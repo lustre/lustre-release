@@ -29,7 +29,7 @@ endif
 #export CC
 
 # This is the debhelper compatibility version to use.
-export DH_COMPAT=7
+export DH_COMPAT=9
 
 # Module-assistant stuff
 PACKAGE=lustre-client-modules
@@ -57,12 +57,12 @@ KSRC_TREE?=$(LINUX)
 IB_OPTIONS?=""
 
 # Packages
-PATCH_PKG=linux-patch-lustre
 UTILS_PKG=lustre-utils
 TESTS_PKG=lustre-tests
 DEV_PKG=lustre-dev
 SOURCE_PKG=lustre-source
 MODS_PKG=lustre-client-modules
+IOKIT_PKG=lustre-iokit
 
 #Build dir
 #BUILDDIR=debian/build
@@ -145,49 +145,12 @@ build-stamp: patch-stamp configure-stamp
 # instead we will build the modules with m-a in the "make debs" target
 # binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG) \
 # binary-$(MODS_PKG) binary-kern-mods
-binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG)
+binary-arch: binary-$(UTILS_PKG) binary-$(DEV_PKG) \
+	     binary-$(IOKIT_PKG) binary-$(TESTS_PKG)
 
-binary-indep: binary-$(PATCH_PKG) binary-$(SOURCE_PKG)
+binary-indep: binary-$(SOURCE_PKG)
 
 binary: binary-indep binary-arch
-
-binary-$(PATCH_PKG): patch-stamp
-	dh_testdir
-	dh_testroot
-	dh_installdirs -p $(PATCH_PKG)
-	dh_installdocs -p $(PATCH_PKG)
-#	dh_installkpatches -p $(PATCH_PKG)
-	dh_install -p $(PATCH_PKG)
-
-	# Install apply script
-	cp $(TOP_DIR)/debian/linux-patch-lustre.apply $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/lustre/scripts/apply
-	chmod a+x $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/lustre/scripts/apply
-	set -e; for KERNEL in $(SUPPORTED_KERNELS); do \
-	  mkdir -p $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/all/$$KERNEL/apply/; \
-	  ln -s ../../../lustre/scripts/apply $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/all/$$KERNEL/apply/lustre; \
-	done
-
-	# Install unpatch script
-	cp $(TOP_DIR)/debian/linux-patch-lustre.unpatch $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/lustre/scripts/unpatch
-	chmod a+x $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/lustre/scripts/unpatch
-	set -e; for KERNEL in $(SUPPORTED_KERNELS); do \
-	  mkdir -p $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/all/$$KERNEL/unpatch/; \
-	  ln -s ../../../lustre/scripts/unpatch $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/all/$$KERNEL/unpatch/lustre; \
-	done
-
-	# Install series
-	cp lustre/kernel_patches/series/*.series $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/lustre/series/
-
-	# Install patches
-	cp lustre/kernel_patches/patches/*.patch $(TOP_DIR)/debian/$(PATCH_PKG)/usr/src/kernel-patches/lustre/patches/
-
-	dh_installchangelogs -p $(PATCH_PKG) lustre/ChangeLog
-	dh_compress -p $(PATCH_PKG)
-	dh_installdeb -p $(PATCH_PKG)
-	dh_fixperms -p $(PATCH_PKG)
-	dh_gencontrol -p $(PATCH_PKG)
-	dh_md5sums -p $(PATCH_PKG)
-	dh_builddeb -p $(PATCH_PKG)
 
 binary-$(UTILS_PKG): build-stamp
 	dh_testdir
@@ -196,6 +159,12 @@ binary-$(UTILS_PKG): build-stamp
 	dh_installdocs -p  $(UTILS_PKG)
 	dh_installman -p $(UTILS_PKG)
 	dh_install -p $(UTILS_PKG)
+	rm -rf debian/$(UTILS_PKG)/usr/bin/iokit-* \
+	       debian/$(UTILS_PKG)/usr/bin/*-survey \
+	       debian/$(UTILS_PKG)/usr/bin/mcreate \
+	       debian/$(UTILS_PKG)/usr/bin/munlink \
+	       debian/$(UTILS_PKG)/usr/sbin/wirecheck \
+	       debian/$(UTILS_PKG)/usr/sbin/wiretest
 	dh_makeshlibs -p $(UTILS_PKG)
 	dh_installexamples -p $(UTILS_PKG)
 	dh_installchangelogs -p $(UTILS_PKG) lustre/ChangeLog
@@ -206,6 +175,27 @@ binary-$(UTILS_PKG): build-stamp
 	dh_gencontrol -p $(UTILS_PKG)
 	dh_md5sums -p $(UTILS_PKG)
 	dh_builddeb -p $(UTILS_PKG)
+
+binary-$(IOKIT_PKG): build-stamp
+	dh_testdir
+	dh_testroot
+	dh_installdirs -p $(IOKIT_PKG)
+	dh_installdocs -p  $(IOKIT_PKG)
+	dh_installman -p $(IOKIT_PKG)
+	dh_install -p $(IOKIT_PKG)
+	rm -rf debian/$(IOKIT_PKG)/usr/bin/lustre_req_history \
+	       debian/$(IOKIT_PKG)/usr/bin/*ll*stat \
+	       debian/$(IOKIT_PKG)/usr/bin/lfs-*
+	dh_makeshlibs -p $(IOKIT_PKG)
+	dh_installexamples -p $(IOKIT_PKG)
+	dh_installchangelogs -p $(IOKIT_PKG) lustre/ChangeLog
+	dh_compress -p $(IOKIT_PKG)
+	dh_strip -p $(IOKIT_PKG)
+	dh_installdeb -p $(IOKIT_PKG)
+	dh_fixperms -p $(IOKIT_PKG)
+	dh_gencontrol -p $(IOKIT_PKG)
+	dh_md5sums -p $(IOKIT_PKG)
+	dh_builddeb -p $(IOKIT_PKG)
 
 binary-$(TESTS_PKG): build-stamp
 	dh_testdir
@@ -359,7 +349,7 @@ binary-modules: prep-deb-files
 	$(MAKE) $(PMAKEARGS)
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/$(PKGNAME)
 	# Remove stuff that doesn't belong (no module-only target)
-	cd $(CURDIR)/debian/$(PKGNAME) && rm -rf usr sbin etc
+	cd $(CURDIR)/debian/$(PKGNAME) && rm -rf usr/bin usr/sbin usr/lib usr/share usr/include/lustre sbin etc
 	dh_installdocs -p$(PKGNAME)
 	dh_installchangelogs -p$(PKGNAME)
 	dh_installmodules -p $(PKGNAME)
@@ -376,7 +366,7 @@ clean:
 	dh_testroot
 	dpatch deapply-all -v
 	-$(MAKE) distclean
-	rm -rf  debian/substvars debian/*.bak debian/*~ *~  *-stamp debian/$(PATCH_PKG)
+	rm -rf  debian/substvars debian/*.bak debian/*~ *~  *-stamp
 	ls -d debian/lustre-client-modules-* | grep -v _KVERS_ | xargs rm -f || true
 	# only remove this if the clean was not called from kdist_clean
 	if [ "$$MA_SOURCE_PKG" = "" ]; then \

@@ -16,5 +16,3 @@ Description: Lustre Linux kernel module (kernel _KVERS_)
  .
  These modules are compiled for the _KVERS_ linux kernel.
 
- 
-
