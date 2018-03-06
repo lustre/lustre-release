@@ -679,13 +679,15 @@ static bool clean_usr_data(struct cYAML *node, void *usr_data, void **out)
 
 static bool free_node(struct cYAML *node, void *user_data, void **out)
 {
+	if (!node)
+		return true;
+
 	if (node->cy_type == CYAML_TYPE_STRING)
 		free(node->cy_valuestring);
 	if (node->cy_string)
 		free(node->cy_string);
-	if (node)
-		free(node);
 
+	free(node);
 	return true;
 }
 
