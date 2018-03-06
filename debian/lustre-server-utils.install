@@ -1,7 +1,5 @@
 debian/tmp/sbin/*			sbin
 debian/tmp/usr/sbin/*			usr/sbin
 debian/tmp/usr/bin/*			usr/bin
-debian/tmp/usr/lib/*.a			usr/lib
-debian/tmp/usr/lib/*.la			usr/lib
-debian/tmp/usr/lib/*.so*		usr/lib
+debian/tmp/usr/lib/*.so.*		usr/lib
 debian/tmp/usr/lib/lustre/*.so*		usr/lib/lustre

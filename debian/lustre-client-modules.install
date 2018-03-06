@@ -1,1 +1,3 @@
 debian/tmp/lib	/
+debian/tmp/usr/include/linux/lnet/*		usr/include/linux/lnet
+debian/tmp/usr/include/linux/libcfs/*		usr/include/linux/libcfs

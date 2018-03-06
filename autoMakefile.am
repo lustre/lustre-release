@@ -292,11 +292,11 @@ debs: undef.h
 	popd && \
 	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog) && \
 	mkdir -p debs && \
-	mv ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb \
-	   ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb \
-	   ../lustre-*-utils_$${VER}_*.deb ../lustre_$${VER}.dsc \
-	   ../lustre_$${VER}_*.changes ../lustre_$${VER}.tar.gz \
-	   ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
+	mv ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb \
+	   ../lustre-iokit_$${VER}_*.deb ../lustre-tests_$${VER}_*.deb \
+	   ../lustre-*-utils_$${VER}_*.deb \
+	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
+	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
 	   debs/
 
 if USES_DPKG

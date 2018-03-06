@@ -2,12 +2,11 @@
 /*.substvars
 /.debhelper
 /files
-/linux-patch-lustre
 /lustre-dev
 /lustre-source
+/lustre-iokit
 /lustre-tests
-/lustre-tests.substvars
 /lustre-utils
-/lustre-utils.substvars
+/lustre-*.substvars
 /lustre-*-utils
 /tmp

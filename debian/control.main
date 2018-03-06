@@ -4,35 +4,15 @@ Priority: optional
 Maintainer: Brian J. Murrell <brian.murrell@intel.com>
 Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.8.3
-Build-Depends: module-assistant, libreadline-dev, debhelper (>=7.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libsnmp-dev, bzip2, quilt, linux-headers-generic | linux-headers | linux-headers-amd64, rsync
+Build-Depends: module-assistant, libreadline-dev, debhelper (>=7.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libtool, libyaml-dev, libselinux-dev, libsnmp-dev, bzip2, quilt, linux-headers-generic | linux-headers | linux-headers-amd64, rsync
 Homepage: https://wiki.hpdd.intel.com/
 Vcs-Git: git://git.hpdd.intel.com/fs/lustre-release.git
-
-Package: linux-patch-lustre
-Section: devel
-Architecture: all
-Priority: optional
-Depends: ${kpatch:Depends}
-Recommends: kernel-package, quilt
-Description: Linux kernel patch for the Lustre Filesystem
- Lustre is a scalable, secure, robust, highly-available
- cluster file system. This release is maintained by Intel Corporation
- and available from https://wiki.hpdd.intel.com/
- .
- Lustre servers require a number of patches to the core Linux kernel,
- mostly to export new functions, add features to ext3, and add
- a new locking path to the VFS. This package provides these patches
- for kernel versions 2.6.18, 2.6.21 and 2.6.22 on i386, amd64, powerpc
- and ia64 architectures.
- .
- For Lustre clients, you will also need to build a lustre-modules
- package, using the lustre-source package and module-assistant.
 
 Package: lustre-source
 Section: admin
 Architecture: all
 Priority: optional
-Depends: module-assistant, bzip2, debhelper (>= 7.0.0), libsnmp-dev, dpatch
+Depends: module-assistant, bzip2, debhelper (>= 7.0.0), libtool, libyaml-dev, libselinux-dev, libsnmp-dev, dpatch
 Description: source for Lustre filesystem client kernel modules
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
@@ -46,7 +26,7 @@ Package: lustre-client-utils
 Section: utils
 Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp30, zlib1g, perl
 Description: Userspace utilities for the Lustre filesystem (client)
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
@@ -58,9 +38,9 @@ Description: Userspace utilities for the Lustre filesystem (client)
 
 Package: lustre-server-utils
 Section: utils
-Architecture: i386 powerpc ppc64el amd64 ia64
+Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp30, zlib1g, perl
 Provides: lustre-server-utils, lustre-client-utils
 Conflicts: lustre-client-utils
 Replaces: lustre-client-utils
@@ -74,11 +54,23 @@ Description: Userspace utilities for the Lustre filesystem (server)
  If you only need to access the LFS cluster, install lustre-client-utils
  instead.
 
+Package: lustre-iokit
+Section: utils
+Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Priority: optional
+Depends: lustre-client-utils (= ${binary:Version}), python, perl, sg3-utils
+Description: Collection of benchmark tools for the Lustre filesystem
+ Lustre is a scalable, secure, robust, highly-available cluster file system.
+ This release is maintained by Intel Corporation and available from
+ https://wiki.hpdd.intel.com/
+ .
+ This package provides a collection of benchmark tools
+
 Package: lustre-tests
 Section: utils
 Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: lustre-client-utils (= ${binary:Version})
+Depends: lustre-iokit (= ${binary:Version}), attr, rsync, perl, lsof
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
