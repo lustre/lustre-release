@@ -111,14 +111,7 @@ typedef struct stat     lstat_t;
 /* for statfs() */
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
-#ifndef FSFILT_IOC_GETFLAGS
-#define FSFILT_IOC_GETFLAGS               _IOR('f', 1, long)
-#define FSFILT_IOC_SETFLAGS               _IOW('f', 2, long)
-#define FSFILT_IOC_GETVERSION             _IOR('f', 3, long)
-#define FSFILT_IOC_SETVERSION             _IOW('f', 4, long)
-#define FSFILT_IOC_GETVERSION_OLD         _IOR('v', 1, long)
-#define FSFILT_IOC_SETVERSION_OLD         _IOW('v', 2, long)
-#endif
+#define FSFILT_IOC_GETVERSION		_IOR('f', 3, long)
 
 /* FIEMAP flags supported by Lustre */
 #define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)

@@ -2085,13 +2085,13 @@ void ll_delete_inode(struct inode *inode)
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ptlrpc_request *req = NULL;
-        int rc, flags = 0;
-        ENTRY;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ptlrpc_request *req = NULL;
+	int rc, flags = 0;
+	ENTRY;
 
-        switch(cmd) {
-        case FSFILT_IOC_GETFLAGS: {
+	switch (cmd) {
+	case FS_IOC_GETFLAGS: {
                 struct mdt_body *body;
                 struct md_op_data *op_data;
 
@@ -2115,11 +2115,11 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 
 		flags = body->mbo_flags;
 
-                ptlrpc_req_finished(req);
+		ptlrpc_req_finished(req);
 
 		RETURN(put_user(flags, (int __user *)arg));
-        }
-        case FSFILT_IOC_SETFLAGS: {
+	}
+	case FS_IOC_SETFLAGS: {
 		struct iattr *attr;
 		struct md_op_data *op_data;
 		struct cl_object *obj;

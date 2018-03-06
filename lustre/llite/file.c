@@ -3170,15 +3170,15 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), cmd=%x\n",
 	       PFID(ll_inode2fid(inode)), inode, cmd);
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
 
-        /* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
-        if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
-                RETURN(-ENOTTY);
+	/* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
+	if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
+		RETURN(-ENOTTY);
 
-        switch(cmd) {
-        case LL_IOC_GETFLAGS:
-                /* Get the current value of the file flags */
+	switch (cmd) {
+	case LL_IOC_GETFLAGS:
+		/* Get the current value of the file flags */
 		return put_user(fd->fd_flags, (int __user *)arg);
         case LL_IOC_SETFLAGS:
         case LL_IOC_CLRFLAGS:
@@ -3252,12 +3252,18 @@ out:
 	case LL_IOC_LOV_GETSTRIPE:
 	case LL_IOC_LOV_GETSTRIPE_NEW:
 		RETURN(ll_file_getstripe(inode, (void __user *)arg, 0));
-        case FSFILT_IOC_GETFLAGS:
-        case FSFILT_IOC_SETFLAGS:
-                RETURN(ll_iocontrol(inode, file, cmd, arg));
-        case FSFILT_IOC_GETVERSION_OLD:
-        case FSFILT_IOC_GETVERSION:
+	case FS_IOC_GETFLAGS:
+	case FS_IOC_SETFLAGS:
+		RETURN(ll_iocontrol(inode, file, cmd, arg));
+	case FSFILT_IOC_GETVERSION:
+	case FS_IOC_GETVERSION:
 		RETURN(put_user(inode->i_generation, (int __user *)arg));
+	/* We need to special case any other ioctls we want to handle,
+	 * to send them to the MDS/OST as appropriate and to properly
+	 * network encode the arg field. */
+	case FS_IOC_SETVERSION:
+		RETURN(-ENOTSUPP);
+
         case LL_IOC_GROUP_LOCK:
                 RETURN(ll_get_grouplock(inode, file, arg));
         case LL_IOC_GROUP_UNLOCK:
@@ -3265,12 +3271,6 @@ out:
         case IOC_OBD_STATFS:
 		RETURN(ll_obd_statfs(inode, (void __user *)arg));
 
-        /* We need to special case any other ioctls we want to handle,
-         * to send them to the MDS/OST as appropriate and to properly
-         * network encode the arg field.
-        case FSFILT_IOC_SETVERSION_OLD:
-        case FSFILT_IOC_SETVERSION:
-        */
 	case LL_IOC_FLUSHCTX:
 		RETURN(ll_flush_ctx(inode));
 	case LL_IOC_PATH2FID: {

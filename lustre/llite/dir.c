@@ -1155,46 +1155,46 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct dentry *dentry = file_dentry(file);
 	struct inode *inode = file_inode(file);
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct obd_ioctl_data *data;
-        int rc = 0;
-        ENTRY;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct obd_ioctl_data *data;
+	int rc = 0;
+	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), cmd=%#x\n",
 	       PFID(ll_inode2fid(inode)), inode, cmd);
 
-        /* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
-        if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
-                return -ENOTTY;
+	/* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
+	if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
+		return -ENOTTY;
 
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
-        switch(cmd) {
-        case FSFILT_IOC_GETFLAGS:
-        case FSFILT_IOC_SETFLAGS:
-                RETURN(ll_iocontrol(inode, file, cmd, arg));
-        case FSFILT_IOC_GETVERSION_OLD:
-        case FSFILT_IOC_GETVERSION:
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_IOCTL, 1);
+	switch (cmd) {
+	case FS_IOC_GETFLAGS:
+	case FS_IOC_SETFLAGS:
+		RETURN(ll_iocontrol(inode, file, cmd, arg));
+	case FSFILT_IOC_GETVERSION:
+	case FS_IOC_GETVERSION:
 		RETURN(put_user(inode->i_generation, (int __user *)arg));
-        /* We need to special case any other ioctls we want to handle,
-         * to send them to the MDS/OST as appropriate and to properly
-         * network encode the arg field.
-        case FSFILT_IOC_SETVERSION_OLD:
-        case FSFILT_IOC_SETVERSION:
-        */
-        case LL_IOC_GET_MDTIDX: {
-                int mdtidx;
+	/* We need to special case any other ioctls we want to handle,
+	 * to send them to the MDS/OST as appropriate and to properly
+	 * network encode the arg field. */
+	case FS_IOC_SETVERSION:
+		RETURN(-ENOTSUPP);
 
-                mdtidx = ll_get_mdt_idx(inode);
-                if (mdtidx < 0)
-                        RETURN(mdtidx);
+	case LL_IOC_GET_MDTIDX: {
+		int mdtidx;
+
+		mdtidx = ll_get_mdt_idx(inode);
+		if (mdtidx < 0)
+			RETURN(mdtidx);
 
 		if (put_user((int)mdtidx, (int __user *)arg))
-                        RETURN(-EFAULT);
+			RETURN(-EFAULT);
 
-                return 0;
-        }
-        case IOC_MDC_LOOKUP: {
-		int namelen, len = 0;
+		return 0;
+	}
+	case IOC_MDC_LOOKUP: {
+				     int namelen, len = 0;
 		char *buf = NULL;
 		char *filename;
 
