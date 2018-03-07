@@ -1782,8 +1782,9 @@ test_45() {
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
 
-	$LFS setstripe -N -E1m -c2 -o0,1 -E2m -Eeof -N -E4m -Eeof \
-		-N -E3m -Eeof -N -E8m -Eeof $file || error "Create $file failed"
+	$LFS setstripe -N -E1m -S1m -c2 -o0,1 -E2m -Eeof -N -E4m -Eeof \
+		-N -E3m -S1m -Eeof -N -E8m -Eeof $file ||
+			error "Create $file failed"
 
 	echo "getstripe --yaml $file"
 	$LFS getstripe --yaml $file > $temp || error "getstripe $file failed"
@@ -1821,8 +1822,8 @@ test_46() {
 	########################### 1. PFL file #############################
 	echo "  ** 1. PFL file"
 	rm -f $file
-	$LFS setstripe -E1m -c2 -o0,1 -E2m -c2 -E3m -o1,0 -E4m -c1 -E-1 $file ||
-		error "1. Create PFL $file failed"
+	$LFS setstripe -E1m -S 1M -c2 -o0,1 -E2m -c2 -E3m -o1,0 -E4m -c1 -E-1 \
+		$file || error "1. Create PFL $file failed"
 
 	rm -f $file.copy
 	verify_46 $file $file.copy "1. PFL file"
@@ -1838,9 +1839,8 @@ test_46() {
 
 	########################### 3. FLR file #############################
 	echo "  ** 3. FLR file"
-	rm -f $file
-	$LFS setstripe -N -E1m -c2 -o0,1 -E4m -c1 -Eeof -N -E16m -Eeof $file ||
-		error "3. Create FLR $file failed"
+	$LFS setstripe -N -E1m -S 1M -c2 -o0,1 -E4m -c1 -Eeof -N -E16m -Eeof \
+		$file || error "3. Create FLR $file failed"
 
 	rm -f $file.copy
 	verify_46 $file $file.copy "3. FLR file"
@@ -1849,21 +1849,21 @@ test_46() {
 	########################### 4. PFL dir ##############################
 	echo "  ** 4. PFL dir"
 	test_mkdir $dir
-	$LFS setstripe -E1m -c2 -E2m -c1 -E-1 $dir ||
+	$LFS setstripe -E1m -S 1M -c2 -E2m -c1 -E-1 $dir ||
 		error "4. setstripe PFL $dir failed"
 
 	test_mkdir $dir.copy
-	verify_46 $dir $dir.copy "3. PFL dir"
+	verify_46 $dir $dir.copy "4. PFL dir"
 
 	########################### 5. plain dir ############################
 	echo "  ** 5. plain dir"
-	$LFS setstripe -c2 -i-1 $dir || error "4. setstripe plain $dir failed"
+	$LFS setstripe -c2 -i-1 $dir || error "5. setstripe plain $dir failed"
 
 	verify_46 $dir $dir.copy "5. plain dir"
 
 	########################### 6. FLR dir ##############################
 	echo "  ** 6. FLR dir"
-	$LFS setstripe -N -E1m -c2 -E2m -c1 -Eeof -N -E4m -Eeof $dir ||
+	$LFS setstripe -N -E1m -S 1M -c2 -E2m -c1 -Eeof -N -E4m -Eeof $dir ||
 		error "6. setstripe FLR $dir failed"
 
 	verify_46 $dir $dir.copy "6. FLR dir"

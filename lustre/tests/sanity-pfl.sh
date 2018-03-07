@@ -670,8 +670,8 @@ test_16() {
 	#####################################################################
 	#	                    1. PFL file
 	# set stripe for source file
-	$LFS setstripe -E1m -c2 -o0,1 -E2m -c2 -E3m -o1,0 -E4m -c1 -E-1 $file ||
-		error "Create $file failed"
+	$LFS setstripe -E1m -S 1M -c2 -o0,1 -E2m -c2 -E3m -o1,0 -E4m -c1 -E-1 \
+		$file || error "Create $file failed"
 
 	echo "1. PFL file"
 	verify_16 $file $file.copy $temp "1. PFL file"
@@ -690,7 +690,7 @@ test_16() {
 	#	                    3. PFL dir
 	# set stripe for source dir
 	test_mkdir $dir
-	$LFS setstripe -E1m -c2 -E2m -c1 -E-1 $dir ||
+	$LFS setstripe -E1m -S 1M -c2 -E2m -c1 -E-1 $dir ||
 		error "setstripe $dir failed"
 
 	test_mkdir $dir.copy
