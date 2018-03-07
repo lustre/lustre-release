@@ -988,17 +988,17 @@ static int check_markers(struct lustre_cfg *lcfg,
 	/* Track markers. Find given device */
 	if (lcfg->lcfg_command == LCFG_MARKER) {
 		marker = lustre_cfg_buf(lcfg, 1);
-		/* Clean llog from records marked as CM_EXCLUDE.
-		   CM_SKIP records are used for "active" command
+		/* Clean llog from records marked as CM_SKIP.
+		   CM_EXCLUDE records are used for "active" command
 		   and can be restored if needed */
-		if ((marker->cm_flags & (CM_EXCLUDE | CM_START)) ==
-		    (CM_EXCLUDE | CM_START)) {
+		if ((marker->cm_flags & (CM_SKIP | CM_START)) ==
+		    (CM_SKIP | CM_START)) {
 			mrd->skip_it = 1;
 			return 1;
 		}
 
-		if ((marker->cm_flags & (CM_EXCLUDE | CM_END)) ==
-		    (CM_EXCLUDE | CM_END)) {
+		if ((marker->cm_flags & (CM_SKIP | CM_END)) ==
+		    (CM_SKIP | CM_END)) {
 			mrd->skip_it = 0;
 			return 1;
 		}
