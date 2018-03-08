@@ -4469,6 +4469,22 @@ test_101c() {
 }
 run_test 101c "Discard DoM data on close-unlink"
 
+# test to verify file handle related system calls
+# (name_to_handle_at/open_by_handle_at)
+# The new system calls are supported in glibc >= 2.14.
+
+# test to verify we can open by handle an unlinked file from > 1 client
+# This test opens the file normally on $DIR1, which is on one mount, and then
+# opens it by handle on $DIR2, which is on a different mount.
+test_102() {
+	echo "Test file_handle syscalls" > $DIR/$tfile ||
+		error "write failed"
+	check_fhandle_syscalls $DIR/$tfile $DIR2 ||
+		error "check_fhandle_syscalls failed"
+	rm -f $DIR2/$tfile
+}
+run_test 102 "Test open by handle of unlinked file"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

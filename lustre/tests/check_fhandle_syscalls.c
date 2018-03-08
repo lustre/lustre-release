@@ -47,7 +47,30 @@
 
 #define MAX_HANDLE_SZ 128
 
-#if !defined(HAVE_FHANDLE_GLIBC_SUPPORT) && defined(HAVE_FHANDLE_SYSCALLS)
+void usage(char *prog)
+{
+	fprintf(stderr, "usage: %s <filepath> <mount2>\n",
+		prog);
+	fprintf(stderr, "the absolute path of a test file on a "
+		"lustre file system is needed.\n");
+	exit(1);
+}
+
+
+#ifndef HAVE_FHANDLE_SYSCALLS
+
+int main(int argc, char **argv)
+{
+	if (argc != 3)
+		usage(argv[0]);
+
+	fprintf(stderr, "HAVE_FHANDLE_SYSCALLS not defined\n");
+	return 0;
+}
+
+#else
+
+#ifndef HAVE_FHANDLE_GLIBC_SUPPORT
 /* Because the kernel supports this functions doesn't mean that glibc does.
  * Just in case we define what we need */
 struct file_handle {
@@ -87,7 +110,6 @@ struct file_handle {
 #define __NR_open_by_handle_at 265
 #endif
 
-
 #endif
 
 static inline int
@@ -105,128 +127,13 @@ open_by_handle_at(int mnt_fd, struct file_handle *fh, int mode)
 }
 #endif
 
-void usage(char *prog)
+/* verify a file contents */
+int check_access(const char *filename,
+		 int mnt_fd, struct file_handle *fh, struct stat *st_orig)
 {
-	fprintf(stderr, "usage: %s <filepath>\n",
-		prog);
-	fprintf(stderr, "the absolute path of a test file on a "
-		"lustre file system is needed.\n");
-	exit(1);
-}
-
-int main(int argc, char **argv)
-{
-#ifdef HAVE_FHANDLE_SYSCALLS
-	char *filename, *file, *mount_point = NULL, *readbuf = NULL;
-	int ret, rc = -EINVAL, mnt_id, mnt_fd, fd1, fd2, i, len, offset;
-	struct file_handle *fh = NULL;
-	int file_size, mtime, ctime;
-	struct lu_fid *parent, *fid;
-	struct mntent *ent;
+	int fd2, rc, len, offset;
 	struct stat st;
-	__ino_t inode;
-	FILE *mntpt;
-
-	if (argc != 2)
-		usage(argv[0]);
-
-	file = argv[1];
-	if (file[0] != '/') {
-		fprintf(stderr, "Need the absolete path of the file\n");
-		goto out;
-	}
-
-	fd1 = open(file, O_RDONLY);
-	if (fd1 < 0) {
-		fprintf(stderr, "open file %s error: %s\n",
-			file, strerror(errno));
-		rc = errno;
-		goto out;
-	}
-
-	/* Get file stats using fd1 from traditional open */
-	bzero(&st, sizeof(struct stat));
-	rc = fstat(fd1, &st);
-	if (rc < 0) {
-		fprintf(stderr, "fstat(%s) error: %s\n", file,
-			strerror(errno));
-		rc = errno;
-		goto out_fd1;
-	}
-
-	inode = st.st_ino;
-	mtime = st.st_mtime;
-	ctime = st.st_ctime;
-	file_size = st.st_size;
-
-	/* Now for the setup to use fhandles */
-	mntpt = setmntent("/etc/mtab", "r");
-	if (mntpt == NULL) {
-		fprintf(stderr, "setmntent error: %s\n",
-			strerror(errno));
-		rc = errno;
-		goto out_fd1;
-	}
-
-	while (NULL != (ent = getmntent(mntpt))) {
-		if ((strncmp(file, ent->mnt_dir, strlen(ent->mnt_dir)) == 0) &&
-		    (strcmp(ent->mnt_type, "lustre") == 0)) {
-			mount_point = ent->mnt_dir;
-			break;
-		}
-	}
-	endmntent(mntpt);
-
-	if (mount_point == NULL) {
-		fprintf(stderr, "file is not located on a lustre file "
-			"system?\n");
-		goto out_fd1;
-	}
-
-	filename = rindex(file, '/') + 1;
-
-	/* Open mount point directory */
-	mnt_fd = open(mount_point, O_DIRECTORY);
-	if (mnt_fd < 0) {
-		fprintf(stderr, "open(%s) error: %s\n)", mount_point,
-			strerror(errno));
-		rc = errno;
-		goto out_fd1;
-	}
-
-	/* Allocate memory for file handle */
-	fh = malloc(sizeof(struct file_handle) + MAX_HANDLE_SZ);
-	if (!fh) {
-		fprintf(stderr, "malloc(%d) error: %s\n", MAX_HANDLE_SZ,
-			strerror(errno));
-		rc = errno;
-		goto out_mnt_fd;
-	}
-	fh->handle_bytes = MAX_HANDLE_SZ;
-
-	/* Convert name to handle */
-	ret = name_to_handle_at(mnt_fd, filename, fh, &mnt_id,
-				AT_SYMLINK_FOLLOW);
-	if (ret) {
-		fprintf(stderr, "name_by_handle_at(%s) error: %s\n", filename,
-			strerror(errno));
-		rc = errno;
-		goto out_f_handle;
-	}
-
-	/* Print out the contents of the file handle */
-	fprintf(stdout, "fh_bytes: %u\nfh_type: %d\nfh_data: ",
-		fh->handle_bytes, fh->handle_type);
-	for (i = 0; i < fh->handle_bytes; i++)
-		fprintf(stdout, "%02x ", fh->f_handle[i]);
-	fprintf(stdout, "\n");
-
-	/* Lustre stores both the parents FID and the file FID
-	 * in the f_handle. */
-	parent = (struct lu_fid *)(fh->f_handle + 16);
-	fid = (struct lu_fid *)fh->f_handle;
-	fprintf(stdout, "file's parent FID is "DFID"\n", PFID(parent));
-	fprintf(stdout, "file FID is "DFID"\n", PFID(fid));
+	char *readbuf = NULL;
 
 	/* Open the file handle */
 	fd2 = open_by_handle_at(mnt_fd, fh, O_RDONLY);
@@ -247,10 +154,13 @@ int main(int argc, char **argv)
 		goto out_fd2;
 	}
 
-	if (ctime != st.st_ctime || file_size != st.st_size ||
-	    inode != st.st_ino || mtime != st.st_mtime) {
+	/* we can't check a ctime due unlink update */
+	if (st_orig->st_size != st.st_size ||
+	    st_orig->st_ino != st.st_ino ||
+	    st_orig->st_mtime != st.st_mtime) {
 		fprintf(stderr, "stat data does not match between fopen "
 			"and fhandle case\n");
+		rc = EINVAL;
 		goto out_fd2;
 	}
 
@@ -275,15 +185,120 @@ int main(int argc, char **argv)
 			}
 		}
 	}
+	rc = 0;
+out_readbuf:
+	free(readbuf);
+out_fd2:
+	close(fd2);
+out_f_handle:
+	return rc;
+}
+
+int main(int argc, char **argv)
+{
+	char *filename, *file;
+	int ret, rc = -EINVAL, mnt_fd, mnt_id, fd1, i;
+	struct file_handle *fh = NULL;
+	struct lu_fid *parent, *fid;
+	struct stat st;
+
+	if (argc != 3)
+		usage(argv[0]);
+
+	file = argv[1];
+	if (file[0] != '/') {
+		fprintf(stderr, "Need the absolete path of the file\n");
+		goto out;
+	}
+
+	if (*argv[2] != '/') {
+		fprintf(stderr, "Need the absolete path of the mount point\n");
+		goto out;
+	}
+	filename = rindex(file, '/') + 1;
+
+	fd1 = open(file, O_RDONLY);
+	if (fd1 < 0) {
+		fprintf(stderr, "open file %s error: %s\n",
+			file, strerror(errno));
+		rc = errno;
+		goto out;
+	}
+
+	/* Get file stats using fd1 from traditional open */
+	bzero(&st, sizeof(struct stat));
+	rc = fstat(fd1, &st);
+	if (rc < 0) {
+		fprintf(stderr, "fstat(%s) error: %s\n", file,
+			strerror(errno));
+		rc = errno;
+		goto out_fd1;
+	}
+
+	/* Open mount point directory */
+	mnt_fd = open(argv[2], O_DIRECTORY);
+	if (mnt_fd < 0) {
+		fprintf(stderr, "open(%s) error: %s\n)", argv[2],
+			strerror(errno));
+		rc = errno;
+		goto out_fd1;
+	}
+
+	/* Allocate memory for file handle */
+	fh = malloc(sizeof(struct file_handle) + MAX_HANDLE_SZ);
+	if (!fh) {
+		fprintf(stderr, "malloc(%d) error: %s\n", MAX_HANDLE_SZ,
+			strerror(errno));
+		rc = errno;
+		goto out_mnt_fd;
+	}
+	fh->handle_bytes = MAX_HANDLE_SZ;
+
+	/* Convert name to handle */
+	ret = name_to_handle_at(AT_FDCWD, file, fh, &mnt_id,
+				AT_SYMLINK_FOLLOW);
+	if (ret) {
+		fprintf(stderr, "name_by_handle_at(%s) error: %s\n", filename,
+			strerror(errno));
+		rc = errno;
+		goto out_f_handle;
+	}
+
+	/* Print out the contents of the file handle */
+	fprintf(stdout, "fh_bytes: %u\nfh_type: %d\nfh_data: ",
+		fh->handle_bytes, fh->handle_type);
+	for (i = 0; i < fh->handle_bytes; i++)
+		fprintf(stdout, "%02x ", fh->f_handle[i]);
+	fprintf(stdout, "\n");
+
+	/* Lustre stores both the parents FID and the file FID
+	 * in the f_handle. */
+	parent = (struct lu_fid *)(fh->f_handle + 16);
+	fid = (struct lu_fid *)fh->f_handle;
+	fprintf(stdout, "file's parent FID is "DFID"\n", PFID(parent));
+	fprintf(stdout, "file FID is "DFID"\n", PFID(fid));
+
+	fprintf(stdout, "just access via different mount point - ");
+	rc = check_access(filename, mnt_fd, fh, &st);
+	if (rc != 0)
+		goto out_f_handle;
+	fprintf(stdout, "OK \n");
+
+	fprintf(stdout, "access after unlink - ");
+	ret = unlink(file);
+	if (ret < 0) {
+		fprintf(stderr, "can't unlink a file. check permissions?\n");
+		goto out_f_handle;
+	}
+
+	rc = check_access(filename, mnt_fd, fh, &st);
+	if (rc != 0)
+		goto out_f_handle;
+	fprintf(stdout, "OK\n");
 
 	rc = 0;
 	fprintf(stdout, "check_fhandle_syscalls test Passed!\n");
 
-out_readbuf:
-	if (readbuf != NULL)
-		free(readbuf);
-out_fd2:
-	close(fd2);
 out_f_handle:
 	free(fh);
 out_mnt_fd:
@@ -292,11 +307,6 @@ out_fd1:
 	close(fd1);
 out:
 	return rc;
-#else /* !HAVE_FHANDLE_SYSCALLS */
-	if (argc != 2)
-		usage(argv[0]);
-
-	fprintf(stderr, "HAVE_FHANDLE_SYSCALLS not defined\n");
-	return 0;
-#endif /* HAVE_FHANDLE_SYSCALLS */
 }
+
+#endif

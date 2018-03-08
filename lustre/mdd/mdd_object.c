@@ -2988,8 +2988,11 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 	int mode, rc;
 	ENTRY;
 
-	/* EEXIST check */
-	if (mdd_is_dead_obj(obj))
+	/* EEXIST check, also opening of *open* orphans is allowed so we can
+	 * open-by-handle unlinked files
+	 */
+	if (mdd_is_dead_obj(obj) &&
+	    likely(!(mdd_is_orphan_obj(obj) && obj->mod_count > 0)))
 		RETURN(-ENOENT);
 
 	if (S_ISLNK(attr->la_mode))

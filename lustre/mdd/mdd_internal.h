@@ -494,6 +494,11 @@ static inline bool mdd_is_volatile_obj(struct mdd_object *obj)
 	return obj->mod_flags & VOLATILE_OBJ;
 }
 
+static inline bool mdd_is_orphan_obj(struct mdd_object *obj)
+{
+	return obj->mod_flags & ORPHAN_OBJ;
+}
+
 static inline int mdd_object_exists(struct mdd_object *obj)
 {
         return lu_object_exists(mdd2lu_obj(obj));
