@@ -942,12 +942,12 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 	RETURN(rc);
 }
 
-static int mdd_changelog_data_store_xattr(const struct lu_env *env,
-					  struct mdd_device *mdd,
-					  enum changelog_rec_type type,
-					  int flags, struct mdd_object *mdd_obj,
-					  const char *xattr_name,
-					  struct thandle *handle)
+int mdd_changelog_data_store_xattr(const struct lu_env *env,
+				   struct mdd_device *mdd,
+				   enum changelog_rec_type type,
+				   int flags, struct mdd_object *mdd_obj,
+				   const char *xattr_name,
+				   struct thandle *handle)
 {
 	int				 rc;
 
@@ -1846,6 +1846,11 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 			rc = mdd_xattr_merge(env, obj, victim);
 		else
 			rc = mdd_xattr_split(env, obj, mrd);
+		RETURN(rc);
+	}
+
+	if (strcmp(name, XATTR_NAME_LMV) == 0) {
+		rc = mdd_dir_layout_shrink(env, obj, buf);
 		RETURN(rc);
 	}
 

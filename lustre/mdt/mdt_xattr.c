@@ -305,6 +305,160 @@ out:
 	return rc;
 }
 
+/* shrink dir layout after migration */
+static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
+{
+	const struct lu_env *env = info->mti_env;
+	struct mdt_device *mdt = info->mti_mdt;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct lmv_user_md *lmu = rr->rr_eadata;
+	__u32 lum_stripe_count = lmu->lum_stripe_count;
+	struct lu_buf *buf = &info->mti_buf;
+	struct lmv_mds_md_v1 *lmv;
+	struct md_attr *ma = &info->mti_attr;
+	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
+	struct mdt_object *pobj = NULL;
+	struct mdt_object *obj;
+	struct mdt_lock_handle *lhp = NULL;
+	struct mdt_lock_handle *lhc;
+	int rc;
+
+	ENTRY;
+
+	rc = mdt_remote_permission(info);
+	if (rc)
+		RETURN(rc);
+
+	/* mti_big_lmm is used to save LMV, but it may be uninitialized. */
+	if (unlikely(!info->mti_big_lmm)) {
+		info->mti_big_lmmsize = lmv_mds_md_size(64, LMV_MAGIC);
+		OBD_ALLOC(info->mti_big_lmm, info->mti_big_lmmsize);
+		if (!info->mti_big_lmm)
+			RETURN(-ENOMEM);
+	}
+
+	obj = mdt_object_find(env, mdt, rr->rr_fid1);
+	if (IS_ERR(obj))
+		RETURN(PTR_ERR(obj));
+
+relock:
+	/* lock object */
+	lhc = &info->mti_lh[MDT_LH_CHILD];
+	mdt_lock_reg_init(lhc, LCK_EX);
+	rc = mdt_reint_striped_lock(info, obj, lhc, MDS_INODELOCK_FULL, einfo,
+				    true);
+	if (rc)
+		GOTO(put_obj, rc);
+
+	ma->ma_lmv = info->mti_big_lmm;
+	ma->ma_lmv_size = info->mti_big_lmmsize;
+	ma->ma_valid = 0;
+	rc = mdt_stripe_get(info, obj, ma, XATTR_NAME_LMV);
+	if (rc)
+		GOTO(unlock_obj, rc);
+
+	/* user may run 'lfs migrate' multiple times, so it's shrunk already */
+	if (!(ma->ma_valid & MA_LMV))
+		GOTO(unlock_obj, rc = -EALREADY);
+
+	lmv = &ma->ma_lmv->lmv_md_v1;
+
+	/* ditto */
+	if (!(le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_FLAG_MIGRATION))
+		GOTO(unlock_obj, rc = -EALREADY);
+
+	lum_stripe_count = lmu->lum_stripe_count;
+	if (!lum_stripe_count)
+		lum_stripe_count = cpu_to_le32(1);
+
+	if (lmv->lmv_migrate_offset != lum_stripe_count) {
+		CERROR("%s: "DFID" migrate mdt count mismatch %u != %u\n",
+			mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+			lmv->lmv_migrate_offset, lmu->lum_stripe_count);
+		GOTO(unlock_obj, rc = -EINVAL);
+	}
+
+	if (lmv->lmv_master_mdt_index != lmu->lum_stripe_offset) {
+		CERROR("%s: "DFID" migrate mdt index mismatch %u != %u\n",
+			mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+			lmv->lmv_master_mdt_index, lmu->lum_stripe_offset);
+		GOTO(unlock_obj, rc = -EINVAL);
+	}
+
+	if (lum_stripe_count > 1 &&
+	    (lmv->lmv_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK)) !=
+	    lmu->lum_hash_type) {
+		CERROR("%s: "DFID" migrate mdt hash mismatch %u != %u\n",
+			mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+			lmv->lmv_hash_type, lmu->lum_hash_type);
+		GOTO(unlock_obj, rc = -EINVAL);
+	}
+
+	if (le32_to_cpu(lmu->lum_stripe_count) < 2 && !pobj) {
+		/*
+		 * lock parent because dir will be shrunk to be 1 stripe, which
+		 * should be converted to normal directory, but that will
+		 * change dir fid and update namespace of parent.
+		 */
+		lhp = &info->mti_lh[MDT_LH_PARENT];
+		mdt_lock_reg_init(lhp, LCK_PW);
+
+		/* get parent from PFID */
+		ma->ma_need |= MA_PFID;
+		ma->ma_valid = 0;
+		rc = mdt_attr_get_complex(info, obj, ma);
+		if (rc)
+			GOTO(unlock_obj, rc);
+
+		if (!(ma->ma_valid & MA_PFID))
+			GOTO(unlock_obj, rc = -ENOTSUPP);
+
+		pobj = mdt_object_find(env, mdt, &ma->ma_pfid);
+		if (IS_ERR(pobj)) {
+			rc = PTR_ERR(pobj);
+			pobj = NULL;
+			GOTO(unlock_obj, rc);
+		}
+
+		mdt_reint_striped_unlock(info, obj, lhc, einfo, 1);
+
+		if (mdt_object_remote(pobj)) {
+			rc = mdt_remote_object_lock(info, pobj, rr->rr_fid1,
+						    &lhp->mlh_rreg_lh, LCK_EX,
+						    MDS_INODELOCK_LOOKUP,
+						    false);
+			if (rc != ELDLM_OK) {
+				mdt_object_put(env, pobj);
+				GOTO(put_obj, rc);
+			}
+			mdt_object_unlock(info, NULL, lhp, 1);
+		}
+
+		rc = mdt_reint_object_lock(info, pobj, lhp,
+					   MDS_INODELOCK_UPDATE, true);
+		if (rc) {
+			mdt_object_put(env, pobj);
+			GOTO(put_obj, rc);
+		}
+
+		goto relock;
+	}
+
+	buf->lb_buf = rr->rr_eadata;
+	buf->lb_len = rr->rr_eadatalen;
+	rc = mo_xattr_set(env, mdt_object_child(obj), buf, XATTR_NAME_LMV, 0);
+	GOTO(unlock_obj, rc);
+
+unlock_obj:
+	mdt_reint_striped_unlock(info, obj, lhc, einfo, rc);
+	if (pobj)
+		mdt_object_unlock_put(info, pobj, lhp, rc);
+put_obj:
+	mdt_object_put(env, obj);
+
+	return rc;
+}
+
 int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *unused)
 {
@@ -343,6 +497,17 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 			GOTO(out, rc = -EOPNOTSUPP);
 	} else if (strncmp(xattr_name, XATTR_TRUSTED_PREFIX,
 		    sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0) {
+
+		/* setxattr(LMV) with lum is used to shrink dir layout */
+		if (strcmp(xattr_name, XATTR_NAME_LMV) == 0) {
+			__u32 *magic = rr->rr_eadata;
+
+			if (le32_to_cpu(*magic) == LMV_USER_MAGIC ||
+			    le32_to_cpu(*magic) == LMV_USER_MAGIC_SPECIFIC) {
+				rc = mdt_dir_layout_shrink(info);
+				GOTO(out, rc);
+			}
+		}
 
 		if (!md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);

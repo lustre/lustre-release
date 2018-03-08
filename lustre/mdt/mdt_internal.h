@@ -760,6 +760,16 @@ int mdt_remote_object_lock(struct mdt_thread_info *mti,
 			   struct mdt_object *o, const struct lu_fid *fid,
 			   struct lustre_handle *lh,
 			   enum ldlm_mode mode, __u64 ibits, bool cache);
+int mdt_reint_striped_lock(struct mdt_thread_info *info,
+			   struct mdt_object *o,
+			   struct mdt_lock_handle *lh,
+			   __u64 ibits,
+			   struct ldlm_enqueue_info *einfo,
+			   bool cos_incompat);
+void mdt_reint_striped_unlock(struct mdt_thread_info *info,
+			      struct mdt_object *o,
+			      struct mdt_lock_handle *lh,
+			      struct ldlm_enqueue_info *einfo, int decref);
 
 enum mdt_name_flags {
 	MNF_FIX_ANON = 1,
@@ -882,6 +892,7 @@ int mdt_links_read(struct mdt_thread_info *info,
 		   struct linkea_data *ldata);
 int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		       struct mdt_body *repbody);
+int mdt_remote_permission(struct mdt_thread_info *info);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {

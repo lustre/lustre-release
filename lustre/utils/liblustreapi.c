@@ -4476,9 +4476,41 @@ out:
 	return ret;
 }
 
+/* dir migration finished, shrink its stripes */
+static int cb_migrate_mdt_fini(char *path, DIR *parent, DIR **dirp, void *data,
+			       struct dirent64 *de)
+{
+	struct find_param *param = data;
+	struct lmv_user_md *lmu = param->fp_lmv_md;
+	int lmulen = lmv_user_md_size(lmu->lum_stripe_count, lmu->lum_magic);
+	int ret = 0;
+
+	if (de && de->d_type != DT_DIR)
+		goto out;
+
+	if (*dirp) {
+		/*
+		 * close it before setxattr because the latter may destroy the
+		 * original object, and cause close fail.
+		 */
+		ret = closedir(*dirp);
+		*dirp = NULL;
+		if (ret)
+			goto out;
+	}
+
+	ret = setxattr(path, XATTR_NAME_LMV, lmu, lmulen, 0);
+	if (ret == -EALREADY)
+		ret = 0;
+out:
+	cb_common_fini(path, parent, dirp, data, de);
+	return ret;
+}
+
 int llapi_migrate_mdt(char *path, struct find_param *param)
 {
-	return param_callback(path, cb_migrate_mdt_init, cb_common_fini, param);
+	return param_callback(path, cb_migrate_mdt_init, cb_migrate_mdt_fini,
+			      param);
 }
 
 int llapi_mv(char *path, struct find_param *param)

@@ -204,6 +204,7 @@ struct mdd_thread_info {
 	struct dt_insert_rec	  mti_dt_rec;
 	struct lfsck_req_local	  mti_lrl;
 	struct lu_seq_range	  mti_range;
+	union lmv_mds_md	  mti_lmv;
 };
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
@@ -270,6 +271,9 @@ int mdd_links_rename(const struct lu_env *env,
 		     struct thandle *handle,
 		     struct linkea_data *ldata,
 		     int first, int check);
+int mdd_dir_layout_shrink(const struct lu_env *env,
+			  struct md_object *md_obj,
+			  const struct lu_buf *lmu_buf);
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 
@@ -351,6 +355,12 @@ int mdd_declare_create_object_internal(const struct lu_env *env,
 				       struct dt_allocation_hint *hint);
 int mdd_stripe_get(const struct lu_env *env, struct mdd_object *obj,
 		   struct lu_buf *lmm_buf, const char *name);
+int mdd_changelog_data_store_xattr(const struct lu_env *env,
+				   struct mdd_device *mdd,
+				   enum changelog_rec_type type,
+				   int flags, struct mdd_object *mdd_obj,
+				   const char *xattr_name,
+				   struct thandle *handle);
 
 /* mdd_trans.c */
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,

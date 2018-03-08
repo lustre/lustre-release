@@ -244,7 +244,7 @@ static inline int mdt_remote_permission_check(struct mdt_thread_info *info)
  * retval	= 0 remote operation is allowed.
  *              < 0 remote operation is denied.
  */
-static int mdt_remote_permission(struct mdt_thread_info *info)
+int mdt_remote_permission(struct mdt_thread_info *info)
 {
 	struct md_op_spec *spec = &info->mti_spec;
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
@@ -362,12 +362,12 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 			      policy);
 }
 
-static inline int mdt_reint_striped_lock(struct mdt_thread_info *info,
-					 struct mdt_object *o,
-					 struct mdt_lock_handle *lh,
-					 __u64 ibits,
-					 struct ldlm_enqueue_info *einfo,
-					 bool cos_incompat)
+int mdt_reint_striped_lock(struct mdt_thread_info *info,
+			   struct mdt_object *o,
+			   struct mdt_lock_handle *lh,
+			   __u64 ibits,
+			   struct ldlm_enqueue_info *einfo,
+			   bool cos_incompat)
 {
 	int rc;
 
@@ -396,10 +396,10 @@ static inline int mdt_reint_striped_lock(struct mdt_thread_info *info,
 	return rc;
 }
 
-static inline void
-mdt_reint_striped_unlock(struct mdt_thread_info *info, struct mdt_object *o,
-			 struct mdt_lock_handle *lh,
-			 struct ldlm_enqueue_info *einfo, int decref)
+void mdt_reint_striped_unlock(struct mdt_thread_info *info,
+			      struct mdt_object *o,
+			      struct mdt_lock_handle *lh,
+			      struct ldlm_enqueue_info *einfo, int decref)
 {
 	if (einfo->ei_cbdata)
 		mdt_unlock_slaves(info, o, einfo, decref);

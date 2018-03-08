@@ -3337,6 +3337,9 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 			rc = lod_dir_declare_layout_add(env, dt, buf, th);
 		else if (strcmp(op, "del") == 0)
 			rc = lod_dir_declare_layout_delete(env, dt, buf, th);
+		else if (strcmp(op, "set") == 0)
+			rc = lod_sub_declare_xattr_set(env, next, buf,
+						       XATTR_NAME_LMV, fl, th);
 
 		RETURN(rc);
 	} else if (S_ISDIR(mode)) {
@@ -4094,12 +4097,15 @@ static int lod_xattr_set(const struct lu_env *env,
 		const char *op = name + strlen(XATTR_NAME_LMV) + 1;
 
 		rc = -ENOTSUPP;
-		if (strcmp(op, "del") == 0)
-			rc = lod_dir_layout_delete(env, dt, buf, th);
 		/*
 		 * XATTR_NAME_LMV".add" is never called, but only declared,
 		 * because lod_xattr_set_lmv() will do the addition.
 		 */
+		if (strcmp(op, "del") == 0)
+			rc = lod_dir_layout_delete(env, dt, buf, th);
+		else if (strcmp(op, "set") == 0)
+			rc = lod_sub_xattr_set(env, next, buf, XATTR_NAME_LMV,
+					       fl, th);
 
 		RETURN(rc);
 	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
