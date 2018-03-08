@@ -44,17 +44,25 @@
 
 #include "llite_internal.h"
 
+#ifndef HAVE_XATTR_HANDLER_NAME
+static inline const char *xattr_prefix(const struct xattr_handler *handler)
+{
+	return handler->prefix;
+}
+#endif
+
 const struct xattr_handler *get_xattr_type(const char *name)
 {
-	int i = 0;
+	int i;
 
-	while (ll_xattr_handlers[i]) {
-		size_t len = strlen(ll_xattr_handlers[i]->prefix);
+	for (i = 0; ll_xattr_handlers[i]; i++) {
+		const char *prefix = xattr_prefix(ll_xattr_handlers[i]);
+		size_t prefix_len = strlen(prefix);
 
-		if (!strncmp(ll_xattr_handlers[i]->prefix, name, len))
+		if (!strncmp(prefix, name, prefix_len))
 			return ll_xattr_handlers[i];
-		i++;
 	}
+
 	return NULL;
 }
 
@@ -143,7 +151,7 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 			RETURN(-EPERM);
 	}
 
-	fullname = kasprintf(GFP_KERNEL, "%s%s", handler->prefix, name);
+	fullname = kasprintf(GFP_KERNEL, "%s%s", xattr_prefix(handler), name);
 	if (!fullname)
 		RETURN(-ENOMEM);
 
@@ -453,7 +461,7 @@ static int ll_xattr_get_common(const struct xattr_handler *handler,
 		RETURN(-ENODATA);
 #endif
 
-	fullname = kasprintf(GFP_KERNEL, "%s%s", handler->prefix, name);
+	fullname = kasprintf(GFP_KERNEL, "%s%s", xattr_prefix(handler), name);
 	if (!fullname)
 		RETURN(-ENOMEM);
 
@@ -764,7 +772,11 @@ static const struct xattr_handler ll_security_xattr_handler = {
 };
 
 static const struct xattr_handler ll_acl_access_xattr_handler = {
+#ifdef HAVE_XATTR_HANDLER_NAME
+	.name = XATTR_NAME_POSIX_ACL_ACCESS,
+#else
 	.prefix = XATTR_NAME_POSIX_ACL_ACCESS,
+#endif
 	.flags = XATTR_ACL_ACCESS_T,
 #if defined(HAVE_XATTR_HANDLER_SIMPLIFIED)
 	.get = ll_xattr_get_common_4_3,
@@ -779,7 +791,11 @@ static const struct xattr_handler ll_acl_access_xattr_handler = {
 };
 
 static const struct xattr_handler ll_acl_default_xattr_handler = {
+#ifdef HAVE_XATTR_HANDLER_NAME
+	.name = XATTR_NAME_POSIX_ACL_DEFAULT,
+#else
 	.prefix = XATTR_NAME_POSIX_ACL_DEFAULT,
+#endif
 	.flags = XATTR_ACL_DEFAULT_T,
 #if defined(HAVE_XATTR_HANDLER_SIMPLIFIED)
 	.get = ll_xattr_get_common_4_3,

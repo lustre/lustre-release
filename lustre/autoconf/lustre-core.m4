@@ -2327,6 +2327,26 @@ key_payload_data_array, [
 ]) #LC_HAVE_KEY_PAYLOAD_DATA_ARRAY
 
 #
+# LC_HAVE_XATTR_HANDLER_NAME
+#
+# Kernel version 4.4 commit 98e9cb5711c68223f0e4d5201b9a6add255ec550
+# add a name member to struct xattr_handler
+#
+AC_DEFUN([LC_HAVE_XATTR_HANDLER_NAME], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'struct xattr_handler' has a name member],
+xattr_handler_name, [
+	#include <linux/xattr.h>
+],[
+	((struct xattr_handler *)NULL)->name = NULL;
+],[
+	AC_DEFINE(HAVE_XATTR_HANDLER_NAME, 1, [xattr_handler has a name member])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_XATTR_HANDLER_NAME
+
+#
 # LC_HAVE_FILE_DENTRY
 #
 # 4.5 adds wrapper file_dentry
@@ -2913,6 +2933,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.4
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT
 	LC_HAVE_KEY_PAYLOAD_DATA_ARRAY
+	LC_HAVE_XATTR_HANDLER_NAME
 	LC_HAVE_BI_CNT
 	LC_HAVE_BI_RW
 	LC_HAVE_SUBMIT_BIO_2ARGS
