@@ -9920,12 +9920,13 @@ size_in_KMGT() {
 }
 
 get_rename_size() {
-    local size=$1
-    local context=${2:-.}
-    local sample=$(do_facet $SINGLEMDS $LCTL get_param mdt.*.rename_stats |
+	local size=$1
+	local context=${2:-.}
+	local sample=$(do_facet $SINGLEMDS $LCTL \
+		get_param mdt.$FSNAME-MDT0000.rename_stats |
 		grep -A1 $context |
 		awk '/ '${size}'/ {print $4}' | sed -e "s/,//g")
-    echo $sample
+	echo $sample
 }
 
 test_133d() {
@@ -9937,11 +9938,12 @@ test_133d() {
 
 	local testdir1=$DIR/${tdir}/stats_testdir1
 	local testdir2=$DIR/${tdir}/stats_testdir2
+	mkdir -p $DIR/${tdir}
 
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.rename_stats=clear
 
-	mkdir -p ${testdir1} || error "mkdir failed"
-	mkdir -p ${testdir2} || error "mkdir failed"
+	lfs mkdir -i 0 -c 1 ${testdir1} || error "mkdir failed"
+	lfs mkdir -i 0 -c 1 ${testdir2} || error "mkdir failed"
 
 	createmany -o $testdir1/test 512 || error "createmany failed"
 
@@ -9962,7 +9964,9 @@ test_133d() {
 	echo "source rename dir size: ${testdir1_size}"
 	echo "target rename dir size: ${testdir2_size}"
 
-	local cmd="do_facet $SINGLEMDS $LCTL get_param mdt.*.rename_stats"
+	local cmd="do_facet $SINGLEMDS $LCTL "
+	cmd+="get_param mdt.$FSNAME-MDT0000.rename_stats"
+
 	eval $cmd || error "$cmd failed"
 	local samedir=$($cmd | grep 'same_dir')
 	local same_sample=$(get_rename_size $testdir1_size)
