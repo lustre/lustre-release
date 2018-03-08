@@ -2232,7 +2232,7 @@ enum lfsck_cmd {
 
 #define LOV_DESC_MAGIC 0xB0CCDE5C
 #define LOV_DESC_QOS_MAXAGE_DEFAULT 5  /* Seconds */
-#define LOV_DESC_STRIPE_SIZE_DEFAULT (4 << LNET_MTU_BITS)
+#define LOV_DESC_STRIPE_SIZE_DEFAULT (1 << LNET_MTU_BITS)
 
 /* LOV settings descriptor (should only contain static info) */
 struct lov_desc {
