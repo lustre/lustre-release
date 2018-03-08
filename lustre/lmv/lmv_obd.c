@@ -1425,9 +1425,8 @@ static int lmv_get_root(struct obd_export *exp, const char *fileset,
 }
 
 static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-			u64 valid, const char *name,
-			const char *input, int input_size, int output_size,
-			int flags, struct ptlrpc_request **request)
+			u64 obd_md_valid, const char *name, size_t buf_size,
+			struct ptlrpc_request **req)
 {
         struct obd_device      *obd = exp->exp_obd;
         struct lmv_obd         *lmv = &obd->u.lmv;
@@ -1439,17 +1438,16 @@ static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-	rc = md_getxattr(tgt->ltd_exp, fid, valid, name, input,
-			 input_size, output_size, flags, request);
+	rc = md_getxattr(tgt->ltd_exp, fid, obd_md_valid, name, buf_size, req);
 
 	RETURN(rc);
 }
 
 static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-			u64 valid, const char *name,
-			const char *input, int input_size, int output_size,
-			int flags, __u32 suppgid,
-			struct ptlrpc_request **request)
+			u64 obd_md_valid, const char *name,
+			const void *value, size_t value_size,
+			unsigned int xattr_flags, u32 suppgid,
+			struct ptlrpc_request **req)
 {
         struct obd_device      *obd = exp->exp_obd;
         struct lmv_obd         *lmv = &obd->u.lmv;
@@ -1461,9 +1459,8 @@ static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-	rc = md_setxattr(tgt->ltd_exp, fid, valid, name, input,
-			 input_size, output_size, flags, suppgid,
-			 request);
+	rc = md_setxattr(tgt->ltd_exp, fid, obd_md_valid, name,
+			 value, value_size, xattr_flags, suppgid, req);
 
 	RETURN(rc);
 }

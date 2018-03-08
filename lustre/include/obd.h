@@ -1076,12 +1076,11 @@ struct md_ops {
 			struct ptlrpc_request **);
 
 	int (*m_setxattr)(struct obd_export *, const struct lu_fid *,
-			  u64, const char *, const char *, int, int, int, u32,
-			  struct ptlrpc_request **);
+			  u64, const char *, const void *, size_t, unsigned int,
+			  u32, struct ptlrpc_request **);
 
 	int (*m_getxattr)(struct obd_export *, const struct lu_fid *,
-			  u64, const char *, const char *, int, int, int,
-			  struct ptlrpc_request **);
+			  u64, const char *, size_t, struct ptlrpc_request **);
 
 	int (*m_intent_getattr_async)(struct obd_export *,
 				      struct md_enqueue_info *);

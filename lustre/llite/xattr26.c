@@ -152,7 +152,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 	}
 
 	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid, name, pv,
-			 size, 0, flags, ll_i2suppgid(inode), &req);
+			 size, flags, ll_i2suppgid(inode), &req);
 	if (rc) {
 		if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
 			LCONSOLE_INFO("Disabling user_xattr feature because "
@@ -405,9 +405,8 @@ do_getxattr:
 		}
 	} else {
 getxattr_nocache:
-		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode),
-				valid, name, NULL, 0, size, 0, &req);
-
+		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,
+				 name, size, &req);
 		if (rc < 0)
 			GOTO(out_xattr, rc);
 

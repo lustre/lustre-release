@@ -4472,7 +4472,7 @@ int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 
 	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode),
 			 value ? OBD_MD_FLXATTR : OBD_MD_FLXATTRRM,
-			 name, value, value_size, 0, 0, 0, &req);
+			 name, value, value_size, 0, 0, &req);
 
 	ptlrpc_req_finished(req);
 out_value:
@@ -4774,8 +4774,7 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 	rc = ll_get_default_mdsize(sbi, &lmmsize);
 	if (rc == 0)
 		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode),
-				OBD_MD_FLXATTR, XATTR_NAME_LOV, NULL, 0,
-				lmmsize, 0, &req);
+				OBD_MD_FLXATTR, XATTR_NAME_LOV, lmmsize, &req);
 	if (rc < 0)
 		RETURN(rc);
 

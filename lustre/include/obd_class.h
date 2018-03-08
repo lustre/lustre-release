@@ -1652,10 +1652,10 @@ static inline int md_merge_attr(struct obd_export *exp,
 }
 
 static inline int md_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-			      u64 valid, const char *name,
-			      const char *input, int input_size,
-			      int output_size, int flags, __u32 suppgid,
-			      struct ptlrpc_request **request)
+			      u64 obd_md_valid, const char *name,
+			      const void *value, size_t value_size,
+			      unsigned int xattr_flags, u32 suppgid,
+			      struct ptlrpc_request **req)
 {
 	int rc;
 	ENTRY;
@@ -1664,16 +1664,14 @@ static inline int md_setxattr(struct obd_export *exp, const struct lu_fid *fid,
 	if (rc)
 		RETURN(rc);
 	EXP_MD_COUNTER_INCREMENT(exp, setxattr);
-	RETURN(MDP(exp->exp_obd, setxattr)(exp, fid, valid, name, input,
-					   input_size, output_size, flags,
-					   suppgid, request));
+	RETURN(MDP(exp->exp_obd, setxattr)(exp, fid, obd_md_valid, name,
+					   value, value_size, xattr_flags,
+					   suppgid, req));
 }
 
 static inline int md_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-			      u64 valid, const char *name,
-			      const char *input, int input_size,
-			      int output_size, int flags,
-			      struct ptlrpc_request **request)
+			      u64 obd_md_valid, const char *name,
+			      size_t buf_size, struct ptlrpc_request **req)
 {
 	int rc;
 	ENTRY;
@@ -1681,9 +1679,8 @@ static inline int md_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 	if (rc)
 		RETURN(rc);
 	EXP_MD_COUNTER_INCREMENT(exp, getxattr);
-	RETURN(MDP(exp->exp_obd, getxattr)(exp, fid, valid, name, input,
-					   input_size, output_size, flags,
-					   request));
+	RETURN(MDP(exp->exp_obd, getxattr)(exp, fid, obd_md_valid, name,
+					   buf_size, req));
 }
 
 static inline int md_set_open_replay_data(struct obd_export *exp,
