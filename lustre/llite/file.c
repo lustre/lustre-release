@@ -4431,44 +4431,51 @@ struct posix_acl *ll_get_acl(struct inode *inode, int type)
 #ifdef CONFIG_FS_POSIX_ACL
 int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 {
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ptlrpc_request *req = NULL;
 	const char *name = NULL;
 	char *value = NULL;
-	size_t size = 0;
-	int rc = 0;
+	size_t value_size = 0;
+	int rc;
 	ENTRY;
 
 	switch (type) {
 	case ACL_TYPE_ACCESS:
+		name = XATTR_NAME_POSIX_ACL_ACCESS;
 		if (acl) {
 			rc = posix_acl_update_mode(inode, &inode->i_mode, &acl);
 			if (rc)
 				GOTO(out, rc);
 		}
-		name = XATTR_NAME_POSIX_ACL_ACCESS;
+
 		break;
 	case ACL_TYPE_DEFAULT:
+		name = XATTR_NAME_POSIX_ACL_DEFAULT;
 		if (!S_ISDIR(inode->i_mode))
 			GOTO(out, rc = acl ? -EACCES : 0);
-		name = XATTR_NAME_POSIX_ACL_DEFAULT;
+
 		break;
 	default:
 		GOTO(out, rc = -EINVAL);
 	}
 
 	if (acl) {
-		size = posix_acl_xattr_size(acl->a_count);
-		value = kmalloc(size, GFP_NOFS);
+		value_size = posix_acl_xattr_size(acl->a_count);
+		value = kmalloc(value_size, GFP_NOFS);
 		if (value == NULL)
 			GOTO(out, rc = -ENOMEM);
 
-		rc = posix_acl_to_xattr(&init_user_ns, acl, value, size);
+		rc = posix_acl_to_xattr(&init_user_ns, acl, value, value_size);
 		if (rc < 0)
-			GOTO(out_free, rc);
+			GOTO(out_value, rc);
 	}
 
-	/* dentry is only used for *.lov attributes so it's safe to be NULL */
-	rc = __vfs_setxattr(NULL, inode, name, value, size, XATTR_CREATE);
-out_free:
+	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode),
+			 value ? OBD_MD_FLXATTR : OBD_MD_FLXATTRRM,
+			 name, value, value_size, 0, 0, 0, &req);
+
+	ptlrpc_req_finished(req);
+out_value:
 	kfree(value);
 out:
 	if (!rc)
