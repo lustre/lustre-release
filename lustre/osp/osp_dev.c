@@ -1942,7 +1942,7 @@ static int __init osp_init(void)
 		return rc;
 	}
 
-	rc = class_register_type(&lwp_obd_device_ops, NULL, true, NULL,
+	rc = class_register_type(&lwp_obd_device_ops, NULL, false, NULL,
 				 LUSTRE_LWP_NAME, &lwp_device_type);
 	if (rc != 0) {
 		class_unregister_type(LUSTRE_OSP_NAME);

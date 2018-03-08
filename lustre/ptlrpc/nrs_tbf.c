@@ -3268,10 +3268,8 @@ static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
 	       nrq->nr_u.tbf.tr_sequence);
 }
 
-#ifdef CONFIG_PROC_FS
-
 /**
- * lprocfs interface
+ * debugfs interface
  */
 
 /**
@@ -3659,7 +3657,8 @@ out_free_kernbuff:
 out:
 	return rc ? rc : count;
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_tbf_rule);
+
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_tbf_rule);
 
 /**
  * Initializes a TBF policy's lprocfs interface for service \a svc
@@ -3678,26 +3677,12 @@ static int nrs_tbf_lprocfs_init(struct ptlrpc_service *svc)
 		{ NULL }
 	};
 
-	if (svc->srv_procroot == NULL)
+	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
 		return 0;
 
-	return lprocfs_add_vars(svc->srv_procroot, nrs_tbf_lprocfs_vars, NULL);
+	return ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_tbf_lprocfs_vars,
+				 NULL);
 }
-
-/**
- * Cleans up a TBF policy's lprocfs interface for service \a svc
- *
- * \param[in] svc the service
- */
-static void nrs_tbf_lprocfs_fini(struct ptlrpc_service *svc)
-{
-	if (svc->srv_procroot == NULL)
-		return;
-
-	lprocfs_remove_proc_entry("nrs_tbf_rule", svc->srv_procroot);
-}
-
-#endif /* CONFIG_PROC_FS */
 
 /**
  * TBF policy operations
@@ -3712,10 +3697,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_tbf_ops = {
 	.op_req_enqueue		= nrs_tbf_req_add,
 	.op_req_dequeue		= nrs_tbf_req_del,
 	.op_req_stop		= nrs_tbf_req_stop,
-#ifdef CONFIG_PROC_FS
 	.op_lprocfs_init	= nrs_tbf_lprocfs_init,
-	.op_lprocfs_fini	= nrs_tbf_lprocfs_fini,
-#endif
 };
 
 /**

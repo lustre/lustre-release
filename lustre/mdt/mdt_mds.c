@@ -151,12 +151,8 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 {
 	static struct ptlrpc_service_conf conf;
 	struct obd_device *obd = m->mds_md_dev.md_lu_dev.ld_obd;
-	struct proc_dir_entry *procfs_entry;
 	int rc = 0;
 	ENTRY;
-
-	procfs_entry = obd->obd_proc_entry;
-	LASSERT(procfs_entry != NULL);
 
 	conf = (typeof(conf)) {
 		.psc_name		= LUSTRE_MDT_NAME,
@@ -193,7 +189,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_regular_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-							 procfs_entry);
+							 obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_regular_service)) {
 		rc = PTR_ERR(m->mds_regular_service);
 		CERROR("failed to start regular mdt service: %d\n", rc);
@@ -237,7 +233,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_readpage_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-							  procfs_entry);
+							  obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_readpage_service)) {
 		rc = PTR_ERR(m->mds_readpage_service);
 		CERROR("failed to start readpage service: %d\n", rc);
@@ -285,7 +281,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_setattr_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-							 procfs_entry);
+							 obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_setattr_service)) {
 		rc = PTR_ERR(m->mds_setattr_service);
 		CERROR("failed to start setattr service: %d\n", rc);
@@ -331,7 +327,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_out_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-						     procfs_entry);
+						     obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_out_service)) {
 		rc = PTR_ERR(m->mds_out_service);
 		CERROR("failed to start out service: %d\n", rc);
@@ -367,7 +363,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_mdsc_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-						      procfs_entry);
+						      obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_mdsc_service)) {
 		rc = PTR_ERR(m->mds_mdsc_service);
 		CERROR("failed to start seq controller service: %d\n", rc);
@@ -404,7 +400,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_mdss_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-						      procfs_entry);
+						      obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_mdss_service)) {
 		rc = PTR_ERR(m->mds_mdss_service);
 		CERROR("failed to start metadata seq server service: %d\n", rc);
@@ -439,7 +435,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_fld_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-						     procfs_entry);
+						     obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_fld_service)) {
 		rc = PTR_ERR(m->mds_fld_service);
 		CERROR("failed to start fld service: %d\n", rc);
@@ -478,7 +474,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		},
 	};
 	m->mds_io_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-						    procfs_entry);
+						    obd->obd_debugfs_entry);
 	if (IS_ERR(m->mds_io_service)) {
 		rc = PTR_ERR(m->mds_io_service);
 		CERROR("failed to start MDT I/O service: %d\n", rc);
@@ -613,7 +609,7 @@ static struct obd_ops mds_obd_device_ops = {
 
 int mds_mod_init(void)
 {
-	return class_register_type(&mds_obd_device_ops, NULL, true, NULL,
+	return class_register_type(&mds_obd_device_ops, NULL, false, NULL,
 				   LUSTRE_MDS_NAME, &mds_device_type);
 }
 

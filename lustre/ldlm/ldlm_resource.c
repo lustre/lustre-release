@@ -58,24 +58,24 @@ LIST_HEAD(ldlm_cli_active_namespace_list);
 /* Client namespaces that don't have any locks in them */
 LIST_HEAD(ldlm_cli_inactive_namespace_list);
 
-static struct proc_dir_entry *ldlm_type_proc_dir;
-static struct proc_dir_entry *ldlm_ns_proc_dir;
-struct proc_dir_entry *ldlm_svc_proc_dir;
+static struct dentry *ldlm_debugfs_dir;
+static struct dentry *ldlm_ns_debugfs_dir;
+struct dentry *ldlm_svc_debugfs_dir;
 
 /* during debug dump certain amount of granted locks for one resource to avoid
  * DDOS. */
 static unsigned int ldlm_dump_granted_max = 256;
 
-#ifdef CONFIG_PROC_FS
-static ssize_t
-lprocfs_dump_ns_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
+static ssize_t ldebugfs_dump_ns_seq_write(struct file *file,
+					  const char __user *buffer,
+					  size_t count, loff_t *off)
 {
 	ldlm_dump_all_namespaces(LDLM_NAMESPACE_SERVER, D_DLMTRACE);
 	ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
 	RETURN(count);
 }
-LPROC_SEQ_FOPS_WR_ONLY(ldlm, dump_ns);
+
+LDEBUGFS_FOPS_WR_ONLY(ldlm, dump_ns);
 
 static int ldlm_rw_uint_seq_show(struct seq_file *m, void *v)
 {
@@ -96,7 +96,7 @@ ldlm_rw_uint_seq_write(struct file *file, const char __user *buffer,
 				    (unsigned int *)seq->private);
 }
 
-LPROC_SEQ_FOPS(ldlm_rw_uint);
+LDEBUGFS_SEQ_FOPS(ldlm_rw_uint);
 
 #ifdef HAVE_SERVER_SUPPORT
 
@@ -163,7 +163,7 @@ static ssize_t seq_watermark_write(struct file *file,
 
 static int seq_watermark_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, seq_watermark_show, PDE_DATA(inode));
+	return single_open(file, seq_watermark_show, inode->i_private);
 }
 
 static const struct file_operations ldlm_watermark_fops = {
@@ -184,7 +184,7 @@ static int seq_granted_show(struct seq_file *m, void *data)
 
 static int seq_granted_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, seq_granted_show, PDE_DATA(inode));
+	return single_open(file, seq_granted_show, inode->i_private);
 }
 
 static const struct file_operations ldlm_granted_fops = {
@@ -197,59 +197,62 @@ static const struct file_operations ldlm_granted_fops = {
 
 #endif /* HAVE_SERVER_SUPPORT */
 
-int ldlm_proc_setup(void)
+static struct lprocfs_vars ldlm_debugfs_list[] = {
+	{ .name	=	"dump_namespaces",
+	  .fops	=	&ldlm_dump_ns_fops,
+	  .proc_mode =	0222 },
+	{ .name	=	"dump_granted_max",
+	  .fops	=	&ldlm_rw_uint_fops,
+	  .data	=	&ldlm_dump_granted_max },
+#ifdef HAVE_SERVER_SUPPORT
+	{ .name =	"lock_reclaim_threshold_mb",
+	  .fops =	&ldlm_watermark_fops,
+	  .data =	&ldlm_reclaim_threshold_mb },
+	{ .name =	"lock_limit_mb",
+	  .fops =	&ldlm_watermark_fops,
+	  .data =	&ldlm_lock_limit_mb },
+	{ .name =	"lock_granted_count",
+	  .fops =	&ldlm_granted_fops,
+	  .data =	&ldlm_granted_total },
+#endif
+	{ NULL }
+};
+
+int ldlm_debugfs_setup(void)
 {
 	int rc;
-	struct lprocfs_vars list[] = {
-		{ .name	=	"dump_namespaces",
-		  .fops	=	&ldlm_dump_ns_fops,
-		  .proc_mode =	0222 },
-		{ .name	=	"dump_granted_max",
-		  .fops	=	&ldlm_rw_uint_fops,
-		  .data	=	&ldlm_dump_granted_max },
-#ifdef HAVE_SERVER_SUPPORT
-		{ .name =	"lock_reclaim_threshold_mb",
-		  .fops =	&ldlm_watermark_fops,
-		  .data =	&ldlm_reclaim_threshold_mb },
-		{ .name =	"lock_limit_mb",
-		  .fops =	&ldlm_watermark_fops,
-		  .data =	&ldlm_lock_limit_mb },
-		{ .name =	"lock_granted_count",
-		  .fops =	&ldlm_granted_fops,
-		  .data =	&ldlm_granted_total },
-#endif
-		{ NULL }};
-	ENTRY;
-	LASSERT(ldlm_ns_proc_dir == NULL);
 
-	ldlm_type_proc_dir = lprocfs_register(OBD_LDLM_DEVICENAME,
-					      proc_lustre_root,
-					      NULL, NULL);
-	if (IS_ERR(ldlm_type_proc_dir)) {
-		CERROR("LProcFS failed in ldlm-init\n");
-		rc = PTR_ERR(ldlm_type_proc_dir);
+	ENTRY;
+	ldlm_debugfs_dir = ldebugfs_register(OBD_LDLM_DEVICENAME,
+					     debugfs_lustre_root,
+					     NULL, NULL);
+	if (IS_ERR_OR_NULL(ldlm_debugfs_dir)) {
+		CERROR("LDebugFS failed in ldlm-init\n");
+		rc = ldlm_debugfs_dir ? PTR_ERR(ldlm_debugfs_dir) : -ENOMEM;
 		GOTO(err, rc);
 	}
 
-	ldlm_ns_proc_dir = lprocfs_register("namespaces",
-					    ldlm_type_proc_dir,
-					    NULL, NULL);
-	if (IS_ERR(ldlm_ns_proc_dir)) {
+	ldlm_ns_debugfs_dir = ldebugfs_register("namespaces",
+						ldlm_debugfs_dir,
+						NULL, NULL);
+	if (IS_ERR_OR_NULL(ldlm_ns_debugfs_dir)) {
 		CERROR("LProcFS failed in ldlm-init\n");
-		rc = PTR_ERR(ldlm_ns_proc_dir);
+		rc = ldlm_ns_debugfs_dir ? PTR_ERR(ldlm_ns_debugfs_dir)
+					 : -ENOMEM;
 		GOTO(err_type, rc);
 	}
 
-	ldlm_svc_proc_dir = lprocfs_register("services",
-					     ldlm_type_proc_dir,
-					     NULL, NULL);
-	if (IS_ERR(ldlm_svc_proc_dir)) {
+	ldlm_svc_debugfs_dir = ldebugfs_register("services",
+						 ldlm_debugfs_dir,
+						 NULL, NULL);
+	if (IS_ERR_OR_NULL(ldlm_svc_debugfs_dir)) {
 		CERROR("LProcFS failed in ldlm-init\n");
-		rc = PTR_ERR(ldlm_svc_proc_dir);
+		rc = ldlm_svc_debugfs_dir ? PTR_ERR(ldlm_svc_debugfs_dir)
+					  : -ENOMEM;
 		GOTO(err_ns, rc);
 	}
 
-	rc = lprocfs_add_vars(ldlm_type_proc_dir, list, NULL);
+	rc = ldebugfs_add_vars(ldlm_debugfs_dir, ldlm_debugfs_list, NULL);
 	if (rc != 0) {
 		CERROR("LProcFS failed in ldlm-init\n");
 		GOTO(err_svc, rc);
@@ -258,26 +261,32 @@ int ldlm_proc_setup(void)
 	RETURN(0);
 
 err_svc:
-	lprocfs_remove(&ldlm_svc_proc_dir);
+	ldebugfs_remove(&ldlm_svc_debugfs_dir);
 err_ns:
-        lprocfs_remove(&ldlm_ns_proc_dir);
+	ldebugfs_remove(&ldlm_ns_debugfs_dir);
 err_type:
-        lprocfs_remove(&ldlm_type_proc_dir);
+	ldebugfs_remove(&ldlm_debugfs_dir);
 err:
-        ldlm_svc_proc_dir = NULL;
-        RETURN(rc);
+	ldlm_svc_debugfs_dir = NULL;
+	ldlm_ns_debugfs_dir = NULL;
+	ldlm_debugfs_dir = NULL;
+	RETURN(rc);
 }
 
-void ldlm_proc_cleanup(void)
+void ldlm_debugfs_cleanup(void)
 {
-        if (ldlm_svc_proc_dir)
-                lprocfs_remove(&ldlm_svc_proc_dir);
+	if (!IS_ERR_OR_NULL(ldlm_svc_debugfs_dir))
+		ldebugfs_remove(&ldlm_svc_debugfs_dir);
 
-        if (ldlm_ns_proc_dir)
-                lprocfs_remove(&ldlm_ns_proc_dir);
+	if (!IS_ERR_OR_NULL(ldlm_ns_debugfs_dir))
+		ldebugfs_remove(&ldlm_ns_debugfs_dir);
 
-        if (ldlm_type_proc_dir)
-                lprocfs_remove(&ldlm_type_proc_dir);
+	if (!IS_ERR_OR_NULL(ldlm_debugfs_dir))
+		ldebugfs_remove(&ldlm_debugfs_dir);
+
+	ldlm_svc_debugfs_dir = NULL;
+	ldlm_ns_debugfs_dir = NULL;
+	ldlm_debugfs_dir = NULL;
 }
 
 static ssize_t resource_count_show(struct kobject *kobj, struct attribute *attr,
@@ -662,13 +671,13 @@ static struct kobj_type ldlm_ns_ktype = {
 	.release	= ldlm_ns_release,
 };
 
-static void ldlm_namespace_proc_unregister(struct ldlm_namespace *ns)
+static void ldlm_namespace_debugfs_unregister(struct ldlm_namespace *ns)
 {
-	if (ns->ns_proc_dir_entry == NULL)
+	if (IS_ERR_OR_NULL(ns->ns_debugfs_entry))
                 CERROR("dlm namespace %s has no procfs dir?\n",
                        ldlm_ns_name(ns));
 	else
-		lprocfs_remove(&ns->ns_proc_dir_entry);
+		ldebugfs_remove(&ns->ns_debugfs_entry);
 
 	if (ns->ns_stats != NULL)
 		lprocfs_free_stats(&ns->ns_stats);
@@ -701,31 +710,23 @@ int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 	return err;
 }
 
-static int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
+static int ldlm_namespace_debugfs_register(struct ldlm_namespace *ns)
 {
-	struct proc_dir_entry *ns_pde;
+	struct dentry *ns_entry;
 
-        LASSERT(ns != NULL);
-        LASSERT(ns->ns_rs_hash != NULL);
-
-	if (ns->ns_proc_dir_entry != NULL) {
-		ns_pde = ns->ns_proc_dir_entry;
+	if (!IS_ERR_OR_NULL(ns->ns_debugfs_entry)) {
+		ns_entry = ns->ns_debugfs_entry;
 	} else {
-		ns_pde = proc_mkdir(ldlm_ns_name(ns), ldlm_ns_proc_dir);
-		if (ns_pde == NULL)
+		ns_entry = debugfs_create_dir(ldlm_ns_name(ns),
+					      ldlm_ns_debugfs_dir);
+		if (!ns_entry)
 			return -ENOMEM;
-		ns->ns_proc_dir_entry = ns_pde;
+		ns->ns_debugfs_entry = ns_entry;
 	}
 
 	return 0;
 }
 #undef MAX_STRING_SIZE
-#else /* CONFIG_PROC_FS */
-
-#define ldlm_namespace_proc_unregister(ns)      ({;})
-#define ldlm_namespace_proc_register(ns)        ({0;})
-
-#endif /* CONFIG_PROC_FS */
 
 static unsigned ldlm_res_hop_hash(struct cfs_hash *hs,
                                   const void *key, unsigned mask)
@@ -971,7 +972,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 		GOTO(out_hash, rc);
 	}
 
-	rc = ldlm_namespace_proc_register(ns);
+	rc = ldlm_namespace_debugfs_register(ns);
 	if (rc) {
 		CERROR("Can't initialize ns proc, rc %d\n", rc);
 		GOTO(out_sysfs, rc);
@@ -987,7 +988,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
         ldlm_namespace_register(ns, client);
         RETURN(ns);
 out_proc:
-	ldlm_namespace_proc_unregister(ns);
+	ldlm_namespace_debugfs_unregister(ns);
 out_sysfs:
 	ldlm_namespace_sysfs_unregister(ns);
 	ldlm_namespace_cleanup(ns, 0);
@@ -1253,7 +1254,7 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 	 * Removing it after @dir may cause oops. */
 	ldlm_pool_fini(&ns->ns_pool);
 
-	ldlm_namespace_proc_unregister(ns);
+	ldlm_namespace_debugfs_unregister(ns);
 	ldlm_namespace_sysfs_unregister(ns);
 	cfs_hash_putref(ns->ns_rs_hash);
 	/* Namespace \a ns should be not on list at this time, otherwise

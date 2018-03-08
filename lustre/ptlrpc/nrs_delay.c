@@ -362,10 +362,8 @@ static int nrs_delay_ctl(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * lprocfs interface
+ * debugfs interface
  */
-
-#ifdef CONFIG_PROC_FS
 
 /* nrs_delay_min and nrs_delay_max are bounded by these values */
 #define LPROCFS_NRS_DELAY_LOWER_BOUND		0
@@ -607,7 +605,7 @@ ptlrpc_lprocfs_nrs_delay_min_seq_write(struct file *file,
 						  svc, NRS_POL_NAME_DELAY,
 						  NRS_CTL_DELAY_WR_MIN, false);
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_min);
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_min);
 
 /**
  * Retrieves the value of the maximum delay for delay policy instances on both
@@ -690,7 +688,7 @@ ptlrpc_lprocfs_nrs_delay_max_seq_write(struct file *file,
 						  svc, NRS_POL_NAME_DELAY,
 						  NRS_CTL_DELAY_WR_MAX, false);
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_max);
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_max);
 
 /**
  * Retrieves the value of the percentage of requests which should be delayed
@@ -774,7 +772,8 @@ ptlrpc_lprocfs_nrs_delay_pct_seq_write(struct file *file,
 						  svc, NRS_POL_NAME_DELAY,
 						  NRS_CTL_DELAY_WR_PCT, false);
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_pct);
+
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_delay_pct);
 
 static int nrs_delay_lprocfs_init(struct ptlrpc_service *svc)
 {
@@ -791,24 +790,12 @@ static int nrs_delay_lprocfs_init(struct ptlrpc_service *svc)
 		{ NULL }
 	};
 
-	if (svc->srv_procroot == NULL)
+	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
 		return 0;
 
-	return lprocfs_add_vars(svc->srv_procroot, nrs_delay_lprocfs_vars,
-				NULL);
+	return ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_delay_lprocfs_vars,
+				 NULL);
 }
-
-static void nrs_delay_lprocfs_fini(struct ptlrpc_service *svc)
-{
-	if (svc->srv_procroot == NULL)
-		return;
-
-	lprocfs_remove_proc_entry("nrs_delay_min", svc->srv_procroot);
-	lprocfs_remove_proc_entry("nrs_delay_max", svc->srv_procroot);
-	lprocfs_remove_proc_entry("nrs_delay_pct", svc->srv_procroot);
-}
-
-#endif /* CONFIG_PROC_FS */
 
 /**
  * Delay policy operations
@@ -822,10 +809,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_delay_ops = {
 	.op_req_enqueue		= nrs_delay_req_add,
 	.op_req_dequeue		= nrs_delay_req_del,
 	.op_req_stop		= nrs_delay_req_stop,
-#ifdef CONFIG_PROC_FS
 	.op_lprocfs_init	= nrs_delay_lprocfs_init,
-	.op_lprocfs_fini	= nrs_delay_lprocfs_fini,
-#endif
 };
 
 /**

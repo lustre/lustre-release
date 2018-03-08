@@ -687,7 +687,7 @@ ptlrpc_service_part_init(struct ptlrpc_service *svc,
 struct ptlrpc_service *
 ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 			struct kset *parent,
-			struct proc_dir_entry *proc_entry)
+			struct dentry *debugfs_entry)
 {
 	struct ptlrpc_service_cpt_conf	*cconf = &conf->psc_cpt;
 	struct ptlrpc_service		*service;
@@ -813,8 +813,8 @@ ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 			GOTO(failed, rc);
 	}
 
-	if (proc_entry != NULL)
-		ptlrpc_lprocfs_register_service(proc_entry, service);
+	if (debugfs_entry != NULL)
+		ptlrpc_ldebugfs_register_service(debugfs_entry, service);
 
 	rc = ptlrpc_service_nrs_setup(service);
 	if (rc != 0)

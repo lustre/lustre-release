@@ -1402,7 +1402,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 
 	/* Start the service threads */
 	mgs->mgs_service = ptlrpc_register_service(&conf, &obd->obd_kset,
-						   obd->obd_proc_entry);
+						   obd->obd_debugfs_entry);
 	if (IS_ERR(mgs->mgs_service)) {
 		rc = PTR_ERR(mgs->mgs_service);
 		CERROR("failed to start mgs service: %d\n", rc);

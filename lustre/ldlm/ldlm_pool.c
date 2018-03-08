@@ -695,7 +695,8 @@ static int lprocfs_pool_state_seq_show(struct seq_file *m, void *unused)
 		   granted, limit);
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(lprocfs_pool_state);
+
+LDEBUGFS_SEQ_FOPS_RO(lprocfs_pool_state);
 
 static ssize_t grant_speed_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -779,10 +780,10 @@ static int ldlm_pool_sysfs_init(struct ldlm_pool *pl)
 	return err;
 }
 
-static int ldlm_pool_proc_init(struct ldlm_pool *pl)
+static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 {
 	struct ldlm_namespace *ns = ldlm_pl2ns(pl);
-	struct proc_dir_entry *parent_ns_proc;
+	struct dentry *debugfs_ns_parent;
 	struct lprocfs_vars pool_vars[2];
 	char *var_name = NULL;
 	int rc = 0;
@@ -792,18 +793,18 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
 	if (!var_name)
 		RETURN(-ENOMEM);
 
-	parent_ns_proc = ns->ns_proc_dir_entry;
-	if (parent_ns_proc == NULL) {
-		CERROR("%s: proc entry is not initialized\n",
+	debugfs_ns_parent = ns->ns_debugfs_entry;
+	if (IS_ERR_OR_NULL(debugfs_ns_parent)) {
+		CERROR("%s: debugfs entry is not initialized\n",
 		       ldlm_ns_name(ns));
 		GOTO(out_free_name, rc = -EINVAL);
 	}
-	pl->pl_proc_dir = lprocfs_register("pool", parent_ns_proc,
-					   NULL, NULL);
-	if (IS_ERR(pl->pl_proc_dir)) {
-		rc = PTR_ERR(pl->pl_proc_dir);
-		pl->pl_proc_dir = NULL;
-		CERROR("%s: cannot create 'pool' proc entry: rc = %d\n",
+	pl->pl_debugfs_entry = ldebugfs_register("pool", debugfs_ns_parent,
+						 NULL, NULL);
+	if (IS_ERR(pl->pl_debugfs_entry)) {
+		rc = PTR_ERR(pl->pl_debugfs_entry);
+		pl->pl_debugfs_entry = NULL;
+		CERROR("%s: cannot create 'pool' debugfs entry: rc = %d\n",
 		       ldlm_ns_name(ns), rc);
 		GOTO(out_free_name, rc);
 	}
@@ -812,7 +813,7 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
 	memset(pool_vars, 0, sizeof(pool_vars));
 	pool_vars[0].name = var_name;
 
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "state", pl,
+	ldlm_add_var(&pool_vars[0], pl->pl_debugfs_entry, "state", pl,
 		     &lprocfs_pool_state_fops);
 
         pl->pl_stats = lprocfs_alloc_stats(LDLM_POOL_LAST_STAT -
@@ -853,7 +854,8 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         lprocfs_counter_init(pl->pl_stats, LDLM_POOL_TIMING_STAT,
                              LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
                              "recalc_timing", "sec");
-	rc = lprocfs_register_stats(pl->pl_proc_dir, "stats", pl->pl_stats);
+	rc = ldebugfs_register_stats(pl->pl_debugfs_entry, "stats",
+				     pl->pl_stats);
 
         EXIT;
 out_free_name:
@@ -867,15 +869,15 @@ static void ldlm_pool_sysfs_fini(struct ldlm_pool *pl)
 	wait_for_completion(&pl->pl_kobj_unregister);
 }
 
-static void ldlm_pool_proc_fini(struct ldlm_pool *pl)
+static void ldlm_pool_debugfs_fini(struct ldlm_pool *pl)
 {
         if (pl->pl_stats != NULL) {
                 lprocfs_free_stats(&pl->pl_stats);
                 pl->pl_stats = NULL;
         }
-        if (pl->pl_proc_dir != NULL) {
-                lprocfs_remove(&pl->pl_proc_dir);
-                pl->pl_proc_dir = NULL;
+	if (pl->pl_debugfs_entry != NULL) {
+		ldebugfs_remove(&pl->pl_debugfs_entry);
+		pl->pl_debugfs_entry = NULL;
         }
 }
 
@@ -909,7 +911,7 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
                 pl->pl_recalc_period = LDLM_POOL_CLI_DEF_RECALC_PERIOD;
         }
         pl->pl_client_lock_volume = 0;
-        rc = ldlm_pool_proc_init(pl);
+	rc = ldlm_pool_debugfs_init(pl);
         if (rc)
                 RETURN(rc);
 
@@ -926,7 +928,7 @@ void ldlm_pool_fini(struct ldlm_pool *pl)
 {
 	ENTRY;
 	ldlm_pool_sysfs_fini(pl);
-	ldlm_pool_proc_fini(pl);
+	ldlm_pool_debugfs_fini(pl);
 
         /*
          * Pool should not be used after this point. We can't free it here as

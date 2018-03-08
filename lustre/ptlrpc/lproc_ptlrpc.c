@@ -194,32 +194,33 @@ static const char *ll_eopcode2str(__u32 opcode)
         return ll_eopcode_table[opcode].opname;
 }
 
-#ifdef CONFIG_PROC_FS
-static void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
-                             char *name, struct proc_dir_entry **procroot_ret,
-                             struct lprocfs_stats **stats_ret)
+static void
+ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
+			 struct dentry **debugfs_root_ret,
+			 struct lprocfs_stats **stats_ret)
 {
-        struct proc_dir_entry *svc_procroot;
+	struct dentry *svc_debugfs_entry;
         struct lprocfs_stats *svc_stats;
         int i, rc;
         unsigned int svc_counter_config = LPROCFS_CNTR_AVGMINMAX |
                                           LPROCFS_CNTR_STDDEV;
 
-        LASSERT(*procroot_ret == NULL);
-        LASSERT(*stats_ret == NULL);
+	LASSERT(!*debugfs_root_ret);
+	LASSERT(!*stats_ret);
 
-        svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES+LUSTRE_MAX_OPCODES,0);
-        if (svc_stats == NULL)
+	svc_stats = lprocfs_alloc_stats(EXTRA_MAX_OPCODES + LUSTRE_MAX_OPCODES,
+					0);
+	if (!svc_stats)
                 return;
 
         if (dir) {
-		svc_procroot = lprocfs_register(dir, root, NULL, NULL);
-                if (IS_ERR(svc_procroot)) {
+		svc_debugfs_entry = ldebugfs_register(dir, root, NULL, NULL);
+		if (IS_ERR(svc_debugfs_entry)) {
                         lprocfs_free_stats(&svc_stats);
                         return;
                 }
         } else {
-                svc_procroot = root;
+		svc_debugfs_entry = root;
         }
 
         lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
@@ -235,7 +236,7 @@ static void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         for (i = 0; i < EXTRA_LAST_OPC; i++) {
                 char *units;
 
-                switch(i) {
+		switch (i) {
                 case BRW_WRITE_BYTES:
                 case BRW_READ_BYTES:
                         units = "bytes";
@@ -255,14 +256,14 @@ static void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                                      ll_opcode2str(opcode), "usec");
         }
 
-        rc = lprocfs_register_stats(svc_procroot, name, svc_stats);
+	rc = ldebugfs_register_stats(svc_debugfs_entry, name, svc_stats);
         if (rc < 0) {
                 if (dir)
-                        lprocfs_remove(&svc_procroot);
+			ldebugfs_remove(&svc_debugfs_entry);
                 lprocfs_free_stats(&svc_stats);
         } else {
                 if (dir)
-                        *procroot_ret = svc_procroot;
+			*debugfs_root_ret = svc_debugfs_entry;
                 *stats_ret = svc_stats;
         }
 }
@@ -281,7 +282,9 @@ ptlrpc_lprocfs_req_history_len_seq_show(struct seq_file *m, void *v)
 	seq_printf(m, "%d\n", total);
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(ptlrpc_lprocfs_req_history_len);
+
+
+LDEBUGFS_SEQ_FOPS_RO(ptlrpc_lprocfs_req_history_len);
 
 static int
 ptlrpc_lprocfs_req_history_max_seq_show(struct seq_file *m, void *n)
@@ -340,7 +343,8 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_req_history_max);
+
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_req_history_max);
 
 static int
 ptlrpc_lprocfs_req_buffers_max_seq_show(struct seq_file *m, void *n)
@@ -376,7 +380,8 @@ ptlrpc_lprocfs_req_buffers_max_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_req_buffers_max);
+
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_req_buffers_max);
 
 static ssize_t threads_min_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -784,7 +789,8 @@ out:
 
 	RETURN(rc < 0 ? rc : count);
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs);
+
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs);
 
 /** @} nrs */
 
@@ -1069,7 +1075,7 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
 		return rc;
 
 	seqf = file->private_data;
-	seqf->private = PDE_DATA(inode);
+	seqf->private = inode->i_private;
 	return 0;
 }
 
@@ -1103,7 +1109,8 @@ static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(ptlrpc_lprocfs_timeouts);
+
+LDEBUGFS_SEQ_FOPS_RO(ptlrpc_lprocfs_timeouts);
 
 static ssize_t high_priority_ratio_show(struct kobject *kobj,
 					struct attribute *attr,
@@ -1177,8 +1184,8 @@ int ptlrpc_sysfs_register_service(struct kset *parent,
 				    &parent->kobj, "%s", svc->srv_name);
 }
 
-void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
-                                     struct ptlrpc_service *svc)
+void ptlrpc_ldebugfs_register_service(struct dentry *entry,
+				      struct ptlrpc_service *svc)
 {
 	struct lprocfs_vars lproc_vars[] = {
 		{ .name	= "req_buffer_history_len",
@@ -1208,25 +1215,24 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
 
         int rc;
 
-        ptlrpc_lprocfs_register(entry, svc->srv_name,
-				"stats", &svc->srv_procroot,
-				&svc->srv_stats);
-	if (svc->srv_procroot == NULL)
+	ptlrpc_ldebugfs_register(entry, svc->srv_name, "stats",
+				 &svc->srv_debugfs_entry, &svc->srv_stats);
+	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
 		return;
 
-	lprocfs_add_vars(svc->srv_procroot, lproc_vars, NULL);
+	ldebugfs_add_vars(svc->srv_debugfs_entry, lproc_vars, NULL);
 
-	rc = lprocfs_seq_create(svc->srv_procroot, "req_history",
-				0400, &req_history_fops, svc);
+	rc = ldebugfs_seq_create(svc->srv_debugfs_entry, "req_history",
+				 0400, &req_history_fops, svc);
 	if (rc)
 		CWARN("Error adding the req_history file\n");
 }
 
 void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
 {
-        ptlrpc_lprocfs_register(obddev->obd_proc_entry, NULL, "stats",
-                                &obddev->obd_svc_procroot,
-                                &obddev->obd_svc_stats);
+	ptlrpc_ldebugfs_register(obddev->obd_debugfs_entry, NULL, "stats",
+				 &obddev->obd_svc_debugfs_entry,
+				 &obddev->obd_svc_stats);
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 
@@ -1274,8 +1280,8 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
-        if (svc->srv_procroot != NULL)
-                lprocfs_remove(&svc->srv_procroot);
+	if (!IS_ERR_OR_NULL(svc->srv_debugfs_entry))
+		ldebugfs_remove(&svc->srv_debugfs_entry);
 
         if (svc->srv_stats)
                 lprocfs_free_stats(&svc->srv_stats);
@@ -1288,8 +1294,8 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 	 */
 	lprocfs_obd_cleanup(obd);
 
-        if (obd->obd_svc_procroot)
-                lprocfs_remove(&obd->obd_svc_procroot);
+	if (!IS_ERR_OR_NULL(obd->obd_svc_debugfs_entry))
+		ldebugfs_remove(&obd->obd_svc_debugfs_entry);
 
         if (obd->obd_svc_stats)
                 lprocfs_free_stats(&obd->obd_svc_stats);
@@ -1450,5 +1456,3 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 	return count;
 }
 EXPORT_SYMBOL(lprocfs_pinger_recov_seq_write);
-
-#endif /* CONFIG_PROC_FS */

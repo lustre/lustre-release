@@ -218,7 +218,7 @@ void ldlm_destroy_flock_export(struct obd_export *exp);
 void l_check_ns_lock(struct ldlm_namespace *ns);
 void l_check_no_ns_lock(struct ldlm_namespace *ns);
 
-extern struct proc_dir_entry *ldlm_svc_proc_dir;
+extern struct dentry *ldlm_svc_debugfs_dir;
 
 struct ldlm_state {
         struct ptlrpc_service *ldlm_cb_service;
@@ -338,13 +338,13 @@ enum ldlm_policy_res {
 	struct __##var##__dummy_write {; } /* semicolon catcher */
 
 static inline void
-ldlm_add_var(struct lprocfs_vars *vars, struct proc_dir_entry *proc_dir,
+ldlm_add_var(struct lprocfs_vars *vars, struct dentry *debugfs_entry,
 	     const char *name, void *data, const struct file_operations *ops)
 {
 	snprintf((char *)vars->name, MAX_STRING_SIZE, "%s", name);
 	vars->data = data;
 	vars->fops = ops;
-	lprocfs_add_vars(proc_dir, vars, NULL);
+	ldebugfs_add_vars(debugfs_entry, vars, NULL);
 }
 
 static inline int is_granted_or_cancelled(struct ldlm_lock *lock)

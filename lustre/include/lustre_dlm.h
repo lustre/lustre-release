@@ -232,8 +232,8 @@ struct ldlm_pool_ops {
  * This feature is commonly referred to as lru_resize.
  */
 struct ldlm_pool {
-	/** Pool proc directory. */
-	struct proc_dir_entry	*pl_proc_dir;
+	/** Pool debugfs directory. */
+	struct dentry		*pl_debugfs_entry;
 	/** Pool name, must be long enough to hold compound proc entry name. */
 	char			pl_name[100];
 	/** Lock for protecting SLV/CLV updates. */
@@ -393,8 +393,8 @@ struct ldlm_namespace {
 	/** Client side original connect flags supported by server. */
 	__u64			ns_orig_connect_flags;
 
-	/* namespace proc dir entry */
-	struct proc_dir_entry	*ns_proc_dir_entry;
+	/* namespace debugfs dir entry */
+	struct dentry		*ns_debugfs_entry;
 
 	/**
 	 * Position in global namespace list linking all namespaces on
@@ -1481,9 +1481,9 @@ void ldlm_namespace_unregister(struct ldlm_namespace *ns,
 			       enum ldlm_side client);
 void ldlm_namespace_get(struct ldlm_namespace *ns);
 void ldlm_namespace_put(struct ldlm_namespace *ns);
-int ldlm_proc_setup(void);
-#ifdef CONFIG_PROC_FS
-void ldlm_proc_cleanup(void);
+
+int ldlm_debugfs_setup(void);
+void ldlm_debugfs_cleanup(void);
 
 static inline void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
 				     struct lprocfs_stats *srv_stats)
@@ -1515,11 +1515,6 @@ static inline void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
 
 	return;
 }
-#else
-static inline void ldlm_proc_cleanup(void) {}
-static inline void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
-				     struct lprocfs_stats *srv_stats) {}
-#endif
 
 /* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,

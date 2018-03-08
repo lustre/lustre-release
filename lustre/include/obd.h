@@ -709,7 +709,7 @@ struct obd_device {
 	struct dentry			*obd_debugfs_entry;
 	struct proc_dir_entry	*obd_proc_entry;
 	struct proc_dir_entry	*obd_proc_exports_entry;
-	struct proc_dir_entry	*obd_svc_procroot;
+	struct dentry			*obd_svc_debugfs_entry;
 	struct lprocfs_stats	*obd_svc_stats;
 	struct attribute_group		 obd_attrs_group;
 	struct attribute	       **obd_attrs;

@@ -610,10 +610,8 @@ static void nrs_crrn_req_stop(struct ptlrpc_nrs_policy *policy,
 	       libcfs_id2str(req->rq_peer), nrq->nr_u.crr.cr_round);
 }
 
-#ifdef CONFIG_PROC_FS
-
 /**
- * lprocfs interface
+ * debugfs interface
  */
 
 /**
@@ -808,7 +806,8 @@ ptlrpc_lprocfs_nrs_crrn_quantum_seq_write(struct file *file,
 
 	return rc == -ENODEV && rc2 == -ENODEV ? -ENODEV : count;
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_nrs_crrn_quantum);
+
+LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_crrn_quantum);
 
 /**
  * Initializes a CRR-N policy's lprocfs interface for service \a svc
@@ -827,26 +826,11 @@ static int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 		{ NULL }
 	};
 
-	if (svc->srv_procroot == NULL)
+	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
 		return 0;
 
-	return lprocfs_add_vars(svc->srv_procroot, nrs_crrn_lprocfs_vars, NULL);
+	return ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_crrn_lprocfs_vars, NULL);
 }
-
-/**
- * Cleans up a CRR-N policy's lprocfs interface for service \a svc
- *
- * \param[in] svc the service
- */
-static void nrs_crrn_lprocfs_fini(struct ptlrpc_service *svc)
-{
-	if (svc->srv_procroot == NULL)
-		return;
-
-	lprocfs_remove_proc_entry("nrs_crrn_quantum", svc->srv_procroot);
-}
-
-#endif /* CONFIG_PROC_FS */
 
 /**
  * CRR-N policy operations
@@ -861,10 +845,7 @@ static const struct ptlrpc_nrs_pol_ops nrs_crrn_ops = {
 	.op_req_enqueue		= nrs_crrn_req_add,
 	.op_req_dequeue		= nrs_crrn_req_del,
 	.op_req_stop		= nrs_crrn_req_stop,
-#ifdef CONFIG_PROC_FS
 	.op_lprocfs_init	= nrs_crrn_lprocfs_init,
-	.op_lprocfs_fini	= nrs_crrn_lprocfs_fini,
-#endif
 };
 
 /**

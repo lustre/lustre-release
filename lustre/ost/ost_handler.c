@@ -114,7 +114,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	};
 	ost->ost_service = ptlrpc_register_service(&svc_conf,
 						   &obd->obd_kset,
-						   obd->obd_proc_entry);
+						   obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_service)) {
 		rc = PTR_ERR(ost->ost_service);
 		CERROR("failed to start service: %d\n", rc);
@@ -153,7 +153,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	};
 	ost->ost_create_service = ptlrpc_register_service(&svc_conf,
 							  &obd->obd_kset,
-							  obd->obd_proc_entry);
+							  obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_create_service)) {
 		rc = PTR_ERR(ost->ost_create_service);
 		CERROR("failed to start OST create service: %d\n", rc);
@@ -222,7 +222,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	};
 	ost->ost_io_service = ptlrpc_register_service(&svc_conf,
 						      &obd->obd_kset,
-						      obd->obd_proc_entry);
+						      obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_io_service)) {
 		rc = PTR_ERR(ost->ost_io_service);
 		CERROR("failed to start OST I/O service: %d\n", rc);
@@ -264,7 +264,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	};
 	ost->ost_seq_service = ptlrpc_register_service(&svc_conf,
 						       &obd->obd_kset,
-						       obd->obd_proc_entry);
+						       obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_seq_service)) {
 		rc = PTR_ERR(ost->ost_seq_service);
 		CERROR("failed to start OST seq service: %d\n", rc);
@@ -311,7 +311,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	};
 	ost->ost_out_service = ptlrpc_register_service(&svc_conf,
 						       &obd->obd_kset,
-						       obd->obd_proc_entry);
+						       obd->obd_debugfs_entry);
 	if (IS_ERR(ost->ost_out_service)) {
 		rc = PTR_ERR(ost->ost_out_service);
 		CERROR("failed to start out service: %d\n", rc);
@@ -406,7 +406,7 @@ static int __init ost_init(void)
 
 	ENTRY;
 
-	rc = class_register_type(&ost_obd_ops, NULL, true, NULL,
+	rc = class_register_type(&ost_obd_ops, NULL, false, NULL,
 				 LUSTRE_OSS_NAME, NULL);
 
         RETURN(rc);
