@@ -468,37 +468,30 @@ int ll_removexattr(struct dentry *dentry, const char *name);
 #ifndef HAVE_VFS_SETXATTR
 const struct xattr_handler *get_xattr_type(const char *name);
 
-#ifdef HAVE_XATTR_HANDLER_FLAGS
 static inline int
 __vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
 	       const void *value, size_t size, int flags)
 {
+# ifdef HAVE_XATTR_HANDLER_FLAGS
 	const struct xattr_handler *handler;
 	int rc;
 
 	handler = get_xattr_type(name);
 	if (!handler)
-		return -ENXIO;
+		return -EOPNOTSUPP;
 
-#if defined(HAVE_XATTR_HANDLER_INODE_PARAM)
-	rc = handler->set(handler, dentry, inode, name, value, size,
-			  XATTR_CREATE);
-#elif defined(HAVE_XATTR_HANDLER_SIMPLIFIED)
-	rc = handler->set(handler, dentry, name, value, size, XATTR_CREATE);
-#else
-	rc = handler->set(dentry, name, value, size, XATTR_CREATE,
-			  handler->flags);
-#endif /* !HAVE_XATTR_HANDLER_INODE_PARAM */
+#  if defined(HAVE_XATTR_HANDLER_INODE_PARAM)
+	rc = handler->set(handler, dentry, inode, name, value, size, flags);
+#  elif defined(HAVE_XATTR_HANDLER_SIMPLIFIED)
+	rc = handler->set(handler, dentry, name, value, size, flags);
+#  else
+	rc = handler->set(dentry, name, value, size, flags, handler->flags);
+#  endif /* !HAVE_XATTR_HANDLER_INODE_PARAM */
 	return rc;
-}
-#else /* !HAVE_XATTR_HANDLER_FLAGS */
-static inline int
-__vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
-	       const void *value, size_t size, int flags)
-{
+# else /* !HAVE_XATTR_HANDLER_FLAGS */
 	return ll_setxattr(dentry, name, value, size, flags);
+# endif /* HAVE_XATTR_HANDLER_FLAGS */
 }
-#endif /* HAVE_XATTR_HANDLER_FLAGS */
 #endif /* HAVE_VFS_SETXATTR */
 
 #ifdef HAVE_IOP_SET_ACL
