@@ -447,7 +447,7 @@ static int lov_process_config(const struct lu_env *env,
 	int cmd;
 	int rc;
 	int gen;
-	__u32 index;
+	u32 index;
 
 	obd_getref(obd);
 
@@ -479,8 +479,9 @@ static int lov_process_config(const struct lu_env *env,
 
 		obd_str2uuid(&tgt_uuid, lustre_cfg_buf(cfg, 1));
 
-		if (sscanf(lustre_cfg_buf(cfg, 2), "%d", &index) != 1)
-			GOTO(out, rc = -EINVAL);
+		rc = kstrtou32(lustre_cfg_buf(cfg, 2), 10, &index);
+		if (rc)
+			GOTO(out, rc);
 
 		mdc = class_find_client_obd(&tgt_uuid, LUSTRE_MDC_NAME,
 					    &obd->obd_uuid);

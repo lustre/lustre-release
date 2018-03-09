@@ -702,7 +702,7 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 			RETURN(ELDLM_OK);
 
 		matched = ldlm_handle2lock(&lockh);
-		if (ldlm_is_kms_ignore(matched))
+		if (!matched || ldlm_is_kms_ignore(matched))
 			goto no_match;
 
 		if (mdc_set_dom_lock_data(env, matched, einfo->ei_cbdata)) {

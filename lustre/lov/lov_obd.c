@@ -100,21 +100,21 @@ static void lov_putref(struct obd_device *obd)
 
 		list_for_each_entry_safe(tgt, n, &kill, ltd_kill) {
 			list_del(&tgt->ltd_kill);
-                        /* Disconnect */
-                        __lov_del_obd(obd, tgt);
-                }
-        } else {
+			/* Disconnect */
+			__lov_del_obd(obd, tgt);
+		}
+	} else {
 		mutex_unlock(&lov->lov_lock);
-        }
+	}
 }
 
 static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
-                              enum obd_notify_event ev);
+			      enum obd_notify_event ev);
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 		      enum obd_notify_event ev);
 
-int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
-                    struct obd_connect_data *data)
+int lov_connect_obd(struct obd_device *obd, u32 index, int activate,
+		    struct obd_connect_data *data)
 {
 	struct lov_obd *lov = &obd->u.lov;
 	struct obd_uuid *tgt_uuid;
@@ -316,40 +316,42 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 
 static int lov_disconnect(struct obd_export *exp)
 {
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lov_obd *lov = &obd->u.lov;
-        int i, rc;
-        ENTRY;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct lov_obd *lov = &obd->u.lov;
+	u32 index;
+	int rc;
 
-        if (!lov->lov_tgts)
-                goto out;
+	ENTRY;
+	if (!lov->lov_tgts)
+		goto out;
 
-        /* Only disconnect the underlying layers on the final disconnect. */
-        lov->lov_connects--;
-        if (lov->lov_connects != 0) {
-                /* why should there be more than 1 connect? */
-                CERROR("disconnect #%d\n", lov->lov_connects);
-                goto out;
-        }
+	/* Only disconnect the underlying layers on the final disconnect. */
+	lov->lov_connects--;
+	if (lov->lov_connects != 0) {
+		/* why should there be more than 1 connect? */
+		CWARN("%s: unexpected disconnect #%d\n",
+		      obd->obd_name, lov->lov_connects);
+		goto out;
+	}
 
-        /* Let's hold another reference so lov_del_obd doesn't spin through
-           putref every time */
-        obd_getref(obd);
+	/* hold another ref so lov_del_obd() doesn't spin in putref each time */
+	obd_getref(obd);
 
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                if (lov->lov_tgts[i] && lov->lov_tgts[i]->ltd_exp) {
-                        /* Disconnection is the last we know about an obd */
-			lov_del_target(obd, i, NULL, lov->lov_tgts[i]->ltd_gen);
-                }
-        }
-        obd_putref(obd);
+	for (index = 0; index < lov->desc.ld_tgt_count; index++) {
+		if (lov->lov_tgts[index] && lov->lov_tgts[index]->ltd_exp) {
+			/* Disconnection is the last we know about an OBD */
+			lov_del_target(obd, index, NULL,
+				       lov->lov_tgts[index]->ltd_gen);
+		}
+	}
+	obd_putref(obd);
 
 	if (lov->targets_proc_entry != NULL)
 		lprocfs_remove(&lov->targets_proc_entry);
 
 out:
-        rc = class_disconnect(exp); /* bz 9811 */
-        RETURN(rc);
+	rc = class_disconnect(exp); /* bz 9811 */
+	RETURN(rc);
 }
 
 /* Error codes:
@@ -487,37 +489,37 @@ out_notify_lock:
 }
 
 static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
-                          __u32 index, int gen, int active)
+			  u32 index, int gen, int active)
 {
-        struct lov_obd *lov = &obd->u.lov;
-        struct lov_tgt_desc *tgt;
-        struct obd_device *tgt_obd;
-        int rc;
-        ENTRY;
+	struct lov_obd *lov = &obd->u.lov;
+	struct lov_tgt_desc *tgt;
+	struct obd_device *tgt_obd;
+	int rc;
 
-        CDEBUG(D_CONFIG, "uuid:%s idx:%d gen:%d active:%d\n",
-               uuidp->uuid, index, gen, active);
+	ENTRY;
+	CDEBUG(D_CONFIG, "uuid:%s idx:%u gen:%d active:%d\n",
+	       uuidp->uuid, index, gen, active);
 
-        if (gen <= 0) {
-                CERROR("request to add OBD %s with invalid generation: %d\n",
-                       uuidp->uuid, gen);
-                RETURN(-EINVAL);
-        }
+	if (gen <= 0) {
+		CERROR("%s: request to add '%s' with invalid generation: %d\n",
+		       obd->obd_name, uuidp->uuid, gen);
+		RETURN(-EINVAL);
+	}
 
-        tgt_obd = class_find_client_obd(uuidp, LUSTRE_OSC_NAME,
-                                        &obd->obd_uuid);
-        if (tgt_obd == NULL)
-                RETURN(-EINVAL);
+	tgt_obd = class_find_client_obd(uuidp, LUSTRE_OSC_NAME, &obd->obd_uuid);
+	if (tgt_obd == NULL)
+		RETURN(-EINVAL);
 
 	mutex_lock(&lov->lov_lock);
 
-        if ((index < lov->lov_tgt_size) && (lov->lov_tgts[index] != NULL)) {
-                tgt = lov->lov_tgts[index];
-                CERROR("UUID %s already assigned at LOV target index %d\n",
-                       obd_uuid2str(&tgt->ltd_uuid), index);
+	if ((index < lov->lov_tgt_size) && (lov->lov_tgts[index] != NULL)) {
+		tgt = lov->lov_tgts[index];
+		rc = -EEXIST;
+		CERROR("%s: UUID %s already assigned at index %d: rc = %d\n",
+		       obd->obd_name, obd_uuid2str(&tgt->ltd_uuid), index, rc);
 		mutex_unlock(&lov->lov_lock);
-                RETURN(-EEXIST);
-        }
+		RETURN(rc);
+	}
 
         if (index >= lov->lov_tgt_size) {
                 /* We need to reallocate the lov target array. */
@@ -608,17 +610,17 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 			active ? OBD_NOTIFY_CONNECT : OBD_NOTIFY_INACTIVE);
 
 out:
-        if (rc) {
-                CERROR("add failed (%d), deleting %s\n", rc,
-                       obd_uuid2str(&tgt->ltd_uuid));
+	if (rc) {
+		CERROR("%s: add failed, deleting %s: rc = %d\n",
+		       obd->obd_name, obd_uuid2str(&tgt->ltd_uuid), rc);
 		lov_del_target(obd, index, NULL, 0);
-        }
-        obd_putref(obd);
-        RETURN(rc);
+	}
+	obd_putref(obd);
+	RETURN(rc);
 }
 
 /* Schedule a target for deletion */
-int lov_del_target(struct obd_device *obd, __u32 index,
+int lov_del_target(struct obd_device *obd, u32 index,
                    struct obd_uuid *uuidp, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
@@ -892,43 +894,47 @@ static int lov_cleanup(struct obd_device *obd)
 }
 
 int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
-                            __u32 *indexp, int *genp)
+			    u32 *indexp, int *genp)
 {
-        struct obd_uuid obd_uuid;
-        int cmd;
-        int rc = 0;
-        ENTRY;
+	struct obd_uuid obd_uuid;
+	int cmd;
+	int rc = 0;
 
-        switch(cmd = lcfg->lcfg_command) {
+	ENTRY;
+	switch (cmd = lcfg->lcfg_command) {
 	case LCFG_ADD_MDC:
 	case LCFG_DEL_MDC:
 		break;
 	case LCFG_LOV_ADD_OBD:
-        case LCFG_LOV_ADD_INA:
-        case LCFG_LOV_DEL_OBD: {
-                __u32 index;
-                int gen;
-                /* lov_modify_tgts add  0:lov_mdsA  1:ost1_UUID  2:0  3:1 */
-                if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(obd_uuid.uuid))
-                        GOTO(out, rc = -EINVAL);
+	case LCFG_LOV_ADD_INA:
+	case LCFG_LOV_DEL_OBD: {
+		u32 index;
+		int gen;
 
-                obd_str2uuid(&obd_uuid,  lustre_cfg_buf(lcfg, 1));
+		/* lov_modify_tgts add  0:lov_mdsA  1:ost1_UUID  2:0  3:1 */
+		if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(obd_uuid.uuid))
+			GOTO(out, rc = -EINVAL);
 
-		if (sscanf(lustre_cfg_buf(lcfg, 2), "%u", indexp) != 1)
-                        GOTO(out, rc = -EINVAL);
-                if (sscanf(lustre_cfg_buf(lcfg, 3), "%d", genp) != 1)
-                        GOTO(out, rc = -EINVAL);
-                index = *indexp;
-                gen = *genp;
-                if (cmd == LCFG_LOV_ADD_OBD)
-                        rc = lov_add_target(obd, &obd_uuid, index, gen, 1);
-                else if (cmd == LCFG_LOV_ADD_INA)
-                        rc = lov_add_target(obd, &obd_uuid, index, gen, 0);
-                else
-                        rc = lov_del_target(obd, index, &obd_uuid, gen);
-                GOTO(out, rc);
-        }
-        case LCFG_PARAM: {
+		obd_str2uuid(&obd_uuid,  lustre_cfg_buf(lcfg, 1));
+
+		rc = kstrtou32(lustre_cfg_buf(lcfg, 2), 10, indexp);
+		if (rc)
+			GOTO(out, rc);
+		rc = kstrtoint(lustre_cfg_buf(lcfg, 3), 10, genp);
+		if (rc)
+			GOTO(out, rc);
+		index = *indexp;
+		gen = *genp;
+		if (cmd == LCFG_LOV_ADD_OBD)
+			rc = lov_add_target(obd, &obd_uuid, index, gen, 1);
+		else if (cmd == LCFG_LOV_ADD_INA)
+			rc = lov_add_target(obd, &obd_uuid, index, gen, 0);
+		else
+			rc = lov_del_target(obd, index, &obd_uuid, gen);
+
+		GOTO(out, rc);
+	}
+	case LCFG_PARAM: {
 		struct lov_desc *desc = &(obd->u.lov.desc);
 
 		if (!desc)
