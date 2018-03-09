@@ -1814,10 +1814,10 @@ static int server_fill_super_common(struct super_block *sb)
 static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 {
 	struct lustre_mount_data *lmd = lsi->lsi_lmd;
-	struct obd_device	 *obd;
-	struct dt_device_param    p;
-	char			  flagstr[16];
-	int			  rc;
+	struct obd_device *obd;
+	struct dt_device_param p;
+	char flagstr[20 + 1 + 10 + 1];
+	int rc;
 	ENTRY;
 
 	CDEBUG(D_MOUNT,
@@ -1827,7 +1827,7 @@ static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
 	sprintf(lsi->lsi_osd_obdname, "%s-osd", lsi->lsi_svname);
 	strcpy(lsi->lsi_osd_uuid, lsi->lsi_osd_obdname);
 	strcat(lsi->lsi_osd_uuid, "_UUID");
-	sprintf(flagstr, "%lu:%lu", mflags, (unsigned long) lmd->lmd_flags);
+	snprintf(flagstr, sizeof(flagstr), "%lu:%u", mflags, lmd->lmd_flags);
 
 	obd = class_name2obd(lsi->lsi_osd_obdname);
 	if (obd == NULL) {
