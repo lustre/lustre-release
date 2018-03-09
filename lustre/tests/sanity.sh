@@ -12,8 +12,8 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c     77k"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# skipped tests: LU-8411 LU-9096 LU-9054 LU-10734 ..
-ALWAYS_EXCEPT="  407     253     312     160g     $ALWAYS_EXCEPT"
+# skipped tests: LU-8411 LU-9096 LU-9054 ..
+ALWAYS_EXCEPT="  407     253     312     $ALWAYS_EXCEPT"
 
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
@@ -12357,9 +12357,12 @@ test_160g() {
 	# Create a user
 	changelog_register || error "first changelog_register failed"
 	changelog_register || error "second changelog_register failed"
-	local cl_users=(${CL_USERS[$SINGLEMDS]})
-	local cl_user1="${cl_users[0]}"
-	local cl_user2="${cl_users[1]}"
+	local cl_users
+	declare -A cl_user1
+	declare -A cl_user2
+	local user_rec1
+	local user_rec2
+	local i
 
 	# generate some changelog records to accumulate on each MDT
 	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
@@ -12367,11 +12370,11 @@ test_160g() {
 		error "create $DIR/$tdir/$tfile failed"
 
 	# check changelogs have been generated
-	nbcl=$(changelog_dump | wc -l)
+	local nbcl=$(changelog_dump | wc -l)
 	[[ $nbcl -eq 0 ]] && error "no changelogs found"
 
-	# changelog_gc=1 should be set by default
 	for param in "changelog_max_idle_indexes=$((nbcl / 2))" \
+		     "changelog_gc=1" \
 		     "changelog_min_gc_interval=2" \
 		     "changelog_min_free_cat_entries=3"; do
 		local MDT0=$(facet_svc $SINGLEMDS)
@@ -12387,37 +12390,71 @@ test_160g() {
 	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
 	do_nodes $mdts $LCTL set_param fail_loc=0x1313 fail_val=3
 
-	local user_rec1=$(changelog_user_rec $SINGLEMDS $cl_user1)
+	for i in $(seq $MDSCOUNT); do
+		cl_users=(${CL_USERS[mds$i]})
+		cl_user1[mds$i]="${cl_users[0]}"
+		cl_user2[mds$i]="${cl_users[1]}"
 
-	__changelog_clear $SINGLEMDS $cl_user1 +3
+		[ -n "${cl_user1[mds$i]}" ] ||
+			error "mds$i: no user registered"
+		[ -n "${cl_user2[mds$i]}" ] ||
+			error "mds$i: only ${cl_user1[mds$i]} is registered"
 
-	local user_rec2=$(changelog_user_rec $SINGLEMDS $cl_user1)
+		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec1" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		__changelog_clear mds$i ${cl_user1[mds$i]} +2
+		user_rec2=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec2" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		echo "mds$i: verifying user ${cl_user1[mds$i]} clear: " \
+		     "$user_rec1 + 2 == $user_rec2"
+		[ $((user_rec1 + 2)) == $user_rec2 ] ||
+			error "mds$i: user ${cl_user1[mds$i]} index expected " \
+			      "$user_rec1 + 2, but is $user_rec2"
+		user_rec2=$(changelog_user_rec mds$i ${cl_user2[mds$i]})
+		[ -n "$user_rec2" ] ||
+			error "mds$i: User ${cl_user2[mds$i]} not registered"
+		[ $user_rec1 == $user_rec2 ] ||
+			error "mds$i: user ${cl_user2[mds$i]} index expected " \
+			      "$user_rec1, but is $user_rec2"
+	done
 
-	echo "verifying user clear: $user_rec1 + 3 == $user_rec2"
-	[ $((user_rec1 + 3)) == $user_rec2 ] ||
-		error "user index expected $user_rec1 + 3, but is $user_rec2"
+	# ensure we are past the previous changelog_min_gc_interval set above
+	sleep 2
 
 	# generate one more changelog to trigger fail_loc
-	rm -rf $DIR/$tdir || error "rm -rf $tdir failed"
+	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/${tfile}bis failed"
 
 	# ensure gc thread is done
-	wait_update_facet $SINGLEMDS \
-			  "ps -e -o comm= | grep chlg_gc_thread" "" 20
+	for i in $(mdts_nodes); do
+		wait_update $i \
+			"ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
+			error "$i: GC-thread not done"
+	done
 
-	# check user still registered
-	[ -n "$(changelog_user_rec $SINGLEMDS $cl_user1)" ] ||
-		error "User $cl_user1 not found in changelog_users"
-	# check user2 unregistered
-	[ -z "$(changelog_user_rec $SINGLEMDS $cl_user2)" ] ||
-		error "User $cl_user2 still found in changelog_users"
+	local first_rec
+	for i in $(seq $MDSCOUNT); do
+		# check cl_user1 still registered
+		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		# check cl_user2 unregistered
+		changelog_users mds$i | grep -q "${cl_user2[mds$i]}" &&
+			error "mds$i: User ${cl_user2[mds$i]} still registered"
 
-	# check changelogs are present and starting at $user_rec2 + 1
-	local first_rec=$($LFS changelog $(facet_svc $SINGLEMDS) |
-			  awk '{ print $1; exit; }')
+		# check changelogs are present and starting at $user_rec1 + 1
+		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec1" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		first_rec=$($LFS changelog $(facet_svc mds$i) |
+			    awk '{ print $1; exit; }')
 
-	echo "verifying min purge: $user_rec2 + 1 == $first_rec"
-	[ $((user_rec2 + 1)) == $first_rec ] ||
-		error "first index should be $user_rec2 + 1, but is $first_rec"
+		echo "mds$i: verifying first index $user_rec1 + 1 == $first_rec"
+		[ $((user_rec1 + 1)) == $first_rec ] ||
+			error "mds$i: first index should be $user_rec1 + 1, " \
+			      "but is $first_rec"
+	done
 }
 run_test 160g "changelog garbage collect (old users)"
 
