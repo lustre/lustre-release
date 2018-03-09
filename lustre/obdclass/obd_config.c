@@ -1749,7 +1749,7 @@ static struct lcfg_type_data {
 	{ LCFG_DEL_CONN, "del_conn", { "1", "2", "3", "4" }  },
 	{ LCFG_LOV_ADD_OBD, "add_osc", { "ost", "index", "gen", "UUID" } },
 	{ LCFG_LOV_DEL_OBD, "del_osc", { "1", "2", "3", "4" } },
-	{ LCFG_PARAM, "set_param", { "parameter", "value", "3", "4" } },
+	{ LCFG_PARAM, "conf_param", { "parameter", "value", "3", "4" } },
 	{ LCFG_MARKER, "marker", { "1", "2", "3", "4" } },
 	{ LCFG_LOG_START, "log_start", { "1", "2", "3", "4" } },
 	{ LCFG_LOG_END, "log_end", { "1", "2", "3", "4" } },
@@ -1763,6 +1763,7 @@ static struct lcfg_type_data {
 	{ LCFG_POOL_DEL, "del_pool", { "fsname", "pool", "3", "4" } },
 	{ LCFG_SET_LDLM_TIMEOUT, "set_ldlm_timeout",
 	  { "parameter", "2", "3", "4" } },
+	{ LCFG_SET_PARAM, "set_param", { "parameter", "value", "3", "4" } },
 	{ 0, NULL, { NULL, NULL, NULL, NULL } }
 };
 
@@ -1830,6 +1831,30 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 		ptr += snprintf(ptr, end - ptr, ", device: %s",
 				lustre_cfg_string(lcfg, 0));
 
+	if (lcfg->lcfg_command == LCFG_SET_PARAM) {
+		/*
+		 * set_param -P parameters have param=val here, separate
+		 * them through pointer magic and print them out in
+		 * native yamlese
+		 */
+		char *cfg_str = lustre_cfg_string(lcfg, 1);
+		char *tmp = strchr(cfg_str, '=');
+		size_t len;
+
+		if (tmp == NULL)
+			return -ENOTTY;
+
+		ptr += snprintf(ptr, end - ptr, ", %s: ", ldata->ltd_bufs[0]);
+		len = tmp - cfg_str + 1;
+		snprintf(ptr, len, "%s", cfg_str);
+		ptr += len - 1;
+
+		ptr += snprintf(ptr, end - ptr, ", %s: ", ldata->ltd_bufs[1]);
+		ptr += snprintf(ptr, end - ptr, "%s", tmp + 1);
+
+		goto out_done;
+	}
+
 	for (i = 1; i < lcfg->lcfg_bufcount; i++) {
 		if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0)
 			ptr += snprintf(ptr, end - ptr, ", %s: %s",
@@ -1837,6 +1862,7 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 					lustre_cfg_string(lcfg, i));
 	}
 
+out_done:
 	ptr += snprintf(ptr, end - ptr, " }\n");
 	/* return consumed bytes */
 	rc = ptr - buf;

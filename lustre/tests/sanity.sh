@@ -5642,6 +5642,26 @@ test_60aa() {
 }
 run_test 60aa "llog_print works with FIDs and simple names"
 
+test_60ab() {
+	# test llog_print with params
+	local yaml
+	local orig_val
+
+	orig_val=$(do_facet mgs $LCTL get_param jobid_name)
+	do_facet mgs $LCTL set_param -P jobid_name="testname"
+
+	yaml=$(do_facet mgs $LCTL --device MGS llog_print params |
+	    grep jobid_name | tail -n 1)
+
+	local param=`awk '{ print $10 }' <<< "$yaml"`
+	local val=`awk '{ print $12 }' <<< "$yaml"`
+	#return to the default
+	do_facet mgs $LCTL set_param -P jobid_name=$orig_val
+	[ $val = "testname" ] || error "bad value: $val"
+	[ $param = "jobid_name," ] || error "Bad param: $param"
+}
+run_test 60ab "llog_print params output values from set_param -P"
+
 test_60b() { # bug 6411
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	dmesg > $DIR/$tfile
