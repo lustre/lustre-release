@@ -1177,6 +1177,15 @@ no_bulk:
 
 	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
 
+	/* For READ and WRITE, we can't fill o_uid and o_gid using from_kuid()
+	 * and from_kgid(), because they are asynchronous. Fortunately, variable
+	 * oa contains valid o_uid and o_gid in these two operations.
+	 * Besides, filling o_uid and o_gid is enough for nrs-tbf, see LU-9658.
+	 * OBD_MD_FLUID and OBD_MD_FLUID is not set in order to avoid breaking
+	 * other process logic */
+	body->oa.o_uid = oa->o_uid;
+	body->oa.o_gid = oa->o_gid;
+
 	obdo_to_ioobj(oa, ioobj);
 	ioobj->ioo_bufcnt = niocount;
 	/* The high bits of ioo_max_brw tells server _maximum_ number of bulks
@@ -2051,7 +2060,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	 * way to do this in a single call.  bug 10150 */
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	crattr->cra_oa = &body->oa;
-	crattr->cra_flags = OBD_MD_FLMTIME|OBD_MD_FLCTIME|OBD_MD_FLATIME;
+	crattr->cra_flags = OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLATIME;
 	cl_req_attr_set(env, osc2cl(obj), crattr);
 	lustre_msg_set_jobid(req->rq_reqmsg, crattr->cra_jobid);
 
