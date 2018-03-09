@@ -2336,7 +2336,7 @@ static int lfsck_stop_notify(const struct lu_env *env,
 		laia->laia_ltd = ltd;
 		laia->laia_lr = lr;
 
-		rc = lfsck_async_request(env, ltd, lr, set,
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					 lfsck_async_interpret_common,
 					 laia, LFSCK_NOTIFY);
 		if (rc != 0) {
@@ -2374,21 +2374,17 @@ static int lfsck_async_interpret(const struct lu_env *env,
 	return 0;
 }
 
-int lfsck_async_request(const struct lu_env *env, struct lfsck_tgt_desc *ltd,
+int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 			struct lfsck_request *lr,
 			struct ptlrpc_request_set *set,
 			ptlrpc_interpterer_t interpreter,
 			void *args, int request)
 {
-	struct obd_import *imp = class_exp2cliimp(ltd->ltd_exp);
 	struct lfsck_async_interpret_args *laia;
 	struct ptlrpc_request		  *req;
 	struct lfsck_request		  *tmp;
 	struct req_format		  *format;
 	int				   rc;
-
-	if (unlikely(ltd->ltd_dead))
-		return -ENODEV;
 
 	switch (request) {
 	case LFSCK_NOTIFY:
@@ -2399,11 +2395,11 @@ int lfsck_async_request(const struct lu_env *env, struct lfsck_tgt_desc *ltd,
 		break;
 	default:
 		CDEBUG(D_LFSCK, "%s: unknown async request %d: rc = %d\n",
-		       imp->imp_obd->obd_name, request, -EINVAL);
+		       exp->exp_obd->obd_name, request, -EINVAL);
 		return -EINVAL;
 	}
 
-	req = ptlrpc_request_alloc(imp, format);
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), format);
 	if (req == NULL)
 		return -ENOMEM;
 
@@ -2413,13 +2409,6 @@ int lfsck_async_request(const struct lu_env *env, struct lfsck_tgt_desc *ltd,
 
 		return rc;
 	}
-
-	if (unlikely(imp->imp_state != LUSTRE_IMP_FULL))
-		LCONSOLE_INFO("%s (%d): sending async LFSCK RPC (%u) to %s%4x "
-			      "on non-full connection (%u), may be blocked.\n",
-			      imp->imp_obd->obd_name, current_pid(),
-			      lr->lr_event, ltd->ltd_for_ost ? "OST" : "MDT",
-			      ltd->ltd_index, imp->imp_state);
 
 	tmp = req_capsule_client_get(&req->rq_pill, &RMF_LFSCK_REQUEST);
 	*tmp = *lr;
@@ -2472,7 +2461,7 @@ again:
 
 		laia->laia_ltd = ltd;
 		up_read(&ltds->ltd_rw_sem);
-		rc = lfsck_async_request(env, ltd, lr, set,
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					 lfsck_async_interpret_common,
 					 laia, LFSCK_QUERY);
 		if (rc != 0) {
@@ -2935,7 +2924,7 @@ static int lfsck_stop_all(const struct lu_env *env,
 		LASSERT(ltd != NULL);
 
 		laia->laia_ltd = ltd;
-		rc = lfsck_async_request(env, ltd, lr, set,
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					 lfsck_async_interpret, laia,
 					 LFSCK_NOTIFY);
 		if (rc != 0) {
@@ -3019,7 +3008,7 @@ again:
 		ltd->ltd_layout_done = 0;
 		ltd->ltd_namespace_done = 0;
 		ltd->ltd_synced_failures = 0;
-		rc = lfsck_async_request(env, ltd, lr, set,
+		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
 					 lfsck_async_interpret, laia,
 					 LFSCK_NOTIFY);
 		if (rc != 0) {
@@ -3852,8 +3841,6 @@ int lfsck_add_target(const struct lu_env *env, struct dt_device *key,
 	ltd->ltd_tgt = tgt;
 	ltd->ltd_key = key;
 	ltd->ltd_exp = exp;
-	if (for_ost)
-		ltd->ltd_for_ost = 1;
 	INIT_LIST_HEAD(&ltd->ltd_orphan_list);
 	INIT_LIST_HEAD(&ltd->ltd_layout_list);
 	INIT_LIST_HEAD(&ltd->ltd_layout_phase_list);

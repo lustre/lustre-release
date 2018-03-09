@@ -477,7 +477,6 @@ struct lfsck_tgt_desc {
 	__u32		   ltd_layout_gen;
 	__u32		   ltd_namespace_gen;
 	unsigned int	   ltd_dead:1,
-			   ltd_for_ost:1,
 			   ltd_retry_start:1,
 			   ltd_layout_done:1,
 			   ltd_namespace_done:1,
@@ -964,7 +963,7 @@ lfsck_assistant_object_load(const struct lu_env *env,
 int lfsck_async_interpret_common(const struct lu_env *env,
 				 struct ptlrpc_request *req,
 				 void *args, int rc);
-int lfsck_async_request(const struct lu_env *env, struct lfsck_tgt_desc *ltd,
+int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 			struct lfsck_request *lr,
 			struct ptlrpc_request_set *set,
 			ptlrpc_interpterer_t interpterer,
