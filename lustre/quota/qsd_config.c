@@ -122,7 +122,7 @@ out:
 int qsd_config(char *valstr, char *fsname, int pool)
 {
 	struct qsd_fsinfo *qfs;
-	int rc, enabled = 0;
+	int rc, enabled = 0, old_enabled = 0;
 	bool reint = false;
 
 	ENTRY;
@@ -148,6 +148,7 @@ int qsd_config(char *valstr, char *fsname, int pool)
 	if ((qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] & enabled) != enabled)
 		reint = true;
 
+	old_enabled = qfs->qfs_enabled[pool - LQUOTA_FIRST_RES];
 	qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] = enabled;
 
 	/* trigger reintegration for all qsd */
@@ -170,6 +171,12 @@ int qsd_config(char *valstr, char *fsname, int pool)
 
 			for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 				qqi = qsd->qsd_type_array[type];
+				/* only trigger reintegration if this
+				 * type of quota is not enabled before */
+				if ((old_enabled & 1 << type) ||
+				    !(enabled & 1 << type))
+					continue;
+
 				if (qqi->qqi_acct_failed) {
 					LCONSOLE_ERROR("%s: can't enable quota "
 						       "enforcement since space "
