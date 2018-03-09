@@ -145,7 +145,6 @@ copytool_device() {
 cleanup() {
 	copytool_monitor_cleanup
 	copytool_cleanup
-	changelog_cleanup
 	cdt_set_sanity_policy
 }
 
@@ -616,41 +615,6 @@ mdts_check_param() {
 			$timeout ||
 			error "$key state is not '$target' on mds${mdtno}"
 	done
-}
-
-changelog_setup() {
-	_CL_USERS=()
-	local mdtno
-	for mdtno in $(seq 1 $MDSCOUNT); do
-		local idx=$(($mdtno - 1))
-		local cl_user=$(do_facet mds${mdtno} $LCTL \
-			     --device ${MDT[$idx]} \
-			     changelog_register -n)
-		_CL_USERS+=($cl_user)
-		do_facet mds${mdtno} lctl set_param \
-			mdd.${MDT[$idx]}.changelog_mask="+hsm"
-		$LFS changelog_clear ${MDT[$idx]} $cl_user 0
-	done
-}
-
-changelog_cleanup() {
-	local mdtno
-	for mdtno in $(seq 1 $MDSCOUNT); do
-		local idx=$(($mdtno - 1))
-		[[ -z  ${_CL_USERS[$idx]} ]] && continue
-		$LFS changelog_clear ${MDT[$idx]} ${_CL_USERS[$idx]} 0
-		do_facet mds${mdtno} lctl --device ${MDT[$idx]} \
-			changelog_deregister ${_CL_USERS[$idx]}
-	done
-	_CL_USERS=()
-}
-
-changelog_get_flags() {
-	local mdt=$1
-	local cltype=$2
-	local fid=$3
-
-	$LFS changelog $mdt | awk "/$cltype/ && /t=\[$fid\]/ {print \$5}"
 }
 
 get_hsm_param() {
@@ -4209,16 +4173,13 @@ test_220A() { # was test_220
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
-	changelog_setup
+	changelog_register
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-	changelog_cleanup
-
-	local target=0x0
-	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x0 ||
+		error "The expected changelog was not emitted"
 }
 run_test 220A "Changelog for archive"
 
@@ -4231,7 +4192,7 @@ test_220a() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
-	changelog_setup
+	changelog_register
 
 	# block copytool operations to allow for HSM request to be
 	# submitted and file be unlinked (CDT will find object removed)
@@ -4248,12 +4209,9 @@ test_220a() {
 
 	wait_request_state $fid ARCHIVE FAILED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-	changelog_cleanup
-
 	# HE_ARCHIVE|ENOENT
-	local target=0x2
-	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x2 ||
+		error "The expected changelog was not emitted"
 }
 run_test 220a "Changelog for failed archive"
 
@@ -4266,7 +4224,7 @@ test_221() {
 	fid=$(make_custom_file_for_progress $f 103 1048576)
 	[ $? != 0 ] && skip "not enough free space" && return
 
-	changelog_setup
+	changelog_register
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE STARTED
@@ -4274,10 +4232,8 @@ test_221() {
 	wait_request_state $fid ARCHIVE CANCELED
 	wait_request_state $fid CANCEL SUCCEED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-
-	local target=0x7d
-	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x7d ||
+		error "The expected changelog was not emitted"
 }
 run_test 221 "Changelog for archive canceled"
 
@@ -4292,15 +4248,13 @@ test_222a() {
 	import_file $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
-	changelog_setup
+	changelog_register
 
 	$LFS hsm_restore $f
 	wait_request_state $fid RESTORE SUCCEED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-
-	local target=0x80
-	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x80 ||
+		error "The expected changelog was not emitted"
 
 	copytool_cleanup
 }
@@ -4314,7 +4268,7 @@ test_222b() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
-	changelog_setup
+	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
@@ -4323,10 +4277,8 @@ test_222b() {
 
 	wait_request_state $fid RESTORE SUCCEED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-
-	local target=0x80
-	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x80 ||
+		error "The expected changelog was not emitted"
 }
 run_test 222b "Changelog for implicit restore"
 
@@ -4341,7 +4293,7 @@ test_222c() {
 	import_file $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
-	changelog_setup
+	changelog_register
 
 	# block copytool operations to allow for HSM request to be
 	# submitted and file be unlinked (CDT will find object removed)
@@ -4358,11 +4310,9 @@ test_222c() {
 
 	wait_request_state $fid RESTORE FAILED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-
 	# HE_RESTORE|ENOENT
-	local target=0x82
-	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x82 ||
+		error "The expected changelog was not emitted"
 
 	copytool_cleanup
 }
@@ -4376,7 +4326,7 @@ test_222d() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
-	changelog_setup
+	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
@@ -4386,11 +4336,9 @@ test_222d() {
 
 	wait_request_state $fid RESTORE FAILED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-
 	# HE_RESTORE|ENOENT
-	local target=0x82
-	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x82 ||
+		error "The expected changelog was not emitted"
 
 	copytool_cleanup
 }
@@ -4403,7 +4351,7 @@ test_223a() {
 	local f=$DIR/$tdir/$tfile
 	create_archive_file $tdir/$tfile
 
-	changelog_setup
+	changelog_register
 
 	import_file $tdir/$tfile $f
 	local fid=$(path2fid $f)
@@ -4414,11 +4362,8 @@ test_223a() {
 	wait_request_state $fid RESTORE CANCELED
 	wait_request_state $fid CANCEL SUCCEED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-
-	local target=0xfd
-	[[ $flags == $target ]] ||
-		error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0xfd ||
+		error "The expected changelog was not emitted"
 
 	cleanup
 }
@@ -4433,7 +4378,7 @@ test_223b() {
 	fid=$(make_custom_file_for_progress $f 39 1000000)
 	[ $? != 0 ] && skip "not enough free space" && return
 
-	changelog_setup
+	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
@@ -4443,11 +4388,8 @@ test_223b() {
 	wait_request_state $fid RESTORE CANCELED
 	wait_request_state $fid CANCEL SUCCEED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -1)
-
-	local target=0xfd
-	[[ $flags == $target ]] ||
-		error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0xfd ||
+		error "The expected changelog was not emitted"
 
 	copytool_cleanup
 }
@@ -4462,18 +4404,15 @@ test_224A() { # was test_224
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
-	changelog_setup
+	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
 	$LFS hsm_remove $f
 	wait_request_state $fid REMOVE SUCCEED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -n 1)
-
-	local target=0x200
-	[[ $flags == $target ]] ||
-		error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x200 ||
+		error "The expected changelog was not emitted"
 }
 run_test 224A "Changelog for remove"
 
@@ -4486,7 +4425,7 @@ test_224a() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
 
-	changelog_setup
+	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
@@ -4507,12 +4446,9 @@ test_224a() {
 
 	wait_request_state $fid REMOVE FAILED
 
-	local flags=$(changelog_get_flags ${MDT[0]} HSM $fid | tail -n 1)
-
-	# HE_REMOVE|ENOENT
-	local target=0x202
-	[[ $flags == $target ]] ||
-		error "Changelog flag is $flags not $target"
+	# HE_REMOVE|ENOENT=0x202
+	changelog_find -type HSM -target-fid $fid -flags 0x202 ||
+		error "The expected changelog was not emitted"
 
 	cleanup
 }
@@ -4533,7 +4469,7 @@ test_225() {
 	fid=$(make_custom_file_for_progress $f 39 1000000)
 	[ $? != 0 ] && skip "not enough free space" && return
 
-	changelog_setup
+	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
@@ -4545,13 +4481,8 @@ test_225() {
 	wait_request_state $fid REMOVE CANCELED
 	wait_request_state $fid CANCEL SUCCEED
 
-	flags=$(changelog_get_flags ${MDT[0]} RENME $fid2)
-	local flags=$($LFS changelog ${MDT[0]} | grep HSM | grep $fid |
-		tail -n 1 | awk '{print $5}')
-
-	local target=0x27d
-	[[ $flags == $target ]] ||
-		error "Changelog flag is $flags not $target"
+	changelog_find -type HSM -target-fid $fid -flags 0x27d
+		error "The expected changelog was not emitted"
 }
 run_test 225 "Changelog for remove canceled"
 
@@ -4568,7 +4499,7 @@ test_226() {
 	local fid2=$(copy_file /etc/passwd $f2)
 	copy_file /etc/passwd $f3
 
-	changelog_setup
+	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f1
 	wait_request_state $fid1 ARCHIVE SUCCEED
 
@@ -4577,74 +4508,57 @@ test_226() {
 
 	rm $f1 || error "rm $f1 failed"
 
-	local flags=$(changelog_get_flags ${MDT[0]} UNLNK $fid1)
-
-	local target=0x3
-	[[ $flags == $target ]] ||
-		error "Changelog flag is $flags not $target"
+	changelog_dump
+	changelog_find -type UNLNK -target-fid $fid1 -flags 0x3 ||
+		error "The expected changelog was not emitted"
 
 	mv $f3 $f2 || error "mv $f3 $f2 failed"
 
-	flags=$(changelog_get_flags ${MDT[0]} RENME $fid2)
-
-	target=0x3
-	[[ $flags == $target ]] ||
-		error "Changelog flag is $flags not $target"
+	changelog_find -type RENME -target-fid $fid2 -flags 0x3 ||
+		error "The expected changelog was not emitted"
 }
 run_test 226 "changelog for last rm/mv with exiting archive"
 
-check_flags_changes() {
-	local f=$1
-	local fid=$2
-	local hsm_flag=$3
-	local fst=$4
-	local cnt=$5
-
+# This is just a utility function to clarify what test_227 does
+__test_227()
+{
 	local target=0x280
-	$LFS hsm_set --$hsm_flag $f ||
-		error "Cannot set $hsm_flag on $f"
-	local flags=($(changelog_get_flags ${MDT[0]} HSM $fid))
-	local seen=${#flags[*]}
-	cnt=$((fst + cnt))
-	[[ $seen == $cnt ]] ||
-		error "set $hsm_flag: Changelog events $seen != $cnt"
-	[[ ${flags[$((cnt - 1))]} == $target ]] ||
-		error "set $hsm_flag: Changelog flags are "\
-			"${flags[$((cnt - 1))]} not $target"
 
-	$LFS hsm_clear --$hsm_flag $f ||
-		error "Cannot clear $hsm_flag on $f"
-	flags=($(changelog_get_flags ${MDT[0]} HSM $fid))
-	seen=${#flags[*]}
-	cnt=$(($cnt + 1))
-	[[ $cnt == $seen ]] ||
-		error "clear $hsm_flag: Changelog events $seen != $cnt"
+	"$LFS" "$action" --$flag "$file" ||
+		error "Cannot ${action#hsm_} $flag on '$file'"
 
-	[[ ${flags[$((cnt - 1))]} == $target ]] ||
-		error "clear $hsm_flag: Changelog flag is "\
-			"${flags[$((cnt - 1))]} not $target"
+	# Only one changelog should be produced
+	local entries="$(changelog_find -type HSM -target-fid $fid)"
+	[ $(wc -l <<< "$entries") -eq $((++count)) ] ||
+		error "lfs $action --$flag '$file' produced more than one" \
+		      "changelog record"
+
+	# Parse the last changelog record
+	local entry="$(tail -n 1 <<< "$entries")"
+	eval local -A changelog=$(changelog2array $entry)
+
+	# Also check the flags match what is expected
+	[[ ${changelog[flags]} == $target ]] ||
+		error "Changelog flag is '${changelog[flags]}', not $target"
 }
 
 test_227() {
-	# test needs a running copytool
-	copytool setup
-	changelog_setup
+	local file="$DIR/$tdir/$tfile"
+	local fid=$(create_empty_file "$file")
+	local count=0
 
-	mkdir -p $DIR/$tdir
-	typeset -a flags
+	changelog_register
 
-	for i in norelease noarchive exists archived
-	do
-		local f=$DIR/$tdir/$tfile-$i
-		local fid=$(copy_file /etc/passwd $f)
-		check_flags_changes $f $fid $i 0 1
+	for flag in norelease noarchive exists archived lost; do
+		if [ "$flag" == lost ]; then
+			# The flag "lost" only works on an archived file
+			"$LFS" hsm_set --archived "$file"
+			((count++))
+		fi
+
+		action="hsm_set" __test_227
+		action="hsm_clear" __test_227
 	done
-
-	f=$DIR/$tdir/$tfile---lost
-	fid=$(copy_file /etc/passwd $f)
-	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
-	wait_request_state $fid ARCHIVE SUCCEED
-	check_flags_changes $f $fid lost 3 1
 }
 run_test 227 "changelog when explicit setting of HSM flags"
 

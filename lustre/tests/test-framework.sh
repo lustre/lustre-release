@@ -7058,7 +7058,7 @@ do_rpc_nodes () {
 	local LIBPATH="/usr/lib/lustre/tests:/usr/lib64/lustre/tests:"
 	local TESTPATH="$RLUSTRE/tests:"
 	local RPATH="PATH=${TESTPATH}${LIBPATH}${PATH}:/sbin:/bin:/usr/sbin:"
-	do_nodesv $list "${RPATH} NAME=${NAME} sh rpc.sh $@ "
+	do_nodesv $list "${RPATH} NAME=${NAME} bash rpc.sh $@ "
 }
 
 wait_clients_import_state () {
@@ -9072,6 +9072,169 @@ changelog_extract_field() {
 	changelog_dump | gawk "/$cltype.*$file$/ {
 		print gensub(/^.* "$identifier'(\[[^\]]*\]).*$/,"\\1",1)}' |
 		tail -1
+}
+
+# Prints a changelog record produced by "lfs changelog" as an associative array
+#
+# Example:
+# $> changelog2array 16 01CREAT 10:28:46.968438800 2018.03.09 0x0 \
+#                    t=[0x200000401:0x10:0x0] j=touch.501 ef=0xf u=501:501 \
+#                    nid=0@lo p=[0x200000007:0x1:0x0] blob
+# ([index]='16' [type]='CREAT' [time]='10:28:46.968438800'
+#  [date]='2018.03.09' [flags]=0x0 ['target-fid']='[0x200000401:0x10:0x0]'
+#  ['jobid']='touch.501' ['extra-flags']='0x0f' [uid]='0' ['gid']='0'
+#  ['nid']='0@lo' ['parent-fid']='[0x200000007:0x1:0x0]')
+#
+# Note that the changelog record is not quoted
+# Also note that the line breaks in the output were only added for readability
+#
+# Typically, you want to eval the output of the command to fill an actual
+# associative array, like this:
+# $> eval declare -A changelog=$(changelog2array $entry)
+#
+# It can then be accessed like any bash associative array:
+# $> echo "${changelog[index]}" "${changelog[type]}" "${changelog[flags]}"
+# 16 CREAT 0x0
+# $> echo "${changelog[uid]}":"${changelog[gid]}"
+# 501:501
+#
+changelog2array()
+{
+	# Start the array
+	printf '('
+
+	# A changelog, as printed by "lfs changelog" typically looks like this:
+	# <index> <type> <time> <date> <flags> <key1=value1> <key2=value2> ...
+
+	# Parse the positional part of the changelog
+
+	# changelog_dump() prefixes records with their mdt's name
+	local index="${1##*.}"
+
+	printf "[index]='%s' [type]='%s' [time]='%s' [date]='%s' [flags]='%s'" \
+	       "$index" "${2:2}" "$3" "$4" "$5"
+
+	# Parse the key/value part of the changelog
+	for arg in "${@:5}"; do
+		# Check it matches a key=value syntax
+		[[ "$arg" =~ ^[[:alpha:]]+= ]] || continue
+
+		local key="${arg%%=*}"
+		local value="${arg#*=}"
+
+		case "$key" in
+		u)
+			# u is actually for uid AND gid: u=UID:GID
+			printf " [uid]='%s'" "${value%:*}"
+			key=gid
+			value="${value#*:}"
+			;;
+		t)
+			key=target-fid
+			value="${value#[}"
+			value="${value%]}"
+			;;
+		j)
+			key=jobid
+			;;
+		p)
+			key=parent-fid
+			value="${value#[}"
+			value="${value%]}"
+			;;
+		ef)
+			key=extra-flags
+			;;
+		*)
+			;;
+		esac
+
+		printf " ['%s']='%s'" "$key" "$value"
+	done
+
+	# end the array
+	printf ')'
+}
+
+# Format and print a changelog record
+#
+# Interpreted sequences are:
+#	%%	a single %
+#	%f	the "flags" attribute of a changelog record
+__changelog_printf()
+{
+	local format="$1"
+
+	local -i i
+	for ((i = 0; i < ${#format}; i++)); do
+		local char="${format:$i:1}"
+		if [ "$char" != % ]; then
+			printf '%c' "$char"
+			continue
+		fi
+
+		i+=1
+		char="${format:$i:1}"
+		case "$char" in
+		f)
+			printf '%s' "${changelog[flags]}"
+			;;
+		%)
+			printf '%'
+			;;
+		esac
+	done
+	printf '\n'
+}
+
+# Filter changelog records
+changelog_find()
+{
+	local -A filter
+	local action='print'
+	local format
+
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-print)
+			action='print'
+			;;
+		-printf)
+			action='printf'
+			format="$2"
+			shift
+			;;
+		-*)
+			filter[${1#-}]="$2"
+			shift
+			;;
+		esac
+		shift
+	done
+
+	local found=false
+	local record
+	changelog_dump | { while read -r record; do
+		eval local -A changelog=$(changelog2array $record)
+		for key in "${!filter[@]}"; do
+			case "$key" in
+			*)
+				[ "${changelog[$key]}" == "${filter[$key]}" ]
+				;;
+			esac || continue 2
+		done
+
+		found=true
+
+		case "${action:-print}" in
+		print)
+			printf '%s\n' "$record"
+			;;
+		printf)
+			__changelog_printf "$format"
+			;;
+		esac
+	done; $found; }
 }
 
 restore_layout() {

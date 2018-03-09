@@ -6112,7 +6112,7 @@ test_60a() {
 
 	log "$TEST60_HEAD - from kernel mode"
 	do_facet mgs "$LCTL set_param debug=warning; $LCTL dk > /dev/null"
-	do_facet mgs "sh run-llog.sh" || error "run-llog.sh failed"
+	do_facet mgs "bash run-llog.sh" || error "run-llog.sh failed"
 	do_facet mgs $LCTL dk > $TMP/$tfile
 
 	# LU-6388: test llog_reader
