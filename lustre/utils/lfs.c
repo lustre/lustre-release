@@ -6112,6 +6112,7 @@ quota_type:
 			if (rc1 && !rc)
 				rc = rc1;
 		}
+		return rc;
 	/* lfs quota -u username /path/to/lustre/mount */
 	} else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
 		/* options should be followed by u/g-name and mntpoint */
@@ -6145,15 +6146,15 @@ quota_type:
 				return CMD_HELP;
 			}
 		}
-		mnt = argv[optind];
-		rc = get_print_quota(mnt, name, &qctl, verbose, quiet,
-				     human_readable);
 	} else if (optind + 1 != argc || qctl.qc_type == ALLQUOTA) {
 		fprintf(stderr, "%s quota: missing quota info argument(s)\n",
 			progname);
 		return CMD_HELP;
 	}
 
+	mnt = argv[optind];
+	rc = get_print_quota(mnt, name, &qctl, verbose, quiet,
+			     human_readable);
 	return rc;
 }
 #endif /* HAVE_SYS_QUOTA_H! */

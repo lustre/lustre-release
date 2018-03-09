@@ -3026,6 +3026,25 @@ test_55() {
 }
 run_test 55 "Chgrp should be affected by group quota"
 
+test_56 () {
+	setup_quota_test || error "setup quota failed with $?"
+
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	quota_init
+
+	$LFS setquota -t -u -b 10 -i 10 $DIR ||
+		erro "failed to set grace time for usr quota"
+	grace_time=$($LFS quota -t -u $DIR | grep "Block grace time:" |
+		     awk '{print $4 $8}')
+	if [ "x$grace_time" != "x10s;10s" ]; then
+		$LFS quota -t -u $DIR
+		error "expected grace time: 10s;10s, got:$grace_time"
+	fi
+
+	cleanup_quota_test
+}
+run_test 56 "lfs quota -t should work well"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
