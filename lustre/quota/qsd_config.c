@@ -131,7 +131,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 	char			*fsname = lustre_cfg_string(lcfg, 0);
 	char			*cfgstr = lustre_cfg_string(lcfg, 1);
 	char			*keystr, *valstr;
-	int			 rc, pool, enabled = 0;
+	int			 rc, pool, enabled = 0, old_enabled = 0;
 	bool			 reint = false;
 	ENTRY;
 
@@ -170,6 +170,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 	if ((qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] & enabled) != enabled)
 		reint = true;
 
+	old_enabled = qfs->qfs_enabled[pool - LQUOTA_FIRST_RES];
 	qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] = enabled;
 
 	/* trigger reintegration for all qsd */
@@ -192,6 +193,12 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 
 			for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 				qqi = qsd->qsd_type_array[type];
+				/* only trigger reintegration if this
+				 * type of quota is not enabled before */
+				if ((old_enabled & 1 << type) ||
+				    !(enabled & 1 << type))
+					continue;
+
 				if (qqi->qqi_acct_failed) {
 					LCONSOLE_ERROR("%s: can't enable quota "
 						       "enforcement since space "

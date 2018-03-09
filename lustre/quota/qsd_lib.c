@@ -759,7 +759,7 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 				       ". Please run tunefs.lustre --quota on "
 				       "an unmounted filesystem if not done "
 				       "already\n", qsd->qsd_svname);
-			break;
+			continue;
 		}
 
 		rc = qsd_start_reint_thread(qqi);
