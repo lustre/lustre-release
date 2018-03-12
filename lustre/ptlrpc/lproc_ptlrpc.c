@@ -324,8 +324,8 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 	bufpages = (roundup_pow_of_two(svc->srv_buf_size) + PAGE_SIZE - 1) >>
 							PAGE_SHIFT;
 	/* do not allow history to consume more than half max number of rqbds */
-	if ((svc->srv_nrqbds_max == 0 && val > totalram_pages/(2 * bufpages)) ||
-	    val > svc->srv_nrqbds_max/2)
+	if ((svc->srv_nrqbds_max == 0 && val > totalram_pages / (2 * bufpages)) ||
+	    (svc->srv_nrqbds_max != 0 && val > svc->srv_nrqbds_max / 2))
 		return -ERANGE;
 
 	spin_lock(&svc->srv_lock);
@@ -365,7 +365,7 @@ ptlrpc_lprocfs_req_buffers_max_seq_write(struct file *file,
 	if (rc < 0)
 		return rc;
 
-	if (val < svc->srv_nbuf_per_group)
+	if (val < svc->srv_nbuf_per_group && val != 0)
 		return -ERANGE;
 
 	spin_lock(&svc->srv_lock);
