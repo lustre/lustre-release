@@ -2752,6 +2752,40 @@ super_setup_bdi_name, [
 ]) # LC_SUPER_SETUP_BDI_NAME
 
 #
+# LC_BI_STATUS
+#
+# 4.12 replace bi_error to bi_status
+#
+AC_DEFUN([LC_BI_STATUS], [
+LB_CHECK_COMPILE([if 'bi_status' exist],
+bi_status, [
+	#include <linux/blk_types.h>
+],[
+	((struct bio *)0)->bi_status = 0;
+],[
+	AC_DEFINE(HAVE_BI_STATUS, 1,
+		['bi_status' is available])
+])
+]) # LC_BI_STATUS
+
+#
+# LC_PAGEVEC_INIT_ONE_PARAM
+#
+# 4.14 pagevec_init takes one parameter
+#
+AC_DEFUN([LC_PAGEVEC_INIT_ONE_PARAM], [
+LB_CHECK_COMPILE([if 'pagevec_init' takes one parameter],
+pagevec_init, [
+	#include <linux/pagevec.h>
+],[
+	pagevec_init(NULL);
+],[
+	AC_DEFINE(HAVE_PAGEVEC_INIT_ONE_PARAM, 1,
+		['pagevec_init' takes one parameter])
+])
+]) # LC_PAGEVEC_INIT_ONE_PARAM
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2977,6 +3011,10 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.12
 	LC_CURRENT_TIME
 	LC_SUPER_SETUP_BDI_NAME
+	LC_BI_STATUS
+
+	# 4.14
+	LC_PAGEVEC_INIT_ONE_PARAM
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

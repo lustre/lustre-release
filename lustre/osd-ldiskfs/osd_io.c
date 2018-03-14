@@ -140,7 +140,11 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_complete_routine(struct bio *bio)
 {
+# ifdef HAVE_BI_STATUS
+	int error = bio->bi_status;
+# else
 	int error = bio->bi_error;
+# endif
 #else
 static void dio_complete_routine(struct bio *bio, int error)
 {
@@ -493,7 +497,11 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	struct pagevec pvec;
 	int i;
 
+#ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
+	pagevec_init(&pvec);
+#else
 	pagevec_init(&pvec, 0);
+#endif
 
 	for (i = 0; i < npages; i++) {
 		if (lnb[i].lnb_page == NULL)
@@ -2008,8 +2016,8 @@ static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
 		if (end == 0)
 			break;
 		invalidate_mapping_pages(inode->i_mapping,
-					 start >> PAGE_CACHE_SHIFT,
-					 (end - 1) >> PAGE_CACHE_SHIFT);
+					 start >> PAGE_SHIFT,
+					 (end - 1) >> PAGE_SHIFT);
 		break;
 	default:
 		rc = -ENOTSUPP;
