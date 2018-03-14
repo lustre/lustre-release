@@ -2698,6 +2698,58 @@ static int osd_inode_setattr(const struct lu_env *env,
 	return 0;
 }
 
+#ifdef HAVE_PROJECT_QUOTA
+static int osd_transfer_project(struct inode *inode, __u32 projid)
+{
+	struct super_block *sb = inode->i_sb;
+	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+	int err;
+	kprojid_t kprojid;
+	struct ldiskfs_iloc iloc;
+	struct ldiskfs_inode *raw_inode;
+	struct dquot *transfer_to[LDISKFS_MAXQUOTAS] = { };
+
+	if (!ldiskfs_has_feature_project(sb)) {
+		LASSERT(__kprojid_val(LDISKFS_I(inode)->i_projid)
+			!= LDISKFS_DEF_PROJID);
+		if (projid != LDISKFS_DEF_PROJID)
+			return -EOPNOTSUPP;
+		else
+			return 0;
+	}
+
+	if (LDISKFS_INODE_SIZE(sb) <= LDISKFS_GOOD_OLD_INODE_SIZE)
+		return -EOPNOTSUPP;
+
+	kprojid = make_kprojid(&init_user_ns, (projid_t)projid);
+	if (projid_eq(kprojid, LDISKFS_I(inode)->i_projid))
+		return 0;
+
+	err = ldiskfs_get_inode_loc(inode, &iloc);
+	if (err)
+		return err;
+
+	raw_inode = ldiskfs_raw_inode(&iloc);
+	if (!LDISKFS_FITS_IN_INODE(raw_inode, ei, i_projid)) {
+		err = -EOVERFLOW;
+		brelse(iloc.bh);
+		return err;
+	}
+	brelse(iloc.bh);
+
+	dquot_initialize(inode);
+	transfer_to[PRJQUOTA] = dqget(sb, make_kqid_projid(kprojid));
+	if (transfer_to[PRJQUOTA]) {
+		err = __dquot_transfer(inode, transfer_to);
+		dqput(transfer_to[PRJQUOTA]);
+		if (err)
+			return err;
+	}
+
+	return err;
+}
+#endif
+
 static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 {
 	int rc;
@@ -2728,7 +2780,7 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 	if (attr->la_valid & LA_PROJID &&
 	    attr->la_projid != i_projid_read(inode)) {
 #ifdef HAVE_PROJECT_QUOTA
-		rc = ldiskfs_transfer_project(inode, attr->la_projid);
+		rc = osd_transfer_project(inode, attr->la_projid);
 #else
 		rc = -ENOTSUPP;
 #endif
@@ -3534,7 +3586,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 #ifdef	HAVE_PROJECT_QUOTA
 	if (LDISKFS_I(pobj->oo_inode)->i_flags & LUSTRE_PROJINHERIT_FL &&
 	    i_projid_read(pobj->oo_inode) != 0) {
-		rc = ldiskfs_transfer_project(local, 0);
+		rc = osd_transfer_project(local, 0);
 		if (rc) {
 			CERROR("%s: quota transfer failed: rc = %d. Is project "
 			       "quota enforcement enabled on the ldiskfs "
