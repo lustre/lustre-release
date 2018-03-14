@@ -798,21 +798,21 @@ run_write_append_truncate() {
 }
 
 run_write_disjoint() {
+	if [ "$NFSCLIENT" ]; then
+		skip "skipped for NFSCLIENT mode"
+		return
+	fi
 
-    WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint \
-        2> /dev/null || true)}
-    # threads per client
-    wdisjoint_THREADS=${wdisjoint_THREADS:-4}
-    wdisjoint_REP=${wdisjoint_REP:-10000}
+	WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null ||
+					   true)}
+
+	[ x$WRITE_DISJOINT = x ] &&
+		{ skip_env "write_disjoint not found" && return; }
+
+	# threads per client
+	wdisjoint_THREADS=${wdisjoint_THREADS:-4}
+	wdisjoint_REP=${wdisjoint_REP:-10000}
 	chunk_size_limit=$1
-
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
-
-    [ x$WRITE_DISJOINT = x ] &&
-        { skip_env "write_disjoint not found" && return; }
 
     # FIXME
     # Need space estimation here.
@@ -824,8 +824,8 @@ run_write_disjoint() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
-	local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP -m "\
-			  "$chunk_size_limit"
+	local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP -m \
+			$chunk_size_limit"
 
 	echo "+ $cmd"
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
