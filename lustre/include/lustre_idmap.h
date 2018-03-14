@@ -58,6 +58,8 @@
 
 #endif /* HAVE_GROUP_INFO_GID */
 
+#include <linux/cred.h>
+
 struct lu_ucred;
 
 extern void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist);
