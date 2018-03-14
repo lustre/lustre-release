@@ -98,7 +98,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
 ===================================================================
 --- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/inode.c
 +++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
-@@ -5281,3 +5281,17 @@ out:
+@@ -5281,3 +5281,18 @@ out:
  	sb_end_pagefault(inode->i_sb);
  	return ret;
  }
@@ -116,6 +116,7 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
 +EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
 +EXPORT_SYMBOL(__ext4_std_error);
 +EXPORT_SYMBOL(ext4fs_dirhash);
++EXPORT_SYMBOL(ext4_get_inode_loc);
 Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
 ===================================================================
 --- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/mballoc.c
