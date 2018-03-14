@@ -2168,8 +2168,7 @@ kiblnd_peer_connect_failed(kib_peer_ni_t *peer_ni, int active, int error)
 	peer_ni->ibp_reconnected = 0;
 	if (list_empty(&peer_ni->ibp_conns)) {
 		/* Take peer_ni's blocked transmits to complete with error */
-		list_add(&zombies, &peer_ni->ibp_tx_queue);
-		list_del_init(&peer_ni->ibp_tx_queue);
+		list_splice_init(&peer_ni->ibp_tx_queue, &zombies);
 
 		if (kiblnd_peer_active(peer_ni))
 			kiblnd_unlink_peer_locked(peer_ni);
