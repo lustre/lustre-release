@@ -95,6 +95,7 @@
     <xi:include href="BackupAndRestore.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ManagingStripingFreeSpace.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="DataOnMDT.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="FileLevelRedundancy.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ManagingFileSystemIO.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ManagingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ConfiguringQuotas.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
