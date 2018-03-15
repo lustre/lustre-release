@@ -92,6 +92,11 @@ module_param_call(lnet_peer_discovery_disabled, discovery_set, param_get_int,
 MODULE_PARM_DESC(lnet_peer_discovery_disabled,
 		"Set to 1 to disable peer discovery on this node.");
 
+unsigned lnet_transaction_timeout = 5;
+module_param(lnet_transaction_timeout, uint, 0444);
+MODULE_PARM_DESC(lnet_transaction_timeout,
+		"Time in seconds to wait for a REPLY or an ACK");
+
 /*
  * This sequence number keeps track of how many times DLC was used to
  * update the local NIs. It is incremented when a NI is added or

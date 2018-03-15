@@ -2950,7 +2950,7 @@ __must_hold(&lp->lp_lock)
  * obsessively re-check the clock. The oldest discovery request will
  * be at the head of the queue.
  */
-static struct lnet_peer *lnet_peer_dc_timed_out(time64_t now)
+static struct lnet_peer *lnet_peer_get_dc_timed_out(time64_t now)
 {
 	struct lnet_peer *lp;
 
@@ -2958,7 +2958,7 @@ static struct lnet_peer *lnet_peer_dc_timed_out(time64_t now)
 		return NULL;
 	lp = list_first_entry(&the_lnet.ln_dc_working,
 			      struct lnet_peer, lp_dc_list);
-	if (now < lp->lp_last_queued + DEFAULT_PEER_TIMEOUT)
+	if (now < lp->lp_last_queued + lnet_transaction_timeout)
 		return NULL;
 	return lp;
 }
@@ -2969,7 +2969,7 @@ static struct lnet_peer *lnet_peer_dc_timed_out(time64_t now)
  * lnet_discovery_event_handler() will proceed from here and complete
  * the cleanup.
  */
-static void lnet_peer_discovery_timeout(struct lnet_peer *lp)
+static void lnet_peer_cancel_discovery(struct lnet_peer *lp)
 {
 	struct lnet_handle_md ping_mdh;
 	struct lnet_handle_md push_mdh;
@@ -3018,7 +3018,7 @@ static int lnet_peer_discovery_wait_for_work(void)
 			break;
 		if (!list_empty(&the_lnet.ln_msg_resend))
 			break;
-		if (lnet_peer_dc_timed_out(ktime_get_real_seconds()))
+		if (lnet_peer_get_dc_timed_out(ktime_get_real_seconds()))
 			break;
 		lnet_net_unlock(cpt);
 
@@ -3187,14 +3187,14 @@ static int lnet_peer_discovery(void *arg)
 		 * taking too long. Move all that are found to the
 		 * ln_dc_expired queue and time out any pending
 		 * Ping or Push. We have to drop the lnet_net_lock
-		 * in the loop because lnet_peer_discovery_timeout()
+		 * in the loop because lnet_peer_cancel_discovery()
 		 * calls LNetMDUnlink().
 		 */
 		now = ktime_get_real_seconds();
-		while ((lp = lnet_peer_dc_timed_out(now)) != NULL) {
+		while ((lp = lnet_peer_get_dc_timed_out(now)) != NULL) {
 			list_move(&lp->lp_dc_list, &the_lnet.ln_dc_expired);
 			lnet_net_unlock(LNET_LOCK_EX);
-			lnet_peer_discovery_timeout(lp);
+			lnet_peer_cancel_discovery(lp);
 			lnet_net_lock(LNET_LOCK_EX);
 		}
 
@@ -3218,7 +3218,7 @@ static int lnet_peer_discovery(void *arg)
 				      struct lnet_peer, lp_dc_list);
 		list_move(&lp->lp_dc_list, &the_lnet.ln_dc_expired);
 		lnet_net_unlock(LNET_LOCK_EX);
-		lnet_peer_discovery_timeout(lp);
+		lnet_peer_cancel_discovery(lp);
 		lnet_net_lock(LNET_LOCK_EX);
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
