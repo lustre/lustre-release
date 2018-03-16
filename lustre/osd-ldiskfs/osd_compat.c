@@ -369,6 +369,9 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 	int			    rc;
 	ENTRY;
 
+	if (unlikely(osd->od_is_ost))
+		RETURN(-ENOENT);
+
 	parent = omm->omm_remote_parent;
 	sprintf(name, DFID_NOBRACE, PFID(fid));
 	dentry = osd_child_dentry_by_inode(oti->oti_env, parent->d_inode,
@@ -535,7 +538,6 @@ static void osd_index_backup_dir_fini(struct osd_device *dev)
 int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
 {
 	int rc;
-	bool ost_init = false;
 	bool mdt_init = false;
 	ENTRY;
 
@@ -543,16 +545,19 @@ int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
 	if (rc)
 		RETURN(rc);
 
-	ost_init = true;
-	rc = osd_mdt_init(env, dev);
-	if (!rc) {
+	if (!dev->od_is_ost) {
+		rc = osd_mdt_init(env, dev);
+		if (rc) {
+			osd_ost_fini(dev);
+			RETURN(rc);
+		}
+
 		mdt_init = true;
-		rc = osd_index_backup_dir_init(env, dev);
 	}
 
+	rc = osd_index_backup_dir_init(env, dev);
 	if (rc) {
-		if (ost_init)
-			osd_ost_fini(dev);
+		osd_ost_fini(dev);
 		if (mdt_init)
 			osd_mdt_fini(dev);
 	}

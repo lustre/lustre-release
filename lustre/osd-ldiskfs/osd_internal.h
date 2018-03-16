@@ -1273,9 +1273,14 @@ static inline int fid_is_internal(const struct lu_fid *fid)
 	return (!fid_is_namespace_visible(fid) && !fid_is_idif(fid));
 }
 
-static inline unsigned long osd_remote_parent_ino(struct osd_device *dev)
+static inline bool is_remote_parent_ino(struct osd_device *o, unsigned long ino)
 {
-	return dev->od_mdt_map->omm_remote_parent->d_inode->i_ino;
+	if (o->od_is_ost)
+		return false;
+
+	LASSERT(o->od_mdt_map != NULL);
+
+	return ino == o->od_mdt_map->omm_remote_parent->d_inode->i_ino;
 }
 
 /**
