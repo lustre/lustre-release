@@ -963,7 +963,7 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 	/* Not handle the backend root object and agent parent object.
 	 * They are neither visible to namespace nor have OI mappings. */
 	if (unlikely(pos == osd_sb(dev)->s_root->d_inode->i_ino ||
-		     pos == osd_remote_parent_ino(dev)))
+		     is_remote_parent_ino(dev, pos)))
 		RETURN(SCRUB_NEXT_CONTINUE);
 
 	osd_id_gen(lid, pos, OSD_OII_NOGEN);

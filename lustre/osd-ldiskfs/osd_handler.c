@@ -1096,7 +1096,7 @@ trigger:
 	 * only happened for the RPC from other MDT during the
 	 * OI scrub, or for the client side RPC with FID only,
 	 * such as FID to path, or from old connected client. */
-	if (!remote && !fid_is_on_ost(info, dev, fid, OI_CHECK_FLD)) {
+	if (!remote) {
 		rc1 = osd_lookup_in_remote_parent(info, dev, fid, id);
 		if (!rc1) {
 			remote = true;
@@ -5320,7 +5320,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		/* done with de, release bh */
 		brelse(bh);
 		if (rc != 0) {
-			if (unlikely(ino == osd_remote_parent_ino(dev))) {
+			if (unlikely(is_remote_parent_ino(dev, ino))) {
 				const char *name = (const char *)key;
 
 				/* If the parent is on remote MDT, and there
@@ -6544,10 +6544,10 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 	int			rc    = 0;
 	ENTRY;
 
-	LASSERT(obj->oo_inode != dev->od_mdt_map->omm_remote_parent->d_inode);
+	LASSERT(!is_remote_parent_ino(dev, obj->oo_inode->i_ino));
 
 	if (attr & LUDA_VERIFY) {
-		if (unlikely(ino == osd_remote_parent_ino(dev))) {
+		if (unlikely(is_remote_parent_ino(dev, ino))) {
 			attr |= LUDA_IGNORE;
 			/* If the parent is on remote MDT, and there
 			 * is no FID-in-dirent, then we have to get
@@ -6575,7 +6575,7 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 			/* If the parent is on remote MDT, and there
 			 * is no FID-in-dirent, then we have to get
 			 * the parent FID from the linkEA.  */
-			if (ino == osd_remote_parent_ino(dev) && is_dotdot) {
+			if (is_remote_parent_ino(dev, ino) && is_dotdot) {
 				rc = osd_get_pfid_from_linkea(env, obj, fid);
 			} else {
 				if (is_dotdot == false &&
