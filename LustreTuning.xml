@@ -1866,6 +1866,39 @@ iozone_user1 opcode={ost_read ost_write} 200, ref 0
 computes nid={192.168.1.[2-128]@tcp} 500, ref 0
 default * 10000, ref 0</screen>
 	  </listitem>
+	  <listitem>
+	    <para><emphasis role="bold">TBF realtime policies under congestion
+	    </emphasis></para>
+	    <para>During TBF evaluation, we find that when the sum of I/O
+	    bandwidth requirements for all classes exceeds the system capacity,
+	    the classes with the same rate limits get less bandwidth than if
+	    preconfigured evenly. The reason for this is the heavy load on a
+	    congested server will result in some missed deadlines for some
+	    classes. The number of the calculated tokens may be larger than 1
+	    during dequeuing. In the original implementation, all classes are
+	    equally handled to simply discard exceeding tokens.</para>
+	    <para>Thus, a Hard Token Compensation (HTC) strategy has been
+	    implemented. A class can be configured with the HTC feature by the
+	    rule it matches. This feature means that requests in this kind of
+	    class queues have high real-time requirements and that the bandwidth
+	    assignment must be satisfied as good as possible. When deadline
+	    misses happen, the class keeps the deadline unchanged and the time
+	    residue(the remainder of elapsed time divided by 1/r) is compensated
+	    to the next round. This ensures that the next idle I/O thread will
+	    always select this class to serve until all accumulated exceeding
+	    tokens are handled or there are no pending requests in the class
+	    queue.</para>
+	    <para>Command:</para>
+	    <para>A new command format is added to enable the realtime feature
+	    for a rule:</para>
+	    <screen>lctl set_param x.x.x.nrs_tbf_rule=\
+"start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>... realtime=1</screen>
+	    <para>Example:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+"start realjob jobid={dd.0} rate=100 realtime=1</screen>
+	    <para>This example rule means the RPC requests whose JobID is dd.0
+	    will be processed at the rate of 100req/sec in realtime.</para>
+	  </listitem>
 	</itemizedlist>
       </section>
     </section>
