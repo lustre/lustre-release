@@ -67,7 +67,7 @@ cleanup_nfs() {
 				 service nfsserver stop; } ||
 				 service nfs stop" || return 1
 
-	do_nodes $LUSTRE_CLIENT "sed -i '/^${MNTPNT##*/}/d' /etc/exports" || return 1
+	do_nodes $LUSTRE_CLIENT "sed -i '/${MNTPNT##*/}/d' /etc/exports" || return 1
 
 	do_nodes $LUSTRE_CLIENT "exportfs -v"
 }
