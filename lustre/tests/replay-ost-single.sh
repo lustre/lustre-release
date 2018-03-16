@@ -159,7 +159,8 @@ test_5() {
 	if (( size > GB )); then
 		size=$GB
 	fi
-	local iozone_opts="-i 0 -i 1 -i 2 -+d -r 4 -s $size -f $TDIR/$tfile"
+	# no random I/O (-i 2) as it's very slow with ZFS
+	local iozone_opts="-i 0 -i 1 -+d -r 4 -s $size -f $TDIR/$tfile"
 
 	iozone_bg $iozone_opts &
 	local pid=$!
