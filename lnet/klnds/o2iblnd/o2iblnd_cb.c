@@ -516,10 +516,21 @@ kiblnd_rx_complete (kib_rx_t *rx, int status, int nob)
         /* set time last known alive */
         kiblnd_peer_alive(conn->ibc_peer);
 
-	/* racing with connection establishment/teardown! */
-	if (conn->ibc_state < IBLND_CONN_ESTABLISHED)
-		goto ignore;
+        /* racing with connection establishment/teardown! */
 
+        if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
+		rwlock_t  *g_lock = &kiblnd_data.kib_global_lock;
+		unsigned long  flags;
+
+		write_lock_irqsave(g_lock, flags);
+		/* must check holding global lock to eliminate race */
+		if (conn->ibc_state < IBLND_CONN_ESTABLISHED) {
+			list_add_tail(&rx->rx_list, &conn->ibc_early_rxs);
+			write_unlock_irqrestore(g_lock, flags);
+			return;
+		}
+		write_unlock_irqrestore(g_lock, flags);
+        }
         kiblnd_handle_rx(rx);
         return;
 
@@ -2045,6 +2056,29 @@ kiblnd_close_conn(kib_conn_t *conn, int error)
 }
 
 static void
+kiblnd_handle_early_rxs(kib_conn_t *conn)
+{
+	unsigned long    flags;
+	kib_rx_t        *rx;
+
+	LASSERT(!in_interrupt());
+	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
+
+	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	while (!list_empty(&conn->ibc_early_rxs)) {
+		rx = list_entry(conn->ibc_early_rxs.next,
+				    kib_rx_t, rx_list);
+		list_del(&rx->rx_list);
+		write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+
+		kiblnd_handle_rx(rx);
+
+		write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	}
+	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+}
+
+static void
 kiblnd_abort_txs(kib_conn_t *conn, struct list_head *txs)
 {
 	struct list_head	 zombies = LIST_HEAD_INIT(zombies);
@@ -2101,6 +2135,8 @@ kiblnd_finalise_conn (kib_conn_t *conn)
 	kiblnd_abort_txs(conn, &conn->ibc_tx_queue_rsrvd);
 	kiblnd_abort_txs(conn, &conn->ibc_tx_queue_nocred);
 	kiblnd_abort_txs(conn, &conn->ibc_active_txs);
+
+	kiblnd_handle_early_rxs(conn);
 }
 
 static void
@@ -2257,6 +2293,8 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 	kiblnd_check_sends_locked(conn);
 	spin_unlock(&conn->ibc_lock);
 
+	/* schedule blocked rxs */
+	kiblnd_handle_early_rxs(conn);
 	kiblnd_conn_decref(conn);
 }
 
