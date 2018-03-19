@@ -204,6 +204,80 @@ libcfs_ip_addr_range_print(char *buffer, int count, struct list_head *list)
 	return i;
 }
 
+static int
+cfs_ip_addr_range_gen_recurse(__u32 *ip_list, int *count, int shift,
+			      __u32 result, struct list_head *head_el,
+			      struct cfs_expr_list *octet_el)
+{
+	__u32 value = 0;
+	int i;
+	struct cfs_expr_list *next_octet_el;
+	struct cfs_range_expr *octet_expr;
+
+	/*
+	 * each octet can have multiple expressions so we need to traverse
+	 * all of the expressions
+	 */
+	list_for_each_entry(octet_expr, &octet_el->el_exprs, re_link) {
+		for (i = octet_expr->re_lo; i <= octet_expr->re_hi; i++) {
+			if (((i - octet_expr->re_lo) % octet_expr->re_stride) == 0) {
+				/*
+				 * we have a hit calculate the result and
+				 * pass it forward to the next iteration
+				 * of the recursion.
+				 */
+				next_octet_el =
+					list_entry(octet_el->el_link.next,
+							typeof(*next_octet_el),
+							el_link);
+				value = result | (i << (shift * 8));
+				if (next_octet_el->el_link.next != head_el) {
+					/*
+					 * We still have more octets in
+					 * the IP address so traverse
+					 * that. We're doing a depth first
+					 * recursion here.
+					 */
+					if (cfs_ip_addr_range_gen_recurse(ip_list, count,
+									  shift - 1, value,
+									  head_el,
+									  next_octet_el) == -1)
+						return -1;
+				} else {
+					/*
+					 * We have hit a leaf so store the
+					 * calculated IP address in the
+					 * list. If we have run out of
+					 * space stop the recursion.
+					 */
+					if (*count == -1)
+						return -1;
+					/* add ip to the list */
+					ip_list[*count] = value;
+					(*count)--;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
+/*
+ * only generate maximum of count ip addresses from the given expression
+ */
+int
+cfs_ip_addr_range_gen(__u32 *ip_list, int count, struct list_head *ip_addr_expr)
+{
+	struct cfs_expr_list *octet_el;
+	int idx = count - 1;
+
+	octet_el = list_entry(ip_addr_expr->next, typeof(*octet_el), el_link);
+
+	(void) cfs_ip_addr_range_gen_recurse(ip_list, &idx, 3, 0, &octet_el->el_link, octet_el);
+
+	return idx;
+}
+
 /**
  * Matches address (\a addr) against address set encoded in \a list.
  *
