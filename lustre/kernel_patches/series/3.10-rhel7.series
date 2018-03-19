@@ -2,5 +2,3 @@ raid5-mmp-unplug-dev-3.8.patch
 dev_read_only-3.7.patch
 blkdev_tunables-3.9.patch
 vfs-project-quotas-rhel7.patch
-jbd2-speedup-jbd2_journal_get_-write-undo-_access.patch
-jbd2-fix-null-committed-data-return-in-undo_access.patch
