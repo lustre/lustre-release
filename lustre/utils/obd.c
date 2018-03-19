@@ -3433,6 +3433,51 @@ int jt_nodemap_test_id(int argc, char **argv)
 }
 
 /**
+ * parse nid range
+ *
+ * \param	nodemap_range	--range string
+ * \param	nid_range	nid range string, min_nid:max_nid
+ *
+ * \retval			0 on success
+ */
+static int parse_nid_range(char *nodemap_range, char *nid_range, int range_len)
+{
+	char			min_nid[LNET_NIDSTR_SIZE + 1];
+	char			max_nid[LNET_NIDSTR_SIZE + 1];
+	struct list_head	nidlist;
+	int			rc = 0;
+
+	INIT_LIST_HEAD(&nidlist);
+
+	if (cfs_parse_nidlist(nodemap_range, strlen(nodemap_range),
+			      &nidlist) <= 0) {
+		fprintf(stderr,
+			"error: nodemap_xxx_range: can't parse nid range: %s\n",
+			nodemap_range);
+		return -1;
+	}
+
+	rc = cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
+				       LNET_NIDSTR_SIZE);
+	if (rc < 0) {
+		if (rc == -EINVAL)
+			fprintf(stderr,
+				"error: nodemap_xxx_range: nid range uses "
+				"currently unsupported features\n");
+		else if (rc == -ERANGE)
+			fprintf(stderr,
+				"error: nodemap_xxx_range: nodemap ranges must "
+				"be contiguous\n");
+
+		return rc;
+	}
+
+	snprintf(nid_range, range_len, "%s:%s", min_nid, max_nid);
+
+	return rc;
+}
+
+/**
  * add an nid range to a nodemap
  *
  * \param	argc		number of args
@@ -3447,9 +3492,6 @@ int jt_nodemap_add_range(int argc, char **argv)
 {
 	char			*nodemap_name = NULL;
 	char			*nodemap_range = NULL;
-	struct list_head	nidlist;
-	char			min_nid[LNET_NIDSTR_SIZE + 1];
-	char			max_nid[LNET_NIDSTR_SIZE + 1];
 	char			nid_range[2 * LNET_NIDSTR_SIZE + 2];
 	int			rc = 0;
 	int			c;
@@ -3472,8 +3514,6 @@ int jt_nodemap_add_range(int argc, char **argv)
 		}
 	};
 
-	INIT_LIST_HEAD(&nidlist);
-
 	while ((c = getopt_long(argc, argv, "n:r:",
 				long_options, NULL)) != -1) {
 		switch (c) {
@@ -3492,30 +3532,11 @@ int jt_nodemap_add_range(int argc, char **argv)
 		return -1;
 	}
 
-	if (cfs_parse_nidlist(nodemap_range, strlen(nodemap_range),
-			      &nidlist) <= 0) {
-		fprintf(stderr, "error: %s: can't parse nid range: %s\n",
-			jt_cmdname(argv[0]), nodemap_range);
-		return -1;
-	}
-
-	rc = cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
-				       LNET_NIDSTR_SIZE);
-	if (rc < 0) {
+	rc = parse_nid_range(nodemap_range, nid_range, sizeof(nid_range));
+	if (rc) {
 		errno = -rc;
-		if (rc == -EINVAL)
-			fprintf(stderr, "error: %s: nid range uses "
-				"currently unsupported features\n",
-				jt_cmdname(argv[0]));
-		else if (rc == -ERANGE)
-			fprintf(stderr, "error: %s: nodemap ranges must be "
-				"contiguous\n", jt_cmdname(argv[0]));
-
 		return rc;
 	}
-
-	snprintf(nid_range, sizeof(nid_range), "%s:%s", min_nid, max_nid);
-
 	rc = nodemap_cmd(LCFG_NODEMAP_ADD_RANGE, NULL, 0, argv[0],
 			 nodemap_name, nid_range, NULL);
 	if (rc != 0) {
@@ -3543,9 +3564,6 @@ int jt_nodemap_del_range(int argc, char **argv)
 {
 	char			*nodemap_name = NULL;
 	char			*nodemap_range = NULL;
-	struct list_head	nidlist;
-	char			min_nid[LNET_NIDSTR_SIZE + 1];
-	char			max_nid[LNET_NIDSTR_SIZE + 1];
 	char			nid_range[2 * LNET_NIDSTR_SIZE + 2];
 	int			rc = 0;
 	int			c;
@@ -3568,8 +3586,6 @@ int jt_nodemap_del_range(int argc, char **argv)
 		}
 	};
 
-	INIT_LIST_HEAD(&nidlist);
-
 	while ((c = getopt_long(argc, argv, "n:r:",
 				long_options, NULL)) != -1) {
 		switch (c) {
@@ -3588,30 +3604,11 @@ int jt_nodemap_del_range(int argc, char **argv)
 		return -1;
 	}
 
-	if (cfs_parse_nidlist(nodemap_range, strlen(nodemap_range),
-			      &nidlist) <= 0) {
-		fprintf(stderr, "error: %s: can't parse nid range: %s\n",
-			jt_cmdname(argv[0]), nodemap_range);
-		return -1;
-	}
-
-	rc = cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
-				       LNET_NIDSTR_SIZE);
-	if (rc < 0) {
+	rc = parse_nid_range(nodemap_range, nid_range, sizeof(nid_range));
+	if (rc) {
 		errno = -rc;
-		if (rc == -EINVAL)
-			fprintf(stderr, "error: %s: nid range uses "
-				"currently unsupported features\n",
-				jt_cmdname(argv[0]));
-		else if (rc == -ERANGE)
-			fprintf(stderr, "error: %s: nodemap ranges must be "
-				"contiguous\n", jt_cmdname(argv[0]));
-
 		return rc;
 	}
-
-	snprintf(nid_range, sizeof(nid_range), "%s:%s", min_nid, max_nid);
-
 	rc = nodemap_cmd(LCFG_NODEMAP_DEL_RANGE, NULL, 0, argv[0],
 			 nodemap_name, nid_range, NULL);
 	if (rc != 0) {

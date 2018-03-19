@@ -338,8 +338,8 @@ add_idmaps() {
 }
 
 update_idmaps() { #LU-10040
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.55) ] &&
-		skip "Need MGS >= 2.10.55" &&
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.1) ] &&
+		skip "Need MGS >= 2.10.1" &&
 		return
 	local csum=${HOSTNAME_CHECKSUM}_0
 	local old_id_client=$ID0
@@ -751,8 +751,8 @@ test_10a() {
 run_test 10a "nodemap reject duplicate ranges"
 
 test_10b() {
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.53) ] &&
-		skip "Need MGS >= 2.10.53" && return
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.1) ] &&
+		skip "Need MGS >= 2.10.1" && return
 
 	local nm1="nodemap1"
 	local nm2="nodemap2"
@@ -779,8 +779,8 @@ test_10b() {
 run_test 10b "delete range from the correct nodemap"
 
 test_10c() { #LU-8912
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.57) ] &&
-		skip "Need MGS >= 2.10.57" && return
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.1) ] &&
+		skip "Need MGS >= 2.10.1" && return
 
 	local nm="nodemap_lu8912"
 	local nid_range="10.210.[32-47].[0-255]@o2ib3"
@@ -807,6 +807,36 @@ test_10c() { #LU-8912
 	return 0
 }
 run_test 10c "verfify contiguous range support"
+
+test_10d() { #LU-8913
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.3) ] &&
+		skip "Need MGS >= 2.10.3" && return
+
+	local nm="nodemap_lu8913"
+	local nid_range="*@o2ib3"
+	local start_nid="0.0.0.0@o2ib3"
+	local end_nid="255.255.255.255@o2ib3"
+	local start_nid_found
+	local end_nid_found
+
+	do_facet mgs $LCTL nodemap_del $nm 2>/dev/null
+	do_facet mgs $LCTL nodemap_add $nm || error "Add $nm failed"
+	do_facet mgs $LCTL nodemap_add_range --name $nm --range $nid_range ||
+		error "Add range $nid_range to $nm failed"
+
+	start_nid_found=$(do_facet mgs $LCTL get_param nodemap.$nm.* |
+		awk -F '[,: ]' /start_nid/'{ print $9 }')
+	[ "$start_nid" == "$start_nid_found" ] ||
+		error "start_nid: $start_nid_found != $start_nid"
+	end_nid_found=$(do_facet mgs $LCTL get_param nodemap.$nm.* |
+		awk -F '[,: ]' /end_nid/'{ print $13 }')
+	[ "$end_nid" == "$end_nid_found" ] ||
+		error "end_nid: $end_nid_found != $end_nid"
+
+	do_facet mgs $LCTL nodemap_del $nm || error "Delete $nm failed"
+	return 0
+}
+run_test 10d "verfify nodemap range format '*@<net>' support"
 
 test_11() {
 	local rc
@@ -1724,8 +1754,8 @@ run_test 23a "test mapped regular ACLs"
 
 test_23b() { #LU-9929
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.53) ] &&
-		skip "Need MGS >= 2.10.53" && return
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.1) ] &&
+		skip "Need MGS >= 2.10.1" && return
 
 	nodemap_test_setup
 	trap nodemap_test_cleanup EXIT
