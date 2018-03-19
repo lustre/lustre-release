@@ -1201,6 +1201,12 @@ static int cfs_ip_min_max(struct list_head *nidlist, __u32 *min_nid,
 		if (nidlist_count > 0)
 			return -EINVAL;
 
+		if (nr->nr_all) {
+			min_ip_addr = 0;
+			max_ip_addr = 0xffffffff;
+			break;
+		}
+
 		list_for_each_entry(ar, &nr->nr_addrranges, ar_link) {
 			rc = cfs_ip_ar_min_max(ar, &tmp_min_ip_addr,
 					       &tmp_max_ip_addr);
