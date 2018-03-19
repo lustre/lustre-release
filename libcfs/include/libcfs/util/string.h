@@ -82,6 +82,8 @@ int cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 void cfs_expr_list_free(struct cfs_expr_list *expr_list);
 void cfs_expr_list_free_list(struct list_head *list);
 int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
+int cfs_ip_addr_range_gen(__u32 *ip_list, int count,
+			  struct list_head *ip_addr_expr);
 int cfs_ip_addr_match(__u32 addr, struct list_head *list);
 int cfs_abs_path(const char *request_path, char **resolved_path);
 
