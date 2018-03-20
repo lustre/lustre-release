@@ -997,12 +997,9 @@ wait_nm_sync() {
 	local nodemap_name=$1
 	local key=$2
 	local value=$3
-	local proc_param="${nodemap_name}.${key}"
-	[ "$nodemap_name" == "active" ] && proc_param="active"
-
+	local opt=$4
+	local proc_param
 	local is_active=$(do_facet mgs $LCTL get_param -n nodemap.active)
-	(( is_active == 0 )) && [ "$proc_param" != "active" ] && return
-
 	local max_retries=20
 	local is_sync
 	local out1=""
@@ -1010,8 +1007,17 @@ wait_nm_sync() {
 	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
 	local i
 
+	if [ "$nodemap_name" == "active" ]; then
+		proc_param="active"
+	elif [ -z "$key" ]; then
+		proc_param=${nodemap_name}
+	else
+		proc_param="${nodemap_name}.${key}"
+	fi
+	(( is_active == 0 )) && [ "$proc_param" != "active" ] && return
+
 	if [ -z "$value" ]; then
-		out1=$(do_facet mgs $LCTL get_param nodemap.${proc_param})
+		out1=$(do_facet mgs $LCTL get_param $opt nodemap.${proc_param})
 		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
 	else
 		out1=$value;
@@ -1028,7 +1034,7 @@ wait_nm_sync() {
 			[ $node_ip == $mgs_ip ] && continue
 		    fi
 
-		    out2=$(do_node $node_ip $LCTL get_param \
+		    out2=$(do_node $node_ip $LCTL get_param $opt \
 				   nodemap.$proc_param 2>/dev/null)
 		    echo "On $node ${node_ip}, ${proc_param} = $out2"
 		    [ "$out1" != "$out2" ] && is_sync=false && break
@@ -1857,7 +1863,6 @@ run_test 26 "test transferring very large nodemap"
 
 nodemap_exercise_fileset() {
 	local nm="$1"
-	local fileset_on_mgs=""
 	local loop=0
 
 	# setup
@@ -1910,12 +1915,12 @@ nodemap_exercise_fileset() {
 		error "subdir of fileset not taken into account"
 
 	# remove fileset info from nodemap
-	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset \'\' ||
+	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset clear ||
 		error "unable to delete fileset info on $nm nodemap"
 	wait_update_facet mgs "$LCTL get_param nodemap.${nm}.fileset" \
 			  "nodemap.${nm}.fileset=" ||
 		error "fileset info still not cleared on $nm nodemap"
-	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=\'\' ||
+	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=clear ||
 		error "unable to reset fileset info on $nm nodemap"
 	wait_nm_sync $nm fileset "nodemap.${nm}.fileset="
 
@@ -1952,7 +1957,10 @@ nodemap_exercise_fileset() {
 	fi
 }
 
-test_27() {
+test_27a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.59) ] &&
+		skip "Need MDS >= 2.10.59" && return
+
 	for nm in "default" "c0"; do
 		local subdir="subdir_${nm}"
 		local subsubdir="subsubdir_${nm}"
@@ -1961,7 +1969,46 @@ test_27() {
 		nodemap_exercise_fileset "$nm"
 	done
 }
-run_test 27 "test fileset in various nodemaps"
+run_test 27a "test fileset in various nodemaps"
+
+test_27b() { #LU-10703
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.59) ] &&
+		skip "Need MDS >= 2.10.59" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+
+	nodemap_test_setup
+	trap nodemap_test_cleanup EXIT
+
+	# Add the nodemaps and set their filesets
+	for i in $(seq 1 $MDSCOUNT); do
+		do_facet mgs $LCTL nodemap_del nm$i 2>/dev/null
+		do_facet mgs $LCTL nodemap_add nm$i ||
+			error "add nodemap nm$i failed"
+		wait_nm_sync nm$i "" "" "-N"
+
+		if ! combined_mgs_mds; then
+			do_facet mgs \
+				$LCTL set_param nodemap.nm$i.fileset=/dir$i ||
+				error "set nm$i.fileset=/dir$i failed on MGS"
+		fi
+		do_facet mgs $LCTL set_param -P nodemap.nm$i.fileset=/dir$i ||
+			error "set nm$i.fileset=/dir$i failed on servers"
+		wait_nm_sync nm$i fileset "nodemap.nm$i.fileset=/dir$i"
+	done
+
+	# Check if all the filesets are correct
+	for i in $(seq 1 $MDSCOUNT); do
+		fileset=$(do_facet mds$i \
+			  $LCTL get_param -n nodemap.nm$i.fileset)
+		[ "$fileset" = "/dir$i" ] ||
+			error "nm$i.fileset $fileset != /dir$i on mds$i"
+		do_facet mgs $LCTL nodemap_del nm$i ||
+			error "delete nodemap nm$i failed"
+	done
+
+	nodemap_test_cleanup
+}
+run_test 27b "The new nodemap won't clear the old nodemap's fileset"
 
 test_28() {
 	if ! $SHARED_KEY; then
