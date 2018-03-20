@@ -730,8 +730,6 @@ test_2() {
 	$LFS setstripe -E 1M -S 1M -E EOF -c 1 $tf
 	$LFS setstripe -E 2M -S 1M -E EOF -c -1 $tf2
 
-	local layout=$($LFS getstripe $tf2 | grep -A 4 lmm_objects)
-
 	$LFS mirror extend -N -f $tf2 $tf ||
 		error "merging $tf2 into $tf failed"
 

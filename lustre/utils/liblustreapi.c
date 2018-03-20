@@ -2603,6 +2603,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 				     lum->lmm_stripe_offset ==
 				     (typeof(lum->lmm_stripe_offset))(-1) ? -1 :
 				     lum->lmm_stripe_offset);
+		else if (lov_pattern(lum->lmm_pattern) == LOV_PATTERN_MDT)
+			llapi_printf(LLAPI_MSG_NORMAL, "0");
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%u",
 				     objects[0].l_ost_idx);
@@ -2656,7 +2658,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 				 flags);
 
 	if (!is_dir && !skip_objs && (header & VERBOSE_OBJID) &&
-	    !(lum->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
+	    !(lum->lmm_pattern & LOV_PATTERN_F_RELEASED ||
+	      lov_pattern(lum->lmm_pattern) == LOV_PATTERN_MDT)) {
 		char *space = "      - ";
 
 		if (indent)
