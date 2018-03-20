@@ -140,8 +140,7 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
         for (i = 0; i < svc->srv_nbuf_per_group; i++) {
                 /* NB: another thread might have recycled enough rqbds, we
 		 * need to make sure it wouldn't over-allocate, see LU-1212. */
-		if (test_req_buffer_pressure ||
-		    svcpt->scp_nrqbds_posted >= svc->srv_nbuf_per_group ||
+		if (svcpt->scp_nrqbds_posted >= svc->srv_nbuf_per_group ||
 		    (svc->srv_nrqbds_max != 0 &&
 		     svcpt->scp_nrqbds_total > svc->srv_nrqbds_max))
 			break;
