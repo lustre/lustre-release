@@ -527,8 +527,6 @@ void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, __u32 flags,
                                                     &RMF_MDT_BODY);
 
 	b->mbo_valid = valid;
-	if (op_data->op_bias & MDS_CHECK_SPLIT)
-		b->mbo_valid |= OBD_MD_FLCKSPLIT;
 	if (op_data->op_bias & MDS_CROSS_REF)
 		b->mbo_valid |= OBD_MD_FLCROSSREF;
 	b->mbo_eadatasize = ea_size;

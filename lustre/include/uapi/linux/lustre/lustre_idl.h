@@ -1216,7 +1216,7 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 /*	OBD_MD_FLRMTPERM     (0x0000010000000000ULL) remote perm, obsolete */
 #define OBD_MD_FLMDSCAPA     (0x0000020000000000ULL) /* MDS capability */
 #define OBD_MD_FLOSSCAPA     (0x0000040000000000ULL) /* OSS capability */
-#define OBD_MD_FLCKSPLIT     (0x0000080000000000ULL) /* Check split on server */
+/*      OBD_MD_FLCKSPLIT     (0x0000080000000000ULL) obsolete 2.3.58*/
 #define OBD_MD_FLCROSSREF    (0x0000100000000000ULL) /* Cross-ref case */
 #define OBD_MD_FLGETATTRLOCK (0x0000200000000000ULL) /* Get IOEpoch attributes
                                                       * under lock; for xattr
@@ -1829,7 +1829,7 @@ struct mdt_rec_setattr {
 #define MDS_ATTR_PROJID	    0x10000ULL	/* = 65536 */
 
 enum mds_op_bias {
-	MDS_CHECK_SPLIT		= 1 << 0,
+/*	MDS_CHECK_SPLIT		= 1 << 0, obsolete before 2.3.58 */
 	MDS_CROSS_REF		= 1 << 1,
 	MDS_VTX_BYPASS		= 1 << 2,
 	MDS_PERM_BYPASS		= 1 << 3,
