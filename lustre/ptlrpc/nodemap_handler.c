@@ -924,8 +924,20 @@ static int nodemap_set_fileset_helper(struct nodemap_config *config,
 {
 	int rc = 0;
 
-	/* we allow fileset = "" which means clear fileset info */
-	if (fileset == NULL || (fileset[0] != 0 && fileset[0] != '/'))
+	/* Allow 'fileset=clear' in addition to 'fileset=""' to clear fileset
+	 * because either command 'lctl set_param -P *.*.fileset=""' or
+	 * 'lctl nodemap_set_fileset --fileset ""' can only work correctly
+	 * on MGS, while on other servers, both commands will invoke upcall
+	 * "/usr/sbin/lctl set_param nodemap.default.fileset=" by function
+	 * process_param2_config(), which will cause "no value" error and
+	 * won't clear fileset.
+	 * 'fileset=""' is still kept for compatibility reason.
+	 */
+	if (fileset == NULL)
+		rc = -EINVAL;
+	else if (fileset[0] == '\0' || strcmp(fileset, "clear") == 0)
+		nodemap->nm_fileset[0] = '\0';
+	else if (fileset[0] != '/')
 		rc = -EINVAL;
 	else if (strlcpy(nodemap->nm_fileset, fileset,
 			 sizeof(nodemap->nm_fileset)) >=
@@ -947,8 +959,7 @@ int nodemap_set_fileset(const char *name, const char *fileset)
 		GOTO(out, rc = PTR_ERR(nodemap));
 	}
 
-	rc = nodemap_set_fileset_helper(active_config, nodemap,
-						fileset);
+	rc = nodemap_set_fileset_helper(active_config, nodemap, fileset);
 	mutex_unlock(&active_config_lock);
 
 	nodemap_putref(nodemap);
@@ -999,6 +1010,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 	struct lu_nodemap	*default_nodemap;
 	struct cfs_hash		*hash = config->nmc_nodemap_hash;
 	int			 rc = 0;
+	ENTRY;
 
 	default_nodemap = config->nmc_default_nodemap;
 
@@ -1079,11 +1091,11 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nm_fileset[0] = '\0';
 	}
 
-	return nodemap;
+	RETURN(nodemap);
 
 out:
 	CERROR("cannot add nodemap: '%s': rc = %d\n", name, rc);
-	return ERR_PTR(rc);
+	RETURN(ERR_PTR(rc));
 }
 
 /**

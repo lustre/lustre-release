@@ -710,7 +710,9 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			      " nodemap_id=%d. nodemap config file corrupt?\n",
 			      nodemap_id);
 		break;
-	case NODEMAP_CLUSTER_IDX:
+	case NODEMAP_CLUSTER_IDX: {
+		struct lu_nodemap *old_nm = NULL;
+
 		nodemap = cfs_hash_lookup(config->nmc_nodemap_hash,
 					  rec->ncr.ncr_name);
 		if (nodemap == NULL) {
@@ -752,6 +754,17 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		nodemap->nmf_map_gid_only =
 					flags & NM_FL_MAP_GID_ONLY;
 
+		/* The fileset should be saved otherwise it will be empty
+		 * every time in case of "NODEMAP_CLUSTER_IDX". */
+		mutex_lock(&active_config_lock);
+		old_nm = nodemap_lookup(rec->ncr.ncr_name);
+		if (!IS_ERR(old_nm) && old_nm->nm_fileset[0] != '\0')
+			strlcpy(nodemap->nm_fileset, old_nm->nm_fileset,
+				sizeof(nodemap->nm_fileset));
+		mutex_unlock(&active_config_lock);
+		if (!IS_ERR(old_nm))
+			nodemap_putref(old_nm);
+
 		if (*recent_nodemap == NULL) {
 			*recent_nodemap = nodemap;
 			INIT_LIST_HEAD(&nodemap->nm_list);
@@ -761,6 +774,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 		}
 		nodemap_putref(nodemap);
 		break;
+	}
 	case NODEMAP_RANGE_IDX:
 		nid[0] = le64_to_cpu(rec->nrr.nrr_start_nid);
 		nid[1] = le64_to_cpu(rec->nrr.nrr_end_nid);
