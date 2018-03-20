@@ -671,7 +671,7 @@ struct ptlrpc_body_v3 {
 	__u64 pb_padding64_0;
 	__u64 pb_padding64_1;
 	__u64 pb_padding64_2;
-	char  pb_jobid[LUSTRE_JOBID_SIZE]; /* req: ASCII MPI jobid from env */
+	char  pb_jobid[LUSTRE_JOBID_SIZE]; /* req: ASCII jobid from env + NUL */
 };
 #define ptlrpc_body     ptlrpc_body_v3
 

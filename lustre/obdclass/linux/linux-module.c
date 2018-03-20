@@ -481,8 +481,8 @@ static ssize_t jobid_name_show(struct kobject *kobj, struct attribute *attr,
 {
 	int rc = 0;
 
-	if (strlen(obd_jobid_node))
-		rc = snprintf(buf, PAGE_SIZE, "%s\n", obd_jobid_node);
+	if (strlen(obd_jobid_name))
+		rc = snprintf(buf, PAGE_SIZE, "%s\n", obd_jobid_name);
 	return rc;
 }
 
@@ -492,22 +492,23 @@ static ssize_t jobid_name_store(struct kobject *kobj, struct attribute *attr,
 	if (!count || count > LUSTRE_JOBID_SIZE)
 		return -EINVAL;
 
-	if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) != 0) {
+	if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) != 0 &&
+	    !strchr(buffer, '%')) {
 		lustre_jobid_clear(buffer);
 		return count;
 	}
 
 	/* clear previous value */
-	memset(obd_jobid_node, 0, LUSTRE_JOBID_SIZE);
+	memset(obd_jobid_name, 0, LUSTRE_JOBID_SIZE);
 
-	memcpy(obd_jobid_node, buffer, count);
+	memcpy(obd_jobid_name, buffer, count);
 
 	/* Trim the trailing '\n' if any */
-	if (obd_jobid_node[count - 1] == '\n') {
+	if (obd_jobid_name[count - 1] == '\n') {
 		/* Don't echo just a newline */
 		if (count == 1)
 			return -EINVAL;
-		obd_jobid_node[count - 1] = 0;
+		obd_jobid_name[count - 1] = 0;
 	}
 
 	return count;

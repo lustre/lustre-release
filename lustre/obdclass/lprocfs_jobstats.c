@@ -65,7 +65,7 @@ struct job_stat {
 	struct hlist_node	js_hash;	/* hash struct for this jobid */
 	struct list_head	js_list;	/* on ojs_list, with ojs_lock */
 	atomic_t		js_refcount;	/* num users of this struct */
-	char			js_jobid[LUSTRE_JOBID_SIZE]; /* job name */
+	char			js_jobid[LUSTRE_JOBID_SIZE]; /* job name + NUL*/
 	time64_t		js_timestamp;	/* seconds of most recent stat*/
 	struct lprocfs_stats	*js_stats;	/* per-job statistics */
 	struct obd_job_stats	*js_jobstats;	/* for accessing ojs_lock */
@@ -252,7 +252,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 
 	jobs->ojs_cntr_init_fn(job->js_stats);
 
-	memcpy(job->js_jobid, jobid, LUSTRE_JOBID_SIZE);
+	memcpy(job->js_jobid, jobid, sizeof(job->js_jobid));
 	job->js_timestamp = ktime_get_real_seconds();
 	job->js_jobstats = jobs;
 	INIT_HLIST_NODE(&job->js_hash);

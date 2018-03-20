@@ -54,7 +54,7 @@ extern rwlock_t obd_dev_lock;
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
 extern struct obd_device *class_exp2obd(struct obd_export *);
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
-int lustre_get_jobid(char *jobid);
+int lustre_get_jobid(char *jobid, size_t len);
 void lustre_jobid_clear(const char *jobid);
 void jobid_cache_fini(void);
 int jobid_cache_init(void);
@@ -1889,7 +1889,7 @@ int class_del_uuid (const char *uuid);
 int class_check_uuid(struct obd_uuid *uuid, __u64 nid);
 
 /* class_obd.c */
-extern char obd_jobid_node[];
+extern char obd_jobid_name[];
 
 /* prng.c */
 #define ll_generate_random_uuid(uuid_out) cfs_get_random_bytes(uuid_out, sizeof(class_uuid_t))

@@ -955,7 +955,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_async_rc = 0;
 	}
 	mutex_init(&lli->lli_layout_mutex);
-	memset(lli->lli_jobid, 0, LUSTRE_JOBID_SIZE);
+	memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));
 }
 
 #ifndef HAVE_SUPER_SETUP_BDI_NAME

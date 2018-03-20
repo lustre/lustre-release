@@ -262,9 +262,14 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 			    !memcmp(entry, key, key_len)) {
 				entry += key_len + 1;
 				entry_len -= key_len + 1;
-				/* The 'value' buffer passed in is too small.*/
-				if (entry_len >= *val_len)
+
+				/* The 'value' buffer passed in is too small.
+				 * Copy what fits, but return -EOVERFLOW. */
+				if (entry_len >= *val_len) {
+					memcpy(value, entry, *val_len);
+					value[*val_len - 1] = 0;
 					GOTO(out, rc = -EOVERFLOW);
+				}
 
 				memcpy(value, entry, entry_len);
 				*val_len = entry_len;

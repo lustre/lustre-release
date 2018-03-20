@@ -13225,6 +13225,7 @@ else
 		JOBENV=FAKE_JOBID
 	fi
 fi
+LUSTRE_JOBID_SIZE=31 # plus NUL terminator
 
 verify_jobstats() {
 	local cmd=($1)
@@ -13243,16 +13244,16 @@ verify_jobstats() {
 	[ "$JOBENV" = "FAKE_JOBID" ] &&
 		FAKE_JOBID=id.$testnum.$(basename ${cmd[0]}).$RANDOM
 
-	JOBVAL=${!JOBENV}
+	JOBVAL=${!JOBENV:0:$LUSTRE_JOBID_SIZE}
 
 	[ "$JOBENV" = "nodelocal" ] && {
-		FAKE_JOBID=id.$testnum.$(basename ${cmd[0]}).$RANDOM
+		FAKE_JOBID=id.$testnum.%e.$RANDOM
 		$LCTL set_param jobid_name=$FAKE_JOBID
-		JOBVAL=$FAKE_JOBID
+		JOBVAL=${FAKE_JOBID/\%e/$(basename ${cmd[0]})}
 	}
 
 	log "Test: ${cmd[*]}"
-	log "Using JobID environment variable $JOBENV=$JOBVAL"
+	log "Using JobID environment $($LCTL get_param -n jobid_var)=$JOBVAL"
 
 	if [ $JOBENV = "FAKE_JOBID" ]; then
 		FAKE_JOBID=$JOBVAL ${cmd[*]}
@@ -13263,8 +13264,10 @@ verify_jobstats() {
 	# all files are created on OST0000
 	for facet in $facets; do
 		local stats="*.$(convert_facet2label $facet).job_stats"
+
+		# strip out libtool wrappers for in-tree executables
 		if [ $(do_facet $facet lctl get_param $stats |
-		       grep -c $JOBVAL) -ne 1 ]; then
+		       sed -e 's/\.lt-/./' | grep -c $JOBVAL) -ne 1 ]; then
 			do_facet $facet lctl get_param $stats
 			error "No jobstats for $JOBVAL found on $facet::$stats"
 		fi
@@ -13292,11 +13295,9 @@ test_205() { # Job stats
 	[[ $JOBID_VAR = disable ]] && skip "jobstats is disabled" && return
 
 	local old_jobenv=$($LCTL get_param -n jobid_var)
-	if [ $old_jobenv != $JOBENV ]; then
-		jobstats_set $JOBENV
-		stack_trap "do_facet mgs \
-			$LCTL conf_param $FSNAME.sys.jobid_var=$old_jobenv" EXIT
-	fi
+	[ $old_jobenv != $JOBENV ] && jobstats_set $JOBENV
+	stack_trap "do_facet mgs \
+		$LCTL conf_param $FSNAME.sys.jobid_var=$old_jobenv" EXIT
 
 	changelog_register
 
@@ -13373,6 +13374,12 @@ test_205() { # Job stats
 		[ $jobids -eq 0 ] ||
 			error "Unexpected jobids when jobid_var=$JOBENV"
 	fi
+
+	lctl set_param jobid_var=USER jobid_name="S.%j.%e.%u.%h.E"
+	JOBENV="JOBCOMPLEX"
+	JOBCOMPLEX="S.$USER.touch.$(id -u).$(hostname).E"
+
+	verify_jobstats "touch $DIR/$tfile" $SINGLEMDS
 }
 run_test 205 "Verify job stats"
 

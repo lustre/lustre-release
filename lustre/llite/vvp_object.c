@@ -219,7 +219,8 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_INVALID_PFID))
 		oa->o_parent_oid++;
-	memcpy(attr->cra_jobid, ll_i2info(inode)->lli_jobid, LUSTRE_JOBID_SIZE);
+	memcpy(attr->cra_jobid, ll_i2info(inode)->lli_jobid,
+	       sizeof(attr->cra_jobid));
 }
 
 static const struct cl_object_operations vvp_ops = {

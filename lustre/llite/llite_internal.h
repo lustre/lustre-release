@@ -178,8 +178,8 @@ struct ll_inode_info {
 
 		/* for non-directory */
 		struct {
-			struct mutex			lli_size_mutex;
-			char			       *lli_symlink_name;
+			struct mutex		lli_size_mutex;
+			char		       *lli_symlink_name;
 			/*
 			 * struct rw_semaphore {
 			 *    signed long	count;     // align d.d_def_acl
@@ -187,23 +187,23 @@ struct ll_inode_info {
 			 *    struct list_head wait_list;
 			 * }
 			 */
-			struct rw_semaphore		lli_trunc_sem;
-			struct range_lock_tree		lli_write_tree;
+			struct rw_semaphore	lli_trunc_sem;
+			struct range_lock_tree	lli_write_tree;
 
-			struct rw_semaphore		lli_glimpse_sem;
-			ktime_t				lli_glimpse_time;
-			struct list_head		lli_agl_list;
-			__u64				lli_agl_index;
+			struct rw_semaphore	lli_glimpse_sem;
+			ktime_t			lli_glimpse_time;
+			struct list_head	lli_agl_list;
+			__u64			lli_agl_index;
 
 			/* for writepage() only to communicate to fsync */
-			int				lli_async_rc;
+			int			lli_async_rc;
 
 			/*
-			 * whenever a process try to read/write the file, the
+			 * Whenever a process try to read/write the file, the
 			 * jobid of the process will be saved here, and it'll
 			 * be packed into the write PRC when flush later.
 			 *
-			 * so the read/write statistics for jobid will not be
+			 * So the read/write statistics for jobid will not be
 			 * accurate if the file is shared by different jobs.
 			 */
 			char                    lli_jobid[LUSTRE_JOBID_SIZE];

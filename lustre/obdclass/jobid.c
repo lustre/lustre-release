@@ -36,6 +36,7 @@
 #ifdef HAVE_UIDGID_HEADER
 #include <linux/uidgid.h>
 #endif
+#include <linux/utsname.h>
 
 #include <libcfs/linux/linux-misc.h>
 #include <obd_support.h>
@@ -50,36 +51,39 @@ spinlock_t jobid_hash_lock;
 #define DELETE_INTERVAL 300
 
 char obd_jobid_var[JOBSTATS_JOBID_VAR_MAX_LEN + 1] = JOBSTATS_DISABLE;
-char obd_jobid_node[LUSTRE_JOBID_SIZE + 1];
+char obd_jobid_name[LUSTRE_JOBID_SIZE] = "%e.%u";
 
 /**
- * Structure to store a single jobID/PID mapping
+ * Structure to store a single PID->JobID mapping
  */
-struct jobid_to_pid_map {
+struct jobid_pid_map {
 	struct hlist_node	jp_hash;
 	time64_t		jp_time;
-	atomic_t		jp_refcount;
 	spinlock_t		jp_lock; /* protects jp_jobid */
-	char			jp_jobid[LUSTRE_JOBID_SIZE + 1];
+	char			jp_jobid[LUSTRE_JOBID_SIZE];
+	unsigned int		jp_joblen;
+	atomic_t		jp_refcount;
 	pid_t			jp_pid;
 };
 
-/* Get jobid of current process by reading the environment variable
+/*
+ * Get jobid of current process by reading the environment variable
  * stored in between the "env_start" & "env_end" of task struct.
  *
  * If some job scheduler doesn't store jobid in the "env_start/end",
  * then an upcall could be issued here to get the jobid by utilizing
  * the userspace tools/API. Then, the jobid must be cached.
  */
-int get_jobid_from_environ(char *jobid_var, char *jobid, int jobid_len)
+int jobid_get_from_environ(char *jobid_var, char *jobid, int *jobid_len)
 {
+	static bool printed;
 	int rc;
 
-	rc = cfs_get_environ(jobid_var, jobid, &jobid_len);
+	rc = cfs_get_environ(jobid_var, jobid, jobid_len);
 	if (!rc)
 		goto out;
 
-	if (rc == -EOVERFLOW) {
+	if (unlikely(rc == -EOVERFLOW && !printed)) {
 		/* For the PBS_JOBID and LOADL_STEP_ID keys (which are
 		 * variable length strings instead of just numbers), it
 		 * might make sense to keep the unique parts for JobID,
@@ -87,17 +91,16 @@ int get_jobid_from_environ(char *jobid_var, char *jobid, int jobid_len)
 		 * larger temp buffer for cfs_get_environ(), then
 		 * truncating the string at some separator to fit into
 		 * the specified jobid_len.  Fix later if needed. */
-		static bool printed;
-		if (unlikely(!printed)) {
-			LCONSOLE_ERROR_MSG(0x16b, "%s value too large "
-					   "for JobID buffer (%d)\n",
-					   obd_jobid_var, jobid_len);
-			printed = true;
-		}
-	} else {
+		LCONSOLE_ERROR_MSG(0x16b,
+				   "jobid: '%s' value too large (%d)\n",
+				   obd_jobid_var, *jobid_len);
+		printed = true;
+		rc = 0;
+	}
+	if (rc) {
 		CDEBUG((rc == -ENOENT || rc == -EINVAL ||
 			rc == -EDEADLK) ? D_INFO : D_ERROR,
-		       "Get jobid for (%s) failed: rc = %d\n",
+		       "jobid: get '%s' failed: rc = %d\n",
 		       obd_jobid_var, rc);
 	}
 
@@ -118,7 +121,7 @@ out:
 static int jobid_should_free_item(void *obj, void *data)
 {
 	char *jobid = data;
-	struct jobid_to_pid_map *pidmap = obj;
+	struct jobid_pid_map *pidmap = obj;
 	int rc = 0;
 
 	if (obj == NULL)
@@ -139,18 +142,21 @@ static int jobid_should_free_item(void *obj, void *data)
 }
 
 /*
- * check_job_name
+ * jobid_name_is_valid
  *
  * Checks if the jobid is a Lustre process
  *
  * Returns true if jobid is valid
  * Returns false if jobid looks like it's a Lustre process
  */
-static bool check_job_name(char *jobid)
+static bool jobid_name_is_valid(char *jobid)
 {
-	const char *const lustre_reserved[] = {"ll_ping", "ptlrpc",
-						"ldlm", "ll_sa", NULL};
+	const char *const lustre_reserved[] = { "ll_ping", "ptlrpc",
+						"ldlm", "ll_sa", NULL };
 	int i;
+
+	if (jobid[0] == '\0')
+		return false;
 
 	for (i = 0; lustre_reserved[i] != NULL; i++) {
 		if (strncmp(jobid, lustre_reserved[i],
@@ -161,27 +167,44 @@ static bool check_job_name(char *jobid)
 }
 
 /*
- * get_jobid
+ * jobid_get_from_cache()
  *
- * Returns the jobid for the current pid.
- *
- * If no jobid is found in the table, the jobid is calculated based on
- * the value of jobid_var, using procname_uid as the default.
+ * Returns contents of jobid_var from process environment for current PID.
+ * This will be cached for some time to avoid overhead scanning environment.
  *
  * Return: -ENOMEM if allocating a new pidmap fails
- *         0 for success
+ *         -ENOENT if no entry could be found
+ *         +ve string length for success (something was returned in jobid)
  */
-int get_jobid(char *jobid)
+static int jobid_get_from_cache(char *jobid, size_t joblen)
 {
+	static time64_t last_expire;
+	bool expire_cache = false;
 	pid_t pid = current_pid();
-	struct jobid_to_pid_map *pidmap = NULL;
-	struct jobid_to_pid_map *pidmap2;
-	char tmp_jobid[LUSTRE_JOBID_SIZE + 1];
+	struct jobid_pid_map *pidmap = NULL;
+	time64_t now = ktime_get_real_seconds();
 	int rc = 0;
 	ENTRY;
 
+	LASSERT(jobid_hash != NULL);
+
+	/* scan hash periodically to remove old PID entries from cache */
+	spin_lock(&jobid_hash_lock);
+	if (unlikely(last_expire + DELETE_INTERVAL <= now)) {
+		expire_cache = true;
+		last_expire = now;
+	}
+	spin_unlock(&jobid_hash_lock);
+
+	if (expire_cache)
+		cfs_hash_cond_del(jobid_hash, jobid_should_free_item,
+				  "intentionally_bad_jobid");
+
+	/* first try to find PID in the hash and use that value */
 	pidmap = cfs_hash_lookup(jobid_hash, &pid);
 	if (pidmap == NULL) {
+		struct jobid_pid_map *pidmap2;
+
 		OBD_ALLOC_PTR(pidmap);
 		if (pidmap == NULL)
 			GOTO(out, rc = -ENOMEM);
@@ -195,13 +218,13 @@ int get_jobid(char *jobid)
 		/*
 		 * Add the newly created map to the hash, on key collision we
 		 * lost a racing addition and must destroy our newly allocated
-		 * map.  The object which exists in the hash will be
-		 * returned.
+		 * map.  The object which exists in the hash will be returned.
 		 */
 		pidmap2 = cfs_hash_findadd_unique(jobid_hash, &pid,
 						  &pidmap->jp_hash);
 		if (unlikely(pidmap != pidmap2)) {
-			CDEBUG(D_INFO, "Duplicate jobid found\n");
+			CDEBUG(D_INFO, "jobid: duplicate found for PID=%u\n",
+			       pid);
 			OBD_FREE_PTR(pidmap);
 			pidmap = pidmap2;
 		} else {
@@ -209,56 +232,136 @@ int get_jobid(char *jobid)
 		}
 	}
 
+	/*
+	 * If pidmap is old (this is always true for new entries) refresh it.
+	 * If obd_jobid_var is not found, cache empty entry and try again
+	 * later, to avoid repeat lookups for PID if obd_jobid_var missing.
+	 */
 	spin_lock(&pidmap->jp_lock);
-	if ((ktime_get_real_seconds() - pidmap->jp_time >= RESCAN_INTERVAL) ||
-	    pidmap->jp_jobid[0] == '\0') {
-		/* mark the pidmap as being up to date, if we fail to find
-		 * a good jobid, revert to the old time and try again later
-		 * prevent a race with deletion */
+	if (pidmap->jp_time + RESCAN_INTERVAL <= now) {
+		char env_jobid[LUSTRE_JOBID_SIZE] = "";
+		int env_len = sizeof(env_jobid);
 
-		time64_t tmp_time = pidmap->jp_time;
-		pidmap->jp_time = ktime_get_real_seconds();
+		pidmap->jp_time = now;
 
 		spin_unlock(&pidmap->jp_lock);
-		if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
-			rc = 1;
-		} else {
-			memset(tmp_jobid, '\0', LUSTRE_JOBID_SIZE + 1);
-			rc = get_jobid_from_environ(obd_jobid_var,
-						    tmp_jobid,
-						    LUSTRE_JOBID_SIZE + 1);
-		}
+		rc = jobid_get_from_environ(obd_jobid_var, env_jobid, &env_len);
 
-		/* Use process name + fsuid as jobid default, or when
-		 * specified by "jobname_uid" */
-		if (rc) {
-			snprintf(tmp_jobid, LUSTRE_JOBID_SIZE, "%s.%u",
-				 current_comm(),
-				 from_kuid(&init_user_ns, current_fsuid()));
-			rc = 0;
-		}
-
-		CDEBUG(D_INFO, "Jobid to pid mapping established: %d->%s\n",
-		       pidmap->jp_pid, tmp_jobid);
-
+		CDEBUG(D_INFO, "jobid: PID mapping established: %d->%s\n",
+		       pidmap->jp_pid, env_jobid);
 		spin_lock(&pidmap->jp_lock);
-		if (check_job_name(tmp_jobid))
-			strncpy(pidmap->jp_jobid, tmp_jobid,
-				LUSTRE_JOBID_SIZE);
-		else
-			pidmap->jp_time = tmp_time;
+		if (!rc) {
+			pidmap->jp_joblen = env_len;
+			strlcpy(pidmap->jp_jobid, env_jobid,
+				sizeof(pidmap->jp_jobid));
+			rc = 0;
+		} else if (rc == -ENOENT) {
+			/* It might have been deleted, clear out old entry */
+			pidmap->jp_joblen = 0;
+			pidmap->jp_jobid[0] = '\0';
+		}
 	}
 
-	if (strlen(pidmap->jp_jobid) != 0)
-		strncpy(jobid, pidmap->jp_jobid, LUSTRE_JOBID_SIZE);
-
+	/*
+	 * Regardless of how pidmap was found, if it contains a valid entry
+	 * use that for now.  If there was a technical error (e.g. -ENOMEM)
+	 * use the old cached value until it can be looked up again properly.
+	 * If a cached missing entry was found, return -ENOENT.
+	 */
+	if (pidmap->jp_joblen) {
+		strlcpy(jobid, pidmap->jp_jobid, joblen);
+		joblen = pidmap->jp_joblen;
+		rc = 0;
+	} else if (!rc) {
+		rc = -ENOENT;
+	}
 	spin_unlock(&pidmap->jp_lock);
 
 	cfs_hash_put(jobid_hash, &pidmap->jp_hash);
 
 	EXIT;
 out:
-	return rc;
+	return rc < 0 ? rc : joblen;
+}
+
+/*
+ * jobid_interpret_string()
+ *
+ * Interpret the jobfmt string to expand specified fields, like coredumps do:
+ *   %e = executable
+ *   %g = gid
+ *   %h = hostname
+ *   %j = jobid from environment
+ *   %p = pid
+ *   %u = uid
+ *
+ * Unknown escape strings are dropped.  Other characters are copied through,
+ * excluding whitespace (to avoid making jobid parsing difficult).
+ *
+ * Return: -EOVERFLOW if the expanded string does not fit within @joblen
+ *         0 for success
+ */
+static int jobid_interpret_string(const char *jobfmt, char *jobid,
+				  ssize_t joblen)
+{
+	char c;
+
+	while ((c = *jobfmt++) && joblen > 1) {
+		char f;
+		int l;
+
+		if (isspace(c)) /* Don't allow embedded spaces */
+			continue;
+
+		if (c != '%') {
+			*jobid = c;
+			joblen--;
+			jobid++;
+			continue;
+		}
+
+		switch ((f = *jobfmt++)) {
+		case 'e': /* executable name */
+			l = snprintf(jobid, joblen, "%s", current_comm());
+			break;
+		case 'g': /* group ID */
+			l = snprintf(jobid, joblen, "%u",
+				     from_kgid(&init_user_ns, current_fsgid()));
+			break;
+		case 'h': /* hostname */
+			l = snprintf(jobid, joblen, "%s",
+				     init_utsname()->nodename);
+			break;
+		case 'j': /* jobid stored in process environment */
+			l = jobid_get_from_cache(jobid, joblen);
+			if (l < 0)
+				l = 0;
+			break;
+		case 'p': /* process ID */
+			l = snprintf(jobid, joblen, "%u", current_pid());
+			break;
+		case 'u': /* user ID */
+			l = snprintf(jobid, joblen, "%u",
+				     from_kuid(&init_user_ns, current_fsuid()));
+			break;
+		case '\0': /* '%' at end of format string */
+			l = 0;
+			goto out;
+		default: /* drop unknown %x format strings */
+			l = 0;
+			break;
+		}
+		jobid += l;
+		joblen -= l;
+	}
+	/*
+	 * This points at the end of the buffer, so long as jobid is always
+	 * incremented the same amount as joblen is decremented.
+	 */
+out:
+	jobid[joblen - 1] = '\0';
+
+	return joblen < 0 ? -EOVERFLOW : 0;
 }
 
 /*
@@ -271,30 +374,16 @@ out:
 int jobid_cache_init(void)
 {
 	int rc = 0;
-	struct cfs_hash *tmp_jobid_hash;
 	ENTRY;
 
+	if (jobid_hash)
+		return 0;
+
 	spin_lock_init(&jobid_hash_lock);
-
-	tmp_jobid_hash = cfs_hash_create("JOBID_HASH",
-					 HASH_JOBID_CUR_BITS,
-					 HASH_JOBID_MAX_BITS,
-					 HASH_JOBID_BKT_BITS, 0,
-					 CFS_HASH_MIN_THETA,
-					 CFS_HASH_MAX_THETA,
-					 &jobid_hash_ops,
-					 CFS_HASH_DEFAULT);
-
-	spin_lock(&jobid_hash_lock);
-	if (jobid_hash == NULL) {
-		jobid_hash = tmp_jobid_hash;
-		spin_unlock(&jobid_hash_lock);
-	} else {
-		spin_unlock(&jobid_hash_lock);
-		if (tmp_jobid_hash != NULL)
-			cfs_hash_putref(tmp_jobid_hash);
-	}
-
+	jobid_hash = cfs_hash_create("JOBID_HASH", HASH_JOBID_CUR_BITS,
+				     HASH_JOBID_MAX_BITS, HASH_JOBID_BKT_BITS,
+				     0, CFS_HASH_MIN_THETA, CFS_HASH_MAX_THETA,
+				     &jobid_hash_ops, CFS_HASH_DEFAULT);
 	if (!jobid_hash)
 		rc = -ENOMEM;
 
@@ -332,9 +421,9 @@ static unsigned jobid_hashfn(struct cfs_hash *hs, const void *key,
 
 static void *jobid_key(struct hlist_node *hnode)
 {
-	struct jobid_to_pid_map *pidmap;
+	struct jobid_pid_map *pidmap;
 
-	pidmap = hlist_entry(hnode, struct jobid_to_pid_map, jp_hash);
+	pidmap = hlist_entry(hnode, struct jobid_pid_map, jp_hash);
 	return &pidmap->jp_pid;
 }
 
@@ -352,26 +441,26 @@ static int jobid_keycmp(const void *key, struct hlist_node *hnode)
 
 static void *jobid_object(struct hlist_node *hnode)
 {
-	return hlist_entry(hnode, struct jobid_to_pid_map, jp_hash);
+	return hlist_entry(hnode, struct jobid_pid_map, jp_hash);
 }
 
 static void jobid_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
-	struct jobid_to_pid_map *pidmap;
+	struct jobid_pid_map *pidmap;
 
-	pidmap = hlist_entry(hnode, struct jobid_to_pid_map, jp_hash);
+	pidmap = hlist_entry(hnode, struct jobid_pid_map, jp_hash);
 
 	atomic_inc(&pidmap->jp_refcount);
 }
 
 static void jobid_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
-	struct jobid_to_pid_map *pidmap;
+	struct jobid_pid_map *pidmap;
 
 	if (hnode == NULL)
 		return;
 
-	pidmap = hlist_entry(hnode, struct jobid_to_pid_map, jp_hash);
+	pidmap = hlist_entry(hnode, struct jobid_pid_map, jp_hash);
 	LASSERT(atomic_read(&pidmap->jp_refcount) > 0);
 	if (atomic_dec_and_test(&pidmap->jp_refcount)) {
 		CDEBUG(D_INFO, "Freeing: %d->%s\n",
@@ -391,46 +480,55 @@ static struct cfs_hash_ops jobid_hash_ops = {
 	.hs_put_locked	= jobid_put_locked,
 };
 
-/*
- * Return the jobid:
+/**
+ * Generate the job identifier string for this process for tracking purposes.
  *
- * Based on the value of obd_jobid_var
- * JOBSTATS_DISABLE:  none
- * JOBSTATS_NODELOCAL:  Contents of obd_jobid_name
- * JOBSTATS_PROCNAME_UID:  Process name/UID
- * anything else:  Look up the value in the processes environment
- * default: JOBSTATS_PROCNAME_UID
+ * Fill in @jobid string based on the value of obd_jobid_var:
+ * JOBSTATS_DISABLE:      none
+ * JOBSTATS_NODELOCAL:    content of obd_jobid_node (jobid_interpret_string())
+ * JOBSTATS_PROCNAME_UID: process name/UID
+ * anything else:         look up obd_jobid_var in the processes environment
+ *
+ * Return -ve error number, 0 on success.
  */
-
-int lustre_get_jobid(char *jobid)
+int lustre_get_jobid(char *jobid, size_t joblen)
 {
 	int rc = 0;
-	int clear = 0;
-	static time64_t last_delete;
 	ENTRY;
 
-	LASSERT(jobid_hash != NULL);
-
-	spin_lock(&jobid_hash_lock);
-	if (last_delete + DELETE_INTERVAL <= ktime_get_real_seconds()) {
-		clear = 1;
-		last_delete = ktime_get_real_seconds();
+	if (unlikely(joblen < 2)) {
+		if (joblen == 1)
+			jobid[0] = '\0';
+		RETURN(-EINVAL);
 	}
-	spin_unlock(&jobid_hash_lock);
 
-	if (clear)
-		cfs_hash_cond_del(jobid_hash, jobid_should_free_item,
-				  "intentionally_bad_jobid");
-
-	if (strcmp(obd_jobid_var, JOBSTATS_DISABLE) == 0)
+	if (strcmp(obd_jobid_var, JOBSTATS_DISABLE) == 0) {
 		/* Jobstats isn't enabled */
-		memset(jobid, 0, LUSTRE_JOBID_SIZE);
-	else if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) == 0)
+		memset(jobid, 0, joblen);
+	} else if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) == 0) {
 		/* Whole node dedicated to single job */
-		memcpy(jobid, obd_jobid_node, LUSTRE_JOBID_SIZE);
-	else
-		/* Get jobid from hash table */
-		rc = get_jobid(jobid);
+		rc = jobid_interpret_string(obd_jobid_name, jobid, joblen);
+	} else if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
+		rc = jobid_interpret_string("%e.%u", jobid, joblen);
+	} else if (jobid_name_is_valid(current_comm())) {
+		/*
+		 * obd_jobid_var holds the jobid environment variable name.
+		 * Skip initial check if obd_jobid_name already uses "%j",
+		 * otherwise try just "%j" first, then fall back to whatever
+		 * is in obd_jobid_name if obd_jobid_var is not found.
+		 */
+		rc = -EAGAIN;
+		if (!strnstr(obd_jobid_name, "%j", joblen))
+			rc = jobid_get_from_cache(jobid, joblen);
+
+		/* fall back to jobid_node if jobid_var not in environment */
+		if (rc < 0) {
+			int rc2 = jobid_interpret_string(obd_jobid_name,
+							 jobid, joblen);
+			if (!rc2)
+				rc = 0;
+		}
+	}
 
 	RETURN(rc);
 }
@@ -439,20 +537,22 @@ EXPORT_SYMBOL(lustre_get_jobid);
 /*
  * lustre_jobid_clear
  *
- * uses value pushed in via jobid_name
+ * Search cache for JobID given by @find_jobid.
  * If any entries in the hash table match the value, they are removed
  */
-void lustre_jobid_clear(const char *data)
+void lustre_jobid_clear(const char *find_jobid)
 {
-	char jobid[LUSTRE_JOBID_SIZE + 1];
+	char jobid[LUSTRE_JOBID_SIZE];
+	char *end;
 
 	if (jobid_hash == NULL)
 		return;
 
-	strncpy(jobid, data, LUSTRE_JOBID_SIZE);
+	strlcpy(jobid, find_jobid, sizeof(jobid));
 	/* trim \n off the end of the incoming jobid */
-	if (jobid[strlen(jobid) - 1] == '\n')
-		jobid[strlen(jobid) - 1] = '\0';
+	end = strchr(jobid, '\n');
+	if (end && *end == '\n')
+		*end = '\0';
 
 	CDEBUG(D_INFO, "Clearing Jobid: %s\n", jobid);
 	cfs_hash_cond_del(jobid_hash, jobid_should_free_item, jobid);
