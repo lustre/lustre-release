@@ -1520,7 +1520,7 @@ kiblnd_fmr_flush_trigger(struct lnet_ioctl_config_o2iblnd_tunables *tunables,
 static int kiblnd_alloc_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 {
 	struct ib_fmr_pool_param param = {
-		.max_pages_per_fmr = LNET_MAX_PAYLOAD/PAGE_SIZE,
+		.max_pages_per_fmr = LNET_MAX_IOV,
 		.page_shift        = PAGE_SHIFT,
 		.access            = (IB_ACCESS_LOCAL_WRITE |
 				      IB_ACCESS_REMOTE_WRITE),
@@ -1567,7 +1567,7 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
 
 #ifndef HAVE_IB_MAP_MR_SG
 		frd->frd_frpl = ib_alloc_fast_reg_page_list(fpo->fpo_hdev->ibh_ibdev,
-							    LNET_MAX_PAYLOAD/PAGE_SIZE);
+							    LNET_MAX_IOV);
 		if (IS_ERR(frd->frd_frpl)) {
 			rc = PTR_ERR(frd->frd_frpl);
 			CERROR("Failed to allocate ib_fast_reg_page_list: %d\n",
@@ -1579,7 +1579,7 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
 
 #ifdef HAVE_IB_ALLOC_FAST_REG_MR
 		frd->frd_mr = ib_alloc_fast_reg_mr(fpo->fpo_hdev->ibh_pd,
-						   LNET_MAX_PAYLOAD/PAGE_SIZE);
+						   LNET_MAX_IOV);
 #else
 		/*
 		 * it is expected to get here if this is an MLX-5 card.
@@ -1597,7 +1597,7 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
 #else
 						IB_MR_TYPE_MEM_REG,
 #endif
-					  LNET_MAX_PAYLOAD/PAGE_SIZE);
+					  LNET_MAX_IOV);
 		if ((*kiblnd_tunables.kib_use_fastreg_gaps == 1) &&
 		    (dev_caps & IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT))
 			CWARN("using IB_MR_TYPE_SG_GAPS, expect a performance drop\n");

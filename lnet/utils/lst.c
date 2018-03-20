@@ -2952,8 +2952,6 @@ lst_get_bulk_param(int argc, char **argv, struct lst_test_bulk_param *bulk)
 
 		} else if (strcasestr(argv[i], "size=") == argv[i] ||
 			   strcasestr(argv[i], "s=") == argv[i]) {
-			int max_size = sysconf(_SC_PAGESIZE) * LNET_MAX_IOV;
-
                         tok = strchr(argv[i], '=') + 1;
 
                         bulk->blk_size = strtol(tok, &end, 0);
@@ -2970,7 +2968,7 @@ lst_get_bulk_param(int argc, char **argv, struct lst_test_bulk_param *bulk)
                         else if (*end == 'm' || *end == 'M')
                                 bulk->blk_size *= 1024 * 1024;
 
-			if (bulk->blk_size > max_size) {
+			if (bulk->blk_size > LNET_MTU) {
                                 fprintf(stderr, "Size exceed limitation: %d bytes\n",
                                         bulk->blk_size);
                                 return -1;

@@ -1,26 +1,4 @@
 #
-# LN_CONFIG_MAX_PAYLOAD
-#
-# configure maximum payload
-#
-AC_DEFUN([LN_CONFIG_MAX_PAYLOAD], [
-AC_MSG_CHECKING([for non-default maximum LNET payload])
-AC_ARG_WITH([max-payload-mb],
-	AC_HELP_STRING([--with-max-payload-mb=MBytes],
-		[set maximum lnet payload in MBytes]),
-	[
-		AC_MSG_RESULT([$with_max_payload_mb])
-		CONFIG_LNET_MAX_PAYLOAD_MB=$with_max_payload_mb
-		CONFIG_LNET_MAX_PAYLOAD="(($with_max_payload_mb)<<20)"
-	], [
-		AC_MSG_RESULT([no])
-		CONFIG_LNET_MAX_PAYLOAD="LNET_MTU"
-	])
-AC_DEFINE_UNQUOTED(CONFIG_LNET_MAX_PAYLOAD, $CONFIG_LNET_MAX_PAYLOAD,
-	[Max LNET payload])
-]) # LN_CONFIG_MAX_PAYLOAD
-
-#
 # LN_CHECK_GCC_VERSION
 #
 # Check compiler version
@@ -805,7 +783,6 @@ AS_IF([test "$enable_efence" = yes], [
 ])
 AC_SUBST(LIBEFENCE)
 
-LN_CONFIG_MAX_PAYLOAD
 LN_CONFIG_DLC
 ]) # LN_CONFIGURE
 
