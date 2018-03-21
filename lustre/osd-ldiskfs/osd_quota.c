@@ -437,7 +437,17 @@ static __u64 osd_it_acct_store(const struct lu_env *env,
 static int osd_it_acct_load(const struct lu_env *env,
 			    const struct dt_it *di, __u64 hash)
 {
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+
 	ENTRY;
+
+	/* LU-8999 - If it is called to resume the iteration, calling
+	 * osd_it_acct_get could change the block orders in the lower level
+	 * of the quota tree, which are saved in osd_it_quota->oiq_blk.
+	 * */
+	if (it->oiq_id != 0 && it->oiq_id == hash)
+		RETURN(1);
+
 	RETURN(osd_it_acct_get(env, (struct dt_it *)di,
 			       (const struct dt_key *)&hash));
 }
