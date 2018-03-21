@@ -40,6 +40,7 @@
 #include <linux/pagemap.h>
 #include <linux/bio.h>
 #include <linux/xattr.h>
+#include <linux/workqueue.h>
 
 #include <libcfs/linux/linux-fs.h>
 #include <lustre_patchless_compat.h>
@@ -686,6 +687,10 @@ static inline struct timespec current_time(struct inode *inode)
 
 #ifndef __GFP_COLD
 #define __GFP_COLD 0
+#endif
+
+#ifndef alloc_workqueue
+#define alloc_workqueue(name, flags, max_active) create_workqueue(name)
 #endif
 
 #endif /* _LUSTRE_COMPAT_H */

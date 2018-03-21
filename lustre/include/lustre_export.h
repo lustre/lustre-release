@@ -42,6 +42,8 @@
  * @{
  */
 
+#include <linux/workqueue.h>
+
 #include <lprocfs_status.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_dlm.h>
@@ -202,6 +204,8 @@ struct obd_export {
 	struct obd_uuid		exp_client_uuid;
         /** To link all exports on an obd device */
 	struct list_head	exp_obd_chain;
+	/** work_struct for destruction of export */
+	struct work_struct	exp_zombie_work;
 	/* Unlinked export list */
 	struct list_head	exp_stale_list;
 	struct hlist_node	exp_uuid_hash;	/** uuid-export hash*/
