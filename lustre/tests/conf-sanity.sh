@@ -8199,6 +8199,45 @@ test_122() {
 }
 run_test 122 "Check OST sequence update"
 
+test_123() {
+	setupall
+	local yaml_file="$TMP/$tfile.yaml"
+	do_facet mgs rm "$yaml_file"
+	local cfgfiles=$(do_facet mgs "lctl --device MGS llog_catlist |"\
+			" sed 's/config_log://'")
+
+	# set jobid_var to a different value for test
+	local orig_val=$(do_facet mgs $LCTL get_param jobid_var)
+	do_facet mgs $LCTL set_param -P jobid_var="testname"
+
+	for i in params $cfgfiles; do
+		do_facet mgs "lctl --device MGS llog_print ${i} >> $yaml_file"
+	done
+
+	echo "Unmounting FS"
+	stopall
+	echo "Writeconf"
+	writeconf_all
+	echo "Remounting"
+	mountmgs
+	mountmds
+	mountoss
+	mountcli
+
+	# Reapply the config from before
+	echo "Setting configuration parameters"
+	do_facet mgs "lctl set_param -F $yaml_file"
+
+	local set_val=$(do_facet mgs $LCTL get_param jobid_var)
+	do_facet mgs $LCTL set_param -P $orig_val
+
+	[ $set_val == "jobid_var=testname" ] ||
+		error "$set_val is not testname"
+
+	do_facet mgs rm "$yaml_file"
+}
+run_test 123 "clear and reset all parameters using set_param -F"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

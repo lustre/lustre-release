@@ -164,7 +164,8 @@ command_t cmdlist[] = {
 	{"set_timeout", jt_lcfg_set_timeout, 0,
 	 "usage: conf_param obd_timeout=<secs>\n"},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-	{"conf_param", jt_lcfg_mgsparam, 0,"set a permanent config parameter.\n"
+	{"conf_param", jt_lcfg_confparam, 0,
+	 "set a permanent config parameter.\n"
 	 "This command must be run on the MGS node\n"
 	 "usage: conf_param [-d] <target.keyword=val>\n"
 	 "  -d  Delete the permanent setting from the configuration."},
@@ -182,12 +183,13 @@ command_t cmdlist[] = {
 	 "      (Especially useful when using patterns.)\n"
 	 "  -R  Get parameters recursively from the specified entry.\n"},
 	{"set_param", jt_lcfg_setparam, 0, "set the Lustre or LNET parameter\n"
-	 "usage: set_param [-n] [-P] [-d]"
+	 "usage: set_param [-n] [-P] [-d] [-F]"
 	 "<param_path1=value1 param_path2=value2 ...>\n"
 	 "Set the value of the Lustre or LNET parameter at the specified path.\n"
 	 "  -n  Disable printing of the key name when printing values.\n"
 	 "  -P  Set the parameter permanently, filesystem-wide.\n"
-	 "  -d  Remove the permanent setting (only with -P option).\n"},
+	 "  -d  Remove the permanent setting (only with -P option).\n"
+	 "  -F  Read permanent configuration from a YAML file.\n"},
 	{"list_param", jt_lcfg_listparam, 0,
 	 "list the Lustre or LNET parameter name\n"
 	 "usage: list_param [-F|-R|-D] <param_path1 param_path2 ...>\n"

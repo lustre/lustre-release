@@ -229,6 +229,15 @@ Remove the permanent setting (only with -P option)
 # lctl set_param -P osc.*.max_dirty_mb=32
 .br
 .TP
+.BI "set_param -F " <filename>
+.br
+Apply configuration file specified by <filename>
+.br
+File is in YAML format, created as an output from
+\fBlctl --device MGS llog_print <fsname>-client\fR or any other valid
+llog_file from the output of \fBlctl --device MGS llog_catlist\fR
+.br
+.TP
 .BI conf_param " [-d] <device|fsname>.<parameter>=<value>"
 Set a permanent configuration parameter for any device via the MGS.  This
 command must be run on the MGS node.

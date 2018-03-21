@@ -57,7 +57,7 @@ lctl_SOURCES = portals.c debug.c obd.c lustre_cfg.c lctl.c obdctl.h
 if SERVER
 lctl_SOURCES += lustre_lfsck.c lsnapshot.c
 endif
-lctl_LDADD :=  liblustreapi.la $(PTHREAD_LIBS)
+lctl_LDADD :=  liblustreapi.la $(PTHREAD_LIBS) -lyaml
 lctl_DEPENDENCIES := liblustreapi.la
 
 lfs_SOURCES = lfs.c lfs_project.c lfs_project.h

@@ -68,6 +68,7 @@
 
 #include "obdctl.h"
 #include <stdio.h>
+#include <yaml.h>
 
 static char * lcfg_devname;
 
@@ -441,46 +442,78 @@ struct param_opts {
 	unsigned int po_show_path:1;
 	unsigned int po_show_type:1;
 	unsigned int po_recursive:1;
-	unsigned int po_params2:1;
+	unsigned int po_perm:1;
 	unsigned int po_delete:1;
 	unsigned int po_only_dir:1;
+	unsigned int po_file:1;
 };
+
+int lcfg_setparam_perm(char *func, char *buf)
+{
+	int     rc = 0;
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+
+	lustre_cfg_bufs_reset(&bufs, NULL);
+	/* This same command would be executed on all nodes, many
+	 * of which should fail (silently) because they don't have
+	 * that proc file existing locally. There would be no
+	 * preprocessing on the MGS to try to figure out which
+	 * parameter files to add this to, there would be nodes
+	 * processing on the cluster nodes to try to figure out
+	 * if they are the intended targets. They will blindly
+	 * try to set the parameter, and ENOTFOUND means it wasn't
+	 * for them.
+	 * Target name "general" means call on all targets. It is
+	 * left here in case some filtering will be added in
+	 * future.
+	 */
+	lustre_cfg_bufs_set_string(&bufs, 0, "general");
+
+	lustre_cfg_bufs_set_string(&bufs, 1, buf);
+
+
+	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount,
+				     bufs.lcfg_buflen));
+	if (lcfg == NULL) {
+		rc = -ENOMEM;
+		fprintf(stderr, "error: allocating lcfg for %s: %s\n",
+			jt_cmdname(func), strerror(rc));
+
+	} else {
+		lustre_cfg_init(lcfg, LCFG_SET_PARAM, &bufs);
+		rc = lcfg_mgs_ioctl(func, OBD_DEV_ID, lcfg);
+		if (rc != 0)
+			fprintf(stderr, "error: executing %s: %s\n",
+				jt_cmdname(func), strerror(errno));
+		free(lcfg);
+	}
+
+	return rc;
+}
 
 /* Param set to single log file, used by all clients and servers.
  * This should be loaded after the individual config logs.
  * Called from set param with -P option.
  */
-static int jt_lcfg_mgsparam2(int argc, char **argv, struct param_opts *popt)
+static int jt_lcfg_setparam_perm(int argc, char **argv,
+				 struct param_opts *popt)
 {
-	int	rc, i;
-	int	first_param;
-	struct	lustre_cfg_bufs bufs;
-	struct	lustre_cfg *lcfg;
-	char	*buf = NULL;
-	int	len;
+	int rc;
+	int i;
+	int first_param;
+	char *buf = NULL;
+	int len;
 
 	first_param = optind;
 	if (first_param < 0 || first_param >= argc)
 		return CMD_HELP;
 
 	for (i = first_param, rc = 0; i < argc; i++) {
-		lustre_cfg_bufs_reset(&bufs, NULL);
-		/* This same command would be executed on all nodes, many
-		 * of which should fail (silently) because they don't have
-		 * that proc file existing locally. There would be no
-		 * preprocessing on the MGS to try to figure out which
-		 * parameter files to add this to, there would be nodes
-		 * processing on the cluster nodes to try to figure out
-		 * if they are the intended targets. They will blindly
-		 * try to set the parameter, and ENOTFOUND means it wasn't
-		 * for them.
-		 * Target name "general" means call on all targets. It is
-		 * left here in case some filtering will be added in
-		 * future.
-		 */
-		lustre_cfg_bufs_set_string(&bufs, 0, "general");
 
 		len = strlen(argv[i]);
+
+		buf = argv[i];
 
 		/* put an '=' on the end in case it doesn't have one */
 		if (popt->po_delete && argv[i][len - 1] != '=') {
@@ -490,34 +523,36 @@ static int jt_lcfg_mgsparam2(int argc, char **argv, struct param_opts *popt)
 				break;
 			}
 			sprintf(buf, "%s=", argv[i]);
-		} else {
-			buf = argv[i];
 		}
-		lustre_cfg_bufs_set_string(&bufs, 1, buf);
 
+		rc = lcfg_setparam_perm(argv[0], buf);
 
-		lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount,
-			      bufs.lcfg_buflen));
-		if (lcfg == NULL) {
-			fprintf(stderr, "error: allocating lcfg for %s: %s\n",
-				jt_cmdname(argv[0]), strerror(-ENOMEM));
-			if (rc == 0)
-				rc = -ENOMEM;
-		} else {
-			int rc2;
-
-			lustre_cfg_init(lcfg, LCFG_SET_PARAM, &bufs);
-			rc2 = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
-			if (rc2 != 0) {
-				fprintf(stderr, "error: executing %s: %s\n",
-					jt_cmdname(argv[0]), strerror(errno));
-				if (rc == 0)
-					rc = rc2;
-			}
-			free(lcfg);
-		}
 		if (buf != argv[i])
 			free(buf);
+	}
+
+	return rc;
+}
+
+int lcfg_conf_param(char *func, char *buf)
+{
+	int rc;
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+
+	lustre_cfg_bufs_reset(&bufs, NULL);
+	lustre_cfg_bufs_set_string(&bufs, 1, buf);
+
+	/* We could put other opcodes here. */
+	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (lcfg == NULL) {
+		rc = -ENOMEM;
+	} else {
+		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
+		rc = lcfg_mgs_ioctl(func, OBD_DEV_ID, lcfg);
+		if (rc < 0)
+			rc = -errno;
+		free(lcfg);
 	}
 
 	return rc;
@@ -530,60 +565,47 @@ static int jt_lcfg_mgsparam2(int argc, char **argv, struct param_opts *popt)
  * and not here. */
 /* After removal of a parameter (-d) Lustre will use the default
  * AT NEXT REBOOT, not immediately. */
-int jt_lcfg_mgsparam(int argc, char **argv)
+int jt_lcfg_confparam(int argc, char **argv)
 {
 	int rc;
 	int del = 0;
-	struct lustre_cfg_bufs bufs;
-	struct lustre_cfg *lcfg;
 	char *buf = NULL;
 
-        /* mgs_setparam processes only lctl buf #1 */
-        if ((argc > 3) || (argc <= 1))
-                return CMD_HELP;
+	/* mgs_setparam processes only lctl buf #1 */
+	if ((argc > 3) || (argc <= 1))
+		return CMD_HELP;
 
-        while ((rc = getopt(argc, argv, "d")) != -1) {
-                switch (rc) {
-                        case 'd':
-                                del = 1;
-                                break;
-                        default:
-                                return CMD_HELP;
-                }
-        }
+	while ((rc = getopt(argc, argv, "d")) != -1) {
+		switch (rc) {
+		case 'd':
+			del = 1;
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
 
-        lustre_cfg_bufs_reset(&bufs, NULL);
-        if (del) {
-                char *ptr;
+	buf = argv[optind];
 
-                /* for delete, make it "<param>=\0" */
-                buf = malloc(strlen(argv[optind]) + 2);
+	if (del) {
+		char *ptr;
+
+		/* for delete, make it "<param>=\0" */
+		buf = malloc(strlen(argv[optind]) + 2);
 		if (buf == NULL) {
 			rc = -ENOMEM;
 			goto out;
 		}
-                /* put an '=' on the end in case it doesn't have one */
-                sprintf(buf, "%s=", argv[optind]);
-                /* then truncate after the first '=' */
-                ptr = strchr(buf, '=');
-                *(++ptr) = '\0';
-                lustre_cfg_bufs_set_string(&bufs, 1, buf);
-        } else {
-                lustre_cfg_bufs_set_string(&bufs, 1, argv[optind]);
-        }
-
-	/* We could put other opcodes here. */
-	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	if (lcfg == NULL) {
-		rc = -ENOMEM;
-	} else {
-		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
-		rc = lcfg_mgs_ioctl(argv[0], OBD_DEV_ID, lcfg);
-		if (rc < 0)
-			rc = -errno;
-		free(lcfg);
+		/* put an '=' on the end in case it doesn't have one */
+		sprintf(buf, "%s=", argv[optind]);
+		/* then truncate after the first '=' */
+		ptr = strchr(buf, '=');
+		*(++ptr) = '\0';
 	}
-	if (buf)
+
+	rc = lcfg_conf_param(argv[0], buf);
+
+	if (buf != argv[optind])
 		free(buf);
 out:
 	if (rc < 0) {
@@ -1298,25 +1320,221 @@ static int setparam_cmdline(int argc, char **argv, struct param_opts *popt)
         popt->po_only_path = 0;
         popt->po_show_type = 0;
         popt->po_recursive = 0;
-	popt->po_params2 = 0;
+	popt->po_perm = 0;
 	popt->po_delete = 0;
+	popt->po_file = 0;
 
-	while ((ch = getopt(argc, argv, "nPd")) != -1) {
+	while ((ch = getopt(argc, argv, "nPdF")) != -1) {
                 switch (ch) {
                 case 'n':
                         popt->po_show_path = 0;
                         break;
 		case 'P':
-			popt->po_params2 = 1;
+			popt->po_perm = 1;
 			break;
 		case 'd':
 			popt->po_delete = 1;
+			break;
+		case 'F':
+			popt->po_file = 1;
 			break;
                 default:
                         return -1;
                 }
         }
         return optind;
+}
+
+enum paramtype {
+	PT_NONE = 0,
+	PT_SETPARAM,
+	PT_CONFPARAM
+};
+
+
+#define PS_NONE 0
+#define PS_PARAM_FOUND 1
+#define PS_PARAM_SET 2
+#define PS_VAL_FOUND 4
+#define PS_VAL_SET 8
+#define PS_DEVICE_FOUND 16
+#define PS_DEVICE_SET 32
+
+#define PARAM_SZ 256
+
+static struct cfg_type_data {
+	enum paramtype ptype;
+	char *type_name;
+} cfg_type_table[] = {
+	{ PT_SETPARAM, "set_param" },
+	{ PT_CONFPARAM, "conf_param" },
+	{ PT_NONE, "none" }
+};
+
+static struct cfg_stage_data {
+	int pstage;
+	char *stage_name;
+} cfg_stage_table[] = {
+	{ PS_PARAM_FOUND, "parameter" },
+	{ PS_VAL_FOUND, "value" },
+	{ PS_DEVICE_FOUND, "device" },
+	{ PS_NONE, "none" }
+};
+
+
+void conf_to_set_param(enum paramtype confset, const char *param,
+		       const char *device, char *buf,
+		       int bufsize)
+{
+	char *tmp;
+
+	if (confset == PT_SETPARAM) {
+		strncpy(buf, param, bufsize);
+		return;
+	}
+
+	/*
+	 * sys.* params are top level, we just need to trim the sys.
+	 */
+	tmp = strstr(param, "sys.");
+	if (tmp != NULL) {
+		tmp += 4;
+		strncpy(buf, tmp, bufsize);
+		return;
+	}
+
+	/*
+	 * parameters look like type.parameter, we need to stick the device
+	 * in the middle.  Example combine mdt.identity_upcall with device
+	 * lustre-MDT0000 for mdt.lustre-MDT0000.identity_upcall
+	 */
+
+	tmp = strchrnul(param, '.');
+	snprintf(buf, tmp - param + 1, "%s", param);
+	buf += tmp - param;
+	bufsize -= tmp - param;
+	snprintf(buf, bufsize, ".%s%s", device, tmp);
+}
+
+int lcfg_setparam_yaml(char *func, char *filename)
+{
+	FILE *file;
+	yaml_parser_t parser;
+	yaml_token_t token;
+	int rc = 0;
+
+	enum paramtype confset = PT_NONE;
+	int param = PS_NONE;
+	char *tmp;
+	char parameter[PARAM_SZ];
+	char value[PARAM_SZ];
+	char device[PARAM_SZ];
+
+	file = fopen(filename, "rb");
+	yaml_parser_initialize(&parser);
+	yaml_parser_set_input_file(&parser, file);
+
+	/*
+	 * Search tokens for conf_param or set_param
+	 * The token after "parameter" goes into parameter
+	 * The token after "value" goes into value
+	 * when we have all 3, create param=val and call the
+	 * appropriate function for set/conf param
+	 */
+	while (token.type != YAML_STREAM_END_TOKEN && rc == 0) {
+		int i;
+
+		yaml_token_delete(&token);
+		if (!yaml_parser_scan(&parser, &token)) {
+			rc = 1;
+			break;
+		}
+
+		if (token.type != YAML_SCALAR_TOKEN)
+			continue;
+
+		for (i = 0; cfg_type_table[i].ptype != PT_NONE; i++) {
+			if (!strncmp((char *)token.data.alias.value,
+				     cfg_type_table[i].type_name,
+				     strlen(cfg_type_table[i].type_name))) {
+				confset = cfg_type_table[i].ptype;
+				break;
+			}
+		}
+
+		if (confset == PT_NONE)
+			continue;
+
+		for (i = 0; cfg_stage_table[i].pstage != PS_NONE; i++) {
+			if (!strncmp((char *)token.data.alias.value,
+				     cfg_stage_table[i].stage_name,
+				     strlen(cfg_stage_table[i].stage_name))) {
+				param |= cfg_stage_table[i].pstage;
+				break;
+			}
+		}
+
+		if (cfg_stage_table[i].pstage != PS_NONE)
+			continue;
+
+		if (param & PS_PARAM_FOUND) {
+			conf_to_set_param(confset,
+					  (char *)token.data.alias.value,
+					  device, parameter, PARAM_SZ);
+			param |= PS_PARAM_SET;
+			param &= ~PS_PARAM_FOUND;
+
+			/*
+			 * we're getting parameter: param=val
+			 * copy val and mark that we've got it in case
+			 * there is no value: tag
+			 */
+			tmp = strchrnul(parameter, '=');
+			if (*tmp == '=') {
+				strncpy(value, tmp+1, sizeof(value));
+				*tmp = '\0';
+				param |= PS_VAL_SET;
+			} else {
+				continue;
+			}
+		} else if (param & PS_VAL_FOUND) {
+			strncpy(value, (char *)token.data.alias.value,
+				PARAM_SZ);
+			param |= PS_VAL_SET;
+			param &= ~PS_VAL_FOUND;
+		} else if (param & PS_DEVICE_FOUND) {
+			strncpy(device, (char *)token.data.alias.value,
+				PARAM_SZ);
+			param |= PS_DEVICE_SET;
+			param &= ~PS_DEVICE_FOUND;
+		}
+
+		if (confset && param & PS_VAL_SET && param & PS_PARAM_SET) {
+			int size = strlen(parameter) + strlen(value) + 2;
+			char *buf = malloc(size);
+
+			if (buf == NULL) {
+				rc = 2;
+				break;
+			}
+			snprintf(buf, size, "%s=%s", parameter, value);
+
+			printf("set_param: %s\n", buf);
+			rc = lcfg_setparam_perm(func, buf);
+
+			confset = PT_NONE;
+			param = PS_NONE;
+			parameter[0] = '\0';
+			value[0] = '\0';
+			device[0] = '\0';
+			free(buf);
+		}
+	}
+
+	yaml_parser_delete(&parser);
+	fclose(file);
+
+	return rc;
 }
 
 int jt_lcfg_setparam(int argc, char **argv)
@@ -1330,21 +1548,23 @@ int jt_lcfg_setparam(int argc, char **argv)
 	if (index < 0 || index >= argc)
 		return CMD_HELP;
 
-	if (popt.po_params2)
+	if (popt.po_perm)
 		/* We can't delete parameters that were
 		 * set with old conf_param interface */
-		return jt_lcfg_mgsparam2(argc, argv, &popt);
+		return jt_lcfg_setparam_perm(argc, argv, &popt);
+
+	if (popt.po_file)
+		return lcfg_setparam_yaml(argv[0], argv[index]);
 
 	for (i = index; i < argc; i++) {
 		int rc2;
-		path = NULL;
+		path = argv[i];
 
-		value = strchr(argv[i], '=');
+		value = strchr(path, '=');
 		if (value != NULL) {
 			/* format: set_param a=b */
 			*value = '\0';
 			value++;
-			path = argv[i];
 			if (*value == '\0') {
 				fprintf(stderr,
 					"error: %s: setting %s: no value\n",
@@ -1355,7 +1575,6 @@ int jt_lcfg_setparam(int argc, char **argv)
 			}
 		} else {
 			/* format: set_param a b */
-			path = argv[i];
 			i++;
 			if (i >= argc) {
 				fprintf(stderr,

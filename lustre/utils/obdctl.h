@@ -160,7 +160,7 @@ int jt_lcfg_set_timeout(int argc, char **argv);
 int jt_lcfg_add_conn(int argc, char **argv);
 int jt_lcfg_del_conn(int argc, char **argv);
 int jt_lcfg_param(int argc, char **argv);
-int jt_lcfg_mgsparam(int argc, char **argv);
+int jt_lcfg_confparam(int argc, char **argv);
 int jt_lcfg_getparam(int argc, char **argv);
 int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
