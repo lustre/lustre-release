@@ -1868,38 +1868,37 @@ static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
 static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
                         struct obd_quotactl *oqctl)
 {
-        struct ptlrpc_request   *req;
-        struct obd_quotactl     *oqc;
-        int                      rc;
-        ENTRY;
+	struct ptlrpc_request	*req;
+	struct obd_quotactl	*oqc;
+	int			 rc;
+	ENTRY;
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                        &RQF_MDS_QUOTACTL, LUSTRE_MDS_VERSION,
-                                        MDS_QUOTACTL);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+					&RQF_MDS_QUOTACTL, LUSTRE_MDS_VERSION,
+					MDS_QUOTACTL);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
-        oqc = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-        *oqc = *oqctl;
+	oqc = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+	*oqc = *oqctl;
 
-        ptlrpc_request_set_replen(req);
-        ptlrpc_at_set_req_timeout(req);
-        req->rq_no_resend = 1;
+	ptlrpc_request_set_replen(req);
+	ptlrpc_at_set_req_timeout(req);
 
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
+	rc = ptlrpc_queue_wait(req);
+	if (rc)
+		CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
 
-        if (req->rq_repmsg &&
-            (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
-                *oqctl = *oqc;
-        } else if (!rc) {
-                CERROR ("Can't unpack obd_quotactl\n");
-                rc = -EPROTO;
-        }
-        ptlrpc_req_finished(req);
+	if (req->rq_repmsg &&
+	    (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
+		*oqctl = *oqc;
+	} else if (!rc) {
+		CERROR ("Can't unpack obd_quotactl\n");
+		rc = -EPROTO;
+	}
+	ptlrpc_req_finished(req);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdc_ioc_swap_layouts(struct obd_export *exp,
