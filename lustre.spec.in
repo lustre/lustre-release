@@ -132,8 +132,8 @@ Source6: kmp-lustre-osd-zfs.files
 Source7: kmp-lustre-tests.files
 URL: https://wiki.hpdd.intel.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
-Requires: %{requires_kmod_name} = %{requires_kmod_version}
-BuildRequires: libtool
+Requires: %{requires_kmod_name} = %{requires_kmod_version} libyaml zlib
+BuildRequires: libtool libyaml-devel zlib-devel
 %if %{with servers}
 Requires: lustre-osd
 Requires: lustre-osd-mount
