@@ -3058,7 +3058,7 @@ wait_mds_ost_sync () {
 	done
 
 	# show which nodes are not finished.
-	cmd=$(echo $cmd | sed '/-n//')
+	cmd=$(echo $cmd | sed 's/-n//')
 	do_nodes $list "$cmd"
 	echo "$facet recovery node $i not done in $WAIT_TIMEOUT sec. $STATUS"
 	return 1
