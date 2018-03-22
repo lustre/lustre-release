@@ -3313,6 +3313,12 @@ test_89() {
 	mount_facet ost1
 	zconf_mount $(hostname) $MOUNT || error "mount fails"
 	client_up || error "client_up failed"
+
+	# wait for the remounted client to connect to ost1
+	local target=$(get_osc_import_name client ost1)
+	wait_import_state "FULL" "osc.${target}.ost_server_uuid" \
+		$(max_recovery_time)
+
 	wait_mds_ost_sync || error "MDS-OST sync timed out"
 	wait_delete_completed || error "wait delete timed out"
 	local blocks2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
