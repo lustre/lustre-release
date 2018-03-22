@@ -37,6 +37,7 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/kthread.h>
+#include <linux/workqueue.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
@@ -237,31 +238,26 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 	}
 }
 
-static int ptlrpc_pinger_main(void *arg)
+static struct workqueue_struct *pinger_wq;
+static void ptlrpc_pinger_main(struct work_struct *ws);
+static DECLARE_DELAYED_WORK(ping_work, ptlrpc_pinger_main);
+
+static void ptlrpc_pinger_main(struct work_struct *ws)
 {
-	struct ptlrpc_thread *thread = (struct ptlrpc_thread *)arg;
-	ENTRY;
+	time64_t this_ping = ktime_get_seconds();
+	time64_t time_to_next_wake;
+	struct timeout_item *item;
+	struct obd_import *imp;
+	struct list_head *iter;
 
-	/* Record that the thread is running */
-	thread_set_flags(thread, SVC_RUNNING);
-	wake_up(&thread->t_ctl_waitq);
-
-	/* And now, loop forever, pinging as needed. */
-	while (1) {
-		time64_t this_ping = ktime_get_seconds();
-		struct l_wait_info lwi;
-		time64_t time_to_next_wake;
-		struct timeout_item *item;
-		struct list_head *iter;
-
+	do {
 		mutex_lock(&pinger_mutex);
 		list_for_each_entry(item, &timeout_list, ti_chain)
-                        item->ti_cb(item, item->ti_cb_data);
+			item->ti_cb(item, item->ti_cb_data);
 
 		list_for_each(iter, &pinger_imports) {
-			struct obd_import *imp = list_entry(iter,
-							    struct obd_import,
-							    imp_pinger_chain);
+			imp = list_entry(iter, struct obd_import,
+					 imp_pinger_chain);
 
 			ptlrpc_pinger_process_import(imp, this_ping);
 			/* obd_timeout might have changed */
@@ -273,72 +269,35 @@ static int ptlrpc_pinger_main(void *arg)
 		/* update memory usage info */
 		obd_update_maxusage();
 
-                /* Wait until the next ping time, or until we're stopped. */
-                time_to_next_wake = pinger_check_timeout(this_ping);
-                /* The ping sent by ptlrpc_send_rpc may get sent out
-                   say .01 second after this.
-                   ptlrpc_pinger_sending_on_import will then set the
-                   next ping time to next_ping + .01 sec, which means
-                   we will SKIP the next ping at next_ping, and the
-                   ping will get sent 2 timeouts from now!  Beware. */
+		/* Wait until the next ping time, or until we're stopped. */
+		time_to_next_wake = pinger_check_timeout(this_ping);
+		/* The ping sent by ptlrpc_send_rpc may get sent out
+		 * say .01 second after this.
+		 * ptlrpc_pinger_sending_on_import will then set the
+		 * next ping time to next_ping + .01 sec, which means
+		 * we will SKIP the next ping at next_ping, and the
+		 * ping will get sent 2 timeouts from now!  Beware. */
 		CDEBUG(D_INFO, "next wakeup in %lld (%lld)\n",
 		       time_to_next_wake, this_ping + PING_INTERVAL);
-                if (time_to_next_wake > 0) {
-			time64_t time_max = max(time_to_next_wake, 1LL);
+	} while (time_to_next_wake <= 0);
 
-			lwi = LWI_TIMEOUT(cfs_time_seconds(time_max),
-                                          NULL, NULL);
-                        l_wait_event(thread->t_ctl_waitq,
-                                     thread_is_stopping(thread) ||
-                                     thread_is_event(thread),
-                                     &lwi);
-                        if (thread_test_and_clear_flags(thread, SVC_STOPPING)) {
-                                EXIT;
-                                break;
-                        } else {
-                                /* woken after adding import to reset timer */
-                                thread_test_and_clear_flags(thread, SVC_EVENT);
-                        }
-                }
-        }
-
-	thread_set_flags(thread, SVC_STOPPED);
-	wake_up(&thread->t_ctl_waitq);
-
-	CDEBUG(D_NET, "pinger thread exiting, process %d\n", current_pid());
-	return 0;
+	queue_delayed_work(pinger_wq, &ping_work,
+			   cfs_time_seconds(max(time_to_next_wake, 1LL)));
 }
-
-static struct ptlrpc_thread pinger_thread;
 
 int ptlrpc_start_pinger(void)
 {
-	struct l_wait_info lwi = { 0 };
-	struct task_struct *task;
-	int rc;
-#ifndef ENABLE_PINGER
-	return 0;
-#endif
-	ENTRY;
+#ifdef ENABLE_PINGER
+	if (pinger_wq)
+		return -EALREADY;
 
-	if (!thread_is_init(&pinger_thread) &&
-	    !thread_is_stopped(&pinger_thread))
-		RETURN(-EALREADY);
-
-	init_waitqueue_head(&pinger_thread.t_ctl_waitq);
-
-	strcpy(pinger_thread.t_name, "ll_ping");
-
-	task = kthread_run(ptlrpc_pinger_main, &pinger_thread,
-			   pinger_thread.t_name);
-	if (IS_ERR(task)) {
-		rc = PTR_ERR(task);
-		CERROR("cannot start pinger thread: rc = %d\n", rc);
-		RETURN(rc);
+	pinger_wq = alloc_workqueue("ptlrpc_pinger", 0, 1);
+	if (!pinger_wq) {
+		CERROR("cannot start pinger workqueue\n");
+		return -ENOMEM;
 	}
 
-	l_wait_event(pinger_thread.t_ctl_waitq,
-		     thread_is_running(&pinger_thread), &lwi);
+	queue_delayed_work(pinger_wq, &ping_work, 0);
 
 	if (suppress_pings)
 		CWARN("Pings will be suppressed at the request of the "
@@ -346,32 +305,25 @@ int ptlrpc_start_pinger(void)
 		      "additional requirements described in the manual.  "
 		      "(Search for the \"suppress_pings\" kernel module "
 		      "parameter.)\n");
-
-	RETURN(0);
+#endif
+	return 0;
 }
 
 int ptlrpc_pinger_remove_timeouts(void);
 
 int ptlrpc_stop_pinger(void)
 {
-	struct l_wait_info lwi = { 0 };
-#ifndef ENABLE_PINGER
-	return 0;
-#endif
-	ENTRY;
-
-	if (thread_is_init(&pinger_thread) ||
-	    thread_is_stopped(&pinger_thread))
-		RETURN(-EALREADY);
+#ifdef ENABLE_PINGER
+	if (!pinger_wq)
+		return -EALREADY;
 
 	ptlrpc_pinger_remove_timeouts();
 
-	thread_set_flags(&pinger_thread, SVC_STOPPING);
-	wake_up(&pinger_thread.t_ctl_waitq);
-
-	l_wait_event(pinger_thread.t_ctl_waitq,
-		     thread_is_stopped(&pinger_thread), &lwi);
-	RETURN(0);
+	cancel_delayed_work_sync(&ping_work);
+	destroy_workqueue(pinger_wq);
+	pinger_wq = NULL;
+#endif
+	return 0;
 }
 
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
@@ -557,8 +509,7 @@ int ptlrpc_pinger_remove_timeouts(void)
 void ptlrpc_pinger_wake_up()
 {
 #ifdef ENABLE_PINGER
-	thread_add_flags(&pinger_thread, SVC_EVENT);
-	wake_up(&pinger_thread.t_ctl_waitq);
+	mod_delayed_work(pinger_wq, &ping_work, 0);
 #endif
 }
 
