@@ -1830,6 +1830,9 @@ dm_cleanup_dev() {
 
 	# detach a loop device
 	[[ $major -ne 7 ]] || cleanup_loop_device $facet /dev/loop$minor
+
+	# unload dm-flakey module
+	do_facet $facet "modprobe -r dm-flakey" || true
 }
 
 mount_facet() {
