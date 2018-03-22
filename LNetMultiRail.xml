@@ -40,8 +40,11 @@
         </para></listitem>
       </orderedlist>
       <para>This section is a supplement to
-          <xref linkend="dbdoclet.lnetaddshowdelete" /> and contains further
+          <xref linkend="lnet_config.lnetaddshowdelete" /> and contains further
           examples for Multi-Rail configurations.</para>
+      <para>For information on the dynamic peer discovery feature added in
+        Lustre Release 2.11.0, see
+        <xref linkend="lnet_config.dynamic_discovery" />.</para>
       <section xml:id="dbdoclet.addinterfaces">
           <title><indexterm><primary>MR</primary>
           <secondary>multipleinterfaces</secondary>

@@ -480,7 +480,7 @@ lnet large_router_buffers=8192
           interface. The default setting is 1. (For more information about the
           LNet routes parameter, see 
           <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-          linkend="dbdoclet.50438216_71227" /></para>
+          linkend="lnet_module_routes" /></para>
           <para>A router is considered down if any of its NIDs are down. For
           example, router X has three NIDs: 
           <literal>Xnid1</literal>, 

@@ -1,38 +1,39 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlnet">
   <title xml:id="configuringlnet.title">Configuring Lustre Networking (LNet)</title>
-  <para>This chapter describes how to configure Lustre Networking (LNet). It includes the following sections:</para>
+  <para>This chapter describes how to configure Lustre Networking (LNet). It
+    includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_15201"/>
+      <para><xref linkend="lnet_config"/>
       </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_33148"/>
+      <para><xref linkend="lnet_module_params"/>
           </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_46279"/>
+      <para><xref linkend="lnet_module_network_params"/>
           </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_31414"/>
+      <para><xref linkend="lnet_ip2nets"/>
           </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_71227"/>
+      <para><xref linkend="lnet_module_routes"/>
           </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_10523"/>
+      <para><xref linkend="lnet_config_testing"/>
           </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_35668"/>
+      <para><xref linkend="lnet_router_checker"/>
           </para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438216_15200"/>
+      <para><xref linkend="lnet_best_practices"/>
           </para>
     </listitem>
   </itemizedlist>
@@ -46,16 +47,17 @@
     interfaces.</para>
     <para condition='l27'>The <literal>lnetctl</literal> utility can be used
     to initialize LNet without bringing up any network interfaces. Network
-    interfaces can be added after configuring LNet via <literal>lnetctl</literal>. 
-    <literal>lnetctl</literal> can also be used to manage an operational LNet.
-    However, if it wasn't initialized by <literal>lnetctl</literal> then 
-    <literal>lnetctl lnet configure</literal> must be invoked before 
-    <literal>lnetctl</literal> can be used to manage LNet.</para>
+    interfaces can be added after configuring LNet via
+    <literal>lnetctl</literal>.  <literal>lnetctl</literal> can also be used to
+    manage an operational LNet.  However, if it wasn't initialized by
+    <literal>lnetctl</literal> then <literal>lnetctl lnet configure</literal>
+    must be invoked before <literal>lnetctl</literal> can be used to manage
+    LNet.</para>
     <para condition='l27'>DLC also introduces a C-API to enable
     configuring LNet programatically.  See <xref
     linkend="lnetconfigurationapi"/></para>
   </note>
-  <section xml:id="dbdoclet.50438216_15201" condition='l27'>
+  <section xml:id="lnet_config" condition='l27'>
     <title><indexterm>
         <primary>LNet</primary>
         <secondary>Configuring LNet</secondary>
@@ -85,7 +87,7 @@
         </listitem>
       </itemizedlist>
     </para>
-    <section>
+    <section xml:id="lnet_config.cli_overview">
       <title><indexterm>
           <primary>LNet</primary>
           <secondary>cli</secondary>
@@ -102,7 +104,22 @@
       unconfigure LNet.</para>
       <screen>lnetctl lnet unconfigure</screen>
     </section>
-    <section xml:id="dbdoclet.lnetaddshowdelete">
+    <section xml:id="lnet_config.show_global_settings">
+      <title><indexterm>
+        <primary>LNet</primary>
+        <secondary>cli</secondary>
+      </indexterm>Displaying Global Settings</title>
+      <para>The active LNet global settings  can be displayed using the
+        <literal>lnetctl</literal> command shown below:</para>
+      <screen>lnetctl global show</screen>
+      <para>For example:</para>
+      <screen># lnetctl global show
+        global:
+        numa_range: 0
+        max_intf: 200
+        discovery: 1</screen>
+    </section>
+    <section xml:id="lnet_config.lnetaddshowdelete">
       <title><indexterm><primary>LNet</primary>
       <secondary>cli</secondary></indexterm>Adding, Deleting and Showing
       Networks</title>
@@ -187,18 +204,20 @@ net:
           peer_buffer_credits: 0
           credits: 256</screen>
     </section>
-    <section condition='l2A'>
+    <section condition='l2A' xml:id="lnet_config.manual_addshowdelete">
         <title><indexterm>
             <primary>LNet</primary>
             <secondary>cli</secondary>
-        </indexterm>Adding, Deleting and Showing Peers</title>
+        </indexterm>Manual Adding, Deleting and Showing Peers</title>
         <para>The <emphasis role="bold"><literal>lnetctl peer add</literal>
-        </emphasis> command is used to add a remote peer to a software
-        multi-rail configuration.</para>
+        </emphasis> command is used to manually add a remote peer to a software
+        multi-rail configuration.  For the dynamic peer discovery capability
+        introduced in Lustre Release 2.11.0, please see
+        <xref linkend="lnet_config.dynamic_discovery" />.</para>
         <para>When configuring peers, use the <literal>–-prim_nid</literal>
             option to specify the key or primary nid of the peer node.  Then
-            follow that with the <literal>--nid</literal> option to specify a set
-            of comma separated NIDs.</para>
+            follow that with the <literal>--nid</literal> option to specify a
+            set of comma separated NIDs.</para>
         <screen>peer add: add a peer
             --prim_nid: primary NID of the peer
             --nid: comma separated list of peer nids (e.g. 10.1.1.2@tcp0)
@@ -272,15 +291,75 @@ net:
             --nid: comma separated list of peer nids (e.g. 10.1.1.2@tcp0)</screen>
         <para><literal>prim_nid</literal> should always be specified. The
             <literal>prim_nid</literal> identifies the peer. If the
-            <literal>prim_nid</literal> is the only one specified, then the entire
-            peer is deleted.</para>
+            <literal>prim_nid</literal> is the only one specified, then the
+            entire peer is deleted.</para>
         <para>Example of deleting a single nid of a peer (10.10.10.3@tcp):
         </para>
         <screen>lnetctl peer del --prim_nid 10.10.10.2@tcp --nid 10.10.10.3@tcp</screen>
         <para>Example of deleting the entire peer:</para>
         <screen>lnetctl peer del --prim_nid 10.10.10.2@tcp</screen>
-
     </section>
+    <section condition='l2B' xml:id="lnet_config.dynamic_discovery">
+      <title><indexterm>
+        <primary>LNet</primary>
+        <secondary>cli</secondary>
+        <tertiary>dynamic discovery</tertiary>
+      </indexterm>Dynamic Peer Discovery</title>
+      <section xml:id="lnet_config.dynamic_discovery.overview">
+        <title>Overview</title>
+        <para>Dynamic Discovery (DD) is a feature that allows nodes to
+          dynamically discover a peer's interfaces without having to explicitly
+          configure them. This is very useful for Multi-Rail (MR)
+          configurations. In large clusters, there could be hundreds of nodes
+          and having to configure MR peers on each node becomes error prone.
+          Dynamic Discovery is enabled by default and uses a new protocol based
+          on LNet pings to discover the interfaces of the remote peers on first
+          message.</para>
+      </section>
+      <section xml:id="lnet_config.dynamic_discovery.protocol">
+        <title>Protocol</title>
+        <para>When LNet on a node is requested to send a message to a peer it
+          first attempts to ping the peer. The reply to the ping contains the
+          peer's NIDs as well as a feature bit outlining what the peer supports.
+          Dynamic Discovery adds a Multi-Rail feature bit. If the peer is
+          Multi-Rail capable, it sets the MR bit in the ping reply. When the
+          node receives the reply it checks the MR bit, and if it is set it then
+          pushes its own list of NIDs to the peer using a new PUT message,
+          referred to as a "push ping". After this brief protocol, both the peer
+          and the node will have each other's list of interfaces. The MR
+          algorithm can then proceed to use the list of interfaces of the
+          corresponding peer.</para>
+          <para>If the peer is not MR capable, it will not set the MR feature
+            bit in the ping reply. The node will understand that the peer is
+            not MR capable and will only use the interface provided by upper
+            layers for sending messages.</para>
+      </section>
+    <section xml:id="lnet_config.dynamic_discovery.userspace_config">
+      <title>Dynamic Discovery and User-space Configuration</title>
+      <para>It is possible to configure the peer manually while Dynamic
+        Discovery is running.  Manual peer configuration always takes precedence
+        over Dynamic Discovery. If there is a discrepancy between the manual
+        configuration and the dynamically discovered information, a warning is
+        printed.</para>
+    </section>
+    <section xml:id="lnet_config.dynamic_discovery.config">
+      <title>Configuration</title>
+      <para>Dynamic Discovery is very light on the configuration side. It can
+        only be turned on or turned off.  To turn the feature on or off, the
+        following command is used:</para>
+      <screen>lnetctl set discovery [0 | 1]</screen>
+      <para>To check the current <literal>discovery</literal> setting, the
+        <literal>lnetctl global show</literal> command can be used as shown in
+        <xref linkend="lnet_config.show_global_settings"/>.</para>
+    </section>
+    <section xml:id="lnet_config.dynamic_discovery.ondemand">
+      <title>Initiating Dynamic Discovery on Demand</title>
+      <para>It is possible to initiate the Dynamic Discovery protocol on demand
+        without having to wait for a message to be sent to the peer. This can
+        be done with the following command:</para>
+      <screen>lnetctl discover &lt;peer_nid&gt; [&lt;peer_nid&gt; ...]</screen>
+    </section>
+  </section>
     <section>
       <title><indexterm>
           <primary>LNet</primary>
@@ -300,7 +379,8 @@ net:
 
 Example:
 lnetctl route add --net tcp2 --gateway 192.168.205.130@tcp1 --hop 2 --prio 1</screen>
-      <para>Routes can be deleted via the following <literal>lnetctl</literal> command.</para>
+      <para>Routes can be deleted via the following <literal>lnetctl</literal>
+        command.</para>
       <screen>lnetctl route del: delete a route
         --net: net name (ex tcp0)
         --gateway: gateway nid (ex 10.1.1.2@tcp)
@@ -518,13 +598,15 @@ lnetctl export > FILE.yaml</screen>
 	integer represents the CPT to associate the network interface
 	with> seq_no: &lt;integer.  Optional.  User generated, and is
 	passed back in the YAML error block></screen>
-        <para>Both seq_no and detail fields do not appear in the show output.</para>
+        <para>Both seq_no and detail fields do not appear in the show output.
+        </para>
       </section>
       <section>
         <title><indexterm>
             <primary>LNet</primary>
             <secondary>buffer yaml syntax</secondary>
-          </indexterm>Enable Routing and Adjust Router Buffer Configuration</title>
+          </indexterm>Enable Routing and Adjust Router Buffer Configuration
+        </title>
         <para/>
         <screen>routing:
     - tiny: &lt;Integer. Tiny buffers>
@@ -556,14 +638,14 @@ lnetctl export > FILE.yaml</screen>
     hop: &lt;an integer between 1 and 255. Optional>
     detail: &lt;This is only applicable for show commands.  1 - output detailed info.  0. basic output>
     seq_no: &lt;integer. Optional. User generated, and is passed back in the YAML error block></screen>
-        <para>Both seq_no and detail fields do not appear in the show output.</para>
+        <para>Both seq_no and detail fields do not appear in the show output.
+        </para>
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438216_33148">
-      <title><indexterm><primary>LNet</primary></indexterm>
-
-          Overview of LNet Module Parameters</title>
+  <section xml:id="lnet_module_params">
+    <title><indexterm><primary>LNet</primary></indexterm>
+    Overview of LNet Module Parameters</title>
     <para>LNet kernel module (lnet) parameters specify how LNet is to be
     configured to work with Lustre, including which NICs will be
     configured to work with Lustre and the routing to be used with
@@ -584,7 +666,8 @@ lnetctl export > FILE.yaml</screen>
     be used at a time):</para>
     <itemizedlist>
       <listitem>
-        <para><literal>networks</literal>  - Specifies the networks to be used.</para>
+        <para><literal>networks</literal>  - Specifies the networks to be used.
+        </para>
       </listitem>
       <listitem>
 	<para><literal>ip2nets</literal>  - Lists globally-available
@@ -593,18 +676,20 @@ lnetctl export > FILE.yaml</screen>
 	lookup.</para>
       </listitem>
     </itemizedlist>
-    <para>See <xref linkend="dbdoclet.50438216_46279"/> and <xref linkend="dbdoclet.50438216_31414"/> for more details.</para>
+    <para>See <xref linkend="lnet_module_network_params"/> and
+      <xref linkend="lnet_ip2nets"/> for more details.</para>
     <para>To set up routing between networks, use:</para>
     <itemizedlist>
       <listitem>
-        <para><literal>routes</literal>  - Lists networks and the NIDs of routers that forward to them.</para>
+        <para><literal>routes</literal>  - Lists networks and the NIDs of
+          routers that forward to them.</para>
       </listitem>
     </itemizedlist>
-    <para>See <xref linkend="dbdoclet.50438216_71227"/> for more details.</para>
+    <para>See <xref linkend="lnet_module_routes"/> for more details.</para>
     <para>A <literal>router</literal> checker can be configured to enable
     Lustre nodes to detect router health status, avoid routers that appear
     dead, and reuse those that restore service after failures. See <xref
-    linkend="dbdoclet.50438216_35668"/> for more details.</para>
+    linkend="lnet_router_checker"/> for more details.</para>
     <para>For a complete reference to the LNet module parameters, see
     <emphasis><xref linkend="configurationfilesmoduleparameters"/>LNet
     Options</emphasis>.</para>
@@ -634,12 +719,15 @@ lnetctl export > FILE.yaml</screen>
       the mount command, use the <literal>lctl</literal> command. To
       display MDS NIDs, run on the MDS :</para>
       <screen>lctl list_nids</screen>
-      <para>To determine if a client can reach the MDS using a particular NID, run on the client:</para>
+      <para>To determine if a client can reach the MDS using a particular NID,
+        run on the client:</para>
       <screen>lctl which_nid <replaceable>MDS_NID</replaceable></screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438216_46279">
-    <title><indexterm><primary>LNet</primary><secondary>module parameters</secondary></indexterm>Setting the LNet Module networks Parameter</title>
+  <section xml:id="lnet_module_network_params">
+    <title><indexterm><primary>LNet</primary>
+      <secondary>module parameters</secondary>
+      </indexterm>Setting the LNet Module networks Parameter</title>
     <para>If a node has more than one network interface, you&apos;ll
     typically want to dedicate a specific interface to Lustre. You can do
     this by including an entry in the <literal>lustre.conf</literal> file
@@ -650,7 +738,8 @@ lnetctl export > FILE.yaml</screen>
     <para>This example specifies that a Lustre node will use a TCP/IP
     interface and an InfiniBand interface:</para>
     <screen>options lnet networks=tcp0(eth0),o2ib(ib0)</screen>
-    <para>This example specifies that the Lustre node will use the TCP/IP interface <literal>eth1</literal>:</para>
+    <para>This example specifies that the Lustre node will use the TCP/IP
+      interface <literal>eth1</literal>:</para>
     <screen>options lnet networks=tcp0(eth1)</screen>
     <para>Depending on the network design, it may be necessary to specify
     explicit interfaces. To explicitly specify that interface
@@ -670,7 +759,9 @@ lnetctl export > FILE.yaml</screen>
       not used for routing decisions.</para>
     </note>
     <section>
-      <title><indexterm><primary>configuring</primary><secondary>multihome</secondary></indexterm>Multihome Server Example</title>
+      <title><indexterm><primary>configuring</primary>
+        <secondary>multihome</secondary></indexterm>Multihome Server Example
+      </title>
       <para>If a server with multiple IP addresses (multihome server) is
       connected to a Lustre network, certain configuration setting are
       required. An example illustrating these setting consists of a
@@ -695,7 +786,8 @@ lnetctl export > FILE.yaml</screen>
 	  interface and a TCP/IP interface for administration.</para>
         </listitem>
       </itemizedlist>
-      <para>To set the <literal>networks</literal> option for this example:</para>
+      <para>To set the <literal>networks</literal> option for this example:
+      </para>
       <itemizedlist>
         <listitem>
 	  <para> On each server, <literal>svr1</literal> and
@@ -734,8 +826,10 @@ lnetctl export > FILE.yaml</screen>
       </note>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438216_31414">
-    <title><indexterm><primary>LNet</primary><secondary>ip2nets</secondary></indexterm>Setting the LNet Module ip2nets Parameter</title>
+  <section xml:id="lnet_ip2nets">
+    <title><indexterm><primary>LNet</primary>
+      <secondary>ip2nets</secondary>
+      </indexterm>Setting the LNet Module ip2nets Parameter</title>
     <para>The <literal>ip2nets</literal> option is typically used when a
     single, universal <literal>lustre.conf</literal> file is run on all
     servers and clients. Each node identifies the locally available
@@ -775,7 +869,8 @@ lnetctl export > FILE.yaml</screen>
     <literal>lustre.conf</literal> file on each server and client:</para>
     <screen>options lnet &apos;ip2nets=&quot;tcp0(eth0) 192.168.0.[2,4]; \
 tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
-    <para>Each entry in <literal>ip2nets</literal> is referred to as a &apos;rule&apos;.</para>
+    <para>Each entry in <literal>ip2nets</literal> is referred to as a
+      &apos;rule&apos;.</para>
     <para>The order of LNet entries is important when configuring servers.
     If a server node can be reached using more than one network, the first
     network specified in <literal>lustre.conf</literal> will be
@@ -792,8 +887,8 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     network.</para>
     <note condition='l2A'>
         <para>Multi-rail deprecates the kernel parsing of ip2nets. ip2nets
-            patterns are matched in user space and translated into Network interfaces
-            to be added into the system.</para>
+            patterns are matched in user space and translated into Network
+            interfaces to be added into the system.</para>
         <para>The first interface that matches the IP pattern will be used when
             adding a network interface.</para>
         <para>If an interface is explicitly specified as well as a pattern, the
@@ -801,8 +896,9 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
             explicitly-defined interface.</para>
         <para>For example, <literal>tcp(eth0) 192.168.*.3</literal> and there
             exists in the system <literal>eth0 == 192.158.19.3</literal> and
-            <literal>eth1 == 192.168.3.3</literal>, then the configuration will fail,
-            because the pattern contradicts the interface specified.</para>
+            <literal>eth1 == 192.168.3.3</literal>, then the configuration will
+            fail, because the pattern contradicts the interface specified.
+        </para>
         <para>A clear warning will be displayed if inconsistent configuration is
             encountered.</para>
         <para>You could use the following command to configure ip2nets:</para>
@@ -823,9 +919,10 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
          0: 192.168.*.*</screen>
     </note>
   </section>
-  <section xml:id="dbdoclet.50438216_71227">
-    <title><indexterm><primary>LNet</primary><secondary>routes</secondary></indexterm>Setting
-    the LNet Module routes Parameter</title>
+  <section xml:id="lnet_module_routes">
+    <title><indexterm><primary>LNet</primary>
+      <secondary>routes</secondary></indexterm>Setting the LNet Module routes
+      Parameter</title>
     <para>The LNet module routes parameter is used to identify routers in
     a Lustre configuration. These parameters are set in
     <literal>modprobe.conf</literal> on each Lustre node. </para>
@@ -863,17 +960,19 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
 lctl network configure</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438216_10523">
-    <title><indexterm><primary>LNet</primary><secondary>testing</secondary></indexterm>Testing
-    the LNet Configuration</title>
+  <section xml:id="lnet_config_testing">
+    <title><indexterm><primary>LNet</primary>
+      <secondary>testing</secondary></indexterm>Testing the LNet
+      Configuration</title>
     <para>After configuring Lustre Networking, it is highly recommended
     that you test your LNet configuration using the LNet Self-Test
     provided with the Lustre software. For more information about using
     LNet Self-Test, see <xref linkend="lnetselftest"/>.</para>
   </section>
-  <section xml:id="dbdoclet.50438216_35668">
-    <title><indexterm><primary>LNet</primary><secondary>route
-    checker</secondary></indexterm>Configuring the Router Checker</title>
+  <section xml:id="lnet_router_checker">
+    <title><indexterm><primary>LNet</primary>
+      <secondary>route checker</secondary>
+      </indexterm>Configuring the Router Checker</title>
     <para>In a Lustre configuration in which different types of networks,
     such as a TCP/IP network and an Infiniband network, are connected by
     routers, a router checker can be run on the clients and servers in the
@@ -931,7 +1030,8 @@ lctl network configure</screen>
     <screen>options lnet check_routers_before_use=on</screen>
       </listitem>
     </itemizedlist>
-    <para>The router checker obtains the following information from each router:</para>
+    <para>The router checker obtains the following information from each router:
+    </para>
     <itemizedlist>
       <listitem>
         <para> Time the router was disabled</para>
@@ -948,17 +1048,17 @@ lctl network configure</screen>
     <para>If 100 packets have been sent successfully through a router, the
     sent-packets counter for that router will have a value of 100.</para>
   </section>
-  <section xml:id="dbdoclet.50438216_15200">
-    <title><indexterm><primary>LNet</primary><secondary>best
-    practice</secondary></indexterm>Best Practices for LNet
-    Options</title>
+  <section xml:id="lnet_best_practices">
+    <title><indexterm><primary>LNet</primary>
+      <secondary>best practice</secondary>
+    </indexterm>Best Practices for LNet Options</title>
     <para>For the <literal>networks</literal>, <literal>ip2nets</literal>,
     and <literal>routes</literal> options, follow these best practices to
     avoid configuration errors.</para>
-    <section>
-      <title><indexterm><primary>LNet</primary><secondary>escaping commas
-      with quotes</secondary></indexterm>Escaping commas with
-      quotes</title>
+    <section xml:id="lnet_best_practices.escape_comments">
+      <title><indexterm><primary>LNet</primary>
+        <secondary>escaping commas with quotes</secondary>
+      </indexterm>Escaping commas with quotes</title>
       <para>Depending on the Linux distribution, commas may need to be
       escaped using single or double quotes. In the extreme case, the
       <literal>options</literal> entry would look like this:</para>
@@ -972,9 +1072,9 @@ lctl network configure</screen>
       NID&apos;</literal> message generally points to an error in the LNet
       module configuration.</para>
     </section>
-    <section>
-      <title><indexterm><primary>LNet</primary><secondary>comments</secondary></indexterm>Including
-      comments</title>
+    <section xml:id="lnet_best_practices.comments">
+      <title><indexterm><primary>LNet</primary>
+        <secondary>comments</secondary></indexterm>Including comments</title>
       <para><emphasis>Place the semicolon terminating a comment
       immediately after the comment.</emphasis> LNet silently ignores
       everything between the <literal>#</literal> character at the
