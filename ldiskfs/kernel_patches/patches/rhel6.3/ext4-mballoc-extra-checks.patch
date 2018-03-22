@@ -164,7 +164,7 @@ Index: linux-stage/fs/ext4/mballoc.c
 +	unsigned short i, first, free = 0;
 +	unsigned short free_in_gdp = ext4_free_blks_count(sb, gdp);
 +
-+	if (free_in_gdp == 0 && gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT))
++	if (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT))
 +		return 0;
 +
 +	i = mb_find_next_zero_bit(bitmap, max, 0);
