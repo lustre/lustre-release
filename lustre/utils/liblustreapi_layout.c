@@ -1431,7 +1431,7 @@ int llapi_layout_pool_name_set(struct llapi_layout *layout,
  *
  * \param[in] path		name of the file to open
  * \param[in] open_flags	open() flags
- * \param[in] mode		permissions to create new file with
+ * \param[in] mode		permissions to create file, filtered by umask
  * \param[in] layout		layout to create new file with
  *
  * \retval		non-negative file descriptor on successful open

@@ -8270,7 +8270,37 @@ test_103a() {
 		fi
 	done
 }
-run_test 103a "acl test ========================================="
+run_test 103a "acl test"
+
+test_103b() {
+	local U
+
+	for U in {0..511}; do
+		{
+		local O=$(printf "%04o" $U)
+
+		umask $(printf "%04o" $((511 ^ $O)))
+		$LFS setstripe -c 1 $DIR/$tfile.s$O
+		local S=$(printf "%04o" 0$(stat -c%a $DIR/$tfile.s$O))
+
+		(( $S == ($O & 0666) )) ||
+			error "lfs setstripe $DIR/$tfile.s$O '$S' != '$O'"
+
+		$LFS setstripe -E16M -c 1 -E1G -S4M $DIR/$tfile.p$O
+		S=$(printf "%04o" 0$(stat -c%a $DIR/$tfile.p$O))
+		(( $S == ($O & 0666) )) ||
+			error "lfs setstripe -E $DIR/$tfile.p$O '$S' != '$O'"
+
+		$LFS setstripe -N2 -c 1 $DIR/$tfile.m$O
+		S=$(printf "%04o" 0$(stat -c%a $DIR/$tfile.m$O))
+		(( $S == ($O & 0666) )) ||
+			error "lfs setstripe -N2 $DIR/$tfile.m$O '$S' != '$O'"
+		rm -f $DIR/$tfile.[smp]$0
+		} &
+	done
+	wait
+}
+run_test 103b "umask lfs setstripe"
 
 test_103c() {
 	mkdir -p $DIR/$tdir

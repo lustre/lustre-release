@@ -1403,7 +1403,7 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 		goto error;
 	}
 
-	rc = lfs_component_create(fname, O_CREAT | O_WRONLY, 0644,
+	rc = lfs_component_create(fname, O_CREAT | O_WRONLY, 0666,
 				  layout);
 	if (rc >= 0) {
 		close(rc);
@@ -3189,7 +3189,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					      NULL);
 		} else if (layout != NULL) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
-						      0644, layout);
+						      0666, layout);
 			if (result >= 0) {
 				close(result);
 				result = 0;
@@ -3197,7 +3197,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		} else {
 			result = llapi_file_open_param(fname,
 						       O_CREAT | O_WRONLY,
-						       0644, param);
+						       0666, param);
 			if (result >= 0) {
 				close(result);
 				result = 0;
