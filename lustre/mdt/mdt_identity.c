@@ -37,30 +37,6 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/kmod.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/version.h>
-#include <linux/unistd.h>
-#include <asm/uaccess.h>
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <linux/slab.h>
-
-#include <libcfs/libcfs.h>
-#include <obd.h>
-#include <obd_class.h>
-#include <obd_support.h>
-#include <lustre_net.h>
-#include <lustre_import.h>
-#include <lustre_dlm.h>
-#include <lustre_lib.h>
-
 #include "mdt_internal.h"
 
 static void mdt_identity_entry_init(struct upcall_cache_entry *entry,
