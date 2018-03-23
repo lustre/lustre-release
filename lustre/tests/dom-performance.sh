@@ -29,7 +29,6 @@ check_and_setup_lustre
 
 build_test_filter
 
-DP_DNE=${DP_DNE:-"no"}
 DP_DIO=${DP_DIO:-"no"}
 
 DOM_SIZE=${DOM_SIZE:-"1M"}
@@ -39,6 +38,7 @@ rm -rf $DIR/*
 
 DP_NORM=$DIR/dp_norm
 DP_DOM=$DIR/dp_dom
+DP_DOM_DNE=$DIR/dp_dne
 DP_STATS=${DP_STATS:-"no"}
 
 # total number of files
@@ -48,16 +48,17 @@ DP_NUM=${DP_NUM:-4}
 
 # 1 stripe for normal files
 mkdir -p $DP_NORM
-$LFS setstripe -c 1 $DP_NORM ||
+$LFS setstripe -c 2 $DP_NORM ||
 	error "Cannot create test directory for ordinary files"
 
-if [ "x$DP_DNE" == "xyes" ] ; then
-	$LFS setdirstripe -i 0 -c 2 $DP_DOM ||
-		error "Cannot create striped directory"
-else
-	mkdir -p $DP_DOM
+if [[ $MDSCOUNT -gt 1 ]] ; then
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DP_DOM_DNE ||
+		error_noexit "Cannot create striped directory"
+	$LFS setstripe -E ${DOM_SIZE} -L mdt -E EOF $DP_DOM_DNE ||
+		error_noexit "Cannot create test directory for dom files"
 fi
 
+mkdir -p $DP_DOM
 $LFS setstripe -E ${DOM_SIZE} -L mdt -E EOF $DP_DOM ||
 	error "Cannot create test directory for dom files"
 
@@ -99,8 +100,8 @@ dp_setup_test() {
 	local cli=$1
 
 	cancel_lru_locks $cli
-	### drop all debug
-	$LCTL set_param -n debug=0
+	### drop all debug except critical
+	$LCTL set_param -n debug="error warning console emerg"
 	dp_clear_stats $cli
 }
 
@@ -142,7 +143,7 @@ run_MDtest() {
 	local th_num=$((DP_FNUM * 2 / DP_NUM))
 	local bsizes="8192"
 
-	[ "$SLOW" = "yes" ] && bsizes="4096 16384"
+	[ "$SLOW" = "yes" ] && bsizes="4096 32768"
 
 	for bsize in $bsizes ; do
 		dp_run_cmd "mpirun -np $DP_NUM $mdtest -i 3 -I $th_num -F \
@@ -220,7 +221,7 @@ run_IOR() {
 
 	local TDIR=${1:-$MOUNT}
 	local bsizes="8"
-	[ "$SLOW" = "yes" ] && bsizes="4 16"
+	[ "$SLOW" = "yes" ] && bsizes="4 32"
 
 	for bsize in $bsizes ; do
 		segments=$((128 / bsize))
@@ -251,12 +252,12 @@ run_Dbench() {
 		return 0
 	fi
 
-	if [ "x$DP_DNE" == "xyes" ] ; then
-		echo "dbench uses subdirs, skipping for DNE setup"
+	local TDIR=${1:-$MOUNT}
+
+	if [ "x$DP_DOM_DNE" == "x$TDIR" ] ; then
+		echo "dbench uses subdirs, skipping for DNE dir"
 		return 0
 	fi
-
-	local TDIR=${1:-$MOUNT}
 
 	dp_run_cmd "dbench -D $TDIR $DP_NUM | egrep -v 'warmup|execute'"
 	if [ ${PIPESTATUS[0]} != 0 ]; then
@@ -306,31 +307,55 @@ run_FIO() {
 	fi
 
 	local bsizes="8"
-	[ "$SLOW" = "yes" ] && bsizes="4 16"
+	[ "$SLOW" = "yes" ] && bsizes="4 32"
 
 	for bsize in $bsizes ; do
-		dp_run_cmd "$base_cmd --bs=${bsize}k --rw=randwrite $direct \
-			 --file_service_type=random --randrepeat=1 \
-			 --norandommap --group_reporting=1 --loops=$loops |
-			awk -F\; '{printf \"WRITE: BW %dKiB/sec, IOPS %d, \
-					lat (%d/%d/%d)usec\n\",\
-					\$48, \$49, \$53, \$57, \$81}'"
+		local write_cmd="$base_cmd --bs=${bsize}k --rw=randwrite \
+			$direct --file_service_type=random --randrepeat=1 \
+			 --norandommap --group_reporting=1 --loops=$loops"
+		if [ "x$DP_STATS" != "xyes" ] ; then
+			dp_run_cmd "$write_cmd | awk -F\; '{printf \"WRITE: \
+				BW %dKiB/sec, IOPS %d, lat (%d/%d/%d)usec\n\", \
+				\$48, \$49, \$53, \$57, \$81}'"
+		else
+			dp_run_cmd "$write_cmd"
+		fi
 		if [ ${PIPESTATUS[0]} != 0 ]; then
 			error "FIO write test with ${bsize}k failed, aborting"
 		fi
 
-		dp_run_cmd "$base_cmd --bs=${bsize}k --rw=randread $direct \
-			 --file_service_type=random --randrepeat=1 \
-			 --norandommap --group_reporting=1 --loops=$loops |
-			awk -F\; '{printf \"READ : BW %dKiB/sec, IOPS %d, \
-					lat (%d/%d/%d)usec\n\",\
-					\$7, \$8, \$12, \$16, \$40}'"
+		local read_cmd="$base_cmd --bs=${bsize}k --rw=randread \
+			$direct --file_service_type=random --randrepeat=1 \
+			 --norandommap --group_reporting=1 --loops=$loops"
+		if [ "x$DP_STATS" != "xyes" ] ; then
+			dp_run_cmd "$read_cmd | awk -F\; '{printf \"READ : \
+				BW %dKiB/sec, IOPS %d, lat (%d/%d/%d)usec\n\", \
+				\$7, \$8, \$12, \$16, \$40}'"
+		else
+			dp_run_cmd "$read_cmd"
+		fi
 		if [ ${PIPESTATUS[0]} != 0 ]; then
 			error "FIO read test with ${bsize}k failed, aborting"
 		fi
 	done
 	rm -rf $TDIR/*
 	return 0
+}
+
+run_compbench() {
+	if ! which compilebench > /dev/null 2>&1 ; then
+		echo "Compilebench is not installed, skipping"
+		return 0
+	fi
+
+	local TDIR=${1:-$MOUNT}
+
+	dp_run_cmd "compilebench -D $TDIR -i 2 -r 2 --makej"
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error "Compilebench failed, aborting"
+	fi
+
+	rm -rf $TDIR/*
 }
 
 dp_test_run() {
@@ -341,21 +366,23 @@ dp_test_run() {
 
 	save_lustre_params $facets "mdt.*.dom_lock" >> $p
 
-	printf "\n##### $test: DoM files, IO lock on open\n"
+	printf "\n##### $test: DoM files\n"
 	do_nodes $nodes "lctl set_param -n mdt.*.dom_lock=1"
 	DP_OSC="mdc"
 	run_${test} $DP_DOM
 
-	printf "\n##### $test: DoM files, no IO lock on open\n"
-	do_nodes $nodes "lctl set_param -n mdt.*.dom_lock=0"
-	DP_OSC="mdc"
-	run_${test} $DP_DOM
+	if [ -d $DP_DOM_DNE ] ; then
+		printf "\n##### $test: DoM files + DNE\n"
+		DP_OSC="mdc"
+		run_${test} $DP_DOM_DNE
+	fi
 
 	printf "\n##### $test: OST files\n"
 	DP_OSC="osc"
 	run_${test} $DP_NORM
 
 	restore_lustre_params < $p
+	rm -f $p
 }
 
 test_smallio() {
@@ -382,6 +409,11 @@ test_fio() {
 	dp_test_run FIO
 }
 run_test fio "Performance comparision: FIO"
+
+test_compbench() {
+	dp_test_run compbench
+}
+run_test compbench "Performance comparision: compilebench"
 
 FAIL_ON_ERROR=$SAVED_FAIL_ON_ERROR
 $LCTL set_param -n debug="$SAVED_DEBUG"
