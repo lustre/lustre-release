@@ -5017,6 +5017,11 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
 	mdt_hsm_cdt_fini(m);
 
+	if (m->mdt_los != NULL) {
+		local_oid_storage_fini(env, m->mdt_los);
+		m->mdt_los = NULL;
+	}
+
 	if (m->mdt_namespace != NULL) {
 		ldlm_namespace_free_post(m->mdt_namespace);
 		d->ld_obd->obd_namespace = m->mdt_namespace = NULL;
@@ -5060,6 +5065,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	struct seq_server_site *ss_site;
 	const char *identity_upcall = "NONE";
 	struct md_device *next;
+	struct lu_fid fid;
 	int rc;
 	long node_id;
 	mntopt_t mntopts;
@@ -5178,18 +5184,11 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	/* set obd_namespace for compatibility with old code */
 	obd->obd_namespace = m->mdt_namespace;
 
-	rc = mdt_hsm_cdt_init(m);
-	if (rc != 0) {
-		CERROR("%s: error initializing coordinator, rc %d\n",
-		       mdt_obd_name(m), rc);
-		GOTO(err_free_ns, rc);
-	}
-
 	rc = tgt_init(env, &m->mdt_lut, obd, m->mdt_bottom, mdt_common_slice,
 		      OBD_FAIL_MDS_ALL_REQUEST_NET,
 		      OBD_FAIL_MDS_ALL_REPLY_NET);
 	if (rc)
-		GOTO(err_free_hsm, rc);
+		GOTO(err_free_ns, rc);
 
 	/* Amount of available space excluded from granting and reserved
 	 * for metadata. It is in percentage and 50% is default value. */
@@ -5203,6 +5202,20 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	rc = mdt_fs_setup(env, m, obd, lsi);
 	if (rc)
 		GOTO(err_tgt, rc);
+
+	fid.f_seq = FID_SEQ_LOCAL_NAME;
+	fid.f_oid = 1;
+	fid.f_ver = 0;
+	rc = local_oid_storage_init(env, m->mdt_bottom, &fid, &m->mdt_los);
+	if (rc != 0)
+		GOTO(err_fs_cleanup, rc);
+
+	rc = mdt_hsm_cdt_init(m);
+	if (rc != 0) {
+		CERROR("%s: error initializing coordinator, rc %d\n",
+		       mdt_obd_name(m), rc);
+		GOTO(err_los_fini, rc);
+	}
 
 	tgt_adapt_sptlrpc_conf(&m->mdt_lut);
 
@@ -5234,7 +5247,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	if (IS_ERR(m->mdt_identity_cache)) {
 		rc = PTR_ERR(m->mdt_identity_cache);
 		m->mdt_identity_cache = NULL;
-		GOTO(err_fs_cleanup, rc);
+		GOTO(err_free_hsm, rc);
 	}
 
 	rc = mdt_procfs_init(m, dev);
@@ -5270,12 +5283,15 @@ err_recovery:
 	target_recovery_fini(obd);
 	upcall_cache_cleanup(m->mdt_identity_cache);
 	m->mdt_identity_cache = NULL;
+err_free_hsm:
+	mdt_hsm_cdt_fini(m);
+err_los_fini:
+	local_oid_storage_fini(env, m->mdt_los);
+	m->mdt_los = NULL;
 err_fs_cleanup:
 	mdt_fs_cleanup(env, m);
 err_tgt:
 	tgt_fini(env, &m->mdt_lut);
-err_free_hsm:
-	mdt_hsm_cdt_fini(m);
 err_free_ns:
 	ldlm_namespace_free(m->mdt_namespace, NULL, 0);
 	obd->obd_namespace = m->mdt_namespace = NULL;

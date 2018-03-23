@@ -201,6 +201,7 @@ struct mdt_device {
         struct md_device          *mdt_child;
         struct dt_device          *mdt_bottom;
 	struct obd_export	  *mdt_bottom_exp;
+	struct local_oid_storage  *mdt_los;
         /** target device */
         struct lu_target           mdt_lut;
 	/*
