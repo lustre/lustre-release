@@ -79,6 +79,13 @@ int mds_max_io_threads = 512;
 module_param(mds_max_io_threads, int, 0444);
 MODULE_PARM_DESC(mds_max_io_threads, "maximum number of MDS IO service threads");
 
+static char *mds_io_num_cpts;
+module_param(mds_io_num_cpts, charp, 0444);
+MODULE_PARM_DESC(mds_io_num_cpts,
+		 "CPU partitions MDS IO threads should run on");
+
+static struct cfs_cpt_table *mdt_io_cptable;
+
 static char *mds_num_cpts;
 module_param(mds_num_cpts, charp, 0444);
 MODULE_PARM_DESC(mds_num_cpts, "CPU partitions MDS threads should run on");
@@ -144,6 +151,11 @@ static void mds_stop_ptlrpc_service(struct mds_device *m)
 	}
 	mutex_unlock(&m->mds_health_mutex);
 
+	if (mdt_io_cptable != NULL) {
+		cfs_cpt_table_free(mdt_io_cptable);
+		mdt_io_cptable = NULL;
+	}
+
 	EXIT;
 }
 
@@ -151,7 +163,9 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 {
 	static struct ptlrpc_service_conf conf;
 	struct obd_device *obd = m->mds_md_dev.md_lu_dev.ld_obd;
+	nodemask_t *mask;
 	int rc = 0;
+
 	ENTRY;
 
 	conf = (typeof(conf)) {
@@ -444,6 +458,32 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 		GOTO(err_mds_svc, rc);
 	}
 
+
+	mask = cfs_cpt_nodemask(cfs_cpt_table, CFS_CPT_ANY);
+	/* event CPT feature is disabled in libcfs level by set partition
+	 * number to 1, we still want to set node affinity for io service */
+	if (cfs_cpt_number(cfs_cpt_table) == 1 && nodes_weight(*mask) > 1) {
+		int cpt = 0;
+		int i;
+
+		mdt_io_cptable = cfs_cpt_table_alloc(nodes_weight(*mask));
+		for_each_node_mask(i, *mask) {
+			if (mdt_io_cptable == NULL) {
+				CWARN("MDS failed to create CPT table\n");
+				break;
+			}
+
+			rc = cfs_cpt_set_node(mdt_io_cptable, cpt++, i);
+			if (!rc) {
+				CWARN("MDS Failed to set node %d for"
+				      "IO CPT table\n", i);
+				cfs_cpt_table_free(mdt_io_cptable);
+				mdt_io_cptable = NULL;
+				break;
+			}
+		}
+	}
+
 	memset(&conf, 0, sizeof(conf));
 	conf = (typeof(conf)) {
 		.psc_name		= LUSTRE_MDT_NAME "_io",
@@ -457,13 +497,19 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.bc_rep_portal		= MDC_REPLY_PORTAL,
 		},
 		.psc_thr		= {
-			.tc_thr_name		= "ll_mdt_io",
+			.tc_thr_name		= LUSTRE_MDT_NAME "_io",
 			.tc_thr_factor		= OSS_THR_FACTOR,
 			.tc_nthrs_init		= OSS_NTHRS_INIT,
 			.tc_nthrs_base		= OSS_NTHRS_BASE,
 			.tc_nthrs_max		= mds_max_io_threads,
+			.tc_nthrs_user		= mds_num_threads,
 			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_DT_THREAD | LCT_MD_THREAD,
+		},
+		.psc_cpt		= {
+			.cc_cptable		= mdt_io_cptable,
+			.cc_pattern		= mdt_io_cptable == NULL ?
+						  mds_io_num_cpts : NULL,
 		},
 		.psc_ops		= {
 			.so_thr_init		= tgt_io_thread_init,
