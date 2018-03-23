@@ -58,7 +58,9 @@
 #define DEL_CMD			"del"
 #define SHOW_CMD		"show"
 #define DBG_CMD			"dbg"
-#define MANAGE_CMD              "manage"
+#define MANAGE_CMD		"manage"
+
+#define MAX_NUM_IPS		128
 
 #define modparam_path "/sys/module/lnet/parameters/"
 #define gni_nid_path "/proc/cray_xt/"
@@ -246,6 +248,20 @@ void lustre_lnet_init_nw_descr(struct lnet_dlc_network_descr *nw_descr)
 	}
 }
 
+static char *get_next_delimiter_in_nid(char *str, char sep)
+{
+	char *at, *comma;
+
+	/* first find the '@' */
+	at = strchr(str, '@');
+	if (!at)
+		return str;
+
+	/* now that you found the at find the sep after */
+	comma = strchr(at, sep);
+	return comma;
+}
+
 int lustre_lnet_parse_nids(char *nids, char **array, int size,
 			   char ***out_array)
 {
@@ -257,9 +273,9 @@ int lustre_lnet_parse_nids(char *nids, char **array, int size,
 	if (nids == NULL || strlen(nids) == 0)
 		return size;
 
-	/* count the number or new nids, by counting the number of commas */
+	/* count the number or new nids, by counting the number of comma*/
 	while (comma) {
-		comma = strchr(comma, ',');
+		comma = get_next_delimiter_in_nid(comma, ',');
 		if (comma) {
 			comma++;
 			num_nids++;
@@ -284,7 +300,7 @@ int lustre_lnet_parse_nids(char *nids, char **array, int size,
 	start = (size > 0) ? size: 0;
 	finish = (size > 0) ? size + num_nids : num_nids;
 	for (i = start; i < finish; i++) {
-		comma = strchr(comma, ',');
+		comma = get_next_delimiter_in_nid(comma, ',');
 		if (!comma)
 			/*
 			 * the length of the string to be parsed out is
@@ -438,37 +454,6 @@ int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
 	return rc;
 }
 
-static lnet_nid_t *allocate_create_nid_array(char **nids, __u32 num_nids,
-					     char *err_str)
-{
-	lnet_nid_t *array = NULL;
-	__u32 i;
-
-	if (!nids || num_nids == 0) {
-		snprintf(err_str, LNET_MAX_STR_LEN, "no NIDs to add");
-		return NULL;
-	}
-
-	array = calloc(sizeof(*array) * num_nids, 1);
-	if (array == NULL) {
-		snprintf(err_str, LNET_MAX_STR_LEN, "out of memory");
-		return NULL;
-	}
-
-	for (i = 0; i < num_nids; i++) {
-		array[i] = libcfs_str2nid(nids[i]);
-		if (array[i] == LNET_NID_ANY) {
-			free(array);
-			snprintf(err_str, LNET_MAX_STR_LEN,
-				 "bad NID: '%s'",
-				 nids[i]);
-			return NULL;
-		}
-	}
-
-	return array;
-}
-
 static int dispatch_peer_ni_cmd(lnet_nid_t pnid, lnet_nid_t nid, __u32 cmd,
 				struct lnet_ioctl_peer_cfg *data,
 				char *err_str, char *cmd_str)
@@ -485,6 +470,7 @@ static int dispatch_peer_ni_cmd(lnet_nid_t pnid, lnet_nid_t nid, __u32 cmd,
 			LNET_MAX_STR_LEN,
 			"\"cannot %s peer ni: %s\"",
 			(cmd_str) ? cmd_str : "add", strerror(errno));
+		err_str[LNET_MAX_STR_LEN - 1] = '\0';
 	}
 
 	return rc;
@@ -682,99 +668,283 @@ int lustre_lnet_discover_nid(char *ping_nids, int force, int seq_no,
 	return rc;
 }
 
-int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
-				bool mr, int seq_no, struct cYAML **err_rc)
+static void lustre_lnet_clean_ip2nets(struct lustre_lnet_ip2nets *ip2nets)
 {
+	struct lustre_lnet_ip_range_descr *ipr, *tmp;
+	struct cfs_expr_list *el, *el_tmp;
+
+	list_for_each_entry_safe(ipr, tmp,
+				 &ip2nets->ip2nets_ip_ranges,
+				 ipr_entry) {
+		list_del(&ipr->ipr_entry);
+		list_for_each_entry_safe(el, el_tmp, &ipr->ipr_expr,
+					 el_link) {
+			list_del(&el->el_link);
+			cfs_expr_list_free(el);
+		}
+		free(ipr);
+	}
+}
+
+/*
+ * returns an rc < 0 if there is an error
+ * otherwise it returns the number IPs generated
+ *  it also has out params: net - network name
+ */
+static int lnet_expr2ips(char *nidstr, __u32 *ip_list,
+			 struct lustre_lnet_ip2nets *ip2nets,
+			 __u32 *net, char *err_str)
+{
+	struct lustre_lnet_ip_range_descr *ipr;
+	char *comp1, *comp2;
+	int ip_idx = MAX_NUM_IPS - 1;
+	int ip_range_len, rc = LUSTRE_CFG_RC_NO_ERR;
+	__u32 net_type;
+	char ip_range[LNET_MAX_STR_LEN];
+
+	/* separate the two components of the NID */
+	comp1 = nidstr;
+	comp2 = strchr(nidstr, '@');
+	if (comp2 == NULL) {
+		snprintf(err_str,
+			LNET_MAX_STR_LEN,
+			"\"cannot parse NID %s\"", nidstr);
+		err_str[LNET_MAX_STR_LEN - 1] = '\0';
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	/* length of the expected ip-range */
+	ip_range_len = comp2 - comp1;
+	if (ip_range_len >= LNET_MAX_STR_LEN) {
+		snprintf(err_str,
+			LNET_MAX_STR_LEN,
+			"\"cannot parse ip_range '%s'\"", ip_range);
+		err_str[LNET_MAX_STR_LEN - 1] = '\0';
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	/* move beyond '@' */
+	comp2++;
+
+	/*
+	 * if the net component is either o2ib or tcp then we expect
+	 * an IP range which could only be a single IP address.
+	 * Parse that.
+	 */
+	*net = libcfs_str2net(comp2);
+	net_type = LNET_NETTYP(*net);
+	/* expression support is for o2iblnd and socklnd only */
+	if (net_type != O2IBLND && net_type != SOCKLND)
+		return LUSTRE_CFG_RC_SKIP;
+
+	strncpy(ip_range, comp1, ip_range_len);
+	ip_range[ip_range_len] = '\0';
+	ip2nets->ip2nets_net.nw_id = *net;
+
+	rc = lustre_lnet_add_ip_range(&ip2nets->ip2nets_ip_ranges, ip_range);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		snprintf(err_str,
+			LNET_MAX_STR_LEN,
+			"\"cannot parse ip_range '%s'\"", ip_range);
+		err_str[LNET_MAX_STR_LEN - 1] = '\0';
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	/*
+	* Generate all the IP Addresses from the parsed range. For sanity
+	* we allow only a max of MAX_NUM_IPS nids to be configured for
+	* a single peer.
+	*/
+	list_for_each_entry(ipr, &ip2nets->ip2nets_ip_ranges, ipr_entry)
+		ip_idx = cfs_ip_addr_range_gen(ip_list, MAX_NUM_IPS,
+						&ipr->ipr_expr);
+
+	if (ip_idx == MAX_NUM_IPS - 1) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+				"no NIDs provided for configuration");
+		err_str[LNET_MAX_STR_LEN - 1] = '\0';
+		rc = LUSTRE_CFG_RC_NO_MATCH;
+		goto out;
+	} else if (ip_idx == -1) {
+		rc = LUSTRE_CFG_RC_LAST_ELEM;
+	} else {
+		rc = ip_idx;
+	}
+
+out:
+	return rc;
+}
+
+static int lustre_lnet_handle_peer_ip2nets(char **nid, int num_nids, bool mr,
+					   bool range, __u32 cmd,
+					   char *cmd_type, char *err_str)
+{
+	__u32 net = LNET_NIDNET(LNET_NID_ANY);
+	int ip_idx;
+	int i, j, rc = LUSTRE_CFG_RC_NO_ERR;
+	__u32 ip_list[MAX_NUM_IPS];
+	struct lustre_lnet_ip2nets ip2nets;
 	struct lnet_ioctl_peer_cfg data;
+	lnet_nid_t peer_nid;
 	lnet_nid_t prim_nid = LNET_NID_ANY;
+
+	/* initialize all lists */
+	INIT_LIST_HEAD(&ip2nets.ip2nets_ip_ranges);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.network_on_rule);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.nw_intflist);
+
+	/* each nid entry is an expression */
+	for (i = 0; i < num_nids; i++) {
+		if (!range && i == 0)
+			prim_nid = libcfs_str2nid(nid[0]);
+		else if (range)
+			prim_nid = LNET_NID_ANY;
+
+		rc = lnet_expr2ips(nid[i], ip_list, &ip2nets, &net, err_str);
+		if (rc == LUSTRE_CFG_RC_SKIP)
+			continue;
+		else if (rc == LUSTRE_CFG_RC_LAST_ELEM)
+			rc = -1;
+		else if (rc < LUSTRE_CFG_RC_NO_ERR)
+			goto out;
+
+		ip_idx = rc;
+
+		for (j = MAX_NUM_IPS - 1; j > ip_idx; j--) {
+			peer_nid = LNET_MKNID(net, ip_list[j]);
+			if (peer_nid == LNET_NID_ANY) {
+				snprintf(err_str,
+					LNET_MAX_STR_LEN,
+					"\"cannot parse NID\"");
+				err_str[LNET_MAX_STR_LEN - 1] = '\0';
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				goto out;
+			}
+
+			LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+			data.prcfg_mr = mr;
+
+			if (prim_nid == LNET_NID_ANY && j == MAX_NUM_IPS - 1) {
+				prim_nid = peer_nid;
+				peer_nid = LNET_NID_ANY;
+			}
+
+			if (!range && num_nids > 1 && i == 0 &&
+			    cmd == IOC_LIBCFS_DEL_PEER_NI)
+				continue;
+			else if (!range && i == 0)
+				peer_nid = LNET_NID_ANY;
+
+			/*
+			* If prim_nid is not provided then the first nid in the
+			* list becomes the prim_nid. First time round the loop
+			* use LNET_NID_ANY for the first parameter, then use
+			* nid[0] as the key nid after wards
+			*/
+			rc = dispatch_peer_ni_cmd(prim_nid, peer_nid, cmd,
+						  &data, err_str, cmd_type);
+			if (rc != 0)
+				goto out;
+
+			/*
+			 * we just deleted the entire peer using the
+			 * primary_nid. So don't bother iterating through
+			 * the rest of the nids
+			 */
+			if (prim_nid != LNET_NID_ANY &&
+			    peer_nid == LNET_NID_ANY &&
+			    cmd == IOC_LIBCFS_DEL_PEER_NI)
+				goto next_nid;
+		}
+next_nid:
+		lustre_lnet_clean_ip2nets(&ip2nets);
+	}
+
+out:
+	lustre_lnet_clean_ip2nets(&ip2nets);
+	return rc;
+}
+
+int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
+				bool mr, bool ip2nets, int seq_no,
+				struct cYAML **err_rc)
+{
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	int idx = 0;
-	bool nid0_used = false;
 	char err_str[LNET_MAX_STR_LEN] = {0};
-	lnet_nid_t *nids = allocate_create_nid_array(nid, num_nids, err_str);
+	char **nid_array = NULL;
+
+	snprintf(err_str, sizeof(err_str), "\"Success\"");
+
+	if (ip2nets) {
+		rc = lustre_lnet_handle_peer_ip2nets(nid, num_nids, mr,
+						ip2nets, IOC_LIBCFS_ADD_PEER_NI,
+						ADD_CMD, err_str);
+		goto out;
+	}
 
 	if (pnid) {
-		prim_nid = libcfs_str2nid(pnid);
-		if (prim_nid == LNET_NID_ANY) {
+		if (libcfs_str2nid(pnid) == LNET_NID_ANY) {
 			snprintf(err_str, sizeof(err_str),
-				 "bad key NID: '%s'",
+				 "bad primary NID: '%s'",
 				 pnid);
 			rc = LUSTRE_CFG_RC_MISSING_PARAM;
 			goto out;
 		}
-	} else if (!nids || nids[0] == LNET_NID_ANY) {
-		snprintf(err_str, sizeof(err_str),
-			 "no NIDs provided for configuration");
-		rc = LUSTRE_CFG_RC_MISSING_PARAM;
-		goto out;
-	} else {
-		prim_nid = LNET_NID_ANY;
-	}
 
-	snprintf(err_str, sizeof(err_str), "\"Success\"");
+		num_nids++;
 
-	LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
-	data.prcfg_mr = mr;
-
-	/*
-	 * if prim_nid is not specified use the first nid in the list of
-	 * nids provided as the prim_nid. NOTE: on entering 'if' we must
-	 * have at least 1 NID
-	 */
-	if (prim_nid == LNET_NID_ANY) {
-		nid0_used = true;
-		prim_nid = nids[0];
-	}
-
-	/* Create the prim_nid first */
-	rc = dispatch_peer_ni_cmd(prim_nid, LNET_NID_ANY,
-				  IOC_LIBCFS_ADD_PEER_NI,
-				  &data, err_str, "add");
-
-	if (rc != 0)
-		goto out;
-
-	/* add the rest of the nids to the key nid if any are available */
-	for (idx = nid0_used ? 1 : 0 ; nids && idx < num_nids; idx++) {
-		/*
-		 * If prim_nid is not provided then the first nid in the
-		 * list becomes the prim_nid. First time round the loop use
-		 * LNET_NID_ANY for the first parameter, then use nid[0]
-		 * as the key nid after wards
-		 */
-		rc = dispatch_peer_ni_cmd(prim_nid, nids[idx],
-					  IOC_LIBCFS_ADD_PEER_NI, &data,
-					  err_str, "add");
-
-		if (rc != 0)
+		nid_array = calloc(sizeof(*nid_array), num_nids);
+		if (!nid_array) {
+			snprintf(err_str, sizeof(err_str),
+					"out of memory");
+			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 			goto out;
+		}
+		nid_array[0] = pnid;
+		memcpy(&nid_array[1], nid, sizeof(*nid) * (num_nids - 1));
 	}
+
+	rc = lustre_lnet_handle_peer_ip2nets((pnid) ? nid_array : nid,
+					     num_nids, mr, ip2nets,
+					     IOC_LIBCFS_ADD_PEER_NI, ADD_CMD,
+					     err_str);
+	if (rc)
+		goto out;
 
 out:
-	if (nids != NULL)
-		free(nids);
+	if (nid_array)
+		free(nid_array);
+
 	cYAML_build_error(rc, seq_no, ADD_CMD, "peer_ni", err_str, err_rc);
 	return rc;
 }
 
 int lustre_lnet_del_peer_nid(char *pnid, char **nid, int num_nids,
-			     int seq_no, struct cYAML **err_rc)
+			     bool ip2nets, int seq_no, struct cYAML **err_rc)
 {
-	struct lnet_ioctl_peer_cfg data;
-	lnet_nid_t prim_nid;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
-	int idx = 0;
 	char err_str[LNET_MAX_STR_LEN] = {0};
-	lnet_nid_t *nids = allocate_create_nid_array(nid, num_nids, err_str);
+	char **nid_array = NULL;
+
+	snprintf(err_str, sizeof(err_str), "\"Success\"");
+
+	if (ip2nets) {
+		rc = lustre_lnet_handle_peer_ip2nets(nid, num_nids, false,
+						ip2nets, IOC_LIBCFS_DEL_PEER_NI,
+						DEL_CMD, err_str);
+		goto out;
+	}
 
 	if (pnid == NULL) {
 		snprintf(err_str, sizeof(err_str),
 			 "\"Primary nid is not provided\"");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
-	} else {
-		prim_nid = libcfs_str2nid(pnid);
-		if (prim_nid == LNET_NID_ANY) {
+	} else if (!ip2nets) {
+		if (libcfs_str2nid(pnid) == LNET_NID_ANY) {
 			rc = LUSTRE_CFG_RC_BAD_PARAM;
 			snprintf(err_str, sizeof(err_str),
 				 "bad key NID: '%s'",
@@ -783,28 +953,27 @@ int lustre_lnet_del_peer_nid(char *pnid, char **nid, int num_nids,
 		}
 	}
 
-	snprintf(err_str, sizeof(err_str), "\"Success\"");
-
-	LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
-	if (!nids || nids[0] == LNET_NID_ANY) {
-		rc = dispatch_peer_ni_cmd(prim_nid, LNET_NID_ANY,
-					  IOC_LIBCFS_DEL_PEER_NI,
-					  &data, err_str, "del");
+	num_nids++;
+	nid_array = calloc(sizeof(*nid_array), num_nids);
+	if (!nid_array) {
+		snprintf(err_str, sizeof(err_str),
+				"out of memory");
+		rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 		goto out;
 	}
+	nid_array[0] = pnid;
+	memcpy(&nid_array[1], nid, sizeof(*nid) * (num_nids - 1));
 
-	for (idx = 0; nids && idx < num_nids; idx++) {
-		rc = dispatch_peer_ni_cmd(prim_nid, nids[idx],
-					  IOC_LIBCFS_DEL_PEER_NI, &data,
-					  err_str, "del");
-
-		if (rc != 0)
-			goto out;
-	}
+	rc = lustre_lnet_handle_peer_ip2nets(nid_array, num_nids, false,
+					     ip2nets, IOC_LIBCFS_DEL_PEER_NI,
+					     DEL_CMD, err_str);
+	if (rc)
+		goto out;
 
 out:
-	if (nids != NULL)
-		free(nids);
+	if (nid_array)
+		free(nid_array);
+
 	cYAML_build_error(rc, seq_no, DEL_CMD, "peer_ni", err_str, err_rc);
 	return rc;
 }
@@ -3571,18 +3740,13 @@ static int handle_yaml_del_ni(struct cYAML *tree, struct cYAML **show_rc,
 	return rc;
 }
 
-static int yaml_copy_peer_nids(struct cYAML *tree, char ***nidsppp, bool del)
+static int yaml_copy_peer_nids(struct cYAML *nids_entry, char ***nidsppp,
+			       char *prim_nid, bool del)
 {
-	struct cYAML *nids_entry = NULL, *child = NULL, *entry = NULL,
-		     *prim_nid = NULL;
+	struct cYAML *child = NULL, *entry = NULL;
 	char **nids = NULL;
 	int num = 0, rc = LUSTRE_CFG_RC_NO_ERR;
 
-	prim_nid = cYAML_get_object_item(tree, "primary nid");
-	if (!prim_nid || !prim_nid->cy_valuestring)
-		return LUSTRE_CFG_RC_MISSING_PARAM;
-
-	nids_entry = cYAML_get_object_item(tree, "peer ni");
 	if (cYAML_is_sequence(nids_entry)) {
 		while (cYAML_get_next_seq_item(nids_entry, &child)) {
 			entry = cYAML_get_object_item(child, "nid");
@@ -3590,7 +3754,8 @@ static int yaml_copy_peer_nids(struct cYAML *tree, char ***nidsppp, bool del)
 			if (!entry || !entry->cy_valuestring)
 				continue;
 
-			if ((strcmp(entry->cy_valuestring, prim_nid->cy_valuestring)
+			if (prim_nid &&
+			    (strcmp(entry->cy_valuestring, prim_nid)
 					== 0) && del) {
 				/*
 				 * primary nid is present in the list of
@@ -3608,8 +3773,8 @@ static int yaml_copy_peer_nids(struct cYAML *tree, char ***nidsppp, bool del)
 	if (num == 0)
 		return LUSTRE_CFG_RC_MISSING_PARAM;
 
-	nids = calloc(sizeof(*nids) * num, 1);
-	if (nids == NULL)
+	nids = calloc(sizeof(*nids), num);
+	if (!nids)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	/* now grab all the nids */
@@ -3646,19 +3811,41 @@ static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
 {
 	char **nids = NULL;
 	int num, rc;
-	struct cYAML *seq_no, *prim_nid, *non_mr;
-
-	num = yaml_copy_peer_nids(tree, &nids, false);
-	if (num < 0)
-		return num;
+	struct cYAML *seq_no, *prim_nid, *non_mr, *ip2nets, *peer_nis;
+	char err_str[LNET_MAX_STR_LEN];
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 	prim_nid = cYAML_get_object_item(tree, "primary nid");
 	non_mr = cYAML_get_object_item(tree, "non_mr");
+	ip2nets = cYAML_get_object_item(tree, "ip2nets");
+	peer_nis = cYAML_get_object_item(tree, "peer ni");
+
+	if (ip2nets && (prim_nid || peer_nis)) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "ip2nets can not be specified along side prim_nid"
+			 " or peer ni fields");
+		cYAML_build_error(rc, (seq_no) ? seq_no->cy_valueint : -1,
+				  ADD_CMD, "peer", err_str, err_rc);
+		return rc;
+	}
+
+	num = yaml_copy_peer_nids((ip2nets) ? ip2nets : peer_nis, &nids,
+				  (prim_nid) ? prim_nid->cy_valuestring : NULL,
+				   false);
+
+	if (num < 0) {
+		snprintf(err_str, sizeof(err_str),
+			 "error copying nids from YAML block");
+		cYAML_build_error(num, (seq_no) ? seq_no->cy_valueint : -1,
+				  ADD_CMD, "peer", err_str, err_rc);
+		return num;
+	}
 
 	rc = lustre_lnet_config_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
 					 nids, num,
 					 (non_mr) ? false : true,
+					 (ip2nets) ? true : false,
 					 (seq_no) ? seq_no->cy_valueint : -1,
 					 err_rc);
 
@@ -3671,17 +3858,37 @@ static int handle_yaml_del_peer(struct cYAML *tree, struct cYAML **show_rc,
 {
 	char **nids = NULL;
 	int num, rc;
-	struct cYAML *seq_no, *prim_nid;
-
-	num = yaml_copy_peer_nids(tree, &nids, true);
-	if (num < 0)
-		return num;
+	struct cYAML *seq_no, *prim_nid, *ip2nets, *peer_nis;
+	char err_str[LNET_MAX_STR_LEN];
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 	prim_nid = cYAML_get_object_item(tree, "primary nid");
+	ip2nets = cYAML_get_object_item(tree, "ip2nets");
+	peer_nis = cYAML_get_object_item(tree, "peer ni");
+
+	if (ip2nets && (prim_nid || peer_nis)) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "ip2nets can not be specified along side prim_nid"
+			 " or peer ni fields");
+		cYAML_build_error(rc, (seq_no) ? seq_no->cy_valueint : -1,
+				  DEL_CMD, "peer", err_str, err_rc);
+		return rc;
+	}
+
+	num = yaml_copy_peer_nids((ip2nets) ? ip2nets : peer_nis , &nids,
+				  (prim_nid) ? prim_nid->cy_valuestring : NULL,
+				  true);
+	if (num < 0) {
+		snprintf(err_str, sizeof(err_str),
+			 "error copying nids from YAML block");
+		cYAML_build_error(num, (seq_no) ? seq_no->cy_valueint : -1,
+				  ADD_CMD, "peer", err_str, err_rc);
+		return num;
+	}
 
 	rc = lustre_lnet_del_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
-				      nids, num,
+				      nids, num, (ip2nets) ? true : false,
 				      (seq_no) ? seq_no->cy_valueint : -1,
 				      err_rc);
 

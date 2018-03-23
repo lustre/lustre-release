@@ -40,6 +40,8 @@
 #define LUSTRE_CFG_RC_GENERIC_ERR		-5
 #define LUSTRE_CFG_RC_NO_MATCH			-6
 #define LUSTRE_CFG_RC_MATCH			-7
+#define LUSTRE_CFG_RC_SKIP			-8
+#define LUSTRE_CFG_RC_LAST_ELEM			-9
 
 struct lnet_dlc_network_descr {
 	struct list_head network_on_rule;
@@ -327,11 +329,14 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
  *     nid - list of nids to add
  *     num_nids - number of nids in the nid array
  *     mr - true if this peer is MR capable.
+ *     ip2nets - true if a list of nid expressions are given to configure
+ *     multiple peers
  *     seq_no - sequence number of the command
  *     err_rc - YAML strucutre of the resultant return code.
  */
 int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
-				bool mr, int seq_no, struct cYAML **err_rc);
+				bool mr, bool ip2nets, int seq_no,
+				struct cYAML **err_rc);
 
 /*
  * lustre_lnet_del_peer_nid
@@ -343,11 +348,12 @@ int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
  *     pnid - Primary NID of the peer
  *     nid - list of nids to add
  *     num_nids - number of nids in the nid array
+ *     ip2nets - used to specify a range of nids
  *     seq_no - sequence number of the command
  *     err_rc - YAML strucutre of the resultant return code.
  */
 int lustre_lnet_del_peer_nid(char *pnid, char **nid, int num_nids,
-			     int seq_no, struct cYAML **err_rc);
+			     bool ip2nets, int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_show_peer
