@@ -373,8 +373,6 @@ static int llog_changelog_cancel(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static struct llog_operations changelog_orig_logops;
-
 static int
 mdd_changelog_write_header(const struct lu_env *env, struct mdd_device *mdd,
 			   int markerflags);
@@ -439,7 +437,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
 	obd->obd_lvfs_ctxt.dt = mdd->mdd_bottom;
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CHANGELOG_ORIG_CTXT,
-			obd, &changelog_orig_logops);
+			obd, &llog_common_cat_ops);
 	if (rc) {
 		CERROR("%s: changelog llog setup failed: rc = %d\n",
 		       obd->obd_name, rc);
@@ -472,7 +470,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 
 	/* setup user changelog */
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CHANGELOG_USER_ORIG_CTXT,
-			obd, &changelog_orig_logops);
+			obd, &llog_common_cat_ops);
 	if (rc) {
 		CERROR("%s: changelog users llog setup failed: rc = %d\n",
 		       obd->obd_name, rc);
@@ -486,9 +484,6 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 			      CHANGELOG_USERS);
 	if (rc)
 		GOTO(out_ucleanup, rc);
-
-	uctxt->loc_handle->lgh_logops->lop_add = llog_cat_add_rec;
-	uctxt->loc_handle->lgh_logops->lop_declare_add = llog_cat_declare_add_rec;
 
 	rc = llog_init_handle(env, uctxt->loc_handle, LLOG_F_IS_CAT, NULL);
 	if (rc)
@@ -995,9 +990,6 @@ out:
 	return rc;
 }
 
-
-static struct llog_operations hsm_actions_logops;
-
 /**
  * set llog methods and create LLOG_AGENT_ORIG_CTXT llog
  * object in obd_device
@@ -1014,7 +1006,7 @@ static int mdd_hsm_actions_llog_init(const struct lu_env *env,
 	obd->obd_lvfs_ctxt.dt = m->mdd_bottom;
 
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_AGENT_ORIG_CTXT,
-			obd, &hsm_actions_logops);
+			obd, &llog_common_cat_ops);
 	if (rc) {
 		CERROR("%s: hsm actions llog setup failed: rc = %d\n",
 			obd->obd_name, rc);
@@ -1989,14 +1981,6 @@ static int __init mdd_init(void)
 	rc = lu_kmem_init(mdd_caches);
 	if (rc)
 		return rc;
-
-	changelog_orig_logops = llog_osd_ops;
-	changelog_orig_logops.lop_add = llog_cat_add_rec;
-	changelog_orig_logops.lop_declare_add = llog_cat_declare_add_rec;
-
-	hsm_actions_logops = llog_osd_ops;
-	hsm_actions_logops.lop_add = llog_cat_add_rec;
-	hsm_actions_logops.lop_declare_add = llog_cat_declare_add_rec;
 
 	rc = class_register_type(&mdd_obd_device_ops, NULL, true, NULL,
 				 LUSTRE_MDD_NAME, &mdd_device_type);

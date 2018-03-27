@@ -1356,7 +1356,7 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT,
 			d->opd_storage->dd_lu_dev.ld_obd,
-			&osp_mds_ost_orig_logops);
+			&llog_common_cat_ops);
 	if (rc)
 		RETURN(rc);
 

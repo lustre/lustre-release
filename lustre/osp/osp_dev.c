@@ -1907,8 +1907,6 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_fid_alloc	= osp_fid_alloc,
 };
 
-struct llog_operations osp_mds_ost_orig_logops;
-
 static struct obd_type sym;
 
 /**
@@ -1949,11 +1947,6 @@ static int __init osp_init(void)
 		lu_kmem_fini(osp_caches);
 		return rc;
 	}
-
-	/* Note: add_rec/delcare_add_rec will be only used by catalogs */
-	osp_mds_ost_orig_logops = llog_osd_ops;
-	osp_mds_ost_orig_logops.lop_add = llog_cat_add_rec;
-	osp_mds_ost_orig_logops.lop_declare_add = llog_cat_declare_add_rec;
 
 	/* create "osc" entry for compatibility purposes */
 	dname.name = "osc";

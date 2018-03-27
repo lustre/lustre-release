@@ -686,7 +686,6 @@ typedef int (*osp_update_interpreter_t)(const struct lu_env *env,
 
 /* osp_dev.c */
 void osp_update_last_id(struct osp_device *d, u64 objid);
-extern struct llog_operations osp_mds_ost_orig_logops;
 
 /* osp_trans.c */
 int osp_insert_async_request(const struct lu_env *env, enum update_type op,
