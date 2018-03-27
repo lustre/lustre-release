@@ -79,16 +79,41 @@ MODULE_PARM_DESC(lnet_numa_range,
 		"NUMA range to consider during Multi-Rail selection");
 
 static int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
-static int intf_max_set(const char *val, struct kernel_param *kp);
+static int intf_max_set(const char *val, cfs_kernel_param_arg_t *kp);
+
+static struct kernel_param_ops param_ops_interfaces_max = {
+	.set = intf_max_set,
+	.get = param_get_int,
+};
+
+#define param_check_interfaces_max(name, p) \
+		__param_check(name, p, int)
+
+#ifdef HAVE_KERNEL_PARAM_OPS
+module_param(lnet_interfaces_max, interfaces_max, 0644);
+#else
 module_param_call(lnet_interfaces_max, intf_max_set, param_get_int,
-		  &lnet_interfaces_max, S_IRUGO|S_IWUSR);
+		  &param_ops_interfaces_max, 0644);
+#endif
 MODULE_PARM_DESC(lnet_interfaces_max,
 		"Maximum number of interfaces in a node.");
 
 unsigned lnet_peer_discovery_disabled = 0;
-static int discovery_set(const char *val, struct kernel_param *kp);
+static int discovery_set(const char *val, cfs_kernel_param_arg_t *kp);
+
+static struct kernel_param_ops param_ops_discovery_disabled = {
+	.set = discovery_set,
+	.get = param_get_int,
+};
+
+#define param_check_discovery_disabled(name, p) \
+		__param_check(name, p, int)
+#ifdef HAVE_KERNEL_PARAM_OPS
+module_param(lnet_peer_discovery_disabled, discovery_disabled, 0644);
+#else
 module_param_call(lnet_peer_discovery_disabled, discovery_set, param_get_int,
-		  &lnet_peer_discovery_disabled, S_IRUGO|S_IWUSR);
+		  &param_ops_discovery_disabled, 0644);
+#endif
 MODULE_PARM_DESC(lnet_peer_discovery_disabled,
 		"Set to 1 to disable peer discovery on this node.");
 
@@ -113,7 +138,7 @@ static int lnet_discover(struct lnet_process_id id, __u32 force,
 			 struct lnet_process_id __user *ids, int n_ids);
 
 static int
-discovery_set(const char *val, struct kernel_param *kp)
+discovery_set(const char *val, cfs_kernel_param_arg_t *kp)
 {
 	int rc;
 	unsigned *discovery = (unsigned *)kp->arg;
@@ -163,7 +188,7 @@ discovery_set(const char *val, struct kernel_param *kp)
 }
 
 static int
-intf_max_set(const char *val, struct kernel_param *kp)
+intf_max_set(const char *val, cfs_kernel_param_arg_t *kp)
 {
 	int value, rc;
 
