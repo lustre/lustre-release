@@ -227,28 +227,6 @@ int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags)
 }
 EXPORT_SYMBOL(llog_sync);
 
-int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
-		struct llog_cookie *cookies, int flags)
-{
-        int rc;
-        ENTRY;
-
-        if (!ctxt) {
-                CERROR("No ctxt\n");
-                RETURN(-ENODEV);
-        }
-
-	if (!ctxt->loc_obd->obd_type || !(ctxt)->loc_logops->lop_cancel) {
-		CERROR("%s: no lop_cancel operation\n",
-		       ctxt->loc_obd->obd_name);
-		RETURN(-EOPNOTSUPP);
-	}
-
-	rc = ctxt->loc_logops->lop_cancel(env, ctxt, cookies, flags);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_cancel);
-
 /* context key constructor/destructor: llog_key_init, llog_key_fini */
 LU_KEY_INIT_FINI(llog, struct llog_thread_info);
 /* context key: llog_thread_key */

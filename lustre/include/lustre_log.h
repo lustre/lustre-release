@@ -171,8 +171,6 @@ int llog_setup(const struct lu_env *env, struct obd_device *obd,
 int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt);
 int llog_cleanup(const struct lu_env *env, struct llog_ctxt *);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags);
-int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
-		struct llog_cookie *cookies, int flags);
 
 /* llog_ioctl.c */
 struct obd_ioctl_data;
@@ -203,8 +201,6 @@ struct llog_operations {
 	int (*lop_sync)(struct llog_ctxt *ctxt, struct obd_export *exp,
 			int flags);
 	int (*lop_cleanup)(const struct lu_env *env, struct llog_ctxt *ctxt);
-	int (*lop_cancel)(const struct lu_env *env, struct llog_ctxt *ctxt,
-			  struct llog_cookie *cookies, int flags);
 	int (*lop_connect)(struct llog_ctxt *ctxt, struct llog_logid *logid,
 			   struct llog_gen *gen, struct obd_uuid *uuid);
 	/**

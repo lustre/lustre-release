@@ -254,7 +254,7 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 
 static int llog_changelog_cancel(const struct lu_env *env,
 				 struct llog_ctxt *ctxt,
-				 struct llog_cookie *cookies, int flags)
+				 long long endrec)
 {
 	struct llog_handle	*cathandle = ctxt->loc_handle;
 	int			 rc;
@@ -265,7 +265,7 @@ static int llog_changelog_cancel(const struct lu_env *env,
 	LASSERT(cathandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
 	rc = llog_cat_process(env, cathandle, llog_changelog_cancel_cb,
-			      (void *)cookies, 0, 0);
+			      &endrec, 0, 0);
 	if (rc >= 0)
 		/* 0 or 1 means we're done */
 		rc = 0;
@@ -508,7 +508,7 @@ mdd_changelog_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
            changed since the last purge) */
 	mdd->mdd_cl.mc_starttime = ktime_get();
 
-	rc = llog_cancel(env, ctxt, (struct llog_cookie *)&endrec, 0);
+	rc = llog_changelog_cancel(env, ctxt, endrec);
 out:
         llog_ctxt_put(ctxt);
         return rc;
@@ -1807,7 +1807,6 @@ static int __init mdd_init(void)
 		return rc;
 
 	changelog_orig_logops = llog_osd_ops;
-	changelog_orig_logops.lop_cancel = llog_changelog_cancel;
 	changelog_orig_logops.lop_add = llog_cat_add_rec;
 	changelog_orig_logops.lop_declare_add = llog_cat_declare_add_rec;
 
