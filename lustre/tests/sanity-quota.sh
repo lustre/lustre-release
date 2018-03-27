@@ -71,7 +71,9 @@ export QUOTA_AUTO=0
 
 check_and_setup_lustre
 
+ENABLE_PROJECT_QUOTAS=${ENABLE_PROJECT_QUOTAS:-true}
 is_project_quota_supported() {
+	$ENABLE_PROJECT_QUOTAS || return 1
 	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
 		[ $(lustre_version_code $SINGLEMDS) -gt \
 		$(version_code 2.9.55) ] &&
