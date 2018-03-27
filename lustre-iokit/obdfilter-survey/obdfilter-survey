@@ -434,7 +434,7 @@ if [ $case == "network" ]; then
 		exit 1
 	fi
 	# Now start client setup
-	osc_names_str=$($lctl dl| grep osc | grep -v mdt | grep UP)
+	osc_names_str=$($lctl dl| grep osc | grep -v mdt | grep UP || true)
 	if [ -n "$osc_names_str" ]; then
 		echo "The existing setup must be cleaned";
 		exit 0;
@@ -539,7 +539,7 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 				declare -a pidarray
 				for host in ${unique_hosts[@]}; do
 					remote_shell $host \
-					    "lctl set_param -n osd*.*OST*.force_sync 1"
+					    "lctl set_param -n osd*.*OST*.force_sync 1 &>/dev/null || true"
 					echo "starting run for test: $test rsz: $rsz " \
 					"threads: $thr objects: $nobj" >> ${vmstatf}_${host}
 				done

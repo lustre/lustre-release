@@ -59,6 +59,21 @@ enum {
         LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
 };
 
+struct echo_srv_device {
+	struct lu_device esd_dev;
+	struct lu_target esd_lut;
+};
+
+static inline struct echo_srv_device *echo_srv_dev(struct lu_device *d)
+{
+	return container_of0(d, struct echo_srv_device, esd_dev);
+}
+
+static inline struct obd_device *echo_srv_obd(struct echo_srv_device *esd)
+{
+	return esd->esd_dev.ld_obd;
+}
+
 static int echo_connect(const struct lu_env *env,
                         struct obd_export **exp, struct obd_device *obd,
                         struct obd_uuid *cluuid, struct obd_connect_data *data,
@@ -113,115 +128,6 @@ static u64 echo_next_id(struct obd_device *obddev)
 	spin_unlock(&obddev->u.echo.eo_lock);
 
 	return id;
-}
-
-static int echo_create(const struct lu_env *env, struct obd_export *exp,
-		       struct obdo *oa)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-
-        if (!obd) {
-		CERROR("invalid client cookie %#llx\n",
-                       exp->exp_handle.h_cookie);
-                return -EINVAL;
-        }
-
-	if (!(oa->o_mode & S_IFMT)) {
-		CERROR("echo obd: no type!\n");
-		return -ENOENT;
-	}
-
-        if (!(oa->o_valid & OBD_MD_FLTYPE)) {
-		CERROR("invalid o_valid %#llx\n", oa->o_valid);
-                return -EINVAL;
-        }
-
-	ostid_set_seq_echo(&oa->o_oi);
-	if (ostid_set_id(&oa->o_oi, echo_next_id(obd))) {
-		CERROR("Bad %llu to set " DOSTID "\n",
-		       echo_next_id(obd), POSTID(&oa->o_oi));
-		return -EINVAL;
-	}
-	oa->o_valid = OBD_MD_FLID;
-
-	return 0;
-}
-
-static int echo_destroy(const struct lu_env *env, struct obd_export *exp,
-			struct obdo *oa)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-
-        ENTRY;
-        if (!obd) {
-		CERROR("invalid client cookie %#llx\n",
-                       exp->exp_handle.h_cookie);
-                RETURN(-EINVAL);
-        }
-
-        if (!(oa->o_valid & OBD_MD_FLID)) {
-		CERROR("obdo missing FLID valid flag: %#llx\n", oa->o_valid);
-                RETURN(-EINVAL);
-        }
-
-	if (ostid_id(&oa->o_oi) > obd->u.echo.eo_lastino ||
-	    ostid_id(&oa->o_oi) < ECHO_INIT_OID) {
-		CERROR("bad destroy objid: "DOSTID"\n", POSTID(&oa->o_oi));
-		RETURN(-EINVAL);
-	}
-
-        RETURN(0);
-}
-
-static int echo_getattr(const struct lu_env *env, struct obd_export *exp,
-			struct obdo *oa)
-{
-	struct obd_device *obd = class_exp2obd(exp);
-	u64 id = ostid_id(&oa->o_oi);
-
-	ENTRY;
-	if (!obd) {
-		CERROR("invalid client cookie %#llx\n",
-		       exp->exp_handle.h_cookie);
-		RETURN(-EINVAL);
-	}
-
-	if (!(oa->o_valid & OBD_MD_FLID)) {
-		CERROR("obdo missing FLID valid flag: %#llx\n", oa->o_valid);
-		RETURN(-EINVAL);
-	}
-
-	obdo_cpy_md(oa, &obd->u.echo.eo_oa, oa->o_valid);
-	ostid_set_seq_echo(&oa->o_oi);
-	if (ostid_set_id(&oa->o_oi, id)) {
-		CERROR("Bad %llu to set " DOSTID "\n",
-		       id, POSTID(&oa->o_oi));
-		RETURN(-EINVAL);
-	}
-
-	RETURN(0);
-}
-
-static int echo_setattr(const struct lu_env *env, struct obd_export *exp,
-			struct obdo *oa)
-{
-	struct obd_device *obd = class_exp2obd(exp);
-
-	ENTRY;
-	if (!obd) {
-		CERROR("invalid client cookie %#llx\n",
-		       exp->exp_handle.h_cookie);
-		RETURN(-EINVAL);
-	}
-
-	if (!(oa->o_valid & OBD_MD_FLID)) {
-		CERROR("obdo missing FLID valid flag: %#llx\n", oa->o_valid);
-		RETURN(-EINVAL);
-	}
-
-	obd->u.echo.eo_oa = *oa;
-
-	RETURN(0);
 }
 
 static void
@@ -546,34 +452,318 @@ commitrw_cleanup:
 	return rc;
 }
 
-static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+LPROC_SEQ_FOPS_RO_TYPE(echo, uuid);
+static struct lprocfs_vars lprocfs_echo_obd_vars[] = {
+	{ .name =       "uuid",
+	  .fops =       &echo_uuid_fops         },
+	{ NULL }
+};
+
+struct obd_ops echo_obd_ops = {
+	.o_owner           = THIS_MODULE,
+	.o_connect         = echo_connect,
+	.o_disconnect      = echo_disconnect,
+	.o_init_export     = echo_init_export,
+	.o_destroy_export  = echo_destroy_export,
+	.o_preprw          = echo_preprw,
+	.o_commitrw        = echo_commitrw,
+};
+
+/**
+ * Echo Server request handler for OST_CREATE RPC.
+ *
+ * This is part of request processing. Its simulates the object
+ * creation on OST.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+static int esd_create_hdl(struct tgt_session_info *tsi)
 {
-	int			rc;
-	__u64			lock_flags = 0;
-	struct ldlm_res_id	res_id = {.name = {1}};
-	char			ns_name[48];
+	const struct obdo *oa = &tsi->tsi_ost_body->oa;
+	struct obd_device *obd = tsi->tsi_exp->exp_obd;
+	struct ost_body *repbody;
+	struct obdo *rep_oa;
+
 	ENTRY;
 
-        obd->u.echo.eo_obt.obt_magic = OBT_MAGIC;
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+
+	if (!(oa->o_mode & S_IFMT)) {
+		CERROR("%s: no type is set in obdo!\n",
+		       tsi->tsi_exp->exp_obd->obd_name);
+		RETURN(-ENOENT);
+	}
+
+	if (!(oa->o_valid & OBD_MD_FLTYPE)) {
+		CERROR("%s: invalid o_valid in obdo: %#llx\n",
+		       tsi->tsi_exp->exp_obd->obd_name, oa->o_valid);
+		RETURN(-EINVAL);
+	}
+
+	rep_oa = &repbody->oa;
+
+	if (!fid_seq_is_echo(ostid_seq(&oa->o_oi))) {
+		CERROR("%s: invalid seq %#llx\n",
+		       tsi->tsi_exp->exp_obd->obd_name, ostid_seq(&oa->o_oi));
+		return -EINVAL;
+	}
+
+	ostid_set_seq_echo(&rep_oa->o_oi);
+	ostid_set_id(&rep_oa->o_oi, echo_next_id(obd));
+
+	CDEBUG(D_INFO, "%s: Create object "DOSTID"\n",
+	       tsi->tsi_exp->exp_obd->obd_name, POSTID(&rep_oa->o_oi));
+
+	rep_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	RETURN(0);
+}
+
+/**
+ * Echo Server request handler for OST_DESTROY RPC.
+ *
+ * This is Echo Server part of request handling. It simulates the objects
+ * destroy on OST.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+static int esd_destroy_hdl(struct tgt_session_info *tsi)
+{
+	const struct obdo *oa = &tsi->tsi_ost_body->oa;
+	struct obd_device *obd = tsi->tsi_exp->exp_obd;
+	struct ost_body *repbody;
+	u64 oid;
+
+	ENTRY;
+
+	oid = ostid_id(&oa->o_oi);
+	LASSERT(oid != 0);
+
+	if (!(oa->o_valid & OBD_MD_FLID)) {
+		CERROR("%s: obdo missing FLID valid flag: %#llx\n",
+		       tsi->tsi_exp->exp_obd->obd_name, oa->o_valid);
+		RETURN(-EINVAL);
+	}
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+
+	if (ostid_id(&oa->o_oi) > obd->u.echo.eo_lastino ||
+	    ostid_id(&oa->o_oi) < ECHO_INIT_OID) {
+		CERROR("%s: bad objid to destroy: "DOSTID"\n",
+		       tsi->tsi_exp->exp_obd->obd_name, POSTID(&oa->o_oi));
+		RETURN(-EINVAL);
+	}
+
+	CDEBUG(D_INFO, "%s: Destroy object "DOSTID"\n",
+	       tsi->tsi_exp->exp_obd->obd_name, POSTID(&oa->o_oi));
+
+	repbody->oa.o_oi = oa->o_oi;
+	RETURN(0);
+}
+
+/**
+ * Echo Server request handler for OST_GETATTR RPC.
+ *
+ * This is Echo Server part of request handling. It returns an object
+ * attributes to the client. All objects have the same attributes in
+ * Echo Server.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+static int esd_getattr_hdl(struct tgt_session_info *tsi)
+{
+	const struct obdo *oa = &tsi->tsi_ost_body->oa;
+	struct obd_device *obd = tsi->tsi_exp->exp_obd;
+	struct ost_body *repbody;
+
+	ENTRY;
+
+	if (!(oa->o_valid & OBD_MD_FLID)) {
+		CERROR("%s: obdo missing FLID valid flag: %#llx\n",
+		       tsi->tsi_exp->exp_obd->obd_name, oa->o_valid);
+		RETURN(-EINVAL);
+	}
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+
+	repbody->oa.o_oi = oa->o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	obdo_cpy_md(&repbody->oa, &obd->u.echo.eo_oa, oa->o_valid);
+
+	repbody->oa.o_valid |= OBD_MD_FLFLAGS;
+	repbody->oa.o_flags = OBD_FL_FLUSH;
+
+	RETURN(0);
+}
+
+/**
+ * Echo Server request handler for OST_SETATTR RPC.
+ *
+ * This is Echo Server part of request handling. It sets common
+ * attributes from request to the Echo Server objects.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+static int esd_setattr_hdl(struct tgt_session_info *tsi)
+{
+	struct ost_body *body = tsi->tsi_ost_body;
+	struct obd_device *obd = tsi->tsi_exp->exp_obd;
+	struct ost_body *repbody;
+
+	ENTRY;
+
+	if (!(body->oa.o_valid & OBD_MD_FLID)) {
+		CERROR("%s: obdo missing FLID valid flag: %#llx\n",
+		       tsi->tsi_exp->exp_obd->obd_name,
+		       body->oa.o_valid);
+		RETURN(-EINVAL);
+	}
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+
+	repbody->oa.o_oi = body->oa.o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	obd->u.echo.eo_oa = body->oa;
+
+	RETURN(0);
+}
+
+#define OBD_FAIL_OST_READ_NET	OBD_FAIL_OST_BRW_NET
+#define OBD_FAIL_OST_WRITE_NET	OBD_FAIL_OST_BRW_NET
+#define OST_BRW_READ	OST_READ
+#define OST_BRW_WRITE	OST_WRITE
+
+/**
+ * Table of Echo Server specific request handlers
+ *
+ * This table contains all opcodes accepted by Echo Server and
+ * specifies handlers for them. The tgt_request_handler()
+ * uses such table from each target to process incoming
+ * requests.
+ */
+static struct tgt_handler esd_tgt_handlers[] = {
+TGT_RPC_HANDLER(OST_FIRST_OPC, 0, OST_CONNECT, tgt_connect,
+		&RQF_CONNECT, LUSTRE_OBD_VERSION),
+TGT_RPC_HANDLER(OST_FIRST_OPC, 0, OST_DISCONNECT, tgt_disconnect,
+		&RQF_OST_DISCONNECT, LUSTRE_OBD_VERSION),
+TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO, OST_GETATTR, esd_getattr_hdl),
+TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR, OST_SETATTR,
+	    esd_setattr_hdl),
+TGT_OST_HDL(HABEO_REFERO | MUTABOR, OST_CREATE, esd_create_hdl),
+TGT_OST_HDL(HABEO_REFERO | MUTABOR, OST_DESTROY, esd_destroy_hdl),
+TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO, OST_BRW_READ, tgt_brw_read),
+TGT_OST_HDL(HABEO_CORPUS | MUTABOR, OST_BRW_WRITE, tgt_brw_write),
+};
+
+static struct tgt_opc_slice esd_common_slice[] = {
+	{
+		.tos_opc_start	= OST_FIRST_OPC,
+		.tos_opc_end	= OST_LAST_OPC,
+		.tos_hs		= esd_tgt_handlers
+	},
+	{
+		.tos_opc_start	= OBD_FIRST_OPC,
+		.tos_opc_end	= OBD_LAST_OPC,
+		.tos_hs		= tgt_obd_handlers
+	},
+	{
+		.tos_opc_start	= LDLM_FIRST_OPC,
+		.tos_opc_end	= LDLM_LAST_OPC,
+		.tos_hs		= tgt_dlm_handlers
+	},
+	{
+		.tos_opc_start  = SEC_FIRST_OPC,
+		.tos_opc_end    = SEC_LAST_OPC,
+		.tos_hs         = tgt_sec_ctx_handlers
+	},
+	{
+		.tos_hs		= NULL
+	}
+};
+
+/**
+ * lu_device_operations matrix for ECHO SRV device is NULL,
+ * this device is just serving incoming requests immediately
+ * without building a stack of lu_devices.
+ */
+static struct lu_device_operations echo_srv_lu_ops = { 0 };
+
+/**
+ * Initialize Echo Server device with parameters in the config log \a cfg.
+ *
+ * This is the main starting point of Echo Server initialization. It fills all
+ * parameters with their initial values and starts Echo Server.
+ *
+ * \param[in] env	execution environment
+ * \param[in] m		Echo Server device
+ * \param[in] ldt	LU device type of Echo Server
+ * \param[in] cfg	configuration log
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+static int echo_srv_init0(const struct lu_env *env,
+			  struct echo_srv_device *esd,
+			  struct lu_device_type *ldt, struct lustre_cfg *cfg)
+{
+	const char *dev = lustre_cfg_string(cfg, 0);
+	struct obd_device *obd;
+	char ns_name[48];
+	int rc;
+
+	ENTRY;
+
+	obd = class_name2obd(dev);
+	if (obd == NULL) {
+		CERROR("Cannot find obd with name %s\n", dev);
+		RETURN(-ENODEV);
+	}
+
 	spin_lock_init(&obd->u.echo.eo_lock);
-        obd->u.echo.eo_lastino = ECHO_INIT_OID;
+	obd->u.echo.eo_lastino = ECHO_INIT_OID;
 
-        sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);
-        obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
-                                                LDLM_NAMESPACE_SERVER,
-                                                LDLM_NAMESPACE_MODEST,
-                                                LDLM_NS_TYPE_OST);
-        if (obd->obd_namespace == NULL) {
-                LBUG();
-                RETURN(-ENOMEM);
-        }
+	esd->esd_dev.ld_ops = &echo_srv_lu_ops;
+	esd->esd_dev.ld_obd = obd;
+	/* set this lu_device to obd, because error handling need it */
+	obd->obd_lu_dev = &esd->esd_dev;
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_PLAIN,
-                                    NULL, LCK_NL, &lock_flags, NULL,
-				    ldlm_completion_ast, NULL, NULL, 0,
-				    LVB_T_NONE, NULL, &obd->u.echo.eo_nl_lock);
-        LASSERT (rc == ELDLM_OK);
+	/* No connection accepted until configurations will finish */
+	spin_lock(&obd->obd_dev_lock);
+	obd->obd_no_conn = 1;
+	spin_unlock(&obd->obd_dev_lock);
 
+	/* non-replayable target */
+	obd->obd_replayable = 0;
+
+	snprintf(ns_name, sizeof(ns_name), "echotgt-%s", obd->obd_uuid.uuid);
+	obd->obd_namespace = ldlm_namespace_new(obd, ns_name,
+						LDLM_NAMESPACE_SERVER,
+						LDLM_NAMESPACE_MODEST,
+						LDLM_NS_TYPE_OST);
+	if (obd->obd_namespace == NULL)
+		RETURN(-ENOMEM);
+
+	obd->obd_vars = lprocfs_echo_obd_vars;
 	if (!lprocfs_obd_setup(obd, true) &&
             lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
                 lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
@@ -586,48 +776,158 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
 			   "echo_ldlm_cb_client", &obd->obd_ldlm_client);
-        RETURN(0);
-}
 
-static int echo_cleanup(struct obd_device *obd)
-{
-	int leaked;
-	ENTRY;
+	rc = tgt_init(env, &esd->esd_lut, obd, NULL, esd_common_slice,
+		      OBD_FAIL_OST_ALL_REQUEST_NET,
+		      OBD_FAIL_OST_ALL_REPLY_NET);
+	if (rc)
+		GOTO(err_out, rc);
+
+	spin_lock(&obd->obd_dev_lock);
+	obd->obd_no_conn = 0;
+	spin_unlock(&obd->obd_dev_lock);
+
+	RETURN(0);
+
+err_out:
+	ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
+	obd->obd_namespace = NULL;
 
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_obd_stats(obd);
+	RETURN(rc);
+}
 
-	ldlm_lock_decref(&obd->u.echo.eo_nl_lock, LCK_NL);
+/**
+ * Stop the Echo Server device.
+ *
+ * This function stops the Echo Server device and all its subsystems.
+ * This is the end of Echo Server lifecycle.
+ *
+ * \param[in] env	execution environment
+ * \param[in] esd		ESD device
+ */
+static void echo_srv_fini(const struct lu_env *env,
+			  struct echo_srv_device *esd)
+{
+	struct obd_device *obd = echo_srv_obd(esd);
+	struct lu_device *d = &esd->esd_dev;
+	int leaked;
 
-	/* XXX Bug 3413; wait for a bit to ensure the BL callback has
-	 * happened before calling ldlm_namespace_free() */
-	set_current_state(TASK_UNINTERRUPTIBLE);
-	schedule_timeout(cfs_time_seconds(1));
+	ENTRY;
 
-	ldlm_namespace_free(obd->obd_namespace, NULL, obd->obd_force);
-	obd->obd_namespace = NULL;
+	class_disconnect_exports(obd);
+	if (obd->obd_namespace != NULL)
+		ldlm_namespace_free_prior(obd->obd_namespace, NULL,
+					  obd->obd_force);
+
+	obd_exports_barrier(obd);
+	obd_zombie_barrier();
+
+	tgt_fini(env, &esd->esd_lut);
+
+	if (obd->obd_namespace != NULL) {
+		ldlm_namespace_free_post(obd->obd_namespace);
+		obd->obd_namespace = NULL;
+	}
+
+	lprocfs_obd_cleanup(obd);
+	lprocfs_free_obd_stats(obd);
 
 	leaked = atomic_read(&obd->u.echo.eo_prep);
 	if (leaked != 0)
 		CERROR("%d prep/commitrw pages leaked\n", leaked);
 
-	RETURN(0);
+	LASSERT(atomic_read(&d->ld_ref) == 0);
+	EXIT;
 }
 
-struct obd_ops echo_obd_ops = {
-        .o_owner           = THIS_MODULE,
-        .o_connect         = echo_connect,
-        .o_disconnect      = echo_disconnect,
-        .o_init_export     = echo_init_export,
-        .o_destroy_export  = echo_destroy_export,
-        .o_create          = echo_create,
-        .o_destroy         = echo_destroy,
-        .o_getattr         = echo_getattr,
-        .o_setattr         = echo_setattr,
-        .o_preprw          = echo_preprw,
-        .o_commitrw        = echo_commitrw,
-        .o_setup           = echo_setup,
-        .o_cleanup         = echo_cleanup
+/**
+ * Implementation of lu_device_type_operations::ldto_device_fini.
+ *
+ * Finalize device. Dual to echo_srv_device_init(). It is called from
+ * obd_precleanup() and stops the current device.
+ *
+ * \param[in] env	execution environment
+ * \param[in] d		LU device of ESD
+ *
+ * \retval		NULL
+ */
+static struct lu_device *echo_srv_device_fini(const struct lu_env *env,
+					      struct lu_device *d)
+{
+	ENTRY;
+	echo_srv_fini(env, echo_srv_dev(d));
+	RETURN(NULL);
+}
+
+/**
+ * Implementation of lu_device_type_operations::ldto_device_free.
+ *
+ * Free Echo Server device. Dual to echo_srv_device_alloc().
+ *
+ * \param[in] env	execution environment
+ * \param[in] d		LU device of ESD
+ *
+ * \retval		NULL
+ */
+static struct lu_device *echo_srv_device_free(const struct lu_env *env,
+					      struct lu_device *d)
+{
+	struct echo_srv_device *esd = echo_srv_dev(d);
+
+	lu_device_fini(&esd->esd_dev);
+	OBD_FREE_PTR(esd);
+	RETURN(NULL);
+}
+
+/**
+ * Implementation of lu_device_type_operations::ldto_device_alloc.
+ *
+ * This function allocates the new Echo Server device. It is called from
+ * obd_setup() if OBD device had lu_device_type defined.
+ *
+ * \param[in] env	execution environment
+ * \param[in] t		lu_device_type of ESD device
+ * \param[in] cfg	configuration log
+ *
+ * \retval		pointer to the lu_device of just allocated OFD
+ * \retval		ERR_PTR of return value on error
+ */
+static struct lu_device *echo_srv_device_alloc(const struct lu_env *env,
+					       struct lu_device_type *t,
+					       struct lustre_cfg *cfg)
+{
+	struct echo_srv_device *esd;
+	struct lu_device *l;
+	int rc;
+
+	OBD_ALLOC_PTR(esd);
+	if (esd == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	l = &esd->esd_dev;
+	lu_device_init(l, t);
+	rc = echo_srv_init0(env, esd, t, cfg);
+	if (rc != 0) {
+		echo_srv_device_free(env, l);
+		l = ERR_PTR(rc);
+	}
+
+	return l;
+}
+
+static const struct lu_device_type_operations echo_srv_type_ops = {
+	.ldto_device_alloc = echo_srv_device_alloc,
+	.ldto_device_free = echo_srv_device_free,
+	.ldto_device_fini = echo_srv_device_fini
+};
+
+struct lu_device_type echo_srv_type = {
+	.ldt_tags = LU_DEVICE_DT,
+	.ldt_name = LUSTRE_ECHO_NAME,
+	.ldt_ops = &echo_srv_type_ops,
+	.ldt_ctx_tags = LCT_DT_THREAD,
 };
 
 void echo_persistent_pages_fini(void)

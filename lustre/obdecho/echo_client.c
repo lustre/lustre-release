@@ -3072,7 +3072,7 @@ static int __init obdecho_init(void)
                 goto failed_0;
 
 	rc = class_register_type(&echo_obd_ops, NULL, true, NULL,
-				 LUSTRE_ECHO_NAME, NULL);
+				 LUSTRE_ECHO_NAME, &echo_srv_type);
 	if (rc != 0)
 		goto failed_1;
 # endif
