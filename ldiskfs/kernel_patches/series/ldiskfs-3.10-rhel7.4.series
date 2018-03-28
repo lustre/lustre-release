@@ -33,3 +33,4 @@ rhel7.4/ext4-dont-check-before-replay.patch
 rhel7/ext4-cleanup-goto-next-group.patch
 rhel7/ext4-reduce-lock-contention-in-__ext4_new_inode.patch
 rhel7.2/ext4-preread-gd.patch
+rhel7/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
