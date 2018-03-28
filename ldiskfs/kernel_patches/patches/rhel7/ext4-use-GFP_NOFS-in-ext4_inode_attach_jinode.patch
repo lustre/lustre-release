@@ -1,0 +1,13 @@
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 153dda7..63339a2 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -3775,7 +3775,7 @@ int ext4_inode_attach_jinode(struct inode *inode)
+ 	if (ei->jinode || !EXT4_SB(inode->i_sb)->s_journal)
+ 		return 0;
+ 
+-	jinode = jbd2_alloc_inode(GFP_KERNEL);
++	jinode = jbd2_alloc_inode(GFP_NOFS);
+ 	spin_lock(&inode->i_lock);
+ 	if (!ei->jinode) {
+ 		if (!jinode) {

@@ -30,3 +30,4 @@ rhel7/ext4-projid-feature-support.patch
 rhel7/ext4-projid-quotas.patch
 rhel7/ext4-projid-xfs-ioctls.patch
 rhel7/ext4-fix-xattr-shifting-when-expanding-inodes.patch
+rhel7/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
