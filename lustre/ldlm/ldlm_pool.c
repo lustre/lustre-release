@@ -1090,9 +1090,6 @@ static unsigned long ldlm_pools_count(enum ldlm_side client, gfp_t gfp_mask)
 	if (client == LDLM_NAMESPACE_CLIENT && !(gfp_mask & __GFP_FS))
 		return 0;
 
-	CDEBUG(D_DLMTRACE, "Request to count %s locks from all pools\n",
-	       client == LDLM_NAMESPACE_CLIENT ? "client" : "server");
-
 	/*
 	 * Find out how many resources we may release.
 	 */
@@ -1214,9 +1211,6 @@ static int ldlm_pools_shrink(enum ldlm_side client, int nr, gfp_t gfp_mask)
 	if (client == LDLM_NAMESPACE_CLIENT && nr != 0 &&
 	    !(gfp_mask & __GFP_FS))
 		return -1;
-
-	CDEBUG(D_DLMTRACE, "Request to shrink %d %s locks from all pools\n",
-	       nr, client == LDLM_NAMESPACE_CLIENT ? "client" : "server");
 
 	total = ldlm_pools_count(client, gfp_mask);
 
