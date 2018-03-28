@@ -3828,7 +3828,7 @@ test_79() {
 		error "setfattr -n trusted.name1=value1 $DIR/$tdir failed"
 
 #define OBD_FAIL_MDS_INTENT_DELAY		0x160
-	local mdtidx=$($LFS getstripe -M $DIR/$tdir)
+	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
 	local facet=mds$((mdtidx + 1))
 	stat $DIR/$tdir
 	set_nodes_failloc $(facet_active_host $facet) 0x80000160
@@ -3874,7 +3874,7 @@ test_80a() {
 
 	echo "Finish migration, then checking.."
 	for file in $(find $DIR1/$tdir); do
-		mdt_index=$($LFS getstripe -M $file)
+		mdt_index=$($LFS getstripe -m $file)
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"
 	done

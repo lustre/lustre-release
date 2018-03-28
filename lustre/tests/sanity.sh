@@ -660,7 +660,7 @@ test_17m() {
 		ln -sf ${short_sym} $wdir/short-$i || error "short_sym failed"
 	done
 
-	local mds_index=$(($($LFS getstripe -M $wdir) + 1))
+	local mds_index=$(($($LFS getstripe -m $wdir) + 1))
 	local devname=$(mdsdevname $mds_index)
 
 	echo "stop and checking mds${mds_index}:"
@@ -761,7 +761,7 @@ test_17o() {
 
 	test_mkdir $wdir
 	touch $wdir/$tfile
-	mdt_index=$($LFS getstripe -M $wdir/$tfile)
+	mdt_index=$($LFS getstripe -m $wdir/$tfile)
 	mdt_index=$((mdt_index + 1))
 
 	cancel_lru_locks mdc
@@ -1597,7 +1597,7 @@ exhaust_precreations() {
 	local ofacet=ost$((OSTIDX + 1))
 
 	test_mkdir -p -c1 $DIR/$tdir
-	local mdtidx=$($LFS getstripe -M $DIR/$tdir)
+	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
 	local mfacet=mds$((mdtidx + 1))
 	echo OSTIDX=$OSTIDX MDTIDX=$mdtidx
 
@@ -4357,7 +4357,7 @@ test_51b() {
 
 	$LFS df
 	$LFS df -i
-	local mdtidx=$(printf "%04x" $($LFS getstripe -M $dir))
+	local mdtidx=$(printf "%04x" $($LFS getstripe -m $dir))
 	local numfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.filesfree)
 	[[ $numfree -lt $nrdirs ]] &&
 		skip "not enough free inodes ($numfree) on MDT$mdtidx"
@@ -4468,8 +4468,8 @@ test_51f() {
 	local max=100000
 	local ulimit_old=$(ulimit -n)
 	local spare=20 # number of spare fd's for scripts/libraries, etc.
-	local mdt=$(lfs getstripe -M $DIR/$tdir)
-	local numfree=$(lfs df -i $DIR/$tdir | awk '/MDT:'$mdt'/ { print $4 }')
+	local mdt=$($LFS getstripe -m $DIR/$tdir)
+	local numfree=$($LFS df -i $DIR/$tdir | awk '/MDT:'$mdt'/ { print $4 }')
 
 	echo "MDT$mdt numfree=$numfree, max=$max"
 	[[ $numfree -gt $max ]] && numfree=$max || numfree=$((numfree * 7 / 8))
@@ -5265,21 +5265,21 @@ test_56u() { # LU-611
 run_test 56u "check lfs find -stripe-index works"
 
 test_56v() {
-	local MDT_IDX=0
+	local mdt_idx=0
 	local dir=$DIR/$tdir
 
 	setup_56 $dir $NUMFILES $NUMDIRS
 
-	UUID=$(mdtuuid_from_index $MDT_IDX $dir)
-	[ -z "$UUID" ] && error "mdtuuid_from_index cannot find MDT $MDT_IDX"
+	UUID=$(mdtuuid_from_index $mdt_idx $dir)
+	[ -z "$UUID" ] && error "mdtuuid_from_index cannot find MDT $mdt_idx"
 
-	for file in $($LFS find -mdt $UUID $dir); do
-		file_mdt_idx=$($LFS getstripe -M $file)
-		[ $file_mdt_idx -eq $MDT_IDX ] ||
-			error "lfind -mdt $UUID != getstripe -M $file_mdt_idx"
+	for file in $($LFS find -m $UUID $dir); do
+		file_midx=$($LFS getstripe -m $file)
+		[ $file_midx -eq $mdt_idx ] ||
+			error "lfs find -m $UUID != getstripe -m $file_midx"
 	done
 }
-run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="
+run_test 56v "check 'lfs find -m match with lfs getstripe -m'"
 
 test_56w() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
@@ -6025,50 +6025,54 @@ test_57b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local dir=$DIR/$tdir
-	local FILECOUNT=100
-	local FILE1=$dir/f1
-	local FILEN=$dir/f$FILECOUNT
+	local filecount=100
+	local file1=$dir/f1
+	local fileN=$dir/f$filecount
 
 	rm -rf $dir || error "removing $dir"
 	test_mkdir -c1 $dir
-	local mdtidx=$($LFS getstripe -M $dir)
+	local mdtidx=$($LFS getstripe -m $dir)
 	local mdtname=MDT$(printf %04x $mdtidx)
 	local facet=mds$((mdtidx + 1))
 
-	echo "mcreating $FILECOUNT files"
-	createmany -m $dir/f 1 $FILECOUNT || \
-		error "creating files in $dir"
+	echo "mcreating $filecount files"
+	createmany -m $dir/f 1 $filecount || error "creating files in $dir"
 
 	# verify that files do not have EAs yet
-	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
-	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
+	$LFS getstripe $file1 2>&1 | grep -q "no stripe" ||
+		error "$file1 has an EA"
+	$LFS getstripe $fileN 2>&1 | grep -q "no stripe" ||
+		error "$fileN has an EA"
 
 	sync
 	sleep 1
 	df $dir  #make sure we get new statfs data
-	local MDSFREE=$(do_facet $facet \
-		lctl get_param -n osd*.*$mdtname.kbytesfree)
-	local MDCFREE=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
+	local mdsfree=$(do_facet $facet \
+			lctl get_param -n osd*.*$mdtname.kbytesfree)
+	local mdcfree=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
+	local file
+
 	echo "opening files to create objects/EAs"
-	local FILE
-	for FILE in `seq -f $dir/f%g 1 $FILECOUNT`; do
-		$OPENFILE -f O_RDWR $FILE > /dev/null 2>&1 || error "opening $FILE"
+	for file in $(seq -f $dir/f%g 1 $filecount); do
+		$OPENFILE -f O_RDWR $file > /dev/null 2>&1 ||
+			error "opening $file"
 	done
 
 	# verify that files have EAs now
-	$GETSTRIPE $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
-	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
+	$LFS getstripe $file1 | grep -q "obdidx" || error "$file1 missing EA"
+	$LFS getstripe $fileN | grep -q "obdidx" || error "$fileN missing EA"
 
 	sleep 1  #make sure we get new statfs data
 	df $dir
-	local MDSFREE2=$(do_facet $facet \
-		lctl get_param -n osd*.*$mdtname.kbytesfree)
-	local MDCFREE2=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
-	if [[ $MDCFREE2 -lt $((MDCFREE - 16)) ]]; then
-		if [ "$MDSFREE" != "$MDSFREE2" ]; then
-			error "MDC before $MDCFREE != after $MDCFREE2"
+	local mdsfree2=$(do_facet $facet \
+			 lctl get_param -n osd*.*$mdtname.kbytesfree)
+	local mdcfree2=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
+
+	if [[ $mdcfree2 -lt $((mdcfree - 16)) ]]; then
+		if [ "$mdsfree" != "$mdsfree2" ]; then
+			error "MDC before $mdcfree != after $mdcfree2"
 		else
-			echo "MDC before $MDCFREE != after $MDCFREE2"
+			echo "MDC before $mdcfree != after $mdcfree2"
 			echo "unable to confirm if MDS has large inodes"
 		fi
 	fi
@@ -14455,19 +14459,19 @@ test_230a() {
 
 	test_mkdir $DIR/$tdir
 	test_mkdir -i0 -c1 $DIR/$tdir/test_230_local
-	local mdt_idx=$($GETSTRIPE -M $DIR/$tdir/test_230_local)
+	local mdt_idx=$($LFS getstripe -m $DIR/$tdir/test_230_local)
 	[ $mdt_idx -ne 0 ] &&
 		error "create local directory on wrong MDT $mdt_idx"
 
 	$LFS mkdir -i $MDTIDX $DIR/$tdir/test_230 ||
 			error "create remote directory failed"
-	local mdt_idx=$($GETSTRIPE -M $DIR/$tdir/test_230)
+	local mdt_idx=$($LFS getstripe -m $DIR/$tdir/test_230)
 	[ $mdt_idx -ne $MDTIDX ] &&
 		error "create remote directory on wrong MDT $mdt_idx"
 
 	createmany -o $DIR/$tdir/test_230/t- 10 ||
 		error "create files on remote directory failed"
-	mdt_idx=$($GETSTRIPE -M $DIR/$tdir/test_230/t-0)
+	mdt_idx=$($LFS getstripe -m $DIR/$tdir/test_230/t-0)
 	[ $mdt_idx -ne $MDTIDX ] && error "create files on wrong MDT $mdt_idx"
 	rm -r $DIR/$tdir || error "unlink remote directory failed"
 }
@@ -14523,14 +14527,14 @@ test_230b() {
 	echo "migratate to MDT1, then checking.."
 	for ((i = 0; i < 10; i++)); do
 		for file in $(find $migrate_dir/dir_${i}); do
-			mdt_index=$($LFS getstripe -M $file)
+			mdt_index=$($LFS getstripe -m $file)
 			[ $mdt_index == $MDTIDX ] ||
 				error "$file is not on MDT${MDTIDX}"
 		done
 	done
 
 	# the multiple link file should still in MDT0
-	mdt_index=$($LFS getstripe -M $migrate_dir/$tfile)
+	mdt_index=$($LFS getstripe -m $migrate_dir/$tfile)
 	[ $mdt_index == 0 ] ||
 		error "$file is not on MDT${MDTIDX}"
 
@@ -14587,7 +14591,7 @@ test_230b() {
 
 	echo "migrate back to MDT0, checking.."
 	for file in $(find $migrate_dir); do
-		mdt_index=$($LFS getstripe -M $file)
+		mdt_index=$($LFS getstripe -m $file)
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"
 	done
@@ -14684,7 +14688,7 @@ test_230c() {
 
 	echo "Finish migration, then checking.."
 	for file in $(find $migrate_dir); do
-		mdt_index=$($LFS getstripe -M $file)
+		mdt_index=$($LFS getstripe -m $file)
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"
 	done
@@ -14717,7 +14721,7 @@ test_230d() {
 
 	echo "Finish migration, then checking.."
 	for file in $(find $migrate_dir); do
-		mdt_index=$($LFS getstripe -M $file)
+		mdt_index=$($LFS getstripe -m $file)
 		[ $mdt_index == $MDTIDX ] ||
 			error "$file is not on MDT${MDTIDX}"
 	done
@@ -14745,22 +14749,22 @@ test_230e() {
 	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||
 		error "migrate dir fails"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir)
 	[ $mdt_index == 1 ] || error "migrate_dir is not on MDT1"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir/a)
 	[ $mdt_index == 0 ] || error "a is not on MDT0"
 
 	$LFS migrate -m 1 $DIR/$tdir/other_dir ||
 		error "migrate dir fails"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/other_dir)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/other_dir)
 	[ $mdt_index == 1 ] || error "other_dir is not on MDT1"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir/a)
 	[ $mdt_index == 1 ] || error "a is not on MDT1"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/other_dir/b)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/other_dir/b)
 	[ $mdt_index == 1 ] || error "b is not on MDT1"
 
 	a_fid=$($LFS path2fid $DIR/$tdir/migrate_dir/a)
@@ -14790,15 +14794,15 @@ test_230f() {
 	# a should be migrated to MDT1, since no other links on MDT0
 	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||
 		error "#1 migrate dir fails"
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir)
 	[ $mdt_index == 1 ] || error "migrate_dir is not on MDT1"
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir/a)
 	[ $mdt_index == 1 ] || error "a is not on MDT1"
 
 	# a should stay on MDT1, because it is a mulitple link file
 	$LFS migrate -m 0 $DIR/$tdir/migrate_dir ||
 		error "#2 migrate dir fails"
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir/a)
 	[ $mdt_index == 1 ] || error "a is not on MDT1"
 
 	$LFS migrate -m 1 $DIR/$tdir/migrate_dir ||
@@ -14814,7 +14818,7 @@ test_230f() {
 	# a should be migrated to MDT0, since no other links on MDT1
 	$LFS migrate -m 0 $DIR/$tdir/migrate_dir ||
 		error "#4 migrate dir fails"
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir/a)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir/a)
 	[ $mdt_index == 0 ] || error "a is not on MDT0"
 
 	rm -rf $DIR/$tdir || error "rm dir failed after migration"
@@ -14852,10 +14856,10 @@ test_230h() {
 	$LFS migrate -m1 $DIR/$tdir/migrate_dir/.. ||
 		error "migrating $tdir fail"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir)
 	[ $mdt_index == 1 ] || error "$mdt_index != 1 after migration"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir/migrate_dir)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir)
 	[ $mdt_index == 1 ] || error "$mdt_index != 1 after migration"
 
 }
@@ -16093,7 +16097,7 @@ test_257() {
 	stat $DIR/$tdir
 
 #define OBD_FAIL_MDS_XATTR_REP			0x161
-	local mdtidx=$($LFS getstripe -M $DIR/$tdir)
+	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
 	local facet=mds$((mdtidx + 1))
 	set_nodes_failloc $(facet_active_host $facet) 0x80000161
 	getfattr -n trusted.name1 $DIR/$tdir 2> /dev/null
@@ -16170,7 +16174,7 @@ test_270a() {
 	[ $($LFS getstripe -c $dom) == 0 ] || error "bad stripe count"
 	[ $($LFS getstripe -S $dom) == 1048576 ] || error "bad stripe size"
 
-	local mdtidx=$($GETSTRIPE -M $dom)
+	local mdtidx=$($LFS getstripe -m $dom)
 	local mdtname=MDT$(printf %04x $mdtidx)
 	local facet=mds$((mdtidx + 1))
 	local space_check=1
@@ -16506,7 +16510,7 @@ test_271c() {
 
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
-	local mdtidx=$($LFS getstripe -M $DIR/$tdir)
+	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
 	local facet=mds$((mdtidx + 1))
 
 	cancel_lru_locks mdc
@@ -16754,7 +16758,7 @@ test_300d() {
 		error "create 10 files failed"
 
 	for file in $(find $DIR/$tdir); do
-		stripe_count=$($GETSTRIPE -c $file)
+		stripe_count=$($LFS getstripe -c $file)
 		[ $stripe_count -eq 2 ] ||
 			error "wrong stripe $stripe_count for $file"
 	done

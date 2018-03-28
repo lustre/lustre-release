@@ -568,7 +568,7 @@ test_21b() {
 
 	local param_file=$TMP/$tfile-params
 
-	local mdtidx=$($LFS getstripe -M $MOUNT1)
+	local mdtidx=$($LFS getstripe -m $MOUNT1)
 	local facet=mds$((mdtidx + 1))
 
 	save_lustre_params $facet "mdt.*.commit_on_sharing" > $param_file

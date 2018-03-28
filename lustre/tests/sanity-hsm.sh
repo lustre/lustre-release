@@ -5172,10 +5172,10 @@ test_405() {
 	local fid3=$(create_small_sync_file $striped_dir/${tfile}_2)
 	local fid4=$(create_small_sync_file $striped_dir/${tfile}_3)
 
-	local idx1=$($LFS getstripe -M $striped_dir/${tfile}_0)
-	local idx2=$($LFS getstripe -M $striped_dir/${tfile}_1)
-	local idx3=$($LFS getstripe -M $striped_dir/${tfile}_2)
-	local idx4=$($LFS getstripe -M $striped_dir/${tfile}_3)
+	local idx1=$($LFS getstripe -m $striped_dir/${tfile}_0)
+	local idx2=$($LFS getstripe -m $striped_dir/${tfile}_1)
+	local idx3=$($LFS getstripe -m $striped_dir/${tfile}_2)
+	local idx4=$($LFS getstripe -m $striped_dir/${tfile}_3)
 
 	# check that compound requests are shunt to the rights MDTs
 	$LFS hsm_archive $striped_dir/${tfile}_0 $striped_dir/${tfile}_1  \
@@ -5237,7 +5237,7 @@ test_406() {
 	$LFS migrate -m1 $DIR/$tdir ||
 		error "cannot complete migration after HSM remove"
 
-	mdt_index=$($LFS getstripe -M $DIR/$tdir)
+	mdt_index=$($LFS getstripe -m $DIR/$tdir)
 	if ((mdt_index != 1)); then
 		error "expected MDT index 1, got $mdt_index"
 	fi

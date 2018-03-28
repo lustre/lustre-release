@@ -1197,7 +1197,7 @@ test_36() {
 	verify_ost_layout_version $tf
 
 	# test case 2
-	local mds_idx=mds$(($($LFS getstripe -M $tf-2) + 1))
+	local mds_idx=mds$(($($LFS getstripe -m $tf-2) + 1))
 
 	local delay_sec=10
 	do_facet $mds_idx $LCTL set_param fail_val=$delay_sec
@@ -1218,7 +1218,7 @@ test_36() {
 	do_facet $mds_idx $LCTL set_param fail_loc=0
 
 	# test case 3
-	mds_idx=mds$(($($LFS getstripe -M $tf-3) + 1))
+	mds_idx=mds$(($($LFS getstripe -m $tf-3) + 1))
 
 	#define OBD_FAIL_FLR_LV_INC 0x1A02
 	do_facet $mds_idx $LCTL set_param fail_loc=0x1A02
@@ -1955,7 +1955,7 @@ test_200() {
 	#define OBD_FAIL_FLR_RANDOM_PICK_MIRROR	0x1A03
 	$LCTL set_param fail_loc=0x1A03
 
-	local mds_idx=mds$(($($LFS getstripe -M $tf) + 1))
+	local mds_idx=mds$(($($LFS getstripe -m $tf) + 1))
 	do_facet $mds_idx $LCTL set_param fail_loc=0x1A03
 
 	declare -a pids

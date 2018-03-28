@@ -2004,21 +2004,21 @@ run_test 108 "client eviction don't crash"
 test_110a () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local remote_dir=$DIR/$tdir/remote_dir
-	local MDTIDX=1
+	local mdtidx=1
 	local num
 
 	#prepare for 110 test, which need set striped dir on remote MDT.
 	for num in $(seq $MDSCOUNT); do
 		do_facet mds$num \
-			lctl set_param -n mdt.${FSNAME}*.enable_remote_dir=1 \
+			lctl set_param -n mdt.$FSNAME*.enable_remote_dir=1 \
 				2>/dev/null
 	done
 
 	mkdir -p $DIR/$tdir
-	drop_request "$LFS mkdir -i $MDTIDX -c2 $remote_dir" ||
-					error "lfs mkdir failed"
-	local diridx=$($GETSTRIPE -M $remote_dir)
-	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
+	drop_request "$LFS mkdir -i $mdtidx -c2 $remote_dir" ||
+		error "lfs mkdir failed"
+	local diridx=$($LFS getstripe -m $remote_dir)
+	[ $diridx -eq $mdtidx ] || error "$diridx != $mdtidx"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 }
@@ -2027,14 +2027,14 @@ run_test 110a "create remote directory: drop client req"
 test_110b () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local remote_dir=$DIR/$tdir/remote_dir
-	local MDTIDX=1
+	local mdtidx=1
 
 	mkdir -p $DIR/$tdir
-	drop_reint_reply "$LFS mkdir -i $MDTIDX -c2 $remote_dir" ||
-					error "lfs mkdir failed"
+	drop_reint_reply "$LFS mkdir -i $mdtidx -c2 $remote_dir" ||
+		error "lfs mkdir failed"
 
-	diridx=$($GETSTRIPE -M $remote_dir)
-	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
+	diridx=$($LFS getstripe -m $remote_dir)
+	[ $diridx -eq $mdtidx ] || error "$diridx != $mdtidx"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 }
@@ -2043,14 +2043,14 @@ run_test 110b "create remote directory: drop Master rep"
 test_110c () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local remote_dir=$DIR/$tdir/remote_dir
-	local MDTIDX=1
+	local mdtidx=1
 
 	mkdir -p $DIR/$tdir
-	drop_update_reply $MDTIDX "$LFS mkdir -i $MDTIDX -c2 $remote_dir" ||
-						error "lfs mkdir failed"
+	drop_update_reply $mdtidx "$LFS mkdir -i $mdtidx -c2 $remote_dir" ||
+		error "lfs mkdir failed"
 
-	diridx=$($GETSTRIPE -M $remote_dir)
-	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
+	diridx=$($GETSTRIPE -m $remote_dir)
+	[ $diridx -eq $mdtidx ] || error "$diridx != $mdtidx"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 }
@@ -2107,21 +2107,21 @@ test_110g () {
 
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local remote_dir=$DIR/$tdir/remote_dir
-	local MDTIDX=1
+	local mdtidx=1
 
 	mkdir -p $remote_dir
 
 	createmany -o $remote_dir/f 100
 
 	#define OBD_FAIL_MIGRATE_NET_REP		0x1800
-	do_facet mds$MDTIDX lctl set_param fail_loc=0x1800
-	$LFS migrate -m $MDTIDX $remote_dir || error "migrate failed"
-	do_facet mds$MDTIDX lctl set_param fail_loc=0x0
+	do_facet mds$mdtidx lctl set_param fail_loc=0x1800
+	$LFS migrate -m $mdtidx $remote_dir || error "migrate failed"
+	do_facet mds$mdtidx lctl set_param fail_loc=0x0
 
 	for file in $(find $remote_dir); do
-		mdt_index=$($LFS getstripe -M $file)
-		[ $mdt_index == $MDTIDX ] ||
-			error "$file is not on MDT${MDTIDX}"
+		mdt_index=$($LFS getstripe -m $file)
+		[ $mdt_index == $mdtidx ] ||
+			error "$file is not on MDT${mdtidx}"
 	done
 
 	rm -rf $DIR/$tdir || error "rmdir failed"

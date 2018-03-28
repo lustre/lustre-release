@@ -2575,18 +2575,18 @@ test_74() {
 run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
 remote_dir_check_80() {
-	local MDTIDX=1
+	local mdtidx=1
 	local diridx
 	local fileidx
 
-	diridx=$($GETSTRIPE -M $remote_dir) ||
-		error "$GETSTRIPE -M $remote_dir failed"
-	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
+	diridx=$($LFS getstripe -m $remote_dir) ||
+		error "$LFS getstripe -m $remote_dir failed"
+	[ $diridx -eq $mdtidx ] || error "$diridx != $mdtidx"
 
 	createmany -o $remote_dir/f-%d 20 || error "creation failed"
-	fileidx=$($GETSTRIPE -M $remote_dir/f-1) ||
-		error "$GETSTRIPE -M $remote_dir/f-1 failed"
-	[ $fileidx -eq $MDTIDX ] || error "$fileidx != $MDTIDX"
+	fileidx=$($LFS getstripe -m $remote_dir/f-1) ||
+		error "$LFS getstripe -m $remote_dir/f-1 failed"
+	[ $fileidx -eq $mdtidx ] || error "$fileidx != $mdtidx"
 
 	return 0
 }
@@ -3357,25 +3357,30 @@ test_90() { # bug 19494
 
 	echo "Create the files"
 
-    # file "f${index}" striped over 1 OST
-    # file "all" striped over all OSTs
+	# file "f${index}" striped over 1 OST
+	# file "all" striped over all OSTs
 
-    $SETSTRIPE -c $OSTCOUNT $dir/all ||
-        error "setstripe failed to create $dir/all"
+	$LFS setstripe -c $OSTCOUNT $dir/all ||
+		error "setstripe failed to create $dir/all"
 
-    for (( i=0; i<$OSTCOUNT; i++ )); do
-        local f=$dir/f$i
-        $SETSTRIPE -i $i -c 1 $f || error "$SETSTRIPE failed to create $f"
+	for ((i = 0; i < $OSTCOUNT; i++)); do
+		local f=$dir/f$i
 
-        # confirm setstripe actually created the stripe on the requested OST
-        local uuid=$(ostuuid_from_index $i)
-        for file in f$i all; do
-            if [[ $dir/$file != $($LFS find --obd $uuid --name $file $dir) ]]; then
-		$GETSTRIPE $dir/$file
-		error wrong stripe: $file, uuid: $uuid
-            fi
-        done
-    done
+		$LFS setstripe -i $i -c 1 $f ||
+			error "$LFS setstripe failed to create $f"
+
+		# confirm setstripe actually created stripe on requested OST
+		local uuid=$(ostuuid_from_index $i)
+
+		for file in f$i all; do
+			local found=$($LFS find --obd $uuid --name $file $dir)
+
+			if [[ $dir/$file != $found ]]; then
+				$LFS getstripe $dir/$file
+				error "wrong stripe: $file, uuid: $uuid"
+			fi
+		done
+	done
 
 	# Before failing an OST, get its obd name and index
 	local varsvc=${ostfail}_svc
