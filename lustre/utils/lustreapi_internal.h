@@ -155,4 +155,12 @@ int libcfs_ukuc_stop(struct lustre_kernelcomm *l);
 int libcfs_ukuc_get_rfd(struct lustre_kernelcomm *link);
 int libcfs_ukuc_msg_get(struct lustre_kernelcomm *l, char *buf, int maxsize,
 			int transport);
+
+enum get_lmd_info_type {
+	GET_LMD_INFO = 1,
+	GET_LMD_STRIPE = 2,
+};
+
+int get_lmd_info_fd(char *path, int parentfd, int dirfd,
+		    void *lmd_buf, int lmd_len, enum get_lmd_info_type type);
 #endif /* _LUSTREAPI_INTERNAL_H_ */

@@ -994,8 +994,15 @@ static int ct_md_getattr(const struct hsm_copytool_private *ct,
 			 lstat_t *st)
 {
 	struct lov_user_mds_data *lmd;
+	char fname[FID_NOBRACE_LEN + 1] = "";
 	size_t lmd_size;
 	int rc;
+
+	rc = snprintf(fname, sizeof(fname), DFID_NOBRACE, PFID(fid));
+	if (rc < 0)
+		return rc;
+	if (rc >= sizeof(fname) || rc == 0)
+		return -EINVAL;
 
 	lmd_size = sizeof(lmd->lmd_st) +
 		lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
@@ -1003,23 +1010,14 @@ static int ct_md_getattr(const struct hsm_copytool_private *ct,
 	if (lmd_size < sizeof(lmd->lmd_st) + XATTR_SIZE_MAX)
 		lmd_size = sizeof(lmd->lmd_st) + XATTR_SIZE_MAX;
 
-	if (lmd_size < FID_NOBRACE_LEN + 1)
-		lmd_size = FID_NOBRACE_LEN + 1;
-
 	lmd = malloc(lmd_size);
 	if (lmd == NULL)
 		return -ENOMEM;
 
-	snprintf((char *)lmd, lmd_size, DFID_NOBRACE, PFID(fid));
-
-	rc = ioctl(ct->open_by_fid_fd, IOC_MDC_GETFILEINFO, lmd);
-	if (rc != 0) {
-		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "cannot get metadata attributes of "DFID" in '%s'",
-			    PFID(fid), ct->mnt);
+	rc = get_lmd_info_fd(fname, ct->open_by_fid_fd, -1,
+			     lmd, lmd_size, GET_LMD_INFO);
+	if (rc)
 		goto out;
-	}
 
 	*st = lmd->lmd_st;
 out:

@@ -687,11 +687,6 @@ struct lov_user_mds_data_v1 {
 	lstat_t lmd_st;                 /* MDS stat struct */
 	struct lov_user_md_v1 lmd_lmm;  /* LOV EA V1 user data */
 } __attribute__((packed));
-
-struct lov_user_mds_data_v3 {
-	lstat_t lmd_st;                 /* MDS stat struct */
-	struct lov_user_md_v3 lmd_lmm;  /* LOV EA V3 user data */
-} __attribute__((packed));
 #endif
 
 struct lmv_user_mds_data {

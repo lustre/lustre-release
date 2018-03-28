@@ -1644,7 +1644,7 @@ static int common_param_init(struct find_param *param, char *path)
 		lum_size = PATH_MAX + 1;
 
 	param->fp_lum_size = lum_size;
-	param->fp_lmd = calloc(1, sizeof(lstat_t) + param->fp_lum_size);
+	param->fp_lmd = calloc(1, sizeof(lstat_t) + lum_size);
 	if (param->fp_lmd == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
 			    "error: allocation of %zu bytes for ioctl",
@@ -1747,62 +1747,93 @@ again:
 	return ret;
 }
 
-static int get_lmd_info(char *path, DIR *parent, DIR *dir,
-                 struct lov_user_mds_data *lmd, int lumlen)
+int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
+		    void *lmdbuf, int lmdlen, enum get_lmd_info_type type)
 {
-        lstat_t *st = &lmd->lmd_st;
-        int ret = 0;
+	struct lov_user_mds_data *lmd = lmdbuf;
+	lstat_t *st = &lmd->lmd_st;
+	int ret = 0;
 
-        if (parent == NULL && dir == NULL)
-                return -EINVAL;
+	if (parent_fd < 0 && dir_fd < 0)
+		return -EINVAL;
+	if (type != GET_LMD_INFO && type != GET_LMD_STRIPE)
+		return -EINVAL;
 
-        if (dir) {
-                ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO, (void *)lmd);
-        } else if (parent) {
+	if (dir_fd >= 0) {
+		/* LL_IOC_MDC_GETINFO operates on the current directory inode
+		 * and returns struct lov_user_mds_data, while
+		 * LL_IOC_LOV_GETSTRIPE returns only struct lov_user_md.
+		 */
+		ret = ioctl(dir_fd, type == GET_LMD_INFO ? LL_IOC_MDC_GETINFO :
+							   LL_IOC_LOV_GETSTRIPE,
+			    lmdbuf);
+	} else if (parent_fd >= 0) {
 		char *fname = strrchr(path, '/');
 
-		/* To avoid opening, locking, and closing each file on the
-		 * client if that is not needed. The GETFILEINFO ioctl can
-		 * be done on the patent dir with a single open for all
+		/* IOC_MDC_GETFILEINFO takes as input the filename (relative to
+		 * the parent directory) and returns struct lov_user_mds_data,
+		 * while IOC_MDC_GETFILESTRIPE returns only struct lov_user_md.
+		 *
+		 * This avoids opening, locking, and closing each file on the
+		 * client if that is not needed. Multiple of these ioctl() can
+		 * be done on the parent dir with a single open for all
 		 * files in that directory, and it also doesn't pollute the
 		 * client dcache with millions of dentries when traversing
-		 * a large filesystem.  */
+		 * a large filesystem.
+		 */
 		fname = (fname == NULL ? path : fname + 1);
-		/* retrieve needed file info */
-		snprintf((char *)lmd, lumlen, "%s", fname);
-		ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
-        }
 
-        if (ret) {
-                if (errno == ENOTTY) {
-                        /* ioctl is not supported, it is not a lustre fs.
-                         * Do the regular lstat(2) instead. */
-                        ret = lstat_f(path, st);
-                        if (ret) {
-                                ret = -errno;
-                                llapi_error(LLAPI_MSG_ERROR, ret,
-                                            "error: %s: lstat failed for %s",
-                                            __func__, path);
-                        }
-                } else if (errno == ENOENT) {
-                        ret = -errno;
-                        llapi_error(LLAPI_MSG_WARN, ret,
-                                    "warning: %s: %s does not exist",
-                                    __func__, path);
-                } else if (errno != EISDIR) {
-                        ret = -errno;
-                        llapi_error(LLAPI_MSG_ERROR, ret,
-                                    "%s ioctl failed for %s.",
-                                    dir ? "LL_IOC_MDC_GETINFO" :
-                                    "IOC_MDC_GETFILEINFO", path);
-		} else {
+		ret = snprintf(lmdbuf, lmdlen, "%s", fname);
+		if (ret < 0)
+			errno = -ret;
+		else if (ret >= lmdlen || ret++ == 0)
+			errno = EINVAL;
+		else
+			ret = ioctl(parent_fd, type == GET_LMD_INFO ?
+						IOC_MDC_GETFILEINFO :
+						IOC_MDC_GETFILESTRIPE, lmdbuf);
+	}
+
+	if (ret && type == GET_LMD_INFO) {
+		if (errno == ENOTTY) {
+			/* ioctl is not supported, it is not a lustre fs.
+			 * Do the regular lstat(2) instead.
+			 */
+			ret = lstat_f(path, st);
+			if (ret) {
+				ret = -errno;
+				llapi_error(LLAPI_MSG_ERROR, ret,
+					    "error: %s: lstat failed for %s",
+					    __func__, path);
+			}
+		} else if (errno == ENOENT) {
+			ret = -errno;
+			llapi_error(LLAPI_MSG_WARN, ret,
+				    "warning: %s does not exist", path);
+		} else if (errno != EISDIR && errno != ENODATA) {
 			ret = -errno;
 			llapi_error(LLAPI_MSG_ERROR, ret,
-				 "error: %s: IOC_MDC_GETFILEINFO failed for %s",
-				   __func__, path);
+				    "%s ioctl failed for %s.",
+				    dir_fd >= 0 ? "LL_IOC_MDC_GETINFO" :
+				    "IOC_MDC_GETFILEINFO", path);
 		}
 	}
+
 	return ret;
+}
+
+static int get_lmd_info(char *path, DIR *parent, DIR *dir, void *lmdbuf,
+			int lmdlen, enum get_lmd_info_type type)
+{
+	int parent_fd = -1;
+	int dir_fd = -1;
+
+	if (parent)
+		parent_fd = dirfd(parent);
+	if (dir)
+		dir_fd = dirfd(dir);
+
+	return get_lmd_info_fd(path, parent_fd, dir_fd, lmdbuf, lmdlen, type);
 }
 
 static int llapi_semantic_traverse(char *path, int size, DIR *parent,
@@ -1859,7 +1890,7 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 			lstat_t *st = &param->fp_lmd->lmd_st;
 
 			rc = get_lmd_info(path, d, NULL, param->fp_lmd,
-					   param->fp_lum_size);
+					  param->fp_lum_size, GET_LMD_INFO);
 			if (rc == 0)
 				dent->d_type = IFTODT(st->st_mode);
 			else if (ret == 0)
@@ -3984,7 +4015,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 
 		param->fp_lmd->lmd_lmm.lmm_magic = 0;
 		ret = get_lmd_info(path, parent, dir, param->fp_lmd,
-				   param->fp_lum_size);
+				   param->fp_lum_size, GET_LMD_INFO);
 		if (ret == 0 && param->fp_lmd->lmd_lmm.lmm_magic == 0 &&
 		    find_check_lmm_info(param)) {
 			struct lov_user_md *lmm = &param->fp_lmd->lmd_lmm;
@@ -4507,26 +4538,14 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
 			return ret;
 	}
 
-	if (d) {
-		if (param->fp_get_lmv || param->fp_get_default_lmv) {
-			ret = cb_get_dirstripe(path, d, param);
-		} else {
-			ret = ioctl(dirfd(d), LL_IOC_LOV_GETSTRIPE,
-				     (void *)&param->fp_lmd->lmd_lmm);
-		}
-
-	} else if (parent && !param->fp_get_lmv && !param->fp_get_default_lmv) {
-		char *fname = strrchr(path, '/');
-		fname = (fname == NULL ? path : fname + 1);
-
-		snprintf((char *)&param->fp_lmd->lmd_lmm, param->fp_lum_size,
-			 "%s", fname);
-
-		ret = ioctl(dirfd(parent), IOC_MDC_GETFILESTRIPE,
-			    (void *)&param->fp_lmd->lmd_lmm);
-	} else {
+	if (d && (param->fp_get_lmv || param->fp_get_default_lmv))
+		ret = cb_get_dirstripe(path, d, param);
+	else if (d ||
+		 (parent && !param->fp_get_lmv && !param->fp_get_default_lmv))
+		ret = get_lmd_info(path, parent, d, &param->fp_lmd->lmd_lmm,
+				   param->fp_lum_size, GET_LMD_STRIPE);
+	else
 		return 0;
-	}
 
         if (ret) {
                 if (errno == ENODATA && d != NULL) {
