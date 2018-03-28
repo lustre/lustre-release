@@ -81,12 +81,14 @@
 %global modules_fs_path /lib/modules/%{kversion}/%{kmoddir}
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+	%global requires_yaml_name libyaml
 	%global requires_kmod_name kmod-%{lustre_name}
 	%if %{with lustre_tests}
 		%global requires_kmod_tests_name kmod-%{lustre_name}-tests
 	%endif
 	%global requires_kmod_version %{version}
 %else	#for Suse
+	%global requires_yaml_name libyaml-0-2
 	%global requires_kmod_name %{lustre_name}-kmp
 	%if %{with lustre_tests}
 		%global requires_kmod_tests_name %{lustre_name}-tests-kmp
@@ -132,7 +134,8 @@ Source6: kmp-lustre-osd-zfs.files
 Source7: kmp-lustre-tests.files
 URL: https://wiki.hpdd.intel.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
-Requires: %{requires_kmod_name} = %{requires_kmod_version} libyaml zlib
+Requires: %{requires_kmod_name} = %{requires_kmod_version} zlib
+Requires: %{requires_yaml_name}
 BuildRequires: libtool libyaml-devel zlib-devel
 %if %{with servers}
 Requires: lustre-osd
