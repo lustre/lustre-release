@@ -69,11 +69,10 @@ if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
 fi
 
-# Get the SLES version so we can make decisions on if a test should be run
+# Get the SLES distro version
 #
 # Returns a version string that should only be used in comparing
 # strings returned by version_code()
-
 sles_version_code()
 {
 	local version=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
@@ -83,6 +82,8 @@ sles_version_code()
 	version_code $sles_version
 }
 
+# Check if we are running on Ubuntu or SLES so we can make decisions on
+# what tests to run
 if [ -r /etc/SuSE-release ]; then
 	sles_version=$(sles_version_code)
 	[ $sles_version -lt $(version_code 11.4.0) ] &&
@@ -91,6 +92,21 @@ if [ -r /etc/SuSE-release ]; then
 	[ $sles_version -lt $(version_code 12.0.0) ] &&
 		# bug number for skipped test: LU-3703
 		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  234"
+elif [ -r /etc/os-release ]; then
+	if grep -qi ubuntu /etc/os-release; then
+		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
+						-e 's/^VERSION=//p' \
+						/etc/os-release |
+						awk '{ print $1 }'))
+
+		if [[ $ubuntu_version -gt $(version_code 16.0.0) ]]; then
+			# bug number for skipped test:
+			#                LU-10334 LU-10335 LU-10335 LU-10335
+			ALWAYS_EXCEPT+=" 103a     130a     130b     130c"
+			#                LU-10335 LU-10335 LU-10365 LU-10366
+			ALWAYS_EXCEPT+=" 130d     130e     400a     410"
+		fi
+	fi
 fi
 
 FAIL_ON_ERROR=false
