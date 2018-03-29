@@ -327,10 +327,13 @@ AS_IF([test "x$enable_gss" != xno], [
 		AC_DEFINE([HAVE_GSS], [1], [Define this is if you enable gss])
 		enable_gss="yes"
 	], [
+		enable_gss_keyring="no"
 		enable_gss="no"
 	])
 
 	enable_ssk=$enable_gss
+], [
+	enable_gss_keyring="no"
 ])
 ]) # LC_CONFIG_GSS
 

@@ -57,14 +57,11 @@ sysconfigdir = $(sysconfdir)/sysconfig
 sysconfig_DATA = lustre
 if GSS_KEYRING
 sysconfig_DATA += lsvcgss
+requestkeydir = $(sysconfdir)/request-key.d
+requestkey_DATA = lgssc.conf
 endif
 endif
 endif
 
 modprobedir = $(sysconfdir)/modprobe.d
 modprobe_DATA = ko2iblnd.conf
-
-if GSS_KEYRING
-requestkeydir = $(sysconfdir)/request-key.d
-requestkey_DATA = lgssc.conf
-endif
