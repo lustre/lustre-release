@@ -22,6 +22,7 @@
 #               OCF parameters are as follows:
 #               OCF_RESKEY_target - the device or ZFS volume to mount/umount
 #               OCF_RESKEY_mountpoint - the mountpoint to use
+#               OCF_RESKEY_mountoptions - any mount options to use
 #######################################################################
 # Initialization:
 
@@ -76,6 +77,14 @@ The mount point where the Lustre target will be mounted.
 <content type="string" default="" />
 </parameter>
 
+<parameter name="mountoptions" unique="1" required="0">
+<longdesc lang="en">
+Any additional mount options for the Lustre target. (eg: "-o skpath=/path/to/keys")
+</longdesc>
+<shortdesc lang="en">Mount options for Lustre target</shortdesc>
+<content type="string" default="" />
+</parameter>
+
 </parameters>
 
 <actions>
@@ -121,11 +130,15 @@ lustre_mount () {
     if ! lustre_is_mounted; then
 	ocf_log info "Starting to mount $OCF_RESKEY_target"
 
-	if mount -t lustre $OCF_RESKEY_target $OCF_RESKEY_mountpoint ; then
+	output=$(mount -t lustre $OCF_RESKEY_mountoptions $OCF_RESKEY_target $OCF_RESKEY_mountpoint 2>&1)
+	rc=$?
+	if [ $rc -eq 0 ]; then
 	    ocf_log info "$OCF_RESKEY_target mounted successfully"
+	    [ -n "$output" ] && ocf_log info "$output"
 	    return $OCF_SUCCESS
 	fi
-	ocf_log err "$OCF_RESKEY_volume mount failed"
+	ocf_log err "$OCF_RESKEY_target mount failed, rc=$rc"
+	ocf_log err "$output"
 	return $OCF_ERR_GENERIC
     fi
     return $OCF_SUCCESS
@@ -135,11 +148,15 @@ lustre_umount () {
     if lustre_is_mounted; then
 	ocf_log info "Starting to unmount $OCF_RESKEY_target"
 
-	if umount $OCF_RESKEY_mountpoint; then
+	output=$(umount $OCF_RESKEY_mountpoint 2>&1)
+	rc=$?
+	if [ $rc -eq 0 ]; then
 	    ocf_log info "$OCF_RESKEY_target unmounted successfully"
+	    [ -n "$output" ] && ocf_log info "$output"
 	    return $OCF_SUCCESS
 	fi
-	ocf_log err "$OCF_RESKEY_target unmount failed"
+	ocf_log err "$OCF_RESKEY_target unmount failed, rc=$rc"
+	ocf_log err "$output"
 	return $OCF_ERR_GENERIC
     fi
     return $OCF_SUCCESS
