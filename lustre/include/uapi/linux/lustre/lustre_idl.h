@@ -808,9 +808,10 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT_OBDOPACK	 0x4000000000000000ULL /* compact OUT obdo */
 #define OBD_CONNECT_FLAGS2	 0x8000000000000000ULL /* second flags word */
 /* ocd_connect_flags2 flags */
-#define OBD_CONNECT2_FILE_SECCTX	0x1ULL /* set file security context at create */
-#define OBD_CONNECT2_LOCKAHEAD	0x2ULL /* ladvise lockahead v2 */
-#define OBD_CONNECT2_FLR	0x20ULL /* FLR support */
+#define OBD_CONNECT2_FILE_SECCTX	 0x1ULL /* set file security context at create */
+#define OBD_CONNECT2_LOCKAHEAD		 0x2ULL /* ladvise lockahead v2 */
+#define OBD_CONNECT2_DIR_MIGRATE	 0x4ULL /* migrate striped dir */
+#define OBD_CONNECT2_FLR		0x20ULL /* FLR support */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same

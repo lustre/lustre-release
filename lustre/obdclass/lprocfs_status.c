@@ -800,8 +800,12 @@ static const char *obd_connect_names[] = {
 	"compact_obdo",
 	"second_flags",
 	/* flags2 names */
-	"file_secctx",
-	"lockaheadv2",
+	"file_secctx",	/* 0x01 */
+	"lockaheadv2",	/* 0x02 */
+	"dir_migrate",	/* 0x04 */
+	"unknown",	/* 0x08 */
+	"unknown",	/* 0x10 */
+	"flr",		/* 0x20 */
 	NULL
 };
 
