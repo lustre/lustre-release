@@ -335,6 +335,7 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 	const struct dt_it_ops	*iops;
 	int			rc;
 	__u32			index;
+	int range_count = 0;
 	ENTRY;
 
 	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
@@ -388,25 +389,38 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 		GOTO(out, rc = PTR_ERR(it));
 
 	rc = iops->load(env, it, 0);
+	if (rc > 0)
+		rc = 0;
+	else if (rc == 0)
+		rc = iops->next(env, it);
+
 	if (rc < 0)
 		GOTO(out_it_fini, rc);
 
-	if (rc > 0) {
-		/* Load FLD entry into server cache */
-		do {
-			rc = iops->rec(env, it, (struct dt_rec *)range, 0);
-			if (rc != 0)
-				GOTO(out_it_put, rc);
-			LASSERT(range != NULL);
-			range_be_to_cpu(range, range);
+	while (rc == 0) {
+		rc = iops->rec(env, it, (struct dt_rec *)range, 0);
+		if (rc != 0)
+			GOTO(out_it_put, rc);
+
+		range_be_to_cpu(range, range);
+
+		/* Newly created ldiskfs IAM indexes may include a
+		 * zeroed-out key and record. Ignore it here. */
+		if (range->lsr_start < range->lsr_end) {
 			rc = fld_cache_insert(fld->lsf_cache, range);
 			if (rc != 0)
 				GOTO(out_it_put, rc);
-			rc = iops->next(env, it);
-		} while (rc == 0);
-	} else {
-		fld->lsf_new = 1;
+
+			range_count++;
+		}
+
+		rc = iops->next(env, it);
+		if (rc < 0)
+			GOTO(out_it_fini, rc);
 	}
+
+	if (range_count == 0)
+		fld->lsf_new = 1;
 
 	rc = fld_name_to_index(fld->lsf_name, &index);
 	if (rc < 0)
