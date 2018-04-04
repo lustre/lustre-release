@@ -253,6 +253,7 @@ struct dt_object *dt_locate_at(const struct lu_env *env,
 			return container_of0(n, struct dt_object, do_lu);
 	}
 
+	lu_object_put(env, lo);
 	return ERR_PTR(-ENOENT);
 }
 EXPORT_SYMBOL(dt_locate_at);

@@ -153,9 +153,9 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 		list_add_tail(&top->loh_lru, &bkt->lsb_lru);
 		bkt->lsb_lru_len++;
 		percpu_counter_inc(&site->ls_lru_len_counter);
-		CDEBUG(D_INODE, "Add %p to site lru. hash: %p, bkt: %p, "
-		       "lru_len: %ld\n",
-		       o, site->ls_obj_hash, bkt, bkt->lsb_lru_len);
+		CDEBUG(D_INODE, "Add %p/%p to site lru. hash: %p, bkt: %p, "
+		       "lru_len: %ld\n", orig, top,
+		       site->ls_obj_hash, bkt, bkt->lsb_lru_len);
 		cfs_hash_bd_unlock(site->ls_obj_hash, &bd, 1);
 		return;
 	}
