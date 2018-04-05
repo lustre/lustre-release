@@ -71,6 +71,7 @@ int class_dentry_readdir(const struct lu_env *env, struct mgs_device *mgs,
 	struct mgs_direntry *de;
 	char *key;
 	int rc, key_sz;
+	size_t suffix_len = sizeof(".bak") - 1;
 
 	INIT_LIST_HEAD(log_list);
 
@@ -107,9 +108,8 @@ int class_dentry_readdir(const struct lu_env *env, struct mgs_device *mgs,
 		}
 
 		/* filter out ".bak" files */
-		/* sizeof(".bak") - 1 == 3 */
-		if (key_sz >= 3 &&
-		    !memcmp(".bak", key + key_sz - 3, 3)) {
+		if (key_sz >= suffix_len &&
+		    !memcmp(".bak", key + key_sz - suffix_len, suffix_len)) {
 			CDEBUG(D_MGS, "Skipping backup file %.*s\n",
 			       key_sz, key);
 			goto next;
