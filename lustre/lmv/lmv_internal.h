@@ -152,9 +152,6 @@ struct lmv_tgt_desc
 *lmv_locate_mds(struct lmv_obd *lmv, struct md_op_data *op_data,
 		struct lu_fid *fid);
 /* lproc_lmv.c */
-#ifdef CONFIG_PROC_FS
-extern struct lprocfs_vars lprocfs_lmv_obd_vars[];
-#endif
-extern struct file_operations lmv_proc_target_fops;
+int lmv_tunables_init(struct obd_device *obd);
 
 #endif

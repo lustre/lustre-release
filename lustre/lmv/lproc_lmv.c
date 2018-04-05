@@ -32,63 +32,58 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/version.h>
 #include <linux/seq_file.h>
-#include <asm/statfs.h>
+#include <linux/statfs.h>
 #include <lprocfs_status.h>
 #include <obd_class.h>
 
 #include "lmv_internal.h"
 
-#ifndef CONFIG_PROC_FS
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-#else
-static int lmv_numobd_seq_show(struct seq_file *m, void *v)
+static ssize_t numobd_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
 {
-	struct obd_device	*dev = (struct obd_device *)m->private;
-        struct lmv_desc         *desc;
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lmv_desc *desc;
 
-        LASSERT(dev != NULL);
         desc = &dev->u.lmv.desc;
-	seq_printf(m, "%u\n", desc->ld_tgt_count);
-	return 0;
+	return sprintf(buf, "%u\n", desc->ld_tgt_count);
 }
-LPROC_SEQ_FOPS_RO(lmv_numobd);
+LUSTRE_RO_ATTR(numobd);
 
-static int lmv_activeobd_seq_show(struct seq_file *m, void *v)
+static ssize_t activeobd_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct obd_device	*dev = (struct obd_device *)m->private;
-        struct lmv_desc         *desc;
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lmv_desc *desc;
 
-        LASSERT(dev != NULL);
         desc = &dev->u.lmv.desc;
-	seq_printf(m, "%u\n", desc->ld_active_tgt_count);
-	return 0;
+	return sprintf(buf, "%u\n", desc->ld_active_tgt_count);
 }
-LPROC_SEQ_FOPS_RO(lmv_activeobd);
+LUSTRE_RO_ATTR(activeobd);
 
-static int lmv_desc_uuid_seq_show(struct seq_file *m, void *v)
+static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct obd_device	*dev = (struct obd_device*)m->private;
-        struct lmv_obd          *lmv;
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lmv_desc *desc;
 
-        LASSERT(dev != NULL);
-        lmv = &dev->u.lmv;
-	seq_printf(m, "%s\n", lmv->desc.ld_uuid.uuid);
-	return 0;
+	desc = &dev->u.lmv.desc;
+	return sprintf(buf, "%s\n", desc->ld_uuid.uuid);
 }
-LPROC_SEQ_FOPS_RO(lmv_desc_uuid);
+LUSTRE_RO_ATTR(desc_uuid);
 
+#ifdef CONFIG_PROC_FS
 static void *lmv_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
 	struct obd_device       *dev = p->private;
 	struct lmv_obd          *lmv = &dev->u.lmv;
 
 	while (*pos < lmv->tgts_size) {
-		if (lmv->tgts[*pos] != NULL)
+		if (lmv->tgts[*pos])
 			return lmv->tgts[*pos];
-
 		++*pos;
 	}
 
@@ -97,7 +92,6 @@ static void *lmv_tgt_seq_start(struct seq_file *p, loff_t *pos)
 
 static void lmv_tgt_seq_stop(struct seq_file *p, void *v)
 {
-        return;
 }
 
 static void *lmv_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
@@ -107,9 +101,8 @@ static void *lmv_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
 
 	++*pos;
 	while (*pos < lmv->tgts_size) {
-		if (lmv->tgts[*pos] != NULL)
+		if (lmv->tgts[*pos])
 			return lmv->tgts[*pos];
-
 		++*pos;
 	}
 
@@ -120,10 +113,12 @@ static int lmv_tgt_seq_show(struct seq_file *p, void *v)
 {
 	struct lmv_tgt_desc     *tgt = v;
 
-	if (tgt == NULL)
+	if (!tgt)
 		return 0;
-	seq_printf(p, "%u: %s %sACTIVE\n", tgt->ltd_idx,
-		  tgt->ltd_uuid.uuid, tgt->ltd_active ? "" : "IN");
+
+	seq_printf(p, "%u: %s %sACTIVE\n",
+		   tgt->ltd_idx, tgt->ltd_uuid.uuid,
+		   tgt->ltd_active ? "" : "IN");
 	return 0;
 }
 
@@ -148,17 +143,7 @@ static int lmv_target_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-struct lprocfs_vars lprocfs_lmv_obd_vars[] = {
-	{ .name	=	"numobd",
-	  .fops	=	&lmv_numobd_fops	},
-	{ .name	=	"activeobd",
-	  .fops	=	&lmv_activeobd_fops	},
-	{ .name	=	"desc_uuid",
-	  .fops	=	&lmv_desc_uuid_fops	},
-	{ NULL }
-};
-
-struct file_operations lmv_proc_target_fops = {
+static const struct file_operations lmv_proc_target_fops = {
         .owner                = THIS_MODULE,
         .open                 = lmv_target_seq_open,
         .read                 = seq_read,
@@ -166,3 +151,39 @@ struct file_operations lmv_proc_target_fops = {
         .release              = seq_release,
 };
 #endif /* CONFIG_PROC_FS */
+
+static struct attribute *lmv_attrs[] = {
+	&lustre_attr_activeobd.attr,
+	&lustre_attr_desc_uuid.attr,
+	&lustre_attr_numobd.attr,
+	NULL,
+};
+
+int lmv_tunables_init(struct obd_device *obd)
+{
+	int rc;
+
+	obd->obd_ktype.default_attrs = lmv_attrs;
+	rc = lprocfs_obd_setup(obd, true);
+	if (rc)
+		goto out_failed;
+#ifdef CONFIG_PROC_FS
+	rc = lprocfs_alloc_md_stats(obd, 0);
+	if (rc) {
+		lprocfs_obd_cleanup(obd);
+		goto out_failed;
+	}
+
+	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
+				0444, &lmv_proc_target_fops, obd);
+	if (rc) {
+		lprocfs_free_md_stats(obd);
+		lprocfs_obd_cleanup(obd);
+		CWARN("%s: error adding LMV target_obd file: rc = %d\n",
+		      obd->obd_name, rc);
+		rc = 0;
+	}
+#endif /* CONFIG_PROC_FS */
+out_failed:
+	return rc;
+}

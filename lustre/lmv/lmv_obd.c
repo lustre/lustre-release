@@ -213,30 +213,24 @@ static int lmv_connect(const struct lu_env *env,
 	lmv->connected = 0;
 	lmv->conn_data = *data;
 
-	if (lmv->targets_proc_entry == NULL) {
-		lmv->targets_proc_entry = lprocfs_register("target_obds",
-							   obd->obd_proc_entry,
-							   NULL, NULL);
-		if (IS_ERR(lmv->targets_proc_entry)) {
-			CERROR("%s: cannot register "
-			       "/proc/fs/lustre/%s/%s/target_obds\n",
-			       obd->obd_name, obd->obd_type->typ_name,
-			       obd->obd_name);
-			lmv->targets_proc_entry = NULL;
-		}
+	lmv->lmv_tgts_kobj = kobject_create_and_add("target_obds",
+						    &obd->obd_kset.kobj);
+	if (!lmv->lmv_tgts_kobj) {
+		CERROR("%s: cannot create /sys/fs/lustre/%s/%s/target_obds\n",
+		       obd->obd_name, obd->obd_type->typ_name, obd->obd_name);
 	}
 
 	rc = lmv_check_connect(obd);
 	if (rc != 0)
-		GOTO(out_proc, rc);
+		GOTO(out_sysfs, rc);
 
 	*pexp = exp;
 
 	RETURN(rc);
 
-out_proc:
-	if (lmv->targets_proc_entry != NULL)
-		lprocfs_remove(&lmv->targets_proc_entry);
+out_sysfs:
+	if (lmv->lmv_tgts_kobj)
+		kobject_put(lmv->lmv_tgts_kobj);
 
 	class_disconnect(exp);
 
@@ -363,23 +357,11 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 		mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
 		atomic_read(&obd->obd_refcount));
 
-	if (lmv->targets_proc_entry != NULL) {
-		struct proc_dir_entry *mdc_symlink;
-
-		LASSERT(mdc_obd->obd_type != NULL);
-		LASSERT(mdc_obd->obd_type->typ_name != NULL);
-		mdc_symlink = lprocfs_add_symlink(mdc_obd->obd_name,
-						  lmv->targets_proc_entry,
-						  "../../../%s/%s",
-						  mdc_obd->obd_type->typ_name,
-						  mdc_obd->obd_name);
-		if (mdc_symlink == NULL) {
-			CERROR("cannot register LMV target "
-			       "/proc/fs/lustre/%s/%s/target_obds/%s\n",
-			       obd->obd_type->typ_name, obd->obd_name,
-			       mdc_obd->obd_name);
-		}
-	}
+	if (lmv->lmv_tgts_kobj)
+		/* Even if we failed to create the link, that's fine */
+		rc = sysfs_create_link(lmv->lmv_tgts_kobj,
+				       &mdc_obd->obd_kset.kobj,
+				       mdc_obd->obd_name);
 	RETURN(0);
 }
 
@@ -584,9 +566,9 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 mdc_obd->obd_fail = obd->obd_fail;
                 mdc_obd->obd_no_recov = obd->obd_no_recov;
 
-		if (lmv->targets_proc_entry != NULL)
-			lprocfs_remove_proc_entry(mdc_obd->obd_name,
-						  lmv->targets_proc_entry);
+		if (lmv->lmv_tgts_kobj)
+			sysfs_remove_link(lmv->lmv_tgts_kobj,
+					  mdc_obd->obd_name);
 	}
 
 	rc = obd_fid_fini(tgt->ltd_exp->exp_obd);
@@ -629,11 +611,8 @@ static int lmv_disconnect(struct obd_export *exp)
 		lmv_disconnect_mdc(obd, lmv->tgts[i]);
         }
 
-	if (lmv->targets_proc_entry != NULL)
-		lprocfs_remove(&lmv->targets_proc_entry);
-	else
-		CERROR("/proc/fs/lustre/%s/%s/target_obds missing\n",
-		       obd->obd_type->typ_name, obd->obd_name);
+	if (lmv->lmv_tgts_kobj)
+		kobject_put(lmv->lmv_tgts_kobj);
 
 out_local:
         /*
@@ -1287,16 +1266,11 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	spin_lock_init(&lmv->lmv_lock);
 	mutex_init(&lmv->lmv_init_mutex);
 
-#ifdef CONFIG_PROC_FS
-	obd->obd_vars = lprocfs_lmv_obd_vars;
-	lprocfs_obd_setup(obd, true);
-	lprocfs_alloc_md_stats(obd, 0);
-	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
-				0444, &lmv_proc_target_fops, obd);
+	rc = lmv_tunables_init(obd);
 	if (rc)
-		CWARN("%s: error adding LMV target_obd file: rc = %d\n",
+		CWARN("%s: error adding LMV sysfs/debugfs files: rc = %d\n",
 		      obd->obd_name, rc);
-#endif
+
 	rc = fld_client_init(&lmv->lmv_fld, obd->obd_name,
 			     LUSTRE_CLI_FLD_HASH_DHT);
 	if (rc) {
