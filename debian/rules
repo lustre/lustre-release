@@ -349,7 +349,7 @@ binary-modules: prep-deb-files
 	$(MAKE) $(PMAKEARGS)
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/$(PKGNAME)
 	# Remove stuff that doesn't belong (no module-only target)
-	cd $(CURDIR)/debian/$(PKGNAME) && rm -rf usr/bin usr/sbin usr/lib usr/share usr/include/lustre sbin etc
+	cd $(CURDIR)/debian/$(PKGNAME) && rm -rf usr/bin usr/sbin usr/lib usr/share usr/include/lustre lib/systemd sbin etc
 	dh_installdocs -p$(PKGNAME)
 	dh_installchangelogs -p$(PKGNAME)
 	dh_installmodules -p $(PKGNAME)
