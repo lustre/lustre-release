@@ -1,0 +1,4 @@
+/etc/lnet.conf
+/etc/lnet_routes.conf
+/etc/modprobe.d/ko2iblnd.conf
+/etc/udev/rules.d/99-lustre.rules

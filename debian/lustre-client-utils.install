@@ -2,3 +2,5 @@ debian/tmp/sbin/*			sbin
 debian/tmp/usr/sbin/*			usr/sbin
 debian/tmp/usr/bin/*			usr/bin
 debian/tmp/usr/lib/*.so.*		usr/lib
+debian/tmp/lib/systemd/system/* 	lib/systemd/system
+debian/tmp/etc/*			etc
