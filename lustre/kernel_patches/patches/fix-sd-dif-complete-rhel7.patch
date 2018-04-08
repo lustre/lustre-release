@@ -1,0 +1,30 @@
+When sector offset is larger then 2^32, the mapping from physical
+reference tag to the virtual values expected by block layer will be
+wrong.
+Linux-commit: c611529e7cd3465ec0eada0f44200e8420c38908
+
+Index: linux-3.10.0-693.21.1.el7.x86_64/drivers/scsi/sd_dif.c
+===================================================================
+--- linux-3.10.0-693.21.1.el7.x86_64.orig/drivers/scsi/sd_dif.c
++++ linux-3.10.0-693.21.1.el7.x86_64/drivers/scsi/sd_dif.c
+@@ -416,6 +416,7 @@ void sd_dif_complete(struct scsi_cmnd *s
+ 	struct sd_dif_tuple *sdt;
+ 	unsigned int i, j, sectors, sector_sz;
+ 	u32 phys, virt;
++	sector_t sector;
+ 
+ 	sdkp = scsi_disk(scmd->request->rq_disk);
+ 
+@@ -425,9 +426,10 @@ void sd_dif_complete(struct scsi_cmnd *s
+ 	sector_sz = scmd->device->sector_size;
+ 	sectors = good_bytes / sector_sz;
+ 
+-	phys = blk_rq_pos(scmd->request) & 0xffffffff;
++	sector = blk_rq_pos(scmd->request);
+ 	if (sector_sz == 4096)
+-		phys >>= 3;
++		sector >>= 3;
++	phys = sector & 0xffffffff;
+ 
+ 	__rq_for_each_bio(bio, scmd->request) {
+ 		struct bio_vec *iv;

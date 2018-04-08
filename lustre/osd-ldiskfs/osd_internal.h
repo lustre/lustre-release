@@ -238,6 +238,14 @@ struct osd_obj_orphan {
 	__u32 oor_ino;
 };
 
+enum osd_t10_type {
+	OSD_T10_TYPE_UNKNOWN = 0,
+	OSD_T10_TYPE1_CRC,
+	OSD_T10_TYPE3_CRC,
+	OSD_T10_TYPE1_IP,
+	OSD_T10_TYPE3_IP
+};
+
 /*
  * osd device.
  */
@@ -315,6 +323,8 @@ struct osd_device {
 	struct inode		*od_index_backup_inode;
 	enum lustre_index_backup_policy od_index_backup_policy;
 	int			 od_index_backup_stop;
+	/* T10PI type, zero if not supported  */
+	enum osd_t10_type	 od_t10_type;
 };
 
 enum osd_full_scrub_ratio {
@@ -521,7 +531,9 @@ struct osd_iobuf {
 	unsigned int       dr_rw:1;
 	struct lu_buf	   dr_pg_buf;
 	struct page      **dr_pages;
+	struct niobuf_local	**dr_lnbs;
 	struct lu_buf	   dr_bl_buf;
+	struct lu_buf	   dr_lnb_buf;
 	sector_t	  *dr_blocks;
 	ktime_t		   dr_start_time;
 	ktime_t		   dr_elapsed;	/* how long io took */
@@ -1422,5 +1434,17 @@ void osd_execute_truncate(struct osd_object *obj);
  * This limit is arbitrary, but is reasonable for the xattr API.
  */
 #define LDISKFS_XATTR_MAX_LARGE_EA_SIZE    (1024 * 1024)
+
+struct osd_bio_private {
+	struct osd_iobuf	*obp_iobuf;
+	/* Start page index in the obp_iobuf for the bio */
+	int			 obp_start_page_idx;
+};
+
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
+int osd_get_integrity_profile(struct osd_device *osd,
+			      integrity_gen_fn **generate_fn,
+			      integrity_vrfy_fn **verify_fn);
+#endif
 
 #endif /* _OSD_INTERNAL_H */

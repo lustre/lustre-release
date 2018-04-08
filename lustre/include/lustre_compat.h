@@ -178,6 +178,12 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define bvl_to_page(bvl)		(bvl->bv_page)
 #endif
 
+#ifdef HAVE_BVEC_ITER
+#define bio_start_sector(bio) (bio->bi_iter.bi_sector)
+#else
+#define bio_start_sector(bio) (bio->bi_sector)
+#endif
+
 #ifndef HAVE_BLK_QUEUE_MAX_SEGMENTS
 #define blk_queue_max_segments(rq, seg)                      \
         do { blk_queue_max_phys_segments(rq, seg);           \
@@ -723,5 +729,50 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 	return "";
 }
 #endif
+
+static inline unsigned int bip_size(struct bio_integrity_payload *bip)
+{
+#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+	return bip->bip_iter.bi_size;
+#else
+	return bip->bip_size;
+#endif
+}
+
+#ifndef INTEGRITY_FLAG_READ
+#define INTEGRITY_FLAG_READ BLK_INTEGRITY_VERIFY
+#endif
+
+#ifndef INTEGRITY_FLAG_WRITE
+#define INTEGRITY_FLAG_WRITE BLK_INTEGRITY_GENERATE
+#endif
+
+static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
+{
+	struct blk_integrity *bi = bdev_get_integrity(bdev);
+
+	if (bi == NULL)
+		return false;
+
+#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
+	if (rw == 0 && bi->profile->verify_fn != NULL &&
+	    (bi->flags & INTEGRITY_FLAG_READ))
+		return true;
+
+	if (rw == 1 && bi->profile->generate_fn != NULL &&
+	    (bi->flags & INTEGRITY_FLAG_WRITE))
+		return true;
+#else
+	if (rw == 0 && bi->verify_fn != NULL &&
+	    (bi->flags & INTEGRITY_FLAG_READ))
+		return true;
+
+	if (rw == 1 && bi->generate_fn != NULL &&
+	    (bi->flags & INTEGRITY_FLAG_WRITE))
+		return true;
+#endif
+
+	return false;
+}
 
 #endif /* _LUSTRE_COMPAT_H */

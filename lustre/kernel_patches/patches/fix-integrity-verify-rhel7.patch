@@ -1,0 +1,50 @@
+bio_integrity_verify() doesn't verify the data integrity at all.
+In that function, after reading the data, bio->bi_idx will be
+equal to bio->bi_vcnt because of bio_advance(),
+so bio_for_each_segment_all() should be used, not
+bio_for_each_segment().
+bio_advance() should not change the integrity data
+bio_integrity_advance() unless the BIO is being trimmed.
+Linux-commit: 63573e359d052e506d305c263576499f06355985
+
+Index: linux-3.10.0-693.21.1.el7.x86_64/fs/bio.c
+===================================================================
+--- linux-3.10.0-693.21.1.el7.x86_64.orig/fs/bio.c
++++ linux-3.10.0-693.21.1.el7.x86_64/fs/bio.c
+@@ -870,9 +870,6 @@ EXPORT_SYMBOL(submit_bio_wait);
+  */
+ void bio_advance(struct bio *bio, unsigned bytes)
+ {
+-	if (bio_integrity(bio))
+-		bio_integrity_advance(bio, bytes);
+-
+ 	bio->bi_sector += bytes >> 9;
+ 	bio->bi_size -= bytes;
+ 
+@@ -1973,6 +1970,9 @@ void bio_trim(struct bio *bio, int offse
+ 
+ 	clear_bit(BIO_SEG_VALID, &bio->bi_flags);
+ 
++	if (bio_integrity(bio))
++		bio_integrity_advance(bio, offset << 9);
++
+ 	bio_advance(bio, offset << 9);
+ 
+ 	bio->bi_size = size;
+Index: linux-3.10.0-693.21.1.el7.x86_64/fs/bio-integrity.c
+===================================================================
+--- linux-3.10.0-693.21.1.el7.x86_64.orig/fs/bio-integrity.c
++++ linux-3.10.0-693.21.1.el7.x86_64/fs/bio-integrity.c
+@@ -463,7 +463,11 @@ static int bio_integrity_verify(struct b
+ 	bix.disk_name = bio->bi_bdev->bd_disk->disk_name;
+ 	bix.sector_size = bi->sector_size;
+ 
+-	bio_for_each_segment(bv, bio, i) {
++	/*
++	 * bio->bi_idx might be equal to bio->bi_vcnt after __bio_advance(),
++	 * So use bio_for_each_segment_all() not bio_for_each_segment().
++	 */
++	bio_for_each_segment_all(bv, bio, i) {
+ 		void *kaddr = kmap_atomic(bv->bv_page);
+ 		bix.data_buf = kaddr + bv->bv_offset;
+ 		bix.data_size = bv->bv_len;

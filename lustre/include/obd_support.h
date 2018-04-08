@@ -335,6 +335,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OST_SKIP_LV_CHECK	 0x241
 #define OBD_FAIL_OST_STATFS_DELAY	 0x242
 #define OBD_FAIL_OST_INTEGRITY_FAULT	 0x243
+#define OBD_FAIL_OST_INTEGRITY_CMP	 0x244
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301

@@ -1948,6 +1948,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				     int sector_size,
 				     u32 *check_sum)
 {
+	enum cksum_types t10_cksum_type = tgt->lut_dt_conf.ddp_t10_cksum_type;
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
 	const char *obd_name = tgt->lut_obd->obd_name;
 	struct cfs_crypto_hash_desc *hdesc;
@@ -2011,14 +2012,35 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 * The left guard number should be able to hold checksums of a
 		 * whole page
 		 */
-		rc = obd_page_dif_generate_buffer(obd_name,
-			local_nb[i].lnb_page,
-			local_nb[i].lnb_page_offset & ~PAGE_MASK,
-			local_nb[i].lnb_len, guard_start + used_number,
-			guard_number - used_number, &used, sector_size,
-			fn);
-		if (rc)
-			break;
+		if (t10_cksum_type && opc == OST_READ &&
+		    local_nb[i].lnb_guard_disk) {
+			used = DIV_ROUND_UP(local_nb[i].lnb_len, sector_size);
+			if (used > (guard_number - used_number)) {
+				rc = -E2BIG;
+				break;
+			}
+			memcpy(guard_start + used_number,
+			       local_nb[i].lnb_guards,
+			       used * sizeof(*local_nb[i].lnb_guards));
+		} else {
+			rc = obd_page_dif_generate_buffer(obd_name,
+				local_nb[i].lnb_page,
+				local_nb[i].lnb_page_offset & ~PAGE_MASK,
+				local_nb[i].lnb_len, guard_start + used_number,
+				guard_number - used_number, &used, sector_size,
+				fn);
+			if (rc)
+				break;
+		}
+
+		LASSERT(used <= MAX_GUARD_NUMBER);
+		/* If disk support T10PI checksum, copy guards to local_nb */
+		if (t10_cksum_type && opc == OST_WRITE) {
+			local_nb[i].lnb_guard_rpc = 1;
+			memcpy(local_nb[i].lnb_guards,
+			       guard_start + used_number,
+			       used * sizeof(*local_nb[i].lnb_guards));
+		}
 
 		used_number += used;
 		if (used_number == guard_number) {

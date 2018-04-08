@@ -1,0 +1,41 @@
+Having struct bio allows us to do more in the genrate/verify_fn,
+like copying a known good guard tag already available rather than
+calculating it.
+
+Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
+===================================================================
+--- linux-3.10.0-862.9.1.el7.orig/fs/bio-integrity.c
++++ linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
+@@ -334,6 +334,8 @@ static void bio_integrity_generate(struc
+ 		bix.data_size = bv->bv_len;
+ 		bix.prot_buf = prot_buf;
+ 		bix.sector = sector;
++		bix.bio = bio;
++		bix.bi_idx = i;
+ 
+ 		generate_fn(&bix);
+ 
+@@ -485,6 +487,8 @@ static int bio_integrity_verify(struct b
+ 		bix.data_size = bv->bv_len;
+ 		bix.prot_buf = prot_buf;
+ 		bix.sector = sector;
++		bix.bio = bio;
++		bix.bi_idx = i;
+ 
+ 		ret = verify_fn(&bix);
+ 
+Index: linux-3.10.0-862.9.1.el7/include/linux/blkdev.h
+===================================================================
+--- linux-3.10.0-862.9.1.el7.orig/include/linux/blkdev.h
++++ linux-3.10.0-862.9.1.el7/include/linux/blkdev.h
+@@ -1696,8 +1696,10 @@ static inline uint64_t rq_io_start_time_
+ struct blk_integrity_exchg {
+ 	void			*prot_buf;
+ 	void			*data_buf;
++	struct bio		*bio;
+ 	sector_t		sector;
+ 	unsigned int		data_size;
++	unsigned int		bi_idx;
+ 	unsigned short		sector_size;
+ 	const char		*disk_name;
+ };

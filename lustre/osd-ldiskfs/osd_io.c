@@ -117,6 +117,12 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	if (unlikely(iobuf->dr_pages == NULL))
 		return -ENOMEM;
 
+	lu_buf_realloc(&iobuf->dr_lnb_buf,
+		       pages * sizeof(iobuf->dr_lnbs[0]));
+	iobuf->dr_lnbs = iobuf->dr_lnb_buf.lb_buf;
+	if (unlikely(iobuf->dr_lnbs == NULL))
+		return -ENOMEM;
+
 	iobuf->dr_max_pages = pages;
 
 	return 0;
@@ -124,10 +130,13 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 #define osd_init_iobuf(dev, iobuf, rw, pages) \
 	__osd_init_iobuf(dev, iobuf, rw, __LINE__, pages)
 
-static void osd_iobuf_add_page(struct osd_iobuf *iobuf, struct page *page)
+static void osd_iobuf_add_page(struct osd_iobuf *iobuf,
+			       struct niobuf_local *lnb)
 {
-        LASSERT(iobuf->dr_npages < iobuf->dr_max_pages);
-        iobuf->dr_pages[iobuf->dr_npages++] = page;
+	LASSERT(iobuf->dr_npages < iobuf->dr_max_pages);
+	iobuf->dr_pages[iobuf->dr_npages] = lnb->lnb_page;
+	iobuf->dr_lnbs[iobuf->dr_npages] = lnb;
+	iobuf->dr_npages++;
 }
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
@@ -306,6 +315,164 @@ static void bio_integrity_fault_inject(struct bio *bio)
 	}
 }
 
+static int bio_dif_compare(__u16 *expected_guard_buf, void *bio_prot_buf,
+			   unsigned int sectors, int tuple_size)
+{
+	__u16 *expected_guard;
+	__u16 *bio_guard;
+	int i;
+
+	expected_guard = expected_guard_buf;
+	for (i = 0; i < sectors; i++) {
+		bio_guard = (__u16 *)bio_prot_buf;
+		if (*bio_guard != *expected_guard) {
+			CERROR("unexpected guard tags on sector %d "
+			       "expected guard %u, bio guard "
+			       "%u, sectors %u, tuple size %d\n",
+			       i, *expected_guard, *bio_guard, sectors,
+			       tuple_size);
+			return -EIO;
+		}
+		expected_guard++;
+		bio_prot_buf += tuple_size;
+	}
+	return 0;
+}
+
+static int osd_bio_integrity_compare(struct bio *bio, struct osd_iobuf *iobuf,
+				     int index)
+{
+	struct blk_integrity *bi = bdev_get_integrity(bio->bi_bdev);
+	struct bio_integrity_payload *bip = bio->bi_integrity;
+	struct niobuf_local *lnb;
+	unsigned short sector_size = blk_integrity_interval(bi);
+	void *bio_prot_buf = page_address(bip->bip_vec->bv_page) +
+		bip->bip_vec->bv_offset;
+	struct bio_vec *bv;
+	sector_t sector = bio_start_sector(bio);
+	unsigned int i, sectors, total;
+	__u16 *expected_guard;
+	int rc;
+
+	total = 0;
+	bio_for_each_segment_all(bv, bio, i) {
+		lnb = iobuf->dr_lnbs[index];
+		expected_guard = lnb->lnb_guards;
+		sectors = bv->bv_len / sector_size;
+		if (lnb->lnb_guard_rpc) {
+			rc = bio_dif_compare(expected_guard, bio_prot_buf,
+					     sectors, bi->tuple_size);
+			if (rc)
+				return rc;
+		}
+
+		sector += sectors;
+		bio_prot_buf += sectors * bi->tuple_size;
+		total += sectors * bi->tuple_size;
+		LASSERT(total <= bip_size(bio->bi_integrity));
+		index++;
+	}
+	return 0;
+}
+
+static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
+				    struct osd_iobuf *iobuf,
+				    int start_page_idx, bool fault_inject,
+				    bool integrity_enabled)
+{
+	int rc;
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
+	integrity_gen_fn *generate_fn = NULL;
+	integrity_vrfy_fn *verify_fn = NULL;
+#endif
+
+	ENTRY;
+
+	if (!integrity_enabled)
+		RETURN(0);
+
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
+	rc = osd_get_integrity_profile(osd, &generate_fn, &verify_fn);
+	if (rc)
+		RETURN(rc);
+
+	rc = bio_integrity_prep_fn(bio, generate_fn, verify_fn);
+#else
+	rc = bio_integrity_prep(bio);
+#endif
+	if (rc)
+		RETURN(rc);
+
+	/* Verify and inject fault only when writing */
+	if (iobuf->dr_rw == 1) {
+		if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_CMP))) {
+			rc = osd_bio_integrity_compare(bio, iobuf,
+						       start_page_idx);
+			if (rc)
+				RETURN(rc);
+		}
+
+		if (unlikely(fault_inject))
+			bio_integrity_fault_inject(bio);
+	}
+
+	RETURN(0);
+}
+
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
+#  ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
+static void dio_integrity_complete_routine(struct bio *bio)
+{
+#  else
+static void dio_integrity_complete_routine(struct bio *bio, int error)
+{
+#  endif
+	struct osd_bio_private *bio_private = bio->bi_private;
+
+	bio->bi_private = bio_private->obp_iobuf;
+#  ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
+	dio_complete_routine(bio);
+#  else
+	dio_complete_routine(bio, error);
+#  endif
+
+	OBD_FREE_PTR(bio_private);
+}
+#endif
+
+static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
+			bool integrity_enabled, int start_page_idx,
+			struct osd_bio_private **pprivate)
+{
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
+	struct osd_bio_private *bio_private;
+
+	ENTRY;
+
+	*pprivate = NULL;
+	if (integrity_enabled) {
+		OBD_ALLOC_GFP(bio_private, sizeof(*bio_private), GFP_NOIO);
+		if (bio_private == NULL)
+			RETURN(-ENOMEM);
+		bio->bi_end_io = dio_integrity_complete_routine;
+		bio->bi_private = bio_private;
+		bio_private->obp_start_page_idx = start_page_idx;
+		bio_private->obp_iobuf = iobuf;
+		*pprivate = bio_private;
+	} else {
+		bio->bi_end_io = dio_complete_routine;
+		bio->bi_private = iobuf;
+	}
+	RETURN(0);
+#else
+	ENTRY;
+
+	bio->bi_end_io = dio_complete_routine;
+	bio->bi_private = iobuf;
+	RETURN(0);
+#endif
+}
+
 static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                       struct osd_iobuf *iobuf)
 {
@@ -314,9 +481,13 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	int npages = iobuf->dr_npages;
 	sector_t *blocks = iobuf->dr_blocks;
 	int total_blocks = npages * blocks_per_page;
-	int sector_bits = inode->i_sb->s_blocksize_bits - 9;
-	unsigned int blocksize = inode->i_sb->s_blocksize;
+	struct super_block *sb = inode->i_sb;
+	int sector_bits = sb->s_blocksize_bits - 9;
+	unsigned int blocksize = sb->s_blocksize;
+	struct block_device *bdev = sb->s_bdev;
+	struct osd_bio_private *bio_private = NULL;
 	struct bio *bio = NULL;
+	int bio_start_page_idx;
 	struct page *page;
 	unsigned int page_offset;
 	sector_t sector;
@@ -326,11 +497,14 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	int i;
 	int rc = 0;
 	bool fault_inject;
+	bool integrity_enabled;
 	DECLARE_PLUG(plug);
 	ENTRY;
 
 	fault_inject = OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT);
         LASSERT(iobuf->dr_npages == npages);
+
+	integrity_enabled = bdev_integrity_enabled(bdev, iobuf->dr_rw);
 
 	osd_brw_stats_update(osd, iobuf);
 	iobuf->dr_start_time = ktime_get();
@@ -386,20 +560,19 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                        bio_phys_segments(q, bio),
                                        queue_max_phys_segments(q),
 				       0, queue_max_hw_segments(q));
-				if (bio_integrity_enabled(bio)) {
-					if (bio_integrity_prep(bio)) {
-						bio_put(bio);
-						rc = -EIO;
-						goto out;
-					}
-					if (unlikely(fault_inject))
-						bio_integrity_fault_inject(bio);
+				rc = osd_bio_integrity_handle(osd, bio,
+					iobuf, bio_start_page_idx,
+					fault_inject, integrity_enabled);
+				if (rc) {
+					bio_put(bio);
+					goto out;
 				}
 
 				record_start_io(iobuf, bi_size);
 				osd_submit_bio(iobuf->dr_rw, bio);
 			}
 
+			bio_start_page_idx = page_idx;
 			/* allocate new bio */
 			bio = bio_alloc(GFP_NOIO, min(BIO_MAX_PAGES,
 						      (npages - page_idx) *
@@ -412,15 +585,19 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                 goto out;
                         }
 
-			bio_set_dev(bio, inode->i_sb->s_bdev);
+			bio_set_dev(bio, bdev);
 			bio_set_sector(bio, sector);
 #ifdef HAVE_BI_RW
 			bio->bi_rw = (iobuf->dr_rw == 0) ? READ : WRITE;
 #else
 			bio->bi_opf = (iobuf->dr_rw == 0) ? READ : WRITE;
 #endif
-			bio->bi_end_io = dio_complete_routine;
-			bio->bi_private = iobuf;
+			rc = osd_bio_init(bio, iobuf, integrity_enabled,
+					  bio_start_page_idx, &bio_private);
+			if (rc) {
+				bio_put(bio);
+				goto out;
+			}
 
 			rc = bio_add_page(bio, page,
 					  blocksize * nblocks, page_offset);
@@ -429,14 +606,13 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	}
 
 	if (bio != NULL) {
-		if (bio_integrity_enabled(bio)) {
-			if (bio_integrity_prep(bio)) {
-				bio_put(bio);
-				rc = -EIO;
-				goto out;
-			}
-			if (unlikely(fault_inject))
-				bio_integrity_fault_inject(bio);
+		rc = osd_bio_integrity_handle(osd, bio, iobuf,
+					      bio_start_page_idx,
+					      fault_inject,
+					      integrity_enabled);
+		if (rc) {
+			bio_put(bio);
+			goto out;
 		}
 
 		record_start_io(iobuf, bio_sectors(bio) << 9);
@@ -457,8 +633,13 @@ out:
 		osd_fini_iobuf(osd, iobuf);
 	}
 
-	if (rc == 0)
+	if (rc == 0) {
 		rc = iobuf->dr_error;
+	} else {
+		if (bio_private)
+			OBD_FREE_PTR(bio_private);
+	}
+
 	RETURN(rc);
 }
 
@@ -482,6 +663,8 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 		lnb->lnb_flags = 0;
 		lnb->lnb_page = NULL;
 		lnb->lnb_rc = 0;
+		lnb->lnb_guard_rpc = 0;
+		lnb->lnb_guard_disk = 0;
 
                 LASSERTF(plen <= len, "plen %u, len %lld\n", plen,
                          (long long) len);
@@ -1177,7 +1360,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 			continue;
 
 		if (maxidx >= lnb[i].lnb_page->index) {
-			osd_iobuf_add_page(iobuf, lnb[i].lnb_page);
+			osd_iobuf_add_page(iobuf, &lnb[i]);
 		} else {
 			long off;
 			char *p = kmap(lnb[i].lnb_page);
@@ -1434,7 +1617,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 		SetPageUptodate(lnb[i].lnb_page);
 
-		osd_iobuf_add_page(iobuf, lnb[i].lnb_page);
+		osd_iobuf_add_page(iobuf, &lnb[i]);
         }
 
 	osd_trans_exec_op(env, thandle, OSD_OT_WRITE);
@@ -1530,7 +1713,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			cache_hits++;
 		} else {
 			cache_misses++;
-			osd_iobuf_add_page(iobuf, lnb[i].lnb_page);
+			osd_iobuf_add_page(iobuf, &lnb[i]);
 		}
 
 		if (cache == 0)

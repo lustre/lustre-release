@@ -451,6 +451,9 @@ struct lmv_obd {
 	struct kobject		*lmv_tgts_kobj;
 };
 
+/* Minimum sector size is 512 */
+#define MAX_GUARD_NUMBER (PAGE_SIZE / 512)
+
 struct niobuf_local {
 	__u64		lnb_file_offset;
 	__u32		lnb_page_offset;
@@ -459,6 +462,9 @@ struct niobuf_local {
 	int		lnb_rc;
 	struct page	*lnb_page;
 	void		*lnb_data;
+	__u16		lnb_guards[MAX_GUARD_NUMBER];
+	__u16		lnb_guard_rpc:1;
+	__u16		lnb_guard_disk:1;
 };
 
 struct tgt_thread_big_cache {

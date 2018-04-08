@@ -2343,6 +2343,44 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_XATTR_HANDLER_SIMPLIFIED
 
 #
+# LC_HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+#
+# 4.3 replace interval with interval_exp in 'struct blk_integrity'.
+#
+AC_DEFUN([LC_HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD], [
+LB_CHECK_COMPILE([if 'bio_integrity_payload.bip_iter' exist],
+bio_integrity_payload_bip_iter, [
+	#include <linux/bio.h>
+],[
+	((struct bio_integrity_payload *)0)->bip_iter.bi_size = 0;
+],[
+	AC_DEFINE(HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD, 1,
+		[bio_integrity_payload.bip_iter exist])
+])
+]) # LC_HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
+
+#
+# LC_BIO_INTEGRITY_PREP_FN
+#
+# Lustre kernel patch extents bio_integrity_prep to accept optional
+# generate/verify_fn as extra args.
+#
+AC_DEFUN([LC_BIO_INTEGRITY_PREP_FN], [
+LB_CHECK_COMPILE([if 'bio_integrity_prep_fn' exists],
+bio_integrity_prep_fn, [
+	#include <linux/bio.h>
+],[
+	bio_integrity_prep_fn(NULL, NULL, NULL);
+],[
+	AC_DEFINE(HAVE_BIO_INTEGRITY_PREP_FN, 1,
+		[kernel has bio_integrity_prep_fn])
+	AC_SUBST(PATCHED_INTEGRITY_INTF)
+],[
+	AC_SUBST(PATCHED_INTEGRITY_INTF, [#])
+])
+]) # LC_BIO_INTEGRITY_PREP_FN
+
+#
 # LC_HAVE_LOCKS_LOCK_FILE_WAIT
 #
 # 4.4 kernel have moved locks API users to
@@ -3093,6 +3131,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.3
 	LC_HAVE_INTERVAL_EXP_BLK_INTEGRITY
+	LC_HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
 	LC_HAVE_CACHE_HEAD_HLIST
 	LC_HAVE_XATTR_HANDLER_SIMPLIFIED
 
@@ -3152,6 +3191,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.14
 	LC_PAGEVEC_INIT_ONE_PARAM
 	LC_BI_BDEV
+
+	# kernel patch to extend integrity interface
+	LC_BIO_INTEGRITY_PREP_FN
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

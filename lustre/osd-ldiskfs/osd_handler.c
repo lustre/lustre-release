@@ -2314,22 +2314,32 @@ static void osd_conf_get(const struct lu_env *env,
 			    sizeof("T10-DIF-TYPE") - 1) == 0) {
 			/* also skip "1/3-" at end */
 			const int type_off = sizeof("T10-DIF-TYPE.");
+			char type_number = name[type_off - 2];
 
-			if (interval != 512 && interval != 4096)
+			if (interval != 512 && interval != 4096) {
 				CERROR("%s: unsupported T10PI sector size %u\n",
 				       d->od_svname, interval);
-			else if (strcmp(name + type_off, "CRC") == 0)
+			} else if (type_number != '1' && type_number != '3') {
+				CERROR("%s: unsupported T10PI type %s\n",
+				       d->od_svname, name);
+			} else if (strcmp(name + type_off, "CRC") == 0) {
+				d->od_t10_type = type_number == '1' ?
+					OSD_T10_TYPE1_CRC : OSD_T10_TYPE3_CRC;
 				param->ddp_t10_cksum_type = interval == 512 ?
 					OBD_CKSUM_T10CRC512 :
 					OBD_CKSUM_T10CRC4K;
-			else if (strcmp(name + type_off, "IP") == 0)
+			} else if (strcmp(name + type_off, "IP") == 0) {
+				d->od_t10_type = type_number == '1' ?
+					OSD_T10_TYPE1_IP : OSD_T10_TYPE3_IP;
 				param->ddp_t10_cksum_type = interval == 512 ?
 					OBD_CKSUM_T10IP512 :
 					OBD_CKSUM_T10IP4K;
-			else
+			} else {
 				CERROR("%s: unsupported checksum type of "
 				       "T10PI type '%s'",
 				       d->od_svname, name);
+			}
+
 		} else {
 			CERROR("%s: unsupported T10PI type '%s'",
 			       d->od_svname, name);
@@ -7328,6 +7338,7 @@ static void osd_key_fini(const struct lu_context *ctx,
 	OBD_FREE(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
 	lu_buf_free(&info->oti_iobuf.dr_pg_buf);
 	lu_buf_free(&info->oti_iobuf.dr_bl_buf);
+	lu_buf_free(&info->oti_iobuf.dr_lnb_buf);
 	lu_buf_free(&info->oti_big_buf);
 	if (idc != NULL) {
 		LASSERT(info->oti_ins_cache_size > 0);
@@ -7692,6 +7703,7 @@ static int osd_device_init0(const struct lu_env *env,
 	INIT_LIST_HEAD(&o->od_index_restore_list);
 	spin_lock_init(&o->od_lock);
 	o->od_index_backup_policy = LIBP_NONE;
+	o->od_t10_type = 0;
 
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
