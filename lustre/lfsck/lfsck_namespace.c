@@ -4144,6 +4144,7 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 	lnr->lnr_fid = *lfsck_dto2fid(lfsck->li_obj_dir);
 	lnr->lnr_dir_cookie = MDS_DIR_END_OFF;
 	lnr->lnr_size = size;
+	lnr->lnr_type = lso->lso_attr.la_mode;
 
 	spin_lock(&lad->lad_lock);
 	if (lad->lad_assistant_status < 0 ||
