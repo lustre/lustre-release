@@ -7003,8 +7003,8 @@ cleanup_77c() {
 	$LCTL set_param osc.*osc-[^mM]*.checksum_dump=0
 	$check_ost &&
 		do_facet ost1 $LCTL set_param obdfilter.*-OST*.checksum_dump=0
-	[ -n $osc_file_prefix ] && rm -f ${osc_file_prefix}*
-	$check_ost && [ -n $ost_file_prefix ] &&
+	[ -n "$osc_file_prefix" ] && rm -f ${osc_file_prefix}*
+	$check_ost && [ -n "$ost_file_prefix" ] &&
 		do_facet ost1 rm -f ${ost_file_prefix}\*
 }
 
