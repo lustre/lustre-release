@@ -1546,18 +1546,19 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 
 /* Check if we are already handling earlier incarnation of this request.
  * Called under &req->rq_export->exp_rpc_lock locked */
-static int ptlrpc_server_check_resend_in_progress(struct ptlrpc_request *req)
+static struct ptlrpc_request*
+ptlrpc_server_check_resend_in_progress(struct ptlrpc_request *req)
 {
 	struct ptlrpc_request	*tmp = NULL;
 
 	if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) ||
 	    (atomic_read(&req->rq_export->exp_rpc_count) == 0))
-		return 0;
+		return NULL;
 
 	/* bulk request are aborted upon reconnect, don't try to
 	 * find a match */
 	if (req->rq_bulk_write || req->rq_bulk_read)
-		return 0;
+		return NULL;
 
 	/* This list should not be longer than max_requests in
 	 * flights on the client, so it is not all that long.
@@ -1575,12 +1576,12 @@ static int ptlrpc_server_check_resend_in_progress(struct ptlrpc_request *req)
 		if (tmp->rq_xid == req->rq_xid)
 			goto found;
 	}
-	return 0;
+	return NULL;
 
 found:
 	DEBUG_REQ(D_HA, req, "Found duplicate req in processing");
 	DEBUG_REQ(D_HA, tmp, "Request being processed");
-	return -EBUSY;
+	return tmp;
 }
 
 /**
@@ -1670,6 +1671,7 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 {
 	int rc;
 	bool hp;
+	struct ptlrpc_request *orig;
 	ENTRY;
 
 	rc = ptlrpc_server_hpreq_init(svcpt, req);
@@ -1685,12 +1687,30 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 		/* do search for duplicated xid and the adding to the list
 		 * atomically */
 		spin_lock_bh(&exp->exp_rpc_lock);
-		rc = ptlrpc_server_check_resend_in_progress(req);
-		if (rc < 0) {
+		orig = ptlrpc_server_check_resend_in_progress(req);
+		if (orig && likely(atomic_inc_not_zero(&orig->rq_refcount))) {
+			bool linked;
+
 			spin_unlock_bh(&exp->exp_rpc_lock);
 
+			/*
+			 * When the client resend request and the server has
+			 * the previous copy of it, we need to update deadlines,
+			 * to be sure that the client and the server have equal
+			 *  request deadlines.
+			 */
+
+			spin_lock(&orig->rq_rqbd->rqbd_svcpt->scp_at_lock);
+			linked = orig->rq_at_linked;
+			if (likely(linked))
+				ptlrpc_at_remove_timed(orig);
+			spin_unlock(&orig->rq_rqbd->rqbd_svcpt->scp_at_lock);
+			orig->rq_deadline = req->rq_deadline;
+			if (likely(linked))
+				ptlrpc_at_add_timed(orig);
+			ptlrpc_server_drop_request(orig);
 			ptlrpc_nrs_req_finalize(req);
-			RETURN(rc);
+			RETURN(-EBUSY);
 		}
 
 		if (hp || req->rq_ops != NULL)
