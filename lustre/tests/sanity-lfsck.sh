@@ -8,8 +8,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-#Bug number for excepting test      LU-10732 LU-10406
-ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT 9a       31c"
+#Bug number for excepting test      LU-10406
+ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT 31c"
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -40,7 +40,10 @@ SAVED_OSTCOUNT=${OSTCOUNT}
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
 MDSSIZE=100000
+[ $(facet_fstype $SINGLEMDS) == zfs ] && MDSSIZE=300000
 OSTSIZE=100000
+[ $(facet_fstype ost1) == zfs ] && OSTSIZE=300000
+
 # no need too many OSTs, to reduce the format/start/stop overhead
 cleanupall
 [ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
@@ -1119,8 +1122,10 @@ test_9a() {
 		error "(6) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL set_param -n mdd.*.lfsck_speed_limit 0
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param -n obdfilter.*.lfsck_speed_limit 0
 
 	wait_update_facet $SINGLEMDS \
 		"$LCTL get_param -n mdd.${MDT_DEV}.lfsck_layout |
@@ -1215,8 +1220,10 @@ test_9b() {
 		error "(10) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL set_param -n mdd.*.lfsck_speed_limit 0
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param -n obdfilter.*.lfsck_speed_limit 0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
@@ -1288,8 +1295,10 @@ test_10()
 	[ "$STATUS" == "scanning-phase1" ] ||
 		error "(15) Expect 'scanning-phase1', but got '$STATUS'"
 
-	do_facet $SINGLEMDS \
-		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL set_param -n mdd.*.lfsck_speed_limit 0
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param -n obdfilter.*.lfsck_speed_limit 0
 	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
 		mdd.${MDT_DEV}.lfsck_namespace |
 		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
@@ -4598,6 +4607,9 @@ test_30() {
 	mkdir $DIR/$tdir/foo/d0 || error "(3) Fail to mkdir d0"
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
+	local pfid=$($LFS path2fid $DIR/$tdir/foo)
+	local cfid=$($LFS path2fid $DIR/$tdir/foo/d0)
+
 	touch $DIR/$tdir/foo/d0/f1 || error "(4) Fail to touch f1"
 	mkdir $DIR/$tdir/foo/d0/d1 || error "(5) Fail to mkdir d1"
 
@@ -4648,10 +4660,10 @@ test_30() {
 
 	ls -ail $MOUNT/.lustre/lost+found/MDT0000/
 
-	cname=$(find $MOUNT/.lustre/lost+found/MDT0000/ -name *-*-D-*)
+	local cname=$MOUNT/.lustre/lost+found/MDT0000/${cfid}-${pfid}-D-0
 	[ ! -z "$cname" ] || error "(20) d0 is not recovered"
 
-	stat ${cname}/d1 || error "(21) d0 is not recovered"
+	stat ${cname}/d1 || error "(21) d1 is not recovered"
 	stat ${cname}/f1 || error "(22) f1 is not recovered"
 }
 run_test 30 "LFSCK can recover the orphans from backend /lost+found"
