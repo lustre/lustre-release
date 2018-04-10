@@ -1,4 +1,4 @@
-d#!/bin/bash
+#!/bin/bash
 # -*- tab-width: 8; indent-tabs-mode: t; -*-
 #
 # Run select tests by setting ONLY, or as arguments to the script.
