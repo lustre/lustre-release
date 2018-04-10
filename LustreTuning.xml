@@ -1634,15 +1634,16 @@ ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
 	<screen>lctl set_param ost.OSS.ost_io.nrs_policies="tbf &lt;<replaceable>policy</replaceable>&gt;"
 	</screen>
 	<para>For now, the RPCs can be classified into the different types
-	according to their NID, JOBID and OPCode. (UID/GID will be supported
-	soon.) When enabling TBF policy, you can specify one of the types, or
-	just use "tbf" to enable all of them to do a fine-grained RPC requests
-	classification.</para>
+	according to their NID, JOBID, OPCode and UID/GID. When enabling TBF
+	policy, you can specify one of the types, or just use "tbf" to enable
+	all of them to do a fine-grained RPC requests classification.</para>
 	<para>Example:</para>
 	<screen>$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf"
 $ lctl set_param ost.OSS.ost_io.nrs_policies="tbf nid"
 $ lctl set_param ost.OSS.ost_io.nrs_policies="tbf jobid"
-$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf opcode"</screen>
+$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf opcode"
+$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf uid"
+$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf gid"</screen>
       </section>
       <section remap="h4">
 	<title>Start a TBF rule</title>
@@ -1706,7 +1707,7 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
             linkend="dbdoclet.jobstats" /> for more details.</para>
 	    <para>Command:</para>
             <screen>lctl set_param x.x.x.nrs_tbf_rule=
-"[reg|hp] start <replaceable>name</replaceable> jobid={<replaceable>jobid_list</replaceable>} rate=<replaceable>rate</replaceable>"
+"[reg|hp] start <replaceable>rule_name</replaceable> jobid={<replaceable>jobid_list</replaceable>} rate=<replaceable>rate</replaceable>"
 	    </screen>
 	    <para>Wildcard is supported in
 	    {<replaceable>jobid_list</replaceable>}.</para>
@@ -1730,7 +1731,7 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
 	    <para><emphasis role="bold">Opcode based TBF policy</emphasis></para>
 	    <para>Command:</para>
             <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
-"[reg|hp] start <replaceable>name</replaceable> opcode={<replaceable>opcode_list</replaceable>} rate=<replaceable>rate</replaceable>"
+"[reg|hp] start <replaceable>rule_name</replaceable> opcode={<replaceable>opcode_list</replaceable>} rate=<replaceable>rate</replaceable>"
 	    </screen>
             <para>Example:</para>
 	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
@@ -1745,11 +1746,33 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
 "reg start iozone_user1 opcode={ost_read} rate=100"</screen>
 	  </listitem>
 	  <listitem>
+      <para><emphasis role="bold">UID/GID based TBF policy</emphasis></para>
+	    <para>Command:</para>
+	    <screen>$ lctl set_param ost.OSS.*.nrs_tbf_rule=\
+"[reg][hp] start <replaceable>rule_name</replaceable> uid={<replaceable>uid</replaceable>} rate=<replaceable>rate</replaceable>"
+$ lctl set_param ost.OSS.*.nrs_tbf_rule=\
+"[reg][hp] start <replaceable>rule_name</replaceable> gid={<replaceable>gid</replaceable>} rate=<replaceable>rate</replaceable>"</screen>
+	    <para>Exapmle:</para>
+	    <para>Limit the rate of RPC requests of the uid 500</para>
+	    <screen>$ lctl set_param ost.OSS.*.nrs_tbf_rule=\
+"start tbf_name uid={500} rate=100"</screen>
+	    <para>Limit the rate of RPC requests of the gid 500</para>
+	    <screen>$ lctl set_param ost.OSS.*.nrs_tbf_rule=\
+"start tbf_name gid={500} rate=100"</screen>
+	    <para>Also, you can use the following rule to control all reqs
+	    to mds:</para>
+	    <para>Start the tbf uid QoS on MDS:</para>
+	    <screen>$ lctl set_param mds.MDS.*.nrs_policies="tbf uid"</screen>
+	    <para>Limit the rate of RPC requests of the uid 500</para>
+	    <screen>$ lctl set_param mds.MDS.*.nrs_tbf_rule=\
+"start tbf_name uid={500} rate=100"</screen>
+	  </listitem>
+	  <listitem>
 	    <para><emphasis role="bold">Policy combination</emphasis></para>
-	    <para>To support rules with complex expressions of NID/JOBID/OPCode
-	    conditions, TBF classifier is extented to classify RPC in a more
-	    fine-grained way. This feature supports logical conditional
-	    conjunction and disjunction operations among different types.
+	    <para>To support TBF rules with complex expressions of conditions,
+	    TBF classifier is extented to classify RPC in a more fine-grained
+	    way. This feature supports logical conditional conjunction and
+	    disjunction operations among different types.
 	    In the rule:
 	    "&amp;" represents the conditional conjunction and
 	    "," represents the conditional disjunction.</para>
@@ -1780,6 +1803,11 @@ default * 10000, ref 0
 CPT 1:
 comp_rule opcode={ost_write}&amp;jobid={dd.0},nid={192.168.1.[1-128]@tcp 0@lo} 100, ref 0
 default * 10000, ref 0</screen>
+	    <para>Example:</para>
+	    <screen>$ lctl set_param ost.OSS.*.nrs_tbf_rule=\
+"start tbf_name uid={500}&amp;gid={500} rate=100"</screen>
+	    <para>In this example, those RPC requests whose uid is 500 and
+	    gid is 500 will be processed at the rate of 100 req/sec.</para>
 	  </listitem>
 	</itemizedlist>
       </section>
