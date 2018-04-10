@@ -423,12 +423,12 @@ xml:id="understandinglustre">
         <listitem>
           <para>
           <emphasis role="bold">NFS and CIFS export:</emphasis>Lustre files can
-          be re-exported using NFS (via Linux knfsd) or CIFS (via Samba)
-          enabling them to be shared with non-Linux clients, such as Microsoft
-          <superscript>*</superscript>Windows
-          <superscript>*</superscript>and Apple
+          be re-exported using NFS (via Linux knfsd or Ganesha) or CIFS (via
+	  Samba), enabling them to be shared with non-Linux clients such as
+	  Microsoft<superscript>*</superscript>Windows,
+          <superscript>*</superscript>Apple
           <superscript>*</superscript>Mac OS X
-          <superscript>*</superscript>.</para>
+          <superscript>*</superscript>, and others.</para>
         </listitem>
         <listitem>
           <para>
