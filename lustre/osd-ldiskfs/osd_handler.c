@@ -2711,7 +2711,7 @@ static int osd_transfer_project(struct inode *inode, __u32 projid)
 
 	if (!ldiskfs_has_feature_project(sb)) {
 		LASSERT(__kprojid_val(LDISKFS_I(inode)->i_projid)
-			!= LDISKFS_DEF_PROJID);
+			== LDISKFS_DEF_PROJID);
 		if (projid != LDISKFS_DEF_PROJID)
 			return -EOPNOTSUPP;
 		else
