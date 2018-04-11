@@ -12824,28 +12824,31 @@ obdecho_test() {
 
 test_180a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	remote_ost_nodsh && skip "remote OST with nodsh"
-
-	local rc=0
-	local rmmod_local=0
 
 	if ! module_loaded obdecho; then
-	    load_module obdecho/obdecho
-	    rmmod_local=1
+		load_module obdecho/obdecho &&
+			stack_trap "rmmod obdecho" EXIT ||
+			error "unable to load obdecho on client"
 	fi
 
 	local osc=$($LCTL dl | grep -v mdt | awk '$3 == "osc" {print $4; exit}')
-	local host=$(lctl get_param -n osc.$osc.import |
-			     awk '/current_connection:/ {print $2}' )
-	local target=$(lctl get_param -n osc.$osc.import |
-			     awk '/target:/ {print $2}' )
+	local host=$($LCTL get_param -n osc.$osc.import |
+		     awk '/current_connection:/ { print $2 }' )
+	local target=$($LCTL get_param -n osc.$osc.import |
+		       awk '/target:/ { print $2 }' )
 	target=${target%_UUID}
 
-	[[ -n $target ]]  && { setup_obdecho_osc $host $target || rc=1; } || rc=1
-	[ $rc -eq 0 ] && { obdecho_test ${target}_osc client || rc=2; }
-	[[ -n $target ]] && cleanup_obdecho_osc $target
-	[ $rmmod_local -eq 1 ] && rmmod obdecho
-	return $rc
+	if [ -n "$target" ]; then
+		setup_obdecho_osc $host $target &&
+			stack_trap "cleanup_obdecho_osc $target" EXIT ||
+			{ error "obdecho setup failed with $?"; return; }
+
+		obdecho_test ${target}_osc client ||
+			error "obdecho_test failed on ${target}_osc"
+	else
+		$LCTL get_param osc.$osc.import
+		error "there is no osc.$osc.import target"
+	fi
 }
 run_test 180a "test obdecho on osc"
 
@@ -12853,15 +12856,19 @@ test_180b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
-	local rc=0
-	local rmmod_remote=0
-
 	do_rpc_nodes $(facet_active_host ost1) load_module obdecho/obdecho &&
-		rmmod_remote=true || error "failed to load module obdecho"
-	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ {print $4;exit}')
-	[[ -n $target ]] && { obdecho_test $target ost1 || rc=1; }
-	$rmmod_remote && do_facet ost1 "rmmod obdecho"
-	return $rc
+		stack_trap "do_facet ost1 rmmod obdecho" EXIT ||
+		error "failed to load module obdecho"
+
+	local target=$(do_facet ost1 $LCTL dl |
+		       awk '/obdfilter/ { print $4; exit; }')
+
+	if [ -n "$target" ]; then
+		obdecho_test $target ost1 || error "obdecho_test failed with $?"
+	else
+		do_facet ost1 $LCTL dl
+		error "there is no obdfilter target on ost1"
+	fi
 }
 run_test 180b "test obdecho directly on obdfilter"
 
@@ -12871,23 +12878,22 @@ test_180c() { # LU-2598
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.0) ]] &&
 		skip "Need MDS version at least 2.4.0"
 
-	local rc=0
-	local rmmod_remote=false
-	local pages=16384 # 64MB bulk I/O RPC size
-	local target
-
 	do_rpc_nodes $(facet_active_host ost1) load_module obdecho/obdecho &&
-		rmmod_remote=true || error "failed to load module obdecho"
+		stack_trap "do_facet ost1 rmmod obdecho" EXIT ||
+		error "failed to load module obdecho"
 
-	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ { print $4; exit; }')
+	local target=$(do_facet ost1 $LCTL dl |
+		       awk '/obdfilter/ { print $4; exit; }')
+
 	if [ -n "$target" ]; then
-		obdecho_test "$target" ost1 "$pages" || rc=${PIPESTATUS[0]}
+		local pages=16384 # 64MB bulk I/O RPC size
+
+		obdecho_test "$target" ost1 "$pages" ||
+			error "obdecho_test with pages=$pages failed with $?"
 	else
-		echo "there is no obdfilter target on ost1"
-		rc=2
+		do_facet ost1 $LCTL dl
+		error "there is no obdfilter target on ost1"
 	fi
-	$rmmod_remote && do_facet ost1 "rmmod obdecho" || true
-	return $rc
 }
 run_test 180c "test huge bulk I/O size on obdfilter, don't LASSERT"
 

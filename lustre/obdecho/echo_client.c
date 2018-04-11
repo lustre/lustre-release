@@ -2579,11 +2579,11 @@ static int echo_client_prep_commit(const struct lu_env *env,
 				   u64 offset, u64 count,
 				   u64 batch, int async)
 {
-	struct obd_ioobj	 ioo;
-	struct niobuf_local	*lnb;
-	struct niobuf_remote	 rnb;
-	u64			 off;
-	u64			 npages, tot_pages, apc;
+	struct obd_ioobj ioo;
+	struct niobuf_local *lnb;
+	struct niobuf_remote rnb;
+	u64 off;
+	u64 npages, tot_pages, apc;
 	int i, ret = 0, brw_flags = 0;
 
 	ENTRY;
@@ -2594,7 +2594,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	apc = npages = batch >> PAGE_SHIFT;
 	tot_pages = count >> PAGE_SHIFT;
 
-	OBD_ALLOC(lnb, apc * sizeof(struct niobuf_local));
+	OBD_ALLOC_LARGE(lnb, apc * sizeof(struct niobuf_local));
 	if (lnb == NULL)
 		RETURN(-ENOMEM);
 
@@ -2660,7 +2660,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	}
 
 out:
-	OBD_FREE(lnb, apc * sizeof(struct niobuf_local));
+	OBD_FREE_LARGE(lnb, apc * sizeof(struct niobuf_local));
 
 	RETURN(ret);
 }
