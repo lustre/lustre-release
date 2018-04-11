@@ -3025,6 +3025,24 @@ test_57() {
 }
 run_test 57 "lfs project could tolerate errors"
 
+test_59() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "ldiskfs only test"
+		return
+	fi
+	disable_project_quota
+	setup_quota_test || error "setup quota failed with $?"
+	quota_init
+
+	local testfile="$DIR/$tdir/$tfile-0"
+	#make sure it did not crash kernel
+	touch $testfile && lfs project -sp 1 $testfile
+
+	enable_project_quota
+	cleanup_quota_test
+}
+run_test 59 "lfs project dosen't crash kernel with project disabled"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
