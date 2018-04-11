@@ -341,8 +341,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                 continue;       /* added this frag OK */
 
 			if (bio != NULL) {
-				struct request_queue *q =
-					bdev_get_queue(bio->bi_bdev);
+				struct request_queue *q = bio_get_queue(bio);
 				unsigned int bi_size = bio_sectors(bio) << 9;
 
 				/* Dang! I have to fragment this I/O */
@@ -370,7 +369,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                 goto out;
                         }
 
-			bio->bi_bdev = inode->i_sb->s_bdev;
+			bio_set_dev(bio, inode->i_sb->s_bdev);
 			bio_set_sector(bio, sector);
 #ifdef HAVE_BI_RW
 			bio->bi_rw = (iobuf->dr_rw == 0) ? READ : WRITE;

@@ -49,6 +49,7 @@
 /* struct dirent64 */
 #include <linux/dirent.h>
 #include <linux/statfs.h>
+#include <linux/bio.h>
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/ldiskfs_jbd2.h>
 
@@ -1327,6 +1328,13 @@ static inline struct buffer_head *__ldiskfs_bread(handle_t *handle,
 #endif
 	return bh;
 }
+
+#ifndef bio_set_dev
+# define bio_set_dev(bio, bdev) ((bio)->bi_bdev = bdev)
+# define bio_get_queue(bio)	bdev_get_queue((bio)->bi_bdev)
+#else
+# define bio_get_queue(bio)	((bio)->bi_disk->queue)
+#endif
 
 void ldiskfs_inc_count(handle_t *handle, struct inode *inode);
 void ldiskfs_dec_count(handle_t *handle, struct inode *inode);
