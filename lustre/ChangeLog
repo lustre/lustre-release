@@ -1,3 +1,42 @@
+TBD Intel Corporation
+       * version 2.10.4
+       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+         for currently supported client and server kernel versions.
+       * Server known to build on patched kernels:
+         2.6.32-431.29.2.el6 (RHEL6.5)
+         2.6.32-504.30.3.el6 (RHEL6.6)
+         2.6.32-573.26.1.el6 (RHEL6.7)
+         2.6.32-642.15.1.el6 (RHEL6.8)
+         2.6.32-696.23.1.el6 (RHEL6.9)
+         3.10.0-693.21.1.el7 (RHEL7.4)
+         3.0.101-0.47.71     (SLES11 SP3)
+         3.0.101-107         (SLES11 SP4)
+         3.12.74-60.64.40    (SLES12 SP1)
+         4.4.120-92.70       (SLES12 SP2)
+         4.4.120-94.17       (SLES12 SP3)
+         vanilla linux 4.6.7 (ZFS only)
+       * Client known to build on unpatched kernels:
+         2.6.32-431.29.2.el6 (RHEL6.5)
+         2.6.32-504.30.3.el6 (RHEL6.6)
+         2.6.32-573.26.1.el6 (RHEL6.7)
+         2.6.32-642.15.1.el6 (RHEL6.8)
+         2.6.32-696.23.1.el6 (RHEL6.9)
+         3.10.0-693.21.1.el7 (RHEL7.4)
+         3.0.101-0.47.71     (SLES11 SP3)
+         3.0.101-107         (SLES11 SP4)
+         3.12.74-60.64.40    (SLES12 SP1)
+         4.4.120-92.70       (SLES12 SP2)
+         4.4.120-94.17       (SLES12 SP3)
+         vanilla linux 4.6.7
+       * Recommended e2fsprogs version: 1.42.13.wc6 or newer
+       * Recommended ZFS / SPL version: 0.7.8
+       * Tested with ZFS / SPL version: 0.7.8
+       * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
+         since the NFSv4 export of Lustre filesystem with 4K stack may cause a
+         stack overflow. For more information, please refer to bugzilla 17630.
+       * NFSv4 reexport to 32-bit NFS client nodes requires Lustre client on
+         the re-exporting nodes to be mounted with "32bitapi" mount option
+
 01-31-2018 Intel Corporation
        * version 2.10.3
        * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
@@ -29,7 +68,7 @@
          4.4.120-94.17       (SLES12 SP3)
          4.4.0-116           (Ubuntu 16.04)
          vanilla linux 4.6.7
-       * Recommended e2fsprogs version: 1.42.13.wc4 or newer
+       * Recommended e2fsprogs version: 1.42.13.wc6 or newer
        * Recommended ZFS / SPL version: 0.7.5
        * Tested with ZFS / SPL version: 0.7.5
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
