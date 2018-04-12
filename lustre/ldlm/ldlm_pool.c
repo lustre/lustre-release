@@ -575,7 +575,7 @@ static struct ldlm_pool_ops ldlm_cli_pool_ops = {
  * Pool recalc wrapper. Will call either client or server pool recalc callback
  * depending what pool \a pl is used.
  */
-int ldlm_pool_recalc(struct ldlm_pool *pl)
+time64_t ldlm_pool_recalc(struct ldlm_pool *pl)
 {
 	time64_t recalc_interval_sec;
 	int count;
@@ -1244,15 +1244,15 @@ static int ldlm_pools_cli_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 
 #endif /* HAVE_SHRINKER_COUNT */
 
-int ldlm_pools_recalc(enum ldlm_side client)
+time64_t ldlm_pools_recalc(enum ldlm_side client)
 {
 	unsigned long nr_l = 0, nr_p = 0, l;
 	struct ldlm_namespace *ns;
 	struct ldlm_namespace *ns_old = NULL;
 	int nr, equal = 0;
 	/* seconds of sleep if no active namespaces */
-	int time = client ? LDLM_POOL_CLI_DEF_RECALC_PERIOD :
-			    LDLM_POOL_SRV_DEF_RECALC_PERIOD;
+	time64_t time = client ? LDLM_POOL_CLI_DEF_RECALC_PERIOD :
+				 LDLM_POOL_SRV_DEF_RECALC_PERIOD;
 
 	/*
 	 * No need to setup pool limit for client pools.
@@ -1388,7 +1388,7 @@ int ldlm_pools_recalc(enum ldlm_side client)
 		 * After setup is done - recalc the pool.
 		 */
 		if (!skip) {
-			int ttime = ldlm_pool_recalc(&ns->ns_pool);
+			time64_t ttime = ldlm_pool_recalc(&ns->ns_pool);
 
 			if (ttime < time)
 				time = ttime;
@@ -1406,9 +1406,9 @@ int ldlm_pools_recalc(enum ldlm_side client)
 static int ldlm_pools_thread_main(void *arg)
 {
 	struct ptlrpc_thread *thread = (struct ptlrpc_thread *)arg;
-	int s_time, c_time;
-	ENTRY;
+	time64_t s_time, c_time;
 
+	ENTRY;
 	thread_set_flags(thread, SVC_RUNNING);
 	wake_up(&thread->t_ctl_waitq);
 
@@ -1540,7 +1540,7 @@ int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
         return 0;
 }
 
-int ldlm_pool_recalc(struct ldlm_pool *pl)
+time64_t ldlm_pool_recalc(struct ldlm_pool *pl)
 {
         return 0;
 }
@@ -1617,7 +1617,7 @@ void ldlm_pools_fini(void)
 	return;
 }
 
-int ldlm_pools_recalc(enum ldlm_side client)
+time64_t ldlm_pools_recalc(enum ldlm_side client)
 {
 	return 0;
 }

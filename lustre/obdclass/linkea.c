@@ -143,10 +143,11 @@ int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 	reclen = lname->ln_namelen + sizeof(struct link_ea_entry);
 	if (unlikely(leh->leh_len + reclen > MAX_LINKEA_SIZE)) {
 		/* Use 32-bits to save the overflow time, although it will
-		 * shrink the cfs_time_current_sec() returned 64-bits value
+		 * shrink the ktime_get_real_seconds() returned 64-bits value
 		 * to 32-bits value, it is still quite large and can be used
-		 * for about 140 years. That is enough. */
-		leh->leh_overflow_time = cfs_time_current_sec();
+		 * for about 140 years. That is enough.
+		 */
+		leh->leh_overflow_time = ktime_get_real_seconds();
 		if (unlikely(leh->leh_overflow_time == 0))
 			leh->leh_overflow_time++;
 
@@ -235,7 +236,7 @@ int linkea_overflow_shrink(struct linkea_data *ldata)
 	if (unlikely(leh->leh_reccount == 0))
 		return 0;
 
-	leh->leh_overflow_time = cfs_time_current_sec();
+	leh->leh_overflow_time = ktime_get_real_seconds();
 	if (unlikely(leh->leh_overflow_time == 0))
 		leh->leh_overflow_time++;
 	ldata->ld_reclen = 0;

@@ -46,7 +46,6 @@
 #include <linux/pagemap.h>
 #include <linux/uaccess.h>
 #include <libcfs/linux/linux-fs.h>
-#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 
 /* XXX move things up to the top, comment */
@@ -395,34 +394,34 @@ console:
                 return 1;
         }
 
-        if (cdls != NULL) {
-                if (libcfs_console_ratelimit &&
-                    cdls->cdls_next != 0 &&     /* not first time ever */
-                    !cfs_time_after(cfs_time_current(), cdls->cdls_next)) {
-                        /* skipping a console message */
-                        cdls->cdls_count++;
-                        if (tcd != NULL)
-                                cfs_trace_put_tcd(tcd);
-                        return 1;
-                }
+	if (cdls != NULL) {
+		if (libcfs_console_ratelimit &&
+		    cdls->cdls_next != 0 &&	/* not first time ever */
+		    time_after(jiffies, cdls->cdls_next)) {
+			/* skipping a console message */
+			cdls->cdls_count++;
+			if (tcd != NULL)
+				cfs_trace_put_tcd(tcd);
+			return 1;
+		}
 
-                if (cfs_time_after(cfs_time_current(), cdls->cdls_next +
-                                                       libcfs_console_max_delay
-                                                       + cfs_time_seconds(10))) {
-                        /* last timeout was a long time ago */
-                        cdls->cdls_delay /= libcfs_console_backoff * 4;
-                } else {
-                        cdls->cdls_delay *= libcfs_console_backoff;
-                }
+		if (time_after(jiffies, cdls->cdls_next +
+					libcfs_console_max_delay +
+					cfs_time_seconds(10))) {
+			/* last timeout was a long time ago */
+			cdls->cdls_delay /= libcfs_console_backoff * 4;
+		} else {
+			cdls->cdls_delay *= libcfs_console_backoff;
+		}
 
 		if (cdls->cdls_delay < libcfs_console_min_delay)
 			cdls->cdls_delay = libcfs_console_min_delay;
 		else if (cdls->cdls_delay > libcfs_console_max_delay)
 			cdls->cdls_delay = libcfs_console_max_delay;
 
-                /* ensure cdls_next is never zero after it's been seen */
-                cdls->cdls_next = (cfs_time_current() + cdls->cdls_delay) | 1;
-        }
+		/* ensure cdls_next is never zero after it's been seen */
+		cdls->cdls_next = (jiffies + cdls->cdls_delay) | 1;
+	}
 
         if (tcd != NULL) {
                 cfs_print_to_console(&header, mask, string_buf, needed, file,

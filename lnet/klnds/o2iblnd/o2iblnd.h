@@ -79,7 +79,7 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include <libcfs/libcfs_time.h>
+#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
 #define IBLND_PEER_HASH_SIZE		101	/* # peer_ni lists */

@@ -35,7 +35,6 @@
  */
 #define DEBUG_SUBSYSTEM S_SEC
 
-#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/lnet-types.h>
 #include <upcall_cache.h>

@@ -1666,7 +1666,7 @@ void unlock_res_and_lock(struct ldlm_lock *lock);
  * There are not used outside of ldlm.
  * @{
  */
-int ldlm_pools_recalc(enum ldlm_side client);
+time64_t ldlm_pools_recalc(enum ldlm_side client);
 int ldlm_pools_init(void);
 void ldlm_pools_fini(void);
 
@@ -1675,7 +1675,7 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
 int ldlm_pool_shrink(struct ldlm_pool *pl, int nr, gfp_t gfp_mask);
 void ldlm_pool_fini(struct ldlm_pool *pl);
 int ldlm_pool_setup(struct ldlm_pool *pl, int limit);
-int ldlm_pool_recalc(struct ldlm_pool *pl);
+time64_t ldlm_pool_recalc(struct ldlm_pool *pl);
 __u32 ldlm_pool_get_lvf(struct ldlm_pool *pl);
 __u64 ldlm_pool_get_slv(struct ldlm_pool *pl);
 __u64 ldlm_pool_get_clv(struct ldlm_pool *pl);

@@ -24,7 +24,6 @@
 
 #include <linux/uaccess.h>
 
-#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 

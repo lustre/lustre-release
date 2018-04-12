@@ -66,11 +66,17 @@ cfs_list_splice_init||list_splice_init
 cfs_list_splice_tail||list_splice_tail
 cfs_list_t||struct list_head
 struct timeval||struct timespec64
+get_seconds||ktime_get_real_seconds
 cfs_time_current_sec||ktime_get_real_seconds
 cfs_time_current_64||ktime_get
 cfs_time_add_64||ktime_add
+cfs_time_after|time_after
+cfs_time_aftereq|time_after_eq
+cfs_time_before|time_before
+cfs_time_beforeeq|time_before_eq
 cfs_time_before_64||ktime_before
 cfs_time_beforeq_64||ktime_compare
+cfs_time_current|jiffies
 CFS_PAGE_MASK||PAGE_MASK
 CFS_PAGE_SIZE||PAGE_SIZE
 PAGE_CACHE_MASK||PAGE_MASK

@@ -1787,8 +1787,8 @@ struct ptlrpc_service_part {
 	struct list_head		scp_rqbd_posted;
 	/** incoming reqs */
 	struct list_head		scp_req_incoming;
-	/** timeout before re-posting reqs, in tick */
-	cfs_duration_t			scp_rqbd_timeout;
+	/** timeout before re-posting reqs, in jiffies */
+	long				scp_rqbd_timeout;
 	/**
 	 * all threads sleep on this. This wait-queue is signalled when new
 	 * incoming request arrives and when difficult reply has to be handled.
@@ -1839,7 +1839,7 @@ struct ptlrpc_service_part {
 	/** early reply timer */
 	struct timer_list		scp_at_timer;
 	/** debug */
-	cfs_time_t			scp_at_checktime;
+	ktime_t				scp_at_checktime;
 	/** check early replies */
 	unsigned			scp_at_check;
 	/** @} */

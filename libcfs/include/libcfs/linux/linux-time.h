@@ -40,24 +40,6 @@
 #define __LIBCFS_LINUX_LINUX_TIME_H__
 
 /* Portable time API */
-
-/*
- * Platform provides three opaque data-types:
- *
- *  cfs_time_t        represents point in time. This is internal kernel
- *                    time rather than "wall clock". This time bears no
- *                    relation to gettimeofday().
- *
- *  cfs_duration_t    represents time interval with resolution of internal
- *                    platform clock
- *
- *  cfs_time_t     cfs_time_current(void);
- *  cfs_time_t     cfs_time_add    (cfs_time_t, cfs_duration_t);
- *  cfs_duration_t cfs_time_sub    (cfs_time_t, cfs_time_t);
- *
- *  time_t         cfs_duration_sec (cfs_duration_t);
- */
-
 #include <linux/hrtimer.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -71,10 +53,6 @@
 /*
  * Generic kernel stuff
  */
-
-typedef unsigned long cfs_time_t;      /* jiffies */
-typedef long cfs_duration_t;
-
 #ifndef HAVE_TIMESPEC64
 
 typedef __s64 time64_t;
@@ -214,34 +192,9 @@ static inline ktime_t timespec64_to_ktime(struct timespec64 ts)
 }
 #endif
 
-static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
+static inline unsigned long cfs_time_seconds(time64_t seconds)
 {
-        return time_before(t1, t2);
-}
-
-static inline int cfs_time_beforeq(cfs_time_t t1, cfs_time_t t2)
-{
-        return time_before_eq(t1, t2);
-}
-
-static inline cfs_time_t cfs_time_current(void)
-{
-        return jiffies;
-}
-
-static inline time_t cfs_time_current_sec(void)
-{
-	return get_seconds();
-}
-
-static inline cfs_duration_t cfs_time_seconds(int seconds)
-{
-	return ((cfs_duration_t)seconds) * msecs_to_jiffies(MSEC_PER_SEC);
-}
-
-static inline time_t cfs_duration_sec(cfs_duration_t d)
-{
-	return d / msecs_to_jiffies(MSEC_PER_SEC);
+	return nsecs_to_jiffies(seconds * NSEC_PER_SEC);
 }
 
 #endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */

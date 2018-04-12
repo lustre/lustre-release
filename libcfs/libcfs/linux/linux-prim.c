@@ -41,11 +41,12 @@
 #include <linux/sched/mm.h>
 #endif
 #include <linux/uaccess.h>
-#include <libcfs/libcfs.h>
 
 #if defined(CONFIG_KGDB)
 #include <asm/kgdb.h>
 #endif
+
+#include <libcfs/linux/linux-time.h>
 
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts)

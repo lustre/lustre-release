@@ -39,7 +39,6 @@
 
 #include <linux/ctype.h>
 #include <linux/kthread.h>
-#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
@@ -148,7 +147,7 @@ static int param_get_delay(char *buffer, cfs_kernel_param_arg_t *kp)
 {
 	unsigned int d = *(unsigned int *)kp->arg;
 
-	return sprintf(buffer, "%u", (unsigned int)cfs_duration_sec(d * 100));
+	return sprintf(buffer, "%lu", jiffies_to_msecs(d * 10) / MSEC_PER_SEC);
 }
 
 unsigned int libcfs_console_max_delay;

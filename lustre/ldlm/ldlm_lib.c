@@ -39,6 +39,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <linux/jiffies.h>
 #include <linux/kthread.h>
 #include <libcfs/libcfs.h>
 #include <obd.h>
@@ -787,7 +788,8 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 	}
 
 	now = ktime_get_seconds();
-	deadline = cfs_duration_sec(target->obd_recovery_timer.expires);
+	deadline = jiffies_to_msecs(target->obd_recovery_timer.expires) /
+		   MSEC_PER_SEC;
 	if (now < deadline) {
 		struct target_distribute_txn_data *tdtd;
 		int size = 0;
@@ -1254,8 +1256,8 @@ no_export:
 			i = atomic_read(&target->obd_lock_replay_clients);
 			k = target->obd_max_recoverable_clients;
 			s = target->obd_stale_clients;
-			t = target->obd_recovery_timer.expires;
-			t = cfs_duration_sec(target->obd_recovery_timer.expires);
+			t = jiffies_to_msecs(target->obd_recovery_timer.expires);
+			t /= MSEC_PER_SEC;
 			t -= ktime_get_seconds();
 			LCONSOLE_WARN("%s: Denying connection for new client %s"
 				      "(at %s), waiting for %d known clients "

@@ -53,7 +53,6 @@
 
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
-#include <libcfs/linux/linux-misc.h>
 #include <lnet/lib-lnet.h>
 #include "tracefile.h"
 

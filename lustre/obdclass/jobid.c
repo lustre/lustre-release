@@ -38,7 +38,7 @@
 #endif
 #include <linux/utsname.h>
 
-#include <libcfs/linux/linux-misc.h>
+#include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>

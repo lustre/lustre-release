@@ -16,6 +16,5 @@ EXTRA_DIST = \
 	libcfs_prim.h \
 	libcfs_private.h \
 	libcfs_string.h \
-	libcfs_time.h \
 	libcfs_workitem.h \
 	libcfs_ptask.h

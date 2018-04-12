@@ -47,7 +47,6 @@
 #include <linux/sched/mm.h>
 #endif
 
-#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <uapi/linux/lustre/lustre_ver.h>
@@ -166,9 +165,9 @@ static inline int back_to_sleep(void *arg)
 #define LWI_ON_SIGNAL_NOOP ((void (*)(void *))(-1))
 
 struct l_wait_info {
-        cfs_duration_t lwi_timeout;
-        cfs_duration_t lwi_interval;
-        int            lwi_allow_intr;
+	long		lwi_timeout;
+	long		lwi_interval;
+	int		lwi_allow_intr;
         int  (*lwi_on_timeout)(void *);
         void (*lwi_on_signal)(void *);
         void  *lwi_cb_data;
@@ -260,8 +259,8 @@ static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
 #define __l_wait_event(wq, condition, info, ret, l_add_wait)                   \
 do {                                                                           \
 	wait_queue_entry_t __wait;                                             \
-	cfs_duration_t __timeout = info->lwi_timeout;                          \
-	sigset_t   __blocked;                                              \
+	long __timeout = info->lwi_timeout;				       \
+	sigset_t __blocked;						       \
 	int   __allow_intr = info->lwi_allow_intr;                             \
 									       \
 	ret = 0;                                                               \
@@ -310,13 +309,12 @@ do {                                                                           \
 		if (__timeout == 0) {                                          \
 			schedule();					       \
 		} else {                                                       \
-			cfs_duration_t interval = info->lwi_interval?          \
-					     min_t(cfs_duration_t,             \
-						 info->lwi_interval,__timeout):\
-					     __timeout;                        \
-			cfs_duration_t remaining = schedule_timeout(interval); \
-			__timeout = cfs_time_sub(__timeout,                    \
-					    cfs_time_sub(interval, remaining));\
+			long interval = info->lwi_interval ?		       \
+						min_t(long, info->lwi_interval,\
+						      __timeout) : __timeout;  \
+			long remaining = schedule_timeout(interval);	       \
+									       \
+			__timeout -= interval - remaining;		       \
 			if (__timeout == 0) {                                  \
 				if (info->lwi_on_timeout == NULL ||            \
 				    info->lwi_on_timeout(info->lwi_cb_data)) { \

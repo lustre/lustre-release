@@ -320,7 +320,7 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 	__u32		    num_active;
 	unsigned int	    i;
 	int		    rc, prio_wide;
-	time_t		    now, age;
+	time64_t	    now, age;
 	ENTRY;
 
 	if (!lod->lod_qos.lq_dirty)
@@ -344,9 +344,10 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 
 	ba_min = (__u64)(-1);
 	ba_max = 0;
-	now = cfs_time_current_sec();
+	now = ktime_get_real_seconds();
 	/* Calculate OST penalty per object
-	 * (lod ref taken in lod_qos_prep_create()) */
+	 * (lod ref taken in lod_qos_prep_create())
+	 */
 	cfs_foreach_bit(lod->lod_ost_bitmap, i) {
 		LASSERT(OST_TGT(lod,i));
 		temp = TGT_BAVAIL(i);
@@ -482,7 +483,7 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 	oss->lqo_penalty >>= 1;
 
 	/* mark the OSS and OST as recently used */
-	ost->ltd_qos.ltq_used = oss->lqo_used = cfs_time_current_sec();
+	ost->ltd_qos.ltq_used = oss->lqo_used = ktime_get_real_seconds();
 
 	/* Set max penalties for this OST and OSS */
 	ost->ltd_qos.ltq_penalty +=

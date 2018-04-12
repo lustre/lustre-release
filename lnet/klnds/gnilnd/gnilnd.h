@@ -66,6 +66,11 @@
 #include <gni_pub.h>
 #include "gnilnd_version.h"
 
+static inline time_t cfs_duration_sec(long duration_jiffies)
+{
+	return jiffies_to_msecs(duration_jiffies) / MSEC_PER_SEC;
+}
+
 #ifdef CONFIG_SLAB
 #define GNILND_MBOX_SIZE	KMALLOC_MAX_SIZE
 #else

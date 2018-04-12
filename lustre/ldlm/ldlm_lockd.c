@@ -245,9 +245,8 @@ static int expired_lock_main(void *arg)
 				spin_unlock_bh(&export->exp_bl_list_lock);
 
 				LDLM_ERROR(lock,
-					   "lock callback timer expired after "
-					   "%llds: evicting client at %s ",
-					   cfs_time_current_sec() -
+					   "lock callback timer expired after %llds: evicting client at %s ",
+					   ktime_get_real_seconds() -
 					   lock->l_last_activity,
 					   obd_export_nid2str(export));
 				ldlm_lock_to_ns(lock)->ns_timeouts++;

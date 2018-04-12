@@ -100,7 +100,7 @@ struct lod_qos_oss {
 	__u64			 lqo_penalty;	/* current penalty */
 	__u64			 lqo_penalty_per_obj; /* penalty decrease
 							 every obj*/
-	time_t			 lqo_used;	/* last used time, seconds */
+	time64_t		 lqo_used;	/* last used time, seconds */
 	__u32			 lqo_ost_count;	/* number of osts on this oss */
 };
 
@@ -110,7 +110,7 @@ struct ltd_qos {
 	__u64			 ltq_penalty_per_obj; /* penalty decrease
 							 every obj*/
 	__u64			 ltq_weight;	/* net weighting */
-	time_t			 ltq_used;	/* last used time, seconds */
+	time64_t		 ltq_used;	/* last used time, seconds */
 	bool			 ltq_usable:1;	/* usable for striping */
 };
 

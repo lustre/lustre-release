@@ -33,13 +33,18 @@
 #ifndef __LIBCFS_LIBCFS_H__
 #define __LIBCFS_LIBCFS_H__
 
+#include <linux/kernel.h>
+#include <linux/module.h>
+
+#include <libcfs/linux/linux-misc.h>
+#include <libcfs/linux/linux-time.h>
+
 #include <uapi/linux/lnet/libcfs_ioctl.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
 #include <libcfs/bitmap.h>
 #include <libcfs/libcfs_cpu.h>
 #include <libcfs/libcfs_prim.h>
-#include <libcfs/libcfs_time.h>
 #include <libcfs/libcfs_string.h>
 #include <libcfs/libcfs_workitem.h>
 #include <libcfs/libcfs_hash.h>
