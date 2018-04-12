@@ -257,10 +257,12 @@ client$ lfs getstripe /mnt/lustre/domdir/domfile
           <section><title>LFS limits for DoM component size</title>
               <para><literal>lfs setstripe</literal> allows for setting the
               component size for MDT layouts up to 1GB, however, the size must
-              be also aligned by 64KB. This is the maximum possible size on MDT.
+              also be aligned by 64KB due to the minimum stripe size in Lustre
+              (see <xref linkend="settinguplustresystem.tab2"/>). This value
+              represents the maximum possible size of the component on the MDT.
               Meanwhile, there is another limit which is checked by
-              <literal>lfs setstripe</literal> is provided by MDT server itself.
-              </para>
+              <literal>lfs setstripe</literal> and is provided by the MDT
+              server itself.</para>
           </section>
           <section><title>MDT Server Limits</title>
               <para>The LOD parameter <literal>dom_stripesize</literal> is used
@@ -406,11 +408,11 @@ Invalid argument</screen></para>
           </section>
           <section><title>Temporary Set Examples</title>
               <para>The example below shows a change to the default DoM limit on
-              the server to 32KB and try to create a file with 1MB DoM size
+              the server to 64KB and try to create a file with 1MB DoM size
               after that.
-              <screen>mds# lctl set_param -n lod.*MDT0000*.dom_stripesize=32K
+              <screen>mds# lctl set_param -n lod.*MDT0000*.dom_stripesize=64K
 mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
-32768
+65536
 
 client$ lfs setstripe -E 1M -L mdt /mnt/lustre/dom
 Create composite file /mnt/lustre/dom failed. Invalid argument
