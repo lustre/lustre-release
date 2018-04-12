@@ -2554,14 +2554,9 @@ int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 	if (rc < 0)
 		RETURN(rc);
 
-#ifdef CONFIG_PROC_FS
-	obd->obd_vars = lprocfs_mdc_obd_vars;
-	lprocfs_obd_setup(obd, false);
-	lprocfs_alloc_md_stats(obd, 0);
-#endif
-
-	sptlrpc_lprocfs_cliobd_attach(obd);
-	ptlrpc_lprocfs_register_obd(obd);
+	rc = mdc_tunables_init(obd);
+	if (rc)
+		GOTO(err_osc_cleanup, rc);
 
 	ns_register_cancel(obd->obd_namespace, mdc_cancel_weight);
 
@@ -2586,9 +2581,9 @@ int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 err_changelog_cleanup:
 	mdc_llog_finish(obd);
 err_llog_cleanup:
-	ptlrpc_lprocfs_unregister_obd(obd);
 	lprocfs_free_md_stats(obd);
-
+	ptlrpc_lprocfs_unregister_obd(obd);
+err_osc_cleanup:
 	osc_cleanup_common(obd);
 	return rc;
 }
@@ -2639,10 +2634,10 @@ static int mdc_cleanup(struct obd_device *obd)
 int mdc_process_config(struct obd_device *obd, size_t len, void *buf)
 {
 	struct lustre_cfg *lcfg = buf;
-	int rc;
+	size_t count  = class_modify_config(lcfg, PARAM_MDC,
+					    &obd->obd_kset.kobj);
 
-	rc = class_process_proc_param(PARAM_MDC, obd->obd_vars, lcfg, obd);
-	return (rc > 0 ? 0: rc);
+	return count > 0 ? 0 : count;
 }
 
 static struct obd_ops mdc_obd_ops = {

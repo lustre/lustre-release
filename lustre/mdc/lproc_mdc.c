@@ -31,36 +31,35 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/version.h>
 #include <linux/vfs.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_osc.h>
 #include <cl_object.h>
-
 #include "mdc_internal.h"
 
-#ifdef CONFIG_PROC_FS
-static int mdc_active_seq_show(struct seq_file *m, void *v)
+static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
 {
-	struct obd_device *dev = m->private;
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	ssize_t len;
 
 	LPROCFS_CLIMP_CHECK(dev);
-	seq_printf(m, "%d\n", !dev->u.cli.cl_import->imp_deactive);
+	len = sprintf(buf, "%d\n", !dev->u.cli.cl_import->imp_deactive);
 	LPROCFS_CLIMP_EXIT(dev);
-	return 0;
+	return len;
 }
 
-static ssize_t mdc_active_seq_write(struct file *file,
-				    const char __user *buffer,
-				    size_t count, loff_t *off)
+static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buffer, size_t count)
 {
-	struct obd_device *dev;
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	bool val;
 	int rc;
 
-	dev = ((struct seq_file *)file->private_data)->private;
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -73,7 +72,78 @@ static ssize_t mdc_active_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdc_active);
+LUSTRE_RW_ATTR(active);
+
+static ssize_t max_rpcs_in_flight_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	ssize_t len;
+	u32 max;
+
+	max = obd_get_max_rpcs_in_flight(&dev->u.cli);
+	len = sprintf(buf, "%u\n", max);
+
+	return len;
+}
+
+static ssize_t max_rpcs_in_flight_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer,
+					size_t count)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
+	if (rc)
+		count = rc;
+
+	return count;
+}
+LUSTRE_RW_ATTR(max_rpcs_in_flight);
+
+static ssize_t max_mod_rpcs_in_flight_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	u16 max;
+
+	max = obd_get_max_mod_rpcs_in_flight(&dev->u.cli);
+	return sprintf(buf, "%hu\n", max);
+}
+
+static ssize_t max_mod_rpcs_in_flight_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer,
+					    size_t count)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	u16 val;
+	int rc;
+
+	rc = kstrtou16(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	rc = obd_set_max_mod_rpcs_in_flight(&dev->u.cli, val);
+	if (rc)
+		count = rc;
+
+	return count;
+}
+LUSTRE_RW_ATTR(max_mod_rpcs_in_flight);
 
 static int mdc_max_dirty_mb_seq_show(struct seq_file *m, void *v)
 {
@@ -97,7 +167,7 @@ static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
 	struct seq_file *sfl = file->private_data;
 	struct obd_device *dev = sfl->private;
 	struct client_obd *cli = &dev->u.cli;
-	__s64 pages_number;
+	s64 pages_number;
 	int rc;
 
 	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
@@ -119,6 +189,42 @@ static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
 	return count;
 }
 LPROC_SEQ_FOPS(mdc_max_dirty_mb);
+
+static ssize_t contention_seconds_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct osc_device *od = obd2osc_dev(obd);
+
+	return sprintf(buf, "%lld\n", od->od_contention_time);
+}
+
+static ssize_t contention_seconds_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer,
+					size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct osc_device *od = obd2osc_dev(obd);
+	time64_t val;
+	int rc;
+
+	rc = kstrtoll(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	od->od_contention_time = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(contention_seconds);
+
+LUSTRE_RO_ATTR(conn_uuid);
+
+LUSTRE_WO_ATTR(ping);
 
 static int mdc_cached_mb_seq_show(struct seq_file *m, void *v)
 {
@@ -183,35 +289,6 @@ mdc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdc_cached_mb);
 
-static int mdc_contention_seconds_seq_show(struct seq_file *m, void *v)
-{
-	struct obd_device *obd = m->private;
-	struct osc_device *od  = obd2osc_dev(obd);
-
-	seq_printf(m, "%lld\n", od->od_contention_time);
-	return 0;
-}
-
-static ssize_t mdc_contention_seconds_seq_write(struct file *file,
-						const char __user *buffer,
-						size_t count, loff_t *off)
-{
-	struct seq_file *sfl = file->private_data;
-	struct obd_device *obd = sfl->private;
-	struct osc_device *od  = obd2osc_dev(obd);
-	time64_t val;
-	int rc;
-
-	rc = kstrtoll_from_user(buffer, count, 0, &val);
-	if (rc)
-		return rc;
-
-	od->od_contention_time = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdc_contention_seconds);
-
 static int mdc_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
@@ -227,70 +304,6 @@ static int mdc_unstable_stats_seq_show(struct seq_file *m, void *v)
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(mdc_unstable_stats);
-
-static int mdc_max_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
-{
-	struct obd_device *dev = m->private;
-	__u32 max;
-
-	max = obd_get_max_rpcs_in_flight(&dev->u.cli);
-	seq_printf(m, "%u\n", max);
-
-	return 0;
-}
-
-static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
-						const char __user *buffer,
-						size_t count, loff_t *off)
-{
-	struct obd_device *dev;
-	unsigned int val;
-	int rc;
-
-	dev = ((struct seq_file *)file->private_data)->private;
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
-	if (rc)
-		return rc;
-
-	rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
-	if (rc)
-		return rc;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdc_max_rpcs_in_flight);
-
-static int mdc_max_mod_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
-{
-	struct obd_device *dev = m->private;
-	__u16 max;
-
-	max = obd_get_max_mod_rpcs_in_flight(&dev->u.cli);
-	seq_printf(m, "%hu\n", max);
-
-	return 0;
-}
-
-static ssize_t mdc_max_mod_rpcs_in_flight_seq_write(struct file *file,
-						    const char __user *buffer,
-						    size_t count, loff_t *off)
-{
-	struct obd_device *dev;
-	u16 val;
-	int rc;
-
-	dev =  ((struct seq_file *)file->private_data)->private;
-	rc = kstrtou16_from_user(buffer, count, 0, &val);
-	if (rc)
-		return rc;
-
-	rc = obd_set_max_mod_rpcs_in_flight(&dev->u.cli, val);
-	if (rc)
-		count = rc;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdc_max_mod_rpcs_in_flight);
 
 static ssize_t mdc_rpc_stats_seq_write(struct file *file,
 				       const char __user *buf,
@@ -440,11 +453,8 @@ static ssize_t mdc_stats_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_stats);
 
-LPROC_SEQ_FOPS_WR_ONLY(mdc, ping);
-
 LPROC_SEQ_FOPS_RO_TYPE(mdc, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, conn_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, state);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, obd_max_pages_per_rpc);
@@ -452,29 +462,18 @@ LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, pinger_recov);
 
 struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
-	{ .name	=	"ping",
-	  .fops	=	&mdc_ping_fops,
-	  .proc_mode =	0222			},
 	{ .name	=	"connect_flags",
 	  .fops	=	&mdc_connect_flags_fops	},
 	{ .name	=	"mds_server_uuid",
 	  .fops	=	&mdc_server_uuid_fops	},
-	{ .name	=	"mds_conn_uuid",
-	  .fops	=	&mdc_conn_uuid_fops	},
-	{ .name	=	"max_pages_per_rpc",
-	  .fops	=	&mdc_obd_max_pages_per_rpc_fops	},
-	{ .name	=	"max_rpcs_in_flight",
-	  .fops	=	&mdc_max_rpcs_in_flight_fops	},
-	{ .name	=	"max_mod_rpcs_in_flight",
-	  .fops	=	&mdc_max_mod_rpcs_in_flight_fops },
-	{ .name	=	"max_dirty_mb",
-	  .fops	=	&mdc_max_dirty_mb_fops		},
+	{ .name =	"max_pages_per_rpc",
+	  .fops =	&mdc_obd_max_pages_per_rpc_fops },
+	{ .name =	"max_dirty_mb",
+	  .fops =	&mdc_max_dirty_mb_fops		},
 	{ .name	=	"mdc_cached_mb",
 	  .fops	=	&mdc_cached_mb_fops		},
 	{ .name	=	"timeouts",
 	  .fops	=	&mdc_timeouts_fops		},
-	{ .name	=	"contention_seconds",
-	  .fops	=	&mdc_contention_seconds_fops	},
 	{ .name	=	"import",
 	  .fops	=	&mdc_import_fops		},
 	{ .name	=	"state",
@@ -483,8 +482,6 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_pinger_recov_fops		},
 	{ .name	=	"rpc_stats",
 	  .fops	=	&mdc_rpc_stats_fops		},
-	{ .name	=	"active",
-	  .fops	=	&mdc_active_fops		},
 	{ .name	=	"unstable_stats",
 	  .fops	=	&mdc_unstable_stats_fops	},
 	{ .name	=	"mdc_stats",
@@ -492,4 +489,43 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	{ NULL }
 };
 
-#endif /* CONFIG_PROC_FS */
+static struct attribute *mdc_attrs[] = {
+	&lustre_attr_active.attr,
+	&lustre_attr_max_rpcs_in_flight.attr,
+	&lustre_attr_max_mod_rpcs_in_flight.attr,
+	&lustre_attr_contention_seconds.attr,
+	&lustre_attr_conn_uuid.attr,
+	&lustre_attr_ping.attr,
+	NULL,
+};
+
+int mdc_tunables_init(struct obd_device *obd)
+{
+	int rc;
+
+	obd->obd_ktype.default_attrs = mdc_attrs;
+	obd->obd_vars = lprocfs_mdc_obd_vars;
+
+	rc = lprocfs_obd_setup(obd, false);
+	if (rc)
+		goto out_failed;
+#ifdef CONFIG_PROC_FS
+	rc = lprocfs_alloc_md_stats(obd, 0);
+	if (rc) {
+		lprocfs_obd_cleanup(obd);
+		goto out_failed;
+	}
+#endif
+	rc = sptlrpc_lprocfs_cliobd_attach(obd);
+	if (rc) {
+#ifdef CONFIG_PROC_FS
+		lprocfs_free_md_stats(obd);
+#endif
+		lprocfs_obd_cleanup(obd);
+		goto out_failed;
+	}
+	ptlrpc_lprocfs_register_obd(obd);
+
+out_failed:
+	return rc;
+}
