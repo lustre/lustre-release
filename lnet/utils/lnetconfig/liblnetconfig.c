@@ -728,8 +728,17 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 	struct lnet_ioctl_config_data data;
 	lnet_nid_t gateway_nid;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
+	int ip_idx, i;
+	__u32 rnet = LNET_NIDNET(LNET_NID_ANY);
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	char err_str[LNET_MAX_STR_LEN];
+	__u32 ip_list[MAX_NUM_IPS];
+	struct lustre_lnet_ip2nets ip2nets;
+
+	/* initialize all lists */
+	INIT_LIST_HEAD(&ip2nets.ip2nets_ip_ranges);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.network_on_rule);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.nw_intflist);
 
 	snprintf(err_str, sizeof(err_str), "\"Success\"");
 
@@ -743,20 +752,11 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 		goto out;
 	}
 
-	net = libcfs_str2net(nw);
-	if (net == LNET_NIDNET(LNET_NID_ANY)) {
+	rnet = libcfs_str2net(nw);
+	if (rnet == LNET_NIDNET(LNET_NID_ANY)) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"cannot parse net %s\"", nw);
-		rc = LUSTRE_CFG_RC_BAD_PARAM;
-		goto out;
-	}
-
-	gateway_nid = libcfs_str2nid(gw);
-	if (gateway_nid == LNET_NID_ANY) {
-		snprintf(err_str,
-			sizeof(err_str),
-			"\"cannot parse gateway NID '%s'\"", gw);
+			 "\"cannot parse remote net %s\"", nw);
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
@@ -784,21 +784,42 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 		goto out;
 	}
 
+	rc = lnet_expr2ips(gw, ip_list,
+			   &ip2nets, &net, err_str);
+	if (rc == LUSTRE_CFG_RC_LAST_ELEM)
+		rc = -1;
+	else if (rc < LUSTRE_CFG_RC_NO_ERR)
+		goto out;
+
+	ip_idx = rc;
+
 	LIBCFS_IOC_INIT_V2(data, cfg_hdr);
-	data.cfg_net = net;
+	data.cfg_net = rnet;
 	data.cfg_config_u.cfg_route.rtr_hop = hops;
 	data.cfg_config_u.cfg_route.rtr_priority = prio;
-	data.cfg_nid = gateway_nid;
 
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_ROUTE, &data);
-	if (rc != 0) {
-		rc = -errno;
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot add route: %s\"", strerror(errno));
-		goto out;
+	for (i = MAX_NUM_IPS - 1; i > ip_idx; i--) {
+		gateway_nid = LNET_MKNID(net, ip_list[i]);
+		if (gateway_nid == LNET_NID_ANY) {
+			snprintf(err_str,
+				LNET_MAX_STR_LEN,
+				"\"cannot form gateway NID: %u\"",
+				ip_list[i]);
+			err_str[LNET_MAX_STR_LEN - 1] = '\0';
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			goto out;
+		}
+		data.cfg_nid = gateway_nid;
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_ROUTE, &data);
+		if (rc != 0) {
+			rc = -errno;
+			snprintf(err_str,
+				sizeof(err_str),
+				"\"cannot add route: %s\"", strerror(errno));
+			goto out;
+		}
 	}
-
 out:
 	cYAML_build_error(rc, seq_no, ADD_CMD, "route", err_str, err_rc);
 
@@ -811,8 +832,17 @@ int lustre_lnet_del_route(char *nw, char *gw,
 	struct lnet_ioctl_config_data data;
 	lnet_nid_t gateway_nid;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
+	__u32 rnet = LNET_NIDNET(LNET_NID_ANY);
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	char err_str[LNET_MAX_STR_LEN];
+	int ip_idx, i;
+	__u32 ip_list[MAX_NUM_IPS];
+	struct lustre_lnet_ip2nets ip2nets;
+
+	/* initialize all lists */
+	INIT_LIST_HEAD(&ip2nets.ip2nets_ip_ranges);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.network_on_rule);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.nw_intflist);
 
 	snprintf(err_str, sizeof(err_str), "\"Success\"");
 
@@ -826,37 +856,49 @@ int lustre_lnet_del_route(char *nw, char *gw,
 		goto out;
 	}
 
-	net = libcfs_str2net(nw);
-	if (net == LNET_NIDNET(LNET_NID_ANY)) {
+	rnet = libcfs_str2net(nw);
+	if (rnet == LNET_NIDNET(LNET_NID_ANY)) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"cannot parse net '%s'\"", nw);
+			 "\"cannot parse remote net '%s'\"", nw);
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
 
-	gateway_nid = libcfs_str2nid(gw);
-	if (gateway_nid == LNET_NID_ANY) {
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot parse gateway NID '%s'\"", gw);
-		rc = LUSTRE_CFG_RC_BAD_PARAM;
+	rc = lnet_expr2ips(gw, ip_list,
+			   &ip2nets, &net, err_str);
+	if (rc == LUSTRE_CFG_RC_LAST_ELEM)
+		rc = -1;
+	else if (rc < LUSTRE_CFG_RC_NO_ERR)
 		goto out;
-	}
+
+	ip_idx = rc;
 
 	LIBCFS_IOC_INIT_V2(data, cfg_hdr);
-	data.cfg_net = net;
-	data.cfg_nid = gateway_nid;
+	data.cfg_net = rnet;
 
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_ROUTE, &data);
-	if (rc != 0) {
-		rc = -errno;
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot delete route: %s\"", strerror(errno));
-		goto out;
+	for (i = MAX_NUM_IPS - 1; i > ip_idx; i--) {
+		gateway_nid = LNET_MKNID(net, ip_list[i]);
+		if (gateway_nid == LNET_NID_ANY) {
+			snprintf(err_str,
+				LNET_MAX_STR_LEN,
+				"\"cannot form gateway NID: %u\"",
+				ip_list[i]);
+			err_str[LNET_MAX_STR_LEN - 1] = '\0';
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			goto out;
+		}
+		data.cfg_nid = gateway_nid;
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_ROUTE, &data);
+		if (rc != 0) {
+			rc = -errno;
+			snprintf(err_str,
+				sizeof(err_str),
+				"\"cannot delete route: %s\"", strerror(errno));
+			goto out;
+		}
 	}
-
 out:
 	cYAML_build_error(rc, seq_no, DEL_CMD, "route", err_str, err_rc);
 
