@@ -175,8 +175,8 @@ endif # LDISKFS_ENABLED
 mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mount_lustre_CPPFLAGS := ${MNTMODCFLAGS}
 mount_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
-mount_lustre_LDADD    := $(top_builddir)/libcfs/libcfs/libcfs.la \
-			 $(SELINUX) $(LDLIBMOUNT) $(PLUGIN_LIB) $(GSSLIB)
+mount_lustre_LDADD    := $(SELINUX) $(LDLIBMOUNT) $(PLUGIN_LIB) $(GSSLIB) \
+			 $(top_builddir)/libcfs/libcfs/libcfs.la
 
 mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mkfs_lustre_CPPFLAGS := -UTUNEFS ${MNTMODCFLAGS}
