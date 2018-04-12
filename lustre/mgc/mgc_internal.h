@@ -39,10 +39,8 @@
 #include <lustre_log.h>
 #include <lustre_export.h>
 
-#ifdef CONFIG_PROC_FS
-extern struct lprocfs_vars lprocfs_mgc_obd_vars[];
+int mgc_tunables_init(struct obd_device *obd);
 int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data);
-#endif /* CONFIG_PROC_FS */
 
 int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);
 

@@ -39,30 +39,26 @@
 
 #ifdef CONFIG_PROC_FS
 
-LPROC_SEQ_FOPS_RO_TYPE(mgc, connect_flags);
-LPROC_SEQ_FOPS_RO_TYPE(mgc, server_uuid);
-LPROC_SEQ_FOPS_RO_TYPE(mgc, conn_uuid);
-LPROC_SEQ_FOPS_RO_TYPE(mgc, import);
-LPROC_SEQ_FOPS_RO_TYPE(mgc, state);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mgc, connect_flags);
 
-LPROC_SEQ_FOPS_WR_ONLY(mgc, ping);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mgc, server_uuid);
+
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mgc, import);
+
+LDEBUGFS_SEQ_FOPS_RO_TYPE(mgc, state);
 
 static int mgc_ir_state_seq_show(struct seq_file *m, void *v)
 {
 	return lprocfs_mgc_rd_ir_state(m, m->private);
 }
-LPROC_SEQ_FOPS_RO(mgc_ir_state);
+
+LDEBUGFS_SEQ_FOPS_RO(mgc_ir_state);
 
 struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
-	{ .name	=	"ping",
-	  .fops	=	&mgc_ping_fops,
-	  .proc_mode =	0222			},
 	{ .name	=	"connect_flags",
 	  .fops	=	&mgc_connect_flags_fops	},
 	{ .name	=	"mgs_server_uuid",
 	  .fops	=	&mgc_server_uuid_fops	},
-	{ .name	=	"mgs_conn_uuid",
-	  .fops	=	&mgc_conn_uuid_fops	},
 	{ .name	=	"import",
 	  .fops	=	&mgc_import_fops	},
 	{ .name	=	"state",
@@ -72,3 +68,25 @@ struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
 	{ NULL }
 };
 #endif /* CONFIG_PROC_FS */
+
+LUSTRE_RO_ATTR(conn_uuid);
+LUSTRE_WO_ATTR(ping);
+
+static struct attribute *mgc_attrs[] = {
+	&lustre_attr_conn_uuid.attr,
+	&lustre_attr_ping.attr,
+	NULL,
+};
+
+int mgc_tunables_init(struct obd_device *obd)
+{
+	int rc;
+
+	obd->obd_ktype.default_attrs = mgc_attrs;
+	obd->obd_vars = lprocfs_mgc_obd_vars;
+	rc = lprocfs_obd_setup(obd, true);
+	if (rc)
+		return rc;
+
+	return sptlrpc_lprocfs_cliobd_attach(obd);
+}

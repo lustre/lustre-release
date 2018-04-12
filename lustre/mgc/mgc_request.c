@@ -538,16 +538,15 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 	RETURN(rc);
 }
 
-#ifdef CONFIG_PROC_FS
 int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data)
 {
 	struct obd_device       *obd = data;
 	struct obd_import       *imp;
 	struct obd_connect_data *ocd;
 	struct config_llog_data *cld;
-	ENTRY;
 
-	LASSERT(obd != NULL);
+	ENTRY;
+	LASSERT(obd);
 	LPROCFS_CLIMP_CHECK(obd);
 	imp = obd->u.cli.cl_import;
 	ocd = &imp->imp_connect_data;
@@ -569,7 +568,6 @@ int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data)
 	LPROCFS_CLIMP_EXIT(obd);
 	RETURN(0);
 }
-#endif
 
 /* reenqueue any lost locks */
 #define RQ_RUNNING	0x1
@@ -967,11 +965,9 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(err_cleanup, rc);
 	}
 
-#ifdef CONFIG_PROC_FS
-	obd->obd_vars = lprocfs_mgc_obd_vars;
-	lprocfs_obd_setup(obd, true);
-#endif
-	sptlrpc_lprocfs_cliobd_attach(obd);
+	rc = mgc_tunables_init(obd);
+	if (rc)
+		GOTO(err_sysfs, rc);
 
 	if (atomic_inc_return(&mgc_count) == 1) {
 		rq_state = 0;
@@ -984,7 +980,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			CERROR("%s: cannot start requeue thread: rc = %d; "
 			       "no more log updates\n",
 			       obd->obd_name, rc);
-			GOTO(err_cleanup, rc);
+			GOTO(err_sysfs, rc);
 		}
 		/* rc is the task_struct pointer of mgc_requeue_thread. */
 		rc = 0;
@@ -993,6 +989,8 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	RETURN(rc);
 
+err_sysfs:
+	lprocfs_obd_cleanup(obd);
 err_cleanup:
 	client_obd_cleanup(obd);
 err_decref:
@@ -2291,7 +2289,7 @@ static struct obd_ops mgc_obd_ops = {
 
 static int __init mgc_init(void)
 {
-	return class_register_type(&mgc_obd_ops, NULL, true, NULL,
+	return class_register_type(&mgc_obd_ops, NULL, false, NULL,
 				   LUSTRE_MGC_NAME, NULL);
 }
 
