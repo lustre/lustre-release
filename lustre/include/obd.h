@@ -410,6 +410,8 @@ struct lov_obd {
 	struct rw_semaphore	lov_notify_lock;
 	/* Data-on-MDT: MDC array */
 	struct lov_md_tgt_desc	*lov_mdc_tgts;
+
+	struct kobject		*lov_tgts_kobj;
 };
 
 struct lmv_tgt_desc {

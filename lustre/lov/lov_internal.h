@@ -305,10 +305,7 @@ void lsm_free_plain(struct lov_stripe_md *lsm);
 void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm);
 
 /* lproc_lov.c */
-extern const struct file_operations lov_proc_target_fops;
-#ifdef CONFIG_PROC_FS
-extern struct lprocfs_vars lprocfs_lov_obd_vars[];
-#endif
+int lov_tunables_init(struct obd_device *obd);
 
 /* lov_cl.c */
 extern struct lu_device_type lov_device_type;

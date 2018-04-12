@@ -103,6 +103,10 @@ static void lov_putref(struct obd_device *obd)
 			/* Disconnect */
 			__lov_del_obd(obd, tgt);
 		}
+
+		if (lov->lov_tgts_kobj)
+			kobject_put(lov->lov_tgts_kobj);
+
 	} else {
 		mutex_unlock(&lov->lov_lock);
 	}
@@ -180,26 +184,17 @@ int lov_connect_obd(struct obd_device *obd, u32 index, int activate,
         CDEBUG(D_CONFIG, "Connected tgt idx %d %s (%s) %sactive\n", index,
                obd_uuid2str(tgt_uuid), tgt_obd->obd_name, activate ? "":"in");
 
-	if (lov->targets_proc_entry != NULL) {
-		struct proc_dir_entry *osc_symlink;
-		struct obd_device *osc_obd;
-
-		osc_obd = lov->lov_tgts[index]->ltd_exp->exp_obd;
-
-		LASSERT(osc_obd != NULL);
-		LASSERT(osc_obd->obd_magic == OBD_DEVICE_MAGIC);
-		LASSERT(osc_obd->obd_type->typ_name != NULL);
-
-		osc_symlink = lprocfs_add_symlink(osc_obd->obd_name,
-						  lov->targets_proc_entry,
-						  "../../../%s/%s",
-						  osc_obd->obd_type->typ_name,
-						  osc_obd->obd_name);
-		if (osc_symlink == NULL) {
-			CERROR("cannot register LOV target "
-			       "/proc/fs/lustre/%s/%s/target_obds/%s\n",
-			       obd->obd_type->typ_name, obd->obd_name,
-			       osc_obd->obd_name);
+	if (lov->lov_tgts_kobj) {
+		/* Even if we failed, that's ok */
+		rc = sysfs_create_link(lov->lov_tgts_kobj,
+				       &tgt_obd->obd_kset.kobj,
+				       tgt_obd->obd_name);
+		if (rc) {
+			CERROR("%s: can't register LOV target /sys/fs/lustre/%s/%s/target_obds/%s : rc = %d\n",
+			       obd->obd_name, obd->obd_type->typ_name,
+			       obd->obd_name,
+			       lov->lov_tgts[index]->ltd_exp->exp_obd->obd_name,
+			       rc);
 		}
 	}
 	RETURN(0);
@@ -232,17 +227,11 @@ static int lov_connect(const struct lu_env *env,
         if (data)
                 lov->lov_ocd = *data;
 
-	lov->targets_proc_entry = lprocfs_register("target_obds",
-						   obd->obd_proc_entry,
-						   NULL, NULL);
-	if (IS_ERR(lov->targets_proc_entry)) {
-		CERROR("%s: cannot register "
-		       "/proc/fs/lustre/%s/%s/target_obds\n",
-		       obd->obd_name, obd->obd_type->typ_name, obd->obd_name);
-		lov->targets_proc_entry = NULL;
-	}
+	obd_getref(obd);
 
-        obd_getref(obd);
+	lov->lov_tgts_kobj = kobject_create_and_add("target_obds",
+						    &obd->obd_kset.kobj);
+
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 tgt = lov->lov_tgts[i];
                 if (!tgt || obd_uuid_empty(&tgt->ltd_uuid))
@@ -288,6 +277,10 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         }
 
 	if (osc_obd) {
+		if (lov->lov_tgts_kobj)
+			sysfs_remove_link(lov->lov_tgts_kobj,
+					  osc_obd->obd_name);
+
 		/* Pass it on to our clients.
 		 * XXX This should be an argument to disconnect,
 		 * XXX not a back-door flag on the OBD.  Ah well.
@@ -345,9 +338,6 @@ static int lov_disconnect(struct obd_export *exp)
 		}
 	}
 	obd_putref(obd);
-
-	if (lov->targets_proc_entry != NULL)
-		lprocfs_remove(&lov->targets_proc_entry);
 
 out:
 	rc = class_disconnect(exp); /* bz 9811 */
@@ -739,9 +729,6 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct lov_desc *desc;
 	struct lov_obd *lov = &obd->u.lov;
-#ifdef CONFIG_PROC_FS
-	struct obd_type *type;
-#endif
 	int rc;
 	ENTRY;
 
@@ -795,47 +782,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
 		GOTO(out, rc);
 
-	obd->obd_vars = lprocfs_lov_obd_vars;
-#ifdef CONFIG_PROC_FS
-	/* If this is true then both client (lov) and server
-	 * (lod) are on the same node. The lod layer if loaded
-	 * first will register the lov proc directory. In that
-	 * case obd->obd_type->typ_procroot will be not set.
-	 * Instead we use type->typ_procsym as the parent.
-	 */
-	type = class_search_type(LUSTRE_LOD_NAME);
-	if (type && type->typ_procsym) {
-		obd->obd_proc_entry = lprocfs_register(obd->obd_name,
-						       type->typ_procsym,
-						       obd->obd_vars, obd);
-		if (IS_ERR(obd->obd_proc_entry)) {
-			rc = PTR_ERR(obd->obd_proc_entry);
-			CERROR("error %d setting up lprocfs for %s\n", rc,
-			       obd->obd_name);
-			obd->obd_proc_entry = NULL;
-		}
-	}
-#endif
-
-	rc = lprocfs_obd_setup(obd, false);
-	if (rc)
-		GOTO(out, rc);
-
-	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd", 0444,
-				&lov_proc_target_fops, obd);
-	if (rc)
-		CWARN("%s: Error adding the target_obd file : rc %d\n",
-		      obd->obd_name, rc);
-
-	lov->lov_pool_proc_entry = lprocfs_register("pools",
-						    obd->obd_proc_entry,
-						    NULL, NULL);
-	if (IS_ERR(lov->lov_pool_proc_entry)) {
-		rc = PTR_ERR(lov->lov_pool_proc_entry);
-		CERROR("%s: error setting up ldebugfs for pools : rc %d\n",
-		       obd->obd_name, rc);
-		lov->lov_pool_proc_entry = NULL;
-	}
+	rc = lov_tunables_init(obd);
 out:
 	return rc;
 }
@@ -936,15 +883,14 @@ int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
 	}
 	case LCFG_PARAM: {
 		struct lov_desc *desc = &(obd->u.lov.desc);
+		ssize_t count;
 
 		if (!desc)
 			GOTO(out, rc = -EINVAL);
 
-		rc = class_process_proc_param(PARAM_LOV, obd->obd_vars,
-					      lcfg, obd);
-		if (rc > 0)
-			rc = 0;
-                GOTO(out, rc);
+		count = class_modify_config(lcfg, PARAM_LOV,
+					    &obd->obd_kset.kobj);
+		GOTO(out, rc = count < 0 ? count : 0);
         }
         case LCFG_POOL_NEW:
         case LCFG_POOL_ADD:
