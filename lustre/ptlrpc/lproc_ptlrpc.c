@@ -910,10 +910,12 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 		if (i > cpt) /* make up the lowest position for this CPT */
 			*pos = PTLRPC_REQ_CPT2POS(svc, i);
 
+		mutex_lock(&svcpt->scp_mutex);
 		spin_lock(&svcpt->scp_lock);
 		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi,
 				PTLRPC_REQ_POS2SEQ(svc, *pos));
 		spin_unlock(&svcpt->scp_lock);
+		mutex_unlock(&svcpt->scp_mutex);
 		if (rc == 0) {
 			*pos = PTLRPC_REQ_SEQ2POS(svc, srhi->srhi_seq);
 			srhi->srhi_idx = i;
@@ -955,9 +957,11 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 			seq = srhi->srhi_seq + (1 << svc->srv_cpt_bits);
 		}
 
+		mutex_lock(&svcpt->scp_mutex);
 		spin_lock(&svcpt->scp_lock);
 		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, seq);
 		spin_unlock(&svcpt->scp_lock);
+		mutex_unlock(&svcpt->scp_mutex);
 		if (rc == 0) {
 			*pos = PTLRPC_REQ_SEQ2POS(svc, srhi->srhi_seq);
 			srhi->srhi_idx = i;
@@ -1011,6 +1015,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 
 	svcpt = svc->srv_parts[srhi->srhi_idx];
 
+	mutex_lock(&svcpt->scp_mutex);
 	spin_lock(&svcpt->scp_lock);
 
 	rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, srhi->srhi_seq);
@@ -1051,6 +1056,8 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 	}
 
 	spin_unlock(&svcpt->scp_lock);
+	mutex_unlock(&svcpt->scp_mutex);
+
 	return rc;
 }
 

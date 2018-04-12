@@ -605,6 +605,7 @@ ptlrpc_service_part_init(struct ptlrpc_service *svc,
 
 	/* rqbd and incoming request queue */
 	spin_lock_init(&svcpt->scp_lock);
+	mutex_init(&svcpt->scp_mutex);
 	INIT_LIST_HEAD(&svcpt->scp_rqbd_idle);
 	INIT_LIST_HEAD(&svcpt->scp_rqbd_posted);
 	INIT_LIST_HEAD(&svcpt->scp_req_incoming);
