@@ -2386,34 +2386,36 @@ ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
 }
 EXPORT_SYMBOL(lprocfs_obd_max_pages_per_rpc_seq_write);
 
-int lprocfs_obd_short_io_bytes_seq_show(struct seq_file *m, void *data)
+ssize_t short_io_bytes_show(struct kobject *kobj, struct attribute *attr,
+			    char *buf)
 {
-	struct obd_device *dev = data;
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &dev->u.cli;
+	int rc;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	seq_printf(m, "%d\n", cli->cl_short_io_bytes);
+	rc = sprintf(buf, "%d\n", cli->cl_short_io_bytes);
 	spin_unlock(&cli->cl_loi_list_lock);
-	return 0;
+	return rc;
 }
-EXPORT_SYMBOL(lprocfs_obd_short_io_bytes_seq_show);
+EXPORT_SYMBOL(short_io_bytes_show);
 
 /* Used to catch people who think they're specifying pages. */
 #define MIN_SHORT_IO_BYTES 64
 
-ssize_t lprocfs_obd_short_io_bytes_seq_write(struct file *file,
-					     const char __user *buffer,
-					     size_t count, loff_t *off)
+ssize_t short_io_bytes_store(struct kobject *kobj, struct attribute *attr,
+			     const char *buffer, size_t count)
 {
-	struct obd_device *dev = ((struct seq_file *)
-						file->private_data)->private;
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct client_obd *cli = &dev->u.cli;
-	int val;
+	u32 val;
 	int rc;
 
 	LPROCFS_CLIMP_CHECK(dev);
 
-	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		GOTO(out, rc);
 
@@ -2433,7 +2435,7 @@ out:
 	LPROCFS_CLIMP_EXIT(dev);
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_obd_short_io_bytes_seq_write);
+EXPORT_SYMBOL(short_io_bytes_store);
 
 int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
 			   struct root_squash_info *squash, char *name)

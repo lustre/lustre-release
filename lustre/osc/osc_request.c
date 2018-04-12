@@ -2993,7 +2993,6 @@ EXPORT_SYMBOL(osc_setup_common);
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct client_obd *cli = &obd->u.cli;
-	struct obd_type	  *type;
 	int		   adding;
 	int		   added;
 	int		   req_count;
@@ -3005,36 +3004,9 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (rc < 0)
 		RETURN(rc);
 
-#ifdef CONFIG_PROC_FS
-	obd->obd_vars = lprocfs_osc_obd_vars;
-#endif
-	/* If this is true then both client (osc) and server (osp) are on the
-	 * same node. The osp layer if loaded first will register the osc proc
-	 * directory. In that case this obd_device will be attached its proc
-	 * tree to type->typ_procsym instead of obd->obd_type->typ_procroot.
-	 */
-	type = class_search_type(LUSTRE_OSP_NAME);
-	if (type && type->typ_procsym) {
-		obd->obd_proc_entry = lprocfs_register(obd->obd_name,
-						       type->typ_procsym,
-						       obd->obd_vars, obd);
-		if (IS_ERR(obd->obd_proc_entry)) {
-			rc = PTR_ERR(obd->obd_proc_entry);
-			CERROR("error %d setting up lprocfs for %s\n", rc,
-			       obd->obd_name);
-			obd->obd_proc_entry = NULL;
-		}
-	}
-
-	rc = lprocfs_obd_setup(obd, false);
-	if (!rc) {
-		/* If the basic OSC proc tree construction succeeded then
-		 * lets do the rest.
-		 */
-		lproc_osc_attach_seqstat(obd);
-		sptlrpc_lprocfs_cliobd_attach(obd);
-		ptlrpc_lprocfs_register_obd(obd);
-	}
+	rc = osc_tunables_init(obd);
+	if (rc)
+		RETURN(rc);
 
 	/*
 	 * We try to control the total number of requests with a upper limit
@@ -3135,8 +3107,9 @@ EXPORT_SYMBOL(osc_cleanup_common);
 
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-	int rc = class_process_proc_param(PARAM_OSC, obd->obd_vars, lcfg, obd);
-	return rc > 0 ? 0: rc;
+	ssize_t count  = class_modify_config(lcfg, PARAM_OSC,
+					     &obd->obd_kset.kobj);
+	return count > 0 ? 0 : count;
 }
 
 static int osc_process_config(struct obd_device *obd, size_t len, void *buf)
