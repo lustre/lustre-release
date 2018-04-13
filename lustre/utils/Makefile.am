@@ -42,7 +42,7 @@ endif # TESTS
 
 if SERVER
 sbin_PROGRAMS += mkfs.lustre tunefs.lustre llverdev lr_reader lshowmount \
-		 ll_decode_filter_fid llog_reader l_tunedisk
+		 ll_decode_filter_fid llog_reader
 endif
 if LIBPTHREAD
 sbin_PROGRAMS += lhsmtool_posix
@@ -162,11 +162,6 @@ tunefs_lustre_CPPFLAGS := -DTUNEFS ${MNTMODCFLAGS}
 tunefs_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
 tunefs_lustre_LDADD    := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
-
-l_tunedisk_SOURCES = l_tunedisk.c mount_utils.c mount_utils.h $(GSSSRC)
-l_tunedisk_CPPFLAGS := ${MNTMODCFLAGS}
-l_tunedisk_LDFLAGS  := ${MNTMODLDFLAGS}
-l_tunedisk_LDADD    := $(mount_lustre_LDADD)
 
 l_getidentity_SOURCES = l_getidentity.c
 l_getidentity_LDADD := $(LIBPTLCTL)
