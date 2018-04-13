@@ -1832,11 +1832,11 @@ struct mdt_rec_setattr {
 enum mds_op_bias {
 /*	MDS_CHECK_SPLIT		= 1 << 0, obsolete before 2.3.58 */
 	MDS_CROSS_REF		= 1 << 1,
-	MDS_VTX_BYPASS		= 1 << 2,
+/*	MDS_VTX_BYPASS		= 1 << 2, obsolete since 2.3.54 */
 	MDS_PERM_BYPASS		= 1 << 3,
 /*	MDS_SOM			= 1 << 4, obsolete since 2.8.0 */
 	MDS_QUOTA_IGNORE	= 1 << 5,
-	/* Was MDS_CLOSE_CLEANUP (1 << 6), No more used */
+/*	MDS_CLOSE_CLEANUP	= 1 << 6, obsolete since 2.3.51 */
 	MDS_KEEP_ORPHAN		= 1 << 7,
 	MDS_RECOV_OPEN		= 1 << 8,
 	MDS_DATA_MODIFIED	= 1 << 9,

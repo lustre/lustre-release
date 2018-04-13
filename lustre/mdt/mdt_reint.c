@@ -610,8 +610,8 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	if (rc > 0)
 		cos_incompat = true;
 
-        lh = &info->mti_lh[MDT_LH_PARENT];
-        mdt_lock_reg_init(lh, LCK_PW);
+	lh = &info->mti_lh[MDT_LH_PARENT];
+	mdt_lock_reg_init(lh, LCK_PW);
 
 	/* Even though the new MDT will grant PERM lock to the old
 	 * client, but the old client will almost ignore that during
@@ -631,41 +631,37 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 
-        /* all attrs are packed into mti_attr in unpack_setattr */
-        mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
-                       OBD_FAIL_MDS_REINT_SETATTR_WRITE);
+	/* all attrs are packed into mti_attr in unpack_setattr */
+	mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
+		       OBD_FAIL_MDS_REINT_SETATTR_WRITE);
 
-        /* This is only for set ctime when rename's source is on remote MDS. */
-        if (unlikely(ma->ma_attr.la_valid == LA_CTIME))
-                ma->ma_attr_flags |= MDS_VTX_BYPASS;
-
-        /* VBR: update version if attr changed are important for recovery */
-        if (do_vbr) {
-                /* update on-disk version of changed object */
+	/* VBR: update version if attr changed are important for recovery */
+	if (do_vbr) {
+		/* update on-disk version of changed object */
 		tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(mo));
-                rc = mdt_version_get_check_save(info, mo, 0);
-                if (rc)
-                        GOTO(out_unlock, rc);
-        }
+		rc = mdt_version_get_check_save(info, mo, 0);
+		if (rc)
+			GOTO(out_unlock, rc);
+	}
 
 	/* Ensure constant striping during chown(). See LU-2789. */
 	if (ma->ma_attr.la_valid & (LA_UID|LA_GID|LA_PROJID))
 		mutex_lock(&mo->mot_lov_mutex);
 
-        /* all attrs are packed into mti_attr in unpack_setattr */
-        rc = mo_attr_set(info->mti_env, mdt_object_child(mo), ma);
+	/* all attrs are packed into mti_attr in unpack_setattr */
+	rc = mo_attr_set(info->mti_env, mdt_object_child(mo), ma);
 
 	if (ma->ma_attr.la_valid & (LA_UID|LA_GID|LA_PROJID))
 		mutex_unlock(&mo->mot_lov_mutex);
 
-        if (rc != 0)
-                GOTO(out_unlock, rc);
+	if (rc != 0)
+		GOTO(out_unlock, rc);
 	mdt_dom_obj_lvb_update(info->mti_env, mo, false);
-        EXIT;
+	EXIT;
 out_unlock:
 	mdt_unlock_slaves(info, mo, lockpart, s0_lh, s0_obj, einfo, rc);
-        mdt_object_unlock(info, mo, lh, rc);
-        return rc;
+	mdt_object_unlock(info, mo, lh, rc);
+	return rc;
 }
 
 /**
