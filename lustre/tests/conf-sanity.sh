@@ -58,8 +58,8 @@ if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 fi
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:		LU-10898
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	32a 32d"
+# bug number for skipped test:
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 init_logging
@@ -1516,15 +1516,21 @@ t32_reload_modules() {
 	local node=$1
 	local all_removed=false
 	local i=0
+	local fstype=$(facet_fstype $SINGLEMDS)
+
+	[ $fstype == "zfs" ] && do_rpc_nodes $node "service zed stop"
 
 	while ((i < 20)); do
 		echo "Unloading modules on $node: Attempt $i"
-		do_rpc_nodes $node $LUSTRE_RMMOD $(facet_fstype $SINGLEMDS) &&
+		do_rpc_nodes $node $LUSTRE_RMMOD $fstype &&
 			all_removed=true
 		do_rpc_nodes $node check_mem_leak || return 1
 		if $all_removed; then
 			do_rpc_nodes $node load_modules
 			return 0
+		fi
+		if [ $fstype == "zfs" ]; then
+			do_rpc_nodes $node "$ZPOOL status -v"
 		fi
 		sleep 5
 		i=$((i + 1))
@@ -2272,6 +2278,9 @@ t32_test() {
 				error_noexit "Unmounting the MDT2"
 				return 1
 			}
+			if [[ $fstype == zfs ]]; then
+			    $r "$ZPOOL export t32fs-mdt2"
+			fi
 			shall_cleanup_mdt1=false
 		fi
 
@@ -2279,12 +2288,18 @@ t32_test() {
 			error_noexit "Unmounting the MDT"
 			return 1
 		}
+		if [[ $fstype == zfs ]]; then
+		    $r "$ZPOOL export t32fs-mdt1"
+		fi
 		shall_cleanup_mdt=false
 
 		$r $UMOUNT $tmp/mnt/ost || {
 			error_noexit "Unmounting the OST"
 			return 1
 		}
+		if [[ $fstype == zfs ]]; then
+		    $r "$ZPOOL export t32fs-ost1"
+		fi
 		shall_cleanup_ost=false
 
 		t32_reload_modules $node || {
