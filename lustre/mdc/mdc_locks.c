@@ -349,6 +349,7 @@ mdc_intent_getxattr_pack(struct obd_export *exp,
 	struct ldlm_intent	*lit;
 	int			rc, count = 0;
 	struct list_head	cancels = LIST_HEAD_INIT(cancels);
+	u32 min_buf_size = 0;
 
 	ENTRY;
 
@@ -367,19 +368,36 @@ mdc_intent_getxattr_pack(struct obd_export *exp,
 	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 	lit->opc = IT_GETXATTR;
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+	/* If the supplied buffer is too small then the server will
+	 * return -ERANGE and llite will fallback to using non cached
+	 * xattr operations. On servers before 2.10.1 a (non-cached)
+	 * listxattr RPC for an orphan or dead file causes an oops. So
+	 * let's try to avoid sending too small a buffer to too old a
+	 * server. This is effectively undoing the memory conservation
+	 * of LU-9417 when it would be *more* likely to crash the
+	 * server. See LU-9856. */
+	if (exp->exp_connect_data.ocd_version < OBD_OCD_VERSION(2, 10, 1, 0))
+		min_buf_size = exp->exp_connect_data.ocd_max_easize;
+#endif
+
 	/* pack the intended request */
 	mdc_pack_body(req, &op_data->op_fid1, op_data->op_valid,
-		      GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM,
+		      max_t(u32, min_buf_size,
+			  GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM),
 		      -1, 0);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
-			     GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM);
+			     max_t(u32, min_buf_size,
+				 GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EAVALS, RCL_SERVER,
-			     GA_DEFAULT_EA_VAL_LEN * GA_DEFAULT_EA_NUM);
+			     max_t(u32, min_buf_size,
+				 GA_DEFAULT_EA_VAL_LEN * GA_DEFAULT_EA_NUM));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EAVALS_LENS, RCL_SERVER,
-			     sizeof(__u32) * GA_DEFAULT_EA_NUM);
+			     max_t(u32, min_buf_size,
+				 sizeof(__u32) * GA_DEFAULT_EA_NUM));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
 
