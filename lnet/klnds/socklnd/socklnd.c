@@ -1268,7 +1268,7 @@ ksocknal_create_conn(struct lnet_ni *ni, ksock_route_t *route,
 	}
 
 	conn->ksnc_peer = peer_ni;                 /* conn takes my ref on peer_ni */
-	peer_ni->ksnp_last_alive = ktime_get_seconds();
+	peer_ni->ksnp_last_alive = ktime_get_real_seconds();
 	peer_ni->ksnp_send_keepalive = 0;
 	peer_ni->ksnp_error = 0;
 
@@ -1285,11 +1285,10 @@ ksocknal_create_conn(struct lnet_ni *ni, ksock_route_t *route,
         sched->kss_nconns++;
         conn->ksnc_scheduler = sched;
 
-	conn->ksnc_tx_last_post = ktime_get_seconds();
+	conn->ksnc_tx_last_post = ktime_get_real_seconds();
 	/* Set the deadline for the outgoing HELLO to drain */
 	conn->ksnc_tx_bufnob = sock->sk->sk_wmem_queued;
-	conn->ksnc_tx_deadline = ktime_get_seconds() +
-				 *ksocknal_tunables.ksnd_timeout;
+	conn->ksnc_tx_deadline = cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
 	smp_mb();   /* order with adding to peer_ni's conn list */
 
 	list_add(&conn->ksnc_list, &peer_ni->ksnp_conns);
@@ -1517,7 +1516,7 @@ void
 ksocknal_peer_failed (ksock_peer_ni_t *peer_ni)
 {
         int        notify = 0;
-	time64_t last_alive = 0;
+	cfs_time_t last_alive = 0;
 
 	/* There has been a connection failure or comms error; but I'll only
 	 * tell LNET I think the peer_ni is dead if it's to another kernel and
@@ -1537,7 +1536,7 @@ ksocknal_peer_failed (ksock_peer_ni_t *peer_ni)
 
 	if (notify)
 		lnet_notify(peer_ni->ksnp_ni, peer_ni->ksnp_id.nid, 0,
-			    cfs_time_seconds(last_alive)); /* to jiffies */
+			    last_alive);
 }
 
 void
@@ -1652,9 +1651,9 @@ ksocknal_queue_zombie_conn (ksock_conn_t *conn)
 }
 
 void
-ksocknal_destroy_conn(ksock_conn_t *conn)
+ksocknal_destroy_conn (ksock_conn_t *conn)
 {
-	time64_t last_rcv;
+	cfs_time_t      last_rcv;
 
 	/* Final coup-de-grace of the reaper */
 	CDEBUG (D_NET, "connection %p\n", conn);
@@ -1671,14 +1670,15 @@ ksocknal_destroy_conn(ksock_conn_t *conn)
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_LNET_PAYLOAD:
                 last_rcv = conn->ksnc_rx_deadline -
-			   *ksocknal_tunables.ksnd_timeout;
+			   cfs_time_seconds(*ksocknal_tunables.ksnd_timeout);
 		CERROR("Completing partial receive from %s[%d], "
 		       "ip %pI4h:%d, with error, wanted: %d, left: %d, "
-		       "last alive is %lld secs ago\n",
+		       "last alive is %ld secs ago\n",
                        libcfs_id2str(conn->ksnc_peer->ksnp_id), conn->ksnc_type,
 		       &conn->ksnc_ipaddr, conn->ksnc_port,
                        conn->ksnc_rx_nob_wanted, conn->ksnc_rx_nob_left,
-		       ktime_get_seconds() - last_rcv);
+		       cfs_duration_sec(cfs_time_sub(ktime_get_real_seconds(),
+					last_rcv)));
 		lnet_finalize(conn->ksnc_cookie, -EIO);
 		break;
         case SOCKNAL_RX_LNET_HEADER:
@@ -1822,7 +1822,7 @@ ksocknal_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 {
 	int connect = 1;
 	time64_t last_alive = 0;
-	time64_t now = ktime_get_seconds();
+	time64_t now = ktime_get_real_seconds();
 	ksock_peer_ni_t *peer_ni = NULL;
 	rwlock_t *glock = &ksocknal_data.ksnd_global_lock;
 	struct lnet_process_id id = {
@@ -1844,8 +1844,8 @@ ksocknal_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 
 			if (bufnob < conn->ksnc_tx_bufnob) {
 				/* something got ACKed */
-				conn->ksnc_tx_deadline = ktime_get_seconds() +
-							 *ksocknal_tunables.ksnd_timeout;
+				conn->ksnc_tx_deadline =
+					cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
                                 peer_ni->ksnp_last_alive = now;
                                 conn->ksnc_tx_bufnob = bufnob;
                         }
@@ -1859,11 +1859,11 @@ ksocknal_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 	read_unlock(glock);
 
         if (last_alive != 0)
-		*when = cfs_time_seconds(last_alive);
+		*when = last_alive;
 
-	CDEBUG(D_NET, "peer_ni %s %p, alive %lld secs ago, connect %d\n",
+	CDEBUG(D_NET, "peer_ni %s %p, alive %ld secs ago, connect %d\n",
                libcfs_nid2str(nid), peer_ni,
-	       last_alive ? now - last_alive : -1,
+	       last_alive ? cfs_duration_sec(now - last_alive) : -1,
                connect);
 
         if (!connect)

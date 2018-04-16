@@ -221,9 +221,9 @@ ksocknal_transmit(ksock_conn_t *conn, ksock_tx_t *tx)
 		if (bufnob < conn->ksnc_tx_bufnob) {
 			/* allocated send buffer bytes < computed; infer
 			 * something got ACKed */
-			conn->ksnc_tx_deadline = ktime_get_seconds() +
-						 *ksocknal_tunables.ksnd_timeout;
-			conn->ksnc_peer->ksnp_last_alive = ktime_get_seconds();
+			conn->ksnc_tx_deadline =
+				cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
+			conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
 			conn->ksnc_tx_bufnob = bufnob;
 			smp_mb();
 		}
@@ -269,9 +269,9 @@ ksocknal_recv_iov (ksock_conn_t *conn)
         /* received something... */
         nob = rc;
 
-	conn->ksnc_peer->ksnp_last_alive = ktime_get_seconds();
-	conn->ksnc_rx_deadline = ktime_get_seconds() +
-				 *ksocknal_tunables.ksnd_timeout;
+	conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
+	conn->ksnc_rx_deadline =
+		cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
 	smp_mb();                       /* order with setting rx_started */
 	conn->ksnc_rx_started = 1;
 
@@ -313,9 +313,9 @@ ksocknal_recv_kiov (ksock_conn_t *conn)
         /* received something... */
         nob = rc;
 
-	conn->ksnc_peer->ksnp_last_alive = ktime_get_seconds();
-	conn->ksnc_rx_deadline = ktime_get_seconds() +
-				 *ksocknal_tunables.ksnd_timeout;
+	conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
+	conn->ksnc_rx_deadline =
+		cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
 	smp_mb();                       /* order with setting rx_started */
 	conn->ksnc_rx_started = 1;
 
@@ -463,8 +463,8 @@ ksocknal_check_zc_req(ksock_tx_t *tx)
 	spin_lock(&peer_ni->ksnp_lock);
 
         /* ZC_REQ is going to be pinned to the peer_ni */
-	tx->tx_deadline = ktime_get_seconds() +
-			  *ksocknal_tunables.ksnd_timeout;
+	tx->tx_deadline =
+		cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
 
         LASSERT (tx->tx_msg.ksm_zc_cookies[0] == 0);
 
@@ -541,8 +541,9 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                 LASSERT (conn->ksnc_tx_scheduled);
 		list_add_tail(&conn->ksnc_tx_list,
                                   &ksocknal_data.ksnd_enomem_conns);
-		if (ktime_get_seconds() + SOCKNAL_ENOMEM_RETRY <
-		    ksocknal_data.ksnd_reaper_waketime)
+		if (!cfs_time_aftereq(cfs_time_add(cfs_time_current(),
+					SOCKNAL_ENOMEM_RETRY),
+					ksocknal_data.ksnd_reaper_waketime))
 			wake_up(&ksocknal_data.ksnd_reaper_waitq);
 
 		spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
@@ -650,7 +651,7 @@ ksocknal_find_conn_locked(ksock_peer_ni_t *peer_ni, ksock_tx_t *tx, int nonblk)
                 case SOCKNAL_MATCH_YES: /* typed connection */
                         if (typed == NULL || tnob > nob ||
                             (tnob == nob && *ksocknal_tunables.ksnd_round_robin &&
-			     typed->ksnc_tx_last_post > c->ksnc_tx_last_post)) {
+			     cfs_time_after(typed->ksnc_tx_last_post, c->ksnc_tx_last_post))) {
                                 typed = c;
                                 tnob  = nob;
                         }
@@ -659,7 +660,7 @@ ksocknal_find_conn_locked(ksock_peer_ni_t *peer_ni, ksock_tx_t *tx, int nonblk)
                 case SOCKNAL_MATCH_MAY: /* fallback connection */
                         if (fallback == NULL || fnob > nob ||
                             (fnob == nob && *ksocknal_tunables.ksnd_round_robin &&
-			     fallback->ksnc_tx_last_post > c->ksnc_tx_last_post)) {
+			     cfs_time_after(fallback->ksnc_tx_last_post, c->ksnc_tx_last_post))) {
                                 fallback = c;
                                 fnob     = nob;
                         }
@@ -671,7 +672,7 @@ ksocknal_find_conn_locked(ksock_peer_ni_t *peer_ni, ksock_tx_t *tx, int nonblk)
         conn = (typed != NULL) ? typed : fallback;
 
         if (conn != NULL)
-		conn->ksnc_tx_last_post = ktime_get_seconds();
+		conn->ksnc_tx_last_post = cfs_time_current();
 
         return conn;
 }
@@ -728,10 +729,10 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
 
 	if (list_empty(&conn->ksnc_tx_queue) && bufnob == 0) {
 		/* First packet starts the timeout */
-		conn->ksnc_tx_deadline = ktime_get_seconds() +
-					 *ksocknal_tunables.ksnd_timeout;
+		conn->ksnc_tx_deadline =
+			cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
 		if (conn->ksnc_tx_bufnob > 0) /* something got ACKed */
-			conn->ksnc_peer->ksnp_last_alive = ktime_get_seconds();
+			conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
 		conn->ksnc_tx_bufnob = 0;
 		smp_mb(); /* order with adding to tx_queue */
 	}
@@ -777,8 +778,8 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
 ksock_route_t *
 ksocknal_find_connectable_route_locked (ksock_peer_ni_t *peer_ni)
 {
-	time64_t now = ktime_get_seconds();
-	struct list_head *tmp;
+	cfs_time_t     now = cfs_time_current();
+	struct list_head    *tmp;
         ksock_route_t *route;
 
 	list_for_each(tmp, &peer_ni->ksnp_routes) {
@@ -794,14 +795,14 @@ ksocknal_find_connectable_route_locked (ksock_peer_ni_t *peer_ni)
                         continue;
 
                 if (!(route->ksnr_retry_interval == 0 || /* first attempt */
-		      now >= route->ksnr_timeout)) {
+		      cfs_time_aftereq(now, route->ksnr_timeout))) {
                         CDEBUG(D_NET,
 			       "Too soon to retry route %pI4h "
-			       "(cnted %d, interval %lld, %lld secs later)\n",
+			       "(cnted %d, interval %ld, %ld secs later)\n",
 			       &route->ksnr_ipaddr,
                                route->ksnr_connected,
                                route->ksnr_retry_interval,
-			       route->ksnr_timeout - now);
+			       cfs_duration_sec(route->ksnr_timeout - now));
                         continue;
                 }
 
@@ -905,8 +906,8 @@ ksocknal_launch_packet(struct lnet_ni *ni, ksock_tx_t *tx,
         if (peer_ni->ksnp_accepting > 0 ||
             ksocknal_find_connecting_route_locked (peer_ni) != NULL) {
                 /* the message is going to be pinned to the peer_ni */
-		tx->tx_deadline = ktime_get_seconds() +
-				  *ksocknal_tunables.ksnd_timeout;
+		tx->tx_deadline =
+			cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
 
                 /* Queue the message until a connection is established */
 		list_add_tail(&tx->tx_list, &peer_ni->ksnp_tx_queue);
@@ -1853,11 +1854,12 @@ ksocknal_connect (ksock_route_t *route)
         int               type;
         int               wanted;
 	struct socket     *sock;
-	time64_t deadline;
+	cfs_time_t        deadline;
         int               retry_later = 0;
         int               rc = 0;
 
-	deadline = ktime_get_seconds() + *ksocknal_tunables.ksnd_timeout;
+	deadline = cfs_time_add(cfs_time_current(),
+				cfs_time_seconds(*ksocknal_tunables.ksnd_timeout));
 
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
@@ -1901,7 +1903,7 @@ ksocknal_connect (ksock_route_t *route)
 
 		write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
-		if (ktime_get_seconds() >= deadline) {
+		if (cfs_time_aftereq(cfs_time_current(), deadline)) {
                         rc = -ETIMEDOUT;
                         lnet_connect_console_error(rc, peer_ni->ksnp_id.nid,
                                                    route->ksnr_ipaddr,
@@ -1946,9 +1948,10 @@ ksocknal_connect (ksock_route_t *route)
                          * attempt to connect if we lost conn race,
                          * but the race is resolved quickly usually,
                          * so min_reconnectms should be good heuristic */
-			route->ksnr_retry_interval = *ksocknal_tunables.ksnd_min_reconnectms / 1000;
-			route->ksnr_timeout = ktime_get_seconds() +
-					      route->ksnr_retry_interval;
+			route->ksnr_retry_interval =
+				cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000;
+			route->ksnr_timeout = cfs_time_add(cfs_time_current(),
+							   route->ksnr_retry_interval);
                 }
 
                 ksocknal_launch_connection_locked(route);
@@ -1966,14 +1969,15 @@ ksocknal_connect (ksock_route_t *route)
 	/* This is a retry rather than a new connection */
 	route->ksnr_retry_interval *= 2;
 	route->ksnr_retry_interval =
-		max_t(time64_t, route->ksnr_retry_interval,
-		      *ksocknal_tunables.ksnd_min_reconnectms / 1000);
+		MAX(route->ksnr_retry_interval,
+		    cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000);
 	route->ksnr_retry_interval =
-		min_t(time64_t, route->ksnr_retry_interval,
-		      *ksocknal_tunables.ksnd_max_reconnectms / 1000);
+		MIN(route->ksnr_retry_interval,
+		    cfs_time_seconds(*ksocknal_tunables.ksnd_max_reconnectms)/1000);
 
-	LASSERT(route->ksnr_retry_interval);
-	route->ksnr_timeout = ktime_get_seconds() + route->ksnr_retry_interval;
+	LASSERT (route->ksnr_retry_interval != 0);
+	route->ksnr_timeout = cfs_time_add(cfs_time_current(),
+					   route->ksnr_retry_interval);
 
 	if (!list_empty(&peer_ni->ksnp_tx_queue) &&
             peer_ni->ksnp_accepting == 0 &&
@@ -2108,20 +2112,22 @@ ksocknal_connd_check_stop(time64_t sec, long *timeout)
 static ksock_route_t *
 ksocknal_connd_get_route_locked(signed long *timeout_p)
 {
-	time64_t now = ktime_get_seconds();
 	ksock_route_t *route;
+	cfs_time_t     now;
+
+	now = cfs_time_current();
 
 	/* connd_routes can contain both pending and ordinary routes */
 	list_for_each_entry(route, &ksocknal_data.ksnd_connd_routes,
 				 ksnr_connd_list) {
 
 		if (route->ksnr_retry_interval == 0 ||
-		    now >= route->ksnr_timeout)
+		    cfs_time_aftereq(now, route->ksnr_timeout))
 			return route;
 
 		if (*timeout_p == MAX_SCHEDULE_TIMEOUT ||
-		    *timeout_p > cfs_time_seconds(route->ksnr_timeout - now))
-			*timeout_p = cfs_time_seconds(route->ksnr_timeout - now);
+		    (int)*timeout_p > (int)(route->ksnr_timeout - now))
+			*timeout_p = (int)(route->ksnr_timeout - now);
 	}
 
 	return NULL;
@@ -2289,7 +2295,8 @@ ksocknal_find_timed_out_conn (ksock_peer_ni_t *peer_ni)
                 }
 
                 if (conn->ksnc_rx_started &&
-		    ktime_get_seconds() >= conn->ksnc_rx_deadline) {
+		    cfs_time_aftereq(cfs_time_current(),
+				     conn->ksnc_rx_deadline)) {
                         /* Timed out incomplete incoming message */
                         ksocknal_conn_addref(conn);
 			CNETERR("Timeout receiving from %s (%pI4h:%d), "
@@ -2305,7 +2312,8 @@ ksocknal_find_timed_out_conn (ksock_peer_ni_t *peer_ni)
 
 		if ((!list_empty(&conn->ksnc_tx_queue) ||
 		     conn->ksnc_sock->sk->sk_wmem_queued != 0) &&
-		    ktime_get_seconds() >= conn->ksnc_tx_deadline) {
+		    cfs_time_aftereq(cfs_time_current(),
+				     conn->ksnc_tx_deadline)) {
                         /* Timed out messages queued for sending or
                          * buffered in the socket's send buffer */
                         ksocknal_conn_addref(conn);
@@ -2332,7 +2340,8 @@ ksocknal_flush_stale_txs(ksock_peer_ni_t *peer_ni)
 		tx = list_entry(peer_ni->ksnp_tx_queue.next,
 				     ksock_tx_t, tx_list);
 
-		if (ktime_get_seconds() < tx->tx_deadline)
+		if (!cfs_time_aftereq(cfs_time_current(),
+				      tx->tx_deadline))
 			break;
 
 		list_del(&tx->tx_list);
@@ -2360,16 +2369,18 @@ __must_hold(&ksocknal_data.ksnd_global_lock)
                 return 0;
 
         if (*ksocknal_tunables.ksnd_keepalive <= 0 ||
-	    ktime_get_seconds() < peer_ni->ksnp_last_alive +
-				  *ksocknal_tunables.ksnd_keepalive)
+	    cfs_time_before(cfs_time_current(),
+			    cfs_time_add(peer_ni->ksnp_last_alive,
+					 cfs_time_seconds(*ksocknal_tunables.ksnd_keepalive))))
                 return 0;
 
-	if (ktime_get_seconds() < peer_ni->ksnp_send_keepalive)
+	if (cfs_time_before(cfs_time_current(),
+			    peer_ni->ksnp_send_keepalive))
                 return 0;
 
         /* retry 10 secs later, so we wouldn't put pressure
          * on this peer_ni if we failed to send keepalive this time */
-	peer_ni->ksnp_send_keepalive = ktime_get_seconds() + 10;
+	peer_ni->ksnp_send_keepalive = cfs_time_shift(10);
 
         conn = ksocknal_find_conn_locked(peer_ni, NULL, 1);
         if (conn != NULL) {
@@ -2422,9 +2433,9 @@ ksocknal_check_peer_timeouts (int idx)
 
 	list_for_each_entry(peer_ni, peers, ksnp_list) {
 		ksock_tx_t *tx_stale;
-		time64_t deadline = 0;
-		int resid = 0;
-		int n = 0;
+		cfs_time_t  deadline = 0;
+		int         resid = 0;
+		int         n     = 0;
 
                 if (ksocknal_send_keepalive_locked(peer_ni) != 0) {
 			read_unlock(&ksocknal_data.ksnd_global_lock);
@@ -2452,7 +2463,9 @@ ksocknal_check_peer_timeouts (int idx)
 				list_entry(peer_ni->ksnp_tx_queue.next,
                                                 ksock_tx_t, tx_list);
 
-			if (ktime_get_seconds() >= tx->tx_deadline) {
+			if (cfs_time_aftereq(cfs_time_current(),
+					     tx->tx_deadline)) {
+
                                 ksocknal_peer_addref(peer_ni);
 				read_unlock(&ksocknal_data.ksnd_global_lock);
 
@@ -2469,7 +2482,8 @@ ksocknal_check_peer_timeouts (int idx)
 		tx_stale = NULL;
 		spin_lock(&peer_ni->ksnp_lock);
 		list_for_each_entry(tx, &peer_ni->ksnp_zc_req_list, tx_zc_list) {
-			if (ktime_get_seconds() < tx->tx_deadline)
+			if (!cfs_time_aftereq(cfs_time_current(),
+					      tx->tx_deadline))
                                 break;
                         /* ignore the TX if connection is being closed */
                         if (tx->tx_conn->ksnc_closing)
@@ -2493,10 +2507,10 @@ ksocknal_check_peer_timeouts (int idx)
 		read_unlock(&ksocknal_data.ksnd_global_lock);
 
 		CERROR("Total %d stale ZC_REQs for peer_ni %s detected; the "
-		       "oldest(%p) timed out %lld secs ago, "
+		       "oldest(%p) timed out %ld secs ago, "
 		       "resid: %d, wmem: %d\n",
 		       n, libcfs_nid2str(peer_ni->ksnp_id.nid), tx_stale,
-		       ktime_get_seconds() - deadline,
+		       cfs_duration_sec(cfs_time_current() - deadline),
 		       resid, conn->ksnc_sock->sk->sk_wmem_queued);
 
                 ksocknal_close_conn_and_siblings (conn, -ETIMEDOUT);
@@ -2514,10 +2528,10 @@ int ksocknal_reaper(void *arg)
 	ksock_sched_t     *sched;
 	struct list_head         enomem_conns;
         int                nenomem_conns;
-	time64_t timeout;
+	cfs_duration_t     timeout;
         int                i;
         int                peer_index = 0;
-	time64_t deadline = ktime_get_seconds();
+	cfs_time_t         deadline = cfs_time_current();
 
         cfs_block_allsigs ();
 
@@ -2586,7 +2600,8 @@ int ksocknal_reaper(void *arg)
                 }
 
                 /* careful with the jiffy wrap... */
-		while ((timeout = deadline - ktime_get_seconds()) <= 0) {
+		while ((timeout = cfs_time_sub(deadline,
+					       cfs_time_current())) <= 0) {
                         const int n = 4;
                         const int p = 1;
                         int       chunk = ksocknal_data.ksnd_peer_hash_size;
@@ -2610,7 +2625,7 @@ int ksocknal_reaper(void *arg)
                                              ksocknal_data.ksnd_peer_hash_size;
                         }
 
-			deadline += p;
+			deadline = cfs_time_add(deadline, cfs_time_seconds(p));
                 }
 
                 if (nenomem_conns != 0) {
@@ -2619,16 +2634,16 @@ int ksocknal_reaper(void *arg)
                          * if any go back on my enomem list. */
                         timeout = SOCKNAL_ENOMEM_RETRY;
                 }
-		ksocknal_data.ksnd_reaper_waketime = ktime_get_seconds() +
-						     timeout;
+		ksocknal_data.ksnd_reaper_waketime =
+			cfs_time_add(cfs_time_current(), timeout);
 
-		set_current_state(TASK_INTERRUPTIBLE);
+			set_current_state(TASK_INTERRUPTIBLE);
 		add_wait_queue(&ksocknal_data.ksnd_reaper_waitq, &wait);
 
 		if (!ksocknal_data.ksnd_shuttingdown &&
 		    list_empty(&ksocknal_data.ksnd_deathrow_conns) &&
 		    list_empty(&ksocknal_data.ksnd_zombie_conns))
-			schedule_timeout(cfs_duration_sec(timeout));
+			schedule_timeout(timeout);
 
 		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&ksocknal_data.ksnd_reaper_waitq, &wait);
