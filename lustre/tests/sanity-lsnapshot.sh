@@ -330,6 +330,41 @@ test_3b() {
 }
 run_test 3b "modify snapshot without original filesystem mounted"
 
+test_4() { # LU-10843
+	combined_mgs_mds && skip "Combined MGS/MDS" && return
+
+	local rcmd="$LCTL get_param ldlm.namespaces.MGS.resource_count"
+
+	local exports=$(do_facet mgs "$LCTL get_param -n mgs.MGS.num_exports")
+	local rcount=$(do_facet mgs $rcmd)
+
+	echo "Remount MGT"
+	stop mgs || error "stop mgs failed"
+	start mgs $(mgsdevname) $MGS_MOUNT_OPTS || error "start mgs failed"
+
+	echo "Wait for all reconnects"
+	local CMD="$LCTL get_param -n mgs.MGS.num_exports"
+	wait_update_facet mgs "$CMD" $exports ||
+		lss_err "(1) failed to export from mgs"
+
+	wait_update_facet mgs "$rcmd" $rcount ||
+		lss_err "(2) failed to reconnect mds"
+
+	echo "Create lss_4_0"
+	lsnapshot_create -n lss_4_0 -c "'It is test_4'" ||
+		lss_err "(3) Fail to create lss_4_0"
+
+	echo "List lss_4_0"
+	lsnapshot_list -n lss_4_0 ||
+		lss_err "(4) Fail to list lss_4_0"
+
+	echo "Destroy lss_4_0"
+	lsnapshot_destroy -n lss_4_0 ||
+		lss_err "(5) Fail to destroy lss_4_0"
+
+}
+run_test 4 "create/delete snapshot after MGS remount"
+
 lss_cleanup
 do_facet mgs $LCTL set_param debug=-snapshot
 do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param debug=-snapshot

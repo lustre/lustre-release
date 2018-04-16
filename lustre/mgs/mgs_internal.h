@@ -201,6 +201,9 @@ int mgs_params_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs);
 int mgs_params_fsdb_cleanup(const struct lu_env *env, struct mgs_device *mgs);
 int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
 			  char *name, struct fs_db **dbh);
+int mgs_find_or_make_fsdb_nolock(const struct lu_env *env,
+				  struct mgs_device *mgs, char *name,
+				  struct fs_db **dbh);
 struct fs_db *mgs_find_fsdb(struct mgs_device *mgs, const char *fsname);
 void mgs_put_fsdb(struct mgs_device *mgs, struct fs_db *fsdb);
 int mgs_get_fsdb_srpc_from_llog(const struct lu_env *env,
