@@ -92,6 +92,7 @@ struct mdd_changelog {
 	ktime_t			mc_starttime;
 	spinlock_t		mc_user_lock;
 	int			mc_lastuser;
+	int			mc_users;      /* registered users number */
 	struct task_struct	*mc_gc_task;
 	time64_t		mc_gc_time;
 	unsigned int		mc_deniednext; /* interval for recording denied

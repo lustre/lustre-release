@@ -8972,8 +8972,12 @@ changelog_register() {
 
 changelog_deregister() {
 	local cl_user
+	# bash assoc arrays do not guarantee to list keys in created order
+	# so reorder to get same order than in changelog_register()
+	local cl_facets=$(echo "${!CL_USERS[@]}" | tr " " "\n" | sort |
+			  tr "\n" " ")
 
-	for facet in "${!CL_USERS[@]}"; do
+	for facet in $cl_facets; do
 		for cl_user in ${CL_USERS[$facet]}; do
 			__changelog_deregister $facet $cl_user || return $?
 		done
@@ -9037,7 +9041,12 @@ __changelog_clear()
 # users.
 changelog_clear() {
 	local rc
-	for facet in ${!CL_USERS[@]}; do
+	# bash assoc arrays do not guarantee to list keys in created order
+	# so reorder to get same order than in changelog_register()
+	local cl_facets=$(echo "${!CL_USERS[@]}" | tr " " "\n" | sort |
+			  tr "\n" " ")
+
+	for facet in $cl_facets; do
 		for cl_user in ${CL_USERS[$facet]}; do
 			__changelog_clear $facet $cl_user $1 || rc=${rc:-$?}
 		done

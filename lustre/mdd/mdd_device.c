@@ -215,6 +215,7 @@ static int changelog_user_init_cb(const struct lu_env *env,
 
 	spin_lock(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = rec->cur_id;
+	mdd->mdd_cl.mc_users++;
 	if (rec->cur_endrec > mdd->mdd_cl.mc_index)
 		mdd->mdd_cl.mc_index = rec->cur_endrec;
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
@@ -1332,10 +1333,7 @@ static int mdd_changelog_user_register(const struct lu_env *env,
                 RETURN(-ENOMEM);
         }
 
-	/* Assume we want it on since somebody registered */
-	rc = mdd_changelog_on(env, mdd);
-	if (rc)
-		GOTO(out, rc);
+	CFS_RACE(CFS_FAIL_CHLOG_USER_REG_UNREG_RACE);
 
         rec->cur_hdr.lrh_len = sizeof(*rec);
         rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
@@ -1346,6 +1344,7 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 		GOTO(out, rc = -EOVERFLOW);
 	}
 	*id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
+	mdd->mdd_cl.mc_users++;
 	rec->cur_endrec = mdd->mdd_cl.mc_index;
 
 	rec->cur_time = (__u32)get_seconds();
@@ -1355,8 +1354,22 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cur_hdr, NULL);
+	if (rc) {
+		CWARN("%s: Failed to register changelog user %d: rc=%d\n",
+		      mdd2obd_dev(mdd)->obd_name, *id, rc);
+		spin_lock(&mdd->mdd_cl.mc_user_lock);
+		mdd->mdd_cl.mc_users--;
+		spin_unlock(&mdd->mdd_cl.mc_user_lock);
+		GOTO(out, rc);
+	}
 
         CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
+
+	/* Assume we want it on since somebody registered */
+	rc = mdd_changelog_on(env, mdd);
+	if (rc)
+		GOTO(out, rc);
+
 out:
         OBD_FREE_PTR(rec);
         llog_ctxt_put(ctxt);
@@ -1364,6 +1377,7 @@ out:
 }
 
 struct mdd_changelog_user_purge {
+	struct mdd_device *mcup_mdd;
 	__u32 mcup_id;
 	__u32 mcup_usercount;
 	__u64 mcup_minrec;
@@ -1413,6 +1427,9 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
 	if (rc == 0) {
 		mcup->mcup_found = true;
 		mcup->mcup_usercount--;
+		spin_lock(&mcup->mcup_mdd->mdd_cl.mc_user_lock);
+		mcup->mcup_mdd->mdd_cl.mc_users--;
+		spin_unlock(&mcup->mcup_mdd->mdd_cl.mc_user_lock);
 	}
 
 	RETURN(rc);
@@ -1422,6 +1439,7 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 			     struct mdd_device *mdd, __u32 id)
 {
 	struct mdd_changelog_user_purge mcup = {
+		.mcup_mdd = mdd,
 		.mcup_id = id,
 		.mcup_found = false,
 		.mcup_usercount = 0,
@@ -1445,6 +1463,16 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 			      mdd_changelog_user_purge_cb, &mcup,
 			      0, 0);
 
+	if ((rc == 0) && (mcup.mcup_usercount == 0)) {
+		spin_lock(&mdd->mdd_cl.mc_user_lock);
+		if (mdd->mdd_cl.mc_users == 0) {
+			/* No more users; turn changelogs off */
+			CDEBUG(D_IOCTL, "turning off changelogs\n");
+			rc = mdd_changelog_off(env, mdd);
+		}
+		spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	}
+
 	if ((rc == 0) && mcup.mcup_found) {
 		CDEBUG(D_IOCTL, "%s: Purging changelog entries for user %d "
 		       "record=%llu\n",
@@ -1461,11 +1489,7 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 		GOTO(out, rc = -ENOENT);
 	}
 
-	if ((rc == 0) && (mcup.mcup_usercount == 0)) {
-		/* No more users; turn changelogs off */
-		CDEBUG(D_IOCTL, "turning off changelogs\n");
-		rc = mdd_changelog_off(env, mdd);
-	}
+	CFS_RACE(CFS_FAIL_CHLOG_USER_REG_UNREG_RACE);
 
 	EXIT;
 out:

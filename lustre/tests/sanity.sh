@@ -12349,6 +12349,66 @@ test_160g() {
 }
 run_test 160g "changelog garbage collect (old users)"
 
+test_160h() {
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	changelog_register || error "first changelog_register failed"
+
+	# generate some changelog records to accumulate on each MDT
+	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/$tfile failed"
+
+	# check changelogs have been generated
+	local nbcl=$(changelog_dump | wc -l)
+	[[ $nbcl -eq 0 ]] && error "no changelogs found"
+
+	# simulate race between register and unregister
+	# XXX as fail_loc is set per-MDS, with DNE configs the race
+	# simulation will only occur for one MDT per MDS and for the
+	# others the normal race scenario will take place
+	#define CFS_FAIL_CHLOG_USER_REG_UNREG_RACE          0x1315
+	do_nodes $mdts $LCTL set_param fail_loc=0x10001315
+	do_nodes $mdts $LCTL set_param fail_val=1
+
+	# unregister 1st user
+	changelog_deregister &
+	local pid1=$!
+	# wait some time for deregister work to reach race rdv
+	sleep 2
+	# register 2nd user
+	changelog_register || error "2nd user register failed"
+
+	wait $pid1 || error "1st user deregister failed"
+
+	local i
+	local last_rec
+	declare -A LAST_REC
+	for i in $(seq $MDSCOUNT); do
+		if changelog_users mds$i | grep "^cl"; then
+			# make sure new records are added with one user present
+			LAST_REC[mds$i]=$(changelog_users $SINGLEMDS |
+					  awk '/^current.index:/ { print $NF }')
+		else
+			error "mds$i has no user registered"
+		fi
+	done
+
+	# generate more changelog records to accumulate on each MDT
+	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/${tfile}bis failed"
+
+	for i in $(seq $MDSCOUNT); do
+		last_rec=$(changelog_users $SINGLEMDS |
+			   awk '/^current.index:/ { print $NF }')
+		echo "verify changelogs are on: $last_rec != ${LAST_REC[mds$i]}"
+		[ $last_rec != ${LAST_REC[mds$i]} ] ||
+			error "changelogs are off on mds$i"
+	done
+}
+run_test 160h "changelog user register/unregister race"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
