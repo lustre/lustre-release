@@ -304,16 +304,35 @@ static int mgs_barrier_freeze(const struct lu_env *env,
 	down_write(&mgs->mgs_barrier_rwsem);
 	mutex_lock(&mgs->mgs_mutex);
 
-	fsdb = mgs_find_fsdb(mgs, name);
-	if (!fsdb) {
+	rc = mgs_find_or_make_fsdb_nolock(env, mgs, name, &fsdb);
+	if (rc) {
 		mutex_unlock(&mgs->mgs_mutex);
 		up_write(&mgs->mgs_barrier_rwsem);
-
-		RETURN(-ENODEV);
+		RETURN(rc);
 	}
 
-	if (unlikely(fsdb->fsdb_mdt_count == 0))
+	if (unlikely(fsdb->fsdb_mdt_count == 0)) {
 		mgs_barrier_bitmap_setup(mgs, fsdb, bc->bc_name);
+
+		/* fsdb was just created, ensure that fsdb_barrier_disabled is
+		 * set correctly */
+		if (fsdb->fsdb_mdt_count > 0) {
+			struct obd_export *exp;
+			struct obd_device *mgs_obd = mgs->mgs_obd;
+
+			spin_lock(&mgs_obd->obd_dev_lock);
+			list_for_each_entry(exp, &mgs_obd->obd_exports,
+					    exp_obd_chain) {
+				__u64 flags = exp_connect_flags(exp);
+				if (!!(flags & OBD_CONNECT_MDS_MDS) &&
+				    !(flags & OBD_CONNECT_BARRIER)) {
+					fsdb->fsdb_barrier_disabled = 1;
+					break;
+				}
+			}
+			spin_unlock(&mgs_obd->obd_dev_lock);
+		}
+	}
 
 	mutex_lock(&fsdb->fsdb_mutex);
 	mutex_unlock(&mgs->mgs_mutex);
@@ -445,16 +464,35 @@ static int mgs_barrier_thaw(const struct lu_env *env,
 	down_write(&mgs->mgs_barrier_rwsem);
 	mutex_lock(&mgs->mgs_mutex);
 
-	fsdb = mgs_find_fsdb(mgs, name);
-	if (!fsdb) {
+	rc = mgs_find_or_make_fsdb_nolock(env, mgs, name, &fsdb);
+	if (rc) {
 		mutex_unlock(&mgs->mgs_mutex);
 		up_write(&mgs->mgs_barrier_rwsem);
-
-		RETURN(-ENODEV);
+		RETURN(rc);
 	}
 
-	if (unlikely(fsdb->fsdb_mdt_count == 0))
+	if (unlikely(fsdb->fsdb_mdt_count == 0)) {
 		mgs_barrier_bitmap_setup(mgs, fsdb, bc->bc_name);
+
+		/* fsdb was just created, ensure that fsdb_barrier_disabled is
+		 * set correctly */
+		if (fsdb->fsdb_mdt_count > 0) {
+			struct obd_export *exp;
+			struct obd_device *mgs_obd = mgs->mgs_obd;
+
+			spin_lock(&mgs_obd->obd_dev_lock);
+			list_for_each_entry(exp, &mgs_obd->obd_exports,
+					    exp_obd_chain) {
+				__u64 flags = exp_connect_flags(exp);
+				if (!!(flags & OBD_CONNECT_MDS_MDS) &&
+				    !(flags & OBD_CONNECT_BARRIER)) {
+					fsdb->fsdb_barrier_disabled = 1;
+					break;
+				}
+			}
+			spin_unlock(&mgs_obd->obd_dev_lock);
+		}
+	}
 
 	mutex_lock(&fsdb->fsdb_mutex);
 	mutex_unlock(&mgs->mgs_mutex);
@@ -596,13 +634,32 @@ static int mgs_barrier_rescan(const struct lu_env *env,
 
 	snprintf(name, sizeof(mgs_env_info(env)->mgi_fsname) - 1, "%s-%s",
 		 bc->bc_name, BARRIER_FILENAME);
-	b_fsdb = mgs_find_fsdb(mgs, name);
-	if (!b_fsdb) {
+	rc = mgs_find_or_make_fsdb_nolock(env, mgs, name, &b_fsdb);
+	if (rc) {
 		mutex_unlock(&mgs->mgs_mutex);
 		up_write(&mgs->mgs_barrier_rwsem);
 		mgs_put_fsdb(mgs, c_fsdb);
+		RETURN(rc);
+	}
 
-		RETURN(-ENODEV);
+	if (unlikely(b_fsdb->fsdb_mdt_count == 0 &&
+		     c_fsdb->fsdb_mdt_count > 0)) {
+		/* fsdb was just created, ensure that fsdb_barrier_disabled is
+		 * set correctly */
+		struct obd_export *exp;
+		struct obd_device *mgs_obd = mgs->mgs_obd;
+
+		spin_lock(&mgs_obd->obd_dev_lock);
+		list_for_each_entry(exp, &mgs_obd->obd_exports,
+				    exp_obd_chain) {
+			__u64 flags = exp_connect_flags(exp);
+			if (!!(flags & OBD_CONNECT_MDS_MDS) &&
+			    !(flags & OBD_CONNECT_BARRIER)) {
+				b_fsdb->fsdb_barrier_disabled = 1;
+				break;
+			}
+		}
+		spin_unlock(&mgs_obd->obd_dev_lock);
 	}
 
 	mutex_lock(&b_fsdb->fsdb_mutex);

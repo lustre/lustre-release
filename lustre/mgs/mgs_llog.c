@@ -541,14 +541,15 @@ int mgs_cleanup_fsdb_list(struct mgs_device *mgs)
 	return 0;
 }
 
-int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
-			  char *name, struct fs_db **dbh)
+/* The caller must hold mgs->mgs_mutex. */
+int mgs_find_or_make_fsdb_nolock(const struct lu_env *env,
+				struct mgs_device *mgs,
+				char *name, struct fs_db **dbh)
 {
 	struct fs_db *fsdb;
 	int rc = 0;
 	ENTRY;
 
-	mutex_lock(&mgs->mgs_mutex);
 	fsdb = mgs_find_fsdb(mgs, name);
 	if (!fsdb) {
 		fsdb = mgs_new_fsdb(env, mgs, name);
@@ -557,10 +558,22 @@ int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
 
 		CDEBUG(D_MGS, "Created new db: rc = %d\n", rc);
 	}
-	mutex_unlock(&mgs->mgs_mutex);
 
 	if (!rc)
 		*dbh = fsdb;
+
+	RETURN(rc);
+}
+
+int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
+			  char *name, struct fs_db **dbh)
+{
+	int rc;
+	ENTRY;
+
+	mutex_lock(&mgs->mgs_mutex);
+	rc = mgs_find_or_make_fsdb_nolock(env, mgs, name, dbh);
+	mutex_unlock(&mgs->mgs_mutex);
 
 	RETURN(rc);
 }
