@@ -730,7 +730,6 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 	flag2str(imp, pingable);
 	flag2str(imp, resend_replay);
 	flag2str(imp, no_pinger_recover);
-	flag2str(imp, need_mne_swab);
 	flag2str(imp, connect_tried);
 }
 

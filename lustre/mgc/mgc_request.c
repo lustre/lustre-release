@@ -1760,13 +1760,7 @@ again:
 		GOTO(out, rc);
 	}
 
-	mne_swab = !!ptlrpc_rep_need_swab(req);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-	/* This import flag means the server did an extra swab of IR MNE
-	 * records (fixed in LU-1252), reverse it here if needed. LU-1644 */
-	if (unlikely(req->rq_import->imp_need_mne_swab))
-		mne_swab = !mne_swab;
-#endif
+	mne_swab = ptlrpc_rep_need_swab(req);
 
 	/* When a nodemap config is received, we build a new nodemap config,
 	 * with new nodemap structs. We keep track of the most recently added

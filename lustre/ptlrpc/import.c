@@ -831,25 +831,6 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		warned = true;
 	}
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-	/* Check if server has LU-1252 fix applied to not always swab
-	 * the IR MNE entries. Do this only once per connection.  This
-	 * fixup is version-limited, because we don't want to carry the
-	 * OBD_CONNECT_MNE_SWAB flag around forever, just so long as we
-	 * need interop with unpatched 2.2 servers.  For newer servers,
-	 * the client will do MNE swabbing only as needed.  LU-1644 */
-	if (unlikely((ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
-		     !(ocd->ocd_connect_flags & OBD_CONNECT_MNE_SWAB) &&
-		     OBD_OCD_VERSION_MAJOR(ocd->ocd_version) == 2 &&
-		     OBD_OCD_VERSION_MINOR(ocd->ocd_version) == 2 &&
-		     OBD_OCD_VERSION_PATCH(ocd->ocd_version) < 55 &&
-		     strcmp(imp->imp_obd->obd_type->typ_name,
-			    LUSTRE_MGC_NAME) == 0))
-		imp->imp_need_mne_swab = 1;
-	else /* clear if server was upgraded since last connect */
-		imp->imp_need_mne_swab = 0;
-#endif
-
 	if (ocd->ocd_connect_flags & OBD_CONNECT_CKSUM) {
 		/* We sent to the server ocd_cksum_types with bits set
 		 * for algorithms we understand. The server masked off

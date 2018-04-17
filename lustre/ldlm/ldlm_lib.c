@@ -1079,7 +1079,8 @@ int target_handle_connect(struct ptlrpc_request *req)
 		 *
 		 * Via check OBD_CONNECT_FID, we can distinguish whether
 		 * the OBD_CONNECT_MDS_MDS/OBD_CONNECT_MNE_SWAB is from
-		 * MGC or MDT. */
+		 * MGC or MDT, since MGC does not use OBD_CONNECT_FID.
+		 */
 		if (!lw_client &&
 		    (data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
 		    (data->ocd_connect_flags & OBD_CONNECT_FID) &&
