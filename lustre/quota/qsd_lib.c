@@ -589,14 +589,6 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 		qsd->qsd_ns = NULL;
 	}
 
-	/* free per-quota type data */
-	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++)
-		qsd_qtype_fini(env, qsd, qtype);
-
-	/* deregister connection to the quota master */
-	qsd->qsd_exp_valid = false;
-	lustre_deregister_lwp_item(&qsd->qsd_exp);
-
 	/* release per-filesystem information */
 	if (qsd->qsd_fsinfo != NULL) {
 		mutex_lock(&qsd->qsd_fsinfo->qfs_mutex);
@@ -606,6 +598,14 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 		qsd_put_fsinfo(qsd->qsd_fsinfo);
 		qsd->qsd_fsinfo = NULL;
 	}
+
+	/* free per-quota type data */
+	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++)
+		qsd_qtype_fini(env, qsd, qtype);
+
+	/* deregister connection to the quota master */
+	qsd->qsd_exp_valid = false;
+	lustre_deregister_lwp_item(&qsd->qsd_exp);
 
 	/* release quota root directory */
 	if (qsd->qsd_root != NULL) {
