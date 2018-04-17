@@ -1493,6 +1493,7 @@ nodemap_test_setup() {
 
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property admin --value 1
+	wait_nm_sync default admin_nodemap
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property trusted --value 1
 	wait_nm_sync default trusted_nodemap
@@ -1506,6 +1507,7 @@ nodemap_test_cleanup() {
 
 	do_facet mgs $LCTL nodemap_modify --name default \
 		 --property admin --value 0
+	wait_nm_sync default admin_nodemap
 	do_facet mgs $LCTL nodemap_modify --name default \
 		 --property trusted --value 0
 	wait_nm_sync default trusted_nodemap
@@ -1694,6 +1696,7 @@ nodemap_acl_test() {
 }
 
 test_23a() {
+	[ $num_clients -lt 2 ] && skip "Need 2 clients at least" && return
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
