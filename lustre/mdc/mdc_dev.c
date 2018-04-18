@@ -151,7 +151,8 @@ again:
 	 * VFS and page cache already protect us locally, so lots of readers/
 	 * writers can share a single PW lock. */
 	mode = mdc_dom_lock_match(env, osc_export(obj), resname, LDLM_IBITS,
-				  policy, LCK_PR | LCK_PW, &flags, obj, &lockh,
+				  policy, LCK_PR | LCK_PW | LCK_GROUP, &flags,
+				  obj, &lockh,
 				  dap_flags & OSC_DAP_FL_CANCELING);
 	if (mode != 0) {
 		lock = ldlm_handle2lock(&lockh);

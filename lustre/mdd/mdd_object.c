@@ -2151,6 +2151,30 @@ static inline int mdd_set_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
 	return mdd_lmm_gen(lmm, gen, false);
 }
 
+static inline __u64 mdd_lmm_dom_size(void *buf)
+{
+	struct lov_mds_md *lmm = buf;
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_mds_md *v1;
+	__u32 off;
+
+	if (lmm == NULL)
+		return 0;
+
+	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
+		return 0;
+
+	comp_v1 = (struct lov_comp_md_v1 *)lmm;
+	off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
+	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+
+	/* DoM entry is the first entry always */
+	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) == LOV_PATTERN_MDT)
+		return le64_to_cpu(comp_v1->lcm_entries[0].lcme_extent.e_end);
+
+	return 0;
+}
+
 /**
  * swap layouts between 2 lustre objects
  */
@@ -2216,6 +2240,18 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	rc = mdd_get_lov_ea(env, snd_o, snd_buf);
 	if (rc < 0 && rc != -ENODATA)
 		GOTO(stop, rc);
+
+	/* check if file is DoM, it can be migrated only to another DoM layout
+	 * with the same DoM component size
+	 */
+	if (mdd_lmm_dom_size(fst_buf->lb_buf) !=
+	    mdd_lmm_dom_size(snd_buf->lb_buf)) {
+		rc = -EOPNOTSUPP;
+		CDEBUG(D_LAYOUT, "cannot swap layout for "DFID": new layout "
+		       "must have the same DoM component: rc = %d\n",
+		       PFID(mdo2fid(fst_o)), rc);
+		GOTO(stop, rc);
+	}
 
 	/* swapping 2 non existant layouts is a success */
 	if (fst_buf->lb_buf == NULL && snd_buf->lb_buf == NULL)
