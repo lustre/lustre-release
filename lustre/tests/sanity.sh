@@ -18,24 +18,6 @@ ALWAYS_EXCEPT="  407     253     312 $ALWAYS_EXCEPT"
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
 
-is_sles11()						# LU-4341
-{
-	if [ -r /etc/SuSE-release ]
-	then
-		local vers=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
-		local patchlev=$(grep PATCHLEVEL /etc/SuSE-release |
-			awk '{ print $3 }')
-		if [ $vers -eq 11 ] && [ $patchlev -ge 3 ]; then
-			return 0
-		fi
-	fi
-	return 1
-}
-
-if is_sles11; then					# LU-4341
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 170"
-fi
-
 SRCDIR=$(cd $(dirname $0); echo $PWD)
 export PATH=$PATH:/sbin
 
@@ -85,6 +67,43 @@ if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  65ic    180"
 	#                                               13    (min)"
 	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
+fi
+
+
+is_sles11()						# LU-4341
+{
+	if [ -r /etc/SuSE-release ]
+	then
+		local vers=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
+		local patchlev=$(grep PATCHLEVEL /etc/SuSE-release |
+			awk '{ print $3 }')
+		if [ $vers -eq 11 ] && [ $patchlev -ge 3 ]; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+# Check if we are running on Ubuntu or SLES so we can make decisions on
+# what tests to run
+if is_sles11; then
+	# bug number for skipped test: LU-4341
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  170"
+elif [ -r /etc/os-release ]; then
+	if grep -qi ubuntu /etc/os-release; then
+		ubuntu_version=$(version_code $(sed -n -e 's/"//g' \
+						-e 's/^VERSION=//p' \
+						/etc/os-release |
+						awk '{ print $1 }'))
+
+		if [[ $ubuntu_version -gt $(version_code 16.0.0) ]]; then
+			# bug number for skipped test:
+			#                LU-10334 LU-10335 LU-10335 LU-10335
+			ALWAYS_EXCEPT+=" 103a     130a     130b     130c"
+			#                LU-10335 LU-10335 LU-10365 LU-10366
+			ALWAYS_EXCEPT+=" 130d     130e     400a     410"
+		fi
+	fi
 fi
 
 FAIL_ON_ERROR=false
