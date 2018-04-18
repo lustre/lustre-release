@@ -217,58 +217,34 @@ int fld_client_del_target(struct lu_client_fld *fld, __u64 idx)
 	RETURN(-ENOENT);
 }
 
-#ifdef CONFIG_PROC_FS
-static int fld_client_proc_init(struct lu_client_fld *fld)
+struct dentry *fld_debugfs_dir;
+
+static int fld_client_debugfs_init(struct lu_client_fld *fld)
 {
 	int rc;
-	ENTRY;
 
-	fld->lcf_proc_dir = lprocfs_register(fld->lcf_name, fld_type_proc_dir,
-					     NULL, NULL);
-	if (IS_ERR(fld->lcf_proc_dir)) {
-		CERROR("%s: LProcFS failed in fld-init\n",
-		       fld->lcf_name);
-		rc = PTR_ERR(fld->lcf_proc_dir);
+	ENTRY;
+	fld->lcf_debugfs_entry = ldebugfs_register(fld->lcf_name,
+						   fld_debugfs_dir,
+						   fld_client_debugfs_list,
+						   fld);
+	if (IS_ERR_OR_NULL(fld->lcf_debugfs_entry)) {
+		CERROR("%s: LdebugFS failed in fld-init\n", fld->lcf_name);
+		rc = fld->lcf_debugfs_entry ? PTR_ERR(fld->lcf_debugfs_entry)
+					    : -ENOMEM;
+		fld->lcf_debugfs_entry = NULL;
 		RETURN(rc);
 	}
 
-	rc = lprocfs_add_vars(fld->lcf_proc_dir, fld_client_proc_list, fld);
-	if (rc) {
-		CERROR("%s: Can't init FLD proc, rc %d\n",
-		       fld->lcf_name, rc);
-		GOTO(out_cleanup, rc);
-	}
-
-	RETURN(0);
-
-out_cleanup:
-	fld_client_proc_fini(fld);
-	return rc;
+	return 0;
 }
 
-void fld_client_proc_fini(struct lu_client_fld *fld)
+void fld_client_debugfs_fini(struct lu_client_fld *fld)
 {
-        ENTRY;
-        if (fld->lcf_proc_dir) {
-                if (!IS_ERR(fld->lcf_proc_dir))
-                        lprocfs_remove(&fld->lcf_proc_dir);
-                fld->lcf_proc_dir = NULL;
-        }
-        EXIT;
+	if (!IS_ERR_OR_NULL(fld->lcf_debugfs_entry))
+		ldebugfs_remove(&fld->lcf_debugfs_entry);
 }
-#else /* !CONFIG_PROC_FS */
-static int fld_client_proc_init(struct lu_client_fld *fld)
-{
-        return 0;
-}
-
-void fld_client_proc_fini(struct lu_client_fld *fld)
-{
-        return;
-}
-#endif /* CONFIG_PROC_FS */
-
-EXPORT_SYMBOL(fld_client_proc_fini);
+EXPORT_SYMBOL(fld_client_debugfs_fini);
 
 static inline int hash_is_sane(int hash)
 {
@@ -278,14 +254,12 @@ static inline int hash_is_sane(int hash)
 int fld_client_init(struct lu_client_fld *fld,
                     const char *prefix, int hash)
 {
-        int cache_size, cache_threshold;
-        int rc;
-        ENTRY;
+	int cache_size, cache_threshold;
+	int rc;
 
-        LASSERT(fld != NULL);
-
-        snprintf(fld->lcf_name, sizeof(fld->lcf_name),
-                 "cli-%s", prefix);
+	ENTRY;
+	snprintf(fld->lcf_name, sizeof(fld->lcf_name),
+		 "cli-%s", prefix);
 
         if (!hash_is_sane(hash)) {
                 CERROR("%s: Wrong hash function %#x\n",
@@ -312,7 +286,7 @@ int fld_client_init(struct lu_client_fld *fld,
                 GOTO(out, rc);
         }
 
-        rc = fld_client_proc_init(fld);
+	rc = fld_client_debugfs_init(fld);
         if (rc)
                 GOTO(out, rc);
         EXIT;
@@ -531,22 +505,20 @@ void fld_client_flush(struct lu_client_fld *fld)
         fld_cache_flush(fld->lcf_cache);
 }
 
-
-struct proc_dir_entry *fld_type_proc_dir;
-
 static int __init fld_init(void)
 {
-	fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
-					     proc_lustre_root,
-					     NULL, NULL);
-	if (IS_ERR(fld_type_proc_dir))
-		return PTR_ERR(fld_type_proc_dir);
-
 #ifdef HAVE_SERVER_SUPPORT
-	fld_server_mod_init();
+	int rc;
+
+	rc = fld_server_mod_init();
+	if (rc)
+		return rc;
 #endif /* HAVE_SERVER_SUPPORT */
 
-	return 0;
+	fld_debugfs_dir = ldebugfs_register(LUSTRE_FLD_NAME,
+					    debugfs_lustre_root,
+					    NULL, NULL);
+	return PTR_ERR_OR_ZERO(fld_debugfs_dir);
 }
 
 static void __exit fld_exit(void)
@@ -555,10 +527,8 @@ static void __exit fld_exit(void)
 	fld_server_mod_exit();
 #endif /* HAVE_SERVER_SUPPORT */
 
-	if (fld_type_proc_dir != NULL && !IS_ERR(fld_type_proc_dir)) {
-		lprocfs_remove(&fld_type_proc_dir);
-		fld_type_proc_dir = NULL;
-	}
+	if (!IS_ERR_OR_NULL(fld_debugfs_dir))
+		ldebugfs_remove(&fld_debugfs_dir);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

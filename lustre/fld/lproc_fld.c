@@ -41,37 +41,36 @@
 
 #include <libcfs/libcfs.h>
 #include <linux/module.h>
+
+#ifdef HAVE_SERVER_SUPPORT
 #include <dt_object.h>
+#endif
 #include <obd_support.h>
 #include <lustre_fld.h>
 #include <lustre_fid.h>
 #include "fld_internal.h"
 
-#ifdef CONFIG_PROC_FS
 static int
-fld_proc_targets_seq_show(struct seq_file *m, void *unused)
+fld_debugfs_targets_seq_show(struct seq_file *m, void *unused)
 {
 	struct lu_client_fld *fld = (struct lu_client_fld *)m->private;
         struct lu_fld_target *target;
+
 	ENTRY;
-
-	LASSERT(fld != NULL);
-
 	spin_lock(&fld->lcf_lock);
 	list_for_each_entry(target, &fld->lcf_targets, ft_chain)
 	seq_printf(m, "%s\n", fld_target_name(target));
 	spin_unlock(&fld->lcf_lock);
+
 	RETURN(0);
 }
 
 static int
-fld_proc_hash_seq_show(struct seq_file *m, void *unused)
+fld_debugfs_hash_seq_show(struct seq_file *m, void *unused)
 {
 	struct lu_client_fld *fld = (struct lu_client_fld *)m->private;
+
 	ENTRY;
-
-	LASSERT(fld != NULL);
-
 	spin_lock(&fld->lcf_lock);
 	seq_printf(m, "%s\n", fld->lcf_hash->fh_name);
 	spin_unlock(&fld->lcf_lock);
@@ -80,7 +79,7 @@ fld_proc_hash_seq_show(struct seq_file *m, void *unused)
 }
 
 static ssize_t
-fld_proc_hash_seq_write(struct file *file, const char __user *buffer,
+fld_debugfs_hash_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct lu_client_fld *fld;
@@ -95,9 +94,8 @@ fld_proc_hash_seq_write(struct file *file, const char __user *buffer,
 		return -EFAULT;
 
 	fld = ((struct seq_file *)file->private_data)->private;
-	LASSERT(fld != NULL);
 
-	for (i = 0; fld_hash[i].fh_name != NULL; i++) {
+	for (i = 0; fld_hash[i].fh_name; i++) {
 		if (count != strlen(fld_hash[i].fh_name))
 			continue;
 
@@ -107,7 +105,7 @@ fld_proc_hash_seq_write(struct file *file, const char __user *buffer,
 		}
 	}
 
-	if (hash != NULL) {
+	if (hash) {
 		spin_lock(&fld->lcf_lock);
 		fld->lcf_hash = hash;
 		spin_unlock(&fld->lcf_lock);
@@ -119,15 +117,14 @@ fld_proc_hash_seq_write(struct file *file, const char __user *buffer,
 	return count;
 }
 
-static ssize_t
-lprocfs_cache_flush_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *pos)
+static ssize_t ldebugfs_cache_flush_seq_write(struct file *file,
+					      const char __user *buffer,
+					      size_t count, loff_t *pos)
 {
-	struct lu_client_fld *fld = ((struct seq_file *)file->private_data)->private;
+	struct seq_file *m = file->private_data;
+	struct lu_client_fld *fld = m->private;
+
 	ENTRY;
-
-        LASSERT(fld != NULL);
-
         fld_cache_flush(fld->lcf_cache);
 
         CDEBUG(D_INFO, "%s: Lookup cache is flushed\n", fld->lcf_name);
@@ -135,15 +132,15 @@ lprocfs_cache_flush_seq_write(struct file *file, const char __user *buffer,
         RETURN(count);
 }
 
-LPROC_SEQ_FOPS_RO(fld_proc_targets);
-LPROC_SEQ_FOPS(fld_proc_hash);
-LPROC_SEQ_FOPS_WR_ONLY(fld, cache_flush);
+LDEBUGFS_SEQ_FOPS_RO(fld_debugfs_targets);
+LDEBUGFS_SEQ_FOPS(fld_debugfs_hash);
+LDEBUGFS_FOPS_WR_ONLY(fld, cache_flush);
 
-struct lprocfs_vars fld_client_proc_list[] = {
+struct lprocfs_vars fld_client_debugfs_list[] = {
 	{ .name	=	"targets",
-	  .fops	=	&fld_proc_targets_fops	},
+	  .fops	=	&fld_debugfs_targets_fops	},
 	{ .name	=	"hash",
-	  .fops	=	&fld_proc_hash_fops	},
+	  .fops	=	&fld_debugfs_hash_fops	},
 	{ .name	=	"cache_flush",
 	  .fops	=	&fld_cache_flush_fops	},
 	{ NULL }
@@ -275,16 +272,12 @@ struct seq_operations fldb_sops = {
 static int fldb_seq_open(struct inode *inode, struct file *file)
 {
 	struct seq_file		*seq;
-	struct lu_server_fld    *fld = (struct lu_server_fld *)PDE_DATA(inode);
+	struct lu_server_fld    *fld = inode->i_private;
 	struct dt_object	*obj;
 	const struct dt_it_ops  *iops;
 	struct fld_seq_param    *param = NULL;
 	int			env_init = 0;
 	int			rc;
-
-	rc = LPROCFS_ENTRY_CHECK(inode);
-	if (rc < 0)
-		return rc;
 
 	rc = seq_open(file, &fldb_sops);
 	if (rc)
@@ -355,17 +348,11 @@ static int fldb_seq_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-const struct file_operations fld_proc_seq_fops = {
+const struct file_operations fld_debugfs_seq_fops = {
 	.owner   = THIS_MODULE,
 	.open    = fldb_seq_open,
 	.read    = seq_read,
 	.release = fldb_seq_release,
 };
 
-struct lprocfs_vars fld_server_proc_list[] = {
-	{ NULL }
-};
-
 # endif /* HAVE_SERVER_SUPPORT */
-
-#endif /* CONFIG_PROC_FS */

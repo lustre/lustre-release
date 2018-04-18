@@ -389,52 +389,34 @@ int fid_is_local(const struct lu_env *env,
 	return result;
 }
 
-static void fld_server_proc_fini(struct lu_server_fld *fld);
-
-#ifdef CONFIG_PROC_FS
-static int fld_server_proc_init(struct lu_server_fld *fld)
+static void fld_server_debugfs_fini(struct lu_server_fld *fld)
 {
-        int rc = 0;
-        ENTRY;
+	if (!IS_ERR_OR_NULL(fld->lsf_debugfs_entry))
+		ldebugfs_remove(&fld->lsf_debugfs_entry);
+}
 
-	fld->lsf_proc_dir = lprocfs_register(fld->lsf_name, fld_type_proc_dir,
-					     fld_server_proc_list, fld);
-	if (IS_ERR(fld->lsf_proc_dir)) {
-		rc = PTR_ERR(fld->lsf_proc_dir);
+static int fld_server_debugfs_init(struct lu_server_fld *fld)
+{
+	int rc = 0;
+
+	ENTRY;
+	fld->lsf_debugfs_entry = ldebugfs_register(fld->lsf_name,
+						   fld_debugfs_dir,
+						   NULL, NULL);
+	if (IS_ERR_OR_NULL(fld->lsf_debugfs_entry)) {
+		rc = fld->lsf_debugfs_entry ? PTR_ERR(fld->lsf_debugfs_entry)
+					    : -ENOMEM;
+		fld->lsf_debugfs_entry = NULL;
 		RETURN(rc);
 	}
 
-	rc = lprocfs_seq_create(fld->lsf_proc_dir, "fldb", 0444,
-				&fld_proc_seq_fops, fld);
-	if (rc) {
-		lprocfs_remove(&fld->lsf_proc_dir);
-		fld->lsf_proc_dir = NULL;
-	}
+	rc = ldebugfs_seq_create(fld->lsf_debugfs_entry, "fldb", 0444,
+				 &fld_debugfs_seq_fops, fld);
+	if (rc)
+		ldebugfs_remove(&fld->lsf_debugfs_entry);
 
 	RETURN(rc);
 }
-
-static void fld_server_proc_fini(struct lu_server_fld *fld)
-{
-        ENTRY;
-        if (fld->lsf_proc_dir != NULL) {
-                if (!IS_ERR(fld->lsf_proc_dir))
-                        lprocfs_remove(&fld->lsf_proc_dir);
-                fld->lsf_proc_dir = NULL;
-        }
-        EXIT;
-}
-#else
-static int fld_server_proc_init(struct lu_server_fld *fld)
-{
-        return 0;
-}
-
-static void fld_server_proc_fini(struct lu_server_fld *fld)
-{
-        return;
-}
-#endif
 
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 		    struct dt_device *dt, const char *prefix, int type)
@@ -463,7 +445,7 @@ int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 	if (rc)
 		GOTO(out_cache, rc);
 
-	rc = fld_server_proc_init(fld);
+	rc = fld_server_debugfs_init(fld);
 	if (rc)
 		GOTO(out_index, rc);
 
@@ -484,7 +466,7 @@ void fld_server_fini(const struct lu_env *env, struct lu_server_fld *fld)
 {
 	ENTRY;
 
-	fld_server_proc_fini(fld);
+	fld_server_debugfs_fini(fld);
 	fld_index_fini(env, fld);
 
 	if (fld->lsf_cache != NULL) {

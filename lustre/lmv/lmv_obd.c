@@ -2595,7 +2595,7 @@ static int lmv_precleanup(struct obd_device *obd)
 {
 	ENTRY;
 	libcfs_kkuc_group_rem(&obd->obd_uuid, 0, KUC_GRP_HSM);
-	fld_client_proc_fini(&obd->u.lmv.lmv_fld);
+	fld_client_debugfs_fini(&obd->u.lmv.lmv_fld);
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);
 	RETURN(0);

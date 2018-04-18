@@ -67,9 +67,10 @@ struct lu_fld_target {
 };
 
 struct lu_server_fld {
-        /**
-         * Fld dir proc entry. */
-	struct proc_dir_entry	*lsf_proc_dir;
+	/**
+	 * Fld dir debugfs entry.
+	 */
+	struct dentry		*lsf_debugfs_entry;
 
         /**
          * /fld file object device */
@@ -108,8 +109,9 @@ struct lu_server_fld {
 
 struct lu_client_fld {
 	/**
-	 * Client side proc entry. */
-	struct proc_dir_entry	*lcf_proc_dir;
+	 * Client side debugfs entry.
+	 */
+	struct dentry		*lcf_debugfs_entry;
 
 	/**
 	 * List of exports client FLD knows about. */
@@ -132,7 +134,8 @@ struct lu_client_fld {
         struct fld_cache        *lcf_cache;
 
         /**
-         * Client fld proc entry name. */
+	 * Client fld debugfs entry name.
+	 */
         char                     lcf_name[80];
 };
 
@@ -189,7 +192,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
 int fld_client_del_target(struct lu_client_fld *fld,
                           __u64 idx);
 
-void fld_client_proc_fini(struct lu_client_fld *fld);
+void fld_client_debugfs_fini(struct lu_client_fld *fld);
 
 /** @} fld */
 
