@@ -8038,6 +8038,9 @@ test_116() {
 	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
 		skip "ldiskfs only test" && return
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.59) ] &&
+		skip "Need server version at least 2.10.59" && return
+
 	stopall
 	load_modules
 
