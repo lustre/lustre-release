@@ -4436,28 +4436,28 @@ int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 	const char *name = NULL;
 	char *value = NULL;
 	size_t value_size = 0;
-	int rc;
+	int rc = 0;
 	ENTRY;
 
 	switch (type) {
 	case ACL_TYPE_ACCESS:
 		name = XATTR_NAME_POSIX_ACL_ACCESS;
-		if (acl) {
+		if (acl)
 			rc = posix_acl_update_mode(inode, &inode->i_mode, &acl);
-			if (rc)
-				GOTO(out, rc);
-		}
-
 		break;
+
 	case ACL_TYPE_DEFAULT:
 		name = XATTR_NAME_POSIX_ACL_DEFAULT;
 		if (!S_ISDIR(inode->i_mode))
-			GOTO(out, rc = acl ? -EACCES : 0);
-
+			rc = acl ? -EACCES : 0;
 		break;
+
 	default:
-		GOTO(out, rc = -EINVAL);
+		rc = -EINVAL;
+		break;
 	}
+	if (rc)
+		return rc;
 
 	if (acl) {
 		value_size = posix_acl_xattr_size(acl->a_count);
@@ -4478,10 +4478,10 @@ int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 out_value:
 	kfree(value);
 out:
-	if (!rc)
-		set_cached_acl(inode, type, acl);
-	else
+	if (rc)
 		forget_cached_acl(inode, type);
+	else
+		set_cached_acl(inode, type, acl);
 	RETURN(rc);
 }
 #endif /* CONFIG_FS_POSIX_ACL */
