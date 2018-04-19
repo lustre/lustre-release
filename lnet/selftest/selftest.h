@@ -274,7 +274,7 @@ struct srpc_service_cd {
 	/** error code for scd_buf_wi */
 	int			scd_buf_err;
 	/** timestamp for scd_buf_err */
-	time64_t		scd_buf_err_stamp;
+	unsigned long		scd_buf_err_stamp;
 	/** total # request buffers */
 	int			scd_buf_total;
 	/** # posted request buffers */

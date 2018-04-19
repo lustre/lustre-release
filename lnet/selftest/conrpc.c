@@ -1191,8 +1191,8 @@ lstcon_rpc_pinger(void *arg)
         }
 
 	if (!console_session.ses_expired &&
-	    ktime_get_real_seconds() - console_session.ses_laststamp >
-	    (time64_t)console_session.ses_timeout)
+	    cfs_time_current_sec() - console_session.ses_laststamp >
+	    (time_t)console_session.ses_timeout)
 		console_session.ses_expired = 1;
 
 	trans = console_session.ses_ping;
@@ -1277,7 +1277,7 @@ lstcon_rpc_pinger(void *arg)
 
         CDEBUG(D_NET, "Ping %d nodes in session\n", count);
 
-	ptimer->stt_expires = ktime_get_real_seconds() + LST_PING_INTERVAL;
+	ptimer->stt_expires = (cfs_time_t)(cfs_time_current_sec() + LST_PING_INTERVAL);
 	stt_add_timer(ptimer);
 
 	mutex_unlock(&console_session.ses_mutex);
@@ -1300,7 +1300,7 @@ lstcon_rpc_pinger_start(void)
         }
 
 	ptimer = &console_session.ses_ping_timer;
-	ptimer->stt_expires = ktime_get_real_seconds() + LST_PING_INTERVAL;
+	ptimer->stt_expires = (cfs_time_t)(cfs_time_current_sec() + LST_PING_INTERVAL);
 
 	stt_add_timer(ptimer);
 

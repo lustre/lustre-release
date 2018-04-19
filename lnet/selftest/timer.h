@@ -36,7 +36,7 @@
 
 typedef struct {
 	struct list_head	stt_list;
-	time64_t		stt_expires;
+	cfs_time_t		stt_expires;
 	void			(*stt_func)(void *);
 	void			*stt_data;
 } stt_timer_t;

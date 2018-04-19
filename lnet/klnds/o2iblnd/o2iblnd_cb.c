@@ -3356,9 +3356,8 @@ kiblnd_connd (void *arg)
                 }
 
 		while (reconn < KIB_RECONN_BREAK) {
-			if (kiblnd_data.kib_reconn_sec !=
-			    ktime_get_real_seconds()) {
-				kiblnd_data.kib_reconn_sec = ktime_get_real_seconds();
+			if (kiblnd_data.kib_reconn_sec != get_seconds()) {
+				kiblnd_data.kib_reconn_sec = get_seconds();
 				list_splice_init(&kiblnd_data.kib_reconn_wait,
 						 &kiblnd_data.kib_reconn_list);
 			}

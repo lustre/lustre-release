@@ -2446,10 +2446,10 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	}
 
 	if (the_lnet.ln_routing &&
-	    ni->ni_last_alive != ktime_get_real_seconds()) {
+	    ni->ni_last_alive != cfs_time_current_sec()) {
 		/* NB: so far here is the only place to set NI status to "up */
 		lnet_ni_lock(ni);
-		ni->ni_last_alive = ktime_get_real_seconds();
+		ni->ni_last_alive = cfs_time_current_sec();
 		if (ni->ni_status != NULL &&
 		    ni->ni_status->ns_status == LNET_NI_STATUS_DOWN)
 			ni->ni_status->ns_status = LNET_NI_STATUS_UP;

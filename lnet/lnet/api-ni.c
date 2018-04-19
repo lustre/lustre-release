@@ -2859,15 +2859,11 @@ LNetCtl(unsigned int cmd, void *arg)
 		return rc;
 	}
 
-	case IOC_LIBCFS_NOTIFY_ROUTER: {
-		unsigned long jiffies_passed;
-
-		jiffies_passed = ktime_get_real_seconds() - data->ioc_u64[0];
-		jiffies_passed = cfs_time_seconds(jiffies_passed);
-
+	case IOC_LIBCFS_NOTIFY_ROUTER:
 		return lnet_notify(NULL, data->ioc_nid, data->ioc_flags,
-				   jiffies - jiffies_passed);
-	}
+				  cfs_time_current() -
+				  cfs_time_seconds(cfs_time_current_sec() -
+						   (time_t)data->ioc_u64[0]));
 
 	case IOC_LIBCFS_LNET_DIST:
 		rc = LNetDist(data->ioc_nid, &data->ioc_nid, &data->ioc_u32[1]);

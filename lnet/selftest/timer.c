@@ -74,7 +74,7 @@ stt_add_timer(stt_timer_t *timer)
 	LASSERT(!stt_data.stt_shuttingdown);
 	LASSERT(timer->stt_func != NULL);
 	LASSERT(list_empty(&timer->stt_list));
-	LASSERT(timer->stt_expires > ktime_get_real_seconds());
+	LASSERT(cfs_time_after(timer->stt_expires, cfs_time_current_sec()));
 
 	/* a simple insertion sort */
 	list_for_each_prev(pos, STTIMER_SLOT(timer->stt_expires)) {
@@ -118,7 +118,7 @@ stt_del_timer(stt_timer_t *timer)
 
 /* called with stt_data.stt_lock held */
 static int
-stt_expire_list(struct list_head *slot, time64_t now)
+stt_expire_list(struct list_head *slot, cfs_time_t now)
 {
 	int	     expired = 0;
 	stt_timer_t *timer;
@@ -145,10 +145,10 @@ static int
 stt_check_timers(cfs_time_t *last)
 {
 	int expired = 0;
-	time64_t now;
+	cfs_time_t now;
         cfs_time_t this_slot;
 
-	now = ktime_get_real_seconds();
+	now = cfs_time_current_sec();
         this_slot = now & STTIMER_SLOTTIMEMASK;
 
 	spin_lock(&stt_data.stt_lock);
@@ -210,7 +210,7 @@ stt_startup (void)
         int i;
 
         stt_data.stt_shuttingdown = 0;
-	stt_data.stt_prev_slot = ktime_get_real_seconds() & STTIMER_SLOTTIMEMASK;
+	stt_data.stt_prev_slot = cfs_time_current_sec() & STTIMER_SLOTTIMEMASK;
 
 	spin_lock_init(&stt_data.stt_lock);
         for (i = 0; i < STTIMER_NSLOTS; i++)
