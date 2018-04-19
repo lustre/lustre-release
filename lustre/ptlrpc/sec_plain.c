@@ -215,12 +215,12 @@ int plain_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 static
 int plain_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
-        struct lustre_msg   *msg = req->rq_repdata;
-        struct plain_header *phdr;
-        __u32                cksum;
-        int                  swabbed;
-        ENTRY;
+	struct lustre_msg *msg = req->rq_repdata;
+	struct plain_header *phdr;
+	__u32 cksum;
+	bool swabbed;
 
+	ENTRY;
         if (msg->lm_bufcount != PLAIN_PACK_SEGMENTS) {
                 CERROR("unexpected reply buf count %u\n", msg->lm_bufcount);
                 RETURN(-EPROTO);
@@ -723,16 +723,15 @@ static struct ptlrpc_svc_ctx plain_svc_ctx = {
         .sc_policy      = &plain_policy,
 };
 
-static
-int plain_accept(struct ptlrpc_request *req)
+static int plain_accept(struct ptlrpc_request *req)
 {
-        struct lustre_msg   *msg = req->rq_reqbuf;
-        struct plain_header *phdr;
-        int                  swabbed;
-        ENTRY;
+	struct lustre_msg *msg = req->rq_reqbuf;
+	struct plain_header *phdr;
+	bool swabbed;
 
-        LASSERT(SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) ==
-                SPTLRPC_POLICY_PLAIN);
+	ENTRY;
+	LASSERT(SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) ==
+		SPTLRPC_POLICY_PLAIN);
 
         if (SPTLRPC_FLVR_BASE(req->rq_flvr.sf_rpc) !=
             SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_PLAIN) ||

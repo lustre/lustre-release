@@ -1163,37 +1163,37 @@ static inline bool ptlrpc_nrs_req_can_move(struct ptlrpc_request *req)
 /** @} nrs */
 
 /**
- * Returns 1 if request buffer at offset \a index was already swabbed
+ * Returns true if request buffer at offset \a index was already swabbed
  */
-static inline int lustre_req_swabbed(struct ptlrpc_request *req, size_t index)
+static inline bool lustre_req_swabbed(struct ptlrpc_request *req, size_t index)
 {
-        LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
-        return req->rq_req_swab_mask & (1 << index);
+	LASSERT(index < sizeof(req->rq_req_swab_mask) * 8);
+	return req->rq_req_swab_mask & (1 << index);
 }
 
 /**
- * Returns 1 if request reply buffer at offset \a index was already swabbed
+ * Returns true if request reply buffer at offset \a index was already swabbed
  */
-static inline int lustre_rep_swabbed(struct ptlrpc_request *req, size_t index)
+static inline bool lustre_rep_swabbed(struct ptlrpc_request *req, size_t index)
 {
-        LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
-        return req->rq_rep_swab_mask & (1 << index);
+	LASSERT(index < sizeof(req->rq_rep_swab_mask) * 8);
+	return req->rq_rep_swab_mask & (1 << index);
 }
 
 /**
- * Returns 1 if request needs to be swabbed into local cpu byteorder
+ * Returns true if request needs to be swabbed into local cpu byteorder
  */
-static inline int ptlrpc_req_need_swab(struct ptlrpc_request *req)
+static inline bool ptlrpc_req_need_swab(struct ptlrpc_request *req)
 {
-        return lustre_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+	return lustre_req_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 }
 
 /**
- * Returns 1 if request reply needs to be swabbed into local cpu byteorder
+ * Returns true if request reply needs to be swabbed into local cpu byteorder
  */
-static inline int ptlrpc_rep_need_swab(struct ptlrpc_request *req)
+static inline bool ptlrpc_rep_need_swab(struct ptlrpc_request *req)
 {
-        return lustre_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
+	return lustre_rep_swabbed(req, MSG_PTLRPC_HEADER_OFF);
 }
 
 /**
@@ -2321,8 +2321,8 @@ int ptlrpc_reconnect_import(struct obd_import *imp);
  *
  * @{
  */
-int ptlrpc_buf_need_swab(struct ptlrpc_request *req, const int inout,
-			 __u32 index);
+bool ptlrpc_buf_need_swab(struct ptlrpc_request *req, const int inout,
+			  __u32 index);
 void ptlrpc_buf_set_swabbed(struct ptlrpc_request *req, const int inout,
 			    __u32 index);
 int ptlrpc_unpack_rep_msg(struct ptlrpc_request *req, int len);
