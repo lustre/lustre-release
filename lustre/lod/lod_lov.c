@@ -1644,6 +1644,52 @@ out:
 	RETURN(rc);
 }
 
+int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1)
+{
+	struct lov_comp_md_entry_v1 *ent;
+	struct lu_extent *dom_ext, *ext;
+	struct lov_user_md_v1 *lum;
+	__u32 stripe_size;
+	__u16 mid, dom_mid;
+	int i;
+
+	ent = &comp_v1->lcm_entries[0];
+	dom_ext = &ent->lcme_extent;
+	dom_mid = mirror_id_of(le32_to_cpu(ent->lcme_id));
+	stripe_size = d->lod_dom_max_stripesize;
+
+	lum = (void *)comp_v1 + le32_to_cpu(ent->lcme_offset);
+	CDEBUG(D_LAYOUT, "DoM component size %u was bigger than MDT limit %u, "
+	       "new size is %u\n", le32_to_cpu(lum->lmm_stripe_size),
+	       d->lod_dom_max_stripesize, stripe_size);
+	lum->lmm_stripe_size = cpu_to_le32(stripe_size);
+
+	for (i = 1; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+		ent = &comp_v1->lcm_entries[i];
+		mid = mirror_id_of(le32_to_cpu(ent->lcme_id));
+
+		if (mid != dom_mid)
+			continue;
+
+		ext = &ent->lcme_extent;
+		if (ext->e_start != dom_ext->e_end)
+			continue;
+
+		/* Found next component after the DoM one with the same
+		 * mirror_id and adjust its start with DoM component end.
+		 *
+		 * NOTE: we are considering here that there can be only one
+		 * DoM component in a file, all replicas are located on OSTs
+		 * always and don't need adjustment since use own layouts.
+		 */
+		ext->e_start = cpu_to_le64(stripe_size);
+		break;
+	}
+	/* Update DoM extent end finally */
+	dom_ext->e_end = cpu_to_le64(stripe_size);
+	return 0;
+}
+
 /**
  * Verify LOV striping.
  *
@@ -1768,8 +1814,6 @@ int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
 			RETURN(-EINVAL);
 		}
 
-		prev_end = le64_to_cpu(ext->e_end);
-
 		tmp.lb_buf = (char *)comp_v1 + le32_to_cpu(ent->lcme_offset);
 		tmp.lb_len = le32_to_cpu(ent->lcme_size);
 
@@ -1786,7 +1830,7 @@ int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
 			stripe_size = le32_to_cpu(lum->lmm_stripe_size);
 			/* There is just one stripe on MDT and it must
 			 * cover whole component size. */
-			if (stripe_size != prev_end) {
+			if (stripe_size != le64_to_cpu(ext->e_end)) {
 				CDEBUG(D_LAYOUT, "invalid DoM layout "
 				       "stripe size %u != %llu "
 				       "(component size)\n",
@@ -1799,9 +1843,14 @@ int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
 				       "%u is bigger than MDT limit %u, check "
 				       "dom_max_stripesize parameter\n",
 				       stripe_size, d->lod_dom_max_stripesize);
-				RETURN(-EINVAL);
+				if (d->lod_dom_max_stripesize)
+					lod_fix_dom_stripe(d, comp_v1);
+				else
+					RETURN(-EFBIG);
 			}
 		}
+
+		prev_end = le64_to_cpu(ext->e_end);
 
 		rc = lod_verify_v1v3(d, &tmp, is_from_disk);
 		if (rc)

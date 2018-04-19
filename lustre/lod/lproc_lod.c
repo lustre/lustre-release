@@ -99,8 +99,19 @@ lod_dom_stripesize_seq_write(struct file *file, const char __user *buffer,
 	/* 1GB is the limit */
 	if (val > (1ULL << 30))
 		return -ERANGE;
-	else if (val > 0)
-		lod_fix_desc_stripe_size(&val);
+	else if (val > 0) {
+		if (val < LOV_MIN_STRIPE_SIZE) {
+			LCONSOLE_INFO("Increasing provided stripe size to "
+				      "a minimum value %u\n",
+				      LOV_MIN_STRIPE_SIZE);
+			val = LOV_MIN_STRIPE_SIZE;
+		} else if (val & (LOV_MIN_STRIPE_SIZE - 1)) {
+			val &= ~(LOV_MIN_STRIPE_SIZE - 1);
+			LCONSOLE_WARN("Changing provided stripe size to %llu "
+				      "(a multiple of minimum %u)\n",
+				      val, LOV_MIN_STRIPE_SIZE);
+		}
+	}
 
 	lod->lod_dom_max_stripesize = val;
 

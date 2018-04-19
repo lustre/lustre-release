@@ -16487,7 +16487,8 @@ test_270f() {
 		error "Can't set directory default striping"
 
 	# exceed maximum stripe size
-	$LFS setstripe -E $(($dom_limit * 2)) -L mdt $dom &&
+	$LFS setstripe -E $((dom_limit * 2)) -L mdt $dom
+	[ $($LFS getstripe -S $dom) -eq $((dom_limit * 2)) ] &&
 		error "Able to create DoM component size more than LOD limit"
 
 	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=0
@@ -16503,6 +16504,10 @@ test_270f() {
 	[ 30000 -eq ${dom_current} ] &&
 		error "Can set too small DoM stripe limit"
 
+	# 64K is a minimal stripe size in Lustre, expect limit of that size
+	[ 65536 -eq ${dom_current} ] ||
+		error "Limit is not set to 64K but ${dom_current}"
+
 	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=2147483648
 	dom_current=$(do_facet mds1 $LCTL get_param -n \
 						lod.$mdtname.dom_stripesize)
@@ -16516,7 +16521,8 @@ test_270f() {
 		error "Can't create DoM component size after limit change"
 	do_facet mds1 $LCTL set_param -n \
 				lod.$mdtname.dom_stripesize=$((dom_limit / 2))
-	$LFS setstripe -E $dom_limit -L mdt ${dom}_big &&
+	$LFS setstripe -E $dom_limit -L mdt ${dom}_big
+	[ $($LFS getstripe -S ${dom}_big) -eq $((dom_limit / 2)) ] ||
 		error "Can create big DoM component after limit decrease"
 	touch ${dom}_def ||
 		error "Can't create file with old default layout"
