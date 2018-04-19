@@ -121,15 +121,17 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 	cptab->ctb_nparts = ncpt;
 
 	LIBCFS_ALLOC(cptab->ctb_cpumask, cpumask_size());
-	LIBCFS_ALLOC(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
+	if (!cptab->ctb_cpumask)
+		goto failed_alloc_cpumask;
 
-	if (!cptab->ctb_cpumask || !cptab->ctb_nodemask)
-		goto failed;
+	LIBCFS_ALLOC(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
+	if (!cptab->ctb_nodemask)
+		goto failed_alloc_nodemask;
 
 	LIBCFS_ALLOC(cptab->ctb_cpu2cpt,
 		     nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
 	if (!cptab->ctb_cpu2cpt)
-		goto failed;
+		goto failed_alloc_cpu2cpt;
 
 	memset(cptab->ctb_cpu2cpt, -1,
 	       nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
@@ -137,36 +139,75 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 	LIBCFS_ALLOC(cptab->ctb_node2cpt,
 		     nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
 	if (!cptab->ctb_node2cpt)
-		goto failed;
+		goto failed_alloc_node2cpt;
 
 	memset(cptab->ctb_node2cpt, -1,
 	       nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
 
 	LIBCFS_ALLOC(cptab->ctb_parts, ncpt * sizeof(cptab->ctb_parts[0]));
 	if (!cptab->ctb_parts)
-		goto failed;
+		goto failed_alloc_ctb_parts;
 
 	for (i = 0; i < ncpt; i++) {
 		struct cfs_cpu_partition *part = &cptab->ctb_parts[i];
 
 		LIBCFS_ALLOC(part->cpt_cpumask, cpumask_size());
 		if (!part->cpt_cpumask)
-			goto failed;
+			goto failed_setting_ctb_parts;
 
 		LIBCFS_ALLOC(part->cpt_nodemask, sizeof(*part->cpt_nodemask));
 		if (!part->cpt_nodemask)
-			goto failed;
+			goto failed_setting_ctb_parts;
 
 		LIBCFS_ALLOC(part->cpt_distance,
-			cptab->ctb_nparts * sizeof(part->cpt_distance[0]));
+			     cptab->ctb_nparts * sizeof(part->cpt_distance[0]));
 		if (!part->cpt_distance)
-			goto failed;
+			goto failed_setting_ctb_parts;
 	}
 
 	return cptab;
 
-failed:
-	cfs_cpt_table_free(cptab);
+failed_setting_ctb_parts:
+	while (i-- >= 0) {
+		struct cfs_cpu_partition *part = &cptab->ctb_parts[i];
+
+		if (part->cpt_nodemask) {
+			LIBCFS_FREE(part->cpt_nodemask,
+				    sizeof(*part->cpt_nodemask));
+		}
+
+		if (part->cpt_cpumask)
+			LIBCFS_FREE(part->cpt_cpumask, cpumask_size());
+
+		if (part->cpt_distance) {
+			LIBCFS_FREE(part->cpt_distance,
+				cptab->ctb_nparts *
+					sizeof(part->cpt_distance[0]));
+		}
+	}
+
+	if (cptab->ctb_parts) {
+		LIBCFS_FREE(cptab->ctb_parts,
+			    cptab->ctb_nparts * sizeof(cptab->ctb_parts[0]));
+	}
+failed_alloc_ctb_parts:
+	if (cptab->ctb_node2cpt) {
+		LIBCFS_FREE(cptab->ctb_node2cpt,
+			    nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
+	}
+failed_alloc_node2cpt:
+	if (cptab->ctb_cpu2cpt) {
+		LIBCFS_FREE(cptab->ctb_cpu2cpt,
+			    nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
+	}
+failed_alloc_cpu2cpt:
+	if (cptab->ctb_nodemask)
+		LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
+failed_alloc_nodemask:
+	if (cptab->ctb_cpumask)
+		LIBCFS_FREE(cptab->ctb_cpumask, cpumask_size());
+failed_alloc_cpumask:
+	LIBCFS_FREE(cptab, sizeof(*cptab));
 	return NULL;
 }
 EXPORT_SYMBOL(cfs_cpt_table_alloc);
@@ -1136,12 +1177,14 @@ int cfs_cpu_init(void)
 					"fs/lustre/cfe:dead", NULL,
 					cfs_cpu_dead);
 	if (ret < 0)
-		goto failed;
+		goto failed_cpu_dead;
+
 	ret = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
 					"fs/lustre/cfe:online",
 					cfs_cpu_online, NULL);
 	if (ret < 0)
-		goto failed;
+		goto failed_cpu_online;
+
 	lustre_cpu_online = ret;
 #else
 	register_hotcpu_notifier(&cfs_cpu_notifier);
@@ -1156,7 +1199,7 @@ int cfs_cpu_init(void)
 			CERROR("Failed to create cptab from pattern '%s'\n",
 			       cpu_pattern);
 			ret = PTR_ERR(cfs_cpt_table);
-			goto failed;
+			goto failed_alloc_table;
 		}
 
 	} else {
@@ -1165,7 +1208,7 @@ int cfs_cpu_init(void)
 			CERROR("Failed to create cptab with npartitions %d\n",
 			       cpu_npartitions);
 			ret = PTR_ERR(cfs_cpt_table);
-			goto failed;
+			goto failed_alloc_table;
 		}
 	}
 
@@ -1176,9 +1219,23 @@ int cfs_cpu_init(void)
 		 cfs_cpt_number(cfs_cpt_table));
 	return 0;
 
-failed:
+failed_alloc_table:
 	put_online_cpus();
-	cfs_cpu_fini();
+
+	if (!IS_ERR_OR_NULL(cfs_cpt_table))
+		cfs_cpt_table_free(cfs_cpt_table);
+
+#ifdef CONFIG_HOTPLUG_CPU
+#ifdef HAVE_HOTPLUG_STATE_MACHINE
+	if (lustre_cpu_online > 0)
+		cpuhp_remove_state_nocalls(lustre_cpu_online);
+failed_cpu_online:
+	cpuhp_remove_state_nocalls(CPUHP_LUSTRE_CFS_DEAD);
+failed_cpu_dead:
+#else
+	unregister_hotcpu_notifier(&cfs_cpu_notifier);
+#endif /* !HAVE_HOTPLUG_STATE_MACHINE */
+#endif /* CONFIG_HOTPLUG_CPU */
 	return ret;
 }
 

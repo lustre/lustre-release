@@ -51,10 +51,11 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 	}
 
 	LIBCFS_ALLOC(cptab, sizeof(*cptab));
-	if (cptab) {
-		cpumask_set_cpu(0, cptab->ctb_cpumask);
-		node_set(0, cptab->ctb_nodemask);
-	}
+	if (!cptab)
+		return NULL;
+
+	cpumask_set_cpu(0, cptab->ctb_cpumask);
+	node_set(0, cptab->ctb_nodemask);
 
 	return cptab;
 }
