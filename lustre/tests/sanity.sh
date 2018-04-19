@@ -18746,6 +18746,8 @@ test_314() {
 run_test 314 "OSP shouldn't fail after last_rcvd update failure"
 
 test_315() { # LU-618
+	[ -f /proc/$$/io ] || skip_env "no IO accounting in kernel"
+
 	local file=$DIR/$tfile
 	rm -f $file
 
