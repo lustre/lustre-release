@@ -10711,6 +10711,9 @@ test_133b() {
 		ls -l ${testdir}/${tfile} > /dev/null|| error "ls failed"
 		check_stats $SINGLEMDS "getattr" 1
 	fi
+	# Sleep to avoid a cached response.
+	#define OBD_STATFS_CACHE_SECONDS 1
+	sleep 2
 	$LFS df || error "lfs failed"
 	check_stats $SINGLEMDS "statfs" 1
 
