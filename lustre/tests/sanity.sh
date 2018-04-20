@@ -7186,6 +7186,46 @@ test_77j() { # bug 13805
 }
 run_test 77j "client only supporting ADLER32"
 
+test_77k() { # LU-10906
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+
+	local cksum_param="osc.$FSNAME*.checksums"
+	local get_checksum="$LCTL get_param -n $cksum_param | head -n1"
+	local checksum
+	local i
+
+	[ "$ORIG_CSUM" ] || ORIG_CSUM=$(eval $get_checksum)
+	stack_trap "wait_update $HOSTNAME '$get_checksum' $ORIG_CSUM" EXIT
+	stack_trap "do_facet mgs $LCTL set_param -P $cksum_param=$ORIG_CSUM" \
+		EXIT
+
+	for i in 0 1; do
+		do_facet mgs $LCTL set_param -P $cksum_param=$i ||
+			error "failed to set checksum=$i on MGS"
+		wait_update $HOSTNAME "$get_checksum" $i
+		#remount
+		echo "remount client, checksum should be $i"
+		remount_client $MOUNT || "failed to remount client"
+		checksum=$(eval $get_checksum)
+		[ $checksum -eq $i ] || error "checksum($checksum) != $i"
+	done
+
+	for opt in "checksum" "nochecksum"; do
+		#remount with mount option
+		echo "remount client with option $opt, checksum should be $i"
+		umount_client $MOUNT || "failed to umount client"
+		mount_client $MOUNT "$MOUNT_OPTS,$opt" ||
+			"failed to mount client with option '$opt'"
+		checksum=$(eval $get_checksum)
+		[ $checksum -eq $i ] || error "checksum($checksum) != $i"
+		i=$((i - 1))
+	done
+
+	remount_client $MOUNT || "failed to remount client"
+}
+run_test 77k "enable/disable checksum correctly"
+
 [ "$ORIG_CSUM" ] && set_checksums $ORIG_CSUM || true
 rm -f $F77_TMP
 unset F77_TMP

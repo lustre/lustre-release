@@ -571,13 +571,15 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	}
 
 	checksum = sbi->ll_flags & LL_SBI_CHECKSUM;
-	err = obd_set_info_async(NULL, sbi->ll_dt_exp, sizeof(KEY_CHECKSUM),
-				 KEY_CHECKSUM, sizeof(checksum), &checksum,
-				 NULL);
-	if (err) {
-		CERROR("%s: Set checksum failed: rc = %d\n",
-		       sbi->ll_dt_exp->exp_obd->obd_name, err);
-		GOTO(out_root, err);
+	if (sbi->ll_checksum_set) {
+		err = obd_set_info_async(NULL, sbi->ll_dt_exp,
+					 sizeof(KEY_CHECKSUM), KEY_CHECKSUM,
+					 sizeof(checksum), &checksum, NULL);
+		if (err) {
+			CERROR("%s: Set checksum failed: rc = %d\n",
+			       sbi->ll_dt_exp->exp_obd->obd_name, err);
+			GOTO(out_root, err);
+		}
 	}
 	cl_sb_init(sb);
 
@@ -774,23 +776,24 @@ void ll_kill_super(struct super_block *sb)
 
 static inline int ll_set_opt(const char *opt, char *data, int fl)
 {
-        if (strncmp(opt, data, strlen(opt)) != 0)
-                return(0);
-        else
-                return(fl);
+	if (strncmp(opt, data, strlen(opt)) != 0)
+		return 0;
+	else
+		return fl;
 }
 
 /* non-client-specific mount options are parsed in lmd_parse */
-static int ll_options(char *options, int *flags)
+static int ll_options(char *options, struct ll_sb_info *sbi)
 {
-        int tmp;
-        char *s1 = options, *s2;
-        ENTRY;
+	int tmp;
+	char *s1 = options, *s2;
+	int *flags = &sbi->ll_flags;
+	ENTRY;
 
-        if (!options)
-                RETURN(0);
+	if (!options)
+		RETURN(0);
 
-        CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
+	CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
 
         while (*s1) {
                 CDEBUG(D_SUPER, "next opt=%s\n", s1);
@@ -847,16 +850,18 @@ static int ll_options(char *options, int *flags)
 			goto next;
 		}
 
-                tmp = ll_set_opt("checksum", s1, LL_SBI_CHECKSUM);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("nochecksum", s1, LL_SBI_CHECKSUM);
-                if (tmp) {
-                        *flags &= ~tmp;
-                        goto next;
-                }
+		tmp = ll_set_opt("checksum", s1, LL_SBI_CHECKSUM);
+		if (tmp) {
+			*flags |= tmp;
+			sbi->ll_checksum_set = 1;
+			goto next;
+		}
+		tmp = ll_set_opt("nochecksum", s1, LL_SBI_CHECKSUM);
+		if (tmp) {
+			*flags &= ~tmp;
+			sbi->ll_checksum_set = 1;
+			goto next;
+		}
                 tmp = ll_set_opt("lruresize", s1, LL_SBI_LRU_RESIZE);
                 if (tmp) {
                         *flags |= tmp;
@@ -1022,7 +1027,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	if (!sbi)
 		GOTO(out_free, err = -ENOMEM);
 
-	err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
+	err = ll_options(lsi->lsi_lmd->lmd_opts, sbi);
 	if (err)
 		GOTO(out_free, err);
 
