@@ -1,15 +1,12 @@
 MODULES := obdclass llog_test
 
-obdclass-linux-objs := linux-module.o linux-obdo.o
-obdclass-linux-objs := $(addprefix linux/,$(obdclass-linux-objs))
-
 default: all
 
 obdclass-all-objs := llog.o llog_cat.o llog_obd.o llog_swab.o llog_osd.o
 obdclass-all-objs += class_obd.o debug.o genops.o llog_ioctl.o
 obdclass-all-objs += lprocfs_status.o lprocfs_counters.o
 obdclass-all-objs += lustre_handles.o lustre_peer.o local_storage.o
-obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o
+obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o obd_sysfs.o
 obdclass-all-objs += lu_object.o dt_object.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
 obdclass-all-objs += linkea.o
@@ -23,9 +20,10 @@ obdclass-all-objs += kernelcomm.o jobid.o
 @SERVER_TRUE@obdclass-all-objs += lu_ucred.o
 @SERVER_TRUE@obdclass-all-objs += md_attrs.o
 @SERVER_TRUE@obdclass-all-objs += obd_mount_server.o
+@SERVER_TRUE@obdclass-all-objs += obdo_server.o
 @SERVER_TRUE@obdclass-all-objs += scrub.o
 
-obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
+obdclass-objs := $(obdclass-all-objs)
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
@@ -40,6 +38,7 @@ EXTRA_DIST += cl_internal.h local_storage.h
 @SERVER_FALSE@EXTRA_DIST += lu_ucred.c
 @SERVER_FALSE@EXTRA_DIST += md_attrs.c
 @SERVER_FALSE@EXTRA_DIST += obd_mount_server.c
+@SERVER_FALSE@EXTRA_DIST += obdo_server.c
 @SERVER_FALSE@EXTRA_DIST += scrub.c
 
 @INCLUDE_RULES@

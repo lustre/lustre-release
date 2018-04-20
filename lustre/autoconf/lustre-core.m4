@@ -3390,7 +3390,6 @@ lustre/fld/Makefile
 lustre/fld/autoMakefile
 lustre/obdclass/Makefile
 lustre/obdclass/autoMakefile
-lustre/obdclass/linux/Makefile
 lustre/obdecho/Makefile
 lustre/obdecho/autoMakefile
 lustre/ofd/Makefile

@@ -1,6 +1,3 @@
-SUBDIRS = linux
-DIST_SUBDIRS = linux
-
 if MODULES
 
 if LINUX
@@ -13,4 +10,3 @@ endif # LINUX
 endif # MODULES
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
-MOSTLYCLEANFILES += linux/*.o
