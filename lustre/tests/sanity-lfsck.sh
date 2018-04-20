@@ -5032,29 +5032,70 @@ test_31h() {
 }
 run_test 31h "Repair the corrupted shard's name entry"
 
-test_32()
+test_32a()
 {
 	lfsck_prep 5 5
 	umount_client $MOUNT
 
-	#define OBD_FAIL_LFSCK_ASSISTANT_DIRECT	0x162d
+	#define OBD_FAIL_LFSCK_ENGINE_DELAY	0x162d
 	do_facet $SINGLEMDS $LCTL set_param fail_val=3 fail_loc=0x162d
-	$START_LAYOUT -r || error "(2) Fail to start LFSCK for layout!"
+	$START_LAYOUT -r || error "(1) Fail to start LFSCK for layout!"
 
 	local STATUS=$($SHOW_LAYOUT | awk '/^status/ { print $2 }')
 	[ "$STATUS" == "scanning-phase1" ] ||
-		error "(3) Expect 'scanning-phase1', but got '$STATUS'"
+		error "(2) Expect 'scanning-phase1', but got '$STATUS'"
 
 	echo "stop ost1"
-	stop ost1 > /dev/null || error "(4) Fail to stop OST1!"
+	stop ost1 > /dev/null || error "(3) Fail to stop OST1!"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
-	sleep 1
+	sleep 4
 
 	echo "stop LFSCK"
-	$STOP_LFSCK || error "(5) Fail to stop LFSCK!"
+	$STOP_LFSCK || error "(4) Fail to stop LFSCK!"
+
+	start ost1 $(ostdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(5) Fail to start ost1"
 }
-run_test 32 "stop LFSCK when some OST failed"
+run_test 32a "stop LFSCK when some OST failed"
+
+test_32b()
+{
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	lfsck_prep 5 5
+	$LFS mkdir -i 1 $DIR/$tdir/dp ||
+		error "(1) Fail to create $DIR/$tdir/dp"
+	$LFS mkdir -i 0 -c $MDSCOUNT $DIR/$tdir/dp/dc1 ||
+		error "(2) Fail to create $DIR/$tdir/dp/dc1"
+	$LFS mkdir -i 0 -c $MDSCOUNT $DIR/$tdir/dp/dc2 ||
+		error "(3) Fail to create $DIR/$tdir/dp/dc2"
+	umount_client $MOUNT
+
+	#define OBD_FAIL_LFSCK_ENGINE_DELAY	0x162d
+	do_facet $SINGLEMDS $LCTL set_param fail_val=3 fail_loc=0x162d
+	$START_NAMESPACE -r -A || error "(4) Fail to start LFSCK for namespace!"
+
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "scanning-phase1" 32 || {
+		$SHOW_NAMESPACE
+		error "(5) unexpected status"
+	}
+
+	echo "stop mds2"
+	stop mds2 > /dev/null || error "(6) Fail to stop MDT2!"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
+	sleep 4
+
+	echo "stop LFSCK"
+	$STOP_LFSCK || error "(7) Fail to stop LFSCK!"
+
+	start mds2 $(mdsdevname 2) $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(8) Fail to start MDT2"
+}
+run_test 32b "stop LFSCK when some MDT failed"
 
 test_33()
 {

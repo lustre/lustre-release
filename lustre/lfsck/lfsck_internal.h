@@ -675,6 +675,7 @@ struct lfsck_instance {
 	atomic_t		  li_ref;
 	atomic_t		  li_double_scan_count;
 	struct ptlrpc_thread	  li_thread;
+	struct task_struct	 *li_task;
 
 	/* The time for last checkpoint, seconds */
 	time64_t		  li_time_last_checkpoint;

@@ -1016,6 +1016,10 @@ int lfsck_master_engine(void *args)
 	int			  rc;
 	ENTRY;
 
+	spin_lock(&lfsck->li_lock);
+	lfsck->li_task = current;
+	spin_unlock(&lfsck->li_lock);
+
 	/* There will be some objects verification during the LFSCK start,
 	 * such as the subsequent lfsck_verify_lpf(). Trigger low layer OI
 	 * OI scrub before that to handle the potential inconsistence. */
@@ -1112,6 +1116,7 @@ fini_oit:
 fini_args:
 	spin_lock(&lfsck->li_lock);
 	thread_set_flags(thread, SVC_STOPPED);
+	lfsck->li_task = NULL;
 	spin_unlock(&lfsck->li_lock);
 	wake_up_all(&thread->t_ctl_waitq);
 	lfsck_thread_args_fini(lta);

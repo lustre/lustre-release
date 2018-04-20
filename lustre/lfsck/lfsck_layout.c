@@ -4099,7 +4099,7 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	if (lso->lso_dead)
 		RETURN(0);
 
-	CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_ASSISTANT_DIRECT, cfs_fail_val);
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_ENGINE_DELAY, cfs_fail_val);
 
 	rc = dt_attr_get(env, child, cla);
 	if (rc == -ENOENT) {
@@ -5304,16 +5304,13 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 			goto next;
 		}
 
-		if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_ASSISTANT_DIRECT)) {
-			rc = dt_declare_attr_get(env, cobj);
-			if (rc != 0)
-				goto next;
+		rc = dt_declare_attr_get(env, cobj);
+		if (rc)
+			goto next;
 
-			rc = dt_declare_xattr_get(env, cobj, &buf,
-						  XATTR_NAME_FID);
-			if (rc != 0)
-				goto next;
-		}
+		rc = dt_declare_xattr_get(env, cobj, &buf, XATTR_NAME_FID);
+		if (rc)
+			goto next;
 
 		if (lso == NULL) {
 			struct lu_attr *attr = &info->lti_la;

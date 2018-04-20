@@ -1718,6 +1718,8 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
+	CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_ENGINE_DELAY, cfs_fail_val);
+
 	parent = lfsck_object_find_bottom(env, lfsck, pfid);
 	if (IS_ERR(parent)) {
 		rc = lfsck_namespace_trace_update(env, com, cfid,

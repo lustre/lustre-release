@@ -3396,6 +3396,9 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 
 	thread_set_flags(thread, SVC_STOPPING);
 
+	LASSERT(lfsck->li_task != NULL);
+	force_sig(SIGINT, lfsck->li_task);
+
 	if (lfsck->li_master) {
 		struct lfsck_component *com;
 		struct lfsck_assistant_data *lad;
