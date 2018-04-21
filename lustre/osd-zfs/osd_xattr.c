@@ -292,6 +292,11 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		RETURN(-EOPNOTSUPP);
 
 	down_read(&obj->oo_guard);
+	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed)) {
+		up_read(&obj->oo_guard);
+		RETURN(-ENOENT);
+	}
+
 	/* For the OST migrated from ldiskfs, the PFID EA may
 	 * be stored in LMA because of ldiskfs inode size. */
 	if (strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma)
