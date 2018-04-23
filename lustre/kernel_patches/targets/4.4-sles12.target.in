@@ -12,7 +12,7 @@ FLAVOR_DELIMITER="-"
 
 KERNEL_SRPM=kernel-source-${lnxmaj}${lnxmin}-${lnxrel}${rpmfix}.src.rpm
 SERIES=4.4-sles12.series
-LDISKFS_SERIES=4.4-sles12sp3.series
+LDISKFS_SERIES=4.4-sles12sp2.series
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxmin#.}-${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@
