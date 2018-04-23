@@ -2694,6 +2694,17 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         target_process_req_flags(obd, req);
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LOCK_REPLAY_DONE) {
+		if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_TGT_RECOVERY_REQ_RACE))) {
+			if (cfs_fail_val == 1) {
+				cfs_race_state = 1;
+				cfs_fail_val = 0;
+				wake_up(&cfs_race_waitq);
+
+				set_current_state(TASK_INTERRUPTIBLE);
+				schedule_timeout(cfs_time_seconds(1));
+			}
+		}
+
                 /* client declares he's ready to complete recovery
                  * so, we put the request on th final queue */
 		target_request_copy_get(req);

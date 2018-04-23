@@ -4648,6 +4648,43 @@ test_120() {
 }
 run_test 120 "DNE fail abort should stop both normal and DNE replay"
 
+test_121() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+		skip "Don't support it before 2.11" &&
+		return 0
+
+	local at_max_saved=$(at_max_get mds)
+
+	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
+	cancel_lru_locks mdc
+
+	multiop_bg_pause $DIR/$tfile s_s || error "multiop $DIR/$tfile failed"
+	mpid=$!
+
+	lctl set_param -n ldlm.cancel_unused_locks_before_replay "0"
+
+	stop mds1
+	change_active mds1
+	wait_for_facet mds1
+
+	#define OBD_FAIL_TGT_RECOVERY_REQ_RACE	0x721
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x721 fail_val=0"
+	at_max_set 0 mds
+
+	mount_facet mds1
+	wait_clients_import_state "$clients" mds1 FULL
+	clients_up || clients_up || error "failover df: $?"
+
+	kill -USR1 $mpid
+	wait $mpid || error "multiop_bg_pause pid failed"
+
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
+	lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
+	at_max_set $at_max_saved mds
+	rm -f $DIR/$tfile
+}
+run_test 121 "lock replay timed out and race"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

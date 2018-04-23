@@ -661,6 +661,19 @@ static int process_req_last_xid(struct ptlrpc_request *req)
 			RETURN(-EPROTO);
 	}
 
+	/* The "last_xid" is the minimum xid among unreplied requests,
+	 * if the request is from the previous connection, its xid can
+	 * still be larger than "exp_last_xid", then the above check of
+	 * xid is not enough to determine whether the request is delayed.
+	 *
+	 * For example, if some replay request was delayed and caused
+	 * timeout at client and the replay is restarted, the delayed
+	 * replay request will have the larger xid than "exp_last_xid"
+	 */
+	if (req->rq_export->exp_conn_cnt >
+	    lustre_msg_get_conn_cnt(req->rq_reqmsg))
+		RETURN(-ESTALE);
+
 	/* try to release in-memory reply data */
 	if (tgt_is_multimodrpcs_client(req->rq_export)) {
 		tgt_handle_received_xid(req->rq_export,
@@ -686,6 +699,19 @@ int tgt_request_handle(struct ptlrpc_request *req)
 	int			 rc;
 	bool			 is_connect = false;
 	ENTRY;
+
+	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_TGT_RECOVERY_REQ_RACE))) {
+		if (cfs_fail_val == 0 &&
+		    lustre_msg_get_opc(msg) != OBD_PING &&
+		    lustre_msg_get_flags(msg) & MSG_REQ_REPLAY_DONE) {
+			struct l_wait_info lwi =  { 0 };
+
+			cfs_fail_val = 1;
+			cfs_race_state = 0;
+			l_wait_event(cfs_race_waitq, (cfs_race_state == 1),
+				     &lwi);
+		}
+	}
 
 	/* Refill the context, to make sure all thread keys are allocated */
 	lu_env_refill(req->rq_svc_thread->t_env);
