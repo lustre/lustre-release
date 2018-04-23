@@ -64,6 +64,9 @@ extern struct kset *ldlm_svc_kset;
 #define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
 #define LDLM_DEFAULT_MAX_ALIVE		3900	/* 3900 seconds ~65 min */
 #define LDLM_CTIME_AGE_LIMIT (10)
+/* if client lock is unused for that time it can be cancelled if any other
+ * client shows interest in that lock, e.g. glimpse is occured. */
+#define LDLM_DIRTY_AGE_LIMIT (10)
 #define LDLM_DEFAULT_PARALLEL_AST_LIMIT 1024
 
 /**
@@ -438,7 +441,13 @@ struct ldlm_namespace {
 	 * for a directory and may save an RPC for a later stat.
 	 */
 	time64_t		ns_ctime_age_limit;
-
+	/**
+	 * Number of seconds since the lock was last used. The client may
+	 * cancel the lock limited by this age and flush related data if
+	 * any other client shows interest in it doing glimpse request.
+	 * This allows to cache stat data locally for such files early.
+	 */
+	time64_t		ns_dirty_age_limit;
 	/**
 	 * Used to rate-limit ldlm_namespace_dump calls.
 	 * \see ldlm_namespace_dump. Increased by 10 seconds every time

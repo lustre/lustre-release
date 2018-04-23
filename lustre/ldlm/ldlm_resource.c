@@ -490,6 +490,32 @@ static ssize_t early_lock_cancel_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(early_lock_cancel);
 
+static ssize_t dirty_age_limit_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return sprintf(buf, "%llu\n", ns->ns_dirty_age_limit);
+}
+
+static ssize_t dirty_age_limit_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	unsigned long long tmp;
+
+	if (kstrtoull(buffer, 10, &tmp))
+		return -EINVAL;
+
+	ns->ns_dirty_age_limit = tmp;
+
+	return count;
+}
+LUSTRE_RW_ATTR(dirty_age_limit);
+
 #ifdef HAVE_SERVER_SUPPORT
 static ssize_t ctime_age_limit_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
@@ -647,6 +673,7 @@ static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_lru_size.attr,
 	&lustre_attr_lru_max_age.attr,
 	&lustre_attr_early_lock_cancel.attr,
+	&lustre_attr_dirty_age_limit.attr,
 #ifdef HAVE_SERVER_SUPPORT
 	&lustre_attr_ctime_age_limit.attr,
 	&lustre_attr_lock_timeouts.attr,
@@ -960,6 +987,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
         ns->ns_max_unused         = LDLM_DEFAULT_LRU_SIZE;
 	ns->ns_max_age            = ktime_set(LDLM_DEFAULT_MAX_ALIVE, 0);
         ns->ns_ctime_age_limit    = LDLM_CTIME_AGE_LIMIT;
+	ns->ns_dirty_age_limit    = LDLM_DIRTY_AGE_LIMIT;
         ns->ns_timeouts           = 0;
         ns->ns_orig_connect_flags = 0;
         ns->ns_connect_flags      = 0;

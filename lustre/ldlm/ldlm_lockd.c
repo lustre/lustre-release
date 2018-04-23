@@ -1772,7 +1772,7 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
             !lock->l_readers && !lock->l_writers &&
 	    ktime_after(ktime_get(),
 			ktime_add(lock->l_last_used,
-				  ktime_set(10, 0)))) {
+				  ktime_set(ns->ns_dirty_age_limit, 0)))) {
                 unlock_res_and_lock(lock);
                 if (ldlm_bl_to_thread_lock(ns, NULL, lock))
                         ldlm_handle_bl_callback(ns, NULL, lock);
