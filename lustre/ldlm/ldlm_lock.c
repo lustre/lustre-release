@@ -486,6 +486,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lu_ref_init(&lock->l_reference);
         lu_ref_add(&lock->l_reference, "hash", lock);
         lock->l_callback_timeout = 0;
+	lock->l_activity = 0;
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 	INIT_LIST_HEAD(&lock->l_exp_refs_link);
