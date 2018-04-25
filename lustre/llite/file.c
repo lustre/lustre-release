@@ -417,25 +417,12 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	struct niobuf_remote *rnb;
 	struct mdt_body *body;
 	char *data;
-	struct lustre_handle lockh;
-	struct ldlm_lock *lock;
 	unsigned long index, start;
 	struct niobuf_local lnb;
-	bool dom_lock = false;
 
 	ENTRY;
 
 	if (obj == NULL)
-		RETURN_EXIT;
-
-	if (it->it_lock_mode != 0) {
-		lockh.cookie = it->it_lock_handle;
-		lock = ldlm_handle2lock(&lockh);
-		if (lock != NULL)
-			dom_lock = ldlm_has_dom(lock);
-		LDLM_LOCK_PUT(lock);
-	}
-	if (!dom_lock)
 		RETURN_EXIT;
 
 	if (!req_capsule_field_present(&req->rq_pill, &RMF_NIOBUF_INLINE,
@@ -575,8 +562,27 @@ retry:
 	rc = ll_prep_inode(&de->d_inode, req, NULL, itp);
 
 	if (!rc && itp->it_lock_mode) {
-		ll_dom_finish_open(de->d_inode, req, itp);
+		struct lustre_handle handle = {.cookie = itp->it_lock_handle};
+		struct ldlm_lock *lock;
+		bool has_dom_bit = false;
+
+		/* If we got a lock back and it has a LOOKUP bit set,
+		 * make sure the dentry is marked as valid so we can find it.
+		 * We don't need to care about actual hashing since other bits
+		 * of kernel will deal with that later.
+		 */
+		lock = ldlm_handle2lock(&handle);
+		if (lock) {
+			has_dom_bit = ldlm_has_dom(lock);
+			if (lock->l_policy_data.l_inodebits.bits &
+			    MDS_INODELOCK_LOOKUP)
+				d_lustre_revalidate(de);
+
+			LDLM_LOCK_PUT(lock);
+		}
 		ll_set_lock_data(sbi->ll_md_exp, de->d_inode, itp, NULL);
+		if (has_dom_bit)
+			ll_dom_finish_open(de->d_inode, req, itp);
 	}
 
 out:
