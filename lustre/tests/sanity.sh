@@ -18103,6 +18103,11 @@ test_300k() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
+	# this test needs a huge transaction
+	local kb
+	kb=$(do_facet $SINGLEMDS lctl get_param -n osd*.lustre-MDT0000.kbytestotal)
+	[ $kb -lt $((1024*1024)) ] && skip "too small mds: $kb"
+
 	local stripe_count
 	local file
 
