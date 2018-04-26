@@ -1914,11 +1914,11 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 
 			tx->tx_offset = ((__u64)((unsigned long)sink->gnrd_addr)) & 3;
 			if (tx->tx_offset)
-				kgnilnd_admin_addref(kgnilnd_data.kgn_rev_offset);
+				atomic_inc(&kgnilnd_data.kgn_rev_offset);
 
 			if ((nob + tx->tx_offset) & 3) {
 				desc_nob = ((nob + tx->tx_offset) + (4 - ((nob + tx->tx_offset) & 3)));
-				kgnilnd_admin_addref(kgnilnd_data.kgn_rev_length);
+				atomic_inc(&kgnilnd_data.kgn_rev_length);
 			} else {
 				desc_nob = (nob + tx->tx_offset);
 			}
@@ -1934,7 +1934,7 @@ kgnilnd_rdma(kgn_tx_t *tx, int type,
 					kgnilnd_tx_done(tx, -EFAULT);
 					return 0;
 				}
-				kgnilnd_admin_addref(kgnilnd_data.kgn_rev_copy_buff);
+				atomic_inc(&kgnilnd_data.kgn_rev_copy_buff);
 				rc = kgnilnd_mem_register(conn->gnc_device->gnd_handle, (__u64)tx->tx_buffer_copy, desc_nob, NULL, GNI_MEM_READWRITE, &tx->tx_buffer_copy_map_key);
 				if (rc != GNI_RC_SUCCESS) {
 					/* Registration Failed nak rdma and kill the tx. */
