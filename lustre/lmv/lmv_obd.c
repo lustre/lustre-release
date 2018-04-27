@@ -2054,7 +2054,7 @@ struct lmv_dir_ctxt {
 	struct stripe_dirent	 ldc_stripes[0];
 };
 
-static inline void put_stripe_dirent(struct stripe_dirent *stripe)
+static inline void stripe_dirent_unload(struct stripe_dirent *stripe)
 {
 	if (stripe->sd_page) {
 		kunmap(stripe->sd_page);
@@ -2069,76 +2069,14 @@ static inline void put_lmv_dir_ctxt(struct lmv_dir_ctxt *ctxt)
 	int i;
 
 	for (i = 0; i < ctxt->ldc_count; i++)
-		put_stripe_dirent(&ctxt->ldc_stripes[i]);
+		stripe_dirent_unload(&ctxt->ldc_stripes[i]);
 }
 
-static struct lu_dirent *stripe_dirent_next(struct lmv_dir_ctxt *ctxt,
-					    struct stripe_dirent *stripe,
-					    int stripe_index)
+/* if @ent is dummy, or . .., get next */
+static struct lu_dirent *stripe_dirent_get(struct lmv_dir_ctxt *ctxt,
+					   struct lu_dirent *ent,
+					   int stripe_index)
 {
-	struct lu_dirent *ent = stripe->sd_ent;
-	__u64 hash = ctxt->ldc_hash;
-	__u64 end;
-	int rc = 0;
-	ENTRY;
-
-	LASSERT(stripe == &ctxt->ldc_stripes[stripe_index]);
-
-	if (stripe->sd_eof)
-		RETURN(NULL);
-
-	if (ent) {
-		ent = lu_dirent_next(ent);
-		if (!ent) {
-check_eof:
-			end = le64_to_cpu(stripe->sd_dp->ldp_hash_end);
-			LASSERTF(hash <= end, "hash %llx end %llx\n",
-				 hash, end);
-			if (end == MDS_DIR_END_OFF) {
-				stripe->sd_ent = NULL;
-				stripe->sd_eof = true;
-				RETURN(NULL);
-			}
-
-			put_stripe_dirent(stripe);
-			hash = end;
-		}
-	}
-
-	if (!ent) {
-		struct md_op_data *op_data = ctxt->ldc_op_data;
-		struct lmv_oinfo *oinfo;
-		struct lu_fid fid = op_data->op_fid1;
-		struct inode *inode = op_data->op_data;
-		struct lmv_tgt_desc *tgt;
-
-		LASSERT(!stripe->sd_page);
-
-		oinfo = &op_data->op_mea1->lsm_md_oinfo[stripe_index];
-		tgt = lmv_get_target(ctxt->ldc_lmv, oinfo->lmo_mds, NULL);
-		if (IS_ERR(tgt))
-			GOTO(out, rc = PTR_ERR(tgt));
-
-		/* op_data will be shared by each stripe, so we need
-		 * reset these value for each stripe */
-		op_data->op_fid1 = oinfo->lmo_fid;
-		op_data->op_fid2 = oinfo->lmo_fid;
-		op_data->op_data = oinfo->lmo_root;
-
-		rc = md_read_page(tgt->ltd_exp, op_data, ctxt->ldc_cb_op, hash,
-				  &stripe->sd_page);
-
-		op_data->op_fid1 = fid;
-		op_data->op_fid2 = fid;
-		op_data->op_data = inode;
-
-		if (rc)
-			GOTO(out, rc);
-
-		stripe->sd_dp = page_address(stripe->sd_page);
-		ent = lu_dirent_start(stripe->sd_dp);
-	}
-
 	for (; ent; ent = lu_dirent_next(ent)) {
 		/* Skip dummy entry */
 		if (le16_to_cpu(ent->lde_namelen) == 0)
@@ -2152,26 +2090,89 @@ check_eof:
 			     le16_to_cpu(ent->lde_namelen)) == 0))
 			continue;
 
-		if (le64_to_cpu(ent->lde_hash) >= hash)
+		if (le64_to_cpu(ent->lde_hash) >= ctxt->ldc_hash)
 			break;
 	}
 
-	if (!ent)
-		goto check_eof;
-	EXIT;
+	return ent;
+}
 
-out:
+static struct lu_dirent *stripe_dirent_load(struct lmv_dir_ctxt *ctxt,
+					    struct stripe_dirent *stripe,
+					    int stripe_index)
+{
+	struct md_op_data *op_data = ctxt->ldc_op_data;
+	struct lmv_oinfo *oinfo;
+	struct lu_fid fid = op_data->op_fid1;
+	struct inode *inode = op_data->op_data;
+	struct lmv_tgt_desc *tgt;
+	struct lu_dirent *ent = stripe->sd_ent;
+	__u64 hash = ctxt->ldc_hash;
+	int rc = 0;
+
+	ENTRY;
+
+	LASSERT(stripe == &ctxt->ldc_stripes[stripe_index]);
+	LASSERT(!ent);
+
+	do {
+		if (stripe->sd_page) {
+			__u64 end = le64_to_cpu(stripe->sd_dp->ldp_hash_end);
+
+			/* @hash should be the last dirent hash */
+			LASSERTF(hash <= end,
+				 "ctxt@%p stripe@%p hash %llx end %llx\n",
+				 ctxt, stripe, hash, end);
+			/* unload last page */
+			stripe_dirent_unload(stripe);
+			/* eof */
+			if (end == MDS_DIR_END_OFF) {
+				stripe->sd_eof = true;
+				break;
+			}
+			hash = end;
+		}
+
+		oinfo = &op_data->op_mea1->lsm_md_oinfo[stripe_index];
+		tgt = lmv_get_target(ctxt->ldc_lmv, oinfo->lmo_mds, NULL);
+		if (IS_ERR(tgt)) {
+			rc = PTR_ERR(tgt);
+			break;
+		}
+
+		/* op_data is shared by stripes, reset after use */
+		op_data->op_fid1 = oinfo->lmo_fid;
+		op_data->op_fid2 = oinfo->lmo_fid;
+		op_data->op_data = oinfo->lmo_root;
+
+		rc = md_read_page(tgt->ltd_exp, op_data, ctxt->ldc_cb_op, hash,
+				  &stripe->sd_page);
+
+		op_data->op_fid1 = fid;
+		op_data->op_fid2 = fid;
+		op_data->op_data = inode;
+
+		if (rc)
+			break;
+
+		stripe->sd_dp = page_address(stripe->sd_page);
+		ent = stripe_dirent_get(ctxt, lu_dirent_start(stripe->sd_dp),
+					stripe_index);
+		/* in case a page filled with ., .. and dummy, read next */
+	} while (!ent);
+
 	stripe->sd_ent = ent;
-	/* treat error as eof, so dir can be partially accessed */
 	if (rc) {
-		put_stripe_dirent(stripe);
+		LASSERT(!ent);
+		/* treat error as eof, so dir can be partially accessed */
 		stripe->sd_eof = true;
 		LCONSOLE_WARN("dir "DFID" stripe %d readdir failed: %d, "
 			      "directory is partially accessed!\n",
 			      PFID(&ctxt->ldc_op_data->op_fid1), stripe_index,
 			      rc);
 	}
-	return ent;
+
+	RETURN(ent);
 }
 
 static int lmv_file_resync(struct obd_export *exp, struct md_op_data *data)
@@ -2224,8 +2225,7 @@ static struct lu_dirent *lmv_dirent_next(struct lmv_dir_ctxt *ctxt)
 			continue;
 
 		if (!stripe->sd_ent) {
-			/* locate starting entry */
-			stripe_dirent_next(ctxt, stripe, i);
+			stripe_dirent_load(ctxt, stripe, i);
 			if (!stripe->sd_ent) {
 				LASSERT(stripe->sd_eof);
 				continue;
@@ -2246,7 +2246,8 @@ static struct lu_dirent *lmv_dirent_next(struct lmv_dir_ctxt *ctxt)
 		stripe = &ctxt->ldc_stripes[min];
 		ent = stripe->sd_ent;
 		/* pop found dirent */
-		stripe_dirent_next(ctxt, stripe, min);
+		stripe->sd_ent = stripe_dirent_get(ctxt, lu_dirent_next(ent),
+						   min);
 	}
 
 	return ent;
