@@ -1708,7 +1708,7 @@ lstcon_new_session_id(struct lst_sid *sid)
 
 	LNetGetId(1, &id);
 	sid->ses_nid = id.nid;
-	sid->ses_stamp = ktime_get_ns() / NSEC_PER_MSEC;
+	sid->ses_stamp = div_u64(ktime_get_ns(), NSEC_PER_MSEC);
 }
 
 int

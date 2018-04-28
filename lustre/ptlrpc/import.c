@@ -305,16 +305,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                  * out. Use obd_timeout if calculated value is smaller
 		 * than it.
 		 */
-                if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
-                        timeout = ptlrpc_inflight_timeout(imp);
-                        timeout += timeout / 3;
+		if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
+			timeout = ptlrpc_inflight_timeout(imp);
+			timeout += div_u64(timeout, 3);
 
-                        if (timeout == 0)
-                                timeout = obd_timeout;
-                } else {
-                        /* decrease the interval to increase race condition */
-                        timeout = 1;
-                }
+			if (timeout == 0)
+				timeout = obd_timeout;
+		} else {
+			/* decrease the interval to increase race condition */
+			timeout = 1;
+		}
 
 		CDEBUG(D_RPCTRACE, "Sleeping %llds for inflight to error out\n",
 		       timeout);

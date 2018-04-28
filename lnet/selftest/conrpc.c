@@ -1252,7 +1252,8 @@ lstcon_rpc_pinger(void *arg)
 		if (nd->nd_state != LST_NODE_ACTIVE)
 			continue;
 
-		intv = ktime_ms_delta(ktime_get(), nd->nd_stamp) / MSEC_PER_SEC;
+		intv = div_u64(ktime_ms_delta(ktime_get(), nd->nd_stamp),
+			       MSEC_PER_SEC);
 		if (intv < nd->nd_timeout / 2)
 			continue;
 

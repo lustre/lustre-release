@@ -2053,7 +2053,7 @@ static int str_to_u64_parse(char *buffer, unsigned long count,
 	}
 
 	/* the multiplier limits how large the value can be */
-	wrap_indicator /=  mult;
+	wrap_indicator = div64_u64(wrap_indicator, mult);
 
 	if (strwhole) {
 		rc = kstrtoull(strwhole, base, &whole);

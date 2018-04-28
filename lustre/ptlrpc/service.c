@@ -2102,7 +2102,8 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 		if (unlikely(ptlrpc_check_req(request)))
 			goto put_conn;
 		ptlrpc_update_export_timer(request->rq_export,
-					   timediff_usecs / (USEC_PER_SEC / 2));
+					   div_u64(timediff_usecs,
+						   USEC_PER_SEC / 2));
         }
 
         /* Discard requests queued for longer than the deadline.
@@ -2189,7 +2190,7 @@ put_conn:
 		DEBUG_REQ(D_ADAPTTO, request,
 			  "sent %d early replies before finishing in %llds",
 			  request->rq_early_count,
-			  arrived_usecs / USEC_PER_SEC);
+			  div_u64(arrived_usecs, USEC_PER_SEC));
 	}
 
 	ptlrpc_server_finish_active_request(svcpt, request);
