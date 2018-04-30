@@ -12,8 +12,8 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$LRSYNC_EXCEPT"
 # bug number for skipped test:
+ALWAYS_EXCEPT="$LRSYNC_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -52,44 +52,40 @@ export LRSYNC=${LRSYNC:-"$LUSTRE/utils/lustre_rsync"}
 [ ! -f "$LRSYNC" ] && export LRSYNC=$(which lustre_rsync)
 export LRSYNC="$LRSYNC -v -c no -d 2"
 
-# control the time of tests
-DBENCH_TIME=${DBENCH_TIME:-60}  # No of seconds to run dbench
+# Number of seconds to run dbench
+DBENCH_TIME=${DBENCH_TIME:-60}
 TGT=$TMP/target
 TGT2=$TMP/target2
 MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
 	awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
 
 init_changelog() {
-    CL_USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
-    echo $MDT0: Registered changelog user $CL_USER
-    CL_USERS=$(( $(do_facet $SINGLEMDS lctl get_param -n \
-	mdd.$MDT0.changelog_users | wc -l) - 2 ))
-    [ $CL_USERS -ne 1 ] && \
-	echo "Other changelog users present ($CL_USERS)"
-}
-
-init_src() {
-    rm -rf $TGT/$tdir $TGT/d*.lustre_rsync-test 2> /dev/null
-    rm -rf $TGT2/$tdir $TGT2/d*.lustre_rsync-test 2> /dev/null
-    rm -rf ${DIR}/$tdir $DIR/d*.lustre_rsync-test ${DIR}/tgt 2> /dev/null
-    rm -f $LREPL_LOG
-    mkdir -p ${DIR}/$tdir
-    mkdir -p ${TGT}/$tdir
-    mkdir -p ${TGT2}/$tdir
-    if [ $? -ne 0 ]; then
-        error "Failed to create target: " $TGT
-    fi
-}
-
-cleanup_src_tgt() {
-    rm -rf $TGT/$tdir
-    rm -rf $DIR/$tdir
-    rm -rf $DIR/tgt
+	changelog_register || error "changelog_register failed"
+	CL_USER=(${CL_USERS[$SINGLEMDS]})
+	echo $MDT0: Registered changelog user $CL_USER
+	[ -z $CL_USER ] &&
+		echo "No changelog users present on $SINGLEMDS"
 }
 
 fini_changelog() {
-    $LFS changelog_clear $MDT0 $CL_USER 0
-    do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $CL_USER
+	changelog_clear
+	changelog_deregister
+}
+
+init_src() {
+	rm -rf $TGT/$tdir $TGT/d*.lustre_rsync-test 2> /dev/null
+	rm -rf $TGT2/$tdir $TGT2/d*.lustre_rsync-test 2> /dev/null
+	rm -rf ${DIR}/$tdir $DIR/d*.lustre_rsync-test ${DIR}/tgt 2> /dev/null
+	rm -f $LREPL_LOG
+	mkdir -p ${DIR}/$tdir || error "Failed to create target: " $DIR/$tdir
+	mkdir -p ${TGT}/$tdir || error "Failed to create target: " $TGT/$tdir
+	mkdir -p ${TGT2}/$tdir || error "Failed to create target: " $TGT2/$tdir
+}
+
+cleanup_src_tgt() {
+	rm -rf $TGT/$tdir
+	rm -rf $DIR/$tdir
+	rm -rf $DIR/tgt
 }
 
 # Check whether the filesystem supports xattr or not.
@@ -160,7 +156,7 @@ stop_procs() {
 	return 1
 }
 
-# Test 1 - test basic operations
+# Test 1A - test basic operations
 test_1A() { # was test_1
     init_src
     init_changelog
@@ -217,32 +213,21 @@ test_1A() { # was test_1
 	echo "Replication #2"
 	$LRSYNC -l $LREPL_LOG -D $LRSYNC_LOG
 
-    if [[ "$xattr" != "no" ]]; then
-        local xval1=$(get_xattr_value user.foo $TGT/$tdir/file5)
-        local xval2=$(get_xattr_value user.foo $TGT2/$tdir/file5)
-    fi
+	if [[ "$xattr" != "no" ]]; then
+		local xval1=$(get_xattr_value user.foo $TGT/$tdir/file5)
+		local xval2=$(get_xattr_value user.foo $TGT2/$tdir/file5)
 
-    RC=0
-
-    # fid2path and path2fid aren't implemented for block devices
-    #if [[ ! -b $TGT/$tdir/dev1 ]] || [[ ! -b $TGT2/$tdir/dev1 ]]; then
-    #   ls -l $DIR/$tdir/dev1 $TGT/$tdir/dev1 $TGT2/$tdir/dev1
-    #   error "Error replicating block devices"
-    #   RC=1
-
-    if [[ "$xattr" != "no" ]] &&
-       [[ "$xval1" != "$value" || "$xval2" != "$value" ]]; then
-        error "Error in replicating xattrs."
-        RC=1
-    fi
+		if [[ "$xval1" != "$value" || "$xval2" != "$value" ]]; then
+			error "Error in replicating xattrs."
+		fi
+	fi
 
 	# Use diff to compare the source and the destination
 	check_diff $DIR/$tdir $TGT/$tdir
 	check_diff $DIR/$tdir $TGT2/$tdir
 
-    fini_changelog
-    cleanup_src_tgt
-    return $RC
+	fini_changelog
+	cleanup_src_tgt
 }
 run_test 1A "Simple Replication"
 
@@ -313,7 +298,6 @@ test_2a() {
 	return 0
 }
 run_test 2a "Replicate files created by dbench."
-
 
 # Test 2b - Replicate files changed by dbench.
 test_2b() {
@@ -420,7 +404,6 @@ test_3a() {
 	return 0
 }
 run_test 3a "Replicate files created by createmany"
-
 
 # Test 3b - Replicate files created by writemany
 test_3b() {
@@ -610,13 +593,15 @@ run_test 6 "lustre_rsync large no of hard links"
 
 # Test 7 - lustre_rsync stripesize
 test_7() {
-    init_src
-    mkdir -p ${DIR}/tgt/$tdir
-    init_changelog
+	local numfiles=100
 
-    local NUMFILES=100
-    lfs setstripe -c $OSTCOUNT $DIR/$tdir
-    createmany -o $DIR/$tdir/$tfile $NUMFILES
+	init_src
+	mkdir -p ${DIR}/tgt/$tdir
+	init_changelog
+
+	$LFS setstripe -c $OSTCOUNT $DIR/$tdir ||
+		error "$LFS setstripe failed"
+	createmany -o $DIR/$tdir/$tfile $numfiles
 
 	# To simulate replication to another lustre filesystem, replicate
 	# the changes to $DIR/tgt. We can't turn off the changelogs
@@ -629,9 +614,9 @@ test_7() {
 	check_diff ${DIR}/$tdir $DIR/tgt/$tdir
 
 	local i=0
-	while [ $i -lt $NUMFILES ];
+	while [ $i -lt $numfiles ];
 	do
-		local count=$(lfs getstripe $DIR/tgt/$tdir/${tfile}$i | \
+		local count=$($LFS getstripe $DIR/tgt/$tdir/${tfile}$i |
 			      awk '/stripe_count/ {print $2}')
 		if [ $count -ne $OSTCOUNT ]; then
 			error "Stripe size not replicated"
