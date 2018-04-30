@@ -1194,7 +1194,6 @@ out:
 
 struct tgt_handler tgt_obd_handlers[] = {
 TGT_OBD_HDL    (0,	OBD_PING,		tgt_obd_ping),
-TGT_OBD_HDL_VAR(0,	OBD_LOG_CANCEL,		tgt_obd_log_cancel),
 TGT_OBD_HDL    (0,	OBD_IDX_READ,		tgt_obd_idx_read)
 };
 EXPORT_SYMBOL(tgt_obd_handlers);
@@ -1392,30 +1391,6 @@ int tgt_llog_open(struct tgt_session_info *tsi)
 }
 EXPORT_SYMBOL(tgt_llog_open);
 
-int tgt_llog_close(struct tgt_session_info *tsi)
-{
-	int rc;
-
-	ENTRY;
-
-	rc = llog_origin_handle_close(tgt_ses_req(tsi));
-
-	RETURN(rc);
-}
-EXPORT_SYMBOL(tgt_llog_close);
-
-
-int tgt_llog_destroy(struct tgt_session_info *tsi)
-{
-	int rc;
-
-	ENTRY;
-
-	rc = llog_origin_handle_destroy(tgt_ses_req(tsi));
-
-	RETURN(rc);
-}
-
 int tgt_llog_read_header(struct tgt_session_info *tsi)
 {
 	int rc;
@@ -1458,8 +1433,6 @@ TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_CREATE,	tgt_llog_open),
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_DESTROY,	tgt_llog_destroy),
-TGT_LLOG_HDL_VAR(0,	LLOG_ORIGIN_HANDLE_CLOSE,	tgt_llog_close),
 };
 EXPORT_SYMBOL(tgt_llog_handlers);
 

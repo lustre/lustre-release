@@ -412,8 +412,6 @@ int tgt_convert(struct tgt_session_info *tsi);
 int tgt_bl_callback(struct tgt_session_info *tsi);
 int tgt_cp_callback(struct tgt_session_info *tsi);
 int tgt_llog_open(struct tgt_session_info *tsi);
-int tgt_llog_close(struct tgt_session_info *tsi);
-int tgt_llog_destroy(struct tgt_session_info *tsi);
 int tgt_llog_read_header(struct tgt_session_info *tsi);
 int tgt_llog_next_block(struct tgt_session_info *tsi);
 int tgt_llog_prev_block(struct tgt_session_info *tsi);

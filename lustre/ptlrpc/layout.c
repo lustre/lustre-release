@@ -87,11 +87,6 @@ static const struct req_msg_field *mgs_config_read_server[] = {
         &RMF_MGS_CONFIG_RES
 };
 
-static const struct req_msg_field *log_cancel_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_LOGCOOKIES
-};
-
 static const struct req_msg_field *mdt_body_only[] = {
         &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY
@@ -575,11 +570,6 @@ static const struct req_msg_field *llog_log_hdr_only[] = {
         &RMF_LLOG_LOG_HDR
 };
 
-static const struct req_msg_field *llogd_conn_body_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_LLOGD_CONN_BODY
-};
-
 static const struct req_msg_field *llog_origin_handle_next_block_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_LLOGD_BODY,
@@ -820,13 +810,10 @@ static struct req_format *req_formats[] = {
 	&RQF_LDLM_INTENT_GETXATTR,
 	&RQF_LDLM_INTENT_QUOTA,
 	&RQF_QUOTA_DQACQ,
-        &RQF_LOG_CANCEL,
         &RQF_LLOG_ORIGIN_HANDLE_CREATE,
-        &RQF_LLOG_ORIGIN_HANDLE_DESTROY,
         &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK,
         &RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK,
         &RQF_LLOG_ORIGIN_HANDLE_READ_HEADER,
-	&RQF_LLOG_ORIGIN_CONNECT,
 	&RQF_CONNECT,
 	&RQF_LFSCK_NOTIFY,
 	&RQF_LFSCK_QUERY,
@@ -1354,10 +1341,6 @@ struct req_format RQF_FLD_READ =
 	DEFINE_REQ_FMT0("FLD_READ", fld_read_client, fld_read_server);
 EXPORT_SYMBOL(RQF_FLD_READ);
 
-struct req_format RQF_LOG_CANCEL =
-        DEFINE_REQ_FMT0("OBD_LOG_CANCEL", log_cancel_client, empty);
-EXPORT_SYMBOL(RQF_LOG_CANCEL);
-
 struct req_format RQF_MDS_QUOTACTL =
         DEFINE_REQ_FMT0("MDS_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTACTL);
@@ -1620,11 +1603,6 @@ struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE =
                         llog_origin_handle_create_client, llogd_body_only);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_CREATE);
 
-struct req_format RQF_LLOG_ORIGIN_HANDLE_DESTROY =
-        DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_DESTROY",
-                        llogd_body_only, llogd_body_only);
-EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_DESTROY);
-
 struct req_format RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_NEXT_BLOCK",
                         llogd_body_only, llog_origin_handle_next_block_server);
@@ -1639,10 +1617,6 @@ struct req_format RQF_LLOG_ORIGIN_HANDLE_READ_HEADER =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_READ_HEADER",
                         llogd_body_only, llog_log_hdr_only);
 EXPORT_SYMBOL(RQF_LLOG_ORIGIN_HANDLE_READ_HEADER);
-
-struct req_format RQF_LLOG_ORIGIN_CONNECT =
-        DEFINE_REQ_FMT0("LLOG_ORIGIN_CONNECT", llogd_conn_body_only, empty);
-EXPORT_SYMBOL(RQF_LLOG_ORIGIN_CONNECT);
 
 struct req_format RQF_CONNECT =
 	DEFINE_REQ_FMT0("CONNECT", obd_connect_client, obd_connect_server);

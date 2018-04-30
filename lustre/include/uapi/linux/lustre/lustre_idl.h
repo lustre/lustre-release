@@ -2525,8 +2525,8 @@ struct cfg_marker {
  * Opcodes for multiple servers.
  */
 enum obd_cmd {
-        OBD_PING = 400,
-        OBD_LOG_CANCEL,
+	OBD_PING = 400,
+	OBD_LOG_CANCEL, /* Obsolete since 1.5. */
 	OBD_QC_CALLBACK, /* not used since 2.4 */
 	OBD_IDX_READ,
         OBD_LAST_OPC
@@ -2871,17 +2871,17 @@ struct llog_cookie {
 
 /** llog protocol */
 enum llogd_rpc_ops {
-        LLOG_ORIGIN_HANDLE_CREATE       = 501,
-        LLOG_ORIGIN_HANDLE_NEXT_BLOCK   = 502,
-        LLOG_ORIGIN_HANDLE_READ_HEADER  = 503,
-        LLOG_ORIGIN_HANDLE_WRITE_REC    = 504,
-        LLOG_ORIGIN_HANDLE_CLOSE        = 505,
-        LLOG_ORIGIN_CONNECT             = 506,
-	LLOG_CATINFO			= 507,  /* deprecated */
-        LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
-        LLOG_ORIGIN_HANDLE_DESTROY      = 509,  /* for destroy llog object*/
-        LLOG_LAST_OPC,
-        LLOG_FIRST_OPC                  = LLOG_ORIGIN_HANDLE_CREATE
+	LLOG_ORIGIN_HANDLE_CREATE	= 501,
+	LLOG_ORIGIN_HANDLE_NEXT_BLOCK	= 502,
+	LLOG_ORIGIN_HANDLE_READ_HEADER	= 503,
+	LLOG_ORIGIN_HANDLE_WRITE_REC	= 504, /* Obsolete by 2.1. */
+	LLOG_ORIGIN_HANDLE_CLOSE	= 505, /* Obsolete by 1.8. */
+	LLOG_ORIGIN_CONNECT		= 506, /* Obsolete by 2.4. */
+	LLOG_CATINFO			= 507, /* Obsolete by 2.3. */
+	LLOG_ORIGIN_HANDLE_PREV_BLOCK	= 508,
+	LLOG_ORIGIN_HANDLE_DESTROY	= 509, /* Obsolete. */
+	LLOG_LAST_OPC,
+	LLOG_FIRST_OPC			= LLOG_ORIGIN_HANDLE_CREATE
 };
 
 struct llogd_body {

@@ -111,45 +111,6 @@ out_ctxt:
 	return rc;
 }
 
-int llog_origin_handle_destroy(struct ptlrpc_request *req)
-{
-	struct llogd_body	*body;
-	struct llog_logid	*logid = NULL;
-	struct llog_ctxt	*ctxt;
-	int			 rc;
-
-	ENTRY;
-
-	body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
-	if (body == NULL)
-		RETURN(err_serious(-EFAULT));
-
-	rc = req_capsule_server_pack(&req->rq_pill);
-	if (rc < 0)
-		RETURN(err_serious(-ENOMEM));
-
-	if (ostid_id(&body->lgd_logid.lgl_oi) > 0)
-		logid = &body->lgd_logid;
-
-	if (!(body->lgd_llh_flags & LLOG_F_IS_PLAIN))
-		CERROR("%s: wrong llog flags %x\n",
-		       req->rq_export->exp_obd->obd_name, body->lgd_llh_flags);
-
-	if (body->lgd_ctxt_idx >= LLOG_MAX_CTXTS) {
-		CDEBUG(D_WARNING, "%s: bad ctxt ID: idx=%d\n",
-		       req->rq_export->exp_obd->obd_name, body->lgd_ctxt_idx);
-		RETURN(-EPROTO);
-	}
-
-	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
-	if (ctxt == NULL)
-		RETURN(-ENODEV);
-
-	rc = llog_erase(req->rq_svc_thread->t_env, ctxt, logid, NULL);
-	llog_ctxt_put(ctxt);
-	RETURN(rc);
-}
-
 int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
 	struct llog_handle	*loghandle;
@@ -323,16 +284,4 @@ out_close:
 out_ctxt:
 	llog_ctxt_put(ctxt);
 	return rc;
-}
-
-int llog_origin_handle_close(struct ptlrpc_request *req)
-{
-	int	 rc;
-
-	ENTRY;
-
-	rc = req_capsule_server_pack(&req->rq_pill);
-	if (rc)
-		RETURN(err_serious(-ENOMEM));
-	RETURN(0);
 }

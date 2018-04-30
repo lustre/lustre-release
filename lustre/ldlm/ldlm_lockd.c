@@ -2116,35 +2116,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = ldlm_handle_setinfo(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
-        case LLOG_ORIGIN_HANDLE_CREATE:
-                req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
-                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
-                        RETURN(0);
-		rc = llog_origin_handle_open(req);
-                ldlm_callback_reply(req, rc);
-                RETURN(0);
-        case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
-                req_capsule_set(&req->rq_pill,
-                                &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
-                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
-                        RETURN(0);
-                rc = llog_origin_handle_next_block(req);
-                ldlm_callback_reply(req, rc);
-                RETURN(0);
-        case LLOG_ORIGIN_HANDLE_READ_HEADER:
-                req_capsule_set(&req->rq_pill,
-                                &RQF_LLOG_ORIGIN_HANDLE_READ_HEADER);
-                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
-                        RETURN(0);
-                rc = llog_origin_handle_read_header(req);
-                ldlm_callback_reply(req, rc);
-                RETURN(0);
-        case LLOG_ORIGIN_HANDLE_CLOSE:
-                if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
-                        RETURN(0);
-                rc = llog_origin_handle_close(req);
-                ldlm_callback_reply(req, rc);
-                RETURN(0);
         default:
                 CERROR("unknown opcode %u\n",
                        lustre_msg_get_opc(req->rq_reqmsg));

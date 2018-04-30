@@ -1234,7 +1234,6 @@ static struct tgt_handler mgs_llog_handlers[] = {
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_CREATE,	mgs_llog_open),
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
-TGT_LLOG_HDL_VAR(0,	LLOG_ORIGIN_HANDLE_CLOSE,	tgt_llog_close),
 TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
 };
 
