@@ -16245,6 +16245,9 @@ test_255b() {
 	dd if=/dev/zero of=$DIR/$tfile bs=1048576 count=$size_mb ||
 		error "dd to $DIR/$tfile failed"
 
+	#force write to complete before dropping OST cache & checking memory
+	sync
+
 	local total=$(facet_meminfo ost1 MemTotal)
 	echo "Total memory: $total KiB"
 
