@@ -3220,7 +3220,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 				  lwi);
 		LASSERT(rc == 0 || rc == -ETIMEDOUT);
 		/* Wait again if we changed rq_deadline. */
-		rq_deadline = ACCESS_ONCE(req->rq_deadline);
+		rq_deadline = READ_ONCE(req->rq_deadline);
 		deadline = start + bulk_timeout;
 		if (deadline > rq_deadline)
 			deadline = rq_deadline;

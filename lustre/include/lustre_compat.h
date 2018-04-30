@@ -693,4 +693,8 @@ static inline struct timespec current_time(struct inode *inode)
 #define alloc_workqueue(name, flags, max_active) create_workqueue(name)
 #endif
 
+#ifndef READ_ONCE
+#define READ_ONCE ACCESS_ONCE
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */
