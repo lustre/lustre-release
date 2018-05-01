@@ -330,7 +330,9 @@ static int ll_md_close(struct inode *inode, struct file *file)
 	}
 	mutex_unlock(&lli->lli_och_mutex);
 
-	if (!md_lock_match(ll_i2mdexp(inode), flags, ll_inode2fid(inode),
+	/* LU-4398: do not cache write open lock if the file has exec bit */
+	if ((lockmode == LCK_CW && inode->i_mode & S_IXUGO) ||
+	    !md_lock_match(ll_i2mdexp(inode), flags, ll_inode2fid(inode),
 			   LDLM_IBITS, &policy, lockmode, &lockh))
 		rc = ll_md_real_close(inode, fd->fd_omode);
 
