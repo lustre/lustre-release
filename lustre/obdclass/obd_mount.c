@@ -1156,37 +1156,52 @@ static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
  * make \a *endh point to the string starting with the delimiter. The commas
  * in expression list [...] will be skipped.
  *
- * \param[in] buf	a delimiter-separated string
- * \param[in] endh	a pointer to a pointer that will point to the string
- *			starting with the delimiter
+ * @buf		a delimiter-separated string
+ * @endh	a pointer to a pointer that will point to the string
+ *		starting with the delimiter
  *
- * \retval 0		if delimiter is found
- * \retval 1		if delimiter is not found
+ * RETURNS	true if delimiter is found, false if delimiter is not found
  */
-static int lmd_find_delimiter(char *buf, char **endh)
+static bool lmd_find_delimiter(char *buf, char **endh)
 {
 	char *c = buf;
-	int   skip = 0;
+	size_t pos;
+	bool found;
 
-	if (buf == NULL)
-		return 1;
+	if (!buf)
+		return false;
+try_again:
+	if (*c == ',' || *c == ':')
+		return true;
 
-	while (*c != '\0') {
-		if (*c == '[')
-			skip++;
-		else if (*c == ']')
-			skip--;
+	pos = strcspn(c, "[:,]");
+	if (!pos)
+		return false;
 
-		if ((*c == ',' || *c == ':') && skip == 0) {
-			if (endh != NULL)
-				*endh = c;
-			return 0;
-		}
-
-		c++;
+	/* Not a valid mount string */
+	if (*c == ']') {
+		CWARN("invalid mount string format\n");
+		return false;
 	}
 
-	return 1;
+	c += pos;
+	if (*c == '[') {
+		c = strchr(c, ']');
+
+		/* invalid mount string */
+		if (!c) {
+			CWARN("invalid mount string format\n");
+			return false;
+		}
+		c++;
+		goto try_again;
+	}
+
+	found = *c != '\0';
+	if (found && endh)
+		*endh = c;
+
+	return found;
 }
 
 /**
@@ -1215,7 +1230,7 @@ static int lmd_parse_nidlist(char *buf, char **endh)
 	if (*buf == ' ' || *buf == '/' || *buf == '\0')
 		return 1;
 
-	if (lmd_find_delimiter(buf, &endp) != 0)
+	if (!lmd_find_delimiter(buf, &endp))
 		endp = buf + strlen(buf);
 
 	tmp = *endp;
@@ -1360,9 +1375,8 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		} else if (strncmp(s1, "param=", 6) == 0) {
 			size_t length, params_length;
 			char  *tail = s1;
-			if (lmd_find_delimiter(s1 + 6, &tail) != 0)
-				length = strlen(s1);
-			else {
+
+			if (lmd_find_delimiter(s1 + 6, &tail)) {
 				char *param_str = tail + 1;
 				int   supplementary = 1;
 				while (lmd_parse_nidlist(param_str,
@@ -1370,6 +1384,8 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 					supplementary = 0;
 				}
 				length = param_str - s1 - supplementary;
+			} else {
+				length = strlen(s1);
 			}
 			length -= 6;
 			params_length = strlen(lmd->lmd_params);
