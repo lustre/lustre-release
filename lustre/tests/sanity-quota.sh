@@ -2983,7 +2983,7 @@ test_54() {
 }
 run_test 54 "basic lfs project interface test"
 
-test_56 () {
+test_56() {
 	setup_quota_test || error "setup quota failed with $?"
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
@@ -3001,6 +3001,27 @@ test_56 () {
 	cleanup_quota_test
 }
 run_test 56 "lfs quota -t should work well"
+
+test_57() {
+	setup_quota_test || error "setup quota failed with $?"
+
+	local dir="$DIR/$tdir/dir"
+	mkdir -p $dir
+	mkfifo $dir/pipe
+	#try to change pipe file should not hang and return failure
+	wait_update_facet client "$LFS project -sp 1 $dir/pipe 2>&1 |
+		awk -F ':' '{ print \\\$2 }'" \
+			" failed to get xattr for '$dir/pipe'" || return 1
+	#command can process further if it hit some errors
+	touch $dir/aaa $dir/bbb
+	#create one invalid link file
+	ln -s $dir/not_exist_file $dir/ccc
+	local cnt=$(lfs project -r $dir 2>/dev/null | wc -l)
+	[ $cnt -eq 2 ] || error "expected 2 got $cnt"
+
+	cleanup_quota_test
+}
+run_test 57 "lfs project could tolerate errors"
 
 quota_fini()
 {

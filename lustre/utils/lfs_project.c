@@ -79,7 +79,7 @@ static int project_get_xattr(const char *pathname, struct fsxattr *fsx)
 {
 	int ret, fd;
 
-	fd = open(pathname, O_RDONLY | O_NOCTTY);
+	fd = open(pathname, O_RDONLY | O_NOCTTY | O_NDELAY);
 	if (fd < 0) {
 		fprintf(stderr, "%s: failed to open '%s': %s\n",
 			progname, pathname, strerror(errno));
@@ -224,6 +224,7 @@ lfs_project_handle_dir(struct list_head *head, const char *pathname,
 	struct dirent *ent;
 	DIR *dir;
 	int ret = 0;
+	int rc;
 
 	dir = opendir(pathname);
 	if (dir == NULL) {
@@ -233,24 +234,31 @@ lfs_project_handle_dir(struct list_head *head, const char *pathname,
 		return ret;
 	}
 
-	while (ret == 0 && (ent = readdir(dir)) != NULL) {
+	while ((ent = readdir(dir)) != NULL) {
 		/* skip "." and ".." */
 		if (strcmp(ent->d_name, ".") == 0 ||
 		    strcmp(ent->d_name, "..") == 0)
 			continue;
 
-		if (strlen(ent->d_name) + strlen(pathname) >=
-		    sizeof(fullname) + 1) {
+		if (strlen(ent->d_name) + strlen(pathname) + 1 >=
+		    sizeof(fullname)) {
 			ret = -ENAMETOOLONG;
 			errno = ENAMETOOLONG;
-			break;
+			fprintf(stderr, "%s: ignored too long path: %s/%s\n",
+					progname, pathname, ent->d_name);
+			continue;
 		}
 		snprintf(fullname, PATH_MAX, "%s/%s", pathname,
 			 ent->d_name);
 
-		ret = func(fullname, phc);
-		if (phc->recursive && ret == 0 && ent->d_type == DT_DIR)
-			ret = lfs_project_item_alloc(head, fullname);
+		rc = func(fullname, phc);
+		if (rc && !ret)
+			ret = rc;
+		if (phc->recursive && ent->d_type == DT_DIR) {
+			rc = lfs_project_item_alloc(head, fullname);
+			if (rc && !ret)
+				ret = rc;
+		}
 	}
 
 	if (ret)
@@ -270,7 +278,7 @@ static int lfs_project_iterate(const char *pathname,
 	struct list_head head;
 	struct stat st;
 	int ret = 0;
-	bool top_dir = true;
+	int rc = 0;
 
 	ret = stat(pathname, &st);
 	if (ret) {
@@ -296,16 +304,13 @@ static int lfs_project_iterate(const char *pathname,
 	while (!list_empty(&head)) {
 		lpi = list_entry(head.next, struct lfs_project_item, lpi_list);
 		list_del(&lpi->lpi_list);
-		if (ret == 0) {
-			ret = lfs_project_handle_dir(&head, lpi->lpi_pathname,
+		if (rc == 0) {
+			rc = lfs_project_handle_dir(&head, lpi->lpi_pathname,
 						     phc, func);
-			/* only ignore ENOENT error if this is
-			 * not top directory. */
-			if (ret == -ENOENT && !top_dir)
-				ret = 0;
+			if (!ret && rc)
+				ret = rc;
 		}
 		free(lpi);
-		top_dir = false;
 	}
 
 	return ret;
