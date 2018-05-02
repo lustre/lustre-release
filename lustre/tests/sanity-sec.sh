@@ -1991,8 +1991,8 @@ nodemap_exercise_fileset() {
 }
 
 test_27a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.59) ] &&
-		skip "Need MDS >= 2.10.59" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS >= 2.11.50" && return
 
 	for nm in "default" "c0"; do
 		local subdir="subdir_${nm}"
@@ -2005,8 +2005,8 @@ test_27a() {
 run_test 27a "test fileset in various nodemaps"
 
 test_27b() { #LU-10703
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.59) ] &&
-		skip "Need MDS >= 2.10.59" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS >= 2.11.50" && return
 	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
 
 	nodemap_test_setup
