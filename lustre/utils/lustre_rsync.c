@@ -1668,10 +1668,6 @@ int lr_replicate()
                                 break;
                 }
                 lr_clear_cl(info, 0);
-                if (debug) {
-                        bzero(info, sizeof(struct lr_info));
-                        bzero(ext, sizeof(struct lr_info));
-                }
         }
 
         llapi_changelog_fini(&changelog_priv);
