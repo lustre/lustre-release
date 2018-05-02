@@ -3585,8 +3585,8 @@ test_id() {
 }
 
 test_77ja(){
-	if [ $(lustre_version_code ost1) -lt $(version_code 2.10.58) ]; then
-		skip "need ost version at least 2.10.58"
+	if [ $(lustre_version_code ost1) -lt $(version_code 2.11.50) ]; then
+		skip "Need OST version at least 2.11.50"
 		return 0
 	fi
 	test_id "u" "500" "5" "-u 500"
