@@ -3964,12 +3964,17 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct lfsck_lmv		*llmv	= lfsck->li_lmv;
 	struct lfsck_namespace_req	*lnr;
-	__u32				 size	=
-				sizeof(*lnr) + LFSCK_TMPBUF_LEN;
-	bool				 wakeup	= false;
+	struct lu_attr *la = &lfsck_env_info(env)->lti_la2;
+	__u32 size = sizeof(*lnr) + LFSCK_TMPBUF_LEN;
+	int rc;
+	bool wakeup = false;
 	ENTRY;
 
 	if (llmv == NULL)
+		RETURN_EXIT;
+
+	rc = dt_attr_get(env, lfsck->li_obj_dir, la);
+	if (rc)
 		RETURN_EXIT;
 
 	OBD_ALLOC(lnr, size);
@@ -3980,7 +3985,7 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 	}
 
 	lso = lfsck_assistant_object_init(env, lfsck_dto2fid(lfsck->li_obj_dir),
-			NULL, lfsck->li_pos_current.lp_oit_cookie, true);
+			la, lfsck->li_pos_current.lp_oit_cookie, true);
 	if (IS_ERR(lso)) {
 		OBD_FREE(lnr, size);
 		ns->ln_striped_dirs_skipped++;

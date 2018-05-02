@@ -1930,7 +1930,6 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 		const struct lu_fid *cfid = &lslr->lslr_fid;
 		const struct lu_name *cname;
 		struct linkea_data ldata = { NULL };
-		int len;
 		int rc1 = 0;
 		bool repair_linkea = false;
 		bool repair_lmvea = false;
@@ -1945,11 +1944,12 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 		if (fid_is_zero(cfid))
 			continue;
 
-		len = snprintf(info->lti_tmpbuf, sizeof(info->lti_tmpbuf),
-			       DFID":%u", PFID(cfid), i);
-		cname = lfsck_name_get_const(env, info->lti_tmpbuf, len);
-		memcpy(lnr->lnr_name, info->lti_tmpbuf, len);
-
+		lnr->lnr_fid = *cfid;
+		lnr->lnr_namelen = snprintf(lnr->lnr_name,
+					    lnr->lnr_size - sizeof(*lnr),
+					    DFID":%u", PFID(cfid), i);
+		cname = lfsck_name_get_const(env, lnr->lnr_name,
+					     lnr->lnr_namelen);
 		obj = lfsck_object_find_bottom(env, lfsck, cfid);
 		if (IS_ERR(obj)) {
 			if (dir == NULL) {

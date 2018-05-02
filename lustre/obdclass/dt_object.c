@@ -210,10 +210,11 @@ enum dt_format_type dt_mode_to_dft(__u32 mode)
                 result = DFT_NODE;
                 break;
         default:
-                LBUG();
-                break;
-        }
-        return result;
+		LASSERTF(0, "invalid mode %o\n", mode);
+		result = 0; /* Just for satisfying compiler. */
+		break;
+	}
+	return result;
 }
 EXPORT_SYMBOL(dt_mode_to_dft);
 
