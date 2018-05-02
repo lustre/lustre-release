@@ -3457,37 +3457,15 @@ static struct mdt_it_flavor {
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_OPEN
         },
-        [MDT_IT_CREATE]   = {
-                .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = MUTABOR,
-                .it_act   = mdt_intent_reint,
-                .it_reint = REINT_CREATE
-        },
         [MDT_IT_GETATTR]  = {
                 .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
                 .it_flags = HABEO_REFERO,
                 .it_act   = mdt_intent_getattr
         },
-        [MDT_IT_READDIR]  = {
-                .it_fmt   = NULL,
-                .it_flags = 0,
-                .it_act   = NULL
-        },
         [MDT_IT_LOOKUP]   = {
                 .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
                 .it_flags = HABEO_REFERO,
                 .it_act   = mdt_intent_getattr
-        },
-        [MDT_IT_UNLINK]   = {
-                .it_fmt   = &RQF_LDLM_INTENT_UNLINK,
-                .it_flags = MUTABOR,
-                .it_act   = NULL,
-                .it_reint = REINT_UNLINK
-        },
-        [MDT_IT_TRUNC]    = {
-                .it_fmt   = NULL,
-                .it_flags = MUTABOR,
-                .it_act   = NULL
         },
         [MDT_IT_GETXATTR] = {
 		.it_fmt   = &RQF_LDLM_INTENT_GETXATTR,
@@ -4085,8 +4063,12 @@ static int mdt_intent_opc(enum ldlm_intent_flags itopc,
 	}
 
 	flv = &mdt_it_flavor[opc];
-	if (flv->it_fmt != NULL)
-		req_capsule_extend(pill, flv->it_fmt);
+
+	/* Fail early on unknown requests. */
+	if (flv->it_fmt == NULL)
+		RETURN(-EPROTO);
+
+	req_capsule_extend(pill, flv->it_fmt);
 
 	rc = mdt_unpack_req_pack_rep(info, flv->it_flags);
 	if (rc < 0)
