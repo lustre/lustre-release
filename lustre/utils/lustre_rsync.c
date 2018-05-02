@@ -1388,14 +1388,9 @@ int lr_read_log()
 int lr_clear_cl(struct lr_info *info, int force)
 {
 	char		mdt_device[LR_NAME_MAXLEN + 1];
-	long long	rec;
 	int		rc = 0;
 
         if (force || info->recno > status->ls_last_recno + CLEAR_INTERVAL) {
-                if (info->type == CL_RENAME)
-                        rec = info->recno + 1;
-                else
-                        rec = info->recno;
                 if (!noclear && !dryrun) {
                         /* llapi_changelog_clear modifies the mdt
                          * device name so make a copy of it until this
@@ -1405,20 +1400,21 @@ int lr_clear_cl(struct lr_info *info, int force)
 				sizeof(mdt_device));
                         rc = llapi_changelog_clear(mdt_device,
                                                    status->ls_registration,
-                                                   rec);
+						   info->recno);
                         if (rc)
-                                printf("Changelog clear (%s, %s, %lld) "
-                                       "returned %d\n", status->ls_mdt_device,
-                                       status->ls_registration, rec, rc);
-                }
-                if (!rc && !dryrun) {
-                        status->ls_last_recno = rec;
-                        lr_write_log();
+				printf("Changelog clear (%s, %s, %lld) "
+				       "returned %d\n", status->ls_mdt_device,
+				       status->ls_registration, info->recno,
+				       rc);
+		}
 
-                }
-        }
+		if (!rc && !dryrun) {
+			status->ls_last_recno = info->recno;
+			lr_write_log();
+		}
+	}
 
-        return rc;
+	return rc;
 }
 
 /* Locate a usable version of rsync. At this point we'll use any
@@ -1588,6 +1584,7 @@ int lr_replicate()
 			strlcpy(info->sname, info->name, sizeof(info->sname));
 			strlcpy(info->name, ext->name, sizeof(info->name));
 			info->is_extended = 1;
+			info->recno = ext->recno; /* For lr_clear_cl(). */
 		}
 
                 if (dryrun)
