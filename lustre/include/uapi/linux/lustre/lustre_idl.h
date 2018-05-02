@@ -807,6 +807,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_LOCKAHEAD		 0x2ULL /* ladvise lockahead v2 */
 #define OBD_CONNECT2_DIR_MIGRATE	 0x4ULL /* migrate striped dir */
 #define OBD_CONNECT2_FLR		0x20ULL /* FLR support */
+#define OBD_CONNECT2_WBC_INTENTS	0x40ULL /* create/unlink/... intents for wbc, also operations under client-held parent locks */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same

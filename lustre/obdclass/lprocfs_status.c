@@ -806,6 +806,7 @@ static const char *obd_connect_names[] = {
 	"unknown",	/* 0x08 */
 	"unknown",	/* 0x10 */
 	"flr",		/* 0x20 */
+	"wbc",		/* 0x40 */
 	NULL
 };
 
