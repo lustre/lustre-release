@@ -1504,6 +1504,13 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info,
 	if (IS_ERR(mold))
 		GOTO(out_unlock_parent, rc = PTR_ERR(mold));
 
+	if (!mdt_object_exists(mold)) {
+		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
+				&mold->mot_obj,
+				"object does not exist");
+		GOTO(out_put_child, rc = -ENOENT);
+	}
+
 	if (mdt_object_remote(mold)) {
 		CDEBUG(D_OTHER, "%s: source "DFID" is on the remote MDT\n",
 		       mdt_obd_name(info->mti_mdt), PFID(old_fid));
@@ -1987,6 +1994,13 @@ relock:
 	if (IS_ERR(mold))
 		GOTO(out_unlock_parents, rc = PTR_ERR(mold));
 
+	if (!mdt_object_exists(mold)) {
+		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
+				&mold->mot_obj,
+				"object does not exist");
+		GOTO(out_put_old, rc = -ENOENT);
+	}
+
 	/* Check if @mtgtdir is subdir of @mold, before locking child
 	 * to avoid reverse locking. */
 	if (mtgtdir != msrcdir) {
@@ -2032,6 +2046,13 @@ relock:
 		mnew = mdt_object_find(info->mti_env, info->mti_mdt, new_fid);
 		if (IS_ERR(mnew))
 			GOTO(out_put_old, rc = PTR_ERR(mnew));
+
+		if (!mdt_object_exists(mnew)) {
+			LU_OBJECT_DEBUG(D_INODE, info->mti_env,
+					&mnew->mot_obj,
+					"object does not exist");
+			GOTO(out_put_new, rc = -ENOENT);
+		}
 
 		if (mdt_object_remote(mnew)) {
 			struct mdt_body	 *repbody;
