@@ -393,7 +393,6 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	filp->f_pos = pos;
 #endif
 	ll_finish_md_op_data(op_data);
-	filp->f_version = inode->i_version;
 
 out:
 	if (!rc)
