@@ -200,7 +200,7 @@ test_0d() { # LU-3397
 	$LCTL get_param mgc.*.import | tee $temp_imp
 	# Check if client uuid is found in MGS export
 	for exp_client_nid in $(do_facet mgs $LCTL get_param -N $mgs_exp.*); do
-		[ $(do_facet mgs $LCTL get_param $exp_client_nid.uuid) == \
+		[ $(do_facet mgs $LCTL get_param -n $exp_client_nid.uuid) == \
 			$client_uuid ] &&
 			break;
 	done
