@@ -1590,6 +1590,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 		spin_lock(&lli->lli_sa_lock);
 		lli->lli_sai = NULL;
 		spin_unlock(&lli->lli_sa_lock);
+		atomic_dec(&ll_i2sbi(parent->d_inode)->ll_sa_running);
 		rc = PTR_ERR(task);
 		CERROR("can't start ll_sa thread, rc: %d\n", rc);
 		GOTO(out, rc);
