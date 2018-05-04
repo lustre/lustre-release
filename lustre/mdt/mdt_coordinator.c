@@ -142,6 +142,7 @@ struct hsm_scan_data {
 	 * for new work?
 	 */
 	bool			 hsd_housekeeping;
+	bool			 hsd_one_restore;
 	int			 hsd_action_count;
 	int			 hsd_request_len; /* array alloc len */
 	int			 hsd_request_count; /* array used count */
@@ -164,19 +165,16 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	/* Are agents full? */
 	if (hsd->hsd_action_count + atomic_read(&cdt->cdt_request_count) >=
 	    cdt->cdt_max_requests) {
-		if (hsd->hsd_housekeeping) {
-			/* Unknown request and no more room for a new
-			 * request. Continue to scan to find other
-			 * entries for already existing requests. */
-			RETURN(0);
-		} else {
-			/* We cannot send and more requests, stop
-			 * here. There might be more known requests
-			 * that could be merged, but this avoid
-			 * analyzing too many llogs for minor
-			 * gains. */
-			RETURN(LLOG_PROC_BREAK);
-		}
+		/* We cannot send any more request
+		 *
+		 *                     *** SPECIAL CASE ***
+		 *
+		 * Restore requests are too important not to schedule at least
+		 * one, everytime we can.
+		 */
+		if (larr->arr_hai.hai_action != HSMA_RESTORE ||
+		    hsd->hsd_one_restore)
+			RETURN(hsd->hsd_housekeeping ? 0 : LLOG_PROC_BREAK);
 	}
 
 	hai_size = cfs_size_round(larr->arr_hai.hai_len);
@@ -193,17 +191,53 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 		}
 	}
 
+	/* Are we trying to force-schedule a request? */
+	if (hsd->hsd_action_count + atomic_read(&cdt->cdt_request_count) >=
+	    cdt->cdt_max_requests) {
+		/* Is there really no compatible hsm_scan_request? */
+		if (!request) {
+			for (i -= 1; i >= 0; i--) {
+				if (hsd->hsd_request[i].hal->hal_archive_id ==
+				    archive_id) {
+					request = &hsd->hsd_request[i];
+					break;
+				}
+			}
+		}
+
+		/* Make room for the hai */
+		if (request) {
+			/* Discard the last hai until there is enough space */
+			do {
+				request->hal->hal_count--;
+
+				hai = hai_first(request->hal);
+				for (i = 0; i < request->hal->hal_count; i++)
+					hai = hai_next(hai);
+				request->hal_used_sz -=
+					cfs_size_round(hai->hai_len);
+				hsd->hsd_action_count--;
+			} while (request->hal_used_sz + hai_size >
+				 LDLM_MAXREQSIZE);
+		} else if (hsd->hsd_housekeeping) {
+			struct hsm_scan_request *tmp;
+
+			/* Discard the (whole) last hal */
+			hsd->hsd_request_count--;
+			tmp = &hsd->hsd_request[hsd->hsd_request_count];
+			hsd->hsd_action_count -= tmp->hal->hal_count;
+			OBD_FREE(tmp->hal, tmp->hal_sz);
+		} else {
+			/* Bailing out, this code path is too hot */
+			RETURN(LLOG_PROC_BREAK);
+
+		}
+	}
+
 	if (!request) {
 		struct hsm_action_list *hal;
 
-		if (hsd->hsd_request_count == hsd->hsd_request_len) {
-			/* Logic as above. */
-			if (hsd->hsd_housekeeping)
-				RETURN(0);
-			else
-				RETURN(LLOG_PROC_BREAK);
-		}
-
+		LASSERT(hsd->hsd_request_count < hsd->hsd_request_len);
 		request = &hsd->hsd_request[hsd->hsd_request_count];
 
 		/* allocates hai vector size just needs to be large
@@ -246,15 +280,22 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 
 	memcpy(hai, &larr->arr_hai, larr->arr_hai.hai_len);
 
-	request->hal_used_sz += cfs_size_round(hai->hai_len);
+	request->hal_used_sz += hai_size;
 	request->hal->hal_count++;
 
 	hsd->hsd_action_count++;
 
-	if (hai->hai_action != HSMA_CANCEL)
+	switch (hai->hai_action) {
+	case HSMA_CANCEL:
+		break;
+	case HSMA_RESTORE:
+		hsd->hsd_one_restore = true;
+		/* Intentional fallthrough */
+	default:
 		cdt_agent_record_hash_add(cdt, hai->hai_cookie,
 					  llh->lgh_hdr->llh_cat_idx,
 					  larr->arr_hdr.lrh_index);
+	}
 
 	RETURN(0);
 }
@@ -646,6 +687,7 @@ static int mdt_coordinator(void *data)
 
 		hsd.hsd_action_count = 0;
 		hsd.hsd_request_count = 0;
+		hsd.hsd_one_restore = false;
 
 		rc = cdt_llog_process(mti->mti_env, mdt, mdt_coordinator_cb,
 				      &hsd, 0, 0, WRITE);

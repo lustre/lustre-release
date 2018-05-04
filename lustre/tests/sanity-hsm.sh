@@ -4595,6 +4595,202 @@ test_254b()
 }
 run_test 254b "Request counters are correctly incremented and decremented"
 
+# tests 260[a-c] rely on the parsing of the copytool's log file, they might
+# break in the future because of that.
+test_260a()
+{
+	local -a files=("$DIR/$tdir/$tfile".{0..15})
+	local file
+
+	for file in "${files[@]}"; do
+		create_small_file "$file"
+	done
+
+	# Set a few hsm parameters
+	stack_trap \
+		"set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
+	set_hsm_param loop_period 1
+	stack_trap \
+		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
+	set_hsm_param max_requests 3
+
+	# Release one file
+	copytool setup
+	"$LFS" hsm_archive "${files[0]}"
+	wait_request_state "$(path2fid "${files[0]}")" ARCHIVE SUCCEED
+	"$LFS" hsm_release "${files[0]}"
+
+	# Stop the copytool
+	kill_copytools
+	wait_copytools || error "copytools failed to stop"
+
+	# Send several archive requests
+	for file in "${files[@]:1}"; do
+		"$LFS" hsm_archive "$file"
+	done
+
+	# Send one restore request
+	"$LFS" hsm_restore "${files[0]}"
+
+	# Launch a copytool
+	copytool setup
+
+	# Wait for all the requests to complete
+	wait_request_state "$(path2fid "${files[0]}")" RESTORE SUCCEED
+	for file in "${files[@]:1}"; do
+		wait_request_state "$(path2fid "$file")" ARCHIVE SUCCEED
+	done
+
+	# Collect the actions in the order in which the copytool processed them
+	local -a actions=(
+		$(do_facet "$SINGLEAGT" grep -o '\"RESTORE\\|ARCHIVE\"' \
+			"$(copytool_logfile "$SINGLEAGT")")
+		)
+
+	printf '%s\n' "${actions[@]}"
+
+	local action
+	for action in "${actions[@]:0:3}"; do
+		[ "$action" == RESTORE ] && return
+	done
+
+	error "Too many ARCHIVE requests were run before the RESTORE request"
+}
+run_test 260a "Restore request have priority over other requests"
+
+# This test is very much tied to the implementation of the current priorisation
+# mechanism in the coordinator. It might not make sense to keep it in the future
+test_260b()
+{
+	local -a files=("$DIR/$tdir/$tfile".{0..15})
+	local file
+
+	for file in "${files[@]}"; do
+		create_small_file "$file"
+	done
+
+	# Set a few hsm parameters
+	stack_trap \
+		"set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
+	set_hsm_param loop_period 1
+	stack_trap \
+		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
+	set_hsm_param max_requests 3
+
+	# Release one file
+	copytool setup --archive-id 2
+	"$LFS" hsm_archive --archive 2 "${files[0]}"
+	wait_request_state "$(path2fid "${files[0]}")" ARCHIVE SUCCEED
+	"$LFS" hsm_release "${files[0]}"
+
+	# Stop the copytool
+	kill_copytools
+	wait_copytools || error "copytools failed to stop"
+
+	# Send several archive requests
+	for file in "${files[@]:1}"; do
+		"$LFS" hsm_archive "$file"
+	done
+
+	# Send one restore request
+	"$LFS" hsm_restore "${files[0]}"
+
+	# Launch a copytool
+	copytool setup
+	copytool setup --archive-id 2
+
+	# Wait for all the requests to complete
+	wait_request_state "$(path2fid "${files[0]}")" RESTORE SUCCEED
+	for file in "${files[@]:1}"; do
+		wait_request_state "$(path2fid "$file")" ARCHIVE SUCCEED
+	done
+
+	# Collect the actions in the order in which the copytool processed them
+	local -a actions=(
+		$(do_facet "$SINGLEAGT" grep -o '\"RESTORE\\|ARCHIVE\"' \
+			"$(copytool_logfile "$SINGLEAGT")")
+		)
+
+	printf '%s\n' "${actions[@]}"
+
+	local action
+	for action in "${actions[@]:0:3}"; do
+		[ "$action" == RESTORE ] && return
+	done
+
+	error "Too many ARCHIVE requests were run before the RESTORE request"
+}
+run_test 260b "Restore request have priority over other requests"
+
+# This test is very much tied to the implementation of the current priorisation
+# mechanism in the coordinator. It might not make sense to keep it in the future
+test_260c()
+{
+	local -a files=("$DIR/$tdir/$tfile".{0..15})
+	local file
+
+	for file in "${files[@]}"; do
+		create_small_file "$file"
+	done
+
+	# Set a few hsm parameters
+	stack_trap \
+		"set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
+	set_hsm_param loop_period 10
+	stack_trap \
+		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
+	set_hsm_param max_requests 3
+
+	# Release one file
+	copytool setup --archive-id 2
+	"$LFS" hsm_archive --archive 2 "${files[0]}"
+	wait_request_state "$(path2fid "${files[0]}")" ARCHIVE SUCCEED
+	"$LFS" hsm_release "${files[0]}"
+
+	# Stop the copytool
+	kill_copytools
+	wait_copytools || error "copytools failed to stop"
+
+	"$LFS" hsm_archive "${files[1]}"
+
+	# Launch a copytool
+	copytool setup
+	copytool setup --archive-id 2
+
+	wait_request_state "$(path2fid "${files[1]}")" ARCHIVE SUCCEED
+
+	# Send several archive requests
+	for file in "${files[@]:2}"; do
+		"$LFS" hsm_archive "$file"
+	done
+
+	# Send one restore request
+	"$LFS" hsm_restore "${files[0]}"
+
+	# Wait for all the requests to complete
+	wait_request_state "$(path2fid "${files[0]}")" RESTORE SUCCEED
+	for file in "${files[@]:2}"; do
+		wait_request_state "$(path2fid "$file")" ARCHIVE SUCCEED
+	done
+
+	# Collect the actions in the order in which the copytool processed them
+	local -a actions=(
+		$(do_facet "$SINGLEAGT" grep -o '\"RESTORE\\|ARCHIVE\"' \
+			"$(copytool_logfile "$SINGLEAGT")")
+		)
+
+	printf '%s\n' "${actions[@]}"
+
+	local action
+	for action in "${actions[@]:0:3}"; do
+		[ "$action" == RESTORE ] &&
+			error "Restore requests should not be prioritised" \
+			      "unless the coordinator is doing housekeeping"
+	done
+	return 0
+}
+run_test 260c "Restore request have priority over other requests"
+
 test_300() {
 	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return
 
