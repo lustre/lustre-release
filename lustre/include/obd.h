@@ -132,7 +132,7 @@ struct timeout_item {
 #define OBD_MAX_RIF_DEFAULT	8
 #define OBD_MAX_RIF_MAX		512
 #define OSC_MAX_RIF_MAX		256
-#define OSC_MAX_DIRTY_DEFAULT	(OBD_MAX_RIF_DEFAULT * 4)
+#define OSC_MAX_DIRTY_DEFAULT	2000	 /* Arbitrary large value */
 #define OSC_MAX_DIRTY_MB_MAX	2048     /* arbitrary, but < MAX_LONG bytes */
 #define OSC_DEFAULT_RESENDS	10
 

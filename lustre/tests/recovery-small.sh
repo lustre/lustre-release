@@ -1312,6 +1312,13 @@ test_55() {
 
 	mkdir -p $DIR/$tdir
 
+	# This test assumes relatively small max_dirty_mb setting
+	# which we want to walk away from, so just for it we will
+	# temporarily lower the value
+	local max_dirty_mb=$(lctl get_param -n osc.*.max_dirty_mb | head -n 1)
+	lctl set_param -n osc.*.max_dirty_mb=32
+	stack_trap "lctl set_param osc.*.max_dirty_mb=$max_dirty_mb" EXIT
+
 	# Minimum pass speed is 2MBps
 	local ddtimeout=64
 	# LU-2887/LU-3089 - set min pass speed to 500KBps

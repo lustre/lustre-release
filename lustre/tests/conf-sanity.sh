@@ -5338,7 +5338,7 @@ test_76a() {
 	local MAX_DIRTY_MB=$($LCTL get_param -n $MDMB_PARAM |
 		head -1)
 	echo "max_dirty_mb: $MAX_DIRTY_MB"
-	local NEW_MAX_DIRTY_MB=$((MAX_DIRTY_MB + MAX_DIRTY_MB))
+	local NEW_MAX_DIRTY_MB=$((MAX_DIRTY_MB - 10))
 	echo "new_max_dirty_mb: $NEW_MAX_DIRTY_MB"
 	do_facet mgs $LCTL set_param -P $MDMB_PARAM=$NEW_MAX_DIRTY_MB
 	wait_update $HOSTNAME "$LCTL get_param -n $MDMB_PARAM |
