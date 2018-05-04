@@ -19038,9 +19038,9 @@ test_411() {
 	echo 1M > $cgdir/memory.limit_in_bytes
 
 	# Should not LBUG, just be killed by oom-killer
-	sh -c "echo \$$ > $cgdir/tasks && dd if=$DIR/$tfile of=/dev/null" &&
-		error "fail to trigger a memory allocation error"
-
+	# dd will return 0 even allocation failure in some environment.
+	# So don't check return value
+	sh -c "echo \$$ > $cgdir/tasks && dd if=$DIR/$tfile of=/dev/null"
 	cleanup_test411_cgroup $cgdir
 
 	return 0
