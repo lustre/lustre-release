@@ -501,6 +501,7 @@ config_im_$1, [
 m4_define([LB_LANG_PROGRAM],
 [
 #include <linux/kernel.h>
+#include <linux/module.h>
 $1
 int
 main (void)
@@ -510,7 +511,8 @@ dnl Don't move the `;' right after for the same reason.
 $2
   ;
   return 0;
-}])
+};
+MODULE_LICENSE("GPL");])
 
 #
 # LB_LINUX_COMPILE_IFELSE
