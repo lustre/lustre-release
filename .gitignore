@@ -13,6 +13,7 @@
 #
 # Normal rules
 #
+.cache.mk
 .dirstamp
 .deps
 .depend
@@ -34,6 +35,7 @@
 *.lo
 *.mod.c
 *.o
+*.o.ur-safe
 *.orig
 *.rej
 *.s
