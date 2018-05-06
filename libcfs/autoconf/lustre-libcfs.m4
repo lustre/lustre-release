@@ -542,8 +542,8 @@ ktime_to_timespec64, [
 	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
+	ktime_t now = ktime_set(0, 0);
 	struct timespec64 ts;
-	ktime_t now = { };
 
 	ts = ktime_to_timespec64(now);
 ],[
@@ -882,6 +882,25 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_NEW_KERNEL_WRITE
 
 #
+# LIBCFS_TIMER_SETUP
+#
+# Kernel version 4.15 commit e99e88a9d2b067465adaa9c111ada99a041bef9a
+# setup_timer() was replaced by timer_setup(), where the callback
+# argument is the structure already holding the struct timer_list.
+#
+AC_DEFUN([LIBCFS_TIMER_SETUP], [
+LB_CHECK_COMPILE([if setup_timer has been replaced with timer_setup],
+timer_setup, [
+	#include <linux/timer.h>
+],[
+	timer_setup(NULL, NULL, 0);
+],[
+	AC_DEFINE(HAVE_TIMER_SETUP, 1,
+		[timer_setup has replaced setup_timer])
+])
+]) # LIBCFS_TIMER_SETUP
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -966,6 +985,8 @@ LIBCFS_SCHED_HEADERS
 LIBCFS_WAIT_QUEUE_ENTRY
 # 4.14
 LIBCFS_NEW_KERNEL_WRITE
+# 4.15
+LIBCFS_TIMER_SETUP
 ]) # LIBCFS_PROG_LINUX
 
 #

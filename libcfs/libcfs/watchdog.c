@@ -118,9 +118,9 @@ lcw_dump(struct lc_watchdog *lcw)
         EXIT;
 }
 
-static void lcw_cb(uintptr_t data)
+static void lcw_cb(cfs_timer_cb_arg_t data)
 {
-        struct lc_watchdog *lcw = (struct lc_watchdog *)data;
+	struct lc_watchdog *lcw = cfs_from_timer(lcw, data, lcw_timer);
         ENTRY;
 
         if (lcw->lcw_state != LC_WATCHDOG_ENABLED) {
@@ -364,7 +364,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 	lcw->lcw_state    = LC_WATCHDOG_DISABLED;
 
 	INIT_LIST_HEAD(&lcw->lcw_list);
-	setup_timer(&lcw->lcw_timer, lcw_cb, (unsigned long)lcw);
+	cfs_timer_setup(&lcw->lcw_timer, lcw_cb, (unsigned long)lcw, 0);
 
 	mutex_lock(&lcw_refcount_mutex);
 	if (++lcw_refcount == 1)

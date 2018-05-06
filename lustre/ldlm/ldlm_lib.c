@@ -2605,9 +2605,9 @@ void target_recovery_fini(struct obd_device *obd)
 }
 EXPORT_SYMBOL(target_recovery_fini);
 
-static void target_recovery_expired(unsigned long castmeharder)
+static void target_recovery_expired(cfs_timer_cb_arg_t data)
 {
-	struct obd_device *obd = (struct obd_device *)castmeharder;
+	struct obd_device *obd = cfs_from_timer(obd, data, obd_recovery_timer);
 	CDEBUG(D_HA, "%s: recovery timed out; %d clients are still in recovery"
 	       " after %llus (%d clients connected)\n",
 	       obd->obd_name, atomic_read(&obd->obd_lock_replay_clients),
@@ -2639,8 +2639,8 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
         obd->obd_recovery_start = 0;
         obd->obd_recovery_end = 0;
 
-	setup_timer(&obd->obd_recovery_timer, target_recovery_expired,
-		    (unsigned long)obd);
+	cfs_timer_setup(&obd->obd_recovery_timer, target_recovery_expired,
+			(unsigned long)obd, 0);
 	target_start_recovery_thread(lut, handler);
 }
 EXPORT_SYMBOL(target_recovery_init);

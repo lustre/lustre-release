@@ -88,9 +88,9 @@ static inline bool osp_precreate_stopped(struct osp_device *d)
 	return !!(d->opd_pre_thread.t_flags & SVC_STOPPED);
 }
 
-static void osp_statfs_timer_cb(unsigned long _d)
+static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
 {
-	struct osp_device *d = (struct osp_device *) _d;
+	struct osp_device *d = cfs_from_timer(d, data, opd_statfs_timer);
 
 	LASSERT(d);
 	if (d->opd_pre != NULL && osp_precreate_running(d))
@@ -1707,8 +1707,8 @@ int osp_init_precreate(struct osp_device *d)
 	CDEBUG(D_OTHER, "current %lldns, fresh till %lldns\n",
 	       ktime_get_ns(),
 	       ktime_to_ns(d->opd_statfs_fresh_till));
-	setup_timer(&d->opd_statfs_timer, osp_statfs_timer_cb,
-		    (unsigned long)d);
+	cfs_timer_setup(&d->opd_statfs_timer, osp_statfs_timer_cb,
+			(unsigned long)d, 0);
 
 	if (d->opd_storage->dd_rdonly)
 		RETURN(0);
