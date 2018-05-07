@@ -412,7 +412,6 @@ int ldlm_cli_dropbits(struct ldlm_lock *lock, __u64 drop_bits)
 		ldlm_set_cbpending(lock);
 		ldlm_set_bl_ast(lock);
 		unlock_res_and_lock(lock);
-		LASSERT(list_empty(&lock->l_lru));
 		GOTO(exit, rc);
 	}
 	EXIT;

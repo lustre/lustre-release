@@ -1098,21 +1098,25 @@ static int lock_convert_interpret(const struct lu_env *env,
 	} else {
 		ldlm_clear_converting(lock);
 
-		/* Concurrent BL AST has arrived, it may cause another convert
-		 * or cancel so just exit here.
+		/* Concurrent BL AST may arrive and cause another convert
+		 * or cancel so just do nothing here if bl_ast is set,
+		 * finish with convert otherwise.
 		 */
 		if (!ldlm_is_bl_ast(lock)) {
 			struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
 			/* Drop cancel_bits since there are no more converts
-			 * and put lock into LRU if it is not there yet.
+			 * and put lock into LRU if it is still not used and
+			 * is not there yet.
 			 */
 			lock->l_policy_data.l_inodebits.cancel_bits = 0;
-			spin_lock(&ns->ns_lock);
-			if (!list_empty(&lock->l_lru))
+			if (!lock->l_readers && !lock->l_writers) {
+				spin_lock(&ns->ns_lock);
+				/* there is check for list_empty() inside */
 				ldlm_lock_remove_from_lru_nolock(lock);
-			ldlm_lock_add_to_lru_nolock(lock);
-			spin_unlock(&ns->ns_lock);
+				ldlm_lock_add_to_lru_nolock(lock);
+				spin_unlock(&ns->ns_lock);
+			}
 		}
 	}
 	unlock_res_and_lock(lock);
@@ -1120,7 +1124,6 @@ out:
 	if (rc) {
 		lock_res_and_lock(lock);
 		if (ldlm_is_converting(lock)) {
-			LASSERT(list_empty(&lock->l_lru));
 			ldlm_clear_converting(lock);
 			ldlm_set_cbpending(lock);
 			ldlm_set_bl_ast(lock);
