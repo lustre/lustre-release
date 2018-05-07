@@ -239,30 +239,6 @@ i_uid_read, [
 ]) # LIBCFS_I_UID_READ
 
 #
-# LIBCFS_SOCK_ALLOC_FILE
-#
-# FC18 3.7.2-201 unexport sock_map_fd() change to
-# use sock_alloc_file().
-# upstream commit 56b31d1c9f1e6a3ad92e7bfe252721e05d92b285
-#
-AC_DEFUN([LIBCFS_SOCK_ALLOC_FILE], [
-LB_CHECK_EXPORT([sock_alloc_file], [net/socket.c], [
-	LB_CHECK_COMPILE([if 'sock_alloc_file' takes 3 arguments],
-	sock_alloc_file_3args, [
-		#include <linux/net.h>
-	],[
-		sock_alloc_file(NULL, 0, NULL);
-	],[
-		AC_DEFINE(HAVE_SOCK_ALLOC_FILE_3ARGS, 1,
-			[sock_alloc_file takes 3 arguments])
-	],[
-		AC_DEFINE(HAVE_SOCK_ALLOC_FILE, 1,
-			[sock_alloc_file is exported])
-	])
-])
-]) # LIBCFS_SOCK_ALLOC_FILE
-
-#
 # LIBCFS_HAVE_CRC32
 #
 AC_DEFUN([LIBCFS_HAVE_CRC32], [
@@ -929,8 +905,6 @@ LIBCFS_REINIT_COMPLETION
 # 3.5
 LIBCFS_PROCESS_NAMESPACE
 LIBCFS_I_UID_READ
-# 3.7
-LIBCFS_SOCK_ALLOC_FILE
 # 3.8
 LIBCFS_HAVE_CRC32
 LIBCFS_ENABLE_CRC32_ACCEL
