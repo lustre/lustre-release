@@ -1,78 +1,113 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingsecurity">
   <title xml:id="managingsecurity.title">Managing Security in a Lustre File System</title>
-  <para>This chapter describes security features of the Lustre file system and includes the
-    following sections:</para>
+  <para>This chapter describes security features of the Lustre file system and
+    includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438221_16221"/></para>
+      <para><xref linkend="managingSecurity.acl"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438221_64726"/></para>
+      <para><xref linkend="managingSecurity.root_squash"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438221_16221">
-      <title><indexterm><primary>Access Control List (ACL)</primary></indexterm>Using ACLs</title>
-    <para>An access control list (ACL), is a set of data that informs an operating system about permissions or access rights that each user or group has to specific system objects, such as directories or files. Each object has a unique security attribute that identifies users who have access to it. The ACL lists each object and user access privileges such as read, write or execute.</para>
-    <section remap="h3">
-        <title><indexterm><primary>Access Control List (ACL)</primary><secondary>how they work</secondary></indexterm>How ACLs Work</title>
-      <para>Implementing ACLs varies between operating systems. Systems that support the Portable
-        Operating System Interface (POSIX) family of standards share a simple yet powerful file
-        system permission model, which should be well-known to the Linux/UNIX administrator. ACLs
-        add finer-grained permissions to this model, allowing for more complicated permission
-        schemes. For a detailed explanation of ACLs on a Linux operating system, refer to the SUSE
-        Labs article, <emphasis>Posix Access Control Lists on Linux</emphasis>:</para>
-      <para><link xl:href="http://www.suse.de/~agruen/acl/linux-acls/online/">http://www.suse.de/~agruen/acl/linux-acls/online/</link></para>
-      <para>We have implemented ACLs according to this model. The Lustre software works with the
-        standard Linux ACL tools, setfacl, getfacl, and the historical chacl, normally installed
-        with the ACL package.</para>
+  <section xml:id="managingSecurity.acl">
+    <title><indexterm><primary>Access Control List (ACL)</primary></indexterm>
+    Using ACLs</title>
+    <para>An access control list (ACL), is a set of data that informs an
+      operating system about permissions or access rights that each user or
+      group has to specific system objects, such as directories or files. Each
+      object has a unique security attribute that identifies users who have
+      access to it. The ACL lists each object and user access privileges such as
+      read, write or execute.</para>
+    <section xml:id="managingSecurity.acl.howItWorks" remap="h3">
+      <title><indexterm><primary>Access Control List (ACL)</primary><secondary>
+        how they work</secondary></indexterm>How ACLs Work</title>
+      <para>Implementing ACLs varies between operating systems. Systems that
+        support the Portable Operating System Interface (POSIX) family of
+        standards share a simple yet powerful file system permission model,
+        which should be well-known to the Linux/UNIX administrator. ACLs add
+        finer-grained permissions to this model, allowing for more complicated
+        permission schemes. For a detailed explanation of ACLs on a Linux
+        operating system, refer to the SUSE Labs article
+        <link xl:href="http://wiki.lustre.org/images/5/57/PosixAccessControlInLinux.pdf">
+          Posix Access Control Lists on Linux</link>.</para>
+      <para>We have implemented ACLs according to this model. The Lustre
+        software works with the standard Linux ACL tools, setfacl, getfacl, and
+        the historical chacl, normally installed with the ACL package.</para>
       <note>
-        <para>ACL support is a system-range feature, meaning that all clients have ACL enabled or not. You cannot specify which clients should enable ACL.</para>
+        <para>ACL support is a system-range feature, meaning that all clients
+          have ACL enabled or not. You cannot specify which clients should
+          enable ACL.</para>
       </note>
     </section>
-    <section remap="h3">
-        <title><indexterm>
-          <primary>Access Control List (ACL)</primary>
-          <secondary>using</secondary>
-        </indexterm>Using ACLs with the Lustre Software</title>
-      <para>POSIX Access Control Lists (ACLs) can be used with the Lustre software. An ACL consists
-        of file entries representing permissions based on standard POSIX file system object
-        permissions that define three classes of user (owner, group and other). Each class is
-        associated with a set of permissions [read (r), write (w) and execute (x)].</para>
+    <section xml:id="managingSecurity.acl.using" remap="h3">
+      <title><indexterm>
+        <primary>Access Control List (ACL)</primary>
+        <secondary>using</secondary>
+      </indexterm>Using ACLs with the Lustre Software</title>
+      <para>POSIX Access Control Lists (ACLs) can be used with the Lustre
+        software. An ACL consists of file entries representing permissions based
+        on standard POSIX file system object permissions that define three
+        classes of user (owner, group and other). Each class is associated with
+        a set of permissions [read (r), write (w) and execute (x)].</para>
       <itemizedlist>
         <listitem>
-          <para>Owner class permissions define access privileges of the file owner.</para>
+          <para>Owner class permissions define access privileges of the file
+            owner.</para>
         </listitem>
         <listitem>
-          <para>Group class permissions define access privileges of the owning group.</para>
+          <para>Group class permissions define access privileges of the owning
+            group.</para>
         </listitem>
         <listitem>
-          <para>Other class permissions define access privileges of all users not in the owner or group class.</para>
+          <para>Other class permissions define access privileges of all users
+            not in the owner or group class.</para>
         </listitem>
       </itemizedlist>
-      <para>The <literal>ls -l</literal> command displays the owner, group, and other class permissions in the first column of its output (for example, <literal>-rw-r- --</literal> for a regular file with read and write access for the owner class, read access for the group class, and no access for others).</para>
-      <para>Minimal ACLs have three entries. Extended ACLs have more than the three entries. Extended ACLs also contain a mask entry and may contain any number of named user and named group entries.</para>
-      <para>The MDS needs to be configured to enable ACLs. Use <literal>--mountfsoptions</literal> to enable ACLs when creating your configuration:</para>
+      <para>The <literal>ls -l</literal> command displays the owner, group, and
+        other class permissions in the first column of its output (for example,
+        <literal>-rw-r- --</literal> for a regular file with read and write
+        access for the owner class, read access for the group class, and no
+        access for others).</para>
+      <para>Minimal ACLs have three entries. Extended ACLs have more than the
+        three entries. Extended ACLs also contain a mask entry and may contain
+        any number of named user and named group entries.</para>
+      <para>The MDS needs to be configured to enable ACLs. Use
+        <literal>--mountfsoptions</literal> to enable ACLs when creating your
+        configuration:</para>
       <screen>$ mkfs.lustre --fsname spfs --mountfsoptions=acl --mdt -mgs /dev/sda</screen>
-      <para>Alternately, you can enable ACLs at run time by using the <literal>--acl</literal> option with <literal>mkfs.lustre</literal>:</para>
+      <para>Alternately, you can enable ACLs at run time by using the
+        <literal>--acl</literal> option with <literal>mkfs.lustre</literal>:
+      </para>
       <screen>$ mount -t lustre -o acl /dev/sda /mnt/mdt</screen>
       <para>To check ACLs on the MDS:</para>
       <screen>$ lctl get_param -n mdc.home-MDT0000-mdc-*.connect_flags | grep acl acl</screen>
       <para>To mount the client with no ACLs:</para>
       <screen>$ mount -t lustre -o noacl ibmds2@o2ib:/home /home</screen>
-      <para>ACLs are enabled in a Lustre file system on a system-wide basis; either all clients
-        enable ACLs or none do. Activating ACLs is controlled by MDS mount options
-          <literal>acl</literal> / <literal>noacl</literal> (enable/disable ACLs). Client-side mount
-        options acl/noacl are ignored. You do not need to change the client configuration, and the
-        &apos;acl&apos; string will not appear in the client /etc/mtab. The client acl mount option
-        is no longer needed. If a client is mounted with that option, then this message appears in
-        the MDS syslog:</para>
+      <para>ACLs are enabled in a Lustre file system on a system-wide basis;
+        either all clients enable ACLs or none do. Activating ACLs is controlled
+        by MDS mount options <literal>acl</literal> / <literal>noacl</literal>
+        (enable/disable ACLs). Client-side mount options acl/noacl are ignored.
+        You do not need to change the client configuration, and the
+        &apos;acl&apos; string will not appear in the client /etc/mtab. The
+        client acl mount option is no longer needed. If a client is mounted with
+        that option, then this message appears in the MDS syslog:</para>
       <screen>...MDS requires ACL support but client does not</screen>
-      <para>The message is harmless but indicates a configuration issue, which should be corrected.</para>
-      <para>If ACLs are not enabled on the MDS, then any attempts to reference an ACL on a client return an Operation not supported error.</para>
+      <para>The message is harmless but indicates a configuration issue, which
+        should be corrected.</para>
+      <para>If ACLs are not enabled on the MDS, then any attempts to reference
+        an ACL on a client return an Operation not supported error.</para>
     </section>
-    <section remap="h3">
-        <title><indexterm><primary>Access Control List (ACL)</primary><secondary>examples</secondary></indexterm>Examples</title>
-      <para>These examples are taken directly from the POSIX paper referenced above. ACLs on a Lustre file system work exactly like ACLs on any Linux file system. They are manipulated with the standard tools in the standard manner. Below, we create a directory and allow a specific user access.</para>
+    <section xml:id="managingSecurity.acl.examples" remap="h3">
+        <title><indexterm>
+          <primary>Access Control List (ACL)</primary>
+          <secondary>examples</secondary>
+        </indexterm>Examples</title>
+      <para>These examples are taken directly from the POSIX paper referenced
+        above. ACLs on a Lustre file system work exactly like ACLs on any Linux
+        file system. They are manipulated with the standard tools in the
+        standard manner. Below, we create a directory and allow a specific user
+        access.</para>
       <screen>[root@client lustre]# umask 027
 [root@client lustre]# mkdir rain
 [root@client lustre]# ls -ld rain
@@ -96,90 +131,139 @@ mask::rwx
 other::---</screen>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438221_64726">
-    <title><indexterm><primary>root squash</primary></indexterm>Using Root Squash</title>
-    <para>Root squash is a security feature which restricts super-user access rights to a Lustre
-      file system. Without the root squash feature enabled, Lustre file system users on untrusted
-      clients could access or modify files owned by root on the file system, including deleting
-      them. Using the root squash feature restricts file access/modifications as the root user to
-      only the specified clients. Note, however, that this does <emphasis>not</emphasis> prevent
-      users on insecure clients from accessing files owned by <emphasis>other</emphasis>
-      users.</para>
-    <para>The root squash feature works by re-mapping the user ID (UID) and group ID (GID) of the
-      root user to a UID and GID specified by the system administrator, via the Lustre configuration
-      management server (MGS). The root squash feature also enables the Lustre file system
-      administrator to specify a set of client for which UID/GID re-mapping does not apply.</para>
-    <section remap="h3">
-        <title><indexterm><primary>root squash</primary><secondary>configuring</secondary></indexterm>Configuring Root Squash</title>
-      <para>Root squash functionality is managed by two configuration parameters, <literal>root_squash</literal> and <literal>nosquash_nids</literal>.</para>
+  <section xml:id="managingSecurity.root_squash">
+    <title><indexterm>
+      <primary>root squash</primary>
+    </indexterm>Using Root Squash</title>
+    <para>Root squash is a security feature which restricts super-user access
+      rights to a Lustre file system. Without the root squash feature enabled,
+      Lustre file system users on untrusted clients could access or modify files
+      owned by root on the file system, including deleting them. Using the root
+      squash feature restricts file access/modifications as the root user to
+      only the specified clients. Note, however, that this does
+      <emphasis>not</emphasis> prevent users on insecure clients from accessing
+      files owned by <emphasis>other</emphasis> users.</para>
+    <para>The root squash feature works by re-mapping the user ID (UID) and
+      group ID (GID) of the root user to a UID and GID specified by the system
+      administrator, via the Lustre configuration management server (MGS). The
+      root squash feature also enables the Lustre file system administrator to
+      specify a set of client for which UID/GID re-mapping does not apply.
+    </para>
+    <section xml:id="managingSecurity.root_squash.config" remap="h3">
+      <title><indexterm>
+        <primary>root squash</primary>
+        <secondary>configuring</secondary>
+      </indexterm>Configuring Root Squash</title>
+      <para>Root squash functionality is managed by two configuration
+        parameters, <literal>root_squash</literal> and
+        <literal>nosquash_nids</literal>.</para>
       <itemizedlist>
         <listitem>
-          <para>The <literal>root_squash</literal> parameter specifies the UID and GID with which the root user accesses the Lustre file system.</para>
+          <para>The <literal>root_squash</literal> parameter specifies the UID
+            and GID with which the root user accesses the Lustre file system.
+          </para>
         </listitem>
         <listitem>
-          <para>The <literal>nosquash_nids</literal> parameter specifies the set of clients to which root squash does not apply. LNet NID range syntax is used for this parameter (see the NID range syntax rules described in <xref linkend="dbdoclet.50438221_48757"/>). For example:</para>
+          <para>The <literal>nosquash_nids</literal> parameter specifies the set
+            of clients to which root squash does not apply. LNet NID range
+            syntax is used for this parameter (see the NID range syntax rules
+            described in <xref linkend="managingSecurity.root_squash"/>). For
+            example:</para>
         </listitem>
       </itemizedlist>
       <screen>nosquash_nids=172.16.245.[0-255/2]@tcp</screen>
-      <para>In this example, root squash does not apply to TCP clients on subnet 172.16.245.0 that have an even number as the last component of their IP address.</para>
+      <para>In this example, root squash does not apply to TCP clients on subnet
+        172.16.245.0 that have an even number as the last component of their IP
+        address.</para>
     </section>
-    <section xml:id="dbdoclet.50438221_48757">
-        <title><indexterm><primary>root squash</primary><secondary>enabling</secondary></indexterm>Enabling and Tuning Root Squash</title>
-      <para>The default value for <literal>nosquash_nids</literal> is NULL, which means that root squashing applies to all clients. Setting the root squash UID and GID to 0 turns root squash off.</para>
-      <para>Root squash parameters can be set when the MDT is created (<literal>mkfs.lustre --mdt</literal>). For example:</para>
+    <section xml:id="managingSecurity.root_squash.tuning">
+      <title><indexterm>
+        <primary>root squash</primary><secondary>enabling</secondary>
+      </indexterm>Enabling and Tuning Root Squash</title>
+      <para>The default value for <literal>nosquash_nids</literal> is NULL,
+        which means that root squashing applies to all clients. Setting the root
+        squash UID and GID to 0 turns root squash off.</para>
+      <para>Root squash parameters can be set when the MDT is created
+        (<literal>mkfs.lustre --mdt</literal>). For example:</para>
       <screen>mds# mkfs.lustre --reformat --fsname=testfs --mdt --mgs \
        --param &quot;mdt.root_squash=500:501&quot; \
        --param &quot;mdt.nosquash_nids=&apos;0@elan1 192.168.1.[10,11]&apos;&quot; /dev/sda1</screen>
-      <para>Root squash parameters can also be changed on an unmounted device with <literal>tunefs.lustre</literal>. For example:</para>
+      <para>Root squash parameters can also be changed on an unmounted device
+        with <literal>tunefs.lustre</literal>. For example:</para>
       <screen>tunefs.lustre --param &quot;mdt.root_squash=65534:65534&quot;  \
 --param &quot;mdt.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
 </screen>
-      <para>Root squash parameters can also be changed with the <literal>lctl conf_param</literal> command. For example:</para>
+      <para>Root squash parameters can also be changed with the
+        <literal>lctl conf_param</literal> command. For example:</para>
       <screen>mgs# lctl conf_param testfs.mdt.root_squash=&quot;1000:101&quot;
 mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
       <note>
         <para>When using the lctl conf_param command, keep in mind:</para>
         <itemizedlist>
           <listitem>
-            <para><literal>lctl conf_param</literal> must be run on a live MGS</para>
+            <para><literal>lctl conf_param</literal> must be run on a live MGS
+            </para>
           </listitem>
           <listitem>
-            <para><literal>lctl conf_param</literal> causes the parameter to change on all MDSs</para>
+            <para><literal>lctl conf_param</literal> causes the parameter to
+              change on all MDSs</para>
           </listitem>
           <listitem>
-            <para><literal>lctl conf_param</literal> is to be used once per a parameter</para>
+            <para><literal>lctl conf_param</literal> is to be used once per a
+              parameter</para>
           </listitem>
         </itemizedlist>
       </note>
-      <para>The <literal>nosquash_nids</literal> list can be cleared with:</para>
+      <para>The <literal>nosquash_nids</literal> list can be cleared with:
+      </para>
       <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;NONE&quot;</screen>
       <para>- OR -</para>
       <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;clear&quot;</screen>
-      <para>If the <literal>nosquash_nids</literal> value consists of several NID ranges (e.g. <literal>0@elan</literal>, <literal>1@elan1</literal>), the list of NID ranges must be quoted with single (&apos;) or double (&apos;&apos;) quotation marks. List elements must be separated with a space. For example:</para>
+      <para>If the <literal>nosquash_nids</literal> value consists of several
+        NID ranges (e.g. <literal>0@elan</literal>, <literal>1@elan1</literal>),
+        the list of NID ranges must be quoted with single (&apos;) or double
+        (&apos;&apos;) quotation marks. List elements must be separated with a
+        space. For example:</para>
       <screen>mds# mkfs.lustre ... --param &quot;mdt.nosquash_nids=&apos;0@elan1 1@elan2&apos;&quot; /dev/sda1
 lctl conf_param testfs.mdt.nosquash_nids=&quot;24@elan 15@elan1&quot;</screen>
       <para>These are examples of incorrect syntax:</para>
       <screen>mds# mkfs.lustre ... --param &quot;mdt.nosquash_nids=0@elan1 1@elan2&quot; /dev/sda1
 lctl conf_param testfs.mdt.nosquash_nids=24@elan 15@elan1</screen>
-      <para>To check root squash parameters, use the lctl get_param command:</para>
+      <para>To check root squash parameters, use the lctl get_param command:
+      </para>
       <screen>mds# lctl get_param mdt.testfs-MDT0000.root_squash
 lctl get_param mdt.*.nosquash_nids</screen>
       <note>
         <para>An empty nosquash_nids list is reported as NONE.</para>
       </note>
     </section>
-    <section remap="h3">
-        <title><indexterm><primary>root squash</primary><secondary>tips</secondary></indexterm>Tips on Using Root Squash</title>
-      <para>Lustre configuration management limits root squash in several ways.</para>
+    <section xml:id="managingSecurity.root_squash.tips" remap="h3">
+        <title><indexterm>
+          <primary>root squash</primary>
+          <secondary>tips</secondary>
+        </indexterm>Tips on Using Root Squash</title>
+      <para>Lustre configuration management limits root squash in several ways.
+      </para>
       <itemizedlist>
         <listitem>
-          <para>The <literal>lctl conf_param</literal> value overwrites the parameter&apos;s previous value. If the new value uses an incorrect syntax, then the system continues with the old parameters and the previously-correct value is lost on remount. That is, be careful doing root squash tuning.</para>
+          <para>The <literal>lctl conf_param</literal> value overwrites the
+            parameter&apos;s previous value. If the new value uses an incorrect
+            syntax, then the system continues with the old parameters and the
+            previously-correct value is lost on remount. That is, be careful
+            doing root squash tuning.</para>
         </listitem>
         <listitem>
-          <para><literal>mkfs.lustre</literal> and <literal>tunefs.lustre</literal> do not perform parameter syntax checking. If the root squash parameters are incorrect, they are ignored on mount and the default values are used instead.</para>
+          <para><literal>mkfs.lustre</literal> and
+            <literal>tunefs.lustre</literal> do not perform parameter syntax
+            checking. If the root squash parameters are incorrect, they are
+            ignored on mount and the default values are used instead.</para>
         </listitem>
         <listitem>
-          <para>Root squash parameters are parsed with rigorous syntax checking. The root_squash parameter should be specified as <literal>&lt;decnum&gt;:&lt;decnum&gt;</literal>. The <literal>nosquash_nids</literal> parameter should follow LNet NID range list syntax.</para>
+          <para>Root squash parameters are parsed with rigorous syntax checking.
+            The root_squash parameter should be specified as
+            <literal>&lt;decnum&gt;:&lt;decnum&gt;</literal>. The
+            <literal>nosquash_nids</literal> parameter should follow LNet NID
+            range list syntax.</para>
         </listitem>
       </itemizedlist>
       <para>LNet NID range syntax:</para>
@@ -201,7 +285,13 @@ lctl get_param mdt.*.nosquash_nids</screen>
            | &quot;ra&quot; | &quot;elan&quot;
 &lt;number&gt;     :== &lt;nonnegative decimal&gt; | &lt;hexadecimal&gt;</screen>
       <note>
-        <para>For networks using numeric addresses (e.g. elan), the address range must be specified in the <literal>&lt;numaddr_range&gt;</literal> syntax. For networks using IP addresses, the address range must be in the <literal>&lt;ipaddr_range&gt;</literal>. For example, if elan is using numeric addresses, <literal>1.2.3.4@elan</literal> is incorrect.</para>
+        <para>For networks using numeric addresses (e.g. elan), the address
+          range must be specified in the
+          <literal>&lt;numaddr_range&gt;</literal> syntax. For networks using
+          IP addresses, the address range must be in the
+          <literal>&lt;ipaddr_range&gt;</literal>. For example, if elan is using
+          numeric addresses, <literal>1.2.3.4@elan</literal> is incorrect.
+        </para>
       </note>
     </section>
   </section>
