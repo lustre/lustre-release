@@ -1073,7 +1073,7 @@ static int lock_convert_interpret(const struct lu_env *env,
 			   aa->lock_handle.cookie, reply->lock_handle.cookie,
 			   req->rq_export->exp_client_uuid.uuid,
 			   libcfs_id2str(req->rq_peer));
-		GOTO(out, rc = -ESTALE);
+		GOTO(out, rc = ELDLM_NO_LOCK_DATA);
 	}
 
 	lock_res_and_lock(lock);
@@ -1122,15 +1122,29 @@ static int lock_convert_interpret(const struct lu_env *env,
 	unlock_res_and_lock(lock);
 out:
 	if (rc) {
+		int flag;
+
 		lock_res_and_lock(lock);
 		if (ldlm_is_converting(lock)) {
 			ldlm_clear_converting(lock);
 			ldlm_set_cbpending(lock);
 			ldlm_set_bl_ast(lock);
+			lock->l_policy_data.l_inodebits.cancel_bits = 0;
 		}
 		unlock_res_and_lock(lock);
-	}
 
+		/* fallback to normal lock cancel. If rc means there is no
+		 * valid lock on server, do only local cancel */
+		if (rc == ELDLM_NO_LOCK_DATA)
+			flag = LCF_LOCAL;
+		else
+			flag = LCF_ASYNC;
+
+		rc = ldlm_cli_cancel(&aa->lock_handle, flag);
+		if (rc < 0)
+			LDLM_DEBUG(lock, "failed to cancel lock: rc = %d\n",
+				   rc);
+	}
 	LDLM_LOCK_PUT(lock);
 	RETURN(rc);
 }
@@ -1161,6 +1175,15 @@ int ldlm_cli_convert(struct ldlm_lock *lock, __u32 *flags)
 		RETURN(-EINVAL);
 	}
 
+	/* this is better to check earlier and it is done so already,
+	 * but this check is kept too as final one to issue an error
+	 * if any new code will miss such check.
+	 */
+	if (!exp_connect_lock_convert(exp)) {
+		LDLM_ERROR(lock, "server doesn't support lock convert\n");
+		RETURN(-EPROTO);
+	}
+
 	if (lock->l_resource->lr_type != LDLM_IBITS) {
 		LDLM_ERROR(lock, "convert works with IBITS locks only.");
 		RETURN(-EINVAL);
@@ -1189,13 +1212,12 @@ int ldlm_cli_convert(struct ldlm_lock *lock, __u32 *flags)
 
 	ptlrpc_request_set_replen(req);
 
-	/* That could be useful to use cancel portals for convert as well
-	 * as high-priority handling. This will require changes in
-	 * ldlm_cancel_handler to understand convert RPC as well.
-	 *
-	 * req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
-	 * req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
+	/*
+	 * Use cancel portals for convert as well as high-priority handling.
 	 */
+	req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
+	req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
+
 	ptlrpc_at_set_req_timeout(req);
 
 	if (exp->exp_obd->obd_svc_stats != NULL)

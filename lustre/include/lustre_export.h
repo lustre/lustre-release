@@ -450,6 +450,11 @@ static inline int exp_connect_flr(struct obd_export *exp)
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_FLR);
 }
 
+static inline int exp_connect_lock_convert(struct obd_export *exp)
+{
+	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_LOCK_CONVERT);
+}
+
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
 

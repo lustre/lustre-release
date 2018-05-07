@@ -374,10 +374,15 @@ void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
  * that convert is really needed. */
 int ll_md_need_convert(struct ldlm_lock *lock)
 {
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 	struct inode *inode;
 	__u64 wanted = lock->l_policy_data.l_inodebits.cancel_bits;
 	__u64 bits = lock->l_policy_data.l_inodebits.bits & ~wanted;
 	enum ldlm_mode mode = LCK_MINMODE;
+
+	if (!lock->l_conn_export ||
+	    !exp_connect_lock_convert(lock->l_conn_export))
+		return 0;
 
 	if (!wanted || !bits || ldlm_is_cancel(lock))
 		return 0;
@@ -411,7 +416,7 @@ int ll_md_need_convert(struct ldlm_lock *lock)
 	lock_res_and_lock(lock);
 	if (ktime_after(ktime_get(),
 			ktime_add(lock->l_last_used,
-				  ktime_set(10, 0)))) {
+				  ktime_set(ns->ns_dirty_age_limit, 0)))) {
 		unlock_res_and_lock(lock);
 		return 0;
 	}
