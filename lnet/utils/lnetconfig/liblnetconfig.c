@@ -2886,6 +2886,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	struct lnet_process_id *list = NULL;
 	void *data = NULL;
 	void *lpni_data;
+	bool exist = false;
 
 	snprintf(err_str, sizeof(err_str),
 		 "\"out of memory\"");
@@ -2948,6 +2949,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 		l_errno = ENOMEM;
 		goto out;
 	}
+
 	for (i = 0; i < count; i++) {
 		for (;;) {
 			memset(&peer_info, 0, sizeof(peer_info));
@@ -2979,6 +2981,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 				goto out;
 			}
 		}
+		exist = true;
 
 		peer = cYAML_create_seq_item(peer_root);
 		if (peer == NULL)
@@ -3150,7 +3153,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 out:
 	free(list);
 	free(data);
-	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR || !exist) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
 		struct cYAML *show_node;
