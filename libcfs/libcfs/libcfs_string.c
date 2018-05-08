@@ -254,16 +254,46 @@ int
 cfs_str2num_check(char *str, int nob, unsigned *num,
 		  unsigned min, unsigned max)
 {
-	char	*endp;
+	bool all_numbers = true;
+	char *endp, cache;
+	int len;
+	int rc;
 
-	*num = simple_strtoul(str, &endp, 0);
-	if (endp == str)
-		return 0;
-
-	for (; endp < str + nob; endp++) {
-		if (!isspace(*endp))
-			return 0;
+	endp = strim(str);
+	/**
+	 * kstrouint can only handle strings composed
+	 * of only numbers. We need to scan the string
+	 * passed in for the first non-digit character
+	 * and end the string at that location. If we
+	 * don't find any non-digit character we still
+	 * need to place a '\0' at position len since
+	 * we are not interested in the rest of the
+	 * string which is longer than len in size.
+	 * After we are done the character at the
+	 * position we placed '\0' must be restored.
+	 */
+	len = min((int)strlen(endp), nob);
+	for (; endp < str + len; endp++) {
+		if (!isxdigit(*endp) && *endp != '-' &&
+		    *endp != '+') {
+			all_numbers = false;
+			break;
+		}
 	}
+
+	/* Eat trailing space */
+	if (!all_numbers && isspace(*endp)) {
+		all_numbers = true;
+		endp--;
+	}
+
+	cache = *endp;
+	*endp = '\0';
+
+	rc = kstrtouint(str, 0, num);
+	*endp = cache;
+	if (rc || !all_numbers)
+		return 0;
 
 	return (*num >= min && *num <= max);
 }
