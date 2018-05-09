@@ -7264,6 +7264,8 @@ test_101() {
 run_test 101 "Race MDT->OST reconnection with create"
 
 test_102() {
+	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.53) ]] ||
+		skip "Need server version greater than 2.9.53"
 	cleanup || error "cleanup failed with $?"
 
 	local mds1dev=$(mdsdevname 1)
