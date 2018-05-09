@@ -6211,6 +6211,10 @@ run_test 60aa "llog_print works with FIDs and simple names"
 
 test_60ab() {
 	# test llog_print with params
+
+	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.11.51) ]] ||
+		skip "Need server version greater than 2.11.51"
+
 	local yaml
 	local orig_val
 
