@@ -27,7 +27,7 @@ init_logging
 check_and_setup_lustre
 
 if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.51) ]]; then
-	skip_env "Need MDS version at least 2.9.51" && exit
+	skip_env "Need MDS version at least 2.9.51"
 fi
 
 build_test_filter
@@ -40,7 +40,7 @@ assert_DIR
 rm -rf $DIR/[Rdfs][0-9]*
 
 test_0() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M
@@ -187,7 +187,7 @@ test_3() {
 run_test 3 "Delete component from existing file"
 
 test_4() {
-	skip "Not supported in PFL" && return
+	skip "Not supported in PFL"
 	# In PFL project, only LCME_FL_INIT is supported, and it can't
 	# be altered by application.
 }
@@ -474,7 +474,7 @@ test_11() {
 run_test 11 "Verify component instantiation with write/truncate"
 
 test_12() {
-	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
+	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs"
 
 	local file=$DIR/$tdir/$tfile
 	test_mkdir $DIR/$tdir
@@ -515,7 +515,7 @@ test_12() {
 run_test 12 "Verify ost list specification"
 
 test_13() { # LU-9311
-	[ $OSTCOUNT -lt 8 ] && skip "needs >= 8 OSTs" && return
+	[ $OSTCOUNT -lt 8 ] && skip "needs >= 8 OSTs"
 
 	local file=$DIR/$tfile
 	local dd_count=4
@@ -535,7 +535,7 @@ test_13() { # LU-9311
 run_test 13 "shouldn't reprocess granted resent request"
 
 test_14() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	local file=$DIR/$tdir/$tfile
 	test_mkdir -p $DIR/$tdir
 	rm -f $file
@@ -659,7 +659,7 @@ verify_16() {
 }
 
 test_16() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
 	local file=$DIR/$tdir/$tfile
 	local dir=$DIR/$tdir/dir
@@ -708,7 +708,7 @@ test_16() {
 run_test 16 "Verify setstripe/getstripe with YAML config file"
 
 test_17() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	local file=$DIR/$tdir/$tfile
 	test_mkdir -p $DIR/$tdir
 	rm -f $file
