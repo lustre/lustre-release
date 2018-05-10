@@ -7747,9 +7747,22 @@ CKSUM_TYPES=${CKSUM_TYPES:-$(lctl get_param -n osc.*osc-[^mM]*.checksum_type |
 set_checksum_type()
 {
 	lctl set_param -n osc.*osc-[^mM]*.checksum_type $1
-	log "set checksum type to $1"
-	return 0
+	rc=$?
+	log "set checksum type to $1, rc = $rc"
+	return $rc
 }
+
+get_osc_checksum_type()
+{
+	# arugment 1: OST name, like OST0000
+	ost=$1
+	checksum_type=$(lctl get_param -n osc.*${ost}-osc-[^mM]*.checksum_type |
+			sed 's/.*\[\(.*\)\].*/\1/g')
+	rc=$?
+	[ $rc -ne 0 ] && error "failed to get checksum type of $ost, rc = $rc, output = $checksum_type"
+	echo $checksum_type
+}
+
 F77_TMP=$TMP/f77-temp
 F77SZ=8
 setup_f77() {
@@ -8000,6 +8013,38 @@ test_77k() { # LU-10906
 	remount_client $MOUNT || "failed to remount client"
 }
 run_test 77k "enable/disable checksum correctly"
+
+test_77l() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+
+	set_checksums 1
+	stack_trap "set_checksums $ORIG_CSUM" EXIT
+	stack_trap "set_checksum_type $ORIG_CSUM_TYPE" EXIT
+
+	set_checksum_type invalid && error "unexpected success of invalid checksum type"
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile
+	for algo in $CKSUM_TYPES; do
+		set_checksum_type $algo || error "fail to set checksum type $algo"
+		osc_algo=$(get_osc_checksum_type OST0000)
+		[ "$osc_algo" != "$algo" ] && error "checksum type is $osc_algo after setting it to $algo"
+
+		# no locks, no reqs to let the connection idle
+		cancel_lru_locks osc
+		lru_resize_disable osc
+		wait_osc_import_state client ost1 IDLE
+
+		# ensure ost1 is connected
+		stat $DIR/$tfile >/dev/null || error "can't stat"
+		wait_osc_import_state client ost1 FULL
+
+		osc_algo=$(get_osc_checksum_type OST0000)
+		[ "$osc_algo" != "$algo" ] && error "checksum type changed from $algo to $osc_algo after reconnection"
+	done
+	return 0
+}
+run_test 77l "preferred checksum type is remembered after reconnected"
 
 [ "$ORIG_CSUM" ] && set_checksums $ORIG_CSUM || true
 rm -f $F77_TMP

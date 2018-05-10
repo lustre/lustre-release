@@ -889,7 +889,8 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		cli->cl_supp_cksum_types = OBD_CKSUM_ADLER;
 	}
 	cli->cl_cksum_type = obd_cksum_type_select(imp->imp_obd->obd_name,
-						   cli->cl_supp_cksum_types);
+						  cli->cl_supp_cksum_types,
+						  cli->cl_preferred_cksum_type);
 
 	if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
 		cli->cl_max_pages_per_rpc =

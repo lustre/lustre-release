@@ -342,6 +342,8 @@ struct client_obd {
         __u32                    cl_supp_cksum_types;
         /* checksum algorithm to be used */
 	enum cksum_types	 cl_cksum_type;
+	/* preferred checksum algorithm to be used */
+	enum cksum_types	 cl_preferred_cksum_type;
 
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;

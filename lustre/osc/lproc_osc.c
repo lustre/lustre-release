@@ -425,28 +425,34 @@ static ssize_t osc_checksum_type_seq_write(struct file *file,
 	int i;
 	DECLARE_CKSUM_NAME;
 	char kernbuf[10];
+	int rc = -EINVAL;
 
-        if (obd == NULL)
-                return 0;
+	if (obd == NULL)
+		return 0;
 
-        if (count > sizeof(kernbuf) - 1)
-                return -EINVAL;
+	if (count > sizeof(kernbuf) - 1)
+		return -EINVAL;
 	if (copy_from_user(kernbuf, buffer, count))
-                return -EFAULT;
-        if (count > 0 && kernbuf[count - 1] == '\n')
-                kernbuf[count - 1] = '\0';
-        else
-                kernbuf[count] = '\0';
+		return -EFAULT;
 
-        for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
-                if (((1 << i) & obd->u.cli.cl_supp_cksum_types) == 0)
-                        continue;
-                if (!strcmp(kernbuf, cksum_name[i])) {
-                       obd->u.cli.cl_cksum_type = 1 << i;
-                       return count;
-                }
-        }
-        return -EINVAL;
+	if (count > 0 && kernbuf[count - 1] == '\n')
+		kernbuf[count - 1] = '\0';
+	else
+		kernbuf[count] = '\0';
+
+	for (i = 0; i < ARRAY_SIZE(cksum_name); i++) {
+		if (strcmp(kernbuf, cksum_name[i]) == 0) {
+			obd->u.cli.cl_preferred_cksum_type = BIT(i);
+			if (obd->u.cli.cl_supp_cksum_types & BIT(i)) {
+				obd->u.cli.cl_cksum_type = BIT(i);
+				rc = count;
+			} else {
+				rc = -ENOTSUPP;
+			}
+			break;
+		}
+	}
+	return rc;
 }
 LPROC_SEQ_FOPS(osc_checksum_type);
 

@@ -112,10 +112,17 @@ enum cksum_types obd_cksum_types_supported_server(const char *obd_name);
  * checksum type due to its benchmarking at libcfs module load.
  * Caution is advised, however, since what is fastest on a single client may
  * not be the fastest or most efficient algorithm on the server.  */
-static inline enum cksum_types
-obd_cksum_type_select(const char *obd_name, enum cksum_types cksum_types)
+static inline
+enum cksum_types obd_cksum_type_select(const char *obd_name,
+				       enum cksum_types cksum_types,
+				       enum cksum_types preferred)
 {
-	u32 flag = obd_cksum_type_pack(obd_name, cksum_types);
+	u32 flag;
+
+	if (preferred & cksum_types)
+		return preferred;
+
+	flag = obd_cksum_type_pack(obd_name, cksum_types);
 
 	return obd_cksum_type_unpack(flag);
 }
