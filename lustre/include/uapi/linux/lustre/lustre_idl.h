@@ -2415,19 +2415,19 @@ union ldlm_gl_desc {
 enum ldlm_intent_flags {
 	IT_OPEN        = 0x00000001,
 	IT_CREAT       = 0x00000002,
-	IT_OPEN_CREAT  = 0x00000003,
-	IT_READDIR     = 0x00000004,
+	IT_OPEN_CREAT  = IT_OPEN | IT_CREAT, /* To allow case label. */
+	IT_READDIR     = 0x00000004, /* Used by mdc, not put on the wire. */
 	IT_GETATTR     = 0x00000008,
 	IT_LOOKUP      = 0x00000010,
-	IT_UNLINK      = 0x00000020,
-	IT_TRUNC       = 0x00000040,
+/*	IT_UNLINK      = 0x00000020, Obsolete. */
+/*	IT_TRUNC       = 0x00000040, Obsolete. */
 	IT_GETXATTR    = 0x00000080,
-	IT_EXEC        = 0x00000100,
-	IT_PIN         = 0x00000200,
+/*	IT_EXEC        = 0x00000100, Obsolete. */
+/*	IT_PIN         = 0x00000200, Obsolete. */
 	IT_LAYOUT      = 0x00000400,
 	IT_QUOTA_DQACQ = 0x00000800,
 	IT_QUOTA_CONN  = 0x00001000,
-	IT_SETXATTR    = 0x00002000,
+/*	IT_SETXATTR    = 0x00002000, Obsolete. */
 	IT_GLIMPSE     = 0x00004000,
 	IT_BRW	       = 0x00008000,
 };

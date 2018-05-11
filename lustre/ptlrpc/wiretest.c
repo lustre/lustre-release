@@ -3468,24 +3468,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)IT_GETATTR);
 	LASSERTF(IT_LOOKUP == 16, "found %lld\n",
 		 (long long)IT_LOOKUP);
-	LASSERTF(IT_UNLINK == 32, "found %lld\n",
-		 (long long)IT_UNLINK);
-	LASSERTF(IT_TRUNC == 64, "found %lld\n",
-		 (long long)IT_TRUNC);
 	LASSERTF(IT_GETXATTR == 128, "found %lld\n",
 		 (long long)IT_GETXATTR);
-	LASSERTF(IT_EXEC == 256, "found %lld\n",
-		 (long long)IT_EXEC);
-	LASSERTF(IT_PIN == 512, "found %lld\n",
-		 (long long)IT_PIN);
 	LASSERTF(IT_LAYOUT == 1024, "found %lld\n",
 		 (long long)IT_LAYOUT);
 	LASSERTF(IT_QUOTA_DQACQ == 2048, "found %lld\n",
 		 (long long)IT_QUOTA_DQACQ);
 	LASSERTF(IT_QUOTA_CONN == 4096, "found %lld\n",
 		 (long long)IT_QUOTA_CONN);
-	LASSERTF(IT_SETXATTR == 8192, "found %lld\n",
-		 (long long)IT_SETXATTR);
 
 	/* Checks for struct ldlm_resource_desc */
 	LASSERTF((int)sizeof(struct ldlm_resource_desc) == 40, "found %lld\n",

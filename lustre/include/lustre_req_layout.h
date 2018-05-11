@@ -216,7 +216,6 @@ extern struct req_format RQF_LDLM_INTENT_LAYOUT;
 extern struct req_format RQF_LDLM_INTENT_GETATTR;
 extern struct req_format RQF_LDLM_INTENT_OPEN;
 extern struct req_format RQF_LDLM_INTENT_CREATE;
-extern struct req_format RQF_LDLM_INTENT_UNLINK;
 extern struct req_format RQF_LDLM_INTENT_GETXATTR;
 extern struct req_format RQF_LDLM_INTENT_QUOTA;
 extern struct req_format RQF_LDLM_CANCEL;

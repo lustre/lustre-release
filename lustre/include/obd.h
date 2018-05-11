@@ -791,8 +791,6 @@ static inline int it_to_lock_mode(struct lookup_intent *it)
 		return LCK_PR;
 	else if (it->it_op &  IT_GETXATTR)
 		return LCK_PR;
-	else if (it->it_op &  IT_SETXATTR)
-		return LCK_PW;
 
 	LASSERTF(0, "Invalid it_op: %d\n", it->it_op);
 	return -EINVAL;
@@ -821,7 +819,7 @@ enum md_cli_flags {
  */
 static inline bool it_has_reply_body(const struct lookup_intent *it)
 {
-	return it->it_op & (IT_OPEN | IT_UNLINK | IT_LOOKUP | IT_GETATTR);
+	return it->it_op & (IT_OPEN | IT_LOOKUP | IT_GETATTR);
 }
 
 struct md_op_data {

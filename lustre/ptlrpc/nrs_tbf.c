@@ -1486,8 +1486,6 @@ static struct req_format *intent_req_fmt(__u32 it_opc)
 		return &RQF_LDLM_INTENT_OPEN;
 	else if (it_opc & (IT_GETATTR | IT_LOOKUP))
 		return &RQF_LDLM_INTENT_GETATTR;
-	else if (it_opc & IT_UNLINK)
-		return &RQF_LDLM_INTENT_UNLINK;
 	else if (it_opc & IT_GETXATTR)
 		return &RQF_LDLM_INTENT_GETXATTR;
 	else if (it_opc & (IT_GLIMPSE | IT_BRW))

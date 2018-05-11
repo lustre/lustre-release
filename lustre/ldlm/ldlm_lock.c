@@ -125,8 +125,6 @@ const char *ldlm_it2str(enum ldlm_intent_flags it)
 		return "getattr";
 	case IT_LOOKUP:
 		return "lookup";
-	case IT_UNLINK:
-		return "unlink";
 	case IT_GETXATTR:
 		return "getxattr";
 	case IT_LAYOUT:
