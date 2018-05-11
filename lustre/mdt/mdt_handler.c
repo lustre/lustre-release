@@ -3381,25 +3381,14 @@ static int mdt_tgt_connect(struct tgt_session_info *tsi)
 	return tgt_connect(tsi);
 }
 
-enum mdt_it_code {
-	MDT_IT_OPEN,
-	MDT_IT_GETATTR,
-	MDT_IT_LOOKUP,
-	MDT_IT_GETXATTR,
-	MDT_IT_LAYOUT,
-	MDT_IT_QUOTA,
-	MDT_IT_GLIMPSE,
-	MDT_IT_BRW,
-};
-
-static int mdt_intent_glimpse(enum mdt_it_code opcode,
+static int mdt_intent_glimpse(enum ldlm_intent_flags it_opc,
 			      struct mdt_thread_info *info,
 			      struct ldlm_lock **lockp, __u64 flags)
 {
 	return mdt_glimpse_enqueue(info, info->mti_mdt->mdt_namespace,
 				   lockp, flags);
 }
-static int mdt_intent_brw(enum mdt_it_code opcode,
+static int mdt_intent_brw(enum ldlm_intent_flags it_opc,
 			  struct mdt_thread_info *info,
 			  struct ldlm_lock **lockp, __u64 flags)
 {
@@ -3546,10 +3535,10 @@ void mdt_intent_fixup_resent(struct mdt_thread_info *info,
 		  dlmreq->lock_handle[0].cookie);
 }
 
-static int mdt_intent_getxattr(enum mdt_it_code opcode,
-				struct mdt_thread_info *info,
-				struct ldlm_lock **lockp,
-				__u64 flags)
+static int mdt_intent_getxattr(enum ldlm_intent_flags it_opc,
+			       struct mdt_thread_info *info,
+			       struct ldlm_lock **lockp,
+			       __u64 flags)
 {
 	struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_RMT];
 	struct ldlm_reply      *ldlm_rep = NULL;
@@ -3596,7 +3585,7 @@ static int mdt_intent_getxattr(enum mdt_it_code opcode,
 	RETURN(rc);
 }
 
-static int mdt_intent_getattr(enum mdt_it_code opcode,
+static int mdt_intent_getattr(enum ldlm_intent_flags it_opc,
                               struct mdt_thread_info *info,
                               struct ldlm_lock **lockp,
 			      __u64 flags)
@@ -3619,18 +3608,19 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 	repbody->mbo_eadatasize = 0;
 	repbody->mbo_aclsize = 0;
 
-        switch (opcode) {
-        case MDT_IT_LOOKUP:
+	switch (it_opc) {
+	case IT_LOOKUP:
 		child_bits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM;
-                break;
-        case MDT_IT_GETATTR:
+		break;
+	case IT_GETATTR:
 		child_bits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
 			     MDS_INODELOCK_PERM;
-                break;
-        default:
-                CERROR("Unsupported intent (%d)\n", opcode);
-                GOTO(out_shrink, rc = -EINVAL);
-        }
+		break;
+	default:
+		CERROR("%s: unsupported intent %#x\n",
+		       mdt_obd_name(info->mti_mdt), (unsigned int)it_opc);
+		GOTO(out_shrink, rc = -EINVAL);
+	}
 
 	rc = mdt_init_ucred_intent_getattr(info, reqbody);
 	if (rc)
@@ -3665,7 +3655,7 @@ out_shrink:
         return rc;
 }
 
-static int mdt_intent_layout(enum mdt_it_code opcode,
+static int mdt_intent_layout(enum ldlm_intent_flags it_opc,
 			     struct mdt_thread_info *info,
 			     struct ldlm_lock **lockp,
 			     __u64 flags)
@@ -3678,12 +3668,6 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	int layout_size = 0;
 	int rc = 0;
 	ENTRY;
-
-	if (opcode != MDT_IT_LAYOUT) {
-		CERROR("%s: Unknown intent (%d)\n", mdt_obd_name(info->mti_mdt),
-			opcode);
-		RETURN(-EINVAL);
-	}
 
 	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
 
@@ -3818,7 +3802,7 @@ out:
 	return rc;
 }
 
-static int mdt_intent_open(enum mdt_it_code opcode,
+static int mdt_intent_open(enum ldlm_intent_flags it_opc,
 			   struct mdt_thread_info *info,
 			   struct ldlm_lock **lockp,
 			   __u64 flags)
@@ -3888,99 +3872,60 @@ static int mdt_intent_open(enum mdt_it_code opcode,
 	RETURN(ELDLM_LOCK_ABORTED);
 }
 
-static struct mdt_it_flavor {
-	const struct req_format *it_fmt;
-	int (*it_act)(enum mdt_it_code,
-		      struct mdt_thread_info *,
-		      struct ldlm_lock **,
-		      __u64);
-	enum tgt_handler_flags it_handler_flags;
-} mdt_it_flavor[] = {
-	[MDT_IT_OPEN] = {
-		/*
-		 * OCREAT is not a MUTABOR request as if the file
-		 * already exists.
-		 * We do the extra check of OBD_CONNECT_RDONLY in
-		 * mdt_reint_open() when we really need to create
-		 * the object.
-		 */
-		.it_fmt = &RQF_LDLM_INTENT,
-		.it_act = mdt_intent_open,
-	},
-	[MDT_IT_GETATTR] = {
-		.it_fmt = &RQF_LDLM_INTENT_GETATTR,
-		.it_act = mdt_intent_getattr,
-		.it_handler_flags = HABEO_REFERO,
-	},
-	[MDT_IT_LOOKUP] = {
-		.it_fmt = &RQF_LDLM_INTENT_GETATTR,
-		.it_act = mdt_intent_getattr,
-		.it_handler_flags = HABEO_REFERO,
-	},
-	[MDT_IT_GETXATTR] = {
-		.it_fmt = &RQF_LDLM_INTENT_GETXATTR,
-		.it_act = mdt_intent_getxattr,
-		.it_handler_flags = HABEO_CORPUS,
-	},
-	[MDT_IT_LAYOUT] = {
-		.it_fmt = &RQF_LDLM_INTENT_LAYOUT,
-		.it_act = mdt_intent_layout,
-	},
-	[MDT_IT_GLIMPSE] = {
-		.it_fmt = &RQF_LDLM_INTENT,
-		.it_act = mdt_intent_glimpse,
-	},
-	[MDT_IT_BRW] = {
-		.it_fmt = &RQF_LDLM_INTENT,
-		.it_act = mdt_intent_brw,
-	},
-};
-
-static int mdt_intent_opc(enum ldlm_intent_flags it_code,
+static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 			  struct mdt_thread_info *info,
-			  struct ldlm_lock **lockp, __u64 flags)
+			  struct ldlm_lock **lockp,
+			  u64 flags /* LDLM_FL_* */)
 {
 	struct req_capsule *pill = info->mti_pill;
 	struct ptlrpc_request *req = mdt_info_req(info);
-	struct mdt_it_flavor *flv;
-	enum mdt_it_code opc;
+	const struct req_format *it_format;
+	int (*it_handler)(enum ldlm_intent_flags,
+			  struct mdt_thread_info *,
+			  struct ldlm_lock **,
+			  u64);
+	enum tgt_handler_flags it_handler_flags = 0;
+	struct ldlm_reply *rep;
 	int rc;
 	ENTRY;
 
-	switch (it_code) {
+	switch (it_opc) {
 	case IT_OPEN:
 	case IT_OPEN|IT_CREAT:
-		opc = MDT_IT_OPEN;
+		/*
+		 * OCREAT is not a MUTABOR request since the file may
+		 * already exist. We do the extra check of
+		 * OBD_CONNECT_RDONLY in mdt_reint_open() when we
+		 * really need to create the object.
+		 */
+		it_format = &RQF_LDLM_INTENT;
+		it_handler = &mdt_intent_open;
 		break;
 	case IT_GETATTR:
-		opc = MDT_IT_GETATTR;
-		break;
 	case IT_LOOKUP:
-		opc = MDT_IT_LOOKUP;
+		it_format = &RQF_LDLM_INTENT_GETATTR;
+		it_handler = &mdt_intent_getattr;
+		it_handler_flags = HABEO_REFERO;
 		break;
 	case IT_GETXATTR:
-		opc = MDT_IT_GETXATTR;
+		it_format = &RQF_LDLM_INTENT_GETXATTR;
+		it_handler = &mdt_intent_getxattr;
+		it_handler_flags = HABEO_CORPUS;
 		break;
 	case IT_LAYOUT:
-		opc = MDT_IT_LAYOUT;
-		break;
-	case IT_QUOTA_DQACQ:
-	case IT_QUOTA_CONN:
-		opc = MDT_IT_QUOTA;
+		it_format = &RQF_LDLM_INTENT_LAYOUT;
+		it_handler = &mdt_intent_layout;
 		break;
 	case IT_GLIMPSE:
-		opc = MDT_IT_GLIMPSE;
+		it_format = &RQF_LDLM_INTENT;
+		it_handler = &mdt_intent_glimpse;
 		break;
 	case IT_BRW:
-		opc = MDT_IT_BRW;
+		it_format = &RQF_LDLM_INTENT;
+		it_handler = &mdt_intent_brw;
 		break;
-	default:
-		CERROR("%s: unknown intent code %#x\n",
-		       mdt_obd_name(info->mti_mdt), it_code);
-		RETURN(-EPROTO);
-	}
-
-	if (opc == MDT_IT_QUOTA) {
+	case IT_QUOTA_DQACQ:
+	case IT_QUOTA_CONN: {
 		struct lu_device *qmt = info->mti_mdt->mdt_qmt_dev;
 
 		if (qmt == NULL)
@@ -3996,40 +3941,31 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_code,
 						 flags);
 		RETURN(rc);
 	}
-
-	if (!(0 <= opc && opc < ARRAY_SIZE(mdt_it_flavor)))
+	default:
+		CERROR("%s: unknown intent code %#x\n",
+		       mdt_obd_name(info->mti_mdt), it_opc);
 		RETURN(-EPROTO);
+	}
 
-	flv = &mdt_it_flavor[opc];
+	req_capsule_extend(pill, it_format);
 
-	/* Fail early on unknown requests. */
-	if (flv->it_fmt == NULL)
-		RETURN(-EPROTO);
-
-	req_capsule_extend(pill, flv->it_fmt);
-
-	rc = mdt_unpack_req_pack_rep(info, flv->it_handler_flags);
+	rc = mdt_unpack_req_pack_rep(info, it_handler_flags);
 	if (rc < 0)
 		RETURN(rc);
 
-	if (flv->it_handler_flags & MUTABOR && mdt_rdonly(req->rq_export))
+	if (it_handler_flags & MUTABOR && mdt_rdonly(req->rq_export))
 		RETURN(-EROFS);
 
-	if (flv->it_act != NULL) {
-		struct ldlm_reply *rep;
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_INTENT_DELAY, 10);
 
-		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_INTENT_DELAY, 10);
+	/* execute policy */
+	rc = (*it_handler)(it_opc, info, lockp, flags);
 
-		/* execute policy */
-		rc = flv->it_act(opc, info, lockp, flags);
-
-		/* Check whether the reply has been packed successfully. */
-		if (req->rq_repmsg != NULL) {
-			rep = req_capsule_server_get(info->mti_pill,
-						     &RMF_DLM_REP);
-			rep->lock_policy_res2 =
-				ptlrpc_status_hton(rep->lock_policy_res2);
-		}
+	/* Check whether the reply has been packed successfully. */
+	if (req->rq_repmsg != NULL) {
+		rep = req_capsule_server_get(info->mti_pill, &RMF_DLM_REP);
+		rep->lock_policy_res2 =
+			ptlrpc_status_hton(rep->lock_policy_res2);
 	}
 
 	RETURN(rc);
