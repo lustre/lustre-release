@@ -76,6 +76,7 @@
 #include <linux/slab.h>
 #include <linux/topology.h>
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 
 #include <libcfs/linux/linux-cpu.h>
 
