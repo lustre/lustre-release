@@ -1014,11 +1014,13 @@ static void mdd_changelog_rec_ext_rename(struct changelog_rec *rec,
 					 const struct lu_name *sname)
 {
 	struct changelog_ext_rename *rnm = changelog_rec_rename(rec);
-	size_t extsize = sname->ln_namelen + 1;
+	size_t extsize;
 
 	LASSERT(sfid != NULL);
 	LASSERT(spfid != NULL);
 	LASSERT(sname != NULL);
+
+	extsize = sname->ln_namelen + 1;
 
 	rnm->cr_sfid = *sfid;
 	rnm->cr_spfid = *spfid;
