@@ -4266,27 +4266,26 @@ int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 
 	mutex_lock(&fsdb->fsdb_mutex);
 
-        if (mti->mti_flags &
-            (LDD_F_VIRGIN | LDD_F_UPGRADE14 | LDD_F_WRITECONF)) {
-                /* Generate a log from scratch */
-                if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+	if (mti->mti_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
+		/* Generate a log from scratch */
+		if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
 			rc = mgs_write_log_mdt(env, mgs, fsdb, mti);
-                } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+		} else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
 			rc = mgs_write_log_ost(env, mgs, fsdb, mti);
-                } else {
-                        CERROR("Unknown target type %#x, can't create log for "
-                               "%s\n", mti->mti_flags, mti->mti_svname);
-                }
-                if (rc) {
-                        CERROR("Can't write logs for %s (%d)\n",
-                               mti->mti_svname, rc);
-                        GOTO(out_up, rc);
-                }
-        } else {
-                /* Just update the params from tunefs in mgs_write_log_params */
-                CDEBUG(D_MGS, "Update params for %s\n", mti->mti_svname);
-                mti->mti_flags |= LDD_F_PARAM;
-        }
+		} else {
+			CERROR("Unknown target type %#x, can't create log for %s\n",
+			       mti->mti_flags, mti->mti_svname);
+		}
+		if (rc) {
+			CERROR("Can't write logs for %s (%d)\n",
+			       mti->mti_svname, rc);
+			GOTO(out_up, rc);
+		}
+	} else {
+		/* Just update the params from tunefs in mgs_write_log_params */
+		CDEBUG(D_MGS, "Update params for %s\n", mti->mti_svname);
+		mti->mti_flags |= LDD_F_PARAM;
+	}
 
         /* allocate temporary buffer, where class_get_next_param will
            make copy of a current  parameter */

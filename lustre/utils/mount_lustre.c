@@ -490,12 +490,6 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 		return EINVAL;
 	}
 
-	if (ldd->ldd_flags & LDD_F_UPGRADE14) {
-		fprintf(stderr, "%s: we cannot upgrade %s from this (very old) "
-			"Lustre version\n", progname, source);
-		return EINVAL;
-	}
-
 	if (ldd->ldd_flags & LDD_F_UPDATE)
 		clear_update_ondisk(source, ldd);
 

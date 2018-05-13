@@ -188,17 +188,16 @@ void print_ldd(char *str, struct mkfs_opts *mop)
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %#x\n", ldd->ldd_flags);
-	printf("              (%s%s%s%s%s%s%s%s%s)\n",
-               IS_MDT(ldd) ? "MDT ":"",
-               IS_OST(ldd) ? "OST ":"",
-               IS_MGS(ldd) ? "MGS ":"",
-               ldd->ldd_flags & LDD_F_NEED_INDEX ? "needs_index ":"",
-               ldd->ldd_flags & LDD_F_VIRGIN     ? "first_time ":"",
-               ldd->ldd_flags & LDD_F_UPDATE     ? "update ":"",
-               ldd->ldd_flags & LDD_F_WRITECONF  ? "writeconf ":"",
-               ldd->ldd_flags & LDD_F_NO_PRIMNODE? "no_primnode ":"",
-               ldd->ldd_flags & LDD_F_UPGRADE14  ? "upgrade1.4 ":"");
-        printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
+	printf("              (%s%s%s%s%s%s%s%s)\n",
+	       IS_MDT(ldd) ? "MDT " : "",
+	       IS_OST(ldd) ? "OST " : "",
+	       IS_MGS(ldd) ? "MGS " : "",
+	       ldd->ldd_flags & LDD_F_NEED_INDEX ? "needs_index " : "",
+	       ldd->ldd_flags & LDD_F_VIRGIN     ? "first_time " : "",
+	       ldd->ldd_flags & LDD_F_UPDATE     ? "update " : "",
+	       ldd->ldd_flags & LDD_F_WRITECONF  ? "writeconf " : "",
+	       ldd->ldd_flags & LDD_F_NO_PRIMNODE ? "no_primnode " : "");
+	printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
 	osd_print_ldd_params(mop);
         if (ldd->ldd_userdata[0])
                 printf("Comment: %s\n", ldd->ldd_userdata);
@@ -744,7 +743,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	if (strlen(new_fsname) > 0) {
 		if (!(mop->mo_flags & (MO_FORCEFORMAT | MO_RENAME)) &&
 		     (!(ldd->ldd_flags &
-			(LDD_F_UPGRADE14 | LDD_F_VIRGIN | LDD_F_WRITECONF)))) {
+			(LDD_F_VIRGIN | LDD_F_WRITECONF)))) {
 			fprintf(stderr, "%s: cannot change the name "
 				"of a registered target\n", progname);
 			return 1;
@@ -754,8 +753,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	}
 
 	if (index_option && !(mop->mo_ldd.ldd_flags &
-	      (LDD_F_UPGRADE14 | LDD_F_VIRGIN |
-	       LDD_F_WRITECONF))) {
+			      (LDD_F_VIRGIN | LDD_F_WRITECONF))) {
 		fprintf(stderr, "%s: cannot change the index of"
 			" a registered target\n", progname);
 		return 1;
@@ -902,15 +900,6 @@ int main(int argc, char *const argv[])
 		}
 #endif
 		ldd->ldd_flags &= ~LDD_F_NEED_INDEX;
-	}
-
-	if ((ldd->ldd_flags & (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) ==
-	    (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) {
-		fatal();
-		fprintf(stderr, "Can't find the target index, "
-		"specify with --index\n");
-		ret = EINVAL;
-		goto out;
 	}
 
 	if (ldd->ldd_flags & LDD_F_NEED_INDEX)

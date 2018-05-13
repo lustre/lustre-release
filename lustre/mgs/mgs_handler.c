@@ -438,8 +438,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 	if (mti->mti_flags & LDD_F_NEED_INDEX)
 		mti->mti_flags |= LDD_F_WRITECONF;
 
-	if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPGRADE14 |
-				LDD_F_UPDATE))) {
+	if (!(mti->mti_flags & (LDD_F_WRITECONF | LDD_F_UPDATE))) {
 		/* We're just here as a startup ping. */
 		CDEBUG(D_MGS, "Server %s is running on %s\n",
 		       mti->mti_svname, obd_export_nid2str(tsi->tsi_exp));
@@ -499,8 +498,6 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 		}
 
 		mti->mti_flags |= LDD_F_UPDATE;
-		/* Erased logs means start from scratch. */
-		mti->mti_flags &= ~LDD_F_UPGRADE14;
 	}
 
 	rc = mgs_find_or_make_fsdb(tsi->tsi_env, mgs, mti->mti_fsname, &c_fsdb);
@@ -510,19 +507,13 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 		GOTO(out_norevoke, rc);
 	}
 
-        /*
-         * Log writing contention is handled by the fsdb_mutex.
-         *
-         * It should be alright if someone was reading while we were
-         * updating the logs - if we revoke at the end they will just update
-         * from where they left off.
-         */
-
-        if (mti->mti_flags & LDD_F_UPGRADE14) {
-		CERROR("Can't upgrade from 1.4 (%d)\n", rc);
-		GOTO(out, rc);
-	}
-
+	/*
+	 * Log writing contention is handled by the fsdb_mutex.
+	 *
+	 * It should be alright if someone was reading while we were
+	 * updating the logs - if we revoke at the end they will just update
+	 * from where they left off.
+	 */
         if (mti->mti_flags & LDD_F_UPDATE) {
                 CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname,
                        mti->mti_stripe_index);
@@ -536,10 +527,9 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
                         GOTO(out, rc);
                 }
 
-                mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE |
-                                    LDD_F_NEED_INDEX | LDD_F_WRITECONF |
-                                    LDD_F_UPGRADE14);
-                mti->mti_flags |= LDD_F_REWRITE_LDD;
+		mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE |
+				    LDD_F_NEED_INDEX | LDD_F_WRITECONF);
+		mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
 
 out:

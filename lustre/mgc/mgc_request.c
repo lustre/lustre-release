@@ -2208,11 +2208,6 @@ static int mgc_process_config(struct obd_device *obd, size_t len, void *buf)
 			break;
 		}
 
-		/* COMPAT_146 */
-		/* FIXME only set this for old logs!  Right now this forces
-		   us to always skip the "inside markers" check */
-		cld->cld_cfg.cfg_flags |= CFG_F_COMPAT146;
-
 		rc = mgc_process_log(obd, cld);
 		if (rc == 0 && cld->cld_recover != NULL) {
 			if (OCD_HAS_FLAG(&obd->u.cli.cl_import->

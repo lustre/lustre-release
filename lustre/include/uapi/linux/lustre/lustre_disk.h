@@ -90,7 +90,7 @@
 /** regenerate config logs for this fs or server */
 #define LDD_F_WRITECONF		0x0100
 /** COMPAT_14 */
-#define LDD_F_UPGRADE14		0x0200
+/*#define LDD_F_UPGRADE14		0x0200 deprecated since 1.8 */
 /** process as lctl conf_param */
 #define LDD_F_PARAM		0x0400
 /** all nodes are specified as service nodes */

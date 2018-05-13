@@ -1619,9 +1619,9 @@ int class_config_llog_handler(const struct lu_env *env,
 			}
 		}
 		/* A config command without a start marker before it is
-		   illegal (post 146) */
-		if (!(cfg->cfg_flags & CFG_F_COMPAT146) &&
-		    !(cfg->cfg_flags & CFG_F_MARKER) &&
+		 * illegal
+		 */
+		if (!(cfg->cfg_flags & CFG_F_MARKER) &&
 		    (lcfg->lcfg_command != LCFG_MARKER)) {
 			CWARN("Config not inside markers, ignoring! "
 			      "(inst: %p, uuid: %s, flags: %#x)\n",
