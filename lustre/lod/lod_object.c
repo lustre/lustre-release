@@ -3683,6 +3683,9 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 		OBD_FREE(lod_comp->llc_stripe, sizeof(struct dt_object *) *
 					lod_comp->llc_stripes_allocated);
 		lod_comp->llc_stripe = NULL;
+		OBD_FREE(lod_comp->llc_ost_indices,
+			 sizeof(__u32) * lod_comp->llc_stripes_allocated);
+		lod_comp->llc_ost_indices = NULL;
 		lod_comp->llc_stripes_allocated = 0;
 		lod_obj_set_pool(lo, i, NULL);
 		if (lod_comp->llc_ostlist.op_array) {
@@ -5490,11 +5493,6 @@ out:
 	RETURN(rc);
 }
 
-#define lod_foreach_mirror_comp(comp, lo, mirror_idx)                      \
-for (comp = &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_start];  \
-     comp <= &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_end];   \
-     comp++)
-
 static inline int lod_comp_index(struct lod_object *lo,
 				 struct lod_layout_component *lod_comp)
 {
@@ -6369,6 +6367,10 @@ void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo)
 				 sizeof(struct dt_object *) *
 				 lod_comp->llc_stripes_allocated);
 			lod_comp->llc_stripe = NULL;
+			OBD_FREE(lod_comp->llc_ost_indices,
+				 sizeof(__u32) *
+				 lod_comp->llc_stripes_allocated);
+			lod_comp->llc_ost_indices = NULL;
 			lod_comp->llc_stripes_allocated = 0;
 		}
 		lod_free_comp_entries(lo);

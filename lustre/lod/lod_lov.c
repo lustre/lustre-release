@@ -1121,15 +1121,16 @@ static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 			   struct lov_ost_data_v1 *objs, int comp_idx)
 {
-	struct lod_layout_component	*lod_comp;
-	struct lod_thread_info	*info = lod_env_info(env);
-	struct lod_device	*md;
-	struct lu_object	*o, *n;
-	struct lu_device	*nd;
-	struct dt_object       **stripe;
-	int			 stripe_len;
-	int			 i, rc = 0;
-	__u32			idx;
+	struct lod_layout_component *lod_comp;
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_device *md;
+	struct lu_object *o, *n;
+	struct lu_device *nd;
+	struct dt_object **stripe = NULL;
+	__u32 *ost_indices = NULL;
+	int stripe_len;
+	int i, rc = 0;
+	__u32 idx;
 	ENTRY;
 
 	LASSERT(lo != NULL);
@@ -1146,6 +1147,9 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
 	if (stripe == NULL)
 		RETURN(-ENOMEM);
+	OBD_ALLOC(ost_indices, sizeof(*ost_indices) * stripe_len);
+	if (!ost_indices)
+		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < lod_comp->llc_stripe_count; i++) {
 		if (unlikely(lovea_slot_is_dummy(&objs[i])))
@@ -1180,6 +1184,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 		LASSERT(n);
 
 		stripe[i] = container_of(n, struct dt_object, do_lu);
+		ost_indices[i] = idx;
 	}
 
 out:
@@ -1190,8 +1195,12 @@ out:
 
 		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
 		lod_comp->llc_stripe_count = 0;
+		if (ost_indices)
+			OBD_FREE(ost_indices,
+				 sizeof(*ost_indices) * stripe_len);
 	} else {
 		lod_comp->llc_stripe = stripe;
+		lod_comp->llc_ost_indices = ost_indices;
 		lod_comp->llc_stripes_allocated = stripe_len;
 	}
 

@@ -77,6 +77,7 @@ int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 	struct obd_export  *exp = ost_desc->ltd_exp;
 	int		    rc = 0, found = 0;
 	struct list_head   *list;
+	__u32 id = 0;
 	ENTRY;
 
 	down_write(&lod->lod_qos.lq_rw_sem);
@@ -91,6 +92,8 @@ int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 			found++;
 			break;
 		}
+		if (oss->lqo_id > id)
+			id = oss->lqo_id;
 	}
 
 	if (!found) {
@@ -99,6 +102,8 @@ int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
 			GOTO(out, rc = -ENOMEM);
 		memcpy(&oss->lqo_uuid, &exp->exp_connection->c_remote_uuid,
 		       sizeof(oss->lqo_uuid));
+		++id;
+		oss->lqo_id = id;
 	} else {
 		/* Assume we have to move this one */
 		list_del(&oss->lqo_oss_list);
@@ -864,19 +869,74 @@ static inline void lod_comp_ost_in_use(struct ost_pool *inuse, int ost)
 	}
 }
 
+static inline void lod_avoid_update(struct lod_object *lo,
+				    struct lod_avoid_guide *lag)
+{
+	if (!lod_is_flr(lo))
+		return;
+
+	lag->lag_ost_avail--;
+}
+
+static inline bool lod_should_avoid_ost(struct lod_object *lo,
+					struct lod_avoid_guide *lag,
+					__u32 index)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_tgt_desc *ost = OST_TGT(lod, index);
+	struct lod_qos_oss *lqo = ost->ltd_qos.ltq_oss;
+	bool used = false;
+	int i;
+
+	if (!cfs_bitmap_check(lod->lod_ost_bitmap, index))
+		return true;
+
+	/**
+	 * we've tried our best, all available OSTs have been used in
+	 * overlapped components in the other mirror
+	 */
+	if (lag->lag_ost_avail == 0)
+		return false;
+
+	/* check OSS use */
+	for (i = 0; i < lag->lag_oaa_count; i++) {
+		if (lag->lag_oss_avoid_array[i] == lqo->lqo_id) {
+			used = true;
+			break;
+		}
+	}
+	/**
+	 * if the OSS which OST[index] resides has not been used, we'd like to
+	 * use it
+	 */
+	if (!used)
+		return false;
+
+	/* if the OSS has been used, check whether the OST has been used */
+	if (!cfs_bitmap_check(lag->lag_ost_avoid_bitmap, index))
+		used = false;
+	else
+		QOS_DEBUG("OST%d: has been used in overlapped component "
+			  "in other mirror\n", index);
+	return used;
+}
+
 static int lod_check_and_reserve_ost(const struct lu_env *env,
-				     struct lod_device *m,
+				     struct lod_object *lo,
 				     struct obd_statfs *sfs, __u32 ost_idx,
 				     __u32 speed, __u32 *s_idx,
 				     struct dt_object **stripe,
+				     __u32 *ost_indices,
 				     struct thandle *th,
 				     struct ost_pool *inuse)
 {
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
 	struct dt_object   *o;
 	__u32 stripe_idx = *s_idx;
 	int rc;
 
-	rc = lod_statfs_and_check(env, m, ost_idx, sfs);
+	rc = lod_statfs_and_check(env, lod, ost_idx, sfs);
 	if (rc) {
 		/* this OSP doesn't feel well */
 		goto out_return;
@@ -908,13 +968,22 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 		goto out_return;
 	}
 
+	/**
+	 * try not allocate OSTs used by conflicting component of other mirrors
+	 * for the first and second time.
+	 */
+	if (speed < 2 && lod_should_avoid_ost(lo, lag, ost_idx)) {
+		QOS_DEBUG("#%d: used by overlapped component of other mirror\n",
+			  ost_idx);
+		goto out_return;
+	}
 	/*
 	 * do not put >1 objects on a single OST
 	 */
 	if (lod_qos_is_ost_used(env, ost_idx, stripe_idx))
 		goto out_return;
 
-	o = lod_qos_declare_object_on(env, m, ost_idx, th);
+	o = lod_qos_declare_object_on(env, lod, ost_idx, th);
 	if (IS_ERR(o)) {
 		CDEBUG(D_OTHER, "can't declare new object on #%u: %d\n",
 		       ost_idx, (int) PTR_ERR(o));
@@ -925,9 +994,11 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	/*
 	 * We've successfully declared (reserved) an object
 	 */
+	lod_avoid_update(lo, lag);
 	lod_qos_ost_in_use(env, stripe_idx, ost_idx);
 	lod_comp_ost_in_use(inuse, ost_idx);
 	stripe[stripe_idx] = o;
+	ost_indices[stripe_idx] = ost_idx;
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LOV_CREATE_RACE, 2);
 	stripe_idx++;
 	*s_idx = stripe_idx;
@@ -950,21 +1021,22 @@ out_return:
  * time we give priority to targets which already have objects precreated.
  * Full OSTs are skipped (see lod_qos_dev_is_full() for the details).
  *
- * \param[in] env	execution environment for this thread
- * \param[in] lo	LOD object
- * \param[out] stripe	striping created
- * \param[in] flags	allocation flags (0 or LOV_USES_DEFAULT_STRIPE)
- * \param[in] th	transaction handle
- * \param[in] comp_idx	index of ldo_comp_entries
- * \param[in|out] inuse	array of inuse ost index
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[out] stripe		striping created
+ * \param[out] ost_indices	ost indices of striping created
+ * \param[in] flags		allocation flags (0 or LOV_USES_DEFAULT_STRIPE)
+ * \param[in] th		transaction handle
+ * \param[in] comp_idx		index of ldo_comp_entries
+ * \param[in|out] inuse		array of inuse ost index
  *
  * \retval 0		on success
  * \retval -ENOSPC	if not enough OSTs are found
  * \retval negative	negated errno for other failures
  */
 static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
-			struct dt_object **stripe, int flags,
-			struct thandle *th, int comp_idx,
+			struct dt_object **stripe, __u32 *ost_indices,
+			int flags, struct thandle *th, int comp_idx,
 			struct ost_pool *inuse)
 {
 	struct lod_layout_component *lod_comp;
@@ -1051,8 +1123,9 @@ repeat_find:
 			continue;
 
 		spin_unlock(&lqr->lqr_alloc);
-		rc = lod_check_and_reserve_ost(env, m, sfs, ost_idx, speed,
-					       &stripe_idx, stripe, th, inuse);
+		rc = lod_check_and_reserve_ost(env, lo, sfs, ost_idx, speed,
+					       &stripe_idx, stripe, ost_indices,
+					       th, inuse);
 		spin_lock(&lqr->lqr_alloc);
 
 		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_connecting)
@@ -1105,12 +1178,13 @@ out:
  * structures are protected, but no concurrent allocation is allowed on the
  * same objects.
  *
- * \param[in] env	execution environment for this thread
- * \param[in] lo	LOD object
- * \param[out] stripe	striping created
- * \param[in] th	transaction handle
- * \param[in] comp_idx	index of ldo_comp_entries
- * \param[in|out] inuse	array of inuse ost index
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[out] stripe		striping created
+ * \param[out] ost_indices	ost indices of striping created
+ * \param[in] th		transaction handle
+ * \param[in] comp_idx		index of ldo_comp_entries
+ * \param[in|out] inuse		array of inuse ost index
  *
  * \retval 0		on success
  * \retval -ENODEV	OST index does not exist on file system
@@ -1118,8 +1192,9 @@ out:
  * \retval negative	negated errno on error
  */
 static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
-			      struct dt_object **stripe, struct thandle *th,
-			      int comp_idx, struct ost_pool *inuse)
+			      struct dt_object **stripe, __u32 *ost_indices,
+			      struct thandle *th, int comp_idx,
+			      struct ost_pool *inuse)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device	*m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1190,6 +1265,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 		lod_qos_ost_in_use(env, stripe_count, ost_idx);
 		lod_comp_ost_in_use(inuse, ost_idx);
 		stripe[stripe_count] = o;
+		ost_indices[stripe_count] = ost_idx;
 		stripe_count++;
 	}
 
@@ -1208,13 +1284,14 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
  * release the stripes allocated. All the internal structures are protected,
  * but no concurrent allocation is allowed on the same objects.
  *
- * \param[in] env	execution environment for this thread
- * \param[in] lo	LOD object
- * \param[out] stripe	striping created
- * \param[in] flags	not used
- * \param[in] th	transaction handle
- * \param[in] comp_idx	index of ldo_comp_entries
- * \param[in|out]inuse	array of inuse ost index
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[out] stripe		striping created
+ * \param[out] ost_indices	ost indices of striping created
+ * \param[in] flags		not used
+ * \param[in] th		transaction handle
+ * \param[in] comp_idx		index of ldo_comp_entries
+ * \param[in|out]inuse		array of inuse ost index
  *
  * \retval 0		on success
  * \retval -ENOSPC	if no OST objects are available at all
@@ -1223,8 +1300,8 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
  * \retval negative	errno on failure
  */
 static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
-			      struct dt_object **stripe, int flags,
-			      struct thandle *th, int comp_idx,
+			      struct dt_object **stripe, __u32 *ost_indices,
+			      int flags, struct thandle *th, int comp_idx,
 			      struct ost_pool *inuse)
 {
 	struct lod_layout_component *lod_comp;
@@ -1332,6 +1409,7 @@ repeat_find:
 		lod_qos_ost_in_use(env, stripe_num, ost_idx);
 		lod_comp_ost_in_use(inuse, ost_idx);
 		stripe[stripe_num] = o;
+		ost_indices[stripe_num] = ost_idx;
 		stripe_num++;
 
 		/* We have enough stripes */
@@ -1414,13 +1492,14 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
  * An OST with a higher weight is proportionately more likely to be selected
  * than one with a lower weight.
  *
- * \param[in] env	execution environment for this thread
- * \param[in] lo	LOD object
- * \param[out] stripe	striping created
- * \param[in] flags	0 or LOV_USES_DEFAULT_STRIPE
- * \param[in] th	transaction handle
- * \param[in] comp_idx	index of ldo_comp_entries
- * \param[in|out]inuse	array of inuse ost index
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[out] stripe		striping created
+ * \param[out] ost_indices	ost indices of striping created
+ * \param[in] flags		0 or LOV_USES_DEFAULT_STRIPE
+ * \param[in] th		transaction handle
+ * \param[in] comp_idx		index of ldo_comp_entries
+ * \param[in|out]inuse		array of inuse ost index
  *
  * \retval 0		on success
  * \retval -EAGAIN	not enough OSTs are found for specified stripe count
@@ -1428,13 +1507,14 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
  * \retval negative	errno on failure
  */
 static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
-			 struct dt_object **stripe, int flags,
-			 struct thandle *th, int comp_idx,
+			 struct dt_object **stripe, __u32 *ost_indices,
+			 int flags, struct thandle *th, int comp_idx,
 			 struct ost_pool *inuse)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
+	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
 	struct lod_tgt_desc *ost;
 	struct dt_object *o;
 	__u64 total_weight = 0;
@@ -1563,7 +1643,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		for (i = 0; i < osts->op_count; i++) {
 			__u32 idx = osts->op_array[i];
 
-			if (!cfs_bitmap_check(lod->lod_ost_bitmap, idx))
+			if (lod_should_avoid_ost(lo, lag, idx))
 				continue;
 
 			ost = OST_TGT(lod, idx);
@@ -1595,10 +1675,13 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				continue;
 			}
 
+			lod_avoid_update(lo, lag);
 			lod_qos_ost_in_use(env, nfound, idx);
 			lod_comp_ost_in_use(inuse, idx);
-			stripe[nfound++] = o;
+			stripe[nfound] = o;
+			ost_indices[nfound] = idx;
 			lod_qos_used(lod, osts, idx, &total_weight);
+			nfound++;
 			rc = 0;
 			break;
 		}
@@ -2052,6 +2135,138 @@ free_comp:
 }
 
 /**
+ * prepare enough OST avoidance bitmap space
+ */
+int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_tgt_descs *ltds = &lod->lod_ost_descs;
+	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
+	struct cfs_bitmap *bitmap = NULL;
+	__u32 *new_oss = NULL;
+
+	lag->lag_ost_avail = ltds->ltd_tgtnr;
+
+	/* reset OSS avoid guide array */
+	lag->lag_oaa_count = 0;
+	if (lag->lag_oss_avoid_array && lag->lag_oaa_size < ltds->ltd_tgtnr) {
+		OBD_FREE(lag->lag_oss_avoid_array,
+			 sizeof(__u32) * lag->lag_oaa_size);
+		lag->lag_oss_avoid_array = NULL;
+		lag->lag_oaa_size = 0;
+	}
+
+	/* init OST avoid guide bitmap */
+	if (lag->lag_ost_avoid_bitmap) {
+		if (ltds->ltd_tgtnr <= lag->lag_ost_avoid_bitmap->size) {
+			CFS_RESET_BITMAP(lag->lag_ost_avoid_bitmap);
+		} else {
+			CFS_FREE_BITMAP(lag->lag_ost_avoid_bitmap);
+			lag->lag_ost_avoid_bitmap = NULL;
+		}
+	}
+
+	if (!lag->lag_ost_avoid_bitmap) {
+		bitmap = CFS_ALLOCATE_BITMAP(ltds->ltd_tgtnr);
+		if (!bitmap)
+			return -ENOMEM;
+	}
+
+	if (!lag->lag_oss_avoid_array) {
+		/**
+		 * usually there are multiple OSTs in one OSS, but we don't
+		 * know the exact OSS number, so we choose a safe option,
+		 * using OST count to allocate the array to store the OSS
+		 * id.
+		 */
+		OBD_ALLOC(new_oss, sizeof(*new_oss) * ltds->ltd_tgtnr);
+		if (!new_oss) {
+			CFS_FREE_BITMAP(bitmap);
+			return -ENOMEM;
+		}
+	}
+
+	if (new_oss) {
+		lag->lag_oss_avoid_array = new_oss;
+		lag->lag_oaa_size = ltds->ltd_tgtnr;
+	}
+	if (bitmap)
+		lag->lag_ost_avoid_bitmap = bitmap;
+
+	return 0;
+}
+
+/**
+ * Collect information of used OSTs and OSSs in the overlapped components
+ * of other mirrors
+ */
+void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
+			   int comp_idx)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_layout_component *lod_comp = &lo->ldo_comp_entries[comp_idx];
+	struct cfs_bitmap *bitmap = lag->lag_ost_avoid_bitmap;
+	int i, j;
+
+	/* iterate mirrors */
+	for (i = 0; i < lo->ldo_mirror_count; i++) {
+		struct lod_layout_component *comp;
+
+		/**
+		 * skip mirror containing component[comp_idx], we only
+		 * collect OSTs info of conflicting component in other mirrors,
+		 * so that during read, if OSTs of a mirror's component are
+		 * not available, we still have other mirror with different
+		 * OSTs to read the data.
+		 */
+		comp = &lo->ldo_comp_entries[lo->ldo_mirrors[i].lme_start];
+		if (comp->llc_id == LCME_ID_INVAL ||
+		    mirror_id_of(comp->llc_id) ==
+						mirror_id_of(lod_comp->llc_id))
+			continue;
+
+		/* iterate components of a mirror */
+		lod_foreach_mirror_comp(comp, lo, i) {
+			/* skip non-overlapped or un-instantiated components */
+			if (!lu_extent_is_overlapped(&comp->llc_extent,
+						     &lod_comp->llc_extent) ||
+			    !lod_comp_inited(comp) || !comp->llc_stripe)
+				continue;
+
+			/**
+			 * collect used OSTs index and OSS info from a
+			 * component
+			 */
+			for (j = 0; j < comp->llc_stripe_count; j++) {
+				struct lod_tgt_desc *ost;
+				struct lod_qos_oss *lqo;
+				int k;
+
+				ost = OST_TGT(lod, comp->llc_ost_indices[j]);
+				lqo = ost->ltd_qos.ltq_oss;
+
+				if (cfs_bitmap_check(bitmap, ost->ltd_index))
+					continue;
+
+				cfs_bitmap_set(bitmap, ost->ltd_index);
+				lag->lag_ost_avail--;
+
+				for (k = 0; k < lag->lag_oaa_count; k++) {
+					if (lag->lag_oss_avoid_array[k] ==
+					    lqo->lqo_id)
+						break;
+				}
+				if (k == lag->lag_oaa_count) {
+					lag->lag_oss_avoid_array[k] =
+								lqo->lqo_id;
+					lag->lag_oaa_count++;
+				}
+			}
+		}
+	}
+}
+
+/**
  * Create a striping for an obejct.
  *
  * The function creates a new striping for the object. The function tries QoS
@@ -2076,10 +2291,12 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device      *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	struct dt_object      **stripe;
 	int			stripe_len;
 	int			flag = LOV_USES_ASSIGNED_STRIPE;
 	int			i, rc = 0;
+	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
+	struct dt_object **stripe = NULL;
+	__u32 *ost_indices = NULL;
 	ENTRY;
 
 	LASSERT(lo);
@@ -2112,6 +2329,9 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
 		if (stripe == NULL)
 			GOTO(out, rc = -ENOMEM);
+		OBD_ALLOC(ost_indices, sizeof(*ost_indices) * stripe_len);
+		if (!ost_indices)
+			GOTO(out, rc = -ENOMEM);
 
 		lod_getref(&d->lod_ost_descs);
 		/* XXX: support for non-0 files w/o objects */
@@ -2119,29 +2339,38 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 				d->lod_desc.ld_tgt_count, stripe_len);
 
 		if (lod_comp->llc_ostlist.op_array) {
-			rc = lod_alloc_ost_list(env, lo, stripe, th, comp_idx,
-						inuse);
+			rc = lod_alloc_ost_list(env, lo, stripe, ost_indices,
+						th, comp_idx, inuse);
 		} else if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT) {
-			rc = lod_alloc_qos(env, lo, stripe, flag, th,
-					   comp_idx, inuse);
-			if (rc == -EAGAIN)
-				rc = lod_alloc_rr(env, lo, stripe, flag, th,
-						  comp_idx, inuse);
-		} else {
-			rc = lod_alloc_specific(env, lo, stripe, flag, th,
-						comp_idx, inuse);
-		}
-		lod_putref(d, &d->lod_ost_descs);
+			/**
+			 * collect OSTs and OSSs used in other mirrors whose
+			 * components cross the ldo_comp_entries[comp_idx]
+			 */
+			rc = lod_prepare_avoidance(env, lo);
+			if (rc)
+				GOTO(put_ldts, rc);
 
+			lod_collect_avoidance(lo, lag, comp_idx);
+
+			rc = lod_alloc_qos(env, lo, stripe, ost_indices, flag,
+					   th, comp_idx, inuse);
+			if (rc == -EAGAIN)
+				rc = lod_alloc_rr(env, lo, stripe, ost_indices,
+						  flag, th, comp_idx, inuse);
+		} else {
+			rc = lod_alloc_specific(env, lo, stripe, ost_indices,
+						flag, th, comp_idx, inuse);
+		}
+put_ldts:
+		lod_putref(d, &d->lod_ost_descs);
 		if (rc < 0) {
 			for (i = 0; i < stripe_len; i++)
 				if (stripe[i] != NULL)
 					dt_object_put(env, stripe[i]);
-
-			OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
 			lod_comp->llc_stripe_count = 0;
 		} else {
 			lod_comp->llc_stripe = stripe;
+			lod_comp->llc_ost_indices = ost_indices;
 			lod_comp->llc_stripes_allocated = stripe_len;
 		}
 	} else {
@@ -2172,6 +2401,13 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 	}
 
 out:
+	if (rc < 0) {
+		if (stripe)
+			OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
+		if (ost_indices)
+			OBD_FREE(ost_indices,
+				 sizeof(*ost_indices) * stripe_len);
+	}
 	RETURN(rc);
 }
 

@@ -102,6 +102,7 @@ struct lod_qos_oss {
 							 every obj*/
 	time64_t		 lqo_used;	/* last used time, seconds */
 	__u32			 lqo_ost_count;	/* number of osts on this oss */
+	__u32			 lqo_id;	/* unique oss id */
 };
 
 struct ltd_qos {
@@ -161,6 +162,19 @@ struct lod_tgt_descs {
 	struct mutex		ltd_mutex;
 	/* read/write semaphore used for array relocation */
 	struct rw_semaphore	ltd_rw_sem;
+};
+
+struct lod_avoid_guide {
+	/* ids of OSSs avoid guidance */
+	__u32			*lag_oss_avoid_array;
+	/* number of filled array items */
+	unsigned int		lag_oaa_count;
+	/* number of allocated array items */
+	unsigned int		lag_oaa_size;
+	/* bitmap of OSTs avoid guidance */
+	struct cfs_bitmap	*lag_ost_avoid_bitmap;
+	/* how many OSTs are available for alloc */
+	__u32			lag_ost_avail;
 };
 
 struct lod_device {
@@ -244,6 +258,7 @@ struct lod_layout_component {
 	/* ost list specified with LOV_USER_MAGIC_SPECIFIC lum */
 	struct ost_pool		  llc_ostlist;
 	struct dt_object	**llc_stripe;
+	__u32			 *llc_ost_indices;
 };
 
 struct lod_default_striping {
@@ -319,6 +334,19 @@ struct lod_object {
 	/* slave stripes of striped directory (LMV) */
 	struct dt_object		**ldo_stripe;
 };
+
+#define lod_foreach_mirror_comp(comp, lo, mirror_idx)                      \
+for (comp = &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_start];  \
+     comp <= &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_end];   \
+     comp++)
+
+static inline bool lod_is_flr(const struct lod_object *lo)
+{
+	if (!lo->ldo_is_composite)
+		return false;
+
+	return (lo->ldo_flr_state & LCM_FL_FLR_MASK) != LCM_FL_NONE;
+}
 
 static inline int lod_set_pool(char **pool, const char *new_pool)
 {
@@ -413,6 +441,8 @@ struct lod_thread_info {
 	size_t				lti_comp_size;
 	size_t				lti_count;
 	struct lu_attr			lti_layout_attr;
+	/* object allocation avoid guide info */
+	struct lod_avoid_guide		lti_avoid;
 };
 
 extern const struct lu_device_operations lod_lu_ops;

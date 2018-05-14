@@ -1868,6 +1868,77 @@ test_46() {
 }
 run_test 46 "Verify setstripe --copy option"
 
+test_47() {
+	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
+
+	local file=$DIR/$tdir/$tfile
+	local ids
+	local ost
+	local osts
+
+	test_mkdir $DIR/$tdir
+
+	# test case 1:
+	rm -f $file
+	# mirror1: [comp0]ost0,    [comp1]ost1 and ost2
+	# mirror2: [comp2]    ,    [comp3] should not use ost1 or ost2
+	$LFS mirror create -N -E2m -c1 -o0 --flags=prefer -Eeof -c2 -o1,2 \
+		-N -E2m -c1 -Eeof -c1 $file || error "create FLR $file failed"
+	ids=($($LFS getstripe $file | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+
+	dd if=/dev/zero of=$file bs=1M count=3 || error "dd $file failed"
+	$LFS mirror resync $file || error "resync $file failed"
+
+	ost=$($LFS getstripe -I${ids[2]} $file | awk '/l_ost_idx/{print $5}')
+	if [[ x$ost == "x0," ]]; then
+		$LFS getstripe $file
+		error "component ${ids[2]} objects allocated on $ost " \
+		      "shouldn't on OST0"
+	fi
+
+	ost=$($LFS getstripe -I${ids[3]} $file | awk '/l_ost_idx/{print $5}')
+	if [[ x$ost == "x1," || x$ost == "x2," ]]; then
+		$LFS getstripe $file
+		error "component ${ids[3]} objects allocated on $ost " \
+		      "shouldn't on OST1 or on OST2"
+	fi
+
+	## test case 2:
+	rm -f $file
+	# mirror1: [comp0]    [comp1]
+	# mirror2: [comp2]    [comp3]
+	# mirror3: [comp4]    [comp5]
+	# mirror4: [comp6]    [comp7]
+	$LFS mirror create -N4 -E1m -c1 -Eeof -c1 $file ||
+		error "create FLR $file failed"
+	ids=($($LFS getstripe $file | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+
+	dd if=/dev/zero of=$file bs=1M count=3 || error "dd $file failed"
+	$LFS mirror resync $file || error "resync $file failed"
+
+	for ((i = 0; i < 6; i++)); do
+		osts[$i]=$($LFS getstripe -I${ids[$i]} $file |
+			awk '/l_ost_idx/{print $5}')
+	done
+	# comp[0],comp[2],comp[4] should use different osts
+	if [[ ${osts[0]} == ${osts[2]} || ${osts[0]} == ${osts[4]} ||
+	      ${osts[2]} == ${osts[4]} ]]; then
+		$LFS getstripe $file
+		error "component ${ids[0]}, ${ids[2]}, ${ids[4]} have objects "\
+		      "allocated on duplicated OSTs"
+	fi
+	# comp[1],comp[3],comp[5] should use different osts
+	if [[ ${osts[1]} == ${osts[3]} || ${osts[1]} == ${osts[5]} ||
+	      ${osts[3]} == ${osts[5]} ]]; then
+		$LFS getstripe $file
+		error "component ${ids[1]}, ${ids[3]}, ${ids[5]} have objects "\
+		      "allocated on duplicated OSTs"
+	fi
+
+	return 0
+}
+run_test 47 "Verify mirror obj alloc"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 

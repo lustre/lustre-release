@@ -1727,6 +1727,15 @@ static struct lu_device *lod_device_alloc(const struct lu_env *env,
 	return lu_dev;
 }
 
+static void lod_avoid_guide_fini(struct lod_avoid_guide *lag)
+{
+	if (lag->lag_oss_avoid_array)
+		OBD_FREE(lag->lag_oss_avoid_array,
+			 sizeof(__u32) * lag->lag_oaa_size);
+	if (lag->lag_ost_avoid_bitmap)
+		CFS_FREE_BITMAP(lag->lag_ost_avoid_bitmap);
+}
+
 /**
  * Implementation of lu_device_type_operations::ldto_device_fini() for LOD
  *
@@ -1873,6 +1882,8 @@ static void lod_key_fini(const struct lu_context *ctx,
 	if (info->lti_comp_size > 0)
 		OBD_FREE(info->lti_comp_idx,
 			 info->lti_comp_size * sizeof(__u32));
+
+	lod_avoid_guide_fini(&info->lti_avoid);
 
 	OBD_FREE_PTR(info);
 }
