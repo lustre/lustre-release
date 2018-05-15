@@ -968,9 +968,12 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 		nsb->nsb_reclaim_start = 0;
         }
 
-        ns->ns_obd      = obd;
-        ns->ns_appetite = apt;
-        ns->ns_client   = client;
+	ns->ns_obd = obd;
+	ns->ns_appetite = apt;
+	ns->ns_client = client;
+	ns->ns_name = kstrdup(name, GFP_KERNEL);
+	if (!ns->ns_name)
+		goto out_hash;
 
 	INIT_LIST_HEAD(&ns->ns_list_chain);
 	INIT_LIST_HEAD(&ns->ns_unused_list);
@@ -1022,7 +1025,8 @@ out_sysfs:
 	ldlm_namespace_sysfs_unregister(ns);
 	ldlm_namespace_cleanup(ns, 0);
 out_hash:
-        cfs_hash_putref(ns->ns_rs_hash);
+	kfree(ns->ns_name);
+	cfs_hash_putref(ns->ns_rs_hash);
 out_ns:
         OBD_FREE_PTR(ns);
 out_ref:
@@ -1286,9 +1290,11 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 	ldlm_namespace_debugfs_unregister(ns);
 	ldlm_namespace_sysfs_unregister(ns);
 	cfs_hash_putref(ns->ns_rs_hash);
+	kfree(ns->ns_name);
 	/* Namespace \a ns should be not on list at this time, otherwise
 	 * this will cause issues related to using freed \a ns in poold
-	 * thread. */
+	 * thread.
+	 */
 	LASSERT(list_empty(&ns->ns_list_chain));
 	OBD_FREE_PTR(ns);
 	ldlm_put_ref();
