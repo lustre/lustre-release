@@ -1133,14 +1133,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	strcat(osdname, "-osd");
 	CDEBUG(D_HA, "%s: connect to %s (%s)\n", obd->obd_name, osdname, src);
 
-	if (osp->opd_connect_mdt) {
-		struct client_obd *cli = &osp->opd_obd->u.cli;
-
-		OBD_ALLOC(cli->cl_rpc_lock, sizeof(*cli->cl_rpc_lock));
-		if (!cli->cl_rpc_lock)
-			GOTO(out_fini, rc = -ENOMEM);
-		osp_init_rpc_lock(cli->cl_rpc_lock);
-	}
+	osp_init_rpc_lock(osp);
 
 	osp->opd_dt_dev.dd_lu_dev.ld_ops = &osp_lu_ops;
 	osp->opd_dt_dev.dd_ops = &osp_dt_ops;
@@ -1244,13 +1237,6 @@ out_proc:
 out_ref:
 	ptlrpcd_decref();
 out_disconnect:
-	if (osp->opd_connect_mdt) {
-		struct client_obd *cli = &osp->opd_obd->u.cli;
-		if (cli->cl_rpc_lock != NULL) {
-			OBD_FREE_PTR(cli->cl_rpc_lock);
-			cli->cl_rpc_lock = NULL;
-		}
-	}
 	obd_disconnect(osp->opd_storage_exp);
 out_fini:
 	if (osdname)
@@ -1355,14 +1341,6 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 
 	LASSERT(osp->opd_obd);
 	osp_tunables_fini(osp);
-
-	if (osp->opd_connect_mdt) {
-		struct client_obd *cli = &osp->opd_obd->u.cli;
-		if (cli->cl_rpc_lock != NULL) {
-			OBD_FREE_PTR(cli->cl_rpc_lock);
-			cli->cl_rpc_lock = NULL;
-		}
-	}
 
 	rc = client_obd_cleanup(osp->opd_obd);
 	if (rc != 0) {

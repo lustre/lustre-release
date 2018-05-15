@@ -306,8 +306,6 @@ struct client_obd {
 	atomic_t		 cl_destroy_in_flight;
 	wait_queue_head_t	 cl_destroy_waitq;
 
-        struct mdc_rpc_lock     *cl_rpc_lock;
-
 	/* modify rpcs in flight
 	 * currently used for metadata only */
 	spinlock_t		 cl_mod_rpcs_lock;

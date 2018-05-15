@@ -44,7 +44,6 @@
 #include <lustre_fid.h>
 #include <lustre_update.h>
 #include <lu_target.h>
-#include <lustre_mdc.h>
 
 /*
  * Infrastructure to support tracking of last committed llog record
@@ -145,6 +144,13 @@ struct osp_updates {
 	__u64			ou_generation;
 };
 
+struct osp_rpc_lock {
+	/** Lock protecting in-flight RPC concurrency. */
+	struct mutex		rpcl_mutex;
+	/** Used for MDS/RPC load testing purposes. */
+	unsigned int		rpcl_fakes;
+};
+
 struct osp_device {
 	struct dt_device		 opd_dt_dev;
 	/* corresponded OST index */
@@ -166,6 +172,7 @@ struct osp_device {
 	struct lu_fid			opd_gap_start_fid;
 	int				 opd_gap_count;
 	/* connection to OST */
+	struct osp_rpc_lock		 opd_rpc_lock;
 	struct obd_device		*opd_obd;
 	struct obd_export		*opd_exp;
 	struct obd_uuid			 opd_cluuid;
@@ -503,20 +510,79 @@ static inline struct seq_server_site *osp_seq_site(struct osp_device *osp)
 	return osp->opd_dt_dev.dd_lu_dev.ld_site->ld_seq_site;
 }
 
-#define osp_init_rpc_lock(lck) mdc_init_rpc_lock(lck)
+/**
+ * Serializes in-flight MDT-modifying RPC requests to preserve idempotency.
+ *
+ * This mutex is used to implement execute-once semantics on the MDT.
+ * The MDT stores the last transaction ID and result for every client in
+ * its last_rcvd file. If the client doesn't get a reply, it can safely
+ * resend the request and the MDT will reconstruct the reply being aware
+ * that the request has already been executed. Without this lock,
+ * execution status of concurrent in-flight requests would be
+ * overwritten.
+ *
+ * This imlpementation limits the extent to which we can keep a full pipeline
+ * of in-flight requests from a single client.  This limitation can be
+ * overcome by allowing multiple slots per client in the last_rcvd file,
+ * see LU-6864.
+ */
+#define OSP_FAKE_RPCL_IT ((void *)0x2c0012bfUL)
+
+static inline void osp_init_rpc_lock(struct osp_device *osp)
+{
+	struct osp_rpc_lock *lck = &osp->opd_rpc_lock;
+
+	mutex_init(&lck->rpcl_mutex);
+	lck->rpcl_fakes = 0;
+}
 
 static inline void osp_get_rpc_lock(struct osp_device *osp)
 {
-	struct mdc_rpc_lock *rpc_lock = osp->opd_obd->u.cli.cl_rpc_lock;
+	struct osp_rpc_lock *lck = &osp->opd_rpc_lock;
 
-	mdc_get_rpc_lock(rpc_lock, NULL);
+	/* This would normally block until the existing request finishes.
+	 * If fail_loc is set it will block until the regular request is
+	 * done, then increment rpcl_fakes.  Once that is non-zero it
+	 * will only be cleared when all fake requests are finished.
+	 * Only when all fake requests are finished can normal requests
+	 * be sent, to ensure they are recoverable again.
+	 */
+ again:
+	mutex_lock(&lck->rpcl_mutex);
+
+	if (CFS_FAIL_CHECK_QUIET(OBD_FAIL_MDC_RPCS_SEM) ||
+	    CFS_FAIL_CHECK_QUIET(OBD_FAIL_OSP_RPCS_SEM)) {
+		lck->rpcl_fakes++;
+		mutex_unlock(&lck->rpcl_mutex);
+
+		return;
+	}
+
+	/* This will only happen when the CFS_FAIL_CHECK() was just turned
+	 * off but there are still requests in progress.  Wait until they
+	 * finish.  It doesn't need to be efficient in this extremely rare
+	 * case, just have low overhead in the common case when it isn't true.
+	 */
+	if (unlikely(lck->rpcl_fakes)) {
+		mutex_unlock(&lck->rpcl_mutex);
+		schedule_timeout(cfs_time_seconds(1) / 4);
+
+		goto again;
+	}
 }
 
 static inline void osp_put_rpc_lock(struct osp_device *osp)
 {
-	struct mdc_rpc_lock *rpc_lock = osp->opd_obd->u.cli.cl_rpc_lock;
+	struct osp_rpc_lock *lck = &osp->opd_rpc_lock;
 
-	mdc_put_rpc_lock(rpc_lock, NULL);
+	if (lck->rpcl_fakes) { /* OBD_FAIL_OSP_RPCS_SEM */
+		mutex_lock(&lck->rpcl_mutex);
+
+		if (lck->rpcl_fakes) /* check again under lock */
+			lck->rpcl_fakes--;
+	}
+
+	mutex_unlock(&lck->rpcl_mutex);
 }
 
 static inline int osp_fid_diff(const struct lu_fid *fid1,

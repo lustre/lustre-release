@@ -472,7 +472,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
 #define OBD_FAIL_MDC_OLD_EXT_FLAGS       0x802
 #define OBD_FAIL_MDC_GETATTR_ENQUEUE     0x803
-#define OBD_FAIL_MDC_RPCS_SEM		 0x804
+#define OBD_FAIL_MDC_RPCS_SEM		 0x804 /* deprecated */
 #define OBD_FAIL_MDC_LIGHTWEIGHT	 0x805
 #define OBD_FAIL_MDC_CLOSE		 0x806
 #define OBD_FAIL_MDC_MERGE		 0x807
@@ -657,6 +657,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSP_CHECK_INVALID_REC		0x2100
 #define OBD_FAIL_OSP_CHECK_ENOMEM		0x2101
 #define OBD_FAIL_OSP_FAKE_PRECREATE		0x2102
+#define OBD_FAIL_OSP_RPCS_SEM			0x2104
 
  /* barrier */
 #define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200
