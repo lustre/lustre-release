@@ -762,9 +762,7 @@ retry_open:
 			errmsg = strerror(errno);
 
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "error on ioctl %#jx for '%s' (%d): %s",
-				  (uintmax_t)LL_IOC_LOV_SETSTRIPE, name, fd,
-				  errmsg);
+				  "setstripe error for '%s': %s", name, errmsg);
 
 		close(fd);
 		fd = rc;
@@ -969,8 +967,8 @@ int llapi_dir_set_default_lmv(const char *name,
 			errmsg = strerror(errno);
 
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "error on LL_IOC_LMV_SETSTRIPE '%s' (%d): %s",
-				  name, fd, errmsg);
+				  "default dirstripe error on '%s': %s",
+				  name, errmsg);
 	}
 	close(fd);
 	return rc;
@@ -1066,13 +1064,13 @@ int llapi_dir_create(const char *name, mode_t mode,
 
 	if (ioctl(fd, LL_IOC_LMV_SETSTRIPE, buf)) {
 		char *errmsg = "stripe already set";
+
 		rc = -errno;
 		if (errno != EEXIST && errno != EALREADY)
 			errmsg = strerror(errno);
 
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "error on LL_IOC_LMV_SETSTRIPE '%s' (%d): %s",
-				  name, fd, errmsg);
+				  "dirstripe error on '%s': %s", name, errmsg);
 	}
 	close(fd);
 out:
