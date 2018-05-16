@@ -924,7 +924,38 @@ struct llapi_lu_ladvise {
                 <entry>
                     <para>Additional arguments for future advice types and
                     should be set to zero if not explicitly required for a given
-                    advice type.</para>
+                    advice type.  Advice-specific names for these fields
+                    follow.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> <literal>lla_lockahead_mode</literal></para>
+                </entry>
+                <entry>
+                  <para>When using LU_ADVISE_LOCKAHEAD, the 'lla_value1' field
+                  is used to communicate the requested lock mode, and can be
+                  referred to as lla_lockahead_mode.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> <literal>lla_peradvice_flags</literal></para>
+                </entry>
+                <entry>
+                  <para>When using advices which support them, the 'lla_value2'
+                  field is used to communicate per-advice flags and can be
+                  referred to as 'lla_peradvice_flags'.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> <literal>lla_lockahead_result</literal></para>
+                </entry>
+                <entry>
+                  <para>When using LU_ADVISE_LOCKAHEAD, the 'lla_value3' field
+                  is used to communicate the result of the request, and can be
+                  referred to as lla_lockahead_result.</para>
                 </entry>
               </row>
               </tbody>
@@ -946,6 +977,20 @@ struct llapi_lu_ladvise {
           benefit.  Fetching that data into each client cache with
           <emphasis>fadvise()</emphasis> may not be beneficial, due to much more
           data being sent to the clients.
+          </para>
+          <para>
+          LU_LADVISE_LOCKAHEAD merits a special comment.  While it is possible
+          and encouraged to use it directly in your application to avoid lock
+          contention (primarily for writing to a single file from multiple
+          clients), it will also be available in the MPI-I/O / MPICH library
+          from ANL for use with the i/o aggregation mode of that library.  This
+          is intended (eventually) to be the primary way this feature is used.
+          </para>
+          <para>
+          At the time of writing, this support is proposed as a patch but is
+          not yet merged in to the public ANL code base.  Users are encouraged
+          to check their MPICH documentation and/or check with their library
+          provider about support.
           </para>
           <para>While conceptually similar to the
           <emphasis>posix_fadvise</emphasis> and Linux

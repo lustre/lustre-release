@@ -2147,7 +2147,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
         Server-Side Advice and Hinting
       </title>
       <section><title>Overview</title>
-      <para>Use the <literal>lfs ladvise</literal> command give file access
+      <para>Use the <literal>lfs ladvise</literal> command to give file access
       advices or hints to servers.</para>
       <screen>lfs ladvise [--advice|-a ADVICE ] [--background|-b]
 [--start|-s START[kMGT]]
@@ -2182,6 +2182,12 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
                 cache</para>
                 <para><literal>dontneed</literal> to cleanup data cache on
                 server</para>
+                <para><literal>lockahead</literal> Request an LDLM extent lock
+                of the given mode on the given byte range </para>
+                <para><literal>noexpand</literal> Disable extent lock expansion
+                behavior for I/O to this file descriptor</para>
+                <para><literal>unset</literal> Unset/clear a previous advice
+                (Currently only supports LU_ADVISE_LOCKNOEXPAND)</para>
               </entry>
             </row>
             <row>
@@ -2227,6 +2233,16 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
                   <literal>-e</literal> option.</para>
                 </entry>
             </row>
+            <row>
+                <entry>
+                    <para><literal>-m</literal>, <literal>--mode=</literal>
+                        <literal>MODE</literal></para>
+                </entry>
+                <entry>
+                  <para>Lockahead request mode <literal>{READ,WRITE}</literal>.
+                  Request a lock with this mode.</para>
+                </entry>
+            </row>
           </tbody>
           </tgroup>
         </informaltable>
@@ -2242,6 +2258,19 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
       file, prefetching pages into OSS cache with big linear reads before the
       random IO is a net benefit. Fetching that data into each client cache with
       fadvise() may not be, due to much more data being sent to the client.
+      </para>
+      <para>
+      <literal>ladvise lockahead</literal> is different in that it attempts to
+      control LDLM locking behavior by explicitly requesting LDLM locks in
+      advance of use.  This does not directly affect caching behavior, instead
+      it is used in special cases to avoid pathological results (lock exchange)
+      from the normal LDLM locking behavior.
+      </para>
+      <para>
+      Note that the <literal>noexpand</literal> and <literal>unset</literal>
+      advices work on a specific file descriptor, so using them via lfs has no
+      effect.  They must be used on a particular file descriptor which is used
+      for i/o to have any effect.
       </para>
       <para>The main difference between the Linux <literal>fadvise()</literal>
       system call and <literal>lfs ladvise</literal> is that
@@ -2260,6 +2289,17 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
         will not be read in the near future, thus the OST(s) could clear the
         cache of the file in the memory.</para>
         <screen>client1$ lfs ladvise -a dontneed -s 0 -e 1048576000 /mnt/lustre/file1
+        </screen>
+        <para>The following example requests an LDLM read lock on the first
+	1 MiB of <literal>/mnt/lustre/file1</literal>.  This will attempt to
+	request a lock from the OST holding that region of the file.</para>
+        <screen>client1$ lfs ladvise -a lockahead -m READ -s 0 -e 1M /mnt/lustre/file1
+        </screen>
+        <para>The following example requests an LDLM write lock on
+	[3 MiB, 10 MiB] of <literal>/mnt/lustre/file1</literal>.  This will
+	attempt to request a lock from the OST holding that region of the
+	file.</para>
+        <screen>client1$ lfs ladvise -a lockahead -m WRITE -s 3M -e 10M /mnt/lustre/file1
         </screen>
       </section>
   </section>
