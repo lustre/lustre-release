@@ -74,6 +74,7 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 		RETURN(th);
 
 	tth = container_of(th, struct top_thandle, tt_super);
+	tth->tt_master_sub_thandle->th_ignore_quota = th->th_ignore_quota;
 
 	/* local object must be mdt object, Note: during ost object
 	 * creation, FID is not assigned until osp_create(),
@@ -103,6 +104,7 @@ struct thandle *lod_sub_get_thandle(const struct lu_env *env,
 	sub_th = thandle_get_sub(env, th, sub_obj);
 	if (IS_ERR(sub_th))
 		RETURN(sub_th);
+	sub_th->th_ignore_quota = th->th_ignore_quota;
 
 	if (tth->tt_multiple_thandle != NULL && record_update != NULL &&
 	    th->th_result == 0)

@@ -1901,7 +1901,9 @@ struct thandle {
 				th_wait_submit:1,
 	/* complex transaction which will track updates on all targets,
 	 * including OSTs */
-				th_complex:1;
+				th_complex:1,
+	/* whether ignore quota */
+				th_ignore_quota:1;
 };
 
 /**

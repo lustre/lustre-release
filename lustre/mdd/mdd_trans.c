@@ -48,6 +48,9 @@
 struct thandle *mdd_trans_create(const struct lu_env *env,
                                  struct mdd_device *mdd)
 {
+	struct thandle *th;
+	struct lu_ucred *uc = lu_ucred_check(env);
+
 	/* If blocked by the write barrier, then return "-EINPROGRESS"
 	 * to the caller. Usually, such error will be forwarded to the
 	 * client, and the expected behaviour is to re-try such modify
@@ -55,7 +58,11 @@ struct thandle *mdd_trans_create(const struct lu_env *env,
 	if (unlikely(!barrier_entry(mdd->mdd_bottom)))
 		return ERR_PTR(-EINPROGRESS);
 
-        return mdd_child_ops(mdd)->dt_trans_create(env, mdd->mdd_child);
+	th = mdd_child_ops(mdd)->dt_trans_create(env, mdd->mdd_child);
+	if (!IS_ERR(th) && uc)
+		th->th_ignore_quota = !!md_capable(uc, CFS_CAP_SYS_RESOURCE);
+
+	return th;
 }
 
 int mdd_trans_start(const struct lu_env *env, struct mdd_device *mdd,

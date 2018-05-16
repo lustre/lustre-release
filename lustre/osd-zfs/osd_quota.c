@@ -522,7 +522,9 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	struct lquota_id_info *qi = &info->oti_qi;
 	struct qsd_instance *qsd = osd->od_quota_slave;
 	int rcu, rcg, rcp = 0; /* user & group & project rc */
-	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE);
+	struct thandle *th = &oh->ot_super;
+	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE) ||
+			th->th_ignore_quota;
 	ENTRY;
 
 	if (unlikely(qsd == NULL))

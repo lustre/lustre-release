@@ -634,7 +634,9 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	struct osd_thread_info  *info = osd_oti_get(env);
 	struct lquota_id_info   *qi = &info->oti_qi;
 	int rcu, rcg, rcp = 0; /* user & group & project rc */
-	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE);
+	struct thandle *th = &oh->ot_super;
+	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE) ||
+			th->th_ignore_quota;
 	ENTRY;
 
 	/* let's start with user quota */

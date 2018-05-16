@@ -3063,6 +3063,34 @@ test_59() {
 }
 run_test 59 "lfs project dosen't crash kernel with project disabled"
 
+test_60() {
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+	local testfile=$DIR/$tdir/$tfile
+	local limit=100
+
+	set_mdt_qtype "ug" || error "enable mdt quota failed"
+
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $limit $DIR ||
+		error "set quota failed"
+	quota_show_check a g $TSTUSR
+
+	chown $TSTUSR.$TSTUSR $DIR/$tdir || error "chown $DIR/$tdir failed"
+	chmod g+s $DIR/$tdir || error "chmod g+s failed"
+	$RUNAS createmany -m ${testfile} $((limit-1)) ||
+		error "create many files failed"
+
+	$RUNAS touch $DIR/$tdir/foo && error "regular user should fail"
+
+	# root user can overrun quota
+	runas -u 0 -g 0 touch $DIR/$tdir/foo ||
+		error "root user should succeed"
+
+	cleanup_quota_test
+	resetquota -u $TSTUSR
+}
+run_test 60 "Test quota for root with setgid"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
