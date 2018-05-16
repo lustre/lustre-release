@@ -74,6 +74,7 @@ Provides:	@PACKAGE@-dkms
 Obsoletes:	@PACKAGE@-dkms
 %endif
 %if %{with ldiskfs}
+Requires:	patch
 Requires:	%{ext4_source_rpm}
 Requires:	@PACKAGE@-osd-ldiskfs-mount
 Conflicts:	@PACKAGE@-zfs-dkms
@@ -152,6 +153,8 @@ dkms remove -m %{module} -v %{version} --all --rpm_safe_upgrade
 exit 0
 
 %changelog
+* Wed May 16 2018 Joe Grund <joe.grund@intel.com>
+- Add patch requirement
 * Mon Aug  1 2016 Nathaniel Clark <nathaniel.l.clark@intel.com>
 - Add option to build either ldiskfs or zfs flavour of server version
 * Sat Jan 23 2016 Bruno Faccini <bruno.faccini@intel.com>
