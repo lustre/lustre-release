@@ -861,11 +861,17 @@ struct llapi_lu_ladvise {
           descriptor <emphasis>fd</emphasis> from an application to one or more
           Lustre servers.  Optionally, <emphasis>flags</emphasis> can modify how
           the advice will be processed via bitwise-or'd values:</para>
-          <itemizedlist><listitem>
-          <para><literal>LF_ASYNC</literal>:  Clients return to userspace
+          <itemizedlist>
+          <listitem>
+          <para><literal>LF_ASYNC</literal>: Clients return to userspace
           immediately after submitting ladvise RPCs, leaving server threads to
           handle the advices asynchronously.</para>
-          </listitem></itemizedlist>
+          </listitem>
+          <listitem>
+          <para><literal>LF_UNSET</literal>: Unset/clear a previous advice
+          (Currently only supports LU_ADVISE_LOCKNOEXPAND).</para>
+          </listitem>
+          </itemizedlist>
           <para>Each of the <emphasis>ladvise</emphasis> elements is an
           <emphasis>llapi_lu_ladvise</emphasis> structure, which contains the
           following fields:
@@ -945,7 +951,8 @@ struct llapi_lu_ladvise {
                 <entry>
                   <para>When using advices which support them, the 'lla_value2'
                   field is used to communicate per-advice flags and can be
-                  referred to as 'lla_peradvice_flags'.</para>
+                  referred to as 'lla_peradvice_flags'. Both LF_ASYNC and
+                  LF_UNSET are supported as peradvice flags.</para>
                 </entry>
               </row>
               <row>

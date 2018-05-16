@@ -2186,8 +2186,6 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
                 of the given mode on the given byte range </para>
                 <para><literal>noexpand</literal> Disable extent lock expansion
                 behavior for I/O to this file descriptor</para>
-                <para><literal>unset</literal> Unset/clear a previous advice
-                (Currently only supports LU_ADVISE_LOCKNOEXPAND)</para>
               </entry>
             </row>
             <row>
@@ -2267,10 +2265,9 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
       from the normal LDLM locking behavior.
       </para>
       <para>
-      Note that the <literal>noexpand</literal> and <literal>unset</literal>
-      advices work on a specific file descriptor, so using them via lfs has no
-      effect.  They must be used on a particular file descriptor which is used
-      for i/o to have any effect.
+      Note that the <literal>noexpand</literal> advice works on a specific
+      file descriptor, so using it via lfs has no effect.  It must be used
+      on a particular file descriptor which is used for i/o to have any effect.
       </para>
       <para>The main difference between the Linux <literal>fadvise()</literal>
       system call and <literal>lfs ladvise</literal> is that
