@@ -522,11 +522,11 @@ your distribution.
 		dnl #
 		dnl # ZFS 0.7.0 feature: SPA_FEATURE_USEROBJ_ACCOUNTING
 		dnl #
-		LB_CHECK_COMPILE([if zfs has native dnode accounting supported],
-		dmu_objset_id_quota_upgrade, [
+		LB_CHECK_COMPILE([if ZFS has native dnode accounting supported],
+		dmu_objset_userobjused_enabled, [
 			#include <sys/dmu_objset.h>
 		],[
-			dmu_objset_id_quota_upgrade(NULL);
+			dmu_objset_userobjused_enabled(NULL);
 		],[
 			AC_DEFINE(HAVE_DMU_USEROBJ_ACCOUNTING, 1,
 				[Have native dnode accounting in ZFS])
