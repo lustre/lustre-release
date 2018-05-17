@@ -985,12 +985,6 @@ struct obd_ops {
 			  char *ostname);
 	int (*o_pool_rem)(struct obd_device *obd, char *poolname,
 			  char *ostname);
-	void (*o_getref)(struct obd_device *obd);
-	void (*o_putref)(struct obd_device *obd);
-	/*
-	 * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
-	 * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
-	 * Also, add a wrapper function in include/linux/obd_class.h. */
 };
 
 /* lmv structures */

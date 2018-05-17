@@ -271,6 +271,8 @@ int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
 int lov_fini_statfs_set(struct lov_request_set *set);
 
 /* lov_obd.c */
+void lov_tgts_getref(struct obd_device *obd);
+void lov_tgts_putref(struct obd_device *obd);
 void lov_stripe_lock(struct lov_stripe_md *md);
 void lov_stripe_unlock(struct lov_stripe_md *md);
 void lov_fix_desc(struct lov_desc *desc);

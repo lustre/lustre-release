@@ -331,7 +331,7 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
         int rc;
         ENTRY;
 
-        obd_getref(obd);
+	lov_tgts_getref(obd);
 
         tgt = obd->u.lov.lov_tgts[index];
         LASSERT(tgt != NULL);
@@ -356,8 +356,10 @@ static int lov_cl_add_target(const struct lu_env *env, struct lu_device *dev,
 			rc = PTR_ERR(cl);
 		}
         }
-        obd_putref(obd);
-        RETURN(rc);
+
+	lov_tgts_putref(obd);
+
+	RETURN(rc);
 }
 
 /**
@@ -449,7 +451,7 @@ static int lov_process_config(const struct lu_env *env,
 	int gen;
 	u32 index;
 
-	obd_getref(obd);
+	lov_tgts_getref(obd);
 
 	cmd = cfg->lcfg_command;
 
@@ -492,7 +494,7 @@ static int lov_process_config(const struct lu_env *env,
 	}
 	}
 out:
-	obd_putref(obd);
+	lov_tgts_putref(obd);
 	RETURN(rc);
 }
 

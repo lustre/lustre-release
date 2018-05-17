@@ -628,13 +628,11 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, ping);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);
 	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_del);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, getref);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, putref);
+	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);
+	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
 
-	CLASSERT(NUM_OBD_STATS == OBD_COUNTER_OFFSET(putref) + 1);
+	CLASSERT(NUM_OBD_STATS == OBD_COUNTER_OFFSET(pool_rem) + 1);
 }
 EXPORT_SYMBOL(lprocfs_init_ops_stats);
 

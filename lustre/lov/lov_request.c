@@ -289,7 +289,7 @@ static int cb_statfs_update(void *cookie, int rc)
 	if (rc)
 		GOTO(out, rc);
 
-        obd_getref(lovobd);
+	lov_tgts_getref(lovobd);
         tgt = lov->lov_tgts[lovreq->rq_idx];
         if (!tgt || !tgt->ltd_active)
                 GOTO(out_update, rc);
@@ -303,8 +303,7 @@ static int cb_statfs_update(void *cookie, int rc)
 
 out_update:
         lov_update_statfs(osfs, lov_sfs, success);
-        obd_putref(lovobd);
-
+	lov_tgts_putref(lovobd);
 out:
 	RETURN(0);
 }
