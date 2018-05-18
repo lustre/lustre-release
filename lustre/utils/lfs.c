@@ -269,14 +269,16 @@ command_t mirror_cmdlist[] = {
 	  MIRROR_EXTEND_HELP },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
-	"usage: lfs mirror split <--mirror-id <mirror_id>> [--destroy|-d] "
-	"[-f <new_file>] <mirrored file>\n"
-	"\tmirror_id:    The numerical unique identifier for a mirror. It\n"
-	"\t              can be fetched by lfs getstripe command.\n"
-	"\tnew_file:     This option indicates the layout of the split\n"
-	"\t              mirror will be stored into. If not specified,\n"
-	"\t              a new file named <mirrored_file>.mirror~<mirror_id>\n"
-	"\t              will be used.\n" },
+	"usage: lfs mirror split <--mirror-id <mirror_id> | \n"
+	"\t		<--component-id|-I <comp_id>> [--destroy|-d] \n"
+	"\t		[-f <new_file>] <mirrored file>\n"
+	"\tmirror_id:   The numerical unique identifier for a mirror. It\n"
+	"\t             can be fetched by lfs getstripe command.\n"
+	"\tcomp_id:     Unique component ID within a mirror.\n"
+	"\tnew_file:    This option indicates the layout of the split\n"
+	"\t             mirror will be stored into. If not specified,\n"
+	"\t             a new file named <mirrored_file>.mirror~<mirror_id>\n"
+	"\t             will be used.\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
@@ -1255,12 +1257,14 @@ static inline int mirror_sanity_check_one(struct llapi_layout *layout)
  *	       in case the victim file(s) contains the same data as the
  *	       original mirrored file.
  * @MF_DESTROY: Indicates to delete the mirror from the mirrored file.
+ * @MF_COMP_ID: specified component id instead of mirror id
  *
  * Flags for extending a mirrored file.
  */
 enum mirror_flags {
 	MF_NO_VERIFY	= 0x1,
 	MF_DESTROY	= 0x2,
+	MF_COMP_ID	= 0x4,
 };
 
 /**
@@ -1681,7 +1685,7 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 	return rc;
 }
 
-static int verify_id(struct llapi_layout *layout, void *cbdata)
+static int find_mirror_id(struct llapi_layout *layout, void *cbdata)
 {
 	uint32_t id;
 	int rc;
@@ -1696,7 +1700,21 @@ static int verify_id(struct llapi_layout *layout, void *cbdata)
 	return LLAPI_LAYOUT_ITER_CONT;
 }
 
-static int mirror_split(const char *fname, __u16 mirror_id,
+static int find_comp_id(struct llapi_layout *layout, void *cbdata)
+{
+	uint32_t id;
+	int rc;
+
+	rc = llapi_layout_comp_id_get(layout, &id);
+	if (rc < 0)
+		return rc;
+
+	if (id == *(__u32 *)cbdata)
+		return LLAPI_LAYOUT_ITER_STOP;
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+static int mirror_split(const char *fname, __u32 id,
 			enum mirror_flags mflags, const char *victim_file)
 {
 	struct llapi_layout *layout;
@@ -1710,7 +1728,7 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 	int fd, fdv;
 	int rc;
 
-	/* check fname contains mirror with mirror_id */
+	/* check fname contains mirror with mirror_id/comp_id */
 	layout = llapi_layout_get_by_path(fname, 0);
 	if (!layout) {
 		fprintf(stderr,
@@ -1737,7 +1755,12 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 		goto free_layout;
 	}
 
-	rc = llapi_layout_comp_iterate(layout, verify_id, &mirror_id);
+	if (mflags & MF_COMP_ID) {
+		rc = llapi_layout_comp_iterate(layout, find_comp_id, &id);
+		id = mirror_id_of(id);
+	} else {
+		rc = llapi_layout_comp_iterate(layout, find_mirror_id, &id);
+	}
 	if (rc < 0) {
 		fprintf(stderr, "error %s: failed to iterate layout of '%s'\n",
 			progname, fname);
@@ -1745,7 +1768,7 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 	} else if (rc == LLAPI_LAYOUT_ITER_CONT) {
 		fprintf(stderr,
 		     "error %s: file '%s' does not contain mirror with id %u\n",
-			progname, fname, mirror_id);
+			progname, fname, id);
 		goto free_layout;
 	}
 
@@ -1793,7 +1816,7 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 							O_LOV_DELAY_CREATE);
 		} else {
 			snprintf(victim, sizeof(victim), "%s.mirror~%u",
-				 fname, mirror_id);
+				 fname, id);
 			fdv = open(victim, flags, S_IRUSR | S_IWUSR);
 		}
 	} else {
@@ -1828,7 +1851,7 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 	data->lil_flags = LL_LEASE_LAYOUT_SPLIT;
 	data->lil_count = 2;
 	data->lil_ids[0] = fdv;
-	data->lil_ids[1] = mirror_id;
+	data->lil_ids[1] = id;
 	rc = llapi_lease_set(fd, data);
 	if (rc <= 0) {
 		if (rc == 0) /* lost lease lock */
@@ -3090,9 +3113,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		goto usage_error;
 	}
 
-	if (!comp_del && !comp_set && comp_id != 0) {
+	if (!comp_del && !comp_set && (opc != SO_MIRROR_SPLIT) &&
+	    comp_id != 0) {
 		fprintf(stderr,
-			"%s %s: option -I can only be used with --component-del\n",
+		"%s %s: option -I can only be used with --component-del or --component-set or lfs mirror split\n",
 			progname, argv[0]);
 		goto usage_error;
 	}
@@ -3194,13 +3218,17 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			result = mirror_extend(fname, mirror_list,
 					       mirror_flags);
 		} else if (opc == SO_MIRROR_SPLIT) {
-			if (mirror_id == 0) {
+			if (mirror_id == 0 && comp_id == 0) {
 				fprintf(stderr,
-					"%s %s: no mirror id is specified\n",
+			"%s %s: no mirror id or component id is specified\n",
 					progname, argv[0]);
 				goto usage_error;
 			}
-			result = mirror_split(fname, mirror_id, mirror_flags,
+			if (mirror_id != 0)
+				comp_id = mirror_id;
+			else
+				mirror_flags |= MF_COMP_ID;
+			result = mirror_split(fname, comp_id, mirror_flags,
 					      has_m_file ? mirror_list->m_file :
 					      NULL);
 		} else if (layout != NULL) {

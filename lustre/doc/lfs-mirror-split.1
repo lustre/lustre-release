@@ -3,12 +3,14 @@
 lfs mirror split \- split a specified mirror from an existing mirrored file
 .SH SYNOPSIS
 .B lfs mirror split
-<\fB\-\-mirror\-id\fR <\fImirror_id\fR>>
+{\fB\-\-mirror\-id\fR <\fImirror_id\fR> | \fB\-\-component\-id\fR|\fB\-I\fR
+<\fIcomp_id\fR>}
 [\fB\-\-destroy\fR|\fB\-d\fR]
 [\fB\-f\fR <\fInew_file\fR>]
 <\fImirrored_file\fR>
 .SH DESCRIPTION
-This command splits a mirror with ID <\fImirror_id\fR> out of a mirrored
+This command splits a mirror with mirror ID <\fImirror_id\fR> or containing
+a component with <\fIcomp_id\fR> out of a mirrored
 file specified by the path name \fImirrored_file\fR. By default, the layout of
 the split mirror will be stored into a new file named
 <\fImirrored_file\fR>.mirror~<\fImirror_id\fR>. If \fB\-\-destroy\fR|\fB\-d\fR
@@ -27,6 +29,9 @@ will return an error.
 The numerical unique identifier for a mirror. The mirror ID is unique within a
 mirrored file and is automatically assigned at file creation or extension time.
 It can be fetched by \fBlfs getstripe\fR command (see \fBlfs(1)\fR).
+.TP
+.BR \-\-comp\-id\fR\ <\fIcomp_id\fR>
+The numerical unique identifier for a component contained withiin a mirror.
 .TP
 .BR \-\-destroy\fR|\fB\-d\fR
 This option indicates the split mirror will be destroyed.
