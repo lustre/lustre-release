@@ -103,10 +103,6 @@ static void lov_putref(struct obd_device *obd)
 			/* Disconnect */
 			__lov_del_obd(obd, tgt);
 		}
-
-		if (lov->lov_tgts_kobj)
-			kobject_put(lov->lov_tgts_kobj);
-
 	} else {
 		mutex_unlock(&lov->lov_lock);
 	}
@@ -228,9 +224,6 @@ static int lov_connect(const struct lu_env *env,
                 lov->lov_ocd = *data;
 
 	obd_getref(obd);
-
-	lov->lov_tgts_kobj = kobject_create_and_add("target_obds",
-						    &obd->obd_kset.kobj);
 
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 tgt = lov->lov_tgts[i];
@@ -783,6 +776,12 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(out, rc);
 
 	rc = lov_tunables_init(obd);
+	if (rc)
+		GOTO(out, rc);
+
+	lov->lov_tgts_kobj = kobject_create_and_add("target_obds",
+						    &obd->obd_kset.kobj);
+
 out:
 	return rc;
 }
@@ -793,6 +792,11 @@ static int lov_cleanup(struct obd_device *obd)
 	struct list_head *pos, *tmp;
         struct pool_desc *pool;
         ENTRY;
+
+	if (lov->lov_tgts_kobj) {
+		kobject_put(lov->lov_tgts_kobj);
+		lov->lov_tgts_kobj = NULL;
+	}
 
 	list_for_each_safe(pos, tmp, &lov->lov_pool_list) {
 		pool = list_entry(pos, struct pool_desc, pool_list);
