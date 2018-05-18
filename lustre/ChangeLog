@@ -33,6 +33,7 @@ TBD Intel Corporation
          3.13.0-101          (Ubuntu 14.04)
          4.4.0-85.108        (Ubuntu 14.04.5 LTS)
          4.4.0-116           (Ubuntu 16.04)
+         4.15.0-20           (Ubuntu 18.04)
          vanilla linux 4.6.7
        * Recommended e2fsprogs version: 1.42.13.wc6 or newer
        * Recommended ZFS / SPL version: 0.7.9
