@@ -16491,7 +16491,8 @@ test_270f() {
 		error "Can't set directory default striping"
 
 	# exceed maximum stripe size
-	$LFS setstripe -E $((dom_limit * 2)) -L mdt $dom
+	$LFS setstripe -E $((dom_limit * 2)) -L mdt $dom ||
+		error "Can't create file with $((dom_limit * 2)) DoM stripe"
 	[ $($LFS getstripe -S $dom) -eq $((dom_limit * 2)) ] &&
 		error "Able to create DoM component size more than LOD limit"
 
@@ -16500,6 +16501,19 @@ test_270f() {
 						lod.$mdtname.dom_stripesize)
 	[ 0 -eq ${dom_current} ] ||
 		error "Can't set zero DoM stripe limit"
+	rm $dom
+
+	# attempt to create DoM file on server with disabled DoM should
+	# remove DoM entry from layout and be succeed
+	$LFS setstripe -E $dom_limit -L mdt -E -1 $dom ||
+		error "Can't create DoM file (DoM is disabled)"
+	[ $($LFS getstripe -L $dom) == "mdt" ] &&
+		error "File has DoM component while DoM is disabled"
+	rm $dom
+
+	# attempt to create DoM file with only DoM stripe should return error
+	$LFS setstripe -E $dom_limit -L mdt $dom &&
+		error "Able to create DoM-only file while DoM is disabled"
 
 	# too low values to be aligned with smallest stripe size 64K
 	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=30000
@@ -16525,7 +16539,8 @@ test_270f() {
 		error "Can't create DoM component size after limit change"
 	do_facet mds1 $LCTL set_param -n \
 				lod.$mdtname.dom_stripesize=$((dom_limit / 2))
-	$LFS setstripe -E $dom_limit -L mdt ${dom}_big
+	$LFS setstripe -E $dom_limit -L mdt ${dom}_big ||
+		error "Can't create DoM file after limit decrease"
 	[ $($LFS getstripe -S ${dom}_big) -eq $((dom_limit / 2)) ] ||
 		error "Can create big DoM component after limit decrease"
 	touch ${dom}_def ||
