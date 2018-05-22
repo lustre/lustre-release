@@ -994,7 +994,11 @@ again:
 		oclb.oclb_items = 0;
 #ifdef HAVE_DIR_CONTEXT
 		oclb.ctx.pos = filp->f_pos;
+#ifdef HAVE_ITERATE_SHARED
+		rc = fops->iterate_shared(filp, &oclb.ctx);
+#else
 		rc = fops->iterate(filp, &oclb.ctx);
+#endif
 		filp->f_pos = oclb.ctx.pos;
 #else
 		rc = fops->readdir(filp, &oclb, osd_stripe_dir_filldir);
@@ -6365,7 +6369,11 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 
 #ifdef HAVE_DIR_CONTEXT
 	buf.ctx.pos = filp->f_pos;
+#ifdef HAVE_ITERATE_SHARED
+	rc = inode->i_fop->iterate_shared(filp, &buf.ctx);
+#else
 	rc = inode->i_fop->iterate(filp, &buf.ctx);
+#endif
 	filp->f_pos = buf.ctx.pos;
 #else
 	rc = inode->i_fop->readdir(filp, &buf, osd_ldiskfs_filldir);
