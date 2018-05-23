@@ -1,9 +1,8 @@
 #!/bin/bash
 #set -x
 
+DIR="$1"
 MAX_FILES=${MAX_FILES:-20}
-DIR=${DIR:-$1}
-DIR=${DIR:-"/mnt/lustre/racer"}
 DURATION=${DURATION:-$((60*5))}
 MDSCOUNT=${MDSCOUNT:-1}
 
