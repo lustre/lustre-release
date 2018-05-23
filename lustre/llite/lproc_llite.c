@@ -100,25 +100,26 @@ static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(blocksize);
 
-static int ll_stat_blksize_seq_show(struct seq_file *m, void *v)
+static ssize_t stat_blocksize_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
 {
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 
-	seq_printf(m, "%u\n", sbi->ll_stat_blksize);
-
-	return 0;
+	return sprintf(buf, "%u\n", sbi->ll_stat_blksize);
 }
 
-static ssize_t ll_stat_blksize_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
+static ssize_t stat_blocksize_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer,
+				    size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -129,7 +130,7 @@ static ssize_t ll_stat_blksize_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ll_stat_blksize);
+LUSTRE_RW_ATTR(stat_blocksize);
 
 static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -968,25 +969,27 @@ static ssize_t xattr_cache_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(xattr_cache);
 
-static int ll_tiny_write_seq_show(struct seq_file *m, void *v)
+static ssize_t tiny_write_show(struct kobject *kobj,
+			       struct attribute *attr,
+			       char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 
-	seq_printf(m, "%u\n", !!(sbi->ll_flags & LL_SBI_TINY_WRITE));
-	return 0;
+	return sprintf(buf, "%u\n", !!(sbi->ll_flags & LL_SBI_TINY_WRITE));
 }
 
-static ssize_t ll_tiny_write_seq_write(
-	struct file *file, const char __user *buffer, size_t count, loff_t *off)
+static ssize_t tiny_write_store(struct kobject *kobj,
+				struct attribute *attr,
+				const char *buffer,
+				size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -999,28 +1002,29 @@ static ssize_t ll_tiny_write_seq_write(
 
 	return count;
 }
-LPROC_SEQ_FOPS(ll_tiny_write);
+LUSTRE_RW_ATTR(tiny_write);
 
-static int ll_fast_read_seq_show(struct seq_file *m, void *v)
+static ssize_t fast_read_show(struct kobject *kobj,
+			      struct attribute *attr,
+			      char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 
-	seq_printf(m, "%u\n", !!(sbi->ll_flags & LL_SBI_FAST_READ));
-	return 0;
+	return sprintf(buf, "%u\n", !!(sbi->ll_flags & LL_SBI_FAST_READ));
 }
 
-static ssize_t
-ll_fast_read_seq_write(struct file *file, const char __user *buffer,
-		       size_t count, loff_t *off)
+static ssize_t fast_read_store(struct kobject *kobj,
+			       struct attribute *attr,
+			       const char *buffer,
+			       size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -1033,27 +1037,29 @@ ll_fast_read_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ll_fast_read);
+LUSTRE_RW_ATTR(fast_read);
 
-static int ll_pio_seq_show(struct seq_file *m, void *v)
+static ssize_t pio_show(struct kobject *kobj,
+			struct attribute *attr,
+			char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 
-	seq_printf(m, "%u\n", !!(sbi->ll_flags & LL_SBI_PIO));
-	return 0;
+	return sprintf(buf, "%u\n", !!(sbi->ll_flags & LL_SBI_PIO));
 }
 
-static ssize_t ll_pio_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t pio_store(struct kobject *kobj,
+			 struct attribute *attr,
+			 const char *buffer,
+			 size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -1066,7 +1072,7 @@ static ssize_t ll_pio_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ll_pio);
+LUSTRE_RW_ATTR(pio);
 
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
@@ -1189,8 +1195,6 @@ LPROC_SEQ_FOPS(ll_nosquash_nids);
 struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"site",
 	  .fops	=	&ll_site_stats_fops			},
-	{ .name	=	"stat_blocksize",
-	  .fops	=	&ll_stat_blksize_fops			},
 	{ .name	=	"max_read_ahead_mb",
 	  .fops	=	&ll_max_readahead_mb_fops		},
 	{ .name	=	"max_read_ahead_per_file_mb",
@@ -1209,12 +1213,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_root_squash_fops			},
 	{ .name	=	"nosquash_nids",
 	  .fops	=	&ll_nosquash_nids_fops			},
-	{ .name =	"fast_read",
-	  .fops =	&ll_fast_read_fops,			},
-	{ .name =	"pio",
-	  .fops =	&ll_pio_fops,				},
-	{ .name =	"tiny_write",
-	  .fops =	&ll_tiny_write_fops,			},
 	{ NULL }
 };
 
@@ -1222,6 +1220,7 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 
 static struct attribute *llite_attrs[] = {
 	&lustre_attr_blocksize.attr,
+	&lustre_attr_stat_blocksize.attr,
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
@@ -1242,6 +1241,9 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_max_easize.attr,
 	&lustre_attr_default_easize.attr,
 	&lustre_attr_xattr_cache.attr,
+	&lustre_attr_fast_read.attr,
+	&lustre_attr_pio.attr,
+	&lustre_attr_tiny_write.attr,
 	NULL,
 };
 
