@@ -277,7 +277,7 @@ int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
 	}
 	ret = 1;
 
-	for (; index <= 0xff && ret > 0; index++) {
+	for (; index <= 0xff; index++) {
 		blk = le32_to_cpu(ref[index]);
 		if (!blk)       /* No reference */
 			continue;
@@ -288,7 +288,10 @@ int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
 		else
 			ret = walk_block_dqentry(env, obj, type, blk, 0, it);
 
+		if (ret <= 0)
+			break;
 	}
+
 	it->oiq_blk[depth + 1] = blk;
 	it->oiq_index[depth] = index;
 
