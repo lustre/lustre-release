@@ -204,7 +204,6 @@ lnet_ipif_enumerate(char ***namesp)
 	i = 0;
 	for_each_netdev(sock_net(sock->sk), dev) {
 		nob = strnlen(dev->name, IFNAMSIZ);
-		CERROR("netdev %s\n", dev->name);
 		if (nob == IFNAMSIZ) {
 			/* no space for terminating NULL */
 			CERROR("interface name %.*s too long (%d max)\n",
