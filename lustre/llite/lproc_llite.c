@@ -44,6 +44,38 @@
 #include "vvp_internal.h"
 
 struct proc_dir_entry *proc_lustre_fs_root;
+static struct kobject *llite_kobj;
+
+int llite_tunables_register(void)
+{
+	int rc = 0;
+
+	proc_lustre_fs_root = lprocfs_register("llite", proc_lustre_root,
+					       NULL, NULL);
+	if (IS_ERR(proc_lustre_fs_root)) {
+		rc = PTR_ERR(proc_lustre_fs_root);
+		CERROR("cannot register '/proc/fs/lustre/llite': rc = %d\n",
+		       rc);
+		proc_lustre_fs_root = NULL;
+		return rc;
+	}
+
+	llite_kobj = class_setup_tunables("llite");
+	if (IS_ERR(llite_kobj)) {
+		rc = PTR_ERR(llite_kobj);
+		llite_kobj = NULL;
+	}
+
+	return rc;
+}
+
+void llite_tunables_unregister(void)
+{
+	if (llite_kobj)
+		kobject_put(llite_kobj);
+
+	lprocfs_remove(&proc_lustre_fs_root);
+}
 
 #ifdef CONFIG_PROC_FS
 /* /proc/lustre/llite mount point registration */
@@ -59,7 +91,7 @@ static int ll_blksize_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%u\n", osfs.os_bsize);
 	return rc;
@@ -104,7 +136,7 @@ static int ll_kbytestotal_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_blocks;
@@ -125,7 +157,7 @@ static int ll_kbytesfree_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_bfree;
@@ -146,7 +178,7 @@ static int ll_kbytesavail_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_bavail;
@@ -167,7 +199,7 @@ static int ll_filestotal_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%llu\n", osfs.os_files);
 	return rc;
@@ -181,7 +213,7 @@ static int ll_filesfree_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%llu\n", osfs.os_ffree);
 	return rc;
@@ -202,9 +234,10 @@ LPROC_SEQ_FOPS_RO(ll_client_type);
 static int ll_fstype_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
 	LASSERT(sb != NULL);
-	seq_printf(m, "%s\n", sb->s_type->name);
+	seq_printf(m, "%s\n", sbi->ll_mnt.mnt->mnt_sb->s_type->name);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ll_fstype);
@@ -1166,6 +1199,23 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 
 #define MAX_STRING_SIZE 128
 
+static struct attribute *llite_attrs[] = {
+	NULL,
+};
+
+static void llite_kobj_release(struct kobject *kobj)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	complete(&sbi->ll_kobj_unregister);
+}
+
+static struct kobj_type llite_ktype = {
+	.default_attrs  = llite_attrs,
+	.sysfs_ops      = &lustre_sysfs_ops,
+	.release        = llite_kobj_release,
+};
+
 static const struct llite_file_opcode {
         __u32       opcode;
         __u32       type;
@@ -1254,34 +1304,20 @@ static const char *ra_stat_string[] = {
 LPROC_SEQ_FOPS_RO_TYPE(llite, name);
 LPROC_SEQ_FOPS_RO_TYPE(llite, uuid);
 
-int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
-				   struct super_block *sb)
+int ll_debugfs_register_super(struct super_block *sb, const char *name)
 {
-	struct lprocfs_vars lvars[2];
-	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	char name[MAX_STRING_SIZE + 1], *ptr;
-	int err, id, len, rc;
+	struct lprocfs_vars lvars[2];
+	int err, id, rc;
+
 	ENTRY;
-
 	memset(lvars, 0, sizeof(lvars));
-
-	name[MAX_STRING_SIZE] = '\0';
 	lvars[0].name = name;
 
 	LASSERT(sbi != NULL);
 
-	/* Get fsname */
-	len = strlen(lsi->lsi_lmd->lmd_profile);
-	ptr = strrchr(lsi->lsi_lmd->lmd_profile, '-');
-	if (ptr && (strcmp(ptr, "-client") == 0))
-		len -= 7;
-
-	/* Mount info */
-	snprintf(name, MAX_STRING_SIZE, "%.*s-%p", len,
-		 lsi->lsi_lmd->lmd_profile, sb);
-
-	sbi->ll_proc_root = lprocfs_register(name, parent, NULL, NULL);
+	sbi->ll_proc_root = lprocfs_register(name, proc_lustre_fs_root,
+					     NULL, NULL);
 	if (IS_ERR(sbi->ll_proc_root)) {
 		err = PTR_ERR(sbi->ll_proc_root);
 		sbi->ll_proc_root = NULL;
@@ -1312,7 +1348,8 @@ int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
 	sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
 					    LPROCFS_STATS_FLAG_NONE);
 	if (sbi->ll_stats == NULL)
-		GOTO(out, err = -ENOMEM);
+		GOTO(out_proc, err = -ENOMEM);
+
 	/* do counter init */
 	for (id = 0; id < LPROC_LL_FILE_OPCODES; id++) {
 		__u32 type = llite_opcode_table[id].type;
@@ -1328,14 +1365,15 @@ int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
 				     (type & LPROCFS_CNTR_AVGMINMAX),
 				     llite_opcode_table[id].opname, ptr);
 	}
+
 	err = lprocfs_register_stats(sbi->ll_proc_root, "stats", sbi->ll_stats);
 	if (err)
-		GOTO(out, err);
+		GOTO(out_stats, err);
 
 	sbi->ll_ra_stats = lprocfs_alloc_stats(ARRAY_SIZE(ra_stat_string),
 					       LPROCFS_STATS_FLAG_NONE);
 	if (sbi->ll_ra_stats == NULL)
-		GOTO(out, err = -ENOMEM);
+		GOTO(out_stats, err = -ENOMEM);
 
 	for (id = 0; id < ARRAY_SIZE(ra_stat_string); id++)
 		lprocfs_counter_init(sbi->ll_ra_stats, id, 0,
@@ -1343,19 +1381,31 @@ int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
 	err = lprocfs_register_stats(sbi->ll_proc_root, "read_ahead_stats",
 				     sbi->ll_ra_stats);
 	if (err)
-		GOTO(out, err);
-
+		GOTO(out_ra_stats, err);
 
 	err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_llite_obd_vars, sb);
 	if (err)
-		GOTO(out, err);
+		GOTO(out_ra_stats, err);
 
-out:
-	if (err) {
-		lprocfs_remove(&sbi->ll_proc_root);
-		lprocfs_free_stats(&sbi->ll_ra_stats);
-		lprocfs_free_stats(&sbi->ll_stats);
-	}
+	/* Yes we also register sysfs mount kset here as well */
+	sbi->ll_kset.kobj.parent = llite_kobj;
+	sbi->ll_kset.kobj.ktype = &llite_ktype;
+	init_completion(&sbi->ll_kobj_unregister);
+	err = kobject_set_name(&sbi->ll_kset.kobj, "%s", name);
+	if (err)
+		GOTO(out_ra_stats, err);
+
+	err = kset_register(&sbi->ll_kset);
+	if (err)
+		GOTO(out_ra_stats, err);
+	RETURN(0);
+out_ra_stats:
+	lprocfs_free_stats(&sbi->ll_ra_stats);
+out_stats:
+	lprocfs_free_stats(&sbi->ll_stats);
+out_proc:
+	lprocfs_remove(&sbi->ll_proc_root);
+
 	RETURN(err);
 }
 
@@ -1408,8 +1458,13 @@ out:
 	RETURN(err);
 }
 
-void lprocfs_ll_unregister_mountpoint(struct ll_sb_info *sbi)
+void ll_debugfs_unregister_super(struct super_block *sb)
 {
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	kset_unregister(&sbi->ll_kset);
+	wait_for_completion(&sbi->ll_kobj_unregister);
+
         if (sbi->ll_proc_root) {
                 lprocfs_remove(&sbi->ll_proc_root);
                 lprocfs_free_stats(&sbi->ll_ra_stats);

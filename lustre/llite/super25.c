@@ -100,7 +100,6 @@ void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 
 static int __init lustre_init(void)
 {
-	struct proc_dir_entry *entry;
 	struct lnet_process_id lnet_id;
 	struct timespec64 ts;
 	int i, rc, seed[2];
@@ -125,15 +124,9 @@ static int __init lustre_init(void)
 	if (ll_file_data_slab == NULL)
 		GOTO(out_cache, rc = -ENOMEM);
 
-	entry = lprocfs_register("llite", proc_lustre_root, NULL, NULL);
-	if (IS_ERR(entry)) {
-		rc = PTR_ERR(entry);
-		CERROR("cannot register '/proc/fs/lustre/llite': rc = %d\n",
-		       rc);
+	rc = llite_tunables_register();
+	if (rc)
 		GOTO(out_cache, rc);
-	}
-
-	proc_lustre_fs_root = entry;
 
 	cfs_get_random_bytes(seed, sizeof(seed));
 
@@ -152,7 +145,7 @@ static int __init lustre_init(void)
 
 	rc = vvp_global_init();
 	if (rc != 0)
-		GOTO(out_proc, rc);
+		GOTO(out_tunables, rc);
 
 	cl_inode_fini_env = cl_env_alloc(&cl_inode_fini_refcheck,
 					 LCT_REMEMBER | LCT_NOREF);
@@ -175,15 +168,11 @@ out_inode_fini_env:
 	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 out_vvp:
 	vvp_global_fini();
-out_proc:
-	lprocfs_remove(&proc_lustre_fs_root);
+out_tunables:
+	llite_tunables_unregister();
 out_cache:
-	if (ll_inode_cachep != NULL)
-		kmem_cache_destroy(ll_inode_cachep);
-
-	if (ll_file_data_slab != NULL)
-		kmem_cache_destroy(ll_file_data_slab);
-
+	kmem_cache_destroy(ll_inode_cachep);
+	kmem_cache_destroy(ll_file_data_slab);
 	return rc;
 }
 
@@ -193,7 +182,7 @@ static void __exit lustre_exit(void)
 	lustre_register_kill_super_cb(NULL);
 	lustre_register_client_process_config(NULL);
 
-	lprocfs_remove(&proc_lustre_fs_root);
+	llite_tunables_unregister();
 
 	ll_xattr_fini();
 	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);

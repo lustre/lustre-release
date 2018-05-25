@@ -738,7 +738,7 @@ static void client_common_put_super(struct super_block *sb)
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
 
-	lprocfs_ll_unregister_mountpoint(sbi);
+	ll_debugfs_unregister_super(sb);
 
 	obd_fid_fini(sbi->ll_md_exp->exp_obd);
 	obd_disconnect(sbi->ll_md_exp);
@@ -963,6 +963,8 @@ void ll_lli_init(struct ll_inode_info *lli)
 	memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));
 }
 
+#define MAX_STRING_SIZE 128
+
 #ifndef HAVE_SUPER_SETUP_BDI_NAME
 
 #define LSI_BDI_INITIALIZED	0x00400000
@@ -970,8 +972,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 #ifndef HAVE_BDI_CAP_MAP_COPY
 # define BDI_CAP_MAP_COPY	0
 #endif
-
-#define MAX_STRING_SIZE 128
 
 static int super_setup_bdi_name(struct super_block *sb, char *fmt, ...)
 {
@@ -1009,11 +1009,14 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	struct config_llog_instance *cfg;
 	/* %p for void* in printf needs 16+2 characters: 0xffffffffffffffff */
 	const int instlen = sizeof(cfg->cfg_instance) * 2 + 2;
-	int	md_len = 0;
-	int	dt_len = 0;
-	int	err;
-	ENTRY;
+	char name[MAX_STRING_SIZE];
+	int md_len = 0;
+	int dt_len = 0;
+	char *ptr;
+	int len;
+	int err;
 
+	ENTRY;
 	CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
 
 	try_module_get(THIS_MODULE);
@@ -1039,16 +1042,24 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
 	sb->s_d_op = &ll_d_ops;
 #endif
+	/* Get fsname */
+	len = strlen(lsi->lsi_lmd->lmd_profile);
+	ptr = strrchr(lsi->lsi_lmd->lmd_profile, '-');
+	if (ptr && (strcmp(ptr, "-client") == 0))
+		len -= 7;
 
-	/* Call lprocfs_ll_register_mountpoint() before lustre_process_log()
-	 * so that "llite.*.*" params can be processed correctly. */
-	if (proc_lustre_fs_root != NULL) {
-		err = lprocfs_ll_register_mountpoint(proc_lustre_fs_root, sb);
-		if (err < 0) {
-			CERROR("%s: could not register mountpoint in llite: "
-			       "rc = %d\n", ll_get_fsname(sb, NULL, 0), err);
-			err = 0;
-		}
+	/* Mount info */
+	snprintf(name, MAX_STRING_SIZE, "%.*s-%p", len,
+		 lsi->lsi_lmd->lmd_profile, sb);
+
+	/* Call ll_debugfs_register_super() before lustre_process_log()
+	 * so that "llite.*.*" params can be processed correctly.
+	 */
+	err = ll_debugfs_register_super(sb, name);
+	if (err < 0) {
+		CERROR("%s: could not register mountpoint in llite: rc = %d\n",
+		       ll_get_fsname(sb, NULL, 0), err);
+		err = 0;
 	}
 
 	/* Generate a string unique to this super, in case some joker tries
@@ -1095,7 +1106,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 
 out_proc:
 	if (err < 0)
-		lprocfs_ll_unregister_mountpoint(sbi);
+		ll_debugfs_unregister_super(sb);
 out_free:
 	if (md)
 		OBD_FREE(md, md_len);
@@ -1778,10 +1789,9 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 	return ll_setattr_raw(de, attr, false);
 }
 
-int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
+int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 		       u32 flags)
 {
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct obd_statfs obd_osfs;
 	time64_t max_age;
 	int rc;
@@ -1795,7 +1805,7 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                 RETURN(rc);
         }
 
-        osfs->os_type = sb->s_magic;
+	osfs->os_type = LL_SUPER_MAGIC;
 
 	CDEBUG(D_SUPER, "MDC blocks %llu/%llu objects %llu/%llu\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
@@ -1841,7 +1851,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
         ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STAFS, 1);
 
 	/* Some amount of caching on the client is allowed */
-	rc = ll_statfs_internal(sb, &osfs, 0);
+	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, 0);
 	if (rc)
 		return rc;
 

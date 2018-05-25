@@ -541,6 +541,9 @@ struct ll_sb_info {
 
 	/* st_blksize returned by stat(2), when non-zero */
 	unsigned int		  ll_stat_blksize;
+
+	struct kset		  ll_kset;	/* sysfs object */
+	struct completion	  ll_kobj_unregister;
 };
 
 /*
@@ -657,6 +660,8 @@ struct ll_file_data {
 };
 
 extern struct proc_dir_entry *proc_lustre_fs_root;
+void llite_tunables_unregister(void);
+int llite_tunables_register(void);
 
 static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 {
@@ -710,20 +715,17 @@ void cl_put_grouplock(struct ll_grouplock *lg);
 
 /* llite/lproc_llite.c */
 #ifdef CONFIG_PROC_FS
-int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
-				   struct super_block *sb);
 int lprocfs_ll_register_obd(struct super_block *sb, const char *obdname);
-void lprocfs_ll_unregister_mountpoint(struct ll_sb_info *sbi);
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
 extern struct lprocfs_vars lprocfs_llite_obd_vars[];
 #else
-static inline int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
-					struct super_block *sb) {return 0; }
-static inline int lprocfs_ll_register_obd(struct super_block *sb,
-					  const char *obdname) {return 0; }
-static inline void lprocfs_ll_unregister_mountpoint(struct ll_sb_info *sbi) {}
+static inline int ll_debugs_register_super(struct super_block *sb,
+					   const char *name)
+{ return 0; }
 static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
 #endif
+int ll_debugfs_register_super(struct super_block *sb, const char *name);
+void ll_debugfs_unregister_super(struct super_block *sb);
 
 enum {
 	LPROC_LL_DIRTY_HITS,
@@ -920,7 +922,7 @@ void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import);
 int ll_setattr(struct dentry *de, struct iattr *attr);
 int ll_statfs(struct dentry *de, struct kstatfs *sfs);
-int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
+int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 		       u32 flags);
 int ll_update_inode(struct inode *inode, struct lustre_md *md);
 int ll_read_inode2(struct inode *inode, void *opaque);
