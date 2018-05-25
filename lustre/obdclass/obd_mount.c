@@ -1414,6 +1414,15 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 			rc = lmd_parse_network(lmd, s1 + 8);
 			if (rc)
 				goto invalid;
+
+			/* check if LNet dynamic peer discovery is activated */
+			if (LNetGetPeerDiscoveryStatus()) {
+				CERROR("LNet Dynamic Peer Discovery is enabled "
+				       "on this node. 'network' mount option "
+				       "cannot be taken into account.\n");
+				goto invalid;
+			}
+
 			clear++;
 		}
 

@@ -211,6 +211,12 @@ This option can be useful in case of several Lustre client mount
 points on the same node, with each mount point using a different
 network. It is also interesting when running Lustre clients from
 containers, by restricting each container to a specific network.
+.PP
+.RS
+Warning! 'network' option is incompatible with LNet Dynamic Peer Discovery.
+If you want to restrict client NID, please make sure LNet Dynamic Peer Discovery
+is disabled.
+.RE
 .SH SERVER OPTIONS
 In addition to the standard mount options and backing disk type
 (e.g. ldiskfs) options listed in

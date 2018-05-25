@@ -4147,3 +4147,16 @@ out:
 
 	return rc;
 }
+
+/**
+ * Retrieve peer discovery status.
+ *
+ * \retval 1 if lnet_peer_discovery_disabled is 0
+ * \retval 0 if lnet_peer_discovery_disabled is 1
+ */
+int
+LNetGetPeerDiscoveryStatus(void)
+{
+	return !lnet_peer_discovery_disabled;
+}
+EXPORT_SYMBOL(LNetGetPeerDiscoveryStatus);
