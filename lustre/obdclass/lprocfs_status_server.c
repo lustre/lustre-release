@@ -586,90 +586,24 @@ int lprocfs_exp_cleanup(struct obd_export *exp)
 	return 0;
 }
 
-#define LPROCFS_OBD_OP_INIT(base, stats, op)			\
-do {								\
-	unsigned int coffset = base + OBD_COUNTER_OFFSET(op);	\
-	LASSERT(coffset < stats->ls_num);			\
-	lprocfs_counter_init(stats, coffset, 0, #op, "reqs");	\
-} while (0)
-
-void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
-{
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, iocontrol);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, get_info);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_info_async);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, setup);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, precleanup);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, cleanup);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, process_config);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, postrecov);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, add_conn);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, del_conn);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, connect);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, reconnect);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, disconnect);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_init);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_fini);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, fid_alloc);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, statfs_async);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, create);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, setattr);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, getattr);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, preprw);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, commitrw);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_export);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, import_event);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, health_check);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, get_uuid);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, ping);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_new);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_del);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_add);
-	LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_rem);
-
-	CLASSERT(NUM_OBD_STATS == OBD_COUNTER_OFFSET(pool_rem) + 1);
-}
-EXPORT_SYMBOL(lprocfs_init_ops_stats);
-
-int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
+int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned int num_stats)
 {
 	struct lprocfs_stats *stats;
-	unsigned int num_stats;
-	int rc, i;
+	int rc;
 
 	LASSERT(obd->obd_stats == NULL);
 	LASSERT(obd->obd_proc_entry != NULL);
-	LASSERT(obd->obd_cntr_base == 0);
 
-	num_stats = NUM_OBD_STATS + num_private_stats;
 	stats = lprocfs_alloc_stats(num_stats, 0);
 	if (stats == NULL)
 		return -ENOMEM;
 
-	lprocfs_init_ops_stats(num_private_stats, stats);
-
-	for (i = num_private_stats; i < num_stats; i++) {
-		/* If this LBUGs, it is likely that an obd
-		 * operation was added to struct obd_ops in
-		 * <obd.h>, and that the corresponding line item
-		 * LPROCFS_OBD_OP_INIT(.., .., opname)
-		 * is missing from the list above. */
-		LASSERTF(stats->ls_cnt_header[i].lc_name != NULL,
-			 "Missing obd_stat initializer obd_op "
-			 "operation at offset %d.\n", i - num_private_stats);
-	}
 	rc = lprocfs_register_stats(obd->obd_proc_entry, "stats", stats);
-	if (rc < 0) {
+	if (rc < 0)
 		lprocfs_free_stats(&stats);
-	} else {
-		obd->obd_stats  = stats;
-		obd->obd_cntr_base = num_private_stats;
-	}
+	else
+		obd->obd_stats = stats;
+
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_alloc_obd_stats);

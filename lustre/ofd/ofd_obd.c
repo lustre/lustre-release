@@ -72,8 +72,6 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 	int			 rc;
 	ENTRY;
 
-	LASSERT(obd->obd_uses_nid_stats);
-
 	if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
 		/* Self-export gets no proc entry */
 		RETURN(0);
@@ -84,13 +82,10 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 		RETURN(rc == -EALREADY ? 0 : rc);
 
 	stats = exp->exp_nid_stats;
-	stats->nid_stats = lprocfs_alloc_stats(NUM_OBD_STATS +
-						LPROC_OFD_STATS_LAST,
-						LPROCFS_STATS_FLAG_NOPERCPU);
+	stats->nid_stats = lprocfs_alloc_stats(LPROC_OFD_STATS_LAST,
+					       LPROCFS_STATS_FLAG_NOPERCPU);
 	if (stats->nid_stats == NULL)
 		RETURN(-ENOMEM);
-
-	lprocfs_init_ops_stats(LPROC_OFD_STATS_LAST, stats->nid_stats);
 
 	ofd_stats_counter_init(stats->nid_stats);
 

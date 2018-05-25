@@ -69,12 +69,10 @@ int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 		RETURN(rc == -EALREADY ? 0 : rc);
 
 	stats = exp->exp_nid_stats;
-	stats->nid_stats = lprocfs_alloc_stats(NUM_OBD_STATS + LPROC_MGS_LAST,
-						LPROCFS_STATS_FLAG_NOPERCPU);
+	stats->nid_stats = lprocfs_alloc_stats(LPROC_MGS_LAST,
+					       LPROCFS_STATS_FLAG_NOPERCPU);
 	if (stats->nid_stats == NULL)
 		RETURN(-ENOMEM);
-
-	lprocfs_init_ops_stats(LPROC_MGS_LAST, stats->nid_stats);
 
 	mgs_stats_counter_init(stats->nid_stats);
 

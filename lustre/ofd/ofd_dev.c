@@ -734,8 +734,6 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 		GOTO(obd_cleanup, rc);
 	}
 
-	obd->obd_uses_nid_stats = 1;
-
 	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);

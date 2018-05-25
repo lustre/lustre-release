@@ -615,7 +615,6 @@ struct obd_device {
 					 * (for /proc/status only!!) */
 		obd_no_ir:1,		/* no imperative recovery. */
 		obd_process_conf:1,	/* device is processing mgs config */
-		obd_uses_nid_stats:1,	/* maintain per-client OBD stats */
 		obd_checksum_dump:1;	/* dump pages upon cksum error */
 
         /* use separate field as it is set in interrupt to don't mess with
@@ -703,7 +702,6 @@ struct obd_device {
 
 	/* Fields used by LProcFS */
 	struct lprocfs_stats		*obd_stats;
-	unsigned int			obd_cntr_base;
 
 	unsigned int			 obd_md_cntr_base;
 	struct lprocfs_stats		*obd_md_stats;

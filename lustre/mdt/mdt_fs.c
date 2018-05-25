@@ -67,8 +67,6 @@ int mdt_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 	int rc;
 	ENTRY;
 
-	LASSERT(!obd->obd_uses_nid_stats);
-
 	rc = lprocfs_exp_setup(exp, client_nid);
 	if (rc != 0)
 		/* Mask error for already created /proc entries */
