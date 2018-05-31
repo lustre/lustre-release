@@ -267,7 +267,7 @@ index 7282d07..e6805e6 100644
  		/*
  		 * pa is already deleted so we use the value obtained
  		 * from the bitmap and continue.
-@@ -4031,14 +4034,11 @@ ext4_mb_discard_group_preallocations(struct super_block *sb,
+@@ -4031,15 +4034,11 @@ ext4_mb_discard_group_preallocations(struct super_block *sb,
  	bitmap_bh = ext4_read_block_bitmap(sb, group);
 	if (IS_ERR(bitmap_bh)) {
 		err = PTR_ERR(bitmap_bh);
@@ -278,17 +278,18 @@ index 7282d07..e6805e6 100644
  
  	err = ext4_mb_load_buddy(sb, group, &e4b);
  	if (err) {
--		ext4_error(sb, "Error loading buddy information for %u", group);
+-		ext4_warning(sb, "Error %d loading buddy information for %u",
+-			     err, group);
  		put_bh(bitmap_bh);
  		return 0;
  	}
 @@ -4198,17 +4198,12 @@ repeat:
- 		group = ext4_get_group_number(sb, pa->pa_pstart);
  
- 		err = ext4_mb_load_buddy(sb, group, &e4b);
+		err = ext4_mb_load_buddy_gfp(sb, group, &e4b,
+					     GFP_NOFS|__GFP_NOFAIL);
 -		if (err) {
--			ext4_error(sb, "Error loading buddy information for %u",
--					group);
+-			ext4_error(sb, "Error %d loading buddy information for %u",
+-				   err, group);
 +		if (err)
  			return;
 -		}
@@ -302,13 +303,13 @@ index 7282d07..e6805e6 100644
  			continue;
  		}
 @@ -4467,11 +4462,8 @@ ext4_mb_discard_lg_preallocations(struct super_block *sb,
- 	list_for_each_entry_safe(pa, tmp, &discard_list, u.pa_tmp_list) {
  
- 		group = ext4_get_group_number(sb, pa->pa_pstart);
--		if (ext4_mb_load_buddy(sb, group, &e4b)) {
--			ext4_error(sb, "Error loading buddy information for %u",
--					group);
-+		if (ext4_mb_load_buddy(sb, group, &e4b))
+		err = ext4_mb_load_buddy_gfp(sb, group, &e4b,
+					     GFP_NOFS|__GFP_NOFAIL);
+-		if (err) {
+-			ext4_error(sb, "Error %d loading buddy information for %u",
+-				   err, group);
++		if (err)
  			continue;
 -		}
  		ext4_lock_group(sb, group);
@@ -389,8 +390,8 @@ index 7282d07..e6805e6 100644
  
  	ret = ext4_mb_load_buddy(sb, group, &e4b);
 -	if (ret) {
--		ext4_error(sb, "Error in loading buddy "
--				"information for %u", group);
+-		ext4_warning(sb, "Error %d loading buddy information for %u",
+-			     ret, group);
 +	if (ret)
  		return ret;
 -	}
