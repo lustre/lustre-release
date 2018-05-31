@@ -93,7 +93,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <linux/kthread.h>
+#include <linux/workqueue.h>
 #include <libcfs/linux/linux-mem.h>
 #include <lustre_dlm.h>
 #include <cl_object.h>
@@ -1073,10 +1073,8 @@ __u32 ldlm_pool_get_lvf(struct ldlm_pool *pl)
 	return atomic_read(&pl->pl_lock_volume_factor);
 }
 
-static struct ptlrpc_thread *ldlm_pools_thread;
 static struct shrinker *ldlm_pools_srv_shrinker;
 static struct shrinker *ldlm_pools_cli_shrinker;
-static struct completion ldlm_pools_comp;
 
 /*
 * count locks from all namespaces (if possible). Returns number of
@@ -1244,108 +1242,35 @@ static int ldlm_pools_cli_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 
 #endif /* HAVE_SHRINKER_COUNT */
 
-time64_t ldlm_pools_recalc(enum ldlm_side client)
+static time64_t ldlm_pools_recalc_delay(enum ldlm_side side)
 {
-	unsigned long nr_l = 0, nr_p = 0, l;
 	struct ldlm_namespace *ns;
 	struct ldlm_namespace *ns_old = NULL;
-	int nr, equal = 0;
 	/* seconds of sleep if no active namespaces */
-	time64_t time = client ? LDLM_POOL_CLI_DEF_RECALC_PERIOD :
-				 LDLM_POOL_SRV_DEF_RECALC_PERIOD;
+	time64_t delay = side == LDLM_NAMESPACE_SERVER ?
+				 LDLM_POOL_SRV_DEF_RECALC_PERIOD :
+				 LDLM_POOL_CLI_DEF_RECALC_PERIOD;
+	int nr;
 
-	/*
-	 * No need to setup pool limit for client pools.
-	 */
-	if (client == LDLM_NAMESPACE_SERVER) {
+	/* Recalc at least ldlm_namespace_nr(side) namespaces. */
+	for (nr = ldlm_namespace_nr_read(side); nr > 0; nr--) {
+		int skip;
 		/*
-		 * Check all modest namespaces first.
+		 * Lock the list, get first @ns in the list, getref, move it
+		 * to the tail, unlock and call pool recalc. This way we avoid
+		 * calling recalc under @ns lock, which is really good as we
+		 * get rid of potential deadlock on side nodes when canceling
+		 * locks synchronously.
 		 */
-		mutex_lock(ldlm_namespace_lock(client));
-		list_for_each_entry(ns, ldlm_namespace_list(client),
-				    ns_list_chain)
-		{
-			if (ns->ns_appetite != LDLM_NAMESPACE_MODEST)
-				continue;
-
-                        l = ldlm_pool_granted(&ns->ns_pool);
-                        if (l == 0)
-                                l = 1;
-
-                        /*
-                         * Set the modest pools limit equal to their avg granted
-                         * locks + ~6%.
-                         */
-                        l += dru(l, LDLM_POOLS_MODEST_MARGIN_SHIFT, 0);
-                        ldlm_pool_setup(&ns->ns_pool, l);
-                        nr_l += l;
-                        nr_p++;
-                }
-
-                /*
-                 * Make sure that modest namespaces did not eat more that 2/3
-                 * of limit.
-                 */
-                if (nr_l >= 2 * (LDLM_POOL_HOST_L / 3)) {
-                        CWARN("\"Modest\" pools eat out 2/3 of server locks "
-                              "limit (%lu of %lu). This means that you have too "
-                              "many clients for this amount of server RAM. "
-                              "Upgrade server!\n", nr_l, LDLM_POOL_HOST_L);
-                        equal = 1;
-                }
-
-		/*
-		 * The rest is given to greedy namespaces.
-		 */
-		list_for_each_entry(ns, ldlm_namespace_list(client),
-				    ns_list_chain)
-		{
-			if (!equal && ns->ns_appetite != LDLM_NAMESPACE_GREEDY)
-				continue;
-
-                        if (equal) {
-                                /*
-                                 * In the case 2/3 locks are eaten out by
-                                 * modest pools, we re-setup equal limit
-                                 * for _all_ pools.
-                                 */
-                                l = LDLM_POOL_HOST_L /
-					ldlm_namespace_nr_read(client);
-                        } else {
-                                /*
-                                 * All the rest of greedy pools will have
-                                 * all locks in equal parts.
-                                 */
-                                l = (LDLM_POOL_HOST_L - nr_l) /
-					(ldlm_namespace_nr_read(client) -
-                                         nr_p);
-                        }
-                        ldlm_pool_setup(&ns->ns_pool, l);
-                }
-		mutex_unlock(ldlm_namespace_lock(client));
-        }
-
-        /*
-         * Recalc at least ldlm_namespace_nr(client) namespaces.
-         */
-	for (nr = ldlm_namespace_nr_read(client); nr > 0; nr--) {
-                int     skip;
-                /*
-                 * Lock the list, get first @ns in the list, getref, move it
-                 * to the tail, unlock and call pool recalc. This way we avoid
-                 * calling recalc under @ns lock what is really good as we get
-                 * rid of potential deadlock on client nodes when canceling
-                 * locks synchronously.
-                 */
-		mutex_lock(ldlm_namespace_lock(client));
-		if (list_empty(ldlm_namespace_list(client))) {
-			mutex_unlock(ldlm_namespace_lock(client));
+		mutex_lock(ldlm_namespace_lock(side));
+		if (list_empty(ldlm_namespace_list(side))) {
+			mutex_unlock(ldlm_namespace_lock(side));
 			break;
 		}
-		ns = ldlm_namespace_first_locked(client);
+		ns = ldlm_namespace_first_locked(side);
 
 		if (ns_old == ns) { /* Full pass complete */
-			mutex_unlock(ldlm_namespace_lock(client));
+			mutex_unlock(ldlm_namespace_lock(side));
 			break;
 		}
 
@@ -1360,8 +1285,8 @@ time64_t ldlm_pools_recalc(enum ldlm_side client)
 		 *   there).
 		 */
 		if (ldlm_ns_empty(ns)) {
-			ldlm_namespace_move_to_inactive_locked(ns, client);
-			mutex_unlock(ldlm_namespace_lock(client));
+			ldlm_namespace_move_to_inactive_locked(ns, side);
+			mutex_unlock(ldlm_namespace_lock(side));
 			continue;
 		}
 
@@ -1381,144 +1306,118 @@ time64_t ldlm_pools_recalc(enum ldlm_side client)
 		}
 		spin_unlock(&ns->ns_lock);
 
-		ldlm_namespace_move_to_active_locked(ns, client);
-		mutex_unlock(ldlm_namespace_lock(client));
+		ldlm_namespace_move_to_active_locked(ns, side);
+		mutex_unlock(ldlm_namespace_lock(side));
 
 		/*
 		 * After setup is done - recalc the pool.
 		 */
 		if (!skip) {
-			time64_t ttime = ldlm_pool_recalc(&ns->ns_pool);
-
-			if (ttime < time)
-				time = ttime;
-
+			delay = min(delay, ldlm_pool_recalc(&ns->ns_pool));
 			ldlm_namespace_put(ns);
 		}
-        }
+	}
+
+	return delay;
+}
+
+static void ldlm_pools_recalc_task(struct work_struct *ws);
+static DECLARE_DELAYED_WORK(ldlm_pools_recalc_work, ldlm_pools_recalc_task);
+
+static void ldlm_pools_recalc_task(struct work_struct *ws)
+{
+	/* seconds of sleep if no active namespaces */
+	time64_t delay;
+#ifdef HAVE_SERVER_SUPPORT
+	struct ldlm_namespace *ns;
+	unsigned long nr_l = 0, nr_p = 0, l;
+	int equal = 0;
+
+	/* Check all modest namespaces first. */
+	mutex_lock(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
+	list_for_each_entry(ns, ldlm_namespace_list(LDLM_NAMESPACE_SERVER),
+			    ns_list_chain) {
+		if (ns->ns_appetite != LDLM_NAMESPACE_MODEST)
+			continue;
+
+		l = ldlm_pool_granted(&ns->ns_pool);
+		if (l == 0)
+			l = 1;
+
+		/*
+		 * Set the modest pools limit equal to their avg granted
+		 * locks + ~6%.
+		 */
+		l += dru(l, LDLM_POOLS_MODEST_MARGIN_SHIFT, 0);
+		ldlm_pool_setup(&ns->ns_pool, l);
+		nr_l += l;
+		nr_p++;
+	}
+
+	/*
+	 * Make sure than modest namespaces did not eat more that 2/3
+	 * of limit.
+	 */
+	if (nr_l >= 2 * (LDLM_POOL_HOST_L / 3)) {
+		CWARN("'Modest' pools eat out 2/3 of server locks "
+		      "limit (%lu of %lu). This means that you have too "
+		      "many clients for this amount of server RAM. "
+		      "Upgrade server!\n", nr_l, LDLM_POOL_HOST_L);
+		equal = 1;
+	}
+
+	/* The rest is given to greedy namespaces. */
+	list_for_each_entry(ns, ldlm_namespace_list(LDLM_NAMESPACE_SERVER),
+			    ns_list_chain) {
+		if (!equal && ns->ns_appetite != LDLM_NAMESPACE_GREEDY)
+			continue;
+
+		if (equal) {
+			/*
+			 * In the case 2/3 locks are eaten out by
+			 * modest pools, we re-setup equal limit
+			 * for _all_ pools.
+			 */
+			l = LDLM_POOL_HOST_L /
+				ldlm_namespace_nr_read(LDLM_NAMESPACE_SERVER);
+		} else {
+			/*
+			 * All the rest of greedy pools will have
+			 * all locks in equal parts.
+			 */
+			l = (LDLM_POOL_HOST_L - nr_l) /
+				(ldlm_namespace_nr_read(LDLM_NAMESPACE_SERVER) -
+				 nr_p);
+		}
+		ldlm_pool_setup(&ns->ns_pool, l);
+	}
+	mutex_unlock(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
+
+	delay = min(ldlm_pools_recalc_delay(LDLM_NAMESPACE_SERVER),
+		    ldlm_pools_recalc_delay(LDLM_NAMESPACE_CLIENT));
+#else  /* !HAVE_SERVER_SUPPORT */
+	delay = ldlm_pools_recalc_delay(LDLM_NAMESPACE_CLIENT);
+#endif /* HAVE_SERVER_SUPPORT */
 
 	/* Wake up the blocking threads from time to time. */
 	ldlm_bl_thread_wakeup();
 
-	return time;
-}
-
-static int ldlm_pools_thread_main(void *arg)
-{
-	struct ptlrpc_thread *thread = (struct ptlrpc_thread *)arg;
-	time64_t s_time, c_time;
-
-	ENTRY;
-	thread_set_flags(thread, SVC_RUNNING);
-	wake_up(&thread->t_ctl_waitq);
-
-	CDEBUG(D_DLMTRACE, "%s: pool thread starting, process %d\n",
-	       "ldlm_poold", current_pid());
-
-        while (1) {
-                struct l_wait_info lwi;
-
-		/*
-		 * Recal all pools on this tick.
-		 */
-		s_time = ldlm_pools_recalc(LDLM_NAMESPACE_SERVER);
-		c_time = ldlm_pools_recalc(LDLM_NAMESPACE_CLIENT);
-
-		/*
-		 * Wait until the next check time, or until we're
-		 * stopped.
-		 */
-		lwi = LWI_TIMEOUT(cfs_time_seconds(min(s_time, c_time)),
-				  NULL, NULL);
-                l_wait_event(thread->t_ctl_waitq,
-                             thread_is_stopping(thread) ||
-                             thread_is_event(thread),
-                             &lwi);
-
-                if (thread_test_and_clear_flags(thread, SVC_STOPPING))
-                        break;
-                else
-                        thread_test_and_clear_flags(thread, SVC_EVENT);
-        }
-
-	thread_set_flags(thread, SVC_STOPPED);
-	wake_up(&thread->t_ctl_waitq);
-
-	CDEBUG(D_DLMTRACE, "%s: pool thread exiting, process %d\n",
-		"ldlm_poold", current_pid());
-
-	complete_and_exit(&ldlm_pools_comp, 0);
-}
-
-static int ldlm_pools_thread_start(void)
-{
-	struct l_wait_info lwi = { 0 };
-	struct task_struct *task;
-	ENTRY;
-
-	if (ldlm_pools_thread != NULL)
-		RETURN(-EALREADY);
-
-	OBD_ALLOC_PTR(ldlm_pools_thread);
-	if (ldlm_pools_thread == NULL)
-		RETURN(-ENOMEM);
-
-	init_completion(&ldlm_pools_comp);
-	init_waitqueue_head(&ldlm_pools_thread->t_ctl_waitq);
-
-	task = kthread_run(ldlm_pools_thread_main, ldlm_pools_thread,
-			   "ldlm_poold");
-	if (IS_ERR(task)) {
-		CERROR("Can't start pool thread, error %ld\n", PTR_ERR(task));
-		OBD_FREE(ldlm_pools_thread, sizeof(*ldlm_pools_thread));
-		ldlm_pools_thread = NULL;
-		RETURN(PTR_ERR(task));
-	}
-	l_wait_event(ldlm_pools_thread->t_ctl_waitq,
-		     thread_is_running(ldlm_pools_thread), &lwi);
-	RETURN(0);
-}
-
-static void ldlm_pools_thread_stop(void)
-{
-	ENTRY;
-
-	if (ldlm_pools_thread == NULL) {
-		EXIT;
-		return;
-	}
-
-	thread_set_flags(ldlm_pools_thread, SVC_STOPPING);
-	wake_up(&ldlm_pools_thread->t_ctl_waitq);
-
-	/*
-	 * Make sure that pools thread is finished before freeing @thread.
-	 * This fixes possible race and oops due to accessing freed memory
-	 * in pools thread.
-	 */
-	wait_for_completion(&ldlm_pools_comp);
-	OBD_FREE_PTR(ldlm_pools_thread);
-	ldlm_pools_thread = NULL;
-	EXIT;
+	schedule_delayed_work(&ldlm_pools_recalc_work, cfs_time_seconds(delay));
 }
 
 int ldlm_pools_init(void)
 {
-	int rc;
 	DEF_SHRINKER_VAR(shsvar, ldlm_pools_srv_shrink,
 			 ldlm_pools_srv_count, ldlm_pools_srv_scan);
 	DEF_SHRINKER_VAR(shcvar, ldlm_pools_cli_shrink,
 			 ldlm_pools_cli_count, ldlm_pools_cli_scan);
-	ENTRY;
 
-	rc = ldlm_pools_thread_start();
-	if (rc == 0) {
-		ldlm_pools_srv_shrinker =
-			set_shrinker(DEFAULT_SEEKS, &shsvar);
-		ldlm_pools_cli_shrinker =
-			set_shrinker(DEFAULT_SEEKS, &shcvar);
-	}
-	RETURN(rc);
+	schedule_delayed_work(&ldlm_pools_recalc_work,
+			      LDLM_POOL_CLI_DEF_RECALC_PERIOD);
+	ldlm_pools_srv_shrinker = set_shrinker(DEFAULT_SEEKS, &shsvar);
+	ldlm_pools_cli_shrinker = set_shrinker(DEFAULT_SEEKS, &shcvar);
+
+	return 0;
 }
 
 void ldlm_pools_fini(void)
@@ -1531,7 +1430,7 @@ void ldlm_pools_fini(void)
 		remove_shrinker(ldlm_pools_cli_shrinker);
 		ldlm_pools_cli_shrinker = NULL;
 	}
-	ldlm_pools_thread_stop();
+	cancel_delayed_work_sync(&ldlm_pools_recalc_work);
 }
 
 #else /* !HAVE_LRU_RESIZE_SUPPORT */
@@ -1540,7 +1439,7 @@ int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
         return 0;
 }
 
-time64_t ldlm_pool_recalc(struct ldlm_pool *pl)
+int ldlm_pool_recalc(struct ldlm_pool *pl)
 {
         return 0;
 }
@@ -1617,8 +1516,4 @@ void ldlm_pools_fini(void)
 	return;
 }
 
-time64_t ldlm_pools_recalc(enum ldlm_side client)
-{
-	return 0;
-}
 #endif /* HAVE_LRU_RESIZE_SUPPORT */

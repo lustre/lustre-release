@@ -1701,7 +1701,6 @@ void unlock_res_and_lock(struct ldlm_lock *lock);
  * There are not used outside of ldlm.
  * @{
  */
-time64_t ldlm_pools_recalc(enum ldlm_side client);
 int ldlm_pools_init(void);
 void ldlm_pools_fini(void);
 
