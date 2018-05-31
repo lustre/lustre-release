@@ -302,7 +302,7 @@ lnet_init_locks(void)
 	spin_lock_init(&the_lnet.ln_eq_wait_lock);
 	spin_lock_init(&the_lnet.ln_msg_resend_lock);
 	init_waitqueue_head(&the_lnet.ln_eq_waitq);
-	init_waitqueue_head(&the_lnet.ln_rc_waitq);
+	init_waitqueue_head(&the_lnet.ln_mt_waitq);
 	mutex_init(&the_lnet.ln_lnd_mutex);
 }
 
@@ -2304,13 +2304,13 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 	lnet_ping_target_update(pbuf, ping_mdh);
 
-	rc = lnet_router_checker_start();
+	rc = lnet_monitor_thr_start();
 	if (rc != 0)
 		goto err_stop_ping;
 
 	rc = lnet_push_target_init();
 	if (rc != 0)
-		goto err_stop_router_checker;
+		goto err_stop_monitor_thr;
 
 	rc = lnet_peer_discovery_start();
 	if (rc != 0)
@@ -2325,8 +2325,8 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 err_destroy_push_target:
 	lnet_push_target_fini();
-err_stop_router_checker:
-	lnet_router_checker_stop();
+err_stop_monitor_thr:
+	lnet_monitor_thr_stop();
 err_stop_ping:
 	lnet_ping_target_fini();
 err_acceptor_stop:
@@ -2378,7 +2378,7 @@ LNetNIFini()
 		lnet_router_debugfs_init();
 		lnet_peer_discovery_stop();
 		lnet_push_target_fini();
-		lnet_router_checker_stop();
+		lnet_monitor_thr_stop();
 		lnet_ping_target_fini();
 
 		/* Teardown fns that use my own API functions BEFORE here */

@@ -1006,6 +1006,9 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 		}
 	}
 
+	/* unset the tx_delay flag as we're going to send it now */
+	msg->msg_tx_delayed = 0;
+
 	if (do_send) {
 		lnet_net_unlock(cpt);
 		lnet_ni_send(ni, msg);
@@ -1100,6 +1103,9 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 
 	msg->msg_niov = rbp->rbp_npages;
 	msg->msg_kiov = &rb->rb_kiov[0];
+
+	/* unset the msg-rx_delayed flag since we're receiving the message */
+	msg->msg_rx_delayed = 0;
 
 	if (do_recv) {
 		int cpt = msg->msg_rx_cpt;
@@ -2614,6 +2620,104 @@ lnet_send(lnet_nid_t src_nid, struct lnet_msg *msg, lnet_nid_t rtr_nid)
 
 	/* rc == LNET_CREDIT_OK or LNET_CREDIT_WAIT or LNET_DC_WAIT */
 	return 0;
+}
+
+static int
+lnet_monitor_thread(void *arg)
+{
+	/*
+	 * The monitor thread takes care of the following:
+	 *  1. Checks the aliveness of routers
+	 *  2. Checks if there are messages on the resend queue to resend
+	 *     them.
+	 *  3. Check if there are any NIs on the local recovery queue and
+	 *     pings them
+	 *  4. Checks if there are any NIs on the remote recovery queue
+	 *     and pings them.
+	 */
+	cfs_block_allsigs();
+
+	while (the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING) {
+		if (lnet_router_checker_active())
+			lnet_check_routers();
+
+		/*
+		 * TODO do we need to check if we should sleep without
+		 * timeout?  Technically, an active system will always
+		 * have messages in flight so this check will always
+		 * evaluate to false. And on an idle system do we care
+		 * if we wake up every 1 second? Although, we've seen
+		 * cases where we get a complaint that an idle thread
+		 * is waking up unnecessarily.
+		 */
+		wait_event_interruptible_timeout(the_lnet.ln_mt_waitq,
+						false,
+						cfs_time_seconds(1));
+	}
+
+	/* clean up the router checker */
+	lnet_prune_rc_data(1);
+
+	/* Shutting down */
+	the_lnet.ln_mt_state = LNET_MT_STATE_SHUTDOWN;
+
+	/* signal that the monitor thread is exiting */
+	up(&the_lnet.ln_mt_signal);
+
+	return 0;
+}
+
+int lnet_monitor_thr_start(void)
+{
+	int rc;
+	struct task_struct *task;
+
+	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN);
+
+	sema_init(&the_lnet.ln_mt_signal, 0);
+
+	/* Pre monitor thread start processing */
+	rc = lnet_router_pre_mt_start();
+	if (!rc)
+		return rc;
+
+	the_lnet.ln_mt_state = LNET_MT_STATE_RUNNING;
+	task = kthread_run(lnet_monitor_thread, NULL, "monitor_thread");
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		CERROR("Can't start monitor thread: %d\n", rc);
+		/* block until event callback signals exit */
+		down(&the_lnet.ln_mt_signal);
+
+		/* clean up */
+		lnet_router_cleanup();
+		the_lnet.ln_mt_state = LNET_MT_STATE_SHUTDOWN;
+		return -ENOMEM;
+	}
+
+	/* post monitor thread start processing */
+	lnet_router_post_mt_start();
+
+	return 0;
+}
+
+void lnet_monitor_thr_stop(void)
+{
+	if (the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN)
+		return;
+
+	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING);
+	the_lnet.ln_mt_state = LNET_MT_STATE_STOPPING;
+
+	/* tell the monitor thread that we're shutting down */
+	wake_up(&the_lnet.ln_mt_waitq);
+
+	/* block until monitor thread signals that it's done */
+	down(&the_lnet.ln_mt_signal);
+	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN);
+
+	lnet_router_cleanup();
+	return;
 }
 
 void

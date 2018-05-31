@@ -143,13 +143,17 @@ lnet_msg_commit(struct lnet_msg *msg, int cpt)
 {
 	struct lnet_msg_container *container = the_lnet.ln_msg_containers[cpt];
 	struct lnet_counters *counters = the_lnet.ln_counters[cpt];
+	s64 timeout_ns;
+
+	/* set the message deadline */
+	timeout_ns = lnet_transaction_timeout * NSEC_PER_SEC;
+	msg->msg_deadline = ktime_add_ns(ktime_get(), timeout_ns);
 
 	/* routed message can be committed for both receiving and sending */
 	LASSERT(!msg->msg_tx_committed);
 
 	if (msg->msg_sending) {
 		LASSERT(!msg->msg_receiving);
-
 		msg->msg_tx_cpt = cpt;
 		msg->msg_tx_committed = 1;
 		if (msg->msg_rx_committed) { /* routed message REPLY */
@@ -163,8 +167,9 @@ lnet_msg_commit(struct lnet_msg *msg, int cpt)
 	}
 
 	LASSERT(!msg->msg_onactivelist);
+
 	msg->msg_onactivelist = 1;
-	list_add(&msg->msg_activelist, &container->msc_active);
+	list_add_tail(&msg->msg_activelist, &container->msc_active);
 
 	counters->msgs_alloc++;
 	if (counters->msgs_alloc > counters->msgs_max)

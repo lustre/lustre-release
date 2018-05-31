@@ -823,8 +823,15 @@ int lnet_sock_connect(struct socket **sockp, int *fatal,
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(struct lnet_net *net);
 
-int lnet_router_checker_start(void);
-void lnet_router_checker_stop(void);
+int lnet_monitor_thr_start(void);
+void lnet_monitor_thr_stop(void);
+
+bool lnet_router_checker_active(void);
+void lnet_check_routers(void);
+int lnet_router_pre_mt_start(void);
+void lnet_router_post_mt_start(void);
+void lnet_prune_rc_data(int wait_unlink);
+void lnet_router_cleanup(void);
 void lnet_router_ni_update_locked(struct lnet_peer_ni *gw, __u32 net);
 void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
 
