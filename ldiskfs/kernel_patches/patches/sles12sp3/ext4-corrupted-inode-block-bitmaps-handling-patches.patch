@@ -124,45 +124,6 @@ diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
 index fc65310..92bcc8d 100644
 --- a/fs/ext4/ialloc.c
 +++ b/fs/ext4/ialloc.c
-@@ -70,25 +70,15 @@ static unsigned ext4_init_inode_bitmap(struct super_block *sb,
- 				       ext4_group_t block_group,
- 				       struct ext4_group_desc *gdp)
- {
--	struct ext4_group_info *grp;
--	struct ext4_sb_info *sbi = EXT4_SB(sb);
- 	J_ASSERT_BH(bh, buffer_locked(bh));
- 
- 	/* If checksum is bad mark all blocks and inodes use to prevent
- 	 * allocation, essentially implementing a per-group read-only flag. */
- 	if (!ext4_group_desc_csum_verify(sb, block_group, gdp)) {
--		grp = ext4_get_group_info(sb, block_group);
--		if (!EXT4_MB_GRP_BBITMAP_CORRUPT(grp))
--			percpu_counter_sub(&sbi->s_freeclusters_counter,
--					   grp->bb_free);
--		set_bit(EXT4_GROUP_INFO_BBITMAP_CORRUPT_BIT, &grp->bb_state);
--		if (!EXT4_MB_GRP_IBITMAP_CORRUPT(grp)) {
--			int count;
--			count = ext4_free_inodes_count(sb, gdp);
--			percpu_counter_sub(&sbi->s_freeinodes_counter,
--					   count);
--		}
--		set_bit(EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT, &grp->bb_state);
-+		ext4_corrupted_block_group(sb, block_group,
-+				EXT4_GROUP_INFO_BBITMAP_CORRUPT |
-+				EXT4_GROUP_INFO_IBITMAP_CORRUPT,
-+				"Checksum bad for group %u", block_group);
-		return -EFSBADCRC;
- 	}
- 
-@@ -193,8 +180,6 @@ verify:
-		ext4_unlock_group(sb, block_group);
-		unlock_buffer(bh);
-		if (err) {
--			ext4_error(sb, "Failed to init inode bitmap for group "
--				   "%u: %d", block_group, err);
-			goto out;
-		}
-		return bh;
 @@ -337,14 +318,9 @@ out:
  		if (!fatal)
  			fatal = err;
