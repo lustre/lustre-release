@@ -478,11 +478,12 @@ download_srpm() {
 
 	# let the download_file handle the concurrency
 	if $DOWNLOAD; then
-		local location= \
-		"https://downloads.whamcloud.com/public/kernels/$target/old"
+		local location
 		# get the location from a distro specific method if it exists
 		if type -p kernel_srpm_location; then
 			location=$(kernel_srpm_location)
+		else
+			fatal 1 "Must specify location for download kernel SRPM."
 		fi
 		echo "Downloading $location/$srpm..."
 		if ! download_file \
