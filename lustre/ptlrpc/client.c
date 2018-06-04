@@ -2672,8 +2672,11 @@ void ptlrpc_request_committed(struct ptlrpc_request *req, int force)
 		return;
 	}
 
-	if (force || req->rq_transno <= imp->imp_peer_committed_transno)
+	if (force || req->rq_transno <= imp->imp_peer_committed_transno) {
+		if (imp->imp_replay_cursor == &req->rq_replay_list)
+			imp->imp_replay_cursor = req->rq_replay_list.next;
 		ptlrpc_free_request(req);
+	}
 
 	spin_unlock(&imp->imp_lock);
 }
