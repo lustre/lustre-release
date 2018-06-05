@@ -604,6 +604,8 @@ void lnet_prep_send(struct lnet_msg *msg, int type,
 		    struct lnet_process_id target, unsigned int offset,
 		    unsigned int len);
 int lnet_send(lnet_nid_t nid, struct lnet_msg *msg, lnet_nid_t rtr_nid);
+int lnet_send_ping(lnet_nid_t dest_nid, struct lnet_handle_md *mdh, int nnis,
+		   void *user_ptr, struct lnet_handle_eq eqh, bool recovery);
 void lnet_return_tx_credits_locked(struct lnet_msg *msg);
 void lnet_return_rx_credits_locked(struct lnet_msg *msg);
 void lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp);
@@ -691,6 +693,7 @@ void lnet_msg_container_cleanup(struct lnet_msg_container *container);
 void lnet_msg_containers_destroy(void);
 int lnet_msg_containers_create(void);
 
+char *lnet_health_error2str(enum lnet_msg_hstatus hstatus);
 char *lnet_msgtyp2str(int type);
 void lnet_print_hdr(struct lnet_hdr *hdr);
 int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);

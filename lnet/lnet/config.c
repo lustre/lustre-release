@@ -458,6 +458,7 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 	spin_lock_init(&ni->ni_lock);
 	INIT_LIST_HEAD(&ni->ni_cptlist);
 	INIT_LIST_HEAD(&ni->ni_netlist);
+	INIT_LIST_HEAD(&ni->ni_recovery);
 	ni->ni_refs = cfs_percpt_alloc(lnet_cpt_table(),
 				       sizeof(*ni->ni_refs[0]));
 	if (ni->ni_refs == NULL)
@@ -482,7 +483,7 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 		ni->ni_net_ns = NULL;
 
 	ni->ni_last_alive = ktime_get_real_seconds();
-	ni->ni_state = LNET_NI_STATE_INIT;
+	ni->ni_state |= LNET_NI_STATE_INIT;
 	list_add_tail(&ni->ni_netlist, &net->net_ni_added);
 
 	/*

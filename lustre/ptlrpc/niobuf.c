@@ -231,7 +231,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 				     desc->bd_portal, mbits, 0, 0);
 		else
 			rc = LNetGet(self_nid, desc->bd_mds[posted_md],
-				     peer_id, desc->bd_portal, mbits, 0);
+				     peer_id, desc->bd_portal, mbits, 0, false);
 
 		posted_md++;
 		if (rc != 0) {

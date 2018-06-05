@@ -837,6 +837,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 	INIT_LIST_HEAD(&the_lnet.ln_dc_request);
 	INIT_LIST_HEAD(&the_lnet.ln_dc_working);
 	INIT_LIST_HEAD(&the_lnet.ln_dc_expired);
+	INIT_LIST_HEAD(&the_lnet.ln_mt_localNIRecovq);
 	init_waitqueue_head(&the_lnet.ln_dc_waitq);
 
 	rc = lnet_descriptor_setup();
@@ -1085,8 +1086,7 @@ lnet_islocalnet(__u32 net_id)
 bool
 lnet_is_ni_healthy_locked(struct lnet_ni *ni)
 {
-	if (ni->ni_state == LNET_NI_STATE_ACTIVE ||
-	    ni->ni_state == LNET_NI_STATE_DEGRADED)
+	if (ni->ni_state & LNET_NI_STATE_ACTIVE)
 		return true;
 
 	return false;
@@ -1673,7 +1673,7 @@ lnet_clear_zombies_nis_locked(struct lnet_net *net)
 		list_del_init(&ni->ni_netlist);
 		/* the ni should be in deleting state. If it's not it's
 		 * a bug */
-		LASSERT(ni->ni_state == LNET_NI_STATE_DELETING);
+		LASSERT(ni->ni_state & LNET_NI_STATE_DELETING);
 		cfs_percpt_for_each(ref, j, ni->ni_refs) {
 			if (*ref == 0)
 				continue;
@@ -1721,7 +1721,10 @@ lnet_shutdown_lndni(struct lnet_ni *ni)
 	struct lnet_net *net = ni->ni_net;
 
 	lnet_net_lock(LNET_LOCK_EX);
-	ni->ni_state = LNET_NI_STATE_DELETING;
+	lnet_ni_lock(ni);
+	ni->ni_state |= LNET_NI_STATE_DELETING;
+	ni->ni_state &= ~LNET_NI_STATE_ACTIVE;
+	lnet_ni_unlock(ni);
 	lnet_ni_unlink_locked(ni);
 	lnet_incr_dlc_seq();
 	lnet_net_unlock(LNET_LOCK_EX);
@@ -1820,6 +1823,7 @@ lnet_shutdown_lndnets(void)
 
 	list_for_each_entry_safe(msg, tmp, &resend, msg_list) {
 		list_del_init(&msg->msg_list);
+		msg->msg_no_resend = true;
 		lnet_finalize(msg, -ECANCELED);
 	}
 
@@ -1856,7 +1860,10 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 		goto failed0;
 	}
 
-	ni->ni_state = LNET_NI_STATE_ACTIVE;
+	lnet_ni_lock(ni);
+	ni->ni_state |= LNET_NI_STATE_ACTIVE;
+	ni->ni_state &= ~LNET_NI_STATE_INIT;
+	lnet_ni_unlock(ni);
 
 	/* We keep a reference on the loopback net through the loopback NI */
 	if (net->net_lnd->lnd_type == LOLND) {
@@ -2579,10 +2586,17 @@ lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
 	struct lnet_ni		*ni;
 	struct lnet_net		*net = mynet;
 
+	/*
+	 * It is possible that the net has been cleaned out while there is
+	 * a message being sent. This function accessed the net without
+	 * checking if the list is empty
+	 */
 	if (prev == NULL) {
 		if (net == NULL)
 			net = list_entry(the_lnet.ln_nets.next, struct lnet_net,
 					net_list);
+		if (list_empty(&net->net_ni_list))
+			return NULL;
 		ni = list_entry(net->net_ni_list.next, struct lnet_ni,
 				ni_netlist);
 
@@ -2604,12 +2618,17 @@ lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
 		/* get the next net */
 		net = list_entry(prev->ni_net->net_list.next, struct lnet_net,
 				 net_list);
+		if (list_empty(&net->net_ni_list))
+			return NULL;
 		/* get the ni on it */
 		ni = list_entry(net->net_ni_list.next, struct lnet_ni,
 				ni_netlist);
 
 		return ni;
 	}
+
+	if (list_empty(&prev->ni_netlist))
+		return NULL;
 
 	/* there are more nis left */
 	ni = list_entry(prev->ni_netlist.next, struct lnet_ni, ni_netlist);
@@ -3627,7 +3646,7 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 
 	rc = LNetGet(LNET_NID_ANY, mdh, id,
 		     LNET_RESERVED_PORTAL,
-		     LNET_PROTO_PING_MATCHBITS, 0);
+		     LNET_PROTO_PING_MATCHBITS, 0, false);
 
 	if (rc != 0) {
 		/* Don't CERROR; this could be deliberate! */

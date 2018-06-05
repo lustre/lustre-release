@@ -764,8 +764,10 @@ lnet_ni_send(struct lnet_ni *ni, struct lnet_msg *msg)
 		 (msg->msg_txcredit && msg->msg_peertxcredit));
 
 	rc = (ni->ni_net->net_lnd->lnd_send)(ni, priv, msg);
-	if (rc < 0)
+	if (rc < 0) {
+		msg->msg_no_resend = true;
 		lnet_finalize(msg, rc);
+	}
 }
 
 static int
@@ -946,8 +948,10 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 
 		CNETERR("Dropping message for %s: peer not alive\n",
 			libcfs_id2str(msg->msg_target));
-		if (do_send)
+		if (do_send) {
+			msg->msg_health_status = LNET_MSG_STATUS_LOCAL_DROPPED;
 			lnet_finalize(msg, -EHOSTUNREACH);
+		}
 
 		lnet_net_lock(cpt);
 		return -EHOSTUNREACH;
@@ -960,8 +964,10 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 		CNETERR("Aborting message for %s: LNetM[DE]Unlink() already "
 			"called on the MD/ME.\n",
 			libcfs_id2str(msg->msg_target));
-		if (do_send)
+		if (do_send) {
+			msg->msg_no_resend = true;
 			lnet_finalize(msg, -ECANCELED);
+		}
 
 		lnet_net_lock(cpt);
 		return -ECANCELED;
@@ -1246,6 +1252,7 @@ lnet_drop_routed_msgs_locked(struct list_head *list, int cpt)
 		lnet_ni_recv(msg->msg_rxni, msg->msg_private, NULL,
 			     0, 0, 0, msg->msg_hdr.payload_length);
 		list_del_init(&msg->msg_list);
+		msg->msg_no_resend = true;
 		lnet_finalize(msg, -ECANCELED);
 	}
 
@@ -2505,6 +2512,15 @@ again:
 	}
 
 	/*
+	 * Cache the original src_nid. If we need to resend the message
+	 * then we'll need to know whether the src_nid was originally
+	 * specified for this message. If it was originally specified,
+	 * then we need to keep using the same src_nid since it's
+	 * continuing the same sequence of messages.
+	 */
+	msg->msg_src_nid_param = src_nid;
+
+	/*
 	 * Now that we have a peer_ni, check if we want to discover
 	 * the peer. Traffic to the LNET_RESERVED_PORTAL should not
 	 * trigger discovery.
@@ -2521,7 +2537,6 @@ again:
 		/* The peer may have changed. */
 		peer = lpni->lpni_peer_net->lpn_peer;
 		/* queue message and return */
-		msg->msg_src_nid_param = src_nid;
 		msg->msg_rtr_nid_param = rtr_nid;
 		msg->msg_sending = 0;
 		list_add_tail(&msg->msg_list, &peer->lp_dc_pendq);
@@ -2555,7 +2570,12 @@ again:
 	else
 		send_case |= REMOTE_DST;
 
-	if (!lnet_peer_is_multi_rail(peer))
+	/*
+	 * if this is a non-MR peer or if we're recovering a peer ni then
+	 * let's consider this an NMR case so we can hit the destination
+	 * NID.
+	 */
+	if (!lnet_peer_is_multi_rail(peer) || msg->msg_recovery)
 		send_case |= NMR_DST;
 	else
 		send_case |= MR_DST;
@@ -2602,10 +2622,11 @@ lnet_send(lnet_nid_t src_nid, struct lnet_msg *msg, lnet_nid_t rtr_nid)
 	 * in the future
 	 */
 	/* NB: ni != NULL == interface pre-determined (ACK/REPLY) */
-	LASSERT (msg->msg_txpeer == NULL);
-	LASSERT (!msg->msg_sending);
-	LASSERT (!msg->msg_target_is_router);
-	LASSERT (!msg->msg_receiving);
+	LASSERT(msg->msg_txpeer == NULL);
+	LASSERT(msg->msg_txni == NULL);
+	LASSERT(!msg->msg_sending);
+	LASSERT(!msg->msg_target_is_router);
+	LASSERT(!msg->msg_receiving);
 
 	msg->msg_sending = 1;
 
@@ -2620,6 +2641,323 @@ lnet_send(lnet_nid_t src_nid, struct lnet_msg *msg, lnet_nid_t rtr_nid)
 
 	/* rc == LNET_CREDIT_OK or LNET_CREDIT_WAIT or LNET_DC_WAIT */
 	return 0;
+}
+
+static void
+lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
+{
+	struct lnet_msg *msg;
+
+	while (!list_empty(resendq)) {
+		struct lnet_peer_ni *lpni;
+
+		msg = list_entry(resendq->next, struct lnet_msg,
+				 msg_list);
+
+		list_del_init(&msg->msg_list);
+
+		lpni = lnet_find_peer_ni_locked(msg->msg_hdr.dest_nid);
+		if (!lpni) {
+			lnet_net_unlock(cpt);
+			CERROR("Expected that a peer is already created for %s\n",
+			       libcfs_nid2str(msg->msg_hdr.dest_nid));
+			msg->msg_no_resend = true;
+			lnet_finalize(msg, -EFAULT);
+			lnet_net_lock(cpt);
+		} else {
+			struct lnet_peer *peer;
+			int rc;
+			lnet_nid_t src_nid = LNET_NID_ANY;
+
+			/*
+			 * if this message is not being routed and the
+			 * peer is non-MR then we must use the same
+			 * src_nid that was used in the original send.
+			 * Otherwise if we're routing the message (IE
+			 * we're a router) then we can use any of our
+			 * local interfaces. It doesn't matter to the
+			 * final destination.
+			 */
+			peer = lpni->lpni_peer_net->lpn_peer;
+			if (!msg->msg_routing &&
+			    !lnet_peer_is_multi_rail(peer))
+				src_nid = le64_to_cpu(msg->msg_hdr.src_nid);
+
+			/*
+			 * If we originally specified a src NID, then we
+			 * must attempt to reuse it in the resend as well.
+			 */
+			if (msg->msg_src_nid_param != LNET_NID_ANY)
+				src_nid = msg->msg_src_nid_param;
+			lnet_peer_ni_decref_locked(lpni);
+
+			lnet_net_unlock(cpt);
+			rc = lnet_send(src_nid, msg, LNET_NID_ANY);
+			if (rc) {
+				CERROR("Error sending %s to %s: %d\n",
+				       lnet_msgtyp2str(msg->msg_type),
+				       libcfs_id2str(msg->msg_target), rc);
+				msg->msg_no_resend = true;
+				lnet_finalize(msg, rc);
+			}
+			lnet_net_lock(cpt);
+		}
+	}
+}
+
+static void
+lnet_resend_pending_msgs(void)
+{
+	int i;
+
+	cfs_cpt_for_each(i, lnet_cpt_table()) {
+		lnet_net_lock(i);
+		lnet_resend_pending_msgs_locked(the_lnet.ln_mt_resendqs[i], i);
+		lnet_net_unlock(i);
+	}
+}
+
+/* called with cpt and ni_lock held */
+static void
+lnet_unlink_ni_recovery_mdh_locked(struct lnet_ni *ni, int cpt)
+{
+	struct lnet_handle_md recovery_mdh;
+
+	LNetInvalidateMDHandle(&recovery_mdh);
+
+	if (ni->ni_state & LNET_NI_STATE_RECOVERY_PENDING) {
+		recovery_mdh = ni->ni_ping_mdh;
+		LNetInvalidateMDHandle(&ni->ni_ping_mdh);
+	}
+	lnet_ni_unlock(ni);
+	lnet_net_unlock(cpt);
+	if (!LNetMDHandleIsInvalid(recovery_mdh))
+		LNetMDUnlink(recovery_mdh);
+	lnet_net_lock(cpt);
+	lnet_ni_lock(ni);
+}
+
+static void
+lnet_recover_local_nis(void)
+{
+	struct list_head processed_list;
+	struct list_head local_queue;
+	struct lnet_handle_md mdh;
+	struct lnet_ni *tmp;
+	struct lnet_ni *ni;
+	lnet_nid_t nid;
+	int healthv;
+	int rc;
+
+	INIT_LIST_HEAD(&local_queue);
+	INIT_LIST_HEAD(&processed_list);
+
+	/*
+	 * splice the recovery queue on a local queue. We will iterate
+	 * through the local queue and update it as needed. Once we're
+	 * done with the traversal, we'll splice the local queue back on
+	 * the head of the ln_mt_localNIRecovq. Any newly added local NIs
+	 * will be traversed in the next iteration.
+	 */
+	lnet_net_lock(0);
+	list_splice_init(&the_lnet.ln_mt_localNIRecovq,
+			 &local_queue);
+	lnet_net_unlock(0);
+
+	list_for_each_entry_safe(ni, tmp, &local_queue, ni_recovery) {
+		/*
+		 * if an NI is being deleted or it is now healthy, there
+		 * is no need to keep it around in the recovery queue.
+		 * The monitor thread is the only thread responsible for
+		 * removing the NI from the recovery queue.
+		 * Multiple threads can be adding NIs to the recovery
+		 * queue.
+		 */
+		healthv = atomic_read(&ni->ni_healthv);
+
+		lnet_net_lock(0);
+		lnet_ni_lock(ni);
+		if (!(ni->ni_state & LNET_NI_STATE_ACTIVE) ||
+		    healthv == LNET_MAX_HEALTH_VALUE) {
+			list_del_init(&ni->ni_recovery);
+			lnet_unlink_ni_recovery_mdh_locked(ni, 0);
+			lnet_ni_unlock(ni);
+			lnet_ni_decref_locked(ni, 0);
+			lnet_net_unlock(0);
+			continue;
+		}
+		lnet_ni_unlock(ni);
+		lnet_net_unlock(0);
+
+		/*
+		 * protect the ni->ni_state field. Once we call the
+		 * lnet_send_ping function it's possible we receive
+		 * a response before we check the rc. The lock ensures
+		 * a stable value for the ni_state RECOVERY_PENDING bit
+		 */
+		lnet_ni_lock(ni);
+		if (!(ni->ni_state & LNET_NI_STATE_RECOVERY_PENDING)) {
+			ni->ni_state |= LNET_NI_STATE_RECOVERY_PENDING;
+			lnet_ni_unlock(ni);
+			mdh = ni->ni_ping_mdh;
+			/*
+			 * Invalidate the ni mdh in case it's deleted.
+			 * We'll unlink the mdh in this case below.
+			 */
+			LNetInvalidateMDHandle(&ni->ni_ping_mdh);
+			nid = ni->ni_nid;
+
+			/*
+			 * remove the NI from the local queue and drop the
+			 * reference count to it while we're recovering
+			 * it. The reason for that, is that the NI could
+			 * be deleted, and the way the code is structured
+			 * is if we don't drop the NI, then the deletion
+			 * code will enter a loop waiting for the
+			 * reference count to be removed while holding the
+			 * ln_mutex_lock(). When we look up the peer to
+			 * send to in lnet_select_pathway() we will try to
+			 * lock the ln_mutex_lock() as well, leading to
+			 * a deadlock. By dropping the refcount and
+			 * removing it from the list, we allow for the NI
+			 * to be removed, then we use the cached NID to
+			 * look it up again. If it's gone, then we just
+			 * continue examining the rest of the queue.
+			 */
+			lnet_net_lock(0);
+			list_del_init(&ni->ni_recovery);
+			lnet_ni_decref_locked(ni, 0);
+			lnet_net_unlock(0);
+
+			rc = lnet_send_ping(nid, &mdh,
+					    LNET_INTERFACES_MIN, (void *)nid,
+					    the_lnet.ln_mt_eqh, true);
+			/* lookup the nid again */
+			lnet_net_lock(0);
+			ni = lnet_nid2ni_locked(nid, 0);
+			if (!ni) {
+				/*
+				 * the NI has been deleted when we dropped
+				 * the ref count
+				 */
+				lnet_net_unlock(0);
+				LNetMDUnlink(mdh);
+				continue;
+			}
+			/*
+			 * Same note as in lnet_recover_peer_nis(). When
+			 * we're sending the ping, the NI is free to be
+			 * deleted or manipulated. By this point it
+			 * could've been added back on the recovery queue,
+			 * and a refcount taken on it.
+			 * So we can't just add it blindly again or we'll
+			 * corrupt the queue. We must check under lock if
+			 * it's not on any list and if not then add it
+			 * to the processed list, which will eventually be
+			 * spliced back on to the recovery queue.
+			 */
+			ni->ni_ping_mdh = mdh;
+			if (list_empty(&ni->ni_recovery)) {
+				list_add_tail(&ni->ni_recovery, &processed_list);
+				lnet_ni_addref_locked(ni, 0);
+			}
+			lnet_net_unlock(0);
+
+			lnet_ni_lock(ni);
+			if (rc)
+				ni->ni_state &= ~LNET_NI_STATE_RECOVERY_PENDING;
+		}
+		lnet_ni_unlock(ni);
+	}
+
+	/*
+	 * put back the remaining NIs on the ln_mt_localNIRecovq to be
+	 * reexamined in the next iteration.
+	 */
+	list_splice_init(&processed_list, &local_queue);
+	lnet_net_lock(0);
+	list_splice(&local_queue, &the_lnet.ln_mt_localNIRecovq);
+	lnet_net_unlock(0);
+}
+
+static struct list_head **
+lnet_create_array_of_queues(void)
+{
+	struct list_head **qs;
+	struct list_head *q;
+	int i;
+
+	qs = cfs_percpt_alloc(lnet_cpt_table(),
+			      sizeof(struct list_head));
+	if (!qs) {
+		CERROR("Failed to allocate queues\n");
+		return NULL;
+	}
+
+	cfs_percpt_for_each(q, i, qs)
+		INIT_LIST_HEAD(q);
+
+	return qs;
+}
+
+static int
+lnet_resendqs_create(void)
+{
+	struct list_head **resendqs;
+	resendqs = lnet_create_array_of_queues();
+
+	if (!resendqs)
+		return -ENOMEM;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	the_lnet.ln_mt_resendqs = resendqs;
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	return 0;
+}
+
+static void
+lnet_clean_local_ni_recoveryq(void)
+{
+	struct lnet_ni *ni;
+
+	/* This is only called when the monitor thread has stopped */
+	lnet_net_lock(0);
+
+	while (!list_empty(&the_lnet.ln_mt_localNIRecovq)) {
+		ni = list_entry(the_lnet.ln_mt_localNIRecovq.next,
+				struct lnet_ni, ni_recovery);
+		list_del_init(&ni->ni_recovery);
+		lnet_ni_lock(ni);
+		lnet_unlink_ni_recovery_mdh_locked(ni, 0);
+		lnet_ni_unlock(ni);
+		lnet_ni_decref_locked(ni, 0);
+	}
+
+	lnet_net_unlock(0);
+}
+
+static void
+lnet_clean_resendqs(void)
+{
+	struct lnet_msg *msg, *tmp;
+	struct list_head msgs;
+	int i;
+
+	INIT_LIST_HEAD(&msgs);
+
+	cfs_cpt_for_each(i, lnet_cpt_table()) {
+		lnet_net_lock(i);
+		list_splice_init(the_lnet.ln_mt_resendqs[i], &msgs);
+		lnet_net_unlock(i);
+		list_for_each_entry_safe(msg, tmp, &msgs, msg_list) {
+			list_del_init(&msg->msg_list);
+			msg->msg_no_resend = true;
+			lnet_finalize(msg, -ESHUTDOWN);
+		}
+	}
+
+	cfs_percpt_free(the_lnet.ln_mt_resendqs);
 }
 
 static int
@@ -2640,6 +2978,10 @@ lnet_monitor_thread(void *arg)
 	while (the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING) {
 		if (lnet_router_checker_active())
 			lnet_check_routers();
+
+		lnet_resend_pending_msgs();
+
+		lnet_recover_local_nis();
 
 		/*
 		 * TODO do we need to check if we should sleep without
@@ -2667,42 +3009,183 @@ lnet_monitor_thread(void *arg)
 	return 0;
 }
 
+/*
+ * lnet_send_ping
+ * Sends a ping.
+ * Returns == 0 if success
+ * Returns > 0 if LNetMDBind or prior fails
+ * Returns < 0 if LNetGet fails
+ */
+int
+lnet_send_ping(lnet_nid_t dest_nid,
+	       struct lnet_handle_md *mdh, int nnis,
+	       void *user_data, struct lnet_handle_eq eqh, bool recovery)
+{
+	struct lnet_md md = { NULL };
+	struct lnet_process_id id;
+	struct lnet_ping_buffer *pbuf;
+	int rc;
+
+	if (dest_nid == LNET_NID_ANY) {
+		rc = -EHOSTUNREACH;
+		goto fail_error;
+	}
+
+	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
+	if (!pbuf) {
+		rc = ENOMEM;
+		goto fail_error;
+	}
+
+	/* initialize md content */
+	md.start     = &pbuf->pb_info;
+	md.length    = LNET_PING_INFO_SIZE(nnis);
+	md.threshold = 2; /* GET/REPLY */
+	md.max_size  = 0;
+	md.options   = LNET_MD_TRUNCATE;
+	md.user_ptr  = user_data;
+	md.eq_handle = eqh;
+
+	rc = LNetMDBind(md, LNET_UNLINK, mdh);
+	if (rc) {
+		lnet_ping_buffer_decref(pbuf);
+		CERROR("Can't bind MD: %d\n", rc);
+		rc = -rc; /* change the rc to positive */
+		goto fail_error;
+	}
+	id.pid = LNET_PID_LUSTRE;
+	id.nid = dest_nid;
+
+	rc = LNetGet(LNET_NID_ANY, *mdh, id,
+		     LNET_RESERVED_PORTAL,
+		     LNET_PROTO_PING_MATCHBITS, 0, recovery);
+
+	if (rc)
+		goto fail_unlink_md;
+
+	return 0;
+
+fail_unlink_md:
+	LNetMDUnlink(*mdh);
+	LNetInvalidateMDHandle(mdh);
+fail_error:
+	return rc;
+}
+
+static void
+lnet_mt_event_handler(struct lnet_event *event)
+{
+	lnet_nid_t nid = (lnet_nid_t) event->md.user_ptr;
+	struct lnet_ni *ni;
+	struct lnet_ping_buffer *pbuf;
+
+	/* TODO: remove assert */
+	LASSERT(event->type == LNET_EVENT_REPLY ||
+		event->type == LNET_EVENT_SEND ||
+		event->type == LNET_EVENT_UNLINK);
+
+	CDEBUG(D_NET, "Received event: %d status: %d\n", event->type,
+	       event->status);
+
+	switch (event->type) {
+	case LNET_EVENT_REPLY:
+		/*
+		 * If the NI has been restored completely then remove from
+		 * the recovery queue
+		 */
+		lnet_net_lock(0);
+		ni = lnet_nid2ni_locked(nid, 0);
+		if (!ni) {
+			lnet_net_unlock(0);
+			break;
+		}
+		lnet_ni_lock(ni);
+		ni->ni_state &= ~LNET_NI_STATE_RECOVERY_PENDING;
+		lnet_ni_unlock(ni);
+		lnet_net_unlock(0);
+		break;
+	case LNET_EVENT_SEND:
+		CDEBUG(D_NET, "%s recovery message sent %s:%d\n",
+			       libcfs_nid2str(nid),
+			       (event->status) ? "unsuccessfully" :
+			       "successfully", event->status);
+		break;
+	case LNET_EVENT_UNLINK:
+		/* nothing to do */
+		CDEBUG(D_NET, "%s recovery ping unlinked\n",
+		       libcfs_nid2str(nid));
+		break;
+	default:
+		CERROR("Unexpected event: %d\n", event->type);
+		return;
+	}
+	if (event->unlinked) {
+		pbuf = LNET_PING_INFO_TO_BUFFER(event->md.start);
+		lnet_ping_buffer_decref(pbuf);
+	}
+}
+
 int lnet_monitor_thr_start(void)
 {
-	int rc;
+	int rc = 0;
 	struct task_struct *task;
 
-	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN);
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_SHUTDOWN)
+		return -EALREADY;
 
-	sema_init(&the_lnet.ln_mt_signal, 0);
+	rc = lnet_resendqs_create();
+	if (rc)
+		return rc;
+
+	rc = LNetEQAlloc(0, lnet_mt_event_handler, &the_lnet.ln_mt_eqh);
+	if (rc != 0) {
+		CERROR("Can't allocate monitor thread EQ: %d\n", rc);
+		goto clean_queues;
+	}
 
 	/* Pre monitor thread start processing */
 	rc = lnet_router_pre_mt_start();
-	if (!rc)
-		return rc;
+	if (rc)
+		goto free_mem;
+
+	sema_init(&the_lnet.ln_mt_signal, 0);
 
 	the_lnet.ln_mt_state = LNET_MT_STATE_RUNNING;
 	task = kthread_run(lnet_monitor_thread, NULL, "monitor_thread");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("Can't start monitor thread: %d\n", rc);
-		/* block until event callback signals exit */
-		down(&the_lnet.ln_mt_signal);
-
-		/* clean up */
-		lnet_router_cleanup();
-		the_lnet.ln_mt_state = LNET_MT_STATE_SHUTDOWN;
-		return -ENOMEM;
+		goto clean_thread;
 	}
 
 	/* post monitor thread start processing */
 	lnet_router_post_mt_start();
 
 	return 0;
+
+clean_thread:
+	the_lnet.ln_mt_state = LNET_MT_STATE_STOPPING;
+	/* block until event callback signals exit */
+	down(&the_lnet.ln_mt_signal);
+	/* clean up */
+	lnet_router_cleanup();
+free_mem:
+	the_lnet.ln_mt_state = LNET_MT_STATE_SHUTDOWN;
+	lnet_clean_resendqs();
+	lnet_clean_local_ni_recoveryq();
+	LNetEQFree(the_lnet.ln_mt_eqh);
+	LNetInvalidateEQHandle(&the_lnet.ln_mt_eqh);
+	return rc;
+clean_queues:
+	lnet_clean_resendqs();
+	lnet_clean_local_ni_recoveryq();
+	return rc;
 }
 
 void lnet_monitor_thr_stop(void)
 {
+	int rc;
+
 	if (the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN)
 		return;
 
@@ -2716,7 +3199,12 @@ void lnet_monitor_thr_stop(void)
 	down(&the_lnet.ln_mt_signal);
 	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN);
 
+	/* perform cleanup tasks */
 	lnet_router_cleanup();
+	lnet_clean_resendqs();
+	lnet_clean_local_ni_recoveryq();
+	rc = LNetEQFree(the_lnet.ln_mt_eqh);
+	LASSERT(rc == 0);
 	return;
 }
 
@@ -3420,6 +3908,8 @@ lnet_drop_delayed_msg_list(struct list_head *head, char *reason)
 		lnet_drop_message(msg->msg_rxni, msg->msg_rx_cpt,
 				  msg->msg_private, msg->msg_len,
 				  msg->msg_type);
+
+		msg->msg_no_resend = true;
 		/*
 		 * NB: message will not generate event because w/o attached MD,
 		 * but we still should give error code so lnet_msg_decommit()
@@ -3583,6 +4073,7 @@ LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 	if (rc != 0) {
 		CNETERR("Error sending PUT to %s: %d\n",
 			libcfs_id2str(target), rc);
+		msg->msg_no_resend = true;
 		lnet_finalize(msg, rc);
 	}
 
@@ -3712,7 +4203,7 @@ EXPORT_SYMBOL(lnet_set_reply_msg_len);
 int
 LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
 	struct lnet_process_id target, unsigned int portal,
-	__u64 match_bits, unsigned int offset)
+	__u64 match_bits, unsigned int offset, bool recovery)
 {
 	struct lnet_msg		*msg;
 	struct lnet_libmd	*md;
@@ -3735,6 +4226,8 @@ LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
 		       libcfs_id2str(target));
 		return -ENOMEM;
 	}
+
+	msg->msg_recovery = recovery;
 
 	cpt = lnet_cpt_of_cookie(mdh.cookie);
 	lnet_res_lock(cpt);
@@ -3779,6 +4272,7 @@ LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
 	if (rc < 0) {
 		CNETERR("Error sending GET to %s: %d\n",
 			libcfs_id2str(target), rc);
+		msg->msg_no_resend = true;
 		lnet_finalize(msg, rc);
 	}
 

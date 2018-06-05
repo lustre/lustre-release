@@ -2719,9 +2719,7 @@ static lnet_nid_t lnet_peer_select_nid(struct lnet_peer *lp)
 static int lnet_peer_send_ping(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
-	struct lnet_md md = { NULL };
-	struct lnet_process_id id;
-	struct lnet_ping_buffer *pbuf;
+	lnet_nid_t pnid;
 	int nnis;
 	int rc;
 	int cpt;
@@ -2730,55 +2728,37 @@ __must_hold(&lp->lp_lock)
 	lp->lp_state &= ~LNET_PEER_FORCE_PING;
 	spin_unlock(&lp->lp_lock);
 
-	nnis = MAX(lp->lp_data_nnis, LNET_INTERFACES_MIN);
-	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
-	if (!pbuf) {
-		rc = -ENOMEM;
-		goto fail_error;
-	}
-
-	/* initialize md content */
-	md.start     = &pbuf->pb_info;
-	md.length    = LNET_PING_INFO_SIZE(nnis);
-	md.threshold = 2; /* GET/REPLY */
-	md.max_size  = 0;
-	md.options   = LNET_MD_TRUNCATE;
-	md.user_ptr  = lp;
-	md.eq_handle = the_lnet.ln_dc_eqh;
-
-	rc = LNetMDBind(md, LNET_UNLINK, &lp->lp_ping_mdh);
-	if (rc != 0) {
-		lnet_ping_buffer_decref(pbuf);
-		CERROR("Can't bind MD: %d\n", rc);
-		goto fail_error;
-	}
 	cpt = lnet_net_lock_current();
 	/* Refcount for MD. */
 	lnet_peer_addref_locked(lp);
-	id.pid = LNET_PID_LUSTRE;
-	id.nid = lnet_peer_select_nid(lp);
+	pnid = lnet_peer_select_nid(lp);
 	lnet_net_unlock(cpt);
 
-	if (id.nid == LNET_NID_ANY) {
-		rc = -EHOSTUNREACH;
-		goto fail_unlink_md;
+	nnis = MAX(lp->lp_data_nnis, LNET_INTERFACES_MIN);
+
+	rc = lnet_send_ping(pnid, &lp->lp_ping_mdh, nnis, lp,
+			    the_lnet.ln_dc_eqh, false);
+
+	/*
+	 * if LNetMDBind in lnet_send_ping fails we need to decrement the
+	 * refcount on the peer, otherwise LNetMDUnlink will be called
+	 * which will eventually do that.
+	 */
+	if (rc > 0) {
+		lnet_net_lock(cpt);
+		lnet_peer_decref_locked(lp);
+		lnet_net_unlock(cpt);
+		rc = -rc; /* change the rc to negative value */
+		goto fail_error;
+	} else if (rc < 0) {
+		goto fail_error;
 	}
-
-	rc = LNetGet(LNET_NID_ANY, lp->lp_ping_mdh, id,
-		     LNET_RESERVED_PORTAL,
-		     LNET_PROTO_PING_MATCHBITS, 0);
-
-	if (rc)
-		goto fail_unlink_md;
 
 	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
 
 	spin_lock(&lp->lp_lock);
 	return 0;
 
-fail_unlink_md:
-	LNetMDUnlink(lp->lp_ping_mdh);
-	LNetInvalidateMDHandle(&lp->lp_ping_mdh);
 fail_error:
 	CDEBUG(D_NET, "peer %s: %d\n", libcfs_nid2str(lp->lp_primary_nid), rc);
 	/*

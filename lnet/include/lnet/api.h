@@ -198,7 +198,8 @@ int LNetGet(lnet_nid_t	      self,
 	    struct lnet_process_id target_in,
 	    unsigned int      portal_in,
 	    __u64	      match_bits_in,
-	    unsigned int      offset_in);
+	    unsigned int      offset_in,
+	    bool	      recovery);
 /** @} lnet_data */
 
 

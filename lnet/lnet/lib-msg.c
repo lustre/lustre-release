@@ -461,14 +461,252 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 	return 0;
 }
 
+static void
+lnet_dec_healthv_locked(atomic_t *healthv)
+{
+	int h = atomic_read(healthv);
+
+	if (h < lnet_health_sensitivity) {
+		atomic_set(healthv, 0);
+	} else {
+		h -= lnet_health_sensitivity;
+		atomic_set(healthv, h);
+	}
+}
+
+static inline void
+lnet_inc_healthv(atomic_t *healthv)
+{
+	atomic_add_unless(healthv, 1, LNET_MAX_HEALTH_VALUE);
+}
+
+static void
+lnet_handle_local_failure(struct lnet_msg *msg)
+{
+	struct lnet_ni *local_ni;
+
+	local_ni = msg->msg_txni;
+
+	/*
+	 * the lnet_net_lock(0) is used to protect the addref on the ni
+	 * and the recovery queue.
+	 */
+	lnet_net_lock(0);
+	/* the mt could've shutdown and cleaned up the queues */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
+		lnet_net_unlock(0);
+		return;
+	}
+
+	lnet_dec_healthv_locked(&local_ni->ni_healthv);
+	/*
+	 * add the NI to the recovery queue if it's not already there
+	 * and it's health value is actually below the maximum. It's
+	 * possible that the sensitivity might be set to 0, and the health
+	 * value will not be reduced. In this case, there is no reason to
+	 * invoke recovery
+	 */
+	if (list_empty(&local_ni->ni_recovery) &&
+	    atomic_read(&local_ni->ni_healthv) < LNET_MAX_HEALTH_VALUE) {
+		CERROR("ni %s added to recovery queue. Health = %d\n",
+			libcfs_nid2str(local_ni->ni_nid),
+			atomic_read(&local_ni->ni_healthv));
+		list_add_tail(&local_ni->ni_recovery,
+			      &the_lnet.ln_mt_localNIRecovq);
+		lnet_ni_addref_locked(local_ni, 0);
+	}
+	lnet_net_unlock(0);
+}
+
+/*
+ * Do a health check on the message:
+ * return -1 if we're not going to handle the error
+ *   success case will return -1 as well
+ * return 0 if it the message is requeued for send
+ */
+static int
+lnet_health_check(struct lnet_msg *msg)
+{
+	enum lnet_msg_hstatus hstatus = msg->msg_health_status;
+
+	/* TODO: lnet_incr_hstats(hstatus); */
+
+	LASSERT(msg->msg_txni);
+
+	if (hstatus != LNET_MSG_STATUS_OK &&
+	    ktime_compare(ktime_get(), msg->msg_deadline) >= 0)
+		return -1;
+
+	/* if we're shutting down no point in handling health. */
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		return -1;
+
+	switch (hstatus) {
+	case LNET_MSG_STATUS_OK:
+		lnet_inc_healthv(&msg->msg_txni->ni_healthv);
+		/* we can finalize this message */
+		return -1;
+	case LNET_MSG_STATUS_LOCAL_INTERRUPT:
+	case LNET_MSG_STATUS_LOCAL_DROPPED:
+	case LNET_MSG_STATUS_LOCAL_ABORTED:
+	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
+	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
+		lnet_handle_local_failure(msg);
+		/* add to the re-send queue */
+		goto resend;
+
+	/*
+		* TODO: since the remote dropped the message we can
+		* attempt a resend safely.
+		*/
+	case LNET_MSG_STATUS_REMOTE_DROPPED:
+	break;
+
+	/*
+		* These errors will not trigger a resend so simply
+		* finalize the message
+		*/
+	case LNET_MSG_STATUS_LOCAL_ERROR:
+		lnet_handle_local_failure(msg);
+		return -1;
+	case LNET_MSG_STATUS_REMOTE_ERROR:
+	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
+	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
+		return -1;
+	}
+
+resend:
+	/* don't resend recovery messages */
+	if (msg->msg_recovery)
+		return -1;
+
+	/*
+	 * if we explicitly indicated we don't want to resend then just
+	 * return
+	 */
+	if (msg->msg_no_resend)
+		return -1;
+
+	lnet_net_lock(msg->msg_tx_cpt);
+
+	/*
+	 * remove message from the active list and reset it in preparation
+	 * for a resend. Two exception to this
+	 *
+	 * 1. the router case, whe a message is committed for rx when
+	 * received, then tx when it is sent. When committed to both tx and
+	 * rx we don't want to remove it from the active list.
+	 *
+	 * 2. The REPLY case since it uses the same msg block for the GET
+	 * that was received.
+	 */
+	if (!msg->msg_routing && msg->msg_type != LNET_MSG_REPLY) {
+		list_del_init(&msg->msg_activelist);
+		msg->msg_onactivelist = 0;
+	}
+	/*
+	 * The msg_target.nid which was originally set
+	 * when calling LNetGet() or LNetPut() might've
+	 * been overwritten if we're routing this message.
+	 * Call lnet_return_tx_credits_locked() to return
+	 * the credit this message consumed. The message will
+	 * consume another credit when it gets resent.
+	 */
+	msg->msg_target.nid = msg->msg_hdr.dest_nid;
+	lnet_msg_decommit_tx(msg, -EAGAIN);
+	msg->msg_sending = 0;
+	msg->msg_receiving = 0;
+	msg->msg_target_is_router = 0;
+
+	CDEBUG(D_NET, "%s->%s:%s:%s - queuing for resend\n",
+	       libcfs_nid2str(msg->msg_hdr.src_nid),
+	       libcfs_nid2str(msg->msg_hdr.dest_nid),
+	       lnet_msgtyp2str(msg->msg_type),
+	       lnet_health_error2str(hstatus));
+
+	list_add_tail(&msg->msg_list, the_lnet.ln_mt_resendqs[msg->msg_tx_cpt]);
+	lnet_net_unlock(msg->msg_tx_cpt);
+
+	wake_up(&the_lnet.ln_mt_waitq);
+	return 0;
+}
+
+static void
+lnet_detach_md(struct lnet_msg *msg, int status)
+{
+	int cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
+
+	lnet_res_lock(cpt);
+	lnet_msg_detach_md(msg, status);
+	lnet_res_unlock(cpt);
+}
+
+static bool
+lnet_is_health_check(struct lnet_msg *msg)
+{
+	bool hc;
+	int status = msg->msg_ev.status;
+
+	/*
+	 * perform a health check for any message committed for transmit
+	 */
+	hc = msg->msg_tx_committed;
+
+	/* Check for status inconsistencies */
+	if (hc &&
+	    ((!status && msg->msg_health_status != LNET_MSG_STATUS_OK) ||
+	     (status && msg->msg_health_status == LNET_MSG_STATUS_OK))) {
+		CERROR("Msg is in inconsistent state, don't perform health "
+		       "checking (%d, %d)\n", status, msg->msg_health_status);
+		hc = false;
+	}
+
+	CDEBUG(D_NET, "health check = %d, status = %d, hstatus = %d\n",
+	       hc, status, msg->msg_health_status);
+
+	return hc;
+}
+
+char *
+lnet_health_error2str(enum lnet_msg_hstatus hstatus)
+{
+	switch (hstatus) {
+	case LNET_MSG_STATUS_LOCAL_INTERRUPT:
+		return "LOCAL_INTERRUPT";
+	case LNET_MSG_STATUS_LOCAL_DROPPED:
+		return "LOCAL_DROPPED";
+	case LNET_MSG_STATUS_LOCAL_ABORTED:
+		return "LOCAL_ABORTED";
+	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
+		return "LOCAL_NO_ROUTE";
+	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
+		return "LOCAL_TIMEOUT";
+	case LNET_MSG_STATUS_LOCAL_ERROR:
+		return "LOCAL_ERROR";
+	case LNET_MSG_STATUS_REMOTE_DROPPED:
+		return "REMOTE_DROPPED";
+	case LNET_MSG_STATUS_REMOTE_ERROR:
+		return "REMOTE_ERROR";
+	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
+		return "REMOTE_TIMEOUT";
+	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
+		return "NETWORK_TIMEOUT";
+	case LNET_MSG_STATUS_OK:
+		return "OK";
+	default:
+		return "<UNKNOWN>";
+	}
+}
+
 void
 lnet_finalize(struct lnet_msg *msg, int status)
 {
-	struct lnet_msg_container	*container;
-	int				my_slot;
-	int				cpt;
-	int				rc;
-	int				i;
+	struct lnet_msg_container *container;
+	int my_slot;
+	int cpt;
+	int rc;
+	int i;
+	bool hc;
 
 	LASSERT(!in_interrupt());
 
@@ -477,21 +715,58 @@ lnet_finalize(struct lnet_msg *msg, int status)
 
 	msg->msg_ev.status = status;
 
-	if (msg->msg_md != NULL) {
-		cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
+	/* if the message is successfully sent, no need to keep the MD around */
+	if (msg->msg_md != NULL && !status)
+		lnet_detach_md(msg, status);
 
-		lnet_res_lock(cpt);
-		lnet_msg_detach_md(msg, status);
-		lnet_res_unlock(cpt);
-	}
+again:
+	hc = lnet_is_health_check(msg);
 
- again:
+	/*
+	 * the MD would've been detached from the message if it was
+	 * successfully sent. However, if it wasn't successfully sent the
+	 * MD would be around. And since we recalculate whether to
+	 * health check or not, it's possible that we change our minds and
+	 * we don't want to health check this message. In this case also
+	 * free the MD.
+	 *
+	 * If the message is successful we're going to
+	 * go through the lnet_health_check() function, but that'll just
+	 * increment the appropriate health value and return.
+	 */
+	if (msg->msg_md != NULL && !hc)
+		lnet_detach_md(msg, status);
+
 	rc = 0;
 	if (!msg->msg_tx_committed && !msg->msg_rx_committed) {
 		/* not committed to network yet */
 		LASSERT(!msg->msg_onactivelist);
 		lnet_msg_free(msg);
 		return;
+	}
+
+	if (hc) {
+		/*
+		 * Check the health status of the message. If it has one
+		 * of the errors that we're supposed to handle, and it has
+		 * not timed out, then
+		 *	1. Decrement the appropriate health_value
+		 *	2. queue the message on the resend queue
+
+		 * if the message send is success, timed out or failed in the
+		 * health check for any reason then we'll just finalize the
+		 * message. Otherwise just return since the message has been
+		 * put on the resend queue.
+		 */
+		if (!lnet_health_check(msg))
+			return;
+
+		/*
+		 * if we get here then we need to clean up the md because we're
+		 * finalizing the message.
+		*/
+		if (msg->msg_md != NULL)
+			lnet_detach_md(msg, status);
 	}
 
 	/*
@@ -528,7 +803,7 @@ lnet_finalize(struct lnet_msg *msg, int status)
 		msg = list_entry(container->msc_finalizing.next,
 				 struct lnet_msg, msg_list);
 
-		list_del(&msg->msg_list);
+		list_del_init(&msg->msg_list);
 
 		/* NB drops and regains the lnet lock if it actually does
 		 * anything, so my finalizing friends can chomp along too */
@@ -566,7 +841,7 @@ lnet_msg_container_cleanup(struct lnet_msg_container *container)
 				  struct lnet_msg, msg_activelist);
 		LASSERT(msg->msg_onactivelist);
 		msg->msg_onactivelist = 0;
-		list_del(&msg->msg_activelist);
+		list_del_init(&msg->msg_activelist);
 		lnet_msg_free(msg);
 		count++;
 	}
