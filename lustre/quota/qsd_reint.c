@@ -89,6 +89,14 @@ static int qsd_reint_qid(const struct lu_env *env, struct qsd_qtype_info *qqi,
 
 	rc = qsd_update_index(env, qqi, qid, global, 0, rec);
 out:
+
+	if (global && qid->qid_uid == 0) {
+		struct lquota_glb_rec *glb_rec = (struct lquota_glb_rec *)rec;
+		qsd_update_default_quota(qqi, glb_rec->qbr_hardlimit,
+					 glb_rec->qbr_softlimit,
+					 glb_rec->qbr_time);
+	}
+
 	lqe_putref(lqe);
 	RETURN(rc);
 }

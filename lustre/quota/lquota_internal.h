@@ -178,11 +178,12 @@ struct lquota_entry {
 	} u;
 
 	/* flags describing the state of the lquota_entry */
-	unsigned long	lqe_enforced:1,/* quota enforced or not */
-			lqe_uptodate:1,/* successfully read from disk */
-			lqe_edquot:1,  /* id out of quota space on QMT */
-			lqe_gl:1,      /* glimpse is in progress */
-			lqe_nopreacq:1;/* pre-acquire disabled */
+	unsigned long	lqe_enforced:1,	  /* quota enforced or not */
+			lqe_uptodate:1,	  /* successfully read from disk */
+			lqe_edquot:1,	  /* id out of quota space on QMT */
+			lqe_gl:1,	  /* glimpse is in progress */
+			lqe_nopreacq:1,	  /* pre-acquire disabled */
+			lqe_is_default:1; /* the default quota is used */
 };
 
 /* Compartment within which lquota_entry are unique.

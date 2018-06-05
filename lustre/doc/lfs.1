@@ -107,6 +107,8 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 .br
 .B lfs quotacheck [-ug] <filesystem>
 .br
+.B lfs quota <-U|-G|-P> <filesystem>
+.br
 .B lfs quotaon [-ugf] <filesystem>
 .br
 .B lfs quotaoff [-ug] <filesystem>
@@ -263,6 +265,9 @@ List all the MDTs
 .TP
 .B $ lfs quota -u bob /mnt/lustre
 List quotas of user `bob'
+.TP
+.B $ lfs quota -U /mnt/lustre
+List user quotas of system default setting
 .TP
 .B $ lfs quota -t -u /mnt/lustre
 Show grace times for user quotas on /mnt/lustre

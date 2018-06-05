@@ -46,6 +46,55 @@ static void qmt_lqe_init(struct lquota_entry *lqe, void *arg)
 	init_rwsem(&lqe->lqe_sem);
 }
 
+/* Apply the default quota setting to the specified quota entry
+ *
+ * \param env		- is the environment passed by the caller
+ * \param pool		- is the quota pool of the quota entry
+ * \param lqe		- is the lquota_entry object to apply default quota on
+ * \param create_record	- if true, an global quota record will be created and
+ *                        write to the disk.
+ *
+ * \retval 0		: success
+ * \retval -ve		: other appropriate errors
+ */
+int qmt_lqe_set_default(const struct lu_env *env, struct qmt_pool_info *pool,
+			struct lquota_entry *lqe, bool create_record)
+{
+	struct lquota_entry	*lqe_def;
+	int			rc = 0;
+
+	ENTRY;
+
+	if (lqe->lqe_id.qid_uid == 0)
+		RETURN(0);
+
+	lqe_def = pool->qpi_grace_lqe[lqe->lqe_site->lqs_qtype];
+
+	LQUOTA_DEBUG(lqe, "inherit default quota");
+
+	lqe->lqe_is_default = true;
+	lqe->lqe_hardlimit = lqe_def->lqe_hardlimit;
+	lqe->lqe_softlimit = lqe_def->lqe_softlimit;
+
+	if (create_record) {
+		lqe->lqe_uptodate = true;
+		rc = qmt_set_with_lqe(env, pool->qpi_qmt, lqe, 0, 0,
+				      LQUOTA_GRACE_FLAG(0, LQUOTA_FLAG_DEFAULT),
+				      QIF_TIMES, true, false);
+
+		if (rc != 0)
+			LQUOTA_ERROR(lqe, "failed to create the global quota"
+				     " record: %d", rc);
+	}
+
+	if (lqe->lqe_hardlimit == 0 && lqe->lqe_softlimit == 0)
+		lqe->lqe_enforced = false;
+	else
+		lqe->lqe_enforced = true;
+
+	RETURN(rc);
+}
+
 /*
  * Update a lquota entry. This is done by reading quota settings from the global
  * index. The lquota entry must be write locked.
@@ -70,28 +119,32 @@ static int qmt_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 
 	switch (rc) {
 	case -ENOENT:
-		/* no such entry, assume quota isn't enforced for this user */
-		lqe->lqe_enforced = false;
+		qmt_lqe_set_default(env, pool, lqe, true);
 		break;
 	case 0:
 		/* copy quota settings from on-disk record */
 		lqe->lqe_granted   = qti->qti_glb_rec.qbr_granted;
 		lqe->lqe_hardlimit = qti->qti_glb_rec.qbr_hardlimit;
 		lqe->lqe_softlimit = qti->qti_glb_rec.qbr_softlimit;
-		lqe->lqe_gracetime = qti->qti_glb_rec.qbr_time;
+		lqe->lqe_gracetime = LQUOTA_GRACE(qti->qti_glb_rec.qbr_time);
 
-		if (lqe->lqe_hardlimit == 0 && lqe->lqe_softlimit == 0)
-			/* {hard,soft}limit=0 means no quota enforced */
-			lqe->lqe_enforced = false;
-		else
-			lqe->lqe_enforced  = true;
-
+		if (lqe->lqe_hardlimit == 0 && lqe->lqe_softlimit == 0 &&
+		    (LQUOTA_FLAG(qti->qti_glb_rec.qbr_time) &
+		     LQUOTA_FLAG_DEFAULT))
+			qmt_lqe_set_default(env, pool, lqe, false);
 		break;
 	default:
 		LQUOTA_ERROR(lqe, "failed to read quota entry from disk, rc:%d",
 			     rc);
 		RETURN(rc);
 	}
+
+	if (lqe->lqe_id.qid_uid == 0 ||
+	    (lqe->lqe_hardlimit == 0 && lqe->lqe_softlimit == 0))
+		/* {hard,soft}limit=0 means no quota enforced */
+		lqe->lqe_enforced = false;
+	else
+		lqe->lqe_enforced  = true;
 
 	LQUOTA_DEBUG(lqe, "read");
 	RETURN(0);
@@ -113,8 +166,8 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 
 	libcfs_debug_vmsg2(msgdata, fmt, args,
 			   "qmt:%s pool:%d-%s id:%llu enforced:%d hard:%llu"
-			   " soft:%llu granted:%llu time:%llu qunit:"
-			   "%llu edquot:%d may_rel:%llu revoke:%lld\n",
+			   " soft:%llu granted:%llu time:%llu qunit: %llu"
+			   " edquot:%d may_rel:%llu revoke:%lld default:%s\n",
 			   pool->qpi_qmt->qmt_svname,
 			   pool->qpi_key & 0x0000ffff,
 			   RES_NAME(pool->qpi_key >> 16),
@@ -122,7 +175,8 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 			   lqe->lqe_hardlimit, lqe->lqe_softlimit,
 			   lqe->lqe_granted, lqe->lqe_gracetime,
 			   lqe->lqe_qunit, lqe->lqe_edquot, lqe->lqe_may_rel,
-			   lqe->lqe_revoke_time);
+			   lqe->lqe_revoke_time,
+			   lqe->lqe_is_default ? "yes" : "no");
 }
 
 /*
@@ -264,9 +318,15 @@ int qmt_glb_write(const struct lu_env *env, struct thandle *th,
 
 	/* fill global index with updated quota settings */
 	rec->qbr_granted   = lqe->lqe_granted;
-	rec->qbr_hardlimit = lqe->lqe_hardlimit;
-	rec->qbr_softlimit = lqe->lqe_softlimit;
-	rec->qbr_time      = lqe->lqe_gracetime;
+	if (lqe->lqe_is_default) {
+		rec->qbr_hardlimit = 0;
+		rec->qbr_softlimit = 0;
+		rec->qbr_time      = LQUOTA_GRACE_FLAG(0, LQUOTA_FLAG_DEFAULT);
+	} else {
+		rec->qbr_hardlimit = lqe->lqe_hardlimit;
+		rec->qbr_softlimit = lqe->lqe_softlimit;
+		rec->qbr_time      = lqe->lqe_gracetime;
+	}
 
 	/* write new quota settings */
 	rc = lquota_disk_write(env, th, LQE_GLB_OBJ(lqe), &lqe->lqe_id,

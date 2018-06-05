@@ -231,6 +231,49 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 	RETURN(rc);
 }
 
+static int qsd_entry_def_iter_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+				 struct hlist_node *hnode, void *data)
+{
+	struct qsd_qtype_info	*qqi = (struct qsd_qtype_info *)data;
+	struct lquota_entry	*lqe;
+
+	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+
+	if (lqe->lqe_id.qid_uid == 0 || !lqe->lqe_is_default)
+		return 0;
+
+	lqe_write_lock(lqe);
+	if (qqi->qqi_default_hardlimit == 0 && qqi->qqi_default_softlimit == 0)
+		lqe->lqe_enforced = false;
+	else
+		lqe->lqe_enforced = true;
+	lqe_write_unlock(lqe);
+
+	return 0;
+}
+
+/* Update the quota entries after receiving default quota update
+ *
+ * \param qqi       - is the qsd_qtype_info associated with the quota entries
+ * \param hardlimit - new hardlimit of default quota
+ * \param softlimit - new softlimit of default quota
+ * \param gracetime - new gracetime of default quota
+ */
+void qsd_update_default_quota(struct qsd_qtype_info *qqi, __u64 hardlimit,
+			      __u64 softlimit, __u64 gracetime)
+{
+	CDEBUG(D_QUOTA, "%s: update default quota setting from QMT.\n",
+	       qqi->qqi_qsd->qsd_svname);
+
+	qqi->qqi_default_hardlimit = hardlimit;
+	qqi->qqi_default_softlimit = softlimit;
+	qqi->qqi_default_gracetime = gracetime;
+
+	cfs_hash_for_each_safe(qqi->qqi_site->lqs_hash,
+			       qsd_entry_def_iter_cb, qqi);
+}
+
 /*
  * Glimpse callback handler for global quota lock.
  *
@@ -272,6 +315,10 @@ static int qsd_glb_glimpse_ast(struct ldlm_lock *lock, void *data)
 	rec.qbr_softlimit = desc->gl_softlimit;
 	rec.qbr_time      = desc->gl_time;
 	rec.qbr_granted   = 0;
+
+	if (desc->gl_id.qid_uid == 0)
+		qsd_update_default_quota(qqi, desc->gl_hardlimit,
+					 desc->gl_softlimit, desc->gl_time);
 
 	/* We can't afford disk io in the context of glimpse callback handling
 	 * thread, so the on-disk global limits update has to be deferred. */

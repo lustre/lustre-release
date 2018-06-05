@@ -176,7 +176,12 @@ struct qsd_qtype_info {
 				qqi_acct_failed:1; /* failed to setup acct */
 
 	/* A list of references to this instance, for debugging */
-	struct lu_ref		 qqi_reference;
+	struct lu_ref		qqi_reference;
+
+	/* default quota setting*/
+	__u64			qqi_default_hardlimit;
+	__u64			qqi_default_softlimit;
+	__u64			qqi_default_gracetime;
 };
 
 /*
@@ -349,6 +354,8 @@ int qsd_write_version(const struct lu_env *, struct qsd_qtype_info *,
 /* qsd_lock.c */
 extern struct ldlm_enqueue_info qsd_glb_einfo;
 extern struct ldlm_enqueue_info qsd_id_einfo;
+void qsd_update_default_quota(struct qsd_qtype_info *qqi, __u64 hardlimit,
+			      __u64 softlimit, __u64 gracetime);
 int qsd_id_lock_match(struct lustre_handle *, struct lustre_handle *);
 int qsd_id_lock_cancel(const struct lu_env *, struct lquota_entry *);
 

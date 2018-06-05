@@ -307,6 +307,21 @@ static int qsd_process_upd(const struct lu_env *env, struct qsd_upd_rec *upd)
 	rc = qsd_update_index(env, qqi, &upd->qur_qid, upd->qur_global,
 			      upd->qur_ver, &upd->qur_rec);
 out:
+	if (upd->qur_global && rc == 0 &&
+	    upd->qur_rec.lqr_glb_rec.qbr_softlimit == 0 &&
+	    upd->qur_rec.lqr_glb_rec.qbr_hardlimit == 0 &&
+	    (LQUOTA_FLAG(upd->qur_rec.lqr_glb_rec.qbr_time) &
+							LQUOTA_FLAG_DEFAULT)) {
+		lqe->lqe_is_default = true;
+		if (qqi->qqi_default_softlimit == 0 &&
+		    qqi->qqi_default_hardlimit == 0)
+			lqe->lqe_enforced = false;
+		else
+			lqe->lqe_enforced = true;
+
+		LQUOTA_DEBUG(lqe, "update to use default quota");
+	}
+
 	if (lqe && !IS_ERR(lqe)) {
 		lqe_putref(lqe);
 		upd->qur_lqe = NULL;

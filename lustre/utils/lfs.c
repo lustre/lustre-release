@@ -414,13 +414,25 @@ command_t cmdlist[] = {
 	 "       setquota [-t] <-u|--user|-g|--group|-p|--projid>\n"
          "                [--block-grace <block-grace>]\n"
          "                [--inode-grace <inode-grace>] <filesystem>\n"
+	 "       setquota <-U|-G|-P>\n"
+	 "                -b <block-softlimit> -B <block-hardlimit>\n"
+	 "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
+	 "       setquota <-U|--default-usr|-G|--default-grp|-P|--default-prj>\n"
+	 "                [--block-softlimit <block-softlimit>]\n"
+	 "                [--block-hardlimit <block-hardlimit>]\n"
+	 "                [--inode-softlimit <inode-softlimit>]\n"
+	 "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
+	 "       setquota <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>\n"
+	 "                <-d|--default>\n"
          "       -b can be used instead of --block-softlimit/--block-grace\n"
          "       -B can be used instead of --block-hardlimit\n"
          "       -i can be used instead of --inode-softlimit/--inode-grace\n"
-	 "       -I can be used instead of --inode-hardlimit\n\n"
+	 "       -I can be used instead of --inode-hardlimit\n"
+	 "       -d can be used instead of --default\n\n"
 	 "Note: The total quota space will be split into many qunits and\n"
 	 "      balanced over all server targets, the minimal qunit size is\n"
 	 "      1M bytes for block space and 1K inodes for inode space.\n\n"
+	 "      The maximum quota grace time is 2^48 - 1 seconds.\n\n"
 	 "      Quota space rebalancing process will stop when this mininum\n"
 	 "      value is reached. As a result, quota exceeded can be returned\n"
 	 "      while many targets still have 1MB or 1K inodes of spare\n"
@@ -429,7 +441,8 @@ command_t cmdlist[] = {
 	 "usage: quota [-q] [-v] [-h] [-o <obd_uuid>|-i <mdt_idx>|-I "
 		       "<ost_idx>]\n"
 	 "             [<-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>] <filesystem>\n"
-	 "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g|-p> <filesystem>"},
+	 "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g|-p> <filesystem>\n"
+	"	 quota [-q] [-v] [h] <-U|-G|-P> <filesystem>"},
 	{"project", lfs_project, 0,
 	 "Change or list project attribute for specified file or directory.\n"
 	 "usage: project [-d|-r] <file|directory...>\n"
@@ -5361,6 +5374,12 @@ quota_type:
                 return CMD_HELP;
         }
 
+	if ((dqb->dqb_valid | QIF_BTIME && dqi->dqi_bgrace >= UINT_MAX) ||
+	    (dqb->dqb_valid | QIF_ITIME && dqi->dqi_igrace >= UINT_MAX)) {
+		fprintf(stderr, "error: grace time is too large\n");
+		return CMD_HELP;
+	}
+
         mnt = argv[optind];
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
@@ -5381,25 +5400,30 @@ quota_type:
 
 int lfs_setquota(int argc, char **argv)
 {
-        int c, rc;
-        struct if_quotactl qctl;
-        char *mnt, *obd_type = (char *)qctl.obd_type;
-        struct obd_dqblk *dqb = &qctl.qc_dqblk;
-        struct option long_opts[] = {
+	int c, rc = 0;
+	struct if_quotactl qctl;
+	char *mnt, *obd_type = (char *)qctl.obd_type;
+	struct obd_dqblk *dqb = &qctl.qc_dqblk;
+	struct option long_opts[] = {
 	{ .val = 'b',	.name = "block-softlimit",
 						.has_arg = required_argument },
 	{ .val = 'B',	.name = "block-hardlimit",
 						.has_arg = required_argument },
+	{ .val = 'd',	.name = "default",	.has_arg = no_argument },
 	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
+	{ .val = 'G',	.name = "default-grp",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "inode-softlimit",
 						.has_arg = required_argument },
 	{ .val = 'I',	.name = "inode-hardlimit",
 						.has_arg = required_argument },
 	{ .val = 'p',	.name = "projid",	.has_arg = required_argument },
+	{ .val = 'P',	.name = "default-prj",	.has_arg = no_argument },
 	{ .val = 'u',	.name = "user",		.has_arg = required_argument },
+	{ .val = 'U',	.name = "default-usr",	.has_arg = no_argument },
 	{ .name = NULL } };
-        unsigned limit_mask = 0;
-        char *endptr;
+	unsigned limit_mask = 0;
+	char *endptr;
+	bool use_default = false;
 	int qtype;
 
 	if (has_times_option(argc, argv))
@@ -5411,37 +5435,65 @@ int lfs_setquota(int argc, char **argv)
 				  * so it can be used as a marker that qc_type
 				  * isn't reinitialized from command line */
 
-	while ((c = getopt_long(argc, argv, "b:B:g:i:I:p:u:",
+	while ((c = getopt_long(argc, argv, "b:B:dg:Gi:I:p:Pu:U",
 		long_opts, NULL)) != -1) {
 		switch (c) {
+		case 'U':
+			qctl.qc_cmd = LUSTRE_Q_SETDEFAULT;
+			qtype = USRQUOTA;
+			qctl.qc_id = 0;
+			goto quota_type_def;
 		case 'u':
 			qtype = USRQUOTA;
 			rc = name2uid(&qctl.qc_id, optarg);
 			goto quota_type;
+		case 'G':
+			qctl.qc_cmd = LUSTRE_Q_SETDEFAULT;
+			qtype = GRPQUOTA;
+			qctl.qc_id = 0;
+			goto quota_type_def;
                 case 'g':
 			qtype = GRPQUOTA;
 			rc = name2gid(&qctl.qc_id, optarg);
 			goto quota_type;
+		case 'P':
+			qctl.qc_cmd = LUSTRE_Q_SETDEFAULT;
+			qtype = PRJQUOTA;
+			qctl.qc_id = 0;
+			goto quota_type_def;
 		case 'p':
 			qtype = PRJQUOTA;
 			rc = name2projid(&qctl.qc_id, optarg);
 quota_type:
+			if (rc) {
+				qctl.qc_id = strtoul(optarg, &endptr, 10);
+				if (*endptr != '\0') {
+					fprintf(stderr, "%s setquota: invalid"
+						" id '%s'\n", progname, optarg);
+					return -1;
+				}
+			}
+
+			if (qctl.qc_id == 0) {
+				fprintf(stderr, "%s setquota: can't set quota"
+					" for root usr/group/project.\n",
+					progname);
+				return -1;
+			}
+
+quota_type_def:
 			if (qctl.qc_type != ALLQUOTA) {
 				fprintf(stderr,
-					"%s setquota: only one of -u, -g or -p may be specified\n",
+					"%s setquota: only one of -u, -U, -g,"
+					" -G, -p or -P may be specified\n",
 					progname);
 				return CMD_HELP;
 			}
 			qctl.qc_type = qtype;
-			if (rc) {
-				qctl.qc_id = strtoul(optarg, &endptr, 10);
-				if (*endptr != '\0') {
-					fprintf(stderr,
-						"%s setquota: invalid id '%s'\n",
-						progname, optarg);
-					return -1;
-				}
-			}
+			break;
+		case 'd':
+			qctl.qc_cmd = LUSTRE_Q_SETDEFAULT;
+			use_default = true;
 			break;
 		case 'b':
 			ARG2ULL(dqb->dqb_bsoftlimit, optarg, 1024);
@@ -5504,9 +5556,25 @@ quota_type:
 		return CMD_HELP;
 	}
 
-	if (limit_mask == 0) {
+	if (!use_default && limit_mask == 0) {
 		fprintf(stderr,
 			"%s setquota: at least one limit must be specified\n",
+			progname);
+		return CMD_HELP;
+	}
+
+	if (use_default && limit_mask != 0) {
+		fprintf(stderr,
+			"%s setquota: limits should not be specified when"
+			" using default quota\n",
+			progname);
+		return CMD_HELP;
+	}
+
+	if (use_default && qctl.qc_id == 0) {
+		fprintf(stderr,
+			"%s setquota: can not set default quota for root"
+			" user/group/project\n",
 			progname);
 		return CMD_HELP;
 	}
@@ -5520,42 +5588,50 @@ quota_type:
 
         mnt = argv[optind];
 
-        if ((!(limit_mask & BHLIMIT) ^ !(limit_mask & BSLIMIT)) ||
-            (!(limit_mask & IHLIMIT) ^ !(limit_mask & ISLIMIT))) {
-                /* sigh, we can't just set blimits/ilimits */
-                struct if_quotactl tmp_qctl = {.qc_cmd  = LUSTRE_Q_GETQUOTA,
-                                               .qc_type = qctl.qc_type,
-                                               .qc_id   = qctl.qc_id};
+	if (use_default) {
+		dqb->dqb_bhardlimit = 0;
+		dqb->dqb_bsoftlimit = 0;
+		dqb->dqb_ihardlimit = 0;
+		dqb->dqb_isoftlimit = 0;
+		dqb->dqb_itime = 0;
+		dqb->dqb_btime = 0;
+		dqb->dqb_valid |= QIF_LIMITS | QIF_TIMES;
+	} else if ((!(limit_mask & BHLIMIT) ^ !(limit_mask & BSLIMIT)) ||
+		   (!(limit_mask & IHLIMIT) ^ !(limit_mask & ISLIMIT))) {
+		/* sigh, we can't just set blimits/ilimits */
+		struct if_quotactl tmp_qctl = {.qc_cmd  = LUSTRE_Q_GETQUOTA,
+					       .qc_type = qctl.qc_type,
+					       .qc_id   = qctl.qc_id};
 
-                rc = llapi_quotactl(mnt, &tmp_qctl);
+		rc = llapi_quotactl(mnt, &tmp_qctl);
 		if (rc < 0)
 			return rc;
 
-                if (!(limit_mask & BHLIMIT))
-                        dqb->dqb_bhardlimit = tmp_qctl.qc_dqblk.dqb_bhardlimit;
-                if (!(limit_mask & BSLIMIT))
-                        dqb->dqb_bsoftlimit = tmp_qctl.qc_dqblk.dqb_bsoftlimit;
-                if (!(limit_mask & IHLIMIT))
-                        dqb->dqb_ihardlimit = tmp_qctl.qc_dqblk.dqb_ihardlimit;
-                if (!(limit_mask & ISLIMIT))
-                        dqb->dqb_isoftlimit = tmp_qctl.qc_dqblk.dqb_isoftlimit;
+		if (!(limit_mask & BHLIMIT))
+			dqb->dqb_bhardlimit = tmp_qctl.qc_dqblk.dqb_bhardlimit;
+		if (!(limit_mask & BSLIMIT))
+			dqb->dqb_bsoftlimit = tmp_qctl.qc_dqblk.dqb_bsoftlimit;
+		if (!(limit_mask & IHLIMIT))
+			dqb->dqb_ihardlimit = tmp_qctl.qc_dqblk.dqb_ihardlimit;
+		if (!(limit_mask & ISLIMIT))
+			dqb->dqb_isoftlimit = tmp_qctl.qc_dqblk.dqb_isoftlimit;
 
-                /* Keep grace times if we have got no softlimit arguments */
-                if ((limit_mask & BHLIMIT) && !(limit_mask & BSLIMIT)) {
-                        dqb->dqb_valid |= QIF_BTIME;
-                        dqb->dqb_btime = tmp_qctl.qc_dqblk.dqb_btime;
-                }
+		/* Keep grace times if we have got no softlimit arguments */
+		if ((limit_mask & BHLIMIT) && !(limit_mask & BSLIMIT)) {
+			dqb->dqb_valid |= QIF_BTIME;
+			dqb->dqb_btime = tmp_qctl.qc_dqblk.dqb_btime;
+		}
 
-                if ((limit_mask & IHLIMIT) && !(limit_mask & ISLIMIT)) {
-                        dqb->dqb_valid |= QIF_ITIME;
-                        dqb->dqb_itime = tmp_qctl.qc_dqblk.dqb_itime;
-                }
-        }
+		if ((limit_mask & IHLIMIT) && !(limit_mask & ISLIMIT)) {
+			dqb->dqb_valid |= QIF_ITIME;
+			dqb->dqb_itime = tmp_qctl.qc_dqblk.dqb_itime;
+		}
+	}
 
-        dqb->dqb_valid |= (limit_mask & (BHLIMIT | BSLIMIT)) ? QIF_BLIMITS : 0;
-        dqb->dqb_valid |= (limit_mask & (IHLIMIT | ISLIMIT)) ? QIF_ILIMITS : 0;
+	dqb->dqb_valid |= (limit_mask & (BHLIMIT | BSLIMIT)) ? QIF_BLIMITS : 0;
+	dqb->dqb_valid |= (limit_mask & (IHLIMIT | ISLIMIT)) ? QIF_ILIMITS : 0;
 
-        rc = llapi_quotactl(mnt, &qctl);
+	rc = llapi_quotactl(mnt, &qctl);
 	if (rc) {
 		if (*obd_type)
 			fprintf(stderr,
@@ -5624,15 +5700,22 @@ static void diff2str(time_t seconds, char *buf, time_t now)
 }
 
 static void print_quota_title(char *name, struct if_quotactl *qctl,
-			      bool human_readable)
+			      bool human_readable, bool show_default)
 {
-	printf("Disk quotas for %s %s (%cid %u):\n",
-	       qtype_name(qctl->qc_type), name,
-	       *qtype_name(qctl->qc_type), qctl->qc_id);
-	printf("%15s%8s %7s%8s%8s%8s %7s%8s%8s\n",
-	       "Filesystem", human_readable ? "used" : "kbytes",
-	       "quota", "limit", "grace",
-	       "files", "quota", "limit", "grace");
+	if (show_default) {
+		printf("Disk default %s quota:\n", qtype_name(qctl->qc_type));
+		printf("%15s %8s%8s%8s %8s%8s%8s\n",
+		       "Filesystem", "bquota", "blimit", "bgrace",
+		       "iquota", "ilimit", "igrace");
+	} else {
+		printf("Disk quotas for %s %s (%cid %u):\n",
+		       qtype_name(qctl->qc_type), name,
+		       *qtype_name(qctl->qc_type), qctl->qc_id);
+		printf("%15s%8s %7s%8s%8s%8s %7s%8s%8s\n",
+		       "Filesystem", human_readable ? "used" : "kbytes",
+		       "quota", "limit", "grace",
+		       "files", "quota", "limit", "grace");
+	}
 }
 
 static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
@@ -5659,20 +5742,21 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 
 #define STRBUF_LEN	32
 static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
-			int rc, bool h)
+			int rc, bool h, bool show_default)
 {
-        time_t now;
+	time_t now;
 
-        time(&now);
+	time(&now);
 
-        if (qctl->qc_cmd == LUSTRE_Q_GETQUOTA || qctl->qc_cmd == Q_GETOQUOTA) {
+	if (qctl->qc_cmd == LUSTRE_Q_GETQUOTA || qctl->qc_cmd == Q_GETOQUOTA ||
+	    qctl->qc_cmd == LUSTRE_Q_GETDEFAULT) {
 		int bover = 0, iover = 0;
 		struct obd_dqblk *dqb = &qctl->qc_dqblk;
 		char numbuf[3][STRBUF_LEN];
 		char timebuf[40];
 		char strbuf[STRBUF_LEN];
 
-                if (dqb->dqb_bhardlimit &&
+		if (dqb->dqb_bhardlimit &&
 		    lustre_stoqb(dqb->dqb_curspace) >= dqb->dqb_bhardlimit) {
                         bover = 1;
                 } else if (dqb->dqb_bsoftlimit && dqb->dqb_btime) {
@@ -5702,6 +5786,9 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 
 		if (bover)
 			diff2str(dqb->dqb_btime, timebuf, now);
+		else if (show_default)
+			snprintf(timebuf, sizeof(timebuf), "%llu",
+				 dqb->dqb_btime);
 
 		kbytes2str(lustre_stoqb(dqb->dqb_curspace),
 			   strbuf, sizeof(strbuf), h);
@@ -5722,15 +5809,23 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		sprintf(numbuf[2], (dqb->dqb_valid & QIF_BLIMITS) ?
 			"%s" : "[%s]", strbuf);
 
-		printf(" %7s%c %6s %7s %7s",
-		       numbuf[0], bover ? '*' : ' ', numbuf[1],
-		       numbuf[2], bover > 1 ? timebuf : "-");
+		if (show_default)
+			printf(" %6s %7s %7s", numbuf[1], numbuf[2], timebuf);
+		else
+			printf(" %7s%c %6s %7s %7s",
+			       numbuf[0], bover ? '*' : ' ', numbuf[1],
+			       numbuf[2], bover > 1 ? timebuf : "-");
+
 
 		if (iover)
 			diff2str(dqb->dqb_itime, timebuf, now);
+		else if (show_default)
+			snprintf(timebuf, sizeof(timebuf), "%llu",
+				 dqb->dqb_itime);
 
-		sprintf(numbuf[0], (dqb->dqb_valid & QIF_INODES) ?
-			"%ju" : "[%ju]", (uintmax_t)dqb->dqb_curinodes);
+		snprintf(numbuf[0], sizeof(numbuf),
+			 (dqb->dqb_valid & QIF_INODES) ? "%ju" : "[%ju]",
+			 (uintmax_t)dqb->dqb_curinodes);
 
 		if (type == QC_GENERAL)
 			sprintf(numbuf[1], (dqb->dqb_valid & QIF_ILIMITS) ?
@@ -5742,7 +5837,9 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		sprintf(numbuf[2], (dqb->dqb_valid & QIF_ILIMITS) ?
 			"%ju" : "[%ju]", (uintmax_t)dqb->dqb_ihardlimit);
 
-		if (type != QC_OSTIDX)
+		if (show_default)
+			printf(" %6s %7s %7s", numbuf[1], numbuf[2], timebuf);
+		else if (type != QC_OSTIDX)
 			printf(" %7s%c %6s %7s %7s",
 			       numbuf[0], iover ? '*' : ' ', numbuf[1],
 			       numbuf[2], iover > 1 ? timebuf : "-");
@@ -5793,7 +5890,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
                 }
 
 		print_quota(obd_uuid2str(&qctl->obd_uuid), qctl,
-			    qctl->qc_valid, 0, h);
+			    qctl->qc_valid, 0, h, false);
 		*total += is_mdt ? qctl->qc_dqblk.dqb_ihardlimit :
 				   qctl->qc_dqblk.dqb_bhardlimit;
 	}
@@ -5803,12 +5900,15 @@ out:
 }
 
 static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
-			   int verbose, int quiet, bool human_readable)
+			   int verbose, int quiet, bool human_readable,
+			   bool show_default)
 {
 	int rc1 = 0, rc2 = 0, rc3 = 0;
 	char *obd_type = (char *)qctl->obd_type;
 	char *obd_uuid = (char *)qctl->obd_uuid.uuid;
 	__u64 total_ialloc = 0, total_balloc = 0;
+	bool use_default_for_blk = false;
+	bool use_default_for_file = false;
 	int inacc;
 
 	rc1 = llapi_quotactl(mnt, qctl);
@@ -5830,8 +5930,31 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		}
 	}
 
-	if (qctl->qc_cmd == LUSTRE_Q_GETQUOTA && !quiet)
-		print_quota_title(name, qctl, human_readable);
+	if (!show_default && qctl->qc_id == 0) {
+		qctl->qc_dqblk.dqb_bhardlimit = 0;
+		qctl->qc_dqblk.dqb_bsoftlimit = 0;
+		qctl->qc_dqblk.dqb_ihardlimit = 0;
+		qctl->qc_dqblk.dqb_isoftlimit = 0;
+		qctl->qc_dqblk.dqb_btime = 0;
+		qctl->qc_dqblk.dqb_itime = 0;
+		qctl->qc_dqblk.dqb_valid |= QIF_LIMITS | QIF_TIMES;
+	}
+
+	if (qctl->qc_dqblk.dqb_valid & QIF_BTIME &&
+	    LQUOTA_FLAG(qctl->qc_dqblk.dqb_btime) & LQUOTA_FLAG_DEFAULT) {
+		use_default_for_blk = true;
+		qctl->qc_dqblk.dqb_btime &= LQUOTA_GRACE_MASK;
+	}
+
+	if (qctl->qc_dqblk.dqb_valid & QIF_ITIME &&
+	    LQUOTA_FLAG(qctl->qc_dqblk.dqb_itime) & LQUOTA_FLAG_DEFAULT) {
+		use_default_for_file = true;
+		qctl->qc_dqblk.dqb_itime &= LQUOTA_GRACE_MASK;
+	}
+
+	if ((qctl->qc_cmd == LUSTRE_Q_GETQUOTA ||
+	     qctl->qc_cmd == LUSTRE_Q_GETDEFAULT) && !quiet)
+		print_quota_title(name, qctl, human_readable, show_default);
 
 	if (rc1 && *obd_type)
 		fprintf(stderr, "%s %s ", obd_type, obd_uuid);
@@ -5843,10 +5966,10 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		((qctl->qc_dqblk.dqb_valid & (QIF_LIMITS|QIF_USAGE)) !=
 		 (QIF_LIMITS|QIF_USAGE));
 
-	print_quota(mnt, qctl, QC_GENERAL, rc1, human_readable);
+	print_quota(mnt, qctl, QC_GENERAL, rc1, human_readable, show_default);
 
-	if (qctl->qc_valid == QC_GENERAL && qctl->qc_cmd != LUSTRE_Q_GETINFO &&
-	    verbose) {
+	if (!show_default && verbose &&
+	    qctl->qc_valid == QC_GENERAL && qctl->qc_cmd != LUSTRE_Q_GETINFO) {
 		char strbuf[STRBUF_LEN];
 
 		rc2 = print_obd_quota(mnt, qctl, 1, human_readable,
@@ -5859,6 +5982,14 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		       "allocated block limit: %s\n", (uintmax_t)total_ialloc,
 		       strbuf);
 	}
+
+	if (use_default_for_blk)
+		printf("%cid %u is using default block quota setting\n",
+		       *qtype_name(qctl->qc_type), qctl->qc_id);
+
+	if (use_default_for_file)
+		printf("%cid %u is using default file quota setting\n",
+		       *qtype_name(qctl->qc_type), qctl->qc_id);
 
 	if (rc1 || rc2 || rc3 || inacc)
 		printf("Some errors happened when getting quota info. "
@@ -6034,16 +6165,23 @@ static int lfs_quota(int argc, char **argv)
 	char *endptr;
 	__u32 valid = QC_GENERAL, idx = 0;
 	bool human_readable = false;
+	bool show_default = false;
 	int qtype;
 
-	while ((c = getopt(argc, argv, "gi:I:o:pqtuvh")) != -1) {
+	while ((c = getopt(argc, argv, "gGi:I:o:pPqtuUvh")) != -1) {
 		switch (c) {
+		case 'U':
+			show_default = true;
 		case 'u':
 			qtype = USRQUOTA;
 			goto quota_type;
+		case 'G':
+			show_default = true;
 		case 'g':
 			qtype = GRPQUOTA;
 			goto quota_type;
+		case 'P':
+			show_default = true;
 		case 'p':
 			qtype = PRJQUOTA;
 quota_type:
@@ -6100,7 +6238,7 @@ quota_type:
 
         /* current uid/gid info for "lfs quota /path/to/lustre/mount" */
 	if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA && qctl.qc_type == ALLQUOTA &&
-	    optind == argc - 1) {
+	    optind == argc - 1 && !show_default) {
 
 		qctl.qc_cmd = LUSTRE_Q_GETQUOTA;
 		qctl.qc_valid = valid;
@@ -6119,7 +6257,7 @@ quota_type:
 				name = "<unknown>";
 			mnt = argv[optind];
 			rc1 = get_print_quota(mnt, name, &qctl, verbose, quiet,
-					      human_readable);
+					      human_readable, show_default);
 			if (rc1 && !rc)
 				rc = rc1;
 		}
@@ -6127,28 +6265,37 @@ quota_type:
 	/* lfs quota -u username /path/to/lustre/mount */
 	} else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
 		/* options should be followed by u/g-name and mntpoint */
-		if (optind + 2 != argc || qctl.qc_type == ALLQUOTA) {
+		if ((!show_default && optind + 2 != argc) ||
+		    (show_default && optind + 1 != argc) ||
+		    qctl.qc_type == ALLQUOTA) {
 			fprintf(stderr,
 				"%s quota: name and mount point must be specified\n",
 				progname);
 			return CMD_HELP;
 		}
 
-		name = argv[optind++];
-		switch (qctl.qc_type) {
-		case USRQUOTA:
-			rc = name2uid(&qctl.qc_id, name);
-			break;
-		case GRPQUOTA:
-			rc = name2gid(&qctl.qc_id, name);
-			break;
-		case PRJQUOTA:
-			rc = name2projid(&qctl.qc_id, name);
-			break;
-		default:
-			rc = -ENOTSUP;
-			break;
+		if (!show_default) {
+			name = argv[optind++];
+			switch (qctl.qc_type) {
+			case USRQUOTA:
+				rc = name2uid(&qctl.qc_id, name);
+				break;
+			case GRPQUOTA:
+				rc = name2gid(&qctl.qc_id, name);
+				break;
+			case PRJQUOTA:
+				rc = name2projid(&qctl.qc_id, name);
+				break;
+			default:
+				rc = -ENOTSUP;
+				break;
+			}
+		} else {
+			qctl.qc_valid = QC_GENERAL;
+			qctl.qc_cmd = LUSTRE_Q_GETDEFAULT;
+			qctl.qc_id = 0;
 		}
+
 		if (rc) {
 			qctl.qc_id = strtoul(name, &endptr, 10);
 			if (*endptr != '\0') {
@@ -6165,7 +6312,7 @@ quota_type:
 
 	mnt = argv[optind];
 	rc = get_print_quota(mnt, name, &qctl, verbose, quiet,
-			     human_readable);
+			     human_readable, show_default);
 	return rc;
 }
 #endif /* HAVE_SYS_QUOTA_H! */

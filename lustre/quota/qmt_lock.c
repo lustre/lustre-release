@@ -631,9 +631,17 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 	/* send glimpse callback to notify slaves of new quota settings */
 	qti->qti_gl_desc.lquota_desc.gl_id        = lqe->lqe_id;
 	qti->qti_gl_desc.lquota_desc.gl_flags     = 0;
-	qti->qti_gl_desc.lquota_desc.gl_hardlimit = lqe->lqe_hardlimit;
-	qti->qti_gl_desc.lquota_desc.gl_softlimit = lqe->lqe_softlimit;
-	qti->qti_gl_desc.lquota_desc.gl_time      = lqe->lqe_gracetime;
+	if (lqe->lqe_is_default) {
+		qti->qti_gl_desc.lquota_desc.gl_hardlimit = 0;
+		qti->qti_gl_desc.lquota_desc.gl_softlimit = 0;
+		qti->qti_gl_desc.lquota_desc.gl_time = LQUOTA_GRACE_FLAG(0,
+							LQUOTA_FLAG_DEFAULT);
+
+	} else {
+		qti->qti_gl_desc.lquota_desc.gl_hardlimit = lqe->lqe_hardlimit;
+		qti->qti_gl_desc.lquota_desc.gl_softlimit = lqe->lqe_softlimit;
+		qti->qti_gl_desc.lquota_desc.gl_time = lqe->lqe_gracetime;
+	}
 	qti->qti_gl_desc.lquota_desc.gl_ver       = ver;
 
 	/* look up ldlm resource associated with global index */

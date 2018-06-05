@@ -3087,9 +3087,181 @@ test_60() {
 		error "root user should succeed"
 
 	cleanup_quota_test
-	resetquota -u $TSTUSR
+	resetquota -g $TSTUSR
 }
 run_test 60 "Test quota for root with setgid"
+
+# test default quota
+test_default_quota() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.51) ] &&
+		skip "Not supported before 2.11.51." && return
+
+	local qtype=$1
+	local qpool=$2
+	local qid=$TSTUSR
+	local qprjid=$TSTPRJID
+	local qdtype="-U"
+	local qs="-b"
+	local qh="-B"
+	local LIMIT=102400 #100M disk space
+	local TESTFILE="$DIR/$tdir/$tfile-0"
+
+	[ $qtype == "-p" ] && ! is_project_quota_supported &&
+		echo "Project quota is not supported" && return 0
+
+	[ $qtype == "-u" ] && qdtype="-U"
+	[ $qtype == "-g" ] && qdtype="-G"
+	[ $qtype == "-p" ] && {
+		qdtype="-P"
+		qid=$qprjid
+	}
+
+	[ $qpool == "meta" ] && {
+		LIMIT=10240 #10K inodes
+		qs="-i"
+		qh="-I"
+	}
+
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+
+	quota_init
+
+	# enable mdt/ost quota
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	log "set to use default quota"
+	$LFS setquota $qtype $qid -d $DIR ||
+		error "set $qid to use default quota failed"
+
+	log "set default quota"
+	$LFS setquota $qdtype $qs ${LIMIT} $qh ${LIMIT} $DIR ||
+		error "set $qid default quota failed"
+
+	log "get default quota"
+	$LFS quota $qdtype $DIR || error "get default quota failed"
+
+	if [ $qpool == "data" ]; then
+		local SLIMIT=$($LFS quota $qdtype $DIR | grep "$MOUNT" | \
+							awk '{print $2}')
+		[ $SLIMIT -eq $LIMIT ] ||
+			error "the returned default quota is wrong"
+	else
+		local SLIMIT=$($LFS quota $qdtype $DIR | grep "$MOUNT" | \
+							awk '{print $5}')
+		[ $SLIMIT -eq $LIMIT ] ||
+			error "the returned default quota is wrong"
+	fi
+
+	# make sure the system is clean
+	local USED=$(getquota $qtype $qid global curspace)
+	[ $USED -ne 0 ] && error "Used space for $qid isn't 0."
+
+	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
+	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+
+	[ $qtype == "-p" ] && change_project -sp $TSTPRJID $DIR/$tdir
+
+	log "Test not out of quota"
+	if [ $qpool == "data" ]; then
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT/2 >> 10)) ||
+			quota_error $qtype $qid "write failed, expect succeed"
+	else
+		$RUNAS createmany -m $TESTFILE $((LIMIT/2)) ||
+			quota_error $qtype $qid "create failed, expect succeed"
+
+		unlinkmany $TESTFILE $((LIMIT/2))
+	fi
+
+	log "Test out of quota"
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+	if [ $qpool == "data" ]; then
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) &&
+			quota_error $qtype $qid "write succeed, expect EDQUOT"
+	else
+		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) &&
+			quota_error $qtype $qid "create succeed, expect EDQUOT"
+
+		unlinkmany $TESTFILE $((LIMIT*2))
+	fi
+
+	log "Increase default quota"
+	# increase default quota
+	$LFS setquota $qdtype $qs $((LIMIT*3)) $qh $((LIMIT*3)) $DIR ||
+		error "set default quota failed"
+
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+	if [ $qpool == "data" ]; then
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) ||
+			quota_error $qtype $qid "write failed, expect succeed"
+	else
+		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) ||
+			quota_error $qtype $qid "create failed, expect succeed"
+
+		unlinkmany $TESTFILE $((LIMIT*2))
+	fi
+
+	log "Set quota to override default quota"
+	$LFS setquota $qtype $qid $qs ${LIMIT} $qh ${LIMIT} $DIR ||
+		error "set $qid quota failed"
+
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+	if [ $qpool == "data" ]; then
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) &&
+			quota_error $qtype $qid "write succeed, expect EQUOT"
+	else
+		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) &&
+			quota_error $qtype $qid "create succeed, expect EQUOT"
+
+		unlinkmany $TESTFILE $((LIMIT*2))
+	fi
+
+	log "Set to use default quota again"
+	$LFS setquota $qtype $qid -d $DIR ||
+		error "set $qid to use default quota failed"
+
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+	if [ $qpool == "data" ]; then
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) ||
+			quota_error $qtype $qid "write failed, expect succeed"
+	else
+		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) ||
+			quota_error $qtype $qid "create failed, expect succeed"
+
+		unlinkmany $TESTFILE $((LIMIT*2))
+	fi
+
+	log "Cleanup"
+	rm -f $TESTFILE
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	$LFS setquota $qdtype -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "reset default quota failed"
+	$LFS setquota $qtype $qid -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "reset quota failed"
+
+	cleanup_quota_test
+}
+
+test_61() {
+	test_default_quota "-u" "data"
+	test_default_quota "-u" "meta"
+	test_default_quota "-g" "data"
+	test_default_quota "-g" "meta"
+	test_default_quota "-p" "data"
+	test_default_quota "-p" "meta"
+}
+run_test 61 "default quota tests"
 
 quota_fini()
 {

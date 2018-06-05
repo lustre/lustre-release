@@ -830,6 +830,28 @@ static inline __u64 lustre_stoqb(size_t space)
 /* lustre-specific control commands */
 #define LUSTRE_Q_INVALIDATE  0x80000b     /* deprecated as of 2.4 */
 #define LUSTRE_Q_FINVALIDATE 0x80000c     /* deprecated as of 2.4 */
+#define LUSTRE_Q_GETDEFAULT  0x80000d     /* get default quota */
+#define LUSTRE_Q_SETDEFAULT  0x80000e     /* set default quota */
+
+/* In the current Lustre implementation, the grace time is either the time
+ * or the timestamp to be used after some quota ID exceeds the soft limt,
+ * 48 bits should be enough, its high 16 bits can be used as quota flags.
+ * */
+#define LQUOTA_GRACE_BITS	48
+#define LQUOTA_GRACE_MASK	((1ULL << LQUOTA_GRACE_BITS) - 1)
+#define LQUOTA_GRACE_MAX	LQUOTA_GRACE_MASK
+#define LQUOTA_GRACE(t)		(t & LQUOTA_GRACE_MASK)
+#define LQUOTA_FLAG(t)		(t >> LQUOTA_GRACE_BITS)
+#define LQUOTA_GRACE_FLAG(t, f)	((__u64)t | (__u64)f << LQUOTA_GRACE_BITS)
+
+/* different quota flags */
+
+/* the default quota flag, the corresponding quota ID will use the default
+ * quota setting, the hardlimit and softlimit of its quota record in the global
+ * quota file will be set to 0, the low 48 bits of the grace will be set to 0
+ * and high 16 bits will contain this flag (see above comment).
+ * */
+#define LQUOTA_FLAG_DEFAULT	0x0001
 
 #define ALLQUOTA 255       /* set all quota */
 static inline char *qtype_name(int qtype)

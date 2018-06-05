@@ -290,6 +290,14 @@ static inline bool qmt_space_exhausted(struct lquota_entry *lqe, __u64 now)
 	return (qmt_hard_exhausted(lqe) || qmt_soft_exhausted(lqe, now));
 }
 
+/* helper routine clearing the default quota setting  */
+static inline void qmt_lqe_clear_default(struct lquota_entry *lqe)
+{
+	lqe->lqe_is_default = false;
+	lqe->lqe_gracetime &= ~((__u64)LQUOTA_FLAG_DEFAULT <<
+							LQUOTA_GRACE_BITS);
+}
+
 /* number of seconds to wait for slaves to release quota space after
  * rebalancing */
 #define QMT_REBA_TIMEOUT 2
@@ -307,6 +315,8 @@ struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *,
 					 union lquota_id *);
 /* qmt_entry.c */
 extern struct lquota_entry_operations qmt_lqe_ops;
+int qmt_lqe_set_default(const struct lu_env *env, struct qmt_pool_info *pool,
+			struct lquota_entry *lqe, bool create_record);
 struct thandle *qmt_trans_start_with_slv(const struct lu_env *,
 					 struct lquota_entry *,
 					 struct dt_object *,
@@ -327,6 +337,9 @@ void qmt_revalidate(const struct lu_env *, struct lquota_entry *);
 __u64 qmt_alloc_expand(struct lquota_entry *, __u64, __u64);
 
 /* qmt_handler.c */
+int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
+		     struct lquota_entry *lqe, __u64 hard, __u64 soft,
+		     __u64 time, __u32 valid, bool is_default, bool is_updated);
 int qmt_dqacq0(const struct lu_env *, struct lquota_entry *,
 	       struct qmt_device *, struct obd_uuid *, __u32, __u64, __u64,
 	       struct quota_body *);
