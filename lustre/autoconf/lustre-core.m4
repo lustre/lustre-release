@@ -2823,6 +2823,23 @@ bi_status, [
 ]) # LC_BI_STATUS
 
 #
+# LC_BIO_INTEGRITY_ENABLED
+#
+# 4.13 removed bio_integrity_enabled
+#
+AC_DEFUN([LC_BIO_INTEGRITY_ENABLED], [
+LB_CHECK_COMPILE([if 'bio_integrity_enabled' exist],
+bio_integrity_enabled, [
+	#include <linux/bio.h>
+],[
+	bio_integrity_enabled(NULL);
+],[
+	AC_DEFINE(HAVE_BIO_INTEGRITY_ENABLED, 1,
+		['bio_integrity_enabled' is available])
+])
+]) # LC_BIO_INTEGRITY_ENABLED
+
+#
 # LC_PAGEVEC_INIT_ONE_PARAM
 #
 # 4.14 pagevec_init takes one parameter
@@ -2838,6 +2855,24 @@ pagevec_init, [
 		['pagevec_init' takes one parameter])
 ])
 ]) # LC_PAGEVEC_INIT_ONE_PARAM
+
+#
+# LC_BI_BDEV
+#
+# 4.14 replaced bi_bdev to bi_disk
+#
+AC_DEFUN([LC_BI_BDEV], [
+LB_CHECK_COMPILE([if 'bi_bdev' exist],
+bi_bdev, [
+	#include <linux/blk_types.h>
+],[
+	((struct bio *)0)->bi_bdev = NULL;
+],[
+	AC_DEFINE(HAVE_BI_BDEV, 1,
+		['bi_bdev' is available])
+])
+]) # LC_BI_BDEV
+
 
 #
 # LC_PROG_LINUX
@@ -3069,8 +3104,12 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_SUPER_SETUP_BDI_NAME
 	LC_BI_STATUS
 
+	# 4.13
+	LC_BIO_INTEGRITY_ENABLED
+
 	# 4.14
 	LC_PAGEVEC_INIT_ONE_PARAM
+	LC_BI_BDEV
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

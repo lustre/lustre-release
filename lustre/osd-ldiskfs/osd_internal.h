@@ -1337,7 +1337,11 @@ static inline struct buffer_head *__ldiskfs_bread(handle_t *handle,
 	return bh;
 }
 
-#ifndef bio_set_dev
+#ifndef HAVE_BIO_INTEGRITY_ENABLED
+bool bio_integrity_enabled(struct bio *bio);
+#endif
+
+#ifdef HAVE_BI_BDEV
 # define bio_set_dev(bio, bdev) ((bio)->bi_bdev = bdev)
 # define bio_get_queue(bio)	bdev_get_queue((bio)->bi_bdev)
 #else
