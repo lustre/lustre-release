@@ -2893,7 +2893,7 @@ static int __init kgnilnd_init(void)
 	if (rc != 0)
 		return rc;
 
-	printk(KERN_INFO "Lustre: kgnilnd build version: "KGNILND_BUILD_REV"\n");
+	LCONSOLE_INFO("Lustre: kgnilnd build version: "LUSTRE_VERSION_STRING"\n");
 
 	kgnilnd_insert_sysctl();
 	kgnilnd_proc_init();
@@ -2905,7 +2905,7 @@ static int __init kgnilnd_init(void)
 
 MODULE_AUTHOR("Cray, Inc. <nic@cray.com>");
 MODULE_DESCRIPTION("Gemini LNet Network Driver");
-MODULE_VERSION(KGNILND_BUILD_REV);
+MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
 module_init(kgnilnd_init);

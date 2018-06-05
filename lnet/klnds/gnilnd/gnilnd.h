@@ -64,7 +64,6 @@
 #include <lnet/lib-lnet.h>
 
 #include <gni_pub.h>
-#include "gnilnd_version.h"
 
 static inline time_t cfs_duration_sec(long duration_jiffies)
 {

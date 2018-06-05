@@ -238,8 +238,8 @@ static struct ctl_table kgnilnd_table[] = {
 	{
 		INIT_CTL_NAME
 		.procname = "version",
-		.data     = KGNILND_BUILD_REV,
-		.maxlen   = sizeof(KGNILND_BUILD_REV),
+		.data     = LUSTRE_VERSION_STRING,
+		.maxlen   = sizeof(LUSTRE_VERSION_STRING),
 		.mode     = 0444,
 		.proc_handler = &proc_dostring
 	},
