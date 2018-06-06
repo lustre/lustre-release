@@ -834,6 +834,19 @@ test_23b() { # bug 18988
 }
 run_test 23b "O_APPEND check =========================="
 
+# LU-11069 file offset is correct after appending writes
+test_23d() {
+	local file=$DIR/$tfile
+	local offset
+
+	echo CentaurHauls > $file
+	offset=$($MULTIOP $file oO_WRONLY:O_APPEND:w13Zp)
+	if ((offset != 26)); then
+		error "wrong offset, expected 26, got '$offset'"
+	fi
+}
+run_test 23d "file offset is correct after appending writes"
+
 # rename sanity
 test_24a() {
 	echo '-- same directory rename'
