@@ -2557,13 +2557,13 @@ struct cfg_marker {
  * Opcodes for multiple servers.
  */
 enum obd_cmd {
-	OBD_PING = 400,
-	OBD_LOG_CANCEL, /* Obsolete since 1.5. */
-	OBD_QC_CALLBACK, /* not used since 2.4 */
-	OBD_IDX_READ,
-        OBD_LAST_OPC
+	OBD_PING	= 400,
+/*	OBD_LOG_CANCEL	= 401, obsolete since 1.5 */
+/*	OBD_QC_CALLBACK	= 402, obsolete since 2.4 */
+	OBD_IDX_READ	= 403,
+	OBD_LAST_OPC,
+	OBD_FIRST_OPC = OBD_PING
 };
-#define OBD_FIRST_OPC OBD_PING
 
 /**
  * llog contexts indices.

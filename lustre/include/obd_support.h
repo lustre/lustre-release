@@ -431,12 +431,12 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_PTLRPC_BULK_ATTACH      0x521
 
 #define OBD_FAIL_OBD_PING_NET            0x600
-#define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
+/*	OBD_FAIL_OBD_LOG_CANCEL_NET      0x601 obsolete since 1.5 */
 #define OBD_FAIL_OBD_LOGD_NET            0x602
 /*	OBD_FAIL_OBD_QC_CALLBACK_NET     0x603 obsolete since 2.4 */
 #define OBD_FAIL_OBD_DQACQ               0x604
 #define OBD_FAIL_OBD_LLOG_SETUP          0x605
-#define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
+/*	OBD_FAIL_OBD_LOG_CANCEL_REP      0x606 obsolete since 1.5 */
 #define OBD_FAIL_OBD_IDX_READ_NET        0x607
 #define OBD_FAIL_OBD_IDX_READ_BREAK	 0x608
 #define OBD_FAIL_OBD_NO_LRU		 0x609

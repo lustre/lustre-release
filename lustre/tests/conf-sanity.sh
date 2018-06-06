@@ -4376,9 +4376,6 @@ test_58() { # bug 22658
 	setup_noconfig
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	createmany -o $DIR/$tdir/$tfile-%d 100
-	# make sure that OSTs do not cancel llog cookies before we unmount the MDS
-#define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
-	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x601"
 	unlinkmany $DIR/$tdir/$tfile-%d 100
 	stop_mds || error "Unable to stop MDS"
 
