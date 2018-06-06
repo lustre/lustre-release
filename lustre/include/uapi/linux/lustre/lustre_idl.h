@@ -2455,16 +2455,16 @@ struct ldlm_reply {
  * Opcodes for mountconf (mgs and mgc)
  */
 enum mgs_cmd {
-        MGS_CONNECT = 250,
-        MGS_DISCONNECT,
-        MGS_EXCEPTION,         /* node died, etc. */
-        MGS_TARGET_REG,        /* whenever target starts up */
-        MGS_TARGET_DEL,
-        MGS_SET_INFO,
-        MGS_CONFIG_READ,
-        MGS_LAST_OPC
+	MGS_CONNECT	= 250,
+	MGS_DISCONNECT	= 251,
+	MGS_EXCEPTION	= 252,	/* node died, etc. */
+	MGS_TARGET_REG	= 253,	/* whenever target starts up */
+	MGS_TARGET_DEL	= 254,
+	MGS_SET_INFO	= 255,
+	MGS_CONFIG_READ	= 256,
+	MGS_LAST_OPC,
+	MGS_FIRST_OPC	= MGS_CONNECT
 };
-#define MGS_FIRST_OPC MGS_CONNECT
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
 #define MGS_PARAM_MAXLEN 1024
