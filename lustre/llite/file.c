@@ -1405,7 +1405,13 @@ restart:
 
 		if (args->via_io_subtype == IO_NORMAL) {
 			iov_iter_advance(args->u.normal.via_iter, io->ci_nob);
-			pos += io->ci_nob;
+
+			/* CLIO is too complicated. See LU-11069. */
+			if (cl_io_is_append(io))
+				pos = io->u.ci_rw.rw_iocb.ki_pos;
+			else
+				pos += io->ci_nob;
+
 			args->u.normal.via_iocb->ki_pos = pos;
 #ifdef HAVE_KIOCB_KI_LEFT
 			args->u.normal.via_iocb->ki_left = count;

@@ -89,6 +89,7 @@ char usage[] =
 "	 N  rename filename to path\n"
 "	 o  open(O_RDONLY)\n"
 "	 O  open(O_CREAT|O_RDWR)\n"
+"	 p  print return value of last command\n"
 "	 r[num] read [optional length]\n"
 "	 R  reference entire mmap-ed region\n"
 "	 s  stat\n"
@@ -104,7 +105,8 @@ char usage[] =
 "	 W  write entire mmap-ed region\n"
 "	 y  fsync\n"
 "	 Y  fdatasync\n"
-"	 z[num] seek [optional position, default 0]\n"
+"	 z[num] lseek(SEEK_SET) [optional offset, default 0]\n"
+"	 Z[num] lseek(SEEK_CUR) [optional offset, default 0]\n"
 "	 _  wait for signal\n";
 
 void usr1_handler(int unused)
@@ -211,7 +213,7 @@ int main(int argc, char **argv)
 	struct statfs		 stfs;
 	size_t			 mmap_len = 0, i;
 	unsigned char		*mmap_ptr = NULL, junk = 0;
-	int			 rc, len, fd = -1;
+	int			 len, fd = -1;
 	int			 flags;
 	int			 save_errno;
 	int			 verbose = 0;
@@ -219,6 +221,8 @@ int main(int argc, char **argv)
 	struct lu_fid		 fid;
 	struct timespec		 ts;
 	struct lov_user_md_v3	 lum;
+	long long rc = 0;
+	long long last_rc;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -234,6 +238,11 @@ int main(int argc, char **argv)
         fname = argv[1];
 
         for (commands = argv[2]; *commands; commands++) {
+		/* XXX Most commands return 0 or we exit so we only
+		 * update rc where really needed. */
+		last_rc = rc;
+		rc = 0;
+
                 switch (*commands) {
                 case '_':
                         if (verbose) {
@@ -255,7 +264,8 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'a':
-			if (fgetxattr(fd, XATTR, NULL, 0) == -1) {
+			rc = fgetxattr(fd, XATTR, NULL, 0);
+			if (rc < 0) {
 				save_errno = errno;
 				perror("fgetxattr");
 				exit(save_errno);
@@ -290,6 +300,7 @@ int main(int argc, char **argv)
                                 perror("create stripe file");
                                 exit(save_errno);
                         }
+			rc = fd;
                         break;
                 case 'd':
                         if (mkdir(fname, 0755) == -1) {
@@ -305,6 +316,7 @@ int main(int argc, char **argv)
                                 perror("open(O_DIRECTORY)");
                                 exit(save_errno);
                         }
+			rc = fd;
                         break;
 		case 'e':
 			commands++;
@@ -334,7 +346,7 @@ int main(int argc, char **argv)
 					str = "read";
 				else if (rc == LL_LEASE_WRLCK)
 					str = "write";
-				fprintf(stdout, "%s lease(%d) released.\n",
+				fprintf(stdout, "%s lease(%lld) released.\n",
 					str, rc);
 			} else if (rc == 0) {
 				fprintf(stdout, "lease already broken.\n");
@@ -353,7 +365,7 @@ int main(int argc, char **argv)
 					str = "read";
 				else if (rc == LL_LEASE_WRLCK)
 					str = "write";
-				fprintf(stdout, "%s lease(%d) has applied.\n",
+				fprintf(stdout, "%s lease(%lld) has applied.\n",
 					str, rc);
 				if (*commands == '-')
 					errx(-1, "expect lease to not exist");
@@ -376,7 +388,7 @@ int main(int argc, char **argv)
 				rc = llapi_fd2fid(fd, &fid);
 			if (rc != 0)
 				fprintf(stderr,
-					"llapi_path/fd2fid() on %d, rc=%d\n",
+					"llapi_path/fd2fid() on %d, rc=%lld\n",
 					fd, rc);
 			else
 				printf(DFID"\n", PFID(&fid));
@@ -407,6 +419,7 @@ int main(int argc, char **argv)
 				perror("create stripe file");
 				exit(save_errno);
 			}
+			rc = fd;
 			break;
 		case 'j':
 			if (flock(fd, LOCK_EX) == -1)
@@ -494,6 +507,7 @@ int main(int argc, char **argv)
                                 perror("open(O_RDWR|O_CREAT)");
                                 exit(save_errno);
                         }
+			rc = fd;
                         break;
                 case 'o':
                         len = get_flags(commands+1, &flags);
@@ -507,7 +521,11 @@ int main(int argc, char **argv)
                                 perror("open");
                                 exit(save_errno);
                         }
+			rc = fd;
                         break;
+		case 'p':
+			printf("%lld\n", last_rc);
+			break;
 		case 'r':
 			len = atoi(commands+1);
 			if (len <= 0)
@@ -534,14 +552,14 @@ int main(int argc, char **argv)
 					exit(save_errno);
 				}
 				if (rc < len) {
-					fprintf(stderr, "short read: %u/%u\n",
+					fprintf(stderr, "short read: %lld/%u\n",
 						rc, len);
 					if (rc == 0)
 						exit(ENODATA);
 				}
 				len -= rc;
 				if (verbose >= 2)
-					printf("%.*s\n", rc, buf_align);
+					printf("%.*s\n", (int)rc, buf_align);
 			}
 			break;
                 case 'R':
@@ -603,6 +621,7 @@ int main(int argc, char **argv)
 				perror("llapi_create_volatile");
 				exit(fd);
 			}
+			rc = fd;
 			break;
 		case 'w':
 			len = atoi(commands+1);
@@ -631,7 +650,7 @@ int main(int argc, char **argv)
 					exit(save_errno);
 				}
 				if (rc < len)
-					fprintf(stderr, "short write: %u/%u\n",
+					fprintf(stderr, "short write: %lld/%u\n",
 						rc, len);
 				len -= rc;
 			}
@@ -646,7 +665,7 @@ int main(int argc, char **argv)
 			rc = llapi_get_data_version(fd, &dv, 0);
 			if (rc) {
 				fprintf(stderr, "cannot get file data version"
-					" %d\n", rc);
+					" %lld\n", rc);
 				exit(-rc);
 			}
 			printf("dataversion is %ju\n", (uintmax_t)dv);
@@ -658,7 +677,7 @@ int main(int argc, char **argv)
 			rc = llapi_get_ost_layout_version(fd, &layout_version);
 			if (rc) {
 				fprintf(stderr, "cannot get ost layout version"
-					" %d\n", rc);
+					" %lld\n", rc);
 				exit(-rc);
 			}
 			printf("ostlayoutversion: %u\n", layout_version);
@@ -678,14 +697,34 @@ int main(int argc, char **argv)
 				exit(save_errno);
 			}
 			break;
-                case 'z':
-                        len = atoi(commands+1);
-                        if (lseek(fd, len, SEEK_SET) == -1) {
-                                save_errno = errno;
-                                perror("lseek");
-                                exit(save_errno);
-                        }
-                        break;
+		case 'z': {
+			off_t off;
+
+			len = atoi(commands + 1);
+			off = lseek(fd, len, SEEK_SET);
+			if (off == (off_t)-1) {
+				save_errno = errno;
+				perror("lseek");
+				exit(save_errno);
+			}
+
+			rc = off;
+			break;
+		}
+		case 'Z': {
+			off_t off;
+
+			len = atoi(commands + 1);
+			off = lseek(fd, len, SEEK_CUR);
+			if (off == (off_t)-1) {
+				save_errno = errno;
+				perror("lseek");
+				exit(save_errno);
+			}
+
+			rc = off;
+			break;
+		}
 		case '-':
                 case '0':
                 case '1':
