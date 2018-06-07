@@ -213,6 +213,7 @@ static struct lu_object *lod_object_alloc(const struct lu_env *env,
 	if (lod_obj == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
+	mutex_init(&lod_obj->ldo_layout_mutex);
 	lu_obj = lod2lu_obj(lod_obj);
 	dt_object_init(&lod_obj->ldo_obj, NULL, dev);
 	lod_obj->ldo_obj.do_ops = &lod_obj_ops;

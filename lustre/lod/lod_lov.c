@@ -1235,6 +1235,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(buf);
 	LASSERT(buf->lb_buf);
 	LASSERT(buf->lb_len);
+	LASSERT(mutex_is_locked(&lo->ldo_layout_mutex));
 
 	lmm = (struct lov_mds_md_v1 *)buf->lb_buf;
 	magic = le32_to_cpu(lmm->lmm_magic);
@@ -1370,7 +1371,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 
 out:
 	if (rc)
-		lod_object_free_striping(env, lo);
+		lod_striping_free_nolock(env, lo);
 	RETURN(rc);
 }
 
@@ -1390,7 +1391,7 @@ static bool lod_striping_loaded(struct lod_object *lo)
 		return true;
 
 	if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
-		if (lo->ldo_stripe != NULL || lo->ldo_dir_stripe_loaded)
+		if (lo->ldo_dir_stripe_loaded)
 			return true;
 
 		/* Never load LMV stripe for slaves of striped dir */
@@ -1402,37 +1403,45 @@ static bool lod_striping_loaded(struct lod_object *lo)
 }
 
 /**
- * Initialize the object representing the stripes.
+ * A generic function to initialize the stripe objects.
  *
- * Unless the stripes are initialized already, fetch LOV (for regular
- * objects) or LMV (for directory objects) EA and call lod_parse_striping()
- * to instantiate the objects representing the stripes. Caller should
- * hold the dt_write_lock(next).
+ * A protected version of lod_striping_load_locked() - load the striping
+ * information from storage, parse that and instantiate LU objects to
+ * represent the stripes.  The LOD object \a lo supplies a pointer to the
+ * next sub-object in the LU stack so we can lock it. Also use \a lo to
+ * return an array of references to the newly instantiated objects.
  *
  * \param[in] env		execution environment for this thread
- * \param[in,out] lo		LOD object
+ * \param[in,out] lo		LOD object, where striping is stored and
+ *				which gets an array of references
  *
  * \retval			0 if parsing and object creation succeed
  * \retval			negative error number on failure
- */
-int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
+ **/
+int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 {
-	struct lod_thread_info	*info = lod_env_info(env);
-	struct lu_buf		*buf  = &info->lti_buf;
-	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
-	int			 rc = 0;
+	struct lod_thread_info *info = lod_env_info(env);
+	struct dt_object *next = dt_object_child(&lo->ldo_obj);
+	struct lu_buf *buf = &info->lti_buf;
+	int rc = 0;
+
 	ENTRY;
 
 	if (!dt_object_exists(next))
-		GOTO(out, rc = 0);
+		RETURN(0);
 
 	if (lod_striping_loaded(lo))
-		GOTO(out, rc = 0);
+		RETURN(0);
+
+	mutex_lock(&lo->ldo_layout_mutex);
+	if (lod_striping_loaded(lo))
+		GOTO(unlock, rc = 0);
 
 	if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr)) {
 		rc = lod_get_lov_ea(env, lo);
 		if (rc <= 0)
-			GOTO(out, rc);
+			GOTO(unlock, rc);
+
 		/*
 		 * there is LOV EA (striping information) in this object
 		 * let's parse it and create in-core objects for the stripes
@@ -1451,7 +1460,7 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 			 */
 			if (rc == 0)
 				lo->ldo_dir_stripe_loaded = 1;
-			GOTO(out, rc = rc > 0 ? -EINVAL : rc);
+			GOTO(unlock, rc = rc > 0 ? -EINVAL : rc);
 		}
 		buf->lb_buf = info->lti_ea_store;
 		buf->lb_len = info->lti_ea_store_size;
@@ -1465,7 +1474,7 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 			}
 
 			if (rc < 0)
-				GOTO(out, rc);
+				GOTO(unlock, rc);
 		}
 
 		/*
@@ -1476,44 +1485,26 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		if (rc == 0)
 			lo->ldo_dir_stripe_loaded = 1;
 	}
-out:
-	RETURN(rc);
+	EXIT;
+unlock:
+	mutex_unlock(&lo->ldo_layout_mutex);
+
+	return rc;
 }
 
-/**
- * A generic function to initialize the stripe objects.
- *
- * A protected version of lod_load_striping_locked() - load the striping
- * information from storage, parse that and instantiate LU objects to
- * represent the stripes.  The LOD object \a lo supplies a pointer to the
- * next sub-object in the LU stack so we can lock it. Also use \a lo to
- * return an array of references to the newly instantiated objects.
- *
- * \param[in] env		execution environment for this thread
- * \param[in,out] lo		LOD object, where striping is stored and
- *				which gets an array of references
- *
- * \retval			0 if parsing and object creation succeed
- * \retval			negative error number on failure
- **/
-int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
+int lod_striping_reload(const struct lu_env *env, struct lod_object *lo,
+			 const struct lu_buf *buf)
 {
-	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
-	int			rc;
+	int rc;
 
-	if (!dt_object_exists(next))
-		return 0;
+	ENTRY;
 
-	/* Check without locking first */
-	if (lod_striping_loaded(lo))
-		return 0;
+	mutex_lock(&lo->ldo_layout_mutex);
+	lod_striping_free_nolock(env, lo);
+	rc = lod_parse_striping(env, lo, buf);
+	mutex_unlock(&lo->ldo_layout_mutex);
 
-	/* currently this code is supposed to be called from declaration
-	 * phase only, thus the object is not expected to be locked by caller */
-	dt_write_lock(env, next, 0);
-	rc = lod_load_striping_locked(env, lo);
-	dt_write_unlock(env, next);
-	return rc;
+	RETURN(rc);
 }
 
 /**

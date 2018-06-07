@@ -1821,17 +1821,20 @@ int lod_use_defined_striping(const struct lu_env *env,
 	int	rc = 0, i;
 	ENTRY;
 
+	mutex_lock(&mo->ldo_layout_mutex);
+	lod_striping_free_nolock(env, mo);
+
 	magic = le32_to_cpu(v1->lmm_magic) & ~LOV_MAGIC_DEFINED;
 
 	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3 &&
 	    magic != LOV_MAGIC_COMP_V1)
-		RETURN(-EINVAL);
+		GOTO(unlock, rc = -EINVAL);
 
 	if (magic == LOV_MAGIC_COMP_V1) {
 		comp_v1 = buf->lb_buf;
 		comp_cnt = le16_to_cpu(comp_v1->lcm_entry_count);
 		if (comp_cnt == 0)
-			RETURN(-EINVAL);
+			GOTO(unlock, rc = -EINVAL);
 		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;
 		mo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
 					LCM_FL_FLR_MASK;
@@ -1845,7 +1848,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 
 	rc = lod_alloc_comp_entries(mo, mirror_cnt, comp_cnt);
 	if (rc)
-		RETURN(rc);
+		GOTO(unlock, rc);
 
 	for (i = 0; i < comp_cnt; i++) {
 		struct lu_extent *ext;
@@ -1905,11 +1908,12 @@ int lod_use_defined_striping(const struct lu_env *env,
 	}
 
 	rc = lod_fill_mirrors(mo);
-	if (rc)
-		GOTO(out, rc);
+	GOTO(out, rc);
 out:
 	if (rc)
-		lod_object_free_striping(env, mo);
+		lod_striping_free_nolock(env, mo);
+unlock:
+	mutex_unlock(&mo->ldo_layout_mutex);
 
 	RETURN(rc);
 }

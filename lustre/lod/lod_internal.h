@@ -293,6 +293,7 @@ struct lod_mirror_entry {
 struct lod_object {
 	/* common fields for both files and directories */
 	struct dt_object		ldo_obj;
+	struct mutex			ldo_layout_mutex;
 	union {
 		/* file stripe (LOV) */
 		struct {
@@ -590,8 +591,9 @@ int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 		   unsigned gen, bool for_ost);
 int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 		 struct lod_tgt_descs *ltd, bool for_ost);
-int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo);
-int lod_load_striping(const struct lu_env *env, struct lod_object *lo);
+int lod_striping_load(const struct lu_env *env, struct lod_object *lo);
+int lod_striping_reload(const struct lu_env *env, struct lod_object *lo,
+			const struct lu_buf *buf);
 
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 	       const char *name);
@@ -751,7 +753,8 @@ int lod_declare_striped_create(const struct lu_env *env, struct dt_object *dt,
 int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 			struct lu_attr *attr, struct dt_object_format *dof,
 			struct thandle *th);
-void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo);
+void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo);
+void lod_striping_free(const struct lu_env *env, struct lod_object *lo);
 
 int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 			    struct thandle *th,
