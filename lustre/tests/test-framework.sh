@@ -24,6 +24,7 @@ export SK_S2SNM=${SK_S2SNM:-TestFrameNM}
 export SK_S2SNMCLI=${SK_S2SNMCLI:-TestFrameNMCli}
 export IDENTITY_UPCALL=default
 export QUOTA_AUTO=1
+export FLAKEY=${FLAKEY:-true}
 # specify environment variable containing batch job name for server statistics
 export JOBID_VAR=${JOBID_VAR:-"procname_uid"}  # or "existing" or "disable"
 
@@ -1582,6 +1583,7 @@ is_dm_flakey_dev() {
 dm_flakey_supported() {
 	local facet=$1
 
+	$FLAKEY || return 1
 	do_facet $facet "modprobe dm-flakey;
 			 $DMSETUP targets | grep -q flakey" &> /dev/null
 }
