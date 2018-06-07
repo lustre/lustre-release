@@ -39,8 +39,10 @@
 
 static int str2logid(struct llog_logid *logid, char *str, int len)
 {
-	char *start, *end, *endp;
-	__u64 id, seq;
+	unsigned long long id, seq;
+	char *start, *end;
+	u32 ogen;
+	int rc;
 
 	ENTRY;
 	start = str;
@@ -71,21 +73,22 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 		RETURN(-EINVAL);
 
 	*end = '\0';
-	id = simple_strtoull(start, &endp, 0);
-        if (endp != end)
-                RETURN(-EINVAL);
+	rc = kstrtoull(start, 0, &id);
+	if (rc)
+		RETURN(rc);
 
-        start = ++end;
-        if (start - str >= len - 1)
-                RETURN(-EINVAL);
-        end = strchr(start, '#');
-        if (end == NULL || end == start)
-                RETURN(-EINVAL);
+	start = ++end;
+	if (start - str >= len - 1)
+		RETURN(-EINVAL);
 
-        *end = '\0';
-	seq = simple_strtoull(start, &endp, 0);
-        if (endp != end)
-                RETURN(-EINVAL);
+	end = strchr(start, '#');
+	if (!end || end == start)
+		RETURN(-EINVAL);
+
+	*end = '\0';
+	rc = kstrtoull(start, 0, &seq);
+	if (rc)
+		RETURN(rc);
 
 	ostid_set_seq(&logid->lgl_oi, seq);
 	if (ostid_set_id(&logid->lgl_oi, id))
@@ -94,11 +97,13 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 	start = ++end;
         if (start - str >= len - 1)
                 RETURN(-EINVAL);
-        logid->lgl_ogen = simple_strtoul(start, &endp, 16);
-        if (*endp != '\0')
-                RETURN(-EINVAL);
 
-        RETURN(0);
+	rc = kstrtouint(start, 16, &ogen);
+	if (rc)
+                RETURN(-EINVAL);
+	logid->lgl_ogen = ogen;
+
+	RETURN(0);
 #else
 	RETURN(-EINVAL);
 #endif
@@ -107,29 +112,31 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 			 struct llog_rec_hdr *rec, void *data)
 {
-        struct obd_ioctl_data *ioc_data = (struct obd_ioctl_data *)data;
+	struct obd_ioctl_data *ioc_data = data;
 	static int l, remains;
 	static long from, to;
-        static char *out;
-        char *endp;
-        int cur_index, rc = 0;
+	static char *out;
+	int cur_index;
+	int rc = 0;
 
-        ENTRY;
-
+	ENTRY;
 	if (ioc_data && ioc_data->ioc_inllen1 > 0) {
-                l = 0;
-                remains = ioc_data->ioc_inllen4 +
-                        cfs_size_round(ioc_data->ioc_inllen1) +
-                        cfs_size_round(ioc_data->ioc_inllen2) +
-                        cfs_size_round(ioc_data->ioc_inllen3);
-                from = simple_strtol(ioc_data->ioc_inlbuf2, &endp, 0);
-                if (*endp != '\0')
-                        RETURN(-EINVAL);
-                to = simple_strtol(ioc_data->ioc_inlbuf3, &endp, 0);
-                if (*endp != '\0')
-                        RETURN(-EINVAL);
-                ioc_data->ioc_inllen1 = 0;
-                out = ioc_data->ioc_bulk;
+		l = 0;
+		remains = ioc_data->ioc_inllen4 +
+			  round_up(ioc_data->ioc_inllen1, 8) +
+			  round_up(ioc_data->ioc_inllen2, 8) +
+			  round_up(ioc_data->ioc_inllen3, 8);
+
+		rc = kstrtol(ioc_data->ioc_inlbuf2, 0, &from);
+		if (rc)
+			RETURN(rc);
+
+		rc = kstrtol(ioc_data->ioc_inlbuf3, 0, &to);
+		if (rc)
+			RETURN(rc);
+
+		ioc_data->ioc_inllen1 = 0;
+		out = ioc_data->ioc_bulk;
 	}
 
 	cur_index = rec->lrh_index;
@@ -194,29 +201,32 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 			 struct llog_rec_hdr *rec, void *data)
 {
-        struct obd_ioctl_data *ioc_data = (struct obd_ioctl_data *)data;
+	struct obd_ioctl_data *ioc_data = data;
 	static int l, remains;
 	static long from, to;
-        static char *out;
-        char *endp;
-        int cur_index;
+	static char *out;
+	int cur_index;
+	int rc;
 
-        ENTRY;
-	if (ioc_data != NULL && ioc_data->ioc_inllen1 > 0) {
-                l = 0;
-                remains = ioc_data->ioc_inllen4 +
-                        cfs_size_round(ioc_data->ioc_inllen1) +
-                        cfs_size_round(ioc_data->ioc_inllen2) +
-                        cfs_size_round(ioc_data->ioc_inllen3);
-                from = simple_strtol(ioc_data->ioc_inlbuf2, &endp, 0);
-                if (*endp != '\0')
-                        RETURN(-EINVAL);
-                to = simple_strtol(ioc_data->ioc_inlbuf3, &endp, 0);
-                if (*endp != '\0')
-                        RETURN(-EINVAL);
-                out = ioc_data->ioc_bulk;
-                ioc_data->ioc_inllen1 = 0;
-        }
+	ENTRY;
+	if (ioc_data && ioc_data->ioc_inllen1 > 0) {
+		l = 0;
+		remains = ioc_data->ioc_inllen4 +
+			  round_up(ioc_data->ioc_inllen1, 8) +
+			  round_up(ioc_data->ioc_inllen2, 8) +
+			  round_up(ioc_data->ioc_inllen3, 8);
+
+		rc = kstrtol(ioc_data->ioc_inlbuf2, 0, &from);
+		if (rc)
+			RETURN(rc);
+
+		rc = kstrtol(ioc_data->ioc_inlbuf3, 0, &to);
+		if (rc)
+			RETURN(rc);
+
+		out = ioc_data->ioc_bulk;
+		ioc_data->ioc_inllen1 = 0;
+	}
 
         cur_index = rec->lrh_index;
         if (cur_index < from)
@@ -382,11 +392,12 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	case OBD_IOC_LLOG_CANCEL: {
 		struct llog_cookie cookie;
 		struct llog_logid plain;
-		char *endp;
+		u32 lgc_index;
 
-		cookie.lgc_index = simple_strtoul(data->ioc_inlbuf3, &endp, 0);
-		if (*endp != '\0')
-			GOTO(out_close, rc = -EINVAL);
+		rc = kstrtouint(data->ioc_inlbuf3, 0, &lgc_index);
+		if (rc)
+			GOTO(out_close, rc);
+		cookie.lgc_index = lgc_index;
 
 		if (handle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
 			rc = llog_cancel_rec(env, handle, cookie.lgc_index);
