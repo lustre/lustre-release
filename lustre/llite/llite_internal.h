@@ -944,7 +944,6 @@ int ll_obd_statfs(struct inode *inode, void __user *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 int ll_get_default_mdsize(struct ll_sb_info *sbi, int *default_mdsize);
 int ll_set_default_mdsize(struct ll_sb_info *sbi, int default_mdsize);
-int ll_process_config(struct lustre_cfg *lcfg);
 
 enum {
 	LUSTRE_OPC_MKDIR	= 0,
