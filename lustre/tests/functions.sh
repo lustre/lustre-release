@@ -619,7 +619,8 @@ run_ior() {
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 	if [ -z "$NFSCLIENT" ]; then
-		$LFS setstripe $testdir -c -1 ||
+		ior_stripe_params=${ior_stripe_params:-"-c -1"}
+		$LFS setstripe $testdir $ior_stripe_params ||
 			{ error "setstripe failed" && return 2; }
 	fi
 
@@ -635,9 +636,14 @@ run_ior() {
 	# -T    maxTimeDuration -- max time in minutes to run tests"
 	# -k    keepFile -- keep testFile(s) on program exit
 
-	local cmd="$IOR -a $ior_type -b ${ior_blockSize}${ior_blockUnit} \
+	local cmd
+	if [ -n "$ior_custom_params" ]; then
+		cmd="$IOR $ior_custom_params -o $testdir/iorData"
+	else
+		cmd="$IOR -a $ior_type -b ${ior_blockSize}${ior_blockUnit} \
 		-o $testdir/iorData -t $ior_xferSize -v -C -w -r -W \
 		-i $ior_iteration -T $ior_DURATION -k"
+	fi
 
 	[ $type = "fpp" ] && cmd="$cmd -F"
 
@@ -648,8 +654,9 @@ run_ior() {
 			-n $((num_clients * ior_THREADS)) -p $SRUN_PARTITION \
 			-- $cmd
 	else
+		mpi_ior_custom_threads=${mpi_ior_custom_threads:-"$((num_clients * ior_THREADS))"}
 		mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
-			-np $((num_clients * $ior_THREADS)) $cmd
+			-np $mpi_ior_custom_threads $cmd
 	fi
 
     local rc=$?
