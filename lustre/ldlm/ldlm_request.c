@@ -1110,7 +1110,8 @@ static int lock_convert_interpret(const struct lu_env *env,
 			 * is not there yet.
 			 */
 			lock->l_policy_data.l_inodebits.cancel_bits = 0;
-			if (!lock->l_readers && !lock->l_writers) {
+			if (!lock->l_readers && !lock->l_writers &&
+			    !ldlm_is_canceling(lock)) {
 				spin_lock(&ns->ns_lock);
 				/* there is check for list_empty() inside */
 				ldlm_lock_remove_from_lru_nolock(lock);
