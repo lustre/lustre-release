@@ -1275,45 +1275,6 @@ static void mdt_rename_unlock(struct lustre_handle *lh)
 	EXIT;
 }
 
-/*
- * This is is_subdir() variant, it is CMD if cmm forwards it to correct
- * target. Source should not be ancestor of target dir. May be other rename
- * checks can be moved here later.
- */
-static int mdt_is_subdir(struct mdt_thread_info *info,
-			 struct mdt_object *dir,
-			 const struct lu_fid *fid)
-{
-	struct lu_fid dir_fid = dir->mot_header.loh_fid;
-        int rc = 0;
-        ENTRY;
-
-	/* If the source and target are in the same directory, they can not
-	 * be parent/child relationship, so subdir check is not needed */
-	if (lu_fid_eq(&dir_fid, fid))
-		return 0;
-
-	if (!mdt_object_exists(dir))
-		RETURN(-ENOENT);
-
-	rc = mdo_is_subdir(info->mti_env, mdt_object_child(dir),
-			   fid, &dir_fid);
-	if (rc < 0) {
-		CERROR("%s: failed subdir check in "DFID" for "DFID
-		       ": rc = %d\n", mdt_obd_name(info->mti_mdt),
-		       PFID(&dir_fid), PFID(fid), rc);
-		/* Return EINVAL only if a parent is the @fid */
-		if (rc == -EINVAL)
-			rc = -EIO;
-	} else {
-		/* check the found fid */
-		if (lu_fid_eq(&dir_fid, fid))
-			rc = -EINVAL;
-	}
-
-        RETURN(rc);
-}
-
 /* Update object linkEA */
 struct mdt_lock_list {
 	struct mdt_object	*mll_obj;
@@ -1795,6 +1756,98 @@ static int mdt_object_lock_save(struct mdt_thread_info *info,
 }
 
 /*
+ * determine lock order of sobj and tobj
+ *
+ * there are two situations we need to lock tobj before sobj:
+ * 1. sobj is child of tobj
+ * 2. sobj and tobj are stripes of a directory, and stripe index of sobj is
+ *    larger than that of tobj
+ *
+ * \retval	1 lock tobj before sobj
+ * \retval	0 lock sobj before tobj
+ * \retval	-ev negative errno upon error
+ */
+static int mdt_rename_determine_lock_order(struct mdt_thread_info *info,
+					   struct mdt_object *sobj,
+					   struct mdt_object *tobj)
+{
+	struct md_attr *ma = &info->mti_attr;
+	struct lu_fid *spfid = &info->mti_tmp_fid1;
+	struct lu_fid *tpfid = &info->mti_tmp_fid2;
+	struct lmv_mds_md_v1 *lmv;
+	__u32 sindex;
+	__u32 tindex;
+	int rc;
+
+	/* sobj and tobj are the same */
+	if (sobj == tobj)
+		return 0;
+
+	if (fid_is_root(mdt_object_fid(sobj)))
+		return 0;
+
+	if (fid_is_root(mdt_object_fid(tobj)))
+		return 1;
+
+	/* check whether sobj is child of tobj */
+	rc = mdo_is_subdir(info->mti_env, mdt_object_child(sobj),
+			   mdt_object_fid(tobj));
+	if (rc < 0)
+		return rc;
+
+	if (rc == 1)
+		return 1;
+
+	/* check whether sobj and tobj are children of the same parent */
+	rc = mdt_attr_get_pfid(info, sobj, spfid);
+	if (rc)
+		return rc;
+
+	rc = mdt_attr_get_pfid(info, tobj, tpfid);
+	if (rc)
+		return rc;
+
+	if (!lu_fid_eq(spfid, tpfid))
+		return 0;
+
+	/* check whether sobj and tobj are sibling stripes */
+	ma->ma_need = MA_LMV;
+	ma->ma_valid = 0;
+	ma->ma_lmv = (union lmv_mds_md *)info->mti_xattr_buf;
+	ma->ma_lmv_size = sizeof(info->mti_xattr_buf);
+	rc = mdt_stripe_get(info, sobj, ma, XATTR_NAME_LMV);
+	if (rc)
+		return rc;
+
+	if (!(ma->ma_valid & MA_LMV))
+		return 0;
+
+	lmv = &ma->ma_lmv->lmv_md_v1;
+	if (!(le32_to_cpu(lmv->lmv_magic) & LMV_MAGIC_STRIPE))
+		return 0;
+	sindex = le32_to_cpu(lmv->lmv_master_mdt_index);
+
+	ma->ma_valid = 0;
+	rc = mdt_stripe_get(info, tobj, ma, XATTR_NAME_LMV);
+	if (rc)
+		return rc;
+
+	if (!(ma->ma_valid & MA_LMV))
+		return -ENODATA;
+
+	lmv = &ma->ma_lmv->lmv_md_v1;
+	if (!(le32_to_cpu(lmv->lmv_magic) & LMV_MAGIC_STRIPE))
+		return -EINVAL;
+	tindex = le32_to_cpu(lmv->lmv_master_mdt_index);
+
+	/* check stripe index of sobj and tobj */
+	if (sindex == tindex)
+		return -EINVAL;
+
+	return sindex < tindex ? 0 : 1;
+}
+
+/*
  * VBR: rename versions in reply: 0 - srcdir parent; 1 - tgtdir parent;
  * 2 - srcdir child; 3 - tgtdir child.
  * Update on disk version of srcdir child.
@@ -1847,18 +1900,16 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 		mtgtdir = msrcdir;
 		mdt_object_get(info->mti_env, mtgtdir);
 	} else {
-		/* Check if the @msrcdir is not a child of the @mtgtdir,
-		 * otherwise a reverse locking must take place. */
-		rc = mdt_is_subdir(info, msrcdir, rr->rr_fid2);
-		if (rc == -EINVAL)
-			reverse = true;
-		else if (rc)
-			GOTO(out_put_srcdir, rc);
-
 		mtgtdir = mdt_object_find_check(info, rr->rr_fid2, 1);
 		if (IS_ERR(mtgtdir))
 			GOTO(out_put_srcdir, rc = PTR_ERR(mtgtdir));
 	}
+
+	rc = mdt_rename_determine_lock_order(info, msrcdir, mtgtdir);
+	if (rc < 0)
+		GOTO(out_put_tgtdir, rc);
+
+	reverse = rc;
 
 	/* source needs to be looked up after locking source parent, otherwise
 	 * this rename may race with unlink source, and cause rename hang, see
@@ -1937,9 +1988,13 @@ relock:
 	/* Check if @mtgtdir is subdir of @mold, before locking child
 	 * to avoid reverse locking. */
 	if (mtgtdir != msrcdir) {
-		rc = mdt_is_subdir(info, mtgtdir, old_fid);
-		if (rc)
+		rc = mdo_is_subdir(info->mti_env, mdt_object_child(mtgtdir),
+				   old_fid);
+		if (rc) {
+			if (rc == 1)
+				rc = -EINVAL;
 			GOTO(out_put_old, rc);
+		}
 	}
 
 	tgt_vbr_obj_set(info->mti_env, mdt_obj2dt(mold));
@@ -2020,9 +2075,13 @@ relock:
 		/* Check if @msrcdir is subdir of @mnew, before locking child
 		 * to avoid reverse locking. */
 		if (mtgtdir != msrcdir) {
-			rc = mdt_is_subdir(info, msrcdir, new_fid);
-			if (rc)
+			rc = mdo_is_subdir(info->mti_env,
+					   mdt_object_child(msrcdir), new_fid);
+			if (rc) {
+				if (rc == 1)
+					rc = -EINVAL;
 				GOTO(out_unlock_old, rc);
+			}
 		}
 
 		/* We used to acquire MDS_INODELOCK_FULL here but we

@@ -798,6 +798,8 @@ int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 		      const char *name);
 int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 		   struct md_attr *ma, const char *name);
+int mdt_attr_get_pfid(struct mdt_thread_info *info, struct mdt_object *o,
+		      struct lu_fid *pfid);
 int mdt_write_get(struct mdt_object *o);
 void mdt_write_put(struct mdt_object *o);
 int mdt_write_read(struct mdt_object *o);

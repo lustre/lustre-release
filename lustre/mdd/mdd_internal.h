@@ -234,8 +234,6 @@ void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
 int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj);
 
 /* mdd_dir.c */
-int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
-                  const struct lu_fid *fid, struct lu_fid *sfid);
 int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 		   const struct lu_attr *pattr, struct mdd_object *cobj,
 		   bool check_perm);

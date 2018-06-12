@@ -4016,7 +4016,7 @@ test_80b() {
 }
 run_test 80b "Accessing directory during migration"
 
-test_81() {
+test_81a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	rm -rf $DIR1/$tdir
@@ -4042,7 +4042,35 @@ test_81() {
 
 	return 0
 }
-run_test 81 "rename and stat under striped directory"
+run_test 81a "rename and stat under striped directory"
+
+test_81b() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDTs for this test"
+
+	local total
+	local setattr_pid
+
+	total=1000
+
+	$LFS mkdir -c $MDSCOUNT $DIR1/$tdir || error "$LFS mkdir"
+	createmany -o $DIR1/$tdir/$tfile. $total || error "createmany"
+
+	(
+		while true; do
+			touch $DIR1/$tdir
+		done
+	) &
+	setattr_pid=$!
+
+	for i in $(seq $total); do
+		mrename $DIR2/$tdir/$tfile.$i $DIR2/$tdir/$tfile-new.$i \
+			> /dev/null
+	done
+
+	kill -9 $setattr_pid
+}
+run_test 81b "rename under striped directory doesn't deadlock"
 
 test_82() {
 	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.6.91) ]] ||

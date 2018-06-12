@@ -280,36 +280,36 @@ struct md_object_operations {
  * Operations implemented for each directory object.
  */
 struct md_dir_operations {
-        int (*mdo_is_subdir) (const struct lu_env *env, struct md_object *obj,
-                              const struct lu_fid *fid, struct lu_fid *sfid);
+	int (*mdo_is_subdir)(const struct lu_env *env, struct md_object *obj,
+			     const struct lu_fid *fid);
 
-        int (*mdo_lookup)(const struct lu_env *env, struct md_object *obj,
-                          const struct lu_name *lname, struct lu_fid *fid,
-                          struct md_op_spec *spec);
+	int (*mdo_lookup)(const struct lu_env *env, struct md_object *obj,
+			  const struct lu_name *lname, struct lu_fid *fid,
+			  struct md_op_spec *spec);
 
-        mdl_mode_t (*mdo_lock_mode)(const struct lu_env *env,
-                                    struct md_object *obj,
-                                    mdl_mode_t mode);
+	mdl_mode_t (*mdo_lock_mode)(const struct lu_env *env,
+				    struct md_object *obj,
+				    mdl_mode_t mode);
 
-        int (*mdo_create)(const struct lu_env *env, struct md_object *pobj,
-                          const struct lu_name *lname, struct md_object *child,
-                          struct md_op_spec *spec,
-                          struct md_attr *ma);
+	int (*mdo_create)(const struct lu_env *env, struct md_object *pobj,
+			  const struct lu_name *lname, struct md_object *child,
+			  struct md_op_spec *spec,
+			  struct md_attr *ma);
 
-        /** This method is used for creating data object for this meta object*/
-        int (*mdo_create_data)(const struct lu_env *env, struct md_object *p,
-                               struct md_object *o,
-                               const struct md_op_spec *spec,
-                               struct md_attr *ma);
+	/** This method is used for creating data object for this meta object*/
+	int (*mdo_create_data)(const struct lu_env *env, struct md_object *p,
+			       struct md_object *o,
+			       const struct md_op_spec *spec,
+			       struct md_attr *ma);
 
-        int (*mdo_rename)(const struct lu_env *env, struct md_object *spobj,
-                          struct md_object *tpobj, const struct lu_fid *lf,
-                          const struct lu_name *lsname, struct md_object *tobj,
-                          const struct lu_name *ltname, struct md_attr *ma);
+	int (*mdo_rename)(const struct lu_env *env, struct md_object *spobj,
+			  struct md_object *tpobj, const struct lu_fid *lf,
+			  const struct lu_name *lsname, struct md_object *tobj,
+			  const struct lu_name *ltname, struct md_attr *ma);
 
-        int (*mdo_link)(const struct lu_env *env, struct md_object *tgt_obj,
-                        struct md_object *src_obj, const struct lu_name *lname,
-                        struct md_attr *ma);
+	int (*mdo_link)(const struct lu_env *env, struct md_object *tgt_obj,
+			struct md_object *src_obj, const struct lu_name *lname,
+			struct md_attr *ma);
 
 	int (*mdo_unlink)(const struct lu_env *env, struct md_object *pobj,
 			  struct md_object *cobj, const struct lu_name *lname,
@@ -621,12 +621,11 @@ static inline int mdo_migrate(const struct lu_env *env,
 }
 
 static inline int mdo_is_subdir(const struct lu_env *env,
-                                struct md_object *mo,
-                                const struct lu_fid *fid,
-                                struct lu_fid *sfid)
+				struct md_object *mo,
+				const struct lu_fid *fid)
 {
-        LASSERT(mo->mo_dir_ops->mdo_is_subdir);
-        return mo->mo_dir_ops->mdo_is_subdir(env, mo, fid, sfid);
+	LASSERT(mo->mo_dir_ops->mdo_is_subdir);
+	return mo->mo_dir_ops->mdo_is_subdir(env, mo, fid);
 }
 
 static inline int mdo_link(const struct lu_env *env,

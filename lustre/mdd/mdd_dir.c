@@ -255,61 +255,56 @@ int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid)
 }
 
 /*
- * return 1: if lf is the fid of the ancestor of p1;
+ * return 1: if \a tfid is the fid of the ancestor of \a mo;
  * return 0: if not;
- *
- * return -EREMOTE: if remote object is found, in this
- * case fid of remote object is saved to @pf;
- *
  * otherwise: values < 0, errors.
  */
 static int mdd_is_parent(const struct lu_env *env,
 			struct mdd_device *mdd,
-			struct mdd_object *p1,
+			struct mdd_object *mo,
 			const struct lu_attr *attr,
-			const struct lu_fid *lf,
-			struct lu_fid *pf)
+			const struct lu_fid *tfid)
 {
-        struct mdd_object *parent = NULL;
-        struct lu_fid *pfid;
-        int rc;
-        ENTRY;
+	struct mdd_object *mp;
+	struct lu_fid *pfid;
+	int rc;
 
-        LASSERT(!lu_fid_eq(mdo2fid(p1), lf));
-        pfid = &mdd_env_info(env)->mti_fid;
+	LASSERT(!lu_fid_eq(mdo2fid(mo), tfid));
+	pfid = &mdd_env_info(env)->mti_fid;
 
-        /* Check for root first. */
-        if (mdd_is_root(mdd, mdo2fid(p1)))
-                RETURN(0);
+	if (mdd_is_root(mdd, mdo2fid(mo)))
+		return 0;
 
-        for(;;) {
-		/* this is done recursively */
-		rc = mdd_parent_fid(env, p1, attr, pfid);
+	if (mdd_is_root(mdd, tfid))
+		return 1;
+
+	rc = mdd_parent_fid(env, mo, attr, pfid);
+	if (rc)
+		return rc;
+
+	while (1) {
+		if (lu_fid_eq(pfid, tfid))
+			return 1;
+
+		if (mdd_is_root(mdd, pfid))
+			return 0;
+
+		mp = mdd_object_find(env, mdd, pfid);
+		if (IS_ERR(mp))
+			return PTR_ERR(mp);
+
+		if (!mdd_object_exists(mp)) {
+			mdd_object_put(env, mp);
+			return -ENOENT;
+		}
+
+		rc = mdd_parent_fid(env, mp, attr, pfid);
+		mdd_object_put(env, mp);
 		if (rc)
-			GOTO(out, rc);
-                if (mdd_is_root(mdd, pfid))
-                        GOTO(out, rc = 0);
-		if (lu_fid_eq(pfid, &mdd->mdd_local_root_fid))
-			GOTO(out, rc = 0);
-                if (lu_fid_eq(pfid, lf))
-                        GOTO(out, rc = 1);
-		if (parent != NULL)
-			mdd_object_put(env, parent);
+			return rc;
+	}
 
-		parent = mdd_object_find(env, mdd, pfid);
-		if (IS_ERR(parent))
-			GOTO(out, rc = PTR_ERR(parent));
-
-		if (!mdd_object_exists(parent))
-			GOTO(out, rc = -EINVAL);
-
-		p1 = parent;
-        }
-        EXIT;
-out:
-        if (parent && !IS_ERR(parent))
-                mdd_object_put(env, parent);
-        return rc;
+	return 0;
 }
 
 /*
@@ -317,36 +312,27 @@ out:
  *
  * returns 1: if fid is ancestor of @mo;
  * returns 0: if fid is not an ancestor of @mo;
- *
- * returns EREMOTE if remote object is found, fid of remote object is saved to
- * @fid;
- *
  * returns < 0: if error
  */
 int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
-		  const struct lu_fid *fid, struct lu_fid *sfid)
+		  const struct lu_fid *fid)
 {
 	struct mdd_device *mdd = mdo2mdd(mo);
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	int rc;
 	ENTRY;
 
+	if (!mdd_object_exists(md2mdd_obj(mo)))
+		RETURN(-ENOENT);
+
 	if (!S_ISDIR(mdd_object_type(md2mdd_obj(mo))))
-		RETURN(0);
+		RETURN(-ENOTDIR);
 
 	rc = mdd_la_get(env, md2mdd_obj(mo), attr);
 	if (rc != 0)
 		RETURN(rc);
 
-	rc = mdd_is_parent(env, mdd, md2mdd_obj(mo), attr, fid, sfid);
-	if (rc == 0) {
-		/* found root */
-		fid_zero(sfid);
-	} else if (rc == 1) {
-		/* found @fid is parent */
-		*sfid = *fid;
-		rc = 0;
-	}
+	rc = mdd_is_parent(env, mdd, md2mdd_obj(mo), attr, fid);
 	RETURN(rc);
 }
 
@@ -2687,8 +2673,8 @@ static int mdd_rename_order(const struct lu_env *env,
         } else if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(tgt_pobj))) {
                 rc = MDD_RN_TGTSRC;
         } else {
-		rc = mdd_is_parent(env, mdd, src_pobj, pattr, mdo2fid(tgt_pobj),
-				   NULL);
+		rc = mdd_is_parent(env, mdd, src_pobj, pattr,
+				   mdo2fid(tgt_pobj));
                 if (rc == -EREMOTE)
                         rc = 0;
 

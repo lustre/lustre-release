@@ -956,8 +956,8 @@ got:
 	return rc;
 }
 
-static int mdt_attr_get_pfid(struct mdt_thread_info *info,
-			     struct mdt_object *o, struct lu_fid *pfid)
+int mdt_attr_get_pfid(struct mdt_thread_info *info, struct mdt_object *o,
+		      struct lu_fid *pfid)
 {
 	struct lu_buf		*buf = &info->mti_buf;
 	struct link_ea_header	*leh;
