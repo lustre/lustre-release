@@ -2161,6 +2161,39 @@ test_202() {
 }
 run_test 202 "lfs setstripe --add-component wide striping"
 
+test_203() {
+	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
+
+	local tf=$DIR/$tfile
+
+	#create 2 mirrors
+	$LFS mirror create -N2 -c1 $tf || error "create FLR file $tf"
+	#delete first mirror
+	$LFS mirror split --mirror-id=1 -d $tf || error "delete first mirror"
+
+	$LFS getstripe $tf
+	local old_id=$($LFS getstripe --mirror-id=2 -I $tf)
+	local count=$($LFS getstripe --mirror-id=2 -c $tf) ||
+		error "getstripe count of mirror 2"
+	[[ x$count = x1 ]] || error "mirror 2 stripe count $count is not 1"
+
+	#extend a mirror with 2 OSTs
+	$LFS mirror extend -N -c2 $tf || error "extend mirror"
+	$LFS getstripe $tf
+
+	local new_id=$($LFS getstripe --mirror-id=2 -I $tf)
+	count=$($LFS getstripe --mirror-id=2 -c $tf) ||
+		error "getstripe count of mirror 2"
+	[[ x$oldid = x$newid ]] ||
+		error "mirror 2 changed ID from $old_id to $new_id"
+	[[ x$count = x1 ]] || error "mirror 2 stripe count $count is not 1"
+
+	count=$($LFS getstripe --mirror-id=3 -c $tf) ||
+		error "getstripe count of mirror 3"
+	[[ x$count = x2 ]] || error "mirror 3 stripe count $count is not 2"
+}
+run_test 203 "mirror file preserve mirror ID"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

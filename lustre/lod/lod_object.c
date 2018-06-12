@@ -2898,8 +2898,12 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 
 		offset += le32_to_cpu(lcme->lcme_size);
 
-		if (mirror_count == 1) {
-			/* new mirrored file, create new mirror ID */
+		if (mirror_count == 1 &&
+		    mirror_id_of(le32_to_cpu(lcme->lcme_id)) == 0) {
+			/* Add mirror from a non-flr file, create new mirror ID.
+			 * Otherwise, keep existing mirror's component ID, used
+			 * for mirror extension.
+			 */
 			id = pflr_id(1, i + 1);
 			lcme->lcme_id = cpu_to_le32(id);
 		}
@@ -4906,16 +4910,28 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL);
 
-	mirror_id = lo->ldo_mirror_count > 1 ? 1 : 0;
+	mirror_id = 0; /* non-flr file's mirror_id is 0 */
+	if (lo->ldo_mirror_count > 1) {
+		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			lod_comp = &lo->ldo_comp_entries[i];
+			if (lod_comp->llc_id != LCME_ID_INVAL &&
+			    mirror_id_of(lod_comp->llc_id) > mirror_id)
+				mirror_id = mirror_id_of(lod_comp->llc_id);
+		}
+	}
 
 	/* create all underlying objects */
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
 
-		if (lod_comp->llc_extent.e_start == 0 && i > 0) /* new mirror */
-			++mirror_id;
-
 		if (lod_comp->llc_id == LCME_ID_INVAL) {
+			/* only the component of FLR layout with more than 1
+			 * mirror has mirror ID in its component ID.
+			 */
+			if (lod_comp->llc_extent.e_start == 0 &&
+			    lo->ldo_mirror_count > 1)
+				++mirror_id;
+
 			lod_comp->llc_id = lod_gen_component_id(lo,
 								mirror_id, i);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
