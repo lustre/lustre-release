@@ -53,8 +53,8 @@
 #include "osd_oi.h"
 
 static void osd_push_ctxt(const struct osd_device *dev,
-                          struct lvfs_run_ctxt *newctxt,
-                          struct lvfs_run_ctxt *save)
+			  struct lvfs_run_ctxt *newctxt,
+			  struct lvfs_run_ctxt *save)
 {
 	OBD_SET_CTXT_MAGIC(newctxt);
 	newctxt->pwdmnt = dev->od_mnt;
@@ -77,6 +77,7 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 	struct inode *inode;
 	struct dentry *dchild;
 	int err = 0;
+
 	ENTRY;
 
 	// ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
@@ -153,27 +154,27 @@ out_err:
 
 static int osd_last_rcvd_subdir_count(struct osd_device *osd)
 {
-        struct lr_server_data lsd;
-        struct dentry        *dlast;
-        loff_t                off;
-        int                   rc = 0;
-	int                   count = OBJ_SUBDIR_COUNT;
+	struct lr_server_data lsd;
+	struct dentry *dlast;
+	loff_t off;
+	int rc = 0;
+	int count = OBJ_SUBDIR_COUNT;
 
-        ENTRY;
+	ENTRY;
 
-        dlast = ll_lookup_one_len(LAST_RCVD, osd_sb(osd)->s_root,
-                                  strlen(LAST_RCVD));
-        if (IS_ERR(dlast))
-                return PTR_ERR(dlast);
-        else if (dlast->d_inode == NULL)
-                goto out;
+	dlast = ll_lookup_one_len(LAST_RCVD, osd_sb(osd)->s_root,
+				  strlen(LAST_RCVD));
+	if (IS_ERR(dlast))
+		return PTR_ERR(dlast);
+	else if (dlast->d_inode == NULL)
+		goto out;
 
-        off = 0;
-        rc = osd_ldiskfs_read(dlast->d_inode, &lsd, sizeof(lsd), &off);
-        if (rc == sizeof(lsd)) {
-                CDEBUG(D_INFO, "read last_rcvd header, uuid = %s, "
-                       "subdir count = %d\n", lsd.lsd_uuid,
-                       lsd.lsd_subdir_count);
+	off = 0;
+	rc = osd_ldiskfs_read(dlast->d_inode, &lsd, sizeof(lsd), &off);
+	if (rc == sizeof(lsd)) {
+		CDEBUG(D_INFO,
+		      "read last_rcvd header, uuid = %s, subdir count = %d\n",
+		      lsd.lsd_uuid, lsd.lsd_subdir_count);
 		if (le16_to_cpu(lsd.lsd_subdir_count) > 0)
 			count = le16_to_cpu(lsd.lsd_subdir_count);
 	} else if (rc != 0) {
@@ -191,14 +192,15 @@ out:
 
 static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 {
-	struct lvfs_run_ctxt	new;
-	struct lvfs_run_ctxt	save;
-	struct dentry		*parent;
-	struct osd_mdobj_map	*omm;
-	struct dentry		*d;
-	struct osd_thread_info	*info = osd_oti_get(env);
-	struct lu_fid		*fid = &info->oti_fid3;
-	int			rc = 0;
+	struct lvfs_run_ctxt new;
+	struct lvfs_run_ctxt save;
+	struct dentry *parent;
+	struct osd_mdobj_map *omm;
+	struct dentry *d;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lu_fid *fid = &info->oti_fid3;
+	int rc = 0;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(dev->od_mdt_map);
@@ -248,20 +250,22 @@ static void osd_mdt_fini(struct osd_device *osd)
 int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 			     struct osd_object *obj, struct osd_thandle *oh)
 {
-	struct osd_mdobj_map	*omm = osd->od_mdt_map;
-	struct osd_thread_info	*oti = osd_oti_get(env);
-	struct lustre_mdt_attrs	*lma = &oti->oti_ost_attrs.loa_lma;
-	char			*name = oti->oti_name;
-	struct osd_thread_info  *info = osd_oti_get(env);
-	struct dentry		*dentry;
-	struct dentry		*parent;
-	int			rc;
+	struct osd_mdobj_map *omm = osd->od_mdt_map;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct lustre_mdt_attrs *lma = &oti->oti_ost_attrs.loa_lma;
+	char *name = oti->oti_name;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct dentry *dentry;
+	struct dentry *parent;
+	int rc;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
 		RETURN(0);
 
-	/* Set REMOTE_PARENT in lma, so other process like unlink or lfsck
-	 * can identify this object quickly */
+	/*
+	 * Set REMOTE_PARENT in lma, so other process like unlink or lfsck
+	 * can identify this object quickly
+	 */
 	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry,
 			 &oti->oti_ost_attrs);
 	if (rc)
@@ -299,15 +303,15 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 				  struct osd_object *obj,
 				  struct osd_thandle *oh, bool destroy)
 {
-	struct osd_mdobj_map	   *omm = osd->od_mdt_map;
-	struct osd_thread_info	   *oti = osd_oti_get(env);
-	struct lustre_mdt_attrs    *lma = &oti->oti_ost_attrs.loa_lma;
-	char			   *name = oti->oti_name;
-	struct dentry		   *dentry;
-	struct dentry		   *parent;
+	struct osd_mdobj_map *omm = osd->od_mdt_map;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct lustre_mdt_attrs *lma = &oti->oti_ost_attrs.loa_lma;
+	char *name = oti->oti_name;
+	struct dentry *dentry;
+	struct dentry *parent;
 	struct ldiskfs_dir_entry_2 *de;
-	struct buffer_head	   *bh;
-	int			   rc;
+	struct buffer_head *bh;
+	int rc;
 
 	parent = omm->omm_remote_parent;
 	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
@@ -360,13 +364,14 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 				const struct lu_fid *fid,
 				struct osd_inode_id *id)
 {
-	struct osd_mdobj_map	    *omm = osd->od_mdt_map;
-	char			    *name = oti->oti_name;
-	struct dentry		    *parent;
-	struct dentry		    *dentry;
+	struct osd_mdobj_map *omm = osd->od_mdt_map;
+	char *name = oti->oti_name;
+	struct dentry *parent;
+	struct dentry *dentry;
 	struct ldiskfs_dir_entry_2 *de;
-	struct buffer_head	   *bh;
-	int			    rc;
+	struct buffer_head *bh;
+	int rc;
+
 	ENTRY;
 
 	if (unlikely(osd->od_is_ost))
@@ -419,6 +424,7 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 	struct dentry *d;
 	int rc;
 	bool created = false;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(dev->od_ost_map);
@@ -465,10 +471,10 @@ static void osd_seq_free(struct osd_obj_seq *osd_seq)
 		for (j = 0; j < osd_seq->oos_subdir_count; j++) {
 			if (osd_seq->oos_dirs[j])
 				dput(osd_seq->oos_dirs[j]);
-                }
+		}
 		OBD_FREE(osd_seq->oos_dirs,
 			 sizeof(struct dentry *) * osd_seq->oos_subdir_count);
-        }
+	}
 
 	if (osd_seq->oos_root)
 		dput(osd_seq->oos_root);
@@ -478,9 +484,10 @@ static void osd_seq_free(struct osd_obj_seq *osd_seq)
 
 static void osd_ost_fini(struct osd_device *osd)
 {
-	struct osd_obj_seq    *osd_seq;
-	struct osd_obj_seq    *tmp;
-	struct osd_obj_map    *map = osd->od_ost_map;
+	struct osd_obj_seq *osd_seq;
+	struct osd_obj_seq *tmp;
+	struct osd_obj_map *map = osd->od_ost_map;
+
 	ENTRY;
 
 	if (map == NULL)
@@ -510,6 +517,7 @@ static int osd_index_backup_dir_init(const struct lu_env *env,
 	struct lvfs_run_ctxt save;
 	struct dentry *dentry;
 	int rc = 0;
+
 	ENTRY;
 
 	lu_local_obj_fid(fid, INDEX_BACKUP_OID);
@@ -539,6 +547,7 @@ int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
 {
 	int rc;
 	bool mdt_init = false;
+
 	ENTRY;
 
 	rc = osd_ost_init(env, dev);
@@ -607,16 +616,17 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 				const struct osd_inode_id *id,
 				handle_t *th)
 {
-	struct inode		   *parent = dir->d_inode;
-	struct dentry		   *child;
+	struct inode *parent = dir->d_inode;
+	struct dentry *child;
 	struct ldiskfs_dir_entry_2 *de;
-	struct buffer_head	   *bh;
-	struct inode		   *inode;
-	struct dentry		   *dentry = &info->oti_obj_dentry;
-	struct osd_inode_id	   *oi_id  = &info->oti_id3;
-	struct lustre_mdt_attrs	   *lma    = &info->oti_ost_attrs.loa_lma;
-	struct lu_fid		   *oi_fid = &lma->lma_self_fid;
-	int			    rc;
+	struct buffer_head *bh;
+	struct inode *inode;
+	struct dentry *dentry = &info->oti_obj_dentry;
+	struct osd_inode_id *oi_id = &info->oti_id3;
+	struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
+	struct lu_fid *oi_fid = &lma->lma_self_fid;
+	int rc;
+
 	ENTRY;
 
 	LASSERT(th != NULL);
@@ -646,8 +656,10 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 		GOTO(out, rc);
 	}
 
-	/* The EA inode should NOT be in OI, old OI scrub may added
-	 * such OI mapping by wrong, replace it. */
+	/*
+	 * The EA inode should NOT be in OI, old OI scrub may added
+	 * such OI mapping by wrong, replace it.
+	 */
 	if (unlikely(osd_is_ea_inode(inode))) {
 		iput(inode);
 		goto update;
@@ -666,8 +678,10 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	/* If the OST-object has neither FID-in-LMA nor FID-in-ff, it is
-	 * either a crashed object or a uninitialized one. Replace it. */
+	/*
+	 * If the OST-object has neither FID-in-LMA nor FID-in-ff, it is
+	 * either a crashed object or a uninitialized one. Replace it.
+	 */
 	if (oi_fid != NULL && lu_fid_eq(fid, oi_fid)) {
 		CERROR("%s: the FID "DFID" is used by two objects: "
 		       "%u/%u %u/%u\n", osd_name(osd), PFID(fid),
@@ -716,14 +730,16 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	}
 
 update:
-	/* There may be temporary inconsistency: On one hand, the new
+	/*
+	 * There may be temporary inconsistency: On one hand, the new
 	 * object may be referenced by multiple entries, which is out
 	 * of our control unless we traverse the whole /O completely,
 	 * which is non-flat order and inefficient, should be avoided;
 	 * On the other hand, the old object may become orphan if it
 	 * is still valid. Since it was referenced by an invalid entry,
 	 * making it as invisible temporary may be not worse. OI scrub
-	 * will process it later. */
+	 * will process it later.
+	 */
 	rc = ldiskfs_journal_get_write_access(th, bh);
 	if (rc != 0)
 		GOTO(out, rc);
@@ -746,15 +762,15 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 			     handle_t *th)
 {
 	struct ldiskfs_dir_entry_2 *de;
-	struct buffer_head         *bh;
-	struct dentry              *child;
-	struct inode               *dir = dird->d_inode;
-	int                         rc;
+	struct buffer_head *bh;
+	struct dentry *child;
+	struct inode *dir = dird->d_inode;
+	int rc;
+
 	ENTRY;
 
 	LASSERT(th != NULL);
 	LASSERT(th->h_transaction != NULL);
-
 
 	child = &info->oti_child_dentry;
 	child->d_name.hash = 0;
@@ -798,6 +814,7 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 	inode = info->oti_inode;
 	if (unlikely(inode == NULL)) {
 		struct ldiskfs_inode_info *lii;
+
 		OBD_ALLOC_PTR(lii);
 		if (lii == NULL)
 			RETURN(-ENOMEM);
@@ -855,11 +872,12 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 			       struct osd_device *osd,
 			       struct osd_obj_seq *osd_seq)
 {
-	struct osd_obj_map  *map = osd->od_ost_map;
-	struct dentry       *seq_dir;
-	int		    rc = 0;
-	int		    i;
-	char		    dir_name[32];
+	struct osd_obj_map *map = osd->od_ost_map;
+	struct dentry *seq_dir;
+	int rc = 0;
+	int i;
+	char dir_name[32];
+
 	ENTRY;
 
 	if (osd_seq->oos_root != NULL)
@@ -921,9 +939,10 @@ out_err:
 static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
 					struct osd_device *osd, u64 seq)
 {
-	struct osd_obj_map	*map;
-	struct osd_obj_seq	*osd_seq;
-	int			rc = 0;
+	struct osd_obj_map *map;
+	struct osd_obj_seq *osd_seq;
+	int rc = 0;
+
 	ENTRY;
 
 	map = osd->od_ost_map;
@@ -952,8 +971,10 @@ static struct osd_obj_seq *osd_seq_load(struct osd_thread_info *info,
 
 	INIT_LIST_HEAD(&osd_seq->oos_seq_list);
 	osd_seq->oos_seq = seq;
-	/* Init subdir count to be 32, but each seq can have
-	 * different subdir count */
+	/*
+	 * Init subdir count to be 32, but each seq can have
+	 * different subdir count
+	 */
 	osd_seq->oos_subdir_count = map->om_subdir_count;
 	rc = osd_seq_load_locked(info, osd, osd_seq);
 	if (rc != 0)
@@ -977,26 +998,26 @@ cleanup:
 int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *dev,
 		       const struct lu_fid *fid, struct osd_inode_id *id)
 {
-	struct osd_obj_map		*map;
-	struct osd_obj_seq		*osd_seq;
-	struct dentry			*d_seq;
-	struct dentry			*child;
-	struct ost_id			*ostid = &info->oti_ostid;
-	int				dirn;
-	char				name[32];
-	struct ldiskfs_dir_entry_2	*de;
-	struct buffer_head		*bh;
-	struct inode			*dir;
-	struct inode			*inode;
-        ENTRY;
+	struct osd_obj_map *map;
+	struct osd_obj_seq *osd_seq;
+	struct dentry *d_seq;
+	struct dentry *child;
+	struct ost_id *ostid = &info->oti_ostid;
+	int dirn;
+	char name[32];
+	struct ldiskfs_dir_entry_2 *de;
+	struct buffer_head *bh;
+	struct inode *dir;
+	struct inode *inode;
 
-        /* on the very first lookup we find and open directories */
+	ENTRY;
 
-        map = dev->od_ost_map;
-        LASSERT(map);
+	/* on the very first lookup we find and open directories */
+	map = dev->od_ost_map;
+	LASSERT(map);
 	LASSERT(map->om_root);
 
-        fid_to_ostid(fid, ostid);
+	fid_to_ostid(fid, ostid);
 	osd_seq = osd_seq_load(info, dev, ostid_seq(ostid));
 	if (IS_ERR(osd_seq))
 		RETURN(PTR_ERR(osd_seq));
@@ -1042,13 +1063,14 @@ int osd_obj_map_insert(struct osd_thread_info *info,
 		       const struct osd_inode_id *id,
 		       handle_t *th)
 {
-	struct osd_obj_map	*map;
-	struct osd_obj_seq	*osd_seq;
-	struct dentry		*d;
-	struct ost_id		*ostid = &info->oti_ostid;
-	u64			 oid;
-	int			dirn, rc = 0;
-	char			name[32];
+	struct osd_obj_map *map;
+	struct osd_obj_seq *osd_seq;
+	struct dentry *d;
+	struct ost_id *ostid = &info->oti_ostid;
+	u64 oid;
+	int dirn, rc = 0;
+	char name[32];
+
 	ENTRY;
 
 	map = osd->od_ost_map;
@@ -1085,19 +1107,20 @@ again:
 int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
 		       const struct lu_fid *fid, handle_t *th)
 {
-	struct osd_obj_map	*map;
-	struct osd_obj_seq	*osd_seq;
-	struct dentry		*d;
-	struct ost_id		*ostid = &info->oti_ostid;
-	int			dirn, rc = 0;
-	char			name[32];
-        ENTRY;
+	struct osd_obj_map *map;
+	struct osd_obj_seq *osd_seq;
+	struct dentry *d;
+	struct ost_id *ostid = &info->oti_ostid;
+	int dirn, rc = 0;
+	char name[32];
 
-        map = osd->od_ost_map;
-        LASSERT(map);
+	ENTRY;
+
+	map = osd->od_ost_map;
+	LASSERT(map);
 
 	/* map fid to seq:objid */
-        fid_to_ostid(fid, ostid);
+	fid_to_ostid(fid, ostid);
 
 	osd_seq = osd_seq_load(info, osd, ostid_seq(ostid));
 	if (IS_ERR(osd_seq))
@@ -1110,7 +1133,7 @@ int osd_obj_map_delete(struct osd_thread_info *info, struct osd_device *osd,
 	osd_oid_name(name, sizeof(name), fid, ostid_id(ostid));
 	rc = osd_obj_del_entry(info, osd, d, name, th);
 cleanup:
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int osd_obj_map_update(struct osd_thread_info *info,
@@ -1119,11 +1142,12 @@ int osd_obj_map_update(struct osd_thread_info *info,
 		       const struct osd_inode_id *id,
 		       handle_t *th)
 {
-	struct osd_obj_seq	*osd_seq;
-	struct dentry		*d;
-	struct ost_id		*ostid = &info->oti_ostid;
-	int			dirn, rc = 0;
-	char			name[32];
+	struct osd_obj_seq *osd_seq;
+	struct dentry *d;
+	struct ost_id *ostid = &info->oti_ostid;
+	int dirn, rc = 0;
+	char name[32];
+
 	ENTRY;
 
 	fid_to_ostid(fid, ostid);
@@ -1147,18 +1171,19 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 			struct dentry *src_child,
 			const struct lu_fid *fid)
 {
-	struct osd_obj_seq	   *osd_seq;
-	struct dentry		   *tgt_parent;
-	struct dentry		   *tgt_child = &info->oti_child_dentry;
-	struct inode		   *dir;
-	struct inode		   *inode     = src_child->d_inode;
-	struct ost_id		   *ostid     = &info->oti_ostid;
-	handle_t		   *jh;
+	struct osd_obj_seq *osd_seq;
+	struct dentry *tgt_parent;
+	struct dentry *tgt_child = &info->oti_child_dentry;
+	struct inode *dir;
+	struct inode *inode = src_child->d_inode;
+	struct ost_id *ostid = &info->oti_ostid;
+	handle_t *jh;
 	struct ldiskfs_dir_entry_2 *de;
-	struct buffer_head	   *bh;
-	char			    name[32];
-	int			    dirn;
-	int			    rc	      = 0;
+	struct buffer_head *bh;
+	char name[32];
+	int dirn;
+	int rc = 0;
+
 	ENTRY;
 
 	if (fid_is_last_id(fid)) {
@@ -1203,14 +1228,15 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 	inode_lock(dir);
 	bh = osd_ldiskfs_find_entry(dir, &tgt_child->d_name, &de, NULL, NULL);
 	if (!IS_ERR(bh)) {
-		/* XXX: If some other object occupied the same slot. And If such
-		 * 	inode is zero-sized and with SUID+SGID, then means it is
-		 * 	a new created one. Maybe we can remove it and insert the
-		 * 	original one back to the /O/<seq>/d<x>. But there are
-		 * 	something to be considered:
+		/*
+		 * XXX: If some other object occupied the same slot. And If such
+		 *	inode is zero-sized and with SUID+SGID, then means it is
+		 *	a new created one. Maybe we can remove it and insert the
+		 *	original one back to the /O/<seq>/d<x>. But there are
+		 *	something to be considered:
 		 *
-		 * 	1) The OST-object under /lost+found has crashed LMA.
-		 * 	   So it should not conflict with the current one.
+		 *	1) The OST-object under /lost+found has crashed LMA.
+		 *	   So it should not conflict with the current one.
 		 *
 		 *	2) There are race conditions that: someone may just want
 		 *	   to modify the current one. Even if the OI scrub takes
@@ -1219,7 +1245,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		 *	   has been removed when the RPC service thread waiting
 		 *	   for the lock.
 		 *
-		 * 	So keep it there before we have suitable solution. */
+		 *	So keep it there before we have suitable solution.
+		 */
 		brelse(bh);
 		inode_unlock(dir);
 		inode_unlock(src_parent);
@@ -1288,9 +1315,10 @@ int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
 			handle_t *th)
 {
-	struct dentry	*root;
-	char		*name = NULL;
-	int		 rc;
+	struct dentry *root;
+	char *name = NULL;
+	int rc;
+
 	ENTRY;
 
 	root = osd_object_spec_find(info, osd, fid, &name);
@@ -1309,9 +1337,10 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
 			handle_t *th)
 {
-	struct dentry	*root;
-	char		*name = NULL;
-	int		 rc;
+	struct dentry *root;
+	char *name = NULL;
+	int rc;
+
 	ENTRY;
 
 	root = osd_object_spec_find(info, osd, fid, &name);
@@ -1329,11 +1358,12 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id)
 {
-	struct dentry	*root;
-	struct dentry	*dentry;
-	struct inode	*inode;
-	char		*name = NULL;
-	int		rc = -ENOENT;
+	struct dentry *root;
+	struct dentry *dentry;
+	struct inode *inode;
+	char *name = NULL;
+	int rc = -ENOENT;
+
 	ENTRY;
 
 	if (fid_is_last_id(fid)) {
@@ -1363,8 +1393,10 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 				rc = 0;
 			}
 		}
-		/* if dentry is accessible after osd_compat_spec_insert it
-		 * will still contain NULL inode, so don't keep it in cache */
+		/*
+		 * if dentry is accessible after osd_compat_spec_insert it
+		 * will still contain NULL inode, so don't keep it in cache
+		 */
 		d_invalidate(dentry);
 		dput(dentry);
 	}
