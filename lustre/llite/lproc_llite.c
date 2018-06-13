@@ -691,6 +691,42 @@ static ssize_t ll_track_gid_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ll_track_gid);
 
+static ssize_t statahead_running_max_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, 16, "%u\n", sbi->ll_sa_running_max);
+}
+
+static ssize_t statahead_running_max_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer,
+					   size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned long val;
+	int rc;
+
+	rc = kstrtoul(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val <= LL_SA_RUNNING_MAX) {
+		sbi->ll_sa_running_max = val;
+		return count;
+	}
+
+	CERROR("Bad statahead_running_max value %lu. Valid values "
+	       "are in the range [0, %d]\n", val, LL_SA_RUNNING_MAX);
+
+	return -ERANGE;
+}
+LUSTRE_RW_ATTR(statahead_running_max);
+
 static int ll_statahead_max_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1200,6 +1236,7 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 #define MAX_STRING_SIZE 128
 
 static struct attribute *llite_attrs[] = {
+	&lustre_attr_statahead_running_max.attr,
 	NULL,
 };
 
