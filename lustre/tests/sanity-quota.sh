@@ -128,11 +128,6 @@ DD="dd if=/dev/zero bs=1M"
 
 FAIL_ON_ERROR=false
 
-check_runas_id_ret $TSTUSR $TSTUSR $RUNAS ||
-	error "Please create user $TSTUSR($TSTID) and group $TSTUSR($TSTID)"
-check_runas_id_ret $TSTUSR2 $TSTUSR2 $RUNAS2 ||
-	error "Please create user $TSTUSR2($TSTID2) and group $TSTUSR2($TSTID2)"
-
 # clear quota limits for a user or a group
 # usage: resetquota -u username
 #        resetquota -g groupname
@@ -431,17 +426,25 @@ enable_project_quota() {
 }
 enable_project_quota
 
+reset_quota_settings() {
+	resetquota -u $TSTUSR
+	resetquota -g $TSTUSR
+	resetquota -u $TSTUSR2
+	resetquota -g $TSTUSR2
+	resetquota -p $TSTPRJID
+}
+
 # enable quota debug
 quota_init() {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 }
 quota_init
+reset_quota_settings
 
-resetquota -u $TSTUSR
-resetquota -g $TSTUSR
-resetquota -u $TSTUSR2
-resetquota -g $TSTUSR2
-resetquota -p $TSTPRJID
+check_runas_id_ret $TSTUSR $TSTUSR $RUNAS ||
+	error "Please create user $TSTUSR($TSTID) and group $TSTUSR($TSTID)"
+check_runas_id_ret $TSTUSR2 $TSTUSR2 $RUNAS2 ||
+	error "Please create user $TSTUSR2($TSTID2) and group $TSTUSR2($TSTID2)"
 
 test_quota_performance() {
 	local TESTFILE="$DIR/$tdir/$tfile-0"
@@ -3022,6 +3025,7 @@ test_55() {
 
 	$LFS quota -v -g $TSTUSR2 $DIR
 
+	resetquota -g $TSTUSR2
 	cleanup_quota_test
 }
 run_test 55 "Chgrp should be affected by group quota"
@@ -3268,6 +3272,7 @@ quota_fini()
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
 	disable_project_quota
 }
+reset_quota_settings
 quota_fini
 
 cd $ORIG_PWD
