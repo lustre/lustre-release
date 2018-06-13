@@ -673,6 +673,40 @@ static ssize_t ll_track_gid_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ll_track_gid);
 
+static int ll_statahead_running_max_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	seq_printf(m, "%u\n", sbi->ll_sa_running_max);
+	return 0;
+}
+
+static ssize_t ll_statahead_running_max_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int rc;
+	__s64 val;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val >= 0 || val <= LL_SA_RUNNING_MAX)
+		sbi->ll_sa_running_max = val;
+	else
+		CERROR("%s: bad statahead_running_max value %lld. Valid values "
+		       "are in the range [0, %u]\n", ll_get_fsname(sb, NULL, 0),
+		       val, LL_SA_RUNNING_MAX);
+
+	return count;
+}
+LPROC_SEQ_FOPS(ll_statahead_running_max);
+
 static int ll_statahead_max_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -687,7 +721,8 @@ static ssize_t ll_statahead_max_seq_write(struct file *file,
 					  size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	int rc;
 	__s64 val;
 
@@ -698,8 +733,9 @@ static ssize_t ll_statahead_max_seq_write(struct file *file,
 	if (val >= 0 && val <= LL_SA_RPC_MAX)
 		sbi->ll_sa_max = val;
 	else
-		CERROR("Bad statahead_max value %lld. Valid values are in "
-		       "the range [0, %d]\n", val, LL_SA_RPC_MAX);
+		CERROR("%s: bad statahead_max value %lld. Valid values are in "
+		       "are in the range [0, %u]\n", ll_get_fsname(sb, NULL, 0),
+		       val, LL_SA_RPC_MAX);
 
 	return count;
 }
@@ -1119,6 +1155,8 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_track_gid_fops			},
 	{ .name	=	"statahead_max",
 	  .fops	=	&ll_statahead_max_fops			},
+	{ .name	=	"statahead_running_max",
+	  .fops	=	&ll_statahead_running_max_fops		},
 	{ .name	=	"statahead_agl",
 	  .fops	=	&ll_statahead_agl_fops			},
 	{ .name	=	"statahead_stats",
