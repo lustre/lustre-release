@@ -2456,6 +2456,32 @@ out_statfs:
 	return rc;
 }
 
+int ll_process_config(struct lustre_cfg *lcfg)
+{
+	struct super_block *sb;
+	unsigned long x;
+	int rc = 0;
+	char *ptr;
+
+	/* The instance name contains the sb: lustre-client-aacfe000 */
+	ptr = strrchr(lustre_cfg_string(lcfg, 0), '-');
+	if (!ptr || !*(++ptr))
+		return -EINVAL;
+	if (sscanf(ptr, "%lx", &x) != 1)
+		return -EINVAL;
+	sb = (struct super_block *)x;
+	/* This better be a real Lustre superblock! */
+	LASSERT(s2lsi(sb)->lsi_lmd->lmd_magic == LMD_MAGIC);
+
+	/* Note we have not called client_common_fill_super yet, so
+	   proc fns must be able to handle that! */
+	rc = class_process_proc_param(PARAM_LLITE, lprocfs_llite_obd_vars,
+				      lcfg, sb);
+	if (rc > 0)
+		rc = 0;
+	return rc;
+}
+
 /* this function prepares md_op_data hint for passing it down to MD stack. */
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      struct inode *i1, struct inode *i2,
