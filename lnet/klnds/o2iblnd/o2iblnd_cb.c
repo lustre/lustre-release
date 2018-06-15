@@ -86,12 +86,17 @@ kiblnd_tx_done(struct kib_tx *tx)
 		if (lntmsg[i] == NULL)
 			continue;
 
+		/* propagate health status to LNet for requests */
+		if (i == 0 && lntmsg[i])
+			lntmsg[i]->msg_health_status = tx->tx_hstatus;
+
 		lnet_finalize(lntmsg[i], rc);
 	}
 }
 
 void
-kiblnd_txlist_done(struct list_head *txlist, int status)
+kiblnd_txlist_done(struct list_head *txlist, int status,
+		   enum lnet_msg_hstatus hstatus)
 {
 	struct kib_tx *tx;
 
@@ -102,6 +107,7 @@ kiblnd_txlist_done(struct list_head *txlist, int status)
 		/* complete now */
 		tx->tx_waiting = 0;
 		tx->tx_status = status;
+		tx->tx_hstatus = hstatus;
 		kiblnd_tx_done(tx);
 	}
 }
@@ -131,6 +137,7 @@ kiblnd_get_idle_tx(struct lnet_ni *ni, lnet_nid_t target)
         LASSERT (tx->tx_nfrags == 0);
 
 	tx->tx_gaps = false;
+	tx->tx_hstatus = LNET_MSG_STATUS_OK;
 
         return tx;
 }
@@ -266,23 +273,24 @@ kiblnd_handle_completion(struct kib_conn *conn, int txtype, int status, u64 cook
 		spin_unlock(&conn->ibc_lock);
 
 		CWARN("Unmatched completion type %x cookie %#llx from %s\n",
-                      txtype, cookie, libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                kiblnd_close_conn(conn, -EPROTO);
-                return;
-        }
+		      txtype, cookie, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+		kiblnd_close_conn(conn, -EPROTO);
+		return;
+	}
 
-        if (tx->tx_status == 0) {               /* success so far */
-                if (status < 0) {               /* failed? */
-                        tx->tx_status = status;
-                } else if (txtype == IBLND_MSG_GET_REQ) {
-                        lnet_set_reply_msg_len(ni, tx->tx_lntmsg[1], status);
-                }
-        }
+	if (tx->tx_status == 0) {               /* success so far */
+		if (status < 0) {               /* failed? */
+			tx->tx_status = status;
+			tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
+		} else if (txtype == IBLND_MSG_GET_REQ) {
+			lnet_set_reply_msg_len(ni, tx->tx_lntmsg[1], status);
+		}
+	}
 
-        tx->tx_waiting = 0;
+	tx->tx_waiting = 0;
 
-        idle = !tx->tx_queued && (tx->tx_sending == 0);
-        if (idle)
+	idle = !tx->tx_queued && (tx->tx_sending == 0);
+	if (idle)
 		list_del(&tx->tx_list);
 
 	spin_unlock(&conn->ibc_lock);
@@ -906,6 +914,7 @@ __must_hold(&conn->ibc_lock)
 		 * kiblnd_check_sends_locked will queue NOOP again when
 		 * posted NOOPs complete */
 		spin_unlock(&conn->ibc_lock);
+		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		kiblnd_tx_done(tx);
 		spin_lock(&conn->ibc_lock);
                 CDEBUG(D_NET, "%s(%d): redundant or enough NOOP\n",
@@ -1101,6 +1110,7 @@ kiblnd_tx_complete(struct kib_tx *tx, int status)
                 conn->ibc_noops_posted--;
 
         if (failed) {
+		tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_DROPPED;
                 tx->tx_waiting = 0;             /* don't wait for peer_ni */
                 tx->tx_status = -EIO;
         }
@@ -1468,7 +1478,8 @@ kiblnd_reconnect_peer(struct kib_peer_ni *peer_ni)
 
 	CWARN("Abort reconnection of %s: %s\n",
 	      libcfs_nid2str(peer_ni->ibp_nid), reason);
-	kiblnd_txlist_done(&txs, -ECONNABORTED);
+	kiblnd_txlist_done(&txs, -ECONNABORTED,
+			   LNET_MSG_STATUS_LOCAL_ABORTED);
 	return false;
 }
 
@@ -1543,6 +1554,7 @@ kiblnd_launch_tx(struct lnet_ni *ni, struct kib_tx *tx, lnet_nid_t nid)
 		if (tx != NULL) {
 			tx->tx_status = -EHOSTUNREACH;
 			tx->tx_waiting = 0;
+			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kiblnd_tx_done(tx);
 		}
 		return;
@@ -1667,6 +1679,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		if (rc != 0) {
 			CERROR("Can't setup GET sink for %s: %d\n",
 			       libcfs_nid2str(target.nid), rc);
+			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kiblnd_tx_done(tx);
 			return -EIO;
 		}
@@ -1821,9 +1834,11 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
         kiblnd_queue_tx(tx, rx->rx_conn);
         return;
 
- failed_1:
+
+failed_1:
+	tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 	kiblnd_tx_done(tx);
- failed_0:
+failed_0:
 	lnet_finalize(lntmsg, -EIO);
 }
 
@@ -1905,6 +1920,7 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		if (rc != 0) {
 			CERROR("Can't setup PUT sink for %s: %d\n",
 			       libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
+			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kiblnd_tx_done(tx);
 			/* tell peer_ni it's over */
 			kiblnd_send_completion(rx->rx_conn, IBLND_MSG_PUT_NAK,
@@ -2118,13 +2134,35 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 			LASSERT(!tx->tx_queued);
 			LASSERT(tx->tx_waiting ||
 				tx->tx_sending != 0);
+			if (conn->ibc_comms_error == -ETIMEDOUT) {
+				if (tx->tx_waiting && !tx->tx_sending)
+					tx->tx_hstatus =
+					  LNET_MSG_STATUS_REMOTE_TIMEOUT;
+				else if (tx->tx_sending)
+					tx->tx_hstatus =
+					  LNET_MSG_STATUS_NETWORK_TIMEOUT;
+			}
 		} else {
 			LASSERT(tx->tx_queued);
+			if (conn->ibc_comms_error == -ETIMEDOUT)
+				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_TIMEOUT;
+			else
+				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		}
 
 		tx->tx_status = -ECONNABORTED;
 		tx->tx_waiting = 0;
 
+		/*
+		 * TODO: This makes an assumption that
+		 * kiblnd_tx_complete() will be called for each tx. If
+		 * that event is dropped we could end up with stale
+		 * connections floating around. We'd like to deal with
+		 * that in a better way.
+		 *
+		 * Also that means we can exceed the timeout by many
+		 * seconds.
+		 */
 		if (tx->tx_sending == 0) {
 			tx->tx_queued = 0;
 			list_del(&tx->tx_list);
@@ -2134,7 +2172,11 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 
 	spin_unlock(&conn->ibc_lock);
 
-	kiblnd_txlist_done(&zombies, -ECONNABORTED);
+	/*
+	 * aborting transmits occurs when finalizing the connection.
+	 * The connection is finalized on error
+	 */
+	kiblnd_txlist_done(&zombies, -ECONNABORTED, -1);
 }
 
 static void
@@ -2213,7 +2255,8 @@ kiblnd_peer_connect_failed(struct kib_peer_ni *peer_ni, int active,
 	CNETERR("Deleting messages for %s: connection failed\n",
 		libcfs_nid2str(peer_ni->ibp_nid));
 
-	kiblnd_txlist_done(&zombies, -EHOSTUNREACH);
+	kiblnd_txlist_done(&zombies, error,
+			   LNET_MSG_STATUS_LOCAL_DROPPED);
 }
 
 static void
@@ -2288,7 +2331,8 @@ kiblnd_connreq_done(struct kib_conn *conn, int status)
                 kiblnd_close_conn_locked(conn, -ECONNABORTED);
 		write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-		kiblnd_txlist_done(&txs, -ECONNABORTED);
+		kiblnd_txlist_done(&txs, -ECONNABORTED,
+				   LNET_MSG_STATUS_LOCAL_ERROR);
 
 		return;
 	}
@@ -3361,7 +3405,8 @@ kiblnd_check_conns (int idx)
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	if (!list_empty(&timedout_txs))
-		kiblnd_txlist_done(&timedout_txs, -ETIMEDOUT);
+		kiblnd_txlist_done(&timedout_txs, -ETIMEDOUT,
+				   LNET_MSG_STATUS_LOCAL_TIMEOUT);
 
 	/* Handle timeout by closing the whole
 	 * connection. We can only be sure RDMA activity
