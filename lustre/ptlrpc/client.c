@@ -2785,7 +2785,7 @@ void ptlrpc_cleanup_client(struct obd_import *imp)
  */
 void ptlrpc_resend_req(struct ptlrpc_request *req)
 {
-        DEBUG_REQ(D_HA, req, "going to resend");
+	DEBUG_REQ(D_HA, req, "going to resend");
 	spin_lock(&req->rq_lock);
 
 	/* Request got reply but linked to the import list still.
@@ -2796,14 +2796,13 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
 		return;
 	}
 
-        lustre_msg_set_handle(req->rq_reqmsg, &(struct lustre_handle){ 0 });
-        req->rq_status = -EAGAIN;
+	req->rq_status = -EAGAIN;
 
-        req->rq_resend = 1;
-        req->rq_net_err = 0;
-        req->rq_timedout = 0;
+	req->rq_resend = 1;
+	req->rq_net_err = 0;
+	req->rq_timedout = 0;
 
-        ptlrpc_client_wake_req(req);
+	ptlrpc_client_wake_req(req);
 	spin_unlock(&req->rq_lock);
 }
 
