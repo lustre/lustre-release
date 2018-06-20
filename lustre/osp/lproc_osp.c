@@ -835,7 +835,7 @@ osp_reserved_mb_high_seq_write(struct file *file, const char __user *buffer,
 	__s64			val;
 	int			rc;
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return -EINVAL;
 
 	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
@@ -896,7 +896,7 @@ osp_reserved_mb_low_seq_write(struct file *file, const char __user *buffer,
 	__s64			val;
 	int			rc;
 
-	if (osp == NULL)
+	if (osp == NULL || osp->opd_pre == NULL)
 		return -EINVAL;
 
 	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
