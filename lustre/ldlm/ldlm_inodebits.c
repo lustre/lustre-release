@@ -57,6 +57,42 @@
 #include "ldlm_internal.h"
 
 #ifdef HAVE_SERVER_SUPPORT
+/*
+ * local lock will be canceled after use, and it should run blocking ast only
+ * when it should trigger Commit-on-Sharing, otherwise if the blocking ast
+ * is run and does nothing, it will prevent subsequent operations to trigger
+ * Commit-on-Sharing, see LU-11102.
+ */
+static bool ldlm_should_run_bl_ast(const struct ldlm_lock *lock,
+				   const struct ldlm_lock *req)
+{
+	/* no blocking ast */
+	if (!lock->l_blocking_ast)
+		return false;
+
+	/* not local lock */
+	if (!ldlm_is_local(lock))
+		return true;
+
+	/* should trigger Commit-on-Sharing */
+	if ((lock->l_req_mode & LCK_COS))
+		return true;
+
+	/* local read lock will be canceld after use */
+	if (!(lock->l_req_mode & (LCK_PW | LCK_EX)))
+		return false;
+
+	/* if CoS enabled, check if @req is from different client */
+	if (ldlm_is_cos_enabled(req))
+		return lock->l_client_cookie != req->l_client_cookie;
+
+	/* check if @req is COS incompatible */
+	if (ldlm_is_cos_incompat(req))
+		return true;
+
+	return false;
+}
+
 /**
  * Determine if the lock is compatible with all locks on the queue.
  *
@@ -168,12 +204,12 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 				/* Add locks of the policy group to @work_list
 				 * as blocking locks for @req */
-				if (lock->l_blocking_ast)
+				if (ldlm_should_run_bl_ast(lock, req))
 					ldlm_add_ast_work_item(lock, req,
 							       work_list);
 				head = &lock->l_sl_policy;
 				list_for_each_entry(lock, head, l_sl_policy)
-					if (lock->l_blocking_ast)
+					if (ldlm_should_run_bl_ast(lock, req))
 						ldlm_add_ast_work_item(lock,
 								req, work_list);
 			}

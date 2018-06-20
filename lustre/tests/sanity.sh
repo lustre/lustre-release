@@ -18641,6 +18641,47 @@ test_414() {
 }
 run_test 414 "simulate ENOMEM in ptlrpc_register_bulk()"
 
+test_415() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $(lustre_version_code mds1) -lt $(version_code 2.11.52) ] &&
+		skip "Need server version at least 2.11.52"
+
+	# LU-11102
+	local total
+	local setattr_pid
+	local start_time
+	local end_time
+	local duration
+
+	total=500
+
+	# though this test is designed for striped directory, let's test normal
+	# directory too since lock is always saved as CoS lock.
+	test_mkdir $DIR/$tdir || error "mkdir $tdir"
+	createmany -o $DIR/$tdir/$tfile. $total || error "createmany"
+
+	(
+		while true; do
+			touch $DIR/$tdir
+		done
+	) &
+	setattr_pid=$!
+
+	start_time=$(date +%s)
+	for i in $(seq $total); do
+		mrename $DIR/$tdir/$tfile.$i $DIR/$tdir/$tfile-new.$i \
+			> /dev/null
+	done
+	end_time=$(date +%s)
+	duration=$((end_time - start_time))
+
+	kill -9 $setattr_pid
+
+	echo "rename $total files took $duration sec"
+	[ $duration -lt 100 ] || error "rename took $duration sec"
+}
+run_test 415 "lock revoke is not missing"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
