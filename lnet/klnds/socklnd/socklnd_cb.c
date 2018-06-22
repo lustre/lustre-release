@@ -57,6 +57,7 @@ ksocknal_alloc_tx(int type, int size)
 	tx->tx_zc_aborted = 0;
 	tx->tx_zc_capable = 0;
 	tx->tx_zc_checked = 0;
+	tx->tx_hstatus = LNET_MSG_STATUS_OK;
 	tx->tx_desc_size  = size;
 
 	atomic_inc(&ksocknal_data.ksnd_nactive_txs);
@@ -392,19 +393,27 @@ void
 ksocknal_tx_done(struct lnet_ni *ni, struct ksock_tx *tx, int rc)
 {
 	struct lnet_msg *lnetmsg = tx->tx_lnetmsg;
+	enum lnet_msg_hstatus hstatus = tx->tx_hstatus;
         ENTRY;
 
 	LASSERT(ni != NULL || tx->tx_conn != NULL);
 
-	if (!rc && (tx->tx_resid != 0 || tx->tx_zc_aborted))
+	if (!rc && (tx->tx_resid != 0 || tx->tx_zc_aborted)) {
 		rc = -EIO;
+		hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
+	}
 
 	if (tx->tx_conn != NULL)
 		ksocknal_conn_decref(tx->tx_conn);
 
 	ksocknal_free_tx(tx);
-	if (lnetmsg != NULL) /* KSOCK_MSG_NOOP go without lnetmsg */
+	if (lnetmsg != NULL) { /* KSOCK_MSG_NOOP go without lnetmsg */
+		if (rc)
+			CERROR("tx failure rc = %d, hstatus = %d\n", rc,
+			       hstatus);
+		lnetmsg->msg_health_status = hstatus;
 		lnet_finalize(lnetmsg, rc);
+	}
 
 	EXIT;
 }
@@ -428,6 +437,22 @@ ksocknal_txlist_done(struct lnet_ni *ni, struct list_head *txlist, int error)
 		}
 
 		list_del(&tx->tx_list);
+
+		if (tx->tx_hstatus == LNET_MSG_STATUS_OK) {
+			if (error == -ETIMEDOUT)
+				tx->tx_hstatus =
+				  LNET_MSG_STATUS_LOCAL_TIMEOUT;
+			else if (error == -ENETDOWN ||
+				 error == -EHOSTUNREACH ||
+				 error == -ENETUNREACH)
+				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_DROPPED;
+			/*
+			 * for all other errors we don't want to
+			 * retransmit
+			 */
+			else if (error)
+				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
+		}
 
 		LASSERT(atomic_read(&tx->tx_refcount) == 1);
 		ksocknal_tx_done(ni, tx, error);
@@ -546,39 +571,54 @@ ksocknal_process_transmit(struct ksock_conn *conn, struct ksock_tx *tx)
 			wake_up(&ksocknal_data.ksnd_reaper_waitq);
 
 		spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
+
+		/*
+		 * set the health status of the message which determines
+		 * whether we should retry the transmit
+		 */
+		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		return (rc);
 	}
 
-        /* Actual error */
-        LASSERT (rc < 0);
+	/* Actual error */
+	LASSERT(rc < 0);
 
-        if (!conn->ksnc_closing) {
-                switch (rc) {
-                case -ECONNRESET:
+	/*
+	 * set the health status of the message which determines
+	 * whether we should retry the transmit
+	 */
+	if (rc == -ETIMEDOUT)
+		tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_TIMEOUT;
+	else
+		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
+
+	if (!conn->ksnc_closing) {
+		switch (rc) {
+		case -ECONNRESET:
 			LCONSOLE_WARN("Host %pI4h reset our connection "
-                                      "while we were sending data; it may have "
-                                      "rebooted.\n",
+				      "while we were sending data; it may have "
+				      "rebooted.\n",
 				      &conn->ksnc_ipaddr);
-                        break;
-                default:
-                        LCONSOLE_WARN("There was an unexpected network error "
+			break;
+		default:
+			LCONSOLE_WARN("There was an unexpected network error "
 				      "while writing to %pI4h: %d.\n",
 				      &conn->ksnc_ipaddr, rc);
-                        break;
-                }
+			break;
+		}
 		CDEBUG(D_NET, "[%p] Error %d on write to %s ip %pI4h:%d\n",
 		       conn, rc, libcfs_id2str(conn->ksnc_peer->ksnp_id),
 		       &conn->ksnc_ipaddr, conn->ksnc_port);
-        }
+	}
 
-        if (tx->tx_zc_checked)
-                ksocknal_uncheck_zc_req(tx);
+	if (tx->tx_zc_checked)
+		ksocknal_uncheck_zc_req(tx);
 
-        /* it's not an error if conn is being closed */
-        ksocknal_close_conn_and_siblings (conn,
-                                          (conn->ksnc_closing) ? 0 : rc);
+	/* it's not an error if conn is being closed */
+	ksocknal_close_conn_and_siblings(conn,
+					  (conn->ksnc_closing) ? 0 : rc);
 
-        return (rc);
+	return rc;
 }
 
 static void
@@ -2246,6 +2286,7 @@ ksocknal_find_timed_out_conn(struct ksock_peer_ni *peer_ni)
         /* We're called with a shared lock on ksnd_global_lock */
 	struct ksock_conn *conn;
 	struct list_head *ctmp;
+	struct ksock_tx *tx;
 
 	list_for_each(ctmp, &peer_ni->ksnp_conns) {
 		int error;
@@ -2310,6 +2351,10 @@ ksocknal_find_timed_out_conn(struct ksock_peer_ni *peer_ni)
                         /* Timed out messages queued for sending or
                          * buffered in the socket's send buffer */
                         ksocknal_conn_addref(conn);
+			list_for_each_entry(tx, &conn->ksnc_tx_queue,
+					    tx_list)
+				tx->tx_hstatus =
+					LNET_MSG_STATUS_LOCAL_TIMEOUT;
 			CNETERR("Timeout sending data to %s (%pI4h:%d) "
                                 "the network or that node may be down.\n",
                                 libcfs_id2str(peer_ni->ksnp_id),
@@ -2335,6 +2380,8 @@ ksocknal_flush_stale_txs(struct ksock_peer_ni *peer_ni)
 
 		if (ktime_get_seconds() < tx->tx_deadline)
 			break;
+
+		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_TIMEOUT;
 
 		list_del(&tx->tx_list);
 		list_add_tail(&tx->tx_list, &stale_txs);
