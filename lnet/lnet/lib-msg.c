@@ -474,12 +474,6 @@ lnet_dec_healthv_locked(atomic_t *healthv)
 	}
 }
 
-static inline void
-lnet_inc_healthv(atomic_t *healthv)
-{
-	atomic_add_unless(healthv, 1, LNET_MAX_HEALTH_VALUE);
-}
-
 static void
 lnet_handle_local_failure(struct lnet_msg *msg)
 {
@@ -518,6 +512,43 @@ lnet_handle_local_failure(struct lnet_msg *msg)
 	lnet_net_unlock(0);
 }
 
+static void
+lnet_handle_remote_failure(struct lnet_msg *msg)
+{
+	struct lnet_peer_ni *lpni;
+
+	lpni = msg->msg_txpeer;
+
+	/* lpni could be NULL if we're in the LOLND case */
+	if (!lpni)
+		return;
+
+	lnet_net_lock(0);
+	/* the mt could've shutdown and cleaned up the queues */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
+		lnet_net_unlock(0);
+		return;
+	}
+
+	lnet_dec_healthv_locked(&lpni->lpni_healthv);
+	/*
+	 * add the peer NI to the recovery queue if it's not already there
+	 * and it's health value is actually below the maximum. It's
+	 * possible that the sensitivity might be set to 0, and the health
+	 * value will not be reduced. In this case, there is no reason to
+	 * invoke recovery
+	 */
+	if (list_empty(&lpni->lpni_recovery) &&
+	    atomic_read(&lpni->lpni_healthv) < LNET_MAX_HEALTH_VALUE) {
+		CERROR("lpni %s added to recovery queue. Health = %d\n",
+			libcfs_nid2str(lpni->lpni_nid),
+			atomic_read(&lpni->lpni_healthv));
+		list_add_tail(&lpni->lpni_recovery, &the_lnet.ln_mt_peerNIRecovq);
+		lnet_peer_ni_addref_locked(lpni);
+	}
+	lnet_net_unlock(0);
+}
+
 /*
  * Do a health check on the message:
  * return -1 if we're not going to handle the error
@@ -528,10 +559,20 @@ static int
 lnet_health_check(struct lnet_msg *msg)
 {
 	enum lnet_msg_hstatus hstatus = msg->msg_health_status;
+	bool lo = false;
 
 	/* TODO: lnet_incr_hstats(hstatus); */
 
 	LASSERT(msg->msg_txni);
+
+	/*
+	 * if we're sending to the LOLND then the msg_txpeer will not be
+	 * set. So no need to sanity check it.
+	 */
+	if (LNET_NETTYP(LNET_NIDNET(msg->msg_txni->ni_nid)) != LOLND)
+		LASSERT(msg->msg_txpeer);
+	else
+		lo = true;
 
 	if (hstatus != LNET_MSG_STATUS_OK &&
 	    ktime_compare(ktime_get(), msg->msg_deadline) >= 0)
@@ -541,9 +582,22 @@ lnet_health_check(struct lnet_msg *msg)
 	if (the_lnet.ln_state != LNET_STATE_RUNNING)
 		return -1;
 
+	CDEBUG(D_NET, "health check: %s->%s: %s: %s\n",
+	       libcfs_nid2str(msg->msg_txni->ni_nid),
+	       (lo) ? "self" : libcfs_nid2str(msg->msg_txpeer->lpni_nid),
+	       lnet_msgtyp2str(msg->msg_type),
+	       lnet_health_error2str(hstatus));
+
 	switch (hstatus) {
 	case LNET_MSG_STATUS_OK:
 		lnet_inc_healthv(&msg->msg_txni->ni_healthv);
+		/*
+		 * It's possible msg_txpeer is NULL in the LOLND
+		 * case.
+		 */
+		if (msg->msg_txpeer)
+			lnet_inc_healthv(&msg->msg_txpeer->lpni_healthv);
+
 		/* we can finalize this message */
 		return -1;
 	case LNET_MSG_STATUS_LOCAL_INTERRUPT:
@@ -556,23 +610,28 @@ lnet_health_check(struct lnet_msg *msg)
 		goto resend;
 
 	/*
-		* TODO: since the remote dropped the message we can
-		* attempt a resend safely.
-		*/
-	case LNET_MSG_STATUS_REMOTE_DROPPED:
-	break;
-
-	/*
-		* These errors will not trigger a resend so simply
-		* finalize the message
-		*/
+	 * These errors will not trigger a resend so simply
+	 * finalize the message
+	 */
 	case LNET_MSG_STATUS_LOCAL_ERROR:
 		lnet_handle_local_failure(msg);
 		return -1;
+
+	/*
+	 * TODO: since the remote dropped the message we can
+	 * attempt a resend safely.
+	 */
+	case LNET_MSG_STATUS_REMOTE_DROPPED:
+		lnet_handle_remote_failure(msg);
+		goto resend;
+
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
+		lnet_handle_remote_failure(msg);
 		return -1;
+	default:
+		LBUG();
 	}
 
 resend:

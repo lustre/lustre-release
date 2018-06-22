@@ -495,6 +495,8 @@ struct lnet_peer_ni {
 	struct list_head	lpni_peer_nis;
 	/* chain on remote peer list */
 	struct list_head	lpni_on_remote_peer_ni_list;
+	/* chain on recovery queue */
+	struct list_head	lpni_recovery;
 	/* chain on peer hash */
 	struct list_head	lpni_hashlist;
 	/* messages blocking for tx credits */
@@ -547,6 +549,10 @@ struct lnet_peer_ni {
 	lnet_nid_t		lpni_nid;
 	/* # refs */
 	atomic_t		lpni_refcount;
+	/* health value for the peer */
+	atomic_t		lpni_healthv;
+	/* recovery ping mdh */
+	struct lnet_handle_md	lpni_recovery_ping_mdh;
 	/* CPT this peer attached on */
 	int			lpni_cpt;
 	/* state flags -- protected by lpni_lock */
@@ -576,6 +582,10 @@ struct lnet_peer_ni {
 
 /* Preferred path added due to traffic on non-MR peer_ni */
 #define LNET_PEER_NI_NON_MR_PREF	(1 << 0)
+/* peer is being recovered. */
+#define LNET_PEER_NI_RECOVERY_PENDING	(1 << 1)
+/* peer is being deleted */
+#define LNET_PEER_NI_DELETING		(1 << 2)
 
 struct lnet_peer {
 	/* chain on pt_peer_list */
@@ -1071,6 +1081,8 @@ struct lnet {
 	struct list_head		**ln_mt_resendqs;
 	/* local NIs to recover */
 	struct list_head		ln_mt_localNIRecovq;
+	/* local NIs to recover */
+	struct list_head		ln_mt_peerNIRecovq;
 	/* recovery eq handler */
 	struct lnet_handle_eq		ln_mt_eqh;
 

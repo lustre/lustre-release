@@ -166,6 +166,7 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	INIT_LIST_HEAD(&lpni->lpni_routes);
 	INIT_LIST_HEAD(&lpni->lpni_hashlist);
 	INIT_LIST_HEAD(&lpni->lpni_peer_nis);
+	INIT_LIST_HEAD(&lpni->lpni_recovery);
 	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
 
 	spin_lock_init(&lpni->lpni_lock);
@@ -175,6 +176,7 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	lpni->lpni_ping_feats = LNET_PING_FEAT_INVAL;
 	lpni->lpni_nid = nid;
 	lpni->lpni_cpt = cpt;
+	atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);
 	lnet_set_peer_ni_health_locked(lpni, true);
 
 	net = lnet_get_net_locked(LNET_NIDNET(nid));
@@ -373,6 +375,14 @@ lnet_peer_ni_del_locked(struct lnet_peer_ni *lpni)
 
 	/* remove peer ni from the hash list. */
 	list_del_init(&lpni->lpni_hashlist);
+
+	/*
+	 * indicate the peer is being deleted so the monitor thread can
+	 * remove it from the recovery queue.
+	 */
+	spin_lock(&lpni->lpni_lock);
+	lpni->lpni_state |= LNET_PEER_NI_DELETING;
+	spin_unlock(&lpni->lpni_lock);
 
 	/* decrement the ref count on the peer table */
 	ptable = the_lnet.ln_peer_tables[lpni->lpni_cpt];
