@@ -2891,8 +2891,13 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
 			 * is never going to be sent to client and we do not
 			 * want it slowed down due to possible cancels.
 			 */
-			policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
-			policy->l_inodebits.try_bits = 0;
+			policy->l_inodebits.bits =
+				*ibits & MDS_INODELOCK_UPDATE;
+			policy->l_inodebits.try_bits =
+				trybits & MDS_INODELOCK_UPDATE;
+			/* at least one of them should be set */
+			LASSERT(policy->l_inodebits.bits |
+				policy->l_inodebits.try_bits);
 			rc = mdt_fid_lock(ns, &lh->mlh_pdo_lh, lh->mlh_pdo_mode,
 					  policy, res_id, dlmflags,
 					  info->mti_exp == NULL ? NULL :
