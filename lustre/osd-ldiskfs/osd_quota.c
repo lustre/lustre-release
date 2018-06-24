@@ -86,12 +86,14 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			le32_to_cpu(LDISKFS_SB(sb)->s_es->s_grp_quota_inum);
 		break;
 	case PRJQUOTA:
- #ifdef HAVE_PROJECT_QUOTA
-		if (ldiskfs_has_feature_project(sb))
-			id->oii_ino =
-				le32_to_cpu(LDISKFS_SB(sb)->s_es->s_prj_quota_inum);
-		else
- #endif
+#ifdef HAVE_PROJECT_QUOTA
+		if (ldiskfs_has_feature_project(sb)) {
+			__le32 prj_quota;
+
+			prj_quota = LDISKFS_SB(sb)->s_es->s_prj_quota_inum;
+			id->oii_ino = le32_to_cpu(prj_quota);
+		} else
+#endif
 			RETURN(-ENOENT);
 		break;
 	}
@@ -117,20 +119,20 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 				 struct dt_rec *dtrec,
 				 const struct dt_key *dtkey)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
+	struct osd_thread_info *info = osd_oti_get(env);
 #if defined(HAVE_DQUOT_QC_DQBLK)
-	struct qc_dqblk		*dqblk = &info->oti_qdq;
+	struct qc_dqblk *dqblk = &info->oti_qdq;
 #elif defined(HAVE_DQUOT_FS_DISK_QUOTA)
-	struct fs_disk_quota	*dqblk = &info->oti_fdq;
+	struct fs_disk_quota *dqblk = &info->oti_fdq;
 #else
-	struct if_dqblk		*dqblk = &info->oti_dqblk;
+	struct if_dqblk *dqblk = &info->oti_dqblk;
 #endif
-	struct super_block	*sb = osd_sb(osd_obj2dev(osd_dt_obj(dtobj)));
-	struct lquota_acct_rec	*rec = (struct lquota_acct_rec *)dtrec;
-	__u64			 id = *((__u64 *)dtkey);
-	int			 rc;
+	struct super_block *sb = osd_sb(osd_obj2dev(osd_dt_obj(dtobj)));
+	struct lquota_acct_rec *rec = (struct lquota_acct_rec *)dtrec;
+	__u64 id = *((__u64 *)dtkey);
+	int rc;
 #ifdef HAVE_DQUOT_KQID
-	struct kqid		 qid;
+	struct kqid qid;
 #endif
 	int type;
 
@@ -162,7 +164,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 #define QUOTA_IT_READ_ERROR(it, rc)                                    \
 	CERROR("%s: Error while trying to read quota information, "    \
 	       "failed with %d\n",                                     \
-	       osd_dev(it->oiq_obj->oo_dt.do_lu.lo_dev)->od_svname, rc); \
+	       osd_dev(it->oiq_obj->oo_dt.do_lu.lo_dev)->od_svname, rc) \
 
 /**
  * Initialize osd Iterator for given osd index object.
@@ -174,9 +176,9 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 				      struct dt_object *dt,
 				      __u32 attr)
 {
-	struct osd_it_quota	*it;
-	struct lu_object	*lo = &dt->do_lu;
-	struct osd_object	*obj = osd_dt_obj(dt);
+	struct osd_it_quota *it;
+	struct lu_object *lo = &dt->do_lu;
+	struct osd_object *obj = osd_dt_obj(dt);
 
 	ENTRY;
 
@@ -193,9 +195,11 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 	/* LUSTRE_DQTREEOFF is the initial offset where the tree can be found */
 	it->oiq_blk[0] = LUSTRE_DQTREEOFF;
 
-	/* NB: we don't need to store the tree depth since it is always
+	/*
+	 * NB: we don't need to store the tree depth since it is always
 	 * equal to LUSTRE_DQTREEDEPTH - 1 (root has depth = 0) for a leaf
-	 * block. */
+	 * block.
+	 */
 	RETURN((struct dt_it *)it);
 }
 
@@ -208,6 +212,7 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 {
 	struct osd_it_quota *it = (struct osd_it_quota *)di;
 	struct osd_quota_leaf *leaf, *tmp;
+
 	ENTRY;
 
 	osd_object_put(env, it->oiq_obj);
@@ -236,13 +241,12 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 static int osd_it_acct_get(const struct lu_env *env, struct dt_it *di,
 			   const struct dt_key *key)
 {
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	const struct lu_fid	*fid =
-				lu_object_fid(&it->oiq_obj->oo_dt.do_lu);
-	int			 type;
-	qid_t			 dqid = *(qid_t *)key;
-	loff_t			 offset;
-	int			 rc;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+	const struct lu_fid *fid = lu_object_fid(&it->oiq_obj->oo_dt.do_lu);
+	int type;
+	qid_t dqid = *(qid_t *)key;
+	loff_t offset;
+	int rc;
 
 	ENTRY;
 	type = fid2type(fid);
@@ -301,18 +305,18 @@ static int osd_it_add_processed(struct osd_it_quota *it, int depth)
  */
 static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 {
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	const struct lu_fid	*fid =
-				lu_object_fid(&it->oiq_obj->oo_dt.do_lu);
-	int			 type;
-	int			 depth, rc;
-	uint			 index;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+	const struct lu_fid *fid = lu_object_fid(&it->oiq_obj->oo_dt.do_lu);
+	int type;
+	int depth, rc;
+	uint index;
 
 	ENTRY;
 
 	type = fid2type(fid);
 
-	/* Let's first check if there are any remaining valid entry in the
+	/*
+	 * Let's first check if there are any remaining valid entry in the
 	 * current leaf block. Start with the next entry after the current one.
 	 */
 	depth = LUSTRE_DQTREEDEPTH;
@@ -325,8 +329,10 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 			QUOTA_IT_READ_ERROR(it, rc);
 			RETURN(rc);
 		} else if (rc == 0) {
-			/* Found on entry, @it is already updated to the
-			 * new position in walk_block_dqentry(). */
+			/*
+			 * Found on entry, @it is already updated to the
+			 * new position in walk_block_dqentry().
+			 */
 			RETURN(0);
 		} else {
 			rc = osd_it_add_processed(it, depth);
@@ -340,12 +346,16 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 	}
 	rc = 1;
 
-	/* We have consumed all the entries of the current leaf block, move on
-	 * to the next one. */
+	/*
+	 * We have consumed all the entries of the current leaf block, move on
+	 * to the next one.
+	 */
 	depth--;
 
-	/* We keep searching as long as walk_tree_dqentry() returns +1
-	 * (= no valid entry found). */
+	/*
+	 * We keep searching as long as walk_tree_dqentry() returns +1
+	 * (= no valid entry found).
+	 */
 	for (; depth >= 0 && rc > 0; depth--) {
 		index = it->oiq_index[depth];
 		if (++index > 0xff)
@@ -397,9 +407,9 @@ static int osd_it_acct_rec(const struct lu_env *env,
 			   const struct dt_it *di,
 			   struct dt_rec *dtrec, __u32 attr)
 {
-	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	const struct dt_key	*key = osd_it_acct_key(env, di);
-	int			 rc;
+	struct osd_it_quota *it = (struct osd_it_quota *)di;
+	const struct dt_key *key = osd_it_acct_key(env, di);
+	int rc;
 
 	ENTRY;
 
@@ -439,10 +449,11 @@ static int osd_it_acct_load(const struct lu_env *env,
 
 	ENTRY;
 
-	/* LU-8999 - If it is called to resume the iteration, calling
+	/*
+	 * LU-8999 - If it is called to resume the iteration, calling
 	 * osd_it_acct_get could change the block orders in the lower level
 	 * of the quota tree, which are saved in osd_it_quota->oiq_blk.
-	 * */
+	 */
 	if (it->oiq_id != 0 && it->oiq_id == hash)
 		RETURN(1);
 
@@ -454,8 +465,8 @@ static int osd_it_acct_load(const struct lu_env *env,
  * Index and Iterator operations for accounting objects
  */
 const struct dt_index_operations osd_acct_index_ops = {
-	.dio_lookup	= osd_acct_index_lookup,
-	.dio_it		= {
+	.dio_lookup = osd_acct_index_lookup,
+	.dio_it = {
 		.init		= osd_it_acct_init,
 		.fini		= osd_it_acct_fini,
 		.get		= osd_it_acct_get,
@@ -476,7 +487,7 @@ static inline void osd_quota_swab(char *ptr, size_t size)
 	LASSERT((size & (sizeof(__u64) - 1)) == 0);
 
 	for (offset = 0; offset < size; offset += sizeof(__u64))
-	     __swab64s((__u64 *)(ptr + offset));
+		__swab64s((__u64 *)(ptr + offset));
 }
 
 const struct dt_rec *osd_quota_pack(struct osd_object *obj,
@@ -536,11 +547,12 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    struct lquota_id_info *qi, struct osd_object *obj,
 		    bool enforce, int *flags)
 {
-	struct osd_device       *dev;
-	struct qsd_instance     *qsd;
-	struct inode		*inode = NULL;
-	int                      i, rc = 0, crd;
-	bool                     found = false;
+	struct osd_device *dev;
+	struct qsd_instance *qsd;
+	struct inode *inode = NULL;
+	int i, rc = 0, crd;
+	bool found = false;
+
 	ENTRY;
 
 	LASSERT(oh != NULL);
@@ -574,16 +586,21 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		if (qi->lqi_id.qid_uid == 0) {
 			crd = 1;
 		} else {
-			/* used space for this ID could be dropped to zero,
+			/*
+			 * used space for this ID could be dropped to zero,
 			 * reserve extra credits for removing ID entry from
-			 * the quota file */
+			 * the quota file
+			 */
 			if (qi->lqi_space < 0)
 				crd = LDISKFS_QUOTA_DEL_BLOCKS(osd_sb(dev));
-			/* reserve credits for adding ID entry to the quota
-			 * file if the i_dquot isn't initialized yet. */
+			/*
+			 * reserve credits for adding ID entry to the quota
+			 * file if the i_dquot isn't initialized yet.
+			 */
 			else if (inode == NULL ||
 #ifdef HAVE_EXT4_INFO_DQUOT
-				 LDISKFS_I(inode)->i_dquot[qi->lqi_type] == NULL)
+				 LDISKFS_I(inode)->i_dquot[qi->lqi_type] ==
+					NULL)
 #else
 				 inode->i_dquot[qi->lqi_type] == NULL)
 #endif
@@ -631,8 +648,8 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 			  struct osd_object *obj, int *flags,
 			  enum osd_qid_declare_flags osd_qid_declare_flags)
 {
-	struct osd_thread_info  *info = osd_oti_get(env);
-	struct lquota_id_info   *qi = &info->oti_qi;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lquota_id_info *qi = &info->oti_qi;
 	int rcu, rcg, rcp = 0; /* user & group & project rc */
 	struct thandle *th = &oh->ot_super;
 	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE) ||
@@ -641,25 +658,27 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 
 	/* let's start with user quota */
 	qi->lqi_id.qid_uid = uid;
-	qi->lqi_type       = USRQUOTA;
-	qi->lqi_space      = space;
-	qi->lqi_is_blk     = !!(osd_qid_declare_flags & OSD_QID_BLK);
+	qi->lqi_type = USRQUOTA;
+	qi->lqi_space = space;
+	qi->lqi_is_blk = !!(osd_qid_declare_flags & OSD_QID_BLK);
 	rcu = osd_declare_qid(env, oh, qi, obj, true, flags);
 
 	if (force && (rcu == -EDQUOT || rcu == -EINPROGRESS))
 		/* ignore EDQUOT & EINPROGRESS when changes are done by root */
 		rcu = 0;
 
-	/* For non-fatal error, we want to continue to get the noquota flags
+	/*
+	 * For non-fatal error, we want to continue to get the noquota flags
 	 * for group id. This is only for commit write, which has @flags passed
 	 * in. See osd_declare_write_commit().
-	 * When force is set to true, we also want to proceed with the gid */
+	 * When force is set to true, we also want to proceed with the gid
+	 */
 	if (rcu && (rcu != -EDQUOT || flags == NULL))
 		RETURN(rcu);
 
 	/* and now group quota */
 	qi->lqi_id.qid_gid = gid;
-	qi->lqi_type       = GRPQUOTA;
+	qi->lqi_type = GRPQUOTA;
 	rcg = osd_declare_qid(env, oh, qi, obj, true, flags);
 
 	if (force && (rcg == -EDQUOT || rcg == -EINPROGRESS))
