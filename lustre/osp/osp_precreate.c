@@ -652,7 +652,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 
 ready:
 	if (osp_fid_diff(fid, &d->opd_pre_used_fid) <= 0) {
-		CERROR("%s: precreate fid "DFID" < local used fid "DFID
+		CERROR("%s: precreate fid "DFID" <= local used fid "DFID
 		       ": rc = %d\n", d->opd_obd->obd_name,
 		       PFID(fid), PFID(&d->opd_pre_used_fid), -ESTALE);
 		GOTO(out_req, rc = -ESTALE);
