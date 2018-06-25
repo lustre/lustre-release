@@ -1474,7 +1474,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 			if (atomic_read(&d->opd_sync_changes) && synced == 0) {
 				/* force local commit to release space */
 				dt_commit_async(env, d->opd_storage);
-				osp_sync_force(env, d);
+				osp_sync_check_for_work(d);
 				synced = 1;
 			}
 			if (atomic_read(&d->opd_sync_rpcs_in_progress)) {
