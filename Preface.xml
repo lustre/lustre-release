@@ -8,9 +8,9 @@
     the operation and performance of a Lustre file system.</para>
   <section remap="h2">
     <title>About this Document</title>
-    <para>This document is maintained by Intel in Docbook format. The
+    <para>This document is maintained by Whamcloud in Docbook format. The
     canonical version is available at
-    <link xl:href="http://wiki.hpdd.intel.com/display/PUB/Documentation">http://wiki.hpdd.intel.com/display/PUB/Documentation</link>. </para>
+    <link xl:href="http://wiki.whamcloud.com/display/PUB/Documentation">http://wiki.whamcloud.com/display/PUB/Documentation</link>. </para>
 
     <section remap="h2">
       <title>UNIX<superscript>*</superscript> Commands</title>
@@ -145,8 +145,8 @@
               </entry>
               <entry>
                 <para> Online at <link
-                    xl:href="http://wiki.hpdd.intel.com/display/PUB/Documentation"
-                    >http://wiki.hpdd.intel.com/display/PUB/Documentation</link></para>
+                    xl:href="http://wiki.whamcloud.com/display/PUB/Documentation"
+                    >http://wiki.whamcloud.com/display/PUB/Documentation</link></para>
               </entry>
             </row>
             <row>
@@ -163,8 +163,8 @@
               </entry>
               <entry>
                 <para> Online at <link
-                    xl:href="http://wiki.hpdd.intel.com/display/PUB/Documentation"
-                    >http://wiki.hpdd.intel.com/display/PUB/Documentation</link></para>
+                    xl:href="http://wiki.whamcloud.com/display/PUB/Documentation"
+                    >http://wiki.whamcloud.com/display/PUB/Documentation</link></para>
               </entry>
             </row>
           </tbody>
@@ -172,17 +172,18 @@
       </informaltable>
     </section>
     <section remap="h2">
-      <title>Documentation, Support, and Training</title>
+      <title>Documentation and Support</title>
       <para>These web sites provide additional resources:</para>
       <itemizedlist>
         <listitem>
-          <para> Documentation <link xl:href="http://wiki.hpdd.intel.com/display/PUB/Documentation">http://wiki.hpdd.intel.com/display/PUB/Documentation</link></para>
+					<para> Documentation
+						<link xl:href="http://wiki.whamcloud.com/display/PUB/Documentation">
+						http://wiki.whamcloud.com/display/PUB/Documentation</link>
+						<link xl:href="http://www.lustre.org">
+						http://www.lustre.org</link></para>
         </listitem>
         <listitem>
-          <para> Support <link xl:href="http://www.hpdd.intel.com/">http://www.hpdd.intel.com/</link></para>
-        </listitem>
-        <listitem>
-          <para> Training <link xl:href="http://www.hpdd.intel.com/">http://www.hpdd.intel.com/</link></para>
+          <para> Support <link xl:href="https://jira.whamcloud.com/">https://jira.whamcloud.com/</link></para>
         </listitem>
       </itemizedlist>
     </section>

@@ -106,7 +106,7 @@ diff: $(TGT_BASE).xhtml $(TGT_MASTER).xhtml
 
 .PHONY: push
 push:
-	git push ssh://review.hpdd.intel.com:29418/doc/manual HEAD:refs/for/master
+	git push ssh://review.whamcloud.com:29418/doc/manual HEAD:refs/for/master
 
 .PHONY: clean
 clean:

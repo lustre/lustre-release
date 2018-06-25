@@ -435,7 +435,7 @@ Changelog records consumed: 42</screen>
       <emphasis role="bold">Since Lustre software release 2.3</emphasis>,
       Object Index files are automatically rebuilt at first mount after a
       restore is detected (see 
-      <link xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>),
+      <link xl:href="http://jira.whamcloud.com/browse/LU-957">LU-957</link>),
       and file-level backup is supported (see 
       <xref linkend="backup_fs_level"/>).</para>
     </warning>
@@ -505,7 +505,7 @@ Changelog records consumed: 42</screen>
       <para><emphasis role="bold">Since Lustre software release 2.3</emphasis>,
       Object Index files are automatically rebuilt at first mount after a
       restore is detected (see 
-      <link xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>),
+      <link xl:href="http://jira.whamcloud.com/browse/LU-957">LU-957</link>),
       so file-level MDT restore is supported.</para></note>
     <section xml:id="backup_fs_level.index_objects" condition="l2B">
       <title>

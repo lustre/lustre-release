@@ -48,7 +48,7 @@ xml:id="installinglustre">
 	  kernel version (e.g., 2.9.0-1.el7) and
           <replaceable>arch</replaceable> refers to the processor architecture
           (e.g., x86_64). These packages are available in the
-          <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+          <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
           Lustre Releases</link> repository, and may differ depending on
 	  your distro and version.</para>
           <para>
@@ -146,7 +146,7 @@ xml:id="installinglustre">
 	  listed in the table below, where
           <replaceable>ver</replaceable> refers to the Linux distribution (e.g.,
           3.6.18-348.1.1.el5). These packages are available in the
-          <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+          <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
           Lustre Releases</link> repository.</para>
           <para>
             <table frame="all" xml:id="table_j3r_ym3_gk">
@@ -255,7 +255,7 @@ xml:id="installinglustre">
             <emphasis role="bold">
               <emphasis role="italic">Optional packages.</emphasis>
             </emphasis>Optional packages provided in the 
-            <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+            <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
             Lustre Releases</link>repository may include the following
             (depending on the operating system and platform):
             <itemizedlist>
@@ -394,12 +394,12 @@ xml:id="installinglustre">
       <listitem>
         <para>Download the 
         <literal>e2fsprogs</literal> RPMs for your platform from the 
-        <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+        <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
         Lustre Releases</link>repository.</para>
       </listitem>
       <listitem>
         <para>Download the Lustre server RPMs for your platform from the 
-        <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+        <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
         Lustre Releases</link>repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
         linkend="table_cnh_5m3_gk" />for a list of required packages.</para>
@@ -440,7 +440,7 @@ rpm -qa|egrep "lustre|wc"|sort
       </listitem>
       <listitem>
         <para>Download the Lustre client RPMs for your platform from the 
-        <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
+        <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
         Lustre Releases</link>repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
         linkend="table_j3r_ym3_gk" />for a list of required packages.</para>

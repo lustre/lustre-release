@@ -79,7 +79,7 @@
         </listitem>
       </itemizedlist>
       <para>Download the Lustre I/O kit (<literal>lustre-iokit</literal>)from:</para>
-      <para><link xl:href="http://downloads.hpdd.intel.com/">http://downloads.hpdd.intel.com/</link></para>
+      <para><link xl:href="http://downloads.whamcloud.com/">http://downloads.whamcloud.com/</link></para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438212_51053">

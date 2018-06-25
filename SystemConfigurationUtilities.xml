@@ -65,7 +65,7 @@
       <title><indexterm><primary>e2scan</primary></indexterm>
                   e2scan</title>
     <para>The e2scan utility is an ext2 file system-modified inode scan program. The e2scan program uses libext2fs to find inodes with ctime or mtime newer than a given time and prints out their pathname. Use e2scan to efficiently generate lists of files that have been modified. The e2scan tool is included in the e2fsprogs package, located at:</para>
-    <para><link xl:href="http://downloads.hpdd.intel.com/public/e2fsprogs/latest/">http://downloads.hpdd.intel.com/public/e2fsprogs/latest/</link></para>
+    <para><link xl:href="http://downloads.whamcloud.com/public/e2fsprogs/latest/">http://downloads.whamcloud.com/public/e2fsprogs/latest/</link></para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>e2scan [options] [-f file] block_device</screen>
