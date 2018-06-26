@@ -551,7 +551,8 @@ lnet_handle_remote_failure(struct lnet_msg *msg)
 
 /*
  * Do a health check on the message:
- * return -1 if we're not going to handle the error
+ * return -1 if we're not going to handle the error or
+ *   if we've reached the maximum number of retries.
  *   success case will return -1 as well
  * return 0 if it the message is requeued for send
  */
@@ -645,6 +646,11 @@ resend:
 	 */
 	if (msg->msg_no_resend)
 		return -1;
+
+	/* check if the message has exceeded the number of retries */
+	if (msg->msg_retry_count >= lnet_retry_count)
+		return -1;
+	msg->msg_retry_count++;
 
 	lnet_net_lock(msg->msg_tx_cpt);
 

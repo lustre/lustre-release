@@ -106,6 +106,8 @@ struct lnet_msg {
 	enum lnet_msg_hstatus	msg_health_status;
 	/* This is a recovery message */
 	bool			msg_recovery;
+	/* the number of times a transmission has been retried */
+	int			msg_retry_count;
 	/* flag to indicate that we do not want to resend this message */
 	bool			msg_no_resend;
 
