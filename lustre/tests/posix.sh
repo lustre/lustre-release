@@ -27,7 +27,7 @@ BASELINE_FS=${BASELINE_FS:-"ext4"}
 if [[ $(facet_fstype $SINGLEMDS) = zfs ]]; then
 	BASELINE_FS=zfs
 	! which $ZFS $ZPOOL >/dev/null 2>&1 &&
-		skip_env "need $ZFS and $ZPOOL commands" && exit 0
+		skip_env "need $ZFS and $ZPOOL commands"
 
 	POSIX_ZPOOL=$FSNAME-posix
 	POSIX_ZFS=$POSIX_ZPOOL/${POSIX_ZPOOL##$FSNAME-}

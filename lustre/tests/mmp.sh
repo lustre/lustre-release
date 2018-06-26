@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 #
 # Tests for multiple mount protection (MMP) feature.
 #
@@ -25,14 +23,14 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+remote_mds_nodsh && skip "remote MDS with nodsh"
+remote_ost_nodsh && skip "remote OST with nodsh"
 
 # unmount and cleanup the Lustre filesystem
 MMP_RESTORE_MOUNT=false
 if is_mounted $MOUNT || is_mounted $MOUNT2; then
-    cleanupall
-    MMP_RESTORE_MOUNT=true
+	cleanupall
+	MMP_RESTORE_MOUNT=true
 fi
 
 SAVED_FAIL_ON_ERROR=$FAIL_ON_ERROR
@@ -187,13 +185,11 @@ mmp_init() {
 	init_vars
 
 	if [ $(facet_fstype $MMP_MDS) != ldiskfs ]; then
-		skip "ldiskfs only test"
-		exit
+		skip_env "ldiskfs only test"
 	fi
 
 	if [ $(facet_fstype $MMP_OSS) != ldiskfs ]; then
-		skip "ldiskfs only test"
-		exit
+		skip_env "ldiskfs only test"
 	fi
 
 	mmp_is_enabled $MMP_MDS $MMP_MDSDEV ||
@@ -427,16 +423,16 @@ run_e2fsck() {
 
 # Check whether there are failover pairs for MDS and OSS servers.
 check_failover_pair() {
-    [ "$MMP_MDS" = "$MMP_MDS_FAILOVER" -o "$MMP_OSS" = "$MMP_OSS_FAILOVER" ] \
-        && { skip_env "failover pair is needed" && return 1; }
-    return 0
+	[ "$MMP_MDS" = "$MMP_MDS_FAILOVER" -o "$MMP_OSS" = "$MMP_OSS_FAILOVER" ] &&
+		skip_env "failover pair is needed"
+	return 0
 }
 
 mmp_init
 
 # Test 1 - two mounts at the same time.
 test_1() {
-	check_failover_pair || return 0
+	check_failover_pair
 
 	mount_after_interval 0 0 || return ${PIPESTATUS[0]}
 	stop_services primary || return ${PIPESTATUS[0]}
@@ -446,106 +442,105 @@ run_test 1 "two mounts at the same time"
 
 # Test 2 - one mount delayed by mmp update interval.
 test_2() {
-    check_failover_pair || return 0
+	check_failover_pair
 
-    local mdt_interval=$(get_mmp_update_interval $MMP_MDS $MMP_MDSDEV)
-    local ost_interval=$(get_mmp_update_interval $MMP_OSS $MMP_OSTDEV)
+	local mdt_interval=$(get_mmp_update_interval $MMP_MDS $MMP_MDSDEV)
+	local ost_interval=$(get_mmp_update_interval $MMP_OSS $MMP_OSTDEV)
 
-    mount_after_interval $mdt_interval $ost_interval || return ${PIPESTATUS[0]}
-    stop_services primary || return ${PIPESTATUS[0]}
+	mount_after_interval $mdt_interval $ost_interval ||
+		return ${PIPESTATUS[0]}
+	stop_services primary || return ${PIPESTATUS[0]}
 }
 run_test 2 "one mount delayed by mmp update interval"
 
 # Test 3 - one mount delayed by 2x mmp check interval.
 test_3() {
-    check_failover_pair || return 0
+	check_failover_pair
 
-    local mdt_interval=$(get_mmp_check_interval $MMP_MDS $MMP_MDSDEV)
-    local ost_interval=$(get_mmp_check_interval $MMP_OSS $MMP_OSTDEV)
+	local mdt_interval=$(get_mmp_check_interval $MMP_MDS $MMP_MDSDEV)
+	local ost_interval=$(get_mmp_check_interval $MMP_OSS $MMP_OSTDEV)
 
-    mdt_interval=$((2 * $mdt_interval + 1))
-    ost_interval=$((2 * $ost_interval + 1))
+	mdt_interval=$((2 * $mdt_interval + 1))
+	ost_interval=$((2 * $ost_interval + 1))
 
-    mount_after_interval $mdt_interval $ost_interval || return ${PIPESTATUS[0]}
-    stop_services primary || return ${PIPESTATUS[0]}
+	mount_after_interval $mdt_interval $ost_interval ||
+		return ${PIPESTATUS[0]}
+	stop_services primary || return ${PIPESTATUS[0]}
 }
 run_test 3 "one mount delayed by 2x mmp check interval"
 
 # Test 4 - one mount delayed by > 2x mmp check interval.
 test_4() {
-    check_failover_pair || return 0
+	check_failover_pair
 
-    local mdt_interval=$(get_mmp_check_interval $MMP_MDS $MMP_MDSDEV)
-    local ost_interval=$(get_mmp_check_interval $MMP_OSS $MMP_OSTDEV)
+	local mdt_interval=$(get_mmp_check_interval $MMP_MDS $MMP_MDSDEV)
+	local ost_interval=$(get_mmp_check_interval $MMP_OSS $MMP_OSTDEV)
 
-    mdt_interval=$((4 * $mdt_interval))
-    ost_interval=$((4 * $ost_interval))
+	mdt_interval=$((4 * $mdt_interval))
+	ost_interval=$((4 * $ost_interval))
 
-    mount_after_interval $mdt_interval $ost_interval || return ${PIPESTATUS[0]}
-    stop_services primary || return ${PIPESTATUS[0]}
+	mount_after_interval $mdt_interval $ost_interval ||
+		return ${PIPESTATUS[0]}
+	stop_services primary || return ${PIPESTATUS[0]}
 }
 run_test 4 "one mount delayed by > 2x mmp check interval"
 
 # Test 5 - mount during unmount of the first filesystem.
 test_5() {
-    local rc=0
-    check_failover_pair || return 0
+	local rc=0
+	check_failover_pair
 
-    mount_during_unmount $MMP_MDSDEV $MMP_MDS $MDS_MOUNT_OPTS || \
-        return ${PIPESTATUS[0]}
+	mount_during_unmount $MMP_MDSDEV $MMP_MDS $MDS_MOUNT_OPTS ||
+		return ${PIPESTATUS[0]}
 
-    echo
-    start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS || return ${PIPESTATUS[0]}
-    mount_during_unmount $MMP_OSTDEV $MMP_OSS $OST_MOUNT_OPTS
-    rc=${PIPESTATUS[0]}
-    if [ $rc -ne 0 ]; then
-        stop $MMP_MDS || return ${PIPESTATUS[0]}
-        return $rc
-    fi
-
-    stop $MMP_MDS || return ${PIPESTATUS[0]}
+	echo
+	start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS || return ${PIPESTATUS[0]}
+	mount_during_unmount $MMP_OSTDEV $MMP_OSS $OST_MOUNT_OPTS
+	rc=${PIPESTATUS[0]}
+	stop $MMP_MDS || return ${PIPESTATUS[0]}
+	return $rc
 }
 run_test 5 "mount during unmount of the first filesystem"
 
 # Test 6 - mount after clean unmount.
 test_6() {
-    local rc=0
-    check_failover_pair || return 0
+	local rc=0
+	check_failover_pair
 
-    mount_after_unmount $MMP_MDSDEV $MMP_MDS $MDS_MOUNT_OPTS || \
-        return ${PIPESTATUS[0]}
+	mount_after_unmount $MMP_MDSDEV $MMP_MDS $MDS_MOUNT_OPTS ||
+		return ${PIPESTATUS[0]}
 
-    echo
-    mount_after_unmount $MMP_OSTDEV $MMP_OSS $OST_MOUNT_OPTS
-    rc=${PIPESTATUS[0]}
-    if [ $rc -ne 0 ]; then
-        stop $MMP_MDS_FAILOVER || return ${PIPESTATUS[0]}
-        return $rc
-    fi
+	echo
+	mount_after_unmount $MMP_OSTDEV $MMP_OSS $OST_MOUNT_OPTS
+	rc=${PIPESTATUS[0]}
+	if [ $rc -ne 0 ]; then
+		stop $MMP_MDS_FAILOVER || return ${PIPESTATUS[0]}
+		return $rc
+	fi
 
-    stop_services failover || return ${PIPESTATUS[0]}
+	stop_services failover || return ${PIPESTATUS[0]}
 }
 run_test 6 "mount after clean unmount"
 
 # Test 7 - mount after reboot.
 test_7() {
-    local rc=0
-    check_failover_pair || return 0
+	local rc=0
+	check_failover_pair
 
-    mount_after_reboot $MMP_MDSDEV $MMP_MDS $MDS_MOUNT_OPTS || \
-        return ${PIPESTATUS[0]}
+	mount_after_reboot $MMP_MDSDEV $MMP_MDS $MDS_MOUNT_OPTS ||
+		return ${PIPESTATUS[0]}
 
-    echo
-    mount_after_reboot $MMP_OSTDEV $MMP_OSS $OST_MOUNT_OPTS
-    rc=${PIPESTATUS[0]}
-    if [ $rc -ne 0 ]; then
-        stop $MMP_MDS || return ${PIPESTATUS[0]}
-        stop $MMP_MDS_FAILOVER || return ${PIPESTATUS[0]}
-        return $rc
-    fi
+	echo
+	mount_after_reboot $MMP_OSTDEV $MMP_OSS $OST_MOUNT_OPTS
+	rc=${PIPESTATUS[0]}
+	if [ $rc -ne 0 ]; then
+		stop $MMP_MDS || return ${PIPESTATUS[0]}
+		stop $MMP_MDS_FAILOVER || return ${PIPESTATUS[0]}
+		return $rc
+	fi
 
-    stop_services failover || return ${PIPESTATUS[0]}
-    stop_services primary || return ${PIPESTATUS[0]}
+	stop_services failover || return ${PIPESTATUS[0]}
+	stop_services primary || return ${PIPESTATUS[0]}
 }
 run_test 7 "mount after reboot"
 

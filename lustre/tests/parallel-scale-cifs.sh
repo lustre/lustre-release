@@ -35,8 +35,7 @@ SMBCLIENTS=${SMBCLIENTS:-$CLIENTS}
 SMBCLIENTS=$(exclude_items_from_list $SMBCLIENTS $LUSTRE_CLIENT_SMBSRV)
 
 [ -z "$SMBCLIENTS" ] &&
-	skip_env "need at least two nodes: samba server and samba client" &&
-	exit 0
+	skip_env "need at least two nodes: samba server and samba client"
 
 # set CONFIGURE_SMB=false to skip smb config
 CONFIGURE_SMB=${CONFIGURE_SMB:-true}
