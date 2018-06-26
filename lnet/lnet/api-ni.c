@@ -149,6 +149,8 @@ module_param(lnet_retry_count, uint, 0444);
 MODULE_PARM_DESC(lnet_retry_count,
 		 "Maximum number of times to retry transmitting a message");
 
+unsigned lnet_lnd_timeout = LNET_LND_DEFAULT_TIMEOUT;
+
 /*
  * This sequence number keeps track of how many times DLC was used to
  * update the local NIs. It is incremented when a NI is added or
@@ -572,6 +574,13 @@ static struct lnet_lnd *lnet_find_lnd_by_type(__u32 type)
 	}
 	return NULL;
 }
+
+unsigned int
+lnet_get_lnd_timeout(void)
+{
+	return lnet_lnd_timeout;
+}
+EXPORT_SYMBOL(lnet_get_lnd_timeout);
 
 void
 lnet_register_lnd(struct lnet_lnd *lnd)
