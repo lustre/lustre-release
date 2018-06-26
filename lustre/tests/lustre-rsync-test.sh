@@ -453,19 +453,16 @@ run_test 3c "Replicate files created by createmany/unlinkmany"
 
 # Test 4 - Replicate files created by iozone
 test_4() {
-    which iozone > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-	skip "iozone not found. Skipping test"
-	return
-    fi
+	which iozone > /dev/null 2>&1
+	[ $? -ne 0 ] && skip "iozone not found"
 
-    init_src
-    init_changelog
+	init_src
+	init_changelog
 
-    END_RUN_FILE=${DIR}/$tdir/run LOAD_PID_FILE=${DIR}/$tdir/pid \
-        MOUNT=${DIR}/$tdir run_iozone.sh &
-    sleep 30
-    child_pid=$(pgrep iozone)
+	END_RUN_FILE=${DIR}/$tdir/run LOAD_PID_FILE=${DIR}/$tdir/pid \
+		MOUNT=${DIR}/$tdir run_iozone.sh &
+	sleep 30
+	child_pid=$(pgrep iozone)
 	stop_procs $child_pid
 
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")

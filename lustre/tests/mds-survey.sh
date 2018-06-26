@@ -19,12 +19,10 @@ thrlo=${thrlo:-1}
 ALWAYS_EXCEPT="$MDS_SURVEY_EXCEPT"
 
 MDSSURVEY=${MDSSURVEY:-$(which mds-survey 2>/dev/null || true)}
-if [ -z ${MDSSURVEY} ]; then
-    skip_env "mds-survey not found" && exit
-fi
+[ -z ${MDSSURVEY} ] && skip_env "mds-survey not found"
 
 if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
-	skip_env "Need MDS version at least 2.3.51" && exit
+	skip_env "Need MDS version at least 2.3.51"
 fi
 
 build_test_filter
@@ -121,13 +119,9 @@ run_test 1 "Metadata survey with zero-stripe"
 test_2() {
 	local mdscount=$(get_node_count "$(mdts_nodes)")
 
-	if [ $mdscount -gt 1 ]; then
-		skip_env "Only run this test on single MDS" && return
-	fi
+	[ $mdscount -gt 1 ] && skip_env "Only run this test on single MDS"
+	[ $ost_count -eq 0 ] && skip_env "Need to mount OST to test"
 
-	if [ $ost_count -eq 0 ]; then
-		skip_env "Need to mount OST to test" && return
-	fi
 	mds_survey_run "mdd" "1"
 }
 run_test 2 "Metadata survey with stripe_count = 1"

@@ -263,10 +263,7 @@ test_3() {
 	machine_file=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	numloops=1000
 
-	if [ ! -f "$WRITE_DISJOINT" ]; then
-		skip_env "$0 : write_disjoint not found "
-		return
-	fi
+	[ ! -f "$WRITE_DISJOINT" ] && skip_env "write_disjoint not found"
 
 	set $TRACE
 	generate_machine_file $NODES_TO_USE $machine_file

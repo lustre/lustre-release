@@ -11,7 +11,7 @@ init_logging
 #
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT $LNET_SELFTEST_EXCEPT"
 
-[ x$LST = x ] && { skip_env "lst not found LST=$LST" && exit 0; }
+[ x$LST = x ] && skip_env "lst not found LST=$LST"
 
 # FIXME: what is the reasonable value here?
 lst_LOOP=${lst_LOOP:-100000}

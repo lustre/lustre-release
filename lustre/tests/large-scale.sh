@@ -19,13 +19,12 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
+remote_mds_nodsh && skip "remote MDS with nodsh"
 
-[ -z "$CLIENTS" ] && skip_env "$TESTSUITE: Need two or more clients" && exit 0
+[ -z "$CLIENTS" ] && skip_env "$TESTSUITE: Need two or more clients"
 [ $CLIENTCOUNT -lt 2 ] &&
-	skip_env "$TESTSUITE: Need 2+ clients, have only $CLIENTCOUNT" && exit 0
+	skip_env "$TESTSUITE: Need 2+ clients, have only $CLIENTCOUNT"
 
-#
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 
 MOUNT_2=""

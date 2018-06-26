@@ -14,7 +14,6 @@ init_logging
 if [ "$REFORMAT" != "yes" ]; then
 	skip_env "$0 reformats all devices,\
 		please set REFORMAT to run this test"
-	exit 0
 fi
 
 # Variable to run mdsrate
@@ -150,7 +149,7 @@ trap cleanupall EXIT
 
 test_1 () {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "ldiskfs only test" && return
+		skip_env "ldiskfs only test"
 	local dev
 	for num in $(seq $OSTCOUNT); do
 		dev=$(ostdevname $num)
@@ -240,10 +239,10 @@ test_2 () {
 run_test 2 "run llverfs on OST ldiskfs/zfs filesystem"
 
 test_3 () {
-	[ -z "$CLIENTS" ] && skip_env "CLIENTS not defined, skipping" && return
-	[ -z "$MPIRUN" ] && skip_env "MIPRUN not defined, skipping" && return
-	[ -z "$MDSRATE" ] && skip_env "MDSRATE not defined, skipping" && return
-	[ ! -x $MDSRATE ] && skip_env "$MDSRATE not built, skipping" && return
+	[ -z "$CLIENTS" ] && skip_env "CLIENTS not defined, skipping"
+	[ -z "$MPIRUN" ] && skip_env "MIPRUN not defined, skipping"
+	[ -z "$MDSRATE" ] && skip_env "MDSRATE not defined, skipping"
+	[ ! -x $MDSRATE ] && skip_env "$MDSRATE not built, skipping"
 	# Setup the Lustre filesystem.
 	log "setup the lustre filesystem"
 	REFORMAT="yes" check_and_setup_lustre

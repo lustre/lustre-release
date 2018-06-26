@@ -17,7 +17,7 @@ require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
 [ "$SLOW" = "no" ] &&
-	skip "skip lfsck performance test under non-SLOW mode" && exit 0
+	skip "skip lfsck performance test under non-SLOW mode"
 
 NTHREADS=${NTHREADS:-0}
 UNIT=${UNIT:-8192}
@@ -180,7 +180,7 @@ run_test 0 "lfsck namespace performance (routine case) without load"
 
 test_1() {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "not implemented for ZFS" && return
+		skip_env "not implemented for ZFS"
 
 	local BCOUNT=0
 	local i
@@ -932,7 +932,7 @@ test_7c() {
 run_test 7c "namespace LFSCK performance (repairing bad FID-in-dirent) for DNE"
 
 test_8() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	[ $INCFACTOR -gt 25 ] && INCFACTOR=25
 
