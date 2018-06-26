@@ -60,22 +60,22 @@ run_sgpdd_facets () {
 }
 
 test_1 () {
-    local mdss=$(get_facets MDS)
+	local mdss=$(get_facets MDS)
 
-    check_progs_installed $(facets_hosts $mdss) $SGPDDSURVEY sg_map || \
-        { skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found" && return 0; }
+	check_progs_installed $(facets_hosts $mdss) $SGPDDSURVEY sg_map ||
+		skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found"
 
-    run_sgpdd_facets $mdss
+	run_sgpdd_facets $mdss
 }
 run_test 1 "sgpdd-survey, mds, scsidevs"
 
 test_2 () {
-    local osts=$(get_facets OST)
+	local osts=$(get_facets OST)
 
-    check_progs_installed $(facets_hosts $osts) $SGPDDSURVEY sg_map || \
-        { skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found" && return 0; }
+	check_progs_installed $(facets_hosts $osts) $SGPDDSURVEY sg_map ||
+		skip_env "SGPDDSURVEY=$SGPDDSURVEY or sg_map not found"
 
-    run_sgpdd_facets $osts
+	run_sgpdd_facets $osts
 }
 run_test 2 "sgpdd-survey, osts, scsidevs"
 

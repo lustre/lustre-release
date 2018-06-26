@@ -67,7 +67,7 @@ cleanup_running_directories()
 
 test_sanity()
 {
-	[ ! -f sanity.sh ] && skip_env "No sanity.sh skipping" && return
+	[ ! -f sanity.sh ] && skip_env "No sanity.sh skipping"
 
 	local index
 	local pid

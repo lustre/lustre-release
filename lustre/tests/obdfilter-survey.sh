@@ -210,9 +210,9 @@ test_3a () {
 	#    'lctl dl' output must be blank.
 	# Skipping test for CLIENTONLY mode because of
 	# cleanupall()->stopall() does not cleanup the servers on this mode.
-	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return
+	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode"
 
-	remote_servers || { skip "Local servers" && return 0; }
+	remote_servers || skip "Local servers"
 
 	cleanupall
 

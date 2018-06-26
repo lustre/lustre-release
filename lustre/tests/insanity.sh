@@ -19,7 +19,6 @@ ALWAYS_EXCEPT="15  $INSANITY_EXCEPT"
 if [ "$FAILURE_MODE" = "HARD" ]; then
 	skip_env "$TESTSUITE: is not functional with FAILURE_MODE = HARD, " \
 		"please use recovery-double-scale, bz20407"
-	exit 0
 fi
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -171,7 +170,7 @@ run_test 0 "Fail all nodes, independently"
 
 ############### First Failure Mode ###############
 test_1() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
 	clients_up
 
@@ -328,7 +327,7 @@ run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 
 ############### Fifth Failure Mode ###############
 test_5() {
-	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs" && return 0
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 
 	echo "Fifth Failure Mode: OST/OST `date`"
 
@@ -597,7 +596,7 @@ run_test 9 "Ninth Failure Mode: CLIENT/CLIENT `date`"
 
 ############### Tenth Failure Mode ###############
 test_10() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
 	shutdown_facet mds1
 	reboot_facet mds1
@@ -641,7 +640,7 @@ run_test 10 "Tenth Failure Mode: MDT0/OST/MDT1 `date`"
 
 ############### Seventh Failure Mode ###############
 test_11() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	echo "Verify Lustre filesystem is up and running"
 	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
@@ -673,7 +672,7 @@ run_test 11 "Eleventh Failure Mode: MDS0/CLIENT/MDS1 `date`"
 ###################################################
 
 test_12() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	echo "Verify Lustre filesystem is up and running"
 	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
@@ -704,7 +703,7 @@ run_test 12 "Twelve Failure Mode: MDS0,MDS1/OST0, OST1/CLIENTS `date`"
 ###################################################
 
 test_13() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	echo "Verify Lustre filesystem is up and running"
 	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
@@ -735,7 +734,7 @@ run_test 13 "Thirteen Failure Mode: MDS0,MDS1/CLIENTS/OST0,OST1 `date`"
 ###################################################
 
 test_14() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	echo "Verify Lustre filesystem is up and running"
 	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
