@@ -748,6 +748,80 @@ test_17() {
 }
 run_test 17 "Verify LOVEA grows with more component inited"
 
+check_distribution() {
+	local file=$1
+	local objs
+	local ave
+	local obj_min_one=$((OSTCOUNT - 1))
+
+	objs=$($LFS getstripe $file |
+		awk '/l_ost_idx:/ { print $5 }' | wc -l)
+	let ave=$((objs / OSTCOUNT))
+
+	# collect objects per OST distribution
+	$LFS getstripe $file | awk '/l_ost_idx:/ { print $5 }' | tr -d "," |
+		(inuse=( $(for i in $(seq 0 $obj_min_one); do echo 0; done) )
+		while read O; do
+			let inuse[$O]=$((1 + ${inuse[$O]}))
+		done;
+
+		# verify object distribution varies no more than +-1
+		for idx in $(seq 0 $obj_min_one); do
+			let dif=$((${inuse[$idx]} - ave))
+			let dif=${dif#-}
+			if [ "$dif" -gt 1 ]; then
+				echo "OST${idx}: ${inuse[$idx]} objects"
+				error "bad distribution on OST${idx}"
+			fi
+		done)
+}
+
+test_18() {
+	local file1=$DIR/${tfile}-1
+	local file2=$DIR/${tfile}-2
+	local file3=$DIR/${tfile}-3
+
+	rm -f $file1 $file2 $file3
+
+	$LFS setstripe -E 1m -S 1m $file1 ||
+		error "Create $file1 failed"
+	$LFS setstripe -E 1m -S 1m $file2 ||
+		error "Create $file2 failed"
+	$LFS setstripe -E 1m -S 1m $file3 ||
+		error "Create $file3 failed"
+
+	local objs=$((OSTCOUNT+1))
+	for comp in $(seq 1 $OSTCOUNT); do
+		$LFS setstripe --component-add -E $((comp+1))M -c 1 $file1 ||
+			error "Add component to $file1 failed 2"
+		$LFS setstripe --component-add -E $((comp+1))M -c 1 $file2 ||
+			error "Add component to $file2 failed 2"
+		$LFS setstripe --component-add -E $((comp+1))M -c 1 $file3 ||
+			error "Add component to $file3 failed 2"
+	done
+
+	$LFS setstripe --component-add -E -1 -c -1 $file1 ||
+		error "Add component to $file1 failed 3"
+	$LFS setstripe --component-add -E -1 -c -1 $file2 ||
+		error "Add component to $file2 failed 3"
+	$LFS setstripe --component-add -E -1 -c -1 $file3 ||
+		error "Add component to $file3 failed 3"
+
+	# Instantiate all components
+	dd if=/dev/urandom of=$file1 bs=1M count=$((objs+1)) ||
+		error "dd failed for $file1"
+	dd if=/dev/urandom of=$file2 bs=1M count=$((objs+1)) ||
+		error "dd failed for $file2"
+	dd if=/dev/urandom of=$file3 bs=1M count=$((objs+1)) ||
+		error "dd failed for $file3"
+
+	check_distribution $file1
+	check_distribution $file2
+	check_distribution $file3
+
+}
+run_test 18 "check component distribution"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
