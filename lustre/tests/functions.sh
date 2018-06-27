@@ -291,10 +291,10 @@ run_compilebench() {
 	print_opts cbench_DIR cbench_IDIRS cbench_RUNS
 
 	[ x$cbench_DIR = x ] &&
-		{ skip_env "compilebench not found" && return; }
+		skip_env "compilebench not found"
 
 	[ -e $cbench_DIR/compilebench ] ||
-		{ skip_env "No compilebench build" && return; }
+		skip_env "No compilebench build"
 
 	# Space estimation:
 	# compile dir kernel-0	~1GB
@@ -303,8 +303,7 @@ run_compilebench() {
 	if [[ $space -le $((1024 * 1024 * cbench_IDIRS)) ]]; then
 		cbench_IDIRS=$((space / 1024 / 1024))
 		[[ $cbench_IDIRS -eq 0 ]] &&
-			skip_env "Need free space at least 1GB, have $space" &&
-			return
+			skip_env "Need free space at least 1GB, have $space"
 
 		echo "reducing initial dirs to $cbench_IDIRS"
 	fi
@@ -343,8 +342,7 @@ run_metabench() {
 	mbench_OPTIONS=${mbench_OPTIONS:-}
 	mbench_CLEANUP=${mbench_CLEANUP:-true}
 
-	[ x$METABENCH = x ] &&
-		{ skip_env "metabench not found" && return; }
+	[ x$METABENCH = x ] && skip_env "metabench not found"
 
 	print_opts METABENCH clients mbench_NFILES mbench_THREADS
 
@@ -383,34 +381,28 @@ run_metabench() {
 }
 
 run_simul() {
+	SIMUL=${SIMUL:=$(which simul 2> /dev/null || true)}
+	[ x$SIMUL = x ] && skip_env "simul not found"
+	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
 
-    SIMUL=${SIMUL:=$(which simul 2> /dev/null || true)}
-    # threads per client
-    simul_THREADS=${simul_THREADS:-2}
-    simul_REP=${simul_REP:-20}
+	# threads per client
+	simul_THREADS=${simul_THREADS:-2}
+	simul_REP=${simul_REP:-20}
 
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
+	# FIXME
+	# Need space estimation here.
 
-    [ x$SIMUL = x ] &&
-        { skip_env "simul not found" && return; }
+	print_opts SIMUL clients simul_REP simul_THREADS
 
-    # FIXME
-    # Need space estimation here.
+	local testdir=$DIR/d0.simul
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
-    print_opts SIMUL clients simul_REP simul_THREADS
+	# -n # : repeat each test # times
+	# -N # : repeat the entire set of tests # times
 
-    local testdir=$DIR/d0.simul
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-
-    # -n # : repeat each test # times
-    # -N # : repeat the entire set of tests # times
-
-    local cmd="$SIMUL -d $testdir -n $simul_REP -N $simul_REP"
+	local cmd="$SIMUL -d $testdir -n $simul_REP -N $simul_REP"
 
 	echo "+ $cmd"
 	# find out if we need to use srun by checking $SRUN_PARTITION
@@ -431,40 +423,33 @@ run_simul() {
 }
 
 run_mdtest() {
+	MDTEST=${MDTEST:=$(which mdtest 2> /dev/null || true)}
+	[ x$MDTEST = x ] && skip_env "mdtest not found"
+	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
 
-    MDTEST=${MDTEST:=$(which mdtest 2> /dev/null || true)}
-    # threads per client
-    mdtest_THREADS=${mdtest_THREADS:-2}
-    mdtest_nFiles=${mdtest_nFiles:-"100000"}
-    # We devide the files by number of core
-    mdtest_nFiles=$((mdtest_nFiles/mdtest_THREADS/num_clients))
-    mdtest_iteration=${mdtest_iteration:-1}
+	# threads per client
+	mdtest_THREADS=${mdtest_THREADS:-2}
+	mdtest_nFiles=${mdtest_nFiles:-"100000"}
+	# We devide the files by number of core
+	mdtest_nFiles=$((mdtest_nFiles/mdtest_THREADS/num_clients))
+	mdtest_iteration=${mdtest_iteration:-1}
 	local mdtest_custom_params=${mdtest_custom_params:-""}
+	local type=${1:-"ssf"}
 
-    local type=${1:-"ssf"}
+	# FIXME
+	# Need space estimation here.
 
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
+	print_opts MDTEST mdtest_iteration mdtest_THREADS mdtest_nFiles
 
-    [ x$MDTEST = x ] &&
-        { skip_env "mdtest not found" && return; }
+	local testdir=$DIR/d0.mdtest
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
-    # FIXME
-    # Need space estimation here.
-
-    print_opts MDTEST mdtest_iteration mdtest_THREADS mdtest_nFiles
-
-    local testdir=$DIR/d0.mdtest
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-
-    # -i # : repeat each test # times
-    # -d   : test dir
-    # -n # : number of file/dir to create/stat/remove
-    # -u   : each process create/stat/remove individually
+	# -i # : repeat each test # times
+	# -d   : test dir
+	# -n # : number of file/dir to create/stat/remove
+	# -u   : each process create/stat/remove individually
 
 	local cmd="$MDTEST -d $testdir -i $mdtest_iteration \
 		-n $mdtest_nFiles $mdtest_custom_params"
@@ -496,19 +481,15 @@ run_connectathon() {
 
 	print_opts cnt_DIR cnt_NRUN
 
-	[ x$cnt_DIR = x ] &&
-		{ skip_env "connectathon dir not found" && return; }
-
-	[ -e $cnt_DIR/runtests ] ||
-		{ skip_env "No connectathon runtests found" && return; }
+	[ x$cnt_DIR = x ] && skip_env "connectathon dir not found"
+	[ -e $cnt_DIR/runtests ] || skip_env "No connectathon runtests found"
 
 	# Space estimation:
 	# "special" tests create a 30 MB file + misc. small files
 	# required space ~40 MB
 	local space=$(df -P $dir | tail -n 1 | awk '{ print $4 }')
 	if [[ $space -le $((1024 * 40)) ]]; then
-		skip_env "Need free space at least 40MB, have $space KB" &&
-		return
+		skip_env "Need free space at least 40MB, have $space KB"
 	fi
 	echo "free space = $space KB"
 
@@ -571,8 +552,7 @@ run_ior() {
 	fi
 
 	IOR=${IOR:-$(which IOR 2> /dev/null || true)}
-	[ x$IOR = x ] &&
-		{ skip_env "IOR not found" && return; }
+	[ x$IOR = x ] && skip_env "IOR not found"
 
 	# threads per client
 	ior_THREADS=${ior_THREADS:-2}
@@ -604,10 +584,9 @@ run_ior() {
 	if [ $((space / 2)) -le \
 	     $((ior_blockSize * multiplier * total_threads)) ]; then
 		ior_blockSize=$((space / 2 / multiplier / total_threads))
-		[ $ior_blockSize -eq 0 ] && \
+		[ $ior_blockSize -eq 0 ] &&
 		skip_env "Need free space more than $((2 * total_threads)) \
-			 ${ior_blockUnit}: have $((space / multiplier))" &&
-			 return
+			 ${ior_blockUnit}: have $((space / multiplier))"
 
 		echo "(reduced blockSize to $ior_blockSize \
 		     ${ior_blockUnit} bytes)"
@@ -660,40 +639,34 @@ run_ior() {
 }
 
 run_mib() {
+	MIB=${MIB:=$(which mib 2> /dev/null || true)}
+	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
+	[ x$MIB = x ] && skip_env "MIB not found"
 
-    MIB=${MIB:=$(which mib 2> /dev/null || true)}
-    # threads per client
-    mib_THREADS=${mib_THREADS:-2}
-    mib_xferSize=${mib_xferSize:-1m}
-    mib_xferLimit=${mib_xferLimit:-5000}
-    mib_timeLimit=${mib_timeLimit:-300}
+	# threads per client
+	mib_THREADS=${mib_THREADS:-2}
+	mib_xferSize=${mib_xferSize:-1m}
+	mib_xferLimit=${mib_xferLimit:-5000}
+	mib_timeLimit=${mib_timeLimit:-300}
 
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
+	print_opts MIB mib_THREADS mib_xferSize mib_xferLimit mib_timeLimit \
+		MACHINEFILE
 
-    [ x$MIB = x ] &&
-        { skip_env "MIB not found" && return; }
-
-    print_opts MIB mib_THREADS mib_xferSize mib_xferLimit mib_timeLimit \
-        MACHINEFILE
-
-    local testdir=$DIR/d0.mib
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-    $LFS setstripe $testdir -c -1 ||
-        { error "setstripe failed" && return 2; }
-    #
-    # -I    Show intermediate values in output
-    # -H    Show headers in output
-    # -L    Do not issue new system calls after this many seconds
-    # -s    Use system calls of this size
-    # -t    test dir
-    # -l    Issue no more than this many system calls
-    local cmd="$MIB -t $testdir -s $mib_xferSize -l $mib_xferLimit \
-        -L $mib_timeLimit -HI -p mib.$(date +%Y%m%d%H%M%S)"
+	local testdir=$DIR/d0.mib
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
+	$LFS setstripe $testdir -c -1 ||
+		error "setstripe failed"
+	#
+	# -I    Show intermediate values in output
+	# -H    Show headers in output
+	# -L    Do not issue new system calls after this many seconds
+	# -s    Use system calls of this size
+	# -t    test dir
+	# -l    Issue no more than this many system calls
+	local cmd="$MIB -t $testdir -s $mib_xferSize -l $mib_xferLimit \
+		-L $mib_timeLimit -HI -p mib.$(date +%Y%m%d%H%M%S)"
 
 	echo "+ $cmd"
 	# find out if we need to use srun by checking $SRUN_PARTITION
@@ -714,34 +687,28 @@ run_mib() {
 }
 
 run_cascading_rw() {
+	CASC_RW=${CASC_RW:-$(which cascading_rw 2> /dev/null || true)}
+	[ x$CASC_RW = x ] && skip_env "cascading_rw not found"
+	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
 
-    CASC_RW=${CASC_RW:-$(which cascading_rw 2> /dev/null || true)}
-    # threads per client
-    casc_THREADS=${casc_THREADS:-2}
-    casc_REP=${casc_REP:-300}
+	# threads per client
+	casc_THREADS=${casc_THREADS:-2}
+	casc_REP=${casc_REP:-300}
 
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
+	# FIXME
+	# Need space estimation here.
 
-    [ x$CASC_RW = x ] &&
-        { skip_env "cascading_rw not found" && return; }
+	print_opts CASC_RW clients casc_THREADS casc_REP MACHINEFILE
 
-    # FIXME
-    # Need space estimation here.
+	local testdir=$DIR/d0.cascading_rw
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
-    print_opts CASC_RW clients casc_THREADS casc_REP MACHINEFILE
+	# -g: debug mode
+	# -n: repeat test # times
 
-    local testdir=$DIR/d0.cascading_rw
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-
-    # -g: debug mode
-    # -n: repeat test # times
-
-    local cmd="$CASC_RW -g -d $testdir -n $casc_REP"
+	local cmd="$CASC_RW -g -d $testdir -n $casc_REP"
 
 	echo "+ $cmd"
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
@@ -755,35 +722,29 @@ run_cascading_rw() {
 }
 
 run_write_append_truncate() {
+	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
+	# location is lustre/tests dir
+	if ! which write_append_truncate > /dev/null 2>&1 ; then
+		skip_env "write_append_truncate not found"
+	fi
 
-    # threads per client
-    write_THREADS=${write_THREADS:-8}
-    write_REP=${write_REP:-10000}
+	# threads per client
+	write_THREADS=${write_THREADS:-8}
+	write_REP=${write_REP:-10000}
 
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
+	# FIXME
+	# Need space estimation here.
 
-    # location is lustre/tests dir
-    if ! which write_append_truncate > /dev/null 2>&1 ; then
-        skip_env "write_append_truncate not found"
-        return
-    fi
+	local testdir=$DIR/d0.write_append_truncate
+	local file=$testdir/f0.wat
 
-    # FIXME
-    # Need space estimation here.
+	print_opts clients write_REP write_THREADS MACHINEFILE
 
-    local testdir=$DIR/d0.write_append_truncate
-    local file=$testdir/f0.wat
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
-    print_opts clients write_REP write_THREADS MACHINEFILE
-
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-
-    local cmd="write_append_truncate -n $write_REP $file"
+	local cmd="write_append_truncate -n $write_REP $file"
 
 	echo "+ $cmd"
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
@@ -798,16 +759,10 @@ run_write_append_truncate() {
 }
 
 run_write_disjoint() {
-	if [ "$NFSCLIENT" ]; then
-		skip "skipped for NFSCLIENT mode"
-		return
-	fi
-
 	WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null ||
 					   true)}
-
-	[ x$WRITE_DISJOINT = x ] &&
-		{ skip_env "write_disjoint not found" && return; }
+	[ x$WRITE_DISJOINT = x ] && skip_env "write_disjoint not found"
+	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
 
 	# threads per client
 	wdisjoint_THREADS=${wdisjoint_THREADS:-4}
@@ -839,29 +794,24 @@ run_write_disjoint() {
 }
 
 run_parallel_grouplock() {
+	PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-$(which parallel_grouplock \
+	    2> /dev/null || true)}
 
-    PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-$(which parallel_grouplock \
-        2> /dev/null || true)}
-    parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
+	[ x$PARALLEL_GROUPLOCK = x ] && skip "PARALLEL_GROUPLOCK not found"
+	[ "$NFSCLIENT" ] && skip "skipped for NFSCLIENT mode"
 
-    if [ "$NFSCLIENT" ]; then
-        skip "skipped for NFSCLIENT mode"
-        return
-    fi
+	parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
 
-    [ x$PARALLEL_GROUPLOCK = x ] &&
-        { skip "PARALLEL_GROUPLOCK not found" && return; }
+	print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
 
-    print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
+	local testdir=$DIR/d0.parallel_grouplock
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
-    local testdir=$DIR/d0.parallel_grouplock
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-
-    local cmd
-    local status=0
-    local subtest
+	local cmd
+	local status=0
+	local subtest
 	for i in $(seq 12); do
 		subtest="-t $i"
 		local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
@@ -898,21 +848,17 @@ cleanup_statahead () {
 }
 
 run_statahead () {
+	if [[ -n $NFSCLIENT ]]; then
+		skip "Statahead testing is not supported on NFS clients."
+	fi
+	[ x$MDSRATE = x ] && skip_env "mdsrate not found"
 
-    statahead_NUMMNTPTS=${statahead_NUMMNTPTS:-5}
-    statahead_NUMFILES=${statahead_NUMFILES:-500000}
+	statahead_NUMMNTPTS=${statahead_NUMMNTPTS:-5}
+	statahead_NUMFILES=${statahead_NUMFILES:-500000}
 
-    if [[ -n $NFSCLIENT ]]; then
-        skip "Statahead testing is not supported on NFS clients."
-        return 0
-    fi
+	print_opts MDSRATE clients statahead_NUMMNTPTS statahead_NUMFILES
 
-    [ x$MDSRATE = x ] &&
-        { skip_env "mdsrate not found" && return; }
-
-    print_opts MDSRATE clients statahead_NUMMNTPTS statahead_NUMFILES
-
-    # create large dir
+	# create large dir
 
     # do not use default "d[0-9]*" dir name
     # to avoid of rm $statahead_NUMFILES (500k) files in t-f cleanup
@@ -993,13 +939,13 @@ cleanup_rr_alloc () {
 }
 
 run_rr_alloc() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	echo "===Test gives more reproduction percentage if number of "\
 		"client and ost are more. Test with 44 or more clients "\
 		"and 73 or more OSTs gives 100% reproduction rate=="
 
 	RR_ALLOC=${RR_ALLOC:-$(which rr_alloc 2> /dev/null || true)}
-	[ x$RR_ALLOC = x ] && { skip_env "rr_alloc not found" && return; }
+	[ x$RR_ALLOC = x ] && skip_env "rr_alloc not found"
 	declare -a diff_max_min_arr
 	# foeo = file on each ost. calc = calculated.
 	local ost_idx
@@ -1122,8 +1068,7 @@ run_fs_test() {
 	fs_test_objunit=${fs_test_objunit:-1048576} # 1 mb
 	fs_test_ndirs=${fs_test_ndirs:-80000}
 
-	[ x$FS_TEST = x ] &&
-		{ skip "FS_TEST not found" && return; }
+	[ x$FS_TEST = x ] && skip "FS_TEST not found"
 
 	# Space estimation  in bytes
 	local space=$(df -B 1 -P $dir | tail -n 1 | awk '{ print $4 }')
@@ -1133,11 +1078,10 @@ run_fs_test() {
 		$((fs_test_objsize * fs_test_objunit * total_threads)) ]; then
 			fs_test_objsize=$((space / 2 / fs_test_objunit / \
 				total_threads))
-			[ $fs_test_objsize -eq 0 ] && \
+			[ $fs_test_objsize -eq 0 ] &&
 			skip_env "Need free space more than \
 				$((2 * total_threads * fs_test_objunit)) \
-				: have $((space / fs_test_objunit))" &&
-				return
+				: have $((space / fs_test_objunit))"
 
 			echo "(reduced objsize to \
 				$((fs_test_objsize * fs_test_objunit)) bytes)"
@@ -1213,8 +1157,7 @@ run_fio() {
 
 	[ "$SLOW" = "no" ] || runtime=600
 
-	[ x$FIO = x ] &&
-		{ skip_env "FIO not found" && return; }
+	[ x$FIO = x ] && skip_env "FIO not found"
 
 	mkdir -p $testdir
 
@@ -1280,8 +1223,7 @@ run_xdd() {
 	local xdd_custom_params=${xdd_custom_params:-"-dio -stoponerror \
 		-maxpri -minall -noproclock -nomemlock"}
 
-	[ x$XDD = x ] &&
-		{ skip "XDD not found" && return; }
+	[ x$XDD = x ] && skip "XDD not found"
 
 	print_opts XDD clients xdd_queuedepth xdd_blocksize xdd_reqsize \
 		xdd_mbytes xdd_passes xdd_rwratio

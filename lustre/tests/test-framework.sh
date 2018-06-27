@@ -5859,6 +5859,12 @@ error_not_in_vm() {
 	fi
 }
 
+#
+# Function: skip_env()
+# Purpose:  to skip a test during developer testing because some tool
+#           is missing, but fail the test in release testing because the test
+#           environment is not configured properly".
+#
 skip_env () {
 	$FAIL_ON_SKIP_ENV && error false $@ || skip $@
 }
