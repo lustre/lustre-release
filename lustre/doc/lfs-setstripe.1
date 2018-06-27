@@ -19,6 +19,8 @@ lfs setstripe \- set striping pattern of a file or directory default
 .br
 .B lfs setstripe -d \fR<\fIdirectory\fR>
 .br
+.B lfs setstripe -N\fR[\fImirror_count\fR] \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfilename\fR>
+.br
 .B lfs setstripe --yaml=<yaml_template_file> <filename>
 .br
 .SH DESCRIPTION
@@ -113,6 +115,21 @@ Delete the default layout on the specified directory.  It is not necessary
 to delete the default layout on a directory before replacing it.  This is
 only needed if the directory should revert from a directory-specific layout
 to using the global filesystem default layout stored on the root directory.
+.TP
+.B lfs setstripe -N\fR[\fImirror_count\fR] \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfilename\fR>
+.br
+The -N option indicates how many mirrors that have the same layout will be set
+on a file or directory (see \fBlfs-mirror-create\fR(1)). The \fImirror_count\fR
+argument is optional and defaults to 1 if it's not specified; if specified,
+it must follow the option without a space.
+.br
+The \fISTRIPE_OPTIONS\fR specify the specific layout for the mirror. It can
+be a plain layout with specific striping pattern or a composite layout.
+If they are not specified, the stripe options inherited from the previous
+component will be used. If there is no previous component, the
+\fIstripe_count\fR and \fIstripe_size\fR options inherited from filesystem-wide
+default values will be used, and OST \fIpool_name\fR inherited from parent
+directory will be used.
 .TP
 .B lfs setstripe --yaml=<yaml_template_file> <filename>
 .br
@@ -242,6 +259,16 @@ This creates a file striped on two OSTs with 128kB on each stripe.
 .B $ lfs setstripe -d /mnt/lustre/dir
 This deletes a default stripe pattern on dir. New files created in that
 directory will use the filesystem global default instead.
+.TP
+.B lfs setstripe -N2 -E 1M -E eof -c -1 /mnt/lustre/dir1
+This sets a default mirror layout on a directory with 2 PFL mirrors. Each mirror
+has the same specified PFL layout.
+.TP
+.B lfs setstripe -N2 /mnt/lustre/file1
+This creates a mirrored file with 2 mirrors. Each mirror has the same default
+striping pattern with \fIstripe_count\fR and \fIstripe_size\fR inherited from
+filesystem-wide default values, and OST \fIpool_name\fR inherited from parent
+directory.
 .TP
 .B $ lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 /mnt/lustre/file1
 This creates a file with composite layout, the component has 1 stripe and \
