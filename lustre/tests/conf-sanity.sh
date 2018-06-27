@@ -485,10 +485,7 @@ test_5e() {
 run_test 5e "delayed connect, don't crash (bug 10268)"
 
 test_5f() {
-	if combined_mgs_mds ; then
-		skip "needs separate mgs and mds"
-		return 0
-	fi
+	combined_mgs_mds && skip "needs separate mgs and mds"
 
 	grep " $MOUNT " /etc/mtab &&
 		error false "unexpected entry in mtab before mount" && return 10
@@ -524,7 +521,7 @@ run_test 5f "mds down, cleanup after failed mount (bug 2712)"
 test_5g() {
 	modprobe lustre
 	[ $(lustre_version_code client) -lt $(version_code 2.9.53) ] &&
-		{ skip "automount of debugfs missing before 2.9.53" && return 0; }
+		skip "automount of debugfs missing before 2.9.53"
 	umount /sys/kernel/debug
 	$LCTL get_param -n devices | egrep -v "error" && \
 		error "lctl can't access debugfs data"
@@ -592,7 +589,6 @@ run_test 9 "test ptldebug and subsystem for mkfs"
 test_17() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	setup
@@ -621,7 +617,6 @@ run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should ret
 test_18() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
@@ -660,7 +655,7 @@ test_18() {
 			log "use file $MDSDEV with MIN=$MIN"
 	fi
 
-	[ -z "$OK" ] && skip_env "$MDSDEV too small for ${MIN}kB MDS" && return
+	[ -z "$OK" ] && skip_env "$MDSDEV too small for ${MIN}kB MDS"
 
 	echo "mount mds with large journal..."
 
@@ -751,12 +746,10 @@ test_21c() {
 run_test 21c "start mds between two osts, stop mds last"
 
 test_21d() {
-        if combined_mgs_mds ; then
-                skip "need separate mgs device" && return 0
-        fi
-        stopall
+	combined_mgs_mds && skip "need separate mgs device"
 
-        reformat
+	stopall
+	reformat
 
 	start_mgs || error "unable to start MGS"
 	start_ost || error "unable to start OST1"
@@ -784,7 +777,7 @@ cleanup_21e() {
 test_21e() { # LU-5863
 	if [[ -z "$fs3ost_DEV" || -z "$fs2ost_DEV" || -z "$fs2mds_DEV" ]]; then
 		is_blkdev $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
-		skip_env "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working"
 	fi
 
 	local fs2mdsdev=$(mdsdevname 1_2)
@@ -930,7 +923,7 @@ test_24a() {
 
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" ]; then
 		is_blkdev $SINGLEMDS $MDSDEV &&
-		skip_env "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working"
 	fi
 
 	[ -n "$ost1_HOST" ] && fs2ost_HOST=$ost1_HOST
@@ -999,7 +992,7 @@ test_24b() {
 		local dev=${SINGLEMDS}_dev
 		local MDSDEV=${!dev}
 		is_blkdev $SINGLEMDS $MDSDEV &&
-		skip_env "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working"
 	fi
 
 	local fs2mdsdev=$(mdsdevname 1_2)
@@ -1095,9 +1088,9 @@ run_test 28A "permanent parameter setting"
 
 test_28a() { # LU-4221
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.5.52) ]] ||
-		{ skip "Need OST version at least 2.5.52" && return 0; }
+		skip "Need OST version at least 2.5.52"
 	[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "LU-4221: no such proc params for ZFS OSTs" && return
+		skip "LU-4221: no such proc params for ZFS OSTs"
 
 	local name
 	local param
@@ -1142,8 +1135,8 @@ test_28a() { # LU-4221
 run_test 28a "set symlink parameters permanently with lctl"
 
 test_29() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
-        setup > /dev/null 2>&1
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs"
+	setup > /dev/null 2>&1
 	start_ost2 || error "Unable to start OST2"
 	sleep 10
 
@@ -1156,7 +1149,7 @@ test_29() {
 	local PROC_ACT="osc.$FSNAME-OST0001-osc-*.active"
 	local PROC_UUID="osc.$FSNAME-OST0001-osc-[!M]*.ost_server_uuid"
 
-        ACTV=$($LCTL get_param -n $PROC_ACT)
+	ACTV=$($LCTL get_param -n $PROC_ACT)
 	DEAC=$((1 - $ACTV))
 	set_persistent_param_and_check client $PROC_ACT $PARAM $DEAC
 	# also check ost_server_uuid status
@@ -1448,28 +1441,19 @@ test_32newtarball() {
 # variable "tarballs".
 #
 t32_check() {
+	[ "$CLIENTONLY" ] && skip "Client-only testing"
+
 	local node=$(facet_active_host $SINGLEMDS)
 	local r="do_node $node"
 
-	if [ "$CLIENTONLY" ]; then
-		skip "Client-only testing"
-		exit 0
-	fi
-
-	if ! $r which $TUNEFS; then
-		skip_env "tunefs.lustre required on $node"
-		exit 0
-	fi
+	! $r which "$TUNEFS" && skip_env "tunefs.lustre required on $node"
 
 	local IMGTYPE=$(facet_fstype $SINGLEMDS)
 
 	tarballs=$($r find $RLUSTRE/tests -maxdepth 1 \
 		   -name \'disk*-$IMGTYPE.tar.bz2\')
 
-	if [ -z "$tarballs" ]; then
-		skip "No applicable tarballs found"
-		exit 0
-	fi
+	[ -z "$tarballs" ] && skip "No applicable tarballs found"
 }
 
 t32_test_cleanup() {
@@ -1791,8 +1775,8 @@ t32_test() {
 	else
 		if [ -n "$($LCTL list_nids | grep -v '\(tcp\|lo\)[[:digit:]]*$')" ]; then
 			[[ $(lustre_version_code mgs) -ge $(version_code 2.3.59) ]] ||
-			{ skip "LU-2200: Cannot run over Inifiniband w/o lctl replace_nids "
-				"(Need MGS version at least 2.3.59)"; return 0; }
+			skip "LU-2200: Cannot run over IB w/o lctl replace_nids "
+				"(Need MGS version at least 2.3.59)"
 
 			local osthost=$(facet_active_host ost1)
 			local ostnid=$(do_node $osthost $LCTL list_nids | head -1)
@@ -2408,7 +2392,7 @@ test_32c() {
 	local tarball
 	local rc=0
 
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	t32_check
 	for tarball in $tarballs; do
 		# Do not support 1_8 and 2_1 direct upgrade to DNE2 anymore */
@@ -2436,7 +2420,7 @@ run_test 32d "convert ff test"
 
 test_32e() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-		{ skip "Need MDS version at least 2.10.56"; return 0; }
+		skip "Need MDS version at least 2.10.56"
 
 	local tarballs
 	local tarball
@@ -2463,8 +2447,7 @@ test_33a() { # bug 12333, was test_33
 		local dev=${SINGLEMDS}_dev
 		local MDSDEV=${!dev}
 		is_blkdev $SINGLEMDS $MDSDEV &&
-			skip_env "mixed loopback and real device not working" &&
-			return
+			skip_env "mixed loopback and real device not working"
 	fi
 
 	local fs2mdsdev=$(mdsdevname 1_2)
@@ -2623,7 +2606,7 @@ test_35a() { # bug 12459
 run_test 35a "Reconnect to the last active server first"
 
 test_35b() { # bug 18674
-	remote_mds || { skip "local MDS" && return 0; }
+	remote_mds || skip "local MDS"
 	setup
 
 	debugsave
@@ -2713,10 +2696,10 @@ test_35b() { # bug 18674
 run_test 35b "Continue reconnection retries, if the active server is busy"
 
 test_36() { # 12743
-	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] ||
-		{ skip "remote OST" && return 0; }
+		skip "remote OST"
 
 	local rc=0
 	local FSNAME2=test1234
@@ -2726,7 +2709,7 @@ test_36() { # 12743
 
 	if [ -z "$fs2ost_DEV" -o -z "$fs2mds_DEV" -o -z "$fs3ost_DEV" ]; then
 		is_blkdev $SINGLEMDS $MDSDEV &&
-		skip_env "mixed loopback and real device not working" && return
+			skip_env "mixed loopback and real device not working"
 	fi
 
 	local fs2mdsdev=$(mdsdevname 1_2)
@@ -2803,7 +2786,6 @@ test_37() {
 
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	echo "MDS :     $mdsdev"
@@ -2932,11 +2914,9 @@ test_41a() { #bug 14134
 	if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
 	   ! do_facet $SINGLEMDS test -b $(mdsdevname 1); then
 		skip "Loop devices does not work with nosvc option"
-		return
 	fi
 
-	combined_mgs_mds ||
-		{ skip "needs combined MGT and MDT device" && return 0; }
+	combined_mgs_mds || skip "needs combined MGT and MDT device"
 
 	start_mdt 1 -o nosvc -n
 	if [ $MDSCOUNT -ge 2 ]; then
@@ -2963,10 +2943,9 @@ test_41b() {
 	if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
 	   ! do_facet $SINGLEMDS test -b $(mdsdevname 1); then
 		skip "Loop devices does not work with nosvc option"
-		return
 	fi
 
-	! combined_mgs_mds && skip "needs combined mgs device" && return 0
+	! combined_mgs_mds && skip "needs combined mgs device"
 
 	stopall
 	reformat
@@ -3002,7 +2981,7 @@ test_41c() {
 	   $server_version -lt $(version_code 2.5.50) ]] ||
 	[[ $server_version -ge $(version_code 2.5.4) &&
 	   $server_version -lt $(version_code 2.5.11) ]] ||
-		{ skip "Need MDS version 2.5.4+ or 2.5.26+ or 2.6.52+"; return; }
+		skip "Need MDS version 2.5.4+ or 2.5.26+ or 2.6.52+"
 
 	# ensure mds1 ost1 have been created even if running sub-test standalone
 	cleanup
@@ -3166,13 +3145,12 @@ run_test 42 "allow client/server mount/unmount with invalid config param"
 
 test_43a() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.5.58) ]] ||
-		{ skip "Need MDS version at least 2.5.58" && return 0; }
+		skip "Need MDS version at least 2.5.58"
 	[ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
 
 	ID1=${ID1:-501}
 	USER1=$(getent passwd | grep :$ID1:$ID1: | cut -d: -f1)
-	[ -z "$USER1" ] && skip_env "missing user with uid=$ID1 gid=$ID1" &&
-		return
+	[ -z "$USER1" ] && skip_env "missing user with uid=$ID1 gid=$ID1"
 
 	setup
 	chmod ugo+x $DIR || error "chmod 0 failed"
@@ -3318,11 +3296,11 @@ run_test 43a "check root_squash and nosquash_nids"
 
 test_43b() { # LU-5690
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.7.62) ]] ||
-		{ skip "Need MGS version 2.7.62+"; return; }
+		skip "Need MGS version 2.7.62+"
 
 	if [[ -z "$fs2mds_DEV" ]]; then
 		is_blkdev $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
-		skip_env "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working"
 	fi
 
 	local fs2mdsdev=$(mdsdevname 1_2)
@@ -3791,10 +3769,10 @@ test_50f() {
 run_test 50f "normal statfs one server in down"
 
 test_50g() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >=2 OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >=2 OSTs"
 	setup
 	start_ost2 || error "Unable to start OST2"
-        wait_osc_import_state mds ost2 FULL
+	wait_osc_import_state mds ost2 FULL
 	wait_osc_import_ready client ost2
 
 	if [[ $PERM_CMD == *"set_param -P"* ]]; then
@@ -3825,7 +3803,7 @@ run_test 50g "deactivated OST should not cause panic"
 # LU-642
 test_50h() {
 	# prepare MDT/OST, make OSC inactive for OST1
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >=2 OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >=2 OSTs"
 
 	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
 	do_facet ost1 "$TUNEFS --param osc.active=0 `ostdevname 1`" ||
@@ -3863,7 +3841,7 @@ run_test 50h "LU-642: activate deactivated OST"
 
 test_50i() {
 	# prepare MDT/OST, make OSC inactive for OST1
-	[ "$MDSCOUNT" -lt "2" ] && skip_env "needs >= 2 MDTs" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs"
 
 	load_modules
 	[ $(facet_fstype mds2) == zfs ] && import_zpool mds2
@@ -4001,7 +3979,6 @@ diff_files_xattrs()
 test_52() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	start_mds || error "Unable to start MDS"
@@ -4141,8 +4118,7 @@ thread_sanity() {
 	fi
 
 	[ $tmin -eq $tmax -a $tmin -eq $tstarted ] &&
-		skip_env "module parameter forced $facet thread count" &&
-		tmin=3 && tmax=$((3 * tmax))
+		skip_env "module parameter forced $facet thread count"
 
 	# Check that we can change min/max
 	do_facet $facet "$LCTL set_param \
@@ -4226,7 +4202,6 @@ run_test 53b "check MDS thread count params"
 test_54a() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	do_rpc_nodes $(facet_host ost1) run_llverdev $(ostdevname 1) -p ||
@@ -4238,7 +4213,6 @@ run_test 54a "test llverdev and partial verify of device"
 test_54b() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	setup
@@ -4256,7 +4230,6 @@ lov_objid_size()
 test_55() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	local mdsdev=$(mdsdevname 1)
@@ -4342,7 +4315,7 @@ cleanup_56b() {
 }
 
 test_56b() {
-	[ $MDSCOUNT -lt 3 ] && skip "needs >= 3 MDTs" && return
+	[ $MDSCOUNT -lt 3 ] && skip "needs >= 3 MDTs"
 
 	trap cleanup_56b EXIT RETURN ERR
 	stopall
@@ -4517,12 +4490,11 @@ test_59() {
 run_test 59 "writeconf mount option"
 
 test_60() { # LU-471
-	local num
-
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
+
+	local num
 
 	for num in $(seq $MDSCOUNT); do
 		add mds${num} $(mkfs_opts mds${num} $(mdsdevname $num)) \
@@ -4548,7 +4520,7 @@ test_61() { # LU-80
 	local lxattr=false
 
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.1.53) ] ||
-		{ skip "Need MDS version at least 2.1.53"; return 0; }
+		skip "Need MDS version at least 2.1.53"
 
 	if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
 	     ! large_xattr_enabled; then
@@ -4624,15 +4596,13 @@ run_test 61 "large xattr"
 test_62() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
+		skip "Need MDS version at least 2.2.51"
 
 	# MRP-118
 	local mdsdev=$(mdsdevname 1)
 	local ostdev=$(ostdevname 1)
-
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
-		{ skip "Need MDS version at least 2.2.51"; return 0; }
 
 	echo "disable journal for mds"
 	do_facet mds1 $TUNE2FS -O ^has_journal $mdsdev || error "tune2fs failed"
@@ -4648,7 +4618,6 @@ run_test 62 "start with disabled journal"
 test_63() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	do_rpc_nodes $(facet_active_host $SINGLEMDS) load_module ldiskfs
@@ -4656,7 +4625,6 @@ test_63() {
 			   awk '/ldiskfs_inode_cache/ { print $5 / $6 }')
 	if [ -z "$inode_slab" ]; then
 		skip "ldiskfs module has not been loaded"
-		return
 	fi
 
 	echo "$inode_slab ldiskfs inodes per page"
@@ -4691,7 +4659,7 @@ run_test 64 "check lfs df --lazy "
 test_65() { # LU-2237
 	# Currently, the test is only valid for ldiskfs backend
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
+		skip "ldiskfs only test"
 
 	local devname=$(mdsdevname ${SINGLEMDS//mds/})
 	local brpt=$(facet_mntpt brpt)
@@ -4730,7 +4698,7 @@ run_test 65 "re-create the lost last_rcvd file when server mount"
 
 test_66() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.3.59) ]] ||
-		{ skip "Need MGS version at least 2.3.59"; return 0; }
+		skip "Need MGS version at least 2.3.59"
 
 	setup
 	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
@@ -4887,7 +4855,7 @@ test_68() {
 	local END
 
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.4.53) ] ||
-		{ skip "Need MDS version at least 2.4.53"; return 0; }
+		skip "Need MDS version at least 2.4.53"
 
 	umount_client $MOUNT || error "umount client failed"
 
@@ -4938,11 +4906,11 @@ test_69() {
 	local server_version=$(lustre_version_code $SINGLEMDS)
 
 	[[ $server_version -lt $(version_code 2.4.2) ]] &&
-		skip "Need MDS version at least 2.4.2" && return
+		skip "Need MDS version at least 2.4.2"
 
 	[[ $server_version -ge $(version_code 2.4.50) ]] &&
 	[[ $server_version -lt $(version_code 2.5.0) ]] &&
-		skip "Need MDS version at least 2.5.0" && return
+		skip "Need MDS version at least 2.5.0"
 
 	setup
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -5012,7 +4980,7 @@ test_69() {
 run_test 69 "replace an OST with the same index"
 
 test_70a() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	local MDTIDX=1
 
 	cleanup || error "cleanup failed with $?"
@@ -5037,7 +5005,7 @@ test_70a() {
 run_test 70a "start MDT0, then OST, then MDT1"
 
 test_70b() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	local MDTIDX=1
 
 	start_ost || error "OST0 start fail"
@@ -5058,7 +5026,7 @@ test_70b() {
 run_test 70b "start OST, MDT1, MDT0"
 
 test_70c() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	local MDTIDX=1
 
 	start_mds || error "MDS start fail"
@@ -5082,7 +5050,7 @@ test_70c() {
 run_test 70c "stop MDT0, mkdir fail, create remote dir fail"
 
 test_70d() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	local MDTIDX=1
 
 	start_mds || error "MDS start fail"
@@ -5109,10 +5077,10 @@ test_70d() {
 run_test 70d "stop MDT1, mkdir succeed, create remote dir fail"
 
 test_70e() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.62) ] ||
-		{ skip "Need MDS version at least 2.7.62"; return 0; }
+		skip "Need MDS version at least 2.7.62"
 
 	cleanup || error "cleanup failed with $?"
 
@@ -5163,9 +5131,9 @@ test_70e() {
 run_test 70e "Sync-on-Cancel will be enabled by default on DNE"
 
 test_71a() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	if combined_mgs_mds; then
-		skip "needs separate MGS/MDT" && return
+		skip "needs separate MGS/MDT"
 	fi
 	local MDTIDX=1
 
@@ -5194,9 +5162,9 @@ test_71a() {
 run_test 71a "start MDT0 OST0, MDT1, OST1"
 
 test_71b() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	if combined_mgs_mds; then
-		skip "needs separate MGS/MDT" && return
+		skip "needs separate MGS/MDT"
 	fi
 	local MDTIDX=1
 
@@ -5224,10 +5192,9 @@ test_71b() {
 run_test 71b "start MDT1, OST0, MDT0, OST1"
 
 test_71c() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	if combined_mgs_mds; then
-		skip "needs separate MGS/MDT" && return
-	fi
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	combined_mgs_mds && skip "needs separate MGS/MDT"
+
 	local MDTIDX=1
 
 	start_ost || error "OST0 start fail"
@@ -5255,10 +5222,9 @@ test_71c() {
 run_test 71c "start OST0, OST1, MDT1, MDT0"
 
 test_71d() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	if combined_mgs_mds; then
-		skip "needs separate MGS/MDT" && return
-	fi
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	combined_mgs_mds && skip "needs separate MGS/MDT"
+
 	local MDTIDX=1
 
 	start_ost || error "OST0 start fail"
@@ -5286,10 +5252,9 @@ test_71d() {
 run_test 71d "start OST0, MDT1, MDT0, OST1"
 
 test_71e() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	if combined_mgs_mds; then
-		skip "needs separate MGS/MDT" && return
-	fi
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	combined_mgs_mds && skip "needs separate MGS/MDT"
+
 	local MDTIDX=1
 
 	start_ost || error "OST0 start fail"
@@ -5317,14 +5282,14 @@ test_71e() {
 run_test 71e "start OST0, MDT1, OST1, MDT0"
 
 test_72() { #LU-2634
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "ldiskfs only test"
+
 	local mdsdev=$(mdsdevname 1)
 	local ostdev=$(ostdevname 1)
 	local cmd="$E2FSCK -fnvd $mdsdev"
 	local fn=3
 	local add_options
-
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
 
 	if combined_mgs_mds; then
 		add_options='--reformat'
@@ -5384,7 +5349,7 @@ run_test 73 "failnode to update from mountdata properly"
 
 test_75() { # LU-2374
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
-	                skip "Need MDS version at least 2.4.1" && return
+		skip "Need MDS version at least 2.4.1"
 
 	local index=0
 	local opts_mds="$(mkfs_opts mds1 $(mdsdevname 1)) \
@@ -5415,7 +5380,7 @@ run_test 75 "The order of --index should be irrelevant"
 
 test_76a() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.4.52) ]] ||
-		{ skip "Need MDS version at least 2.4.52" && return 0; }
+		skip "Need MDS version at least 2.4.52"
 
 	if ! combined_mgs_mds; then
 		start_mgs || error "start mgs failed"
@@ -5478,7 +5443,7 @@ run_test 76a "set permanent params with lctl across mounts"
 
 test_76b() { # LU-4783
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.5.57) ]] ||
-		{ skip "Need MGS version at least 2.5.57" && return 0; }
+		skip "Need MGS version at least 2.5.57"
 	stopall
 	setupall
 	do_facet mgs $LCTL get_param mgs.MGS.live.params ||
@@ -5489,7 +5454,7 @@ run_test 76b "verify params log setup correctly"
 
 test_76c() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.8.54) ]] ||
-		{ skip "Need MDS version at least 2.4.52" && return 0; }
+		skip "Need MDS version at least 2.4.52"
 	setupall
 	local MASK_PARAM="mdd.*.changelog_mask"
 	echo "Change changelog_mask"
@@ -5540,11 +5505,11 @@ run_test 76d "verify llite.*.xattr_cache can be set by 'lctl set_param -P' corre
 test_77() { # LU-3445
 	local server_version=$(lustre_version_code $SINGLEMDS)
 	[[ $server_version -ge $(version_code 2.8.55) ]] ||
-		{ skip "Need MDS version 2.8.55+ "; return; }
+		skip "Need MDS version 2.8.55+ "
 
 	if [[ -z "$fs2ost_DEV" || -z "$fs2mds_DEV" ]]; then
 		is_blkdev $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
-		skip_env "mixed loopback and real device not working" && return
+		skip_env "mixed loopback and real device not working"
 	fi
 
 	local fs2mdsdev=$(mdsdevname 1_2)
@@ -5581,7 +5546,7 @@ run_test 77 "comma-separated MGS NIDs and failover node NIDs"
 test_78() {
 	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ||
 	   $(facet_fstype ost1) != ldiskfs ]] &&
-		skip "ldiskfs only test" && return
+		skip "ldiskfs only test"
 
 	# reformat the Lustre filesystem with a smaller size
 	local saved_MDSCOUNT=$MDSCOUNT
@@ -5744,7 +5709,7 @@ run_test 78 "run resize2fs on MDT and OST filesystems"
 
 test_79() { # LU-4227
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.59) ]] ||
-		{ skip "Need MDS version at least 2.5.59"; return 0; }
+		skip "Need MDS version at least 2.5.59"
 
 	local mdsdev1=$(mdsdevname 1)
 	local mdsvdev1=$(mdsvdevname 1)
@@ -5839,8 +5804,8 @@ restore_ostindex() {
 # assigned index and ensures we can mount such a formatted file system
 test_81() { # LU-4665
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
-		{ skip "Need MDS version at least 2.6.54" && return; }
-	[[ $OSTCOUNT -ge 3 ]] || { skip_env "needs >= 3 OSTs" && return; }
+		skip "Need MDS version at least 2.6.54"
+	[[ $OSTCOUNT -ge 3 ]] || skip_env "needs >= 3 OSTs"
 
 	stopall
 
@@ -5901,8 +5866,8 @@ run_test 81 "sparse OST indexing"
 # 5. Lastly ensure this functionality fails with directories.
 test_82a() { # LU-4665
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
-		{ skip "Need MDS version at least 2.6.54" && return; }
-	[[ $OSTCOUNT -ge 3 ]] || { skip_env "needs >= 3 OSTs" && return; }
+		skip "Need MDS version at least 2.6.54"
+	[[ $OSTCOUNT -ge 3 ]] || skip_env "needs >= 3 OSTs"
 
 	stopall
 
@@ -6023,8 +5988,8 @@ cleanup_82b() {
 # supplied pool.
 test_82b() { # LU-4665
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
-		{ skip "Need MDS version at least 2.6.54" && return; }
-	[[ $OSTCOUNT -ge 4 ]] || { skip_env "needs >= 4 OSTs" && return; }
+		skip "Need MDS version at least 2.6.54"
+	[[ $OSTCOUNT -ge 4 ]] || skip_env "needs >= 4 OSTs"
 
 	stopall
 
@@ -6117,10 +6082,9 @@ run_test 82b "specify OSTs for file with --pool and --ost-list options"
 
 test_83() {
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.6.91) ]] ||
-		{ skip "Need OST version at least 2.6.91" && return 0; }
+		skip "Need OST version at least 2.6.91"
 	if [ $(facet_fstype ost1) != ldiskfs ]; then
 		skip "ldiskfs only test"
-		return
 	fi
 
 	local dev
@@ -6235,7 +6199,7 @@ run_test 84 "check recovery_hard_time"
 
 test_85() {
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.7.55) ]] ||
-		{ skip "Need OST version at least 2.7.55" && return 0; }
+		skip "Need OST version at least 2.7.55"
 ##define OBD_FAIL_OSD_OST_EA_FID_SET 0x197
 	do_facet ost1 "lctl set_param fail_loc=0x197"
 	start_ost
@@ -6255,9 +6219,9 @@ cleanup_86() {
 test_86() {
 	local server_version=$(lustre_version_code $SINGLEMDS)
 	[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "LU-6442: no such mkfs params for ZFS OSTs" && return
+		skip "LU-6442: no such mkfs params for ZFS OSTs"
 	[[ $server_version -ge $(version_code 2.7.56) ]] ||
-		{ skip "Need server version newer than 2.7.55"; return 0; }
+		skip "Need server version newer than 2.7.55"
 
 	local OST_OPTS="$(mkfs_opts ost1 $(ostdevname 1)) \
 		--reformat $(ostdevname 1) $(ostvdevname 1)"
@@ -6295,11 +6259,11 @@ run_test 86 "Replacing mkfs.lustre -G option"
 
 test_87() { #LU-6544
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.9.51) ]] ||
-		{ skip "Need MDS version at least 2.9.51" && return; }
+		skip "Need MDS version at least 2.9.51"
 	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
-		{ skip "ldiskfs only test" && return; }
+		skip "ldiskfs only test"
 	[[ $OSTCOUNT -gt 59 ]] &&
-		{ skip "Ignore wide striping situation" && return; }
+		skip "Ignore wide striping situation"
 
 	local mdsdev=$(mdsdevname 1)
 	local mdsvdev=$(mdsvdevname 1)
@@ -6380,7 +6344,7 @@ run_test 87 "check if MDT inode can hold EAs with N stripes properly"
 
 test_88() {
 	[ "$(facet_fstype mds1)" == "zfs" ] &&
-		skip "LU-6662: no implementation for ZFS" && return
+		skip "LU-6662: no implementation for ZFS"
 
 	load_modules
 
@@ -6403,7 +6367,7 @@ run_test 88 "check the default mount options can be overridden"
 
 test_89() { # LU-7131
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.9.54) ]] ||
-		{ skip "Need MDT version at least 2.9.54" && return 0; }
+		skip "Need MDT version at least 2.9.54"
 
 	local key=failover.node
 	local val1=192.0.2.254@tcp0 # Reserved IPs, see RFC 5735
@@ -6569,7 +6533,7 @@ test_90a() {
 
 	[[ $($LCTL get_param mdc.*.import |
 	     grep "connect_flags:.*multi_mod_rpc") ]] ||
-		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+		skip "Need MDC with 'multi_mod_rpcs' feature"
 
 	# check default value
 	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -6589,7 +6553,7 @@ test_90b() {
 
 	[[ $($LCTL get_param mdc.*.import |
 	     grep "connect_flags:.*multi_mod_rpc") ]] ||
-		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+		skip "Need MDC with 'multi_mod_rpcs' feature"
 
 	### test 1.
 	# update max_mod_rpcs_in_flight
@@ -6601,9 +6565,8 @@ test_90b() {
 	tmp=$($LCTL get_param -n mdc.$FSNAME-MDT*-mdc-*.import |
 		grep -c "multi_mod_rpcs")
 	if [ "$tmp" -ne $MDSCOUNT ]; then
-		echo "Client not able to send multiple modify RPCs in parallel"
 		cleanup
-		return
+		skip "Client not able to send multiple modify RPCs in parallel"
 	fi
 
 	# update max_mod_rpcs_in_flight
@@ -6645,15 +6608,14 @@ test_90c() {
 
 	[[ $($LCTL get_param mdc.*.import |
 	     grep "connect_flags:.*multi_mod_rpc") ]] ||
-		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+		skip "Need MDC with 'multi_mod_rpcs' feature"
 
 	# check client is able to send multiple modify RPCs in paralell
 	tmp=$($LCTL get_param -n mdc.$FSNAME-MDT*-mdc-*.import |
 		grep -c "multi_mod_rpcs")
 	if [ "$tmp" -ne $MDSCOUNT ]; then
-		skip "Client not able to send multiple modify RPCs in parallel"
 		cleanup
-		return
+		skip "Client not able to send multiple modify RPCs in parallel"
 	fi
 
 	# get max_rpcs_in_flight value
@@ -6707,7 +6669,7 @@ test_90d() {
 
 	[[ $($LCTL get_param mdc.*.import |
 	     grep "connect_flags:.*multi_mod_rpc") ]] ||
-		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
+		skip "Need MDC with 'multi_mod_rpcs' feature"
 
 	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
@@ -6717,9 +6679,8 @@ test_90d() {
 	tmp=$($LCTL get_param -N \
 		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
 	if [ -z "$tmp" ]; then
-		skip "Client does not support multiple modify RPCs in flight"
 		cleanup
-		return
+		skip "Client does not support multiple modify RPCs in flight"
 	fi
 
 	# get current value of max_mod_rcps_in_flight
@@ -6781,9 +6742,9 @@ test_91() {
 	local found
 
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.7.63) ]] ||
-		{ skip "Need OST version at least 2.7.63" && return 0; }
+		skip "Need OST version at least 2.7.63"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.63) ]] ||
-		{ skip "Need MDT version at least 2.7.63" && return 0; }
+		skip "Need MDT version at least 2.7.63"
 
 	start_mds || error "MDS start failed"
 	start_ost || error "unable to start OST"
@@ -6976,7 +6937,7 @@ test_92() {
 run_test 92 "ldev returns MGS NID correctly in command substitution"
 
 test_93() {
-	[ $MDSCOUNT -lt 3 ] && skip "needs >= 3 MDTs" && return
+	[ $MDSCOUNT -lt 3 ] && skip "needs >= 3 MDTs"
 
 	reformat
 	#start mgs or mgs/mdt0
@@ -7281,14 +7242,14 @@ run_test 98 "Buffer-overflow check while parsing mount_opts"
 test_99()
 {
 	[[ $(facet_fstype ost1) != ldiskfs ]] &&
-		{ skip "ldiskfs only test" && return; }
+		skip "ldiskfs only test"
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.8.57) ]] ||
-		{ skip "Need OST version at least 2.8.57" && return 0; }
+		skip "Need OST version at least 2.8.57"
 
 	local ost_opts="$(mkfs_opts ost1 $(ostdevname 1)) \
 		--reformat $(ostdevname 1) $(ostvdevname 1)"
 	do_facet ost1 $DEBUGFS -c -R stats `ostdevname 1` | grep "meta_bg" &&
-		skip "meta_bg already set" && return
+		skip "meta_bg already set"
 
 	local opts=ost_opts
 	if [[ ${!opts} != *mkfsoptions* ]]; then
@@ -7557,7 +7518,7 @@ test_104() { # LU-6952
 			awk '{ print $2 }')
 
 	[[ $(version_code $lctl_ver) -lt $(version_code 2.9.55) ]] &&
-		{ skip "this test needs utils above 2.9.55" && return 0; }
+		skip "this test needs utils above 2.9.55"
 
 	# specify "acl" in mount options used by mkfs.lustre
 	if [ -z "$MDS_MOUNT_FS_OPTS" ]; then
@@ -7666,7 +7627,7 @@ run_test 106 "check osp llog processing when catalog is wrapped"
 
 test_107() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.50) ]] ||
-		{ skip "Need MDS version > 2.10.50"; return; }
+		skip "Need MDS version > 2.10.50"
 	local cmd
 
 	start_mgsmds || error "start_mgsmds failed"
@@ -7774,13 +7735,10 @@ t_108_cleanup() {
 }
 
 test_108a() {
-	[ "$CLIENTONLY" ] && skip "Client-only testing" && return
-
-	[ $(facet_fstype $SINGLEMDS) != "zfs" ] &&
-		skip "zfs only test" && return
-
+	[ "$CLIENTONLY" ] && skip "Client-only testing"
+	[ $(facet_fstype $SINGLEMDS) != "zfs" ] && skip "zfs only test"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
-		skip "Need server version at least 2.10.58" && return
+		skip "Need server version at least 2.10.58"
 
 	stopall
 	load_modules
@@ -7841,13 +7799,10 @@ test_108a() {
 run_test 108a "migrate from ldiskfs to ZFS"
 
 test_108b() {
-	[ "$CLIENTONLY" ] && skip "Client-only testing" && return
-
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
-
+	[ "$CLIENTONLY" ] && skip "Client-only testing"
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && skip "ldiskfs only test"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
-		skip "Need server version at least 2.10.58" && return
+		skip "Need server version at least 2.10.58"
 
 	stopall
 	load_modules
@@ -8009,7 +7964,7 @@ test_109_file_shortened() {
 test_109a()
 {
 	[ "$(facet_fstype mgs)" == "zfs" ] &&
-		skip "LU-8727: no implementation for ZFS" && return
+		skip "LU-8727: no implementation for ZFS"
 	stopall
 	reformat
 	setup_noconfig
@@ -8052,7 +8007,7 @@ run_test 109a "test lctl clear_conf fsname"
 test_109b()
 {
 	[ "$(facet_fstype mgs)" == "zfs" ] &&
-		skip "LU-8727: no implementation for ZFS" && return
+		skip "LU-8727: no implementation for ZFS"
 	stopall
 	reformat
 	setup_noconfig
@@ -8301,12 +8256,11 @@ cleanup_115()
 }
 
 test_115() {
-	IMAGESIZE=$((3072 << 30)) # 3072 GiB
-
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 		skip "Only applicable to ldiskfs-based MDTs"
-		return
 	fi
+
+	IMAGESIZE=$((3072 << 30)) # 3072 GiB
 
 	stopall
 	# We need MDT size 3072GB, because it is smallest
@@ -8317,7 +8271,7 @@ test_115() {
 	do_facet $SINGLEMDS "touch $mdsimgname"
 	trap cleanup_115 RETURN EXIT
 	do_facet $SINGLEMDS "$TRUNCATE $mdsimgname $IMAGESIZE" ||
-		{ skip "Backend FS doesn't support sparse files"; return 0; }
+		skip "Backend FS doesn't support sparse files"
 	local mdsdev=$(do_facet $SINGLEMDS "losetup -f")
 	do_facet $SINGLEMDS "losetup $mdsdev $mdsimgname"
 
@@ -8325,7 +8279,7 @@ test_115() {
 		--mkfsoptions='-O lazy_itable_init,ea_inode,^resize_inode,meta_bg \
 		-i 1024'"
 	add mds1 $mds_opts --mgs --reformat $mdsdev ||
-		{ skip_env "format large MDT failed"; return 0; }
+		skip_env "format large MDT failed"
 	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --index=$i \
 			--reformat $(ostdevname 1) $(ostvdevname 1)
 
@@ -8360,16 +8314,11 @@ test_115() {
 run_test 115 "Access large xattr with inodes number over 2TB"
 
 test_116() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
-
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && skip "ldiskfs only test"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.59) ] &&
-		skip "Need server version at least 2.10.59" && return
-
-	do_facet $SINGLEMDS which mkfs.xfs || {
+		skip "Need server version at least 2.10.59"
+	do_facet $SINGLEMDS which mkfs.xfs ||
 		skip_env "No mkfs.xfs installed"
-		return
-	}
 
 	stopall
 	load_modules
@@ -8440,10 +8389,9 @@ test_120() { # LU-11130
 run_test 120 "cross-target rename should not create bad symlinks"
 
 test_122() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.11.53) ]] ||
-		{ skip "Need OST version at least 2.11.53" && return 0; }
-
+		skip "Need OST version at least 2.11.53"
 
 	reformat
 	LOAD_MODULES_REMOTE=true load_modules
@@ -8594,8 +8542,8 @@ run_test 123F "clear and reset all parameters using set_param -F"
 
 test_124()
 {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[ -z $mds2failover_HOST ] && skip "needs MDT failover setup" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ -z $mds2failover_HOST ] && skip "needs MDT failover setup"
 
 	setup
 	cleanup
