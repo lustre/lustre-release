@@ -465,6 +465,13 @@ struct lnet_ni {
 	atomic_t		ni_healthv;
 
 	/*
+	 * Set to 1 by the LND when it receives an event telling it the device
+	 * has gone into a fatal state. Set to 0 when the LND receives an
+	 * even telling it the device is back online.
+	 */
+	atomic_t		ni_fatal_error_on;
+
+	/*
 	 * equivalent interfaces to use
 	 * This is an array because socklnd bonding can still be configured
 	 */

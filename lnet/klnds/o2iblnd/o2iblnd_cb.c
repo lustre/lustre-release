@@ -3615,21 +3615,34 @@ kiblnd_qp_event(struct ib_event *event, void *arg)
 {
 	struct kib_conn *conn = arg;
 
-        switch (event->event) {
-        case IB_EVENT_COMM_EST:
-                CDEBUG(D_NET, "%s established\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid));
+	switch (event->event) {
+	case IB_EVENT_COMM_EST:
+		CDEBUG(D_NET, "%s established\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_nid));
 		/* We received a packet but connection isn't established
 		 * probably handshake packet was lost, so free to
 		 * force make connection established */
 		rdma_notify(conn->ibc_cmid, IB_EVENT_COMM_EST);
-                return;
+		return;
 
-        default:
-                CERROR("%s: Async QP event type %d\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid), event->event);
-                return;
-        }
+	case IB_EVENT_PORT_ERR:
+	case IB_EVENT_DEVICE_FATAL:
+		CERROR("Fatal device error for NI %s\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_ni->ni_nid));
+		atomic_set(&conn->ibc_peer->ibp_ni->ni_fatal_error_on, 1);
+		return;
+
+	case IB_EVENT_PORT_ACTIVE:
+		CERROR("Port reactivated for NI %s\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_ni->ni_nid));
+		atomic_set(&conn->ibc_peer->ibp_ni->ni_fatal_error_on, 0);
+		return;
+
+	default:
+		CERROR("%s: Async QP event type %d\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_nid), event->event);
+		return;
+	}
 }
 
 static void

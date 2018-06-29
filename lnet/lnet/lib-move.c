@@ -1480,9 +1480,11 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		unsigned int distance;
 		int ni_credits;
 		int ni_healthv;
+		int ni_fatal;
 
 		ni_credits = atomic_read(&ni->ni_tx_credits);
 		ni_healthv = atomic_read(&ni->ni_healthv);
+		ni_fatal = atomic_read(&ni->ni_fatal_error_on);
 
 		/*
 		 * calculate the distance from the CPT on which
@@ -1510,7 +1512,9 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		 * Select on health, shorter distance, available
 		 * credits, then round-robin.
 		 */
-		if (ni_healthv < best_healthv) {
+		if (ni_fatal) {
+			continue;
+		} else if (ni_healthv < best_healthv) {
 			continue;
 		} else if (ni_healthv > best_healthv) {
 			best_healthv = ni_healthv;
