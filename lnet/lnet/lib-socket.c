@@ -303,8 +303,8 @@ retry:
 			goto failed;
 		}
 		if (rc != 0) {
-			CERROR("Error trying to bind to port %d: %d\n",
-			       local_port, rc);
+			CERROR("Error trying to bind to %pISc/%d: rc = %d\n",
+			       &locaddr, local_port, rc);
 			goto failed;
 		}
 	}
