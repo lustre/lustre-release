@@ -262,6 +262,9 @@ int mdt_getxattr(struct mdt_thread_info *info)
 		const char *xattr_name = req_capsule_client_get(info->mti_pill,
 								&RMF_NAME);
 		rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
+		if (rc < 0)
+			GOTO(out, rc);
+
 		rc = mdt_nodemap_map_acl(info, buf->lb_buf, rc, xattr_name,
 					 NODEMAP_FS_TO_CLIENT);
 	} else if (valid == OBD_MD_FLXATTRLS) {
