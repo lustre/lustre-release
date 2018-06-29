@@ -780,6 +780,16 @@ lnet_finalize(struct lnet_msg *msg, int status)
 
 	msg->msg_ev.status = status;
 
+	/*
+	 * if this is an ACK or a REPLY then make sure to remove the
+	 * response tracker.
+	 */
+	if (msg->msg_ev.type == LNET_EVENT_REPLY ||
+	    msg->msg_ev.type == LNET_EVENT_ACK) {
+		cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
+		lnet_detach_rsp_tracker(msg->msg_md, cpt);
+	}
+
 	/* if the message is successfully sent, no need to keep the MD around */
 	if (msg->msg_md != NULL && !status)
 		lnet_detach_md(msg, status);

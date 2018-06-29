@@ -78,6 +78,17 @@ enum lnet_msg_hstatus {
 	LNET_MSG_STATUS_NETWORK_TIMEOUT
 };
 
+struct lnet_rsp_tracker {
+	/* chain on the waiting list */
+	struct list_head rspt_on_list;
+	/* cpt to lock */
+	int rspt_cpt;
+	/* deadline of the REPLY/ACK */
+	ktime_t rspt_deadline;
+	/* parent MD */
+	struct lnet_handle_md rspt_mdh;
+};
+
 struct lnet_msg {
 	struct list_head	msg_activelist;
 	struct list_head	msg_list;	/* Q for credits/MD */
@@ -191,24 +202,25 @@ struct lnet_me {
 };
 
 struct lnet_libmd {
-	struct list_head	md_list;
-	struct lnet_libhandle	md_lh;
-	struct lnet_me	       *md_me;
-	char		       *md_start;
-	unsigned int		md_offset;
-	unsigned int		md_length;
-	unsigned int		md_max_size;
-	int			md_threshold;
-	int			md_refcount;
-	unsigned int		md_options;
-	unsigned int		md_flags;
-	unsigned int		md_niov;	/* # frags at end of struct */
-	void		       *md_user_ptr;
-	struct lnet_eq	       *md_eq;
-	struct lnet_handle_md	md_bulk_handle;
+	struct list_head	 md_list;
+	struct lnet_libhandle	 md_lh;
+	struct lnet_me	        *md_me;
+	char		        *md_start;
+	unsigned int		 md_offset;
+	unsigned int		 md_length;
+	unsigned int		 md_max_size;
+	int			 md_threshold;
+	int			 md_refcount;
+	unsigned int		 md_options;
+	unsigned int		 md_flags;
+	unsigned int		 md_niov;	/* # frags at end of struct */
+	void		        *md_user_ptr;
+	struct lnet_rsp_tracker *md_rspt_ptr;
+	struct lnet_eq	        *md_eq;
+	struct lnet_handle_md	 md_bulk_handle;
 	union {
-		struct kvec	iov[LNET_MAX_IOV];
-		lnet_kiov_t	kiov[LNET_MAX_IOV];
+		struct kvec	 iov[LNET_MAX_IOV];
+		lnet_kiov_t	 kiov[LNET_MAX_IOV];
 	} md_iov;
 };
 
@@ -1085,6 +1097,14 @@ struct lnet {
 	struct list_head		ln_mt_localNIRecovq;
 	/* local NIs to recover */
 	struct list_head		ln_mt_peerNIRecovq;
+	/*
+	 * An array of queues for GET/PUT waiting for REPLY/ACK respectively.
+	 * There are CPT number of queues. Since response trackers will be
+	 * added on the fast path we can't afford to grab the exclusive
+	 * net lock to protect these queues. The CPT will be calculated
+	 * based on the mdh cookie.
+	 */
+	struct list_head		**ln_mt_rstq;
 	/* recovery eq handler */
 	struct lnet_handle_eq		ln_mt_eqh;
 
