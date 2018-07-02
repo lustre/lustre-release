@@ -36,6 +36,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <malloc.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -67,7 +68,7 @@ char usage[] =
 "Usage: %s filename command-sequence [path...]\n"
 "    command-sequence items:\n"
 "	 A  fsetxattr(\"user.multiop\")\n"
-"	 a  fgetxattr(\"user.multiop\")\n"
+"	 a[num] fgetxattr(\"user.multiop\") [optional buffer size, default 0]\n"
 "	 c  close\n"
 "	 B[num] call setstripe ioctl to create stripes\n"
 "	 C[num] create with optional stripes\n"
@@ -221,6 +222,8 @@ int main(int argc, char **argv)
 	struct lu_fid		 fid;
 	struct timespec		 ts;
 	struct lov_user_md_v3	 lum;
+	char *xattr_buf = NULL;
+	size_t xattr_buf_size = 0;
 	long long rc = 0;
 	long long last_rc;
 
@@ -264,7 +267,19 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'a':
-			rc = fgetxattr(fd, XATTR, NULL, 0);
+			len = atoi(commands + 1);
+			if (xattr_buf_size < len) {
+				xattr_buf = realloc(xattr_buf, len);
+				if (xattr_buf == NULL) {
+					save_errno = errno;
+					perror("allocating xattr buffer\n");
+					exit(save_errno);
+				}
+
+				xattr_buf_size = len;
+			}
+
+			rc = fgetxattr(fd, XATTR, xattr_buf, len);
 			if (rc < 0) {
 				save_errno = errno;
 				perror("fgetxattr");

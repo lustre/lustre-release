@@ -8394,6 +8394,30 @@ test_102s() {
 }
 run_test 102s "getting nonexistent xattrs should fail"
 
+test_102t() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "MDS needs to be at least 2.11.52"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params client "llite.*.xattr_cache" > $save
+
+	for cache in 0 1; do
+		lctl set_param llite.*.xattr_cache=$cache
+
+		for buf_size in 0 256; do
+			rm -f $DIR/$tfile
+			touch $DIR/$tfile || error "touch"
+			setfattr -n user.multiop $DIR/$tfile
+			$MULTIOP $DIR/$tfile oa$buf_size ||
+				error "cannot get zero length xattr value (buf_size = $buf_size)"
+		done
+	done
+
+	restore_lustre_params < $save
+}
+run_test 102t "zero length xattr values handled correctly"
+
 run_acl_subtest()
 {
     $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test

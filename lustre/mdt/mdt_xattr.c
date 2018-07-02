@@ -294,6 +294,10 @@ int mdt_getxattr(struct mdt_thread_info *info)
 out:
 	if (rc >= 0) {
 		mdt_counter_incr(req, LPROC_MDT_GETXATTR);
+		/* LU-11109: Set OBD_MD_FLXATTR on success so that
+		 * newer clients can distinguish between nonexistent
+		 * xattrs and zero length values. */
+		repbody->mbo_valid |= OBD_MD_FLXATTR;
 		repbody->mbo_eadatasize = rc;
 		rc = 0;
 	}
