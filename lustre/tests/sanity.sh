@@ -8366,6 +8366,32 @@ test_102r() {
 }
 run_test 102r "set EAs with empty values"
 
+test_102s() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "MDS needs to be at least 2.11.52"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params client "llite.*.xattr_cache" > $save
+
+	for cache in 0 1; do
+		lctl set_param llite.*.xattr_cache=$cache
+
+		rm -f $DIR/$tfile
+		touch $DIR/$tfile || error "touch"
+		for prefix in lustre security system trusted user; do
+			# Note getxattr() may fail with 'Operation not
+			# supported' or 'No such attribute' depending
+			# on prefix and cache.
+			getfattr -n $prefix.n102s $DIR/$tfile &&
+				error "getxattr '$prefix.n102s' should fail (cache = $cache)"
+		done
+	done
+
+	restore_lustre_params < $save
+}
+run_test 102s "getting nonexistent xattrs should fail"
+
 run_acl_subtest()
 {
     $LUSTRE/tests/acl/run $LUSTRE/tests/acl/$1.test

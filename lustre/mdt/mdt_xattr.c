@@ -51,21 +51,23 @@
 /* return EADATA length to the caller. negative value means error */
 static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 {
-        struct req_capsule     *pill = info->mti_pill ;
-        struct ptlrpc_request  *req = mdt_info_req(info);
-        char                   *xattr_name;
-        __u64                   valid;
-        static const char       user_string[] = "user.";
-        int                     size, rc;
-        ENTRY;
+	struct req_capsule *pill = info->mti_pill;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	const char *xattr_name;
+	u64 valid;
+	static const char user_string[] = "user.";
+	int size;
+	int rc = 0;
+	int rc2;
+	ENTRY;
 
 	valid = info->mti_body->mbo_valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
 
-        /* Determine how many bytes we need */
+	/* Determine how many bytes we need */
         if (valid == OBD_MD_FLXATTR) {
-                xattr_name = req_capsule_client_get(pill, &RMF_NAME);
-                if (!xattr_name)
-                        RETURN(-EFAULT);
+		xattr_name = req_capsule_client_get(pill, &RMF_NAME);
+		if (!xattr_name)
+			RETURN(-EFAULT);
 
 		if (!(exp_connect_flags(req->rq_export) & OBD_CONNECT_XATTR) &&
 		    !strncmp(xattr_name, user_string, sizeof(user_string) - 1))
@@ -74,6 +76,16 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		size = mo_xattr_get(info->mti_env,
 				    mdt_object_child(info->mti_object),
 				    &LU_BUF_NULL, xattr_name);
+		if (size == -ENODATA) {
+			/* XXX: Some client code will not handle -ENODATA
+			 * for XATTR_NAME_LOV (trusted.lov) properly. */
+			if (strcmp(xattr_name, XATTR_NAME_LOV) == 0)
+				rc = 0;
+			else
+				rc = -ENODATA;
+
+			size = 0;
+		}
 	} else if (valid == OBD_MD_FLXATTRLS) {
 		xattr_name = "list";
 		size = mo_xattr_list(info->mti_env,
@@ -93,9 +105,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		RETURN(-EINVAL);
 	}
 
-	if (size == -ENODATA) {
-		size = 0;
-	} else if (size < 0) {
+	if (size < 0) {
 		if (size != -EOPNOTSUPP && size != -ENOENT)
 			CERROR("%s: error geting EA size for '%s': rc = %d\n",
 			       mdt_obd_name(info->mti_mdt), xattr_name, size);
@@ -106,18 +116,17 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
 				     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
-        req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
+	req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
 			     info->mti_body->mbo_eadatasize == 0 ? 0 : size);
-        rc = req_capsule_server_pack(pill);
-        if (rc) {
-                LASSERT(rc < 0);
-                RETURN(rc);
-        }
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
-                RETURN(-ENOMEM);
+	rc2 = req_capsule_server_pack(pill);
+	if (rc2 < 0)
+		RETURN(rc2);
 
-        RETURN(size);
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
+		RETURN(-ENOMEM);
+
+	RETURN(rc < 0 ? rc : size);
 }
 
 static int mdt_nodemap_map_acl(struct mdt_thread_info *info, void *buf,
@@ -242,8 +251,10 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
         next = mdt_object_child(info->mti_object);
         easize = mdt_getxattr_pack_reply(info);
-        if (easize < 0)
-                GOTO(out, rc = err_serious(easize));
+	if (easize == -ENODATA)
+		GOTO(out, rc = easize);
+	else if (easize < 0)
+		GOTO(out, rc = err_serious(easize));
 
         repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
         LASSERT(repbody != NULL);
