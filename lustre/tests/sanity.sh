@@ -5814,21 +5814,92 @@ test_56xb() {
 	test_mkdir "$dir" || error "cannot create dir $dir"
 
 	echo "testing lfs migrate mode when all links fit within xattrs"
-	LFS_MIGRATE_RSYNC=false check_migrate_links "$dir" 2 99
+	LFS_MIGRATE_RSYNC_MODE=false check_migrate_links "$dir" 2 99
 
 	echo "testing rsync mode when all links fit within xattrs"
-	LFS_MIGRATE_RSYNC=true check_migrate_links "$dir" 2 99
+	LFS_MIGRATE_RSYNC_MODE=true check_migrate_links "$dir" 2 99
 
 	echo "testing lfs migrate mode when all links do not fit within xattrs"
-	LFS_MIGRATE_RSYNC=false check_migrate_links "$dir" 101 100
+	LFS_MIGRATE_RSYNC_MODE=false check_migrate_links "$dir" 101 100
 
 	echo "testing rsync mode when all links do not fit within xattrs"
-	LFS_MIGRATE_RSYNC=true check_migrate_links "$dir" 101 100
+	LFS_MIGRATE_RSYNC_MODE=true check_migrate_links "$dir" 101 100
+
 
 	# clean up
 	rm -rf $dir
 }
 run_test 56xb "lfs migration hard link support"
+
+test_56xc() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	local dir="$DIR/$tdir"
+
+	test_mkdir "$dir" || error "cannot create dir $dir"
+
+	# Test 1: ensure file < 1 GB is always migrated with 1 stripe
+	echo -n "Setting initial stripe for 20MB test file..."
+	$LFS setstripe -c 2 -i 0 "$dir/20mb" || error "cannot setstripe"
+	echo "done"
+	echo -n "Sizing 20MB test file..."
+	truncate "$dir/20mb" 20971520 || error "cannot create 20MB test file"
+	echo "done"
+	echo -n "Verifying small file autostripe count is 1..."
+	$LFS_MIGRATE -y -A -C 1 "$dir/20mb" &> /dev/null ||
+		error "cannot migrate 20MB file"
+	local stripe_count=$($LFS getstripe -c "$dir/20mb") ||
+		error "cannot get stripe for $dir/20mb"
+	[ $stripe_count -eq 1 ] ||
+		error "unexpected stripe count $stripe_count for 20MB file"
+	rm -f "$dir/20mb"
+	echo "done"
+
+	# Test 2: File is small enough to fit within the available space on
+	# sqrt(size_in_gb) + 1 OSTs but is larger than 1GB.  The file must
+	# have at least an additional 1KB for each desired stripe for test 3
+	echo -n "Setting stripe for 1GB test file..."
+	$LFS setstripe -c 1 -i 0 "$dir/1gb" || error "cannot setstripe"
+	echo "done"
+	echo -n "Sizing 1GB test file..."
+	# File size is 1GB + 3KB
+	truncate "$dir/1gb" 1073744896 &> /dev/null ||
+		error "cannot create 1GB test file"
+	echo "done"
+	echo -n "Migrating 1GB file..."
+	$LFS_MIGRATE -y -A -C 1 "$dir/1gb" &> /dev/null ||
+		error "cannot migrate file"
+	echo "done"
+	echo -n "Verifying autostripe count is sqrt(n) + 1..."
+	stripe_count=$($LFS getstripe -c "$dir/1gb") ||
+		error "cannot get stripe for $dir/1gb"
+	[ $stripe_count -eq 2 ] ||
+		error "unexpected stripe count $stripe_count (expected 2)"
+	echo "done"
+
+	# Test 3: File is too large to fit within the available space on
+	# sqrt(n) + 1 OSTs.  Simulate limited available space with -X
+	if [ $OSTCOUNT -ge 3 ]; then
+		# The required available space is calculated as
+		# file size (1GB + 3KB) / OST count (3).
+		local kb_per_ost=349526
+
+		echo -n "Migrating 1GB file..."
+		$LFS_MIGRATE -y -A -C 1 -X $kb_per_ost "$dir/1gb" &>> \
+			/dev/null || error "cannot migrate file"
+		echo "done"
+
+		stripe_count=$($LFS getstripe -c "$dir/1gb")
+		echo -n "Verifying autostripe count with limited space..."
+		[ "$stripe_count" -a $stripe_count -eq 3 ] ||
+			error "unexpected stripe count $stripe_count (wanted 3)"
+		echo "done"
+	fi
+
+	# clean up
+	rm -rf $dir
+}
+run_test 56xc "lfs migration autostripe"
 
 test_56y() {
 	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&

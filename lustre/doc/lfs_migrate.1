@@ -12,8 +12,12 @@
 .RB [ --skip|-s ]
 .RB [ --verbose|-v ]
 .RB [ --yes|-y ]
+.RB [ -D ]
+.RB [ -A [ -C \fI<cap> \fR] [ -M \fI<min_free> \fR] [ -X \fI<max_free> \fR]]
+.RB [ --stripe-count|-c \fI<stripe_count> \fR]
+.RB [ --stripe-size|-S \fI<stripe_size> \fR]
 .RB [ -0 ]
-.RI [ FILE | DIR ]...
+.RI [ FILE | DIR ] ...
 .br
 .SH DESCRIPTION
 .B lfs_migrate
@@ -52,7 +56,7 @@ To maintain backward compatibility, the \fI-n \fRoption is used by the
 script to indicate a dry-run (no modifications made), and is not passed to
 .B lfs migrate
 as the non-block option.  To specify non-block, use the long option
-.IR --non-block .
+.BR --non-block .
 .PP
 The current file allocation policies on MDS dictate where the new files
 are placed, taking into account whether specific OSTs have been disabled
@@ -65,29 +69,52 @@ directory (potentially changing the stripe count, stripe size, OST pool,
 or OST index of a new file).
 .SH OPTIONS
 .TP
-.B \\--dry-run
+.B \\--dry-run|-n
 Only print the names of files to be migrated.
+.TP
+.B \\-D
+Do not use direct I/O to copy file contents.
+.TP
+.B \\-A
+Automatically determine the stripe count for the file, using the algorithm
+count = sqrt(filesize_in_GB) + 1.  This option may not be specified at the
+same time as the \fB-c \fRor \\-R \fRoptions.
+.TP
+.B \\--stripe-count|-c \fI<stripe_count>
+Restripe file using the specified \fIstripe_count\fR. This option may not be
+specified at the same time as the \fB-A \fRor \fB-R \fRoptions.
+.TP
+.B \\-C \fI<cap>
+When \fB-A \fRis set, limit the migrated file to use on each OST at most
+1/\fIcap \fRof the available space of the smallest OST.  If this option is not
+set, a default value of 100 is used, limiting the object size to 1% of available
+space.
 .TP
 .B \\--help|-h
 Display help information.
 .TP
 .B \\--no-rsync
 Do not fall back to using rsync if
-.BR lfs (1) " migrate" " fails."
-Cannot be used at the same time as \fI--rsync\fR.
+.BR lfs-migrate (1) " fails."
+Cannot be used at the same time as \fB--rsync\fR.
+.B \\--min-free|-M \fI<min_free>
+When \fB-A \fRis set, only consider OSTs with free space greater than the
+\fImin_free \fRvalue to be available for migration.  The value is specified in
+KB. If this option is not set, a default of 256MB is used.
 .TP
 .B \\--quiet|-q
 Run quietly (don't print filenames or status).
 .TP
 .B \\--rsync
 Force rsync to be used instead of
-.BR lfs (1) " migrate" .
-May not be used at the same time as \fI--no-rsync\fR.
+.BR lfs-migrate (1) .
+May not be used at the same time as
+.BR --no-rsync .
 .TP
 .B \\--restripe|-R
 Restripe file using default directory striping instead of keeping striping.
-This option may not be specified at the same time as the -c or -S options
-(these options are passed through to
+This option may not be specified at the same time as the \fB-A\fR, \fB-c\fR, or
+\fB-S \fRoptions.  (these options are passed through to
 .BR "lfs migrate" ,
 and are therefore not listed here).
 .TP
@@ -97,6 +124,21 @@ against original to verify correctness.
 .TP
 .B \\--verbose|-v
 Show verbose debug messages.
+.B \\--max-free|-X \fI<max_free>
+When \fB-A \fRis set, \fImax_free \fRis the maximum amount of free space that
+can be considered available for the migration of the file on each OST.  The
+value is specified in KB.  This option is useful for testing, by simulating
+OSTs that are nearly full.
+.TP
+.B \\--yes|-y
+Answer 'y' to usage warning without prompting (for scripts; use with caution).
+.SH EXAMPLES
+To rebalance all files within
+.I /testfs/jobs/2011
+.B \\--stripe-size|-S
+.I <stripe_size>
+Restripe file using the specified stripe size. This option may not be
+specified at the same time as the \fB-R \fRoption.
 .TP
 .B \\--yes|-y
 Answer 'y' to usage warning without prompting (for scripts, use with caution).
@@ -118,9 +160,16 @@ and older than two days (to avoid files that are in use, though this is NOT
 a guarantee the files are not being modified, that is workload specific) after
 disabling file creation on testfs-OST0004 (this is needed on all MDS nodes):
 .IP
+.nf
 mds# lctl set_param osp.testfs-OST0004*.max_create_count=0
 client# lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d | lfs_migrate -y
 mds# lctl set_param osp.testfs-OST0004*.max_create_count=20000
+.fi
+.PP
+To use automatic striping, and limit the object size per OST to 5% of current
+free space:
+.IP
+lfs_migrate -A -C 20 /testfs/jobs/2011
 .SH NOTES
 In versions prior to 2.5,
 .B lfs_migrate
@@ -136,8 +185,8 @@ old file becoming an open-unlinked file, and any modifications to that file
 will be lost.
 .SH AVAILABILITY
 .B lfs_migrate
-is part of the 
-.BR Lustre (7) 
+is part of the
+.BR Lustre (7)
 filesystem package.  Added in the 1.8.4 release.
 .SH SEE ALSO
 .BR lfs (1)
