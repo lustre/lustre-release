@@ -524,12 +524,6 @@ lnet_handle_remote_failure(struct lnet_msg *msg)
 		return;
 
 	lnet_net_lock(0);
-	/* the mt could've shutdown and cleaned up the queues */
-	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
-		lnet_net_unlock(0);
-		return;
-	}
-
 	lnet_dec_healthv_locked(&lpni->lpni_healthv);
 	/*
 	 * add the peer NI to the recovery queue if it's not already there
@@ -538,14 +532,7 @@ lnet_handle_remote_failure(struct lnet_msg *msg)
 	 * value will not be reduced. In this case, there is no reason to
 	 * invoke recovery
 	 */
-	if (list_empty(&lpni->lpni_recovery) &&
-	    atomic_read(&lpni->lpni_healthv) < LNET_MAX_HEALTH_VALUE) {
-		CERROR("lpni %s added to recovery queue. Health = %d\n",
-			libcfs_nid2str(lpni->lpni_nid),
-			atomic_read(&lpni->lpni_healthv));
-		list_add_tail(&lpni->lpni_recovery, &the_lnet.ln_mt_peerNIRecovq);
-		lnet_peer_ni_addref_locked(lpni);
-	}
+	lnet_peer_ni_add_to_recoveryq_locked(lpni);
 	lnet_net_unlock(0);
 }
 

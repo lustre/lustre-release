@@ -591,6 +591,8 @@ extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 				struct libcfs_ioctl_hdr __user *uparam);
 extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,
 			      struct lnet_process_id __user *ids);
+extern void lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all);
+extern void lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni);
 
 void lnet_router_debugfs_init(void);
 void lnet_router_debugfs_fini(void);

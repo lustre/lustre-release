@@ -3241,6 +3241,35 @@ __u32 lnet_get_dlc_seq_locked(void)
 	return atomic_read(&lnet_dlc_seq_no);
 }
 
+static void
+lnet_ni_set_healthv(lnet_nid_t nid, int value, bool all)
+{
+	struct lnet_net *net;
+	struct lnet_ni *ni;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (ni->ni_nid == nid || all) {
+				atomic_set(&ni->ni_healthv, value);
+				if (list_empty(&ni->ni_recovery) &&
+				    value < LNET_MAX_HEALTH_VALUE) {
+					CERROR("manually adding local NI %s to recovery\n",
+					       libcfs_nid2str(ni->ni_nid));
+					list_add_tail(&ni->ni_recovery,
+						      &the_lnet.ln_mt_localNIRecovq);
+					lnet_ni_addref_locked(ni, 0);
+				}
+				if (!all) {
+					lnet_net_unlock(LNET_LOCK_EX);
+					return;
+				}
+			}
+		}
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+
 /**
  * LNet ioctl handler.
  *
@@ -3524,6 +3553,26 @@ LNetCtl(unsigned int cmd, void *arg)
 				(struct lnet_process_id __user *)cfg->prcfg_bulk);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
+	}
+
+	case IOC_LIBCFS_SET_HEALHV: {
+		struct lnet_ioctl_reset_health_cfg *cfg = arg;
+		int value;
+		if (cfg->rh_hdr.ioc_len < sizeof(*cfg))
+			return -EINVAL;
+		if (cfg->rh_value < 0 ||
+		    cfg->rh_value > LNET_MAX_HEALTH_VALUE)
+			value = LNET_MAX_HEALTH_VALUE;
+		else
+			value = cfg->rh_value;
+		mutex_lock(&the_lnet.ln_api_mutex);
+		if (cfg->rh_type == LNET_HEALTH_TYPE_LOCAL_NI)
+			lnet_ni_set_healthv(cfg->rh_nid, value,
+					     cfg->rh_all);
+		else
+			lnet_peer_ni_set_healthv(cfg->rh_nid, value,
+						  cfg->rh_all);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 	}
 
 	case IOC_LIBCFS_NOTIFY_ROUTER: {

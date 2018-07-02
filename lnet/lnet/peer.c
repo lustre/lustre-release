@@ -3449,3 +3449,66 @@ out_lp_decref:
 out:
 	return rc;
 }
+
+void
+lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni)
+{
+	/* the mt could've shutdown and cleaned up the queues */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING)
+		return;
+
+	if (list_empty(&lpni->lpni_recovery) &&
+	    atomic_read(&lpni->lpni_healthv) < LNET_MAX_HEALTH_VALUE) {
+		CERROR("lpni %s added to recovery queue. Health = %d\n",
+			libcfs_nid2str(lpni->lpni_nid),
+			atomic_read(&lpni->lpni_healthv));
+		list_add_tail(&lpni->lpni_recovery, &the_lnet.ln_mt_peerNIRecovq);
+		lnet_peer_ni_addref_locked(lpni);
+	}
+}
+
+/* Call with the ln_api_mutex held */
+void
+lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all)
+{
+	struct lnet_peer_table *ptable;
+	struct lnet_peer *lp;
+	struct lnet_peer_net *lpn;
+	struct lnet_peer_ni *lpni;
+	int lncpt;
+	int cpt;
+
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		return;
+
+	if (!all) {
+		lnet_net_lock(LNET_LOCK_EX);
+		lpni = lnet_find_peer_ni_locked(nid);
+		atomic_set(&lpni->lpni_healthv, value);
+		lnet_peer_ni_add_to_recoveryq_locked(lpni);
+		lnet_peer_ni_decref_locked(lpni);
+		lnet_net_unlock(LNET_LOCK_EX);
+		return;
+	}
+
+	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
+
+	/*
+	 * Walk all the peers and reset the healhv for each one to the
+	 * maximum value.
+	 */
+	lnet_net_lock(LNET_LOCK_EX);
+	for (cpt = 0; cpt < lncpt; cpt++) {
+		ptable = the_lnet.ln_peer_tables[cpt];
+		list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
+			list_for_each_entry(lpn, &lp->lp_peer_nets, lpn_peer_nets) {
+				list_for_each_entry(lpni, &lpn->lpn_peer_nis,
+						    lpni_peer_nis) {
+					atomic_set(&lpni->lpni_healthv, value);
+					lnet_peer_ni_add_to_recoveryq_locked(lpni);
+				}
+			}
+		}
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+}

@@ -239,6 +239,20 @@ struct lnet_ioctl_peer_cfg {
 	void __user *prcfg_bulk;
 };
 
+
+enum lnet_health_type {
+	LNET_HEALTH_TYPE_LOCAL_NI = 0,
+	LNET_HEALTH_TYPE_PEER_NI,
+};
+
+struct lnet_ioctl_reset_health_cfg {
+	struct libcfs_ioctl_hdr rh_hdr;
+	enum lnet_health_type rh_type;
+	bool rh_all;
+	int rh_value;
+	lnet_nid_t rh_nid;
+};
+
 struct lnet_ioctl_set_value {
 	struct libcfs_ioctl_hdr sv_hdr;
 	__u32 sv_value;
