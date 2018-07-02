@@ -11835,8 +11835,7 @@ test_155_big_load() {
 save_writethrough() {
 	local facets=$(get_facets OST)
 
-	save_lustre_params $facets "obdfilter.*.writethrough_cache_enable" > $1
-	save_lustre_params $facets "osd-*.*.writethrough_cache_enable" >> $1
+	save_lustre_params $facets "osd-*.*.writethrough_cache_enable" > $1
 }
 
 test_155a() {

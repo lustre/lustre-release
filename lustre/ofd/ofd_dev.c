@@ -766,6 +766,7 @@ obd_cleanup:
 	return rc;
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
 /**
  * Expose OSD statistics to OFD layer.
  *
@@ -803,6 +804,7 @@ static void ofd_procfs_add_brw_stats_symlink(struct ofd_device *ofd)
 			    "../../%s/%s/writethrough_cache_enable",
 			    osd_obd->obd_type->typ_name, obd->obd_name);
 }
+#endif
 
 /**
  * Cleanup all procfs entries in OFD.
@@ -2959,7 +2961,9 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		GOTO(err_fini_proc, rc);
 	}
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
 	ofd_procfs_add_brw_stats_symlink(m);
+#endif
 
 	snprintf(info->fti_u.name, sizeof(info->fti_u.name), "%s-%s",
 		 "filter"/*LUSTRE_OST_NAME*/, obd->obd_uuid.uuid);

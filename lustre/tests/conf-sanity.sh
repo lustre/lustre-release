@@ -1100,30 +1100,10 @@ test_28a() { # LU-4221
 
 	# In this test we will set three kinds of proc parameters with
 	# lctl conf_param:
-	# 1. the ones moved from the OFD to the OSD, and only their
-	#    symlinks kept in obdfilter
-	# 2. non-symlink ones in the OFD
-	# 3. non-symlink ones in the OSD
+	# 1. non-symlink ones in the OFD
+	# 2. non-symlink ones in the OSD
 
 	# Check 1.
-	# prepare a symlink parameter in the OFD
-	name="writethrough_cache_enable"
-	param="$device.ost.$name"
-	cmd="$LCTL get_param -n obdfilter.$device.$name"
-
-	# conf_param the symlink parameter in the OFD
-	old=$(do_facet ost1 $cmd)
-	new=$(((old + 1) % 2))
-	set_conf_param_and_check ost1 "$cmd" "$param" $new ||
-		error "lctl conf_param $device.ost.$param=$new failed"
-
-	# conf_param the target parameter in the OSD
-	param="$device.osd.$name"
-	cmd="$LCTL get_param -n osd-*.$device.$name"
-	set_conf_param_and_check ost1 "$cmd" "$param" $old ||
-		error "lctl conf_param $device.osd.$param=$old failed"
-
-	# Check 2.
 	# prepare a non-symlink parameter in the OFD
 	name="client_cache_seconds"
 	param="$device.ost.$name"
@@ -1137,7 +1117,7 @@ test_28a() { # LU-4221
 	set_conf_param_and_check ost1 "$cmd" "$param" $old ||
 		error "lctl conf_param $device.ost.$param=$old failed"
 
-	# Check 3.
+	# Check 2.
 	# prepare a non-symlink parameter in the OSD
 	name="auto_scrub"
 	param="$device.osd.$name"
