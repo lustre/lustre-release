@@ -1343,6 +1343,7 @@ LPROC_SEQ_FOPS_RO_TYPE(llite, uuid);
 
 int ll_debugfs_register_super(struct super_block *sb, const char *name)
 {
+	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct lprocfs_vars lvars[2];
 	int err, id, rc;
@@ -1435,6 +1436,9 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 	err = kset_register(&sbi->ll_kset);
 	if (err)
 		GOTO(out_ra_stats, err);
+
+	lsi->lsi_kobj = kobject_get(&sbi->ll_kset.kobj);
+
 	RETURN(0);
 out_ra_stats:
 	lprocfs_free_stats(&sbi->ll_ra_stats);
@@ -1497,7 +1501,10 @@ out:
 
 void ll_debugfs_unregister_super(struct super_block *sb)
 {
+	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	kobject_put(lsi->lsi_kobj);
 
 	kset_unregister(&sbi->ll_kset);
 	wait_for_completion(&sbi->ll_kobj_unregister);

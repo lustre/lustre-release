@@ -95,9 +95,6 @@ struct super_operations lustre_super_operations =
         .show_options  = ll_show_options,
 };
 
-
-void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
-
 static int __init lustre_init(void)
 {
 	struct lnet_process_id lnet_id;
@@ -160,7 +157,6 @@ static int __init lustre_init(void)
 
 	lustre_register_client_fill_super(ll_fill_super);
 	lustre_register_kill_super_cb(ll_kill_super);
-	lustre_register_client_process_config(ll_process_config);
 
 	RETURN(0);
 
@@ -180,7 +176,6 @@ static void __exit lustre_exit(void)
 {
 	lustre_register_client_fill_super(NULL);
 	lustre_register_kill_super_cb(NULL);
-	lustre_register_client_process_config(NULL);
 
 	llite_tunables_unregister();
 
