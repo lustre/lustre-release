@@ -931,6 +931,7 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			  __u32 *ni_peer_tx_credits, __u32 *peer_tx_credits,
 			  __u32 *peer_rtr_credits, __u32 *peer_min_rtr_credtis,
 			  __u32 *peer_tx_qnob);
+int lnet_get_peer_ni_hstats(struct lnet_ioctl_peer_ni_hstats *stats);
 
 static inline bool
 lnet_is_peer_ni_healthy_locked(struct lnet_peer_ni *lpni)

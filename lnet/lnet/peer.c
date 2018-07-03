@@ -3351,6 +3351,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 {
 	struct lnet_ioctl_element_stats *lpni_stats;
 	struct lnet_ioctl_element_msg_stats *lpni_msg_stats;
+	struct lnet_ioctl_peer_ni_hstats *lpni_hstats;
 	struct lnet_peer_ni_credit_info *lpni_info;
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer *lp;
@@ -3366,7 +3367,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	}
 
 	size = sizeof(nid) + sizeof(*lpni_info) + sizeof(*lpni_stats)
-		+ sizeof(*lpni_msg_stats);
+		+ sizeof(*lpni_msg_stats) + sizeof(*lpni_hstats);
 	size *= lp->lp_nnis;
 	if (size > cfg->prcfg_size) {
 		cfg->prcfg_size = size;
@@ -3392,6 +3393,9 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	LIBCFS_ALLOC(lpni_msg_stats, sizeof(*lpni_msg_stats));
 	if (!lpni_msg_stats)
 		goto out_free_stats;
+	LIBCFS_ALLOC(lpni_hstats, sizeof(*lpni_hstats));
+	if (!lpni_hstats)
+		goto out_free_msg_stats;
 
 
 	lpni = NULL;
@@ -3399,7 +3403,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
 		nid = lpni->lpni_nid;
 		if (copy_to_user(bulk, &nid, sizeof(nid)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(nid);
 
 		memset(lpni_info, 0, sizeof(*lpni_info));
@@ -3418,7 +3422,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 		lpni_info->cr_peer_min_tx_credits = lpni->lpni_mintxcredits;
 		lpni_info->cr_peer_tx_qnob = lpni->lpni_txqnob;
 		if (copy_to_user(bulk, lpni_info, sizeof(*lpni_info)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(*lpni_info);
 
 		memset(lpni_stats, 0, sizeof(*lpni_stats));
@@ -3429,15 +3433,30 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 		lpni_stats->iel_drop_count = lnet_sum_stats(&lpni->lpni_stats,
 							    LNET_STATS_TYPE_DROP);
 		if (copy_to_user(bulk, lpni_stats, sizeof(*lpni_stats)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(*lpni_stats);
 		lnet_usr_translate_stats(lpni_msg_stats, &lpni->lpni_stats);
 		if (copy_to_user(bulk, lpni_msg_stats, sizeof(*lpni_msg_stats)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(*lpni_msg_stats);
+		lpni_hstats->hlpni_network_timeout =
+		  atomic_read(&lpni->lpni_hstats.hlt_network_timeout);
+		lpni_hstats->hlpni_remote_dropped =
+		  atomic_read(&lpni->lpni_hstats.hlt_remote_dropped);
+		lpni_hstats->hlpni_remote_timeout =
+		  atomic_read(&lpni->lpni_hstats.hlt_remote_timeout);
+		lpni_hstats->hlpni_remote_error =
+		  atomic_read(&lpni->lpni_hstats.hlt_remote_error);
+		lpni_hstats->hlpni_health_value =
+		  atomic_read(&lpni->lpni_healthv);
+		if (copy_to_user(bulk, lpni_hstats, sizeof(*lpni_hstats)))
+			goto out_free_hstats;
+		bulk += sizeof(*lpni_hstats);
 	}
 	rc = 0;
 
+out_free_hstats:
+	LIBCFS_FREE(lpni_hstats, sizeof(*lpni_hstats));
 out_free_msg_stats:
 	LIBCFS_FREE(lpni_msg_stats, sizeof(*lpni_msg_stats));
 out_free_stats:
@@ -3512,3 +3531,4 @@ lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all)
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 }
+

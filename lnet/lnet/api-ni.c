@@ -3270,6 +3270,35 @@ lnet_ni_set_healthv(lnet_nid_t nid, int value, bool all)
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
+static int
+lnet_get_local_ni_hstats(struct lnet_ioctl_local_ni_hstats *stats)
+{
+	int cpt, rc = 0;
+	struct lnet_ni *ni;
+	lnet_nid_t nid = stats->hlni_nid;
+
+	cpt = lnet_net_lock_current();
+	ni = lnet_nid2ni_locked(nid, cpt);
+
+	if (!ni) {
+		rc = -ENOENT;
+		goto unlock;
+	}
+
+	stats->hlni_local_interrupt = atomic_read(&ni->ni_hstats.hlt_local_interrupt);
+	stats->hlni_local_dropped = atomic_read(&ni->ni_hstats.hlt_local_dropped);
+	stats->hlni_local_aborted = atomic_read(&ni->ni_hstats.hlt_local_aborted);
+	stats->hlni_local_no_route = atomic_read(&ni->ni_hstats.hlt_local_no_route);
+	stats->hlni_local_timeout = atomic_read(&ni->ni_hstats.hlt_local_timeout);
+	stats->hlni_local_error = atomic_read(&ni->ni_hstats.hlt_local_error);
+	stats->hlni_health_value = atomic_read(&ni->ni_healthv);
+
+unlock:
+	lnet_net_unlock(cpt);
+
+	return rc;
+}
+
 /**
  * LNet ioctl handler.
  *
@@ -3477,6 +3506,19 @@ LNetCtl(unsigned int cmd, void *arg)
 		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_get_rtr_pool_cfg(config->cfg_count, pool_cfg);
 		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_LOCAL_HSTATS: {
+		struct lnet_ioctl_local_ni_hstats *stats = arg;
+
+		if (stats->hlni_hdr.ioc_len < sizeof(*stats))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_local_ni_hstats(stats);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
 		return rc;
 	}
 
