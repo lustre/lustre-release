@@ -348,6 +348,22 @@ struct lnet_element_stats {
 	struct lnet_comm_count el_drop_stats;
 };
 
+struct lnet_health_local_stats {
+	atomic_t hlt_local_interrupt;
+	atomic_t hlt_local_dropped;
+	atomic_t hlt_local_aborted;
+	atomic_t hlt_local_no_route;
+	atomic_t hlt_local_timeout;
+	atomic_t hlt_local_error;
+};
+
+struct lnet_health_remote_stats {
+	atomic_t hlt_remote_dropped;
+	atomic_t hlt_remote_timeout;
+	atomic_t hlt_remote_error;
+	atomic_t hlt_network_timeout;
+};
+
 struct lnet_net {
 	/* chain on the ln_nets */
 	struct list_head	net_list;
@@ -448,6 +464,7 @@ struct lnet_ni {
 
 	/* NI statistics */
 	struct lnet_element_stats ni_stats;
+	struct lnet_health_local_stats ni_hstats;
 
 	/* physical device CPT */
 	int			ni_dev_cpt;
@@ -530,6 +547,7 @@ struct lnet_peer_ni {
 	struct lnet_peer_net	*lpni_peer_net;
 	/* statistics kept on each peer NI */
 	struct lnet_element_stats lpni_stats;
+	struct lnet_health_remote_stats lpni_hstats;
 	/* spin lock protecting credits and lpni_txq / lpni_rtrq */
 	spinlock_t		lpni_lock;
 	/* # tx credits available */

@@ -536,6 +536,54 @@ lnet_handle_remote_failure(struct lnet_msg *msg)
 	lnet_net_unlock(0);
 }
 
+static void
+lnet_incr_hstats(struct lnet_msg *msg, enum lnet_msg_hstatus hstatus)
+{
+	struct lnet_ni *ni = msg->msg_txni;
+	struct lnet_peer_ni *lpni = msg->msg_txpeer;
+
+	switch (hstatus) {
+	case LNET_MSG_STATUS_LOCAL_INTERRUPT:
+		atomic_inc(&ni->ni_hstats.hlt_local_interrupt);
+		break;
+	case LNET_MSG_STATUS_LOCAL_DROPPED:
+		atomic_inc(&ni->ni_hstats.hlt_local_dropped);
+		break;
+	case LNET_MSG_STATUS_LOCAL_ABORTED:
+		atomic_inc(&ni->ni_hstats.hlt_local_aborted);
+		break;
+	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
+		atomic_inc(&ni->ni_hstats.hlt_local_no_route);
+		break;
+	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
+		atomic_inc(&ni->ni_hstats.hlt_local_timeout);
+		break;
+	case LNET_MSG_STATUS_LOCAL_ERROR:
+		atomic_inc(&ni->ni_hstats.hlt_local_error);
+		break;
+	case LNET_MSG_STATUS_REMOTE_DROPPED:
+		if (lpni)
+			atomic_inc(&lpni->lpni_hstats.hlt_remote_dropped);
+		break;
+	case LNET_MSG_STATUS_REMOTE_ERROR:
+		if (lpni)
+			atomic_inc(&lpni->lpni_hstats.hlt_remote_error);
+		break;
+	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
+		if (lpni)
+			atomic_inc(&lpni->lpni_hstats.hlt_remote_timeout);
+		break;
+	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
+		if (lpni)
+			atomic_inc(&lpni->lpni_hstats.hlt_network_timeout);
+		break;
+	case LNET_MSG_STATUS_OK:
+		break;
+	default:
+		LBUG();
+	}
+}
+
 /*
  * Do a health check on the message:
  * return -1 if we're not going to handle the error or
@@ -549,8 +597,6 @@ lnet_health_check(struct lnet_msg *msg)
 	enum lnet_msg_hstatus hstatus = msg->msg_health_status;
 	bool lo = false;
 
-	/* TODO: lnet_incr_hstats(hstatus); */
-
 	LASSERT(msg->msg_txni);
 
 	/*
@@ -561,6 +607,8 @@ lnet_health_check(struct lnet_msg *msg)
 		LASSERT(msg->msg_txpeer);
 	else
 		lo = true;
+
+	lnet_incr_hstats(msg, hstatus);
 
 	if (hstatus != LNET_MSG_STATUS_OK &&
 	    ktime_compare(ktime_get(), msg->msg_deadline) >= 0)
