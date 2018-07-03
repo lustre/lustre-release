@@ -1445,8 +1445,7 @@ static int after_reply(struct ptlrpc_request *req)
         ptlrpc_at_adj_net_latency(req,
                                   lustre_msg_get_service_time(req->rq_repmsg));
 
-        rc = ptlrpc_check_status(req);
-        imp->imp_connect_error = rc;
+	rc = ptlrpc_check_status(req);
 
 	if (rc) {
 		/*

@@ -1756,26 +1756,45 @@ test_100()
 }
 run_test 100 "IR: Make sure normal recovery still works w/o IR"
 
-test_101()
+test_101a()
 {
-        do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
-                { skip "MGS without IR support"; return 0; }
+	do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+		skip "MGS without IR support"
 
-        set_ir_status full
+	set_ir_status full
 
-        local OST1_IMP=$(get_osc_import_name client ost1)
+	local ost1_imp=$(get_osc_import_name client ost1)
 
-        # disable pinger recovery
-        lctl set_param -n osc.$OST1_IMP.pinger_recov=0
+	# disable pinger recovery
+	lctl set_param -n osc.$ost1_imp.pinger_recov=0
+	stack_trap "$LCTL set_param -n osc.$ost1_imp.pinger_recov=1" EXIT
 
-        fail ost1
+	fail ost1
 
-        target_instance_match ost1 || error "instance mismatch"
-        nidtbl_versions_match || error "version must match"
-
-        lctl set_param -n osc.$OST1_IMP.pinger_recov=1
+	target_instance_match ost1 || error "instance mismatch"
+	nidtbl_versions_match || error "version must match"
 }
-run_test 101 "IR: Make sure IR works w/o normal recovery"
+run_test 101a "IR: Make sure IR works w/o normal recovery"
+
+test_101b()
+{
+	do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+		skip "MGS without IR support"
+
+	set_ir_status full
+
+	local ost1_imp=$(get_osc_import_name client ost1)
+
+#define OBD_FAIL_OST_PREPARE_DELAY	 0x247
+	do_facet ost1 "$LCTL set_param fail_loc=0x247"
+	# disable pinger recovery
+	$LCTL set_param -n osc.$ost1_imp.pinger_recov=0
+	stack_trap "$LCTL set_param -n osc.$ost1_imp.pinger_recov=1" EXIT
+
+#OST may return EAGAIN if it is not configured yet
+	fail ost1
+}
+run_test 101b "IR: Make sure IR works w/o normal recovery and proceed EAGAIN"
 
 test_102()
 {

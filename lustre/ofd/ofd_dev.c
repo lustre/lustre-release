@@ -633,6 +633,8 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	LASSERTF(rc == 0, "register namespace failed: rc = %d\n", rc);
 
 	target_recovery_init(&ofd->ofd_lut, tgt_request_handle);
+	OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_PREPARE_DELAY, OBD_FAIL_ONCE,
+			       (OBD_TIMEOUT_DEFAULT + 1) / 4);
 	LASSERT(obd->obd_no_conn);
 	spin_lock(&obd->obd_dev_lock);
 	obd->obd_no_conn = 0;

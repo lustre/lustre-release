@@ -987,6 +987,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 		RETURN(0);
 	}
 
+	imp->imp_connect_error = rc;
 	if (rc) {
 		struct ptlrpc_request *free_req;
 		struct ptlrpc_request *tmp;

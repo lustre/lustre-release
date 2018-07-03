@@ -247,14 +247,15 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 	       ptlrpc_import_state_name(level), level, force, force_next,
 	       imp->imp_deactive, imp->imp_pingable, suppress);
 
-        if (level == LUSTRE_IMP_DISCON && !imp_is_deactive(imp)) {
-                /* wait for a while before trying recovery again */
-                imp->imp_next_ping = ptlrpc_next_reconnect(imp);
-                if (!imp->imp_no_pinger_recover)
-                        ptlrpc_initiate_recovery(imp);
-        } else if (level != LUSTRE_IMP_FULL ||
-                   imp->imp_obd->obd_no_recov ||
-                   imp_is_deactive(imp)) {
+	if (level == LUSTRE_IMP_DISCON && !imp_is_deactive(imp)) {
+		/* wait for a while before trying recovery again */
+		imp->imp_next_ping = ptlrpc_next_reconnect(imp);
+		if (!imp->imp_no_pinger_recover ||
+		    imp->imp_connect_error == -EAGAIN)
+			ptlrpc_initiate_recovery(imp);
+	} else if (level != LUSTRE_IMP_FULL ||
+		   imp->imp_obd->obd_no_recov ||
+		   imp_is_deactive(imp)) {
 		CDEBUG(D_HA, "%s->%s: not pinging (in recovery "
 		       "or recovery disabled: %s)\n",
 		       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
