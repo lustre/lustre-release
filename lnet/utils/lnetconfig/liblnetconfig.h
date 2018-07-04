@@ -225,6 +225,29 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_retry_count
+ *   sets the maximum number of retries to resend a message
+ *
+ *   count - maximum value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_retry_count(int count, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_retry_count
+ *    show current maximum number of retries in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing retry count info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_retry_count(int seq_no, struct cYAML **show_rc,
+				 struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_max_intf
  *   Sets the maximum number of interfaces per node. this tunable is
  *   primarily useful for sanity checks prior to allocating memory.
