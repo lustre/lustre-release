@@ -225,6 +225,30 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_transaction_to
+ *   sets the timeout after which a message expires or a timeout event is
+ *   propagated for an expired response.
+ *
+ *   timeout - timeout value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_transaction_to
+ *    show the transaction timeout in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing transaction timeout info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_transaction_to(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_retry_count
  *   sets the maximum number of retries to resend a message
  *

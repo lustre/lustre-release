@@ -2429,6 +2429,28 @@ int ioctl_set_value(__u32 val, int ioc, char *name,
 	return rc;
 }
 
+int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", timeout);
+
+	rc = write_sysfs_file(modparam_path, "lnet_transaction_timeout", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure transaction timeout: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "transaction_timeout", err_str, err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_retry_count(int count, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -3207,6 +3229,31 @@ static int ioctl_show_global_values(int ioc, int seq_no, char *name,
 
 	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no, name,
 				       data.sv_value, show_rc, err_rc, l_errno);
+}
+
+int lustre_lnet_show_transaction_to(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int tto = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_transaction_timeout", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get transaction timeout: %d\"", rc);
+	} else {
+		tto = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "transaction_timeout", tto, show_rc,
+				       err_rc, l_errno);
 }
 
 int lustre_lnet_show_retry_count(int seq_no, struct cYAML **show_rc,
@@ -4130,7 +4177,7 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **show_rc,
 					      struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *discovery, *retry, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4161,6 +4208,13 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 						    seq_no ? seq_no->cy_valueint
 							: -1,
 						    err_rc);
+
+	tto = cYAML_get_object_item(tree, "transaction_timeout");
+	if (tto)
+		rc = lustre_lnet_config_transaction_to(tto->cy_valueint,
+						       seq_no ? seq_no->cy_valueint
+								: -1,
+						       err_rc);
 
 	return rc;
 }
@@ -4202,7 +4256,7 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 					    struct cYAML **show_rc,
 					    struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *discovery, *retry, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4230,6 +4284,11 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 							: -1,
 						  show_rc, err_rc);
 
+	tto = cYAML_get_object_item(tree, "transaction_timeout");
+	if (tto)
+		rc = lustre_lnet_show_transaction_to(seq_no ? seq_no->cy_valueint
+							: -1,
+						     show_rc, err_rc);
 
 	return rc;
 }
