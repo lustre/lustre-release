@@ -2816,6 +2816,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	struct lnet_peer_ni_credit_info *lpni_cri;
 	struct lnet_ioctl_element_stats *lpni_stats;
 	struct lnet_ioctl_element_msg_stats *msg_stats;
+	struct lnet_ioctl_peer_ni_hstats *hstats;
 	lnet_nid_t *nidp;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	int i, j, k;
@@ -2824,7 +2825,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	__u32 size;
 	struct cYAML *root = NULL, *peer = NULL, *peer_ni = NULL,
 		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL,
-		     *msg_statistics = NULL, *statistics = NULL;
+		     *msg_statistics = NULL, *statistics = NULL,
+		     *yhstats;
 	char err_str[LNET_MAX_STR_LEN];
 	struct lnet_process_id *list = NULL;
 	void *data = NULL;
@@ -2961,7 +2963,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			lpni_cri = (void*)nidp + sizeof(nidp);
 			lpni_stats = (void *)lpni_cri + sizeof(*lpni_cri);
 			msg_stats = (void *)lpni_stats + sizeof(*lpni_stats);
-			lpni_data = (void *)msg_stats + sizeof(*msg_stats);
+			hstats = (void *)msg_stats + sizeof(*msg_stats);
+			lpni_data = (void *)hstats + sizeof(*hstats);
 
 			peer_ni = cYAML_create_seq_item(tmp);
 			if (peer_ni == NULL)
@@ -3056,6 +3059,29 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 					goto out;
 			}
 
+			yhstats = cYAML_create_object(peer_ni, "health stats");
+			if (!yhstats)
+				goto out;
+			if (cYAML_create_number(yhstats, "health value",
+						hstats->hlpni_health_value)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "dropped",
+						hstats->hlpni_remote_dropped)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "timeout",
+						hstats->hlpni_remote_timeout)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "error",
+						hstats->hlpni_remote_error)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "network timeout",
+						hstats->hlpni_network_timeout)
+							== NULL)
+				goto out;
 		}
 	}
 
