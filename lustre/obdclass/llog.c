@@ -198,6 +198,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	struct dt_device	*dt;
 	struct llog_log_hdr	*llh;
 	struct thandle		*th;
+	__u32			 tmp_lgc_index;
 	int			 rc;
 	int rc1;
 	bool subtract_count = false;
@@ -249,12 +250,19 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	loghandle->lgh_hdr->llh_count--;
 	subtract_count = true;
+
+	/* Since llog_process_thread use lgi_cookie, it`s better to save them
+	 * and restore after using
+	 */
+	tmp_lgc_index = lgi->lgi_cookie.lgc_index;
 	/* Pass this index to llog_osd_write_rec(), which will use the index
 	 * to only update the necesary bitmap. */
 	lgi->lgi_cookie.lgc_index = index;
 	/* update header */
 	rc = llog_write_rec(env, loghandle, &llh->llh_hdr, &lgi->lgi_cookie,
 			    LLOG_HEADER_IDX, th);
+	lgi->lgi_cookie.lgc_index = tmp_lgc_index;
+
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 

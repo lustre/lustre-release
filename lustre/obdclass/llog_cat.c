@@ -213,8 +213,10 @@ out_destroy:
 	loghandle->lgh_hdr->llh_flags &= ~LLOG_F_ZAP_WHEN_EMPTY;
 	/* this is to mimic full log, so another llog_cat_current_log()
 	 * can skip it and ask for another onet */
-	loghandle->lgh_last_idx = LLOG_HDR_BITMAP_SIZE(llh) + 1;
+	loghandle->lgh_last_idx = LLOG_HDR_BITMAP_SIZE(loghandle->lgh_hdr) + 1;
 	llog_trans_destroy(env, loghandle, th);
+	if (handle != NULL)
+		dt_trans_stop(env, dt, handle);
 	RETURN(rc);
 }
 
