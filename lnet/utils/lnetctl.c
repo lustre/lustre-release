@@ -55,6 +55,7 @@ static int jt_set_large(int argc, char **argv);
 static int jt_set_numa(int argc, char **argv);
 static int jt_set_retry_count(int argc, char **argv);
 static int jt_set_transaction_to(int argc, char **argv);
+static int jt_set_hsensitivity(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
@@ -181,6 +182,9 @@ command_t set_cmds[] = {
 	 "\t>0 - number of retries\n"},
 	{"transaction_timeout", jt_set_transaction_to, 0, "Message/Response timeout\n"
 	 "\t>0 - timeout in seconds\n"},
+	{"health_sensitivity", jt_set_hsensitivity, 0, "sensitivity to failure\n"
+	 "\t0 - turn off health evaluation\n"
+	 "\t>0 - sensitivity value not more than 1000\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -327,6 +331,34 @@ static int jt_set_numa(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_numa_range(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_hsensitivity(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "health_sensitivity", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse health sensitivity value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_hsensitivity(value, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -1050,6 +1082,12 @@ static int jt_show_global(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_transaction_to(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
+	rc = lustre_lnet_show_hsensitivity(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		goto out;

@@ -225,6 +225,30 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_hsensitivity
+ *   sets the health sensitivity; the value by which to decrement the
+ *   health value of a local or peer NI. If 0 then health is turned off
+ *
+ *   sen - sensitivity value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_hsensitivity
+ *    show the health sensitivity in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing health sensitivity info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
+				  struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_transaction_to
  *   sets the timeout after which a message expires or a timeout event is
  *   propagated for an expired response.

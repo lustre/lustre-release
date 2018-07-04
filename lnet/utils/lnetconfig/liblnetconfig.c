@@ -2429,6 +2429,28 @@ int ioctl_set_value(__u32 val, int ioc, char *name,
 	return rc;
 }
 
+int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", sen);
+
+	rc = write_sysfs_file(modparam_path, "lnet_health_sensitivity", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure health sensitivity: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "health_sensitivity", err_str, err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -3229,6 +3251,31 @@ static int ioctl_show_global_values(int ioc, int seq_no, char *name,
 
 	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no, name,
 				       data.sv_value, show_rc, err_rc, l_errno);
+}
+
+int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
+				  struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int sen = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_health_sensitivity", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get health sensitivity: %d\"", rc);
+	} else {
+		sen = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "health_sensitivity", sen, show_rc,
+				       err_rc, l_errno);
 }
 
 int lustre_lnet_show_transaction_to(int seq_no, struct cYAML **show_rc,
@@ -4177,7 +4224,8 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **show_rc,
 					      struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
+		     *sen;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4215,6 +4263,13 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 						       seq_no ? seq_no->cy_valueint
 								: -1,
 						       err_rc);
+
+	sen = cYAML_get_object_item(tree, "health_sensitivity");
+	if (sen)
+		rc = lustre_lnet_config_hsensitivity(sen->cy_valueint,
+						     seq_no ? seq_no->cy_valueint
+							: -1,
+						     err_rc);
 
 	return rc;
 }
@@ -4256,7 +4311,8 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 					    struct cYAML **show_rc,
 					    struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
+		     *sen;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4287,6 +4343,12 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 	tto = cYAML_get_object_item(tree, "transaction_timeout");
 	if (tto)
 		rc = lustre_lnet_show_transaction_to(seq_no ? seq_no->cy_valueint
+							: -1,
+						     show_rc, err_rc);
+
+	sen = cYAML_get_object_item(tree, "health_sensitivity");
+	if (sen)
+		rc = lustre_lnet_show_hsensitivity(seq_no ? seq_no->cy_valueint
 							: -1,
 						     show_rc, err_rc);
 
