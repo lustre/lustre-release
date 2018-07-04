@@ -2078,6 +2078,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct lnet_ioctl_config_lnd_tunables *lnd;
 	struct lnet_ioctl_element_stats *stats;
 	struct lnet_ioctl_element_msg_stats msg_stats;
+	struct lnet_ioctl_local_ni_hstats hstats;
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	__u32 prev_net = LNET_NIDNET(LNET_NID_ANY);
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
@@ -2085,7 +2086,8 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct cYAML *root = NULL, *tunables = NULL,
 		*net_node = NULL, *interfaces = NULL,
 		*item = NULL, *first_seq = NULL,
-		*tmp = NULL, *statistics = NULL;
+		*tmp = NULL, *statistics = NULL,
+		*yhstats = NULL;
 	int str_buf_len = LNET_MAX_SHOW_NUM_CPT * 2;
 	char str_buf[str_buf_len];
 	char *pos;
@@ -2276,6 +2278,48 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 							       counts))
 					goto out;
 			}
+
+			LIBCFS_IOC_INIT_V2(hstats, hlni_hdr);
+			hstats.hlni_nid = ni_data->lic_nid;
+			/* grab health stats */
+			rc = l_ioctl(LNET_DEV_ID,
+				     IOC_LIBCFS_GET_LOCAL_HSTATS,
+				     &hstats);
+			if (rc != 0) {
+				l_errno = errno;
+				goto continue_without_msg_stats;
+			}
+			yhstats = cYAML_create_object(item, "health stats");
+			if (!yhstats)
+				goto out;
+			if (cYAML_create_number(yhstats, "health value",
+						hstats.hlni_health_value)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "interrupts",
+						hstats.hlni_local_interrupt)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "dropped",
+						hstats.hlni_local_dropped)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "aborted",
+						hstats.hlni_local_aborted)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "no route",
+						hstats.hlni_local_no_route)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "timeouts",
+						hstats.hlni_local_timeout)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "error",
+						hstats.hlni_local_error)
+							== NULL)
+				goto out;
 
 continue_without_msg_stats:
 			tunables = cYAML_create_object(item, "tunables");
