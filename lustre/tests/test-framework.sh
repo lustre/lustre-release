@@ -507,62 +507,91 @@ lustre_insmod() {
 # /etc/modprobe.conf, from /etc/modprobe.d/Lustre, or else none will be used.
 #
 load_module() {
-    local optvar
-    EXT=".ko"
-    module=$1
-    shift
-    BASE=$(basename $module $EXT)
+	local module=$1 # '../libcfs/libcfs/libcfs', 'obdclass/obdclass', ...
+	shift
+	local ext=".ko"
+	local base=$(basename $module $ext)
+	local path
+	local -A module_is_loaded_aa
+	local optvar
+	local mod
 
-    module_loaded ${BASE} && return
+	for mod in $(lsmod | awk '{ print $1; }'); do
+		module_is_loaded_aa[${mod//-/_}]=true
+	done
 
-    # If no module arguments were passed, get them from $MODOPTS_<MODULE>,
-    # else from modprobe.conf
-    if [ $# -eq 0 ]; then
-        # $MODOPTS_<MODULE>; we could use associative arrays, but that's not in
-        # Bash until 4.x, so we resort to eval.
-        optvar="MODOPTS_$(basename $module | tr a-z A-Z)"
-        eval set -- \$$optvar
-        if [ $# -eq 0 -a -n "$MODPROBECONF" ]; then
-		# Nothing in $MODOPTS_<MODULE>; try modprobe.conf
-		local opt
-		opt=$(awk -v var="^options $BASE" '$0 ~ var \
-			{gsub("'"options $BASE"'",""); print}' $MODPROBECONF)
-		set -- $(echo -n $opt)
+	module_is_loaded() {
+		${module_is_loaded_aa[${1//-/_}]:-false}
+	}
 
-		# Ensure we have accept=all for lnet
-		if [ $(basename $module) = lnet ]; then
-			# OK, this is a bit wordy...
-			local arg accept_all_present=false
+	if module_is_loaded $base; then
+		return
+	fi
 
-			for arg in "$@"; do
-				[ "$arg" = accept=all ] && \
-					accept_all_present=true
-			done
-			$accept_all_present || set -- "$@" accept=all
+	if [[ -f $LUSTRE/$module$ext ]]; then
+		path=$LUSTRE/$module$ext
+	elif [[ "$base" == lnet_selftest ]] &&
+	     [[ -f $LUSTRE/../lnet/selftest/$base$ext ]]; then
+		path=$LUSTRE/../lnet/selftest/$base$ext
+	else
+		path=''
+	fi
+
+	if [[ -n "$path" ]]; then
+		# Try to load any non-Lustre modules that $module depends on.
+		for mod in $(modinfo --field=depends $path | tr ',' ' '); do
+			if ! module_is_loaded $mod; then
+				modprobe $mod
+			fi
+		done
+	fi
+
+	# If no module arguments were passed then get them from
+	# $MODOPTS_<MODULE>, otherwise from modprobe.conf.
+	if [ $# -eq 0 ]; then
+		# $MODOPTS_<MODULE>; we could use associative arrays, but that's
+		# not in Bash until 4.x, so we resort to eval.
+		optvar="MODOPTS_$(basename $module | tr a-z A-Z)"
+		eval set -- \$$optvar
+		if [ $# -eq 0 -a -n "$MODPROBECONF" ]; then
+			# Nothing in $MODOPTS_<MODULE>; try modprobe.conf
+			local opt
+			opt=$(awk -v var="^options $base" '$0 ~ var \
+			      {gsub("'"options $base"'",""); print}' \
+				$MODPROBECONF)
+			set -- $(echo -n $opt)
+
+			# Ensure we have accept=all for lnet
+			if [[ "$base" == lnet ]]; then
+				# OK, this is a bit wordy...
+				local arg accept_all_present=false
+
+				for arg in "$@"; do
+					[[ "$arg" == accept=all ]] &&
+						accept_all_present=true
+				done
+
+				$accept_all_present || set -- "$@" accept=all
+			fi
+
+			export $optvar="$*"
 		fi
-		export $optvar="$*"
-        fi
-    fi
+	fi
 
-    [ $# -gt 0 ] && echo "${module} options: '$*'"
+	[ $# -gt 0 ] && echo "${module} options: '$*'"
 
 	# Note that insmod will ignore anything in modprobe.conf, which is why
-	# we're passing options on the command-line.
-	if [[ "$BASE" == "lnet_selftest" ]] &&
-		[[ -f ${LUSTRE}/../lnet/selftest/${module}${EXT} ]]; then
-		lustre_insmod ${LUSTRE}/../lnet/selftest/${module}${EXT}
-	elif [[ -f ${LUSTRE}/${module}${EXT} ]]; then
-		[[ "$BASE" != "ptlrpc_gss" ]] || modprobe sunrpc
-		lustre_insmod ${LUSTRE}/${module}${EXT} "$@"
-	else
-		# must be testing a "make install" or "rpm" installation
-		# note failed to load ptlrpc_gss is considered not fatal
-		if [[ "$BASE" == "ptlrpc_gss" ]]; then
-			modprobe $BASE "$@" 2>/dev/null ||
-				echo "gss/krb5 is not supported"
-		else
-			modprobe $BASE "$@"
+	# we're passing options on the command-line. If $path does not exist
+	# then we must be testing a "make install" or"rpm" installation. Also
+	# note that failing to load ptlrpc_gss is not considered fatal.
+	if [[ -n "$path" ]]; then
+		lustre_insmod $path "$@"
+	elif [[ "$base" == ptlrpc_gss ]]; then
+		if ! modprobe $base "$@" 2>/dev/null; then
+			echo "gss/krb5 is not supported"
 		fi
+	else
+		modprobe $base "$@"
 	fi
 }
 
@@ -635,23 +664,12 @@ load_modules_local() {
 	load_module mgc/mgc
 	load_module obdecho/obdecho
 	if ! client_only; then
-		SYMLIST=/proc/kallsyms
-		grep -q crc16 $SYMLIST ||
-			{ modprobe crc16 2>/dev/null || true; }
-		grep -q -w jbd2 $SYMLIST ||
-			{ modprobe jbd2 2>/dev/null || true; }
 		load_module lfsck/lfsck
 		[ "$LQUOTA" != "no" ] &&
 			load_module quota/lquota $LQUOTAOPTS
 		if [[ $(node_fstypes $HOSTNAME) == *zfs* ]]; then
-			lsmod | grep zfs >&/dev/null || modprobe zfs
 			load_module osd-zfs/osd_zfs
-		fi
-		if [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
-			grep -q exportfs_decode_fh $SYMLIST ||
-				{ modprobe exportfs 2> /dev/null || true; }
-			grep -q -w mbcache $SYMLIST ||
-				{ modprobe mbcache 2>/dev/null || true; }
+		elif [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
 			load_module ../ldiskfs/ldiskfs
 			load_module osd-ldiskfs/osd_ldiskfs
 		fi
