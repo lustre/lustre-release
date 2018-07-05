@@ -722,6 +722,7 @@ void osc_lock_cancel(const struct lu_env *env,
 		     const struct cl_lock_slice *slice);
 void osc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice);
 int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data);
+unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock);
 
 /*****************************************************************************
  *

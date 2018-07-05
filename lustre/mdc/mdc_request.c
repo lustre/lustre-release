@@ -2507,6 +2507,12 @@ static int mdc_cancel_weight(struct ldlm_lock *lock)
 	if (lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_OPEN)
 		RETURN(0);
 
+	/* Special case for DoM locks, cancel only unused and granted locks */
+	if (ldlm_has_dom(lock) &&
+	    (lock->l_granted_mode != lock->l_req_mode ||
+	     osc_ldlm_weigh_ast(lock) != 0))
+		RETURN(0);
+
 	RETURN(1);
 }
 

@@ -4699,6 +4699,65 @@ test_121() {
 }
 run_test 121 "lock replay timed out and race"
 
+test_130a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+		skip "Do not support Data-on-MDT before 2.11"
+
+	replay_barrier $SINGLEMDS
+	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
+	fail $SINGLEMDS
+
+	[ $($LFS getstripe -L $DIR/$tfile) == "mdt" ] ||
+		error "Fail to replay DoM file creation"
+}
+run_test 130a "DoM file create (setstripe) replay"
+
+test_130b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+		skip "Do not support Data-on-MDT before 2.11"
+
+	mkdir $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tdir
+	replay_barrier $SINGLEMDS
+	touch $DIR/$tdir/$tfile
+	fail $SINGLEMDS
+
+	[ $($LFS getstripe -L $DIR/$tdir/$tfile) == "mdt" ] ||
+		error "Fail to replay DoM file creation"
+}
+run_test 130b "DoM file create (inherited) replay"
+
+test_131a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+		skip "Do not support Data-on-MDT before 2.11"
+
+	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	echo "dom_data" | dd of=$DIR/$tfile bs=1 count=8
+	# lock is not canceled and will be replayed
+	fail $SINGLEMDS
+
+	[ $(cat $DIR/$tfile) == "dom_data" ] ||
+		error "Wrong file content after failover"
+}
+run_test 131a "DoM file write lock replay"
+
+test_131b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+		skip "Do not support Data-on-MDT before 2.11"
+
+	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	echo "dom_data" | dd of=$DIR/$tfile bs=1 count=8
+	cancel_lru_locks mdc
+
+	fail $SINGLEMDS
+
+	[ $(cat $DIR/$tfile) == "dom_data" ] ||
+		error "Wrong file content after failover"
+}
+run_test 131b "DoM file write replay"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
