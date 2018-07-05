@@ -447,7 +447,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			      loff_t off, ssize_t len, struct niobuf_local *lnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	int                plen, off_in_block, sz_in_block;
+	int                poff, plen, off_in_block, sz_in_block;
 	int                rc, i = 0, npages = 0;
 	dnode_t *dn = obj->oo_dn;
 	arc_buf_t *abuf;
@@ -511,11 +511,16 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 						LPROC_OSD_TAIL_IO, 1);
 
 			/* can't use zerocopy, allocate temp. buffers */
+			poff = off & (PAGE_SIZE - 1);
 			while (sz_in_block > 0) {
-				plen = min_t(int, sz_in_block, PAGE_SIZE);
+				plen = min_t(int, poff + sz_in_block,
+					     PAGE_SIZE);
+				plen -= poff;
 
 				lnb[i].lnb_file_offset = off;
-				lnb[i].lnb_page_offset = 0;
+				lnb[i].lnb_page_offset = poff;
+				poff = 0;
+
 				lnb[i].lnb_len = plen;
 				lnb[i].lnb_rc = 0;
 				lnb[i].lnb_data = NULL;
