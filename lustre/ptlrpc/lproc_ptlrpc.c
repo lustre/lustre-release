@@ -1397,14 +1397,14 @@ lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 	uuid = kbuf + prefix_len;
 	ptr = strstr(uuid, "::");
 	if (ptr) {
-		__u32 inst;
-		char *endptr;
+		u32 inst;
+		int rc;
 
 		*ptr = 0;
 		do_reconn = 0;
 		ptr += 2; /* Skip :: */
-		inst = simple_strtol(ptr, &endptr, 10);
-		if (*endptr) {
+		rc = kstrtouint(ptr, 10, &inst);
+		if (rc) {
 			CERROR("config: wrong instance # %s\n", ptr);
 		} else if (inst != imp->imp_connect_data.ocd_instance) {
 			CDEBUG(D_INFO, "IR: %s is connecting to an obsoleted "

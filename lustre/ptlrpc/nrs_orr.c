@@ -1307,8 +1307,9 @@ ptlrpc_lprocfs_nrs_orr_quantum_seq_write(struct file *file,
 	val = lprocfs_find_named_value(kernbuf, NRS_LPROCFS_QUANTUM_NAME_REG,
 				       &count_copy);
 	if (val != kernbuf) {
-		quantum_reg = simple_strtol(val, NULL, 10);
-
+		rc = kstrtol(val, 10, &quantum_reg);
+		if (rc)
+			return rc;
 		queue |= PTLRPC_NRS_QUEUE_REG;
 	}
 
@@ -1323,7 +1324,9 @@ ptlrpc_lprocfs_nrs_orr_quantum_seq_write(struct file *file,
 		if (!nrs_svc_has_hp(svc))
 			return -ENODEV;
 
-		quantum_hp = simple_strtol(val, NULL, 10);
+		rc = kstrtol(val, 10, &quantum_hp);
+		if (rc)
+			return rc;
 
 		queue |= PTLRPC_NRS_QUEUE_HP;
 	}
@@ -1333,10 +1336,9 @@ ptlrpc_lprocfs_nrs_orr_quantum_seq_write(struct file *file,
 	 * value
 	 */
 	if (queue == 0) {
-		if (!isdigit(kernbuf[0]))
-			return -EINVAL;
-
-		quantum_reg = simple_strtol(kernbuf, NULL, 10);
+		rc = kstrtol(kernbuf, 10, &quantum_reg);
+		if (rc)
+			return rc;
 
 		queue = PTLRPC_NRS_QUEUE_REG;
 

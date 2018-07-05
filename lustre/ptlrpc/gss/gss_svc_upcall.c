@@ -298,7 +298,6 @@ static struct cache_head *rsi_alloc(void)
 static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
 {
         char           *buf = mesg;
-        char           *ep;
         int             len;
         struct rsi      rsii, *rsip = NULL;
         time_t          expiry;
@@ -340,18 +339,21 @@ static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
         if (len <= 0)
                 goto out;
 
-        /* major */
-        rsii.major_status = simple_strtol(buf, &ep, 10);
-        if (*ep)
-                goto out;
+	/* major */
+	status = kstrtoint(buf, 10, &rsii.major_status);
+	if (status)
+		goto out;
 
-        /* minor */
-        len = qword_get(&mesg, buf, mlen);
-        if (len <= 0)
-                goto out;
-        rsii.minor_status = simple_strtol(buf, &ep, 10);
-        if (*ep)
-                goto out;
+	/* minor */
+	len = qword_get(&mesg, buf, mlen);
+	if (len <= 0) {
+		status = -EINVAL;
+		goto out;
+	}
+
+	status = kstrtoint(buf, 10, &rsii.minor_status);
+	if (status)
+		goto out;
 
         /* out_handle */
         len = qword_get(&mesg, buf, mlen);
