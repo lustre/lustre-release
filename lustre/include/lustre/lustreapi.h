@@ -521,7 +521,11 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 
 /* PCC */
 int llapi_pcc_attach(const char *path, __u32 id, enum lu_pcc_type type);
-int llapi_pcc_detach_fid_fd(int fd, const struct lu_fid *fid);
+int llapi_pcc_attach_fid(const char *mntpath, const struct lu_fid *fid,
+			 __u32 id, enum lu_pcc_type type);
+int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
+			     __u32 id, enum lu_pcc_type type);
+int llapi_pcc_detach_fd(int fd);
 int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid);
 int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr);
 int llapi_pcc_detach_file(const char *path);

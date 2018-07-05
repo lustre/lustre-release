@@ -26,6 +26,7 @@ init_logging
 
 MULTIOP=${MULTIOP:-multiop}
 OPENFILE=${OPENFILE:-openfile}
+MMAP_CAT=${MMAP_CAT:-mmap_cat}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
 
@@ -133,7 +134,8 @@ check_lpcc_state()
 {
 	local lustre_path="$1"
 	local expected_state="$2"
-	local state=$(do_facet $SINGLEAGT $LFS pcc state $lustre_path |
+	local facet=${3:-$SINGLEAGT}
+	local state=$(do_facet $facet $LFS pcc state $lustre_path |
 			awk -F 'type: ' '{print $2}' | awk -F ',' '{print $1}')
 
 	[[ "x$state" == "x$expected_state" ]] || error \
@@ -163,15 +165,19 @@ cdt_set_sanity_policy
 set_hsm_param grace_delay 10
 
 cleanup_pcc_mapping() {
-	do_facet $SINGLEAGT $LCTL pcc clear $MOUNT
+	local facet=${1:-$SINGLEAGT}
+
+	do_facet $facet $LCTL pcc clear $MOUNT
 }
 
 setup_pcc_mapping() {
-	local hsm_root=$(hsm_root)
+	local facet=${1:-$SINGLEAGT}
+	local hsm_root=${hsm_root:-$(hsm_root "$facet")}
+	local param="$2"
 
-	cleanup_pcc_mapping
-	do_facet $SINGLEAGT $LCTL pcc add $MOUNT $hsm_root \
-		-p "$HSM_ARCHIVE_NUMBER\ 100"
+	[ -z "$param" ] && param="$HSM_ARCHIVE_NUMBER\ 100"
+	cleanup_pcc_mapping $facet
+	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p $param
 }
 
 lpcc_rw_test() {
@@ -257,6 +263,7 @@ lpcc_rw_test() {
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 	do_facet $SINGLEAGT "echo -n attach_detach > $file"
+	echo "Start to detach the $file"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "PCC detach $file failed"
 	check_lpcc_state $file "none"
@@ -287,12 +294,11 @@ test_1d() {
 }
 run_test 1d "Test Project ID with remote access"
 
-
 #
 # When a process created a LPCC file and holding the open,
 # another process on the same client should be able to open the file.
 #
-test_2() {
+test_2a() {
 	local project_id=100
 	local agt_facet=$SINGLEAGT
 	local hsm_root=$(hsm_root)
@@ -326,9 +332,101 @@ test_2() {
 	rmultiop_stop $agt_host || error "close $file failed"
 	cleanup_pcc_mapping
 }
-run_test 2 "Test multi open when creating"
+run_test 2a "Test multi open when creating"
 
-test_3() {
+get_remote_client() {
+	current_id=$(do_facet $SINGLEAGT hostname)
+	for client in ${CLIENTS//,/ }
+	do
+		r_id=$(do_node $client hostname)
+		if [ $r_id != $current_id ]; then
+			echo $client
+			return
+		fi
+	done
+}
+
+#
+# When a process created a LPCC file and holding the open, another
+# process on the different client should be able to open the file
+# and perform IO on the file.
+#
+test_2b() {
+	local agt_facet=$SINGLEAGT
+	local hsm_root=$(hsm_root)
+	local agt_host=$(facet_active_host $SINGLEAGT)
+
+	needclients 2 || return 0
+
+	remote_client=$(get_remote_client)
+
+	enable_project_quota
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+	file=$DIR/$tdir/multiop
+	mkdir -p $DIR/$tdir
+	rm -f $file
+
+	do_facet $SINGLEAGT "echo -n file_data > $file"
+	do_facet $SINGLEAGT lfs pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+
+	rmultiop_start $agt_host $file O_c || error "open $file failed"
+
+	do_node $remote_client "echo -n multiopen_data > $file"
+
+	# PCC cached file should be automatically detached
+	check_lpcc_state $file "none"
+
+	check_file_data $SINGLEAGT $file "multiopen_data"
+	rmultiop_stop $agt_host || error "close $file failed"
+	check_file_data $SINGLEAGT $file "multiopen_data"
+
+	do_node $remote_client cat $file || error \
+		"cat $file on remote client failed"
+	do_node $remote_client echo -n "multiopen_data" > $file \
+		|| error "write $file on remote client failed"
+	cleanup_pcc_mapping
+}
+run_test 2b "Test multi remote open when creating"
+
+test_2c() {
+	local agt_host=$(facet_active_host $SINGLEAGT)
+	local file=$DIR/$tdir/$tfile
+	local file2=$DIR2/$tdir/$tfile
+
+	enable_project_quota
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+	mkdir -p $DIR/$tdir
+	rm -f $file
+
+	do_facet $SINGLEAGT "echo -n file_data > $file"
+	do_facet $SINGLEAGT lfs pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+
+	rmultiop_start $agt_host $file O_c || error "open $file failed"
+
+	echo -n multiopen_data > $file2
+
+	# PCC cached file should be automatically detached
+	check_lpcc_state $file "none"
+
+	check_file_data $SINGLEAGT $file "multiopen_data"
+	rmultiop_stop $agt_host || error "close $file failed"
+	check_file_data $SINGLEAGT $file "multiopen_data"
+
+	cat $file2 || error "cat $file on mount $MOUNT2 failed"
+	echo -n "multiopen_data" > $file2 ||
+		error "write $file on mount $MOUNT2 failed"
+
+	cleanup_pcc_mapping
+}
+run_test 2c "Test multi open on different mount points when creating"
+
+test_3a() {
 	local file=$DIR/$tdir/$tfile
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -356,7 +454,364 @@ test_3() {
 
 	cleanup_pcc_mapping
 }
-run_test 3 "Repeat attach/detach operations"
+run_test 3a "Repeat attach/detach operations"
+
+test_3b() {
+	local n
+	local file=$DIR/$tdir/$tfile
+
+	needclients 3 || return 0
+
+	# Start all of the copytools and setup PCC
+	for n in $(seq $AGTCOUNT); do
+		copytool setup -f agt$n -a $n -m $MOUNT
+		setup_pcc_mapping agt$n "$n\ 100"
+	done
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+
+	echo "Start to attach/detach $file on $agt1_HOST"
+	do_facet agt1 $LFS pcc attach -i 1 $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite" agt1
+	do_facet agt1 $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none" agt1
+
+	echo "Repeat to attach/detach $file on $agt2_HOST"
+	do_facet agt2 $LFS pcc attach -i 2 $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite" agt2
+	do_facet agt2 $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none" agt2
+
+	echo "Try attach on two agents"
+	do_facet agt1 $LFS pcc attach -i 1 $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite" agt1
+	do_facet agt2 $LFS pcc attach -i 2 $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite" agt2
+	# The later attach PCC agent should succeed,
+	# the former agent should be detached automatically.
+	check_lpcc_state $file "none" agt1
+	do_facet agt2 $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none" agt2
+
+	for n in $(seq $AGTCOUNT); do
+		cleanup_pcc_mapping agt$n
+	done
+}
+run_test 3b "Repeat attach/detach operations on multiple clients"
+
+test_4() {
+	local project_id=100
+
+	! is_project_quota_supported &&
+		skip "project quota is not supported" && return
+
+	enable_project_quota
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	lfs project -sp $project_id $DIR/$tdir ||
+		error "lfs project -sp $project_id $DIR/$tdir failed"
+
+	# mmap_sanity tst7 failed on the local ext4 filesystem.
+	# It seems that Lustre filesystem does special process for tst 7.
+	# Thus, we exclude tst7 from the PCC testing.
+	$LUSTRE/tests/mmap_sanity -d $DIR/$tdir -m $DIR2/$tdir -e 7 ||
+		error "mmap_sanity test failed"
+	sync; sleep 1; sync
+
+	cleanup_pcc_mapping
+}
+run_test 4 "Auto cache test for mmap"
+
+test_5() {
+	local file=$DIR/$tdir/$tfile
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	do_facet $SINGLEAGT "echo -n attach_mmap_data > $file" ||
+		error "echo $file failed"
+
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+
+	local content=$($MMAP_CAT $file)
+
+	[[ $content == "attach_mmap_data" ]] ||
+		error "mmap cat data mismatch: $content"
+
+	$LFS hsm_restore $file || error "failed to restore $file"
+	wait_request_state $(path2fid $file) RESTORE SUCCEED
+	check_lpcc_state $file "none"
+
+	content=$($MMAP_CAT $file)
+	[[ $content == "attach_mmap_data" ]] ||
+		error "mmap cat data mismatch: $content"
+
+	cleanup_pcc_mapping
+}
+run_test 5 "Mmap & cat a RW-PCC cached file"
+
+test_6() {
+	local file=$DIR/$tdir/$tfile
+	local content
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	echo -n mmap_write_data > $file || error "echo write $file failed"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+
+	do_facet $SINGLEAGT $MULTIOP $file OSMWUc ||
+		error "could not mmap $file"
+	check_lpcc_state $file "readwrite"
+	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
+	# After mmap write via multiop, the first character of each page
+	# increases with 1.
+	[[ $content == "nmap_write_data" ]] ||
+		error "mmap write data mismatch: $content"
+	check_lpcc_state $file "readwrite"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach file $file"
+
+	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
+	[[ $content == "nmap_write_data" ]] ||
+		error "mmap write data mismatch: $content"
+
+	cleanup_pcc_mapping
+}
+run_test 6 "Test mmap write on RW-PCC "
+
+test_7a() {
+	local file=$DIR/$tdir/$tfile
+	local content
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	echo "QQQQQ" > $file
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+	check_file_data $SINGLEAGT $file "QQQQQ"
+	# define OBD_FAIL_LLITE_PCC_DETACH_MKWRITE	0x1412
+	do_facet $SINGLEAGT $LCTL set_param fail_loc=0x1412
+	# HSM released exists archived status
+	check_hsm_flags $file "0x0000000d"
+
+	# multiop mmap write increase the first character of each page with 1
+	do_facet $SINGLEAGT $MULTIOP $file OSMWUc ||
+		error "mmap write $file failed"
+	check_lpcc_state $file "none"
+	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
+	[[ $content == "RQQQQ" ]] || error "data mismatch: $content"
+
+	cleanup_pcc_mapping
+}
+run_test 7a "Fake file detached between fault() and page_mkwrite() for RW-PCC"
+
+test_7b() {
+	local file=$DIR/$tdir/$tfile
+	local content
+	local pid
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	echo "QQQQQ" > $file
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+	check_file_data $SINGLEAGT $file "QQQQQ"
+	# define OBD_FAIL_LLITE_PCC_MKWRITE_PAUSE	0x1413
+	do_facet $SINGLEAGT $LCTL set_param fail_loc=0x1413 fail_val=20
+	# HSM released exists archived status
+	check_hsm_flags $file "0x0000000d"
+
+	# multiop mmap write increase the first character of each page with 1
+	do_facet $SINGLEAGT $MULTIOP $file OSMWUc &
+	pid=$!
+
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach file $file"
+
+	wait $pid || error "multiop mmap write failed"
+	check_lpcc_state $file "none"
+	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
+	[[ $content == "RQQQQ" ]] || error "data mismatch: $content"
+
+	cleanup_pcc_mapping
+}
+run_test 7b "Test the race with concurrent mkwrite and detach"
+
+test_8() {
+	local file=$DIR/$tdir/$tfile
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	echo "QQQQQ" > $file
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+	check_file_data $SINGLEAGT $file "QQQQQ"
+
+	# define OBD_FAIL_LLITE_PCC_FAKE_ERROR	0x1411
+	do_facet $SINGLEAGT $LCTL set_param fail_loc=0x1411
+	do_facet $SINGLEAGT "echo -n ENOSPC_write > $file"
+	# Above write will return -ENOSPC failure and retry the IO on normal
+	# IO path. It will restore the HSM released file.
+	check_lpcc_state $file "none"
+	check_file_data $SINGLEAGT $file "ENOSPC_write"
+
+	cleanup_pcc_mapping
+}
+run_test 8 "Test fake -ENOSPC tolerance for RW-PCC"
+
+setup_loopdev() {
+	local facet=$1
+	local file=$2
+	local mntpt=$3
+	local size=${4:-50}
+
+	do_facet $facet mkdir -p $mntpt || error "mkdir -p $hsm_root failed"
+	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
+	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
+	stack_trap "do_facet $facet rm -f $file" EXIT
+	do_facet $facet mkfs.ext4 $file ||
+		error "mkfs.ext4 $file failed"
+	do_facet $facet file $file
+	do_facet $facet mount -t ext4 -o loop,usrquota,grpquota $file $mntpt ||
+		error "mount -o loop,usrquota,grpquota $file $mntpt failed"
+	stack_trap "do_facet $facet $UMOUNT $mntpt" EXIT
+}
+
+test_9() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.9a"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMVER" -h "$hsm_root"
+	setup_pcc_mapping
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	touch $file || error "touch $file failed"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "fail to attach $file"
+	check_lpcc_state $file "readwrite"
+	# write 60M data, it is larger than the capacity of PCC backend
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=60 ||
+		error "fail to dd write $file"
+	check_lpcc_state $file "none"
+	check_file_size $SINGLEAGT $file 62914560
+
+	cleanup_pcc_mapping
+}
+run_test 9 "Test -ENOSPC tolerance on loop PCC device for RW-PCC"
+
+test_10() {
+	local file=$DIR/$tdir/$tfile
+	local hsm_root=$(hsm_root)
+	local file=$DIR/$tdir/$tfile
+	local -a lpcc_path
+	local lpcc_dir
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	do_facet $SINGLEAGT "echo -n QQQQQ > $file"
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	lpcc_dir=$(dirname $lpcc_path)
+	echo "Lustre file: $file LPCC dir: $lpcc_dir"
+	do_facet $SINGLEAGT mkdir -p $lpcc_dir ||
+		error "mkdir -p $lpcc_dir failed"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach $file"
+	check_lpcc_state $file "readwrite"
+	check_file_data $SINGLEAGT $file "QQQQQ"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+	rm $file || error "rm $file failed"
+
+	# The parent directory of the PCC file is immutable
+	do_facet $SINGLEAGT "echo -n immutable_dir > $file"
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	lpcc_dir=$(dirname $lpcc_path)
+	echo "Lustre file: $file LPCC dir: $lpcc_dir"
+	do_facet $SINGLEAGT mkdir -p $lpcc_dir ||
+		error "mkdir -p $lpcc_dir failed"
+	do_facet $SINGLEAGT chattr +i $lpcc_dir ||
+		error "chattr +i $lpcc_dir failed"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &&
+		error "attach $file with immutable directory should be failed"
+	do_facet $SINGLEAGT chattr -i $lpcc_dir ||
+		error "chattr -i $lpcc_dir failed"
+	rm $file || error "rm $file failed"
+
+	# The PCC file path is set to a directory
+	do_facet $SINGLEAGT "echo -n pcc_file_path_is_dir > $file"
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT mkdir -p $lpcc_path ||
+		error "mkdir -p $lpcc_path failed"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &&
+		error "attach $file should fail as PCC path is a directory"
+	rm $file || error "rm $file failed"
+
+	cleanup_pcc_mapping
+}
+run_test 10 "Test attach fault injection with simulated PCC file path"
+
+test_11() {
+	local file=$DIR/$tfile
+	local pid
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	echo  -n race_rw_attach_hsmremove > $file
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "attach $file failed"
+	do_facet $SINGLEAGT $LFS pcc detach $file || error "detach $file failed"
+	# HSM released exists archived status
+	check_hsm_flags $file "0x0000000d"
+	# define OBD_FAIL_LLITE_PCC_ATTACH_PAUSE	0x1414
+	do_facet $SINGLEAGT $LCTL set_param fail_loc=0x1414 fail_val=20
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &
+	pid=$!
+	$LFS hsm_state $file
+	sleep 3
+	wait_request_state $(path2fid $file) RESTORE SUCCEED
+	$LFS hsm_remove $file || error "hsm remove $file failed"
+	wait $pid && error "RW-PCC attach $file should fail"
+
+	cleanup_pcc_mapping
+}
+run_test 11 "RW-PCC attach races with concurrent HSM remove"
 
 complete $SECONDS
 check_and_cleanup_lustre

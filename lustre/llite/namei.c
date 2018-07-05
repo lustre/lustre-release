@@ -833,10 +833,6 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
 		lum->lmm_magic = LOV_USER_MAGIC_V1;
 		lum->lmm_pattern = LOV_PATTERN_F_RELEASED | LOV_PATTERN_RAID0;
-		lum->lmm_stripe_size = 0;
-		lum->lmm_stripe_count = 0;
-		lum->lmm_stripe_offset = 0;
-
 		op_data->op_data = lum;
 		op_data->op_data_size = sizeof(*lum);
 		op_data->op_archive_id = dataset->pccd_id;

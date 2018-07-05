@@ -45,25 +45,15 @@
  * Fetch and attach a file to readwrite PCC.
  *
  */
-static int llapi_readwrite_pcc_attach(const char *path, __u32 archive_id)
+static int llapi_readwrite_pcc_attach_fd(int fd, __u32 archive_id)
 {
-	int fd;
 	int rc;
 	struct ll_ioc_lease *data;
 
-	fd = open(path, O_RDWR | O_NONBLOCK);
-	if (fd < 0) {
-		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'",
-			    path);
-		return rc;
-	}
-
 	rc = llapi_lease_acquire(fd, LL_LEASE_WRLCK);
 	if (rc < 0) {
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "cannot get lease for '%s'", path);
-		goto out_close;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get lease");
+		return rc;
 	}
 
 	data = malloc(offsetof(typeof(*data), lil_ids[1]));
@@ -71,7 +61,7 @@ static int llapi_readwrite_pcc_attach(const char *path, __u32 archive_id)
 		rc = -ENOMEM;
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
 				  "failed to allocate memory");
-		goto out_close;
+		return rc;
 	}
 
 	data->lil_mode = LL_LEASE_UNLCK;
@@ -83,14 +73,30 @@ static int llapi_readwrite_pcc_attach(const char *path, __u32 archive_id)
 		if (rc == 0) /* lost lease lock */
 			rc = -EBUSY;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "cannot attach '%s' with ID: %u",
-			     path, archive_id);
+			    "cannot attach with ID: %u", archive_id);
 	} else {
 		rc = 0;
 	}
 
 	free(data);
-out_close:
+	return rc;
+}
+
+static int llapi_readwrite_pcc_attach(const char *path, __u32 archive_id)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDWR | O_NONBLOCK);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'",
+			    path);
+		return rc;
+	}
+
+	rc = llapi_readwrite_pcc_attach_fd(fd, archive_id);
+
 	close(fd);
 	return rc;
 }
@@ -110,41 +116,85 @@ int llapi_pcc_attach(const char *path, __u32 id, enum lu_pcc_type type)
 	return rc;
 }
 
-
-/**
- * detach PCC cache of a file by an ioctl on the dir fd (usually a mount
- * point fd that the copytool already has open).
- *
- * If the file is being used, the detaching will return -EBUSY immediately.
- * Thus, if a PCC-attached file is kept open for a long time, the restore
- * request will always return failure.
- *
- * \param fd		Directory file descriptor.
- * \param fid		FID of the file.
- *
- * \return 0 on success, an error code otherwise.
- */
-int llapi_pcc_detach_fid_fd(int fd, const struct lu_fid *fid)
+static int llapi_readwrite_pcc_attach_fid(const char *mntpath,
+					  const struct lu_fid *fid,
+					  __u32 id)
 {
 	int rc;
-	struct lu_pcc_detach detach;
+	int fd;
 
-	detach.pccd_fid = *fid;
-	rc = ioctl(fd, LL_IOC_PCC_DETACH, &detach);
-	if (rc == -EAGAIN)
+	fd = llapi_open_by_fid(mntpath, fid, O_RDWR | O_NONBLOCK);
+	if (fd < 0) {
+		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "FID "DFID" may be in the attaching state, "
-			    "or you may need to re-run the pcc_attach "
-			    "to finish the attach process.", PFID(fid));
-	else if (rc)
-		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "cannot detach FID "DFID" from PCC", PFID(fid));
+			    "llapi_open_by_fid for " DFID "failed",
+			    PFID(fid));
+		return rc;
+	}
+
+	rc = llapi_readwrite_pcc_attach_fd(fd, id);
+
+	close(fd);
+	return rc;
+}
+
+int llapi_pcc_attach_fid(const char *mntpath, const struct lu_fid *fid,
+			 __u32 id, enum lu_pcc_type type)
+{
+	int rc;
+
+	switch (type) {
+	case LU_PCC_READWRITE:
+		rc = llapi_readwrite_pcc_attach_fid(mntpath, fid, id);
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+	return rc;
+}
+
+
+int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
+			     __u32 id, enum lu_pcc_type type)
+{
+	int rc;
+	struct lu_fid fid;
+	const char *fidstr_orig = fidstr;
+
+	while (*fidstr == '[')
+		fidstr++;
+	rc = sscanf(fidstr, SFID, RFID(&fid));
+	if (rc != 3) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "bad FID format '%s', should be [seq:oid:ver]"
+				  " (e.g. "DFID")\n", fidstr_orig,
+				  (unsigned long long)FID_SEQ_NORMAL, 2, 0);
+		return -EINVAL;
+	}
+
+	rc = llapi_pcc_attach_fid(mntpath, &fid, id, type);
 
 	return rc;
 }
 
 /**
- * detach PCC cache of a file.
+ * detach PCC cache of a file by using fd.
+ *
+ * \param fd		File handle.
+ *
+ * \return 0 on success, an error code otherwise.
+ */
+int llapi_pcc_detach_fd(int fd)
+{
+	int rc;
+
+	rc = ioctl(fd, LL_IOC_PCC_DETACH);
+	return rc;
+}
+
+/**
+ * detach PCC cache of a file via FID.
  *
  * \param mntpath	Fullpath to the client mount point.
  * \param fid		FID of the file.
@@ -155,6 +205,7 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid)
 {
 	int rc;
 	int fd;
+	struct lu_pcc_detach detach;
 
 	rc = get_root_path(WANT_FD, NULL, &fd, (char *)mntpath, -1);
 	if (rc) {
@@ -163,14 +214,21 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid)
 		return rc;
 	}
 
-	rc = llapi_pcc_detach_fid_fd(fd, fid);
-
+	/*
+	 * PCC prefetching algorithm scans Lustre OPEN/CLOSE changelogs
+	 * to determine the candidate files needing to prefetch into
+	 * PCC. To avoid generattion of unnecessary open/close changelogs,
+	 * we implement a new dir ioctl LL_IOC_PCC_DETACH_BY_FID to detach
+	 * files.
+	 */
+	detach.pccd_fid = *fid;
+	rc = ioctl(fd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	close(fd);
 	return rc;
 }
 
 /**
- * detach PCC cache of a file.
+ * detach PCC cache of a file via FID.
  *
  * \param mntpath	Fullpath to the client mount point.
  * \param fid		FID string of the file.
@@ -209,16 +267,18 @@ int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr)
 int llapi_pcc_detach_file(const char *path)
 {
 	int rc;
-	lustre_fid fid;
+	int fd;
 
-	rc = llapi_path2fid(path, &fid);
-	if (rc) {
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get FID of '%s'",
+	fd = open(path, O_RDWR | O_NONBLOCK);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'",
 			    path);
 		return rc;
 	}
 
-	rc = llapi_pcc_detach_fid(path, &fid);
+	rc = llapi_pcc_detach_fd(fd);
+	close(fd);
 	return rc;
 }
 

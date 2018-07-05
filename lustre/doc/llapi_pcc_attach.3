@@ -1,19 +1,31 @@
 .TH llapi_pcc_attach 3 "2019 April 20" "Lustre User API"
 .SH NAME
-llapi_pcc_attach \- attach a file into PCC
+llapi_pcc_attach, llapi_pcc_attach_fid, llapi_pcc_attach_fid_str \- attach a file into PCC
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
 .BI "int llapi_pcc_attach(const char *" path ", __u32 " id ,
 .BI "                     enum lu_pcc_type " type ");"
+.PP
+.BI "int llapi_pcc_attach_fid(const char *" mntpath ", const struct lu_fid *" fid ,
+.BI "                         __u32 " id ", enum lu_pcc_type " type ");"
+.PP
+.BI "int llapi_pcc_attach_fid_str(const char *" mntpath ", const char *" fidstr ,
+.BI "                             __u32 " id ", enum lu_pcc_type " type ");"
 .fi
 .SH DESCRIPTION
 .PP
 The function
-.B llapi_pcc_attach()
+.BR llapi_pcc_attach() ,
+.BR llapi_pcc_attach_fid() ,
+and
+.BR llapi_pcc_attach_fid_str()
 tries to attach the file referenced by
-.BR path
+.IR path ,
+.IR fid ,
+or
+.IR fidstr
 into PCC backend. PCC provides a group of local caches and works in two modes:
 RW-PCC enables a read-write cache on the local SSDs of a single client; RO-PCC
 provides a read-only cache on the local SSDs of multiple clients. For RW-PCC,

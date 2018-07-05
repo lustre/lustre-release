@@ -9754,6 +9754,10 @@ copytool()
 			shift
 			local archive_id="$1"
 			;;
+		-h|--hsm-root)
+			shift
+			local hsm_root="$1"
+			;;
 		-b|--bwlimit)
 			shift
 			local bandwidth="$1" # in MB/s
@@ -9772,7 +9776,7 @@ copytool()
 	# Use default values if needed
 	local facet=${facet:-$SINGLEAGT}
 	local mountpoint="${mountpoint:-${MOUNT2:-$MOUNT}}"
-	local hsm_root="$(hsm_root "$facet")"
+	local hsm_root="${hsm_root:-$(hsm_root "$facet")}"
 
 	stack_trap "do_facet $facet rm -rf '$hsm_root'" EXIT
 	do_facet $facet mkdir -p "$hsm_root" ||

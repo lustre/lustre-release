@@ -61,6 +61,7 @@ struct split_param {
 struct pcc_param {
 	__u64	pa_data_version;
 	__u32	pa_archive_id;
+	__u32	pa_layout_gen;
 };
 
 static int
@@ -237,6 +238,12 @@ static int ll_close_inode_openhandle(struct inode *inode,
 		body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 		if (!(body->mbo_valid & OBD_MD_CLOSE_INTENT_EXECED))
 			rc = -EBUSY;
+
+		if (bias & MDS_PCC_ATTACH) {
+			struct pcc_param *param = data;
+
+			param->pa_layout_gen = body->mbo_layout_gen;
+		}
 	}
 
 	ll_finish_md_op_data(op_data);
@@ -1641,7 +1648,7 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	ssize_t result;
 	ssize_t rc2;
 	__u16 refcheck;
-	bool cached = false;
+	bool cached;
 
 	/**
 	 * Currently when PCC read failed, we do not fall back to the
@@ -1752,22 +1759,23 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct lu_env *env;
 	ssize_t rc_tiny = 0, rc_normal;
 	__u16 refcheck;
-	bool cached = false;
+	bool cached;
 	int result;
 
 	ENTRY;
 
 	/**
-	 * When PCC write failed, we do not fall back to the normal
-	 * write path, just return the error. The reason is that:
-	 * PCC is actually a HSM device, and HSM does not handle the
-	 * failure especially -ENOSPC due to space used out; Moreover,
-	 * the fallback to normal I/O path for ENOSPC failure, needs
-	 * to restore the file data to OSTs first and redo the write
-	 * again, making the logic of PCC very complex.
+	 * When PCC write failed, we usually do not fall back to the normal
+	 * write path, just return the error. But there is a special case when
+	 * returned error code is -ENOSPC due to running out of space on PCC HSM
+	 * bakcend. At this time, it will fall back to normal I/O path and
+	 * retry the I/O. As the file is in HSM released state, it will restore
+	 * the file data to OSTs first and redo the write again. And the
+	 * restore process will revoke the layout lock and detach the file
+	 * from PCC cache automatically.
 	 */
 	result = pcc_file_write_iter(iocb, from, &cached);
-	if (cached)
+	if (cached && result != -ENOSPC)
 		return result;
 
 	/* NB: we can't do direct IO for tiny writes because they use the page
@@ -1946,23 +1954,22 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
                                    struct pipe_inode_info *pipe, size_t count,
                                    unsigned int flags)
 {
-        struct lu_env      *env;
-        struct vvp_io_args *args;
-        ssize_t             result;
-	__u16               refcheck;
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(in_file);
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
+	struct lu_env *env;
+	struct vvp_io_args *args;
+	ssize_t result;
+	__u16 refcheck;
+	bool cached;
 
         ENTRY;
 
-	/* pcc cache path */
-	if (pcc_file && file_inode(pcc_file)->i_fop->splice_read)
-		return file_inode(pcc_file)->i_fop->splice_read(pcc_file,
-						ppos, pipe, count, flags);
+	result = pcc_file_splice_read(in_file, ppos, pipe,
+				      count, flags, &cached);
+	if (cached)
+		RETURN(result);
 
 	ll_ras_enter(in_file);
 
-        env = cl_env_get(&refcheck);
+	env = cl_env_get(&refcheck);
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
@@ -3310,8 +3317,10 @@ out:
 	case LL_LEASE_PCC_ATTACH:
 		if (!rc)
 			rc = rc2;
-		rc = pcc_readwrite_attach_fini(file, inode, lease_broken,
-					       rc, attached);
+		rc = pcc_readwrite_attach_fini(file, inode,
+					       param.pa_layout_gen,
+					       lease_broken, rc,
+					       attached);
 		break;
 	}
 
@@ -3836,6 +3845,14 @@ out_ladvise:
 		rc = ll_heat_set(inode, flags);
 		RETURN(rc);
 	}
+	case LL_IOC_PCC_DETACH:
+		if (!S_ISREG(inode->i_mode))
+			RETURN(-EINVAL);
+
+		if (!inode_owner_or_capable(inode))
+			RETURN(-EPERM);
+
+		RETURN(pcc_ioctl_detach(inode));
 	case LL_IOC_PCC_STATE: {
 		struct lu_pcc_state __user *ustate =
 			(struct lu_pcc_state __user *)arg;
@@ -3848,7 +3865,7 @@ out_ladvise:
 		if (copy_from_user(state, ustate, sizeof(*state)))
 			GOTO(out_state, rc = -EFAULT);
 
-		rc = pcc_ioctl_state(inode, state);
+		rc = pcc_ioctl_state(file, inode, state);
 		if (rc)
 			GOTO(out_state, rc);
 
@@ -4055,28 +4072,14 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 #endif
 	struct inode *inode = dentry->d_inode;
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 	struct ptlrpc_request *req;
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
 	int rc, err;
+
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
 	       PFID(ll_inode2fid(inode)), inode);
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC, 1);
-
-	/* pcc cache path */
-	if (pcc_file)
-#ifdef HAVE_FILE_FSYNC_4ARGS
-		return file_inode(pcc_file)->i_fop->fsync(pcc_file,
-					start, end, datasync);
-#elif defined(HAVE_FILE_FSYNC_2ARGS)
-		return file_inode(pcc_file)->i_fop->fsync(pcc_file,
-					datasync);
-#else
-		return file_inode(pcc_file)->i_fop->fsync(pcc_file,
-					dentry, datasync);
-#endif
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
 	rc = filemap_write_and_wait_range(inode->i_mapping, start, end);
@@ -4109,8 +4112,15 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 
 	if (S_ISREG(inode->i_mode)) {
 		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+		bool cached;
 
-		err = cl_sync_file_range(inode, start, end, CL_FSYNC_ALL, 0);
+		/* Sync metadata on MDT first, and then sync the cached data
+		 * on PCC.
+		 */
+		err = pcc_fsync(file, start, end, datasync, &cached);
+		if (!cached)
+			err = cl_sync_file_range(inode, start, end,
+						 CL_FSYNC_ALL, 0);
 		if (rc == 0 && err < 0)
 			rc = err;
 		if (rc < 0)
@@ -4651,11 +4661,12 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
 		RETURN(rc);
 
 	if (S_ISREG(inode->i_mode)) {
-		bool cached = false;
+		bool cached;
 
 		rc = pcc_inode_getattr(inode, &cached);
 		if (cached && rc < 0)
 			RETURN(rc);
+
 		/* In case of restore, the MDT has the right size and has
 		 * already send it back without granting the layout lock,
 		 * inode is up-to-date so glimpse is useless.

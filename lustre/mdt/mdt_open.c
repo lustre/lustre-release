@@ -1746,6 +1746,22 @@ static inline int mdt_hsm_set_released(struct lov_mds_md *lmm)
 	return 0;
 }
 
+static inline int mdt_get_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
+{
+	struct lov_comp_md_v1 *comp_v1;
+
+	if (le32_to_cpu(lmm->lmm_magic == LOV_MAGIC_COMP_V1)) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		*gen = le32_to_cpu(comp_v1->lcm_layout_gen);
+	} else if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
+		   le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3) {
+		*gen = le16_to_cpu(lmm->lmm_layout_gen);
+	} else {
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 			   struct md_attr *ma)
 {
@@ -1827,6 +1843,9 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 				       ma->ma_hsm.mh_arch_ver);
 				ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
 			}
+
+			if (ma->ma_hsm.mh_flags & HS_DIRTY)
+				ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
 		} else {
 			/* Set up HSM attribte for PCC archived object */
 			CLASSERT(sizeof(struct hsm_attrs) <=
@@ -1957,6 +1976,12 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o),
 			     mdt_object_child(orphan),
 			     SWAP_LAYOUTS_MDS_HSM);
+
+	if (!rc && ma->ma_attr_flags & MDS_PCC_ATTACH) {
+		ma->ma_need = MA_LOV;
+		rc = mdt_attr_get_complex(info, o, ma);
+	}
+
 	EXIT;
 
 out_layout_lock:
@@ -1983,6 +2008,13 @@ out_unlock:
 		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 		LASSERT(repbody != NULL);
 		repbody->mbo_valid |= OBD_MD_CLOSE_INTENT_EXECED;
+		if (ma->ma_attr_flags & MDS_PCC_ATTACH) {
+			LASSERT(ma->ma_valid & MA_LOV);
+			rc = mdt_get_lmm_gen(ma->ma_lmm,
+					     &repbody->mbo_layout_gen);
+			if (!rc)
+				repbody->mbo_valid |= OBD_MD_LAYOUT_VERSION;
+		}
 	}
 
 out_reprocess:

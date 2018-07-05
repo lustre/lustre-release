@@ -482,7 +482,8 @@ struct ll_ioc_lease_id {
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
 #define LL_IOC_HEAT_GET			_IOWR('f', 251, struct lu_heat)
 #define LL_IOC_HEAT_SET			_IOW('f', 251, __u64)
-#define LL_IOC_PCC_DETACH		_IOW('f', 252, struct lu_pcc_detach)
+#define LL_IOC_PCC_DETACH		_IO('f', 252)
+#define LL_IOC_PCC_DETACH_BY_FID	_IOW('f', 252, struct lu_pcc_detach)
 #define LL_IOC_PCC_STATE		_IOR('f', 252, struct lu_pcc_state)
 
 #ifndef	FS_IOC_FSGETXATTR
@@ -2329,8 +2330,11 @@ struct lu_pcc_detach {
 };
 
 enum lu_pcc_state_flags {
-	/* Whether the inode attr is cached locally */
-	PCC_STATE_FLAG_ATTR_VALID	= 0x1,
+	PCC_STATE_FL_NONE		= 0x0,
+	/* The inode attr is cached locally */
+	PCC_STATE_FL_ATTR_VALID		= 0x01,
+	/* The file is being attached into PCC */
+	PCC_STATE_FL_ATTACHING		= 0x02,
 };
 
 struct lu_pcc_state {

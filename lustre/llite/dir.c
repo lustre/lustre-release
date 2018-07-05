@@ -1983,41 +1983,12 @@ migrate_free:
 		RETURN(ll_ioctl_fsgetxattr(inode, cmd, arg));
 	case LL_IOC_FSSETXATTR:
 		RETURN(ll_ioctl_fssetxattr(inode, cmd, arg));
-	case LL_IOC_PCC_DETACH: {
+	case LL_IOC_PCC_DETACH_BY_FID: {
 		struct lu_pcc_detach *detach;
 		struct lu_fid *fid;
 		struct inode *inode2;
 		unsigned long ino;
 
-		/*
-		 * The reason why a dir IOCTL is used to detach a PCC-cached
-		 * file rather than making it a file IOCTL is:
-		 * When PCC caching a file, it will attach the file firstly,
-		 * and increase the refcount of PCC inode (pcci->pcci_refcount)
-		 * from 0 to 1.
-		 * When detaching a PCC-cached file, it will check whether the
-		 * refcount is 1. If so, the file can be detached successfully.
-		 * Otherwise, it means there are some users opened and using
-		 * the file currently, and it will return -EBUSY.
-		 * Each open on the PCC-cached file will increase the refcount
-		 * of the PCC inode;
-		 * Each close on the PCC-cached file will decrease the refcount
-		 * of the PCC inode;
-		 * When used a file IOCTL to detach a PCC-cached file, it needs
-		 * to open it at first, which will increase the refcount. So
-		 * during the process of the detach IOCTL, it will return
-		 * -EBUSY as the PCC inode refcount is larger than 1. Someone
-		 * might argue that here it can just decrease the refcount
-		 * of the PCC inode, return succeed and make the close of
-		 * IOCTL file handle to perform the real detach. But this
-		 * may result in inconsistent state of a PCC file. i.e. Process
-		 * A got a successful return form the detach IOCTL; Process B
-		 * opens the file before Process A finally closed the IOCTL
-		 * file handle. It makes the following I/O of Process B will
-		 * direct into PCC although the file was already detached from
-		 * the view of Process A.
-		 * Using a dir IOCTL does not exist the problem above.
-		 */
 		OBD_ALLOC_PTR(detach);
 		if (detach == NULL)
 			RETURN(-ENOMEM);

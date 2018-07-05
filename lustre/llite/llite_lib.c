@@ -984,6 +984,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		obd_heat_clear(lli->lli_heat_instances, OBD_HEAT_COUNT);
 		lli->lli_heat_flags = 0;
 		mutex_init(&lli->lli_pcc_lock);
+		lli->lli_pcc_state = PCC_STATE_FL_NONE;
 		lli->lli_pcc_inode = NULL;
 	}
 	mutex_init(&lli->lli_layout_mutex);
@@ -1656,6 +1657,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct md_op_data *op_data = NULL;
 	int rc = 0;
+
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "%s: setattr inode "DFID"(%p) from %llu to %llu, "

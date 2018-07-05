@@ -1243,16 +1243,6 @@ static int ct_restore(const struct hsm_action_item *hai, const long hal_flags)
 		goto fini;
 	}
 
-	/* When restore request for a file triggered by read/write/
-	 * truncate operation from another client, it needs to detach
-	 * the file first if it is PCC-attached.
-	 */
-	rc = llapi_pcc_detach_fid_fd(opt.o_mnt_fd, &hai->hai_fid);
-	if (rc) {
-		CT_ERROR(rc, "cannot detach pcc for file '%s'", dst);
-		goto fini;
-	}
-
 	dst_fd = llapi_hsm_action_get_fd(hcp);
 	if (dst_fd < 0) {
 		rc = dst_fd;
@@ -1331,7 +1321,12 @@ static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 		rc = -errno;
 		CT_ERROR(rc, "cannot unlink '%s'", attr);
 		err_minor++;
-		goto fini;
+
+		/* ignore the error when lov file does not exist. */
+		if (rc == -ENOENT)
+			rc = 0;
+		else
+			goto fini;
 	}
 
 fini:

@@ -1140,7 +1140,37 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 			goto err_out;
 	} else if (hai->hai_action == HSMA_REMOVE) {
 		/* Since remove is atomic there is no need to send an
-		 * initial MDS_HSM_PROGRESS RPC. */
+		 * initial MDS_HSM_PROGRESS RPC.
+		 * RW-PCC uses Lustre HSM mechanism for data synchronization.
+		 * At the beginning of RW-PCC attach, the client tries to
+		 * exclusively open the file by using a lease lock. A
+		 * successful lease open ensures that the current attach
+		 * process is the unique opener for the file.
+		 * After taking the lease, the file data is then copied from
+		 * OSTs into PCC and then the client closes the lease with
+		 * with a PCC attach intent.
+		 * However, for a file with HSM exists, archived state (i.e. a
+		 * cached file just was detached from PCC and restore into
+		 * OST), a HSM REMOVE request may delete the above PCC copy
+		 * during RW-PCC attach wrongly.
+		 * Thus, a open/close on the corresponding Lustre file is added
+		 * for HSMA_REMOVE here to solve this conflict.
+		 */
+		fd = ct_open_by_fid(hcp->ct_priv, &hai->hai_fid,
+				O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK);
+		if (fd < 0) {
+			rc = fd;
+			/* ignore the error in case of Remove Archive on Last
+			 * Unlink (RAoLU).
+			 */
+			if (rc == -ENOENT) {
+				rc = 0;
+				goto out_log;
+			}
+			goto err_out;
+		}
+
+		hcp->source_fd = fd;
 		goto out_log;
 	}
 

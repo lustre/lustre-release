@@ -349,16 +349,21 @@ static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 #endif
 	int count = 0;
 	bool printed = false;
+	bool cached;
 	int result;
 	sigset_t set;
+
+	ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
+			   LPROC_LL_FAULT, 1);
+
+	result = pcc_fault(vma, vmf, &cached);
+	if (cached)
+		return result;
 
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by
 	 * other signals. */
 	set = cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM));
-
-	ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
-			   LPROC_LL_FAULT, 1);
 
 	/* make sure offset is not a negative number */
 	if (vmf->pgoff > (MAX_LFS_FILESIZE >> PAGE_SHIFT))
@@ -403,10 +408,15 @@ static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 	int count = 0;
 	bool printed = false;
 	bool retry;
+	bool cached;
 	int result;
 
 	ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
 			   LPROC_LL_MKWRITE, 1);
+
+	result = pcc_page_mkwrite(vma, vmf, &cached);
+	if (cached)
+		return result;
 
 	file_update_time(vma->vm_file);
         do {
@@ -459,6 +469,7 @@ static void ll_vm_open(struct vm_area_struct * vma)
 	ENTRY;
 	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
 	atomic_inc(&vob->vob_mmap_cnt);
+	pcc_vm_open(vma);
 	EXIT;
 }
 
@@ -473,6 +484,7 @@ static void ll_vm_close(struct vm_area_struct *vma)
 	ENTRY;
 	atomic_dec(&vob->vob_mmap_cnt);
 	LASSERT(atomic_read(&vob->vob_mmap_cnt) >= 0);
+	pcc_vm_close(vma);
 	EXIT;
 }
 
@@ -487,7 +499,7 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
         if (mapping_mapped(mapping)) {
                 rc = 0;
 		unmap_mapping_range(mapping, first + PAGE_SIZE - 1,
-                                    last - first + 1, 0);
+				    last - first + 1, 1);
         }
 
         RETURN(rc);
@@ -503,20 +515,17 @@ static const struct vm_operations_struct ll_file_vm_ops = {
 int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
 {
 	struct inode *inode = file_inode(file);
+	bool cached;
         int rc;
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-	struct file *pcc_file = fd->fd_pcc_file.pccf_file;
 
         ENTRY;
 
-	/* pcc cache path */
-	if (pcc_file) {
-		vma->vm_file = pcc_file;
-		return file_inode(pcc_file)->i_fop->mmap(pcc_file, vma);
-	}
-
         if (ll_file_nolock(file))
                 RETURN(-EOPNOTSUPP);
+
+	rc = pcc_file_mmap(file, vma, &cached);
+	if (cached && rc != 0)
+		RETURN(rc);
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_MAP, 1);
         rc = generic_file_mmap(file, vma);
@@ -524,7 +533,8 @@ int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
 		vma->vm_ops = &ll_file_vm_ops;
                 vma->vm_ops->open(vma);
                 /* update the inode's size and mtime */
-		rc = ll_glimpse_size(inode);
+		if (!cached)
+			rc = ll_glimpse_size(inode);
         }
 
         RETURN(rc);

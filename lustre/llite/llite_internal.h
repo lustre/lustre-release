@@ -216,6 +216,7 @@ struct ll_inode_info {
 			char                    lli_jobid[LUSTRE_JOBID_SIZE];
 
 			struct mutex		 lli_pcc_lock;
+			enum lu_pcc_state_flags	 lli_pcc_state;
 			struct pcc_inode	*lli_pcc_inode;
 		};
 	};
