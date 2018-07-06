@@ -625,15 +625,9 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 
 	*fid = d->opd_pre_last_created_fid;
 	rc = osp_precreate_fids(env, d, fid, &grow);
-	if (rc == 1) {
+	if (rc == 1)
 		/* Current seq has been used up*/
-		if (!osp_is_fid_client(d)) {
-			osp_pre_update_status(d, -ENOSPC);
-			rc = -ENOSPC;
-		}
-		wake_up(&d->opd_pre_waitq);
-		GOTO(out_req, rc);
-	}
+		GOTO(out_req, rc = -ENOSPC);
 
 	if (!osp_is_fid_client(d)) {
 		/* Non-FID client will always send seq 0 because of

@@ -754,13 +754,8 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	 * how many objects are available for immediate creation
 	 */
 	spin_lock(&d->opd_pre_lock);
-	LASSERTF(fid_seq(&d->opd_pre_last_created_fid) ==
-		 fid_seq(&d->opd_pre_used_fid),
-		 "last_created "DFID", next_fid "DFID"\n",
-		 PFID(&d->opd_pre_last_created_fid),
-		 PFID(&d->opd_pre_used_fid));
-	sfs->os_fprecreated = fid_oid(&d->opd_pre_last_created_fid) -
-			      fid_oid(&d->opd_pre_used_fid);
+	sfs->os_fprecreated = osp_fid_diff(&d->opd_pre_last_created_fid,
+					   &d->opd_pre_used_fid);
 	sfs->os_fprecreated -= d->opd_pre_reserved;
 	LASSERTF(sfs->os_fprecreated <= OST_MAX_PRECREATE * 2,
 		 "last_created "DFID", next_fid "DFID", reserved %llu\n",
