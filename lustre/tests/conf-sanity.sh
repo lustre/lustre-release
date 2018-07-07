@@ -7758,6 +7758,31 @@ test_109b()
 }
 run_test 109b "test lctl clear_conf one config"
 
+test_120() { # LU-11130
+	[ "$MDSCOUNT" -lt 2 ] && skip "mdt count < 2"
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs only test"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "Need DNE2 capable MD target with LU-11130 fix"
+
+	setup
+
+	local mds1host=$(facet_active_host mds1)
+	local mds1dev=$(mdsdevname 1)
+
+	$LFS mkdir -i 1 $DIR/$tdir
+	$LFS mkdir -i 0 $DIR/$tdir/mds1dir
+
+	ln -s foo $DIR/$tdir/bar
+	mv $DIR/$tdir/bar $DIR/$tdir/mds1dir/bar2 ||
+		error "cross-target rename failed"
+
+	stopall
+
+	run_e2fsck $mds1host $mds1dev "-n"
+}
+run_test 120 "cross-target rename should not create bad symlinks"
+
 test_122() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.10.6) ]] ||
