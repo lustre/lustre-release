@@ -298,6 +298,11 @@ static int qsd_process_upd(const struct lu_env *env, struct qsd_upd_rec *upd)
 			GOTO(out, rc);
 		/* refresh usage */
 		qsd_refresh_usage(env, lqe);
+
+		spin_lock(&qqi->qqi_qsd->qsd_adjust_lock);
+		lqe->lqe_adjust_time = 0;
+		spin_unlock(&qqi->qqi_qsd->qsd_adjust_lock);
+
 		/* Report usage asynchronously */
 		rc = qsd_adjust(env, lqe);
 		if (rc)
