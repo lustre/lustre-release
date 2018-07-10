@@ -3110,7 +3110,8 @@ print_last_init_comp(struct find_param *param)
 
 	/* print specific component info */
 	if (param->fp_check_comp_id || param->fp_check_comp_flags ||
-	    param->fp_check_comp_start || param->fp_check_comp_end)
+	    param->fp_check_comp_start || param->fp_check_comp_end ||
+	    param->fp_check_mirror_id || param->fp_check_mirror_index)
 		return false;
 
 	return true;
@@ -3201,6 +3202,8 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 	int obdindex = param->fp_obd_index;
 	int i, j, match;
 	bool obdstripe = false;
+	__u16 mirror_index = 0;
+	__u16 mirror_id = 0;
 
 	if (obdindex != OBD_NOT_FOUND) {
 		for (i = 0; !(flags & LDF_IS_DIR) && !obdstripe &&
@@ -3257,6 +3260,32 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		if (param->fp_check_comp_end) {
 			match = find_comp_end_cmp(entry->lcme_extent.e_end,
 						  param);
+			if (match == -1)
+				continue;
+		}
+
+		if (param->fp_check_mirror_index) {
+			if (mirror_id != mirror_id_of(entry->lcme_id)) {
+				mirror_index++;
+				mirror_id = mirror_id_of(entry->lcme_id);
+			}
+
+			match = find_value_cmp(mirror_index,
+					       param->fp_mirror_index,
+					       param->fp_mirror_index_sign,
+					       param->fp_exclude_mirror_index,
+					       1, 0);
+			if (match == -1)
+				continue;
+		} else if (param->fp_check_mirror_id) {
+			if (mirror_id != mirror_id_of(entry->lcme_id))
+				mirror_id = mirror_id_of(entry->lcme_id);
+
+			match = find_value_cmp(mirror_id,
+					       param->fp_mirror_id,
+					       param->fp_mirror_id_sign,
+					       param->fp_exclude_mirror_id,
+					       1, 0);
 			if (match == -1)
 				continue;
 		}

@@ -335,6 +335,8 @@ command_t cmdlist[] = {
 	 "		   [--component-count]\n"
 	 "		   [--component-start[=[+-]comp_start]]\n"
 	 "		   [--component-end[=[+-]comp_end]|-E[[+-]comp_end]]\n"
+	 "		   [[!] --mirror-index=[+-]<index> |\n"
+	 "		    [!] --mirror-id=[+-]<id>]\n"
 	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
@@ -2503,6 +2505,7 @@ enum {
 	LFS_MIRROR_ID_OPT,
 	LFS_MIRROR_STATE_OPT,
 	LFS_LAYOUT_COPY,
+	LFS_MIRROR_INDEX_OPT,
 };
 
 /* functions */
@@ -4002,6 +4005,10 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			.name = "comp-start",	.has_arg = optional_argument },
 	{ .val = LFS_COMP_START_OPT,
 		.name = "component-start",	.has_arg = optional_argument },
+	{ .val = LFS_MIRROR_INDEX_OPT,
+		.name = "mirror-index",		.has_arg = required_argument },
+	{ .val = LFS_MIRROR_ID_OPT,
+		.name = "mirror-id",		.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = no_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = no_argument },
 /* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
@@ -4040,11 +4047,36 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
 	{ .name = NULL } };
 	int c, rc;
+	int neg_opt = 0;
+	int pathstart = -1, pathend = -1;
+	int isoption;
 	char *end, *tmp;
 
-	while ((c = getopt_long(argc, argv, "cdDE::FghiI::LmMoO:pqrRsSvy",
-				long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv,
+			"-cdDE::FghiI::LmMoO:pqrRsSvy",
+			long_opts, NULL)) != -1) {
+		if (neg_opt)
+			--neg_opt;
+
+		/* '!' is part of option */
+		isoption = (c != 1) || (strcmp(optarg, "!") == 0);
+		if (!isoption && pathend != -1) {
+			fprintf(stderr,
+				"error: %s: filename|dirname must either precede options or follow options\n",
+				argv[0]);
+			return CMD_HELP;
+		}
+		if (!isoption && pathstart == -1)
+			pathstart = optind - 1;
+		if (isoption && pathstart != -1 && pathend == -1)
+			pathend = optind - 2;
+
 		switch (c) {
+		case 1:
+			/* unknown: opt is "!" */
+			if (strcmp(optarg, "!") == 0)
+				neg_opt = 2;
+			break;
 		case 'c':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
 				param->fp_verbose |= VERBOSE_COUNT;
@@ -4097,6 +4129,58 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_verbose |= VERBOSE_COMP_START;
 				param->fp_max_depth = 0;
 			}
+			break;
+		case LFS_MIRROR_INDEX_OPT:
+			if (optarg[0] == '+') {
+				param->fp_mirror_index_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param->fp_mirror_index_sign = 1;
+				optarg++;
+			}
+
+			param->fp_mirror_index = strtoul(optarg, &end, 0);
+			if (*end != '\0' || (param->fp_mirror_index == 0 &&
+			    param->fp_mirror_index_sign == 0 && neg_opt == 0)) {
+				fprintf(stderr,
+					"%s %s: invalid mirror index '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+			if (param->fp_mirror_id != 0) {
+				fprintf(stderr,
+					"%s %s: can't specify both mirror index and mirror ID\n",
+					progname, argv[0]);
+				return CMD_HELP;
+			}
+			param->fp_check_mirror_index = 1;
+			param->fp_exclude_mirror_index = !!neg_opt;
+			break;
+		case LFS_MIRROR_ID_OPT:
+			if (optarg[0] == '+') {
+				param->fp_mirror_id_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param->fp_mirror_id_sign = 1;
+				optarg++;
+			}
+
+			param->fp_mirror_id = strtoul(optarg, &end, 0);
+			if (*end != '\0' || (param->fp_mirror_id == 0 &&
+			    param->fp_mirror_id_sign == 0 && neg_opt == 0)) {
+				fprintf(stderr,
+					"%s %s: invalid mirror ID '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+			if (param->fp_mirror_index != 0) {
+				fprintf(stderr,
+					"%s %s: can't specify both mirror index and mirror ID\n",
+					progname, argv[0]);
+				return CMD_HELP;
+			}
+			param->fp_check_mirror_id = 1;
+			param->fp_exclude_mirror_id = !!neg_opt;
 			break;
 		case 'd':
 			param->fp_max_depth = 0;
@@ -4228,7 +4312,16 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		}
 	}
 
-	if (optind >= argc)
+	if (pathstart == -1) {
+		fprintf(stderr, "error: %s: no filename|pathname\n",
+				argv[0]);
+		return CMD_HELP;
+	} else if (pathend == -1) {
+		/* no options */
+		pathend = argc;
+	}
+
+	if (pathend > argc)
 		return CMD_HELP;
 
 	if (param->fp_recursive)
@@ -4242,8 +4335,8 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		param->fp_verbose = VERBOSE_OBJID;
 
 	do {
-		rc = llapi_getstripe(argv[optind], param);
-	} while (++optind < argc && !rc);
+		rc = llapi_getstripe(argv[pathstart], param);
+	} while (++pathstart < pathend && !rc);
 
 	if (rc)
 		fprintf(stderr, "error: %s failed for %s.\n",

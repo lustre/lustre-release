@@ -198,6 +198,8 @@ struct find_param {
 				 fp_comp_end_sign:2,
 				 fp_comp_count_sign:2,
 				 fp_mirror_count_sign:2,
+				 fp_mirror_index_sign:2,
+				 fp_mirror_id_sign:2,
 				 fp_mdt_count_sign:2,
 				 fp_blocks_sign:2;
 	unsigned long long	 fp_size;
@@ -244,6 +246,10 @@ struct find_param {
 				 fp_exclude_comp_end:1,
 				 fp_check_comp_id:1,
 				 fp_exclude_comp_id:1,
+				 fp_check_mirror_id:1,
+				 fp_exclude_mirror_id:1,
+				 fp_check_mirror_index:1,
+				 fp_exclude_mirror_index:1,
 				 fp_check_mdt_count:1,
 				 fp_exclude_mdt_count:1,
 				 fp_check_hash_type:1,
@@ -291,6 +297,8 @@ struct find_param {
 	__u16			 fp_mirror_state;
 	__u16			 fp_mirror_neg_state;
 	__u32			 fp_comp_id;
+	__u16			 fp_mirror_id;
+	__u16			 fp_mirror_index;
 	unsigned long long	 fp_comp_start;
 	unsigned long long	 fp_comp_start_units;
 	unsigned long long	 fp_comp_end;
