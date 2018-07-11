@@ -1,0 +1,11 @@
+--- a/fs/ext4/super.c	2018-07-11 16:27:46.890341960 +0300
++++ b/fs/ext4/super.c	2018-07-11 16:29:17.549061853 +0300
+@@ -5403,6 +5403,8 @@ static int ext4_mark_dquot_dirty(struct
+ 	/* Are we journaling quotas? */
+ 	if (EXT4_HAS_RO_COMPAT_FEATURE(sb, EXT4_FEATURE_RO_COMPAT_QUOTA) ||
+ 	    sbi->s_qf_names[USRQUOTA] || sbi->s_qf_names[GRPQUOTA]) {
++		if (test_bit(DQ_MOD_B, &dquot->dq_flags))
++			return 0;
+ 		dquot_mark_dquot_dirty(dquot);
+ 		return ext4_write_dquot(dquot);
+ 	} else {
