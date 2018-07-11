@@ -3175,6 +3175,7 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 	lum = buf->lb_buf;
 
 	switch (lum->lmm_magic) {
+	case LOV_USER_MAGIC_SPECIFIC:
 	case LOV_USER_MAGIC_V3:
 		v3 = buf->lb_buf;
 		if (v3->lmm_pool_name[0] != '\0')
@@ -4005,6 +4006,49 @@ static inline int lod_object_will_be_striped(int is_reg, const struct lu_fid *fi
 	return (is_reg && fid_seq(fid) != FID_SEQ_LOCAL_FILE);
 }
 
+/**
+ * Copy OST list from layout provided by user.
+ *
+ * \param[in] lod_comp		layout_component to be filled
+ * \param[in] v3		LOV EA V3 user data
+ *
+ * \retval		0 on success
+ * \retval		negative if failed
+ */
+int lod_comp_copy_ost_lists(struct lod_layout_component *lod_comp,
+			    struct lov_user_md_v3 *v3)
+{
+	int j;
+
+	ENTRY;
+
+	if (v3->lmm_stripe_offset == LOV_OFFSET_DEFAULT)
+		v3->lmm_stripe_offset = v3->lmm_objects[0].l_ost_idx;
+
+	if (lod_comp->llc_ostlist.op_array) {
+		if (lod_comp->llc_ostlist.op_count ==
+					v3->lmm_stripe_count)
+			goto skip;
+		OBD_FREE(lod_comp->llc_ostlist.op_array,
+			 lod_comp->llc_ostlist.op_size);
+	}
+
+	/* copy ost list from lmm */
+	lod_comp->llc_ostlist.op_count = v3->lmm_stripe_count;
+	lod_comp->llc_ostlist.op_size = v3->lmm_stripe_count * sizeof(__u32);
+	OBD_ALLOC(lod_comp->llc_ostlist.op_array,
+		  lod_comp->llc_ostlist.op_size);
+	if (!lod_comp->llc_ostlist.op_array)
+		RETURN(-ENOMEM);
+skip:
+	for (j = 0; j < v3->lmm_stripe_count; j++) {
+		lod_comp->llc_ostlist.op_array[j] =
+			v3->lmm_objects[j].l_ost_idx;
+	}
+
+	RETURN(0);
+}
+
 
 /**
  * Get default striping.
@@ -4045,13 +4089,19 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
 		v3 = (struct lov_user_md_v3 *)v1;
 		lustre_swab_lov_user_md_v3(v3);
+	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_SPECIFIC)) {
+		v3 = (struct lov_user_md_v3 *)v1;
+		lustre_swab_lov_user_md_v3(v3);
+		lustre_swab_lov_user_md_objects(v3->lmm_objects,
+						v3->lmm_stripe_count);
 	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_COMP_V1)) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
 		lustre_swab_lov_comp_md_v1(comp_v1);
 	}
 
 	if (v1->lmm_magic != LOV_MAGIC_V3 && v1->lmm_magic != LOV_MAGIC_V1 &&
-	    v1->lmm_magic != LOV_MAGIC_COMP_V1)
+	    v1->lmm_magic != LOV_MAGIC_COMP_V1 &&
+	    v1->lmm_magic != LOV_USER_MAGIC_SPECIFIC)
 		RETURN(-ENOTSUPP);
 
 	if (v1->lmm_magic == LOV_MAGIC_COMP_V1) {
@@ -4122,6 +4172,12 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 				pool = v3->lmm_pool_name;
 		}
 		lod_set_def_pool(lds, i, pool);
+		if (v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+			v3 = (struct lov_user_md_v3 *)v1;
+			rc = lod_comp_copy_ost_lists(lod_comp, v3);
+			if (rc)
+				RETURN(rc);
+		}
 	}
 
 	lds->lds_def_striping_set = 1;
@@ -4238,6 +4294,17 @@ static void lod_striping_from_default(struct lod_object *lo,
 				/* pointer was copied from def_comp */
 				obj_comp->llc_pool = NULL;
 				lod_obj_set_pool(lo, i, def_comp->llc_pool);
+			}
+
+			/* copy ost list */
+			if (def_comp->llc_ostlist.op_array) {
+				OBD_ALLOC(obj_comp->llc_ostlist.op_array,
+					  obj_comp->llc_ostlist.op_size);
+				if (!obj_comp->llc_ostlist.op_array)
+					return;
+				memcpy(obj_comp->llc_ostlist.op_array,
+				       def_comp->llc_ostlist.op_array,
+				       obj_comp->llc_ostlist.op_size);
 			}
 
 			/*

@@ -584,13 +584,28 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 			lum_size = sizeof(struct lmv_user_md);
 			break;
 		}
-                default: {
-                        CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
-                                        " %#08x != %#08x nor %#08x\n",
-                                        lump->lmm_magic, LOV_USER_MAGIC_V1,
-                                        LOV_USER_MAGIC_V3);
-                        RETURN(-EINVAL);
-                }
+		case LOV_USER_MAGIC_SPECIFIC: {
+			struct lov_user_md_v3 *v3 =
+					(struct lov_user_md_v3 *)lump;
+			if (v3->lmm_stripe_count > LOV_MAX_STRIPE_COUNT)
+				RETURN(-EINVAL);
+			if (lump->lmm_magic !=
+			    cpu_to_le32(LOV_USER_MAGIC_SPECIFIC)) {
+				lustre_swab_lov_user_md_v3(v3);
+				lustre_swab_lov_user_md_objects(v3->lmm_objects,
+						v3->lmm_stripe_count);
+			}
+			lum_size = lov_user_md_size(v3->lmm_stripe_count,
+						    LOV_USER_MAGIC_SPECIFIC);
+			break;
+		}
+		default: {
+			CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
+					" %#08x != %#08x nor %#08x\n",
+					lump->lmm_magic, LOV_USER_MAGIC_V1,
+					LOV_USER_MAGIC_V3);
+			RETURN(-EINVAL);
+		}
                 }
         } else {
                 lum_size = sizeof(struct lov_user_md_v1);
@@ -741,6 +756,16 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	case LMV_USER_MAGIC:
 		if (LMV_USER_MAGIC != cpu_to_le32(LMV_USER_MAGIC))
 			lustre_swab_lmv_user_md((struct lmv_user_md *)lmm);
+		break;
+	case LOV_USER_MAGIC_SPECIFIC: {
+		struct lov_user_md_v3 *v3 = (struct lov_user_md_v3 *)lmm;
+
+		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
+			lustre_swab_lov_user_md_v3(v3);
+			lustre_swab_lov_user_md_objects(v3->lmm_objects,
+							v3->lmm_stripe_count);
+			}
+		}
 		break;
 	default:
 		CERROR("unknown magic: %lX\n", (unsigned long)lmm->lmm_magic);
@@ -1288,34 +1313,51 @@ lmv_out_free:
 	}
 	case LL_IOC_LOV_SETSTRIPE_NEW:
 	case LL_IOC_LOV_SETSTRIPE: {
-		struct lov_user_md_v3 lumv3;
-		struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&lumv3;
+		struct lov_user_md_v3 *lumv3 = NULL;
+		struct lov_user_md_v1 lumv1;
+		struct lov_user_md_v1 *lumv1_ptr = &lumv1;
 		struct lov_user_md_v1 __user *lumv1p =
 			(struct lov_user_md_v1 __user *)arg;
 		struct lov_user_md_v3 __user *lumv3p =
 			(struct lov_user_md_v3 __user *)arg;
+		int lum_size;
 
 		int set_default = 0;
 
 		CLASSERT(sizeof(struct lov_user_md_v3) >
 			 sizeof(struct lov_comp_md_v1));
-		CLASSERT(sizeof(lumv3) == sizeof(*lumv3p));
-		CLASSERT(sizeof(lumv3.lmm_objects[0]) ==
-			 sizeof(lumv3p->lmm_objects[0]));
+		CLASSERT(sizeof(*lumv3) == sizeof(*lumv3p));
 		/* first try with v1 which is smaller than v3 */
-		if (copy_from_user(lumv1, lumv1p, sizeof(*lumv1)))
+		if (copy_from_user(&lumv1, lumv1p, sizeof(lumv1)))
 			RETURN(-EFAULT);
-
-		if (lumv1->lmm_magic == LOV_USER_MAGIC_V3)
-			if (copy_from_user(&lumv3, lumv3p, sizeof(lumv3)))
-				RETURN(-EFAULT);
 
 		if (inode->i_sb->s_root == file_dentry(file))
 			set_default = 1;
 
-		/* in v1 and v3 cases lumv1 points to data */
-		rc = ll_dir_setstripe(inode, lumv1, set_default);
+		switch (lumv1.lmm_magic) {
+		case LOV_USER_MAGIC_V3:
+		case LOV_USER_MAGIC_SPECIFIC:
+			lum_size = ll_lov_user_md_size(&lumv1);
+			if (lum_size < 0)
+				RETURN(lum_size);
+			OBD_ALLOC(lumv3, lum_size);
+			if (!lumv3)
+				RETURN(-ENOMEM);
+			if (copy_from_user(lumv3, lumv3p, lum_size))
+				GOTO(out, rc = -EFAULT);
+			lumv1_ptr = (struct lov_user_md_v1 *)lumv3;
+			break;
+		case LOV_USER_MAGIC_V1:
+			break;
+		default:
+			GOTO(out, rc = -ENOTSUPP);
+		}
 
+		/* in v1 and v3 cases lumv1 points to data */
+		rc = ll_dir_setstripe(inode, lumv1_ptr, set_default);
+out:
+		if (lumv3)
+			OBD_FREE(lumv3, lum_size);
 		RETURN(rc);
 	}
 	case LL_IOC_LMV_GETSTRIPE: {

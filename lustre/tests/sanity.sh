@@ -2297,6 +2297,25 @@ test_27G() { #LU-10629
 }
 run_test 27G "Clear OST pool from stripe"
 
+test_27H() {
+	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.11.53) ]] &&
+		skip "Need MDS version newer than 2.11.53"
+	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -o 0 -o 2 $DIR/$tdir || error "setstripe failed"
+	touch $DIR/$tdir/$tfile
+	$LFS getstripe -c $DIR/$tdir/$tfile
+	[ $($LFS getstripe -c $DIR/$tdir/$tfile) -eq 2 ] ||
+		error "two-stripe file doesn't have two stripes"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=4k count=4 || error "dd failed"
+	$LFS getstripe -y $DIR/$tdir/$tfile
+	(( $($LFS getstripe -y $DIR/$tdir/$tfile |
+	     egrep -c "l_ost_idx: [02]$") == "2" )) ||
+		error "expected l_ost_idx: [02]$ not matched"
+}
+run_test 27H "Set specific OSTs stripe"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

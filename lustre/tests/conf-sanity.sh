@@ -5895,17 +5895,21 @@ test_82a() { # LU-4665
 	echo -e "\n$cmd"
 	eval $cmd && error "index $start_ost_idx should be in $ost_indices"
 
-	# 5. Specifying OST indices for directory should fail with ENOSUPP.
+	# 5. Specifying OST indices for directory should succeed.
 	local dir=$DIR/$tdir/$tdir
 	mkdir $dir || error "mkdir $dir failed"
 	cmd="$SETSTRIPE -o $ost_indices $dir"
-	echo -e "\n$cmd"
-	eval $cmd && error "$cmd should fail, specifying OST indices" \
-			   "for directory is not supported"
+	if [[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.11.53) &&
+	   $(lustre_version_code client -gt $(version_code 2.11.53)) ]]; then
+		echo -e "\n$cmd"
+		eval $cmd || error "unable to specify OST indices on directory"
+	else
+		echo "need MDS+client version at least 2.11.53"
+	fi
 
 	restore_ostindex
 }
-run_test 82a "specify OSTs for file (succeed) or directory (fail)"
+run_test 82a "specify OSTs for file (succeed) or directory (succeed)"
 
 cleanup_82b() {
 	trap 0

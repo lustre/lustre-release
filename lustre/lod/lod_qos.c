@@ -1219,6 +1219,10 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 	if (rc < 0)
 		RETURN(rc);
 
+	if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT)
+		lod_comp->llc_stripe_offset =
+				lod_comp->llc_ostlist.op_array[0];
+
 	for (i = 0; i < lod_comp->llc_stripe_count; i++) {
 		if (lod_comp->llc_ostlist.op_array[i] ==
 		    lod_comp->llc_stripe_offset) {
@@ -2041,30 +2045,14 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		pool_name = NULL;
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3 ||
 		    v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
-			int j;
-
 			v3 = (struct lov_user_md_v3 *)v1;
 			if (v3->lmm_pool_name[0] != '\0')
 				pool_name = v3->lmm_pool_name;
 
 			if (v3->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
-				if (v3->lmm_stripe_offset == LOV_OFFSET_DEFAULT)
-					v3->lmm_stripe_offset =
-						v3->lmm_objects[0].l_ost_idx;
-
-				/* copy ost list from lmm */
-				lod_comp->llc_ostlist.op_count =
-					v3->lmm_stripe_count;
-				lod_comp->llc_ostlist.op_size =
-					v3->lmm_stripe_count * sizeof(__u32);
-				OBD_ALLOC(lod_comp->llc_ostlist.op_array,
-					  lod_comp->llc_ostlist.op_size);
-				if (!lod_comp->llc_ostlist.op_array)
-					GOTO(free_comp, rc = -ENOMEM);
-
-				for (j = 0; j < v3->lmm_stripe_count; j++)
-					lod_comp->llc_ostlist.op_array[j] =
-						v3->lmm_objects[j].l_ost_idx;
+				rc = lod_comp_copy_ost_lists(lod_comp, v3);
+				if (rc)
+					GOTO(free_comp, rc);
 			}
 		}
 

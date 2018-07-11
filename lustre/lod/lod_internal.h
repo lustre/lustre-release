@@ -757,6 +757,8 @@ void lod_striping_free(const struct lu_env *env, struct lod_object *lo);
 int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 			    struct thandle *th,
 			    struct lod_obj_stripe_cb_data *data);
+int lod_comp_copy_ost_lists(struct lod_layout_component *lod_comp,
+			    struct lov_user_md_v3 *v3);
 
 /* lod_sub_object.c */
 struct thandle *lod_sub_get_thandle(const struct lu_env *env,

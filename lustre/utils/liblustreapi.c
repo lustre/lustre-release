@@ -3480,6 +3480,7 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 	switch (magic) {
 	case LOV_USER_MAGIC_V1:
 	case LOV_USER_MAGIC_V3:
+	case LOV_USER_MAGIC_SPECIFIC:
 		lov_dump_plain_user_lmm(param, path, flags);
 		break;
 	case LMV_MAGIC_V1:
