@@ -147,8 +147,8 @@ ssize_t llapi_mirror_read(int fd, unsigned int id, void *buf, size_t count,
 	return result;
 }
 
-static ssize_t llapi_mirror_write(int fd, unsigned int id,
-				   const void *buf, size_t count, off_t pos)
+ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
+			   size_t count, off_t pos)
 {
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	ssize_t result = 0;
@@ -186,7 +186,7 @@ static ssize_t llapi_mirror_write(int fd, unsigned int id,
 	return result;
 }
 
-static int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
+int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
 {
 	int rc;
 

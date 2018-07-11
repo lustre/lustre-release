@@ -7970,6 +7970,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	struct llapi_layout *layout;
 	struct stat stbuf;
 	uint32_t flr_state;
+	uint64_t start;
+	uint64_t end;
 	int comp_size = 0;
 	int idx;
 	int fd;
@@ -8042,51 +8044,29 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		goto free_layout;
 	}
 
-	idx = 0;
-	while (idx < comp_size) {
-		ssize_t result;
-		uint64_t end;
-		__u16 mirror_id;
-		int i;
-
-		rc = llapi_lease_check(fd);
-		if (rc != LL_LEASE_WRLCK) {
-			fprintf(stderr, "%s: '%s' lost lease lock.\n",
-				progname, fname);
-			goto free_layout;
-		}
-
-		mirror_id = comp_array[idx].lrc_mirror_id;
-		end = comp_array[idx].lrc_end;
-
-		/* try to combine adjacent component */
-		for (i = idx + 1; i < comp_size; i++) {
-			if (mirror_id != comp_array[i].lrc_mirror_id ||
-			    end != comp_array[i].lrc_start)
-				break;
-			end = comp_array[i].lrc_end;
-		}
-
-		result = llapi_mirror_resync_one(fd, layout, mirror_id,
-						 comp_array[idx].lrc_start,
-						 end);
-		if (result < 0) {
-			fprintf(stderr, "%s: '%s' llapi_mirror_resync_one: "
-				"%ld.\n", progname, fname, result);
-			rc = result;
-			goto unlock;
-		} else if (result > 0) {
-			int j;
-
-			/* mark synced components */
-			for (j = idx; j < i; j++)
-				comp_array[j].lrc_synced = true;
-		}
-
-		idx = i;
+	/* get the read range [start, end) */
+	start = comp_array[0].lrc_start;
+	end = comp_array[0].lrc_end;
+	for (idx = 1; idx < comp_size; idx++) {
+		if (comp_array[idx].lrc_start < start)
+			start = comp_array[idx].lrc_start;
+		if (end < comp_array[idx].lrc_end)
+			end = comp_array[idx].lrc_end;
 	}
 
-unlock:
+	rc = llapi_lease_check(fd);
+	if (rc != LL_LEASE_WRLCK) {
+		fprintf(stderr, "%s: '%s' lost lease lock.\n",
+			progname, fname);
+		goto free_layout;
+	}
+
+	rc = llapi_mirror_resync_many(fd, layout, comp_array, comp_size,
+				      start, end);
+	if (rc < 0)
+		fprintf(stderr, "%s: '%s' llapi_mirror_resync_many: %d.\n",
+			progname, fname, rc);
+
 	/* prepare ioc for lease put */
 	ioc->lil_mode = LL_LEASE_UNLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC_DONE;

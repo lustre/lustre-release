@@ -516,11 +516,18 @@ struct llapi_resync_comp {
 /** Opaque data type abstracting the layout of a Lustre file. */
 struct llapi_layout;
 
+int llapi_mirror_truncate(int fd, unsigned int id, off_t length);
+ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
+			   size_t count, off_t pos);
+uint32_t llapi_mirror_find(struct llapi_layout *layout,
+			   uint64_t file_start, uint64_t file_end,
+			   uint64_t *endp);
 int llapi_mirror_find_stale(struct llapi_layout *layout,
 		struct llapi_resync_comp *comp, size_t comp_size,
 		__u16 *mirror_ids, int ids_nr);
-ssize_t llapi_mirror_resync_one(int fd, struct llapi_layout *layout,
-				uint32_t dst, uint64_t start, uint64_t end);
+int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
+			     struct llapi_resync_comp *comp_array,
+			     int comp_size,  uint64_t start, uint64_t end);
 /*
  * Flags to control how layouts are retrieved.
  */

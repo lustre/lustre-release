@@ -2491,9 +2491,9 @@ error:
 }
 
 /* locate @layout to a valid component covering file [file_start, file_end) */
-static uint32_t llapi_mirror_find(struct llapi_layout *layout,
-				  uint64_t file_start, uint64_t file_end,
-				  uint64_t *endp)
+uint32_t llapi_mirror_find(struct llapi_layout *layout,
+			   uint64_t file_start, uint64_t file_end,
+			   uint64_t *endp)
 {
 	uint32_t mirror_id = 0;
 	int rc;
@@ -2546,12 +2546,21 @@ static uint32_t llapi_mirror_find(struct llapi_layout *layout,
 	return mirror_id;
 }
 
-ssize_t llapi_mirror_resync_one(int fd, struct llapi_layout *layout,
-				uint32_t dst, uint64_t start, uint64_t end)
+int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
+			     struct llapi_resync_comp *comp_array,
+			     int comp_size,  uint64_t start, uint64_t end)
 {
-	uint64_t mirror_end = 0;
-	ssize_t result = 0;
 	size_t count;
+	size_t page_size = sysconf(_SC_PAGESIZE);
+	const size_t buflen = 4 << 20; /* 4M */
+	void *buf;
+	uint64_t pos = start;
+	int i;
+	int rc;
+
+	rc = posix_memalign(&buf, page_size, buflen);
+	if (rc)
+		return -rc;
 
 	if (end == OBD_OBJECT_EOF)
 		count = OBD_OBJECT_EOF;
@@ -2560,30 +2569,86 @@ ssize_t llapi_mirror_resync_one(int fd, struct llapi_layout *layout,
 
 	while (count > 0) {
 		uint32_t src;
-		size_t to_copy;
-		ssize_t copied;
+		uint64_t mirror_end = 0;
+		ssize_t bytes_read;
+		size_t to_read;
+		size_t to_write;
 
-		src = llapi_mirror_find(layout, start, end, &mirror_end);
+		src = llapi_mirror_find(layout, pos, end, &mirror_end);
 		if (src == 0)
 			return -ENOENT;
 
-		if (mirror_end == OBD_OBJECT_EOF)
-			to_copy = count;
-		else
-			to_copy = MIN(count, mirror_end - start);
+		if (mirror_end == OBD_OBJECT_EOF) {
+			to_read = count;
+		} else {
+			to_read = MIN(count, mirror_end - pos);
+			to_read = (to_read + page_size - 1) & ~(page_size - 1);
+		}
+		to_read = MIN(buflen, to_read);
 
-		copied = llapi_mirror_copy(fd, src, dst, start, to_copy);
-		if (copied < 0)
-			return copied;
-
-		result += copied;
-		if (copied < to_copy) /* end of file */
+		bytes_read = llapi_mirror_read(fd, src, buf, to_read, pos);
+		if (bytes_read == 0) {
+			/* end of file */
 			break;
+		}
+		if (bytes_read < 0) {
+			rc = bytes_read;
+			break;
+		}
 
-		if (count != OBD_OBJECT_EOF)
-			count -= copied;
-		start += copied;
+		/* round up to page align to make direct IO happy. */
+		to_write = (bytes_read + page_size - 1) & ~(page_size - 1);
+
+		for (i = 0; i < comp_size; i++) {
+			ssize_t written;
+
+			/* skip non-overlapped component */
+			if (pos > comp_array[i].lrc_end ||
+			    pos + to_write < comp_array[i].lrc_start)
+				continue;
+
+			written = llapi_mirror_write(fd,
+					comp_array[i].lrc_mirror_id, buf,
+					to_write, pos);
+			if (written < 0) {
+				/**
+				 * this component is not written successfully,
+				 * mark it using its lrc_synced, it is supposed
+				 * to be false before getting here.
+				 *
+				 * And before this function returns, all
+				 * elements of comp_array will reverse their
+				 * lrc_synced flag to reflect their true
+				 * meanings.
+				 */
+				comp_array[i].lrc_synced = true;
+				continue;
+			}
+			assert(written == to_write);
+		}
+
+		pos += bytes_read;
+		count -= bytes_read;
 	}
 
-	return result;
+	free(buf);
+
+	if (rc < 0) {
+		for (i = 0; i < comp_size; i++)
+			comp_array[i].lrc_synced = false;
+		return rc;
+	}
+
+	for (i = 0; i < comp_size; i++) {
+		comp_array[i].lrc_synced = !comp_array[i].lrc_synced;
+		if (comp_array[i].lrc_synced && pos & (page_size - 1)) {
+			rc = llapi_mirror_truncate(fd,
+					comp_array[i].lrc_mirror_id, pos);
+			if (rc < 0)
+				comp_array[i].lrc_synced = false;
+		}
+	}
+
+	/* partially successful is successful */
+	return 0;
 }

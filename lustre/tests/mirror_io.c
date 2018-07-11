@@ -359,6 +359,48 @@ static enum resync_errors resync_parse_error(const char *err)
 	return -1;
 }
 
+ssize_t mirror_resync_one(int fd, struct llapi_layout *layout,
+			  uint32_t dst, uint64_t start, uint64_t end)
+{
+	uint64_t mirror_end = 0;
+	ssize_t result = 0;
+	size_t count;
+
+	if (end == OBD_OBJECT_EOF)
+		count = OBD_OBJECT_EOF;
+	else
+		count = end - start;
+
+	while (count > 0) {
+		uint32_t src;
+		size_t to_copy;
+		ssize_t copied;
+
+		src = llapi_mirror_find(layout, start, end, &mirror_end);
+		if (src == 0)
+			return -ENOENT;
+
+		if (mirror_end == OBD_OBJECT_EOF)
+			to_copy = count;
+		else
+			to_copy = MIN(count, mirror_end - start);
+
+		copied = llapi_mirror_copy(fd, src, dst, start, to_copy);
+		if (copied < 0)
+			return copied;
+
+		result += copied;
+		if (copied < to_copy) /* end of file */
+			break;
+
+		if (count != OBD_OBJECT_EOF)
+			count -= copied;
+		start += copied;
+	}
+
+	return result;
+}
+
 static void mirror_resync(int argc, char *argv[])
 {
 	const char *fname;
@@ -464,8 +506,8 @@ static void mirror_resync(int argc, char *argv[])
 		}
 		printf("\b\n");
 
-		res = llapi_mirror_resync_one(fd, layout, mirror_id,
-					      comp_array[idx].lrc_start, end);
+		res = mirror_resync_one(fd, layout, mirror_id,
+					comp_array[idx].lrc_start, end);
 		if (res > 0) {
 			int j;
 
