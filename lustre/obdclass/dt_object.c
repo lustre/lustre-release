@@ -40,7 +40,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/list.h>
-#include <obd.h>
+#include <obd_class.h>
 #include <dt_object.h>
 /* fid_be_to_cpu() */
 #include <lustre_fid.h>
@@ -1096,3 +1096,220 @@ int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v)
 EXPORT_SYMBOL(lprocfs_dt_filesfree_seq_show);
 
 #endif /* CONFIG_PROC_FS */
+
+static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+
+	if (!lu->ld_obd)
+		return -ENODEV;
+
+	return sprintf(buf, "%s\n", lu->ld_obd->obd_uuid.uuid);
+}
+LUSTRE_RO_ATTR(uuid);
+
+static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	return sprintf(buf, "%u\n", (unsigned) osfs.os_bsize);
+}
+LUSTRE_RO_ATTR(blocksize);
+
+static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	u32 blk_size;
+	u64 result;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	blk_size = osfs.os_bsize >> 10;
+	result = osfs.os_blocks;
+
+	while (blk_size >>= 1)
+		result <<= 1;
+
+	return sprintf(buf, "%llu\n", result);
+}
+LUSTRE_RO_ATTR(kbytestotal);
+
+static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	u32 blk_size;
+	u64 result;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	blk_size = osfs.os_bsize >> 10;
+	result = osfs.os_bfree;
+
+	while (blk_size >>= 1)
+		result <<= 1;
+
+	return sprintf(buf, "%llu\n", result);
+}
+LUSTRE_RO_ATTR(kbytesfree);
+
+static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	u32 blk_size;
+	u64 result;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	blk_size = osfs.os_bsize >> 10;
+	result = osfs.os_bavail;
+
+	while (blk_size >>= 1)
+		result <<= 1;
+
+	return sprintf(buf, "%llu\n", result);
+}
+LUSTRE_RO_ATTR(kbytesavail);
+
+static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	return sprintf(buf, "%llu\n", osfs.os_files);
+}
+LUSTRE_RO_ATTR(filestotal);
+
+static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	rc = dt_statfs(NULL, dt, &osfs);
+	if (rc)
+		return rc;
+
+	return sprintf(buf, "%llu\n", osfs.os_ffree);
+}
+LUSTRE_RO_ATTR(filesfree);
+
+static const struct attribute *dt_def_attrs[] = {
+	&lustre_attr_uuid.attr,
+	&lustre_attr_blocksize.attr,
+	&lustre_attr_kbytestotal.attr,
+	&lustre_attr_kbytesfree.attr,
+	&lustre_attr_kbytesavail.attr,
+	&lustre_attr_filestotal.attr,
+	&lustre_attr_filesfree.attr,
+	NULL,
+};
+
+static void dt_sysfs_release(struct kobject *kobj)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+
+	complete(&dt->dd_kobj_unregister);
+}
+
+int dt_tunables_fini(struct dt_device *dt)
+{
+	if (!dt)
+		return -EINVAL;
+
+	if (!IS_ERR_OR_NULL(dt->dd_debugfs_entry))
+		ldebugfs_remove(&dt->dd_debugfs_entry);
+
+	if (dt->dd_def_attrs)
+		sysfs_remove_files(&dt->dd_kobj, dt->dd_def_attrs);
+
+	kobject_put(&dt->dd_kobj);
+	wait_for_completion(&dt->dd_kobj_unregister);
+
+	return 0;
+}
+EXPORT_SYMBOL(dt_tunables_fini);
+
+int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
+		     const char *name, struct lprocfs_vars *list)
+{
+	int rc;
+
+	dt->dd_ktype.sysfs_ops = &lustre_sysfs_ops;
+	dt->dd_ktype.release = dt_sysfs_release;
+
+	init_completion(&dt->dd_kobj_unregister);
+	rc = kobject_init_and_add(&dt->dd_kobj, &dt->dd_ktype, type->typ_kobj,
+				  "%s", name);
+	if (rc)
+		return rc;
+
+	dt->dd_def_attrs = dt_def_attrs;
+
+	rc = sysfs_create_files(&dt->dd_kobj, dt->dd_def_attrs);
+	if (rc) {
+		kobject_put(&dt->dd_kobj);
+		return rc;
+	}
+
+	/* No need to register debugfs if no enteries. This allows us to
+	 * choose between using dt_device or obd_device for debugfs.
+	 */
+	if (!list)
+		return rc;
+
+	dt->dd_debugfs_entry = ldebugfs_register(name,
+						 type->typ_debugfs_entry,
+						 list, dt);
+	if (IS_ERR_OR_NULL(dt->dd_debugfs_entry)) {
+		rc = dt->dd_debugfs_entry ? PTR_ERR(dt->dd_debugfs_entry)
+					  : -ENOMEM;
+		CERROR("%s: error %d setting up debugfs\n",
+		       name, rc);
+		dt->dd_debugfs_entry = NULL;
+		sysfs_remove_files(&dt->dd_kobj, dt->dd_def_attrs);
+		kobject_put(&dt->dd_kobj);
+		return rc;
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_tunables_init);

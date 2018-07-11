@@ -40,7 +40,6 @@
 
 #include "osp_internal.h"
 
-#ifdef CONFIG_PROC_FS
 /**
  * Show OSP active status
  *
@@ -49,14 +48,19 @@
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_active_seq_show(struct seq_file *m, void *data)
+static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
 {
-	struct obd_device	*dev = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
+	int rc;
 
-	LPROCFS_CLIMP_CHECK(dev);
-	seq_printf(m, "%d\n", !dev->u.cli.cl_import->imp_deactive);
-	LPROCFS_CLIMP_EXIT(dev);
-	return 0;
+	LPROCFS_CLIMP_CHECK(obd);
+	rc = sprintf(buf, "%d\n", !obd->u.cli.cl_import->imp_deactive);
+	LPROCFS_CLIMP_EXIT(obd);
+	return rc;
 }
 
 /**
@@ -69,31 +73,32 @@ static int osp_active_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-osp_active_seq_write(struct file *file, const char __user *buffer,
-			size_t count, loff_t *off)
+static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
-	LPROCFS_CLIMP_CHECK(dev);
+	LPROCFS_CLIMP_CHECK(obd);
 	/* opposite senses */
-	if (dev->u.cli.cl_import->imp_deactive == val)
-		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
+	if (obd->u.cli.cl_import->imp_deactive == val)
+		rc = ptlrpc_set_import_active(obd->u.cli.cl_import, val);
 	else
-		CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n",
-		       val);
+		CDEBUG(D_CONFIG, "activate %u: ignoring repeat request\n",
+		       (unsigned int)val);
 
-	LPROCFS_CLIMP_EXIT(dev);
+	LPROCFS_CLIMP_EXIT(obd);
 	return count;
 }
-LPROC_SEQ_FOPS(osp_active);
+LUSTRE_RW_ATTR(active);
 
 /**
  * Show number of RPCs in flight
@@ -103,18 +108,17 @@ LPROC_SEQ_FOPS(osp_active);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_sync_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
+static ssize_t sync_in_flight_show(struct kobject *kobj,
+				   struct attribute *attr,
+				   char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n", atomic_read(&osp->opd_sync_rpcs_in_flight));
-	return 0;
+	return sprintf(buf, "%u\n", atomic_read(&osp->opd_sync_rpcs_in_flight));
 }
-LPROC_SEQ_FOPS_RO(osp_sync_rpcs_in_flight);
+LUSTRE_RO_ATTR(sync_in_flight);
 
 /**
  * Show number of RPCs in processing (including uncommitted by OST)
@@ -124,18 +128,17 @@ LPROC_SEQ_FOPS_RO(osp_sync_rpcs_in_flight);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_sync_rpcs_in_progress_seq_show(struct seq_file *m, void *data)
+static ssize_t sync_in_progress_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n", atomic_read(&osp->opd_sync_rpcs_in_progress));
-	return 0;
+	return sprintf(buf, "%u\n", atomic_read(&osp->opd_sync_rpcs_in_progress));
 }
-LPROC_SEQ_FOPS_RO(osp_sync_rpcs_in_progress);
+LUSTRE_RO_ATTR(sync_in_progress);
 
 /**
  * Show number of changes to sync
@@ -145,16 +148,15 @@ LPROC_SEQ_FOPS_RO(osp_sync_rpcs_in_progress);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_sync_changes_seq_show(struct seq_file *m, void *data)
+static ssize_t sync_changes_show(struct kobject *kobj,
+				 struct attribute *attr,
+				 char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n", atomic_read(&osp->opd_sync_changes));
-	return 0;
+	return sprintf(buf, "%u\n", atomic_read(&osp->opd_sync_changes));
 }
 
 /**
@@ -167,15 +169,14 @@ static int osp_sync_changes_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t osp_sync_changes_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
+static ssize_t sync_changes_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
 {
-	struct seq_file		*m	= file->private_data;
-	struct obd_device	*dev	= m->private;
-	struct osp_device	*osp	= lu2osp_dev(dev->obd_lu_dev);
-	struct lu_env		 env;
-	int			 rc;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	struct lu_env env;
+	int rc;
 
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc != 0)
@@ -186,7 +187,7 @@ static ssize_t osp_sync_changes_seq_write(struct file *file,
 
 	return rc == 0 ? count : rc;
 }
-LPROC_SEQ_FOPS(osp_sync_changes);
+LUSTRE_RW_ATTR(sync_changes);
 
 /**
  * Show maximum number of RPCs in flight allowed
@@ -196,16 +197,15 @@ LPROC_SEQ_FOPS(osp_sync_changes);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
+static ssize_t max_rpcs_in_flight_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n", osp->opd_sync_max_rpcs_in_flight);
-	return 0;
+	return sprintf(buf, "%u\n", osp->opd_sync_max_rpcs_in_flight);
 }
 
 /**
@@ -218,20 +218,18 @@ static int osp_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-osp_max_rpcs_in_flight_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t max_rpcs_in_flight_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer,
+					size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	unsigned int val;
 	int rc;
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -241,7 +239,7 @@ osp_max_rpcs_in_flight_seq_write(struct file *file, const char __user *buffer,
 	osp->opd_sync_max_rpcs_in_flight = val;
 	return count;
 }
-LPROC_SEQ_FOPS(osp_max_rpcs_in_flight);
+LUSTRE_RW_ATTR(max_rpcs_in_flight);
 
 /**
  * Show maximum number of RPCs in processing allowed
@@ -251,16 +249,15 @@ LPROC_SEQ_FOPS(osp_max_rpcs_in_flight);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_max_rpcs_in_progress_seq_show(struct seq_file *m, void *data)
+static ssize_t max_rpcs_in_progress_show(struct kobject *kobj,
+					 struct attribute *attr,
+					 char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n", osp->opd_sync_max_rpcs_in_progress);
-	return 0;
+	return sprintf(buf, "%u\n", osp->opd_sync_max_rpcs_in_progress);
 }
 
 /**
@@ -273,20 +270,18 @@ static int osp_max_rpcs_in_progress_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-osp_max_rpcs_in_progress_seq_write(struct file *file, const char __user *buffer,
-				   size_t count, loff_t *off)
+static ssize_t max_rpcs_in_progress_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer,
+					  size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	unsigned int val;
 	int rc;
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -297,7 +292,7 @@ osp_max_rpcs_in_progress_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(osp_max_rpcs_in_progress);
+LUSTRE_RW_ATTR(max_rpcs_in_progress);
 
 /**
  * Show number of objects to precreate next time
@@ -307,16 +302,18 @@ LPROC_SEQ_FOPS(osp_max_rpcs_in_progress);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_create_count_seq_show(struct seq_file *m, void *data)
+static ssize_t create_count_show(struct kobject *kobj,
+				 struct attribute *attr,
+				 char *buf)
 {
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
-	seq_printf(m, "%d\n", osp->opd_pre_create_count);
-	return 0;
+	return sprintf(buf, "%d\n", osp->opd_pre_create_count);
 }
 
 /**
@@ -329,20 +326,20 @@ static int osp_create_count_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-osp_create_count_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t create_count_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	unsigned int val;
 	int rc, i;
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -367,7 +364,7 @@ osp_create_count_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(osp_create_count);
+LUSTRE_RW_ATTR(create_count);
 
 /**
  * Show maximum number of objects to precreate
@@ -377,16 +374,18 @@ LPROC_SEQ_FOPS(osp_create_count);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_max_create_count_seq_show(struct seq_file *m, void *data)
+static ssize_t max_create_count_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
 {
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
-	seq_printf(m, "%d\n", osp->opd_pre_max_create_count);
-	return 0;
+	return sprintf(buf, "%d\n", osp->opd_pre_max_create_count);
 }
 
 /**
@@ -399,20 +398,20 @@ static int osp_max_create_count_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-osp_max_create_count_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t max_create_count_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	unsigned int val;
 	int rc;
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -428,7 +427,7 @@ osp_max_create_count_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(osp_max_create_count);
+LUSTRE_RW_ATTR(max_create_count);
 
 /**
  * Show last id to assign in creation
@@ -438,15 +437,18 @@ LPROC_SEQ_FOPS(osp_max_create_count);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_prealloc_next_id_seq_show(struct seq_file *m, void *data)
+static ssize_t prealloc_next_id_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
 {
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	struct lu_fid *fid;
-	__u64 id;
+	u64 id;
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
 	fid = &osp->opd_pre_used_fid;
 	if (fid_is_idif(fid)) {
@@ -457,10 +459,9 @@ static int osp_prealloc_next_id_seq_show(struct seq_file *m, void *data)
 			1 : fid_oid(fid) + 1;
 	}
 
-	seq_printf(m, "%llu\n", id);
-	return 0;
+	return sprintf(buf, "%llu\n", id);
 }
-LPROC_SEQ_FOPS_RO(osp_prealloc_next_id);
+LUSTRE_RO_ATTR(prealloc_next_id);
 
 /**
  * Show last created id OST reported
@@ -470,24 +471,28 @@ LPROC_SEQ_FOPS_RO(osp_prealloc_next_id);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_prealloc_last_id_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
-	struct lu_fid *fid;
-	__u64 id;
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+static ssize_t prealloc_last_id_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	struct lu_fid *fid;
+	u64 id;
+
+	if (!osp->opd_pre)
+		return -EINVAL;
+
 	fid = &osp->opd_pre_last_created_fid;
 	id = fid_is_idif(fid) ?
 			 fid_idif_id(fid_seq(fid), fid_oid(fid), fid_ver(fid)) :
 			 fid_oid(fid);
 
-	seq_printf(m, "%llu\n", id);
-	return 0;
+	return sprintf(buf, "%llu\n", id);
 }
-LPROC_SEQ_FOPS_RO(osp_prealloc_last_id);
+LUSTRE_RO_ATTR(prealloc_last_id);
 
 /**
  * Show next FID sequence to precreate
@@ -497,22 +502,23 @@ LPROC_SEQ_FOPS_RO(osp_prealloc_last_id);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_prealloc_next_seq_seq_show(struct seq_file *m, void *data)
+static ssize_t prealloc_next_seq_show(struct kobject *kobj,
+				      struct attribute *attr,
+				      char *buf)
 {
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	struct lu_fid *fid;
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
 	fid = &osp->opd_pre_used_fid;
-	seq_printf(m, "%#llx\n", fid_is_idif(fid) ?
-		   fid_seq(fid) & (~0xffff) : fid_seq(fid));
-
-	return 0;
+	return sprintf(buf, "%#llx\n", fid_is_idif(fid) ?
+		       fid_seq(fid) & (~0xffff) : fid_seq(fid));
 }
-LPROC_SEQ_FOPS_RO(osp_prealloc_next_seq);
+LUSTRE_RO_ATTR(prealloc_next_seq);
 
 /**
  * Show last created FID sequence OST reported
@@ -522,22 +528,23 @@ LPROC_SEQ_FOPS_RO(osp_prealloc_next_seq);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_prealloc_last_seq_seq_show(struct seq_file *m, void *data)
+static ssize_t prealloc_last_seq_show(struct kobject *kobj,
+				      struct attribute *attr,
+				      char *buf)
 {
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	struct lu_fid *fid;
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
 	fid = &osp->opd_pre_last_created_fid;
-	seq_printf(m, "%#llx\n", fid_is_idif(fid) ?
-		   fid_seq(fid) & (~0xffff) : fid_seq(fid));
-
-	return 0;
+	return sprintf(buf, "%#llx\n", fid_is_idif(fid) ?
+		       fid_seq(fid) & (~0xffff) : fid_seq(fid));
 }
-LPROC_SEQ_FOPS_RO(osp_prealloc_last_seq);
+LUSTRE_RO_ATTR(prealloc_last_seq);
 
 /**
  * Show the number of ids reserved by declare
@@ -547,18 +554,20 @@ LPROC_SEQ_FOPS_RO(osp_prealloc_last_seq);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_prealloc_reserved_seq_show(struct seq_file *m, void *data)
+static ssize_t prealloc_reserved_show(struct kobject *kobj,
+				      struct attribute *attr,
+				      char *buf)
 {
-	struct obd_device *obd = m->private;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL || osp->opd_pre == NULL)
-		return 0;
+	if (!osp->opd_pre)
+		return -EINVAL;
 
-	seq_printf(m, "%llu\n", osp->opd_pre_reserved);
-	return 0;
+	return sprintf(buf, "%llu\n", osp->opd_pre_reserved);
 }
-LPROC_SEQ_FOPS_RO(osp_prealloc_reserved);
+LUSTRE_RO_ATTR(prealloc_reserved);
 
 /**
  * Show interval (in seconds) to update statfs data
@@ -568,16 +577,15 @@ LPROC_SEQ_FOPS_RO(osp_prealloc_reserved);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_maxage_seq_show(struct seq_file *m, void *data)
+static ssize_t maxage_show(struct kobject *kobj,
+			   struct attribute *attr,
+			   char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%lld\n", osp->opd_statfs_maxage);
-	return 0;
+	return sprintf(buf, "%lld\n", osp->opd_statfs_maxage);
 }
 
 /**
@@ -590,20 +598,16 @@ static int osp_maxage_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-osp_maxage_seq_write(struct file *file, const char __user *buffer,
-			size_t count, loff_t *off)
+static ssize_t maxage_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 	unsigned int val;
 	int rc;
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -614,7 +618,7 @@ osp_maxage_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(osp_maxage);
+LUSTRE_RW_ATTR(maxage);
 
 /**
  * Show current precreation status: output 0 means success, otherwise negative
@@ -625,18 +629,20 @@ LPROC_SEQ_FOPS(osp_maxage);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_pre_status_seq_show(struct seq_file *m, void *data)
+static ssize_t prealloc_status_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL || osp->opd_pre == NULL)
+	if (!osp->opd_pre)
 		return -EINVAL;
 
-	seq_printf(m, "%d\n", osp->opd_pre_status);
-	return 0;
+	return sprintf(buf, "%d\n", osp->opd_pre_status);
 }
-LPROC_SEQ_FOPS_RO(osp_pre_status);
+LUSTRE_RO_ATTR(prealloc_status);
 
 /**
  * Show the number of RPCs in processing (including uncommitted by OST) plus
@@ -653,20 +659,19 @@ LPROC_SEQ_FOPS_RO(osp_pre_status);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_destroys_in_flight_seq_show(struct seq_file *m, void *data)
+static ssize_t destroys_in_flight_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%u\n",
-		   atomic_read(&osp->opd_sync_rpcs_in_progress) +
-		   atomic_read(&osp->opd_sync_changes));
-	return 0;
+	return sprintf(buf, "%u\n",
+		       atomic_read(&osp->opd_sync_rpcs_in_progress) +
+		       atomic_read(&osp->opd_sync_changes));
 }
-LPROC_SEQ_FOPS_RO(osp_destroys_in_flight);
+LUSTRE_RO_ATTR(destroys_in_flight);
 
 /**
  * Show changes synced from previous mount
@@ -676,18 +681,17 @@ LPROC_SEQ_FOPS_RO(osp_destroys_in_flight);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_old_sync_processed_seq_show(struct seq_file *m, void *data)
+static ssize_t old_sync_processed_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
 {
-	struct obd_device	*dev = m->private;
-	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
 
-	if (osp == NULL)
-		return -EINVAL;
-
-	seq_printf(m, "%d\n", osp->opd_sync_prev_done);
-	return 0;
+	return sprintf(buf, "%d\n", osp->opd_sync_prev_done);
 }
-LPROC_SEQ_FOPS_RO(osp_old_sync_processed);
+LUSTRE_RO_ATTR(old_sync_processed);
 
 /**
  * Show maximum number of RPCs in flight
@@ -697,15 +701,18 @@ LPROC_SEQ_FOPS_RO(osp_old_sync_processed);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int
-osp_lfsck_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
+static ssize_t lfsck_max_rpcs_in_flight_show(struct kobject *kobj,
+					     struct attribute *attr,
+					     char *buf)
 {
-	struct obd_device *dev = m->private;
-	__u32 max;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
+	u32 max;
 
-	max = obd_get_max_rpcs_in_flight(&dev->u.cli);
-	seq_printf(m, "%u\n", max);
-	return 0;
+	max = obd_get_max_rpcs_in_flight(&obd->u.cli);
+	return sprintf(buf, "%u\n", max);
 }
 
 /**
@@ -718,35 +725,52 @@ osp_lfsck_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-osp_lfsck_max_rpcs_in_flight_seq_write(struct file *file,
-				       const char __user *buffer,
-				       size_t count, loff_t *off)
+static ssize_t lfsck_max_rpcs_in_flight_store(struct kobject *kobj,
+					      struct attribute *attr,
+					      const char *buffer,
+					      size_t count)
 {
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *dev = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
-	if (!rc)
-		rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
-	else
-		count = rc;
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
 
-	return count;
+	rc = obd_set_max_rpcs_in_flight(&obd->u.cli, val);
+	return rc ? rc : count;
 }
-LPROC_SEQ_FOPS(osp_lfsck_max_rpcs_in_flight);
+LUSTRE_RW_ATTR(lfsck_max_rpcs_in_flight);
 
-LPROC_SEQ_FOPS_WR_ONLY(osp, ping);
-LPROC_SEQ_FOPS_RO_TYPE(osp, connect_flags);
-LPROC_SEQ_FOPS_RO_TYPE(osp, server_uuid);
-LPROC_SEQ_FOPS_RO_TYPE(osp, conn_uuid);
+ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
+		  char *buffer)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
+	int rc;
 
-LPROC_SEQ_FOPS_RO_TYPE(osp, timeouts);
+	LPROCFS_CLIMP_CHECK(obd);
+	rc = ptlrpc_obd_ping(obd);
+	LPROCFS_CLIMP_EXIT(obd);
+
+	return rc;
+}
+LUSTRE_RO_ATTR(ping);
+
+LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, connect_flags);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, server_uuid);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, conn_uuid);
+
+LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, timeouts);
 
 LPROC_SEQ_FOPS_RW_TYPE(osp, import);
-LPROC_SEQ_FOPS_RO_TYPE(osp, state);
+LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, state);
 
 /**
  * Show high watermark (in megabytes). If available free space at OST is grater
@@ -807,7 +831,7 @@ osp_reserved_mb_high_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(osp_reserved_mb_high);
+LDEBUGFS_SEQ_FOPS(osp_reserved_mb_high);
 
 /**
  * Show low watermark (in megabytes). If available free space at OST is less
@@ -866,150 +890,102 @@ osp_reserved_mb_low_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(osp_reserved_mb_low);
+LDEBUGFS_SEQ_FOPS(osp_reserved_mb_low);
 
-static ssize_t
-lprocfs_force_sync_seq_write(struct file *file, const char __user *buffer,
-			     size_t count, loff_t *off)
+static ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct dt_device  *dt = lu2dt_dev(dev->obd_lu_dev);
-	struct lu_env	   env;
-	int		   rc;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_env env;
+	int rc;
 
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc)
 		return rc;
+
 	rc = dt_sync(&env, dt);
 	lu_env_fini(&env);
 
 	return rc == 0 ? count : rc;
 }
-LPROC_SEQ_FOPS_WR_ONLY(osp, force_sync);
+LUSTRE_WO_ATTR(force_sync);
 
 static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
-	{ .name =	"ping",
-	  .fops =	&osp_ping_fops,
-	  .proc_mode =	0222				},
 	{ .name =	"connect_flags",
 	  .fops =	&osp_connect_flags_fops		},
 	{ .name =	"ost_server_uuid",
 	  .fops =	&osp_server_uuid_fops		},
 	{ .name =	"ost_conn_uuid",
 	  .fops =	&osp_conn_uuid_fops		},
-	{ .name =	"active",
-	  .fops =	&osp_active_fops		},
-	{ .name =	"max_rpcs_in_flight",
-	  .fops =	&osp_max_rpcs_in_flight_fops	},
-	{ .name =	"max_rpcs_in_progress",
-	  .fops =	&osp_max_rpcs_in_progress_fops	},
-	{ .name =	"create_count",
-	  .fops =	&osp_create_count_fops		},
-	{ .name =	"max_create_count",
-	  .fops =	&osp_max_create_count_fops	},
-	{ .name =	"prealloc_next_id",
-	  .fops =	&osp_prealloc_next_id_fops	},
-	{ .name =	"prealloc_next_seq",
-	  .fops =	&osp_prealloc_next_seq_fops	},
-	{ .name =	"prealloc_last_id",
-	  .fops =	&osp_prealloc_last_id_fops	},
-	{ .name =	"prealloc_last_seq",
-	  .fops =	&osp_prealloc_last_seq_fops	},
-	{ .name =	"prealloc_reserved",
-	  .fops =	&osp_prealloc_reserved_fops	},
 	{ .name =	"timeouts",
 	  .fops =	&osp_timeouts_fops		},
 	{ .name =	"import",
 	  .fops =	&osp_import_fops		},
 	{ .name =	"state",
 	  .fops =	&osp_state_fops			},
-	{ .name =	"maxage",
-	  .fops =	&osp_maxage_fops		},
-	{ .name =	"prealloc_status",
-	  .fops =	&osp_pre_status_fops		},
-	{ .name =	"sync_changes",
-	  .fops =	&osp_sync_changes_fops		},
-	{ .name =	"sync_in_flight",
-	  .fops =	&osp_sync_rpcs_in_flight_fops	},
-	{ .name =	"sync_in_progress",
-	  .fops =	&osp_sync_rpcs_in_progress_fops	},
-	{ .name =	"old_sync_processed",
-	  .fops =	&osp_old_sync_processed_fops	},
 	{ .name =	"reserved_mb_high",
 	  .fops =	&osp_reserved_mb_high_fops	},
 	{ .name =	"reserved_mb_low",
 	  .fops =	&osp_reserved_mb_low_fops	},
-	{ .name	=	"force_sync",
-	  .fops	=	&osp_force_sync_fops	},
-
-	/* for compatibility reasons */
-	{ .name =	"destroys_in_flight",
-	  .fops =	&osp_destroys_in_flight_fops		},
-	{ .name	=	"lfsck_max_rpcs_in_flight",
-	  .fops	=	&osp_lfsck_max_rpcs_in_flight_fops	},
 	{ NULL }
 };
 
 static struct lprocfs_vars lprocfs_osp_md_vars[] = {
-	{ .name =	"ping",
-	  .fops =	&osp_ping_fops,
-	  .proc_mode =	0222				},
 	{ .name =	"connect_flags",
 	  .fops =	&osp_connect_flags_fops		},
 	{ .name =	"mdt_server_uuid",
 	  .fops =	&osp_server_uuid_fops		},
 	{ .name =	"mdt_conn_uuid",
 	  .fops =	&osp_conn_uuid_fops		},
-	{ .name =	"active",
-	  .fops =	&osp_active_fops		},
-	{ .name =	"max_rpcs_in_flight",
-	  .fops =	&osp_max_rpcs_in_flight_fops	},
-	{ .name =	"max_rpcs_in_progress",
-	  .fops =	&osp_max_rpcs_in_progress_fops	},
 	{ .name =	"timeouts",
 	  .fops =	&osp_timeouts_fops		},
 	{ .name =	"import",
 	  .fops =	&osp_import_fops		},
 	{ .name =	"state",
 	  .fops =	&osp_state_fops			},
-	{ .name =	"maxage",
-	  .fops =	&osp_maxage_fops		},
-	{ .name =	"prealloc_status",
-	  .fops =	&osp_pre_status_fops		},
-
-	/* for compatibility reasons */
-	{ .name =	"destroys_in_flight",
-	  .fops =	&osp_destroys_in_flight_fops		},
-	{ .name	=	"lfsck_max_rpcs_in_flight",
-	  .fops	=	&osp_lfsck_max_rpcs_in_flight_fops	},
 	{ NULL }
 };
 
-LPROC_SEQ_FOPS_RO_TYPE(osp, dt_blksize);
-LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytestotal);
-LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytesfree);
-LPROC_SEQ_FOPS_RO_TYPE(osp, dt_kbytesavail);
-LPROC_SEQ_FOPS_RO_TYPE(osp, dt_filestotal);
-LPROC_SEQ_FOPS_RO_TYPE(osp, dt_filesfree);
-
-static struct lprocfs_vars lprocfs_osp_osd_vars[] = {
-	{ .name =	"blocksize",
-	  .fops =	&osp_dt_blksize_fops		},
-	{ .name =	"kbytestotal",
-	  .fops =	&osp_dt_kbytestotal_fops	},
-	{ .name =	"kbytesfree",
-	  .fops =	&osp_dt_kbytesfree_fops		},
-	{ .name =	"kbytesavail",
-	  .fops =	&osp_dt_kbytesavail_fops	},
-	{ .name =	"filestotal",
-	  .fops =	&osp_dt_filestotal_fops		},
-	{ .name =	"filesfree",
-	  .fops =	&osp_dt_filesfree_fops		},
-	{ NULL }
+static struct attribute *osp_obd_attrs[] = {
+	/* First two for compatiability reasons */
+	&lustre_attr_lfsck_max_rpcs_in_flight.attr,
+	&lustre_attr_destroys_in_flight.attr,
+	&lustre_attr_active.attr,
+	&lustre_attr_max_rpcs_in_flight.attr,
+	&lustre_attr_max_rpcs_in_progress.attr,
+	&lustre_attr_maxage.attr,
+	&lustre_attr_ping.attr,
+	&lustre_attr_prealloc_status.attr,
+	&lustre_attr_prealloc_next_id.attr,
+	&lustre_attr_prealloc_last_id.attr,
+	&lustre_attr_prealloc_next_seq.attr,
+	&lustre_attr_prealloc_last_seq.attr,
+	&lustre_attr_prealloc_reserved.attr,
+	&lustre_attr_sync_in_flight.attr,
+	&lustre_attr_sync_in_progress.attr,
+	&lustre_attr_sync_changes.attr,
+	&lustre_attr_force_sync.attr,
+	&lustre_attr_old_sync_processed.attr,
+	&lustre_attr_create_count.attr,
+	&lustre_attr_max_create_count.attr,
+	NULL,
 };
 
-void osp_lprocfs_fini(struct osp_device *osp)
+static struct attribute *osp_md_attrs[] = {
+	/* First two for compatiability reasons */
+	&lustre_attr_lfsck_max_rpcs_in_flight.attr,
+	&lustre_attr_destroys_in_flight.attr,
+	&lustre_attr_active.attr,
+	&lustre_attr_max_rpcs_in_flight.attr,
+	&lustre_attr_max_rpcs_in_progress.attr,
+	&lustre_attr_maxage.attr,
+	&lustre_attr_ping.attr,
+	&lustre_attr_prealloc_status.attr,
+	NULL,
+};
+
+void osp_tunables_fini(struct osp_device *osp)
 {
 	struct obd_device *obd = osp->opd_obd;
 	struct kobject *osc;
@@ -1024,35 +1000,53 @@ void osp_lprocfs_fini(struct osp_device *osp)
 		ldebugfs_remove(&osp->opd_debugfs);
 
 	ptlrpc_lprocfs_unregister_obd(obd);
-	if (osp->opd_symlink)
-		lprocfs_remove(&osp->opd_symlink);
+
+	if (!IS_ERR_OR_NULL(obd->obd_debugfs_entry))
+		ldebugfs_remove(&obd->obd_debugfs_entry);
+
+	dt_tunables_fini(&osp->opd_dt_dev);
 }
 
 /**
- * Initialize OSP lprocfs
+ * Initialize OSP sysfs / debugfs
  *
  * param[in] osp	OSP device
  */
-void osp_lprocfs_init(struct osp_device *osp)
+void osp_tunables_init(struct osp_device *osp)
 {
 	struct obd_device *obd = osp->opd_obd;
-	struct proc_dir_entry *osc_proc_dir = NULL;
-	struct obd_type	*type;
 	struct kobject *osc;
 	int rc;
 
-	if (osp->opd_connect_mdt)
+	if (osp->opd_connect_mdt) {
+		osp->opd_dt_dev.dd_ktype.default_attrs = osp_md_attrs;
 		obd->obd_vars = lprocfs_osp_md_vars;
-	else
+	} else {
+		osp->opd_dt_dev.dd_ktype.default_attrs = osp_obd_attrs;
 		obd->obd_vars = lprocfs_osp_obd_vars;
-	if (lprocfs_obd_setup(obd, true) != 0)
-		return;
+	}
 
-	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_osp_osd_vars,
-			      &osp->opd_dt_dev);
+	rc = dt_tunables_init(&osp->opd_dt_dev, obd->obd_type, obd->obd_name,
+			      NULL);
 	if (rc) {
-		CERROR("%s: can't register in lprocfs, rc %d\n",
+		CERROR("%s: failed to setup DT tunables: %d\n",
 		       obd->obd_name, rc);
+		return;
+	}
+
+	/* Since we register the obd device with ptlrpc / sptlrpc we
+	 * have to register debugfs with obd_device
+	 */
+	obd->obd_debugfs_entry = ldebugfs_register(obd->obd_name,
+						   obd->obd_type->typ_debugfs_entry,
+						   obd->obd_vars, obd);
+	if (IS_ERR_OR_NULL(obd->obd_debugfs_entry)) {
+		rc = obd->obd_debugfs_entry ? PTR_ERR(obd->obd_debugfs_entry)
+					    : -ENOMEM;
+		CERROR("%s: error %d setting up debugfs\n",
+		       obd->obd_name, rc);
+		obd->obd_debugfs_entry = NULL;
+		dt_tunables_fini(&osp->opd_dt_dev);
 		return;
 	}
 
@@ -1068,7 +1062,7 @@ void osp_lprocfs_init(struct osp_device *osp)
 	 */
 	osc = kset_find_obj(lustre_kset, "osc");
 	if (osc) {
-		rc = sysfs_create_link(osc, &obd->obd_kset.kobj,
+		rc = sysfs_create_link(osc, &osp->opd_dt_dev.dd_kobj,
 				       obd->obd_name);
 		kobject_put(osc);
 	}
@@ -1078,26 +1072,4 @@ void osp_lprocfs_init(struct osp_device *osp)
 	if (!osp->opd_debugfs)
 		CERROR("%s: failed to create OSC debugfs symlink\n",
 		       obd->obd_name);
-
-	/* If the real OSC is present which is the case for setups
-	 * with both server and clients on the same node then use
-	 * the OSC's proc root */
-	type = class_search_type(LUSTRE_OSC_NAME);
-	if (type != NULL && type->typ_procroot != NULL)
-		osc_proc_dir = type->typ_procroot;
-	else
-		osc_proc_dir = obd->obd_type->typ_procsym;
-
-	if (osc_proc_dir == NULL)
-		return;
-
-	/* for compatibility we link old procfs's OSC entries to osp ones */
-	osp->opd_symlink = lprocfs_add_symlink(obd->obd_name, osc_proc_dir,
-					       "../osp/%s", obd->obd_name);
-	if (osp->opd_symlink == NULL)
-		CERROR("cannot create OSC symlink for /proc/fs/lustre/osp/%s\n",
-		       obd->obd_name);
 }
-
-#endif /* CONFIG_PROC_FS */
-

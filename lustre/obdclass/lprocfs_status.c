@@ -1184,12 +1184,12 @@ int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_connect_flags_seq_show);
 
-static struct attribute *obd_def_uuid_attrs[] = {
+static const struct attribute *obd_def_uuid_attrs[] = {
 	&lustre_attr_uuid.attr,
 	NULL,
 };
 
-static struct attribute *obd_def_attrs[] = {
+static const struct attribute *obd_def_attrs[] = {
 	&lustre_attr_blocksize.attr,
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
@@ -1222,8 +1222,6 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 
 	obd->obd_ktype.sysfs_ops = &lustre_sysfs_ops;
 	obd->obd_ktype.release = obd_sysfs_release;
-	if (obd->obd_attrs)
-		obd->obd_ktype.default_attrs = obd->obd_attrs;
 
 	obd->obd_kset.kobj.parent = obd->obd_type->typ_kobj;
 	obd->obd_kset.kobj.ktype = &obd->obd_ktype;
@@ -1233,11 +1231,11 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		return rc;
 
 	if (uuid_only)
-		obd->obd_attrs_group.attrs = obd_def_uuid_attrs;
+		obd->obd_attrs = obd_def_uuid_attrs;
 	else
-		obd->obd_attrs_group.attrs = obd_def_attrs;
+		obd->obd_attrs = obd_def_attrs;
 
-	rc = sysfs_create_group(&obd->obd_kset.kobj, &obd->obd_attrs_group);
+	rc = sysfs_create_files(&obd->obd_kset.kobj, obd->obd_attrs);
 	if (rc) {
 		kset_unregister(&obd->obd_kset);
 		return rc;
@@ -1254,7 +1252,10 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		CERROR("error %d setting up debugfs for %s\n",
 		       rc, obd->obd_name);
 		obd->obd_debugfs_entry = NULL;
-		lprocfs_obd_cleanup(obd);
+
+		sysfs_remove_files(&obd->obd_kset.kobj, obd->obd_attrs);
+		obd->obd_attrs = NULL;
+		kset_unregister(&obd->obd_kset);
 		return rc;
 	}
 
@@ -1268,7 +1269,12 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		rc = PTR_ERR(obd->obd_proc_entry);
 		CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);
 		obd->obd_proc_entry = NULL;
-		lprocfs_obd_cleanup(obd);
+
+		ldebugfs_remove(&obd->obd_debugfs_entry);
+		sysfs_remove_files(&obd->obd_kset.kobj, obd->obd_attrs);
+		obd->obd_attrs = NULL;
+		kset_unregister(&obd->obd_kset);
+		return rc;
 	}
 already_registered:
 	return rc;
@@ -1294,10 +1300,17 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 	if (!IS_ERR_OR_NULL(obd->obd_debugfs_entry))
 		ldebugfs_remove(&obd->obd_debugfs_entry);
 
-	sysfs_remove_group(&obd->obd_kset.kobj, &obd->obd_attrs_group);
+	/* obd device never allocated a kset */
+	if (!obd->obd_kset.kobj.state_initialized)
+		return 0;
+
+	if (obd->obd_attrs) {
+		sysfs_remove_files(&obd->obd_kset.kobj, obd->obd_attrs);
+		obd->obd_attrs = NULL;
+	}
+
 	kset_unregister(&obd->obd_kset);
 	wait_for_completion(&obd->obd_kobj_unregister);
-
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_obd_cleanup);

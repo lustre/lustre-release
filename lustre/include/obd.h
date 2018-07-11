@@ -711,8 +711,7 @@ struct obd_device {
 	struct proc_dir_entry	*obd_proc_exports_entry;
 	struct dentry			*obd_svc_debugfs_entry;
 	struct lprocfs_stats	*obd_svc_stats;
-	struct attribute_group		 obd_attrs_group;
-	struct attribute	       **obd_attrs;
+	const struct attribute	       **obd_attrs;
 	struct lprocfs_vars	*obd_vars;
 	atomic_t		obd_evict_inprogress;
 	wait_queue_head_t	obd_evict_inprogress_waitq;

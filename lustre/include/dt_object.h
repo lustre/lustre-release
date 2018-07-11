@@ -1785,6 +1785,14 @@ struct dt_device {
 	struct list_head		   dd_txn_callbacks;
 	unsigned int			   dd_record_fid_accessed:1,
 					   dd_rdonly:1;
+
+	/* sysfs and debugfs handling */
+	struct dentry			  *dd_debugfs_entry;
+
+	const struct attribute		 **dd_def_attrs;
+	struct kobject			   dd_kobj;
+	struct kobj_type		   dd_ktype;
+	struct completion		   dd_kobj_unregister;
 };
 
 int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);
@@ -2820,6 +2828,9 @@ static inline struct dt_thread_info *dt_info(const struct lu_env *env)
 
 int dt_global_init(void);
 void dt_global_fini(void);
+int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
+		     const char *name, struct lprocfs_vars *list);
+int dt_tunables_fini(struct dt_device *dt);
 
 # ifdef CONFIG_PROC_FS
 int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v);

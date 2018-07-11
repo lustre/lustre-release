@@ -636,9 +636,11 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 static int osp_process_config(const struct lu_env *env,
 			      struct lu_device *dev, struct lustre_cfg *lcfg)
 {
-	struct osp_device		*d = lu2osp_dev(dev);
-	struct obd_device		*obd = d->opd_obd;
-	int				 rc;
+	struct osp_device *d = lu2osp_dev(dev);
+	struct dt_device *dt = lu2dt_dev(dev);
+	struct obd_device *obd = d->opd_obd;
+	ssize_t count;
+	int rc;
 
 	ENTRY;
 
@@ -654,22 +656,20 @@ static int osp_process_config(const struct lu_env *env,
 		rc = osp_shutdown(env, d);
 		break;
 	case LCFG_PARAM:
-		LASSERT(obd);
-		rc = class_process_proc_param(d->opd_connect_mdt ?
-					      PARAM_OSP : PARAM_OSC,
-					      obd->obd_vars, lcfg, obd);
-		if (rc > 0)
-			rc = 0;
-		if (rc == -ENOSYS) {
-			/* class_process_proc_param() haven't found matching
-			 * parameter and returned ENOSYS so that layer(s)
+		count = class_modify_config(lcfg, d->opd_connect_mdt ?
+						  PARAM_OSP : PARAM_OSC,
+					    &dt->dd_kobj);
+		if (count < 0) {
+			/* class_modify_config() haven't found matching
+			 * parameter and returned an error so that layer(s)
 			 * below could use that. But OSP is the bottom, so
-			 * just ignore it */
+			 * just ignore it
+			 */
 			CERROR("%s: unknown param %s\n",
 			       (char *)lustre_cfg_string(lcfg, 0),
 			       (char *)lustre_cfg_string(lcfg, 1));
-			rc = 0;
 		}
+		rc = 0;
 		break;
 	default:
 		CERROR("%s: unknown command %u\n",
@@ -1160,7 +1160,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 		GOTO(out_ref, rc);
 	}
 
-	osp_lprocfs_init(osp);
+	osp_tunables_init(osp);
 
 	rc = obd_fid_init(osp->opd_obd, NULL, osp->opd_connect_mdt ?
 			  LUSTRE_SEQ_METADATA : LUSTRE_SEQ_DATA);
@@ -1232,7 +1232,7 @@ out_last_used:
 out_fid:
 	obd_fid_fini(osp->opd_obd);
 out_proc:
-	osp_lprocfs_fini(osp);
+	osp_tunables_fini(osp);
 	client_obd_cleanup(obd);
 out_ref:
 	ptlrpcd_decref();
@@ -1347,7 +1347,7 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	}
 
 	LASSERT(osp->opd_obd);
-	osp_lprocfs_fini(osp);
+	osp_tunables_fini(osp);
 
 	if (osp->opd_connect_mdt) {
 		struct client_obd *cli = &osp->opd_obd->u.cli;
