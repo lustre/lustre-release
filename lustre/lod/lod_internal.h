@@ -424,7 +424,6 @@ struct lod_thread_info {
 	struct lu_attr			lti_attr;
 	struct lod_it			lti_it;
 	struct ldlm_res_id		lti_res_id;
-	struct ost_pool			lti_inuse_osts;
 	/* used to hold lu_dirent, sizeof(struct lu_dirent) + NAME_MAX */
 	char				lti_key[sizeof(struct lu_dirent) +
 						NAME_MAX];
@@ -701,18 +700,21 @@ typedef int (*lod_obj_stripe_cb_t)(const struct lu_env *env,
 typedef bool (*lod_obj_comp_skip_cb_t)(const struct lu_env *env,
 					struct lod_object *lo, int comp_idx,
 					struct lod_obj_stripe_cb_data *data);
+typedef int (*lod_obj_comp_cb_t)(const struct lu_env *env,
+				struct lod_object *lo, int comp_idx,
+				struct lod_obj_stripe_cb_data *data);
 struct lod_obj_stripe_cb_data {
 	union {
 		const struct lu_attr	*locd_attr;
-		struct ost_pool		*locd_inuse;
+		int			locd_ost_index;
 	};
 	lod_obj_stripe_cb_t		locd_stripe_cb;
 	lod_obj_comp_skip_cb_t		locd_comp_skip_cb;
+	lod_obj_comp_cb_t		locd_comp_cb;
 	bool				locd_declare;
 };
 
 /* lod_qos.c */
-int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo);
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		       struct lu_attr *attr, const struct lu_buf *buf,
 		       struct thandle *th);
@@ -721,15 +723,11 @@ int qos_del_tgt(struct lod_device *, struct lod_tgt_desc *);
 void lod_qos_rr_init(struct lod_qos_rr *lqr);
 int lod_use_defined_striping(const struct lu_env *, struct lod_object *,
 			     const struct lu_buf *);
-int lod_obj_stripe_set_inuse_cb(const struct lu_env *env, struct lod_object *lo,
-				struct dt_object *dt, struct thandle *th,
-				int comp_idx, int stripe_idx,
-				struct lod_obj_stripe_cb_data *data);
 int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			 const struct lu_buf *buf);
 int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			struct lu_attr *attr, struct thandle *th,
-			int comp_idx, struct ost_pool *inuse);
+			int comp_idx);
 __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 				  struct lod_layout_component *entry,
 				  bool is_dir);

@@ -1085,6 +1085,18 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 		    data->locd_comp_skip_cb(env, lo, i, data))
 			continue;
 
+		if (data->locd_comp_cb) {
+			rc = data->locd_comp_cb(env, lo, i, data);
+			if (rc)
+				RETURN(rc);
+		}
+
+		/* could used just to do sth about component, not each
+		 * stripes
+		 */
+		if (!data->locd_stripe_cb)
+			continue;
+
 		LASSERT(lod_comp->llc_stripe_count > 0);
 		for (j = 0; j < lod_comp->llc_stripe_count; j++) {
 			struct dt_object *dt = lod_comp->llc_stripe[j];
@@ -5346,22 +5358,15 @@ static int lod_declare_instantiate_components(const struct lu_env *env,
 		struct lod_object *lo, struct thandle *th)
 {
 	struct lod_thread_info *info = lod_env_info(env);
-	struct ost_pool *inuse = &info->lti_inuse_osts;
 	int i;
 	int rc = 0;
 	ENTRY;
 
 	LASSERT(info->lti_count < lo->ldo_comp_cnt);
-	if (info->lti_count > 0) {
-		/* Prepare inuse array for composite file */
-		rc = lod_prepare_inuse(env, lo);
-		if (rc)
-			RETURN(rc);
-	}
 
 	for (i = 0; i < info->lti_count; i++) {
 		rc = lod_qos_prep_create(env, lo, NULL, th,
-					 info->lti_comp_idx[i], inuse);
+					 info->lti_comp_idx[i]);
 		if (rc)
 			break;
 	}
