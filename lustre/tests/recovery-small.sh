@@ -2690,6 +2690,36 @@ test_133() {
 }
 run_test 133 "don't fail on flock resend"
 
+test_134() {
+	[ -z "$CLIENTS" ] && skip "Need two or more clients" && return
+	[ $CLIENTCOUNT -lt 2 ] &&
+		{ skip "Need 2+ clients, have $CLIENTCOUNT" && return; }
+
+	mkdir -p $MOUNT/$tdir/1 $MOUNT/$tdir/2 || error "mkdir failed"
+	touch $MOUNT/$tdir/1/$tfile $MOUNT/$tdir/2/$tfile ||
+		error "touch failed"
+	zconf_umount_clients $CLIENTS $MOUNT
+	zconf_mount_clients $CLIENTS $MOUNT
+
+#define OBD_FAIL_TGT_REPLY_DATA_RACE    0x722
+	# assume commit interval is 5
+	do_facet mds1 "$LCTL set_param fail_loc=0x722 fail_val=5"
+
+	local -a clients=(${CLIENTS//,/ })
+	local client1=${clients[0]}
+	local client2=${clients[1]}
+
+	do_node $client1 rm $MOUNT/$tdir/1/$tfile &
+	rmpid=$!
+	do_node $client2 mv $MOUNT/$tdir/2/$tfile $MOUNT/$tdir/2/${tfile}_2 &
+	mvpid=$!
+	fail mds1
+	wait $rmpid || error "rm failed"
+	wait $mvpid || error "mv failed"
+	return 0
+}
+run_test 134 "race between failover and search for reply data free slot"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

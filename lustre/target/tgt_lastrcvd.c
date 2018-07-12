@@ -148,6 +148,13 @@ static int tgt_clear_reply_slot(struct lu_target *lut, int idx)
 	int chunk;
 	int b;
 
+	if (lut->lut_obd->obd_stopping)
+		/*
+		 * in case of failover keep the bit set in order to
+		 * avoid overwriting slots in reply_data which might
+		 * be required by resent rpcs
+		 */
+		return 0;
 	chunk = idx / LUT_REPLY_SLOTS_PER_CHUNK;
 	b = idx % LUT_REPLY_SLOTS_PER_CHUNK;
 

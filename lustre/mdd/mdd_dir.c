@@ -1679,6 +1679,9 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	int rc, is_dir = 0, cl_flags = 0;
 	ENTRY;
 
+	/* let shutdown to start */
+	CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_REPLY_DATA_RACE, 1);
+
 	/* cobj == NULL means only delete name entry */
 	if (likely(cobj != NULL)) {
 		mdd_cobj = md2mdd_obj(cobj);
@@ -2900,6 +2903,9 @@ static int mdd_rename(const struct lu_env *env,
 	unsigned cl_flags = 0;
 	int rc, rc2;
 	ENTRY;
+
+	/* let unlink to complete and commit */
+	CFS_FAIL_TIMEOUT(OBD_FAIL_TGT_REPLY_DATA_RACE, 2 + cfs_fail_val);
 
 	if (tobj)
 		mdd_tobj = md2mdd_obj(tobj);
