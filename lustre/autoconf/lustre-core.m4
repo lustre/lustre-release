@@ -2887,7 +2887,7 @@ pagevec_init, [
 AC_DEFUN([LC_BI_BDEV], [
 LB_CHECK_COMPILE([if 'bi_bdev' exist],
 bi_bdev, [
-	#include <linux/blk_types.h>
+	#include <linux/bio.h>
 ],[
 	((struct bio *)0)->bi_bdev = NULL;
 ],[
