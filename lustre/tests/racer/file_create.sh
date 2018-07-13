@@ -1,28 +1,22 @@
 #!/bin/bash
 trap 'kill $(jobs -p)' EXIT
+RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-false}
+RACER_ENABLE_FLR=${RACER_ENABLE_FLR:-true}
 DIR=$1
 MAX=$2
 MAX_MB=${RACER_MAX_MB:-8}
 
-. $LUSTRE/tests/test-framework.sh
-
-OSTCOUNT=${OSTCOUNT:-$($LFS df $DIR 2> /dev/null | grep -c OST)}
-
 layout=(raid0 raid0)
 
 # check if it supports PFL layout
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.0) ]] &&
-	layout+=(pfl pfl pfl)
+$RACER_ENABLE_PFL && layout+=(pfl pfl pfl)
 
 # check if it supports DoM
-if $RACER_ENABLE_DOM ; then
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.53) ]] &&
-		layout+=(dom dom dom)
-fi
+$RACER_ENABLE_DOM && layout+=(dom dom dom)
 
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.55) ]] &&
-	layout+=(flr flr flr)
+# check if it supports FLR
+$RACER_ENABLE_FLR && layout+=(flr flr flr)
 
 echo "layout: ${layout[*]}"
 
