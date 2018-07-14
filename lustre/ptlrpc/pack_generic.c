@@ -2312,7 +2312,9 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 		__swab64s(&ent->lcme_extent.e_end);
 		__swab32s(&ent->lcme_offset);
 		__swab32s(&ent->lcme_size);
-		CLASSERT(offsetof(typeof(*ent), lcme_padding) != 0);
+		__swab32s(&ent->lcme_layout_gen);
+		CLASSERT(offsetof(typeof(*ent), lcme_padding_1) != 0);
+		CLASSERT(offsetof(typeof(*ent), lcme_padding_2) != 0);
 
 		v1 = (struct lov_user_md_v1 *)((char *)lum + off);
 		stripe_count = v1->lmm_stripe_count;
@@ -2841,6 +2843,18 @@ void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent)
 	CLASSERT(offsetof(typeof(ent->loe_rec), lor_padding) != 0);
 }
 EXPORT_SYMBOL(lustre_swab_orphan_ent_v2);
+
+void lustre_swab_orphan_ent_v3(struct lu_orphan_ent_v3 *ent)
+{
+	lustre_swab_lu_fid(&ent->loe_key);
+	lustre_swab_orphan_rec(&ent->loe_rec.lor_rec);
+	lustre_swab_ost_layout(&ent->loe_rec.lor_layout);
+	__swab32s(&ent->loe_rec.lor_layout_version);
+	__swab32s(&ent->loe_rec.lor_range);
+	CLASSERT(offsetof(typeof(ent->loe_rec), lor_padding_1) != 0);
+	CLASSERT(offsetof(typeof(ent->loe_rec), lor_padding_2) != 0);
+}
+EXPORT_SYMBOL(lustre_swab_orphan_ent_v3);
 
 void lustre_swab_ladvise(struct lu_ladvise *ladvise)
 {

@@ -624,7 +624,9 @@ struct lov_comp_md_entry_v1 {
 	__u32			lcme_offset;    /* offset of component blob,
 						   start from lov_comp_md_v1 */
 	__u32			lcme_size;      /* size of component blob */
-	__u64			lcme_padding[2];
+	__u32			lcme_layout_gen;
+	__u32			lcme_padding_1;
+	__u64			lcme_padding_2;
 } __attribute__((packed));
 
 #define SEQ_ID_MAX		0x0000FFFF

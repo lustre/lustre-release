@@ -384,6 +384,23 @@ struct lu_orphan_ent_v2 {
 	struct lu_orphan_rec_v2	loe_rec;
 };
 
+struct lu_orphan_rec_v3 {
+	struct lu_orphan_rec	lor_rec;
+	struct ost_layout	lor_layout;
+	/* The OST-object declared layout version in PFID EA.*/
+	__u32			lor_layout_version;
+	/* The OST-object declared layout range (of version) in PFID EA.*/
+	__u32			lor_range;
+	__u32			lor_padding_1;
+	__u64			lor_padding_2;
+};
+
+struct lu_orphan_ent_v3 {
+	/* The orphan OST-object's FID */
+	struct lu_fid		loe_key;
+	struct lu_orphan_rec_v3	loe_rec;
+};
+
 /** @} lu_fid */
 
 /** \defgroup lu_dir lu_dir

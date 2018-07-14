@@ -1573,7 +1573,9 @@ int osp_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(!osp->opd_connect_mdt);
-	rc = osp_sync_declare_add(env, o, MDS_UNLINK64_REC, th);
+
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ))
+		rc = osp_sync_declare_add(env, o, MDS_UNLINK64_REC, th);
 
 	RETURN(rc);
 }
@@ -1607,11 +1609,14 @@ static int osp_destroy(const struct lu_env *env, struct dt_object *dt,
 	o->opo_non_exist = 1;
 
 	LASSERT(!osp->opd_connect_mdt);
-	/* once transaction is committed put proper command on
-	 * the queue going to our OST. */
-	rc = osp_sync_add(env, o, MDS_UNLINK64_REC, th, NULL);
-	if (rc < 0)
-		RETURN(rc);
+
+	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ)) {
+		/* once transaction is committed put proper command on
+		 * the queue going to our OST. */
+		rc = osp_sync_add(env, o, MDS_UNLINK64_REC, th, NULL);
+		if (rc < 0)
+			RETURN(rc);
+	}
 
 	/* not needed in cache any more */
 	set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
@@ -1973,6 +1978,13 @@ again:
 		it->ooi_pos_ent++;
 		if (it->ooi_pos_ent < idxpage->lip_nr) {
 			if (it->ooi_rec_size ==
+					sizeof(struct lu_orphan_rec_v3)) {
+				it->ooi_ent =
+				(struct lu_orphan_ent_v3 *)idxpage->lip_entries+
+							it->ooi_pos_ent;
+				if (it->ooi_swab)
+					lustre_swab_orphan_ent_v3(it->ooi_ent);
+			} else if (it->ooi_rec_size ==
 					sizeof(struct lu_orphan_rec_v2)) {
 				it->ooi_ent =
 				(struct lu_orphan_ent_v2 *)idxpage->lip_entries+
@@ -2031,7 +2043,13 @@ static int osp_orphan_it_rec(const struct lu_env *env, const struct dt_it *di,
 	struct osp_it *it = (struct osp_it *)di;
 
 	if (likely(it->ooi_ent)) {
-		if (it->ooi_rec_size == sizeof(struct lu_orphan_rec_v2)) {
+		if (it->ooi_rec_size == sizeof(struct lu_orphan_rec_v3)) {
+			struct lu_orphan_ent_v3 *ent =
+				(struct lu_orphan_ent_v3 *)it->ooi_ent;
+
+			*(struct lu_orphan_rec_v3 *)rec = ent->loe_rec;
+		} else if (it->ooi_rec_size ==
+				sizeof(struct lu_orphan_rec_v2)) {
 			struct lu_orphan_ent_v2 *ent =
 				(struct lu_orphan_ent_v2 *)it->ooi_ent;
 

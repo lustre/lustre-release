@@ -587,8 +587,8 @@ const struct dt_index_features dt_lfsck_layout_orphan_features = {
 	.dif_flags		= 0,
 	.dif_keysize_min	= sizeof(struct lu_fid),
 	.dif_keysize_max	= sizeof(struct lu_fid),
-	.dif_recsize_min	= sizeof(struct lu_orphan_rec_v2),
-	.dif_recsize_max	= sizeof(struct lu_orphan_rec_v2),
+	.dif_recsize_min	= sizeof(struct lu_orphan_rec_v3),
+	.dif_recsize_max	= sizeof(struct lu_orphan_rec_v3),
 	.dif_ptrsize		= 4
 };
 EXPORT_SYMBOL(dt_lfsck_layout_orphan_features);

@@ -795,7 +795,9 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_extent);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_offset);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_size);
-	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_layout_gen);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding_1);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding_2);
 
 	CHECK_VALUE_X(LCME_FL_INIT);
 	CHECK_VALUE_X(LCME_FL_NEG);

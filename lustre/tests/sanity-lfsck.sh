@@ -5204,6 +5204,323 @@ test_35()
 }
 run_test 35 "LFSCK can rebuild the lost agent entry"
 
+# It will be replaced by "lfs getstripe -N" via LU-11124.
+get_mirrors_count() {
+	local mirrors=$($LFS getstripe $1 |
+			awk '/lcm_mirror_count/ { print $2 }')
+	echo $mirrors
+}
+
+test_36a() {
+	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
+
+	echo "#####"
+	echo "The target MDT-object's LOV EA corrupted as to lose one of the "
+	echo "mirrors information. The layout LFSCK should rebuild the LOV EA "
+	echo "with the PFID EA of related OST-object(s) belong to the mirror."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS setstripe -N -E 1M -o 0,1 -E -1 -o 2 -N -E 2M -o 1,2 -E -1 -o 0 \
+		-N -E 3M -o 2,0 -E -1 -o 1 $DIR/$tdir/f0 ||
+		error "(0) Fail to create mirror file $DIR/$tdir/f0"
+	$LFS setstripe -N -E 1M -o 0,1 -E -1 -o 2 -N -E 2M -o 1,2 -E -1 -o 0 \
+		-N -E 3M -o 2,0 -E -1 -o 1 $DIR/$tdir/f1 ||
+		error "(1) Fail to create mirror file $DIR/$tdir/f1"
+	$LFS setstripe -N -E 1M -o 0,1 -E -1 -o 2 -N -E 2M -o 1,2 -E -1 -o 0 \
+		-N -E 3M -o 2,0 -E -1 -o 1 $DIR/$tdir/f2 ||
+		error "(2) Fail to create mirror file $DIR/$tdir/f2"
+
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=4 ||
+		error "(3) Fail to write $DIR/$tdir/f0"
+	dd if=/dev/zero of=$DIR/$tdir/f1 bs=1M count=4 ||
+		error "(4) Fail to write $DIR/$tdir/f1"
+	dd if=/dev/zero of=$DIR/$tdir/f2 bs=1M count=4 ||
+		error "(5) Fail to write $DIR/$tdir/f2"
+
+	$LFS mirror resync $DIR/$tdir/f0 ||
+		error "(6) Fail to resync $DIR/$tdir/f0"
+	$LFS mirror resync $DIR/$tdir/f1 ||
+		error "(7) Fail to resync $DIR/$tdir/f1"
+	$LFS mirror resync $DIR/$tdir/f2 ||
+		error "(8) Fail to resync $DIR/$tdir/f2"
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	$LFS getstripe $DIR/$tdir/f0 ||
+		error "(9) Fail to getstripe for $DIR/$tdir/f0"
+	$LFS getstripe $DIR/$tdir/f1 ||
+		error "(10) Fail to getstripe for $DIR/$tdir/f1"
+	$LFS getstripe $DIR/$tdir/f2 ||
+		error "(11) Fail to getstripe for $DIR/$tdir/f2"
+
+	echo "Inject failure, to simulate the case of missing one mirror in LOV"
+	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
+	do_facet mds1 $LCTL set_param fail_loc=0x1616
+
+	$LFS mirror split --mirror-id 1 -d $DIR/$tdir/f0 ||
+		error "(12) Fail to split 1st mirror from $DIR/$tdir/f0"
+	$LFS mirror split --mirror-id 2 -d $DIR/$tdir/f1 ||
+		error "(13) Fail to split 2nd mirror from $DIR/$tdir/f1"
+	$LFS mirror split --mirror-id 3 -d $DIR/$tdir/f2 ||
+		error "(14) Fail to split 3rd mirror from $DIR/$tdir/f2"
+
+	sync
+	sleep 2
+	do_facet mds1 $LCTL set_param fail_loc=0
+
+	$LFS getstripe $DIR/$tdir/f0 | grep "lcme_mirror_id:.*1" &&
+		error "(15) The 1st of mirror is not destroyed"
+	$LFS getstripe $DIR/$tdir/f1 | grep "lcme_mirror_id:.*2" &&
+		error "(16) The 2nd of mirror is not destroyed"
+	$LFS getstripe $DIR/$tdir/f2 | grep "lcme_mirror_id:.*3" &&
+		error "(17) The 3rd of mirror is not destroyed"
+
+	local mirrors
+
+	mirrors=$(get_mirrors_count $DIR/$tdir/f0)
+	[ $mirrors -eq 2 ] || error "(18) $DIR/$tdir/f0 has $mirrors mirrors"
+	mirrors=$(get_mirrors_count $DIR/$tdir/f1)
+	[ $mirrors -eq 2 ] || error "(19) $DIR/$tdir/f1 has $mirrors mirrors"
+	mirrors=$(get_mirrors_count $DIR/$tdir/f2)
+	[ $mirrors -eq 2 ] || error "(20) $DIR/$tdir/f2 has $mirrors mirrors"
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
+	$START_LAYOUT -r -o || error "(21) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(22) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
+				obdfilter.$(facet_svc ost${k}).lfsck_layout |
+				awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(23) OST${k} Expect 'completed', but got '$cur_status'"
+	done
+
+	local repaired=$(do_facet mds1 $LCTL get_param -n \
+			 mdd.$(facet_svc mds1).lfsck_layout |
+			 awk '/^repaired_orphan/ { print $2 }')
+	[ $repaired -eq 9 ] ||
+		error "(24) Expect 9 fixed on mds1, but got: $repaired"
+
+	mirrors=$(get_mirrors_count $DIR/$tdir/f0)
+	[ $mirrors -eq 3 ] || error "(25) $DIR/$tdir/f0 has $mirrors mirrors"
+	mirrors=$(get_mirrors_count $DIR/$tdir/f1)
+	[ $mirrors -eq 3 ] || error "(26) $DIR/$tdir/f1 has $mirrors mirrors"
+	mirrors=$(get_mirrors_count $DIR/$tdir/f2)
+	[ $mirrors -eq 3 ] || error "(27) $DIR/$tdir/f2 has $mirrors mirrors"
+
+	$LFS getstripe $DIR/$tdir/f0 | grep "lcme_mirror_id:.*1" || {
+		$LFS getstripe $DIR/$tdir/f0
+		error "(28) The 1st of mirror is not recovered"
+	}
+
+	$LFS getstripe $DIR/$tdir/f1 | grep "lcme_mirror_id:.*2" || {
+		$LFS getstripe $DIR/$tdir/f1
+		error "(29) The 2nd of mirror is not recovered"
+	}
+
+	$LFS getstripe $DIR/$tdir/f2 | grep "lcme_mirror_id:.*3" || {
+		$LFS getstripe $DIR/$tdir/f2
+		error "(30) The 3rd of mirror is not recovered"
+	}
+}
+run_test 36a "rebuild LOV EA for mirrored file (1)"
+
+test_36b() {
+	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
+
+	echo "#####"
+	echo "The mirrored file lost its MDT-object, but relatd OST-objects "
+	echo "are still there. The layout LFSCK should rebuild the LOV EA "
+	echo "with the PFID EA of related OST-object(s) belong to the file. "
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS setstripe -N -E 1M -o 0,1 -E -1 -o 2 -N -E 2M -o 1,2 -E -1 -o 0 \
+		-N -E 3M -o 2,0 -E -1 -o 1 $DIR/$tdir/f0 ||
+		error "(0) Fail to create mirror file $DIR/$tdir/f0"
+
+	local fid=$($LFS path2fid $DIR/$tdir/f0)
+
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=4 ||
+		error "(1) Fail to write $DIR/$tdir/f0"
+	$LFS mirror resync $DIR/$tdir/f0 ||
+		error "(2) Fail to resync $DIR/$tdir/f0"
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	$LFS getstripe $DIR/$tdir/f0 ||
+		error "(3) Fail to getstripe for $DIR/$tdir/f0"
+
+	echo "Inject failure, to simulate the case of missing the MDT-object"
+	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
+	do_facet mds1 $LCTL set_param fail_loc=0x1616
+	rm -f $DIR/$tdir/f0 || error "(4) Fail to remove $DIR/$tdir/f0"
+
+	sync
+	sleep 2
+	do_facet mds1 $LCTL set_param fail_loc=0
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
+	$START_LAYOUT -r -o || error "(5) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(6) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
+				obdfilter.$(facet_svc ost${k}).lfsck_layout |
+				awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(7) OST${k} Expect 'completed', but got '$cur_status'"
+	done
+
+	local count=$(do_facet mds1 $LCTL get_param -n \
+		      mdd.$(facet_svc mds1).lfsck_layout |
+		      awk '/^repaired_orphan/ { print $2 }')
+	[ $count -eq 9 ] || error "(8) Expect 9 fixed on mds1, but got: $count"
+
+	local name=$MOUNT/.lustre/lost+found/MDT0000/${fid}-R-0
+	count=$($LFS getstripe $name | awk '/lcm_mirror_count/ { print $2 }')
+	[ $count -eq 3 ] || error "(9) $DIR/$tdir/f0 has $count mirrors"
+
+	count=$($LFS getstripe $name | awk '/lcm_entry_count/ { print $2 }')
+	[ $count -eq 6 ] || error "(10) $DIR/$tdir/f0 has $count entries"
+
+	$LFS getstripe $name | grep "lcme_mirror_id:.*1" || {
+		$LFS getstripe $name
+		error "(11) The 1st of mirror is not recovered"
+	}
+
+	$LFS getstripe $name | grep "lcme_mirror_id:.*2" || {
+		$LFS getstripe $name
+		error "(12) The 2nd of mirror is not recovered"
+	}
+
+	$LFS getstripe $name | grep "lcme_mirror_id:.*3" || {
+		$LFS getstripe $name
+		error "(13) The 3rd of mirror is not recovered"
+	}
+}
+run_test 36b "rebuild LOV EA for mirrored file (2)"
+
+test_36c() {
+	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
+
+	echo "#####"
+	echo "The mirrored file has been modified, not resynced yet, then "
+	echo "lost its MDT-object, but relatd OST-objects are still there. "
+	echo "The layout LFSCK should rebuild the LOV EA and relatd status "
+	echo "with the PFID EA of related OST-object(s) belong to the file. "
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS setstripe -N -E 1M -o 0,1 -E -1 -o 2 -N -E 2M -o 1,2 -E -1 -o 0 \
+		$DIR/$tdir/f0 ||
+		error "(0) Fail to create mirror file $DIR/$tdir/f0"
+
+	local fid=$($LFS path2fid $DIR/$tdir/f0)
+
+	# The 1st dd && resync makes all related OST-objects have been written
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=4 ||
+		error "(1.1) Fail to write $DIR/$tdir/f0"
+	$LFS mirror resync $DIR/$tdir/f0 ||
+		error "(1.2) Fail to resync $DIR/$tdir/f0"
+	# The 2nd dd makes one mirror to be stale
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=4 ||
+		error "(1.3) Fail to write $DIR/$tdir/f0"
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	$LFS getstripe $DIR/$tdir/f0 ||
+		error "(2) Fail to getstripe for $DIR/$tdir/f0"
+
+	local saved_flags1=$($LFS getstripe $DIR/$tdir/f0 | head -n 10 |
+			     awk '/lcme_flags/ { print $2 }')
+	local saved_flags2=$($LFS getstripe $DIR/$tdir/f0 | tail -n 10 |
+			     awk '/lcme_flags/ { print $2 }')
+
+	echo "Inject failure, to simulate the case of missing the MDT-object"
+	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
+	do_facet mds1 $LCTL set_param fail_loc=0x1616
+	rm -f $DIR/$tdir/f0 || error "(3) Fail to remove $DIR/$tdir/f0"
+
+	sync
+	sleep 2
+	do_facet mds1 $LCTL set_param fail_loc=0
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
+	$START_LAYOUT -r -o || error "(4) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(5) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
+				obdfilter.$(facet_svc ost${k}).lfsck_layout |
+				awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(6) OST${k} Expect 'completed', but got '$cur_status'"
+	done
+
+	local count=$(do_facet mds1 $LCTL get_param -n \
+		      mdd.$(facet_svc mds1).lfsck_layout |
+		      awk '/^repaired_orphan/ { print $2 }')
+	[ $count -eq 6 ] || error "(7) Expect 9 fixed on mds1, but got: $count"
+
+	local name=$MOUNT/.lustre/lost+found/MDT0000/${fid}-R-0
+	count=$($LFS getstripe $name | awk '/lcm_mirror_count/ { print $2 }')
+	[ $count -eq 2 ] || error "(8) $DIR/$tdir/f0 has $count mirrors"
+
+	count=$($LFS getstripe $name | awk '/lcm_entry_count/ { print $2 }')
+	[ $count -eq 4 ] || error "(9) $DIR/$tdir/f0 has $count entries"
+
+	local flags=$($LFS getstripe $name | head -n 10 |
+		awk '/lcme_flags/ { print $2 }')
+	[ "$flags" == "$saved_flags1" ] || {
+		$LFS getstripe $name
+		error "(10) expect flags $saved_flags1, got $flags"
+	}
+
+	flags=$($LFS getstripe $name | tail -n 10 |
+		awk '/lcme_flags/ { print $2 }')
+	[ "$flags" == "$saved_flags2" ] || {
+		$LFS getstripe $name
+		error "(11) expect flags $saved_flags2, got $flags"
+	}
+}
+run_test 36c "rebuild LOV EA for mirrored file (3)"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

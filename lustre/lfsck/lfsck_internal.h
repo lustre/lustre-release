@@ -903,7 +903,7 @@ struct lfsck_thread_info {
 	struct ldlm_res_id	lti_resid;
 	struct filter_fid	lti_ff;
 	struct dt_allocation_hint lti_hint;
-	struct lu_orphan_rec_v2	lti_rec;
+	struct lu_orphan_rec_v3	lti_rec;
 	struct lov_user_md	lti_lum;
 	struct dt_insert_rec	lti_dt_rec;
 	struct lu_object_conf	lti_conf;
