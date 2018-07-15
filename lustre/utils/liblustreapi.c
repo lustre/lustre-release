@@ -1520,7 +1520,6 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
 		goto free_path;
 	}
 
-	llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
 	dir = opendir(pathname.gl_pathv[0]);
 	if (dir == NULL) {
 		rc = -errno;
@@ -1545,14 +1544,14 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
                 /* check output bounds */
 		if (nb_entries >= list_size) {
 			rc = -EOVERFLOW;
-			goto free_dir;
+			goto free_dir_no_msg;
 		}
 
                 /* +2 for '.' and final '\0' */
 		if (used + strlen(pool->d_name) + strlen(fsname) + 2
 		    > buffer_size) {
 			rc = -EOVERFLOW;
-			goto free_dir;
+			goto free_dir_no_msg;
 		}
 
 		sprintf(buffer + used, "%s.%s", fsname, pool->d_name);
@@ -1565,6 +1564,10 @@ free_dir:
 	if (rc)
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "Error reading pool list for '%s'", name);
+	else
+		llapi_printf(LLAPI_MSG_NORMAL, "Pools from %s:\n", fsname);
+
+free_dir_no_msg:
 	closedir(dir);
 free_path:
 	cfs_free_param_data(&pathname);
