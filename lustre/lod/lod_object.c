@@ -5575,7 +5575,8 @@ static inline int lod_check_ost_avail(const struct lu_env *env,
 
 	ost = OST_TGT(lod, idx);
 	if (ost->ltd_statfs.os_state &
-		(OS_STATE_READONLY | OS_STATE_ENOSPC | OS_STATE_ENOINO) ||
+		(OS_STATE_READONLY | OS_STATE_ENOSPC | OS_STATE_ENOINO |
+		 OS_STATE_NOPRECREATE) ||
 	    ost->ltd_active == 0) {
 		CDEBUG(D_LAYOUT, DFID ": mirror %d OST%d unavail, rc = %d\n",
 		       PFID(lod_object_fid(lo)), index, idx, rc);

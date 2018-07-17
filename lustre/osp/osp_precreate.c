@@ -1038,6 +1038,13 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 			       available, d->opd_reserved_mb_low,
 			       d->opd_pre_status, rc);
 		}
+
+		/* Object precreation is skipped on the OST with
+		 * max_create_count=0. */
+		if (d->opd_pre_max_create_count == 0)
+			msfs->os_state |= OS_STATE_NOPRECREATE;
+		else
+			msfs->os_state &= ~OS_STATE_NOPRECREATE;
 	}
 out:
 	wake_up(&d->opd_pre_user_waitq);

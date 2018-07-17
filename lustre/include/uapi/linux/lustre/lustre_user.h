@@ -119,6 +119,7 @@ typedef struct stat     lstat_t;
 enum obd_statfs_state {
 	OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
 	OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
+	OS_STATE_NOPRECREATE    = 0x00000004, /**< no object precreation */
 	OS_STATE_ENOSPC		= 0x00000020, /**< not enough free space */
 	OS_STATE_ENOINO		= 0x00000040, /**< not enough inodes */
 };
