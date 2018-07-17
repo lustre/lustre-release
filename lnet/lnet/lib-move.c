@@ -2555,12 +2555,6 @@ again:
 	}
 	lnet_peer_ni_decref_locked(lpni);
 
-	/* If peer is not healthy then can not send anything to it */
-	if (!lnet_is_peer_healthy_locked(peer)) {
-		lnet_net_unlock(cpt);
-		return -EHOSTUNREACH;
-	}
-
 	/*
 	 * Identify the different send cases
 	 */

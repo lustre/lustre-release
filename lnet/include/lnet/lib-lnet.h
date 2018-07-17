@@ -545,7 +545,6 @@ extern struct lnet_ni *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern struct lnet_ni *lnet_nid2ni_addref(lnet_nid_t nid);
 extern struct lnet_ni *lnet_net2ni_locked(__u32 net, int cpt);
 extern struct lnet_ni *lnet_net2ni_addref(__u32 net);
-bool lnet_is_ni_healthy_locked(struct lnet_ni *ni);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
 
 int lnet_lib_init(void);
@@ -932,45 +931,6 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			  __u32 *peer_rtr_credits, __u32 *peer_min_rtr_credtis,
 			  __u32 *peer_tx_qnob);
 int lnet_get_peer_ni_hstats(struct lnet_ioctl_peer_ni_hstats *stats);
-
-static inline bool
-lnet_is_peer_ni_healthy_locked(struct lnet_peer_ni *lpni)
-{
-	return lpni->lpni_healthy;
-}
-
-static inline void
-lnet_set_peer_ni_health_locked(struct lnet_peer_ni *lpni, bool health)
-{
-	lpni->lpni_healthy = health;
-}
-
-static inline bool
-lnet_is_peer_net_healthy_locked(struct lnet_peer_net *peer_net)
-{
-	struct lnet_peer_ni *lpni;
-
-	list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
-			    lpni_peer_nis) {
-		if (lnet_is_peer_ni_healthy_locked(lpni))
-			return true;
-	}
-
-	return false;
-}
-
-static inline bool
-lnet_is_peer_healthy_locked(struct lnet_peer *peer)
-{
-	struct lnet_peer_net *peer_net;
-
-	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_peer_nets) {
-		if (lnet_is_peer_net_healthy_locked(peer_net))
-			return true;
-	}
-
-	return false;
-}
 
 static inline struct lnet_peer_net *
 lnet_find_peer_net_locked(struct lnet_peer *peer, __u32 net_id)

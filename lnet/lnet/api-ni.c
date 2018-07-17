@@ -1222,15 +1222,6 @@ lnet_islocalnet(__u32 net_id)
 	return local;
 }
 
-bool
-lnet_is_ni_healthy_locked(struct lnet_ni *ni)
-{
-	if (ni->ni_state & LNET_NI_STATE_ACTIVE)
-		return true;
-
-	return false;
-}
-
 struct lnet_ni  *
 lnet_nid2ni_locked(lnet_nid_t nid, int cpt)
 {

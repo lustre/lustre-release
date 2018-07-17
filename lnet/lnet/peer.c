@@ -177,7 +177,6 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	lpni->lpni_nid = nid;
 	lpni->lpni_cpt = cpt;
 	atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);
-	lnet_set_peer_ni_health_locked(lpni, true);
 
 	net = lnet_get_net_locked(LNET_NIDNET(nid));
 	lpni->lpni_net = net;
@@ -2701,8 +2700,6 @@ static lnet_nid_t lnet_peer_select_nid(struct lnet_peer *lp)
 	/* Look for a direct-connected NID for this peer. */
 	lpni = NULL;
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
-		if (!lnet_is_peer_ni_healthy_locked(lpni))
-			continue;
 		if (!lnet_get_net_locked(lpni->lpni_peer_net->lpn_net_id))
 			continue;
 		break;
@@ -2713,8 +2710,6 @@ static lnet_nid_t lnet_peer_select_nid(struct lnet_peer *lp)
 	/* Look for a routed-connected NID for this peer. */
 	lpni = NULL;
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
-		if (!lnet_is_peer_ni_healthy_locked(lpni))
-			continue;
 		if (!lnet_find_rnet_locked(lpni->lpni_peer_net->lpn_net_id))
 			continue;
 		break;
@@ -3094,9 +3089,6 @@ static int lnet_peer_discovery(void *arg)
 			 * forever, in case the GET message (for ping)
 			 * doesn't get a REPLY or the PUT message (for
 			 * push) doesn't get an ACK.
-			 *
-			 * TODO: LNet Health will deal with this scenario
-			 * in a generic way.
 			 */
 			lp->lp_last_queued = ktime_get_real_seconds();
 			lnet_net_unlock(LNET_LOCK_EX);
