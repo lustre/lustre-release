@@ -733,6 +733,13 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		     is_remote_parent_ino(dev, pos)))
 		RETURN(SCRUB_NEXT_CONTINUE);
 
+	 /* Skip project quota inode since it is greater than s_first_ino. */
+#ifdef HAVE_PROJECT_QUOTA
+	if (ldiskfs_has_feature_project(sb) &&
+	    pos == le32_to_cpu(LDISKFS_SB(sb)->s_es->s_prj_quota_inum))
+		RETURN(SCRUB_NEXT_CONTINUE);
+#endif
+
 	osd_id_gen(lid, pos, OSD_OII_NOGEN);
 	inode = osd_iget(info, dev, lid);
 	if (IS_ERR(inode)) {
