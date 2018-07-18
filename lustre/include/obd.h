@@ -1223,7 +1223,8 @@ static inline int cli_brw_size(struct obd_device *obd)
 	return obd->u.cli.cl_max_pages_per_rpc << PAGE_SHIFT;
 }
 
-/* when RPC size or the max RPCs in flight is increased, the max dirty pages
+/*
+ * When RPC size or the max RPCs in flight is increased, the max dirty pages
  * of the client should be increased accordingly to avoid sending fragmented
  * RPCs over the network when the client runs out of the maximum dirty space
  * when so many RPCs are being generated.
@@ -1231,10 +1232,10 @@ static inline int cli_brw_size(struct obd_device *obd)
 static inline void client_adjust_max_dirty(struct client_obd *cli)
 {
 	 /* initializing */
-	if (cli->cl_dirty_max_pages <= 0)
-		cli->cl_dirty_max_pages = (OSC_MAX_DIRTY_DEFAULT * 1024 * 1024)
-							>> PAGE_SHIFT;
-	else {
+	if (cli->cl_dirty_max_pages <= 0) {
+		cli->cl_dirty_max_pages =
+			(OSC_MAX_DIRTY_DEFAULT * 1024 * 1024) >> PAGE_SHIFT;
+	} else {
 		unsigned long dirty_max = cli->cl_max_rpcs_in_flight *
 					  cli->cl_max_pages_per_rpc;
 
@@ -1244,6 +1245,12 @@ static inline void client_adjust_max_dirty(struct client_obd *cli)
 
 	if (cli->cl_dirty_max_pages > totalram_pages / 8)
 		cli->cl_dirty_max_pages = totalram_pages / 8;
+
+	/* This value is exported to userspace through the max_dirty_mb
+	 * parameter.  So we round up the number of pages to make it a round
+	 * number of MBs. */
+	cli->cl_dirty_max_pages = round_up(cli->cl_dirty_max_pages,
+					   1 << (20 - PAGE_SHIFT));
 }
 
 #endif /* __OBD_H */
