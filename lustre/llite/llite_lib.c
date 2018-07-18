@@ -1900,6 +1900,15 @@ void ll_inode_size_unlock(struct inode *inode)
 	mutex_unlock(&lli->lli_size_mutex);
 }
 
+void ll_update_inode_flags(struct inode *inode, int ext_flags)
+{
+	inode->i_flags = ll_ext_to_inode_flags(ext_flags);
+	if (ext_flags & LUSTRE_PROJINHERIT_FL)
+		ll_file_set_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT);
+	else
+		ll_file_clear_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT);
+}
+
 int ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
@@ -1956,7 +1965,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 
 	/* Clear i_flags to remove S_NOSEC before permissions are updated */
 	if (body->mbo_valid & OBD_MD_FLFLAGS)
-		inode->i_flags = ll_ext_to_inode_flags(body->mbo_flags);
+		ll_update_inode_flags(inode, body->mbo_flags);
 	if (body->mbo_valid & OBD_MD_FLMODE)
 		inode->i_mode = (inode->i_mode & S_IFMT) |
 				(body->mbo_mode & ~S_IFMT);
@@ -2158,7 +2167,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		if (rc)
 			RETURN(rc);
 
-		inode->i_flags = ll_ext_to_inode_flags(flags);
+		ll_update_inode_flags(inode, flags);
 
 		obj = ll_i2info(inode)->lli_clob;
 		if (obj == NULL)

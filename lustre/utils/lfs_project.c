@@ -119,7 +119,7 @@ project_check_one(const char *pathname, struct project_handle_control *phc)
 		phc->projid = fsx.fsx_projid;
 	}
 
-	if (!(fsx.fsx_xflags & LL_PROJINHERIT_FL)) {
+	if (!(fsx.fsx_xflags & FS_XFLAG_PROJINHERIT)) {
 		if (!phc->newline) {
 			printf("%s%c", pathname, '\0');
 			goto out;
@@ -152,7 +152,7 @@ project_list_one(const char *pathname, struct project_handle_control *phc)
 		return ret;
 
 	printf("%5u %c %s\n", fsx.fsx_projid,
-	       (fsx.fsx_xflags & LL_PROJINHERIT_FL) ?
+	       (fsx.fsx_xflags & FS_XFLAG_PROJINHERIT) ?
 		'P' : '-', pathname);
 
 	close(ret);
@@ -170,11 +170,11 @@ project_set_one(const char *pathname, struct project_handle_control *phc)
 		return fd;
 
 	if ((!phc->set_projid || fsx.fsx_projid == phc->projid) &&
-	    (!phc->set_inherit || (fsx.fsx_xflags & LL_PROJINHERIT_FL)))
+	    (!phc->set_inherit || (fsx.fsx_xflags & FS_XFLAG_PROJINHERIT)))
 		goto out;
 
 	if (phc->set_inherit)
-		fsx.fsx_xflags |= LL_PROJINHERIT_FL;
+		fsx.fsx_xflags |= FS_XFLAG_PROJINHERIT;
 	if (phc->set_projid)
 		fsx.fsx_projid = phc->projid;
 
@@ -197,11 +197,11 @@ project_clear_one(const char *pathname, struct project_handle_control *phc)
 	if (fd < 0)
 		return fd;
 
-	if ((!(fsx.fsx_xflags & LL_PROJINHERIT_FL)) &&
+	if ((!(fsx.fsx_xflags & FS_XFLAG_PROJINHERIT)) &&
 	     (fsx.fsx_projid == 0 || phc->keep_projid))
 		goto out;
 
-	fsx.fsx_xflags &= ~LL_PROJINHERIT_FL;
+	fsx.fsx_xflags &= ~FS_XFLAG_PROJINHERIT;
 	if (!phc->keep_projid)
 		fsx.fsx_projid = 0;
 

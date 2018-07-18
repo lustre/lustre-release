@@ -1729,6 +1729,18 @@ enum {
 	LUSTRE_LMA_FL_MASKS = LUSTRE_ORPHAN_FL,
 };
 
+#ifndef FS_XFLAG_SYNC
+#define FS_XFLAG_SYNC		0x00000020	/* all writes synchronous */
+#endif
+#ifndef FS_XFLAG_NOATIME
+#define FS_XFLAG_NOATIME	0x00000040	/* do not update access time */
+#endif
+#ifndef FS_XFLAG_IMMUTABLE
+#define FS_XFLAG_IMMUTABLE	0x00000008	/* file cannot be modified */
+#endif
+#ifndef FS_XFLAG_APPEND
+#define FS_XFLAG_APPEND		0x00000010	/* all writes append */
+#endif
 #ifndef FS_XFLAG_PROJINHERIT
 #define FS_XFLAG_PROJINHERIT	0x00000200	/* create with parents projid */
 #endif
@@ -1748,8 +1760,7 @@ static inline int ll_ext_to_inode_flags(int flags)
 #if defined(S_DIRSYNC)
                 ((flags & LUSTRE_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
 #endif
-		((flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0) |
-		((flags & LUSTRE_PROJINHERIT_FL) ? FS_XFLAG_PROJINHERIT : 0));
+		((flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0));
 }
 
 static inline int ll_inode_to_ext_flags(int iflags)
@@ -1760,8 +1771,23 @@ static inline int ll_inode_to_ext_flags(int iflags)
 #if defined(S_DIRSYNC)
                 ((iflags & S_DIRSYNC)   ? LUSTRE_DIRSYNC_FL   : 0) |
 #endif
-		((iflags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0) |
-		((iflags & FS_XFLAG_PROJINHERIT) ? LUSTRE_PROJINHERIT_FL : 0));
+		((iflags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0));
+}
+
+static inline int ll_xflags_to_inode_flags(int xflags)
+{
+	return  ((xflags & FS_XFLAG_SYNC) ? S_SYNC : 0) |
+		((xflags & FS_XFLAG_NOATIME) ? S_NOATIME : 0) |
+		((xflags & FS_XFLAG_APPEND) ? S_APPEND : 0) |
+		((xflags & FS_XFLAG_IMMUTABLE) ? S_IMMUTABLE : 0);
+}
+
+static inline int ll_inode_flags_to_xflags(int flags)
+{
+	return  ((flags & S_SYNC) ? FS_XFLAG_SYNC : 0) |
+		((flags & S_NOATIME) ? FS_XFLAG_NOATIME : 0) |
+		((flags & S_APPEND) ? FS_XFLAG_APPEND : 0) |
+		((flags & S_IMMUTABLE) ? FS_XFLAG_IMMUTABLE : 0);
 }
 #endif
 

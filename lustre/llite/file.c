@@ -104,6 +104,8 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 				     ATTR_CTIME | ATTR_CTIME_SET;
 	op_data->op_attr_blocks = inode->i_blocks;
 	op_data->op_attr_flags = ll_inode_to_ext_flags(inode->i_flags);
+	if (ll_file_test_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT))
+		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
 	op_data->op_handle = och->och_fh;
 
 	if (och->och_flags & FMODE_WRITE &&
@@ -3046,7 +3048,9 @@ int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 			   sizeof(fsxattr)))
 		RETURN(-EFAULT);
 
-	fsxattr.fsx_xflags = ll_inode_to_ext_flags(inode->i_flags);
+	fsxattr.fsx_xflags = ll_inode_flags_to_xflags(inode->i_flags);
+	if (ll_file_test_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT))
+		fsxattr.fsx_xflags |= FS_XFLAG_PROJINHERIT;
 	fsxattr.fsx_projid = ll_i2info(inode)->lli_projid;
 	if (copy_to_user((struct fsxattr __user *)arg,
 			 &fsxattr, sizeof(fsxattr)))
@@ -3064,6 +3068,7 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	int rc = 0;
 	struct fsxattr fsxattr;
 	struct cl_object *obj;
+	int flags;
 
 	/* only root could change project ID */
 	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
@@ -3079,7 +3084,10 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 			   sizeof(fsxattr)))
 		GOTO(out_fsxattr1, rc = -EFAULT);
 
-	op_data->op_attr_flags = fsxattr.fsx_xflags;
+	flags = ll_xflags_to_inode_flags(fsxattr.fsx_xflags);
+	op_data->op_attr_flags = ll_inode_to_ext_flags(flags);
+	if (fsxattr.fsx_xflags & FS_XFLAG_PROJINHERIT)
+		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
 	op_data->op_projid = fsxattr.fsx_projid;
 	op_data->op_attr.ia_valid |= (MDS_ATTR_PROJID | ATTR_ATTR_FLAG);
 	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL,
@@ -3090,7 +3098,7 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	if (obj) {
 		struct iattr *attr;
 
-		inode->i_flags = ll_ext_to_inode_flags(fsxattr.fsx_xflags);
+		ll_update_inode_flags(inode, op_data->op_attr_flags);
 		OBD_ALLOC_PTR(attr);
 		if (attr == NULL)
 			GOTO(out_fsxattr1, rc = -ENOMEM);
