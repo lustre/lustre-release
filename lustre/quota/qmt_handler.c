@@ -209,6 +209,8 @@ quota_set:
 				qmt_restore(lqe, &qti->qti_restore);
 				GOTO(out, rc);
 			}
+		} else {
+			ver = dt_version_get(env, LQE_GLB_OBJ(lqe));
 		}
 
 		/* compute new qunit value now that we have modified the quota
