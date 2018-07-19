@@ -93,13 +93,12 @@
 #define IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT	0x2
 #define IBLND_DEV_CAPS_FMR_ENABLED		0x4
 
-typedef struct
-{
+struct kib_tunables {
 	int              *kib_dev_failover;     /* HCA failover */
 	unsigned int     *kib_service;          /* IB service number */
 	int              *kib_min_reconnect_interval; /* first failed connection retry... */
 	int              *kib_max_reconnect_interval; /* ...exponentially increasing to this */
-	int              *kib_cksum;            /* checksum kib_msg_t? */
+	int              *kib_cksum;            /* checksum struct kib_msg? */
 	int              *kib_timeout;          /* comms timeout (seconds) */
 	int              *kib_keepalive;        /* keepalive timeout (seconds) */
 	int              *kib_ntx;              /* # tx descs */
@@ -113,15 +112,15 @@ typedef struct
 	int		 *kib_nscheds;
 	int		 *kib_wrq_sge;		/* # sg elements per wrq */
 	int		 *kib_use_fastreg_gaps; /* enable discontiguous fastreg fragment support */
-} kib_tunables_t;
+};
 
-extern kib_tunables_t  kiblnd_tunables;
+extern struct kib_tunables  kiblnd_tunables;
 
 #define IBLND_MSG_QUEUE_SIZE_V1      8          /* V1 only : # messages/RDMAs in-flight */
 #define IBLND_CREDIT_HIGHWATER_V1    7          /* V1 only : when eagerly to return credits */
 
 #define IBLND_CREDITS_DEFAULT        8          /* default # of peer_ni credits */
-#define IBLND_CREDITS_MAX          ((typeof(((kib_msg_t*) 0)->ibm_credits)) - 1)  /* Max # of peer_ni credits */
+#define IBLND_CREDITS_MAX          ((typeof(((struct kib_msg *) 0)->ibm_credits)) - 1)  /* Max # of peer_ni credits */
 
 /* when eagerly to return credits */
 #define IBLND_CREDITS_HIGHWATER(t, v) ((v) == IBLND_MSG_VERSION_1 ? \
@@ -179,8 +178,7 @@ struct kib_hca_dev;
 #define KIB_IFNAME_SIZE              256
 #endif
 
-typedef struct
-{
+struct kib_dev {
 	struct list_head	ibd_list;	/* chain on kib_devs */
 	struct list_head	ibd_fail_list;	/* chain on kib_failed_devs */
 	__u32			ibd_ifip;	/* IPoIB interface IP */
@@ -198,10 +196,9 @@ typedef struct
 	struct list_head	ibd_nets;
 	struct kib_hca_dev	*ibd_hdev;
 	__u32			ibd_dev_caps;
-} kib_dev_t;
+};
 
-typedef struct kib_hca_dev
-{
+struct kib_hca_dev {
 	struct rdma_cm_id   *ibh_cmid;          /* listener cmid */
 	struct ib_device    *ibh_ibdev;         /* IB device */
 	int                  ibh_page_shift;    /* page shift of current HCA */
@@ -213,20 +210,19 @@ typedef struct kib_hca_dev
 	struct ib_mr        *ibh_mrs;           /* global MR */
 #endif
 	struct ib_pd        *ibh_pd;            /* PD */
-	kib_dev_t           *ibh_dev;           /* owner */
+	struct kib_dev           *ibh_dev;           /* owner */
 	atomic_t             ibh_ref;           /* refcount */
-} kib_hca_dev_t;
+};
 
 /** # of seconds to keep pool alive */
 #define IBLND_POOL_DEADLINE     300
 /** # of seconds to retry if allocation failed */
 #define IBLND_POOL_RETRY        1
 
-typedef struct
-{
+struct kib_pages {
         int                     ibp_npages;             /* # pages */
         struct page            *ibp_pages[0];           /* page array */
-} kib_pages_t;
+};
 
 struct kib_pool;
 struct kib_poolset;
@@ -241,8 +237,7 @@ struct kib_net;
 
 #define IBLND_POOL_NAME_LEN     32
 
-typedef struct kib_poolset
-{
+struct kib_poolset {
 	/* serialize */
 	spinlock_t		ps_lock;
 	/* network it belongs to */
@@ -270,16 +265,15 @@ typedef struct kib_poolset
 	kib_ps_node_init_t	ps_node_init;
 	/* finalize node */
 	kib_ps_node_fini_t	ps_node_fini;
-} kib_poolset_t;
+};
 
-typedef struct kib_pool
-{
+struct kib_pool {
 	/* chain on pool list */
 	struct list_head	po_list;
 	/* pre-allocated node */
 	struct list_head	po_free_list;
 	/* pool_set of this pool */
-	kib_poolset_t	       *po_owner;
+	struct kib_poolset     *po_owner;
 	/* deadline of this pool */
 	time64_t		po_deadline;
 	/* # of elements in use */
@@ -288,22 +282,21 @@ typedef struct kib_pool
 	int			po_failed;
 	/* # of pre-allocated elements */
 	int			po_size;
-} kib_pool_t;
+};
 
-typedef struct {
-        kib_poolset_t           tps_poolset;            /* pool-set */
+struct kib_tx_poolset {
+	struct kib_poolset	tps_poolset;		/* pool-set */
         __u64                   tps_next_tx_cookie;     /* cookie of TX */
-} kib_tx_poolset_t;
+};
 
-typedef struct {
-        kib_pool_t              tpo_pool;               /* pool */
+struct kib_tx_pool {
+	struct kib_pool		tpo_pool;		/* pool */
         struct kib_hca_dev     *tpo_hdev;               /* device for this pool */
         struct kib_tx          *tpo_tx_descs;           /* all the tx descriptors */
-        kib_pages_t            *tpo_tx_pages;           /* premapped tx msg pages */
-} kib_tx_pool_t;
+	struct kib_pages       *tpo_tx_pages;           /* premapped tx msg pages */
+};
 
-typedef struct
-{
+struct kib_fmr_poolset {
 	spinlock_t		fps_lock;		/* serialize */
 	struct kib_net	       *fps_net;		/* IB network */
 	struct list_head	fps_pool_list;		/* FMR pool list */
@@ -317,7 +310,7 @@ typedef struct
 	int			fps_increasing;
 	/* time stamp for retry if failed to allocate */
 	time64_t		fps_next_retry;
-} kib_fmr_poolset_t;
+};
 
 #ifndef HAVE_IB_RDMA_WR
 struct ib_rdma_wr {
@@ -338,11 +331,10 @@ struct kib_fast_reg_descriptor { /* For fast registration */
 	bool				 frd_valid;
 };
 
-typedef struct
-{
+struct kib_fmr_pool {
 	struct list_head	fpo_list;	/* chain on pool list */
 	struct kib_hca_dev     *fpo_hdev;	/* device for this pool */
-	kib_fmr_poolset_t      *fpo_owner;	/* owner of this pool */
+	struct kib_fmr_poolset      *fpo_owner;	/* owner of this pool */
 	union {
 		struct {
 			struct ib_fmr_pool *fpo_fmr_pool; /* IB FMR pool */
@@ -356,18 +348,17 @@ typedef struct
 	int			fpo_failed;	/* fmr pool is failed */
 	int			fpo_map_count;	/* # of mapped FMR */
 	bool			fpo_is_fmr; /* True if FMR pools allocated */
-} kib_fmr_pool_t;
+};
 
-typedef struct {
-	kib_fmr_pool_t			*fmr_pool;	/* pool of FMR */
+struct kib_fmr {
+	struct kib_fmr_pool		*fmr_pool;	/* pool of FMR */
 	struct ib_pool_fmr		*fmr_pfmr;	/* IB pool fmr */
 	struct kib_fast_reg_descriptor	*fmr_frd;
 	u32				 fmr_key;
-} kib_fmr_t;
+};
 
-typedef struct kib_net
-{
-	/* chain on kib_dev_t::ibd_nets */
+struct kib_net {
+	/* chain on struct kib_dev::ibd_nets */
 	struct list_head	ibn_list;
 	__u64			ibn_incarnation;/* my epoch */
 	int			ibn_init;	/* initialisation state */
@@ -376,11 +367,11 @@ typedef struct kib_net
 	atomic_t		ibn_npeers;	/* # peers extant */
 	atomic_t		ibn_nconns;	/* # connections extant */
 
-	kib_tx_poolset_t	**ibn_tx_ps;	/* tx pool-set */
-	kib_fmr_poolset_t	**ibn_fmr_ps;	/* fmr pool-set */
+	struct kib_tx_poolset	**ibn_tx_ps;	/* tx pool-set */
+	struct kib_fmr_poolset	**ibn_fmr_ps;	/* fmr pool-set */
 
-	kib_dev_t		*ibn_dev;	/* underlying IB device */
-} kib_net_t;
+	struct kib_dev		*ibn_dev;	/* underlying IB device */
+};
 
 #define KIB_THREAD_SHIFT		16
 #define KIB_THREAD_ID(cpt, tid)		((cpt) << KIB_THREAD_SHIFT | (tid))
@@ -401,8 +392,7 @@ struct kib_sched_info {
 	int			ibs_cpt;	/* CPT id */
 };
 
-typedef struct
-{
+struct kib_data {
 	int			kib_init;	/* initialisation state */
 	int			kib_shutdown;	/* shut down? */
 	struct list_head	kib_devs;	/* IB devices extant */
@@ -438,7 +428,7 @@ typedef struct
 	struct ib_qp_attr	kib_error_qpa;	/* QP->ERROR */
 	/* percpt data for schedulers */
 	struct kib_sched_info	**kib_scheds;
-} kib_data_t;
+};
 
 #define IBLND_INIT_NOTHING         0
 #define IBLND_INIT_DATA            1
@@ -449,60 +439,51 @@ typedef struct
  * These are sent in sender's byte order (i.e. receiver flips).
  */
 
-typedef struct kib_connparams
-{
+struct kib_connparams {
         __u16             ibcp_queue_depth;
         __u16             ibcp_max_frags;
         __u32             ibcp_max_msg_size;
-} WIRE_ATTR kib_connparams_t;
+} WIRE_ATTR;
 
-typedef struct
-{
+struct kib_immediate_msg {
 	struct lnet_hdr		ibim_hdr;	/* portals header */
 	char			ibim_payload[0];/* piggy-backed payload */
-} WIRE_ATTR kib_immediate_msg_t;
+} WIRE_ATTR;
 
-typedef struct
-{
+struct kib_rdma_frag {
         __u32             rf_nob;               /* # bytes this frag */
         __u64             rf_addr;              /* CAVEAT EMPTOR: misaligned!! */
-} WIRE_ATTR kib_rdma_frag_t;
+} WIRE_ATTR;
 
-typedef struct
-{
-        __u32             rd_key;               /* local/remote key */
-        __u32             rd_nfrags;            /* # fragments */
-        kib_rdma_frag_t   rd_frags[0];          /* buffer frags */
-} WIRE_ATTR kib_rdma_desc_t;
+struct kib_rdma_desc {
+	__u32			rd_key;		/* local/remote key */
+	__u32			rd_nfrags;	/* # fragments */
+	struct kib_rdma_frag	rd_frags[0];	/* buffer frags */
+} WIRE_ATTR;
 
-typedef struct
-{
+struct kib_putreq_msg {
 	struct lnet_hdr		ibprm_hdr;	/* portals header */
 	__u64			ibprm_cookie;	/* opaque completion cookie */
-} WIRE_ATTR kib_putreq_msg_t;
+} WIRE_ATTR;
 
-typedef struct
-{
+struct kib_putack_msg {
         __u64             ibpam_src_cookie;     /* reflected completion cookie */
         __u64             ibpam_dst_cookie;     /* opaque completion cookie */
-        kib_rdma_desc_t   ibpam_rd;             /* sender's sink buffer */
-} WIRE_ATTR kib_putack_msg_t;
+	struct kib_rdma_desc	ibpam_rd;	/* sender's sink buffer */
+} WIRE_ATTR;
 
-typedef struct
-{
+struct kib_get_msg {
 	struct lnet_hdr		ibgm_hdr;	/* portals header */
 	__u64			ibgm_cookie;	/* opaque completion cookie */
-	kib_rdma_desc_t		ibgm_rd;	/* rdma descriptor */
-} WIRE_ATTR kib_get_msg_t;
+	struct kib_rdma_desc	ibgm_rd;	/* rdma descriptor */
+} WIRE_ATTR;
 
-typedef struct
-{
+struct kib_completion_msg {
         __u64             ibcm_cookie;          /* opaque completion cookie */
         __s32             ibcm_status;          /* < 0 failure: >= 0 length */
-} WIRE_ATTR kib_completion_msg_t;
+} WIRE_ATTR;
 
-typedef struct
-{
+struct kib_msg {
         /* First 2 fields fixed FOR ALL TIME */
         __u32             ibm_magic;            /* I'm an ibnal message */
         __u16             ibm_version;          /* this is my version number */
@@ -517,14 +498,14 @@ typedef struct
         __u64             ibm_dststamp;         /* destination's incarnation */
 
         union {
-                kib_connparams_t      connparams;
-                kib_immediate_msg_t   immediate;
-                kib_putreq_msg_t      putreq;
-                kib_putack_msg_t      putack;
-                kib_get_msg_t         get;
-                kib_completion_msg_t  completion;
+		struct kib_connparams		connparams;
+		struct kib_immediate_msg	immediate;
+		struct kib_putreq_msg		putreq;
+		struct kib_putack_msg		putack;
+		struct kib_get_msg		get;
+		struct kib_completion_msg	completion;
         } WIRE_ATTR ibm_u;
-} WIRE_ATTR kib_msg_t;
+} WIRE_ATTR;
 
 #define IBLND_MSG_MAGIC LNET_PROTO_IB_MAGIC	/* unique magic */
 
@@ -543,14 +524,14 @@ typedef struct
 #define IBLND_MSG_GET_REQ           0xd6        /* getreq (sink->src) */
 #define IBLND_MSG_GET_DONE          0xd7        /* completion (src->sink: all OK) */
 
-typedef struct {
+struct kib_rej {
         __u32            ibr_magic;             /* sender's magic */
         __u16            ibr_version;           /* sender's version */
         __u8             ibr_why;               /* reject reason */
         __u8             ibr_padding;           /* padding */
         __u64            ibr_incarnation;       /* incarnation of peer_ni */
-        kib_connparams_t ibr_cp;                /* connection parameters */
-} WIRE_ATTR kib_rej_t;
+	struct kib_connparams	ibr_cp;		/* connection parameters */
+} WIRE_ATTR;
 
 /* connection rejection reasons */
 #define IBLND_REJECT_CONN_RACE       1          /* You lost connection race */
@@ -568,8 +549,7 @@ typedef struct {
 
 /***********************************************************************/
 
-typedef struct kib_rx                           /* receive message */
-{
+struct kib_rx {					/* receive message */
 	/* queue for attention */
 	struct list_head	rx_list;
 	/* owning conn */
@@ -579,7 +559,7 @@ typedef struct kib_rx                           /* receive message */
 	/* completion status */
 	enum ib_wc_status	rx_status;
 	/* message buffer (host vaddr) */
-	kib_msg_t	       *rx_msg;
+	struct kib_msg	       *rx_msg;
 	/* message buffer (I/O addr) */
 	__u64			rx_msgaddr;
 	/* for dma_unmap_single() */
@@ -588,19 +568,18 @@ typedef struct kib_rx                           /* receive message */
 	struct ib_recv_wr	rx_wrq;
 	/* ...and its memory */
 	struct ib_sge		rx_sge;
-} kib_rx_t;
+};
 
 #define IBLND_POSTRX_DONT_POST    0             /* don't post */
 #define IBLND_POSTRX_NO_CREDIT    1             /* post: no credits */
 #define IBLND_POSTRX_PEER_CREDIT  2             /* post: give peer_ni back 1 credit */
 #define IBLND_POSTRX_RSRVD_CREDIT 3             /* post: give myself back 1 reserved credit */
 
-typedef struct kib_tx                           /* transmit message */
-{
+struct kib_tx {					/* transmit message */
 	/* queue on idle_txs ibc_tx_queue etc. */
 	struct list_head	tx_list;
 	/* pool I'm from */
-	kib_tx_pool_t		*tx_pool;
+	struct kib_tx_pool	*tx_pool;
 	/* owning conn */
 	struct kib_conn		*tx_conn;
 	/* # tx callbacks outstanding */
@@ -618,7 +597,7 @@ typedef struct kib_tx                           /* transmit message */
 	/* lnet msgs to finalize on completion */
 	struct lnet_msg		*tx_lntmsg[2];
 	/* message buffer (host vaddr) */
-	kib_msg_t		*tx_msg;
+	struct kib_msg		*tx_msg;
 	/* message buffer (I/O addr) */
 	__u64			tx_msgaddr;
 	/* for dma_unmap_single() */
@@ -634,7 +613,7 @@ typedef struct kib_tx                           /* transmit message */
 	/* ...and their memory */
 	struct ib_sge		*tx_sge;
 	/* rdma descriptor */
-	kib_rdma_desc_t		*tx_rd;
+	struct kib_rdma_desc	*tx_rd;
 	/* # entries in... */
 	int			tx_nfrags;
 	/* dma_map_sg descriptor */
@@ -644,25 +623,23 @@ typedef struct kib_tx                           /* transmit message */
 	/* gaps in fragments */
 	bool			tx_gaps;
 	/* FMR */
-	kib_fmr_t		tx_fmr;
+	struct kib_fmr		tx_fmr;
 				/* dma direction */
 	int			tx_dmadir;
-} kib_tx_t;
+};
 
-typedef struct kib_connvars
-{
+struct kib_connvars {
         /* connection-in-progress variables */
-        kib_msg_t                 cv_msg;
-} kib_connvars_t;
+	struct kib_msg		cv_msg;
+};
 
-typedef struct kib_conn
-{
+struct kib_conn {
 	/* scheduler information */
 	struct kib_sched_info	*ibc_sched;
 	/* owning peer_ni */
-	struct kib_peer		*ibc_peer;
+	struct kib_peer_ni	*ibc_peer;
 	/* HCA bound on */
-	kib_hca_dev_t		*ibc_hdev;
+	struct kib_hca_dev	*ibc_hdev;
 	/* stash on peer_ni's conn list */
 	struct list_head	ibc_list;
 	/* schedule for attention */
@@ -718,9 +695,9 @@ typedef struct kib_conn
 	/* serialise */
 	spinlock_t		ibc_lock;
 	/* the rx descs */
-	kib_rx_t		*ibc_rxs;
+	struct kib_rx		*ibc_rxs;
 	/* premapped rx msg pages */
-	kib_pages_t		*ibc_rx_pages;
+	struct kib_pages	*ibc_rx_pages;
 
 	/* CM id */
 	struct rdma_cm_id	*ibc_cmid;
@@ -728,8 +705,8 @@ typedef struct kib_conn
 	struct ib_cq		*ibc_cq;
 
 	/* in-progress connection state */
-	kib_connvars_t		*ibc_connvars;
-} kib_conn_t;
+	struct kib_connvars	*ibc_connvars;
+};
 
 #define IBLND_CONN_INIT               0         /* being initialised */
 #define IBLND_CONN_ACTIVE_CONNECT     1         /* active sending req */
@@ -738,8 +715,7 @@ typedef struct kib_conn
 #define IBLND_CONN_CLOSING            4         /* being closed */
 #define IBLND_CONN_DISCONNECTED       5         /* disconnected */
 
-typedef struct kib_peer
-{
+struct kib_peer_ni {
 	/* stash on global peer_ni list */
 	struct list_head	ibp_list;
 	/* who's on the other end(s) */
@@ -776,7 +752,7 @@ typedef struct kib_peer
 	__u16			ibp_max_frags;
 	/* max_peer_credits */
 	__u16			ibp_queue_depth;
-} kib_peer_ni_t;
+};
 
 #ifndef HAVE_IB_INC_RKEY
 /**
@@ -791,21 +767,21 @@ static inline u32 ib_inc_rkey(u32 rkey)
 }
 #endif
 
-extern kib_data_t      kiblnd_data;
+extern struct kib_data kiblnd_data;
 
-extern void kiblnd_hdev_destroy(kib_hca_dev_t *hdev);
+extern void kiblnd_hdev_destroy(struct kib_hca_dev *hdev);
 
 int kiblnd_msg_queue_size(int version, struct lnet_ni *ni);
 
 static inline void
-kiblnd_hdev_addref_locked(kib_hca_dev_t *hdev)
+kiblnd_hdev_addref_locked(struct kib_hca_dev *hdev)
 {
 	LASSERT(atomic_read(&hdev->ibh_ref) > 0);
 	atomic_inc(&hdev->ibh_ref);
 }
 
 static inline void
-kiblnd_hdev_decref(kib_hca_dev_t *hdev)
+kiblnd_hdev_decref(struct kib_hca_dev *hdev)
 {
 	LASSERT(atomic_read(&hdev->ibh_ref) > 0);
 	if (atomic_dec_and_test(&hdev->ibh_ref))
@@ -813,7 +789,7 @@ kiblnd_hdev_decref(kib_hca_dev_t *hdev)
 }
 
 static inline int
-kiblnd_dev_can_failover(kib_dev_t *dev)
+kiblnd_dev_can_failover(struct kib_dev *dev)
 {
 	if (!list_empty(&dev->ibd_fail_list)) /* already scheduled */
                 return 0;
@@ -869,7 +845,7 @@ do {                                                            \
 } while (0)
 
 static inline bool
-kiblnd_peer_connecting(kib_peer_ni_t *peer_ni)
+kiblnd_peer_connecting(struct kib_peer_ni *peer_ni)
 {
 	return peer_ni->ibp_connecting != 0 ||
 	       peer_ni->ibp_reconnecting != 0 ||
@@ -877,7 +853,7 @@ kiblnd_peer_connecting(kib_peer_ni_t *peer_ni)
 }
 
 static inline bool
-kiblnd_peer_idle(kib_peer_ni_t *peer_ni)
+kiblnd_peer_idle(struct kib_peer_ni *peer_ni)
 {
 	return !kiblnd_peer_connecting(peer_ni) && list_empty(&peer_ni->ibp_conns);
 }
@@ -892,14 +868,14 @@ kiblnd_nid2peerlist (lnet_nid_t nid)
 }
 
 static inline int
-kiblnd_peer_active (kib_peer_ni_t *peer_ni)
+kiblnd_peer_active(struct kib_peer_ni *peer_ni)
 {
 	/* Am I in the peer_ni hash table? */
 	return !list_empty(&peer_ni->ibp_list);
 }
 
 static inline struct kib_conn *
-kiblnd_get_conn_locked (kib_peer_ni_t *peer_ni)
+kiblnd_get_conn_locked(struct kib_peer_ni *peer_ni)
 {
 	struct list_head *next;
 
@@ -917,7 +893,7 @@ kiblnd_get_conn_locked (kib_peer_ni_t *peer_ni)
 }
 
 static inline int
-kiblnd_send_keepalive(kib_conn_t *conn)
+kiblnd_send_keepalive(struct kib_conn *conn)
 {
 	s64 keepalive_ns = *kiblnd_tunables.kib_keepalive * NSEC_PER_SEC;
 
@@ -927,7 +903,7 @@ kiblnd_send_keepalive(kib_conn_t *conn)
 }
 
 static inline int
-kiblnd_need_noop(kib_conn_t *conn)
+kiblnd_need_noop(struct kib_conn *conn)
 {
 	struct lnet_ni *ni = conn->ibc_peer->ibp_ni;
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
@@ -963,14 +939,14 @@ kiblnd_need_noop(kib_conn_t *conn)
 }
 
 static inline void
-kiblnd_abort_receives(kib_conn_t *conn)
+kiblnd_abort_receives(struct kib_conn *conn)
 {
         ib_modify_qp(conn->ibc_cmid->qp,
                      &kiblnd_data.kib_error_qpa, IB_QP_STATE);
 }
 
 static inline const char *
-kiblnd_queue2str(kib_conn_t *conn, struct list_head *q)
+kiblnd_queue2str(struct kib_conn *conn, struct list_head *q)
 {
 	if (q == &conn->ibc_tx_queue)
 		return "tx_queue";
@@ -1021,21 +997,21 @@ kiblnd_wreqid2type (__u64 wreqid)
 }
 
 static inline void
-kiblnd_set_conn_state (kib_conn_t *conn, int state)
+kiblnd_set_conn_state(struct kib_conn *conn, int state)
 {
 	conn->ibc_state = state;
 	smp_mb();
 }
 
 static inline void
-kiblnd_init_msg (kib_msg_t *msg, int type, int body_nob)
+kiblnd_init_msg(struct kib_msg *msg, int type, int body_nob)
 {
         msg->ibm_type = type;
-        msg->ibm_nob  = offsetof(kib_msg_t, ibm_u) + body_nob;
+	msg->ibm_nob = offsetof(struct kib_msg, ibm_u) + body_nob;
 }
 
 static inline int
-kiblnd_rd_size (kib_rdma_desc_t *rd)
+kiblnd_rd_size(struct kib_rdma_desc *rd)
 {
         int   i;
         int   size;
@@ -1047,25 +1023,25 @@ kiblnd_rd_size (kib_rdma_desc_t *rd)
 }
 
 static inline __u64
-kiblnd_rd_frag_addr(kib_rdma_desc_t *rd, int index)
+kiblnd_rd_frag_addr(struct kib_rdma_desc *rd, int index)
 {
         return rd->rd_frags[index].rf_addr;
 }
 
 static inline __u32
-kiblnd_rd_frag_size(kib_rdma_desc_t *rd, int index)
+kiblnd_rd_frag_size(struct kib_rdma_desc *rd, int index)
 {
         return rd->rd_frags[index].rf_nob;
 }
 
 static inline __u32
-kiblnd_rd_frag_key(kib_rdma_desc_t *rd, int index)
+kiblnd_rd_frag_key(struct kib_rdma_desc *rd, int index)
 {
         return rd->rd_key;
 }
 
 static inline int
-kiblnd_rd_consume_frag(kib_rdma_desc_t *rd, int index, __u32 nob)
+kiblnd_rd_consume_frag(struct kib_rdma_desc *rd, int index, __u32 nob)
 {
         if (nob < rd->rd_frags[index].rf_nob) {
                 rd->rd_frags[index].rf_addr += nob;
@@ -1078,14 +1054,14 @@ kiblnd_rd_consume_frag(kib_rdma_desc_t *rd, int index, __u32 nob)
 }
 
 static inline int
-kiblnd_rd_msg_size(kib_rdma_desc_t *rd, int msgtype, int n)
+kiblnd_rd_msg_size(struct kib_rdma_desc *rd, int msgtype, int n)
 {
         LASSERT (msgtype == IBLND_MSG_GET_REQ ||
                  msgtype == IBLND_MSG_PUT_ACK);
 
         return msgtype == IBLND_MSG_GET_REQ ?
-               offsetof(kib_get_msg_t, ibgm_rd.rd_frags[n]) :
-               offsetof(kib_putack_msg_t, ibpam_rd.rd_frags[n]);
+	       offsetof(struct kib_get_msg, ibgm_rd.rd_frags[n]) :
+	       offsetof(struct kib_putack_msg, ibpam_rd.rd_frags[n]);
 }
 
 static inline __u64
@@ -1144,15 +1120,15 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 #define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
 #define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
 
-void kiblnd_map_rx_descs(kib_conn_t *conn);
-void kiblnd_unmap_rx_descs(kib_conn_t *conn);
-void kiblnd_pool_free_node(kib_pool_t *pool, struct list_head *node);
-struct list_head *kiblnd_pool_alloc_node(kib_poolset_t *ps);
+void kiblnd_map_rx_descs(struct kib_conn *conn);
+void kiblnd_unmap_rx_descs(struct kib_conn *conn);
+void kiblnd_pool_free_node(struct kib_pool *pool, struct list_head *node);
+struct list_head *kiblnd_pool_alloc_node(struct kib_poolset *ps);
 
-int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, kib_tx_t *tx,
-			 kib_rdma_desc_t *rd, __u32 nob, __u64 iov,
-			 kib_fmr_t *fmr);
-void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
+int kiblnd_fmr_pool_map(struct kib_fmr_poolset *fps, struct kib_tx *tx,
+			struct kib_rdma_desc *rd, u32 nob, u64 iov,
+			struct kib_fmr *fmr);
+void kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status);
 
 int  kiblnd_tunables_setup(struct lnet_ni *ni);
 int  kiblnd_tunables_init(void);
@@ -1162,43 +1138,44 @@ int  kiblnd_scheduler(void *arg);
 int  kiblnd_thread_start(int (*fn)(void *arg), void *arg, char *name);
 int  kiblnd_failover_thread (void *arg);
 
-int  kiblnd_alloc_pages(kib_pages_t **pp, int cpt, int npages);
+int kiblnd_alloc_pages(struct kib_pages **pp, int cpt, int npages);
 
 int  kiblnd_cm_callback(struct rdma_cm_id *cmid,
                         struct rdma_cm_event *event);
 int  kiblnd_translate_mtu(int value);
 
-int  kiblnd_dev_failover(kib_dev_t *dev);
-int kiblnd_create_peer(struct lnet_ni *ni, kib_peer_ni_t **peerp,
+int  kiblnd_dev_failover(struct kib_dev *dev);
+int kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 		       lnet_nid_t nid);
-void kiblnd_destroy_peer (kib_peer_ni_t *peer);
-bool kiblnd_reconnect_peer(kib_peer_ni_t *peer);
-void kiblnd_destroy_dev (kib_dev_t *dev);
-void kiblnd_unlink_peer_locked (kib_peer_ni_t *peer_ni);
-kib_peer_ni_t *kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid);
-int  kiblnd_close_stale_conns_locked (kib_peer_ni_t *peer_ni,
-                                      int version, __u64 incarnation);
-int  kiblnd_close_peer_conns_locked (kib_peer_ni_t *peer_ni, int why);
+void kiblnd_destroy_peer(struct kib_peer_ni *peer);
+bool kiblnd_reconnect_peer(struct kib_peer_ni *peer);
+void kiblnd_destroy_dev(struct kib_dev *dev);
+void kiblnd_unlink_peer_locked(struct kib_peer_ni *peer_ni);
+struct kib_peer_ni *kiblnd_find_peer_locked(struct lnet_ni *ni, lnet_nid_t nid);
+int  kiblnd_close_stale_conns_locked(struct kib_peer_ni *peer_ni,
+				     int version, u64 incarnation);
+int  kiblnd_close_peer_conns_locked(struct kib_peer_ni *peer_ni, int why);
 
-kib_conn_t *kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
-			       int state, int version);
-void kiblnd_destroy_conn(kib_conn_t *conn);
-void kiblnd_close_conn (kib_conn_t *conn, int error);
-void kiblnd_close_conn_locked (kib_conn_t *conn, int error);
+struct kib_conn *kiblnd_create_conn(struct kib_peer_ni *peer_ni,
+				    struct rdma_cm_id *cmid,
+				    int state, int version);
+void kiblnd_destroy_conn(struct kib_conn *conn);
+void kiblnd_close_conn(struct kib_conn *conn, int error);
+void kiblnd_close_conn_locked(struct kib_conn *conn, int error);
 
-void kiblnd_launch_tx(struct lnet_ni *ni, kib_tx_t *tx, lnet_nid_t nid);
+void kiblnd_launch_tx(struct lnet_ni *ni, struct kib_tx *tx, lnet_nid_t nid);
 void kiblnd_txlist_done(struct list_head *txlist, int status);
 
 void kiblnd_qp_event(struct ib_event *event, void *arg);
 void kiblnd_cq_event(struct ib_event *event, void *arg);
 void kiblnd_cq_completion(struct ib_cq *cq, void *arg);
 
-void kiblnd_pack_msg(struct lnet_ni *ni, kib_msg_t *msg, int version,
+void kiblnd_pack_msg(struct lnet_ni *ni, struct kib_msg *msg, int version,
 		     int credits, lnet_nid_t dstnid, __u64 dststamp);
-int  kiblnd_unpack_msg(kib_msg_t *msg, int nob);
-int  kiblnd_post_rx (kib_rx_t *rx, int credit);
+int kiblnd_unpack_msg(struct kib_msg *msg, int nob);
+int kiblnd_post_rx(struct kib_rx *rx, int credit);
 
-int  kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg);
+int kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg);
 int kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		int delayed, unsigned int niov, struct kvec *iov,
 		lnet_kiov_t *kiov, unsigned int offset, unsigned int mlen,

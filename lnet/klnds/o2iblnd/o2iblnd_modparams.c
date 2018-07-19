@@ -186,7 +186,7 @@ static unsigned int wrq_sge = 2;
 module_param(wrq_sge, uint, 0444);
 MODULE_PARM_DESC(wrq_sge, "# scatter/gather element per work request");
 
-kib_tunables_t kiblnd_tunables = {
+struct kib_tunables kiblnd_tunables = {
         .kib_dev_failover           = &dev_failover,
         .kib_service                = &service,
         .kib_cksum                  = &cksum,
