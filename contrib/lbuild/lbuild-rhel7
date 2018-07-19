@@ -9,6 +9,7 @@ BUILD_GEN+=".0"
 SPEC_NAME="kernel.spec"
 DEVEL_PATH_ARCH_DELIMETER="."
 USE_KABI=false
+MOFED_KMP="1"
 
 # force local definition of %dist into ~/.rpmmacros
 # to avoid verbose extended strings like ".el7.centos"
@@ -25,13 +26,17 @@ LBUILD_KMODTOOL="${LBUILD_DIR}/rhel7/kmodtool"
 cp  $RHEL_KMODTOOL $LBUILD_KMODTOOL
 pushd ${LBUILD_DIR}/rhel7
 patch -p1 < kmodtool.patch
+# Replace the hardcoded /usr/src/kernels with our build path
+tmp="${TOPDIR}/reused/usr/src/kernels"
+tmp="${tmp//\//\\/}"
+sed -i "s/\/usr\/src\/kernels/${tmp}/g" ${LBUILD_DIR}/rhel7/kmodtool
 chmod 755 kmodtool
 popd
 # Next we replace %kernel_module_package with one that is nearly
 # identical, but calls lbuild's modified kmodtool script.
 # We need to cleanout the previous entry
 sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
-sed -e "s|REPLACE_ME|$LBUILD_KMODTOOL|" \
+sed -e "s|REPLACE_ME|$LBUILD_KMODTOOL|" -e "s/\/usr\/src\/kernels/${tmp}/g" \
     ${LBUILD_DIR}/rhel7/rpmmacros.template > ${LBUILD_DIR}/rhel7/rpmmacros
 cat ${LBUILD_DIR}/rhel7/rpmmacros >> $RMAC
 

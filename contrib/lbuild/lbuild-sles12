@@ -8,6 +8,7 @@ BUILD_GEN+=".0"
 # This distro does not support zfs, so define WITH_ZFS
 # use words that make the bash log readable.
 WITH_ZFS="Zfs Not Supported"
+MOFED_KMP="1"
 
 source ${LBUILD_DIR}/lbuild-sles
 

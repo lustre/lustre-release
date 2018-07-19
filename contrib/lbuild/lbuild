@@ -1233,20 +1233,13 @@ build_kernel_ib() {
 
     # build kernel-ib{,-devel}/compat-rdma{,-devel}
     local K_SRC="K_SRC"
+    local KMP=${MOFED_KMP:-"1"}
 
 	local OFED_CORE="--with-core-mod --with-ipoib-mod --with-user_mad-mod \
-	--with-user_access-mod --with-addr_trans-mod --with-madeye-mod"
-	local OFED_HARDWARE="--with-mthca-mod --with-mlx4-mod \
-	--with-mlx4_en-mod --with-cxgb3-mod --with-mlx4_en-mod \
-	--with-cxgb3-mod --with-nes-mod --with-mlx5-mod --with-cxgb4-mod \
-	--with-qib-mod"
-
-	# Removing the check for older version support
-	#if compare_version $OFED_VERSION 3.0; then
-	#OFED_CORE="$OFED_CORE --with-madeye-mod --with-rds-mod"
-	#else
-	#OFED_HARDWARE="$OFED_HARDWARE --with-mlx5-mod --with-cxgb4-mod --with-ocrdma-mod --with-qib-mod"
-	#fi
+	--with-user_access-mod --with-addr_trans-mod --with-innova-flex "
+	local OFED_HARDWARE="--with-mlx4-mod --with-mlx4_en-mod \
+	--with-srp-mod --with-iser-mod --with-isert-mod --with-mlx5-mod \
+	--with-mlxfw-mod "
 
     # some I/B drivers are architecture dependent and kernel-ib's configure
     # does not figure it out for us ~sigh~
@@ -1255,14 +1248,6 @@ build_kernel_ib() {
             OFED_HARDWARE="$OFED_HARDWARE --with-ehca-mod"
             ;;
     esac
-    # we're no longer shipping the OFED iSCSI target
-    #OFED_ISCSI="--with-srp-mod --with-srp-target-mod"
-    OFED_ISCSI="--with-srp-mod"
-    ## ISER module has no backport support as of OFED 1.5 (i.e. only builds on
-    ##kernels >= 2.6.30)
-    #if [[ $OFED_VERSION = 1.[0-4]* ]]; then
-    #   OFED_ISCSI="$OFED_ISCSI --with-iser-mod"
-    #fi
 
     # assume we are just rebuilding the SRPM
     local BUILD_TYPE=${BUILD_TYPE:-"--rebuild"}
@@ -1334,15 +1319,15 @@ EOF
 			${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
 			--define "_topdir ${TOPDIR}" --target ${TARGET_ARCH} \
 			--define "KVERSION ${linuxrelease}" \
+			--define "KMP ${KMP}" \
 			--define "$K_SRC ${linux}" \
 			${OFA_KERNEL_RELEASE:+--define "_release $OFA_KERNEL_RELEASE"} \
-			--define "configure_options --without-quilt $OFED_CORE $OFED_HARDWARE $OFED_ISCSI" \
 			${SOURCE} 2>&1; then
 			fatal 1 "Error building ${kib_rpm}"
 		fi
 		# now that we have the kernel rpms, we need to lib rpms too
 		# we don't have to rebuild since MOFED include the binaries
-		cp -f OFED_RPMS/{libibmad-*,libibverbs-*,libibumad-*,librdmacm*,ibutils-*,opensm-libs*}.${TARGET_ARCH}.rpm \
+		cp -f OFED_RPMS/{libibmad-*,libibverbs-*,libibumad-*,librdmacm*,ibutils-*,opensm-*}.${TARGET_ARCH}.rpm \
 			${TOPDIR}/RPMS/${TARGET_ARCH} || \
 			fatal 1 "Failed to copy MOFED rpms"
 		;;
