@@ -1026,7 +1026,7 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 
 	/* Update lvbo data if DoM lock returned or if LVB is not yet valid. */
 	if (dom_lock || !mdt_dom_lvb_is_valid(res))
-		mdt_dom_lvbo_update(res, NULL, NULL, false);
+		mdt_dom_lvbo_update(env, res, NULL, NULL, false);
 
 	mdt_lvb2body(res, mb);
 	ldlm_resource_putref(res);
@@ -1124,7 +1124,7 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 fill_mbo:
 	/* LVB can be without valid data in case of DOM */
 	if (!mdt_dom_lvb_is_valid(res))
-		mdt_dom_lvbo_update(res, lock, NULL, false);
+		mdt_dom_lvbo_update(mti->mti_env, res, lock, NULL, false);
 	mdt_lvb2body(res, mbo);
 	RETURN(rc);
 }
@@ -1225,10 +1225,10 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 
 	/* Tell the clients that the object is gone now and that they should
 	 * throw away any cached pages. */
-	rc = ldlm_cli_enqueue_local(mdt->mdt_namespace, res_id, LDLM_IBITS,
-				    policy, LCK_PW, &flags, ldlm_blocking_ast,
-				    ldlm_completion_ast, NULL, NULL, 0,
-				    LVB_T_NONE, NULL, &dom_lh);
+	rc = ldlm_cli_enqueue_local(info->mti_env, mdt->mdt_namespace, res_id,
+				    LDLM_IBITS, policy, LCK_PW, &flags,
+				    ldlm_blocking_ast, ldlm_completion_ast,
+				    NULL, NULL, 0, LVB_T_NONE, NULL, &dom_lh);
 
 	/* We only care about the side-effects, just drop the lock. */
 	if (rc == ELDLM_OK)

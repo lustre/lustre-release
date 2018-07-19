@@ -1243,8 +1243,9 @@ static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
 	 * going to be sent to client. If it is - mdt_intent_policy() path will
 	 * fix it up and turn FL_LOCAL flag off.
 	 */
-	rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
-			  res, dlmflags, &info->mti_exp->exp_handle.h_cookie);
+	rc = mdt_fid_lock(info->mti_env, ns, &lh->mlh_reg_lh, lh->mlh_reg_mode,
+			  policy, res, dlmflags,
+			  &info->mti_exp->exp_handle.h_cookie);
 	return rc;
 }
 
@@ -1284,12 +1285,13 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 		memset(policy, 0, sizeof *policy);
 		policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
 		flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
-		rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
-					   LCK_EX, &flags, ldlm_blocking_ast,
-					   ldlm_completion_ast, NULL, NULL, 0,
-					   LVB_T_NONE,
-					   &info->mti_exp->exp_handle.h_cookie,
-					   lh);
+		rc = ldlm_cli_enqueue_local(info->mti_env, ns, res_id,
+					    LDLM_IBITS, policy, LCK_EX, &flags,
+					    ldlm_blocking_ast,
+					    ldlm_completion_ast, NULL, NULL, 0,
+					    LVB_T_NONE,
+					    &info->mti_exp->exp_handle.h_cookie,
+					    lh);
 		RETURN(rc);
 	}
 	RETURN(rc);
@@ -1355,8 +1357,9 @@ static int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
 		fid_build_reg_res_name(mdt_object_fid(obj), res);
 		memset(policy, 0, sizeof(*policy));
 		policy->l_inodebits.bits = MDS_INODELOCK_LOOKUP;
-		rc = mdt_fid_lock(info->mti_mdt->mdt_namespace, &lh->mlh_reg_lh,
-				  LCK_EX, policy, res, dlmflags, NULL);
+		rc = mdt_fid_lock(info->mti_env, info->mti_mdt->mdt_namespace,
+				  &lh->mlh_reg_lh, LCK_EX, policy, res,
+				  dlmflags, NULL);
 	}
 
 	if (rc != ELDLM_OK)

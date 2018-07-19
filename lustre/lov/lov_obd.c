@@ -945,7 +945,7 @@ static int lov_statfs(const struct lu_env *env, struct obd_export *exp,
 			GOTO(out_set, rc);
 	}
 
-	rc = ptlrpc_set_wait(rqset);
+	rc = ptlrpc_set_wait(env, rqset);
 
 out_set:
 	if (rc < 0)
@@ -1253,7 +1253,7 @@ static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 	lov_tgts_putref(obddev);
 	if (no_set) {
-		err = ptlrpc_set_wait(set);
+		err = ptlrpc_set_wait(env, set);
 		if (rc == 0)
 			rc = err;
 		ptlrpc_set_destroy(set);

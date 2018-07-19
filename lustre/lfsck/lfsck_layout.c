@@ -308,7 +308,7 @@ static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 	up_read(&ltds->ltd_rw_sem);
 
 	if (rc == 0 && atomic_read(&count) > 0)
-		rc = ptlrpc_set_wait(set);
+		rc = ptlrpc_set_wait(env, set);
 
 	ptlrpc_set_destroy(set);
 
@@ -2580,10 +2580,10 @@ static int lfsck_layout_slave_conditional_destroy(const struct lu_env *env,
 	memset(policy, 0, sizeof(*policy));
 	policy->l_extent.end = OBD_OBJECT_EOF;
 	ost_fid_build_resid(fid, resid);
-	rc = ldlm_cli_enqueue_local(lfsck->li_namespace, resid, LDLM_EXTENT,
-				    policy, LCK_EX, &flags, ldlm_blocking_ast,
-				    ldlm_completion_ast, NULL, NULL, 0,
-				    LVB_T_NONE, NULL, &lh);
+	rc = ldlm_cli_enqueue_local(env, lfsck->li_namespace, resid,
+				    LDLM_EXTENT, policy, LCK_EX, &flags,
+				    ldlm_blocking_ast, ldlm_completion_ast,
+				    NULL, NULL, 0, LVB_T_NONE, NULL, &lh);
 	if (rc != ELDLM_OK)
 		GOTO(put, rc = -EIO);
 
@@ -4752,7 +4752,7 @@ lfsck_layout_slave_query_master(const struct lu_env *env,
 	}
 	spin_unlock(&llsd->llsd_lock);
 
-	rc = ptlrpc_set_wait(set);
+	rc = ptlrpc_set_wait(env, set);
 	ptlrpc_set_destroy(set);
 
 	GOTO(log, rc = (rc1 != 0 ? rc1 : rc));
@@ -4830,7 +4830,7 @@ lfsck_layout_slave_notify_master(const struct lu_env *env,
 	}
 	spin_unlock(&llsd->llsd_lock);
 
-	ptlrpc_set_wait(set);
+	ptlrpc_set_wait(env, set);
 	ptlrpc_set_destroy(set);
 
 	RETURN_EXIT;

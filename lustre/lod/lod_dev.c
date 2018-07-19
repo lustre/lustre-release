@@ -2145,7 +2145,7 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 
 
 	if (no_set) {
-		rc2 = ptlrpc_set_wait(set);
+		rc2 = ptlrpc_set_wait(env, set);
 		if (rc2 == 0 && rc == 0)
 			rc = rc2;
 		ptlrpc_set_destroy(set);

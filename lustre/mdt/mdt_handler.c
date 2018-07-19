@@ -2887,7 +2887,7 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
 	struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
 	union ldlm_policy_data *policy = &info->mti_policy;
 	struct ldlm_res_id *res_id = &info->mti_res_id;
-	__u64 dlmflags = 0;
+	__u64 dlmflags = 0, *cookie = NULL;
 	int rc;
 	ENTRY;
 
@@ -2919,9 +2919,11 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
 		}
 	}
 
-
 	fid_build_reg_res_name(mdt_object_fid(o), res_id);
 	dlmflags |= LDLM_FL_ATOMIC_CB;
+
+	if (info->mti_exp)
+		cookie = &info->mti_exp->exp_handle.h_cookie;
 
 	/*
 	 * Take PDO lock on whole directory and build correct @res_id for lock
@@ -2943,10 +2945,9 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
 			/* at least one of them should be set */
 			LASSERT(policy->l_inodebits.bits |
 				policy->l_inodebits.try_bits);
-			rc = mdt_fid_lock(ns, &lh->mlh_pdo_lh, lh->mlh_pdo_mode,
-					  policy, res_id, dlmflags,
-					  info->mti_exp == NULL ? NULL :
-					  &info->mti_exp->exp_handle.h_cookie);
+			rc = mdt_fid_lock(info->mti_env, ns, &lh->mlh_pdo_lh,
+					  lh->mlh_pdo_mode, policy, res_id,
+					  dlmflags, cookie);
 			if (unlikely(rc != 0))
 				GOTO(out_unlock, rc);
                 }
@@ -2966,10 +2967,9 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
          * going to be sent to client. If it is - mdt_intent_policy() path will
          * fix it up and turn FL_LOCAL flag off.
          */
-	rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
-			  res_id, LDLM_FL_LOCAL_ONLY | dlmflags,
-			  info->mti_exp == NULL ? NULL :
-			  &info->mti_exp->exp_handle.h_cookie);
+	rc = mdt_fid_lock(info->mti_env, ns, &lh->mlh_reg_lh, lh->mlh_reg_mode,
+			  policy, res_id, LDLM_FL_LOCAL_ONLY | dlmflags,
+			  cookie);
 out_unlock:
 	if (rc != 0)
 		mdt_object_unlock(info, o, lh, 1);
@@ -4043,9 +4043,12 @@ static void mdt_ptlrpc_stats_update(struct ptlrpc_request *req,
 				LDLM_GLIMPSE_ENQUEUE : LDLM_IBITS_ENQUEUE));
 }
 
-static int mdt_intent_policy(struct ldlm_namespace *ns,
-			     struct ldlm_lock **lockp, void *req_cookie,
-			     enum ldlm_mode mode, __u64 flags, void *data)
+static int mdt_intent_policy(const struct lu_env *env,
+			     struct ldlm_namespace *ns,
+			     struct ldlm_lock **lockp,
+			     void *req_cookie,
+			     enum ldlm_mode mode,
+			     __u64 flags, void *data)
 {
 	struct tgt_session_info	*tsi;
 	struct mdt_thread_info	*info;
@@ -4059,7 +4062,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 
 	LASSERT(req != NULL);
 
-	tsi = tgt_ses_info(req->rq_svc_thread->t_env);
+	tsi = tgt_ses_info(env);
 
 	info = tsi2mdt_info(tsi);
 	LASSERT(info != NULL);

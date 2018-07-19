@@ -1235,7 +1235,7 @@ again:
 	}
 	spin_unlock(&ltds->ltd_lock);
 
-	rc = ptlrpc_set_wait(set);
+	rc = ptlrpc_set_wait(env, set);
 	if (rc < 0) {
 		ptlrpc_set_destroy(set);
 		RETURN(rc);
@@ -1330,7 +1330,7 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 		up_read(&ltds->ltd_rw_sem);
 
 		/* Sync up */
-		rc = ptlrpc_set_wait(set);
+		rc = ptlrpc_set_wait(env, set);
 		if (rc < 0) {
 			ptlrpc_set_destroy(set);
 			RETURN(rc);
@@ -1462,7 +1462,7 @@ again:
 		}
 		spin_unlock(&ltds->ltd_lock);
 
-		rc = ptlrpc_set_wait(set);
+		rc = ptlrpc_set_wait(env, set);
 		if (rc < 0) {
 			ptlrpc_set_destroy(set);
 			RETURN(rc);
@@ -1536,7 +1536,7 @@ again:
 		break;
 	}
 
-	rc1 = ptlrpc_set_wait(set);
+	rc1 = ptlrpc_set_wait(env, set);
 	ptlrpc_set_destroy(set);
 
 	RETURN(rc != 0 ? rc : rc1);

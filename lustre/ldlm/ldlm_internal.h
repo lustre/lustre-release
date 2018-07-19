@@ -145,7 +145,9 @@ ldlm_lock_create(struct ldlm_namespace *ns, const struct ldlm_res_id *,
 		 enum ldlm_type type, enum ldlm_mode mode,
 		 const struct ldlm_callback_suite *cbs,
 		 void *data, __u32 lvb_len, enum lvb_type lvb_type);
-enum ldlm_error ldlm_lock_enqueue(struct ldlm_namespace *, struct ldlm_lock **,
+enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
+				  struct ldlm_namespace *,
+				  struct ldlm_lock **,
 				  void *cookie, __u64 *flags);
 void ldlm_lock_addref_internal(struct ldlm_lock *, enum ldlm_mode mode);
 void ldlm_lock_addref_internal_nolock(struct ldlm_lock *, enum ldlm_mode mode);
@@ -162,7 +164,7 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 void ldlm_discard_bl_list(struct list_head *bl_list);
 #endif
 int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
-                      ldlm_desc_ast_t ast_type);
+		      ldlm_desc_ast_t ast_type);
 int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq);
 int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock, ktime_t last_use);
 #define ldlm_lock_remove_from_lru(lock) \

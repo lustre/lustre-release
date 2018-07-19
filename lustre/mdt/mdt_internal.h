@@ -406,7 +406,8 @@ struct mdt_thread_info {
         /*
          * Object attributes.
          */
-        struct md_attr             mti_attr;
+	struct md_attr             mti_attr;
+	struct md_attr             mti_attr2; /* mdt_lvb.c */
         /*
          * Body for "habeo corpus" operations.
          */
@@ -1137,7 +1138,8 @@ static int mdt_dom_glimpse_ast(struct ldlm_lock *lock, void *reqp)
 }
 
 /* Issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
-static inline int mdt_fid_lock(struct ldlm_namespace *ns,
+static inline int mdt_fid_lock(const struct lu_env *env,
+			       struct ldlm_namespace *ns,
 			       struct lustre_handle *lh, enum ldlm_mode mode,
 			       union ldlm_policy_data *policy,
 			       const struct ldlm_res_id *res_id,
@@ -1149,7 +1151,7 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
 	LASSERT(ns != NULL);
 	LASSERT(lh != NULL);
 
-	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
+	rc = ldlm_cli_enqueue_local(env, ns, res_id, LDLM_IBITS, policy,
 				    mode, &flags, mdt_blocking_ast,
 				    ldlm_completion_ast,
 				    glimpse ? mdt_dom_glimpse_ast : NULL,
@@ -1196,8 +1198,9 @@ int mdt_lsom_update(struct mdt_thread_info *info, struct mdt_object *obj,
 /* mdt_lvb.c */
 extern struct ldlm_valblock_ops mdt_lvbo;
 int mdt_dom_lvb_is_valid(struct ldlm_resource *res);
-int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
-			struct ptlrpc_request *req, bool increase_only);
+int mdt_dom_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
+			struct ldlm_lock *lock, struct ptlrpc_request *req,
+			bool increase_only);
 
 void mdt_enable_cos(struct mdt_device *dev, bool enable);
 int mdt_cos_is_enabled(struct mdt_device *);

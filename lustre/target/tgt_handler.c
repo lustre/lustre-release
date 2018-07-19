@@ -1604,7 +1604,7 @@ int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	LASSERT(ns != NULL);
 	LASSERT(!lustre_handle_is_used(lh));
 
-	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, &policy, mode,
+	rc = ldlm_cli_enqueue_local(NULL, ns, res_id, LDLM_IBITS, &policy, mode,
 				    flags, ldlm_blocking_ast,
 				    ldlm_completion_ast, ldlm_glimpse_ast,
 				    NULL, 0, LVB_T_NONE, NULL, lh);
@@ -1624,9 +1624,9 @@ EXPORT_SYMBOL(tgt_mdt_data_unlock);
  * Helper function for getting server side [start, start+count] DLM lock
  * if asked by client.
  */
-int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
-		    __u64 start, __u64 end, struct lustre_handle *lh,
-		    int mode, __u64 *flags)
+int tgt_extent_lock(const struct lu_env *env, struct ldlm_namespace *ns,
+		    struct ldlm_res_id *res_id, __u64 start, __u64 end,
+		    struct lustre_handle *lh, int mode, __u64 *flags)
 {
 	union ldlm_policy_data policy;
 	int rc;
@@ -1649,8 +1649,8 @@ int tgt_extent_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	else
 		policy.l_extent.end = end | ~PAGE_MASK;
 
-	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_EXTENT, &policy, mode,
-				    flags, ldlm_blocking_ast,
+	rc = ldlm_cli_enqueue_local(env, ns, res_id, LDLM_EXTENT, &policy,
+				    mode, flags, ldlm_blocking_ast,
 				    ldlm_completion_ast, ldlm_glimpse_ast,
 				    NULL, 0, LVB_T_NONE, NULL, lh);
 	RETURN(rc == ELDLM_OK ? 0 : -EIO);
@@ -1664,9 +1664,10 @@ void tgt_extent_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 }
 EXPORT_SYMBOL(tgt_extent_unlock);
 
-static int tgt_brw_lock(struct obd_export *exp, struct ldlm_res_id *res_id,
-			struct obd_ioobj *obj, struct niobuf_remote *nb,
-			struct lustre_handle *lh, enum ldlm_mode mode)
+static int tgt_brw_lock(const struct lu_env *env, struct obd_export *exp,
+			struct ldlm_res_id *res_id, struct obd_ioobj *obj,
+			struct niobuf_remote *nb, struct lustre_handle *lh,
+			enum ldlm_mode mode)
 {
 	struct ldlm_namespace	*ns = exp->exp_obd->obd_namespace;
 	__u64			 flags = 0;
@@ -1693,7 +1694,7 @@ static int tgt_brw_lock(struct obd_export *exp, struct ldlm_res_id *res_id,
 	if (exp->exp_connect_data.ocd_connect_flags & OBD_CONNECT_IBITS)
 		rc = tgt_mdt_data_lock(ns, res_id, lh, mode, &flags);
 	else
-		rc = tgt_extent_lock(ns, res_id, nb[0].rnb_offset,
+		rc = tgt_extent_lock(env, ns, res_id, nb[0].rnb_offset,
 				     nb[nrbufs - 1].rnb_offset +
 				     nb[nrbufs - 1].rnb_len - 1,
 				     lh, mode, &flags);
@@ -2158,8 +2159,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 	local_nb = tbc->local;
 
-	rc = tgt_brw_lock(exp, &tsi->tsi_resid, ioo, remote_nb, &lockh,
-			  LCK_PR);
+	rc = tgt_brw_lock(tsi->tsi_env, exp, &tsi->tsi_resid, ioo, remote_nb,
+			  &lockh, LCK_PR);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -2496,8 +2497,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 
 	local_nb = tbc->local;
 
-	rc = tgt_brw_lock(exp, &tsi->tsi_resid, ioo, remote_nb, &lockh,
-			  LCK_PW);
+	rc = tgt_brw_lock(tsi->tsi_env, exp, &tsi->tsi_resid, ioo, remote_nb,
+			  &lockh, LCK_PW);
 	if (rc != 0)
 		GOTO(out, rc);
 

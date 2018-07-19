@@ -270,7 +270,7 @@ void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type)
 
 	if (!rc) {
 		LASSERT(cp != NULL);
-		rc = ldlm_cli_enqueue_local(mgs->mgs_obd->obd_namespace,
+		rc = ldlm_cli_enqueue_local(NULL, mgs->mgs_obd->obd_namespace,
 					    &res_id, LDLM_PLAIN, NULL, LCK_EX,
 					    &flags, ldlm_blocking_ast, cp,
 					    NULL, fsdb, 0, LVB_T_NONE, NULL,

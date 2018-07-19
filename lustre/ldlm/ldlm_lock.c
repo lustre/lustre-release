@@ -1727,7 +1727,8 @@ restart:
  * set, skip all the enqueueing and delegate lock processing to intent policy
  * function.
  */
-enum ldlm_error ldlm_lock_enqueue(struct ldlm_namespace *ns,
+enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
+				  struct ldlm_namespace *ns,
 				  struct ldlm_lock **lockp,
 				  void *cookie, __u64 *flags)
 {
@@ -1741,8 +1742,8 @@ enum ldlm_error ldlm_lock_enqueue(struct ldlm_namespace *ns,
         /* policies are not executed on the client or during replay */
         if ((*flags & (LDLM_FL_HAS_INTENT|LDLM_FL_REPLAY)) == LDLM_FL_HAS_INTENT
             && !local && ns->ns_policy) {
-                rc = ns->ns_policy(ns, lockp, cookie, lock->l_req_mode, *flags,
-                                   NULL);
+		rc = ns->ns_policy(env, ns, lockp, cookie, lock->l_req_mode,
+				   *flags, NULL);
                 if (rc == ELDLM_LOCK_REPLACED) {
                         /* The lock that was returned has already been granted,
                          * and placed into lockp.  If it's not the same as the
@@ -2199,7 +2200,7 @@ int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
  * one.
  */
 int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
-                      ldlm_desc_ast_t ast_type)
+		      ldlm_desc_ast_t ast_type)
 {
 	struct ldlm_cb_set_arg *arg;
 	set_producer_func       work_ast_lock;
@@ -2245,7 +2246,7 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
 	if (arg->set == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	ptlrpc_set_wait(arg->set);
+	ptlrpc_set_wait(NULL, arg->set);
 	ptlrpc_set_destroy(arg->set);
 
 	rc = atomic_read(&arg->restart) ? -ERESTART : 0;
@@ -2455,6 +2456,7 @@ int ldlm_lock_set_data(const struct lustre_handle *lockh, void *data)
 EXPORT_SYMBOL(ldlm_lock_set_data);
 
 struct export_cl_data {
+	const struct lu_env	*ecl_env;
 	struct obd_export	*ecl_exp;
 	int			ecl_loop;
 };
@@ -2467,7 +2469,7 @@ static void ldlm_cancel_lock_for_export(struct obd_export *exp,
 
 	res = ldlm_resource_getref(lock->l_resource);
 
-	ldlm_lvbo_update(res, lock, NULL, 1);
+	ldlm_lvbo_update(ecl->ecl_env, res, lock, NULL, 1);
 	ldlm_lock_cancel(lock);
 	if (!exp->exp_obd->obd_stopping)
 		ldlm_reprocess_all(res);
@@ -2507,10 +2509,17 @@ ldlm_cancel_locks_for_export_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
  */
 int ldlm_export_cancel_blocked_locks(struct obd_export *exp)
 {
+	struct lu_env env;
 	struct export_cl_data	ecl = {
 		.ecl_exp	= exp,
 		.ecl_loop	= 0,
 	};
+	int rc;
+
+	rc = lu_env_init(&env, LCT_DT_THREAD);
+	if (rc)
+		RETURN(rc);
+	ecl.ecl_env = &env;
 
 	while (!list_empty(&exp->exp_bl_list)) {
 		struct ldlm_lock *lock;
@@ -2533,6 +2542,8 @@ int ldlm_export_cancel_blocked_locks(struct obd_export *exp)
 		LDLM_LOCK_RELEASE(lock);
 	}
 
+	lu_env_fini(&env);
+
 	CDEBUG(D_DLMTRACE, "Export %p, canceled %d locks, "
 	       "left on hash table %d.\n", exp, ecl.ecl_loop,
 	       atomic_read(&exp->exp_lock_hash->hs_count));
@@ -2547,10 +2558,16 @@ int ldlm_export_cancel_blocked_locks(struct obd_export *exp)
  */
 int ldlm_export_cancel_locks(struct obd_export *exp)
 {
-	struct export_cl_data	ecl = {
-		.ecl_exp	= exp,
-		.ecl_loop	= 0,
-	};
+	struct export_cl_data ecl;
+	struct lu_env env;
+	int rc;
+
+	rc = lu_env_init(&env, LCT_DT_THREAD);
+	if (rc)
+		RETURN(rc);
+	ecl.ecl_env = &env;
+	ecl.ecl_exp = exp;
+	ecl.ecl_loop = 0;
 
 	cfs_hash_for_each_empty(exp->exp_lock_hash,
 				ldlm_cancel_locks_for_export_cb, &ecl);
@@ -2563,6 +2580,8 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
 	    atomic_read(&exp->exp_lock_hash->hs_count) == 0 &&
 	    exp->exp_obd->obd_stopping)
 		ldlm_reprocess_recovery_done(exp->exp_obd->obd_namespace);
+
+	lu_env_fini(&env);
 
 	return ecl.ecl_loop;
 }

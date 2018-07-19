@@ -380,7 +380,7 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
 
 		rc = dt_object_lock(env, obj, lh, einfo, policy);
 	} else {
-		rc = ldlm_cli_enqueue_local(lfsck->li_namespace, resid,
+		rc = ldlm_cli_enqueue_local(env, lfsck->li_namespace, resid,
 					    LDLM_IBITS, policy, mode,
 					    &flags, ldlm_blocking_ast,
 					    ldlm_completion_ast, NULL, NULL,
@@ -2347,7 +2347,7 @@ static int lfsck_stop_notify(const struct lu_env *env,
 			       ltd->ltd_index, lad->lad_name, rc);
 			lfsck_tgt_put(ltd);
 		} else {
-			rc = ptlrpc_set_wait(set);
+			rc = ptlrpc_set_wait(env, set);
 		}
 
 		ptlrpc_set_destroy(set);
@@ -2484,7 +2484,7 @@ again:
 		goto again;
 	}
 
-	rc = ptlrpc_set_wait(set);
+	rc = ptlrpc_set_wait(env, set);
 	ptlrpc_set_destroy(set);
 
 	RETURN(rc);
@@ -2946,7 +2946,7 @@ static int lfsck_stop_all(const struct lu_env *env,
 	}
 	up_read(&ltds->ltd_rw_sem);
 
-	rc = ptlrpc_set_wait(set);
+	rc = ptlrpc_set_wait(env, set);
 	ptlrpc_set_destroy(set);
 
 	if (rc == 0)
@@ -3037,7 +3037,7 @@ again:
 		RETURN(rc);
 	}
 
-	rc = ptlrpc_set_wait(set);
+	rc = ptlrpc_set_wait(env, set);
 	ptlrpc_set_destroy(set);
 
 	if (rc == 0)

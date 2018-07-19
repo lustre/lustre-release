@@ -5705,7 +5705,7 @@ static int lod_object_lock(const struct lu_env *env,
 				dlmflags |= LDLM_FL_COS_INCOMPAT;
 
 			LASSERT(ns != NULL);
-			rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS,
+			rc = ldlm_cli_enqueue_local(env, ns, res_id, LDLM_IBITS,
 						    policy, einfo->ei_mode,
 						    &dlmflags, blocking,
 						    completion, NULL,

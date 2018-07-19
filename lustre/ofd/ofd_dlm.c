@@ -212,9 +212,9 @@ out:
  * \retval		ELDLM_LOCK_ABORTED in other cases except error
  * \retval		negative errno on error
  */
-int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
-		      void *req_cookie, enum ldlm_mode mode, __u64 flags,
-		      void *data)
+int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
+		      struct ldlm_lock **lockp, void *req_cookie,
+		      enum ldlm_mode mode, __u64 flags, void *data)
 {
 	struct ptlrpc_request *req = req_cookie;
 	struct ldlm_lock *lock = *lockp;

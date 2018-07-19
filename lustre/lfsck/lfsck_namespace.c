@@ -6577,7 +6577,7 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 	}
 	up_read(&ltds->ltd_rw_sem);
 
-	rc = ptlrpc_set_wait(set);
+	rc = ptlrpc_set_wait(env, set);
 	ptlrpc_set_destroy(set);
 
 	GOTO(out, rc);

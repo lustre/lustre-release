@@ -958,7 +958,8 @@ int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
 }
 
 
-static int ofd_lock_unlock_region(struct ldlm_namespace *ns,
+static int ofd_lock_unlock_region(const struct lu_env *env,
+				  struct ldlm_namespace *ns,
 				  struct ldlm_res_id *res_id,
 				  unsigned long long begin,
 				  unsigned long long end)
@@ -969,7 +970,7 @@ static int ofd_lock_unlock_region(struct ldlm_namespace *ns,
 
 	LASSERT(begin <= end);
 
-	rc = tgt_extent_lock(ns, res_id, begin, end, &lh, LCK_PR, &flags);
+	rc = tgt_extent_lock(env, ns, res_id, begin, end, &lh, LCK_PR, &flags);
 	if (rc != 0)
 		return rc;
 
@@ -997,7 +998,8 @@ static int ofd_lock_unlock_region(struct ldlm_namespace *ns,
  * \retval		0 if successful
  * \retval		negative value on error
  */
-static int lock_zero_regions(struct ldlm_namespace *ns,
+static int lock_zero_regions(const struct lu_env *env,
+			     struct ldlm_namespace *ns,
 			     struct ldlm_res_id *res_id,
 			     struct fiemap *fiemap)
 {
@@ -1013,7 +1015,7 @@ static int lock_zero_regions(struct ldlm_namespace *ns,
 		if (fiemap_start[i].fe_logical > begin) {
 			CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
 			       begin, fiemap_start[i].fe_logical);
-			rc = ofd_lock_unlock_region(ns, res_id, begin,
+			rc = ofd_lock_unlock_region(env, ns, res_id, begin,
 						    fiemap_start[i].fe_logical);
 			if (rc)
 				RETURN(rc);
@@ -1025,7 +1027,7 @@ static int lock_zero_regions(struct ldlm_namespace *ns,
 	if (begin < (fiemap->fm_start + fiemap->fm_length)) {
 		CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
 		       begin, fiemap->fm_start + fiemap->fm_length);
-		rc = ofd_lock_unlock_region(ns, res_id, begin,
+		rc = ofd_lock_unlock_region(env, ns, res_id, begin,
 				fiemap->fm_start + fiemap->fm_length);
 	}
 
@@ -1126,7 +1128,7 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		if (fm_key->lfik_oa.o_valid & OBD_MD_FLFLAGS &&
 		    fm_key->lfik_oa.o_flags & OBD_FL_SRVLOCK) {
 			ost_fid_build_resid(fid, &fti->fti_resid);
-			rc = lock_zero_regions(ofd->ofd_namespace,
+			rc = lock_zero_regions(tsi->tsi_env, ofd->ofd_namespace,
 					       &fti->fti_resid, fiemap);
 			if (rc == 0)
 				rc = ofd_fiemap_get(tsi->tsi_env, ofd, fid,
@@ -1218,7 +1220,8 @@ static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 		if (unlikely(tsi->tsi_ost_body->oa.o_flags & OBD_FL_FLUSH))
 			lock_mode = LCK_PW;
 
-		rc = tgt_extent_lock(tsi->tsi_tgt->lut_obd->obd_namespace,
+		rc = tgt_extent_lock(tsi->tsi_env,
+				     tsi->tsi_tgt->lut_obd->obd_namespace,
 				     &tsi->tsi_resid, 0, OBD_OBJECT_EOF, &lh,
 				     lock_mode, &flags);
 		if (rc != 0)
@@ -1350,7 +1353,7 @@ out:
 		res = ldlm_resource_get(ofd->ofd_namespace, NULL,
 					&tsi->tsi_resid, LDLM_EXTENT, 0);
 		if (!IS_ERR(res)) {
-			ldlm_res_lvbo_update(res, NULL, 0);
+			ldlm_res_lvbo_update(tsi->tsi_env, res, NULL, 0);
 			ldlm_resource_putref(res);
 		}
 	}
@@ -1975,8 +1978,8 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 		  oa->o_flags & OBD_FL_SRVLOCK;
 
 	if (srvlock) {
-		rc = tgt_extent_lock(ns, &tsi->tsi_resid, start, end, &lh,
-				     LCK_PW, &flags);
+		rc = tgt_extent_lock(tsi->tsi_env, ns, &tsi->tsi_resid, start,
+				     end, &lh, LCK_PW, &flags);
 		if (rc != 0)
 			RETURN(rc);
 	}
@@ -2019,7 +2022,7 @@ out:
 		if (!IS_ERR(res)) {
 			struct ost_lvb *res_lvb;
 
-			ldlm_res_lvbo_update(res, NULL, 0);
+			ldlm_res_lvbo_update(tsi->tsi_env, res, NULL, 0);
 			res_lvb = res->lr_lvb_data;
 			repbody->oa.o_valid |= OBD_MD_FLBLOCKS;
 			repbody->oa.o_blocks = res_lvb->lvb_blocks;
@@ -2186,7 +2189,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 
 			ioo.ioo_oid = body->oa.o_oi;
 			ioo.ioo_bufcnt = 1;
-			rc = tgt_extent_lock(exp->exp_obd->obd_namespace,
+			rc = tgt_extent_lock(env, exp->exp_obd->obd_namespace,
 					     &tsi->tsi_resid, start, end - 1,
 					     &lockh, LCK_PR, &flags);
 			if (rc != 0)

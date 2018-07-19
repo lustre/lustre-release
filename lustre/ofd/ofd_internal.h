@@ -426,9 +426,9 @@ extern struct ldlm_valblock_ops ofd_lvbo;
 /* ofd_dlm.c */
 extern struct kmem_cache *ldlm_glimpse_work_kmem;
 
-int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
-		      void *req_cookie, enum ldlm_mode mode, __u64 flags,
-		      void *data);
+int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
+		      struct ldlm_lock **lockp, void *req_cookie,
+		      enum ldlm_mode mode, __u64 flags, void *data);
 
 static inline struct ofd_thread_info *ofd_info(const struct lu_env *env)
 {

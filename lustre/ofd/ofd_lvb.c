@@ -82,17 +82,18 @@ static int ofd_lvbo_free(struct ldlm_resource *res)
  * \retval		0 on successful setup
  * \retval		negative value on error
  */
-static int ofd_lvbo_init(struct ldlm_resource *res)
+static int ofd_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
 {
 	struct ost_lvb		*lvb;
 	struct ofd_device	*ofd;
 	struct ofd_object	*fo;
 	struct ofd_thread_info	*info;
-	struct lu_env		 env;
 	int			 rc = 0;
 
 	ENTRY;
 
+	LASSERT(env);
+	info = ofd_info(env);
 	LASSERT(res);
 	LASSERT(mutex_is_locked(&res->lr_lvb_mutex));
 
@@ -105,25 +106,20 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_LVB))
 		RETURN(-ENOMEM);
 
-	rc = lu_env_init(&env, LCT_DT_THREAD);
-	if (rc)
-		RETURN(rc);
-
 	OBD_ALLOC_PTR(lvb);
 	if (lvb == NULL)
-		GOTO(out_env, rc = -ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	res->lr_lvb_data = lvb;
 	res->lr_lvb_len = sizeof(*lvb);
 
-	info = ofd_info_init(&env, NULL);
 	ost_fid_from_resid(&info->fti_fid, &res->lr_name,
 			   ofd->ofd_lut.lut_lsd.lsd_osd_index);
-	fo = ofd_object_find(&env, ofd, &info->fti_fid);
+	fo = ofd_object_find(env, ofd, &info->fti_fid);
 	if (IS_ERR(fo))
 		GOTO(out_lvb, rc = PTR_ERR(fo));
 
-	rc = ofd_attr_get(&env, fo, &info->fti_attr);
+	rc = ofd_attr_get(env, fo, &info->fti_attr);
 	if (rc)
 		GOTO(out_obj, rc);
 
@@ -138,14 +134,15 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	       PFID(&info->fti_fid), lvb->lvb_size,
 	       lvb->lvb_mtime, lvb->lvb_blocks);
 
+	info->fti_attr.la_valid = 0;
+
 	EXIT;
 out_obj:
-	ofd_object_put(&env, fo);
+	ofd_object_put(env, fo);
 out_lvb:
 	if (rc != 0)
 		OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
-out_env:
-	lu_env_fini(&env);
+out:
 	/* Don't free lvb data on lookup error */
 	return rc;
 }
@@ -179,35 +176,32 @@ out_env:
  * \retval		0 on successful setup
  * \retval		negative value on error
  */
-static int ofd_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
-			   struct ptlrpc_request *req, int increase_only)
+static int ofd_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
+			   struct ldlm_lock *lock, struct ptlrpc_request *req,
+			   int increase_only)
 {
+	struct ofd_thread_info	*info;
 	struct ofd_device	*ofd;
 	struct ofd_object	*fo;
-	struct ofd_thread_info	*info;
 	struct ost_lvb		*lvb;
-	struct lu_env		 env;
 	int			 rc = 0;
 
 	ENTRY;
 
+	LASSERT(env);
+	info = ofd_info(env);
 	LASSERT(res != NULL);
 
 	ofd = ldlm_res_to_ns(res)->ns_lvbp;
 	LASSERT(ofd != NULL);
 
-	rc = lu_env_init(&env, LCT_DT_THREAD);
-	if (rc)
-		RETURN(rc);
-
-	info = ofd_info_init(&env, NULL);
 	fid_extract_from_res_name(&info->fti_fid, &res->lr_name);
 
 	lvb = res->lr_lvb_data;
 	if (lvb == NULL) {
 		CERROR("%s: no LVB data for "DFID"\n",
 		       ofd_name(ofd), PFID(&info->fti_fid));
-		GOTO(out_env, rc = 0);
+		GOTO(out, rc = 0);
 	}
 
 	/* Update the LVB from the network message */
@@ -279,11 +273,11 @@ disk_update:
 	/* Update the LVB from the disk inode */
 	ost_fid_from_resid(&info->fti_fid, &res->lr_name,
 			   ofd->ofd_lut.lut_lsd.lsd_osd_index);
-	fo = ofd_object_find(&env, ofd, &info->fti_fid);
+	fo = ofd_object_find(env, ofd, &info->fti_fid);
 	if (IS_ERR(fo))
-		GOTO(out_env, rc = PTR_ERR(fo));
+		GOTO(out, rc = PTR_ERR(fo));
 
-	rc = ofd_attr_get(&env, fo, &info->fti_attr);
+	rc = ofd_attr_get(env, fo, &info->fti_attr);
 	if (rc)
 		GOTO(out_obj, rc);
 
@@ -322,9 +316,8 @@ disk_update:
 	unlock_res(res);
 
 out_obj:
-	ofd_object_put(&env, fo);
-out_env:
-	lu_env_fini(&env);
+	ofd_object_put(env, fo);
+out:
 	return rc;
 }
 
@@ -358,7 +351,8 @@ static int ofd_lvbo_size(struct ldlm_lock *lock)
  *
  * \retval		size of LVB data written into \a buf buffer
  */
-static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int buflen)
+static int ofd_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
+			 void *buf, int buflen)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	int lvb_len;

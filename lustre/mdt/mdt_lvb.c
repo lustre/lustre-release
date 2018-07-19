@@ -34,7 +34,7 @@
 #include "mdt_internal.h"
 
 /* Called with res->lr_lvb_sem held */
-static int mdt_lvbo_init(struct ldlm_resource *res)
+static int mdt_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
 {
 	if (IS_LQUOTA_RES(res)) {
 		struct mdt_device	*mdt;
@@ -96,7 +96,7 @@ int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,
 	if (!mdt_object_exists(mo) || mdt_object_remote(mo))
 		RETURN(-ENOENT);
 
-	ma = &info->mti_attr;
+	ma = &info->mti_attr2;
 	ma->ma_valid = 0;
 	ma->ma_need = MA_INODE;
 	rc = mo_attr_get(env, mdt_object_child(mo), ma);
@@ -140,15 +140,15 @@ int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,
 	RETURN(rc);
 }
 
-int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
-			struct ptlrpc_request *req, bool increase_only)
+int mdt_dom_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
+			struct ldlm_lock *lock, struct ptlrpc_request *req,
+			bool increase_only)
 {
 	struct obd_export *exp = lock ? lock->l_export : NULL;
 	struct mdt_device *mdt;
 	struct mdt_object *mo;
 	struct mdt_thread_info *info;
 	struct ost_lvb *lvb;
-	struct lu_env env;
 	struct lu_fid *fid;
 	int rc = 0;
 
@@ -173,18 +173,21 @@ int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 	if (mdt == NULL)
 		RETURN(-ENOENT);
 
-	rc = lu_env_init(&env, LCT_MD_THREAD);
-	if (rc)
-		RETURN(rc);
-
-	info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
-	if (info == NULL)
-		GOTO(out_env, rc = -ENOMEM);
-
-	memset(info, 0, sizeof *info);
-	info->mti_env = &env;
-	info->mti_exp = req ? req->rq_export : NULL;
-	info->mti_mdt = mdt;
+	LASSERT(env);
+	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	if (!info) {
+		rc = lu_env_refill_by_tags((struct lu_env *)env,
+					   LCT_MD_THREAD, 0);
+		if (rc)
+			GOTO(out_env, rc);
+		info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+		if (!info)
+			GOTO(out_env, rc = -ENOMEM);
+	}
+	if (!info->mti_exp)
+		info->mti_exp = req ? req->rq_export : NULL;
+	if (!info->mti_mdt)
+		info->mti_mdt = mdt;
 
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &res->lr_name);
@@ -238,19 +241,19 @@ int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 
 disk_update:
 	/* Update the LVB from the disk inode */
-	mo = mdt_object_find(&env, mdt, fid);
+	mo = mdt_object_find(env, mdt, fid);
 	if (IS_ERR(mo))
 		GOTO(out_env, rc = PTR_ERR(mo));
 
-	rc = mdt_dom_disk_lvbo_update(&env, mo, res, !!increase_only);
-	mdt_object_put(&env, mo);
+	rc = mdt_dom_disk_lvbo_update(env, mo, res, !!increase_only);
+	mdt_object_put(env, mo);
 out_env:
-	lu_env_fini(&env);
 	return rc;
 }
 
-static int mdt_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
-			   struct ptlrpc_request *req, int increase_only)
+static int mdt_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
+			   struct ldlm_lock *lock, struct ptlrpc_request *req,
+			   int increase_only)
 {
 	ENTRY;
 
@@ -272,7 +275,8 @@ static int mdt_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 	 * by MDT for DOM objects only.
 	 */
 	if (lock == NULL || ldlm_has_dom(lock))
-		return mdt_dom_lvbo_update(res, lock, req, !!increase_only);
+		return mdt_dom_lvbo_update(env, res, lock, req,
+					   !!increase_only);
 	return 0;
 }
 
@@ -302,9 +306,9 @@ static int mdt_lvbo_size(struct ldlm_lock *lock)
 	return 0;
 }
 
-static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
+static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
+			 void *lvb, int lvblen)
 {
-	struct lu_env env;
 	struct mdt_thread_info *info;
 	struct mdt_device *mdt;
 	struct lu_fid *fid;
@@ -324,6 +328,23 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 		RETURN(rc);
 	}
 
+	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	if (!info) {
+		rc = lu_env_refill_by_tags((struct lu_env *)env,
+					   LCT_MD_THREAD, 0);
+		if (rc)
+			GOTO(out, rc);
+		info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+		if (!info)
+			GOTO(out, rc = -ENOMEM);
+	}
+	if (!info->mti_env)
+		info->mti_env = env;
+	if (!info->mti_exp)
+		info->mti_exp = lock->l_export;
+	if (!info->mti_mdt)
+		info->mti_mdt = mdt;
+
 	/* LVB for DoM lock is needed only for glimpse,
 	 * don't fill DoM data if there is layout lock */
 	if (ldlm_has_dom(lock)) {
@@ -331,7 +352,8 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 		int lvb_len = sizeof(struct ost_lvb);
 
 		if (!mdt_dom_lvb_is_valid(res))
-			mdt_dom_lvbo_update(lock->l_resource, lock, NULL, 0);
+			mdt_dom_lvbo_update(env, lock->l_resource,
+					    lock, NULL, 0);
 
 		if (lvb_len > lvblen)
 			lvb_len = lvblen;
@@ -340,47 +362,30 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 		memcpy(lvb, res->lr_lvb_data, lvb_len);
 		unlock_res(res);
 
-		RETURN(lvb_len);
+		GOTO(out, rc = lvb_len);
 	}
 
 	/* Only fill layout if layout lock is granted */
 	if (!ldlm_has_layout(lock) || lock->l_granted_mode != lock->l_req_mode)
-		RETURN(0);
-
-	/* XXX create an env to talk to mdt stack. We should get this env from
-	 * ptlrpc_thread->t_env. */
-	rc = lu_env_init(&env, LCT_MD_THREAD);
-	/* Likely ENOMEM */
-	if (rc)
-		RETURN(rc);
-
-	info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
-	/* Likely ENOMEM */
-	if (info == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-	memset(info, 0, sizeof *info);
-	info->mti_env = &env;
-	info->mti_exp = lock->l_export;
-	info->mti_mdt = mdt;
+		GOTO(out, rc = 0);
 
 	/* XXX get fid by resource id. why don't include fid in ldlm_resource */
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &lock->l_resource->lr_name);
 
-	obj = mdt_object_find(&env, info->mti_mdt, fid);
+	obj = mdt_object_find(env, info->mti_mdt, fid);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
 	if (!mdt_object_exists(obj) || mdt_object_remote(obj))
-		GOTO(out, rc = -ENOENT);
+		GOTO(out_put, rc = -ENOENT);
 
 	child = mdt_object_child(obj);
 
 	/* get the length of lsm */
-	rc = mo_xattr_get(&env, child, &LU_BUF_NULL, XATTR_NAME_LOV);
+	rc = mo_xattr_get(env, child, &LU_BUF_NULL, XATTR_NAME_LOV);
 	if (rc < 0)
-		GOTO(out, rc);
+		GOTO(out_put, rc);
 	if (rc > 0) {
 		struct lu_buf *lmm = NULL;
 		if (lvblen < rc) {
@@ -400,20 +405,20 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 				     "%d (max_mdsize %d): rc = %d\n",
 				     mdt_obd_name(mdt), lvblen, rc,
 				     info->mti_mdt->mdt_max_mdsize, -ERANGE);
-			GOTO(out, rc = -ERANGE);
+			GOTO(out_put, rc = -ERANGE);
 		}
 		lmm = &info->mti_buf;
 		lmm->lb_buf = lvb;
 		lmm->lb_len = rc;
-		rc = mo_xattr_get(&env, child, lmm, XATTR_NAME_LOV);
+		rc = mo_xattr_get(env, child, lmm, XATTR_NAME_LOV);
 		if (rc < 0)
-			GOTO(out, rc);
+			GOTO(out_put, rc);
 	}
 
-out:
+out_put:
 	if (obj != NULL && !IS_ERR(obj))
-		mdt_object_put(&env, obj);
-	lu_env_fini(&env);
+		mdt_object_put(env, obj);
+out:
 	RETURN(rc < 0 ? 0 : rc);
 }
 

@@ -431,7 +431,8 @@ int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
 /**
  * Enqueue a local lock (typically on a server).
  */
-int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
+int ldlm_cli_enqueue_local(const struct lu_env *env,
+			   struct ldlm_namespace *ns,
 			   const struct ldlm_res_id *res_id,
 			   enum ldlm_type type, union ldlm_policy_data *policy,
 			   enum ldlm_mode mode, __u64 *flags,
@@ -461,7 +462,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 	if (IS_ERR(lock))
 		GOTO(out_nolock, err = PTR_ERR(lock));
 
-	err = ldlm_lvbo_init(lock->l_resource);
+	err = ldlm_lvbo_init(env, lock->l_resource);
 	if (err < 0) {
 		LDLM_ERROR(lock, "delayed lvb init failed (rc %d)", err);
 		ldlm_lock_destroy_nolock(lock);
@@ -489,15 +490,15 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 		lock->l_req_extent = policy->l_extent;
 	}
 
-        err = ldlm_lock_enqueue(ns, &lock, policy, flags);
-        if (unlikely(err != ELDLM_OK))
-                GOTO(out, err);
+	err = ldlm_lock_enqueue(env, ns, &lock, policy, flags);
+	if (unlikely(err != ELDLM_OK))
+		GOTO(out, err);
 
-        if (policy != NULL)
-                *policy = lock->l_policy_data;
+	if (policy != NULL)
+		*policy = lock->l_policy_data;
 
-        if (lock->l_completion_ast)
-                lock->l_completion_ast(lock, *flags, NULL);
+	if (lock->l_completion_ast)
+		lock->l_completion_ast(lock, *flags, NULL);
 
         LDLM_DEBUG(lock, "client-side local enqueue handler, new lock created");
         EXIT;
@@ -564,12 +565,16 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 			  __u32 lvb_len, const struct lustre_handle *lockh,
 			  int rc)
 {
-        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-        int is_replay = *flags & LDLM_FL_REPLAY;
-        struct ldlm_lock *lock;
-        struct ldlm_reply *reply;
-        int cleanup_phase = 1;
-        ENTRY;
+	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+	const struct lu_env *env = NULL;
+	int is_replay = *flags & LDLM_FL_REPLAY;
+	struct ldlm_lock *lock;
+	struct ldlm_reply *reply;
+	int cleanup_phase = 1;
+	ENTRY;
+
+	if (req && req->rq_svc_thread)
+		env = req->rq_svc_thread->t_env;
 
         lock = ldlm_handle2lock(lockh);
         /* ldlm_cli_enqueue is holding a reference on this lock. */
@@ -707,16 +712,16 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 		}
         }
 
-        if (!is_replay) {
-                rc = ldlm_lock_enqueue(ns, &lock, NULL, flags);
-                if (lock->l_completion_ast != NULL) {
-                        int err = lock->l_completion_ast(lock, *flags, NULL);
-                        if (!rc)
-                                rc = err;
-                        if (rc)
-                                cleanup_phase = 1;
-                }
-        }
+	if (!is_replay) {
+		rc = ldlm_lock_enqueue(env, ns, &lock, NULL, flags);
+		if (lock->l_completion_ast != NULL) {
+			int err = lock->l_completion_ast(lock, *flags, NULL);
+			if (!rc)
+				rc = err;
+			if (rc)
+				cleanup_phase = 1;
+		}
+	}
 
 	if (lvb_len > 0 && lvb != NULL) {
 		/* Copy the LVB here, and not earlier, because the completion

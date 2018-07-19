@@ -2322,11 +2322,12 @@ time64_t ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
  * error or otherwise be interrupted).
  * Returns 0 on success or error code otherwise.
  */
-int ptlrpc_set_wait(struct ptlrpc_request_set *set)
+int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 {
-	struct list_head            *tmp;
-        struct ptlrpc_request *req;
-        struct l_wait_info     lwi;
+	struct list_head *tmp;
+	struct ptlrpc_request *req;
+	struct l_wait_info lwi;
+	struct lu_env _env;
 	time64_t timeout;
 	int rc;
 	ENTRY;
@@ -2343,6 +2344,18 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 
 	if (list_empty(&set->set_requests))
                 RETURN(0);
+
+	/* ideally we want env provide by the caller all the time,
+	 * but at the moment that would mean a massive change in
+	 * LDLM while benefits would be close to zero, so just
+	 * initialize env here for those rare cases */
+	if (!env) {
+		/* XXX: skip on the client side? */
+		rc = lu_env_init(&_env, LCT_DT_THREAD);
+		if (rc)
+			RETURN(rc);
+		env = &_env;
+	}
 
         do {
                 timeout = ptlrpc_set_next_timeout(set);
@@ -2371,7 +2384,8 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                         lwi = LWI_TIMEOUT(cfs_time_seconds(timeout? timeout : 1),
                                           ptlrpc_expired_set, set);
 
-                rc = l_wait_event(set->set_waitq, ptlrpc_check_set(NULL, set), &lwi);
+		rc = l_wait_event(set->set_waitq,
+				  ptlrpc_check_set(env, set), &lwi);
 
                 /* LU-769 - if we ignored the signal because it was already
                  * pending when we started, we need to handle it now or we risk
@@ -2421,6 +2435,9 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 if (req->rq_status != 0)
                         rc = req->rq_status;
         }
+
+	if (env && env == &_env)
+		lu_env_fini(&_env);
 
 	RETURN(rc);
 }
@@ -2921,13 +2938,13 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 	/* for distributed debugging */
 	lustre_msg_set_status(req->rq_reqmsg, current_pid());
 
-        /* add a ref for the set (see comment in ptlrpc_set_add_req) */
-        ptlrpc_request_addref(req);
-        ptlrpc_set_add_req(set, req);
-        rc = ptlrpc_set_wait(set);
-        ptlrpc_set_destroy(set);
+	/* add a ref for the set (see comment in ptlrpc_set_add_req) */
+	ptlrpc_request_addref(req);
+	ptlrpc_set_add_req(set, req);
+	rc = ptlrpc_set_wait(NULL, set);
+	ptlrpc_set_destroy(set);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ptlrpc_queue_wait);
 

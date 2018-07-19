@@ -952,7 +952,7 @@ out:
 		 * to go... deadlock! */
 		res = ldlm_resource_get(ns, NULL, &info->fti_resid, LDLM_EXTENT, 0);
 		if (!IS_ERR(res)) {
-			ldlm_res_lvbo_update(res, NULL, 0);
+			ldlm_res_lvbo_update(env, res, NULL, 0);
 			ldlm_resource_putref(res);
 		}
 	}
@@ -994,7 +994,7 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 	/* Tell the clients that the object is gone now and that they should
 	 * throw away any cached pages. */
 	ost_fid_build_resid(fid, &info->fti_resid);
-	rc = ldlm_cli_enqueue_local(ofd->ofd_namespace, &info->fti_resid,
+	rc = ldlm_cli_enqueue_local(env, ofd->ofd_namespace, &info->fti_resid,
 				    LDLM_EXTENT, &policy, LCK_PW, &flags,
 				    ldlm_blocking_ast, ldlm_completion_ast,
 				    NULL, NULL, 0, LVB_T_NONE, NULL, &lockh);
