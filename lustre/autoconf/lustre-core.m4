@@ -2537,6 +2537,24 @@ generic_write_sync_2args, [
 ]) # LC_GENERIC_WRITE_SYNC_2ARGS
 
 #
+# LC_FOP_ITERATE_SHARED
+#
+# Kernel version 4.7 adds iterate_shared method to file_operations
+#
+AC_DEFUN([LC_FOP_ITERATE_SHARED], [
+LB_CHECK_COMPILE([if 'file_operations' has 'iterate_shared'],
+fop_iterate_shared, [
+	#include <linux/fs.h>
+],[
+	struct file_operations fop;
+	fop.iterate_shared = NULL;
+],[
+	AC_DEFINE(HAVE_FOP_ITERATE_SHARED, 1,
+		[file_operations has iterate_shared])
+])
+]) # LC_FOP_ITERATE_SHARED
+
+#
 # LC_FOPS_ITERATE_SHARED
 #
 # 4.7 commit ae05327a00fd47c34dfe25294b359a3f3fef96e8

@@ -1,0 +1,29 @@
+We won't change i_xtime in ldiskfs code path. But also
+need keep normal function out of Lustre. So we using
+S_NOCMTIME to indicate invoked from Lustre.
+
+Index: linux-4.15.0/fs/ext4/ext4.h
+===================================================================
+--- linux-4.15.0.orig/fs/ext4/ext4.h
++++ linux-4.15.0/fs/ext4/ext4.h
+@@ -655,6 +655,20 @@ enum {
+ #define EXT4_GOING_FLAGS_LOGFLUSH		0x1	/* flush log but not data */
+ #define EXT4_GOING_FLAGS_NOLOGFLUSH		0x2	/* don't flush log nor data */
+ 
++#define current_time(a) ext4_current_time(a)
++static inline struct timespec ext4_current_time(struct inode *inode)
++{
++	struct timespec now = current_kernel_time();
++
++	if (IS_NOCMTIME(inode))
++		return inode->i_ctime;
++
++	/* Copy from fs/inode.c */
++	if (unlikely(!inode->i_sb))
++		return now;
++
++	return timespec_trunc(now, inode->i_sb->s_time_gran);
++}
+ 
+ #if defined(__KERNEL__) && defined(CONFIG_COMPAT)
+ /*

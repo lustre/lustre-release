@@ -15,8 +15,8 @@ dnl #
 dnl #                       * /var/lib/dkms/zfs/${VERSION}/source
 dnl #                       * /usr/src/zfs-${VERSION}/${LINUXRELEASE}
 dnl #                       * /usr/src/zfs-${VERSION}
-dnl #                       * ../spl/
-dnl #                       * $LINUX
+dnl #                       * ../zfs/
+dnl #                       * $LINUX/zfs
 dnl #
 dnl # --with-zfs-devel=path
 dnl #                 - User provided directory where zfs development headers
@@ -46,7 +46,7 @@ dnl #                   * /var/lib/dkms/spl/${VERSION}/source
 dnl #                   * /usr/src/spl-${VERSION}/${LINUXRELEASE}
 dnl #                   * /usr/src/spl-${VERSION}
 dnl #                   * ../spl/
-dnl #                   * $LINUX
+dnl #                   * $LINUX/spl
 dnl #
 dnl # --with-spl=path - Enable spl support and use the spl headers in the
 dnl #                   provided path.  No autodetection is performed.
@@ -76,7 +76,7 @@ AC_DEFUN([LB_SPL], [
 	splsrc1="/usr/src/spl-${splver}/${LINUXRELEASE}"
 	splsrc2="/usr/src/spl-${splver}"
 	splsrc3="../spl/"
-	splsrc4="$LINUX"
+	splsrc4="$LINUX/spl"
 
 	AC_MSG_CHECKING([spl source directory])
 	AS_IF([test -z "${splsrc}"], [
@@ -194,7 +194,7 @@ AC_DEFUN([LB_ZFS], [
 	zfssrc1="/usr/src/zfs-${zfsver}/${LINUXRELEASE}"
 	zfssrc2="/usr/src/zfs-${zfsver}"
 	zfssrc3="../zfs/"
-	zfssrc4="$LINUX"
+	zfssrc4="$LINUX/zfs"
 
 	AC_MSG_CHECKING([zfs source directory])
 	AS_IF([test -z "${zfssrc}"], [

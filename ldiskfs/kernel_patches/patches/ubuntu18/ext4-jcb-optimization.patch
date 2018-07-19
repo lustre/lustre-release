@@ -1,0 +1,19 @@
+Change list_add_tail to list_add. It gives advantages to ldiskfs
+in tgt_cb_last_committed. In the beginning of list will be placed
+thandles with the highest transaction numbers. So at the first
+iterations we will have the highest transno. It will save from
+extra call of ptlrpc_commit_replies.
+
+Index: linux-4.15.0/fs/ext4/ext4_jbd2.h
+===================================================================
+--- linux-4.15.0.orig/fs/ext4/ext4_jbd2.h
++++ linux-4.15.0/fs/ext4/ext4_jbd2.h
+@@ -172,7 +172,7 @@ static inline void _ext4_journal_callbac
+ 			struct ext4_journal_cb_entry *jce)
+ {
+ 	/* Add the jce to transaction's private list */
+-	list_add_tail(&jce->jce_list, &handle->h_transaction->t_private_list);
++	list_add(&jce->jce_list, &handle->h_transaction->t_private_list);
+ }
+ 
+ static inline void ext4_journal_callback_add(handle_t *handle,

@@ -56,23 +56,33 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	)], [LDISKFS_SERIES="4.4-sles12sp3.series"],
             [LDISKFS_SERIES="4.4-sles12sp3.series"])
 ], [test x$UBUNTU_KERNEL = xyes], [
-	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0],
-		[],
-		[
-			KPLEV=$(echo $LINUXRELEASE | sed -n 's/.*-\([0-9]\+\).*/\1/p')
-			AS_IF(
-				[test -z "$KPLEV"], [
-					AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
-					LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"
-				],
-				[test $KPLEV -ge 73], [LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"],
-				[test $KPLEV -ge 62], [LDISKFS_SERIES="4.4.0-62-ubuntu14+16.series"],
-				[test $KPLEV -ge 49], [LDISKFS_SERIES="4.4.0-49-ubuntu14+16.series"],
-				[LDISKFS_SERIES="4.4.0-45-ubuntu14+16.series"]
-			)
-		],
-		[LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"]
-	)
+	AS_VERSION_COMPARE([$LINUXRELEASE],[4.15.0],[
+	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0], [],
+	[
+		KPLEV=$(echo $LINUXRELEASE | sed -n 's/.*-\([0-9]\+\).*/\1/p')
+		AS_IF(
+			[test -z "$KPLEV"], [
+				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
+				LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"
+			],
+			[test $KPLEV -ge 73], [LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"],
+			[test $KPLEV -ge 62], [LDISKFS_SERIES="4.4.0-62-ubuntu14+16.series"],
+			[test $KPLEV -ge 49], [LDISKFS_SERIES="4.4.0-49-ubuntu14+16.series"],
+			[LDISKFS_SERIES="4.4.0-45-ubuntu14+16.series"]
+		)
+	],
+	[LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"])],
+	[
+		KPLEV=$(echo $LINUXRELEASE | sed -n 's/.*-\([0-9]\+\).*/\1/p')
+		AS_IF(
+			[test -z "$KPLEV"], [
+				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
+				LDISKFS_SERIES="4.15.0-20-ubuntu18.series"
+			],
+			[test $KPLEV -ge 20], [LDISKFS_SERIES="4.15.0-20-ubuntu18.series"]
+		)
+	],
+	[LDISKFS_SERIES="4.15.0-20-ubuntu18.series"])
 ])
 ])
 AS_IF([test -z "$LDISKFS_SERIES"],

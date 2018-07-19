@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Brian J. Murrell <brian.murrell@intel.com>
 Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.7.2
-Build-Depends: debhelper (>= 7.0.0), bzip2
+Build-Depends: debhelper (>= 9.0.0), bzip2
 
 Package: lustre-client-modules-_KVERS_
 Architecture: any

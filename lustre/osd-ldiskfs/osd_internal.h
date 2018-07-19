@@ -1415,4 +1415,10 @@ void osd_trunc_unlock_all(struct list_head *list);
 void osd_process_truncates(struct list_head *list);
 void osd_execute_truncate(struct osd_object *obj);
 
+/*
+ * Maximum size of xattr attributes for FEATURE_INCOMPAT_EA_INODE 1Mb
+ * This limit is arbitrary, but is reasonable for the xattr API.
+ */
+#define LDISKFS_XATTR_MAX_LARGE_EA_SIZE    (1024 * 1024)
+
 #endif /* _OSD_INTERNAL_H */

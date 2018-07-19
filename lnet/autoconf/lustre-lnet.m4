@@ -249,16 +249,13 @@ AS_IF([test $ENABLEO2IB = "no"], [
 		# we know at this point that the found OFED source is good
 		O2IB_SYMVER=""
 		if test $ENABLEO2IB = "withpath" -o "x$OFED" = "xyes" ; then
-			# OFED default rpm not handle sles10 Modules.symvers name
-			for name in Module.symvers Modules.symvers; do
-				if test -f $O2IBPATH/$name; then
-					O2IB_SYMVER=$name;
-					break;
-				fi
-			done
+			if test -f $O2IBPATH/Module.symvers; then
+				O2IB_SYMVER=$O2IBPATH/Module.symvers;
+				break;
+			fi
 			if test -n "$O2IB_SYMVER"; then
-				AC_MSG_NOTICE([adding $O2IBPATH/$O2IB_SYMVER to Symbol Path])
-				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $O2IBPATH/$O2IB_SYMVER"
+				AC_MSG_NOTICE([adding $O2IB_SYMVER to Symbol Path])
+				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $O2IB_SYMVER"
 				AC_SUBST(EXTRA_SYMBOLS)
 			else
 				AC_MSG_ERROR([an external source tree was, either specified or detected, for o2iblnd however I could not find a $O2IBPATH/Module.symvers there])

@@ -282,8 +282,11 @@ debs: undef.h
 	if test "x@ENABLEO2IB@" = "xno"; then \
 		export IB_OPTIONS="--with-o2ib=no"; \
 	else \
-		if test -n "@O2IBPATH@"; then \
+		if test "x@ENABLEO2IB@" != "xyes" && \
+		   test -n "@O2IBPATH@"; then \
 			export IB_OPTIONS="--with-o2ib=@O2IBPATH@"; \
+		else \
+			export IB_OPTIONS="--with-o2ib=yes"; \
 		fi; \
 	fi; \
 	export KSRC_TREE=$(LINUX) && \
