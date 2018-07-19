@@ -358,7 +358,7 @@ static int ofd_lvbo_size(struct ldlm_lock *lock)
  *
  * \retval		size of LVB data written into \a buf buffer
  */
-static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int buflen)
+static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int *buflen)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	int lvb_len;
@@ -370,8 +370,8 @@ static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int buflen)
 	lvb_len = ofd_lvbo_size(lock);
 	LASSERT(lvb_len <= res->lr_lvb_len);
 
-	if (lvb_len > buflen)
-		lvb_len = buflen;
+	if (lvb_len > *buflen)
+		lvb_len = *buflen;
 
 	lock_res(res);
 	memcpy(buf, res->lr_lvb_data, lvb_len);

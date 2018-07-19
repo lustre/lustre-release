@@ -342,7 +342,7 @@ test_9() {
 	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
-	$LFS setstripe -E 1m -S 1m -E 2M -c 1 $comp_file ||
+	$LFS setstripe -E 1M -S 1M -E -1 -c 1 $comp_file ||
 		error "Create $comp_file failed"
 
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)

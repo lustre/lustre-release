@@ -297,7 +297,7 @@ struct ldlm_valblock_ops {
 	/* Return size of lvb data appropriate RPC size can be reserved */
 	int (*lvbo_size)(struct ldlm_lock *lock);
 	/* Called to fill in lvb data to RPC buffer @buf */
-	int (*lvbo_fill)(struct ldlm_lock *lock, void *buf, int buflen);
+	int (*lvbo_fill)(struct ldlm_lock *lock, void *buf, int *buflen);
 };
 
 /**
@@ -1084,7 +1084,7 @@ static inline int ldlm_lvbo_size(struct ldlm_lock *lock)
 	return 0;
 }
 
-static inline int ldlm_lvbo_fill(struct ldlm_lock *lock, void *buf, int len)
+static inline int ldlm_lvbo_fill(struct ldlm_lock *lock, void *buf, int *len)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 	int rc;

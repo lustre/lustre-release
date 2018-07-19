@@ -140,7 +140,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	/* on success, pack lvb in reply */
 	lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
 	lvb_len = ldlm_lvbo_size(*lockp);
-	lvb_len = ldlm_lvbo_fill(*lockp, lvb, lvb_len);
+	lvb_len = ldlm_lvbo_fill(*lockp, lvb, &lvb_len);
 	if (lvb_len < 0)
 		GOTO(out, rc = lvb_len);
 

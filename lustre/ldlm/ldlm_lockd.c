@@ -1012,7 +1012,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	if (lvb_len > 0) {
 		void *lvb = req_capsule_client_get(&req->rq_pill, &RMF_DLM_LVB);
 
-		lvb_len = ldlm_lvbo_fill(lock, lvb, lvb_len);
+		lvb_len = ldlm_lvbo_fill(lock, lvb, &lvb_len);
 		if (lvb_len < 0) {
 			/* We still need to send the RPC to wake up the blocked
 			 * enqueue thread on the client.
@@ -1460,43 +1460,59 @@ existing_lock:
 		LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
 			   "(err=%d, rc=%d)", err, rc);
 
-		if (rc == 0) {
-			if (req_capsule_has_field(&req->rq_pill, &RMF_DLM_LVB,
-						  RCL_SERVER) &&
-			    ldlm_lvbo_size(lock) > 0) {
-				void *buf;
-				int buflen;
+		if (rc == 0 &&
+		    req_capsule_has_field(&req->rq_pill, &RMF_DLM_LVB,
+					  RCL_SERVER) &&
+		    ldlm_lvbo_size(lock) > 0) {
+			void *buf;
+			int buflen;
 
-				buf = req_capsule_server_get(&req->rq_pill,
-							     &RMF_DLM_LVB);
-				LASSERTF(buf != NULL, "req %p, lock %p\n",
-					 req, lock);
-				buflen = req_capsule_get_size(&req->rq_pill,
-						&RMF_DLM_LVB, RCL_SERVER);
-				/* non-replayed lock, delayed lvb init may
-				 * need to be occur now */
-				if ((buflen > 0) && !(flags & LDLM_FL_REPLAY)) {
-					buflen = ldlm_lvbo_fill(lock, buf,
-								buflen);
-					if (buflen >= 0)
+retry:
+			buf = req_capsule_server_get(&req->rq_pill,
+						     &RMF_DLM_LVB);
+			LASSERTF(buf != NULL, "req %p, lock %p\n", req, lock);
+			buflen = req_capsule_get_size(&req->rq_pill,
+					&RMF_DLM_LVB, RCL_SERVER);
+			/* non-replayed lock, delayed lvb init may
+			 * need to be occur now
+			 */
+			if ((buflen > 0) && !(flags & LDLM_FL_REPLAY)) {
+				int rc2;
+
+				rc2 = ldlm_lvbo_fill(lock, buf, &buflen);
+				if (rc2 >= 0) {
+					req_capsule_shrink(&req->rq_pill,
+							   &RMF_DLM_LVB,
+							   rc2, RCL_SERVER);
+				} else if (rc2 == -ERANGE) {
+					rc2 = req_capsule_server_grow(
+							&req->rq_pill,
+							&RMF_DLM_LVB, buflen);
+					if (!rc2) {
+						goto retry;
+					} else {
+						/* if we can't grow the buffer,
+						 * it's ok to return empty lvb
+						 * to client.
+						 */
 						req_capsule_shrink(
 							&req->rq_pill,
-							&RMF_DLM_LVB,
-							buflen, RCL_SERVER);
-					else
-						rc = buflen;
-				} else if (flags & LDLM_FL_REPLAY) {
-					/* no LVB resend upon replay */
-					if (buflen > 0)
-						req_capsule_shrink(
-							&req->rq_pill,
-							&RMF_DLM_LVB,
-							0, RCL_SERVER);
-					else
-						rc = buflen;
+							&RMF_DLM_LVB, 0,
+							RCL_SERVER);
+					}
 				} else {
-					rc = buflen;
+					rc = rc2;
 				}
+			} else if (flags & LDLM_FL_REPLAY) {
+				/* no LVB resend upon replay */
+				if (buflen > 0)
+					req_capsule_shrink(&req->rq_pill,
+							   &RMF_DLM_LVB,
+							   0, RCL_SERVER);
+				else
+					rc = buflen;
+			} else {
+				rc = buflen;
 			}
 		}
 

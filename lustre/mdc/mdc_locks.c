@@ -613,14 +613,14 @@ static int mdc_finish_enqueue(struct obd_export *exp,
          * It's important that we do this first!  Otherwise we might exit the
          * function without doing so, and try to replay a failed create
          * (bug 3440) */
-        if (it->it_op & IT_OPEN && req->rq_replay &&
+	if (it->it_op & IT_OPEN && req->rq_replay &&
 	    (!it_disposition(it, DISP_OPEN_OPEN) || it->it_status != 0))
 		mdc_clear_replay_flag(req, it->it_status);
 
-	DEBUG_REQ(D_RPCTRACE, req, "op: %d disposition: %x, status: %d",
+	DEBUG_REQ(D_RPCTRACE, req, "op: %x disposition: %x, status: %d",
 		  it->it_op, it->it_disposition, it->it_status);
 
-        /* We know what to expect, so we do any byte flipping required here */
+	/* We know what to expect, so we do any byte flipping required here */
 	if (it_has_reply_body(it)) {
                 struct mdt_body *body;
 
@@ -683,6 +683,8 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 		/* maybe the lock was granted right away and layout
 		 * is packed into RMF_DLM_LVB of req */
 		lvb_len = req_capsule_get_size(pill, &RMF_DLM_LVB, RCL_SERVER);
+		CDEBUG(D_INFO, "%s: layout return lvb %d transno %lld\n",
+		       class_exp2obd(exp)->obd_name, lvb_len, req->rq_transno);
 		if (lvb_len > 0) {
 			lvb_data = req_capsule_server_sized_get(pill,
 							&RMF_DLM_LVB, lvb_len);
