@@ -1138,7 +1138,11 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 	struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
-#define MAX_MD_SIZE (sizeof(struct lov_mds_md) + 4 * sizeof(struct lov_ost_data))
+#define MAX_MD_SIZE_OLD (sizeof(struct lov_mds_md) +			\
+			 4 * sizeof(struct lov_ost_data))
+#define MAX_MD_SIZE (sizeof(struct lov_comp_md_v1) +			\
+		     4 * (sizeof(struct lov_comp_md_entry_v1) +		\
+			  MAX_MD_SIZE_OLD))
 #define MIN_MD_SIZE (sizeof(struct lov_mds_md) + 1 * sizeof(struct lov_ost_data))
 
 /* This is the default MDT reply size allocated, should the striping be bigger,

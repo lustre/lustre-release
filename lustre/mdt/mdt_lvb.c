@@ -306,8 +306,23 @@ static int mdt_lvbo_size(struct ldlm_lock *lock)
 	return 0;
 }
 
+/**
+ * Implementation of ldlm_valblock_ops::lvbo_fill for MDT.
+ *
+ * This function is called to fill the given RPC buffer \a buf with LVB data
+ *
+ * \param[in] env		execution environment
+ * \param[in] lock		LDLM lock
+ * \param[in] buf		RPC buffer to fill
+ * \param[in,out] lvblen	lvb buffer length
+ *
+ * \retval		size of LVB data written into \a buf buffer
+ *			or -ERANGE when the provided @lvblen is not big enough,
+ *			and the needed lvb buffer size will be returned in
+ *			@lvblen
+ */
 static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
-			 void *lvb, int lvblen)
+			 void *lvb, int *lvblen)
 {
 	struct mdt_thread_info *info;
 	struct mdt_device *mdt;
@@ -324,7 +339,7 @@ static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 
 		/* call lvbo fill function of quota master */
 		rc = qmt_hdls.qmth_lvbo_fill(mdt->mdt_qmt_dev, lock, lvb,
-					     lvblen);
+					     *lvblen);
 		RETURN(rc);
 	}
 
@@ -355,8 +370,8 @@ static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 			mdt_dom_lvbo_update(env, lock->l_resource,
 					    lock, NULL, 0);
 
-		if (lvb_len > lvblen)
-			lvb_len = lvblen;
+		if (lvb_len > *lvblen)
+			lvb_len = *lvblen;
 
 		lock_res(res);
 		memcpy(lvb, res->lr_lvb_data, lvb_len);
@@ -388,7 +403,7 @@ static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 		GOTO(out_put, rc);
 	if (rc > 0) {
 		struct lu_buf *lmm = NULL;
-		if (lvblen < rc) {
+		if (*lvblen < rc) {
 			int level;
 
 			/* The layout EA may be larger than mdt_max_mdsize
@@ -403,8 +418,9 @@ static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 			}
 			CDEBUG_LIMIT(level, "%s: small buffer size %d for EA "
 				     "%d (max_mdsize %d): rc = %d\n",
-				     mdt_obd_name(mdt), lvblen, rc,
+				     mdt_obd_name(mdt), *lvblen, rc,
 				     info->mti_mdt->mdt_max_mdsize, -ERANGE);
+			*lvblen = rc;
 			GOTO(out_put, rc = -ERANGE);
 		}
 		lmm = &info->mti_buf;
@@ -419,7 +435,10 @@ out_put:
 	if (obj != NULL && !IS_ERR(obj))
 		mdt_object_put(env, obj);
 out:
-	RETURN(rc < 0 ? 0 : rc);
+	if (rc < 0 && rc != -ERANGE)
+		rc = 0;
+
+	RETURN(rc);
 }
 
 static int mdt_lvbo_free(struct ldlm_resource *res)

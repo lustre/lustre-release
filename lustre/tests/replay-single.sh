@@ -4758,6 +4758,33 @@ test_131b() {
 }
 run_test 131b "DoM file write replay"
 
+test_132a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.90) ] &&
+		skip "Do not support PFL files before 2.10"
+
+	$LFS setstripe -E 1M -c 1 -E EOF -c 2 $DIR/$tfile
+	replay_barrier $SINGLEMDS
+	# write over the first component size cause next component instantiation
+	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=1 seek=1 ||
+		error "dd to $DIR/$tfile failed"
+	lfs getstripe $DIR/$tfile
+
+	cksum=$(md5sum $DIR/$tfile | awk '{print $1}')
+	$LFS getstripe -I2 $DIR/$tfile | grep -q lmm_objects ||
+		error "Component #1 was not instantiated"
+
+	fail $SINGLEMDS
+
+	lfs getstripe $DIR/$tfile
+	$LFS getstripe -I2 $DIR/$tfile | grep -q lmm_objects ||
+		error "Component #1 instantiation was not replayed"
+	cksum2=$(md5sum $DIR/$tfile | awk '{print $1}')
+	if [ $cksum != $cksum2 ] ; then
+		error_noexit "New cksum $cksum2 does not match original $cksum"
+	fi
+}
+run_test 132a "PFL new component instantiate replay"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

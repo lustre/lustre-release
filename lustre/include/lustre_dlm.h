@@ -302,7 +302,7 @@ struct ldlm_valblock_ops {
 	int (*lvbo_size)(struct ldlm_lock *lock);
 	/* Called to fill in lvb data to RPC buffer @buf */
 	int (*lvbo_fill)(const struct lu_env *env, struct ldlm_lock *lock,
-			 void *buf, int buflen);
+			 void *buf, int *buflen);
 };
 
 /**
@@ -1122,7 +1122,7 @@ static inline int ldlm_lvbo_size(struct ldlm_lock *lock)
 }
 
 static inline int ldlm_lvbo_fill(const struct lu_env *env,
-				 struct ldlm_lock *lock, void *buf, int len)
+				 struct ldlm_lock *lock, void *buf, int *len)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 	int rc;

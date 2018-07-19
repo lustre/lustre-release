@@ -3793,6 +3793,8 @@ static int mdt_intent_layout(enum ldlm_intent_flags it_opc,
 			if (layout_size > info->mti_mdt->mdt_max_mdsize)
 				info->mti_mdt->mdt_max_mdsize = layout_size;
 		}
+		CDEBUG(D_INFO, "%s: layout_size %d\n",
+		       mdt_obd_name(info->mti_mdt), layout_size);
 	}
 
 	/*
@@ -3864,7 +3866,7 @@ out_obj:
 out:
 	lhc->mlh_reg_lh.cookie = 0;
 
-	return rc;
+	RETURN(rc);
 }
 
 static int mdt_intent_open(enum ldlm_intent_flags it_opc,
@@ -5032,7 +5034,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	obd = class_name2obd(dev);
 	LASSERT(obd != NULL);
 
-	m->mdt_max_mdsize = MAX_MD_SIZE; /* 4 stripes */
+	m->mdt_max_mdsize = MAX_MD_SIZE_OLD;
 	m->mdt_opts.mo_evict_tgt_nids = 1;
 	m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
 

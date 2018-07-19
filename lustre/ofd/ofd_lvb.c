@@ -345,6 +345,7 @@ static int ofd_lvbo_size(struct ldlm_lock *lock)
  *
  * This function is called to fill the given RPC buffer \a buf with LVB data
  *
+ * \param[in] env	execution environment
  * \param[in] lock	LDLM lock
  * \param[in] buf	RPC buffer to fill
  * \param[in] buflen	buffer length
@@ -352,7 +353,7 @@ static int ofd_lvbo_size(struct ldlm_lock *lock)
  * \retval		size of LVB data written into \a buf buffer
  */
 static int ofd_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
-			 void *buf, int buflen)
+			 void *buf, int *buflen)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	int lvb_len;
@@ -364,8 +365,8 @@ static int ofd_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 	lvb_len = ofd_lvbo_size(lock);
 	LASSERT(lvb_len <= res->lr_lvb_len);
 
-	if (lvb_len > buflen)
-		lvb_len = buflen;
+	if (lvb_len > *buflen)
+		lvb_len = *buflen;
 
 	lock_res(res);
 	memcpy(buf, res->lr_lvb_data, lvb_len);

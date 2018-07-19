@@ -27,11 +27,6 @@ if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.51) ]]; then
 	skip_env "Need MDS version at least 2.9.51"
 fi
 
-if [ $MDSCOUNT -eq 1 ]; then
-	# Bug number:    LU-10686
-	ALWAYS_EXCEPT+=" 9"
-fi
-
 [ "$ALWAYS_EXCEPT$EXCEPT" ] &&
 	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
@@ -350,7 +345,7 @@ test_9() {
 	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
-	$LFS setstripe -E 1M -S 1M -E 2M -c 1 $comp_file ||
+	$LFS setstripe -E 1M -S 1M -E -1 -c 1 $comp_file ||
 		error "Create $comp_file failed"
 
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)

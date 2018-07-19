@@ -1856,6 +1856,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 		if (mo->ldo_is_composite) {
 			offs = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
 			v1 = (struct lov_mds_md_v1 *)((char *)comp_v1 + offs);
+			v3 = (struct lov_mds_md_v3 *)v1;
 			magic = le32_to_cpu(v1->lmm_magic);
 
 			ext = &comp_v1->lcm_entries[i].lcme_extent;
