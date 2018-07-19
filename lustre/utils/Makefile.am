@@ -80,7 +80,7 @@ EXT2FSLIB =
 endif
 
 if BLKID
-BLKIDLIB = -lblkid
+BLKIDLIB = -lblkid -luuid
 else
 BLKIDLIB =
 endif
