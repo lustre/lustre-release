@@ -59,6 +59,11 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
+if [[ $MDSCOUNT -gt 1 ]]; then
+	# bug number:    LU-11161
+	ALWAYS_EXCEPT+=" 160g"
+fi
+
 #                                  5          12          (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
 
