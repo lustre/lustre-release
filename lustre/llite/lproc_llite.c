@@ -84,19 +84,21 @@ static const struct file_operations ll_rw_extents_stats_pp_fops;
 static const struct file_operations ll_rw_offset_stats_fops;
 static __s64 ll_stats_pid_write(const char __user *buf, size_t len);
 
-static int ll_blksize_seq_show(struct seq_file *m, void *v)
+static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	struct obd_statfs osfs;
 	int rc;
 
-	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
-	if (!rc)
-		seq_printf(m, "%u\n", osfs.os_bsize);
-	return rc;
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
+
+	return sprintf(buf, "%u\n", osfs.os_bsize);
 }
-LPROC_SEQ_FOPS_RO(ll_blksize);
+LUSTRE_RO_ATTR(blocksize);
 
 static int ll_stat_blksize_seq_show(struct seq_file *m, void *v)
 {
@@ -1170,8 +1172,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_fstype_fops				},
 	{ .name	=	"site",
 	  .fops	=	&ll_site_stats_fops			},
-	{ .name	=	"blocksize",
-	  .fops	=	&ll_blksize_fops			},
 	{ .name	=	"stat_blocksize",
 	  .fops	=	&ll_stat_blksize_fops			},
 	{ .name	=	"kbytestotal",
@@ -1236,6 +1236,7 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 #define MAX_STRING_SIZE 128
 
 static struct attribute *llite_attrs[] = {
+	&lustre_attr_blocksize.attr,
 	&lustre_attr_statahead_running_max.attr,
 	NULL,
 };
