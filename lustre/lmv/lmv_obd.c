@@ -1937,8 +1937,6 @@ static int lmv_migrate(struct obd_export *exp, struct md_op_data *op_data,
 	ENTRY;
 
 	LASSERT(op_data->op_cli_flags & CLI_MIGRATE);
-	LASSERTF(fid_is_sane(&op_data->op_fid3), "invalid FID "DFID"\n",
-		 PFID(&op_data->op_fid3));
 
 	CDEBUG(D_INODE, "MIGRATE "DFID"/%.*s\n",
 	       PFID(&op_data->op_fid1), (int)namelen, name);

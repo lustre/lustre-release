@@ -166,6 +166,8 @@ struct ll_inode_info {
 			unsigned int			lli_sa_enabled:1;
 			/* generation for statahead */
 			unsigned int			lli_sa_generation;
+			/* rw lock protects lli_lsm_md */
+			struct rw_semaphore		lli_lsm_sem;
 			/* directory stripe information */
 			struct lmv_stripe_md		*lli_lsm_md;
 			/* default directory stripe offset.  This is extracted
@@ -978,6 +980,7 @@ enum {
 	LUSTRE_OPC_ANY		= 5,
 };
 
+void ll_unlock_md_op_lsm(struct md_op_data *op_data);
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      struct inode *i1, struct inode *i2,
 				      const char *name, size_t namelen,

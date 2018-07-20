@@ -775,6 +775,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	if (rc < 0)
 		GOTO(out, retval = ERR_PTR(rc));
 
+	/* dir layout may change */
+	ll_unlock_md_op_lsm(op_data);
 	rc = ll_lookup_it_finish(req, it, parent, &dentry);
         if (rc != 0) {
                 ll_intent_release(it);

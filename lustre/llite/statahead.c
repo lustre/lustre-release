@@ -330,6 +330,58 @@ __sa_make_ready(struct ll_statahead_info *sai, struct sa_entry *entry, int ret)
 	return (index == sai->sai_index_wait);
 }
 
+/* finish async stat RPC arguments */
+static void sa_fini_data(struct md_enqueue_info *minfo)
+{
+	ll_unlock_md_op_lsm(&minfo->mi_data);
+	iput(minfo->mi_dir);
+	OBD_FREE_PTR(minfo);
+}
+
+static int ll_statahead_interpret(struct ptlrpc_request *req,
+				  struct md_enqueue_info *minfo, int rc);
+
+/*
+ * prepare arguments for async stat RPC.
+ */
+static struct md_enqueue_info *
+sa_prep_data(struct inode *dir, struct inode *child, struct sa_entry *entry)
+{
+	struct md_enqueue_info   *minfo;
+	struct ldlm_enqueue_info *einfo;
+	struct md_op_data        *op_data;
+
+	OBD_ALLOC_PTR(minfo);
+	if (minfo == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	op_data = ll_prep_md_op_data(&minfo->mi_data, dir, child,
+				     entry->se_qstr.name, entry->se_qstr.len, 0,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data)) {
+		OBD_FREE_PTR(minfo);
+		return (struct md_enqueue_info *)op_data;
+	}
+
+	if (child == NULL)
+		op_data->op_fid2 = entry->se_fid;
+
+	minfo->mi_it.it_op = IT_GETATTR;
+	minfo->mi_dir = igrab(dir);
+	minfo->mi_cb = ll_statahead_interpret;
+	minfo->mi_cbdata = entry;
+
+	einfo = &minfo->mi_einfo;
+	einfo->ei_type   = LDLM_IBITS;
+	einfo->ei_mode   = it_to_lock_mode(&minfo->mi_it);
+	einfo->ei_cb_bl  = ll_md_blocking_ast;
+	einfo->ei_cb_cp  = ldlm_completion_ast;
+	einfo->ei_cb_gl  = NULL;
+	einfo->ei_cbdata = NULL;
+
+	return minfo;
+}
+
 /*
  * release resources used in async stat RPC, update entry state and wakeup if
  * scanner process it waiting on this entry.
@@ -346,8 +398,7 @@ sa_make_ready(struct ll_statahead_info *sai, struct sa_entry *entry, int ret)
 	if (minfo) {
 		entry->se_minfo = NULL;
 		ll_intent_release(&minfo->mi_it);
-		iput(minfo->mi_dir);
-		OBD_FREE_PTR(minfo);
+		sa_fini_data(minfo);
 	}
 
 	if (req) {
@@ -582,14 +633,14 @@ static void sa_instantiate(struct ll_statahead_info *sai,
 	int rc = 0;
 	ENTRY;
 
-        LASSERT(entry->se_handle != 0);
+	LASSERT(entry->se_handle != 0);
 
-        minfo = entry->se_minfo;
-        it = &minfo->mi_it;
-        req = entry->se_req;
-        body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-        if (body == NULL)
-                GOTO(out, rc = -EFAULT);
+	minfo = entry->se_minfo;
+	it = &minfo->mi_it;
+	req = entry->se_req;
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		GOTO(out, rc = -EFAULT);
 
 	child = entry->se_inode;
 	if (child != NULL) {
@@ -604,25 +655,25 @@ static void sa_instantiate(struct ll_statahead_info *sai,
 
 	it->it_lock_handle = entry->se_handle;
 	rc = md_revalidate_lock(ll_i2mdexp(dir), it, ll_inode2fid(dir), NULL);
-        if (rc != 1)
-                GOTO(out, rc = -EAGAIN);
+	if (rc != 1)
+		GOTO(out, rc = -EAGAIN);
 
-        rc = ll_prep_inode(&child, req, dir->i_sb, it);
-        if (rc)
-                GOTO(out, rc);
+	rc = ll_prep_inode(&child, req, dir->i_sb, it);
+	if (rc)
+		GOTO(out, rc);
 
 	CDEBUG(D_READA, "%s: setting %.*s"DFID" l_data to inode %p\n",
 	       ll_get_fsname(child->i_sb, NULL, 0),
 	       entry->se_qstr.len, entry->se_qstr.name,
 	       PFID(ll_inode2fid(child)), child);
-        ll_set_lock_data(ll_i2sbi(dir)->ll_md_exp, child, it, NULL);
+	ll_set_lock_data(ll_i2sbi(dir)->ll_md_exp, child, it, NULL);
 
-        entry->se_inode = child;
+	entry->se_inode = child;
 
-        if (agl_should_run(sai, child))
-                ll_agl_add(sai, child, entry->se_index);
+	if (agl_should_run(sai, child))
+		ll_agl_add(sai, child, entry->se_index);
 
-        EXIT;
+	EXIT;
 
 out:
 	/* sa_make_ready() will drop ldlm ibits lock refcount by calling
@@ -686,8 +737,7 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 
 	if (rc != 0) {
 		ll_intent_release(it);
-		iput(dir);
-		OBD_FREE_PTR(minfo);
+		sa_fini_data(minfo);
 	} else {
 		/* release ibits lock ASAP to avoid deadlock when statahead
 		 * thread enqueues lock on parent in readdir and another
@@ -695,6 +745,7 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 		 * unlink. */
 		handle = it->it_lock_handle;
 		ll_intent_drop_lock(it);
+		ll_unlock_md_op_lsm(&minfo->mi_data);
 	}
 
 	spin_lock(&lli->lli_sa_lock);
@@ -722,54 +773,6 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 	spin_unlock(&lli->lli_sa_lock);
 
 	RETURN(rc);
-}
-
-/* finish async stat RPC arguments */
-static void sa_fini_data(struct md_enqueue_info *minfo)
-{
-        iput(minfo->mi_dir);
-        OBD_FREE_PTR(minfo);
-}
-
-/*
- * prepare arguments for async stat RPC.
- */
-static struct md_enqueue_info *
-sa_prep_data(struct inode *dir, struct inode *child, struct sa_entry *entry)
-{
-	struct md_enqueue_info   *minfo;
-	struct ldlm_enqueue_info *einfo;
-	struct md_op_data        *op_data;
-
-	OBD_ALLOC_PTR(minfo);
-	if (minfo == NULL)
-		return ERR_PTR(-ENOMEM);
-
-	op_data = ll_prep_md_op_data(&minfo->mi_data, dir, child,
-				     entry->se_qstr.name, entry->se_qstr.len, 0,
-				     LUSTRE_OPC_ANY, NULL);
-	if (IS_ERR(op_data)) {
-		OBD_FREE_PTR(minfo);
-		return (struct md_enqueue_info *)op_data;
-	}
-
-	if (child == NULL)
-		op_data->op_fid2 = entry->se_fid;
-
-	minfo->mi_it.it_op = IT_GETATTR;
-	minfo->mi_dir = igrab(dir);
-	minfo->mi_cb = ll_statahead_interpret;
-	minfo->mi_cbdata = entry;
-
-	einfo = &minfo->mi_einfo;
-	einfo->ei_type   = LDLM_IBITS;
-	einfo->ei_mode   = it_to_lock_mode(&minfo->mi_it);
-	einfo->ei_cb_bl  = ll_md_blocking_ast;
-	einfo->ei_cb_cp  = ldlm_completion_ast;
-	einfo->ei_cb_gl  = NULL;
-	einfo->ei_cbdata = NULL;
-
-	return minfo;
 }
 
 /* async stat for file not found in dcache */
@@ -813,20 +816,18 @@ static int sa_revalidate(struct inode *dir, struct sa_entry *entry,
 	if (d_mountpoint(dentry))
 		RETURN(1);
 
+	minfo = sa_prep_data(dir, inode, entry);
+	if (IS_ERR(minfo))
+		RETURN(PTR_ERR(minfo));
+
 	entry->se_inode = igrab(inode);
 	rc = md_revalidate_lock(ll_i2mdexp(dir), &it, ll_inode2fid(inode),
 				NULL);
 	if (rc == 1) {
 		entry->se_handle = it.it_lock_handle;
 		ll_intent_release(&it);
+		sa_fini_data(minfo);
 		RETURN(1);
-	}
-
-	minfo = sa_prep_data(dir, inode, entry);
-	if (IS_ERR(minfo)) {
-		entry->se_inode = NULL;
-		iput(inode);
-		RETURN(PTR_ERR(minfo));
 	}
 
 	rc = md_intent_getattr_async(ll_i2mdexp(dir), minfo);
@@ -1003,8 +1004,7 @@ static int ll_statahead_thread(void *arg)
 	CDEBUG(D_READA, "statahead thread starting: sai %p, parent %.*s\n",
 	       sai, parent->d_name.len, parent->d_name.name);
 
-	op_data = ll_prep_md_op_data(NULL, dir, dir, NULL, 0, 0,
-				     LUSTRE_OPC_ANY, dir);
+	OBD_ALLOC_PTR(op_data);
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
 
@@ -1026,8 +1026,16 @@ static int ll_statahead_thread(void *arg)
 		struct lu_dirpage *dp;
 		struct lu_dirent  *ent;
 
+		op_data = ll_prep_md_op_data(op_data, dir, dir, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, dir);
+		if (IS_ERR(op_data)) {
+			rc = PTR_ERR(op_data);
+			break;
+		}
+
 		sai->sai_in_readpage = 1;
 		page = ll_get_dir_page(dir, op_data, pos, &chain);
+		ll_unlock_md_op_lsm(op_data);
 		sai->sai_in_readpage = 0;
 		if (IS_ERR(page)) {
 			rc = PTR_ERR(page);

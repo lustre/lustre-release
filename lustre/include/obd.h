@@ -843,6 +843,8 @@ struct md_op_data {
 	s64			op_mod_time;
 	const char		*op_name;
 	size_t			op_namelen;
+	struct rw_semaphore	*op_mea1_sem;
+	struct rw_semaphore	*op_mea2_sem;
 	struct lmv_stripe_md	*op_mea1;
 	struct lmv_stripe_md	*op_mea2;
 	__u32			op_suppgids[2];

@@ -82,6 +82,23 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 
 	return true;
 }
+
+static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
+{
+	int i;
+
+	CDEBUG(mask, "magic %#x stripe count %d master mdt %d hash type %#x "
+		"version %d migrate offset %d migrate hash %#x pool %s\n",
+		lsm->lsm_md_magic, lsm->lsm_md_stripe_count,
+		lsm->lsm_md_master_mdt_index, lsm->lsm_md_hash_type,
+		lsm->lsm_md_layout_version, lsm->lsm_md_migrate_offset,
+		lsm->lsm_md_migrate_hash, lsm->lsm_md_pool_name);
+
+	for (i = 0; i < lsm->lsm_md_stripe_count; i++)
+		CDEBUG(mask, "stripe[%d] "DFID"\n",
+		       i, PFID(&lsm->lsm_md_oinfo[i].lmo_fid));
+}
+
 union lmv_mds_md;
 
 void lmv_free_memmd(struct lmv_stripe_md *lsm);

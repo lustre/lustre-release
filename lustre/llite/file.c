@@ -4428,12 +4428,15 @@ out:
 
 static int ll_merge_md_attr(struct inode *inode)
 {
+	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_attr attr = { 0 };
 	int rc;
 
-	LASSERT(ll_i2info(inode)->lli_lsm_md != NULL);
+	LASSERT(lli->lli_lsm_md != NULL);
+	down_read(&lli->lli_lsm_sem);
 	rc = md_merge_attr(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
 			   &attr, ll_md_blocking_ast);
+	up_read(&lli->lli_lsm_sem);
 	if (rc != 0)
 		RETURN(rc);
 
