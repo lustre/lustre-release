@@ -3127,7 +3127,7 @@ test_default_quota() {
 	local qdtype="-U"
 	local qs="-b"
 	local qh="-B"
-	local LIMIT=102400 #100M disk space
+	local LIMIT=20480 #20M disk space
 	local TESTFILE="$DIR/$tdir/$tfile-0"
 
 	[ $qtype == "-p" ] && ! is_project_quota_supported &&
@@ -3189,7 +3189,7 @@ test_default_quota() {
 
 	log "Test not out of quota"
 	if [ $qpool == "data" ]; then
-		$RUNAS $DD of=$TESTFILE count=$((LIMIT/2 >> 10)) ||
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT/2 >> 10)) oflag=sync ||
 			quota_error $qtype $qid "write failed, expect succeed"
 	else
 		$RUNAS createmany -m $TESTFILE $((LIMIT/2)) ||
@@ -3204,7 +3204,7 @@ test_default_quota() {
 	cancel_lru_locks mdc
 	sync; sync_all_data || true
 	if [ $qpool == "data" ]; then
-		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) &&
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) oflag=sync &&
 			quota_error $qtype $qid "write succeed, expect EDQUOT"
 	else
 		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) &&
@@ -3222,7 +3222,7 @@ test_default_quota() {
 	cancel_lru_locks mdc
 	sync; sync_all_data || true
 	if [ $qpool == "data" ]; then
-		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) ||
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) oflag=sync ||
 			quota_error $qtype $qid "write failed, expect succeed"
 	else
 		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) ||
@@ -3239,7 +3239,7 @@ test_default_quota() {
 	cancel_lru_locks mdc
 	sync; sync_all_data || true
 	if [ $qpool == "data" ]; then
-		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) &&
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) oflag=sync &&
 			quota_error $qtype $qid "write succeed, expect EQUOT"
 	else
 		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) &&
@@ -3256,7 +3256,7 @@ test_default_quota() {
 	cancel_lru_locks mdc
 	sync; sync_all_data || true
 	if [ $qpool == "data" ]; then
-		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) ||
+		$RUNAS $DD of=$TESTFILE count=$((LIMIT*2 >> 10)) oflag=sync ||
 			quota_error $qtype $qid "write failed, expect succeed"
 	else
 		$RUNAS createmany -m $TESTFILE $((LIMIT*2)) ||
