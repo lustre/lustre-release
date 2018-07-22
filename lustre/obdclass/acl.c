@@ -49,20 +49,22 @@
 #ifdef CONFIG_FS_POSIX_ACL
 
 static inline void lustre_posix_acl_le_to_cpu(posix_acl_xattr_entry *d,
-                                              posix_acl_xattr_entry *s)
+					      posix_acl_xattr_entry *s)
 {
-        d->e_tag        = le16_to_cpu(s->e_tag);
-        d->e_perm       = le16_to_cpu(s->e_perm);
-        d->e_id         = le32_to_cpu(s->e_id);
+	d->e_tag = le16_to_cpu(s->e_tag);
+	d->e_perm = le16_to_cpu(s->e_perm);
+	d->e_id = le32_to_cpu(s->e_id);
 }
 
-/*static inline void lustre_posix_acl_cpu_to_le(posix_acl_xattr_entry *d,
-                                              posix_acl_xattr_entry *s)
+#if 0
+static inline void lustre_posix_acl_cpu_to_le(posix_acl_xattr_entry *d,
+					      posix_acl_xattr_entry *s)
 {
-        d->e_tag        = cpu_to_le16(s->e_tag);
-        d->e_perm       = cpu_to_le16(s->e_perm);
-        d->e_id         = cpu_to_le32(s->e_id);
-}*/
+	d->e_tag = cpu_to_le16(s->e_tag);
+	d->e_perm = cpu_to_le16(s->e_perm);
+	d->e_id = cpu_to_le32(s->e_id);
+}
+#endif
 
 /*
  * Check permission based on POSIX ACL.
@@ -71,80 +73,79 @@ int lustre_posix_acl_permission(struct lu_ucred *mu, const struct lu_attr *la,
 				int want, posix_acl_xattr_entry *entry,
 				int count)
 {
-        posix_acl_xattr_entry *pa, *pe, *mask_obj;
-        posix_acl_xattr_entry ae, me;
-        int found = 0;
+	posix_acl_xattr_entry *pa, *pe, *mask_obj;
+	posix_acl_xattr_entry ae, me;
+	int found = 0;
 
-        if (count <= 0)
-                return -EACCES;
+	if (count <= 0)
+		return -EACCES;
 
-        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
-                lustre_posix_acl_le_to_cpu(&ae, pa);
-                switch (ae.e_tag) {
-                case ACL_USER_OBJ:
-                        /* (May have been checked already) */
+	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
+		lustre_posix_acl_le_to_cpu(&ae, pa);
+		switch (ae.e_tag) {
+		case ACL_USER_OBJ:
+			/* (May have been checked already) */
 			if (la->la_uid == mu->uc_fsuid)
 				goto check_perm;
-                        break;
-                case ACL_USER:
+			break;
+		case ACL_USER:
 			if (ae.e_id == mu->uc_fsuid)
 				goto mask;
-                        break;
-                case ACL_GROUP_OBJ:
-                        if (lustre_in_group_p(mu, la->la_gid)) {
-                                found = 1;
-                                if ((ae.e_perm & want) == want)
-                                        goto mask;
-                        }
-                        break;
-                case ACL_GROUP:
-                        if (lustre_in_group_p(mu, ae.e_id)) {
-                                found = 1;
-                                if ((ae.e_perm & want) == want)
-                                        goto mask;
-                        }
-                        break;
-                case ACL_MASK:
-                        break;
-                case ACL_OTHER:
-                        if (found)
-                                return -EACCES;
-                        else
-                                goto check_perm;
-                default:
-                        return -EIO;
-                }
-        }
-        return -EIO;
+			break;
+		case ACL_GROUP_OBJ:
+			if (lustre_in_group_p(mu, la->la_gid)) {
+				found = 1;
+				if ((ae.e_perm & want) == want)
+					goto mask;
+			}
+			break;
+		case ACL_GROUP:
+			if (lustre_in_group_p(mu, ae.e_id)) {
+				found = 1;
+				if ((ae.e_perm & want) == want)
+					goto mask;
+			}
+			break;
+		case ACL_MASK:
+			break;
+		case ACL_OTHER:
+			if (found)
+				return -EACCES;
+			goto check_perm;
+		default:
+			return -EIO;
+}
+	}
+	return -EIO;
 
 mask:
-        for (mask_obj = pa + 1; mask_obj <= pe; mask_obj++) {
-                lustre_posix_acl_le_to_cpu(&me, mask_obj);
-                if (me.e_tag == ACL_MASK) {
-                        if ((ae.e_perm & me.e_perm & want) == want)
-                                return 0;
+	for (mask_obj = pa + 1; mask_obj <= pe; mask_obj++) {
+		lustre_posix_acl_le_to_cpu(&me, mask_obj);
+		if (me.e_tag == ACL_MASK) {
+			if ((ae.e_perm & me.e_perm & want) == want)
+				return 0;
 
-                        return -EACCES;
-                }
-        }
+			return -EACCES;
+		}
+	}
 
 check_perm:
-        if ((ae.e_perm & want) == want)
-                return 0;
+	if ((ae.e_perm & want) == want)
+		return 0;
 
-        return -EACCES;
+	return -EACCES;
 }
 EXPORT_SYMBOL(lustre_posix_acl_permission);
 
 /*
  * Modify the ACL for the chmod.
  */
-int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry, __u32 mode,
-                                int count)
+int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry, u32 mode,
+				int count)
 {
 	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
 
-        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
+	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
 		switch (le16_to_cpu(pa->e_tag)) {
 		case ACL_USER_OBJ:
 			pa->e_perm = cpu_to_le16((mode & S_IRWXU) >> 6);
@@ -187,8 +188,8 @@ lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry, mode_t *mode_p,
 			    int count)
 {
 	posix_acl_xattr_entry *pa, *pe;
-	mode_t                 mode = 0;
-	int                    not_equiv = 0;
+	mode_t mode = 0;
+	int not_equiv = 0;
 
 	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
 		__u16 perm = le16_to_cpu(pa->e_perm);
@@ -224,19 +225,19 @@ EXPORT_SYMBOL(lustre_posix_acl_equiv_mode);
 /*
  * Modify acl when creating a new object.
  */
-int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry, __u32 *pmode,
-                                 int count)
+int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry, u32 *pmode,
+				 int count)
 {
-        posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
-        posix_acl_xattr_entry ae;
-	__u32 mode = *pmode;
+	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
+	posix_acl_xattr_entry ae;
+	u32 mode = *pmode;
 	int not_equiv = 0;
 
-        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
-                lustre_posix_acl_le_to_cpu(&ae, pa);
-                switch (ae.e_tag) {
-                case ACL_USER_OBJ:
-                        ae.e_perm &= (mode >> 6) | ~S_IRWXO;
+	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
+		lustre_posix_acl_le_to_cpu(&ae, pa);
+		switch (ae.e_tag) {
+		case ACL_USER_OBJ:
+			ae.e_perm &= (mode >> 6) | ~(0007);
 			pa->e_perm = cpu_to_le16(ae.e_perm);
 			mode &= (ae.e_perm << 6) | ~S_IRWXU;
 			break;
@@ -244,39 +245,39 @@ int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry, __u32 *pmode,
 		case ACL_GROUP:
 			not_equiv = 1;
 			break;
-                case ACL_GROUP_OBJ:
+		case ACL_GROUP_OBJ:
 			group_obj = pa;
-                        break;
-                case ACL_OTHER:
-                        ae.e_perm &= mode | ~S_IRWXO;
+			break;
+		case ACL_OTHER:
+			ae.e_perm &= mode | ~(0007);
 			pa->e_perm = cpu_to_le16(ae.e_perm);
-			mode &= ae.e_perm | ~S_IRWXO;
-                        break;
-                case ACL_MASK:
+			mode &= ae.e_perm | ~(0007);
+			break;
+		case ACL_MASK:
 			mask_obj = pa;
 			not_equiv = 1;
-                        break;
+			break;
 		default:
 			return -EIO;
-                }
-        }
+		}
+	}
 
 	if (mask_obj) {
 		ae.e_perm = le16_to_cpu(mask_obj->e_perm) &
-                            ((mode >> 3) | ~S_IRWXO);
+					((mode >> 3) | ~(0007));
 		mode &= (ae.e_perm << 3) | ~S_IRWXG;
-                mask_obj->e_perm = cpu_to_le16(ae.e_perm);
+		mask_obj->e_perm = cpu_to_le16(ae.e_perm);
 	} else {
 		if (!group_obj)
 			return -EIO;
 		ae.e_perm = le16_to_cpu(group_obj->e_perm) &
-                            ((mode >> 3) | ~S_IRWXO);
+					((mode >> 3) | ~(0007));
 		mode &= (ae.e_perm << 3) | ~S_IRWXG;
-                group_obj->e_perm = cpu_to_le16(ae.e_perm);
+		group_obj->e_perm = cpu_to_le16(ae.e_perm);
 	}
 
 	*pmode = (*pmode & ~S_IRWXUGO) | mode;
-        return not_equiv;
+	return not_equiv;
 }
 EXPORT_SYMBOL(lustre_posix_acl_create_masq);
 #endif
