@@ -760,19 +760,41 @@ again:
 	return rc;
 }
 
+static inline bool linkea_reclen_is_valid(const struct linkea_data *ldata)
+{
+	if (ldata->ld_reclen <= 0)
+		return false;
+
+	if ((char *)ldata->ld_lee + ldata->ld_reclen >
+	    (char *)ldata->ld_leh + ldata->ld_leh->leh_len)
+		return false;
+
+	return true;
+}
+
+static inline bool linkea_entry_is_valid(const struct linkea_data *ldata,
+					 const struct lu_name *cname,
+					 const struct lu_fid *pfid)
+{
+	if (!linkea_reclen_is_valid(ldata))
+		return false;
+
+	if (cname->ln_namelen <= 0 || cname->ln_namelen > NAME_MAX)
+		return false;
+
+	if (!fid_is_sane(pfid))
+		return false;
+
+	return true;
+}
+
 static int lfsck_namespace_unpack_linkea_entry(struct linkea_data *ldata,
 					       struct lu_name *cname,
 					       struct lu_fid *pfid,
 					       char *buf, const int buflen)
 {
 	linkea_entry_unpack(ldata->ld_lee, &ldata->ld_reclen, cname, pfid);
-	if (unlikely(ldata->ld_reclen <= 0 ||
-		     ldata->ld_reclen + sizeof(struct link_ea_header) >
-			ldata->ld_leh->leh_len ||
-		     cname->ln_namelen <= 0 ||
-		     cname->ln_namelen > NAME_MAX ||
-		     cname->ln_namelen >= buflen ||
-		     !fid_is_sane(pfid)))
+	if (unlikely(!linkea_entry_is_valid(ldata, cname, pfid)))
 		return -EINVAL;
 
 	/* To guarantee the 'name' is terminated with '0'. */
@@ -790,9 +812,7 @@ static void lfsck_linkea_del_buf(struct linkea_data *ldata,
 
 	/* If current record is corrupted, all the subsequent
 	 * records will be dropped. */
-	if (unlikely(ldata->ld_reclen <= 0 ||
-		     ldata->ld_reclen + sizeof(struct link_ea_header) >
-			ldata->ld_leh->leh_len)) {
+	if (unlikely(!linkea_reclen_is_valid(ldata))) {
 		void *ptr = ldata->ld_lee;
 
 		ldata->ld_leh->leh_len = sizeof(struct link_ea_header);
@@ -830,7 +850,10 @@ static int lfsck_namespace_filter_linkea_entry(struct linkea_data *ldata,
 	while (ldata->ld_lee != NULL) {
 		ldata->ld_reclen = (ldata->ld_lee->lee_reclen[0] << 8) |
 				   ldata->ld_lee->lee_reclen[1];
-		if (unlikely(ldata->ld_reclen == oldlen &&
+		if (unlikely(!linkea_reclen_is_valid(ldata))) {
+			lfsck_linkea_del_buf(ldata, NULL);
+			LASSERT(ldata->ld_lee == NULL);
+		} else if (unlikely(ldata->ld_reclen == oldlen &&
 			     memcmp(ldata->ld_lee, oldlee, oldlen) == 0)) {
 			repeated++;
 			if (!remove)
@@ -3386,8 +3409,7 @@ static int lfsck_namespace_check_agent_entry(const struct lu_env *env,
 	while (ldata.ld_lee != NULL && !remote) {
 		linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen,
 				    cname, pfid);
-		/* If parent FID is unknown, not verify agent entry. */
-		if (!fid_is_sane(pfid))
+		if (!linkea_entry_is_valid(&ldata, cname, pfid))
 			GOTO(out, rc = 0);
 
 		fld_range_set_mdt(range);
@@ -4400,6 +4422,8 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 		if (!fid_is_sane(pfid)) {
 			rc = lfsck_namespace_trace_update(env, com, fid,
 						  LNTF_CHECK_PARENT, true);
+		} else if (!linkea_entry_is_valid(&ldata, cname, pfid)) {
+			GOTO(out, rc);
 		} else {
 			fld_range_set_mdt(range);
 			rc = fld_server_lookup(env, ss->ss_server_fld,
@@ -6679,6 +6703,9 @@ int lfsck_links_get_first(const struct lu_env *env, struct dt_object *obj,
 
 	linkea_first_entry(&ldata);
 	linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen, cname, pfid);
+	if (!linkea_entry_is_valid(&ldata, cname, pfid))
+		return -EINVAL;
+
 	/* To guarantee the 'name' is terminated with '0'. */
 	memcpy(name, cname->ln_name, cname->ln_namelen);
 	name[cname->ln_namelen] = 0;
