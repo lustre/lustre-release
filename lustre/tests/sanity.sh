@@ -18654,6 +18654,8 @@ test_415() {
 	local duration
 
 	total=500
+	# this test may be slow on ZFS
+	[ "$(facet_fstype mds1)" == "zfs" ] && total=100
 
 	# though this test is designed for striped directory, let's test normal
 	# directory too since lock is always saved as CoS lock.
