@@ -3074,6 +3074,7 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	int rc = 0;
 	struct fsxattr fsxattr;
 	struct cl_object *obj;
+	struct iattr *attr;
 	int flags;
 
 	/* only root could change project ID */
@@ -3088,7 +3089,7 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	if (copy_from_user(&fsxattr,
 			   (const struct fsxattr __user *)arg,
 			   sizeof(fsxattr)))
-		GOTO(out_fsxattr1, rc = -EFAULT);
+		GOTO(out_fsxattr, rc = -EFAULT);
 
 	flags = ll_xflags_to_inode_flags(fsxattr.fsx_xflags);
 	op_data->op_attr_flags = ll_inode_to_ext_flags(flags);
@@ -3099,21 +3100,21 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL,
 			0, &req);
 	ptlrpc_req_finished(req);
-
+	if (rc)
+		GOTO(out_fsxattr, rc);
+	ll_update_inode_flags(inode, op_data->op_attr_flags);
 	obj = ll_i2info(inode)->lli_clob;
-	if (obj) {
-		struct iattr *attr;
+	if (obj == NULL)
+		GOTO(out_fsxattr, rc);
 
-		ll_update_inode_flags(inode, op_data->op_attr_flags);
-		OBD_ALLOC_PTR(attr);
-		if (attr == NULL)
-			GOTO(out_fsxattr1, rc = -ENOMEM);
-		attr->ia_valid = ATTR_ATTR_FLAG;
-		rc = cl_setattr_ost(obj, attr, fsxattr.fsx_xflags);
+	OBD_ALLOC_PTR(attr);
+	if (attr == NULL)
+		GOTO(out_fsxattr, rc = -ENOMEM);
 
-		OBD_FREE_PTR(attr);
-	}
-out_fsxattr1:
+	attr->ia_valid = ATTR_ATTR_FLAG;
+	rc = cl_setattr_ost(obj, attr, fsxattr.fsx_xflags);
+	OBD_FREE_PTR(attr);
+out_fsxattr:
 	ll_finish_md_op_data(op_data);
 	RETURN(rc);
 }
