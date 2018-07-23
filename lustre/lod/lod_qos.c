@@ -211,6 +211,10 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	if (sfs->os_state & OS_STATE_READONLY)
 		rc = -EROFS;
 
+	/* object precreation is skipped on the OST with max_create_count=0 */
+	if (sfs->os_state & OS_STATE_NOPRECREATE)
+		rc = -ENOBUFS;
+
 	/* check whether device has changed state (active, inactive) */
 	if (rc != 0 && ost->ltd_active) {
 		/* turned inactive? */
