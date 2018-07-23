@@ -502,15 +502,21 @@ static int lov_io_slice_init(struct lov_io *lio,
 {
 	int index;
 	int result = 0;
+	bool rdonly;
 	ENTRY;
 
 	io->ci_result = 0;
 	lio->lis_object = obj;
 	lio->lis_cached_entry = LIS_CACHE_ENTRY_NONE;
 
+	rdonly = lsm_is_rdonly(obj->lo_lsm);
 	switch (io->ci_type) {
 	case CIT_READ:
 	case CIT_WRITE:
+		if (io->ci_type == CIT_WRITE && rdonly) {
+			io->ci_need_pccro_clear = 1;
+			GOTO(out, result = 1);
+		}
 		lio->lis_pos = io->u.ci_rw.crw_pos;
 		lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_bytes;
 		lio->lis_io_endpos = lio->lis_endpos;
@@ -532,9 +538,17 @@ static int lov_io_slice_init(struct lov_io *lio,
 
 	case CIT_SETATTR:
 		if (cl_io_is_fallocate(io)) {
+			if (rdonly) {
+				io->ci_need_pccro_clear = 1;
+				GOTO(out, result = 1);
+			}
 			lio->lis_pos = io->u.ci_setattr.sa_falloc_offset;
 			lio->lis_endpos = io->u.ci_setattr.sa_falloc_end;
 		} else if (cl_io_is_trunc(io)) {
+			if (rdonly) {
+				io->ci_need_pccro_clear = 1;
+				GOTO(out, result = 1);
+			}
 			lio->lis_pos = io->u.ci_setattr.sa_attr.lvb_size;
 			lio->lis_endpos = OBD_OBJECT_EOF;
 		} else {
@@ -550,6 +564,11 @@ static int lov_io_slice_init(struct lov_io *lio,
 
 	case CIT_FAULT: {
 		pgoff_t index = io->u.ci_fault.ft_index;
+
+		if (cl_io_is_mkwrite(io) && rdonly) {
+			io->ci_need_pccro_clear = 1;
+			GOTO(out, result = -ENODATA);
+		}
 
 		lio->lis_pos = index << PAGE_SHIFT;
 		lio->lis_endpos = (index + 1) << PAGE_SHIFT;

@@ -46,18 +46,38 @@
 
 /**
  * Layout component, which contains all attributes of a plain
- * V1/V3 layout.
+ * V1/V3/FOREIGN(HSM) layout.
  */
 struct llapi_layout_comp {
 	uint64_t	llc_pattern;
-	uint64_t	llc_stripe_size;
-	uint64_t	llc_stripe_count;
-	uint64_t	llc_stripe_offset;
-	/* Add 1 so user always gets back a null terminated string. */
-	char		llc_pool_name[LOV_MAXPOOLNAME + 1];
-	/** Number of objects in llc_objects array if was initialized. */
-	uint32_t	llc_objects_count;
-	struct		lov_user_ost_data_v1 *llc_objects;
+	union {
+		struct { /* For plain layout. */
+			uint64_t	llc_stripe_size;
+			uint64_t	llc_stripe_count;
+			uint64_t	llc_stripe_offset;
+			/**
+			 * Add 1 so user always gets back a null terminated
+			 * string.
+			 */
+			char		llc_pool_name[LOV_MAXPOOLNAME + 1];
+			/**
+			 * Number of objects in llc_objects array if was
+			 * initialized.
+			 */
+			uint32_t	llc_objects_count;
+			struct lov_user_ost_data_v1 *llc_objects;
+		};
+		struct { /* For FOREIGN/HSM layout. */
+			uint32_t	 llc_length;
+			uint32_t	 llc_type;
+			uint32_t	 llc_hsm_flags;
+			union {
+				struct lov_hsm_base	 llc_hsm;
+				char			*llc_value;
+			};
+		};
+	};
+
 	/* fields used only for composite layouts */
 	struct lu_extent	llc_extent;	/* [start, end) of component */
 	uint32_t		llc_id;		/* unique ID of component */
@@ -67,6 +87,10 @@ struct llapi_layout_comp {
 						   components list */
 	bool		llc_ondisk;
 };
+
+#define llc_archive_id	llc_hsm.lhb_archive_id
+#define llc_archive_ver	llc_hsm.lhb_archive_ver
+#define llc_uuid	llc_hsm.lhb_uuid
 
 /**
  * An Opaque data type abstracting the layout of a Lustre file.
@@ -95,6 +119,9 @@ static int llapi_layout_objects_in_lum(struct lov_user_md *lum, size_t lum_size)
 {
 	uint32_t magic;
 	size_t base_size;
+
+	if (lum->lmm_magic == __swab32(LOV_MAGIC_FOREIGN))
+		return 0;
 
 	if (lum_size < lov_user_md_size(0, LOV_MAGIC_V1))
 		return 0;
@@ -162,24 +189,41 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 					ent->lcme_offset);
 			lum_size = ent->lcme_size;
 		}
-		obj_count = llapi_layout_objects_in_lum(lum, lum_size);
 
 		lum->lmm_magic = __swab32(lum->lmm_magic);
-		lum->lmm_pattern = __swab32(lum->lmm_pattern);
-		lum->lmm_stripe_size = __swab32(lum->lmm_stripe_size);
-		lum->lmm_stripe_count = __swab16(lum->lmm_stripe_count);
-		lum->lmm_stripe_offset = __swab16(lum->lmm_stripe_offset);
+		if (lum->lmm_magic == LOV_MAGIC_FOREIGN) {
+			struct lov_hsm_md *lhm;
 
-		if (lum->lmm_magic != LOV_MAGIC_V1) {
-			struct lov_user_md_v3 *v3;
-			v3 = (struct lov_user_md_v3 *)lum;
-			lod = v3->lmm_objects;
+			lhm = (struct lov_hsm_md *)lum;
+			lhm->lhm_length = __swab32(lhm->lhm_length);
+			lhm->lhm_type = __swab32(lhm->lhm_type);
+			lhm->lhm_flags = __swab32(lhm->lhm_flags);
+			if (!lov_hsm_type_supported(lhm->lhm_type))
+				continue;
+
+			lhm->lhm_archive_id = __swab64(lhm->lhm_archive_id);
+			lhm->lhm_archive_ver = __swab64(lhm->lhm_archive_ver);
 		} else {
-			lod = lum->lmm_objects;
-		}
+			obj_count = llapi_layout_objects_in_lum(lum, lum_size);
 
-		for (j = 0; j < obj_count; j++)
-			lod[j].l_ost_idx = __swab32(lod[j].l_ost_idx);
+			lum->lmm_pattern = __swab32(lum->lmm_pattern);
+			lum->lmm_stripe_size = __swab32(lum->lmm_stripe_size);
+			lum->lmm_stripe_count = __swab16(lum->lmm_stripe_count);
+			lum->lmm_stripe_offset =
+				__swab16(lum->lmm_stripe_offset);
+
+			if (lum->lmm_magic != LOV_MAGIC_V1) {
+				struct lov_user_md_v3 *v3;
+
+				v3 = (struct lov_user_md_v3 *)lum;
+				lod = v3->lmm_objects;
+			} else {
+				lod = lum->lmm_objects;
+			}
+
+			for (j = 0; j < obj_count; j++)
+				lod[j].l_ost_idx = __swab32(lod[j].l_ost_idx);
+		}
 	}
 }
 
@@ -274,14 +318,52 @@ static struct llapi_layout_comp *__llapi_comp_alloc(unsigned int num_stripes)
 }
 
 /**
+ * Allocate storage for a HSM component with \a length buffer.
+ *
+ * \retval	valid pointer if allocation succeeds
+ * \retval	NULL if allocate fails
+ */
+static struct llapi_layout_comp *__llapi_comp_hsm_alloc(uint32_t length)
+{
+	struct llapi_layout_comp *comp;
+
+	if (lov_foreign_md_size(length) > XATTR_SIZE_MAX) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	comp = calloc(1, sizeof(*comp));
+	if (comp == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	comp->llc_pattern = LLAPI_LAYOUT_FOREIGN;
+	comp->llc_length = length;
+	comp->llc_type = LU_FOREIGN_TYPE_UNKNOWN;
+	comp->llc_hsm_flags = 0;
+	comp->llc_archive_id = 0;
+	comp->llc_archive_ver = 0;
+	comp->llc_extent.e_start = 0;
+	comp->llc_extent.e_end = LUSTRE_EOF;
+	comp->llc_flags = 0;
+	comp->llc_id = 0;
+	INIT_LIST_HEAD(&comp->llc_list);
+
+	return comp;
+}
+
+/**
  * Free memory allocated for \a comp
  *
  * \param[in] comp	previously allocated by __llapi_comp_alloc()
  */
 static void __llapi_comp_free(struct llapi_layout_comp *comp)
 {
-	if (comp->llc_objects != NULL)
+	if (comp->llc_pattern != LLAPI_LAYOUT_FOREIGN &&
+	    comp->llc_objects != NULL) {
 		free(comp->llc_objects);
+	}
 	free(comp);
 }
 
@@ -416,6 +498,9 @@ static bool llapi_layout_lum_valid(struct lov_user_md *lum, int lum_size)
 			lum = (struct lov_user_md *)((char *)comp_v1 +
 				comp_v1->lcm_entries[i].lcme_offset);
 			lum_size = comp_v1->lcm_entries[i].lcme_size;
+
+			if (lum->lmm_magic == LOV_MAGIC_FOREIGN)
+				continue;
 		}
 		obj_count = llapi_layout_objects_in_lum(lum, lum_size);
 
@@ -451,7 +536,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 	struct lov_user_md *v1;
 	struct llapi_layout *layout = NULL;
 	struct llapi_layout_comp *comp;
-	int i, ent_count = 0, obj_count;
+	int i, ent_count = 0, obj_count = 0;
 
 	if (lov_xattr == NULL || lov_xattr_size <= 0) {
 		errno = EINVAL;
@@ -532,10 +617,34 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 			ent = NULL;
 		}
 
-		obj_count = llapi_layout_objects_in_lum(v1, lov_xattr_size);
-		comp = __llapi_comp_alloc(obj_count);
-		if (comp == NULL)
-			goto out_layout;
+		if (v1->lmm_magic == LOV_MAGIC_FOREIGN) {
+			struct lov_hsm_md *lhm;
+
+			lhm = (struct lov_hsm_md *)v1;
+			if (!lov_hsm_type_supported(lhm->lhm_type))
+				goto out_layout;
+
+			if (lhm->lhm_length != sizeof(struct lov_hsm_base))
+				goto out_layout;
+
+			comp = __llapi_comp_hsm_alloc(lhm->lhm_length);
+			if (comp == NULL)
+				goto out_layout;
+
+			comp->llc_length = lhm->lhm_length;
+			comp->llc_type = lhm->lhm_type;
+			comp->llc_hsm_flags = lhm->lhm_flags;
+			comp->llc_archive_id = lhm->lhm_archive_id;
+			comp->llc_archive_ver = lhm->lhm_archive_ver;
+			memcpy(comp->llc_uuid, lhm->lhm_archive_uuid,
+			       sizeof(comp->llc_uuid));
+		} else {
+			obj_count = llapi_layout_objects_in_lum(v1,
+								lov_xattr_size);
+			comp = __llapi_comp_alloc(obj_count);
+			if (comp == NULL)
+				goto out_layout;
+		}
 
 		if (ent != NULL) {
 			comp->llc_extent.e_start = ent->lcme_extent.e_start;
@@ -551,6 +660,11 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 			comp->llc_flags = 0;
 		}
 
+		if (v1->lmm_magic == LOV_MAGIC_FOREIGN) {
+			comp->llc_pattern = LLAPI_LAYOUT_FOREIGN;
+			goto comp_add;
+		}
+
 		if (v1->lmm_pattern == LOV_PATTERN_RAID0)
 			comp->llc_pattern = LLAPI_LAYOUT_RAID0;
 		else if (v1->lmm_pattern == (LOV_PATTERN_RAID0 |
@@ -559,8 +673,8 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 		else if (v1->lmm_pattern & LOV_PATTERN_MDT)
 			comp->llc_pattern = LLAPI_LAYOUT_MDT;
 		else
-			/* Lustre only supports RAID0, overstripping
-			 * and DoM for now.
+			/* Lustre only supports RAID0, overstripping,
+			 * DoM and FOREIGN/HSM for now.
 			 */
 			comp->llc_pattern = v1->lmm_pattern;
 
@@ -584,10 +698,16 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 
 		if (v1->lmm_magic != LOV_USER_MAGIC_V1) {
 			const struct lov_user_md_v3 *lumv3;
+			size_t size = sizeof(comp->llc_pool_name);
+			int rc;
+
 			lumv3 = (struct lov_user_md_v3 *)v1;
-			snprintf(comp->llc_pool_name,
-				 sizeof(comp->llc_pool_name),
-				 "%s", lumv3->lmm_pool_name);
+			rc = snprintf(comp->llc_pool_name, size,
+				      "%s", lumv3->lmm_pool_name);
+			/* Avoid GCC 7 format-truncation warning. */
+			if (rc > size)
+				comp->llc_pool_name[size - 1] = 0;
+
 			memcpy(comp->llc_objects, lumv3->lmm_objects,
 			       obj_count * sizeof(lumv3->lmm_objects[0]));
 		} else {
@@ -600,7 +720,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 		if (obj_count != 0)
 			comp->llc_stripe_offset =
 				comp->llc_objects[0].l_ost_idx;
-
+comp_add:
 		comp->llc_ondisk = true;
 		list_add_tail(&comp->llc_list, &layout->llot_comp_list);
 		layout->llot_cur_comp = comp;
@@ -629,6 +749,9 @@ __u32 llapi_pattern_to_lov(uint64_t pattern)
 		break;
 	case LLAPI_LAYOUT_MDT:
 		lov_pattern = LOV_PATTERN_MDT;
+		break;
+	case LLAPI_LAYOUT_FOREIGN:
+		lov_pattern = LOV_PATTERN_FOREIGN;
 		break;
 	case LLAPI_LAYOUT_OVERSTRIPING:
 		lov_pattern = LOV_PATTERN_OVERSTRIPING | LOV_PATTERN_RAID0;
@@ -1160,7 +1283,10 @@ int llapi_layout_stripe_count_get(const struct llapi_layout *layout,
 		return -1;
 	}
 
-	*count = comp->llc_stripe_count;
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN)
+		*count = 0;
+	else
+		*count = comp->llc_stripe_count;
 
 	return 0;
 }
@@ -1254,6 +1380,12 @@ static int layout_stripe_size_get(const struct llapi_layout *layout,
 		return -1;
 	}
 
+	/* FIXME: return a component rather than FOREIGN/HSM component. */
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	comp_ext = comp->llc_flags & LCME_FL_EXTENSION;
 	if ((comp_ext && !extension) || (!comp_ext && extension)) {
 		errno = EINVAL;
@@ -1298,6 +1430,11 @@ static int layout_stripe_size_set(struct llapi_layout *layout,
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
 		return -1;
+
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	comp_ext = comp->llc_flags & LCME_FL_EXTENSION;
 	if ((comp_ext && !extension) || (!comp_ext && extension)) {
@@ -1378,7 +1515,8 @@ int llapi_layout_pattern_set(struct llapi_layout *layout, uint64_t pattern)
 
 	if (pattern != LLAPI_LAYOUT_DEFAULT &&
 	    pattern != LLAPI_LAYOUT_RAID0 && pattern != LLAPI_LAYOUT_MDT
-	    && pattern != LLAPI_LAYOUT_OVERSTRIPING) {
+	    && pattern != LLAPI_LAYOUT_OVERSTRIPING &&
+	    pattern != LLAPI_LAYOUT_FOREIGN) {
 		errno = EOPNOTSUPP;
 		return -1;
 	}
@@ -1420,6 +1558,11 @@ int llapi_layout_ost_index_set(struct llapi_layout *layout, int stripe_number,
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
 		return -1;
+
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	if (!llapi_layout_stripe_index_is_valid(ost_index)) {
 		errno = EINVAL;
@@ -1481,6 +1624,11 @@ int llapi_layout_ost_index_get(const struct llapi_layout *layout,
 	if (comp == NULL)
 		return -1;
 
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	if (index == NULL) {
 		errno = EINVAL;
 		return -1;
@@ -1525,6 +1673,11 @@ int llapi_layout_pool_name_get(const struct llapi_layout *layout, char *dest,
 		return -1;
 	}
 
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	strncpy(dest, comp->llc_pool_name, n);
 
 	return 0;
@@ -1549,6 +1702,11 @@ int llapi_layout_pool_name_set(struct llapi_layout *layout,
 		return -1;
 
 	if (!llapi_pool_name_is_valid(&pool_name)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -1701,6 +1859,12 @@ const char *llapi_layout_flags_string(uint32_t flags)
 		return "wp";
 	case LCM_FL_SYNC_PENDING:
 		return "sp";
+	case LCM_FL_RDONLY | LCM_FL_PCC_RDONLY:
+		return "ro,pccro";
+	case LCM_FL_WRITE_PENDING | LCM_FL_PCC_RDONLY:
+		return "wp,pccro";
+	case LCM_FL_SYNC_PENDING | LCM_FL_PCC_RDONLY:
+		return "sp,pccro";
 	}
 
 	return "0";
@@ -3332,6 +3496,7 @@ enum llapi_layout_comp_sanity_error {
 	LSE_START_GT_END,
 	LSE_ALIGN_END,
 	LSE_ALIGN_EXT,
+	LSE_FOREIGN_EXTENSION,
 	LSE_LAST,
 };
 
@@ -3368,6 +3533,8 @@ const char *const llapi_layout_strerror[] =
 		"The component end must be aligned by the stripe size",
 	[LSE_ALIGN_EXT] =
 		"The extension size must be aligned by the stripe size",
+	[LSE_FOREIGN_EXTENSION] =
+		"FOREIGN components can't be extension space",
 };
 
 struct llapi_layout_sanity_args {
@@ -3500,6 +3667,15 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 		if (!first_comp) {
 			args->lsa_rc = LSE_DOM_FIRST;
 			errno = EINVAL;
+			goto out_err;
+		}
+	}
+
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN ||
+	    comp->llc_pattern == LOV_PATTERN_FOREIGN) {
+		/* FOREING/HSM components can't be extension components */
+		if (comp->llc_flags & LCME_FL_EXTENSION) {
+			args->lsa_rc = LSE_FOREIGN_EXTENSION;
 			goto out_err;
 		}
 	}

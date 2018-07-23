@@ -7768,6 +7768,7 @@ restart:
 		for (i = 0; i < lo->ldo_mirror_count; i++) {
 			if (i == primary)
 				continue;
+
 			rc = lod_declare_update_extents(env, lo, &pri_extent,
 							th, i, 0);
 			/* if update_extents changed the layout, it may have

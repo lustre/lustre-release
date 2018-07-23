@@ -1319,6 +1319,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		comp_cnt = le16_to_cpu(comp_v1->lcm_entry_count);
 		if (comp_cnt == 0)
 			GOTO(out, rc = -EINVAL);
+
 		lo->ldo_layout_gen = le32_to_cpu(comp_v1->lcm_layout_gen);
 		lo->ldo_is_composite = 1;
 		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;

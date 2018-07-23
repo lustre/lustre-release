@@ -357,7 +357,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	}
 
 	/* dynamic layout change needed, send layout intent RPC. */
-	if (io->ci_need_write_intent) {
+	if (io->ci_need_write_intent || io->ci_need_pccro_clear) {
 		enum layout_intent_opc opc = LAYOUT_INTENT_WRITE;
 
 		io->ci_need_write_intent = 0;
@@ -371,6 +371,11 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 
 		if (cl_io_is_trunc(io))
 			opc = LAYOUT_INTENT_TRUNC;
+
+		if (io->ci_need_pccro_clear) {
+			io->ci_need_pccro_clear = 0;
+			opc = LAYOUT_INTENT_PCCRO_CLEAR;
+		}
 
 		rc = ll_layout_write_intent(inode, opc, &io->ci_write_intent);
 		io->ci_result = rc;

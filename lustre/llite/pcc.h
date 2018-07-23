@@ -147,9 +147,11 @@ struct pcc_inode {
 	 */
 	atomic_t		 pcci_refcount;
 	/* Whether readonly or readwrite PCC */
-	enum lu_pcc_type	 pcci_type;
+	enum lu_pcc_type	 pcci_type:8;
 	/* Whether the inode attr is cached locally */
 	bool			 pcci_attr_valid;
+	/* Whether the PCC inode is unlinked at detach */
+	bool			 pcci_unlinked;
 	/* Layout generation */
 	__u32			 pcci_layout_gen;
 	/*
@@ -183,10 +185,8 @@ enum pcc_io_type {
 	PIT_FAULT,
 	/* fsync system call handling */
 	PIT_FSYNC,
-#ifdef HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT
 	/* splice_read system call */
 	PIT_SPLICE_READ,
-#endif
 	/* open system call */
 	PIT_OPEN
 };
@@ -229,6 +229,8 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 int pcc_readwrite_attach_fini(struct file *file, struct inode *inode,
 			      __u32 gen, bool lease_broken, int rc,
 			      bool attached);
+int pcc_ioctl_attach(struct file *file, struct inode *inode,
+		     struct lu_pcc_attach *attach);
 int pcc_ioctl_detach(struct inode *inode, __u32 opt);
 int pcc_ioctl_state(struct file *file, struct inode *inode,
 		    struct lu_pcc_state *state);

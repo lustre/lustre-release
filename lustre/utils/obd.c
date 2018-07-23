@@ -5743,8 +5743,8 @@ int jt_pcc_add(int argc, char **argv)
 
 	if (optind + 2 != argc) {
 		fprintf(stderr,
-			"%s: must specify mount path and PCC path %d:%d\n",
-			jt_cmdname(argv[0]), optind, argc);
+			"%s: must specify mount path and PCC path\n",
+			jt_cmdname(argv[0]));
 		return CMD_HELP;
 	}
 
@@ -5769,7 +5769,7 @@ int jt_pcc_del(int argc, char **argv)
 
 	optind = 1;
 	if (argc != 3) {
-		fprintf(stderr, "%s: require 3 arguments\n",
+		fprintf(stderr, "%s: require 2 arguments\n",
 			jt_cmdname(argv[0]));
 		return CMD_HELP;
 	}
@@ -5793,7 +5793,7 @@ int jt_pcc_clear(int argc, char **argv)
 
 	optind = 1;
 	if (argc != 2) {
-		fprintf(stderr, "%s: require 2 arguments\n",
+		fprintf(stderr, "%s: require 1 arguments\n",
 			jt_cmdname(argv[0]));
 		return CMD_HELP;
 	}
@@ -5814,7 +5814,7 @@ int jt_pcc_list(int argc, char **argv)
 
 	optind = 1;
 	if (argc != 2) {
-		fprintf(stderr, "%s: require 2 arguments\n",
+		fprintf(stderr, "%s: require 1 arguments\n",
 			jt_cmdname(argv[0]));
 		return CMD_HELP;
 	}

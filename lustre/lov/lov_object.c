@@ -1059,6 +1059,9 @@ static int lov_attr_get_composite(const struct lu_env *env,
 		if (!lsm_entry_inited(lov->lo_lsm, index))
 			continue;
 
+		if (lsm_entry_is_foreign(lov->lo_lsm, index))
+			continue;
+
 		result = entry->lle_comp_ops->lco_getattr(env, lov, index,
 							  entry, &lov_attr);
 		if (result < 0)
@@ -2277,6 +2280,7 @@ static int lov_object_layout_get(const struct lu_env *env,
 
 	cl->cl_size = lov_comp_md_size(lsm);
 	cl->cl_layout_gen = lsm->lsm_layout_gen;
+	cl->cl_is_rdonly = lsm->lsm_is_rdonly;
 	cl->cl_is_released = lsm->lsm_is_released;
 	cl->cl_is_composite = lsm_is_composite(lsm->lsm_magic);
 
@@ -2402,6 +2406,9 @@ int lov_read_and_clear_async_rc(struct cl_object *clob)
 				    !lov_pattern_supported(
 					    lov_pattern(lse->lsme_pattern)) ||
 				    !lov_supported_comp_magic(lse->lsme_magic))
+					break;
+
+				if (lsme_is_foreign(lse))
 					break;
 
 				for (j = 0; j < lse->lsme_stripe_count; j++) {

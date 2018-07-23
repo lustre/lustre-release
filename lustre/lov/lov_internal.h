@@ -47,12 +47,32 @@ struct lov_stripe_md_entry {
 	u32			lsme_flags;
 	u32			lsme_pattern;
 	u64			lsme_timestamp;
-	u32			lsme_stripe_size;
-	u16			lsme_stripe_count;
-	u16			lsme_layout_gen;
-	char			lsme_pool_name[LOV_MAXPOOLNAME + 1];
-	struct lov_oinfo       *lsme_oinfo[];
+	union {
+		struct { /* For stripe objects */
+			u32	lsme_stripe_size;
+			u16	lsme_stripe_count;
+			u16	lsme_layout_gen;
+			char	lsme_pool_name[LOV_MAXPOOLNAME + 1];
+			struct lov_oinfo	*lsme_oinfo[];
+		};
+		struct { /* For foreign layout (i.e. HSM, DAOS) */
+			u32	lsme_length;
+			u32	lsme_type;
+			u32	lsme_foreign_flags;
+			u32	lsme_padding;
+			union {
+				/* inline HSM layout data */
+				struct lov_hsm_base	 lsme_hsm;
+				/* Other kind of foreign layout (i.e. DAOS) */
+				char			*lsme_value;
+			};
+		};
+	};
 };
+
+#define lsme_archive_id		lsme_hsm.lhb_archive_id
+#define lsme_archive_ver	lsme_hsm.lhb_archive_ver
+#define lsme_uuid		lsme_hsm.lhb_uuid
 
 static inline bool lsme_is_dom(struct lov_stripe_md_entry *lsme)
 {
@@ -87,6 +107,7 @@ struct lov_stripe_md {
 	u32		lsm_layout_gen;
 	u16		lsm_flags;
 	bool		lsm_is_released;
+	bool		lsm_is_rdonly;
 	u16		lsm_mirror_count;
 	u16		lsm_entry_count;
 	struct lov_stripe_md_entry *lsm_entries[];
@@ -120,6 +141,11 @@ static inline bool lsm_is_composite(__u32 magic)
 	return magic == LOV_MAGIC_COMP_V1;
 }
 
+static inline bool lsm_is_rdonly(const struct lov_stripe_md *lsm)
+{
+	return lsm->lsm_is_rdonly;
+}
+
 static inline size_t lov_comp_md_size(const struct lov_stripe_md *lsm)
 {
 	struct lov_stripe_md_entry *lsme;
@@ -142,13 +168,16 @@ static inline size_t lov_comp_md_size(const struct lov_stripe_md *lsm)
 
 		lsme = lsm->lsm_entries[entry];
 
-		if (lsme_inited(lsme))
-			stripe_count = lsme->lsme_stripe_count;
-		else
-			stripe_count = 0;
+		if (lsme->lsme_magic == LOV_MAGIC_FOREIGN) {
+			size += lov_foreign_md_size(lsme->lsme_length);
+		} else {
+			if (lsme_inited(lsme))
+				stripe_count = lsme->lsme_stripe_count;
+			else
+				stripe_count = 0;
 
-		size += lov_mds_md_size(stripe_count,
-					lsme->lsme_magic);
+			size += lov_mds_md_size(stripe_count, lsme->lsme_magic);
+		}
 	}
 
 	return size;

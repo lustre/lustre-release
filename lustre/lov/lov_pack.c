@@ -182,17 +182,71 @@ static ssize_t lov_lsm_pack_foreign(const struct lov_stripe_md *lsm, void *buf,
 	RETURN(lfm_size);
 }
 
+unsigned int lov_lsme_pack_foreign(struct lov_stripe_md_entry *lsme, void *lmm)
+{
+	struct lov_foreign_md *lfm = (struct lov_foreign_md *)lmm;
+
+	lfm->lfm_magic = cpu_to_le32(lsme->lsme_magic);
+	lfm->lfm_length = cpu_to_le32(lsme->lsme_length);
+	lfm->lfm_type = cpu_to_le32(lsme->lsme_type);
+	lfm->lfm_flags = cpu_to_le32(lsme->lsme_foreign_flags);
+
+	/* TODO: support for foreign layout other than HSM, i.e. DAOS. */
+	if (lov_hsm_type_supported(lsme->lsme_type))
+		lov_foreign_hsm_to_le(lfm, &lsme->lsme_hsm);
+
+	return lov_foreign_md_size(lsme->lsme_length);
+}
+
+unsigned int lov_lsme_pack_v1v3(struct lov_stripe_md_entry *lsme,
+				struct lov_mds_md *lmm)
+{
+	struct lov_ost_data_v1 *lmm_objects;
+	__u16 stripe_count;
+	unsigned int i;
+
+	lmm->lmm_magic = cpu_to_le32(lsme->lsme_magic);
+	/* lmm->lmm_oi not set */
+	lmm->lmm_pattern = cpu_to_le32(lsme->lsme_pattern);
+	lmm->lmm_stripe_size = cpu_to_le32(lsme->lsme_stripe_size);
+	lmm->lmm_stripe_count = cpu_to_le16(lsme->lsme_stripe_count);
+	lmm->lmm_layout_gen = cpu_to_le16(lsme->lsme_layout_gen);
+
+	if (lsme->lsme_magic == LOV_MAGIC_V3) {
+		struct lov_mds_md_v3 *lmmv3 = (struct lov_mds_md_v3 *)lmm;
+
+		strlcpy(lmmv3->lmm_pool_name, lsme->lsme_pool_name,
+			sizeof(lmmv3->lmm_pool_name));
+		lmm_objects = lmmv3->lmm_objects;
+	} else {
+		lmm_objects = ((struct lov_mds_md_v1 *)lmm)->lmm_objects;
+	}
+
+	if (lsme_inited(lsme) && !(lsme->lsme_pattern & LOV_PATTERN_F_RELEASED))
+		stripe_count = lsme->lsme_stripe_count;
+	else
+		stripe_count = 0;
+
+	for (i = 0; i < stripe_count; i++) {
+		struct lov_oinfo *loi = lsme->lsme_oinfo[i];
+
+		ostid_cpu_to_le(&loi->loi_oi, &lmm_objects[i].l_ost_oi);
+		lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
+		lmm_objects[i].l_ost_idx = cpu_to_le32(loi->loi_ost_idx);
+	}
+
+	return lov_mds_md_size(stripe_count, lsme->lsme_magic);
+}
+
 ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 		     size_t buf_size)
 {
 	struct lov_comp_md_v1 *lcmv1 = buf;
 	struct lov_comp_md_entry_v1 *lcme;
-	struct lov_ost_data_v1 *lmm_objects;
 	size_t lmm_size;
 	unsigned int entry;
 	unsigned int offset;
 	unsigned int size;
-	unsigned int i;
 
 	ENTRY;
 
@@ -221,7 +275,6 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 	for (entry = 0; entry < lsm->lsm_entry_count; entry++) {
 		struct lov_stripe_md_entry *lsme;
 		struct lov_mds_md *lmm;
-		__u16 stripe_count;
 
 		lsme = lsm->lsm_entries[entry];
 		lcme = &lcmv1->lcm_entries[entry];
@@ -238,42 +291,10 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 		lcme->lcme_offset = cpu_to_le32(offset);
 
 		lmm = (struct lov_mds_md *)((char *)lcmv1 + offset);
-		lmm->lmm_magic = cpu_to_le32(lsme->lsme_magic);
-		/* lmm->lmm_oi not set */
-		lmm->lmm_pattern = cpu_to_le32(lsme->lsme_pattern);
-		lmm->lmm_stripe_size = cpu_to_le32(lsme->lsme_stripe_size);
-		lmm->lmm_stripe_count = cpu_to_le16(lsme->lsme_stripe_count);
-		lmm->lmm_layout_gen = cpu_to_le16(lsme->lsme_layout_gen);
-
-		if (lsme->lsme_magic == LOV_MAGIC_V3) {
-			struct lov_mds_md_v3 *lmmv3 =
-						(struct lov_mds_md_v3 *)lmm;
-
-			strlcpy(lmmv3->lmm_pool_name, lsme->lsme_pool_name,
-				sizeof(lmmv3->lmm_pool_name));
-			lmm_objects = lmmv3->lmm_objects;
-		} else {
-			lmm_objects =
-				((struct lov_mds_md_v1 *)lmm)->lmm_objects;
-		}
-
-		if (lsme_inited(lsme) &&
-		    !(lsme->lsme_pattern & LOV_PATTERN_F_RELEASED))
-			stripe_count = lsme->lsme_stripe_count;
+		if (lsme->lsme_magic == LOV_MAGIC_FOREIGN)
+			size = lov_lsme_pack_foreign(lsme, lmm);
 		else
-			stripe_count = 0;
-
-		for (i = 0; i < stripe_count; i++) {
-			struct lov_oinfo *loi = lsme->lsme_oinfo[i];
-
-			ostid_cpu_to_le(&loi->loi_oi, &lmm_objects[i].l_ost_oi);
-			lmm_objects[i].l_ost_gen =
-					cpu_to_le32(loi->loi_ost_gen);
-			lmm_objects[i].l_ost_idx =
-					cpu_to_le32(loi->loi_ost_idx);
-		}
-
-		size = lov_mds_md_size(stripe_count, lsme->lsme_magic);
+			size = lov_lsme_pack_v1v3(lsme, lmm);
 		lcme->lcme_size = cpu_to_le32(size);
 		offset += size;
 	} /* for each layout component */

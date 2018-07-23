@@ -4744,6 +4744,29 @@ out_ladvise:
 		rc = ll_heat_set(inode, flags);
 		RETURN(rc);
 	}
+	case LL_IOC_PCC_ATTACH: {
+		struct lu_pcc_attach *attach;
+
+		if (!S_ISREG(inode->i_mode))
+			RETURN(-EINVAL);
+
+		if (!inode_owner_or_capable(&init_user_ns, inode))
+			RETURN(-EPERM);
+
+		OBD_ALLOC_PTR(attach);
+		if (attach == NULL)
+			RETURN(-ENOMEM);
+
+		if (copy_from_user(attach,
+				   (const struct lu_pcc_attach __user *)arg,
+				   sizeof(*attach)))
+			GOTO(out_pcc, rc = -EFAULT);
+
+		rc = pcc_ioctl_attach(file, inode, attach);
+out_pcc:
+		OBD_FREE_PTR(attach);
+		RETURN(rc);
+	}
 	case LL_IOC_PCC_DETACH: {
 		struct lu_pcc_detach *detach;
 

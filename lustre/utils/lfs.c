@@ -4787,6 +4787,8 @@ static int name2layout(__u32 *layout, char *name)
 			*layout |= LOV_PATTERN_MDT;
 		else if (strcmp(layout_name, "overstriping") == 0)
 			*layout |= LOV_PATTERN_OVERSTRIPING;
+		else if (strcmp(layout_name, "foreign") == 0)
+			*layout |= LOV_PATTERN_FOREIGN;
 		else
 			return -1;
 	}
@@ -13341,30 +13343,36 @@ static int lfs_pcc_attach(int argc, char **argv)
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "id",	.has_arg = required_argument },
+	{ .val = 'r',	.name = "readonly",	.has_arg = no_argument },
 	{ .name = NULL } };
 	int c;
 	int rc = 0;
-	__u32 archive_id = 0;
+	__u32 attach_id = 0;
 	const char *path;
 	char *end;
 	char fullpath[PATH_MAX];
 	enum lu_pcc_type type = LU_PCC_READWRITE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "hi:",
+	while ((c = getopt_long(argc, argv, "hi:r",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
 			errno = 0;
-			archive_id = strtoul(optarg, &end, 0);
+			attach_id = strtoul(optarg, &end, 0);
 			if (errno != 0 || *end != '\0' ||
-			    archive_id == 0 || archive_id > UINT32_MAX) {
+			    attach_id == 0 || attach_id > UINT32_MAX) {
 				fprintf(stderr,
 					"error: %s: bad archive ID '%s'\n",
 					progname, optarg);
 				return CMD_HELP;
 			}
 			break;
+		case 'r':
+			type = LU_PCC_READONLY;
+			break;
+		case '?':
+			return CMD_HELP;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
@@ -13374,7 +13382,7 @@ static int lfs_pcc_attach(int argc, char **argv)
 		}
 	}
 
-	if (archive_id == 0) {
+	if (attach_id == 0) {
 		fprintf(stderr, "%s: must specify attach ID\n", argv[0]);
 		return CMD_HELP;
 	}
@@ -13397,11 +13405,11 @@ static int lfs_pcc_attach(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = llapi_pcc_attach(fullpath, archive_id, type);
+		rc2 = llapi_pcc_attach(fullpath, attach_id, type);
 		if (rc2 < 0) {
 			fprintf(stderr,
-				"%s: cannot attach '%s' to PCC with archive ID '%u': %s\n",
-				argv[0], path, archive_id, strerror(-rc2));
+				"%s: cannot attach '%s' to PCC with attach ID '%u': %s\n",
+				argv[0], path, attach_id, strerror(-rc2));
 			if (rc == 0)
 				rc = rc2;
 		}
@@ -13412,32 +13420,36 @@ static int lfs_pcc_attach(int argc, char **argv)
 static int lfs_pcc_attach_fid(int argc, char **argv)
 {
 	struct option long_opts[] = {
-	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
-	{ .val = 'i',	.name = "id",	.has_arg = required_argument },
-	{ .val = 'm',	.name = "mnt",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'i',	.name = "id",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "readonly",	.has_arg = no_argument },
+	{ .val = 'm',	.name = "mnt",		.has_arg = required_argument },
 	{ .name = NULL } };
 	int c;
 	int rc = 0;
-	__u32 archive_id = 0;
+	__u32 attach_id = 0;
 	char *end;
 	const char *mntpath = NULL;
 	const char *fidstr;
 	enum lu_pcc_type type = LU_PCC_READWRITE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "hi:m:",
+	while ((c = getopt_long(argc, argv, "hi:m:r",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'i':
 			errno = 0;
-			archive_id = strtoul(optarg, &end, 0);
+			attach_id = strtoul(optarg, &end, 0);
 			if (errno != 0 || *end != '\0' ||
-			    archive_id > UINT32_MAX) {
+			    attach_id > UINT32_MAX) {
 				fprintf(stderr,
-					"error: %s: bad archive ID '%s'\n",
+					"error: %s: bad attach ID '%s'\n",
 					argv[0], optarg);
 				return CMD_HELP;
 			}
+			break;
+		case 'r':
+			type = LU_PCC_READONLY;
 			break;
 		case 'm':
 			mntpath = optarg;
@@ -13451,7 +13463,7 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		}
 	}
 
-	if (archive_id == 0) {
+	if (attach_id == 0) {
 		fprintf(stderr, "%s: must specify an archive ID\n", argv[0]);
 		return CMD_HELP;
 	}
@@ -13473,11 +13485,11 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 		fidstr = argv[optind++];
 
 		rc2 = llapi_pcc_attach_fid_str(mntpath, fidstr,
-					       archive_id, type);
+					       attach_id, type);
 		if (rc2 < 0) {
 			fprintf(stderr,
-				"%s: cannot attach '%s' on '%s' to PCC with archive ID '%u': %s\n",
-				argv[0], fidstr, mntpath, archive_id,
+				"%s: cannot attach '%s' on '%s' to PCC with attach ID '%u': %s\n",
+				argv[0], fidstr, mntpath, attach_id,
 				strerror(rc2));
 		}
 		if (rc == 0 && rc2 < 0)

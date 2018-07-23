@@ -93,8 +93,12 @@ static int llapi_msg_level = LLAPI_MSG_MAX;
 const char *liblustreapi_cmd;
 
 struct lustre_foreign_type lu_foreign_types[] = {
-	{.lft_type = LU_FOREIGN_TYPE_NONE, .lft_name = "none"},
-	{.lft_type = LU_FOREIGN_TYPE_SYMLINK, .lft_name = "symlink"},
+	{.lft_type = LU_FOREIGN_TYPE_NONE,	.lft_name = "none"},
+	{.lft_type = LU_FOREIGN_TYPE_POSIX,	.lft_name = "posix"},
+	{.lft_type = LU_FOREIGN_TYPE_PCCRW,	.lft_name = "pccrw"},
+	{.lft_type = LU_FOREIGN_TYPE_PCCRO,	.lft_name = "pccro"},
+	{.lft_type = LU_FOREIGN_TYPE_S3,	.lft_name = "S3"},
+	{.lft_type = LU_FOREIGN_TYPE_SYMLINK,	.lft_name = "symlink"},
 	/* must be the last element */
 	{.lft_type = LU_FOREIGN_TYPE_UNKNOWN, .lft_name = NULL}
 	/* array max dimension must be <= UINT32_MAX */
@@ -2612,6 +2616,8 @@ static char *layout2name(__u32 layout_pattern)
 {
 	if (layout_pattern & LOV_PATTERN_F_RELEASED)
 		return "released";
+	else if (layout_pattern & LOV_PATTERN_FOREIGN)
+		return "foreign";
 	else if (layout_pattern == LOV_PATTERN_MDT)
 		return "mdt";
 	else if (layout_pattern == LOV_PATTERN_RAID0)
@@ -2952,6 +2958,87 @@ static void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 		}
 	}
 	llapi_printf(LLAPI_MSG_NORMAL, "\n");
+}
+
+static void hsm_flags2str(__u32 hsm_flags)
+{
+	bool found = false;
+	int i = 0;
+
+	if (!hsm_flags) {
+		llapi_printf(LLAPI_MSG_NORMAL, "0");
+		return;
+	}
+	for (i = 0; i < ARRAY_SIZE(hsm_flags_table); i++) {
+		if (hsm_flags & hsm_flags_table[i].hfn_flag) {
+			if (found)
+				llapi_printf(LLAPI_MSG_NORMAL, ",");
+			llapi_printf(LLAPI_MSG_NORMAL, "%s",
+				     hsm_flags_table[i].hfn_name);
+			found = true;
+		}
+	}
+	if (hsm_flags) {
+		if (found)
+			llapi_printf(LLAPI_MSG_NORMAL, ",");
+		llapi_printf(LLAPI_MSG_NORMAL, "%#x", hsm_flags);
+	}
+}
+
+static uint32_t check_foreign_type(uint32_t foreign_type)
+{
+	uint32_t i;
+
+	for (i = 0; i < LU_FOREIGN_TYPE_UNKNOWN; i++) {
+		if (lu_foreign_types[i].lft_name == NULL)
+			break;
+		if (foreign_type == lu_foreign_types[i].lft_type)
+			return i;
+	}
+
+	return LU_FOREIGN_TYPE_UNKNOWN;
+}
+
+void lov_dump_hsm_lmm(void *lum, char *path, int depth,
+		      enum llapi_layout_verbose verbose,
+		      enum lov_dump_flags flags)
+{
+	struct lov_hsm_md *lhm = lum;
+	bool indent = flags & LDF_INDENT;
+	bool is_dir = flags & LDF_IS_DIR;
+	char *space = indent ? "      " : "";
+
+	if (!is_dir) {
+		uint32_t type = check_foreign_type(lhm->lhm_type);
+
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_magic:         0x%08X\n",
+			     space, lhm->lhm_magic);
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_pattern:       hsm\n",
+			     space);
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_length:        %u\n",
+			     space, lhm->lhm_length);
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_type:          0x%08X",
+			     space, lhm->lhm_type);
+		if (type < LU_FOREIGN_TYPE_UNKNOWN)
+			llapi_printf(LLAPI_MSG_NORMAL, " (%s)\n",
+				     lu_foreign_types[type].lft_name);
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, " (unknown)\n");
+
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_flags:         ", space);
+		hsm_flags2str(lhm->lhm_flags);
+		llapi_printf(LLAPI_MSG_NORMAL, "\n");
+
+		if (!lov_hsm_type_supported(lhm->lhm_type))
+			return;
+
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_archive_id:    %llu\n",
+			     space, (unsigned long long)lhm->lhm_archive_id);
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_archive_ver:   %llu\n",
+			     space, (unsigned long long)lhm->lhm_archive_ver);
+		llapi_printf(LLAPI_MSG_NORMAL, "%slhm_archive_uuid:  '%.*s'\n",
+			     space, UUID_MAX, lhm->lhm_archive_uuid);
+	}
 }
 
 static void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
@@ -3507,6 +3594,9 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 				continue;
 
 			v1 = lov_comp_entry(comp_v1, i);
+			if (v1->lmm_magic == LOV_MAGIC_FOREIGN)
+				continue;
+
 			objects = lov_v1v3_objects(v1);
 
 			for (j = 0; j < v1->lmm_stripe_count; j++) {
@@ -3606,6 +3696,9 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 			if (obdindex != OBD_NOT_FOUND) {
 				flags |= LDF_SKIP_OBJS;
 				v1 = lov_comp_entry(comp_v1, i);
+				if (v1->lmm_magic == LOV_MAGIC_FOREIGN)
+					continue;
+
 				objects = lov_v1v3_objects(v1);
 
 				for (j = 0; j < v1->lmm_stripe_count; j++) {
@@ -3626,13 +3719,19 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		lov_dump_comp_v1_entry(param, flags, i);
 
 		v1 = lov_comp_entry(comp_v1, i);
-		objects = lov_v1v3_objects(v1);
-		lov_v1v3_pool_name(v1, pool_name);
+		if (v1->lmm_magic == LOV_MAGIC_FOREIGN) {
+			lov_dump_hsm_lmm(v1, path, param->fp_max_depth,
+					 param->fp_verbose, flags);
+		} else {
+			objects = lov_v1v3_objects(v1);
+			lov_v1v3_pool_name(v1, pool_name);
 
-		ext = entry->lcme_flags & LCME_FL_EXTENSION ? LDF_EXTENSION : 0;
-		lov_dump_user_lmm_v1v3(v1, pool_name, objects, path, obdindex,
-				       param->fp_max_depth, param->fp_verbose,
-				       flags | ext);
+			ext = entry->lcme_flags & LCME_FL_EXTENSION ?
+			      LDF_EXTENSION : 0;
+			lov_dump_user_lmm_v1v3(v1, pool_name, objects, path,
+					       obdindex, param->fp_max_depth,
+					       param->fp_verbose, flags | ext);
+		}
 	}
 	if (print_last_init_comp(param)) {
 		/**
@@ -3648,14 +3747,20 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		lov_dump_comp_v1_entry(param, flags, i);
 
 		v1 = lov_comp_entry(comp_v1, i);
-		objects = lov_v1v3_objects(v1);
-		lov_v1v3_pool_name(v1, pool_name);
+		if (v1->lmm_magic == LOV_MAGIC_FOREIGN) {
+			lov_dump_hsm_lmm(v1, path, param->fp_max_depth,
+					 param->fp_verbose, flags);
+		} else {
+			objects = lov_v1v3_objects(v1);
+			lov_v1v3_pool_name(v1, pool_name);
 
-		entry = &comp_v1->lcm_entries[i];
-		ext = entry->lcme_flags & LCME_FL_EXTENSION ? LDF_EXTENSION : 0;
-		lov_dump_user_lmm_v1v3(v1, pool_name, objects, path, obdindex,
-				       param->fp_max_depth, param->fp_verbose,
-				       flags | ext);
+			entry = &comp_v1->lcm_entries[i];
+			ext = entry->lcme_flags & LCME_FL_EXTENSION ?
+			      LDF_EXTENSION : 0;
+			lov_dump_user_lmm_v1v3(v1, pool_name, objects, path,
+					       obdindex, param->fp_max_depth,
+					       param->fp_verbose, flags | ext);
+		}
 	}
 }
 
@@ -3757,20 +3862,6 @@ static void lov_dump_plain_user_lmm(struct find_param *param, char *path,
 				       param->fp_max_depth, param->fp_verbose,
 				       flags);
 	}
-}
-
-static uint32_t check_foreign_type(uint32_t foreign_type)
-{
-	uint32_t i;
-
-	for (i = 0; i < LU_FOREIGN_TYPE_UNKNOWN; i++) {
-		if (lu_foreign_types[i].lft_name == NULL)
-			break;
-		if (foreign_type == lu_foreign_types[i].lft_type)
-			return i;
-	}
-
-	return LU_FOREIGN_TYPE_UNKNOWN;
 }
 
 static void lov_dump_foreign_lmm(struct find_param *param, char *path,

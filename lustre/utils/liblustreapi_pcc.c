@@ -45,7 +45,7 @@
  * Fetch and attach a file to readwrite PCC.
  *
  */
-static int llapi_readwrite_pcc_attach_fd(int fd, __u32 archive_id)
+static int llapi_pcc_attach_rw_fd(int fd, __u32 archive_id)
 {
 	int rc;
 	struct ll_ioc_lease *data;
@@ -82,7 +82,7 @@ static int llapi_readwrite_pcc_attach_fd(int fd, __u32 archive_id)
 	return rc;
 }
 
-static int llapi_readwrite_pcc_attach(const char *path, __u32 archive_id)
+static int llapi_pcc_attach_rw(const char *path, __u32 archive_id)
 {
 	int fd;
 	int rc;
@@ -95,7 +95,51 @@ static int llapi_readwrite_pcc_attach(const char *path, __u32 archive_id)
 		return rc;
 	}
 
-	rc = llapi_readwrite_pcc_attach_fd(fd, archive_id);
+	rc = llapi_pcc_attach_rw_fd(fd, archive_id);
+
+	close(fd);
+	return rc;
+}
+
+static int llapi_pcc_attach_ro_fd(int fd, __u32 roid)
+{
+	struct lu_pcc_attach attach;
+	int rc;
+
+	attach.pcca_id = roid;
+	attach.pcca_type = LU_PCC_READONLY;
+	rc = ioctl(fd, LL_IOC_PCC_ATTACH, &attach);
+	if (rc) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot attach the file to PCC with ID %u failed",
+			    roid);
+	}
+
+	return rc;
+}
+
+static int llapi_pcc_attach_ro(const char *path, __u32 roid)
+{
+	int fd;
+	int rc;
+
+	if (strlen(path) <= 0 || path[0] != '/') {
+		rc = -EINVAL;
+		llapi_err_noerrno(LLAPI_MSG_ERROR, "invalid file path: %s",
+				  path);
+		return rc;
+	}
+
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "open file: %s failed",
+			    path);
+		return rc;
+	}
+
+	rc = llapi_pcc_attach_ro_fd(fd, roid);
 
 	close(fd);
 	return rc;
@@ -107,7 +151,10 @@ int llapi_pcc_attach(const char *path, __u32 id, enum lu_pcc_type type)
 
 	switch (type & LU_PCC_TYPE_MASK) {
 	case LU_PCC_READWRITE:
-		rc = llapi_readwrite_pcc_attach(path, id);
+		rc = llapi_pcc_attach_rw(path, id);
+		break;
+	case LU_PCC_READONLY:
+		rc = llapi_pcc_attach_ro(path, id);
 		break;
 	default:
 		rc = -EINVAL;
@@ -116,9 +163,9 @@ int llapi_pcc_attach(const char *path, __u32 id, enum lu_pcc_type type)
 	return rc;
 }
 
-static int llapi_readwrite_pcc_attach_fid(const char *mntpath,
-					  const struct lu_fid *fid,
-					  __u32 id)
+static int llapi_pcc_attach_rw_fid(const char *mntpath,
+				   const struct lu_fid *fid,
+				   __u32 rwid)
 {
 	int rc;
 	int fd;
@@ -132,7 +179,29 @@ static int llapi_readwrite_pcc_attach_fid(const char *mntpath,
 		return rc;
 	}
 
-	rc = llapi_readwrite_pcc_attach_fd(fd, id);
+	rc = llapi_pcc_attach_rw_fd(fd, rwid);
+
+	close(fd);
+	return rc;
+}
+
+static int llapi_pcc_attach_ro_fid(const char *mntpath,
+				   const struct lu_fid *fid,
+				   __u32 roid)
+{
+	int rc;
+	int fd;
+
+	fd = llapi_open_by_fid(mntpath, fid, O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "llapi_open_by_fid for " DFID "failed",
+			    PFID(fid));
+		return rc;
+	}
+
+	rc = llapi_pcc_attach_ro_fd(fd, roid);
 
 	close(fd);
 	return rc;
@@ -145,7 +214,10 @@ int llapi_pcc_attach_fid(const char *mntpath, const struct lu_fid *fid,
 
 	switch (type & LU_PCC_TYPE_MASK) {
 	case LU_PCC_READWRITE:
-		rc = llapi_readwrite_pcc_attach_fid(mntpath, fid, id);
+		rc = llapi_pcc_attach_rw_fid(mntpath, fid, id);
+		break;
+	case LU_PCC_READONLY:
+		rc = llapi_pcc_attach_ro_fid(mntpath, fid, id);
 		break;
 	default:
 		rc = -EINVAL;

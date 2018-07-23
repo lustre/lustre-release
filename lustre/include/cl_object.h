@@ -294,6 +294,8 @@ struct cl_layout {
 	bool		cl_is_composite;
 	/** Whether layout is a HSM released one */
 	bool		cl_is_released;
+	/** Whether layout is a readonly one */
+	bool		cl_is_rdonly;
 };
 
 enum coo_inode_opc {
@@ -1865,6 +1867,11 @@ struct cl_io {
 	 * 2. the mirrored files are NOT in WRITE_PENDING state.
 	 */
 			     ci_need_write_intent:1,
+	/**
+	 * File is in PCC-RO state, need MDS intervention to complete
+	 * a data modifying operation.
+	 */
+			     ci_need_pccro_clear:1,
 	/**
 	 * Check if layout changed after the IO finishes. Mainly for HSM
 	 * requirement. If IO occurs to openning files, it doesn't need to

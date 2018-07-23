@@ -460,13 +460,36 @@ lsme_unpack_foreign(struct lov_obd *lov, void *buf, size_t buf_size,
 {
 	struct lov_stripe_md_entry *lsme;
 	struct lov_foreign_md *lfm = buf;
+	size_t length;
 	__u32 magic;
+	__u32 type;
 
 	ENTRY;
 
 	magic = le32_to_cpu(lfm->lfm_magic);
 	if (magic != LOV_MAGIC_FOREIGN)
 		RETURN(ERR_PTR(-EINVAL));
+
+	type = le32_to_cpu(lfm->lfm_type);
+	if (!lov_foreign_type_supported(type)) {
+		CDEBUG(D_LAYOUT, "Unsupported foreign type: %u\n", type);
+		RETURN(ERR_PTR(-EINVAL));
+	}
+
+	length = le32_to_cpu(lfm->lfm_length);
+	if (lov_foreign_size_le(lfm) > buf_size) {
+		CDEBUG(D_LAYOUT, "LOV EA HSM too small: %zu, need %zu\n",
+		       buf_size, lov_foreign_size_le(lfm));
+		RETURN(ERR_PTR(-EINVAL));
+	}
+
+	if (lov_hsm_type_supported(type) &&
+	    length < sizeof(struct lov_hsm_base)) {
+		CDEBUG(D_LAYOUT,
+		       "Invalid LOV HSM len: %zu, should be larger than %zu\n",
+		       length, sizeof(struct lov_hsm_base));
+		RETURN(ERR_PTR(-EINVAL));
+	}
 
 	OBD_ALLOC_LARGE(lsme, sizeof(*lsme));
 	if (!lsme)
@@ -475,6 +498,13 @@ lsme_unpack_foreign(struct lov_obd *lov, void *buf, size_t buf_size,
 	lsme->lsme_magic = magic;
 	lsme->lsme_pattern = LOV_PATTERN_FOREIGN;
 	lsme->lsme_flags = 0;
+	lsme->lsme_length = length;
+	lsme->lsme_type = type;
+	lsme->lsme_foreign_flags = le32_to_cpu(lfm->lfm_flags);
+
+	/* TODO: Initialize for other kind of foreign layout such as DAOS. */
+	if (lov_hsm_type_supported(type))
+		lov_foreign_hsm_to_cpu(&lsme->lsme_hsm, lfm);
 
 	if (maxbytes)
 		*maxbytes = MAX_LFS_FILESIZE;
@@ -505,7 +535,10 @@ lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 	    !(lov_pattern(le32_to_cpu(lmm->lmm_pattern)) & LOV_PATTERN_MDT))
 		RETURN(ERR_PTR(-EINVAL));
 
-	if (magic == LOV_MAGIC_V1) {
+	if (magic == LOV_MAGIC_FOREIGN) {
+		return lsme_unpack_foreign(lov, lmm, lmm_buf_size,
+					   inited, maxbytes);
+	} else if (magic == LOV_MAGIC_V1) {
 		return lsme_unpack(lov, lmm, lmm_buf_size, NULL,
 				   inited, lmm->lmm_objects, maxbytes);
 	} else if (magic == LOV_MAGIC_V3) {
@@ -548,6 +581,7 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 	lsm->lsm_entry_count = entry_count;
 	lsm->lsm_mirror_count = le16_to_cpu(lcm->lcm_mirror_count);
 	lsm->lsm_flags = le16_to_cpu(lcm->lcm_flags);
+	lsm->lsm_is_rdonly = lsm->lsm_flags & LCM_FL_PCC_RDONLY;
 	lsm->lsm_is_released = true;
 	lsm->lsm_maxbytes = LLONG_MIN;
 
@@ -591,7 +625,8 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		 * pressume that unrecognized magic component also has valid
 		 * lsme_id/lsme_flags/lsme_extent
 		 */
-		if (!(lsme->lsme_pattern & LOV_PATTERN_F_RELEASED))
+		if (!(lsme->lsme_magic == LOV_MAGIC_FOREIGN) &&
+		    !(lsme->lsme_pattern & LOV_PATTERN_F_RELEASED))
 			lsm->lsm_is_released = false;
 
 		lsm->lsm_entries[i] = lsme;
@@ -711,26 +746,36 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 	for (i = 0; i < lsm->lsm_entry_count; i++) {
 		struct lov_stripe_md_entry *lse = lsm->lsm_entries[i];
 
-		CDEBUG(level, DEXT ": id: %u, flags: %x, "
-		       "magic 0x%08X, layout_gen %u, "
-		       "stripe count %u, sstripe size %u, "
-		       "pool: ["LOV_POOLNAMEF"]\n",
-		       PEXT(&lse->lsme_extent), lse->lsme_id, lse->lsme_flags,
-		       lse->lsme_magic, lse->lsme_layout_gen,
-		       lse->lsme_stripe_count, lse->lsme_stripe_size,
-		       lse->lsme_pool_name);
-		if (!lsme_inited(lse) ||
-		    lse->lsme_pattern & LOV_PATTERN_F_RELEASED ||
-		    !lov_supported_comp_magic(lse->lsme_magic) ||
-		    !lov_pattern_supported(lov_pattern(lse->lsme_pattern)))
-			continue;
-		for (j = 0; j < lse->lsme_stripe_count; j++) {
-			CDEBUG(level, "   oinfo:%p: ostid: "DOSTID
-			       " ost idx: %d gen: %d\n",
-			       lse->lsme_oinfo[j],
-			       POSTID(&lse->lsme_oinfo[j]->loi_oi),
-			       lse->lsme_oinfo[j]->loi_ost_idx,
-			       lse->lsme_oinfo[j]->loi_ost_gen);
+		if (lsme_is_foreign(lse)) {
+			CDEBUG_LIMIT(level,
+				   "HSM layout "DEXT ": id %u, flags: %08x, magic 0x%08X, length %u, type %x, flags %08x, archive_id %llu, archive_ver %llu, archive_uuid '%.*s'\n",
+				   PEXT(&lse->lsme_extent), lse->lsme_id,
+				   lse->lsme_flags, lse->lsme_magic,
+				   lse->lsme_length, lse->lsme_type,
+				   lse->lsme_foreign_flags,
+				   lse->lsme_archive_id, lse->lsme_archive_ver,
+				   (int)sizeof(lse->lsme_uuid), lse->lsme_uuid);
+		} else {
+			CDEBUG_LIMIT(level,
+				   DEXT ": id: %u, flags: %x, magic 0x%08X, layout_gen %u, stripe count %u, sstripe size %u, pool: ["LOV_POOLNAMEF"]\n",
+				   PEXT(&lse->lsme_extent), lse->lsme_id,
+				   lse->lsme_flags, lse->lsme_magic,
+				   lse->lsme_layout_gen, lse->lsme_stripe_count,
+				   lse->lsme_stripe_size, lse->lsme_pool_name);
+			if (!lsme_inited(lse) ||
+			    lse->lsme_pattern & LOV_PATTERN_F_RELEASED ||
+			    !lov_supported_comp_magic(lse->lsme_magic) ||
+			    !lov_pattern_supported(
+				    	lov_pattern(lse->lsme_pattern)))
+				continue;
+			for (j = 0; j < lse->lsme_stripe_count; j++) {
+				CDEBUG_LIMIT(level,
+					   "   oinfo:%p: ostid: "DOSTID" ost idx: %d gen: %d\n",
+					   lse->lsme_oinfo[j],
+					   POSTID(&lse->lsme_oinfo[j]->loi_oi),
+					   lse->lsme_oinfo[j]->loi_ost_idx,
+					   lse->lsme_oinfo[j]->loi_ost_gen);
+			}
 		}
 	}
 }

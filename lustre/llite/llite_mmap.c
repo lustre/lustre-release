@@ -97,7 +97,7 @@ struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
  */
 static struct cl_io *
 ll_fault_io_init(struct lu_env *env, struct vm_area_struct *vma,
-		pgoff_t index, bool mkwrite)
+		 pgoff_t index, bool mkwrite)
 {
 	struct file	       *file = vma->vm_file;
 	struct inode	       *inode = file_inode(file);
