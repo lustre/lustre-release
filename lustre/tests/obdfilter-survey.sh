@@ -17,9 +17,9 @@ init_logging
 [ "$SLOW" = no ] && { nobjhi=1; thrhi=4; }
 thrlo=${thrlo:-$(( thrhi / 2))}
 
-# Skip these tests
-# bug number   23791 23791
-ALWAYS_EXCEPT="1b    2b    $OBDFILTER_SURVEY_EXCEPT"
+# bug number for skipped test:
+ALWAYS_EXCEPT="$OBDFILTER_SURVEY_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 OBDSURVEY=${OBDSURVEY:-$(which obdfilter-survey)}
 
@@ -85,59 +85,11 @@ obdflter_survey_run () {
 	cat ${TMP}/obdfilter_survey*
 	[ $rc = 0 ] || error "$OBDSURVEY failed: $rc"
 }
+
 test_1a () {
 	obdflter_survey_run disk
 }
 run_test 1a "Object Storage Targets survey"
-
-print_jbd () {
-	local file=$1
-	local facet=$2
-	local varsvc=${facet}_svc
-	local dev=$(ldiskfs_canon "*.${!varsvc}.mntdev" $facet)
-
-	# ext4: /proc/fs/jbd2/sda1:8/history
-	# ext3: /proc/fs/jbd/sdb1/history
-
-	do_facet $facet cat /proc/fs/jbd*/${dev}*/$file
-}
-
-check_jbd_values () {
-	local facet=$1
-	local thrhi=$2
-	local rtime=$3
-
-	# last two lines from history
-	# $4: run >= 5000
-	# $8: hndls >= thrhi * 2
-	# display history of rtime/4 before, in case obd cleanup consumes time
-	local tlines=$((rtime / 5 / 4 + 1))
-	local hist=("$(print_jbd history $facet | tail -$tlines | head -n1)")
-	echo "$hist"
-	local run=($(echo "${hist[*]}" | awk '{print $4}'))
-	local hndls=($(echo "${hist[*]}" | awk '{print $8}'))
-
-	local rc=0
-	for (( i=0; i<1; i++)); do
-		[[ ${run[i]} -lt 5000 ]] && \
-			error "$facet: run expected 5000, have ${run[i]}" && rc=1
-		[[ ${hndls[i]} -lt $((thrhi * 2)) ]] && \
-			error "$facet: hndls expected > $((thrhi * 2)), have ${hndls[i]}" && rc=2
-	done
-	return $rc
-}
-
-check_jbd_values_facets () {
-	local facets=$1
-	local thrhi=$2
-	local rtime=$3
-	local facet
-	local rc=0
-	for facet in  ${facets//,/ }; do
-		check_jbd_values $facet $thrhi $rtime || rc=$((rc+$?))
-	done
-	return $rc
-}
 
 test_1b () {
 	local param_file=$TMP/$tfile-params
@@ -156,12 +108,9 @@ test_1b () {
 	local rtime=$((etime - stime))
 
 	echo "obd survey finished in $rtime seconds"
-	check_jbd_values_facets $(get_facets OST) 4 $rtime || rc=$((rc+$?))
-
 	restore_lustre_params < $param_file
 
 	rm -f $param_file
-	return $rc
 }
 run_test 1b "Object Storage Targets survey, async journal"
 
@@ -192,12 +141,9 @@ test_2b () {
 	local rtime=$((etime - stime))
 
 	echo "obd survey finished in $rtime seconds"
-	check_jbd_values_facets $(get_facets OST) 4 $rtime || rc=$((rc+$?))
-
 	restore_lustre_params < $param_file
 
 	rm -f $param_file
-	return $rc
 }
 run_test 2b "Stripe F/S over the Network, async journal"
 

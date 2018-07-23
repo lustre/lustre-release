@@ -10,7 +10,7 @@
 #   0 - gather stats at start and stop only
 #   N - gather stats every N seconds
 # if some XXX_INTERVAL isn't specified, related stats won't be collected
-# XXX can be: VMSTAT, SERVICE, BRW, SDIO, MBALLOC, IO, JBD
+# XXX can be: VMSTAT, SERVICE, BRW, SDIO, MBALLOC, IO
 #
 # to stop collection:
 #   iokit-lstats stop
@@ -511,59 +511,6 @@ function io_start()
 }
 
 #
-# jbd_stats collector
-#
-# JBD_INVERVAL:
-# - 0 - collect at start and stop only
-# - N - isn't implemented yet, works as with 0
-#
-function jbd_collector()
-{
-	local obd=$1
-	local uuid=$(lctl get_param -n obd.uuid 2>&1)
-	local tmp=$(lctl get_param -n obd.mntdev 2>&1)
-	local disk=$(basename $tmp)
-	local file="/proc/fs/jbd/${disk}/history"
-
-	echo "jbd history for ${uuid}/${disk} " $(date)
-
-	if let "JBD_INTERVAL==0"; then
-		idle_collector
-		cat $file
-	elif let "JBD_INTERVAL>0"; then
-		idle_collector
-		cat $file
-	else
-		echo "Invalid JBD_INTERVAL=$JBD_INTERVAL"
-		idle_collector
-	fi
-}
-
-function jbd_start()
-{
-	if [ "$JBD_INTERVAL" == "" ]; then
-		return;
-	fi
-
-	# find all obdfilters and MDSs
-	for i in $(lctl list_param obdfilter.* mds.*); do
-		obd=$(echo "$i" | awk -F"." '{print $2}')
-		if [ "$obd" == "num_refs" ]; then
-			continue;
-		fi
-		local tmp=$(lctl get_param -n ${i}.mntdev 2>&1)
-		if [ $? != 0 ]; then
-			continue;
-		fi
-		local disk=$(basename $tmp)
-		if [ ! -f /proc/fs/jbd/${disk}/history ]; then
-			continue;
-		fi
-		run_collector "jbd" jbd_collector ${i} &
-	done
-}
-
-#
 # start entry point
 #
 function ls_start()
@@ -594,7 +541,6 @@ function ls_start()
 	sdio_start
 	mballoc_start
 	io_start
-	jbd_start
 	client_start
 }
 
