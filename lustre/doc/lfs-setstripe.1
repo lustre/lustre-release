@@ -2,143 +2,126 @@
 .SH NAME
 lfs setstripe \- set striping pattern of a file or directory default
 .SH SYNOPSIS
-.B lfs setstripe \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfilename\fR>
+.B lfs setstripe \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfile\fR>
 .br
-.B lfs setstripe \fR{\fB--component-end\fR|\fB-E \fIend1\fR} [\fISTRIPE_OPTIONS\fR]
-[{\fB--component-end\fR|\fB-E \fIend2\fR} [\fISTRIPE_OPTIONS\fR] ...] <\fIfilename\fR>
+.B lfs setstripe -E \fIend1\fR [\fISTRIPE_OPTIONS\fR] ... \
+<\fIdirectory\fR|\fIfile\fR>
 .br
-.B lfs setstripe --component-add \fR{\fB--component-end\fR|\fB-E \fIend1\fR}
-[\fISTRIPE_OPTIONS\fR] [{\fB--component-end\fR|\fB-E \fIend2\fR} [\fISTRIPE_OPTIONS\fR]
-\&...] <\fIfilename\fR>
+.B lfs setstripe --comp-add -E \fIend1\fR [\fISTRIPE_OPTIONS\fR] ... \
+<\fIfile\fR>
 .br
-.B lfs setstripe --component-del \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR|
-.B --component-flags=\fIcomp_flags\fR} <\fIfilename\fR>
+.B lfs setstripe --comp-del \fR{\fB-I \fIcomp_id\fR|\
+\fB--comp-flags=\fIcomp_flags\fR} <\fIfile\fR>
 .br
-.B lfs setstripe --component-set \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR|
-.B --component-flags=\fIcomp_flags\fR} <\fIfilename\fR>
-.br
-.B lfs setstripe -d \fR<\fIdirectory\fR>
+.B lfs setstripe --comp-set \fR{-I \fIcomp_id\fR|\
+\fB--comp-flags=\fIcomp_flags\fR} <\fIfile\fR>
 .br
 .B lfs setstripe -N\fR[\fImirror_count\fR] \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfilename\fR>
 .br
-.B lfs setstripe --yaml=<yaml_template_file> <filename>
+.B lfs setstripe -d \fR<\fIdirectory\fR>
 .br
+.B lfs setstripe --yaml=\fR<\fIyaml_template_file.lyl\fR> <\fIfile\fR>
+.br
+.B lfs setstripe --copy=\fR<\fIsource_template_file\fR> <\fIfile\fR>
 .SH DESCRIPTION
-.TP
-.B lfs setstripe \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfilename\fR>
-Create a file with specified layout, or set or replace the default file
-layout on an existing directory.  If the default file layout is set on
-the filesystem root directory, it will be used as the filesystem-wide
-default layout for all files that do not explicitly specify a layout and
-do not have a default layout on the parent directory.  The default layout
-set on a directory will be copied to any new subdirectories created within
-that directory at the time they are created.
-.TP
-.B lfs setstripe \fR{\fB--component-end\fR|\fB-E \fIend1\fR} [\fISTRIPE_OPTIONS\fR] \
-[{\fB--component-end\fR|\fB-E \fIend2\fR} [\fISTRIPE_OPTIONS\fR] ...] <\fIfilename\fR>
-.br
-Create a file with the specified composite layout. Each component defines the
-stripe pattern of the file in the range of
-.RI [ start ", " end ].
-The first component implicitly starts at offset 0, and all later components
-start at the end of previous extent.  The
-.B -E
-option is used to specify the end offset of each component, and it also
-indicates the following \fISTRIPE_OPTIONS\fR are for this component. The end
-offset of
-.B -1
-or
-.B eof
-indicates the component extends to the end of file.
-.TP
-.B lfs setstripe --component-add \fR{\fB--component-end\fR|\fB-E \fIend1\fR} [\fISTRIPE_OPTIONS\fR] \
-[{\fB--component-end\fR|\fB-E \fIend2\fR} [\fISTRIPE_OPTIONS\fR] ...] <\fIfilename\fR>
-.br
-Add components to an existing composite file. The extent start of the first
-component to be added is equal to the extent end of last component in existing
-file, and all components to be added must be adjacent with each other.  It is
-not possible to add components incrementally to the default directory layout,
-since the entire default layout can be replaced with one
+The
 .B lfs setstripe
-call.
+command is used to create a new
+.I file
+in a Lustre filesystem with the specified layout, or to specify the default
+layout for new files created in
+.IR directory ,
+or anywhere in the filesystem if
+.I directory
+is the filesystem root and no other layout takes precedence.
+.PP
+Files with composite layouts allow different
+.I STRIPE_OPTIONS
+to be specified for non-overlapping extents of the file. Files will
+inherit options not explicitly specified on the command line either from
+the default layout on the parent directory, or from the filesystem-wide
+default.  The default layout set on a directory will be copied to any new
+subdirectories created within that directory at the time they are created.
+.TP
+.B lfs setstripe \fR[\fISTRIPE_OPTIONS\fR ...] <\fIdirectory\fR|\fIfile\fR>
+Create a new
+.I file
+with specified plain layout using the specified
+.IR STRIPE_OPTIONS ,
+or replace the default file layout on an existing
+.IR directory .
+.TP
+.B lfs setstripe -E \fIend\fR [\fISTRIPE_OPTIONS\fR] ... \
+<\fIdirectory\fR|\fIfile\fR>
 .br
-Adding a component to FLR files is not allowed.
+Create a new composite
+.I file
+with one or more component layouts, or set or replace the default file layout
+on an existing
+.IR directory .
 .TP
-.B lfs setstripe --component-del \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR | \
-\fB--component-flags \fIcomp_flags\fR} <\fIfilename\fR>
+.B lfs setstripe --component-add -E \fIend1\fR [\fISTRIPE_OPTIONS\fR] \
+... <\fIfile\fR>
 .br
-Remove the component(s) specified by component ID or flags from an existing
-file. The ID specified by the
-.B -I
-option is the numerical unique ID of the component, it can be obtained using
-the
-.B lfs getstripe
-command.  It is not possible to delete components from a default directory
-layout, since the entire default layout can be replaced with one
-.B lfs setstripe
-call.
-The \fB--component-flags\fR option is used to specify certain type of
-components, such as all instantiated ones. Available component flags for
-deleting a component would be:
-.RS
+Add one or more components after the last component of an existing composite
+file that does not yet have a component at
+.BR eof .
 .TP
-.B init
-instantiated component.
-.LP
-A leading '^' in front of the \fIflags\fR means inverted flags.
-.br
-Deleting a component from FLR files is not allowed.
-.RE
+.B lfs setstripe --comp-del \fR{\fB-I \fIcomp_id\fR | \
+\fB--comp-flags \fIcomp_flags\fR} <\fIfile\fR>
+Remove the component(s) specified by component ID or flags from
+.IR file .
 .TP
-.B lfs setstripe --component-set \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR | \
-\fB--component-flags \fIcomp_flags\fR} <\fIfilename\fR>
-Set or clear \fIflags\fR to the specified component. This command can be only
-be applied to FLR files. Available \fIflags\fR are:
-.RS
+.B lfs setstripe --comp-set \fR{\fB-I \fIcomp_id\fR | \
+\fB--comp-flags \fIcomp_flags\fR} <\fIfile\fR>
+Set or clear
+.I flags
+on the specified component. This command can be only
+be applied to mirrored files.
 .TP
-.B stale
-indicates the data in the corresponding component is not available for I/O.
-Once a component is set to stale, a \fBlfs-mirror-resync\fR(1) is required to
-clear the flag.
-.TP
-.B prefer
-set this flag to the corresponding component so that Lustre would prefer to
-choose the specified component for I/O.
-.LP
-A leading '^' means to clear the corresponding flag. It doesn't allow to clear
-\fBstale\fR flag.
-.RE
+.B lfs setstripe -N \fR[\fImirror_count\fR] \fR[\fICOMPONENT_OPTIONS\fR] <\fIdirectory\fR|\fIfile\fR>
+Create a new
+.I file
+with the specified number of mirrors and other specified layout options, or
+set or replace the default file layout on an existing
+.IR directory .
 .TP
 .B lfs setstripe -d \fR<\fIdirectory\fR>
 .br
 Delete the default layout on the specified directory.  It is not necessary
-to delete the default layout on a directory before replacing it.  This is
-only needed if the directory should revert from a directory-specific layout
+to delete the default layout on a directory before replacing it, only if
+the directory should revert from a directory-specific default layout
 to using the global filesystem default layout stored on the root directory.
 .TP
-.B lfs setstripe -N\fR[\fImirror_count\fR] \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfilename\fR>
+.B lfs setstripe --yaml=\fR<\fIyaml_template_file.lyl\fR> <\fIfile\fR>
 .br
-The -N option indicates how many mirrors that have the same layout will be set
-on a file or directory (see \fBlfs-mirror-create\fR(1)). The \fImirror_count\fR
-argument is optional and defaults to 1 if it's not specified; if specified,
-it must follow the option without a space.
+Create a new
+.I file
+using the Lustre YAML Layout template
+.IR yaml_template_file.lyl ,
+created from
+.I existing_file
+via:
 .br
-The \fISTRIPE_OPTIONS\fR specify the specific layout for the mirror. It can
-be a plain layout with specific striping pattern or a composite layout.
-If they are not specified, the stripe options inherited from the previous
-component will be used. If there is no previous component, the
-\fIstripe_count\fR and \fIstripe_size\fR options inherited from filesystem-wide
-default values will be used, and OST \fIpool_name\fR inherited from parent
-directory will be used.
+.B lfs getstripe --yaml \fR<\fIexisting_file\fR> > <\fIyaml_template_file.lyl\fR>
+.br
+.I yaml_template_file.lyl
+is a plain-text file that may be saved and/or modified after creation.
+This allows complex file layouts to be created once and re-used later.
 .TP
-.B lfs setstripe --yaml=<yaml_template_file> <filename>
+.B lfs setstripe --copy=\fR<\fIsource_template_file\fR> <\fIfile\fR>
 .br
-Create a file with layout information specified by a YAML format template
-file, the template file can be obtained using the
-.B lfs getstripe --yaml <anotherfile>
-command.
+Create a new
+.I file
+using the same layout as an existing
+.IR source_template_file .
+This is similar to the
+.B --yaml
+option but avoids the need for the intermediate
+.B .lyl
+file.
 .SH STRIPE_OPTIONS
-The various stripe related options are listed and explained below:
+The various OST stripe related options are listed and explained below:
 .TP
 .B -c\fR, \fB--stripe-count \fR<\fIstripe_count\fR>
 The number of OSTs to stripe a file over. \fB0 \fRmeans to use the
@@ -146,15 +129,56 @@ filesystem-wide default stripe count (default 1), and \fB-1 \fRmeans to stripe
 over all available OSTs.
 .TP
 .B -S\fR, \fB--stripe-size \fR<\fIstripe_size\fR>
-The number of bytes to store on each OST before moving to the next OST. \fB0\fR
-means to use the filesystem-wide default stripe_size (default 1MB).
+The number of bytes to store on each OST before moving to the next OST. A
+stripe size of
+.B 0
+means the file should use the filesystem-wide default stripe_size
+(default 1MiB).  An optional suffix can be used to specify the units in
+.BR K ibi-,
+.BR M "ebi-, or"
+.BR G ibibytes.
+The
+.I stripe_size
+must be a multiple of 64KiB in size.
 .TP
 .B -i\fR, \fB--stripe-index \fR<\fIstart_ost_index\fR>
-The OST index (starting at 0) on which to start striping for this file. \fB-1\fR
+The OST index (starting at 0) on which to start striping for this file.  A
+.I start_ost_index
+of
+.B -1
 allows the MDS to choose the starting index and it is strongly recommended, as
 this allows space and load balancing to be done by the MDS as needed.
 .TP
-.B -o\fR, \fB--ost-list \fR<\fIost_indices\fR>
+.B -L\fR, \fB--layout \fR<\fIlayout_type\fR>
+The type of layout for that component, which can be one of:
+.RS
+.B raid0\fR - stripe the file data across
+.B stripe_count
+OST objects in units of
+.B stripe_size
+chunks.  This is the default layout if not specified.
+.RE
+.RS
+.B mdt\fR - place the first component of the file data on the MDT for faster
+access where the inode is located. This can be used for small files, and with
+composite file layouts.  The
+.B mdt
+type may only be used for first component of a file. The
+.IR stripe_size
+of the MDT component is always equal to the component size. There is also a
+per-MDT tunable parameter
+.IR lod.dom_stripesize
+that limits the maximum size of a DoM stripe.  It can be changed on the MDS via
+.B lctl set_param lod.*.dom_stripesize=\fR<\fIstripe_size\fR> ,
+where
+.I stripe_size
+must be a multiple of 64KiB in size,
+see also
+.BR lctl (8)
+for details.
+.RE
+.TP
+.B -o\fR, \fB--ost \fR<\fIost_indices\fR>
 Used to specify the exact stripe layout on the file system. \fIost_indices\fR
 is a list of OSTs referenced by their indices, which are specified in decimal
 or hex form and can be obtained using the
@@ -182,81 +206,175 @@ striping the file. Otherwise the striping will occur in the order specified in
 .IR ost_indices .
 .TP
 .B -p\fR, \fB--pool \fR<\fIpool_name\fR>
-The name of a predefined pool of OSTs (see
-.BR lctl (8))
-that will be used for striping. The
+Allocate objects from the predefined OST pool
+.I pool_name
+for the layout of this file or component. The
 .IR stripe_count ,
 .IR stripe_size ,
 and
 .I start_ost_index
-will be used as well; the
+can be used to select a subset of the OSTs within the pool; the
 .I start_ost_index
 must be part of the pool or an error will be returned.
-If <\fIpool_name\fR> is
-.BR none
-, then the OST pool name will be cleared and inherit from parent directory.
-.TP
-.B -L\fR, \fB--layout \fR<\fIlayout type\fR>
-The type of stripe layout, can be
-.BR raid0 ", " released " or " mdt ".
-It is
-.BR raid0
-by default. The
-.BR mdt
-type allows place the first component of the file on the MDT where the inode
-is located. This is used with composite file layouts and can be defined as
-first component only. The
-.IR stripe_size
-of MDT part is always equal to the component size. There is also per-MDT
-parameter
-.IR lod.dom_stripesize
-to limit maximum size of DoM stripe which can be changed with
-.BR lctl\ set_param
-command, (e.g.
-.IR lctl\ set_param\ lod.*.dom_stripesize=0
-, see
-.BR lctl (8))
-.TP
+It is possible to specify a different pool for each component of a file.  If
+no pool is specified, it will be inherited from the previous component (for
+later components of a composite layout) or the parent or root directory (for
+plain
+.B raid0
+layouts, or the first component of a composite file).
+Use
+.BR pool_name='' ,
+or
+.BR pool_name=none
+(since Lustre 2.11) to force a component to inherit the pool from the parent
+or root directory instead of the previous component.
 .SH COMPONENT_OPTIONS
-The various component related options are listed and explained below:
+The various component related options are listed and explained below.  The
+.B --component-*
+options can be shortened to
+.B --comp-*
+if desired.
 .TP
 .B -E\fR, \fB--component-end \fR<\fIend\fR>
-The end offset of the component,
+Add a new component to a file using the
+.I STRIPE_OPTIONS
+following the
+.B -E
+argument.  These options apply to the component ending at offset
 .I end
-is specified in bytes, or using a suffix (kMGTP),
-such as 256M. \fB-1\fR means the end of file.
-.TP
-.B -I\fR, \fB--component-id \fR<\fIcomp_id\fR>
-The numerical unique component id.
-.TP
-.B --component-flags \fR<\fIflags\fR>
-Component flags. Available \fIflags\fR:
+in bytes, or by using a suffix (KMGTP) to specify base-two units,
+such as 256M for 2^28 bytes. An offset of
+.B -1
+or
+.B eof
+means the following options extend to the end of the file.  The first
+component starts at offset 0, and each subsequent component starts at
+the end of the previous component, so they must be specified in increasing
+file offset order.
+.PP
 .RS
-.RS
-.B init\fR: instantiated component.
+The first component specified will inherit default parameters from the
+parent directory or the root directory like a plain layout, as specified
+above.  Later components will inherit the default layout parameters from
+the previous component.  Multiple
+.B -E
+options are used to separate the
+.I STRIPE_OPTIONS
+parameters for different regions of the file.
 .RE
+.PP
 .RS
-.B prefer\fR: preferred component, for FLR only.
-.RE
-.RS
-.B stale\fR: stale component, for FLR only.
-.RE
-.LP
-A leading '^' means inverted flag. Multiple flags can be separated by comma(s).
+If a file does not have a component extending to
+.B eof
+it will generate an error when trying to write beyond the last component
+.IR end .
+This can be useful to limit the size of a file to the end of the last
+specified component, or use
+.B --component-add
+to add more components to the end of the file.
 .RE
 .TP
 .B --component-add
-Add specified components to an existing composite file.
+Add components to the end an existing composite file.  It is not possible
+to add components incrementally to the default directory layout, since the
+entire default layout can be replaced with a single
+.B lfs setstripe
+command.  Adding components to mirrored files is not currently allowed.
 .TP
 .B --component-del
-Delete specified the components from an existing file. Deletion must start
-with the last component.
+Delete specified the components from an existing file using either the
+.BR --component-id | -I
+or
+.BR --component-flags .
+Deletion must start with the last component.  The ID specified by the
+.B -I
+option is the numerical unique ID of the component, it can be obtained using
+the
+.B lfs getstripe -I
+command.  It is not possible to delete components from a default directory
+layout, since the entire default layout can be replaced with a single
+.B lfs setstripe
+call.
+The \fB--component-flags\fR option is used to specify certain type of
+components. The only allowed component flag for deleting a component is
+.B ^init
+to indicate an uninstantiated component.  Deleting a single component from
+mirrored files is not currently allowed, see the
+.BR lfs-mirror-split (1)
+command.
+.TP
+.B --component-flags \fR<\fIflags\fR>
+Find, set, or clear
+.B flags
+on a specific component. Allowed
+.I flags
+are:
+.RS
+.B init\fR - component is initialized (has allocated objects).  Used with
+.B --component-del --component-flags ^init
+to find uninitialized components.
+.RE
+.RS
+.B prefer\fR - component preferred for read/write in a mirrored file
+.RE
+.RS
+.B stale\fR - component has outdated data in a mirrored file.  Once a
+component is marked
+.BR stale ,
+it isn't permitted to clear this flag directly. \fBlfs-mirror-resync\fR(1)
+is required to clear the flag.
+.RE
+.RS
+A leading '^' before \fIflags\fR clears the flags, or finds components not
+matching the flags.  Multiple flags can be separated by comma(s).
+.RE
+.TP
+.B -I\fR, \fB--component-id \fR<\fIcomp_id\fR>
+The numerical unique component ID to identify a component to be modified.
+.TP
+.BR -N "[\fImirror_count\fR], " --mirror-count=" [\fImirror_count\fR]
+Create a file with
+.I mirror_count
+identical replicas on the file or directory.  The
+.I mirror_count
+argument is optional and defaults to 1 if it's not specified; if specified,
+it must follow the
+.B -N
+option without a space.
+.br
+The \fISTRIPE_OPTIONS\fR specify the specific layout for the mirror. It
+can be a plain layout with specific striping pattern or a composite layout.
+If not specified, the stripe options are inherited from the previous
+component. If there is no previous component, the
+.I stripe_count
+and
+.I stripe_size
+options are inherited from filesystem-wide default values, and OST
+.I pool_name
+will be inherited from the parent directory.
+.br
+Multiple
+.B -N
+options may be specified, each with its own
+.I STRIPE_OPTIONS
+if there is a reason to have different layouts for the replicas, such as
+flash pools and archive pools (see
+.BR lfs-mirror-create (1)
+for full details).
+.br
+.B NOTE
+that in the current client implementation, only
+.B one
+replica will be written by client nodes, and the other replicas need to
+be resynched using the
+.B lfs mirror resync
+command, or an external resync agent.
 .SH EXAMPLES
 .TP
-.B $ lfs setstripe -S 128k -c 2 /mnt/lustre/file1
-This creates a file striped on two OSTs with 128kB on each stripe.
+.B lfs setstripe -S 128K -c 2 /mnt/lustre/file1
+This creates a file striped on two OSTs with 128KiB on each stripe.
 .TP
-.B $ lfs setstripe -d /mnt/lustre/dir
+.B lfs setstripe -d /mnt/lustre/dir
 This deletes a default stripe pattern on dir. New files created in that
 directory will use the filesystem global default instead.
 .TP
@@ -264,37 +382,55 @@ directory will use the filesystem global default instead.
 This sets a default mirror layout on a directory with 2 PFL mirrors. Each mirror
 has the same specified PFL layout.
 .TP
-.B lfs setstripe -N2 /mnt/lustre/file1
-This creates a mirrored file with 2 mirrors. Each mirror has the same default
-striping pattern with \fIstripe_count\fR and \fIstripe_size\fR inherited from
-filesystem-wide default values, and OST \fIpool_name\fR inherited from parent
-directory.
+.B lfs setstripe -N -E 1M -L mdt -E eof --component-flags=prefer -p flash \
+    -N -E 1G -c 1 -p disk -E eof -c -1 /mnt/lustre/file1
+This creates a mirrored file with 2 replicas. The first replica is using the
+MDT for files smaller than 1MB, and the remainder of the file is on the
+.B flash
+OST pool with filesystem-wide default values.  The second replica is on the
+.B disk
+OST pool, with 1 stripe for the first 1GB of the file, and striped across
+all OSTs in the
+.B disk pool for the remainder of the file.  Clients will
+.B prefer
+the first (flash) replica for both reads and writes.
 .TP
-.B $ lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 /mnt/lustre/file1
-This creates a file with composite layout, the component has 1 stripe and \
-covers [0, 4M), the second component has 4 stripes and covers [4M, 64M), the \
-last component stripes over all available OSTs and covers [64M, EOF).
+.B lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 /mnt/lustre/file1
+This creates a file with composite layout, the component has 1 stripe and
+covers [0, 4MiB), the second component has 4 stripes and covers [4MiB, 64MiB),
+the last component stripes over all available OSTs and covers [64MiB, EOF).
 .TP
-.B $ lfs setstripe --component-add -E -1 -c 4  /mnt/lustre/file1
-This add a component which start from the end of last existing component to \
+.B lfs setstripe --component-add -E eof -c 4  /mnt/lustre/file1
+This add a component which starts at the end of last existing component to
 the end of file.
 .TP
-.B $ lfs setstripe --component-del -I 1 /mnt/lustre/file1
-This deletes the component with ID equals 1 from an existing file.
+.B lfs setstripe --component-del -I 1 /mnt/lustre/file1
+This deletes the component with ID equal to 1 from an existing file.
 .TP
-.B $ lfs setstripe --component-set -I 1 --component-flags=^prefer,stale /mnt/lustre/file1
-This command will clear the \fBprefer\fR flag and set the \fBstale\fR to
-component with ID 1.
+.B lfs setstripe --comp-set -I 1 --comp-flags=^prefer,stale /mnt/lustre/file1
+This command will clear the \fBprefer\fR flag and set the \fBstale\fR flag on
+.B file1
+component ID 1.
 .TP
-.B $ lfs setstripe -E 1M -L mdt -E -1 /mnt/lustre/file1
-This created file with Data-on-MDT layout. The first 1M is placed on MDT and \
-rest of file is placed on OST with default striping.
+.B lfs setstripe -E 1M -L mdt -E -1 /mnt/lustre/file1
+Create
+.B file1
+with Data-on-MDT layout. The first 1MiB of the file data is placed on the
+MDT and rest of file is placed on OST(s) with default striping.
 .TP
-.B $ lfs setstripe --yaml=/tmp/layout_yaml /mnt/lustre/file2
-This creates a file with layout specified by a layout template which can be \
-obtained with \fBlfs getstripe --yaml\fR command.
-
+.B lfs setstripe --yaml=/tmp/layout_yaml /mnt/lustre/file2
+This creates
+.B file2
+with layout stored in the layout template
+file
+.B layout_yaml
+which can be created with the
+.B lfs getstripe --yaml
+command.
 .SH SEE ALSO
+.BR lctl (1),
 .BR lfs (1),
 .BR lfs-migrate (1),
+.BR lfs-mirror-create (1),
+.BR lfs-mirror-split (1),
 .BR lustre (7)
