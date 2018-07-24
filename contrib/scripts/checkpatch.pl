@@ -2714,11 +2714,9 @@ sub process {
 # Check for various typo / spelling mistakes
 		if (defined($misspellings) &&
 		    ($in_commit_log || $line =~ /^(?:\+|Subject:)/i)) {
-			while ($rawline =~ /(?:^|[^a-z@])($misspellings)(?:\b|$|[^a-z@])/gi) {
+			while ($rawline =~ /(?:^|[^a-z@])($misspellings)(?:\b|$|[^a-z@])/g) {
 				my $typo = $1;
-				my $typo_fix = $spelling_fix{lc($typo)};
-				$typo_fix = ucfirst($typo_fix) if ($typo =~ /^[A-Z]/);
-				$typo_fix = uc($typo_fix) if ($typo =~ /^[A-Z]+$/);
+				my $typo_fix = $spelling_fix{$typo};
 				my $msg_type = \&WARN;
 				$msg_type = \&CHK if ($file);
 				if (&{$msg_type}("TYPO_SPELLING",
