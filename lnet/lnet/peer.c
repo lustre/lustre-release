@@ -3495,6 +3495,10 @@ lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all)
 	if (!all) {
 		lnet_net_lock(LNET_LOCK_EX);
 		lpni = lnet_find_peer_ni_locked(nid);
+		if (!lpni) {
+			lnet_net_unlock(LNET_LOCK_EX);
+			return;
+		}
 		atomic_set(&lpni->lpni_healthv, value);
 		lnet_peer_ni_add_to_recoveryq_locked(lpni);
 		lnet_peer_ni_decref_locked(lpni);

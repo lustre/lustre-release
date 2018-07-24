@@ -225,6 +225,36 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_ni_healthv
+ *   set the health value of the NI. -1 resets the value to maximum.
+ *
+ *   value: health value to set.
+ *   all: true to set all local NIs to that value.
+ *   ni_nid: NI NID to set its health value. all parameter always takes
+ *   precedence
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_ni_healthv(int value, bool all, char *ni_nid,
+				  int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_peer_ni_healthv
+ *   set the health value of the peer NI. -1 resets the value to maximum.
+ *
+ *   value: health value to set.
+ *   all: true to set all local NIs to that value.
+ *   pni_nid: Peer NI NID to set its health value. all parameter always takes
+ *   precedence
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_peer_ni_healthv(int value, bool all, char *pni_nid,
+				       int seq_no, struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_hsensitivity
  *   sets the health sensitivity; the value by which to decrement the
  *   health value of a local or peer NI. If 0 then health is turned off

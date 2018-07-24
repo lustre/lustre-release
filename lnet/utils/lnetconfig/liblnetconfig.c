@@ -2028,6 +2028,61 @@ out:
 	return rc;
 }
 
+static int
+lustre_lnet_config_healthv(int value, bool all, lnet_nid_t nid,
+			   enum lnet_health_type type, char *name,
+			   int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_reset_health_cfg data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	LIBCFS_IOC_INIT_V2(data, rh_hdr);
+	data.rh_type = type;
+	data.rh_all = all;
+	data.rh_value = value;
+	data.rh_nid = nid;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_HEALHV, &data);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str), "Can not configure health value");
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_ni_healthv(int value, bool all, char *ni_nid, int seq_no,
+				  struct cYAML **err_rc)
+{
+	lnet_nid_t nid;
+	if (ni_nid)
+		nid = libcfs_str2nid(ni_nid);
+	else
+		nid = LNET_NID_ANY;
+	return lustre_lnet_config_healthv(value, all, nid,
+					  LNET_HEALTH_TYPE_LOCAL_NI,
+					  "ni healthv", seq_no, err_rc);
+}
+
+int lustre_lnet_config_peer_ni_healthv(int value, bool all, char *lpni_nid,
+				       int seq_no, struct cYAML **err_rc)
+{
+	lnet_nid_t nid;
+	if (lpni_nid)
+		nid = libcfs_str2nid(lpni_nid);
+	else
+		nid = LNET_NID_ANY;
+	return lustre_lnet_config_healthv(value, all, nid,
+					  LNET_HEALTH_TYPE_PEER_NI,
+					  "peer_ni healthv", seq_no, err_rc);
+}
+
 static bool
 add_msg_stats_to_yaml_blk(struct cYAML *yaml,
 			  struct lnet_ioctl_comm_count *counts)

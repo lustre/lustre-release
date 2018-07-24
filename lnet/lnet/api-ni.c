@@ -3598,6 +3598,9 @@ LNetCtl(unsigned int cmd, void *arg)
 			value = LNET_MAX_HEALTH_VALUE;
 		else
 			value = cfg->rh_value;
+		CDEBUG(D_NET, "Manually setting healthv to %d for %s:%s. all = %d\n",
+		       value, (cfg->rh_type == LNET_HEALTH_TYPE_LOCAL_NI) ?
+		       "local" : "peer", libcfs_nid2str(cfg->rh_nid), cfg->rh_all);
 		mutex_lock(&the_lnet.ln_api_mutex);
 		if (cfg->rh_type == LNET_HEALTH_TYPE_LOCAL_NI)
 			lnet_ni_set_healthv(cfg->rh_nid, value,

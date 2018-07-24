@@ -75,7 +75,8 @@ static int jt_set(int argc, char **argv);
 static int jt_stats(int argc, char **argv);
 static int jt_global(int argc, char **argv);
 static int jt_peers(int argc, char **argv);
-
+static int jt_set_ni_value(int argc, char **argv);
+static int jt_set_peer_ni_value(int argc, char **argv);
 
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
@@ -141,6 +142,10 @@ command_t net_cmds[] = {
 	 "\t--net: net name (e.g. tcp0) to filter on\n"
 	 "\t--verbose: display detailed output per network."
 		       " Optional argument of '2' outputs more stats\n"},
+	{"set", jt_set_ni_value, 0, "set local NI specific parameter\n"
+	 "\t--nid: NI NID to set the\n"
+	 "\t--health: specify health value to set\n"
+	 "\t--all: set all NIs value to the one specified\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -206,6 +211,10 @@ command_t peer_cmds[] = {
 	 "\t--verbose: display detailed output per peer."
 		       " Optional argument of '2' outputs more stats\n"},
 	{"list", jt_list_peer, 0, "list all peers\n"},
+	{"set", jt_set_peer_ni_value, 0, "set peer ni specific parameter\n"
+	 "\t--nid: Peer NI NID to set the\n"
+	 "\t--health: specify health value to set\n"
+	 "\t--all: set all peer_nis values to the one specified\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -951,6 +960,63 @@ static int jt_show_route(int argc, char **argv)
 	cYAML_free_tree(show_rc);
 
 	return rc;
+}
+
+static int set_value_helper(int argc, char **argv,
+			    int (*cb)(int, bool, char*, int, struct cYAML**))
+{
+	char *nid = NULL;
+	long int healthv = -1;
+	bool all = false;
+	int rc, opt;
+	struct cYAML *err_rc = NULL;
+
+	const char *const short_options = "h:n:a";
+	static const struct option long_options[] = {
+		{ .name = "nid", .has_arg = required_argument, .val = 'n' },
+		{ .name = "health", .has_arg = required_argument, .val = 'h' },
+		{ .name = "all", .has_arg = no_argument, .val = 'a' },
+		{ .name = NULL } };
+
+	rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'n':
+			nid = optarg;
+			break;
+		case 'h':
+			if (parse_long(argv[optind++], &healthv) != 0)
+				healthv = -1;
+			break;
+		case 'a':
+			all = true;
+		default:
+			return 0;
+		}
+	}
+
+	rc = cb(healthv, all, nid, -1, &err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_ni_value(int argc, char **argv)
+{
+	return set_value_helper(argc, argv, lustre_lnet_config_ni_healthv);
+}
+
+static int jt_set_peer_ni_value(int argc, char **argv)
+{
+	return set_value_helper(argc, argv, lustre_lnet_config_peer_ni_healthv);
 }
 
 static int jt_show_net(int argc, char **argv)
