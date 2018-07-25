@@ -7308,6 +7308,16 @@ static void osd_key_fini(const struct lu_context *ctx,
 	struct ldiskfs_inode_info *lli = LDISKFS_I(info->oti_inode);
 	struct osd_idmap_cache *idc = info->oti_ins_cache;
 
+	if (info->oti_dio_pages) {
+		int i;
+		for (i = 0; i < PTLRPC_MAX_BRW_PAGES; i++) {
+			if (info->oti_dio_pages[i])
+				__free_page(info->oti_dio_pages[i]);
+		}
+		OBD_FREE(info->oti_dio_pages,
+			 sizeof(struct page *) * PTLRPC_MAX_BRW_PAGES);
+	}
+
 	if (info->oti_inode != NULL)
 		OBD_FREE_PTR(lli);
 	if (info->oti_hlock != NULL)
@@ -7617,6 +7627,12 @@ static int osd_mount(const struct lu_env *env,
 
 	if (lmd_flags & LMD_FLG_NOSCRUB)
 		o->od_auto_scrub_interval = AS_NEVER;
+
+	if (blk_queue_nonrot(bdev_get_queue(osd_sb(o)->s_bdev))) {
+		/* do not use pagecache with flash-backed storage */
+		o->od_writethrough_cache = 0;
+		o->od_read_cache = 0;
+	}
 
 	GOTO(out, rc = 0);
 

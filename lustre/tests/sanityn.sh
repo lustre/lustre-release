@@ -444,6 +444,42 @@ test_16b() {
 }
 run_test 16b "$FSXNUM iterations of dual-mount fsx at small size"
 
+test_16c() {
+	local file1=$DIR1/$tfile
+	local file2=$DIR2/$tfile
+	local stripe_size=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
+
+	[ $(facet_fstype ost1) != ldiskfs ] && skip "dio on ldiskfs only"
+
+	# to allocate grant because it may run out due to test_15.
+	$LFS setstripe -c -1 $file1
+	dd if=/dev/zero of=$file1 bs=$stripe_size count=$OSTCOUNT oflag=sync
+	dd if=/dev/zero of=$file2 bs=$stripe_size count=$OSTCOUNT oflag=sync
+	rm -f $file1
+	wait_delete_completed
+
+	local list=$(comma_list $(osts_nodes))
+	if ! get_osd_param $list '' read_cache_enable >/dev/null; then
+		skip "not cache-capable obdfilter"
+	fi
+
+	set_osd_param $list '' read_cache_enable 0
+	set_osd_param $list '' writethrough_cache_enable 0
+
+	$LFS setstripe -c -1 $file1 # b=10919
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 \
+		|| error "fsx failed"
+	rm -f $file1
+
+	set_osd_param $list '' read_cache_enable 1
+	set_osd_param $list '' writethrough_cache_enable 1
+
+	return 0
+}
+run_test 16c "verify data consistency on ldiskfs with cache disabled (b=17397)"
+
+
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

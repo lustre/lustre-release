@@ -56,6 +56,15 @@
 /* ext_depth() */
 #include <ldiskfs/ldiskfs_extents.h>
 
+static inline bool osd_use_page_cache(struct osd_device *d)
+{
+	/* do not use pagecache if write and read caching are disabled */
+	if (d->od_writethrough_cache + d->od_read_cache == 0)
+		return false;
+	/* use pagecache by default */
+	return true;
+}
+
 static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 			    int rw, int line, int pages)
 {
@@ -485,22 +494,54 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
         RETURN(0);
 }
 
-static struct page *osd_get_page(struct dt_object *dt, loff_t offset,
-				 gfp_t gfp_mask)
+static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
+				 loff_t offset, gfp_t gfp_mask)
 {
+	struct osd_thread_info *oti = osd_oti_get(env);
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	struct osd_device *d = osd_obj2dev(osd_dt_obj(dt));
 	struct page *page;
+	int cur = oti->oti_dio_pages_used;
 
         LASSERT(inode);
 
-	page = find_or_create_page(inode->i_mapping, offset >> PAGE_SHIFT,
-				   gfp_mask);
+	if (osd_use_page_cache(d)) {
+		page = find_or_create_page(inode->i_mapping,
+					   offset >> PAGE_SHIFT,
+					   gfp_mask);
 
-        if (unlikely(page == NULL))
-                lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_PAGE, 1);
+		if (likely(page))
+			LASSERT(!test_bit(PG_private_2, &page->flags));
+		else
+			lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_PAGE, 1);
+	} else {
 
-        return page;
+		LASSERT(oti->oti_dio_pages);
+
+		if (unlikely(!oti->oti_dio_pages[cur])) {
+			LASSERT(cur < PTLRPC_MAX_BRW_PAGES);
+			page = alloc_page(gfp_mask);
+			if (!page)
+				return NULL;
+			oti->oti_dio_pages[cur] = page;
+		}
+
+		page = oti->oti_dio_pages[cur];
+		LASSERT(!test_bit(PG_private_2, &page->flags));
+		set_bit(PG_private_2, &page->flags);
+		oti->oti_dio_pages_used++;
+
+		LASSERT(!PageLocked(page));
+		lock_page(page);
+
+		LASSERT(!page->mapping);
+		LASSERT(!PageWriteback(page));
+		ClearPageUptodate(page);
+
+		page->index = offset >> PAGE_SHIFT;
+	}
+
+	return page;
 }
 
 /*
@@ -537,6 +578,7 @@ static struct page *osd_get_page(struct dt_object *dt, loff_t offset,
 static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages)
 {
+	struct osd_thread_info *oti = osd_oti_get(env);
 	struct pagevec pvec;
 	int i;
 
@@ -547,15 +589,30 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 #endif
 
 	for (i = 0; i < npages; i++) {
-		if (lnb[i].lnb_page == NULL)
+		struct page *page = lnb[i].lnb_page;
+
+		if (page == NULL)
 			continue;
-		LASSERT(PageLocked(lnb[i].lnb_page));
-		unlock_page(lnb[i].lnb_page);
-		if (pagevec_add(&pvec, lnb[i].lnb_page) == 0)
-			pagevec_release(&pvec);
+		LASSERT(PageLocked(page));
+
+		/* if the page isn't cached, then reset uptodate
+		 * to prevent reuse */
+		if (test_bit(PG_private_2, &page->flags)) {
+			clear_bit(PG_private_2, &page->flags);
+			ClearPageUptodate(page);
+			unlock_page(page);
+			oti->oti_dio_pages_used--;
+		} else {
+			unlock_page(page);
+			if (pagevec_add(&pvec, page) == 0)
+				pagevec_release(&pvec);
+		}
 		dt_object_put(env, dt);
+
 		lnb[i].lnb_page = NULL;
 	}
+
+	LASSERTF(oti->oti_dio_pages_used == 0, "%d\n", oti->oti_dio_pages_used);
 
 	/* Release any partial pagevec */
 	pagevec_release(&pvec);
@@ -591,11 +648,21 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			loff_t pos, ssize_t len, struct niobuf_local *lnb,
 			enum dt_bufs_type rw)
 {
+	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_object *obj = osd_dt_obj(dt);
 	int npages, i, rc = 0;
 	gfp_t gfp_mask;
 
 	LASSERT(obj->oo_inode);
+
+	if (!osd_use_page_cache(osd_obj2dev(obj))) {
+		if (unlikely(!oti->oti_dio_pages)) {
+			OBD_ALLOC(oti->oti_dio_pages,
+				  sizeof(struct page *) * PTLRPC_MAX_BRW_PAGES);
+			if (!oti->oti_dio_pages)
+				return -ENOMEM;
+		}
+	}
 
 	osd_map_remote_to_local(pos, len, &npages, lnb);
 
@@ -603,7 +670,7 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 	gfp_mask = rw & DT_BUFS_TYPE_LOCAL ? (GFP_NOFS | __GFP_HIGHMEM) :
 					     GFP_HIGHUSER;
 	for (i = 0; i < npages; i++, lnb++) {
-		lnb->lnb_page = osd_get_page(dt, lnb->lnb_file_offset,
+		lnb->lnb_page = osd_get_page(env, dt, lnb->lnb_file_offset,
 					     gfp_mask);
 		if (lnb->lnb_page == NULL)
 			GOTO(cleanup, rc = -ENOMEM);
@@ -2170,6 +2237,7 @@ void osd_trunc_unlock_all(struct list_head *list)
 
 void osd_execute_truncate(struct osd_object *obj)
 {
+	struct osd_device *d = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
 	__u64 size;
 
@@ -2196,8 +2264,16 @@ void osd_execute_truncate(struct osd_object *obj)
 	 * avoid data corruption during direct disk write.  b=17397
 	 */
 	size = i_size_read(inode);
-	if ((size & ~PAGE_MASK) != 0)
+	if ((size & ~PAGE_MASK) == 0)
+		return;
+	if (osd_use_page_cache(d)) {
 		filemap_fdatawrite_range(inode->i_mapping, size, size + 1);
+	} else {
+		/* Notice we use "wait" version to ensure I/O is complete */
+		filemap_write_and_wait_range(inode->i_mapping, size, size + 1);
+		invalidate_mapping_pages(inode->i_mapping, size >> PAGE_SHIFT,
+					 size >> PAGE_SHIFT);
+	}
 }
 
 void osd_process_truncates(struct list_head *list)

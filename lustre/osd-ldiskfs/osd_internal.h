@@ -643,6 +643,9 @@ struct osd_thread_info {
 	unsigned int		oti_declare_ops_cred[OSD_OT_MAX];
 	unsigned int		oti_declare_ops_used[OSD_OT_MAX];
 	struct osd_directory	oti_iam;
+
+	struct page		**oti_dio_pages;
+	int			oti_dio_pages_used;
 };
 
 extern int ldiskfs_pdo;
