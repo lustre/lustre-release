@@ -752,11 +752,13 @@ static inline void obd_memory_sub(long size)
 
 #define __OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, flags)		      \
 do {									      \
-	(ptr) = (cptab) == NULL ?					      \
-		kmalloc(size, (flags) | __GFP_ZERO) :			      \
-		cfs_cpt_malloc(cptab, cpt, size, (flags) | __GFP_ZERO);	      \
-	if (likely((ptr) != NULL))                                            \
-		OBD_ALLOC_POST(ptr, size, "kmalloced");                       \
+	if (cptab)							      \
+		ptr = cfs_cpt_malloc((cptab), (cpt), (size),		      \
+				     (flags) | __GFP_ZERO | __GFP_NOWARN);    \
+	if (!(cptab) || unlikely(!(ptr))) /* retry without CPT if failure */  \
+		ptr = kmalloc(size, (flags) | __GFP_ZERO);		      \
+	if (likely((ptr) != NULL))					      \
+		OBD_ALLOC_POST((ptr), (size), "kmalloced");		      \
 } while (0)
 
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)				      \
