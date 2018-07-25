@@ -192,6 +192,7 @@ autodetect_target() {
     case ${distro} in
           oel5*)  target="2.6-oel5";;
          rhel5*)  target="2.6-rhel5";;
+        rhel6.10) target="2.6-rhel6.10";;
          rhel6.9) target="2.6-rhel6.9";;
          rhel6.8) target="2.6-rhel6.8";;
          rhel6.7) target="2.6-rhel6.7";;
