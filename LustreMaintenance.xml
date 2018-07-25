@@ -117,10 +117,12 @@ Mounting a Server Without Lustre Service</title>
     <section xml:id="dbdoclet.50438199_54623">
       <title><indexterm><primary>maintenance</primary><secondary>regenerating config logs</secondary></indexterm>
 Regenerating Lustre Configuration Logs</title>
-      <para>If the Lustre file system configuration logs are in a state where the file system cannot
-      be started, use the <literal>writeconf</literal> command to erase them. After the
-        <literal>writeconf</literal> command is run and the servers restart, the configuration logs
-      are re-generated and stored on the MGS (as in a new file system).</para>
+      <para>If the Lustre file system configuration logs are in a state where
+      the file system cannot be started, use the
+      <literal>tunefs.lustre --writeconf</literal> command to regenerate them.
+      After the <literal>writeconf</literal> command is run and the servers
+      restart, the configuration logs are re-generated and stored on the MGS
+      (as with a new file system).</para>
       <para>You should only use the <literal>writeconf</literal> command if:</para>
       <itemizedlist>
         <listitem>
@@ -130,82 +132,84 @@ Regenerating Lustre Configuration Logs</title>
           <para>A server NID is being changed</para>
         </listitem>
       </itemizedlist>
-      <para>The <literal>writeconf</literal> command is destructive to some configuration items (i.e., OST pools information and items set via <literal>conf_param</literal>), and should be used with caution. To avoid problems:</para>
-      <itemizedlist>
-        <listitem>
-          <para>Shut down the file system before running the <literal>writeconf</literal> command</para>
-        </listitem>
-        <listitem>
-          <para>Run the <literal>writeconf</literal> command on all servers (MDT first, then OSTs)</para>
-        </listitem>
-        <listitem>
-          <para>Start the file system in this order:</para>
-          <itemizedlist>
-            <listitem>
-              <para>MGS (or the combined MGS/MDT)</para>
-            </listitem>
-            <listitem>
-              <para>MDT</para>
-            </listitem>
-            <listitem>
-              <para>OSTs</para>
-            </listitem>
-            <listitem>
-              <para>Lustre clients</para>
-            </listitem>
-          </itemizedlist>
-        </listitem>
-      </itemizedlist>
+      <para>The <literal>writeconf</literal> command is destructive to some
+      configuration items (e.g. OST pools information and tunables set via
+      <literal>conf_param</literal>), and should be used with caution.</para>
       <caution>
-        <para>The OST pools feature enables a group of OSTs to be named for file striping purposes. If you use OST pools, be aware that running the <literal>writeconf</literal> command erases <emphasis role="bold">all</emphasis> pools information (as well as any other parameters set via <literal>lctl conf_param</literal>). We recommend that the pools definitions (and <literal>conf_param</literal> settings) be executed via a script, so they can be reproduced easily after a <literal>writeconf</literal> is performed.</para>
+        <para>The OST pools feature enables a group of OSTs to be named for
+	file striping purposes. If you use OST pools, be aware that running
+	the <literal>writeconf</literal> command erases
+	<emphasis role="bold">all</emphasis> pools information (as well as
+	any other parameters set via <literal>lctl conf_param</literal>).
+	We recommend that the pools definitions (and
+	<literal>conf_param</literal> settings) be executed via a script,
+	so they can be regenerated easily after <literal>writeconf</literal>
+	is performed.  However, tunables saved with <literal>lctl set_param
+	-P</literal> are <emphasis>not</emphasis> erased in this case.</para>
       </caution>
+      <note>
+        <para>If the MGS still holds any configuration logs, it may be
+	possible to dump these logs to save any parameters stored with
+	<literal>lctl conf_param</literal> by dumping the config logs on
+	the MGS and saving the output:</para>
+<screen>
+mgs# lctl --device MGS llog_print <replaceable>fsname</replaceable>-client
+mgs# lctl --device MGS llog_print <replaceable>fsname</replaceable>-MDT0000
+mgs# lctl --device MGS llog_print <replaceable>fsname</replaceable>-OST0000
+</screen>
+      </note>
       <para>To regenerate Lustre file system configuration logs:</para>
       <orderedlist>
         <listitem>
-          <para>Shut down the file system in this order.</para>
+          <para>Stop the file system services in the following order before
+	    running the <literal>tunefs.lustre --writeconf</literal> command:
+	  </para>
           <orderedlist>
             <listitem>
               <para>Unmount the clients.</para>
             </listitem>
             <listitem>
-              <para>Unmount the MDT.</para>
+              <para>Unmount the MDT(s).</para>
             </listitem>
             <listitem>
-              <para>Unmount all OSTs.</para>
+              <para>Unmount the OST(s).</para>
+            </listitem>
+            <listitem>
+              <para>If the MGS is separate from the MDT it can remain mounted
+	        during this process.</para>
             </listitem>
           </orderedlist>
         </listitem>
         <listitem>
-          <para>Make sure the the MDT and OST devices are available.</para>
+          <para>Make sure the MDT and OST devices are available.</para>
         </listitem>
         <listitem>
-          <para>Run the <literal>writeconf</literal> command on all servers.</para>
-          <para>Run writeconf on the MDT first, and then the OSTs.</para>
+          <para>Run the <literal>tunefs.lustre --writeconf</literal> command
+	    on all target devices.</para>
+          <para>Run writeconf on the MDT(s) first, and then the OST(s).</para>
           <orderedlist>
             <listitem>
-              <para>On the MDT, run:</para>
-              <screen>mdt# tunefs.lustre --writeconf <replaceable>/dev/mdt_device</replaceable></screen>
+              <para>On each MDS, for each MDT run:</para>
+              <screen>mds# tunefs.lustre --writeconf <replaceable>/dev/mdt_device</replaceable></screen>
             </listitem>
             <listitem>
-              <para>
-              On each OST, run:
-              
-          <screen>ost# tunefs.lustre --writeconf <replaceable>/dev/ost_device</replaceable></screen>
+              <para> On each OSS, for each OST run:
+          <screen>oss# tunefs.lustre --writeconf <replaceable>/dev/ost_device</replaceable></screen>
           </para>
             </listitem>
           </orderedlist>
         </listitem>
         <listitem>
-          <para>Restart the file system in this order.</para>
+          <para>Restart the file system in the following order:</para>
           <orderedlist>
             <listitem>
-              <para>Mount the MGS (or the combined MGS/MDT).</para>
+              <para>Mount the separate MGT, if it is not already mounted.</para>
             </listitem>
             <listitem>
-              <para>Mount the MDT.</para>
+              <para>Mount the MDT(s) in order, starting with MDT0000.</para>
             </listitem>
             <listitem>
-              <para>Mount the OSTs.</para>
+              <para>Mount the OSTs in order, starting with OST0000.</para>
             </listitem>
             <listitem>
               <para>Mount the clients.</para>
@@ -213,7 +217,9 @@ Regenerating Lustre Configuration Logs</title>
           </orderedlist>
         </listitem>
       </orderedlist>
-      <para>After the <literal>writeconf</literal> command is run, the configuration logs are re-generated as servers restart.</para>
+      <para>After the <literal>tunefs.lustre --writeconf</literal> command is
+      run, the configuration logs are re-generated as servers connect to the
+      MGS.</para>
     </section>
     <section xml:id="dbdoclet.changingservernid">
       <title><indexterm><primary>maintenance</primary><secondary>changing a NID</secondary></indexterm>
