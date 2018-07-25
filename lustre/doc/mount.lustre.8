@@ -10,20 +10,24 @@
 mount.lustre \- start a Lustre client or target service
 .SH SYNOPSIS
 .br
-.BI "mount \-t lustre [\-o " options "] " "device mountpoint"
+.BI "mount \-t lustre [\-o " options "] " "<block_device> <server_mountpoint>"
+.br
+.BI "mount \-t lustre [\-o " options "] " "<mgsname>:/<fsname> <client_mountpoint>"
 .SH DESCRIPTION
 .B mount.lustre
-is used to start a Lustre client or target service.  This program should not be
-called directly; rather it is a helper program invoked through
+is used to start a Lustre client or target service.  This program should not
+be called directly; rather it is a helper program invoked through
 .BR mount (8)
-as above.  Lustre clients and targets are stopped by using the
+as above when the
+.B lustre
+filesystem type is used.  Lustre clients and targets are stopped by using the
 .BR umount (8)
 command.
 .br
 
-There are two forms for the
-.I device
-option, depending on whether a client or a target service is started:
+There are two forms for the device option passed to the
+.I mount
+command, depending on whether a client or a target service is started:
 .TP
 .IR <mgsname> :/ <fsname>[/<subdir>]
 mounts the Lustre filesystem named
@@ -31,12 +35,12 @@ mounts the Lustre filesystem named
 (optionally starting at subdirectory
 .I subdir
 within the filesystem, if specified) on the client at the directory
-.IR mountpoint ,
+.IR client_mountpoint ,
 by contacting the Management Service at
 .IR mgsname .
 The format for
 .I mgsname
-is defined below.  A client filesystem can be listed in
+is defined below.  A client filesystem will typically be listed in
 .BR fstab (5)
 for automatic mount at boot time, is usable like any local filesystem, and
 provides a full POSIX-compilant interface.
@@ -44,7 +48,7 @@ provides a full POSIX-compilant interface.
 .I block_device
 starts the target service defined by the
 .IR mkfs.lustre (8)
-command on the physical disk
+command on the physical disk or ZFS dataset given by
 .IR block_device .
 The
 .I block_device
@@ -80,8 +84,8 @@ and may be running on any one of the nodes.
 .BI <mgsnode>:= <mgsnid>[,<mgsnid>]
 Each
 .I mgsnode
-may be specify a comma-separated list of NIDs, if there are different
-LNet interfaces for that
+may specify a comma-separated list of NIDs, if there are different
+LNet interfaces for the same
 .IR mgsnode .
 .TP
 .BI mgssec= flavor
@@ -150,7 +154,7 @@ support entirely, and is the default option.  Applications calling
 .BR flock(2)
 will get an
 .B ENOSYS
-error.  It is up to theadministrator to choose either the
+error.  It is up to the administrator to choose either the
 .B localflock
 or
 .B flock
@@ -187,13 +191,14 @@ Disable use of extended attributes by regular users.  Root and system processes 
 Force a client to keep pinging even if servers have enabled suppress_pings.
 .TP
 .BI verbose
-Enable mount/umount console messages.
+Enable mount/remount/umount console messages.
 .TP
 .BI noverbose
-Disable mount/umount console messages.
+Disable mount/remount/umount console messages.
 .TP
 .BI user_fid2path
-Enable FID to path translation by regular users.
+Enable FID to path translation by regular users via
+.BR "lfs fid2path" .
 .TP
 .BI nouser_fid2path
 Disable FID to path translation by regular users.  Root and process with
@@ -206,7 +211,7 @@ This option can be useful in case of several Lustre client mount
 points on the same node, with each mount point using a different
 network. It is also interesting when running Lustre clients from
 containers, by restricting each container to a specific network.
-.SH CLIENT OPTIONS
+.SH SERVER OPTIONS
 In addition to the standard mount options and backing disk type
 (e.g. ldiskfs) options listed in
 .BR mount (8),
@@ -215,21 +220,24 @@ Lustre understands the following
 options:
 .TP
 .BI acl
-Enable POSIX Access Control List support.  See the
+Enable POSIX Access Control List support for all clients.  See the
 .BR acl (5)
 manual page.
 .TP
 .BI nosvc
-Only start the MGC (and MGS, if co-located) for a target service, and not the actual service.
+Only start the MGC (and MGS, if co-located) for a target service,
+and not the actual MDS or OSS service.
 .TP
 .BI nomgs
-Start a MDT with a co-located MGS without starting the MGS.
+Start an MDT with a co-located MGS without starting the MGS service.
 .TP
 .BI noscrub
-Not trigger OI scrub automatically when detect some inconsistency, unless it is started explicitly.
+Do not trigger OI scrub automatically when an inconsistency is detected.
+It is still possible to start explicitly using the
+.BR "lctl lfsck_start" .
 .TP
 .BI skip_lfsck
-Not resume the former paused/crashed LFSCK automatically when mount.
+Do not resume the former paused/crashed LFSCK automatically when mounting.
 .TP
 .BI abort_recov
 Abort client recovery and start the target service immediately.

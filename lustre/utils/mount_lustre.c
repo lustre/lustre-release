@@ -88,35 +88,49 @@ void usage(FILE *out)
 {
 	fprintf(out, "\nThis mount helper should only be invoked via the "
 		"mount (8) command,\ne.g. mount -t lustre dev dir\n\n");
-	fprintf(out, "usage: %s [-fhnvV] [-o <mntopt>] <device> <mountpt>\n",
+	fprintf(out, "usage: %s [-fhnvV] [-o <srvopt>] <device> <mountpt>\n",
+		progname);
+	fprintf(out, "usage: %s [-fhnvV] [-o <cliopt>] <mgstarget> <mountpt>\n",
 		progname);
 	fprintf(out,
-		"\t<device>: the disk device, or for a client:\n"
+		"\t<device>: the local disk device when mounting a server\n"
+		"\t<mgstarget>: the server MGS and filesystem for a client:\n"
 		"\t\t<mgsnid>[:<altmgsnid>...]:/<filesystem>[/<subdir>]\n"
-		"\t<filesystem>: name of the Lustre filesystem (e.g. lustre1)\n"
+		"\t\t\t<mgsnid>: MGS LNet Node Identifier (e.g. mgs01@o2ib)\n"
+		"\t\t\t<filesystem>: Lustre filesystem name (e.g. lustre1)\n"
+		"\t\t\t<subdir>: subdirectory of the filesystem to mount\n"
 		"\t<mountpt>: filesystem mountpoint (e.g. /mnt/lustre)\n"
-		"\t-f|--fake: fake mount (updates /etc/mtab)\n"
+		"\t-f|--fake: fake mount (only update /etc/mtab)\n"
 		"\t-o force|--force: force mount even if already in /etc/mtab\n"
 		"\t-h|--help: print this usage message\n"
 		"\t-n|--nomtab: do not update /etc/mtab after mount\n"
 		"\t-v|--verbose: print verbose config settings\n"
 		"\t-V|--version: output build version of the utility and exit\n"
-		"\t<mntopt>: one or more comma separated of:\n"
-		"\t\t(no)flock,(no)user_xattr,(no)acl\n"
+		"\tdefault options are marked below with '*'\n"
+		"\t\t(no)flock: disable* or enable POSIX flock support\n"
+		"\t\t(no)user_xattr: disable or enable* user xattr namespace\n"
+		"\t<srvopt>: one or more comma separated server options:\n"
+		"\t\t(no)acl: disable or enable* POSIX ACL support completely\n"
 		"\t\tabort_recov: abort server recovery handling\n"
-		"\t\tnosvc: only start MGC/MGS obds\n"
-		"\t\tnomgs: only start target obds, using existing MGS\n"
-		"\t\tnoscrub: NOT auto start OI scrub unless start explicitly\n"
-		"\t\tskip_lfsck: NOT auto resume the paused/crashed LFSCK\n"
-		"\t\texclude=<ostname>[:<ostname>] : colon-separated list of "
-		"inactive OSTs (e.g. lustre-OST0001)\n"
-#ifdef HAVE_GSS
-		"\t\tskpath=<file|directory>: Path to a file or directory of"
-		"key configuration files to load into the kernel keyring\n"
-#endif
+		"\t\tnosvc: only start MGC/MGS without starting MDS/OSS\n"
+		"\t\tnomgs: only start target MDS/OSS, using existing MGS\n"
+		"\t\tnoscrub: do NOT auto start OI scrub unless requested\n"
+		"\t\tskip_lfsck: do NOT auto resume paused/crashed LFSCK\n"
+		"\t\tmd_stripe_cache_size=<num>: set MD RAID device stripe cache size\n"
+		"\t<cliopt>: one or more comma separated client options:\n"
+		"\t\texclude=<ostname>[:<ostname>]: list of inactive OSTs (e.g. lustre-OST0001)\n"
+		"\t\tlocalflock: enable POSIX flock only on local client\n"
 		"\t\tretry=<num>: number of times mount is retried by client\n"
-		"\t\tmd_stripe_cache_size=<num>: set the raid stripe cache "
-		"size for the underlying raid if present\n");
+#ifdef HAVE_GSS
+		"\t\tskpath=<file|directory>: path of keys to load into kernel keyring\n"
+#endif
+		"\t\t(no)user_fid2path: disable* or enable user $MOUNT/.lustre/fid access\n"
+		"\t\t(no)checksum: disable or enable* data checksums\n"
+		"\t\t(no)lruresize: disable or enable* LDLM dynamic LRU size\n"
+		"\t\t(no)lazystatfs: disable or enable* statfs to work if OST is unavailable\n"
+		"\t\t32bitapi: return only 32-bit inode numbers to userspace\n"
+		"\t\t(no)verbose: disable or enable* messages at filesystem (un,re)mount\n"
+		);
 	exit((out != stdout) ? EINVAL : 0);
 }
 
