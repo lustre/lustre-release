@@ -125,7 +125,9 @@ test_iorfpp() {
 run_test iorfpp "iorfpp"
 
 test_racer_on_nfs() {
-	$racer $CLIENTS
+	local racer_params="MDSCOUNT=$MDSCOUNT OSTCOUNT=$OSTCOUNT LFS=$LFS"
+
+	do_nodes $CLIENTS "$racer_params $racer $TESTDIR"
 }
 run_test racer_on_nfs "racer on NFS client"
 
