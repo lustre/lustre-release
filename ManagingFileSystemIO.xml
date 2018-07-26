@@ -15,12 +15,13 @@ xml:id="managingfilesystemio">
     </indexterm>Handling Full OSTs</title>
     <para>Sometimes a Lustre file system becomes unbalanced, often due to
     incorrectly-specified stripe settings, or when very large files are created
-    that are not striped over all of the OSTs. If an OST is full and an attempt
-    is made to write more information to the file system, an error occurs. The
-    procedures below describe how to handle a full OST.</para>
+    that are not striped over all of the OSTs. Lustre will automatically avoid
+    allocating new files on OSTs that are full. If an OST is completely full and
+    more data is written to files already located on that OST, an error occurs.
+    The procedures below describe how to handle a full OST.</para>
     <para>The MDS will normally handle space balancing automatically at file
-    creation time, and this procedure is normally not needed, but may be
-    desirable in certain circumstances (e.g. when creating very large files
+    creation time, and this procedure is normally not needed, but manual data
+    migration may be desirable in some cases (e.g. creating very large files
     that would consume more than the total free space of the full OSTs).</para>
     <section remap="h3">
       <title>
@@ -67,72 +68,28 @@ dd: writing '/mnt/testfs/test_3': No space left on device
       <title>
       <indexterm>
         <primary>I/O</primary>
-        <secondary>taking OST offline</secondary>
-      </indexterm>Taking a Full OST Offline</title>
+        <secondary>disabling OST creates</secondary>
+      </indexterm>Disabling creates on a Full OST</title>
       <para>To avoid running out of space in the file system, if the OST usage
       is imbalanced and one or more OSTs are close to being full while there
-      are others that have a lot of space, the full OSTs may optionally be
-      deactivated at the MDS to prevent the MDS from allocating new objects
-      there.</para>
+      are others that have a lot of space, the MDS will typically avoid file
+      creation on the full OST(s) automatically.  The full OSTs may optionally
+      be deactivated manually on the MDS to ensure the MDS will not allocate
+      new objects there.</para>
       <orderedlist>
         <listitem>
-          <para>Log into the MDS server:</para>
+          <para>Log into the MDS server and use the <literal>lctl</literal>
+	  command to stop new object creation on the full OST(s):
+          </para>
           <screen>
-client# ssh root@192.168.0.10 
-root@192.168.0.10's password: 
-Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6
-</screen>
-        </listitem>
-        <listitem>
-          <para>Use the 
-          <literal>lctl dl</literal> command to show the status of all file
-          system components:</para>
-          <screen>
-mds# lctl dl 
-0 UP mgs MGS MGS 9 
-1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
-2 UP mdt MDS MDS_uuid 3
-3 UP lov testfs-mdtlov testfs-mdtlov_UUID 4
-4 UP mds testfs-MDT0000 testfs-MDT0000_UUID 5
-5 UP osc testfs-OST0000-osc testfs-mdtlov_UUID 5
-6 UP osc testfs-OST0001-osc testfs-mdtlov_UUID 5
-7 UP osc testfs-OST0002-osc testfs-mdtlov_UUID 5
-8 UP osc testfs-OST0003-osc testfs-mdtlov_UUID 5
-9 UP osc testfs-OST0004-osc testfs-mdtlov_UUID 5
-10 UP osc testfs-OST0005-osc testfs-mdtlov_UUID 5
-</screen>
-        </listitem>
-        <listitem>
-          <para>Use 
-          <literal>lctl</literal> deactivate to take the full OST
-          offline:</para>
-          <screen>
-mds# lctl --device 7 deactivate
-</screen>
-        </listitem>
-        <listitem>
-          <para>Display the status of the file system components:</para>
-          <screen>
-mds# lctl dl 
-0 UP mgs MGS MGS 9
-1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
-2 UP mdt MDS MDS_uuid 3
-3 UP lov testfs-mdtlov testfs-mdtlov_UUID 4
-4 UP mds testfs-MDT0000 testfs-MDT0000_UUID 5
-5 UP osc testfs-OST0000-osc testfs-mdtlov_UUID 5
-6 UP osc testfs-OST0001-osc testfs-mdtlov_UUID 5
-7 IN osc testfs-OST0002-osc testfs-mdtlov_UUID 5
-8 UP osc testfs-OST0003-osc testfs-mdtlov_UUID 5
-9 UP osc testfs-OST0004-osc testfs-mdtlov_UUID 5
-10 UP osc testfs-OST0005-osc testfs-mdtlov_UUID 5
+mds# lctl set_param osp.<replaceable>fsname</replaceable>-OST<replaceable>nnnn</replaceable>*.max_create_count=0
 </screen>
         </listitem>
       </orderedlist>
-      <para>The device list shows that OST0002 is now inactive. When new files
-      are created in the file system, they will only use the remaining active
-      OSTs. Either manual space rebalancing can be done by migrating data to
-      other OSTs, as shown in the next section, or normal file deletion and
-      creation can be allowed to passively rebalance the space usage.</para>
+      <para>When new files are created in the file system, they will only use
+      the remaining OSTs. Either manual space rebalancing can be done by
+      migrating data to other OSTs, as shown in the next section, or normal
+      file deletion and creation can passively rebalance the space usage.</para>
     </section>
     <section remap="h3">
       <title>
@@ -141,13 +98,38 @@ mds# lctl dl
         <secondary>migrating data</secondary>
       </indexterm>
       <indexterm>
-        <primary>migrating metadata</primary>
-      </indexterm>
-      <indexterm>
         <primary>maintenance</primary>
         <secondary>full OSTs</secondary>
       </indexterm>Migrating Data within a File System</title>
 
+      <para>If there is a need to move the file data from the current
+      OST(s) to new OST(s), the data must be migrated (copied)
+      to the new location.  The simplest way to do this is to use the
+      <literal>lfs_migrate</literal> command, as described in
+      <xref linkend="dbdoclet.adding_new_ost" />.</para>
+    </section>
+    <section remap="h3">
+      <title>
+      <indexterm>
+        <primary>I/O</primary>
+        <secondary>bringing OST online</secondary>
+      </indexterm>
+      <indexterm>
+        <primary>maintenance</primary>
+        <secondary>bringing OST online</secondary>
+      </indexterm>Returning an Inactive OST Back Online</title>
+      <para>Once the full OST(s) no longer are severely imbalanced, due
+      to either active or passive data redistribution, they should be
+      reactivated so they will again have new files allocated on them.</para>
+      <screen>
+[mds]# lctl set_param osp.testfs-OST0002.max_create_count=20000
+</screen>
+    </section>
+    <section remap="h3">
+      <title>
+      <indexterm>
+        <primary>migrating metadata</primary>
+      </indexterm>Migrating Directories to a new MDT</title>
       <para condition='l28'>Lustre software version 2.8 includes a feature
       to migrate metadata (directories and inodes therein) between MDTs.
       This migration can only be performed on whole directories. For example,
@@ -172,44 +154,10 @@ $ for i in $(seq 3); do lfs getstripe -M ./testremote/${i}.txt; done <lineannota
       <para>For more information, see <literal>man lfs-migrate</literal></para>
       <warning><para>Currently, only whole directories can be migrated
       between MDTs. During migration each file receives a new identifier
-      (FID). As a consequence, the file receives a new inode number. Some
+      (FID). As a consequence, the file will report a new inode number. Some
       system tools (for example, backup and archiving tools) may consider
       the migrated files to be new, even though the contents are unchanged.
       </para></warning>
-      <para>If there is a need to migrate the file <emphasis>data</emphasis>
-      from the current OST(s) to new OST(s), the data must be migrated (copied)
-      to the new location.  The simplest way to do this is to use the
-      <literal>lfs_migrate</literal> command, see
-      <xref linkend="dbdoclet.lfs_migrate" />.</para>
-    </section>
-    <section remap="h3">
-      <title>
-      <indexterm>
-        <primary>I/O</primary>
-        <secondary>bringing OST online</secondary>
-      </indexterm>
-      <indexterm>
-        <primary>maintenance</primary>
-        <secondary>bringing OST online</secondary>
-      </indexterm>Returning an Inactive OST Back Online</title>
-      <para>Once the deactivated OST(s) no longer are severely imbalanced, due
-      to either active or passive data redistribution, they should be
-      reactivated so they will again have new files allocated on them.</para>
-      <screen>
-[mds]# lctl --device 7 activate
-[mds]# lctl dl
-  0 UP mgs MGS MGS 9
-  1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-816dd1e813 5
-  2 UP mdt MDS MDS_uuid 3
-  3 UP lov testfs-mdtlov testfs-mdtlov_UUID 4
-  4 UP mds testfs-MDT0000 testfs-MDT0000_UUID 5
-  5 UP osc testfs-OST0000-osc testfs-mdtlov_UUID 5
-  6 UP osc testfs-OST0001-osc testfs-mdtlov_UUID 5
-  7 UP osc testfs-OST0002-osc testfs-mdtlov_UUID 5
-  8 UP osc testfs-OST0003-osc testfs-mdtlov_UUID 5
-  9 UP osc testfs-OST0004-osc testfs-mdtlov_UUID 5
- 10 UP osc testfs-OST0005-osc testfs-mdtlov_UUID
-</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438211_75549">

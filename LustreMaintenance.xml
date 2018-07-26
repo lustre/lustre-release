@@ -420,7 +420,7 @@ oss# mount -t lustre /dev/sda /mnt/testfs/ost12</screen>
 	  This redistributes file data over the entire set of OSTs.</para>
           <para>For example, to rebalance all files within the directory
 	  <literal>/mnt/lustre/dir</literal>, enter:</para>
-          <screen>client# lfs_migrate /mnt/lustre/file</screen>
+          <screen>client# lfs_migrate /mnt/lustre/dir</screen>
           <para>To migrate files within the <literal>/test</literal> file
 	  system on <literal>OST0004</literal> that are larger than 4GB in
 	  size to other OSTs, enter:</para>
@@ -474,16 +474,16 @@ Removing and Restoring MDTs and OSTs</title>
       <section condition="l24" xml:id="dbdoclet.rmremotedir">
       <title><indexterm><primary>maintenance</primary><secondary>removing an MDT</secondary></indexterm>Removing an MDT from the File System</title>
         <para>If the MDT is permanently inaccessible,
-    <literal>lfs rm_entry {directory}</literal> can be used to delete the
-    directory entry for the unavailable MDT. Using <literal>rmdir</literal>
-    would otherwise report an IO error due to the remote MDT being inactive.
-    Please note that if the MDT <emphasis>is</emphasis> available, standard
-    <literal>rm -r</literal> should be used to delete the remote directory.
-    After the remote directory has been removed, the administrator should
-    mark the MDT as permanently inactive with:</para>
-<screen>lctl conf_param {MDT name}.mdc.active=0</screen>
-<para>A user can identify which MDT holds a remote sub-directory using
-the <literal>lfs</literal> utility. For example:</para>
+        <literal>lfs rm_entry {directory}</literal> can be used to delete the
+        directory entry for the unavailable MDT. Using <literal>rmdir</literal>
+        would otherwise report an IO error due to the remote MDT being inactive.
+        Please note that if the MDT <emphasis>is</emphasis> available, standard
+        <literal>rm -r</literal> should be used to delete the remote directory.
+        After the remote directory has been removed, the administrator should
+        mark the MDT as permanently inactive with:</para>
+        <screen>lctl conf_param {MDT name}.mdc.active=0</screen>
+        <para>A user can identify which MDT holds a remote sub-directory using
+        the <literal>lfs</literal> utility. For example:</para>
 <screen>client$ lfs getstripe --mdt-index /mnt/lustre/remote_dir1
 1
 client$ mkdir /mnt/lustre/local_dir0
@@ -492,8 +492,8 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
 </screen>
         <para>The <literal>lfs getstripe --mdt-index</literal> command
         returns the index of the MDT that is serving the given directory.</para>
-          </section>
-          <section xml:id="dbdoclet.inactivemdt" condition='l24'>
+      </section>
+      <section xml:id="dbdoclet.inactivemdt" condition='l24'>
       <title>
           <indexterm><primary>maintenance</primary></indexterm>
           <indexterm><primary>maintenance</primary><secondary>inactive MDTs</secondary></indexterm>Working with Inactive MDTs</title>
@@ -570,6 +570,11 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
               files with objects on the deactivated OST, and copy them
               to other OSTs in the file system to: </para>
               <screen>client# lfs find --ost <replaceable>ost_name</replaceable> <replaceable>/mount/point</replaceable> | lfs_migrate -y</screen>
+	      <para>Note that if multiple OSTs are being deactivated at one
+	      time, the <literal>lfs find</literal> command can take multiple
+	      <literal>--ost</literal> arguments, and will return files that
+	      are located on <emphasis>any</emphasis> of the specified OSTs.
+	      </para>
             </listitem>
             <listitem>
               <para>If the OST is no longer available, delete the files

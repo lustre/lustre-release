@@ -26,12 +26,14 @@ XSL_F16=/usr/share/sgml/docbook/xsl-ns-stylesheets
 XSL_SLE=/usr/share/xml/docbook/stylesheet/nwalsh5/current
 XSL_BREW=/usr/local/opt/docbook-xsl/docbook-xsl
 XSL_MAC=/opt/local/share/xsl/docbook-xsl
+XSL_MAC2=/opt/local/share/xsl/docbook-xsl-nons
 XSL=$(or $(shell ls -d $(XSL_UBN) 2> /dev/null), \
 	 $(shell ls -d $(XSL_REL) 2> /dev/null), \
 	 $(shell ls -d $(XSL_F16) 2> /dev/null), \
 	 $(shell ls -d $(XSL_SLE) 2> /dev/null), \
 	 $(shell ls -d $(XSL_BREW) 2> /dev/null),\
-	 $(shell ls -d $(XSL_MAC) 2> /dev/null))
+	 $(shell ls -d $(XSL_MAC) 2> /dev/null),\
+	 $(shell ls -d $(XSL_MAC2) 2> /dev/null))
 PRIMARYXSL=$(XSL)/$(subst $(TGT_BASE).,,$@)/docbook.xsl
 PRIMARYCHUNKXSL=$(XSL)/html/chunkfast.xsl
 
