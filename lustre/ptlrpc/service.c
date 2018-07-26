@@ -1496,14 +1496,18 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 				break;
 			}
 
-			ptlrpc_at_remove_timed(rq);
 			/**
 			 * ptlrpc_server_drop_request() may drop
 			 * refcount to 0 already. Let's check this and
 			 * don't add entry to work_list
 			 */
-			if (likely(atomic_inc_not_zero(&rq->rq_refcount)))
+			if (likely(atomic_inc_not_zero(&rq->rq_refcount))) {
+				ptlrpc_at_remove_timed(rq);
 				list_add(&rq->rq_timed_list, &work_list);
+			} else {
+				ptlrpc_at_remove_timed(rq);
+			}
+
 			counter++;
 		}
 
