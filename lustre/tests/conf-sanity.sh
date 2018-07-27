@@ -8096,6 +8096,28 @@ test_116() {
 }
 run_test 116 "big size MDT support"
 
+test_122() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[[ $(lustre_version_code ost1) -ge $(version_code 2.11.53) ]] ||
+		{ skip "Need OST version at least 2.11.53" && return 0; }
+
+
+	reformat
+	LOAD_MODULES_REMOTE=true load_modules
+#define OBD_FAIL_OFD_SET_OID 0x1e0
+	do_facet ost1 $LCTL set_param fail_loc=0x00001e0
+
+	setupall
+	$LFS mkdir -i1 -c1 $DIR/$tdir
+	$LFS setstripe -i0 -c1 $DIR/$tdir
+	do_facet ost1 $LCTL set_param fail_loc=0
+	createmany -o $DIR/$tdir/file_ 1000 ||
+		error "Fail to create a new sequence"
+
+	reformat
+}
+run_test 122 "Check OST sequence update"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

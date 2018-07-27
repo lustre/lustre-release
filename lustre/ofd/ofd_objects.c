@@ -207,12 +207,12 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 	/* Don't create objects beyond the valid range for this SEQ */
 	if (unlikely(fid_seq_is_mdt0(ostid_seq(&oseq->os_oi)) &&
-		     (id + nr) >= IDIF_MAX_OID)) {
+		     (id + nr) > IDIF_MAX_OID)) {
 		CERROR("%s:"DOSTID" hit the IDIF_MAX_OID (1<<48)!\n",
 		       ofd_name(ofd), id, ostid_seq(&oseq->os_oi));
 		RETURN(rc = -ENOSPC);
 	} else if (unlikely(!fid_seq_is_mdt0(ostid_seq(&oseq->os_oi)) &&
-			    (id + nr) >= OBIF_MAX_OID)) {
+			    (id + nr) > OBIF_MAX_OID)) {
 		CERROR("%s:"DOSTID" hit the OBIF_MAX_OID (1<<32)!\n",
 		       ofd_name(ofd), id, ostid_seq(&oseq->os_oi));
 		RETURN(rc = -ENOSPC);
