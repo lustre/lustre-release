@@ -826,6 +826,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_FLR		0x20ULL /* FLR support */
 #define OBD_CONNECT2_WBC_INTENTS	0x40ULL /* create/unlink/... intents for wbc, also operations under client-held parent locks */
 #define OBD_CONNECT2_LOCK_CONVERT	0x80ULL /* IBITS lock convert support */
+#define OBD_CONNECT2_ARCHIVE_ID_ARRAY	0x100ULL /* store HSM archive_id in array */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
