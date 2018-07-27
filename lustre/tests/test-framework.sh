@@ -45,7 +45,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/functions.sh
 . $LUSTRE/tests/yaml.sh
 
-export LD_LIBRARY_PATH=${LUSTRE}/utils:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=${LUSTRE}/utils/.libs:${LUSTRE}/utils:${LD_LIBRARY_PATH}
 
 LUSTRE_TESTS_CFG_DIR=${LUSTRE_TESTS_CFG_DIR:-${LUSTRE}/tests/cfg}
 
