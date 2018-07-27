@@ -416,7 +416,10 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 
 	if (info->fti_attr.la_size == 0) {
 		/* object is just created, initialize last id */
-		ofd_seq_last_oid_set(oseq, OFD_INIT_OBJID);
+		if (OBD_FAIL_CHECK(OBD_FAIL_OFD_SET_OID))
+			ofd_seq_last_oid_set(oseq, 0xffffff00);
+		else
+			ofd_seq_last_oid_set(oseq, OFD_INIT_OBJID);
 		ofd_seq_last_oid_write(env, ofd, oseq);
 	} else if (info->fti_attr.la_size == sizeof(lastid)) {
 		info->fti_off = 0;
