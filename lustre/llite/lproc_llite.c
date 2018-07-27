@@ -131,68 +131,77 @@ static ssize_t ll_stat_blksize_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ll_stat_blksize);
 
-static int ll_kbytestotal_seq_show(struct seq_file *m, void *v)
+static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	struct obd_statfs osfs;
+	u32 blk_size;
+	u64 result;
 	int rc;
 
-	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
-	if (!rc) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_blocks;
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
 
-		while (blk_size >>= 1)
-			result <<= 1;
+	blk_size = osfs.os_bsize >> 10;
+	result = osfs.os_blocks;
 
-		seq_printf(m, "%llu\n", result);
-	}
-	return rc;
+	while (blk_size >>= 1)
+		result <<= 1;
+
+	return sprintf(buf, "%llu\n", result);
 }
-LPROC_SEQ_FOPS_RO(ll_kbytestotal);
+LUSTRE_RO_ATTR(kbytestotal);
 
-static int ll_kbytesfree_seq_show(struct seq_file *m, void *v)
+static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	struct obd_statfs osfs;
+	u32 blk_size;
+	u64 result;
 	int rc;
 
-	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
-	if (!rc) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_bfree;
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
 
-		while (blk_size >>= 1)
-			result <<= 1;
+	blk_size = osfs.os_bsize >> 10;
+	result = osfs.os_bfree;
 
-		seq_printf(m, "%llu\n", result);
-	}
-	return rc;
+	while (blk_size >>= 1)
+		result <<= 1;
+
+	return sprintf(buf, "%llu\n", result);
 }
-LPROC_SEQ_FOPS_RO(ll_kbytesfree);
+LUSTRE_RO_ATTR(kbytesfree);
 
-static int ll_kbytesavail_seq_show(struct seq_file *m, void *v)
+static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	struct obd_statfs osfs;
+	u32 blk_size;
+	u64 result;
 	int rc;
 
-	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
-	if (!rc) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_bavail;
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
 
-		while (blk_size >>= 1)
-			result <<= 1;
+	blk_size = osfs.os_bsize >> 10;
+	result = osfs.os_bavail;
 
-		seq_printf(m, "%llu\n", result);
-	}
-	return rc;
+	while (blk_size >>= 1)
+		result <<= 1;
+
+	return sprintf(buf, "%llu\n", result);
 }
-LPROC_SEQ_FOPS_RO(ll_kbytesavail);
+LUSTRE_RO_ATTR(kbytesavail);
 
 static int ll_filestotal_seq_show(struct seq_file *m, void *v)
 {
@@ -1174,12 +1183,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_site_stats_fops			},
 	{ .name	=	"stat_blocksize",
 	  .fops	=	&ll_stat_blksize_fops			},
-	{ .name	=	"kbytestotal",
-	  .fops	=	&ll_kbytestotal_fops			},
-	{ .name	=	"kbytesfree",
-	  .fops	=	&ll_kbytesfree_fops			},
-	{ .name	=	"kbytesavail",
-	  .fops	=	&ll_kbytesavail_fops			},
 	{ .name	=	"filestotal",
 	  .fops	=	&ll_filestotal_fops			},
 	{ .name	=	"filesfree",
@@ -1237,6 +1240,9 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 
 static struct attribute *llite_attrs[] = {
 	&lustre_attr_blocksize.attr,
+	&lustre_attr_kbytestotal.attr,
+	&lustre_attr_kbytesfree.attr,
+	&lustre_attr_kbytesavail.attr,
 	&lustre_attr_statahead_running_max.attr,
 	NULL,
 };
