@@ -8057,10 +8057,15 @@ test_116() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.59) ] &&
 		skip "Need server version at least 2.10.59" && return
 
+	do_facet $SINGLEMDS which mkfs.xfs || {
+		skip_env "No mkfs.xfs installed"
+		return
+	}
+
 	stopall
 	load_modules
 
-	local tmpmnt=/mnt/$tdir
+	local tmpmnt=$TMP/$tdir
 	local mdtimg=$tfile-mdt0
 
 	do_facet $SINGLEMDS mkdir -p $tmpmnt
