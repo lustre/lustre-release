@@ -187,15 +187,14 @@ LPROC_SEQ_FOPS(lod_stripesize);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_stripeoffset_seq_show(struct seq_file *m, void *v)
+static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%lld\n", lod->lod_desc.ld_default_stripe_offset);
-	return 0;
+	return sprintf(buf, "%lld\n", lod->lod_desc.ld_default_stripe_offset);
 }
 
 /**
@@ -212,21 +211,19 @@ static int lod_stripeoffset_seq_show(struct seq_file *m, void *v)
  * \retval @count	on success
  * \retval negative	error code if failed
  */
-static ssize_t
-lod_stripeoffset_seq_write(struct file *file, const char __user *buffer,
-			   size_t count, loff_t *off)
+static ssize_t stripeoffset_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 	long val;
 	int rc;
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = kstrtol_from_user(buffer, count, 0, &val);
+	rc = kstrtol(buffer, 0, &val);
 	if (rc)
 		return rc;
+
 	if (val < -1 || val > LOV_MAX_STRIPE_COUNT)
 		return -ERANGE;
 
@@ -234,7 +231,7 @@ lod_stripeoffset_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_stripeoffset);
+LUSTRE_RW_ATTR(stripeoffset);
 
 /**
  * Show default striping pattern (LOV_PATTERN_*).
@@ -245,15 +242,14 @@ LPROC_SEQ_FOPS(lod_stripeoffset);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_stripetype_seq_show(struct seq_file *m, void *v)
+static ssize_t stripetype_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%u\n", lod->lod_desc.ld_pattern);
-	return 0;
+	return sprintf(buf, "%u\n", lod->lod_desc.ld_pattern);
 }
 
 /**
@@ -268,19 +264,16 @@ static int lod_stripetype_seq_show(struct seq_file *m, void *v)
  * \retval @count	on success
  * \retval negative	error code if failed
  */
-static ssize_t
-lod_stripetype_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
+static ssize_t stripetype_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 	u32 pattern;
 	int rc;
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = kstrtouint_from_user(buffer, count, 0, &pattern);
+	rc = kstrtouint(buffer, 0, &pattern);
 	if (rc)
 		return rc;
 
@@ -289,7 +282,7 @@ lod_stripetype_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_stripetype);
+LUSTRE_RW_ATTR(stripetype);
 
 /**
  * Show default number of stripes.
@@ -300,16 +293,15 @@ LPROC_SEQ_FOPS(lod_stripetype);
  * \retval 0		on success,
  * \retval negative	error code if failed
  */
-static int lod_stripecount_seq_show(struct seq_file *m, void *v)
+static ssize_t stripecount_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%d\n",
-		   (__s16)(lod->lod_desc.ld_default_stripe_count + 1) - 1);
-	return 0;
+	return sprintf(buf, "%d\n",
+		       (s16)(lod->lod_desc.ld_default_stripe_count + 1) - 1);
 }
 
 /**
@@ -324,19 +316,16 @@ static int lod_stripecount_seq_show(struct seq_file *m, void *v)
  * \retval @count	on success
  * \retval negative	error code otherwise
  */
-static ssize_t
-lod_stripecount_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
+static ssize_t stripecount_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 	u32 stripe_count;
 	int rc;
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-	rc = kstrtouint_from_user(buffer, count, 0, &stripe_count);
+	rc = kstrtouint(buffer, 0, &stripe_count);
 	if (rc)
 		return rc;
 
@@ -345,7 +334,7 @@ lod_stripecount_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_stripecount);
+LUSTRE_RW_ATTR(stripecount);
 
 /**
  * Show number of targets.
@@ -356,17 +345,16 @@ LPROC_SEQ_FOPS(lod_stripecount);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_numobd_seq_show(struct seq_file *m, void *v)
+static ssize_t numobd_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%u\n", lod->lod_desc.ld_tgt_count);
-	return 0;
+	return sprintf(buf, "%u\n", lod->lod_desc.ld_tgt_count);
 }
-LPROC_SEQ_FOPS_RO(lod_numobd);
+LUSTRE_RO_ATTR(numobd);
 
 /**
  * Show number of active targets.
@@ -377,17 +365,16 @@ LPROC_SEQ_FOPS_RO(lod_numobd);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_activeobd_seq_show(struct seq_file *m, void *v)
+static ssize_t activeobd_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%u\n", lod->lod_desc.ld_active_tgt_count);
-	return 0;
+	return sprintf(buf, "%u\n", lod->lod_desc.ld_active_tgt_count);
 }
-LPROC_SEQ_FOPS_RO(lod_activeobd);
+LUSTRE_RO_ATTR(activeobd);
 
 /**
  * Show UUID of LOD device.
@@ -398,17 +385,16 @@ LPROC_SEQ_FOPS_RO(lod_activeobd);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_desc_uuid_seq_show(struct seq_file *m, void *v)
+static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%s\n", lod->lod_desc.ld_uuid.uuid);
-	return 0;
+	return sprintf(buf, "%s\n", lod->lod_desc.ld_uuid.uuid);
 }
-LPROC_SEQ_FOPS_RO(lod_desc_uuid);
+LUSTRE_RO_ATTR(desc_uuid);
 
 /**
  * Show QoS priority parameter.
@@ -424,15 +410,15 @@ LPROC_SEQ_FOPS_RO(lod_desc_uuid);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_qos_priofree_seq_show(struct seq_file *m, void *v)
+static ssize_t qos_prio_free_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(lod != NULL);
-	seq_printf(m, "%d%%\n",
-		   (lod->lod_qos.lq_prio_free * 100 + 255) >> 8);
-	return 0;
+	return sprintf(buf, "%d%%\n",
+		       (lod->lod_qos.lq_prio_free * 100 + 255) >> 8);
 }
 
 /**
@@ -451,20 +437,16 @@ static int lod_qos_priofree_seq_show(struct seq_file *m, void *v)
  * \retval @count	on success
  * \retval negative	error code if failed
  */
-static ssize_t
-lod_qos_priofree_seq_write(struct file *file, const char __user *buffer,
-			   size_t count, loff_t *off)
+static ssize_t qos_prio_free_store(struct kobject *kobj, struct attribute *attr,
+				   const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 	unsigned int val;
 	int rc;
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -476,7 +458,7 @@ lod_qos_priofree_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_qos_priofree);
+LUSTRE_RW_ATTR(qos_prio_free);
 
 /**
  * Show threshold for "same space on all OSTs" rule.
@@ -553,15 +535,14 @@ LPROC_SEQ_FOPS(lod_qos_thresholdrr);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_qos_maxage_seq_show(struct seq_file *m, void *v)
+static ssize_t qos_maxage_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%u Sec\n", lod->lod_desc.ld_qos_maxage);
-	return 0;
+	return sprintf(buf, "%u Sec\n", lod->lod_desc.ld_qos_maxage);
 }
 
 /**
@@ -575,14 +556,13 @@ static int lod_qos_maxage_seq_show(struct seq_file *m, void *v)
  * \retval @count	on success
  * \retval negative	error code if failed
  */
-static ssize_t
-lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
+static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 	struct lustre_cfg_bufs bufs;
-	struct lod_device *lod;
 	struct lu_device *next;
 	struct lustre_cfg *lcfg;
 	char str[32];
@@ -590,10 +570,7 @@ lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
 	int rc;
 	u32 val;
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -624,7 +601,7 @@ lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_qos_maxage);
+LUSTRE_RW_ATTR(qos_maxage);
 
 static void *lod_osts_seq_start(struct seq_file *p, loff_t *pos)
 {
@@ -734,13 +711,6 @@ static int lod_osts_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-LPROC_SEQ_FOPS_RO_TYPE(lod, dt_blksize);
-LPROC_SEQ_FOPS_RO_TYPE(lod, dt_kbytestotal);
-LPROC_SEQ_FOPS_RO_TYPE(lod, dt_kbytesfree);
-LPROC_SEQ_FOPS_RO_TYPE(lod, dt_kbytesavail);
-LPROC_SEQ_FOPS_RO_TYPE(lod, dt_filestotal);
-LPROC_SEQ_FOPS_RO_TYPE(lod, dt_filesfree);
-
 /**
  * Show whether special failout mode for testing is enabled or not.
  *
@@ -750,16 +720,14 @@ LPROC_SEQ_FOPS_RO_TYPE(lod, dt_filesfree);
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_lmv_failout_seq_show(struct seq_file *m, void *v)
+static ssize_t lmv_failout_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-
-	seq_printf(m, "%d\n", lod->lod_lmv_failout ? 1 : 0);
-	return 0;
+	return sprintf(buf, "%d\n", lod->lod_lmv_failout ? 1 : 0);
 }
 
 /**
@@ -777,20 +745,16 @@ static int lod_lmv_failout_seq_show(struct seq_file *m, void *v)
  * \retval @count	on success
  * \retval negative	error code if failed
  */
-static ssize_t
-lod_lmv_failout_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
+static ssize_t lmv_failout_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 	bool val = 0;
 	int rc;
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -798,46 +762,16 @@ lod_lmv_failout_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_lmv_failout);
+LUSTRE_RW_ATTR(lmv_failout);
 
 static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 	{ .name	=	"stripesize",
 	  .fops	=	&lod_stripesize_fops	},
-	{ .name	=	"stripeoffset",
-	  .fops	=	&lod_stripeoffset_fops	},
-	{ .name	=	"stripecount",
-	  .fops	=	&lod_stripecount_fops	},
-	{ .name	=	"stripetype",
-	  .fops	=	&lod_stripetype_fops	},
-	{ .name	=	"numobd",
-	  .fops	=	&lod_numobd_fops	},
-	{ .name	=	"activeobd",
-	  .fops	=	&lod_activeobd_fops	},
-	{ .name	=	"desc_uuid",
-	  .fops	=	&lod_desc_uuid_fops	},
-	{ .name	=	"qos_prio_free",
-	  .fops	=	&lod_qos_priofree_fops	},
 	{ .name	=	"qos_threshold_rr",
 	  .fops	=	&lod_qos_thresholdrr_fops },
-	{ .name	=	"qos_maxage",
-	  .fops	=	&lod_qos_maxage_fops	},
-	{ .name	=	"lmv_failout",
-	  .fops	=	&lod_lmv_failout_fops	},
-	{
-	  .name = "dom_stripesize",
-	  .fops = &lod_dom_stripesize_fops
-	},
+	{ .name =	"dom_stripesize",
+	  .fops =	&lod_dom_stripesize_fops	},
 	{ NULL }
-};
-
-static struct lprocfs_vars lprocfs_lod_osd_vars[] = {
-	{ .name = "blocksize",	 .fops = &lod_dt_blksize_fops },
-	{ .name = "kbytestotal", .fops = &lod_dt_kbytestotal_fops },
-	{ .name = "kbytesfree",	 .fops = &lod_dt_kbytesfree_fops },
-	{ .name = "kbytesavail", .fops = &lod_dt_kbytesavail_fops },
-	{ .name = "filestotal",	 .fops = &lod_dt_filestotal_fops },
-	{ .name = "filesfree",	 .fops = &lod_dt_filesfree_fops },
-	{ .name = NULL }
 };
 
 static const struct file_operations lod_proc_target_fops = {
@@ -846,6 +780,19 @@ static const struct file_operations lod_proc_target_fops = {
 	.read    = seq_read,
 	.llseek  = seq_lseek,
 	.release = lprocfs_seq_release,
+};
+
+static struct attribute *lod_attrs[] = {
+	&lustre_attr_stripeoffset.attr,
+	&lustre_attr_stripecount.attr,
+	&lustre_attr_stripetype.attr,
+	&lustre_attr_activeobd.attr,
+	&lustre_attr_desc_uuid.attr,
+	&lustre_attr_lmv_failout.attr,
+	&lustre_attr_numobd.attr,
+	&lustre_attr_qos_maxage.attr,
+	&lustre_attr_qos_prio_free.attr,
+	NULL,
 };
 
 /**
@@ -864,18 +811,22 @@ int lod_procfs_init(struct lod_device *lod)
 	struct kobject *lov;
 	int rc;
 
-	obd->obd_vars = lprocfs_lod_obd_vars;
-	rc = lprocfs_obd_setup(obd, true);
+	lod->lod_dt_dev.dd_ktype.default_attrs = lod_attrs;
+	rc = dt_tunables_init(&lod->lod_dt_dev, obd->obd_type, obd->obd_name,
+			      NULL);
 	if (rc) {
-		CERROR("%s: cannot setup procfs entry: %d\n",
+		CERROR("%s: failed to setup DT tunables: %d\n",
 		       obd->obd_name, rc);
 		RETURN(rc);
 	}
 
-	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_lod_osd_vars,
-			      &lod->lod_dt_dev);
-	if (rc) {
-		CERROR("%s: cannot setup procfs entry: %d\n",
+	obd->obd_vars = lprocfs_lod_obd_vars;
+	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
+					       obd->obd_type->typ_procroot,
+					       obd->obd_vars, obd);
+	if (IS_ERR(obd->obd_proc_entry)) {
+		rc = PTR_ERR(obd->obd_proc_entry);
+		CERROR("%s: error %d setting up lprocfs\n",
 		       obd->obd_name, rc);
 		GOTO(out, rc);
 	}
@@ -901,7 +852,7 @@ int lod_procfs_init(struct lod_device *lod)
 
 	lov = kset_find_obj(lustre_kset, "lov");
 	if (lov) {
-		rc = sysfs_create_link(lov, &obd->obd_kset.kobj,
+		rc = sysfs_create_link(lov, &lod->lod_dt_dev.dd_kobj,
 				       obd->obd_name);
 		kobject_put(lov);
 	}
@@ -933,7 +884,7 @@ int lod_procfs_init(struct lod_device *lod)
 	RETURN(0);
 
 out:
-	lprocfs_obd_cleanup(obd);
+	dt_tunables_fini(&lod->lod_dt_dev);
 
 	return rc;
 }
@@ -962,7 +913,12 @@ void lod_procfs_fini(struct lod_device *lod)
 	if (!IS_ERR_OR_NULL(lod->lod_debugfs))
 		ldebugfs_remove(&lod->lod_debugfs);
 
-	lprocfs_obd_cleanup(obd);
+	if (obd->obd_proc_entry) {
+		lprocfs_remove(&obd->obd_proc_entry);
+		obd->obd_proc_entry = NULL;
+	}
+
+	dt_tunables_fini(&lod->lod_dt_dev);
 }
 
 #endif /* CONFIG_PROC_FS */
