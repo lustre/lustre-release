@@ -203,33 +203,37 @@ static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(kbytesavail);
 
-static int ll_filestotal_seq_show(struct seq_file *m, void *v)
+static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	struct obd_statfs osfs;
 	int rc;
 
-	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
-	if (!rc)
-		seq_printf(m, "%llu\n", osfs.os_files);
-	return rc;
-}
-LPROC_SEQ_FOPS_RO(ll_filestotal);
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
 
-static int ll_filesfree_seq_show(struct seq_file *m, void *v)
+	return sprintf(buf, "%llu\n", osfs.os_files);
+}
+LUSTRE_RO_ATTR(filestotal);
+
+static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	struct obd_statfs osfs;
 	int rc;
 
-	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_NODELAY);
-	if (!rc)
-		seq_printf(m, "%llu\n", osfs.os_ffree);
-	return rc;
+	rc = ll_statfs_internal(sbi, &osfs, OBD_STATFS_NODELAY);
+	if (rc)
+		return rc;
+
+	return sprintf(buf, "%llu\n", osfs.os_ffree);
 }
-LPROC_SEQ_FOPS_RO(ll_filesfree);
+LUSTRE_RO_ATTR(filesfree);
 
 static int ll_client_type_seq_show(struct seq_file *m, void *v)
 {
@@ -1183,10 +1187,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_site_stats_fops			},
 	{ .name	=	"stat_blocksize",
 	  .fops	=	&ll_stat_blksize_fops			},
-	{ .name	=	"filestotal",
-	  .fops	=	&ll_filestotal_fops			},
-	{ .name	=	"filesfree",
-	  .fops	=	&ll_filesfree_fops			},
 	{ .name	=	"client_type",
 	  .fops	=	&ll_client_type_fops			},
 	{ .name	=	"max_read_ahead_mb",
@@ -1243,6 +1243,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
+	&lustre_attr_filestotal.attr,
+	&lustre_attr_filesfree.attr,
 	&lustre_attr_statahead_running_max.attr,
 	NULL,
 };
