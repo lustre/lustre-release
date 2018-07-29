@@ -235,16 +235,12 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(filesfree);
 
-static int ll_client_type_seq_show(struct seq_file *m, void *v)
+static ssize_t client_type_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-
-	LASSERT(sbi != NULL);
-
-	seq_puts(m, "local client\n");
-	return 0;
+	return sprintf(buf, "local client\n");
 }
-LPROC_SEQ_FOPS_RO(ll_client_type);
+LUSTRE_RO_ATTR(client_type);
 
 static int ll_fstype_seq_show(struct seq_file *m, void *v)
 {
@@ -1187,8 +1183,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_site_stats_fops			},
 	{ .name	=	"stat_blocksize",
 	  .fops	=	&ll_stat_blksize_fops			},
-	{ .name	=	"client_type",
-	  .fops	=	&ll_client_type_fops			},
 	{ .name	=	"max_read_ahead_mb",
 	  .fops	=	&ll_max_readahead_mb_fops		},
 	{ .name	=	"max_read_ahead_per_file_mb",
@@ -1245,6 +1239,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_kbytesavail.attr,
 	&lustre_attr_filestotal.attr,
 	&lustre_attr_filesfree.attr,
+	&lustre_attr_client_type.attr,
 	&lustre_attr_statahead_running_max.attr,
 	NULL,
 };
