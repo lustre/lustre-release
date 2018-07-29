@@ -252,15 +252,15 @@ static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(fstype);
 
-static int ll_sb_uuid_seq_show(struct seq_file *m, void *v)
+static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
 {
-	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 
-	LASSERT(sb != NULL);
-	seq_printf(m, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
-	return 0;
+	return sprintf(buf, "%s\n", sbi->ll_sb_uuid.uuid);
 }
-LPROC_SEQ_FOPS_RO(ll_sb_uuid);
+LUSTRE_RO_ATTR(uuid);
 
 static int ll_xattr_cache_seq_show(struct seq_file *m, void *v)
 {
@@ -1174,8 +1174,6 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 LPROC_SEQ_FOPS(ll_nosquash_nids);
 
 struct lprocfs_vars lprocfs_llite_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&ll_sb_uuid_fops			},
 	{ .name	=	"site",
 	  .fops	=	&ll_site_stats_fops			},
 	{ .name	=	"stat_blocksize",
@@ -1238,6 +1236,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_filesfree.attr,
 	&lustre_attr_client_type.attr,
 	&lustre_attr_fstype.attr,
+	&lustre_attr_uuid.attr,
 	&lustre_attr_statahead_running_max.attr,
 	NULL,
 };
