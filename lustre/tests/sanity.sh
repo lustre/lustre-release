@@ -19132,6 +19132,8 @@ test_802() {
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
 		skip "Need server version at least 2.9.55"
 
+	[[ $ENABLE_QUOTA ]] && skip "Quota enabled for read-only test"
+
 	mkdir $DIR/$tdir || error "(1) fail to mkdir"
 
 	cp $LUSTRE/tests/test-framework.sh $DIR/$tdir/ ||
