@@ -4919,6 +4919,7 @@ static int lod_declare_layout_change(const struct lu_env *env,
 		rc = lod_use_defined_striping(env, lo, buf);
 		if (rc)
 			GOTO(out, rc);
+		lo->ldo_comp_cached = 1;
 
 		rc = lod_get_lov_ea(env, lo);
 		if (rc <= 0)
