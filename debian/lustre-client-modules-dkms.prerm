@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -e
+
+# Get the package version
+package="lustre-client-modules"
+version="$(dpkg-query -W -f='${Version}' "${package}-dkms" | sed -e 's/-[^-]*$//')"
+
+dkms remove -m "${package}" -v "${version}" --all || true

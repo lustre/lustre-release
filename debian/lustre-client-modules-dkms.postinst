@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+# Get the package version
+package="lustre-client-modules"
+version="$(dpkg-query -W -f='${Version}' "${package}-dkms" | sed -e 's/-[^-]*$//')"
+
+dkms add -m "${package}" -v "${version}"
+dkms build -m "${package}" -v "${version}" && dkms install -m "${package}" -v "${version}" || true

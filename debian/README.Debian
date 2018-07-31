@@ -51,6 +51,28 @@ and Installation Howtos from Lustre.
     install lustre-source and build the module as described in 1.)
      - mount -t lustre mgsnode@tcp0:/spfs /mnt
 
+#5. Building client modules with DKMS
+
+    Lustre client-only kernel modules can built against non-patched, vanilla
+	kernels. This may be more convenient than installing the patched kernel
+	and server modules.
+
+    Installing the lustre-client-modules-dkms package will automatically
+	build modules for all currently installed kernels using DKMS
+	(http://linux.dell.com/dkms/) for which you will need to have the relevant
+	linux-headers packages installed. When a new kernel is installed on the
+	machine, DKMS will automatically build a new set of Lustre client modules.
+
+    You can also use DKMS to create a new deb containing the pre-built kernel
+	modules, suitable for installing on other machines which may not have a
+	full build environment.
+
+    - dkms build -m lustre-client-modules -v <version> -k <kernel-version>
+      (repeat the above step for all required kernel versions)
+    - dkms mkdeb -m lustre-client-modules -v <version>
+    - dkms mkdsc -m lustre-client-modules -v <version>
+
+
 ###########
 Please have also a look into the official documentation for Lustre available at:
 

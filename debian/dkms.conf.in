@@ -1,0 +1,69 @@
+# Lustre Linux kernel module (DKMS)
+# Created by Guy Coates
+# Updated by Michael Kuhn
+# Copyright 2012 Genome Research Ltd.
+#           2017-2018 Universität Hamburg
+
+PACKAGE_NAME="lustre-client-modules"
+PACKAGE_VERSION="@UPVERSION@"
+
+# We need to run autogen.sh between builds, see Ubuntu bug #952817
+MAKE="sh autogen.sh && ./configure --with-linux=$kernel_source_dir --with-linux-obj=$kernel_source_dir --disable-server --disable-quilt --disable-dependency-tracking --disable-doc --disable-utils --disable-iokit --disable-snmp --disable-tests --enable-quota --with-kmp-moddir=updates && make"
+CLEAN="make distclean || true"
+
+AUTOINSTALL="yes"
+STRIP="no"
+
+# Module names
+BUILT_MODULE_NAME[0]="fid"
+BUILT_MODULE_NAME[1]="fld"
+BUILT_MODULE_NAME[2]="lmv"
+BUILT_MODULE_NAME[3]="lov"
+BUILT_MODULE_NAME[4]="lustre"
+BUILT_MODULE_NAME[5]="mdc"
+BUILT_MODULE_NAME[6]="mgc"
+BUILT_MODULE_NAME[7]="obdclass"
+BUILT_MODULE_NAME[8]="obdecho"
+BUILT_MODULE_NAME[9]="osc"
+BUILT_MODULE_NAME[10]="ptlrpc"
+BUILT_MODULE_NAME[11]="ko2iblnd"
+BUILT_MODULE_NAME[12]="ksocklnd"
+BUILT_MODULE_NAME[13]="libcfs"
+BUILT_MODULE_NAME[14]="lnet"
+BUILT_MODULE_NAME[15]="lnet_selftest"
+
+# Location of the modules in the source tree after build
+BUILT_MODULE_LOCATION[0]="lustre/fid"
+BUILT_MODULE_LOCATION[1]="lustre/fld"
+BUILT_MODULE_LOCATION[2]="lustre/lmv"
+BUILT_MODULE_LOCATION[3]="lustre/lov"
+BUILT_MODULE_LOCATION[4]="lustre/llite"
+BUILT_MODULE_LOCATION[5]="lustre/mdc"
+BUILT_MODULE_LOCATION[6]="lustre/mgc"
+BUILT_MODULE_LOCATION[7]="lustre/obdclass"
+BUILT_MODULE_LOCATION[8]="lustre/obdecho"
+BUILT_MODULE_LOCATION[9]="lustre/osc"
+BUILT_MODULE_LOCATION[10]="lustre/ptlrpc"
+BUILT_MODULE_LOCATION[11]="lnet/klnds/o2iblnd"
+BUILT_MODULE_LOCATION[12]="lnet/klnds/socklnd"
+BUILT_MODULE_LOCATION[13]="libcfs/libcfs"
+BUILT_MODULE_LOCATION[14]="lnet/lnet"
+BUILT_MODULE_LOCATION[15]="lnet/selftest"
+
+# Final destination of the modules under /lib/modules/<kernel>/
+DEST_MODULE_LOCATION[0]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[1]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[2]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[3]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[4]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[5]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[6]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[7]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[8]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[9]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[10]="/updates/kernel/fs/lustre"
+DEST_MODULE_LOCATION[11]="/updates/kernel/net/lustre"
+DEST_MODULE_LOCATION[12]="/updates/kernel/net/lustre"
+DEST_MODULE_LOCATION[13]="/updates/kernel/net/lustre"
+DEST_MODULE_LOCATION[14]="/updates/kernel/net/lustre"
+DEST_MODULE_LOCATION[15]="/updates/kernel/net/lustre"

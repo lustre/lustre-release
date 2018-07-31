@@ -17,6 +17,15 @@ DEB_BUILD_GNU_CPU = $(shell dpkg-architecture -qDEB_BUILD_GNU_CPU)
 # whether to use module-assistant to build the kernel modules or not
 USE_MA = true
 
+# Whether to build the DKMS packages
+BUILD_DKMS ?= false
+
+ifeq ($(BUILD_DKMS),true)
+	DKMS_TARGET = binary-$(DKMS_PKG)
+else
+	DKMS_TARGET =
+endif
+
 CFLAGS = -Wall -g
 ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
         CFLAGS += -O0
@@ -47,7 +56,7 @@ TOP_DIR:=$(shell pwd)
 
 # This is the Lustre version
 VERSION=$(shell sed -n -e '1s/.*(\(.*\)) .*/\1/p' debian/changelog)
-UPVERSION=$(shell echo $VERSION | sed -e 's/-[^-]*$$//')
+UPVERSION=$(shell echo $(VERSION) | sed -e 's/-[^-]*$$//')
 
 # KVER is set to LINUXRELEASE being by autoconf which is either
 # $(uname -r) or the version of the source specified by the user
@@ -72,9 +81,11 @@ SOURCE_PKG=lustre-source
 ifneq (,$(findstring server,$(DEB_BUILD_PROFILES)))
 	UTILS_PKG=lustre-server-utils
 	MODS_PKG=lustre-server-modules
+	DKMS_PKG=
 else
 	UTILS_PKG=lustre-client-utils
 	MODS_PKG=lustre-client-modules
+	DKMS_PKG=lustre-client-modules-dkms
 endif
 
 #Build dir
@@ -193,7 +204,7 @@ build-stamp: patch-stamp configure-stamp
 binary-arch: binary-$(UTILS_PKG) binary-$(DEV_PKG) \
 	     binary-$(IOKIT_PKG) binary-$(TESTS_PKG)
 
-binary-indep: binary-$(SOURCE_PKG)
+binary-indep: binary-$(SOURCE_PKG) $(DKMS_TARGET)
 
 binary: binary-indep binary-arch
 
@@ -302,6 +313,31 @@ binary-$(SOURCE_PKG): build-stamp
 	dh_gencontrol -p $(SOURCE_PKG)
 	dh_md5sums -p $(SOURCE_PKG)
 	dh_builddeb -p $(SOURCE_PKG)
+
+binary-$(DKMS_PKG): build-stamp
+	dh_testdir
+	dh_testroot
+	# Create /usr/src/lustre-client-modules-<version>
+	dh_installdirs -p $(DKMS_PKG) usr/src/lustre-client-modules-$(UPVERSION)
+	# Copy the source
+	rsync -av --exclude='debian/$(DKMS_PKG)/*' --exclude='.git/' \
+		--link-dest=$(PWD) \
+		. debian/$(DKMS_PKG)/usr/src/lustre-client-modules-$(UPVERSION)
+	# Clean it up
+	$(MAKE) -C debian/$(DKMS_PKG)/usr/src/lustre-client-modules-$(UPVERSION) -f debian/rules clean
+
+	# Put the DKMS configuration file in place
+	sed -e 's/[@]UPVERSION[@]/$(UPVERSION)/' debian/dkms.conf.in > debian/$(DKMS_PKG)/usr/src/lustre-client-modules-$(UPVERSION)/dkms.conf
+	dh_install -p $(DKMS_PKG)
+	dh_installchangelogs -p $(DKMS_PKG) lustre/ChangeLog
+	dh_installdocs -p $(DKMS_PKG)
+	dh_compress -p $(DKMS_PKG)
+	dh_installdeb -p $(DKMS_PKG)
+	dh_strip -p $(DKMS_PKG)
+	dh_fixperms -p $(DKMS_PKG)
+	dh_gencontrol -p $(DKMS_PKG)
+	dh_md5sums -p $(DKMS_PKG)
+	dh_builddeb -p $(DKMS_PKG)
 
 # if only we could use m-a for this, but this stupid "compliant.list"
 # thing fouls that up
@@ -433,7 +469,7 @@ clean:
 	dpatch deapply-all -v
 	-$(MAKE) distclean
 	rm -rf  debian/substvars debian/*.bak debian/*~ *~  *-stamp
-	ls -d debian/lustre-*-modules-* | grep -v _KVERS_ | xargs rm -f || true
+	ls -d debian/lustre-*-modules-* | grep -v _KVERS_ | grep -v dkms | xargs rm -f || true
 	# only remove this if the clean was not called from kdist_clean
 	if [ "$$MA_SOURCE_PKG" = "" ]; then \
 		rm -rf  debian/m-a_root; \
