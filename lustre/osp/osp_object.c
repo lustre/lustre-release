@@ -1434,10 +1434,8 @@ static int osp_declare_create(const struct lu_env *env, struct dt_object *dt,
 
 	if (unlikely(!fid_is_zero(fid))) {
 		/* replay case: caller knows fid */
-		osi->osi_off = sizeof(osi->osi_id) * d->opd_index;
-		osi->osi_lb.lb_len = sizeof(osi->osi_id);
-		osi->osi_lb.lb_buf = NULL;
-
+		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, NULL,
+				   d->opd_index);
 		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
 					     &osi->osi_lb, osi->osi_off,
 					     local_th);
@@ -1461,9 +1459,8 @@ static int osp_declare_create(const struct lu_env *env, struct dt_object *dt,
 		o->opo_reserved = 1;
 
 		/* common for all OSPs file hystorically */
-		osi->osi_off = sizeof(osi->osi_id) * d->opd_index;
-		osi->osi_lb.lb_len = sizeof(osi->osi_id);
-		osi->osi_lb.lb_buf = NULL;
+		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, NULL,
+				   d->opd_index);
 		rc = dt_declare_record_write(env, d->opd_last_used_oid_file,
 					     &osi->osi_lb, osi->osi_off,
 					     local_th);
@@ -1506,7 +1503,6 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 	int			rc = 0;
 	struct lu_fid		*fid = &osi->osi_fid;
 	struct thandle		*local_th;
-	struct lu_fid		*last_fid = &d->opd_last_used_fid;
 	ENTRY;
 
 	if (is_only_remote_trans(th) &&
@@ -1586,13 +1582,8 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* Only need update last_used oid file, seq file will only be update
 	 * during seq rollover */
-	if (fid_is_idif((last_fid)))
-		osi->osi_id = fid_idif_id(fid_seq(last_fid),
-					  fid_oid(last_fid), fid_ver(last_fid));
-	else
-		osi->osi_id = fid_oid(last_fid);
 	osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off,
-			   &osi->osi_id, d->opd_index);
+			   &d->opd_last_id, d->opd_index);
 
 	rc = dt_record_write(env, d->opd_last_used_oid_file, &osi->osi_lb,
 			     &osi->osi_off, local_th);

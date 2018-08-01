@@ -258,25 +258,23 @@ static int osp_init_last_objid(const struct lu_env *env, struct osp_device *osp)
 	if (IS_ERR(dto))
 		RETURN(PTR_ERR(dto));
 
+	osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &osp->opd_last_id,
+			   osp->opd_index);
+
 	/* object will be released in device cleanup path */
-	if (osi->osi_attr.la_size >=
-	    sizeof(osi->osi_id) * (osp->opd_index + 1)) {
-		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &osi->osi_id,
-				   osp->opd_index);
+	if (osi->osi_attr.la_size >= (osi->osi_off + osi->osi_lb.lb_len)) {
 		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
 		if (rc != 0 && rc != -EFAULT)
 			GOTO(out, rc);
 		/* In case of idif bits 32-48 go to f_seq
 		 * (see osp_init_last_seq). So don't care
 		 * about u64->u32 convertion. */
-		fid->f_oid = osi->osi_id;
+		fid->f_oid = osp->opd_last_id;
 	}
 
 	if (rc == -EFAULT) { /* fresh LAST_ID */
-		osi->osi_id = 0;
+		osp->opd_last_id = 0;
 		fid->f_oid = 0;
-		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &osi->osi_id,
-				   osp->opd_index);
 		rc = osp_write_local_file(env, osp, dto, &osi->osi_lb,
 					  osi->osi_off);
 		if (rc != 0)
@@ -320,22 +318,21 @@ static int osp_init_last_seq(const struct lu_env *env, struct osp_device *osp)
 	if (IS_ERR(dto))
 		RETURN(PTR_ERR(dto));
 
+	osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_seq,
+			   osp->opd_index);
+
 	/* object will be released in device cleanup path */
-	if (osi->osi_attr.la_size >=
-	    sizeof(osi->osi_id) * (osp->opd_index + 1)) {
-		osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_seq,
-				   osp->opd_index);
+	if (osi->osi_attr.la_size >= (osi->osi_off + osi->osi_lb.lb_len)) {
 		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
 		if (rc != 0 && rc != -EFAULT)
 			GOTO(out, rc);
 		if (fid_is_idif(fid))
-			fid->f_seq = fid_idif_seq(osi->osi_id, osp->opd_index);
+			fid->f_seq = fid_idif_seq(osp->opd_last_id,
+						  osp->opd_index);
 	}
 
 	if (rc == -EFAULT) { /* fresh OSP */
 		fid->f_seq = 0;
-		osp_objseq_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_seq,
-				    osp->opd_index);
 		rc = osp_write_local_file(env, osp, dto, &osi->osi_lb,
 					  osi->osi_off);
 		if (rc != 0)
@@ -412,6 +409,7 @@ static int osp_last_used_init(const struct lu_env *env, struct osp_device *osp)
 		GOTO(out, rc = -EINVAL);
 	}
 
+	osp_fid_to_obdid(&osp->opd_last_used_fid, &osp->opd_last_id);
 	CDEBUG(D_INFO, "%s: Init last used fid "DFID"\n",
 	       osp->opd_obd->obd_name, PFID(&osp->opd_last_used_fid));
 out:

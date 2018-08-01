@@ -169,6 +169,8 @@ struct osp_device {
 	 * and required le64_to_cpu() conversion before use.
 	 * Protected by opd_pre_lock */
 	struct lu_fid			opd_last_used_fid;
+	/* on disk copy last_used_fid.f_oid or idif */
+	u64				opd_last_id;
 	struct lu_fid			opd_gap_start_fid;
 	int				 opd_gap_count;
 	/* connection to OST */
@@ -335,7 +337,6 @@ struct osp_thread_info {
 	struct lu_attr		 osi_attr;
 	struct ost_id		 osi_oi;
 	struct ost_id		 osi_oi2;
-	u64			 osi_id;
 	loff_t			 osi_off;
 	union {
 		struct llog_rec_hdr		osi_hdr;
@@ -606,17 +607,26 @@ static inline int osp_fid_diff(const struct lu_fid *fid1,
 		       fid_idif_id(fid2->f_seq, fid2->f_oid, 0);
 	}
 
-	LASSERTF(fid_seq(fid1) == fid_seq(fid2), "fid1:"DFID
-		 ", fid2:"DFID"\n", PFID(fid1), PFID(fid2));
+	LASSERTF(fid_seq(fid1) == fid_seq(fid2), "fid1:"DFID", fid2:"DFID"\n",
+		 PFID(fid1), PFID(fid2));
 
 	return fid_oid(fid1) - fid_oid(fid2);
 }
 
+static inline void osp_fid_to_obdid(struct lu_fid *last_fid, u64 *osi_id)
+{
+	if (fid_is_idif((last_fid)))
+		*osi_id = fid_idif_id(fid_seq(last_fid), fid_oid(last_fid),
+				      fid_ver(last_fid));
+	else
+		*osi_id = fid_oid(last_fid);
+}
 
 static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 {
 	int diff = osp_fid_diff(fid, &d->opd_last_used_fid);
 	struct lu_fid *gap_start = &d->opd_gap_start_fid;
+
 	/*
 	 * we might have lost precreated objects due to VBR and precreate
 	 * orphans, the gap in objid can be calculated properly only here
@@ -636,6 +646,7 @@ static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 			       PFID(&d->opd_gap_start_fid), d->opd_gap_count);
 		}
 		d->opd_last_used_fid = *fid;
+		osp_fid_to_obdid(fid, &d->opd_last_id);
 	}
 }
 
