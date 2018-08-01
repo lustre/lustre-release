@@ -58,7 +58,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/param.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <time.h>
