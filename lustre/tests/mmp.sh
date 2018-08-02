@@ -310,43 +310,50 @@ mount_after_interval() {
 # Mount the shared target on the failover server
 # during unmounting it on the primary server.
 mount_during_unmount() {
-    local device=$1
-    shift
-    local facet=$1
-    shift
-    local mnt_opts="$@"
-    local failover_facet=$(get_failover_facet $facet)
+	local device=$1
+	shift
+	local facet=$1
+	shift
+	local mnt_opts="$@"
+	local failover_facet=$(get_failover_facet $facet)
 
-    local unmount_pid
-    local unmount_rc=0
-    local mount_rc=0
+	local unmount_pid
+	local unmount_rc=0
+	local mount_rc=0
 
-    log "Mounting $device on $facet..."
-    start $facet $device $mnt_opts || return ${PIPESTATUS[0]}
+	log "Mounting $device on $facet..."
+	start $facet $device $mnt_opts || return ${PIPESTATUS[0]}
 
-    log "Unmounting $device on $facet..."
-    stop $facet &
-    unmount_pid=$!
+	log "Unmounting $device on $facet..."
+	stop $facet &
+	unmount_pid=$!
 
-    log "Mounting $device on $failover_facet..."
-    start $failover_facet $device $mnt_opts
-    mount_rc=${PIPESTATUS[0]}
+	log "Mounting $device on $failover_facet..."
+	start $failover_facet $device $mnt_opts
+	mount_rc=${PIPESTATUS[0]}
 
-    wait $unmount_pid
-    unmount_rc=${PIPESTATUS[0]}
+	# check whether the first filesystem is still mounted
+	local mntpt=$(facet_mntpt $facet)
+	local mounted=$(do_facet $facet "grep -w $mntpt /proc/mounts")
 
-    if [ $mount_rc -eq 0 ]; then
-        error_noexit "mount during unmount of the first filesystem should fail"
-        stop $failover_facet || return ${PIPESTATUS[0]}
-        return 1
-    fi
+	wait $unmount_pid
+	unmount_rc=${PIPESTATUS[0]}
 
-    if [ $unmount_rc -ne 0 ]; then
-        error_noexit "unmount the $device on $facet should succeed"
-        return $unmount_rc
-    fi
+	if [ $mount_rc -eq 0 ]; then
+		stop $failover_facet || return ${PIPESTATUS[0]}
 
-    return 0
+		if [ -n "$mounted" ]; then
+			error_noexit "mount during unmount of first filesystem worked"
+			return 1
+		fi
+	fi
+
+	if [ $unmount_rc -ne 0 ]; then
+		error_noexit "unmount the $device on $facet should succeed"
+		return $unmount_rc
+	fi
+
+	return 0
 }
 
 # Mount the shared target on the failover server
