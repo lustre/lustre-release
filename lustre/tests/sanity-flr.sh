@@ -77,7 +77,7 @@ start_osts() {
 	done
 
 	for idx in "$@"; do
-		wait_osc_import_state client ost$idx FULL
+		wait_recovery_complete ost$idx
 	done
 }
 
