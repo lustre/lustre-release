@@ -2181,7 +2181,7 @@ next:
 		      "%d "DFID" of the striped directory "DFID" with "
 		      "dangling %s/%s, rename %s/%s, llinkea %s/%s, "
 		      "repair_lmvea %s/%s: rc = %d\n", lfsck_lfsck2name(lfsck),
-		      i, PFID(cfid), PFID(&lnr->lnr_fid),
+		      i, PFID(cfid), PFID(pfid),
 		      create ? "yes" : "no", create_repaired ? "yes" : "no",
 		      rename ? "yes" : "no", rename_repaired ? "yes" : "no",
 		      repair_linkea ? "yes" : "no",
