@@ -10964,6 +10964,18 @@ run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
 
 proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 
+# Some versions of find (4.5.11, 4.5.14) included in CentOS 7.3-7.5 do
+# not honor the -ignore_readdir_race option correctly. So we call
+# error_ignore() rather than error() in these cases. See LU-11152.
+error_133() {
+	if (find --version; do_facet mds1 find --version) |
+		grep -q '\b4\.5\.1[1-4]\b'; then
+		error_ignore LU-11152 "$@"
+	else
+		error "$@"
+	fi
+}
+
 test_133f() {
 	# First without trusting modes.
 	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
@@ -10981,7 +10993,7 @@ test_133f() {
 		-not -name force_lbug \
 		-not -name changelog_mask \
 		-exec badarea_io '{}' \; ||
-			error "find $proc_dirs failed"
+			error_133 "find $proc_dirs failed"
 }
 run_test 133f "Check reads/writes of client lustre proc files with bad area io"
 
@@ -11015,7 +11027,7 @@ test_133g() {
 			-not -name force_lbug \
 			-not -name changelog_mask \
 			-exec badarea_io '{}' \\\; ||
-				error "$facet find $facet_proc_dirs failed"
+				error_133 "$facet find $facet_proc_dirs failed"
 	done
 
 	# remount the FS in case writes/reads /proc break the FS
