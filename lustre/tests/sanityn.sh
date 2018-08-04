@@ -983,16 +983,28 @@ test_33c() {
 }
 run_test 33c "Cancel cross-MDT lock should trigger Sync-Lock-Cancel"
 
-ops_do_cos() {
+# arg1 is operations done before CoS, arg2 is the operation that triggers CoS
+op_trigger_cos() {
+	local commit_nr
+	local total=0
 	local nodes=$(comma_list $(mdts_nodes))
-	do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
-	sh -c "$@"
-	local async_commit_count=$(do_nodes $nodes \
-		"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
-	[ $async_commit_count -gt 0 ] || error "CoS not triggerred"
 
-	rm -rf $DIR/$tdir
-	sync
+	sync_all_data
+
+	# trigger CoS twice in case transaction commit before unlock
+	for i in 1 2; do
+		sh -c "$1"
+		do_nodes $nodes "lctl set_param -n mdt.*.async_commit_count=0"
+		sh -c "$2"
+		commit_nr=$(do_nodes $nodes \
+			"lctl get_param -n mdt.*.async_commit_count" | calc_sum)
+		total=$((total + commit_nr));
+		rm -rf $DIR/$tdir
+		sync_all_data
+	done
+
+	echo "CoS count $total"
+	[ $total -gt 0 ] || error "$2 didn't trigger CoS"
 }
 
 test_33d() {
@@ -1000,39 +1012,34 @@ test_33d() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
 		skip "DNE CoS not supported" && return
 
-	sync
 	# remote directory create
-	mkdir $DIR/$tdir
-	ops_do_cos "$LFS mkdir -i 1 $DIR/$tdir/subdir"
+	op_trigger_cos "mkdir $DIR/$tdir" "$LFS mkdir -i 1 $DIR/$tdir/subdir"
 	# remote directory unlink
-	$LFS mkdir -i 1 $DIR/$tdir
-	ops_do_cos "rmdir $DIR/$tdir"
+	op_trigger_cos "$LFS mkdir -i 1 $DIR/$tdir" "rmdir $DIR/$tdir"
 	# striped directory create
-	mkdir $DIR/$tdir
-	ops_do_cos "$LFS mkdir -c 2 $DIR/$tdir/subdir"
+	op_trigger_cos "mkdir $DIR/$tdir" "$LFS mkdir -c 2 $DIR/$tdir/subdir"
 	# striped directory setattr
-	$LFS mkdir -c 2 $DIR/$tdir
-	touch $DIR/$tdir
-	ops_do_cos "chmod 713 $DIR/$tdir"
+	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; touch $DIR/$tdir" \
+		"chmod 713 $DIR/$tdir"
 	# striped directory unlink
-	$LFS mkdir -c 2 $DIR/$tdir
-	touch $DIR/$tdir
-	ops_do_cos "rmdir $DIR/$tdir"
+	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; touch $DIR/$tdir" \
+		"rmdir $DIR/$tdir"
 	# cross-MDT link
-	$LFS mkdir -c 2 $DIR/$tdir
-	$LFS mkdir -i 0 $DIR/$tdir/d1
-	$LFS mkdir -i 1 $DIR/$tdir/d2
-	touch $DIR/$tdir/d1/tgt
-	ops_do_cos "ln $DIR/$tdir/d1/tgt $DIR/$tdir/d2/src"
+	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; \
+			$LFS mkdir -i 0 $DIR/$tdir/d1; \
+			$LFS mkdir -i 1 $DIR/$tdir/d2; \
+			touch $DIR/$tdir/d1/tgt" \
+		"ln $DIR/$tdir/d1/tgt $DIR/$tdir/d2/src"
 	# cross-MDT rename
-	$LFS mkdir -c 2 $DIR/$tdir
-	$LFS mkdir -i 0 $DIR/$tdir/d1
-	$LFS mkdir -i 1 $DIR/$tdir/d2
-	touch $DIR/$tdir/d1/src
-	ops_do_cos "mv $DIR/$tdir/d1/src $DIR/$tdir/d2/tgt"
+	op_trigger_cos "$LFS mkdir -c 2 $DIR/$tdir; \
+			$LFS mkdir -i 0 $DIR/$tdir/d1; \
+			$LFS mkdir -i 1 $DIR/$tdir/d2; \
+			touch $DIR/$tdir/d1/src" \
+		"mv $DIR/$tdir/d1/src $DIR/$tdir/d2/tgt"
 	# migrate
-	$LFS mkdir -i 0 $DIR/$tdir
-	ops_do_cos "$LFS migrate -m 1 $DIR/$tdir"
+	op_trigger_cos "$LFS mkdir -i 0 $DIR/$tdir" \
+		"$LFS migrate -m 1 $DIR/$tdir"
+
 	return 0
 }
 run_test 33d "DNE distributed operation should trigger COS"
