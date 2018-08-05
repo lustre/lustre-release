@@ -3453,6 +3453,90 @@ int lustre_lnet_show_retry_count(int seq_no, struct cYAML **show_rc,
 				       err_rc, l_errno);
 }
 
+int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
+			struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_recovery_list nid_list;
+	struct cYAML *root = NULL, *nids = NULL;
+	int rc, i;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "failed to print recovery queue\n");
+
+	LIBCFS_IOC_INIT_V2(nid_list, rlst_hdr);
+	nid_list.rlst_type = type;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_RECOVERY_QUEUE, &nid_list);
+	if (rc) {
+		rc = errno;
+		goto out;
+	}
+
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	nids = cYAML_create_object(root, name);
+	if (nids == NULL)
+		goto out;
+
+	rc = -EINVAL;
+
+	for (i = 0; i < nid_list.rlst_num_nids; i++) {
+		char nidenum[LNET_MAX_STR_LEN];
+		snprintf(nidenum, sizeof(nidenum), "nid-%d", i);
+		if (!cYAML_create_string(nids, nidenum,
+			libcfs_nid2str(nid_list.rlst_nid_array[i])))
+			goto out;
+	}
+
+	snprintf(err_str, sizeof(err_str), "success\n");
+
+	rc = 0;
+
+out:
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		struct cYAML *show_node;
+		/* find the net node, if one doesn't exist
+		 * then insert one.  Otherwise add to the one there
+		 */
+		show_node = cYAML_get_object_item(*show_rc, name);
+		if (show_node != NULL && cYAML_is_sequence(show_node)) {
+			cYAML_insert_child(show_node, nids);
+			free(nids);
+			free(root);
+		} else if (show_node == NULL) {
+			cYAML_insert_sibling((*show_rc)->cy_child,
+						nids);
+			free(root);
+		} else {
+			cYAML_free_tree(root);
+		}
+	} else {
+		*show_rc = root;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, name, err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_show_local_ni_recovq(int seq_no, struct cYAML **show_rc,
+				     struct cYAML **err_rc)
+{
+	return show_recovery_queue(LNET_HEALTH_TYPE_LOCAL_NI, "local NI recovery",
+				   seq_no, show_rc, err_rc);
+}
+
+int lustre_lnet_show_peer_ni_recovq(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc)
+{
+	return show_recovery_queue(LNET_HEALTH_TYPE_PEER_NI, "peer NI recovery",
+				   seq_no, show_rc, err_rc);
+}
+
 int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 			      struct cYAML **err_rc)
 {

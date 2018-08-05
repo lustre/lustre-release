@@ -44,6 +44,7 @@
 #define MAX_NUM_SHOW_ENTRIES	32
 #define LNET_MAX_STR_LEN	128
 #define LNET_MAX_SHOW_NUM_CPT	128
+#define LNET_MAX_SHOW_NUM_NID	128
 #define LNET_UNDEFINED_HOPS	((__u32) -1)
 
 /*
@@ -270,6 +271,13 @@ struct lnet_ioctl_reset_health_cfg {
 	bool rh_all;
 	int rh_value;
 	lnet_nid_t rh_nid;
+};
+
+struct lnet_ioctl_recovery_list {
+	struct libcfs_ioctl_hdr rlst_hdr;
+	enum lnet_health_type rlst_type;
+	int rlst_num_nids;
+	lnet_nid_t rlst_nid_array[LNET_MAX_SHOW_NUM_NID];
 };
 
 struct lnet_ioctl_set_value {

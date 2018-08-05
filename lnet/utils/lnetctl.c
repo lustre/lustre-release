@@ -48,6 +48,7 @@ static int jt_show_net(int argc, char **argv);
 static int jt_show_routing(int argc, char **argv);
 static int jt_show_stats(int argc, char **argv);
 static int jt_show_peer(int argc, char **argv);
+static int jt_show_recovery(int argc, char **argv);
 static int jt_show_global(int argc, char **argv);
 static int jt_set_tiny(int argc, char **argv);
 static int jt_set_small(int argc, char **argv);
@@ -72,6 +73,7 @@ static int jt_route(int argc, char **argv);
 static int jt_net(int argc, char **argv);
 static int jt_routing(int argc, char **argv);
 static int jt_set(int argc, char **argv);
+static int jt_debug(int argc, char **argv);
 static int jt_stats(int argc, char **argv);
 static int jt_global(int argc, char **argv);
 static int jt_peers(int argc, char **argv);
@@ -89,6 +91,7 @@ command_t cmd_list[] = {
 	{"import", jt_import, 0, "import FILE.yaml"},
 	{"export", jt_export, 0, "export FILE.yaml"},
 	{"stats", jt_stats, 0, "stats {show | help}"},
+	{"debug", jt_debug, 0, "debug recovery {local | peer}"},
 	{"global", jt_global, 0, "global {show | help}"},
 	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
 	{"ping", jt_ping, 0, "ping nid,[nid,...]"},
@@ -156,6 +159,13 @@ command_t routing_cmds[] = {
 
 command_t stats_cmds[] = {
 	{"show", jt_show_stats, 0, "show LNET statistics\n"},
+	{ 0, 0, 0, NULL }
+};
+
+command_t debug_cmds[] = {
+	{"recovery", jt_show_recovery, 0, "list recovery queues\n"
+		"\t--local : list local recovery queue\n"
+		"\t--peer : list peer recovery queue\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -1019,6 +1029,46 @@ static int jt_set_peer_ni_value(int argc, char **argv)
 	return set_value_helper(argc, argv, lustre_lnet_config_peer_ni_healthv);
 }
 
+static int jt_show_recovery(int argc, char **argv)
+{
+	int rc, opt;
+	struct cYAML *err_rc = NULL, *show_rc = NULL;
+
+	const char *const short_options = "lp";
+	static const struct option long_options[] = {
+		{ .name = "local", .has_arg = no_argument, .val = 'l' },
+		{ .name = "peer", .has_arg = no_argument, .val = 'p' },
+		{ .name = NULL } };
+
+	rc = check_cmd(debug_cmds, "recovery", NULL, 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'l':
+			rc = lustre_lnet_show_local_ni_recovq(-1, &show_rc, &err_rc);
+			break;
+		case 'p':
+			rc = lustre_lnet_show_peer_ni_recovq(-1, &show_rc, &err_rc);
+			break;
+		default:
+			return 0;
+		}
+	}
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+	else if (show_rc)
+		cYAML_print_tree(show_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
 static int jt_show_net(int argc, char **argv)
 {
 	char *network = NULL;
@@ -1222,6 +1272,17 @@ static int jt_stats(int argc, char **argv)
 		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], stats_cmds);
+}
+
+static int jt_debug(int argc, char **argv)
+{
+	int rc;
+
+	rc = check_cmd(debug_cmds, "recovery", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
+
+	return Parser_execarg(argc - 1, &argv[1], debug_cmds);
 }
 
 static int jt_global(int argc, char **argv)

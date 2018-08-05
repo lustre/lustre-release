@@ -3303,6 +3303,44 @@ unlock:
 	return rc;
 }
 
+static int
+lnet_get_local_ni_recovery_list(struct lnet_ioctl_recovery_list *list)
+{
+	struct lnet_ni *ni;
+	int i = 0;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	list_for_each_entry(ni, &the_lnet.ln_mt_localNIRecovq, ni_recovery) {
+		list->rlst_nid_array[i] = ni->ni_nid;
+		i++;
+		if (i >= LNET_MAX_SHOW_NUM_NID)
+			break;
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+	list->rlst_num_nids = i;
+
+	return 0;
+}
+
+static int
+lnet_get_peer_ni_recovery_list(struct lnet_ioctl_recovery_list *list)
+{
+	struct lnet_peer_ni *lpni;
+	int i = 0;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	list_for_each_entry(lpni, &the_lnet.ln_mt_peerNIRecovq, lpni_recovery) {
+		list->rlst_nid_array[i] = lpni->lpni_nid;
+		i++;
+		if (i >= LNET_MAX_SHOW_NUM_NID)
+			break;
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+	list->rlst_num_nids = i;
+
+	return 0;
+}
+
 /**
  * LNet ioctl handler.
  *
@@ -3523,6 +3561,20 @@ LNetCtl(unsigned int cmd, void *arg)
 		rc = lnet_get_local_ni_hstats(stats);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_RECOVERY_QUEUE: {
+		struct lnet_ioctl_recovery_list *list = arg;
+		if (list->rlst_hdr.ioc_len < sizeof(*list))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		if (list->rlst_type == LNET_HEALTH_TYPE_LOCAL_NI)
+			rc = lnet_get_local_ni_recovery_list(list);
+		else
+			rc = lnet_get_peer_ni_recovery_list(list);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
 
