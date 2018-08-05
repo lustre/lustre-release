@@ -226,11 +226,24 @@ struct lnet_acceptor_connreq {
 struct lnet_counters {
 	__u32	msgs_alloc;
 	__u32	msgs_max;
+	__u32	rst_alloc;
 	__u32	errors;
 	__u32	send_count;
 	__u32	recv_count;
 	__u32	route_count;
 	__u32	drop_count;
+	__u32	resend_count;
+	__u32	response_timeout_count;
+	__u32	local_interrupt_count;
+	__u32	local_dropped_count;
+	__u32	local_aborted_count;
+	__u32	local_no_route_count;
+	__u32	local_timeout_count;
+	__u32	local_error_count;
+	__u32	remote_dropped_count;
+	__u32	remote_error_count;
+	__u32	remote_timeout_count;
+	__u32	network_timeout_count;
 	__u64	send_length;
 	__u64	recv_length;
 	__u64	route_length;

@@ -3557,12 +3557,64 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 				data.st_cntrs.msgs_max) == NULL)
 		goto out;
 
+	if (cYAML_create_number(stats, "rst_alloc",
+				data.st_cntrs.rst_alloc) == NULL)
+		goto out;
+
 	if (cYAML_create_number(stats, "errors",
 				data.st_cntrs.errors) == NULL)
 		goto out;
 
 	if (cYAML_create_number(stats, "send_count",
 				data.st_cntrs.send_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "resend_count",
+				data.st_cntrs.resend_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "response_timeout_count",
+				data.st_cntrs.response_timeout_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_interrupt_count",
+				data.st_cntrs.local_interrupt_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_dropped_count",
+				data.st_cntrs.local_dropped_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_aborted_count",
+				data.st_cntrs.local_aborted_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_no_route_count",
+				data.st_cntrs.local_no_route_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_timeout_count",
+				data.st_cntrs.local_timeout_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_error_count",
+				data.st_cntrs.local_error_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "remote_dropped_count",
+				data.st_cntrs.remote_dropped_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "remote_error_count",
+				data.st_cntrs.remote_error_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "remote_timeout_count",
+				data.st_cntrs.remote_timeout_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "network_timeout_count",
+				data.st_cntrs.network_timeout_count) == NULL)
 		goto out;
 
 	if (cYAML_create_number(stats, "recv_count",

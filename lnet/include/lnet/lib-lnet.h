@@ -496,6 +496,7 @@ lnet_rspt_alloc(int cpt)
 	struct lnet_rsp_tracker *rspt;
 	LIBCFS_ALLOC(rspt, sizeof(*rspt));
 	lnet_net_lock(cpt);
+	the_lnet.ln_counters[cpt]->rst_alloc++;
 	lnet_net_unlock(cpt);
 	return rspt;
 }
@@ -505,6 +506,7 @@ lnet_rspt_free(struct lnet_rsp_tracker *rspt, int cpt)
 {
 	LIBCFS_FREE(rspt, sizeof(*rspt));
 	lnet_net_lock(cpt);
+	the_lnet.ln_counters[cpt]->rst_alloc--;
 	lnet_net_unlock(cpt);
 }
 

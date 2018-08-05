@@ -541,41 +541,52 @@ lnet_incr_hstats(struct lnet_msg *msg, enum lnet_msg_hstatus hstatus)
 {
 	struct lnet_ni *ni = msg->msg_txni;
 	struct lnet_peer_ni *lpni = msg->msg_txpeer;
+	struct lnet_counters *counters = the_lnet.ln_counters[0];
 
 	switch (hstatus) {
 	case LNET_MSG_STATUS_LOCAL_INTERRUPT:
 		atomic_inc(&ni->ni_hstats.hlt_local_interrupt);
+		counters->local_interrupt_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_DROPPED:
 		atomic_inc(&ni->ni_hstats.hlt_local_dropped);
+		counters->local_dropped_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_ABORTED:
 		atomic_inc(&ni->ni_hstats.hlt_local_aborted);
+		counters->local_aborted_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
 		atomic_inc(&ni->ni_hstats.hlt_local_no_route);
+		counters->local_no_route_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
 		atomic_inc(&ni->ni_hstats.hlt_local_timeout);
+		counters->local_timeout_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_ERROR:
 		atomic_inc(&ni->ni_hstats.hlt_local_error);
+		counters->local_error_count++;
 		break;
 	case LNET_MSG_STATUS_REMOTE_DROPPED:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_remote_dropped);
+		counters->remote_dropped_count++;
 		break;
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_remote_error);
+		counters->remote_error_count++;
 		break;
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_remote_timeout);
+		counters->remote_timeout_count++;
 		break;
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_network_timeout);
+		counters->network_timeout_count++;
 		break;
 	case LNET_MSG_STATUS_OK:
 		break;
@@ -597,6 +608,10 @@ lnet_health_check(struct lnet_msg *msg)
 	enum lnet_msg_hstatus hstatus = msg->msg_health_status;
 	bool lo = false;
 
+	/* if we're shutting down no point in handling health. */
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		return -1;
+
 	LASSERT(msg->msg_txni);
 
 	/*
@@ -608,15 +623,19 @@ lnet_health_check(struct lnet_msg *msg)
 	else
 		lo = true;
 
-	lnet_incr_hstats(msg, hstatus);
-
 	if (hstatus != LNET_MSG_STATUS_OK &&
 	    ktime_compare(ktime_get(), msg->msg_deadline) >= 0)
 		return -1;
 
-	/* if we're shutting down no point in handling health. */
-	if (the_lnet.ln_state != LNET_STATE_RUNNING)
-		return -1;
+	/*
+	 * stats are only incremented for errors so avoid wasting time
+	 * incrementing statistics if there is no error.
+	 */
+	if (hstatus != LNET_MSG_STATUS_OK) {
+		lnet_net_lock(0);
+		lnet_incr_hstats(msg, hstatus);
+		lnet_net_unlock(0);
+	}
 
 	CDEBUG(D_NET, "health check: %s->%s: %s: %s\n",
 	       libcfs_nid2str(msg->msg_txni->ni_nid),

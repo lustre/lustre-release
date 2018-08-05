@@ -751,7 +751,20 @@ lnet_counters_get(struct lnet_counters *counters)
 	cfs_percpt_for_each(ctr, i, the_lnet.ln_counters) {
 		counters->msgs_max     += ctr->msgs_max;
 		counters->msgs_alloc   += ctr->msgs_alloc;
+		counters->rst_alloc    += ctr->rst_alloc;
 		counters->errors       += ctr->errors;
+		counters->resend_count += ctr->resend_count;
+		counters->response_timeout_count += ctr->response_timeout_count;
+		counters->local_interrupt_count += ctr->local_interrupt_count;
+		counters->local_dropped_count += ctr->local_dropped_count;
+		counters->local_aborted_count += ctr->local_aborted_count;
+		counters->local_no_route_count += ctr->local_no_route_count;
+		counters->local_timeout_count += ctr->local_timeout_count;
+		counters->local_error_count += ctr->local_error_count;
+		counters->remote_dropped_count += ctr->remote_dropped_count;
+		counters->remote_error_count += ctr->remote_error_count;
+		counters->remote_timeout_count += ctr->remote_timeout_count;
+		counters->network_timeout_count += ctr->network_timeout_count;
 		counters->send_count   += ctr->send_count;
 		counters->recv_count   += ctr->recv_count;
 		counters->route_count  += ctr->route_count;

@@ -2737,6 +2737,10 @@ lnet_finalize_expired_responses(bool force)
 				md->md_rspt_ptr = NULL;
 				lnet_res_unlock(i);
 
+				lnet_net_lock(i);
+				the_lnet.ln_counters[i]->response_timeout_count++;
+				lnet_net_unlock(i);
+
 				list_del_init(&rspt->rspt_on_list);
 
 				CDEBUG(D_NET, "Response timed out: md = %p\n", md);
@@ -2804,6 +2808,11 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 			lnet_peer_ni_decref_locked(lpni);
 
 			lnet_net_unlock(cpt);
+			CDEBUG(D_NET, "resending %s->%s: %s recovery %d\n",
+			       libcfs_nid2str(src_nid),
+			       libcfs_id2str(msg->msg_target),
+			       lnet_msgtyp2str(msg->msg_type),
+			       msg->msg_recovery);
 			rc = lnet_send(src_nid, msg, LNET_NID_ANY);
 			if (rc) {
 				CERROR("Error sending %s to %s: %d\n",
@@ -2813,6 +2822,8 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 				lnet_finalize(msg, rc);
 			}
 			lnet_net_lock(cpt);
+			if (!rc)
+				the_lnet.ln_counters[cpt]->resend_count++;
 		}
 	}
 }
