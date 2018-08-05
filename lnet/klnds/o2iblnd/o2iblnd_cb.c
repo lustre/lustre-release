@@ -969,7 +969,10 @@ __must_hold(&conn->ibc_lock)
 			 libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
 		bad = NULL;
-		rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
+		if (lnet_send_error_simulation(tx->tx_lntmsg[0], &tx->tx_hstatus))
+			rc = -EINVAL;
+		else
+			rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
 	}
 
 	conn->ibc_last_send = ktime_get();

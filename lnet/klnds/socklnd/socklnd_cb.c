@@ -400,7 +400,8 @@ ksocknal_tx_done(struct lnet_ni *ni, struct ksock_tx *tx, int rc)
 
 	if (!rc && (tx->tx_resid != 0 || tx->tx_zc_aborted)) {
 		rc = -EIO;
-		hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
+		if (hstatus == LNET_MSG_STATUS_OK)
+			hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 	}
 
 	if (tx->tx_conn != NULL)
@@ -533,6 +534,13 @@ static int
 ksocknal_process_transmit(struct ksock_conn *conn, struct ksock_tx *tx)
 {
 	int rc;
+	bool error_sim = false;
+
+	if (lnet_send_error_simulation(tx->tx_lnetmsg, &tx->tx_hstatus)) {
+		error_sim = true;
+		rc = -EINVAL;
+		goto simulate_error;
+	}
 
         if (tx->tx_zc_capable && !tx->tx_zc_checked)
                 ksocknal_check_zc_req(tx);
@@ -580,17 +588,21 @@ ksocknal_process_transmit(struct ksock_conn *conn, struct ksock_tx *tx)
 		return (rc);
 	}
 
+simulate_error:
+
 	/* Actual error */
 	LASSERT(rc < 0);
 
-	/*
-	 * set the health status of the message which determines
-	 * whether we should retry the transmit
-	 */
-	if (rc == -ETIMEDOUT)
-		tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_TIMEOUT;
-	else
-		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
+	if (!error_sim) {
+		/*
+		* set the health status of the message which determines
+		* whether we should retry the transmit
+		*/
+		if (rc == -ETIMEDOUT)
+			tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_TIMEOUT;
+		else
+			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
+	}
 
 	if (!conn->ksnc_closing) {
 		switch (rc) {

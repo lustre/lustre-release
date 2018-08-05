@@ -32,6 +32,8 @@
 # include <linux/lnet/lnet-types.h>
 #endif
 
+#include <stdbool.h>
+
 /** \addtogroup lnet_fault_simulation
  * @{ */
 
@@ -50,6 +52,19 @@ enum {
 #define LNET_PUT_BIT		(1 << 1)
 #define LNET_GET_BIT		(1 << 2)
 #define LNET_REPLY_BIT		(1 << 3)
+
+#define HSTATUS_END			11
+#define HSTATUS_LOCAL_INTERRUPT_BIT	(1 << 1)
+#define HSTATUS_LOCAL_DROPPED_BIT	(1 << 2)
+#define HSTATUS_LOCAL_ABORTED_BIT	(1 << 3)
+#define HSTATUS_LOCAL_NO_ROUTE_BIT	(1 << 4)
+#define HSTATUS_LOCAL_ERROR_BIT		(1 << 5)
+#define HSTATUS_LOCAL_TIMEOUT_BIT	(1 << 6)
+#define HSTATUS_REMOTE_ERROR_BIT	(1 << 7)
+#define HSTATUS_REMOTE_DROPPED_BIT	(1 << 8)
+#define HSTATUS_REMOTE_TIMEOUT_BIT	(1 << 9)
+#define HSTATUS_NETWORK_TIMEOUT_BIT	(1 << 10)
+#define HSTATUS_RANDOM			0xffffffff
 
 /** ioctl parameter for LNet fault simulation */
 struct lnet_fault_attr {
@@ -88,6 +103,10 @@ struct lnet_fault_attr {
 			 * with da_rate
 			 */
 			__u32			da_interval;
+			/** error type mask */
+			__u32			da_health_error_mask;
+			/** randomize error generation */
+			bool			da_random;
 		} drop;
 		/** message latency simulation */
 		struct {

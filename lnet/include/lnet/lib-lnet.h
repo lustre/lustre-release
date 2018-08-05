@@ -706,6 +706,8 @@ void lnet_set_reply_msg_len(struct lnet_ni *ni, struct lnet_msg *msg,
 void lnet_detach_rsp_tracker(struct lnet_libmd *md, int cpt);
 
 void lnet_finalize(struct lnet_msg *msg, int rc);
+bool lnet_send_error_simulation(struct lnet_msg *msg,
+				enum lnet_msg_hstatus *hstatus);
 
 void lnet_drop_message(struct lnet_ni *ni, int cpt, void *private,
 		       unsigned int nob, __u32 msg_type);
@@ -728,7 +730,7 @@ int lnet_fault_ctl(int cmd, struct libcfs_ioctl_data *data);
 int lnet_fault_init(void);
 void lnet_fault_fini(void);
 
-bool lnet_drop_rule_match(struct lnet_hdr *hdr);
+bool lnet_drop_rule_match(struct lnet_hdr *hdr, enum lnet_msg_hstatus *hstatus);
 
 int lnet_delay_rule_add(struct lnet_fault_attr *attr);
 int lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown);

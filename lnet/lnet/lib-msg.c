@@ -817,6 +817,30 @@ lnet_health_error2str(enum lnet_msg_hstatus hstatus)
 	}
 }
 
+bool
+lnet_send_error_simulation(struct lnet_msg *msg,
+			   enum lnet_msg_hstatus *hstatus)
+{
+	if (!msg)
+		return false;
+
+	if (list_empty(&the_lnet.ln_drop_rules))
+	    return false;
+
+	/* match only health rules */
+	if (!lnet_drop_rule_match(&msg->msg_hdr, hstatus))
+		return false;
+
+	CDEBUG(D_NET, "src %s, dst %s: %s simulate health error: %s\n",
+		libcfs_nid2str(msg->msg_hdr.src_nid),
+		libcfs_nid2str(msg->msg_hdr.dest_nid),
+		lnet_msgtyp2str(msg->msg_type),
+		lnet_health_error2str(*hstatus));
+
+	return true;
+}
+EXPORT_SYMBOL(lnet_send_error_simulation);
+
 void
 lnet_finalize(struct lnet_msg *msg, int status)
 {

@@ -1315,6 +1315,57 @@ fault_attr_ptl_parse(char *ptl_str, __u64 *mask_p)
 }
 
 static int
+fault_attr_health_error_parse(char *error, __u32 *mask)
+{
+	if (!strcasecmp(error, "local_interrupt")) {
+		*mask |= HSTATUS_LOCAL_INTERRUPT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_dropped")) {
+		*mask |= HSTATUS_LOCAL_DROPPED_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_aborted")) {
+		*mask |= HSTATUS_LOCAL_ABORTED_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_no_route")) {
+		*mask |= HSTATUS_LOCAL_NO_ROUTE_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_error")) {
+		*mask |= HSTATUS_LOCAL_ERROR_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "local_timeout")) {
+		*mask |= HSTATUS_LOCAL_TIMEOUT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "remote_error")) {
+		*mask |= HSTATUS_REMOTE_ERROR_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "remote_dropped")) {
+		*mask |= HSTATUS_REMOTE_DROPPED_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "remote_timeout")) {
+		*mask |= HSTATUS_REMOTE_TIMEOUT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "network_timeout")) {
+		*mask |= HSTATUS_NETWORK_TIMEOUT_BIT;
+		return 0;
+	}
+	if (!strcasecmp(error, "random")) {
+		*mask = HSTATUS_RANDOM;
+		return 0;
+	}
+
+	return -1;
+}
+
+static int
 fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 {
 	struct libcfs_ioctl_data  data = { { 0 } };
@@ -1327,9 +1378,11 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 	{ .name = "dest",     .has_arg = required_argument, .val = 'd' },
 	{ .name = "rate",     .has_arg = required_argument, .val = 'r' },
 	{ .name = "interval", .has_arg = required_argument, .val = 'i' },
+	{ .name = "random",   .has_arg = no_argument,       .val = 'n' },
 	{ .name = "latency",  .has_arg = required_argument, .val = 'l' },
 	{ .name = "portal",   .has_arg = required_argument, .val = 'p' },
 	{ .name = "message",  .has_arg = required_argument, .val = 'm' },
+	{ .name = "health_error",  .has_arg = required_argument, .val = 'e' },
 	{ .name = NULL } };
 
 	if (argc == 1) {
@@ -1338,7 +1391,7 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 		return -1;
 	}
 
-	optstr = opc == LNET_CTL_DROP_ADD ? "s:d:r:i:p:m:" : "s:d:r:l:p:m:";
+	optstr = opc == LNET_CTL_DROP_ADD ? "s:d:r:i:p:m:e:n" : "s:d:r:l:p:m:";
 	memset(&attr, 0, sizeof(attr));
 	while (1) {
 		char c = getopt_long(argc, argv, optstr, opts, NULL);
@@ -1364,6 +1417,20 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 				attr.u.drop.da_rate = strtoul(optarg, NULL, 0);
 			else
 				attr.u.delay.la_rate = strtoul(optarg, NULL, 0);
+			break;
+
+		case 'e':
+			if (opc == LNET_CTL_DROP_ADD) {
+				rc = fault_attr_health_error_parse(optarg,
+					&attr.u.drop.da_health_error_mask);
+				if (rc)
+					goto getopt_failed;
+			}
+			break;
+
+		case 'n':
+			if (opc == LNET_CTL_DROP_ADD)
+				attr.u.drop.da_random = true;
 			break;
 
 		case 'i': /* time interval (# seconds) for message drop */
@@ -1406,6 +1473,12 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 			fprintf(stderr,
 				"please provide either drop rate or interval "
 				"but not both at the same time.\n");
+			return -1;
+		}
+
+		if (attr.u.drop.da_random &&
+		    attr.u.drop.da_interval == 0) {
+			fprintf(stderr, "please provide an interval to randomize\n");
 			return -1;
 		}
 	} else if (opc == LNET_CTL_DELAY_ADD) {

@@ -757,7 +757,7 @@ static void
 lnet_ni_send(struct lnet_ni *ni, struct lnet_msg *msg)
 {
 	void   *priv = msg->msg_private;
-	int	rc;
+	int rc;
 
 	LASSERT (!in_interrupt ());
 	LASSERT (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND ||
@@ -4135,7 +4135,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	}
 
 	if (!list_empty(&the_lnet.ln_drop_rules) &&
-	    lnet_drop_rule_match(hdr)) {
+	    lnet_drop_rule_match(hdr, NULL)) {
 		CDEBUG(D_NET, "%s, src %s, dst %s: Dropping %s to simulate"
 			      "silent message loss\n",
 		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
