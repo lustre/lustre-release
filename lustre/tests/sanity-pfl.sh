@@ -12,9 +12,6 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$SANITY_PFL_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
-	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
-
 TMP=${TMP:-/tmp}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 
@@ -29,6 +26,14 @@ check_and_setup_lustre
 if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.51) ]]; then
 	skip_env "Need MDS version at least 2.9.51"
 fi
+
+if [ $MDSCOUNT -eq 1 ]; then
+	# Bug number:    LU-10686
+	ALWAYS_EXCEPT+=" 9"
+fi
+
+[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
+	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 build_test_filter
 
