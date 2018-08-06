@@ -813,6 +813,8 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 	conn->ibc_cmid = cmid;
 	conn->ibc_max_frags = peer_ni->ibp_max_frags;
 	conn->ibc_queue_depth = peer_ni->ibp_queue_depth;
+	conn->ibc_rxs = NULL;
+	conn->ibc_rx_pages = NULL;
 
 	INIT_LIST_HEAD(&conn->ibc_early_rxs);
 	INIT_LIST_HEAD(&conn->ibc_tx_noops);
@@ -856,20 +858,6 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
         kiblnd_setup_mtu_locked(cmid);
 
 	write_unlock_irqrestore(glock, flags);
-
-	LIBCFS_CPT_ALLOC(conn->ibc_rxs, lnet_cpt_table(), cpt,
-			 IBLND_RX_MSGS(conn) * sizeof(struct kib_rx));
-	if (conn->ibc_rxs == NULL) {
-		CERROR("Cannot allocate RX buffers\n");
-		goto failed_2;
-	}
-
-	rc = kiblnd_alloc_pages(&conn->ibc_rx_pages, cpt,
-				IBLND_RX_MSG_PAGES(conn));
-	if (rc != 0)
-		goto failed_2;
-
-	kiblnd_map_rx_descs(conn);
 
 #ifdef HAVE_IB_CQ_INIT_ATTR
 	cq_attr.cqe = IBLND_CQ_ENTRIES(conn);
@@ -941,6 +929,20 @@ kiblnd_create_conn(struct kib_peer_ni *peer_ni, struct rdma_cm_id *cmid,
 		      libcfs_nid2str(peer_ni->ibp_nid),
 		      peer_ni->ibp_queue_depth,
 		      conn->ibc_queue_depth);
+
+	LIBCFS_CPT_ALLOC(conn->ibc_rxs, lnet_cpt_table(), cpt,
+			 IBLND_RX_MSGS(conn) * sizeof(struct kib_rx));
+	if (conn->ibc_rxs == NULL) {
+		CERROR("Cannot allocate RX buffers\n");
+		goto failed_2;
+	}
+
+	rc = kiblnd_alloc_pages(&conn->ibc_rx_pages, cpt,
+				IBLND_RX_MSG_PAGES(conn));
+	if (rc != 0)
+		goto failed_2;
+
+	kiblnd_map_rx_descs(conn);
 
 	LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
 
