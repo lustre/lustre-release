@@ -131,7 +131,7 @@ static DEFINE_SPINLOCK(waiting_locks_spinlock); /* BH lock (timer) */
  * All access to it should be under waiting_locks_spinlock.
  */
 static LIST_HEAD(waiting_locks_list);
-static void waiting_locks_callback(cfs_timer_cb_arg_t unused);
+static void waiting_locks_callback(TIMER_DATA_TYPE unused);
 static CFS_DEFINE_TIMER(waiting_locks_timer, waiting_locks_callback, 0, 0);
 
 enum elt_state {
@@ -303,7 +303,7 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
 }
 
 /* This is called from within a timer interrupt and cannot schedule */
-static void waiting_locks_callback(cfs_timer_cb_arg_t unused)
+static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 {
 	struct ldlm_lock	*lock;
 	int			need_dump = 0;

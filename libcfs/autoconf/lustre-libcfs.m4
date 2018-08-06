@@ -858,6 +858,25 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_NEW_KERNEL_WRITE
 
 #
+# LIBCFS_DEFINE_TIMER
+#
+# Kernel version 4.14 commit 1d27e3e2252ba9d949ca82fbdb73cde102cb2067
+# remove expires and data arguments from DEFINE_TIMER. Also the callback
+# when from using unsigned long argument to using struct timer_list pointer.
+#
+AC_DEFUN([LIBCFS_DEFINE_TIMER], [
+LB_CHECK_COMPILE([if DEFINE_TIMER takes only 2 arguments],
+define_timer, [
+	#include <linux/timer.h>
+],[
+	static DEFINE_TIMER(my_timer, NULL);
+],[
+	AC_DEFINE(HAVE_NEW_DEFINE_TIMER, 1,
+		[DEFINE_TIMER uses only 2 arguements])
+])
+]) # LIBCFS_DEFINE_TIMER
+
+#
 # LIBCFS_TIMER_SETUP
 #
 # Kernel version 4.15 commit e99e88a9d2b067465adaa9c111ada99a041bef9a
@@ -958,6 +977,7 @@ LIBCFS_SCHED_HEADERS
 # 4.13
 LIBCFS_WAIT_QUEUE_ENTRY
 # 4.14
+LIBCFS_DEFINE_TIMER
 LIBCFS_NEW_KERNEL_WRITE
 # 4.15
 LIBCFS_TIMER_SETUP

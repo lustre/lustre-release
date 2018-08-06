@@ -197,22 +197,34 @@ static inline unsigned long cfs_time_seconds(time64_t seconds)
 	return nsecs_to_jiffies(seconds * NSEC_PER_SEC);
 }
 
+#ifdef HAVE_NEW_DEFINE_TIMER
+# ifndef TIMER_DATA_TYPE
+# define TIMER_DATA_TYPE struct timer_list *
+# endif
+
+#define CFS_DEFINE_TIMER(_name, _function, _expires, _data) \
+	DEFINE_TIMER((_name), (_function))
+#else
+# ifndef TIMER_DATA_TYPE
+# define TIMER_DATA_TYPE unsigned long
+# endif
+
+#define CFS_DEFINE_TIMER(_name, _function, _expires, _data) \
+	DEFINE_TIMER((_name), (_function), (_expires), (_data))
+#endif
+
 #ifdef HAVE_TIMER_SETUP
 #define cfs_timer_cb_arg_t struct timer_list *
 #define cfs_from_timer(var, callback_timer, timer_fieldname) \
 	from_timer(var, callback_timer, timer_fieldname)
 #define cfs_timer_setup(timer, callback, data, flags) \
 	timer_setup((timer), (callback), (flags))
-#define CFS_DEFINE_TIMER(_name, _function, _expires, _data) \
-	DEFINE_TIMER((_name), (_function))
 #define cfs_timer_cb_arg(var, timer_fieldname) (&(var)->timer_fieldname)
 #else
 #define cfs_timer_cb_arg_t unsigned long
 #define cfs_from_timer(var, data, timer_fieldname) (typeof(var))(data)
 #define cfs_timer_setup(timer, callback, data, flags) \
 	setup_timer((timer), (callback), (data))
-#define CFS_DEFINE_TIMER(_name, _function, _expires, _data) \
-	DEFINE_TIMER((_name), (_function), (_expires), (_data))
 #define cfs_timer_cb_arg(var, timer_fieldname) (cfs_timer_cb_arg_t)(var)
 #endif
 
