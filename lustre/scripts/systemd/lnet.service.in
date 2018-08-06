@@ -9,7 +9,7 @@ ConditionPathExists=!/proc/sys/lnet/
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=@sbindir@/modprobe lnet
+ExecStart=/sbin/modprobe lnet
 @BUILD_DLC_FALSE@ExecStart=@sbindir@/lctl network up
 @BUILD_DLC_FALSE@ExecStart=@sbindir@/lustre_routes_config @sysconfdir@/lnet_routes.conf
 @BUILD_DLC_TRUE@ExecStart=@sbindir@/lnetctl lnet configure
