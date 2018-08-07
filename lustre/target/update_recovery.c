@@ -502,6 +502,8 @@ void dtrq_destroy(struct distribute_txn_replay_req *dtrq)
 	struct distribute_txn_replay_req_sub	*tmp;
 
 	LASSERT(list_empty(&dtrq->dtrq_list));
+	CDEBUG(D_HA, "destroy x%llu t%llu\n", dtrq->dtrq_xid,
+	       dtrq->dtrq_master_transno);
 	spin_lock(&dtrq->dtrq_sub_list_lock);
 	list_for_each_entry_safe(dtrqs, tmp, &dtrq->dtrq_sub_list, dtrqs_list) {
 		struct sub_thandle_cookie *stc;
@@ -607,14 +609,14 @@ EXPORT_SYMBOL(distribute_txn_get_next_transno);
 
 struct distribute_txn_replay_req *
 distribute_txn_lookup_finish_list(struct target_distribute_txn_data *tdtd,
-				  __u64 xid)
+				  __u64 transno)
 {
 	struct distribute_txn_replay_req *dtrq = NULL;
 	struct distribute_txn_replay_req *iter;
 
 	spin_lock(&tdtd->tdtd_replay_list_lock);
 	list_for_each_entry(iter, &tdtd->tdtd_replay_finish_list, dtrq_list) {
-		if (iter->dtrq_xid == xid) {
+		if (iter->dtrq_master_transno == transno) {
 			dtrq = iter;
 			break;
 		}
@@ -631,7 +633,8 @@ bool is_req_replayed_by_update(struct ptlrpc_request *req)
 	if (tgt->lut_tdtd == NULL)
 		return false;
 
-	dtrq = distribute_txn_lookup_finish_list(tgt->lut_tdtd, req->rq_xid);
+	dtrq = distribute_txn_lookup_finish_list(tgt->lut_tdtd,
+					lustre_msg_get_transno(req->rq_reqmsg));
 	if (dtrq == NULL)
 		return false;
 
@@ -1093,6 +1096,7 @@ static void update_recovery_update_ses(struct lu_env *env,
 	lrd->lrd_result          = le32_to_cpu(lrd->lrd_result);
 	lrd->lrd_client_gen      = le32_to_cpu(lrd->lrd_client_gen);
 
+	CDEBUG(D_HA, "xid=%llu transno=%llu\n", lrd->lrd_xid, lrd->lrd_transno);
 	if (lrd->lrd_transno != tgt_th_info(env)->tti_transno)
 		return;
 

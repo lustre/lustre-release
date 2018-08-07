@@ -2381,7 +2381,7 @@ static void replay_request_or_update(struct lu_env *env,
 				struct distribute_txn_replay_req *dtrq;
 
 				dtrq = distribute_txn_lookup_finish_list(tdtd,
-								   req->rq_xid);
+								      transno);
 				LASSERT(dtrq != NULL);
 				spin_lock(&tdtd->tdtd_replay_list_lock);
 				list_del_init(&dtrq->dtrq_list);
@@ -2394,7 +2394,8 @@ static void replay_request_or_update(struct lu_env *env,
 			}
 
 			LASSERT(trd->trd_processing_task == current_pid());
-			DEBUG_REQ(D_HA, req, "processing t%lld from %s",
+			DEBUG_REQ(D_HA, req, "processing x%llu t%lld from %s",
+				  req->rq_xid,
 				  lustre_msg_get_transno(req->rq_reqmsg),
 				  libcfs_nid2str(req->rq_peer.nid));
 

@@ -568,6 +568,11 @@ static int out_index_insert(struct tgt_session_info *tsi)
 				 tti->tti_tea.ta_handle,
 				 tti->tti_u.update.tti_update_reply,
 				 tti->tti_u.update.tti_update_reply_index);
+
+	CDEBUG(D_INFO, "%s: "DFID" index insert %s: rc = %d\n",
+	       tgt_name(tsi->tsi_tgt), PFID(lu_object_fid(&obj->do_lu)),
+	       name, rc);
+
 	RETURN(rc);
 }
 

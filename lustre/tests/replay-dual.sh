@@ -1028,6 +1028,38 @@ test_28() {
 }
 run_test 28 "lock replay should be ordered: waiting after granted"
 
+test_29() {
+	local dir0=$DIR/$tdir/d0
+	local dir1=$DIR/$tdir/d1
+
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $CLIENTCOUNT -lt 2 ] && skip "needs >= 2 clients" && return 0
+	[ "$CLIENT1" == "$CLIENT2" ] &&
+		skip "clients must be on different nodes" && return 0
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i0 $dir0
+	$LFS mkdir -i1 $dir1
+	sync
+
+	replay_barrier mds2
+	# create a remote dir, drop reply
+	#define OBD_FAIL_PTLRPC_ROUND_XID 0x530
+	$LCTL set_param fail_loc=0x530 fail_val=36
+	#define OBD_FAIL_MDS_REINT_MULTI_NET_REP 0x15a
+	do_facet mds2 $LCTL set_param fail_loc=0x8000015a
+	echo make remote dir d0 for $dir0
+	$LFS mkdir -i1 -c1 $dir0/d3 &
+	sleep 1
+
+	echo make local dir d1 for $dir1
+	do_node $CLIENT2 $LCTL set_param fail_loc=0x530 fail_val=36
+	do_node $CLIENT2 mkdir $dir1/d4
+
+	fail mds2
+}
+run_test 29 "replay vs update with the same xid"
+
 complete $SECONDS
 SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
