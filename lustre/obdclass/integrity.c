@@ -27,7 +27,7 @@
  */
 #include <linux/blkdev.h>
 #include <linux/crc-t10dif.h>
-#include <asm-generic/checksum.h>
+#include <asm/checksum.h>
 #include <obd_class.h>
 #include <obd_cksum.h>
 
