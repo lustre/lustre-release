@@ -45,6 +45,8 @@
 #endif
 #include <linux/string.h>
 #include <linux/unistd.h>
+#include <linux/stacktrace.h>
+#include <linux/utsname.h>
 
 # define DEBUG_SUBSYSTEM S_LNET
 
@@ -92,24 +94,50 @@ void libcfs_run_debug_log_upcall(char *file)
 /* coverity[+kill] */
 void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
-        libcfs_catastrophe = 1;
-        libcfs_debug_msg(msgdata, "LBUG\n");
+	libcfs_catastrophe = 1;
+	libcfs_debug_msg(msgdata, "LBUG\n");
 
-        if (in_interrupt()) {
-                panic("LBUG in interrupt.\n");
-                /* not reached */
-        }
+	if (in_interrupt()) {
+		panic("LBUG in interrupt.\n");
+		/* not reached */
+	}
 
-        libcfs_debug_dumpstack(NULL);
-        if (!libcfs_panic_on_lbug)
-                libcfs_debug_dumplog();
-        if (libcfs_panic_on_lbug)
-                panic("LBUG");
+	libcfs_debug_dumpstack(NULL);
+	if (libcfs_panic_on_lbug)
+		panic("LBUG");
+	else
+		libcfs_debug_dumplog();
 	set_current_state(TASK_UNINTERRUPTIBLE);
-        while (1)
-                schedule();
+	while (1)
+		schedule();
 }
 EXPORT_SYMBOL(lbug_with_loc);
+
+#ifdef CONFIG_STACKTRACE
+
+#define MAX_ST_ENTRIES	100
+static DEFINE_SPINLOCK(st_lock);
+
+static void libcfs_call_trace(struct task_struct *tsk)
+{
+	struct stack_trace trace;
+	static unsigned long entries[MAX_ST_ENTRIES];
+
+	trace.nr_entries = 0;
+	trace.max_entries = MAX_ST_ENTRIES;
+	trace.entries = entries;
+	trace.skip = 0;
+
+	spin_lock(&st_lock);
+	pr_info("Pid: %d, comm: %.20s %s %s\n", tsk->pid, tsk->comm,
+	       init_utsname()->release, init_utsname()->version);
+	pr_info("Call Trace:\n");
+	save_stack_trace_tsk(tsk, &trace);
+	print_stack_trace(&trace, 0);
+	spin_unlock(&st_lock);
+}
+
+#else /* !CONFIG_STACKTRACE */
 
 #ifdef CONFIG_X86
 #include <linux/nmi.h>
@@ -197,6 +225,8 @@ static void libcfs_call_trace(struct task_struct *tsk)
 }
 
 #endif /* CONFIG_X86 */
+
+#endif /* CONFIG_STACKTRACE */
 
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
