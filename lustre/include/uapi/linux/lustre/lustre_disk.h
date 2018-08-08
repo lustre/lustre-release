@@ -71,6 +71,7 @@
 #define LFSCK_NAMESPACE		"lfsck_namespace"
 #define REMOTE_PARENT_DIR	"REMOTE_PARENT_DIR"
 #define INDEX_BACKUP_DIR	"index_backup"
+#define MDT_ORPHAN_DIR		"PENDING"
 
 /****************** persistent mount data *********************/
 

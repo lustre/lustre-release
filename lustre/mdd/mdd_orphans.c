@@ -45,7 +45,7 @@
 #include <lustre_fid.h>
 #include "mdd_internal.h"
 
-static const char mdd_orphan_index_name[] = "PENDING";
+static const char mdd_orphan_index_name[] = MDT_ORPHAN_DIR;
 static const char dotdot[] = "..";
 
 enum {

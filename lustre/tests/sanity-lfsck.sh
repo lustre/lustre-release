@@ -5532,6 +5532,29 @@ test_36c() {
 }
 run_test 36c "rebuild LOV EA for mirrored file (3)"
 
+test_37()
+{
+	local PID
+	local rc
+	local t_dir="$DIR/$tdir/d0"
+	check_mount_and_prep
+
+	$LFS mkdir -i 0 $t_dir || error "(2) Fail to mkdir $t_dir on MDT0"
+	multiop_bg_pause $t_dir D_c || { error "multiop failed: $?"; return 1; }
+	PID=$!
+	rmdir $t_dir
+
+	$START_NAMESPACE -r -A || {
+	    error "(3) Fail to start LFSCK for namespace!"; kill -USR1 $PID; }
+
+	wait_all_targets_blocked namespace completed 4
+	stat $t_dir && rc=1
+	kill -USR1 $PID
+	return $rc
+}
+run_test 37 "LFSCK must skip a ORPHAN"
+
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

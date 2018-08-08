@@ -1069,25 +1069,25 @@ struct lustre_swap_layouts {
  * Only the first 12 bits are currently saved.
  */
 enum la_valid {
-	LA_ATIME = 1 << 0,
-	LA_MTIME = 1 << 1,
-	LA_CTIME = 1 << 2,
-	LA_SIZE  = 1 << 3,
-	LA_MODE  = 1 << 4,
-	LA_UID   = 1 << 5,
-	LA_GID   = 1 << 6,
-	LA_BLOCKS = 1 << 7,
-	LA_TYPE   = 1 << 8,
-	LA_FLAGS  = 1 << 9,
-	LA_NLINK  = 1 << 10,
-	LA_RDEV   = 1 << 11,
-	LA_BLKSIZE = 1 << 12,
-	LA_KILL_SUID = 1 << 13,
-	LA_KILL_SGID = 1 << 14,
-	LA_PROJID    = 1 << 15,
-	LA_LAYOUT_VERSION = 1 << 16,
-	LA_LSIZE = 1 << 17,
-	LA_LBLOCKS = 1 << 18,
+	LA_ATIME	= 1 << 0,	/* 0x00001 */
+	LA_MTIME	= 1 << 1,	/* 0x00002 */
+	LA_CTIME	= 1 << 2,	/* 0x00004 */
+	LA_SIZE		= 1 << 3,	/* 0x00008 */
+	LA_MODE		= 1 << 4,	/* 0x00010 */
+	LA_UID		= 1 << 5,	/* 0x00020 */
+	LA_GID		= 1 << 6,	/* 0x00040 */
+	LA_BLOCKS	= 1 << 7,	/* 0x00080 */
+	LA_TYPE		= 1 << 8,	/* 0x00100 */
+	LA_FLAGS	= 1 << 9,	/* 0x00200 */
+	LA_NLINK	= 1 << 10,	/* 0x00400 */
+	LA_RDEV		= 1 << 11,	/* 0x00800 */
+	LA_BLKSIZE	= 1 << 12,	/* 0x01000 */
+	LA_KILL_SUID	= 1 << 13,	/* 0x02000 */
+	LA_KILL_SGID	= 1 << 14,	/* 0x04000 */
+	LA_PROJID	= 1 << 15,	/* 0x08000 */
+	LA_LAYOUT_VERSION = 1 << 16,	/* 0x10000 */
+	LA_LSIZE	= 1 << 17,	/* 0x20000 */
+	LA_LBLOCKS	= 1 << 18,	/* 0x40000 */
 	/**
 	 * Attributes must be transmitted to OST objects
 	 */

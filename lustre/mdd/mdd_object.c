@@ -235,8 +235,7 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 		return rc;
 	}
 
-	if (la->la_valid & LA_FLAGS &&
-	    la->la_flags & LUSTRE_ORPHAN_FL)
+	if (la->la_valid & LA_FLAGS && la->la_flags & LUSTRE_ORPHAN_FL)
 		obj->mod_flags |= ORPHAN_OBJ | DEAD_OBJ;
 
 	return 0;

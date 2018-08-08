@@ -1717,17 +1717,17 @@ enum {
 enum {
 	/* these should be identical to their EXT4_*_FL counterparts, they are
 	 * redefined here only to avoid dragging in fs/ext4/ext4.h */
-	LUSTRE_SYNC_FL = 0x00000008, /* Synchronous updates */
-	LUSTRE_IMMUTABLE_FL = 0x00000010, /* Immutable file */
-	LUSTRE_APPEND_FL = 0x00000020, /* writes to file may only append */
-	LUSTRE_NODUMP_FL = 0x00000040, /* do not dump file */
-	LUSTRE_NOATIME_FL = 0x00000080, /* do not update atime */
-	LUSTRE_INDEX_FL = 0x00001000, /* hash-indexed directory */
-	LUSTRE_DIRSYNC_FL = 0x00010000, /* dirsync behaviour (dir only) */
-	LUSTRE_TOPDIR_FL = 0x00020000, /* Top of directory hierarchies*/
-	LUSTRE_DIRECTIO_FL = 0x00100000, /* Use direct i/o */
-	LUSTRE_INLINE_DATA_FL = 0x10000000, /* Inode has inline data. */
-	LUSTRE_PROJINHERIT_FL = 0x20000000, /* Create with parents projid */
+	LUSTRE_SYNC_FL		= 0x00000008, /* Synchronous updates */
+	LUSTRE_IMMUTABLE_FL	= 0x00000010, /* Immutable file */
+	LUSTRE_APPEND_FL	= 0x00000020, /* file writes may only append */
+	LUSTRE_NODUMP_FL	= 0x00000040, /* do not dump file */
+	LUSTRE_NOATIME_FL	= 0x00000080, /* do not update atime */
+	LUSTRE_INDEX_FL		= 0x00001000, /* hash-indexed directory */
+	LUSTRE_DIRSYNC_FL	= 0x00010000, /* dirsync behaviour (dir only) */
+	LUSTRE_TOPDIR_FL	= 0x00020000, /* Top of directory hierarchies*/
+	LUSTRE_DIRECTIO_FL	= 0x00100000, /* Use direct i/o */
+	LUSTRE_INLINE_DATA_FL	= 0x10000000, /* Inode has inline data. */
+	LUSTRE_PROJINHERIT_FL	= 0x20000000, /* Create with parents projid */
 
 	/* These flags will not be identical to any EXT4_*_FL counterparts,
 	 * and only reserved for lustre purpose. Note: these flags might
@@ -1736,10 +1736,10 @@ enum {
 	 * wired by la_flags see osd_attr_get().
 	 * 2. If these flags needs to be stored into inode, they will be
 	 * stored in LMA. see LMAI_XXXX */
-	LUSTRE_ORPHAN_FL = 0x00002000,
-	LUSTRE_SET_SYNC_FL = 0x00040000, /* Synchronous setattr on OSTs */
+	LUSTRE_ORPHAN_FL	= 0x00002000,
+	LUSTRE_SET_SYNC_FL	= 0x00040000, /* Synchronous setattr on OSTs */
 
-	LUSTRE_LMA_FL_MASKS = LUSTRE_ORPHAN_FL,
+	LUSTRE_LMA_FL_MASKS	= LUSTRE_ORPHAN_FL,
 };
 
 #ifndef FS_XFLAG_SYNC
