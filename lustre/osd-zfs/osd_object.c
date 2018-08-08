@@ -984,8 +984,7 @@ static int osd_write_locked(const struct lu_env *env, struct dt_object *dt)
 	return rc;
 }
 
-static int osd_attr_get(const struct lu_env *env,
-			struct dt_object *dt,
+static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 			struct lu_attr *attr)
 {
 	struct osd_object	*obj = osd_dt_obj(dt);
@@ -1006,9 +1005,16 @@ static int osd_attr_get(const struct lu_env *env,
 
 	read_lock(&obj->oo_attr_lock);
 	*attr = obj->oo_attr;
-	if (obj->oo_lma_flags & LUSTRE_ORPHAN_FL)
+	if (obj->oo_lma_flags & LUSTRE_ORPHAN_FL) {
+		attr->la_valid |= LA_FLAGS;
 		attr->la_flags |= LUSTRE_ORPHAN_FL;
+	}
 	read_unlock(&obj->oo_attr_lock);
+	if (attr->la_valid & LA_FLAGS && attr->la_flags & LUSTRE_ORPHAN_FL)
+		CDEBUG(D_INFO, "%s: set orphan flag on "DFID" (%llx/%x)\n",
+		       osd_obj2dev(obj)->od_svname,
+		       PFID(lu_object_fid(&dt->do_lu)),
+		       attr->la_valid, obj->oo_lma_flags);
 
 	/* with ZFS_DEBUG zrl_add_debug() called by DB_DNODE_ENTER()
 	 * from within sa_object_size() can block on a mutex, so

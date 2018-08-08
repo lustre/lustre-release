@@ -701,7 +701,7 @@ static const struct osd_lf_map osd_lf_maps[] = {
 
 	/* PENDING */
 	{
-		.olm_name		= "PENDING",
+		.olm_name		= MDT_ORPHAN_DIR,
 	},
 
 	/* ROOT */

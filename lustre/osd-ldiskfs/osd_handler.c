@@ -2622,8 +2622,7 @@ static void osd_inode_getattr(const struct lu_env *env,
 		attr->la_flags |= LUSTRE_PROJINHERIT_FL;
 }
 
-static int osd_attr_get(const struct lu_env *env,
-			struct dt_object *dt,
+static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 			struct lu_attr *attr)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
@@ -2638,8 +2637,10 @@ static int osd_attr_get(const struct lu_env *env,
 
 	spin_lock(&obj->oo_guard);
 	osd_inode_getattr(env, obj->oo_inode, attr);
-	if (obj->oo_lma_flags & LUSTRE_ORPHAN_FL)
+	if (obj->oo_lma_flags & LUSTRE_ORPHAN_FL) {
+		attr->la_valid |= LA_FLAGS;
 		attr->la_flags |= LUSTRE_ORPHAN_FL;
+	}
 	spin_unlock(&obj->oo_guard);
 
 	return 0;
