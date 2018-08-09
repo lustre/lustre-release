@@ -698,6 +698,7 @@ static inline struct timespec current_time(struct inode *inode)
 #define READ_ONCE ACCESS_ONCE
 #endif
 
+#ifdef HAVE_BLK_INTEGRITY_ENABLED
 static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
 {
 #ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
@@ -717,5 +718,16 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 	return bi->name;
 #endif
 }
+#else
+static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
+{
+	return 0;
+}
+static inline const char *blk_integrity_name(struct blk_integrity *bi)
+{
+	/* gcc8 dislikes when strcmp() is called against NULL */
+	return "";
+}
+#endif
 
 #endif /* _LUSTRE_COMPAT_H */

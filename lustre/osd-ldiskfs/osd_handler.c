@@ -2164,11 +2164,9 @@ static void osd_conf_get(const struct lu_env *env,
 {
 	struct osd_device *d = osd_dt_dev(dev);
 	struct super_block *sb = osd_sb(d);
-	struct block_device *bdev = sb->s_bdev;
-	struct blk_integrity *bi = bdev_get_integrity(bdev);
-	unsigned short interval;
-	int ea_overhead;
+	struct blk_integrity *bi = bdev_get_integrity(sb->s_bdev);
 	const char *name;
+	int ea_overhead;
 
 	/*
 	 * XXX should be taken from not-yet-existing fs abstraction layer.
@@ -2226,7 +2224,7 @@ static void osd_conf_get(const struct lu_env *env,
 
 	param->ddp_t10_cksum_type = 0;
 	if (bi) {
-		interval = blk_integrity_interval(bi);
+		unsigned short interval = blk_integrity_interval(bi);
 		name = blk_integrity_name(bi);
 		/*
 		 * Expected values:
