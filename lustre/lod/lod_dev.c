@@ -1409,11 +1409,16 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 	lod_foreach_ost(lod, i) {
 		ost = OST_TGT(lod, i);
 		LASSERT(ost && ost->ltd_ost);
+		if (!ost->ltd_active)
+			continue;
 		rc = dt_sync(env, ost->ltd_ost);
 		if (rc) {
-			CERROR("%s: can't sync ost %u: %d\n",
-			       lod2obd(lod)->obd_name, i, rc);
-			break;
+			if (rc != -ENOTCONN) {
+				CERROR("%s: can't sync ost %u: %d\n",
+				       lod2obd(lod)->obd_name, i, rc);
+				break;
+			}
+			rc = 0;
 		}
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
@@ -1425,11 +1430,16 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 	lod_foreach_mdt(lod, i) {
 		mdt = MDT_TGT(lod, i);
 		LASSERT(mdt && mdt->ltd_mdt);
+		if (!mdt->ltd_active)
+			continue;
 		rc = dt_sync(env, mdt->ltd_mdt);
 		if (rc) {
-			CERROR("%s: can't sync mdt %u: %d\n",
-			       lod2obd(lod)->obd_name, i, rc);
-			break;
+			if (rc != -ENOTCONN) {
+				CERROR("%s: can't sync mdt %u: %d\n",
+				       lod2obd(lod)->obd_name, i, rc);
+				break;
+			}
+			rc = 0;
 		}
 	}
 	lod_putref(lod, &lod->lod_mdt_descs);
