@@ -737,7 +737,7 @@ static inline void ptlrpc_assign_next_xid(struct ptlrpc_request *req)
 
 static atomic64_t ptlrpc_last_xid;
 
-void ptlrpc_reassign_next_xid(struct ptlrpc_request *req)
+static void ptlrpc_reassign_next_xid(struct ptlrpc_request *req)
 {
 	spin_lock(&req->rq_import->imp_lock);
 	list_del_init(&req->rq_unreplied_list);
@@ -745,7 +745,32 @@ void ptlrpc_reassign_next_xid(struct ptlrpc_request *req)
 	spin_unlock(&req->rq_import->imp_lock);
 	DEBUG_REQ(D_RPCTRACE, req, "reassign xid");
 }
-EXPORT_SYMBOL(ptlrpc_reassign_next_xid);
+
+void ptlrpc_get_mod_rpc_slot(struct ptlrpc_request *req)
+{
+	struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
+	__u32 opc;
+	__u16 tag;
+
+	opc = lustre_msg_get_opc(req->rq_reqmsg);
+	tag = obd_get_mod_rpc_slot(cli, opc);
+	lustre_msg_set_tag(req->rq_reqmsg, tag);
+	ptlrpc_reassign_next_xid(req);
+}
+EXPORT_SYMBOL(ptlrpc_get_mod_rpc_slot);
+
+void ptlrpc_put_mod_rpc_slot(struct ptlrpc_request *req)
+{
+	__u16 tag = lustre_msg_get_tag(req->rq_reqmsg);
+
+	if (tag != 0) {
+		struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
+		__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+		obd_put_mod_rpc_slot(cli, opc, tag);
+	}
+}
+EXPORT_SYMBOL(ptlrpc_put_mod_rpc_slot);
 
 int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 			     __u32 version, int opcode, char **bufs,

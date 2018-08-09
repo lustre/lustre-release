@@ -220,6 +220,8 @@ struct lu_target {
 #define LUT_REPLY_SLOTS_PER_CHUNK (1<<20)
 #define LUT_REPLY_SLOTS_MAX_CHUNKS 16
 
+#define TRD_INDEX_MEMORY -1
+
 /**
  * Target reply data
  */
@@ -494,10 +496,10 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
 			   int sync);
 int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt);
 int tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd);
-int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
-		       struct tg_export_data *ted, struct tg_reply_data *trd,
-		       struct ptlrpc_request *req,
-		       struct thandle *th, bool update_lrd_file);
+int tgt_mk_reply_data(const struct lu_env *env, struct lu_target *tgt,
+		      struct tg_export_data *ted, struct ptlrpc_request *req,
+		      __u64 opdata, struct thandle *th, bool write_update,
+		      __u64 transno);
 struct tg_reply_data *tgt_lookup_reply_by_xid(struct tg_export_data *ted,
 					       __u64 xid);
 int tgt_tunables_init(struct lu_target *lut);

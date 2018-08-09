@@ -1759,6 +1759,9 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 	int local = ns_is_client(ldlm_res_to_ns(res));
 	enum ldlm_error rc = ELDLM_OK;
 	struct ldlm_interval *node = NULL;
+#ifdef HAVE_SERVER_SUPPORT
+	bool reconstruct = false;
+#endif
 	ENTRY;
 
         /* policies are not executed on the client or during replay */
@@ -1813,6 +1816,19 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 	 * this lock in the future. - jay */
 	if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
 		OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, GFP_NOFS);
+
+#ifdef HAVE_SERVER_SUPPORT
+	reconstruct = !local && res->lr_type == LDLM_FLOCK &&
+		      !(*flags & LDLM_FL_TEST_LOCK);
+	if (reconstruct) {
+		rc = req_can_reconstruct(cookie, NULL);
+		if (rc != 0) {
+			if (rc == 1)
+				rc = 0;
+			RETURN(rc);
+		}
+	}
+#endif
 
 	lock_res_and_lock(lock);
 	if (local && ldlm_is_granted(lock)) {
@@ -1887,6 +1903,16 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 
 out:
         unlock_res_and_lock(lock);
+
+#ifdef HAVE_SERVER_SUPPORT
+	if (reconstruct) {
+		struct ptlrpc_request *req = cookie;
+
+		tgt_mk_reply_data(NULL, NULL,
+				  &req->rq_export->exp_target_data,
+				  req, 0, NULL, false, 0);
+	}
+#endif
         if (node)
                 OBD_SLAB_FREE(node, ldlm_interval_slab, sizeof(*node));
         return rc;

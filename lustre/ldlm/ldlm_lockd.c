@@ -1349,18 +1349,11 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 		lock->l_req_extent = lock->l_policy_data.l_extent;
 
 existing_lock:
-	if (flags & LDLM_FL_HAS_INTENT) {
-		/*
-		 * In this case, the reply buffer is allocated deep in
-		 * local_lock_enqueue by the policy function.
-		 */
-		cookie = req;
-	} else {
-		/*
-		 * based on the assumption that lvb size never changes during
+	cookie = req;
+	if (!(flags & LDLM_FL_HAS_INTENT)) {
+		/* based on the assumption that lvb size never changes during
 		 * resource life time otherwise it need resource->lr_lock's
-		 * protection
-		 */
+		 * protection */
 		req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB,
 				     RCL_SERVER, ldlm_lvbo_size(lock));
 

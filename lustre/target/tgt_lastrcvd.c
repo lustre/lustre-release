@@ -331,7 +331,7 @@ static void tgt_free_reply_data(struct lu_target *lut,
 
 	list_del(&trd->trd_list);
 	ted->ted_reply_cnt--;
-	if (lut != NULL)
+	if (lut != NULL && trd->trd_index != TRD_INDEX_MEMORY)
 		tgt_clear_reply_slot(lut, trd->trd_index);
 	OBD_FREE_PTR(trd);
 }
@@ -1166,7 +1166,7 @@ static void tgt_clean_by_tag(struct obd_export *exp, __u64 xid, __u16 tag)
 	}
 }
 
-int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
+static int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 		       struct tg_export_data *ted, struct tg_reply_data *trd,
 		       struct ptlrpc_request *req,
 		       struct thandle *th, bool update_lrd_file)
@@ -1181,28 +1181,33 @@ int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 		ted->ted_lcd->lcd_last_transno = lrd->lrd_transno;
 	mutex_unlock(&ted->ted_lcd_lock);
 
-	/* find a empty slot */
-	i = tgt_find_free_reply_slot(tgt);
-	if (unlikely(i < 0)) {
-		CERROR("%s: couldn't find a slot for reply data: "
-		       "rc = %d\n", tgt_name(tgt), i);
-		RETURN(i);
-	}
-	trd->trd_index = i;
-
-	if (update_lrd_file) {
-		loff_t	off;
-		int	rc;
-
-		/* write reply data to disk */
-		off = sizeof(struct lsd_reply_header) + sizeof(*lrd) * i;
-		rc = tgt_reply_data_write(env, tgt, lrd, off, th);
-		if (unlikely(rc != 0)) {
-			CERROR("%s: can't update %s file: rc = %d\n",
-			       tgt_name(tgt), REPLY_DATA, rc);
-			RETURN(rc);
+	if (tgt != NULL) {
+		/* find a empty slot */
+		i = tgt_find_free_reply_slot(tgt);
+		if (unlikely(i < 0)) {
+			CERROR("%s: couldn't find a slot for reply data: "
+			       "rc = %d\n", tgt_name(tgt), i);
+			RETURN(i);
 		}
+		trd->trd_index = i;
+
+		if (update_lrd_file) {
+			loff_t	off;
+			int	rc;
+
+			/* write reply data to disk */
+			off = sizeof(struct lsd_reply_header) + sizeof(*lrd) * i;
+			rc = tgt_reply_data_write(env, tgt, lrd, off, th);
+			if (unlikely(rc != 0)) {
+				CERROR("%s: can't update %s file: rc = %d\n",
+				       tgt_name(tgt), REPLY_DATA, rc);
+				RETURN(rc);
+			}
+		}
+	} else {
+		trd->trd_index = TRD_INDEX_MEMORY;
 	}
+
 	/* add reply data to target export's reply list */
 	mutex_lock(&ted->ted_lcd_lock);
 	if (req != NULL) {
@@ -1231,7 +1236,64 @@ int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 
 	RETURN(0);
 }
-EXPORT_SYMBOL(tgt_add_reply_data);
+
+int tgt_mk_reply_data(const struct lu_env *env,
+		      struct lu_target *tgt,
+		      struct tg_export_data *ted,
+		      struct ptlrpc_request *req,
+		      __u64 opdata,
+		      struct thandle *th,
+		      bool write_update,
+		      __u64 transno)
+{
+	struct tg_reply_data	*trd;
+	struct lsd_reply_data	*lrd;
+	__u64			*pre_versions = NULL;
+	int			rc;
+
+	OBD_ALLOC_PTR(trd);
+	if (unlikely(trd == NULL))
+		RETURN(-ENOMEM);
+
+	/* fill reply data information */
+	lrd = &trd->trd_reply;
+	lrd->lrd_transno = transno;
+	if (req != NULL) {
+		lrd->lrd_xid = req->rq_xid;
+		trd->trd_tag = lustre_msg_get_tag(req->rq_reqmsg);
+		lrd->lrd_client_gen = ted->ted_lcd->lcd_generation;
+		if (write_update) {
+			pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+			lrd->lrd_result = th->th_result;
+		}
+	} else {
+		struct tgt_session_info *tsi;
+
+		LASSERT(env != NULL);
+		tsi = tgt_ses_info(env);
+		LASSERT(tsi->tsi_xid != 0);
+
+		lrd->lrd_xid = tsi->tsi_xid;
+		lrd->lrd_result = tsi->tsi_result;
+		lrd->lrd_client_gen = tsi->tsi_client_gen;
+	}
+
+	lrd->lrd_data = opdata;
+	if (pre_versions) {
+		trd->trd_pre_versions[0] = pre_versions[0];
+		trd->trd_pre_versions[1] = pre_versions[1];
+		trd->trd_pre_versions[2] = pre_versions[2];
+		trd->trd_pre_versions[3] = pre_versions[3];
+	}
+
+	rc = tgt_add_reply_data(env, tgt, ted, trd, req,
+				th, write_update);
+	if (rc < 0)
+		OBD_FREE_PTR(trd);
+	return rc;
+
+}
+EXPORT_SYMBOL(tgt_mk_reply_data);
 
 /*
  * last_rcvd & last_committed update callbacks
@@ -1322,48 +1384,8 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 
 	/* Target that supports multiple reply data */
 	if (tgt_is_multimodrpcs_client(exp)) {
-		struct tg_reply_data	*trd;
-		struct lsd_reply_data	*lrd;
-		__u64			*pre_versions;
-		bool			write_update;
-
-		OBD_ALLOC_PTR(trd);
-		if (unlikely(trd == NULL))
-			RETURN(-ENOMEM);
-
-		/* fill reply data information */
-		lrd = &trd->trd_reply;
-		lrd->lrd_transno = tti->tti_transno;
-		if (req != NULL) {
-			lrd->lrd_xid = req->rq_xid;
-			trd->trd_tag = lustre_msg_get_tag(req->rq_reqmsg);
-			pre_versions = lustre_msg_get_versions(req->rq_repmsg);
-			lrd->lrd_result = th->th_result;
-			lrd->lrd_client_gen = ted->ted_lcd->lcd_generation;
-			write_update = true;
-		} else {
-			LASSERT(tsi->tsi_xid != 0);
-			lrd->lrd_xid = tsi->tsi_xid;
-			lrd->lrd_result = tsi->tsi_result;
-			lrd->lrd_client_gen = tsi->tsi_client_gen;
-			trd->trd_tag = 0;
-			pre_versions = NULL;
-			write_update = false;
-		}
-
-		lrd->lrd_data = opdata;
-		if (pre_versions) {
-			trd->trd_pre_versions[0] = pre_versions[0];
-			trd->trd_pre_versions[1] = pre_versions[1];
-			trd->trd_pre_versions[2] = pre_versions[2];
-			trd->trd_pre_versions[3] = pre_versions[3];
-		}
-
-		rc = tgt_add_reply_data(env, tgt, ted, trd, req,
-					th, write_update);
-		if (rc < 0)
-			OBD_FREE_PTR(trd);
-		return rc;
+		return tgt_mk_reply_data(env, tgt, ted, req, opdata, th,
+					 !!(req != NULL), tti->tti_transno);
 	}
 
 	/* Enough for update replay, let's return */

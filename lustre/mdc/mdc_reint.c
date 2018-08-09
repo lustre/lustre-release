@@ -46,9 +46,9 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
 
         request->rq_send_state = level;
 
-	mdc_get_mod_rpc_slot(request, NULL);
+	ptlrpc_get_mod_rpc_slot(request);
 	rc = ptlrpc_queue_wait(request);
-	mdc_put_mod_rpc_slot(request, NULL);
+	ptlrpc_put_mod_rpc_slot(request);
         if (rc)
                 CDEBUG(D_INFO, "error in handling %d\n", rc);
         else if (!req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY)) {

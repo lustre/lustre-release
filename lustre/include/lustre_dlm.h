@@ -1200,6 +1200,7 @@ struct ldlm_enqueue_info {
 	void		*ei_namespace;	/** lock namespace **/
 	u64		ei_inodebits;	/** lock inode bits **/
 	unsigned int	ei_enq_slave:1;	/** whether enqueue slave stripes */
+	unsigned int	ei_enq_slot:1;	/** whether acquire rpc slot */
 };
 
 #define ei_res_id	ei_cb_gl
