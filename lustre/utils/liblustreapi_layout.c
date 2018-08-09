@@ -2601,15 +2601,27 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 
 		for (i = 0; i < comp_size; i++) {
 			ssize_t written;
+			off_t pos2 = pos;
+			size_t to_write2 = to_write;
 
 			/* skip non-overlapped component */
-			if (pos > comp_array[i].lrc_end ||
-			    pos + to_write < comp_array[i].lrc_start)
+			if (pos >= comp_array[i].lrc_end ||
+			    pos + to_write <= comp_array[i].lrc_start)
 				continue;
 
+			if (pos < comp_array[i].lrc_start)
+				pos2 = comp_array[i].lrc_start;
+
+			to_write2 -= pos2 - pos;
+
+			if ((pos + to_write) > comp_array[i].lrc_end)
+				to_write2 -= pos + to_write -
+					     comp_array[i].lrc_end;
+
 			written = llapi_mirror_write(fd,
-					comp_array[i].lrc_mirror_id, buf,
-					to_write, pos);
+					comp_array[i].lrc_mirror_id,
+					buf + pos2 - pos,
+					to_write2, pos2);
 			if (written < 0) {
 				/**
 				 * this component is not written successfully,
@@ -2624,7 +2636,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 				comp_array[i].lrc_synced = true;
 				continue;
 			}
-			assert(written == to_write);
+			assert(written == to_write2);
 		}
 
 		pos += bytes_read;

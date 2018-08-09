@@ -1477,8 +1477,10 @@ test_41() {
 	# write data in [0, 2M)
 	dd if=/dev/zero of=$tf bs=1M count=2 conv=notrunc ||
 		error "writing $tf failed"
-	dd if=/dev/zero of=$tf-1 bs=1M count=4 conv=notrunc ||
+	dd if=/dev/urandom of=$tf-1 bs=1M count=4 conv=notrunc ||
 		error "writing $tf-1 failed"
+
+	local sum0=$(cat $tf-1 | md5sum | cut -f 1 -d' ')
 
 	echo " **verify files be WRITE_PENDING"
 	verify_flr_state $tf "wp"
@@ -1493,6 +1495,14 @@ test_41() {
 
 	echo " **full resync"
 	$LFS mirror resync $tf $tf-1 || error "mirror resync $tf $tf-1 failed"
+
+	echo " **verify $tf-1 data consistency in all mirrors"
+	local sum
+	for i in 1 2 3; do
+		sum=$(mirror_io dump -i $i $tf-1 | md5sum | cut -f 1 -d' ')
+		[ "$sum" = "$sum0" ] ||
+			error "$i: mismatch: $sum vs. $sum0"
+	done
 
 	echo " **verify files be RDONLY"
 	verify_flr_state $tf "ro"
@@ -1995,9 +2005,13 @@ resync_file_200() {
 
 		echo -n "resync file $tf with '$cmd' .."
 
-		$lock_taken && flock -x 200
-		$cmd $tf &> /dev/null && echo "done" || echo "failed"
-		$lock_taken && flock -u 200
+		if [[ $lock_taken = "true" ]]; then
+			flock -x 200 -c "$cmd $tf &> /dev/null" &&
+				echo "done" || echo "failed"
+			flock -u 200
+		else
+			$cmd $tf &> /dev/null && echo "done" || echo "failed"
+		fi
 
 		sleep 0.$((RANDOM % 8 + 1))
 	done
