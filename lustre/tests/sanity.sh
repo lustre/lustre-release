@@ -5515,7 +5515,7 @@ test_56wb() {
 run_test 56wb "check lfs_migrate pool support"
 
 test_56wc() {
-	local file1="$DIR/$tdir/file 1"
+	local file1="$DIR/$tdir/file1"
 
 	echo -n "Creating test dir..."
 	test_mkdir $DIR/$tdir &> /dev/null || error "cannot create dir"

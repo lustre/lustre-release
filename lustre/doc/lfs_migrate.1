@@ -1,29 +1,32 @@
 .TH lfs_migrate 1 "Dec 19, 2017" Lustre "utilities"
 .SH NAME
 .B lfs_migrate
-\- simple tool to migrate files between Lustre OSTs
+\- migrate files between Lustre OSTs
 .SH SYNOPSIS
 .B lfs_migrate
 .RB [ --dry-run ]
-.RB [ -D ]
-.RB [ -h ]
+.RB [ --help|-h ]
 .RB [ --no-rsync | --rsync ]
-.RB [ -q ]
-.RB [ -R ]
-.RB [ -s ]
-.RB [ -v ]
-.RB [ -y ]
+.RB [ --quiet|-q ]
+.RB [ --restripe|-R ]
+.RB [ --skip|-s ]
+.RB [ --verbose|-v ]
+.RB [ --yes|-y ]
 .RB [ -0 ]
 .RI [ FILE | DIR ]...
 .br
 .SH DESCRIPTION
 .B lfs_migrate
-is a simple tool to assist migration of files between Lustre OSTs.  It
-is simply copying each specified file to a new file, verifying the file
-contents have not changed, and then renaming the new file back to the
-original filename.  This allows balancing space usage between OSTs, moving
-files off OSTs that are starting to show hardware problems (though are still
-functional), or OSTs that will be removed from the filesystem.
+is a tool to assist migration of files between Lustre OSTs, possibly also
+restriping the files as it goes. It copies each specified file to a new file,
+verifies the file contents have not changed, and then replaces the original
+filename with the new file (either atomically via
+.BR lfs-migrate (1)
+on Lustre 2.5 and later, or
+.BR mv (1)
+on older versions of Lustre). This allows balancing space usage between OSTs,
+moving files off OSTs that are starting to show hardware problems but are still
+functional, or OSTs that will be removed from the filesystem.
 .PP
 Files to be migrated can be specified as command-line arguments.  If a
 directory is specified on the command-line then all files within that
@@ -31,16 +34,22 @@ directory are migrated.  If no files are specified on the command-line,
 then a list of files is read from the standard input, making
 .B lfs_migrate
 suitable for use with
-.BR lfs (1) " find"
-to locate files on specific OSTs and/or matching other file attributes.
+.BR lfs-find (1)
+to locate files on specific OSTs and/or matching other file attributes,
+or any other tools that generate a list of files.
 .PP
-Any options and arguments not explicitly recognized by the script are passed
-through to the
+Any options and arguments not explicitly recognized by
+.B lfs_migrate
+are passed through to the underlying
 .B lfs migrate
 command, see
-.BR lfs-migrate (1).
-To maintain backward compatibility, the \fI-n \fRoption is used by the script
-for a dry-run, and is not passed to
+.BR lfs-migrate (1)
+and
+.BR lfs-setstripe (1)
+for a complete list of options.
+.PP
+To maintain backward compatibility, the \fI-n \fRoption is used by the
+script to indicate a dry-run (no modifications made), and is not passed to
 .B lfs migrate
 as the non-block option.  To specify non-block, use the long option
 .IR --non-block .
@@ -59,10 +68,7 @@ or OST index of a new file).
 .B \\--dry-run
 Only print the names of files to be migrated.
 .TP
-.B \\-D
-Do not use direct I/O to copy file contents.
-.TP
-.B \\-h
+.B \\--help|-h
 Display help information.
 .TP
 .B \\--no-rsync
@@ -70,7 +76,7 @@ Do not fall back to using rsync if
 .BR lfs (1) " migrate" " fails."
 Cannot be used at the same time as \fI--rsync\fR.
 .TP
-.B \\-q
+.B \\--quiet|-q
 Run quietly (don't print filenames or status).
 .TP
 .B \\--rsync
@@ -78,21 +84,21 @@ Force rsync to be used instead of
 .BR lfs (1) " migrate" .
 May not be used at the same time as \fI--no-rsync\fR.
 .TP
-.B \\-R
+.B \\--restripe|-R
 Restripe file using default directory striping instead of keeping striping.
 This option may not be specified at the same time as the -c or -S options
 (these options are passed through to
 .BR "lfs migrate" ,
 and are therefore not listed here).
 .TP
-.B \\-s
+.B \\--skip|-s
 Skip file data comparison after migrate.  Default is to compare migrated file
 against original to verify correctness.
 .TP
-.B \\-v
+.B \\--verbose|-v
 Show verbose debug messages.
 .TP
-.B \\-y
+.B \\--yes|-y
 Answer 'y' to usage warning without prompting (for scripts, use with caution).
 .TP
 .B \\-0
@@ -109,10 +115,12 @@ To migrate files within the
 filesystem on OST0004 (perhaps because it is much more full than other OSTs),
 larger than 4GB (because it is more efficient to just migrate large files),
 and older than two days (to avoid files that are in use, though this is NOT
-a guarantee the files are not being modified, that is workload specific):
+a guarantee the files are not being modified, that is workload specific) after
+disabling file creation on testfs-OST0004 (this is needed on all MDS nodes):
 .IP
-lfs find /testfs -obd test-OST0004 -size +4G -mtime +2d |
-    lfs_migrate -y
+mds# lctl set_param osp.testfs-OST0004*.max_create_count=0
+client# lfs find /testfs -obd testfs-OST0004 -size +4G -mtime +2d | lfs_migrate -y
+mds# lctl set_param osp.testfs-OST0004*.max_create_count=20000
 .SH NOTES
 In versions prior to 2.5,
 .B lfs_migrate
@@ -121,17 +129,11 @@ is
 closely integrated with the MDS, and cannot determine whether a file
 is currently open and/or in-use by other applications or nodes.  That makes
 it
-.B
-UNSAFE
+.B UNSAFE
 for use on files that might be modified by other applications, since the
 migrated file is only a copy of the current file. This will result in the
 old file becoming an open-unlinked file, and any modifications to that file
 will be lost.
-.SH KNOWN BUGS
-Eventually, this functionality will be integrated into
-.BR lfs (1)
-itself and will integrate with the MDS layout locking to make it safe
-in the presence of opened files and ongoing file IO.
 .SH AVAILABILITY
 .B lfs_migrate
 is part of the 

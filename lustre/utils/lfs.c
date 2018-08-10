@@ -2577,6 +2577,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	char *template = NULL;
 
 	struct option long_opts[] = {
+/* find { .val = '0',	.name = "null",		.has_arg = no_argument }, */
 /* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
 	/* --block is only valid in migrate mode */
 	{ .val = 'b',	.name = "block",	.has_arg = no_argument },
@@ -2621,6 +2622,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
 /* find	{ .val = 'g',	.name = "gid",		.has_arg = no_argument }, */
 /* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
+/* find	{ .val = 'h',	.name = "help",		.has_arg = no_argument }, */
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},

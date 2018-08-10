@@ -13,7 +13,7 @@
 # to be 100% safe the administrator needs to ensure this is safe.
 
 RSYNC=${RSYNC:-rsync}
-LFS_MIGRATE_RSYNC_MODE=${LFS_MIGRATE_RSYNC_MODE:-false}
+OPT_RSYNC=${LFS_MIGRATE_RSYNC_MODE:-false}
 ECHO=echo
 LFS=${LFS:-lfs}
 RSYNC_WITH_HLINKS=false
@@ -21,6 +21,7 @@ LFS_MIGRATE_TMP=${TMPDIR:-/tmp}
 MIGRATED_SET="$(mktemp ${LFS_MIGRATE_TMP}/lfs_migrate.links.XXXXXX)"
 NEWNAME=""
 REMOVE_FID='s/^\[[0-9a-fx:]*\] //'
+PROG=$(basename $0)
 
 add_to_set() {
 	local old_fid="$1"
@@ -44,22 +45,24 @@ old_fid_in_set() {
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: lfs_migrate [--dry-run] [-D] [-h] [--no-rsync|--rsync] [-q] [-R]
-		   [-s] [-v] [-y] [-0] [FILE|DIR...]
-	--dry-run only print the names of files to be migrated
-	-D do not use direct I/O to copy file contents
-	-h show this usage message
+usage: lfs_migrate [--dry-run] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
+		   [--restripe|-R] [--skip|-s] [--verbose|-v] [--yes|-y] [-0]
+		   [FILE|DIR...]
+	--dry-run  only print the names of files to be migrated
+	-h         show this usage message
 	--no-rsync do not fall back to rsync mode even if lfs migrate fails
-	-q run quietly (don't print filenames or status)
-	--rsync force rsync mode instead of using lfs migrate
-	-R restripe file using default directory striping
-	-s skip file data comparison after migrate
-	-v show verbose debug messages
-	-y answer 'y' to usage question
-	-0 input file names on stdin are separated by a null character
+	-q         run quietly (don't print filenames or status)
+	--rsync    force rsync mode instead of using lfs migrate
+	-R         restripe file using default directory striping
+	-s         skip file data comparison after migrate
+	-v         show verbose debug messages
+	-y         answer 'y' to usage question
+	-0         input file names on stdin are separated by a null character
 
-The -c <stripe_count> and -S <stripe_size> options may not be specified at
-the same time as the -R option.
+If the --restripe|-R option is used, other "lfs setstripe" layout options
+such as -E, -c, -S, --copy, and --yaml may not be specified at the same time.
+Only the --block, --non-block, --non-direct, and --verbose non-layout setstripe
+options may be used in that case.
 
 The --rsync and --no-rsync options may not be specified at the same time.
 
@@ -86,122 +89,54 @@ trap cleanup EXIT
 
 OPT_CHECK=true
 OPT_DEBUG=false
-OPT_NO_RSYNC=false
 OPT_DRYRUN=false
-OPT_YES=false
-OPT_RESTRIPE=false
+OPT_FILE=()
+OPT_LAYOUT=()
+OPT_NO_RSYNC=false
+OPT_NO_DIRECT=false
 OPT_NULL=false
 OPT_PASSTHROUGH=()
-STRIPE_COUNT=""
-STRIPE_SIZE=""
-POOL=""
-LFS_OPT_DIRECTIO=""
+OPT_RESTRIPE=false
+OPT_YES=false
 
 # Examine any long options and arguments.  getopts does not support long
 # options, so they must be stripped out and classified as either options
 # for the script, or passed through to "lfs migrate".
-LONG_OPT=false
-SHORT_OPT=false
-OPTS=()
-
-for f in $(seq 1 $#); do
-	arg=${!f}
-	if [ "${arg:0:2}" = "--" ]; then
-		SHORT_OPT=false
-		if [ "$arg" = "--block" ]; then
-			BLOCK="$arg"
-			OPT_YES=true
-		elif [ "$arg" = "--non-block" ]; then
-			BLOCK="$arg"
-		elif [ "$arg" = "--dry-run" ]; then
-			OPT_DRYRUN=true
-			OPT_YES=true
-		elif [ "$arg" = "--rsync" ]; then
-			LFS_MIGRATE_RSYNC_MODE=true
-		elif [ "$arg" = "--no-rsync" ]; then
-			OPT_NO_RSYNC=true
-			OPT_YES=true
-		else
-			LONG_OPT=true
-			OPT_PASSTHROUGH+=("$arg")
-			PREV="$arg"
-		fi
-	elif [ "${arg:0:1}" = "-" ]; then
-		LONG_OPT=false
-		if [ "$arg" == "-b" ]; then
-			BLOCK="$arg"
-		else
-			SHORT_OPT=true
-			OPTS+=("$arg")
-			PREV="$arg"
-		fi
-	elif $LONG_OPT; then
-		LONG_OPT=false
-		# This will prevent long options from having file name
-		# arguments, but allows long options with no arguments to work.
-		if [ -f "$arg" -o -d "$arg" ]; then
-			OPTS+=("$arg")
-		else
-			[ "$PREV" = "--stripe-count" ] &&
-				STRIPE_COUNT="$arg"
-			[ "$PREV" = "--stripe-size" ] &&
-				STRIPE_SIZE="$arg"
-			[ "$PREV" = "--pool" ] &&
-				POOL="$arg"
-			OPT_PASSTHROUGH+=("$arg")
-		fi
-	elif $SHORT_OPT; then
-		[ "$PREV" = "-c" ] &&
-			STRIPE_COUNT="$arg"
-		[ "$PREV" = "-S" ] &&
-			STRIPE_SIZE="$arg"
-		[ "$PREV" = "-p" ] &&
-			POOL="$arg"
-		SHORT_OPT=false
-		OPTS+=("$arg")
-	else
-		OPTS+=("$arg")
-	fi
+while [ -n "$*" ]; do
+	arg="$1"
+	case "$arg" in
+	-h|--help) usage;;
+	-l|--link) ;; # maintained backward compatibility for now
+	-n|--dry-run) OPT_DRYRUN=true; OPT_YES=true
+	   echo "$PROG: -n deprecated, use --dry-run or --non-block" 1>&2;;
+	-q|--quiet) ECHO=:;;
+	-R|--restripe) OPT_RESTRIPE=true;;
+	-s|--skip) OPT_CHECK=false;;
+	-v|--verbose) OPT_DEBUG=true; ECHO=echo; OPT_PASSTHROUGH+=("$arg");;
+	-y|--yes) OPT_YES=true;;
+	-0) OPT_NULL=true;;
+	-b|--block|--non-block|--non-direct|--no-verify)
+	   # Always pass non-layout options to 'lfs migrate'
+	   OPT_PASSTHROUGH+=("$arg");;
+	--rsync) OPT_RSYNC=true;;
+	--no-rsync) OPT_NO_RSYNC=true;;
+	--copy|--yaml|--file)
+	   # these options have files as arguments, pass both through
+	   OPT_LAYOUT+="$arg $2"; shift;;
+	*) # Pass other non-file layout options to 'lfs migrate'
+	   [ -e "$arg" ] && OPT_FILE+="$arg " && break || OPT_LAYOUT+="$arg "
+	esac
+	shift
 done
 
-# Reset the argument list to include only the short options and file names
-set -- "${OPTS[@]}"
-
-while getopts ":DhlnqRsvy0" opt $*; do
-    case $opt in
-	D) LFS_OPT_DIRECTIO="-D";;
-	h) usage;;
-	l) ;; # maintained for backward compatibility
-	n) OPT_DRYRUN=true
-	   OPT_YES=true
-	   echo "$(basename $0): -n deprecated, use --dry-run instead" 1>&2
-	   echo "$(basename $0): to specify non-block, use --non-block instead" 1>&2;;
-	q) ECHO=:;;
-	R) OPT_RESTRIPE=true;;
-	s) OPT_CHECK=false;;
-	v) OPT_DEBUG=true; ECHO=echo; OPT_PASSTHROUGH+=("-v");;
-	y) OPT_YES=true;;
-	0) OPT_NULL=true;;
-	*) # Pass through any unrecognized options to 'lfs migrate'
-	   OPT_PASSTHROUGH+=("-$OPTARG")
-	   if [[ ${!OPTIND:0:1} != "-" && ! -f "${!OPTIND}" &&
-		 ! -d "${!OPTIND}" ]]; then
-		OPT_PASSTHROUGH+=("${!OPTIND}")
-		((OPTIND++))
-	   fi;;
-    esac
-done
-shift $((OPTIND - 1))
-
-if $OPT_RESTRIPE && [[ "$STRIPE_COUNT" || "$STRIPE_SIZE" ]]; then
-	echo "$(basename $0): Options -c <stripe_count> and -S <stripe_size> "\
-	"may not be specified at the same time as the -R option." 1>&2
+if $OPT_RESTRIPE && [ -n "$OPT_LAYOUT" ]; then
+	echo "$PROG: Options $OPT_LAYOUT cannot be used with the -R option" 1>&2
 	exit 1
 fi
 
-if $LFS_MIGRATE_RSYNC_MODE && $OPT_NO_RSYNC; then
-	echo "$(basename $0): Options --rsync and --no-rsync may not be "\
-	"specified at the same time." 1>&2
+if $OPT_RSYNC && $OPT_NO_RSYNC; then
+	echo "$PROG: Options --rsync and --no-rsync may not be" \
+		"specified at the same time." 1>&2
 	exit 1
 fi
 
@@ -234,10 +169,11 @@ umask 0077
 lfs_migrate() {
 	while IFS='' read -d '' OLDNAME; do
 		local hlinks=()
-		local stripe_size="$STRIPE_SIZE"
-		local stripe_count="$STRIPE_COUNT"
-		local parent_count=""
-		local parent_size=""
+		local stripe_size
+		local stripe_count
+		local stripe_pool
+		local mirror_count
+		local layout
 
 		$ECHO -n "$OLDNAME: "
 
@@ -298,7 +234,7 @@ lfs_migrate() {
 			local migrated=$(old_fid_in_set "$fid")
 			if [ -n "$migrated" ]; then
 				$ECHO -e "$OLDNAME: already migrated via another hard link"
-				if $LFS_MIGRATE_RSYNC_MODE; then
+				if $OPT_RSYNC; then
 					# Only the rsync case has to relink.
 					# The lfs migrate case preserves the
 					# inode so the links are already
@@ -319,16 +255,18 @@ lfs_migrate() {
 		# then we don't need to do this getstripe/mktemp stuff.
 			UNLINK="-u"
 
-			[ -z "$stripe_count" ] &&
-				stripe_count=$($LFS getstripe -c "$OLDNAME" 2> /dev/null)
-
-			[ -z "$stripe_size" ] &&
-				stripe_size=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
+			stripe_count=$($LFS getstripe -c "$OLDNAME" 2> /dev/null)
+			stripe_size=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
+			stripe_pool=$($LFS getstripe -p "$OLDNAME" 2> /dev/null)
+			mirror_count=$($LFS getstripe -N "$OLDFILE" 2> /dev/null)
 
 			[ -z "$stripe_count" -o -z "$stripe_size" ] && UNLINK=""
 		fi
 
 		if $OPT_DEBUG; then
+			local parent_count
+			local parent_size
+
 			if $OPT_RESTRIPE; then
 				parent_count=$($LFS getstripe -c \
 					       $(dirname "$OLDNAME") 2> \
@@ -336,12 +274,19 @@ lfs_migrate() {
 				parent_size=$($LFS getstripe -S \
 					      $(dirname "$OLDNAME") 2> \
 					      /dev/null)
+				stripe_pool=$($LFS getstripe --pool \
+					      $(dirname "$OLDNAME") 2> \
+					      /dev/null)
+				mirror_count=$($LFS getstripe -N \
+					       $(dirname "$OLDFILE") 2> \
+					       /dev/null)
 			fi
 
 			$ECHO -n "stripe" \
 				"count=${stripe_count:-$parent_count}," \
 				"size=${stripe_size:-$parent_size}," \
-				"pool=${POOL:-not in a pool}: "
+				"pool=${stripe_pool}," \
+				"mirror_count=${mirror_count}"
 		fi
 
 		if $OPT_DRYRUN; then
@@ -349,16 +294,12 @@ lfs_migrate() {
 			continue
 		fi
 
-		if [[ "$stripe_count" && -z "$STRIPE_COUNT" ]]; then
-			stripe_count="-c $stripe_count"
-		else
-			stripe_count=""
-		fi
-		if [[ "$stripe_size" && -z "$STRIPE_SIZE" ]]; then
-			stripe_size="-S $stripe_size"
-		else
-			stripe_size=""
-		fi
+		stripe_count="-c $stripe_count"
+		stripe_size="-S $stripe_size"
+		[ -n "$stripe_pool" ] && stripe_pool="-p $stripe_pool"
+		[ -n "$mirror_count" ] && mirror_count="-N $mirror_count"
+		layout="$stripe_count $stripe_size $stripe_pool $mirror_count \
+		        $OPT_LAYOUT"
 
 		# detect other hard links and store them on a global
 		# list so we don't re-migrate them
@@ -376,10 +317,9 @@ lfs_migrate() {
 		hlinks+=("$OLDNAME")
 
 		# first try to migrate via Lustre tools, then fall back to rsync
-		if ! $LFS_MIGRATE_RSYNC_MODE; then
-			if $LFS migrate "${OPT_PASSTHROUGH[@]}" ${BLOCK} \
-			   $LFS_OPT_DIRECTIO ${stripe_count} ${stripe_size} \
-			    "$OLDNAME" &> /dev/null; then
+		if ! $OPT_RSYNC; then
+			if $LFS migrate "${OPT_PASSTHROUGH[@]}" $layout \
+			   "$OLDNAME"; then
 				$ECHO "done migrate"
 				for link in ${hlinks[*]}; do
 					add_to_set "$fid" "$link"
@@ -390,7 +330,7 @@ lfs_migrate() {
 				continue
 			else
 				$ECHO -n "falling back to rsync: "
-				LFS_MIGRATE_RSYNC_MODE=true
+				OPT_RSYNC=true
 			fi
 		fi
 
@@ -400,9 +340,13 @@ lfs_migrate() {
 			continue
 		fi
 
-		[ "$UNLINK" ] && $LFS setstripe ${OPT_PASSTHROUGH}	\
-				 ${stripe_count} ${stripe_size}		\
-				 "$NEWNAME" &> /dev/null
+		if [ "$UNLINK" ]; then
+			if ! $LFS setstripe "${OPT_PASSTHROUGH}" $layout \
+			     "$NEWNAME"; then
+				echo -e "\r\e[K$NEWNAME: setstripe failed, exiting" 1>&2
+				exit 2
+			fi
+		fi
 
 		# we use --inplace, since we created our own temp file already
 		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
