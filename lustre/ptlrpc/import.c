@@ -1665,12 +1665,37 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 					    void *data, int rc)
 {
 	struct obd_import *imp = req->rq_import;
+	int connect = 0;
 
-	LASSERT(imp->imp_state == LUSTRE_IMP_CONNECTING);
+	DEBUG_REQ(D_HA, req, "inflight=%d, refcount=%d: rc = %d\n",
+		  atomic_read(&imp->imp_inflight),
+		  atomic_read(&imp->imp_refcount), rc);
+
 	spin_lock(&imp->imp_lock);
-	IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_IDLE);
-	memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
+	/* DISCONNECT reply can be late and another connection can just
+	 * be initiated. so we have to abort disconnection. */
+	if (req->rq_import_generation == imp->imp_generation &&
+	    imp->imp_state != LUSTRE_IMP_CLOSED) {
+		LASSERTF(imp->imp_state == LUSTRE_IMP_CONNECTING,
+			 "%s\n", ptlrpc_import_state_name(imp->imp_state));
+		imp->imp_state = LUSTRE_IMP_IDLE;
+		memset(&imp->imp_remote_handle, 0,
+		       sizeof(imp->imp_remote_handle));
+		/* take our DISCONNECT into account */
+		if (atomic_read(&imp->imp_inflight) > 1) {
+			imp->imp_generation++;
+			imp->imp_initiated_at = imp->imp_generation;
+			IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_NEW);
+			connect = 1;
+		}
+	}
 	spin_unlock(&imp->imp_lock);
+
+	if (connect) {
+		rc = ptlrpc_connect_import(imp);
+		if (rc >= 0)
+			ptlrpc_pinger_add_import(imp);
+	}
 
 	return 0;
 }

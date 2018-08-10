@@ -867,6 +867,12 @@ ptlrpc_request_alloc_internal(struct obd_import *imp,
         struct ptlrpc_request *request;
 	int connect = 0;
 
+	request = __ptlrpc_request_alloc(imp, pool);
+	if (request == NULL)
+		return NULL;
+
+	/* initiate connection if needed when the import has been
+	 * referenced by the new request to avoid races with disconnect */
 	if (unlikely(imp->imp_state == LUSTRE_IMP_IDLE)) {
 		int rc;
 		CDEBUG_LIMIT(imp->imp_idle_debug,
@@ -883,15 +889,13 @@ ptlrpc_request_alloc_internal(struct obd_import *imp,
 		spin_unlock(&imp->imp_lock);
 		if (connect) {
 			rc = ptlrpc_connect_import(imp);
-			if (rc < 0)
+			if (rc < 0) {
+				ptlrpc_request_free(request);
 				return NULL;
+			}
 			ptlrpc_pinger_add_import(imp);
 		}
 	}
-
-	request = __ptlrpc_request_alloc(imp, pool);
-	if (request == NULL)
-		return NULL;
 
         req_capsule_init(&request->rq_pill, request, RCL_CLIENT);
         req_capsule_set(&request->rq_pill, format);
@@ -2346,7 +2350,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                 /* wait until all complete, interrupted, or an in-flight
                  * req times out */
 		CDEBUG(D_RPCTRACE, "set %p going to sleep for %lld seconds\n",
-                       set, timeout);
+			set, timeout);
 
 		if ((timeout == 0 && !signal_pending(current)) ||
 		    set->set_allow_intr)
