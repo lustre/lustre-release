@@ -716,7 +716,6 @@ struct obd_device {
 	/* Fields used by LProcFS */
 	struct lprocfs_stats		*obd_stats;
 
-	unsigned int			 obd_md_cntr_base;
 	struct lprocfs_stats		*obd_md_stats;
 
 	struct dentry			*obd_debugfs_entry;
@@ -1028,18 +1027,6 @@ struct lookup_intent;
 struct cl_attr;
 
 struct md_ops {
-	/* Every operation from MD_STATS_FIRST_OP up to and including
-	 * MD_STATS_LAST_OP will be counted by EXP_MD_OP_INCREMENT()
-	 * and will appear in /proc/fs/lustre/{lmv,mdc}/.../md_stats.
-	 * Operations after MD_STATS_LAST_OP are excluded from stats.
-	 * There are a few reasons for doing this: we prune the 17
-	 * counters which will be of minimal use in understanding
-	 * metadata utilization, we save memory by allocating 15
-	 * instead of 32 counters, we save cycles by not counting.
-	 *
-	 * MD_STATS_FIRST_OP must be the first member of md_ops.
-	 */
-#define MD_STATS_FIRST_OP m_close
 	int (*m_close)(struct obd_export *, struct md_op_data *,
 		       struct md_open_data *, struct ptlrpc_request **);
 
@@ -1091,8 +1078,6 @@ struct md_ops {
 
         int (*m_revalidate_lock)(struct obd_export *, struct lookup_intent *,
                                  struct lu_fid *, __u64 *bits);
-
-#define MD_STATS_LAST_OP m_revalidate_lock
 
 	int (*m_file_resync)(struct obd_export *, struct md_op_data *);
 

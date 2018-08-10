@@ -1188,8 +1188,8 @@ void mdt_enable_cos(struct mdt_device *dev, bool enable);
 int mdt_cos_is_enabled(struct mdt_device *);
 
 /* lprocfs stuff */
-enum {
-        LPROC_MDT_OPEN = 0,
+enum mdt_stat_idx {
+	LPROC_MDT_OPEN,
         LPROC_MDT_CLOSE,
         LPROC_MDT_MKNOD,
         LPROC_MDT_LINK,
@@ -1210,6 +1210,7 @@ enum {
 	LPROC_MDT_IO_PUNCH,
 	LPROC_MDT_LAST,
 };
+
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode);
 void mdt_stats_counter_init(struct lprocfs_stats *stats);
 int mdt_procfs_init(struct mdt_device *mdt, const char *name);

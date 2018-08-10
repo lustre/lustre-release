@@ -468,8 +468,6 @@ extern struct lprocfs_stats *
 lprocfs_alloc_stats(unsigned int num, enum lprocfs_stats_flags flags);
 extern void lprocfs_clear_stats(struct lprocfs_stats *stats);
 extern void lprocfs_free_stats(struct lprocfs_stats **stats);
-extern void lprocfs_init_mps_stats(int num_private_stats,
-                                   struct lprocfs_stats *stats);
 extern void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats);
 extern int lprocfs_alloc_obd_stats(struct obd_device *obddev,
 				   unsigned int num_stats);
@@ -902,9 +900,6 @@ static inline int lprocfs_register_stats(struct proc_dir_entry *root,
                                          const char *name,
                                          struct lprocfs_stats *stats)
 { return 0; }
-static inline void lprocfs_init_mps_stats(int num_private_stats,
-                                          struct lprocfs_stats *stats)
-{ return; }
 static inline void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 { return; }
 static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,

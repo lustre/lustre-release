@@ -1031,7 +1031,8 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 	struct obd_export *exp = req->rq_export;
 
 	if (exp->exp_obd && exp->exp_obd->obd_md_stats)
-		lprocfs_counter_incr(exp->exp_obd->obd_md_stats, opcode);
+		lprocfs_counter_incr(exp->exp_obd->obd_md_stats,
+				     opcode + LPROC_MD_LAST_OPC);
 	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
 		lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
 	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&
@@ -1041,41 +1042,51 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 				      opcode, 1);
 }
 
+static const char * const mdt_stats[] = {
+	[LPROC_MDT_OPEN]		= "open",
+	[LPROC_MDT_CLOSE]		= "close",
+	[LPROC_MDT_MKNOD]		= "mknod",
+	[LPROC_MDT_LINK]		= "link",
+	[LPROC_MDT_UNLINK]		= "unlink",
+	[LPROC_MDT_MKDIR]		= "mkdir",
+	[LPROC_MDT_RMDIR]		= "rmdir",
+	[LPROC_MDT_RENAME]		= "rename",
+	[LPROC_MDT_GETATTR]		= "getattr",
+	[LPROC_MDT_SETATTR]		= "setattr",
+	[LPROC_MDT_GETXATTR]		= "getxattr",
+	[LPROC_MDT_SETXATTR]		= "setxattr",
+	[LPROC_MDT_STATFS]		= "statfs",
+	[LPROC_MDT_SYNC]		= "sync",
+	[LPROC_MDT_SAMEDIR_RENAME]	= "samedir_rename",
+	[LPROC_MDT_CROSSDIR_RENAME]	= "crossdir_rename",
+	[LPROC_MDT_IO_READ]		= "read_bytes",
+	[LPROC_MDT_IO_WRITE]		= "write_bytes",
+	[LPROC_MDT_IO_PUNCH]		= "punch",
+};
+
 void mdt_stats_counter_init(struct lprocfs_stats *stats)
 {
-	LASSERT(stats && stats->ls_num >= LPROC_MDT_LAST);
+	int idx;
 
-        lprocfs_counter_init(stats, LPROC_MDT_OPEN, 0, "open", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_CLOSE, 0, "close", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_MKNOD, 0, "mknod", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_LINK, 0, "link", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_UNLINK, 0, "unlink", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_MKDIR, 0, "mkdir", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_RMDIR, 0, "rmdir", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_RENAME, 0, "rename", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_GETATTR, 0, "getattr", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_SETATTR, 0, "setattr", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_GETXATTR, 0, "getxattr", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_SETXATTR, 0, "setxattr", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_STATFS, 0, "statfs", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_SYNC, 0, "sync", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_SAMEDIR_RENAME, 0,
-                             "samedir_rename", "reqs");
-        lprocfs_counter_init(stats, LPROC_MDT_CROSSDIR_RENAME, 0,
-                             "crossdir_rename", "reqs");
-	lprocfs_counter_init(stats, LPROC_MDT_IO_READ,
-			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
-	lprocfs_counter_init(stats, LPROC_MDT_IO_WRITE,
-			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
-	lprocfs_counter_init(stats, LPROC_MDT_IO_PUNCH, 0, "punch", "reqs");
+	LASSERT(stats && stats->ls_num >= ARRAY_SIZE(mdt_stats));
+
+	for (idx = 0; idx < ARRAY_SIZE(mdt_stats); idx++) {
+		int flags = 0;
+
+		if (idx == LPROC_MDT_IO_WRITE || idx == LPROC_MDT_IO_READ)
+			flags = LPROCFS_CNTR_AVGMINMAX;
+
+		lprocfs_counter_init(stats, idx, flags, mdt_stats[idx], "reqs");
+	}
 }
 
 int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 {
-	struct obd_device		*obd = mdt2obd_dev(mdt);
-	int				 rc;
-	ENTRY;
+	struct obd_device *obd = mdt2obd_dev(mdt);
+	int rc;
+	int i;
 
+	ENTRY;
 	LASSERT(name != NULL);
 
 	obd->obd_vars = lprocfs_mdt_obd_vars;
@@ -1098,12 +1109,24 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 	if (obd->obd_proc_exports_entry)
 		lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
 				   obd, &mdt_nid_stats_clear_fops);
-	rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_LAST);
+
+	rc = lprocfs_alloc_md_stats(obd, ARRAY_SIZE(mdt_stats));
 	if (rc)
 		return rc;
-	mdt_stats_counter_init(obd->obd_md_stats);
 
-	rc = lprocfs_job_stats_init(obd, LPROC_MDT_LAST,
+	/* add additional MDT md_stats after the default ones */
+	for (i = 0; i < ARRAY_SIZE(mdt_stats); i++) {
+		int idx = i + LPROC_MD_LAST_OPC;
+		int flags = 0;
+
+		if (idx == LPROC_MDT_IO_WRITE || idx == LPROC_MDT_IO_READ)
+			flags = LPROCFS_CNTR_AVGMINMAX;
+
+		lprocfs_counter_init(obd->obd_md_stats, idx, flags,
+				     mdt_stats[i], "reqs");
+	}
+
+	rc = lprocfs_job_stats_init(obd, ARRAY_SIZE(mdt_stats),
 				    mdt_stats_counter_init);
 
 	rc = lproc_mdt_attach_rename_seqstat(mdt);
