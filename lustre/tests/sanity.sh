@@ -17286,6 +17286,140 @@ test_271f() {
 }
 run_test 271f "DoM: read on open (200K file and read tail)"
 
+test_272a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS version at least 2.11.50"
+
+	local dom=$DIR/$tdir/dom
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 256K -L mdt -E -1 -c1 $dom
+	dd if=/dev/urandom of=$dom bs=512K count=1 ||
+		error "failed to write data into $dom"
+	local old_md5=$(md5sum $dom)
+
+	$LFS migrate -E 256K -L mdt -E -1 -c2 $dom ||
+		error "failed to migrate to the same DoM component"
+
+	[ $($LFS getstripe -c $dom) -eq 2 ] ||
+		error "layout was not changed silently"
+
+	local new_md5=$(md5sum $dom)
+
+	[ "$old_md5" != "$new_md5" ] &&
+		error "md5sum differ: $old_md5, $new_md5"
+	return 0
+}
+run_test 272a "DoM migration: new layout with the same DOM component"
+
+test_272b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS version at least 2.11.50"
+
+	local dom=$DIR/$tdir/dom
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E -1 -c1 $dom
+
+	local mdtidx=$($LFS getstripe -m $dom)
+	local mdtname=MDT$(printf %04x $mdtidx)
+	local facet=mds$((mdtidx + 1))
+
+	local mdtfree1=$(do_facet $facet \
+		lctl get_param -n osd*.*$mdtname.kbytesfree)
+	dd if=/dev/urandom of=$dom bs=2M count=1 ||
+		error "failed to write data into $dom"
+	local old_md5=$(md5sum $dom)
+	cancel_lru_locks mdc
+	local mdtfree1=$(do_facet $facet \
+		lctl get_param -n osd*.*$mdtname.kbytesfree)
+
+	$LFS migrate -c2 $dom ||
+		error "failed to migrate to the new composite layout"
+	[ $($LFS getstripe -L $dom) == 'mdt' ] &&
+		error "MDT stripe was not removed"
+
+	cancel_lru_locks mdc
+	local new_md5=$(md5sum $dom)
+	[ "$old_md5" != "$new_md5" ] &&
+		error "$old_md5 != $new_md5"
+
+	# Skip free space checks with ZFS
+	if [ "$(facet_fstype $facet)" != "zfs" ]; then
+		local mdtfree2=$(do_facet $facet \
+				lctl get_param -n osd*.*$mdtname.kbytesfree)
+		[ $mdtfree2 -gt $mdtfree1 ] ||
+			error "MDT space is not freed after migration"
+	fi
+	return 0
+}
+run_test 272b "DoM migration: DOM file to the OST-striped file (plain)"
+
+test_272c() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS version at least 2.11.50"
+
+	local dom=$DIR/$tdir/$tfile
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E -1 -c1 $dom
+
+	local mdtidx=$($LFS getstripe -m $dom)
+	local mdtname=MDT$(printf %04x $mdtidx)
+	local facet=mds$((mdtidx + 1))
+
+	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
+		error "failed to write data into $dom"
+	local old_md5=$(md5sum $dom)
+	cancel_lru_locks mdc
+	local mdtfree1=$(do_facet $facet \
+		lctl get_param -n osd*.*$mdtname.kbytesfree)
+
+	$LFS migrate -E 2M -c1 -E -1 -c2 $dom ||
+		error "failed to migrate to the new composite layout"
+	[ $($LFS getstripe -L $dom) == 'mdt' ] &&
+		error "MDT stripe was not removed"
+
+	cancel_lru_locks mdc
+	local new_md5=$(md5sum $dom)
+	[ "$old_md5" != "$new_md5" ] &&
+		error "$old_md5 != $new_md5"
+
+	# Skip free space checks with ZFS
+	if [ "$(facet_fstype $facet)" != "zfs" ]; then
+		local mdtfree2=$(do_facet $facet \
+				lctl get_param -n osd*.*$mdtname.kbytesfree)
+		[ $mdtfree2 -gt $mdtfree1 ] ||
+			error "MDS space is not freed after migration"
+	fi
+	return 0
+}
+run_test 272c "DoM migration: DOM file to the OST-striped file (composite)"
+
+test_273a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS version at least 2.11.50"
+
+	# Layout swap cannot be done if either file has DOM component,
+	# this will never be supported, migration should be used instead
+
+	local dom=$DIR/$tdir/$tfile
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -c2 ${dom}_plain
+	$LFS setstripe -E 1M -L mdt -E -1 -c2 ${dom}_dom
+	$LFS swap_layouts ${dom}_plain ${dom}_dom &&
+		error "can swap layout with DoM component"
+	$LFS swap_layouts ${dom}_dom ${dom}_plain &&
+		error "can swap layout with DoM component"
+
+	$LFS setstripe -E 1M -c1 -E -1 -c2 ${dom}_comp
+	$LFS swap_layouts ${dom}_comp ${dom}_dom &&
+		error "can swap layout with DoM component"
+	$LFS swap_layouts ${dom}_dom ${dom}_comp &&
+		error "can swap layout with DoM component"
+	return 0
+}
+run_test 273a "DoM: layout swapping should fail with DOM"
+
 test_275() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $(lustre_version_code ost1) -lt $(version_code 2.10.57) ] &&

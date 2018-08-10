@@ -2191,29 +2191,65 @@ static inline int mdd_set_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
 	return mdd_lmm_gen(lmm, gen, false);
 }
 
+static int mdd_dom_data_truncate(const struct lu_env *env,
+				 struct mdd_device *mdd, struct mdd_object *mo)
+{
+	struct thandle *th;
+	struct dt_object *dom;
+	int rc;
+
+	dom = dt_object_locate(mdd_object_child(mo), mdd->mdd_bottom);
+	if (!dom)
+		GOTO(out, rc = -ENODATA);
+
+	th = dt_trans_create(env, mdd->mdd_bottom);
+	if (IS_ERR(th))
+		GOTO(out, rc = PTR_ERR(th));
+
+	rc = dt_declare_punch(env, dom, 0, OBD_OBJECT_EOF, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, mdd->mdd_bottom, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_punch(env, dom, 0, OBD_OBJECT_EOF, th);
+stop:
+	dt_trans_stop(env, mdd->mdd_bottom, th);
+out:
+	/* Ignore failure but report the error */
+	if (rc)
+		CERROR("%s: "DFID" can't truncate DOM inode data, rc = %d\n",
+		       mdd_obj_dev_name(mo), PFID(mdo2fid(mo)), rc);
+	return rc;
+}
+
 /**
  * swap layouts between 2 lustre objects
  */
 static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 			    struct md_object *obj2, __u64 flags)
 {
-	struct mdd_thread_info	*info = mdd_env_info(env);
-	struct mdd_object	*fst_o = md2mdd_obj(obj1);
-	struct mdd_object	*snd_o = md2mdd_obj(obj2);
-	struct lu_attr		*fst_la = MDD_ENV_VAR(env, cattr);
-	struct lu_attr		*snd_la = MDD_ENV_VAR(env, tattr);
-	struct mdd_device	*mdd = mdo2mdd(obj1);
-	struct lov_mds_md	*fst_lmm, *snd_lmm;
-	struct lu_buf		*fst_buf = &info->mti_buf[0];
-	struct lu_buf		*snd_buf = &info->mti_buf[1];
-	struct lu_buf		*fst_hsm_buf = &info->mti_buf[2];
-	struct lu_buf		*snd_hsm_buf = &info->mti_buf[3];
-	struct ost_id		*saved_oi = NULL;
-	struct thandle		*handle;
-	__u32			 fst_gen, snd_gen, saved_gen;
-	int			 fst_fl;
-	int			 rc;
-	int			 rc2;
+	struct mdd_thread_info *info = mdd_env_info(env);
+	struct mdd_object *fst_o = md2mdd_obj(obj1);
+	struct mdd_object *snd_o = md2mdd_obj(obj2);
+	struct lu_attr *fst_la = MDD_ENV_VAR(env, cattr);
+	struct lu_attr *snd_la = MDD_ENV_VAR(env, tattr);
+	struct mdd_device *mdd = mdo2mdd(obj1);
+	struct lov_mds_md *fst_lmm, *snd_lmm;
+	struct lu_buf *fst_buf = &info->mti_buf[0];
+	struct lu_buf *snd_buf = &info->mti_buf[1];
+	struct lu_buf *fst_hsm_buf = &info->mti_buf[2];
+	struct lu_buf *snd_hsm_buf = &info->mti_buf[3];
+	struct ost_id *saved_oi = NULL;
+	struct thandle *handle;
+	struct mdd_object *dom_o = NULL;
+	__u64 domsize_dom, domsize_vlt;
+	__u32 fst_gen, snd_gen, saved_gen;
+	int fst_fl;
+	int rc, rc2;
+
 	ENTRY;
 
 	CLASSERT(ARRAY_SIZE(info->mti_buf) >= 4);
@@ -2257,16 +2293,49 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	if (rc < 0 && rc != -ENODATA)
 		GOTO(stop, rc);
 
-	/* check if file is DoM, it can be migrated only to another DoM layout
-	 * with the same DoM component size
+	/* check if file has DoM. DoM file can be migrated only to another
+	 * DoM layout with the same DoM component size or to an non-DOM
+	 * layout. After migration to OSTs layout, local MDT inode data
+	 * should be truncated.
+	 * Objects are sorted by FIDs, considering that original file's FID
+	 * is always smaller the snd_o is always original file we are migrating
+	 * from.
 	 */
-	if (mdd_lmm_dom_size(fst_buf->lb_buf) !=
-	    mdd_lmm_dom_size(snd_buf->lb_buf)) {
+	domsize_dom = mdd_lmm_dom_size(snd_buf->lb_buf);
+	domsize_vlt = mdd_lmm_dom_size(fst_buf->lb_buf);
+
+	/* Only migration is supported for DoM files, not 'swap_layouts' so
+	 * target file must be volatile and orphan.
+	 */
+	if (fst_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
+		dom_o = domsize_dom ? snd_o : NULL;
+	} else if (snd_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
+		swap(domsize_dom, domsize_vlt);
+		dom_o = domsize_dom ? fst_o : NULL;
+	} else if (domsize_dom > 0 || domsize_vlt > 0) {
+		/* 'lfs swap_layouts' case, neither file should have DoM */
+		rc = -EOPNOTSUPP;
+		CDEBUG(D_LAYOUT, "cannot swap layouts with DOM component, "
+		       "use migration instead: rc = %d\n", rc);
+		GOTO(stop, rc);
+	}
+
+	if (domsize_vlt > 0 && domsize_dom == 0) {
+		rc = -EOPNOTSUPP;
+		CDEBUG(D_LAYOUT, "cannot swap layout for "DFID": OST to DOM "
+		       "migration is not supported: rc = %d\n",
+		       PFID(mdo2fid(snd_o)), rc);
+		GOTO(stop, rc);
+	} else if (domsize_vlt > 0 && domsize_dom != domsize_vlt) {
 		rc = -EOPNOTSUPP;
 		CDEBUG(D_LAYOUT, "cannot swap layout for "DFID": new layout "
-		       "must have the same DoM component: rc = %d\n",
+		       "must have the same DoM component size: rc = %d\n",
 		       PFID(mdo2fid(fst_o)), rc);
 		GOTO(stop, rc);
+	} else if (domsize_vlt > 0) {
+		/* Migration with the same DOM component size, no need to
+		 * truncate local data, it is still being used */
+		dom_o = NULL;
 	}
 
 	/* swapping 2 non existant layouts is a success */
@@ -2470,6 +2539,10 @@ out_restore:
 
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
+
+	/* Truncate local DOM data if all went well */
+	if (!rc && dom_o)
+		mdd_dom_data_truncate(env, mdd, dom_o);
 
 	mdd_write_unlock(env, snd_o);
 	mdd_write_unlock(env, fst_o);
