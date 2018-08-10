@@ -377,7 +377,12 @@ static int osc_lock_flush(struct osc_object *obj, pgoff_t start, pgoff_t end,
 			rc = 0;
 	}
 
-	rc2 = osc_lock_discard_pages(env, obj, start, end, discard);
+	/*
+	 * Do not try to match other locks with CLM_WRITE since we already
+	 * know there're none
+	 */
+	rc2 = osc_lock_discard_pages(env, obj, start, end,
+				     mode == CLM_WRITE || discard);
 	if (rc == 0 && rc2 < 0)
 		rc = rc2;
 
