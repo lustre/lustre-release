@@ -61,8 +61,10 @@ void obdo_set_o_projid(struct obdo *dst, u32 projid)
 }
 EXPORT_SYMBOL(obdo_set_o_projid);
 
-/* WARNING: the file systems must take care not to tinker with
-   attributes they don't manage (such as blocks). */
+/*
+ * WARNING: the file systems must take care not to tinker with
+ * attributes they don't manage (such as blocks).
+ */
 void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid)
 {
 	u64 newvalid = 0;
@@ -72,40 +74,40 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid)
 			valid, LTIME_S(src->i_mtime),
 			LTIME_S(src->i_ctime));
 
-        if (valid & OBD_MD_FLATIME) {
-                dst->o_atime = LTIME_S(src->i_atime);
-                newvalid |= OBD_MD_FLATIME;
-        }
-        if (valid & OBD_MD_FLMTIME) {
-                dst->o_mtime = LTIME_S(src->i_mtime);
-                newvalid |= OBD_MD_FLMTIME;
-        }
-        if (valid & OBD_MD_FLCTIME) {
-                dst->o_ctime = LTIME_S(src->i_ctime);
-                newvalid |= OBD_MD_FLCTIME;
-        }
-        if (valid & OBD_MD_FLSIZE) {
-                dst->o_size = i_size_read(src);
-                newvalid |= OBD_MD_FLSIZE;
-        }
-        if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
-                dst->o_blocks = src->i_blocks;
-                newvalid |= OBD_MD_FLBLOCKS;
-        }
-        if (valid & OBD_MD_FLBLKSZ) {   /* optimal block size */
+	if (valid & OBD_MD_FLATIME) {
+		dst->o_atime = LTIME_S(src->i_atime);
+		newvalid |= OBD_MD_FLATIME;
+	}
+	if (valid & OBD_MD_FLMTIME) {
+		dst->o_mtime = LTIME_S(src->i_mtime);
+		newvalid |= OBD_MD_FLMTIME;
+	}
+	if (valid & OBD_MD_FLCTIME) {
+		dst->o_ctime = LTIME_S(src->i_ctime);
+		newvalid |= OBD_MD_FLCTIME;
+	}
+	if (valid & OBD_MD_FLSIZE) {
+		dst->o_size = i_size_read(src);
+		newvalid |= OBD_MD_FLSIZE;
+	}
+	if (valid & OBD_MD_FLBLOCKS) { /* allocation of space (x512 bytes) */
+		dst->o_blocks = src->i_blocks;
+		newvalid |= OBD_MD_FLBLOCKS;
+	}
+	if (valid & OBD_MD_FLBLKSZ) { /* optimal block size */
 		dst->o_blksize = 1U << src->i_blkbits;
-                newvalid |= OBD_MD_FLBLKSZ;
-        }
-        if (valid & OBD_MD_FLTYPE) {
-                dst->o_mode = (dst->o_mode & S_IALLUGO) |
-                              (src->i_mode & S_IFMT);
-                newvalid |= OBD_MD_FLTYPE;
-        }
-        if (valid & OBD_MD_FLMODE) {
-                dst->o_mode = (dst->o_mode & S_IFMT) |
-                              (src->i_mode & S_IALLUGO);
-                newvalid |= OBD_MD_FLMODE;
-        }
+		newvalid |= OBD_MD_FLBLKSZ;
+	}
+	if (valid & OBD_MD_FLTYPE) {
+		dst->o_mode = (dst->o_mode & S_IALLUGO) |
+			      (src->i_mode & S_IFMT);
+		newvalid |= OBD_MD_FLTYPE;
+	}
+	if (valid & OBD_MD_FLMODE) {
+		dst->o_mode = (dst->o_mode & S_IFMT) |
+			      (src->i_mode & S_IALLUGO);
+		newvalid |= OBD_MD_FLMODE;
+	}
 	if (valid & OBD_MD_FLUID) {
 		dst->o_uid = from_kuid(&init_user_ns, src->i_uid);
 		newvalid |= OBD_MD_FLUID;
@@ -167,18 +169,20 @@ void obdo_to_ioobj(const struct obdo *oa, struct obd_ioobj *ioobj)
 	if (unlikely(!(oa->o_valid & OBD_MD_FLGROUP)))
 		ostid_set_seq_mdt0(&ioobj->ioo_oid);
 
-	/* Since 2.4 this does not contain o_mode in the low 16 bits.
-	 * Instead, it holds (bd_md_max_brw - 1) for multi-bulk BRW RPCs */
+	/*
+	 * Since 2.4 this does not contain o_mode in the low 16 bits.
+	 * Instead, it holds (bd_md_max_brw - 1) for multi-bulk BRW RPCs
+	 */
 	ioobj->ioo_max_brw = 0;
 }
 EXPORT_SYMBOL(obdo_to_ioobj);
 
-/**
+/*
  * Create an obdo to send over the wire
  */
 void lustre_set_wire_obdo(const struct obd_connect_data *ocd,
-				 struct obdo *wobdo,
-				 const struct obdo *lobdo)
+			  struct obdo *wobdo,
+			  const struct obdo *lobdo)
 {
 	*wobdo = *lobdo;
 	if (ocd == NULL)
@@ -191,20 +195,22 @@ void lustre_set_wire_obdo(const struct obd_connect_data *ocd,
 
 	if (unlikely(!(ocd->ocd_connect_flags & OBD_CONNECT_FID)) &&
 	    fid_seq_is_echo(ostid_seq(&lobdo->o_oi))) {
-		/* Currently OBD_FL_OSTID will only be used when 2.4 echo
-		 * client communicate with pre-2.4 server */
+		/*
+		 * Currently OBD_FL_OSTID will only be used when 2.4 echo
+		 * client communicate with pre-2.4 server
+		 */
 		wobdo->o_oi.oi.oi_id = fid_oid(&lobdo->o_oi.oi_fid);
 		wobdo->o_oi.oi.oi_seq = fid_seq(&lobdo->o_oi.oi_fid);
 	}
 }
 EXPORT_SYMBOL(lustre_set_wire_obdo);
 
-/**
+/*
  * Create a local obdo from a wire based odbo
  */
 void lustre_get_wire_obdo(const struct obd_connect_data *ocd,
-				 struct obdo *lobdo,
-				 const struct obdo *wobdo)
+			  struct obdo *lobdo,
+			  const struct obdo *wobdo)
 {
 	*lobdo = *wobdo;
 	if (ocd == NULL)
