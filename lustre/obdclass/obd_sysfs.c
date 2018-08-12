@@ -318,7 +318,7 @@ EXPORT_SYMBOL_GPL(debugfs_lustre_root);
 
 #ifdef CONFIG_PROC_FS
 /* Root for /proc/fs/lustre */
-struct proc_dir_entry *proc_lustre_root = NULL;
+struct proc_dir_entry *proc_lustre_root;
 EXPORT_SYMBOL(proc_lustre_root);
 #else
 #define lprocfs_base NULL
@@ -358,10 +358,10 @@ static struct attribute *lustre_attrs[] = {
 
 static void *obd_device_list_seq_start(struct seq_file *p, loff_t *pos)
 {
-        if (*pos >= class_devno_max())
-                return NULL;
+	if (*pos >= class_devno_max())
+		return NULL;
 
-        return pos;
+	return pos;
 }
 
 static void obd_device_list_seq_stop(struct seq_file *p, void *v)
@@ -370,33 +370,33 @@ static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
-        ++*pos;
-        if (*pos >= class_devno_max())
-                return NULL;
+	++*pos;
+	if (*pos >= class_devno_max())
+		return NULL;
 
-        return pos;
+	return pos;
 }
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        loff_t index = *(loff_t *)v;
-        struct obd_device *obd = class_num2obd((int)index);
-        char *status;
+	loff_t index = *(loff_t *)v;
+	struct obd_device *obd = class_num2obd((int)index);
+	char *status;
 
-        if (obd == NULL)
-                return 0;
+	if (obd == NULL)
+		return 0;
 
-        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-        if (obd->obd_stopping)
-                status = "ST";
-        else if (obd->obd_inactive)
-                status = "IN";
-        else if (obd->obd_set_up)
-                status = "UP";
-        else if (obd->obd_attached)
-                status = "AT";
-        else
-                status = "--";
+	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+	if (obd->obd_stopping)
+		status = "ST";
+	else if (obd->obd_inactive)
+		status = "IN";
+	else if (obd->obd_set_up)
+		status = "UP";
+	else if (obd->obd_attached)
+		status = "AT";
+	else
+		status = "--";
 
 	seq_printf(p, "%3d %s %s %s %s %d\n",
 		   (int)index, status, obd->obd_type->typ_name,
@@ -406,10 +406,10 @@ static int obd_device_list_seq_show(struct seq_file *p, void *v)
 }
 
 static const struct seq_operations obd_device_list_sops = {
-        .start = obd_device_list_seq_start,
-        .stop = obd_device_list_seq_stop,
-        .next = obd_device_list_seq_next,
-        .show = obd_device_list_seq_show,
+	.start = obd_device_list_seq_start,
+	.stop = obd_device_list_seq_stop,
+	.next = obd_device_list_seq_next,
+	.show = obd_device_list_seq_show,
 };
 
 static int obd_device_list_open(struct inode *inode, struct file *file)
@@ -426,11 +426,11 @@ static int obd_device_list_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations obd_device_list_fops = {
-        .owner   = THIS_MODULE,
-        .open    = obd_device_list_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
+	.owner   = THIS_MODULE,
+	.open    = obd_device_list_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = seq_release,
 };
 
 struct kset *lustre_kset;
@@ -463,6 +463,7 @@ int class_procfs_init(void)
 	struct proc_dir_entry *entry;
 	struct dentry *file;
 	int rc = -ENOMEM;
+
 	ENTRY;
 
 	lustre_kset = kset_create_and_add("lustre", NULL, fs_kobj);
