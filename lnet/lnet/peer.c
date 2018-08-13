@@ -2935,25 +2935,6 @@ __must_hold(&lp->lp_lock)
 }
 
 /*
- * Returns the first peer on the ln_dc_working queue if its timeout
- * has expired. Takes the current time as an argument so as to not
- * obsessively re-check the clock. The oldest discovery request will
- * be at the head of the queue.
- */
-static struct lnet_peer *lnet_peer_get_dc_timed_out(time64_t now)
-{
-	struct lnet_peer *lp;
-
-	if (list_empty(&the_lnet.ln_dc_working))
-		return NULL;
-	lp = list_first_entry(&the_lnet.ln_dc_working,
-			      struct lnet_peer, lp_dc_list);
-	if (now < lp->lp_last_queued + lnet_transaction_timeout)
-		return NULL;
-	return lp;
-}
-
-/*
  * Discovering this peer is taking too long. Cancel any Ping or Push
  * that discovery is waiting on by unlinking the relevant MDs. The
  * lnet_discovery_event_handler() will proceed from here and complete
@@ -3007,8 +2988,6 @@ static int lnet_peer_discovery_wait_for_work(void)
 		if (!list_empty(&the_lnet.ln_dc_request))
 			break;
 		if (!list_empty(&the_lnet.ln_msg_resend))
-			break;
-		if (lnet_peer_get_dc_timed_out(ktime_get_real_seconds()))
 			break;
 		lnet_net_unlock(cpt);
 
@@ -3079,7 +3058,6 @@ static void lnet_resend_msgs(void)
 static int lnet_peer_discovery(void *arg)
 {
 	struct lnet_peer *lp;
-	time64_t now;
 	int rc;
 
 	CDEBUG(D_NET, "started\n");
@@ -3169,23 +3147,6 @@ static int lnet_peer_discovery(void *arg)
 				lnet_peer_discovery_complete(lp);
 			if (the_lnet.ln_dc_state == LNET_DC_STATE_STOPPING)
 				break;
-		}
-
-		/*
-		 * Now that the ln_dc_request queue has been emptied
-		 * check the ln_dc_working queue for peers that are
-		 * taking too long. Move all that are found to the
-		 * ln_dc_expired queue and time out any pending
-		 * Ping or Push. We have to drop the lnet_net_lock
-		 * in the loop because lnet_peer_cancel_discovery()
-		 * calls LNetMDUnlink().
-		 */
-		now = ktime_get_real_seconds();
-		while ((lp = lnet_peer_get_dc_timed_out(now)) != NULL) {
-			list_move(&lp->lp_dc_list, &the_lnet.ln_dc_expired);
-			lnet_net_unlock(LNET_LOCK_EX);
-			lnet_peer_cancel_discovery(lp);
-			lnet_net_lock(LNET_LOCK_EX);
 		}
 
 		lnet_net_unlock(LNET_LOCK_EX);
