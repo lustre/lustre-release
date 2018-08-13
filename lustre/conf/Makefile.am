@@ -32,15 +32,13 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-EXTRA_DIST = lustre.dtd slapd-lustre.conf lustre2ldif.xsl top.ldif \
+EXTRA_DIST = lustre.dtd lustre2ldif.xsl top.ldif \
              99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss \
              lnet_routes.conf lnet.conf lgssc.conf
-ldapconfdir = $(sysconfdir)/openldap
 
 sysconf_DATA = lnet.conf
 
 if UTILS
-noinst_SCRIPTS = slapd-lustre.conf
 noinst_DATA = top.ldif lustre2ldif.xsl
 sysconf_DATA += lnet_routes.conf
 endif
