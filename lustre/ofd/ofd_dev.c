@@ -1623,8 +1623,9 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		oseq->os_destroys_in_progress = 1;
 		mutex_lock(&oseq->os_create_lock);
 		if (!oseq->os_destroys_in_progress) {
-			CERROR("%s:[%llu] destroys_in_progress already"
-			       " cleared\n", ofd_name(ofd), seq);
+			CDEBUG(D_HA,
+			       "%s:[%llu] destroys_in_progress already cleared\n",
+			       ofd_name(ofd), seq);
 			rc = ostid_set_id(&rep_oa->o_oi,
 					  ofd_seq_last_oid(oseq));
 			GOTO(out, rc);
