@@ -54,7 +54,7 @@ KVER?=$(LINUXRELEASE)
 KVERS?=$(KVER)
 KSRC?=$(LINUX_OBJ)
 KSRC_TREE?=$(LINUX)
-IB_OPTIONS?=""
+EXTRA_OPTIONS?=$(IB_OPTIONS)
 
 # Packages
 UTILS_PKG=lustre-utils
@@ -336,7 +336,7 @@ kdist_config: prep-deb-files patch-stamp
 		    --disable-tests \
 		    --enable-quota \
 		    --with-kmp-moddir=updates \
-		    $(IB_OPTIONS)
+		    $(EXTRA_OPTIONS)
 
 kdist_configure: kdist_config
 
