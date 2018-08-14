@@ -68,7 +68,7 @@ KVER?=$(LINUXRELEASE)
 KVERS?=$(KVER)
 KSRC?=$(LINUX_OBJ)
 KSRC_TREE?=$(LINUX)
-IB_OPTIONS?=""
+EXTRA_OPTIONS?=$(IB_OPTIONS)
 
 # Packages provided for both client and server builds
 IOKIT_PKG=lustre-iokit
@@ -437,7 +437,7 @@ kdist_config: prep-deb-files patch-stamp
 		--enable-quota \
 		--with-kmp-moddir=updates \
 		$${EXTRAFLAGS} \
-		$(IB_OPTIONS)
+		$(EXTRA_OPTIONS)
 
 
 kdist_configure: kdist_config
