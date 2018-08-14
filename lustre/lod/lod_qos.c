@@ -898,8 +898,11 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 	bool used = false;
 	int i;
 
-	if (!cfs_bitmap_check(lod->lod_ost_bitmap, index))
+	if (!cfs_bitmap_check(lod->lod_ost_bitmap, index)) {
+		QOS_DEBUG("OST%d: been used in conflicting mirror component\n",
+			  index);
 		return true;
+	}
 
 	/**
 	 * we've tried our best, all available OSTs have been used in
@@ -926,8 +929,8 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 	if (!cfs_bitmap_check(lag->lag_ost_avoid_bitmap, index))
 		used = false;
 	else
-		QOS_DEBUG("OST%d: has been used in overlapped component "
-			  "in other mirror\n", index);
+		QOS_DEBUG("OST%d: been used in conflicting mirror component\n",
+			  index);
 	return used;
 }
 
@@ -944,12 +947,11 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	struct dt_object   *o;
 	__u32 stripe_idx = *s_idx;
 	int rc;
+	ENTRY;
 
 	rc = lod_statfs_and_check(env, lod, ost_idx, sfs);
-	if (rc) {
-		/* this OSP doesn't feel well */
-		goto out_return;
-	}
+	if (rc)
+		RETURN(rc);
 
 	/*
 	 * We expect number of precreated objects in f_ffree at
@@ -957,7 +959,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 */
 	if (sfs->os_fprecreated == 0 && speed == 0) {
 		QOS_DEBUG("#%d: precreation is empty\n", ost_idx);
-		goto out_return;
+		RETURN(rc);
 	}
 
 	/*
@@ -965,7 +967,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 */
 	if (sfs->os_state & OS_STATE_DEGRADED && speed < 2) {
 		QOS_DEBUG("#%d: degraded\n", ost_idx);
-		goto out_return;
+		RETURN(rc);
 	}
 
 	/*
@@ -973,8 +975,9 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * component
 	 */
 	if (speed == 0 && lod_comp_is_ost_used(env, lo, ost_idx)) {
-		QOS_DEBUG("#%d: used by other component\n", ost_idx);
-		goto out_return;
+		QOS_DEBUG("iter %d: OST%d used by other component\n",
+			  speed, ost_idx);
+		RETURN(rc);
 	}
 
 	/**
@@ -982,22 +985,22 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * for the first and second time.
 	 */
 	if (speed < 2 && lod_should_avoid_ost(lo, lag, ost_idx)) {
-		QOS_DEBUG("#%d: used by overlapped component of other mirror\n",
-			  ost_idx);
-		goto out_return;
+		QOS_DEBUG("iter %d: OST%d used by conflicting mirror "
+			  "component\n", speed, ost_idx);
+		RETURN(rc);
 	}
 	/*
 	 * do not put >1 objects on a single OST
 	 */
 	if (lod_qos_is_ost_used(env, ost_idx, stripe_idx))
-		goto out_return;
+		RETURN(rc);
 
 	o = lod_qos_declare_object_on(env, lod, ost_idx, th);
 	if (IS_ERR(o)) {
 		CDEBUG(D_OTHER, "can't declare new object on #%u: %d\n",
 		       ost_idx, (int) PTR_ERR(o));
 		rc = PTR_ERR(o);
-		goto out_return;
+		RETURN(rc);
 	}
 
 	/*
@@ -1011,8 +1014,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	stripe_idx++;
 	*s_idx = stripe_idx;
 
-out_return:
-	return rc;
+	RETURN(rc);
 }
 
 /**
@@ -2205,17 +2207,24 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 		 * OSTs to read the data.
 		 */
 		comp = &lo->ldo_comp_entries[lo->ldo_mirrors[i].lme_start];
-		if (comp->llc_id == LCME_ID_INVAL ||
+		if (comp->llc_id != LCME_ID_INVAL &&
 		    mirror_id_of(comp->llc_id) ==
 						mirror_id_of(lod_comp->llc_id))
 			continue;
 
 		/* iterate components of a mirror */
 		lod_foreach_mirror_comp(comp, lo, i) {
-			/* skip non-overlapped or un-instantiated components */
+			/**
+			 * skip non-overlapped or un-instantiated components,
+			 * NOTE: don't use lod_comp_inited(comp) to judge
+			 * whether @comp has been inited, since during
+			 * declare phase, comp->llc_stripe has been allocated
+			 * while it's init flag not been set until the exec
+			 * phase.
+			 */
 			if (!lu_extent_is_overlapped(&comp->llc_extent,
 						     &lod_comp->llc_extent) ||
-			    !lod_comp_inited(comp) || !comp->llc_stripe)
+			    !comp->llc_stripe)
 				continue;
 
 			/**
@@ -2233,6 +2242,8 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 				if (cfs_bitmap_check(bitmap, ost->ltd_index))
 					continue;
 
+				QOS_DEBUG("OST%d used in conflicting mirror "
+					  "component\n", ost->ltd_index);
 				cfs_bitmap_set(bitmap, ost->ltd_index);
 				lag->lag_ost_avail--;
 
@@ -2334,6 +2345,8 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			if (rc)
 				GOTO(put_ldts, rc);
 
+			QOS_DEBUG("collecting conflict osts for comp[%d]\n",
+				  comp_idx);
 			lod_collect_avoidance(lo, lag, comp_idx);
 
 			rc = lod_alloc_qos(env, lo, stripe, ost_indices, flag,
@@ -2440,8 +2453,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 
 		lod_comp = &lo->ldo_comp_entries[i];
 		extent = &lod_comp->llc_extent;
-		CDEBUG(D_QOS, "%lld [%lld, %lld)\n",
-		       size, extent->e_start, extent->e_end);
+		QOS_DEBUG("comp[%d] %lld "DEXT"\n", i, size, PEXT(extent));
 		if (!lo->ldo_is_composite || size >= extent->e_start) {
 			rc = lod_qos_prep_create(env, lo, attr, th, i);
 			if (rc)
