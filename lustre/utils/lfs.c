@@ -124,6 +124,7 @@ static int lfs_mirror_list_commands(int argc, char **argv);
 static int lfs_list_commands(int argc, char **argv);
 static inline int lfs_mirror_resync(int argc, char **argv);
 static inline int lfs_mirror_verify(int argc, char **argv);
+static inline int lfs_mirror_dump(int argc, char **argv);
 
 enum setstripe_origin {
 	SO_SETSTRIPE,
@@ -283,6 +284,10 @@ command_t mirror_cmdlist[] = {
 	"\t             mirror will be stored into. If not specified,\n"
 	"\t             a new file named <mirrored_file>.mirror~<mirror_id>\n"
 	"\t             will be used.\n" },
+	{ .pc_name = "dump", .pc_func = lfs_mirror_dump,
+	  .pc_help = "Dump the content of a specified mirror of a file.\n"
+		  "usage: lfs mirror dump <--mirror-id|-N <mirror_id> "
+		  "[--outfile|-o <output_file>] <mirrored_file>\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
@@ -581,6 +586,7 @@ command_t cmdlist[] = {
 	 "lfs mirror extend - add mirror(s) to an existing file\n"
 	 "lfs mirror split  - split a mirror from an existing mirrored file\n"
 	 "lfs mirror resync - resynchronize out-of-sync mirrored file(s)\n"
+	 "lfs mirror dump   - dump a mirror content of a mirrored file\n"
 	 "lfs mirror verify - verify mirrored file(s)\n"},
 	{"getsom", lfs_getsom, 0, "To list the SOM info for a given file.\n"
 	 "usage: getsom [-s] [-b] [-f] <path>\n"
@@ -8256,6 +8262,188 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 
 	free(ioc);
 error:
+	return rc;
+}
+
+static inline int lfs_mirror_dump(int argc, char **argv)
+{
+	int rc = CMD_HELP;
+	__u16 mirror_id = 0;
+	const char *outfile = NULL;
+	char *fname;
+	struct stat stbuf;
+	int fd = 0;
+	struct llapi_layout *layout;
+	int outfd;
+	int c;
+	const size_t buflen = 4 << 20;
+	void *buf;
+	off_t pos;
+
+	struct option long_opts[] = {
+	{ .val = 'N',	.name = "mirror-id",	.has_arg = required_argument },
+	{ .val = 'o',	.name = "outfile",	.has_arg = required_argument },
+	{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "N:o:", long_opts, NULL)) >= 0) {
+		char *end;
+
+		switch (c) {
+		case 'N':
+			mirror_id = strtoul(optarg, &end, 0);
+			if (*end != '\0' || mirror_id == 0) {
+				fprintf(stderr,
+					"%s %s: invalid mirror ID '%s'\n",
+					progname, argv[0], optarg);
+				return rc;
+			}
+			break;
+		case 'o':
+			outfile = optarg;
+			break;
+		}
+	}
+
+	if (argc == optind) {
+		fprintf(stderr, "%s %s: no mirrored file provided\n",
+			progname, argv[0]);
+		return rc;
+	} else if (argc > optind + 1) {
+		fprintf(stderr, "%s %s: too many files\n", progname, argv[0]);
+		return rc;
+	}
+
+	if (mirror_id == 0) {
+		fprintf(stderr, "%s %s: no valid mirror ID is provided\n",
+			progname, argv[0]);
+		return rc;
+	}
+
+	/* open mirror file */
+	fname = argv[optind];
+
+	if (stat(fname, &stbuf) < 0) {
+		fprintf(stderr, "%s %s: cannot stat file '%s': %s.\n",
+			progname, argv[0], fname, strerror(errno));
+		return rc;
+	}
+
+	if (!S_ISREG(stbuf.st_mode)) {
+		fprintf(stderr, "%s %s: '%s' is not a regular file.\n",
+			progname, argv[0], fname);
+		return rc;
+	}
+
+	fd = open(fname, O_DIRECT | O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "%s %s: cannot open '%s': %s.\n",
+			progname, argv[0], fname, strerror(errno));
+		return rc;
+	}
+
+	/* verify mirror id */
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		fprintf(stderr, "%s %s: could not get layout of file '%s'.\n",
+			progname, argv[0], fname);
+		rc = -EINVAL;
+		goto close_fd;
+	}
+
+	rc = llapi_layout_comp_iterate(layout, find_mirror_id, &mirror_id);
+	if (rc < 0) {
+		fprintf(stderr, "%s %s: failed to iterate layout of '%s'.\n",
+			progname, argv[0], fname);
+		llapi_layout_free(layout);
+		goto close_fd;
+	} else if (rc == LLAPI_LAYOUT_ITER_CONT) {
+		fprintf(stderr,
+			"%s %s: file '%s' does not contain mirror with ID %u\n",
+			progname, argv[0], fname, mirror_id);
+		llapi_layout_free(layout);
+
+		rc = -EINVAL;
+		goto close_fd;
+	}
+	llapi_layout_free(layout);
+
+	/* open output file */
+	if (outfile) {
+		outfd = open(outfile, O_EXCL | O_WRONLY | O_CREAT, 0644);
+		if (outfd < 0) {
+			fprintf(stderr, "%s %s: cannot create file '%s':%s.\n",
+				progname, argv[0], outfile, strerror(errno));
+			rc = -errno;
+			goto close_fd;
+		}
+	} else {
+		outfd = STDOUT_FILENO;
+	}
+
+	/* allocate buffer */
+	rc = posix_memalign(&buf, sysconf(_SC_PAGESIZE), buflen);
+	if (rc) {
+		fprintf(stderr, "%s %s: posix_memalign returns %d.\n",
+				progname, argv[0], rc);
+		goto close_outfd;
+	}
+
+	pos = 0;
+	while (1) {
+		ssize_t bytes_read;
+		ssize_t written = 0;
+
+		bytes_read = llapi_mirror_read(fd, mirror_id, buf, buflen, pos);
+		if (bytes_read < 0) {
+			rc = bytes_read;
+			fprintf(stderr,
+				"%s %s: fail to read data from mirror %u:%s.\n",
+				progname, argv[0], mirror_id, strerror(-rc));
+			goto free_buf;
+		}
+
+		/* EOF reached */
+		if (bytes_read == 0)
+			break;
+
+		while (written < bytes_read) {
+			ssize_t written2;
+
+			written2 = write(outfd, buf + written,
+					 bytes_read - written);
+			if (written2 < 0) {
+				fprintf(stderr,
+					"%s %s: fail to write %s:%s.\n",
+					progname, argv[0], outfile ? : "STDOUT",
+					strerror(errno));
+				rc = -errno;
+				goto free_buf;
+			}
+			written += written2;
+		}
+
+		if (written != bytes_read) {
+			fprintf(stderr,
+		"%s %s: written %ld bytes does not match with %ld read.\n",
+				progname, argv[0], written, bytes_read);
+			rc = -EIO;
+			goto free_buf;
+		}
+
+		pos += bytes_read;
+	}
+
+	fsync(outfd);
+	rc = 0;
+
+free_buf:
+	free(buf);
+close_outfd:
+	if (outfile)
+		close(outfd);
+close_fd:
+	close(fd);
+
 	return rc;
 }
 

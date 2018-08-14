@@ -1256,9 +1256,9 @@ test_37()
 
 	# assume the mirror id will be 1, 2, and 3
 	declare -A checksums
-	checksums[1]=$(md5sum $tf | cut -f 1 -d' ')
-	checksums[2]=$(md5sum $tf2 | cut -f 1 -d' ')
-	checksums[3]=$(md5sum $tf3 | cut -f 1 -d' ')
+	checksums[1]=$(cat $tf | md5sum)
+	checksums[2]=$(cat $tf2 | md5sum)
+	checksums[3]=$(cat $tf3 | md5sum)
 
 	printf '%s\n' "${checksums[@]}"
 
@@ -1275,7 +1275,7 @@ test_37()
 
 	local sum
 	for i in ${mirror_array[@]}; do
-		sum=$(mirror_io dump -i $i $tf | md5sum | cut -f 1 -d' ')
+		sum=$($LFS mirror dump -N $i $tf | md5sum)
 		[ "$sum" = "${checksums[$i]}" ] ||
 			error "$i: mismatch: \'${checksums[$i]}\' vs. \'$sum\'"
 	done
@@ -1298,7 +1298,7 @@ test_37()
 	# verify copying is successful by checking checksums
 	remount_client $MOUNT
 	for i in ${mirror_array[@]}; do
-		sum=$(mirror_io dump -i $i $tf | md5sum | cut -f 1 -d' ')
+		sum=$($LFS mirror dump -N $i $tf | md5sum)
 		[ "$sum" = "${checksums[1]}" ] ||
 			error "$i: mismatch checksum after copy"
 	done
@@ -1343,13 +1343,13 @@ test_38() {
 	local fsize=$((RANDOM << 8 + 1048576))
 	$TRUNCATE $ref $fsize
 
-	local ref_cksum=$(md5sum $ref | cut -f 1 -d' ')
+	local ref_cksum=$(cat $ref | md5sum)
 
 	# case 1: verify write to mirrored file & resync work
 	cp $ref $tf || error "copy from $ref to $f error"
 	verify_flr_state $tf "wp"
 
-	local file_cksum=$(md5sum $tf | cut -f 1 -d' ')
+	local file_cksum=$(cat $tf | md5sum)
 	[ "$file_cksum" = "$ref_cksum" ] || error "write failed, cksum mismatch"
 
 	get_mirror_ids $tf
@@ -1357,8 +1357,7 @@ test_38() {
 
 	local valid_mirror stale_mirror id mirror_cksum
 	for id in "${mirror_array[@]}"; do
-		mirror_cksum=$(mirror_io dump -i $id $tf |
-				md5sum | cut -f 1 -d' ')
+		mirror_cksum=$($LFS mirror dump -N $id $tf | md5sum)
 		[ "$ref_cksum" == "$mirror_cksum" ] &&
 			{ valid_mirror=$id; continue; }
 
@@ -1371,8 +1370,7 @@ test_38() {
 	mirror_io resync $tf || error "resync failed"
 	verify_flr_state $tf "ro"
 
-	mirror_cksum=$(mirror_io dump -i $stale_mirror $tf |
-			md5sum | cut -f 1 -d' ')
+	mirror_cksum=$($LFS mirror dump -N $stale_mirror $tf | md5sum)
 	[ "$file_cksum" = "$ref_cksum" ] || error "resync failed"
 
 	# case 2: inject an error to make mirror_io exit after changing
@@ -1480,7 +1478,7 @@ test_41() {
 	dd if=/dev/urandom of=$tf-1 bs=1M count=4 conv=notrunc ||
 		error "writing $tf-1 failed"
 
-	local sum0=$(cat $tf-1 | md5sum | cut -f 1 -d' ')
+	local sum0=$(cat $tf-1 | md5sum)
 
 	echo " **verify files be WRITE_PENDING"
 	verify_flr_state $tf "wp"
@@ -1497,11 +1495,10 @@ test_41() {
 	$LFS mirror resync $tf $tf-1 || error "mirror resync $tf $tf-1 failed"
 
 	echo " **verify $tf-1 data consistency in all mirrors"
-	local sum
 	for i in 1 2 3; do
-		sum=$(mirror_io dump -i $i $tf-1 | md5sum | cut -f 1 -d' ')
-		[ "$sum" = "$sum0" ] ||
-			error "$i: mismatch: $sum vs. $sum0"
+		local sum=$($LFS mirror dump -N$i $tf-1 | md5sum)
+		[[ "$sum" = "$sum0" ]] ||
+			error "$tf-1.$i: checksum mismatch: $sum != $sum0"
 	done
 
 	echo " **verify files be RDONLY"
@@ -2081,9 +2078,9 @@ test_200() {
 	mirror_io resync $tf
 	get_mirror_ids $tf
 
-	local csum=$(mirror_io dump -i ${mirror_array[0]} $tf | md5sum)
+	local csum=$($LFS mirror dump -N ${mirror_array[0]} $tf | md5sum)
 	for id in ${mirror_array[@]:1}; do
-		[ "$(mirror_io dump -i $id $tf | md5sum)" = "$csum" ] ||
+		[ "$($LFS mirror dump -N $id $tf | md5sum)" = "$csum" ] ||
 			error "checksum error for mirror $id"
 	done
 
