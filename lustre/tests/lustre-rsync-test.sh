@@ -12,8 +12,8 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT="$LRSYNC_EXCEPT"
+# bug number for skipped test: LU-4256
+ALWAYS_EXCEPT="$LRSYNC_EXCEPT  2b"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
