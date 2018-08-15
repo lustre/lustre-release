@@ -2272,17 +2272,12 @@ test_70d () {
 }
 run_test 70d "mkdir/rmdir striped dir ${MDSCOUNT}mdts recovery"
 
-cleanup_70e() {
-	trap 0
-	kill -9 $rename_70e_pid
-}
-
 test_70e () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local clients=${CLIENTS:-$HOSTNAME}
 	local rc=0
 
-	echo ha > /proc/sys/lnet/debug
+	lctl set_param debug=+ha
 	zconf_mount_clients $clients $MOUNT
 
 	local duration=300
@@ -2295,45 +2290,40 @@ test_70e () {
 	$LFS mkdir -i0 $DIR/$tdir/test_1
 	touch $DIR/$tdir/test_0/a
 	touch $DIR/$tdir/test_1/b
-	trap cleanup_70e EXIT
 	(
-		while true; do
-			mrename $DIR/$tdir/test_0/a $DIR/$tdir/test_1/b > \
-						/dev/null || {
-				echo "a->b fails"
-				break;
-			}
+	while true; do
+		mrename $DIR/$tdir/test_0/a $DIR/$tdir/test_1/b > /dev/null || {
+			echo "a->b fails"
+			break;
+		}
 
-			checkstat $DIR/$tdir/test_0/a && {
-				echo "a still exists"
-				break
-			}
+		checkstat $DIR/$tdir/test_0/a && {
+			echo "a still exists"
+			break
+		}
 
-			checkstat $DIR/$tdir/test_1/b || {
-				echo "b still  exists"
-				break
-			}
+		checkstat $DIR/$tdir/test_1/b || {
+			echo "b still  exists"
+			break
+		}
 
-			touch $DIR/$tdir/test_0/a || {
-				echo "touch a fails"
-				break
-			}
+		touch $DIR/$tdir/test_0/a || {
+			echo "touch a fails"
+			break
+		}
 
-			mrename $DIR/$tdir/test_1/b $DIR/$tdir/test_0/a > \
-						/dev/null || {
-				echo "a->a fails"
-				break;
-			}
-		done
+		mrename $DIR/$tdir/test_1/b $DIR/$tdir/test_0/a > /dev/null || {
+			echo "a->a fails"
+			break;
+		}
+	done
 	)&
 	rename_70e_pid=$!
-	echo "Started  $rename_70e_pid"
+	stack_trap "kill -9 $rename_70e_pid" EXIT
+	echo "Started PID=$rename_70e_pid"
 
 	random_fail_mdt 2 $duration $rename_70e_pid
 	kill -0 $rename_70e_pid || error "rename $rename_70e_pid stopped"
-
-	cleanup_70e
-	true
 }
 run_test 70e "rename cross-MDT with random fails"
 
