@@ -1121,6 +1121,30 @@ static inline bool permission_needs_sync(const struct lu_attr *old,
 	return false;
 }
 
+static inline __u64 mdd_lmm_dom_size(void *buf)
+{
+	struct lov_mds_md *lmm = buf;
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_mds_md *v1;
+	__u32 off;
+
+	if (lmm == NULL)
+		return 0;
+
+	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
+		return 0;
+
+	comp_v1 = (struct lov_comp_md_v1 *)lmm;
+	off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
+	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+
+	/* DoM entry is the first entry always */
+	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) == LOV_PATTERN_MDT)
+		return le64_to_cpu(comp_v1->lcm_entries[0].lcme_extent.e_end);
+
+	return 0;
+}
+
 /* set attr and LOV EA at once, return updated attr */
 int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		 const struct md_attr *ma)
@@ -1198,6 +1222,25 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		       la->la_mtime, la->la_ctime);
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+
+	/* LU-10509: setattr of LA_SIZE should be skipped case of DOM,
+	 * otherwise following truncate will do nothing and truncated
+	 * data may be read again. This is a quick fix until LU-11033
+	 * will be resolved.
+	 */
+	if (la_copy->la_valid & LA_SIZE) {
+		struct lu_buf *lov_buf = mdd_buf_get(env, NULL, 0);
+
+		rc = mdd_get_lov_ea(env, mdd_obj, lov_buf);
+		if (rc) {
+			rc = 0;
+		} else {
+			if (mdd_lmm_dom_size(lov_buf->lb_buf) > 0)
+				la_copy->la_valid &= ~LA_SIZE;
+			lu_buf_free(lov_buf);
+		}
+	}
+
 	if (la_copy->la_valid) {
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
 
@@ -2149,30 +2192,6 @@ static inline int mdd_get_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
 static inline int mdd_set_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
 {
 	return mdd_lmm_gen(lmm, gen, false);
-}
-
-static inline __u64 mdd_lmm_dom_size(void *buf)
-{
-	struct lov_mds_md *lmm = buf;
-	struct lov_comp_md_v1 *comp_v1;
-	struct lov_mds_md *v1;
-	__u32 off;
-
-	if (lmm == NULL)
-		return 0;
-
-	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
-		return 0;
-
-	comp_v1 = (struct lov_comp_md_v1 *)lmm;
-	off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
-	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
-
-	/* DoM entry is the first entry always */
-	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) == LOV_PATTERN_MDT)
-		return le64_to_cpu(comp_v1->lcm_entries[0].lcme_extent.e_end);
-
-	return 0;
 }
 
 /**
