@@ -580,21 +580,22 @@ out:
 }
 LPROC_SEQ_FOPS(ll_max_cached_mb);
 
-static int ll_checksum_seq_show(struct seq_file *m, void *v)
+static ssize_t checksum_pages_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 
-	seq_printf(m, "%u\n", (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
-	return 0;
+	return sprintf(buf, "%u\n", (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
 }
 
-static ssize_t ll_checksum_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+static ssize_t checksum_pages_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer,
+				    size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	bool val;
 	int tmp;
 	int rc;
@@ -603,7 +604,7 @@ static ssize_t ll_checksum_seq_write(struct file *file,
 		/* Not set up yet */
 		return -EAGAIN;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 	if (val)
@@ -619,7 +620,7 @@ static ssize_t ll_checksum_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ll_checksum);
+LUSTRE_RW_ATTR(checksum_pages);
 
 static int ll_rd_track_id(struct seq_file *m, enum stats_track_type type)
 {
@@ -1183,8 +1184,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_max_read_ahead_whole_mb_fops	},
 	{ .name	=	"max_cached_mb",
 	  .fops	=	&ll_max_cached_mb_fops			},
-	{ .name	=	"checksum_pages",
-	  .fops	=	&ll_checksum_fops			},
 	{ .name	=	"stats_track_pid",
 	  .fops	=	&ll_track_pid_fops			},
 	{ .name	=	"stats_track_ppid",
@@ -1234,6 +1233,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_client_type.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_uuid.attr,
+	&lustre_attr_checksum_pages.attr,
 	&lustre_attr_statahead_running_max.attr,
 	NULL,
 };
