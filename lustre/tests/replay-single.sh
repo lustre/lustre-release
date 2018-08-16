@@ -2620,7 +2620,7 @@ test_80b() {
 	local remote_dir=$DIR/$tdir/remote_dir
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	#define OBD_FAIL_UPDATE_OBJ_NET_REP	0x1701
+	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
 	local CLIENT_PID=$!
@@ -2649,7 +2649,7 @@ test_80c() {
 	local remote_dir=$DIR/$tdir/remote_dir
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	#define OBD_FAIL_UPDATE_OBJ_NET_REP	0x1701
+	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
 	local CLIENT_PID=$!
@@ -2674,7 +2674,7 @@ test_80d() {
 	local remote_dir=$DIR/$tdir/remote_dir
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	#define OBD_FAIL_UPDATE_OBJ_NET_REP	0x1701
+	#define OBD_FAIL_OUT_UPDATE_NET_REP	0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	$LFS mkdir -i $MDTIDX $remote_dir &
 	local CLIENT_PID=$!
@@ -2831,7 +2831,7 @@ test_81a() {
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
 	touch $remote_dir || error "touch $remote_dir failed"
-	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
+	# OBD_FAIL_OUT_UPDATE_NET_REP       0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	rmdir $remote_dir &
 	local CLIENT_PID=$!
@@ -2861,7 +2861,7 @@ test_81b() {
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
-	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
+	# OBD_FAIL_OUT_UPDATE_NET_REP       0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	rmdir $remote_dir &
 	local CLIENT_PID=$!
@@ -2892,7 +2892,7 @@ test_81c() {
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
-	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
+	# OBD_FAIL_OUT_UPDATE_NET_REP       0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	rmdir $remote_dir &
 	local CLIENT_PID=$!
@@ -2920,7 +2920,7 @@ test_81d() {
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
 
-	# OBD_FAIL_OBJ_UPDATE_NET_REP       0x1701
+	# OBD_FAIL_OUT_UPDATE_NET_REP       0x1701
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	rmdir $remote_dir &
 	local CLIENT_PID=$!
