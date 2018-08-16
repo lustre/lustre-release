@@ -8136,7 +8136,7 @@ test_102h() { # bug 15777
 run_test 102h "grow xattr from inside inode to external block"
 
 test_102ha() {
-	large_xattr_enabled || skip_env "large_xattr disabled"
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
 	grow_xattr $(max_xattr_size)
 }
@@ -18231,7 +18231,7 @@ run_test 315 "read should be accounted"
 
 test_316() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	large_xattr_enabled || skip_env "large_xattr disabled"
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
 	rm -rf $DIR/$tdir/d
 	mkdir -p $DIR/$tdir/d
