@@ -81,7 +81,7 @@ static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	struct lov_desc *desc = &dev->u.lov.desc;
 
-	return sprintf(buf, "%llu\n", desc->ld_default_stripe_offset);
+	return sprintf(buf, "%lld\n", desc->ld_default_stripe_offset);
 }
 
 static ssize_t stripeoffset_store(struct kobject *kobj, struct attribute *attr,
