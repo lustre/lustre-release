@@ -1279,12 +1279,11 @@ void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
 			    bool increase_only);
 int mdt_dom_lvb_alloc(struct ldlm_resource *res);
 
-static inline void mdt_dom_check_and_discard(struct mdt_thread_info *mti,
+static inline bool mdt_dom_check_for_discard(struct mdt_thread_info *mti,
 					     struct mdt_object *mo)
 {
-	if (lu_object_is_dying(&mo->mot_header) &&
-	    S_ISREG(lu_object_attr(&mo->mot_obj)))
-		mdt_dom_discard_data(mti, mdt_object_fid(mo));
+	return lu_object_is_dying(&mo->mot_header) &&
+	       S_ISREG(lu_object_attr(&mo->mot_obj));
 }
 
 int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,

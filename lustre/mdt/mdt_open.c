@@ -2222,17 +2222,20 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	struct mdt_object *o = mfd->mfd_object;
 	struct md_object *next = mdt_object_child(o);
 	struct md_attr *ma = &info->mti_attr;
+	struct lu_fid *ofid = &info->mti_tmp_fid1;
 	int rc = 0;
 	__u64 mode;
 	__u64 intent;
+	bool discard = false;
 
 	ENTRY;
 
 	mode = mfd->mfd_mode;
 	intent = ma->ma_attr_flags & MDS_CLOSE_INTENT;
+	*ofid = *mdt_object_fid(o);
 
 	CDEBUG(D_INODE, "%s: close file "DFID" with intent: %llx\n",
-	       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(o)), intent);
+	       mdt_obd_name(info->mti_mdt), PFID(ofid), intent);
 
 	switch (intent) {
 	case MDS_HSM_RELEASE: {
@@ -2240,7 +2243,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		if (rc < 0) {
 			CDEBUG(D_HSM, "%s: File " DFID " release failed: %d\n",
 			       mdt_obd_name(info->mti_mdt),
-			       PFID(mdt_object_fid(o)), rc);
+			       PFID(ofid), rc);
 			/* continue to close even error occurred. */
 		}
 		break;
@@ -2253,7 +2256,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 			CDEBUG(D_INODE,
 			       "%s: cannot swap layout of "DFID": rc = %d\n",
 			       mdt_obd_name(info->mti_mdt),
-			       PFID(mdt_object_fid(o)), rc);
+			       PFID(ofid), rc);
 			/* continue to close even if error occurred. */
 		}
 		break;
@@ -2275,7 +2278,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 			CDEBUG(D_INODE,
 			       "%s: File " DFID " LSOM failed: rc = %d\n",
 			       mdt_obd_name(info->mti_mdt),
-			       PFID(mdt_object_fid(o)), rc2);
+			       PFID(ofid), rc2);
 			/* continue to close even if error occured. */
 	}
 
@@ -2307,7 +2310,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
 	if (!MFD_CLOSED(mode)) {
 		rc = mo_close(info->mti_env, next, ma, mode);
-		mdt_dom_check_and_discard(info, o);
+		discard = mdt_dom_check_for_discard(info, o);
 	}
 
 	/* adjust open and lease count */
@@ -2318,6 +2321,9 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
 	mdt_mfd_free(mfd);
 	mdt_object_put(info->mti_env, o);
+
+	if (discard)
+		mdt_dom_discard_data(info, ofid);
 
 	RETURN(rc);
 }

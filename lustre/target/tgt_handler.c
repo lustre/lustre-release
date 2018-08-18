@@ -1270,7 +1270,7 @@ static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 		rc = lu_env_init(&env, LCT_DT_THREAD);
 		if (unlikely(rc != 0))
-			RETURN(rc);
+			GOTO(err, rc);
 
 		ost_fid_from_resid(&fid, &lock->l_resource->lr_name,
 				   tgt->lut_lsd.lsd_osd_index);
@@ -1301,7 +1301,7 @@ err_put:
 err_env:
 		lu_env_fini(&env);
 	}
-
+err:
 	rc = ldlm_server_blocking_ast(lock, desc, data, flag);
 	RETURN(rc);
 }

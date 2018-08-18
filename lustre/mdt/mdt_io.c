@@ -78,6 +78,36 @@ static inline time64_t prolong_timeout(struct ptlrpc_request *req)
 		     req_timeout);
 }
 
+static void mdt_dom_resource_prolong(struct ldlm_prolong_args *arg)
+{
+	struct ldlm_resource *res;
+	struct ldlm_lock *lock;
+
+	ENTRY;
+
+	res = ldlm_resource_get(arg->lpa_export->exp_obd->obd_namespace, NULL,
+				&arg->lpa_resid, LDLM_EXTENT, 0);
+	if (IS_ERR(res)) {
+		CDEBUG(D_DLMTRACE,
+		       "Failed to get resource for resid %llu/%llu\n",
+		       arg->lpa_resid.name[0], arg->lpa_resid.name[1]);
+		RETURN_EXIT;
+	}
+
+	lock_res(res);
+	list_for_each_entry(lock, &res->lr_granted, l_res_link) {
+		if (ldlm_has_dom(lock)) {
+			LDLM_DEBUG(lock, "DOM lock to prolong ");
+			ldlm_lock_prolong_one(lock, arg);
+			break;
+		}
+	}
+	unlock_res(res);
+	ldlm_resource_putref(res);
+
+	EXIT;
+}
+
 static void mdt_prolong_dom_lock(struct tgt_session_info *tsi,
 				 struct ldlm_prolong_args *data)
 {
@@ -102,9 +132,11 @@ static void mdt_prolong_dom_lock(struct tgt_session_info *tsi,
 			ldlm_lock_prolong_one(lock, data);
 			lock->l_last_used = ktime_get();
 			LDLM_LOCK_PUT(lock);
-			RETURN_EXIT;
+			if (data->lpa_locks_cnt > 0)
+				RETURN_EXIT;
 		}
 	}
+	mdt_dom_resource_prolong(data);
 	EXIT;
 }
 
@@ -1200,7 +1232,7 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 
 	/* We only care about the side-effects, just drop the lock. */
 	if (rc == ELDLM_OK)
-		ldlm_lock_decref(&dom_lh, LCK_PW);
+		ldlm_lock_decref_and_cancel(&dom_lh, LCK_PW);
 }
 
 /* check if client has already DoM lock for given resource */

@@ -1029,7 +1029,7 @@ relock:
 		if (rc)
 			GOTO(out_stat, rc);
 	} else {
-		discard = true;
+		discard = mdt_dom_check_for_discard(info, mc);
 	}
 	mdt_handle_last_unlink(info, mc, ma);
 
@@ -1058,13 +1058,18 @@ out_stat:
 unlock_child:
 	mdt_reint_striped_unlock(info, mc, child_lh, einfo, rc);
 put_child:
-	if (discard)
-		mdt_dom_check_and_discard(info, mc);
 	mdt_object_put(info->mti_env, mc);
 unlock_parent:
 	mdt_object_unlock(info, mp, parent_lh, rc);
 put_parent:
 	mdt_object_put(info->mti_env, mp);
+
+	/* discard is just a PW DOM lock to drop the data on a client
+	 * no need to keep objects being get and locked, do that after all.
+	 */
+	if (discard)
+		mdt_dom_discard_data(info, child_fid);
+
         return rc;
 }
 
@@ -2173,7 +2178,7 @@ relock:
 		mdt_counter_incr(req, LPROC_MDT_RENAME);
 		if (mnew) {
 			mdt_handle_last_unlink(info, mnew, ma);
-			discard = true;
+			discard = mdt_dom_check_for_discard(info, mnew);
 		}
 
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
@@ -2186,11 +2191,8 @@ relock:
 out_unlock_old:
 	mdt_object_unlock(info, mold, lh_oldp, rc);
 out_put_new:
-	if (mnew != NULL) {
-		if (discard)
-			mdt_dom_check_and_discard(info, mnew);
+	if (mnew != NULL)
 		mdt_object_put(info->mti_env, mnew);
-	}
 out_put_old:
 	mdt_object_put(info->mti_env, mold);
 out_unlock_parents:
@@ -2200,6 +2202,14 @@ out_put_tgtdir:
 	mdt_object_put(info->mti_env, mtgtdir);
 out_put_srcdir:
 	mdt_object_put(info->mti_env, msrcdir);
+
+	/* If 'discard' is set then new_fid must exits.
+	 * DOM data discard need neither object nor lock,
+	 * so do this at the end.
+	 */
+	if (discard)
+		mdt_dom_discard_data(info, new_fid);
+
 	return rc;
 }
 
