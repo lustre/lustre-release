@@ -2028,6 +2028,61 @@ out:
 	return rc;
 }
 
+static int
+lustre_lnet_config_healthv(int value, bool all, lnet_nid_t nid,
+			   enum lnet_health_type type, char *name,
+			   int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_reset_health_cfg data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	LIBCFS_IOC_INIT_V2(data, rh_hdr);
+	data.rh_type = type;
+	data.rh_all = all;
+	data.rh_value = value;
+	data.rh_nid = nid;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_HEALHV, &data);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str), "Can not configure health value");
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_ni_healthv(int value, bool all, char *ni_nid, int seq_no,
+				  struct cYAML **err_rc)
+{
+	lnet_nid_t nid;
+	if (ni_nid)
+		nid = libcfs_str2nid(ni_nid);
+	else
+		nid = LNET_NID_ANY;
+	return lustre_lnet_config_healthv(value, all, nid,
+					  LNET_HEALTH_TYPE_LOCAL_NI,
+					  "ni healthv", seq_no, err_rc);
+}
+
+int lustre_lnet_config_peer_ni_healthv(int value, bool all, char *lpni_nid,
+				       int seq_no, struct cYAML **err_rc)
+{
+	lnet_nid_t nid;
+	if (lpni_nid)
+		nid = libcfs_str2nid(lpni_nid);
+	else
+		nid = LNET_NID_ANY;
+	return lustre_lnet_config_healthv(value, all, nid,
+					  LNET_HEALTH_TYPE_PEER_NI,
+					  "peer_ni healthv", seq_no, err_rc);
+}
+
 static bool
 add_msg_stats_to_yaml_blk(struct cYAML *yaml,
 			  struct lnet_ioctl_comm_count *counts)
@@ -2078,6 +2133,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct lnet_ioctl_config_lnd_tunables *lnd;
 	struct lnet_ioctl_element_stats *stats;
 	struct lnet_ioctl_element_msg_stats msg_stats;
+	struct lnet_ioctl_local_ni_hstats hstats;
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	__u32 prev_net = LNET_NIDNET(LNET_NID_ANY);
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
@@ -2085,7 +2141,8 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct cYAML *root = NULL, *tunables = NULL,
 		*net_node = NULL, *interfaces = NULL,
 		*item = NULL, *first_seq = NULL,
-		*tmp = NULL, *statistics = NULL;
+		*tmp = NULL, *statistics = NULL,
+		*yhstats = NULL;
 	int str_buf_len = LNET_MAX_SHOW_NUM_CPT * 2;
 	char str_buf[str_buf_len];
 	char *pos;
@@ -2277,6 +2334,48 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 					goto out;
 			}
 
+			LIBCFS_IOC_INIT_V2(hstats, hlni_hdr);
+			hstats.hlni_nid = ni_data->lic_nid;
+			/* grab health stats */
+			rc = l_ioctl(LNET_DEV_ID,
+				     IOC_LIBCFS_GET_LOCAL_HSTATS,
+				     &hstats);
+			if (rc != 0) {
+				l_errno = errno;
+				goto continue_without_msg_stats;
+			}
+			yhstats = cYAML_create_object(item, "health stats");
+			if (!yhstats)
+				goto out;
+			if (cYAML_create_number(yhstats, "health value",
+						hstats.hlni_health_value)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "interrupts",
+						hstats.hlni_local_interrupt)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "dropped",
+						hstats.hlni_local_dropped)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "aborted",
+						hstats.hlni_local_aborted)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "no route",
+						hstats.hlni_local_no_route)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "timeouts",
+						hstats.hlni_local_timeout)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "error",
+						hstats.hlni_local_error)
+							== NULL)
+				goto out;
+
 continue_without_msg_stats:
 			tunables = cYAML_create_object(item, "tunables");
 			if (!tunables)
@@ -2425,6 +2524,72 @@ int ioctl_set_value(__u32 val, int ioc, char *name,
 	}
 
 	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", sen);
+
+	rc = write_sysfs_file(modparam_path, "lnet_health_sensitivity", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure health sensitivity: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "health_sensitivity", err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", timeout);
+
+	rc = write_sysfs_file(modparam_path, "lnet_transaction_timeout", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure transaction timeout: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "transaction_timeout", err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_retry_count(int count, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", count);
+
+	rc = write_sysfs_file(modparam_path, "lnet_retry_count", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure retry count: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "retry_count", err_str, err_rc);
 
 	return rc;
 }
@@ -2706,6 +2871,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	struct lnet_peer_ni_credit_info *lpni_cri;
 	struct lnet_ioctl_element_stats *lpni_stats;
 	struct lnet_ioctl_element_msg_stats *msg_stats;
+	struct lnet_ioctl_peer_ni_hstats *hstats;
 	lnet_nid_t *nidp;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	int i, j, k;
@@ -2714,7 +2880,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	__u32 size;
 	struct cYAML *root = NULL, *peer = NULL, *peer_ni = NULL,
 		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL,
-		     *msg_statistics = NULL, *statistics = NULL;
+		     *msg_statistics = NULL, *statistics = NULL,
+		     *yhstats;
 	char err_str[LNET_MAX_STR_LEN];
 	struct lnet_process_id *list = NULL;
 	void *data = NULL;
@@ -2851,7 +3018,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			lpni_cri = (void*)nidp + sizeof(nidp);
 			lpni_stats = (void *)lpni_cri + sizeof(*lpni_cri);
 			msg_stats = (void *)lpni_stats + sizeof(*lpni_stats);
-			lpni_data = (void *)msg_stats + sizeof(*msg_stats);
+			hstats = (void *)msg_stats + sizeof(*msg_stats);
+			lpni_data = (void *)hstats + sizeof(*hstats);
 
 			peer_ni = cYAML_create_seq_item(tmp);
 			if (peer_ni == NULL)
@@ -2946,6 +3114,29 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 					goto out;
 			}
 
+			yhstats = cYAML_create_object(peer_ni, "health stats");
+			if (!yhstats)
+				goto out;
+			if (cYAML_create_number(yhstats, "health value",
+						hstats->hlpni_health_value)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "dropped",
+						hstats->hlpni_remote_dropped)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "timeout",
+						hstats->hlpni_remote_timeout)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "error",
+						hstats->hlpni_remote_error)
+							== NULL)
+				goto out;
+			if (cYAML_create_number(yhstats, "network timeout",
+						hstats->hlpni_network_timeout)
+							== NULL)
+				goto out;
 		}
 	}
 
@@ -3187,6 +3378,165 @@ static int ioctl_show_global_values(int ioc, int seq_no, char *name,
 				       data.sv_value, show_rc, err_rc, l_errno);
 }
 
+int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
+				  struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int sen = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_health_sensitivity", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get health sensitivity: %d\"", rc);
+	} else {
+		sen = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "health_sensitivity", sen, show_rc,
+				       err_rc, l_errno);
+}
+
+int lustre_lnet_show_transaction_to(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int tto = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_transaction_timeout", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get transaction timeout: %d\"", rc);
+	} else {
+		tto = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "transaction_timeout", tto, show_rc,
+				       err_rc, l_errno);
+}
+
+int lustre_lnet_show_retry_count(int seq_no, struct cYAML **show_rc,
+				 struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int retry_count = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_retry_count", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get retry count: %d\"", rc);
+	} else {
+		retry_count = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "retry_count", retry_count, show_rc,
+				       err_rc, l_errno);
+}
+
+int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
+			struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_recovery_list nid_list;
+	struct cYAML *root = NULL, *nids = NULL;
+	int rc, i;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "failed to print recovery queue\n");
+
+	LIBCFS_IOC_INIT_V2(nid_list, rlst_hdr);
+	nid_list.rlst_type = type;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_RECOVERY_QUEUE, &nid_list);
+	if (rc) {
+		rc = errno;
+		goto out;
+	}
+
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	nids = cYAML_create_object(root, name);
+	if (nids == NULL)
+		goto out;
+
+	rc = -EINVAL;
+
+	for (i = 0; i < nid_list.rlst_num_nids; i++) {
+		char nidenum[LNET_MAX_STR_LEN];
+		snprintf(nidenum, sizeof(nidenum), "nid-%d", i);
+		if (!cYAML_create_string(nids, nidenum,
+			libcfs_nid2str(nid_list.rlst_nid_array[i])))
+			goto out;
+	}
+
+	snprintf(err_str, sizeof(err_str), "success\n");
+
+	rc = 0;
+
+out:
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		struct cYAML *show_node;
+		/* find the net node, if one doesn't exist
+		 * then insert one.  Otherwise add to the one there
+		 */
+		show_node = cYAML_get_object_item(*show_rc, name);
+		if (show_node != NULL && cYAML_is_sequence(show_node)) {
+			cYAML_insert_child(show_node, nids);
+			free(nids);
+			free(root);
+		} else if (show_node == NULL) {
+			cYAML_insert_sibling((*show_rc)->cy_child,
+						nids);
+			free(root);
+		} else {
+			cYAML_free_tree(root);
+		}
+	} else {
+		*show_rc = root;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, name, err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_show_local_ni_recovq(int seq_no, struct cYAML **show_rc,
+				     struct cYAML **err_rc)
+{
+	return show_recovery_queue(LNET_HEALTH_TYPE_LOCAL_NI, "local NI recovery",
+				   seq_no, show_rc, err_rc);
+}
+
+int lustre_lnet_show_peer_ni_recovq(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc)
+{
+	return show_recovery_queue(LNET_HEALTH_TYPE_PEER_NI, "peer NI recovery",
+				   seq_no, show_rc, err_rc);
+}
+
 int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 			      struct cYAML **err_rc)
 {
@@ -3291,12 +3641,64 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 				data.st_cntrs.msgs_max) == NULL)
 		goto out;
 
+	if (cYAML_create_number(stats, "rst_alloc",
+				data.st_cntrs.rst_alloc) == NULL)
+		goto out;
+
 	if (cYAML_create_number(stats, "errors",
 				data.st_cntrs.errors) == NULL)
 		goto out;
 
 	if (cYAML_create_number(stats, "send_count",
 				data.st_cntrs.send_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "resend_count",
+				data.st_cntrs.resend_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "response_timeout_count",
+				data.st_cntrs.response_timeout_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_interrupt_count",
+				data.st_cntrs.local_interrupt_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_dropped_count",
+				data.st_cntrs.local_dropped_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_aborted_count",
+				data.st_cntrs.local_aborted_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_no_route_count",
+				data.st_cntrs.local_no_route_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_timeout_count",
+				data.st_cntrs.local_timeout_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "local_error_count",
+				data.st_cntrs.local_error_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "remote_dropped_count",
+				data.st_cntrs.remote_dropped_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "remote_error_count",
+				data.st_cntrs.remote_error_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "remote_timeout_count",
+				data.st_cntrs.remote_timeout_count) == NULL)
+		goto out;
+
+	if (cYAML_create_number(stats, "network_timeout_count",
+				data.st_cntrs.network_timeout_count) == NULL)
 		goto out;
 
 	if (cYAML_create_number(stats, "recv_count",
@@ -4083,7 +4485,8 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **show_rc,
 					      struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *discovery, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
+		     *sen;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4107,6 +4510,27 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 						  seq_no ? seq_no->cy_valueint
 							: -1,
 						  err_rc);
+
+	retry = cYAML_get_object_item(tree, "retry_count");
+	if (retry)
+		rc = lustre_lnet_config_retry_count(retry->cy_valueint,
+						    seq_no ? seq_no->cy_valueint
+							: -1,
+						    err_rc);
+
+	tto = cYAML_get_object_item(tree, "transaction_timeout");
+	if (tto)
+		rc = lustre_lnet_config_transaction_to(tto->cy_valueint,
+						       seq_no ? seq_no->cy_valueint
+								: -1,
+						       err_rc);
+
+	sen = cYAML_get_object_item(tree, "health_sensitivity");
+	if (sen)
+		rc = lustre_lnet_config_hsensitivity(sen->cy_valueint,
+						     seq_no ? seq_no->cy_valueint
+							: -1,
+						     err_rc);
 
 	return rc;
 }
@@ -4148,7 +4572,8 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 					    struct cYAML **show_rc,
 					    struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *discovery, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
+		     *sen;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4169,6 +4594,24 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 		rc = lustre_lnet_show_discovery(seq_no ? seq_no->cy_valueint
 							: -1,
 						show_rc, err_rc);
+
+	retry = cYAML_get_object_item(tree, "retry_count");
+	if (retry)
+		rc = lustre_lnet_show_retry_count(seq_no ? seq_no->cy_valueint
+							: -1,
+						  show_rc, err_rc);
+
+	tto = cYAML_get_object_item(tree, "transaction_timeout");
+	if (tto)
+		rc = lustre_lnet_show_transaction_to(seq_no ? seq_no->cy_valueint
+							: -1,
+						     show_rc, err_rc);
+
+	sen = cYAML_get_object_item(tree, "health_sensitivity");
+	if (sen)
+		rc = lustre_lnet_show_hsensitivity(seq_no ? seq_no->cy_valueint
+							: -1,
+						     show_rc, err_rc);
 
 	return rc;
 }

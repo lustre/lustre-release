@@ -225,6 +225,113 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_ni_healthv
+ *   set the health value of the NI. -1 resets the value to maximum.
+ *
+ *   value: health value to set.
+ *   all: true to set all local NIs to that value.
+ *   ni_nid: NI NID to set its health value. all parameter always takes
+ *   precedence
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_ni_healthv(int value, bool all, char *ni_nid,
+				  int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_peer_ni_healthv
+ *   set the health value of the peer NI. -1 resets the value to maximum.
+ *
+ *   value: health value to set.
+ *   all: true to set all local NIs to that value.
+ *   pni_nid: Peer NI NID to set its health value. all parameter always takes
+ *   precedence
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_peer_ni_healthv(int value, bool all, char *pni_nid,
+				       int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_hsensitivity
+ *   sets the health sensitivity; the value by which to decrement the
+ *   health value of a local or peer NI. If 0 then health is turned off
+ *
+ *   sen - sensitivity value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_hsensitivity
+ *    show the health sensitivity in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing health sensitivity info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
+				  struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_transaction_to
+ *   sets the timeout after which a message expires or a timeout event is
+ *   propagated for an expired response.
+ *
+ *   timeout - timeout value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_transaction_to(int timeout, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_transaction_to
+ *    show the transaction timeout in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing transaction timeout info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_transaction_to(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_retry_count
+ *   sets the maximum number of retries to resend a message
+ *
+ *   count - maximum value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_retry_count(int count, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_retry_count
+ *    show current maximum number of retries in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing retry count info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_retry_count(int seq_no, struct cYAML **show_rc,
+				 struct cYAML **err_rc);
+
+int lustre_lnet_show_local_ni_recovq(int seq_no, struct cYAML **show_rc,
+				     struct cYAML **err_rc);
+
+int lustre_lnet_show_peer_ni_recovq(int seq_no, struct cYAML **show_rc,
+				    struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_max_intf
  *   Sets the maximum number of interfaces per node. this tunable is
  *   primarily useful for sanity checks prior to allocating memory.
