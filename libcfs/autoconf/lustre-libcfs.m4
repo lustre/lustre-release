@@ -749,6 +749,18 @@ get_user_pages_6arg, [
 ]) # LIBCFS_GET_USER_PAGES_6ARG
 
 #
+# LIBCFS_STRINGHASH
+#
+# 4.6 kernel created stringhash.h which moved stuff out of dcache.h
+# commit f4bcbe792b8f434e32487cff9d9e30ab45a3ce02
+#
+AC_DEFUN([LIBCFS_STRINGHASH], [
+LB_CHECK_LINUX_HEADER([linux/stringhash.h], [
+	AC_DEFINE(HAVE_STRINGHASH, 1,
+		[stringhash.h is present])])
+]) # LIBCFS_STRINGHASH
+
+#
 # LIBCFS_STACKTRACE_OPS
 #
 # Kernel version 4.8 commit c8fe4609827aedc9c4b45de80e7cdc8ccfa8541b
@@ -812,6 +824,25 @@ LB_CHECK_LINUX_HEADER([linux/sched/signal.h], [
 	AC_DEFINE(HAVE_SCHED_HEADERS, 1,
 		[linux/sched header directory exist])])
 ]) # LIBCFS_SCHED_HEADERS
+
+#
+# Kernel version 4.11 commit f9fe1c12d126f9887441fa5bb165046f30ddd4b5
+# introduced rhashtable_lookup_get_insert_fast
+#
+AC_DEFUN([LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST], [
+LB_CHECK_COMPILE([if 'rhashtable_lookup_get_insert_fast' exist],
+rhashtable_lookup_get_insert_fast, [
+	#include <linux/rhashtable.h>
+],[
+	const struct rhashtable_params params = { 0 };
+	void *ret;
+
+	ret = rhashtable_lookup_get_insert_fast(NULL, NULL, params);
+],[
+	AC_DEFINE(HAVE_RHASHTABLE_LOOKUP_GET_INSERT_FAST, 1,
+		[rhashtable_lookup_get_insert_fast() is available])
+])
+]) # LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 
 #
 # LIBCFS_WAIT_QUEUE_ENTRY
@@ -966,6 +997,7 @@ LIBCFS_EXPORT_KSET_FIND_OBJ
 # 4.6
 LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 LIBCFS_GET_USER_PAGES_6ARG
+LIBCFS_STRINGHASH
 # 4.8
 LIBCFS_STACKTRACE_OPS
 # 4.9
@@ -973,6 +1005,7 @@ LIBCFS_GET_USER_PAGES_GUP_FLAGS
 # 4.10
 LIBCFS_HOTPLUG_STATE_MACHINE
 # 4.11
+LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 LIBCFS_SCHED_HEADERS
 # 4.13
 LIBCFS_WAIT_QUEUE_ENTRY
