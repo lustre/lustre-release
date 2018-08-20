@@ -152,5 +152,9 @@ if [ $pkgname = "lustre-ldiskfs" -o $pkgname = "lustre-all" ] ; then
 BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osd_ldiskfs"
 BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osd-ldiskfs/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+# ldiskfs module
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ldiskfs"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="ldiskfs/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
 EOF
 fi
