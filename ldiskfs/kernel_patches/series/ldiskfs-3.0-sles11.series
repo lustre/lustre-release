@@ -5,7 +5,6 @@ sles11sp2/ext4-use-ext4_msg-instead-of-printk-in-mballoc.patch
 sles11sp2/revert-ext4-avoid-uninitialized-memory-references-in-ext3_htree_next_block.patch
 sles11sp2/ext4-journal-callback.patch
 sles11sp2/ext4-make-quota-as-first-class-supported-feature.patch
-
 sles11sp2/ext4-handle-cleanup-after-quota-failure.patch
 sles11sp2/ext4-map_inode_page-3.0.patch
 sles11sp2/export-ext4-3.0.patch
@@ -40,3 +39,4 @@ rhel6.3/ext4-journal-path-opt.patch
 sles11sp3/ext4_s_max_ext_tree_depth.patch
 sles11sp1/ext4-notalloc_under_idatasem.patch
 rhel6.5/ext4-fix-journal-quota.patch
+sles11sp2/ext4-mmp-dont-mark-bh-dirty.patch

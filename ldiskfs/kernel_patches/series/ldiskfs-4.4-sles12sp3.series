@@ -25,3 +25,4 @@ sles12sp3/ext4-dont-check-before-replay.patch
 rhel7.2/ext4-dont-check-in-ro.patch
 sles12sp2/ext4-fix-xattr-shifting-when-expanding-inodes.patch
 rhel7/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
+rhel7/ext4-mmp-dont-mark-bh-dirty.patch
