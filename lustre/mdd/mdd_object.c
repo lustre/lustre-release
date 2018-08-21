@@ -1018,7 +1018,9 @@ mdd_xattr_changelog_type(const struct lu_env *env, struct mdd_device *mdd,
 
 	if (has_prefix(xattr_name, XATTR_USER_PREFIX) ||
 	    has_prefix(xattr_name, XATTR_NAME_POSIX_ACL_ACCESS) ||
-	    has_prefix(xattr_name, XATTR_NAME_POSIX_ACL_DEFAULT))
+	    has_prefix(xattr_name, XATTR_NAME_POSIX_ACL_DEFAULT) ||
+	    has_prefix(xattr_name, XATTR_TRUSTED_PREFIX) ||
+	    has_prefix(xattr_name, XATTR_SECURITY_PREFIX))
 		return CL_XATTR;
 
 	return -1;
