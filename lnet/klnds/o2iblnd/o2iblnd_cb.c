@@ -107,7 +107,8 @@ kiblnd_txlist_done(struct list_head *txlist, int status,
 		/* complete now */
 		tx->tx_waiting = 0;
 		tx->tx_status = status;
-		tx->tx_hstatus = hstatus;
+		if (hstatus != LNET_MSG_STATUS_OK)
+			tx->tx_hstatus = hstatus;
 		kiblnd_tx_done(tx);
 	}
 }
@@ -2177,9 +2178,11 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 
 	/*
 	 * aborting transmits occurs when finalizing the connection.
-	 * The connection is finalized on error
+	 * The connection is finalized on error.
+	 * Passing LNET_MSG_STATUS_OK to txlist_done() will not
+	 * override the value already set in tx->tx_hstatus above.
 	 */
-	kiblnd_txlist_done(&zombies, -ECONNABORTED, -1);
+	kiblnd_txlist_done(&zombies, -ECONNABORTED, LNET_MSG_STATUS_OK);
 }
 
 static void
