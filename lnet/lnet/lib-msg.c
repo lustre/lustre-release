@@ -691,19 +691,34 @@ lnet_health_check(struct lnet_msg *msg)
 
 resend:
 	/* don't resend recovery messages */
-	if (msg->msg_recovery)
+	if (msg->msg_recovery) {
+		CDEBUG(D_NET, "msg %s->%s is a recovery ping. retry# %d\n",
+			libcfs_nid2str(msg->msg_from),
+			libcfs_nid2str(msg->msg_target.nid),
+			msg->msg_retry_count);
 		return -1;
+	}
 
 	/*
 	 * if we explicitly indicated we don't want to resend then just
 	 * return
 	 */
-	if (msg->msg_no_resend)
+	if (msg->msg_no_resend) {
+		CDEBUG(D_NET, "msg %s->%s requested no resend. retry# %d\n",
+			libcfs_nid2str(msg->msg_from),
+			libcfs_nid2str(msg->msg_target.nid),
+			msg->msg_retry_count);
 		return -1;
+	}
 
 	/* check if the message has exceeded the number of retries */
-	if (msg->msg_retry_count >= lnet_retry_count)
+	if (msg->msg_retry_count >= lnet_retry_count) {
+		CNETERR("msg %s->%s exceeded retry count %d\n",
+			libcfs_nid2str(msg->msg_from),
+			libcfs_nid2str(msg->msg_target.nid),
+			msg->msg_retry_count);
 		return -1;
+	}
 	msg->msg_retry_count++;
 
 	lnet_net_lock(msg->msg_tx_cpt);

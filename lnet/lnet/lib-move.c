@@ -1704,14 +1704,14 @@ lnet_handle_send(struct lnet_send_data *sd)
 	rc = lnet_post_send_locked(msg, 0);
 
 	if (!rc)
-		CDEBUG(D_NET, "TRACE: %s(%s:%s) -> %s(%s:%s) : %s\n",
+		CDEBUG(D_NET, "TRACE: %s(%s:%s) -> %s(%s:%s) : %s try# %d\n",
 		       libcfs_nid2str(msg->msg_hdr.src_nid),
 		       libcfs_nid2str(msg->msg_txni->ni_nid),
 		       libcfs_nid2str(sd->sd_src_nid),
 		       libcfs_nid2str(msg->msg_hdr.dest_nid),
 		       libcfs_nid2str(sd->sd_dst_nid),
 		       libcfs_nid2str(msg->msg_txpeer->lpni_nid),
-		       lnet_msgtyp2str(msg->msg_type));
+		       lnet_msgtyp2str(msg->msg_type), msg->msg_retry_count);
 
 	return rc;
 }
@@ -2751,7 +2751,7 @@ lnet_finalize_expired_responses(bool force)
 
 				list_del_init(&rspt->rspt_on_list);
 
-				CDEBUG(D_NET, "Response timed out: md = %p\n", md);
+				CNETERR("Response timed out: md = %p\n", md);
 				LNetMDUnlink(rspt->rspt_mdh);
 				lnet_rspt_free(rspt, i);
 			} else {
@@ -2816,11 +2816,12 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 			lnet_peer_ni_decref_locked(lpni);
 
 			lnet_net_unlock(cpt);
-			CDEBUG(D_NET, "resending %s->%s: %s recovery %d\n",
+			CDEBUG(D_NET, "resending %s->%s: %s recovery %d try# %d\n",
 			       libcfs_nid2str(src_nid),
 			       libcfs_id2str(msg->msg_target),
 			       lnet_msgtyp2str(msg->msg_type),
-			       msg->msg_recovery);
+			       msg->msg_recovery,
+			       msg->msg_retry_count);
 			rc = lnet_send(src_nid, msg, LNET_NID_ANY);
 			if (rc) {
 				CERROR("Error sending %s to %s: %d\n",
