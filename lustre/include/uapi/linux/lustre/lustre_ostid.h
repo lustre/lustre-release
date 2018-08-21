@@ -35,6 +35,7 @@
 #define _UAPI_LUSTRE_OSTID_H_
 
 #include <linux/errno.h>
+#include <linux/types.h>
 /*
  * This is due to us being out of kernel and the way the OpenSFS branch
  * handles CFLAGS.

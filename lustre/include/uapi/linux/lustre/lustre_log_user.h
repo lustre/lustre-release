@@ -38,6 +38,7 @@
 #ifndef _LUSTRE_LOG_USER_H
 #define _LUSTRE_LOG_USER_H
 
+#include <linux/types.h>
 /*
  * This is due to us being out of kernel and the way the OpenSFS branch
  * handles CFLAGS.

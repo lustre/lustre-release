@@ -37,6 +37,7 @@
 #ifndef _UAPI_LUSTRE_FID_H_
 #define _UAPI_LUSTRE_FID_H_
 
+#include <linux/types.h>
 /*
  * This is due to us being out of kernel and the way the OpenSFS branch
  * handles CFLAGS.

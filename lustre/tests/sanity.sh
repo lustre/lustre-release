@@ -110,8 +110,8 @@ elif [ -r /etc/os-release ]; then
 			# bug number for skipped test:
 			#                LU-10334 LU-10335 LU-10335 LU-10335
 			ALWAYS_EXCEPT+=" 103a     130a     130b     130c"
-			#                LU-10335 LU-10335 LU-10365 LU-10366
-			ALWAYS_EXCEPT+=" 130d     130e     400a     410"
+			#                LU-10335 LU-10335 LU-10366
+			ALWAYS_EXCEPT+=" 130d     130e     410"
 		fi
 	fi
 fi
@@ -18402,12 +18402,12 @@ test_400a() { # LU-1606, was conf-sanity test_74
 
 	if ! [[ -d $prefix ]]; then
 		# Assume we're running in tree and fixup the include path.
-		extra_flags+=" -I$LUSTRE/include"
-		extra_flags+=" -L$LUSTRE/utils"
+		extra_flags+=" -I$LUSTRE/../lnet/include/uapi -I$LUSTRE/include/uapi -I$LUSTRE/include"
+		extra_flags+=" -L$LUSTRE/utils/.lib"
 	fi
 
 	for prog in $LUSTRE_TESTS_API_DIR/*.c; do
-		$CC -Wall -Werror $extra_flags -llustreapi -o $out $prog ||
+		$CC -Wall -Werror $extra_flags -o $out $prog -llustreapi ||
 			error "client api broken"
 	done
 	rm -f $out

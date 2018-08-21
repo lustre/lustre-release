@@ -35,6 +35,8 @@
 #ifndef __UAPI_LNET_ST_H__
 #define __UAPI_LNET_ST_H__
 
+#include <linux/types.h>
+
 #define LST_FEAT_NONE		(0)
 #define LST_FEAT_BULK_LEN	(1 << 0)	/* enable variable page size */
 

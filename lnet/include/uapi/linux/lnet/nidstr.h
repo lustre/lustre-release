@@ -28,6 +28,7 @@
 #ifndef _LNET_NIDSTRINGS_H
 #define _LNET_NIDSTRINGS_H
 
+#include <linux/types.h>
 /*
  * This is due to us being out of kernel and the way the OpenSFS branch
  * handles CFLAGS.

@@ -22,6 +22,7 @@
 #ifndef __UAPI_LNETCTL_H_
 #define __UAPI_LNETCTL_H_
 
+#include <linux/types.h>
 /*
  * This is due to us being out of kernel and the way the OpenSFS branch
  * handles CFLAGS.

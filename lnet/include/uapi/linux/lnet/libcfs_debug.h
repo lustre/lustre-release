@@ -38,6 +38,8 @@
 #ifndef __UAPI_LIBCFS_DEBUG_H__
 #define __UAPI_LIBCFS_DEBUG_H__
 
+#include <linux/types.h>
+
 /**
  * Format for debug message headers
  */
