@@ -166,6 +166,7 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	INIT_LIST_HEAD(&lpni->lpni_routes);
 	INIT_LIST_HEAD(&lpni->lpni_hashlist);
 	INIT_LIST_HEAD(&lpni->lpni_peer_nis);
+	INIT_LIST_HEAD(&lpni->lpni_recovery);
 	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
 
 	spin_lock_init(&lpni->lpni_lock);
@@ -175,7 +176,7 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	lpni->lpni_ping_feats = LNET_PING_FEAT_INVAL;
 	lpni->lpni_nid = nid;
 	lpni->lpni_cpt = cpt;
-	lnet_set_peer_ni_health_locked(lpni, true);
+	atomic_set(&lpni->lpni_healthv, LNET_MAX_HEALTH_VALUE);
 
 	net = lnet_get_net_locked(LNET_NIDNET(nid));
 	lpni->lpni_net = net;
@@ -373,6 +374,14 @@ lnet_peer_ni_del_locked(struct lnet_peer_ni *lpni)
 
 	/* remove peer ni from the hash list. */
 	list_del_init(&lpni->lpni_hashlist);
+
+	/*
+	 * indicate the peer is being deleted so the monitor thread can
+	 * remove it from the recovery queue.
+	 */
+	spin_lock(&lpni->lpni_lock);
+	lpni->lpni_state |= LNET_PEER_NI_DELETING;
+	spin_unlock(&lpni->lpni_lock);
 
 	/* decrement the ref count on the peer table */
 	ptable = the_lnet.ln_peer_tables[lpni->lpni_cpt];
@@ -2691,8 +2700,6 @@ static lnet_nid_t lnet_peer_select_nid(struct lnet_peer *lp)
 	/* Look for a direct-connected NID for this peer. */
 	lpni = NULL;
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
-		if (!lnet_is_peer_ni_healthy_locked(lpni))
-			continue;
 		if (!lnet_get_net_locked(lpni->lpni_peer_net->lpn_net_id))
 			continue;
 		break;
@@ -2703,8 +2710,6 @@ static lnet_nid_t lnet_peer_select_nid(struct lnet_peer *lp)
 	/* Look for a routed-connected NID for this peer. */
 	lpni = NULL;
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
-		if (!lnet_is_peer_ni_healthy_locked(lpni))
-			continue;
 		if (!lnet_find_rnet_locked(lpni->lpni_peer_net->lpn_net_id))
 			continue;
 		break;
@@ -2719,9 +2724,7 @@ static lnet_nid_t lnet_peer_select_nid(struct lnet_peer *lp)
 static int lnet_peer_send_ping(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
-	struct lnet_md md = { NULL };
-	struct lnet_process_id id;
-	struct lnet_ping_buffer *pbuf;
+	lnet_nid_t pnid;
 	int nnis;
 	int rc;
 	int cpt;
@@ -2730,55 +2733,37 @@ __must_hold(&lp->lp_lock)
 	lp->lp_state &= ~LNET_PEER_FORCE_PING;
 	spin_unlock(&lp->lp_lock);
 
-	nnis = MAX(lp->lp_data_nnis, LNET_INTERFACES_MIN);
-	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
-	if (!pbuf) {
-		rc = -ENOMEM;
-		goto fail_error;
-	}
-
-	/* initialize md content */
-	md.start     = &pbuf->pb_info;
-	md.length    = LNET_PING_INFO_SIZE(nnis);
-	md.threshold = 2; /* GET/REPLY */
-	md.max_size  = 0;
-	md.options   = LNET_MD_TRUNCATE;
-	md.user_ptr  = lp;
-	md.eq_handle = the_lnet.ln_dc_eqh;
-
-	rc = LNetMDBind(md, LNET_UNLINK, &lp->lp_ping_mdh);
-	if (rc != 0) {
-		lnet_ping_buffer_decref(pbuf);
-		CERROR("Can't bind MD: %d\n", rc);
-		goto fail_error;
-	}
 	cpt = lnet_net_lock_current();
 	/* Refcount for MD. */
 	lnet_peer_addref_locked(lp);
-	id.pid = LNET_PID_LUSTRE;
-	id.nid = lnet_peer_select_nid(lp);
+	pnid = lnet_peer_select_nid(lp);
 	lnet_net_unlock(cpt);
 
-	if (id.nid == LNET_NID_ANY) {
-		rc = -EHOSTUNREACH;
-		goto fail_unlink_md;
+	nnis = MAX(lp->lp_data_nnis, LNET_INTERFACES_MIN);
+
+	rc = lnet_send_ping(pnid, &lp->lp_ping_mdh, nnis, lp,
+			    the_lnet.ln_dc_eqh, false);
+
+	/*
+	 * if LNetMDBind in lnet_send_ping fails we need to decrement the
+	 * refcount on the peer, otherwise LNetMDUnlink will be called
+	 * which will eventually do that.
+	 */
+	if (rc > 0) {
+		lnet_net_lock(cpt);
+		lnet_peer_decref_locked(lp);
+		lnet_net_unlock(cpt);
+		rc = -rc; /* change the rc to negative value */
+		goto fail_error;
+	} else if (rc < 0) {
+		goto fail_error;
 	}
-
-	rc = LNetGet(LNET_NID_ANY, lp->lp_ping_mdh, id,
-		     LNET_RESERVED_PORTAL,
-		     LNET_PROTO_PING_MATCHBITS, 0);
-
-	if (rc)
-		goto fail_unlink_md;
 
 	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
 
 	spin_lock(&lp->lp_lock);
 	return 0;
 
-fail_unlink_md:
-	LNetMDUnlink(lp->lp_ping_mdh);
-	LNetInvalidateMDHandle(&lp->lp_ping_mdh);
 fail_error:
 	CDEBUG(D_NET, "peer %s: %d\n", libcfs_nid2str(lp->lp_primary_nid), rc);
 	/*
@@ -2945,25 +2930,6 @@ __must_hold(&lp->lp_lock)
 }
 
 /*
- * Returns the first peer on the ln_dc_working queue if its timeout
- * has expired. Takes the current time as an argument so as to not
- * obsessively re-check the clock. The oldest discovery request will
- * be at the head of the queue.
- */
-static struct lnet_peer *lnet_peer_get_dc_timed_out(time64_t now)
-{
-	struct lnet_peer *lp;
-
-	if (list_empty(&the_lnet.ln_dc_working))
-		return NULL;
-	lp = list_first_entry(&the_lnet.ln_dc_working,
-			      struct lnet_peer, lp_dc_list);
-	if (now < lp->lp_last_queued + lnet_transaction_timeout)
-		return NULL;
-	return lp;
-}
-
-/*
  * Discovering this peer is taking too long. Cancel any Ping or Push
  * that discovery is waiting on by unlinking the relevant MDs. The
  * lnet_discovery_event_handler() will proceed from here and complete
@@ -3017,8 +2983,6 @@ static int lnet_peer_discovery_wait_for_work(void)
 		if (!list_empty(&the_lnet.ln_dc_request))
 			break;
 		if (!list_empty(&the_lnet.ln_msg_resend))
-			break;
-		if (lnet_peer_get_dc_timed_out(ktime_get_real_seconds()))
 			break;
 		lnet_net_unlock(cpt);
 
@@ -3089,7 +3053,6 @@ static void lnet_resend_msgs(void)
 static int lnet_peer_discovery(void *arg)
 {
 	struct lnet_peer *lp;
-	time64_t now;
 	int rc;
 
 	CDEBUG(D_NET, "started\n");
@@ -3126,9 +3089,6 @@ static int lnet_peer_discovery(void *arg)
 			 * forever, in case the GET message (for ping)
 			 * doesn't get a REPLY or the PUT message (for
 			 * push) doesn't get an ACK.
-			 *
-			 * TODO: LNet Health will deal with this scenario
-			 * in a generic way.
 			 */
 			lp->lp_last_queued = ktime_get_real_seconds();
 			lnet_net_unlock(LNET_LOCK_EX);
@@ -3179,23 +3139,6 @@ static int lnet_peer_discovery(void *arg)
 				lnet_peer_discovery_complete(lp);
 			if (the_lnet.ln_dc_state == LNET_DC_STATE_STOPPING)
 				break;
-		}
-
-		/*
-		 * Now that the ln_dc_request queue has been emptied
-		 * check the ln_dc_working queue for peers that are
-		 * taking too long. Move all that are found to the
-		 * ln_dc_expired queue and time out any pending
-		 * Ping or Push. We have to drop the lnet_net_lock
-		 * in the loop because lnet_peer_cancel_discovery()
-		 * calls LNetMDUnlink().
-		 */
-		now = ktime_get_real_seconds();
-		while ((lp = lnet_peer_get_dc_timed_out(now)) != NULL) {
-			list_move(&lp->lp_dc_list, &the_lnet.ln_dc_expired);
-			lnet_net_unlock(LNET_LOCK_EX);
-			lnet_peer_cancel_discovery(lp);
-			lnet_net_lock(LNET_LOCK_EX);
 		}
 
 		lnet_net_unlock(LNET_LOCK_EX);
@@ -3400,6 +3343,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 {
 	struct lnet_ioctl_element_stats *lpni_stats;
 	struct lnet_ioctl_element_msg_stats *lpni_msg_stats;
+	struct lnet_ioctl_peer_ni_hstats *lpni_hstats;
 	struct lnet_peer_ni_credit_info *lpni_info;
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer *lp;
@@ -3415,7 +3359,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	}
 
 	size = sizeof(nid) + sizeof(*lpni_info) + sizeof(*lpni_stats)
-		+ sizeof(*lpni_msg_stats);
+		+ sizeof(*lpni_msg_stats) + sizeof(*lpni_hstats);
 	size *= lp->lp_nnis;
 	if (size > cfg->prcfg_size) {
 		cfg->prcfg_size = size;
@@ -3441,6 +3385,9 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	LIBCFS_ALLOC(lpni_msg_stats, sizeof(*lpni_msg_stats));
 	if (!lpni_msg_stats)
 		goto out_free_stats;
+	LIBCFS_ALLOC(lpni_hstats, sizeof(*lpni_hstats));
+	if (!lpni_hstats)
+		goto out_free_msg_stats;
 
 
 	lpni = NULL;
@@ -3448,7 +3395,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
 		nid = lpni->lpni_nid;
 		if (copy_to_user(bulk, &nid, sizeof(nid)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(nid);
 
 		memset(lpni_info, 0, sizeof(*lpni_info));
@@ -3467,7 +3414,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 		lpni_info->cr_peer_min_tx_credits = lpni->lpni_mintxcredits;
 		lpni_info->cr_peer_tx_qnob = lpni->lpni_txqnob;
 		if (copy_to_user(bulk, lpni_info, sizeof(*lpni_info)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(*lpni_info);
 
 		memset(lpni_stats, 0, sizeof(*lpni_stats));
@@ -3478,15 +3425,30 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 		lpni_stats->iel_drop_count = lnet_sum_stats(&lpni->lpni_stats,
 							    LNET_STATS_TYPE_DROP);
 		if (copy_to_user(bulk, lpni_stats, sizeof(*lpni_stats)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(*lpni_stats);
 		lnet_usr_translate_stats(lpni_msg_stats, &lpni->lpni_stats);
 		if (copy_to_user(bulk, lpni_msg_stats, sizeof(*lpni_msg_stats)))
-			goto out_free_msg_stats;
+			goto out_free_hstats;
 		bulk += sizeof(*lpni_msg_stats);
+		lpni_hstats->hlpni_network_timeout =
+		  atomic_read(&lpni->lpni_hstats.hlt_network_timeout);
+		lpni_hstats->hlpni_remote_dropped =
+		  atomic_read(&lpni->lpni_hstats.hlt_remote_dropped);
+		lpni_hstats->hlpni_remote_timeout =
+		  atomic_read(&lpni->lpni_hstats.hlt_remote_timeout);
+		lpni_hstats->hlpni_remote_error =
+		  atomic_read(&lpni->lpni_hstats.hlt_remote_error);
+		lpni_hstats->hlpni_health_value =
+		  atomic_read(&lpni->lpni_healthv);
+		if (copy_to_user(bulk, lpni_hstats, sizeof(*lpni_hstats)))
+			goto out_free_hstats;
+		bulk += sizeof(*lpni_hstats);
 	}
 	rc = 0;
 
+out_free_hstats:
+	LIBCFS_FREE(lpni_hstats, sizeof(*lpni_hstats));
 out_free_msg_stats:
 	LIBCFS_FREE(lpni_msg_stats, sizeof(*lpni_msg_stats));
 out_free_stats:
@@ -3498,3 +3460,71 @@ out_lp_decref:
 out:
 	return rc;
 }
+
+void
+lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni)
+{
+	/* the mt could've shutdown and cleaned up the queues */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING)
+		return;
+
+	if (list_empty(&lpni->lpni_recovery) &&
+	    atomic_read(&lpni->lpni_healthv) < LNET_MAX_HEALTH_VALUE) {
+		CERROR("lpni %s added to recovery queue. Health = %d\n",
+			libcfs_nid2str(lpni->lpni_nid),
+			atomic_read(&lpni->lpni_healthv));
+		list_add_tail(&lpni->lpni_recovery, &the_lnet.ln_mt_peerNIRecovq);
+		lnet_peer_ni_addref_locked(lpni);
+	}
+}
+
+/* Call with the ln_api_mutex held */
+void
+lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all)
+{
+	struct lnet_peer_table *ptable;
+	struct lnet_peer *lp;
+	struct lnet_peer_net *lpn;
+	struct lnet_peer_ni *lpni;
+	int lncpt;
+	int cpt;
+
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		return;
+
+	if (!all) {
+		lnet_net_lock(LNET_LOCK_EX);
+		lpni = lnet_find_peer_ni_locked(nid);
+		if (!lpni) {
+			lnet_net_unlock(LNET_LOCK_EX);
+			return;
+		}
+		atomic_set(&lpni->lpni_healthv, value);
+		lnet_peer_ni_add_to_recoveryq_locked(lpni);
+		lnet_peer_ni_decref_locked(lpni);
+		lnet_net_unlock(LNET_LOCK_EX);
+		return;
+	}
+
+	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
+
+	/*
+	 * Walk all the peers and reset the healhv for each one to the
+	 * maximum value.
+	 */
+	lnet_net_lock(LNET_LOCK_EX);
+	for (cpt = 0; cpt < lncpt; cpt++) {
+		ptable = the_lnet.ln_peer_tables[cpt];
+		list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
+			list_for_each_entry(lpn, &lp->lp_peer_nets, lpn_peer_nets) {
+				list_for_each_entry(lpni, &lpn->lpn_peer_nis,
+						    lpni_peer_nis) {
+					atomic_set(&lpni->lpni_healthv, value);
+					lnet_peer_ni_add_to_recoveryq_locked(lpni);
+				}
+			}
+		}
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+

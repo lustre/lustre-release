@@ -86,12 +86,17 @@ kiblnd_tx_done(struct kib_tx *tx)
 		if (lntmsg[i] == NULL)
 			continue;
 
+		/* propagate health status to LNet for requests */
+		if (i == 0 && lntmsg[i])
+			lntmsg[i]->msg_health_status = tx->tx_hstatus;
+
 		lnet_finalize(lntmsg[i], rc);
 	}
 }
 
 void
-kiblnd_txlist_done(struct list_head *txlist, int status)
+kiblnd_txlist_done(struct list_head *txlist, int status,
+		   enum lnet_msg_hstatus hstatus)
 {
 	struct kib_tx *tx;
 
@@ -102,6 +107,7 @@ kiblnd_txlist_done(struct list_head *txlist, int status)
 		/* complete now */
 		tx->tx_waiting = 0;
 		tx->tx_status = status;
+		tx->tx_hstatus = hstatus;
 		kiblnd_tx_done(tx);
 	}
 }
@@ -131,6 +137,7 @@ kiblnd_get_idle_tx(struct lnet_ni *ni, lnet_nid_t target)
         LASSERT (tx->tx_nfrags == 0);
 
 	tx->tx_gaps = false;
+	tx->tx_hstatus = LNET_MSG_STATUS_OK;
 
         return tx;
 }
@@ -266,23 +273,24 @@ kiblnd_handle_completion(struct kib_conn *conn, int txtype, int status, u64 cook
 		spin_unlock(&conn->ibc_lock);
 
 		CWARN("Unmatched completion type %x cookie %#llx from %s\n",
-                      txtype, cookie, libcfs_nid2str(conn->ibc_peer->ibp_nid));
-                kiblnd_close_conn(conn, -EPROTO);
-                return;
-        }
+		      txtype, cookie, libcfs_nid2str(conn->ibc_peer->ibp_nid));
+		kiblnd_close_conn(conn, -EPROTO);
+		return;
+	}
 
-        if (tx->tx_status == 0) {               /* success so far */
-                if (status < 0) {               /* failed? */
-                        tx->tx_status = status;
-                } else if (txtype == IBLND_MSG_GET_REQ) {
-                        lnet_set_reply_msg_len(ni, tx->tx_lntmsg[1], status);
-                }
-        }
+	if (tx->tx_status == 0) {               /* success so far */
+		if (status < 0) {               /* failed? */
+			tx->tx_status = status;
+			tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
+		} else if (txtype == IBLND_MSG_GET_REQ) {
+			lnet_set_reply_msg_len(ni, tx->tx_lntmsg[1], status);
+		}
+	}
 
-        tx->tx_waiting = 0;
+	tx->tx_waiting = 0;
 
-        idle = !tx->tx_queued && (tx->tx_sending == 0);
-        if (idle)
+	idle = !tx->tx_queued && (tx->tx_sending == 0);
+	if (idle)
 		list_del(&tx->tx_list);
 
 	spin_unlock(&conn->ibc_lock);
@@ -906,6 +914,7 @@ __must_hold(&conn->ibc_lock)
 		 * kiblnd_check_sends_locked will queue NOOP again when
 		 * posted NOOPs complete */
 		spin_unlock(&conn->ibc_lock);
+		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		kiblnd_tx_done(tx);
 		spin_lock(&conn->ibc_lock);
                 CDEBUG(D_NET, "%s(%d): redundant or enough NOOP\n",
@@ -960,7 +969,10 @@ __must_hold(&conn->ibc_lock)
 			 libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
 		bad = NULL;
-		rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
+		if (lnet_send_error_simulation(tx->tx_lntmsg[0], &tx->tx_hstatus))
+			rc = -EINVAL;
+		else
+			rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
 	}
 
 	conn->ibc_last_send = ktime_get();
@@ -1101,6 +1113,7 @@ kiblnd_tx_complete(struct kib_tx *tx, int status)
                 conn->ibc_noops_posted--;
 
         if (failed) {
+		tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_DROPPED;
                 tx->tx_waiting = 0;             /* don't wait for peer_ni */
                 tx->tx_status = -EIO;
         }
@@ -1268,7 +1281,7 @@ kiblnd_queue_tx_locked(struct kib_tx *tx, struct kib_conn *conn)
 	LASSERT(!tx->tx_queued);	/* not queued for sending already */
 	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
-	timeout_ns = *kiblnd_tunables.kib_timeout * NSEC_PER_SEC;
+	timeout_ns = lnet_get_lnd_timeout() * NSEC_PER_SEC;
 	tx->tx_queued = 1;
 	tx->tx_deadline = ktime_add_ns(ktime_get(), timeout_ns);
 
@@ -1394,21 +1407,21 @@ kiblnd_connect_peer(struct kib_peer_ni *peer_ni)
 
         kiblnd_peer_addref(peer_ni);               /* cmid's ref */
 
-        if (*kiblnd_tunables.kib_use_priv_port) {
-                rc = kiblnd_resolve_addr(cmid, &srcaddr, &dstaddr,
-                                         *kiblnd_tunables.kib_timeout * 1000);
-        } else {
-                rc = rdma_resolve_addr(cmid,
-                                       (struct sockaddr *)&srcaddr,
-                                       (struct sockaddr *)&dstaddr,
-                                       *kiblnd_tunables.kib_timeout * 1000);
-        }
-        if (rc != 0) {
-                /* Can't initiate address resolution:  */
-                CERROR("Can't resolve addr for %s: %d\n",
-                       libcfs_nid2str(peer_ni->ibp_nid), rc);
-                goto failed2;
-        }
+	if (*kiblnd_tunables.kib_use_priv_port) {
+		rc = kiblnd_resolve_addr(cmid, &srcaddr, &dstaddr,
+					 lnet_get_lnd_timeout() * 1000);
+	} else {
+		rc = rdma_resolve_addr(cmid,
+				       (struct sockaddr *)&srcaddr,
+				       (struct sockaddr *)&dstaddr,
+				       lnet_get_lnd_timeout() * 1000);
+	}
+	if (rc != 0) {
+		/* Can't initiate address resolution:  */
+		CERROR("Can't resolve addr for %s: %d\n",
+		       libcfs_nid2str(peer_ni->ibp_nid), rc);
+		goto failed2;
+	}
 
 	return;
 
@@ -1468,7 +1481,8 @@ kiblnd_reconnect_peer(struct kib_peer_ni *peer_ni)
 
 	CWARN("Abort reconnection of %s: %s\n",
 	      libcfs_nid2str(peer_ni->ibp_nid), reason);
-	kiblnd_txlist_done(&txs, -ECONNABORTED);
+	kiblnd_txlist_done(&txs, -ECONNABORTED,
+			   LNET_MSG_STATUS_LOCAL_ABORTED);
 	return false;
 }
 
@@ -1543,6 +1557,7 @@ kiblnd_launch_tx(struct lnet_ni *ni, struct kib_tx *tx, lnet_nid_t nid)
 		if (tx != NULL) {
 			tx->tx_status = -EHOSTUNREACH;
 			tx->tx_waiting = 0;
+			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kiblnd_tx_done(tx);
 		}
 		return;
@@ -1667,6 +1682,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		if (rc != 0) {
 			CERROR("Can't setup GET sink for %s: %d\n",
 			       libcfs_nid2str(target.nid), rc);
+			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kiblnd_tx_done(tx);
 			return -EIO;
 		}
@@ -1821,9 +1837,11 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
         kiblnd_queue_tx(tx, rx->rx_conn);
         return;
 
- failed_1:
+
+failed_1:
+	tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 	kiblnd_tx_done(tx);
- failed_0:
+failed_0:
 	lnet_finalize(lntmsg, -EIO);
 }
 
@@ -1905,6 +1923,7 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		if (rc != 0) {
 			CERROR("Can't setup PUT sink for %s: %d\n",
 			       libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
+			tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kiblnd_tx_done(tx);
 			/* tell peer_ni it's over */
 			kiblnd_send_completion(rx->rx_conn, IBLND_MSG_PUT_NAK,
@@ -2118,13 +2137,35 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 			LASSERT(!tx->tx_queued);
 			LASSERT(tx->tx_waiting ||
 				tx->tx_sending != 0);
+			if (conn->ibc_comms_error == -ETIMEDOUT) {
+				if (tx->tx_waiting && !tx->tx_sending)
+					tx->tx_hstatus =
+					  LNET_MSG_STATUS_REMOTE_TIMEOUT;
+				else if (tx->tx_sending)
+					tx->tx_hstatus =
+					  LNET_MSG_STATUS_NETWORK_TIMEOUT;
+			}
 		} else {
 			LASSERT(tx->tx_queued);
+			if (conn->ibc_comms_error == -ETIMEDOUT)
+				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_TIMEOUT;
+			else
+				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 		}
 
 		tx->tx_status = -ECONNABORTED;
 		tx->tx_waiting = 0;
 
+		/*
+		 * TODO: This makes an assumption that
+		 * kiblnd_tx_complete() will be called for each tx. If
+		 * that event is dropped we could end up with stale
+		 * connections floating around. We'd like to deal with
+		 * that in a better way.
+		 *
+		 * Also that means we can exceed the timeout by many
+		 * seconds.
+		 */
 		if (tx->tx_sending == 0) {
 			tx->tx_queued = 0;
 			list_del(&tx->tx_list);
@@ -2134,7 +2175,11 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 
 	spin_unlock(&conn->ibc_lock);
 
-	kiblnd_txlist_done(&zombies, -ECONNABORTED);
+	/*
+	 * aborting transmits occurs when finalizing the connection.
+	 * The connection is finalized on error
+	 */
+	kiblnd_txlist_done(&zombies, -ECONNABORTED, -1);
 }
 
 static void
@@ -2213,7 +2258,8 @@ kiblnd_peer_connect_failed(struct kib_peer_ni *peer_ni, int active,
 	CNETERR("Deleting messages for %s: connection failed\n",
 		libcfs_nid2str(peer_ni->ibp_nid));
 
-	kiblnd_txlist_done(&zombies, -EHOSTUNREACH);
+	kiblnd_txlist_done(&zombies, error,
+			   LNET_MSG_STATUS_LOCAL_DROPPED);
 }
 
 static void
@@ -2288,7 +2334,8 @@ kiblnd_connreq_done(struct kib_conn *conn, int status)
                 kiblnd_close_conn_locked(conn, -ECONNABORTED);
 		write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-		kiblnd_txlist_done(&txs, -ECONNABORTED);
+		kiblnd_txlist_done(&txs, -ECONNABORTED,
+				   LNET_MSG_STATUS_LOCAL_ERROR);
 
 		return;
 	}
@@ -3109,9 +3156,9 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                         CNETERR("Can't resolve address for %s: %d\n",
                                 libcfs_nid2str(peer_ni->ibp_nid), event->status);
                         rc = event->status;
-                } else {
-                        rc = rdma_resolve_route(
-                                cmid, *kiblnd_tunables.kib_timeout * 1000);
+		} else {
+			rc = rdma_resolve_route(
+				cmid, lnet_get_lnd_timeout() * 1000);
 			if (rc == 0) {
 				struct kib_net *net = peer_ni->ibp_ni->ni_data;
 				struct kib_dev *dev = net->ibn_dev;
@@ -3361,7 +3408,8 @@ kiblnd_check_conns (int idx)
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	if (!list_empty(&timedout_txs))
-		kiblnd_txlist_done(&timedout_txs, -ETIMEDOUT);
+		kiblnd_txlist_done(&timedout_txs, -ETIMEDOUT,
+				   LNET_MSG_STATUS_LOCAL_TIMEOUT);
 
 	/* Handle timeout by closing the whole
 	 * connection. We can only be sure RDMA activity
@@ -3515,6 +3563,7 @@ kiblnd_connd (void *arg)
                         const int n = 4;
                         const int p = 1;
                         int       chunk = kiblnd_data.kib_peer_hash_size;
+			unsigned int lnd_timeout;
 
 			spin_unlock_irqrestore(lock, flags);
                         dropped_lock = 1;
@@ -3527,11 +3576,11 @@ kiblnd_connd (void *arg)
                          * connection within (n+1)/n times the timeout
                          * interval. */
 
-                        if (*kiblnd_tunables.kib_timeout > n * p)
-                                chunk = (chunk * n * p) /
-                                        *kiblnd_tunables.kib_timeout;
-                        if (chunk == 0)
-                                chunk = 1;
+			lnd_timeout = lnet_get_lnd_timeout();
+			if (lnd_timeout > n * p)
+				chunk = (chunk * n * p) / lnd_timeout;
+			if (chunk == 0)
+				chunk = 1;
 
 			for (i = 0; i < chunk; i++) {
 				kiblnd_check_conns(peer_index);
@@ -3569,21 +3618,34 @@ kiblnd_qp_event(struct ib_event *event, void *arg)
 {
 	struct kib_conn *conn = arg;
 
-        switch (event->event) {
-        case IB_EVENT_COMM_EST:
-                CDEBUG(D_NET, "%s established\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid));
+	switch (event->event) {
+	case IB_EVENT_COMM_EST:
+		CDEBUG(D_NET, "%s established\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_nid));
 		/* We received a packet but connection isn't established
 		 * probably handshake packet was lost, so free to
 		 * force make connection established */
 		rdma_notify(conn->ibc_cmid, IB_EVENT_COMM_EST);
-                return;
+		return;
 
-        default:
-                CERROR("%s: Async QP event type %d\n",
-                       libcfs_nid2str(conn->ibc_peer->ibp_nid), event->event);
-                return;
-        }
+	case IB_EVENT_PORT_ERR:
+	case IB_EVENT_DEVICE_FATAL:
+		CERROR("Fatal device error for NI %s\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_ni->ni_nid));
+		atomic_set(&conn->ibc_peer->ibp_ni->ni_fatal_error_on, 1);
+		return;
+
+	case IB_EVENT_PORT_ACTIVE:
+		CERROR("Port reactivated for NI %s\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_ni->ni_nid));
+		atomic_set(&conn->ibc_peer->ibp_ni->ni_fatal_error_on, 0);
+		return;
+
+	default:
+		CERROR("%s: Async QP event type %d\n",
+		       libcfs_nid2str(conn->ibc_peer->ibp_nid), event->event);
+		return;
+	}
 }
 
 static void

@@ -44,6 +44,7 @@
 #define MAX_NUM_SHOW_ENTRIES	32
 #define LNET_MAX_STR_LEN	128
 #define LNET_MAX_SHOW_NUM_CPT	128
+#define LNET_MAX_SHOW_NUM_NID	128
 #define LNET_UNDEFINED_HOPS	((__u32) -1)
 
 /*
@@ -172,6 +173,31 @@ struct lnet_ioctl_element_stats {
 	__u32 iel_drop_count;
 };
 
+enum lnet_health_type {
+	LNET_HEALTH_TYPE_LOCAL_NI = 0,
+	LNET_HEALTH_TYPE_PEER_NI,
+};
+
+struct lnet_ioctl_local_ni_hstats {
+	struct libcfs_ioctl_hdr hlni_hdr;
+	lnet_nid_t hlni_nid;
+	__u32 hlni_local_interrupt;
+	__u32 hlni_local_dropped;
+	__u32 hlni_local_aborted;
+	__u32 hlni_local_no_route;
+	__u32 hlni_local_timeout;
+	__u32 hlni_local_error;
+	__s32 hlni_health_value;
+};
+
+struct lnet_ioctl_peer_ni_hstats {
+	__u32 hlpni_remote_dropped;
+	__u32 hlpni_remote_timeout;
+	__u32 hlpni_remote_error;
+	__u32 hlpni_network_timeout;
+	__s32 hlpni_health_value;
+};
+
 struct lnet_ioctl_element_msg_stats {
 	struct libcfs_ioctl_hdr im_hdr;
 	__u32 im_idx;
@@ -237,6 +263,21 @@ struct lnet_ioctl_peer_cfg {
 	__u32 prcfg_state;
 	__u32 prcfg_size;
 	void __user *prcfg_bulk;
+};
+
+struct lnet_ioctl_reset_health_cfg {
+	struct libcfs_ioctl_hdr rh_hdr;
+	enum lnet_health_type rh_type;
+	bool rh_all;
+	int rh_value;
+	lnet_nid_t rh_nid;
+};
+
+struct lnet_ioctl_recovery_list {
+	struct libcfs_ioctl_hdr rlst_hdr;
+	enum lnet_health_type rlst_type;
+	int rlst_num_nids;
+	lnet_nid_t rlst_nid_array[LNET_MAX_SHOW_NUM_NID];
 };
 
 struct lnet_ioctl_set_value {

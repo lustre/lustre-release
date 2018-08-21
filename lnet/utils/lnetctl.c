@@ -48,11 +48,15 @@ static int jt_show_net(int argc, char **argv);
 static int jt_show_routing(int argc, char **argv);
 static int jt_show_stats(int argc, char **argv);
 static int jt_show_peer(int argc, char **argv);
+static int jt_show_recovery(int argc, char **argv);
 static int jt_show_global(int argc, char **argv);
 static int jt_set_tiny(int argc, char **argv);
 static int jt_set_small(int argc, char **argv);
 static int jt_set_large(int argc, char **argv);
 static int jt_set_numa(int argc, char **argv);
+static int jt_set_retry_count(int argc, char **argv);
+static int jt_set_transaction_to(int argc, char **argv);
+static int jt_set_hsensitivity(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
@@ -69,10 +73,12 @@ static int jt_route(int argc, char **argv);
 static int jt_net(int argc, char **argv);
 static int jt_routing(int argc, char **argv);
 static int jt_set(int argc, char **argv);
+static int jt_debug(int argc, char **argv);
 static int jt_stats(int argc, char **argv);
 static int jt_global(int argc, char **argv);
 static int jt_peers(int argc, char **argv);
-
+static int jt_set_ni_value(int argc, char **argv);
+static int jt_set_peer_ni_value(int argc, char **argv);
 
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
@@ -85,6 +91,7 @@ command_t cmd_list[] = {
 	{"import", jt_import, 0, "import FILE.yaml"},
 	{"export", jt_export, 0, "export FILE.yaml"},
 	{"stats", jt_stats, 0, "stats {show | help}"},
+	{"debug", jt_debug, 0, "debug recovery {local | peer}"},
 	{"global", jt_global, 0, "global {show | help}"},
 	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
 	{"ping", jt_ping, 0, "ping nid,[nid,...]"},
@@ -138,6 +145,10 @@ command_t net_cmds[] = {
 	 "\t--net: net name (e.g. tcp0) to filter on\n"
 	 "\t--verbose: display detailed output per network."
 		       " Optional argument of '2' outputs more stats\n"},
+	{"set", jt_set_ni_value, 0, "set local NI specific parameter\n"
+	 "\t--nid: NI NID to set the\n"
+	 "\t--health: specify health value to set\n"
+	 "\t--all: set all NIs value to the one specified\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -148,6 +159,13 @@ command_t routing_cmds[] = {
 
 command_t stats_cmds[] = {
 	{"show", jt_show_stats, 0, "show LNET statistics\n"},
+	{ 0, 0, 0, NULL }
+};
+
+command_t debug_cmds[] = {
+	{"recovery", jt_show_recovery, 0, "list recovery queues\n"
+		"\t--local : list local recovery queue\n"
+		"\t--peer : list peer recovery queue\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -174,6 +192,14 @@ command_t set_cmds[] = {
 	{"discovery", jt_set_discovery, 0, "enable/disable peer discovery\n"
 	 "\t0 - disable peer discovery\n"
 	 "\t1 - enable peer discovery (default)\n"},
+	{"retry_count", jt_set_retry_count, 0, "number of retries\n"
+	 "\t0 - turn of retries\n"
+	 "\t>0 - number of retries\n"},
+	{"transaction_timeout", jt_set_transaction_to, 0, "Message/Response timeout\n"
+	 "\t>0 - timeout in seconds\n"},
+	{"health_sensitivity", jt_set_hsensitivity, 0, "sensitivity to failure\n"
+	 "\t0 - turn off health evaluation\n"
+	 "\t>0 - sensitivity value not more than 1000\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -195,6 +221,10 @@ command_t peer_cmds[] = {
 	 "\t--verbose: display detailed output per peer."
 		       " Optional argument of '2' outputs more stats\n"},
 	{"list", jt_list_peer, 0, "list all peers\n"},
+	{"set", jt_set_peer_ni_value, 0, "set peer ni specific parameter\n"
+	 "\t--nid: Peer NI NID to set the\n"
+	 "\t--health: specify health value to set\n"
+	 "\t--all: set all peer_nis values to the one specified\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -320,6 +350,90 @@ static int jt_set_numa(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_numa_range(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_hsensitivity(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "health_sensitivity", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse health sensitivity value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_hsensitivity(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_transaction_to(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "transaction_timeout", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse transaction timeout value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_transaction_to(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_retry_count(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "retry_count", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse retry_count value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_retry_count(value, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -858,6 +972,103 @@ static int jt_show_route(int argc, char **argv)
 	return rc;
 }
 
+static int set_value_helper(int argc, char **argv,
+			    int (*cb)(int, bool, char*, int, struct cYAML**))
+{
+	char *nid = NULL;
+	long int healthv = -1;
+	bool all = false;
+	int rc, opt;
+	struct cYAML *err_rc = NULL;
+
+	const char *const short_options = "h:n:a";
+	static const struct option long_options[] = {
+		{ .name = "nid", .has_arg = required_argument, .val = 'n' },
+		{ .name = "health", .has_arg = required_argument, .val = 'h' },
+		{ .name = "all", .has_arg = no_argument, .val = 'a' },
+		{ .name = NULL } };
+
+	rc = check_cmd(net_cmds, "net", "set", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'n':
+			nid = optarg;
+			break;
+		case 'h':
+			if (parse_long(argv[optind++], &healthv) != 0)
+				healthv = -1;
+			break;
+		case 'a':
+			all = true;
+		default:
+			return 0;
+		}
+	}
+
+	rc = cb(healthv, all, nid, -1, &err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_ni_value(int argc, char **argv)
+{
+	return set_value_helper(argc, argv, lustre_lnet_config_ni_healthv);
+}
+
+static int jt_set_peer_ni_value(int argc, char **argv)
+{
+	return set_value_helper(argc, argv, lustre_lnet_config_peer_ni_healthv);
+}
+
+static int jt_show_recovery(int argc, char **argv)
+{
+	int rc, opt;
+	struct cYAML *err_rc = NULL, *show_rc = NULL;
+
+	const char *const short_options = "lp";
+	static const struct option long_options[] = {
+		{ .name = "local", .has_arg = no_argument, .val = 'l' },
+		{ .name = "peer", .has_arg = no_argument, .val = 'p' },
+		{ .name = NULL } };
+
+	rc = check_cmd(debug_cmds, "recovery", NULL, 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'l':
+			rc = lustre_lnet_show_local_ni_recovq(-1, &show_rc, &err_rc);
+			break;
+		case 'p':
+			rc = lustre_lnet_show_peer_ni_recovq(-1, &show_rc, &err_rc);
+			break;
+		default:
+			return 0;
+		}
+	}
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+	else if (show_rc)
+		cYAML_print_tree(show_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
 static int jt_show_net(int argc, char **argv)
 {
 	char *network = NULL;
@@ -980,6 +1191,24 @@ static int jt_show_global(int argc, char **argv)
 		goto out;
 	}
 
+	rc = lustre_lnet_show_retry_count(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
+	rc = lustre_lnet_show_transaction_to(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
+	rc = lustre_lnet_show_hsensitivity(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
 	if (show_rc)
 		cYAML_print_tree(show_rc);
 
@@ -1043,6 +1272,17 @@ static int jt_stats(int argc, char **argv)
 		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], stats_cmds);
+}
+
+static int jt_debug(int argc, char **argv)
+{
+	int rc;
+
+	rc = check_cmd(debug_cmds, "recovery", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
+
+	return Parser_execarg(argc - 1, &argv[1], debug_cmds);
 }
 
 static int jt_global(int argc, char **argv)

@@ -55,8 +55,40 @@
 
 #define LNET_MAX_IOV		(LNET_MAX_PAYLOAD >> PAGE_SHIFT)
 
+/*
+ * This is the maximum health value.
+ * All local and peer NIs created have their health default to this value.
+ */
+#define LNET_MAX_HEALTH_VALUE 1000
+
 /* forward refs */
 struct lnet_libmd;
+
+enum lnet_msg_hstatus {
+	LNET_MSG_STATUS_OK = 0,
+	LNET_MSG_STATUS_LOCAL_INTERRUPT,
+	LNET_MSG_STATUS_LOCAL_DROPPED,
+	LNET_MSG_STATUS_LOCAL_ABORTED,
+	LNET_MSG_STATUS_LOCAL_NO_ROUTE,
+	LNET_MSG_STATUS_LOCAL_ERROR,
+	LNET_MSG_STATUS_LOCAL_TIMEOUT,
+	LNET_MSG_STATUS_REMOTE_ERROR,
+	LNET_MSG_STATUS_REMOTE_DROPPED,
+	LNET_MSG_STATUS_REMOTE_TIMEOUT,
+	LNET_MSG_STATUS_NETWORK_TIMEOUT,
+	LNET_MSG_STATUS_END,
+};
+
+struct lnet_rsp_tracker {
+	/* chain on the waiting list */
+	struct list_head rspt_on_list;
+	/* cpt to lock */
+	int rspt_cpt;
+	/* deadline of the REPLY/ACK */
+	ktime_t rspt_deadline;
+	/* parent MD */
+	struct lnet_handle_md rspt_mdh;
+};
 
 struct lnet_msg {
 	struct list_head	msg_activelist;
@@ -75,6 +107,21 @@ struct lnet_msg {
 	 */
 	lnet_nid_t		msg_src_nid_param;
 	lnet_nid_t		msg_rtr_nid_param;
+
+	/*
+	 * Deadline for the message after which it will be finalized if it
+	 * has not completed.
+	 */
+	ktime_t			msg_deadline;
+
+	/* The message health status. */
+	enum lnet_msg_hstatus	msg_health_status;
+	/* This is a recovery message */
+	bool			msg_recovery;
+	/* the number of times a transmission has been retried */
+	int			msg_retry_count;
+	/* flag to indicate that we do not want to resend this message */
+	bool			msg_no_resend;
 
 	/* committed for sending */
 	unsigned int		msg_tx_committed:1;
@@ -156,24 +203,25 @@ struct lnet_me {
 };
 
 struct lnet_libmd {
-	struct list_head	md_list;
-	struct lnet_libhandle	md_lh;
-	struct lnet_me	       *md_me;
-	char		       *md_start;
-	unsigned int		md_offset;
-	unsigned int		md_length;
-	unsigned int		md_max_size;
-	int			md_threshold;
-	int			md_refcount;
-	unsigned int		md_options;
-	unsigned int		md_flags;
-	unsigned int		md_niov;	/* # frags at end of struct */
-	void		       *md_user_ptr;
-	struct lnet_eq	       *md_eq;
-	struct lnet_handle_md	md_bulk_handle;
+	struct list_head	 md_list;
+	struct lnet_libhandle	 md_lh;
+	struct lnet_me	        *md_me;
+	char		        *md_start;
+	unsigned int		 md_offset;
+	unsigned int		 md_length;
+	unsigned int		 md_max_size;
+	int			 md_threshold;
+	int			 md_refcount;
+	unsigned int		 md_options;
+	unsigned int		 md_flags;
+	unsigned int		 md_niov;	/* # frags at end of struct */
+	void		        *md_user_ptr;
+	struct lnet_rsp_tracker *md_rspt_ptr;
+	struct lnet_eq	        *md_eq;
+	struct lnet_handle_md	 md_bulk_handle;
 	union {
-		struct kvec	iov[LNET_MAX_IOV];
-		lnet_kiov_t	kiov[LNET_MAX_IOV];
+		struct kvec	 iov[LNET_MAX_IOV];
+		lnet_kiov_t	 kiov[LNET_MAX_IOV];
 	} md_iov;
 };
 
@@ -275,18 +323,11 @@ enum lnet_net_state {
 	LNET_NET_STATE_DELETING
 };
 
-enum lnet_ni_state {
-	/* set when NI block is allocated */
-	LNET_NI_STATE_INIT = 0,
-	/* set when NI is started successfully */
-	LNET_NI_STATE_ACTIVE,
-	/* set when LND notifies NI failed */
-	LNET_NI_STATE_FAILED,
-	/* set when LND notifies NI degraded */
-	LNET_NI_STATE_DEGRADED,
-	/* set when shuttding down NI */
-	LNET_NI_STATE_DELETING
-};
+#define LNET_NI_STATE_INIT		(1 << 0)
+#define LNET_NI_STATE_ACTIVE		(1 << 1)
+#define LNET_NI_STATE_FAILED		(1 << 2)
+#define LNET_NI_STATE_RECOVERY_PENDING	(1 << 3)
+#define LNET_NI_STATE_DELETING		(1 << 4)
 
 enum lnet_stats_type {
 	LNET_STATS_TYPE_SEND = 0,
@@ -306,6 +347,22 @@ struct lnet_element_stats {
 	struct lnet_comm_count el_send_stats;
 	struct lnet_comm_count el_recv_stats;
 	struct lnet_comm_count el_drop_stats;
+};
+
+struct lnet_health_local_stats {
+	atomic_t hlt_local_interrupt;
+	atomic_t hlt_local_dropped;
+	atomic_t hlt_local_aborted;
+	atomic_t hlt_local_no_route;
+	atomic_t hlt_local_timeout;
+	atomic_t hlt_local_error;
+};
+
+struct lnet_health_remote_stats {
+	atomic_t hlt_remote_dropped;
+	atomic_t hlt_remote_timeout;
+	atomic_t hlt_remote_error;
+	atomic_t hlt_network_timeout;
 };
 
 struct lnet_net {
@@ -359,6 +416,12 @@ struct lnet_ni {
 	/* chain on net_ni_cpt */
 	struct list_head	ni_cptlist;
 
+	/* chain on the recovery queue */
+	struct list_head	ni_recovery;
+
+	/* MD handle for recovery ping */
+	struct lnet_handle_md	ni_ping_mdh;
+
 	spinlock_t		ni_lock;
 
 	/* number of CPTs */
@@ -392,7 +455,7 @@ struct lnet_ni {
 	struct lnet_ni_status	*ni_status;
 
 	/* NI FSM */
-	enum lnet_ni_state	ni_state;
+	__u32			ni_state;
 
 	/* per NI LND tunables */
 	struct lnet_lnd_tunables ni_lnd_tunables;
@@ -402,12 +465,29 @@ struct lnet_ni {
 
 	/* NI statistics */
 	struct lnet_element_stats ni_stats;
+	struct lnet_health_local_stats ni_hstats;
 
 	/* physical device CPT */
 	int			ni_dev_cpt;
 
 	/* sequence number used to round robin over nis within a net */
 	__u32			ni_seq;
+
+	/*
+	 * health value
+	 *	initialized to LNET_MAX_HEALTH_VALUE
+	 * Value is decremented every time we fail to send a message over
+	 * this NI because of a NI specific failure.
+	 * Value is incremented if we successfully send a message.
+	 */
+	atomic_t		ni_healthv;
+
+	/*
+	 * Set to 1 by the LND when it receives an event telling it the device
+	 * has gone into a fatal state. Set to 0 when the LND receives an
+	 * even telling it the device is back online.
+	 */
+	atomic_t		ni_fatal_error_on;
 
 	/*
 	 * equivalent interfaces to use
@@ -454,6 +534,8 @@ struct lnet_peer_ni {
 	struct list_head	lpni_peer_nis;
 	/* chain on remote peer list */
 	struct list_head	lpni_on_remote_peer_ni_list;
+	/* chain on recovery queue */
+	struct list_head	lpni_recovery;
 	/* chain on peer hash */
 	struct list_head	lpni_hashlist;
 	/* messages blocking for tx credits */
@@ -466,6 +548,7 @@ struct lnet_peer_ni {
 	struct lnet_peer_net	*lpni_peer_net;
 	/* statistics kept on each peer NI */
 	struct lnet_element_stats lpni_stats;
+	struct lnet_health_remote_stats lpni_hstats;
 	/* spin lock protecting credits and lpni_txq / lpni_rtrq */
 	spinlock_t		lpni_lock;
 	/* # tx credits available */
@@ -506,6 +589,10 @@ struct lnet_peer_ni {
 	lnet_nid_t		lpni_nid;
 	/* # refs */
 	atomic_t		lpni_refcount;
+	/* health value for the peer */
+	atomic_t		lpni_healthv;
+	/* recovery ping mdh */
+	struct lnet_handle_md	lpni_recovery_ping_mdh;
 	/* CPT this peer attached on */
 	int			lpni_cpt;
 	/* state flags -- protected by lpni_lock */
@@ -535,6 +622,10 @@ struct lnet_peer_ni {
 
 /* Preferred path added due to traffic on non-MR peer_ni */
 #define LNET_PEER_NI_NON_MR_PREF	(1 << 0)
+/* peer is being recovered. */
+#define LNET_PEER_NI_RECOVERY_PENDING	(1 << 1)
+/* peer is being deleted */
+#define LNET_PEER_NI_DELETING		(1 << 2)
 
 struct lnet_peer {
 	/* chain on pt_peer_list */
@@ -877,9 +968,9 @@ struct lnet_msg_container {
 #define LNET_DC_STATE_STOPPING		2	/* telling thread to stop */
 
 /* Router Checker states */
-#define LNET_RC_STATE_SHUTDOWN		0	/* not started */
-#define LNET_RC_STATE_RUNNING		1	/* started up OK */
-#define LNET_RC_STATE_STOPPING		2	/* telling thread to stop */
+#define LNET_MT_STATE_SHUTDOWN		0	/* not started */
+#define LNET_MT_STATE_RUNNING		1	/* started up OK */
+#define LNET_MT_STATE_STOPPING		2	/* telling thread to stop */
 
 /* LNet states */
 #define LNET_STATE_SHUTDOWN		0	/* not started */
@@ -983,8 +1074,8 @@ struct lnet {
 	/* discovery startup/shutdown state */
 	int				ln_dc_state;
 
-	/* router checker startup/shutdown state */
-	int				ln_rc_state;
+	/* monitor thread startup/shutdown state */
+	int				ln_mt_state;
 	/* router checker's event queue */
 	struct lnet_handle_eq		ln_rc_eqh;
 	/* rcd still pending on net */
@@ -992,7 +1083,7 @@ struct lnet {
 	/* rcd ready for free */
 	struct list_head		ln_rcd_zombie;
 	/* serialise startup/shutdown */
-	struct semaphore		ln_rc_signal;
+	struct semaphore		ln_mt_signal;
 
 	struct mutex			ln_api_mutex;
 	struct mutex			ln_lnd_mutex;
@@ -1020,10 +1111,29 @@ struct lnet {
 	 */
 	bool				ln_nis_from_mod_params;
 
-	/* waitq for router checker.  As long as there are no routes in
-	 * the list, the router checker will sleep on this queue.  when
-	 * routes are added the thread will wake up */
-	wait_queue_head_t		ln_rc_waitq;
+	/*
+	 * waitq for the monitor thread. The monitor thread takes care of
+	 * checking routes, timedout messages and resending messages.
+	 */
+	wait_queue_head_t		ln_mt_waitq;
+
+	/* per-cpt resend queues */
+	struct list_head		**ln_mt_resendqs;
+	/* local NIs to recover */
+	struct list_head		ln_mt_localNIRecovq;
+	/* local NIs to recover */
+	struct list_head		ln_mt_peerNIRecovq;
+	/*
+	 * An array of queues for GET/PUT waiting for REPLY/ACK respectively.
+	 * There are CPT number of queues. Since response trackers will be
+	 * added on the fast path we can't afford to grab the exclusive
+	 * net lock to protect these queues. The CPT will be calculated
+	 * based on the mdh cookie.
+	 */
+	struct list_head		**ln_mt_rstq;
+	/* recovery eq handler */
+	struct lnet_handle_eq		ln_mt_eqh;
+
 };
 
 #endif

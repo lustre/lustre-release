@@ -75,6 +75,7 @@ extern struct lnet the_lnet;			/* THE network */
 
 /* default timeout */
 #define DEFAULT_PEER_TIMEOUT    180
+#define LNET_LND_DEFAULT_TIMEOUT 5
 
 static inline int lnet_is_route_alive(struct lnet_route *route)
 {
@@ -489,6 +490,26 @@ lnet_msg_free(struct lnet_msg *msg)
 	LIBCFS_FREE(msg, sizeof(*msg));
 }
 
+static inline struct lnet_rsp_tracker *
+lnet_rspt_alloc(int cpt)
+{
+	struct lnet_rsp_tracker *rspt;
+	LIBCFS_ALLOC(rspt, sizeof(*rspt));
+	lnet_net_lock(cpt);
+	the_lnet.ln_counters[cpt]->rst_alloc++;
+	lnet_net_unlock(cpt);
+	return rspt;
+}
+
+static inline void
+lnet_rspt_free(struct lnet_rsp_tracker *rspt, int cpt)
+{
+	LIBCFS_FREE(rspt, sizeof(*rspt));
+	lnet_net_lock(cpt);
+	the_lnet.ln_counters[cpt]->rst_alloc--;
+	lnet_net_unlock(cpt);
+}
+
 void lnet_ni_free(struct lnet_ni *ni);
 void lnet_net_free(struct lnet_net *net);
 
@@ -526,14 +547,15 @@ extern struct lnet_ni *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern struct lnet_ni *lnet_nid2ni_addref(lnet_nid_t nid);
 extern struct lnet_ni *lnet_net2ni_locked(__u32 net, int cpt);
 extern struct lnet_ni *lnet_net2ni_addref(__u32 net);
-bool lnet_is_ni_healthy_locked(struct lnet_ni *ni);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
 
 int lnet_lib_init(void);
 void lnet_lib_exit(void);
 
 extern unsigned lnet_transaction_timeout;
+extern unsigned lnet_retry_count;
 extern unsigned int lnet_numa_range;
+extern unsigned int lnet_health_sensitivity;
 extern unsigned int lnet_peer_discovery_disabled;
 extern int portal_rotor;
 
@@ -570,6 +592,8 @@ extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 				struct libcfs_ioctl_hdr __user *uparam);
 extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,
 			      struct lnet_process_id __user *ids);
+extern void lnet_peer_ni_set_healthv(lnet_nid_t nid, int value, bool all);
+extern void lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni);
 
 void lnet_router_debugfs_init(void);
 void lnet_router_debugfs_fini(void);
@@ -603,6 +627,8 @@ void lnet_prep_send(struct lnet_msg *msg, int type,
 		    struct lnet_process_id target, unsigned int offset,
 		    unsigned int len);
 int lnet_send(lnet_nid_t nid, struct lnet_msg *msg, lnet_nid_t rtr_nid);
+int lnet_send_ping(lnet_nid_t dest_nid, struct lnet_handle_md *mdh, int nnis,
+		   void *user_ptr, struct lnet_handle_eq eqh, bool recovery);
 void lnet_return_tx_credits_locked(struct lnet_msg *msg);
 void lnet_return_rx_credits_locked(struct lnet_msg *msg);
 void lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp);
@@ -677,8 +703,11 @@ struct lnet_msg *lnet_create_reply_msg(struct lnet_ni *ni,
 				       struct lnet_msg *get_msg);
 void lnet_set_reply_msg_len(struct lnet_ni *ni, struct lnet_msg *msg,
 			    unsigned int len);
+void lnet_detach_rsp_tracker(struct lnet_libmd *md, int cpt);
 
 void lnet_finalize(struct lnet_msg *msg, int rc);
+bool lnet_send_error_simulation(struct lnet_msg *msg,
+				enum lnet_msg_hstatus *hstatus);
 
 void lnet_drop_message(struct lnet_ni *ni, int cpt, void *private,
 		       unsigned int nob, __u32 msg_type);
@@ -690,6 +719,7 @@ void lnet_msg_container_cleanup(struct lnet_msg_container *container);
 void lnet_msg_containers_destroy(void);
 int lnet_msg_containers_create(void);
 
+char *lnet_health_error2str(enum lnet_msg_hstatus hstatus);
 char *lnet_msgtyp2str(int type);
 void lnet_print_hdr(struct lnet_hdr *hdr);
 int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
@@ -700,7 +730,7 @@ int lnet_fault_ctl(int cmd, struct libcfs_ioctl_data *data);
 int lnet_fault_init(void);
 void lnet_fault_fini(void);
 
-bool lnet_drop_rule_match(struct lnet_hdr *hdr);
+bool lnet_drop_rule_match(struct lnet_hdr *hdr, enum lnet_msg_hstatus *hstatus);
 
 int lnet_delay_rule_add(struct lnet_fault_attr *attr);
 int lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown);
@@ -791,6 +821,7 @@ void lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_md *umd);
 struct page *lnet_kvaddr_to_page(unsigned long vaddr);
 int lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset);
 
+unsigned int lnet_get_lnd_timeout(void);
 void lnet_register_lnd(struct lnet_lnd *lnd);
 void lnet_unregister_lnd(struct lnet_lnd *lnd);
 
@@ -822,8 +853,15 @@ int lnet_sock_connect(struct socket **sockp, int *fatal,
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(struct lnet_net *net);
 
-int lnet_router_checker_start(void);
-void lnet_router_checker_stop(void);
+int lnet_monitor_thr_start(void);
+void lnet_monitor_thr_stop(void);
+
+bool lnet_router_checker_active(void);
+void lnet_check_routers(void);
+int lnet_router_pre_mt_start(void);
+void lnet_router_post_mt_start(void);
+void lnet_prune_rc_data(int wait_unlink);
+void lnet_router_cleanup(void);
 void lnet_router_ni_update_locked(struct lnet_peer_ni *gw, __u32 net);
 void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
 
@@ -896,45 +934,19 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			  __u32 *ni_peer_tx_credits, __u32 *peer_tx_credits,
 			  __u32 *peer_rtr_credits, __u32 *peer_min_rtr_credtis,
 			  __u32 *peer_tx_qnob);
+int lnet_get_peer_ni_hstats(struct lnet_ioctl_peer_ni_hstats *stats);
 
-
-static inline bool
-lnet_is_peer_ni_healthy_locked(struct lnet_peer_ni *lpni)
-{
-	return lpni->lpni_healthy;
-}
-
-static inline void
-lnet_set_peer_ni_health_locked(struct lnet_peer_ni *lpni, bool health)
-{
-	lpni->lpni_healthy = health;
-}
-
-static inline bool
-lnet_is_peer_net_healthy_locked(struct lnet_peer_net *peer_net)
-{
-	struct lnet_peer_ni *lpni;
-
-	list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
-			    lpni_peer_nis) {
-		if (lnet_is_peer_ni_healthy_locked(lpni))
-			return true;
-	}
-
-	return false;
-}
-
-static inline bool
-lnet_is_peer_healthy_locked(struct lnet_peer *peer)
+static inline struct lnet_peer_net *
+lnet_find_peer_net_locked(struct lnet_peer *peer, __u32 net_id)
 {
 	struct lnet_peer_net *peer_net;
 
 	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_peer_nets) {
-		if (lnet_is_peer_net_healthy_locked(peer_net))
-			return true;
+		if (peer_net->lpn_net_id == net_id)
+			return peer_net;
 	}
 
-	return false;
+	return NULL;
 }
 
 static inline void
@@ -982,6 +994,12 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 	if (lp->lp_node_seqno < atomic_read(&the_lnet.ln_ping_target_seqno))
 		return true;
 	return false;
+}
+
+static inline void
+lnet_inc_healthv(atomic_t *healthv)
+{
+	atomic_add_unless(healthv, 1, LNET_MAX_HEALTH_VALUE);
 }
 
 void lnet_incr_stats(struct lnet_element_stats *stats,

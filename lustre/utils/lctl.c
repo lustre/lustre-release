@@ -117,7 +117,8 @@ command_t cmdlist[] = {
 	 "		      <<-r | --rate DROP_RATE> |\n"
 	 "		      <-i | --interval SECONDS>>\n"
 	 "		      [<-p | --portal> PORTAL...]\n"
-	 "		      [<-m | --message> <PUT|ACK|GET|REPLY>...]\n"},
+	 "		      [<-m | --message> <PUT|ACK|GET|REPLY>...]\n"
+	 "		      [< -e | --health_error]\n"},
 	{"net_drop_del", jt_ptl_drop_del, 0, "remove LNet drop rule\n"
 	 "usage: net_drop_del <[-a | --all] |\n"
 	 "		      <-s | --source NID>\n"
