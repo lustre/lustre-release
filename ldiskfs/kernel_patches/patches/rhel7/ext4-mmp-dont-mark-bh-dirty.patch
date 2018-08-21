@@ -1,0 +1,35 @@
+From fe18d649891d813964d3aaeebad873f281627fbc Mon Sep 17 00:00:00 2001
+From: Li Dongyang <dongyangli@ddn.com>
+Date: Sat, 15 Sep 2018 17:11:25 -0400
+Subject: [PATCH] ext4: don't mark mmp buffer head dirty
+
+Marking mmp bh dirty before writing it will make writeback
+pick up mmp block later and submit a write, we don't want the
+duplicate write as kmmpd thread should have full control of
+reading and writing the mmp block.
+Another reason is we will also have random I/O error on
+the writeback request when blk integrity is enabled, because
+kmmpd could modify the content of the mmp block(e.g. setting
+new seq and time) while the mmp block is under I/O requested
+by writeback.
+
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+Reviewed-by: Andreas Dilger <adilger@dilger.ca>
+Cc: stable@vger.kernel.org
+---
+ fs/ext4/mmp.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+Index: linux-3.10.0-693.21.1.el7/fs/ext4/mmp.c
+===================================================================
+--- linux-3.10.0-693.21.1.el7.orig/fs/ext4/mmp.c
++++ linux-3.10.0-693.21.1.el7/fs/ext4/mmp.c
+@@ -48,7 +48,6 @@ static int write_mmp_block(struct super_
+ 	 */
+ 	sb_start_write(sb);
+ 	ext4_mmp_csum_set(sb, mmp);
+-	mark_buffer_dirty(bh);
+ 	lock_buffer(bh);
+ 	bh->b_end_io = end_buffer_write_sync;
+ 	get_bh(bh);

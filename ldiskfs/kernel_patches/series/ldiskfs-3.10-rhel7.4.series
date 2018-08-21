@@ -35,3 +35,4 @@ rhel7/ext4-reduce-lock-contention-in-__ext4_new_inode.patch
 rhel7.2/ext4-preread-gd.patch
 rhel7/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
 rhel7/ext4-export-orphan-add.patch
+rhel7/ext4-mmp-dont-mark-bh-dirty.patch
