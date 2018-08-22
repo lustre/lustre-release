@@ -1593,6 +1593,25 @@ test_65() {
 }
 run_test 65 "lock enqueue for destroyed export"
 
+test_67()
+{
+#define OBD_FAIL_PTLRPC_CONNECT_RACE	 0x531
+	$LCTL set_param fail_loc=0x80000531
+
+	local mdtname="MDT0000"
+	local mdccli=$($LCTL dl | grep "${mdtname}-mdc" | awk '{print $4;}')
+	local conn_uuid=$($LCTL get_param -n mdc.${mdccli}.mds_conn_uuid)
+	$LCTL set_param "mdc.${mdccli}.import=connection=${conn_uuid}" &
+	sleep 2
+
+	mds_evict_client
+	sleep 1
+
+	client_reconnect
+	wait
+}
+run_test 67 "connect vs import invalidate race"
+
 check_cli_ir_state()
 {
         local NODE=${1:-$HOSTNAME}
