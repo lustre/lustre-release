@@ -697,6 +697,8 @@ struct kib_conn {
 	struct list_head	ibc_tx_queue_rsrvd;
 	/* active tx awaiting completion */
 	struct list_head	ibc_active_txs;
+	/* zombie tx awaiting done */
+	struct list_head	ibc_zombie_txs;
 	/* serialise */
 	spinlock_t		ibc_lock;
 	/* the rx descs */
@@ -1145,6 +1147,7 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 #define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
 #define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
 
+void kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs);
 void kiblnd_map_rx_descs(struct kib_conn *conn);
 void kiblnd_unmap_rx_descs(struct kib_conn *conn);
 void kiblnd_pool_free_node(struct kib_pool *pool, struct list_head *node);
