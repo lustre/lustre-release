@@ -37,6 +37,7 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/kthread.h>
+#include <linux/delay.h>
 #include <obd_support.h>
 #include <lustre_ha.h>
 #include <lustre_net.h>
@@ -291,6 +292,10 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 	if (!imp->imp_invalid || imp->imp_obd->obd_no_recov)
 		ptlrpc_deactivate_import(imp);
 
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CONNECT_RACE)) {
+		OBD_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
+		msleep(10 * MSEC_PER_SEC);
+	}
 	CFS_FAIL_TIMEOUT(OBD_FAIL_MGS_CONNECT_NET, 3 * cfs_fail_val / 2);
 	LASSERT(imp->imp_invalid);
 
@@ -668,6 +673,7 @@ int ptlrpc_connect_import(struct obd_import *imp)
 		CERROR("already connected\n");
 		RETURN(0);
 	} else if (imp->imp_state == LUSTRE_IMP_CONNECTING ||
+		   imp->imp_state == LUSTRE_IMP_EVICTED ||
 		   imp->imp_connected) {
 		spin_unlock(&imp->imp_lock);
 		CERROR("already connecting\n");
