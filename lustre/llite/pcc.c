@@ -643,18 +643,29 @@ pcc_cond_match(struct pcc_match_rule *rule, struct pcc_matcher *matcher)
 	return 0;
 }
 
+static inline bool
+pcc_dataset_attach_allowed(struct pcc_dataset *dataset, enum lu_pcc_type type)
+{
+	if (type == LU_PCC_READWRITE && dataset->pccd_flags & PCC_DATASET_PCCRW)
+		return true;
+
+	if (type == LU_PCC_READONLY && dataset->pccd_flags & PCC_DATASET_PCCRO)
+		return true;
+
+	return false;
+}
+
 struct pcc_dataset*
-pcc_dataset_match_get(struct pcc_super *super, struct pcc_matcher *matcher)
+pcc_dataset_match_get(struct pcc_super *super, enum lu_pcc_type type,
+		      struct pcc_matcher *matcher)
 {
 	struct pcc_dataset *dataset;
 	struct pcc_dataset *selected = NULL;
 
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry(dataset, &super->pccs_datasets, pccd_linkage) {
-		if (!(dataset->pccd_flags & PCC_DATASET_PCCRW))
-			continue;
-
-		if (pcc_cond_match(&dataset->pccd_rule, matcher)) {
+		if (pcc_dataset_attach_allowed(dataset, type) &&
+		    pcc_cond_match(&dataset->pccd_rule, matcher)) {
 			atomic_inc(&dataset->pccd_refcount);
 			selected = dataset;
 			break;
@@ -1072,15 +1083,20 @@ void pcc_file_init(struct pcc_file *pccf)
 	pccf->pccf_type = LU_PCC_NONE;
 }
 
-static inline bool pcc_auto_attach_enabled(enum pcc_dataset_flags flags,
+static inline bool pcc_auto_attach_enabled(struct pcc_dataset *dataset,
+					   enum lu_pcc_type type,
 					   enum pcc_io_type iot)
 {
-	if (iot == PIT_OPEN)
-		return flags & PCC_DATASET_OPEN_ATTACH;
-	if (iot == PIT_GETATTR)
-		return flags & PCC_DATASET_STAT_ATTACH;
-	else
-		return flags & PCC_DATASET_AUTO_ATTACH;
+	if (pcc_dataset_attach_allowed(dataset, type)) {
+		if (iot == PIT_OPEN)
+			return dataset->pccd_flags & PCC_DATASET_OPEN_ATTACH;
+		if (iot == PIT_GETATTR)
+			return dataset->pccd_flags & PCC_DATASET_STAT_ATTACH;
+		else
+			return dataset->pccd_flags & PCC_DATASET_AUTO_ATTACH;
+	}
+
+	return false;
 }
 
 static const char pcc_xattr_layout[] = XATTR_USER_PREFIX "PCC.layout";
@@ -1333,7 +1349,7 @@ static int pcc_try_datasets_attach(struct inode *inode, enum pcc_io_type iot,
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry_safe(dataset, tmp,
 				 &super->pccs_datasets, pccd_linkage) {
-		if (!pcc_auto_attach_enabled(dataset->pccd_flags, iot))
+		if (!pcc_auto_attach_enabled(dataset, type, iot))
 			break;
 
 		rc = pcc_try_dataset_attach(inode, gen, type, dataset, cached);
@@ -1382,6 +1398,53 @@ static int pcc_try_datasets_attach(struct inode *inode, enum pcc_io_type iot,
 	}
 	up_read(&super->pccs_rw_sem);
 
+	RETURN(rc);
+}
+
+static int pcc_readonly_ioctl_attach(struct file *file, struct inode *inode,
+				     __u32 roid);
+
+/* Call with pcci_mutex hold */
+static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
+					bool *cached)
+{
+	struct dentry *dentry = file->f_path.dentry;
+	struct pcc_dataset *dataset;
+	struct pcc_matcher item;
+	struct pcc_inode *pcci;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!((file->f_flags & O_ACCMODE) == O_RDONLY))
+		RETURN(0);
+
+	item.pm_uid = from_kuid(&init_user_ns, current_uid());
+	item.pm_gid = from_kgid(&init_user_ns, current_gid());
+	item.pm_projid = ll_i2info(inode)->lli_projid;
+	item.pm_name = &dentry->d_name;
+	dataset = pcc_dataset_match_get(&ll_i2sbi(inode)->ll_pcc_super,
+					LU_PCC_READONLY, &item);
+	if (dataset == NULL)
+		RETURN(0);
+
+	if ((dataset->pccd_flags & PCC_DATASET_PCC_ALL) == PCC_DATASET_PCCRO) {
+		pcc_inode_unlock(inode);
+		rc = pcc_readonly_ioctl_attach(file, inode, dataset->pccd_roid);
+		pcc_inode_lock(inode);
+		pcci = ll_i2pcci(inode);
+		if (pcci && pcc_inode_has_layout(pcci))
+			*cached = true;
+		if (rc) {
+			CDEBUG(D_CACHE,
+			       "Failed to try PCC-RO attach "DFID", rc = %d\n",
+			       PFID(&ll_i2info(inode)->lli_fid), rc);
+			/* ignore the error during auto PCC-RO attach. */
+			rc = 0;
+		}
+	}
+
+	pcc_dataset_put(dataset);
 	RETURN(rc);
 }
 
@@ -1513,6 +1576,9 @@ int pcc_file_open(struct inode *inode, struct file *file)
 		if (pcc_may_auto_attach(inode, PIT_OPEN))
 			rc = pcc_try_auto_attach(inode, &cached, PIT_OPEN);
 
+		if (rc == 0 && !cached)
+			rc = pcc_try_readonly_open_attach(inode, file, &cached);
+
 		if (rc < 0 || !cached)
 			GOTO(out_unlock, rc);
 
@@ -1581,8 +1647,14 @@ static bool pcc_io_tolerate(struct pcc_inode *pcci,
 		 * in pcc_page_mkwrite().
 		 */
 	} else if (pcci->pcci_type == LU_PCC_READONLY) {
+		/*
+		 * For async I/O engine such as libaio and io_uring, PCC read
+		 * should not tolerate -EAGAIN/-EIOCBQUEUED errors, return
+		 * the error code to the caller directly.
+		 */
 		if ((iot == PIT_READ || iot == PIT_GETATTR ||
-		     iot == PIT_SPLICE_READ) && rc < 0 && rc != -ENOMEM)
+		     iot == PIT_SPLICE_READ) && rc < 0 && rc != -ENOMEM &&
+		     rc != -EAGAIN && rc != -EIOCBQUEUED)
 			return false;
 		if (iot == PIT_FAULT && (rc & VM_FAULT_SIGBUS) &&
 		    !(rc & VM_FAULT_OOM))
@@ -2497,6 +2569,15 @@ static ssize_t pcc_copy_data(struct file *src, struct file *dst)
 
 	ENTRY;
 
+#ifdef FMODE_CAN_READ
+	/* Need to add FMODE_CAN_READ flags here, otherwise the check in
+	 * kernel_read() during open() for auto PCC-RO attach will fail.
+	 */
+	if ((src->f_mode & FMODE_READ) &&
+	    likely(src->f_op->read || src->f_op->read_iter))
+		src->f_mode |= FMODE_CAN_READ;
+#endif
+
 	OBD_ALLOC_LARGE(buf, buf_len);
 	if (buf == NULL)
 		RETURN(-ENOMEM);
@@ -2553,6 +2634,7 @@ static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 {
 	const struct cred *old_cred;
 	struct file *pcc_filp;
+	bool direct = false;
 	struct path path;
 	ssize_t ret;
 	int rc;
@@ -2577,7 +2659,23 @@ static int pcc_attach_data_archive(struct file *file, struct inode *inode,
 	if (rc)
 		GOTO(out_fput, rc);
 
+	/*
+	 * When attach a file at file open() time with direct I/O mode, the
+	 * data copy from Lustre OSTs to PCC copy in kernel will report
+	 * -EFAULT error as the buffer is allocated in the kernel space, not
+	 * from the user space.
+	 * Thus it needs to unmask O_DIRECT flag from the file handle during
+	 * data copy. After finished data copying, restore the flag in the
+	 * file handle.
+	 */
+	if (file->f_flags & O_DIRECT) {
+		file->f_flags &= ~O_DIRECT;
+		direct = true;
+	}
+
 	ret = pcc_copy_data(file, pcc_filp);
+	if (direct)
+		file->f_flags |= O_DIRECT;
 	if (ret < 0)
 		GOTO(out_fput, rc = ret);
 
@@ -2649,7 +2747,6 @@ out_unlock:
 	}
 out_dataset_put:
 	pcc_dataset_put(dataset);
-
 	RETURN(rc);
 }
 
@@ -2772,9 +2869,16 @@ repeat:
 	RETURN(rc);
 }
 
+static void pcc_readonly_attach_fini(struct inode *inode)
+{
+	pcc_inode_lock(inode);
+	ll_i2info(inode)->lli_pcc_state &= ~PCC_STATE_FL_ATTACHING;
+	pcc_inode_unlock(inode);
+}
+
 static int pcc_readonly_ioctl_attach(struct file *file,
 				     struct inode *inode,
-				     struct lu_pcc_attach *attach)
+				     __u32 roid)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct pcc_super *super = ll_i2pccs(inode);
@@ -2799,12 +2903,12 @@ static int pcc_readonly_ioctl_attach(struct file *file,
 
 	rc = pcc_layout_rdonly_set(inode, &gen);
 	if (rc)
-		RETURN(rc);
+		GOTO(out_fini, rc);
 
 	dataset = pcc_dataset_get(&ll_s2sbi(inode->i_sb)->ll_pcc_super,
-				  LU_PCC_READONLY, attach->pcca_id);
+				  LU_PCC_READONLY, roid);
 	if (dataset == NULL)
-		RETURN(-ENOENT);
+		GOTO(out_fini, rc = -ENOENT);
 
 	rc = pcc_attach_data_archive(file, inode, dataset, &dentry);
 	if (rc)
@@ -2855,6 +2959,8 @@ out_put_unlock:
 	mutex_unlock(&lli->lli_layout_mutex);
 out_dataset_put:
 	pcc_dataset_put(dataset);
+out_fini:
+	pcc_readonly_attach_fini(inode);
 
 	RETURN(rc);
 }
@@ -2871,7 +2977,8 @@ int pcc_ioctl_attach(struct file *file, struct inode *inode,
 		rc = -EOPNOTSUPP;
 		break;
 	case LU_PCC_READONLY:
-		rc = pcc_readonly_ioctl_attach(file, inode, attach);
+		rc = pcc_readonly_ioctl_attach(file, inode,
+					       attach->pcca_id);
 		break;
 	default:
 		rc = -EINVAL;

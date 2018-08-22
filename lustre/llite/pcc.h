@@ -265,6 +265,7 @@ int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca);
 void pcc_create_attach_cleanup(struct super_block *sb,
 			       struct pcc_create_attach *pca);
 struct pcc_dataset *pcc_dataset_match_get(struct pcc_super *super,
+					  enum lu_pcc_type type,
 					  struct pcc_matcher *matcher);
 void pcc_dataset_put(struct pcc_dataset *dataset);
 void pcc_inode_free(struct inode *inode);

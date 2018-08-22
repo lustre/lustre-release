@@ -1224,6 +1224,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			item.pm_projid = ll_i2info(dir)->lli_projid;
 			item.pm_name = &dentry->d_name;
 			dataset = pcc_dataset_match_get(&sbi->ll_pcc_super,
+							LU_PCC_READWRITE,
 							&item);
 			pca.pca_dataset = dataset;
 		}
@@ -1346,6 +1347,20 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 				 */
 				if (de != NULL)
 					dput(de);
+
+				if (rc)
+					GOTO(out_release, rc);
+
+				/* Auto PCC-RO attach during PCC open will try
+				 * to change the layout to read-only state. If
+				 * the intent open returns the lock with
+				 * MDS_INODELOCK_LAYOUT bit set, it may cause
+				 * dead lock. Thus it would better to release
+				 * the intent lock first before call PCC open.
+				 */
+				ll_intent_release(it);
+				rc = pcc_file_open(dentry->d_inode, file);
+				GOTO(out_free, rc);
 			}
 		} else {
 			rc = finish_no_open(file, de);
@@ -1356,6 +1371,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 
 out_release:
 	ll_intent_release(it);
+out_free:
 	OBD_FREE(it, sizeof(*it));
 clear:
 	ll_clear_inode_lock_owner(dir);

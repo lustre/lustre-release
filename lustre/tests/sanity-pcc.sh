@@ -213,7 +213,7 @@ setup_loopdev() {
 	local mntpt=$3
 	local size=${4:-50}
 
-	do_facet $facet mkdir -p $mntpt || error "mkdir -p $hsm_root failed"
+	do_facet $facet mkdir -p $mntpt || error "mkdir -p $mntpt failed"
 	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
 	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
 	stack_trap "do_facet $facet rm -f $file" EXIT
@@ -1077,6 +1077,62 @@ test_10d() {
 	test_usrgrp_quota "g"
 }
 run_test 10d "Test RO-PCC with group quota on loop PCC device"
+
+test_usrgrp_edquot() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local id=$RUNAS_ID
+	local ug=$1
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	[[ $ug == "g" ]] && id=$RUNAS_GID
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	do_facet $SINGLEAGT quotacheck -c$ug $mntpt ||
+		error "quotacheck -c$ug $mntpt failed"
+	do_facet $SINGLEAGT quotaon -$ug $mntpt ||
+		error "quotaon -$ug $mntpt failed"
+	do_facet $SINGLEAGT setquota -$ug $id 0 4096 0 0 $mntpt ||
+		error "setquota -$ug $id on $mntpt failed"
+	do_facet $SINGLEAGT repquota -${ug}vs $mntpt
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"${ug}id={$id}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	dd if=/dev/zero of=$file bs=1M count=2 ||
+		error "dd write $file failed"
+	chown $RUNAS_ID:$RUNAS_GID $file ||
+		error "chown $RUNAS_ID:$RUNAS_GID $file failed"
+	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1M count=2 ||
+		error "dd read $file failed"
+	check_lpcc_state $file "readonly"
+	$LFS getstripe -v $file
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1M count=5 ||
+		error "dd write $file failed"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1M count=5 ||
+		error "dd read $file failed"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	$LFS getstripe -v $file
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "PCC-RO attach $file failed"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file || error "detach $file failed"
+}
+
+test_10e() {
+	test_usrgrp_edquot "u"
+}
+run_test 10e "Tolerate -EDQUOT failure when auto PCC-RO attach with user quota"
+
+test_10f() {
+	test_usrgrp_edquot "g"
+}
+run_test 10f "Tolerate -EDQUOT failure when auto PCC-RO attach with group quota"
 
 test_11() {
 	local loopfile="$TMP/$tfile"
@@ -2510,6 +2566,80 @@ test_28() {
 	check_lpcc_state $file "none"
 }
 run_test 28 "RW-PCC attach should fail when the file has cluster-wide openers"
+
+test_29a() {
+	local project_id=100
+	local agt_facet=$SINGLEAGT
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tdir/$tfile
+	local file2=$DIR2/$tdir/$tfile
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	is_project_quota_supported || skip "project quota is not supported"
+
+	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={$project_id}\ rwid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	$LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT mkdir -p $DIR/$tdir ||
+		error "mkdir $DIR/$tdir failed"
+	do_facet $SINGLEAGT "echo -n ro_uptodate > $file" ||
+		error "failed to write $file"
+	check_lpcc_state $file "none"
+	$LFS project -sp $project_id $file ||
+		error "failed to set project for $file"
+	$LFS project -d $file
+	check_lpcc_state $file "readonly"
+	check_file_data $SINGLEAGT $file "ro_uptodate"
+
+	echo -n Update_ro_data > $file2
+	check_lpcc_state $file "readonly"
+	check_file_data $SINGLEAGT $file "Update_ro_data"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+}
+run_test 29a "Auto readonly caching on RO-PCC backend for O_RDONLY open"
+
+test_29b() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/myfile.dat
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	do_facet $SINGLEAGT mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping $SINGLEAGT \
+		"fname={*.dat}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=4k count=1 ||
+		error "Write $file failed"
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=4k count=1 ||
+		error "Read $file failed"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=4k count=1 ||
+		error "Write $file failed"
+	sysctl vm.drop_caches=3
+	do_facet $SINGLEAGT dd if=$file of=/dev/null bs=4k count=1 ||
+		error "Read $file failed"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_lpcc_state $file "readonly"
+
+	do_facet $SINGLEAGT $LFS pcc detach $file || error "detach $file failed"
+}
+run_test 29b "Auto PCC-RO attach in atomic_open"
 
 #test 101: containers and PCC
 #LU-15170: Test mount namespaces with PCC

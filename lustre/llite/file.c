@@ -1049,11 +1049,14 @@ restart:
 			GOTO(out_och_free, rc);
 	}
 
-	rc = pcc_file_open(inode, file);
-	if (rc)
-		GOTO(out_och_free, rc);
-
 	mutex_unlock(&lli->lli_och_mutex);
+
+	/* It is not from atomic_open(). */
+	if (it == &oit) {
+		rc = pcc_file_open(inode, file);
+		if (rc)
+			GOTO(out_och_free, rc);
+	}
 
 	fd = NULL;
 
