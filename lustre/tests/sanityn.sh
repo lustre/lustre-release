@@ -960,25 +960,31 @@ test_33c() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
 		skip "DNE CoS not supported" && return
 
-	sync
+	local sync_count
 
 	mkdir $DIR/$tdir
-	# remote mkdir is done on MDT2, which enqueued lock of $tdir on MDT1
-	$LFS mkdir -i 1 $DIR/$tdir/d1
+	sync_all_data
 	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
-	mkdir $DIR/$tdir/d2
-	local sync_count=$(do_facet mds1 \
-		"lctl get_param -n mdt.*MDT0000.sync_count")
-	[ $sync_count -eq 1 ] || error "Sync-Lock-Cancel not triggered"
+	# do twice in case transaction is committed before unlock, see LU-8200
+	for i in 1 2; do
+		# remote dir is created on MDT1, which enqueued lock of $tdir on
+		# MDT0
+		$LFS mkdir -i 1 $DIR/$tdir/remote.$i
+		mkdir $DIR/$tdir/local.$i
+	done
+	sync_count=$(do_facet mds1 "lctl get_param -n mdt.*MDT0000.sync_count")
+	echo "sync_count $sync_count"
+	[ $sync_count -eq 0 ] && error "Sync-Lock-Cancel not triggered"
 
-	$LFS mkdir -i 1 $DIR/$tdir/d3
+	sync_all_data
 	do_facet mds1 "lctl set_param -n mdt.*.sync_count=0"
+	$LFS mkdir -i 1 $DIR/$tdir/remote.3
 	# during sleep remote mkdir should have been committed and canceled
 	# remote lock spontaneously, which shouldn't trigger sync
 	sleep 6
-	mkdir $DIR/$tdir/d4
-	local sync_count=$(do_facet mds1 \
-		"lctl get_param -n mdt.*MDT0000.sync_count")
+	mkdir $DIR/$tdir/local.3
+	sync_count=$(do_facet mds1 "lctl get_param -n mdt.*MDT0000.sync_count")
+	echo "sync_count $sync_count"
 	[ $sync_count -eq 0 ] || error "Sync-Lock-Cancel triggered"
 }
 run_test 33c "Cancel cross-MDT lock should trigger Sync-Lock-Cancel"
