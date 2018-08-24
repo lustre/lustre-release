@@ -2298,8 +2298,8 @@ test_27G() { #LU-10629
 run_test 27G "Clear OST pool from stripe"
 
 test_27H() {
-	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.11.53) ]] &&
-		skip "Need MDS version newer than 2.11.53"
+	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.11.54) ]] &&
+		skip "Need MDS version newer than 2.11.54"
 	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -o 0 -o 2 $DIR/$tdir || error "setstripe failed"
@@ -2313,6 +2313,13 @@ test_27H() {
 	(( $($LFS getstripe -y $DIR/$tdir/$tfile |
 	     egrep -c "l_ost_idx: [02]$") == "2" )) ||
 		error "expected l_ost_idx: [02]$ not matched"
+
+	# make sure ost list have been cleared
+	local stripesize=$($GETSTRIPE -S $DIR/$tdir)
+	$LFS setstripe -S $((stripesize * 4)) -i 1 \
+		-c $((OSTCOUNT - 1)) $DIR/$tdir || error "setstripe"
+	touch $DIR/$tdir/f3
+	$LVERIFY $DIR/$tdir $DIR/$tdir/f3 || error "lverify failed"
 }
 run_test 27H "Set specific OSTs stripe"
 

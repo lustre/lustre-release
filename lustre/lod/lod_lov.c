@@ -896,7 +896,8 @@ static int lod_gen_component_ea(const struct lu_env *env,
 				       PFID(&info->lti_fid), rc);
 				RETURN(rc);
 			}
-		} else if (lod_comp->llc_ostlist.op_array) {
+		} else if (lod_comp->llc_ostlist.op_array &&
+			   lod_comp->llc_ostlist.op_count) {
 			/* user specified ost list */
 			ost_idx = lod_comp->llc_ostlist.op_array[i];
 		}

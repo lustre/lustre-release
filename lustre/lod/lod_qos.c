@@ -1216,6 +1216,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	LASSERT(lod_comp->llc_ostlist.op_array);
+	LASSERT(lod_comp->llc_ostlist.op_count);
 
 	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripe_count);
 	if (rc < 0)
@@ -2333,7 +2334,8 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		CDEBUG(D_OTHER, "tgt_count %d stripe_count %d\n",
 				d->lod_desc.ld_tgt_count, stripe_len);
 
-		if (lod_comp->llc_ostlist.op_array) {
+		if (lod_comp->llc_ostlist.op_array &&
+		    lod_comp->llc_ostlist.op_count) {
 			rc = lod_alloc_ost_list(env, lo, stripe, ost_indices,
 						th, comp_idx);
 		} else if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT) {
