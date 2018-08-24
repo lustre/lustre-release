@@ -2049,7 +2049,8 @@ lustre_lnet_config_healthv(int value, bool all, lnet_nid_t nid,
 	if (rc != 0) {
 		rc = -errno;
 		snprintf(err_str,
-			 sizeof(err_str), "Can not configure health value");
+			 sizeof(err_str), "Can not configure health value: %s",
+			 strerror(errno));
 	}
 
 	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);

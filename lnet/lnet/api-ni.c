@@ -3674,6 +3674,7 @@ LNetCtl(unsigned int cmd, void *arg)
 			lnet_peer_ni_set_healthv(cfg->rh_nid, value,
 						  cfg->rh_all);
 		mutex_unlock(&the_lnet.ln_api_mutex);
+		return 0;
 	}
 
 	case IOC_LIBCFS_NOTIFY_ROUTER: {

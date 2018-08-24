@@ -991,10 +991,10 @@ static int set_value_helper(int argc, char **argv,
 	int rc, opt;
 	struct cYAML *err_rc = NULL;
 
-	const char *const short_options = "h:n:a";
+	const char *const short_options = "t:n:a";
 	static const struct option long_options[] = {
 		{ .name = "nid", .has_arg = required_argument, .val = 'n' },
-		{ .name = "health", .has_arg = required_argument, .val = 'h' },
+		{ .name = "health", .has_arg = required_argument, .val = 't' },
 		{ .name = "all", .has_arg = no_argument, .val = 'a' },
 		{ .name = NULL } };
 
@@ -1008,12 +1008,13 @@ static int set_value_helper(int argc, char **argv,
 		case 'n':
 			nid = optarg;
 			break;
-		case 'h':
-			if (parse_long(argv[optind++], &healthv) != 0)
+		case 't':
+			if (parse_long(optarg, &healthv) != 0)
 				healthv = -1;
 			break;
 		case 'a':
 			all = true;
+			break;
 		default:
 			return 0;
 		}
