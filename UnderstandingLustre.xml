@@ -36,7 +36,7 @@ xml:id="understandinglustre">
     <para>The Lustre storage architecture is used for many different kinds of
     clusters. It is best known for powering many of the largest
     high-performance computing (HPC) clusters worldwide, with tens of thousands
-    of client systems, petabytes (PB) of storage and hundreds of gigabytes per
+    of client systems, petabytes (PiB) of storage and hundreds of gigabytes per
     second (GB/sec) of I/O throughput. Many HPC sites use a Lustre file system
     as a site-wide global file system, serving dozens of clusters.</para>
     <para>The ability of a Lustre file system to scale capacity and performance
@@ -161,8 +161,8 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OST:</emphasis>
                 </para>
-                <para>300M objects, 128TB per OST (ldiskfs)</para>
-                <para>500M objects, 256TB per OST (ZFS)</para>
+                <para>300M objects, 256TiB per OST (ldiskfs)</para>
+                <para>500M objects, 256TiB per OST (ZFS)</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
@@ -172,15 +172,15 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>32x 8TB OSTs per OSS (ldiskfs),</para>
-                <para>8x 32TB OSTs per OSS (ldiskfs)</para>
-                <para>1x 72TB OST per OSS (ZFS)</para>
+                <para>32x 8TiB OSTs per OSS (ldiskfs),</para>
+                <para>8x 32TiB OSTs per OSS (ldiskfs)</para>
+                <para>1x 72TiB OST per OSS (ZFS)</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
-                <para>450 OSSs with 1000 4TB OSTs</para>
-                <para>192 OSSs with 1344 8TB OSTs</para>
-                <para>768 OSSs with 768 72TB OSTs</para>
+                <para>450 OSSs with 1000 4TiB OSTs</para>
+                <para>192 OSSs with 1344 8TiB OSTs</para>
+                <para>768 OSSs with 768 72TiB OSTs</para>
               </entry>
             </row>
             <row>
@@ -224,8 +224,8 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single MDT:</emphasis>
                 </para>
-                <para>4 billion files, 8TB per MDT (ldiskfs)</para>
-		<para>64 billion files, 64TB per MDT (ZFS)</para>
+                <para>4 billion files, 8TiB per MDT (ldiskfs)</para>
+		<para>64 billion files, 64TiB per MDT (ZFS)</para>
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
@@ -240,8 +240,8 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
-                <para>7 MDS with 7 2TB MDTs in production</para>
-                <para>256 MDS with 256 64GB MDTs in testing</para>
+                <para>7 MDS with 7 2TiB MDTs in production</para>
+                <para>256 MDS with 256 64GiB MDTs in testing</para>
               </entry>
             </row>
             <row>
@@ -269,22 +269,22 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single File:</emphasis>
                 </para>
-                <para>32 PB max file size (ldiskfs)</para>
+                <para>32 PiB max file size (ldiskfs)</para>
 		<para>2^63 bytes (ZFS)</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>512 PB space, 1 trillion files</para>
+                <para>512 PiB space, 1 trillion files</para>
               </entry>
               <entry>
                 <para>
                   <emphasis>Single File:</emphasis>
                 </para>
-                <para>multi-TB max file size</para>
+                <para>multi-TiB max file size</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>55 PB space, 8 billion files</para>
+                <para>55 PiB space, 8 billion files</para>
               </entry>
             </row>
           </tbody>
@@ -531,7 +531,7 @@ xml:id="understandinglustre">
           <emphasis role="bold">Object Storage Servers (OSS)</emphasis>: The
           OSS provides file I/O service and network request handling for one or
           more local OSTs. Typically, an OSS serves between two and eight OSTs,
-          up to 16 TB each. A typical configuration is an MDT on a dedicated
+          up to 16 TiB each. A typical configuration is an MDT on a dedicated
           node, two or more OSTs on each OSS node, and a client on each of a
           large number of compute nodes.</para>
         </listitem>
@@ -626,7 +626,7 @@ xml:id="understandinglustre">
                 </para>
               </entry>
               <entry>
-                <para>1-128 TB per OST, 1-8 OSTs per OSS</para>
+                <para>1-128 TiB per OST, 1-8 OSTs per OSS</para>
               </entry>
               <entry>
                 <para>Good bus bandwidth. Recommended that storage be balanced
@@ -892,10 +892,10 @@ xml:id="understandinglustre">
       </figure>
       <para>The maximum file size is not limited by the size of a single
       target. In a Lustre file system, files can be striped across multiple
-      objects (up to 2000), and each object can be up to 16 TB in size with
-      ldiskfs, or up to 256PB with ZFS. This leads to a maximum file size of
-      31.25 PB for ldiskfs or 8EB with ZFS. Note that a Lustre file system can
-      support files up to 2^63 bytes (8EB), limited only by the space available
+      objects (up to 2000), and each object can be up to 16 TiB in size with
+      ldiskfs, or up to 256PiB with ZFS. This leads to a maximum file size of
+      31.25 PiB for ldiskfs or 8EiB with ZFS. Note that a Lustre file system can
+      support files up to 2^63 bytes (8EiB), limited only by the space available
       on the OSTs.</para>
       <note>
         <para>Versions of the Lustre software prior to Release 2.2 limited the
