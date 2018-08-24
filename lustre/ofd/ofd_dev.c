@@ -1645,19 +1645,23 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		 * in place of an old one at the same index.  Instead of
 		 * precreating potentially millions of deleted old objects
 		 * (possibly filling the OST), only precreate the last batch.
-		 * LFSCK will eventually clean up any orphans. LU-14 */
-		if (diff > 5 * OST_MAX_PRECREATE) {
+		 * LFSCK will eventually clean up any orphans. LU-14
+		 * 500000 is a theoretical maximum number of objects that could
+		 * be created(but not stored on disk in case of failover)
+		 * during default journal commit interval - 5 seconds. */
+		if (diff > 500000) {
 			diff = OST_MAX_PRECREATE / 2;
 			LCONSOLE_WARN("%s: Too many FIDs to precreate "
+				      "precreate FID"DOSTID" LAST_ID"DOSTID
 				      "OST replaced or reformatted: "
-				      "LFSCK will clean up",
-				      ofd_name(ofd));
+				      "LFSCK will clean up\n",
+				      ofd_name(ofd), POSTID(&oa->o_oi),
+				      POSTID(&oseq->os_oi));
 
-			CDEBUG(D_HA, "%s: precreate FID "DOSTID" is over "
-			       "%u larger than the LAST_ID "DOSTID", only "
+			CDEBUG(D_HA, "%s: precreate FID "DOSTID" is over 500000"
+			       "larger than the LAST_ID "DOSTID", only "
 			       "precreating the last %lld objects.\n",
 			       ofd_name(ofd), POSTID(&oa->o_oi),
-			       5 * OST_MAX_PRECREATE,
 			       POSTID(&oseq->os_oi), diff);
 			ofd_seq_last_oid_set(oseq, ostid_id(&oa->o_oi) - diff);
 		}
