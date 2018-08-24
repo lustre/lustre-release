@@ -64,6 +64,12 @@
 static char *osd_0copy_tag = "zerocopy";
 
 
+static void dbuf_set_pending_evict(dmu_buf_t *db)
+{
+	dmu_buf_impl_t *dbi = (dmu_buf_impl_t *)db;
+	dbi->db_pending_evict = TRUE;
+}
+
 static void record_start_io(struct osd_device *osd, int rw, int discont_pages)
 {
 	struct obd_histogram *h = osd->od_brw_stats.hist;
@@ -333,13 +339,16 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 			     loff_t off, ssize_t len, struct niobuf_local *lnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	int rc, i, numbufs, npages = 0;
+	int rc, i, numbufs, npages = 0, drop_cache = 0;
 	ktime_t start = ktime_get();
 	dmu_buf_t **dbp;
 	s64 delta_ms;
 
 	ENTRY;
 	record_start_io(osd, READ, 0);
+
+	if (obj->oo_attr.la_size >= osd->od_readcache_max_filesize)
+		drop_cache = 1;
 
 	/* grab buffers for read:
 	 * OSD API let us to grab buffers first, then initiate IO(s)
@@ -400,6 +409,9 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 				npages++;
 				lnb++;
 			}
+
+			if (drop_cache)
+				dbuf_set_pending_evict(dbp[i]);
 
 			/* steal dbuf so dmu_buf_rele_array() can't release
 			 * it */
@@ -776,6 +788,23 @@ out:
 	return rc;
 }
 
+static void osd_evict_dbufs_after_write(struct osd_object *obj,
+					loff_t off, ssize_t len)
+{
+	dmu_buf_t **dbp;
+	int i, rc, numbufs;
+
+	rc = -dmu_buf_hold_array_by_bonus(&obj->oo_dn->dn_bonus->db, off, len,
+					  TRUE, osd_0copy_tag, &numbufs, &dbp);
+	if (unlikely(rc))
+		return;
+
+	for (i = 0; i < numbufs; i++)
+		dbuf_set_pending_evict(dbp[i]);
+
+	dmu_buf_rele_array(dbp, numbufs, osd_0copy_tag);
+}
+
 static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages,
 			struct thandle *th)
@@ -784,7 +813,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	struct osd_device  *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
 	uint64_t            new_size = 0;
-	int                 i, rc = 0;
+	int                 i, abufsz, rc = 0, drop_cache = 0;
 	unsigned long	   iosize = 0;
 	ENTRY;
 
@@ -798,6 +827,11 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	(void)osd_grow_blocksize(obj, oh, lnb[0].lnb_file_offset,
 				 lnb[npages - 1].lnb_file_offset +
 				 lnb[npages - 1].lnb_len);
+
+	if (obj->oo_attr.la_size >= osd->od_readcache_max_filesize ||
+	    lnb[npages - 1].lnb_file_offset + lnb[npages - 1].lnb_len >=
+	    osd->od_readcache_max_filesize)
+		drop_cache = 1;
 
 	/* LU-8791: take oo_guard to avoid the deadlock that changing block
 	 * size and assigning arcbuf take place at the same time.
@@ -850,8 +884,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 				      oh->ot_tx);
 			kunmap(lnb[i].lnb_page);
 			iosize += lnb[i].lnb_len;
+			abufsz = lnb[i].lnb_len; /* to drop cache below */
 		} else if (lnb[i].lnb_data) {
-			int j, apages, abufsz;
+			int j, apages;
 			LASSERT(((unsigned long)lnb[i].lnb_data & 1) == 0);
 			/* buffer loaned for zerocopy, try to use it.
 			 * notice that dmu_assign_arcbuf() is smart
@@ -873,8 +908,20 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			lnb[i].lnb_data = NULL;
 			atomic_dec(&osd->od_zerocopy_loan);
 			iosize += abufsz;
+		} else {
+			/* we don't want to deal with cache if nothing
+			 * has been send to ZFS at this step */
+			continue;
 		}
 
+		if (!drop_cache)
+			continue;
+
+		/* we have to mark dbufs for eviction here because
+		 * dmu_assign_arcbuf() may create a new dbuf for
+		 * loaned abuf */
+		osd_evict_dbufs_after_write(obj, lnb[i].lnb_file_offset,
+					    abufsz);
 	}
 	up_read(&obj->oo_guard);
 

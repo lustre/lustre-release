@@ -330,6 +330,44 @@ static ssize_t zfs_osd_index_backup_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(zfs_osd_index_backup);
 
+static int zfs_osd_readcache_seq_show(struct seq_file *m, void *data)
+{
+	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_os == NULL))
+		return -EINPROGRESS;
+
+	seq_printf(m, "%llu\n", osd->od_readcache_max_filesize);
+	return 0;
+}
+
+static ssize_t
+zfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
+			    size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct dt_device *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
+	s64 val;
+	int rc;
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_os == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
+	if (rc)
+		return rc;
+	if (val < 0)
+		return -ERANGE;
+
+	osd->od_readcache_max_filesize = val > OSD_MAX_CACHE_SIZE ?
+					 OSD_MAX_CACHE_SIZE : val;
+	return count;
+}
+LPROC_SEQ_FOPS(zfs_osd_readcache);
+
 LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_blksize);
 LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytestotal);
 LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytesfree);
@@ -362,6 +400,8 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&zfs_osd_force_sync_fops	},
 	{ .name	=	"index_backup",
 	  .fops	=	&zfs_osd_index_backup_fops	},
+	{ .name	=	"readcache_max_filesize",
+	  .fops	=	&zfs_osd_readcache_fops	},
 	{ 0 }
 };
 

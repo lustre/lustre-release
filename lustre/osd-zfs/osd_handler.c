@@ -1095,6 +1095,7 @@ static int osd_mount(const struct lu_env *env,
 
 	o->od_xattr_in_sa = B_TRUE;
 	o->od_max_blksz = osd_spa_maxblocksize(o->od_os->os_spa);
+	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
 
 	rc = __osd_obj2dnode(o->od_os, o->od_rootid, &rootdn);
 	if (rc)

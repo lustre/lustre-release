@@ -97,6 +97,8 @@
 
 #define OSD_GRANT_FOR_LOCAL_OIDS (2ULL << 20) /* 2MB for last_rcvd, ... */
 
+#define OSD_MAX_CACHE_SIZE OBD_OBJECT_EOF
+
 extern struct dt_body_operations osd_body_scrub_ops;
 
 /**
@@ -385,6 +387,7 @@ struct osd_device {
 	struct list_head	 od_index_backup_list;
 	struct list_head	 od_index_restore_list;
 	spinlock_t		 od_lock;
+	unsigned long long	 od_readcache_max_filesize;
 };
 
 enum osd_destroy_type {
