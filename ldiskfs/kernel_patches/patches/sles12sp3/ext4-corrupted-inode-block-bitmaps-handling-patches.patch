@@ -7,10 +7,10 @@ diff --git a/fs/ext4/balloc.c b/fs/ext4/balloc.c
 index e069155..692b5e4 100644
 --- a/fs/ext4/balloc.c
 +++ b/fs/ext4/balloc.c
-@@ -185,25 +185,17 @@ static int ext4_init_block_bitmap(struct super_block *sb,
+@@ -183,25 +183,17 @@ static int ext4_init_block_bitmap(struct
+ 	unsigned int bit, bit_max;
  	struct ext4_sb_info *sbi = EXT4_SB(sb);
  	ext4_fsblk_t start, tmp;
- 	int flex_bg = 0;
 -	struct ext4_group_info *grp;
  
  	J_ASSERT_BH(bh, buffer_locked(bh));
@@ -35,18 +35,18 @@ index e069155..692b5e4 100644
 +				EXT4_GROUP_INFO_IBITMAP_CORRUPT,
 +				"Checksum bad for group %u",
 +				block_group);
-		return -EFSBADCRC;
+ 		return -EFSBADCRC;
  	}
  	memset(bh->b_data, 0, sb->s_blocksize);
-@@ -367,7 +359,6 @@ static void ext4_validate_block_bitmap(struct super_block *sb,
+@@ -370,7 +362,6 @@ static int ext4_validate_block_bitmap(st
  {
  	ext4_fsblk_t	blk;
  	struct ext4_group_info *grp = ext4_get_group_info(sb, block_group);
 -	struct ext4_sb_info *sbi = EXT4_SB(sb);
  
  	if (buffer_verified(bh))
-		return 0;
-@@ -377,22 +367,19 @@ static void ext4_validate_block_bitmap(struct super_block *sb,
+ 		return 0;
+@@ -381,22 +372,19 @@ static int ext4_validate_block_bitmap(st
  	if (unlikely(!ext4_block_bitmap_csum_verify(sb, block_group,
  			desc, bh))) {
  		ext4_unlock_group(sb, block_group);
@@ -59,7 +59,7 @@ index e069155..692b5e4 100644
 +				EXT4_GROUP_INFO_BBITMAP_CORRUPT,
 +				"bg %u: bad block bitmap checksum",
 +				block_group);
-		return -EFSBADCRC;
+ 		return -EFSBADCRC;
  	}
  	blk = ext4_valid_block_bitmap(sb, desc, block_group, bh);
  	if (unlikely(blk != 0)) {
@@ -74,18 +74,18 @@ index e069155..692b5e4 100644
 +				EXT4_GROUP_INFO_BBITMAP_CORRUPT,
 +				"bg %u: block %llu: invalid block bitmap",
 +				block_group, blk);
-		return -EFSCORRUPTED;
+ 		return -EFSCORRUPTED;
  	}
  	set_buffer_verified(bh);
-@@ -445,8 +432,6 @@ ext4_read_block_bitmap_nowait(struct super_block *sb, ext4_group_t block_group)
+@@ -467,8 +455,6 @@ ext4_read_block_bitmap_nowait(struct sup
  		ext4_unlock_group(sb, block_group);
  		unlock_buffer(bh);
-		if (err) {
+ 		if (err) {
 -			ext4_error(sb, "Failed to init block bitmap for group "
 -				   "%u: %d", block_group, err);
-			goto out;
-		}
-		goto verify;
+ 			goto out;
+ 		}
+ 		goto verify;
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 index 3c41773..63a63b6 100644
 --- a/fs/ext4/ext4.h
