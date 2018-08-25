@@ -80,51 +80,51 @@ EXPORT_SYMBOL(lustre_uuid_to_peer);
    LNET will choose the best one. */
 int class_add_uuid(const char *uuid, __u64 nid)
 {
-        struct uuid_nid_data *data, *entry;
-        int found = 0;
+	struct uuid_nid_data *data, *entry;
+	int found = 0;
 
-        LASSERT(nid != 0);  /* valid newconfig NID is never zero */
+	LASSERT(nid != 0);  /* valid newconfig NID is never zero */
 
-        if (strlen(uuid) > UUID_MAX - 1)
-                return -EOVERFLOW;
+	if (strlen(uuid) > UUID_MAX - 1)
+		return -EOVERFLOW;
 
-        OBD_ALLOC_PTR(data);
-        if (data == NULL)
-                return -ENOMEM;
+	OBD_ALLOC_PTR(data);
+	if (data == NULL)
+		return -ENOMEM;
 
-        obd_str2uuid(&data->un_uuid, uuid);
-        data->un_nids[0] = nid;
-        data->un_nid_count = 1;
+	obd_str2uuid(&data->un_uuid, uuid);
+	data->un_nids[0] = nid;
+	data->un_nid_count = 1;
 
 	spin_lock(&g_uuid_lock);
 	list_for_each_entry(entry, &g_uuid_list, un_list) {
-                if (obd_uuid_equals(&entry->un_uuid, &data->un_uuid)) {
-                        int i;
+		if (obd_uuid_equals(&entry->un_uuid, &data->un_uuid)) {
+			int i;
 
-                        found = 1;
-                        for (i = 0; i < entry->un_nid_count; i++)
-                                if (nid == entry->un_nids[i])
-                                        break;
+			found = 1;
+			for (i = 0; i < entry->un_nid_count; i++)
+				if (nid == entry->un_nids[i])
+					break;
 
-                        if (i == entry->un_nid_count) {
-                                LASSERT(entry->un_nid_count < NIDS_MAX);
-                                entry->un_nids[entry->un_nid_count++] = nid;
-                        }
-                        break;
-                }
-        }
-        if (!found)
+			if (i == entry->un_nid_count) {
+				LASSERT(entry->un_nid_count < NIDS_MAX);
+				entry->un_nids[entry->un_nid_count++] = nid;
+			}
+			break;
+		}
+	}
+	if (!found)
 		list_add(&data->un_list, &g_uuid_list);
 	spin_unlock(&g_uuid_lock);
 
-        if (found) {
-                CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid,
-                       libcfs_nid2str(nid), entry->un_nid_count);
-                OBD_FREE(data, sizeof(*data));
-        } else {
-                CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
-        }
-        return 0;
+	if (found) {
+		CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid,
+		       libcfs_nid2str(nid), entry->un_nid_count);
+		OBD_FREE(data, sizeof(*data));
+	} else {
+		CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
+	}
+	return 0;
 }
 
 /* Delete the nids for one uuid if specified, otherwise delete all */
@@ -173,29 +173,30 @@ int class_del_uuid(const char *uuid)
 /* check if @nid exists in nid list of @uuid */
 int class_check_uuid(struct obd_uuid *uuid, __u64 nid)
 {
-        struct uuid_nid_data *entry;
-        int found = 0;
-        ENTRY;
+	struct uuid_nid_data *entry;
+	int found = 0;
 
-        CDEBUG(D_INFO, "check if uuid %s has %s.\n",
-               obd_uuid2str(uuid), libcfs_nid2str(nid));
+	ENTRY;
+
+	CDEBUG(D_INFO, "check if uuid %s has %s.\n",
+	       obd_uuid2str(uuid), libcfs_nid2str(nid));
 
 	spin_lock(&g_uuid_lock);
 	list_for_each_entry(entry, &g_uuid_list, un_list) {
-                int i;
+		int i;
 
-                if (!obd_uuid_equals(&entry->un_uuid, uuid))
+		if (!obd_uuid_equals(&entry->un_uuid, uuid))
                         continue;
 
-                /* found the uuid, check if it has @nid */
-                for (i = 0; i < entry->un_nid_count; i++) {
-                        if (entry->un_nids[i] == nid) {
-                                found = 1;
-                                break;
-                        }
-                }
-                break;
-        }
+		/* found the uuid, check if it has @nid */
+		for (i = 0; i < entry->un_nid_count; i++) {
+			if (entry->un_nids[i] == nid) {
+				found = 1;
+				break;
+			}
+		}
+		break;
+	}
 	spin_unlock(&g_uuid_lock);
 	RETURN(found);
 }
