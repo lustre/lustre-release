@@ -46,7 +46,7 @@ static __u64 handle_base;
 static DEFINE_SPINLOCK(handle_base_lock);
 
 static struct handle_bucket {
-	spinlock_t	 lock;
+	spinlock_t lock;
 	struct list_head head;
 } *handle_hash;
 
@@ -60,16 +60,17 @@ static struct handle_bucket {
 void class_handle_hash(struct portals_handle *h,
 		       struct portals_handle_ops *ops)
 {
-        struct handle_bucket *bucket;
-        ENTRY;
+	struct handle_bucket *bucket;
 
-        LASSERT(h != NULL);
+	ENTRY;
+
+	LASSERT(h != NULL);
 	LASSERT(list_empty(&h->h_link));
 
-        /*
-         * This is fast, but simplistic cookie generation algorithm, it will
-         * need a re-do at some point in the future for security.
-         */
+	/*
+	 * This is fast, but simplistic cookie generation algorithm, it will
+	 * need a re-do at some point in the future for security.
+	 */
 	spin_lock(&handle_base_lock);
 	handle_base += HANDLE_INCR;
 
@@ -104,12 +105,12 @@ static void class_handle_unhash_nolock(struct portals_handle *h)
 {
 	if (list_empty(&h->h_link)) {
 		CERROR("removing an already-removed handle (%#llx)\n",
-                       h->h_cookie);
-                return;
-        }
+		       h->h_cookie);
+		return;
+	}
 
 	CDEBUG(D_INFO, "removing object %p with handle %#llx from hash\n",
-               h, h->h_cookie);
+	       h, h->h_cookie);
 
 	spin_lock(&h->h_lock);
 	if (h->h_in == 0) {
@@ -150,21 +151,24 @@ EXPORT_SYMBOL(class_handle_hash_back);
 
 void *class_handle2object(__u64 cookie, const void *owner)
 {
-        struct handle_bucket *bucket;
-        struct portals_handle *h;
-        void *retval = NULL;
-        ENTRY;
+	struct handle_bucket *bucket;
+	struct portals_handle *h;
+	void *retval = NULL;
 
-        LASSERT(handle_hash != NULL);
+	ENTRY;
 
-	/* Be careful when you want to change this code. See the
-	 * rcu_read_lock() definition on top this file. - jxiong */
-        bucket = handle_hash + (cookie & HANDLE_HASH_MASK);
+	LASSERT(handle_hash != NULL);
 
-        rcu_read_lock();
-        list_for_each_entry_rcu(h, &bucket->head, h_link) {
+	/*
+	 * Be careful when you want to change this code. See the
+	 * rcu_read_lock() definition on top this file. - jxiong
+	 */
+	bucket = handle_hash + (cookie & HANDLE_HASH_MASK);
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(h, &bucket->head, h_link) {
 		if (h->h_cookie != cookie || h->h_owner != owner)
-                        continue;
+			continue;
 
 		spin_lock(&h->h_lock);
 		if (likely(h->h_in != 0)) {
@@ -197,15 +201,15 @@ EXPORT_SYMBOL(class_handle_free_cb);
 
 int class_handle_init(void)
 {
-        struct handle_bucket *bucket;
+	struct handle_bucket *bucket;
 	struct timespec64 ts;
-        int seed[2];
+	int seed[2];
 
-        LASSERT(handle_hash == NULL);
+	LASSERT(handle_hash == NULL);
 
-        OBD_ALLOC_LARGE(handle_hash, sizeof(*bucket) * HANDLE_HASH_SIZE);
-        if (handle_hash == NULL)
-                return -ENOMEM;
+	OBD_ALLOC_LARGE(handle_hash, sizeof(*bucket) * HANDLE_HASH_SIZE);
+	if (handle_hash == NULL)
+		return -ENOMEM;
 
 	for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
 	     bucket--) {
@@ -218,10 +222,10 @@ int class_handle_init(void)
 	ktime_get_ts64(&ts);
 	cfs_srand(ts.tv_sec ^ seed[0], ts.tv_nsec ^ seed[1]);
 
-        cfs_get_random_bytes(&handle_base, sizeof(handle_base));
-        LASSERT(handle_base != 0ULL);
+	cfs_get_random_bytes(&handle_base, sizeof(handle_base));
+	LASSERT(handle_base != 0ULL);
 
-        return 0;
+	return 0;
 }
 
 static int cleanup_all_handles(void)
@@ -248,14 +252,15 @@ static int cleanup_all_handles(void)
 
 void class_handle_cleanup(void)
 {
-        int count;
-        LASSERT(handle_hash != NULL);
+	int count;
 
-        count = cleanup_all_handles();
+	LASSERT(handle_hash != NULL);
 
-        OBD_FREE_LARGE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
-        handle_hash = NULL;
+	count = cleanup_all_handles();
 
-        if (count != 0)
-                CERROR("handle_count at cleanup: %d\n", count);
+	OBD_FREE_LARGE(handle_hash, sizeof(*handle_hash) * HANDLE_HASH_SIZE);
+	handle_hash = NULL;
+
+	if (count != 0)
+		CERROR("handle_count at cleanup: %d\n", count);
 }
