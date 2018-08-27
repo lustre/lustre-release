@@ -526,6 +526,7 @@ static void sub_trans_stop_cb(struct lu_env *env,
 	struct top_multiple_thandle	*tmt = cb->dcb_data;
 	ENTRY;
 
+	spin_lock(&tmt->tmt_sub_lock);
 	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
 		if (st->st_stopped)
 			continue;
@@ -536,6 +537,7 @@ static void sub_trans_stop_cb(struct lu_env *env,
 			break;
 		}
 	}
+	spin_unlock(&tmt->tmt_sub_lock);
 
 	wake_up(&tmt->tmt_stop_waitq);
 	RETURN_EXIT;
