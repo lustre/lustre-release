@@ -909,9 +909,15 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 	mdt_lock_reg_init(lhc, lm);
 
-	/* one problem to return layout lock on open is that it may result
-	 * in too many layout locks cached on the client side. */
+	/* Return lookup lock to validate inode at the client side.
+	 * This is pretty important otherwise MDT will return layout
+	 * lock for each open.
+	 * However this is a double-edged sword because changing
+	 * permission will revoke a huge number of LOOKUP locks.
+	 */
 	if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_OPEN) && try_layout) {
+		if (!(*ibits & MDS_INODELOCK_LOOKUP))
+			trybits |= MDS_INODELOCK_LOOKUP;
 		trybits |= MDS_INODELOCK_LAYOUT;
 	}
 
