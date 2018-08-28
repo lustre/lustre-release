@@ -51,6 +51,11 @@
  * @{
  */
 #include <linux/kobject.h>
+#ifdef HAVE_RHASHTABLE_LOOKUP_GET_INSERT_FAST
+#include <linux/rhashtable.h>
+#else
+#include <libcfs/linux/linux-hash.h>
+#endif
 #include <linux/uio.h>
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
@@ -524,7 +529,7 @@ struct ptlrpc_replay_async_args {
  */
 struct ptlrpc_connection {
 	/** linkage for connections hash table */
-	struct hlist_node        c_hash;
+	struct rhash_head	c_hash;
 	/** Our own lnet nid for this connection */
 	lnet_nid_t              c_self;
 	/** Remote side nid for this connection */
