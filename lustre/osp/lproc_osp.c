@@ -418,13 +418,16 @@ osp_max_create_count_seq_write(struct file *file, const char __user *buffer,
 	if (rc)
 		return rc;
 
-	if (val < 0 || val > INT_MAX)
-		return -ERANGE;
-	if (val > OST_MAX_PRECREATE)
+	if (val && (val < OST_MIN_PRECREATE ||
+		    val > OST_MAX_PRECREATE))
 		return -ERANGE;
 
 	if (osp->opd_pre_create_count > val)
 		osp->opd_pre_create_count = val;
+
+	/* Can be 0 after setting max_create_count to 0 */
+	if (osp->opd_pre_create_count == 0 && val != 0)
+		osp->opd_pre_create_count = OST_MIN_PRECREATE;
 
 	osp->opd_pre_max_create_count = val;
 

@@ -16145,6 +16145,7 @@ test_311() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
 	local old_iused=$($LFS df -i | grep OST0000 | awk '{ print $3 }')
+	local mdts=$(comma_list $(mdts_nodes))
 
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE -i 0 -c 1 $DIR/$tdir
@@ -16153,14 +16154,11 @@ test_311() {
 	# statfs data is not real time, let's just calculate it
 	old_iused=$((old_iused + 1000))
 
-	local count=$(do_facet $SINGLEMDS "lctl get_param -n \
+	local count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
 			osp.*OST0000*MDT0000.create_count")
-	local max_count=$(do_facet $SINGLEMDS "lctl get_param -n \
+	local max_count=$(do_facet $SINGLEMDS "$LCTL get_param -n \
 				osp.*OST0000*MDT0000.max_create_count")
-	for idx in $(seq $MDSCOUNT); do
-		do_facet mds$idx "lctl set_param -n \
-			osp.*OST0000*MDT000?.max_create_count=0"
-	done
+	do_nodes $mdts "$LCTL set_param -n osp.*OST0000*.max_create_count=0"
 
 	$SETSTRIPE -i 0 $DIR/$tdir/$tfile || error "setstripe failed"
 	local index=$($GETSTRIPE -i $DIR/$tdir/$tfile)
@@ -16168,12 +16166,13 @@ test_311() {
 
 	unlinkmany $DIR/$tdir/$tfile. 1000
 
-	for idx in $(seq $MDSCOUNT); do
-		do_facet mds$idx "lctl set_param -n \
-			osp.*OST0000*MDT000?.max_create_count=$max_count"
-		do_facet mds$idx "lctl set_param -n \
-			osp.*OST0000*MDT000?.create_count=$count"
-	done
+	do_nodes $mdts "$LCTL set_param -n \
+			osp.*OST0000*.max_create_count=$max_count"
+	[ $(lustre_version_code $facet) -lt $(version_code 2.11.56) ] &&
+		do_nodes $mdts "$LCTL set_param -n \
+				osp.*OST0000*.create_count=$count"
+	do_nodes $mdts "$LCTL get_param osp.*OST0000*.create_count" |
+			grep "=0" && error "create_count is zero"
 
 	local new_iused
 	for i in $(seq 120); do
