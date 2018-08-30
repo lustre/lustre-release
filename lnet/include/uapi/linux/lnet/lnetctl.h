@@ -1,5 +1,5 @@
 /*
- *   This file is part of Lustre, https://wiki.hpdd.intel.com/
+ *   This file is part of Lustre, https://wiki.whamcloud.com/
  *
  *   Portals is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public

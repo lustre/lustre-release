@@ -1,6 +1,6 @@
 AC_PREREQ([2.57])
 AC_INIT([Lustre], m4_esyscmd([sh -c "./LUSTRE-VERSION-GEN | tr -d '\n'"]),
-        [https://jira.hpdd.intel.com/], [lustre])
+        [https://jira.whamcloud.com/], [lustre])
 
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])

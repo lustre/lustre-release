@@ -160,7 +160,7 @@ static void dio_complete_routine(struct bio *bio, int error)
 		CERROR("***** bio->bi_private is NULL!  This should never "
 		       "happen.  Normally, I would crash here, but instead I "
 		       "will dump the bio contents to the console.  Please "
-		       "report this to <https://jira.hpdd.intel.com/> , along "
+		       "report this to <https://jira.whamcloud.com/> , along "
 		       "with any interesting messages leading up to this point "
 		       "(like SCSI errors, perhaps).  Because bi_private is "
 		       "NULL, I can't wake up the thread that initiated this "

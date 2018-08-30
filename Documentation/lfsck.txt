@@ -280,7 +280,7 @@ References
 
 source code: 	   lustre/lfsck/*.[ch], lustre/osd-ldiskfs/scrub.c
 
-operations manual: https://build.hpdd.intel.com/job/lustre-manual/lastSuccessfulBuild/artifact/lustre_manual.xhtml#dbdoclet.lfsckadmin
+operations manual: https://build.whamcloud.com/job/lustre-manual/lastSuccessfulBuild/artifact/lustre_manual.xhtml#dbdoclet.lfsckadmin
 
 useful links:      https://www.youtube.com/watch?v=jfLo1eYSh2o
                    http://wiki.lustre.org/images/c/c6/Zhuravlev_LFSCK_LUG-2013.pdf

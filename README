@@ -1,18 +1,18 @@
 Instructions for building, configuring and running Lustre:
-    https://wiki.hpdd.intel.com/display/PUB/Building+Lustre+from+Source
+    https://wiki.whamcloud.com/display/PUB/Building+Lustre+from+Source
 and
-    https://wiki.hpdd.intel.com/display/PUB/Getting+started+with+Lustre.
+    https://wiki.whamcloud.com/display/PUB/Getting+started+with+Lustre.
 
 Instructions for contributing patches for Lustre:
-    https://wiki.hpdd.intel.com/display/PUB/Submitting+Changes
+    https://wiki.whamcloud.com/display/PUB/Submitting+Changes
 and
-    https://wiki.hpdd.intel.com/display/PUB/Using+Gerrit
+    https://wiki.whamcloud.com/display/PUB/Using+Gerrit
 
 The Lustre Coding Style Guidelines can be found at:
-    https://wiki.hpdd.intel.com/display/PUB/Coding+Guidelines
+    https://wiki.whamcloud.com/display/PUB/Coding+Guidelines
 
 The Lustre Test Script Style Guidelines can be found at:
-    https://wiki.hpdd.intel.com/display/PUB/Test+Coding+Style
+    https://wiki.whamcloud.com/display/PUB/Test+Coding+Style
 
 In order to improve the quality of patches submitted to the Lustre tree,
 it is possible to automatically check every patch and commit against the
