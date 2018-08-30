@@ -19170,6 +19170,20 @@ test_415() {
 }
 run_test 415 "lock revoke is not missing"
 
+
+test_416() {
+	[ $(lustre_version_code mds1) -lt $(version_code 2.11.55) ] &&
+		skip "Need server version at least 2.11.55"
+
+	# define OBD_FAIL_OSD_TXN_START    0x19a
+	do_facet mds1 lctl set_param fail_loc=0x19a
+
+	lfs mkdir -c $MDSCOUNT $DIR/$tdir
+
+	true
+}
+run_test 416 "transaction start failure won't cause system hung"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&

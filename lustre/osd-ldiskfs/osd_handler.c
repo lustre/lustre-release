@@ -1894,6 +1894,9 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 			oh->ot_credits = osd_transaction_size(dev);
 	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
+		GOTO(out, rc = -EIO);
+
 	/*
 	 * XXX temporary stuff. Some abstraction layer should
 	 * be used.

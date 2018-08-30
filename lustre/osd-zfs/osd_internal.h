@@ -279,8 +279,7 @@ struct osd_thandle {
 	struct list_head	 ot_sa_list;
 	dmu_tx_t		*ot_tx;
 	struct lquota_trans	 ot_quota_trans;
-	__u32			 ot_write_commit:1,
-				 ot_assigned:1;
+	__u32			 ot_assigned:1;
 };
 
 #define OSD_OI_NAME_SIZE        24

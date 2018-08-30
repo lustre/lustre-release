@@ -82,9 +82,11 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
 		struct sub_thandle_cookie *stc;
 
-		CDEBUG(mask, "st %p obd %s committed %d stopped %d sub_th %p\n",
+		CDEBUG(mask, "st %p obd %s committed %d started %d stopped %d "
+		       "result %d sub_th %p\n",
 		       st, st->st_dt->dd_lu_dev.ld_obd->obd_name,
-		       st->st_committed, st->st_stopped, st->st_sub_th);
+		       st->st_committed, st->st_started, st->st_stopped,
+		       st->st_result, st->st_sub_th);
 
 		list_for_each_entry(stc, &st->st_cookie_list, stc_list) {
 			CDEBUG(mask, " cookie "DFID".%u\n",
@@ -1018,6 +1020,8 @@ stop_master_trans:
 			sub_trans_commit_cb_internal(tmt,
 						master_st->st_sub_th, rc);
 		if (rc < 0) {
+			CERROR("%s: stop trans failed: rc = %d\n",
+			       master_dev->dd_lu_dev.ld_obd->obd_name, rc);
 			th->th_result = rc;
 			GOTO(stop_other_trans, rc);
 		} else if (tur != NULL && tur->tur_update_records != NULL) {
@@ -1055,6 +1059,9 @@ stop_master_trans:
 
 			rc = sub_updates_write(env, lur, st);
 			if (rc < 0) {
+				CERROR("%s: write updates failed: rc = %d\n",
+				       st->st_dt->dd_lu_dev.ld_obd->obd_name,
+				       rc);
 				th->th_result = rc;
 				break;
 			}
@@ -1074,8 +1081,12 @@ stop_other_trans:
 		st->st_sub_th->th_result = th->th_result;
 		rc = dt_trans_stop(env, st->st_sub_th->th_dev,
 				   st->st_sub_th);
-		if (unlikely(rc < 0 && th->th_result == 0))
-			th->th_result = rc;
+		if (rc < 0) {
+			CERROR("%s: stop trans failed: rc = %d\n",
+			       st->st_dt->dd_lu_dev.ld_obd->obd_name, rc);
+			if (th->th_result == 0)
+				th->th_result = rc;
+		}
 	}
 
 	rc = top_trans_wait_result(top_th);

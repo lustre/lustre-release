@@ -194,8 +194,10 @@ static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 			   struct thandle *th)
 {
-	struct osd_thandle	*oh;
-	int			rc;
+	struct osd_device *osd = osd_dt_dev(d);
+	struct osd_thandle *oh;
+	int rc;
+
 	ENTRY;
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
@@ -203,17 +205,19 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	LASSERT(oh->ot_tx);
 
 	rc = dt_txn_hook_start(env, d, th);
-	if (rc != 0)
+	if (rc != 0) {
+		CERROR("%s: dt_txn_hook_start failed: rc = %d\n",
+			osd->od_svname, rc);
 		RETURN(rc);
+	}
 
-	if (oh->ot_write_commit && OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC))
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_TXN_START))
 		/* Unlike ldiskfs, ZFS checks for available space and returns
 		 * -ENOSPC when assigning txg */
-		RETURN(-ENOSPC);
+		RETURN(-EIO);
 
 	rc = -dmu_tx_assign(oh->ot_tx, TXG_WAIT);
 	if (unlikely(rc != 0)) {
-		struct osd_device *osd = osd_dt_dev(d);
 		/* dmu will call commit callback with error code during abort */
 		if (!lu_device_is_md(&d->dd_lu_dev) && rc == -ENOSPC)
 			CERROR("%s: failed to start transaction due to ENOSPC"
@@ -292,6 +296,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	if (oh->ot_assigned == 0) {
 		LASSERT(oh->ot_tx);
+		CDEBUG(D_OTHER, "%s: transaction is aborted\n", osd->od_svname);
+		osd_trans_stop_cb(oh, th->th_result);
 		dmu_tx_abort(oh->ot_tx);
 		osd_object_sa_dirty_rele(env, oh);
 		osd_unlinked_list_emptify(env, osd, &unlinked, false);

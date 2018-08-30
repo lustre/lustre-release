@@ -692,8 +692,6 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		space += osd_roundup2blocksz(size, offset, blksz);
 	}
 
-	oh->ot_write_commit = 1; /* used in osd_trans_start() for fail_loc */
-
 	/* backend zfs filesystem might be configured to store multiple data
 	 * copies */
 	space  *= osd->od_os->os_copies;
@@ -832,6 +830,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	    lnb[npages - 1].lnb_file_offset + lnb[npages - 1].lnb_len >=
 	    osd->od_readcache_max_filesize)
 		drop_cache = 1;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC))
+		RETURN(-ENOSPC);
 
 	/* LU-8791: take oo_guard to avoid the deadlock that changing block
 	 * size and assigning arcbuf take place at the same time.
