@@ -2043,7 +2043,7 @@ void ll_delete_inode(struct inode *inode)
 	truncate_inode_pages_final(&inode->i_data);
 
 	LASSERTF(inode->i_data.nrpages == 0, "inode="DFID"(%p) nrpages=%lu, "
-		 "see https://jira.hpdd.intel.com/browse/LU-118\n",
+		 "see https://jira.whamcloud.com/browse/LU-118\n",
 		 PFID(ll_inode2fid(inode)), inode, inode->i_data.nrpages);
 
 #ifdef HAVE_SBOPS_EVICT_INODE

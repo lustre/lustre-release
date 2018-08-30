@@ -1,6 +1,6 @@
 08-27-2018 Whamcloud
        * version 2.10.5
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -41,7 +41,7 @@
 
 05-22-2018 Intel Corporation
        * version 2.10.4
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -81,7 +81,7 @@
 
 01-31-2018 Intel Corporation
        * version 2.10.3
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -123,7 +123,7 @@
 
 12-11-2017 Intel Corporation
        * version 2.10.2
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -164,7 +164,7 @@
 
 10-02-2017 Intel Corporation
        * version 2.10.1
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -203,7 +203,7 @@
 
 2017-07-05 Intel Corporation
        * version 2.10.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -242,7 +242,7 @@
 
 12-07-2016 Intel Corporation
        * version 2.9.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -277,7 +277,7 @@
 
 02-29-2016 Intel Corporation
        * version 2.8.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -309,7 +309,7 @@
 
 03-10-2015 Intel Corporation
        * version 2.7.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.29.2.el6 (RHEL6.5)
@@ -345,7 +345,7 @@ Details    : Introduce new flag OBD_ROCOMPAT_IDX_IN_IDIF that is stored in the
 
 07-30-2014 Intel Corporation
        * version 2.6.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server known to build on patched kernels:
          2.6.32-431.20.3.el6 (RHEL6.5)
@@ -366,7 +366,7 @@ Details    : Introduce new flag OBD_ROCOMPAT_IDX_IN_IDIF that is stored in the
 
 10-31-2013 Intel Corporation
        * version 2.5.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
        * Server builds for kernels:
          2.6.32-358.18.1.el6  (RHEL6.4)
        * Client builds for unpatched kernels:
@@ -384,7 +384,7 @@ Details    : Introduce new flag OBD_ROCOMPAT_IDX_IN_IDIF that is stored in the
 
 05-30-2013 Intel Corporation
        * version 2.4.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
        * Server builds for kernels:
          2.6.32-358.6.2.el6  (RHEL6.4)
        * Client builds for unpatched kernels:
@@ -402,7 +402,7 @@ Details    : Introduce new flag OBD_ROCOMPAT_IDX_IN_IDIF that is stored in the
 
 9-30-2012 Whamcloud, Inc.
        * version 2.3.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
        * Server support for kernels:
 	 2.6.32-279.5.1.el6 (RHEL6)
        * Client support for unpatched kernels:
@@ -441,7 +441,7 @@ Description: Update RHEL6.2 kernel to 2.6.32-220.7.1.el6
 
 04-30-2012 Whamcloud, Inc.
        * version 2.2.0
-       * See https://wiki.hpdd.intel.com/display/PUB/Lustre+Support+Matrix
+       * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
        * Server support for kernels:
          2.6.32-220.4.2.el6  (RHEL6)
        * Client support for unpatched kernels:

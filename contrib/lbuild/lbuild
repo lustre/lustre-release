@@ -165,7 +165,7 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Path to an existing lustre source tarball to use.
 
   --nodownload
-    Do not try to download a kernel from downloads.hpdd.intel.com
+    Do not try to download a kernel from downloads.whamcloud.com
 
   --nosrc
     Do not build a .src.rpm, a full kernel patch, or a patched kernel
@@ -479,7 +479,7 @@ download_srpm() {
 	# let the download_file handle the concurrency
 	if $DOWNLOAD; then
 		local location= \
-		"https://downloads.hpdd.intel.com/public/kernels/$target/old"
+		"https://downloads.whamcloud.com/public/kernels/$target/old"
 		# get the location from a distro specific method if it exists
 		if type -p kernel_srpm_location; then
 			location=$(kernel_srpm_location)

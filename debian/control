@@ -6,7 +6,7 @@ Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.8.3
 Build-Depends: module-assistant, libreadline-dev, debhelper (>=7.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libtool, libyaml-dev, libselinux-dev, libsnmp-dev, mpi-default-dev, bzip2, quilt, linux-headers-generic | linux-headers | linux-headers-amd64, rsync
 Homepage: https://wiki.hpdd.intel.com/
-Vcs-Git: git://git.hpdd.intel.com/fs/lustre-release.git
+Vcs-Git: git://git.whamcloud.com/fs/lustre-release.git
 
 Package: lustre-source
 Section: admin
@@ -16,7 +16,7 @@ Depends: module-assistant, bzip2, debhelper (>= 7.0.0), libtool, libyaml-dev, li
 Description: source for Lustre filesystem client kernel modules
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
- https://wiki.hpdd.intel.com/
+ https://wiki.whamcloud.com/
  .
  This package contains the module source. The client kernel modules
  can be built for kernels 2.6.32+ with the use of module-assistant
@@ -30,7 +30,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp30
 Description: Userspace utilities for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
- https://wiki.hpdd.intel.com/
+ https://wiki.whamcloud.com/
  .
  This package provides a number of userspace utilities for
  maintaining Lustre filesystems.
@@ -43,7 +43,7 @@ Depends: lustre-utils (= ${binary:Version}), python, perl, sg3-utils
 Description: Collection of benchmark tools for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
- https://wiki.hpdd.intel.com/
+ https://wiki.whamcloud.com/
  .
  This package provides a collection of benchmark tools
 
@@ -55,7 +55,7 @@ Depends: lustre-iokit (= ${binary:Version}), attr, rsync, perl, lsof, mpi-defaul
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
- https://wiki.hpdd.intel.com/
+ https://wiki.whamcloud.com/
  .
  This package provides a number of test utilities for the Lustre filesystem.
 
@@ -67,6 +67,6 @@ Depends: lustre-utils (= ${binary:Version})
 Description: Development files for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
- https://wiki.hpdd.intel.com/
+ https://wiki.whamcloud.com/
  .
  This package provides development libraries for the Lustre filesystem.

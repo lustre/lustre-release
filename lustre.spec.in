@@ -130,7 +130,7 @@ Source4: kmp-lustre-osd-ldiskfs.files
 Source5: kmp-lustre-osd-zfs.preamble
 Source6: kmp-lustre-osd-zfs.files
 Source7: kmp-lustre-tests.files
-URL: https://wiki.hpdd.intel.com/
+URL: https://wiki.whamcloud.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 BuildRequires: libtool
