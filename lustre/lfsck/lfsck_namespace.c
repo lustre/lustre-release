@@ -1614,16 +1614,22 @@ again:
 		lfsck_namespace_filter_linkea_entry(&ldata_new, cname, pfid,
 						    true);
 
-	if (buflen < ldata_new.ld_leh->leh_len) {
+	/*
+	 * linkea may change because it doesn't take lock in the first read, if
+	 * it becomes larger, restart from beginning.
+	 */
+	if ((ldata_new.ld_leh->leh_reccount > 0 ||
+	     unlikely(ldata_new.ld_leh->leh_overflow_time)) &&
+	    buflen < ldata_new.ld_leh->leh_len) {
 		dt_write_unlock(env, obj);
 		dt_trans_stop(env, dev, th);
 		lfsck_buf_init(&linkea_buf, ldata_new.ld_buf->lb_buf,
 			       ldata_new.ld_leh->leh_len);
+		buflen = linkea_buf.lb_len;
 		goto again;
 	}
 
-	if (ldata_new.ld_leh->leh_reccount > 0 ||
-	    unlikely(ldata->ld_leh->leh_overflow_time))
+	if (buflen)
 		rc = lfsck_links_write(env, obj, &ldata_new, th);
 	else
 		rc = dt_xattr_del(env, obj, XATTR_NAME_LINK, th);
