@@ -349,7 +349,7 @@ struct ksock_conn {
         lnet_kiov_t          *ksnc_rx_kiov;     /* the page frags */
 	union ksock_rxiovspace	ksnc_rx_iov_space;/* space for frag descriptors */
         __u32                 ksnc_rx_csum;     /* partial checksum for incoming data */
-        void                 *ksnc_cookie;      /* rx lnet_finalize passthru arg */
+	struct lnet_msg      *ksnc_lnet_msg;    /* rx lnet_finalize arg*/
 	struct ksock_msg	ksnc_msg;	/* incoming message buffer:
 						 * V2.x message takes the
 						 * whole struct
