@@ -710,6 +710,7 @@ struct lod_obj_stripe_cb_data {
 	union {
 		const struct lu_attr	*locd_attr;
 		int			locd_ost_index;
+		const struct lu_buf	*locd_buf;
 	};
 	lod_obj_stripe_cb_t		locd_stripe_cb;
 	lod_obj_comp_skip_cb_t		locd_comp_skip_cb;

@@ -3931,18 +3931,19 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 		return rc;
 
 	if (S_ISREG(attr->la_mode)) {
+		struct lu_buf fid_buf;
+
 		handle->th_complex = 1;
 
-		rc = mdo_declare_xattr_del(env, sobj, XATTR_NAME_LOV, handle);
+		/* target may be remote, update PFID via sobj. */
+		fid_buf.lb_buf = (void *)mdo2fid(tobj);
+		fid_buf.lb_len = sizeof(struct lu_fid);
+		rc = mdo_declare_xattr_set(env, sobj, &fid_buf, XATTR_NAME_FID,
+					   0, handle);
 		if (rc)
 			return rc;
 
-		/*
-		 * target is not initalized because its LOV is copied from
-		 * source in mdd_migrate_create(), declare via sobj.
-		 */
-		rc = mdo_declare_xattr_set(env, sobj, NULL, XATTR_NAME_FID, 0,
-					   handle);
+		rc = mdo_declare_xattr_del(env, sobj, XATTR_NAME_LOV, handle);
 		if (rc)
 			return rc;
 	}
@@ -4052,16 +4053,22 @@ static int mdd_migrate_create(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
+	/* for regular file, update OST objects XATTR_NAME_FID */
 	if (S_ISREG(attr->la_mode)) {
+		struct lu_buf fid_buf;
+
+		/* target may be remote, update PFID via sobj. */
+		fid_buf.lb_buf = (void *)mdo2fid(tobj);
+		fid_buf.lb_len = sizeof(struct lu_fid);
+		rc = mdo_xattr_set(env, sobj, &fid_buf, XATTR_NAME_FID, 0,
+				   handle);
+		if (rc)
+			RETURN(rc);
+
 		/* delete LOV to avoid deleting OST objs when destroying sobj */
 		mdd_write_lock(env, sobj, MOR_SRC_CHILD);
 		rc = mdo_xattr_del(env, sobj, XATTR_NAME_LOV, handle);
 		mdd_write_unlock(env, sobj);
-		if (rc)
-			RETURN(rc);
-
-		/* for regular file, update OST objects XATTR_NAME_FID */
-		rc = mdo_xattr_set(env, tobj, NULL, XATTR_NAME_FID, 0, handle);
 		if (rc)
 			RETURN(rc);
 	}

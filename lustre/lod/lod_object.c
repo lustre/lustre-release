@@ -2473,20 +2473,25 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 		return rc;
 	}
 
-	filter_fid_le_to_cpu(ff, ff, sizeof(*ff));
-
 	/*
-	 * mdd_declare_migrate_create() declares this via source object because
-	 * target is not ready yet, so declare anyway.
+	 * locd_buf is set if it's called by dir migration, which doesn't check
+	 * pfid and comp id.
 	 */
-	if (!data->locd_declare &&
-	    lu_fid_eq(lu_object_fid(&lo->ldo_obj.do_lu), &ff->ff_parent) &&
-	    ff->ff_layout.ol_comp_id == comp->llc_id)
-		return 0;
+	if (data->locd_buf) {
+		memset(ff, 0, sizeof(*ff));
+		ff->ff_parent = *(struct lu_fid *)data->locd_buf->lb_buf;
+	} else {
+		filter_fid_le_to_cpu(ff, ff, sizeof(*ff));
+
+		if (lu_fid_eq(lod_object_fid(lo), &ff->ff_parent) &&
+		    ff->ff_layout.ol_comp_id == comp->llc_id)
+			return 0;
+
+		memset(ff, 0, sizeof(*ff));
+		ff->ff_parent = *lu_object_fid(&lo->ldo_obj.do_lu);
+	}
 
 	/* rewrite filter_fid */
-	memset(ff, 0, sizeof(*ff));
-	ff->ff_parent = *lu_object_fid(&lo->ldo_obj.do_lu);
 	ff->ff_parent.f_ver = stripe_idx;
 	ff->ff_layout.ol_stripe_size = comp->llc_stripe_size;
 	ff->ff_layout.ol_stripe_count = comp->llc_stripe_count;
@@ -2522,11 +2527,11 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
  */
 static int lod_replace_parent_fid(const struct lu_env *env,
 				  struct dt_object *dt,
+				  const struct lu_buf *buf,
 				  struct thandle *th, bool declare)
 {
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct lod_thread_info	*info = lod_env_info(env);
-	struct lu_buf *buf = &info->lti_buf;
 	struct filter_fid *ff;
 	struct lod_obj_stripe_cb_data data = { { 0 } };
 	int rc;
@@ -2548,11 +2553,9 @@ static int lod_replace_parent_fid(const struct lu_env *env,
 			RETURN(rc);
 	}
 
-	buf->lb_buf = info->lti_ea_store;
-	buf->lb_len = info->lti_ea_store_size;
-
 	data.locd_declare = declare;
 	data.locd_stripe_cb = lod_obj_stripe_replace_parent_fid_cb;
+	data.locd_buf = buf;
 	rc = lod_obj_for_each_stripe(env, lo, th, &data);
 
 	RETURN(rc);
@@ -3361,7 +3364,7 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 	} else if (S_ISDIR(mode)) {
 		rc = lod_dir_declare_xattr_set(env, dt, buf, name, fl, th);
 	} else if (strcmp(name, XATTR_NAME_FID) == 0) {
-		rc = lod_replace_parent_fid(env, dt, th, true);
+		rc = lod_replace_parent_fid(env, dt, buf, th, true);
 	} else {
 		rc = lod_sub_declare_xattr_set(env, next, buf, name, fl, th);
 	}
@@ -4230,7 +4233,7 @@ static int lod_xattr_set(const struct lu_env *env,
 		}
 		RETURN(rc);
 	} else if (strcmp(name, XATTR_NAME_FID) == 0) {
-		rc = lod_replace_parent_fid(env, dt, th, false);
+		rc = lod_replace_parent_fid(env, dt, buf, th, false);
 
 		RETURN(rc);
 	}
