@@ -252,6 +252,8 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDS_HSM_CDT_DELAY	 0x164
 #define OBD_FAIL_MDS_ORPHAN_DELETE	 0x165
 #define OBD_FAIL_MDS_RMFID_NET		 0x166
+#define OBD_FAIL_MDS_REINT_OPEN		 0x169
+#define OBD_FAIL_MDS_REINT_OPEN2	 0x16a
 
 /* layout lock */
 #define OBD_FAIL_MDS_NO_LL_GETATTR	 0x170

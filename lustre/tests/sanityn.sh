@@ -1766,6 +1766,57 @@ test_41h() {
 }
 run_test 41h "pdirops: create vs readdir =============="
 
+sub_test_41i() {
+	local PID1 PID2
+	local fail_loc="$1"
+	local ret=0
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=${fail_loc} || true" &>/dev/null
+
+	$MULTIOP $DIR1/$tfile oO_CREAT:O_EXCL:c 2>/dev/null &
+	PID1=$!
+	sleep 0.2
+	$MULTIOP $DIR2/$tfile oO_CREAT:O_EXCL:c 2>/dev/null &
+	PID2=$!
+
+	if ! wait $PID1 && ! wait $PID2; then
+		echo "Both creates failed (1 should fail, 1 should succeed)"
+		ret=1
+	elif wait $PID1 && wait $PID2; then
+		echo "Both creates succeeded (1 should fail, 1 should succeed)"
+		ret=2
+	fi
+
+	#Clean
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x0 || true" &>/dev/null
+	rm -f $DIR/$tfile
+
+	return $ret
+}
+
+test_41i() {
+	[[ $MDS1_VERSION -le $(version_code 2.13.56) ]] ||
+		skip "Need MDS version newer than 2.13.56"
+	local msg fail_loc
+
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN         0x169
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN2        0x16a
+	for fail_loc in "0x80000169" "0x8000016a"; do
+		echo "Begin 100 tests with fail_loc=$fail_loc"
+		printf "Progress: "
+		for i in {1..100}; do
+			printf "*"
+			msg=$(sub_test_41i "$fail_loc") ||
+				{ echo; error "iter=$i : $msg"; }
+		done
+		echo
+	done
+}
+run_test 41i "reint_open: create vs create"
+
+
 # test 42: unlink and blocking operations
 test_42a() {
 	pdo_lru_clear
@@ -2020,6 +2071,62 @@ test_43i() {
 	return 0
 }
 run_test 43i "pdirops: unlink vs remote mkdir"
+
+sub_test_43k() {
+	local PID1 PID2
+	local fail_loc="$1"
+	local ret=0
+
+	# We test in a separate directory to be able to unblock server thread in
+	# cfs_race() if LCK_PW is taken on the parent by mdt_reint_unlink.
+	test_mkdir $DIR2/$tdir
+	touch $DIR2/$tdir/$tfile
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=${fail_loc} || true" &>/dev/null
+	echo content > $DIR1/$tdir/$tfile & PID1=$!
+	sleep 0.5
+	multiop $DIR2/$tdir/$tfile u & PID2=$!
+
+	wait $PID1 ||
+		{ ret=$?; \
+		echo -n "overwriting $tfile should succeed (err=$ret); "; }
+	wait $PID2 ||
+		{ ret=$?; \
+		echo -n "unlinking $tfile should succeed (err=$ret);"; }
+
+	#Clean
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x0 || true" &>/dev/null
+	rm -rf $DIR/$tdir
+
+	return $ret
+}
+
+test_43k() {
+	[[ $MDS1_VERSION -le $(version_code 2.13.56) ]] ||
+		skip "Need MDS version newer than 2.13.56"
+	local msg fail_loc
+
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN         0x169
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN2        0x16a
+	for fail_loc in "0x80000169" "0x8000016a"; do
+		echo "Begin 100 tests with fail_loc=$fail_loc"
+		printf "Progress: "
+		for i in {1..100}; do
+			printf "*"
+			msg=$(sub_test_43k "$fail_loc") ||
+				{ echo; error "iter=$i : $msg"; }
+		done
+		echo
+	done
+
+	#Clean
+	reset_fail_loc
+
+	return 0
+}
+run_test 43k "unlink vs create"
 
 # test 44: rename tgt and blocking operations
 test_44a() {
@@ -2303,6 +2410,60 @@ test_45i() {
 	return 0
 }
 run_test 45i "pdirops: rename src vs remote mkdir"
+
+sub_test_45j() {
+	local PID1 PID2
+	local fail_loc="$1"
+	local ret=0
+
+	# We test in a sparate directory to be able to unblock server thread in
+	# cfs_race if LCK_PW is taken on the parent by mdt_reint_rename.
+	test_mkdir $DIR2/$tdir
+	echo file1 > $DIR2/$tdir/$tfile
+	echo file2 > $DIR2/$tdir/$tfile-2
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=${fail_loc} || true" &>/dev/null
+
+	cat $DIR1/$tdir/$tfile >/dev/null &
+	PID1=$!
+	sleep 0.5
+	mrename $DIR2/$tdir/$tfile-2 $DIR2/$tdir/$tfile > /dev/null &
+	PID2=$!
+
+	wait $PID1 ||
+		{ ret=$?; echo -n "cat $tfile should succeed (err=$ret); "; }
+	wait $PID2 ||
+		{ ret=$?; \
+		echo -n "mrename $tfile-2 to $tfile failed (err=$ret);"; }
+
+	#Clean
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"lctl set_param -n fail_loc=0x0 || true" &>/dev/null
+	rm -rf $DIR/$tdir
+
+	return $ret
+}
+
+test_45j() {
+	[[ $MDS1_VERSION -le $(version_code 2.13.56) ]] ||
+		skip "Need MDS version newer than 2.13.56"
+	local msg fail_loc
+
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN         0x169
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN2        0x16a
+	for fail_loc in "0x80000169" "0x8000016a"; do
+		echo "Begin 100 tests with fail_loc=$fail_loc"
+		printf "Progress: "
+		for i in {1..100}; do
+			printf "*"
+			msg=$(sub_test_45j "$fail_loc") ||
+				{ echo; error "iter=$i : $msg"; }
+		done
+		echo
+	done
+}
+run_test 45j "read vs rename =============="
 
 # test 46: link and blocking operations
 test_46a() {
