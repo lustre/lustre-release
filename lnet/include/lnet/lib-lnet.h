@@ -94,13 +94,12 @@ extern struct lnet the_lnet;			/* THE network */
 
 static inline int lnet_is_route_alive(struct lnet_route *route)
 {
-	if (!route->lr_gateway->lpni_alive)
-		return 0; /* gateway is down */
-	if ((route->lr_gateway->lpni_ping_feats &
-	     LNET_PING_FEAT_NI_STATUS) == 0)
-		return 1; /* no NI status, assume it's alive */
-	/* has NI status, check # down NIs */
-	return route->lr_downis == 0;
+	/* TODO re-implement gateway alive indication */
+	CDEBUG(D_NET, "TODO: reimplement routing. gateway = %s\n",
+	       route->lr_gateway ?
+		libcfs_nid2str(route->lr_gateway->lp_primary_nid) :
+		"undefined");
+	return 1;
 }
 
 static inline int lnet_is_wire_handle_none(struct lnet_handle_wire *wh)
@@ -448,9 +447,9 @@ lnet_peer_ni_decref_locked(struct lnet_peer_ni *lp)
 }
 
 static inline int
-lnet_isrouter(struct lnet_peer_ni *lp)
+lnet_isrouter(struct lnet_peer_ni *lpni)
 {
-	return lp->lpni_rtr_refcount != 0;
+	return lpni->lpni_peer_net->lpn_peer->lp_rtr_refcount != 0;
 }
 
 static inline void

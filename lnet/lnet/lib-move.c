@@ -1063,39 +1063,47 @@ lnet_post_routed_recv_locked(struct lnet_msg *msg, int do_recv)
 	 * sets do_recv FALSE and I don't do the unlock/send/lock bit.
 	 * I return LNET_CREDIT_WAIT if msg blocked and LNET_CREDIT_OK if
 	 * received or OK to receive */
-	struct lnet_peer_ni *lp = msg->msg_rxpeer;
+	struct lnet_peer_ni *lpni = msg->msg_rxpeer;
+	struct lnet_peer *lp;
 	struct lnet_rtrbufpool *rbp;
 	struct lnet_rtrbuf *rb;
 
-	LASSERT (msg->msg_iov == NULL);
-	LASSERT (msg->msg_kiov == NULL);
-	LASSERT (msg->msg_niov == 0);
-	LASSERT (msg->msg_routing);
-	LASSERT (msg->msg_receiving);
-	LASSERT (!msg->msg_sending);
+	LASSERT(msg->msg_iov == NULL);
+	LASSERT(msg->msg_kiov == NULL);
+	LASSERT(msg->msg_niov == 0);
+	LASSERT(msg->msg_routing);
+	LASSERT(msg->msg_receiving);
+	LASSERT(!msg->msg_sending);
+	LASSERT(lpni->lpni_peer_net);
+	LASSERT(lpni->lpni_peer_net->lpn_peer);
+
+	lp = lpni->lpni_peer_net->lpn_peer;
 
 	/* non-lnet_parse callers only receive delayed messages */
 	LASSERT(!do_recv || msg->msg_rx_delayed);
 
 	if (!msg->msg_peerrtrcredit) {
-		spin_lock(&lp->lpni_lock);
-		LASSERT((lp->lpni_rtrcredits < 0) ==
-			!list_empty(&lp->lpni_rtrq));
+		/* lpni_lock protects the credit manipulation */
+		spin_lock(&lpni->lpni_lock);
+		/* lp_lock protects the lp_rtrq */
+		spin_lock(&lp->lp_lock);
 
 		msg->msg_peerrtrcredit = 1;
-		lp->lpni_rtrcredits--;
-		if (lp->lpni_rtrcredits < lp->lpni_minrtrcredits)
-			lp->lpni_minrtrcredits = lp->lpni_rtrcredits;
+		lpni->lpni_rtrcredits--;
+		if (lpni->lpni_rtrcredits < lpni->lpni_minrtrcredits)
+			lpni->lpni_minrtrcredits = lpni->lpni_rtrcredits;
 
-		if (lp->lpni_rtrcredits < 0) {
+		if (lpni->lpni_rtrcredits < 0) {
 			/* must have checked eager_recv before here */
 			LASSERT(msg->msg_rx_ready_delay);
 			msg->msg_rx_delayed = 1;
-			list_add_tail(&msg->msg_list, &lp->lpni_rtrq);
-			spin_unlock(&lp->lpni_lock);
+			list_add_tail(&msg->msg_list, &lp->lp_rtrq);
+			spin_unlock(&lp->lp_lock);
+			spin_unlock(&lpni->lpni_lock);
 			return LNET_CREDIT_WAIT;
 		}
-		spin_unlock(&lp->lpni_lock);
+		spin_unlock(&lp->lp_lock);
+		spin_unlock(&lpni->lpni_lock);
 	}
 
 	rbp = lnet_msg2bufpool(msg);
@@ -1266,7 +1274,8 @@ lnet_drop_routed_msgs_locked(struct list_head *list, int cpt)
 void
 lnet_return_rx_credits_locked(struct lnet_msg *msg)
 {
-	struct lnet_peer_ni *rxpeer = msg->msg_rxpeer;
+	struct lnet_peer_ni *rxpeerni = msg->msg_rxpeer;
+	struct lnet_peer *lp;
 	struct lnet_ni *rxni = msg->msg_rxni;
 	struct lnet_msg	*msg2;
 
@@ -1316,43 +1325,69 @@ lnet_return_rx_credits_locked(struct lnet_msg *msg)
 
 routing_off:
 	if (msg->msg_peerrtrcredit) {
+		LASSERT(rxpeerni);
+		LASSERT(rxpeerni->lpni_peer_net);
+		LASSERT(rxpeerni->lpni_peer_net->lpn_peer);
+
+		lp = rxpeerni->lpni_peer_net->lpn_peer;
+
 		/* give back peer router credits */
 		msg->msg_peerrtrcredit = 0;
 
-		spin_lock(&rxpeer->lpni_lock);
-		LASSERT((rxpeer->lpni_rtrcredits < 0) ==
-			!list_empty(&rxpeer->lpni_rtrq));
+		spin_lock(&rxpeerni->lpni_lock);
+		spin_lock(&lp->lp_lock);
 
-		rxpeer->lpni_rtrcredits++;
+		rxpeerni->lpni_rtrcredits++;
 
 		/* drop all messages which are queued to be routed on that
 		 * peer. */
 		if (!the_lnet.ln_routing) {
 			struct list_head drop;
 			INIT_LIST_HEAD(&drop);
-			list_splice_init(&rxpeer->lpni_rtrq, &drop);
-			spin_unlock(&rxpeer->lpni_lock);
+			list_splice_init(&lp->lp_rtrq, &drop);
+			spin_unlock(&lp->lp_lock);
+			spin_unlock(&rxpeerni->lpni_lock);
 			lnet_drop_routed_msgs_locked(&drop, msg->msg_rx_cpt);
-		} else if (rxpeer->lpni_rtrcredits <= 0) {
-			msg2 = list_entry(rxpeer->lpni_rtrq.next,
+		} else if (!list_empty(&lp->lp_rtrq)) {
+			int msg2_cpt;
+
+			msg2 = list_entry(lp->lp_rtrq.next,
 					  struct lnet_msg, msg_list);
 			list_del(&msg2->msg_list);
-			spin_unlock(&rxpeer->lpni_lock);
+			msg2_cpt = msg2->msg_rx_cpt;
+			spin_unlock(&lp->lp_lock);
+			spin_unlock(&rxpeerni->lpni_lock);
+			/*
+			 * messages on the lp_rtrq can be from any NID in
+			 * the peer, which means they might have different
+			 * cpts. We need to make sure we lock the right
+			 * one.
+			 */
+			if (msg2_cpt != msg->msg_rx_cpt) {
+				lnet_net_unlock(msg->msg_rx_cpt);
+				lnet_net_lock(msg2_cpt);
+			}
 			(void) lnet_post_routed_recv_locked(msg2, 1);
+			if (msg2_cpt != msg->msg_rx_cpt) {
+				lnet_net_unlock(msg2_cpt);
+				lnet_net_lock(msg->msg_rx_cpt);
+			}
 		} else {
-			spin_unlock(&rxpeer->lpni_lock);
+			spin_unlock(&lp->lp_lock);
+			spin_unlock(&rxpeerni->lpni_lock);
 		}
 	}
 	if (rxni != NULL) {
 		msg->msg_rxni = NULL;
 		lnet_ni_decref_locked(rxni, msg->msg_rx_cpt);
 	}
-	if (rxpeer != NULL) {
+	if (rxpeerni != NULL) {
 		msg->msg_rxpeer = NULL;
-		lnet_peer_ni_decref_locked(rxpeer);
+		lnet_peer_ni_decref_locked(rxpeerni);
 	}
 }
 
+#if 0
 static int
 lnet_compare_peers(struct lnet_peer_ni *p1, struct lnet_peer_ni *p2)
 {
@@ -1370,15 +1405,18 @@ lnet_compare_peers(struct lnet_peer_ni *p1, struct lnet_peer_ni *p2)
 
 	return 0;
 }
+#endif
 
 static int
 lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2)
 {
+	/* TODO re-implement gateway comparison
 	struct lnet_peer_ni *p1 = r1->lr_gateway;
 	struct lnet_peer_ni *p2 = r2->lr_gateway;
+	*/
 	int r1_hops = (r1->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r1->lr_hops;
 	int r2_hops = (r2->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r2->lr_hops;
-	int rc;
+	/*int rc;*/
 
 	if (r1->lr_priority < r2->lr_priority)
 		return 1;
@@ -1392,9 +1430,11 @@ lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2)
 	if (r1_hops > r2_hops)
 		return -1;
 
+	/*
 	rc = lnet_compare_peers(p1, p2);
 	if (rc)
 		return rc;
+	*/
 
 	if (r1->lr_seq - r2->lr_seq <= 0)
 		return 1;
@@ -1402,18 +1442,18 @@ lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2)
 	return -1;
 }
 
-static struct lnet_peer_ni *
+/* TODO: lnet_find_route_locked() needs to be reimplemented */
+static struct lnet_route *
 lnet_find_route_locked(struct lnet_net *net, __u32 remote_net,
-		       lnet_nid_t rtr_nid, struct lnet_route **use_route,
-		       struct lnet_route **prev_route)
+		       lnet_nid_t rtr_nid, struct lnet_route **prev_route)
 {
-	struct lnet_remotenet	*rnet;
-	struct lnet_route		*route;
-	struct lnet_route		*best_route;
-	struct lnet_route		*last_route;
-	struct lnet_peer_ni	*lpni_best;
-	struct lnet_peer_ni	*lp;
-	int			rc;
+	struct lnet_remotenet *rnet;
+	struct lnet_route *route;
+	struct lnet_route *best_route;
+	struct lnet_route *last_route;
+	struct lnet_peer *lp_best;
+	struct lnet_peer *lp;
+	int rc;
 
 	/* If @rtr_nid is not LNET_NID_ANY, return the gateway with
 	 * rtr_nid nid, otherwise find the best gateway I can use */
@@ -1422,7 +1462,7 @@ lnet_find_route_locked(struct lnet_net *net, __u32 remote_net,
 	if (rnet == NULL)
 		return NULL;
 
-	lpni_best = NULL;
+	lp_best = NULL;
 	best_route = last_route = NULL;
 	list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 		lp = route->lr_gateway;
@@ -1430,15 +1470,9 @@ lnet_find_route_locked(struct lnet_net *net, __u32 remote_net,
 		if (!lnet_is_route_alive(route))
 			continue;
 
-		if (net != NULL && lp->lpni_net != net)
-			continue;
-
-		if (lp->lpni_nid == rtr_nid) /* it's pre-determined router */
-			return lp;
-
-		if (lpni_best == NULL) {
+		if (lp_best == NULL) {
 			best_route = last_route = route;
-			lpni_best = lp;
+			lp_best = lp;
 			continue;
 		}
 
@@ -1451,14 +1485,12 @@ lnet_find_route_locked(struct lnet_net *net, __u32 remote_net,
 			continue;
 
 		best_route = route;
-		lpni_best = lp;
+		lp_best = lp;
 	}
 
-	if (best_route != NULL) {
-		*use_route = best_route;
-		*prev_route = last_route;
-	}
-	return lpni_best;
+	*prev_route = last_route;
+
+	return best_route;
 }
 
 static struct lnet_ni *
@@ -2031,47 +2063,49 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 			     struct lnet_peer_ni **gw_lpni,
 			     struct lnet_peer **gw_peer)
 {
-	struct lnet_route *best_route = NULL;
-	struct lnet_route *last_route = NULL;
-	struct lnet_peer_ni *gw;
+	struct lnet_peer *gw;
+	struct lnet_route *best_route;
+	struct lnet_route *last_route;
+	struct lnet_peer_ni *lpni = NULL;
 	lnet_nid_t src_nid = sd->sd_src_nid;
 
-	gw = lnet_find_route_locked(NULL, LNET_NIDNET(dst_nid),
-				    sd->sd_rtr_nid, &best_route, &last_route);
-	if (!gw) {
+	best_route = lnet_find_route_locked(NULL, LNET_NIDNET(dst_nid),
+					    sd->sd_rtr_nid, &last_route);
+	if (!best_route) {
 		CERROR("no route to %s from %s\n",
 		       libcfs_nid2str(dst_nid), libcfs_nid2str(src_nid));
 		return -EHOSTUNREACH;
 	}
 
-	/* get the peer of the gw_ni */
-	LASSERT(gw->lpni_peer_net);
-	LASSERT(gw->lpni_peer_net->lpn_peer);
-
-	*gw_peer = gw->lpni_peer_net->lpn_peer;
+	gw = best_route->lr_gateway;
+	*gw_peer = gw;
 
 	/*
 	 * Discover this gateway if it hasn't already been discovered.
 	 * This means we might delay the message until discovery has
 	 * completed
 	 */
+#if 0
+	/* TODO: disable discovey for now */
 	if (lnet_msg_discovery(sd->sd_msg) &&
 	    !lnet_peer_is_uptodate(*gw_peer)) {
 		sd->sd_msg->msg_src_nid_param = sd->sd_src_nid;
 		return lnet_initiate_peer_discovery(gw, sd->sd_msg,
 						    sd->sd_rtr_nid, sd->sd_cpt);
 	}
+#endif
 
 	if (!sd->sd_best_ni)
-		sd->sd_best_ni = lnet_find_best_ni_on_spec_net(NULL, *gw_peer,
-					gw->lpni_peer_net,
+		sd->sd_best_ni = lnet_find_best_ni_on_spec_net(NULL, gw,
+					lnet_peer_get_net_locked(gw,
+						best_route->lr_lnet),
 					sd->sd_md_cpt,
 					true);
 
 	if (!sd->sd_best_ni) {
 		CERROR("Internal Error. Expected local ni on %s "
 		       "but non found :%s\n",
-		       libcfs_net2str(gw->lpni_peer_net->lpn_net_id),
+		       libcfs_net2str(best_route->lr_lnet),
 		       libcfs_nid2str(sd->sd_src_nid));
 		return -EFAULT;
 	}
@@ -2079,15 +2113,32 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	/*
 	 * if gw is MR let's find its best peer_ni
 	 */
-	if (lnet_peer_is_multi_rail(*gw_peer)) {
-		gw = lnet_find_best_lpni_on_net(sd, *gw_peer,
-						sd->sd_best_ni->ni_net->net_id);
+	if (lnet_peer_is_multi_rail(gw)) {
+		lpni = lnet_find_best_lpni_on_net(sd, gw,
+				sd->sd_best_ni->ni_net->net_id);
 		/*
 		 * We've already verified that the gw has an NI on that
 		 * desired net, but we're not finding it. Something is
 		 * wrong.
 		 */
-		if (!gw) {
+		if (!lpni) {
+			CERROR("Internal Error. Route expected to %s from %s\n",
+				libcfs_nid2str(dst_nid),
+				libcfs_nid2str(src_nid));
+			return -EFAULT;
+		}
+	} else {
+		struct lnet_peer_net *lpn;
+		lpn = lnet_peer_get_net_locked(gw, best_route->lr_lnet);
+		if (!lpn) {
+			CERROR("Internal Error. Route expected to %s from %s\n",
+				libcfs_nid2str(dst_nid),
+				libcfs_nid2str(src_nid));
+			return -EFAULT;
+		}
+		lpni = list_entry(lpn->lpn_peer_nis.next, struct lnet_peer_ni,
+				  lpni_peer_nis);
+		if (!lpni) {
 			CERROR("Internal Error. Route expected to %s from %s\n",
 				libcfs_nid2str(dst_nid),
 				libcfs_nid2str(src_nid));
@@ -2095,7 +2146,7 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 		}
 	}
 
-	*gw_lpni = gw;
+	*gw_lpni = lpni;
 
 	/*
 	 * increment the route sequence number since now we're sure we're
@@ -4317,17 +4368,25 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 
 		rnet = lnet_find_rnet_locked(LNET_NIDNET(src_nid));
 		if (rnet) {
-			struct lnet_peer_ni *gw = NULL;
+			struct lnet_peer *gw = NULL;
+			struct lnet_peer_ni *lpni = NULL;
 			struct lnet_route *route;
 
 			list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 				found = false;
 				gw = route->lr_gateway;
-				if (gw->lpni_net != net)
+				if (route->lr_lnet != net->net_id)
 					continue;
-				if (gw->lpni_nid == from_nid) {
-					found = true;
-					break;
+				/*
+				 * if the nid is one of the gateway's NIDs
+				 * then this is a valid gateway
+				 */
+				while ((lpni = lnet_get_next_peer_ni_locked(gw,
+						NULL, lpni)) != NULL) {
+					if (lpni->lpni_nid == from_nid) {
+						found = true;
+						break;
+					}
 				}
 			}
 		}
@@ -5037,9 +5096,10 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 			LASSERT(shortest != NULL);
 			hops = shortest_hops;
 			if (srcnidp != NULL) {
-				ni = lnet_get_next_ni_locked(
-					shortest->lr_gateway->lpni_net,
-					NULL);
+				struct lnet_net *net;
+				net = lnet_get_net_locked(shortest->lr_lnet);
+				LASSERT(net);
+				ni = lnet_get_next_ni_locked(net, NULL);
 				*srcnidp = ni->ni_nid;
 			}
 			if (orderp != NULL)

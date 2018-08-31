@@ -114,7 +114,6 @@ lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 	spin_lock(&lp->lpni_lock);
 
 	lp->lpni_timestamp = when; /* update timestamp */
-	lp->lpni_ping_deadline = 0;               /* disable ping timeout */
 
 	if (lp->lpni_alive_count != 0 &&          /* got old news */
 	    (!lp->lpni_alive) == (!alive)) {      /* new date for old news */
@@ -189,58 +188,6 @@ lnet_ni_notify_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp)
 	spin_unlock(&lp->lpni_lock);
 }
 
-static void
-lnet_rtr_addref_locked(struct lnet_peer_ni *lp)
-{
-	LASSERT(atomic_read(&lp->lpni_refcount) > 0);
-	LASSERT(lp->lpni_rtr_refcount >= 0);
-
-	/* lnet_net_lock must be exclusively locked */
-	lp->lpni_rtr_refcount++;
-	if (lp->lpni_rtr_refcount == 1) {
-		struct list_head *pos;
-
-		/* a simple insertion sort */
-		list_for_each_prev(pos, &the_lnet.ln_routers) {
-			struct lnet_peer_ni *rtr;
-
-			rtr = list_entry(pos, struct lnet_peer_ni,
-					 lpni_rtr_list);
-			if (rtr->lpni_nid < lp->lpni_nid)
-				break;
-		}
-
-		list_add(&lp->lpni_rtr_list, pos);
-		/* addref for the_lnet.ln_routers */
-		lnet_peer_ni_addref_locked(lp);
-		the_lnet.ln_routers_version++;
-	}
-}
-
-static void
-lnet_rtr_decref_locked(struct lnet_peer_ni *lp)
-{
-	LASSERT(atomic_read(&lp->lpni_refcount) > 0);
-	LASSERT(lp->lpni_rtr_refcount > 0);
-
-	/* lnet_net_lock must be exclusively locked */
-	lp->lpni_rtr_refcount--;
-	if (lp->lpni_rtr_refcount == 0) {
-		LASSERT(list_empty(&lp->lpni_routes));
-
-		if (lp->lpni_rcd != NULL) {
-			list_add(&lp->lpni_rcd->rcd_list,
-				 &the_lnet.ln_rcd_deathrow);
-			lp->lpni_rcd = NULL;
-		}
-
-		list_del(&lp->lpni_rtr_list);
-		/* decref for the_lnet.ln_routers */
-		lnet_peer_ni_decref_locked(lp);
-		the_lnet.ln_routers_version++;
-	}
-}
-
 struct lnet_remotenet *
 lnet_find_rnet_locked(__u32 net)
 {
@@ -260,247 +207,24 @@ lnet_find_rnet_locked(__u32 net)
 	return NULL;
 }
 
-static void lnet_shuffle_seed(void)
-{
-	static int seeded;
-	struct lnet_ni *ni = NULL;
-
-	if (seeded)
-		return;
-
-	/* Nodes with small feet have little entropy
-	 * the NID for this node gives the most entropy in the low bits
-	 */
-	while ((ni = lnet_get_next_ni_locked(NULL, ni)))
-		add_device_randomness(&ni->ni_nid, sizeof(ni->ni_nid));
-
-	seeded = 1;
-	return;
-}
-
-/* NB expects LNET_LOCK held */
-static void
-lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
-{
-	unsigned int	  len = 0;
-	unsigned int	  offset = 0;
-	struct list_head *e;
-
-	lnet_shuffle_seed();
-
-	list_for_each(e, &rnet->lrn_routes) {
-		len++;
-	}
-
-	/* len+1 positions to add a new entry, also prevents division by 0 */
-	offset = cfs_rand() % (len + 1);
-	list_for_each(e, &rnet->lrn_routes) {
-		if (offset == 0)
-			break;
-		offset--;
-	}
-	list_add(&route->lr_list, e);
-	list_add(&route->lr_gwlist, &route->lr_gateway->lpni_routes);
-
-	the_lnet.ln_remote_nets_version++;
-	lnet_rtr_addref_locked(route->lr_gateway);
-}
-
 int
 lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	       unsigned int priority)
 {
-	struct list_head	*e;
-	struct lnet_remotenet	*rnet;
-	struct lnet_remotenet	*rnet2;
-	struct lnet_route		*route;
-	struct lnet_ni		*ni;
-	struct lnet_peer_ni	*lpni;
-	int			add_route;
-	int			rc;
-
-	CDEBUG(D_NET, "Add route: net %s hops %d priority %u gw %s\n",
-	       libcfs_net2str(net), hops, priority, libcfs_nid2str(gateway));
-
-	if (gateway == LNET_NID_ANY ||
-	    LNET_NETTYP(LNET_NIDNET(gateway)) == LOLND ||
-	    net == LNET_NIDNET(LNET_NID_ANY) ||
-	    LNET_NETTYP(net) == LOLND ||
-	    LNET_NIDNET(gateway) == net ||
-	    (hops != LNET_UNDEFINED_HOPS && (hops < 1 || hops > 255)))
-		return -EINVAL;
-
-	if (lnet_islocalnet(net))	/* it's a local network */
-		return -EEXIST;
-
-	/* Assume net, route, all new */
-	LIBCFS_ALLOC(route, sizeof(*route));
-	LIBCFS_ALLOC(rnet, sizeof(*rnet));
-	if (route == NULL || rnet == NULL) {
-		CERROR("Out of memory creating route %s %d %s\n",
-		       libcfs_net2str(net), hops, libcfs_nid2str(gateway));
-		if (route != NULL)
-			LIBCFS_FREE(route, sizeof(*route));
-		if (rnet != NULL)
-			LIBCFS_FREE(rnet, sizeof(*rnet));
-		return -ENOMEM;
-	}
-
-	INIT_LIST_HEAD(&rnet->lrn_routes);
-	rnet->lrn_net = net;
-	route->lr_hops = hops;
-	route->lr_net = net;
-	route->lr_priority = priority;
-
-	lnet_net_lock(LNET_LOCK_EX);
-
-	lpni = lnet_nid2peerni_ex(gateway, LNET_LOCK_EX);
-	if (IS_ERR(lpni)) {
-		lnet_net_unlock(LNET_LOCK_EX);
-
-		LIBCFS_FREE(route, sizeof(*route));
-		LIBCFS_FREE(rnet, sizeof(*rnet));
-
-		rc = PTR_ERR(lpni);
-		if (rc == -EHOSTUNREACH) /* gateway is not on a local net. */
-			return rc;	 /* ignore the route entry */
-		CERROR("Error %d creating route %s %d %s\n", rc,
-			libcfs_net2str(net), hops,
-			libcfs_nid2str(gateway));
-		return rc;
-	}
-	route->lr_gateway = lpni;
-	LASSERT(the_lnet.ln_state == LNET_STATE_RUNNING);
-
-	rnet2 = lnet_find_rnet_locked(net);
-	if (rnet2 == NULL) {
-		/* new network */
-		list_add_tail(&rnet->lrn_list, lnet_net2rnethash(net));
-		rnet2 = rnet;
-	}
-
-	/* Search for a duplicate route (it's a NOOP if it is) */
-	add_route = 1;
-	list_for_each(e, &rnet2->lrn_routes) {
-		struct lnet_route *route2;
-
-		route2 = list_entry(e, struct lnet_route, lr_list);
-		if (route2->lr_gateway == route->lr_gateway) {
-			add_route = 0;
-			break;
-		}
-
-		/* our lookups must be true */
-		LASSERT(route2->lr_gateway->lpni_nid != gateway);
-	}
-
-	if (add_route) {
-		lnet_peer_ni_addref_locked(route->lr_gateway); /* +1 for notify */
-		lnet_add_route_to_rnet(rnet2, route);
-
-		ni = lnet_get_next_ni_locked(route->lr_gateway->lpni_net, NULL);
-		lnet_net_unlock(LNET_LOCK_EX);
-
-		/* XXX Assume alive */
-		if (ni->ni_net->net_lnd->lnd_notify != NULL)
-			(ni->ni_net->net_lnd->lnd_notify)(ni, gateway, 1);
-
-		lnet_net_lock(LNET_LOCK_EX);
-	}
-
-	/* -1 for notify or !add_route */
-	lnet_peer_ni_decref_locked(route->lr_gateway);
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	rc = 0;
-
-	if (!add_route) {
-		rc = -EEXIST;
-		LIBCFS_FREE(route, sizeof(*route));
-	}
-
-	if (rnet != rnet2)
-		LIBCFS_FREE(rnet, sizeof(*rnet));
-
-	/* kick start the monitor thread to handle the added route */
-	wake_up(&the_lnet.ln_mt_waitq);
-
-	return rc;
+	net = net;
+	hops = hops;
+	gateway = gateway;
+	priority = priority;
+	return -EINVAL;
 }
 
+/* TODO: reimplement lnet_check_routes() */
 int
 lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 {
-	struct lnet_peer_ni	*gateway;
-	struct lnet_remotenet	*rnet;
-	struct lnet_route		*route;
-	struct list_head	*e1;
-	struct list_head	*e2;
-	int			rc = -ENOENT;
-	struct list_head	*rn_list;
-	int			idx = 0;
-
-	CDEBUG(D_NET, "Del route: net %s : gw %s\n",
-	       libcfs_net2str(net), libcfs_nid2str(gw_nid));
-
-	/* NB Caller may specify either all routes via the given gateway
-	 * or a specific route entry actual NIDs) */
-
-	lnet_net_lock(LNET_LOCK_EX);
-	if (net == LNET_NIDNET(LNET_NID_ANY))
-		rn_list = &the_lnet.ln_remote_nets_hash[0];
-	else
-		rn_list = lnet_net2rnethash(net);
-
-again:
-	list_for_each(e1, rn_list) {
-		rnet = list_entry(e1, struct lnet_remotenet, lrn_list);
-
-		if (!(net == LNET_NIDNET(LNET_NID_ANY) ||
-			net == rnet->lrn_net))
-			continue;
-
-		list_for_each(e2, &rnet->lrn_routes) {
-			route = list_entry(e2, struct lnet_route, lr_list);
-
-			gateway = route->lr_gateway;
-			if (!(gw_nid == LNET_NID_ANY ||
-			      gw_nid == gateway->lpni_nid))
-				continue;
-
-			list_del(&route->lr_list);
-			list_del(&route->lr_gwlist);
-			the_lnet.ln_remote_nets_version++;
-
-			if (list_empty(&rnet->lrn_routes))
-				list_del(&rnet->lrn_list);
-			else
-				rnet = NULL;
-
-			lnet_rtr_decref_locked(gateway);
-			lnet_peer_ni_decref_locked(gateway);
-
-			lnet_net_unlock(LNET_LOCK_EX);
-
-			LIBCFS_FREE(route, sizeof(*route));
-
-			if (rnet != NULL)
-				LIBCFS_FREE(rnet, sizeof(*rnet));
-
-			rc = 0;
-			lnet_net_lock(LNET_LOCK_EX);
-			goto again;
-		}
-	}
-
-	if (net == LNET_NIDNET(LNET_NID_ANY) &&
-	    ++idx < LNET_REMOTE_NETS_HASH_SIZE) {
-		rn_list = &the_lnet.ln_remote_nets_hash[idx];
-		goto again;
-	}
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	return rc;
+	net = net;
+	gw_nid = gw_nid;
+	return -EINVAL;
 }
 
 void
@@ -568,7 +292,7 @@ lnet_get_route(int idx, __u32 *net, __u32 *hops,
 					*net	  = rnet->lrn_net;
 					*hops	  = route->lr_hops;
 					*priority = route->lr_priority;
-					*gateway  = route->lr_gateway->lpni_nid;
+					*gateway  = route->lr_gateway->lp_primary_nid;
 					*alive	  = lnet_is_route_alive(route);
 					lnet_net_unlock(cpt);
 					return 0;
@@ -604,108 +328,12 @@ lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf)
 }
 
 /**
- * parse router-checker pinginfo, record number of down NIs for remote
- * networks on that router.
+ * TODO: re-implement
  */
 static void
 lnet_parse_rc_info(struct lnet_rc_data *rcd)
 {
-	struct lnet_ping_buffer	*pbuf = rcd->rcd_pingbuffer;
-	struct lnet_peer_ni	*gw   = rcd->rcd_gateway;
-	struct lnet_route		*rte;
-	int			nnis;
-
-	if (!gw->lpni_alive || !pbuf)
-		return;
-
-	/*
-	 * Protect gw->lpni_ping_feats. This can be set from
-	 * lnet_notify_locked with different locks being held
-	 */
-	spin_lock(&gw->lpni_lock);
-
-	if (pbuf->pb_info.pi_magic == __swab32(LNET_PROTO_PING_MAGIC))
-		lnet_swap_pinginfo(pbuf);
-
-	/* NB always racing with network! */
-	if (pbuf->pb_info.pi_magic != LNET_PROTO_PING_MAGIC) {
-		CDEBUG(D_NET, "%s: Unexpected magic %08x\n",
-		       libcfs_nid2str(gw->lpni_nid), pbuf->pb_info.pi_magic);
-		gw->lpni_ping_feats = LNET_PING_FEAT_INVAL;
-		goto out;
-	}
-
-	gw->lpni_ping_feats = pbuf->pb_info.pi_features;
-
-	/* Without NI status info there's nothing more to do. */
-	if ((gw->lpni_ping_feats & LNET_PING_FEAT_NI_STATUS) == 0)
-		goto out;
-
-	/* Determine the number of NIs for which there is data. */
-	nnis = pbuf->pb_info.pi_nnis;
-	if (pbuf->pb_nnis < nnis) {
-		if (rcd->rcd_nnis < nnis)
-			rcd->rcd_nnis = nnis;
-		nnis = pbuf->pb_nnis;
-	}
-
-	list_for_each_entry(rte, &gw->lpni_routes, lr_gwlist) {
-		int	down = 0;
-		int	up = 0;
-		int	i;
-
-		/* If routing disabled then the route is down. */
-		if ((gw->lpni_ping_feats & LNET_PING_FEAT_RTE_DISABLED) != 0) {
-			rte->lr_downis = 1;
-			continue;
-		}
-
-		for (i = 0; i < nnis; i++) {
-			struct lnet_ni_status *stat = &pbuf->pb_info.pi_ni[i];
-			lnet_nid_t	 nid = stat->ns_nid;
-
-			if (nid == LNET_NID_ANY) {
-				CDEBUG(D_NET, "%s: unexpected LNET_NID_ANY\n",
-				       libcfs_nid2str(gw->lpni_nid));
-				gw->lpni_ping_feats = LNET_PING_FEAT_INVAL;
-				goto out;
-			}
-
-			if (LNET_NETTYP(LNET_NIDNET(nid)) == LOLND)
-				continue;
-
-			if (stat->ns_status == LNET_NI_STATUS_DOWN) {
-				down++;
-				continue;
-			}
-
-			if (stat->ns_status == LNET_NI_STATUS_UP) {
-				if (LNET_NIDNET(nid) == rte->lr_net) {
-					up = 1;
-					break;
-				}
-				continue;
-			}
-
-			CDEBUG(D_NET, "%s: Unexpected status 0x%x\n",
-			       libcfs_nid2str(gw->lpni_nid), stat->ns_status);
-			gw->lpni_ping_feats = LNET_PING_FEAT_INVAL;
-			goto out;
-		}
-
-		if (up) { /* ignore downed NIs if NI for dest network is up */
-			rte->lr_downis = 0;
-			continue;
-		}
-		/* if @down is zero and this route is single-hop, it means
-		 * we can't find NI for target network */
-		if (down == 0 && rte->lr_hops == 1)
-			down = 1;
-
-		rte->lr_downis = down;
-	}
-out:
-	spin_unlock(&gw->lpni_lock);
+	rcd = rcd;
 }
 
 static void
@@ -737,7 +365,6 @@ lnet_router_checker_event(struct lnet_event *event)
 	}
 
 	if (event->type == LNET_EVENT_SEND) {
-		lp->lpni_ping_notsent = 0;
 		if (event->status == 0)
 			goto out;
 	}
@@ -764,7 +391,7 @@ lnet_router_checker_event(struct lnet_event *event)
 static void
 lnet_wait_known_routerstate(void)
 {
-	struct lnet_peer_ni *rtr;
+	struct lnet_peer *rtr;
 	struct list_head *entry;
 	int all_known;
 
@@ -775,17 +402,17 @@ lnet_wait_known_routerstate(void)
 
 		all_known = 1;
 		list_for_each(entry, &the_lnet.ln_routers) {
-			rtr = list_entry(entry, struct lnet_peer_ni,
-					 lpni_rtr_list);
+			rtr = list_entry(entry, struct lnet_peer,
+					 lp_rtr_list);
 
-			spin_lock(&rtr->lpni_lock);
+			spin_lock(&rtr->lp_lock);
 
-			if (rtr->lpni_alive_count == 0) {
+			if ((rtr->lp_state & LNET_PEER_DISCOVERED) == 0) {
 				all_known = 0;
-				spin_unlock(&rtr->lpni_lock);
+				spin_unlock(&rtr->lp_lock);
 				break;
 			}
-			spin_unlock(&rtr->lpni_lock);
+			spin_unlock(&rtr->lp_lock);
 		}
 
 		lnet_net_unlock(cpt);
@@ -798,17 +425,22 @@ lnet_wait_known_routerstate(void)
 	}
 }
 
+/* TODO: reimplement */
 void
 lnet_router_ni_update_locked(struct lnet_peer_ni *gw, __u32 net)
 {
 	struct lnet_route *rte;
+	struct lnet_peer *lp;
 
-	if ((gw->lpni_ping_feats & LNET_PING_FEAT_NI_STATUS) != 0) {
-		list_for_each_entry(rte, &gw->lpni_routes, lr_gwlist) {
-			if (rte->lr_net == net) {
-				rte->lr_downis = 0;
-				break;
-			}
+	if ((gw->lpni_ping_feats & LNET_PING_FEAT_NI_STATUS) != 0)
+		lp = gw->lpni_peer_net->lpn_peer;
+	else
+		return;
+
+	list_for_each_entry(rte, &lp->lp_routes, lr_gwlist) {
+		if (rte->lr_net == net) {
+			rte->lr_downis = 0;
+			break;
 		}
 	}
 }
@@ -851,213 +483,6 @@ lnet_update_ni_status_locked(void)
 		}
 		lnet_ni_unlock(ni);
 	}
-}
-
-static void
-lnet_destroy_rc_data(struct lnet_rc_data *rcd)
-{
-	LASSERT(list_empty(&rcd->rcd_list));
-	/* detached from network */
-	LASSERT(LNetMDHandleIsInvalid(rcd->rcd_mdh));
-
-	if (rcd->rcd_gateway != NULL) {
-		int cpt = rcd->rcd_gateway->lpni_cpt;
-
-		lnet_net_lock(cpt);
-		lnet_peer_ni_decref_locked(rcd->rcd_gateway);
-		lnet_net_unlock(cpt);
-	}
-
-	if (rcd->rcd_pingbuffer != NULL)
-		lnet_ping_buffer_decref(rcd->rcd_pingbuffer);
-
-	LIBCFS_FREE(rcd, sizeof(*rcd));
-}
-
-static struct lnet_rc_data *
-lnet_update_rc_data_locked(struct lnet_peer_ni *gateway)
-{
-	struct lnet_handle_md mdh;
-	struct lnet_rc_data *rcd;
-	struct lnet_ping_buffer *pbuf = NULL;
-	int nnis = LNET_INTERFACES_MIN;
-	int rc;
-	int i;
-
-	rcd = gateway->lpni_rcd;
-	if (rcd) {
-		nnis = rcd->rcd_nnis;
-		mdh = rcd->rcd_mdh;
-		LNetInvalidateMDHandle(&rcd->rcd_mdh);
-		pbuf = rcd->rcd_pingbuffer;
-		rcd->rcd_pingbuffer = NULL;
-	} else {
-		LNetInvalidateMDHandle(&mdh);
-	}
-
-	lnet_net_unlock(gateway->lpni_cpt);
-
-	if (rcd) {
-		LNetMDUnlink(mdh);
-		lnet_ping_buffer_decref(pbuf);
-	} else {
-		LIBCFS_ALLOC(rcd, sizeof(*rcd));
-		if (rcd == NULL)
-			goto out;
-
-		LNetInvalidateMDHandle(&rcd->rcd_mdh);
-		INIT_LIST_HEAD(&rcd->rcd_list);
-		rcd->rcd_nnis = nnis;
-	}
-
-	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
-	if (pbuf == NULL)
-		goto out;
-
-	for (i = 0; i < nnis; i++) {
-		pbuf->pb_info.pi_ni[i].ns_nid = LNET_NID_ANY;
-		pbuf->pb_info.pi_ni[i].ns_status = LNET_NI_STATUS_INVALID;
-	}
-	rcd->rcd_pingbuffer = pbuf;
-
-	LASSERT(!LNetEQHandleIsInvalid(the_lnet.ln_rc_eqh));
-	rc = LNetMDBind((struct lnet_md){.start     = &pbuf->pb_info,
-				    .user_ptr  = rcd,
-				    .length    = LNET_PING_INFO_SIZE(nnis),
-				    .threshold = LNET_MD_THRESH_INF,
-				    .options   = LNET_MD_TRUNCATE,
-				    .eq_handle = the_lnet.ln_rc_eqh},
-			LNET_UNLINK,
-			&rcd->rcd_mdh);
-	if (rc < 0) {
-		CERROR("Can't bind MD: %d\n", rc);
-		goto out_ping_buffer_decref;
-	}
-	LASSERT(rc == 0);
-
-	lnet_net_lock(gateway->lpni_cpt);
-	/* Check if this is still a router. */
-	if (!lnet_isrouter(gateway))
-		goto out_unlock;
-	/* Check if someone else installed router data. */
-	if (gateway->lpni_rcd && gateway->lpni_rcd != rcd)
-		goto out_unlock;
-
-	/* Install and/or update the router data. */
-	if (!gateway->lpni_rcd) {
-		lnet_peer_ni_addref_locked(gateway);
-		rcd->rcd_gateway = gateway;
-		gateway->lpni_rcd = rcd;
-	}
-	gateway->lpni_ping_notsent = 0;
-
-	return rcd;
-
-out_unlock:
-	lnet_net_unlock(gateway->lpni_cpt);
-	rc = LNetMDUnlink(mdh);
-	LASSERT(rc == 0);
-out_ping_buffer_decref:
-	lnet_ping_buffer_decref(pbuf);
-out:
-	if (rcd && rcd != gateway->lpni_rcd)
-		lnet_destroy_rc_data(rcd);
-	lnet_net_lock(gateway->lpni_cpt);
-	return gateway->lpni_rcd;
-}
-
-static int
-lnet_router_check_interval(struct lnet_peer_ni *rtr)
-{
-	int secs;
-
-	secs = rtr->lpni_alive ? live_router_check_interval :
-			       dead_router_check_interval;
-	if (secs < 0)
-		secs = 0;
-
-	return secs;
-}
-
-static void
-lnet_ping_router_locked(struct lnet_peer_ni *rtr)
-{
-	struct lnet_rc_data *rcd = NULL;
-	time64_t now = ktime_get_seconds();
-	time64_t secs;
-	struct lnet_ni *ni;
-
-	lnet_peer_ni_addref_locked(rtr);
-
-	if (rtr->lpni_ping_deadline != 0 && /* ping timed out? */
-	    now >  rtr->lpni_ping_deadline)
-		lnet_notify_locked(rtr, 1, 0, now);
-
-	/* Run any outstanding notifications */
-	ni = lnet_get_next_ni_locked(rtr->lpni_net, NULL);
-	lnet_ni_notify_locked(ni, rtr);
-
-	if (!lnet_isrouter(rtr) ||
-	    the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
-		/* router table changed or router checker is shutting down */
-		lnet_peer_ni_decref_locked(rtr);
-		return;
-	}
-
-	rcd = rtr->lpni_rcd;
-
-	/*
-	 * The response to the router checker ping could've timed out and
-	 * the mdh might've been invalidated, so we need to update it
-	 * again.
-	 */
-	if (!rcd || rcd->rcd_nnis > rcd->rcd_pingbuffer->pb_nnis ||
-	    LNetMDHandleIsInvalid(rcd->rcd_mdh))
-		rcd = lnet_update_rc_data_locked(rtr);
-	if (rcd == NULL)
-		return;
-
-	secs = lnet_router_check_interval(rtr);
-
-	CDEBUG(D_NET,
-	       "rtr %s %lld: deadline %lld ping_notsent %d alive %d "
-	       "alive_count %d lpni_ping_timestamp %lld\n",
-	       libcfs_nid2str(rtr->lpni_nid), secs,
-	       rtr->lpni_ping_deadline, rtr->lpni_ping_notsent,
-	       rtr->lpni_alive, rtr->lpni_alive_count, rtr->lpni_ping_timestamp);
-
-	if (secs != 0 && !rtr->lpni_ping_notsent &&
-	    now > rtr->lpni_ping_timestamp + secs) {
-		int               rc;
-		struct lnet_process_id id;
-		struct lnet_handle_md mdh;
-
-		id.nid = rtr->lpni_nid;
-		id.pid = LNET_PID_LUSTRE;
-		CDEBUG(D_NET, "Check: %s\n", libcfs_id2str(id));
-
-		rtr->lpni_ping_notsent   = 1;
-		rtr->lpni_ping_timestamp = now;
-
-		mdh = rcd->rcd_mdh;
-
-		if (rtr->lpni_ping_deadline == 0) {
-			rtr->lpni_ping_deadline = ktime_get_seconds() +
-						  router_ping_timeout;
-		}
-
-		lnet_net_unlock(rtr->lpni_cpt);
-
-		rc = LNetGet(LNET_NID_ANY, mdh, id, LNET_RESERVED_PORTAL,
-			     LNET_PROTO_PING_MATCHBITS, 0, false);
-
-		lnet_net_lock(rtr->lpni_cpt);
-		if (rc != 0)
-			rtr->lpni_ping_notsent = 0; /* no event pending */
-	}
-
-	lnet_peer_ni_decref_locked(rtr);
-	return;
 }
 
 int lnet_router_pre_mt_start(void)
@@ -1104,82 +529,7 @@ lnet_router_cleanup(void)
 void
 lnet_prune_rc_data(int wait_unlink)
 {
-	struct lnet_rc_data *rcd;
-	struct lnet_rc_data *tmp;
-	struct lnet_peer_ni *lp;
-	struct list_head head;
-	int i = 2;
-
-	if (likely(the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING &&
-		   list_empty(&the_lnet.ln_rcd_deathrow) &&
-		   list_empty(&the_lnet.ln_rcd_zombie)))
-		return;
-
-	INIT_LIST_HEAD(&head);
-
-	lnet_net_lock(LNET_LOCK_EX);
-
-	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
-		/* router checker is stopping, prune all */
-		list_for_each_entry(lp, &the_lnet.ln_routers,
-				    lpni_rtr_list) {
-			if (lp->lpni_rcd == NULL)
-				continue;
-
-			LASSERT(list_empty(&lp->lpni_rcd->rcd_list));
-			list_add(&lp->lpni_rcd->rcd_list,
-				 &the_lnet.ln_rcd_deathrow);
-			lp->lpni_rcd = NULL;
-		}
-	}
-
-	/* unlink all RCDs on deathrow list */
-	list_splice_init(&the_lnet.ln_rcd_deathrow, &head);
-
-	if (!list_empty(&head)) {
-		lnet_net_unlock(LNET_LOCK_EX);
-
-		list_for_each_entry(rcd, &head, rcd_list)
-			LNetMDUnlink(rcd->rcd_mdh);
-
-		lnet_net_lock(LNET_LOCK_EX);
-	}
-
-	list_splice_init(&head, &the_lnet.ln_rcd_zombie);
-
-	/* release all zombie RCDs */
-	while (!list_empty(&the_lnet.ln_rcd_zombie)) {
-		list_for_each_entry_safe(rcd, tmp, &the_lnet.ln_rcd_zombie,
-					 rcd_list) {
-			if (LNetMDHandleIsInvalid(rcd->rcd_mdh))
-				list_move(&rcd->rcd_list, &head);
-		}
-
-		wait_unlink = wait_unlink &&
-			      !list_empty(&the_lnet.ln_rcd_zombie);
-
-		lnet_net_unlock(LNET_LOCK_EX);
-
-		while (!list_empty(&head)) {
-			rcd = list_entry(head.next,
-					 struct lnet_rc_data, rcd_list);
-			list_del_init(&rcd->rcd_list);
-			lnet_destroy_rc_data(rcd);
-		}
-
-		if (!wait_unlink)
-			return;
-
-		i++;
-		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
-		       "Waiting for rc buffers to unlink\n");
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1) / 4);
-
-		lnet_net_lock(LNET_LOCK_EX);
-	}
-
-	lnet_net_unlock(LNET_LOCK_EX);
+	wait_unlink = wait_unlink;
 }
 
 /*
@@ -1210,31 +560,20 @@ lnet_router_checker_active(void)
 void
 lnet_check_routers(void)
 {
-	struct lnet_peer_ni *rtr;
+	struct lnet_peer *rtr;
 	struct list_head *entry;
 	__u64	version;
 	int	cpt;
-	int	cpt2;
 
 	cpt = lnet_net_lock_current();
 rescan:
 	version = the_lnet.ln_routers_version;
 
 	list_for_each(entry, &the_lnet.ln_routers) {
-		rtr = list_entry(entry, struct lnet_peer_ni,
-					lpni_rtr_list);
+		rtr = list_entry(entry, struct lnet_peer,
+				 lp_rtr_list);
 
-		cpt2 = rtr->lpni_cpt;
-		if (cpt != cpt2) {
-			lnet_net_unlock(cpt);
-			cpt = cpt2;
-			lnet_net_lock(cpt);
-			/* the routers list has changed */
-			if (version != the_lnet.ln_routers_version)
-				goto rescan;
-		}
-
-		lnet_ping_router_locked(rtr);
+		/* TODO use discovery to determine if router is alive */
 
 		/* NB dropped lock */
 		if (version != the_lnet.ln_routers_version) {

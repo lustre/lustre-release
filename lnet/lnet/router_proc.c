@@ -227,7 +227,7 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 			__u32	     net	= rnet->lrn_net;
 			__u32 hops		= route->lr_hops;
 			unsigned int priority	= route->lr_priority;
-			lnet_nid_t   nid	= route->lr_gateway->lpni_nid;
+			lnet_nid_t   nid	= route->lr_gateway->lp_primary_nid;
 			int          alive	= lnet_is_route_alive(route);
 
 			s += snprintf(s, tmpstr + tmpsiz - s,
@@ -303,7 +303,7 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		*ppos = LNET_PROC_POS_MAKE(0, ver, 0, off);
 	} else {
 		struct list_head *r;
-		struct lnet_peer_ni *peer = NULL;
+		struct lnet_peer *peer = NULL;
 		int		  skip = off - 1;
 
 		lnet_net_lock(0);
@@ -318,9 +318,9 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		r = the_lnet.ln_routers.next;
 
 		while (r != &the_lnet.ln_routers) {
-			struct lnet_peer_ni *lp =
-			  list_entry(r, struct lnet_peer_ni,
-				     lpni_rtr_list);
+			struct lnet_peer *lp =
+			  list_entry(r, struct lnet_peer,
+				     lp_rtr_list);
 
 			if (skip == 0) {
 				peer = lp;
@@ -332,21 +332,22 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		}
 
 		if (peer != NULL) {
-			lnet_nid_t nid = peer->lpni_nid;
+			lnet_nid_t nid = peer->lp_primary_nid;
 			time64_t now = ktime_get_seconds();
-			time64_t deadline = peer->lpni_ping_deadline;
-			int nrefs     = atomic_read(&peer->lpni_refcount);
-			int nrtrrefs  = peer->lpni_rtr_refcount;
-			int alive_cnt = peer->lpni_alive_count;
-			int alive     = peer->lpni_alive;
-			int pingsent  = !peer->lpni_ping_notsent;
-			time64_t last_ping = now - peer->lpni_ping_timestamp;
+			/* TODO: readjust what's being printed */
+			time64_t deadline = 0;
+			int nrefs     = atomic_read(&peer->lp_refcount);
+			int nrtrrefs  = peer->lp_rtr_refcount;
+			int alive_cnt = 0;
+			int alive     = 0;
+			int pingsent  = ((peer->lp_state & LNET_PEER_PING_SENT)
+					 != 0);
+			time64_t last_ping = now - peer->lp_rtrcheck_timestamp;
 			int down_ni   = 0;
 			struct lnet_route *rtr;
 
-			if ((peer->lpni_ping_feats &
-			     LNET_PING_FEAT_NI_STATUS) != 0) {
-				list_for_each_entry(rtr, &peer->lpni_routes,
+			if (nrtrrefs > 0) {
+				list_for_each_entry(rtr, &peer->lp_routes,
 						    lr_gwlist) {
 					/* downis on any route should be the
 					 * number of downis on the gateway */
