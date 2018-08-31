@@ -1783,11 +1783,6 @@ lnet_ni_tq_credits(struct lnet_ni *ni)
 static void
 lnet_ni_unlink_locked(struct lnet_ni *ni)
 {
-	if (!list_empty(&ni->ni_cptlist)) {
-		list_del_init(&ni->ni_cptlist);
-		lnet_ni_decref_locked(ni, 0);
-	}
-
 	/* move it to zombie list and nobody can find it anymore */
 	LASSERT(!list_empty(&ni->ni_netlist));
 	list_move(&ni->ni_netlist, &ni->ni_net->net_ni_zombie);

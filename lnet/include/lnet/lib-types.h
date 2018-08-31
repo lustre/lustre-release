@@ -413,9 +413,6 @@ struct lnet_ni {
 	/* chain on the lnet_net structure */
 	struct list_head	ni_netlist;
 
-	/* chain on net_ni_cpt */
-	struct list_head	ni_cptlist;
-
 	/* chain on the recovery queue */
 	struct list_head	ni_recovery;
 
