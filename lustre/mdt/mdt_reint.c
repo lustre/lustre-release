@@ -1071,6 +1071,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			GOTO(put_parent, rc);
 	}
 
+	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
+	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 relock:
 	parent_lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(parent_lh, LCK_PW, &rr->rr_name);
@@ -2630,6 +2632,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	lh_srcdirp = &info->mti_lh[MDT_LH_PARENT];
 	lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
 
+	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN);
+	OBD_RACE(OBD_FAIL_MDS_REINT_OPEN2);
 relock:
 	mdt_lock_pdo_init(lh_srcdirp, LCK_PW, &rr->rr_name);
 	mdt_lock_pdo_init(lh_tgtdirp, LCK_PW, &rr->rr_tgt_name);
