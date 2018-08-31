@@ -1449,45 +1449,41 @@ static int echo_attr_get_complex(const struct lu_env *env,
 {
 	struct echo_thread_info	*info = echo_env_info(env);
 	struct lu_buf		*buf = &info->eti_buf;
-	umode_t		 mode = lu_object_attr(&next->mo_lu);
-	int			 need = ma->ma_need;
+	umode_t			 mode = lu_object_attr(&next->mo_lu);
 	int			 rc = 0, rc2;
 
 	ENTRY;
 
 	ma->ma_valid = 0;
 
-	if (need & MA_INODE) {
-		ma->ma_need = MA_INODE;
+	if (ma->ma_need & MA_INODE) {
 		rc = mo_attr_get(env, next, ma);
 		if (rc)
 			GOTO(out, rc);
 		ma->ma_valid |= MA_INODE;
 	}
 
-	if (need & MA_LOV) {
-		if (S_ISREG(mode) || S_ISDIR(mode)) {
-			LASSERT(ma->ma_lmm_size > 0);
-			buf->lb_buf = ma->ma_lmm;
-			buf->lb_len = ma->ma_lmm_size;
-			rc2 = mo_xattr_get(env, next, buf, XATTR_NAME_LOV);
-			if (rc2 > 0) {
-				ma->ma_lmm_size = rc2;
-				ma->ma_valid |= MA_LOV;
-			} else if (rc2 == -ENODATA) {
-				/* no LOV EA */
-				ma->ma_lmm_size = 0;
-			} else if (rc2 == -ERANGE) {
-				rc2 = echo_big_lmm_get(env, next, ma);
-				if (rc2 < 0)
-					GOTO(out, rc = rc2);
-			} else {
+	if ((ma->ma_need & MA_LOV) && (S_ISREG(mode) || S_ISDIR(mode))) {
+		LASSERT(ma->ma_lmm_size > 0);
+		buf->lb_buf = ma->ma_lmm;
+		buf->lb_len = ma->ma_lmm_size;
+		rc2 = mo_xattr_get(env, next, buf, XATTR_NAME_LOV);
+		if (rc2 > 0) {
+			ma->ma_lmm_size = rc2;
+			ma->ma_valid |= MA_LOV;
+		} else if (rc2 == -ENODATA) {
+			/* no LOV EA */
+			ma->ma_lmm_size = 0;
+		} else if (rc2 == -ERANGE) {
+			rc2 = echo_big_lmm_get(env, next, ma);
+			if (rc2 < 0)
 				GOTO(out, rc = rc2);
-			}
+		} else {
+			GOTO(out, rc = rc2);
 		}
 	}
 
-	if (need & MA_LMV && S_ISDIR(mode)) {
+	if ((ma->ma_need & MA_LMV) && S_ISDIR(mode)) {
 		LASSERT(ma->ma_lmm_size > 0);
 		buf->lb_buf = ma->ma_lmm;
 		buf->lb_len = ma->ma_lmm_size;
@@ -1508,7 +1504,7 @@ static int echo_attr_get_complex(const struct lu_env *env,
 	}
 
 #ifdef CONFIG_FS_POSIX_ACL
-	if (need & MA_ACL_DEF && S_ISDIR(mode)) {
+	if ((ma->ma_need & MA_ACL_DEF) && S_ISDIR(mode)) {
 		buf->lb_buf = ma->ma_acl;
 		buf->lb_len = ma->ma_acl_size;
 		rc2 = mo_xattr_get(env, next, buf, XATTR_NAME_ACL_DEFAULT);
@@ -1524,7 +1520,6 @@ static int echo_attr_get_complex(const struct lu_env *env,
 	}
 #endif
 out:
-	ma->ma_need = need;
 	CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = %#llx ma_lmm=%p\n",
 	       rc, ma->ma_valid, ma->ma_lmm);
 	RETURN(rc);
