@@ -230,7 +230,8 @@ struct md_object_operations {
 			    struct lu_buf *buf);
 
 	int (*moo_changelog)(const struct lu_env *env,
-			     enum changelog_rec_type type, int flags,
+			     enum changelog_rec_type type,
+			     enum changelog_rec_flags clf_flags,
 			     struct md_device *m, const struct lu_fid *fid);
 
 	int (*moo_open)(const struct lu_env *env,
@@ -413,8 +414,8 @@ static inline int mo_readlink(const struct lu_env *env,
 
 static inline int mo_changelog(const struct lu_env *env,
 			       enum changelog_rec_type type,
-			       int flags, struct md_device *m,
-			       const struct lu_fid *fid)
+			       enum changelog_rec_flags clf_flags,
+			       struct md_device *m, const struct lu_fid *fid)
 {
 	struct lu_fid rootfid;
 	struct md_object *root;
@@ -429,7 +430,7 @@ static inline int mo_changelog(const struct lu_env *env,
 		RETURN(PTR_ERR(root));
 
 	LASSERT(root->mo_ops->moo_changelog);
-	rc = root->mo_ops->moo_changelog(env, type, flags, m, fid);
+	rc = root->mo_ops->moo_changelog(env, type, clf_flags, m, fid);
 
 	lu_object_put(env, &root->mo_lu);
 

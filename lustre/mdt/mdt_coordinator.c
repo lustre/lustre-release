@@ -311,7 +311,7 @@ static int mdt_cdt_started_cb(const struct lu_env *env,
 	struct cdt_agent_req *car;
 	time64_t now = ktime_get_real_seconds();
 	time64_t last;
-	int cl_flags;
+	enum changelog_rec_flags clf_flags;
 	int rc;
 
 	if (!hsd->hsd_housekeeping)
@@ -343,30 +343,30 @@ static int mdt_cdt_started_cb(const struct lu_env *env,
 	}
 
 	/* Emit a changelog record for the failed action.*/
-	cl_flags = 0;
-	hsm_set_cl_error(&cl_flags, ECANCELED);
+	clf_flags = 0;
+	hsm_set_cl_error(&clf_flags, ECANCELED);
 
 	switch (hai->hai_action) {
 	case HSMA_ARCHIVE:
-		hsm_set_cl_event(&cl_flags, HE_ARCHIVE);
+		hsm_set_cl_event(&clf_flags, HE_ARCHIVE);
 		break;
 	case HSMA_RESTORE:
-		hsm_set_cl_event(&cl_flags, HE_RESTORE);
+		hsm_set_cl_event(&clf_flags, HE_RESTORE);
 		break;
 	case HSMA_REMOVE:
-		hsm_set_cl_event(&cl_flags, HE_REMOVE);
+		hsm_set_cl_event(&clf_flags, HE_REMOVE);
 		break;
 	case HSMA_CANCEL:
-		hsm_set_cl_event(&cl_flags, HE_CANCEL);
+		hsm_set_cl_event(&clf_flags, HE_CANCEL);
 		break;
 	default:
 		/* Unknown record type, skip changelog. */
-		cl_flags = 0;
+		clf_flags = 0;
 		break;
 	}
 
-	if (cl_flags != 0)
-		mo_changelog(env, CL_HSM, cl_flags, mdt->mdt_child,
+	if (clf_flags != 0)
+		mo_changelog(env, CL_HSM, clf_flags, mdt->mdt_child,
 			     &hai->hai_fid);
 
 	if (hai->hai_action == HSMA_RESTORE)
@@ -1389,16 +1389,17 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 				     const struct cdt_agent_req *car,
 				     enum agent_req_status *status)
 {
-	const struct lu_env	*env = mti->mti_env;
-	struct mdt_device	*mdt = mti->mti_mdt;
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	struct mdt_object	*obj = NULL;
-	int			 cl_flags = 0, rc = 0;
-	struct md_hsm		 mh;
-	bool			 is_mh_changed;
-	bool			 need_changelog = true;
-	ENTRY;
+	const struct lu_env *env = mti->mti_env;
+	struct mdt_device *mdt = mti->mti_mdt;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct mdt_object *obj = NULL;
+	enum changelog_rec_flags clf_flags = 0;
+	struct md_hsm mh;
+	bool is_mh_changed;
+	bool need_changelog = true;
+	int rc = 0;
 
+	ENTRY;
 	/* default is to retry */
 	*status = ARS_WAITING;
 
@@ -1448,25 +1449,24 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			       mdt_obd_name(mdt),
 			       pgs->hpk_cookie, PFID(&pgs->hpk_fid),
 			       pgs->hpk_errval);
-			hsm_set_cl_error(&cl_flags,
-					 CLF_HSM_ERROVERFLOW);
+			hsm_set_cl_error(&clf_flags, CLF_HSM_ERROVERFLOW);
 			rc = -EINVAL;
 		} else {
-			hsm_set_cl_error(&cl_flags, pgs->hpk_errval);
+			hsm_set_cl_error(&clf_flags, pgs->hpk_errval);
 		}
 
 		switch (car->car_hai->hai_action) {
 		case HSMA_ARCHIVE:
-			hsm_set_cl_event(&cl_flags, HE_ARCHIVE);
+			hsm_set_cl_event(&clf_flags, HE_ARCHIVE);
 			break;
 		case HSMA_RESTORE:
-			hsm_set_cl_event(&cl_flags, HE_RESTORE);
+			hsm_set_cl_event(&clf_flags, HE_RESTORE);
 			break;
 		case HSMA_REMOVE:
-			hsm_set_cl_event(&cl_flags, HE_REMOVE);
+			hsm_set_cl_event(&clf_flags, HE_REMOVE);
 			break;
 		case HSMA_CANCEL:
-			hsm_set_cl_event(&cl_flags, HE_CANCEL);
+			hsm_set_cl_event(&clf_flags, HE_CANCEL);
 			CERROR("%s: Failed request %#llx on "DFID
 			       " cannot be a CANCEL\n",
 			       mdt_obd_name(mdt),
@@ -1486,7 +1486,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		*status = ARS_SUCCEED;
 		switch (car->car_hai->hai_action) {
 		case HSMA_ARCHIVE:
-			hsm_set_cl_event(&cl_flags, HE_ARCHIVE);
+			hsm_set_cl_event(&clf_flags, HE_ARCHIVE);
 			/* set ARCHIVE keep EXIST and clear LOST and
 			 * DIRTY */
 			mh.mh_arch_ver = pgs->hpk_data_version;
@@ -1495,7 +1495,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			is_mh_changed = true;
 			break;
 		case HSMA_RESTORE:
-			hsm_set_cl_event(&cl_flags, HE_RESTORE);
+			hsm_set_cl_event(&clf_flags, HE_RESTORE);
 
 			/* do not clear RELEASED and DIRTY here
 			 * this will occur in hsm_swap_layouts()
@@ -1507,13 +1507,13 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			is_mh_changed = true;
 			break;
 		case HSMA_REMOVE:
-			hsm_set_cl_event(&cl_flags, HE_REMOVE);
+			hsm_set_cl_event(&clf_flags, HE_REMOVE);
 			/* clear ARCHIVED EXISTS and LOST */
 			mh.mh_flags &= ~(HS_ARCHIVED | HS_EXISTS | HS_LOST);
 			is_mh_changed = true;
 			break;
 		case HSMA_CANCEL:
-			hsm_set_cl_event(&cl_flags, HE_CANCEL);
+			hsm_set_cl_event(&clf_flags, HE_CANCEL);
 			CERROR("%s: Successful request %#llx on "DFID" cannot be a CANCEL\n",
 			       mdt_obd_name(mdt),
 			       pgs->hpk_cookie,
@@ -1535,7 +1535,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 	 * filled
 	 */
 	if (rc == 0 && !IS_ERR(obj))
-		hsm_set_cl_flags(&cl_flags,
+		hsm_set_cl_flags(&clf_flags,
 				 mh.mh_flags & HS_DIRTY ? CLF_HSM_DIRTY : 0);
 
 	/* unlock is done later, after layout lock management */
@@ -1564,7 +1564,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		/* restore special case, need to create ChangeLog record
 		 * before to give back layout lock to avoid concurrent
 		 * file updater to post out of order ChangeLog */
-		mo_changelog(env, CL_HSM, cl_flags, mdt->mdt_child,
+		mo_changelog(env, CL_HSM, clf_flags, mdt->mdt_child,
 			     &car->car_hai->hai_fid);
 		need_changelog = false;
 
@@ -1576,7 +1576,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 out:
 	/* always add a ChangeLog record */
 	if (need_changelog)
-		mo_changelog(env, CL_HSM, cl_flags, mdt->mdt_child,
+		mo_changelog(env, CL_HSM, clf_flags, mdt->mdt_child,
 			     &car->car_hai->hai_fid);
 
 	if (!IS_ERR(obj))

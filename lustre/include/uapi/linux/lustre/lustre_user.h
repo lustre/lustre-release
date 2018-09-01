@@ -1140,16 +1140,17 @@ static inline const char *changelog_type2str(int type) {
 	return NULL;
 }
 
-/* per-record flags */
+/* 12 bits of per-record data can be stored in the bottom of the flags */
 #define CLF_FLAGSHIFT   12
-#define CLF_FLAGMASK    ((1U << CLF_FLAGSHIFT) - 1)
-#define CLF_VERMASK     (~CLF_FLAGMASK)
 enum changelog_rec_flags {
 	CLF_VERSION	= 0x1000,
 	CLF_RENAME	= 0x2000,
 	CLF_JOBID	= 0x4000,
 	CLF_EXTRA_FLAGS = 0x8000,
-	CLF_SUPPORTED	= CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS
+	CLF_SUPPORTED	= CLF_VERSION | CLF_RENAME | CLF_JOBID |
+			  CLF_EXTRA_FLAGS,
+	CLF_FLAGMASK	= (1U << CLF_FLAGSHIFT) - 1,
+	CLF_VERMASK	= ~CLF_FLAGMASK,
 };
 
 
@@ -1209,29 +1210,32 @@ static inline enum hsm_event hsm_get_cl_event(__u16 flags)
 					    CLF_HSM_EVENT_L);
 }
 
-static inline void hsm_set_cl_event(int *flags, enum hsm_event he)
+static inline void hsm_set_cl_event(enum changelog_rec_flags *clf_flags,
+				    enum hsm_event he)
 {
-	*flags |= (he << CLF_HSM_EVENT_L);
+	*clf_flags |= (he << CLF_HSM_EVENT_L);
 }
 
-static inline __u16 hsm_get_cl_flags(int flags)
+static inline __u16 hsm_get_cl_flags(enum changelog_rec_flags clf_flags)
 {
-	return CLF_GET_BITS(flags, CLF_HSM_FLAG_H, CLF_HSM_FLAG_L);
+	return CLF_GET_BITS(clf_flags, CLF_HSM_FLAG_H, CLF_HSM_FLAG_L);
 }
 
-static inline void hsm_set_cl_flags(int *flags, int bits)
+static inline void hsm_set_cl_flags(enum changelog_rec_flags *clf_flags,
+				    unsigned int bits)
 {
-	*flags |= (bits << CLF_HSM_FLAG_L);
+	*clf_flags |= (bits << CLF_HSM_FLAG_L);
 }
 
-static inline int hsm_get_cl_error(int flags)
+static inline int hsm_get_cl_error(enum changelog_rec_flags clf_flags)
 {
-	return CLF_GET_BITS(flags, CLF_HSM_ERR_H, CLF_HSM_ERR_L);
+	return CLF_GET_BITS(clf_flags, CLF_HSM_ERR_H, CLF_HSM_ERR_L);
 }
 
-static inline void hsm_set_cl_error(int *flags, int error)
+static inline void hsm_set_cl_error(enum changelog_rec_flags *clf_flags,
+				    unsigned int error)
 {
-	*flags |= (error << CLF_HSM_ERR_L);
+	*clf_flags |= (error << CLF_HSM_ERR_L);
 }
 
 enum changelog_rec_extra_flags {
@@ -1326,7 +1330,7 @@ struct changelog_ext_nid {
 	__u32 padding;
 };
 
-/* Changelog extra extension to include OPEN mode. */
+/* Changelog extra extension to include low 32 bits of MDS_OPEN_* flags. */
 struct changelog_ext_openmode {
 	__u32 cr_openflags;
 };

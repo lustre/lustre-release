@@ -325,18 +325,19 @@ void mdd_changelog_rec_extra_uidgid(struct changelog_rec *rec,
 				    __u64 uid, __u64 gid);
 void mdd_changelog_rec_extra_nid(struct changelog_rec *rec,
 				 lnet_nid_t nid);
-void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, int flags);
+void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, u32 flags);
 void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
 				   const char *xattr_name);
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			struct llog_changelog_rec *rec, struct thandle *th);
 int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
-			     enum changelog_rec_type type, int flags,
+			     enum changelog_rec_type type,
+			     enum changelog_rec_flags clf_flags,
 			     struct mdd_object *mdd_obj,
 			     struct thandle *handle);
 int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
 			   enum changelog_rec_type type,
-			   enum changelog_rec_flags crf,
+			   enum changelog_rec_flags clf_flags,
 			   struct mdd_object *target,
 			   const struct lu_fid *tpfid,
 			   const struct lu_fid *sfid,
@@ -357,7 +358,8 @@ int mdd_stripe_get(const struct lu_env *env, struct mdd_object *obj,
 int mdd_changelog_data_store_xattr(const struct lu_env *env,
 				   struct mdd_device *mdd,
 				   enum changelog_rec_type type,
-				   int flags, struct mdd_object *mdd_obj,
+				   enum changelog_rec_flags clf_flags,
+				   struct mdd_object *mdd_obj,
 				   const char *xattr_name,
 				   struct thandle *handle);
 

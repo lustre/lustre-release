@@ -718,17 +718,17 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 				     const struct lu_name *sname)
 {
 	const struct lu_ucred	*uc = lu_ucred(env);
-	enum changelog_rec_flags crf = CLF_EXTRA_FLAGS;
+	enum changelog_rec_flags clf_flags = CLF_EXTRA_FLAGS;
 	enum changelog_rec_extra_flags crfe = CLFE_UIDGID | CLFE_NID;
 
 	if (sname != NULL)
-		crf |= CLF_RENAME;
+		clf_flags |= CLF_RENAME;
 
 	if (uc != NULL && uc->uc_jobid[0] != '\0')
-		crf |= CLF_JOBID;
+		clf_flags |= CLF_JOBID;
 
 	return llog_data_len(LLOG_CHANGELOG_HDR_SZ +
-			     changelog_rec_offset(crf, crfe) +
+			     changelog_rec_offset(clf_flags, crfe) +
 			     (tname != NULL ? tname->ln_namelen : 0) +
 			     (sname != NULL ? 1 + sname->ln_namelen : 0));
 }
@@ -911,17 +911,17 @@ void mdd_changelog_rec_extra_nid(struct changelog_rec *rec,
 	clnid->cr_nid = nid;
 }
 
-void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, int flags)
+void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, u32 flags)
 {
 	struct changelog_ext_openmode *omd = changelog_rec_openmode(rec);
 
-	omd->cr_openflags = (__u32)flags;
+	omd->cr_openflags = flags;
 }
 
 void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
 				   const char *xattr_name)
 {
-	struct changelog_ext_xattr    *xattr = changelog_rec_xattr(rec);
+	struct changelog_ext_xattr *xattr = changelog_rec_xattr(rec);
 
 	strlcpy(xattr->cr_xattr, xattr_name, sizeof(xattr->cr_xattr));
 }
@@ -940,7 +940,7 @@ void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
 int mdd_changelog_ns_store(const struct lu_env *env,
 			   struct mdd_device *mdd,
 			   enum changelog_rec_type type,
-			   enum changelog_rec_flags crf,
+			   enum changelog_rec_flags clf_flags,
 			   struct mdd_object *target,
 			   const struct lu_fid *tpfid,
 			   const struct lu_fid *sfid,
@@ -970,24 +970,24 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
 
-	crf &= CLF_FLAGMASK;
-	crf |= CLF_EXTRA_FLAGS;
+	clf_flags &= CLF_FLAGMASK;
+	clf_flags |= CLF_EXTRA_FLAGS;
 
 	if (uc) {
 		if (uc->uc_jobid[0] != '\0')
-			crf |= CLF_JOBID;
+			clf_flags |= CLF_JOBID;
 		xflags |= CLFE_UIDGID;
 		xflags |= CLFE_NID;
 	}
 
 	if (sname != NULL)
-		crf |= CLF_RENAME;
+		clf_flags |= CLF_RENAME;
 	else
-		crf |= CLF_VERSION;
+		clf_flags |= CLF_VERSION;
 
-	rec->cr.cr_flags = crf;
+	rec->cr.cr_flags = clf_flags;
 
-	if (crf & CLF_EXTRA_FLAGS) {
+	if (clf_flags & CLF_EXTRA_FLAGS) {
 		mdd_changelog_rec_ext_extra_flags(&rec->cr, xflags);
 		if (xflags & CLFE_UIDGID)
 			mdd_changelog_rec_extra_uidgid(&rec->cr,
@@ -1001,10 +1001,10 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	rec->cr.cr_namelen = tname->ln_namelen;
 	memcpy(changelog_rec_name(&rec->cr), tname->ln_name, tname->ln_namelen);
 
-	if (crf & CLF_RENAME)
+	if (clf_flags & CLF_RENAME)
 		mdd_changelog_rec_ext_rename(&rec->cr, sfid, spfid, sname);
 
-	if (crf & CLF_JOBID)
+	if (clf_flags & CLF_JOBID)
 		mdd_changelog_rec_ext_jobid(&rec->cr, uc->uc_jobid);
 
 	if (likely(target != NULL)) {
