@@ -358,6 +358,7 @@ void class_disconnect_exports(struct obd_device *obddev);
 int class_manual_cleanup(struct obd_device *obd);
 void class_disconnect_stale_exports(struct obd_device *,
                                     int (*test_export)(struct obd_export *));
+
 static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
 {
         return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
@@ -395,20 +396,22 @@ void obdo_to_ioobj(const struct obdo *oa, struct obd_ioobj *ioobj);
 #define OBP(dev, op)    (dev)->obd_type->typ_dt_ops->o_ ## op
 #define MDP(dev, op)    (dev)->obd_type->typ_md_ops->m_ ## op
 
-/* Ensure obd_setup: used for cleanup which must be called
-   while obd is stopping */
-#define OBD_CHECK_DEV(obd)                                      \
-do {                                                            \
-        if (!(obd)) {                                           \
-                CERROR("NULL device\n");                        \
-                RETURN(-ENODEV);                                \
-        }                                                       \
-} while (0)
+static inline int obd_check_dev(struct obd_device *obd)
+{
+	if (!obd) {
+		CERROR("NULL device\n");
+		return -ENODEV;
+	}
+	return 0;
+}
 
 /* ensure obd_setup and !obd_stopping */
 #define OBD_CHECK_DEV_ACTIVE(obd)                               \
 do {                                                            \
-        OBD_CHECK_DEV(obd);                                     \
+	rc = obd_check_dev(obd);				\
+	if (rc)							\
+		return rc;					\
+								\
         if (!(obd)->obd_set_up || (obd)->obd_stopping) {        \
                 CERROR("Device %d not setup\n",                 \
                        (obd)->obd_minor);                       \
@@ -1172,7 +1175,10 @@ static inline int obd_notify(struct obd_device *obd,
 {
 	int rc;
 	ENTRY;
-	OBD_CHECK_DEV(obd);
+
+	rc = obd_check_dev(obd);
+	if (rc)
+		return rc;
 
 	if (!obd->obd_set_up) {
 		CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
@@ -1261,8 +1267,13 @@ static inline int obd_health_check(const struct lu_env *env,
 static inline int obd_register_observer(struct obd_device *obd,
                                         struct obd_device *observer)
 {
+	int rc;
         ENTRY;
-        OBD_CHECK_DEV(obd);
+
+	rc = obd_check_dev(obd);
+	if (rc)
+		return rc;
+
 	down_write(&obd->obd_observer_link_sem);
         if (obd->obd_observer && observer) {
 		up_write(&obd->obd_observer_link_sem);
