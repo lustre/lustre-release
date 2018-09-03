@@ -1439,7 +1439,7 @@ int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
         return 0;
 }
 
-int ldlm_pool_recalc(struct ldlm_pool *pl)
+time64_t ldlm_pool_recalc(struct ldlm_pool *pl)
 {
         return 0;
 }
