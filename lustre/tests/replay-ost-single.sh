@@ -22,13 +22,17 @@ ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # bug number for SLOW test:
-#                                  40  (min)"
+# time in minutes:                 40"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="5"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for slowed tests:                          LU-2887
-	#                                               32  12.5  (min)"
-	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 8a  8b"
+# bug number for slow tests:                 LU-2887
+# time in minutes:                           32  12.5"
+	[ "$SLOW" = "no" ] && EXCEPT_SLOW+=" 8a  8b"
+	if [ $MDSCOUNT -gt 1 ]; then
+# bug number for skipped test:
+		ALWAYS_EXCEPT+=""
+	fi
 fi
 
 build_test_filter

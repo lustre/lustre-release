@@ -25,12 +25,17 @@ require_dsh_mds || exit 0
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-#                                  7.5  (min)"
+# time in minutes:                 7.5"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="44b"
 
-[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
+if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 # bug number for skipped test:
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT "
+	ALWAYS_EXCEPT+=""
+	if [ $MDSCOUNT -gt 1 ]; then
+# bug number for skipped test:   LU-10740 LU-11330 LU-9157 LU-11336
+		ALWAYS_EXCEPT+=" 2d       70d      80c     80d"
+	fi
+fi
 
 build_test_filter
 
@@ -2243,6 +2248,7 @@ test_70d () {
 			}
 			rm -rf $DIR/$tdir/test || {
 				echo "rmdir fails"
+				ls -lR $DIR/$tdir
 				break
 			}
 
@@ -2257,6 +2263,7 @@ test_70d () {
 
 			rm -rf $DIR/$tdir/test1 || {
 				echo "rmdir fails"
+				ls -lR $DIR/$tdir/test1
 				break
 			}
 		done

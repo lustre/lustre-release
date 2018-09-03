@@ -785,7 +785,7 @@ fs_log_size() {
 			  ;;
 	esac
 
-	echo -n $size
+	echo -n $((size * MDSCOUNT))
 }
 
 fs_inode_ksize() {

@@ -7,9 +7,19 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
+# bug number for skipped test:
 ALWAYS_EXCEPT="$SANITY_DOM_EXCEPT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+# bug number for skipped test:
+	ALWAYS_EXCEPT+=""
+	if [ $MDSCOUNT -gt 1 ]; then
+# bug number for skipped test:
+		ALWAYS_EXCEPT+=""
+	fi
+fi
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
