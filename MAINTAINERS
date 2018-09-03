@@ -1,0 +1,174 @@
+
+	List of maintainers and how to submit Lustre changes
+
+Please try to follow the guidelines below.  This will make things
+easier on the maintainers.  Not all of these guidelines matter for every
+trivial patch so apply some common sense.
+
+1.	Always _test_ your changes, however small.
+
+2.	PLEASE remember that submissions must be made under the terms
+	of the Linux Foundation certificate of contribution and should
+	include a Signed-off-by: line.  The current version of this
+	"Developer's Certificate of Origin" (DCO) is listed in the file
+	Documentation/process/submitting-patches.rst.
+
+3.	Make sure your changes compile correctly in multiple
+	configurations. In particular check that changes work both as a
+	module and built into the kernel.
+
+4.	Add reviewers to the patch based on the get_maintainers.pl script.
+
+5.	PLEASE check your patch with the automated style checker
+	(contrib/scripts/checkpatch.pl) to catch trivial style violations.
+
+6.	Make sure you have the right to send any changes you make. If you
+	do changes at work you may find your employer owns the patch
+	not you.
+
+7.	Happy hacking.
+
+Descriptions of section entries:
+
+	M: Mail patches to: FullName <address@domain>
+	R: Designated reviewer: FullName <address@domain>
+	   These reviewers should be CCed on patches.
+	W: Web-page with status/info
+	B: URI for where to file bugs. A web-page with detailed bug
+	   filing info, a direct bug tracker link, or a mailto: URI.
+	C: URI for chat protocol, server and channel where developers
+	   usually hang out, for example irc://server/channel.
+	T: SCM tree type and location.
+	   Type is one of: git, hg, quilt, stgit, topgit
+	S: Status, one of the following:
+	   Supported:	Someone is actually paid to look after this.
+	   Maintained:	Someone actually looks after it.
+	   Odd Fixes:	It has a maintainer but they don't have time to do
+			much other than throw the odd patch in. See below..
+	   Orphan:	No current maintainer [but maybe you could take the
+			role as you write your new code].
+	   Obsolete:	Old code. Something tagged obsolete generally means
+			it has been replaced by a better system and you
+			should be using that.
+	F: Files and directories with wildcard patterns.
+	   A trailing slash includes all files and subdirectory files.
+	   F:	drivers/net/	all files in and below drivers/net
+	   F:	drivers/net/*	all files in drivers/net, but not below
+	   F:	*/net/*		all files in "any top level directory"/net
+	   One pattern per line.  Multiple F: lines acceptable.
+	N: Files and directories with regex patterns.
+	   N:	[^a-z]tegra	all files whose path contains the word tegra
+	   One pattern per line.  Multiple N: lines acceptable.
+	   scripts/get_maintainer.pl has different behavior for files that
+	   match F: pattern and matches of N: patterns.  By default,
+	   get_maintainer will not look at git log history when an F: pattern
+	   match occurs.  When an N: match occurs, git log history is used
+	   to also notify the people that have git commit signatures.
+	X: Files and directories that are NOT maintained, same rules as F:
+	   Files exclusions are tested before file matches.
+	   Can be useful for excluding a specific subdirectory, for instance:
+	   F:	net/
+	   X:	net/ipv6/
+	   matches all files in and below net excluding net/ipv6/
+	K: Keyword perl extended regex pattern to match content in a
+	   patch or file.  For instance:
+	   K: of_get_profile
+	      matches patches or files that contain "of_get_profile"
+	   K: \b(printk|pr_(info|err))\b
+	      matches patches or files that contain one or more of the words
+	      printk, pr_info or pr_err
+	   One regex pattern per line.  Multiple K: lines acceptable.
+
+This list is meant to remain in alphabetical order. Please add yourselves
+to it in alphabetical order.  Please include "Lustre" in the subsystem
+description, even though it is currently redundant, so that it is easier
+to keep this in sync once the client is merged upstream.
+
+Maintainers List (try to look for most precise areas first)
+
+		-----------------------------------
+
+Lustre data checksums
+R:	Andreas Dilger <adilger@whamcloud.com>
+S:	Supported
+F:	lustre/include/uapi/linux/lustre/lustre_idl.h
+F:	lustre/include/uapi/linux/lustre/lustre_user.h
+F:	lustre/ptlrpc/pack_generic.c
+F:	lustre/ptlrpc/layout.c
+F:	lustre/utils/wire*.c
+F:	lustre/ptlrpc/wire*.c
+K:	\b(OBD_CKSUM_|OBD_FL_CKSUM|OBD_CONNECT_CKSUM)
+
+Lustre GSSAPI
+S:	Odd Fixes
+F:	lustre/doc/lgss_sk.8
+F:	lustre/utils/gss
+F:	lustre/ptlrpc/gss
+F:	lustre/ptlrpc/sec*.c
+F:	lustre/tests/sanity-sec.sh
+
+Lustre HSM
+S:	Maintained
+F:	lustre/doc/llapi_hsm*.3
+F:	lustre/utils/lhsmtool_posix.c
+F:	lustre/utils/liblustreapi_hsm.c
+
+Lustre library interface
+R:	Andreas Dilger <adilger@whamcloud.com>
+S:	Supported
+F:	lustre/doc/llapi_*.3
+F:	lustre/utils/liblustreapi*.c
+F:	lustre/utils/lustreapi_internal.h
+F:	lustre/include/lustre/lustreapi.h
+
+Lustre Network Request Scheduler
+S:	Maintained
+F:	lustre/ptlrpc/nrs*.c
+K:	(quota|QUOTA)
+
+Lustre Networking
+S:	Supported
+F:	lnet/
+
+Lustre Nodemap
+S:	Maintained
+F:	lustre/ptlrpc/nodemap*.[ch]
+K:	(quota|QUOTA)
+
+Lustre /proc and /sys
+S:	Maintained
+F:	lustre/*/*lproc*.[ch]
+K:	(quota|QUOTA)
+
+Lustre protocol compatibility
+R:	Andreas Dilger <adilger@whamcloud.com>
+S:	Supported
+F:	lustre/include/uapi/linux/lustre/lustre_idl.h
+F:	lustre/include/uapi/linux/lustre/lustre_user.h
+F:	lustre/ptlrpc/pack_generic.c
+F:	lustre/ptlrpc/layout.c
+F:	lustre/utils/wire*.[ch]
+F:	lustre/ptlrpc/wire*.[ch]
+K:	OBD_CONNECT
+
+Lustre quotas
+S:	Maintained
+F:	lustre/quota/
+F:	lustre/osc/osc_quota.c
+F:	lustre/osd-ldiskfs/osd_quota*.[ch]
+F:	lustre/osd-zfs/osd_quota*.[ch]
+F:	lustre/tests/sanity-quota.sh
+F:	lustre/doc/*quota*.[13]
+K:	(quota|QUOTA)
+
+Lustre user documentation
+R:	Andreas Dilger <adilger@whamcloud.com>
+S:	Supported
+F:	lustre/doc/*.[1-9]
+
+Lustre userspace tools
+R:	Andreas Dilger <adilger@whamcloud.com>
+S:	Supported
+F:	lustre/utils/
+X:	lustre/utils/gss/
+
