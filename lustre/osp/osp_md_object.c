@@ -157,15 +157,15 @@ int osp_md_create(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_attr *attr, struct dt_allocation_hint *hint,
 		  struct dt_object_format *dof, struct thandle *th)
 {
-	struct osp_update_request	*update;
-	struct osp_object		*obj = dt2osp_obj(dt);
-	int				rc;
+	struct osp_update_request *update;
+	struct osp_object *obj = dt2osp_obj(dt);
+	int rc;
 
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
 	LASSERT(attr->la_valid & LA_TYPE);
-	rc = osp_update_rpc_pack(env, create, update, OUT_CREATE,
+	rc = OSP_UPDATE_RPC_PACK(env, out_create_pack, update,
 				 lu_object_fid(&dt->do_lu), attr, hint, dof);
 	if (rc != 0)
 		GOTO(out, rc);
@@ -219,13 +219,13 @@ static int osp_md_declare_ref_del(const struct lu_env *env,
 static int osp_md_ref_del(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
 {
-	struct osp_update_request	*update;
-	int				rc;
+	struct osp_update_request *update;
+	int rc;
 
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, ref_del, update, OUT_REF_DEL,
+	rc = OSP_UPDATE_RPC_PACK(env, out_ref_del_pack, update,
 				 lu_object_fid(&dt->do_lu));
 	return rc;
 }
@@ -265,13 +265,13 @@ static int osp_md_declare_ref_add(const struct lu_env *env,
 static int osp_md_ref_add(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th)
 {
-	struct osp_update_request	*update;
-	int				rc;
+	struct osp_update_request *update;
+	int rc;
 
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, ref_add, update, OUT_REF_ADD,
+	rc = OSP_UPDATE_RPC_PACK(env, out_ref_add_pack, update,
 				 lu_object_fid(&dt->do_lu));
 	return rc;
 }
@@ -341,13 +341,13 @@ int osp_md_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
 		    const struct lu_attr *attr, struct thandle *th)
 {
-	struct osp_update_request	*update;
-	int				rc;
+	struct osp_update_request *update;
+	int rc;
 
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, attr_set, update, OUT_ATTR_SET,
+	rc = OSP_UPDATE_RPC_PACK(env, out_attr_set_pack, update,
 				 lu_object_fid(&dt->do_lu), attr);
 	return rc;
 }
@@ -477,7 +477,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
-	rc = osp_update_rpc_pack(env, index_lookup, update, OUT_INDEX_LOOKUP,
+	rc = OSP_UPDATE_RPC_PACK(env, out_index_lookup_pack, update,
 				 lu_object_fid(&dt->do_lu), rec, key);
 	if (rc != 0) {
 		CERROR("%s: Insert update error: rc = %d\n",
@@ -574,20 +574,18 @@ static int osp_md_declare_index_insert(const struct lu_env *env,
  * \retval		0 if packing index insert succeeds.
  * \retval		negative errno if packing fails.
  */
-static int osp_md_index_insert(const struct lu_env *env,
-			       struct dt_object *dt,
+static int osp_md_index_insert(const struct lu_env *env, struct dt_object *dt,
 			       const struct dt_rec *rec,
-			       const struct dt_key *key,
-			       struct thandle *th,
+			       const struct dt_key *key, struct thandle *th,
 			       int ignore_quota)
 {
 	struct osp_update_request *update;
-	int			 rc;
+	int rc;
 
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, index_insert, update, OUT_INDEX_INSERT,
+	rc = OSP_UPDATE_RPC_PACK(env, out_index_insert_pack, update,
 				 lu_object_fid(&dt->do_lu), rec, key);
 	return rc;
 }
@@ -639,7 +637,7 @@ static int osp_md_index_delete(const struct lu_env *env,
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, index_delete, update, OUT_INDEX_DELETE,
+	rc = OSP_UPDATE_RPC_PACK(env, out_index_delete_pack, update,
 				 lu_object_fid(&dt->do_lu), key);
 
 	return rc;
@@ -854,7 +852,7 @@ static int osp_md_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
-	rc = osp_update_rpc_pack(env, xattr_list, update, OUT_XATTR_LIST,
+	rc = OSP_UPDATE_RPC_PACK(env, out_xattr_list_pack, update,
 				 lu_object_fid(&dt->do_lu), buf->lb_len);
 	if (rc) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
@@ -1040,10 +1038,10 @@ int osp_md_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
 		   struct thandle *th)
 {
-	struct osp_object		*o = dt2osp_obj(dt);
-	struct osp_device		*osp = lu2osp_dev(dt->do_lu.lo_dev);
-	struct osp_update_request	*update;
-	int				rc = 0;
+	struct osp_object *o = dt2osp_obj(dt);
+	struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
+	struct osp_update_request *update;
+	int rc = 0;
 
 	ENTRY;
 	o->opo_non_exist = 1;
@@ -1052,7 +1050,7 @@ int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, destroy, update, OUT_DESTROY,
+	rc = OSP_UPDATE_RPC_PACK(env, out_destroy_pack, update,
 				 lu_object_fid(&dt->do_lu));
 	if (rc != 0)
 		RETURN(rc);
@@ -1162,7 +1160,7 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	CDEBUG(D_INFO, "write "DFID" offset = %llu length = %zu\n",
 	       PFID(lu_object_fid(&dt->do_lu)), *pos, buf->lb_len);
 
-	rc = osp_update_rpc_pack(env, write, update, OUT_WRITE,
+	rc = OSP_UPDATE_RPC_PACK(env, out_write_pack, update,
 				 lu_object_fid(&dt->do_lu), buf, *pos);
 	if (rc < 0)
 		RETURN(rc);
@@ -1224,7 +1222,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
-	rc = osp_update_rpc_pack(env, read, update, OUT_READ,
+	rc = OSP_UPDATE_RPC_PACK(env, out_read_pack, update,
 				 lu_object_fid(&dt->do_lu),
 				 rbuf->lb_len, *pos);
 	if (rc != 0) {

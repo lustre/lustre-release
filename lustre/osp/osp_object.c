@@ -561,7 +561,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(update))
 		RETURN(PTR_ERR(update));
 
-	rc = osp_update_rpc_pack(env, attr_get, update, OUT_ATTR_GET,
+	rc = OSP_UPDATE_RPC_PACK(env, out_attr_get_pack, update,
 				 lu_object_fid(&dt->do_lu));
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
@@ -718,8 +718,7 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 			if (IS_ERR(update))
 				RETURN(PTR_ERR(update));
 
-			rc = osp_update_rpc_pack(env, attr_set, update,
-						 OUT_ASTTR_SET,
+			rc = OSP_UPDATE_RPC_PACK(env, out_attr_set_pack, update,
 						 lu_object_fid(&dt->do_lu),
 						 attr);
 			if (rc != 0) {
@@ -989,7 +988,7 @@ unlock:
 	if (IS_ERR(update))
 		GOTO(out, rc = PTR_ERR(update));
 
-	rc = osp_update_rpc_pack(env, xattr_get, update, OUT_XATTR_GET,
+	rc = OSP_UPDATE_RPC_PACK(env, out_xattr_get_pack, update,
 				 lu_object_fid(&dt->do_lu), name, buf->lb_len);
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
@@ -1159,10 +1158,10 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  const struct lu_buf *buf, const char *name, int fl,
 		  struct thandle *th)
 {
-	struct osp_object	*o = dt2osp_obj(dt);
+	struct osp_object *o = dt2osp_obj(dt);
 	struct osp_update_request *update;
-	struct osp_xattr_entry	*oxe;
-	int			rc;
+	struct osp_xattr_entry *oxe;
+	int rc;
 	ENTRY;
 
 	update = thandle_to_osp_update_request(th);
@@ -1171,7 +1170,7 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	CDEBUG(D_INODE, DFID" set xattr '%s' with size %zd\n",
 	       PFID(lu_object_fid(&dt->do_lu)), name, buf->lb_len);
 
-	rc = osp_update_rpc_pack(env, xattr_set, update, OUT_XATTR_SET,
+	rc = OSP_UPDATE_RPC_PACK(env, out_xattr_set_pack, update,
 				 lu_object_fid(&dt->do_lu), buf, name, fl);
 	if (rc != 0)
 		RETURN(rc);
@@ -1248,16 +1247,15 @@ int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		  const char *name, struct thandle *th)
 {
 	struct osp_update_request *update;
-	const struct lu_fid	 *fid = lu_object_fid(&dt->do_lu);
-	struct osp_object	 *o	= dt2osp_obj(dt);
-	struct osp_xattr_entry	 *oxe;
-	int			  rc;
+	const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
+	struct osp_object *o = dt2osp_obj(dt);
+	struct osp_xattr_entry *oxe;
+	int rc;
 
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	rc = osp_update_rpc_pack(env, xattr_del, update, OUT_XATTR_DEL,
-				 fid, name);
+	rc = OSP_UPDATE_RPC_PACK(env, out_xattr_del_pack, update, fid, name);
 	if (rc != 0)
 		return rc;
 

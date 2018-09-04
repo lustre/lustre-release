@@ -622,10 +622,10 @@ osp_current_object_update_request(struct osp_update_request *our);
 int osp_object_update_request_create(struct osp_update_request *our,
 				     size_t size);
 
-#define osp_update_rpc_pack(env, name, our, op, ...)			\
+#define OSP_UPDATE_RPC_PACK(env, out_something_pack, our, ...)		\
 ({									\
-	struct object_update	*object_update;				\
-	size_t			max_update_length;			\
+	struct object_update *object_update;				\
+	size_t max_update_length;					\
 	struct osp_update_request_sub *ours;				\
 	int ret;							\
 									\
@@ -637,9 +637,9 @@ int osp_object_update_request_create(struct osp_update_request *our,
 									\
 		object_update = update_buffer_get_update(ours->ours_req,\
 					 ours->ours_req->ourq_count);	\
-		ret = out_##name##_pack(env, object_update,		\
-					&max_update_length,		\
-				       __VA_ARGS__);			\
+		ret = out_something_pack(env, object_update,		\
+					 &max_update_length,		\
+					 __VA_ARGS__);			\
 		if (ret == -E2BIG) {					\
 			int rc1;					\
 			/* Create new object update request */		\
