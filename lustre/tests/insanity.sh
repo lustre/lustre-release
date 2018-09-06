@@ -1,8 +1,6 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 #
-# Test multiple failures, AKA Test 17
+# Test different failure modes combinations
 
 set -e
 
@@ -13,8 +11,10 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
-#              
-ALWAYS_EXCEPT="15  $INSANITY_EXCEPT"
+
+# bug number for skipped test:
+ALWAYS_EXCEPT="$INSANITY_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 if [ "$FAILURE_MODE" = "HARD" ]; then
 	skip_env "$TESTSUITE: is not functional with FAILURE_MODE = HARD, " \
@@ -57,9 +57,9 @@ DOWN_NUM=0   # number of nodes currently down
 
 # set next client to fail
 set_fail_client() {
-    FAIL_CLIENT=${FAIL_LIST[$FAIL_NEXT]}
-    FAIL_NEXT=$(( (FAIL_NEXT+1) % FAIL_NUM ))
-    echo "fail $FAIL_CLIENT, next is $FAIL_NEXT"
+	FAIL_CLIENT=${FAIL_LIST[$FAIL_NEXT]}
+	FAIL_NEXT=$(( (FAIL_NEXT+1) % FAIL_NUM ))
+	echo "fail $FAIL_CLIENT, next is $FAIL_NEXT"
 }
 
 fail_clients() {
@@ -69,22 +69,22 @@ fail_clients() {
 	if [ -z "$num"  ] || [ "$num" -gt $((FAIL_NUM - DOWN_NUM)) ]; then
 		num=$((FAIL_NUM - DOWN_NUM))
 	fi
-    
-    if [ -z "$num" ] || [ "$num" -le 0 ]; then
-        log "No clients failed!"
-        return
-    fi
 
-    client_mkdirs
+	if [ -z "$num" ] || [ "$num" -le 0 ]; then
+		log "No clients failed!"
+		return
+	fi
 
-    for i in `seq $num`; do
-       set_fail_client
-       client=$FAIL_CLIENT
-       DOWN_CLIENTS="$DOWN_CLIENTS $client"
-       shutdown_client $client
-    done
+	client_mkdirs
 
-    echo "down clients: $DOWN_CLIENTS"
+	for i in `seq $num`; do
+		set_fail_client
+		client=$FAIL_CLIENT
+		DOWN_CLIENTS="$DOWN_CLIENTS $client"
+		shutdown_client $client
+	done
+
+	echo "down clients: $DOWN_CLIENTS"
 
 	for client in $DOWN_CLIENTS; do
 		boot_node $client
@@ -153,18 +153,15 @@ check_and_setup_lustre
 rm -rf $TESTDIR
 mkdir -p $TESTDIR
 
-# 9 Different Failure Modes Combinations
-echo "Starting Test 17 at `date`"
-
 test_0() {
 	for i in $(seq $MDSCOUNT) ; do
 		fail mds$i
 	done
 
-    for i in $(seq $OSTCOUNT) ; do
-        fail ost$i
-    done
-    return 0
+	for i in $(seq $OSTCOUNT) ; do
+		fail ost$i
+	done
+	return 0
 }
 run_test 0 "Fail all nodes, independently"
 
@@ -219,27 +216,27 @@ test_2() {
 		reboot_facet mds$i
 	done
 
-    clients_up &
-    DFPID=$!
-    sleep 5
+	clients_up &
+	DFPID=$!
+	sleep 5
 
-    shutdown_facet ost1
+	shutdown_facet ost1
 
-    echo "Reintegrating OST"
-    reboot_facet ost1
-    wait_for_facet ost1
-    start_ost 1 || return 2
+	echo "Reintegrating OST"
+	reboot_facet ost1
+	wait_for_facet ost1
+	start_ost 1 || return 2
 
 	for i in $(seq $MDSCOUNT) ; do
 		wait_for_facet mds$i
 		start_mdt $i || return $?
 	done
 
-    #Check FS
-    wait $DFPID
-    clients_recover_osts ost1
-    echo "Verify reintegration"
-    clients_up || return 1
+	#Check FS
+	wait $DFPID
+	clients_recover_osts ost1
+	echo "Verify reintegration"
+	clients_up || return 1
 
 }
 run_test 2 "Second Failure Mode: MDS/OST `date`"
@@ -247,52 +244,52 @@ run_test 2 "Second Failure Mode: MDS/OST `date`"
 
 ############### Third Failure Mode ###############
 test_3() {
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
-    #MDS Portion
+	#MDS Portion
 	for i in $(seq $MDSCOUNT) ; do
 		fail mds$i
 	done
-    #Check FS
 
-    echo "Test Lustre stability after MDS failover"
-    clients_up
+	#Check FS
+	echo "Test Lustre stability after MDS failover"
+	clients_up
 
-    #CLIENT Portion
-    echo "Failing 2 CLIENTS"
-    fail_clients 2
-    
-    #Check FS
-    echo "Test Lustre stability after CLIENT failure"
-    clients_up
-    
-    #Reintegration
-    echo "Reintegrating CLIENTS"
-    reintegrate_clients || return 1
+	#CLIENT Portion
+	echo "Failing 2 CLIENTS"
+	fail_clients 2
 
-    clients_up || return 3
-    sleep 2 # give it a little time for fully recovered before next test
+	#Check FS
+	echo "Test Lustre stability after CLIENT failure"
+	clients_up
+
+	#Reintegration
+	echo "Reintegrating CLIENTS"
+	reintegrate_clients || return 1
+
+	clients_up || return 3
+	sleep 2 # give it a little time for fully recovered before next test
 }
-run_test 3  "Thirdb Failure Mode: MDS/CLIENT `date`"
+run_test 3  "Third Failure Mode: MDS/CLIENT `date`"
 ###################################################
 
 ############### Fourth Failure Mode ###############
 test_4() {
 	echo "Fourth Failure Mode: OST/MDS `date`"
 
-    #OST Portion
-    shutdown_facet ost1
+	#OST Portion
+	shutdown_facet ost1
 
-    #Check FS
-    echo "Test Lustre stability after OST failure"
-    clients_up &
-    DFPIDA=$!
-    sleep 5
+	#Check FS
+	echo "Test Lustre stability after OST failure"
+	clients_up &
+	DFPIDA=$!
+	sleep 5
 
 	for i in $(seq $MDSCOUNT) ; do
-    		shutdown_facet mds$i
+		shutdown_facet mds$i
 		reboot_facet mds$i
 
 		# prepare for MDS failover
@@ -300,27 +297,27 @@ test_4() {
 		reboot_facet mds$i
 	done
 
-    clients_up &
-    DFPIDB=$!
-    sleep 5
+	clients_up &
+	DFPIDB=$!
+	sleep 5
 
-    #Reintegration
-    echo "Reintegrating OST"
-    reboot_facet ost1
-    wait_for_facet ost1
-    start_ost 1
+	#Reintegration
+	echo "Reintegrating OST"
+	reboot_facet ost1
+	wait_for_facet ost1
+	start_ost 1
 
 	for i in $(seq $MDSCOUNT) ; do
 		wait_for_facet mds$i
 		start_mdt $i || return $?
 	done
-    #Check FS
 
-    wait $DFPIDA
-    wait $DFPIDB
-    clients_recover_osts ost1
-    echo "Test Lustre stability after MDS failover"
-    clients_up || return 1
+	#Check FS
+	wait $DFPIDA
+	wait $DFPIDB
+	clients_recover_osts ost1
+	echo "Test Lustre stability after MDS failover"
+	clients_up || return 1
 }
 run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 ###################################################
@@ -340,256 +337,250 @@ test_5() {
 	shutdown_facet ost1
 	reboot_facet ost1
 
-    #Check FS
-    echo "Test Lustre stability after OST failure"
-    clients_up &
-    DFPIDA=$!
-    sleep 5
+	#Check FS
+	echo "Test Lustre stability after OST failure"
+	clients_up &
+	DFPIDA=$!
+	sleep 5
 
-    #OST Portion
-    shutdown_facet ost2
-    reboot_facet ost2
+	#OST Portion
+	shutdown_facet ost2
+	reboot_facet ost2
 
-    #Check FS
-    echo "Test Lustre stability after OST failure"
-    clients_up &
-    DFPIDB=$!
-    sleep 5
+	#Check FS
+	echo "Test Lustre stability after OST failure"
+	clients_up &
+	DFPIDB=$!
+	sleep 5
 
-    #Reintegration
-    echo "Reintegrating OSTs"
-    wait_for_facet ost1
-    start_ost 1
-    wait_for_facet ost2
-    start_ost 2
+	#Reintegration
+	echo "Reintegrating OSTs"
+	wait_for_facet ost1
+	start_ost 1
+	wait_for_facet ost2
+	start_ost 2
 
-    clients_recover_osts ost1
-    clients_recover_osts ost2
-    sleep $TIMEOUT
+	clients_recover_osts ost1
+	clients_recover_osts ost2
+	sleep $TIMEOUT
 
-    wait $DFPIDA
-    wait $DFPIDB
-    clients_up || return 2
+	wait $DFPIDA
+	wait $DFPIDB
+	clients_up || return 2
 }
 run_test 5 "Fifth Failure Mode: OST/OST `date`"
 ###################################################
 
 ############### Sixth Failure Mode ###############
 test_6() {
-    echo "Sixth Failure Mode: OST/CLIENT `date`"
+	echo "Sixth Failure Mode: OST/CLIENT `date`"
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
-    clients_up
-    client_touch testfile || return 2
-	
-    #OST Portion
-    shutdown_facet ost1
-    reboot_facet ost1
+	clients_up
+	client_touch testfile || return 2
 
-    #Check FS
-    echo "Test Lustre stability after OST failure"
-    clients_up &
-    DFPIDA=$!
-    echo DFPIDA=$DFPIDA
-    sleep 5
+	#OST Portion
+	shutdown_facet ost1
+	reboot_facet ost1
 
-    #CLIENT Portion
-    echo "Failing CLIENTs"
-    fail_clients
-    
-    #Check FS
-    echo "Test Lustre stability after CLIENTs failure"
-    clients_up &
-    DFPIDB=$!
-    echo DFPIDB=$DFPIDB
-    sleep 5
-    
-    #Reintegration
-    echo "Reintegrating OST/CLIENTs"
-    wait_for_facet ost1
-    start_ost 1
-    reintegrate_clients || return 1
-    sleep 5 
+	#Check FS
+	echo "Test Lustre stability after OST failure"
+	clients_up &
+	DFPIDA=$!
+	echo DFPIDA=$DFPIDA
+	sleep 5
 
-    wait_remote_prog "stat -f" $((TIMEOUT * 3 + 20)) 
-    wait $DFPIDA
-    wait $DFPIDB
+	#CLIENT Portion
+	echo "Failing CLIENTs"
+	fail_clients
 
-    echo "Verifying mount"
-    [ -z "$(mounted_lustre_filesystems)" ] && return 3
-    clients_up
+	#Check FS
+	echo "Test Lustre stability after CLIENTs failure"
+	clients_up &
+	DFPIDB=$!
+	echo DFPIDB=$DFPIDB
+	sleep 5
+
+	#Reintegration
+	echo "Reintegrating OST/CLIENTs"
+	wait_for_facet ost1
+	start_ost 1
+	reintegrate_clients || return 1
+	sleep 5
+
+	wait_remote_prog "stat -f" $((TIMEOUT * 3 + 20))
+	wait $DFPIDA
+	wait $DFPIDB
+
+	echo "Verifying mount"
+	[ -z "$(mounted_lustre_filesystems)" ] && return 3
+	clients_up
 }
 run_test 6 "Sixth Failure Mode: OST/CLIENT `date`"
 ###################################################
 
-
 ############### Seventh Failure Mode ###############
 test_7() {
-    echo "Seventh Failure Mode: CLIENT/MDS `date`"
+	echo "Seventh Failure Mode: CLIENT/MDS `date`"
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
-    clients_up
-    client_touch testfile  || return 1
+	clients_up
+	client_touch testfile  || return 1
 
-    #CLIENT Portion
-    echo "Part 1: Failing CLIENT"
-    fail_clients 2
-    
-    #Check FS
-    echo "Test Lustre stability after CLIENTs failure"
-    clients_up
-    $PDSH $LIVE_CLIENT "ls -l $TESTDIR"
-    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
-    
-    #Sleep
-    echo "Wait 1 minutes"
-    sleep 60
+	#CLIENT Portion
+	echo "Part 1: Failing CLIENT"
+	fail_clients 2
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && return 2
+	#Check FS
+	echo "Test Lustre stability after CLIENTs failure"
+	clients_up
+	$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
 
-    clients_up
-    client_rm testfile
+	#Sleep
+	echo "Wait 1 minutes"
+	sleep 60
 
-    #MDS Portion
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && return 2
+
+	clients_up
+	client_rm testfile
+
+	#MDS Portion
 	for i in $(seq $MDSCOUNT) ; do
 		fail mds$i
 	done
 
-    $PDSH $LIVE_CLIENT "ls -l $TESTDIR"
-    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
+	$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
 
-    #Reintegration
-    echo "Reintegrating CLIENTs"
-    reintegrate_clients || return 2
-    clients_up
-    
-    #Sleep
-    echo "wait 1 minutes"
-    sleep 60
+	#Reintegration
+	echo "Reintegrating CLIENTs"
+	reintegrate_clients || return 2
+	clients_up
+
+	#Sleep
+	echo "wait 1 minutes"
+	sleep 60
 }
 run_test 7 "Seventh Failure Mode: CLIENT/MDS `date`"
 ###################################################
 
-
 ############### Eighth Failure Mode ###############
 test_8() {
-    echo "Eighth Failure Mode: CLIENT/OST `date`"
+	echo "Eighth Failure Mode: CLIENT/OST `date`"
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
-    clients_up
-    client_touch testfile
-	
-    #CLIENT Portion
-    echo "Failing CLIENTs"
-    fail_clients 2
+	clients_up
+	client_touch testfile
 
-    #Check FS
-    echo "Test Lustre stability after CLIENTs failure"
-    clients_up
-    $PDSH $LIVE_CLIENT "ls -l $TESTDIR"
-    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
+	#CLIENT Portion
+	echo "Failing CLIENTs"
+	fail_clients 2
 
-    #Sleep
-    echo "Wait 1 minutes"
-    sleep 60
+	#Check FS
+	echo "Test Lustre stability after CLIENTs failure"
+	clients_up
+	$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	#Sleep
+	echo "Wait 1 minutes"
+	sleep 60
 
-    clients_up
-    client_touch testfile
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
+	clients_up
+	client_touch testfile
 
-    #OST Portion
-    shutdown_facet ost1
-    reboot_facet ost1
+	#OST Portion
+	shutdown_facet ost1
+	reboot_facet ost1
 
-    #Check FS
-    echo "Test Lustre stability after OST failure"
-    clients_up &
-    DFPID=$!
-    sleep 5
-    #non-failout hangs forever here
-    #$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
-    #$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
-    
-    #Reintegration
-    echo "Reintegrating CLIENTs/OST"
-    reintegrate_clients || return 3
-    wait_for_facet ost1
-    start_ost 1
-    wait $DFPID
-    clients_up || return 1
-    client_touch testfile2 || return 2
+	#Check FS
+	echo "Test Lustre stability after OST failure"
+	clients_up &
+	DFPID=$!
+	sleep 5
+	#non-failout hangs forever here
+	#$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
+	#$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
 
-    #Sleep
-    echo "Wait 1 minutes"
-    sleep 60
+	#Reintegration
+	echo "Reintegrating CLIENTs/OST"
+	reintegrate_clients || return 3
+	wait_for_facet ost1
+	start_ost 1
+	wait $DFPID
+	clients_up || return 1
+	client_touch testfile2 || return 2
+
+	#Sleep
+	echo "Wait 1 minutes"
+	sleep 60
 }
 run_test 8 "Eighth Failure Mode: CLIENT/OST `date`"
 ###################################################
 
-
 ############### Ninth Failure Mode ###############
 test_9() {
-    echo 
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	clients_up
+	client_touch testfile || return 1
 
-    clients_up
-    client_touch testfile || return 1
-	
-    #CLIENT Portion
-    echo "Failing CLIENTs"
-    fail_clients 2
+	#CLIENT Portion
+	echo "Failing CLIENTs"
+	fail_clients 2
 
-    #Check FS
-    echo "Test Lustre stability after CLIENTs failure"
-    clients_up
-    $PDSH $LIVE_CLIENT "ls -l $TESTDIR" || return 1
-    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile" || return 2
+	#Check FS
+	echo "Test Lustre stability after CLIENTs failure"
+	clients_up
+	$PDSH $LIVE_CLIENT "ls -l $TESTDIR" || return 1
+	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile" || return 2
 
-    #Sleep
-    echo "Wait 1 minutes"
-    sleep 60
+	#Sleep
+	echo "Wait 1 minutes"
+	sleep 60
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    client_up $LIVE_CLIENT || return 3
-    client_touch testfile || return 4
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	client_up $LIVE_CLIENT || return 3
+	client_touch testfile || return 4
 
-    #CLIENT Portion
-    echo "Failing CLIENTs"
-    fail_clients 2
-    
-    #Check FS
-    echo "Test Lustre stability after CLIENTs failure"
-    clients_up
-    $PDSH $LIVE_CLIENT "ls -l $TESTDIR" || return 5
-    $PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile" || return 6
+	#CLIENT Portion
+	echo "Failing CLIENTs"
+	fail_clients 2
 
-    #Reintegration
-    echo "Reintegrating  CLIENTs/CLIENTs"
-    reintegrate_clients || return 7
-    clients_up
-    
-    #Sleep
-    echo "Wait 1 minutes"
-    sleep 60
+	#Check FS
+	echo "Test Lustre stability after CLIENTs failure"
+	clients_up
+	$PDSH $LIVE_CLIENT "ls -l $TESTDIR" || return 5
+	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile" || return 6
+
+	#Reintegration
+	echo "Reintegrating  CLIENTs/CLIENTs"
+	reintegrate_clients || return 7
+	clients_up
+
+	#Sleep
+	echo "Wait 1 minutes"
+	sleep 60
 }
 run_test 9 "Ninth Failure Mode: CLIENT/CLIENT `date`"
 ###################################################
@@ -762,15 +753,6 @@ test_14() {
 	clients_up || return 4
 }
 run_test 14 "Fourteen Failure Mode: OST0,OST1/CLIENTS/MDS0,MDS1 `date`"
-###################################################
-
-test_15() {
-    #Run availability after all failures
-    DURATION=${DURATION:-$((2 * 60 * 60))} # 6 hours default
-    LOADTEST=${LOADTEST:-metadata-load.py}
-    $PWD/availability.sh $CONFIG $DURATION $CLIENTS || return 1
-}
-run_test 15 "Running Availability for 6 hours..."
 
 complete $SECONDS
 check_and_cleanup_lustre
