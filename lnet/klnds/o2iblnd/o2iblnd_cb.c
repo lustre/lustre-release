@@ -873,15 +873,16 @@ __must_hold(&conn->ibc_lock)
 	 * from the first send; hence the ++ rather than = below. */
 	tx->tx_sending++;
 	list_add(&tx->tx_list, &conn->ibc_active_txs);
+	tx->tx_on_activeq = ktime_get();
 
-        /* I'm still holding ibc_lock! */
-        if (conn->ibc_state != IBLND_CONN_ESTABLISHED) {
-                rc = -ECONNABORTED;
-        } else if (tx->tx_pool->tpo_pool.po_failed ||
-                 conn->ibc_hdev != tx->tx_pool->tpo_hdev) {
-                /* close_conn will launch failover */
-                rc = -ENETDOWN;
-        } else {
+	/* I'm still holding ibc_lock! */
+	if (conn->ibc_state != IBLND_CONN_ESTABLISHED) {
+		rc = -ECONNABORTED;
+	} else if (tx->tx_pool->tpo_pool.po_failed ||
+		conn->ibc_hdev != tx->tx_pool->tpo_hdev) {
+		/* close_conn will launch failover */
+		rc = -ENETDOWN;
+	} else {
 		struct kib_fast_reg_descriptor *frd = tx->tx_fmr.fmr_frd;
 		struct ib_send_wr *bad = &tx->tx_wrq[tx->tx_nwrq - 1].wr;
 		struct ib_send_wr *wr  = &tx->tx_wrq[0].wr;
@@ -3226,6 +3227,8 @@ kiblnd_check_txs_locked(struct kib_conn *conn, struct list_head *txs)
 {
 	struct kib_tx *tx;
 	struct list_head *ttmp;
+	bool active_txs = strcmp(kiblnd_queue2str(conn, txs),
+				 "active_txs") == 0;
 
 	list_for_each(ttmp, txs) {
 		tx = list_entry(ttmp, struct kib_tx, tx_list);
@@ -3237,13 +3240,31 @@ kiblnd_check_txs_locked(struct kib_conn *conn, struct list_head *txs)
 			LASSERT(tx->tx_waiting || tx->tx_sending != 0);
 		}
 
-		if (ktime_compare(ktime_get(), tx->tx_deadline) >= 0) {
-			CERROR("Timed out tx: %s, %lld seconds\n",
+		if (ktime_compare(ktime_get(), tx->tx_deadline) < 0)
+			continue;
+
+		if (!active_txs) {
+			CERROR("Timed out tx: %s, "
+			       "outstanding RDMA time: %lld sec\n",
 			       kiblnd_queue2str(conn, txs),
+			       *kiblnd_tunables.kib_timeout +
+			       (ktime_ms_delta(ktime_get(),
+					       tx->tx_deadline) / MSEC_PER_SEC));
+		} else {
+			CERROR("Timed out tx: %s, time in internal queue: %lld "
+			       "sec, time in active queue: %lld sec,"
+			       " outstanding RDMA time: %lld sec\n",
+			       kiblnd_queue2str(conn, txs),
+			       ktime_ms_delta(tx->tx_deadline,
+					      tx->tx_on_activeq) / MSEC_PER_SEC,
 			       ktime_ms_delta(ktime_get(),
-					      tx->tx_deadline) / MSEC_PER_SEC);
-			return 1;
+					      tx->tx_on_activeq) / MSEC_PER_SEC,
+			       *kiblnd_tunables.kib_timeout +
+			       (ktime_ms_delta(ktime_get(),
+					       tx->tx_deadline) / MSEC_PER_SEC));
 		}
+
+		return 1;
 	}
 
 	return 0;
