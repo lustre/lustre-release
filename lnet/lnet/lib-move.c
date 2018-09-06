@@ -794,87 +794,14 @@ lnet_ni_eager_recv(struct lnet_ni *ni, struct lnet_msg *msg)
 	return rc;
 }
 
-/*
- * This function can be called from two paths:
- *	1. when sending a message
- *	2. when decommiting a message (lnet_msg_decommit_tx())
- * In both these cases the peer_ni should have it's reference count
- * acquired by the caller and therefore it is safe to drop the spin
- * lock before calling lnd_query()
- */
-static void
-lnet_ni_query_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp)
-{
-	time64_t last_alive = 0;
-	int cpt = lnet_cpt_of_nid_locked(lp->lpni_nid, ni);
-
-	LASSERT(lnet_peer_aliveness_enabled(lp));
-	LASSERT(ni->ni_net->net_lnd->lnd_query != NULL);
-
-	lnet_net_unlock(cpt);
-	(ni->ni_net->net_lnd->lnd_query)(ni, lp->lpni_nid, &last_alive);
-	lnet_net_lock(cpt);
-
-	lp->lpni_last_query = ktime_get_seconds();
-
-	if (last_alive != 0) /* NI has updated timestamp */
-		lp->lpni_last_alive = last_alive;
-}
-
-/* NB: always called with lnet_net_lock held */
-static inline int
-lnet_peer_is_alive(struct lnet_peer_ni *lp, time64_t now)
-{
-	int alive;
-	time64_t deadline;
-
-	LASSERT (lnet_peer_aliveness_enabled(lp));
-
-	/*
-	 * Trust lnet_notify() if it has more recent aliveness news, but
-	 * ignore the initial assumed death (see lnet_peers_start_down()).
-	 */
-	spin_lock(&lp->lpni_lock);
-	if (!lp->lpni_alive && lp->lpni_alive_count > 0 &&
-	    lp->lpni_timestamp >= lp->lpni_last_alive) {
-		spin_unlock(&lp->lpni_lock);
-		return 0;
-	}
-
-	deadline = lp->lpni_last_alive +
-		   lp->lpni_net->net_tunables.lct_peer_timeout;
-	alive = deadline > now;
-
-	/*
-	 * Update obsolete lp_alive except for routers assumed to be dead
-	 * initially, because router checker would update aliveness in this
-	 * case, and moreover lpni_last_alive at peer creation is assumed.
-	 */
-	if (alive && !lp->lpni_alive &&
-	    !(lnet_isrouter(lp) && lp->lpni_alive_count == 0)) {
-		spin_unlock(&lp->lpni_lock);
-		lnet_notify_locked(lp, 0, 1, lp->lpni_last_alive);
-	} else {
-		spin_unlock(&lp->lpni_lock);
-	}
-
-	return alive;
-}
-
-
 /* NB: returns 1 when alive, 0 when dead, negative when error;
  *     may drop the lnet_net_lock */
 static int
-lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp,
+lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 		       struct lnet_msg *msg)
 {
-	time64_t now = ktime_get_seconds();
-
-	if (!lnet_peer_aliveness_enabled(lp))
+	if (!lnet_peer_aliveness_enabled(lpni))
 		return -ENODEV;
-
-	if (lnet_peer_is_alive(lp, now))
-		return 1;
 
 	/*
 	 * If we're resending a message, let's attempt to send it even if
@@ -883,36 +810,16 @@ lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp,
 	if (msg->msg_retry_count > 0)
 		return 1;
 
-	/*
-	 * Peer appears dead, but we should avoid frequent NI queries (at
-	 * most once per lnet_queryinterval seconds).
-	 */
-	if (lp->lpni_last_query != 0) {
-		static const int lnet_queryinterval = 1;
-		time64_t next_query;
-
-		next_query = lp->lpni_last_query + lnet_queryinterval;
-
-		if (now < next_query) {
-			if (lp->lpni_alive)
-				CWARN("Unexpected aliveness of peer %s: "
-				      "%lld < %lld (%d/%d)\n",
-				      libcfs_nid2str(lp->lpni_nid),
-				      now, next_query,
-				      lnet_queryinterval,
-				      lp->lpni_net->net_tunables.lct_peer_timeout);
-			return 0;
-		}
-	}
-
-	/* query NI for latest aliveness news */
-	lnet_ni_query_locked(ni, lp);
-
-	if (lnet_peer_is_alive(lp, now))
+	/* try and send recovery messages irregardless */
+	if (msg->msg_recovery)
 		return 1;
 
-	lnet_notify_locked(lp, 0, 0, lp->lpni_last_alive);
-	return 0;
+	/* always send any responses */
+	if (msg->msg_type == LNET_MSG_ACK ||
+	    msg->msg_type == LNET_MSG_REPLY)
+		return 1;
+
+	return lnet_is_peer_ni_alive(lpni);
 }
 
 /**
@@ -4458,18 +4365,12 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	/* Multi-Rail: Primary NID of source. */
 	msg->msg_initiator = lnet_peer_primary_nid_locked(src_nid);
 
-	if (lnet_isrouter(msg->msg_rxpeer)) {
-		lnet_peer_set_alive(msg->msg_rxpeer);
-		if (avoid_asym_router_failure &&
-		    LNET_NIDNET(src_nid) != LNET_NIDNET(from_nid)) {
-			/* received a remote message from router, update
-			 * remote NI status on this router.
-			 * NB: multi-hop routed message will be ignored.
-			 */
-			lnet_router_ni_update_locked(msg->msg_rxpeer,
-						     LNET_NIDNET(src_nid));
-		}
-	}
+	/*
+	 * mark the status of this lpni as UP since we received a message
+	 * from it. The ping response reports back the ns_status which is
+	 * marked on the remote as up or down and we cache it here.
+	 */
+	msg->msg_rxpeer->lpni_ns_status = LNET_NI_STATUS_UP;
 
 	lnet_msg_commit(msg, cpt);
 

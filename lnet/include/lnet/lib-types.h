@@ -569,8 +569,6 @@ struct lnet_peer_ni {
 	int			lpni_minrtrcredits;
 	/* bytes queued for sending */
 	long			lpni_txqnob;
-	/* alive/dead? */
-	bool			lpni_alive;
 	/* notification outstanding? */
 	bool			lpni_notify;
 	/* outstanding notification for LND? */

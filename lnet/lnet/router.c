@@ -170,8 +170,10 @@ lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 
 	lp->lpni_timestamp = when; /* update timestamp */
 
-	if (lp->lpni_alive_count != 0 &&          /* got old news */
-	    (!lp->lpni_alive) == (!alive)) {      /* new date for old news */
+	/* got old news */
+	if (lp->lpni_alive_count != 0 &&
+	    /* new date for old news */
+	    (!lnet_is_peer_ni_alive(lp)) == (!alive)) {
 		spin_unlock(&lp->lpni_lock);
 		CDEBUG(D_NET, "Old news\n");
 		return;
@@ -180,10 +182,9 @@ lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 	/* Flag that notification is outstanding */
 
 	lp->lpni_alive_count++;
-	lp->lpni_alive = (alive) ? 1 : 0;
 	lp->lpni_notify = 1;
 	lp->lpni_notifylnd = notifylnd;
-	if (lp->lpni_alive)
+	if (lnet_is_peer_ni_alive(lp))
 		lp->lpni_ping_feats = LNET_PING_FEAT_INVAL; /* reset */
 
 	spin_unlock(&lp->lpni_lock);
@@ -218,7 +219,7 @@ lnet_ni_notify_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp)
 	 * lnet_notify_locked().
 	 */
 	while (lp->lpni_notify) {
-		alive     = lp->lpni_alive;
+		alive     = lnet_is_peer_ni_alive(lp);
 		notifylnd = lp->lpni_notifylnd;
 
 		lp->lpni_notifylnd = 0;

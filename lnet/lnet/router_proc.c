@@ -536,7 +536,8 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 
 			if (lnet_isrouter(peer) ||
 			    lnet_peer_aliveness_enabled(peer))
-				aliveness = peer->lpni_alive ? "up" : "down";
+				aliveness = lnet_is_peer_ni_alive(peer) ?
+					"up" : "down";
 
 			if (lnet_peer_aliveness_enabled(peer)) {
 				time64_t now = ktime_get_seconds();

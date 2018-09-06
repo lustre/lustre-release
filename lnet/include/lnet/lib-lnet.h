@@ -955,15 +955,6 @@ lnet_find_peer_net_locked(struct lnet_peer *peer, __u32 net_id)
 	return NULL;
 }
 
-static inline void
-lnet_peer_set_alive(struct lnet_peer_ni *lp)
-{
-	lp->lpni_last_alive = ktime_get_seconds();
-	lp->lpni_last_query = lp->lpni_last_alive;
-	if (!lp->lpni_alive)
-		lnet_notify_locked(lp, 0, 1, lp->lpni_last_alive);
-}
-
 static inline bool
 lnet_peer_is_multi_rail(struct lnet_peer *lp)
 {
@@ -1000,6 +991,22 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 	if (lp->lp_node_seqno < atomic_read(&the_lnet.ln_ping_target_seqno))
 		return true;
 	return false;
+}
+
+/*
+ * A peer is alive if it satisfies the following two conditions:
+ *  1. peer health >= LNET_MAX_HEALTH_VALUE * router_sensitivity_percentage
+ *  2. the cached NI status received when we discover the peer is UP
+ */
+static inline bool
+lnet_is_peer_ni_alive(struct lnet_peer_ni *lpni)
+{
+	bool halive = false;
+
+	halive = (atomic_read(&lpni->lpni_healthv) >=
+		 (LNET_MAX_HEALTH_VALUE * router_sensitivity_percentage / 100));
+
+	return halive && lpni->lpni_ns_status == LNET_NI_STATUS_UP;
 }
 
 static inline void

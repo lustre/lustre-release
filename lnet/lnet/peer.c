@@ -3309,7 +3309,7 @@ lnet_debug_peer(lnet_nid_t nid)
 	}
 
 	if (lnet_isrouter(lp) || lnet_peer_aliveness_enabled(lp))
-		aliveness = lp->lpni_alive ? "up" : "down";
+		aliveness = (lnet_is_peer_ni_alive(lp)) ? "up" : "down";
 
 	CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
 	       libcfs_nid2str(lp->lpni_nid), atomic_read(&lp->lpni_refcount),
@@ -3365,7 +3365,7 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			if (lnet_isrouter(lp) ||
 				lnet_peer_aliveness_enabled(lp))
 				snprintf(aliveness, LNET_MAX_STR_LEN,
-					 lp->lpni_alive ? "up" : "down");
+					 lnet_is_peer_ni_alive(lp) ? "up" : "down");
 
 			*nid = lp->lpni_nid;
 			*refcount = atomic_read(&lp->lpni_refcount);
@@ -3452,7 +3452,7 @@ int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 		if (lnet_isrouter(lpni) ||
 			lnet_peer_aliveness_enabled(lpni))
 			snprintf(lpni_info->cr_aliveness, LNET_MAX_STR_LEN,
-				lpni->lpni_alive ? "up" : "down");
+				lnet_is_peer_ni_alive(lpni) ? "up" : "down");
 
 		lpni_info->cr_refcount = atomic_read(&lpni->lpni_refcount);
 		lpni_info->cr_ni_peer_tx_credits = (lpni->lpni_net != NULL) ?
