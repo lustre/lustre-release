@@ -54,7 +54,6 @@ static struct obd_device *obd_devs[MAX_OBD_DEVICES];
 static struct kmem_cache *obd_device_cachep;
 struct kmem_cache *obdo_cachep;
 EXPORT_SYMBOL(obdo_cachep);
-static struct kmem_cache *import_cachep;
 
 static struct workqueue_struct *zombie_wq;
 
@@ -907,10 +906,6 @@ void obd_cleanup_caches(void)
 		kmem_cache_destroy(obdo_cachep);
                 obdo_cachep = NULL;
         }
-        if (import_cachep) {
-		kmem_cache_destroy(import_cachep);
-                import_cachep = NULL;
-        }
 
         EXIT;
 }
@@ -931,13 +926,6 @@ int obd_init_caches(void)
 	obdo_cachep = kmem_cache_create("ll_obdo_cache", sizeof(struct obdo),
 					0, 0, NULL);
 	if (!obdo_cachep)
-		GOTO(out, rc = -ENOMEM);
-
-	LASSERT(import_cachep == NULL);
-	import_cachep = kmem_cache_create("ll_import_cache",
-					  sizeof(struct obd_import),
-					  0, 0, NULL);
-	if (!import_cachep)
 		GOTO(out, rc = -ENOMEM);
 
 	RETURN(0);
