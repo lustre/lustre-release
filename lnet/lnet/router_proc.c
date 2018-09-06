@@ -339,7 +339,7 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 			int nrefs     = atomic_read(&peer->lp_refcount);
 			int nrtrrefs  = peer->lp_rtr_refcount;
 			int alive_cnt = 0;
-			int alive     = 0;
+			int alive     = lnet_is_gateway_alive(peer);
 			int pingsent  = ((peer->lp_state & LNET_PEER_PING_SENT)
 					 != 0);
 			time64_t last_ping = now - peer->lp_rtrcheck_timestamp;

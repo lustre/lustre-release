@@ -151,6 +151,85 @@ lnet_peers_start_down(void)
 	return check_routers_before_use;
 }
 
+/*
+ * A net is alive if at least one gateway NI on the network is alive.
+ */
+static bool
+lnet_is_gateway_net_alive(struct lnet_peer_net *lpn)
+{
+	struct lnet_peer_ni *lpni;
+
+	list_for_each_entry(lpni, &lpn->lpn_peer_nis, lpni_peer_nis) {
+		if (lnet_is_peer_ni_alive(lpni))
+			return true;
+	}
+
+	return false;
+}
+
+/*
+ * a gateway is alive only if all its nets are alive
+ * called with cpt lock held
+ */
+bool lnet_is_gateway_alive(struct lnet_peer *gw)
+{
+	struct lnet_peer_net *lpn;
+
+	list_for_each_entry(lpn, &gw->lp_peer_nets, lpn_peer_nets) {
+		if (!lnet_is_gateway_net_alive(lpn))
+			return false;
+	}
+
+	return true;
+}
+
+/*
+ * lnet_is_route_alive() needs to be called with cpt lock held
+ * A route is alive if the gateway can route between the local network and
+ * the remote network of the route.
+ * This means at least one NI is alive on each of the local and remote
+ * networks of the gateway.
+ */
+bool lnet_is_route_alive(struct lnet_route *route)
+{
+	struct lnet_peer *gw = route->lr_gateway;
+	struct lnet_peer_net *llpn;
+	struct lnet_peer_net *rlpn;
+	bool route_alive;
+
+	/*
+	 * check the gateway's interfaces on the route rnet to make sure
+	 * that the gateway is viable.
+	 */
+	llpn = lnet_peer_get_net_locked(gw, route->lr_lnet);
+	if (!llpn)
+		return false;
+
+	route_alive = lnet_is_gateway_net_alive(llpn);
+
+	if (avoid_asym_router_failure) {
+		rlpn = lnet_peer_get_net_locked(gw, route->lr_net);
+		if (!rlpn)
+			return false;
+		route_alive = route_alive &&
+			      lnet_is_gateway_net_alive(rlpn);
+	}
+
+	if (!route_alive)
+		return route_alive;
+
+	spin_lock(&gw->lp_lock);
+	if (!(gw->lp_state & LNET_PEER_ROUTER_ENABLED)) {
+		if (gw->lp_rtr_refcount > 0)
+			CERROR("peer %s is being used as a gateway but routing feature is not turned on\n",
+			       libcfs_nid2str(gw->lp_primary_nid));
+		route_alive = false;
+	}
+	spin_unlock(&gw->lp_lock);
+
+	return route_alive;
+}
+
 void
 lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 		   time64_t when)
