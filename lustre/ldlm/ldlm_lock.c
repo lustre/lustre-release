@@ -2008,6 +2008,36 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 	RETURN(0);
 }
 
+/* Discard a single lock from bl_list, may be used by
+ * lock convert handler when lock is returned to the granted
+ * state.
+ */
+void ldlm_discard_bl_lock(struct ldlm_lock *lock)
+{
+	check_res_locked(lock->l_resource);
+
+	LASSERT(!list_empty(&lock->l_bl_ast));
+	list_del_init(&lock->l_bl_ast);
+	LASSERT(ldlm_is_ast_sent(lock));
+	ldlm_clear_ast_sent(lock);
+	LASSERT(lock->l_bl_ast_run == 0);
+	LASSERT(lock->l_blocking_lock);
+	LDLM_LOCK_RELEASE(lock->l_blocking_lock);
+	lock->l_blocking_lock = NULL;
+	LDLM_LOCK_RELEASE(lock);
+}
+
+/* Clear the blocking lock, the race is possible between ldlm_handle_convert0()
+ * and ldlm_work_bl_ast_lock(), so this is done under lock with check for NULL.
+ */
+void ldlm_clear_blocking_lock(struct ldlm_lock *lock)
+{
+	if (lock->l_blocking_lock) {
+		LDLM_LOCK_RELEASE(lock->l_blocking_lock);
+		lock->l_blocking_lock = NULL;
+	}
+}
+
 /**
  * Discard all AST work items from list.
  *
@@ -2016,22 +2046,12 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
  */
 void ldlm_discard_bl_list(struct list_head *bl_list)
 {
-	struct list_head *tmp, *pos;
-        ENTRY;
+	struct ldlm_lock *lock, *tmp;
 
-	list_for_each_safe(pos, tmp, bl_list) {
-                struct ldlm_lock *lock =
-			list_entry(pos, struct ldlm_lock, l_bl_ast);
+	ENTRY;
 
-		list_del_init(&lock->l_bl_ast);
-		LASSERT(ldlm_is_ast_sent(lock));
-		ldlm_clear_ast_sent(lock);
-		LASSERT(lock->l_bl_ast_run == 0);
-		LASSERT(lock->l_blocking_lock);
-		LDLM_LOCK_RELEASE(lock->l_blocking_lock);
-		lock->l_blocking_lock = NULL;
-		LDLM_LOCK_RELEASE(lock);
-	}
+	list_for_each_entry_safe(lock, tmp, bl_list, l_bl_ast)
+		ldlm_discard_bl_lock(lock);
 	EXIT;
 }
 
@@ -2054,16 +2074,7 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 
 	lock = list_entry(arg->list->next, struct ldlm_lock, l_bl_ast);
 
-	/* nobody should touch l_bl_ast */
-	lock_res_and_lock(lock);
-	list_del_init(&lock->l_bl_ast);
-
-	LASSERT(ldlm_is_ast_sent(lock));
-	LASSERT(lock->l_bl_ast_run == 0);
 	LASSERT(lock->l_blocking_lock);
-	lock->l_bl_ast_run++;
-	unlock_res_and_lock(lock);
-
 	ldlm_lock2desc(lock->l_blocking_lock, &d);
 	/* copy blocking lock ibits in cancel_bits as well,
 	 * new client may use them for lock convert and it is
@@ -2073,9 +2084,21 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	d.l_policy_data.l_inodebits.cancel_bits =
 		lock->l_blocking_lock->l_policy_data.l_inodebits.bits;
 
+	/* nobody should touch l_bl_ast */
+	lock_res_and_lock(lock);
+	list_del_init(&lock->l_bl_ast);
+
+	LASSERT(ldlm_is_ast_sent(lock));
+	LASSERT(lock->l_bl_ast_run == 0);
+	lock->l_bl_ast_run++;
+	unlock_res_and_lock(lock);
+
 	rc = lock->l_blocking_ast(lock, &d, (void *)arg, LDLM_CB_BLOCKING);
-	LDLM_LOCK_RELEASE(lock->l_blocking_lock);
-	lock->l_blocking_lock = NULL;
+#ifdef HAVE_SERVER_SUPPORT
+	lock_res_and_lock(lock);
+	ldlm_clear_blocking_lock(lock);
+	unlock_res_and_lock(lock);
+#endif
 	LDLM_LOCK_RELEASE(lock);
 
 	RETURN(rc);

@@ -162,6 +162,9 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 			      struct list_head *rpc_list);
 void ldlm_discard_bl_list(struct list_head *bl_list);
+void ldlm_discard_bl_lock(struct ldlm_lock *lock);
+void ldlm_clear_blocking_lock(struct ldlm_lock *lock);
+
 #endif
 int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
 		      ldlm_desc_ast_t ast_type);

@@ -1522,8 +1522,20 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 			ldlm_clear_cbpending(lock);
 			lock->l_policy_data.l_inodebits.cancel_bits = 0;
 			ldlm_inodebits_drop(lock, bits & ~new);
-			lock->l_bl_ast_run = 0;
-			ldlm_clear_ast_sent(lock);
+			/* if lock is in a bl_ast list, remove it from the list
+			 * here before reprocessing.
+			 */
+			if (!list_empty(&lock->l_bl_ast)) {
+				ldlm_discard_bl_lock(lock);
+			} else {
+				/* in this case lock was taken from bl_ast list
+				 * already by ldlm_work_bl_ast_lock() and lock
+				 * must clear only some remaining states.
+				 */
+				ldlm_clear_ast_sent(lock);
+				lock->l_bl_ast_run = 0;
+				ldlm_clear_blocking_lock(lock);
+			}
 			unlock_res_and_lock(lock);
 
 			ldlm_reprocess_all(lock->l_resource);
