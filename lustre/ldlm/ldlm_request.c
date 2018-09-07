@@ -2050,34 +2050,37 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 {
 	struct ldlm_lock *lock;
 	int count = 0;
+
 	ENTRY;
 
 	lock_res(res);
 	list_for_each_entry(lock, &res->lr_granted, l_res_link) {
-                if (opaque != NULL && lock->l_ast_data != opaque) {
-                        LDLM_ERROR(lock, "data %p doesn't match opaque %p",
-                                   lock->l_ast_data, opaque);
-                        //LBUG();
-                        continue;
-                }
+		if (opaque != NULL && lock->l_ast_data != opaque) {
+			LDLM_ERROR(lock, "data %p doesn't match opaque %p",
+				   lock->l_ast_data, opaque);
+			continue;
+		}
 
-                if (lock->l_readers || lock->l_writers)
-                        continue;
-
-		/* If somebody is already doing CANCEL, or blocking AST came,
-		 * skip this lock. */
-		if (ldlm_is_bl_ast(lock) || ldlm_is_canceling(lock))
+		if (lock->l_readers || lock->l_writers)
 			continue;
 
-                if (lockmode_compat(lock->l_granted_mode, mode))
-                        continue;
+		/* If somebody is already doing CANCEL, or blocking AST came,
+		 * or lock is being converted then skip this lock. */
+		if (ldlm_is_bl_ast(lock) || ldlm_is_canceling(lock) ||
+		    ldlm_is_converting(lock))
+			continue;
 
-                /* If policy is given and this is IBITS lock, add to list only
-                 * those locks that match by policy. */
-                if (policy && (lock->l_resource->lr_type == LDLM_IBITS) &&
-                    !(lock->l_policy_data.l_inodebits.bits &
-                      policy->l_inodebits.bits))
-                        continue;
+		if (lockmode_compat(lock->l_granted_mode, mode))
+			continue;
+
+		/* If policy is given and this is IBITS lock, add to list only
+		 * those locks that match by policy.
+		 * Skip locks with DoM bit always to don't flush data.
+		 */
+		if (policy && (lock->l_resource->lr_type == LDLM_IBITS) &&
+		    (!(lock->l_policy_data.l_inodebits.bits &
+		      policy->l_inodebits.bits) || ldlm_has_dom(lock)))
+			continue;
 
 		/* See CBPENDING comment in ldlm_cancel_lru */
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING |
@@ -2085,12 +2088,12 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 
 		LASSERT(list_empty(&lock->l_bl_ast));
 		list_add(&lock->l_bl_ast, cancels);
-                LDLM_LOCK_GET(lock);
-                count++;
-        }
-        unlock_res(res);
+		LDLM_LOCK_GET(lock);
+		count++;
+	}
+	unlock_res(res);
 
-        RETURN(ldlm_cli_cancel_list_local(cancels, count, cancel_flags));
+	RETURN(ldlm_cli_cancel_list_local(cancels, count, cancel_flags));
 }
 EXPORT_SYMBOL(ldlm_cancel_resource_local);
 
