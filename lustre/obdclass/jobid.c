@@ -91,9 +91,8 @@ int jobid_get_from_environ(char *jobid_var, char *jobid, int *jobid_len)
 		 * larger temp buffer for cfs_get_environ(), then
 		 * truncating the string at some separator to fit into
 		 * the specified jobid_len.  Fix later if needed. */
-		LCONSOLE_ERROR_MSG(0x16b,
-				   "jobid: '%s' value too large (%d)\n",
-				   obd_jobid_var, *jobid_len);
+		LCONSOLE_WARN("jobid: '%s' value too large (%d)\n",
+			      obd_jobid_var, *jobid_len);
 		printed = true;
 		rc = 0;
 	}
