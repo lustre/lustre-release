@@ -59,15 +59,16 @@
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_seqs_seq_show(struct seq_file *m, void *data)
+static ssize_t seqs_allocated_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", ofd->ofd_seq_count);
-	return 0;
+	return sprintf(buf, "%u\n", ofd->ofd_seq_count);
 }
-LPROC_SEQ_FOPS_RO(ofd_seqs);
+LUSTRE_RO_ATTR(seqs_allocated);
 
 /**
  * Show total number of grants for precreate.
@@ -78,16 +79,17 @@ LPROC_SEQ_FOPS_RO(ofd_seqs);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_grant_precreate_seq_show(struct seq_file *m, void *data)
+static ssize_t grant_precreate_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 
-	LASSERT(obd != NULL);
-	seq_printf(m, "%ld\n",
-		   obd->obd_self_export->exp_target_data.ted_grant);
-	return 0;
+	return sprintf(buf, "%ld\n",
+		       obd->obd_self_export->exp_target_data.ted_grant);
 }
-LPROC_SEQ_FOPS_RO(ofd_grant_precreate);
+LUSTRE_RO_ATTR(grant_precreate);
 
 /**
  * Show number of precreates allowed in a single transaction.
@@ -98,15 +100,15 @@ LPROC_SEQ_FOPS_RO(ofd_grant_precreate);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_precreate_batch_seq_show(struct seq_file *m, void *data)
+static ssize_t precreate_batch_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
-	struct obd_device *obd = m->private;
-	struct ofd_device *ofd;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	LASSERT(obd != NULL);
-	ofd = ofd_dev(obd->obd_lu_dev);
-	seq_printf(m, "%d\n", ofd->ofd_precreate_batch);
-	return 0;
+	return sprintf(buf, "%d\n", ofd->ofd_precreate_batch);
 }
 
 /**
@@ -120,17 +122,17 @@ static int ofd_precreate_batch_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_precreate_batch_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+static ssize_t precreate_batch_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -142,7 +144,7 @@ ofd_precreate_batch_seq_write(struct file *file, const char __user *buffer,
 	spin_unlock(&ofd->ofd_batch_lock);
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_precreate_batch);
+LUSTRE_RW_ATTR(precreate_batch);
 
 /**
  * Show the last used ID for each FID sequence used by OFD.
@@ -177,6 +179,7 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 	read_unlock(&ofd->ofd_seq_list_lock);
 	return 0;
 }
+
 LPROC_SEQ_FOPS_RO(ofd_last_id);
 
 /**
@@ -188,13 +191,15 @@ LPROC_SEQ_FOPS_RO(ofd_last_id);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_fmd_max_num_seq_show(struct seq_file *m, void *data)
+static ssize_t client_cache_count_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", ofd->ofd_fmd_max_num);
-	return 0;
+	return sprintf(buf, "%u\n", ofd->ofd_fmd_max_num);
 }
 
 /**
@@ -210,17 +215,17 @@ static int ofd_fmd_max_num_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_fmd_max_num_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
+static ssize_t client_cache_count_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	int val;
 	int rc;
 
-	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	rc = kstrtoint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -230,7 +235,7 @@ ofd_fmd_max_num_seq_write(struct file *file, const char __user *buffer,
 	ofd->ofd_fmd_max_num = val;
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_fmd_max_num);
+LUSTRE_RW_ATTR(client_cache_count);
 
 /**
  * Show the maximum age of FMD data in seconds.
@@ -241,13 +246,15 @@ LPROC_SEQ_FOPS(ofd_fmd_max_num);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
+static ssize_t client_cache_seconds_show(struct kobject *kobj,
+					 struct attribute *attr,
+					 char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%lld\n", ofd->ofd_fmd_max_age);
-	return 0;
+	return sprintf(buf, "%lld\n", ofd->ofd_fmd_max_age);
 }
 
 /**
@@ -263,17 +270,17 @@ static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
+static ssize_t client_cache_seconds_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
 {
-	struct seq_file		*m = file->private_data;
-	struct obd_device	*obd = m->private;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	time64_t val;
 	int rc;
 
-	rc = kstrtoll_from_user(buffer, count, 0, &val);
+	rc = kstrtoll(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -283,7 +290,7 @@ ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
 	ofd->ofd_fmd_max_age = val;
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_fmd_max_age);
+LUSTRE_RW_ATTR(client_cache_seconds);
 
 /**
  * Show if the OFD is in degraded mode.
@@ -300,13 +307,14 @@ LPROC_SEQ_FOPS(ofd_fmd_max_age);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_degraded_seq_show(struct seq_file *m, void *data)
+static ssize_t degraded_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", ofd->ofd_raid_degraded);
-	return 0;
+	return sprintf(buf, "%u\n", ofd->ofd_raid_degraded);
 }
 
 /**
@@ -326,17 +334,16 @@ static int ofd_degraded_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_degraded_seq_write(struct file *file, const char __user *buffer,
-		       size_t count, loff_t *off)
+static ssize_t degraded_store(struct kobject *kobj, struct attribute *attr,
+			      const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -345,7 +352,7 @@ ofd_degraded_seq_write(struct file *file, const char __user *buffer,
 	spin_unlock(&ofd->ofd_flags_lock);
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_degraded);
+LUSTRE_RW_ATTR(degraded);
 
 /**
  * Show OFD filesystem type.
@@ -356,19 +363,20 @@ LPROC_SEQ_FOPS(ofd_degraded);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_fstype_seq_show(struct seq_file *m, void *data)
+static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	struct lu_device  *d;
 
 	LASSERT(ofd->ofd_osd);
 	d = &ofd->ofd_osd->dd_lu_dev;
 	LASSERT(d->ld_type);
-	seq_printf(m, "%s\n", d->ld_type->ldt_name);
-	return 0;
+	return sprintf(buf, "%s\n", d->ld_type->ldt_name);
 }
-LPROC_SEQ_FOPS_RO(ofd_fstype);
+LUSTRE_RO_ATTR(fstype);
 
 /**
  * Show journal handling mode: synchronous or asynchronous.
@@ -387,13 +395,14 @@ LPROC_SEQ_FOPS_RO(ofd_fstype);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_syncjournal_seq_show(struct seq_file *m, void *data)
+static ssize_t syncjournal_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct obd_device	*obd = m->private;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", ofd->ofd_syncjournal);
-	return 0;
+	return sprintf(buf, "%u\n", ofd->ofd_syncjournal);
 }
 
 /**
@@ -409,17 +418,16 @@ static int ofd_syncjournal_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_syncjournal_seq_write(struct file *file, const char __user *buffer,
-			  size_t count, loff_t *off)
+static ssize_t syncjournal_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
 {
-	struct seq_file	*m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -430,7 +438,7 @@ ofd_syncjournal_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_syncjournal);
+LUSTRE_RW_ATTR(syncjournal);
 
 /* This must be longer than the longest string below */
 #define SYNC_STATES_MAXLEN 16
@@ -471,6 +479,7 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
+
 LPROC_SEQ_FOPS(ofd_brw_size);
 
 static char *sync_on_cancel_states[] = {"never",
@@ -486,14 +495,15 @@ static char *sync_on_cancel_states[] = {"never",
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_sync_lock_cancel_seq_show(struct seq_file *m, void *data)
+static ssize_t sync_lock_cancel_show(struct kobject *kobj,
+				     struct attribute *attr, char *buf)
 {
-	struct obd_device	*obd = m->private;
-	struct lu_target	*tgt = obd->u.obt.obt_lut;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lu_target *tgt = obd->u.obt.obt_lut;
 
-	seq_printf(m, "%s\n",
-		   sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
-	return 0;
+	return sprintf(buf, "%s\n",
+		       sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
 }
 
 /**
@@ -517,29 +527,21 @@ static int ofd_sync_lock_cancel_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_sync_lock_cancel_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off)
+static ssize_t sync_lock_cancel_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct lu_target *tgt = obd->u.obt.obt_lut;
-	char kernbuf[SYNC_STATES_MAXLEN];
 	int val = -1;
 	int i;
 
-	if (count == 0 || count >= sizeof(kernbuf))
+	if (count == 0 || count >= SYNC_STATES_MAXLEN)
 		return -EINVAL;
 
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-	kernbuf[count] = 0;
-
-	if (kernbuf[count - 1] == '\n')
-		kernbuf[count - 1] = 0;
-
 	for (i = 0 ; i < NUM_SYNC_ON_CANCEL_STATES; i++) {
-		if (strcmp(kernbuf, sync_on_cancel_states[i]) == 0) {
+		if (strcmp(buffer, sync_on_cancel_states[i]) == 0) {
 			val = i;
 			break;
 		}
@@ -547,7 +549,7 @@ ofd_sync_lock_cancel_seq_write(struct file *file, const char __user *buffer,
 
 	/* Legacy numeric codes */
 	if (val == -1) {
-		int rc = kstrtoint_from_user(buffer, count, 0, &val);
+		int rc = kstrtoint(buffer, 0, &val);
 		if (rc)
 			return rc;
 	}
@@ -560,7 +562,7 @@ ofd_sync_lock_cancel_seq_write(struct file *file, const char __user *buffer,
 	spin_unlock(&tgt->lut_flags_lock);
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
+LUSTRE_RW_ATTR(sync_lock_cancel);
 
 /**
  * Show the limit of soft sync RPCs.
@@ -574,13 +576,14 @@ LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_soft_sync_limit_seq_show(struct seq_file *m, void *data)
+static ssize_t soft_sync_limit_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
 {
-	struct obd_device	*obd = m->private;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", ofd->ofd_soft_sync_limit);
-	return 0;
+	return sprintf(buf, "%u\n", ofd->ofd_soft_sync_limit);
 }
 
 /**
@@ -599,24 +602,24 @@ static int ofd_soft_sync_limit_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_soft_sync_limit_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+static ssize_t soft_sync_limit_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
 {
-	struct seq_file	*m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc < 0)
 		return rc;
 
 	ofd->ofd_soft_sync_limit = val;
 	return 0;
 }
-LPROC_SEQ_FOPS(ofd_soft_sync_limit);
+LUSTRE_RW_ATTR(soft_sync_limit);
 
 /**
  * Show the LFSCK speed limit.
@@ -629,12 +632,14 @@ LPROC_SEQ_FOPS(ofd_soft_sync_limit);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
+static ssize_t lfsck_speed_limit_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
 {
-	struct obd_device       *obd = m->private;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return lfsck_get_speed(m, ofd->ofd_osd);
+	return lfsck_get_speed(NULL, buf, ofd->ofd_osd);
 }
 
 /**
@@ -650,17 +655,17 @@ static int ofd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t lfsck_speed_limit_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
-	unsigned long long val;
+	unsigned int val;
 	int rc;
 
-	rc = kstrtoull_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc != 0)
 		return rc;
 
@@ -668,7 +673,7 @@ ofd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
 
 	return rc != 0 ? rc : count;
 }
-LPROC_SEQ_FOPS(ofd_lfsck_speed_limit);
+LUSTRE_RW_ATTR(lfsck_speed_limit);
 
 /**
  * Show LFSCK layout verification stats from the most recent LFSCK run.
@@ -686,6 +691,7 @@ static int ofd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 
 	return lfsck_dump(m, ofd->ofd_osd, LFSCK_TYPE_LAYOUT);
 }
+
 LPROC_SEQ_FOPS_RO(ofd_lfsck_layout);
 
 /**
@@ -747,6 +753,7 @@ ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
+
 LPROC_SEQ_FOPS(ofd_lfsck_verify_pfid);
 
 static int ofd_site_stats_seq_show(struct seq_file *m, void *data)
@@ -755,6 +762,7 @@ static int ofd_site_stats_seq_show(struct seq_file *m, void *data)
 
 	return lu_site_stats_seq_print(obd->obd_lu_dev->ld_site, m);
 }
+
 LPROC_SEQ_FOPS_RO(ofd_site_stats);
 
 /**
@@ -766,13 +774,15 @@ LPROC_SEQ_FOPS_RO(ofd_site_stats);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int ofd_checksum_t10pi_enforce_seq_show(struct seq_file *m, void *data)
+static ssize_t checksum_t10pi_enforce_show(struct kobject *kobj,
+					   struct attribute *attr,
+					   char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", ofd->ofd_checksum_t10pi_enforce);
-	return 0;
+	return sprintf(buf, "%u\n", ofd->ofd_checksum_t10pi_enforce);
 }
 
 /**
@@ -796,18 +806,17 @@ static int ofd_checksum_t10pi_enforce_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-ofd_checksum_t10pi_enforce_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+static ssize_t checksum_t10pi_enforce_store(struct kobject *kobj,
+					    struct attribute *attr,
+					    const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 	bool enforce;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &enforce);
+	rc = kstrtobool(buffer, &enforce);
 	if (rc)
 		return rc;
 
@@ -816,7 +825,7 @@ ofd_checksum_t10pi_enforce_seq_write(struct file *file,
 	spin_unlock(&ofd->ofd_flags_lock);
 	return count;
 }
-LPROC_SEQ_FOPS(ofd_checksum_t10pi_enforce);
+LUSTRE_RW_ATTR(checksum_t10pi_enforce);
 
 LPROC_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_soft);
@@ -834,10 +843,6 @@ LPROC_SEQ_FOPS_RO(tgt_tot_pending);
 LPROC_SEQ_FOPS(tgt_grant_compat_disable);
 
 struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
-	{ .name =	"seqs_allocated",
-	  .fops =	&ofd_seqs_fops			},
-	{ .name =	"fstype",
-	  .fops =	&ofd_fstype_fops		},
 	{ .name =	"last_id",
 	  .fops =	&ofd_last_id_fops		},
 	{ .name =	"tot_dirty",
@@ -846,10 +851,6 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&tgt_tot_pending_fops		},
 	{ .name =	"tot_granted",
 	  .fops =	&tgt_tot_granted_fops		},
-	{ .name =	"grant_precreate",
-	  .fops =	&ofd_grant_precreate_fops	},
-	{ .name =	"precreate_batch",
-	  .fops =	&ofd_precreate_batch_fops	},
 	{ .name =	"recovery_status",
 	  .fops =	&ofd_recovery_status_fops	},
 	{ .name =	"recovery_time_soft",
@@ -860,14 +861,8 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&ofd_evict_client_fops		},
 	{ .name =	"num_exports",
 	  .fops =	&ofd_num_exports_fops		},
-	{ .name =	"degraded",
-	  .fops =	&ofd_degraded_fops		},
-	{ .name =	"sync_journal",
-	  .fops =	&ofd_syncjournal_fops		},
 	{ .name =	"brw_size",
 	  .fops =	&ofd_brw_size_fops		},
-	{ .name =	"sync_on_lock_cancel",
-	  .fops =	&ofd_sync_lock_cancel_fops	},
 	{ .name =	"instance",
 	  .fops =	&ofd_target_instance_fops	},
 	{ .name =	"ir_factor",
@@ -876,24 +871,14 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&ofd_checksum_dump_fops		},
 	{ .name =	"grant_compat_disable",
 	  .fops =	&tgt_grant_compat_disable_fops	},
-	{ .name =	"client_cache_count",
-	  .fops =	&ofd_fmd_max_num_fops		},
-	{ .name =	"client_cache_seconds",
-	  .fops =	&ofd_fmd_max_age_fops		},
 	{ .name =	"job_cleanup_interval",
 	  .fops =	&ofd_job_interval_fops		},
-	{ .name =	"soft_sync_limit",
-	  .fops =	&ofd_soft_sync_limit_fops	},
-	{ .name =	"lfsck_speed_limit",
-	  .fops =	&ofd_lfsck_speed_limit_fops	},
 	{ .name =	"lfsck_layout",
 	  .fops =	&ofd_lfsck_layout_fops		},
 	{ .name	=	"lfsck_verify_pfid",
 	  .fops	=	&ofd_lfsck_verify_pfid_fops	},
 	{ .name =	"site_stats",
 	  .fops =	&ofd_site_stats_fops		},
-	{ .name =	"checksum_t10pi_enforce",
-	  .fops =	&ofd_checksum_t10pi_enforce_fops	},
 	{ NULL }
 };
 
@@ -932,4 +917,90 @@ void ofd_stats_counter_init(struct lprocfs_stats *stats)
 			     0, "quotactl", "reqs");
 }
 
+LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
+
+static struct attribute *ofd_attrs[] = {
+	&lustre_attr_seqs_allocated.attr,
+	&lustre_attr_grant_precreate.attr,
+	&lustre_attr_precreate_batch.attr,
+	&lustre_attr_client_cache_count.attr,
+	&lustre_attr_client_cache_seconds.attr,
+	&lustre_attr_degraded.attr,
+	&lustre_attr_fstype.attr,
+	&lustre_attr_syncjournal.attr,
+	&lustre_attr_sync_lock_cancel.attr,
+	&lustre_attr_soft_sync_limit.attr,
+	&lustre_attr_lfsck_speed_limit.attr,
+	&lustre_attr_checksum_t10pi_enforce.attr,
+	NULL,
+};
+
+/**
+ * Initialize all needed procfs entries for OFD device.
+ *
+ * \param[in] ofd	OFD device
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+int ofd_tunables_init(struct ofd_device *ofd)
+{
+	struct obd_device *obd = ofd_obd(ofd);
+	struct proc_dir_entry *entry;
+	int rc = 0;
+
+	ENTRY;
+	/* lprocfs must be setup before the ofd so state can be safely added
+	 * to /proc incrementally as the ofd is setup
+	 */
+	obd->obd_ktype.default_attrs = ofd_attrs;
+	obd->obd_vars = lprocfs_ofd_obd_vars;
+	rc = lprocfs_obd_setup(obd, false);
+	if (rc) {
+		CERROR("%s: lprocfs_obd_setup failed: %d.\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lprocfs_alloc_obd_stats(obd, LPROC_OFD_STATS_LAST);
+	if (rc) {
+		CERROR("%s: lprocfs_alloc_obd_stats failed: %d.\n",
+		       obd->obd_name, rc);
+		GOTO(obd_cleanup, rc);
+	}
+
+	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CERROR("%s: error %d setting up lprocfs for %s\n",
+		       obd->obd_name, rc, "exports");
+		GOTO(obd_free_stats, rc);
+	}
+	obd->obd_proc_exports_entry = entry;
+
+	entry = lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
+				   obd, &lprocfs_nid_stats_clear_fops);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CERROR("%s: add proc entry 'clear' failed: %d.\n",
+		       obd->obd_name, rc);
+		GOTO(obd_free_stats, rc);
+	}
+
+	ofd_stats_counter_init(obd->obd_stats);
+
+	rc = lprocfs_job_stats_init(obd, LPROC_OFD_STATS_LAST,
+				    ofd_stats_counter_init);
+	if (rc)
+		GOTO(obd_free_stats, rc);
+
+	RETURN(0);
+
+obd_free_stats:
+	lprocfs_free_obd_stats(obd);
+obd_cleanup:
+	lprocfs_obd_cleanup(obd);
+
+	return rc;
+}
 #endif /* CONFIG_PROC_FS */

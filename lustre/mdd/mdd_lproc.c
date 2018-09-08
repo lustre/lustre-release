@@ -459,7 +459,7 @@ static int mdd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
 	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	return lfsck_get_speed(m, mdd->mdd_bottom);
+	return lfsck_get_speed(m, NULL, mdd->mdd_bottom);
 }
 
 static ssize_t

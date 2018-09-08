@@ -359,11 +359,11 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 
 	switch (cfg->lcfg_command) {
 	case LCFG_PARAM: {
-		struct obd_device	*obd = ofd_obd(m);
 		/* For interoperability */
-		struct cfg_interop_param   *ptr = NULL;
-		struct lustre_cfg	   *old_cfg = NULL;
-		char			   *param = NULL;
+		struct cfg_interop_param *ptr = NULL;
+		struct lustre_cfg *old_cfg = NULL;
+		char *param = NULL;
+		ssize_t count;
 
 		param = lustre_cfg_string(cfg, 1);
 		if (param == NULL) {
@@ -397,14 +397,16 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 			break;
 		}
 
-		rc = class_process_proc_param(PARAM_OST, obd->obd_vars, cfg,
-					      d->ld_obd);
-		if (rc > 0 || rc == -ENOSYS) {
-			CDEBUG(D_CONFIG, "pass param %s down the stack.\n",
-			       param);
-			/* we don't understand; pass it on */
-			rc = next->ld_ops->ldo_process_config(env, next, cfg);
+		count = class_modify_config(cfg, PARAM_OST,
+					    &d->ld_obd->obd_kset.kobj);
+		if (count > 0) {
+			rc = 0;
+			break;
 		}
+		CDEBUG(D_CONFIG, "pass param %s down the stack.\n",
+		       param);
+		/* we don't understand; pass it on */
+		rc = next->ld_ops->ldo_process_config(env, next, cfg);
 		break;
 	}
 	case LCFG_SPTLRPC_CONF: {
@@ -698,73 +700,6 @@ static struct lu_device_operations ofd_lu_ops = {
 	.ldo_recovery_complete	= ofd_recovery_complete,
 	.ldo_prepare		= ofd_prepare,
 };
-
-LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
-
-/**
- * Initialize all needed procfs entries for OFD device.
- *
- * \param[in] ofd	OFD device
- *
- * \retval		0 if successful
- * \retval		negative value on error
- */
-static int ofd_procfs_init(struct ofd_device *ofd)
-{
-	struct obd_device		*obd = ofd_obd(ofd);
-	struct proc_dir_entry		*entry;
-	int				 rc = 0;
-
-	ENTRY;
-
-	/* lprocfs must be setup before the ofd so state can be safely added
-	 * to /proc incrementally as the ofd is setup */
-	obd->obd_vars = lprocfs_ofd_obd_vars;
-	rc = lprocfs_obd_setup(obd, false);
-	if (rc) {
-		CERROR("%s: lprocfs_obd_setup failed: %d.\n",
-		       obd->obd_name, rc);
-		RETURN(rc);
-	}
-
-	rc = lprocfs_alloc_obd_stats(obd, LPROC_OFD_STATS_LAST);
-	if (rc) {
-		CERROR("%s: lprocfs_alloc_obd_stats failed: %d.\n",
-		       obd->obd_name, rc);
-		GOTO(obd_cleanup, rc);
-	}
-
-	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
-	if (IS_ERR(entry)) {
-		rc = PTR_ERR(entry);
-		CERROR("%s: error %d setting up lprocfs for %s\n",
-		       obd->obd_name, rc, "exports");
-		GOTO(obd_cleanup, rc);
-	}
-	obd->obd_proc_exports_entry = entry;
-
-	entry = lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
-				   obd, &lprocfs_nid_stats_clear_fops);
-	if (IS_ERR(entry)) {
-		rc = PTR_ERR(entry);
-		CERROR("%s: add proc entry 'clear' failed: %d.\n",
-		       obd->obd_name, rc);
-		GOTO(obd_cleanup, rc);
-	}
-
-	ofd_stats_counter_init(obd->obd_stats);
-
-	rc = lprocfs_job_stats_init(obd, LPROC_OFD_STATS_LAST,
-				    ofd_stats_counter_init);
-	if (rc)
-		GOTO(obd_cleanup, rc);
-	RETURN(0);
-obd_cleanup:
-	lprocfs_obd_cleanup(obd);
-	lprocfs_free_obd_stats(obd);
-
-	return rc;
-}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
 /**
@@ -2931,7 +2866,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	/* set this lu_device to obd, because error handling need it */
 	obd->obd_lu_dev = &m->ofd_dt_dev.dd_lu_dev;
 
-	rc = ofd_procfs_init(m);
+	rc = ofd_tunables_init(m);
 	if (rc) {
 		CERROR("Can't init ofd lprocfs, rc %d\n", rc);
 		RETURN(rc);

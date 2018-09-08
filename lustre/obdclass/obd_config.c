@@ -1391,7 +1391,7 @@ ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 			/* If the prefix doesn't match, return error so we
 			 * can pass it down the stack
 			 */
-			return -ENOSYS;
+			return -EINVAL;
 
 		value = strchr(key, '=');
 		if (!value || *(value + 1) == 0) {
