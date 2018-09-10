@@ -161,14 +161,6 @@
 #define ldlm_set_fail_loc(_l)           LDLM_SET_FLAG((  _l), 1ULL << 32)
 #define ldlm_clear_fail_loc(_l)         LDLM_CLEAR_FLAG((_l), 1ULL << 32)
 
-/**
- * Used while processing the unused list to know that we have already
- * handled this lock and decided to skip it. */
-#define LDLM_FL_SKIPPED                 0x0000000200000000ULL // bit  33
-#define ldlm_is_skipped(_l)             LDLM_TEST_FLAG(( _l), 1ULL << 33)
-#define ldlm_set_skipped(_l)            LDLM_SET_FLAG((  _l), 1ULL << 33)
-#define ldlm_clear_skipped(_l)          LDLM_CLEAR_FLAG((_l), 1ULL << 33)
-
 /** this lock is being destroyed */
 #define LDLM_FL_CBPENDING               0x0000000400000000ULL // bit  34
 #define ldlm_is_cbpending(_l)           LDLM_TEST_FLAG(( _l), 1ULL << 34)

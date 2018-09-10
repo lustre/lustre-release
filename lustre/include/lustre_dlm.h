@@ -416,6 +416,7 @@ struct ldlm_namespace {
 	struct list_head	ns_unused_list;
 	/** Number of locks in the LRU list above */
 	int			ns_nr_unused;
+	struct list_head	*ns_last_pos;
 
 	/**
 	 * Maximum number of locks permitted in the LRU. If 0, means locks
