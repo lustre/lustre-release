@@ -1683,6 +1683,13 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 		ll_file_clear_flag(lli, LLIF_DATA_MODIFIED);
 	}
 
+	if (attr->ia_valid & ATTR_FILE) {
+		struct ll_file_data *fd = LUSTRE_FPRIVATE(attr->ia_file);
+
+		if (fd->fd_lease_och)
+			op_data->op_bias |= MDS_TRUNC_KEEP_LEASE;
+	}
+
 	op_data->op_attr = *attr;
 
 	rc = ll_md_setattr(dentry, op_data);

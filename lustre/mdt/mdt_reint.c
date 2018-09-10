@@ -692,6 +692,28 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (mdt_object_remote(mo))
 		GOTO(out_put, rc = -EREMOTE);
 
+	/* revoke lease lock if size is going to be changed */
+	if (unlikely(ma->ma_attr.la_valid & LA_SIZE &&
+		     !(ma->ma_attr_flags & MDS_TRUNC_KEEP_LEASE) &&
+		     atomic_read(&mo->mot_lease_count) > 0)) {
+		down_read(&mo->mot_open_sem);
+
+		if (atomic_read(&mo->mot_lease_count) > 0) { /* lease exists */
+			lhc = &info->mti_lh[MDT_LH_LOCAL];
+			mdt_lock_reg_init(lhc, LCK_CW);
+
+			rc = mdt_object_lock(info, mo, lhc, MDS_INODELOCK_OPEN);
+			if (rc != 0) {
+				up_read(&mo->mot_open_sem);
+				GOTO(out_put, rc);
+			}
+
+			/* revoke lease lock */
+			mdt_object_unlock(info, mo, lhc, 1);
+		}
+		up_read(&mo->mot_open_sem);
+	}
+
 	if (ma->ma_attr.la_valid & LA_SIZE || rr->rr_flags & MRF_OPEN_TRUNC) {
 		/* Check write access for the O_TRUNC case */
 		if (mdt_write_read(mo) < 0)

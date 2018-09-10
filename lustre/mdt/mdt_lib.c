@@ -1110,13 +1110,8 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	la->la_mtime = rec->sa_mtime;
 	ma->ma_valid = MA_INODE;
 
-	if (rec->sa_bias & MDS_DATA_MODIFIED)
-		ma->ma_attr_flags |= MDS_DATA_MODIFIED;
-	else
-		ma->ma_attr_flags &= ~MDS_DATA_MODIFIED;
-
-	ma->ma_attr_flags &= ~MDS_CLOSE_INTENT;
-	ma->ma_attr_flags |= rec->sa_bias & MDS_CLOSE_INTENT;
+	ma->ma_attr_flags |= rec->sa_bias & (MDS_CLOSE_INTENT |
+				MDS_DATA_MODIFIED | MDS_TRUNC_KEEP_LEASE);
 	RETURN(0);
 }
 
