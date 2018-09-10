@@ -172,8 +172,8 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 
 		seq = ostid_seq(&oseq->os_oi) == 0 ?
 		      fid_idif_seq(ostid_id(&oseq->os_oi),
-				   ofd->ofd_lut.lut_lsd.lsd_osd_index) :
-		      ostid_seq(&oseq->os_oi);
+				ofd->ofd_lut.lut_lsd.lsd_osd_index) & ~0xFFFF :
+				ostid_seq(&oseq->os_oi);
 		seq_printf(m, DOSTID"\n", seq, ostid_id(&oseq->os_oi));
 	}
 	read_unlock(&ofd->ofd_seq_list_lock);
