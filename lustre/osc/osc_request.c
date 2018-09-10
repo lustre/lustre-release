@@ -740,24 +740,24 @@ struct grant_thread_data {
 static struct grant_thread_data client_gtd;
 
 static int osc_shrink_grant_interpret(const struct lu_env *env,
-                                      struct ptlrpc_request *req,
-                                      void *aa, int rc)
+				      struct ptlrpc_request *req,
+				      void *aa, int rc)
 {
-        struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
-        struct obdo *oa = ((struct osc_grant_args *)aa)->aa_oa;
-        struct ost_body *body;
+	struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
+	struct obdo *oa = ((struct osc_grant_args *)aa)->aa_oa;
+	struct ost_body *body;
 
-        if (rc != 0) {
-                __osc_update_grant(cli, oa->o_grant);
-                GOTO(out, rc);
-        }
+	if (rc != 0) {
+		__osc_update_grant(cli, oa->o_grant);
+		GOTO(out, rc);
+	}
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        LASSERT(body);
-        osc_update_grant(cli, body);
+	body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+	LASSERT(body);
+	osc_update_grant(cli, body);
 out:
-        OBDO_FREE(oa);
-        return rc;
+	OBD_SLAB_FREE_PTR(oa, osc_obdo_kmem);
+	return rc;
 }
 
 static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
@@ -2099,7 +2099,7 @@ static int brw_interpret(const struct lu_env *env,
 			cl_object_attr_update(env, obj, attr, valid);
 		cl_object_attr_unlock(obj);
 	}
-	OBDO_FREE(aa->aa_oa);
+	OBD_SLAB_FREE_PTR(aa->aa_oa, osc_obdo_kmem);
 
 	if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE && rc == 0)
 		osc_inc_unstable_pages(req);
@@ -2204,7 +2204,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	if (pga == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	OBDO_ALLOC(oa);
+	OBD_SLAB_ALLOC_PTR_GFP(oa, osc_obdo_kmem, GFP_NOFS);
 	if (oa == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -2332,7 +2332,7 @@ out:
 		LASSERT(req == NULL);
 
 		if (oa)
-			OBDO_FREE(oa);
+			OBD_SLAB_FREE_PTR(oa, osc_obdo_kmem);
 		if (pga)
 			OBD_FREE(pga, sizeof(*pga) * page_count);
 		/* this should happen rarely and is pretty bad, it makes the
@@ -2944,7 +2944,7 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 		CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
 		aa = ptlrpc_req_async_args(req);
-		OBDO_ALLOC(oa);
+		OBD_SLAB_ALLOC_PTR_GFP(oa, osc_obdo_kmem, GFP_NOFS);
 		if (!oa) {
 			ptlrpc_req_finished(req);
 			RETURN(-ENOMEM);

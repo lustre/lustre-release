@@ -566,6 +566,7 @@ extern struct kmem_cache *osc_thread_kmem;
 extern struct kmem_cache *osc_session_kmem;
 extern struct kmem_cache *osc_extent_kmem;
 extern struct kmem_cache *osc_quota_kmem;
+extern struct kmem_cache *osc_obdo_kmem;
 
 extern struct lu_context_key osc_key;
 extern struct lu_context_key osc_session_key;
