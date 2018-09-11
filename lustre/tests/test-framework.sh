@@ -4230,6 +4230,12 @@ add() {
 	stop ${facet} -f
 	rm -f $TMP/${facet}active
 	[[ $facet = mds1 ]] && combined_mgs_mds && rm -f $TMP/mgsactive
+
+	# make sure in-tree ldiskfs is loaded before mkfs
+	if local_mode && [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
+		load_module ../ldiskfs/ldiskfs
+	fi
+
 	do_facet ${facet} $MKFS $* || return ${PIPESTATUS[0]}
 
 	if [[ $(facet_fstype $facet) == zfs ]]; then
