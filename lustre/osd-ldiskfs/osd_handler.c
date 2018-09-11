@@ -2369,11 +2369,16 @@ static int osd_commit_async(const struct lu_env *env,
 			    struct dt_device *d)
 {
 	struct super_block *s = osd_sb(osd_dt_dev(d));
+	int rc;
 
 	ENTRY;
 
 	CDEBUG(D_HA, "%s: async commit OSD\n", osd_dt_dev(d)->od_svname);
-	RETURN(s->s_op->sync_fs(s, 0));
+	down_read(&s->s_umount);
+	rc = s->s_op->sync_fs(s, 0);
+	up_read(&s->s_umount);
+
+	RETURN(rc);
 }
 
 /* Our own copy of the set readonly functions if present, or NU if not. */
