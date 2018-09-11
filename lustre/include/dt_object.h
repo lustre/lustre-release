@@ -1139,7 +1139,6 @@ struct dt_body_operations {
 	 * \param[in] pos	position in the object to start
 	 * \param[out] pos	\a pos + bytes written
 	 * \param[in] th	transaction handle
-	 * \param[in] ignore	unused (was used to request quota ignorance)
 	 *
 	 * \retval positive	bytes written on success
 	 * \retval negative	negated errno on error
@@ -1148,8 +1147,7 @@ struct dt_body_operations {
 			     struct dt_object *dt,
 			     const struct lu_buf *buf,
 			     loff_t *pos,
-			     struct thandle *th,
-			     int ignore);
+			     struct thandle *th);
 
 	/**
 	 * Return buffers for data.
@@ -1482,7 +1480,6 @@ struct dt_index_operations {
 	 * \param[in] rec	buffer storing value
 	 * \param[in] key	key
 	 * \param[in] th	transaction handle
-	 * \param[in] ignore	unused (was used to request quota ignorance)
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -1491,8 +1488,7 @@ struct dt_index_operations {
 			  struct dt_object *dt,
 			  const struct dt_rec *rec,
 			  const struct dt_key *key,
-			  struct thandle *th,
-			  int ignore);
+			  struct thandle *th);
 
 	/**
 	 * Declare intention to delete a key/value from an index.
@@ -2465,12 +2461,12 @@ static inline int dt_declare_write(const struct lu_env *env,
 
 static inline ssize_t dt_write(const struct lu_env *env, struct dt_object *dt,
 			       const struct lu_buf *buf, loff_t *pos,
-			       struct thandle *th, int rq)
+			       struct thandle *th)
 {
 	LASSERT(dt);
 	LASSERT(dt->do_body_ops);
 	LASSERT(dt->do_body_ops->dbo_write);
-	return dt->do_body_ops->dbo_write(env, dt, buf, pos, th, rq);
+	return dt->do_body_ops->dbo_write(env, dt, buf, pos, th);
 }
 
 static inline int dt_declare_punch(const struct lu_env *env,
@@ -2573,11 +2569,10 @@ static inline int dt_declare_insert(const struct lu_env *env,
 }
 
 static inline int dt_insert(const struct lu_env *env,
-                                    struct dt_object *dt,
-                                    const struct dt_rec *rec,
-                                    const struct dt_key *key,
-                                    struct thandle *th,
-                                    int noquota)
+			    struct dt_object *dt,
+			    const struct dt_rec *rec,
+			    const struct dt_key *key,
+			    struct thandle *th)
 {
         LASSERT(dt);
         LASSERT(dt->do_index_ops);
@@ -2586,7 +2581,7 @@ static inline int dt_insert(const struct lu_env *env,
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_INSERT))
 		return cfs_fail_err;
 
-	return dt->do_index_ops->dio_insert(env, dt, rec, key, th, noquota);
+	return dt->do_index_ops->dio_insert(env, dt, rec, key, th);
 }
 
 static inline int dt_declare_xattr_del(const struct lu_env *env,

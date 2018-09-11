@@ -211,7 +211,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 			const struct lu_buf *buf, loff_t *pos,
-			struct thandle *th, int ignore_quota)
+			 struct thandle *th)
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);

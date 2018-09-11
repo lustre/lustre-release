@@ -438,14 +438,13 @@ int lod_sub_declare_insert(const struct lu_env *env, struct dt_object *dt,
  * \param[in] rec	record of the index to be inserted
  * \param[in] key	key of the index to be inserted
  * \param[in] th	the transaction handle
- * \param[in] ign	whether ignore quota
  *
  * \retval		0 if the insertion succeeds.
  * \retval		negative errno if the insertion fails.
  */
 int lod_sub_insert(const struct lu_env *env, struct dt_object *dt,
 		   const struct dt_rec *rec, const struct dt_key *key,
-		   struct thandle *th, int ign)
+		   struct thandle *th)
 {
 	struct thandle *sub_th;
 	int		rc;
@@ -462,7 +461,7 @@ int lod_sub_insert(const struct lu_env *env, struct dt_object *dt,
 			return rc;
 	}
 
-	return dt_insert(env, dt, rec, key, sub_th, ign);
+	return dt_insert(env, dt, rec, key, sub_th);
 }
 
 /**
@@ -804,14 +803,13 @@ int lod_sub_declare_write(const struct lu_env *env, struct dt_object *dt,
  * \param[in] buf	buffer to write which includes an embedded size field
  * \param[in] pos	offet in the object to start writing at
  * \param[in] th	transaction handle
- * \param[in] rq	enforcement for this write
  *
  * \retval		the buffer size in bytes if it succeeds.
  * \retval		negative errno if it fails.
  */
 ssize_t lod_sub_write(const struct lu_env *env, struct dt_object *dt,
 		      const struct lu_buf *buf, loff_t *pos,
-		      struct thandle *th, int rq)
+		      struct thandle *th)
 {
 	struct thandle	*sub_th;
 	bool		record_update;
@@ -829,7 +827,7 @@ ssize_t lod_sub_write(const struct lu_env *env, struct dt_object *dt,
 			RETURN(rc);
 	}
 
-	rc = dt_write(env, dt, buf, pos, sub_th, rq);
+	rc = dt_write(env, dt, buf, pos, sub_th);
 	RETURN(rc);
 }
 

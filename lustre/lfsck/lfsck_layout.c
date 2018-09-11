@@ -1560,7 +1560,7 @@ static int lfsck_layout_ins_dangling_rec(const struct lu_env *env,
 		GOTO(unlock, rc);
 
 	rc = dt_insert(env, obj, (const struct dt_rec *)rec,
-		       (const struct dt_key *)key, th, 1);
+		       (const struct dt_key *)key, th);
 
 	GOTO(unlock, rc);
 
@@ -2439,7 +2439,7 @@ again:
 		GOTO(stop, rc);
 
 	rc = dt_insert(env, lpf, (const struct dt_rec *)dtrec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -7028,8 +7028,7 @@ static int lfsck_orphan_index_insert(const struct lu_env *env,
 				     struct dt_object *dt,
 				     const struct dt_rec *rec,
 				     const struct dt_key *key,
-				     struct thandle *handle,
-				     int ignore_quota)
+				     struct thandle *handle)
 {
 	return -EOPNOTSUPP;
 }

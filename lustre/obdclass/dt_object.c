@@ -514,7 +514,7 @@ int dt_record_write(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt->do_body_ops);
 	LASSERT(dt->do_body_ops->dbo_write);
 
-	size = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, 1);
+	size = dt->do_body_ops->dbo_write(env, dt, buf, pos, th);
 	if (size < 0)
 		return size;
 	return (size == (ssize_t)buf->lb_len) ? 0 : -EFAULT;

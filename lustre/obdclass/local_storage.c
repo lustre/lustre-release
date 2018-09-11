@@ -388,14 +388,14 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 		rec->rec_fid = fid;
 		/* Add "." and ".." for newly created dir */
 		rc = dt_insert(env, dto, (const struct dt_rec *)rec,
-			       (const struct dt_key *)".", th, 1);
+			       (const struct dt_key *)".", th);
 		if (rc != 0)
 			GOTO(destroy, rc);
 
 		dt_ref_add(env, dto, th);
 		rec->rec_fid = lu_object_fid(&parent->do_lu);
 		rc = dt_insert(env, dto, (const struct dt_rec *)rec,
-			       (const struct dt_key *)"..", th, 1);
+			       (const struct dt_key *)"..", th);
 		if (rc != 0)
 			GOTO(destroy, rc);
 	}
@@ -404,7 +404,7 @@ static struct dt_object *__local_file_create(const struct lu_env *env,
 	rec->rec_type = dto->do_lu.lo_header->loh_attr;
 	dt_write_lock(env, parent, LOS_PARENT);
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	if (dti->dti_dof.dof_type == DFT_DIR)
 		dt_ref_add(env, parent, th);
 	dt_write_unlock(env, parent);
@@ -684,7 +684,7 @@ int local_object_unlink(const struct lu_env *env, struct dt_device *dt,
 		rec->rec_fid = &dti->dti_fid;
 		rec->rec_type = dto->do_lu.lo_header->loh_attr;
 		rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-			       (const struct dt_key *)name, th, 1);
+			       (const struct dt_key *)name, th);
 		GOTO(unlock, rc);
 	}
 

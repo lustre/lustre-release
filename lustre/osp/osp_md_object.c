@@ -569,15 +569,13 @@ static int osp_md_declare_index_insert(const struct lu_env *env,
  * \param[in] rec	record of the index to be inserted
  * \param[in] key	key of the index to be inserted
  * \param[in] th	the transaction handle
- * \param[in] ignore_quota quota enforcement for insert
  *
  * \retval		0 if packing index insert succeeds.
  * \retval		negative errno if packing fails.
  */
 static int osp_md_index_insert(const struct lu_env *env, struct dt_object *dt,
 			       const struct dt_rec *rec,
-			       const struct dt_key *key, struct thandle *th,
-			       int ignore_quota)
+			       const struct dt_key *key, struct thandle *th)
 {
 	struct osp_update_request *update;
 	int rc;
@@ -1139,14 +1137,13 @@ static ssize_t osp_md_declare_write(const struct lu_env *env,
  * \param[in] buf	buffer to write which includes an embedded size field
  * \param[in] pos	offet in the object to start writing at
  * \param[in] th	transaction handle
- * \param[in] ignore_quota quota enforcement for this write
  *
  * \retval		the buffer size in bytes if packing succeeds.
  * \retval		negative errno if packing fails.
  */
 static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 			    const struct lu_buf *buf, loff_t *pos,
-			    struct thandle *th, int ignore_quota)
+			    struct thandle *th)
 {
 	struct osp_object	  *obj = dt2osp_obj(dt);
 	struct osp_update_request  *update;

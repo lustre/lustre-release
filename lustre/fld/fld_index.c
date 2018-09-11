@@ -193,7 +193,7 @@ int fld_index_create(const struct lu_env *env, struct lu_server_fld *fld,
 
 	range_cpu_to_be(tmp, tmp);
 	rc = dt_insert(env, fld->lsf_obj, (struct dt_rec *)tmp,
-		       (struct dt_key *)&tmp->lsr_start, th, 1);
+		       (struct dt_key *)&tmp->lsr_start, th);
 	if (rc != 0) {
 		CERROR("%s: insert range "DRANGE" failed: rc = %d\n",
 		       fld->lsf_name, PRANGE(new_range), rc);

@@ -792,7 +792,7 @@ int lod_sub_declare_insert(const struct lu_env *env, struct dt_object *dt,
 			   struct thandle *th);
 int lod_sub_insert(const struct lu_env *env, struct dt_object *dt,
 		   const struct dt_rec *rec, const struct dt_key *key,
-		   struct thandle *th, int ign);
+		   struct thandle *th);
 int lod_sub_declare_delete(const struct lu_env *env, struct dt_object *dt,
 			   const struct dt_key *key, struct thandle *th);
 int lod_sub_delete(const struct lu_env *env, struct dt_object *dt,
@@ -816,7 +816,7 @@ int lod_sub_declare_write(const struct lu_env *env, struct dt_object *dt,
 			  struct thandle *th);
 ssize_t lod_sub_write(const struct lu_env *env, struct dt_object *dt,
 		      const struct lu_buf *buf, loff_t *pos,
-		      struct thandle *th, int rq);
+		      struct thandle *th);
 int lod_sub_declare_punch(const struct lu_env *env, struct dt_object *dt,
 			  __u64 start, __u64 end, struct thandle *th);
 int lod_sub_punch(const struct lu_env *env, struct dt_object *dt,

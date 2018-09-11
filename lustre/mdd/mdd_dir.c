@@ -666,15 +666,11 @@ static int __mdd_index_insert_only(const struct lu_env *env,
 
 	if (dt_try_as_dir(env, next)) {
 		struct dt_insert_rec	*rec = &mdd_env_info(env)->mti_dt_rec;
-		struct lu_ucred		*uc  = lu_ucred_check(env);
-		int			 ignore_quota;
 
 		rec->rec_fid = lf;
 		rec->rec_type = type;
-		ignore_quota = uc ? uc->uc_cap & CFS_CAP_SYS_RESOURCE_MASK : 1;
 		rc = dt_insert(env, next, (const struct dt_rec *)rec,
-			       (const struct dt_key *)name, handle,
-			       ignore_quota);
+			       (const struct dt_key *)name, handle);
 	} else {
 		rc = -ENOTDIR;
 	}
@@ -2345,17 +2341,13 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 #endif
 
 	if (S_ISLNK(attr->la_mode)) {
-		struct lu_ucred  *uc = lu_ucred_assert(env);
 		struct dt_object *dt = mdd_object_child(son);
 		const char *target_name = spec->u.sp_symname;
 		int sym_len = strlen(target_name);
 		loff_t pos = 0;
 
 		buf = mdd_buf_get_const(env, target_name, sym_len);
-		rc = dt->do_body_ops->dbo_write(env, dt, buf, &pos, handle,
-						uc->uc_cap &
-						CFS_CAP_SYS_RESOURCE_MASK);
-
+		rc = dt->do_body_ops->dbo_write(env, dt, buf, &pos, handle);
 		if (rc == sym_len)
 			rc = 0;
 		else

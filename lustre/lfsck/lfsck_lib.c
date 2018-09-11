@@ -727,14 +727,14 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	/* 3b. insert dot into child dir */
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dot, th, 1);
+		       (const struct dt_key *)dot, th);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
 	/* 4b. insert dotdot into child dir */
 	rec->rec_fid = &LU_LPF_FID;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, 1);
+		       (const struct dt_key *)dotdot, th);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -748,7 +748,7 @@ static int lfsck_create_lpf_local(const struct lu_env *env,
 	/* 6b. insert name into parent dir */
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -893,14 +893,14 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 	rec->rec_type = S_IFDIR;
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dot, th, 1);
+		       (const struct dt_key *)dot, th);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
 	/* 4b. insert dotdot into child dir */
 	rec->rec_fid = &LU_LPF_FID;
 	rc = dt_insert(env, child, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, 1);
+		       (const struct dt_key *)dotdot, th);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -948,7 +948,7 @@ static int lfsck_create_lpf_remote(const struct lu_env *env,
 
 	/* 5b. insert name into parent dir */
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 

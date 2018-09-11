@@ -985,14 +985,13 @@ int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
  *      \param  key     key for index
  *      \param  rec     record reference
  *      \param  th      transaction handler
- *      \param  ignore_quota update should not affect quota
  *
  *      \retval  0  success
  *      \retval -ve failure
  */
 static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 			  const struct dt_rec *rec, const struct dt_key *key,
-			  struct thandle *th, int ignore_quota)
+			  struct thandle *th)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_object   *parent = osd_dt_obj(dt);
@@ -1777,7 +1776,7 @@ static int osd_declare_index_insert(const struct lu_env *env,
 
 static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 			    const struct dt_rec *rec, const struct dt_key *key,
-			    struct thandle *th, int ignore_quota)
+			    struct thandle *th)
 {
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);

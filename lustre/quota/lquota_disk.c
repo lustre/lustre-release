@@ -660,11 +660,11 @@ int lquota_disk_write(const struct lu_env *env, struct thandle *th,
 
 	if (rec != NULL) {
 		/* insert record with updated quota settings */
-		rc = dt_insert(env, obj, rec, key, th, 1);
+		rc = dt_insert(env, obj, rec, key, th);
 		if (rc) {
 			/* try to insert the old one */
 			rc = dt_insert(env, obj, (struct dt_rec *)&qti->qti_rec,
-				       key, th, 1);
+				       key, th);
 			LASSERTF(rc == 0, "failed to insert record in quota "
 				 "index "DFID"\n",
 				 PFID(lu_object_fid(&obj->do_lu)));
@@ -782,7 +782,7 @@ int lquota_disk_write_glb(const struct lu_env *env, struct dt_object *obj,
 		rc = 0;
 	}
 
-	rc = dt_insert(env, obj, (struct dt_rec *)rec, key, th, 1);
+	rc = dt_insert(env, obj, (struct dt_rec *)rec, key, th);
 out_lock:
 	dt_write_unlock(env, obj);
 out:

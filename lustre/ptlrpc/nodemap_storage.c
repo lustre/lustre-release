@@ -273,7 +273,7 @@ static int nodemap_idx_insert(const struct lu_env *env,
 	dt_write_lock(env, idx, 0);
 
 	rc = dt_insert(env, idx, (const struct dt_rec *)nr,
-		       (const struct dt_key *)nk, th, 1);
+		       (const struct dt_key *)nk, th);
 
 	nodemap_inc_version(env, idx, th);
 	dt_write_unlock(env, idx);
@@ -321,7 +321,7 @@ static int nodemap_idx_update(const struct lu_env *env,
 		GOTO(out_lock, rc);
 
 	rc = dt_insert(env, idx, (const struct dt_rec *)nr,
-		       (const struct dt_key *)nk, th, 1);
+		       (const struct dt_key *)nk, th);
 	if (rc != 0)
 		GOTO(out_lock, rc);
 

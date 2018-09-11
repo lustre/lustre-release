@@ -1431,7 +1431,7 @@ llog_osd_regular_fid_add_name_entry(const struct lu_env *env,
 			       (struct dt_key *)name, th);
 	} else {
 		rc = dt_insert(env, dir, (struct dt_rec *)rec,
-			       (struct dt_key *)name, th, 1);
+			       (struct dt_key *)name, th);
 	}
 	dt_write_unlock(env, dir);
 
@@ -1598,8 +1598,7 @@ static int llog_osd_create(const struct lu_env *env, struct llog_handle *res,
 		rec->rec_type = S_IFREG;
 		dt_read_lock(env, llog_dir, 0);
 		rc = dt_insert(env, llog_dir, (struct dt_rec *)rec,
-			       (struct dt_key *)res->lgh_name,
-			       th, 1);
+			       (struct dt_key *)res->lgh_name, th);
 		dt_read_unlock(env, llog_dir);
 		dt_object_put(env, llog_dir);
 		if (rc)

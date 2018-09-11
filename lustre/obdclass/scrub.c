@@ -1140,7 +1140,7 @@ int lustre_index_restore(const struct lu_env *env, struct dt_device *dev,
 		GOTO(stop, rc);
 
 	rc = dt_insert(env, parent_obj, (const struct dt_rec *)&ent,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	dt_trans_stop(env, dev, th);
 	/* Some index name may has been inserted by OSD
 	 * automatically when create the index object. */
@@ -1186,7 +1186,7 @@ int lustre_index_restore(const struct lu_env *env, struct dt_device *dev,
 			if (rc)
 				GOTO(stop, rc);
 
-			rc = dt_insert(env, tgt_obj, rec, key, th, 1);
+			rc = dt_insert(env, tgt_obj, rec, key, th);
 			if (unlikely(rc == -EEXIST))
 				rc = 0;
 

@@ -1643,8 +1643,7 @@ static int osp_orphan_index_insert(const struct lu_env *env,
 				   struct dt_object *dt,
 				   const struct dt_rec *rec,
 				   const struct dt_key *key,
-				   struct thandle *handle,
-				   int ignore_quota)
+				   struct thandle *handle)
 {
 	return -EOPNOTSUPP;
 }

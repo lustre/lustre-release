@@ -1073,7 +1073,7 @@ static int out_obj_index_insert(const struct lu_env *env,
 		return -ENOTDIR;
 
 	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
-	rc = dt_insert(env, dt_obj, rec, key, th, 0);
+	rc = dt_insert(env, dt_obj, rec, key, th);
 	dt_write_unlock(env, dt_obj);
 
 	return rc;

@@ -94,7 +94,7 @@ static inline int mdd_orphan_insert_obj(const struct lu_env *env,
 	rec->rec_fid = lf;
 	rec->rec_type = mdd_object_type(obj);
 
-	return dt_insert(env, dor, (const struct dt_rec *)rec, key, th, 1);
+	return dt_insert(env, dor, (const struct dt_rec *)rec, key, th);
 }
 
 int mdd_orphan_declare_insert(const struct lu_env *env, struct mdd_object *obj,
@@ -186,7 +186,7 @@ int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 	rec->rec_fid = lf_dor;
 	rec->rec_type = S_IFDIR;
 	dt_insert(env, next, (const struct dt_rec *)rec,
-		  (const struct dt_key *)dotdot, th, 1);
+		  (const struct dt_key *)dotdot, th);
 
 out:
 	if (rc == 0)

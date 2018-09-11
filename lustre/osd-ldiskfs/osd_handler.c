@@ -5261,8 +5261,7 @@ static int osd_index_declare_iam_insert(const struct lu_env *env,
  */
 static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
 				const struct dt_rec *rec,
-				const struct dt_key *key, struct thandle *th,
-				int ignore_quota)
+				const struct dt_key *key, struct thandle *th)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 	struct iam_path_descr *ipd;
@@ -5952,8 +5951,7 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
  */
 static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 			       const struct dt_rec *rec,
-			       const struct dt_key *key, struct thandle *th,
-			       int ignore_quota)
+			       const struct dt_key *key, struct thandle *th)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 	struct osd_device *osd = osd_dev(dt->do_lu.lo_dev);

@@ -517,7 +517,6 @@ struct osd_iobuf {
 	int                dr_npages;
 	int                dr_error;
 	int                dr_frags;
-	unsigned int       dr_ignore_quota:1;
 	unsigned int       dr_elapsed_valid:1; /* we really did count time */
 	unsigned int       dr_rw:1;
 	struct lu_buf	   dr_pg_buf;

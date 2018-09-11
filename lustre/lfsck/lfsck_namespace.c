@@ -562,7 +562,7 @@ int lfsck_namespace_trace_update(const struct lu_env *env,
 
 	if (new != 0) {
 		rc = dt_insert(env, obj, (const struct dt_rec *)&new,
-			       (const struct dt_key *)key, th, 1);
+			       (const struct dt_key *)key, th);
 		if (rc != 0)
 			GOTO(log, rc);
 	}
@@ -1058,7 +1058,7 @@ again:
 			rec->rec_type = S_IFDIR;
 			rec->rec_fid = pfid;
 			rc = dt_insert(env, orphan, (const struct dt_rec *)rec,
-				       (const struct dt_key *)dotdot, th, 1);
+				       (const struct dt_key *)dotdot, th);
 			if (rc != 0)
 				GOTO(unlock, rc);
 		}
@@ -1077,7 +1077,7 @@ again:
 		rec->rec_type = lfsck_object_type(orphan) & S_IFMT;
 		rec->rec_fid = cfid;
 		rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-			       (const struct dt_key *)cname->ln_name, th, 1);
+			       (const struct dt_key *)cname->ln_name, th);
 		if (rc == 0 && S_ISDIR(rec->rec_type)) {
 			dt_write_lock(env, parent, 0);
 			rc = dt_ref_add(env, parent, th);
@@ -1209,7 +1209,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1459,13 +1459,13 @@ again:
 
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, orphan, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dot, th, 1);
+		       (const struct dt_key *)dot, th);
 	if (rc != 0)
 		GOTO(unlock2, rc);
 
 	rec->rec_fid = lfsck_dto2fid(parent);
 	rc = dt_insert(env, orphan, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, 1);
+		       (const struct dt_key *)dotdot, th);
 	if (rc != 0)
 		GOTO(unlock2, rc);
 
@@ -1483,7 +1483,7 @@ again:
 
 	rec->rec_fid = cfid;
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	if (rc == 0) {
 		dt_write_lock(env, parent, 0);
 		rc = dt_ref_add(env, parent, th);
@@ -1923,7 +1923,7 @@ replace:
 		GOTO(stop, rc);
 
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 
 	GOTO(stop, rc = (rc == 0 ? 1 : rc));
 
@@ -2133,7 +2133,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	if (update) {
 		rc = dt_insert(env, parent,
 			       (const struct dt_rec *)rec,
-			       (const struct dt_key *)name2, th, 1);
+			       (const struct dt_key *)name2, th);
 		if (rc != 0)
 			GOTO(unlock2, rc);
 	}
@@ -2261,7 +2261,7 @@ static int lfsck_namespace_repair_unmatched_pairs(const struct lu_env *env,
 	dt_delete(env, obj, (const struct dt_key *)dotdot, th);
 
 	rc = dt_insert(env, obj, (const struct dt_rec *)rec,
-		       (const struct dt_key *)dotdot, th, 1);
+		       (const struct dt_key *)dotdot, th);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -5264,14 +5264,14 @@ int lfsck_namespace_repair_dangling(const struct lu_env *env,
 		rec->rec_type = S_IFDIR;
 		rec->rec_fid = cfid;
 		rc = dt_insert(env, child, (const struct dt_rec *)rec,
-			       (const struct dt_key *)dot, th, 1);
+			       (const struct dt_key *)dot, th);
 		if (rc != 0)
 			GOTO(unlock, rc);
 
 		/* 4b. insert dotdot into child dir */
 		rec->rec_fid = pfid;
 		rc = dt_insert(env, child, (const struct dt_rec *)rec,
-			       (const struct dt_key *)dotdot, th, 1);
+			       (const struct dt_key *)dotdot, th);
 		if (rc != 0)
 			GOTO(unlock, rc);
 
@@ -5956,7 +5956,7 @@ static int lfsck_namespace_scan_local_lpf_one(const struct lu_env *env,
 
 	/* b5. insert child's FID into the LFSCK trace file. */
 	rc = dt_insert(env, obj, (const struct dt_rec *)&flags,
-		       (const struct dt_key *)key, th, 1);
+		       (const struct dt_key *)key, th);
 
 	GOTO(stop, rc = (rc == 0 ? 1 : rc));
 
@@ -6779,7 +6779,7 @@ int lfsck_update_name_entry(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	rc = dt_insert(env, dir, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th, 1);
+		       (const struct dt_key *)name, th);
 	if (rc == 0 && S_ISDIR(type) && !exists) {
 		dt_write_lock(env, dir, 0);
 		rc = dt_ref_add(env, dir, th);

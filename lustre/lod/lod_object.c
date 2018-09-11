@@ -98,9 +98,9 @@ static int lod_declare_insert(const struct lu_env *env, struct dt_object *dt,
  */
 static int lod_insert(const struct lu_env *env, struct dt_object *dt,
 		      const struct dt_rec *rec, const struct dt_key *key,
-		      struct thandle *th, int ign)
+		      struct thandle *th)
 {
-	return lod_sub_insert(env, dt_object_child(dt), rec, key, th, ign);
+	return lod_sub_insert(env, dt_object_child(dt), rec, key, th);
 }
 
 /**
@@ -3677,14 +3677,14 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 			rec->rec_fid = lu_object_fid(&dto->do_lu);
 			rc = lod_sub_insert(env, dto,
 					    (const struct dt_rec *)rec,
-					    (const struct dt_key *)dot, th, 0);
+					    (const struct dt_key *)dot, th);
 			if (rc != 0)
 				GOTO(out, rc);
 		}
 
 		rec->rec_fid = lu_object_fid(&dt->do_lu);
 		rc = lod_sub_insert(env, dto, (struct dt_rec *)rec,
-				    (const struct dt_key *)dotdot, th, 0);
+				    (const struct dt_key *)dotdot, th);
 		if (rc != 0)
 			GOTO(out, rc);
 
@@ -3728,7 +3728,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		rec->rec_fid = lu_object_fid(&dto->do_lu);
 		rc = lod_sub_insert(env, dt_object_child(dt),
 				    (const struct dt_rec *)rec,
-				    (const struct dt_key *)stripe_name, th, 0);
+				    (const struct dt_key *)stripe_name, th);
 		if (rc != 0)
 			GOTO(out, rc);
 
@@ -6629,11 +6629,11 @@ static ssize_t lod_declare_write(const struct lu_env *env,
  */
 static ssize_t lod_write(const struct lu_env *env, struct dt_object *dt,
 			 const struct lu_buf *buf, loff_t *pos,
-			 struct thandle *th, int iq)
+			 struct thandle *th)
 {
 	LASSERT(S_ISREG(dt->do_lu.lo_header->loh_attr) ||
 		S_ISLNK(dt->do_lu.lo_header->loh_attr));
-	return lod_sub_write(env, dt_object_child(dt), buf, pos, th, iq);
+	return lod_sub_write(env, dt_object_child(dt), buf, pos, th);
 }
 
 static int lod_declare_punch(const struct lu_env *env, struct dt_object *dt,

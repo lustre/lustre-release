@@ -1852,7 +1852,7 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 			 const struct lu_buf *buf, loff_t *pos,
-			 struct thandle *handle, int ignore_quota)
+			 struct thandle *handle)
 {
 	struct inode		*inode = osd_dt_obj(dt)->oo_inode;
 	struct osd_thandle	*oh;
