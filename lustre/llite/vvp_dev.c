@@ -384,6 +384,12 @@ struct vvp_pgcache_id {
         struct lu_object_header *vpi_obj;
 };
 
+struct vvp_seq_private {
+	struct ll_sb_info	*vsp_sbi;
+	struct lu_env		*vsp_env;
+	u16			vsp_refcheck;
+};
+
 static void vvp_pgcache_id_unpack(loff_t pos, struct vvp_pgcache_id *id)
 {
 	CLASSERT(sizeof(pos) == sizeof(__u64));
@@ -526,92 +532,76 @@ static void vvp_pgcache_page_show(const struct lu_env *env,
 
 static int vvp_pgcache_show(struct seq_file *f, void *v)
 {
-	loff_t                   pos;
-	struct ll_sb_info       *sbi;
-	struct cl_object        *clob;
-	struct lu_env           *env;
-	struct vvp_pgcache_id    id;
-	__u16                    refcheck;
-	int                      result;
+	struct vvp_seq_private *priv = f->private;
+	loff_t pos;
+	struct cl_object *clob;
+	struct vvp_pgcache_id id;
 
-	env = cl_env_get(&refcheck);
-	if (!IS_ERR(env)) {
-		pos = *(loff_t *) v;
-		vvp_pgcache_id_unpack(pos, &id);
-		sbi = f->private;
-		clob = vvp_pgcache_obj(env, &sbi->ll_cl->cd_lu_dev, &id);
-		if (clob != NULL) {
-			struct inode *inode = vvp_object_inode(clob);
-			struct cl_page *page = NULL;
-			struct page *vmpage;
+	pos = *(loff_t *) v;
+	vvp_pgcache_id_unpack(pos, &id);
+	clob = vvp_pgcache_obj(priv->vsp_env, &priv->vsp_sbi->ll_cl->cd_lu_dev,
+			       &id);
+	if (clob) {
+		struct inode *inode = vvp_object_inode(clob);
+		struct cl_page *page = NULL;
+		struct page *vmpage;
+		int result;
 
-			result = find_get_pages_contig(inode->i_mapping,
-						      id.vpi_index, 1, &vmpage);
-			if (result > 0) {
-				lock_page(vmpage);
-				page = cl_vmpage_page(vmpage, clob);
-				unlock_page(vmpage);
+		result = find_get_pages_contig(inode->i_mapping,
+					      id.vpi_index, 1, &vmpage);
+		if (result > 0) {
+			lock_page(vmpage);
+			page = cl_vmpage_page(vmpage, clob);
+			unlock_page(vmpage);
 
-				put_page(vmpage);
-			}
+			put_page(vmpage);
+		}
 
-			seq_printf(f, "%8x@"DFID": ", id.vpi_index,
-				   PFID(lu_object_fid(&clob->co_lu)));
-			if (page != NULL) {
-				vvp_pgcache_page_show(env, f, page);
-				cl_page_put(env, page);
-			} else
-				seq_puts(f, "missing\n");
-			lu_object_ref_del(&clob->co_lu, "dump", current);
-			cl_object_put(env, clob);
-		} else
-			seq_printf(f, "%llx missing\n", pos);
-		cl_env_put(env, &refcheck);
-		result = 0;
-	} else
-		result = PTR_ERR(env);
-	return result;
+		seq_printf(f, "%8x@" DFID ": ", id.vpi_index,
+			   PFID(lu_object_fid(&clob->co_lu)));
+		if (page) {
+			vvp_pgcache_page_show(priv->vsp_env, f, page);
+			cl_page_put(priv->vsp_env, page);
+		} else {
+			seq_puts(f, "missing\n");
+		}
+		lu_object_ref_del(&clob->co_lu, "dump", current);
+		cl_object_put(priv->vsp_env, clob);
+	} else {
+		seq_printf(f, "%llx missing\n", pos);
+	}
+	return 0;
 }
 
 static void *vvp_pgcache_start(struct seq_file *f, loff_t *pos)
 {
-        struct ll_sb_info *sbi;
-        struct lu_env     *env;
-	__u16              refcheck;
+	struct vvp_seq_private *priv = f->private;
 
-        sbi = f->private;
+	if (priv->vsp_sbi->ll_site->ls_obj_hash->hs_cur_bits >
+	    64 - PGC_OBJ_SHIFT) {
+		pos = ERR_PTR(-EFBIG);
+	} else {
+		*pos = vvp_pgcache_find(priv->vsp_env,
+					&priv->vsp_sbi->ll_cl->cd_lu_dev,
+					*pos);
+		if (*pos == ~0ULL)
+			pos = NULL;
+	}
 
-        env = cl_env_get(&refcheck);
-        if (!IS_ERR(env)) {
-                sbi = f->private;
-                if (sbi->ll_site->ls_obj_hash->hs_cur_bits > 64 - PGC_OBJ_SHIFT)
-                        pos = ERR_PTR(-EFBIG);
-                else {
-                        *pos = vvp_pgcache_find(env, &sbi->ll_cl->cd_lu_dev,
-                                                *pos);
-                        if (*pos == ~0ULL)
-                                pos = NULL;
-                }
-                cl_env_put(env, &refcheck);
-        }
-        return pos;
+	return pos;
 }
 
 static void *vvp_pgcache_next(struct seq_file *f, void *v, loff_t *pos)
 {
-        struct ll_sb_info *sbi;
-        struct lu_env     *env;
-	__u16              refcheck;
+	struct vvp_seq_private *priv = f->private;
 
-        env = cl_env_get(&refcheck);
-        if (!IS_ERR(env)) {
-                sbi = f->private;
-                *pos = vvp_pgcache_find(env, &sbi->ll_cl->cd_lu_dev, *pos + 1);
-                if (*pos == ~0ULL)
-                        pos = NULL;
-                cl_env_put(env, &refcheck);
-        }
-        return pos;
+	*pos = vvp_pgcache_find(priv->vsp_env,
+				&priv->vsp_sbi->ll_cl->cd_lu_dev,
+				*pos + 1);
+	if (*pos == ~0ULL)
+		pos = NULL;
+
+	return pos;
 }
 
 static void vvp_pgcache_stop(struct seq_file *f, void *v)
@@ -628,22 +618,36 @@ static struct seq_operations vvp_pgcache_ops = {
 
 static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 {
-	struct ll_sb_info	*sbi = PDE_DATA(inode);
-	struct seq_file		*seq;
-	int			result;
+	struct vvp_seq_private *priv;
 
-	result = seq_open(filp, &vvp_pgcache_ops);
-	if (result == 0) {
-		seq = filp->private_data;
-		seq->private = sbi;
+	priv = __seq_open_private(filp, &vvp_pgcache_ops, sizeof(*priv));
+	if (!priv)
+		return -ENOMEM;
+
+	priv->vsp_sbi = PDE_DATA(inode);
+	priv->vsp_env = cl_env_get(&priv->vsp_refcheck);
+	if (IS_ERR(priv->vsp_env)) {
+		int err = PTR_ERR(priv->vsp_env);
+
+		seq_release_private(inode, filp);
+		return err;
 	}
-	return result;
+	return 0;
+}
+
+static int vvp_dump_pgcache_seq_release(struct inode *inode, struct file *file)
+{
+	struct seq_file *seq = file->private_data;
+	struct vvp_seq_private *priv = seq->private;
+
+	cl_env_put(priv->vsp_env, &priv->vsp_refcheck);
+	return seq_release_private(inode, file);
 }
 
 const struct file_operations vvp_dump_pgcache_file_ops = {
-        .owner   = THIS_MODULE,
-        .open    = vvp_dump_pgcache_seq_open,
-        .read    = seq_read,
-        .llseek	 = seq_lseek,
-        .release = seq_release,
+	.owner	 = THIS_MODULE,
+	.open	 = vvp_dump_pgcache_seq_open,
+	.read	 = seq_read,
+	.llseek	 = seq_lseek,
+	.release = vvp_dump_pgcache_seq_release,
 };
