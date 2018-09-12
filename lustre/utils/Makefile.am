@@ -138,7 +138,8 @@ if UTILS
 
 PLUGIN_LIB =
 if PLUGINS
-MNTMODLDFLAGS := -rdynamic -ldl
+MNTMODLDFLAGS := -rdynamic
+MNTMODLIBS := -ldl
 MNTMODCFLAGS := -DPLUGIN_DIR=\"${pkglibdir}\"
 endif # PLUGINS
 
@@ -153,9 +154,11 @@ lib_LTLIBRARIES += libmount_utils_zfs.la
 libmount_utils_zfs.la : libmount_utils_zfs.a
 	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic -pthread \
 			 $(ZFS_LIBZFS_LDFLAGS) -o mount_osd_zfs.so \
-			 `$(AR) -t libmount_utils_zfs.a`
+			 `$(AR) -t libmount_utils_zfs.a` \
+			 $(MNTMODLIBS) $(ZFS_LIBZFS_LIBS)
 else
 MNTMODLDFLAGS := $(ZFS_LIBZFS_LDFLAGS)
+MNTMODLIBS := $(ZFS_LIBZFS_LIBS)
 PLUGIN_LIB += libmount_utils_zfs.a
 endif # PLUGINS
 endif # ZFS_ENABLED
@@ -170,8 +173,9 @@ if PLUGINS
 lib_LTLIBRARIES += libmount_utils_ldiskfs.la
 libmount_utils_ldiskfs.la : libmount_utils_ldiskfs.a
 	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -export-dynamic \
-			 $(SELINUX) -o mount_osd_ldiskfs.so \
-			 `$(AR) -t libmount_utils_ldiskfs.a`
+			 -o mount_osd_ldiskfs.so \
+			 `$(AR) -t libmount_utils_ldiskfs.a` \
+			 $(MNTMODLIBS) $(SELINUX)
 else
 PLUGIN_LIB += libmount_utils_ldiskfs.a
 endif # PLUGINS
@@ -181,7 +185,7 @@ mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mount_lustre_CPPFLAGS := ${MNTMODCFLAGS}
 mount_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
 mount_lustre_LDADD    := $(SELINUX) $(LDLIBMOUNT) $(PLUGIN_LIB) $(GSSLIB) \
-			 $(top_builddir)/libcfs/libcfs/libcfs.la
+			 $(top_builddir)/libcfs/libcfs/libcfs.la $(MNTMODLIBS)
 
 mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mkfs_lustre_CPPFLAGS := -UTUNEFS ${MNTMODCFLAGS}
