@@ -155,7 +155,36 @@ Index: linux-4.15.0/fs/ext4/ialloc.c
  		return -EFSBADCRC;
  	}
  
-@@ -194,8 +184,6 @@ ext4_read_inode_bitmap(struct super_bloc
+@@ -121,7 +111,6 @@ static int ext4_validate_inode_bitmap(st
+ {
+ 	ext4_fsblk_t	blk;
+ 	struct ext4_group_info *grp = ext4_get_group_info(sb, block_group);
+-	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 
+ 	if (buffer_verified(bh))
+ 		return 0;
+@@ -133,16 +122,10 @@ static int ext4_validate_inode_bitmap(st
+ 	if (!ext4_inode_bitmap_csum_verify(sb, block_group, desc, bh,
+ 					   EXT4_INODES_PER_GROUP(sb) / 8)) {
+ 		ext4_unlock_group(sb, block_group);
+-		ext4_error(sb, "Corrupt inode bitmap - block_group = %u, "
+-			   "inode_bitmap = %llu", block_group, blk);
+-		grp = ext4_get_group_info(sb, block_group);
+-		if (!EXT4_MB_GRP_IBITMAP_CORRUPT(grp)) {
+-			int count;
+-			count = ext4_free_inodes_count(sb, desc);
+-			percpu_counter_sub(&sbi->s_freeinodes_counter,
+-					   count);
+-		}
+-		set_bit(EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT, &grp->bb_state);
++		ext4_corrupted_block_group(sb, block_group,
++				EXT4_GROUP_INFO_IBITMAP_CORRUPT,
++				"Corrupt inode bitmap - block_group = %u, inode_bitmap = %llu",
++				block_group, blk);
+ 		return -EFSBADCRC;
+ 	}
+ 	set_buffer_verified(bh);
+@@ -194,8 +177,6 @@ ext4_read_inode_bitmap(struct super_bloc
  		ext4_unlock_group(sb, block_group);
  		unlock_buffer(bh);
  		if (err) {
@@ -164,7 +193,7 @@ Index: linux-4.15.0/fs/ext4/ialloc.c
  			goto out;
  		}
  		return bh;
-@@ -371,14 +359,9 @@ out:
+@@ -371,14 +352,9 @@ out:
  		if (!fatal)
  			fatal = err;
  	} else {
