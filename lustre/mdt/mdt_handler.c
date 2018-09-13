@@ -436,8 +436,13 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	if (!osfs)
 		GOTO(out, rc = -EPROTO);
 
-	if (mdt_is_sum_statfs_client(req->rq_export))
+	if (mdt_is_sum_statfs_client(req->rq_export) &&
+		lustre_packed_msg_size(req->rq_reqmsg) ==
+		req_capsule_fmt_size(req->rq_reqmsg->lm_magic,
+				     &RQF_MDS_STATFS_NEW, RCL_CLIENT)) {
+		req_capsule_extend(info->mti_pill, &RQF_MDS_STATFS_NEW);
 		reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
+	}
 
 	if (reqbody && reqbody->mbo_valid & OBD_MD_FLAGSTATFS)
 		msf = &mdt->mdt_sum_osfs;

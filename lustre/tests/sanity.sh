@@ -10680,7 +10680,6 @@ check_stats() {
 		 ;;
 	*) error "Wrong facet '$facet'" ;;
 	esac
-	echo $res
 	[ "$res" ] || error "The counter for $op on $facet was not incremented"
 	# if the argument $3 is zero, it means any stat increment is ok.
 	if [[ $want -gt 0 ]]; then
@@ -10739,6 +10738,8 @@ test_133a() {
 run_test 133a "Verifying MDT stats ========================================"
 
 test_133b() {
+	local res
+
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -10771,8 +10772,24 @@ test_133b() {
 	# Sleep to avoid a cached response.
 	#define OBD_STATFS_CACHE_SECONDS 1
 	sleep 2
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 	$LFS df || error "lfs failed"
 	check_stats $SINGLEMDS "statfs" 1
+
+	# check aggregated statfs (LU-10018)
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.54) ] &&
+		return 0
+	[ $(lustre_version_code client) -lt $(version_code 2.11.54) ] &&
+		return 0
+	sleep 2
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
+	df $DIR
+	check_stats $SINGLEMDS "statfs" 1
+	res=$(do_facet ost1 \
+	      $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "statfs")
+	[ "$res" ] && error "OST got STATFS"
 
 	return 0
 }

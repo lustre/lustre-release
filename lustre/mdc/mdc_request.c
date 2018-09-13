@@ -1486,26 +1486,31 @@ static int mdc_statfs(const struct lu_env *env,
                       struct obd_export *exp, struct obd_statfs *osfs,
 		      time64_t max_age, __u32 flags)
 {
-        struct obd_device     *obd = class_exp2obd(exp);
-        struct ptlrpc_request *req;
-        struct obd_statfs     *msfs;
-        struct obd_import     *imp = NULL;
-	int		       rc;
-        ENTRY;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct req_format *fmt;
+	struct ptlrpc_request *req;
+	struct obd_statfs *msfs;
+	struct obd_import *imp = NULL;
+	int rc;
+	ENTRY;
 
         /*
          * Since the request might also come from lprocfs, so we need
          * sync this with client_disconnect_export Bug15684
          */
 	down_read(&obd->u.cli.cl_sem);
-        if (obd->u.cli.cl_import)
-                imp = class_import_get(obd->u.cli.cl_import);
+	if (obd->u.cli.cl_import)
+		imp = class_import_get(obd->u.cli.cl_import);
 	up_read(&obd->u.cli.cl_sem);
-        if (!imp)
-                RETURN(-ENODEV);
+	if (!imp)
+		RETURN(-ENODEV);
 
-	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_STATFS,
-					LUSTRE_MDS_VERSION, MDS_STATFS);
+	fmt = &RQF_MDS_STATFS;
+	if ((exp_connect_flags2(exp) & OBD_CONNECT2_SUM_STATFS) &&
+	    (flags & OBD_STATFS_SUM))
+		fmt = &RQF_MDS_STATFS_NEW;
+	req = ptlrpc_request_alloc_pack(imp, fmt, LUSTRE_MDS_VERSION,
+					MDS_STATFS);
 	if (req == NULL)
 		GOTO(output, rc = -ENOMEM);
 

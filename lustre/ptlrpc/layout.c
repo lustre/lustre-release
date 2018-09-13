@@ -719,23 +719,24 @@ static const struct req_msg_field *obd_lfsck_reply[] = {
 };
 
 static struct req_format *req_formats[] = {
-        &RQF_OBD_PING,
-        &RQF_OBD_SET_INFO,
+	&RQF_OBD_PING,
+	&RQF_OBD_SET_INFO,
 	&RQF_OBD_IDX_READ,
-        &RQF_SEC_CTX,
-        &RQF_MGS_TARGET_REG,
+	&RQF_SEC_CTX,
+	&RQF_MGS_TARGET_REG,
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-        &RQF_MGS_SET_INFO,
+	&RQF_MGS_SET_INFO,
 #endif
-        &RQF_MGS_CONFIG_READ,
-        &RQF_SEQ_QUERY,
-        &RQF_FLD_QUERY,
+	&RQF_MGS_CONFIG_READ,
+	&RQF_SEQ_QUERY,
+	&RQF_FLD_QUERY,
 	&RQF_FLD_READ,
-        &RQF_MDS_CONNECT,
-        &RQF_MDS_DISCONNECT,
-        &RQF_MDS_GET_INFO,
+	&RQF_MDS_CONNECT,
+	&RQF_MDS_DISCONNECT,
+	&RQF_MDS_GET_INFO,
 	&RQF_MDS_GET_ROOT,
 	&RQF_MDS_STATFS,
+	&RQF_MDS_STATFS_NEW,
 	&RQF_MDS_GETATTR,
 	&RQF_MDS_GETATTR_NAME,
 	&RQF_MDS_GETXATTR,
@@ -766,21 +767,21 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_REQUEST,
 	&RQF_MDS_SWAP_LAYOUTS,
 	&RQF_OUT_UPDATE,
-        &RQF_OST_CONNECT,
-        &RQF_OST_DISCONNECT,
-        &RQF_OST_QUOTACTL,
-        &RQF_OST_GETATTR,
-        &RQF_OST_SETATTR,
-        &RQF_OST_CREATE,
-        &RQF_OST_PUNCH,
-        &RQF_OST_SYNC,
-        &RQF_OST_DESTROY,
-        &RQF_OST_BRW_READ,
-        &RQF_OST_BRW_WRITE,
-        &RQF_OST_STATFS,
-        &RQF_OST_SET_GRANT_INFO,
+	&RQF_OST_CONNECT,
+	&RQF_OST_DISCONNECT,
+	&RQF_OST_QUOTACTL,
+	&RQF_OST_GETATTR,
+	&RQF_OST_SETATTR,
+	&RQF_OST_CREATE,
+	&RQF_OST_PUNCH,
+	&RQF_OST_SYNC,
+	&RQF_OST_DESTROY,
+	&RQF_OST_BRW_READ,
+	&RQF_OST_BRW_WRITE,
+	&RQF_OST_STATFS,
+	&RQF_OST_SET_GRANT_INFO,
 	&RQF_OST_GET_INFO,
-        &RQF_OST_GET_INFO_LAST_ID,
+	&RQF_OST_GET_INFO_LAST_ID,
 	&RQF_OST_GET_INFO_LAST_FID,
 	&RQF_OST_SET_INFO_LAST_FID,
 	&RQF_OST_GET_INFO_FIEMAP,
@@ -803,10 +804,10 @@ static struct req_format *req_formats[] = {
 	&RQF_LDLM_INTENT_GETXATTR,
 	&RQF_LDLM_INTENT_QUOTA,
 	&RQF_QUOTA_DQACQ,
-        &RQF_LLOG_ORIGIN_HANDLE_CREATE,
-        &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK,
-        &RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK,
-        &RQF_LLOG_ORIGIN_HANDLE_READ_HEADER,
+	&RQF_LLOG_ORIGIN_HANDLE_CREATE,
+	&RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK,
+	&RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK,
+	&RQF_LLOG_ORIGIN_HANDLE_READ_HEADER,
 	&RQF_CONNECT,
 	&RQF_LFSCK_NOTIFY,
 	&RQF_LFSCK_QUERY,
@@ -1361,8 +1362,12 @@ struct req_format RQF_MDS_GET_ROOT =
 EXPORT_SYMBOL(RQF_MDS_GET_ROOT);
 
 struct req_format RQF_MDS_STATFS =
-	DEFINE_REQ_FMT0("MDS_STATFS", mdt_body_only, obd_statfs_server);
+	DEFINE_REQ_FMT0("MDS_STATFS", empty, obd_statfs_server);
 EXPORT_SYMBOL(RQF_MDS_STATFS);
+
+struct req_format RQF_MDS_STATFS_NEW =
+	DEFINE_REQ_FMT0("MDS_STATFS_NEW", mdt_body_only, obd_statfs_server);
+EXPORT_SYMBOL(RQF_MDS_STATFS_NEW);
 
 struct req_format RQF_MDS_SYNC =
         DEFINE_REQ_FMT0("MDS_SYNC", mdt_body_capa, mdt_body_only);
@@ -2320,12 +2325,13 @@ __u32 req_capsule_fmt_size(__u32 magic, const struct req_format *fmt,
 	if (size == 0)
 		return size;
 
-        for (; i < fmt->rf_fields[loc].nr; ++i)
-                if (fmt->rf_fields[loc].d[i]->rmf_size != -1)
-                        size += cfs_size_round(fmt->rf_fields[loc].d[i]->
-                                               rmf_size);
-        return size;
+	for (; i < fmt->rf_fields[loc].nr; ++i)
+		if (fmt->rf_fields[loc].d[i]->rmf_size != -1)
+			size += cfs_size_round(fmt->rf_fields[loc].d[i]->
+					       rmf_size);
+	return size;
 }
+EXPORT_SYMBOL(req_capsule_fmt_size);
 
 /**
  * Changes the format of an RPC.
