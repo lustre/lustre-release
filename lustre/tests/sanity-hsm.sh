@@ -2238,6 +2238,30 @@ test_24f() {
 }
 run_test 24f "root can archive, release, and restore tar files"
 
+test_24g() {
+	local file=$DIR/$tdir/$tfile
+	local fid
+
+	echo "RUNAS = '$RUNAS'"
+
+	copytool setup
+
+	mkdir -p $DIR/$tdir
+	chmod ugo+rwx $DIR/$tdir
+
+	echo "Please listen carefully as our options have changed." | tee $file
+	fid=$(path2fid $file)
+	chmod ugo+rw $file
+
+	$LFS hsm_archive $file
+	wait_request_state $fid ARCHIVE SUCCEED
+	check_hsm_flags $file 0x00000009 # exists archived
+
+	echo "To be electrocuted by your telephone, press #." | $RUNAS tee $file
+	check_hsm_flags $file 0x0000000b # exists dirty archived
+}
+run_test 24g "write by non-owner still sets dirty" # LU-11369
+
 test_25a() {
 	# test needs a running copytool
 	copytool setup

@@ -638,6 +638,8 @@ out_unlock:
 int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma)
 {
+	struct lu_ucred *uc = mdt_ucred(info);
+	cfs_cap_t cap_saved;
 	int rc;
 	ENTRY;
 
@@ -655,7 +657,12 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 	    && !(ma->ma_hsm.mh_flags & (HS_DIRTY|HS_RELEASED))) {
 		ma->ma_hsm.mh_flags |= HS_DIRTY;
 
+		/* Bump cap so that closes from non-owner writers can
+		 * set the HSM state to dirty. */
+		cap_saved = uc->uc_cap;
+		uc->uc_cap |= MD_CAP_TO_MASK(CFS_CAP_FOWNER);
 		rc = mdt_hsm_attr_set(info, mo, &ma->ma_hsm);
+		uc->uc_cap = cap_saved;
 		if (rc)
 			CERROR("file attribute change error for "DFID": %d\n",
 				PFID(mdt_object_fid(mo)), rc);
