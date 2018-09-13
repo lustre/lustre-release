@@ -54,6 +54,20 @@ Description: Userspace utilities for the Lustre filesystem (server)
  If you only need to access the LFS cluster, install lustre-client-utils
  instead.
 
+Package: lustre-resource-agents
+Section: ha
+Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Priority: optional
+Depends: lustre-server-utils (= ${binary:Version}), resource-agents
+Description: HA Resuable Cluster Resource Scripts for Lustre
+ Lustre is a scalable, secure, robust, highly-available cluster file system.
+ This release is maintained by Whamcloud and available from
+ https://wiki.whamcloud.com/
+ .
+ This package provides a set of scripts to operate Lustre
+ resources in a High Availablity environment for both Pacemaker
+ and rgmanager.
+
 Package: lustre-iokit
 Section: utils
 Architecture: i386 powerpc ppc64el amd64 ia64 arm64

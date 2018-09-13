@@ -81,10 +81,14 @@ SOURCE_PKG=lustre-source
 ifneq (,$(findstring server,$(DEB_BUILD_PROFILES)))
 	UTILS_PKG=lustre-server-utils
 	MODS_PKG=lustre-server-modules
+	RESOURCE_PKG=lustre-resource-agents
+	RESOURCE_TARGET=binary-$(RESOURCE_PKG)
 	DKMS_PKG=
 else
 	UTILS_PKG=lustre-client-utils
 	MODS_PKG=lustre-client-modules
+	RESOURCE_TARGET=
+	RESOURCE_PKG=
 	DKMS_PKG=lustre-client-modules-dkms
 endif
 
@@ -202,7 +206,8 @@ build-stamp: patch-stamp configure-stamp
 # binary-arch: binary-$(UTILS_PKG) binary-$(TESTS_PKG) binary-$(DEV_PKG) \
 # binary-$(MODS_PKG) binary-kern-mods
 binary-arch: binary-$(UTILS_PKG) binary-$(DEV_PKG) \
-	     binary-$(IOKIT_PKG) binary-$(TESTS_PKG)
+	     binary-$(IOKIT_PKG) binary-$(TESTS_PKG) \
+	     $(RESOURCE_TARGET)
 
 binary-indep: binary-$(SOURCE_PKG) $(DKMS_TARGET)
 
@@ -231,6 +236,24 @@ binary-$(UTILS_PKG): build-stamp
 	dh_gencontrol -p $(UTILS_PKG)
 	dh_md5sums -p $(UTILS_PKG)
 	dh_builddeb -p $(UTILS_PKG)
+
+binary-$(RESOURCE_PKG): build-stamp
+	dh_testdir
+	dh_testroot
+	dh_installdirs -p $(RESOURCE_PKG)
+	dh_installdocs -p  $(RESOURCE_PKG)
+	dh_installman -p $(RESOURCE_PKG)
+	dh_install -p $(RESOURCE_PKG)
+	dh_makeshlibs -p $(RESOURCE_PKG)
+	dh_installexamples -p $(RESOURCE_PKG)
+	dh_installchangelogs -p $(RESOURCE_PKG) lustre/ChangeLog
+	dh_compress -p $(RESOURCE_PKG)
+	dh_strip -p $(RESOURCE_PKG)
+	dh_installdeb -p $(RESOURCE_PKG)
+	dh_fixperms -p $(RESOURCE_PKG)
+	dh_gencontrol -p $(RESOURCE_PKG)
+	dh_md5sums -p $(RESOURCE_PKG)
+	dh_builddeb -p $(RESOURCE_PKG)
 
 binary-$(IOKIT_PKG): build-stamp
 	dh_testdir

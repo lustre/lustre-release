@@ -1,3 +1,9 @@
+lustre (2.11.55-dirty-1) unstable; urgency=low
+
+  * Automated changelog entry update
+
+ -- Brian J. Murrell <brian@interlinx.bc.ca>  Thu, 13 Sep 2018 12:42:24 -0600
+
 lustre (2.11.52-108-g258f0cf-dirty-1) unstable; urgency=low
 
   * Automated changelog entry update

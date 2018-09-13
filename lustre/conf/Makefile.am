@@ -34,6 +34,7 @@
 
 EXTRA_DIST = lustre.dtd lustre2ldif.xsl top.ldif \
              99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss \
+	     Lustre healthLNET healthLUSTRE \
              lnet_routes.conf lnet.conf lgssc.conf
 
 sysconf_DATA = lnet.conf
@@ -47,6 +48,8 @@ udevrulesdir = $(sysconfdir)/udev/rules.d
 udevrules_DATA = 99-lustre.rules
 
 if SERVER
+pacemakerdir = $(prefix)/lib/ocf/resource.d/lustre
+pacemaker_DATA = healthLNET healthLUSTRE Lustre
 if ZFS_ENABLED
 sysconf_DATA += ldev.conf
 endif

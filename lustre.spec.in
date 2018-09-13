@@ -393,11 +393,6 @@ echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 %endif
 %endif
 
-%if %{with servers}
-mkdir -p $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/lustre/
-install -m 0755 contrib/scripts/pacemaker/* $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/lustre/
-%endif
-
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
 

@@ -294,10 +294,13 @@ debs: undef.h
 	m-a build $${KSRC:+-k $$KSRC} $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
 	popd && \
 	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog) && \
+	if test "x@ENABLE_SERVER@" = "xyes"; then \
+		DEB_SERVER_PKG="../lustre-resource-agents_$${VER}_*.deb"; \
+	fi; \
 	mkdir -p debs && \
 	mv ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb \
 	   ../lustre-iokit_$${VER}_*.deb ../lustre-tests_$${VER}_*.deb \
-	   ../lustre-*-utils_$${VER}_*.deb \
+	   ../lustre-*-utils_$${VER}_*.deb $${DEB_SERVER_PKG} \
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
 	   debs/
