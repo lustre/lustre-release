@@ -169,6 +169,9 @@ int llog_destroy(const struct lu_env *env, struct llog_handle *handle)
 
 	dt = lu2dt_dev(handle->lgh_obj->do_lu.lo_dev);
 
+	if (unlikely(unlikely(dt->dd_rdonly)))
+		RETURN(-EROFS);
+
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
@@ -220,6 +223,9 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	}
 
 	dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
+
+	if (unlikely(unlikely(dt->dd_rdonly)))
+		RETURN(0);
 
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))
@@ -1117,6 +1123,9 @@ int llog_open_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 
 	d = lu2dt_dev((*res)->lgh_obj->do_lu.lo_dev);
 
+	if (unlikely(unlikely(d->dd_rdonly)))
+		RETURN(-EROFS);
+
 	th = dt_trans_create(env, d);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
@@ -1194,6 +1203,9 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 	LASSERT(loghandle->lgh_obj != NULL);
 
 	dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
+
+	if (unlikely(unlikely(dt->dd_rdonly)))
+		RETURN(-EROFS);
 
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))
