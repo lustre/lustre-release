@@ -1294,7 +1294,6 @@ routing_off:
 	}
 }
 
-#if 0
 static int
 lnet_compare_peers(struct lnet_peer_ni *p1, struct lnet_peer_ni *p2)
 {
@@ -1312,53 +1311,197 @@ lnet_compare_peers(struct lnet_peer_ni *p1, struct lnet_peer_ni *p2)
 
 	return 0;
 }
-#endif
 
-static int
-lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2)
+static struct lnet_peer_ni *
+lnet_select_peer_ni(struct lnet_ni *best_ni, lnet_nid_t dst_nid,
+		    struct lnet_peer *peer,
+		    struct lnet_peer_net *peer_net)
 {
-	/* TODO re-implement gateway comparison
-	struct lnet_peer_ni *p1 = r1->lr_gateway;
-	struct lnet_peer_ni *p2 = r2->lr_gateway;
-	*/
-	int r1_hops = (r1->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r1->lr_hops;
-	int r2_hops = (r2->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r2->lr_hops;
-	/*int rc;*/
+	/*
+	 * Look at the peer NIs for the destination peer that connect
+	 * to the chosen net. If a peer_ni is preferred when using the
+	 * best_ni to communicate, we use that one. If there is no
+	 * preferred peer_ni, or there are multiple preferred peer_ni,
+	 * the available transmit credits are used. If the transmit
+	 * credits are equal, we round-robin over the peer_ni.
+	 */
+	struct lnet_peer_ni *lpni = NULL;
+	struct lnet_peer_ni *best_lpni = NULL;
+	int best_lpni_credits = INT_MIN;
+	bool preferred = false;
+	bool ni_is_pref;
+	int best_lpni_healthv = 0;
+	int lpni_healthv;
 
-	if (r1->lr_priority < r2->lr_priority)
-		return 1;
+	while ((lpni = lnet_get_next_peer_ni_locked(peer, peer_net, lpni))) {
+		/*
+		 * if the best_ni we've chosen aleady has this lpni
+		 * preferred, then let's use it
+		 */
+		if (best_ni) {
+			ni_is_pref = lnet_peer_is_pref_nid_locked(lpni,
+								best_ni->ni_nid);
+			CDEBUG(D_NET, "%s ni_is_pref = %d\n",
+			       libcfs_nid2str(best_ni->ni_nid), ni_is_pref);
+		} else {
+			ni_is_pref = false;
+		}
 
-	if (r1->lr_priority > r2->lr_priority)
-		return -1;
+		lpni_healthv = atomic_read(&lpni->lpni_healthv);
 
-	if (r1_hops < r2_hops)
-		return 1;
+		if (best_lpni)
+			CDEBUG(D_NET, "%s c:[%d, %d], s:[%d, %d]\n",
+				libcfs_nid2str(lpni->lpni_nid),
+				lpni->lpni_txcredits, best_lpni_credits,
+				lpni->lpni_seq, best_lpni->lpni_seq);
 
-	if (r1_hops > r2_hops)
-		return -1;
+		/* pick the healthiest peer ni */
+		if (lpni_healthv < best_lpni_healthv) {
+			continue;
+		} else if (lpni_healthv > best_lpni_healthv) {
+			best_lpni_healthv = lpni_healthv;
+		/* if this is a preferred peer use it */
+		} else if (!preferred && ni_is_pref) {
+			preferred = true;
+		} else if (preferred && !ni_is_pref) {
+			/*
+			 * this is not the preferred peer so let's ignore
+			 * it.
+			 */
+			continue;
+		} else if (lpni->lpni_txcredits < best_lpni_credits) {
+			/*
+			 * We already have a peer that has more credits
+			 * available than this one. No need to consider
+			 * this peer further.
+			 */
+			continue;
+		} else if (lpni->lpni_txcredits == best_lpni_credits) {
+			/*
+			 * The best peer found so far and the current peer
+			 * have the same number of available credits let's
+			 * make sure to select between them using Round
+			 * Robin
+			 */
+			if (best_lpni) {
+				if (best_lpni->lpni_seq <= lpni->lpni_seq)
+					continue;
+			}
+		}
+
+		best_lpni = lpni;
+		best_lpni_credits = lpni->lpni_txcredits;
+	}
+
+	/* if we still can't find a peer ni then we can't reach it */
+	if (!best_lpni) {
+		__u32 net_id = (peer_net) ? peer_net->lpn_net_id :
+			LNET_NIDNET(dst_nid);
+		CDEBUG(D_NET, "no peer_ni found on peer net %s\n",
+				libcfs_net2str(net_id));
+		return NULL;
+	}
+
+	CDEBUG(D_NET, "sd_best_lpni = %s\n",
+	       libcfs_nid2str(best_lpni->lpni_nid));
+
+	return best_lpni;
+}
+
+/*
+ * Prerequisite: the best_ni should already be set in the sd
+ */
+static inline struct lnet_peer_ni *
+lnet_find_best_lpni_on_net(struct lnet_send_data *sd, struct lnet_peer *peer,
+			   __u32 net_id)
+{
+	struct lnet_peer_net *peer_net;
 
 	/*
-	rc = lnet_compare_peers(p1, p2);
-	if (rc)
-		return rc;
-	*/
+	 * The gateway is Multi-Rail capable so now we must select the
+	 * proper peer_ni
+	 */
+	peer_net = lnet_peer_get_net_locked(peer, net_id);
 
-	if (r1->lr_seq - r2->lr_seq <= 0)
+	if (!peer_net) {
+		CERROR("gateway peer %s has no NI on net %s\n",
+		       libcfs_nid2str(peer->lp_primary_nid),
+		       libcfs_net2str(net_id));
+		return NULL;
+	}
+
+	return lnet_select_peer_ni(sd->sd_best_ni, sd->sd_dst_nid,
+				   peer, peer_net);
+}
+
+static int
+lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2,
+		    struct lnet_peer_ni **best_lpni)
+{
+	int r1_hops = (r1->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r1->lr_hops;
+	int r2_hops = (r2->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r2->lr_hops;
+	struct lnet_peer *lp1 = r1->lr_gateway;
+	struct lnet_peer *lp2 = r2->lr_gateway;
+	struct lnet_peer_ni *lpni1;
+	struct lnet_peer_ni *lpni2;
+	struct lnet_send_data sd;
+	int rc;
+
+	sd.sd_best_ni = NULL;
+	sd.sd_dst_nid = LNET_NID_ANY;
+	lpni1 = lnet_find_best_lpni_on_net(&sd, lp1, r1->lr_lnet);
+	lpni2 = lnet_find_best_lpni_on_net(&sd, lp2, r2->lr_lnet);
+	LASSERT(lpni1 && lpni2);
+
+	if (r1->lr_priority < r2->lr_priority) {
+		*best_lpni = lpni1;
 		return 1;
+	}
 
+	if (r1->lr_priority > r2->lr_priority) {
+		*best_lpni = lpni2;
+		return -1;
+	}
+
+	if (r1_hops < r2_hops) {
+		*best_lpni = lpni1;
+		return 1;
+	}
+
+	if (r1_hops > r2_hops) {
+		*best_lpni = lpni2;
+		return -1;
+	}
+
+	rc = lnet_compare_peers(lpni1, lpni2);
+	if (rc == 1) {
+		*best_lpni = lpni1;
+		return rc;
+	} else if (rc == -1) {
+		*best_lpni = lpni2;
+		return rc;
+	}
+
+	if (r1->lr_seq - r2->lr_seq <= 0) {
+		*best_lpni = lpni1;
+		return 1;
+	}
+
+	*best_lpni = lpni2;
 	return -1;
 }
 
-/* TODO: lnet_find_route_locked() needs to be reimplemented */
 static struct lnet_route *
 lnet_find_route_locked(struct lnet_net *net, __u32 remote_net,
-		       lnet_nid_t rtr_nid, struct lnet_route **prev_route)
+		       lnet_nid_t rtr_nid, struct lnet_route **prev_route,
+		       struct lnet_peer_ni **gwni)
 {
-	struct lnet_remotenet *rnet;
-	struct lnet_route *route;
+	struct lnet_peer_ni *best_gw_ni = NULL;
 	struct lnet_route *best_route;
 	struct lnet_route *last_route;
+	struct lnet_remotenet *rnet;
 	struct lnet_peer *lp_best;
+	struct lnet_route *route;
 	struct lnet_peer *lp;
 	int rc;
 
@@ -1380,14 +1523,13 @@ lnet_find_route_locked(struct lnet_net *net, __u32 remote_net,
 		if (lp_best == NULL) {
 			best_route = last_route = route;
 			lp_best = lp;
-			continue;
 		}
 
 		/* no protection on below fields, but it's harmless */
 		if (last_route->lr_seq - route->lr_seq < 0)
 			last_route = route;
 
-		rc = lnet_compare_routes(route, best_route);
+		rc = lnet_compare_routes(route, best_route, &best_gw_ni);
 		if (rc < 0)
 			continue;
 
@@ -1396,6 +1538,7 @@ lnet_find_route_locked(struct lnet_net *net, __u32 remote_net,
 	}
 
 	*prev_route = last_route;
+	*gwni = best_gw_ni;
 
 	return best_route;
 }
@@ -1693,125 +1836,6 @@ lnet_handle_send(struct lnet_send_data *sd)
 	return rc;
 }
 
-static struct lnet_peer_ni *
-lnet_select_peer_ni(struct lnet_send_data *sd, struct lnet_peer *peer,
-		    struct lnet_peer_net *peer_net)
-{
-	/*
-	 * Look at the peer NIs for the destination peer that connect
-	 * to the chosen net. If a peer_ni is preferred when using the
-	 * best_ni to communicate, we use that one. If there is no
-	 * preferred peer_ni, or there are multiple preferred peer_ni,
-	 * the available transmit credits are used. If the transmit
-	 * credits are equal, we round-robin over the peer_ni.
-	 */
-	struct lnet_peer_ni *lpni = NULL;
-	struct lnet_peer_ni *best_lpni = NULL;
-	struct lnet_ni *best_ni = sd->sd_best_ni;
-	lnet_nid_t dst_nid = sd->sd_dst_nid;
-	int best_lpni_credits = INT_MIN;
-	bool preferred = false;
-	bool ni_is_pref;
-	int best_lpni_healthv = 0;
-	int lpni_healthv;
-
-	while ((lpni = lnet_get_next_peer_ni_locked(peer, peer_net, lpni))) {
-		/*
-		 * if the best_ni we've chosen aleady has this lpni
-		 * preferred, then let's use it
-		 */
-		ni_is_pref = lnet_peer_is_pref_nid_locked(lpni,
-							  best_ni->ni_nid);
-
-		lpni_healthv = atomic_read(&lpni->lpni_healthv);
-
-		CDEBUG(D_NET, "%s ni_is_pref = %d\n",
-		       libcfs_nid2str(best_ni->ni_nid), ni_is_pref);
-
-		if (best_lpni)
-			CDEBUG(D_NET, "%s c:[%d, %d], s:[%d, %d]\n",
-				libcfs_nid2str(lpni->lpni_nid),
-				lpni->lpni_txcredits, best_lpni_credits,
-				lpni->lpni_seq, best_lpni->lpni_seq);
-
-		/* pick the healthiest peer ni */
-		if (lpni_healthv < best_lpni_healthv) {
-			continue;
-		} else if (lpni_healthv > best_lpni_healthv) {
-			best_lpni_healthv = lpni_healthv;
-		/* if this is a preferred peer use it */
-		} else if (!preferred && ni_is_pref) {
-			preferred = true;
-		} else if (preferred && !ni_is_pref) {
-			/*
-			 * this is not the preferred peer so let's ignore
-			 * it.
-			 */
-			continue;
-		} else if (lpni->lpni_txcredits < best_lpni_credits) {
-			/*
-			 * We already have a peer that has more credits
-			 * available than this one. No need to consider
-			 * this peer further.
-			 */
-			continue;
-		} else if (lpni->lpni_txcredits == best_lpni_credits) {
-			/*
-			 * The best peer found so far and the current peer
-			 * have the same number of available credits let's
-			 * make sure to select between them using Round
-			 * Robin
-			 */
-			if (best_lpni) {
-				if (best_lpni->lpni_seq <= lpni->lpni_seq)
-					continue;
-			}
-		}
-
-		best_lpni = lpni;
-		best_lpni_credits = lpni->lpni_txcredits;
-	}
-
-	/* if we still can't find a peer ni then we can't reach it */
-	if (!best_lpni) {
-		__u32 net_id = (peer_net) ? peer_net->lpn_net_id :
-			LNET_NIDNET(dst_nid);
-		CDEBUG(D_NET, "no peer_ni found on peer net %s\n",
-				libcfs_net2str(net_id));
-		return NULL;
-	}
-
-	CDEBUG(D_NET, "sd_best_lpni = %s\n",
-	       libcfs_nid2str(best_lpni->lpni_nid));
-
-	return best_lpni;
-}
-
-/*
- * Prerequisite: the best_ni should already be set in the sd
- */
-static inline struct lnet_peer_ni *
-lnet_find_best_lpni_on_net(struct lnet_send_data *sd, struct lnet_peer *peer,
-			   __u32 net_id)
-{
-	struct lnet_peer_net *peer_net;
-
-	/*
-	 * The gateway is Multi-Rail capable so now we must select the
-	 * proper peer_ni
-	 */
-	peer_net = lnet_peer_get_net_locked(peer, net_id);
-
-	if (!peer_net) {
-		CERROR("gateway peer %s has no NI on net %s\n",
-		       libcfs_nid2str(peer->lp_primary_nid),
-		       libcfs_net2str(net_id));
-		return NULL;
-	}
-
-	return lnet_select_peer_ni(sd, peer, peer_net);
-}
-
 static inline void
 lnet_set_non_mr_pref_nid(struct lnet_send_data *sd)
 {
@@ -1984,30 +2008,35 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	lnet_nid_t src_nid = sd->sd_src_nid;
 
 	best_route = lnet_find_route_locked(NULL, LNET_NIDNET(dst_nid),
-					    sd->sd_rtr_nid, &last_route);
+					    sd->sd_rtr_nid, &last_route,
+					    &lpni);
 	if (!best_route) {
 		CERROR("no route to %s from %s\n",
 		       libcfs_nid2str(dst_nid), libcfs_nid2str(src_nid));
 		return -EHOSTUNREACH;
 	}
 
+	if (!lpni) {
+		CERROR("Internal Error. Route expected to %s from %s\n",
+			libcfs_nid2str(dst_nid),
+			libcfs_nid2str(src_nid));
+		return -EFAULT;
+	}
+
 	gw = best_route->lr_gateway;
-	*gw_peer = gw;
+	LASSERT(gw == lpni->lpni_peer_net->lpn_peer);
 
 	/*
 	 * Discover this gateway if it hasn't already been discovered.
 	 * This means we might delay the message until discovery has
 	 * completed
 	 */
-#if 0
-	/* TODO: disable discovey for now */
 	if (lnet_msg_discovery(sd->sd_msg) &&
-	    !lnet_peer_is_uptodate(*gw_peer)) {
+	    !lnet_peer_is_uptodate(gw)) {
 		sd->sd_msg->msg_src_nid_param = sd->sd_src_nid;
-		return lnet_initiate_peer_discovery(gw, sd->sd_msg,
+		return lnet_initiate_peer_discovery(lpni, sd->sd_msg,
 						    sd->sd_rtr_nid, sd->sd_cpt);
 	}
-#endif
 
 	if (!sd->sd_best_ni)
 		sd->sd_best_ni = lnet_find_best_ni_on_spec_net(NULL, gw,
@@ -2024,43 +2053,8 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 		return -EFAULT;
 	}
 
-	/*
-	 * if gw is MR let's find its best peer_ni
-	 */
-	if (lnet_peer_is_multi_rail(gw)) {
-		lpni = lnet_find_best_lpni_on_net(sd, gw,
-				sd->sd_best_ni->ni_net->net_id);
-		/*
-		 * We've already verified that the gw has an NI on that
-		 * desired net, but we're not finding it. Something is
-		 * wrong.
-		 */
-		if (!lpni) {
-			CERROR("Internal Error. Route expected to %s from %s\n",
-				libcfs_nid2str(dst_nid),
-				libcfs_nid2str(src_nid));
-			return -EFAULT;
-		}
-	} else {
-		struct lnet_peer_net *lpn;
-		lpn = lnet_peer_get_net_locked(gw, best_route->lr_lnet);
-		if (!lpn) {
-			CERROR("Internal Error. Route expected to %s from %s\n",
-				libcfs_nid2str(dst_nid),
-				libcfs_nid2str(src_nid));
-			return -EFAULT;
-		}
-		lpni = list_entry(lpn->lpn_peer_nis.next, struct lnet_peer_ni,
-				  lpni_peer_nis);
-		if (!lpni) {
-			CERROR("Internal Error. Route expected to %s from %s\n",
-				libcfs_nid2str(dst_nid),
-				libcfs_nid2str(src_nid));
-			return -EFAULT;
-		}
-	}
-
 	*gw_lpni = lpni;
+	*gw_peer = gw;
 
 	/*
 	 * increment the route sequence number since now we're sure we're
