@@ -9,7 +9,7 @@ SRCDIR=$(dirname $0)
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-# Bug number for skipped test:
+# Bug number for skipped test:    LU-11381
 ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT 201"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
