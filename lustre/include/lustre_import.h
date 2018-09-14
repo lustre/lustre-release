@@ -306,12 +306,13 @@ struct obd_import {
 				  imp_connect_tried:1,
 				  /* connected but not FULL yet */
 				  imp_connected:1;
-	__u32                     imp_connect_op;
-	__u32			  imp_idle_timeout;
-	struct obd_connect_data   imp_connect_data;
-	__u64                     imp_connect_flags_orig;
-	__u64                     imp_connect_flags2_orig;
-	int                       imp_connect_error;
+	u32			  imp_connect_op;
+	u32			  imp_idle_timeout;
+	u32			  imp_idle_debug;
+	struct obd_connect_data	  imp_connect_data;
+	__u64			  imp_connect_flags_orig;
+	__u64			  imp_connect_flags2_orig;
+	int			  imp_connect_error;
 
 	enum lustre_msg_magic	imp_msg_magic;
 				/* adjusted based on server capability */

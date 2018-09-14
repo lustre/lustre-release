@@ -4804,6 +4804,7 @@ init_param_vars () {
 
 	osc_ensure_active $SINGLEMDS $TIMEOUT
 	osc_ensure_active client $TIMEOUT
+	$LCTL set_param osc.*.idle_timeout=debug
 
 	if [ -n "$(lctl get_param -n mdc.*.connect_flags|grep jobstats)" ]; then
 		local current_jobid_var=$($LCTL get_param -n jobid_var)
@@ -4811,7 +4812,7 @@ init_param_vars () {
 		if [ $JOBID_VAR = "existing" ]; then
 			echo "keeping jobstats as $current_jobid_var"
 		elif [ $current_jobid_var != $JOBID_VAR ]; then
-			echo "seting jobstats to $JOBID_VAR"
+			echo "setting jobstats to $JOBID_VAR"
 
 			set_conf_param_and_check client			\
 				"$LCTL get_param -n jobid_var"		\

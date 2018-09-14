@@ -869,8 +869,10 @@ ptlrpc_request_alloc_internal(struct obd_import *imp,
 
 	if (unlikely(imp->imp_state == LUSTRE_IMP_IDLE)) {
 		int rc;
-		CDEBUG(D_INFO, "%s: connect at new req\n",
-		       imp->imp_obd->obd_name);
+		CDEBUG_LIMIT(imp->imp_idle_debug,
+			     "%s: reconnect after %llds idle\n",
+			     imp->imp_obd->obd_name, ktime_get_real_seconds() -
+						     imp->imp_last_reply_time);
 		spin_lock(&imp->imp_lock);
 		if (imp->imp_state == LUSTRE_IMP_IDLE) {
 			imp->imp_generation++;

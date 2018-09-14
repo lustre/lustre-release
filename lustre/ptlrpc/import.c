@@ -1696,7 +1696,9 @@ int ptlrpc_disconnect_and_idle_import(struct obd_import *imp)
 	if (IS_ERR(req))
 		RETURN(PTR_ERR(req));
 
-	CDEBUG(D_INFO, "%s: disconnect\n", imp->imp_obd->obd_name);
+	CDEBUG_LIMIT(imp->imp_idle_debug, "%s: disconnect after %llus idle\n",
+		     imp->imp_obd->obd_name,
+		     ktime_get_real_seconds() - imp->imp_last_reply_time);
 	req->rq_interpret_reply = ptlrpc_disconnect_idle_interpret;
 	ptlrpcd_add_req(req);
 

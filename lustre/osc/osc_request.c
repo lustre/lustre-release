@@ -3252,6 +3252,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	list_add_tail(&cli->cl_shrink_list, &osc_shrink_list);
 	spin_unlock(&osc_shrink_lock);
 	cli->cl_import->imp_idle_timeout = osc_idle_timeout;
+	cli->cl_import->imp_idle_debug = D_HA;
 
 	RETURN(0);
 }

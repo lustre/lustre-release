@@ -996,11 +996,13 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 		   "       current_connection: %s\n"
 		   "       connection_attempts: %u\n"
 		   "       generation: %u\n"
-		   "       in-progress_invalidations: %u\n",
+		   "       in-progress_invalidations: %u\n"
+		   "       idle: %lld sec\n",
 		   nidstr,
 		   imp->imp_conn_cnt,
 		   imp->imp_generation,
-		   atomic_read(&imp->imp_inval_count));
+		   atomic_read(&imp->imp_inval_count),
+		   ktime_get_real_seconds() - imp->imp_last_reply_time);
 	spin_unlock(&imp->imp_lock);
 
 	if (obd->obd_svc_stats == NULL)
