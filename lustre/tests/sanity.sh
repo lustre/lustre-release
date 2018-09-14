@@ -13586,6 +13586,20 @@ test_184e() {
 }
 run_test 184e "Recreate layout after stripeless layout swaps"
 
+test_184f() {
+	# Create a file with name longer than sizeof(struct stat) ==
+	# 144 to see if we can get chars from the file name to appear
+	# in the returned striping. Note that 'f' == 0x66.
+	local file=$(for ((i = 0; i < 200; i++)); do echo -n f; done)
+
+	mkdir -p $DIR/$tdir
+	mcreate $DIR/$tdir/$file
+	if lfs find --stripe-count 0x6666 $DIR/$tdir | grep $file; then
+		error "IOC_MDC_GETFILEINFO returned garbage striping"
+	fi
+}
+run_test 184f "IOC_MDC_GETFILEINFO for files with long names but no striping"
+
 test_185() { # LU-2441
 	# LU-3553 - no volatile file support in old servers
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.60) ]] ||

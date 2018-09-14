@@ -1514,13 +1514,14 @@ out_rmdir:
                         GOTO(out_req, rc);
                 }
 
-                if (rc < 0) {
-                        if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO ||
-                                               cmd == LL_IOC_MDC_GETINFO))
-                                GOTO(skip_lmm, rc = 0);
-                        else
-                                GOTO(out_req, rc);
-                }
+		if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO ||
+				       cmd == LL_IOC_MDC_GETINFO)) {
+			lmmsize = 0;
+			rc = 0;
+		}
+
+		if (rc < 0)
+			GOTO(out_req, rc);
 
 		if (cmd == IOC_MDC_GETFILESTRIPE ||
 		    cmd == LL_IOC_LOV_GETSTRIPE ||
@@ -1531,12 +1532,18 @@ out_rmdir:
 			lmdp = (struct lov_user_mds_data __user *)arg;
                         lump = &lmdp->lmd_lmm;
                 }
-		if (copy_to_user(lump, lmm, lmmsize)) {
+
+		if (lmmsize == 0) {
+			/* If the file has no striping then zero out *lump so
+			 * that the caller isn't confused by garbage. */
+			if (clear_user(lump, sizeof(*lump)))
+				GOTO(out_req, rc = -EFAULT);
+		} else if (copy_to_user(lump, lmm, lmmsize)) {
 			if (copy_to_user(lump, lmm, sizeof(*lump)))
-                                GOTO(out_req, rc = -EFAULT);
-                        rc = -EOVERFLOW;
-                }
-        skip_lmm:
+				GOTO(out_req, rc = -EFAULT);
+			rc = -EOVERFLOW;
+		}
+
                 if (cmd == IOC_MDC_GETFILEINFO || cmd == LL_IOC_MDC_GETINFO) {
 			struct lov_user_mds_data __user *lmdp;
                         lstat_t st = { 0 };
