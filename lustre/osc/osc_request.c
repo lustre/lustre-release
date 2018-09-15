@@ -1317,9 +1317,9 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	for (i = 0; i < page_count; i++)
 		short_io_size += pga[i]->count;
 
-	/* Check if we can do a short io. */
-	if (!(short_io_size <= cli->cl_short_io_bytes && niocount == 1 &&
-	    imp_connect_shortio(cli->cl_import)))
+	/* Check if read/write is small enough to be a short io. */
+	if (short_io_size > cli->cl_max_short_io_bytes || niocount > 1 ||
+	    !imp_connect_shortio(cli->cl_import))
 		short_io_size = 0;
 
 	req_capsule_set_size(pill, &RMF_SHORT_IO, RCL_CLIENT,

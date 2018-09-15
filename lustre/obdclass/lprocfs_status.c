@@ -2381,7 +2381,7 @@ ssize_t short_io_bytes_show(struct kobject *kobj, struct attribute *attr,
 	int rc;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	rc = sprintf(buf, "%d\n", cli->cl_short_io_bytes);
+	rc = sprintf(buf, "%d\n", cli->cl_max_short_io_bytes);
 	spin_unlock(&cli->cl_loi_list_lock);
 	return rc;
 }
@@ -2405,7 +2405,7 @@ ssize_t short_io_bytes_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		GOTO(out, rc);
 
-	if (val < MIN_SHORT_IO_BYTES || val > OBD_MAX_SHORT_IO_BYTES)
+	if (val && (val < MIN_SHORT_IO_BYTES || val > OBD_MAX_SHORT_IO_BYTES))
 		GOTO(out, rc = -ERANGE);
 
 	rc = count;
@@ -2414,7 +2414,7 @@ ssize_t short_io_bytes_store(struct kobject *kobj, struct attribute *attr,
 	if (val > (cli->cl_max_pages_per_rpc << PAGE_SHIFT))
 		rc = -ERANGE;
 	else
-		cli->cl_short_io_bytes = val;
+		cli->cl_max_short_io_bytes = val;
 	spin_unlock(&cli->cl_loi_list_lock);
 
 out:
