@@ -1112,8 +1112,9 @@ static inline int obd_commitrw(const struct lu_env *env, int cmd,
 			       struct obd_export *exp, struct obdo *oa,
 			       int objcount, struct obd_ioobj *obj,
 			       struct niobuf_remote *rnb, int pages,
-			       struct niobuf_local *local, int rc)
+			       struct niobuf_local *local, const int orig_rc)
 {
+	int rc;
 	ENTRY;
 
 	rc = exp_check_ops(exp);
@@ -1127,7 +1128,7 @@ static inline int obd_commitrw(const struct lu_env *env, int cmd,
 	}
 
 	rc = OBP(exp->exp_obd, commitrw)(env, cmd, exp, oa, objcount, obj,
-					 rnb, pages, local, rc);
+					 rnb, pages, local, orig_rc);
 
 	RETURN(rc);
 }
