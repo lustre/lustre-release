@@ -435,12 +435,57 @@ static int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 			u64 obd_md_valid, const char *name, size_t buf_size,
 			struct ptlrpc_request **req)
 {
+	struct mdt_body *body;
+	int rc;
+
 	LASSERT(obd_md_valid == OBD_MD_FLXATTR ||
 		obd_md_valid == OBD_MD_FLXATTRLS);
 
-	return mdc_xattr_common(exp, &RQF_MDS_GETXATTR, fid, MDS_GETXATTR,
-				obd_md_valid, name, NULL, 0, buf_size, 0, -1,
-				req);
+	rc = mdc_xattr_common(exp, &RQF_MDS_GETXATTR, fid, MDS_GETXATTR,
+			      obd_md_valid, name, NULL, 0, buf_size, 0, -1,
+			      req);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	body = req_capsule_server_get(&(*req)->rq_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		GOTO(out, rc = -EPROTO);
+
+	/* only detect the xattr size */
+	if (buf_size == 0) {
+		/* LU-11109: Older MDTs do not distinguish
+		 * between nonexistent xattrs and zero length
+		 * values in this case. Newer MDTs will return
+		 * -ENODATA or set OBD_MD_FLXATTR. */
+		GOTO(out, rc = body->mbo_eadatasize);
+	}
+
+	if (body->mbo_eadatasize == 0) {
+		/* LU-11109: Newer MDTs set OBD_MD_FLXATTR on
+		 * success so that we can distinguish between
+		 * zero length value and nonexistent xattr.
+		 *
+		 * If OBD_MD_FLXATTR is not set then we keep
+		 * the old behavior and return -ENODATA for
+		 * getxattr() when mbo_eadatasize is 0. But
+		 * -ENODATA only makes sense for getxattr()
+		 * and not for listxattr(). */
+		if (body->mbo_valid & OBD_MD_FLXATTR)
+			GOTO(out, rc = 0);
+		else if (obd_md_valid == OBD_MD_FLXATTR)
+			GOTO(out, rc = -ENODATA);
+		else
+			GOTO(out, rc = 0);
+	}
+
+	GOTO(out, rc = body->mbo_eadatasize);
+out:
+	if (rc < 0) {
+		ptlrpc_req_finished(*req);
+		*req = NULL;
+	}
+
+	return rc;
 }
 
 #ifdef CONFIG_FS_POSIX_ACL

@@ -4914,7 +4914,6 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req;
-	struct mdt_body *body;
 	void *lvbdata;
 	void *lmm;
 	int lmmsize;
@@ -4934,17 +4933,16 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 	 * layout here. Please note that we can't use the LVB buffer in
 	 * completion AST because it doesn't have a large enough buffer */
 	rc = ll_get_default_mdsize(sbi, &lmmsize);
-	if (rc == 0)
-		rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode),
-				OBD_MD_FLXATTR, XATTR_NAME_LOV, lmmsize, &req);
 	if (rc < 0)
 		RETURN(rc);
 
-	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-	if (body == NULL)
-		GOTO(out, rc = -EPROTO);
+	rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), OBD_MD_FLXATTR,
+			 XATTR_NAME_LOV, lmmsize, &req);
+	if (rc < 0)
+		RETURN(rc);
 
-	lmmsize = body->mbo_eadatasize;
+	lmmsize = rc;
+	rc = 0;
 	if (lmmsize == 0) /* empty layout */
 		GOTO(out, rc = 0);
 
