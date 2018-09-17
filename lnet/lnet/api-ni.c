@@ -160,7 +160,7 @@ module_param_call(lnet_peer_discovery_disabled, discovery_set, param_get_int,
 MODULE_PARM_DESC(lnet_peer_discovery_disabled,
 		"Set to 1 to disable peer discovery on this node.");
 
-unsigned lnet_transaction_timeout = 5;
+unsigned lnet_transaction_timeout = 50;
 static int transaction_to_set(const char *val, cfs_kernel_param_arg_t *kp);
 static struct kernel_param_ops param_ops_transaction_timeout = {
 	.set = transaction_to_set,
@@ -175,8 +175,8 @@ module_param(lnet_transaction_timeout, transaction_timeout, S_IRUGO|S_IWUSR);
 module_param_call(lnet_transaction_timeout, transaction_to_set, param_get_int,
 		  &lnet_transaction_timeout, S_IRUGO|S_IWUSR);
 #endif
-MODULE_PARM_DESC(lnet_peer_discovery_disabled,
-		"Set to 1 to disable peer discovery on this node.");
+MODULE_PARM_DESC(lnet_transaction_timeout,
+		"Maximum number of seconds to wait for a peer response.");
 
 unsigned lnet_retry_count = 0;
 static int retry_count_set(const char *val, cfs_kernel_param_arg_t *kp);
