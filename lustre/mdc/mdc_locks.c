@@ -383,7 +383,7 @@ mdc_intent_getxattr_pack(struct obd_export *exp,
 	struct ldlm_intent	*lit;
 	int			rc, count = 0;
 	struct list_head	cancels = LIST_HEAD_INIT(cancels);
-	u32 min_buf_size = 0;
+	u32 ea_vals_buf_size = GA_DEFAULT_EA_VAL_LEN * GA_DEFAULT_EA_NUM;
 
 	ENTRY;
 
@@ -412,26 +412,22 @@ mdc_intent_getxattr_pack(struct obd_export *exp,
 	 * of LU-9417 when it would be *more* likely to crash the
 	 * server. See LU-9856. */
 	if (exp->exp_connect_data.ocd_version < OBD_OCD_VERSION(2, 10, 1, 0))
-		min_buf_size = exp->exp_connect_data.ocd_max_easize;
+		ea_vals_buf_size = max_t(u32, ea_vals_buf_size,
+					 exp->exp_connect_data.ocd_max_easize);
 #endif
 
 	/* pack the intended request */
 	mdc_pack_body(req, &op_data->op_fid1, op_data->op_valid,
-		      max_t(u32, min_buf_size,
-			    GA_DEFAULT_EA_VAL_LEN * GA_DEFAULT_EA_NUM),
-		      -1, 0);
+		      ea_vals_buf_size, -1, 0);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_SERVER,
-			     max_t(u32, min_buf_size,
-				 GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM));
+			     GA_DEFAULT_EA_NAME_LEN * GA_DEFAULT_EA_NUM);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EAVALS, RCL_SERVER,
-			     max_t(u32, min_buf_size,
-				 GA_DEFAULT_EA_VAL_LEN * GA_DEFAULT_EA_NUM));
+			     ea_vals_buf_size);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EAVALS_LENS, RCL_SERVER,
-			     max_t(u32, min_buf_size,
-				 sizeof(__u32) * GA_DEFAULT_EA_NUM));
+			     sizeof(u32) * GA_DEFAULT_EA_NUM);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
 
