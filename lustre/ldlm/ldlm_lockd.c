@@ -1490,6 +1490,31 @@ retry:
         return rc;
 }
 
+/* Clear the blocking lock, the race is possible between ldlm_handle_convert0()
+ * and ldlm_work_bl_ast_lock(), so this is done under lock with check for NULL.
+ */
+void ldlm_clear_blocking_lock(struct ldlm_lock *lock)
+{
+	if (lock->l_blocking_lock) {
+		LDLM_LOCK_RELEASE(lock->l_blocking_lock);
+		lock->l_blocking_lock = NULL;
+	}
+}
+
+/* A lock can be converted to new ibits or mode and should be considered
+ * as new lock. Clear all states related to a previous blocking AST
+ * processing so new conflicts will cause new blocking ASTs.
+ *
+ * This is used during lock convert below and lock downgrade to COS mode in
+ * ldlm_lock_mode_downgrade().
+ */
+void ldlm_clear_blocking_data(struct ldlm_lock *lock)
+{
+	ldlm_clear_ast_sent(lock);
+	lock->l_bl_ast_run = 0;
+	ldlm_clear_blocking_lock(lock);
+}
+
 /**
  * Main LDLM entry point for server code to process lock conversion requests.
  */
@@ -1543,20 +1568,8 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 			ldlm_clear_cbpending(lock);
 			lock->l_policy_data.l_inodebits.cancel_bits = 0;
 			ldlm_inodebits_drop(lock, bits & ~new);
-			/* if lock is in a bl_ast list, remove it from the list
-			 * here before reprocessing.
-			 */
-			if (!list_empty(&lock->l_bl_ast)) {
-				ldlm_discard_bl_lock(lock);
-			} else {
-				/* in this case lock was taken from bl_ast list
-				 * already by ldlm_work_bl_ast_lock() and lock
-				 * must clear only some remaining states.
-				 */
-				ldlm_clear_ast_sent(lock);
-				lock->l_bl_ast_run = 0;
-				ldlm_clear_blocking_lock(lock);
-			}
+
+			ldlm_clear_blocking_data(lock);
 			unlock_res_and_lock(lock);
 
 			ldlm_reprocess_all(lock->l_resource);

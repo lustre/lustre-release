@@ -2658,6 +2658,7 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 {
 	struct obd_device *obd = ldlm_lock_to_ns(lock)->ns_obd;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct ldlm_cb_set_arg *arg = data;
 	bool commit_async = false;
 	int rc;
 	ENTRY;
@@ -2670,17 +2671,22 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		unlock_res_and_lock(lock);
 		RETURN(0);
 	}
-	/* There is no lock conflict if l_blocking_lock == NULL,
-	 * it indicates a blocking ast sent from ldlm_lock_decref_internal
-	 * when the last reference to a local lock was released */
-	if (lock->l_req_mode & (LCK_PW | LCK_EX) &&
-	    lock->l_blocking_lock != NULL) {
+
+	/* A blocking ast may be sent from ldlm_lock_decref_internal
+	 * when the last reference to a local lock was released and
+	 * during blocking event from ldlm_work_bl_ast_lock().
+	 * The 'data' parameter is l_ast_data in the first case and
+	 * callback arguments in the second one. Distinguish them by that.
+	 */
+	if (!data || data == lock->l_ast_data || !arg->bl_desc)
+		goto skip_cos_checks;
+
+	if (lock->l_req_mode & (LCK_PW | LCK_EX)) {
 		if (mdt_cos_is_enabled(mdt)) {
-			if (lock->l_client_cookie !=
-			    lock->l_blocking_lock->l_client_cookie)
+			if (!arg->bl_desc->bl_same_client)
 				mdt_set_lock_sync(lock);
 		} else if (mdt_slc_is_enabled(mdt) &&
-			   ldlm_is_cos_incompat(lock->l_blocking_lock)) {
+			   arg->bl_desc->bl_cos_incompat) {
 			mdt_set_lock_sync(lock);
 			/*
 			 * we may do extra commit here, but there is a small
@@ -2694,11 +2700,11 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 			 */
 			commit_async = true;
 		}
-	} else if (lock->l_req_mode == LCK_COS &&
-		   lock->l_blocking_lock != NULL) {
+	} else if (lock->l_req_mode == LCK_COS) {
 		commit_async = true;
 	}
 
+skip_cos_checks:
 	rc = ldlm_blocking_ast_nocheck(lock);
 
 	if (commit_async) {

@@ -609,6 +609,11 @@ struct ldlm_glimpse_work {
 	void			*gl_interpret_data;
 };
 
+struct ldlm_bl_desc {
+	unsigned int bl_same_client:1,
+		     bl_cos_incompat:1;
+};
+
 struct ldlm_cb_set_arg {
 	struct ptlrpc_request_set	*set;
 	int				 type; /* LDLM_{CP,BL,GL}_CALLBACK */
@@ -617,6 +622,7 @@ struct ldlm_cb_set_arg {
 	union ldlm_gl_desc		*gl_desc; /* glimpse AST descriptor */
 	ptlrpc_interpterer_t		 gl_interpret_reply;
 	void				*gl_interpret_data;
+	struct ldlm_bl_desc		*bl_desc;
 };
 
 struct ldlm_cb_async_args {
