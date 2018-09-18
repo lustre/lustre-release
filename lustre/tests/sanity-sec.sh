@@ -2136,6 +2136,129 @@ test_30() {
 }
 run_test 30 "check for invalid shared key"
 
+cleanup_31() {
+	# unmount client
+	zconf_umount $HOSTNAME $MOUNT || error "unable to umount client"
+
+	# remove ${NETTYPE}999 network on all nodes
+	do_nodes $(comma_list $(all_nodes)) \
+		 "$LNETCTL net del --net ${NETTYPE}999 && \
+		  $LNETCTL lnet unconfigure 2>/dev/null || true"
+
+	# necessary to do writeconf in order to de-register
+	# @${NETTYPE}999 nid for targets
+	KZPOOL=$KEEP_ZPOOL
+	export KEEP_ZPOOL="true"
+	stopall
+	writeconf_all
+	setupall server_only || echo 1
+	export KEEP_ZPOOL="$KZPOOL"
+
+	# remount client normally
+	mount_client $MOUNT $MOUNT_OPTS || error "unable to remount client"
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 || error "unable to remount client2"
+	fi
+}
+
+test_31() {
+	local nid=$(lctl list_nids | grep ${NETTYPE} | head -n1)
+	local addr=${nid%@*}
+	local net=${nid#*@}
+
+	export LNETCTL=$(which lnetctl 2> /dev/null)
+
+	[ -z "$LNETCTL" ] && skip "without lnetctl support." && return
+	local_mode && skip "in local mode."
+
+	stack_trap cleanup_31 EXIT
+
+	# unmount client
+	umount_client $MOUNT || error "unable to umount client"
+	if [ "$MOUNT_2" ]; then
+		umount_client $MOUNT2 || error "unable to umount client2"
+	fi
+
+	# check exports on servers are empty for client
+	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
+		      grep -q -" && error "export on MGS should be empty"
+	do_nodes $(comma_list $(mdts_nodes) $(osts_nodes)) \
+		 "lctl get_param -n *.${FSNAME}*.exports.'$nid'.uuid \
+		  2>/dev/null | grep -q -" &&
+		error "export on servers should be empty"
+
+	# add network ${NETTYPE}999 on all nodes
+	do_nodes $(comma_list $(all_nodes)) \
+		 "$LNETCTL lnet configure && $LNETCTL net add --if \
+		  $($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
+		  {if (inf==1) print $2; fi; inf=0} /interfaces/{inf=1}') \
+		  --net ${NETTYPE}999" ||
+		error "unable to configure NID ${NETTYPE}999"
+
+	# necessary to do writeconf in order to register
+	# new @${NETTYPE}999 nid for targets
+	KZPOOL=$KEEP_ZPOOL
+	export KEEP_ZPOOL="true"
+	stopall
+	writeconf_all
+	setupall server_only || echo 1
+	export KEEP_ZPOOL="$KZPOOL"
+
+	# backup MGSNID
+	local mgsnid_orig=$MGSNID
+	# compute new MGSNID
+	MGSNID=$(do_facet mgs "$LCTL list_nids | grep ${NETTYPE}999")
+
+	# on client, turn LNet Dynamic Discovery on
+	lnetctl set discovery 1
+
+	# mount client with -o network=${NETTYPE}999 option:
+	# should fail because of LNet Dynamic Discovery
+	mount_client $MOUNT ${MOUNT_OPTS},network=${NETTYPE}999 &&
+		error "client mount with '-o network' option should be refused"
+
+	# on client, reconfigure LNet and turn LNet Dynamic Discovery off
+	$LNETCTL net del --net ${NETTYPE}999 && lnetctl lnet unconfigure
+	lustre_rmmod
+	modprobe lnet
+	lnetctl set discovery 0
+	modprobe ptlrpc
+	$LNETCTL lnet configure && $LNETCTL net add --if \
+	  $($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
+	  {if (inf==1) print $2; fi; inf=0} /interfaces/{inf=1}') \
+	  --net ${NETTYPE}999 ||
+	error "unable to configure NID ${NETTYPE}999 on client"
+
+	# mount client with -o network=${NETTYPE}999 option
+	mount_client $MOUNT ${MOUNT_OPTS},network=${NETTYPE}999 ||
+		error "unable to remount client"
+
+	# restore MGSNID
+	MGSNID=$mgsnid_orig
+
+	# check export on MGS
+	do_facet mgs "lctl get_param -n *.MGS*.exports.'$nid'.uuid 2>/dev/null |
+		      grep -q -"
+	[ $? -ne 0 ] ||	error "export for $nid on MGS should not exist"
+
+	do_facet mgs \
+		"lctl get_param -n *.MGS*.exports.'${addr}@${NETTYPE}999'.uuid \
+		 2>/dev/null | grep -q -"
+	[ $? -eq 0 ] ||
+		error "export for ${addr}@${NETTYPE}999 on MGS should exist"
+
+	# check {mdc,osc} imports
+	lctl get_param mdc.${FSNAME}-*.import | grep current_connection |
+	    grep -q ${NETTYPE}999
+	[ $? -eq 0 ] ||
+		error "import for mdc should use ${addr}@${NETTYPE}999"
+	lctl get_param osc.${FSNAME}-*.import | grep current_connection |
+	    grep -q ${NETTYPE}999
+	[ $? -eq 0 ] ||
+		error "import for osc should use ${addr}@${NETTYPE}999"
+}
+run_test 31 "client mount option '-o network'"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
