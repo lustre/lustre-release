@@ -39,6 +39,8 @@
 
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/kthread.h>
+#include <linux/delay.h>
 
 #include <obd_class.h>
 #include <lustre_fid.h>
@@ -1454,6 +1456,62 @@ out:
 	RETURN(rc);
 }
 
+struct llog_process_info {
+	struct llog_handle	*lpi_loghandle;
+	llog_cb_t		 lpi_cb;
+	void			*lpi_cbdata;
+	void			*lpi_catdata;
+	int			 lpi_rc;
+	struct completion	 lpi_completion;
+	const struct lu_env	*lpi_env;
+	struct task_struct      *lpi_reftask;
+};
+
+
+static int llog_test_process_thread(void *arg)
+{
+	struct llog_process_info	*lpi = arg;
+
+	llog_process(NULL, lpi->lpi_loghandle, lpi->lpi_cb, lpi->lpi_cbdata,
+		     lpi->lpi_catdata);
+
+	complete(&lpi->lpi_completion);
+
+	return 0;
+}
+
+static int cat_check_old_cb(const struct lu_env *env, struct llog_handle *llh,
+			struct llog_rec_hdr *rec, void *data)
+{
+	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
+	struct lu_fid		 fid = {0};
+	struct lu_fid		 *prev_fid = data;
+
+	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+		CERROR("invalid record in catalog\n");
+		RETURN(-EINVAL);
+	}
+
+	logid_to_fid(&lir->lid_id, &fid);
+
+	CWARN("seeing record at index %d - "DFID" in log "DFID"\n",
+	      rec->lrh_index, PFID(&fid),
+	      PFID(lu_object_fid(&llh->lgh_obj->do_lu)));
+
+	if (prev_fid->f_oid > fid.f_oid) {
+		CWARN("processing old record, fail\n");
+		prev_fid->f_oid = 0xbad;
+		RETURN(LLOG_PROC_BREAK);
+	}
+
+	if (prev_fid->f_oid == 0)
+		cfs_fail_loc = OBD_FAIL_LLOG_PROCESS_TIMEOUT;
+
+	*prev_fid = fid;
+
+	RETURN(0);
+}
+
 /* test catalog wrap around */
 static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 {
@@ -1946,6 +2004,60 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 
 	CWARN("10g: llh_cat_idx has also successfully wrapped!\n");
 
+	/* catalog has only one valid entry other slots has outdated
+	 * records. Trying to race the llog_thread_process with llog_add
+	 * llog_thread_process read buffer and loop record on it.
+	 * llog_add adds a record and mark a record in bitmap.
+	 * llog_thread_process process record with old data. */
+	{
+	struct llog_process_info lpi;
+	struct lu_fid test_fid = {0};
+
+	lpi.lpi_loghandle = cath;
+	lpi.lpi_cb = cat_check_old_cb;
+	lpi.lpi_catdata = NULL;
+	lpi.lpi_cbdata = &test_fid;
+	init_completion(&lpi.lpi_completion);
+
+	kthread_run(llog_test_process_thread, &lpi, "llog_test_process_thread");
+
+	msleep(1 * MSEC_PER_SEC);
+	enospc = 0;
+	eok = 0;
+	CWARN("10h: write %d more log records\n", LLOG_TEST_RECNUM);
+	for (i = 0; i < LLOG_TEST_RECNUM; i++) {
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, NULL);
+		if (rc && rc != -ENOSPC) {
+			CERROR("10h: write %d records failed at #%d: %d\n",
+			       LLOG_TEST_RECNUM, i + 1, rc);
+			GOTO(out, rc);
+		}
+		/* after last added plain LLOG has filled up, all new
+		 * records add should fail with -ENOSPC */
+		if (rc == -ENOSPC) {
+			enospc++;
+		} else {
+			enospc = 0;
+			eok++;
+		}
+	}
+
+	if ((enospc == 0) && (enospc+eok != LLOG_TEST_RECNUM)) {
+		CERROR("10h: all last records adds should have failed with"
+		       " -ENOSPC\n");
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CWARN("10h: wrote %d records then %d failed with ENOSPC\n", eok,
+	      enospc);
+
+	wait_for_completion(&lpi.lpi_completion);
+
+	if (test_fid.f_oid == 0xbad) {
+		CERROR("10h: race happened, old record was processed\n");
+		GOTO(out, rc = -EINVAL);
+	}
+	}
 out:
 	cfs_fail_loc = 0;
 	cfs_fail_val = 0;

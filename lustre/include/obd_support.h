@@ -531,6 +531,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_TIME_IN_CHLOG_USER		    0x1314
 #define CFS_FAIL_CHLOG_USER_REG_UNREG_RACE	    0x1315
 #define OBD_FAIL_FORCE_GC_THREAD		    0x1316
+#define OBD_FAIL_LLOG_PROCESS_TIMEOUT		    0x1317
 
 #define OBD_FAIL_LLITE                              0x1400
 #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE             0x1401

@@ -47,6 +47,7 @@
 #include <linux/kthread.h>
 #include <llog_swab.h>
 #include <lustre_log.h>
+#include <obd_support.h>
 #include <obd_class.h>
 #include "llog_internal.h"
 /*
@@ -609,6 +610,8 @@ repeat:
 			/* lgh_cur_offset is used only at llog_test_3 */
 			loghandle->lgh_cur_offset = (char *)rec - (char *)buf +
 						    chunk_offset;
+
+			OBD_FAIL_TIMEOUT(OBD_FAIL_LLOG_PROCESS_TIMEOUT, 2);
 
 			/* if set, process the callback on this record */
 			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh))) {
