@@ -531,16 +531,9 @@ repeat:
 			CDEBUG(D_OTHER, "after swabbing, type=%#x idx=%d\n",
 			       rec->lrh_type, rec->lrh_index);
 
-			/* the bitmap could be changed during processing
-			 * records from the chunk. For wrapped catalog
-			 * it means we can read deleted record and try to
-			 * process it. Check this case and reread the chunk. */
-
 			/* for partial chunk the end of it is zeroed, check
 			 * for index 0 to distinguish it. */
-			if ((partial_chunk && rec->lrh_index == 0) ||
-			     (index == lh_last_idx &&
-			      lh_last_idx != (loghandle->lgh_last_idx + 1))) {
+			if (partial_chunk && rec->lrh_index == 0) {
 				/* concurrent llog_add() might add new records
 				 * while llog_processing, check this is not
 				 * the case and re-read the current chunk
@@ -616,7 +609,23 @@ repeat:
 				struct llog_cookie *lgc;
 				__u64	tmp_off;
 				int	tmp_idx;
+			/* the bitmap could be changed during processing
+			 * records from the chunk. For wrapped catalog
+			 * it means we can read deleted record and try to
+			 * process it. Check this case and reread the chunk.
+			 * Checking the race with llog_add the bit is set
+			 * after incrementation of lgh_last_idx */
+				if (index == lh_last_idx &&
+				    lh_last_idx !=
+				    (loghandle->lgh_last_idx + 1)) {
+					/* save offset inside buffer for
+					 *  the re-read */
+					buf_offset = (char *)rec - (char *)buf;
+					cur_offset = chunk_offset;
+					repeated = true;
+					goto repeat;
 
+				}
 				if (lti != NULL) {
 					lgc = &lti->lgi_cookie;
 					/* store lu_env for recursive calls */
