@@ -2099,6 +2099,11 @@ restart:
 				goto restart;
 			} else {
 				mutex_lock(&cld->cld_lock);
+				/* unlock/lock mutex, so check stopping again */
+				if (cld->cld_stopping) {
+					mutex_unlock(&cld->cld_lock);
+					RETURN(0);
+				}
 				spin_lock(&config_list_lock);
 				cld->cld_lostlock = 1;
 				spin_unlock(&config_list_lock);
