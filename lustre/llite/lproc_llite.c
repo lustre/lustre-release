@@ -1954,23 +1954,19 @@ static void ll_display_extents_info(struct ll_rw_extents_info *io_extents,
 
 static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
 {
-	struct timespec64 now;
 	struct ll_sb_info *sbi = seq->private;
 	struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
 	int k;
-
-	ktime_get_real_ts64(&now);
 
 	if (!sbi->ll_rw_stats_on) {
 		seq_puts(seq, "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
 		return 0;
 	}
-	seq_printf(seq, "snapshot_time:         %llu.%09lu (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
-        seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
-        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
-                   "extents", "calls", "%", "cum%",
-                   "calls", "%", "cum%");
+	lprocfs_stats_header(seq, ktime_get(), io_extents->pp_init, 25, ":", 1);
+	seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
+	seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
+		   "extents", "calls", "%", "cum%",
+		   "calls", "%", "cum%");
 	spin_lock(&sbi->ll_pp_extent_lock);
 	for (k = 0; k < LL_PROCESS_HIST_MAX; k++) {
 		if (io_extents->pp_extents[k].pid != 0) {
@@ -2005,6 +2001,7 @@ static ssize_t ll_rw_extents_stats_pp_seq_write(struct file *file,
 		sbi->ll_rw_stats_on = 1;
 
 	spin_lock(&sbi->ll_pp_extent_lock);
+	io_extents->pp_init = ktime_get();
 	for (i = 0; i < LL_PROCESS_HIST_MAX; i++) {
 		io_extents->pp_extents[i].pid = 0;
 		lprocfs_oh_clear(&io_extents->pp_extents[i].pp_r_hist);
@@ -2018,18 +2015,15 @@ LDEBUGFS_SEQ_FOPS(ll_rw_extents_stats_pp);
 
 static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
 {
-	struct timespec64 now;
 	struct ll_sb_info *sbi = seq->private;
 	struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
-
-	ktime_get_real_ts64(&now);
 
 	if (!sbi->ll_rw_stats_on) {
 		seq_puts(seq, "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
 		return 0;
 	}
-	seq_printf(seq, "snapshot_time:         %llu.%09lu (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
+
+	lprocfs_stats_header(seq, ktime_get(), io_extents->pp_init, 25, ":", 1);
 
 	seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
 	seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
@@ -2063,6 +2057,7 @@ static ssize_t ll_rw_extents_stats_seq_write(struct file *file,
 		sbi->ll_rw_stats_on = 1;
 
 	spin_lock(&sbi->ll_pp_extent_lock);
+	io_extents->pp_init = ktime_get();
 	for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) {
 		io_extents->pp_extents[i].pid = 0;
 		lprocfs_oh_clear(&io_extents->pp_extents[i].pp_r_hist);
@@ -2180,22 +2175,20 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 
 static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 {
-	struct timespec64 now;
 	struct ll_sb_info *sbi = seq->private;
 	struct ll_rw_process_info *offset = sbi->ll_rw_offset_info;
 	struct ll_rw_process_info *process = sbi->ll_rw_process_info;
 	int i;
 
-	ktime_get_real_ts64(&now);
-
 	if (!sbi->ll_rw_stats_on) {
 		seq_puts(seq, "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
 		return 0;
 	}
-	spin_lock(&sbi->ll_process_lock);
 
-	seq_printf(seq, "snapshot_time:         %llu.%09lu (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
+	spin_lock(&sbi->ll_process_lock);
+	lprocfs_stats_header(seq, ktime_get(), sbi->ll_process_stats_init, 25,
+			     ":", true);
+
 	seq_printf(seq, "%3s %10s %14s %14s %17s %17s %14s\n",
 		   "R/W", "PID", "RANGE START", "RANGE END",
 		   "SMALLEST EXTENT", "LARGEST EXTENT", "OFFSET");
@@ -2255,6 +2248,7 @@ static ssize_t ll_rw_offset_stats_seq_write(struct file *file,
 	spin_lock(&sbi->ll_process_lock);
 	sbi->ll_offset_process_count = 0;
 	sbi->ll_rw_offset_entry_count = 0;
+	sbi->ll_process_stats_init = ktime_get();
 	memset(process_info, 0, sizeof(struct ll_rw_process_info) *
 	       LL_PROCESS_HIST_MAX);
 	memset(offset_info, 0, sizeof(struct ll_rw_process_info) *

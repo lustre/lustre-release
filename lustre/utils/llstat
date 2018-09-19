@@ -159,7 +159,7 @@ sub readstat()
 	$prevcount = $cumulhash->{$name};
 	if (defined($prevcount)) {
 		$diff = $cumulcount - $prevcount;
-		if ($name eq "snapshot_time") {
+		if ($name =~ /^snapshot_time/) {
 			$tdiff = int($diff);
 			&print_headings($cumulcount);
 			$| = 1;

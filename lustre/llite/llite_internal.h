@@ -581,14 +581,15 @@ struct ra_io_arg {
 #define LL_HIST_START 12 /* buckets start at 2^12 = 4k */
 #define LL_PROCESS_HIST_MAX 10
 struct per_process_info {
-        pid_t pid;
-        struct obd_histogram pp_r_hist;
-        struct obd_histogram pp_w_hist;
+	pid_t pid;
+	struct obd_histogram pp_r_hist;
+	struct obd_histogram pp_w_hist;
 };
 
 /* pp_extents[LL_PROCESS_HIST_MAX] will hold the combined process info */
 struct ll_rw_extents_info {
-        struct per_process_info pp_extents[LL_PROCESS_HIST_MAX + 1];
+	ktime_t pp_init;
+	struct per_process_info pp_extents[LL_PROCESS_HIST_MAX + 1];
 };
 
 #define LL_OFFSET_HIST_MAX 100
@@ -698,16 +699,18 @@ struct ll_sb_info {
 
 	struct lu_site           *ll_site;
 	struct cl_device         *ll_cl;
+
 	/* Statistics */
 	struct ll_rw_extents_info ll_rw_extents_info;
-	int                       ll_extent_process_count;
+	int			  ll_extent_process_count;
+	unsigned int		  ll_offset_process_count;
+	ktime_t			  ll_process_stats_init;
 	struct ll_rw_process_info ll_rw_process_info[LL_PROCESS_HIST_MAX];
-	unsigned int              ll_offset_process_count;
 	struct ll_rw_process_info ll_rw_offset_info[LL_OFFSET_HIST_MAX];
-	unsigned int              ll_rw_offset_entry_count;
-	int                       ll_stats_track_id;
+	unsigned int		  ll_rw_offset_entry_count;
+	int			  ll_stats_track_id;
 	enum stats_track_type     ll_stats_track_type;
-	int                       ll_rw_stats_on;
+	int			  ll_rw_stats_on;
 
 	/* metadata stat-ahead */
 	unsigned int		  ll_sa_running_max;/* max concurrent

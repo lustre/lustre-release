@@ -150,9 +150,9 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 		iobuf->dr_elapsed_valid = 0;
 		LASSERT(iobuf->dr_dev == d);
 		LASSERT(iobuf->dr_frags > 0);
-		lprocfs_oh_tally(&d->od_brw_stats.hist[BRW_R_DIO_FRAGS+rw],
+		lprocfs_oh_tally(&d->od_brw_stats.bs_hist[BRW_R_DIO_FRAGS + rw],
 				 iobuf->dr_frags);
-		lprocfs_oh_tally_log2(&d->od_brw_stats.hist[BRW_R_IO_TIME+rw],
+		lprocfs_oh_tally_log2(&d->od_brw_stats.bs_hist[BRW_R_IO_TIME+rw],
 				      ktime_to_ms(iobuf->dr_elapsed));
 	}
 }
@@ -229,8 +229,8 @@ static void dio_complete_routine(struct bio *bio, int error)
 
 static void record_start_io(struct osd_iobuf *iobuf, int size)
 {
-	struct osd_device    *osd = iobuf->dr_dev;
-	struct obd_histogram *h = osd->od_brw_stats.hist;
+	struct osd_device *osd = iobuf->dr_dev;
+	struct obd_histogram *h = osd->od_brw_stats.bs_hist;
 
 	iobuf->dr_frags++;
 	atomic_inc(&iobuf->dr_numreqs);

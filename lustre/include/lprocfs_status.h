@@ -121,7 +121,8 @@ enum {
 };
 
 struct brw_stats {
-        struct obd_histogram hist[BRW_LAST];
+	ktime_t			bs_init;
+	struct obd_histogram	bs_hist[BRW_LAST];
 };
 
 enum {
@@ -132,7 +133,8 @@ enum {
 };
 
 struct rename_stats {
-        struct obd_histogram hist[RENAME_LAST];
+	ktime_t			rs_init;
+	struct obd_histogram	rs_hist[RENAME_LAST];
 };
 
 /* An lprocfs counter can be configured using the enum bit masks below.
@@ -230,6 +232,7 @@ struct lprocfs_stats {
 	/* 1 + the biggest cpu # whose ls_percpu slot has been allocated */
 	unsigned short			ls_biggest_alloc_num;
 	enum lprocfs_stats_flags	ls_flags;
+	ktime_t				ls_init;
 	/* Lock used when there are no percpu stats areas; For percpu stats,
 	 * it is used to protect ls_biggest_alloc_num change */
 	spinlock_t			ls_lock;
@@ -427,8 +430,8 @@ struct obd_job_stats {
 	struct cfs_hash	       *ojs_hash;	/* hash of jobids */
 	struct list_head	ojs_list;	/* list of job_stat structs */
 	rwlock_t		ojs_lock;	/* protect ojs_list/js_list */
-	unsigned int		ojs_cleanup_interval;/* seconds before expiry */
-	time64_t		ojs_last_cleanup; /* previous cleanup time */
+	ktime_t			ojs_cleanup_interval;/* 1/2 expiry seconds */
+	ktime_t			ojs_cleanup_last;/* previous cleanup time */
 	cntr_init_callback	ojs_cntr_init_fn;/* lprocfs_stats initializer */
 	unsigned short		ojs_cntr_num;	/* number of stats in struct */
 	bool			ojs_cleaning;	/* currently expiring stats */
@@ -570,6 +573,9 @@ extern int lprocfs_seq_create(struct proc_dir_entry *parent, const char *name,
 extern int lprocfs_obd_seq_create(struct obd_device *obd, const char *name,
 				  mode_t mode, const struct proc_ops *seq_fops,
 				  void *data);
+extern void lprocfs_stats_header(struct seq_file *seq, ktime_t now,
+				 ktime_t ts_init, int width, const char *colon,
+				 bool show_units);
 
 /* Generic callbacks */
 extern int lprocfs_uuid_seq_show(struct seq_file *m, void *data);

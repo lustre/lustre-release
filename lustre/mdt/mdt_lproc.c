@@ -61,7 +61,9 @@
 /**
  * The rename stats output would be YAML formats, like
  * rename_stats:
- * - snapshot_time: 1234567890.123456
+ * - snapshot_time: 1234567890.123456789
+ * - start_time:    1234567880.987654321
+ * - elapsed_time:  9.135802468
  * - same_dir:
  *     4kB: { samples: 1230, pct: 33, cum_pct: 45 }
  *     8kB: { samples: 1242, pct: 33, cum_pct: 78 }
@@ -77,76 +79,74 @@
  **/
 
 static void display_rename_stats(struct seq_file *seq, char *name,
-                                 struct obd_histogram *hist)
+				 struct obd_histogram *rs_hist)
 {
-        unsigned long tot, t, cum = 0;
-        int i;
+	unsigned long tot, t, cum = 0;
+	int i;
 
-        tot = lprocfs_oh_sum(hist);
-        if (tot > 0)
-                seq_printf(seq, "- %-15s\n", name);
-        /* dir size start from 4K, start i from 10(2^10) here */
-        for (i = 0; i < OBD_HIST_MAX; i++) {
-                t = hist->oh_buckets[i];
-                cum += t;
-                if (cum == 0)
-                        continue;
+	tot = lprocfs_oh_sum(rs_hist);
+	if (tot > 0)
+		seq_printf(seq, "- %s\n", name);
 
-                if (i < 10)
-                        seq_printf(seq, "%6s%d%s", " ", 1<< i, "bytes:");
-                else if (i < 20)
-                        seq_printf(seq, "%6s%d%s", " ", 1<<(i-10), "KB:");
-                else
-                        seq_printf(seq, "%6s%d%s", " ", 1<<(i-20), "MB:");
+	for (i = 0; i < OBD_HIST_MAX; i++) {
+		t = rs_hist->oh_buckets[i];
+		cum += t;
+		if (cum == 0)
+			continue;
+
+		if (i < 10)
+			seq_printf(seq, "%6s%d%s", " ", 1 << i, "bytes:");
+		else if (i < 20)
+			seq_printf(seq, "%6s%d%s", " ", 1 << (i - 10), "KB:");
+		else
+			seq_printf(seq, "%6s%d%s", " ", 1 << (i - 20), "MB:");
 
 		seq_printf(seq, " { sample: %3lu, pct: %3u, cum_pct: %3u }\n",
 			   t, pct(t, tot), pct(cum, tot));
 
-                if (cum == tot)
-                        break;
-        }
+		if (cum == tot)
+			break;
+	}
 }
 
 static void rename_stats_show(struct seq_file *seq,
-                              struct rename_stats *rename_stats)
+			      struct rename_stats *rename_stats)
 {
-	struct timespec64 now;
-
 	/* this sampling races with updates */
-	ktime_get_real_ts64(&now);
-	seq_printf(seq, "rename_stats:\n");
-	seq_printf(seq, "- %-15s %llu.%9lu\n", "snapshot_time:",
-		   (s64)now.tv_sec, now.tv_nsec);
+	seq_puts(seq, "rename_stats:\n- ");
+	lprocfs_stats_header(seq, ktime_get(), rename_stats->rs_init, 15, ":",
+			     false);
 
-        display_rename_stats(seq, "same_dir",
-                             &rename_stats->hist[RENAME_SAMEDIR_SIZE]);
-        display_rename_stats(seq, "crossdir_src",
-                             &rename_stats->hist[RENAME_CROSSDIR_SRC_SIZE]);
-        display_rename_stats(seq, "crossdir_tgt",
-                             &rename_stats->hist[RENAME_CROSSDIR_TGT_SIZE]);
+	display_rename_stats(seq, "same_dir",
+			     &rename_stats->rs_hist[RENAME_SAMEDIR_SIZE]);
+	display_rename_stats(seq, "crossdir_src",
+			     &rename_stats->rs_hist[RENAME_CROSSDIR_SRC_SIZE]);
+	display_rename_stats(seq, "crossdir_tgt",
+			     &rename_stats->rs_hist[RENAME_CROSSDIR_TGT_SIZE]);
 }
 
 static int mdt_rename_stats_seq_show(struct seq_file *seq, void *v)
 {
-        struct mdt_device *mdt = seq->private;
+	struct mdt_device *mdt = seq->private;
 
-        rename_stats_show(seq, &mdt->mdt_rename_stats);
+	rename_stats_show(seq, &mdt->mdt_rename_stats);
 
-        return 0;
+	return 0;
 }
 
 static ssize_t
 mdt_rename_stats_seq_write(struct file *file, const char __user *buf,
 			   size_t len, loff_t *off)
 {
-        struct seq_file *seq = file->private_data;
-        struct mdt_device *mdt = seq->private;
-        int i;
+	struct seq_file *seq = file->private_data;
+	struct mdt_device *mdt = seq->private;
+	int i;
 
-        for (i = 0; i < RENAME_LAST; i++)
-                lprocfs_oh_clear(&mdt->mdt_rename_stats.hist[i]);
+	for (i = 0; i < RENAME_LAST; i++)
+		lprocfs_oh_clear(&mdt->mdt_rename_stats.rs_hist[i]);
+	mdt->mdt_rename_stats.rs_init = ktime_get();
 
-        return len;
+	return len;
 }
 LPROC_SEQ_FOPS(mdt_rename_stats);
 
@@ -155,7 +155,7 @@ static int lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
 	int i;
 
 	for (i = 0; i < RENAME_LAST; i++)
-		spin_lock_init(&mdt->mdt_rename_stats.hist[i].oh_lock);
+		spin_lock_init(&mdt->mdt_rename_stats.rs_hist[i].oh_lock);
 
 	return lprocfs_obd_seq_create(mdt2obd_dev(mdt), "rename_stats", 0644,
 				      &mdt_rename_stats_fops, mdt);
@@ -167,41 +167,41 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_object *src,
 			      struct mdt_object *tgt, long count)
 {
-        struct md_attr *ma = &info->mti_attr;
-        struct rename_stats *rstats = &mdt->mdt_rename_stats;
-        int rc;
+	struct md_attr *ma = &info->mti_attr;
+	struct rename_stats *rstats = &mdt->mdt_rename_stats;
+	int rc;
 
-        ma->ma_need = MA_INODE;
-        ma->ma_valid = 0;
-        rc = mo_attr_get(info->mti_env, mdt_object_child(src), ma);
-        if (rc) {
-                CERROR("%s: "DFID" attr_get, rc = %d\n",
+	ma->ma_need = MA_INODE;
+	ma->ma_valid = 0;
+	rc = mo_attr_get(info->mti_env, mdt_object_child(src), ma);
+	if (rc) {
+		CERROR("%s: "DFID" attr_get, rc = %d\n",
 		       mdt_obd_name(mdt), PFID(mdt_object_fid(src)), rc);
-                return;
-        }
+		return;
+	}
 
-        if (src == tgt) {
+	if (src == tgt) {
 		mdt_counter_incr(req, LPROC_MDT_SAMEDIR_RENAME, count);
-                lprocfs_oh_tally_log2(&rstats->hist[RENAME_SAMEDIR_SIZE],
-                                      (unsigned int)ma->ma_attr.la_size);
-                return;
-        }
+		lprocfs_oh_tally_log2(&rstats->rs_hist[RENAME_SAMEDIR_SIZE],
+				      (unsigned int)ma->ma_attr.la_size);
+		return;
+	}
 
 	mdt_counter_incr(req, LPROC_MDT_CROSSDIR_RENAME, count);
-        lprocfs_oh_tally_log2(&rstats->hist[RENAME_CROSSDIR_SRC_SIZE],
-                              (unsigned int)ma->ma_attr.la_size);
+	lprocfs_oh_tally_log2(&rstats->rs_hist[RENAME_CROSSDIR_SRC_SIZE],
+			      (unsigned int)ma->ma_attr.la_size);
 
-        ma->ma_need = MA_INODE;
-        ma->ma_valid = 0;
-        rc = mo_attr_get(info->mti_env, mdt_object_child(tgt), ma);
-        if (rc) {
-                CERROR("%s: "DFID" attr_get, rc = %d\n",
+	ma->ma_need = MA_INODE;
+	ma->ma_valid = 0;
+	rc = mo_attr_get(info->mti_env, mdt_object_child(tgt), ma);
+	if (rc) {
+		CERROR("%s: "DFID" attr_get, rc = %d\n",
 		       mdt_obd_name(mdt), PFID(mdt_object_fid(tgt)), rc);
-                return;
-        }
+		return;
+	}
 
-        lprocfs_oh_tally_log2(&rstats->hist[RENAME_CROSSDIR_TGT_SIZE],
-                              (unsigned int)ma->ma_attr.la_size);
+	lprocfs_oh_tally_log2(&rstats->rs_hist[RENAME_CROSSDIR_TGT_SIZE],
+			      (unsigned int)ma->ma_attr.la_size);
 }
 
 static ssize_t identity_expire_show(struct kobject *kobj,

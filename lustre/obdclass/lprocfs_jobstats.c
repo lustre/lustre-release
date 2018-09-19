@@ -66,7 +66,8 @@ struct job_stat {
 	struct list_head	js_list;	/* on ojs_list, with ojs_lock */
 	atomic_t		js_refcount;	/* num users of this struct */
 	char			js_jobid[LUSTRE_JOBID_SIZE]; /* job name + NUL*/
-	time64_t		js_timestamp;	/* seconds of most recent stat*/
+	ktime_t			js_time_init;	/* time of initial stat*/
+	ktime_t			js_time_latest;	/* time of most recent stat*/
 	struct lprocfs_stats	*js_stats;	/* per-job statistics */
 	struct obd_job_stats	*js_jobstats;	/* for accessing ojs_lock */
 };
@@ -162,11 +163,11 @@ static int job_cleanup_iter_callback(struct cfs_hash *hs,
 				     struct cfs_hash_bd *bd,
 				     struct hlist_node *hnode, void *data)
 {
-	time64_t oldest_time = *((time64_t *)data);
+	ktime_t oldest_time = *((ktime_t *)data);
 	struct job_stat *job;
 
 	job = hlist_entry(hnode, struct job_stat, js_hash);
-	if (job->js_timestamp < oldest_time)
+	if (ktime_before(job->js_time_latest, oldest_time))
 		cfs_hash_bd_del_locked(hs, bd, hnode);
 
 	return 0;
@@ -177,30 +178,37 @@ static int job_cleanup_iter_callback(struct cfs_hash *hs,
  *
  * Since this function may be called frequently, do not scan all of the
  * jobstats on each call, only twice per cleanup interval.  That means stats
- * may be around on average cleanup_interval / 4 longer than necessary,
- * but that is not considered harmful.
+ * may be on average around cleanup_interval / 4 older than the cleanup
+ * interval, but that is not considered harmful.
  *
- * If \a before is negative then this will force clean up all jobstats due
- * to the expiry time being in the future (e.g. at shutdown).
+ * The value stored in ojs_cleanup_interval is how often to perform a cleanup
+ * scan, and 1/2 of the maximum age of the individual statistics.  This is
+ * done rather than dividing the interval by two each time, because it is
+ * much easier to do the division when the value is initially set (in seconds)
+ * rather than after it has been converted to ktime_t, and maybe a bit faster.
+ *
+ * If \a clear is true then this will force clean up all jobstats
+ * (e.g. at shutdown).
  *
  * If there is already another thread doing jobstats cleanup, don't try to
  * do this again in the current thread unless this is a force cleanup.
  *
  * \param[in] stats	stucture tracking all job stats for this device
- * \param[in] before	expire jobstats updated more than this many seconds ago
+ * \param[in] clear	clear all job stats if true
  */
-static void lprocfs_job_cleanup(struct obd_job_stats *stats, int before)
+static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 {
-	time64_t now = ktime_get_real_seconds();
-	time64_t oldest;
+	ktime_t cleanup_interval = stats->ojs_cleanup_interval;
+	ktime_t now = ktime_get();
+	ktime_t oldest;
 
-	if (likely(before >= 0)) {
-		unsigned int cleanup_interval = stats->ojs_cleanup_interval;
-
-		if (cleanup_interval == 0 || before == 0)
+	if (likely(!clear)) {
+		/* ojs_cleanup_interval of zero means never clean up stats */
+		if (ktime_to_ns(cleanup_interval) == 0)
 			return;
 
-		if (now < stats->ojs_last_cleanup + cleanup_interval / 2)
+		if (ktime_before(now, ktime_add(stats->ojs_cleanup_last,
+						cleanup_interval)))
 			return;
 
 		if (stats->ojs_cleaning)
@@ -208,7 +216,7 @@ static void lprocfs_job_cleanup(struct obd_job_stats *stats, int before)
 	}
 
 	write_lock(&stats->ojs_lock);
-	if (before >= 0 && stats->ojs_cleaning) {
+	if (!clear && stats->ojs_cleaning) {
 		write_unlock(&stats->ojs_lock);
 		return;
 	}
@@ -225,14 +233,16 @@ static void lprocfs_job_cleanup(struct obd_job_stats *stats, int before)
 	 * Holding ojs_lock isn't necessary for safety of the hash iteration,
 	 * since locking of the hash is handled internally, but there isn't
 	 * any benefit to having multiple threads doing cleanup at one time.
+	 *
+	 * Subtract twice the cleanup_interval, since it is 1/2 the maximum age.
 	 */
-	oldest = now - before;
+	oldest = ktime_sub(now, ktime_add(cleanup_interval, cleanup_interval));
 	cfs_hash_for_each_safe(stats->ojs_hash, job_cleanup_iter_callback,
 			       &oldest);
 
 	write_lock(&stats->ojs_lock);
 	stats->ojs_cleaning = false;
-	stats->ojs_last_cleanup = ktime_get_real_seconds();
+	stats->ojs_cleanup_last = ktime_get();
 	write_unlock(&stats->ojs_lock);
 }
 
@@ -253,7 +263,8 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	jobs->ojs_cntr_init_fn(job->js_stats, 0);
 
 	memcpy(job->js_jobid, jobid, sizeof(job->js_jobid));
-	job->js_timestamp = ktime_get_real_seconds();
+	job->js_time_init = ktime_get();
+	job->js_time_latest = job->js_time_init;
 	job->js_jobstats = jobs;
 	INIT_HLIST_NODE(&job->js_hash);
 	INIT_LIST_HEAD(&job->js_list);
@@ -288,7 +299,7 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 	if (job)
 		goto found;
 
-	lprocfs_job_cleanup(stats, stats->ojs_cleanup_interval);
+	lprocfs_job_cleanup(stats, false);
 
 	job = job_alloc(jobid, stats);
 	if (job == NULL)
@@ -313,7 +324,7 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 
 found:
 	LASSERT(stats == job->js_jobstats);
-	job->js_timestamp = ktime_get_real_seconds();
+	job->js_time_latest = ktime_get();
 	lprocfs_counter_add(job->js_stats, event, amount);
 
 	job_putref(job);
@@ -329,7 +340,7 @@ void lprocfs_job_stats_fini(struct obd_device *obd)
 	if (stats->ojs_hash == NULL)
 		return;
 
-	lprocfs_job_cleanup(stats, -99);
+	lprocfs_job_cleanup(stats, true);
 	cfs_hash_putref(stats->ojs_hash);
 	stats->ojs_hash = NULL;
 	LASSERT(list_empty(&stats->ojs_list));
@@ -383,7 +394,9 @@ static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
  *
  * job_stats:
  * - job_id:        dd.4854
- *   snapshot_time: 1322494486
+ *   snapshot_time: 1322494486.123456789
+ *   start_time:    1322494476.012345678
+ *   elapsed_time:  10.111111111
  *   open:          { samples:	       1, unit: reqs }
  *   close:         { samples:	       1, unit: reqs }
  *   mknod:         { samples:	       0, unit: reqs }
@@ -403,7 +416,9 @@ static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
  *
  * job_stats:
  * - job_id         dd.4854
- *   snapshot_time: 1322494602
+ *   snapshot_time: 1322494602.123456789
+ *   start_time:    1322494592.987654321
+ *   elapsed_time:  9.135802468
  *   read:          { samples: 0, unit: bytes, min:  0, max:  0, sum:  0 }
  *   write:         { samples: 1, unit: bytes, min: 4096, max: 4096, sum: 4096 }
  *   setattr:       { samples: 0, unit: reqs }
@@ -420,11 +435,11 @@ static int inline width(const char *str, int len)
 
 static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 {
-	struct job_stat			*job = v;
-	struct lprocfs_stats		*s;
-	struct lprocfs_counter		ret;
-	struct lprocfs_counter_header	*cntr_header;
-	int				i;
+	struct job_stat *job = v;
+	struct lprocfs_stats *s;
+	struct lprocfs_counter ret;
+	struct lprocfs_counter_header *cntr_header;
+	int i;
 
 	if (v == SEQ_START_TOKEN) {
 		seq_printf(p, "job_stats:\n");
@@ -442,7 +457,8 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 	}
 	seq_putc(p, '\n');
 
-	seq_printf(p, "  %-16s %lld\n", "snapshot_time:", job->js_timestamp);
+	lprocfs_stats_header(p, job->js_time_latest, job->js_time_init, 16,
+			     ":", true);
 
 	s = job->js_stats;
 	for (i = 0; i < s->ls_num; i++) {
@@ -517,7 +533,7 @@ static ssize_t lprocfs_jobstats_seq_write(struct file *file,
 		jobid[len - 1] = 0;
 
 	if (strcmp(jobid, "clear") == 0) {
-		lprocfs_job_cleanup(stats, -99);
+		lprocfs_job_cleanup(stats, true);
 
 		return len;
 	}
@@ -552,7 +568,7 @@ static int lprocfs_jobstats_seq_release(struct inode *inode, struct file *file)
 	struct seq_file *seq = file->private_data;
 	struct obd_job_stats *stats = seq->private;
 
-	lprocfs_job_cleanup(stats, stats->ojs_cleanup_interval);
+	lprocfs_job_cleanup(stats, false);
 
 	return lprocfs_seq_release(inode, file);
 }
@@ -607,8 +623,11 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 	rwlock_init(&stats->ojs_lock);
 	stats->ojs_cntr_num = cntr_num;
 	stats->ojs_cntr_init_fn = init_fn;
-	stats->ojs_cleanup_interval = 600; /* 10 mins by default */
-	stats->ojs_last_cleanup = ktime_get_real_seconds();
+	/* Store 1/2 the actual interval, since we use that the most, and
+	 * it is easier to work with.
+	 */
+	stats->ojs_cleanup_interval = ktime_set(600 / 2, 0); /* default 10 min*/
+	stats->ojs_cleanup_last = ktime_get();
 
 	entry = lprocfs_add_simple(obd->obd_proc_entry, "job_stats", stats,
 				   &lprocfs_jobstats_seq_fops);
@@ -627,9 +646,12 @@ ssize_t job_cleanup_interval_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct obd_job_stats *stats;
+	struct timespec64 ts;
 
 	stats = &obd->u.obt.obt_jobstats;
-	return scnprintf(buf, PAGE_SIZE, "%d\n", stats->ojs_cleanup_interval);
+	ts = ktime_to_timespec64(stats->ojs_cleanup_interval);
+
+	return scnprintf(buf, PAGE_SIZE, "%lld\n", (long long)ts.tv_sec * 2);
 }
 EXPORT_SYMBOL(job_cleanup_interval_show);
 
@@ -649,8 +671,9 @@ ssize_t job_cleanup_interval_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	stats->ojs_cleanup_interval = val;
-	lprocfs_job_cleanup(stats, stats->ojs_cleanup_interval);
+	stats->ojs_cleanup_interval = ktime_set(val / 2, 0);
+	lprocfs_job_cleanup(stats, false);
+
 	return count;
 }
 EXPORT_SYMBOL(job_cleanup_interval_store);

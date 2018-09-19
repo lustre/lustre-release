@@ -515,14 +515,10 @@ LPROC_SEQ_FOPS(mdc_rpc_stats);
 
 static int mdc_stats_seq_show(struct seq_file *seq, void *v)
 {
-	struct timespec64 now;
 	struct obd_device *obd = seq->private;
 	struct osc_stats *stats = &obd2osc_dev(obd)->od_stats;
 
-	ktime_get_real_ts64(&now);
-
-	seq_printf(seq, "snapshot_time:         %lld.%09lu (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
+	lprocfs_stats_header(seq, ktime_get(), stats->os_init, 25, ":", true);
 	seq_printf(seq, "lockless_write_bytes\t\t%llu\n",
 		   stats->os_lockless_writes);
 	seq_printf(seq, "lockless_read_bytes\t\t%llu\n",
@@ -539,6 +535,8 @@ static ssize_t mdc_stats_seq_write(struct file *file,
 	struct osc_stats *stats = &obd2osc_dev(obd)->od_stats;
 
 	memset(stats, 0, sizeof(*stats));
+	stats->os_init = ktime_get();
+
 	return len;
 }
 LPROC_SEQ_FOPS(mdc_stats);

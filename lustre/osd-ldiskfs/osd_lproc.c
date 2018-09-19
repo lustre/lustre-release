@@ -43,38 +43,38 @@
 
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
 {
-        struct brw_stats *s = &osd->od_brw_stats;
+	struct brw_stats *bs = &osd->od_brw_stats;
 	sector_t	 *last_block = NULL;
-        struct page     **pages = iobuf->dr_pages;
-        struct page      *last_page = NULL;
-        unsigned long     discont_pages = 0;
-        unsigned long     discont_blocks = 0;
+	struct page     **pages = iobuf->dr_pages;
+	struct page      *last_page = NULL;
+	unsigned long     discont_pages = 0;
+	unsigned long     discont_blocks = 0;
 	sector_t	 *blocks = iobuf->dr_blocks;
-        int               i, nr_pages = iobuf->dr_npages;
-        int               blocks_per_page;
-        int               rw = iobuf->dr_rw;
+	int               i, nr_pages = iobuf->dr_npages;
+	int               blocks_per_page;
+	int               rw = iobuf->dr_rw;
 
-        if (unlikely(nr_pages == 0))
-                return;
+	if (unlikely(nr_pages == 0))
+		return;
 
 	blocks_per_page = PAGE_SIZE >> osd_sb(osd)->s_blocksize_bits;
 
-        lprocfs_oh_tally_log2(&s->hist[BRW_R_PAGES+rw], nr_pages);
+	lprocfs_oh_tally_log2(&bs->bs_hist[BRW_R_PAGES + rw], nr_pages);
 
-        while (nr_pages-- > 0) {
-                if (last_page && (*pages)->index != (last_page->index + 1))
-                        discont_pages++;
-                last_page = *pages;
-                pages++;
-                for (i = 0; i < blocks_per_page; i++) {
-                        if (last_block && *blocks != (*last_block + 1))
-                                discont_blocks++;
-                        last_block = blocks++;
-                }
-        }
+	while (nr_pages-- > 0) {
+		if (last_page && (*pages)->index != (last_page->index + 1))
+			discont_pages++;
+		last_page = *pages;
+		pages++;
+		for (i = 0; i < blocks_per_page; i++) {
+			if (last_block && *blocks != (*last_block + 1))
+				discont_blocks++;
+			last_block = blocks++;
+		}
+	}
 
-        lprocfs_oh_tally(&s->hist[BRW_R_DISCONT_PAGES+rw], discont_pages);
-        lprocfs_oh_tally(&s->hist[BRW_R_DISCONT_BLOCKS+rw], discont_blocks);
+	lprocfs_oh_tally(&bs->bs_hist[BRW_R_DISCONT_PAGES+rw], discont_pages);
+	lprocfs_oh_tally(&bs->bs_hist[BRW_R_DISCONT_BLOCKS+rw], discont_blocks);
 }
 
 static void display_brw_stats(struct seq_file *seq, char *name, char *units,
@@ -117,41 +117,36 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
 
 static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 {
-	struct timespec64 now;
-
 	/* this sampling races with updates */
-	ktime_get_real_ts64(&now);
+	lprocfs_stats_header(seq, ktime_get(), brw_stats->bs_init, 25, ":", 1);
 
-	seq_printf(seq, "snapshot_time:         %lld.%09ld (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
+	display_brw_stats(seq, "pages per bulk r/w", "rpcs",
+			  &brw_stats->bs_hist[BRW_R_PAGES],
+			  &brw_stats->bs_hist[BRW_W_PAGES], 1);
 
-        display_brw_stats(seq, "pages per bulk r/w", "rpcs",
-                          &brw_stats->hist[BRW_R_PAGES],
-                          &brw_stats->hist[BRW_W_PAGES], 1);
+	display_brw_stats(seq, "discontiguous pages", "rpcs",
+			  &brw_stats->bs_hist[BRW_R_DISCONT_PAGES],
+			  &brw_stats->bs_hist[BRW_W_DISCONT_PAGES], 0);
 
-        display_brw_stats(seq, "discontiguous pages", "rpcs",
-                          &brw_stats->hist[BRW_R_DISCONT_PAGES],
-                          &brw_stats->hist[BRW_W_DISCONT_PAGES], 0);
+	display_brw_stats(seq, "discontiguous blocks", "rpcs",
+			  &brw_stats->bs_hist[BRW_R_DISCONT_BLOCKS],
+			  &brw_stats->bs_hist[BRW_W_DISCONT_BLOCKS], 0);
 
-        display_brw_stats(seq, "discontiguous blocks", "rpcs",
-                          &brw_stats->hist[BRW_R_DISCONT_BLOCKS],
-                          &brw_stats->hist[BRW_W_DISCONT_BLOCKS], 0);
+	display_brw_stats(seq, "disk fragmented I/Os", "ios",
+			  &brw_stats->bs_hist[BRW_R_DIO_FRAGS],
+			  &brw_stats->bs_hist[BRW_W_DIO_FRAGS], 0);
 
-        display_brw_stats(seq, "disk fragmented I/Os", "ios",
-                          &brw_stats->hist[BRW_R_DIO_FRAGS],
-                          &brw_stats->hist[BRW_W_DIO_FRAGS], 0);
-
-        display_brw_stats(seq, "disk I/Os in flight", "ios",
-                          &brw_stats->hist[BRW_R_RPC_HIST],
-                          &brw_stats->hist[BRW_W_RPC_HIST], 0);
+	display_brw_stats(seq, "disk I/Os in flight", "ios",
+			  &brw_stats->bs_hist[BRW_R_RPC_HIST],
+			  &brw_stats->bs_hist[BRW_W_RPC_HIST], 0);
 
 	display_brw_stats(seq, "I/O time (1/1000s)", "ios",
-			  &brw_stats->hist[BRW_R_IO_TIME],
-			  &brw_stats->hist[BRW_W_IO_TIME], 1);
+			  &brw_stats->bs_hist[BRW_R_IO_TIME],
+			  &brw_stats->bs_hist[BRW_W_IO_TIME], 1);
 
-        display_brw_stats(seq, "disk I/O size", "ios",
-                          &brw_stats->hist[BRW_R_DISK_IOSIZE],
-                          &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
+	display_brw_stats(seq, "disk I/O size", "ios",
+			  &brw_stats->bs_hist[BRW_R_DISK_IOSIZE],
+			  &brw_stats->bs_hist[BRW_W_DISK_IOSIZE], 1);
 }
 
 static int osd_brw_stats_seq_show(struct seq_file *seq, void *v)
@@ -168,24 +163,27 @@ static ssize_t osd_brw_stats_seq_write(struct file *file,
 				       size_t len, loff_t *off)
 {
 	struct seq_file *seq = file->private_data;
-        struct osd_device *osd = seq->private;
-        int i;
+	struct osd_device *osd = seq->private;
+	int i;
 
-        for (i = 0; i < BRW_LAST; i++)
-                lprocfs_oh_clear(&osd->od_brw_stats.hist[i]);
+	for (i = 0; i < BRW_LAST; i++)
+		lprocfs_oh_clear(&osd->od_brw_stats.bs_hist[i]);
+	osd->od_brw_stats.bs_init = ktime_get();
 
-        return len;
+	return len;
 }
 
 LPROC_SEQ_FOPS(osd_brw_stats);
 
 static int osd_stats_init(struct osd_device *osd)
 {
-        int i, result;
-        ENTRY;
+	int i, result;
 
-        for (i = 0; i < BRW_LAST; i++)
-		spin_lock_init(&osd->od_brw_stats.hist[i].oh_lock);
+	ENTRY;
+	osd->od_brw_stats.bs_init = ktime_get();
+
+	for (i = 0; i < BRW_LAST; i++)
+		spin_lock_init(&osd->od_brw_stats.bs_hist[i].oh_lock);
 
         osd->od_stats = lprocfs_alloc_stats(LPROC_OSD_LAST, 0);
         if (osd->od_stats != NULL) {

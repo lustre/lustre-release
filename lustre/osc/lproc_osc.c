@@ -706,18 +706,14 @@ struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 
 static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
-	struct timespec64 now;
 	struct obd_device *obd = seq->private;
 	struct client_obd *cli = &obd->u.cli;
 	unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
 	int i;
 
-	ktime_get_real_ts64(&now);
-
 	spin_lock(&cli->cl_loi_list_lock);
 
-	seq_printf(seq, "snapshot_time:         %lld.%09lu (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
+	lprocfs_stats_header(seq, ktime_get(), cli->cl_stats_init, 25, ":", 1);
 	seq_printf(seq, "read RPCs in flight:  %d\n",
 		   cli->cl_r_in_flight);
 	seq_printf(seq, "write RPCs in flight: %d\n",
@@ -803,7 +799,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
 static ssize_t osc_rpc_stats_seq_write(struct file *file,
 				       const char __user *buf,
-                                       size_t len, loff_t *off)
+				       size_t len, loff_t *off)
 {
 	struct seq_file *seq = file->private_data;
 	struct obd_device *obd = seq->private;
@@ -815,6 +811,7 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file,
 	lprocfs_oh_clear(&cli->cl_write_page_hist);
 	lprocfs_oh_clear(&cli->cl_read_offset_hist);
 	lprocfs_oh_clear(&cli->cl_write_offset_hist);
+	cli->cl_stats_init = ktime_get();
 
 	return len;
 }
@@ -822,14 +819,10 @@ LPROC_SEQ_FOPS(osc_rpc_stats);
 
 static int osc_stats_seq_show(struct seq_file *seq, void *v)
 {
-	struct timespec64 now;
 	struct obd_device *obd = seq->private;
 	struct osc_stats *stats = &obd2osc_dev(obd)->od_stats;
 
-	ktime_get_real_ts64(&now);
-
-	seq_printf(seq, "snapshot_time:         %lld.%09lu (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
+	lprocfs_stats_header(seq, ktime_get(), stats->os_init, 25, ":", true);
 	seq_printf(seq, "lockless_write_bytes\t\t%llu\n",
 		   stats->os_lockless_writes);
 	seq_printf(seq, "lockless_read_bytes\t\t%llu\n",
@@ -846,6 +839,8 @@ static ssize_t osc_stats_seq_write(struct file *file,
 	struct osc_stats *stats = &obd2osc_dev(obd)->od_stats;
 
 	memset(stats, 0, sizeof(*stats));
+	stats->os_init = ktime_get();
+
 	return len;
 }
 

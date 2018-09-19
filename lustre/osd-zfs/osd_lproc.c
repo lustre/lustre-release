@@ -86,39 +86,36 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
 
 static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 {
-	struct timespec64 now;
-
 	/* this sampling races with updates */
-	ktime_get_real_ts64(&now);
-	seq_printf(seq, "snapshot_time:         %llu.%09lu (secs.nsecs)\n",
-		   (s64)now.tv_sec, now.tv_nsec);
+	lprocfs_stats_header(seq, ktime_get(), brw_stats->bs_init, 25, ":", 1);
 
 	display_brw_stats(seq, "pages per bulk r/w", "rpcs",
-			  &brw_stats->hist[BRW_R_PAGES],
-			  &brw_stats->hist[BRW_W_PAGES], 1);
+			  &brw_stats->bs_hist[BRW_R_PAGES],
+			  &brw_stats->bs_hist[BRW_W_PAGES], 1);
+
 	display_brw_stats(seq, "discontiguous pages", "rpcs",
-			  &brw_stats->hist[BRW_R_DISCONT_PAGES],
-			  &brw_stats->hist[BRW_W_DISCONT_PAGES], 0);
+			  &brw_stats->bs_hist[BRW_R_DISCONT_PAGES],
+			  &brw_stats->bs_hist[BRW_W_DISCONT_PAGES], 0);
 #if 0
 	display_brw_stats(seq, "discontiguous blocks", "rpcs",
-			  &brw_stats->hist[BRW_R_DISCONT_BLOCKS],
-			  &brw_stats->hist[BRW_W_DISCONT_BLOCKS], 0);
+			  &brw_stats->bs_hist[BRW_R_DISCONT_BLOCKS],
+			  &brw_stats->bs_hist[BRW_W_DISCONT_BLOCKS], 0);
 
 	display_brw_stats(seq, "disk fragmented I/Os", "ios",
-			  &brw_stats->hist[BRW_R_DIO_FRAGS],
-			  &brw_stats->hist[BRW_W_DIO_FRAGS], 0);
+			  &brw_stats->bs_hist[BRW_R_DIO_FRAGS],
+			  &brw_stats->bs_hist[BRW_W_DIO_FRAGS], 0);
 #endif
 	display_brw_stats(seq, "disk I/Os in flight", "ios",
-			  &brw_stats->hist[BRW_R_RPC_HIST],
-			  &brw_stats->hist[BRW_W_RPC_HIST], 0);
+			  &brw_stats->bs_hist[BRW_R_RPC_HIST],
+			  &brw_stats->bs_hist[BRW_W_RPC_HIST], 0);
 
 	display_brw_stats(seq, "I/O time (1/1000s)", "ios",
-			  &brw_stats->hist[BRW_R_IO_TIME],
-			  &brw_stats->hist[BRW_W_IO_TIME], 1);
+			  &brw_stats->bs_hist[BRW_R_IO_TIME],
+			  &brw_stats->bs_hist[BRW_W_IO_TIME], 1);
 
 	display_brw_stats(seq, "disk I/O size", "ios",
-			  &brw_stats->hist[BRW_R_DISK_IOSIZE],
-			  &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
+			  &brw_stats->bs_hist[BRW_R_DISK_IOSIZE],
+			  &brw_stats->bs_hist[BRW_W_DISK_IOSIZE], 1);
 }
 
 static int osd_brw_stats_seq_show(struct seq_file *seq, void *v)
@@ -139,7 +136,7 @@ static ssize_t osd_brw_stats_seq_write(struct file *file,
 	int i;
 
 	for (i = 0; i < BRW_LAST; i++)
-		lprocfs_oh_clear(&osd->od_brw_stats.hist[i]);
+		lprocfs_oh_clear(&osd->od_brw_stats.bs_hist[i]);
 
 	return len;
 }
@@ -152,7 +149,7 @@ static int osd_stats_init(struct osd_device *osd)
 	ENTRY;
 
 	for (i = 0; i < BRW_LAST; i++)
-		spin_lock_init(&osd->od_brw_stats.hist[i].oh_lock);
+		spin_lock_init(&osd->od_brw_stats.bs_hist[i].oh_lock);
 
 	osd->od_stats = lprocfs_alloc_stats(LPROC_OSD_LAST, 0);
 	if (osd->od_stats != NULL) {

@@ -142,7 +142,7 @@ sub readstat()
         if (defined($prevcount)) {
             $last{$name} = $prevcount;
         }
-        if ($name =~ /^$timestamp$/) {
+        if ($name =~ /^$timestamp/) {
             $cur{$name} = $iodata[1];
         } elsif ($name =~ /^$read_bytes$/) {
 	    if (defined($cur{"read_ops"})) {

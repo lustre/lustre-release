@@ -70,27 +70,25 @@ static void dbuf_set_pending_evict(dmu_buf_t *db)
 
 static void record_start_io(struct osd_device *osd, int rw, int discont_pages)
 {
-	struct obd_histogram *h = osd->od_brw_stats.hist;
+	struct obd_histogram *h = osd->od_brw_stats.bs_hist;
 
 	if (rw == READ) {
 		atomic_inc(&osd->od_r_in_flight);
 		lprocfs_oh_tally(&h[BRW_R_RPC_HIST],
 				 atomic_read(&osd->od_r_in_flight));
 		lprocfs_oh_tally(&h[BRW_R_DISCONT_PAGES], discont_pages);
-
 	} else {
 		atomic_inc(&osd->od_w_in_flight);
 		lprocfs_oh_tally(&h[BRW_W_RPC_HIST],
 				 atomic_read(&osd->od_w_in_flight));
 		lprocfs_oh_tally(&h[BRW_W_DISCONT_PAGES], discont_pages);
-
 	}
 }
 
 static void record_end_io(struct osd_device *osd, int rw,
 			  unsigned long elapsed, int disksize, int npages)
 {
-	struct obd_histogram *h = osd->od_brw_stats.hist;
+	struct obd_histogram *h = osd->od_brw_stats.bs_hist;
 
 	if (rw == READ)
 		atomic_dec(&osd->od_r_in_flight);
