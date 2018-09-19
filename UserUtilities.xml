@@ -22,6 +22,7 @@ lfs
 lfs changelog [--follow] <replaceable>mdt_name</replaceable> [startrec [endrec]]
 lfs changelog_clear <replaceable>mdt_name id endrec</replaceable>
 lfs check <replaceable>mds|osts|servers</replaceable>
+lfs data_version [-nrw] <replaceable>filename</replaceable>
 lfs df [-i] [-h] [--pool]-p <replaceable>fsname</replaceable>[.<replaceable>pool</replaceable>] [<replaceable>path</replaceable>] [--lazy]
 lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N]
          [[!] --ctime|-C [-+]N] [--maxdepth|-D N] [--name|-n <replaceable>pattern</replaceable>]
@@ -167,6 +168,40 @@ lfs help
               <entry>
                 <para>Displays the status of MDS or OSTs (as specified in the
                 command) or all servers (MDS and OSTs).</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para>
+                  <literal>data_version [-nrw]
+                  <replaceable>filename</replaceable></literal>
+                </para>
+              </entry>
+              <entry>
+		<para>Displays the current version of file data. If
+		<literal>-n</literal> is specified, the data version is read
+		without taking a lock. As a consequence, the data version could
+		be outdated if there are dirty caches on filesystem clients, but
+		this option will not force data flushes and has less of an
+		impact on the filesystem. If <literal>-r</literal> is specified,
+		the data version is read after dirty pages on clients are
+		flushed. If <literal>-w</literal> is specified, the data version
+		is read after all caching pages on clients are flushed.
+		</para>
+		<para>
+		Even with <literal>-r</literal> or <literal>-w</literal>, race
+		conditions are possible and the data version should be checked
+		before and after an operation to be confident the data did not
+		change during it.
+		</para>
+		<para>
+		The  data  version is the sum of the last committed transaction
+		numbers of all data objects of a file. It is used by HSM policy
+		engines for verifying that file data has not been changed during
+		an archive operation or before a release operation, and by OST
+		migration, primarily for verifying that file data has not been
+		changed during a data copy, when done in non-blocking mode.
+		</para>
               </entry>
             </row>
             <row>
