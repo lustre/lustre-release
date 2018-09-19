@@ -1610,8 +1610,6 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
-	/* XXX: capa support? */
-	/* osc_set_capa_size(req, &RMF_CAPA1, capa); */
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_PUNCH);
 	if (rc) {
 		ptlrpc_request_free(req);

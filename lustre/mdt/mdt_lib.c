@@ -768,20 +768,12 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 		req_capsule_shrink(pill, &RMF_LOGCOOKIES, acl_size, RCL_SERVER);
 	}
 
-	if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER) &&
-	    !(body->mbo_valid & OBD_MD_FLMDSCAPA))
-		req_capsule_shrink(pill, &RMF_CAPA1, 0, RCL_SERVER);
+	/*
+	 * Some more field should be shrinked if needed.
+	 * This should be done by those who added fields to reply message.
+	 */
 
-	if (req_capsule_has_field(pill, &RMF_CAPA2, RCL_SERVER) &&
-	    !(body->mbo_valid & OBD_MD_FLOSSCAPA))
-		req_capsule_shrink(pill, &RMF_CAPA2, 0, RCL_SERVER);
-
-        /*
-         * Some more field should be shrinked if needed.
-         * This should be done by those who added fields to reply message.
-         */
-
-        /* Grow MD buffer if needed finally */
+	/* Grow MD buffer if needed finally */
 	if (info->mti_big_lmm_used) {
                 void *lmm;
 

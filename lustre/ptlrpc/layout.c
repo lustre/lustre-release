@@ -1085,13 +1085,11 @@ struct req_msg_field RMF_LOGCOOKIES =
 EXPORT_SYMBOL(RMF_LOGCOOKIES);
 
 struct req_msg_field RMF_CAPA1 =
-        DEFINE_MSGF("capa", 0, sizeof(struct lustre_capa),
-                    lustre_swab_lustre_capa, NULL);
+	DEFINE_MSGF("capa", 0, 0, NULL, NULL);
 EXPORT_SYMBOL(RMF_CAPA1);
 
 struct req_msg_field RMF_CAPA2 =
-        DEFINE_MSGF("capa", 0, sizeof(struct lustre_capa),
-                    lustre_swab_lustre_capa, NULL);
+	DEFINE_MSGF("capa", 0, 0, NULL, NULL);
 EXPORT_SYMBOL(RMF_CAPA2);
 
 struct req_msg_field RMF_LAYOUT_INTENT =

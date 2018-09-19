@@ -47,10 +47,10 @@
 
 void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent)
 {
-        dst->o_parent_oid = fid_oid(parent);
-        dst->o_parent_seq = fid_seq(parent);
-        dst->o_parent_ver = fid_ver(parent);
-        dst->o_valid |= OBD_MD_FLGENER | OBD_MD_FLFID;
+	dst->o_parent_oid = fid_oid(parent);
+	dst->o_parent_seq = fid_seq(parent);
+	dst->o_parent_ver = fid_ver(parent);
+	dst->o_valid |= OBD_MD_FLPARENT | OBD_MD_FLFID;
 }
 EXPORT_SYMBOL(obdo_set_parent_fid);
 
@@ -125,39 +125,39 @@ EXPORT_SYMBOL(obdo_from_inode);
 void obdo_cpy_md(struct obdo *dst, const struct obdo *src, u64 valid)
 {
 	CDEBUG(D_INODE, "src obdo "DOSTID" valid %#llx, dst obdo "DOSTID"\n",
-               POSTID(&src->o_oi), src->o_valid, POSTID(&dst->o_oi));
-        if (valid & OBD_MD_FLATIME)
-                dst->o_atime = src->o_atime;
-        if (valid & OBD_MD_FLMTIME)
-                dst->o_mtime = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME)
-                dst->o_ctime = src->o_ctime;
-        if (valid & OBD_MD_FLSIZE)
-                dst->o_size = src->o_size;
-        if (valid & OBD_MD_FLBLOCKS) /* allocation of space */
-                dst->o_blocks = src->o_blocks;
-        if (valid & OBD_MD_FLBLKSZ)
-                dst->o_blksize = src->o_blksize;
-        if (valid & OBD_MD_FLTYPE)
-                dst->o_mode = (dst->o_mode & ~S_IFMT) | (src->o_mode & S_IFMT);
-        if (valid & OBD_MD_FLMODE)
-                dst->o_mode = (dst->o_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
-        if (valid & OBD_MD_FLUID)
-                dst->o_uid = src->o_uid;
-        if (valid & OBD_MD_FLGID)
-                dst->o_gid = src->o_gid;
-        if (valid & OBD_MD_FLFLAGS)
-                dst->o_flags = src->o_flags;
-        if (valid & OBD_MD_FLFID) {
-                dst->o_parent_seq = src->o_parent_seq;
-                dst->o_parent_ver = src->o_parent_ver;
-        }
-        if (valid & OBD_MD_FLGENER)
-                dst->o_parent_oid = src->o_parent_oid;
-        if (valid & OBD_MD_FLHANDLE)
-                dst->o_handle = src->o_handle;
+	       POSTID(&src->o_oi), src->o_valid, POSTID(&dst->o_oi));
+	if (valid & OBD_MD_FLATIME)
+		dst->o_atime = src->o_atime;
+	if (valid & OBD_MD_FLMTIME)
+		dst->o_mtime = src->o_mtime;
+	if (valid & OBD_MD_FLCTIME)
+		dst->o_ctime = src->o_ctime;
+	if (valid & OBD_MD_FLSIZE)
+		dst->o_size = src->o_size;
+	if (valid & OBD_MD_FLBLOCKS) /* allocation of space */
+		dst->o_blocks = src->o_blocks;
+	if (valid & OBD_MD_FLBLKSZ)
+		dst->o_blksize = src->o_blksize;
+	if (valid & OBD_MD_FLTYPE)
+		dst->o_mode = (dst->o_mode & ~S_IFMT) | (src->o_mode & S_IFMT);
+	if (valid & OBD_MD_FLMODE)
+		dst->o_mode = (dst->o_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
+	if (valid & OBD_MD_FLUID)
+		dst->o_uid = src->o_uid;
+	if (valid & OBD_MD_FLGID)
+		dst->o_gid = src->o_gid;
+	if (valid & OBD_MD_FLFLAGS)
+		dst->o_flags = src->o_flags;
+	if (valid & OBD_MD_FLFID) {
+		dst->o_parent_seq = src->o_parent_seq;
+		dst->o_parent_ver = src->o_parent_ver;
+	}
+	if (valid & OBD_MD_FLPARENT)
+		dst->o_parent_oid = src->o_parent_oid;
+	if (valid & OBD_MD_FLHANDLE)
+		dst->o_handle = src->o_handle;
 
-        dst->o_valid |= valid;
+	dst->o_valid |= valid;
 }
 EXPORT_SYMBOL(obdo_cpy_md);
 

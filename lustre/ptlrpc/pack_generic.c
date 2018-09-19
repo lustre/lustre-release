@@ -2464,54 +2464,51 @@ void dump_obdo(struct obdo *oa)
 	if (valid & OBD_MD_FLFID)
 		CDEBUG(D_RPCTRACE, "obdo: o_parent_seq = %#llx\n",
 		       oa->o_parent_seq);
-        if (valid & OBD_MD_FLSIZE)
+	if (valid & OBD_MD_FLSIZE)
 		CDEBUG(D_RPCTRACE, "obdo: o_size = %lld\n", oa->o_size);
-        if (valid & OBD_MD_FLMTIME)
+	if (valid & OBD_MD_FLMTIME)
 		CDEBUG(D_RPCTRACE, "obdo: o_mtime = %lld\n", oa->o_mtime);
-        if (valid & OBD_MD_FLATIME)
+	if (valid & OBD_MD_FLATIME)
 		CDEBUG(D_RPCTRACE, "obdo: o_atime = %lld\n", oa->o_atime);
-        if (valid & OBD_MD_FLCTIME)
+	if (valid & OBD_MD_FLCTIME)
 		CDEBUG(D_RPCTRACE, "obdo: o_ctime = %lld\n", oa->o_ctime);
-        if (valid & OBD_MD_FLBLOCKS)   /* allocation of space */
+	if (valid & OBD_MD_FLBLOCKS)   /* allocation of space */
 		CDEBUG(D_RPCTRACE, "obdo: o_blocks = %lld\n", oa->o_blocks);
-        if (valid & OBD_MD_FLGRANT)
+	if (valid & OBD_MD_FLGRANT)
 		CDEBUG(D_RPCTRACE, "obdo: o_grant = %lld\n", oa->o_grant);
-        if (valid & OBD_MD_FLBLKSZ)
-                CDEBUG(D_RPCTRACE, "obdo: o_blksize = %d\n", oa->o_blksize);
-        if (valid & (OBD_MD_FLTYPE | OBD_MD_FLMODE))
-                CDEBUG(D_RPCTRACE, "obdo: o_mode = %o\n",
-                       oa->o_mode & ((valid & OBD_MD_FLTYPE ?  S_IFMT : 0) |
-                                     (valid & OBD_MD_FLMODE ? ~S_IFMT : 0)));
-        if (valid & OBD_MD_FLUID)
-                CDEBUG(D_RPCTRACE, "obdo: o_uid = %u\n", oa->o_uid);
-        if (valid & OBD_MD_FLUID)
-                CDEBUG(D_RPCTRACE, "obdo: o_uid_h = %u\n", oa->o_uid_h);
-        if (valid & OBD_MD_FLGID)
-                CDEBUG(D_RPCTRACE, "obdo: o_gid = %u\n", oa->o_gid);
-        if (valid & OBD_MD_FLGID)
-                CDEBUG(D_RPCTRACE, "obdo: o_gid_h = %u\n", oa->o_gid_h);
-        if (valid & OBD_MD_FLFLAGS)
-                CDEBUG(D_RPCTRACE, "obdo: o_flags = %x\n", oa->o_flags);
-        if (valid & OBD_MD_FLNLINK)
-                CDEBUG(D_RPCTRACE, "obdo: o_nlink = %u\n", oa->o_nlink);
-        else if (valid & OBD_MD_FLCKSUM)
-                CDEBUG(D_RPCTRACE, "obdo: o_checksum (o_nlink) = %u\n",
-                       oa->o_nlink);
-        if (valid & OBD_MD_FLGENER)
-                CDEBUG(D_RPCTRACE, "obdo: o_parent_oid = %x\n",
-                       oa->o_parent_oid);
-        if (valid & OBD_MD_FLEPOCH)
-		CDEBUG(D_RPCTRACE, "obdo: o_ioepoch = %lld\n",
-                       oa->o_ioepoch);
-        if (valid & OBD_MD_FLFID) {
-                CDEBUG(D_RPCTRACE, "obdo: o_stripe_idx = %u\n",
-                       oa->o_stripe_idx);
-                CDEBUG(D_RPCTRACE, "obdo: o_parent_ver = %x\n",
-                       oa->o_parent_ver);
-        }
-        if (valid & OBD_MD_FLHANDLE)
+	if (valid & OBD_MD_FLBLKSZ)
+		CDEBUG(D_RPCTRACE, "obdo: o_blksize = %d\n", oa->o_blksize);
+	if (valid & (OBD_MD_FLTYPE | OBD_MD_FLMODE))
+		CDEBUG(D_RPCTRACE, "obdo: o_mode = %o\n",
+		       oa->o_mode & ((valid & OBD_MD_FLTYPE ?  S_IFMT : 0) |
+				     (valid & OBD_MD_FLMODE ? ~S_IFMT : 0)));
+	if (valid & OBD_MD_FLUID)
+		CDEBUG(D_RPCTRACE, "obdo: o_uid = %u\n", oa->o_uid);
+	if (valid & OBD_MD_FLUID)
+		CDEBUG(D_RPCTRACE, "obdo: o_uid_h = %u\n", oa->o_uid_h);
+	if (valid & OBD_MD_FLGID)
+		CDEBUG(D_RPCTRACE, "obdo: o_gid = %u\n", oa->o_gid);
+	if (valid & OBD_MD_FLGID)
+		CDEBUG(D_RPCTRACE, "obdo: o_gid_h = %u\n", oa->o_gid_h);
+	if (valid & OBD_MD_FLFLAGS)
+		CDEBUG(D_RPCTRACE, "obdo: o_flags = %x\n", oa->o_flags);
+	if (valid & OBD_MD_FLNLINK)
+		CDEBUG(D_RPCTRACE, "obdo: o_nlink = %u\n", oa->o_nlink);
+	else if (valid & OBD_MD_FLCKSUM)
+		CDEBUG(D_RPCTRACE, "obdo: o_checksum (o_nlink) = %u\n",
+		       oa->o_nlink);
+	if (valid & OBD_MD_FLPARENT)
+		CDEBUG(D_RPCTRACE, "obdo: o_parent_oid = %x\n",
+		       oa->o_parent_oid);
+	if (valid & OBD_MD_FLFID) {
+		CDEBUG(D_RPCTRACE, "obdo: o_stripe_idx = %u\n",
+		       oa->o_stripe_idx);
+		CDEBUG(D_RPCTRACE, "obdo: o_parent_ver = %x\n",
+		       oa->o_parent_ver);
+	}
+	if (valid & OBD_MD_FLHANDLE)
 		CDEBUG(D_RPCTRACE, "obdo: o_handle = %lld\n",
-                       oa->o_handle.cookie);
+		       oa->o_handle.cookie);
 }
 
 void dump_ost_body(struct ost_body *ob)

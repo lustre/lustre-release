@@ -1233,20 +1233,19 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_FLFLAGS     (0x00000800ULL) /* flags word */
 #define OBD_MD_DOM_SIZE    (0X00001000ULL) /* Data-on-MDT component size */
 #define OBD_MD_FLNLINK     (0x00002000ULL) /* link count */
-#define OBD_MD_FLGENER     (0x00004000ULL) /* generation number */
-#define OBD_MD_LAYOUT_VERSION (0x00008000ULL) /* layout version for
-					       * OST objects */
+#define OBD_MD_FLPARENT    (0x00004000ULL) /* parent FID */
+#define OBD_MD_LAYOUT_VERSION (0x00008000ULL) /* OST object layout version */
 #define OBD_MD_FLRDEV      (0x00010000ULL) /* device number */
 #define OBD_MD_FLEASIZE    (0x00020000ULL) /* extended attribute data */
 #define OBD_MD_LINKNAME    (0x00040000ULL) /* symbolic link target */
 #define OBD_MD_FLHANDLE    (0x00080000ULL) /* file/lock handle */
 #define OBD_MD_FLCKSUM     (0x00100000ULL) /* bulk data checksum */
-#define OBD_MD_FLQOS       (0x00200000ULL) /* quality of service stats */
-/*	OBD_MD_FLCOOKIE    (0x00800000ULL)    obsolete in 2.8 */
+/*	OBD_MD_FLQOS       (0x00200000ULL) has never been used */
+/*	OBD_MD_FLCOOKIE    (0x00800000ULL) obsolete in 2.8 */
 #define OBD_MD_FLPRJQUOTA  (0x00400000ULL) /* over quota flags sent from ost */
 #define OBD_MD_FLGROUP     (0x01000000ULL) /* group */
 #define OBD_MD_FLFID       (0x02000000ULL) /* ->ost write inline fid */
-#define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write with ioepoch */
+/*	OBD_MD_FLEPOCH     (0x04000000ULL) obsolete 2.7.50 */
                                            /* ->mds if epoch opens or closes */
 #define OBD_MD_FLGRANT     (0x08000000ULL) /* ost preallocation space grant */
 #define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
@@ -1255,7 +1254,7 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_FLMODEASIZE (0x80000000ULL) /* EA size will be changed */
 
 #define OBD_MD_MDS         (0x0000000100000000ULL) /* where an inode lives on */
-#define OBD_MD_REINT       (0x0000000200000000ULL) /* reintegrate oa */
+/*	OBD_MD_REINT       (0x0000000200000000ULL) obsolete 1.8 */
 #define OBD_MD_MEA         (0x0000000400000000ULL) /* CMD split EA  */
 #define OBD_MD_TSTATE      (0x0000000800000000ULL) /* transient state field */
 
@@ -1264,8 +1263,8 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_FLXATTRRM     (0x0000004000000000ULL) /* xattr remove */
 #define OBD_MD_FLACL         (0x0000008000000000ULL) /* ACL */
 #define OBD_MD_FLAGSTATFS    (0x0000010000000000ULL) /* aggregated statfs */
-#define OBD_MD_FLMDSCAPA     (0x0000020000000000ULL) /* MDS capability */
-#define OBD_MD_FLOSSCAPA     (0x0000040000000000ULL) /* OSS capability */
+/*	OBD_MD_FLMDSCAPA     (0x0000020000000000ULL) obsolete 2.7.54 */
+/*	OBD_MD_FLOSSCAPA     (0x0000040000000000ULL) obsolete 2.7.54 */
 /*      OBD_MD_FLCKSPLIT     (0x0000080000000000ULL) obsolete 2.3.58*/
 #define OBD_MD_FLCROSSREF    (0x0000100000000000ULL) /* Cross-ref case */
 #define OBD_MD_FLGETATTRLOCK (0x0000200000000000ULL) /* Get IOEpoch attributes
@@ -1290,7 +1289,7 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 			  OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
 			  OBD_MD_FLMODE  | OBD_MD_FLTYPE  | OBD_MD_FLUID   | \
 			  OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
-			  OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP | \
+			  OBD_MD_FLPARENT | OBD_MD_FLRDEV  | OBD_MD_FLGROUP | \
 			  OBD_MD_FLPROJID)
 
 #define OBD_MD_FLXATTRALL (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS)
