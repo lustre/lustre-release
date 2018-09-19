@@ -619,8 +619,9 @@ int mdc_enqueue_fini(struct ptlrpc_request *req, osc_enqueue_upcall_f upcall,
 }
 
 int mdc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
-			  struct osc_enqueue_args *aa, int rc)
+			  void *args, int rc)
 {
+	struct osc_enqueue_args *aa = args;
 	struct ldlm_lock *lock;
 	struct lustre_handle *lockh = &aa->oa_lockh;
 	enum ldlm_mode mode = aa->oa_mode;
@@ -764,8 +765,7 @@ no_match:
 			aa->oa_flags = flags;
 			aa->oa_lvb = lvb;
 
-			req->rq_interpret_reply =
-				(ptlrpc_interpterer_t)mdc_enqueue_interpret;
+			req->rq_interpret_reply = mdc_enqueue_interpret;
 			ptlrpcd_add_req(req);
 		} else {
 			ptlrpc_req_finished(req);
@@ -1147,9 +1147,9 @@ struct mdc_data_version_args {
 
 static int
 mdc_data_version_interpret(const struct lu_env *env, struct ptlrpc_request *req,
-			   void *arg, int rc)
+			   void *args, int rc)
 {
-	struct mdc_data_version_args *dva = arg;
+	struct mdc_data_version_args *dva = args;
 	struct osc_io *oio = dva->dva_oio;
 	const struct mdt_body *body;
 

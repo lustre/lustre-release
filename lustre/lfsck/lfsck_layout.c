@@ -4576,12 +4576,12 @@ lfsck_layout_slave_async_interpret(const struct lu_env *env,
 				   void *args, int rc)
 {
 	struct lfsck_layout_slave_async_args *llsaa = args;
-	struct obd_export		     *exp   = llsaa->llsaa_exp;
-	struct lfsck_component		     *com   = llsaa->llsaa_com;
-	struct lfsck_layout_slave_target     *llst  = llsaa->llsaa_llst;
-	struct lfsck_layout_slave_data	     *llsd  = com->lc_data;
-	struct lfsck_reply		     *lr    = NULL;
-	bool				      done  = false;
+	struct obd_export *exp = llsaa->llsaa_exp;
+	struct lfsck_component *com = llsaa->llsaa_com;
+	struct lfsck_layout_slave_target *llst = llsaa->llsaa_llst;
+	struct lfsck_layout_slave_data *llsd = com->lc_data;
+	struct lfsck_reply *lr = NULL;
+	bool done = false;
 
 	if (rc != 0) {
 		/* It is probably caused by network trouble, or target crash,

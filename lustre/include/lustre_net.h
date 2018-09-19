@@ -1124,13 +1124,14 @@ struct ptlrpc_request {
 static inline int ptlrpc_req_interpret(const struct lu_env *env,
                                        struct ptlrpc_request *req, int rc)
 {
-        if (req->rq_interpret_reply != NULL) {
-                req->rq_status = req->rq_interpret_reply(env, req,
-                                                         &req->rq_async_args,
-                                                         rc);
-                return req->rq_status;
-        }
-        return rc;
+	if (req->rq_interpret_reply != NULL) {
+		req->rq_status = req->rq_interpret_reply(env, req,
+							 &req->rq_async_args,
+							 rc);
+		return req->rq_status;
+	}
+
+	return rc;
 }
 
 /** \addtogroup  nrs

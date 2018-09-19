@@ -114,9 +114,9 @@ static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
  * \retval negative	negated errno on error
  */
 static int osp_statfs_interpret(const struct lu_env *env,
-				struct ptlrpc_request *req,
-				union ptlrpc_async_args *aa, int rc)
+				struct ptlrpc_request *req, void *args, int rc)
 {
+	union ptlrpc_async_args *aa = args;
 	struct obd_import *imp = req->rq_import;
 	struct obd_statfs *msfs;
 	struct osp_device *d;
@@ -205,7 +205,7 @@ static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 		req->rq_request_portal = OST_CREATE_PORTAL;
 	ptlrpc_at_set_req_timeout(req);
 
-	req->rq_interpret_reply = (ptlrpc_interpterer_t)osp_statfs_interpret;
+	req->rq_interpret_reply = osp_statfs_interpret;
 	aa = ptlrpc_req_async_args(req);
 	aa->pointer_arg[0] = d;
 

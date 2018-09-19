@@ -709,14 +709,15 @@ static int ldlm_handle_ast_error(const struct lu_env *env,
 }
 
 static int ldlm_cb_interpret(const struct lu_env *env,
-                             struct ptlrpc_request *req, void *data, int rc)
+			     struct ptlrpc_request *req, void *args, int rc)
 {
-        struct ldlm_cb_async_args *ca   = data;
-        struct ldlm_lock          *lock = ca->ca_lock;
-        struct ldlm_cb_set_arg    *arg  = ca->ca_set_arg;
-        ENTRY;
+	struct ldlm_cb_async_args *ca = args;
+	struct ldlm_lock *lock = ca->ca_lock;
+	struct ldlm_cb_set_arg *arg  = ca->ca_set_arg;
 
-        LASSERT(lock != NULL);
+	ENTRY;
+
+	LASSERT(lock != NULL);
 
 	switch (arg->type) {
 	case LDLM_GL_CALLBACK:
@@ -729,7 +730,7 @@ static int ldlm_cb_interpret(const struct lu_env *env,
 		 *   -ELDLM_NO_LOCK_DATA when inode is cleared. LU-274
 		 */
 		if (unlikely(arg->gl_interpret_reply)) {
-			rc = arg->gl_interpret_reply(env, req, data, rc);
+			rc = arg->gl_interpret_reply(env, req, args, rc);
 		} else if (rc == -ELDLM_NO_LOCK_DATA) {
 			LDLM_DEBUG(lock, "lost race - client has a lock but no "
 				   "inode");
@@ -1118,22 +1119,24 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 	ca->ca_set_arg = arg;
 	ca->ca_lock = lock;
 
-        /* server namespace, doesn't need lock */
-        req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
-                             ldlm_lvbo_size(lock));
-        ptlrpc_request_set_replen(req);
+	/* server namespace, doesn't need lock */
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+			     ldlm_lvbo_size(lock));
+	ptlrpc_request_set_replen(req);
 
-        req->rq_send_state = LUSTRE_IMP_FULL;
-        /* ptlrpc_request_alloc_pack already set timeout */
-        if (AT_OFF)
-                req->rq_timeout = ldlm_get_rq_timeout();
+	req->rq_send_state = LUSTRE_IMP_FULL;
+	/* ptlrpc_request_alloc_pack already set timeout */
+	if (AT_OFF)
+		req->rq_timeout = ldlm_get_rq_timeout();
 
 	req->rq_interpret_reply = ldlm_cb_interpret;
 
-        if (lock->l_export && lock->l_export->exp_nid_stats &&
-            lock->l_export->exp_nid_stats->nid_ldlm_stats)
-                lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
-                                     LDLM_GL_CALLBACK - LDLM_FIRST_OPC);
+	if (lock->l_export && lock->l_export->exp_nid_stats) {
+		struct nid_stat *nid_stats = lock->l_export->exp_nid_stats;
+
+		lprocfs_counter_incr(nid_stats->nid_ldlm_stats,
+				     LDLM_GL_CALLBACK - LDLM_FIRST_OPC);
+	}
 
 	rc = ldlm_ast_fini(req, arg, lock, 0);
 

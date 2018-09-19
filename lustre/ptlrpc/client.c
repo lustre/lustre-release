@@ -2955,9 +2955,9 @@ EXPORT_SYMBOL(ptlrpc_queue_wait);
  */
 static int ptlrpc_replay_interpret(const struct lu_env *env,
 				   struct ptlrpc_request *req,
-				   void * data, int rc)
+				   void *args, int rc)
 {
-	struct ptlrpc_replay_async_args *aa = data;
+	struct ptlrpc_replay_async_args *aa = args;
 	struct obd_import *imp = req->rq_import;
 
 	ENTRY;
@@ -3105,23 +3105,22 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 	aa = ptlrpc_req_async_args(req);
 	memset(aa, 0, sizeof(*aa));
 
-        /* Prepare request to be resent with ptlrpcd */
-        aa->praa_old_state = req->rq_send_state;
-        req->rq_send_state = LUSTRE_IMP_REPLAY;
-        req->rq_phase = RQ_PHASE_NEW;
-        req->rq_next_phase = RQ_PHASE_UNDEFINED;
-        if (req->rq_repmsg)
-                aa->praa_old_status = lustre_msg_get_status(req->rq_repmsg);
-        req->rq_status = 0;
-        req->rq_interpret_reply = ptlrpc_replay_interpret;
-        /* Readjust the timeout for current conditions */
-        ptlrpc_at_set_req_timeout(req);
+	/* Prepare request to be resent with ptlrpcd */
+	aa->praa_old_state = req->rq_send_state;
+	req->rq_send_state = LUSTRE_IMP_REPLAY;
+	req->rq_phase = RQ_PHASE_NEW;
+	req->rq_next_phase = RQ_PHASE_UNDEFINED;
+	if (req->rq_repmsg)
+		aa->praa_old_status = lustre_msg_get_status(req->rq_repmsg);
+	req->rq_status = 0;
+	req->rq_interpret_reply = ptlrpc_replay_interpret;
+	/* Readjust the timeout for current conditions */
+	ptlrpc_at_set_req_timeout(req);
 
-        /* Tell server the net_latency, so the server can calculate how long
-         * it should wait for next replay */
-        lustre_msg_set_service_time(req->rq_reqmsg,
-                                    ptlrpc_at_get_net_latency(req));
-        DEBUG_REQ(D_HA, req, "REPLAY");
+	/* Tell server net_latency to calculate how long to wait for reply. */
+	lustre_msg_set_service_time(req->rq_reqmsg,
+				    ptlrpc_at_get_net_latency(req));
+	DEBUG_REQ(D_HA, req, "REPLAY");
 
 	atomic_inc(&req->rq_import->imp_replay_inflight);
 	spin_lock(&req->rq_lock);
@@ -3399,9 +3398,9 @@ static void ptlrpcd_add_work_req(struct ptlrpc_request *req)
 }
 
 static int work_interpreter(const struct lu_env *env,
-			    struct ptlrpc_request *req, void *data, int rc)
+			    struct ptlrpc_request *req, void *args, int rc)
 {
-	struct ptlrpc_work_async_args *arg = data;
+	struct ptlrpc_work_async_args *arg = args;
 
 	LASSERT(ptlrpcd_check_work(req));
 	LASSERT(arg->cb != NULL);

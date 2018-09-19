@@ -662,9 +662,9 @@ struct osc_data_version_args {
 
 static int
 osc_data_version_interpret(const struct lu_env *env, struct ptlrpc_request *req,
-			   void *arg, int rc)
+			   void *args, int rc)
 {
-	struct osc_data_version_args *dva = arg;
+	struct osc_data_version_args *dva = args;
 	struct osc_io *oio = dva->dva_oio;
 	const struct ost_body *body;
 

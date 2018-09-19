@@ -602,17 +602,17 @@ static void osp_update_callback_fini(const struct lu_env *env,
  * \retval		negative error number on failure
  */
 static int osp_update_interpret(const struct lu_env *env,
-				struct ptlrpc_request *req, void *arg, int rc)
+				struct ptlrpc_request *req, void *args, int rc)
 {
-	struct object_update_reply	*reply	= NULL;
-	struct osp_update_args		*oaua	= arg;
-	struct osp_update_request	*our = oaua->oaua_update;
-	struct osp_thandle		*oth;
-	struct osp_update_callback	*ouc;
-	struct osp_update_callback	*next;
-	int				 count	= 0;
-	int				 index  = 0;
-	int				 rc1	= 0;
+	struct object_update_reply *reply = NULL;
+	struct osp_update_args *oaua = args;
+	struct osp_update_request *our = oaua->oaua_update;
+	struct osp_thandle *oth;
+	struct osp_update_callback *ouc;
+	struct osp_update_callback *next;
+	int count = 0;
+	int index = 0;
+	int rc1 = 0;
 
 	ENTRY;
 

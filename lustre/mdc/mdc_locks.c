@@ -1228,18 +1228,18 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
-                                              struct ptlrpc_request *req,
-                                              void *args, int rc)
+					      struct ptlrpc_request *req,
+					      void *args, int rc)
 {
 	struct mdc_getattr_args  *ga = args;
-	struct obd_export        *exp = ga->ga_exp;
-	struct md_enqueue_info   *minfo = ga->ga_minfo;
+	struct obd_export *exp = ga->ga_exp;
+	struct md_enqueue_info *minfo = ga->ga_minfo;
 	struct ldlm_enqueue_info *einfo = &minfo->mi_einfo;
-	struct lookup_intent     *it;
-	struct lustre_handle     *lockh;
-	struct obd_device        *obddev;
-	struct ldlm_reply	 *lockrep;
-	__u64                     flags = LDLM_FL_HAS_INTENT;
+	struct lookup_intent *it;
+	struct lustre_handle *lockh;
+	struct obd_device *obddev;
+	struct ldlm_reply *lockrep;
+	__u64 flags = LDLM_FL_HAS_INTENT;
 	ENTRY;
 
         it    = &minfo->mi_it;

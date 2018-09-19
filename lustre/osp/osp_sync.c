@@ -548,10 +548,10 @@ static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
  * \retval 0		always
  */
 static int osp_sync_interpret(const struct lu_env *env,
-			      struct ptlrpc_request *req, void *aa, int rc)
+			      struct ptlrpc_request *req, void *args, int rc)
 {
+	struct osp_job_req_args *jra = args;
 	struct osp_device *d = req->rq_cb_data;
-	struct osp_job_req_args *jra = aa;
 
 	if (jra->jra_magic != OSP_JOB_MAGIC) {
 		DEBUG_REQ(D_ERROR, req, "bad magic %u\n", jra->jra_magic);

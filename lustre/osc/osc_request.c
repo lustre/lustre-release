@@ -180,24 +180,25 @@ out:
 }
 
 static int osc_setattr_interpret(const struct lu_env *env,
-                                 struct ptlrpc_request *req,
-                                 struct osc_setattr_args *sa, int rc)
+				 struct ptlrpc_request *req, void *args, int rc)
 {
-        struct ost_body *body;
-        ENTRY;
+	struct osc_setattr_args	*sa = args;
+	struct ost_body *body;
 
-        if (rc != 0)
-                GOTO(out, rc);
+	ENTRY;
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
-        if (body == NULL)
-                GOTO(out, rc = -EPROTO);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
+	if (body == NULL)
+		GOTO(out, rc = -EPROTO);
 
 	lustre_get_wire_obdo(&req->rq_import->imp_connect_data, sa->sa_oa,
 			     &body->oa);
 out:
-        rc = sa->sa_upcall(sa->sa_cookie, rc);
-        RETURN(rc);
+	rc = sa->sa_upcall(sa->sa_cookie, rc);
+	RETURN(rc);
 }
 
 int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
@@ -229,8 +230,7 @@ int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 		/* Do not wait for response. */
 		ptlrpcd_add_req(req);
 	} else {
-		req->rq_interpret_reply =
-			(ptlrpc_interpterer_t)osc_setattr_interpret;
+		req->rq_interpret_reply = osc_setattr_interpret;
 
 		CLASSERT(sizeof(*sa) <= sizeof(req->rq_async_args));
 		sa = ptlrpc_req_async_args(req);
@@ -417,7 +417,7 @@ int osc_punch_send(struct obd_export *exp, struct obdo *oa,
 
 	ptlrpc_request_set_replen(req);
 
-	req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_setattr_interpret;
+	req->rq_interpret_reply = osc_setattr_interpret;
 	CLASSERT(sizeof(*sa) <= sizeof(req->rq_async_args));
 	sa = ptlrpc_req_async_args(req);
 	sa->sa_oa = oa;
@@ -431,14 +431,13 @@ int osc_punch_send(struct obd_export *exp, struct obdo *oa,
 EXPORT_SYMBOL(osc_punch_send);
 
 static int osc_sync_interpret(const struct lu_env *env,
-                              struct ptlrpc_request *req,
-                              void *arg, int rc)
+			      struct ptlrpc_request *req, void *args, int rc)
 {
-	struct osc_fsync_args	*fa = arg;
-	struct ost_body		*body;
-	struct cl_attr		*attr = &osc_env_info(env)->oti_attr;
-	unsigned long		valid = 0;
-	struct cl_object	*obj;
+	struct osc_fsync_args *fa = args;
+	struct ost_body *body;
+	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
+	unsigned long valid = 0;
+	struct cl_object *obj;
 	ENTRY;
 
 	if (rc != 0)
@@ -549,13 +548,13 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
 }
 
 static int osc_destroy_interpret(const struct lu_env *env,
-				 struct ptlrpc_request *req, void *data,
-				 int rc)
+				 struct ptlrpc_request *req, void *args, int rc)
 {
 	struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
 
 	atomic_dec(&cli->cl_destroy_in_flight);
 	wake_up(&cli->cl_destroy_waitq);
+
 	return 0;
 }
 
@@ -741,14 +740,14 @@ static struct grant_thread_data client_gtd;
 
 static int osc_shrink_grant_interpret(const struct lu_env *env,
 				      struct ptlrpc_request *req,
-				      void *aa, int rc)
+				      void *args, int rc)
 {
+	struct osc_grant_args *aa = args;
 	struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
-	struct obdo *oa = ((struct osc_grant_args *)aa)->aa_oa;
 	struct ost_body *body;
 
 	if (rc != 0) {
-		__osc_update_grant(cli, oa->o_grant);
+		__osc_update_grant(cli, aa->aa_oa->o_grant);
 		GOTO(out, rc);
 	}
 
@@ -756,7 +755,8 @@ static int osc_shrink_grant_interpret(const struct lu_env *env,
 	LASSERT(body);
 	osc_update_grant(cli, body);
 out:
-	OBD_SLAB_FREE_PTR(oa, osc_obdo_kmem);
+	OBD_SLAB_FREE_PTR(aa->aa_oa, osc_obdo_kmem);
+
 	return rc;
 }
 
@@ -1941,11 +1941,13 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
                         }
                 }
         }
-        /* New request takes over pga and oaps from old request.
-         * Note that copying a list_head doesn't work, need to move it... */
-        aa->aa_resends++;
-        new_req->rq_interpret_reply = request->rq_interpret_reply;
-        new_req->rq_async_args = request->rq_async_args;
+	/*
+	 * New request takes over pga and oaps from old request.
+	 * Note that copying a list_head doesn't work, need to move it...
+	 */
+	aa->aa_resends++;
+	new_req->rq_interpret_reply = request->rq_interpret_reply;
+	new_req->rq_async_args = request->rq_async_args;
 	new_req->rq_commit_cb = request->rq_commit_cb;
 	/* cap resend delay to the current request timeout, this is similar to
 	 * what ptlrpc does (see after_reply()) */
@@ -2019,19 +2021,22 @@ static void osc_release_ppga(struct brw_page **ppga, size_t count)
 }
 
 static int brw_interpret(const struct lu_env *env,
-                         struct ptlrpc_request *req, void *data, int rc)
+			 struct ptlrpc_request *req, void *args, int rc)
 {
-	struct osc_brw_async_args *aa = data;
+	struct osc_brw_async_args *aa = args;
 	struct osc_extent *ext;
 	struct osc_extent *tmp;
 	struct client_obd *cli = aa->aa_cli;
-	unsigned long		transferred = 0;
-        ENTRY;
+	unsigned long transferred = 0;
 
-        rc = osc_brw_fini_request(req, rc);
-        CDEBUG(D_INODE, "request %p aa %p rc %d\n", req, aa, rc);
-        /* When server return -EINPROGRESS, client should always retry
-         * regardless of the number of times the bulk was resent already. */
+	ENTRY;
+
+	rc = osc_brw_fini_request(req, rc);
+	CDEBUG(D_INODE, "request %p aa %p rc %d\n", req, aa, rc);
+	/*
+	 * When server returns -EINPROGRESS, client should always retry
+	 * regardless of the number of times the bulk was resent already.
+	 */
 	if (osc_recoverable_error(rc) && !req->rq_no_delay) {
 		if (req->rq_import_generation !=
 		    req->rq_import->imp_generation) {
@@ -2411,8 +2416,9 @@ int osc_enqueue_fini(struct ptlrpc_request *req, osc_enqueue_upcall_f upcall,
 }
 
 int osc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
-			  struct osc_enqueue_args *aa, int rc)
+			  void *args, int rc)
 {
+	struct osc_enqueue_args *aa = args;
 	struct ldlm_lock *lock;
 	struct lustre_handle *lockh = &aa->oa_lockh;
 	enum ldlm_mode mode = aa->oa_mode;
@@ -2613,8 +2619,7 @@ no_match:
 				aa->oa_flags  = NULL;
 			}
 
-			req->rq_interpret_reply =
-				(ptlrpc_interpterer_t)osc_enqueue_interpret;
+			req->rq_interpret_reply = osc_enqueue_interpret;
 			if (rqset == PTLRPCD_SET)
 				ptlrpcd_add_req(req);
 			else
@@ -2677,36 +2682,36 @@ int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 }
 
 static int osc_statfs_interpret(const struct lu_env *env,
-                                struct ptlrpc_request *req,
-                                struct osc_async_args *aa, int rc)
+				struct ptlrpc_request *req, void *args, int rc)
 {
-        struct obd_statfs *msfs;
-        ENTRY;
+	struct osc_async_args *aa = args;
+	struct obd_statfs *msfs;
 
-        if (rc == -EBADR)
-                /* The request has in fact never been sent
-                 * due to issues at a higher level (LOV).
-                 * Exit immediately since the caller is
-                 * aware of the problem and takes care
-                 * of the clean up */
-                 RETURN(rc);
+	ENTRY;
+	if (rc == -EBADR)
+		/*
+		 * The request has in fact never been sent due to issues at
+		 * a higher level (LOV).  Exit immediately since the caller
+		 * is aware of the problem and takes care of the clean up.
+		 */
+		RETURN(rc);
 
-        if ((rc == -ENOTCONN || rc == -EAGAIN) &&
-            (aa->aa_oi->oi_flags & OBD_STATFS_NODELAY))
-                GOTO(out, rc = 0);
+	if ((rc == -ENOTCONN || rc == -EAGAIN) &&
+	    (aa->aa_oi->oi_flags & OBD_STATFS_NODELAY))
+		GOTO(out, rc = 0);
 
-        if (rc != 0)
-                GOTO(out, rc);
+	if (rc != 0)
+		GOTO(out, rc);
 
-        msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
-        if (msfs == NULL) {
+	msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
+	if (msfs == NULL)
                 GOTO(out, rc = -EPROTO);
-        }
 
-        *aa->aa_oi->oi_osfs = *msfs;
+	*aa->aa_oi->oi_osfs = *msfs;
 out:
-        rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
-        RETURN(rc);
+	rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
+
+	RETURN(rc);
 }
 
 static int osc_statfs_async(struct obd_export *exp,
@@ -2744,7 +2749,7 @@ static int osc_statfs_async(struct obd_export *exp,
 		req->rq_no_delay = 1;
 	}
 
-	req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_statfs_interpret;
+	req->rq_interpret_reply = osc_statfs_interpret;
 	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
 	aa = ptlrpc_req_async_args(req);
 	aa->aa_oi = oinfo;

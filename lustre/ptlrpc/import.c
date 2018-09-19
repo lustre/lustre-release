@@ -107,8 +107,8 @@ EXPORT_SYMBOL(ptlrpc_import_enter_resend);
 
 
 static int ptlrpc_connect_interpret(const struct lu_env *env,
-                                    struct ptlrpc_request *request,
-                                    void * data, int rc);
+				    struct ptlrpc_request *request,
+				    void *args, int rc);
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
 /* Only this function is allowed to change the import state when it is
@@ -1332,13 +1332,12 @@ out:
  * \see signal_completed_replay
  */
 static int completed_replay_interpret(const struct lu_env *env,
-                                      struct ptlrpc_request *req,
-                                      void * data, int rc)
+				      struct ptlrpc_request *req,
+				      void *args, int rc)
 {
 	ENTRY;
 	atomic_dec(&req->rq_import->imp_replay_inflight);
-	if (req->rq_status == 0 &&
-	    !req->rq_import->imp_vbr_failed) {
+	if (req->rq_status == 0 && !req->rq_import->imp_vbr_failed) {
 		ptlrpc_import_recovery_state_machine(req->rq_import);
 	} else {
 		if (req->rq_import->imp_vbr_failed) {
@@ -1662,7 +1661,7 @@ EXPORT_SYMBOL(ptlrpc_disconnect_import);
 
 static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 					    struct ptlrpc_request *req,
-					    void *data, int rc)
+					    void *args, int rc)
 {
 	struct obd_import *imp = req->rq_import;
 	int connect = 0;
