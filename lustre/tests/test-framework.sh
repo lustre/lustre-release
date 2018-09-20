@@ -274,6 +274,8 @@ init_test_env() {
 	SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 	GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 
+	export PERM_CMD=${PERM_CMD:-"$LCTL conf_param"}
+
 	export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
 	if [ ! -f "$L_GETIDENTITY" ]; then
 		if `which l_getidentity > /dev/null 2>&1`; then
@@ -2022,46 +2024,6 @@ stop() {
 	fi
 }
 
-# save quota version (both administrative and operational quotas)
-# add an additional parameter if mountpoint is ever different from $MOUNT
-#
-# XXX This function is kept for interoperability with old server (< 2.3.50),
-#     it should be removed whenever we drop the interoperability for such
-#     server.
-quota_save_version() {
-    local fsname=${2:-$FSNAME}
-    local spec=$1
-    local ver=$(tr -c -d "123" <<< $spec)
-    local type=$(tr -c -d "ug" <<< $spec)
-
-    [ -n "$ver" -a "$ver" != "3" ] && error "wrong quota version specifier"
-
-    [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
-
-    do_facet mgs "lctl conf_param ${fsname}-MDT*.mdd.quota_type=$spec"
-    local varsvc
-    local osts=$(get_facets OST)
-    for ost in ${osts//,/ }; do
-        varsvc=${ost}_svc
-        do_facet mgs "lctl conf_param ${!varsvc}.ost.quota_type=$spec"
-    done
-}
-
-# client could mount several lustre
-#
-# XXX This function is kept for interoperability with old server (< 2.3.50),
-#     it should be removed whenever we drop the interoperability for such
-#     server.
-quota_type() {
-	local fsname=${1:-$FSNAME}
-	local rc=0
-	do_facet $SINGLEMDS lctl get_param mdd.${fsname}-MDT*.quota_type ||
-		rc=$?
-	do_nodes $(comma_list $(osts_nodes)) \
-		lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
-	return $rc
-}
-
 # get mdt quota type
 mdt_quota_type() {
 	local varsvc=${SINGLEMDS}_svc
@@ -2080,12 +2042,24 @@ ost_quota_type() {
 # restore old quota type settings
 restore_quota() {
 	if [ "$old_MDT_QUOTA_TYPE" ]; then
-		do_facet mgs $LCTL conf_param \
-			$FSNAME.quota.mdt=$old_MDT_QUOTA_TYPE
+		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+			do_facet mgs $PERM_CMD \
+				osd-*.$FSNAME-MDT*.quota_slave.enable = \
+				$old_MDT_QUOTA_TYPE
+		else
+			do_facet mgs $PERM_CMD \
+				$FSNAME.quota.mdt=$old_MDT_QUOTA_TYPE
+		fi
 	fi
 	if [ "$old_OST_QUOTA_TYPE" ]; then
-		do_facet mgs $LCTL conf_param \
-			$FSNAME.quota.ost=$old_OST_QUOTA_TYPE
+		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+			do_facet mgs $PERM_CMD \
+				osd-*.$FSNAME-OST*.quota_slave.enable = \
+				$old_OST_QUOTA_TYPE
+		else
+			do_facet mgs $LCTL conf_param \
+				$FSNAME.quota.ost=$old_OST_QUOTA_TYPE
+		fi
 	fi
 }
 
@@ -2138,10 +2112,17 @@ setup_quota(){
 	export old_MDT_QUOTA_TYPE=$mdt_qtype
 	export old_OST_QUOTA_TYPE=$ost_qtype
 
-	do_facet mgs $LCTL conf_param $FSNAME.quota.mdt=$QUOTA_TYPE ||
-		error "set mdt quota type failed"
-	do_facet mgs $LCTL conf_param $FSNAME.quota.ost=$QUOTA_TYPE ||
-		error "set ost quota type failed"
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs $PERM_CMD \
+			osd-*.$FSNAME-MDT*.quota_slave.enable=$QUOTA_TYPE
+		do_facet mgs $PERM_CMD \
+			osd-*.$FSNAME-OST*.quota_slave.enable=$QUOTA_TYPE
+	else
+		do_facet mgs $PERM_CMD $FSNAME.quota.mdt=$QUOTA_TYPE ||
+			error "set mdt quota type failed"
+		do_facet mgs $PERM_CMD $FSNAME.quota.ost=$QUOTA_TYPE ||
+			error "set ost quota type failed"
+	fi
 
 	local quota_usrs=$QUOTA_USERS
 
@@ -4793,6 +4774,49 @@ set_conf_param_and_check() {
 		error "check $PARAM failed!"
 }
 
+set_persistent_param() {
+	local myfacet=$1
+	local test_param=$2
+	local param=$3
+	local orig=$(do_facet $myfacet "$LCTL get_param -n $test_param")
+
+	if [ $# -gt 3 ]; then
+		local final=$4
+	else
+		local -i final
+		final=$((orig + 5))
+	fi
+
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		echo "Setting $test_param from $orig to $final"
+		do_facet mgs "$PERM_CMD $test_param='$final'" ||
+			error "$PERM_CMD $test_param failed"
+	else
+		echo "Setting $param from $orig to $final"
+		do_facet mgs "$PERM_CMD $param='$final'" ||
+			error "$PERM_CMD $param failed"
+	fi
+}
+
+set_persistent_param_and_check() {
+	local myfacet=$1
+	local test_param=$2
+	local param=$3
+	local orig=$(do_facet $myfacet "$LCTL get_param -n $test_param")
+
+	if [ $# -gt 3 ]; then
+		local final=$4
+	else
+		local -i final
+		final=$((orig + 5))
+	fi
+
+	set_persistent_param $myfacet $test_param $param "$final"
+
+	wait_update_facet $myfacet "$LCTL get_param -n $test_param" "$final" ||
+		error "check $param failed!"
+}
+
 init_param_vars () {
 	TIMEOUT=$(lctl get_param -n timeout)
 	TIMEOUT=${TIMEOUT:-20}
@@ -4814,9 +4838,8 @@ init_param_vars () {
 		elif [ $current_jobid_var != $JOBID_VAR ]; then
 			echo "setting jobstats to $JOBID_VAR"
 
-			set_conf_param_and_check client			\
-				"$LCTL get_param -n jobid_var"		\
-				"$FSNAME.sys.jobid_var" $JOBID_VAR
+			set_persistent_param_and_check client \
+				"jobid_var" "$FSNAME.sys.jobid_var" $JOBID_VAR
 		fi
 	else
 		echo "jobstats not supported by server"
@@ -7137,6 +7160,7 @@ wait_osp_active() {
 	# wait until all MDTs are in the expected state
 	for ((num = 1; num <= $MDSCOUNT; num++)); do
 		local mdtosp=$(get_mdtosc_proc_path mds${num} ${tgt_name})
+		local wait=0
 		local mproc
 
 		if [ $facet = "mds" ]; then
@@ -7151,7 +7175,6 @@ wait_osp_active() {
 			sleep 5
 			local result=$(do_facet mds${num} "$LCTL get_param -n $mproc")
 			local max=30
-			local wait=0
 
 			[ ${PIPESTATUS[0]} = 0 ] || error "Can't read $mproc"
 			if [ $result -eq $expected ]; then

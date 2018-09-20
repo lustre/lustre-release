@@ -1030,10 +1030,9 @@ test_27a() {
 	start_mds || error "Unable to start MDS"
 	echo "Requeue thread should have started: "
 	ps -e | grep ll_cfg_requeue
-	set_conf_param_and_check ost1					      \
-	   "$LCTL get_param -n obdfilter.$FSNAME-OST0000.client_cache_seconds" \
-	   "$FSNAME-OST0000.ost.client_cache_seconds" ||
-		error "set_conf_param_and_check ost1 failed"
+	set_persistent_param_and_check ost1			\
+	   "obdfilter.$FSNAME-OST0000.client_cache_seconds"	\
+	   "$FSNAME-OST0000.ost.client_cache_seconds"
 	cleanup_nocli || error "cleanup_nocli failed with rc $?"
 }
 run_test 27a "Reacquire MGS lock if OST started first"
@@ -1045,14 +1044,12 @@ test_27b() {
 			awk '($3 ~ "mdt" && $4 ~ "MDT0000") { print $4 }')
 
 	facet_failover $SINGLEMDS
-	set_conf_param_and_check $SINGLEMDS				\
-		"$LCTL get_param -n mdt.$device.identity_acquire_expire" \
-		"$device.mdt.identity_acquire_expire" ||
-		error "set_conf_param_and_check $SINGLEMDS failed"
-	set_conf_param_and_check client				 \
-		"$LCTL get_param -n mdc.$device-mdc-*.max_rpcs_in_flight"\
-		"$device.mdc.max_rpcs_in_flight" ||
-		error "set_conf_param_and_check client failed"
+	set_persistent_param_and_check $SINGLEMDS	\
+		"mdt.$device.identity_acquire_expire"	\
+		"$device.mdt.identity_acquire_expire"
+	set_persistent_param_and_check client		\
+		"mdc.$device-mdc-*.max_rpcs_in_flight"	\
+		"$device.mdc.max_rpcs_in_flight"
 	check_mount
 	cleanup || error "cleanup failed with $?"
 }
@@ -1060,25 +1057,22 @@ run_test 27b "Reacquire MGS lock after failover"
 
 test_28A() { # was test_28
 	setup
-	TEST="$LCTL get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
+	TEST="llite.$FSNAME-*.max_read_ahead_whole_mb"
 	PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
-	ORIG=$($TEST)
+	ORIG=$($LCTL get_param -n $TEST)
 	FINAL=$(($ORIG + 1))
-	set_conf_param_and_check client "$TEST" "$PARAM" $FINAL ||
-		error "first set_conf_param_and_check client failed"
+	set_persistent_param_and_check client "$TEST" "$PARAM" $FINAL
 	FINAL=$(($FINAL + 1))
-	set_conf_param_and_check client "$TEST" "$PARAM" $FINAL ||
-		error "second set_conf_param_and_check client failed"
+	set_persistent_param_and_check client "$TEST" "$PARAM" $FINAL
 	umount_client $MOUNT || error "umount_client $MOUNT failed"
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	RESULT=$($TEST)
+	RESULT=$($LCTL get_param -n $TEST)
 	if [ $RESULT -ne $FINAL ]; then
 		error "New config not seen: wanted $FINAL got $RESULT"
 	else
 		echo "New config success: got $RESULT"
 	fi
-	set_conf_param_and_check client "$TEST" "$PARAM" $ORIG ||
-		error "third set_conf_param_and_check client failed"
+	set_persistent_param_and_check client "$TEST" "$PARAM" $ORIG
 	cleanup || error "cleanup failed with rc $?"
 }
 run_test 28A "permanent parameter setting"
@@ -1099,7 +1093,7 @@ test_28a() { # LU-4221
 	setup
 
 	# In this test we will set three kinds of proc parameters with
-	# lctl conf_param:
+	# lctl set_param -P or lctl conf_param:
 	# 1. non-symlink ones in the OFD
 	# 2. non-symlink ones in the OSD
 
@@ -1107,33 +1101,29 @@ test_28a() { # LU-4221
 	# prepare a non-symlink parameter in the OFD
 	name="client_cache_seconds"
 	param="$device.ost.$name"
-	cmd="$LCTL get_param -n obdfilter.$device.$name"
+	cmd="obdfilter.$device.$name"
 
-	# conf_param the parameter in the OFD
-	old=$(do_facet ost1 $cmd)
+	# permanently setting the parameter in the OFD
+	old=$(do_facet ost1 $LCTL get_param -n $cmd)
 	new=$((old * 2))
-	set_conf_param_and_check ost1 "$cmd" "$param" $new ||
-		error "lctl conf_param $device.ost.$param=$new failed"
-	set_conf_param_and_check ost1 "$cmd" "$param" $old ||
-		error "lctl conf_param $device.ost.$param=$old failed"
+	set_persistent_param_and_check ost1 "$cmd" "$param" $new
+	set_persistent_param_and_check ost1 "$cmd" "$param" $old
 
 	# Check 2.
 	# prepare a non-symlink parameter in the OSD
 	name="auto_scrub"
 	param="$device.osd.$name"
-	cmd="$LCTL get_param -n osd-*.$device.$name"
+	cmd="osd-*.$device.$name"
 
 	# conf_param the parameter in the OSD
-	old=$(do_facet ost1 $cmd)
+	old=$(do_facet ost1 $LCTL get_param -n $cmd)
 	new=$(((old + 1) % 2))
-	set_conf_param_and_check ost1 "$cmd" "$param" $new ||
-		error "lctl conf_param $device.osd.$param=$new failed"
-	set_conf_param_and_check ost1 "$cmd" "$param" $old ||
-		error "lctl conf_param $device.osd.$param=$old failed"
+	set_persistent_param_and_check ost1 "$cmd" "$param" $new
+	set_persistent_param_and_check ost1 "$cmd" "$param" $old
 
 	cleanup || error "cleanup failed with $?"
 }
-run_test 28a "set symlink parameters permanently with conf_param"
+run_test 28a "set symlink parameters permanently with lctl"
 
 test_29() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
@@ -1142,14 +1132,17 @@ test_29() {
 	sleep 10
 
 	local PARAM="$FSNAME-OST0001.osc.active"
-        local PROC_ACT="osc.$FSNAME-OST0001-osc-[^M]*.active"
-        local PROC_UUID="osc.$FSNAME-OST0001-osc-[^M]*.ost_server_uuid"
+	# With lctl set_param -P the value $PROC_ACT will be sent to
+	# all nodes. The [^M] filter out the ability to set active
+	# on the MDS servers which is tested with wait_osp_* below.
+	# For ost_server_uuid that only exist on client so filtering
+	# is safe.
+	local PROC_ACT="osc.$FSNAME-OST0001-osc-*.active"
+	local PROC_UUID="osc.$FSNAME-OST0001-osc-[!M]*.ost_server_uuid"
 
         ACTV=$($LCTL get_param -n $PROC_ACT)
 	DEAC=$((1 - $ACTV))
-	set_conf_param_and_check client \
-		"$LCTL get_param -n $PROC_ACT" "$PARAM" $DEAC ||
-		error "set_conf_param_and_check client failed"
+	set_persistent_param_and_check client $PROC_ACT $PARAM $DEAC
 	# also check ost_server_uuid status
 	RESULT=$($LCTL get_param -n $PROC_UUID | grep DEACTIV)
 	if [ -z "$RESULT" ]; then
@@ -1173,9 +1166,7 @@ test_29() {
 	fi
 
 	# make sure it reactivates
-	set_conf_param_and_check client \
-		"$LCTL get_param -n $PROC_ACT" "$PARAM" $ACTV ||
-		error "lctl get_param $PROC_ACT $PARAM $ACTV failed"
+	set_persistent_param_and_check client $PROC_ACT $PARAM $ACTV
 
 	umount_client $MOUNT
 	stop_ost2 || error "Unable to stop OST2"
@@ -1189,35 +1180,39 @@ test_30a() {
 	setup
 
 	echo Big config llog
-	TEST="$LCTL get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
-	ORIG=$($TEST)
+	TEST="llite.$FSNAME-*.max_read_ahead_whole_mb"
+	ORIG=$($LCTL get_param -n $TEST)
 	LIST=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
 	for i in ${LIST[@]}; do
-		set_conf_param_and_check client "$TEST" \
-			"$FSNAME.llite.max_read_ahead_whole_mb" $i ||
-			error "Set $FSNAME.llite.max_read_ahead_whole_mb failed"
+		set_persistent_param_and_check client "$TEST" \
+			"$FSNAME.llite.max_read_ahead_whole_mb" $i
 	done
 	# make sure client restart still works
 	umount_client $MOUNT
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	[ "$($TEST)" -ne "$i" ] &&
+	[ "$($LCTL get_param -n $TEST)" -ne "$i" ] &&
 		error "Param didn't stick across restart $($TEST) != $i"
 	pass
 
 	echo Erase parameter setting
-	do_facet mgs "$LCTL conf_param \
-		      -d $FSNAME.llite.max_read_ahead_whole_mb" ||
-		error "Erase param $FSNAME.llite.max_read_ahead_whole_mb failed"
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs "$PERM_CMD -d $TEST" ||
+			error "Erase param $TEST failed"
+	else
+		do_facet mgs "$PERM_CMD \
+			      -d $FSNAME.llite.max_read_ahead_whole_mb" ||
+			error "Erase param $FSNAME.llite.max_read_ahead_whole_mb failed"
+	fi
 	umount_client $MOUNT
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	FINAL=$($TEST)
+	FINAL=$($LCTL get_param -n $TEST)
 	echo "deleted (default) value=$FINAL, orig=$ORIG"
 	# assumes this parameter started at the default value
 	[ "$FINAL" -eq "$ORIG" ] || fail "Deleted value=$FINAL, orig=$ORIG"
 
 	cleanup || error "cleanup failed with rc $?"
 }
-run_test 30a "Big config llog and conf_param deletion"
+run_test 30a "Big config llog and permanent parameter deletion"
 
 test_30b() {
 	setup
@@ -1239,26 +1234,39 @@ test_30b() {
 
 	local TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
 		grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
-	set_conf_param_and_check client "$TEST" \
-		"$FSNAME-OST0000.failover.node" $NEW ||
-		error "didn't add failover nid $NEW"
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		PARAM="osc.$FSNAME-OST0000-osc-[^M]*.import"
+		echo "Setting $PARAM from $TEST to $NEW"
+		do_facet mgs "$PERM_CMD $PARAM='connection=$NEW'" ||
+			error "$PERM_CMD $PARAM failed"
+	else
+		PARAM="$FSNAME-OST0000.failover.node"
+		echo "Setting $PARAM from $TEST to $NEW"
+		do_facet mgs "$PERM_CMD $PARAM='$NEW'" ||
+			error "$PARAM $PARAM failed"
+	fi
+	wait_update_facet client "$TEST" "$NEW" ||
+		error "check $PARAM failed!"
+
 	local NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
 		grep failover_nids)
-	echo $NIDS
 	local NIDCOUNT=$(echo "$NIDS" | wc -w)
 	echo "should have $((orignidcount + 1)) entries \
 		in failover nids string, have $NIDCOUNT"
 	[ $NIDCOUNT -eq $((orignidcount + 1)) ] ||
 		error "Failover nid not added"
 
-	do_facet mgs "$LCTL conf_param -d $FSNAME-OST0000.failover.node" ||
-		error "conf_param delete failed"
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs "$PERM_CMD -d osc.$FSNAME-OST0000-osc-*.import"
+	else
+		do_facet mgs "$PERM_CMD -d $FSNAME-OST0000.failover.node" ||
+			error "$PERM_CMD delete failed"
+	fi
 	umount_client $MOUNT
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
 
 	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
 		grep failover_nids)
-	echo $NIDS
 	NIDCOUNT=$(echo "$NIDS" | wc -w)
 	echo "only $orignidcount final entries should remain \
 		in failover nids string, have $NIDCOUNT"
@@ -1598,21 +1606,13 @@ t32_verify_quota() {
 		return 1
 	}
 
-	do_node $node $LCTL conf_param $fsname.quota.mdt=ug
-	cmd="$LCTL get_param -n osd-$fstype.$fsname-MDT0000"
-	cmd=$cmd.quota_slave.enabled
-	wait_update $node "$cmd" "ug" || {
-		echo "Enable mdt quota failed"
-		return 1
-	}
+	set_persistent_param_and_check $node \
+		"osd-$fstype.$fsname-MDT0000.quota_slave.enabled" \
+		$fsname.quota.mdt" ug
 
-	do_node $node $LCTL conf_param $fsname.quota.ost=ug
-	cmd="$LCTL get_param -n osd-$fstype.$fsname-OST0000"
-	cmd=$cmd.quota_slave.enabled
-	wait_update $node "$cmd" "ug" || {
-		echo "Enable ost quota failed"
-		return 1
-	}
+	set_persistent_param_and_check $node \
+		"osd-$fstype.$fsname-OST0000.quota_slave.enabled" \
+		$fsname.quota.ost" ug
 
 	chmod 0777 $mnt
 	runas -u $T32_QID -g $T32_QID dd if=/dev/zero of=$mnt/t32_qf_new \
@@ -1895,32 +1895,62 @@ t32_test() {
 		return 1
 	fi
 
-	$r $LCTL conf_param $fsname-OST0000.osc.max_dirty_mb=15 || {
-		error_noexit "Setting \"max_dirty_mb\""
-		return 1
-	}
-	$r $LCTL conf_param $fsname-OST0000.failover.node=$nid || {
-		error_noexit "Setting OST \"failover.node\""
-		return 1
-	}
-	$r $LCTL conf_param $fsname-MDT0000.mdc.max_rpcs_in_flight=9 || {
-		error_noexit "Setting \"max_rpcs_in_flight\""
-		return 1
-	}
-	$r $LCTL conf_param $fsname-MDT0000.failover.node=$nid || {
-		error_noexit "Setting MDT \"failover.node\""
-		return 1
-	}
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		$r $PERM_CMD osc.$fsname-OST0000*.import=connection=$nid || {
+			error_noexit "Setting OST \"failover.node\""
+			return 1
+		}
+		$r $PERM_CMD mdc.$fsname-MDT0000*.import=connection=$nid || {
+			error_noexit "Setting MDT \"failover.node\""
+			return 1
+		}
+		$r $PERM_CMD osc.$fsname-OST0000-*.max_dirty_mb=15 || {
+			error_noexit "Setting \"max_dirty_mb\""
+			return 1
+		}
+		$r $PERM_CMD mdc.$fsname-MDT0000-*.max_rpcs_in_flight=9 || {
+			error_noexit "Setting \"max_rpcs_in_flight\""
+			return 1
+		}
+		$r $PERM_CMD lov.$fsname-MDT0000-*.stripesize=4M || {
+			error_noexit "Setting \"lov.stripesize\""
+			return 1
+		}
+		$r $PERM_CMD mdd.$fsname-MDT0000-*.atime_diff=70 || {
+			error_noexit "Setting \"mdd.atime_diff\""
+			return 1
+		}
+	else
+		$r $PERM_CMD $fsname-OST0000.failover.node=$nid || {
+			error_noexit "Setting OST \"failover.node\""
+			return 1
+		}
+
+		$r $PERM_CMD $fsname-MDT0000.failover.node=$nid || {
+			error_noexit "Setting MDT \"failover.node\""
+			return 1
+		}
+
+		$r $PERM_CMD $fsname-OST0000.osc.max_dirty_mb=15 || {
+			error_noexit "Setting \"max_dirty_mb\""
+			return 1
+		}
+		$r $PERM_CMD $fsname-MDT0000.mdc.max_rpcs_in_flight=9 || {
+			error_noexit "Setting \"max_rpcs_in_flight\""
+			return 1
+		}
+		$r $PERM_CMD $fsname-MDT0000.lov.stripesize=4M || {
+			error_noexit "Setting \"lov.stripesize\""
+			return 1
+		}
+		$r $PERM_CMD $fsname-MDT0000.mdd.atime_diff=70 || {
+			error_noexit "Setting \"mdd.atime_diff\""
+			return 1
+		}
+	fi
+
 	$r $LCTL pool_new $fsname.interop || {
 		error_noexit "Setting \"interop\""
-		return 1
-	}
-	$r $LCTL conf_param $fsname-MDT0000.lov.stripesize=4M || {
-		error_noexit "Setting \"lov.stripesize\""
-		return 1
-	}
-	$r $LCTL conf_param $fsname-MDT0000.mdd.atime_diff=70 || {
-		error_noexit "Setting \"mdd.atime_diff\""
 		return 1
 	}
 
@@ -1949,19 +1979,34 @@ t32_test() {
 	fi
 
 	if [ "$dne_upgrade" != "no" ]; then
-		$r $LCTL conf_param \
-				$fsname-MDT0001.mdc.max_rpcs_in_flight=9 || {
-			error_noexit "Setting MDT1 \"max_rpcs_in_flight\""
-			return 1
-		}
-		$r $LCTL conf_param $fsname-MDT0001.failover.node=$nid || {
-			error_noexit "Setting MDT1 \"failover.node\""
-			return 1
-		}
-		$r $LCTL conf_param $fsname-MDT0001.lov.stripesize=4M || {
-			error_noexit "Setting MDT1 \"lov.stripesize\""
-			return 1
-		}
+		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+			$r $PERM_CMD mdc.$fsname-MDT0001*.import=connection=$nid || {
+				error_noexit "Setting MDT1 \"failover.node\""
+				return 1
+			}
+
+			$r $PERM_CMD mdc.$fsname-MDT0001-*.max_rpcs_in_flight=9 || {
+				error_noexit "Setting MDT1 \"max_rpcs_in_flight\""
+				return 1
+			}
+			$r $PERM_CMD lov.$fsname-MDT0001-*.stripesize=4M || {
+				error_noexit "Setting MDT1 \"lov.stripesize\""
+				return 1
+			}
+		else
+			$r $PERM_CMD $fsname-MDT0001.failover.node=$nid || {
+				error_noexit "Setting MDT1 \"failover.node\""
+				return 1
+			}
+			$r $PERM_CMD $fsname-MDT0001.mdc.max_rpcs_in_flight=9 || {
+				error_noexit "Setting MDT1 \"max_rpcs_in_flight\""
+				return 1
+			}
+			$r $PERM_CMD $fsname-MDT0001.lov.stripesize=4M || {
+				error_noexit "Setting MDT1 \"lov.stripesize\""
+				return 1
+			}
+		fi
 	fi
 
 	if [ "$writeconf" ]; then
@@ -2045,18 +2090,10 @@ t32_test() {
 			}
 			rm $tmp/mnt/lustre/dom
 
-			$r $LCTL get_param -n lod.*MDT0000*.dom_stripesize || {
-				error_noexit "Getting \"dom_stripesize\""
-				return 1
-			}
-			$r $LCTL conf_param \
-				$fsname-MDT0000.lod.dom_stripesize=0 || {
+			set_persistent_param_and_check mds \
+			   "lod.*MDT0000*.dom_stripesize" \
+			   "$fsname-MDT0000.lod.dom_stripesize" 0 || {
 				error_noexit "Changing \"dom_stripesize\""
-				return 1
-			}
-			wait_update $(facet_host mds) "$LCTL get_param \
-				-n lod.*MDT0000*.dom_stripesize" 0 || {
-				error_noexit "Verifying \"dom_stripesize\""
 				return 1
 			}
 		fi
@@ -2237,13 +2274,11 @@ t32_test() {
 			return 1
 		}
 		nrpcs=$((nrpcs_orig + 5))
-		$r $LCTL conf_param $fsname-MDT0000.mdc.max_rpcs_in_flight=$nrpcs || {
+
+		set_persistent_param_and_check $HOSTNAME \
+		   "mdc.$fsname-MDT0000*.max_rpcs_in_flight" \
+		   "$fsname-MDT0000.mdc.max_rpcs_in_flight" $nrpcs || {
 			error_noexit "Changing \"max_rpcs_in_flight\""
-			return 1
-		}
-		wait_update $HOSTNAME "$LCTL get_param \
-			-n mdc.*MDT0000*.max_rpcs_in_flight" $nrpcs || {
-			error_noexit "Verifying \"max_rpcs_in_flight\""
 			return 1
 		}
 
@@ -2429,8 +2464,14 @@ test_33a() { # bug 12333, was test_33
 
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
-	do_facet mgs "$LCTL conf_param $FSNAME2.sys.timeout=200" ||
-		error "$LCTL conf_param $FSNAME2.sys.timeout=200 failed"
+
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs "$PERM_CMD timeout=200" ||
+			error "$PERM_CMD timeout=200 failed"
+	else
+		do_facet mgs "$PERM_CMD $FSNAME2.sys.timeout=200" ||
+			error "$PERM_CMD $FSNAME2.sys.timeout=200 failed"
+	fi
 	mkdir -p $MOUNT2 || error "mkdir $MOUNT2 failed"
 	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || error "$MOUNT_CMD failed"
 	echo "ok."
@@ -2504,11 +2545,18 @@ test_35a() { # bug 12459
 	FAKENID="127.0.0.2"
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
 		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
-	do_facet mgs "$LCTL conf_param \
-		      ${device}.failover.node=$(h2nettype $FAKENID)" ||
-		error "Setting ${device}.failover.node=\
-		       $(h2nettype $FAKENID) failed."
 
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs "$PERM_CMD \
+			      mdc.*${device}*.import=connection=$(h2nettype $FAKENID)" ||
+			error "Setting mdc.*${device}*.import=connection=\
+			       $(h2nettype $FAKENID) failed."
+	else
+		do_facet mgs "$PERM_CMD \
+			      ${device}.failover.node=$(h2nettype $FAKENID)" ||
+			error "Setting ${device}.failover.node=\
+			       $(h2nettype $FAKENID) failed."
+	fi
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
 
@@ -2562,10 +2610,18 @@ test_35b() { # bug 18674
 	FAKENID="127.0.0.2"
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
 		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
-	do_facet mgs "$LCTL conf_param \
-		      ${device}.failover.node=$(h2nettype $FAKENID)" ||
-		error "Set ${device}.failover.node=\
-		       $(h2nettype $FAKENID) failed"
+
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs "$PERM_CMD \
+			      mdc.*${device}*.import=connection=$(h2nettype $FAKENID)" ||
+			error "Set mdc.*${device}*.import=connection=\
+			       $(h2nettype $FAKENID) failed"
+	else
+		do_facet mgs "$PERM_CMD \
+			      ${device}.failover.node=$(h2nettype $FAKENID)" ||
+			error "Set ${device}.failover.node=\
+			       $(h2nettype $FAKENID) failed"
+	fi
 
 	local at_max_saved=0
 	# adaptive timeouts may prevent seeing the issue
@@ -3057,16 +3113,24 @@ test_41c() {
 run_test 41c "concurrent mounts of MDT/OST should all fail but one"
 
 test_42() { #bug 14693
+	local PARAM
+
 	setup
 	check_mount || error "client was not mounted"
 
-	do_facet mgs $LCTL conf_param $FSNAME.llite.some_wrong_param=10
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		PARAM="llite.$FSNAME-*.some_wrong_param"
+	else
+		PARAM="$FSNAME.llite.some_wrong_param"
+	fi
+
+	do_facet mgs $PERM_CMD $PARAM=10
 	umount_client $MOUNT ||
 		error "unmounting client failed with invalid llite param"
 	mount_client $MOUNT ||
 		error "mounting client failed with invalid llite param"
 
-	do_facet mgs $LCTL conf_param $FSNAME.sys.some_wrong_param=20
+	do_facet mgs $PERM_CMD $PARAM=20
 	cleanup || error "stopping $FSNAME failed with invalid sys param"
 	setup
 	check_mount || error "client was not mounted with invalid sys param"
@@ -3086,16 +3150,16 @@ test_43a() {
 
 	setup
 	chmod ugo+x $DIR || error "chmod 0 failed"
-	set_conf_param_and_check mds1					\
-		"$LCTL get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
+	set_persistent_param_and_check mds1				\
+		"mdt.$FSNAME-MDT0000.root_squash"			\
 		"$FSNAME.mdt.root_squash"				\
 		"0:0"
 	wait_update $HOSTNAME						\
 		"$LCTL get_param -n llite.${FSNAME}*.root_squash"	\
 		"0:0" ||
 		error "check llite root_squash failed!"
-	set_conf_param_and_check mds1					\
-		"$LCTL get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
+	set_persistent_param_and_check mds1				\
+		"mdt.$FSNAME-MDT0000.nosquash_nids"			\
 		"$FSNAME.mdt.nosquash_nids"				\
 		"NONE"
 	wait_update $HOSTNAME						\
@@ -3103,15 +3167,15 @@ test_43a() {
 		"NONE" ||
 		error "check llite nosquash_nids failed!"
 
-    #
-    # create set of test files
-    #
-    echo "111" > $DIR/$tfile-userfile || error "write 1 failed"
-    chmod go-rw $DIR/$tfile-userfile  || error "chmod 1 failed"
-    chown $RUNAS_ID.$RUNAS_ID $DIR/$tfile-userfile || error "chown failed"
+	#
+	# create set of test files
+	#
+	echo "111" > $DIR/$tfile-userfile || error "write 1 failed"
+	chmod go-rw $DIR/$tfile-userfile  || error "chmod 1 failed"
+	chown $RUNAS_ID.$RUNAS_ID $DIR/$tfile-userfile || error "chown failed"
 
-    echo "222" > $DIR/$tfile-rootfile || error "write 2 failed"
-    chmod go-rw $DIR/$tfile-rootfile  || error "chmod 2 faield"
+	echo "222" > $DIR/$tfile-rootfile || error "write 2 failed"
+	chmod go-rw $DIR/$tfile-rootfile  || error "chmod 2 faield"
 
 	mkdir $DIR/$tdir-rootdir || error "mkdir failed"
 	chmod go-rwx $DIR/$tdir-rootdir || error "chmod 3 failed"
@@ -3126,8 +3190,8 @@ test_43a() {
 	#   set root squash UID:GID to RUNAS_ID
 	#   root should be able to access only files owned by RUNAS_ID
 	#
-	set_conf_param_and_check mds1					\
-		"$LCTL get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
+	set_persistent_param_and_check mds1				\
+		"mdt.$FSNAME-MDT0000.root_squash"			\
 		"$FSNAME.mdt.root_squash"				\
 		"$RUNAS_ID:$RUNAS_ID"
 	wait_update $HOSTNAME						\
@@ -3196,8 +3260,8 @@ test_43a() {
 	local NIDLIST=$($LCTL list_nids all | tr '\n' ' ')
 	NIDLIST="2@gni $NIDLIST 192.168.0.[2,10]@tcp"
 	NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
-	set_conf_param_and_check mds1					\
-		"$LCTL get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
+	set_persistent_param_and_check mds1				\
+		"mdt.$FSNAME-MDT0000.nosquash_nids"			\
 		"$FSNAME-MDTall.mdt.nosquash_nids"			\
 		"$NIDLIST"
 	wait_update $HOSTNAME						\
@@ -3702,18 +3766,21 @@ test_50g() {
         wait_osc_import_state mds ost2 FULL
 	wait_osc_import_ready client ost2
 
-	local PARAM="${FSNAME}-OST0001.osc.active"
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		local PARAM="osc.${FSNAME}-OST0001*.active"
+	else
+		local PARAM="${FSNAME}-OST0001.osc.active"
+	fi
 
 	$SETSTRIPE -c -1 $DIR/$tfile || error "$SETSTRIPE failed"
-	do_facet mgs $LCTL conf_param $PARAM=0 ||
-		error "Unable to deactivate OST"
+	do_facet mgs $PERM_CMD $PARAM=0 || error "Unable to deactivate OST"
 
 	umount_client $MOUNT || error "Unable to unmount client"
 	mount_client $MOUNT || error "Unable to mount client"
 	# This df should not cause a panic
 	df -k $MOUNT
 
-	do_facet mgs $LCTL conf_param $PARAM=1 || error "Unable to activate OST"
+	do_facet mgs $PERM_CMD $PARAM=1 || error "Unable to activate OST"
 	rm -f $DIR/$tfile || error "unable to remove file $DIR/$tfile"
 	umount_client $MOUNT || error "Unable to unmount client"
 	stop_ost2 || error "Unable to stop OST2"
@@ -3740,10 +3807,9 @@ test_50h() {
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	# activatate OSC for OST1
-	local TEST="$LCTL get_param -n osc.${FSNAME}-OST0000-osc-[!M]*.active"
-	set_conf_param_and_check client					\
-		"$TEST" "${FSNAME}-OST0000.osc.active" 1 ||
-		error "Unable to activate OST1"
+	set_persistent_param_and_check client		 \
+		"osc.${FSNAME}-OST0000-osc-[!M]*.active" \
+		"${FSNAME}-OST0000.osc.active" 1
 
 	mkdir $DIR/$tdir/2 || error "mkdir $DIR/$tdir/2 failed"
 	$SETSTRIPE -c -1 -i 0 $DIR/$tdir/2 ||
@@ -3778,13 +3844,18 @@ test_50i() {
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
-	$LCTL conf_param ${FSNAME}-MDT0000.mdc.active=0 &&
-		error "deactive MDC0 succeeds"
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		$PERM_CMD mdc.${FSNAME}-MDT0001-mdc-*.active=0 &&
+			error "deactive MDC0 succeeds"
+	else
+		$PERM_CMD ${FSNAME}-MDT0000.mdc.active=0 &&
+			error "deactive MDC0 succeeds"
+	fi
+
 	# activate MDC for MDT2
-	local TEST="$LCTL get_param -n mdc.${FSNAME}-MDT0001-mdc-[!M]*.active"
-	set_conf_param_and_check client					\
-		"$TEST" "${FSNAME}-MDT0001.mdc.active" 1 ||
-		error "Unable to activate MDT2"
+	set_persistent_param_and_check client		 \
+		"mdc.${FSNAME}-MDT0001-mdc-*.active" \
+		"${FSNAME}-MDT0001.mdc.active" 1
 
 	wait_clients_import_state ${CLIENTS:-$HOSTNAME} mds2 FULL
 	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.60) ]
@@ -3798,10 +3869,9 @@ test_50i() {
 	rm -rf $DIR/$tdir/2 || error "unlink dir failed"
 
 	# deactivate MDC for MDT2
-	local TEST="$LCTL get_param -n mdc.${FSNAME}-MDT0001-mdc-[!M]*.active"
-	set_conf_param_and_check client					\
-		"$TEST" "${FSNAME}-MDT0001.mdc.active" 0 ||
-		error "Unable to deactivate MDT2"
+	set_persistent_param_and_check client		\
+		"mdc.${FSNAME}-MDT0001-mdc-*.active"	\
+		"${FSNAME}-MDT0001.mdc.active" 0
 
 	wait_osp_active mds ${FSNAME}-MDT0001 1 0
 
@@ -5360,7 +5430,7 @@ test_76a() {
 		error "client_cache_count is not saved after remount"
 	stopall
 }
-run_test 76a "set permanent params set_param -P"
+run_test 76a "set permanent params with lctl across mounts"
 
 test_76b() { # LU-4783
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.5.57) ]] ||
@@ -5393,7 +5463,7 @@ test_76c() {
 
 	stopall
 }
-run_test 76c "verify changelog_mask is applied with set_param -P"
+run_test 76c "verify changelog_mask is applied with lctl set_param -P"
 
 test_76d() { #LU-9399
 	setupall
@@ -5421,7 +5491,7 @@ test_76d() { #LU-9399
 
 	stopall
 }
-run_test 76d "verify llite.*.xattr_cache can be set by 'set_param -P' correctly"
+run_test 76d "verify llite.*.xattr_cache can be set by 'lctl set_param -P' correctly"
 
 test_77() { # LU-3445
 	local server_version=$(lustre_version_code $SINGLEMDS)
@@ -7543,13 +7613,18 @@ run_test 106 "check osp llog processing when catalog is wrapped"
 test_107() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.50) ]] ||
 		{ skip "Need MDS version > 2.10.50"; return; }
+	local cmd
 
 	start_mgsmds || error "start_mgsmds failed"
 	start_ost || error "unable to start OST"
 
 	# add unknown configuration parameter.
-	local PARAM="$FSNAME-OST0000.ost.unknown_param=50"
-	do_facet mgs "$LCTL conf_param $PARAM"
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		cmd="$PERM_CMD ost.$FSNAME-OST0000*.unknown_param"
+	else
+		cmd="$PERM_CMD $FSNAME-OST0000*.ost.unknown_param"
+	fi
+	do_facet mgs "$cmd=50"
 	cleanup_nocli || error "cleanup_nocli failed with $?"
 	load_modules
 
@@ -7786,20 +7861,20 @@ run_test 108b "migrate from ZFS to ldiskfs"
 test_109_set_params() {
 	local fsname=$1
 
-	set_conf_param_and_check mds				    \
-	    "$LCTL get_param -n mdd.$fsname-MDT0000.atime_diff"	    \
+	set_persistent_param_and_check mds			    \
+	    "mdd.$fsname-MDT0000.atime_diff"			    \
 	    "$fsname-MDT0000.mdd.atime_diff"			    \
 	    "62"
-	set_conf_param_and_check mds				    \
-	    "$LCTL get_param -n mdd.$fsname-MDT0000.atime_diff"	    \
+	set_persistent_param_and_check mds			    \
+	    "mdd.$fsname-MDT0000.atime_diff"			    \
 	    "$fsname-MDT0000.mdd.atime_diff"			    \
 	    "63"
-	set_conf_param_and_check client				    \
-	    "$LCTL get_param -n llite.$fsname*.max_read_ahead_mb"   \
+	set_persistent_param_and_check client			    \
+	    "llite.$fsname*.max_read_ahead_mb"			    \
 	    "$fsname.llite.max_read_ahead_mb"			    \
 	    "32"
-	set_conf_param_and_check client                             \
-	    "$LCTL get_param -n llite.$fsname*.max_read_ahead_mb"   \
+	set_persistent_param_and_check client			    \
+	    "llite.$fsname*.max_read_ahead_mb"			    \
 	    "$fsname.llite.max_read_ahead_mb"                       \
 	    "64"
 	create_pool $fsname.pool1 || error "create pool failed"

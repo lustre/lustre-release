@@ -230,7 +230,13 @@ set_mdt_qtype() {
 	local cmd
 	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
 		qtype=$(tr -d 'p' <<<$qtype)
-	do_facet mgs $LCTL conf_param $FSNAME.quota.mdt=$qtype
+
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs $PERM_CMD \
+			osd-*.$FSNAME-MDT*.quota_slave.enable=$qtype
+	else
+		do_facet mgs $PERM_CMD $FSNAME.quota.mdt=$qtype
+	fi
 	# we have to make sure each MDT received config changes
 	for mdt in ${mdts//,/ }; do
 		varsvc=${mdt}_svc
@@ -254,7 +260,13 @@ set_ost_qtype() {
 	local cmd
 	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
 		qtype=$(tr -d 'p' <<<$qtype)
-	do_facet mgs $LCTL conf_param $FSNAME.quota.ost=$qtype
+
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		do_facet mgs $PERM_CMD \
+			osd-*.$FSNAME-OST*.quota_slave.enable=$qtype
+	else
+		do_facet mgs $PERM_CMD $FSNAME.quota.ost=$qtype
+	fi
 	# we have to make sure each OST received config changes
 	for ost in ${osts//,/ }; do
 		varsvc=${ost}_svc
@@ -2181,7 +2193,7 @@ test_22() {
 
 	return 0
 }
-run_test 22 "enable/disable quota by 'lctl conf_param'"
+run_test 22 "enable/disable quota by 'lctl conf_param/set_param -P'"
 
 test_23_sub() {
 	local TESTFILE="$DIR/$tdir/$tfile"

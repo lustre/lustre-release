@@ -3340,9 +3340,8 @@ test_77f() {
 	[[ $rc -eq 3 ]] && skip "jobid_var not found" && return
 	[[ $rc -ne 0 ]] && error "failed to get param jobid_var"
 	if [ $saved_jobid_var != procname_uid ]; then
-		set_conf_param_and_check client			\
-			"$LCTL get_param -n jobid_var"		\
-			"$FSNAME.sys.jobid_var" procname_uid
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" procname_uid
 	fi
 
 	local idis
@@ -3379,9 +3378,8 @@ test_77f() {
 	local current_jobid_var=$($LCTL get_param -n jobid_var)
 	[[ $? -ne 0 ]] && error "failed to get param jobid_var"
 	if [ $saved_jobid_var != $current_jobid_var ]; then
-		set_conf_param_and_check client			\
-			"$LCTL get_param -n jobid_var"		\
-			"$FSNAME.sys.jobid_var" $saved_jobid_var
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" $saved_jobid_var
 	fi
 	return 0
 }
@@ -3767,9 +3765,8 @@ test_77n() { #LU-10802
 	# Configure jobid_var
 	local saved_jobid_var=$($LCTL get_param -n jobid_var)
 	if [ $saved_jobid_var != procname_uid ]; then
-		set_conf_param_and_check client			\
-			"$LCTL get_param -n jobid_var"		\
-			"$FSNAME.sys.jobid_var" procname_uid
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" procname_uid
 	fi
 
 	do_nodes $(comma_list $(osts_nodes)) \
@@ -3795,9 +3792,8 @@ test_77n() { #LU-10802
 
 	local current_jobid_var=$($LCTL get_param -n jobid_var)
 	if [ $saved_jobid_var != $current_jobid_var ]; then
-		set_conf_param_and_check client			\
-			"$LCTL get_param -n jobid_var"		\
-			"$FSNAME.sys.jobid_var" $saved_jobid_var
+		set_persistent_param_and_check client \
+			"jobid_var" "$FSNAME.sys.jobid_var" $saved_jobid_var
 	fi
 }
 run_test 77n "check wildcard support for TBF JobID NRS policy"

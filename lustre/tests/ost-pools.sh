@@ -1255,7 +1255,12 @@ test_23a() {
 		$LFS quotaoff -ug $MOUNT
 		$LFS quotacheck -ug $MOUNT
 	else
-		do_facet mgs $LCTL conf_param $FSNAME.quota.ost=ug
+		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+			do_facet mgs $PERM_CMD \
+				osd-*.$FSNAME-OST*.quota_slave.enable=ug
+		else
+			do_facet mgs $PERM_CMD $FSNAME.quota.ost=ug
+		fi
 		sleep 5
 	fi
 
@@ -1326,7 +1331,12 @@ test_23b() {
 	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 		$LFS quotaoff -ug $MOUNT
 	else
-		do_facet mgs $LCTL conf_param $FSNAME.quota.ost=none
+		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+			do_facet mgs $PERM_CMD \
+				osd-*.$FSNAME-OST*.quota_slave.enable=none
+		else
+			do_facet mgs $PERM_CMD $FSNAME.quota.ost=none
+		fi
 		sleep 5
 	fi
 

@@ -13908,8 +13908,8 @@ verify_jobstats() {
 jobstats_set() {
 	local new_jobenv=$1
 
-	do_facet mgs $LCTL conf_param $FSNAME.sys.jobid_var=$new_jobenv
-	wait_update $HOSTNAME "$LCTL get_param -n jobid_var" $new_jobenv
+	set_persistent_param_and_check client "jobid_var" \
+		"$FSNAME.sys.jobid_var" $new_jobenv
 }
 
 test_205() { # Job stats
@@ -13925,9 +13925,13 @@ test_205() { # Job stats
 
 	local old_jobenv=$($LCTL get_param -n jobid_var)
 	[ $old_jobenv != $JOBENV ] && jobstats_set $JOBENV
-	stack_trap "do_facet mgs \
-		$LCTL conf_param $FSNAME.sys.jobid_var=$old_jobenv" EXIT
 
+	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		stack_trap "do_facet mgs $PERM_CMD jobid_var=$old_jobenv" EXIT
+	else
+		stack_trap "do_facet mgs $PERM_CMD \
+			$FSNAME.sys.jobid_var=$old_jobenv" EXIT
+	fi
 	changelog_register
 
 	local old_interval=$(do_facet $SINGLEMDS lctl get_param -n \
@@ -14559,17 +14563,15 @@ test_224c() { # LU-6441
 				osc.*.max_pages_per_rpc)
 	local at_max=$($LCTL get_param -n at_max)
 	local timeout=$($LCTL get_param -n timeout)
-	local test_at="$LCTL get_param -n at_max"
+	local test_at="at_max"
 	local param_at="$FSNAME.sys.at_max"
-	local test_timeout="$LCTL get_param -n timeout"
+	local test_timeout="timeout"
 	local param_timeout="$FSNAME.sys.timeout"
 
 	$LCTL set_param -n osc.*.max_pages_per_rpc=1024
 
-	set_conf_param_and_check client "$test_at" "$param_at" 0 ||
-		error "conf_param at_max=0 failed"
-	set_conf_param_and_check client "$test_timeout" "$param_timeout" 5 ||
-		error "conf_param timeout=5 failed"
+	set_persistent_param_and_check client "$test_at" "$param_at" 0
+	set_persistent_param_and_check client "$test_timeout" "$param_timeout" 5
 
 	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB3   0x520
 	do_facet ost1 $LCTL set_param fail_loc=0x520
@@ -14578,10 +14580,9 @@ test_224c() { # LU-6441
 	sync
 	do_facet ost1 $LCTL set_param fail_loc=0
 
-	set_conf_param_and_check client "$test_at" "$param_at" $at_max ||
-		error "conf_param at_max=$at_max failed"
-	set_conf_param_and_check client "$test_timeout" "$param_timeout" \
-		$timeout || error "conf_param timeout=$timeout failed"
+	set_persistent_param_and_check client "$test_at" "$param_at" $at_max
+	set_persistent_param_and_check client "$test_timeout" "$param_timeout" \
+		$timeout
 
 	$LCTL set_param -n $pages_per_rpc
 	restore_lustre_params < $p
