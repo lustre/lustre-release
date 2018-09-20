@@ -882,9 +882,11 @@ static void osc_grant_work_handler(struct work_struct *data)
 	mutex_lock(&client_gtd.gtd_mutex);
 	list_for_each_entry(cli, &client_gtd.gtd_clients,
 			    cl_grant_chain) {
-		if (++rpc_sent < GRANT_SHRINK_RPC_BATCH &&
-		    osc_should_shrink_grant(cli))
+		if (rpc_sent < GRANT_SHRINK_RPC_BATCH &&
+		    osc_should_shrink_grant(cli)) {
 			osc_shrink_grant(cli);
+			rpc_sent++;
+		}
 
 		if (!init_next_shrink) {
 			if (cli->cl_next_shrink_grant < next_shrink &&
