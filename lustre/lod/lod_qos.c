@@ -1864,6 +1864,9 @@ int lod_use_defined_striping(const struct lu_env *env,
 			lod_comp->llc_extent.e_end = le64_to_cpu(ext->e_end);
 			lod_comp->llc_flags =
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
+			if (lod_comp->llc_flags & LCME_FL_NOSYNC)
+				lod_comp->llc_timestamp = le64_to_cpu(
+					comp_v1->lcm_entries[i].lcme_timestamp);
 			lod_comp->llc_id =
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_id);
 			if (lod_comp->llc_id == LCME_ID_INVAL)

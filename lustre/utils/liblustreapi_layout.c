@@ -60,6 +60,7 @@ struct llapi_layout_comp {
 	struct lu_extent	llc_extent;	/* [start, end) of component */
 	uint32_t		llc_id;		/* unique ID of component */
 	uint32_t		llc_flags;	/* LCME_FL_* flags */
+	uint64_t		llc_timestamp;	/* snapshot timestamp */
 	struct list_head	llc_list;	/* linked to the llapi_layout
 						   components list */
 };
@@ -148,6 +149,7 @@ llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 			ent = &comp_v1->lcm_entries[i];
 			__swab32s(&ent->lcme_id);
 			__swab32s(&ent->lcme_flags);
+			__swab64s(&ent->lcme_timestamp);
 			__swab64s(&ent->lcme_extent.e_start);
 			__swab64s(&ent->lcme_extent.e_end);
 			__swab32s(&ent->lcme_offset);
@@ -418,6 +420,8 @@ llapi_layout_from_lum(const struct lov_user_md *lum, int lum_size)
 			comp->llc_extent.e_end = ent->lcme_extent.e_end;
 			comp->llc_id = ent->lcme_id;
 			comp->llc_flags = ent->lcme_flags;
+			if (comp->llc_flags & LCME_FL_NOSYNC)
+				comp->llc_timestamp = ent->lcme_timestamp;
 		} else {
 			comp->llc_extent.e_start = 0;
 			comp->llc_extent.e_end = LUSTRE_EOF;
@@ -622,6 +626,8 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			ent = &comp_v1->lcm_entries[ent_idx];
 			ent->lcme_id = comp->llc_id;
 			ent->lcme_flags = comp->llc_flags;
+			if (ent->lcme_flags & LCME_FL_NOSYNC)
+				ent->lcme_timestamp = comp->llc_timestamp;
 			ent->lcme_extent.e_start = comp->llc_extent.e_start;
 			ent->lcme_extent.e_end = comp->llc_extent.e_end;
 			ent->lcme_size = blob_size;
@@ -2457,6 +2463,10 @@ int llapi_mirror_find_stale(struct llapi_layout *layout,
 			/* not in the specified mirror */
 			if (j == ids_nr)
 				goto next;
+		} else if (flags & LCME_FL_NOSYNC) {
+			/* if not specified mirrors, do not resync "nosync"
+			 * mirrors */
+			goto next;
 		}
 
 		rc = llapi_layout_comp_id_get(layout, &id);

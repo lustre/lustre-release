@@ -254,6 +254,7 @@ struct lod_layout_component {
 	__u16			  llc_stripe_offset;
 	__u16			  llc_stripe_count;
 	__u16			  llc_stripes_allocated;
+	__u64			  llc_timestamp; /* snapshot time */
 	char			 *llc_pool;
 	/* ost list specified with LOV_USER_MAGIC_SPECIFIC lum */
 	struct ost_pool		  llc_ostlist;

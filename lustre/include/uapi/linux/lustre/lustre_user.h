@@ -594,14 +594,18 @@ enum lov_comp_md_entry_flags {
 	LCME_FL_PREF_RW	= LCME_FL_PREF_RD | LCME_FL_PREF_WR,
 	LCME_FL_OFFLINE	= 0x00000008,	/* Not used */
 	LCME_FL_INIT	= 0x00000010,	/* instantiated */
+	LCME_FL_NOSYNC	= 0x00000020,	/* FLR: no sync for the mirror */
 	LCME_FL_NEG	= 0x80000000	/* used to indicate a negative flag,
 					   won't be stored on disk */
 };
 
 #define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT | LCME_FL_STALE | \
-				 LCME_FL_PREF_RW)
+				 LCME_FL_PREF_RW | LCME_FL_NOSYNC)
 /* The flags can be set by users at mirror creation time. */
 #define LCME_USER_FLAGS		(LCME_FL_PREF_RW)
+
+/* The flags are for mirrors */
+#define LCME_MIRROR_FLAGS	(LCME_FL_NOSYNC)
 
 /* the highest bit in obdo::o_layout_version is used to mark if the file is
  * being resynced. */
@@ -628,8 +632,8 @@ struct lov_comp_md_entry_v1 {
 						   start from lov_comp_md_v1 */
 	__u32			lcme_size;      /* size of component blob */
 	__u32			lcme_layout_gen;
+	__u64			lcme_timestamp;	/* snapshot time if applicable*/
 	__u32			lcme_padding_1;
-	__u64			lcme_padding_2;
 } __attribute__((packed));
 
 #define SEQ_ID_MAX		0x0000FFFF

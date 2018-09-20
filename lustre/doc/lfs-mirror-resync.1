@@ -12,8 +12,13 @@ name \fImirrored_file\fR.
 If there is no stale mirror for the \fImirrored_file(s)\fR, then the command does
 nothing. Otherwise, it will copy data from synced mirror to stale mirror(s), and
 mark all successfully copied mirror(s) as SYNC.
+.br
+If \fB\-\-only\fR option is not specified, the \fBnosync\fR mirror(s) (i.e.
+components that have this flag set) will not be synced.
+.br
 If \fB\-\-only\fR <\fImirror_id\fR[,...]> option is specified, then the
-command will resynchronize the mirror(s) specified by the \fImirror_id\fR(s).
+command will resynchronize the mirror(s) specified by the \fImirror_id\fR(s),
+even nosync mirror(s) will be resynchronized as well.
 This option cannot be used when multiple mirrored files are specified.
 .SH OPTIONS
 .TP
@@ -25,7 +30,7 @@ be used when multiple mirrored files are specified.
 .SH EXAMPLES
 .TP
 .B lfs mirror resync /mnt/lustre/file1 /mnt/lustre/file2
-Resynchronize all of the stale mirror(s) for /mnt/lustre/file1 and /mnt/lustre/file2.
+Resynchronize all of the stale and sync-able mirror(s) for /mnt/lustre/file1 and /mnt/lustre/file2.
 .TP
 .B lfs mirror resync --only 4,5 /mnt/lustre/file1
 Resynchronize mirrors with mirror ID 4 and 5 for /mnt/lustre/file1 even if they

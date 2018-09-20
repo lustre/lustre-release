@@ -2793,6 +2793,8 @@ static int lod_declare_layout_set(const struct lu_env *env,
 	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
 		__u32 id = comp_v1->lcm_entries[i].lcme_id;
 		__u32 flags = comp_v1->lcm_entries[i].lcme_flags;
+		__u32 mirror_flag = flags & LCME_MIRROR_FLAGS;
+		bool neg = flags & LCME_FL_NEG;
 
 		if (flags & LCME_FL_INIT) {
 			if (changed)
@@ -2800,16 +2802,30 @@ static int lod_declare_layout_set(const struct lu_env *env,
 			RETURN(-EINVAL);
 		}
 
+		flags &= ~(LCME_MIRROR_FLAGS | LCME_FL_NEG);
 		for (j = 0; j < lo->ldo_comp_cnt; j++) {
 			lod_comp = &lo->ldo_comp_entries[j];
-			if (id != lod_comp->llc_id)
+
+			/* lfs only put one flag in each entry */
+			if ((flags && id != lod_comp->llc_id) ||
+			    (mirror_flag && mirror_id_of(id) !=
+					    mirror_id_of(lod_comp->llc_id)))
 				continue;
 
-			if (flags & LCME_FL_NEG) {
-				flags &= ~LCME_FL_NEG;
-				lod_comp->llc_flags &= ~flags;
+			if (neg) {
+				if (flags)
+					lod_comp->llc_flags &= ~flags;
+				if (mirror_flag)
+					lod_comp->llc_flags &= ~mirror_flag;
 			} else {
-				lod_comp->llc_flags |= flags;
+				if (flags)
+					lod_comp->llc_flags |= flags;
+				if (mirror_flag) {
+					lod_comp->llc_flags |= mirror_flag;
+					if (mirror_flag & LCME_FL_NOSYNC)
+						lod_comp->llc_timestamp =
+						       ktime_get_real_seconds();
+				}
 			}
 			changed = true;
 		}

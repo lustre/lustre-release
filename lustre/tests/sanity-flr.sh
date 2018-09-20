@@ -143,10 +143,23 @@ verify_comp_attr() {
 		local fl
 		local expected_list=$(comma_list $expected)
 		for fl in ${expected_list//,/ }; do
-			echo $value | grep -q $fl || {
+			local neg=0
+
+			[[ ${fl:0:1} = "^" ]] && neg=1
+			[[ $neg = 1 ]] && fl=${fl:1}
+
+			$(echo $value | grep -q $fl)
+			local match=$?
+			# 0: matched; 1: not matched
+
+			if  [[ $neg = 0 && $match != 0 ||
+			       $neg = 1 && $match = 0 ]]; then
 				$getstripe_cmd $tf
-				error "expected flag $fl existing on $comp_id"
-			}
+				[[ $neg = 0 ]] && # expect the flag
+				    error "expected flag '$fl' not in $comp_id"
+				[[ $neg = 1 ]] && # not expect the flag
+				    error "not expected flag '$fl' in $comp_id"
+			fi
 		done
 		return
 	}
@@ -1945,6 +1958,67 @@ test_47() {
 	return 0
 }
 run_test 47 "Verify mirror obj alloc"
+
+test_48() {
+	local tf=$DIR/$tfile
+
+	rm -f $tf
+	echo " ** create 2 mirrors FLR file $tf"
+	$LFS mirror create -N -E2M -Eeof --flags prefer \
+			   -N -E1M -Eeof $tf ||
+		error "create FLR file $tf failed"
+
+	echo " ** write it"
+	dd if=/dev/urandom of=$tf bs=1M count=3 || error "write $tf failed"
+	verify_flr_state $tf "wp"
+
+	local sum0=$(md5sum < $tf)
+
+	echo " ** resync the file"
+	$LFS mirror resync $tf
+
+	echo " ** snapshot mirror 2"
+	$LFS setstripe --comp-set -I 0x20003 --comp-flags=nosync $tf
+
+	echo " ** write it again"
+	dd if=/dev/urandom of=$tf bs=1M count=3 || error "write $tf failed"
+	echo " ** resync it again"
+	$LFS mirror resync $tf
+
+	verify_flr_state $tf "wp"
+	verify_comp_attr lcme_flags $tf 0x20003 nosync,stale
+
+	local sum1=$($LFS mirror dump -N1 $tf | md5sum)
+	local sum2=$($LFS mirror dump -N2 $tf | md5sum)
+
+	echo " ** verify mirror 2 doesn't change"
+	echo "original checksum: $sum0"
+	echo "mirror 1 checksum: $sum1"
+	echo "mirror 2 checksum: $sum2"
+	[[ $sum0 = $sum2 ]] ||
+		error "original checksum: $sum0, mirror 2 checksum: $sum2"
+	echo " ** mirror 2 stripe info"
+	$LFS getstripe -v --mirror-index=2 $tf
+
+	echo " ** resync mirror 2"
+	$LFS mirror resync --only 2 $tf
+
+	verify_flr_state $tf "ro"
+	verify_comp_attr lcme_flags $tf 0x20003 nosync,^stale
+
+	sum1=$($LFS mirror dump -N1 $tf | md5sum)
+	sum2=$($LFS mirror dump -N2 $tf | md5sum)
+
+	echo " ** verify mirror 2 resync-ed"
+	echo "original checksum: $sum0"
+	echo "mirror 1 checksum: $sum1"
+	echo "mirror 2 checksum: $sum2"
+	[[ $sum1 = $sum2 ]] ||
+		error "mirror 1 checksum: $sum1, mirror 2 checksum: $sum2"
+	echo " ** mirror 2 stripe info"
+	$LFS getstripe -v --mirror-index=2 $tf
+}
+run_test 48 "Verify snapshot mirror"
 
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)

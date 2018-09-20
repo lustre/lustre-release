@@ -278,7 +278,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(MDS_ATTR_LSIZE == 0x0000000000020000ULL, "found 0x%.16llxULL\n",
 			(long long)MDS_ATTR_LSIZE);
 	LASSERTF(MDS_ATTR_LBLOCKS == 0x0000000000040000ULL, "found 0x%.16llxULL\n",
-			(long long)MDS_ATTR_BLOCKS);
+			(long long)MDS_ATTR_LBLOCKS);
 	LASSERTF(FLD_QUERY == 900, "found %lld\n",
 		 (long long)FLD_QUERY);
 	LASSERTF(FLD_READ == 901, "found %lld\n",
@@ -1749,14 +1749,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_layout_gen));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_layout_gen) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_layout_gen));
-	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1) == 36, "found %lld\n",
+	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_timestamp) == 36, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_timestamp));
+	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_timestamp) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_timestamp));
+	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1) == 44, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_1));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_1));
-	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_2) == 40, "found %lld\n",
-		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_padding_2));
-	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_2) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding_2));
 	LASSERTF(LCME_FL_INIT == 0x00000010UL, "found 0x%.8xUL\n",
 		(unsigned)LCME_FL_INIT);
 	LASSERTF(LCME_FL_NEG == 0x80000000UL, "found 0x%.8xUL\n",
@@ -1885,6 +1885,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_statfs, os_bavail));
 	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_bavail) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_bavail));
+	LASSERTF((int)offsetof(struct obd_statfs, os_files) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct obd_statfs, os_files));
+	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_files) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_files));
 	LASSERTF((int)offsetof(struct obd_statfs, os_ffree) == 40, "found %lld\n",
 		 (long long)(int)offsetof(struct obd_statfs, os_ffree));
 	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_ffree) == 8, "found %lld\n",
@@ -1901,6 +1905,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_statfs, os_namelen));
 	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_namelen) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_namelen));
+	LASSERTF((int)offsetof(struct obd_statfs, os_maxbytes) == 96, "found %lld\n",
+		 (long long)(int)offsetof(struct obd_statfs, os_maxbytes));
+	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_maxbytes) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_maxbytes));
 	LASSERTF((int)offsetof(struct obd_statfs, os_state) == 104, "found %lld\n",
 		 (long long)(int)offsetof(struct obd_statfs, os_state));
 	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_state) == 4, "found %lld\n",
@@ -5480,4 +5488,3 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct llog_update_record *)0)->lur_update_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_update_record *)0)->lur_update_rec));
 }
-

@@ -2220,6 +2220,9 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 		CDEBUG(lvl, "\tentry %d:\n", i);
 		CDEBUG(lvl, "\tlcme_id: %#x\n", ent->lcme_id);
 		CDEBUG(lvl, "\tlcme_flags: %#x\n", ent->lcme_flags);
+		if (ent->lcme_flags & LCME_FL_NOSYNC)
+			CDEBUG(lvl, "\tlcme_timestamp: %llu\n",
+					ent->lcme_timestamp);
 		CDEBUG(lvl, "\tlcme_extent.e_start: %llu\n",
 		       ent->lcme_extent.e_start);
 		CDEBUG(lvl, "\tlcme_extent.e_end: %llu\n",
@@ -2308,13 +2311,13 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 		}
 		__swab32s(&ent->lcme_id);
 		__swab32s(&ent->lcme_flags);
+		__swab64s(&ent->lcme_timestamp);
 		__swab64s(&ent->lcme_extent.e_start);
 		__swab64s(&ent->lcme_extent.e_end);
 		__swab32s(&ent->lcme_offset);
 		__swab32s(&ent->lcme_size);
 		__swab32s(&ent->lcme_layout_gen);
 		CLASSERT(offsetof(typeof(*ent), lcme_padding_1) != 0);
-		CLASSERT(offsetof(typeof(*ent), lcme_padding_2) != 0);
 
 		v1 = (struct lov_user_md_v1 *)((char *)lum + off);
 		stripe_count = v1->lmm_stripe_count;

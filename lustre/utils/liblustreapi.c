@@ -68,6 +68,7 @@
 #include <unistd.h>
 #endif
 #include <poll.h>
+#include <time.h>
 
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
@@ -3000,6 +3001,26 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%4slcme_flags:          ", " ");
 		lcme_flags2str(entry->lcme_flags);
+		separator = "\n";
+	}
+	/* print snapshot timestamp if its a nosync comp */
+	if ((verbose & VERBOSE_COMP_FLAGS) &&
+	    (entry->lcme_flags & LCME_FL_NOSYNC)) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_COMP_FLAGS)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_timestamp:      ", " ");
+		if (yaml) {
+			llapi_printf(LLAPI_MSG_NORMAL, "%llu",
+							entry->lcme_timestamp);
+		} else {
+			time_t stamp = entry->lcme_timestamp;
+			char *date_str = asctime(localtime(&stamp));
+
+			date_str[strlen(date_str) - 1] = '\0';
+			llapi_printf(LLAPI_MSG_NORMAL, "'%s'", date_str);
+		}
+
 		separator = "\n";
 	}
 

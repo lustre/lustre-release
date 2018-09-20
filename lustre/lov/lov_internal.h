@@ -47,6 +47,7 @@ struct lov_stripe_md_entry {
 	u32			lsme_magic;
 	u32			lsme_flags;
 	u32			lsme_pattern;
+	u64			lsme_timestamp;
 	u32			lsme_stripe_size;
 	u16			lsme_stripe_count;
 	u16			lsme_layout_gen;

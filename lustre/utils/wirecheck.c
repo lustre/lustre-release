@@ -240,7 +240,7 @@ check_som_attrs(void)
 	BLANK_LINE();
 	CHECK_STRUCT(lustre_som_attrs);
 	CHECK_MEMBER(lustre_som_attrs, lsa_valid);
-	CHECK_MEMBER(lustre_som_attrs, lsa_reserved;
+	CHECK_MEMBER(lustre_som_attrs, lsa_reserved);
 	CHECK_MEMBER(lustre_som_attrs, lsa_size);
 	CHECK_MEMBER(lustre_som_attrs, lsa_blocks);
 }
@@ -792,8 +792,8 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_offset);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_size);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_layout_gen);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_timestamp);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding_1);
-	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding_2);
 
 	CHECK_VALUE_X(LCME_FL_INIT);
 	CHECK_VALUE_X(LCME_FL_NEG);
@@ -857,13 +857,15 @@ check_obd_statfs(void)
 	CHECK_MEMBER(obd_statfs, os_blocks);
 	CHECK_MEMBER(obd_statfs, os_bfree);
 	CHECK_MEMBER(obd_statfs, os_bavail);
+	CHECK_MEMBER(obd_statfs, os_files);
 	CHECK_MEMBER(obd_statfs, os_ffree);
 	CHECK_MEMBER(obd_statfs, os_fsid);
 	CHECK_MEMBER(obd_statfs, os_bsize);
 	CHECK_MEMBER(obd_statfs, os_namelen);
+	CHECK_MEMBER(obd_statfs, os_maxbytes);
 	CHECK_MEMBER(obd_statfs, os_state);
 	CHECK_MEMBER(obd_statfs, os_fprecreated);
-	CHECK_MEMBER(obd_statfs, os_spare2);
+	CHECK_MEMBER(obd_statfs, os_granted);
 	CHECK_MEMBER(obd_statfs, os_spare3);
 	CHECK_MEMBER(obd_statfs, os_spare4);
 	CHECK_MEMBER(obd_statfs, os_spare5);

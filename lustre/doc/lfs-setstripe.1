@@ -310,19 +310,25 @@ on a specific component. Allowed
 .I flags
 are:
 .RS
-.B init\fR - component is initialized (has allocated objects).  Used with
+.B * init\fR - component is initialized (has allocated objects).  Used with
 .B --component-del --component-flags ^init
 to find uninitialized components.
 .RE
 .RS
-.B prefer\fR - component preferred for read/write in a mirrored file
+.B * prefer\fR - component preferred for read/write in a mirrored file
 .RE
 .RS
-.B stale\fR - component has outdated data in a mirrored file.  Once a
+.B * stale\fR - component has outdated data in a mirrored file.  Once a
 component is marked
 .BR stale ,
 it isn't permitted to clear this flag directly. \fBlfs-mirror-resync\fR(1)
 is required to clear the flag.
+.RE
+.RS
+.B * nosync\fR - mirror components will not be resynched by default when the
+.BR lfs-mirror-resync (1)
+command is run. This option is useful to freeze a file mirror as an old
+version or snapshot of the file.
 .RE
 .RS
 A leading '^' before \fIflags\fR clears the flags, or finds components not

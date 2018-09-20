@@ -472,6 +472,9 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		lsm->lsm_entries[i] = lsme;
 		lsme->lsme_id = le32_to_cpu(lcme->lcme_id);
 		lsme->lsme_flags = le32_to_cpu(lcme->lcme_flags);
+		if (lsme->lsme_flags & LCME_FL_NOSYNC)
+			lsme->lsme_timestamp =
+				le64_to_cpu(lcme->lcme_timestamp);
 		lu_extent_le_to_cpu(&lsme->lsme_extent, &lcme->lcme_extent);
 
 		if (i == entry_count - 1) {

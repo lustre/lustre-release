@@ -986,6 +986,9 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 
 		/* component could be un-inistantiated */
 		lcme->lcme_flags = cpu_to_le32(lod_comp->llc_flags);
+		if (lod_comp->llc_flags & LCME_FL_NOSYNC)
+			lcme->lcme_timestamp =
+				cpu_to_le64(lod_comp->llc_timestamp);
 		lcme->lcme_extent.e_start =
 			cpu_to_le64(lod_comp->llc_extent.e_start);
 		lcme->lcme_extent.e_end =
@@ -1284,6 +1287,9 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			lod_comp->llc_extent.e_end = le64_to_cpu(ext->e_end);
 			lod_comp->llc_flags =
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
+			if (lod_comp->llc_flags & LCME_FL_NOSYNC)
+				lod_comp->llc_timestamp = le64_to_cpu(
+					comp_v1->lcm_entries[i].lcme_timestamp);
 			lod_comp->llc_id =
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_id);
 			if (lod_comp->llc_id == LCME_ID_INVAL)

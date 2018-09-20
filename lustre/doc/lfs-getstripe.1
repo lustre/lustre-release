@@ -112,6 +112,11 @@ before they can be accessed again.
 Replicated (mirrored) components that are preferred for read or write.
 For example, because they are located on SSD-based OSTs, or are more
 local on the network to clients.
+.TP
+.B nosync
+Replicated (mirrored) components that do not resync using \fB
+lfs mirror resync\fR.  Files with the \fBnosync\fR flag will also
+print the timestamp when the flag was set on the replica.
 .RE
 .TP
 .BR --component-id | --comp-id [ =\fIid ]| -I [ \fIid ]
