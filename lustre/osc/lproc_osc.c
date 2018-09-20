@@ -362,6 +362,8 @@ static ssize_t grant_shrink_interval_store(struct kobject *kobj,
 		return -ERANGE;
 
 	obd->u.cli.cl_grant_shrink_interval = val;
+	osc_update_next_shrink(&obd->u.cli);
+	osc_schedule_grant_work();
 
 	return count;
 }

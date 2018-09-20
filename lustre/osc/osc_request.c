@@ -908,6 +908,12 @@ static void osc_grant_work_handler(struct work_struct *data)
 		schedule_work(&work.work);
 }
 
+void osc_schedule_grant_work(void)
+{
+	cancel_delayed_work_sync(&work);
+	schedule_work(&work.work);
+}
+
 /**
  * Start grant thread for returing grant to server for idle clients.
  */
