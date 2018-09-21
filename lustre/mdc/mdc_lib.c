@@ -286,8 +286,9 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	set_mrc_cr_flags(rec, cr_flags);
 }
 
-static inline __u64 attr_pack(unsigned int ia_valid) {
-        __u64 sa_valid = 0;
+static inline u64 attr_pack(unsigned int ia_valid, enum op_xvalid ia_xvalid)
+{
+	u64 sa_valid = 0;
 
         if (ia_valid & ATTR_MODE)
                 sa_valid |= MDS_ATTR_MODE;
@@ -309,26 +310,26 @@ static inline __u64 attr_pack(unsigned int ia_valid) {
                 sa_valid |= MDS_ATTR_MTIME_SET;
         if (ia_valid & ATTR_FORCE)
                 sa_valid |= MDS_ATTR_FORCE;
-        if (ia_valid & ATTR_ATTR_FLAG)
-                sa_valid |= MDS_ATTR_ATTR_FLAG;
-        if (ia_valid & ATTR_KILL_SUID)
-                sa_valid |=  MDS_ATTR_KILL_SUID;
-        if (ia_valid & ATTR_KILL_SGID)
-                sa_valid |= MDS_ATTR_KILL_SGID;
-        if (ia_valid & ATTR_CTIME_SET)
-                sa_valid |= MDS_ATTR_CTIME_SET;
-        if (ia_valid & ATTR_FROM_OPEN)
-                sa_valid |= MDS_ATTR_FROM_OPEN;
-        if (ia_valid & ATTR_BLOCKS)
-                sa_valid |= MDS_ATTR_BLOCKS;
-        if (ia_valid & MDS_OPEN_OWNEROVERRIDE)
-                /* NFSD hack (see bug 5781) */
-                sa_valid |= MDS_OPEN_OWNEROVERRIDE;
-	if (ia_valid & MDS_ATTR_PROJID)
+	if (ia_xvalid & OP_XVALID_FLAGS)
+		sa_valid |= MDS_ATTR_ATTR_FLAG;
+	if (ia_valid & ATTR_KILL_SUID)
+		sa_valid |=  MDS_ATTR_KILL_SUID;
+	if (ia_valid & ATTR_KILL_SGID)
+		sa_valid |= MDS_ATTR_KILL_SGID;
+	if (ia_xvalid & OP_XVALID_CTIME_SET)
+		sa_valid |= MDS_ATTR_CTIME_SET;
+	if (ia_valid & ATTR_FROM_OPEN)
+		sa_valid |= MDS_ATTR_FROM_OPEN;
+	if (ia_xvalid & OP_XVALID_BLOCKS)
+		sa_valid |= MDS_ATTR_BLOCKS;
+	if (ia_xvalid & OP_XVALID_OWNEROVERRIDE)
+		/* NFSD hack (see bug 5781) */
+		sa_valid |= MDS_OPEN_OWNEROVERRIDE;
+	if (ia_xvalid & OP_XVALID_PROJID)
 		sa_valid |= MDS_ATTR_PROJID;
-	if (ia_valid & MDS_ATTR_LSIZE)
+	if (ia_xvalid & OP_XVALID_LAZYSIZE)
 		sa_valid |= MDS_ATTR_LSIZE;
-	if (ia_valid & MDS_ATTR_LBLOCKS)
+	if (ia_xvalid & OP_XVALID_LAZYBLOCKS)
 		sa_valid |= MDS_ATTR_LBLOCKS;
         return sa_valid;
 }
@@ -343,7 +344,8 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
 	rec->sa_suppgid = -1;
 
 	rec->sa_fid    = op_data->op_fid1;
-	rec->sa_valid  = attr_pack(op_data->op_attr.ia_valid);
+	rec->sa_valid  = attr_pack(op_data->op_attr.ia_valid,
+				   op_data->op_xvalid);
 	rec->sa_mode   = op_data->op_attr.ia_mode;
 	rec->sa_uid    = from_kuid(&init_user_ns, op_data->op_attr.ia_uid);
 	rec->sa_gid    = from_kgid(&init_user_ns, op_data->op_attr.ia_gid);

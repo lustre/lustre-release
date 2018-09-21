@@ -1613,7 +1613,8 @@ static int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data)
  *
  * In case of HSMimport, we only set attr on MDS.
  */
-int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
+int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
+		   enum op_xvalid xvalid, bool hsm_import)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1653,12 +1654,12 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 			RETURN(-EPERM);
 	}
 
-        /* We mark all of the fields "set" so MDS/OST does not re-set them */
-	if (!(attr->ia_valid & ATTR_CTIME_SET) &&
-	    (attr->ia_valid & ATTR_CTIME)) {
+	/* We mark all of the fields "set" so MDS/OST does not re-set them */
+	if (!(xvalid & OP_XVALID_CTIME_SET) &&
+	     (attr->ia_valid & ATTR_CTIME)) {
 		attr->ia_ctime = current_time(inode);
-                attr->ia_valid |= ATTR_CTIME_SET;
-        }
+		xvalid |= OP_XVALID_CTIME_SET;
+	}
 	if (!(attr->ia_valid & ATTR_ATIME_SET) &&
 	    (attr->ia_valid & ATTR_ATIME)) {
 		attr->ia_atime = current_time(inode);
@@ -1690,8 +1691,9 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 
 	if (!hsm_import && attr->ia_valid & ATTR_SIZE) {
 		/* If we are changing file size, file content is
-		 * modified, flag it. */
-		attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
+		 * modified, flag it.
+		 */
+		xvalid |= OP_XVALID_OWNEROVERRIDE;
 		op_data->op_bias |= MDS_DATA_MODIFIED;
 		ll_file_clear_flag(lli, LLIF_DATA_MODIFIED);
 	}
@@ -1704,6 +1706,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 	}
 
 	op_data->op_attr = *attr;
+	op_data->op_xvalid = xvalid;
 
 	rc = ll_md_setattr(dentry, op_data);
 	if (rc)
@@ -1712,17 +1715,17 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
 	if (!S_ISREG(inode->i_mode) || hsm_import)
 		GOTO(out, rc = 0);
 
-	if (attr->ia_valid & (ATTR_SIZE |
-			      ATTR_ATIME | ATTR_ATIME_SET |
-			      ATTR_MTIME | ATTR_MTIME_SET |
-			      ATTR_CTIME | ATTR_CTIME_SET)) {
+	if (attr->ia_valid & (ATTR_SIZE | ATTR_ATIME | ATTR_ATIME_SET |
+			      ATTR_MTIME | ATTR_MTIME_SET | ATTR_CTIME) ||
+	    xvalid & OP_XVALID_CTIME_SET) {
 		/* For truncate and utimes sending attributes to OSTs, setting
 		 * mtime/atime to the past will be performed under PW [0:EOF]
 		 * extent lock (new_size:EOF for truncate).  It may seem
 		 * excessive to send mtime/atime updates to OSTs when not
 		 * setting times to past, but it is necessary due to possible
-		 * time de-synchronization between MDT inode and OST objects */
-		rc = cl_setattr_ost(lli->lli_clob, attr, 0);
+		 * time de-synchronization between MDT inode and OST objects
+		 */
+		rc = cl_setattr_ost(lli->lli_clob, attr, xvalid, 0);
 	}
 
 	/* If the file was restored, it needs to set dirty flag.
@@ -1782,10 +1785,11 @@ out:
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
 	int mode = de->d_inode->i_mode;
+	enum op_xvalid xvalid = 0;
 
 	if ((attr->ia_valid & (ATTR_CTIME|ATTR_SIZE|ATTR_MODE)) ==
 			      (ATTR_CTIME|ATTR_SIZE|ATTR_MODE))
-		attr->ia_valid |= MDS_OPEN_OWNEROVERRIDE;
+		xvalid |= OP_XVALID_OWNEROVERRIDE;
 
 	if (((attr->ia_valid & (ATTR_MODE|ATTR_FORCE|ATTR_SIZE)) ==
 			       (ATTR_SIZE|ATTR_MODE)) &&
@@ -1806,11 +1810,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 	    !(attr->ia_valid & ATTR_KILL_SGID))
 		attr->ia_valid |= ATTR_KILL_SGID;
 
-	/* avoid polluted from ATTR_TIMES_SET,
-	 * projid is not expected to be set here */
-	attr->ia_valid &= ~MDS_ATTR_PROJID;
-
-	return ll_setattr_raw(de, attr, false);
+	return ll_setattr_raw(de, attr, xvalid, false);
 }
 
 int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
@@ -2179,13 +2179,13 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		if (get_user(flags, (int __user *)arg))
 			RETURN(-EFAULT);
 
-                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-                                             LUSTRE_OPC_ANY, NULL);
-                if (IS_ERR(op_data))
-                        RETURN(PTR_ERR(op_data));
+		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+					     LUSTRE_OPC_ANY, NULL);
+		if (IS_ERR(op_data))
+			RETURN(PTR_ERR(op_data));
 
 		op_data->op_attr_flags = flags;
-                op_data->op_attr.ia_valid |= ATTR_ATTR_FLAG;
+		op_data->op_xvalid |= OP_XVALID_FLAGS;
 		rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, &req);
                 ll_finish_md_op_data(op_data);
                 ptlrpc_req_finished(req);
@@ -2202,8 +2202,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		if (attr == NULL)
 			RETURN(-ENOMEM);
 
-		attr->ia_valid = ATTR_ATTR_FLAG;
-		rc = cl_setattr_ost(obj, attr, flags);
+		rc = cl_setattr_ost(obj, attr, OP_XVALID_FLAGS, flags);
 
 		OBD_FREE_PTR(attr);
 		RETURN(rc);

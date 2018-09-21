@@ -68,7 +68,7 @@ __u16 cl_inode_fini_refcheck;
 static DEFINE_MUTEX(cl_inode_fini_guard);
 
 int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
-		   unsigned int attr_flags)
+		   enum op_xvalid xvalid, unsigned int attr_flags)
 {
         struct lu_env *env;
         struct cl_io  *io;
@@ -90,7 +90,8 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 	io->u.ci_setattr.sa_attr.lvb_ctime = LTIME_S(attr->ia_ctime);
 	io->u.ci_setattr.sa_attr.lvb_size = attr->ia_size;
 	io->u.ci_setattr.sa_attr_flags = attr_flags;
-	io->u.ci_setattr.sa_valid = attr->ia_valid;
+	io->u.ci_setattr.sa_avalid = attr->ia_valid;
+	io->u.ci_setattr.sa_xvalid = xvalid;
 	io->u.ci_setattr.sa_parent_fid = lu_object_fid(&obj->co_lu);
 
 again:

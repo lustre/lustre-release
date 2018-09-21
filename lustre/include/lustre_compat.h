@@ -82,12 +82,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 		path_put(&old_pwd);
 }
 
-/*
- * set ATTR_BLOCKS to a high value to avoid any risk of collision with other
- * ATTR_* attributes (see bug 13828)
- */
-#define ATTR_BLOCKS    (1 << 27)
-
 #define current_ngroups current_cred()->group_info->ngroups
 #define current_groups current_cred()->group_info->small_block
 

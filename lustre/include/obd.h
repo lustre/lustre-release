@@ -775,6 +775,17 @@ struct obd_device {
 #define KEY_CACHE_LRU_SHRINK	"cache_lru_shrink"
 #define KEY_OSP_CONNECTED	"osp_connected"
 
+/* Flags for op_xvalid */
+enum op_xvalid {
+	OP_XVALID_CTIME_SET	= BIT(0),	/* 0x0001 */
+	OP_XVALID_BLOCKS	= BIT(1),	/* 0x0002 */
+	OP_XVALID_OWNEROVERRIDE	= BIT(2),	/* 0x0004 */
+	OP_XVALID_FLAGS		= BIT(3),	/* 0x0008 */
+	OP_XVALID_PROJID	= BIT(4),	/* 0x0010 */
+	OP_XVALID_LAZYSIZE	= BIT(5),	/* 0x0020 */
+	OP_XVALID_LAZYBLOCKS	= BIT(6),	/* 0x0040 */
+};
+
 struct lu_context;
 
 static inline int it_to_lock_mode(struct lookup_intent *it)
@@ -843,9 +854,10 @@ struct md_op_data {
 
 	/* iattr fields and blocks. */
 	struct iattr            op_attr;
+	enum op_xvalid		op_xvalid;	/* eXtra validity flags */
 	loff_t                  op_attr_blocks;
-	__u64                   op_valid; /* OBD_MD_* */
-	unsigned int		op_attr_flags; /* LUSTRE_{SYNC,..}_FL */
+	u64			op_valid;	/* OBD_MD_* */
+	unsigned int		op_attr_flags;	/* LUSTRE_{SYNC,..}_FL */
 
 	enum md_op_flags	op_flags;
 

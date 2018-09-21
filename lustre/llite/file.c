@@ -99,9 +99,10 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 	op_data->op_attr.ia_mtime = inode->i_mtime;
 	op_data->op_attr.ia_ctime = inode->i_ctime;
 	op_data->op_attr.ia_size = i_size_read(inode);
-	op_data->op_attr.ia_valid |= ATTR_MODE | ATTR_ATIME | ATTR_ATIME_SET |
-				     ATTR_MTIME | ATTR_MTIME_SET |
-				     ATTR_CTIME | ATTR_CTIME_SET;
+	op_data->op_attr.ia_valid |= (ATTR_MODE | ATTR_ATIME | ATTR_ATIME_SET |
+				      ATTR_MTIME | ATTR_MTIME_SET |
+				      ATTR_CTIME);
+	op_data->op_xvalid |= OP_XVALID_CTIME_SET;
 	op_data->op_attr_blocks = inode->i_blocks;
 	op_data->op_attr_flags = ll_inode_to_ext_flags(inode->i_flags);
 	if (ll_file_test_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT))
@@ -154,7 +155,8 @@ static int ll_close_inode_openhandle(struct inode *inode,
 	case MDS_CLOSE_LAYOUT_MERGE:
 		/* merge blocks from the victim inode */
 		op_data->op_attr_blocks += ((struct inode *)data)->i_blocks;
-		op_data->op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+		op_data->op_attr.ia_valid |= ATTR_SIZE;
+		op_data->op_xvalid |= OP_XVALID_BLOCKS;
 	case MDS_CLOSE_LAYOUT_SPLIT:
 	case MDS_CLOSE_LAYOUT_SWAP: {
 		struct split_param *sp = data;
@@ -178,7 +180,8 @@ static int ll_close_inode_openhandle(struct inode *inode,
 		LASSERT(data != NULL);
 		op_data->op_attr_blocks +=
 			ioc->lil_count * op_data->op_attr_blocks;
-		op_data->op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+		op_data->op_attr.ia_valid |= ATTR_SIZE;
+		op_data->op_xvalid |= OP_XVALID_BLOCKS;
 		op_data->op_bias |= MDS_CLOSE_RESYNC_DONE;
 
 		op_data->op_lease_handle = och->och_lease_handle;
@@ -193,7 +196,8 @@ static int ll_close_inode_openhandle(struct inode *inode,
 		op_data->op_bias |= MDS_HSM_RELEASE;
 		op_data->op_data_version = *(__u64 *)data;
 		op_data->op_lease_handle = och->och_lease_handle;
-		op_data->op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+		op_data->op_attr.ia_valid |= ATTR_SIZE;
+		op_data->op_xvalid |= OP_XVALID_BLOCKS;
 		break;
 
 	default:
@@ -202,9 +206,9 @@ static int ll_close_inode_openhandle(struct inode *inode,
 	}
 
 	if (!(op_data->op_attr.ia_valid & ATTR_SIZE))
-		op_data->op_attr.ia_valid |= MDS_ATTR_LSIZE;
-	if (!(op_data->op_attr.ia_valid & ATTR_BLOCKS))
-		op_data->op_attr.ia_valid |= MDS_ATTR_LBLOCKS;
+		op_data->op_xvalid |= OP_XVALID_LAZYSIZE;
+	if (!(op_data->op_xvalid & OP_XVALID_BLOCKS))
+		op_data->op_xvalid |= OP_XVALID_LAZYBLOCKS;
 
 	rc = md_close(md_exp, op_data, och->och_mod, &req);
 	if (rc != 0 && rc != -EINTR)
@@ -2745,7 +2749,7 @@ static int ll_hsm_import(struct inode *inode, struct file *file,
 
 	inode_lock(inode);
 
-	rc = ll_setattr_raw(file_dentry(file), attr, true);
+	rc = ll_setattr_raw(file_dentry(file), attr, 0, true);
 	if (rc == -ENODATA)
 		rc = 0;
 
@@ -2773,7 +2777,7 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 	struct iattr ia = {
 		.ia_valid = ATTR_ATIME | ATTR_ATIME_SET |
 			    ATTR_MTIME | ATTR_MTIME_SET |
-			    ATTR_CTIME | ATTR_CTIME_SET,
+			    ATTR_CTIME,
 		.ia_atime = {
 			.tv_sec = lfu->lfu_atime_sec,
 			.tv_nsec = lfu->lfu_atime_nsec,
@@ -2797,7 +2801,8 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 		RETURN(-EINVAL);
 
 	inode_lock(inode);
-	rc = ll_setattr_raw(file_dentry(file), &ia, false);
+	rc = ll_setattr_raw(file_dentry(file), &ia, OP_XVALID_CTIME_SET,
+			    false);
 	inode_unlock(inode);
 
 	RETURN(rc);
@@ -3096,7 +3101,7 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	if (fsxattr.fsx_xflags & FS_XFLAG_PROJINHERIT)
 		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
 	op_data->op_projid = fsxattr.fsx_projid;
-	op_data->op_attr.ia_valid |= (MDS_ATTR_PROJID | ATTR_ATTR_FLAG);
+	op_data->op_xvalid |= OP_XVALID_PROJID | OP_XVALID_FLAGS;
 	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL,
 			0, &req);
 	ptlrpc_req_finished(req);
@@ -3111,8 +3116,8 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	if (attr == NULL)
 		GOTO(out_fsxattr, rc = -ENOMEM);
 
-	attr->ia_valid = ATTR_ATTR_FLAG;
-	rc = cl_setattr_ost(obj, attr, fsxattr.fsx_xflags);
+	rc = cl_setattr_ost(obj, attr, OP_XVALID_FLAGS,
+			    fsxattr.fsx_xflags);
 	OBD_FREE_PTR(attr);
 out_fsxattr:
 	ll_finish_md_op_data(op_data);
