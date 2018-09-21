@@ -856,10 +856,12 @@ static ssize_t lazystatfs_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(lazystatfs);
 
-static int ll_max_easize_seq_show(struct seq_file *m, void *v)
+static ssize_t max_easize_show(struct kobject *kobj,
+			       struct attribute *attr,
+			       char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	unsigned int ealen;
 	int rc;
 
@@ -867,10 +869,9 @@ static int ll_max_easize_seq_show(struct seq_file *m, void *v)
 	if (rc)
 		return rc;
 
-	seq_printf(m, "%u\n", ealen);
-	return 0;
+	return sprintf(buf, "%u\n", ealen);
 }
-LPROC_SEQ_FOPS_RO(ll_max_easize);
+LUSTRE_RO_ATTR(max_easize);
 
 /**
  * Get default_easize.
@@ -883,10 +884,12 @@ LPROC_SEQ_FOPS_RO(ll_max_easize);
  * \retval 0		on success
  * \retval negative	negated errno on failure
  */
-static int ll_default_easize_seq_show(struct seq_file *m, void *v)
+static ssize_t default_easize_show(struct kobject *kobj,
+				   struct attribute *attr,
+				   char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	unsigned int ealen;
 	int rc;
 
@@ -894,8 +897,7 @@ static int ll_default_easize_seq_show(struct seq_file *m, void *v)
 	if (rc)
 		return rc;
 
-	seq_printf(m, "%u\n", ealen);
-	return 0;
+	return sprintf(buf, "%u\n", ealen);
 }
 
 /**
@@ -914,20 +916,20 @@ static int ll_default_easize_seq_show(struct seq_file *m, void *v)
  * \retval positive	\a count on success
  * \retval negative	negated errno on failure
  */
-static ssize_t ll_default_easize_seq_write(struct file *file,
-					   const char __user *buffer,
-					   size_t count, loff_t *unused)
+static ssize_t default_easize_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer,
+				    size_t count)
 {
-	struct seq_file	*seq = file->private_data;
-	struct super_block *sb = (struct super_block *)seq->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	unsigned int val;
 	int rc;
 
 	if (count == 0)
 		return 0;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -937,7 +939,7 @@ static ssize_t ll_default_easize_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ll_default_easize);
+LUSTRE_RW_ATTR(default_easize);
 
 static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 {
@@ -1196,10 +1198,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_max_cached_mb_fops			},
 	{ .name	=	"statahead_stats",
 	  .fops	=	&ll_statahead_stats_fops		},
-	{ .name	=	"max_easize",
-	  .fops	=	&ll_max_easize_fops			},
-	{ .name	=	"default_easize",
-	  .fops	=	&ll_default_easize_fops			},
 	{ .name	=	"sbi_flags",
 	  .fops	=	&ll_sbi_flags_fops			},
 	{ .name	=	"xattr_cache",
@@ -1239,6 +1237,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_statahead_max.attr,
 	&lustre_attr_statahead_agl.attr,
 	&lustre_attr_lazystatfs.attr,
+	&lustre_attr_max_easize.attr,
+	&lustre_attr_default_easize.attr,
 	NULL,
 };
 
