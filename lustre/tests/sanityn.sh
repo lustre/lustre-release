@@ -517,13 +517,10 @@ test_19() { # bug3811
 	[ "x$DOM" = "xyes" ] && node=$(facet_active_host $SINGLEMDS)
 
 	# check whether obdfilter is cache capable at all
-	if ! get_osd_param $node '' read_cache_enable >/dev/null; then
-		echo "not cache-capable obdfilter"
-		return 0
-	fi
+	get_osd_param $node '' read_cache_enable >/dev/null ||
+		skip "not cache-capable obdfilter"
 
-	local MAX=$(get_osd_param $node '' readcache_max_filesize | \
-		    head -n 1)
+	local MAX=$(get_osd_param $node '' readcache_max_filesize | head -n 1)
 	set_osd_param $node '' readcache_max_filesize 4096
 	dd if=/dev/urandom of=$TMP/$tfile bs=512k count=32
 	local SUM=$(cksum $TMP/$tfile | cut -d" " -f 1,2)
