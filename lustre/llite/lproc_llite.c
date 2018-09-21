@@ -823,26 +823,27 @@ static int ll_statahead_stats_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_statahead_stats);
 
-static int ll_lazystatfs_seq_show(struct seq_file *m, void *v)
+static ssize_t lazystatfs_show(struct kobject *kobj,
+			       struct attribute *attr,
+			       char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 
-	seq_printf(m, "%u\n",
-		   (sbi->ll_flags & LL_SBI_LAZYSTATFS) ? 1 : 0);
-	return 0;
+	return sprintf(buf, "%u\n", (sbi->ll_flags & LL_SBI_LAZYSTATFS) ? 1 : 0);
 }
 
-static ssize_t ll_lazystatfs_seq_write(struct file *file,
-				       const char __user *buffer,
-					size_t count, loff_t *off)
+static ssize_t lazystatfs_store(struct kobject *kobj,
+				struct attribute *attr,
+				const char *buffer,
+				size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -853,7 +854,7 @@ static ssize_t ll_lazystatfs_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ll_lazystatfs);
+LUSTRE_RW_ATTR(lazystatfs);
 
 static int ll_max_easize_seq_show(struct seq_file *m, void *v)
 {
@@ -1195,8 +1196,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_max_cached_mb_fops			},
 	{ .name	=	"statahead_stats",
 	  .fops	=	&ll_statahead_stats_fops		},
-	{ .name	=	"lazystatfs",
-	  .fops	=	&ll_lazystatfs_fops			},
 	{ .name	=	"max_easize",
 	  .fops	=	&ll_max_easize_fops			},
 	{ .name	=	"default_easize",
@@ -1239,6 +1238,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_statahead_running_max.attr,
 	&lustre_attr_statahead_max.attr,
 	&lustre_attr_statahead_agl.attr,
+	&lustre_attr_lazystatfs.attr,
 	NULL,
 };
 
