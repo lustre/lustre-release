@@ -259,37 +259,6 @@ static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(uuid);
 
-static int ll_xattr_cache_seq_show(struct seq_file *m, void *v)
-{
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-
-	seq_printf(m, "%u\n", sbi->ll_xattr_cache_enabled);
-	return 0;
-}
-
-static ssize_t ll_xattr_cache_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-	bool val;
-	int rc;
-
-	rc = kstrtobool_from_user(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	if (val && !(sbi->ll_flags & LL_SBI_XATTR_CACHE))
-		return -ENOTSUPP;
-
-	sbi->ll_xattr_cache_enabled = val;
-	sbi->ll_xattr_cache_set = 1;
-
-	return count;
-}
-LPROC_SEQ_FOPS(ll_xattr_cache);
-
 static int ll_site_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -965,6 +934,40 @@ static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_sbi_flags);
 
+static ssize_t xattr_cache_show(struct kobject *kobj,
+				struct attribute *attr,
+				char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return sprintf(buf, "%u\n", sbi->ll_xattr_cache_enabled);
+}
+
+static ssize_t xattr_cache_store(struct kobject *kobj,
+				 struct attribute *attr,
+				 const char *buffer,
+				 size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	if (val && !(sbi->ll_flags & LL_SBI_XATTR_CACHE))
+		return -ENOTSUPP;
+
+	sbi->ll_xattr_cache_enabled = val;
+	sbi->ll_xattr_cache_set = 1;
+
+	return count;
+}
+LUSTRE_RW_ATTR(xattr_cache);
+
 static int ll_tiny_write_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1200,8 +1203,6 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_statahead_stats_fops		},
 	{ .name	=	"sbi_flags",
 	  .fops	=	&ll_sbi_flags_fops			},
-	{ .name	=	"xattr_cache",
-	  .fops	=	&ll_xattr_cache_fops			},
 	{ .name	=	"unstable_stats",
 	  .fops	=	&ll_unstable_stats_fops			},
 	{ .name	=	"root_squash",
@@ -1239,6 +1240,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_lazystatfs.attr,
 	&lustre_attr_max_easize.attr,
 	&lustre_attr_default_easize.attr,
+	&lustre_attr_xattr_cache.attr,
 	NULL,
 };
 
