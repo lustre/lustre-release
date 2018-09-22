@@ -20,7 +20,8 @@ a mirror.
 .BR \-\-inputfile|\-i\fR\ <\fIinput_file\fR>
 The path name of the input file, if not specified, the standard input stream
 will be used. The input stream or input_file cannot be the same mirrored file
-as the \fImirrored_file\fR.
+as the \fImirrored_file\fR. if you'd like to copy a mirror's content to
+another mirror of the same mirrored file, use \fBlfs mirror copy\fR command.
 .SH EXAMPLES
 .TP
 .B lfs mirror write --mirror-id 3 /mnt/lustre/file1 < /tmp/m2
@@ -41,3 +42,4 @@ The \fBlfs mirror write\fR command is part of the Lustre filesystem.
 .BR lfs-mirror-split (1),
 .BR lfs-mirror-verify (1),
 .BR lfs-mirror-read (1)
+.BR lfs-mirror-copy (1)

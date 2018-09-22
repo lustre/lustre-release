@@ -698,6 +698,7 @@ struct lov_comp_md_entry_v1 {
 #define SEQ_ID_MASK		SEQ_ID_MAX
 /* bit 30:16 of lcme_id is used to store mirror id */
 #define MIRROR_ID_MASK		0x7FFF0000
+#define MIRROR_ID_NEG		0x8000
 #define MIRROR_ID_SHIFT		16
 
 static inline __u32 pflr_id(__u16 mirror_id, __u16 seqid)
