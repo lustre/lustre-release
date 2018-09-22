@@ -549,8 +549,8 @@ out:
 }
 LPROC_SEQ_FOPS(ll_max_cached_mb);
 
-static ssize_t checksum_pages_show(struct kobject *kobj, struct attribute *attr,
-				   char *buf)
+static ssize_t checksums_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
@@ -558,10 +558,8 @@ static ssize_t checksum_pages_show(struct kobject *kobj, struct attribute *attr,
 	return sprintf(buf, "%u\n", (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
 }
 
-static ssize_t checksum_pages_store(struct kobject *kobj,
-				    struct attribute *attr,
-				    const char *buffer,
-				    size_t count)
+static ssize_t checksums_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
@@ -589,7 +587,9 @@ static ssize_t checksum_pages_store(struct kobject *kobj,
 
 	return count;
 }
-LUSTRE_RW_ATTR(checksum_pages);
+LUSTRE_RW_ATTR(checksums);
+
+LUSTRE_ATTR(checksum_pages, 0644, checksums_show, checksums_store);
 
 static ssize_t ll_rd_track_id(struct kobject *kobj, char *buf,
 			      enum stats_track_type type)
@@ -1230,6 +1230,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_client_type.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_uuid.attr,
+	&lustre_attr_checksums.attr,
 	&lustre_attr_checksum_pages.attr,
 	&lustre_attr_stats_track_pid.attr,
 	&lustre_attr_stats_track_ppid.attr,
