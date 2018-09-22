@@ -361,6 +361,16 @@ struct ll_ioc_lease {
 	__u32		lil_ids[0];
 };
 
+struct ll_ioc_lease_id {
+	__u32		lil_mode;
+	__u32		lil_flags;
+	__u32		lil_count;
+	__u16		lil_mirror_id;
+	__u16		lil_padding1;
+	__u64		lil_padding2;
+	__u32		lil_ids[0];
+};
+
 /*
  * The ioctl naming rules:
  * LL_*     - works on the currently opened filehandle instead of parent dir

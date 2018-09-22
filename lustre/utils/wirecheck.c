@@ -1351,6 +1351,7 @@ check_mdt_rec_resync(void)
 	CHECK_MEMBER(mdt_rec_resync, rs_padding6);
 	CHECK_MEMBER(mdt_rec_resync, rs_padding7);
 	CHECK_MEMBER(mdt_rec_resync, rs_padding8);
+	CHECK_MEMBER(mdt_rec_resync, rs_mirror_id);
 	CHECK_MEMBER(mdt_rec_resync, rs_padding9);
 }
 
@@ -1381,6 +1382,7 @@ check_mdt_rec_reint(void)
 	CHECK_MEMBER(mdt_rec_reint, rr_flags);
 	CHECK_MEMBER(mdt_rec_reint, rr_flags_h);
 	CHECK_MEMBER(mdt_rec_reint, rr_umask);
+	CHECK_MEMBER(mdt_rec_reint, rr_mirror_id);
 	CHECK_MEMBER(mdt_rec_reint, rr_padding_4);
 }
 

@@ -1670,6 +1670,7 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 	uc->uc_cap   = rec->rs_cap;
 
 	rr->rr_fid1   = &rec->rs_fid;
+	rr->rr_mirror_id = rec->rs_mirror_id;
 
 	/* cookie doesn't need to be swapped but it has been swapped
 	 * in lustre_swab_mdt_rec_reint() as rr_mtime, so here it needs

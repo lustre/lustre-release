@@ -360,6 +360,7 @@ struct mdt_reint_record {
 	void				*rr_eadata;
 	int				 rr_eadatalen;
 	__u32				 rr_flags;
+	__u16				 rr_mirror_id;
 };
 
 enum mdt_reint_flag {

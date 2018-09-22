@@ -1,13 +1,13 @@
-.TH LFS-MIRROR-DUMP 1 2018-08-16 "Lustre" "Lustre Utilities"
+.TH LFS-MIRROR-READ 1 2018-08-16 "Lustre" "Lustre Utilities"
 .SH NAME
-lfs mirror dump \- dump a mirror's content of a mirrored file
+lfs mirror read \- read a mirror's content of a mirrored file
 .SH SYNOPSIS
-.B lfs mirror dump
-<\fB\-\-mirror-id|\-N\fR <\fImirror_id\fR>>
+.B lfs mirror read
+{\fB\-\-mirror-id|\-N\fR <\fImirror_id\fR>}
 [\fB\-\-outfile|\-o\fR <\fIoutput_file\fR>]
 <\fImirrored_file\fR>
 .SH DESCRIPTION
-This command dumps the content of a file's mirror, the file is specified by the
+This command reads the content of a file's mirror, the file is specified by the
 path name \fImirrored_file\fR, the mirror is specified by its mirror ID
 \fImirror_id\fR.
 .br
@@ -17,7 +17,7 @@ otherwise the standard output stream will be used.
 .TP
 .BR \-\-mirror-id|\-N\fR\ <\fImirror_id\fR>
 This option indicates the content of which mirror specified by \fImirror_id\fR
-needs to be dumped. The \fImirror_id\fR is the numerical unique identifier for
+needs to be read. The \fImirror_id\fR is the numerical unique identifier for
 a mirror.
 .TP
 .BR \-\-outfile|\-o\fR\ <\fIoutput_file\fR>
@@ -25,14 +25,14 @@ The path name of the output file, if not specified, the standard output stream
 will be used.
 .SH EXAMPLES
 .TP
-.B lfs mirror dump --mirror-id 3 /mnt/lustre/file1
+.B lfs mirror read --mirror-id 3 /mnt/lustre/file1
 Dump the content of mirror with mirror ID 3 for /mnt/lustre/file1 to STDOUT.
 .TP
-.B lfs mirror dump -N 2 -o /tmp/m2 /mnt/lustre/file1
+.B lfs mirror read -N 2 -o /tmp/m2 /mnt/lustre/file1
 Dump the content of mirror with mirror ID 2 for /mnt/lustre/file1 to file
 /tmp/m2.
 .SH AUTHOR
-The \fBlfs mirror dump\fR command is part of the Lustre filesystem.
+The \fBlfs mirror read\fR command is part of the Lustre filesystem.
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-setstripe (1),
@@ -41,3 +41,4 @@ The \fBlfs mirror dump\fR command is part of the Lustre filesystem.
 .BR lfs-mirror-extend (1),
 .BR lfs-mirror-split (1),
 .BR lfs-mirror-verify (1)
+.BR lfs-mirror-write (1)

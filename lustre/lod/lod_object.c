@@ -6136,6 +6136,30 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 	RETURN(picked);
 }
 
+static int lod_prepare_resync_mirror(const struct lu_env *env,
+				     struct lod_object *lo,
+				     __u16 mirror_id)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_layout_component *lod_comp;
+	int i;
+
+	for (i = 0; i < lo->ldo_mirror_count; i++) {
+		if (lo->ldo_mirrors[i].lme_id != mirror_id)
+			continue;
+
+		lod_foreach_mirror_comp(lod_comp, lo, i) {
+			if (lod_comp_inited(lod_comp))
+				continue;
+
+			info->lti_comp_idx[info->lti_count++] =
+				lod_comp_index(lo, lod_comp);
+		}
+	}
+
+	return 0;
+}
+
 /**
  * figure out the components should be instantiated for resync.
  */
@@ -6251,23 +6275,33 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 		 * prep uninited all components assuming any non-stale mirror
 		 * could be picked as the primary mirror.
 		 */
-		for (i = 0; i < lo->ldo_mirror_count; i++) {
-			if (lo->ldo_mirrors[i].lme_stale)
-				continue;
+		if (mlc->mlc_mirror_id == 0) {
+			/* normal resync */
+			for (i = 0; i < lo->ldo_mirror_count; i++) {
+				if (lo->ldo_mirrors[i].lme_stale)
+					continue;
 
-			lod_foreach_mirror_comp(lod_comp, lo, i) {
-				if (!lod_comp_inited(lod_comp))
-					break;
+				lod_foreach_mirror_comp(lod_comp, lo, i) {
+					if (!lod_comp_inited(lod_comp))
+						break;
 
-				if (extent.e_end < lod_comp->llc_extent.e_end)
-					extent.e_end =
-						lod_comp->llc_extent.e_end;
+					if (extent.e_end <
+						lod_comp->llc_extent.e_end)
+						extent.e_end =
+						     lod_comp->llc_extent.e_end;
+				}
 			}
+			rc = lod_prepare_resync(env, lo, &extent);
+			if (rc)
+				GOTO(out, rc);
+		} else {
+			/* mirror write, try to init its all components */
+			rc = lod_prepare_resync_mirror(env, lo,
+						       mlc->mlc_mirror_id);
+			if (rc)
+				GOTO(out, rc);
 		}
 
-		rc = lod_prepare_resync(env, lo, &extent);
-		if (rc)
-			GOTO(out, rc);
 		/* change the file state to SYNC_PENDING */
 		lo->ldo_flr_state = LCM_FL_SYNC_PENDING;
 	}
@@ -6391,16 +6425,26 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 						lod_comp_index(lo, lod_comp);
 		}
 	} else { /* MD_LAYOUT_RESYNC */
-		lod_foreach_mirror_comp(lod_comp, lo, primary) {
-			if (!lod_comp_inited(lod_comp))
-				break;
+		if (mlc->mlc_mirror_id == 0) {
+			/* normal resync */
+			lod_foreach_mirror_comp(lod_comp, lo, primary) {
+				if (!lod_comp_inited(lod_comp))
+					break;
 
-			extent.e_end = lod_comp->llc_extent.e_end;
+				extent.e_end = lod_comp->llc_extent.e_end;
+			}
+
+			rc = lod_prepare_resync(env, lo, &extent);
+			if (rc)
+				GOTO(out, rc);
+		} else {
+			/* mirror write, try to init its all components */
+			rc = lod_prepare_resync_mirror(env, lo,
+						       mlc->mlc_mirror_id);
+			if (rc)
+				GOTO(out, rc);
 		}
 
-		rc = lod_prepare_resync(env, lo, &extent);
-		if (rc)
-			GOTO(out, rc);
 		/* change the file state to SYNC_PENDING */
 		lo->ldo_flr_state = LCM_FL_SYNC_PENDING;
 	}

@@ -181,6 +181,7 @@ enum md_layout_opc {
  */
 struct md_layout_change {
 	enum md_layout_opc	 mlc_opc;
+	__u16			 mlc_mirror_id;
 	struct layout_intent	*mlc_intent;
 	struct lu_buf		 mlc_buf;
 	struct lustre_som_attrs	 mlc_som;

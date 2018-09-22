@@ -2101,7 +2101,8 @@ struct mdt_rec_resync {
 	__u32           rs_padding6;	/* rr_flags */
 	__u32           rs_padding7;	/* rr_flags_h */
 	__u32           rs_padding8;	/* rr_umask */
-	__u32           rs_padding9;	/* rr_padding_4 */
+	__u16           rs_mirror_id;
+	__u16           rs_padding9;	/* rr_padding_4 */
 };
 
 /*
@@ -2135,7 +2136,8 @@ struct mdt_rec_reint {
 	__u32           rr_flags;
 	__u32           rr_flags_h;
 	__u32           rr_umask;
-	__u32           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
+	__u16		rr_mirror_id;
+	__u16           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
 };
 
 /* lmv structures */

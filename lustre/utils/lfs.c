@@ -124,7 +124,8 @@ static int lfs_mirror_list_commands(int argc, char **argv);
 static int lfs_list_commands(int argc, char **argv);
 static inline int lfs_mirror_resync(int argc, char **argv);
 static inline int lfs_mirror_verify(int argc, char **argv);
-static inline int lfs_mirror_dump(int argc, char **argv);
+static inline int lfs_mirror_read(int argc, char **argv);
+static inline int lfs_mirror_write(int argc, char **argv);
 
 enum setstripe_origin {
 	SO_SETSTRIPE,
@@ -284,10 +285,14 @@ command_t mirror_cmdlist[] = {
 	"\t             mirror will be stored into. If not specified,\n"
 	"\t             a new file named <mirrored_file>.mirror~<mirror_id>\n"
 	"\t             will be used.\n" },
-	{ .pc_name = "dump", .pc_func = lfs_mirror_dump,
-	  .pc_help = "Dump the content of a specified mirror of a file.\n"
-		  "usage: lfs mirror dump <--mirror-id|-N <mirror_id> "
-		  "[--outfile|-o <output_file>] <mirrored_file>\n" },
+	{ .pc_name = "read", .pc_func = lfs_mirror_read,
+	  .pc_help = "Read the content of a specified mirror of a file.\n"
+		"usage: lfs mirror read <--mirror-id|-N <mirror_id> "
+		"[--outfile|-o <output_file>] <mirrored_file>\n" },
+	{ .pc_name = "write", .pc_func = lfs_mirror_write,
+	  .pc_help = "Write to a specified mirror of a file.\n"
+		"usage: lfs mirror write <--mirror-id|-N <mirror_id> "
+		"[--inputfile|-i <input_file>] <mirrored_file>\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
@@ -297,7 +302,7 @@ command_t mirror_cmdlist[] = {
 		"usage: lfs mirror verify "
 		"[--only <mirror_id,mirror_id2[,...]>] "
 		"[--verbose|-v] <mirrored_file> [<mirrored_file2> ...]\n"},
-	{ .pc_name = "--list-commands", .pc_func = lfs_mirror_list_commands,
+	{ .pc_name = "list-commands", .pc_func = lfs_mirror_list_commands,
 	  .pc_help = "list commands supported by lfs mirror"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
 	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
@@ -586,7 +591,8 @@ command_t cmdlist[] = {
 	 "lfs mirror extend - add mirror(s) to an existing file\n"
 	 "lfs mirror split  - split a mirror from an existing mirrored file\n"
 	 "lfs mirror resync - resynchronize out-of-sync mirrored file(s)\n"
-	 "lfs mirror dump   - dump a mirror content of a mirrored file\n"
+	 "lfs mirror read   - read a mirror content of a mirrored file\n"
+	 "lfs mirror write  - write to a mirror of a mirrored file\n"
 	 "lfs mirror verify - verify mirrored file(s)\n"},
 	{"getsom", lfs_getsom, 0, "To list the SOM info for a given file.\n"
 	 "usage: getsom [-s] [-b] [-f] <path>\n"
@@ -8288,7 +8294,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 		/* ignore previous file's error, continue with next file */
 
 		/* reset ioc */
-		memset(ioc, 0, sizeof(__u32) * 4096);
+		memset(ioc, 0, sizeof(*ioc) + sizeof(__u32) * 4096);
 	}
 
 	free(ioc);
@@ -8296,21 +8302,76 @@ error:
 	return rc;
 }
 
-static inline int lfs_mirror_dump(int argc, char **argv)
+static inline int verify_mirror_id_by_fd(int fd, __u16 mirror_id)
+{
+	struct llapi_layout *layout;
+	int rc;
+
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		fprintf(stderr, "could not get layout.\n");
+		return  -EINVAL;
+	}
+
+	rc = llapi_layout_comp_iterate(layout, find_mirror_id, &mirror_id);
+	if (rc < 0) {
+		fprintf(stderr, "failed to iterate layout\n");
+		llapi_layout_free(layout);
+
+		return rc;
+	} else if (rc == LLAPI_LAYOUT_ITER_CONT) {
+		fprintf(stderr, "does not find mirror with ID %u\n", mirror_id);
+		llapi_layout_free(layout);
+
+		return -EINVAL;
+	}
+	llapi_layout_free(layout);
+
+	return 0;
+}
+
+/**
+ * Check whether two files are the same file
+ * \retval	0  same file
+ * \retval	1  not the same file
+ * \retval	<0 error code
+ */
+static inline int check_same_file(const char *f1, const char *f2)
+{
+	struct stat stbuf1;
+	struct stat stbuf2;
+
+	if (stat(f1, &stbuf1) < 0) {
+		fprintf(stderr, "%s: cannot stat file '%s': %s\n",
+			progname, f1, strerror(errno));
+		return -errno;
+	}
+
+	if (stat(f2, &stbuf2) < 0) {
+		fprintf(stderr, "%s: cannot stat file '%s': %s\n",
+			progname, f2, strerror(errno));
+		return -errno;
+	}
+
+	if (stbuf1.st_rdev == stbuf2.st_rdev &&
+	    stbuf1.st_ino == stbuf2.st_ino)
+		return 0;
+
+	return 1;
+}
+
+static inline int lfs_mirror_read(int argc, char **argv)
 {
 	int rc = CMD_HELP;
 	__u16 mirror_id = 0;
 	const char *outfile = NULL;
 	char *fname;
-	struct stat stbuf;
 	int fd = 0;
-	struct llapi_layout *layout;
 	int outfd;
 	int c;
-	const size_t buflen = 4 << 20;
 	void *buf;
+	const size_t buflen = 4 << 20;
 	off_t pos;
-
 	struct option long_opts[] = {
 	{ .val = 'N',	.name = "mirror-id",	.has_arg = required_argument },
 	{ .val = 'o',	.name = "outfile",	.has_arg = required_argument },
@@ -8332,6 +8393,10 @@ static inline int lfs_mirror_dump(int argc, char **argv)
 		case 'o':
 			outfile = optarg;
 			break;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized.\n",
+				progname, argv[optind - 1]);
+			return -EINVAL;
 		}
 	}
 
@@ -8353,56 +8418,39 @@ static inline int lfs_mirror_dump(int argc, char **argv)
 	/* open mirror file */
 	fname = argv[optind];
 
-	if (stat(fname, &stbuf) < 0) {
-		fprintf(stderr, "%s %s: cannot stat file '%s': %s.\n",
-			progname, argv[0], fname, strerror(errno));
-		return rc;
-	}
-
-	if (!S_ISREG(stbuf.st_mode)) {
-		fprintf(stderr, "%s %s: '%s' is not a regular file.\n",
-			progname, argv[0], fname);
-		return rc;
+	if (outfile) {
+		rc = check_same_file(fname, outfile);
+		if (rc == 0) {
+			fprintf(stderr,
+			"%s %s: output file cannot be the mirrored file\n",
+				progname, argv[0]);
+			return -EINVAL;
+		}
+		if (rc < 0)
+			return rc;
 	}
 
 	fd = open(fname, O_DIRECT | O_RDONLY);
 	if (fd < 0) {
-		fprintf(stderr, "%s %s: cannot open '%s': %s.\n",
+		fprintf(stderr, "%s %s: cannot open '%s': %s\n",
 			progname, argv[0], fname, strerror(errno));
 		return rc;
 	}
 
 	/* verify mirror id */
-	layout = llapi_layout_get_by_fd(fd, 0);
-	if (layout == NULL) {
-		fprintf(stderr, "%s %s: could not get layout of file '%s'.\n",
-			progname, argv[0], fname);
-		rc = -EINVAL;
-		goto close_fd;
-	}
-
-	rc = llapi_layout_comp_iterate(layout, find_mirror_id, &mirror_id);
-	if (rc < 0) {
-		fprintf(stderr, "%s %s: failed to iterate layout of '%s'.\n",
-			progname, argv[0], fname);
-		llapi_layout_free(layout);
-		goto close_fd;
-	} else if (rc == LLAPI_LAYOUT_ITER_CONT) {
+	rc = verify_mirror_id_by_fd(fd, mirror_id);
+	if (rc) {
 		fprintf(stderr,
-			"%s %s: file '%s' does not contain mirror with ID %u\n",
-			progname, argv[0], fname, mirror_id);
-		llapi_layout_free(layout);
-
-		rc = -EINVAL;
+			"%s %s: cannot find mirror with ID %u in '%s'\n",
+			progname, argv[0], mirror_id, fname);
 		goto close_fd;
 	}
-	llapi_layout_free(layout);
 
 	/* open output file */
 	if (outfile) {
 		outfd = open(outfile, O_EXCL | O_WRONLY | O_CREAT, 0644);
 		if (outfd < 0) {
-			fprintf(stderr, "%s %s: cannot create file '%s':%s.\n",
+			fprintf(stderr, "%s %s: cannot create file '%s': %s\n",
 				progname, argv[0], outfile, strerror(errno));
 			rc = -errno;
 			goto close_fd;
@@ -8414,7 +8462,7 @@ static inline int lfs_mirror_dump(int argc, char **argv)
 	/* allocate buffer */
 	rc = posix_memalign(&buf, sysconf(_SC_PAGESIZE), buflen);
 	if (rc) {
-		fprintf(stderr, "%s %s: posix_memalign returns %d.\n",
+		fprintf(stderr, "%s %s: posix_memalign returns %d\n",
 				progname, argv[0], rc);
 		goto close_outfd;
 	}
@@ -8428,7 +8476,7 @@ static inline int lfs_mirror_dump(int argc, char **argv)
 		if (bytes_read < 0) {
 			rc = bytes_read;
 			fprintf(stderr,
-				"%s %s: fail to read data from mirror %u:%s.\n",
+				"%s %s: fail to read data from mirror %u: %s\n",
 				progname, argv[0], mirror_id, strerror(-rc));
 			goto free_buf;
 		}
@@ -8444,7 +8492,7 @@ static inline int lfs_mirror_dump(int argc, char **argv)
 					 bytes_read - written);
 			if (written2 < 0) {
 				fprintf(stderr,
-					"%s %s: fail to write %s:%s.\n",
+					"%s %s: fail to write %s: %s\n",
 					progname, argv[0], outfile ? : "STDOUT",
 					strerror(errno));
 				rc = -errno;
@@ -8472,6 +8520,205 @@ free_buf:
 close_outfd:
 	if (outfile)
 		close(outfd);
+close_fd:
+	close(fd);
+
+	return rc;
+}
+
+static inline int lfs_mirror_write(int argc, char **argv)
+{
+	int rc = CMD_HELP;
+	__u16 mirror_id = 0;
+	const char *inputfile = NULL;
+	char *fname;
+	int fd = 0;
+	int inputfd;
+	int c;
+	void *buf;
+	const size_t buflen = 4 << 20;
+	off_t pos;
+	size_t page_size = sysconf(_SC_PAGESIZE);
+	struct ll_ioc_lease_id ioc;
+
+	struct option long_opts[] = {
+	{ .val = 'N',	.name = "mirror-id",	.has_arg = required_argument },
+	{ .val = 'i',	.name = "inputfile",	.has_arg = required_argument },
+	{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "N:i:", long_opts, NULL)) >= 0) {
+		char *end;
+
+		switch (c) {
+		case 'N':
+			mirror_id = strtoul(optarg, &end, 0);
+			if (*end != '\0' || mirror_id == 0) {
+				fprintf(stderr,
+					"%s %s: invalid mirror ID '%s'\n",
+					progname, argv[0], optarg);
+				return rc;
+			}
+			break;
+		case 'i':
+			inputfile = optarg;
+			break;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				progname, argv[optind - 1]);
+			return -EINVAL;
+		}
+	}
+
+	if (argc == optind) {
+		fprintf(stderr, "%s %s: no mirrored file provided\n",
+			progname, argv[0]);
+		return rc;
+	} else if (argc > optind + 1) {
+		fprintf(stderr, "%s %s: too many files\n", progname, argv[0]);
+		return rc;
+	}
+
+	if (mirror_id == 0) {
+		fprintf(stderr, "%s %s: no valid mirror ID is provided\n",
+			progname, argv[0]);
+		return rc;
+	}
+
+	/* open mirror file */
+	fname = argv[optind];
+
+	if (inputfile) {
+		rc = check_same_file(fname, inputfile);
+		if (rc == 0) {
+			fprintf(stderr,
+			"%s %s: input file cannot be the mirrored file\n",
+				progname, argv[0]);
+			return -EINVAL;
+		}
+		if (rc < 0)
+			return rc;
+	}
+
+	fd = open(fname, O_DIRECT | O_WRONLY);
+	if (fd < 0) {
+		fprintf(stderr, "%s %s: cannot open '%s': %s\n",
+			progname, argv[0], fname, strerror(errno));
+		return rc;
+	}
+
+	/* verify mirror id */
+	rc = verify_mirror_id_by_fd(fd, mirror_id);
+	if (rc) {
+		fprintf(stderr,
+			"%s %s: cannot find mirror with ID %u in '%s'\n",
+			progname, argv[0], mirror_id, fname);
+		goto close_fd;
+	}
+
+	/* open input file */
+	if (inputfile) {
+		inputfd = open(inputfile, O_RDONLY, 0644);
+		if (inputfd < 0) {
+			fprintf(stderr, "%s %s: cannot open file '%s': %s\n",
+				progname, argv[0], inputfile, strerror(errno));
+			rc = -errno;
+			goto close_fd;
+		}
+	} else {
+		inputfd = STDIN_FILENO;
+	}
+
+	/* allocate buffer */
+	rc = posix_memalign(&buf, page_size, buflen);
+	if (rc) {
+		fprintf(stderr, "%s %s: posix_memalign returns %d\n",
+			progname, argv[0], rc);
+		goto close_inputfd;
+	}
+
+	/* prepare target mirror components instantiation */
+	ioc.lil_mode = LL_LEASE_WRLCK;
+	ioc.lil_flags = LL_LEASE_RESYNC;
+	ioc.lil_mirror_id = mirror_id;
+	rc = llapi_lease_set(fd, (struct ll_ioc_lease *)&ioc);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s %s: '%s' llapi_lease_get_ext failed: %s\n",
+			progname, argv[0], fname, strerror(errno));
+		goto free_buf;
+	}
+
+	pos = 0;
+	while (1) {
+		ssize_t bytes_read;
+		ssize_t written;
+		size_t to_write;
+
+		rc = llapi_lease_check(fd);
+		if (rc != LL_LEASE_WRLCK) {
+			fprintf(stderr, "%s %s: '%s' lost lease lock\n",
+				progname, argv[0], fname);
+			goto free_buf;
+		}
+
+		bytes_read = read(inputfd, buf, buflen);
+		if (bytes_read < 0) {
+			rc = bytes_read;
+			fprintf(stderr,
+				"%s %s: fail to read data from '%s': %s\n",
+				progname, argv[0], inputfile ? : "STDIN",
+				strerror(errno));
+			rc = -errno;
+			goto free_buf;
+		}
+
+		/* EOF reached */
+		if (bytes_read == 0)
+			break;
+
+		/* round up to page align to make direct IO happy. */
+		to_write = (bytes_read + page_size - 1) & ~(page_size - 1);
+
+		written = llapi_mirror_write(fd, mirror_id, buf, to_write,
+					     pos);
+		if (written < 0) {
+			rc = written;
+			fprintf(stderr,
+			      "%s %s: fail to write to mirror %u: %s\n",
+				progname, argv[0], mirror_id,
+				strerror(-rc));
+			goto free_buf;
+		}
+
+		pos += bytes_read;
+	}
+
+	if (pos & (page_size - 1)) {
+		rc = llapi_mirror_truncate(fd, mirror_id, pos);
+		if (rc < 0)
+			goto free_buf;
+	}
+
+	ioc.lil_mode = LL_LEASE_UNLCK;
+	ioc.lil_flags = LL_LEASE_RESYNC_DONE;
+	ioc.lil_count = 0;
+	rc = llapi_lease_set(fd, (struct ll_ioc_lease *)&ioc);
+	if (rc <= 0) {
+		if (rc == 0)
+			rc = -EBUSY;
+		fprintf(stderr,
+			"%s %s: release lease lock of '%s' failed: %s\n",
+			progname, argv[0], fname, strerror(errno));
+		goto free_buf;
+	}
+
+	rc = 0;
+
+free_buf:
+	free(buf);
+close_inputfd:
+	if (inputfile)
+		close(inputfd);
 close_fd:
 	close(fd);
 
@@ -9074,7 +9321,7 @@ static inline int lfs_mirror_verify(int argc, char **argv)
 			verbose++;
 			break;
 		default:
-			fprintf(stderr, "%s: options '%s' unrecognized.\n",
+			fprintf(stderr, "%s: option '%s' unrecognized.\n",
 				progname, argv[optind - 1]);
 			rc = -EINVAL;
 			goto error;

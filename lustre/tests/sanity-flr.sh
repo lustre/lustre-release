@@ -1273,8 +1273,11 @@ test_37()
 	local tf=$DIR/$tfile
 	local tf2=$DIR/$tfile-2
 	local tf3=$DIR/$tfile-3
+	local tf4=$DIR/$tfile-4
 
 	create_files_37 $((RANDOM + 15 * 1048576)) $tf $tf2 $tf3
+	rm -f $tf4
+	cp $tf $tf4
 
 	# assume the mirror id will be 1, 2, and 3
 	declare -A checksums
@@ -1297,10 +1300,19 @@ test_37()
 
 	local sum
 	for i in ${mirror_array[@]}; do
-		sum=$($LFS mirror dump -N $i $tf | md5sum)
+		$LCTL set_param ldlm.namespaces.*.lru_size=clear > /dev/null
+		sum=$($LFS mirror read -N $i $tf | md5sum)
 		[ "$sum" = "${checksums[$i]}" ] ||
 			error "$i: mismatch: \'${checksums[$i]}\' vs. \'$sum\'"
 	done
+
+	# verify mirror write
+	echo "Verifying mirror write .."
+	$LFS mirror write -N2 $tf < $tf4
+
+	sum=$($LFS mirror read -N2 $tf | md5sum)
+	[[ "$sum" = "${checksums[1]}" ]] ||
+		error "2: mismatch \'${checksums[1]}\' vs. \'$sum\'"
 
 	# verify mirror copy, write to this mirrored file will invalidate
 	# the other two mirrors
@@ -1320,7 +1332,7 @@ test_37()
 	# verify copying is successful by checking checksums
 	remount_client $MOUNT
 	for i in ${mirror_array[@]}; do
-		sum=$($LFS mirror dump -N $i $tf | md5sum)
+		sum=$($LFS mirror read -N $i $tf | md5sum)
 		[ "$sum" = "${checksums[1]}" ] ||
 			error "$i: mismatch checksum after copy"
 	done
@@ -1379,7 +1391,7 @@ test_38() {
 
 	local valid_mirror stale_mirror id mirror_cksum
 	for id in "${mirror_array[@]}"; do
-		mirror_cksum=$($LFS mirror dump -N $id $tf | md5sum)
+		mirror_cksum=$($LFS mirror read -N $id $tf | md5sum)
 		[ "$ref_cksum" == "$mirror_cksum" ] &&
 			{ valid_mirror=$id; continue; }
 
@@ -1392,7 +1404,7 @@ test_38() {
 	mirror_io resync $tf || error "resync failed"
 	verify_flr_state $tf "ro"
 
-	mirror_cksum=$($LFS mirror dump -N $stale_mirror $tf | md5sum)
+	mirror_cksum=$($LFS mirror read -N $stale_mirror $tf | md5sum)
 	[ "$file_cksum" = "$ref_cksum" ] || error "resync failed"
 
 	# case 2: inject an error to make mirror_io exit after changing
@@ -1518,7 +1530,7 @@ test_41() {
 
 	echo " **verify $tf-1 data consistency in all mirrors"
 	for i in 1 2 3; do
-		local sum=$($LFS mirror dump -N$i $tf-1 | md5sum)
+		local sum=$($LFS mirror read -N$i $tf-1 | md5sum)
 		[[ "$sum" = "$sum0" ]] ||
 			error "$tf-1.$i: checksum mismatch: $sum != $sum0"
 	done
@@ -1997,8 +2009,8 @@ test_48() {
 	verify_flr_state $tf "wp"
 	verify_comp_attr lcme_flags $tf 0x20003 nosync,stale
 
-	local sum1=$($LFS mirror dump -N1 $tf | md5sum)
-	local sum2=$($LFS mirror dump -N2 $tf | md5sum)
+	local sum1=$($LFS mirror read -N1 $tf | md5sum)
+	local sum2=$($LFS mirror read -N2 $tf | md5sum)
 
 	echo " ** verify mirror 2 doesn't change"
 	echo "original checksum: $sum0"
@@ -2015,8 +2027,8 @@ test_48() {
 	verify_flr_state $tf "ro"
 	verify_comp_attr lcme_flags $tf 0x20003 nosync,^stale
 
-	sum1=$($LFS mirror dump -N1 $tf | md5sum)
-	sum2=$($LFS mirror dump -N2 $tf | md5sum)
+	sum1=$($LFS mirror read -N1 $tf | md5sum)
+	sum2=$($LFS mirror read -N2 $tf | md5sum)
 
 	echo " ** verify mirror 2 resync-ed"
 	echo "original checksum: $sum0"
@@ -2161,9 +2173,9 @@ test_200() {
 	mirror_io resync $tf
 	get_mirror_ids $tf
 
-	local csum=$($LFS mirror dump -N ${mirror_array[0]} $tf | md5sum)
+	local csum=$($LFS mirror read -N ${mirror_array[0]} $tf | md5sum)
 	for id in ${mirror_array[@]:1}; do
-		[ "$($LFS mirror dump -N $id $tf | md5sum)" = "$csum" ] ||
+		[ "$($LFS mirror read -N $id $tf | md5sum)" = "$csum" ] ||
 			error "checksum error for mirror $id"
 	done
 
