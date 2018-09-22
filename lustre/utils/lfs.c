@@ -243,10 +243,10 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"\tnon-block:    Abort migrations if concurrent access is detected\n" \
 	"\tnon-direct:   Do not use direct I/O to copy file contents\n" \
 
-#define SETDIRSTRIPE_USAGE					\
-	"		[--mdt-count|-c stripe_count>\n"	\
-	"		[--mdt-index|-i mdt_index]\n"		\
-	"		[--mdt-hash|-H mdt_hash]\n"		\
+#define SETDIRSTRIPE_USAGE						\
+	"		[--mdt-count|-c stripe_count>\n"		\
+	"		[--mdt-index|-i mdt_index[,mdt_index,...]\n"	\
+	"		[--mdt-hash|-H mdt_hash]\n"			\
 	"		[--default|-D] [--mode|-m mode] <dir>\n"	\
 	"\tstripe_count: stripe count of the striped directory\n"	\
 	"\tmdt_index: MDT index of first stripe\n"			\

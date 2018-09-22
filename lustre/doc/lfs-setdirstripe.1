@@ -18,10 +18,13 @@ Stripe the new directory over
 .I COUNT
 MDTs.
 .TP
-.BR \-i ", " \-\-mdt\-index =\fISTART_MDT_INDEX\fR
+.BR \-i ", " \-\-mdt\-index =\fISTART_MDT_INDEX\fR[,\fIMDT_INDEX ...]
 Use the MDT whose index is
 .I START_MDT_INDEX
-as the master/starting MDT for the directory. If -1 (default) is set, it will randomly pick
+as the master/starting MDT for the directory. If multiple
+.I MDT_INDEX
+values are given, then the stripes will be allocated on the specified
+MDT indices.  If index -1 (default) is used, it will randomly pick
 .I COUNT
 less full MDTs.
 .TP
