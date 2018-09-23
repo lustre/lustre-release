@@ -142,7 +142,7 @@ void
 lnet_msg_commit(struct lnet_msg *msg, int cpt)
 {
 	struct lnet_msg_container *container = the_lnet.ln_msg_containers[cpt];
-	struct lnet_counters *counters = the_lnet.ln_counters[cpt];
+	struct lnet_counters_common *common;
 	s64 timeout_ns;
 
 	/* set the message deadline */
@@ -171,30 +171,31 @@ lnet_msg_commit(struct lnet_msg *msg, int cpt)
 	msg->msg_onactivelist = 1;
 	list_add_tail(&msg->msg_activelist, &container->msc_active);
 
-	counters->msgs_alloc++;
-	if (counters->msgs_alloc > counters->msgs_max)
-		counters->msgs_max = counters->msgs_alloc;
+	common = &the_lnet.ln_counters[cpt]->lct_common;
+	common->lcc_msgs_alloc++;
+	if (common->lcc_msgs_alloc > common->lcc_msgs_max)
+		common->lcc_msgs_max = common->lcc_msgs_alloc;
 }
 
 static void
 lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 {
-	struct lnet_counters *counters;
+	struct lnet_counters_common *common;
 	struct lnet_event *ev = &msg->msg_ev;
 
 	LASSERT(msg->msg_tx_committed);
 	if (status != 0)
 		goto out;
 
-	counters = the_lnet.ln_counters[msg->msg_tx_cpt];
+	common = &(the_lnet.ln_counters[msg->msg_tx_cpt]->lct_common);
 	switch (ev->type) {
 	default: /* routed message */
 		LASSERT(msg->msg_routing);
 		LASSERT(msg->msg_rx_committed);
 		LASSERT(ev->type == 0);
 
-		counters->route_length += msg->msg_len;
-		counters->route_count++;
+		common->lcc_route_length += msg->msg_len;
+		common->lcc_route_count++;
 		goto incr_stats;
 
 	case LNET_EVENT_PUT:
@@ -208,7 +209,7 @@ lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 	case LNET_EVENT_SEND:
 		LASSERT(!msg->msg_rx_committed);
 		if (msg->msg_type == LNET_MSG_PUT)
-			counters->send_length += msg->msg_len;
+			common->lcc_send_length += msg->msg_len;
 		break;
 
 	case LNET_EVENT_GET:
@@ -220,7 +221,7 @@ lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 		break;
 	}
 
-	counters->send_count++;
+	common->lcc_send_count++;
 
 incr_stats:
 	if (msg->msg_txpeer)
@@ -239,7 +240,7 @@ incr_stats:
 static void
 lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 {
-	struct lnet_counters *counters;
+	struct lnet_counters_common *common;
 	struct lnet_event *ev = &msg->msg_ev;
 
 	LASSERT(!msg->msg_tx_committed); /* decommitted or never committed */
@@ -248,7 +249,7 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 	if (status != 0)
 		goto out;
 
-	counters = the_lnet.ln_counters[msg->msg_rx_cpt];
+	common = &(the_lnet.ln_counters[msg->msg_rx_cpt]->lct_common);
 	switch (ev->type) {
 	default:
 		LASSERT(ev->type == 0);
@@ -266,7 +267,7 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 		 * lnet_msg_decommit_tx(), see details in lnet_parse_get() */
 		LASSERT(msg->msg_type == LNET_MSG_REPLY ||
 			msg->msg_type == LNET_MSG_GET);
-		counters->send_length += msg->msg_wanted;
+		common->lcc_send_length += msg->msg_wanted;
 		break;
 
 	case LNET_EVENT_PUT:
@@ -281,7 +282,7 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 		break;
 	}
 
-	counters->recv_count++;
+	common->lcc_recv_count++;
 
 incr_stats:
 	if (msg->msg_rxpeer)
@@ -293,7 +294,7 @@ incr_stats:
 				msg->msg_type,
 				LNET_STATS_TYPE_RECV);
 	if (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_REPLY)
-		counters->recv_length += msg->msg_wanted;
+		common->lcc_recv_length += msg->msg_wanted;
 
  out:
 	lnet_return_rx_credits_locked(msg);
@@ -326,7 +327,7 @@ lnet_msg_decommit(struct lnet_msg *msg, int cpt, int status)
 	list_del(&msg->msg_activelist);
 	msg->msg_onactivelist = 0;
 
-	the_lnet.ln_counters[cpt2]->msgs_alloc--;
+	the_lnet.ln_counters[cpt2]->lct_common.lcc_msgs_alloc--;
 
 	if (cpt2 != cpt) {
 		lnet_net_unlock(cpt2);
@@ -541,52 +542,54 @@ lnet_incr_hstats(struct lnet_msg *msg, enum lnet_msg_hstatus hstatus)
 {
 	struct lnet_ni *ni = msg->msg_txni;
 	struct lnet_peer_ni *lpni = msg->msg_txpeer;
-	struct lnet_counters *counters = the_lnet.ln_counters[0];
+	struct lnet_counters_health *health;
+
+	health = &the_lnet.ln_counters[0]->lct_health;
 
 	switch (hstatus) {
 	case LNET_MSG_STATUS_LOCAL_INTERRUPT:
 		atomic_inc(&ni->ni_hstats.hlt_local_interrupt);
-		counters->local_interrupt_count++;
+		health->lch_local_interrupt_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_DROPPED:
 		atomic_inc(&ni->ni_hstats.hlt_local_dropped);
-		counters->local_dropped_count++;
+		health->lch_local_dropped_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_ABORTED:
 		atomic_inc(&ni->ni_hstats.hlt_local_aborted);
-		counters->local_aborted_count++;
+		health->lch_local_aborted_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
 		atomic_inc(&ni->ni_hstats.hlt_local_no_route);
-		counters->local_no_route_count++;
+		health->lch_local_no_route_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
 		atomic_inc(&ni->ni_hstats.hlt_local_timeout);
-		counters->local_timeout_count++;
+		health->lch_local_timeout_count++;
 		break;
 	case LNET_MSG_STATUS_LOCAL_ERROR:
 		atomic_inc(&ni->ni_hstats.hlt_local_error);
-		counters->local_error_count++;
+		health->lch_local_error_count++;
 		break;
 	case LNET_MSG_STATUS_REMOTE_DROPPED:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_remote_dropped);
-		counters->remote_dropped_count++;
+		health->lch_remote_dropped_count++;
 		break;
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_remote_error);
-		counters->remote_error_count++;
+		health->lch_remote_error_count++;
 		break;
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_remote_timeout);
-		counters->remote_timeout_count++;
+		health->lch_remote_timeout_count++;
 		break;
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
 		if (lpni)
 			atomic_inc(&lpni->lpni_hstats.hlt_network_timeout);
-		counters->network_timeout_count++;
+		health->lch_network_timeout_count++;
 		break;
 	case LNET_MSG_STATUS_OK:
 		break;

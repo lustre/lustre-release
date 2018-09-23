@@ -1555,27 +1555,27 @@ lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp, int save_old)
                 return rc;
         }
 
-        srp->srp_name = name;
+	srp->srp_name = name;
 
-        for (i = 0; i < count; i++) {
-                rc = lst_alloc_rpcent(&srp->srp_result[i], srp->srp_count,
+	for (i = 0; i < count; i++) {
+		rc = lst_alloc_rpcent(&srp->srp_result[i], srp->srp_count,
 				      sizeof(struct sfw_counters)  +
 				      sizeof(struct srpc_counters) +
-				      sizeof(struct lnet_counters));
-                if (rc != 0) {
-                        fprintf(stderr, "Out of memory\n");
-                        break;
-                }
-        }
+				      sizeof(struct lnet_counters_common));
+		if (rc != 0) {
+			fprintf(stderr, "Out of memory\n");
+			break;
+		}
+	}
 
-        if (rc == 0) {
-                *srpp = srp;
-                return 0;
-        }
+	if (rc == 0) {
+		*srpp = srp;
+		return 0;
+	}
 
-        lst_stat_req_param_free(srp);
+	lst_stat_req_param_free(srp);
 
-        return rc;
+	return rc;
 }
 
 typedef struct {
@@ -1646,16 +1646,16 @@ lst_timeval_diff(struct timeval *tv1,
 }
 
 static void
-lst_cal_lnet_stat(float delta, struct lnet_counters *lnet_new,
-		  struct lnet_counters *lnet_old, int mbs)
+lst_cal_lnet_stat(float delta, struct lnet_counters_common *lnet_new,
+		  struct lnet_counters_common *lnet_old, int mbs)
 {
 	float perf;
 	float rate;
 	unsigned int unit_divisor;
 
 	unit_divisor = (mbs) ? (1000 * 1000) : (1024 * 1024);
-	perf = (float)(lnet_new->send_length -
-		       lnet_old->send_length) / unit_divisor / delta;
+	perf = (float)(lnet_new->lcc_send_length -
+		       lnet_old->lcc_send_length) / unit_divisor / delta;
 	lnet_stat_result.lnet_total_sndperf += perf;
 
 	if (lnet_stat_result.lnet_min_sndperf > perf ||
@@ -1665,8 +1665,8 @@ lst_cal_lnet_stat(float delta, struct lnet_counters *lnet_new,
 	if (lnet_stat_result.lnet_max_sndperf < perf)
 		lnet_stat_result.lnet_max_sndperf = perf;
 
-	perf = (float)(lnet_new->recv_length -
-		       lnet_old->recv_length) / unit_divisor / delta;
+	perf = (float)(lnet_new->lcc_recv_length -
+		       lnet_old->lcc_recv_length) / unit_divisor / delta;
 	lnet_stat_result.lnet_total_rcvperf += perf;
 
 	if (lnet_stat_result.lnet_min_rcvperf > perf ||
@@ -1676,7 +1676,7 @@ lst_cal_lnet_stat(float delta, struct lnet_counters *lnet_new,
 	if (lnet_stat_result.lnet_max_rcvperf < perf)
 		lnet_stat_result.lnet_max_rcvperf = perf;
 
-	rate = (lnet_new->send_count - lnet_old->send_count) / delta;
+	rate = (lnet_new->lcc_send_count - lnet_old->lcc_send_count) / delta;
 	lnet_stat_result.lnet_total_sndrate += rate;
 
 	if (lnet_stat_result.lnet_min_sndrate > rate ||
@@ -1686,7 +1686,7 @@ lst_cal_lnet_stat(float delta, struct lnet_counters *lnet_new,
 	if (lnet_stat_result.lnet_max_sndrate < rate)
 		lnet_stat_result.lnet_max_sndrate = rate;
 
-	rate = (lnet_new->recv_count - lnet_old->recv_count) / delta;
+	rate = (lnet_new->lcc_recv_count - lnet_old->lcc_recv_count) / delta;
 	lnet_stat_result.lnet_total_rcvrate += rate;
 
 	if (lnet_stat_result.lnet_min_rcvrate > rate ||
@@ -1772,17 +1772,17 @@ lst_print_stat(char *name, struct list_head *resultp,
 	       int idx, int lnet, int bwrt, int rdwr, int type,
 	       int mbs)
 {
-	struct list_head        tmp[2];
+	struct list_head tmp[2];
 	struct lstcon_rpc_ent *new;
 	struct lstcon_rpc_ent *old;
-	struct sfw_counters   *sfwk_new;
-	struct sfw_counters   *sfwk_old;
-	struct srpc_counters  *srpc_new;
-	struct srpc_counters  *srpc_old;
-	struct lnet_counters  *lnet_new;
-	struct lnet_counters  *lnet_old;
-        float             delta;
-        int               errcount = 0;
+	struct sfw_counters *sfwk_new;
+	struct sfw_counters *sfwk_old;
+	struct srpc_counters *srpc_new;
+	struct srpc_counters *srpc_old;
+	struct lnet_counters_common *lnet_new;
+	struct lnet_counters_common *lnet_old;
+	float delta;
+	int errcount = 0;
 
 	INIT_LIST_HEAD(&tmp[0]);
 	INIT_LIST_HEAD(&tmp[1]);
@@ -1825,28 +1825,32 @@ lst_print_stat(char *name, struct list_head *resultp,
 		sfwk_new = (struct sfw_counters *)&new->rpe_payload[0];
 		sfwk_old = (struct sfw_counters *)&old->rpe_payload[0];
 
-		srpc_new = (struct srpc_counters *)((char *)sfwk_new + sizeof(*sfwk_new));
-		srpc_old = (struct srpc_counters *)((char *)sfwk_old + sizeof(*sfwk_old));
+		srpc_new = (struct srpc_counters *)((char *)sfwk_new +
+						    sizeof(*sfwk_new));
+		srpc_old = (struct srpc_counters *)((char *)sfwk_old +
+						    sizeof(*sfwk_old));
 
-		lnet_new = (struct lnet_counters *)((char *)srpc_new + sizeof(*srpc_new));
-		lnet_old = (struct lnet_counters *)((char *)srpc_old + sizeof(*srpc_old));
+		lnet_new = (struct lnet_counters_common *)((char *)srpc_new +
+							   sizeof(*srpc_new));
+		lnet_old = (struct lnet_counters_common *)((char *)srpc_old +
+							   sizeof(*srpc_old));
 
 		/* Prior to version 2.3, the running_ms field was a counter for
 		 * the number of running tests.  We are looking at this value
 		 * to determine if it is a millisecond timestamep (>= 2.3) or a
 		 * test counter (< 2.3).  The number 500 is being used for this
 		 * barrier as the test counter should never get this high, and
-		 * the timestamp should never get this low. */
-
+		 * the timestamp should never get this low.
+		 */
 		if (sfwk_new->running_ms > 500) {
 			/* use the timestamp from the remote node, not our
 			 * rpe_stamp from when we copied up the data out of
-			 * the kernel */
-
-			delta = (float) (sfwk_new->running_ms -
+			 * the kernel.
+			 */
+			delta = (float)(sfwk_new->running_ms -
 					sfwk_old->running_ms) / 1000;
 		} else {
-			struct timeval	  tv;
+			struct timeval tv;
 
 			lst_timeval_diff(&new->rpe_stamp, &old->rpe_stamp, &tv);
 			delta = tv.tv_sec + (float)tv.tv_usec / 1000000;

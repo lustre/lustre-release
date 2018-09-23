@@ -496,7 +496,7 @@ lnet_rspt_alloc(int cpt)
 	struct lnet_rsp_tracker *rspt;
 	LIBCFS_ALLOC(rspt, sizeof(*rspt));
 	lnet_net_lock(cpt);
-	the_lnet.ln_counters[cpt]->rst_alloc++;
+	the_lnet.ln_counters[cpt]->lct_health.lch_rst_alloc++;
 	lnet_net_unlock(cpt);
 	return rspt;
 }
@@ -506,7 +506,7 @@ lnet_rspt_free(struct lnet_rsp_tracker *rspt, int cpt)
 {
 	LIBCFS_FREE(rspt, sizeof(*rspt));
 	lnet_net_lock(cpt);
-	the_lnet.ln_counters[cpt]->rst_alloc--;
+	the_lnet.ln_counters[cpt]->lct_health.lch_rst_alloc--;
 	lnet_net_unlock(cpt);
 }
 
@@ -729,6 +729,7 @@ bool lnet_delay_rule_match_locked(struct lnet_hdr *hdr, struct lnet_msg *msg);
 
 /** @} lnet_fault_simulation */
 
+void lnet_counters_get_common(struct lnet_counters_common *common);
 void lnet_counters_get(struct lnet_counters *counters);
 void lnet_counters_reset(void);
 

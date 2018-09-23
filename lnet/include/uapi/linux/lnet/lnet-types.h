@@ -223,32 +223,40 @@ struct lnet_acceptor_connreq {
 
 #define LNET_PROTO_ACCEPTOR_VERSION	1
 
-struct lnet_counters {
-	__u32	msgs_alloc;
-	__u32	msgs_max;
-	__u32	rst_alloc;
-	__u32	errors;
-	__u32	send_count;
-	__u32	recv_count;
-	__u32	route_count;
-	__u32	drop_count;
-	__u32	resend_count;
-	__u32	response_timeout_count;
-	__u32	local_interrupt_count;
-	__u32	local_dropped_count;
-	__u32	local_aborted_count;
-	__u32	local_no_route_count;
-	__u32	local_timeout_count;
-	__u32	local_error_count;
-	__u32	remote_dropped_count;
-	__u32	remote_error_count;
-	__u32	remote_timeout_count;
-	__u32	network_timeout_count;
-	__u64	send_length;
-	__u64	recv_length;
-	__u64	route_length;
-	__u64	drop_length;
+struct lnet_counters_common {
+	__u32	lcc_msgs_alloc;
+	__u32	lcc_msgs_max;
+	__u32	lcc_errors;
+	__u32	lcc_send_count;
+	__u32	lcc_recv_count;
+	__u32	lcc_route_count;
+	__u32	lcc_drop_count;
+	__u64	lcc_send_length;
+	__u64	lcc_recv_length;
+	__u64	lcc_route_length;
+	__u64	lcc_drop_length;
 } WIRE_ATTR;
+
+struct lnet_counters_health {
+	__u32	lch_rst_alloc;
+	__u32	lch_resend_count;
+	__u32	lch_response_timeout_count;
+	__u32	lch_local_interrupt_count;
+	__u32	lch_local_dropped_count;
+	__u32	lch_local_aborted_count;
+	__u32	lch_local_no_route_count;
+	__u32	lch_local_timeout_count;
+	__u32	lch_local_error_count;
+	__u32	lch_remote_dropped_count;
+	__u32	lch_remote_error_count;
+	__u32	lch_remote_timeout_count;
+	__u32	lch_network_timeout_count;
+};
+
+struct lnet_counters {
+	struct lnet_counters_common lct_common;
+	struct lnet_counters_health lct_health;
+};
 
 #define LNET_NI_STATUS_UP	0x15aac0de
 #define LNET_NI_STATUS_DOWN	0xdeadface

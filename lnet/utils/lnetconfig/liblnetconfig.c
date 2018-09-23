@@ -3607,6 +3607,7 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 			   struct cYAML **err_rc)
 {
 	struct lnet_ioctl_lnet_stats data;
+	struct lnet_counters *cntrs;
 	int rc;
 	int l_errno;
 	char err_str[LNET_MAX_STR_LEN];
@@ -3617,7 +3618,7 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 	LIBCFS_IOC_INIT_V2(data, st_hdr);
 
 	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_LNET_STATS, &data);
-	if (rc != 0) {
+	if (rc) {
 		l_errno = errno;
 		snprintf(err_str,
 			 sizeof(err_str),
@@ -3629,111 +3630,113 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 
 	rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 
+	cntrs = &data.st_cntrs;
+
 	root = cYAML_create_object(NULL, NULL);
-	if (root == NULL)
+	if (!root)
 		goto out;
 
 	stats = cYAML_create_object(root, "statistics");
-	if (stats == NULL)
+	if (!stats)
 		goto out;
 
-	if (cYAML_create_number(stats, "msgs_alloc",
-				data.st_cntrs.msgs_alloc) == NULL)
+	if (!cYAML_create_number(stats, "msgs_alloc",
+				 cntrs->lct_common.lcc_msgs_alloc))
 		goto out;
 
-	if (cYAML_create_number(stats, "msgs_max",
-				data.st_cntrs.msgs_max) == NULL)
+	if (!cYAML_create_number(stats, "msgs_max",
+				 cntrs->lct_common.lcc_msgs_max))
 		goto out;
 
-	if (cYAML_create_number(stats, "rst_alloc",
-				data.st_cntrs.rst_alloc) == NULL)
+	if (!cYAML_create_number(stats, "rst_alloc",
+				 cntrs->lct_health.lch_rst_alloc))
 		goto out;
 
-	if (cYAML_create_number(stats, "errors",
-				data.st_cntrs.errors) == NULL)
+	if (!cYAML_create_number(stats, "errors",
+				 cntrs->lct_common.lcc_errors))
 		goto out;
 
-	if (cYAML_create_number(stats, "send_count",
-				data.st_cntrs.send_count) == NULL)
+	if (!cYAML_create_number(stats, "send_count",
+				 cntrs->lct_common.lcc_send_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "resend_count",
-				data.st_cntrs.resend_count) == NULL)
+	if (!cYAML_create_number(stats, "resend_count",
+				 cntrs->lct_health.lch_resend_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "response_timeout_count",
-				data.st_cntrs.response_timeout_count) == NULL)
+	if (!cYAML_create_number(stats, "response_timeout_count",
+				 cntrs->lct_health.lch_response_timeout_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "local_interrupt_count",
-				data.st_cntrs.local_interrupt_count) == NULL)
+	if (!cYAML_create_number(stats, "local_interrupt_count",
+				 cntrs->lct_health.lch_local_interrupt_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "local_dropped_count",
-				data.st_cntrs.local_dropped_count) == NULL)
+	if (!cYAML_create_number(stats, "local_dropped_count",
+				 cntrs->lct_health.lch_local_dropped_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "local_aborted_count",
-				data.st_cntrs.local_aborted_count) == NULL)
+	if (!cYAML_create_number(stats, "local_aborted_count",
+				 cntrs->lct_health.lch_local_aborted_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "local_no_route_count",
-				data.st_cntrs.local_no_route_count) == NULL)
+	if (!cYAML_create_number(stats, "local_no_route_count",
+				 cntrs->lct_health.lch_local_no_route_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "local_timeout_count",
-				data.st_cntrs.local_timeout_count) == NULL)
+	if (!cYAML_create_number(stats, "local_timeout_count",
+				 cntrs->lct_health.lch_local_timeout_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "local_error_count",
-				data.st_cntrs.local_error_count) == NULL)
+	if (!cYAML_create_number(stats, "local_error_count",
+				 cntrs->lct_health.lch_local_error_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "remote_dropped_count",
-				data.st_cntrs.remote_dropped_count) == NULL)
+	if (!cYAML_create_number(stats, "remote_dropped_count",
+				 cntrs->lct_health.lch_remote_dropped_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "remote_error_count",
-				data.st_cntrs.remote_error_count) == NULL)
+	if (!cYAML_create_number(stats, "remote_error_count",
+				 cntrs->lct_health.lch_remote_error_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "remote_timeout_count",
-				data.st_cntrs.remote_timeout_count) == NULL)
+	if (!cYAML_create_number(stats, "remote_timeout_count",
+				 cntrs->lct_health.lch_remote_timeout_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "network_timeout_count",
-				data.st_cntrs.network_timeout_count) == NULL)
+	if (!cYAML_create_number(stats, "network_timeout_count",
+				 cntrs->lct_health.lch_network_timeout_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "recv_count",
-				data.st_cntrs.recv_count) == NULL)
+	if (!cYAML_create_number(stats, "recv_count",
+				 cntrs->lct_common.lcc_recv_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "route_count",
-				data.st_cntrs.route_count) == NULL)
+	if (!cYAML_create_number(stats, "route_count",
+				 cntrs->lct_common.lcc_route_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "drop_count",
-				data.st_cntrs.drop_count) == NULL)
+	if (!cYAML_create_number(stats, "drop_count",
+				 cntrs->lct_common.lcc_drop_count))
 		goto out;
 
-	if (cYAML_create_number(stats, "send_length",
-				data.st_cntrs.send_length) == NULL)
+	if (!cYAML_create_number(stats, "send_length",
+				 cntrs->lct_common.lcc_send_length))
 		goto out;
 
-	if (cYAML_create_number(stats, "recv_length",
-				data.st_cntrs.recv_length) == NULL)
+	if (!cYAML_create_number(stats, "recv_length",
+				 cntrs->lct_common.lcc_recv_length))
 		goto out;
 
-	if (cYAML_create_number(stats, "route_length",
-				data.st_cntrs.route_length) == NULL)
+	if (!cYAML_create_number(stats, "route_length",
+				 cntrs->lct_common.lcc_route_length))
 		goto out;
 
-	if (cYAML_create_number(stats, "drop_length",
-				data.st_cntrs.drop_length) == NULL)
+	if (!cYAML_create_number(stats, "drop_length",
+				 cntrs->lct_common.lcc_drop_length))
 		goto out;
 
-	if (show_rc == NULL)
+	if (!show_rc)
 		cYAML_print_tree(root);
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");

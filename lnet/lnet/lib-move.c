@@ -942,8 +942,9 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 	/* NB 'lp' is always the next hop */
 	if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
 	    lnet_peer_alive_locked(ni, lp, msg) == 0) {
-		the_lnet.ln_counters[cpt]->drop_count++;
-		the_lnet.ln_counters[cpt]->drop_length += msg->msg_len;
+		the_lnet.ln_counters[cpt]->lct_common.lcc_drop_count++;
+		the_lnet.ln_counters[cpt]->lct_common.lcc_drop_length +=
+			msg->msg_len;
 		lnet_net_unlock(cpt);
 		if (msg->msg_txpeer)
 			lnet_incr_stats(&msg->msg_txpeer->lpni_stats,
@@ -2746,7 +2747,7 @@ lnet_finalize_expired_responses(bool force)
 				lnet_res_unlock(i);
 
 				lnet_net_lock(i);
-				the_lnet.ln_counters[i]->response_timeout_count++;
+				the_lnet.ln_counters[i]->lct_health.lch_response_timeout_count++;
 				lnet_net_unlock(i);
 
 				list_del_init(&rspt->rspt_on_list);
@@ -2832,7 +2833,7 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 			}
 			lnet_net_lock(cpt);
 			if (!rc)
-				the_lnet.ln_counters[cpt]->resend_count++;
+				the_lnet.ln_counters[cpt]->lct_health.lch_resend_count++;
 		}
 	}
 }
@@ -3600,8 +3601,8 @@ lnet_drop_message(struct lnet_ni *ni, int cpt, void *private, unsigned int nob,
 {
 	lnet_net_lock(cpt);
 	lnet_incr_stats(&ni->ni_stats, msg_type, LNET_STATS_TYPE_DROP);
-	the_lnet.ln_counters[cpt]->drop_count++;
-	the_lnet.ln_counters[cpt]->drop_length += nob;
+	the_lnet.ln_counters[cpt]->lct_common.lcc_drop_count++;
+	the_lnet.ln_counters[cpt]->lct_common.lcc_drop_length += nob;
 	lnet_net_unlock(cpt);
 
 	lnet_ni_recv(ni, private, NULL, 0, 0, 0, nob);
@@ -4591,8 +4592,9 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 
 	lnet_net_lock(cpt);
 	lnet_incr_stats(&ni->ni_stats, LNET_MSG_GET, LNET_STATS_TYPE_DROP);
-	the_lnet.ln_counters[cpt]->drop_count++;
-	the_lnet.ln_counters[cpt]->drop_length += getmd->md_length;
+	the_lnet.ln_counters[cpt]->lct_common.lcc_drop_count++;
+	the_lnet.ln_counters[cpt]->lct_common.lcc_drop_length +=
+		getmd->md_length;
 	lnet_net_unlock(cpt);
 
 	if (msg != NULL)

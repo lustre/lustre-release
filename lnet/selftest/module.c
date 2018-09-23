@@ -87,13 +87,13 @@ lnet_selftest_exit(void)
 void
 lnet_selftest_structure_assertion(void)
 {
-/*	CLASSERT(sizeof(struct srpc_msg) == 160);
+	CLASSERT(sizeof(struct srpc_msg) == 160);
 	CLASSERT(sizeof(struct srpc_test_reqst) == 70);
 	CLASSERT(offsetof(struct srpc_msg, msg_body.tes_reqst.tsr_concur) == 72);
 	CLASSERT(offsetof(struct srpc_msg, msg_body.tes_reqst.tsr_ndest) == 78);
 	CLASSERT(sizeof(struct srpc_stat_reply) == 136);
 	CLASSERT(sizeof(struct srpc_stat_reqst) == 28);
-*/
+
 }
 
 static int __init

@@ -51,49 +51,49 @@ MODULE_PARM_DESC(rpc_timeout, "rpc timeout in seconds (64 by default, 0 == never
 
 #define sfw_unpack_id(id)               \
 do {                                    \
-        __swab64s(&(id).nid);           \
-        __swab32s(&(id).pid);           \
+	__swab64s(&(id).nid);           \
+	__swab32s(&(id).pid);           \
 } while (0)
 
 #define sfw_unpack_sid(sid)             \
 do {                                    \
-        __swab64s(&(sid).ses_nid);      \
-        __swab64s(&(sid).ses_stamp);    \
+	__swab64s(&(sid).ses_nid);      \
+	__swab64s(&(sid).ses_stamp);    \
 } while (0)
 
 #define sfw_unpack_fw_counters(fc)        \
 do {                                      \
-        __swab32s(&(fc).running_ms);      \
-        __swab32s(&(fc).active_batches);  \
-        __swab32s(&(fc).zombie_sessions); \
-        __swab32s(&(fc).brw_errors);      \
-        __swab32s(&(fc).ping_errors);     \
+	__swab32s(&(fc).running_ms);      \
+	__swab32s(&(fc).active_batches);  \
+	__swab32s(&(fc).zombie_sessions); \
+	__swab32s(&(fc).brw_errors);      \
+	__swab32s(&(fc).ping_errors);     \
 } while (0)
 
 #define sfw_unpack_rpc_counters(rc)     \
 do {                                    \
-        __swab32s(&(rc).errors);        \
-        __swab32s(&(rc).rpcs_sent);     \
-        __swab32s(&(rc).rpcs_rcvd);     \
-        __swab32s(&(rc).rpcs_dropped);  \
-        __swab32s(&(rc).rpcs_expired);  \
-        __swab64s(&(rc).bulk_get);      \
-        __swab64s(&(rc).bulk_put);      \
+	__swab32s(&(rc).errors);        \
+	__swab32s(&(rc).rpcs_sent);     \
+	__swab32s(&(rc).rpcs_rcvd);     \
+	__swab32s(&(rc).rpcs_dropped);  \
+	__swab32s(&(rc).rpcs_expired);  \
+	__swab64s(&(rc).bulk_get);      \
+	__swab64s(&(rc).bulk_put);      \
 } while (0)
 
 #define sfw_unpack_lnet_counters(lc)    \
 do {                                    \
-        __swab32s(&(lc).errors);        \
-        __swab32s(&(lc).msgs_max);      \
-        __swab32s(&(lc).msgs_alloc);    \
-        __swab32s(&(lc).send_count);    \
-        __swab32s(&(lc).recv_count);    \
-        __swab32s(&(lc).drop_count);    \
-        __swab32s(&(lc).route_count);   \
-        __swab64s(&(lc).send_length);   \
-        __swab64s(&(lc).recv_length);   \
-        __swab64s(&(lc).drop_length);   \
-        __swab64s(&(lc).route_length);  \
+	__swab32s(&(lc).lcc_errors);        \
+	__swab32s(&(lc).lcc_msgs_max);      \
+	__swab32s(&(lc).lcc_msgs_alloc);    \
+	__swab32s(&(lc).lcc_send_count);    \
+	__swab32s(&(lc).lcc_recv_count);    \
+	__swab32s(&(lc).lcc_drop_count);    \
+	__swab32s(&(lc).lcc_route_count);   \
+	__swab64s(&(lc).lcc_send_length);   \
+	__swab64s(&(lc).lcc_recv_length);   \
+	__swab64s(&(lc).lcc_drop_length);   \
+	__swab64s(&(lc).lcc_route_length);  \
 } while (0)
 
 #define sfw_test_active(t)      (atomic_read(&(t)->tsi_nactive) != 0)
@@ -390,7 +390,7 @@ sfw_get_stats(struct srpc_stat_reqst *request, struct srpc_stat_reply *reply)
                 return 0;
         }
 
-	lnet_counters_get(&reply->str_lnet);
+	lnet_counters_get_common(&reply->str_lnet);
 	srpc_get_counters(&reply->str_rpc);
 
         /* send over the msecs since the session was started

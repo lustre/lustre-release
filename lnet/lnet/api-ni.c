@@ -739,41 +739,70 @@ lnet_unregister_lnd(struct lnet_lnd *lnd)
 EXPORT_SYMBOL(lnet_unregister_lnd);
 
 void
-lnet_counters_get(struct lnet_counters *counters)
+lnet_counters_get_common(struct lnet_counters_common *common)
 {
 	struct lnet_counters *ctr;
-	int		i;
+	int i;
 
-	memset(counters, 0, sizeof(*counters));
+	memset(common, 0, sizeof(*common));
 
 	lnet_net_lock(LNET_LOCK_EX);
 
 	cfs_percpt_for_each(ctr, i, the_lnet.ln_counters) {
-		counters->msgs_max     += ctr->msgs_max;
-		counters->msgs_alloc   += ctr->msgs_alloc;
-		counters->rst_alloc    += ctr->rst_alloc;
-		counters->errors       += ctr->errors;
-		counters->resend_count += ctr->resend_count;
-		counters->response_timeout_count += ctr->response_timeout_count;
-		counters->local_interrupt_count += ctr->local_interrupt_count;
-		counters->local_dropped_count += ctr->local_dropped_count;
-		counters->local_aborted_count += ctr->local_aborted_count;
-		counters->local_no_route_count += ctr->local_no_route_count;
-		counters->local_timeout_count += ctr->local_timeout_count;
-		counters->local_error_count += ctr->local_error_count;
-		counters->remote_dropped_count += ctr->remote_dropped_count;
-		counters->remote_error_count += ctr->remote_error_count;
-		counters->remote_timeout_count += ctr->remote_timeout_count;
-		counters->network_timeout_count += ctr->network_timeout_count;
-		counters->send_count   += ctr->send_count;
-		counters->recv_count   += ctr->recv_count;
-		counters->route_count  += ctr->route_count;
-		counters->drop_count   += ctr->drop_count;
-		counters->send_length  += ctr->send_length;
-		counters->recv_length  += ctr->recv_length;
-		counters->route_length += ctr->route_length;
-		counters->drop_length  += ctr->drop_length;
+		common->lcc_msgs_max     += ctr->lct_common.lcc_msgs_max;
+		common->lcc_msgs_alloc   += ctr->lct_common.lcc_msgs_alloc;
+		common->lcc_errors       += ctr->lct_common.lcc_errors;
+		common->lcc_send_count   += ctr->lct_common.lcc_send_count;
+		common->lcc_recv_count   += ctr->lct_common.lcc_recv_count;
+		common->lcc_route_count  += ctr->lct_common.lcc_route_count;
+		common->lcc_drop_count   += ctr->lct_common.lcc_drop_count;
+		common->lcc_send_length  += ctr->lct_common.lcc_send_length;
+		common->lcc_recv_length  += ctr->lct_common.lcc_recv_length;
+		common->lcc_route_length += ctr->lct_common.lcc_route_length;
+		common->lcc_drop_length  += ctr->lct_common.lcc_drop_length;
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+EXPORT_SYMBOL(lnet_counters_get_common);
 
+void
+lnet_counters_get(struct lnet_counters *counters)
+{
+	struct lnet_counters *ctr;
+	struct lnet_counters_health *health = &counters->lct_health;
+	int		i;
+
+	memset(counters, 0, sizeof(*counters));
+
+	lnet_counters_get_common(&counters->lct_common);
+
+	lnet_net_lock(LNET_LOCK_EX);
+
+	cfs_percpt_for_each(ctr, i, the_lnet.ln_counters) {
+		health->lch_rst_alloc    += ctr->lct_health.lch_rst_alloc;
+		health->lch_resend_count += ctr->lct_health.lch_resend_count;
+		health->lch_response_timeout_count +=
+				ctr->lct_health.lch_response_timeout_count;
+		health->lch_local_interrupt_count +=
+				ctr->lct_health.lch_local_interrupt_count;
+		health->lch_local_dropped_count +=
+				ctr->lct_health.lch_local_dropped_count;
+		health->lch_local_aborted_count +=
+				ctr->lct_health.lch_local_aborted_count;
+		health->lch_local_no_route_count +=
+				ctr->lct_health.lch_local_no_route_count;
+		health->lch_local_timeout_count +=
+				ctr->lct_health.lch_local_timeout_count;
+		health->lch_local_error_count +=
+				ctr->lct_health.lch_local_error_count;
+		health->lch_remote_dropped_count +=
+				ctr->lct_health.lch_remote_dropped_count;
+		health->lch_remote_error_count +=
+				ctr->lct_health.lch_remote_error_count;
+		health->lch_remote_timeout_count +=
+				ctr->lct_health.lch_remote_timeout_count;
+		health->lch_network_timeout_count +=
+				ctr->lct_health.lch_network_timeout_count;
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 }
