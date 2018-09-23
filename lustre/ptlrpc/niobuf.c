@@ -786,8 +786,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		if (request->rq_resend_cb != NULL)
 			request->rq_resend_cb(request, &request->rq_async_args);
 	}
-        if (request->rq_memalloc)
-                mpflag = cfs_memory_pressure_get_and_set();
+	if (request->rq_memalloc)
+		mpflag = cfs_memory_pressure_get_and_set();
 
 	rc = sptlrpc_cli_wrap_request(request);
 	if (rc)
@@ -822,15 +822,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 				request->rq_status = rc;
 				GOTO(cleanup_bulk, rc);
 			}
-			/* Use real allocated value in lm_repsize,
-			 * so the server may use whole reply buffer
-			 * without resends where it is needed.
-			 */
-			request->rq_reqmsg->lm_repsize = request->rq_repbuf_len;
-                } else {
-                        request->rq_repdata = NULL;
-                        request->rq_repmsg = NULL;
-                }
+		} else {
+			request->rq_repdata = NULL;
+			request->rq_repmsg = NULL;
+		}
 
                 rc = LNetMEAttach(request->rq_reply_portal,/*XXX FIXME bug 249*/
                                   connection->c_peer, request->rq_xid, 0,

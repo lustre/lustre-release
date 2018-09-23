@@ -256,7 +256,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	int			 count = 0;
 	enum ldlm_mode		 mode;
 	int			 rc;
-	int repsize;
+	int repsize, repsize_estimate;
 
 	ENTRY;
 
@@ -351,22 +351,34 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	/* Get real repbuf allocated size as rounded up power of 2 */
 	repsize = size_roundup_power2(req->rq_replen +
 				      lustre_msg_early_size());
-
 	/* Estimate free space for DoM files in repbuf */
-	repsize -= req->rq_replen - obddev->u.cli.cl_max_mds_easize +
-		   sizeof(struct lov_comp_md_v1) +
-		   sizeof(struct lov_comp_md_entry_v1) +
-		   lov_mds_md_size(0, LOV_MAGIC_V3);
+	repsize_estimate = repsize - (req->rq_replen -
+			   obddev->u.cli.cl_max_mds_easize +
+			   sizeof(struct lov_comp_md_v1) +
+			   sizeof(struct lov_comp_md_entry_v1) +
+			   lov_mds_md_size(0, LOV_MAGIC_V3));
 
-	if (repsize < obddev->u.cli.cl_dom_min_inline_repsize) {
-		repsize = obddev->u.cli.cl_dom_min_inline_repsize - repsize;
+	if (repsize_estimate < obddev->u.cli.cl_dom_min_inline_repsize) {
+		repsize = obddev->u.cli.cl_dom_min_inline_repsize -
+			  repsize_estimate + sizeof(struct niobuf_remote);
 		req_capsule_set_size(&req->rq_pill, &RMF_NIOBUF_INLINE,
 				     RCL_SERVER,
 				     sizeof(struct niobuf_remote) + repsize);
 		ptlrpc_request_set_replen(req);
 		CDEBUG(D_INFO, "Increase repbuf by %d bytes, total: %d\n",
 		       repsize, req->rq_replen);
+		repsize = size_roundup_power2(req->rq_replen +
+					      lustre_msg_early_size());
 	}
+	/* The only way to report real allocated repbuf size to the server
+	 * is the lm_repsize but it must be set prior buffer allocation itself
+	 * due to security reasons - it is part of buffer used in signature
+	 * calculation (see LU-11414). Therefore the saved size is predicted
+	 * value as rq_replen rounded to the next higher power of 2.
+	 * Such estimation is safe. Though the final allocated buffer might
+	 * be even larger, it is not possible to know that at this point.
+	 */
+	req->rq_reqmsg->lm_repsize = repsize;
 	return req;
 }
 
