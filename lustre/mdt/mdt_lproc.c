@@ -1001,6 +1001,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_sync_count_fops			},
 	{ .name =	"dom_lock",
 	  .fops =	&mdt_dom_lock_fops			},
+	{ .name =	"dom_read_open",
+	  .fops =	&mdt_dom_read_open_fops			},
 	{ .name =	"migrate_hsm_allowed",
 	  .fops =	&mdt_migrate_hsm_allowed_fops		},
 	{ NULL }
