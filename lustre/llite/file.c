@@ -414,14 +414,10 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	struct page *vmpage;
 	struct niobuf_remote *rnb;
 	char *data;
-	struct lu_env *env;
-	struct cl_io *io;
-	__u16 refcheck;
 	struct lustre_handle lockh;
 	struct ldlm_lock *lock;
 	unsigned long index, start;
 	struct niobuf_local lnb;
-	int rc;
 	bool dom_lock = false;
 
 	ENTRY;
@@ -436,33 +432,21 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 			dom_lock = ldlm_has_dom(lock);
 		LDLM_LOCK_PUT(lock);
 	}
-
 	if (!dom_lock)
-		RETURN_EXIT;
-
-	env = cl_env_get(&refcheck);
-	if (IS_ERR(env))
 		RETURN_EXIT;
 
 	if (!req_capsule_has_field(&req->rq_pill, &RMF_NIOBUF_INLINE,
 				   RCL_SERVER))
-		GOTO(out_env, rc = -ENODATA);
+		RETURN_EXIT;
 
 	rnb = req_capsule_server_get(&req->rq_pill, &RMF_NIOBUF_INLINE);
-	data = (char *)rnb + sizeof(*rnb);
-
 	if (rnb == NULL || rnb->rnb_len == 0)
-		GOTO(out_env, rc = 0);
+		RETURN_EXIT;
 
 	CDEBUG(D_INFO, "Get data buffer along with open, len %i, i_size %llu\n",
 	       rnb->rnb_len, i_size_read(inode));
 
-	io = vvp_env_thread_io(env);
-	io->ci_obj = obj;
-	io->ci_ignore_layout = 1;
-	rc = cl_io_init(env, io, CIT_MISC, obj);
-	if (rc)
-		GOTO(out_io, rc);
+	data = (char *)rnb + sizeof(*rnb);
 
 	lnb.lnb_file_offset = rnb->rnb_offset;
 	start = lnb.lnb_file_offset / PAGE_SIZE;
@@ -470,8 +454,6 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	LASSERT(lnb.lnb_file_offset % PAGE_SIZE == 0);
 	lnb.lnb_page_offset = 0;
 	do {
-		struct cl_page *clp;
-
 		lnb.lnb_data = data + (index << PAGE_SHIFT);
 		lnb.lnb_len = rnb->rnb_len - (index << PAGE_SHIFT);
 		if (lnb.lnb_len > PAGE_SIZE)
@@ -487,34 +469,10 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 			      PTR_ERR(vmpage));
 			break;
 		}
-		lock_page(vmpage);
-		if (vmpage->mapping == NULL) {
-			unlock_page(vmpage);
-			put_page(vmpage);
-			/* page was truncated */
-			GOTO(out_io, rc = -ENODATA);
-		}
-		clp = cl_page_find(env, obj, vmpage->index, vmpage,
-				   CPT_CACHEABLE);
-		if (IS_ERR(clp)) {
-			unlock_page(vmpage);
-			put_page(vmpage);
-			GOTO(out_io, rc = PTR_ERR(clp));
-		}
-
-		/* export page */
-		cl_page_export(env, clp, 1);
-		cl_page_put(env, clp);
-		unlock_page(vmpage);
 		put_page(vmpage);
 		index++;
 	} while (rnb->rnb_len > (index << PAGE_SHIFT));
-	rc = 0;
 	EXIT;
-out_io:
-	cl_io_fini(env, io);
-out_env:
-	cl_env_put(env, &refcheck);
 }
 
 static int ll_intent_file_open(struct dentry *de, void *lmm, int lmmsize,
