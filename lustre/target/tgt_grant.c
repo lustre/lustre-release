@@ -937,6 +937,8 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 	 * client would like to have by more than grants for 2 full
 	 * RPCs
 	 */
+	if (want + chunk <= ted->ted_grant)
+		RETURN(0);
 	if (ted->ted_grant + grant > want + chunk)
 		grant = want + chunk - ted->ted_grant;
 
