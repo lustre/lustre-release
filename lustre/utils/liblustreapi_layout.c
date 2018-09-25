@@ -360,15 +360,16 @@ struct llapi_layout *llapi_layout_alloc(void)
  * Convert the data from a lov_user_md to a newly allocated llapi_layout.
  * The caller is responsible for freeing the returned pointer.
  *
- * \param[in] lum	LOV user metadata structure to copy data from
- * \param[in] lum_size	size the the lum passed in
+ * \param[in] lov_xattr		LOV user metadata xattr to copy data from
+ * \param[in] lov_xattr_size	size the lov_xattr_size passed in
  *
  * \retval		valid llapi_layout pointer on success
  * \retval		NULL if memory allocation fails
  */
-static struct llapi_layout *
-llapi_layout_from_lum(const struct lov_user_md *lum, int lum_size)
+struct llapi_layout *llapi_layout_get_by_xattr(const void *lov_xattr,
+					       ssize_t lov_xattr_size)
 {
+	const struct lov_user_md *lum = lov_xattr;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	struct lov_comp_md_entry_v1 *ent;
 	struct lov_user_md *v1;
@@ -392,6 +393,14 @@ llapi_layout_from_lum(const struct lov_user_md *lum, int lum_size)
 		   lum->lmm_magic == LOV_MAGIC_V3) {
 		ent_count = 1;
 		layout->llot_is_composite = false;
+
+		if (lov_xattr_size <= 0) {
+			errno = EINVAL;
+			goto error;
+		}
+	} else {
+		errno = EOPNOTSUPP;
+		goto error;
 	}
 
 	if (ent_count == 0) {
@@ -405,12 +414,12 @@ llapi_layout_from_lum(const struct lov_user_md *lum, int lum_size)
 			ent = &comp_v1->lcm_entries[i];
 			v1 = (struct lov_user_md *)((char *)comp_v1 +
 				ent->lcme_offset);
-			lum_size = ent->lcme_size;
+			lov_xattr_size = ent->lcme_size;
 		} else {
 			ent = NULL;
 		}
 
-		obj_count = llapi_layout_objects_in_lum(v1, lum_size);
+		obj_count = llapi_layout_objects_in_lum(v1, lov_xattr_size);
 		comp = __llapi_comp_alloc(obj_count);
 		if (comp == NULL)
 			goto error;
@@ -884,7 +893,7 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
 		goto out;
 	}
 
-	layout = llapi_layout_from_lum(lum, bytes_read);
+	layout = llapi_layout_get_by_xattr(lum, bytes_read);
 out:
 	free(lum);
 	return layout;

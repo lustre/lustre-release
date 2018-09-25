@@ -6,6 +6,8 @@ obtain the layout of a Lustre file
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
+.BI "struct llapi_layout *llapi_layout_get_by_xattr(const void *"lov_xattr ",
+.BI "                                               ssize_t " lov_xattr_size );
 .BI "struct llapi_layout *llapi_layout_get_by_fd(int "fd ", uint32_t " flags );
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_fid(const char *"lustre_path ,
@@ -17,6 +19,7 @@ obtain the layout of a Lustre file
 .fi
 .SH DESCRIPTION
 .PP
+.BR llapi_layout_get_by_xattr() ,
 .BR llapi_layout_get_by_fd() ,
 .BR llapi_layout_get_by_fid() ,
 and
@@ -24,6 +27,7 @@ and
 return a pointer to a newly-allocated
 .B struct llapi_layout
 containing the layout information for the file referenced by
+.IR lov_xattr ,
 .IR fd ,
 .IR fid ,
 or
@@ -37,6 +41,12 @@ accessed by an application.  See
 The pointer should be freed with
 .B llapi_layout_free()
 when it is no longer needed.
+.PP
+For
+.BR llapi_layout_get_by_xattr() ,
+.I lov_xattr
+is a Lustre layout extended attribute (LOV EA) from a file or directory in
+a Lustre filesystem.
 .PP
 For
 .BR llapi_layout_get_by_fd() ,
