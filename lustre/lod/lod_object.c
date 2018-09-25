@@ -5326,6 +5326,23 @@ out:
 	RETURN(rc);
 }
 
+static inline bool lod_obj_is_dom(struct dt_object *dt)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+
+	if (!dt_object_exists(dt_object_child(dt)))
+		return false;
+
+	if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
+		return false;
+
+	if (!lo->ldo_comp_cnt)
+		return false;
+
+	return (lov_pattern(lo->ldo_comp_entries[0].llc_pattern) ==
+		LOV_PATTERN_MDT);
+}
+
 /**
  * Implementation of dt_object_operations::do_create.
  *
@@ -5348,7 +5365,8 @@ static int lod_create(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 
 	if (S_ISREG(dt->do_lu.lo_header->loh_attr) &&
-	    lod_obj_is_striped(dt) && dof->u.dof_reg.striped != 0) {
+	    (lod_obj_is_striped(dt) || lod_obj_is_dom(dt)) &&
+	    dof->u.dof_reg.striped != 0) {
 		LASSERT(lod_dt_obj(dt)->ldo_comp_cached == 0);
 		rc = lod_striped_create(env, dt, attr, dof, th);
 	}
