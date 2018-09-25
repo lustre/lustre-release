@@ -173,7 +173,7 @@ lnet_net_append_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 		LIBCFS_ALLOC(net->net_cpts, sizeof(*net->net_cpts) * ncpts);
 		if (net->net_cpts == NULL)
 			return -ENOMEM;
-		memcpy(net->net_cpts, cpts, ncpts);
+		memcpy(net->net_cpts, cpts, ncpts * sizeof(*net->net_cpts));
 		net->net_ncpts = ncpts;
 		return 0;
 	}
