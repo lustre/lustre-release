@@ -1062,9 +1062,14 @@ EXPORT_SYMBOL(tgt_grant_connect);
 void tgt_grant_discard(struct obd_export *exp)
 {
 	struct obd_device	*obd = exp->exp_obd;
-	struct tg_grants_data	*tgd = &obd->u.obt.obt_lut->lut_tgd;
+	struct lu_target        *lut = class_exp2tgt(exp);
 	struct tg_export_data	*ted = &exp->exp_target_data;
+	struct tg_grants_data	*tgd;
 
+	if (!lut)
+		return;
+
+	tgd = &lut->lut_tgd;
 	spin_lock(&tgd->tgd_grant_lock);
 	LASSERTF(tgd->tgd_tot_granted >= ted->ted_grant,
 		 "%s: tot_granted %llu cli %s/%p ted_grant %ld\n",
