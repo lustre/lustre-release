@@ -375,7 +375,6 @@ AM_CONDITIONAL([TESTS], [test x$enable_tests = xyes])
 AM_CONDITIONAL([DOC], [test x$ENABLE_DOC = x1])
 AM_CONDITIONAL([MANPAGES], [test x$enable_manpages = xyes])
 AM_CONDITIONAL([LINUX], [test x$lb_target_os = xlinux])
-AM_CONDITIONAL([USES_DPKG], [test x$uses_dpkg = xyes])
 AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL([RHEL], [test x$RHEL_KERNEL = xyes])
 AM_CONDITIONAL([SUSE], [test x$SUSE_KERNEL = xyes])
@@ -570,7 +569,6 @@ LB_CANONICAL_SYSTEM
 LB_CONFIG_DIST
 
 LB_DOWNSTREAM_RELEASE
-LB_USES_DPKG
 
 LB_LIBCFS_DIR
 

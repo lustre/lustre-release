@@ -333,9 +333,7 @@ dkms-debs: undef.h
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-dkms_$${VER}_*.deb \
 	   debs/
 
-if USES_DPKG
 EXTRA_DIST += debian/*
-endif
 
 CSTK=/tmp/checkstack
 CSTKO=/tmp/checkstack.orig
