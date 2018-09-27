@@ -97,8 +97,12 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			RETURN(-ENOENT);
 		break;
 	}
-	if (!ldiskfs_valid_inum(sb, id->oii_ino))
+
+	if (!ldiskfs_valid_inum(sb, id->oii_ino) &&
+	    id->oii_ino != LDISKFS_USR_QUOTA_INO &&
+	    id->oii_ino != LDISKFS_GRP_QUOTA_INO)
 		RETURN(-ENOENT);
+
 	RETURN(0);
 }
 
