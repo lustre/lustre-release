@@ -1305,5 +1305,10 @@ void ldiskfs_dec_count(handle_t *handle, struct inode *inode);
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
 
+/*
+ * Maximum size of xattr attributes for FEATURE_INCOMPAT_EA_INODE 1Mb
+ * This limit is arbitrary, but is reasonable for the xattr API.
+ */
+#define LDISKFS_XATTR_MAX_LARGE_EA_SIZE    (1024 * 1024)
 
 #endif /* _OSD_INTERNAL_H */
