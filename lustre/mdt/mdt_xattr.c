@@ -325,7 +325,7 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	rc = mdt_remote_permission(info);
+	rc = mdt_remote_dir_permission(info);
 	if (rc)
 		RETURN(rc);
 

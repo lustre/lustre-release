@@ -217,7 +217,7 @@ static int mdt_lookup_version_check(struct mdt_thread_info *info,
 
 }
 
-static inline int mdt_remote_permission_check(struct mdt_thread_info *info)
+static inline int mdt_remote_dir_permission_check(struct mdt_thread_info *info)
 {
 	struct lu_ucred	*uc  = mdt_ucred(info);
 	struct mdt_device *mdt = info->mti_mdt;
@@ -232,7 +232,7 @@ static inline int mdt_remote_permission_check(struct mdt_thread_info *info)
 }
 
 /**
- * mdt_remote_permission: Check whether the remote operation is permitted,
+ * mdt_remote_dir_permission: Check whether the remote operation is permitted,
  *
  * Only sysadmin can create remote directory / striped directory,
  * migrate directory and set default stripedEA on directory, unless
@@ -244,7 +244,7 @@ static inline int mdt_remote_permission_check(struct mdt_thread_info *info)
  * retval	= 0 remote operation is allowed.
  *              < 0 remote operation is denied.
  */
-int mdt_remote_permission(struct mdt_thread_info *info)
+int mdt_remote_dir_permission(struct mdt_thread_info *info)
 {
 	struct md_op_spec *spec = &info->mti_spec;
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
@@ -252,7 +252,7 @@ int mdt_remote_permission(struct mdt_thread_info *info)
 	int rc;
 
 	if (info->mti_rr.rr_opcode == REINT_MIGRATE) {
-		rc = mdt_remote_permission_check(info);
+		rc = mdt_remote_dir_permission_check(info);
 		if (rc != 0)
 			return rc;
 	}
@@ -271,7 +271,7 @@ int mdt_remote_permission(struct mdt_thread_info *info)
 		    !mdt_is_striped_client(exp))
 			return -ENOTSUPP;
 
-		rc = mdt_remote_permission_check(info);
+		rc = mdt_remote_dir_permission_check(info);
 		if (rc != 0)
 			return rc;
 	}
@@ -280,7 +280,7 @@ int mdt_remote_permission(struct mdt_thread_info *info)
 		struct md_attr *ma = &info->mti_attr;
 
 		if ((ma->ma_valid & MA_LMV)) {
-			rc = mdt_remote_permission_check(info);
+			rc = mdt_remote_dir_permission_check(info);
 			if (rc != 0)
 				return rc;
 		}
@@ -474,7 +474,7 @@ static int mdt_create(struct mdt_thread_info *info)
 	if (unlikely(IS_ERR(child)))
 		GOTO(unlock_parent, rc = PTR_ERR(child));
 
-	rc = mdt_remote_permission(info);
+	rc = mdt_remote_dir_permission(info);
 	if (rc != 0)
 		GOTO(put_child, rc);
 
@@ -759,7 +759,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		struct lu_buf *buf  = &info->mti_buf;
 		struct mdt_lock_handle  *lh;
 
-		rc = mdt_remote_permission(info);
+		rc = mdt_remote_dir_permission(info);
 		if (rc < 0)
 			GOTO(out_put, rc);
 
@@ -1992,7 +1992,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 	if (lu_name_is_dot_or_dotdot(&rr->rr_name))
 		RETURN(-EBUSY);
 
-	rc = mdt_remote_permission(info);
+	rc = mdt_remote_dir_permission(info);
 	if (rc)
 		RETURN(rc);
 

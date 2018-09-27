@@ -894,7 +894,7 @@ int mdt_links_read(struct mdt_thread_info *info,
 		   struct linkea_data *ldata);
 int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		       struct mdt_body *repbody);
-int mdt_remote_permission(struct mdt_thread_info *info);
+int mdt_remote_dir_permission(struct mdt_thread_info *info);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
