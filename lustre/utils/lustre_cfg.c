@@ -1031,8 +1031,12 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		switch (mode) {
 		case GET_PARAM:
 			/* Read the contents of file to stdout */
-			if (S_ISREG(st.st_mode))
-				read_param(paths.gl_pathv[i], param_name, popt);
+			if (S_ISREG(st.st_mode)) {
+				rc2 = read_param(paths.gl_pathv[i], param_name,
+						 popt);
+				if (rc2 < 0 && rc == 0)
+					rc = rc2;
+			}
 			break;
 		case SET_PARAM:
 			if (S_ISREG(st.st_mode)) {

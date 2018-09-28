@@ -1804,8 +1804,7 @@ test_24() {
 	nodemap_test_setup
 
 	trap nodemap_test_cleanup EXIT
-	do_nodes $(comma_list $(all_server_nodes)) $LCTL get_param -R nodemap ||
-		error "proc readable file read failed"
+	do_nodes $(comma_list $(all_server_nodes)) $LCTL get_param -R nodemap
 
 	nodemap_test_cleanup
 }

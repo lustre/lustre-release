@@ -8075,6 +8075,15 @@ test_116() {
 }
 run_test 116 "big size MDT support"
 
+test_117() {
+	setup
+	do_facet ost1 "$LCTL set_param ost.OSS.ost_io.nrs_policies=fifo"
+	do_facet ost1 "$LCTL get_param -n ost.OSS.ost_io.nrs_tbf_rule" &&
+		error "get_param should fail"
+	cleanup || error "cleanup failed with rc $?"
+}
+run_test 117 "lctl get_param return errors properly"
+
 test_122() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.11.53) ]] ||
