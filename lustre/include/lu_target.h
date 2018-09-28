@@ -398,6 +398,10 @@ static inline bool tgt_is_multimodrpcs_client(struct obd_export *exp)
 	return exp_connect_flags(exp) & OBD_CONNECT_MULTIMODRPCS;
 }
 
+static inline bool tgt_is_increasing_xid_client(struct obd_export *exp)
+{
+	return exp_connect_flags2(exp) & OBD_CONNECT2_INC_XID;
+}
 
 /* target/tgt_handler.c */
 int tgt_request_handle(struct ptlrpc_request *req);

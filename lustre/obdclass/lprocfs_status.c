@@ -780,7 +780,7 @@ static const char *obd_connect_names[] = {
 	"wbc",		/* 0x40 */
 	"lock_convert",  /* 0x80 */
 	"archive_id_array",	/* 0x100 */
-	"unknown",		/* 0x200 */
+	"increasing_xid",	/* 0x200 */
 	"selinux_policy",	/* 0x400 */
 	"lsom",			/* 0x800 */
 	"pcc",			/* 0x1000 */
