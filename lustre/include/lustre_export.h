@@ -456,7 +456,6 @@ static inline int exp_connect_lock_convert(struct obd_export *exp)
 }
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
-extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
 
 #define KKUC_CT_DATA_MAGIC	0x092013cea
 struct kkuc_ct_data {

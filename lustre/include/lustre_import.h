@@ -42,9 +42,14 @@
  *
  * @{
  */
+#include <linux/atomic.h>
+#include <linux/list.h>
+#include <linux/mutex.h>
+#include <linux/spinlock.h>
+#include <linux/time.h>
+#include <linux/types.h>
 #include <linux/workqueue.h>
-
-#include <lustre_handles.h>
+#include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 
 /**
@@ -159,8 +164,6 @@ struct import_state_hist {
  * Imports are representing client-side view to remote target.
  */
 struct obd_import {
-	/** Local handle (== id) for this import. */
-	struct portals_handle     imp_handle;
 	/** Reference counter */
 	atomic_t                  imp_refcount;
 	struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
@@ -380,7 +383,6 @@ extern unsigned int at_max;
 /* genops.c */
 struct obd_export;
 extern struct obd_import *class_exp2cliimp(struct obd_export *);
-extern struct obd_import *class_conn2cliimp(struct lustre_handle *);
 
 /** @} import */
 
