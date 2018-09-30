@@ -122,7 +122,7 @@ static const char *lfsck_type2name(__u16 type)
 
 static void usage_start(void)
 {
-	fprintf(stderr, "start LFSCK\n"
+	fprintf(stdout, "start LFSCK\n"
 		"usage:\n"
 		"lfsck_start [-M | --device {MDT,OST}_device]\n"
 		"	     [-A | --all] [-c | --create_ostobj [on | off]]\n"
@@ -157,7 +157,7 @@ static void usage_start(void)
 
 static void usage_stop(void)
 {
-	fprintf(stderr, "stop LFSCK\n"
+	fprintf(stdout, "stop LFSCK\n"
 		"usage:\n"
 		"lfsck_stop [-M | --device {MDT,OST}_device]\n"
 		"           [-A | --all] [-h | --help]\n"
@@ -170,7 +170,7 @@ static void usage_stop(void)
 
 static void usage_query(void)
 {
-	fprintf(stderr, "check the LFSCK global status\n"
+	fprintf(stdout, "check the LFSCK global status\n"
 		"usage:\n"
 		"lfsck_query [-M | --device MDT_device] [-h | --help]\n"
 		"            [-t | --type check_type[,check_type...]]\n"
