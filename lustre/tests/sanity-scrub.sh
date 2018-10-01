@@ -106,8 +106,10 @@ scrub_prep() {
 			error "Failed to copy files to mds$n"
 		mkdir -p $DIR/$tdir/mds$n/d_$tfile ||
 			error "mkdir failed on mds$n"
-		createmany -m $DIR/$tdir/mds$n/d_$tfile/f 2 > \
+		touch $DIR/$tdir/mds$n/d_$tfile/f1 > \
 			/dev/null || error "create failed on mds$n"
+		dd if=/dev/zero of=$DIR/$tdir/mds$n/d_$tfile/f2 bs=1M count=1 ||
+		       	error "write failed on mds$n"
 		if [[ $nfiles -gt 0 ]]; then
 			createmany -m $DIR/$tdir/mds$n/$tfile $nfiles > \
 				/dev/null || error "createmany failed on mds$n"
