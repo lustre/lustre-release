@@ -77,7 +77,14 @@ static void ll_release(struct dentry *de)
  * This avoids a race where ll_lookup_it() instantiates a dentry, but we get
  * an AST before calling d_revalidate_it().  The dentry still exists (marked
  * INVALID) so d_lookup() matches it, but we have no lock on it (so
- * lock_match() fails) and we spin around real_lookup(). */
+ * lock_match() fails) and we spin around real_lookup().
+ *
+ * This race doesn't apply to lookups in d_alloc_parallel(), and for
+ * those we want to ensure that only one dentry with a given name is
+ * in ll_lookup_nd() at a time.  So allow invalid dentries to match
+ * while d_in_lookup().  We will be called again when the lookup
+ * completes, and can give a different answer then.
+ */
 #ifdef HAVE_D_COMPARE_7ARGS
 static int ll_dcompare(const struct dentry *parent, const struct inode *pinode,
 		       const struct dentry *dentry, const struct inode *inode,
@@ -116,6 +123,10 @@ static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
 	/* mountpoint is always valid */
 	if (d_mountpoint((struct dentry *)dentry))
 		RETURN(0);
+
+	/* ensure exclusion against parallel lookup of the same name */
+	if (d_in_lookup((struct dentry *)dentry))
+		return 0;
 
 	if (d_lustre_invalid(dentry))
 		RETURN(1);

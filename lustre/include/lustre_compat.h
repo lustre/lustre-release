@@ -246,6 +246,13 @@ static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
 #define DECLARE_LL_D_HLIST_NODE_PTR(name) /* nothing */
 #endif /* !DATA_FOR_LLITE_IS_LIST */
 
+#ifndef HAVE_D_IN_LOOKUP
+static inline int d_in_lookup(struct dentry *dentry)
+{
+	return false;
+}
+#endif
+
 #ifndef QUOTA_OK
 # define QUOTA_OK 0
 #endif

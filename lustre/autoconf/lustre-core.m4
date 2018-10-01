@@ -2517,6 +2517,28 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_XATTR_HANDLER_INODE_PARAM
 
 #
+# LC_D_IN_LOOKUP
+#
+# Kernel version 4.6 commit 85c7f81041d57cfe9dc97f4680d5586b54534a39
+# introduced parallel lookups in the VFS layer. The inline function
+# d_in_lookup was added to notify when the same item was being queried
+# at the same time.
+#
+AC_DEFUN([LC_D_IN_LOOKUP], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'd_in_lookup' is defined],
+d_in_lookup, [
+	#include <linux/dcache.h>
+],[
+	d_in_lookup(NULL);
+],[
+	AC_DEFINE(HAVE_D_IN_LOOKUP, 1, [d_in_lookup is defined])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_D_IN_LOOKUP
+
+#
 # LC_DIRECTIO_2ARGS
 #
 # Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
@@ -3182,6 +3204,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_XATTR_HANDLER_INODE_PARAM
 
 	# 4.7
+	LC_D_IN_LOOKUP
 	LC_DIRECTIO_2ARGS
 	LC_GENERIC_WRITE_SYNC_2ARGS
 	LC_FOPS_ITERATE_SHARED
