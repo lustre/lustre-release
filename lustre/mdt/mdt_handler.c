@@ -2547,7 +2547,7 @@ int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt)
 static int mdt_object_sync(const struct lu_env *env, struct obd_export *exp,
 			   struct mdt_object *mo)
 {
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 
@@ -2558,7 +2558,16 @@ static int mdt_object_sync(const struct lu_env *env, struct obd_export *exp,
 		RETURN(-ESTALE);
 	}
 
-	rc = mo_object_sync(env, mdt_object_child(mo));
+	if (S_ISREG(lu_object_attr(&mo->mot_obj))) {
+		struct lu_target *tgt = tgt_ses_info(env)->tsi_tgt;
+		dt_obj_version_t version;
+
+		version = dt_version_get(env, mdt_obj2dt(mo));
+		if (version > tgt->lut_obd->obd_last_committed)
+			rc = mo_object_sync(env, mdt_object_child(mo));
+	} else {
+		rc = mo_object_sync(env, mdt_object_child(mo));
+	}
 
 	RETURN(rc);
 }
