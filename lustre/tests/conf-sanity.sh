@@ -7288,12 +7288,13 @@ test_100() {
 run_test 100 "check lshowmount lists MGS, MDT, OST and 0@lo"
 
 test_101() {
-	local createmany_oid
+	local createmany_pid
 	local dev=$FSNAME-OST0000-osc-MDT0000
 	setup
 
-	createmany -o $DIR1/$tfile-%d 50000 &
-	createmany_oid=$!
+	mkdir $DIR1/$tdir
+	createmany -o $DIR1/$tdir/$tfile-%d 50000 &
+	createmany_pid=$!
 	# MDT->OST reconnection causes MDT<->OST last_id synchornisation
 	# via osp_precreate_cleanup_orphans.
 	for ((i = 0; i < 100; i++)); do
@@ -7303,12 +7304,14 @@ test_101() {
 		done
 
 		ls -asl $MOUNT | grep '???' &&
-			(kill -9 $createmany_oid &>/dev/null; \
-			 error "File hasn't object on OST")
+			{ kill -9 $createmany_pid &>/dev/null;
+			  error "File has no object on OST"; }
 
-		kill -s 0 $createmany_oid || break
+		kill -s 0 $createmany_pid || break
 	done
-	wait $createmany_oid
+	wait $createmany_pid
+
+	unlinkmany $DIR1/$tdir/$tfile-%d 50000
 	cleanup
 }
 run_test 101 "Race MDT->OST reconnection with create"
