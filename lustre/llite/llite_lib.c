@@ -109,6 +109,9 @@ static struct ll_sb_info *ll_init_sbi(void)
 #ifdef ENABLE_CHECKSUM
         sbi->ll_flags |= LL_SBI_CHECKSUM;
 #endif
+#ifdef ENABLE_FLOCK
+	sbi->ll_flags |= LL_SBI_FLOCK;
+#endif
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         sbi->ll_flags |= LL_SBI_LRU_RESIZE;

@@ -123,6 +123,22 @@ AS_IF([test "x$enable_checksum" != xno],
 ]) # LC_CONFIG_CHECKSUM
 
 #
+# LC_CONFIG_FLOCK
+#
+# enable distributed flock by default
+#
+AC_DEFUN([LC_CONFIG_FLOCK], [
+AC_MSG_CHECKING([whether to enable flock by default])
+AC_ARG_ENABLE([flock],
+	AC_HELP_STRING([--disable-flock],
+		[disable flock by default]),
+	[], [enable_flock="yes"])
+AC_MSG_RESULT([$enable_flock])
+AS_IF([test "x$enable_flock" != xno],
+	[AC_DEFINE(ENABLE_FLOCK, 1, [enable flock by default])])
+]) # LC_CONFIG_FLOCK
+
+#
 # LC_CONFIG_HEALTH_CHECK_WRITE
 #
 # Turn off the actual write to the disk
@@ -3012,6 +3028,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	LC_CONFIG_PINGER
 	LC_CONFIG_CHECKSUM
+	LC_CONFIG_FLOCK
 	LC_CONFIG_HEALTH_CHECK_WRITE
 	LC_CONFIG_LRU_RESIZE
 
