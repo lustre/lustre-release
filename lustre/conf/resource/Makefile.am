@@ -21,10 +21,7 @@
 #
 
 #
-# Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
-# Use is subject to license terms.
-#
-# Copyright (c) 2014, 2015, Intel Corporation.
+# Copyright (c) 2018 Whamcloud
 #
 
 #
@@ -32,37 +29,9 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-SUBDIRS = resource
-DIST_SUBDIRS = resource
-
-EXTRA_DIST = lustre.dtd lustre2ldif.xsl top.ldif \
-             99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss \
-             lnet_routes.conf lnet.conf lgssc.conf
-
-sysconf_DATA = lnet.conf
-
-if UTILS
-noinst_DATA = top.ldif lustre2ldif.xsl
-sysconf_DATA += lnet_routes.conf
-endif
-
-udevrulesdir = $(sysconfdir)/udev/rules.d
-udevrules_DATA = 99-lustre.rules
+EXTRA_DIST = Lustre healthLNET healthLUSTRE
 
 if SERVER
-if ZFS_ENABLED
-sysconf_DATA += ldev.conf
+pacemakerdir = $(prefix)/lib/ocf/resource.d/lustre
+pacemaker_DATA = healthLNET healthLUSTRE Lustre
 endif
-if RHEL
-sysconfigdir = $(sysconfdir)/sysconfig
-sysconfig_DATA = lustre
-if GSS_KEYRING
-sysconfig_DATA += lsvcgss
-requestkeydir = $(sysconfdir)/request-key.d
-requestkey_DATA = lgssc.conf
-endif
-endif
-endif
-
-modprobedir = $(sysconfdir)/modprobe.d
-modprobe_DATA = ko2iblnd.conf
