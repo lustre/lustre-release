@@ -1837,7 +1837,6 @@ fini:
 	spin_lock(&lad->lad_lock);
 	lad->lad_assistant_status = (rc1 != 0 ? rc1 : rc);
 	thread_set_flags(athread, SVC_STOPPED);
-	wake_up_all(&mthread->t_ctl_waitq);
 	lad->lad_task = NULL;
 	spin_unlock(&lad->lad_lock);
 
@@ -1846,6 +1845,7 @@ fini:
 	       lad->lad_assistant_status);
 
 	lfsck_thread_args_fini(lta);
+	wake_up_all(&mthread->t_ctl_waitq);
 
 	return rc;
 }
