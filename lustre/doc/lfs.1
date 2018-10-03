@@ -9,7 +9,7 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 .br
 .B lfs check <mds|osts|servers>
 .br
-.B lfs data_version [-n] \fB<filename>\fR
+.B lfs data_version [-nrw] \fB<filename>\fR
 .br
 .B lfs df [-ihlv] [--pool|-p <fsname>[.<pool>]] [path]
 .br
@@ -156,15 +156,24 @@ Changelog consumers must be registered on the MDT node using \fBlctl\fR.
 .B check
 Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
 .TP
-.B data_version [-n] <filename>
-Display current version of file data. If -n is specified, data version is read
-without taking lock. As a consequence, data version could be outdated if there
-is dirty caches on filesystem clients, but this will not force data flushes and
-has less impact on filesystem.
+.B data_version [-nrw] <filename>
+Display the current version of file data. If -n is specified, the data version
+is read without taking a lock. As a consequence, the data version could be
+outdated if there are dirty caches on filesystem clients, but this option will
+not force data flushes and has less of an impact on the filesystem. If -r is
+specified, the data version is read after dirty pages on clients are flushed. If
+-w is specified, the data version is read after all caching pages on clients are
+flushed.
 
-Even without -n, race conditions are possible and data version should be
+Even with -r or -w, race conditions are possible and the data version should be
 checked before and after an operation to be confident the data did not change
 during it.
+
+The data version is the sum of the last committed transaction numbers of all
+data objects of a file. It is used by HSM policy engines for verifying that file
+data has not been changed during an archive operation or before a release
+operation, and by OST migration, primarily for verifying that file data has not
+been changed during a data copy, when done in non-blocking mode.
 .TP
 .B getname [-h]|[path ...]
 Report all the Lustre mount points and the corresponding Lustre filesystem
