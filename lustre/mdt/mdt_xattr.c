@@ -502,6 +502,10 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		if (strcmp(xattr_name, XATTR_NAME_LMV) == 0) {
 			__u32 *magic = rr->rr_eadata;
 
+			/* we don't let to remove LMV? */
+			if (!rr->rr_eadata)
+				GOTO(out, rc = 0);
+
 			if (le32_to_cpu(*magic) == LMV_USER_MAGIC ||
 			    le32_to_cpu(*magic) == LMV_USER_MAGIC_SPECIFIC) {
 				rc = mdt_dir_layout_shrink(info);
