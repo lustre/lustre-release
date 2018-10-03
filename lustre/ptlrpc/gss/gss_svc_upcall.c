@@ -1172,13 +1172,14 @@ int __init gss_init_svc_upcall(void)
 	/* FIXME this looks stupid. we intend to give lsvcgssd a chance to open
 	 * the init upcall channel, otherwise there's big chance that the first
 	 * upcall issued before the channel be opened thus nfsv4 cache code will
-	 * drop the request direclty, thus lead to unnecessary recovery time.
-	 * here we wait at miximum 1.5 seconds. */
+	 * drop the request directly, thus lead to unnecessary recovery time.
+	 * Here we wait at minimum 1.5 seconds.
+	 */
 	for (i = 0; i < 6; i++) {
 		if (atomic_read(&rsi_cache.readers) > 0)
 			break;
 		set_current_state(TASK_UNINTERRUPTIBLE);
-		LASSERT(msecs_to_jiffies(MSEC_PER_SEC) >= 4);
+		LASSERT(msecs_to_jiffies(MSEC_PER_SEC / 4) > 0);
 		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC / 4));
 	}
 

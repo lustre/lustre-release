@@ -265,10 +265,12 @@ static int lmv_init_ea_size(struct obd_export *exp, __u32 easize,
 	for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
 		struct lmv_tgt_desc *tgt = lmv->tgts[i];
 
-		if (tgt == NULL || tgt->ltd_exp == NULL || !tgt->ltd_active) {
+		if (tgt == NULL || tgt->ltd_exp == NULL) {
 			CWARN("%s: NULL export for %d\n", obd->obd_name, i);
 			continue;
 		}
+		if (!tgt->ltd_active)
+			continue;
 
 		rc = md_init_ea_size(tgt->ltd_exp, easize, def_easize);
 		if (rc) {

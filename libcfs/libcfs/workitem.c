@@ -313,10 +313,9 @@ cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
 		int i = 2;
 
 		while (sched->ws_nthreads > 0) {
-			CDEBUG(is_power_of_2(++i) ? D_WARNING : D_NET,
-			       "waiting for %d threads of WI sched[%s] to "
-			       "terminate\n", sched->ws_nthreads,
-			       sched->ws_name);
+			CDEBUG(is_power_of_2(++i / 20) ? D_WARNING : D_NET,
+			       "waiting %us for %d %s worker threads to exit\n",
+			       i / 20, sched->ws_nthreads, sched->ws_name);
 
 			spin_unlock(&cfs_wi_data.wi_glock);
 			set_current_state(TASK_UNINTERRUPTIBLE);

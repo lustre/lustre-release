@@ -68,7 +68,7 @@ int lgss_mech_register(struct gss_api_mech *gm)
 	spin_lock(&registered_mechs_lock);
 	list_add(&gm->gm_list, &registered_mechs);
 	spin_unlock(&registered_mechs_lock);
-	CWARN("Register %s mechanism\n", gm->gm_name);
+	CDEBUG(D_SEC, "register %s mechanism\n", gm->gm_name);
 	return 0;
 }
 
@@ -77,7 +77,7 @@ void lgss_mech_unregister(struct gss_api_mech *gm)
 	spin_lock(&registered_mechs_lock);
 	list_del(&gm->gm_list);
 	spin_unlock(&registered_mechs_lock);
-	CWARN("Unregister %s mechanism\n", gm->gm_name);
+	CDEBUG(D_SEC, "Unregister %s mechanism\n", gm->gm_name);
 }
 
 
