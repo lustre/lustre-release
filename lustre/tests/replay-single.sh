@@ -29,8 +29,8 @@ ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="44b"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:
-	ALWAYS_EXCEPT+=""
+# bug number for skipped test: LU-11388
+	ALWAYS_EXCEPT+="131b"
 	if [ $MDSCOUNT -gt 1 ]; then
 # bug number for skipped test:   LU-10740 LU-11330 LU-9157 LU-11336
 		ALWAYS_EXCEPT+=" 2d       70d      80c     80d"
@@ -4733,7 +4733,7 @@ test_131a() {
 
 	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
 	replay_barrier $SINGLEMDS
-	echo "dom_data" | dd of=$DIR/$tfile bs=1 count=8
+	echo "dom_data" | dd of=$DIR/$tfile bs=8 count=1
 	# lock is not canceled and will be replayed
 	fail $SINGLEMDS
 
@@ -4748,7 +4748,7 @@ test_131b() {
 
 	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
 	replay_barrier $SINGLEMDS
-	echo "dom_data" | dd of=$DIR/$tfile bs=1 count=8
+	echo "dom_data" | dd of=$DIR/$tfile bs=8 count=1
 	cancel_lru_locks mdc
 
 	fail $SINGLEMDS
