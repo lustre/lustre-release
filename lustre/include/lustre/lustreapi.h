@@ -149,32 +149,39 @@ int llapi_file_lookup(int dirfd, const char *name);
 void llapi_set_command_name(const char *cmd);
 void llapi_clear_command_name(void);
 
-#define VERBOSE_COUNT		   0x1
-#define VERBOSE_SIZE		   0x2
-#define VERBOSE_OFFSET		   0x4
-#define VERBOSE_POOL		   0x8
-#define VERBOSE_DETAIL		  0x10
-#define VERBOSE_OBJID		  0x20
-#define VERBOSE_GENERATION	  0x40
-#define VERBOSE_MDTINDEX	  0x80
-#define VERBOSE_LAYOUT		 0x100
-#define VERBOSE_COMP_COUNT	 0x200
-#define VERBOSE_COMP_FLAGS	 0x400
-#define VERBOSE_COMP_START	 0x800
-#define VERBOSE_COMP_END	0x1000
-#define VERBOSE_COMP_ID		0x2000
-#define VERBOSE_DFID		0x4000
-#define VERBOSE_HASH_TYPE	0x8000
-#define VERBOSE_MIRROR_COUNT	0x10000
-#define VERBOSE_MIRROR_ID	0x20000
-#define VERBOSE_DEFAULT		(VERBOSE_COUNT | VERBOSE_SIZE | \
-				 VERBOSE_OFFSET | VERBOSE_POOL | \
-				 VERBOSE_OBJID | VERBOSE_GENERATION | \
-				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE | \
-				 VERBOSE_COMP_COUNT | VERBOSE_COMP_FLAGS | \
-				 VERBOSE_COMP_START | VERBOSE_COMP_END | \
-				 VERBOSE_COMP_ID | VERBOSE_MIRROR_COUNT| \
-				 VERBOSE_MIRROR_ID)
+enum llapi_layout_verbose  {
+	VERBOSE_STRIPE_COUNT	=     0x1,
+	VERBOSE_STRIPE_SIZE	=     0x2,
+	VERBOSE_STRIPE_OFFSET	=     0x4,
+	VERBOSE_POOL		=     0x8,
+	VERBOSE_DETAIL		=    0x10,
+	VERBOSE_OBJID		=    0x20,
+	VERBOSE_GENERATION	=    0x40,
+	VERBOSE_MDTINDEX	=    0x80,
+	VERBOSE_PATTERN		=   0x100,
+	VERBOSE_COMP_COUNT	=   0x200,
+	VERBOSE_COMP_FLAGS	=   0x400,
+	VERBOSE_COMP_START	=   0x800,
+	VERBOSE_COMP_END	=  0x1000,
+	VERBOSE_COMP_ID		=  0x2000,
+	VERBOSE_DFID		=  0x4000,
+	VERBOSE_HASH_TYPE	=  0x8000,
+	VERBOSE_MIRROR_COUNT	= 0x10000,
+	VERBOSE_MIRROR_ID	= 0x20000,
+	VERBOSE_DEFAULT		= VERBOSE_STRIPE_COUNT | VERBOSE_STRIPE_SIZE |
+				  VERBOSE_STRIPE_OFFSET | VERBOSE_POOL |
+				  VERBOSE_OBJID | VERBOSE_GENERATION |
+				  VERBOSE_PATTERN | VERBOSE_HASH_TYPE |
+				  VERBOSE_COMP_COUNT | VERBOSE_COMP_FLAGS |
+				  VERBOSE_COMP_START | VERBOSE_COMP_END |
+				  VERBOSE_COMP_ID | VERBOSE_MIRROR_COUNT |
+				  VERBOSE_MIRROR_ID
+};
+/* Compatibility with original names */
+#define VERBOSE_SIZE	VERBOSE_STRIPE_SIZE
+#define VERBOSE_COUNT	VERBOSE_STRIPE_COUNT
+#define VERBOSE_OFFSET	VERBOSE_STRIPE_OFFSET
+#define VERBOSE_LAYOUT	VERBOSE_PATTERN
 
 struct find_param {
 	unsigned int		 fp_max_depth;
@@ -258,7 +265,7 @@ struct find_param {
 				 fp_check_blocks:1,
 				 fp_exclude_blocks:1;
 
-	int			 fp_verbose;
+	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;
 
 	/* regular expression */

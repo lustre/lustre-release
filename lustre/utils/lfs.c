@@ -4128,6 +4128,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = no_argument },
 /* find	{ .val = 'M',	.name = "mtime",	.has_arg = required_argument }*/
 /* find	{ .val = 'n',	.name = "name",		.has_arg = required_argument }*/
+	{ .val = 'N',	.name = "mirror-count",	.has_arg = no_argument },
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
 	{ .val = 'p',	.name = "pool",		.has_arg = no_argument },
@@ -4151,7 +4152,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	char *end, *tmp;
 
 	while ((c = getopt_long(argc, argv,
-			"-cdDE::FghiI::LmMoO:pqrRsSvy",
+			"-cdDE::FghiI::LmMNoO:pqrRsSvy",
 			long_opts, NULL)) != -1) {
 		if (neg_opt)
 			--neg_opt;
@@ -4332,7 +4333,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 		case 'i':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_OFFSET;
+				param->fp_verbose |= VERBOSE_STRIPE_OFFSET;
 				param->fp_max_depth = 0;
 			}
 			break;
@@ -4355,7 +4356,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 		case 'L':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_LAYOUT;
+				param->fp_verbose |= VERBOSE_PATTERN;
 				param->fp_max_depth = 0;
 			}
 			break;
@@ -4368,6 +4369,12 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			if (!(param->fp_verbose & VERBOSE_DETAIL))
 				param->fp_max_depth = 0;
 			param->fp_verbose |= VERBOSE_MDTINDEX;
+			break;
+		case 'N':
+			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
+				param->fp_verbose |= VERBOSE_MIRROR_COUNT;
+				param->fp_max_depth = 0;
+			}
 			break;
 		case 'O':
 			if (param->fp_obd_uuid) {
@@ -4395,7 +4402,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 		case 'S':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_SIZE;
+				param->fp_verbose |= VERBOSE_STRIPE_SIZE;
 				param->fp_max_depth = 0;
 			}
 			break;
@@ -4520,7 +4527,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 			break;
 		case 'i':
 		case 'm':
-			param.fp_verbose |= VERBOSE_OFFSET;
+			param.fp_verbose |= VERBOSE_STRIPE_OFFSET;
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':

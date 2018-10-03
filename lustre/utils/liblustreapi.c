@@ -2484,7 +2484,8 @@ enum lov_dump_flags {
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 				     struct lov_user_ost_data_v1 *objects,
-				     int verbose, int depth, char *pool_name,
+				     enum llapi_layout_verbose verbose,
+				     int depth, char *pool_name,
 				     enum lov_dump_flags flags)
 {
 	bool is_dir = flags & LDF_IS_DIR;
@@ -2555,8 +2556,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 				     seq, oid, ver);
 	}
 
-	if (verbose & VERBOSE_COUNT) {
-		if (verbose & ~VERBOSE_COUNT)
+	if (verbose & VERBOSE_STRIPE_COUNT) {
+		if (verbose & ~VERBOSE_STRIPE_COUNT)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_count:  ",
 				     space, prefix);
 		if (is_dir) {
@@ -2589,9 +2590,9 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			separator = "\n";
 	}
 
-	if (verbose & VERBOSE_SIZE) {
+	if (verbose & VERBOSE_STRIPE_SIZE) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_SIZE)
+		if (verbose & ~VERBOSE_STRIPE_SIZE)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_size:   ",
 				     space, prefix);
 		if (is_dir && !is_raw && lum->lmm_stripe_size == 0) {
@@ -2614,9 +2615,9 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			separator = "\n";
 	}
 
-	if ((verbose & VERBOSE_LAYOUT)) {
+	if ((verbose & VERBOSE_PATTERN)) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_LAYOUT)
+		if (verbose & ~VERBOSE_PATTERN)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%spattern:       ",
 				     space, prefix);
 		if (lov_pattern_supported(lum->lmm_pattern))
@@ -2637,9 +2638,9 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		separator = "\n";
 	}
 
-	if (verbose & VERBOSE_OFFSET) {
+	if (verbose & VERBOSE_STRIPE_OFFSET) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_OFFSET)
+		if (verbose & ~VERBOSE_STRIPE_OFFSET)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_offset: ",
 				     space, prefix);
 		if (is_dir || skip_objs)
@@ -2677,7 +2678,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 			    struct lov_user_ost_data_v1 *objects,
 			    char *path, int obdindex, int depth,
-			    int header, enum lov_dump_flags flags)
+			    enum llapi_layout_verbose verbose,
+			    enum lov_dump_flags flags)
 {
 	bool is_dir = flags & LDF_IS_DIR;
 	bool indent = flags & LDF_INDENT;
@@ -2698,10 +2700,10 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 	if (!obdstripe)
 		return;
 
-	lov_dump_user_lmm_header(lum, path, objects, header, depth, pool_name,
+	lov_dump_user_lmm_header(lum, path, objects, verbose, depth, pool_name,
 				 flags);
 
-	if (!is_dir && !skip_objs && (header & VERBOSE_OBJID) &&
+	if (!is_dir && !skip_objs && (verbose & VERBOSE_OBJID) &&
 	    !(lum->lmm_pattern & LOV_PATTERN_F_RELEASED ||
 	      lov_pattern(lum->lmm_pattern) == LOV_PATTERN_MDT)) {
 		char *space = "      - ";
@@ -2756,7 +2758,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 }
 
 void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
-		       char *path, int obdindex, int depth, int verbose,
+		       char *path, int obdindex, int depth,
+		       enum llapi_layout_verbose verbose,
 		       enum lov_dump_flags flags)
 {
 	struct lmv_user_mds_data *objects = lum->lum_objects;
@@ -2791,8 +2794,8 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	/* show all information default */
 	if (!verbose) {
 		if (lum->lum_magic == LMV_USER_MAGIC)
-			verbose = VERBOSE_POOL | VERBOSE_COUNT |
-				  VERBOSE_OFFSET | VERBOSE_HASH_TYPE;
+			verbose = VERBOSE_POOL | VERBOSE_STRIPE_COUNT |
+				  VERBOSE_STRIPE_OFFSET | VERBOSE_HASH_TYPE;
 		else
 			verbose = VERBOSE_OBJID;
 	}
@@ -2800,21 +2803,21 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	if (depth && path && ((verbose != VERBOSE_OBJID)))
 		llapi_printf(LLAPI_MSG_NORMAL, "%s%s\n", prefix, path);
 
-	if (verbose & VERBOSE_COUNT) {
+	if (verbose & VERBOSE_STRIPE_COUNT) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_COUNT)
+		if (verbose & ~VERBOSE_STRIPE_COUNT)
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_count: ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u",
 			     (int)lum->lum_stripe_count);
-		if ((verbose & VERBOSE_OFFSET) && !yaml)
+		if ((verbose & VERBOSE_STRIPE_OFFSET) && !yaml)
 			separator = " ";
 		else
 			separator = "\n";
 	}
 
-	if (verbose & VERBOSE_OFFSET) {
+	if (verbose & VERBOSE_STRIPE_OFFSET) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_OFFSET)
+		if (verbose & ~VERBOSE_STRIPE_OFFSET)
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_offset: ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%d",
 			     (int)lum->lum_stripe_offset);
@@ -2875,7 +2878,7 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 {
 	struct lov_comp_md_v1 *comp_v1 = (void *)&param->fp_lmd->lmd_lmm;
 	int depth = param->fp_max_depth;
-	int verbose = param->fp_verbose;
+	enum llapi_layout_verbose verbose = param->fp_verbose;
 	bool yaml = flags & LDF_YAML;
 
 	if (depth && path && ((verbose != VERBOSE_OBJID) ||
@@ -2960,7 +2963,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 	struct lov_comp_md_v1 *comp_v1 = (void *)&param->fp_lmd->lmd_lmm;
 	struct lov_comp_md_entry_v1 *entry;
 	char *separator = "";
-	int verbose = param->fp_verbose;
+	enum llapi_layout_verbose verbose = param->fp_verbose;
 	bool yaml = flags & LDF_YAML;
 
 	entry = &comp_v1->lcm_entries[index];
@@ -3392,7 +3395,7 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 
 static inline bool has_any_comp_options(struct find_param *param)
 {
-	int verbose = param->fp_verbose;
+	enum llapi_layout_verbose verbose = param->fp_verbose;
 
 	if (param->fp_check_comp_id || param->fp_check_comp_count ||
 	    param->fp_check_comp_start || param->fp_check_comp_end ||

@@ -5204,13 +5204,6 @@ test_35()
 }
 run_test 35 "LFSCK can rebuild the lost agent entry"
 
-# It will be replaced by "lfs getstripe -N" via LU-11124.
-get_mirrors_count() {
-	local mirrors=$($LFS getstripe $1 |
-			awk '/lcm_mirror_count/ { print $2 }')
-	echo $mirrors
-}
-
 test_36a() {
 	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
 
@@ -5280,11 +5273,11 @@ test_36a() {
 
 	local mirrors
 
-	mirrors=$(get_mirrors_count $DIR/$tdir/f0)
+	mirrors=$($LFS getstripe -N $DIR/$tdir/f0)
 	[ $mirrors -eq 2 ] || error "(18) $DIR/$tdir/f0 has $mirrors mirrors"
-	mirrors=$(get_mirrors_count $DIR/$tdir/f1)
+	mirrors=$($LFS getstripe -N $DIR/$tdir/f1)
 	[ $mirrors -eq 2 ] || error "(19) $DIR/$tdir/f1 has $mirrors mirrors"
-	mirrors=$(get_mirrors_count $DIR/$tdir/f2)
+	mirrors=$($LFS getstripe -N $DIR/$tdir/f2)
 	[ $mirrors -eq 2 ] || error "(20) $DIR/$tdir/f2 has $mirrors mirrors"
 
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
@@ -5314,11 +5307,11 @@ test_36a() {
 	[ $repaired -eq 9 ] ||
 		error "(24) Expect 9 fixed on mds1, but got: $repaired"
 
-	mirrors=$(get_mirrors_count $DIR/$tdir/f0)
+	mirrors=$($LFS getstripe -N $DIR/$tdir/f0)
 	[ $mirrors -eq 3 ] || error "(25) $DIR/$tdir/f0 has $mirrors mirrors"
-	mirrors=$(get_mirrors_count $DIR/$tdir/f1)
+	mirrors=$($LFS getstripe -N $DIR/$tdir/f1)
 	[ $mirrors -eq 3 ] || error "(26) $DIR/$tdir/f1 has $mirrors mirrors"
-	mirrors=$(get_mirrors_count $DIR/$tdir/f2)
+	mirrors=$($LFS getstripe -N $DIR/$tdir/f2)
 	[ $mirrors -eq 3 ] || error "(27) $DIR/$tdir/f2 has $mirrors mirrors"
 
 	$LFS getstripe $DIR/$tdir/f0 | grep "lcme_mirror_id:.*1" || {
@@ -5402,11 +5395,11 @@ test_36b() {
 	[ $count -eq 9 ] || error "(8) Expect 9 fixed on mds1, but got: $count"
 
 	local name=$MOUNT/.lustre/lost+found/MDT0000/${fid}-R-0
-	count=$($LFS getstripe $name | awk '/lcm_mirror_count/ { print $2 }')
+	count=$($LFS getstripe --mirror-count $name)
 	[ $count -eq 3 ] || error "(9) $DIR/$tdir/f0 has $count mirrors"
 
-	count=$($LFS getstripe $name | awk '/lcm_entry_count/ { print $2 }')
-	[ $count -eq 6 ] || error "(10) $DIR/$tdir/f0 has $count entries"
+	count=$($LFS getstripe --component-count $name)
+	[ $count -eq 6 ] || error "(10) $DIR/$tdir/f0 has $count components"
 
 	$LFS getstripe $name | grep "lcme_mirror_id:.*1" || {
 		$LFS getstripe $name
@@ -5499,11 +5492,11 @@ test_36c() {
 	[ $count -eq 6 ] || error "(7) Expect 9 fixed on mds1, but got: $count"
 
 	local name=$MOUNT/.lustre/lost+found/MDT0000/${fid}-R-0
-	count=$($LFS getstripe $name | awk '/lcm_mirror_count/ { print $2 }')
+	count=$($LFS getstripe --mirror-count $name)
 	[ $count -eq 2 ] || error "(8) $DIR/$tdir/f0 has $count mirrors"
 
-	count=$($LFS getstripe $name | awk '/lcm_entry_count/ { print $2 }')
-	[ $count -eq 4 ] || error "(9) $DIR/$tdir/f0 has $count entries"
+	count=$($LFS getstripe --component-count $name)
+	[ $count -eq 4 ] || error "(9) $DIR/$tdir/f0 has $count components"
 
 	local flags=$($LFS getstripe $name | head -n 10 |
 		awk '/lcme_flags/ { print $2 }')

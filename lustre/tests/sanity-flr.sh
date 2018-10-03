@@ -87,7 +87,7 @@ start_osts() {
 verify_mirror_count() {
 	local tf=$1
 	local expected=$2
-	local mirror_count=$(get_mirror_ids $tf)
+	local mirror_count=$($LFS getstripe -N $tf)
 
 	[[ $mirror_count = $expected ]] || {
 		$LFS getstripe -v $tf
@@ -982,7 +982,7 @@ test_32() {
 		error "extending mirrored file $DIR/$tfile failed"
 
 	# make sure the mirrored file was created successfully
-	[ $(get_mirror_ids $DIR/$tfile) -eq 2 ] ||
+	[ $($LFS getstripe -N $DIR/$tfile) -eq 2 ] ||
 		{ $LFS getstripe $DIR/$tfile; error "expected 2 mirrors"; }
 
 	drop_client_cache
@@ -1031,7 +1031,7 @@ test_33() {
 		      "without verification failed"
 
 	# make sure that $tfile has two mirrors and $tfile-2 does not exist
-	[ $(get_mirror_ids $DIR/$tfile) -eq 2 ] ||
+	[ $($LFS getstripe -N $DIR/$tfile) -eq 2 ] ||
 		{ $LFS getstripe $DIR/$tfile; error "expected count 2"; }
 
 	[[ ! -e $DIR/$tfile-2 ]] || error "$DIR/$tfile-2 was not unlinked"
@@ -1203,7 +1203,7 @@ test_36() {
 
 	create_file_36 $tf $tf-2 $tf-3
 
-	[ $(get_mirror_ids $tf) -gt 1 ] || error "wrong mirror count"
+	[ $($LFS getstripe -N $tf) -gt 1 ] || error "wrong mirror count"
 
 	# test case 1 - check file write and verify layout version
 	$MULTIOP $tf oO_WRONLY:c ||
@@ -1219,13 +1219,13 @@ test_36() {
 	verify_ost_layout_version $tf
 
 	# test case 2
-	local mds_idx=mds$(($($LFS getstripe -m $tf-2) + 1))
+	local mds_facet=mds$(($($LFS getstripe -m $tf-2) + 1))
 
 	local delay_sec=10
-	do_facet $mds_idx $LCTL set_param fail_val=$delay_sec
+	do_facet $mds_facet $LCTL set_param fail_val=$delay_sec
 
 	#define OBD_FAIL_FLR_LV_DELAY 0x1A01
-	do_facet $mds_idx $LCTL set_param fail_loc=0x1A01
+	do_facet $mds_facet $LCTL set_param fail_loc=0x1A01
 
 	# write should take at least $fail_loc seconds and succeed
 	local st=$(date +%s)
@@ -1237,19 +1237,19 @@ test_36() {
 	# verify OST layout version
 	verify_ost_layout_version $tf
 
-	do_facet $mds_idx $LCTL set_param fail_loc=0
+	do_facet $mds_facet $LCTL set_param fail_loc=0
 
 	# test case 3
 	mds_idx=mds$(($($LFS getstripe -m $tf-3) + 1))
 
 	#define OBD_FAIL_FLR_LV_INC 0x1A02
-	do_facet $mds_idx $LCTL set_param fail_loc=0x1A02
+	do_facet $mds_facet $LCTL set_param fail_loc=0x1A02
 
 	# write open file should return error
 	$MULTIOP $tf-3 oO_WRONLY:O_SYNC:w1024c &&
 		error "write a mirrored file succeeded" || true
 
-	do_facet $mds_idx $LCTL set_param fail_loc=0
+	do_facet $mds_facet $LCTL set_param fail_loc=0
 }
 run_test 36 "write to mirrored files"
 
