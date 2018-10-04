@@ -49,6 +49,11 @@ static int ldlm_num_threads;
 module_param(ldlm_num_threads, int, 0444);
 MODULE_PARM_DESC(ldlm_num_threads, "number of DLM service threads to start");
 
+static unsigned int ldlm_cpu_bind = 1;
+module_param(ldlm_cpu_bind, uint, 0444);
+MODULE_PARM_DESC(ldlm_cpu_bind,
+		 "bind DLM service threads to particular CPU partitions");
+
 static char *ldlm_cpts;
 module_param(ldlm_cpts, charp, 0444);
 MODULE_PARM_DESC(ldlm_cpts, "CPU partitions ldlm threads should run on");
@@ -2954,11 +2959,12 @@ static int ldlm_setup(void)
 			.tc_nthrs_base		= LDLM_NTHRS_BASE,
 			.tc_nthrs_max		= LDLM_NTHRS_MAX,
 			.tc_nthrs_user		= ldlm_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= ldlm_cpu_bind,
 			.tc_ctx_tags		= LCT_MD_THREAD | LCT_DT_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= ldlm_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= ldlm_callback_handler,
@@ -2995,13 +3001,14 @@ static int ldlm_setup(void)
 			.tc_nthrs_base		= LDLM_NTHRS_BASE,
 			.tc_nthrs_max		= LDLM_NTHRS_MAX,
 			.tc_nthrs_user		= ldlm_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= ldlm_cpu_bind,
 			.tc_ctx_tags		= LCT_MD_THREAD | \
 						  LCT_DT_THREAD | \
 						  LCT_CL_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= ldlm_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= ldlm_cancel_handler,

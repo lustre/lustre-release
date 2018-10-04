@@ -75,9 +75,20 @@ static unsigned long mds_num_threads;
 module_param(mds_num_threads, ulong, 0444);
 MODULE_PARM_DESC(mds_num_threads, "number of MDS service threads to start");
 
+static unsigned int mds_cpu_bind = 1;
+module_param(mds_cpu_bind, uint, 0444);
+MODULE_PARM_DESC(mds_cpu_bind,
+		 "bind MDS threads to particular CPU partitions");
+
 int mds_max_io_threads = 512;
 module_param(mds_max_io_threads, int, 0444);
-MODULE_PARM_DESC(mds_max_io_threads, "maximum number of MDS IO service threads");
+MODULE_PARM_DESC(mds_max_io_threads,
+		 "maximum number of MDS IO service threads");
+
+static unsigned int mds_io_cpu_bind = 1;
+module_param(mds_io_cpu_bind, uint, 0444);
+MODULE_PARM_DESC(mds_io_cpu_bind,
+		 "bind MDS IO threads to particular CPU partitions");
 
 static char *mds_io_num_cpts;
 module_param(mds_io_num_cpts, charp, 0444);
@@ -95,6 +106,11 @@ module_param(mds_rdpg_num_threads, ulong, 0444);
 MODULE_PARM_DESC(mds_rdpg_num_threads,
 		 "number of MDS readpage service threads to start");
 
+static unsigned int mds_rdpg_cpu_bind = 1;
+module_param(mds_rdpg_cpu_bind, uint, 0444);
+MODULE_PARM_DESC(mds_rdpg_cpu_bind,
+		 "bind MDS readpage threads to particular CPU partitions");
+
 static char *mds_rdpg_num_cpts;
 module_param(mds_rdpg_num_cpts, charp, 0444);
 MODULE_PARM_DESC(mds_rdpg_num_cpts,
@@ -105,6 +121,11 @@ static unsigned long mds_attr_num_threads;
 module_param(mds_attr_num_threads, ulong, 0444);
 MODULE_PARM_DESC(mds_attr_num_threads,
 		 "number of MDS setattr service threads to start");
+
+static unsigned int mds_attr_cpu_bind = 1;
+module_param(mds_attr_cpu_bind, uint, 0444);
+MODULE_PARM_DESC(mds_attr_cpu_bind,
+		 "bind MDS setattr threads to particular CPU partitions");
 
 static char *mds_attr_num_cpts;
 module_param(mds_attr_num_cpts, charp, 0444);
@@ -190,11 +211,12 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_nthrs_base		= MDS_NTHRS_BASE,
 			.tc_nthrs_max		= MDS_NTHRS_MAX,
 			.tc_nthrs_user		= mds_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= mds_cpu_bind,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= mds_num_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
@@ -235,11 +257,12 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_nthrs_base		= MDS_RDPG_NTHRS_BASE,
 			.tc_nthrs_max		= MDS_RDPG_NTHRS_MAX,
 			.tc_nthrs_user		= mds_rdpg_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= mds_rdpg_cpu_bind,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= mds_rdpg_num_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
@@ -282,11 +305,12 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_nthrs_base		= MDS_SETA_NTHRS_BASE,
 			.tc_nthrs_max		= MDS_SETA_NTHRS_MAX,
 			.tc_nthrs_user		= mds_attr_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= mds_attr_cpu_bind,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= mds_attr_num_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
@@ -327,12 +351,13 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_nthrs_base		= MDS_NTHRS_BASE,
 			.tc_nthrs_max		= MDS_NTHRS_MAX,
 			.tc_nthrs_user		= mds_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= mds_cpu_bind,
 			.tc_ctx_tags		= LCT_MD_THREAD |
 						  LCT_DT_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= mds_num_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
@@ -503,13 +528,14 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_nthrs_base		= OSS_NTHRS_BASE,
 			.tc_nthrs_max		= mds_max_io_threads,
 			.tc_nthrs_user		= mds_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= mds_io_cpu_bind,
 			.tc_ctx_tags		= LCT_DT_THREAD | LCT_MD_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_cptable		= mdt_io_cptable,
 			.cc_pattern		= mdt_io_cptable == NULL ?
 						  mds_io_num_cpts : NULL,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_thr_init		= tgt_io_thread_init,

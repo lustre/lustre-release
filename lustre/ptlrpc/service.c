@@ -710,7 +710,13 @@ ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	if (cptable == NULL)
 		cptable = cfs_cpt_table;
 
-	if (!conf->psc_thr.tc_cpu_affinity) {
+	if (conf->psc_thr.tc_cpu_bind > 1) {
+		CERROR("%s: Invalid cpu bind value %d, only 1 or 0 allowed\n",
+		       conf->psc_name, conf->psc_thr.tc_cpu_bind);
+		RETURN(ERR_PTR(-EINVAL));
+	}
+
+	if (!cconf->cc_affinity) {
 		ncpts = 1;
 	} else {
 		ncpts = cfs_cpt_number(cptable);
@@ -749,6 +755,7 @@ ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	service->srv_cptable		= cptable;
 	service->srv_cpts		= cpts;
 	service->srv_ncpts		= ncpts;
+	service->srv_cpt_bind		= conf->psc_thr.tc_cpu_bind;
 
 	service->srv_cpt_bits = 0; /* it's zero already, easy to read... */
 	while ((1 << service->srv_cpt_bits) < cfs_cpt_number(cptable))
@@ -784,7 +791,7 @@ ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	service->srv_ops		= conf->psc_ops;
 
 	for (i = 0; i < ncpts; i++) {
-		if (!conf->psc_thr.tc_cpu_affinity)
+		if (!cconf->cc_affinity)
 			cpt = CFS_CPT_ANY;
 		else
 			cpt = cpts != NULL ? cpts[i] : i;
@@ -2497,13 +2504,12 @@ static int ptlrpc_main(void *arg)
 	thread->t_pid = current_pid();
 	unshare_fs_struct();
 
-	/* NB: we will call cfs_cpt_bind() for all threads, because we
-	 * might want to run lustre server only on a subset of system CPUs,
-	 * in that case ->scp_cpt is CFS_CPT_ANY */
-	rc = cfs_cpt_bind(svc->srv_cptable, svcpt->scp_cpt);
-	if (rc != 0) {
-		CWARN("%s: failed to bind %s on CPT %d\n",
-		      svc->srv_name, thread->t_name, svcpt->scp_cpt);
+	if (svc->srv_cpt_bind) {
+		rc = cfs_cpt_bind(svc->srv_cptable, svcpt->scp_cpt);
+		if (rc != 0) {
+			CWARN("%s: failed to bind %s on CPT %d\n",
+			      svc->srv_name, thread->t_name, svcpt->scp_cpt);
+		}
 	}
 
 	ginfo = groups_alloc(0);

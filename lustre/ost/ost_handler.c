@@ -51,9 +51,19 @@ static int oss_num_threads;
 module_param(oss_num_threads, int, 0444);
 MODULE_PARM_DESC(oss_num_threads, "number of OSS service threads to start");
 
+static unsigned int oss_cpu_bind = 1;
+module_param(oss_cpu_bind, uint, 0444);
+MODULE_PARM_DESC(oss_cpu_bind,
+		 "bind OSS service threads to particular CPU partitions");
+
 static int oss_num_create_threads;
 module_param(oss_num_create_threads, int, 0444);
 MODULE_PARM_DESC(oss_num_create_threads, "number of OSS create threads to start");
+
+static unsigned int oss_create_cpu_bind = 1;
+module_param(oss_create_cpu_bind, uint, 0444);
+MODULE_PARM_DESC(oss_create_cpu_bind,
+		 "bind OSS create threads to particular CPU partitions");
 
 static char *oss_cpts;
 module_param(oss_cpts, charp, 0444);
@@ -100,11 +110,12 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_nthrs_base		= OSS_NTHRS_BASE,
 			.tc_nthrs_max		= oss_max_threads,
 			.tc_nthrs_user		= oss_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= oss_cpu_bind,
 			.tc_ctx_tags		= LCT_DT_THREAD,
 		},
 		.psc_cpt                = {
 			.cc_pattern             = oss_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
@@ -140,11 +151,12 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_nthrs_base		= OSS_CR_NTHRS_BASE,
 			.tc_nthrs_max		= OSS_CR_NTHRS_MAX,
 			.tc_nthrs_user		= oss_num_create_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= oss_create_cpu_bind,
 			.tc_ctx_tags		= LCT_DT_THREAD,
 		},
 		.psc_cpt                = {
 			.cc_pattern             = oss_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
@@ -204,13 +216,14 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_nthrs_base		= OSS_NTHRS_BASE,
 			.tc_nthrs_max		= oss_max_threads,
 			.tc_nthrs_user		= oss_num_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= oss_cpu_bind,
 			.tc_ctx_tags		= LCT_DT_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_cptable		= ost_io_cptable,
 			.cc_pattern		= ost_io_cptable == NULL ?
 						  oss_io_cpts : NULL,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_thr_init		= tgt_io_thread_init,
@@ -249,12 +262,13 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_nthrs_base		= OSS_CR_NTHRS_BASE,
 			.tc_nthrs_max		= OSS_CR_NTHRS_MAX,
 			.tc_nthrs_user		= oss_num_create_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= oss_create_cpu_bind,
 			.tc_ctx_tags		= LCT_DT_THREAD,
 		},
 
 		.psc_cpt		= {
-			.cc_pattern	     = oss_cpts,
+			.cc_pattern		= oss_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
@@ -296,12 +310,13 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_nthrs_base		= OSS_CR_NTHRS_BASE,
 			.tc_nthrs_max		= OSS_CR_NTHRS_MAX,
 			.tc_nthrs_user		= oss_num_create_threads,
-			.tc_cpu_affinity	= 1,
+			.tc_cpu_bind		= oss_create_cpu_bind,
 			.tc_ctx_tags		= LCT_MD_THREAD |
 						  LCT_DT_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= oss_cpts,
+			.cc_affinity		= true,
 		},
 		.psc_ops		= {
 			.so_req_handler		= tgt_request_handle,
