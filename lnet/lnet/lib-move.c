@@ -957,10 +957,9 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 
 		CNETERR("Dropping message for %s: peer not alive\n",
 			libcfs_id2str(msg->msg_target));
-		if (do_send) {
-			msg->msg_health_status = LNET_MSG_STATUS_LOCAL_DROPPED;
+		msg->msg_health_status = LNET_MSG_STATUS_LOCAL_DROPPED;
+		if (do_send)
 			lnet_finalize(msg, -EHOSTUNREACH);
-		}
 
 		lnet_net_lock(cpt);
 		return -EHOSTUNREACH;

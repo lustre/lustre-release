@@ -442,8 +442,10 @@ ksocknal_txlist_done(struct lnet_ni *ni, struct list_head *txlist, int error)
 				  LNET_MSG_STATUS_LOCAL_TIMEOUT;
 			else if (error == -ENETDOWN ||
 				 error == -EHOSTUNREACH ||
-				 error == -ENETUNREACH)
-				tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_DROPPED;
+				 error == -ENETUNREACH ||
+				 error == -ECONNREFUSED ||
+				 error == -ECONNRESET)
+				tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_DROPPED;
 			/*
 			 * for all other errors we don't want to
 			 * retransmit
@@ -968,6 +970,7 @@ ksocknal_launch_packet(struct lnet_ni *ni, struct ksock_tx *tx,
 
         /* NB Routes may be ignored if connections to them failed recently */
         CNETERR("No usable routes to %s\n", libcfs_id2str(id));
+	tx->tx_hstatus = LNET_MSG_STATUS_REMOTE_ERROR;
         return (-EHOSTUNREACH);
 }
 
@@ -1052,6 +1055,7 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
         if (rc == 0)
                 return (0);
 
+	lntmsg->msg_health_status = tx->tx_hstatus;
         ksocknal_free_tx(tx);
         return (-EIO);
 }
