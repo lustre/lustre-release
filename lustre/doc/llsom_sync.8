@@ -64,7 +64,7 @@ performance significantly if thousands of fsync requests are sent.
 
 .TP
 Register a changelog consumer for MDT lustre-MDT0000
-$ cl_user=$(ssh root@mds01 lctl changelog_register --device lustre-MDT0000 -n)
+$ cl_user=$(ssh root@mds01 lctl --device lustre-MDT0000 changelog_register -n)
 .br
 $ echo $cl_user
 .br
@@ -82,11 +82,11 @@ $ llsom_sync --mdt=lustre-MDT0000 --user=$cl_user \\
 To deregister the changelog user (e.g. after this example, or if SOM
 updates are no longer needed):
 .br
-$ ssh root@mds01 lctl changelog_deregister --device lustre-MDT0000 $cl_user
+$ ssh root@mds01 lctl --device lustre-MDT0000 changelog_deregister $cl_user
 
 .SH AUTHOR
 The llsom_sync command is part of the Lustre filesystem.
 
 .SH SEE ALSO
 .BR lustre (7),
-.BR lctl (8),
+.BR lctl (8)

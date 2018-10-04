@@ -1,0 +1,35 @@
+.TH LFS-GETSOM 1 2018-10-04 "Lustre" "lustre Utilities"
+.SH NAME
+lfs getsom \- list file attributes that are stored on an MDS
+.SH SYNOPSIS
+.B lfs getsom
+[\fB\-s\fR | \fB\-b\fR | \fB\-f\fR] <file>
+.SH DESCRIPTION
+This command lists file attributes that are stored on the MDS. It is called
+with the full path and file name for a file on the Lustre file system. If no
+flags are used, then all file attributes stored on the MDS will be shown.
+.SH OPTIONS
+.TP
+.BR \-s\fR
+Only show the size value of the SOM data for a given file.
+.TP
+.BR \-b\fR
+Only show the blocks value of the SOM data for a given file.
+.TP
+.BR \-f\fR
+Only show the flag value of the SOM data for a given file.Valid flags are:
+.br
+0 - Unknown or no SoM data, must get size from OSTs.
+.br
+1 - Known strictly correct, FLR or DoM file (SoM guaranteed).
+.br
+2 - Known stale - was right at some point in the past, but it is known
+(or likely) to be incorrect now (e.g. opened for write).
+.br
+4 - Approximate, may never have been strictly correct, need to sync SOM
+data to achieve eventual consistency.
+.SH AUTHOR
+The \fBlfs getsom\fR command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR llsom_sync (8)
