@@ -79,10 +79,12 @@ lnet_fault_nid_match(lnet_nid_t nid, lnet_nid_t msg_nid)
 
 static bool
 lnet_fault_attr_match(struct lnet_fault_attr *attr, lnet_nid_t src,
-		      lnet_nid_t dst, unsigned int type, unsigned int portal)
+		      lnet_nid_t local_nid, lnet_nid_t dst,
+		      unsigned int type, unsigned int portal)
 {
 	if (!lnet_fault_nid_match(attr->fa_src, src) ||
-	    !lnet_fault_nid_match(attr->fa_dst, dst))
+	    !lnet_fault_nid_match(attr->fa_dst, dst) ||
+	    !lnet_fault_nid_match(attr->fa_local_nid, local_nid))
 		return false;
 
 	if (!(attr->fa_msg_mask & (1 << type)))
@@ -344,14 +346,21 @@ lnet_fault_match_health(enum lnet_msg_hstatus *hstatus, __u32 mask)
  */
 static bool
 drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
-		lnet_nid_t dst, unsigned int type, unsigned int portal,
+		lnet_nid_t local_nid, lnet_nid_t dst,
+		unsigned int type, unsigned int portal,
 		enum lnet_msg_hstatus *hstatus)
 {
 	struct lnet_fault_attr	*attr = &rule->dr_attr;
 	bool			 drop;
 
-	if (!lnet_fault_attr_match(attr, src, dst, type, portal))
+	if (!lnet_fault_attr_match(attr, src, local_nid, dst, type, portal))
 		return false;
+
+	if (attr->u.drop.da_drop_all) {
+		CDEBUG(D_NET, "set to drop all messages\n");
+		drop = true;
+		goto drop_matched;
+	}
 
 	/*
 	 * if we're trying to match a health status error but it hasn't
@@ -402,6 +411,8 @@ drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
 		}
 	}
 
+drop_matched:
+
 	if (drop) { /* drop this message, update counters */
 		if (hstatus)
 			lnet_fault_match_health(hstatus,
@@ -418,7 +429,9 @@ drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
  * Check if message from \a src to \a dst can match any existed drop rule
  */
 bool
-lnet_drop_rule_match(struct lnet_hdr *hdr, enum lnet_msg_hstatus *hstatus)
+lnet_drop_rule_match(struct lnet_hdr *hdr,
+		     lnet_nid_t local_nid,
+		     enum lnet_msg_hstatus *hstatus)
 {
 	lnet_nid_t src = le64_to_cpu(hdr->src_nid);
 	lnet_nid_t dst = le64_to_cpu(hdr->dest_nid);
@@ -437,7 +450,7 @@ lnet_drop_rule_match(struct lnet_hdr *hdr, enum lnet_msg_hstatus *hstatus)
 
 	cpt = lnet_net_lock_current();
 	list_for_each_entry(rule, &the_lnet.ln_drop_rules, dr_link) {
-		drop = drop_rule_match(rule, src, dst, typ, ptl,
+		drop = drop_rule_match(rule, src, local_nid, dst, typ, ptl,
 				       hstatus);
 		if (drop)
 			break;
@@ -528,7 +541,8 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 	struct lnet_fault_attr	*attr = &rule->dl_attr;
 	bool			 delay;
 
-	if (!lnet_fault_attr_match(attr, src, dst, type, portal))
+	if (!lnet_fault_attr_match(attr, src, LNET_NID_ANY,
+				   dst, type, portal))
 		return false;
 
 	/* match this rule, check delay rate now */

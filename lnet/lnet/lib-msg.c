@@ -906,11 +906,13 @@ lnet_send_error_simulation(struct lnet_msg *msg,
 	    return false;
 
 	/* match only health rules */
-	if (!lnet_drop_rule_match(&msg->msg_hdr, hstatus))
+	if (!lnet_drop_rule_match(&msg->msg_hdr, LNET_NID_ANY,
+				  hstatus))
 		return false;
 
-	CDEBUG(D_NET, "src %s, dst %s: %s simulate health error: %s\n",
+	CDEBUG(D_NET, "src %s(%s)->dst %s: %s simulate health error: %s\n",
 		libcfs_nid2str(msg->msg_hdr.src_nid),
+		libcfs_nid2str(msg->msg_txni->ni_nid),
 		libcfs_nid2str(msg->msg_hdr.dest_nid),
 		lnet_msgtyp2str(msg->msg_type),
 		lnet_health_error2str(*hstatus));
