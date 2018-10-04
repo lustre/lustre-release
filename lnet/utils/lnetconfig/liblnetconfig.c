@@ -3476,6 +3476,9 @@ int show_recovery_queue(enum lnet_health_type type, char *name, int seq_no,
 		goto out;
 	}
 
+	if (nid_list.rlst_num_nids == 0)
+		goto out;
+
 	root = cYAML_create_object(NULL, NULL);
 	if (root == NULL)
 		goto out;
