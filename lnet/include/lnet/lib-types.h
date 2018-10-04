@@ -327,7 +327,8 @@ enum lnet_net_state {
 #define LNET_NI_STATE_ACTIVE		(1 << 1)
 #define LNET_NI_STATE_FAILED		(1 << 2)
 #define LNET_NI_STATE_RECOVERY_PENDING	(1 << 3)
-#define LNET_NI_STATE_DELETING		(1 << 4)
+#define LNET_NI_STATE_RECOVERY_FAILED	(1 << 4)
+#define LNET_NI_STATE_DELETING		(1 << 5)
 
 enum lnet_stats_type {
 	LNET_STATS_TYPE_SEND = 0,
@@ -621,8 +622,10 @@ struct lnet_peer_ni {
 #define LNET_PEER_NI_NON_MR_PREF	(1 << 0)
 /* peer is being recovered. */
 #define LNET_PEER_NI_RECOVERY_PENDING	(1 << 1)
+/* recovery ping failed */
+#define LNET_PEER_NI_RECOVERY_FAILED	(1 << 2)
 /* peer is being deleted */
-#define LNET_PEER_NI_DELETING		(1 << 2)
+#define LNET_PEER_NI_DELETING		(1 << 3)
 
 struct lnet_peer {
 	/* chain on pt_peer_list */
