@@ -366,12 +366,12 @@ lnet_peer_detach_peer_ni_locked(struct lnet_peer_ni *lpni)
 
 /* called with lnet_net_lock LNET_LOCK_EX held */
 static int
-lnet_peer_ni_del_locked(struct lnet_peer_ni *lpni)
+lnet_peer_ni_del_locked(struct lnet_peer_ni *lpni, bool force)
 {
 	struct lnet_peer_table *ptable = NULL;
 
 	/* don't remove a peer_ni if it's also a gateway */
-	if (lnet_isrouter(lpni)) {
+	if (lnet_isrouter(lpni) && !force) {
 		CERROR("Peer NI %s is a gateway. Can not delete it\n",
 		       libcfs_nid2str(lpni->lpni_nid));
 		return -EBUSY;
@@ -428,7 +428,7 @@ void lnet_peer_uninit(void)
 	/* remove all peer_nis from the remote peer and the hash list */
 	list_for_each_entry_safe(lpni, tmp, &the_lnet.ln_remote_peer_ni_list,
 				 lpni_on_remote_peer_ni_list)
-		lnet_peer_ni_del_locked(lpni);
+		lnet_peer_ni_del_locked(lpni, false);
 
 	lnet_peer_tables_destroy();
 
@@ -446,7 +446,7 @@ lnet_peer_del_locked(struct lnet_peer *peer)
 	lpni = lnet_get_next_peer_ni_locked(peer, NULL, lpni);
 	while (lpni != NULL) {
 		lpni2 = lnet_get_next_peer_ni_locked(peer, NULL, lpni);
-		rc = lnet_peer_ni_del_locked(lpni);
+		rc = lnet_peer_ni_del_locked(lpni, false);
 		if (rc != 0)
 			rc2 = rc;
 		lpni = lpni2;
@@ -480,6 +480,7 @@ lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid, unsigned flags)
 	struct lnet_peer_ni *lpni;
 	lnet_nid_t primary_nid = lp->lp_primary_nid;
 	int rc = 0;
+	bool force = (flags & LNET_PEER_RTR_NI_FORCE_DEL) ? true : false;
 
 	if (!(flags & LNET_PEER_CONFIGURED)) {
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
@@ -502,14 +503,21 @@ lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid, unsigned flags)
 	 * This function only allows deletion of the primary NID if it
 	 * is the only NID.
 	 */
-	if (nid == lp->lp_primary_nid && lp->lp_nnis != 1) {
+	if (nid == lp->lp_primary_nid && lp->lp_nnis != 1 && !force) {
 		rc = -EBUSY;
 		goto out;
 	}
 
 	lnet_net_lock(LNET_LOCK_EX);
 
-	rc = lnet_peer_ni_del_locked(lpni);
+	if (nid == lp->lp_primary_nid && lp->lp_nnis != 1 && force) {
+		struct lnet_peer_ni *lpni2;
+		/* assign the next peer_ni to be the primary */
+		lpni2 = lnet_get_next_peer_ni_locked(lp, NULL, lpni);
+		LASSERT(lpni2);
+		lp->lp_primary_nid = lpni->lpni_nid;
+	}
+	rc = lnet_peer_ni_del_locked(lpni, force);
 
 	lnet_net_unlock(LNET_LOCK_EX);
 
@@ -537,7 +545,7 @@ lnet_peer_table_cleanup_locked(struct lnet_net *net,
 
 			peer = lpni->lpni_peer_net->lpn_peer;
 			if (peer->lp_primary_nid != lpni->lpni_nid) {
-				lnet_peer_ni_del_locked(lpni);
+				lnet_peer_ni_del_locked(lpni, false);
 				continue;
 			}
 			/*
@@ -2553,6 +2561,14 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	}
 
 	for (i = 0; i < ndelnis; i++) {
+		/*
+		 * for routers it's okay to delete the primary_nid because
+		 * the upper layers don't really rely on it. So if we're
+		 * being told that the router changed its primary_nid
+		 * then it's okay to delete it.
+		 */
+		if (lp->lp_rtr_refcount > 0)
+			flags |= LNET_PEER_RTR_NI_FORCE_DEL;
 		rc = lnet_peer_del_nid(lp, delnis[i], flags);
 		if (rc) {
 			CERROR("Error deleting NID %s from peer %s: %d\n",
