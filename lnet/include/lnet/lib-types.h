@@ -84,6 +84,8 @@ struct lnet_rsp_tracker {
 	struct list_head rspt_on_list;
 	/* cpt to lock */
 	int rspt_cpt;
+	/* nid of next hop */
+	lnet_nid_t rspt_next_hop_nid;
 	/* deadline of the REPLY/ACK */
 	ktime_t rspt_deadline;
 	/* parent MD */

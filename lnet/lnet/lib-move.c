@@ -1609,6 +1609,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 	__u32 send_case = sd->sd_send_case;
 	int rc;
 	__u32 routing = send_case & REMOTE_DST;
+	 struct lnet_rsp_tracker *rspt;
 
 	/*
 	 * Increment sequence number of the selected peer so that we
@@ -1699,6 +1700,19 @@ lnet_handle_send(struct lnet_send_data *sd)
 		 * ni NID that we picked earlier in the algorithm.
 		 */
 		msg->msg_hdr.dest_nid = cpu_to_le64(msg->msg_txpeer->lpni_nid);
+	}
+
+	/*
+	 * if we have response tracker block update it with the next hop
+	 * nid
+	 */
+	if (msg->msg_md) {
+		rspt = msg->msg_md->md_rspt_ptr;
+		if (rspt) {
+			rspt->rspt_next_hop_nid = msg->msg_txpeer->lpni_nid;
+			CDEBUG(D_NET, "rspt_next_hop_nid = %s\n",
+			       libcfs_nid2str(rspt->rspt_next_hop_nid));
+		}
 	}
 
 	rc = lnet_post_send_locked(msg, 0);
@@ -2733,6 +2747,9 @@ lnet_finalize_expired_responses(bool force)
 
 			if (ktime_compare(ktime_get(), rspt->rspt_deadline) >= 0 ||
 			    force) {
+				struct lnet_peer_ni *lpni;
+				lnet_nid_t nid;
+
 				md = lnet_handle2md(&rspt->rspt_mdh);
 				if (!md) {
 					LNetInvalidateMDHandle(&rspt->rspt_mdh);
@@ -2751,9 +2768,25 @@ lnet_finalize_expired_responses(bool force)
 
 				list_del_init(&rspt->rspt_on_list);
 
-				CNETERR("Response timed out: md = %p\n", md);
+				nid = rspt->rspt_next_hop_nid;
+
+				CNETERR("Response timed out: md = %p: nid = %s\n",
+					md, libcfs_nid2str(nid));
 				LNetMDUnlink(rspt->rspt_mdh);
 				lnet_rspt_free(rspt, i);
+
+				/*
+				 * If there is a timeout on the response
+				 * from the next hop decrement its health
+				 * value so that we don't use it
+				 */
+				lnet_net_lock(0);
+				lpni = lnet_find_peer_ni_locked(nid);
+				if (lpni) {
+					lnet_handle_remote_failure_locked(lpni);
+					lnet_peer_ni_decref_locked(lpni);
+				}
+				lnet_net_unlock(0);
 			} else {
 				lnet_res_unlock(i);
 				break;

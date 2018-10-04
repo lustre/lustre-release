@@ -513,18 +513,13 @@ lnet_handle_local_failure(struct lnet_msg *msg)
 	lnet_net_unlock(0);
 }
 
-static void
-lnet_handle_remote_failure(struct lnet_msg *msg)
+void
+lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 {
-	struct lnet_peer_ni *lpni;
-
-	lpni = msg->msg_txpeer;
-
 	/* lpni could be NULL if we're in the LOLND case */
 	if (!lpni)
 		return;
 
-	lnet_net_lock(0);
 	lnet_dec_healthv_locked(&lpni->lpni_healthv);
 	/*
 	 * add the peer NI to the recovery queue if it's not already there
@@ -534,6 +529,17 @@ lnet_handle_remote_failure(struct lnet_msg *msg)
 	 * invoke recovery
 	 */
 	lnet_peer_ni_add_to_recoveryq_locked(lpni);
+}
+
+static void
+lnet_handle_remote_failure(struct lnet_peer_ni *lpni)
+{
+	/* lpni could be NULL if we're in the LOLND case */
+	if (!lpni)
+		return;
+
+	lnet_net_lock(0);
+	lnet_handle_remote_failure_locked(lpni);
 	lnet_net_unlock(0);
 }
 
@@ -680,13 +686,13 @@ lnet_health_check(struct lnet_msg *msg)
 	 * attempt a resend safely.
 	 */
 	case LNET_MSG_STATUS_REMOTE_DROPPED:
-		lnet_handle_remote_failure(msg);
+		lnet_handle_remote_failure(msg->msg_txpeer);
 		goto resend;
 
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
-		lnet_handle_remote_failure(msg);
+		lnet_handle_remote_failure(msg->msg_txpeer);
 		return -1;
 	default:
 		LBUG();
