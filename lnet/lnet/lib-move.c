@@ -3324,7 +3324,10 @@ lnet_recover_peer_nis(void)
 static int
 lnet_monitor_thread(void *arg)
 {
-	int wakeup_counter = 0;
+	time64_t recovery_timeout = 0;
+	time64_t rsp_timeout = 0;
+	int interval;
+	time64_t now;
 
 	/*
 	 * The monitor thread takes care of the following:
@@ -3339,20 +3342,23 @@ lnet_monitor_thread(void *arg)
 	cfs_block_allsigs();
 
 	while (the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING) {
+		now = ktime_get_real_seconds();
+
 		if (lnet_router_checker_active())
 			lnet_check_routers();
 
 		lnet_resend_pending_msgs();
 
-		wakeup_counter++;
-		if (wakeup_counter >= lnet_transaction_timeout / 2) {
+		if (now >= rsp_timeout) {
 			lnet_finalize_expired_responses(false);
-			wakeup_counter = 0;
+			rsp_timeout = now + (lnet_transaction_timeout / 2);
 		}
 
-		lnet_recover_local_nis();
-
-		lnet_recover_peer_nis();
+		if (now >= recovery_timeout) {
+			lnet_recover_local_nis();
+			lnet_recover_peer_nis();
+			recovery_timeout = now + lnet_recovery_interval;
+		}
 
 		/*
 		 * TODO do we need to check if we should sleep without
@@ -3363,9 +3369,11 @@ lnet_monitor_thread(void *arg)
 		 * cases where we get a complaint that an idle thread
 		 * is waking up unnecessarily.
 		 */
+		interval = min(lnet_recovery_interval,
+			       lnet_transaction_timeout / 2);
 		wait_event_interruptible_timeout(the_lnet.ln_mt_waitq,
 						false,
-						cfs_time_seconds(1));
+						cfs_time_seconds(interval));
 	}
 
 	/* clean up the router checker */
