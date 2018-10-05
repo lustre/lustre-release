@@ -1928,38 +1928,9 @@ void lnet_peer_push_event(struct lnet_event *ev)
 		goto out;
 	}
 
-	/*
-	 * Check whether the Put data is stale. Stale data can just be
-	 * dropped.
-	 */
-	if (pbuf->pb_info.pi_nnis > 1 &&
-	    lp->lp_primary_nid == pbuf->pb_info.pi_ni[1].ns_nid &&
-	    LNET_PING_BUFFER_SEQNO(pbuf) < lp->lp_peer_seqno) {
-		CDEBUG(D_NET, "Stale Push from %s: got %u have %u\n",
-		       libcfs_nid2str(lp->lp_primary_nid),
-		       LNET_PING_BUFFER_SEQNO(pbuf),
-		       lp->lp_peer_seqno);
-		goto out;
-	}
-
-	/*
-	 * Check whether the Put data is new, in which case we clear
-	 * the UPTODATE flag and prepare to process it.
-	 *
-	 * If the Put data is current, and the peer is UPTODATE then
-	 * we assome everything is all right and drop the data as
-	 * stale.
-	 */
-	if (LNET_PING_BUFFER_SEQNO(pbuf) > lp->lp_peer_seqno) {
-		lp->lp_peer_seqno = LNET_PING_BUFFER_SEQNO(pbuf);
-		lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
-	} else if (lp->lp_state & LNET_PEER_NIDS_UPTODATE) {
-		CDEBUG(D_NET, "Stale Push from %s: got %u have %u\n",
-		       libcfs_nid2str(lp->lp_primary_nid),
-		       LNET_PING_BUFFER_SEQNO(pbuf),
-		       lp->lp_peer_seqno);
-		goto out;
-	}
+	/* always assume new data */
+	lp->lp_peer_seqno = LNET_PING_BUFFER_SEQNO(pbuf);
+	lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
 
 	/*
 	 * If there is data present that hasn't been processed yet,
@@ -2244,16 +2215,13 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL &&
 	    pbuf->pb_info.pi_nnis > 1 &&
 	    lp->lp_primary_nid == pbuf->pb_info.pi_ni[1].ns_nid) {
-		if (LNET_PING_BUFFER_SEQNO(pbuf) < lp->lp_peer_seqno) {
-			CDEBUG(D_NET, "Stale Reply from %s: got %u have %u\n",
+		if (LNET_PING_BUFFER_SEQNO(pbuf) < lp->lp_peer_seqno)
+			CDEBUG(D_NET, "peer %s: seq# got %u have %u. peer rebooted?\n",
 				libcfs_nid2str(lp->lp_primary_nid),
 				LNET_PING_BUFFER_SEQNO(pbuf),
 				lp->lp_peer_seqno);
-			goto out;
-		}
 
-		if (LNET_PING_BUFFER_SEQNO(pbuf) > lp->lp_peer_seqno)
-			lp->lp_peer_seqno = LNET_PING_BUFFER_SEQNO(pbuf);
+		lp->lp_peer_seqno = LNET_PING_BUFFER_SEQNO(pbuf);
 	}
 
 	/* We're happy with the state of the data in the buffer. */
