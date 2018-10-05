@@ -178,6 +178,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	__u32 perm = 0;
 	int setuid;
 	int setgid;
+	bool is_nm_gid_squashed = false;
 	int rc = 0;
 
 	ENTRY;
@@ -220,6 +221,10 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		ucred->uc_suppgids[0] = -1;
 		ucred->uc_suppgids[1] = -1;
 	}
+
+	if (nodemap && ucred->uc_o_gid == nodemap->nm_squash_gid)
+		is_nm_gid_squashed = true;
+
 	nodemap_putref(nodemap);
 
 	if (type == BODY_INIT) {
@@ -288,7 +293,8 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	}
 
 	if (perm & CFS_SETGRP_PERM) {
-		if (pud->pud_ngroups) {
+		/* only set groups if GID is not squashed */
+		if (pud->pud_ngroups && !is_nm_gid_squashed) {
 			/* setgroups for local client */
 			ucred->uc_ginfo = groups_alloc(pud->pud_ngroups);
 			if (!ucred->uc_ginfo) {
@@ -301,6 +307,8 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 						pud->pud_groups);
 			lustre_groups_sort(ucred->uc_ginfo);
 		} else {
+			ucred->uc_suppgids[0] = -1;
+			ucred->uc_suppgids[1] = -1;
 			ucred->uc_ginfo = NULL;
 		}
 	} else {

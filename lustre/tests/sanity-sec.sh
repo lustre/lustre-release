@@ -1541,6 +1541,11 @@ test_16() {
 run_test 16 "test nodemap all_off fileops"
 
 test_17() {
+	if $SHARED_KEY &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+		skip "Need MDS >= 2.11.55"
+	fi
+
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
@@ -1552,6 +1557,11 @@ test_17() {
 run_test 17 "test nodemap trusted_noadmin fileops"
 
 test_18() {
+	if $SHARED_KEY &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+		skip "Need MDS >= 2.11.55"
+	fi
+
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
@@ -1563,6 +1573,11 @@ test_18() {
 run_test 18 "test nodemap mapped_noadmin fileops"
 
 test_19() {
+	if $SHARED_KEY &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+		skip "Need MDS >= 2.11.55"
+	fi
+
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
@@ -1574,6 +1589,11 @@ test_19() {
 run_test 19 "test nodemap trusted_admin fileops"
 
 test_20() {
+	if $SHARED_KEY &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+		skip "Need MDS >= 2.11.55"
+	fi
+
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
@@ -1585,6 +1605,11 @@ test_20() {
 run_test 20 "test nodemap mapped_admin fileops"
 
 test_21() {
+	if $SHARED_KEY &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+		skip "Need MDS >= 2.11.55"
+	fi
+
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
@@ -1607,6 +1632,11 @@ test_21() {
 run_test 21 "test nodemap mapped_trusted_noadmin fileops"
 
 test_22() {
+	if $SHARED_KEY &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+		skip "Need MDS >= 2.11.55"
+	fi
+
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
