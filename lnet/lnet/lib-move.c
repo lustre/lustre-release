@@ -3402,7 +3402,8 @@ lnet_monitor_thread(void *arg)
 		 * is waking up unnecessarily.
 		 */
 		interval = min(lnet_recovery_interval,
-			       lnet_transaction_timeout / 2);
+			       min((unsigned int) alive_router_check_interval,
+				   lnet_transaction_timeout / 2));
 		wait_event_interruptible_timeout(the_lnet.ln_mt_waitq,
 						false,
 						cfs_time_seconds(interval));
