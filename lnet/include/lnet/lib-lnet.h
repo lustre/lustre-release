@@ -575,19 +575,6 @@ struct lnet_ni *lnet_get_next_ni_locked(struct lnet_net *mynet,
 					struct lnet_ni *prev);
 struct lnet_ni *lnet_get_ni_idx_locked(int idx);
 
-struct libcfs_ioctl_handler {
-	struct list_head item;
-	int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_hdr *hdr);
-};
-
-#define DECLARE_IOCTL_HANDLER(ident, func)			\
-	static struct libcfs_ioctl_handler ident = {		\
-		.item	      = LIST_HEAD_INIT(ident.item),	\
-		.handle_ioctl = func				\
-	}
-
-extern int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
-extern int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 				struct libcfs_ioctl_hdr __user *uparam);
 extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,

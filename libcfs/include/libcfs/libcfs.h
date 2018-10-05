@@ -91,6 +91,14 @@ void lc_watchdog_delete(struct lc_watchdog *lcw);
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
+extern struct blocking_notifier_head libcfs_ioctl_list;
+static inline int notifier_from_ioctl_errno(int err)
+{
+	if (err == -EINVAL)
+		return NOTIFY_OK;
+	return notifier_from_errno(err) | NOTIFY_STOP_MASK;
+}
+
 /*
  * Defined by platform
  */

@@ -2004,9 +2004,9 @@ static void lstcon_init_acceptor_service(void)
 	lstcon_acceptor_service.sv_wi_total = SFW_FRWK_WI_MAX;
 }
 
-int lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_hdr *hdr);
-
-DECLARE_IOCTL_HANDLER(lstcon_ioctl_handler, lstcon_ioctl_entry);
+static struct notifier_block lstcon_ioctl_handler = {
+	.notifier_call = lstcon_ioctl_entry,
+};
 
 /* initialize console */
 int
@@ -2058,12 +2058,12 @@ lstcon_console_init(void)
                 goto out;
         }
 
-        rc = libcfs_register_ioctl(&lstcon_ioctl_handler);
-
-        if (rc == 0) {
-                lstcon_rpc_module_init();
-                return 0;
-        }
+	rc = blocking_notifier_chain_register(&libcfs_ioctl_list,
+					      &lstcon_ioctl_handler);
+	if (rc == 0) {
+		lstcon_rpc_module_init();
+		return 0;
+	}
 
 out:
 	srpc_shutdown_service(&lstcon_acceptor_service);
@@ -2080,9 +2080,10 @@ out:
 int
 lstcon_console_fini(void)
 {
-        int     i;
+	int i;
 
-        libcfs_deregister_ioctl(&lstcon_ioctl_handler);
+	blocking_notifier_chain_unregister(&libcfs_ioctl_list,
+					   &lstcon_ioctl_handler);
 
 	mutex_lock(&console_session.ses_mutex);
 

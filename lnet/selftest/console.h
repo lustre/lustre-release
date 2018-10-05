@@ -256,6 +256,8 @@ extern int lstcon_test_add(char *batch_name, int type, int loop,
 			   void *param, int paramlen, int *retp,
 			   struct list_head __user *result_up);
 
+int lstcon_ioctl_entry(struct notifier_block *nb,
+		       unsigned long cmd, void *vdata);
 int lstcon_console_init(void);
 int lstcon_console_fini(void);
 

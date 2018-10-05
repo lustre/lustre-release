@@ -805,31 +805,35 @@ out:
 }
 
 int
-lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
+lstcon_ioctl_entry(struct notifier_block *nb,
+		   unsigned long cmd, void *vdata)
 {
-	char   *buf;
+	struct libcfs_ioctl_hdr *hdr = vdata;
 	struct libcfs_ioctl_data *data;
-	int     opc;
-	int     rc;
+	char *buf = NULL;
+	int rc = -EINVAL;
+	int opc;
 
 	if (cmd != IOC_LIBCFS_LNETST)
-		return -EINVAL;
+		goto err;
 
 	data = container_of(hdr, struct libcfs_ioctl_data, ioc_hdr);
 
 	opc = data->ioc_u32[0];
 
 	if (data->ioc_plen1 > PAGE_SIZE)
-		return -EINVAL;
+		goto err;
 
 	LIBCFS_ALLOC(buf, data->ioc_plen1);
-	if (buf == NULL)
-		return -ENOMEM;
+	if (buf == NULL) {
+		rc = -ENOMEM;
+		goto err;
+	}
 
 	/* copy in parameter */
 	if (copy_from_user(buf, data->ioc_pbuf1, data->ioc_plen1)) {
-		LIBCFS_FREE(buf, data->ioc_plen1);
-		return -EFAULT;
+		rc = -EFAULT;
+		goto out_free_buf;
 	}
 
 	mutex_lock(&console_session.ses_mutex);
@@ -910,6 +914,7 @@ lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 		break;
 	default:
 		rc = -EINVAL;
+		goto out;
 	}
 
 	if (copy_to_user(data->ioc_pbuf2, &console_session.ses_trans_stat,
@@ -917,8 +922,8 @@ lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 		rc = -EFAULT;
 out:
 	mutex_unlock(&console_session.ses_mutex);
-
+out_free_buf:
 	LIBCFS_FREE(buf, data->ioc_plen1);
-
-	return rc;
+err:
+	return notifier_from_ioctl_errno(rc);
 }
