@@ -3590,26 +3590,27 @@ test_49b() { # bug 17710
 run_test 49b "check PARAM_SYS_LDLM_TIMEOUT option of mkfs.lustre"
 
 lazystatfs() {
+	# wait long enough to exceed OBD_STATFS_CACHE_SECONDS = 1
+	sleep 2
         # Test both statfs and lfs df and fail if either one fails
 	multiop_bg_pause $1 f_
-	RC1=$?
+	RC=$?
 	PID=$!
 	killall -USR1 multiop
-	[ $RC1 -ne 0 ] && log "lazystatfs multiop failed"
-	wait $PID || { RC1=$?; log "multiop return error "; }
+	[ $RC -ne 0 ] && log "lazystatfs multiop failed"
+	wait $PID || { RC=$?; log "multiop return error "; }
 
+	# wait long enough to exceed OBD_STATFS_CACHE_SECONDS = 1
+	sleep 2
 	$LFS df -l &
 	PID=$!
 	sleep 5
-	kill -s 0 $PID
-	RC2=$?
-	if [ $RC2 -eq 0 ]; then
-	    kill -s 9 $PID
-	    log "lazystatfs df failed"
+	if kill -s 0 $PID; then
+		RC=1
+		kill -s 9 $PID
+		log "lazystatfs lfs df failed to complete in 5s"
 	fi
 
-	RC=0
-	[[ $RC1 -ne 0 || $RC2 -eq 0 ]] && RC=1
 	return $RC
 }
 
@@ -3631,7 +3632,9 @@ test_50b() {
 
 	# Wait for client to detect down OST
 	stop_ost || error "Unable to stop OST1"
-        wait_osc_import_state mds ost DISCONN
+	wait_osc_import_state client ost DISCONN
+	$LCTL dl
+	log "OSCs should all be DISCONN"
 
 	lazystatfs $MOUNT || error "lazystatfs should not return EIO"
 

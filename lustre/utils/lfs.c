@@ -4784,6 +4784,8 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 	}
 
 	for (tp = types; tp->st_name != NULL; tp++) {
+		bool have_ost = false;
+
 		if (!(tp->st_op & ops))
 			continue;
 
@@ -4803,6 +4805,20 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 					continue;
 			} else if (rc2 < 0 && rc == 0) {
 				rc = rc2;
+			}
+
+			/* If we have OSTs then don't report MDT block counts.
+			 * For MDT-only filesystems the expectation is that all
+			 * layouts have a DoM component.  For filesystems with
+			 * OSTs, files are not necessarily going to store data
+			 * on MDTs, and MDT space is limited to a fraction of
+			 * OST space, so don't include it in the summary.
+			 */
+			if (tp->st_op == LL_STATFS_LOV && !have_ost) {
+				have_ost = true;
+				sum.os_blocks = 0;
+				sum.os_bfree = 0;
+				sum.os_bavail = 0;
 			}
 
 			if (poolname && tp->st_op == LL_STATFS_LOV &&
@@ -4828,20 +4844,21 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 				       obd_uuid2str(&uuid_buf), flags,
 				       tp->st_name, index, rc2);
 
-			if (rc2 == 0) {
-				if (tp->st_op == LL_STATFS_LMV) {
-					sum.os_ffree += stat_buf.os_ffree;
-					sum.os_files += stat_buf.os_files;
-				} else /* if (tp->st_op == LL_STATFS_LOV) */ {
-					sum.os_blocks += stat_buf.os_blocks *
-						stat_buf.os_bsize;
-					sum.os_bfree  += stat_buf.os_bfree *
-						stat_buf.os_bsize;
-					sum.os_bavail += stat_buf.os_bavail *
-						stat_buf.os_bsize;
-					ost_ffree += stat_buf.os_ffree;
-				}
+			if (rc2)
+				continue;
+
+			if (tp->st_op == LL_STATFS_LMV) {
+				sum.os_ffree += stat_buf.os_ffree;
+				sum.os_files += stat_buf.os_files;
+			} else /* if (tp->st_op == LL_STATFS_LOV) */ {
+				ost_ffree += stat_buf.os_ffree;
 			}
+			sum.os_blocks += stat_buf.os_blocks *
+					 stat_buf.os_bsize;
+			sum.os_bfree  += stat_buf.os_bfree *
+					 stat_buf.os_bsize;
+			sum.os_bavail += stat_buf.os_bavail *
+					 stat_buf.os_bsize;
 		}
 	}
 

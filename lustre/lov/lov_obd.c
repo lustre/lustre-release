@@ -964,14 +964,14 @@ out_rqset:
 static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
-        struct obd_device *obddev = class_exp2obd(exp);
-        struct lov_obd *lov = &obddev->u.lov;
-        int i = 0, rc = 0, count = lov->desc.ld_tgt_count;
-        struct obd_uuid *uuidp;
-        ENTRY;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct lov_obd *lov = &obd->u.lov;
+	int i = 0, rc = 0, count = lov->desc.ld_tgt_count;
+	struct obd_uuid *uuidp;
 
-        switch (cmd) {
-        case IOC_OBD_STATFS: {
+	ENTRY;
+	switch (cmd) {
+	case IOC_OBD_STATFS: {
 		struct obd_ioctl_data *data = karg;
 		struct obd_device *osc_obd;
 		struct obd_statfs stat_buf = {0};
@@ -980,7 +980,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		__u32 flags;
 
 		memcpy(&index, data->ioc_inlbuf2, sizeof(index));
-		if ((index >= count))
+		if (index >= count)
 			RETURN(-ENODEV);
 
 		if (!lov->lov_tgts[index])
@@ -1004,12 +1004,12 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		memcpy(&flags, data->ioc_inlbuf1, sizeof(flags));
 		flags = flags & LL_STATFS_NODELAY ? OBD_STATFS_NODELAY : 0;
 
-                /* got statfs data */
-                rc = obd_statfs(NULL, lov->lov_tgts[index]->ltd_exp, &stat_buf,
+		/* got statfs data */
+		rc = obd_statfs(NULL, lov->lov_tgts[index]->ltd_exp, &stat_buf,
 				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-                                flags);
-                if (rc)
-                        RETURN(rc);
+				flags);
+		if (rc)
+			RETURN(rc);
 		if (copy_to_user(data->ioc_pbuf1, &stat_buf,
 				 min_t(unsigned long, data->ioc_plen1,
 				       sizeof(struct obd_statfs))))
@@ -1122,12 +1122,11 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
                                 continue;
 
-                        /* ll_umount_begin() sets force flag but for lov, not
-                         * osc. Let's pass it through */
-                        osc_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
-                        osc_obd->obd_force = obddev->obd_force;
-                        err = obd_iocontrol(cmd, lov->lov_tgts[i]->ltd_exp,
-                                            len, karg, uarg);
+			/* ll_umount_begin() sets force on lov, pass to osc */
+			osc_obd = class_exp2obd(lov->lov_tgts[i]->ltd_exp);
+			osc_obd->obd_force = obd->obd_force;
+			err = obd_iocontrol(cmd, lov->lov_tgts[i]->ltd_exp,
+					    len, karg, uarg);
 			if (err) {
                                 if (lov->lov_tgts[i]->ltd_active) {
                                         CDEBUG(err == -ENOTTY ?

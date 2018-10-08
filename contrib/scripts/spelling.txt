@@ -97,7 +97,7 @@ DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
 DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
 from_timer||cfs_from_timer
 f_dentry||f_path.dentry
-get_seconds||ktime_get_real_seconds
+[^_]get_seconds||ktime_get_real_seconds
 GETSTRIPE||LFS getstripe
 ldlm_appetite_t||enum ldlm_appetite
 ldlm_cancel_flags_t||enum ldlm_cancel_flags

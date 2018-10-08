@@ -999,8 +999,8 @@ static inline int obd_statfs_async(struct obd_export *exp,
 				   time64_t max_age,
 				   struct ptlrpc_request_set *rqset)
 {
-	int rc = 0;
 	struct obd_device *obd;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1013,8 +1013,8 @@ static inline int obd_statfs_async(struct obd_export *exp,
 		RETURN(-EOPNOTSUPP);
 	}
 
-	CDEBUG(D_SUPER, "%s: osfs %p age %lld, max_age %lld\n",
-	       obd->obd_name, &obd->obd_osfs, obd->obd_osfs_age, max_age);
+	CDEBUG(D_SUPER, "%s: age %lld, max_age %lld\n",
+	       obd->obd_name, obd->obd_osfs_age, max_age);
 	if (obd->obd_osfs_age < max_age) {
 		rc = OBP(obd, statfs_async)(exp, oinfo, max_age, rqset);
 	} else {
@@ -1024,8 +1024,7 @@ static inline int obd_statfs_async(struct obd_export *exp,
 		       obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
 		       obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
 		spin_lock(&obd->obd_osfs_lock);
-		memcpy(oinfo->oi_osfs, &obd->obd_osfs,
-		       sizeof(*oinfo->oi_osfs));
+		memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
 		spin_unlock(&obd->obd_osfs_lock);
 		oinfo->oi_flags |= OBD_STATFS_FROM_CACHE;
 		if (oinfo->oi_cb_up)
@@ -1040,38 +1039,38 @@ static inline int obd_statfs_async(struct obd_export *exp,
  */
 static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_statfs *osfs, time64_t max_age,
-                             __u32 flags)
+			     __u32 flags)
 {
-        int rc = 0;
-        struct obd_device *obd = exp->exp_obd;
-        ENTRY;
+	struct obd_device *obd = exp->exp_obd;
+	int rc = 0;
 
-        if (obd == NULL)
-                RETURN(-EINVAL);
+	ENTRY;
+	if (unlikely(obd == NULL))
+		RETURN(-EINVAL);
 
 	OBD_CHECK_DEV_ACTIVE(obd);
 
-	if (!obd->obd_type || !obd->obd_type->typ_dt_ops->o_statfs) {
+	if (unlikely(!obd->obd_type || !obd->obd_type->typ_dt_ops->o_statfs)) {
 		CERROR("%s: no %s operation\n", obd->obd_name, __func__);
 		RETURN(-EOPNOTSUPP);
 	}
 
-	CDEBUG(D_SUPER, "osfs %lld, max_age %lld\n",
-               obd->obd_osfs_age, max_age);
+	CDEBUG(D_SUPER, "%s: age %lld, max_age %lld\n",
+	       obd->obd_name, obd->obd_osfs_age, max_age);
 	/* ignore cache if aggregated isn't expected */
 	if (obd->obd_osfs_age < max_age ||
 	    ((obd->obd_osfs.os_state & OS_STATE_SUM) &&
 	     !(flags & OBD_STATFS_SUM))) {
-                rc = OBP(obd, statfs)(env, exp, osfs, max_age, flags);
-                if (rc == 0) {
+		rc = OBP(obd, statfs)(env, exp, osfs, max_age, flags);
+		if (rc == 0) {
 			spin_lock(&obd->obd_osfs_lock);
 			memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
 			obd->obd_osfs_age = ktime_get_seconds();
 			spin_unlock(&obd->obd_osfs_lock);
 		}
 	} else {
-		CDEBUG(D_SUPER, "%s: use %p cache blocks %llu/%llu"
-		       " objects %llu/%llu\n",
+		CDEBUG(D_SUPER,
+		       "%s: use %p cache blocks %llu/%llu objects %llu/%llu\n",
 		       obd->obd_name, &obd->obd_osfs,
 		       obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
 		       obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
