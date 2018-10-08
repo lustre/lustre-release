@@ -478,7 +478,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 
         lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
                              LDLM_NSS_LOCKS);
-	INIT_LIST_HEAD(&lock->l_handle.h_link);
+	INIT_LIST_HEAD_RCU(&lock->l_handle.h_link);
 	class_handle_hash(&lock->l_handle, &lock_handle_ops);
 
         lu_ref_init(&lock->l_reference);

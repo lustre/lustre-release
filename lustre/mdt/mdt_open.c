@@ -63,7 +63,7 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 
 	OBD_ALLOC_PTR(mfd);
 	if (mfd != NULL) {
-		INIT_LIST_HEAD(&mfd->mfd_open_handle.h_link);
+		INIT_LIST_HEAD_RCU(&mfd->mfd_open_handle.h_link);
 		mfd->mfd_open_handle.h_owner = med;
 		INIT_LIST_HEAD(&mfd->mfd_list);
 		class_handle_hash(&mfd->mfd_open_handle, &mfd_open_handle_ops);
