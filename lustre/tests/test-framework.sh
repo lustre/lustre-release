@@ -5531,7 +5531,7 @@ at_max_set() {
 drop_request() {
 # OBD_FAIL_MDS_ALL_REQUEST_NET
     RC=0
-    do_facet $SINGLEMDS lctl set_param fail_loc=0x123
+    do_facet $SINGLEMDS lctl set_param fail_val=0 fail_loc=0x123
     do_facet client "$1" || RC=$?
     do_facet $SINGLEMDS lctl set_param fail_loc=0
     return $RC

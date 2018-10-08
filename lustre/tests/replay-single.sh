@@ -4876,6 +4876,40 @@ test_132a() {
 }
 run_test 132a "PFL new component instantiate replay"
 
+test_133() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	$LFS mkdir -i 1 $remote_dir
+
+	umount $MOUNT
+	do_facet mds2 $LCTL set_param seq.srv*MDT0001.space=clear
+
+	zconf_mount $(hostname) $MOUNT
+	client_up || return 1
+
+	#define OBD_FAIL_MDS_ALL_REQUEST_NET     0x123
+	# SEQ_QUERY                       = 700
+	do_facet mds1 $LCTL set_param fail_val=700 fail_loc=0x80000123
+	cp /etc/hosts $remote_dir/file &
+	local pid=$!
+	sleep 1
+
+	fail_nodf mds1
+
+	wait $pid || error "cp failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 133 "check resend of ongoing requests for lwp during failover"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

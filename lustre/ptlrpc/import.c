@@ -1228,7 +1228,16 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 imp->imp_last_replay_transno = 0;
 		imp->imp_replay_cursor = &imp->imp_committed_list;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
-        } else {
+	} else if ((ocd->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0 &&
+		   !imp->imp_invalid) {
+
+		obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
+		DEBUG_REQ(D_HA, request, "%s: lwp recover",
+			  imp->imp_obd->obd_name);
+		imp->imp_remote_handle =
+			*lustre_msg_get_handle(request->rq_repmsg);
+		IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+	} else {
                 DEBUG_REQ(D_HA, request, "%s: evicting (reconnect/recover flags"
                           " not set: %x)", imp->imp_obd->obd_name, msg_flags);
                 imp->imp_remote_handle =

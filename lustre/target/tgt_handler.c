@@ -799,7 +799,8 @@ int tgt_request_handle(struct ptlrpc_request *req)
 	LASSERTF(h->th_opc == opc, "opcode mismatch %d != %d\n",
 		 h->th_opc, opc);
 
-	if (CFS_FAIL_CHECK_ORSET(request_fail_id, CFS_FAIL_ONCE))
+	if ((cfs_fail_val == 0 || cfs_fail_val == opc) &&
+	     CFS_FAIL_CHECK_ORSET(request_fail_id, CFS_FAIL_ONCE))
 		GOTO(out, rc = 0);
 
 	rc = lustre_msg_check_version(msg, h->th_version);

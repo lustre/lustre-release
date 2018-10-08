@@ -1965,17 +1965,17 @@ test_106() { # LU-1789
 	touch $DIR2/$tfile || error "failed to create empty file"
 	replay_barrier $SINGLEMDS
 
-	$LCTL set_param debug=console
+	$LCTL set_param debug=ha
 	$LCTL clear
 	facet_failover $SINGLEMDS
 
-	# lightweight connection must be evicted
+	# lightweight goes through LUSTRE_IMP_RECOVER during failover
 	touch -c $DIR2/$tfile || true
 	$LCTL dk $TMP/lustre-log-$TESTNAME.log
-	evicted=`awk '/This client was evicted by .*MDT0000/ {
+	recovered=`awk '/MDT0000-mdc-[0-9a-f]*: lwp recover/ {
 				      print;
 		      }' $TMP/lustre-log-$TESTNAME.log`
-	[ -z "$evicted" ] && error "lightweight client not evicted by mds"
+	[ -z "$recovered" ] && error "lightweight client was not recovered"
 
 	# and all operations performed by lightweight client should be
 	# synchronous, so the file created before mds restart should be there
