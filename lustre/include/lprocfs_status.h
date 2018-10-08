@@ -571,7 +571,6 @@ extern int lprocfs_obd_seq_create(struct obd_device *dev, const char *name,
 
 /* Generic callbacks */
 extern int lprocfs_uuid_seq_show(struct seq_file *m, void *data);
-extern int lprocfs_name_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_conn_uuid_seq_show(struct seq_file *m, void *data);
 ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf);
@@ -957,8 +956,6 @@ static inline int lprocfs_obd_setup(struct obd_device *dev, bool uuid_only)
 static inline int lprocfs_obd_cleanup(struct obd_device *dev)
 { return 0; }
 static inline int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
-{ return 0; }
-static inline int lprocfs_name_seq_show(struct seq_file *m, void *data)
 { return 0; }
 static inline int lprocfs_server_seq_show(struct seq_file *m, void *data)
 { return 0; }

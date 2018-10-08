@@ -1345,9 +1345,6 @@ static const char *ra_stat_string[] = {
 	[RA_STAT_FAILED_REACH_END] = "failed to reach end"
 };
 
-LPROC_SEQ_FOPS_RO_TYPE(llite, name);
-LPROC_SEQ_FOPS_RO_TYPE(llite, uuid);
-
 int ll_debugfs_register_super(struct super_block *sb, const char *name)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
@@ -1457,59 +1454,18 @@ out_proc:
 	RETURN(err);
 }
 
-int lprocfs_ll_register_obd(struct super_block *sb, const char *obdname)
-{
-	struct lprocfs_vars lvars[2];
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	struct obd_device *obd;
-	struct proc_dir_entry *dir;
-	char name[MAX_STRING_SIZE + 1];
-	int err;
-	ENTRY;
-
-	memset(lvars, 0, sizeof(lvars));
-
-	name[MAX_STRING_SIZE] = '\0';
-	lvars[0].name = name;
-
-	LASSERT(sbi != NULL);
-	LASSERT(obdname != NULL);
-
-	obd = class_name2obd(obdname);
-
-	LASSERT(obd != NULL);
-	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-	LASSERT(obd->obd_type->typ_name != NULL);
-
-	dir = proc_mkdir(obd->obd_type->typ_name, sbi->ll_proc_root);
-	if (dir == NULL)
-		GOTO(out, err = -ENOMEM);
-
-	snprintf(name, MAX_STRING_SIZE, "common_name");
-	lvars[0].fops = &llite_name_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
-	if (err)
-		GOTO(out, err);
-
-	snprintf(name, MAX_STRING_SIZE, "uuid");
-	lvars[0].fops = &llite_uuid_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
-	if (err)
-		GOTO(out, err);
-
-out:
-	if (err) {
-		lprocfs_remove(&sbi->ll_proc_root);
-		lprocfs_free_stats(&sbi->ll_ra_stats);
-		lprocfs_free_stats(&sbi->ll_stats);
-	}
-	RETURN(err);
-}
-
 void ll_debugfs_unregister_super(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	if (sbi->ll_dt_obd)
+		sysfs_remove_link(&sbi->ll_kset.kobj,
+				  sbi->ll_dt_obd->obd_type->typ_name);
+
+	if (sbi->ll_md_obd)
+		sysfs_remove_link(&sbi->ll_kset.kobj,
+				  sbi->ll_md_obd->obd_type->typ_name);
 
 	kobject_put(lsi->lsi_kobj);
 

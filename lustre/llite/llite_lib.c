@@ -169,20 +169,19 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                     struct vfsmount *mnt)
 {
 	struct inode *root = NULL;
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct obd_device *obd;
-        struct obd_statfs *osfs = NULL;
-        struct ptlrpc_request *request = NULL;
-        struct obd_connect_data *data = NULL;
-        struct obd_uuid *uuid;
-        struct md_op_data *op_data;
-        struct lustre_md lmd;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct obd_statfs *osfs = NULL;
+	struct ptlrpc_request *request = NULL;
+	struct obd_connect_data *data = NULL;
+	struct obd_uuid *uuid;
+	struct md_op_data *op_data;
+	struct lustre_md lmd;
 	u64 valid;
-        int size, err, checksum;
-        ENTRY;
+	int size, err, checksum;
 
-        obd = class_name2obd(md);
-        if (!obd) {
+	ENTRY;
+	sbi->ll_md_obd = class_name2obd(md);
+	if (!sbi->ll_md_obd) {
                 CERROR("MD %s: not setup or attached\n", md);
                 RETURN(-EINVAL);
         }
@@ -278,7 +277,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	data->ocd_brw_size = MD_MAX_BRW_SIZE;
 
-        err = obd_connect(NULL, &sbi->ll_md_exp, obd, &sbi->ll_sb_uuid, data, NULL);
+	err = obd_connect(NULL, &sbi->ll_md_exp, sbi->ll_md_obd,
+			  &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x14f, "An MDT (md %s) is performing "
                                    "recovery, of which this client is not a "
@@ -391,8 +391,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		}
 	}
 
-	obd = class_name2obd(dt);
-	if (!obd) {
+	sbi->ll_dt_obd = class_name2obd(dt);
+	if (!sbi->ll_dt_obd) {
 		CERROR("DT %s: not setup or attached\n", dt);
 		GOTO(out_md_fid, err = -ENODEV);
 	}
@@ -459,13 +459,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	       "ocd_grant: %d\n", data->ocd_connect_flags,
 	       data->ocd_version, data->ocd_grant);
 
-	obd->obd_upcall.onu_owner = &sbi->ll_lco;
-	obd->obd_upcall.onu_upcall = cl_ocd_update;
+	sbi->ll_dt_obd->obd_upcall.onu_owner = &sbi->ll_lco;
+	sbi->ll_dt_obd->obd_upcall.onu_upcall = cl_ocd_update;
 
 	data->ocd_brw_size = DT_MAX_BRW_SIZE;
 
-	err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, data,
-			  NULL);
+	err = obd_connect(NULL, &sbi->ll_dt_exp, sbi->ll_dt_obd,
+			  &sbi->ll_sb_uuid, data, NULL);
 	if (err == -EBUSY) {
 		LCONSOLE_ERROR_MSG(0x150, "An OST (dt %s) is performing "
 				   "recovery, of which this client is not a "
@@ -622,14 +622,21 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (osfs != NULL)
 		OBD_FREE_PTR(osfs);
 
-	if (sbi->ll_proc_root != NULL) {
-		err = lprocfs_ll_register_obd(sb, dt);
+	if (sbi->ll_dt_obd) {
+		err = sysfs_create_link(&sbi->ll_kset.kobj,
+					&sbi->ll_dt_obd->obd_kset.kobj,
+					sbi->ll_dt_obd->obd_type->typ_name);
 		if (err < 0) {
 			CERROR("%s: could not register %s in llite: rc = %d\n",
 			       dt, ll_get_fsname(sb, NULL, 0), err);
 			err = 0;
 		}
-		err = lprocfs_ll_register_obd(sb, md);
+	}
+
+	if (sbi->ll_md_obd) {
+		err = sysfs_create_link(&sbi->ll_kset.kobj,
+					&sbi->ll_md_obd->obd_kset.kobj,
+					sbi->ll_md_obd->obd_type->typ_name);
 		if (err < 0) {
 			CERROR("%s: could not register %s in llite: rc = %d\n",
 			       md, ll_get_fsname(sb, NULL, 0), err);
@@ -646,11 +653,13 @@ out_lock_cn_cb:
 out_dt:
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
+	sbi->ll_dt_obd = NULL;
 out_md_fid:
 	obd_fid_fini(sbi->ll_md_exp->exp_obd);
 out_md:
 	obd_disconnect(sbi->ll_md_exp);
 	sbi->ll_md_exp = NULL;
+	sbi->ll_md_obd = NULL;
 out:
 	if (data != NULL)
 		OBD_FREE_PTR(data);

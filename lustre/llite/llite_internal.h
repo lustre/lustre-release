@@ -486,6 +486,8 @@ struct ll_sb_info {
         struct obd_uuid           ll_sb_uuid;
         struct obd_export        *ll_md_exp;
         struct obd_export        *ll_dt_exp;
+	struct obd_device	 *ll_md_obd;
+	struct obd_device	 *ll_dt_obd;
         struct proc_dir_entry*    ll_proc_root;
         struct lu_fid             ll_root_fid; /* root object fid */
 
@@ -719,7 +721,6 @@ void cl_put_grouplock(struct ll_grouplock *lg);
 
 /* llite/lproc_llite.c */
 #ifdef CONFIG_PROC_FS
-int lprocfs_ll_register_obd(struct super_block *sb, const char *obdname);
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
 extern struct lprocfs_vars lprocfs_llite_obd_vars[];
 #else
