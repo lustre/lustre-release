@@ -329,18 +329,26 @@ static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 	struct lu_fid *fid;
 	struct mdt_object *obj = NULL;
 	struct md_object *child = NULL;
+	struct lu_env _env;
 	int rc;
 	ENTRY;
+
+	if (!env) {
+		rc = lu_env_init(&_env, LCT_DT_THREAD);
+		if (rc)
+			RETURN(rc);
+		env = &_env;
+	}
 
 	mdt = ldlm_lock_to_ns(lock)->ns_lvbp;
 	if (IS_LQUOTA_RES(lock->l_resource)) {
 		if (mdt->mdt_qmt_dev == NULL)
-			RETURN(0);
+			GOTO(out_env, rc = 0);
 
 		/* call lvbo fill function of quota master */
 		rc = qmt_hdls.qmth_lvbo_fill(mdt->mdt_qmt_dev, lock, lvb,
 					     *lvblen);
-		RETURN(rc);
+		GOTO(out_env, rc);
 	}
 
 	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
@@ -437,7 +445,9 @@ out_put:
 out:
 	if (rc < 0 && rc != -ERANGE)
 		rc = 0;
-
+out_env:
+	if (env == &_env)
+		lu_env_fini(&_env);
 	RETURN(rc);
 }
 

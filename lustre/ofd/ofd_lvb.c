@@ -88,12 +88,10 @@ static int ofd_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
 	struct ofd_device	*ofd;
 	struct ofd_object	*fo;
 	struct ofd_thread_info	*info;
-	int			 rc = 0;
-
+	struct lu_env _env;
+	int rc = 0;
 	ENTRY;
 
-	LASSERT(env);
-	info = ofd_info(env);
 	LASSERT(res);
 	LASSERT(mutex_is_locked(&res->lr_lvb_mutex));
 
@@ -106,10 +104,18 @@ static int ofd_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_LVB))
 		RETURN(-ENOMEM);
 
+	if (!env) {
+		rc = lu_env_init(&_env, LCT_DT_THREAD);
+		if (rc)
+			RETURN(rc);
+		env = &_env;
+	}
+
 	OBD_ALLOC_PTR(lvb);
 	if (lvb == NULL)
 		GOTO(out, rc = -ENOMEM);
 
+	info = ofd_info(env);
 	res->lr_lvb_data = lvb;
 	res->lr_lvb_len = sizeof(*lvb);
 
@@ -144,6 +150,8 @@ out_lvb:
 		OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
 out:
 	/* Don't free lvb data on lookup error */
+	if (env && env == &_env)
+		lu_env_fini(&_env);
 	return rc;
 }
 
