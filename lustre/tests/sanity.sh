@@ -19808,6 +19808,38 @@ test_807() {
 }
 run_test 807 "verify LSOM syncing tool"
 
+check_som_nologged()
+{
+	local lines=$($LFS changelog $FSNAME-MDT0000 |
+		grep 'x=trusted.som' | wc -l)
+	[ $lines -ne 0 ] && error "trusted.som xattr is logged in Changelogs"
+}
+
+test_808() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ] &&
+		skip "Need MDS version at least 2.11.55" && return
+
+	# Registration step
+	changelog_register || error "changelog_register failed"
+
+	touch $DIR/$tfile || error "touch $tfile failed"
+	check_som_nologged
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1048576 count=1 ||
+		error "write $tfile failed"
+	check_som_nologged
+
+	$TRUNCATE $DIR/$tfile 1234
+	check_som_nologged
+
+	$TRUNCATE $DIR/$tfile 1048576
+	check_som_nologged
+
+	# Deregistration step
+	changelog_deregister || error "changelog_deregister failed"
+}
+run_test 808 "Check trusted.som xattr not logged in Changelogs"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

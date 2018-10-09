@@ -1087,6 +1087,7 @@ enum la_valid {
 /********* Changelogs **********/
 /** Changelog record types */
 enum changelog_rec_type {
+	CL_NONE     = -1,
 	CL_MARK     = 0,
 	CL_CREATE   = 1,  /* namespace */
 	CL_MKDIR    = 2,  /* namespace */
