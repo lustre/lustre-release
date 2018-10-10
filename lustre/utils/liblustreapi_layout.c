@@ -2602,6 +2602,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 	uint64_t pos = start;
 	int i;
 	int rc;
+	int rc2 = 0;
 
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc)
@@ -2680,6 +2681,11 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 				 * meanings.
 				 */
 				comp_array[i].lrc_synced = true;
+				llapi_error(LLAPI_MSG_ERROR, written,
+					    "component %u not synced\n",
+					    comp_array[i].lrc_id);
+				if (rc2 == 0)
+					rc2 = (int)written;
 				continue;
 			}
 			assert(written == to_write2);
@@ -2692,11 +2698,17 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 	free(buf);
 
 	if (rc < 0) {
+		/* fatal error happens */
 		for (i = 0; i < comp_size; i++)
 			comp_array[i].lrc_synced = false;
 		return rc;
 	}
 
+	/**
+	 * no fatal error happens, each lrc_synced tells whether the component
+	 * has been resync successfully (note: we'd reverse the value to
+	 * reflect its true meaning.
+	 */
 	for (i = 0; i < comp_size; i++) {
 		comp_array[i].lrc_synced = !comp_array[i].lrc_synced;
 		if (comp_array[i].lrc_synced && pos & (page_size - 1)) {
@@ -2707,6 +2719,9 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 		}
 	}
 
-	/* partially successful is successful */
-	return 0;
+	/**
+	 * returns the first error code for partially successful resync if
+	 * possible.
+	 */
+	return rc2;
 }
