@@ -1515,13 +1515,13 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    struct lu_attr *la, uint64_t parent,
 		    nvlist_t *xattr)
 {
-	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
-	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
-	uint64_t	 gen;
-	uint64_t	 crtime[2];
-	timestruc_t	 now;
-	int		 cnt;
-	int		 rc;
+	sa_bulk_attr_t *bulk = osd_oti_get(env)->oti_attr_bulk;
+	struct osa_attr *osa = &osd_oti_get(env)->oti_osa;
+	uint64_t gen;
+	uint64_t crtime[2];
+	inode_timespec_t now;
+	int cnt;
+	int rc;
 	char *dxattr = NULL;
 	size_t sa_size;
 

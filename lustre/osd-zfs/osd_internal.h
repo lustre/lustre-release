@@ -1096,4 +1096,8 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 #define dmu_tx_mark_netfree(tx)
 #endif
 
+#ifndef HAVE_ZFS_INODE_TIMESPEC
+#define inode_timespec_t timestruc_t
+#endif
+
 #endif /* _OSD_INTERNAL_H */

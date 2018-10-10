@@ -426,12 +426,12 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 		       struct osd_thandle *oh)
 {
-	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
-	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
+	sa_bulk_attr_t *bulk = osd_oti_get(env)->oti_attr_bulk;
+	struct osa_attr *osa = &osd_oti_get(env)->oti_osa;
 	struct lu_buf *lb = &osd_oti_get(env)->oti_xattr_lbuf;
 	struct osd_device *osd = osd_obj2dev(obj);
 	uint64_t crtime[2], gen;
-	timestruc_t now;
+	inode_timespec_t now;
 	size_t size;
 	int rc, cnt;
 

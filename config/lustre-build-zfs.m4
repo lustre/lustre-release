@@ -670,6 +670,19 @@ your distribution.
 			AC_DEFINE(HAVE_DMU_TX_MARK_NETFREE, 1,
 				[Have dmu_tx_mark_netfree])
 		])
+		dnl #
+		dnl # ZFS 0.7.10 changes timestruc_t to inode_timespec_t
+		dnl #
+		LB_CHECK_COMPILE([if SPL has 'inode_timespec_t'],
+		zfs_have_inode_timespec, [
+			#include <sys/fs/zfs.h>
+		],[
+			inode_timespec_t now;
+			gethrestime(&now);
+		],[
+			AC_DEFINE(HAVE_ZFS_INODE_TIMESPEC, 1,
+				[Have inode_timespec_t])
+		])
 	])
 
 	AS_IF([test "x$enable_zfs" = xyes], [
