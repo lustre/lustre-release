@@ -2169,7 +2169,7 @@ test_22() {
 
 	echo "Verify if quota is enabled"
 	local qtype1=$(mdt_quota_type)
-	[ $qtype1 != $qtype] && error "mdt quota setting is lost"
+	[ $qtype1 != $qtype ] && error "mdt quota setting is lost"
 	qtype=$(ost_quota_type)
 	[ $qtype1 != $qtype ] && error "ost quota setting is lost"
 
