@@ -5909,6 +5909,9 @@ test_56ab() { # LU-10705
 run_test 56ab "lfs find --blocks"
 
 test_56ba() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.50) ] &&
+		skip "Need MDS version at least 2.10.50"
+
 	# Create composite files with one component
 	local dir=$DIR/$tdir
 
