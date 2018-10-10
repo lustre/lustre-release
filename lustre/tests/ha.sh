@@ -180,6 +180,9 @@ declare     ha_power_delay=${POWER_DELAY:-60}
 declare     ha_failback_delay=${DELAY:-5}
 declare     ha_failback_cmd=${FAILBACK:-""}
 declare     ha_stripe_params=${STRIPEPARAMS:-"-c 0"}
+declare     ha_dir_stripe_count=${DSTRIPECOUNT:-"1"}
+declare     ha_mdt_index=${MDTINDEX:-"0"}
+declare     ha_mdt_index_random=${MDTINDEXRAND:-false}
 declare -a  ha_clients
 declare -a  ha_servers
 declare -a  ha_victims
@@ -394,7 +397,14 @@ ha_repeat_mpi_load()
 	local machines="-machinefile $ha_machine_file"
 	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
 		{
-		ha_on $client mkdir -p "$dir" &&
+		local mdt_index
+		if $ha_mdt_index_random && [ $ha_mdt_index -ne 0 ]; then
+			mdt_index=$(ha_rand $ha_mdt_index)
+		else
+			mdt_index=$ha_mdt_index
+		fi
+		ha_on $client $LFS mkdir -i$mdt_index -c$ha_dir_stripe_count "$dir" &&
+		ha_on $client $LFS getdirstripe "$dir" &&
 		ha_on $client chmod a+xwr $dir &&
 		ha_on $client "su mpiuser sh -c \" $mpirun $ha_mpirun_options \
 			-np $((${#ha_clients[@]} * mpi_threads_per_client )) \
