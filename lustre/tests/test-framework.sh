@@ -6413,7 +6413,7 @@ remote_nodes_list () {
 all_mdts_nodes () {
 	local host
 	local failover_host
-	local nodes="${mds_HOST} ${mdsfailover_HOST}"
+	local nodes
 	local nodes_sort
 	local i
 
@@ -6423,6 +6423,7 @@ all_mdts_nodes () {
 		nodes="$nodes ${!host} ${!failover_host}"
 	done
 
+	[ -n "$nodes" ] || nodes="${mds_HOST} ${mdsfailover_HOST}"
 	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
 	echo -n $nodes_sort
 }
@@ -6431,7 +6432,7 @@ all_mdts_nodes () {
 all_osts_nodes () {
 	local host
 	local failover_host
-	local nodes="${ost_HOST} ${ostfailover_HOST}"
+	local nodes=
 	local nodes_sort
 	local i
 
@@ -6441,6 +6442,7 @@ all_osts_nodes () {
 		nodes="$nodes ${!host} ${!failover_host}"
 	done
 
+	[ -n "$nodes" ] || nodes="${ost_HOST} ${ostfailover_HOST}"
 	nodes_sort=$(for i in $nodes; do echo $i; done | sort -u)
 	echo -n $nodes_sort
 }
