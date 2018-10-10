@@ -196,23 +196,30 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 	if (rc)
 		GOTO(out_lock, rc);
 
-	rc = mo_xattr_get(info->mti_env, mdt_object_child(o), &LU_BUF_NULL,
-			  XATTR_NAME_LOV);
-	if (rc < 0 && rc != -ENODATA)
-		GOTO(out_lock, rc);
-	else if (rc > 0) /* has LOV EA*/
-		tmp_ma->ma_valid |= MA_LOV;
+	/**
+	 * If mti_big_lmm_used is set, it indicates that mti_big_lmm
+	 * should contain valid LOV EA data, and can be used directly.
+	 */
+	if (!info->mti_big_lmm_used) {
+		rc = mdt_big_xattr_get(info, o, XATTR_NAME_LOV);
+		if (rc < 0 && rc != -ENODATA)
+			GOTO(out_lock, rc);
 
-	rc = 0;
+		/* No LOV EA */
+		if (rc == -ENODATA)
+			GOTO(out_lock, rc = 0);
+
+		rc = 0;
+	}
+
 	/**
 	 * Check if a Lazy Size-on-MDS update is needed. Skip the
-	 * file with no LOV EA or unlink files.
+	 * file with no LOV EA, unlink files or DoM-only file.
 	 * MDS only updates LSOM of the file if the size or block
 	 * size is being increased or the file is being truncated.
 	 */
-	if ((tmp_ma->ma_valid & MA_LOV) &&
-	    !(tmp_ma->ma_valid & MA_INODE &&
-	      tmp_ma->ma_attr.la_nlink == 0)) {
+	if (mdt_lmm_dom_entry(info->mti_big_lmm) != LMM_DOM_ONLY &&
+	    !(tmp_ma->ma_valid & MA_INODE && tmp_ma->ma_attr.la_nlink == 0)) {
 		__u64 size;
 		__u64 blocks;
 		bool changed = false;

@@ -19994,6 +19994,33 @@ test_808() {
 }
 run_test 808 "Check trusted.som xattr not logged in Changelogs"
 
+check_som_nodata()
+{
+	$LFS getsom $1
+	[[ $? -eq 61 ]] || error "DoM-only file $1 has SOM xattr"
+}
+
+test_809() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS version at least 2.11.56" && return
+
+	$LFS setstripe -E 1M -L mdt $DIR/$tfile ||
+		error "failed to create DoM-only file $DIR/$tfile"
+	touch $DIR/$tfile || error "touch $tfile failed"
+	check_som_nodata $DIR/$tfile
+
+	dd if=/dev/zero of=$DIR/$tfile bs=2048 count=1 ||
+		error "write $tfile failed"
+	check_som_nodata $DIR/$tfile
+
+	$TRUNCATE $DIR/$tfile 1234
+	check_som_nodata $DIR/$tfile
+
+	$TRUNCATE $DIR/$tfile 4097
+	check_som_nodata $DIR/$file
+}
+run_test 809 "Verify no SOM xattr store for DoM-only files"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

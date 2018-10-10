@@ -9447,8 +9447,9 @@ static int lfs_getsom(int argc, char **argv)
 	attrs = (void *)buf;
 	rc = lgetxattr(path, "trusted.som", attrs, sizeof(buf));
 	if (rc < 0) {
-		fprintf(stderr, "%s failed to get som xattr: %s\n", argv[0],
-			strerror(-rc));
+		rc = -errno;
+		fprintf(stderr, "%s failed to get som xattr: %s (%d)\n",
+			argv[0], strerror(errno), errno);
 		return rc;
 	}
 
