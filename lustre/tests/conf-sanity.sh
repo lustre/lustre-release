@@ -4172,10 +4172,12 @@ thread_sanity() {
 	setmodopts $modname "$oldvalue"
 
 	# Check that $opts took
-	tmin=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min")
-	tmax=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_max")
+	tmin=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_min" ||
+		echo 0)
+	tmax=$(do_facet $facet "$LCTL get_param -n ${paramp}.threads_max" ||
+		echo 0)
 	tstarted=$(do_facet $facet \
-		   "$LCTL get_param -n ${paramp}.threads_started")
+		   "$LCTL get_param -n ${paramp}.threads_started" || echo 0)
 	lassert 28 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' ||
 		return $?
 	cleanup
