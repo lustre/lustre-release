@@ -176,6 +176,7 @@ declare -a  ha_status_files
 declare     ha_machine_file=$ha_tmp_dir/machine_file
 declare     ha_power_down_cmd=${POWER_DOWN:-"pm -0"}
 declare     ha_power_up_cmd=${POWER_UP:-"pm -1"}
+declare     ha_power_delay=${POWER_DELAY:-60}
 declare     ha_failback_delay=${DELAY:-5}
 declare     ha_failback_cmd=${FAILBACK:-""}
 declare     ha_stripe_params=${STRIPEPARAMS:-"-c 0"}
@@ -570,17 +571,31 @@ ha_wait_loads()
 ha_power_down()
 {
 	local nodes=$1
+	local rc=1
+	local i
 
 	ha_info "Powering down $nodes"
-	$ha_power_down_cmd $nodes
+	for i in $(seq 1 5); do
+		$ha_power_down_cmd $nodes && rc=0 && break
+		sleep $ha_power_delay
+	done
+
+	[ $rc -eq 0 ] || ha_info "Failed Powering down in $i attempts"
 }
 
 ha_power_up()
 {
 	local nodes=$1
+	local rc=1
+	local i
 
 	ha_info "Powering up $nodes"
-	$ha_power_up_cmd $nodes
+	for i in $(seq 1 5); do
+		$ha_power_up_cmd $nodes && rc=0 && break
+		sleep $ha_power_delay
+	done
+
+	[ $rc -eq 0 ] || ha_info "Failed Powering up in $i attempts"
 }
 
 #
