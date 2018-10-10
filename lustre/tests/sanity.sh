@@ -11813,6 +11813,12 @@ test_115() {
 	echo "Starting with $OSTIO_pre threads"
 	local thread_max=$((OSTIO_pre * 2))
 	local rpc_in_flight=$((thread_max * 2))
+	# this is limited to OSC_MAX_RIF_MAX (256)
+	[ $rpc_in_flight -gt 256 ] && rpc_in_flight=256
+	thread_max=$((rpc_in_flight / 2))
+	[ $thread_max -le $OSTIO_pre ] && skip "Too many ost_io threads" &&
+		return
+
 	# Number of I/O Process proposed to be started.
 	local nfiles
 	local facets=$(get_facets OST)
