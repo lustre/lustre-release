@@ -45,9 +45,8 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	chmod -R 777 $TESTDIR
 
 	sync
-	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
-		-np $((NUM_CLIENTS * THREADS_PER_CLIENT)) $IOR -a POSIX -b 1g \
-		-o $TESTDIR/IOR-file -s 1 -t 1m -v -w -r 1>$LOG &
+
+	run_ior fpp $TESTDIR  1>$LOG &
 
 	load_pid=$!
 	wait $load_pid

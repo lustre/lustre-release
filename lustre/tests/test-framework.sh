@@ -2638,6 +2638,18 @@ start_client_load() {
 			LFS=$LFS \
 			LCTL=$LCTL \
 			FSNAME=$FSNAME \
+			MPIRUN=$MPIRUN \
+			MPIRUN_OPTIONS=\\\"$MPIRUN_OPTIONS\\\" \
+			MACHINEFILE_OPTION=\\\"$MACHINEFILE_OPTION\\\" \
+			num_clients=$(get_node_count ${CLIENTS//,/ }) \
+			ior_THREADS=$ior_THREADS ior_iteration=$ior_iteration \
+			ior_blockSize=$ior_blockSize \
+			ior_blockUnit=$ior_blockUnit \
+			ior_xferSize=$ior_xferSize ior_type=$ior_type \
+			ior_DURATION=$ior_DURATION \
+			ior_stripe_params=\\\"$ior_stripe_params\\\" \
+			ior_custom_params=\\\"$ior_custom_param\\\" \
+			mpi_ior_custom_threads=$mpi_ior_custom_threads \
 			run_${load}.sh" &
 	local ppid=$!
 	log "Started client load: ${load} on $client"
