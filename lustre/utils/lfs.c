@@ -8963,6 +8963,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	int idx;
 	int fd;
 	int rc;
+	int rc2;
 
 	if (stat(fname, &stbuf) < 0) {
 		fprintf(stderr, "%s: cannot stat file '%s': %s.\n",
@@ -9027,7 +9028,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		else
 			fprintf(stderr,
 			    "%s: '%s' llapi_lease_get_ext resync failed: %s.\n",
-				progname, fname, strerror(errno));
+				progname, fname, strerror(-rc));
 		goto free_layout;
 	}
 
@@ -9051,10 +9052,10 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	rc = llapi_mirror_resync_many(fd, layout, comp_array, comp_size,
 				      start, end);
 	if (rc < 0)
-		fprintf(stderr, "%s: '%s' llapi_mirror_resync_many: %d.\n",
-			progname, fname, rc);
+		fprintf(stderr, "%s: '%s' llapi_mirror_resync_many: %s.\n",
+			progname, fname, strerror(-rc));
 
-	/* prepare ioc for lease put */
+	/* need to do the lease unlock even resync fails */
 	ioc->lil_mode = LL_LEASE_UNLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC_DONE;
 	ioc->lil_count = 0;
@@ -9065,19 +9066,19 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		}
 	}
 
-	rc = llapi_lease_set(fd, ioc);
-	if (rc <= 0) {
-		if (rc == 0) /* lost lease lock */
-			rc = -EBUSY;
-		fprintf(stderr, "%s: resync file '%s' failed: %s.\n",
-			progname, fname, strerror(errno));
-		goto free_layout;
-	}
+	rc2 = llapi_lease_set(fd, ioc);
 	/**
 	 * llapi_lease_set returns lease mode when it request to unlock
-	 * the lease lock
+	 * the lease lock.
 	 */
-	rc = 0;
+	if (rc2 <= 0) {
+		/* rc2 == 0 means lost lease lock */
+		if (rc2 == 0 && rc == 0)
+			rc = -EBUSY;
+		fprintf(stderr, "%s: resync file '%s' failed: %s.\n",
+			progname, fname,
+			rc2 == 0 ? "lost lease lock" : strerror(-rc2));
+	}
 
 free_layout:
 	llapi_layout_free(layout);
