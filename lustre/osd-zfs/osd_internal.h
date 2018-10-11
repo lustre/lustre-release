@@ -99,6 +99,10 @@
 
 #define OSD_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
+#ifndef HAVE_ZFS_REFCOUNT_ADD
+#define zfs_refcount_add	refcount_add
+#endif
+
 extern struct dt_body_operations osd_body_scrub_ops;
 
 /**
@@ -925,7 +929,7 @@ static inline int osd_sa_handle_get(struct osd_object *obj)
 				    SA_HDL_PRIVATE, &obj->oo_sa_hdl);
 	if (rc)
 		return rc;
-	refcount_add(&dn->dn_bonus->db_holds, osd_obj_tag);
+	zfs_refcount_add(&dn->dn_bonus->db_holds, osd_obj_tag);
 	return 0;
 }
 

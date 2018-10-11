@@ -683,6 +683,18 @@ your distribution.
 			AC_DEFINE(HAVE_ZFS_INODE_TIMESPEC, 1,
 				[Have inode_timespec_t])
 		])
+		dnl # ZFS 0.7.12/0.8.x uses zfs_refcount_add() instead of
+		dnl # refcount_add().
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'zfs_refcount_add'],
+		zfs_refcount_add, [
+			#include <sys/refcount.h>
+		],[
+			zfs_refcount_add((zfs_refcount_t *) NULL, NULL);
+		],[
+			AC_DEFINE(HAVE_ZFS_REFCOUNT_ADD, 1,
+				[Have zfs_refcount_add])
+		])
 	])
 
 	AS_IF([test "x$enable_zfs" = xyes], [
