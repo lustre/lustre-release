@@ -607,6 +607,11 @@ enum lov_comp_md_entry_flags {
 /* The flags are for mirrors */
 #define LCME_MIRROR_FLAGS	(LCME_FL_NOSYNC)
 
+/* These flags have meaning when set in a default layout and will be inherited
+ * from the default/template layout set on a directory.
+ */
+#define LCME_TEMPLATE_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC)
+
 /* the highest bit in obdo::o_layout_version is used to mark if the file is
  * being resynced. */
 #define LU_LAYOUT_RESYNC	LCME_FL_NEG

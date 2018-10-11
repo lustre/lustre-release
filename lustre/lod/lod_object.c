@@ -4466,7 +4466,6 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 
 	for (i = 0; i < comp_cnt; i++) {
 		struct lod_layout_component *lod_comp;
-		struct lu_extent *ext;
 		char *pool;
 
 		lod_comp = &lds->lds_def_comp_entries[i];
@@ -4480,8 +4479,12 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		if (composite) {
 			v1 = (struct lov_user_md *)((char *)comp_v1 +
 					comp_v1->lcm_entries[i].lcme_offset);
-			ext = &comp_v1->lcm_entries[i].lcme_extent;
-			lod_comp->llc_extent = *ext;
+			lod_comp->llc_extent =
+					comp_v1->lcm_entries[i].lcme_extent;
+			/* We only inherit certain flags from the layout */
+			lod_comp->llc_flags =
+					comp_v1->lcm_entries[i].lcme_flags &
+					LCME_TEMPLATE_FLAGS;
 		}
 
 		if (v1->lmm_pattern != LOV_PATTERN_RAID0 &&
@@ -4624,8 +4627,9 @@ static void lod_striping_from_default(struct lod_object *lo,
 			struct lod_layout_component *def_comp =
 						&lds->lds_def_comp_entries[i];
 
-			CDEBUG(D_LAYOUT, "Inherite from default: size:%hu "
-			       "nr:%u offset:%u pattern %#x %s\n",
+			CDEBUG(D_LAYOUT, "Inherit from default: flags=%#x "
+			       "size=%hu nr=%u offset=%u pattern=%#x pool=%s\n",
+			       def_comp->llc_flags,
 			       def_comp->llc_stripe_size,
 			       def_comp->llc_stripe_count,
 			       def_comp->llc_stripe_offset,

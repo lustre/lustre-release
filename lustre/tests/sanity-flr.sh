@@ -674,10 +674,19 @@ test_0g() {
 run_test 0g "lfs mirror create flags support"
 
 test_0h() {
-	local tf=$DIR/$tfile
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local ids
+	local i
 
-	$LFS mirror create -N -E 1M -S 1M --flags=prefer -E eof -N2 $tf ||
-		error "create mirrored file $tf failed"
+	# create parent directory
+	test_mkdir $td || error "mkdir $td failed"
+
+	$LFS setstripe -N -E 1M -S 1M --flags=prefer -E eof -N2 $td ||
+		error "set default mirrored layout on directory $td failed"
+
+	# verify flags are inherited from the directory
+	touch $tf
 
 	verify_comp_attr lcme_flags $tf 0x10001 prefer
 	verify_comp_attr lcme_flags $tf 0x10002 prefer
