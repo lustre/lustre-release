@@ -8672,6 +8672,18 @@ test_120() { # LU-11130
 }
 run_test 120 "cross-target rename should not create bad symlinks"
 
+test_121(){
+	stopall
+	start_mgsmds || error "MGS MDS Start failed"
+	fail mgs
+	stop_mds || error "Stopping MDSes failed"
+	#failback
+	start_mds
+	fail mgs
+	stop_mds || error "Stopping MDSes failed"
+}
+run_test 121 "failover MGS"
+
 test_122a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	[[ "$OST1_VERSION" -ge $(version_code 2.11.53) ]] ||
@@ -9029,10 +9041,7 @@ test_123F() {
 	echo "Writeconf"
 	writeconf_all
 	echo "Remounting"
-	mountmgs
-	mountmds
-	mountoss
-	mountcli
+	setup_noconfig
 
 	# Reapply the config from before
 	echo "Setting configuration parameters"
