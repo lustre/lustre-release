@@ -3826,6 +3826,9 @@ check_striped_dir_110()
 
 test_110a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3845,6 +3848,9 @@ run_test 110a "DNE: create striped dir, fail MDT1"
 
 test_110b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3868,6 +3874,9 @@ run_test 110b "DNE: create striped dir, fail MDT1 and client"
 
 test_110c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3888,6 +3897,9 @@ run_test 110c "DNE: create striped dir, fail MDT2"
 
 test_110d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3911,6 +3923,9 @@ run_test 110d "DNE: create striped dir, fail MDT2 and client"
 
 test_110e() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3935,6 +3950,9 @@ run_test 110e "DNE: create striped dir, uncommit on MDT2, fail client/MDT1/MDT2"
 
 test_110f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3956,6 +3974,9 @@ run_test 110f "DNE: create striped dir, fail MDT1/MDT2"
 
 test_110g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3980,6 +4001,9 @@ run_test 110g "DNE: create striped dir, uncommit on MDT1, fail client/MDT1/MDT2"
 
 test_111a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -3999,6 +4023,9 @@ run_test 111a "DNE: unlink striped dir, fail MDT1"
 
 test_111b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4021,6 +4048,9 @@ run_test 111b "DNE: unlink striped dir, fail MDT2"
 
 test_111c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4043,6 +4073,9 @@ run_test 111c "DNE: unlink striped dir, uncommit on MDT1, fail client/MDT1/MDT2"
 
 test_111d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4066,6 +4099,9 @@ run_test 111d "DNE: unlink striped dir, uncommit on MDT2, fail client/MDT1/MDT2"
 
 test_111e() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4085,6 +4121,9 @@ run_test 111e "DNE: unlink striped dir, uncommit on MDT2, fail MDT1/MDT2"
 
 test_111f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4104,6 +4143,9 @@ run_test 111f "DNE: unlink striped dir, uncommit on MDT1, fail MDT1/MDT2"
 
 test_111g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4146,6 +4188,9 @@ test_112_check() {
 
 test_112a() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4165,6 +4210,9 @@ run_test 112a "DNE: cross MDT rename, fail MDT1"
 
 test_112b() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4185,6 +4233,9 @@ run_test 112b "DNE: cross MDT rename, fail MDT2"
 
 test_112c() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4205,6 +4256,9 @@ run_test 112c "DNE: cross MDT rename, fail MDT3"
 
 test_112d() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4225,6 +4279,9 @@ run_test 112d "DNE: cross MDT rename, fail MDT4"
 
 test_112e() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4246,6 +4303,9 @@ run_test 112e "DNE: cross MDT rename, fail MDT1 and MDT2"
 
 test_112f() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4267,6 +4327,9 @@ run_test 112f "DNE: cross MDT rename, fail MDT1 and MDT3"
 
 test_112g() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4288,6 +4351,9 @@ run_test 112g "DNE: cross MDT rename, fail MDT1 and MDT4"
 
 test_112h() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4309,6 +4375,9 @@ run_test 112h "DNE: cross MDT rename, fail MDT2 and MDT3"
 
 test_112i() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4330,6 +4399,9 @@ run_test 112i "DNE: cross MDT rename, fail MDT2 and MDT4"
 
 test_112j() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4351,6 +4423,9 @@ run_test 112j "DNE: cross MDT rename, fail MDT3 and MDT4"
 
 test_112k() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4373,6 +4448,9 @@ run_test 112k "DNE: cross MDT rename, fail MDT1,MDT2,MDT3"
 
 test_112l() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4395,6 +4473,9 @@ run_test 112l "DNE: cross MDT rename, fail MDT1,MDT2,MDT4"
 
 test_112m() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4417,6 +4498,9 @@ run_test 112m "DNE: cross MDT rename, fail MDT1,MDT3,MDT4"
 
 test_112n() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
@@ -4439,6 +4523,9 @@ run_test 112n "DNE: cross MDT rename, fail MDT2,MDT3,MDT4"
 
 test_115() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
+
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
 		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
