@@ -2302,6 +2302,210 @@ test_31() {
 }
 run_test 31 "client mount option '-o network'"
 
+cleanup_32() {
+	# umount client
+	zconf_umount_clients ${clients_arr[0]} $MOUNT
+
+	# disable sk flavor enforcement on MGS
+	set_rule _mgs any any null
+
+	# stop gss daemon on MGS
+	if ! combined_mgs_mds ; then
+		send_sigint $mgs_HOST lsvcgssd
+	fi
+
+	# re-mount client
+	MOUNT_OPTS=$(add_sk_mntflag $MOUNT_OPTS)
+	mountcli
+
+	restore_to_default_flavor
+}
+
+test_32() {
+	if ! $SHARED_KEY; then
+		skip "need shared key feature for this test"
+	fi
+
+	stack_trap cleanup_32 EXIT
+
+	# restore to default null flavor
+	save_flvr=$SK_FLAVOR
+	SK_FLAVOR=null
+	restore_to_default_flavor || error "cannot set null flavor"
+	SK_FLAVOR=$save_flvr
+
+	# umount client
+	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if $(grep -q $MOUNT' ' /proc/mounts); then
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# start gss daemon on MGS
+	if combined_mgs_mds ; then
+		send_sigint $mds_HOST lsvcgssd
+	fi
+	start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
+
+	# add mgs key type and MGS NIDs in key on MGS
+	do_nodes $mgs_HOST "lgss_sk -t mgs,server -g $MGSNID -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on MGS"
+
+	# load modified key file on MGS
+	do_nodes $mgs_HOST "lgss_sk -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not load keyfile on MGS"
+
+	# add MGS NIDs in key on client
+	do_nodes ${clients_arr[0]} "lgss_sk -g $MGSNID -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on MGS"
+
+	# set perms for per-nodemap keys else permission denied
+	do_nodes $(comma_list $(all_nodes)) \
+		 "keyctl show | grep lustre | cut -c1-11 |
+				sed -e 's/ //g;' |
+				xargs -IX keyctl setperm X 0x3f3f3f3f"
+
+	# re-mount client with mgssec=skn
+	save_opts=$MOUNT_OPTS
+	if [ -z "$MOUNT_OPTS" ]; then
+		MOUNT_OPTS="-o mgssec=skn"
+	else
+		MOUNT_OPTS="$MOUNT_OPTS,mgssec=skn"
+	fi
+	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
+		error "mount ${clients_arr[0]} with mgssec=skn failed"
+	MOUNT_OPTS=$save_opts
+
+	# umount client
+	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+		error "umount ${clients_arr[0]} failed"
+
+	# enforce ska flavor on MGS
+	set_rule _mgs any any ska
+
+	# re-mount client without mgssec
+	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS &&
+		error "mount ${clients_arr[0]} without mgssec should fail"
+
+	# re-mount client with mgssec=skn
+	save_opts=$MOUNT_OPTS
+	if [ -z "$MOUNT_OPTS" ]; then
+		MOUNT_OPTS="-o mgssec=skn"
+	else
+		MOUNT_OPTS="$MOUNT_OPTS,mgssec=skn"
+	fi
+	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS &&
+		error "mount ${clients_arr[0]} with mgssec=skn should fail"
+	MOUNT_OPTS=$save_opts
+
+	# re-mount client with mgssec=ska
+	save_opts=$MOUNT_OPTS
+	if [ -z "$MOUNT_OPTS" ]; then
+		MOUNT_OPTS="-o mgssec=ska"
+	else
+		MOUNT_OPTS="$MOUNT_OPTS,mgssec=ska"
+	fi
+	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
+		error "mount ${clients_arr[0]} with mgssec=ska failed"
+	MOUNT_OPTS=$save_opts
+
+	exit 0
+}
+run_test 32 "check for mgssec"
+
+cleanup_33() {
+	# disable sk flavor enforcement
+	set_rule $FSNAME any cli2mdt null
+	wait_flavor cli2mdt null
+
+	# umount client
+	zconf_umount_clients ${clients_arr[0]} $MOUNT
+
+	# stop gss daemon on MGS
+	if ! combined_mgs_mds ; then
+		send_sigint $mgs_HOST lsvcgssd
+	fi
+
+	# re-mount client
+	MOUNT_OPTS=$(add_sk_mntflag $MOUNT_OPTS)
+	mountcli
+
+	restore_to_default_flavor
+}
+
+test_33() {
+	if ! $SHARED_KEY; then
+		skip "need shared key feature for this test"
+	fi
+
+	stack_trap cleanup_33 EXIT
+
+	# restore to default null flavor
+	save_flvr=$SK_FLAVOR
+	SK_FLAVOR=null
+	restore_to_default_flavor || error "cannot set null flavor"
+	SK_FLAVOR=$save_flvr
+
+	# umount client
+	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if $(grep -q $MOUNT' ' /proc/mounts); then
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# start gss daemon on MGS
+	if combined_mgs_mds ; then
+		send_sigint $mds_HOST lsvcgssd
+	fi
+	start_gss_daemons $mgs_HOST "$LSVCGSSD -vvv -s -g"
+
+	# add mgs key type and MGS NIDs in key on MGS
+	do_nodes $mgs_HOST "lgss_sk -t mgs,server -g $MGSNID -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on MGS"
+
+	# load modified key file on MGS
+	do_nodes $mgs_HOST "lgss_sk -l $SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not load keyfile on MGS"
+
+	# add MGS NIDs in key on client
+	do_nodes ${clients_arr[0]} "lgss_sk -g $MGSNID -m \
+				$SK_PATH/$FSNAME.key >/dev/null 2>&1" ||
+		error "could not modify keyfile on MGS"
+
+	# set perms for per-nodemap keys else permission denied
+	do_nodes $(comma_list $(all_nodes)) \
+		 "keyctl show | grep lustre | cut -c1-11 |
+				sed -e 's/ //g;' |
+				xargs -IX keyctl setperm X 0x3f3f3f3f"
+
+	# re-mount client with mgssec=skn
+	save_opts=$MOUNT_OPTS
+	if [ -z "$MOUNT_OPTS" ]; then
+		MOUNT_OPTS="-o mgssec=skn"
+	else
+		MOUNT_OPTS="$MOUNT_OPTS,mgssec=skn"
+	fi
+	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
+		error "mount ${clients_arr[0]} with mgssec=skn failed"
+	MOUNT_OPTS=$save_opts
+
+	# enforce ska flavor for cli2mdt
+	set_rule $FSNAME any cli2mdt ska
+	wait_flavor cli2mdt ska
+
+	# check error message
+	$LCTL dk | grep "faked source" &&
+		error "MGS connection srpc flags incorrect"
+
+	exit 0
+}
+run_test 33 "correct srpc flags for MGS connection"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

@@ -253,7 +253,7 @@ __u32 gss_import_sec_context_sk(rawobj_t *inbuf, struct gss_ctx *gss_context)
 
 	gss_context->internal_ctx_id = skc;
 	CDEBUG(D_SEC, "successfully imported sk%s context\n",
-	       privacy ? "pi" : "i");
+	       privacy ? " (with privacy)" : "");
 
 	return GSS_S_COMPLETE;
 

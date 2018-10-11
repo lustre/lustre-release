@@ -857,6 +857,13 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
 		break;
 	case LUSTRE_SP_CLI:
 		rsci.ctx.gsc_usr_root = 1;
+		break;
+	case LUSTRE_SP_MGS:
+		/* by convention, all 3 set to 1 means MGS */
+		rsci.ctx.gsc_usr_mds = 1;
+		rsci.ctx.gsc_usr_oss = 1;
+		rsci.ctx.gsc_usr_root = 1;
+		break;
 	default:
 		break;
 	}
