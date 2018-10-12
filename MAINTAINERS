@@ -44,7 +44,7 @@ Descriptions of section entries:
 	   Supported:	Someone is actually paid to look after this.
 	   Maintained:	Someone actually looks after it.
 	   Odd Fixes:	It has a maintainer but they don't have time to do
-			much other than throw the odd patch in. See below..
+			much other than throw the odd patch in. See below.
 	   Orphan:	No current maintainer [but maybe you could take the
 			role as you write your new code].
 	   Obsolete:	Old code. Something tagged obsolete generally means
@@ -160,6 +160,11 @@ F:	lustre/osd-zfs/osd_quota*.[ch]
 F:	lustre/tests/sanity-quota.sh
 F:	lustre/doc/*quota*.[13]
 K:	(quota|QUOTA)
+
+Lustre tests
+R:	James Nunez <jnunez@whamcloud.com>
+S:	Supported
+F:	lustre/tests/
 
 Lustre user documentation
 R:	Andreas Dilger <adilger@whamcloud.com>
