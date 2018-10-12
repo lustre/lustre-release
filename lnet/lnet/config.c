@@ -482,7 +482,7 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 		ni->ni_net_ns = NULL;
 
 	ni->ni_last_alive = ktime_get_real_seconds();
-	ni->ni_state |= LNET_NI_STATE_INIT;
+	ni->ni_state = LNET_NI_STATE_INIT;
 	list_add_tail(&ni->ni_netlist, &net->net_ni_added);
 
 	/*

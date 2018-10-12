@@ -1899,7 +1899,7 @@ lnet_clear_zombies_nis_locked(struct lnet_net *net)
 		list_del_init(&ni->ni_netlist);
 		/* the ni should be in deleting state. If it's not it's
 		 * a bug */
-		LASSERT(ni->ni_state & LNET_NI_STATE_DELETING);
+		LASSERT(ni->ni_state == LNET_NI_STATE_DELETING);
 		cfs_percpt_for_each(ref, j, ni->ni_refs) {
 			if (*ref == 0)
 				continue;
@@ -1948,8 +1948,7 @@ lnet_shutdown_lndni(struct lnet_ni *ni)
 
 	lnet_net_lock(LNET_LOCK_EX);
 	lnet_ni_lock(ni);
-	ni->ni_state |= LNET_NI_STATE_DELETING;
-	ni->ni_state &= ~LNET_NI_STATE_ACTIVE;
+	ni->ni_state = LNET_NI_STATE_DELETING;
 	lnet_ni_unlock(ni);
 	lnet_ni_unlink_locked(ni);
 	lnet_incr_dlc_seq();
@@ -2087,8 +2086,7 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 	}
 
 	lnet_ni_lock(ni);
-	ni->ni_state |= LNET_NI_STATE_ACTIVE;
-	ni->ni_state &= ~LNET_NI_STATE_INIT;
+	ni->ni_state = LNET_NI_STATE_ACTIVE;
 	lnet_ni_unlock(ni);
 
 	/* We keep a reference on the loopback net through the loopback NI */

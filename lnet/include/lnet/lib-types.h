@@ -325,12 +325,17 @@ enum lnet_net_state {
 	LNET_NET_STATE_DELETING
 };
 
-#define LNET_NI_STATE_INIT		(1 << 0)
-#define LNET_NI_STATE_ACTIVE		(1 << 1)
-#define LNET_NI_STATE_FAILED		(1 << 2)
-#define LNET_NI_STATE_RECOVERY_PENDING	(1 << 3)
-#define LNET_NI_STATE_RECOVERY_FAILED	(1 << 4)
-#define LNET_NI_STATE_DELETING		(1 << 5)
+enum lnet_ni_state {
+	/* initial state when NI is created */
+	LNET_NI_STATE_INIT = 0,
+	/* set when NI is brought up */
+	LNET_NI_STATE_ACTIVE,
+	/* set when NI is being shutdown */
+	LNET_NI_STATE_DELETING,
+};
+
+#define LNET_NI_RECOVERY_PENDING	BIT(0)
+#define LNET_NI_RECOVERY_FAILED		BIT(1)
 
 enum lnet_stats_type {
 	LNET_STATS_TYPE_SEND = 0,
@@ -454,8 +459,11 @@ struct lnet_ni {
 	/* my health status */
 	struct lnet_ni_status	*ni_status;
 
-	/* NI FSM */
-	__u32			ni_state;
+	/* NI FSM. Protected by lnet_ni_lock() */
+	enum lnet_ni_state	ni_state;
+
+	/* Recovery state. Protected by lnet_ni_lock() */
+	__u32			ni_recovery_state;
 
 	/* per NI LND tunables */
 	struct lnet_lnd_tunables ni_lnd_tunables;
