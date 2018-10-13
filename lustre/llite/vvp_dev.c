@@ -355,7 +355,7 @@ int cl_sb_fini(struct super_block *sb)
 
 /****************************************************************************
  *
- * /proc/fs/lustre/llite/$MNT/dump_page_cache
+ * debugfs/lustre/llite/$MNT/dump_page_cache
  *
  ****************************************************************************/
 
@@ -426,7 +426,7 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 {
 	struct lu_device *dev = &priv->vsp_sbi->ll_cl->cd_lu_dev;
 
-	while(1) {
+	while (1) {
 		struct inode *inode;
 		struct page *vmpage;
 		int nr;
@@ -583,7 +583,7 @@ static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 	if (!priv)
 		return -ENOMEM;
 
-	priv->vsp_sbi = PDE_DATA(inode);
+	priv->vsp_sbi = inode->i_private;
 	priv->vsp_env = cl_env_get(&priv->vsp_refcheck);
 	priv->vsp_clob = NULL;
 	memset(&priv->vvp_id, 0, sizeof(priv->vvp_id));

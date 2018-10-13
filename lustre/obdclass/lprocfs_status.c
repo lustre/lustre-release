@@ -389,16 +389,6 @@ static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(uuid);
 
-int lprocfs_name_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *dev = data;
-
-	LASSERT(dev != NULL);
-	seq_printf(m, "%s\n", dev->obd_name);
-	return 0;
-}
-EXPORT_SYMBOL(lprocfs_name_seq_show);
-
 static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
 {

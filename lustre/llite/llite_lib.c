@@ -296,7 +296,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	 * can make sure the client can be mounted as long as MDT0 is
 	 * avaible */
 	err = obd_statfs(NULL, sbi->ll_md_exp, osfs,
-			ktime_get_seconds() -OBD_STATFS_CACHE_SECONDS,
+			ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 			OBD_STATFS_FOR_MDT0);
 	if (err)
 		GOTO(out_md_fid, err);
@@ -431,8 +431,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
 	/* OBD_CONNECT_CKSUM should always be set, even if checksums are
 	 * disabled by default, because it can still be enabled on the
-	 * fly via /proc. As a consequence, we still need to come to an
-	 * agreement on the supported algorithms at connect time */
+	 * fly via /sys. As a consequence, we still need to come to an
+	 * agreement on the supported algorithms at connect time
+	 */
 	data->ocd_connect_flags |= OBD_CONNECT_CKSUM;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CKSUM_ADLER_ONLY))
@@ -1029,20 +1030,20 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 
 	OBD_ALLOC_PTR(cfg);
 	if (cfg == NULL)
-		GOTO(out_free, err = -ENOMEM);
+		GOTO(out_free_cfg, err = -ENOMEM);
 
 	/* client additional sb info */
 	lsi->lsi_llsbi = sbi = ll_init_sbi();
 	if (!sbi)
-		GOTO(out_free, err = -ENOMEM);
+		GOTO(out_free_cfg, err = -ENOMEM);
 
 	err = ll_options(lsi->lsi_lmd->lmd_opts, sbi);
 	if (err)
-		GOTO(out_free, err);
+		GOTO(out_free_cfg, err);
 
 	err = super_setup_bdi_name(sb, "lustre-%p", sb);
 	if (err)
-		GOTO(out_free, err);
+		GOTO(out_free_cfg, err);
 
 #ifndef HAVE_DCACHE_LOCK
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
@@ -1069,8 +1070,9 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	}
 
 	/* Generate a string unique to this super, in case some joker tries
-	   to mount the same fs at two mount points.
-	   Use the address of the super itself.*/
+	 * to mount the same fs at two mount points.
+	 * Use the address of the super itself.
+	 */
 	cfg->cfg_instance = sb;
 	cfg->cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
 	cfg->cfg_callback = class_config_llog_handler;
@@ -1078,7 +1080,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	/* set up client obds */
 	err = lustre_process_log(sb, profilenm, cfg);
 	if (err < 0)
-		GOTO(out_proc, err);
+		GOTO(out_debugfs, err);
 
 	/* Profile set with LCFG_MOUNTOPT so we can find our mdc and osc obds */
 	lprof = class_get_profile(profilenm);
@@ -1086,7 +1088,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 		LCONSOLE_ERROR_MSG(0x156, "The client profile '%s' could not be"
 				   " read from the MGS.  Does that filesystem "
 				   "exist?\n", profilenm);
-		GOTO(out_proc, err = -EINVAL);
+		GOTO(out_debugfs, err = -EINVAL);
 	}
 	CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm,
 	       lprof->lp_md, lprof->lp_dt);
@@ -1094,34 +1096,38 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	dt_len = strlen(lprof->lp_dt) + instlen + 2;
 	OBD_ALLOC(dt, dt_len);
 	if (!dt)
-		GOTO(out_proc, err = -ENOMEM);
+		GOTO(out_profile, err = -ENOMEM);
 	snprintf(dt, dt_len - 1, "%s-%p", lprof->lp_dt, cfg->cfg_instance);
 
 	md_len = strlen(lprof->lp_md) + instlen + 2;
 	OBD_ALLOC(md, md_len);
 	if (!md)
-		GOTO(out_proc, err = -ENOMEM);
+		GOTO(out_free_dt, err = -ENOMEM);
 	snprintf(md, md_len - 1, "%s-%p", lprof->lp_md, cfg->cfg_instance);
 
 	/* connections, registrations, sb setup */
 	err = client_common_fill_super(sb, md, dt, mnt);
 	if (err < 0)
-		GOTO(out_proc, err);
+		GOTO(out_free_md, err);
 
 	sbi->ll_client_common_fill_super_succeeded = 1;
 
-out_proc:
-	if (err < 0)
-		ll_debugfs_unregister_super(sb);
-out_free:
+out_free_md:
 	if (md)
 		OBD_FREE(md, md_len);
+out_free_dt:
 	if (dt)
 		OBD_FREE(dt, dt_len);
-	if (lprof != NULL)
+out_profile:
+	if (lprof)
 		class_put_profile(lprof);
+out_debugfs:
+	if (err < 0)
+		ll_debugfs_unregister_super(sb);
+out_free_cfg:
 	if (cfg)
 		OBD_FREE_PTR(cfg);
+
 	if (err)
 		ll_put_super(sb);
 	else if (sbi->ll_flags & LL_SBI_VERBOSE)

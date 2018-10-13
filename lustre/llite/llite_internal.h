@@ -499,16 +499,16 @@ struct lustre_client_ocd {
 struct ll_sb_info {
 	/* this protects pglist and ra_info.  It isn't safe to
 	 * grab from interrupt contexts */
-	spinlock_t		  ll_lock;
-	spinlock_t		  ll_pp_extent_lock; /* pp_extent entry*/
-	spinlock_t		  ll_process_lock; /* ll_rw_process_info */
-        struct obd_uuid           ll_sb_uuid;
-        struct obd_export        *ll_md_exp;
-        struct obd_export        *ll_dt_exp;
-	struct obd_device	 *ll_md_obd;
-	struct obd_device	 *ll_dt_obd;
-        struct proc_dir_entry*    ll_proc_root;
-        struct lu_fid             ll_root_fid; /* root object fid */
+	spinlock_t		 ll_lock;
+	spinlock_t		 ll_pp_extent_lock; /* pp_extent entry*/
+	spinlock_t		 ll_process_lock; /* ll_rw_process_info */
+	struct obd_uuid		 ll_sb_uuid;
+	struct obd_export	*ll_md_exp;
+	struct obd_export	*ll_dt_exp;
+	struct obd_device	*ll_md_obd;
+	struct obd_device	*ll_dt_obd;
+	struct dentry		*ll_debugfs_entry;
+	struct lu_fid		 ll_root_fid; /* root object fid */
 
         int                       ll_flags;
 	unsigned int		  ll_umounting:1,
@@ -684,7 +684,6 @@ struct ll_file_data {
 	__u32 fd_layout_version;
 };
 
-extern struct proc_dir_entry *proc_lustre_fs_root;
 void llite_tunables_unregister(void);
 int llite_tunables_register(void);
 
@@ -739,17 +738,9 @@ int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 void cl_put_grouplock(struct ll_grouplock *lg);
 
 /* llite/lproc_llite.c */
-#ifdef CONFIG_PROC_FS
-void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
-extern struct lprocfs_vars lprocfs_llite_obd_vars[];
-#else
-static inline int ll_debugs_register_super(struct super_block *sb,
-					   const char *name)
-{ return 0; }
-static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
-#endif
 int ll_debugfs_register_super(struct super_block *sb, const char *name);
 void ll_debugfs_unregister_super(struct super_block *sb);
+void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
 
 enum {
 	LPROC_LL_DIRTY_HITS,
