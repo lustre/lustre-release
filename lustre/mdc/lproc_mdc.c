@@ -222,6 +222,7 @@ static ssize_t contention_seconds_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(contention_seconds);
 
+LUSTRE_ATTR(mds_conn_uuid, 0444, conn_uuid_show, NULL);
 LUSTRE_RO_ATTR(conn_uuid);
 
 LUSTRE_WO_ATTR(ping);
@@ -526,6 +527,7 @@ static struct attribute *mdc_attrs[] = {
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_max_mod_rpcs_in_flight.attr,
 	&lustre_attr_contention_seconds.attr,
+	&lustre_attr_mds_conn_uuid.attr,
 	&lustre_attr_conn_uuid.attr,
 	&lustre_attr_ping.attr,
 	NULL,

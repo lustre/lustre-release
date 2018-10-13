@@ -566,26 +566,6 @@ int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_server_uuid_seq_show);
 
-int lprocfs_conn_uuid_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = data;
-	struct ptlrpc_connection *conn;
-	int rc = 0;
-
-	LASSERT(obd != NULL);
-
-	LPROCFS_CLIMP_CHECK(obd);
-	conn = obd->u.cli.cl_import->imp_connection;
-	if (conn && obd->u.cli.cl_import)
-		seq_printf(m, "%s\n", conn->c_remote_uuid.uuid);
-	else
-		seq_printf(m, "%s\n", "<none>");
-
-	LPROCFS_CLIMP_EXIT(obd);
-	return rc;
-}
-EXPORT_SYMBOL(lprocfs_conn_uuid_seq_show);
-
 /** add up per-cpu counters */
 
 /**

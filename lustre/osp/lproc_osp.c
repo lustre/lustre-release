@@ -763,10 +763,32 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(ping);
 
+ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_device *lu = dt2lu_dev(dt);
+	struct obd_device *obd = lu->ld_obd;
+	struct ptlrpc_connection *conn;
+	ssize_t count;
+
+	LPROCFS_CLIMP_CHECK(obd);
+	conn = obd->u.cli.cl_import->imp_connection;
+	if (conn && obd->u.cli.cl_import)
+		count = sprintf(buf, "%s\n", conn->c_remote_uuid.uuid);
+	else
+		count = sprintf(buf, "%s\n", "<none>");
+
+	LPROCFS_CLIMP_EXIT(obd);
+	return count;
+}
+
+LUSTRE_ATTR(ost_conn_uuid, 0444, osp_conn_uuid_show, NULL);
+LUSTRE_ATTR(mdt_conn_uuid, 0444, osp_conn_uuid_show, NULL);
+
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, connect_flags);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, server_uuid);
-LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, conn_uuid);
-
 LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, timeouts);
 
 LPROC_SEQ_FOPS_RW_TYPE(osp, import);
@@ -916,8 +938,6 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	  .fops =	&osp_connect_flags_fops		},
 	{ .name =	"ost_server_uuid",
 	  .fops =	&osp_server_uuid_fops		},
-	{ .name =	"ost_conn_uuid",
-	  .fops =	&osp_conn_uuid_fops		},
 	{ .name =	"timeouts",
 	  .fops =	&osp_timeouts_fops		},
 	{ .name =	"import",
@@ -936,8 +956,6 @@ static struct lprocfs_vars lprocfs_osp_md_vars[] = {
 	  .fops =	&osp_connect_flags_fops		},
 	{ .name =	"mdt_server_uuid",
 	  .fops =	&osp_server_uuid_fops		},
-	{ .name =	"mdt_conn_uuid",
-	  .fops =	&osp_conn_uuid_fops		},
 	{ .name =	"timeouts",
 	  .fops =	&osp_timeouts_fops		},
 	{ .name =	"import",
@@ -955,6 +973,7 @@ static struct attribute *osp_obd_attrs[] = {
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_max_rpcs_in_progress.attr,
 	&lustre_attr_maxage.attr,
+	&lustre_attr_ost_conn_uuid.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_prealloc_status.attr,
 	&lustre_attr_prealloc_next_id.attr,
@@ -980,6 +999,7 @@ static struct attribute *osp_md_attrs[] = {
 	&lustre_attr_max_rpcs_in_flight.attr,
 	&lustre_attr_max_rpcs_in_progress.attr,
 	&lustre_attr_maxage.attr,
+	&lustre_attr_mdt_conn_uuid.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_prealloc_status.attr,
 	NULL,
