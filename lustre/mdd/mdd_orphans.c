@@ -214,6 +214,9 @@ int mdd_orphan_declare_delete(const struct lu_env *env, struct mdd_object *obj,
         if (rc)
                 return rc;
 
+	if (!lu_object_exists(&obj->mod_obj.mo_lu))
+		return -ENOENT;
+
         if (S_ISDIR(mdd_object_type(obj))) {
                 rc = mdo_declare_ref_del(env, obj, th);
                 if (rc)
