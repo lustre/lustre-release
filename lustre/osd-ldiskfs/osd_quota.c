@@ -555,6 +555,7 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 	struct qsd_instance *qsd;
 	struct inode *inode = NULL;
 	int i, rc = 0, crd;
+	__u8 res = qi->lqi_is_blk ? LQUOTA_RES_DT : LQUOTA_RES_MD;
 	bool found = false;
 
 	ENTRY;
@@ -566,10 +567,14 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 	dev = osd_dt_dev(oh->ot_super.th_dev);
 	LASSERT(dev != NULL);
 
-	qsd = dev->od_quota_slave;
+	if (res == LQUOTA_RES_DT)
+		qsd = dev->od_quota_slave_dt;
+	else
+		qsd = dev->od_quota_slave_md;
 
 	for (i = 0; i < oh->ot_id_cnt; i++) {
 		if (oh->ot_id_array[i] == qi->lqi_id.qid_uid &&
+		    oh->ot_id_res[i] == res &&
 		    oh->ot_id_types[i] == qi->lqi_type) {
 			found = true;
 			break;
@@ -617,6 +622,7 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 
 		oh->ot_id_array[i] = qi->lqi_id.qid_uid;
 		oh->ot_id_types[i] = qi->lqi_type;
+		oh->ot_id_res[i] = res;
 		oh->ot_id_cnt++;
 	}
 
@@ -698,9 +704,11 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	qi->lqi_type = PRJQUOTA;
 	rcp = osd_declare_qid(env, oh, qi, obj, true, flags);
 
-	if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS))
+	if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS)) {
+		CDEBUG(D_ERROR, "force to ignore quota flags =%d\n", *flags);
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcp = 0;
+	}
 #endif
 
 	RETURN(rcu ? rcu : (rcg ? rcg : rcp));

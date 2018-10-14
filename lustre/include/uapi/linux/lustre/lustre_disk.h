@@ -62,6 +62,8 @@
 #define MGS_NIDTBL_DIR		"NIDTBL_VERSIONS"
 #define QMT_DIR			"quota_master"
 #define QSD_DIR			"quota_slave"
+#define QSD_DIR_DT		"quota_slave_dt"
+#define QSD_DIR_MD		"quota_slave_md"
 #define HSM_ACTIONS		"hsm_actions"
 #define LFSCK_DIR		"LFSCK"
 #define LFSCK_BOOKMARK		"lfsck_bookmark"

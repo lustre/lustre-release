@@ -732,8 +732,15 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 					oa->o_flags = OBD_FL_NO_GRPQUOTA;
 			}
 
+			if (lnb[0].lnb_flags & OBD_BRW_OVER_PRJQUOTA) {
+				if (oa->o_valid & OBD_MD_FLFLAGS)
+					oa->o_flags |= OBD_FL_NO_PRJQUOTA;
+				else
+					oa->o_flags = OBD_FL_NO_PRJQUOTA;
+			}
+
 			oa->o_valid |= OBD_MD_FLFLAGS | OBD_MD_FLUSRQUOTA |
-				       OBD_MD_FLGRPQUOTA;
+				       OBD_MD_FLGRPQUOTA | OBD_MD_FLPRJQUOTA;
 		}
 	} else if (cmd == OBD_BRW_READ) {
 		/* If oa != NULL then mdt_preprw_read updated the inode

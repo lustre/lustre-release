@@ -1158,7 +1158,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	if (attr && attr->la_valid & LA_UID) {
 		/* quota enforcement for user */
 		if (attr->la_uid != obj->oo_attr.la_uid) {
-			rc = qsd_transfer(env, osd->od_quota_slave,
+			rc = qsd_transfer(env, osd_def_qsd(osd),
 					  &oh->ot_quota_trans, USRQUOTA,
 					  obj->oo_attr.la_uid, attr->la_uid,
 					  bspace, &info->oti_qi, true);
@@ -1169,7 +1169,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	if (attr && attr->la_valid & LA_GID) {
 		/* quota enforcement for group */
 		if (attr->la_gid != obj->oo_attr.la_gid) {
-			rc = qsd_transfer(env, osd->od_quota_slave,
+			rc = qsd_transfer(env, osd_def_qsd(osd),
 					  &oh->ot_quota_trans, GRPQUOTA,
 					  obj->oo_attr.la_gid, attr->la_gid,
 					  bspace, &info->oti_qi,
@@ -1201,7 +1201,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 
 		/* quota enforcement for project */
 		if (attr->la_projid != obj->oo_attr.la_projid) {
-			rc = qsd_transfer(env, osd->od_quota_slave,
+			rc = qsd_transfer(env, osd_def_qsd(osd),
 					  &oh->ot_quota_trans, PRJQUOTA,
 					  obj->oo_attr.la_projid,
 					  attr->la_projid, bspace,

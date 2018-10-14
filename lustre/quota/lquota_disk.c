@@ -50,6 +50,7 @@
 
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
+#include <obd_class.h>
 #include "lquota_internal.h"
 
 #define LQUOTA_MODE (S_IFREG | S_IRUGO | S_IWUSR)
@@ -381,7 +382,7 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 {
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_object		*slv_idx;
-	int				 rc;
+	int				 rc, type;
 	ENTRY;
 
 	LASSERT(uuid != NULL);
@@ -394,19 +395,29 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 	if (rc)
 		RETURN(ERR_PTR(rc));
 
+	if (lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev))
+		type = LDD_F_SV_TYPE_MDT;
+	else
+		type = LDD_F_SV_TYPE_OST;
+
 	/* Slave indexes uses the FID_SEQ_QUOTA sequence since they can be read
 	 * through the network */
 	qti->qti_fid.f_seq = FID_SEQ_QUOTA;
 	qti->qti_fid.f_ver = 0;
 	if (local) {
-		int type;
+		int pool_type, qtype;
 
-		rc = lquota_extract_fid(glb_fid, NULL, NULL, &type);
+		rc = lquota_extract_fid(glb_fid, NULL, &pool_type, &qtype);
 		if (rc)
 			RETURN(ERR_PTR(rc));
 
 		/* use predefined fid in the reserved oid list */
-		qti->qti_fid.f_oid = qtype2slv_oid(type);
+		if ((type == LDD_F_SV_TYPE_MDT && pool_type == LQUOTA_RES_MD) ||
+		    (type == LDD_F_SV_TYPE_OST && pool_type == LQUOTA_RES_DT))
+			qti->qti_fid.f_oid = qtype2slv_oid(qtype);
+		else
+			qti->qti_fid.f_oid = pool_type << 16 |
+							qtype2slv_oid(qtype);
 
 		slv_idx = local_index_find_or_create_with_fid(env, dev,
 							      &qti->qti_fid,

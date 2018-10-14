@@ -176,7 +176,7 @@ struct qsd_instance;
  * enforcement. Arguments are documented where each function is defined.  */
 
 struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
-			      struct proc_dir_entry *);
+			      struct proc_dir_entry *, bool is_md);
 int qsd_prepare(const struct lu_env *, struct qsd_instance *);
 int qsd_start(const struct lu_env *, struct qsd_instance *);
 void qsd_fini(const struct lu_env *, struct qsd_instance *);
@@ -212,13 +212,13 @@ struct lquota_id_info {
 	bool			 lqi_is_blk;
 };
 
-/* Since we enforce only inode quota in meta pool (MDTs), and block quota in
- * data pool (OSTs), there are at most 4 quota ids being enforced in a single
- * transaction, which is chown transaction:
+/* With the DoM, both inode quota in meta pool and block quota in data pool
+ * will be enforced at MDT, there are at most 4 quota ids being enforced in
+ * a single transaction for inode and block quota, which is chown transaction:
  * original uid and gid, new uid and gid.
  *
  * This value might need to be revised when directory quota is added.  */
-#define QUOTA_MAX_TRANSIDS    4
+#define QUOTA_MAX_TRANSIDS    8
 
 /* all qids involved in a single transaction */
 struct lquota_trans {

@@ -641,7 +641,7 @@ EXPORT_SYMBOL(qsd_fini);
  */
 struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 			      struct dt_device *dev,
-			      struct proc_dir_entry *osd_proc)
+			      struct proc_dir_entry *osd_proc, bool is_md)
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
 	struct qsd_instance	*qsd;
@@ -668,6 +668,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	INIT_LIST_HEAD(&qsd->qsd_adjust_list);
 	qsd->qsd_prepared = false;
 	qsd->qsd_started = false;
+	qsd->qsd_is_md = is_md;
 
 	/* copy service name */
 	if (strlcpy(qsd->qsd_svname, svname, sizeof(qsd->qsd_svname))
@@ -704,8 +705,18 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	mutex_unlock(&qsd->qsd_fsinfo->qfs_mutex);
 
 	/* register procfs directory */
-	qsd->qsd_proc = lprocfs_register(QSD_DIR, osd_proc,
-					 lprocfs_quota_qsd_vars, qsd);
+	if (qsd->qsd_is_md)
+		qsd->qsd_proc = lprocfs_register(QSD_DIR_MD, osd_proc,
+						 lprocfs_quota_qsd_vars, qsd);
+	else
+		qsd->qsd_proc = lprocfs_register(QSD_DIR_DT, osd_proc,
+						 lprocfs_quota_qsd_vars, qsd);
+
+	if (type == LDD_F_SV_TYPE_MDT && qsd->qsd_is_md)
+		lprocfs_add_symlink(QSD_DIR, osd_proc, "./%s", QSD_DIR_MD);
+	else if (type == LDD_F_SV_TYPE_OST && !qsd->qsd_is_md)
+		lprocfs_add_symlink(QSD_DIR, osd_proc, "./%s", QSD_DIR_DT);
+
 	if (IS_ERR(qsd->qsd_proc)) {
 		rc = PTR_ERR(qsd->qsd_proc);
 		qsd->qsd_proc = NULL;
@@ -758,12 +769,10 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 
 	/* Record whether this qsd instance is managing quota enforcement for a
 	 * MDT (i.e. inode quota) or OST (block quota) */
-	if (lu_device_is_md(qsd->qsd_dev->dd_lu_dev.ld_site->ls_top_dev)) {
-		qsd->qsd_is_md = true;
+	if (qsd->qsd_is_md)
 		qsd->qsd_sync_threshold = LQUOTA_LEAST_QUNIT(LQUOTA_RES_MD);
-	} else {
+	else
 		qsd->qsd_sync_threshold = LQUOTA_LEAST_QUNIT(LQUOTA_RES_DT);
-	}
 
 	/* look-up on-disk directory for the quota slave */
 	qsd->qsd_root = lquota_disk_dir_find_create(env, qsd->qsd_dev, NULL,

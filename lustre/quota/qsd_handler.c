@@ -810,7 +810,7 @@ out_flags:
 static inline bool qid_equal(struct lquota_id_info *q1,
 			     struct lquota_id_info *q2)
 {
-	if (q1->lqi_type != q2->lqi_type)
+	if (q1->lqi_is_blk != q2->lqi_is_blk || q1->lqi_type != q2->lqi_type)
 		return false;
 	return (q1->lqi_id.qid_uid == q2->lqi_id.qid_uid) ? true : false;
 }
@@ -874,8 +874,6 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	for (i = 0; i < trans->lqt_id_cnt; i++) {
 		if (qid_equal(qi, &trans->lqt_ids[i])) {
 			found = true;
-			/* make sure we are not mixing inodes & blocks */
-			LASSERT(trans->lqt_ids[i].lqi_is_blk == qi->lqi_is_blk);
 			break;
 		}
 	}

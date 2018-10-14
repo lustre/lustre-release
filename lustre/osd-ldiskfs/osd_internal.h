@@ -300,8 +300,11 @@ struct osd_device {
 	char                      od_svname[MAX_OBD_NAME];
 	char                      od_mntdev[MAX_OBD_NAME];
 
-	/* quota slave instance */
-	struct qsd_instance      *od_quota_slave;
+	/* quota slave instance for inode */
+	struct qsd_instance      *od_quota_slave_md;
+
+	/* quota slave instance for block */
+	struct qsd_instance	 *od_quota_slave_dt;
 
 	/* osd seq instance */
 	struct lu_client_seq	*od_cl_seq;
@@ -326,6 +329,14 @@ struct osd_device {
 	/* T10PI type, zero if not supported  */
 	enum osd_t10_type	 od_t10_type;
 };
+
+static inline struct qsd_instance *osd_def_qsd(struct osd_device *osd)
+{
+	if (osd->od_is_ost)
+		return osd->od_quota_slave_dt;
+	else
+		return osd->od_quota_slave_md;
+}
 
 enum osd_full_scrub_ratio {
 	/* Trigger OI scrub to scan the whole device directly. */
@@ -384,11 +395,15 @@ struct osd_thandle {
 	/* Link to the device, for debugging. */
 	struct lu_ref_link      ot_dev_link;
 	unsigned int		ot_credits;
+
+	/* quota IDs related to the transaction */
 	unsigned short		ot_id_cnt;
-	__u8                    ot_id_types[OSD_MAX_UGID_CNT];
-	unsigned int		ot_remove_agents:1;
+	__u8			ot_id_res[OSD_MAX_UGID_CNT];
+	__u8			ot_id_types[OSD_MAX_UGID_CNT];
 	uid_t			ot_id_array[OSD_MAX_UGID_CNT];
 	struct lquota_trans    *ot_quota_trans;
+
+	unsigned int		ot_remove_agents:1;
 #if OSD_THANDLE_STATS
         /** time when this handle was allocated */
 	ktime_t oth_alloced;

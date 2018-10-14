@@ -1968,7 +1968,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	struct osd_thandle *oh;
 	struct osd_iobuf *iobuf = &oti->oti_iobuf;
 	struct osd_device *osd = osd_dt_dev(th->th_dev);
-	struct qsd_instance *qsd = osd->od_quota_slave;
+	struct qsd_instance *qsd = osd_def_qsd(osd);
 	struct lquota_trans *qtrans;
 	struct list_head truncates = LIST_HEAD_INIT(truncates);
 	int rc = 0, remove_agents = 0;
@@ -2093,9 +2093,9 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 
 	osd_index_fini(obj);
 	if (inode != NULL) {
-		struct qsd_instance	*qsd = osd_obj2dev(obj)->od_quota_slave;
-		qid_t			 uid = i_uid_read(inode);
-		qid_t			 gid = i_gid_read(inode);
+		struct qsd_instance *qsd = osd_def_qsd(osd_obj2dev(obj));
+		qid_t		     uid = i_uid_read(inode);
+		qid_t		     gid = i_gid_read(inode);
 
 		obj->oo_inode = NULL;
 		iput(inode);
@@ -7447,10 +7447,17 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 	ENTRY;
 
 	/* shutdown quota slave instance associated with the device */
-	if (o->od_quota_slave != NULL) {
-		struct qsd_instance *qsd = o->od_quota_slave;
+	if (o->od_quota_slave_md != NULL) {
+		struct qsd_instance *qsd = o->od_quota_slave_md;
 
-		o->od_quota_slave = NULL;
+		o->od_quota_slave_md = NULL;
+		qsd_fini(env, qsd);
+	}
+
+	if (o->od_quota_slave_dt != NULL) {
+		struct qsd_instance *qsd = o->od_quota_slave_dt;
+
+		o->od_quota_slave_dt = NULL;
 		qsd_fini(env, qsd);
 	}
 
@@ -7774,11 +7781,29 @@ static int osd_device_init0(const struct lu_env *env,
 	LASSERT(l->ld_site->ls_linkage.prev != NULL);
 
 	/* initialize quota slave instance */
-	o->od_quota_slave = qsd_init(env, o->od_svname, &o->od_dt_dev,
-				     o->od_proc_entry);
-	if (IS_ERR(o->od_quota_slave)) {
-		rc = PTR_ERR(o->od_quota_slave);
-		o->od_quota_slave = NULL;
+	/* currently it's no need to prepare qsd_instance_md for OST */
+	if (!o->od_is_ost) {
+		o->od_quota_slave_md = qsd_init(env, o->od_svname,
+						&o->od_dt_dev,
+						o->od_proc_entry, true);
+		if (IS_ERR(o->od_quota_slave_md)) {
+			rc = PTR_ERR(o->od_quota_slave_md);
+			o->od_quota_slave_md = NULL;
+			GOTO(out_procfs, rc);
+		}
+	}
+
+	o->od_quota_slave_dt = qsd_init(env, o->od_svname, &o->od_dt_dev,
+					o->od_proc_entry, false);
+
+	if (IS_ERR(o->od_quota_slave_dt)) {
+		if (o->od_quota_slave_md != NULL) {
+			qsd_fini(env, o->od_quota_slave_md);
+			o->od_quota_slave_md = NULL;
+		}
+
+		rc = PTR_ERR(o->od_quota_slave_dt);
+		o->od_quota_slave_dt = NULL;
 		GOTO(out_procfs, rc);
 	}
 
@@ -7901,14 +7926,17 @@ static int osd_recovery_complete(const struct lu_env *env,
 
 	ENTRY;
 
-	if (osd->od_quota_slave == NULL)
+	if (osd->od_quota_slave_md == NULL && osd->od_quota_slave_dt == NULL)
 		RETURN(0);
 
 	/*
 	 * start qsd instance on recovery completion, this notifies the quota
 	 * slave code that we are about to process new requests now
 	 */
-	rc = qsd_start(env, osd->od_quota_slave);
+	rc = qsd_start(env, osd->od_quota_slave_dt);
+	if (rc == 0 && osd->od_quota_slave_md != NULL)
+		rc = qsd_start(env, osd->od_quota_slave_md);
+
 	RETURN(rc);
 }
 
@@ -7976,12 +8004,20 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 
 	ENTRY;
 
-	if (osd->od_quota_slave != NULL) {
-		/* set up quota slave objects */
-		result = qsd_prepare(env, osd->od_quota_slave);
+	if (osd->od_quota_slave_md != NULL) {
+		/* set up quota slave objects for inode */
+		result = qsd_prepare(env, osd->od_quota_slave_md);
 		if (result != 0)
 			RETURN(result);
 	}
+
+	if (osd->od_quota_slave_dt != NULL) {
+		/* set up quota slave objects for block */
+		result = qsd_prepare(env, osd->od_quota_slave_dt);
+		if (result != 0)
+			RETURN(result);
+	}
+
 
 	if (lsd->lsd_feature_incompat & OBD_COMPAT_OST) {
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 52, 0)

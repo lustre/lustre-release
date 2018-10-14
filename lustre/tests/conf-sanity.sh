@@ -7835,6 +7835,7 @@ test_108b() {
 		$rcmd mount -t ldiskfs -o loop $tmp/images/$facet \
 			$tmp/mnt/$facet ||
 			error "failed to local mount $facet"
+
 		$rcmd tar jxf $LUSTRE/tests/zfs_${facet}_2_11.tar.bz2 \
 			--xattrs --xattrs-include="*.*" \
 			-C $tmp/mnt/$facet/ > /dev/null 2>&1 ||

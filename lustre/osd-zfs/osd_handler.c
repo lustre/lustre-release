@@ -164,7 +164,9 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	 * should be released. Quota space won't be adjusted at this point since
 	 * we can't provide a suitable environment. It will be performed
 	 * asynchronously by a lquota thread. */
-	qsd_op_end(NULL, osd->od_quota_slave, &oh->ot_quota_trans);
+	qsd_op_end(NULL, osd->od_quota_slave_dt, &oh->ot_quota_trans);
+	if (osd->od_quota_slave_md != NULL)
+		qsd_op_end(NULL, osd->od_quota_slave_md, &oh->ot_quota_trans);
 
 	lu_device_put(lud);
 	th->th_dev = NULL;
@@ -303,7 +305,10 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		osd_unlinked_list_emptify(env, osd, &unlinked, false);
 		/* there won't be any commit, release reserved quota space now,
 		 * if any */
-		qsd_op_end(env, osd->od_quota_slave, &oh->ot_quota_trans);
+		qsd_op_end(env, osd->od_quota_slave_dt, &oh->ot_quota_trans);
+		if (osd->od_quota_slave_md != NULL)
+			qsd_op_end(env, osd->od_quota_slave_md,
+				   &oh->ot_quota_trans);
 		OBD_FREE_PTR(oh);
 		RETURN(0);
 	}
@@ -768,14 +773,21 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 	ENTRY;
 
 	/* shutdown quota slave instance associated with the device */
-	if (o->od_quota_slave != NULL) {
+	if (o->od_quota_slave_md != NULL) {
 		/* complete all in-flight callbacks */
 		osd_sync(env, &o->od_dt_dev);
 		txg_wait_callbacks(spa_get_dsl(dmu_objset_spa(o->od_os)));
-		qsd_fini(env, o->od_quota_slave);
-		o->od_quota_slave = NULL;
+		qsd_fini(env, o->od_quota_slave_md);
+		o->od_quota_slave_md = NULL;
 	}
 
+	if (o->od_quota_slave_dt != NULL) {
+		/* complete all in-flight callbacks */
+		osd_sync(env, &o->od_dt_dev);
+		txg_wait_callbacks(spa_get_dsl(dmu_objset_spa(o->od_os)));
+		qsd_fini(env, o->od_quota_slave_dt);
+		o->od_quota_slave_dt = NULL;
+	}
 	osd_fid_fini(env, o);
 
 	RETURN(0);
@@ -1151,12 +1163,29 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
-	/* initialize quota slave instance */
-	o->od_quota_slave = qsd_init(env, o->od_svname, &o->od_dt_dev,
-				     o->od_proc_entry);
-	if (IS_ERR(o->od_quota_slave)) {
-		rc = PTR_ERR(o->od_quota_slave);
-		o->od_quota_slave = NULL;
+	/* currently it's no need to prepare qsd_instance_md for OST */
+	if (!o->od_is_ost) {
+		o->od_quota_slave_md = qsd_init(env, o->od_svname,
+						&o->od_dt_dev,
+						o->od_proc_entry, true);
+		if (IS_ERR(o->od_quota_slave_md)) {
+			rc = PTR_ERR(o->od_quota_slave_md);
+			o->od_quota_slave_md = NULL;
+			GOTO(err, rc);
+		}
+	}
+
+	o->od_quota_slave_dt = qsd_init(env, o->od_svname, &o->od_dt_dev,
+				     o->od_proc_entry, false);
+
+	if (IS_ERR(o->od_quota_slave_dt)) {
+		if (o->od_quota_slave_md != NULL) {
+			qsd_fini(env, o->od_quota_slave_md);
+			o->od_quota_slave_md = NULL;
+		}
+
+		rc = PTR_ERR(o->od_quota_slave_dt);
+		o->od_quota_slave_dt = NULL;
 		GOTO(err, rc);
 	}
 
@@ -1405,12 +1434,14 @@ static int osd_recovery_complete(const struct lu_env *env, struct lu_device *d)
 	int			 rc = 0;
 	ENTRY;
 
-	if (osd->od_quota_slave == NULL)
+	if (osd->od_quota_slave_md == NULL && osd->od_quota_slave_dt == NULL)
 		RETURN(0);
 
 	/* start qsd instance on recovery completion, this notifies the quota
 	 * slave code that we are about to process new requests now */
-	rc = qsd_start(env, osd->od_quota_slave);
+	rc = qsd_start(env, osd->od_quota_slave_dt);
+	if (rc == 0 && osd->od_quota_slave_md != NULL)
+		rc = qsd_start(env, osd->od_quota_slave_md);
 	RETURN(rc);
 }
 
@@ -1500,9 +1531,16 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	int			 rc = 0;
 	ENTRY;
 
-	if (osd->od_quota_slave != NULL) {
+	if (osd->od_quota_slave_md != NULL) {
 		/* set up quota slave objects */
-		rc = qsd_prepare(env, osd->od_quota_slave);
+		rc = qsd_prepare(env, osd->od_quota_slave_md);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	if (osd->od_quota_slave_dt != NULL) {
+		/* set up quota slave objects */
+		rc = qsd_prepare(env, osd->od_quota_slave_dt);
 		if (rc != 0)
 			RETURN(rc);
 	}

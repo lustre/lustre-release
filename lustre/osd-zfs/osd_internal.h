@@ -364,8 +364,11 @@ struct osd_device {
 	dnode_t			*od_projectused_dn;
 #endif
 
-	/* quota slave instance */
-	struct qsd_instance	*od_quota_slave;
+	/* quota slave instance for inode */
+	struct qsd_instance	*od_quota_slave_md;
+
+	/* quota slave instance for block */
+	struct qsd_instance	*od_quota_slave_dt;
 
 	struct brw_stats	od_brw_stats;
 	atomic_t		od_r_in_flight;
@@ -392,6 +395,14 @@ struct osd_device {
 	spinlock_t		 od_lock;
 	unsigned long long	 od_readcache_max_filesize;
 };
+
+static inline struct qsd_instance *osd_def_qsd(struct osd_device *osd)
+{
+	if (osd->od_is_ost)
+		return osd->od_quota_slave_dt;
+	else
+		return osd->od_quota_slave_md;
+}
 
 enum osd_destroy_type {
 	OSD_DESTROY_NONE = 0,

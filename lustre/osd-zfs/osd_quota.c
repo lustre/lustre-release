@@ -520,12 +520,19 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 {
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct lquota_id_info *qi = &info->oti_qi;
-	struct qsd_instance *qsd = osd->od_quota_slave;
+	struct qsd_instance *qsd = NULL;
 	int rcu, rcg, rcp = 0; /* user & group & project rc */
 	struct thandle *th = &oh->ot_super;
 	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE) ||
 			th->th_ignore_quota;
 	ENTRY;
+
+	if (osd_qid_declare_flags & OSD_QID_INODE)
+		qsd = osd->od_quota_slave_md;
+	else if (osd_qid_declare_flags & OSD_QID_BLK)
+		qsd = osd->od_quota_slave_dt;
+	else
+		RETURN(0);
 
 	if (unlikely(qsd == NULL))
 		/* quota slave instance hasn't been allocated yet */

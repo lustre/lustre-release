@@ -3320,6 +3320,118 @@ test_62() {
 }
 run_test 62 "Project inherit should be only changed by root"
 
+test_dom() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ] &&
+		skip "Not supported before 2.11.55" && return
+
+	local qtype=$1
+	local qid=$TSTUSR
+	local dd_failed=false
+	local tdir_dom=${tdir}_dom
+	local LIMIT=20480 #20M
+
+	[ $qtype == "p" ] && ! is_project_quota_supported &&
+		echo "Project quota is not supported" && return 0
+
+	[ $qtype == "p" ] && qid=$TSTPRJID
+
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+
+	quota_init
+
+	# enable mdt/ost quota
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# make sure the system is clean
+	local USED=$(getquota -$qtype $qid global curspace)
+	[ $USED -ne 0 ] && error "Used space for $qid isn't 0."
+
+	chown $TSTUSR.$TSTUSR $DIR/$tdir || error "chown $tdir failed"
+
+	mkdir $DIR/$tdir_dom || error "mkdir $tdir_dom failed"
+	$SETSTRIPE -E 1M -L mdt $DIR/$tdir_dom ||
+		error "setstripe $tdir_dom failed"
+	chown $TSTUSR.$TSTUSR $DIR/$tdir_dom || error "chown $tdir_dom failed"
+
+	[ $qtype == "p" ] && {
+		change_project -sp $TSTPRJID $DIR/$tdir
+		change_project -sp $TSTPRJID $DIR/$tdir_dom
+	}
+
+	$LFS setquota -$qtype $qid -b $LIMIT -B $LIMIT $DIR ||
+		error "set $qid quota failed"
+
+	for ((i = 0; i < $((LIMIT/2048)); i++)); do
+		$RUNAS $DD of=$DIR/$tdir_dom/$tfile-$i count=1 oflag=sync ||
+								dd_failed=true
+	done
+
+	$dd_failed && quota_error $qtype $qid "write failed, expect succeed"
+
+	for ((i = $((LIMIT/2048)); i < $((LIMIT/1024 + 10)); i++)); do
+		$RUNAS $DD of=$DIR/$tdir_dom/$tfile-$i count=1 oflag=sync ||
+								dd_failed=true
+	done
+
+	$dd_failed || quota_error $qtype $qid "write succeed, expect EDQUOT"
+
+	rm -f $DIR/$tdir_dom/*
+
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+
+	dd_failed=false
+
+	$RUNAS $DD of=$DIR/$tdir/file count=$((LIMIT/2048)) oflag=sync ||
+		quota_error $qtype $qid "write failed, expect succeed"
+
+	for ((i = 0; i < $((LIMIT/2048 + 10)); i++)); do
+		$RUNAS $DD of=$DIR/$tdir_dom/$tfile-$i count=1 oflag=sync ||
+								dd_failed=true
+	done
+
+	$dd_failed || quota_error $qtype $TSTID "write succeed, expect EDQUOT"
+
+	rm -f $DIR/$tdir/*
+	rm -f $DIR/$tdir_dom/*
+
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	cancel_lru_locks mdc
+	sync; sync_all_data || true
+
+	dd_failed=false
+
+	for ((i = 0; i < $((LIMIT/2048)); i++)); do
+		$RUNAS $DD of=$DIR/$tdir_dom/$tfile-$i count=1 oflag=sync ||
+								dd_failed=true
+	done
+
+	$dd_failed && quota_error $qtype $qid "write failed, expect succeed"
+
+	$RUNAS $DD of=$DIR/$tdir/file count=$((LIMIT/2048 + 10)) oflag=sync &&
+		quota_error $qtype $qid "write succeed, expect EDQUOT"
+
+	rm -f $DIR/$tdir/*
+	rm -fr $DIR/$tdir_dom
+
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "reset usr quota failed"
+
+	cleanup_quota_test
+}
+
+test_63() {
+	test_dom "u"
+	test_dom "g"
+	test_dom "p"
+}
+run_test 63 "quota on DoM tests"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

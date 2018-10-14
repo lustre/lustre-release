@@ -117,17 +117,26 @@ struct dt_object *acct_obj_lookup(const struct lu_env *env,
  *
  * \param env - is the environment passed by the caller
  * \param dev - is the dt_device storing the slave index object
+ * \param pool - is the pool type, either LQUOTA_RES_MD or LQUOTA_RES_DT
  * \param type - is the quota type, either USRQUOTA or GRPQUOTA
  */
 static struct dt_object *quota_obj_lookup(const struct lu_env *env,
-					  struct dt_device *dev, int type)
+					  struct dt_device *dev, int pool,
+					  int type)
 {
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_object		*obj = NULL;
+	int				 is_md;
 	ENTRY;
 
+	is_md = lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev);
+	if ((is_md && pool == LQUOTA_RES_MD) ||
+	    (!is_md && pool == LQUOTA_RES_DT))
+		qti->qti_fid.f_oid = qtype2slv_oid(type);
+	else
+		qti->qti_fid.f_oid = pool << 16 | qtype2slv_oid(type);
+
 	qti->qti_fid.f_seq = FID_SEQ_QUOTA;
-	qti->qti_fid.f_oid = qtype2slv_oid(type);
 	qti->qti_fid.f_ver = 0;
 
 	/* lookup the quota object */
@@ -173,7 +182,7 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 {
 	struct lquota_thread_info	*qti = lquota_info(env);
 	__u64				 key;
-	struct dt_object		*obj;
+	struct dt_object		*obj, *obj_aux = NULL;
 	struct obd_dqblk		*dqblk = &oqctl->qc_dqblk;
 	int				 rc;
 	ENTRY;
@@ -215,7 +224,11 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 
 	/* Step 2: collect enforcement information */
 
-	obj = quota_obj_lookup(env, dev, oqctl->qc_type);
+	if (lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev))
+		obj = quota_obj_lookup(env, dev, LQUOTA_RES_MD, oqctl->qc_type);
+	else
+		obj = quota_obj_lookup(env, dev, LQUOTA_RES_DT, oqctl->qc_type);
+
 	if (IS_ERR(obj))
 		RETURN(0);
 	if (obj->do_index_ops == NULL)
@@ -231,6 +244,24 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 	if (lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev)) {
 		dqblk->dqb_ihardlimit = qti->qti_slv_rec.qsr_granted;
 		dqblk->dqb_bhardlimit = 0;
+
+		obj_aux = quota_obj_lookup(env, dev, LQUOTA_RES_DT,
+					   oqctl->qc_type);
+		if (IS_ERR(obj_aux)) {
+			obj_aux = NULL;
+			GOTO(out, rc = 0);
+		}
+
+		if (obj_aux->do_index_ops == NULL)
+			GOTO(out, rc = 0);
+
+		memset(&qti->qti_slv_rec, 0, sizeof(qti->qti_slv_rec));
+		rc = dt_lookup(env, obj_aux, (struct dt_rec *)&qti->qti_slv_rec,
+			       (struct dt_key *)&key);
+		if (rc < 0 && rc != -ENOENT)
+			GOTO(out, rc = 0);
+
+		dqblk->dqb_bhardlimit = qti->qti_slv_rec.qsr_granted;
 	} else {
 		dqblk->dqb_ihardlimit = 0;
 		dqblk->dqb_bhardlimit = qti->qti_slv_rec.qsr_granted;
@@ -240,6 +271,8 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 	GOTO(out, rc = 0);
 out:
 	dt_object_put(env, obj);
+	if (obj_aux != NULL)
+		dt_object_put(env, obj_aux);
 	return rc;
 }
 EXPORT_SYMBOL(lquotactl_slv);
