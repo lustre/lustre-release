@@ -736,71 +736,84 @@ error: setstripe: delete component of file '/mnt/testfs/del_comp' failed: Invali
 [--component-end|-E end1] [STRIPE_OPTIONS]
 [--component-end|-E end2] [STRIPE_OPTIONS] ... <replaceable>dirname</replaceable></screen>
         <para><emphasis role="bold">Example</emphasis></para>
-	<screen>$ mkdir /mnt/testfs/pfldir
-$ touch /mnt/testfs/pfldir/commonfile
-$ lfs setstripe -E 64M -c 2 -i 0 -E -1 -c 4 -i 0 /mnt/testfs/pfldir</screen>
+	<screen>
+$ mkdir /mnt/testfs/pfldir
+$ lfs setstripe -E 256M -c 1 -E 16G -c 4 -E -1 -S 4M -c -1 /mnt/testfs/pfldir
+</screen>
         <para>When you run <literal>lfs getstripe</literal>, you will see:
         </para>
-        <screen>$ lfs getstripe /mnt/testfs/pfldir
+        <screen>
+$ lfs getstripe /mnt/testfs/pfldir
 /mnt/testfs/pfldir
   lcm_layout_gen:  0
-  lcm_entry_count: 2
+  lcm_entry_count: 3
     lcme_id:             N/A
     lcme_flags:          0
     lcme_extent.e_start: 0
-    lcme_extent.e_end:   67108864
-      stripe_count:  2       stripe_size:   1048576       stripe_offset: 0
+    lcme_extent.e_end:   268435456
+      stripe_count:  1       stripe_size:   1048576       stripe_offset: -1
     lcme_id:             N/A
     lcme_flags:          0
-    lcme_extent.e_start: 67108864
+    lcme_extent.e_start: 268435456
+    lcme_extent.e_end:   17179869184
+      stripe_count:  4       stripe_size:   1048576       stripe_offset: -1
+    lcme_id:             N/A
+    lcme_flags:          0
+    lcme_extent.e_start: 17179869184
     lcme_extent.e_end:   EOF
-      stripe_count:  4       stripe_size:   1048576       stripe_offset: 0
-/mnt/testfs/pfldir/commonfile
-lmm_stripe_count:  1
-lmm_stripe_size:   1048576
-lmm_pattern:       1
-lmm_layout_gen:    0
-lmm_stripe_offset: 0
-	obdidx		 objid		 objid		 group
-	     0	             9	          0x9	             0</screen>
+      stripe_count:  -1       stripe_size:   4194304       stripe_offset: -1
+</screen>
 	<para>If you create a file under <literal>/mnt/testfs/pfldir</literal>,
-          the layout of that file will inherit 2 components from its parent
+          the layout of that file will inherit the layout from its parent
           directory:</para>
-	<screen>$ touch /mnt/testfs/pfldir/pflfile
+	<screen>
+$ touch /mnt/testfs/pfldir/pflfile
 $ lfs getstripe /mnt/testfs/pfldir/pflfile
 /mnt/testfs/pfldir/pflfile
   lcm_layout_gen:  2
-  lcm_entry_count: 2
+  lcm_entry_count: 3
     lcme_id:             1
     lcme_flags:          init
     lcme_extent.e_start: 0
-    lcme_extent.e_end:   67108864
-      lmm_stripe_count:  2
+    lcme_extent.e_end:   268435456
+      lmm_stripe_count:  1
       lmm_stripe_size:   1048576
-      lmm_pattern:       1
+      lmm_pattern:       raid0
       lmm_layout_gen:    0
-      lmm_stripe_offset: 0
+      lmm_stripe_offset: 1
       lmm_objects:
-      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0xa:0x0] }
-      - 1: { l_ost_idx: 1, l_fid: [0x100010000:0x9:0x0] }
+      - 0: { l_ost_idx: 1, l_fid: [0x100010000:0xa:0x0] }
 
     lcme_id:             2
     lcme_flags:          0
-    lcme_extent.e_start: 67108864
-    lcme_extent.e_end:   EOF
+    lcme_extent.e_start: 268435456
+    lcme_extent.e_end:   17179869184
       lmm_stripe_count:  4
       lmm_stripe_size:   1048576
-      lmm_pattern:       1
+      lmm_pattern:       raid0
       lmm_layout_gen:    0
-      lmm_stripe_offset: 0</screen>
+      lmm_stripe_offset: -1
+
+    lcme_id:             3
+    lcme_flags:          0
+    lcme_extent.e_start: 17179869184
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  -1
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: -1
+</screen>
 	<note><para>
           <literal>lfs setstripe --component-add/del</literal> can't be run
           on a directory, because default layout in directory is likea config,
           which can be arbitrarily changed by <literal>lfs setstripe</literal>,
           while layout in file may have data (OST objects) attached. If you want
-          to delete default layout in a directory, please run <literal>lfs
-          setstripe -d <replaceable>dirname</replaceable></literal>, like :
-	<screen>$ lfs setstripe -d /mnt/testfs/pfldir
+          to delete default layout in a directory, run
+	  <literal>lfs setstripe -d <replaceable>dirname</replaceable></literal>
+	  to return the directory to the filesystem-wide defaults, like:
+	<screen>
+$ lfs setstripe -d /mnt/testfs/pfldir
 $ lfs getstripe -d /mnt/testfs/pfldir
 /mnt/testfs/pfldir
 stripe_count:  1 stripe_size:   1048576 stripe_offset: -1
@@ -811,7 +824,8 @@ lmm_pattern:       1
 lmm_layout_gen:    0
 lmm_stripe_offset: 0
 	obdidx		 objid		 objid		 group
-	     0	             9	          0x9	             0</screen>
+	     2	             9	          0x9	             0
+</screen>
 	</para></note>
       </section>
     </section>
