@@ -784,10 +784,13 @@ out_flags:
 			__u64	usage;
 
 			lqe_read_lock(lqe);
-			usage  = lqe->lqe_usage;
-			usage += lqe->lqe_pending_write;
+			usage = lqe->lqe_pending_write;
 			usage += lqe->lqe_waiting_write;
-			usage += qqi->qqi_qsd->qsd_sync_threshold;
+			if (lqe->lqe_qunit != 0 && (usage % lqe->lqe_qunit >
+			    qqi->qqi_qsd->qsd_sync_threshold))
+				usage += qqi->qqi_qsd->qsd_sync_threshold;
+
+			usage += lqe->lqe_usage;
 
 			qtype_flag = lquota_over_fl(qqi->qqi_qtype);
 			/* if we should notify client to start sync write */
