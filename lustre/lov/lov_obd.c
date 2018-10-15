@@ -146,12 +146,12 @@ int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
          */
         imp = tgt_obd->u.cli.cl_import;
 
-        if (activate) {
-                tgt_obd->obd_no_recov = 0;
-                /* FIXME this is probably supposed to be
-                   ptlrpc_set_import_active.  Horrible naming. */
-                ptlrpc_activate_import(imp);
-        }
+	if (activate) {
+		tgt_obd->obd_no_recov = 0;
+		/* FIXME this is probably supposed to be
+		   ptlrpc_set_import_active.  Horrible naming. */
+		ptlrpc_activate_import(imp, false);
+	}
 
         rc = obd_register_observer(tgt_obd, obd);
         if (rc) {

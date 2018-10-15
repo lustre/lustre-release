@@ -242,8 +242,6 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 
 	imp->imp_force_next_verify = 0;
 
-	spin_unlock(&imp->imp_lock);
-
 	CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
 	       "%s->%s: level %s/%u force %u force_next %u deactive %u pingable %u suppress %u\n",
 	       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
@@ -253,22 +251,21 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 	if (level == LUSTRE_IMP_DISCON && !imp_is_deactive(imp)) {
 		/* wait for a while before trying recovery again */
 		imp->imp_next_ping = ptlrpc_next_reconnect(imp);
+		spin_unlock(&imp->imp_lock);
 		if (!imp->imp_no_pinger_recover ||
 		    imp->imp_connect_error == -EAGAIN)
 			ptlrpc_initiate_recovery(imp);
-	} else if (level != LUSTRE_IMP_FULL ||
-		   imp->imp_obd->obd_no_recov ||
+	} else if (level != LUSTRE_IMP_FULL || imp->imp_obd->obd_no_recov ||
 		   imp_is_deactive(imp)) {
 		CDEBUG(D_HA,
 		       "%s->%s: not pinging (in recovery or recovery disabled: %s)\n",
 		       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
 		       ptlrpc_import_state_name(level));
-		if (force) {
-			spin_lock(&imp->imp_lock);
+		if (force)
 			imp->imp_force_verify = 1;
-			spin_unlock(&imp->imp_lock);
-		}
+		spin_unlock(&imp->imp_lock);
 	} else if ((imp->imp_pingable && !suppress) || force_next || force) {
+		spin_unlock(&imp->imp_lock);
 		ptlrpc_ping(imp);
 	}
 }
