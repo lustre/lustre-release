@@ -97,7 +97,8 @@ void ptlrpc_exit_portals(void);
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 int ptlrpc_import_in_recovery(struct obd_import *imp);
-int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt);
+int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt,
+			     bool invalid);
 void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 void ptlrpc_initiate_recovery(struct obd_import *imp);

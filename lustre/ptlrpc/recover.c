@@ -228,30 +228,22 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
-        struct obd_import *imp = failed_req->rq_import;
-        ENTRY;
+	struct obd_import *imp = failed_req->rq_import;
+	int conn = lustre_msg_get_conn_cnt(failed_req->rq_reqmsg);
+	ENTRY;
 
-        CDEBUG(D_HA, "import %s of %s@%s abruptly disconnected: reconnecting\n",
-               imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
-               imp->imp_connection->c_remote_uuid.uuid);
+	CDEBUG(D_HA, "import %s of %s@%s abruptly disconnected: reconnecting\n",
+		imp->imp_obd->obd_name, obd2cli_tgt(imp->imp_obd),
+		imp->imp_connection->c_remote_uuid.uuid);
 
-        if (ptlrpc_set_import_discon(imp,
-                              lustre_msg_get_conn_cnt(failed_req->rq_reqmsg))) {
-                if (!imp->imp_replayable) {
-                        CDEBUG(D_HA, "import %s@%s for %s not replayable, "
-                               "auto-deactivating\n",
-                               obd2cli_tgt(imp->imp_obd),
-                               imp->imp_connection->c_remote_uuid.uuid,
-                               imp->imp_obd->obd_name);
-                        ptlrpc_deactivate_import(imp);
-                }
-                /* to control recovery via lctl {disable|enable}_recovery */
-                if (imp->imp_deactive == 0)
-                        ptlrpc_connect_import(imp);
-        }
+	if (ptlrpc_set_import_discon(imp, conn, true)) {
+		/* to control recovery via lctl {disable|enable}_recovery */
+		if (imp->imp_deactive == 0)
+			ptlrpc_connect_import(imp);
+	}
 
-        /* Wait for recovery to complete and resend. If evicted, then
-           this request will be errored out later.*/
+	/* Wait for recovery to complete and resend. If evicted, then
+	   this request will be errored out later.*/
 	spin_lock(&failed_req->rq_lock);
 	if (!failed_req->rq_no_resend)
 		failed_req->rq_resend = 1;
@@ -261,7 +253,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 }
 
 /**
- * Administratively active/deactive a client. 
+ * Administratively active/deactive a client.
  * This should only be called by the ioctl interface, currently
  *  - the lctl deactivate and activate commands
  *  - echo 0/1 >> /proc/osc/XXX/active
@@ -320,21 +312,21 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 	    atomic_read(&imp->imp_inval_count))
 		rc = -EINVAL;
 	spin_unlock(&imp->imp_lock);
-        if (rc)
-                GOTO(out, rc);
+	if (rc)
+		GOTO(out, rc);
 
-        /* force import to be disconnected. */
-        ptlrpc_set_import_discon(imp, 0);
+	/* force import to be disconnected. */
+	ptlrpc_set_import_discon(imp, 0, false);
 
-        if (new_uuid) {
-                struct obd_uuid uuid;
+	if (new_uuid) {
+		struct obd_uuid uuid;
 
-                /* intruct import to use new uuid */
-                obd_str2uuid(&uuid, new_uuid);
-                rc = import_set_conn_priority(imp, &uuid);
-                if (rc)
-                        GOTO(out, rc);
-        }
+		/* intruct import to use new uuid */
+		obd_str2uuid(&uuid, new_uuid);
+		rc = import_set_conn_priority(imp, &uuid);
+		if (rc)
+			GOTO(out, rc);
+	}
 
         /* Check if reconnect is already in progress */
 	spin_lock(&imp->imp_lock);
