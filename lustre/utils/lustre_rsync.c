@@ -428,7 +428,7 @@ int lr_sync_data(struct lr_info *info)
 }
 
 /* Copy all attributes from file src to file dest */
-int lr_copy_attr(char *src, char *dest)
+int lr_copy_attr(const char *src, const char *dest)
 {
         struct stat st;
         struct utimbuf time;
@@ -498,9 +498,10 @@ int lr_copy_xattr(struct lr_info *info)
                                  rc, errno);
                         if (rc == -1) {
                                 if (errno != ENOTSUP) {
-                                        fprintf(stderr, "Error replicating "
-                                                " xattr for %s: %d\n",
-                                                info->dest, errno);
+					fprintf(stderr,
+			"cannot replicate xattrs from '%s' to '%s': %s\n",
+						info->src, info->dest,
+						strerror(errno));
                                         errors++;
                                 }
                                 rc = 0;
@@ -1094,6 +1095,30 @@ int lr_link(struct lr_info *info)
 	return rc;
 }
 
+int lr_set_dest_for_attr(struct lr_info *info)
+{
+	int rc;
+
+	snprintf(info->dest, sizeof(info->dest), "%s/%s",
+		 status->ls_targets[info->target_no], info->path);
+	rc = access(info->dest, F_OK);
+	if (rc < 0)
+		rc = -errno;
+
+	if (rc != -ENOENT)
+		return rc;
+
+	snprintf(info->dest, sizeof(info->dest), "%s/%s/%s",
+		 status->ls_targets[info->target_no], SPECIAL_DIR,
+		 info->tfid);
+
+	rc = access(info->dest, F_OK);
+	if (rc < 0)
+		return -errno;
+
+	return 0;
+}
+
 /* Replicate file attributes */
 int lr_setattr(struct lr_info *info)
 {
@@ -1111,9 +1136,10 @@ int lr_setattr(struct lr_info *info)
 
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
+		rc = lr_set_dest_for_attr(info);
+		if (rc < 0)
+			continue;
 
-		snprintf(info->dest, sizeof(info->dest), "%s/%s",
-                         status->ls_targets[info->target_no], info->path);
                 lr_debug(DINFO, "setattr: %s %s %s", info->src, info->dest,
                          info->tfid);
 
@@ -1142,9 +1168,10 @@ int lr_setxattr(struct lr_info *info)
 
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
+		rc = lr_set_dest_for_attr(info);
+		if (rc < 0)
+			continue;
 
-		snprintf(info->dest, sizeof(info->dest), "%s/%s",
-                        status->ls_targets[info->target_no], info->path);
                 lr_debug(DINFO, "setxattr: %s %s %s\n", info->src, info->dest,
                          info->tfid);
 
