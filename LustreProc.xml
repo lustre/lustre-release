@@ -91,7 +91,7 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.rpc_stats</screen></para>
         <para>Replace the dots in the path with slashes.</para>
       </listitem>
       <listitem>
-        <para>Prepend the path with the following as appropriate:
+        <para>Prepend the path with the appropriate directory component:
 	  <screen>/{proc,sys}/{fs,sys}/{lustre,lnet}</screen></para>
       </listitem>
     </itemizedlist>
@@ -348,7 +348,7 @@ testfs-MDT0000</screen></para>
       </itemizedlist></para>
   </section>
   <section>
-    <title>Monitoring Lustre File System  I/O</title>
+    <title>Monitoring Lustre File System I/O</title>
     <para>A number of system utilities are provided to enable collection of data related to I/O
       activity in a Lustre file system. In general, the data collected describes:</para>
     <itemizedlist>
@@ -1161,82 +1161,140 @@ disk I/O size          ios   % cum % |   ios   % cum %
   </section>
   <section>
     <title>Tuning Lustre File System I/O</title>
-    <para>Each OSC has its own tree of  tunables. For example:</para>
-    <screen>$ ls -d /proc/fs/testfs/osc/OSC_client_ost1_MNT_client_2 /localhost
-/proc/fs/testfs/osc/OSC_uml0_ost1_MNT_localhost
-/proc/fs/testfs/osc/OSC_uml0_ost2_MNT_localhost
-/proc/fs/testfs/osc/OSC_uml0_ost3_MNT_localhost
-
-$ ls /proc/fs/testfs/osc/OSC_uml0_ost1_MNT_localhost
-blocksizefilesfree max_dirty_mb ost_server_uuid stats
-
-...</screen>
-    <para>The following sections describe some of the parameters that can be tuned in a Lustre file
-      system.</para>
+    <para>Each OSC has its own tree of tunables. For example:</para>
+    <screen>$ lctl lctl list_param osc.*.*
+osc.myth-OST0000-osc-ffff8804296c2800.active
+osc.myth-OST0000-osc-ffff8804296c2800.blocksize
+osc.myth-OST0000-osc-ffff8804296c2800.checksum_dump
+osc.myth-OST0000-osc-ffff8804296c2800.checksum_type
+osc.myth-OST0000-osc-ffff8804296c2800.checksums
+osc.myth-OST0000-osc-ffff8804296c2800.connect_flags
+:
+:
+osc.myth-OST0000-osc-ffff8804296c2800.state
+osc.myth-OST0000-osc-ffff8804296c2800.stats
+osc.myth-OST0000-osc-ffff8804296c2800.timeouts
+osc.myth-OST0000-osc-ffff8804296c2800.unstable_stats
+osc.myth-OST0000-osc-ffff8804296c2800.uuid
+osc.myth-OST0001-osc-ffff8804296c2800.active
+osc.myth-OST0001-osc-ffff8804296c2800.blocksize
+osc.myth-OST0001-osc-ffff8804296c2800.checksum_dump
+osc.myth-OST0001-osc-ffff8804296c2800.checksum_type
+:
+:
+</screen>
+    <para>The following sections describe some of the parameters that can
+      be tuned in a Lustre file system.</para>
     <section remap="h3" xml:id="TuningClientIORPCStream">
       <title><indexterm>
           <primary>proc</primary>
           <secondary>RPC tunables</secondary>
         </indexterm>Tuning the Client I/O RPC Stream</title>
-      <para>Ideally, an optimal amount of data is packed into each I/O RPC and a consistent number
-        of issued RPCs are in progress at any time. To help optimize the client I/O RPC stream,
-        several tuning variables are provided to adjust behavior according to network conditions and
-        cluster size. For information about monitoring the client I/O RPC stream, see <xref
+      <para>Ideally, an optimal amount of data is packed into each I/O RPC
+        and a consistent number of issued RPCs are in progress at any time.
+        To help optimize the client I/O RPC stream, several tuning variables
+        are provided to adjust behavior according to network conditions and
+        cluster size. For information about monitoring the client I/O RPC
+        stream, see <xref
           xmlns:xlink="http://www.w3.org/1999/xlink" linkend="MonitoringClientRCPStream"/>.</para>
       <para>RPC stream tunables include:</para>
       <para>
         <itemizedlist>
           <listitem>
-            <para><literal>osc.<replaceable>osc_instance</replaceable>.max_dirty_mb</literal> -
-              Controls how many MBs of dirty data can be written and queued up in the OSC. POSIX
-              file writes that are cached contribute to this count. When the limit is reached,
-              additional writes stall until previously-cached writes are written to the server. This
-              may be changed by writing a single ASCII integer to the file. Only values between 0
-              and 2048 or 1/4 of RAM are allowable. If 0 is specified, no writes are cached.
-              Performance suffers noticeably unless you use large writes (1 MB or more).</para>
-            <para>To maximize performance, the value for <literal>max_dirty_mb</literal> is
-              recommended to be 4 * <literal>max_pages_per_rpc </literal>*
-                <literal>max_rpcs_in_flight</literal>.</para>
+            <para><literal>osc.<replaceable>osc_instance</replaceable>.checksums</literal>
+              - Controls whether the client will calculate data integrity
+              checksums for the bulk data transferred to the OST.  Data
+              integrity checksums are enabled by default.  The algorithm used
+              can be set using the <literal>checksum_type</literal> parameter.
+            </para>
           </listitem>
           <listitem>
-            <para><literal>osc.<replaceable>osc_instance</replaceable>.cur_dirty_bytes</literal> - A
-              read-only value that returns the current number of bytes written and cached on this
-              OSC.</para>
+            <para><literal>osc.<replaceable>osc_instance</replaceable>.checksum_type</literal>
+              - Controls the data integrity checksum algorithm used by the
+              client.  The available algorithms are determined by the set of
+              algorihtms.  The checksum algorithm used by default is determined
+              by first selecting the fastest algorithms available on the OST,
+              and then selecting the fastest of those algorithms on the client,
+              which depends on available optimizations in the CPU hardware and
+              kernel.  The default algorithm can be overridden by writing the
+              algorithm name into the <literal>checksum_type</literal>
+              parameter.  Available checksum types can be seen on the client by
+              reading the <literal>checksum_type</literal> parameter. Currently
+              supported checksum types are:
+              <literal>adler</literal>,
+              <literal>crc32</literal>,
+              <literal>crc32c</literal>
+            </para>
           </listitem>
           <listitem>
-            <para><literal>osc.<replaceable>osc_instance</replaceable>.max_pages_per_rpc</literal> -
-              The maximum number of pages that will undergo I/O in a single RPC to the OST. The
-              minimum setting is a single page and the maximum setting is 1024 (for systems with a
-                <literal>PAGE_SIZE</literal> of 4 KB), with the default maximum of 1 MB in the RPC.
-              It is also possible to specify a units suffix (e.g. <literal>4M</literal>), so that
-              the RPC size can be specified independently of the client
-              <literal>PAGE_SIZE</literal>.</para>
+            <para><literal>osc.<replaceable>osc_instance</replaceable>.max_dirty_mb</literal>
+              - Controls how many MiB of dirty data can be written into the
+              client pagecache for writes by <emphasis>each</emphasis> OSC.
+              When this limit is reached, additional writes block until
+              previously-cached data is written to the server. This may be
+              changed by the <literal>lctl set_param</literal> command. Only
+              values larger than 0 and smaller than the lesser of 2048 MiB or
+              1/4 of client RAM are valid. Performance can suffers if the
+              client cannot aggregate enough data per OSC to form a full RPC
+              (as set by the <literal>max_pages_per_rpc</literal>) parameter,
+              unless the application is doing very large writes itself.
+            </para>
+            <para>To maximize performance, the value for
+              <literal>max_dirty_mb</literal> is recommended to be at least
+              4 * <literal>max_pages_per_rpc</literal> *
+              <literal>max_rpcs_in_flight</literal>.
+            </para>
+          </listitem>
+          <listitem>
+            <para><literal>osc.<replaceable>osc_instance</replaceable>.cur_dirty_bytes</literal>
+              - A read-only value that returns the current number of bytes
+              written and cached by this OSC.
+            </para>
+          </listitem>
+          <listitem>
+            <para><literal>osc.<replaceable>osc_instance</replaceable>.max_pages_per_rpc</literal>
+              - The maximum number of pages that will be sent in a single RPC
+              request to the OST. The minimum value is one page and the maximum
+              value is 16 MiB (4096 on systems with <literal>PAGE_SIZE</literal>
+              of 4 KiB), with the default value of 4 MiB in one RPC.  The upper
+              limit may also be constrained by <literal>ofd.*.brw_size</literal>
+              setting on the OSS, and applies to all clients connected to that
+              OST.  It is also possible to specify a units suffix (e.g.
+              <literal>max_pages_per_rpc=4M</literal>), so the RPC size can be
+              set independently of the client <literal>PAGE_SIZE</literal>.
+            </para>
           </listitem>
           <listitem>
             <para><literal>osc.<replaceable>osc_instance</replaceable>.max_rpcs_in_flight</literal>
-              - The maximum number of concurrent RPCs in flight from an OSC to its OST. If the OSC
-              tries to initiate an RPC but finds that it already has the same number of RPCs
-              outstanding, it will wait to issue further RPCs until some complete. The minimum
-              setting is 1 and maximum setting is 256. </para>
+              - The maximum number of concurrent RPCs in flight from an OSC to
+              its OST. If the OSC tries to initiate an RPC but finds that it
+              already has the same number of RPCs outstanding, it will wait to
+              issue further RPCs until some complete. The minimum setting is 1
+              and maximum setting is 256. The default value is 8 RPCs.
+            </para>
             <para>To improve small file I/O performance, increase the
-                <literal>max_rpcs_in_flight</literal> value.</para>
+              <literal>max_rpcs_in_flight</literal> value.
+            </para>
           </listitem>
           <listitem>
-            <para><literal>llite.<replaceable>fsname-instance</replaceable>/max_cache_mb</literal> -
-              Maximum amount of inactive data cached by the client (default is 3/4 of RAM).  For
-              example:</para>
-            <screen># lctl get_param llite.testfs-ce63ca00.max_cached_mb
-128</screen>
+            <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_cache_mb</literal>
+              - Maximum amount of inactive data cached by the client.  The
+              default value is 3/4 of the client RAM.
+            </para>
           </listitem>
         </itemizedlist>
       </para>
       <note>
-        <para>The value for <literal><replaceable>osc_instance</replaceable></literal> is typically
-              <literal><replaceable>fsname</replaceable>-OST<replaceable>ost_index</replaceable>-osc-<replaceable>mountpoint_instance</replaceable></literal>,
-          where the value for <literal><replaceable>mountpoint_instance</replaceable></literal> is
-          unique to each mount point to allow associating osc, mdc, lov, lmv, and llite parameters
-          with the same mount point. For
-          example:<screen>lctl get_param osc.testfs-OST0000-osc-ffff88107412f400.rpc_stats
+        <para>The value for <literal><replaceable>osc_instance</replaceable></literal>
+          and <literal><replaceable>fsname_instance</replaceable></literal>
+          are unique to each mount point to allow associating osc, mdc, lov,
+          lmv, and llite parameters with the same mount point.  However, it is
+          common for scripts to use a wildcard <literal>*</literal> or a
+          filesystem-specific wildcard
+          <literal><replaceable>fsname-*</replaceable></literal> to specify
+          the parameter settings uniformly on all clients. For example:
+<screen>
+client$ lctl get_param osc.testfs-OST0000*.rpc_stats
 osc.testfs-OST0000-osc-ffff88107412f400.rpc_stats=
 snapshot_time:         1375743284.337839 (secs.usecs)
 read RPCs in flight:  0
@@ -1244,7 +1302,7 @@ write RPCs in flight: 0
 </screen></para>
       </note>
     </section>
-    <section remap="h3">
+    <section remap="h3" xml:id="TuningClientReadahead">
       <title><indexterm>
           <primary>proc</primary>
           <secondary>readahead</secondary>
@@ -1268,27 +1326,41 @@ write RPCs in flight: 0
         <para>Readahead tunables include:</para>
         <itemizedlist>
           <listitem>
-            <para><literal>llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_mb</literal> -
-              Controls the maximum amount of data readahead on a file.
-              Files are read ahead in RPC-sized chunks (1 MB or the size of
+            <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_read_ahead_mb</literal>
+              - Controls the maximum amount of data readahead on a file.
+              Files are read ahead in RPC-sized chunks (4 MiB, or the size of
               the <literal>read()</literal> call, if larger) after the second
               sequential read on a file descriptor. Random reads are done at
               the size of the <literal>read()</literal> call only (no
               readahead). Reads to non-contiguous regions of the file reset
-              the readahead algorithm, and readahead is not triggered again
-              until sequential reads take place again.
+              the readahead algorithm, and readahead is not triggered until
+              sequential reads take place again.
             </para>
-            <para>To disable readahead, set
-            <literal>max_read_ahead_mb=0</literal>. The default value is 40 MB.
+            <para>
+              This is the global limit for all files and cannot be larger than
+              1/2 of the client RAM.  To disable readahead, set
+              <literal>max_read_ahead_mb=0</literal>.
             </para>
           </listitem>
           <listitem>
-            <para><literal>llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_whole_mb</literal> -
-              Controls the maximum size of a file that is read in its entirety,
-              regardless of the size of the <literal>read()</literal>.  This
-              avoids multiple small read RPCs on relatively small files, when
-              it is not possible to efficiently detect a sequential read
-              pattern before the whole file has been read.
+            <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_read_ahead_per_file_mb</literal>
+              - Controls the maximum number of megabytes (MiB) of data that
+              should be prefetched by the client when sequential reads are
+              detected on a file.  This is the per-file readahead limit and
+              cannot be larger than <literal>max_read_ahead_mb</literal>.
+            </para>
+          </listitem>
+          <listitem>
+            <para><literal>llite.<replaceable>fsname_instance</replaceable>.max_read_ahead_whole_mb</literal>
+              - Controls the maximum size of a file in MiB that is read in its
+              entirety upon access, regardless of the size of the
+              <literal>read()</literal> call.  This avoids multiple small read
+              RPCs on relatively small files, when it is not possible to
+              efficiently detect a sequential read pattern before the whole
+              file has been read.
+            </para>
+            <para>The default value is the greater of 2 MiB or the size of one
+              RPC, as given by <literal>max_pages_per_rpc</literal>.
             </para>
           </listitem>
         </itemizedlist>
@@ -2339,7 +2411,7 @@ nid                    refs   peer    max   tx    min
       <listitem>
         <para>To temporarily set this tunable, run:</para>
         <screen># lctl <replaceable>get|set</replaceable>_param <replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable> </screen>
-	</listitem>
+        </listitem>
       <listitem>
         <para>To permanently set this tunable, run:</para>
 	<screen># lctl conf_param <replaceable>obdname|fsname.obdtype</replaceable>.threads_<replaceable>min|max|started</replaceable> </screen>
