@@ -35,7 +35,7 @@ TBD Intel Corporation
          4.4.0-131           (Ubuntu 16.04)
          4.15.0-32           (Ubuntu 18.04)
          vanilla linux 4.6.7
-       * Recommended e2fsprogs version: 1.42.13.wc6 or newer
+       * Recommended e2fsprogs version: 1.44.3.wc1 or newer
        * Recommended ZFS / SPL version: 0.7.9
        * Tested with ZFS / SPL version: 0.7.9
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
