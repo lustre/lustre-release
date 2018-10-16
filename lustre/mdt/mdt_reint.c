@@ -2044,6 +2044,20 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 	 */
 	do_sync = rc;
 
+	/* TODO: DoM migration is not supported yet */
+	if (S_ISREG(lu_object_attr(&sobj->mot_obj))) {
+		ma->ma_lmm = info->mti_big_lmm;
+		ma->ma_lmm_size = info->mti_big_lmmsize;
+		ma->ma_valid = 0;
+		rc = mdt_stripe_get(info, sobj, ma, XATTR_NAME_LOV);
+		if (rc)
+			GOTO(put_source, rc);
+
+		if (ma->ma_valid & MA_LOV &&
+		    mdt_lmm_dom_entry(ma->ma_lmm) != LMM_NO_DOM)
+			GOTO(put_source, rc = -EOPNOTSUPP);
+	}
+
 	/* if migration HSM is allowed */
 	if (!mdt->mdt_opts.mo_migrate_hsm_allowed) {
 		ma->ma_need = MA_HSM;

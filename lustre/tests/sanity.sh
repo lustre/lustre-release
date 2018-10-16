@@ -15419,6 +15419,23 @@ test_230i() {
 }
 run_test 230i "lfs migrate -m tolerates trailing slashes"
 
+test_230j() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
+
+	$LFS mkdir -m 0 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS setstripe -E 1M -L mdt $DIR/$tdir/$tfile ||
+		error "create $tfile failed"
+	cat /etc/passwd > $DIR/$tdir/$tfile
+
+	$LFS migrate -m 1 $DIR/$tdir
+
+	cmp /etc/passwd $DIR/$tdir/$tfile ||
+		error "DoM file mismatch after migration"
+}
+run_test 230j "DoM file data not changed after dir migration"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc
