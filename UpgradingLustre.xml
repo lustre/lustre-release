@@ -146,7 +146,7 @@ xml:id="upgradinglustre">
       <literal>ea_inode</literal> option reseults in 
       <literal>ea_inode</literal> in the file system feature list.</para>
     </note>
-    <note condition="l23">
+    <note>
       <para>To generate a list of all files with more than 160 stripes use 
       <literal>lfs find</literal> with the 
       <literal>--stripe-count</literal> option:

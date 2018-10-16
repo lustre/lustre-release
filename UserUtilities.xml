@@ -1631,7 +1631,7 @@ File size of /mnt/lustre/foo is 1468297786 (1433888 blocks of 1024 bytes)
               </para>
             </entry>
             <entry>
-              <para condition="l23">Enables/disables FID to path translation by
+              <para>Enables/disables FID to path translation by
               regular users</para>
             </entry>
           </row>

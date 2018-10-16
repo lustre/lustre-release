@@ -817,12 +817,25 @@ root@oss1# ll_decode_filter_fid #12345[4,5,8]
       <para><xref linkend="dbdoclet.50438219_44971"/></para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_44971">
+  <section xml:id="dbdoclet.50438219_44971" condition='l28'>
     <title><indexterm><primary>ll_recover_lost_found_objs</primary></indexterm>
 ll_recover_lost_found_objs</title>
-    <para>The ll_recover_lost_found_objs utility helps recover Lustre OST objects (file data) from a lost and found directory and return them to their correct locations.</para>
-    <note>
-      <para>Running the ll_recover_lost_found_objs tool is not strictly necessary to bring an OST back online, it just avoids losing access to objects that were moved to the lost and found directory due to directory corruption.</para>
+    <para>The <literal>ll_recover_lost_found_objs</literal> utility was
+      used to help recover Lustre OST objects (file data) from the
+      <literal>lost+found</literal> directory of an OST and return them to
+      their correct locations based on information stored in the
+      <literal>trusted.fid</literal> extended attribute stored on every
+      OST object containing data.</para>
+    <note condition="l26"><para>This utility is not needed with Lustre 2.6
+      and later, and is removed in Lustre 2.8 since <literal>LFSCK</literal>
+      online scanning will automatically move objects from
+      <literal>lost+found</literal> to the proper place in the OST.</para>
+    </note>
+    <note condition='l25'>
+      <para>The <literal>ll_recover_lost_found_objs</literal> tool is not
+        strictly necessary to bring an OST back online, it just avoids losing
+	access to objects that were moved to the lost+found directory due to
+	directory corruption on the OST.</para>
     </note>
     <section remap="h5">
       <title>Synopsis</title>
@@ -832,9 +845,6 @@ ll_recover_lost_found_objs</title>
       <title>Description</title>
       <para>The first time Lustre modifies an object, it saves the MDS inode number and the objid as an extended attribute on the object, so in case of directory corruption of the OST, it is possible to recover the objects. Running e2fsck fixes the corrupted OST directory, but it puts all of the objects into a lost and found directory, where they are inaccessible to Lustre. Use the ll_recover_lost_found_objs utility to recover all (or at least most) objects from a lost and found directory and return them to the O/0/d* directories.</para>
       <para>To use ll_recover_lost_found_objs, mount the file system locally (using the <literal>-t ldiskfs</literal>, or <literal>-t zfs</literal> command), run the utility and then unmount it again. The OST must not be mounted by Lustre when ll_recover_lost_found_objs is run.</para>
-      <para condition="l26">This utility is not needed for 2.6 and later,
-      since the <literal>LFSCK</literal> online scanning will move objects
-      from <literal>lost+found</literal> to the proper place in the OST.</para>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -2110,15 +2120,16 @@ mount.lustre</title>
                 <para> <literal>user_fid2path</literal></para>
               </entry>
               <entry>
-                <para condition='l23'>Enable FID to path translation by regular
-                users. Note: This option allows a potential security hole
-                because it allows regular users direct access to a file by its
-                File ID, bypassing POSIX path-based permission checks which
-                could otherwise prevent the user from accessing a file in a
-                directory that they do not have access to. Regular permission
-                checks are still performed on the file itself, so the user
-                cannot access a file to which they have no access rights.
-                </para>
+                <para>Enable FID-to-path translation by regular users.
+		</para>
+		<note><para>This option allows a potential security hole because
+                  it allows regular users direct access to a file by its Lustre
+                  File ID.  This bypasses POSIX path-based permission checks,
+		  and could allow the user to access a file in a directory that
+		  they do not have access to. Regular POSIX file mode and ACL
+		  permission checks are still performed on the file itself, so
+		  users cannot access a file to which they have no permission.
+                </para></note>
               </entry>
             </row>
             <row>
@@ -2126,7 +2137,7 @@ mount.lustre</title>
                 <para> <literal>nouser_fid2path</literal></para>
               </entry>
               <entry>
-                <para condition='l23'> Disable FID to path translation by
+                <para> Disable FID to path translation by
                 regular users. Root and processes with
                 <literal>CAP_DAC_READ_SEARCH</literal> can still perform FID
                 to path translation.

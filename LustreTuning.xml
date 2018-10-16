@@ -149,8 +149,8 @@ lctl {get,set}_param {service}.thread_{min,max,started}
 	service immediately and disables automatic thread creation behavior.
 	</para>
       </note>
-      <para condition='l23'>Lustre software release 2.3 introduced new
-      parameters to provide more control to administrators.</para>
+      <para>Parameters are available to provide administrators control
+        over the number of service threads.</para>
       <itemizedlist>
         <listitem>
           <para>
@@ -167,16 +167,15 @@ lctl {get,set}_param {service}.thread_{min,max,started}
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.mdsbinding" condition='l23'>
+  <section xml:id="dbdoclet.mdsbinding">
     <title>
     <indexterm>
       <primary>tuning</primary>
       <secondary>MDS binding</secondary>
     </indexterm>Binding MDS Service Thread to CPU Partitions</title>
-    <para>With the introduction of Node Affinity (
-    <xref linkend="nodeaffdef" />) in Lustre software release 2.3, MDS threads
-    can be bound to particular CPU partitions (CPTs) to improve CPU cache
-    usage and memory locality.  Default values for CPT counts and CPU core
+    <para>With the Node Affinity (<xref linkend="nodeaffdef" />) feature,
+    MDS threads can be bound to particular CPU partitions (CPTs) to improve CPU
+    cache usage and memory locality.  Default values for CPT counts and CPU core
     bindings are selected automatically to provide good overall performance for
     a given CPU count. However, an administrator can deviate from these setting
     if they choose.  For details on specifying the mapping of CPU cores to
@@ -268,17 +267,16 @@ options ksocklnd enable_irq_affinity=0
       <para>By default, this parameter is off. As always, you should test the
       performance to compare the impact of changing this parameter.</para>
     </section>
-    <section condition='l23'>
+    <section>
       <title>
       <indexterm>
         <primary>tuning</primary>
         <secondary>Network interface binding</secondary>
       </indexterm>Binding Network Interface Against CPU Partitions</title>
-      <para>Lustre software release 2.3 and beyond provide enhanced network
-      interface control. The enhancement means that an administrator can bind
-      an interface to one or more CPU partitions. Bindings are specified as
-      options to the LNet modules. For more information on specifying module
-      options, see 
+      <para>Lustre allows enhanced network interface control. This means that
+      an administrator can bind an interface to one or more CPU partitions.
+      Bindings are specified as options to the LNet modules. For more
+      information on specifying module options, see 
       <xref linkend="dbdoclet.50438293_15350" /></para>
       <para>For example, 
       <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for 
@@ -324,9 +322,9 @@ ksocklnd credits=256
       <screen>
 ko2iblnd credits=256
 </screen>
-      <note condition="l23">
-        <para>In Lustre software release 2.3 and beyond, LNet may revalidate
-        the NI credits, so the administrator's request may not persist.</para>
+      <note>
+        <para>LNet may revalidate the NI credits, so the administrator's
+	request may not persist.</para>
       </note>
     </section>
     <section>
@@ -375,10 +373,9 @@ ko2iblnd credits=256
       <screen>
 lnet large_router_buffers=8192
 </screen>
-      <note condition="l23">
-        <para>In Lustre software release 2.3 and beyond, LNet may revalidate
-        the router buffer setting, so the administrator's request may not
-        persist.</para>
+      <note>
+        <para>LNet may revalidate the router buffer setting, so the
+	administrator's request may not persist.</para>
       </note>
     </section>
     <section>
@@ -525,16 +522,16 @@ lnet large_router_buffers=8192
       be MAX.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.libcfstuning" condition='l23'>
+  <section xml:id="dbdoclet.libcfstuning">
     <title>
     <indexterm>
       <primary>tuning</primary>
       <secondary>libcfs</secondary>
     </indexterm>libcfs Tuning</title>
-    <para>Lustre software release 2.3 introduced binding service threads via
-    CPU Partition Tables (CPTs). This allows the system administrator to
-    fine-tune on which CPU cores the Lustre service threads are run, for both
-    OSS and MDS services, as well as on the client.
+    <para>Lustre allows binding service threads via CPU Partition Tables
+      (CPTs). This allows the system administrator to fine-tune on which CPU
+      cores the Lustre service threads are run, for both OSS and MDS services,
+      as well as on the client.
     </para>
     <para>CPTs are useful to reserve some cores on the OSS or MDS nodes for
     system functions such as system monitoring, HA heartbeat, or similar

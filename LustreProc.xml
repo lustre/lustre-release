@@ -1225,6 +1225,18 @@ osc.myth-OST0001-osc-ffff8804296c2800.checksum_type
               <literal>crc32</literal>,
               <literal>crc32c</literal>
             </para>
+            <para condition="l2C">
+              In Lustre release 2.12 additional checksum types were added to
+              allow end-to-end checksum integration with T10-PI capable
+              hardware.  The client will compute the appropriate checksum
+              type, based on the checksum type used by the storage, for the
+              RPC checksum, which will be verified by the server and passed
+              on to the storage.  The T10-PI checksum types are:
+              <literal>t10ip512</literal>,
+              <literal>t10ip4K</literal>,
+              <literal>t10crc512</literal>,
+              <literal>t10crc4K</literal>
+            </para>
           </listitem>
           <listitem>
             <para><literal>osc.<replaceable>osc_instance</replaceable>.max_dirty_mb</literal>
@@ -1319,10 +1331,11 @@ write RPCs in flight: 0
       <section remap="h4">
         <title>Tuning File Readahead</title>
         <para>File readahead is triggered when two or more sequential reads
-        by an application fail to be satisfied by data in the Linux buffer
-        cache. The size of the initial readahead is 1 MB. Additional
-        readaheads grow linearly and increment until the readahead cache on
-        the client is full at 40 MB.</para>
+          by an application fail to be satisfied by data in the Linux buffer
+          cache. The size of the initial readahead is determined by the RPC
+          size and the file stripe size, but will typically be at least 1 MiB.
+          Additional readaheads grow linearly and increment until the per-file
+          or per-system readahead cache limit on the client is reached.</para>
         <para>Readahead tunables include:</para>
         <itemizedlist>
           <listitem>

@@ -276,7 +276,7 @@ forwarding (&quot;&quot;)</title>
       <section>
           <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>rnet_htable_size</tertiary></indexterm>
 <literal>rnet_htable_size</literal></title>
-        <para condition='l23'><literal>rnet_htable_size</literal> is an integer that indicates how many remote networks the internal LNet hash table is configured to handle. <literal>rnet_htable_size</literal> is used for optimizing the hash table size and does not put a limit on how many remote networks you can have.  The default hash table size when this parameter is not specified is: 128.</para>
+        <para><literal>rnet_htable_size</literal> is an integer that indicates how many remote networks the internal LNet hash table is configured to handle. <literal>rnet_htable_size</literal> is used for optimizing the hash table size and does not put a limit on how many remote networks you can have.  The default hash table size when this parameter is not specified is: 128.</para>
       </section>
     </section>
     <section remap="h3" xml:id="section_ngq_qhy_zl">

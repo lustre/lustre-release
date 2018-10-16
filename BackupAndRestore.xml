@@ -432,9 +432,8 @@ Changelog records consumed: 42</screen>
       described in this section. File-level restore of an MDT is not possible
       before Lustre software release 2.3, as the Object Index (OI) file cannot
       be rebuilt after restore without the OI Scrub functionality. 
-      <emphasis role="bold">Since Lustre software release 2.3</emphasis>,
-      Object Index files are automatically rebuilt at first mount after a
-      restore is detected (see 
+      Since Lustre 2.3, Object Index files are automatically rebuilt at first
+      mount after a restore is detected (see 
       <link xl:href="http://jira.whamcloud.com/browse/LU-957">LU-957</link>),
       and file-level backup is supported (see 
       <xref linkend="backup_fs_level"/>).</para>
@@ -787,17 +786,15 @@ trusted.fid= \
         <screen>[oss]# lctl get_param -n osd-${fstype}.${fsname}-${target}.oi_scrub</screen>
       </listitem>
     </orderedlist>
-    <para condition='l23'>If the file system was used between the time the
-    backup was made and when it was restored, then the online 
-    <literal>LFSCK</literal> tool (part of Lustre code after version 2.3) 
-    will automatically be
-    run to ensure the file system is coherent. If all of the device file
-    systems were backed up at the same time after the entire Lustre file system
-    was stopped, this step is unnecessary. In either case, the file system will
-    be immediately although there may be I/O errors reading
-    from files that are present on the MDT but not the OSTs, and files that
-    were created after the MDT backup will not be accessible or visible. See 
-    <xref linkend="dbdoclet.lfsckadmin" />for details on using LFSCK.</para>
+    <para>If the file system was used between the time the backup was made and
+      when it was restored, then the online <literal>LFSCK</literal> tool will
+      automatically be run to ensure the filesystem is coherent. If all of the
+      device filesystems were backed up at the same time after Lustre was
+      was stopped, this step is unnecessary. In either case, the filesystem
+      will be immediately although there may be I/O errors reading
+      from files that are present on the MDT but not the OSTs, and files that
+      were created after the MDT backup will not be accessible or visible. See 
+      <xref linkend="dbdoclet.lfsckadmin" />for details on using LFSCK.</para>
   </section>
   <section xml:id="dbdoclet.backup_lvm_snapshot">
     <title>

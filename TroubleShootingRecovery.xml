@@ -57,14 +57,9 @@ Dec 29 14:11:32 mookie kernel: Remounting filesystem read-only </screen>
     <para>In the vast majority of cases, the Lustre software can cope with any
     inconsistencies found on the disk and between other devices in the file
     system.</para>
-    <note>
-	  <para>The legacy offline-LFSCK tool included with e2fsprogs is rarely
-      required for Lustre file system operation. offline-LFSCK is not to be
-      confused with LFSCK tool, which is part of Lustre and provides online
-      consistency checking.</para>
-    </note>
     <para>For problem analysis, it is strongly recommended that
-    <literal>e2fsck</literal> be run under a logger, like script, to record all
+    <literal>e2fsck</literal> be run under a logger, like
+    <literal>script</literal>, to record all
     of the output and changes that are made to the file system in case this
     information is needed later.</para>
     <para>If time permits, it is also a good idea to first run
@@ -105,7 +100,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
       <secondary>corruption of Lustre file system</secondary>
     </indexterm>Recovering from Corruption in the Lustre File System</title>
     <para>In cases where an ldiskfs MDT or OST becomes corrupt, you need to run
-    e2fsck to correct the local filesystem consistency, then use
+    <literal>e2fsck</literal> to ensure local filesystem consistency, then use
     <literal>LFSCK</literal> to run a distributed check on the file system to
     resolve any inconsistencies between the MDTs and OSTs, or among MDTs.</para>
     <orderedlist>
@@ -186,7 +181,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
       <xref linkend="lustrerecovery" />(Version-based Recovery).</para>
     </note>
   </section>
-  <section xml:id="dbdoclet.lfsckadmin" condition='l23'>
+  <section xml:id="dbdoclet.lfsckadmin">
     <title>
     <indexterm>
       <primary>recovery</primary>
@@ -196,34 +191,34 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
       <primary>recovery</primary>
       <secondary>LFSCK</secondary>
     </indexterm>Checking the file system with LFSCK</title>
-	<para condition='l23'>LFSCK is an administrative tool introduced in Lustre
-    software release 2.3 for checking and repair of the attributes specific to a
-    mounted Lustre file system. It is similar in concept to an offline fsck repair
-    tool for a local filesystem, but LFSCK is implemented to run as part of the
-    Lustre file system while the file system is mounted and in use. This allows
-    consistency of checking and repair by the Lustre software without unnecessary
-    downtime, and can be run on the largest Lustre file systems with negligible
-    disruption to normal operations.</para>
-    <para condition='l23'>Since Lustre software release 2.3, LFSCK can verify
-    and repair the Object Index (OI) table that is used internally to map
-    Lustre File Identifiers (FIDs) to MDT internal ldiskfs inode numbers, in
-    an internal table called the OI Table. An OI Scrub traverses the OI table
-    and makes corrections where necessary. An OI Scrub is required after
-    restoring from a file-level MDT backup (
-    <xref linkend="dbdoclet.backup_device" />), or in case the OI Table is
-    otherwise corrupted. Later phases of LFSCK will add further checks to the
-    Lustre distributed file system state.</para>
+    <para>LFSCK is an administrative tool for checking and repair of the
+      attributes specific to a mounted Lustre file system. It is similar
+      in concept to an offline fsck repair tool for a local filesystem,
+      but LFSCK is implemented to run as part of the Lustre file system
+      while the file system is mounted and in use. This allows consistency
+      checking and repair of Lustre-specific metadata without unnecessary
+      downtime, and can be run on the largest Lustre file systems with
+      minimal impact to normal operations.</para>
+    <para>LFSCK can verify
+      and repair the Object Index (OI) table that is used internally to map
+      Lustre File Identifiers (FIDs) to MDT internal ldiskfs inode numbers, in
+      an internal table called the OI Table. An OI Scrub traverses the OI table
+      and makes corrections where necessary. An OI Scrub is required after
+      restoring from a file-level MDT backup (
+      <xref linkend="dbdoclet.backup_device" />), or in case the OI Table is
+      otherwise corrupted. Later phases of LFSCK will add further checks to the
+      Lustre distributed file system state.</para>
     <para condition='l24'>In Lustre software release 2.4, LFSCK namespace
-    scanning can verify and repair the directory FID-in-dirent and LinkEA
-    consistency.</para>
+      scanning can verify and repair the directory FID-in-dirent and LinkEA
+      consistency.</para>
     <para condition='l26'>In Lustre software release 2.6, LFSCK layout scanning
-    can verify and repair MDT-OST file layout inconsistencies. File layout
-    inconsistencies between MDT-objects and OST-objects that are checked and
-    corrected include dangling reference, unreferenced OST-objects, mismatched
-    references and multiple references.</para>
+      can verify and repair MDT-OST file layout inconsistencies. File layout
+      inconsistencies between MDT-objects and OST-objects that are checked and
+      corrected include dangling reference, unreferenced OST-objects, mismatched
+      references and multiple references.</para>
     <para condition='l27'>In Lustre software release 2.7, LFSCK layout scanning
-    is enhanced to support verify and repair inconsistencies between multiple
-    MDTs.</para>
+      is enhanced to support verify and repair inconsistencies between multiple
+      MDTs.</para>
     <para>Control and monitoring of LFSCK is through LFSCK and the
     <literal>/proc</literal> file system interfaces. LFSCK supports three types
     of interface: switch interface, status interface, and adjustment interface.
