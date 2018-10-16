@@ -165,7 +165,8 @@ command_t net_cmds[] = {
 	 "\t--credits: Network Interface credits\n"
 	 "\t--cpt: CPU Partitions configured net uses (e.g. [0,1]\n"
 	 "\t--conns-per-peer: number of connections per peer\n"
-	 "\t--skip-mr-route-setup: do not add linux route for the ni\n"},
+	 "\t--skip-mr-route-setup: do not add linux route for the ni\n"
+	 "\t--auth-key: Network authorization key (kfilnd only)\n"},
 	{"del", jt_del_ni, 0, "delete a network\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--if: physical interface (e.g. eth0)\n"},
@@ -1056,7 +1057,7 @@ static int jt_add_route(int argc, char **argv)
 static int jt_add_ni(int argc, char **argv)
 {
 	char *ip2net = NULL;
-	long int pto = -1, pc = -1, pbc = -1, cre = -1, cpp = -1;
+	long int pto = -1, pc = -1, pbc = -1, cre = -1, cpp = -1, auth_key = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt, cpt_rc = -1;
 	struct lnet_dlc_network_descr nw_descr;
@@ -1068,8 +1069,9 @@ static int jt_add_ni(int argc, char **argv)
 	memset(&tunables, 0, sizeof(tunables));
 	lustre_lnet_init_nw_descr(&nw_descr);
 
-	const char *const short_options = "b:c:i:k:m:n:p:r:s:t:";
+	const char *const short_options = "a:b:c:i:k:m:n:p:r:s:t:";
 	static const struct option long_options[] = {
+	{ .name = "auth-key",	  .has_arg = required_argument, .val = 'a' },
 	{ .name = "peer-buffer-credits",
 				  .has_arg = required_argument, .val = 'b' },
 	{ .name = "peer-credits", .has_arg = required_argument, .val = 'c' },
@@ -1092,6 +1094,14 @@ static int jt_add_ni(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
 		switch (opt) {
+		case 'a':
+			rc = parse_long(optarg, &auth_key);
+			if (rc != 0) {
+				/* ignore option */
+				auth_key = -1;
+				continue;
+			}
+			break;
 		case 'b':
 			rc = parse_long(optarg, &pbc);
 			if (rc != 0) {
@@ -1161,6 +1171,11 @@ static int jt_add_ni(int argc, char **argv)
 		default:
 			return 0;
 		}
+	}
+
+	if (auth_key > 0 && LNET_NETTYP(nw_descr.nw_id) == KFILND) {
+		tunables.lt_tun.lnd_tun_u.lnd_kfi.lnd_auth_key = auth_key;
+		found = true;
 	}
 
 	if (pto > 0 || pc > 0 || pbc > 0 || cre > 0 || cpp > -1) {

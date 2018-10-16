@@ -295,7 +295,8 @@ static struct convert_struct converter[] = {
 	[SOCKLND] = { .name = "SOCKLND", .nid2name = ipv4_nid2hostname },
 	[O2IBLND] = { .name = "O2IBLND", .nid2name = ipv4_nid2hostname },
 	[LOLND]	  = { .name = "LOLND",	 .nid2name = lolnd_nid2hostname },
-	[PTL4LND] = { .name = "PTL4LND", .nid2name = external_nid2hostname }
+	[PTL4LND] = { .name = "PTL4LND", .nid2name = external_nid2hostname },
+	[KFILND]  = { .name = "KFILND",  .nid2name = ipv4_nid2hostname }
 };
 
 #define LND_MAX         (sizeof(converter) / sizeof(converter[0]))

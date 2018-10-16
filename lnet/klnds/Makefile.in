@@ -1,5 +1,6 @@
 @BUILD_GNILND_TRUE@obj-m += gnilnd/
 @BUILD_O2IBLND_TRUE@obj-m += o2iblnd/
+@BUILD_KFILND_TRUE@obj-m += kfilnd/
 obj-m += socklnd/
 
 @INCLUDE_RULES@

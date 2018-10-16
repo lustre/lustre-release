@@ -85,6 +85,25 @@ lustre_socklnd_show_tun(struct cYAML *lndparams,
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
+static int
+lustre_kfilnd_show_tun(struct cYAML *lndparams,
+			struct lnet_ioctl_config_kfilnd_tunables *lnd_cfg)
+{
+	if (cYAML_create_number(lndparams, "prov_major_version",
+				lnd_cfg->lnd_prov_major_version) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (cYAML_create_number(lndparams, "prov_minor_version",
+				lnd_cfg->lnd_prov_minor_version) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	if (cYAML_create_number(lndparams, "auth_key",
+				lnd_cfg->lnd_auth_key) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
 int
 lustre_net_show_tunables(struct cYAML *tunables,
 			 struct lnet_ioctl_config_lnd_cmn_tunables *cmn)
@@ -129,6 +148,9 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 	else if (net_type == SOCKLND)
 		rc = lustre_socklnd_show_tun(lnd_tunables,
 					     &lnd->lnd_tun_u.lnd_sock);
+	else if (net_type == KFILND)
+		rc = lustre_kfilnd_show_tun(lnd_tunables,
+					    &lnd->lnd_tun_u.lnd_kfi);
 
 	return rc;
 }
@@ -176,6 +198,33 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 
 }
 
+static void
+yaml_extract_kfi_tun(struct cYAML *tree,
+		      struct lnet_ioctl_config_kfilnd_tunables *lnd_cfg)
+{
+	struct cYAML *prov_major_version = NULL;
+	struct cYAML *prov_minor_version = NULL;
+	struct cYAML *auth_key = NULL;
+	struct cYAML *lndparams = NULL;
+
+	lndparams = cYAML_get_object_item(tree, "lnd tunables");
+	if (!lndparams)
+		return;
+
+	prov_major_version =
+		cYAML_get_object_item(lndparams, "prov_major_version");
+	lnd_cfg->lnd_prov_major_version =
+		(prov_major_version) ? prov_major_version->cy_valueint : 0;
+
+	prov_minor_version =
+		cYAML_get_object_item(lndparams, "prov_minor_version");
+	lnd_cfg->lnd_prov_minor_version =
+		(prov_minor_version) ? prov_minor_version->cy_valueint : 0;
+
+	auth_key = cYAML_get_object_item(lndparams, "auth_key");
+	lnd_cfg->lnd_auth_key =
+		(auth_key) ? auth_key->cy_valueint : 0;
+}
 
 static void
 yaml_extract_sock_tun(struct cYAML *tree,
@@ -203,6 +252,8 @@ lustre_yaml_extract_lnd_tunables(struct cYAML *tree,
 	else if (net_type == SOCKLND)
 		yaml_extract_sock_tun(tree,
 				      &tun->lnd_tun_u.lnd_sock);
-
+	else if (net_type == KFILND)
+		yaml_extract_kfi_tun(tree,
+				     &tun->lnd_tun_u.lnd_kfi);
 }
 

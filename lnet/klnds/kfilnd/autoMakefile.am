@@ -1,0 +1,10 @@
+if MODULES
+if BUILD_KFILND
+modulenet_DATA := kkfilnd$(KMODEXT)
+endif # BUILD_KFILND
+endif # MODULES
+
+EXTRA_DIST := $(kkfilnd-objs:%.o=%.c) kfilnd.h kfilnd_dev.h kfilnd_dom.h \
+	kfilnd_ep.h kfilnd_peer.h kfilnd_tn.h kfilnd_cq.h
+
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@

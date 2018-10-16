@@ -651,6 +651,44 @@ AC_SUBST(GNICPPFLAGS)
 AC_SUBST(GNILND)
 ]) # LN_CONFIG_GNILND
 
+#
+# LN_CONFIG_KFILND
+#
+# check whether to use the kfabric Network Interface lnd
+#
+AC_DEFUN([LN_CONFIG_KFILND], [
+AC_ARG_WITH([kfi],
+	AC_HELP_STRING([--with-kfi=<path>], [Kfabric build path for kfilnd]),
+	[
+		AC_CHECK_FILE([$with_kfi/Module.symvers],
+		[
+			# KFICPPFLAGS was set in spec file
+			KFICPPFLAGS="-I$with_kfi/include"
+			EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+			EXTRA_KCFLAGS="$EXTRA_KCFLAGS $KFICPPFLAGS"
+			KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS $with_kfi/Module.symvers"
+			LB_CHECK_COMPILE([if kfabric headers are present], KFI_header,
+			[
+				#include <kfi_endpoint.h>
+			],[
+				struct kfi_info *hints;
+				hints = kfi_allocinfo();
+			],[
+				KFILND="kfilnd"
+				AC_MSG_NOTICE([adding $with_kfi/Module.symvers to Symbol Path])
+				EXTRA_SYMBOLS="$EXTRA_SYMBOLS $with_kfi/Module.symvers"
+			],[
+				AC_MSG_ERROR([can't compile kfilnd with given KFICPPFLAGS: $KFICPPFLAGS])
+			])
+		],[
+			AC_MSG_ERROR(["$with_kfi/Module.symvers does not exist"])
+		])
+	],[])
+AC_SUBST(KFICPPFLAGS)
+AC_SUBST(KFILND)
+AC_SUBST(EXTRA_SYMBOLS)
+]) # LN_CONFIG_KFILND
+
 # LN_CONFIG_STRSCPY_EXISTS
 #
 # If strscpy exists, prefer it over strlcpy
@@ -897,6 +935,7 @@ LN_CONFIG_BACKOFF
 LN_CONFIG_O2IB
 LN_CONFIG_GNILND
 LN_CONFIG_STRSCPY_EXISTS
+LN_CONFIG_KFILND
 # 3.10
 LN_EXPORT_KMAP_TO_PAGE
 # 3.15
@@ -1038,6 +1077,7 @@ LN_USR_NLMSGERR
 AC_DEFUN([LN_CONDITIONALS], [
 AM_CONDITIONAL(BUILD_O2IBLND,    test x$O2IBLND = "xo2iblnd")
 AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND  = "xgnilnd")
+AM_CONDITIONAL(BUILD_KFILND,     test x$KFILND  = "xkfilnd")
 ]) # LN_CONDITIONALS
 
 #
@@ -1062,6 +1102,8 @@ lnet/klnds/gnilnd/Makefile
 lnet/klnds/gnilnd/autoMakefile
 lnet/klnds/socklnd/Makefile
 lnet/klnds/socklnd/autoMakefile
+lnet/klnds/kfilnd/Makefile
+lnet/klnds/kfilnd/autoMakefile
 lnet/lnet/Makefile
 lnet/lnet/autoMakefile
 lnet/selftest/Makefile

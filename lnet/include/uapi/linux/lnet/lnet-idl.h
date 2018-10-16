@@ -203,6 +203,7 @@ struct lnet_magicversion {
 #define LNET_PROTO_IB_MAGIC		0x0be91b91
 #define LNET_PROTO_GNI_MAGIC		0xb00fbabe /* ask Kim */
 #define LNET_PROTO_TCP_MAGIC		0xeebc0ded
+#define LNET_PROTO_KFI_MAGIC		0xdeadbeef
 #define LNET_PROTO_ACCEPTOR_MAGIC	0xacce7100
 #define LNET_PROTO_PING_MAGIC		0x70696E67 /* 'ping' */
 
