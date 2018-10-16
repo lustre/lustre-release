@@ -610,6 +610,15 @@ load_modules_local() {
 		return 0
 	fi
 
+	# Create special udev test rules on every node
+	if [ -f $LUSTRE/lustre/conf/99-lustre.rules ]; then {
+		sed -e 's|/usr/sbin/lctl|$LCTL|g' $LUSTRE/lustre/conf/99-lustre.rules > /etc/udev/rules.d/99-lustre-test.rules
+	} else {
+		echo "SUBSYSTEM==\"lustre\", ACTION==\"change\", ENV{PARAM}==\"?*\", RUN+=\"$LCTL set_param '\$env{PARAM}=\$env{SETTING}'\"" > /etc/udev/rules.d/99-lustre-test.rules
+	} fi
+	udevadm control --reload-rules
+	udevadm trigger
+
 	echo Loading modules from $LUSTRE
 
 	local ncpus
@@ -755,12 +764,20 @@ unload_modules() {
 
 	$LUSTRE_RMMOD ldiskfs || return 2
 
+	[ -f /etc/udev/rules.d/99-lustre-test.rules ] &&
+		rm /etc/udev/rules.d/99-lustre-test.rules
+	udevadm control --reload-rules
+	udevadm trigger
+
 	if $LOAD_MODULES_REMOTE; then
 		local list=$(comma_list $(remote_nodes_list))
 		if [ -n "$list" ]; then
 			echo "unloading modules on: '$list'"
 			do_rpc_nodes "$list" $LUSTRE_RMMOD ldiskfs
 			do_rpc_nodes "$list" check_mem_leak
+			do_rpc_nodes "$list" "rm /etc/udev/rules.d/99-lustre-test.rules"
+			do_rpc_nodes "$list" "udevadm control --reload-rules"
+			do_rpc_nodes "$list" "udevadm trigger"
 		fi
 	fi
 
