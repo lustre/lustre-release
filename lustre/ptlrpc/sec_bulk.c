@@ -916,7 +916,7 @@ EXPORT_SYMBOL(bulk_sec_desc_unpack);
 int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 			      void *buf, int buflen)
 {
-	struct cfs_crypto_hash_desc	*hdesc;
+	struct ahash_request	       *req;
 	int				hashsize;
 	unsigned int			bufsize;
 	int				i, err;
@@ -925,17 +925,17 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 	LASSERT(alg > BULK_HASH_ALG_NULL && alg < BULK_HASH_ALG_MAX);
 	LASSERT(buflen >= 4);
 
-	hdesc = cfs_crypto_hash_init(cfs_hash_alg_id[alg], NULL, 0);
-	if (IS_ERR(hdesc)) {
+	req = cfs_crypto_hash_init(cfs_hash_alg_id[alg], NULL, 0);
+	if (IS_ERR(req)) {
 		CERROR("Unable to initialize checksum hash %s\n",
 		       cfs_crypto_hash_name(cfs_hash_alg_id[alg]));
-		return PTR_ERR(hdesc);
+		return PTR_ERR(req);
 	}
 
 	hashsize = cfs_crypto_hash_digestsize(cfs_hash_alg_id[alg]);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		cfs_crypto_hash_update_page(hdesc,
+		cfs_crypto_hash_update_page(req,
 				  BD_GET_KIOV(desc, i).kiov_page,
 				  BD_GET_KIOV(desc, i).kiov_offset &
 					      ~PAGE_MASK,
@@ -948,11 +948,11 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 		bufsize = sizeof(hashbuf);
 		LASSERTF(bufsize >= hashsize, "bufsize = %u < hashsize %u\n",
 			 bufsize, hashsize);
-		err = cfs_crypto_hash_final(hdesc, hashbuf, &bufsize);
+		err = cfs_crypto_hash_final(req, hashbuf, &bufsize);
 		memcpy(buf, hashbuf, buflen);
 	} else {
 		bufsize = buflen;
-		err = cfs_crypto_hash_final(hdesc, buf, &bufsize);
+		err = cfs_crypto_hash_final(req, buf, &bufsize);
 	}
 
 	return err;

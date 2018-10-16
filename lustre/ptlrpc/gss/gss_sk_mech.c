@@ -318,18 +318,18 @@ u32 sk_make_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key, int msg_count,
 		 rawobj_t *msgs, int iov_count, lnet_kiov_t *iovs,
 		 rawobj_t *token)
 {
-	struct cfs_crypto_hash_desc *desc;
+	struct ahash_request *req;
 	int rc2, rc;
 
-	desc = cfs_crypto_hash_init(algo, key->data, key->len);
-	if (IS_ERR(desc)) {
-		rc = PTR_ERR(desc);
+	req = cfs_crypto_hash_init(algo, key->data, key->len);
+	if (IS_ERR(req)) {
+		rc = PTR_ERR(req);
 		goto out_init_failed;
 	}
 
-	rc2 = gss_digest_hash(desc, NULL, msg_count, msgs, iov_count, iovs,
+	rc2 = gss_digest_hash(req, NULL, msg_count, msgs, iov_count, iovs,
 			      token);
-	rc = cfs_crypto_hash_final(desc, key->data, &key->len);
+	rc = cfs_crypto_hash_final(req, key->data, &key->len);
 	if (!rc && rc2)
 		rc = rc2;
 out_init_failed:
@@ -399,7 +399,6 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 			int msgcnt, rawobj_t *msgs, int iovcnt,
 			lnet_kiov_t *iovs, int iov_bytes, rawobj_t *token)
 {
-	struct cfs_crypto_hash_desc *desc;
 	rawobj_t checksum = RAWOBJ_EMPTY;
 	struct ahash_request *req;
 	struct scatterlist sg[1];
@@ -419,11 +418,10 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 	if (!checksum.data)
 		return rc;
 
-	desc = cfs_crypto_hash_init(sc_hmac, key->data, key->len);
-	if (IS_ERR(desc))
+	req = cfs_crypto_hash_init(sc_hmac, key->data, key->len);
+	if (IS_ERR(req))
 		goto cleanup;
 
-	req = (struct ahash_request *) desc;
 	for (i = 0; i < msgcnt; i++) {
 		if (!msgs[i].len)
 			continue;
@@ -466,7 +464,7 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 	rc = GSS_S_COMPLETE;
 
 hash_cleanup:
-	cfs_crypto_hash_final(desc, checksum.data, &checksum.len);
+	cfs_crypto_hash_final(req, checksum.data, &checksum.len);
 
 cleanup:
 	OBD_FREE_LARGE(checksum.data, checksum.len);

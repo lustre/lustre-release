@@ -270,12 +270,11 @@ out:
 	return ret;
 }
 
-int gss_digest_hash(struct cfs_crypto_hash_desc *desc,
+int gss_digest_hash(struct ahash_request *req,
 		    rawobj_t *hdr, int msgcnt, rawobj_t *msgs,
 		    int iovcnt, lnet_kiov_t *iovs,
 		    rawobj_t *cksum)
 {
-	struct ahash_request *req = (struct ahash_request *)desc;
 	struct scatterlist sg[1];
 	struct sg_table sgt;
 	int rc = 0;

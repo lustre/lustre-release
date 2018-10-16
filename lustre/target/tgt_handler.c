@@ -1720,16 +1720,16 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 				 int opc, enum cksum_types cksum_type,
 				 __u32 *cksum)
 {
-	struct cfs_crypto_hash_desc	*hdesc;
+	struct ahash_request	       *req;
 	unsigned int			bufsize;
 	int				i, err;
 	unsigned char			cfs_alg = cksum_obd2cfs(cksum_type);
 
-	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
-	if (IS_ERR(hdesc)) {
+	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(req)) {
 		CERROR("%s: unable to initialize checksum hash %s\n",
 		       tgt_name(tgt), cfs_crypto_hash_name(cfs_alg));
-		return PTR_ERR(hdesc);
+		return PTR_ERR(req);
 	}
 
 	CDEBUG(D_INFO, "Checksum for algo %s\n", cfs_crypto_hash_name(cfs_alg));
@@ -1755,7 +1755,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 				 * display in dump_all_bulk_pages() */
 				np->index = i;
 
-				cfs_crypto_hash_update_page(hdesc, np, off,
+				cfs_crypto_hash_update_page(req, np, off,
 							    len);
 				continue;
 			} else {
@@ -1763,7 +1763,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 				       tgt_name(tgt));
 			}
 		}
-		cfs_crypto_hash_update_page(hdesc, local_nb[i].lnb_page,
+		cfs_crypto_hash_update_page(req, local_nb[i].lnb_page,
 				  local_nb[i].lnb_page_offset & ~PAGE_MASK,
 				  local_nb[i].lnb_len);
 
@@ -1788,7 +1788,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 				 * display in dump_all_bulk_pages() */
 				np->index = i;
 
-				cfs_crypto_hash_update_page(hdesc, np, off,
+				cfs_crypto_hash_update_page(req, np, off,
 							    len);
 				continue;
 			} else {
@@ -1799,7 +1799,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 	}
 
 	bufsize = sizeof(*cksum);
-	err = cfs_crypto_hash_final(hdesc, (unsigned char *)cksum, &bufsize);
+	err = cfs_crypto_hash_final(req, (unsigned char *)cksum, &bufsize);
 
 	return 0;
 }
@@ -1951,7 +1951,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	enum cksum_types t10_cksum_type = tgt->lut_dt_conf.ddp_t10_cksum_type;
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
 	const char *obd_name = tgt->lut_obd->obd_name;
-	struct cfs_crypto_hash_desc *hdesc;
+	struct ahash_request *req;
 	unsigned int bufsize;
 	unsigned char *buffer;
 	struct page *__page;
@@ -1967,11 +1967,11 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	if (__page == NULL)
 		return -ENOMEM;
 
-	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
-	if (IS_ERR(hdesc)) {
+	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(req)) {
 		CERROR("%s: unable to initialize checksum hash %s\n",
 		       tgt_name(tgt), cfs_crypto_hash_name(cfs_alg));
-		return PTR_ERR(hdesc);
+		return PTR_ERR(req);
 	}
 
 	buffer = kmap(__page);
@@ -1999,7 +1999,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				 * display in dump_all_bulk_pages() */
 				np->index = i;
 
-				cfs_crypto_hash_update_page(hdesc, np, off,
+				cfs_crypto_hash_update_page(req, np, off,
 							    len);
 				continue;
 			} else {
@@ -2044,7 +2044,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 
 		used_number += used;
 		if (used_number == guard_number) {
-			cfs_crypto_hash_update_page(hdesc, __page, 0,
+			cfs_crypto_hash_update_page(req, __page, 0,
 				used_number * sizeof(*guard_start));
 			used_number = 0;
 		}
@@ -2070,7 +2070,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				 * display in dump_all_bulk_pages() */
 				np->index = i;
 
-				cfs_crypto_hash_update_page(hdesc, np, off,
+				cfs_crypto_hash_update_page(req, np, off,
 							    len);
 				continue;
 			} else {
@@ -2084,11 +2084,11 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		GOTO(out, rc);
 
 	if (used_number != 0)
-		cfs_crypto_hash_update_page(hdesc, __page, 0,
+		cfs_crypto_hash_update_page(req, __page, 0,
 			used_number * sizeof(*guard_start));
 
 	bufsize = sizeof(cksum);
-	rc = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+	rc = cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
 
 	if (rc == 0)
 		*check_sum = cksum;

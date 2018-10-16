@@ -1106,7 +1106,7 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 				   int sector_size,
 				   u32 *check_sum)
 {
-	struct cfs_crypto_hash_desc *hdesc;
+	struct ahash_request *req;
 	/* Used Adler as the default checksum type on top of DIF tags */
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
 	struct page *__page;
@@ -1126,9 +1126,9 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	if (__page == NULL)
 		return -ENOMEM;
 
-	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
-	if (IS_ERR(hdesc)) {
-		rc = PTR_ERR(hdesc);
+	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(req)) {
+		rc = PTR_ERR(req);
 		CERROR("%s: unable to initialize checksum hash %s: rc = %d\n",
 		       obd_name, cfs_crypto_hash_name(cfs_alg), rc);
 		GOTO(out, rc);
@@ -1166,7 +1166,7 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 
 		used_number += used;
 		if (used_number == guard_number) {
-			cfs_crypto_hash_update_page(hdesc, __page, 0,
+			cfs_crypto_hash_update_page(req, __page, 0,
 				used_number * sizeof(*guard_start));
 			used_number = 0;
 		}
@@ -1180,11 +1180,11 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		GOTO(out, rc);
 
 	if (used_number != 0)
-		cfs_crypto_hash_update_page(hdesc, __page, 0,
+		cfs_crypto_hash_update_page(req, __page, 0,
 			used_number * sizeof(*guard_start));
 
 	bufsize = sizeof(cksum);
-	cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+	cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
 
 	/* For sending we only compute the wrong checksum instead
 	 * of corrupting the data so it is still correct on a redo */
@@ -1203,17 +1203,17 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 			     u32 *cksum)
 {
 	int				i = 0;
-	struct cfs_crypto_hash_desc	*hdesc;
+	struct ahash_request	       *req;
 	unsigned int			bufsize;
 	unsigned char			cfs_alg = cksum_obd2cfs(cksum_type);
 
 	LASSERT(pg_count > 0);
 
-	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
-	if (IS_ERR(hdesc)) {
+	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(req)) {
 		CERROR("Unable to initialize checksum hash %s\n",
 		       cfs_crypto_hash_name(cfs_alg));
-		return PTR_ERR(hdesc);
+		return PTR_ERR(req);
 	}
 
 	while (nob > 0 && pg_count > 0) {
@@ -1229,7 +1229,7 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
 			kunmap(pga[i]->pg);
 		}
-		cfs_crypto_hash_update_page(hdesc, pga[i]->pg,
+		cfs_crypto_hash_update_page(req, pga[i]->pg,
 					    pga[i]->off & ~PAGE_MASK,
 					    count);
 		LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d\n",
@@ -1241,7 +1241,7 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 	}
 
 	bufsize = sizeof(*cksum);
-	cfs_crypto_hash_final(hdesc, (unsigned char *)cksum, &bufsize);
+	cfs_crypto_hash_final(req, (unsigned char *)cksum, &bufsize);
 
 	/* For sending we only compute the wrong checksum instead
 	 * of corrupting the data so it is still correct on a redo */

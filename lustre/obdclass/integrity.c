@@ -85,7 +85,7 @@ static int __obd_t10_performance_test(const char *obd_name,
 				      int repeat_number)
 {
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
-	struct cfs_crypto_hash_desc *hdesc;
+	struct ahash_request *req;
 	obd_dif_csum_fn *fn = NULL;
 	unsigned int bufsize;
 	unsigned char *buffer;
@@ -108,9 +108,9 @@ static int __obd_t10_performance_test(const char *obd_name,
 	if (__page == NULL)
 		return -ENOMEM;
 
-	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
-	if (IS_ERR(hdesc)) {
-		rc = PTR_ERR(hdesc);
+	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(req)) {
+		rc = PTR_ERR(req);
 		CERROR("%s: unable to initialize checksum hash %s: rc = %d\n",
 		       obd_name, cfs_crypto_hash_name(cfs_alg), rc);
 		GOTO(out, rc);
@@ -134,7 +134,7 @@ static int __obd_t10_performance_test(const char *obd_name,
 
 		used_number += used;
 		if (used_number == guard_number) {
-			cfs_crypto_hash_update_page(hdesc, __page, 0,
+			cfs_crypto_hash_update_page(req, __page, 0,
 				used_number * sizeof(*guard_start));
 			used_number = 0;
 		}
@@ -144,12 +144,12 @@ static int __obd_t10_performance_test(const char *obd_name,
 		GOTO(out_final, rc);
 
 	if (used_number != 0)
-		cfs_crypto_hash_update_page(hdesc, __page, 0,
+		cfs_crypto_hash_update_page(req, __page, 0,
 			used_number * sizeof(*guard_start));
 
 	bufsize = sizeof(cksum);
 out_final:
-	rc2 = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+	rc2 = cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
 	rc = rc ? rc : rc2;
 out:
 	__free_page(__page);

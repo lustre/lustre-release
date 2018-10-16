@@ -448,7 +448,7 @@ __s32 krb5_make_checksum(__u32 enctype,
 			 rawobj_t *cksum)
 {
 	struct krb5_enctype *ke = &enctypes[enctype];
-	struct cfs_crypto_hash_desc *desc = NULL;
+	struct ahash_request *req = NULL;
 	enum cfs_crypto_hash_alg hash_algo;
 	rawobj_t hdr;
 	int rc;
@@ -457,12 +457,12 @@ __s32 krb5_make_checksum(__u32 enctype,
 
 	/* For the cbc(des) case we want md5 instead of hmac(md5) */
 	if (strcmp(ke->ke_enc_name, "cbc(des)"))
-		desc = cfs_crypto_hash_init(hash_algo, kb->kb_key.data,
+		req = cfs_crypto_hash_init(hash_algo, kb->kb_key.data,
 					   kb->kb_key.len);
 	else
-		desc = cfs_crypto_hash_init(hash_algo, NULL, 0);
-	if (IS_ERR(desc)) {
-		rc = PTR_ERR(desc);
+		req = cfs_crypto_hash_init(hash_algo, NULL, 0);
+	if (IS_ERR(req)) {
+		rc = PTR_ERR(req);
 		CERROR("failed to alloc hash %s : rc = %d\n",
 		       ke->ke_hash_name, rc);
 		goto out_no_hash;
@@ -479,7 +479,7 @@ __s32 krb5_make_checksum(__u32 enctype,
 	hdr.data = (__u8 *)khdr;
 	hdr.len = sizeof(*khdr);
 
-	rc = gss_digest_hash(desc, &hdr, msgcnt, msgs,
+	rc = gss_digest_hash(req, &hdr, msgcnt, msgs,
 			     iovcnt, iovs, cksum);
 	if (rc)
 		goto out_free_hash;
@@ -487,7 +487,7 @@ __s32 krb5_make_checksum(__u32 enctype,
 	if (!ke->ke_hash_hmac) {
 		LASSERT(kb->kb_tfm);
 
-		cfs_crypto_hash_final(desc, cksum->data, &cksum->len);
+		cfs_crypto_hash_final(req, cksum->data, &cksum->len);
 		rc = gss_crypt_generic(kb->kb_tfm, 0, NULL,
 				       cksum->data, cksum->data,
 				       cksum->len);
@@ -495,8 +495,8 @@ __s32 krb5_make_checksum(__u32 enctype,
 	}
 
 out_free_hash:
-	if (desc)
-		cfs_crypto_hash_final(desc, cksum->data, &cksum->len);
+	if (req)
+		cfs_crypto_hash_final(req, cksum->data, &cksum->len);
 out_no_hash:
 	return rc ? GSS_S_FAILURE : GSS_S_COMPLETE;
 }
