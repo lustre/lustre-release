@@ -1019,6 +1019,8 @@ init_gss() {
 				-m $SK_PATH/$FSNAME-nmclient.key \
 				 >/dev/null 2>&1"
 		fi
+	fi
+	if $GSS_SK; then
 		# mount options for servers and clients
 		MGS_MOUNT_OPTS=$(add_sk_mntflag $MGS_MOUNT_OPTS)
 		MDS_MOUNT_OPTS=$(add_sk_mntflag $MDS_MOUNT_OPTS)
@@ -4820,6 +4822,10 @@ set_persistent_param_and_check() {
 init_param_vars () {
 	TIMEOUT=$(lctl get_param -n timeout)
 	TIMEOUT=${TIMEOUT:-20}
+
+	if [ -n $arg1 ]; then
+		[ "$arg1" = "server_only" ] && return
+	fi
 
 	remote_mds_nodsh && log "Using TIMEOUT=$TIMEOUT" && return 0
 

@@ -2150,15 +2150,10 @@ cleanup_31() {
 	KZPOOL=$KEEP_ZPOOL
 	export KEEP_ZPOOL="true"
 	stopall
+	export SK_MOUNTED=false
 	writeconf_all
-	setupall server_only || echo 1
+	setupall || echo 1
 	export KEEP_ZPOOL="$KZPOOL"
-
-	# remount client normally
-	mount_client $MOUNT $MOUNT_OPTS || error "unable to remount client"
-	if [ "$MOUNT_2" ]; then
-		mount_client $MOUNT2 || error "unable to remount client2"
-	fi
 }
 
 test_31() {
@@ -2173,10 +2168,12 @@ test_31() {
 
 	stack_trap cleanup_31 EXIT
 
-	# unmount client
-	umount_client $MOUNT || error "unable to umount client"
-	if [ "$MOUNT_2" ]; then
-		umount_client $MOUNT2 || error "unable to umount client2"
+	# umount client
+	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if $(grep -q $MOUNT' ' /proc/mounts); then
+		umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
 
 	# check exports on servers are empty for client
@@ -2200,6 +2197,7 @@ test_31() {
 	KZPOOL=$KEEP_ZPOOL
 	export KEEP_ZPOOL="true"
 	stopall
+	export SK_MOUNTED=false
 	writeconf_all
 	setupall server_only || echo 1
 	export KEEP_ZPOOL="$KZPOOL"
