@@ -217,9 +217,11 @@ sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 		return 0;
 	}
 
-	if (value == *sensitivity) {
+	if (value > LNET_MAX_HEALTH_VALUE) {
 		mutex_unlock(&the_lnet.ln_api_mutex);
-		return 0;
+		CERROR("Invalid health value. Maximum: %d value = %lu\n",
+		       LNET_MAX_HEALTH_VALUE, value);
+		return -EINVAL;
 	}
 
 	*sensitivity = value;
