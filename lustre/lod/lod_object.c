@@ -1662,9 +1662,6 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 
 	LASSERT(mutex_is_locked(&lo->ldo_layout_mutex));
 
-	if (le32_to_cpu(lmv1->lmv_hash_type) & LMV_HASH_FLAG_MIGRATION)
-		RETURN(0);
-
 	if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_STRIPE) {
 		lo->ldo_dir_slave_stripe = 1;
 		RETURN(0);
