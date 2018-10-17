@@ -51,7 +51,7 @@ Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
 -		path = kzalloc(sizeof(struct ext4_ext_path) * (depth + 2),
 -				GFP_NOFS);
 +		path = kzalloc(sizeof(struct ext4_ext_path) *
-+			       EXT4_SB(inode->i_sb)->s_max_ext_tree_depth,
++			       (EXT4_SB(inode->i_sb)->s_max_ext_tree_depth + 1),
 +			       GFP_NOFS);
  		if (!path)
  			return ERR_PTR(-ENOMEM);
@@ -77,7 +77,7 @@ Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
 -		path = kzalloc(sizeof(struct ext4_ext_path) * (depth + 1),
 -			       GFP_NOFS);
 +		path = kzalloc(sizeof(struct ext4_ext_path) *
-+			       EXT4_SB(inode->i_sb)->s_max_ext_tree_depth,
++			       (EXT4_SB(inode->i_sb)->s_max_ext_tree_depth + 1),
 +			       GFP_NOFS);
  		if (path == NULL) {
  			ext4_journal_stop(handle);
