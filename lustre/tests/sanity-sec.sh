@@ -1156,6 +1156,12 @@ fops_test_setup() {
 # fileset test directory needs to be initialized on a privileged client
 fileset_test_setup() {
 	local nm=$1
+
+	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ]; then
+		cleanup_mount $MOUNT
+		FILESET="" zconf_mount_clients $CLIENTS $MOUNT
+	fi
+
 	local admin=$(do_facet mgs $LCTL get_param -n \
 		nodemap.${nm}.admin_nodemap)
 	local trust=$(do_facet mgs $LCTL get_param -n \
@@ -1223,6 +1229,10 @@ fileset_test_cleanup() {
 
 	wait_nm_sync $nm admin_nodemap
 	wait_nm_sync $nm trusted_nodemap
+	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ]; then
+		cleanup_mount $MOUNT
+		zconf_mount_clients $CLIENTS $MOUNT
+	fi
 }
 
 do_create_delete() {
