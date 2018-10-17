@@ -6350,6 +6350,36 @@ test_60e() {
 }
 run_test 60e "no space while new llog is being created"
 
+test_60g() {
+	local pid
+
+	test_mkdir -c $MDSCOUNT $DIR/$tdir
+	$LFS setdirstripe -D -i -1 -c $MDSCOUNT $DIR/$tdir
+
+	(
+		local index=0
+		while true; do
+			mkdir $DIR/$tdir/subdir$index 2>/dev/null
+			rmdir $DIR/$tdir/subdir$index 2>/dev/null
+			index=$((index + 1))
+		done
+	) &
+
+	pid=$!
+
+	for i in $(seq 100); do 
+		# define OBD_FAIL_OSD_TXN_START    0x19a
+		do_facet mds1 lctl set_param fail_loc=0x8000019a
+		usleep 100
+	done
+
+	kill -9 $pid
+
+	mkdir $DIR/$tdir/new || error "mkdir failed"
+	rmdir $DIR/$tdir/new || error "rmdir failed"
+}
+run_test 60g "transaction abort won't cause MDT hung"
+
 test_61() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

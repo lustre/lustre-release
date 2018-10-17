@@ -280,7 +280,6 @@ struct llog_handle {
 	atomic_t		 lgh_refcount;
 
 	int			lgh_max_size;
-	__u32			lgh_stale:1;
 };
 
 /* llog_osd.c */

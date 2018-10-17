@@ -220,6 +220,110 @@ out_destroy:
 	RETURN(rc);
 }
 
+static int llog_cat_refresh(const struct lu_env *env,
+			    struct llog_handle *cathandle)
+{
+	struct llog_handle *loghandle;
+	int rc;
+
+	down_write(&cathandle->lgh_lock);
+	list_for_each_entry(loghandle, &cathandle->u.chd.chd_head,
+			    u.phd.phd_entry) {
+		if (!llog_exist(loghandle))
+			continue;
+
+		rc = llog_read_header(env, loghandle, NULL);
+		if (rc)
+			goto unlock;
+	}
+
+	rc = llog_read_header(env, cathandle, NULL);
+unlock:
+	up_write(&loghandle->lgh_lock);
+
+	return rc;
+}
+
+/*
+ * prepare current/next log for catalog.
+ *
+ * if log is NULL, open it, and declare create, NB, if log is remote, create it
+ * synchronously here, see comments below.
+ */
+static int llog_cat_prep_log(const struct lu_env *env,
+			     struct llog_handle *cathandle,
+			     struct llog_handle **ploghandle,
+			     struct thandle *th)
+{
+	int rc = 0;
+
+	if (IS_ERR_OR_NULL(*ploghandle)) {
+		down_write(&cathandle->lgh_lock);
+		if (IS_ERR_OR_NULL(*ploghandle)) {
+			struct llog_handle *loghandle;
+
+			rc = llog_open(env, cathandle->lgh_ctxt, &loghandle,
+				       NULL, NULL, LLOG_OPEN_NEW);
+			if (!rc) {
+				*ploghandle = loghandle;
+				list_add_tail(&loghandle->u.phd.phd_entry,
+					      &cathandle->u.chd.chd_head);
+			}
+		}
+		up_write(&cathandle->lgh_lock);
+
+		if (rc)
+			return rc;
+	}
+
+	if (llog_exist(*ploghandle))
+		return 0;
+
+	if (dt_object_remote(cathandle->lgh_obj)) {
+create_remote_log:
+		down_read_nested(&cathandle->lgh_lock, LLOGH_CAT);
+		down_write_nested(&(*ploghandle)->lgh_lock, LLOGH_LOG);
+		if (!llog_exist(*ploghandle)) {
+			/* For remote operation, if we put the llog object
+			 * creation in the current transaction, then the
+			 * llog object will not be created on the remote
+			 * target until the transaction stop, if other
+			 * operations start before the transaction stop,
+			 * and use the same llog object, will be dependent
+			 * on the success of this transaction. So let's
+			 * create the llog object synchronously here to
+			 * remove the dependency. */
+			rc = llog_cat_new_log(env, cathandle, *ploghandle,
+					      NULL);
+			if (rc == -ESTALE) {
+				up_write(&(*ploghandle)->lgh_lock);
+				up_read(&cathandle->lgh_lock);
+
+				rc = llog_cat_refresh(env, cathandle);
+				if (!rc)
+					goto create_remote_log;
+
+				return rc;
+			}
+		}
+		up_write(&(*ploghandle)->lgh_lock);
+		up_read(&cathandle->lgh_lock);
+	} else {
+		struct llog_thread_info	*lgi = llog_info(env);
+		struct llog_logid_rec *lirec = &lgi->lgi_logid;
+
+		rc = llog_declare_create(env, *ploghandle, th);
+		if (rc)
+			return rc;
+
+		lirec->lid_hdr.lrh_len = sizeof(*lirec);
+		rc = llog_declare_write_rec(env, cathandle, &lirec->lid_hdr, -1,
+					    th);
+	}
+
+	return rc;
+}
+
 /* Open an existent log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.
  *
@@ -427,40 +531,6 @@ out_unlock:
 	RETURN(loghandle);
 }
 
-static int llog_cat_update_header(const struct lu_env *env,
-			   struct llog_handle *cathandle)
-{
-	struct llog_handle *loghandle;
-	int rc;
-	ENTRY;
-
-	/* refresh llog */
-	down_write(&cathandle->lgh_lock);
-	if (!cathandle->lgh_stale) {
-		up_write(&cathandle->lgh_lock);
-		RETURN(0);
-	}
-	list_for_each_entry(loghandle, &cathandle->u.chd.chd_head,
-			    u.phd.phd_entry) {
-		if (!llog_exist(loghandle))
-			continue;
-
-		rc = llog_read_header(env, loghandle, NULL);
-		if (rc != 0) {
-			up_write(&cathandle->lgh_lock);
-			GOTO(out, rc);
-		}
-	}
-	rc = llog_read_header(env, cathandle, NULL);
-	if (rc == 0)
-		cathandle->lgh_stale = 0;
-	up_write(&cathandle->lgh_lock);
-	if (rc != 0)
-		GOTO(out, rc);
-out:
-	RETURN(rc);
-}
-
 /* Add a single record to the recovery log(s) using a catalog
  * Returns as llog_write_record
  *
@@ -530,167 +600,39 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 			     struct llog_handle *cathandle,
 			     struct llog_rec_hdr *rec, struct thandle *th)
 {
-	struct llog_thread_info	*lgi = llog_info(env);
-	struct llog_logid_rec	*lirec = &lgi->lgi_logid;
-	struct llog_handle	*loghandle, *next;
-	int			 rc = 0;
+	int rc;
 
 	ENTRY;
 
-	if (cathandle->u.chd.chd_current_log == NULL) {
-		/* declare new plain llog */
-		down_write(&cathandle->lgh_lock);
-		if (cathandle->u.chd.chd_current_log == NULL) {
-			rc = llog_open(env, cathandle->lgh_ctxt, &loghandle,
-				       NULL, NULL, LLOG_OPEN_NEW);
-			if (rc == 0) {
-				cathandle->u.chd.chd_current_log = loghandle;
-				list_add_tail(&loghandle->u.phd.phd_entry,
-					      &cathandle->u.chd.chd_head);
-			}
-		}
-		up_write(&cathandle->lgh_lock);
-	} else if (cathandle->u.chd.chd_next_log == NULL ||
-		   IS_ERR(cathandle->u.chd.chd_next_log)) {
-		/* declare next plain llog */
-		down_write(&cathandle->lgh_lock);
-		if (cathandle->u.chd.chd_next_log == NULL ||
-		    IS_ERR(cathandle->u.chd.chd_next_log)) {
-			rc = llog_open(env, cathandle->lgh_ctxt, &loghandle,
-				       NULL, NULL, LLOG_OPEN_NEW);
-			if (rc == 0) {
-				cathandle->u.chd.chd_next_log = loghandle;
-				list_add_tail(&loghandle->u.phd.phd_entry,
-					      &cathandle->u.chd.chd_head);
-			}
-		}
-		up_write(&cathandle->lgh_lock);
-	}
+	rc = llog_cat_prep_log(env, cathandle,
+			       &cathandle->u.chd.chd_current_log, th);
 	if (rc)
-		GOTO(out, rc);
+		RETURN(rc);
 
-	lirec->lid_hdr.lrh_len = sizeof(*lirec);
+	rc = llog_cat_prep_log(env, cathandle, &cathandle->u.chd.chd_next_log,
+			       th);
+	if (rc)
+		RETURN(rc);
 
-	if (!llog_exist(cathandle->u.chd.chd_current_log)) {
-		if (dt_object_remote(cathandle->lgh_obj)) {
-			/* For remote operation, if we put the llog object
-			 * creation in the current transaction, then the
-			 * llog object will not be created on the remote
-			 * target until the transaction stop, if other
-			 * operations start before the transaction stop,
-			 * and use the same llog object, will be dependent
-			 * on the success of this transaction. So let's
-			 * create the llog object synchronously here to
-			 * remove the dependency. */
-create_again:
-			down_read_nested(&cathandle->lgh_lock, LLOGH_CAT);
-			loghandle = cathandle->u.chd.chd_current_log;
-			down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
-			if (cathandle->lgh_stale) {
-				up_write(&loghandle->lgh_lock);
-				up_read(&cathandle->lgh_lock);
-				GOTO(out, rc = -EIO);
-			}
-			if (!llog_exist(loghandle)) {
-				rc = llog_cat_new_log(env, cathandle, loghandle,
-						      NULL);
-				if (rc == -ESTALE)
-					cathandle->lgh_stale = 1;
-			}
-			up_write(&loghandle->lgh_lock);
-			up_read(&cathandle->lgh_lock);
-			if (rc == -ESTALE) {
-				rc = llog_cat_update_header(env, cathandle);
-				if (rc != 0)
-					GOTO(out, rc);
-				goto create_again;
-			} else if (rc < 0) {
-				GOTO(out, rc);
-			}
-		} else {
-			rc = llog_declare_create(env,
-					cathandle->u.chd.chd_current_log, th);
-			if (rc)
-				GOTO(out, rc);
-			llog_declare_write_rec(env, cathandle,
-					       &lirec->lid_hdr, -1, th);
-		}
-	}
-
-write_again:
-	/* declare records in the llogs */
+declare_write:
 	rc = llog_declare_write_rec(env, cathandle->u.chd.chd_current_log,
 				    rec, -1, th);
-	if (rc == -ESTALE) {
-		down_write(&cathandle->lgh_lock);
-		if (cathandle->lgh_stale) {
-			up_write(&cathandle->lgh_lock);
-			GOTO(out, rc = -EIO);
-		}
-
-		cathandle->lgh_stale = 1;
-		up_write(&cathandle->lgh_lock);
-		rc = llog_cat_update_header(env, cathandle);
-		if (rc != 0)
-			GOTO(out, rc);
-		goto write_again;
-	} else if (rc < 0) {
-		GOTO(out, rc);
+	if (rc == -ESTALE && dt_object_remote(cathandle->lgh_obj)) {
+		rc = llog_cat_refresh(env, cathandle);
+		if (!rc)
+			goto declare_write;
 	}
 
-	next = cathandle->u.chd.chd_next_log;
-	if (!IS_ERR_OR_NULL(next)) {
-		if (!llog_exist(next)) {
-			if (dt_object_remote(cathandle->lgh_obj)) {
-				/* For remote operation, if we put the llog
-				 * object creation in the current transaction,
-				 * then the llog object will not be created on
-				 * the remote target until the transaction stop,
-				 * if other operations start before the
-				 * transaction stop, and use the same llog
-				 * object, will be dependent on the success of
-				 * this transaction. So let's create the llog
-				 * object synchronously here to remove the
-				 * dependency. */
-				down_write_nested(&cathandle->lgh_lock,
-						 LLOGH_CAT);
-				next = cathandle->u.chd.chd_next_log;
-				if (IS_ERR_OR_NULL(next)) {
-					/* Sigh, another thread just tried,
-					 * let's fail as well */
-					up_write(&cathandle->lgh_lock);
-					if (next == NULL)
-						rc = -EIO;
-					else
-						rc = PTR_ERR(next);
-					GOTO(out, rc);
-				}
+#if 0
+	/*
+	 * XXX: we hope for declarations made for existing llog this might be
+	 * not correct with some backends where declarations are expected
+	 * against specific object like ZFS with full debugging enabled.
+	 */
+	rc = llog_declare_write_rec(env, cathandle->u.chd.chd_next_log, rec, -1,
+				    th);
+#endif
 
-				down_write_nested(&next->lgh_lock, LLOGH_LOG);
-				if (!llog_exist(next)) {
-					rc = llog_cat_new_log(env, cathandle,
-							      next, NULL);
-					if (rc < 0)
-						cathandle->u.chd.chd_next_log =
-								ERR_PTR(rc);
-				}
-				up_write(&next->lgh_lock);
-				up_write(&cathandle->lgh_lock);
-				if (rc < 0)
-					GOTO(out, rc);
-			} else {
-				rc = llog_declare_create(env, next, th);
-				llog_declare_write_rec(env, cathandle,
-						&lirec->lid_hdr, -1, th);
-			}
-		}
-		/* XXX: we hope for declarations made for existing llog
-		 *	this might be not correct with some backends
-		 *	where declarations are expected against specific
-		 *	object like ZFS with full debugging enabled */
-		/*llog_declare_write_rec(env, next, rec, -1, th);*/
-	}
-out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_declare_add_rec);
