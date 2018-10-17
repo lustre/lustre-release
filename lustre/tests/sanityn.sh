@@ -2526,14 +2526,14 @@ test_51d() {
 	local br=$(grep -A 10 $tfile /proc/$PID/smaps | awk '/^Rss/{print $2}')
 	echo "Before revoking layout lock: $br KB mapped"
 
-	# delete the file will revoke layout lock
-	rm -f $DIR2/$tfile
+	# cancel layout lock manually
+	cancel_lru_locks mdc
 
 	# rss after revoking
 	local ar=$(grep -A 10 $tfile /proc/$PID/smaps | awk '/^Rss/{print $2}')
 
 	kill -USR1 $PID
-	wait $PID || error
+	wait $PID || error "$MULTIOP failed"
 
 	[ $ar -eq 0 ] || error "rss before: $br, after $ar, some pages remained"
 }
