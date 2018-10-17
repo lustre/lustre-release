@@ -3029,6 +3029,30 @@ int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 	RETURN(0);
 }
 
+int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa)
+{
+	/*
+	 * Project Quota ID state is only allowed to change from within the init
+	 * namespace. Enforce that restriction only if we are trying to change
+	 * the quota ID state. Everything else is allowed in user namespaces.
+	 */
+	if (current_user_ns() == &init_user_ns)
+		return 0;
+
+	if (ll_i2info(inode)->lli_projid != fa->fsx_projid)
+		return -EINVAL;
+
+	if (ll_file_test_flag(ll_i2info(inode), LLIF_PROJECT_INHERIT)) {
+		if (!(fa->fsx_xflags & FS_XFLAG_PROJINHERIT))
+			return -EINVAL;
+	} else {
+		if (fa->fsx_xflags & FS_XFLAG_PROJINHERIT)
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
 int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg)
 {
@@ -3041,19 +3065,19 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	struct iattr *attr;
 	int flags;
 
-	/* only root could change project ID */
-	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-		RETURN(-EPERM);
+	if (copy_from_user(&fsxattr,
+			   (const struct fsxattr __user *)arg,
+			   sizeof(fsxattr)))
+		RETURN(-EFAULT);
+
+	rc = ll_ioctl_check_project(inode, &fsxattr);
+	if (rc)
+		RETURN(rc);
 
 	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
 				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
-
-	if (copy_from_user(&fsxattr,
-			   (const struct fsxattr __user *)arg,
-			   sizeof(fsxattr)))
-		GOTO(out_fsxattr, rc = -EFAULT);
 
 	flags = ll_xflags_to_inode_flags(fsxattr.fsx_xflags);
 	op_data->op_attr_flags = ll_inode_to_ext_flags(flags);

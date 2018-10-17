@@ -890,6 +890,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
 int ll_inode_permission(struct inode *inode, int mask);
 # endif
 #endif
+int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa);
 int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg);
 int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,

@@ -488,7 +488,7 @@ test_0() {
 	local free_space=$(lfs_df | grep "summary" | awk '{print $4}')
 	[ $free_space -le $((MB * 1024)) ] &&
 		skip "not enough space ${free_space} KB, " \
-			"required $((MB * 1024)) KB" && return
+			"required $((MB * 1024)) KB"
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
@@ -634,8 +634,7 @@ test_2() {
 	local FREE_INODES=$(mdt_free_inodes 0)
 	echo "$FREE_INODES free inodes on master MDT"
 	[ $FREE_INODES -lt $LIMIT ] &&
-		skip "not enough free inodes $FREE_INODES required $LIMIT" &&
-		return
+		skip "not enough free inodes $FREE_INODES required $LIMIT"
 
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
@@ -1437,7 +1436,7 @@ run_test 7d "Quota reintegration (Transfer index in multiple bulks)"
 
 # quota reintegration (inode limits)
 test_7e() {
-	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs"
 
 	# LU-2435: skip this quota test if underlying zfs version has not
 	# supported native dnode accounting
@@ -1447,8 +1446,7 @@ test_7e() {
 		local feature=$(do_facet mds1 $ZPOOL get -H $F $pool)
 
 		[[ "$feature" != *" active "* ]] &&
-			skip "requires zpool with active userobj_accounting" &&
-			return
+			skip "requires zpool with active userobj_accounting"
 	}
 
 	local ilimit=$((1024 * 2)) # 2k inodes
@@ -1682,7 +1680,7 @@ test_11() {
 run_test 11 "Chown/chgrp ignores quota"
 
 test_12a() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "needs >= 2 OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "needs >= 2 OSTs"
 
 	local blimit=22 # 22M
 	local blk_cnt=$((blimit - 5))
@@ -1726,7 +1724,7 @@ test_12a() {
 run_test 12a "Block quota rebalancing"
 
 test_12b() {
-	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs"
 
 	local ilimit=$((1024 * 2)) # 2k inodes
 	local TESTFILE0=$DIR/$tdir/$tfile
@@ -2245,7 +2243,7 @@ test_23_sub() {
 test_23() {
 	[ $(facet_fstype ost1) == "zfs" ] &&
 		skip "Overwrite in place is not guaranteed to be " \
-		"space neutral on ZFS" && return
+		"space neutral on ZFS"
 
 	local OST0_MIN=$((6 * 1024)) # 6MB, extra space for meta blocks.
 	check_whether_skip && return 0
@@ -2687,7 +2685,7 @@ run_test 35 "Usage is still accessible across reboot"
 # LU-5006
 test_37() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.93) ] &&
-		skip "Old server doesn't have LU-5006 fix." && return
+		skip "Old server doesn't have LU-5006 fix."
 
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
@@ -2719,7 +2717,7 @@ run_test 37 "Quota accounted properly for file created by 'lfs setstripe'"
 # LU-8801
 test_38() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.60) ] &&
-		skip "Old server doesn't have LU-8801 fix." && return
+		skip "Old server doesn't have LU-8801 fix."
 
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
 
@@ -2767,7 +2765,7 @@ run_test 38 "Quota accounting iterator doesn't skip id entries"
 test_39() {
 	local TESTFILE="$DIR/$tdir/project"
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 
 	setup_quota_test || error "setup quota failed with $?"
 
@@ -2793,7 +2791,7 @@ run_test 39 "Project ID interface works correctly"
 
 test_40a() {
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 	local dir1="$DIR/$tdir/dir1"
 	local dir2="$DIR/$tdir/dir2"
 
@@ -2813,7 +2811,7 @@ run_test 40a "Hard link across different project ID"
 
 test_40b() {
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 	local dir1="$DIR/$tdir/dir1"
 	local dir2="$DIR/$tdir/dir2"
 
@@ -2833,9 +2831,9 @@ test_40b() {
 run_test 40b "Mv across different project ID"
 
 test_40c() {
-	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs"
 		! is_project_quota_supported &&
-			skip "Project quota is not supported" && return 0
+			skip "Project quota is not supported"
 
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
@@ -2863,7 +2861,7 @@ run_test 40c "Remote child Dir inherit project quota properly"
 
 test_50() {
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
@@ -2879,7 +2877,7 @@ run_test 50 "Test if lfs find --projid works"
 
 test_51() {
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 
@@ -2911,7 +2909,7 @@ run_test 51 "Test project accounting with mv/cp"
 
 test_52() {
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 	mkdir $dir && change_project -sp 1 $dir
@@ -2929,7 +2927,7 @@ run_test 52 "Rename across different project ID"
 
 test_53() {
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 	mkdir $dir && change_project -s $dir
@@ -2946,7 +2944,7 @@ run_test 53 "Project inherit attribute could be cleared"
 
 test_54() {
 	! is_project_quota_supported &&
-		skip "Project quota is not supported" && return 0
+		skip "Project quota is not supported"
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 	local testfile="$DIR/$tdir/$tfile-0"
@@ -3000,7 +2998,7 @@ run_test 54 "basic lfs project interface test"
 
 test_55() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
-		skip "Not supported before 2.10.58." && return
+		skip "Not supported before 2.10.58."
 	setup_quota_test || error "setup quota failed with $?"
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
@@ -3083,10 +3081,8 @@ test_57() {
 run_test 57 "lfs project could tolerate errors"
 
 test_59() {
-	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
 		skip "ldiskfs only test"
-		return
-	fi
 	disable_project_quota
 	setup_quota_test || error "setup quota failed with $?"
 	quota_init
@@ -3131,7 +3127,7 @@ run_test 60 "Test quota for root with setgid"
 # test default quota
 test_default_quota() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.51) ] &&
-		skip "Not supported before 2.11.51." && return
+		skip "Not supported before 2.11.51."
 
 	local qtype=$1
 	local qpool=$2
@@ -3299,6 +3295,30 @@ test_61() {
 	test_default_quota "-p" "meta"
 }
 run_test 61 "default quota tests"
+
+test_62() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported"
+	 [[ "$(chattr -h 2>&1)" =~ "project" ]] ||
+		skip "chattr did not support project quota"
+	setup_quota_test || error "setup quota failed with $?"
+	local testdir=$DIR/$tdir/
+
+	$RUNAS mkdir -p $testdir || error "failed to mkdir"
+	change_project -s $testdir
+	[[ $($LFS project -d $testdir) =~ "P" ]] ||
+		error "inherit attribute should be set"
+	# chattr used FS_IOC_SETFLAGS ioctl
+	$RUNAS chattr -P $testdir &&
+		error "regular user clear inherit should fail"
+	[[ $($LFS project -d $testdir) =~ "P" ]] ||
+		error "inherit attribute should still be set"
+	chattr -P $testdir || error "root failed to clear inherit"
+	[[ $($LFS project -d $testdir) =~ "P" ]] &&
+		error "inherit attribute should be cleared"
+	cleanup_quota_test
+}
+run_test 62 "Project inherit should be only changed by root"
 
 quota_fini()
 {
