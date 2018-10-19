@@ -239,16 +239,16 @@ struct ll_inode_info {
 		};
 	};
 
-        /* XXX: For following frequent used members, although they maybe special
-         *      used for non-directory object, it is some time-wasting to check
-         *      whether the object is directory or not before using them. On the
-         *      other hand, currently, sizeof(f) > sizeof(d), it cannot reduce
-         *      the "ll_inode_info" size even if moving those members into u.f.
-         *      So keep them out side.
-         *
-         *      In the future, if more members are added only for directory,
-         *      some of the following members can be moved into u.f.
-         */
+	/* XXX: For following frequent used members, although they maybe special
+	 *      used for non-directory object, it is some time-wasting to check
+	 *      whether the object is directory or not before using them. On the
+	 *      other hand, currently, sizeof(f) > sizeof(d), it cannot reduce
+	 *      the "ll_inode_info" size even if moving those members into u.f.
+	 *      So keep them out side.
+	 *
+	 *      In the future, if more members are added only for directory,
+	 *      some of the following members can be moved into u.f.
+	 */
 	struct cl_object		*lli_clob;
 
 	/* mutex to request for layout lock exclusively. */
@@ -433,10 +433,10 @@ static inline bool ll_file_test_and_clear_flag(struct ll_inode_info *lli,
 int ll_xattr_cache_destroy(struct inode *inode);
 
 int ll_xattr_cache_get(struct inode *inode,
-			const char *name,
-			char *buffer,
-			size_t size,
-			__u64 valid);
+		       const char *name,
+		       char *buffer,
+		       size_t size,
+		       __u64 valid);
 
 int ll_xattr_cache_insert(struct inode *inode,
 			  const char *name,
@@ -447,7 +447,7 @@ static inline bool obd_connect_has_secctx(struct obd_connect_data *data)
 {
 #ifdef CONFIG_SECURITY
 	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
-	       data->ocd_connect_flags2 & OBD_CONNECT2_FILE_SECCTX;
+		data->ocd_connect_flags2 & OBD_CONNECT2_FILE_SECCTX;
 #else
 	return false;
 #endif
@@ -509,8 +509,11 @@ static inline struct pcc_inode *ll_i2pcci(struct inode *inode)
 /* default to use at least 16M for fast read if possible */
 #define RA_REMAIN_WINDOW_MIN			MiB_TO_PAGES(16UL)
 
-/* default readahead on a given system. */
-#define SBI_DEFAULT_READ_AHEAD_MAX		MiB_TO_PAGES(64UL)
+/* default read-ahead on a given client mountpoint. */
+#define SBI_DEFAULT_READ_AHEAD_MAX		MiB_TO_PAGES(1024UL)
+
+/* default read-ahead for a single file descriptor */
+#define SBI_DEFAULT_READ_AHEAD_PER_FILE_MAX	MiB_TO_PAGES(256UL)
 
 /* default read-ahead full files smaller than limit on the second read */
 #define SBI_DEFAULT_READ_AHEAD_WHOLE_MAX	MiB_TO_PAGES(2UL)

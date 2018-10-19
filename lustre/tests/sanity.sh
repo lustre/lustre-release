@@ -9551,12 +9551,11 @@ test_101g_brw_size_test() {
 		sed -n '/pages per rpc/,/^$/p' |
 		awk '/'$pages':/ { reads += $2; writes += $6 }; \
 		END { print reads,writes }'))
-	[ ${rpcs[0]} -ne $count ] && error "${rpcs[0]} != $count read RPCs" &&
-		return 5
-	[ ${rpcs[1]} -ne $count ] && error "${rpcs[1]} != $count write RPCs" &&
-		return 6
-
-	return 0
+	# allow one extra full-sized read RPC for async readahead
+	[[ ${rpcs[0]} == $count || ${rpcs[0]} == $((count + 1)) ]] ||
+		{ error "${rpcs[0]} != $count read RPCs"; return 5; }
+	[[ ${rpcs[1]} == $count ]] ||
+		{ error "${rpcs[1]} != $count write RPCs"; return 6; }
 }
 
 test_101g() {
