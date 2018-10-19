@@ -2287,46 +2287,71 @@ nid                    refs   peer    max   tx    min
         <primary>proc</primary>
         <secondary>locking</secondary>
       </indexterm>Configuring Locking</title>
-    <para>The <literal>lru_size</literal> parameter is used to control the number of client-side
-      locks in an LRU cached locks queue. LRU size is dynamic, based on load to optimize the number
-      of locks available to nodes that have different workloads (e.g., login/build nodes vs. compute
-      nodes vs. backup nodes).</para>
-    <para>The total number of locks available is a function of the server RAM. The default limit is
-      50 locks/1 MB of RAM. If memory pressure is too high, the LRU size is shrunk. The number of
-      locks on the server is limited to <emphasis role="italic">the number of OSTs per
-        server</emphasis> * <emphasis role="italic">the number of clients</emphasis> * <emphasis
-        role="italic">the value of the</emphasis>
-      <literal>lru_size</literal>
-      <emphasis role="italic">setting on the client</emphasis> as follows: </para>
+    <para>The <literal>lru_size</literal> parameter is used to control the
+      number of client-side locks in the LRU cached locks queue. LRU size is
+      normally dynamic, based on load to optimize the number of locks cached
+      on nodes that have different workloads (e.g., login/build nodes vs.
+      compute nodes vs. backup nodes).</para>
+    <para>The total number of locks available is a function of the server RAM.
+      The default limit is 50 locks/1 MB of RAM. If memory pressure is too high,
+      the LRU size is shrunk. The number of locks on the server is limited to
+      <replaceable>num_osts_per_oss * num_clients * lru_size</replaceable>
+      as follows: </para>
     <itemizedlist>
       <listitem>
-        <para>To enable automatic LRU sizing, set the <literal>lru_size</literal> parameter to 0. In
-          this case, the <literal>lru_size</literal> parameter shows the current number of locks
-          being used on the export. LRU sizing is enabled by default.</para>
+        <para>To enable automatic LRU sizing, set the
+	<literal>lru_size</literal> parameter to 0. In this case, the
+	<literal>lru_size</literal> parameter shows the current number of locks
+        being used on the client. Dynamic LRU resizing is enabled by default.
+	</para>
       </listitem>
       <listitem>
-        <para>To specify a maximum number of locks, set the <literal>lru_size</literal> parameter to
-          a value other than zero but, normally, less than 100 * <emphasis role="italic">number of
-            CPUs in client</emphasis>. It is recommended that you only increase the LRU size on a
-          few login nodes where users access the file system interactively.</para>
+        <para>To specify a maximum number of locks, set the
+	<literal>lru_size</literal> parameter to a value other than zero.
+	A good default value for compute nodes is around
+	<literal>100 * <replaceable>num_cpus</replaceable></literal>.
+        It is recommended that you only set <literal>lru_size</literal>
+	to be signifivantly larger on a few login nodes where multiple
+	users access the file system interactively.</para>
       </listitem>
     </itemizedlist>
-    <para>To clear the LRU on a single client, and, as a result, flush client cache without changing
-      the <literal>lru_size</literal> value, run:</para>
-    <screen>$ lctl set_param ldlm.namespaces.<replaceable>osc_name|mdc_name</replaceable>.lru_size=clear</screen>
-    <para>If the LRU size is set to be less than the number of existing unused locks, the unused
-      locks are canceled immediately. Use <literal>echo clear</literal> to cancel all locks without
-      changing the value.</para>
+    <para>To clear the LRU on a single client, and, as a result, flush client
+      cache without changing the <literal>lru_size</literal> value, run:</para>
+    <screen># lctl set_param ldlm.namespaces.<replaceable>osc_name|mdc_name</replaceable>.lru_size=clear</screen>
+    <para>If the LRU size is set lower than the number of existing locks,
+      <emphasis>unused</emphasis> locks are canceled immediately. Use
+      <literal>clear</literal> to cancel all locks without changing the value.
+    </para>
     <note>
-      <para>The <literal>lru_size</literal> parameter can only be set temporarily using
-          <literal>lctl set_param</literal>; it cannot be set permanently.</para>
+      <para>The <literal>lru_size</literal> parameter can only be set
+        temporarily using <literal>lctl set_param</literal>, it cannot be set
+	permanently.</para>
     </note>
-    <para>To disable LRU sizing, on the Lustre clients, run:</para>
-    <screen>$ lctl set_param ldlm.namespaces.*osc*.lru_size=$((<replaceable>NR_CPU</replaceable>*100))</screen>
-    <para>Replace <literal><replaceable>NR_CPU</replaceable></literal> with the number of CPUs on
-      the node.</para>
-    <para>To determine the number of locks being granted, run:</para>
+    <para>To disable dynamic LRU resizing on the clients, run for example:
+    </para>
+    <screen># lctl set_param ldlm.namespaces.*osc*.lru_size=5000</screen>
+    <para>To determine the number of locks being granted with dynamic LRU
+      resizing, run:</para>
     <screen>$ lctl get_param ldlm.namespaces.*.pool.limit</screen>
+    <para>The <literal>lru_max_age</literal> parameter is used to control the
+      age of client-side locks in the LRU cached locks queue. This limits how
+      long unused locks are cached on the client, and avoids idle clients from
+      holding locks for an excessive time, which reduces memory usage on both
+      the client and server, as well as reducing work during server recovery.
+    </para>
+    <para>The <literal>lru_max_age</literal> is set and printed in milliseconds,
+      and by default is 3900000 ms (65 minutes).</para>
+    <para condition='l2B'>Since Lustre 2.11, in addition to setting the
+      maximum lock age in milliseconds, it can also be set using a suffix of
+      <literal>s</literal> or <literal>ms</literal> to indicate seconds or
+      milliseconds, respectively.  For example to set the client's maximum
+      lock age to 15 minutes (900s) run:
+    </para>
+    <screen>
+# lctl set_param ldlm.namespaces.*MDT*.lru_max_age=900s
+# lctl get_param ldlm.namespaces.*MDT*.lru_max_age
+ldlm.namespaces.myth-MDT0000-mdc-ffff8804296c2800.lru_max_age=900000
+    </screen>
   </section>
   <section xml:id="dbdoclet.50438271_87260">
     <title><indexterm>
