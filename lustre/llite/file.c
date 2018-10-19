@@ -690,12 +690,13 @@ int ll_file_open(struct inode *inode, struct file *file)
                 if (file->f_flags & O_TRUNC)
                         oit.it_flags |= FMODE_WRITE;
 
-                /* kernel only call f_op->open in dentry_open.  filp_open calls
-                 * dentry_open after call to open_namei that checks permissions.
-                 * Only nfsd_open call dentry_open directly without checking
-                 * permissions and because of that this code below is safe. */
-                if (oit.it_flags & (FMODE_WRITE | FMODE_READ))
-                        oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
+		/* kernel only call f_op->open in dentry_open.  filp_open calls
+		 * dentry_open after call to open_namei that checks permissions.
+		 * Only nfsd_open call dentry_open directly without checking
+		 * permissions and because of that this code below is safe.
+		 */
+		if (oit.it_flags & (FMODE_WRITE | FMODE_READ))
+			oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
 
                 /* We do not want O_EXCL here, presumably we opened the file
                  * already? XXX - NFS implications? */

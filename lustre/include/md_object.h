@@ -148,7 +148,7 @@ struct md_op_spec {
 		} sp_ea;
 	} u;
 
-	/** Create flag from client: such as MDS_OPEN_CREAT, and others. */
+	/** Open flags from client: such as MDS_OPEN_CREAT, and others. */
 	__u64      sp_cr_flags;
 
 	/* File security context for creates. */
@@ -193,51 +193,52 @@ union ldlm_policy_data;
  * Operations implemented for each md object (both directory and leaf).
  */
 struct md_object_operations {
-        int (*moo_permission)(const struct lu_env *env,
-                              struct md_object *pobj, struct md_object *cobj,
-                              struct md_attr *attr, int mask);
+	int (*moo_permission)(const struct lu_env *env,
+			      struct md_object *pobj, struct md_object *cobj,
+			      struct md_attr *attr, int mask);
 
-        int (*moo_attr_get)(const struct lu_env *env, struct md_object *obj,
-                            struct md_attr *attr);
+	int (*moo_attr_get)(const struct lu_env *env, struct md_object *obj,
+			    struct md_attr *attr);
 
-        int (*moo_attr_set)(const struct lu_env *env, struct md_object *obj,
-                            const struct md_attr *attr);
+	int (*moo_attr_set)(const struct lu_env *env, struct md_object *obj,
+			    const struct md_attr *attr);
 
-        int (*moo_xattr_get)(const struct lu_env *env, struct md_object *obj,
-                             struct lu_buf *buf, const char *name);
+	int (*moo_xattr_get)(const struct lu_env *env, struct md_object *obj,
+			     struct lu_buf *buf, const char *name);
 
-        int (*moo_xattr_list)(const struct lu_env *env, struct md_object *obj,
-                              struct lu_buf *buf);
+	int (*moo_xattr_list)(const struct lu_env *env, struct md_object *obj,
+			      struct lu_buf *buf);
 
-        int (*moo_xattr_set)(const struct lu_env *env, struct md_object *obj,
-                             const struct lu_buf *buf, const char *name,
-                             int fl);
+	int (*moo_xattr_set)(const struct lu_env *env, struct md_object *obj,
+			     const struct lu_buf *buf, const char *name,
+			     int fl);
 
-        int (*moo_xattr_del)(const struct lu_env *env, struct md_object *obj,
-                             const char *name);
+	int (*moo_xattr_del)(const struct lu_env *env, struct md_object *obj,
+			     const char *name);
 
 	/** This method is used to swap the layouts between 2 objects */
 	int (*moo_swap_layouts)(const struct lu_env *env,
 			       struct md_object *obj1, struct md_object *obj2,
 			       __u64 flags);
 
-        /** \retval number of bytes actually read upon success */
-        int (*moo_readpage)(const struct lu_env *env, struct md_object *obj,
-                            const struct lu_rdpg *rdpg);
+	/** \retval number of bytes actually read upon success */
+	int (*moo_readpage)(const struct lu_env *env, struct md_object *obj,
+			    const struct lu_rdpg *rdpg);
 
-        int (*moo_readlink)(const struct lu_env *env, struct md_object *obj,
-                            struct lu_buf *buf);
+	int (*moo_readlink)(const struct lu_env *env, struct md_object *obj,
+			    struct lu_buf *buf);
+
 	int (*moo_changelog)(const struct lu_env *env,
 			     enum changelog_rec_type type, int flags,
 			     struct md_device *m, const struct lu_fid *fid);
 
-        int (*moo_open)(const struct lu_env *env,
-                        struct md_object *obj, int flag);
+	int (*moo_open)(const struct lu_env *env,
+			struct md_object *obj, u64 open_flags);
 
-        int (*moo_close)(const struct lu_env *env, struct md_object *obj,
-                         struct md_attr *ma, int mode);
+	int (*moo_close)(const struct lu_env *env, struct md_object *obj,
+			 struct md_attr *ma, u64 open_flags);
 
-        int (*moo_object_sync)(const struct lu_env *, struct md_object *);
+	int (*moo_object_sync)(const struct lu_env *, struct md_object *);
 
 	int (*moo_object_lock)(const struct lu_env *env, struct md_object *obj,
 			       struct lustre_handle *lh,
@@ -386,22 +387,19 @@ static inline struct md_object *md_object_find_slice(const struct lu_env *env,
 
 
 /** md operations */
-static inline int mo_permission(const struct lu_env *env,
-                                struct md_object *p,
-                                struct md_object *c,
-                                struct md_attr *at,
-                                int mask)
+static inline int mo_permission(const struct lu_env *env, struct md_object *p,
+				struct md_object *c, struct md_attr *at,
+				int mask)
 {
-        LASSERT(c->mo_ops->moo_permission);
-        return c->mo_ops->moo_permission(env, p, c, at, mask);
+	LASSERT(c->mo_ops->moo_permission);
+	return c->mo_ops->moo_permission(env, p, c, at, mask);
 }
 
-static inline int mo_attr_get(const struct lu_env *env,
-                              struct md_object *m,
-                              struct md_attr *at)
+static inline int mo_attr_get(const struct lu_env *env, struct md_object *m,
+			      struct md_attr *at)
 {
-        LASSERT(m->mo_ops->moo_attr_get);
-        return m->mo_ops->moo_attr_get(env, m, at);
+	LASSERT(m->mo_ops->moo_attr_get);
+	return m->mo_ops->moo_attr_get(env, m, at);
 }
 
 static inline int mo_readlink(const struct lu_env *env,
@@ -506,21 +504,18 @@ static inline int mo_swap_layouts(const struct lu_env *env,
 	return o1->mo_ops->moo_swap_layouts(env, o1, o2, flags);
 }
 
-static inline int mo_open(const struct lu_env *env,
-                          struct md_object *m,
-                          int flags)
+static inline int mo_open(const struct lu_env *env, struct md_object *m,
+			  u64 open_flags)
 {
-        LASSERT(m->mo_ops->moo_open);
-        return m->mo_ops->moo_open(env, m, flags);
+	LASSERT(m->mo_ops->moo_open);
+	return m->mo_ops->moo_open(env, m, open_flags);
 }
 
-static inline int mo_close(const struct lu_env *env,
-                           struct md_object *m,
-                           struct md_attr *ma,
-                           int mode)
+static inline int mo_close(const struct lu_env *env, struct md_object *m,
+			   struct md_attr *ma, u64 open_flags)
 {
-        LASSERT(m->mo_ops->moo_close);
-        return m->mo_ops->moo_close(env, m, ma, mode);
+	LASSERT(m->mo_ops->moo_close);
+	return m->mo_ops->moo_close(env, m, ma, open_flags);
 }
 
 static inline int mo_readpage(const struct lu_env *env,

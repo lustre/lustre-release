@@ -1043,7 +1043,7 @@ enum la_valid {
 /*	MDS_FMODE_SOM            04000000 obsolete since 2.8.0 */
 
 #define MDS_OPEN_CREATED         00000010
-#define MDS_OPEN_CROSS           00000020
+/*	MDS_OPEN_CROSS           00000020 obsolete in 2.12, internal use only */
 
 #define MDS_OPEN_CREAT           00000100
 #define MDS_OPEN_EXCL            00000200

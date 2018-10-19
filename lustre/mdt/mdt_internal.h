@@ -67,7 +67,7 @@ struct mdt_file_data {
 	/**  portals handle must be first */
 	struct portals_handle	mfd_open_handle;
 	/** open mode provided by client */
-	__u64			mfd_mode;
+	u64			mfd_open_flags;
 	/** protected by med_open_lock */
 	struct list_head	mfd_list;
 	/** xid of the open request */
@@ -816,15 +816,10 @@ int mdt_export_stats_init(struct obd_device *obd,
                           void *client_nid);
 
 int mdt_lock_new_child(struct mdt_thread_info *info,
-                       struct mdt_object *o,
-                       struct mdt_lock_handle *child_lockh);
-
-void mdt_mfd_set_mode(struct mdt_file_data *mfd,
-		      __u64 mode);
-
-int mdt_reint_open(struct mdt_thread_info *info,
-		   struct mdt_lock_handle *lhc);
-
+		       struct mdt_object *o,
+		       struct mdt_lock_handle *child_lockh);
+void mdt_mfd_set_mode(struct mdt_file_data *mfd, u64 open_flags);
+int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc);
 struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 					const struct lustre_handle *open_handle,
 					bool is_replay);

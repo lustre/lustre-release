@@ -1908,6 +1908,7 @@ struct mdt_rec_setattr {
 #define MDS_ATTR_PROJID	    0x10000ULL	/* = 65536 */
 #define MDS_ATTR_LSIZE      0x20000ULL	/* = 131072 */
 #define MDS_ATTR_LBLOCKS    0x40000ULL	/* = 262144 */
+#define MDS_ATTR_OVERRIDE	0x2000000ULL /* = 33554432 */
 
 enum mds_op_bias {
 /*	MDS_CHECK_SPLIT		= 1 << 0, obsolete before 2.3.58 */

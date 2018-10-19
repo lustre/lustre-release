@@ -315,9 +315,8 @@ check_capabilities:
 	RETURN(-EACCES);
 }
 
-int mdd_permission(const struct lu_env *env,
-                   struct md_object *pobj, struct md_object *cobj,
-                   struct md_attr *ma, int mask)
+int mdd_permission(const struct lu_env *env, struct md_object *pobj,
+		   struct md_object *cobj, struct md_attr *ma, int mask)
 {
 	struct mdd_object *mdd_pobj = NULL;
 	struct mdd_object *mdd_cobj;
@@ -340,12 +339,6 @@ int mdd_permission(const struct lu_env *env,
 	rc = mdd_la_get(env, mdd_cobj, cattr);
 	if (rc)
 		RETURN(rc);
-
-	/* For cross_open case, the "mask" is open flags,
-	 * so convert it to permission mask first.
-	 * XXX: MDS_OPEN_CROSS must be NOT equal to permission mask MAY_*. */
-	if (unlikely(mask & MDS_OPEN_CROSS))
-		mask = accmode(env, cattr, mask & ~MDS_OPEN_CROSS);
 
 	rc = mdd_permission_internal_locked(env, mdd_cobj, cattr,
 					    mask & ~MAY_RGETFACL,

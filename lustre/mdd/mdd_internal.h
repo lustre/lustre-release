@@ -305,7 +305,6 @@ extern const struct md_dir_operations    mdd_dir_ops;
 extern const struct md_object_operations mdd_obj_ops;
 int mdd_readlink(const struct lu_env *env, struct md_object *obj,
 		 struct lu_buf *buf);
-int accmode(const struct lu_env *env, const struct lu_attr *la, int flags);
 extern struct lu_context_key mdd_thread_key;
 extern const struct lu_device_operations mdd_lu_ops;
 
@@ -402,9 +401,8 @@ int __mdd_fix_mode_acl(const struct lu_env *env, struct lu_buf *buf,
 		       __u32 *mode);
 int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 			      const struct lu_attr *la, int mask, int role);
-int mdd_permission(const struct lu_env *env,
-                   struct md_object *pobj, struct md_object *cobj,
-                   struct md_attr *ma, int mask);
+int mdd_permission(const struct lu_env *env, struct md_object *pobj,
+		   struct md_object *cobj, struct md_attr *ma, int mask);
 int mdd_generic_thread_start(struct mdd_generic_thread *thread,
 			     int (*func)(void *), void *data, char *name);
 void mdd_generic_thread_stop(struct mdd_generic_thread *thread);

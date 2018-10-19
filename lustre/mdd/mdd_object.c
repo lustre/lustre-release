@@ -55,7 +55,7 @@ static const struct lu_object_operations mdd_lu_obj_ops;
 
 struct mdd_object_user {
 	struct list_head	mou_list;	/**< linked off mod_users */
-	int			mou_flags;	/**< open mode by client */
+	u64			mou_open_flags;	/**< open mode by client */
 	__u64			mou_uidgid;	/**< uid_gid on client */
 	int			mou_opencount;	/**< # opened */
 	ktime_t			mou_deniednext; /**< time of next access denied
@@ -77,21 +77,21 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 static inline bool has_prefix(const char *str, const char *prefix);
 
 
-static unsigned int flags_helper(int flags)
+static u32 flags_helper(u64 open_flags)
 {
-	unsigned int mflags = 0;
+	u32 open_mode = 0;
 
-	if (flags & MDS_FMODE_EXEC) {
-		mflags = MDS_FMODE_EXEC;
+	if (open_flags & MDS_FMODE_EXEC) {
+		open_mode = MDS_FMODE_EXEC;
 	} else {
-		if (flags & MDS_FMODE_READ)
-			mflags = MDS_FMODE_READ;
-		if (flags &
+		if (open_flags & MDS_FMODE_READ)
+			open_mode = MDS_FMODE_READ;
+		if (open_flags &
 		    (MDS_FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
-			mflags |= MDS_FMODE_WRITE;
+			open_mode |= MDS_FMODE_WRITE;
 	}
 
-	return mflags;
+	return open_mode;
 }
 
 /** Allocate/init a user and its sub-structures.
@@ -102,7 +102,7 @@ static unsigned int flags_helper(int flags)
  * \retval mou [OUT] success valid structure
  * \retval mou [OUT]
  */
-static struct mdd_object_user *mdd_obj_user_alloc(int flags,
+static struct mdd_object_user *mdd_obj_user_alloc(u64 open_flags,
 						  uid_t uid, gid_t gid)
 {
 	struct mdd_object_user *mou;
@@ -113,7 +113,7 @@ static struct mdd_object_user *mdd_obj_user_alloc(int flags,
 	if (mou == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	mou->mou_flags = flags;
+	mou->mou_open_flags = open_flags;
 	mou->mou_uidgid = ((__u64)uid << 32) | gid;
 	mou->mou_opencount = 0;
 	mou->mou_deniednext = ktime_set(0, 0);
@@ -142,7 +142,8 @@ static void mdd_obj_user_free(struct mdd_object_user *mou)
  */
 static
 struct mdd_object_user *mdd_obj_user_find(struct mdd_object *mdd_obj,
-					  uid_t uid, gid_t gid, int flags)
+					  uid_t uid, gid_t gid,
+					  u64 open_flags)
 {
 	struct mdd_object_user *mou;
 	__u64 uidgid;
@@ -152,7 +153,8 @@ struct mdd_object_user *mdd_obj_user_find(struct mdd_object *mdd_obj,
 	uidgid = ((__u64)uid << 32) | gid;
 	list_for_each_entry(mou, &mdd_obj->mod_users, mou_list) {
 		if (mou->mou_uidgid == uidgid &&
-		    flags_helper(mou->mou_flags) == flags_helper(flags))
+		    flags_helper(mou->mou_open_flags) ==
+		    flags_helper(open_flags))
 			RETURN(mou);
 	}
 	RETURN(NULL);
@@ -178,8 +180,7 @@ static int mdd_obj_user_add(struct mdd_object *mdd_obj,
 
 	ENTRY;
 
-	tmp = mdd_obj_user_find(mdd_obj, uid,
-				gid, mou->mou_flags);
+	tmp = mdd_obj_user_find(mdd_obj, uid, gid, mou->mou_open_flags);
 	if (tmp != NULL)
 		RETURN(-EEXIST);
 
@@ -2953,37 +2954,27 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 	nc->do_ops->do_ah_init(env, hint, np, nc, attr->la_mode & S_IFMT);
 }
 
-/*
- * do NOT or the MAY_*'s, you'll get the weakest
- */
-int accmode(const struct lu_env *env, const struct lu_attr *la, int flags)
+static int accmode(const struct lu_env *env, const struct lu_attr *la,
+		   u64 open_flags)
 {
-	int res = 0;
-
 	/* Sadly, NFSD reopens a file repeatedly during operation, so the
 	 * "acc_mode = 0" allowance for newly-created files isn't honoured.
 	 * NFSD uses the MDS_OPEN_OWNEROVERRIDE flag to say that a file
 	 * owner can write to a file even if it is marked readonly to hide
 	 * its brokenness. (bug 5781) */
-	if (flags & MDS_OPEN_OWNEROVERRIDE) {
+	if (open_flags & MDS_OPEN_OWNEROVERRIDE) {
 		struct lu_ucred *uc = lu_ucred_check(env);
 
 		if ((uc == NULL) || (la->la_uid == uc->uc_fsuid))
 			return 0;
 	}
 
-	if (flags & MDS_FMODE_READ)
-		res |= MAY_READ;
-	if (flags & (MDS_FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
-		res |= MAY_WRITE;
-	if (flags & MDS_FMODE_EXEC)
-		res = MAY_EXEC;
-	return res;
+	return mds_accmode(open_flags);
 }
 
 static int mdd_open_sanity_check(const struct lu_env *env,
-				struct mdd_object *obj,
-				const struct lu_attr *attr, int flag)
+				 struct mdd_object *obj,
+				 const struct lu_attr *attr, u64 open_flags)
 {
 	int mode, rc;
 	ENTRY;
@@ -2998,12 +2989,12 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 	if (S_ISLNK(attr->la_mode))
 		RETURN(-ELOOP);
 
-	mode = accmode(env, attr, flag);
+	mode = accmode(env, attr, open_flags);
 
 	if (S_ISDIR(attr->la_mode) && (mode & MAY_WRITE))
 		RETURN(-EISDIR);
 
-	if (!(flag & MDS_OPEN_CREATED)) {
+	if (!(open_flags & MDS_OPEN_CREATED)) {
 		rc = mdd_permission_internal(env, obj, attr, mode);
 		if (rc)
 			RETURN(rc);
@@ -3011,13 +3002,14 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 
 	if (S_ISFIFO(attr->la_mode) || S_ISSOCK(attr->la_mode) ||
 	    S_ISBLK(attr->la_mode) || S_ISCHR(attr->la_mode))
-		flag &= ~MDS_OPEN_TRUNC;
+		open_flags &= ~MDS_OPEN_TRUNC;
 
 	/* For writing append-only file must open it with append mode. */
 	if (attr->la_flags & LUSTRE_APPEND_FL) {
-		if ((flag & MDS_FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
+		if ((open_flags & MDS_FMODE_WRITE) &&
+		    !(open_flags & MDS_OPEN_APPEND))
 			RETURN(-EPERM);
-		if (flag & MDS_OPEN_TRUNC)
+		if (open_flags & MDS_OPEN_TRUNC)
 			RETURN(-EPERM);
 	}
 
@@ -3025,7 +3017,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_open(const struct lu_env *env, struct md_object *obj,
-		    int flags)
+		    u64 open_flags)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct md_device *md_dev = lu2md_dev(mdd2lu_dev(mdo2mdd(obj)));
@@ -3042,7 +3034,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = mdd_open_sanity_check(env, mdd_obj, attr, flags);
+	rc = mdd_open_sanity_check(env, mdd_obj, attr, open_flags);
 	if ((rc == -EACCES) && (mdd->mdd_cl.mc_mask & (1 << CL_DN_OPEN)))
 		type = CL_DN_OPEN;
 	else if (rc != 0)
@@ -3055,13 +3047,13 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 
 find:
 	/* look for existing opener in list under mdd_write_lock */
-	mou = mdd_obj_user_find(mdd_obj, uc->uc_uid, uc->uc_gid, flags);
+	mou = mdd_obj_user_find(mdd_obj, uc->uc_uid, uc->uc_gid, open_flags);
 
 	if (!mou) {
 		int rc2;
 
 		/* add user to list */
-		mou = mdd_obj_user_alloc(flags, uc->uc_uid, uc->uc_gid);
+		mou = mdd_obj_user_alloc(open_flags, uc->uc_uid, uc->uc_gid);
 		if (IS_ERR(mou)) {
 			if (rc == 0)
 				rc = PTR_ERR(mou);
@@ -3097,7 +3089,7 @@ find:
 		}
 	}
 
-	mdd_changelog(env, type, flags, md_dev, mdo2fid(mdd_obj));
+	mdd_changelog(env, type, open_flags, md_dev, mdo2fid(mdd_obj));
 
 	EXIT;
 out:
@@ -3121,7 +3113,7 @@ static int mdd_declare_close(const struct lu_env *env, struct mdd_object *obj,
  * No permission check is needed.
  */
 static int mdd_close(const struct lu_env *env, struct md_object *obj,
-		     struct md_attr *ma, int mode)
+		     struct md_attr *ma, u64 open_flags)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct mdd_device *mdd = mdo2mdd(obj);
@@ -3220,7 +3212,8 @@ cont:
 		 * the user had the file open. So the corresponding close
 		 * will not be logged.
 		 */
-		mou = mdd_obj_user_find(mdd_obj, uc->uc_uid, uc->uc_gid, mode);
+		mou = mdd_obj_user_find(mdd_obj, uc->uc_uid, uc->uc_gid,
+					open_flags);
 		if (mou) {
 			mou->mou_opencount--;
 			if (mou->mou_opencount == 0) {
@@ -3279,7 +3272,8 @@ out:
 	 * CL_OPEN. Plus Changelogs mask may not change often.
 	 */
 	if (((!(mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) &&
-	      (mode & (MDS_FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC))) ||
+	      (open_flags & (MDS_FMODE_WRITE | MDS_OPEN_APPEND |
+			     MDS_OPEN_TRUNC))) ||
 	     ((mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) && last_close_by_uid)) &&
 	    !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
 		if (handle == NULL) {
@@ -3292,14 +3286,14 @@ out:
 			if (rc)
 				GOTO(stop, rc);
 
-                        rc = mdd_trans_start(env, mdo2mdd(obj), handle);
-                        if (rc)
-                                GOTO(stop, rc);
-                }
+			rc = mdd_trans_start(env, mdo2mdd(obj), handle);
+			if (rc)
+				GOTO(stop, rc);
+		}
 
-                mdd_changelog_data_store(env, mdd, CL_CLOSE, mode,
+		mdd_changelog_data_store(env, mdd, CL_CLOSE, open_flags,
                                          mdd_obj, handle);
-        }
+	}
 
 stop:
 	if (handle != NULL && !IS_ERR(handle))

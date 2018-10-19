@@ -1527,12 +1527,12 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 	/* permission check. Make sure the calling process having permission
 	 * to write both files. */
 	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o1), NULL,
-				MAY_WRITE);
+			   MAY_WRITE);
 	if (rc < 0)
 		GOTO(put, rc);
 
 	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o2), NULL,
-				MAY_WRITE);
+			   MAY_WRITE);
 	if (rc < 0)
 		GOTO(put, rc);
 
@@ -5753,7 +5753,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
 			 * archive request into a noop if it's not actually
 			 * dirty.
 			 */
-			if (mfd->mfd_mode & MDS_FMODE_WRITE)
+			if (mfd->mfd_open_flags & MDS_FMODE_WRITE)
 				rc = mdt_ctxt_add_dirty_flag(&env, info, mfd);
 
 			/* Don't unlink orphan on failover umount, LU-184 */
