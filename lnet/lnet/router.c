@@ -429,63 +429,6 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 }
 
 int
-lnet_check_routes(void)
-{
-	struct lnet_remotenet *rnet;
-	struct lnet_route	 *route;
-	struct lnet_route	 *route2;
-	struct list_head *e1;
-	struct list_head *e2;
-	int		  cpt;
-	struct list_head *rn_list;
-	int		  i;
-
-	cpt = lnet_net_lock_current();
-
-	for (i = 0; i < LNET_REMOTE_NETS_HASH_SIZE; i++) {
-		rn_list = &the_lnet.ln_remote_nets_hash[i];
-		list_for_each(e1, rn_list) {
-			rnet = list_entry(e1, struct lnet_remotenet, lrn_list);
-
-			route2 = NULL;
-			list_for_each(e2, &rnet->lrn_routes) {
-				lnet_nid_t	nid1;
-				lnet_nid_t	nid2;
-				int		net;
-
-				route = list_entry(e2, struct lnet_route,
-						   lr_list);
-
-				if (route2 == NULL) {
-					route2 = route;
-					continue;
-				}
-
-				if (route->lr_gateway->lpni_net ==
-				    route2->lr_gateway->lpni_net)
-					continue;
-
-				nid1 = route->lr_gateway->lpni_nid;
-				nid2 = route2->lr_gateway->lpni_nid;
-				net = rnet->lrn_net;
-
-				lnet_net_unlock(cpt);
-
-				CERROR("Routes to %s via %s and %s not "
-				       "supported\n",
-				       libcfs_net2str(net),
-				       libcfs_nid2str(nid1),
-				       libcfs_nid2str(nid2));
-				return -EINVAL;
-			}
-		}
-	}
-
-	lnet_net_unlock(cpt);
-	return 0;
-}
-
-int
 lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 {
 	struct lnet_peer_ni	*gateway;
