@@ -1556,6 +1556,15 @@ lnet_del_peer_ni(lnet_nid_t prim_nid, lnet_nid_t nid)
 		return -ENODEV;
 	}
 
+	lnet_net_lock(LNET_LOCK_EX);
+	if (lp->lp_rtr_refcount > 0) {
+		lnet_net_unlock(LNET_LOCK_EX);
+		CERROR("%s is a router. Can not be deleted\n",
+		       libcfs_nid2str(prim_nid));
+		return -EBUSY;
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+
 	if (nid == LNET_NID_ANY || nid == lp->lp_primary_nid)
 		return lnet_peer_del(lp);
 
