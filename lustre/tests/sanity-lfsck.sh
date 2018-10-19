@@ -3889,6 +3889,18 @@ test_23b() {
 }
 run_test 23b "LFSCK can repair dangling name entry (2)"
 
+cleanup_23c() {
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(10) unexpected status"
+	}
+
+	stop_full_debug_logging
+}
+
 test_23c() {
 	echo "#####"
 	echo "The objectA has multiple hard links, one of them corresponding"
@@ -3908,34 +3920,34 @@ test_23c() {
 	check_mount_and_prep
 
 	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0 on MDT0"
-	$LFS path2fid $DIR/$tdir/d0
+	parent_fid="$($LFS path2fid $DIR/$tdir/d0)"
+	echo "parent_fid=$parent_fid"
 
 	createmany -o $DIR/$tdir/d0/t 10 || error "(1.5) Fail to creatmany"
 
 	echo "dummy" > $DIR/$tdir/d0/f0 || error "(2) Fail to touch on MDT0"
-	$LFS path2fid $DIR/$tdir/d0/f0
+	f0_fid="$($LFS path2fid $DIR/$tdir/d0/f0)"
+	echo "f0_fid=$f0_fid"
 
 	echo "dead" > $DIR/$tdir/d0/f1 || error "(3) Fail to touch on MDT0"
-	$LFS path2fid $DIR/$tdir/d0/f1
+	f1_fid="$($LFS path2fid $DIR/$tdir/d0/f1)"
+	echo "f1_fid=$f1_fid"
 
-	local SEQ0=$($LFS path2fid $DIR/$tdir/d0/f0 | awk -F':' '{print $1}')
-	local SEQ1=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $1}')
-
-	if [ "$SEQ0" != "$SEQ1" ]; then
+	if [ "${fid_f0/:.*/}" != "${fid_f1/:.*/}" ]; then
 		# To guarantee that the f0 and f1 are in the same FID seq
 		rm -f $DIR/$tdir/d0/f0 ||
 			error "(3.1) Fail to unlink $DIR/$tdir/d0/f0"
 		echo "dummy" > $DIR/$tdir/d0/f0 ||
 			error "(3.2) Fail to touch on MDT0"
-		$LFS path2fid $DIR/$tdir/d0/f0
+		f0_fid="$($LFS path2fid $DIR/$tdir/d0/f0)"
+		echo "f0_fid=$f0_fid (replaced)"
 	fi
 
-	local OID=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $2}')
-	OID=$(printf %d $OID)
+	local oid=$(awk -F':' '{ printf $2 }' <<< $f1_fid)
 
 	echo "Inject failure stub on MDT0 to simulate dangling name entry"
 	#define OBD_FAIL_LFSCK_DANGLING3	0x1621
-	do_facet $SINGLEMDS $LCTL set_param fail_val=$OID fail_loc=0x1621
+	do_facet $SINGLEMDS $LCTL set_param fail_val=$oid fail_loc=0x1621
 	ln $DIR/$tdir/d0/f0 $DIR/$tdir/d0/foo || error "(4) Fail to hard link"
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
 
@@ -3960,8 +3972,17 @@ test_23c() {
 	$START_NAMESPACE -r -C ||
 		error "(7) Fail to start LFSCK for namespace"
 
-	wait_update_facet client "stat $DIR/$tdir/d0/foo |
-		awk '/Size/ { print \\\$2 }'" "0" $LTIME || {
+	wait_update_facet client "stat -c%s $DIR/$tdir/d0/foo" "0" $LTIME || {
+		# While unexpected by the test, it is valid for LFSCK to repair
+		# the link to the original object before any data is written.
+		local size=$(stat -c %s $DIR/$tdir/d0/foo)
+
+		if [ "$size" = "6" -a "$(<$DIR/$tdir/d0/foo)" = "dummy" ]; then
+			log "LFSCK repaired file prematurely"
+			cleanup_23c
+			return 0
+		fi
+
 		stat $DIR/$tdir/d0/foo
 		$SHOW_NAMESPACE
 		error "(8) unexpected size"
@@ -3970,15 +3991,7 @@ test_23c() {
 	echo "data" >> $DIR/$tdir/d0/foo || error "(9) Fail to write"
 	cancel_lru_locks osc
 
-	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
-	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-		mdd.${MDT_DEV}.lfsck_namespace |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
-		$SHOW_NAMESPACE
-		error "(10) unexpected status"
-	}
-
-	stop_full_debug_logging
+	cleanup_23c
 
 	local repaired=$($SHOW_NAMESPACE |
 			 awk '/^dangling_repaired/ { print $2 }')
