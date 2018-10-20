@@ -573,6 +573,7 @@ extern unsigned int lnet_health_sensitivity;
 extern unsigned int lnet_recovery_interval;
 extern unsigned int lnet_peer_discovery_disabled;
 extern unsigned int lnet_drop_asym_route;
+extern unsigned int router_sensitivity_percentage;
 extern int portal_rotor;
 
 void lnet_mt_event_handler(struct lnet_event *event);
