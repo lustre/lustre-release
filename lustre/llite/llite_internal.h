@@ -296,6 +296,23 @@ int ll_xattr_cache_get(struct inode *inode,
 			size_t size,
 			__u64 valid);
 
+static inline bool obd_connect_has_secctx(struct obd_connect_data *data)
+{
+#if defined(HAVE_SECURITY_DENTRY_INIT_SECURITY) && defined(CONFIG_SECURITY)
+	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+	       data->ocd_connect_flags2 & OBD_CONNECT2_FILE_SECCTX;
+#else
+	return false;
+#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
+}
+
+static inline void obd_connect_set_secctx(struct obd_connect_data *data)
+{
+#if defined(HAVE_SECURITY_DENTRY_INIT_SECURITY) && defined(CONFIG_SECURITY)
+	data->ocd_connect_flags2 |= OBD_CONNECT2_FILE_SECCTX;
+#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
+}
+
 int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 			    const char **secctx_name, void **secctx,
 			    __u32 *secctx_size);

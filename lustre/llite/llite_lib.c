@@ -159,12 +159,6 @@ static void ll_free_sbi(struct super_block *sb)
 	EXIT;
 }
 
-static inline int obd_connect_has_secctx(struct obd_connect_data *data)
-{
-	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
-	       data->ocd_connect_flags2 & OBD_CONNECT2_FILE_SECCTX;
-}
-
 static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                     struct vfsmount *mnt)
 {
@@ -271,9 +265,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (sbi->ll_flags & LL_SBI_ALWAYS_PING)
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
 
-#if defined(HAVE_SECURITY_DENTRY_INIT_SECURITY) && defined(CONFIG_SECURITY)
-	data->ocd_connect_flags2 |= OBD_CONNECT2_FILE_SECCTX;
-#endif /* HAVE_SECURITY_DENTRY_INIT_SECURITY */
+	obd_connect_set_secctx(data);
 
 	data->ocd_brw_size = MD_MAX_BRW_SIZE;
 
