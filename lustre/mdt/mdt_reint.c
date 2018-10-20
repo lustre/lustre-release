@@ -953,7 +953,7 @@ relock:
 	if (!cos_incompat) {
 		rc = mdt_object_striped(info, mc);
 		if (rc < 0)
-			GOTO(unlock_parent, rc = PTR_ERR(mc));
+			GOTO(unlock_parent, rc);
 
 		cos_incompat = rc;
 		if (cos_incompat) {
