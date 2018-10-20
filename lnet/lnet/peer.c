@@ -2434,6 +2434,17 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL)
 		flags |= LNET_PEER_MULTI_RAIL;
 
+	/*
+	 * Cache the routing feature for the peer; whether it is enabled
+	 * for disabled as reported by the remote peer.
+	 */
+	spin_lock(&lp->lp_lock);
+	if (!(pbuf->pb_info.pi_features & LNET_PING_FEAT_RTE_DISABLED))
+		lp->lp_state |= LNET_PEER_ROUTER_ENABLED;
+	else
+		lp->lp_state &= ~LNET_PEER_ROUTER_ENABLED;
+	spin_unlock(&lp->lp_lock);
+
 	nnis = MAX(lp->lp_nnis, pbuf->pb_info.pi_nnis);
 	LIBCFS_ALLOC(curnis, nnis * sizeof(*curnis));
 	LIBCFS_ALLOC(addnis, nnis * sizeof(*addnis));

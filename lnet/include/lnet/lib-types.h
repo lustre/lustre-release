@@ -719,9 +719,13 @@ struct lnet_peer {
  *
  * A peer is marked NO_DISCOVERY if the LNET_PING_FEAT_DISCOVERY bit was
  * NOT set when the peer was pinged by discovery.
+ *
+ * A peer is marked ROUTER if it indicates so in the feature bit.
  */
 #define LNET_PEER_MULTI_RAIL	(1 << 0)	/* Multi-rail aware */
 #define LNET_PEER_NO_DISCOVERY	(1 << 1)	/* Peer disabled discovery */
+#define LNET_PEER_ROUTER_ENABLED (1 << 2)	/* router feature enabled */
+
 /*
  * A peer is marked CONFIGURED if it was configured by DLC.
  *
@@ -735,28 +739,28 @@ struct lnet_peer {
  * A peer that was created as the result of inbound traffic will not
  * be marked at all.
  */
-#define LNET_PEER_CONFIGURED	(1 << 2)	/* Configured via DLC */
-#define LNET_PEER_DISCOVERED	(1 << 3)	/* Peer was discovered */
-#define LNET_PEER_REDISCOVER	(1 << 4)	/* Discovery was disabled */
+#define LNET_PEER_CONFIGURED	(1 << 3)	/* Configured via DLC */
+#define LNET_PEER_DISCOVERED	(1 << 4)	/* Peer was discovered */
+#define LNET_PEER_REDISCOVER	(1 << 5)	/* Discovery was disabled */
 /*
  * A peer is marked DISCOVERING when discovery is in progress.
  * The other flags below correspond to stages of discovery.
  */
-#define LNET_PEER_DISCOVERING	(1 << 5)	/* Discovering */
-#define LNET_PEER_DATA_PRESENT	(1 << 6)	/* Remote peer data present */
-#define LNET_PEER_NIDS_UPTODATE	(1 << 7)	/* Remote peer info uptodate */
-#define LNET_PEER_PING_SENT	(1 << 8)	/* Waiting for REPLY to Ping */
-#define LNET_PEER_PUSH_SENT	(1 << 9)	/* Waiting for ACK of Push */
-#define LNET_PEER_PING_FAILED	(1 << 10)	/* Ping send failure */
-#define LNET_PEER_PUSH_FAILED	(1 << 11)	/* Push send failure */
+#define LNET_PEER_DISCOVERING	(1 << 6)	/* Discovering */
+#define LNET_PEER_DATA_PRESENT	(1 << 7)	/* Remote peer data present */
+#define LNET_PEER_NIDS_UPTODATE	(1 << 8)	/* Remote peer info uptodate */
+#define LNET_PEER_PING_SENT	(1 << 9)	/* Waiting for REPLY to Ping */
+#define LNET_PEER_PUSH_SENT	(1 << 10)	/* Waiting for ACK of Push */
+#define LNET_PEER_PING_FAILED	(1 << 11)	/* Ping send failure */
+#define LNET_PEER_PUSH_FAILED	(1 << 12)	/* Push send failure */
 /*
  * A ping can be forced as a way to fix up state, or as a manual
  * intervention by an admin.
  * A push can be forced in circumstances that would normally not
  * allow for one to happen.
  */
-#define LNET_PEER_FORCE_PING	(1 << 12)	/* Forced Ping */
-#define LNET_PEER_FORCE_PUSH	(1 << 13)	/* Forced Push */
+#define LNET_PEER_FORCE_PING	(1 << 13)	/* Forced Ping */
+#define LNET_PEER_FORCE_PUSH	(1 << 14)	/* Forced Push */
 
 struct lnet_peer_net {
 	/* chain on lp_peer_nets */
