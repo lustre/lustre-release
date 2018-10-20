@@ -86,7 +86,7 @@ struct lfsck_layout_slave_data {
 	__u64			 llsd_touch_gen;
 	struct dt_object	*llsd_rb_obj;
 	struct rb_root		 llsd_rb_root;
-	rwlock_t		 llsd_rb_lock;
+	struct rw_semaphore	 llsd_rb_rwsem;
 	unsigned int		 llsd_rbtree_valid:1;
 };
 
@@ -669,9 +669,9 @@ static void lfsck_rbtree_cleanup(const struct lu_env *env,
 
 	lfsck->li_bottom->dd_record_fid_accessed = 0;
 	/* Invalid the rbtree, then no others will use it. */
-	write_lock(&llsd->llsd_rb_lock);
+	down_write(&llsd->llsd_rb_rwsem);
 	llsd->llsd_rbtree_valid = 0;
-	write_unlock(&llsd->llsd_rb_lock);
+	up_write(&llsd->llsd_rb_rwsem);
 
 	while (node != NULL) {
 		next = rb_next(node);
@@ -708,7 +708,7 @@ static void lfsck_rbtree_update_bitmap(const struct lu_env *env,
 	if (!fid_is_idif(fid) && !fid_is_norm(fid))
 		RETURN_EXIT;
 
-	read_lock(&llsd->llsd_rb_lock);
+	down_read(&llsd->llsd_rb_rwsem);
 	if (!llsd->llsd_rbtree_valid)
 		GOTO(unlock, rc = 0);
 
@@ -718,13 +718,13 @@ static void lfsck_rbtree_update_bitmap(const struct lu_env *env,
 
 		LASSERT(!insert);
 
-		read_unlock(&llsd->llsd_rb_lock);
+		up_read(&llsd->llsd_rb_rwsem);
 		tmp = lfsck_rbtree_new(env, fid);
 		if (IS_ERR(tmp))
 			GOTO(out, rc = PTR_ERR(tmp));
 
 		insert = true;
-		write_lock(&llsd->llsd_rb_lock);
+		down_write(&llsd->llsd_rb_rwsem);
 		if (!llsd->llsd_rbtree_valid) {
 			lfsck_rbtree_free(tmp);
 			GOTO(unlock, rc = 0);
@@ -746,9 +746,9 @@ static void lfsck_rbtree_update_bitmap(const struct lu_env *env,
 
 unlock:
 	if (insert)
-		write_unlock(&llsd->llsd_rb_lock);
+		up_write(&llsd->llsd_rb_rwsem);
 	else
-		read_unlock(&llsd->llsd_rb_lock);
+		up_read(&llsd->llsd_rb_rwsem);
 out:
 	if (rc != 0 && accessed) {
 		struct lfsck_layout *lo = com->lc_file_ram;
@@ -5271,9 +5271,9 @@ static int lfsck_layout_slave_prep(const struct lu_env *env,
 	if (rc == 0 && start != NULL && start->ls_flags & LPF_OST_ORPHAN) {
 		LASSERT(!llsd->llsd_rbtree_valid);
 
-		write_lock(&llsd->llsd_rb_lock);
+		down_write(&llsd->llsd_rb_rwsem);
 		rc = lfsck_rbtree_setup(env, com);
-		write_unlock(&llsd->llsd_rb_lock);
+		up_write(&llsd->llsd_rb_rwsem);
 	}
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK slave prep done, start pos ["
@@ -6819,7 +6819,7 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 		INIT_LIST_HEAD(&llsd->llsd_master_list);
 		spin_lock_init(&llsd->llsd_lock);
 		llsd->llsd_rb_root = RB_ROOT;
-		rwlock_init(&llsd->llsd_rb_lock);
+		init_rwsem(&llsd->llsd_rb_rwsem);
 		com->lc_data = llsd;
 	}
 	com->lc_file_size = sizeof(*lo);
@@ -7089,7 +7089,7 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 	if (dev->dd_record_fid_accessed) {
 		/* The first iteration against the rbtree, scan the whole rbtree
 		 * to remove the nodes which do NOT need to be handled. */
-		write_lock(&llsd->llsd_rb_lock);
+		down_write(&llsd->llsd_rb_rwsem);
 		if (dev->dd_record_fid_accessed) {
 			struct rb_node			*node;
 			struct rb_node			*next;
@@ -7111,11 +7111,11 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 				node = next;
 			}
 		}
-		write_unlock(&llsd->llsd_rb_lock);
+		up_write(&llsd->llsd_rb_rwsem);
 	}
 
 	/* read lock the rbtree when init, and unlock when fini */
-	read_lock(&llsd->llsd_rb_lock);
+	down_read(&llsd->llsd_rb_rwsem);
 	it->loi_com = com;
 	com = NULL;
 
@@ -7152,7 +7152,7 @@ static void lfsck_orphan_it_fini(const struct lu_env *env,
 		       lfsck_lfsck2name(com->lc_lfsck));
 
 		llsd = com->lc_data;
-		read_unlock(&llsd->llsd_rb_lock);
+		up_read(&llsd->llsd_rb_rwsem);
 		llst = it->loi_llst;
 		LASSERT(llst != NULL);
 
