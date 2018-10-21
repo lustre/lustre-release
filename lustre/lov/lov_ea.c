@@ -50,8 +50,10 @@ lu_extent_le_to_cpu(struct lu_extent *dst, const struct lu_extent *src)
 	dst->e_end = le64_to_cpu(src->e_end);
 }
 
-/* Find minimum stripe maxbytes value.  For inactive or
- * reconnecting targets use LUSTRE_EXT3_STRIPE_MAXBYTES. */
+/*
+ * Find minimum stripe maxbytes value.  For inactive or
+ * reconnecting targets use LUSTRE_EXT3_STRIPE_MAXBYTES.
+ */
 static loff_t lov_tgt_maxbytes(struct lov_tgt_desc *tgt)
 {
 	struct obd_import *imp;
@@ -61,7 +63,7 @@ static loff_t lov_tgt_maxbytes(struct lov_tgt_desc *tgt)
 		return maxbytes;
 
 	imp = tgt->ltd_obd->u.cli.cl_import;
-	if (imp == NULL)
+	if (!imp)
 		return maxbytes;
 
 	spin_lock(&imp->imp_lock);
@@ -183,7 +185,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 
 	lsme_size = offsetof(typeof(*lsme), lsme_oinfo[stripe_count]);
 	OBD_ALLOC_LARGE(lsme, lsme_size);
-	if (lsme == NULL)
+	if (!lsme)
 		RETURN(ERR_PTR(-ENOMEM));
 
 	lsme->lsme_magic = magic;
@@ -194,7 +196,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	lsme->lsme_stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
 	lsme->lsme_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
 
-	if (pool_name != NULL) {
+	if (pool_name) {
 		size_t pool_name_len;
 
 		pool_name_len = strlcpy(lsme->lsme_pool_name, pool_name,
@@ -214,7 +216,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 		struct lov_tgt_desc *ltd;
 
 		OBD_SLAB_ALLOC_PTR_GFP(loi, lov_oinfo_slab, GFP_NOFS);
-		if (loi == NULL)
+		if (!loi)
 			GOTO(out_lsme, rc = -ENOMEM);
 
 		lsme->lsme_oinfo[i] = loi;
@@ -235,7 +237,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 		}
 
 		ltd = lov->lov_tgts[loi->loi_ost_idx];
-		if (ltd == NULL) {
+		if (!ltd) {
 			CERROR("%s: OST index %d missing\n",
 			       (char*)lov->desc.ld_uuid.uuid, loi->loi_ost_idx);
 			lov_dump_lmm_v1(D_WARNING, lmm);
@@ -253,7 +255,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	lov_bytes = min_stripe_maxbytes * stripe_count;
 
 out_dom:
-	if (maxbytes != NULL) {
+	if (maxbytes) {
 		if (lov_bytes < min_stripe_maxbytes) /* handle overflow */
 			*maxbytes = MAX_LFS_FILESIZE;
 		else
@@ -266,7 +268,7 @@ out_lsme:
 	for (i = 0; i < stripe_count; i++) {
 		struct lov_oinfo *loi = lsme->lsme_oinfo[i];
 
-		if (loi != NULL)
+		if (loi)
 			OBD_SLAB_FREE_PTR(lsme->lsme_oinfo[i], lov_oinfo_slab);
 	}
 	OBD_FREE_LARGE(lsme, lsme_size);
@@ -299,7 +301,7 @@ lov_stripe_md *lsm_unpackmd_v1v3(struct lov_obd *lov, struct lov_mds_md *lmm,
 
 	lsm_size = offsetof(typeof(*lsm), lsm_entries[1]);
 	OBD_ALLOC(lsm, lsm_size);
-	if (lsm == NULL)
+	if (!lsm)
 		GOTO(out_lsme, rc = -ENOMEM);
 
 	atomic_set(&lsm->lsm_refc, 1);
@@ -434,7 +436,7 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 
 	lsm_size = offsetof(typeof(*lsm), lsm_entries[entry_count]);
 	OBD_ALLOC(lsm, lsm_size);
-	if (lsm == NULL)
+	if (!lsm)
 		return ERR_PTR(-ENOMEM);
 
 	atomic_set(&lsm->lsm_refc, 1);
@@ -480,8 +482,10 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		if (i == entry_count - 1) {
 			lsm->lsm_maxbytes = (loff_t)lsme->lsme_extent.e_start +
 					    maxbytes;
-			/* the last component hasn't been defined, or
-			 * lsm_maxbytes overflowed. */
+			/*
+			 * the last component hasn't been defined, or
+			 * lsm_maxbytes overflowed.
+			 */
 			if (!lsme_is_dom(lsme) &&
 			    (lsme->lsme_extent.e_end != LUSTRE_EOF ||
 			     lsm->lsm_maxbytes <
@@ -494,7 +498,7 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 
 out_lsm:
 	for (i = 0; i < entry_count; i++)
-		if (lsm->lsm_entries[i] != NULL)
+		if (lsm->lsm_entries[i])
 			lsme_free(lsm->lsm_entries[i]);
 
 	OBD_FREE(lsm, lsm_size);
