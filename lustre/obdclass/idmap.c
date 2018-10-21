@@ -101,12 +101,12 @@ EXPORT_SYMBOL(lustre_groups_from_list);
 /* a simple shell-metzner sort */
 void lustre_groups_sort(struct group_info *group_info)
 {
-        int base, max, stride;
-        int gidsetsize = group_info->ngroups;
+	int base, max, stride;
+	int gidsetsize = group_info->ngroups;
 
-        for (stride = 1; stride < gidsetsize; stride = 3 * stride + 1)
-                ; /* nothing */
-        stride /= 3;
+	for (stride = 1; stride < gidsetsize; stride = 3 * stride + 1)
+		; /* nothing */
+	stride /= 3;
 
 	while (stride) {
 		max = gidsetsize - stride;
