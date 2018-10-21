@@ -58,10 +58,12 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 	}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 1, 53, 0)
-	/* logids used to be input in the form "#id#seq:ogen" before they
+	/*
+	 * logids used to be input in the form "#id#seq:ogen" before they
 	 * were changed over to accept the FID [seq:oid:ver] format.
 	 * This is accepted for compatibility reasons, though I doubt
-	 * anyone is actually using this for anything. */
+	 * anyone is actually using this for anything.
+	 */
 	if (start[0] != '#')
 		RETURN(-EINVAL);
 
@@ -95,8 +97,8 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 		RETURN(-EINVAL);
 
 	start = ++end;
-        if (start - str >= len - 1)
-                RETURN(-EINVAL);
+	if (start - str >= len - 1)
+		RETURN(-EINVAL);
 
 	rc = kstrtouint(start, 16, &ogen);
 	if (rc)
@@ -146,17 +148,17 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 		RETURN(-LLOG_EEMPTY);
 
 	if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
-		struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
-		struct llog_handle	*loghandle;
+		struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+		struct llog_handle *loghandle;
 
-                if (rec->lrh_type != LLOG_LOGID_MAGIC) {
-                        l = snprintf(out, remains, "[index]: %05d  [type]: "
-                                     "%02x  [len]: %04d failed\n",
-                                     cur_index, rec->lrh_type,
-                                     rec->lrh_len);
-                }
-                if (handle->lgh_ctxt == NULL)
-                        RETURN(-EOPNOTSUPP);
+		if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+			l = snprintf(out, remains,
+				     "[index]: %05d  [type]: %02x  [len]: %04d failed\n",
+				     cur_index, rec->lrh_type,
+				     rec->lrh_len);
+		}
+		if (handle->lgh_ctxt == NULL)
+			RETURN(-EOPNOTSUPP);
 		rc = llog_cat_id2handle(env, handle, &loghandle, &lir->lid_id);
 		if (rc) {
 			CDEBUG(D_IOCTL, "cannot find log "DFID":%x\n",
@@ -169,12 +171,12 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 	} else {
 		bool ok;
 
-                switch (rec->lrh_type) {
-                case OST_SZ_REC:
-                case MDS_UNLINK_REC:
+		switch (rec->lrh_type) {
+		case OST_SZ_REC:
+		case MDS_UNLINK_REC:
 		case MDS_UNLINK64_REC:
-                case MDS_SETATTR64_REC:
-                case OBD_CFG_REC:
+		case MDS_SETATTR64_REC:
+		case OBD_CFG_REC:
 		case LLOG_GEN_REC:
 		case LLOG_HDR_MAGIC:
 			ok = true;
@@ -228,19 +230,19 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 		ioc_data->ioc_inllen1 = 0;
 	}
 
-        cur_index = rec->lrh_index;
-        if (cur_index < from)
-                RETURN(0);
-        if (to > 0 && cur_index > to)
-                RETURN(-LLOG_EEMPTY);
+	cur_index = rec->lrh_index;
+	if (cur_index < from)
+		RETURN(0);
+	if (to > 0 && cur_index > to)
+		RETURN(-LLOG_EEMPTY);
 
-        if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
-                struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+	if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
+		struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
 
-                if (rec->lrh_type != LLOG_LOGID_MAGIC) {
-                        CERROR("invalid record in catalog\n");
-                        RETURN(-EINVAL);
-                }
+		if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+			CERROR("invalid record in catalog\n");
+			RETURN(-EINVAL);
+		}
 
 		l = snprintf(out, remains,
 			     "[index]: %05d  [logid]: "DFID":%x\n",
@@ -257,21 +259,21 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 		l = snprintf(out, remains,
 			     "[index]: %05d  [type]: %02x  [len]: %04d\n",
 			     cur_index, rec->lrh_type, rec->lrh_len);
-        }
-        out += l;
-        remains -= l;
-        if (remains <= 0) {
-                CERROR("not enough space for print log records\n");
-                RETURN(-LLOG_EEMPTY);
-        }
+	}
+	out += l;
+	remains -= l;
+	if (remains <= 0) {
+		CERROR("not enough space for print log records\n");
+		RETURN(-LLOG_EEMPTY);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
 			   struct llog_logid *logid)
 {
-	struct llog_handle	*log;
-	int			 rc;
+	struct llog_handle *log;
+	int rc;
 
 	ENTRY;
 
@@ -298,8 +300,8 @@ out:
 static int llog_delete_cb(const struct lu_env *env, struct llog_handle *handle,
 			  struct llog_rec_hdr *rec, void *data)
 {
-	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
-	int			 rc;
+	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+	int rc;
 
 	ENTRY;
 	if (rec->lrh_type != LLOG_LOGID_MAGIC)
@@ -313,9 +315,9 @@ static int llog_delete_cb(const struct lu_env *env, struct llog_handle *handle,
 int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	       struct obd_ioctl_data *data)
 {
-	struct llog_logid	 logid;
-	int			 rc = 0;
-	struct llog_handle	*handle = NULL;
+	struct llog_logid logid;
+	int rc = 0;
+	struct llog_handle *handle = NULL;
 	char *logname;
 
 	ENTRY;
@@ -347,10 +349,10 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 
 	switch (cmd) {
 	case OBD_IOC_LLOG_INFO: {
-		int	 l;
-		int	 remains = data->ioc_inllen2 +
+		int l;
+		int remains = data->ioc_inllen2 +
 				   cfs_size_round(data->ioc_inllen1);
-		char	*out = data->ioc_bulk;
+		char *out = data->ioc_bulk;
 
 		l = snprintf(out, remains,
 			     "logid:            "DFID":%x\n"
@@ -464,11 +466,11 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 		      int count, struct obd_ioctl_data *data,
 		      const struct lu_fid *fid)
 {
-	int			 size, i;
-	struct llog_catid	*idarray;
-	struct llog_logid	*id;
-	char			*out;
-	int			 l, remains, rc = 0;
+	int size, i;
+	struct llog_catid *idarray;
+	struct llog_logid *id;
+	char *out;
+	int l, remains, rc = 0;
 
 	ENTRY;
 
