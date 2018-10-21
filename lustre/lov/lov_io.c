@@ -56,7 +56,7 @@ static inline struct lov_io_sub *lov_sub_alloc(struct lov_io *lio, int index)
 		OBD_ALLOC_PTR(sub);
 	}
 
-	if (sub != NULL) {
+	if (sub) {
 		INIT_LIST_HEAD(&sub->sub_list);
 		INIT_LIST_HEAD(&sub->sub_linkage);
 		sub->sub_subio_index = index;
@@ -82,7 +82,7 @@ static void lov_io_sub_fini(const struct lu_env *env, struct lov_io *lio,
 
 	cl_io_fini(sub->sub_env, &sub->sub_io);
 
-	if (sub->sub_env != NULL && !IS_ERR(sub->sub_env)) {
+	if (sub->sub_env && !IS_ERR(sub->sub_env)) {
 		cl_env_put(sub->sub_env, &sub->sub_refcheck);
 		sub->sub_env = NULL;
 	}
@@ -166,7 +166,7 @@ struct lov_io_sub *lov_sub_get(const struct lu_env *env,
 
 	if (rc == 0) {
 		sub = lov_sub_alloc(lio, index);
-		if (sub == NULL)
+		if (!sub)
 			GOTO(out, rc = -ENOMEM);
 
 		rc = lov_io_sub_init(env, lio, sub);
@@ -237,7 +237,8 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 	      cl_io_is_mkwrite(io)))
 		RETURN(0);
 
-	/* FLR: check if it needs to send a write intent RPC to server.
+	/*
+	 * FLR: check if it needs to send a write intent RPC to server.
 	 * Writing to sync_pending file needs write intent RPC to change
 	 * the file state back to write_pending, so that the layout version
 	 * can be increased when the state changes to sync_pending at a later
@@ -255,8 +256,10 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 	LASSERT((lov_flr_state(obj) == LCM_FL_WRITE_PENDING));
 	LASSERT(comp->lo_preferred_mirror >= 0);
 
-	/* need to iterate all components to see if there are
-	 * multiple components covering the writing component */
+	/*
+	 * need to iterate all components to see if there are
+	 * multiple components covering the writing component
+	 */
 	primary = &comp->lo_mirrors[comp->lo_preferred_mirror];
 	LASSERT(!primary->lre_stale);
 	lov_foreach_mirror_layout_entry(obj, lle, primary) {
@@ -332,10 +335,12 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 
 		if ((cl_io_is_trunc(io) || io->ci_type == CIT_WRITE) &&
 		    (io->ci_layout_version != obj->lo_lsm->lsm_layout_gen)) {
-			/* For resync I/O, the ci_layout_version was the layout
+			/*
+			 * For resync I/O, the ci_layout_version was the layout
 			 * version when resync starts. If it doesn't match the
 			 * current object layout version, it means the layout
-			 * has been changed */
+			 * has been changed
+			 */
 			RETURN(-ESTALE);
 		}
 
@@ -436,9 +441,11 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 
 	lio->lis_mirror_index = index;
 
-	/* FLR: if all mirrors have been tried once, most likely the network
+	/*
+	 * FLR: if all mirrors have been tried once, most likely the network
 	 * of this client has been partitioned. We should relinquish CPU for
-	 * a while before trying again. */
+	 * a while before trying again.
+	 */
 	++io->ci_ndelay_tried;
 	if (io->ci_ndelay && io->ci_ndelay_tried >= comp->lo_mirror_count) {
 		set_current_state(TASK_INTERRUPTIBLE);
@@ -477,8 +484,10 @@ static int lov_io_slice_init(struct lov_io *lio,
 		if (cl_io_is_append(io)) {
 			LASSERT(io->ci_type == CIT_WRITE);
 
-			/* If there is LOV EA hole, then we may cannot locate
-			 * the current file-tail exactly. */
+			/*
+			 * If there is LOV EA hole, then we may cannot locate
+			 * the current file-tail exactly.
+			 */
 			if (unlikely(obj->lo_lsm->lsm_entries[0]->lsme_pattern &
 				     LOV_PATTERN_F_HOLE))
 				GOTO(out, result = -EIO);
@@ -488,25 +497,26 @@ static int lov_io_slice_init(struct lov_io *lio,
 		}
 		break;
 
-        case CIT_SETATTR:
-                if (cl_io_is_trunc(io))
-                        lio->lis_pos = io->u.ci_setattr.sa_attr.lvb_size;
-                else
-                        lio->lis_pos = 0;
-                lio->lis_endpos = OBD_OBJECT_EOF;
-                break;
+	case CIT_SETATTR:
+		if (cl_io_is_trunc(io))
+			lio->lis_pos = io->u.ci_setattr.sa_attr.lvb_size;
+		else
+			lio->lis_pos = 0;
+		lio->lis_endpos = OBD_OBJECT_EOF;
+		break;
 
 	case CIT_DATA_VERSION:
 		lio->lis_pos = 0;
 		lio->lis_endpos = OBD_OBJECT_EOF;
 		break;
 
-        case CIT_FAULT: {
-                pgoff_t index = io->u.ci_fault.ft_index;
-                lio->lis_pos = cl_offset(io->ci_obj, index);
-                lio->lis_endpos = cl_offset(io->ci_obj, index + 1);
-                break;
-        }
+	case CIT_FAULT: {
+		pgoff_t index = io->u.ci_fault.ft_index;
+
+		lio->lis_pos = cl_offset(io->ci_obj, index);
+		lio->lis_endpos = cl_offset(io->ci_obj, index + 1);
+		break;
+	}
 
 	case CIT_FSYNC: {
 		lio->lis_pos = io->u.ci_fsync.fi_start;
@@ -530,14 +540,14 @@ static int lov_io_slice_init(struct lov_io *lio,
 			GOTO(out, result = 1);
 		break;
 
-        case CIT_MISC:
-                lio->lis_pos = 0;
-                lio->lis_endpos = OBD_OBJECT_EOF;
-                break;
+	case CIT_MISC:
+		lio->lis_pos = 0;
+		lio->lis_endpos = OBD_OBJECT_EOF;
+		break;
 
-        default:
-                LBUG();
-        }
+	default:
+		LBUG();
+	}
 
 	result = lov_io_mirror_init(lio, obj, io);
 	if (result)
@@ -548,8 +558,10 @@ static int lov_io_slice_init(struct lov_io *lio,
 	      (cl_io_is_trunc(io) && io->u.ci_setattr.sa_attr.lvb_size > 0)))
 		GOTO(out, result = 0);
 
-	/* for truncate, it only needs to instantiate the components
-	 * before the truncated size. */
+	/*
+	 * for truncate, it only needs to instantiate the components
+	 * before the truncated size.
+	 */
 	if (cl_io_is_trunc(io)) {
 		io->ci_write_intent.e_start = 0;
 		io->ci_write_intent.e_end = io->u.ci_setattr.sa_attr.lvb_size;
@@ -567,10 +579,12 @@ static int lov_io_slice_init(struct lov_io *lio,
 	}
 
 	if (io->ci_need_write_intent && io->ci_designated_mirror > 0) {
-		/* REINT_SYNC RPC has already tried to instantiate all of the
+		/*
+		 * REINT_SYNC RPC has already tried to instantiate all of the
 		 * components involved, obviously it didn't succeed. Skip this
 		 * mirror for now. The server won't be able to figure out
-		 * which mirror it should instantiate components */
+		 * which mirror it should instantiate components
+		 */
 		CERROR(DFID": trying to instantiate components for designated "
 		       "I/O, file state: %d\n",
 		       PFID(lu_object_fid(lov2lu(obj))), lov_flr_state(obj));
@@ -701,22 +715,22 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 
 static loff_t lov_offset_mod(loff_t val, int delta)
 {
-        if (val != OBD_OBJECT_EOF)
-                val += delta;
-        return val;
+	if (val != OBD_OBJECT_EOF)
+		val += delta;
+	return val;
 }
 
 static int lov_io_iter_init(const struct lu_env *env,
 			    const struct cl_io_slice *ios)
 {
-	struct lov_io        *lio = cl2lov_io(env, ios);
+	struct lov_io *lio = cl2lov_io(env, ios);
 	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
-	struct lov_io_sub    *sub;
+	struct lov_io_sub *sub;
 	struct lu_extent ext;
 	int index;
 	int rc = 0;
 
-        ENTRY;
+	ENTRY;
 
 	ext.e_start = lio->lis_pos;
 	ext.e_end = lio->lis_endpos;
@@ -731,8 +745,10 @@ static int lov_io_iter_init(const struct lu_env *env,
 		CDEBUG(D_VFSTRACE, "component[%d] flags %#x\n",
 		       index, lsm->lsm_entries[index]->lsme_flags);
 		if (!lsm_entry_inited(lsm, index)) {
-			/* Read from uninitialized components should return
-			 * zero filled pages. */
+			/*
+			 * Read from uninitialized components should return
+			 * zero filled pages.
+			 */
 			continue;
 		}
 
@@ -747,7 +763,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 						   &ext, &start, &end))
 				continue;
 
-			if (unlikely(r0->lo_sub[stripe] == NULL)) {
+			if (unlikely(!r0->lo_sub[stripe])) {
 				if (ios->cis_io->ci_type == CIT_READ ||
 				    ios->cis_io->ci_type == CIT_WRITE ||
 				    ios->cis_io->ci_type == CIT_FAULT)
@@ -803,8 +819,10 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	index = lov_io_layout_at(lio, range->cir_pos);
 	if (index < 0) { /* non-existing layout component */
 		if (io->ci_type == CIT_READ) {
-			/* TODO: it needs to detect the next component and
-			 * then set the next pos */
+			/*
+			 * TODO: it needs to detect the next component and
+			 * then set the next pos
+			 */
 			io->ci_continue = 0;
 			/* execute it in main thread */
 			io->ci_pio = 0;
@@ -900,49 +918,49 @@ static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
 
 static int lov_io_lock(const struct lu_env *env, const struct cl_io_slice *ios)
 {
-        ENTRY;
-        RETURN(lov_io_call(env, cl2lov_io(env, ios), cl_io_lock));
+	ENTRY;
+	RETURN(lov_io_call(env, cl2lov_io(env, ios), cl_io_lock));
 }
 
 static int lov_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
 {
-        ENTRY;
-        RETURN(lov_io_call(env, cl2lov_io(env, ios), cl_io_start));
+	ENTRY;
+	RETURN(lov_io_call(env, cl2lov_io(env, ios), cl_io_start));
 }
 
 static int lov_io_end_wrapper(const struct lu_env *env, struct cl_io *io)
 {
-        ENTRY;
-        /*
-         * It's possible that lov_io_start() wasn't called against this
-         * sub-io, either because previous sub-io failed, or upper layer
-         * completed IO.
-         */
-        if (io->ci_state == CIS_IO_GOING)
-                cl_io_end(env, io);
-        else
-                io->ci_state = CIS_IO_FINISHED;
-        RETURN(0);
+	ENTRY;
+	/*
+	 * It's possible that lov_io_start() wasn't called against this
+	 * sub-io, either because previous sub-io failed, or upper layer
+	 * completed IO.
+	 */
+	if (io->ci_state == CIS_IO_GOING)
+		cl_io_end(env, io);
+	else
+		io->ci_state = CIS_IO_FINISHED;
+	RETURN(0);
 }
 
 static int lov_io_iter_fini_wrapper(const struct lu_env *env, struct cl_io *io)
 {
-        cl_io_iter_fini(env, io);
-        RETURN(0);
+	cl_io_iter_fini(env, io);
+	RETURN(0);
 }
 
 static int lov_io_unlock_wrapper(const struct lu_env *env, struct cl_io *io)
 {
-        cl_io_unlock(env, io);
-        RETURN(0);
+	cl_io_unlock(env, io);
+	RETURN(0);
 }
 
 static void lov_io_end(const struct lu_env *env, const struct cl_io_slice *ios)
 {
-        int rc;
+	int rc;
 
-        rc = lov_io_call(env, cl2lov_io(env, ios), lov_io_end_wrapper);
-        LASSERT(rc == 0);
+	rc = lov_io_call(env, cl2lov_io(env, ios), lov_io_end_wrapper);
+	LASSERT(rc == 0);
 }
 
 static void
@@ -973,26 +991,26 @@ lov_io_data_version_end(const struct lu_env *env, const struct cl_io_slice *ios)
 static void lov_io_iter_fini(const struct lu_env *env,
                              const struct cl_io_slice *ios)
 {
-        struct lov_io *lio = cl2lov_io(env, ios);
-        int rc;
+	struct lov_io *lio = cl2lov_io(env, ios);
+	int rc;
 
-        ENTRY;
-        rc = lov_io_call(env, lio, lov_io_iter_fini_wrapper);
-        LASSERT(rc == 0);
+	ENTRY;
+	rc = lov_io_call(env, lio, lov_io_iter_fini_wrapper);
+	LASSERT(rc == 0);
 	while (!list_empty(&lio->lis_active))
 		list_del_init(lio->lis_active.next);
-        EXIT;
+	EXIT;
 }
 
 static void lov_io_unlock(const struct lu_env *env,
                           const struct cl_io_slice *ios)
 {
-        int rc;
+	int rc;
 
-        ENTRY;
-        rc = lov_io_call(env, cl2lov_io(env, ios), lov_io_unlock_wrapper);
-        LASSERT(rc == 0);
-        EXIT;
+	ENTRY;
+	rc = lov_io_call(env, cl2lov_io(env, ios), lov_io_unlock_wrapper);
+	LASSERT(rc == 0);
+	EXIT;
 }
 
 static int lov_io_read_ahead(const struct lu_env *env,
@@ -1025,7 +1043,7 @@ static int lov_io_read_ahead(const struct lu_env *env,
 	stripe = lov_stripe_number(loo->lo_lsm, index, offset);
 
 	r0 = lov_r0(loo, index);
-	if (unlikely(r0->lo_sub[stripe] == NULL))
+	if (unlikely(!r0->lo_sub[stripe]))
 		RETURN(-EIO);
 
 	sub = lov_sub_get(env, lio, lov_comp_index(index, stripe));
@@ -1112,9 +1130,11 @@ static int lov_io_submit(const struct lu_env *env,
 		if (lov_page_is_empty(page)) {
 			cl_page_list_move(&queue->c2_qout, qin, page);
 
-			/* it could only be mirror read to get here therefore
+			/*
+			 * it could only be mirror read to get here therefore
 			 * the pages will be transient. We don't care about
-			 * the return code of cl_page_prep() at all. */
+			 * the return code of cl_page_prep() at all.
+			 */
 			(void) cl_page_prep(env, ios->cis_io, page, crt);
 			cl_page_completion(env, page, crt, 0);
 			continue;
@@ -1160,7 +1180,7 @@ static int lov_io_commit_async(const struct lu_env *env,
 			       cl_commit_cbt cb)
 {
 	struct cl_page_list *plist = &lov_env_info(env)->lti_plist;
-	struct lov_io     *lio = cl2lov_io(env, ios);
+	struct lov_io *lio = cl2lov_io(env, ios);
 	struct lov_io_sub *sub;
 	struct cl_page *page;
 	int rc = 0;
@@ -1266,25 +1286,25 @@ static void lov_io_fsync_end(const struct lu_env *env,
 }
 
 static const struct cl_io_operations lov_io_ops = {
-        .op = {
-                [CIT_READ] = {
-                        .cio_fini      = lov_io_fini,
-                        .cio_iter_init = lov_io_rw_iter_init,
-                        .cio_iter_fini = lov_io_iter_fini,
-                        .cio_lock      = lov_io_lock,
-                        .cio_unlock    = lov_io_unlock,
-                        .cio_start     = lov_io_start,
-                        .cio_end       = lov_io_end
-                },
-                [CIT_WRITE] = {
-                        .cio_fini      = lov_io_fini,
-                        .cio_iter_init = lov_io_rw_iter_init,
-                        .cio_iter_fini = lov_io_iter_fini,
-                        .cio_lock      = lov_io_lock,
-                        .cio_unlock    = lov_io_unlock,
-                        .cio_start     = lov_io_start,
-                        .cio_end       = lov_io_end
-                },
+	.op = {
+		[CIT_READ] = {
+			.cio_fini      = lov_io_fini,
+			.cio_iter_init = lov_io_rw_iter_init,
+			.cio_iter_fini = lov_io_iter_fini,
+			.cio_lock      = lov_io_lock,
+			.cio_unlock    = lov_io_unlock,
+			.cio_start     = lov_io_start,
+			.cio_end       = lov_io_end
+		},
+		[CIT_WRITE] = {
+			.cio_fini      = lov_io_fini,
+			.cio_iter_init = lov_io_rw_iter_init,
+			.cio_iter_fini = lov_io_iter_fini,
+			.cio_lock      = lov_io_lock,
+			.cio_unlock    = lov_io_unlock,
+			.cio_start     = lov_io_start,
+			.cio_end       = lov_io_end
+		},
 		[CIT_SETATTR] = {
 			.cio_fini      = lov_io_fini,
 			.cio_iter_init = lov_io_setattr_iter_init,
@@ -1295,23 +1315,23 @@ static const struct cl_io_operations lov_io_ops = {
 			.cio_end       = lov_io_end
 		},
 		[CIT_DATA_VERSION] = {
-			.cio_fini	= lov_io_fini,
-			.cio_iter_init	= lov_io_iter_init,
-			.cio_iter_fini	= lov_io_iter_fini,
-			.cio_lock	= lov_io_lock,
-			.cio_unlock	= lov_io_unlock,
-			.cio_start	= lov_io_start,
-			.cio_end	= lov_io_data_version_end,
+			.cio_fini       = lov_io_fini,
+			.cio_iter_init  = lov_io_iter_init,
+			.cio_iter_fini  = lov_io_iter_fini,
+			.cio_lock       = lov_io_lock,
+			.cio_unlock     = lov_io_unlock,
+			.cio_start      = lov_io_start,
+			.cio_end        = lov_io_data_version_end,
 		},
-                [CIT_FAULT] = {
-                        .cio_fini      = lov_io_fini,
-                        .cio_iter_init = lov_io_iter_init,
-                        .cio_iter_fini = lov_io_iter_fini,
-                        .cio_lock      = lov_io_lock,
-                        .cio_unlock    = lov_io_unlock,
-                        .cio_start     = lov_io_fault_start,
-                        .cio_end       = lov_io_end
-                },
+		[CIT_FAULT] = {
+			.cio_fini      = lov_io_fini,
+			.cio_iter_init = lov_io_iter_init,
+			.cio_iter_fini = lov_io_iter_fini,
+			.cio_lock      = lov_io_lock,
+			.cio_unlock    = lov_io_unlock,
+			.cio_start     = lov_io_fault_start,
+			.cio_end       = lov_io_end
+		},
 		[CIT_FSYNC] = {
 			.cio_fini      = lov_io_fini,
 			.cio_iter_init = lov_io_iter_init,
@@ -1337,7 +1357,7 @@ static const struct cl_io_operations lov_io_ops = {
 			.cio_fini      = lov_io_fini
 		}
 	},
-	.cio_read_ahead		       = lov_io_read_ahead,
+	.cio_read_ahead                = lov_io_read_ahead,
 	.cio_submit                    = lov_io_submit,
 	.cio_commit_async              = lov_io_commit_async,
 };
@@ -1369,7 +1389,7 @@ static int lov_empty_io_submit(const struct lu_env *env,
 static void lov_empty_impossible(const struct lu_env *env,
                                  struct cl_io_slice *ios)
 {
-        LBUG();
+	LBUG();
 }
 
 #define LOV_EMPTY_IMPOSSIBLE ((void *)lov_empty_impossible)
@@ -1378,37 +1398,37 @@ static void lov_empty_impossible(const struct lu_env *env,
  * An io operation vector for files without stripes.
  */
 static const struct cl_io_operations lov_empty_io_ops = {
-        .op = {
-                [CIT_READ] = {
-                        .cio_fini       = lov_empty_io_fini,
+	.op = {
+		[CIT_READ] = {
+			.cio_fini       = lov_empty_io_fini,
 #if 0
-                        .cio_iter_init  = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_lock       = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_start      = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_end        = LOV_EMPTY_IMPOSSIBLE
+			.cio_iter_init  = LOV_EMPTY_IMPOSSIBLE,
+			.cio_lock       = LOV_EMPTY_IMPOSSIBLE,
+			.cio_start      = LOV_EMPTY_IMPOSSIBLE,
+			.cio_end        = LOV_EMPTY_IMPOSSIBLE
 #endif
-                },
-                [CIT_WRITE] = {
-                        .cio_fini      = lov_empty_io_fini,
-                        .cio_iter_init = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_lock      = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_start     = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_end       = LOV_EMPTY_IMPOSSIBLE
-                },
-                [CIT_SETATTR] = {
-                        .cio_fini      = lov_empty_io_fini,
-                        .cio_iter_init = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_lock      = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_start     = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_end       = LOV_EMPTY_IMPOSSIBLE
-                },
-                [CIT_FAULT] = {
-                        .cio_fini      = lov_empty_io_fini,
-                        .cio_iter_init = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_lock      = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_start     = LOV_EMPTY_IMPOSSIBLE,
-                        .cio_end       = LOV_EMPTY_IMPOSSIBLE
-                },
+		},
+		[CIT_WRITE] = {
+			.cio_fini      = lov_empty_io_fini,
+			.cio_iter_init = LOV_EMPTY_IMPOSSIBLE,
+			.cio_lock      = LOV_EMPTY_IMPOSSIBLE,
+			.cio_start     = LOV_EMPTY_IMPOSSIBLE,
+			.cio_end       = LOV_EMPTY_IMPOSSIBLE
+		},
+		[CIT_SETATTR] = {
+			.cio_fini      = lov_empty_io_fini,
+			.cio_iter_init = LOV_EMPTY_IMPOSSIBLE,
+			.cio_lock      = LOV_EMPTY_IMPOSSIBLE,
+			.cio_start     = LOV_EMPTY_IMPOSSIBLE,
+			.cio_end       = LOV_EMPTY_IMPOSSIBLE
+		},
+		[CIT_FAULT] = {
+			.cio_fini      = lov_empty_io_fini,
+			.cio_iter_init = LOV_EMPTY_IMPOSSIBLE,
+			.cio_lock      = LOV_EMPTY_IMPOSSIBLE,
+			.cio_start     = LOV_EMPTY_IMPOSSIBLE,
+			.cio_end       = LOV_EMPTY_IMPOSSIBLE
+		},
 		[CIT_FSYNC] = {
 			.cio_fini      = lov_empty_io_fini
 		},
@@ -1429,9 +1449,10 @@ static const struct cl_io_operations lov_empty_io_ops = {
 int lov_io_init_composite(const struct lu_env *env, struct cl_object *obj,
 			  struct cl_io *io)
 {
-	struct lov_io       *lio = lov_env_io(env);
-	struct lov_object   *lov = cl2lov(obj);
+	struct lov_io *lio = lov_env_io(env);
+	struct lov_object *lov = cl2lov(obj);
 	int result;
+
 	ENTRY;
 
 	INIT_LIST_HEAD(&lio->lis_active);
@@ -1515,7 +1536,8 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 		result = 1;
 		break;
 	case CIT_SETATTR:
-		/* the truncate to 0 is managed by MDT:
+		/*
+		 * the truncate to 0 is managed by MDT:
 		 * - in open, for open O_TRUNC
 		 * - in setattr, for truncate
 		 */
