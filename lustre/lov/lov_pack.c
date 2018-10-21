@@ -50,7 +50,7 @@
 void lov_dump_lmm_common(int level, void *lmmp)
 {
 	struct lov_mds_md *lmm = lmmp;
-	struct ost_id	oi;
+	struct ost_id oi;
 
 	lmm_oi_le_to_cpu(&oi, &lmm->lmm_oi);
 	CDEBUG(level, "objid "DOSTID", magic 0x%08x, pattern %#x\n",
@@ -84,9 +84,9 @@ static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
-        lov_dump_lmm_common(level, lmm);
-        lov_dump_lmm_objects(level, lmm->lmm_objects,
-                             le16_to_cpu(lmm->lmm_stripe_count));
+	lov_dump_lmm_common(level, lmm);
+	lov_dump_lmm_objects(level, lmm->lmm_objects,
+			     le16_to_cpu(lmm->lmm_stripe_count));
 }
 
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
@@ -133,6 +133,7 @@ ssize_t lov_lsm_pack_v1v3(const struct lov_stripe_md *lsm, void *buf,
 	struct lov_ost_data_v1 *lmm_objects;
 	size_t lmm_size;
 	unsigned int i;
+
 	ENTRY;
 
 	lmm_size = lov_mds_md_size(lsm->lsm_entries[0]->lsme_stripe_count,
@@ -143,7 +144,8 @@ ssize_t lov_lsm_pack_v1v3(const struct lov_stripe_md *lsm, void *buf,
 	if (buf_size < lmm_size)
 		RETURN(-ERANGE);
 
-	/* lmmv1 and lmmv3 point to the same struct and have the
+	/*
+	 * lmmv1 and lmmv3 point to the same struct and have the
 	 * same first fields
 	 */
 	lmmv1->lmm_magic = cpu_to_le32(lsm->lsm_magic);
@@ -191,6 +193,7 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 	unsigned int offset;
 	unsigned int size;
 	unsigned int i;
+
 	ENTRY;
 
 	if (lsm->lsm_magic == LOV_MAGIC_V1 || lsm->lsm_magic == LOV_MAGIC_V3)
@@ -287,8 +290,10 @@ __u16 lov_get_stripe_count(struct lov_obd *lov, __u32 magic, __u16 stripe_count)
 	if (!stripe_count)
 		stripe_count = 1;
 
-	/* stripe count is based on whether ldiskfs can handle
-	 * larger EA sizes */
+	/*
+	 * stripe count is based on whether ldiskfs can handle
+	 * larger EA sizes
+	 */
 	if (lov->lov_ocd.ocd_connect_flags & OBD_CONNECT_MAX_EASIZE &&
 	    lov->lov_ocd.ocd_max_easize)
 		max_stripes = lov_mds_md_max_stripe_count(
@@ -314,7 +319,8 @@ int lov_free_memmd(struct lov_stripe_md **lsmp)
 	return refc;
 }
 
-/* Unpack LOV object metadata from disk storage.  It is packed in LE byte
+/*
+ * Unpack LOV object metadata from disk storage.  It is packed in LE byte
  * order and is opaque to the networking layer.
  */
 struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
@@ -323,6 +329,7 @@ struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
 	const struct lsm_operations *op;
 	struct lov_stripe_md *lsm;
 	u32 magic;
+
 	ENTRY;
 
 	if (buf_size < sizeof(magic))
@@ -330,7 +337,7 @@ struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
 
 	magic = le32_to_cpu(*(u32 *)buf);
 	op = lsm_op_find(magic);
-	if (op == NULL)
+	if (!op)
 		RETURN(ERR_PTR(-EINVAL));
 
 	lsm = op->lsm_unpackmd(lov, buf, buf_size);
@@ -338,7 +345,8 @@ struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
 	RETURN(lsm);
 }
 
-/* Retrieve object striping information.
+/*
+ * Retrieve object striping information.
  *
  * @lump is a pointer to an in-core struct with lmm_ost_count indicating
  * the maximum number of OST indices which will fit in the user buffer.
@@ -354,10 +362,11 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 	/* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
 	struct lov_mds_md *lmmk, *lmm;
 	struct lov_user_md_v1 lum;
-	size_t	lmmk_size;
-	ssize_t	lmm_size, lum_size = 0;
+	size_t lmmk_size;
+	ssize_t lmm_size, lum_size = 0;
 	static bool printed;
-	int	rc = 0;
+	int rc = 0;
+
 	ENTRY;
 
 	if (lsm->lsm_magic != LOV_MAGIC_V1 && lsm->lsm_magic != LOV_MAGIC_V3 &&
@@ -378,7 +387,7 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 	lmmk_size = lov_comp_md_size(lsm);
 
 	OBD_ALLOC_LARGE(lmmk, lmmk_size);
-	if (lmmk == NULL)
+	if (!lmmk)
 		GOTO(out, rc = -ENOMEM);
 
 	lmm_size = lov_lsm_pack(lsm, lmmk, lmmk_size);
@@ -398,8 +407,10 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 		}
 	}
 
-	/* Legacy appication passes limited buffer, we need to figure out
-	 * the user buffer size by the passed in lmm_stripe_count. */
+	/*
+	 * Legacy appication passes limited buffer, we need to figure out
+	 * the user buffer size by the passed in lmm_stripe_count.
+	 */
 	if (copy_from_user(&lum, lump, sizeof(struct lov_user_md_v1)))
 		GOTO(out_free, rc = -EFAULT);
 
@@ -411,8 +422,10 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 	if (lum_size != 0) {
 		struct lov_mds_md *comp_md = lmmk;
 
-		/* Legacy app (ADIO for instance) treats the layout as V1/V3
-		 * blindly, we'd return a reasonable V1/V3 for them. */
+		/*
+		 * Legacy app (ADIO for instance) treats the layout as V1/V3
+		 * blindly, we'd return a reasonable V1/V3 for them.
+		 */
 		if (lmmk->lmm_magic == LOV_MAGIC_COMP_V1) {
 			struct lov_comp_md_v1 *comp_v1;
 			struct cl_object *cl_obj;
@@ -425,8 +438,10 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 			cl_object_attr_get(env, cl_obj, &attr);
 			cl_object_attr_unlock(cl_obj);
 
-			/* return the last instantiated component if file size
-			 * is non-zero, otherwise, return the last component.*/
+			/*
+			 * return the last instantiated component if file size
+			 * is non-zero, otherwise, return the last component.
+			 */
 			comp_v1 = (struct lov_comp_md_v1 *)lmmk;
 			i = attr.cat_size == 0 ? comp_v1->lcm_entry_count : 0;
 			for (; i < comp_v1->lcm_entry_count; i++) {
