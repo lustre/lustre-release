@@ -49,37 +49,39 @@
  */
 
 int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,
-                       const struct lu_object_conf *conf)
+		       const struct lu_object_conf *conf)
 {
-        struct lovsub_device  *dev   = lu2lovsub_dev(obj->lo_dev);
-        struct lu_object      *below;
-        struct lu_device      *under;
+	struct lovsub_device *dev = lu2lovsub_dev(obj->lo_dev);
+	struct lu_object *below;
+	struct lu_device *under;
 
-        int result;
+	int result;
 
-        ENTRY;
-        under = &dev->acid_next->cd_lu_dev;
-        below = under->ld_ops->ldo_object_alloc(env, obj->lo_header, under);
-        if (below != NULL) {
-                lu_object_add(obj, below);
+	ENTRY;
+	under = &dev->acid_next->cd_lu_dev;
+	below = under->ld_ops->ldo_object_alloc(env, obj->lo_header, under);
+	if (below) {
+		lu_object_add(obj, below);
 		cl_object_page_init(lu2cl(obj), 0);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        RETURN(result);
+		result = 0;
+	} else
+		result = -ENOMEM;
+	RETURN(result);
 
 }
 
 static void lovsub_object_free(const struct lu_env *env, struct lu_object *obj)
 {
-        struct lovsub_object *los = lu2lovsub(obj);
-        struct lov_object    *lov = los->lso_super;
-        ENTRY;
+	struct lovsub_object *los = lu2lovsub(obj);
+	struct lov_object *lov = los->lso_super;
 
-        /* We can't assume lov was assigned here, because of the shadow
-         * object handling in lu_object_find.
-         */
-	if (lov != NULL) {
+	ENTRY;
+
+	/*
+	 * We can't assume lov was assigned here, because of the shadow
+	 * object handling in lu_object_find.
+	 */
+	if (lov) {
 		int index = lov_comp_entry(los->lso_index);
 		int stripe = lov_comp_stripe(los->lso_index);
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
@@ -91,18 +93,18 @@ static void lovsub_object_free(const struct lu_env *env, struct lu_object *obj)
 		spin_unlock(&r0->lo_sub_lock);
 	}
 
-        lu_object_fini(obj);
-        lu_object_header_fini(&los->lso_header.coh_lu);
-        OBD_SLAB_FREE_PTR(los, lovsub_object_kmem);
-        EXIT;
+	lu_object_fini(obj);
+	lu_object_header_fini(&los->lso_header.coh_lu);
+	OBD_SLAB_FREE_PTR(los, lovsub_object_kmem);
+	EXIT;
 }
 
 static int lovsub_object_print(const struct lu_env *env, void *cookie,
-                               lu_printer_t p, const struct lu_object *obj)
+			       lu_printer_t p, const struct lu_object *obj)
 {
-        struct lovsub_object *los = lu2lovsub(obj);
+	struct lovsub_object *los = lu2lovsub(obj);
 
-        return (*p)(env, cookie, "[%d]", los->lso_index);
+	return (*p)(env, cookie, "[%d]", los->lso_index);
 }
 
 static int lovsub_attr_update(const struct lu_env *env, struct cl_object *obj,
@@ -117,13 +119,13 @@ static int lovsub_attr_update(const struct lu_env *env, struct cl_object *obj,
 }
 
 static int lovsub_object_glimpse(const struct lu_env *env,
-                                 const struct cl_object *obj,
-                                 struct ost_lvb *lvb)
+				 const struct cl_object *obj,
+				 struct ost_lvb *lvb)
 {
-        struct lovsub_object *los = cl2lovsub(obj);
+	struct lovsub_object *los = cl2lovsub(obj);
 
-        ENTRY;
-        RETURN(cl_object_glimpse(env, &los->lso_super->lo_cl, lvb));
+	ENTRY;
+	RETURN(cl_object_glimpse(env, &los->lso_super->lo_cl, lvb));
 }
 
 /**
@@ -136,6 +138,7 @@ static void lovsub_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 {
 	struct lovsub_object *subobj = cl2lovsub(obj);
 	struct lov_stripe_md *lsm = subobj->lso_super->lo_lsm;
+
 	ENTRY;
 	cl_req_attr_set(env, &subobj->lso_super->lo_cl, attr);
 
@@ -157,12 +160,12 @@ static const struct cl_object_operations lovsub_ops = {
 };
 
 static const struct lu_object_operations lovsub_lu_obj_ops = {
-        .loo_object_init      = lovsub_object_init,
-        .loo_object_delete    = NULL,
-        .loo_object_release   = NULL,
-        .loo_object_free      = lovsub_object_free,
-        .loo_object_print     = lovsub_object_print,
-        .loo_object_invariant = NULL
+	.loo_object_init      = lovsub_object_init,
+	.loo_object_delete    = NULL,
+	.loo_object_release   = NULL,
+	.loo_object_free      = lovsub_object_free,
+	.loo_object_print     = lovsub_object_print,
+	.loo_object_invariant = NULL
 };
 
 struct lu_object *lovsub_object_alloc(const struct lu_env *env,
@@ -174,7 +177,7 @@ struct lu_object *lovsub_object_alloc(const struct lu_env *env,
 
 	ENTRY;
 	OBD_SLAB_ALLOC_PTR_GFP(los, lovsub_object_kmem, GFP_NOFS);
-	if (los != NULL) {
+	if (los) {
 		struct cl_object_header *hdr;
 
 		obj = lovsub2lu(los);
