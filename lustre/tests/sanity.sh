@@ -15468,6 +15468,56 @@ test_230j() {
 }
 run_test 230j "DoM file data not changed after dir migration"
 
+test_230k() {
+	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS version at least 2.11.56"
+
+	local total=20
+	local files_on_starting_mdt=0
+
+	$LFS mkdir -i -1 -c 2 $DIR/$tdir || error "mkdir failed"
+	$LFS getdirstripe $DIR/$tdir
+	for i in $(seq $total); do
+		echo $((i*i - i)) > $DIR/$tdir/$tfile.$i || error "write failed"
+		[[ $($LFS getstripe -m $DIR/$tdir/$tfile.$i) -eq 0 ]] &&
+			files_on_starting_mdt=$((files_on_starting_mdt + 1))
+	done
+
+	echo "$files_on_starting_mdt files on MDT0"
+
+	$LFS migrate -m 1,3 $DIR/$tdir || error "migrate -m 1,3 failed"
+	$LFS getdirstripe $DIR/$tdir
+
+	files_on_starting_mdt=0
+	for i in $(seq $total); do
+		$(echo $((i*i - i)) | cmp $DIR/$tdir/$tfile.$i -) ||
+			error "file $tfile.$i mismatch after migration"
+		[[ $($LFS getstripe -m $DIR/$tdir/$tfile.$i) -eq 1 ]] &&
+			files_on_starting_mdt=$((files_on_starting_mdt + 1))
+	done
+
+	echo "$files_on_starting_mdt files on MDT1 after migration"
+	[[ $files_on_starting_mdt -eq $total ]] && error "all files on MDT1"
+
+	$LFS migrate -m 0 -c 2 $DIR/$tdir || error "migrate -m 0 -c 2 failed"
+	$LFS getdirstripe $DIR/$tdir
+
+	files_on_starting_mdt=0
+	for i in $(seq $total); do
+		$(echo $((i*i - i)) | cmp $DIR/$tdir/$tfile.$i -) ||
+			error "file $tfile.$i mismatch after 2nd migration"
+		[[ $($LFS getstripe -m $DIR/$tdir/$tfile.$i) -eq 0 ]] &&
+			files_on_starting_mdt=$((files_on_starting_mdt + 1))
+	done
+
+	echo "$files_on_starting_mdt files on MDT0 after 2nd migration"
+	[[ $files_on_starting_mdt -eq $total ]] && error "all files on MDT0"
+
+	true
+}
+run_test 230k "file data not changed after dir migration"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

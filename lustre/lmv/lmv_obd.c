@@ -2006,7 +2006,10 @@ static int lmv_migrate(struct obd_export *exp, struct md_op_data *op_data,
 	if (IS_ERR(child_tgt))
 		RETURN(PTR_ERR(child_tgt));
 
-	rc = lmv_fid_alloc(NULL, exp, &target_fid, op_data);
+	if (!S_ISDIR(op_data->op_mode) && tp_tgt)
+		rc = __lmv_fid_alloc(lmv, &target_fid, tp_tgt->ltd_idx);
+	else
+		rc = lmv_fid_alloc(NULL, exp, &target_fid, op_data);
 	if (rc)
 		RETURN(rc);
 
