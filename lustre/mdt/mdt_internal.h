@@ -828,6 +828,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc);
 struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 					const struct lustre_handle *open_handle,
 					bool is_replay);
+int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
+				  struct mdt_object *pobj,
+				  struct mdt_object *obj);
 
 int mdt_get_info(struct tgt_session_info *tsi);
 int mdt_attr_get_complex(struct mdt_thread_info *info,

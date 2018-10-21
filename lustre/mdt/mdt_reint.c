@@ -1303,9 +1303,9 @@ out_put:
  * in case obj is remote obj on its parent, revoke LOOKUP lock,
  * herein we don't really check it, just do revoke.
  */
-static int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
-					 struct mdt_object *pobj,
-					 struct mdt_object *obj)
+int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
+				  struct mdt_object *pobj,
+				  struct mdt_object *obj)
 {
 	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LOCAL];
 	int rc;
@@ -1314,10 +1314,11 @@ static int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
 	mdt_lock_reg_init(lh, LCK_EX);
 
 	if (mdt_object_remote(pobj)) {
+		/* don't bother to check if pobj and obj are on the same MDT. */
 		rc = mdt_remote_object_lock(info, pobj, mdt_object_fid(obj),
 					    &lh->mlh_rreg_lh, LCK_EX,
 					    MDS_INODELOCK_LOOKUP, false);
-	} else {
+	} else if (mdt_object_remote(obj)) {
 		struct ldlm_res_id *res = &info->mti_res_id;
 		union ldlm_policy_data *policy = &info->mti_policy;
 		__u64 dlmflags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB |
@@ -1329,6 +1330,9 @@ static int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
 		rc = mdt_fid_lock(info->mti_env, info->mti_mdt->mdt_namespace,
 				  &lh->mlh_reg_lh, LCK_EX, policy, res,
 				  dlmflags, NULL);
+	} else {
+		/* do nothing if both are local */
+		return 0;
 	}
 
 	if (rc != ELDLM_OK)
@@ -1702,7 +1706,6 @@ static int mdt_migrate_object_lock(struct mdt_thread_info *info,
 	int rc;
 
 	if (mdt_object_remote(obj)) {
-		/* don't bother to check if pobj and obj are on the same MDT. */
 		rc = mdt_revoke_remote_lookup_lock(info, pobj, obj);
 		if (rc)
 			return rc;

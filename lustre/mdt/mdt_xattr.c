@@ -346,14 +346,44 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
 
-relock:
+	/* get parent from PFID */
+	rc = mdt_attr_get_pfid(info, obj, &ma->ma_pfid);
+	if (rc)
+		GOTO(put_obj, rc);
+
+	pobj = mdt_object_find(env, mdt, &ma->ma_pfid);
+	if (IS_ERR(pobj))
+		GOTO(put_obj, rc = PTR_ERR(pobj));
+
+	/* revoke object remote LOOKUP lock */
+	if (mdt_object_remote(pobj)) {
+		rc = mdt_revoke_remote_lookup_lock(info, pobj, obj);
+		if (rc)
+			GOTO(put_pobj, rc);
+	}
+
+	/*
+	 * lock parent if dir will be shrunk to 1 stripe, because dir will be
+	 * converted to normal directory, as will change dir fid and update
+	 * namespace of parent.
+	 */
+	lhp = &info->mti_lh[MDT_LH_PARENT];
+	mdt_lock_reg_init(lhp, LCK_PW);
+
+	if (le32_to_cpu(lmu->lum_stripe_count) < 2) {
+		rc = mdt_reint_object_lock(info, pobj, lhp,
+					   MDS_INODELOCK_UPDATE, true);
+		if (rc)
+			GOTO(put_pobj, rc);
+	}
+
 	/* lock object */
 	lhc = &info->mti_lh[MDT_LH_CHILD];
 	mdt_lock_reg_init(lhc, LCK_EX);
 	rc = mdt_reint_striped_lock(info, obj, lhc, MDS_INODELOCK_FULL, einfo,
 				    true);
 	if (rc)
-		GOTO(put_obj, rc);
+		GOTO(unlock_pobj, rc);
 
 	ma->ma_lmv = info->mti_big_lmm;
 	ma->ma_lmv_size = info->mti_big_lmmsize;
@@ -399,56 +429,6 @@ relock:
 		GOTO(unlock_obj, rc = -EINVAL);
 	}
 
-	if (le32_to_cpu(lmu->lum_stripe_count) < 2 && !pobj) {
-		/*
-		 * lock parent because dir will be shrunk to be 1 stripe, which
-		 * should be converted to normal directory, but that will
-		 * change dir fid and update namespace of parent.
-		 */
-		lhp = &info->mti_lh[MDT_LH_PARENT];
-		mdt_lock_reg_init(lhp, LCK_PW);
-
-		/* get parent from PFID */
-		ma->ma_need |= MA_PFID;
-		ma->ma_valid = 0;
-		rc = mdt_attr_get_complex(info, obj, ma);
-		if (rc)
-			GOTO(unlock_obj, rc);
-
-		if (!(ma->ma_valid & MA_PFID))
-			GOTO(unlock_obj, rc = -ENOTSUPP);
-
-		pobj = mdt_object_find(env, mdt, &ma->ma_pfid);
-		if (IS_ERR(pobj)) {
-			rc = PTR_ERR(pobj);
-			pobj = NULL;
-			GOTO(unlock_obj, rc);
-		}
-
-		mdt_reint_striped_unlock(info, obj, lhc, einfo, 1);
-
-		if (mdt_object_remote(pobj)) {
-			rc = mdt_remote_object_lock(info, pobj, rr->rr_fid1,
-						    &lhp->mlh_rreg_lh, LCK_EX,
-						    MDS_INODELOCK_LOOKUP,
-						    false);
-			if (rc != ELDLM_OK) {
-				mdt_object_put(env, pobj);
-				GOTO(put_obj, rc);
-			}
-			mdt_object_unlock(info, NULL, lhp, 1);
-		}
-
-		rc = mdt_reint_object_lock(info, pobj, lhp,
-					   MDS_INODELOCK_UPDATE, true);
-		if (rc) {
-			mdt_object_put(env, pobj);
-			GOTO(put_obj, rc);
-		}
-
-		goto relock;
-	}
-
 	buf->lb_buf = rr->rr_eadata;
 	buf->lb_len = rr->rr_eadatalen;
 	rc = mo_xattr_set(env, mdt_object_child(obj), buf, XATTR_NAME_LMV, 0);
@@ -456,8 +436,10 @@ relock:
 
 unlock_obj:
 	mdt_reint_striped_unlock(info, obj, lhc, einfo, rc);
-	if (pobj)
-		mdt_object_unlock_put(info, pobj, lhp, rc);
+unlock_pobj:
+	mdt_object_unlock(info, pobj, lhp, rc);
+put_pobj:
+	mdt_object_put(env, pobj);
 put_obj:
 	mdt_object_put(env, obj);
 
