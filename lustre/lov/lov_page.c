@@ -68,17 +68,18 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 			    struct cl_page *page, pgoff_t index)
 {
 	struct lov_object *loo = cl2lov(obj);
-	struct lov_io     *lio = lov_env_io(env);
-	struct cl_object  *subobj;
-	struct cl_object  *o;
+	struct lov_io *lio = lov_env_io(env);
+	struct cl_object *subobj;
+	struct cl_object *o;
 	struct lov_io_sub *sub;
-	struct lov_page   *lpg = cl_object_page_slice(obj, page);
+	struct lov_page *lpg = cl_object_page_slice(obj, page);
 	struct lov_layout_raid0 *r0;
-	loff_t             offset;
-	loff_t             suboff;
-	int                entry;
-	int                stripe;
-	int                rc;
+	loff_t offset;
+	loff_t suboff;
+	int entry;
+	int stripe;
+	int rc;
+
 	ENTRY;
 
 	offset = cl_offset(obj, index);
@@ -106,7 +107,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 	subobj = lovsub2cl(r0->lo_sub[stripe]);
 	list_for_each_entry(o, &subobj->co_lu.lo_header->loh_layers,
 			    co_lu.lo_linkage) {
-		if (o->co_ops->coo_page_init != NULL) {
+		if (o->co_ops->coo_page_init) {
 			rc = o->co_ops->coo_page_init(sub->sub_env, o, page,
 						      cl_index(subobj, suboff));
 			if (rc != 0)
@@ -121,9 +122,9 @@ static int lov_empty_page_print(const struct lu_env *env,
 				const struct cl_page_slice *slice,
 				void *cookie, lu_printer_t printer)
 {
-        struct lov_page *lp = cl2lov_page(slice);
+	struct lov_page *lp = cl2lov_page(slice);
 
-        return (*printer)(env, cookie, LUSTRE_LOV_NAME"-page@%p, empty.\n", lp);
+	return (*printer)(env, cookie, LUSTRE_LOV_NAME"-page@%p, empty.\n", lp);
 }
 
 static const struct cl_page_operations lov_empty_page_ops = {
@@ -135,6 +136,7 @@ int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 {
 	struct lov_page *lpg = cl_object_page_slice(obj, page);
 	void *addr;
+
 	ENTRY;
 
 	lpg->lps_index = ~0;
