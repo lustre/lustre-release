@@ -52,22 +52,22 @@ static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
 						   const struct cl_lock *parent,
 						   struct lov_lock_sub *lls)
 {
-        struct lov_sublock_env *subenv;
-        struct lov_io          *lio    = lov_env_io(env);
-        struct cl_io           *io     = lio->lis_cl.cis_io;
-        struct lov_io_sub      *sub;
+	struct lov_sublock_env *subenv;
+	struct lov_io          *lio    = lov_env_io(env);
+	struct cl_io           *io     = lio->lis_cl.cis_io;
+	struct lov_io_sub      *sub;
 
-        subenv = &lov_env_session(env)->ls_subenv;
+	subenv = &lov_env_session(env)->ls_subenv;
 
-        /*
-         * FIXME: We tend to use the subio's env & io to call the sublock
-         * lock operations because osc lock sometimes stores some control
-         * variables in thread's IO infomation(Now only lockless information).
-         * However, if the lock's host(object) is different from the object
-         * for current IO, we have no way to get the subenv and subio because
-         * they are not initialized at all. As a temp fix, in this case,
-         * we still borrow the parent's env to call sublock operations.
-         */
+	/*
+	 * FIXME: We tend to use the subio's env & io to call the sublock
+	 * lock operations because osc lock sometimes stores some control
+	 * variables in thread's IO infomation(Now only lockless information).
+	 * However, if the lock's host(object) is different from the object
+	 * for current IO, we have no way to get the subenv and subio because
+	 * they are not initialized at all. As a temp fix, in this case,
+	 * we still borrow the parent's env to call sublock operations.
+	 */
 	if (!io || !cl_object_same(io->ci_obj, parent->cll_descr.cld_obj)) {
 		subenv->lse_env = env;
 		subenv->lse_io = io;
@@ -89,6 +89,7 @@ static int lov_sublock_init(const struct lu_env *env,
 {
 	struct lov_sublock_env *subenv;
 	int result;
+
 	ENTRY;
 
 	subenv = lov_sublock_env_get(env, parent, lls);
@@ -137,7 +138,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
 		for (i = 0; i < r0->lo_nr; i++) {
-			if (likely(r0->lo_sub[i] != NULL) && /* spare layout */
+			if (likely(r0->lo_sub[i]) && /* spare layout */
 			    lov_stripe_intersects(lov->lo_lsm, index, i,
 						  &ext, &start, &end))
 				nr++;
@@ -150,7 +151,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 	 */
 
 	OBD_ALLOC_LARGE(lovlck, offsetof(struct lov_lock, lls_sub[nr]));
-	if (lovlck == NULL)
+	if (!lovlck)
 		RETURN(ERR_PTR(-ENOMEM));
 
 	lovlck->lls_nr = nr;
@@ -162,7 +163,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 			struct lov_lock_sub *lls = &lovlck->lls_sub[nr];
 			struct cl_lock_descr *descr = &lls->sub_lock.cll_descr;
 
-			if (unlikely(r0->lo_sub[i] == NULL) ||
+			if (unlikely(!r0->lo_sub[i]) ||
 			    !lov_stripe_intersects(lov->lo_lsm, index, i,
 						   &ext, &start, &end))
 				continue;
@@ -233,10 +234,10 @@ static int lov_lock_enqueue(const struct lu_env *env,
 			    const struct cl_lock_slice *slice,
 			    struct cl_io *io, struct cl_sync_io *anchor)
 {
-	struct cl_lock          *lock   = slice->cls_lock;
-	struct lov_lock         *lovlck = cl2lov_lock(slice);
-	int                     i;
-	int                     rc      = 0;
+	struct cl_lock *lock = slice->cls_lock;
+	struct lov_lock *lovlck = cl2lov_lock(slice);
+	int i;
+	int rc = 0;
 
 	ENTRY;
 
@@ -263,16 +264,16 @@ static int lov_lock_enqueue(const struct lu_env *env,
 static void lov_lock_cancel(const struct lu_env *env,
 			    const struct cl_lock_slice *slice)
 {
-	struct cl_lock  *lock   = slice->cls_lock;
+	struct cl_lock *lock = slice->cls_lock;
 	struct lov_lock *lovlck = cl2lov_lock(slice);
 	int i;
 
 	ENTRY;
 
 	for (i = 0; i < lovlck->lls_nr; ++i) {
-		struct lov_lock_sub     *lls = &lovlck->lls_sub[i];
-		struct cl_lock          *sublock = &lls->sub_lock;
-		struct lov_sublock_env  *subenv;
+		struct lov_lock_sub *lls = &lovlck->lls_sub[i];
+		struct cl_lock *sublock = &lls->sub_lock;
+		struct lov_sublock_env *subenv;
 
 		if (!lls->sub_is_enqueued)
 			continue;
@@ -290,27 +291,27 @@ static void lov_lock_cancel(const struct lu_env *env,
 }
 
 static int lov_lock_print(const struct lu_env *env, void *cookie,
-                          lu_printer_t p, const struct cl_lock_slice *slice)
+			  lu_printer_t p, const struct cl_lock_slice *slice)
 {
-        struct lov_lock *lck = cl2lov_lock(slice);
-        int              i;
+	struct lov_lock *lck = cl2lov_lock(slice);
+	int i;
 
-        (*p)(env, cookie, "%d\n", lck->lls_nr);
-        for (i = 0; i < lck->lls_nr; ++i) {
-                struct lov_lock_sub *sub;
+	(*p)(env, cookie, "%d\n", lck->lls_nr);
+	for (i = 0; i < lck->lls_nr; ++i) {
+		struct lov_lock_sub *sub;
 
-                sub = &lck->lls_sub[i];
+		sub = &lck->lls_sub[i];
 		(*p)(env, cookie, "    %d %x: ", i, sub->sub_is_enqueued);
 		cl_lock_print(env, cookie, p, &sub->sub_lock);
-        }
-        return 0;
+	}
+	return 0;
 }
 
 static const struct cl_lock_operations lov_lock_ops = {
-        .clo_fini      = lov_lock_fini,
-        .clo_enqueue   = lov_lock_enqueue,
-        .clo_cancel    = lov_lock_cancel,
-        .clo_print     = lov_lock_print
+	.clo_fini      = lov_lock_fini,
+	.clo_enqueue   = lov_lock_enqueue,
+	.clo_cancel    = lov_lock_cancel,
+	.clo_print     = lov_lock_print
 };
 
 int lov_lock_init_composite(const struct lu_env *env, struct cl_object *obj,
@@ -332,6 +333,7 @@ static void lov_empty_lock_fini(const struct lu_env *env,
 				struct cl_lock_slice *slice)
 {
 	struct lov_lock *lck = cl2lov_lock(slice);
+
 	OBD_SLAB_FREE_PTR(lck, lov_lock_kmem);
 }
 
@@ -356,7 +358,7 @@ int lov_lock_init_empty(const struct lu_env *env, struct cl_object *obj,
 
 	ENTRY;
 	OBD_SLAB_ALLOC_PTR_GFP(lck, lov_lock_kmem, GFP_NOFS);
-	if (lck != NULL) {
+	if (lck) {
 		cl_lock_slice_add(lock, &lck->lls_cl, obj, &lov_empty_lock_ops);
 		result = 0;
 	}
