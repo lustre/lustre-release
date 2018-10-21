@@ -53,12 +53,13 @@ LU_KEY_INIT(dt_global, struct dt_thread_info);
 LU_KEY_FINI(dt_global, struct dt_thread_info);
 
 struct lu_context_key dt_key = {
-        .lct_tags = LCT_MD_THREAD | LCT_DT_THREAD | LCT_MG_THREAD | LCT_LOCAL,
-        .lct_init = dt_global_key_init,
-        .lct_fini = dt_global_key_fini
+	.lct_tags = LCT_MD_THREAD | LCT_DT_THREAD | LCT_MG_THREAD | LCT_LOCAL,
+	.lct_init = dt_global_key_init,
+	.lct_fini = dt_global_key_fini
 };
 
-/* no lock is necessary to protect the list, because call-backs
+/*
+ * no lock is necessary to protect the list, because call-backs
  * are added during system startup. Please refer to "struct dt_device".
  */
 void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb)
@@ -74,7 +75,7 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 EXPORT_SYMBOL(dt_txn_callback_del);
 
 int dt_txn_hook_start(const struct lu_env *env,
-                      struct dt_device *dev, struct thandle *th)
+		      struct dt_device *dev, struct thandle *th)
 {
 	int rc = 0;
 	struct dt_txn_callback *cb;
@@ -89,9 +90,11 @@ int dt_txn_hook_start(const struct lu_env *env,
 		    !(cb->dtc_tag & env->le_ctx.lc_tags))
 			continue;
 
-		/* Usually dt_txn_hook_start is called from bottom device,
+		/*
+		 * Usually dt_txn_hook_start is called from bottom device,
 		 * and if the thandle has th_top, then we need use top
-		 * thandle for the callback in the top thandle layer */
+		 * thandle for the callback in the top thandle layer
+		 */
 		if (th->th_top != NULL)
 			dtc_th = th->th_top;
 
@@ -105,9 +108,9 @@ EXPORT_SYMBOL(dt_txn_hook_start);
 
 int dt_txn_hook_stop(const struct lu_env *env, struct thandle *th)
 {
-	struct dt_device       *dev = th->th_dev;
+	struct dt_device *dev = th->th_dev;
 	struct dt_txn_callback *cb;
-	int                     rc = 0;
+	int rc = 0;
 
 	if (th->th_local)
 		return 0;
@@ -122,9 +125,11 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *th)
 		    !(cb->dtc_tag & env->le_ctx.lc_tags))
 			continue;
 
-		/* Usually dt_txn_hook_stop is called from bottom device,
+		/*
+		 * Usually dt_txn_hook_stop is called from bottom device,
 		 * and if the thandle has th_top, then we need use top
-		 * thandle for the callback in the top thandle layer */
+		 * thandle for the callback in the top thandle layer
+		 */
 		if (th->th_top != NULL)
 			dtc_th = th->th_top;
 
@@ -145,9 +150,11 @@ void dt_txn_hook_commit(struct thandle *th)
 
 	list_for_each_entry(cb, &th->th_dev->dd_txn_callbacks,
 			    dtc_linkage) {
-		/* Right now, the bottom device (OSD) will use this hook
+		/*
+		 * Right now, the bottom device (OSD) will use this hook
 		 * commit to notify OSP, so we do not check and replace
-		 * the thandle to top thandle now */
+		 * the thandle to top thandle now
+		 */
 		if (cb->dtc_txn_commit)
 			cb->dtc_txn_commit(th, cb->dtc_cookie);
 	}
@@ -163,53 +170,53 @@ EXPORT_SYMBOL(dt_device_init);
 
 void dt_device_fini(struct dt_device *dev)
 {
-        lu_device_fini(&dev->dd_lu_dev);
+	lu_device_fini(&dev->dd_lu_dev);
 }
 EXPORT_SYMBOL(dt_device_fini);
 
 int dt_object_init(struct dt_object *obj,
-                   struct lu_object_header *h, struct lu_device *d)
+		   struct lu_object_header *h, struct lu_device *d)
 
 {
-        return lu_object_init(&obj->do_lu, h, d);
+	return lu_object_init(&obj->do_lu, h, d);
 }
 EXPORT_SYMBOL(dt_object_init);
 
 void dt_object_fini(struct dt_object *obj)
 {
-        lu_object_fini(&obj->do_lu);
+	lu_object_fini(&obj->do_lu);
 }
 EXPORT_SYMBOL(dt_object_fini);
 
 int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj)
 {
-        if (obj->do_index_ops == NULL)
-                obj->do_ops->do_index_try(env, obj, &dt_directory_features);
-        return obj->do_index_ops != NULL;
+	if (obj->do_index_ops == NULL)
+		obj->do_ops->do_index_try(env, obj, &dt_directory_features);
+	return obj->do_index_ops != NULL;
 }
 EXPORT_SYMBOL(dt_try_as_dir);
 
 enum dt_format_type dt_mode_to_dft(__u32 mode)
 {
-        enum dt_format_type result;
+	enum dt_format_type result;
 
-        switch (mode & S_IFMT) {
-        case S_IFDIR:
-                result = DFT_DIR;
-                break;
-        case S_IFREG:
-                result = DFT_REGULAR;
-                break;
-        case S_IFLNK:
-                result = DFT_SYM;
-                break;
-        case S_IFCHR:
-        case S_IFBLK:
-        case S_IFIFO:
-        case S_IFSOCK:
-                result = DFT_NODE;
-                break;
-        default:
+	switch (mode & S_IFMT) {
+	case S_IFDIR:
+		result = DFT_DIR;
+		break;
+	case S_IFREG:
+		result = DFT_REGULAR;
+		break;
+	case S_IFLNK:
+		result = DFT_SYM;
+		break;
+	case S_IFCHR:
+	case S_IFBLK:
+	case S_IFIFO:
+	case S_IFSOCK:
+		result = DFT_NODE;
+		break;
+	default:
 		LASSERTF(0, "invalid mode %o\n", mode);
 		result = 0; /* Just for satisfying compiler. */
 		break;
@@ -232,8 +239,10 @@ int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
 }
 EXPORT_SYMBOL(dt_lookup_dir);
 
-/* this differs from dt_locate by top_dev as parameter
- * but not one from lu_site */
+/*
+ * this differs from dt_locate by top_dev as parameter
+ * but not one from lu_site
+ */
 struct dt_object *dt_locate_at(const struct lu_env *env,
 			       struct dt_device *dev,
 			       const struct lu_fid *fid,
@@ -288,28 +297,28 @@ static int dt_find_entry(const struct lu_env *env, const char *entry,
  * path component to \a entry_func.
  */
 int dt_path_parser(const struct lu_env *env,
-                   char *path, dt_entry_func_t entry_func,
-                   void *data)
+		   char *path, dt_entry_func_t entry_func,
+		   void *data)
 {
-        char *e;
-        int rc = 0;
+	char *e;
+	int rc = 0;
 
-        while (1) {
-                e = strsep(&path, "/");
-                if (e == NULL)
-                        break;
+	while (1) {
+		e = strsep(&path, "/");
+		if (e == NULL)
+			break;
 
-                if (e[0] == 0) {
-                        if (!path || path[0] == '\0')
-                                break;
-                        continue;
-                }
-                rc = entry_func(env, e, data);
-                if (rc)
-                        break;
-        }
+		if (e[0] == 0) {
+			if (!path || path[0] == '\0')
+				break;
+			continue;
+		}
+		rc = entry_func(env, e, data);
+		if (rc)
+			break;
+	}
 
-        return rc;
+	return rc;
 }
 
 struct dt_object *
@@ -317,51 +326,50 @@ dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
 		 const char *path, struct lu_fid *fid)
 {
 	struct dt_thread_info *info = dt_info(env);
-	struct dt_find_hint   *dfh = &info->dti_dfh;
-	struct dt_object      *obj;
-	int		       result;
+	struct dt_find_hint *dfh = &info->dti_dfh;
+	struct dt_object *obj;
+	int result;
 
 
-        dfh->dfh_dt = dt;
-        dfh->dfh_fid = fid;
+	dfh->dfh_dt = dt;
+	dfh->dfh_fid = fid;
 
 	strlcpy(info->dti_buf, path, sizeof(info->dti_buf));
 
-        result = dt->dd_ops->dt_root_get(env, dt, fid);
-        if (result == 0) {
-                obj = dt_locate(env, dt, fid);
-                if (!IS_ERR(obj)) {
-                        dfh->dfh_o = obj;
+	result = dt->dd_ops->dt_root_get(env, dt, fid);
+	if (result == 0) {
+		obj = dt_locate(env, dt, fid);
+		if (!IS_ERR(obj)) {
+			dfh->dfh_o = obj;
 			result = dt_path_parser(env, info->dti_buf,
 						dt_find_entry, dfh);
-                        if (result != 0)
-                                obj = ERR_PTR(result);
-                        else
-                                obj = dfh->dfh_o;
-                }
-        } else {
-                obj = ERR_PTR(result);
-        }
-        return obj;
+			if (result != 0)
+				obj = ERR_PTR(result);
+			else
+				obj = dfh->dfh_o;
+		}
+	} else {
+		obj = ERR_PTR(result);
+	}
+	return obj;
 }
 
 static struct dt_object *dt_reg_open(const struct lu_env *env,
-                                     struct dt_device *dt,
-                                     struct dt_object *p,
-                                     const char *name,
-                                     struct lu_fid *fid)
+				     struct dt_device *dt,
+				     struct dt_object *p,
+				     const char *name,
+				     struct lu_fid *fid)
 {
-        struct dt_object *o;
-        int result;
+	struct dt_object *o;
+	int result;
 
-        result = dt_lookup_dir(env, p, name, fid);
-        if (result == 0){
-                o = dt_locate(env, dt, fid);
-        }
-        else
-                o = ERR_PTR(result);
+	result = dt_lookup_dir(env, p, name, fid);
+	if (result == 0)
+		o = dt_locate(env, dt, fid);
+	else
+		o = ERR_PTR(result);
 
-        return o;
+	return o;
 }
 
 /**
@@ -388,47 +396,47 @@ struct dt_object *dt_store_open(const struct lu_env *env, struct dt_device *dt,
 }
 
 struct dt_object *dt_find_or_create(const struct lu_env *env,
-                                    struct dt_device *dt,
-                                    const struct lu_fid *fid,
-                                    struct dt_object_format *dof,
-                                    struct lu_attr *at)
+				    struct dt_device *dt,
+				    const struct lu_fid *fid,
+				    struct dt_object_format *dof,
+				    struct lu_attr *at)
 {
-        struct dt_object *dto;
-        struct thandle *th;
-        int rc;
+	struct dt_object *dto;
+	struct thandle *th;
+	int rc;
 
-        ENTRY;
+	ENTRY;
 
-        dto = dt_locate(env, dt, fid);
-        if (IS_ERR(dto))
-                RETURN(dto);
+	dto = dt_locate(env, dt, fid);
+	if (IS_ERR(dto))
+		RETURN(dto);
 
-        LASSERT(dto != NULL);
-        if (dt_object_exists(dto))
-                RETURN(dto);
+	LASSERT(dto != NULL);
+	if (dt_object_exists(dto))
+		RETURN(dto);
 
-        th = dt_trans_create(env, dt);
-        if (IS_ERR(th))
-                GOTO(out, rc = PTR_ERR(th));
+	th = dt_trans_create(env, dt);
+	if (IS_ERR(th))
+		GOTO(out, rc = PTR_ERR(th));
 
-        rc = dt_declare_create(env, dto, at, NULL, dof, th);
-        if (rc)
-                GOTO(trans_stop, rc);
+	rc = dt_declare_create(env, dto, at, NULL, dof, th);
+	if (rc)
+		GOTO(trans_stop, rc);
 
-        rc = dt_trans_start_local(env, dt, th);
-        if (rc)
-                GOTO(trans_stop, rc);
+	rc = dt_trans_start_local(env, dt, th);
+	if (rc)
+		GOTO(trans_stop, rc);
 
-        dt_write_lock(env, dto, 0);
-        if (dt_object_exists(dto))
-                GOTO(unlock, rc = 0);
+	dt_write_lock(env, dto, 0);
+	if (dt_object_exists(dto))
+		GOTO(unlock, rc = 0);
 
-        CDEBUG(D_OTHER, "create new object "DFID"\n", PFID(fid));
+	CDEBUG(D_OTHER, "create new object "DFID"\n", PFID(fid));
 
-        rc = dt_create(env, dto, at, NULL, dof, th);
-        if (rc)
+	rc = dt_create(env, dto, at, NULL, dof, th);
+	if (rc)
                 GOTO(unlock, rc);
-        LASSERT(dt_object_exists(dto));
+	LASSERT(dt_object_exists(dto));
 unlock:
 	dt_write_unlock(env, dto);
 trans_stop:
@@ -446,16 +454,16 @@ EXPORT_SYMBOL(dt_find_or_create);
 /* dt class init function. */
 int dt_global_init(void)
 {
-        int result;
+	int result;
 
-        LU_CONTEXT_KEY_INIT(&dt_key);
-        result = lu_context_key_register(&dt_key);
-        return result;
+	LU_CONTEXT_KEY_INIT(&dt_key);
+	result = lu_context_key_register(&dt_key);
+	return result;
 }
 
 void dt_global_fini(void)
 {
-        lu_context_key_degister(&dt_key);
+	lu_context_key_degister(&dt_key);
 }
 
 /**
@@ -470,7 +478,7 @@ void dt_global_fini(void)
  * \retval -ve errno on failure
  */
 int dt_read(const struct lu_env *env, struct dt_object *dt,
-            struct lu_buf *buf, loff_t *pos)
+	    struct lu_buf *buf, loff_t *pos)
 {
 	LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
 	return dt->do_body_ops->dbo_read(env, dt, buf, pos);
@@ -505,7 +513,7 @@ int dt_record_read(const struct lu_env *env, struct dt_object *dt,
 EXPORT_SYMBOL(dt_record_read);
 
 int dt_record_write(const struct lu_env *env, struct dt_object *dt,
-                    const struct lu_buf *buf, loff_t *pos, struct thandle *th)
+		    const struct lu_buf *buf, loff_t *pos, struct thandle *th)
 {
 	ssize_t size;
 
@@ -522,53 +530,53 @@ int dt_record_write(const struct lu_env *env, struct dt_object *dt,
 EXPORT_SYMBOL(dt_record_write);
 
 int dt_declare_version_set(const struct lu_env *env, struct dt_object *o,
-                           struct thandle *th)
+			   struct thandle *th)
 {
-        struct lu_buf vbuf;
-        char *xname = XATTR_NAME_VERSION;
+	struct lu_buf vbuf;
+	char *xname = XATTR_NAME_VERSION;
 
-        LASSERT(o);
-        vbuf.lb_buf = NULL;
-        vbuf.lb_len = sizeof(dt_obj_version_t);
-        return dt_declare_xattr_set(env, o, &vbuf, xname, 0, th);
+	LASSERT(o);
+	vbuf.lb_buf = NULL;
+	vbuf.lb_len = sizeof(dt_obj_version_t);
+	return dt_declare_xattr_set(env, o, &vbuf, xname, 0, th);
 
 }
 EXPORT_SYMBOL(dt_declare_version_set);
 
 void dt_version_set(const struct lu_env *env, struct dt_object *o,
-                    dt_obj_version_t version, struct thandle *th)
+		    dt_obj_version_t version, struct thandle *th)
 {
-        struct lu_buf vbuf;
-        char *xname = XATTR_NAME_VERSION;
-        int rc;
+	struct lu_buf vbuf;
+	char *xname = XATTR_NAME_VERSION;
+	int rc;
 
-        LASSERT(o);
-        vbuf.lb_buf = &version;
-        vbuf.lb_len = sizeof(version);
+	LASSERT(o);
+	vbuf.lb_buf = &version;
+	vbuf.lb_len = sizeof(version);
 
 	rc = dt_xattr_set(env, o, &vbuf, xname, 0, th);
-        if (rc < 0)
-                CDEBUG(D_INODE, "Can't set version, rc %d\n", rc);
-        return;
+	if (rc < 0)
+		CDEBUG(D_INODE, "Can't set version, rc %d\n", rc);
+	return;
 }
 EXPORT_SYMBOL(dt_version_set);
 
 dt_obj_version_t dt_version_get(const struct lu_env *env, struct dt_object *o)
 {
-        struct lu_buf vbuf;
-        char *xname = XATTR_NAME_VERSION;
-        dt_obj_version_t version;
-        int rc;
+	struct lu_buf vbuf;
+	char *xname = XATTR_NAME_VERSION;
+	dt_obj_version_t version;
+	int rc;
 
-        LASSERT(o);
-        vbuf.lb_buf = &version;
-        vbuf.lb_len = sizeof(version);
+	LASSERT(o);
+	vbuf.lb_buf = &version;
+	vbuf.lb_len = sizeof(version);
 	rc = dt_xattr_get(env, o, &vbuf, xname);
-        if (rc != sizeof(version)) {
-                CDEBUG(D_INODE, "Can't get version, rc %d\n", rc);
-                version = 0;
-        }
-        return version;
+	if (rc != sizeof(version)) {
+		CDEBUG(D_INODE, "Can't get version, rc %d\n", rc);
+		version = 0;
+	}
+	return version;
 }
 EXPORT_SYMBOL(dt_version_get);
 
@@ -661,8 +669,10 @@ const struct dt_index_features dt_nodemap_features = {
 };
 EXPORT_SYMBOL(dt_nodemap_features);
 
-/* helper function returning what dt_index_features structure should be used
- * based on the FID sequence. This is used by OBD_IDX_READ RPC */
+/*
+ * helper function returning what dt_index_features structure should be used
+ * based on the FID sequence. This is used by OBD_IDX_READ RPC
+ */
 static inline const struct dt_index_features *dt_index_feat_select(__u64 seq,
 								   __u32 mode)
 {
@@ -708,11 +718,11 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 			       size_t nob, const struct dt_it_ops *iops,
 			       struct dt_it *it, __u32 attr, void *arg)
 {
-	struct idx_info		*ii = (struct idx_info *)arg;
-	struct lu_idxpage	*lip = &lp->lp_idx;
-	char			*entry;
-	size_t			 size;
-	int			 rc;
+	struct idx_info *ii = (struct idx_info *)arg;
+	struct lu_idxpage *lip = &lp->lp_idx;
+	char *entry;
+	size_t size;
+	int rc;
 	ENTRY;
 
 	if (nob < LIP_HDR_SIZE)
@@ -731,11 +741,11 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 
 	entry = lip->lip_entries;
 	do {
-		char		*tmp_entry = entry;
-		struct dt_key	*key;
-		__u64		hash;
-		__u16		keysize;
-		__u16		recsize;
+		char *tmp_entry = entry;
+		struct dt_key *key;
+		__u64 hash;
+		__u16 keysize;
+		__u16 recsize;
 
 		/* fetch 64-bit hash value */
 		hash = iops->store(env, it);
@@ -753,8 +763,10 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 		}
 
 		if (!(ii->ii_flags & II_FL_NOHASH)) {
-			/* client wants to the 64-bit hash value associated with
-			 * each record */
+			/*
+			 * client wants to the 64-bit hash value associated
+			 * with each record
+			 */
 			memcpy(tmp_entry, &hash, sizeof(hash));
 			tmp_entry += sizeof(hash);
 		}
@@ -828,10 +840,10 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		  const struct lu_rdpg *rdpg, dt_index_page_build_t filler,
 		  void *arg)
 {
-	struct dt_it		*it;
-	const struct dt_it_ops	*iops;
-	size_t			 pageidx, nob, nlupgs = 0;
-	int			 rc;
+	struct dt_it *it;
+	const struct dt_it_ops *iops;
+	size_t pageidx, nob, nlupgs = 0;
+	int rc;
 	ENTRY;
 
 	LASSERT(rdpg->rp_pages != NULL);
@@ -872,13 +884,15 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 		GOTO(out, rc);
 	}
 
-	/* Fill containers one after the other. There might be multiple
+	/*
+	 * Fill containers one after the other. There might be multiple
 	 * containers per physical page.
 	 *
 	 * At this point and across for-loop:
 	 *  rc == 0 -> ok, proceed.
 	 *  rc >  0 -> end of index.
-	 *  rc <  0 -> error. */
+	 *  rc <  0 -> error.
+	 */
 	for (pageidx = 0; rc == 0 && nob > 0; pageidx++) {
 		union lu_page	*lp;
 		int		 i;
@@ -934,8 +948,10 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	int				 rc;
 	ENTRY;
 
-	/* rp_count shouldn't be null and should be a multiple of the container
-	 * size */
+	/*
+	 * rp_count shouldn't be null and should be a multiple of the container
+	 * size
+	 */
 	if (rdpg->rp_count == 0 || (rdpg->rp_count & (LU_PAGE_SIZE - 1)) != 0)
 		RETURN(-EFAULT);
 
@@ -1290,7 +1306,8 @@ int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
 		return rc;
 	}
 
-	/* No need to register debugfs if no enteries. This allows us to
+	/*
+	 * No need to register debugfs if no enteries. This allows us to
 	 * choose between using dt_device or obd_device for debugfs.
 	 */
 	if (!list)
