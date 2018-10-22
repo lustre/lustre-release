@@ -663,6 +663,24 @@ lnet_find_peer_ni_locked(lnet_nid_t nid)
 	return lpni;
 }
 
+struct lnet_peer_ni *
+lnet_peer_get_ni_locked(struct lnet_peer *lp, lnet_nid_t nid)
+{
+	struct lnet_peer_net *lpn;
+	struct lnet_peer_ni *lpni;
+
+	lpn = lnet_peer_get_net_locked(lp, LNET_NIDNET(nid));
+	if (!lpn)
+		return NULL;
+
+	list_for_each_entry(lpni, &lpn->lpn_peer_nis, lpni_peer_nis) {
+		if (lpni->lpni_nid == nid)
+			return lpni;
+	}
+
+	return NULL;
+}
+
 struct lnet_peer *
 lnet_find_peer(lnet_nid_t nid)
 {
@@ -1716,6 +1734,19 @@ out_mutex_unlock:
  * Peer Discovery
  */
 
+bool
+lnet_peer_gw_discovery(struct lnet_peer *lp)
+{
+	bool rc = false;
+
+	spin_lock(&lp->lp_lock);
+	if (lp->lp_state & LNET_PEER_RTR_DISCOVERY)
+		rc = true;
+	spin_unlock(&lp->lp_lock);
+
+	return rc;
+}
+
 /*
  * Is a peer uptodate from the point of view of discovery?
  *
@@ -1804,6 +1835,9 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp)
 	list_splice_init(&lp->lp_dc_pendq, &pending_msgs);
 	spin_unlock(&lp->lp_lock);
 	wake_up_all(&lp->lp_dc_waitq);
+
+	if (lp->lp_rtr_refcount > 0)
+		lnet_router_discovery_complete(lp);
 
 	lnet_net_unlock(LNET_LOCK_EX);
 
@@ -2693,8 +2727,10 @@ __must_hold(&lp->lp_lock)
 				rc = lnet_peer_merge_data(lp, pbuf);
 			}
 		} else {
-			rc = lnet_peer_set_primary_data(
-				lpni->lpni_peer_net->lpn_peer, pbuf);
+			struct lnet_peer *new_lp;
+			new_lp = lpni->lpni_peer_net->lpn_peer;
+			rc = lnet_peer_set_primary_data(new_lp, pbuf);
+			lnet_consolidate_routes_locked(lp, new_lp);
 			lnet_peer_ni_decref_locked(lpni);
 		}
 	}

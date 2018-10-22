@@ -234,8 +234,7 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 				      libcfs_net2str(net), hops,
 				      priority,
 				      alive ? "up" : "down",
-				      /* TODO: replace with actual nid */
-				      libcfs_nid2str(LNET_NID_ANY));
+				      libcfs_nid2str(route->lr_nid));
 			LASSERT(tmpstr + tmpsiz - s > 0);
 		}
 

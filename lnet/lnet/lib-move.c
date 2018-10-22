@@ -1941,6 +1941,13 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni,
 
 	lnet_peer_ni_addref_locked(lpni);
 
+	peer = lpni->lpni_peer_net->lpn_peer;
+
+	if (lnet_peer_gw_discovery(peer)) {
+		lnet_peer_ni_decref_locked(lpni);
+		return 0;
+	}
+
 	rc = lnet_discover_peer_locked(lpni, cpt, false);
 	if (rc) {
 		lnet_peer_ni_decref_locked(lpni);
@@ -3630,9 +3637,6 @@ int lnet_monitor_thr_start(void)
 		CERROR("Can't start monitor thread: %d\n", rc);
 		goto clean_thread;
 	}
-
-	/* post monitor thread start processing */
-	lnet_router_post_mt_start();
 
 	return 0;
 

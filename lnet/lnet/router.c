@@ -78,13 +78,9 @@ int avoid_asym_router_failure = 1;
 module_param(avoid_asym_router_failure, int, 0644);
 MODULE_PARM_DESC(avoid_asym_router_failure, "Avoid asymmetrical router failures (0 to disable)");
 
-static int dead_router_check_interval = 60;
-module_param(dead_router_check_interval, int, 0644);
-MODULE_PARM_DESC(dead_router_check_interval, "Seconds between dead router health checks (<= 0 to disable)");
-
-static int live_router_check_interval = 60;
-module_param(live_router_check_interval, int, 0644);
-MODULE_PARM_DESC(live_router_check_interval, "Seconds between live router health checks (<= 0 to disable)");
+int alive_router_check_interval = 60;
+module_param(alive_router_check_interval, int, 0644);
+MODULE_PARM_DESC(alive_router_check_interval, "Seconds between live router health checks (<= 0 to disable)");
 
 static int router_ping_timeout = 50;
 module_param(router_ping_timeout, int, 0644);
@@ -228,6 +224,65 @@ bool lnet_is_route_alive(struct lnet_route *route)
 	spin_unlock(&gw->lp_lock);
 
 	return route_alive;
+}
+
+void
+lnet_consolidate_routes_locked(struct lnet_peer *orig_lp,
+			       struct lnet_peer *new_lp)
+{
+	struct lnet_peer_ni *lpni;
+	struct lnet_route *route;
+
+	/*
+	 * Although a route is correlated with a peer, but when it's added
+	 * a specific NID is used. That NID refers to a peer_ni within
+	 * a peer. There could be other peer_nis on the same net, which
+	 * can be used to send to that gateway. However when we are
+	 * consolidating gateways because of discovery, the nid used to
+	 * add the route might've moved between gateway peers. In this
+	 * case we want to move the route to the new gateway as well. The
+	 * intent here is not to confuse the user who added the route.
+	 */
+	list_for_each_entry(route, &orig_lp->lp_routes, lr_gwlist) {
+		lpni = lnet_peer_get_ni_locked(orig_lp, route->lr_nid);
+		if (!lpni) {
+			lnet_net_lock(LNET_LOCK_EX);
+			list_move(&route->lr_gwlist, &new_lp->lp_routes);
+			lnet_net_unlock(LNET_LOCK_EX);
+		}
+	}
+
+}
+
+void
+lnet_router_discovery_complete(struct lnet_peer *lp)
+{
+	struct lnet_peer_ni *lpni = NULL;
+
+	spin_lock(&lp->lp_lock);
+	lp->lp_state &= ~LNET_PEER_RTR_DISCOVERY;
+	spin_unlock(&lp->lp_lock);
+
+	/*
+	 * Router discovery successful? All peer information would've been
+	 * updated already. No need to do any more processing
+	 */
+	if (!lp->lp_dc_error)
+		return;
+	/*
+	 * discovery failed? then we need to set the status of each lpni
+	 * to DOWN. It will be updated the next time we discover the
+	 * router. For router peer NIs not on local networks, we never send
+	 * messages directly to them, so their health will always remain
+	 * at maximum. We can only tell if they are up or down from the
+	 * status returned in the PING response. If we fail to get that
+	 * status in our scheduled router discovery, then we'll assume
+	 * it's down until we're told otherwise.
+	 */
+	CDEBUG(D_NET, "%s: Router discovery failed %d\n",
+	       libcfs_nid2str(lp->lp_primary_nid), lp->lp_dc_error);
+	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL)
+		lpni->lpni_ns_status = LNET_NI_STATUS_DOWN;
 }
 
 static void
@@ -385,6 +440,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	/* store the local and remote net that the route represents */
 	route->lr_lnet = LNET_NIDNET(gateway);
 	route->lr_net = net;
+	route->lr_nid = gateway;
 	route->lr_priority = priority;
 	route->lr_hops = hops;
 
@@ -636,9 +692,9 @@ lnet_get_route(int idx, __u32 *net, __u32 *hops,
 
 				if (idx-- == 0) {
 					*net	  = rnet->lrn_net;
+					*gateway  = route->lr_nid;
 					*hops	  = route->lr_hops;
 					*priority = route->lr_priority;
-					*gateway  = route->lr_gateway->lp_primary_nid;
 					*alive	  = lnet_is_route_alive(route);
 					lnet_net_unlock(cpt);
 					return 0;
@@ -697,8 +753,7 @@ lnet_update_ni_status_locked(void)
 
 	LASSERT(the_lnet.ln_routing);
 
-	timeout = router_ping_timeout +
-		  MAX(live_router_check_interval, dead_router_check_interval);
+	timeout = router_ping_timeout + alive_router_check_interval;
 
 	now = ktime_get_real_seconds();
 	while ((ni = lnet_get_next_ni_locked(NULL, ni))) {
@@ -728,7 +783,7 @@ lnet_update_ni_status_locked(void)
 	}
 }
 
-void lnet_router_post_mt_start(void)
+void lnet_wait_router_start(void)
 {
 	if (check_routers_before_use) {
 		/* Note that a helpful side-effect of pinging all known routers
@@ -745,26 +800,25 @@ void lnet_router_post_mt_start(void)
 inline bool
 lnet_router_checker_active(void)
 {
-	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING)
-		return true;
-
 	/* Router Checker thread needs to run when routing is enabled in
 	 * order to call lnet_update_ni_status_locked() */
 	if (the_lnet.ln_routing)
 		return true;
 
 	return !list_empty(&the_lnet.ln_routers) &&
-		(live_router_check_interval > 0 ||
-		 dead_router_check_interval > 0);
+		alive_router_check_interval > 0;
 }
 
 void
 lnet_check_routers(void)
 {
-	struct lnet_peer *rtr;
+	struct lnet_peer_ni *lpni;
 	struct list_head *entry;
-	__u64	version;
-	int	cpt;
+	struct lnet_peer *rtr;
+	__u64 version;
+	time64_t now;
+	int cpt;
+	int rc;
 
 	cpt = lnet_net_lock_current();
 rescan:
@@ -774,7 +828,54 @@ rescan:
 		rtr = list_entry(entry, struct lnet_peer,
 				 lp_rtr_list);
 
-		/* TODO use discovery to determine if router is alive */
+		now = ktime_get_real_seconds();
+
+		/*
+		 * only discover the router if we've passed
+		 * alive_router_check_interval seconds. Some of the router
+		 * interfaces could be down and in that case they would be
+		 * undergoing recovery separately from this discovery.
+		 */
+		if (now - rtr->lp_rtrcheck_timestamp <
+		    alive_router_check_interval)
+		       continue;
+
+		/*
+		 * If we're currently discovering the peer then don't
+		 * issue another discovery
+		 */
+		spin_lock(&rtr->lp_lock);
+		if (rtr->lp_state & LNET_PEER_RTR_DISCOVERY) {
+			spin_unlock(&rtr->lp_lock);
+			continue;
+		}
+		/* make sure we actively discover the router */
+		rtr->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
+		rtr->lp_state |= LNET_PEER_RTR_DISCOVERY;
+		spin_unlock(&rtr->lp_lock);
+
+		/* find the peer_ni associated with the primary NID */
+		lpni = lnet_peer_get_ni_locked(rtr, rtr->lp_primary_nid);
+		if (!lpni) {
+			CDEBUG(D_NET, "Expected to find an lpni for %s, but non found\n",
+			       libcfs_nid2str(rtr->lp_primary_nid));
+			continue;
+		}
+		lnet_peer_ni_addref_locked(lpni);
+
+		/* discover the router */
+		CDEBUG(D_NET, "discover %s, cpt = %d\n",
+		       libcfs_nid2str(lpni->lpni_nid), cpt);
+		rc = lnet_discover_peer_locked(lpni, cpt, false);
+
+		/* decrement ref count acquired by find_peer_ni_locked() */
+		lnet_peer_ni_decref_locked(lpni);
+
+		if (!rc)
+			rtr->lp_rtrcheck_timestamp = now;
+		else
+			CERROR("Failed to discover router %s\n",
+			       libcfs_nid2str(rtr->lp_primary_nid));
 
 		/* NB dropped lock */
 		if (version != the_lnet.ln_routers_version) {

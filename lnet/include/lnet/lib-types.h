@@ -734,6 +734,9 @@ struct lnet_peer {
 #define LNET_PEER_FORCE_PING	(1 << 13)	/* Forced Ping */
 #define LNET_PEER_FORCE_PUSH	(1 << 14)	/* Forced Push */
 
+/* gw undergoing alive discovery */
+#define LNET_PEER_RTR_DISCOVERY (1 << 16)
+
 struct lnet_peer_net {
 	/* chain on lp_peer_nets */
 	struct list_head	lpn_peer_nets;
@@ -792,6 +795,7 @@ struct lnet_route {
 	struct list_head	lr_list;	/* chain on net */
 	struct list_head	lr_gwlist;	/* chain on gateway */
 	struct lnet_peer	*lr_gateway;	/* router node */
+	lnet_nid_t		lr_nid;		/* NID used to add route */
 	__u32			lr_net;		/* remote network number */
 	__u32			lr_lnet;	/* local network number */
 	int			lr_seq;		/* sequence for round-robin */

@@ -567,6 +567,7 @@ extern unsigned int lnet_recovery_interval;
 extern unsigned int lnet_peer_discovery_disabled;
 extern unsigned int lnet_drop_asym_route;
 extern unsigned int router_sensitivity_percentage;
+extern int alive_router_check_interval;
 extern int portal_rotor;
 
 void lnet_mt_event_handler(struct lnet_event *event);
@@ -851,13 +852,16 @@ int lnet_sock_connect(struct socket **sockp, int *fatal,
 
 int lnet_peers_start_down(void);
 int lnet_peer_buffer_credits(struct lnet_net *net);
+void lnet_consolidate_routes_locked(struct lnet_peer *orig_lp,
+				    struct lnet_peer *new_lp);
+void lnet_router_discovery_complete(struct lnet_peer *lp);
 
 int lnet_monitor_thr_start(void);
 void lnet_monitor_thr_stop(void);
 
 bool lnet_router_checker_active(void);
 void lnet_check_routers(void);
-void lnet_router_post_mt_start(void);
+void lnet_wait_router_start(void);
 void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
 
 int lnet_ping_info_validate(struct lnet_ping_info *pinfo);
@@ -904,6 +908,8 @@ struct lnet_peer_ni *lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 struct lnet_peer_ni *lnet_nid2peerni_locked(lnet_nid_t nid, lnet_nid_t pref,
 					int cpt);
 struct lnet_peer_ni *lnet_nid2peerni_ex(lnet_nid_t nid, int cpt);
+struct lnet_peer_ni *lnet_peer_get_ni_locked(struct lnet_peer *lp,
+					     lnet_nid_t nid);
 struct lnet_peer_ni *lnet_find_peer_ni_locked(lnet_nid_t nid);
 struct lnet_peer *lnet_find_peer(lnet_nid_t nid);
 void lnet_peer_net_added(struct lnet_net *net);
@@ -967,6 +973,7 @@ lnet_peer_ni_is_primary(struct lnet_peer_ni *lpni)
 }
 
 bool lnet_peer_is_uptodate(struct lnet_peer *lp);
+bool lnet_peer_gw_discovery(struct lnet_peer *lp);
 
 static inline bool
 lnet_peer_needs_push(struct lnet_peer *lp)
