@@ -2100,11 +2100,10 @@ t32_test() {
 		shall_cleanup_lustre=true
 		$r $LCTL set_param debug="$PTLDEBUG"
 
-		# Leave re-enabling this to a separate patch for LU-11558
-		# t32_verify_quota $SINGLEMDS $fsname $tmp/mnt/lustre || {
-		#	error_noexit "verify quota failed"
-		#	return 1
-		#}
+		t32_verify_quota $SINGLEMDS $fsname $tmp/mnt/lustre || {
+			error_noexit "verify quota failed"
+			return 1
+		}
 
 		if $r test -f $tmp/list; then
 			#
