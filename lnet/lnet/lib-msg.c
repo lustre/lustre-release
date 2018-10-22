@@ -453,12 +453,8 @@ lnet_dec_healthv_locked(atomic_t *healthv)
 }
 
 static void
-lnet_handle_local_failure(struct lnet_msg *msg)
+lnet_handle_local_failure(struct lnet_ni *local_ni)
 {
-	struct lnet_ni *local_ni;
-
-	local_ni = msg->msg_txni;
-
 	/*
 	 * the lnet_net_lock(0) is used to protect the addref on the ni
 	 * and the recovery queue.
@@ -651,7 +647,7 @@ lnet_health_check(struct lnet_msg *msg)
 	case LNET_MSG_STATUS_LOCAL_ABORTED:
 	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
 	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
-		lnet_handle_local_failure(msg);
+		lnet_handle_local_failure(msg->msg_txni);
 		/* add to the re-send queue */
 		goto resend;
 
@@ -660,7 +656,7 @@ lnet_health_check(struct lnet_msg *msg)
 	 * finalize the message
 	 */
 	case LNET_MSG_STATUS_LOCAL_ERROR:
-		lnet_handle_local_failure(msg);
+		lnet_handle_local_failure(msg->msg_txni);
 		return -1;
 
 	/*
