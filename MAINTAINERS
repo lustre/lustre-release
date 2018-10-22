@@ -88,8 +88,55 @@ Maintainers List (try to look for most precise areas first)
 
 		-----------------------------------
 
-Lustre data checksums
-R:	Andreas Dilger <adilger@whamcloud.com>
+Lustre Build System
+R:	Minh Diep <mdiep@whamcloud.com>
+S:	Supported
+F:	build/
+F:	contrib/lbuild/
+F:	libcfs/autoconf/
+F:	lnet/autoconf/
+F:	lustre/autoconf/
+F:	lustre/scripts/dkms.mkconf
+F:	*/Makefile.am
+F:	*/Makefile.in
+
+Lustre Client IO stack
+R:	Bobijam Xu <bobijam@whamcloud.com>
+S:	Supported
+F:	Documentation/clio.txt
+F:	lustre/include/cl_object.h
+F:	lustre/include/lustre_osc.h
+F:	lustre/llite/glimpse.c
+F:	lustre/llite/llite_mmap.c
+F:	lustre/llite/lcommon*.c
+F:	lustre/llite/range_lock.[ch]
+F:	lustre/llite/rw*.c
+F:	lustre/llite/vvp*.[ch]
+F:	lustre/osc/
+
+Lustre Class Library
+S:	Supported
+F:	lustre/obdclass/
+
+Lustre Client MD stack
+R:	Lai Siyao <lai.siyao@whamcloud.com>
+S:	Supported
+F:	lustre/include/lustre_mdc.h
+F:	lustre/include/lmv.h
+F:	lustre/llite/dcache.c
+F:	lustre/llite/dir.c
+F:	lustre/llite/namei.c
+F:	lustre/llite/statahead*.c
+F:	lustre/mdc/
+
+Lustre Configuration Management
+S:	Maintained
+F:	lustre/mgc/
+F:	lustre/mgs/
+
+Lustre Data Checksums
+R:	Li Xi <lixi@whamcloud.com>
+M:	Andreas Dilger <adilger@whamcloud.com>
 S:	Supported
 F:	lustre/include/uapi/linux/lustre/lustre_idl.h
 F:	lustre/include/uapi/linux/lustre/lustre_user.h
@@ -99,48 +146,245 @@ F:	lustre/utils/wire*.c
 F:	lustre/ptlrpc/wire*.c
 K:	\b(OBD_CKSUM_|OBD_FL_CKSUM|OBD_CONNECT_CKSUM)
 
+Lustre Data-on-MDT - DoM
+R:	Mikhail Pershin <mpershin@whamcloud.com>
+S:	Supported
+F:	lustre/tests/sanity-dom.sh
+K:	DoM
+K:	_dom
+K:	_DOM
+K:	dom_
+
+Lustre Distributed Lock Manager - LDLM
+R:	Oleg Drokin <green@whamcloud.com>
+S:	Supported
+F:	lustre/include/lustre_dlm.h
+F:	lustre/include/lustre_dlm_flags.h
+F:	lustre/ldlm/
+F:	lustre/mdc/mdc_locks.c
+F:	lustre/mdt/mdt_lvb.c
+F:	lustre/mdt/mdt_open.c
+F:	lustre/ofd/ofd_dlm.c
+F:	lustre/osc/osc_lock.c
+
+Lustre Distributed Namespace - DNE
+R:	Lai Siyao <lai.siyao@whamcloud.com>
+S:	Supported
+F:	lustre/doc/lfs-getdirstripe.1
+F:	lustre/doc/lfs-mkdir.1
+F:	lustre/doc/lfs-setdirstripe.1
+F:	lustre/include/lustre_lmv.h
+F:	lustre/lmv/
+F:	lustre/mdt/
+
+Lustre File Identifiers - FID
+F:	lustre/fid/
+F:	lustre/fld/
+F:	lustre/include/lustre_fid.h
+F:	lustre/include/lustre_fld.h
+F:	lustre/include/uapi/linux/lustre/lustre_fid.h
+K:	FID_SEQ
+K:	FID_OID
+
+Lustre File Layout
+R:	Bobi Jam <bobijam@whamcloud.com>
+M:	Jian Yu <yujian@whamcloud.com>
+S:	Supported
+F:	lustre/doc/lfs-getstripe.1
+F:	lustre/doc/lfs-setstripe.1
+F:	lustre/doc/lfs-mirror-*.1
+F:	lustre/doc/lfs_migrate.1
+F:	lustre/doc/llapi_file_*.3
+F:	lustre/doc/llapi_layout*.3
+F:	lustre/lov/
+F:	lustre/utils/liblustreapi_layout.c
+
+Lustre File System Check - LFSCK
+R:	Hongchao Zhang <hongchao@whamcloud.com>
+S:	Maintained
+F:	lustre/doc/lctl-lfsck*.8
+F:	lustre/include/lustre_lfsck.h
+F:	lustre/include/lustre/lustre_lfsck_user.h
+F:	lustre/lfsck/
+F:	lustre/osd-ldiskfs/osd_scrub.[ch]
+F:	lustre/osd-zfs/osd_scrub.c
+F:	lustre/tests/sanity-lfsck.sh
+F:	lustre/tests/sanity-scrub.sh
+
 Lustre GSSAPI
-S:	Odd Fixes
+M:	Sebastien Buisson <sbuisson@whamcloud.com>
+S:	Maintained
+F:	lustre/conf/lgssc.conf
+F:	lustre/conf/lsvcgss
 F:	lustre/doc/lgss_sk.8
 F:	lustre/utils/gss
 F:	lustre/ptlrpc/gss
 F:	lustre/ptlrpc/sec*.c
+F:	lustre/scripts/lsvgss
 F:	lustre/tests/sanity-sec.sh
 
-Lustre HSM
+Lustre GSSAPI - Kerberos
+M:	Sebastien Buisson <sbuisson@whamcloud.com>
 S:	Maintained
-F:	lustre/doc/llapi_hsm*.3
-F:	lustre/utils/lhsmtool_posix.c
-F:	lustre/utils/liblustreapi_hsm.c
+F:	lustre/ptlrpc/gss/gss_krb5*.[ch]
 
-Lustre library interface
-R:	Andreas Dilger <adilger@whamcloud.com>
+Lustre GSSAPI - Shared Secret Key
+M:	Sebastien Buisson <sbuisson@whamcloud.com>
+S:	Maintained
+F:	lustre/conf/lgssc.conf
+F:	lustre/conf/lsvcgss
+F:	lustre/doc/lgss_sk.8
+F:	lustre/utils/gss
+F:	lustre/ptlrpc/gss/gss_sk_mech.c
+
+Lustre High Availability
+R:	Nathaniel Clark <nclark@whamcloud.com>
 S:	Supported
-F:	lustre/doc/llapi_*.3
-F:	lustre/utils/liblustreapi*.c
-F:	lustre/utils/lustreapi_internal.h
-F:	lustre/include/lustre/lustreapi.h
+F:	contrib/scripts/pacemaker/
+F:	lustre/conf/Lustre/
 
-Lustre Network Request Scheduler
+Lustre HSM
+R:	"John L. Hammond" <jhammond@whamcloud.com>
 S:	Maintained
+F:	lustre/doc/lfs-hsm.1
+F:	lustre/doc/llapi_hsm*.3
+F:	lustre/include/lustre_kernelcomm.h
+F:	lustre/include/uapi/linux/lustre/lustre_kernelcomm.h
+F:	lustre/obdclass/kernelcomm.c
+F:	lustre/mdt/mdt_coordinator.c
+F:	lustre/mdt/mdt_hsm*.c
+F:	lustre/tests/llapi_hsm_test.c
+F:	lustre/tests/sanity-hsm.sh
+F:	lustre/utils/liblustreapi_hsm.c
+F:	lustre/utils/liblustreapi_kernelconn.c
+
+Lustre HSM POSIX Copytool
+R:	"John L. Hammond" <jhammond@whamcloud.com>
+S:	Maintained
+F:	lustre/utils/lhsmtool_posix.c
+
+Lustre Kernel Compatibility
+R:	James Simmons <uja.ornl@yahoo.com>
+S:	Maintained
+F:	libcfs/
+F:	lustre/include/lustre_compat.h
+F:	lustre/include/lustre_patchless_compat.h
+
+Lustre Kernel Patches
+R:	Yang Sheng <ys@whamcloud.com>
+S:	Supported
+F:	lustre/kernel_patches/
+
+Lustre ldiskfs Kernel Patches
+R:	Yang Sheng <ys@whamcloud.com>
+S:	Supported
+F:	ldiskfs/kernel_patches/
+
+Lustre Log - llog
+R:	"John L. Hammond" <jhammond@whamcloud.com>
+M:	Emoly Liu <emoly@whamcloud.com>
+S:	Supported
+F:	lustre/doc/lctl-llog*.8
+F:	lustre/doc/llog_reader.8
+F:	lustre/include/llog_*.h
+F:	lustre/obdclass/llog*.[ch]
+F:	lustre/ptlrpc/llog*.[ch]
+F:	lustre/utils/llog_reader.c
+
+Lustre Metadata Target - MDT
+S:	Supported
+F:	lustre/include/lustre_mds.h
+F:	lustre/mdd/
+F:	lustre/mdt/
+
+Lustre Network Request Scheduler - NRS
+R:	Qian Yingjin <qian@whamcloud.com>
+S:	Maintained
+F:	lustre/include/lustre_nrs*.c
 F:	lustre/ptlrpc/nrs*.c
-K:	(quota|QUOTA)
 
 Lustre Networking
+R:	Amir Shehata <ashehata@whamcloud.com>
+M:	Sonia Sharma <sharmaso@whamcloud.com>
 S:	Supported
+F:	Documentation/dlc.txt
+F:	lustre/conf/ko2iblnd.conf
+F:	lustre/doc/lst.8
+F:	lustre/doc/lustre_routes_config.8
+F:	lustre/doc/lustre_routes_conversion.8
+F:	lustre/doc/nids.5
+F:	lustre/scripts/ko2iblnd-probe
 F:	lnet/
 
+Lustre Networking GNILND
+R:	Chris Horn <hornc@cray.com>
+R:	Chuck Fossen <chuckf@cray.com>
+S:	Supported
+F:	lnet/klnds/gnilnd/
+
+Lustre Networking O2IBLND
+R:	Amir Shehata <ashehata@whamcloud.com>
+S:	Supported
+F:	lnet/klnds/o2iblnd
+
+Lustre Networking TCP Sockets LND
+R:	Amir Shehata <ashehata@whamcloud.com>
+S:	Supported
+F:	lnet/klnds/socklnd
+
 Lustre Nodemap
+R:	Sebastien Buisson <sbuisson@whamcloud.com>
 S:	Maintained
+F:	lustre/include/lustre_nodemap.h
+F:	lustre/include/lustre_idmap.h
 F:	lustre/ptlrpc/nodemap*.[ch]
-K:	(quota|QUOTA)
+F:	lustre/doc/lctl-nodemap*.8
+
+Lustre Object Storage Target - OST
+R:	Alex Zhuravlev <bzzz@whamcloud.com>
+S:	Supported
+F:	lustre/ofd
+F:	lustre/ost
+
+Lustre OSD API
+R:	Alex Zhuravlev <bzzz@whamcloud.com>
+S:	Supported
+F:	include/lustre/dt_object.h
+F:	Documentation/osd-api.txt
+
+Lustre OSD ldiskfs
+R:	Alex Zhuravlev <bzzz@whamcloud.com>
+S:	Supported
+F:	lustre/osd-ldiskfs/
+F:	Documentation/osd-api.txt
+
+Lustre OSD Proxy - OSP
+R:	Alex Zhuravlev <bzzz@whamcloud.com>
+S:	Supported
+F:	lustre/osp/
+F:	Documentation/osd-api.txt
+
+Lustre OSD ZFS
+R:	Alex Zhuravlev <bzzz@whamcloud.com>
+S:	Supported
+F:	lustre/osd-zfs/
+
+Lustre Patch Hooks
+R:	Andreas Dilger <adilger@whamcloud.com>
+S:	Odd Fixes
+F:	contrib/git-hooks/
+F:	contrib/scripts/checkpatch.pl
+F:	contrib/scripts/const_structs.checkpatch
+F:	contrib/scripts/get_maintainer.pl
+F:	contrib/scripts/spelling.txt
+F:	contrib/scripts/updatecw.sh
 
 Lustre /proc and /sys
+R:	James Simmons <uja.ornl@yahoo.com>
 S:	Maintained
 F:	lustre/*/*lproc*.[ch]
-K:	(quota|QUOTA)
 
-Lustre protocol compatibility
+Lustre Protocol Compatibility
 R:	Andreas Dilger <adilger@whamcloud.com>
 S:	Supported
 F:	lustre/include/uapi/linux/lustre/lustre_idl.h
@@ -149,31 +393,68 @@ F:	lustre/ptlrpc/pack_generic.c
 F:	lustre/ptlrpc/layout.c
 F:	lustre/utils/wire*.[ch]
 F:	lustre/ptlrpc/wire*.[ch]
-K:	OBD_CONNECT
+K:	OBD_CONNECT_.*
 
-Lustre quotas
-S:	Maintained
-F:	lustre/quota/
+Lustre Quotas
+R:	Hongchao Zhang <hongchao@whamcloud.com>
+M:	Wang Shilong <wshilong@whamcloud.com>
+S:	Supported
+F:	lustre/doc/*quota*.[13]
+F:	lustre/doc/lfs-project.1
+F:	lustre/include/lustre_quota.h
 F:	lustre/osc/osc_quota.c
 F:	lustre/osd-ldiskfs/osd_quota*.[ch]
 F:	lustre/osd-zfs/osd_quota*.[ch]
+F:	lustre/quota/
 F:	lustre/tests/sanity-quota.sh
 F:	lustre/doc/*quota*.[13]
 K:	(quota|QUOTA)
 
-Lustre tests
+Lustre Server Target
+R:	Mikhail Pershin <mpershin@whamcloud.com>
+S:	Supported
+F:	lustre/target/
+
+Lustre Snapshots
+S:	Maintained
+F:	lustre/doc/lctl-barrier.8
+F:	lustre/doc/lctl-snapshot*.8
+F:	lustre/doc/lctl-lcfg.8
+F:	lustre/mgs/mgs_barrier.c
+F:	lustre/tests/sanity-lsnapshot.sh
+F:	lustre/utils/lsnapshot.c
+
+Lustre Tests
 R:	James Nunez <jnunez@whamcloud.com>
+M:	Sarah Liu <sarah@whamcloud.com>
 S:	Supported
 F:	lustre/tests/
 
-Lustre user documentation
+Lustre User Documentation
 R:	Andreas Dilger <adilger@whamcloud.com>
 S:	Supported
 F:	lustre/doc/*.[1-9]
 
-Lustre userspace tools
+Lustre User Library Interface
+R:	Emoly Liu <emoly@whamcloud.com>
+M:	Andreas Dilger <adilger@whamcloud.com>
+S:	Supported
+F:	lustre/doc/llapi_*.3
+F:	lustre/doc/lustreapi.7
+F:	lustre/include/lustre/lustreapi.h
+F:	lustre/include/uapi/linux/lustre/lustre_user.h
+F:	lustre/utils/liblustreapi*.c
+F:	lustre/utils/lustreapi_internal.h
+
+Lustre User Tools
 R:	Andreas Dilger <adilger@whamcloud.com>
 S:	Supported
+F:	lustre/doc/lfs*.1
+F:	lustre/doc/mkfs.lustre.8
+F:	lustre/doc/mount.lustre.8
+F:	lustre/doc/tunefs.lustre.8
+F:	lustre/scripts/lfs_migrate
+F:	lustre/scripts/lustre_rmmod
 F:	lustre/utils/
 X:	lustre/utils/gss/
 

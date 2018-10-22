@@ -498,6 +498,9 @@ if (!@ARGV) {
 }
 
 foreach my $file (@ARGV) {
+    if ($file eq "-") {
+        $file = "&STDIN";
+    }
     if ($file ne "&STDIN") {
 	##if $file is a directory and it lacks a trailing slash, add one
 	if ((-d $file)) {
