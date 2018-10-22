@@ -2019,24 +2019,24 @@ kiblnd_peer_alive(struct kib_peer_ni *peer_ni)
 static void
 kiblnd_peer_notify(struct kib_peer_ni *peer_ni)
 {
-        int           error = 0;
+	int           error = 0;
 	time64_t last_alive = 0;
-        unsigned long flags;
+	unsigned long flags;
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
 	if (kiblnd_peer_idle(peer_ni) && peer_ni->ibp_error != 0) {
-                error = peer_ni->ibp_error;
-                peer_ni->ibp_error = 0;
+		error = peer_ni->ibp_error;
+		peer_ni->ibp_error = 0;
 
-                last_alive = peer_ni->ibp_last_alive;
-        }
+		last_alive = peer_ni->ibp_last_alive;
+	}
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-        if (error != 0)
-                lnet_notify(peer_ni->ibp_ni,
-                            peer_ni->ibp_nid, 0, last_alive);
+	if (error != 0)
+		lnet_notify(peer_ni->ibp_ni,
+			    peer_ni->ibp_nid, false, false, last_alive);
 }
 
 void

@@ -1215,12 +1215,27 @@ lnet_rtrpools_disable(void)
 	lnet_rtrpools_free(1);
 }
 
-int
-lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, int alive, time64_t when)
+static inline void
+lnet_notify_peer_down(struct lnet_ni *ni, lnet_nid_t nid)
 {
-	struct lnet_peer_ni *lp = NULL;
+	if (ni->ni_net->net_lnd->lnd_notify_peer_down != NULL)
+		(ni->ni_net->net_lnd->lnd_notify_peer_down)(nid);
+}
+
+/*
+ * ni: local NI used to communicate with the peer
+ * nid: peer NID
+ * alive: true if peer is alive, false otherwise
+ * reset: reset health value. This is requested by the LND.
+ * when: notificaiton time.
+ */
+int
+lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
+	    time64_t when)
+{
+	struct lnet_peer_ni *lpni = NULL;
 	time64_t now = ktime_get_seconds();
-	int cpt = lnet_cpt_of_nid(nid, ni);
+	int cpt;
 
 	LASSERT (!in_interrupt ());
 
@@ -1252,36 +1267,44 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, int alive, time64_t when)
 		return 0;
 	}
 
-	lnet_net_lock(cpt);
+	/* must lock 0 since this is used for synchronization */
+	lnet_net_lock(0);
 
 	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		lnet_net_unlock(cpt);
+		lnet_net_unlock(0);
 		return -ESHUTDOWN;
 	}
 
-	lp = lnet_find_peer_ni_locked(nid);
-	if (lp == NULL) {
+	lpni = lnet_find_peer_ni_locked(nid);
+	if (lpni == NULL) {
 		/* nid not found */
-		lnet_net_unlock(cpt);
+		lnet_net_unlock(0);
 		CDEBUG(D_NET, "%s not found\n", libcfs_nid2str(nid));
 		return 0;
 	}
 
-	/*
-	 * It is possible for this function to be called for the same peer
-	 * but with different NIs. We want to synchronize the notification
-	 * between the different calls. So we will use the lpni_cpt to
-	 * grab the net lock.
-	 */
-	if (lp->lpni_cpt != cpt) {
-		lnet_net_unlock(cpt);
-		cpt = lp->lpni_cpt;
-		lnet_net_lock(cpt);
+	if (alive) {
+		if (reset)
+			lnet_set_healthv(&lpni->lpni_healthv,
+					 LNET_MAX_HEALTH_VALUE);
+		else
+			lnet_inc_healthv(&lpni->lpni_healthv);
+	} else {
+		lnet_handle_remote_failure_locked(lpni);
 	}
 
-	lnet_peer_ni_decref_locked(lp);
+	/* recalculate aliveness */
+	alive = lnet_is_peer_ni_alive(lpni);
+	lnet_net_unlock(0);
 
+	if (ni != NULL && !alive)
+		lnet_notify_peer_down(ni, lpni->lpni_nid);
+
+	cpt = lpni->lpni_cpt;
+	lnet_net_lock(cpt);
+	lnet_peer_ni_decref_locked(lpni);
 	lnet_net_unlock(cpt);
+
 	return 0;
 }
 EXPORT_SYMBOL(lnet_notify);

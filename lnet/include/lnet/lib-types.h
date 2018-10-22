@@ -297,8 +297,8 @@ struct lnet_lnd {
 	int (*lnd_eager_recv)(struct lnet_ni *ni, void *private,
 			      struct lnet_msg *msg, void **new_privatep);
 
-	/* notification of peer health */
-	void (*lnd_notify)(struct lnet_ni *ni, lnet_nid_t peer, int alive);
+	/* notification of peer down */
+	void (*lnd_notify_peer_down)(lnet_nid_t peer);
 
 	/* query of peer aliveness */
 	void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, time64_t *when);
