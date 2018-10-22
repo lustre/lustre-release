@@ -2476,11 +2476,13 @@ run_test 47f "pdirops: remote mkdir and rename (src)"
 
 test_47g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	sync
+	sync_all_data
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$!
-	sleep 1
+	sleep 2
 	stat $DIR2/$tfile > /dev/null || error "stat must succeed"
 	check_pdo_conflict $PID1 && { wait $PID1;
 					error "getattr isn't blocked"; }
