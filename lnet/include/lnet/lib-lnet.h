@@ -857,11 +857,7 @@ void lnet_monitor_thr_stop(void);
 
 bool lnet_router_checker_active(void);
 void lnet_check_routers(void);
-int lnet_router_pre_mt_start(void);
 void lnet_router_post_mt_start(void);
-void lnet_prune_rc_data(int wait_unlink);
-void lnet_router_cleanup(void);
-void lnet_router_ni_update_locked(struct lnet_peer_ni *gw, __u32 net);
 void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
 
 int lnet_ping_info_validate(struct lnet_ping_info *pinfo);
