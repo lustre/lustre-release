@@ -1554,7 +1554,7 @@ t32_wait_til_devices_gone() {
 }
 
 t32_verify_quota() {
-	local node=$1
+	local facet=$1
 	local fsname=$2
 	local mnt=$3
 	local fstype=$(facet_fstype $SINGLEMDS)
@@ -1566,7 +1566,7 @@ t32_verify_quota() {
 	# verification in 32b. The object quota usage should be accurate after
 	# zfs-0.7.0 is released.
 	[ $fstype == "zfs" ] && {
-		local zfs_version=$(do_node $node cat /sys/module/zfs/version)
+		local zfs_version=$(do_facet $facet cat /sys/module/zfs/version)
 
 		[ $(version_code $zfs_version) -lt $(version_code 0.7.0) ] && {
 			echo "Skip quota verify for zfs: $zfs_version"
@@ -1612,13 +1612,13 @@ t32_verify_quota() {
 		return 1
 	}
 
-	set_persistent_param_and_check $node \
+	set_persistent_param_and_check $facet \
 		"osd-$fstype.$fsname-MDT0000.quota_slave.enabled" \
-		$fsname.quota.mdt" ug
+		"$fsname.quota.mdt" ug
 
-	set_persistent_param_and_check $node \
+	set_persistent_param_and_check $facet \
 		"osd-$fstype.$fsname-OST0000.quota_slave.enabled" \
-		$fsname.quota.ost" ug
+		"$fsname.quota.ost" ug
 
 	chmod 0777 $mnt
 	runas -u $T32_QID -g $T32_QID dd if=/dev/zero of=$mnt/t32_qf_new \
@@ -2024,6 +2024,12 @@ t32_test() {
 		shall_cleanup_lustre=true
 		$r $LCTL set_param debug="$PTLDEBUG"
 
+		# Leave re-enabling this to a separate patch for LU-11558
+		# t32_verify_quota $SINGLEMDS $fsname $tmp/mnt/lustre || {
+		#	error_noexit "verify quota failed"
+		#	return 1
+		#}
+
 		if $r test -f $tmp/list; then
 			#
 			# There is not a Test Framework API to copy files to or
@@ -2281,7 +2287,7 @@ t32_test() {
 		}
 		nrpcs=$((nrpcs_orig + 5))
 
-		set_persistent_param_and_check $HOSTNAME \
+		set_persistent_param_and_check client \
 		   "mdc.$fsname-MDT0000*.max_rpcs_in_flight" \
 		   "$fsname-MDT0000.mdc.max_rpcs_in_flight" $nrpcs || {
 			error_noexit "Changing \"max_rpcs_in_flight\""
