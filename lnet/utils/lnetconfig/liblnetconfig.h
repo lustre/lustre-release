@@ -279,6 +279,18 @@ int lustre_lnet_show_recov_intrv(int seq_no, struct cYAML **show_rc,
 				 struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_rtr_sensitivity
+ *   sets the router sensitivity percentage. If the percentage health
+ *   of a router interface drops below that it's considered failed
+ *
+ *   sen - sensitivity value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_rtr_sensitivity(int sen, int seq_no, struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_hsensitivity
  *   sets the health sensitivity; the value by which to decrement the
  *   health value of a local or peer NI. If 0 then health is turned off
@@ -301,6 +313,18 @@ int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc);
  */
 int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
 				  struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_rtr_sensitivity
+ *    show the router sensitivity percentage in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing health sensitivity info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_rtr_sensitivity(int seq_no, struct cYAML **show_rc,
+				     struct cYAML **err_rc);
 
 /*
  * lustre_lnet_config_transaction_to
