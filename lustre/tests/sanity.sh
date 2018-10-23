@@ -20268,6 +20268,23 @@ test_810() {
 }
 run_test 810 "partial page writes on ZFS (LU-11663)"
 
+test_811() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS version at least 2.11.56"
+
+	#define OBD_FAIL_MDS_ORPHAN_DELETE	0x165
+	do_facet mds1 $LCTL set_param fail_loc=0x165
+	$MULTIOP $DIR/$tfile Ouc || error "multiop failed"
+
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+
+	sleep 5
+	[[ $(do_facet mds1 pgrep orph_.*-MDD | wc -l) -eq 0 ]] ||
+		error "MDD orphan cleanup thread not quit"
+}
+run_test 811 "orphan name stub can be cleaned up in startup"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
