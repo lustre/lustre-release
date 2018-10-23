@@ -89,10 +89,6 @@
 #define IBLND_N_SCHED			2
 #define IBLND_N_SCHED_HIGH		4
 
-#define IBLND_DEV_CAPS_FASTREG_ENABLED		0x1
-#define IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT	0x2
-#define IBLND_DEV_CAPS_FMR_ENABLED		0x4
-
 struct kib_tunables {
 	int              *kib_dev_failover;     /* HCA failover */
 	unsigned int     *kib_service;          /* IB service number */
@@ -178,6 +174,12 @@ struct kib_hca_dev;
 #define KIB_IFNAME_SIZE              256
 #endif
 
+enum kib_dev_caps {
+	IBLND_DEV_CAPS_FASTREG_ENABLED		= BIT(0),
+	IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT	= BIT(1),
+	IBLND_DEV_CAPS_FMR_ENABLED		= BIT(2),
+};
+
 struct kib_dev {
 	struct list_head	ibd_list;	/* chain on kib_devs */
 	struct list_head	ibd_fail_list;	/* chain on kib_failed_devs */
@@ -195,7 +197,7 @@ struct kib_dev {
 	unsigned int		ibd_can_failover;
 	struct list_head	ibd_nets;
 	struct kib_hca_dev	*ibd_hdev;
-	__u32			ibd_dev_caps;
+	enum kib_dev_caps	ibd_dev_caps;
 };
 
 struct kib_hca_dev {

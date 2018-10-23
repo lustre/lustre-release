@@ -733,7 +733,7 @@ static unsigned int kiblnd_send_wrs(struct kib_conn *conn)
 	 * And ibc_max_frags for the transfer WRs
 	 */
 	unsigned int ret = 1 + conn->ibc_max_frags;
-	__u32 dev_caps = conn->ibc_hdev->ibh_dev->ibd_dev_caps;
+	enum kib_dev_caps dev_caps = conn->ibc_hdev->ibh_dev->ibd_dev_caps;
 
 	/* FastReg needs two extra WRs for map and invalidate */
 	if (dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED)
@@ -1546,7 +1546,7 @@ static int kiblnd_alloc_fmr_pool(struct kib_fmr_poolset *fps,
 
 static int kiblnd_alloc_freg_pool(struct kib_fmr_poolset *fps,
 				  struct kib_fmr_pool *fpo,
-				  __u32 dev_caps)
+				  enum kib_dev_caps dev_caps)
 {
 	struct kib_fast_reg_descriptor *frd, *tmp;
 	int i, rc;
