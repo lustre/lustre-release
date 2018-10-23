@@ -210,12 +210,12 @@ int mdd_orphan_declare_delete(const struct lu_env *env, struct mdd_object *obj,
 	if (rc)
 		return rc;
 
+	if (!mdd_object_exists(obj))
+		return -ENOENT;
+
         rc = mdo_declare_ref_del(env, obj, th);
         if (rc)
                 return rc;
-
-	if (!lu_object_exists(&obj->mod_obj.mo_lu))
-		return -ENOENT;
 
         if (S_ISDIR(mdd_object_type(obj))) {
                 rc = mdo_declare_ref_del(env, obj, th);
@@ -244,7 +244,7 @@ int mdd_orphan_delete(const struct lu_env *env, struct mdd_object *obj,
 	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
 	struct dt_object *dor = mdd->mdd_orphans;
 	struct dt_key *key;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 
@@ -257,12 +257,16 @@ int mdd_orphan_delete(const struct lu_env *env, struct mdd_object *obj,
 	key = mdd_orphan_key_fill(env, mdo2fid(obj));
 	dt_write_lock(env, mdd->mdd_orphans, MOR_TGT_ORPHAN);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_ORPHAN_DELETE))
+		goto ref_del;
+
 	rc = dt_delete(env, mdd->mdd_orphans, key, th);
 	if (rc == -ENOENT) {
 		key = mdd_orphan_key_fill_20(env, mdo2fid(obj));
 		rc = dt_delete(env, mdd->mdd_orphans, key, th);
 	}
 
+ref_del:
 	if (!rc) {
 		/* lov objects will be destroyed by caller */
 		mdo_ref_del(env, obj, th);
@@ -286,6 +290,7 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 {
 	struct thandle *th = NULL;
 	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+	bool orphan_exists = true;
 	int rc = 0;
 	ENTRY;
 
@@ -298,23 +303,31 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(rc);
 	}
 
+	mdd_write_lock(env, obj, MOR_TGT_CHILD);
 	rc = mdd_orphan_declare_delete(env, obj, th);
-	if (rc)
-		GOTO(stop, rc);
+	if (rc == -ENOENT)
+		orphan_exists = false;
+	else if (rc)
+		GOTO(unlock, rc);
 
-	rc = mdo_declare_destroy(env, obj, th);
-	if (rc)
-		GOTO(stop, rc);
+	if (orphan_exists) {
+		rc = mdo_declare_destroy(env, obj, th);
+		if (rc)
+			GOTO(unlock, rc);
+	}
 
 	rc = mdd_trans_start(env, mdd, th);
 	if (rc)
-		GOTO(stop, rc);
+		GOTO(unlock, rc);
 
-	mdd_write_lock(env, obj, MOR_TGT_CHILD);
 	if (likely(obj->mod_count == 0)) {
 		dt_write_lock(env, mdd->mdd_orphans, MOR_TGT_ORPHAN);
 		rc = dt_delete(env, mdd->mdd_orphans, key, th);
-		if (rc == 0) {
+		if (rc) {
+			CERROR("%s: could not delete orphan "DFID": rc = %d\n",
+			       mdd2obd_dev(mdd)->obd_name, PFID(mdo2fid(obj)),
+			       rc);
+		} else if (orphan_exists) {
 			mdo_ref_del(env, obj, th);
 			if (S_ISDIR(mdd_object_type(obj))) {
 				mdo_ref_del(env, obj, th);
@@ -322,15 +335,15 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 			}
 			rc = mdo_destroy(env, obj, th);
 		} else {
-			CERROR("%s: could not delete orphan "DFID": rc = %d\n",
-			       mdd2obd_dev(mdd)->obd_name, PFID(mdo2fid(obj)),
-			       rc);
+			CWARN("%s: orphan %s "DFID" doesn't exist\n",
+			      mdd2obd_dev(mdd)->obd_name, (char *)key,
+			      PFID(mdo2fid(obj)));
 		}
 		dt_write_unlock(env, mdd->mdd_orphans);
 	}
+unlock:
 	mdd_write_unlock(env, obj);
 
-stop:
 	rc = mdd_trans_stop(env, mdd, 0, th);
 
 	RETURN(rc);
