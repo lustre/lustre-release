@@ -110,10 +110,8 @@ elif [ -r /etc/os-release ]; then
 
 		if [[ $ubuntu_version -gt $(version_code 16.0.0) ]]; then
 			# bug number for skipped test:
-			#                LU-10334 LU-10335 LU-10335 LU-10335
-			ALWAYS_EXCEPT+=" 103a     130a     130b     130c"
-			#                LU-10335 LU-10335 LU-10366
-			ALWAYS_EXCEPT+=" 130d     130e     410"
+			#                LU-10334 LU-10366
+			ALWAYS_EXCEPT+=" 103a	  410"
 		fi
 	fi
 fi
