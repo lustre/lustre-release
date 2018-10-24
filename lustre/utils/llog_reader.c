@@ -659,9 +659,10 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 
 	secs = __le64_to_cpu(rec->cr.cr_time) >> 30;
 	gmtime_r(&secs, &ts);
-	printf("changelog record id:0x%x cr_flags:0x%x cr_type:%s(0x%x) "
-	       "date:'%02d:%02d:%02d.%09d %04d.%02d.%02d' target:"DFID,
-	       __le32_to_cpu(rec->cr_hdr.lrh_id),
+	printf("changelog record id:0x%x index:%llu cr_flags:0x%x "
+	       "cr_type:%s(0x%x) date:'%02d:%02d:%02d.%09d %04d.%02d.%02d' "
+	       "target:"DFID, __le32_to_cpu(rec->cr_hdr.lrh_id),
+	       __le64_to_cpu(rec->cr.cr_index),
 	       __le32_to_cpu(rec->cr.cr_flags),
 	       changelog_type2str(__le32_to_cpu(rec->cr.cr_type)),
 	       __le32_to_cpu(rec->cr.cr_type),
