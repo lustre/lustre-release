@@ -366,6 +366,8 @@ F:	Documentation/osd-api.txt
 
 Lustre OSD ZFS
 R:	Alex Zhuravlev <bzzz@whamcloud.com>
+R:	Tony Hutter <hutter2@llnl.gov>
+R:	Olaf Faaland <faaland1@llnl.gov>
 S:	Supported
 F:	lustre/osd-zfs/
 
@@ -448,6 +450,7 @@ F:	lustre/utils/lustreapi_internal.h
 
 Lustre User Tools
 R:	Andreas Dilger <adilger@whamcloud.com>
+R:	Olaf Faaland <faaland1@llnl.gov>
 S:	Supported
 F:	lustre/doc/lfs*.1
 F:	lustre/doc/mkfs.lustre.8
