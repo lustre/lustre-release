@@ -1715,6 +1715,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	EXIT;
 	ofd_counter_incr(exp, LPROC_OFD_STATS_CREATE,
 			 tsi->tsi_jobid, 1);
+	if (unlikely(!oseq->os_last_id_synced))
+		oseq->os_last_id_synced = 1;
 out:
 	mutex_unlock(&oseq->os_create_lock);
 out_nolock:

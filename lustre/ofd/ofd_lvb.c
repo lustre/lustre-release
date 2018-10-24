@@ -126,8 +126,24 @@ static int ofd_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
 		GOTO(out_lvb, rc = PTR_ERR(fo));
 
 	rc = ofd_attr_get(env, fo, &info->fti_attr);
-	if (rc)
+	if (rc) {
+		struct ofd_seq		*oseq;
+		__u64			 seq;
+
+		/* Object could be recreated during the first
+		 * CLEANUP_ORPHAN request. */
+		if (rc == -ENOENT) {
+			seq = fid_seq(&info->fti_fid);
+			oseq = ofd_seq_load(env, ofd, fid_seq_is_idif(seq) ?
+					    FID_SEQ_OST_MDT0 : seq);
+			if (!IS_ERR_OR_NULL(oseq)) {
+				if (!oseq->os_last_id_synced)
+					rc = -EAGAIN;
+				ofd_seq_put(env, oseq);
+			}
+		}
 		GOTO(out_obj, rc);
+	}
 
 	lvb->lvb_size = info->fti_attr.la_size;
 	lvb->lvb_blocks = info->fti_attr.la_blocks;

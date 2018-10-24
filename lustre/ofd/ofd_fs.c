@@ -407,6 +407,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 	mutex_init(&oseq->os_create_lock);
 	spin_lock_init(&oseq->os_last_oid_lock);
 	ostid_set_seq(&oseq->os_oi, seq);
+	oseq->os_last_id_synced = 0;
 
 	atomic_set(&oseq->os_refc, 1);
 

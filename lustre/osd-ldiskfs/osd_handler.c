@@ -1707,6 +1707,7 @@ static void osd_trans_commit_cb(struct super_block *sb,
 	if (error)
 		CERROR("transaction @0x%p commit error: %d\n", th, error);
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_DELAY_TRANS, 40);
 	/* call per-transaction callbacks if any */
 	list_for_each_entry_safe(dcb, tmp, &oh->ot_commit_dcb_list,
 				 dcb_linkage) {
