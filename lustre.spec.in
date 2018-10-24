@@ -476,6 +476,9 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %{_includedir}/linux/lustre
 %endif
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
+%if %{with servers}
+%{_sysconfdir}/udev/rules.d/99-lustre-server.rules
+%endif
 %if %{with zfs}
 %config(noreplace) %{_sysconfdir}/ldev.conf
 %endif

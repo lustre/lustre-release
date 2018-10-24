@@ -1,0 +1,3 @@
+# Ensure block devices re-added to the system allow for large writes (LU-9551)
+ACTION=="add|change", SUBSYSTEM=="block", RUN+="/usr/sbin/l_tunedisk /dev/%k"
+
