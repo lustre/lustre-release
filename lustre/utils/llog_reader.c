@@ -654,8 +654,9 @@ static void print_hsm_action(struct llog_agent_req_rec *larr)
 
 void print_changelog_rec(struct llog_changelog_rec *rec)
 {
-	printf("changelog record id:0x%x cr_flags:0x%x cr_type:%s(0x%x)\n",
-	       __le32_to_cpu(rec->cr_hdr.lrh_id),
+	printf("changelog record id:0x%x index:%llu cr_flags:0x%x "
+	       "cr_type:%s(0x%x)\n", __le32_to_cpu(rec->cr_hdr.lrh_id),
+	       __le64_to_cpu(rec->cr.cr_index),
 	       __le32_to_cpu(rec->cr.cr_flags),
 	       changelog_type2str(__le32_to_cpu(rec->cr.cr_type)),
 	       __le32_to_cpu(rec->cr.cr_type));
