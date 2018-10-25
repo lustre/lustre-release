@@ -219,7 +219,10 @@ static inline int mdd_parent_fid(const struct lu_env *env,
 
 	ENTRY;
 
-	LASSERT(S_ISDIR(mdd_object_type(obj)));
+	LASSERTF(S_ISDIR(mdd_object_type(obj)),
+		 "%s: FID "DFID" is not a directory type = %o\n",
+		 mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)),
+		 mdd_object_type(obj));
 
 	buf = lu_buf_check_and_alloc(buf, PATH_MAX);
 	if (buf->lb_buf == NULL)
