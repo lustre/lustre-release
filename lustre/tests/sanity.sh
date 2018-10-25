@@ -6301,10 +6301,11 @@ test_60b() { # bug 6411
 				else
 					print from_begin
 			  }")
-	[[ $LLOG_COUNT -gt 100 ]] &&
+
+	[[ $LLOG_COUNT -gt 120 ]] &&
 		error "CDEBUG_LIMIT not limiting messages ($LLOG_COUNT)" || true
 }
-run_test 60b "limit repeated messages from CERROR/CWARN ========"
+run_test 60b "limit repeated messages from CERROR/CWARN"
 
 test_60c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
