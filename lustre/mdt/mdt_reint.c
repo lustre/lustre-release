@@ -1275,7 +1275,7 @@ static void mdt_rename_unlock(struct lustre_handle *lh)
 	EXIT;
 }
 
-static struct mdt_object *mdt_object_find_check(struct mdt_thread_info *info,
+static struct mdt_object *mdt_parent_find_check(struct mdt_thread_info *info,
 						const struct lu_fid *fid,
 						int idx)
 {
@@ -1292,6 +1292,12 @@ static struct mdt_object *mdt_object_find_check(struct mdt_thread_info *info,
 	rc = mdt_version_get_check(info, dir, idx);
 	if (rc)
 		GOTO(out_put, rc);
+
+	if (!mdt_object_exists(dir))
+		GOTO(out_put, rc = -ENOENT);
+
+	if (!S_ISDIR(lu_object_attr(&dir->mot_obj)))
+		GOTO(out_put, rc = -ENOTDIR);
 
 	RETURN(dir);
 out_put:
@@ -1966,7 +1972,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 		RETURN(-EPERM);
 
 	/* pobj is master object of parent */
-	pobj = mdt_object_find_check(info, rr->rr_fid1, 0);
+	pobj = mdt_parent_find_check(info, rr->rr_fid1, 0);
 	if (IS_ERR(pobj))
 		RETURN(PTR_ERR(pobj));
 
@@ -2261,7 +2267,7 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 		  PFID(rr->rr_fid2), PNAME(&rr->rr_tgt_name));
 
 	/* find both parents. */
-	msrcdir = mdt_object_find_check(info, rr->rr_fid1, 0);
+	msrcdir = mdt_parent_find_check(info, rr->rr_fid1, 0);
 	if (IS_ERR(msrcdir))
 		RETURN(PTR_ERR(msrcdir));
 
@@ -2271,7 +2277,7 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 		mtgtdir = msrcdir;
 		mdt_object_get(info->mti_env, mtgtdir);
 	} else {
-		mtgtdir = mdt_object_find_check(info, rr->rr_fid2, 1);
+		mtgtdir = mdt_parent_find_check(info, rr->rr_fid2, 1);
 		if (IS_ERR(mtgtdir))
 			GOTO(out_put_srcdir, rc = PTR_ERR(mtgtdir));
 	}
