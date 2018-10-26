@@ -503,7 +503,7 @@
 
 #define OST_NBUFS		64
 /** OST_BUFSIZE = max_reqsize + max sptlrpc payload size */
-#define OST_BUFSIZE		max_t(int, OST_MAXREQSIZE + 1024, 16 * 1024)
+#define OST_BUFSIZE		max_t(int, OST_MAXREQSIZE + 1024, 32 * 1024)
 /**
  * OST_IO_MAXREQSIZE is 18K, giving extra 46K can increase buffer utilization
  * rate of request buffer, please check comment of MDS_LOV_BUFSIZE for details.
