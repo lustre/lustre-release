@@ -255,6 +255,30 @@ int lustre_lnet_config_peer_ni_healthv(int value, bool all, char *pni_nid,
 				       int seq_no, struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_recov_intrv
+ *   set the recovery interval in seconds. That's the interval to ping an
+ *   unhealthy interface.
+ *
+ *   intrv - recovery interval value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_recov_intrv(int intrv, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_recov_intrv
+ *    show the recovery interval set in the system
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing health sensitivity info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_recov_intrv(int seq_no, struct cYAML **show_rc,
+				 struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_hsensitivity
  *   sets the health sensitivity; the value by which to decrement the
  *   health value of a local or peer NI. If 0 then health is turned off
