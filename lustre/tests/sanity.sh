@@ -17030,9 +17030,8 @@ test_271a() {
 	lctl set_param -n mdc.*.stats=clear
 	dd if=/dev/zero of=$dom bs=4096 count=1 || return 1
 	cat $dom > /dev/null
-	local reads=$(lctl get_param -n mdc.*.stats |
-			awk '/ost_read/ {print $2}')
-	[ -z $reads ] || error "Unexpected $reads READ RPCs"
+	local reads=$(lctl get_param -n mdc.*.stats | grep -c ost_read)
+	[ $reads -eq 0 ] || error "Unexpected $reads READ RPCs"
 	ls $dom
 	rm -f $dom
 }
@@ -17054,9 +17053,8 @@ test_271b() {
 	$CHECKSTAT -t file -s 4096 $dom || error "stat #1 fails"
 	# second stat to check size is cached on client
 	$CHECKSTAT -t file -s 4096 $dom || error "stat #2 fails"
-	local gls=$(lctl get_param -n mdc.*.stats |
-			awk '/ldlm_glimpse/ {print $2}')
-	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
+	local gls=$(lctl get_param -n mdc.*.stats | grep -c ldlm_glimpse)
+	[ $gls -eq 0 ] || error "Unexpected $gls glimpse RPCs"
 	rm -f $dom
 }
 run_test 271b "DoM: no glimpse RPC for stat (DoM only file)"
@@ -17078,15 +17076,26 @@ test_271ba() {
 	$CHECKSTAT -t file -s 2097152 $dom || error "stat"
 	# second stat to check size is cached on client
 	$CHECKSTAT -t file -s 2097152 $dom || error "stat"
-	local gls=$(lctl get_param -n mdc.*.stats |
-			awk '/ldlm_glimpse/ {print $2}')
-	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
-	local gls=$(lctl get_param -n osc.*.stats |
-			awk '/ldlm_glimpse/ {print $2}')
-	[ -z $gls ] || error "Unexpected $gls OSC glimpse RPCs"
+	local gls=$(lctl get_param -n mdc.*.stats | grep -c ldlm_glimpse)
+	[ $gls == 0 ] || error "Unexpected $gls glimpse RPCs"
+	local gls=$(lctl get_param -n osc.*.stats | grep -c ldlm_glimpse)
+	[ $gls == 0 ] || error "Unexpected $gls OSC glimpse RPCs"
 	rm -f $dom
 }
 run_test 271ba "DoM: no glimpse RPC for stat (combined file)"
+
+
+get_mdc_stats() {
+	local mdtidx=$1
+	local param=$2
+	local mdt=MDT$(printf %04x $mdtidx)
+
+	if [ -z $param ]; then
+		lctl get_param -n mdc.*$mdt*.stats
+	else
+		lctl get_param -n mdc.*$mdt*.stats | awk "/$param/"'{print $2}'
+	fi
+}
 
 test_271c() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
@@ -17106,9 +17115,8 @@ test_271c() {
 	createmany -o $dom 1000
 	lctl set_param -n mdc.*.stats=clear
 	smalliomany -w $dom 1000 200
-	lctl get_param -n mdc.*.stats
-	local enq=$(lctl get_param -n mdc.*.stats |
-			awk '/ldlm_ibits_enqueue/ {print $2}')
+	get_mdc_stats $mdtidx
+	local enq=$(get_mdc_stats $mdtidx ldlm_ibits_enqueue)
 	# Each file has 1 open, 1 IO enqueues, total 2000
 	# but now we have also +1 getxattr for security.capability, total 3000
 	[ $enq -ge 2000 ] || error "Too few enqueues $enq, expected > 2000"
@@ -17119,9 +17127,7 @@ test_271c() {
 	createmany -o $dom 1000
 	lctl set_param -n mdc.*.stats=clear
 	smalliomany -w $dom 1000 200
-	lctl get_param -n mdc.*.stats
-	local enq_2=$(lctl get_param -n mdc.*.stats |
-			awk '/ldlm_ibits_enqueue/ {print $2}')
+	local enq_2=$(get_mdc_stats $mdtidx ldlm_ibits_enqueue)
 	# Expect to see reduced amount of RPCs by 1000 due to single enqueue
 	# for OPEN and IO lock.
 	[ $((enq - enq_2)) -ge 1000 ] ||
@@ -17149,7 +17155,6 @@ test_271d() {
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
 	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
-	local facet=mds$((mdtidx + 1))
 
 	cancel_lru_locks mdc
 	dd if=/dev/urandom of=$tmp bs=1000 count=1
@@ -17162,12 +17167,9 @@ test_271d() {
 	# append data to the same file it should update local page
 	echo "Append to the same page"
 	cat /etc/hosts >> $dom
-	local num=$(lctl get_param -n mdc.*.stats |
-		awk '/ost_read/ {print $2}')
-	local ra=$(lctl get_param -n mdc.*.stats |
-		awk '/req_active/ {print $2}')
-	local rw=$(lctl get_param -n mdc.*.stats |
-		awk '/req_waittime/ {print $2}')
+	local num=$(get_mdc_stats $mdtidx ost_read)
+	local ra=$(get_mdc_stats $mdtidx req_active)
+	local rw=$(get_mdc_stats $mdtidx req_waittime)
 
 	[ -z $num ] || error "$num READ RPC occured"
 	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
@@ -17181,12 +17183,9 @@ test_271d() {
 
 	echo "Open and read file"
 	cat $dom > /dev/null
-	local num=$(lctl get_param -n mdc.*.stats |
-		awk '/ost_read/ {print $2}')
-	local ra=$(lctl get_param -n mdc.*.stats |
-		awk '/req_active/ {print $2}')
-	local rw=$(lctl get_param -n mdc.*.stats |
-		awk '/req_waittime/ {print $2}')
+	local num=$(get_mdc_stats $mdtidx ost_read)
+	local ra=$(get_mdc_stats $mdtidx req_active)
+	local rw=$(get_mdc_stats $mdtidx req_waittime)
 
 	[ -z $num ] || error "$num READ RPC occured"
 	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
@@ -17212,7 +17211,6 @@ test_271e() {
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
 	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
-	local facet=mds$((mdtidx + 1))
 
 	cancel_lru_locks mdc
 	dd if=/dev/urandom of=$tmp bs=30K count=1
@@ -17224,12 +17222,9 @@ test_271e() {
 	echo "Append to the same page"
 	cat /etc/hosts >> $dom
 
-	local num=$(lctl get_param -n mdc.*.stats | \
-		awk '/ost_read/ {print $2}')
-	local ra=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_active/ {print $2}')
-	local rw=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_waittime/ {print $2}')
+	local num=$(get_mdc_stats $mdtidx ost_read)
+	local ra=$(get_mdc_stats $mdtidx req_active)
+	local rw=$(get_mdc_stats $mdtidx req_waittime)
 
 	[ -z $num ] || error "$num READ RPC occured"
 	# Reply buffer can be adjusted for larger buffer by resend
@@ -17243,12 +17238,9 @@ test_271e() {
 
 	echo "Open and read file"
 	cat $dom > /dev/null
-	local num=$(lctl get_param -n mdc.*.stats | \
-		awk '/ost_read/ {print $2}')
-	local ra=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_active/ {print $2}')
-	local rw=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_waittime/ {print $2}')
+	local num=$(get_mdc_stats $mdtidx ost_read)
+	local ra=$(get_mdc_stats $mdtidx req_active)
+	local rw=$(get_mdc_stats $mdtidx req_waittime)
 
 	[ -z $num ] || error "$num READ RPC occured"
 	# Reply buffer can be adjusted for larger buffer by resend
@@ -17274,7 +17266,6 @@ test_271f() {
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
 	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
-	local facet=mds$((mdtidx + 1))
 
 	cancel_lru_locks mdc
 	dd if=/dev/urandom of=$tmp bs=200000 count=1
@@ -17285,12 +17276,9 @@ test_271f() {
 
 	echo "Append to the same page"
 	cat /etc/hosts >> $dom
-	local num=$(lctl get_param -n mdc.*.stats | \
-		awk '/ost_read/ {print $2}')
-	local ra=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_active/ {print $2}')
-	local rw=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_waittime/ {print $2}')
+	local num=$(get_mdc_stats $mdtidx ost_read)
+	local ra=$(get_mdc_stats $mdtidx req_active)
+	local rw=$(get_mdc_stats $mdtidx req_waittime)
 
 	[ -z $num ] || error "$num READ RPC occured"
 	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
@@ -17304,12 +17292,9 @@ test_271f() {
 
 	echo "Open and read file"
 	cat $dom > /dev/null
-	local num=$(lctl get_param -n mdc.*.stats | \
-		awk '/ost_read/ {print $2}')
-	local ra=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_active/ {print $2}')
-	local rw=$(lctl get_param -n mdc.*.stats | \
-		awk '/req_waittime/ {print $2}')
+	local num=$(get_mdc_stats $mdtidx ost_read)
+	local ra=$(get_mdc_stats $mdtidx req_active)
+	local rw=$(get_mdc_stats $mdtidx req_waittime)
 
 	[ $num -eq 1 ] || error "expect 1 READ RPC, $num occured"
 	[ $ra == $rw ] || error "$((ra - rw)) resend occured"

@@ -4308,14 +4308,13 @@ test_100a() {
 
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #1"
 	# first stat from server should return size data and save glimpse
-	local gls=$(lctl get_param -n mdc.*.stats | \
-		awk '/ldlm_glimpse/ {print $2}')
-	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
+	local gls=$(lctl get_param -n mdc.*.stats | grep -c ldlm_glimpse)
+	[ $gls -eq 0 ] || error "Unexpected $gls glimpse RPCs"
 	# second stat to check size is NOT cached on client without IO lock
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
 
-	local gls=$(lctl get_param -n mdc.*.stats | grep ldlm_glimpse | wc -l)
-	[ "1" == "$gls" ] || error "Expect 1 glimpse RPCs but got $gls"
+	local gls=$(lctl get_param -n mdc.*.stats | grep -c ldlm_glimpse)
+	[ $gls -ge 1 ] || error "Expect glimpse RPCs but none"
 	rm -f $dom
 }
 run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
@@ -4336,10 +4335,9 @@ test_100b() {
 	# second stat to check size is cached on client
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
 
-	local gls=$(lctl get_param -n mdc.*.stats |
-			awk '/ldlm_glimpse/ {print $2}')
+	local gls=$(lctl get_param -n mdc.*.stats | grep -c ldlm_glimpse)
 	# both stats should cause no glimpse requests
-	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
+	[ $gls == 0 ] || error "Unexpected $gls glimpse RPCs"
 	rm -f $dom
 }
 run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
@@ -4360,7 +4358,7 @@ test_100c() {
 	$CHECKSTAT -t file -s 2097152 $DIR/$tdir/dom ||
 		error "Wrong size from stat #1"
 
-	local gls=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	local gls=$(lctl get_param -n osc.*.stats | grep -c ldlm_glimpse)
 	[ $gls -eq 0 ] && error "Expect OST glimpse RPCs but got none"
 
 	rm -f $dom
@@ -4385,7 +4383,7 @@ test_100d() {
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom ||
 		error "Wrong size from stat #1"
 
-	local gls=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	local gls=$(lctl get_param -n osc.*.stats | grep -c ldlm_glimpse)
 	[ $gls -eq 0 ] && error "Expect OST glimpse but got none"
 
 	rm -f $dom
@@ -4412,7 +4410,7 @@ test_101a() {
 	lctl set_param -n mdc.*.stats=clear
 	rm $DIR2/$tfile || error "Unlink fails"
 
-	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	local writes=$(lctl get_param -n mdc.*.stats | grep -c ost_write)
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101a "Discard DoM data on unlink"
@@ -4437,7 +4435,7 @@ test_101b() {
 	lctl set_param -n mdc.*.stats=clear
 	mv $DIR2/${tfile}_2 $DIR2/$tfile || error "Rename fails"
 
-	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	local writes=$(lctl get_param -n mdc.*.stats | grep -c ost_write)
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101b "Discard DoM data on rename"
@@ -4464,7 +4462,7 @@ test_101c() {
 	rm $DIR2/$tfile > /dev/null || error "Unlink fails for opened file"
 	kill -USR1 $MULTIOP_PID && wait $MULTIOP_PID || error "multiop failure"
 
-	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	local writes=$(lctl get_param -n mdc.*.stats | grep -c ost_write)
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101c "Discard DoM data on close-unlink"
