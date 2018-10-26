@@ -13,7 +13,6 @@ lov-objs := lov_dev.o \
 	lov_request.o \
 	lovsub_dev.o \
 	lovsub_object.o \
-	lovsub_page.o \
 	lproc_lov.o
 
 EXTRA_DIST = $(lov-objs:.o=.c) lov_internal.h lov_cl_internal.h

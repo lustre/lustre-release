@@ -99,6 +99,7 @@
 #include <linux/radix-tree.h>
 #include <linux/spinlock.h>
 #include <linux/wait.h>
+#include <linux/pagevec.h>
 #include <lustre_dlm.h>
 
 struct obd_info;
@@ -900,7 +901,8 @@ struct cl_page_operations {
                            const struct cl_page_slice *slice);
         /** Destructor. Frees resources and slice itself. */
         void (*cpo_fini)(const struct lu_env *env,
-                         struct cl_page_slice *slice);
+			 struct cl_page_slice *slice,
+			 struct pagevec *pvec);
         /**
          * Optional debugging helper. Prints given page slice.
          *
@@ -2168,6 +2170,9 @@ struct cl_page *cl_page_alloc       (const struct lu_env *env,
 void            cl_page_get         (struct cl_page *page);
 void            cl_page_put         (const struct lu_env *env,
                                      struct cl_page *page);
+void		cl_pagevec_put      (const struct lu_env *env,
+				     struct cl_page *page,
+				     struct pagevec *pvec);
 void            cl_page_print       (const struct lu_env *env, void *cookie,
                                      lu_printer_t printer,
                                      const struct cl_page *pg);

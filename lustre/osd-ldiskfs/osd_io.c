@@ -766,11 +766,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	struct pagevec pvec;
 	int i;
 
-#ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
-	pagevec_init(&pvec);
-#else
-	pagevec_init(&pvec, 0);
-#endif
+	ll_pagevec_init(&pvec, 0);
 
 	for (i = 0; i < npages; i++) {
 		struct page *page = lnb[i].lnb_page;

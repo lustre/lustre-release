@@ -171,6 +171,7 @@ struct osc_thread_info {
 	struct lustre_handle	oti_handle;
 	struct cl_page_list	oti_plist;
 	struct cl_io		oti_io;
+	struct pagevec		oti_pagevec;
 	void			*oti_pvec[OTI_PVEC_SIZE];
 	/**
 	 * Fields used by cl_lock_discard_pages().

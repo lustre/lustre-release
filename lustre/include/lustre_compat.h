@@ -775,4 +775,10 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 	return false;
 }
 
+#ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
+#define ll_pagevec_init(pvec, n) pagevec_init(pvec)
+#else
+#define ll_pagevec_init(pvec, n) pagevec_init(pvec, n)
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */

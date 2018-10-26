@@ -54,16 +54,22 @@
  *
  */
 
-static void vvp_page_fini_common(struct vvp_page *vpg)
+static void vvp_page_fini_common(struct vvp_page *vpg, struct pagevec *pvec)
 {
 	struct page *vmpage = vpg->vpg_page;
 
 	LASSERT(vmpage != NULL);
-	put_page(vmpage);
+	if (pvec) {
+		if (!pagevec_add(pvec, vmpage))
+			pagevec_release(pvec);
+	} else {
+		put_page(vmpage);
+	}
 }
 
 static void vvp_page_fini(const struct lu_env *env,
-			  struct cl_page_slice *slice)
+			  struct cl_page_slice *slice,
+			  struct pagevec *pvec)
 {
 	struct vvp_page *vpg     = cl2vvp_page(slice);
 	struct page     *vmpage  = vpg->vpg_page;
@@ -73,7 +79,7 @@ static void vvp_page_fini(const struct lu_env *env,
 	 * VPG_FREEING state.
 	 */
 	LASSERT((struct cl_page *)vmpage->private != slice->cpl_page);
-	vvp_page_fini_common(vpg);
+	vvp_page_fini_common(vpg, pvec);
 }
 
 static int vvp_page_own(const struct lu_env *env,
@@ -490,13 +496,14 @@ vvp_transient_page_completion(const struct lu_env *env,
 }
 
 static void vvp_transient_page_fini(const struct lu_env *env,
-				    struct cl_page_slice *slice)
+				    struct cl_page_slice *slice,
+				    struct pagevec *pvec)
 {
 	struct vvp_page *vpg = cl2vvp_page(slice);
 	struct cl_page *clp = slice->cpl_page;
 	struct vvp_object *clobj = cl2vvp(clp->cp_obj);
 
-	vvp_page_fini_common(vpg);
+	vvp_page_fini_common(vpg, pvec);
 	atomic_dec(&clobj->vob_transient_pages);
 }
 

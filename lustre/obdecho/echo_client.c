@@ -328,7 +328,8 @@ static void echo_page_completion(const struct lu_env *env,
 }
 
 static void echo_page_fini(const struct lu_env *env,
-			   struct cl_page_slice *slice)
+			   struct cl_page_slice *slice,
+			   struct pagevec *pvec)
 {
 	struct echo_object *eco = cl2echo_obj(slice->cpl_obj);
 	ENTRY;

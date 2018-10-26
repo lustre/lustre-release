@@ -528,19 +528,22 @@ static void osc_lru_use(struct client_obd *cli, struct osc_page *opg)
 static void discard_pagevec(const struct lu_env *env, struct cl_io *io,
 				struct cl_page **pvec, int max_index)
 {
-        int i;
+	struct pagevec *pagevec = &osc_env_info(env)->oti_pagevec;
+	int i;
 
-        for (i = 0; i < max_index; i++) {
-                struct cl_page *page = pvec[i];
+	ll_pagevec_init(pagevec, 0);
+	for (i = 0; i < max_index; i++) {
+		struct cl_page *page = pvec[i];
 
 		LASSERT(cl_page_is_owned(page, io));
 		cl_page_delete(env, page);
 		cl_page_discard(env, io, page);
 		cl_page_disown(env, io, page);
-                cl_page_put(env, page);
+		cl_pagevec_put(env, page, pagevec);
 
-                pvec[i] = NULL;
-        }
+		pvec[i] = NULL;
+	}
+	pagevec_release(pagevec);
 }
 
 /**

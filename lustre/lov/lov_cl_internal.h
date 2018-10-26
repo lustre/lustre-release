@@ -463,11 +463,6 @@ struct lov_sublock_env {
         struct cl_io        *lse_io;
 };
 
-struct lovsub_page {
-        struct cl_page_slice lsb_cl;
-};
-
-
 struct lov_thread_info {
 	struct cl_object_conf   lti_stripe_conf;
 	struct lu_fid           lti_fid;
@@ -624,8 +619,6 @@ struct lov_io_sub *lov_sub_get(const struct lu_env *env, struct lov_io *lio,
 
 int   lov_page_init       (const struct lu_env *env, struct cl_object *ob,
 			   struct cl_page *page, pgoff_t index);
-int   lovsub_page_init    (const struct lu_env *env, struct cl_object *ob,
-			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_empty (const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
@@ -779,13 +772,6 @@ static inline struct lov_page *cl2lov_page(const struct cl_page_slice *slice)
 {
         LINVRNT(lov_is_object(&slice->cpl_obj->co_lu));
         return container_of0(slice, struct lov_page, lps_cl);
-}
-
-static inline struct lovsub_page *
-cl2lovsub_page(const struct cl_page_slice *slice)
-{
-        LINVRNT(lovsub_is_object(&slice->cpl_obj->co_lu));
-        return container_of0(slice, struct lovsub_page, lsb_cl);
 }
 
 static inline struct lov_io *cl2lov_io(const struct lu_env *env,
