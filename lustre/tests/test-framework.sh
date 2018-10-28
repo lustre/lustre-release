@@ -3828,7 +3828,7 @@ mkfs_opts() {
 			# Check for wide striping
 			if [ $OSTCOUNT -gt 160 ]; then
 				MDSJOURNALSIZE=${MDSJOURNALSIZE:-4096}
-				fs_mkfs_opts+="-O large_xattr"
+				fs_mkfs_opts+="-O ea_inode"
 			fi
 
 			var=${facet}_JRN
@@ -7649,7 +7649,9 @@ get_block_size() {
 	echo -n ${size:-0}
 }
 
-# Check whether the "large_xattr" feature is enabled or not.
+# Check whether the "ea_inode" feature is enabled or not, to allow
+# ldiskfs xattrs over one block in size.  Allow both the historical
+# Lustre feature name (large_xattr) and the upstream name (ea_inode).
 large_xattr_enabled() {
 	[[ $(facet_fstype $SINGLEMDS) == zfs ]] && return 0
 

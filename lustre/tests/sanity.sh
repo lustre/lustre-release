@@ -7340,7 +7340,7 @@ test_102h() { # bug 15777
 run_test 102h "grow xattr from inside inode to external block"
 
 test_102ha() {
-	large_xattr_enabled || { skip "large_xattr disabled" && return; }
+	large_xattr_enabled || { skip "ea_inode feature disabled" && return; }
 	grow_xattr $(max_xattr_size)
 }
 run_test 102ha "grow xattr from inside inode to external inode"

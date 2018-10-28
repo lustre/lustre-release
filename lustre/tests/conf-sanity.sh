@@ -4460,7 +4460,7 @@ test_61() { # LU-80
 		lxattr=true
 
 		for num in $(seq $MDSCOUNT); do
-			do_facet mds${num} $TUNE2FS -O large_xattr \
+			do_facet mds${num} $TUNE2FS -O ea_inode \
 				$(mdsdevname $num) ||
 				error "tune2fs on mds $num failed"
 		done
@@ -4522,14 +4522,7 @@ test_61() { # LU-80
 
 	# need to delete this file to avoid problems in other tests
 	rm -f $file
-	stopall || error "stopping systems to turn off large_xattr"
-	if $lxattr; then
-		for num in $(seq $MDSCOUNT); do
-			do_facet mds${num} $TUNE2FS -O ^large_xattr \
-				$(mdsdevname $num) ||
-				error "tune2fs on mds $num failed"
-		done
-	fi
+	stopall || error "stopping systems failed"
 }
 run_test 61 "large xattr"
 
