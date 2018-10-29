@@ -149,37 +149,48 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 
 	site = ll_i2sbi(inode)->ll_site;
 	lli  = ll_i2info(inode);
-        fid  = &lli->lli_fid;
-        LASSERT(fid_is_sane(fid));
+	fid  = &lli->lli_fid;
+	LASSERT(fid_is_sane(fid));
 
-        if (lli->lli_clob == NULL) {
-                /* clob is slave of inode, empty lli_clob means for new inode,
-                 * there is no clob in cache with the given fid, so it is
-                 * unnecessary to perform lookup-alloc-lookup-insert, just
-                 * alloc and insert directly. */
-                LASSERT(inode->i_state & I_NEW);
-                conf.coc_lu.loc_flags = LOC_F_NEW;
-                clob = cl_object_find(env, lu2cl_dev(site->ls_top_dev),
-                                      fid, &conf);
-                if (!IS_ERR(clob)) {
-                        /*
-                         * No locking is necessary, as new inode is
-                         * locked by I_NEW bit.
-                         */
-                        lli->lli_clob = clob;
-                        lu_object_ref_add(&clob->co_lu, "inode", inode);
-                } else
-                        result = PTR_ERR(clob);
+	if (lli->lli_clob == NULL) {
+		/* clob is slave of inode, empty lli_clob means for new inode,
+		 * there is no clob in cache with the given fid, so it is
+		 * unnecessary to perform lookup-alloc-lookup-insert, just
+		 * alloc and insert directly.
+		 */
+		if (!(inode->i_state & I_NEW)) {
+			result = -EIO;
+			CERROR("%s: unexpected not-NEW inode "DFID": rc = %d\n",
+			       ll_get_fsname(inode->i_sb, NULL, 0), PFID(fid),
+			       result);
+			goto out;
+		}
+
+		conf.coc_lu.loc_flags = LOC_F_NEW;
+		clob = cl_object_find(env, lu2cl_dev(site->ls_top_dev),
+				      fid, &conf);
+		if (!IS_ERR(clob)) {
+			/*
+			 * No locking is necessary, as new inode is
+			 * locked by I_NEW bit.
+			 */
+			lli->lli_clob = clob;
+			lu_object_ref_add(&clob->co_lu, "inode", inode);
+		} else {
+			result = PTR_ERR(clob);
+		}
 	} else {
 		result = cl_conf_set(env, lli->lli_clob, &conf);
 	}
 
-        cl_env_put(env, &refcheck);
+	if (result != 0)
+		CERROR("%s: failed to initialize cl_object "DFID": rc = %d\n",
+			ll_get_fsname(inode->i_sb, NULL, 0), PFID(fid), result);
 
-        if (result != 0)
-                CERROR("Failure to initialize cl object "DFID": %d\n",
-                       PFID(fid), result);
-        return result;
+out:
+	cl_env_put(env, &refcheck);
+
+	return result;
 }
 
 /**
