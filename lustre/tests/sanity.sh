@@ -10781,7 +10781,7 @@ test_133b() {
 	#define OBD_STATFS_CACHE_SECONDS 1
 	sleep 2
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
-	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.exports.*.stats=clear
 	$LFS df || error "lfs failed"
 	check_stats $SINGLEMDS "statfs" 1
 
@@ -10792,12 +10792,20 @@ test_133b() {
 		return 0
 	sleep 2
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
-	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.exports.*.stats=clear
 	df $DIR
 	check_stats $SINGLEMDS "statfs" 1
-	res=$(do_facet ost1 \
-	      $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "statfs")
-	[ "$res" ] && error "OST got STATFS"
+
+	# We want to check that the client didn't send OST_STATFS to
+	# ost1 but the MDT also uses OST_STATFS for precreate. So some
+	# extra care is needed here.
+	if remote_mds; then
+		local nid=$($LCTL list_nids | head -1 | sed  "s/\./\\\./g")
+		local param="obdfilter.$FSNAME-OST0000.exports.'$nid'.stats"
+
+		res=$(do_facet ost1 $LCTL get_param $param | grep statfs)
+		[ "$res" ] && error "OST got STATFS"
+	fi
 
 	return 0
 }
