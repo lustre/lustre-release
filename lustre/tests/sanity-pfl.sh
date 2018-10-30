@@ -377,16 +377,30 @@ component_dump() {
 
 test_10() {
 	local parent=$DIR/$tdir
+	local root=$MOUNT
 
 	save_layout_restore_at_exit $MOUNT
 
 	rm -rf $parent
-	$LFS setstripe -d $MOUNT || error "clear root layout"
+
+	# mount root on $MOUNT2 if FILESET is set
+	if [ -n "$FILESET" ]; then
+		FILESET="" mount_client $MOUNT2 ||
+			error "mount $MOUNT2 fail"
+		root=$MOUNT2
+	fi
+
+	$LFS setstripe -d $root || error "clear root layout"
 
 	# set root composite layout
 	$LFS setstripe -E 2M -c 1 -S 1M -E 16M -c2 -S 2M \
-		-E -1 -c 4 -S 4M $MOUNT ||
+		-E -1 -c 4 -S 4M $root ||
 		error "Set root layout failed"
+
+	if [ "$root" == "$MOUNT2" ]; then
+		umount_client $MOUNT2 ||
+			error "umount $MOUNT2 fail"
+	fi
 
 	test_mkdir $parent
 	# set a different layout for parent
