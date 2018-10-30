@@ -56,13 +56,13 @@ void lov_dump_lmm_common(int level, void *lmmp)
 	struct ost_id	oi;
 
 	lmm_oi_le_to_cpu(&oi, &lmm->lmm_oi);
-	CDEBUG(level, "objid "DOSTID", magic 0x%08x, pattern %#x\n",
-	       POSTID(&oi), le32_to_cpu(lmm->lmm_magic),
-	       le32_to_cpu(lmm->lmm_pattern));
-	CDEBUG(level, "stripe_size %u, stripe_count %u, layout_gen %u\n",
-	       le32_to_cpu(lmm->lmm_stripe_size),
-	       le16_to_cpu(lmm->lmm_stripe_count),
-	       le16_to_cpu(lmm->lmm_layout_gen));
+	CDEBUG_LIMIT(level, "objid "DOSTID", magic 0x%08x, pattern %#x\n",
+		     POSTID(&oi), le32_to_cpu(lmm->lmm_magic),
+		     le32_to_cpu(lmm->lmm_pattern));
+	CDEBUG_LIMIT(level, "stripe_size %u, stripe_count %u, layout_gen %u\n",
+		     le32_to_cpu(lmm->lmm_stripe_size),
+		     le16_to_cpu(lmm->lmm_stripe_count),
+		     le16_to_cpu(lmm->lmm_layout_gen));
 }
 
 static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
@@ -71,8 +71,9 @@ static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
 	int i;
 
 	if (stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
-		CDEBUG(level, "bad stripe_count %u > max_stripe_count %u\n",
-		       stripe_count, LOV_V1_INSANE_STRIPE_COUNT);
+		CDEBUG_LIMIT(level,
+			     "bad stripe_count %u > max_stripe_count %u\n",
+			     stripe_count, LOV_V1_INSANE_STRIPE_COUNT);
 		return;
 	}
 
@@ -80,8 +81,8 @@ static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
 		struct ost_id oi;
 
 		ostid_le_to_cpu(&lod->l_ost_oi, &oi);
-		CDEBUG(level, "stripe %u idx %u subobj "DOSTID"\n", i,
-		       le32_to_cpu(lod->l_ost_idx), POSTID(&oi));
+		CDEBUG_LIMIT(level, "stripe %u idx %u subobj "DOSTID"\n", i,
+			     le32_to_cpu(lod->l_ost_idx), POSTID(&oi));
 	}
 }
 
@@ -95,7 +96,7 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
 {
 	lov_dump_lmm_common(level, lmm);
-	CDEBUG(level, "pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
+	CDEBUG_LIMIT(level, "pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
 	lov_dump_lmm_objects(level, lmm->lmm_objects,
 			     le16_to_cpu(lmm->lmm_stripe_count));
 }
@@ -113,8 +114,8 @@ void lov_dump_lmm(int level, void *lmm)
 		lov_dump_lmm_v3(level, (struct lov_mds_md_v3 *)lmm);
 		break;
 	default:
-		CDEBUG(level, "unrecognized lmm_magic %x, assuming %x\n",
-		       magic, LOV_MAGIC_V1);
+		CDEBUG_LIMIT(level, "unrecognized lmm_magic %x, assuming %x\n",
+			     magic, LOV_MAGIC_V1);
 		lov_dump_lmm_common(level, lmm);
 		break;
 	}
