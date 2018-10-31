@@ -456,6 +456,8 @@ struct niobuf_local {
 	__u16		lnb_guards[MAX_GUARD_NUMBER];
 	__u16		lnb_guard_rpc:1;
 	__u16		lnb_guard_disk:1;
+	/* separate unlock for read path to allow shared access */
+	__u16		lnb_locked:1;
 };
 
 struct tgt_thread_big_cache {
