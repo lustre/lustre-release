@@ -635,7 +635,11 @@ download_ofed() {
 			# this is a work around for suse distro (sles11.3). what we need is
 			# sles11sp3. We really need to redesign how we use target and distro
 			[[ $distro_name =~ sles ]] && distro_name=${DISTRO/./sp}
-			file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}-${arch}.tgz"
+			if [[ $arch = "aarch64" ]]; then
+				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}alternate-${arch}.tgz"
+			else
+				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}-${arch}.tgz"
+			fi
 			download_file "$location/$file" "$KERNELTREE" "$force"
 			;;
 		ifs)
@@ -800,8 +804,11 @@ unpack_ofed() {
 			# this is a work around for suse distro (sles11.3). what we need is
 			# sles11sp3. We really need to redesign how we use target and distro
 			[[ $distro_name =~ sles ]] && distro_name=${DISTRO/./sp}
-			file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}-${arch}"
-
+			if [[ $arch = "aarch64" ]]; then
+				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}alternate-${arch}"
+			else
+				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}-${arch}"
+			fi
 			# it's not important what distro we get the tarball since we only
 			# interest in the src
 			if ! untar "$KERNELTREE/${file}.tgz"; then
