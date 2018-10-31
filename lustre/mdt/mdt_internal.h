@@ -1293,8 +1293,7 @@ int mdt_brw_enqueue(struct mdt_thread_info *info, struct ldlm_namespace *ns,
 		    struct ldlm_lock **lockp, __u64 flags);
 int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 			 struct lustre_handle *lh);
-void mdt_dom_discard_data(struct mdt_thread_info *info,
-			  const struct lu_fid *fid);
+void mdt_dom_discard_data(struct mdt_thread_info *info, struct mdt_object *mo);
 int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,
 			     struct ldlm_resource *res, bool increase_only);
 void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,

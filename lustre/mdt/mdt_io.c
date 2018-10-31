@@ -383,16 +383,42 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 {
 	struct dt_object *dob;
 	int i, j, rc, tot_bytes = 0;
+	int level;
 
 	ENTRY;
 
 	mdt_dom_read_lock(mo);
-	if (!mdt_object_exists(mo))
-		GOTO(unlock, rc = -ENOENT);
+	*nr_local = 0;
+	/* the only valid case when READ can find object is missing or stale
+	 * when export is just evicted and open files are closed forcefully
+	 * on server while client's READ can be in progress.
+	 * This should not happen on healthy export, object can't be missing
+	 * or dying because both states means it was finally destroyed.
+	 */
+	level = exp->exp_failed ? D_INFO : D_ERROR;
+	if (!mdt_object_exists(mo)) {
+		CDEBUG_LIMIT(level,
+			     "%s: READ IO to missing obj "DFID": rc = %d\n",
+			     exp->exp_obd->obd_name, PFID(mdt_object_fid(mo)),
+			     -ENOENT);
+		/* return 0 and continue with empty commit to skip such READ
+		 * without more BRW errors.
+		 */
+		RETURN(0);
+	}
+	if (lu_object_is_dying(&mo->mot_header)) {
+		CDEBUG_LIMIT(level,
+			     "%s: READ IO to stale obj "DFID": rc = %d\n",
+			     exp->exp_obd->obd_name, PFID(mdt_object_fid(mo)),
+			     -ESTALE);
+		/* return 0 and continue with empty commit to skip such READ
+		 * without more BRW errors.
+		 */
+		RETURN(0);
+	}
 
 	dob = mdt_obj2dt(mo);
 	/* parse remote buffers to local buffers and prepare the latter */
-	*nr_local = 0;
 	for (i = 0, j = 0; i < niocount; i++) {
 		rc = dt_bufs_get(env, dob, rnb + i, lnb + j, 0);
 		if (unlikely(rc < 0))
@@ -415,7 +441,6 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	RETURN(0);
 buf_put:
 	dt_bufs_put(env, dob, lnb, *nr_local);
-unlock:
 	mdt_dom_read_unlock(mo);
 	return rc;
 }
@@ -437,15 +462,34 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	tgt_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
 
 	mdt_dom_read_lock(mo);
+	*nr_local = 0;
+	/* don't report error in cases with failed export */
 	if (!mdt_object_exists(mo)) {
-		CDEBUG(D_ERROR, "%s: BRW to missing obj "DFID"\n",
-		       exp->exp_obd->obd_name, PFID(mdt_object_fid(mo)));
-		GOTO(unlock, rc = -ENOENT);
+		int level = exp->exp_failed ? D_INFO : D_ERROR;
+
+		rc = -ENOENT;
+		CDEBUG_LIMIT(level,
+			     "%s: WRITE IO to missing obj "DFID": rc = %d\n",
+			     exp->exp_obd->obd_name, PFID(mdt_object_fid(mo)),
+			     rc);
+		/* exit with no data written, note nr_local = 0 above */
+		GOTO(unlock, rc);
+	}
+	if (lu_object_is_dying(&mo->mot_header)) {
+		/* This is possible race between object destroy followed by
+		 * discard BL AST and client cache flushing. Object is
+		 * referenced until discard finish.
+		 */
+		CDEBUG(D_INODE, "WRITE IO to stale object "DFID"\n",
+		       PFID(mdt_object_fid(mo)));
+		/* Note: continue with no error here to don't cause BRW errors
+		 * but skip transaction in commitrw silently so no data is
+		 * written.
+		 */
 	}
 
 	dob = mdt_obj2dt(mo);
 	/* parse remote buffers to local buffers and prepare the latter */
-	*nr_local = 0;
 	for (i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
 		rc = dt_bufs_get(env, dob, rnb + i, lnb + j, 1);
 		if (unlikely(rc < 0))
@@ -546,11 +590,10 @@ static int mdt_commitrw_read(const struct lu_env *env, struct mdt_device *mdt,
 
 	ENTRY;
 
-	LASSERT(niocount > 0);
-
 	dob = mdt_obj2dt(mo);
 
-	dt_bufs_put(env, dob, lnb, niocount);
+	if (niocount)
+		dt_bufs_put(env, dob, lnb, niocount);
 
 	mdt_dom_read_unlock(mo);
 	RETURN(rc);
@@ -580,6 +623,20 @@ static int mdt_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 retry:
 	if (!dt_object_exists(dob))
 		GOTO(out, rc = -ENOENT);
+	if (lu_object_is_dying(&mo->mot_header)) {
+		/* Commit to stale object can be just skipped silently. */
+		CDEBUG(D_INODE, "skip commit to stale object "DFID"\n",
+			PFID(mdt_object_fid(mo)));
+		GOTO(out, rc = 0);
+	}
+
+	if (niocount == 0) {
+		rc = -EPROTO;
+		DEBUG_REQ(D_WARNING, tgt_ses_req(tgt_ses_info(env)),
+			  "%s: commit with no pages for "DFID": rc = %d\n",
+			  exp->exp_obd->obd_name, PFID(mdt_object_fid(mo)), rc);
+		GOTO(out, rc);
+	}
 
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))
@@ -685,12 +742,6 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	__u64 valid;
 	int rc = 0;
 
-	if (npages == 0) {
-		CERROR("%s: no pages to commit\n",
-		       exp->exp_obd->obd_name);
-		rc = -EPROTO;
-	}
-
 	LASSERT(mo);
 
 	if (cmd == OBD_BRW_WRITE) {
@@ -757,7 +808,6 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	} else {
 		rc = -EPROTO;
 	}
-	/* this put is pair to object_get in ofd_preprw_write */
 	mdt_thread_info_fini(info);
 	RETURN(rc);
 }
@@ -1224,32 +1274,6 @@ out:
 	RETURN(rc);
 }
 
-void mdt_dom_discard_data(struct mdt_thread_info *info,
-			  const struct lu_fid *fid)
-{
-	struct mdt_device *mdt = info->mti_mdt;
-	union ldlm_policy_data *policy = &info->mti_policy;
-	struct ldlm_res_id *res_id = &info->mti_res_id;
-	struct lustre_handle dom_lh;
-	__u64 flags = LDLM_FL_AST_DISCARD_DATA;
-	int rc = 0;
-
-	policy->l_inodebits.bits = MDS_INODELOCK_DOM;
-	policy->l_inodebits.try_bits = 0;
-	fid_build_reg_res_name(fid, res_id);
-
-	/* Tell the clients that the object is gone now and that they should
-	 * throw away any cached pages. */
-	rc = ldlm_cli_enqueue_local(info->mti_env, mdt->mdt_namespace, res_id,
-				    LDLM_IBITS, policy, LCK_PW, &flags,
-				    ldlm_blocking_ast, ldlm_completion_ast,
-				    NULL, NULL, 0, LVB_T_NONE, NULL, &dom_lh);
-
-	/* We only care about the side-effects, just drop the lock. */
-	if (rc == ELDLM_OK)
-		ldlm_lock_decref_and_cancel(&dom_lh, LCK_PW);
-}
-
 /* check if client has already DoM lock for given resource */
 bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 			     const struct lu_fid *fid)
@@ -1573,3 +1597,105 @@ out:
 	RETURN(0);
 }
 
+/**
+ * Completion AST for DOM discard locks:
+ *
+ * CP AST an DOM discard lock is called always right after enqueue or from
+ * reprocess if lock was blocked, in the latest case l_ast_data is set to
+ * the mdt_object which is kept while there are pending locks on it.
+ */
+int ldlm_dom_discard_cp_ast(struct ldlm_lock *lock, __u64 flags, void *data)
+{
+	struct mdt_object *mo;
+	struct lustre_handle dom_lh;
+	struct lu_env *env;
+
+	ENTRY;
+
+	/* l_ast_data is set when lock was not granted immediately
+	 * in mdt_dom_discard_data() below but put into waiting list,
+	 * so this CP callback means we are finished and corresponding
+	 * MDT object should be released finally as well as lock itself.
+	 */
+	lock_res_and_lock(lock);
+	if (!lock->l_ast_data) {
+		unlock_res_and_lock(lock);
+		RETURN(0);
+	}
+
+	mo = lock->l_ast_data;
+	lock->l_ast_data = NULL;
+	unlock_res_and_lock(lock);
+
+	ldlm_lock2handle(lock, &dom_lh);
+	ldlm_lock_decref(&dom_lh, LCK_PW);
+
+	env = lu_env_find();
+	LASSERT(env);
+	mdt_object_put(env, mo);
+
+	RETURN(0);
+}
+
+void mdt_dom_discard_data(struct mdt_thread_info *info,
+			  struct mdt_object *mo)
+{
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_device *mdt = mdt_dev(mo->mot_obj.lo_dev);
+	union ldlm_policy_data policy;
+	struct ldlm_res_id res_id;
+	struct lustre_handle dom_lh;
+	struct ldlm_lock *lock;
+	__u64 flags = LDLM_FL_AST_DISCARD_DATA;
+	int rc = 0;
+	bool old_client;
+
+	ENTRY;
+
+	if (req && req_is_replay(req))
+		RETURN_EXIT;
+
+	policy.l_inodebits.bits = MDS_INODELOCK_DOM;
+	policy.l_inodebits.try_bits = 0;
+	fid_build_reg_res_name(mdt_object_fid(mo), &res_id);
+
+	/* Keep blocking version of discard for an old client to avoid
+	 * crashes on non-patched clients. LU-11359.
+	 */
+	old_client = req && !(exp_connect_flags2(req->rq_export) &
+			      OBD_CONNECT2_ASYNC_DISCARD);
+
+	/* Tell the clients that the object is gone now and that they should
+	 * throw away any cached pages. */
+	rc = ldlm_cli_enqueue_local(info->mti_env, mdt->mdt_namespace, &res_id,
+				    LDLM_IBITS, &policy, LCK_PW, &flags,
+				    ldlm_blocking_ast, old_client ?
+				    ldlm_completion_ast :
+				    ldlm_dom_discard_cp_ast,
+				    NULL, NULL, 0, LVB_T_NONE, NULL, &dom_lh);
+	if (rc != ELDLM_OK) {
+		CDEBUG(D_DLMTRACE,
+		       "Failed to issue discard lock, rc = %d\n", rc);
+		RETURN_EXIT;
+	}
+
+	lock = ldlm_handle2lock(&dom_lh);
+	lock_res_and_lock(lock);
+	/* if lock is not granted then there are BL ASTs in progress and
+	 * lock will be granted in result of reprocessing with CP callback
+	 * notifying about that. The mdt object has to be kept until that and
+	 * it is saved in l_ast_data of the lock. Lock reference is kept too
+	 * until that to prevent it from canceling.
+	 */
+	if (!is_granted_or_cancelled_nolock(lock)) {
+		mdt_object_get(info->mti_env, mo);
+		lock->l_ast_data = mo;
+		unlock_res_and_lock(lock);
+	} else {
+		unlock_res_and_lock(lock);
+		ldlm_lock_decref_and_cancel(&dom_lh, LCK_PW);
+	}
+	LDLM_LOCK_PUT(lock);
+
+	RETURN_EXIT;
+}

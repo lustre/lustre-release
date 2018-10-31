@@ -40,6 +40,7 @@
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
 #endif
+#include <linux/lustre/lustre_cfg.h>
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__);ret = 1;}

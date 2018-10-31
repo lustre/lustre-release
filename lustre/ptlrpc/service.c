@@ -2871,7 +2871,12 @@ static int ptlrpc_hr_main(void *arg)
 	struct ptlrpc_hr_thread *hrt = (struct ptlrpc_hr_thread *)arg;
 	struct ptlrpc_hr_partition *hrp = hrt->hrt_partition;
 	struct list_head replies;
+	struct lu_env *env;
 	int rc;
+
+	OBD_ALLOC_PTR(env);
+	if (env == NULL)
+		RETURN(-ENOMEM);
 
 	INIT_LIST_HEAD(&replies);
 	unshare_fs_struct();
@@ -2886,6 +2891,15 @@ static int ptlrpc_hr_main(void *arg)
 		      threadname, hrp->hrp_cpt, ptlrpc_hr.hr_cpt_table, rc);
 	}
 
+	rc = lu_context_init(&env->le_ctx, LCT_MD_THREAD | LCT_DT_THREAD |
+			     LCT_REMEMBER | LCT_NOREF);
+	if (rc)
+		GOTO(out_env, rc);
+
+	rc = lu_env_add(env);
+	if (rc)
+		GOTO(out_ctx_fini, rc);
+
 	atomic_inc(&hrp->hrp_nstarted);
 	wake_up(&ptlrpc_hr.hr_waitq);
 
@@ -2899,13 +2913,22 @@ static int ptlrpc_hr_main(void *arg)
 					struct ptlrpc_reply_state,
 					rs_list);
 			list_del_init(&rs->rs_list);
+			/* refill keys if needed */
+			lu_env_refill(env);
+			lu_context_enter(&env->le_ctx);
 			ptlrpc_handle_rs(rs);
+			lu_context_exit(&env->le_ctx);
 		}
 	}
 
 	atomic_inc(&hrp->hrp_nstopped);
 	wake_up(&ptlrpc_hr.hr_waitq);
 
+	lu_env_remove(env);
+out_ctx_fini:
+	lu_context_fini(&env->le_ctx);
+out_env:
+	OBD_FREE_PTR(env);
 	return 0;
 }
 

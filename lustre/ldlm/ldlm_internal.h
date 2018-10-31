@@ -354,16 +354,13 @@ ldlm_add_var(struct lprocfs_vars *vars, struct dentry *debugfs_entry,
 
 static inline int is_granted_or_cancelled(struct ldlm_lock *lock)
 {
-        int ret = 0;
+	int ret = 0;
 
-        lock_res_and_lock(lock);
-	if (ldlm_is_granted(lock) && !ldlm_is_cp_reqd(lock))
-		ret = 1;
-	else if (ldlm_is_failed(lock) || ldlm_is_cancel(lock))
-                ret = 1;
-        unlock_res_and_lock(lock);
+	lock_res_and_lock(lock);
+	ret = is_granted_or_cancelled_nolock(lock);
+	unlock_res_and_lock(lock);
 
-        return ret;
+	return ret;
 }
 
 static inline bool is_bl_done(struct ldlm_lock *lock)

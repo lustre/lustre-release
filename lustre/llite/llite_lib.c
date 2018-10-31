@@ -226,7 +226,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				   OBD_CONNECT2_FLR |
 				   OBD_CONNECT2_LOCK_CONVERT |
 				   OBD_CONNECT2_ARCHIVE_ID_ARRAY |
-				   OBD_CONNECT2_LSOM;
+				   OBD_CONNECT2_LSOM |
+				   OBD_CONNECT2_ASYNC_DISCARD;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -2137,11 +2138,17 @@ void ll_delete_inode(struct inode *inode)
 	unsigned long nrpages;
 	ENTRY;
 
-	if (S_ISREG(inode->i_mode) && lli->lli_clob != NULL)
+	if (S_ISREG(inode->i_mode) && lli->lli_clob != NULL) {
 		/* It is last chance to write out dirty pages,
-		 * otherwise we may lose data while umount */
-		cl_sync_file_range(inode, 0, OBD_OBJECT_EOF, CL_FSYNC_LOCAL, 1);
-
+		 * otherwise we may lose data while umount.
+		 *
+		 * If i_nlink is 0 then just discard data. This is safe because
+		 * local inode gets i_nlink 0 from server only for the last
+		 * unlink, so that file is not opened somewhere else
+		 */
+		cl_sync_file_range(inode, 0, OBD_OBJECT_EOF, inode->i_nlink ?
+				   CL_FSYNC_LOCAL : CL_FSYNC_DISCARD, 1);
+	}
 	truncate_inode_pages_final(mapping);
 
 	/* Workaround for LU-118: Note nrpages may not be totally updated when

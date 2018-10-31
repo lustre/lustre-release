@@ -844,7 +844,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	struct mdt_lock_handle *child_lh;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo[0];
 	__u64 lock_ibits;
-	bool cos_incompat = false, discard = false;
+	bool cos_incompat = false;
 	int no_name = 0;
 	int rc;
 
@@ -1025,8 +1025,8 @@ relock:
 		rc = mdt_attr_get_complex(info, mc, ma);
 		if (rc)
 			GOTO(out_stat, rc);
-	} else {
-		discard = mdt_dom_check_for_discard(info, mc);
+	} else if (mdt_dom_check_for_discard(info, mc)) {
+		mdt_dom_discard_data(info, mc);
 	}
 	mdt_handle_last_unlink(info, mc, ma);
 
@@ -1060,13 +1060,6 @@ unlock_parent:
 	mdt_object_unlock(info, mp, parent_lh, rc);
 put_parent:
 	mdt_object_put(info->mti_env, mp);
-
-	/* discard is just a PW DOM lock to drop the data on a client
-	 * no need to keep objects being get and locked, do that after all.
-	 */
-	if (discard)
-		mdt_dom_discard_data(info, child_fid);
-
         return rc;
 }
 
@@ -2295,8 +2288,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	struct lu_fid *old_fid = &info->mti_tmp_fid1;
 	struct lu_fid *new_fid = &info->mti_tmp_fid2;
 	__u64 lock_ibits;
-	bool reverse = false;
-	bool cos_incompat, discard = false;
+	bool reverse = false, discard = false;
+	bool cos_incompat;
 	int rc;
 	ENTRY;
 
@@ -2619,7 +2612,6 @@ relock:
 			mdt_handle_last_unlink(info, mnew, ma);
 			discard = mdt_dom_check_for_discard(info, mnew);
 		}
-
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
 					 msrcdir, mtgtdir);
 	}
@@ -2630,7 +2622,7 @@ relock:
 out_unlock_old:
 	mdt_object_unlock(info, mold, lh_oldp, rc);
 out_put_new:
-	if (mnew != NULL)
+	if (mnew && !discard)
 		mdt_object_put(info->mti_env, mnew);
 out_put_old:
 	mdt_object_put(info->mti_env, mold);
@@ -2645,13 +2637,15 @@ out_put_tgtdir:
 out_put_srcdir:
 	mdt_object_put(info->mti_env, msrcdir);
 
-	/* If 'discard' is set then new_fid must exits.
-	 * DOM data discard need neither object nor lock,
-	 * so do this at the end.
+	/* The DoM discard can be done right in the place above where it is
+	 * assigned, meanwhile it is done here after rename unlock due to
+	 * compatibility with old clients, for them the discard blocks
+	 * the main thread until completion. Check LU-11359 for details.
 	 */
-	if (discard)
-		mdt_dom_discard_data(info, new_fid);
-
+	if (discard) {
+		mdt_dom_discard_data(info, mnew);
+		mdt_object_put(info->mti_env, mnew);
+	}
 	return rc;
 }
 

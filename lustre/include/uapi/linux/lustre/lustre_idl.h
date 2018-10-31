@@ -838,6 +838,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_LSOM		0x800ULL /* LSOM support */
 #define OBD_CONNECT2_PCC		0x1000ULL /* Persistent Client Cache */
 #define OBD_CONNECT2_PLAIN_LAYOUT	0x2000ULL /* Plain Directory Layout */
+#define OBD_CONNECT2_ASYNC_DISCARD	0x4000ULL /* support async DoM data discard */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
@@ -895,7 +896,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_LOCK_CONVERT | \
 				OBD_CONNECT2_ARCHIVE_ID_ARRAY | \
 				OBD_CONNECT2_SELINUX_POLICY | \
-				OBD_CONNECT2_LSOM)
+				OBD_CONNECT2_LSOM | \
+				OBD_CONNECT2_ASYNC_DISCARD)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
