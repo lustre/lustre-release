@@ -3059,7 +3059,7 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 				/* the only discarder is lock cancelling, so
 				 * [start, end] must contain this extent */
 				EASSERT(ext->oe_start >= start &&
-					ext->oe_max_end <= end, ext);
+					ext->oe_end <= end, ext);
 				osc_extent_state_set(ext, OES_LOCKING);
 				ext->oe_owner = current;
 				list_move_tail(&ext->oe_link,

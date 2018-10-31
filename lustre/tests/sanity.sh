@@ -17500,6 +17500,26 @@ test_271f() {
 }
 run_test 271f "DoM: read on open (200K file and read tail)"
 
+test_271g() {
+	[[ $($LCTL get_param mdc.*.import) =~ async_discard ]] ||
+		skip "Skipping due to old client or server version"
+
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
+	# to get layout
+	$CHECKSTAT -t file $DIR1/$tfile
+
+	$MULTIOP $DIR1/$tfile Ow40960_w4096c &
+	MULTIOP_PID=$!
+	sleep 1
+	#define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE
+	$LCTL set_param fail_loc=0x80000314
+	rm $DIR1/$tfile || error "Unlink fails"
+	RC=$?
+	kill -USR1 $MULTIOP_PID && wait $MULTIOP_PID || error "multiop failure"
+	[ $RC -eq 0 ] || error "Failed write to stale object"
+}
+run_test 271g "Discard DoM data vs client flush race"
+
 test_272a() {
 	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS version at least 2.11.50"

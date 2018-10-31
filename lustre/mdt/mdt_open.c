@@ -2245,7 +2245,6 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	int rc = 0;
 	u64 open_flags;
 	u64 intent;
-	bool discard = false;
 
 	ENTRY;
 
@@ -2329,7 +2328,8 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
 	if (!MFD_CLOSED(open_flags)) {
 		rc = mo_close(info->mti_env, next, ma, open_flags);
-		discard = mdt_dom_check_for_discard(info, o);
+		if (mdt_dom_check_for_discard(info, o))
+			mdt_dom_discard_data(info, o);
 	}
 
 	/* adjust open and lease count */
@@ -2340,9 +2340,6 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
 	mdt_mfd_free(mfd);
 	mdt_object_put(info->mti_env, o);
-
-	if (discard)
-		mdt_dom_discard_data(info, ofid);
 
 	RETURN(rc);
 }

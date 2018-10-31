@@ -607,6 +607,7 @@ check_obd_connect_data(void)
 	CHECK_DEFINE_64X(OBD_CONNECT2_ARCHIVE_ID_ARRAY);
 	CHECK_DEFINE_64X(OBD_CONNECT2_SELINUX_POLICY);
 	CHECK_DEFINE_64X(OBD_CONNECT2_LSOM);
+	CHECK_DEFINE_64X(OBD_CONNECT2_ASYNC_DISCARD);
 
 	CHECK_VALUE_X(OBD_CKSUM_CRC32);
 	CHECK_VALUE_X(OBD_CKSUM_ADLER);
@@ -2963,7 +2964,7 @@ main(int argc, char **argv)
 
 	check_lustre_cfg();
 
-	printf("}\n\n");
+	printf("}\n");
 
 	return 0;
 }

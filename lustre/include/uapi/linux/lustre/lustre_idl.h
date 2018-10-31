@@ -835,6 +835,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_ARCHIVE_ID_ARRAY	0x100ULL /* store HSM archive_id in array */
 #define OBD_CONNECT2_SELINUX_POLICY	0x400ULL /* has client SELinux policy */
 #define OBD_CONNECT2_LSOM		0x800ULL /* LSOM support */
+#define OBD_CONNECT2_ASYNC_DISCARD	0x4000ULL /* support async DoM data discard */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
@@ -891,7 +892,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_DIR_MIGRATE | \
 				OBD_CONNECT2_ARCHIVE_ID_ARRAY | \
 				OBD_CONNECT2_SELINUX_POLICY | \
-				OBD_CONNECT2_LSOM)
+				OBD_CONNECT2_LSOM | \
+				OBD_CONNECT2_ASYNC_DISCARD)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \

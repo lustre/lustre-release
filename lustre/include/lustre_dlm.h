@@ -1427,6 +1427,8 @@ static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
 	return ldlm_lvbo_update(res, NULL, req, increase);
 }
 
+int is_granted_or_cancelled_nolock(struct ldlm_lock *lock);
+
 int ldlm_error2errno(enum ldlm_error error);
 enum ldlm_error ldlm_errno2error(int err_no); /* don't call it `errno': this
 					       * confuses user-space. */
