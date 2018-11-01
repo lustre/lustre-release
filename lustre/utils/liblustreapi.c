@@ -59,6 +59,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
+#include <sys/sysmacros.h>
 #include <time.h>
 #include <fnmatch.h>
 #include <libgen.h> /* for dirname() */
@@ -1685,10 +1686,11 @@ static int common_param_init(struct find_param *param, char *path)
 		lum_size = PATH_MAX + 1;
 
 	param->fp_lum_size = lum_size;
-	param->fp_lmd = calloc(1, sizeof(lstat_t) + lum_size);
+	param->fp_lmd = calloc(1, offsetof(typeof(*param->fp_lmd), lmd_lmm) +
+			       lum_size);
 	if (param->fp_lmd == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
-			    "error: allocation of %zu bytes for ioctl",
+			    "error: allocate %zu bytes for layout failed",
 			    sizeof(lstat_t) + param->fp_lum_size);
 		return -ENOMEM;
 	}
@@ -1777,11 +1779,74 @@ again:
 	return ret;
 }
 
-int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
+static void convert_lmd_statx(struct lov_user_mds_data *lmd_v2, lstat_t *st,
+			      bool strict)
+{
+	memset(&lmd_v2->lmd_stx, 0, sizeof(lmd_v2->lmd_stx));
+	lmd_v2->lmd_stx.stx_blksize = st->st_blksize;
+	lmd_v2->lmd_stx.stx_nlink = st->st_nlink;
+	lmd_v2->lmd_stx.stx_uid = st->st_uid;
+	lmd_v2->lmd_stx.stx_gid = st->st_gid;
+	lmd_v2->lmd_stx.stx_mode = st->st_mode;
+	lmd_v2->lmd_stx.stx_ino = st->st_ino;
+	lmd_v2->lmd_stx.stx_size = st->st_size;
+	lmd_v2->lmd_stx.stx_blocks = st->st_blocks;
+	lmd_v2->lmd_stx.stx_atime.tv_sec = st->st_atime;
+	lmd_v2->lmd_stx.stx_ctime.tv_sec = st->st_ctime;
+	lmd_v2->lmd_stx.stx_mtime.tv_sec = st->st_mtime;
+	lmd_v2->lmd_stx.stx_rdev_major = major(st->st_rdev);
+	lmd_v2->lmd_stx.stx_rdev_minor = minor(st->st_rdev);
+	lmd_v2->lmd_stx.stx_dev_major = major(st->st_dev);
+	lmd_v2->lmd_stx.stx_dev_minor = minor(st->st_dev);
+	lmd_v2->lmd_stx.stx_mask |= STATX_BASIC_STATS;
+
+	lmd_v2->lmd_flags = 0;
+	if (strict) {
+		lmd_v2->lmd_flags |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+	} else {
+		lmd_v2->lmd_stx.stx_mask &= ~(STATX_SIZE | STATX_BLOCKS);
+		if (lmd_v2->lmd_stx.stx_size)
+			lmd_v2->lmd_flags |= OBD_MD_FLLAZYSIZE;
+		if (lmd_v2->lmd_stx.stx_blocks)
+			lmd_v2->lmd_flags |= OBD_MD_FLLAZYBLOCKS;
+	}
+	lmd_v2->lmd_flags |= OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+			     OBD_MD_FLBLKSZ | OBD_MD_FLMODE | OBD_MD_FLTYPE |
+			     OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLNLINK |
+			     OBD_MD_FLRDEV;
+
+}
+
+static int convert_lmdbuf_v1v2(void *lmdbuf, int lmdlen)
+{
+	struct lov_user_mds_data_v1 *lmd_v1 = lmdbuf;
+	struct lov_user_mds_data *lmd_v2 = lmdbuf;
+	lstat_t st;
+	int size;
+
+	size = lov_comp_md_size((struct lov_comp_md_v1 *)&lmd_v1->lmd_lmm);
+	if (size < 0)
+		return size;
+
+	if (lmdlen < sizeof(lmd_v1->lmd_st) + size)
+		return -EOVERFLOW;
+
+	st = lmd_v1->lmd_st;
+	memmove(&lmd_v2->lmd_lmm, &lmd_v1->lmd_lmm,
+		lmdlen - (&lmd_v2->lmd_lmm - &lmd_v1->lmd_lmm));
+	convert_lmd_statx(lmd_v2, &st, false);
+	lmd_v2->lmd_lmmsize = 0;
+	lmd_v2->lmd_padding = 0;
+
+	return 0;
+}
+
+int get_lmd_info_fd(const char *path, int parent_fd, int dir_fd,
 		    void *lmdbuf, int lmdlen, enum get_lmd_info_type type)
 {
 	struct lov_user_mds_data *lmd = lmdbuf;
-	lstat_t *st = &lmd->lmd_st;
+	static bool use_old_ioctl;
+	unsigned long cmd;
 	int ret = 0;
 
 	if (parent_fd < 0 && dir_fd < 0)
@@ -1794,11 +1859,24 @@ int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
 		 * and returns struct lov_user_mds_data, while
 		 * LL_IOC_LOV_GETSTRIPE returns only struct lov_user_md.
 		 */
-		ret = ioctl(dir_fd, type == GET_LMD_INFO ? LL_IOC_MDC_GETINFO :
-							   LL_IOC_LOV_GETSTRIPE,
-			    lmdbuf);
+		if (type == GET_LMD_INFO)
+			cmd = use_old_ioctl ? LL_IOC_MDC_GETINFO_OLD :
+					      LL_IOC_MDC_GETINFO;
+		else
+			cmd = LL_IOC_LOV_GETSTRIPE;
+
+retry_getinfo:
+		ret = ioctl(dir_fd, cmd, lmdbuf);
+		if (ret < 0 && errno == ENOTTY && cmd == LL_IOC_MDC_GETINFO) {
+			cmd = LL_IOC_MDC_GETINFO_OLD;
+			use_old_ioctl = true;
+			goto retry_getinfo;
+		}
+
+		if (cmd == LL_IOC_MDC_GETINFO_OLD && !ret)
+			ret = convert_lmdbuf_v1v2(lmdbuf, lmdlen);
 	} else if (parent_fd >= 0) {
-		char *fname = strrchr(path, '/');
+		const char *fname = strrchr(path, '/');
 
 		/* IOC_MDC_GETFILEINFO takes as input the filename (relative to
 		 * the parent directory) and returns struct lov_user_mds_data,
@@ -1818,24 +1896,48 @@ int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
 			errno = -ret;
 		else if (ret >= lmdlen || ret++ == 0)
 			errno = EINVAL;
-		else
-			ret = ioctl(parent_fd, type == GET_LMD_INFO ?
-						IOC_MDC_GETFILEINFO :
-						IOC_MDC_GETFILESTRIPE, lmdbuf);
+		else {
+			if (type == GET_LMD_INFO)
+				cmd = use_old_ioctl ? IOC_MDC_GETFILEINFO_OLD :
+						      IOC_MDC_GETFILEINFO;
+			else
+				cmd = IOC_MDC_GETFILESTRIPE;
+
+retry_getfileinfo:
+			ret = ioctl(parent_fd, cmd, lmdbuf);
+			if (ret < 0 && errno == ENOTTY &&
+			    cmd == IOC_MDC_GETFILEINFO) {
+				cmd = IOC_MDC_GETFILEINFO_OLD;
+				use_old_ioctl = true;
+				goto retry_getfileinfo;
+			}
+
+			if (cmd == IOC_MDC_GETFILEINFO_OLD && !ret)
+				ret = convert_lmdbuf_v1v2(lmdbuf, lmdlen);
+		}
 	}
 
 	if (ret && type == GET_LMD_INFO) {
 		if (errno == ENOTTY) {
+			lstat_t st;
+
 			/* ioctl is not supported, it is not a lustre fs.
 			 * Do the regular lstat(2) instead.
 			 */
-			ret = lstat_f(path, st);
+			ret = lstat_f(path, &st);
 			if (ret) {
 				ret = -errno;
 				llapi_error(LLAPI_MSG_ERROR, ret,
 					    "error: %s: lstat failed for %s",
 					    __func__, path);
 			}
+
+			convert_lmd_statx(lmd, &st, true);
+			/* It may be wrong to set use_old_ioctl with true as
+			 * the file is not a lustre fs. So reset it with false
+			 * directly here.
+			 */
+			use_old_ioctl = false;
 		} else if (errno == ENOENT) {
 			ret = -errno;
 			llapi_error(LLAPI_MSG_WARN, ret,
@@ -1917,12 +2019,12 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 		strcat(path, dent->d_name);
 
 		if (dent->d_type == DT_UNKNOWN) {
-			lstat_t *st = &param->fp_lmd->lmd_st;
+			lstatx_t *stx = &param->fp_lmd->lmd_stx;
 
 			rc = get_lmd_info(path, d, NULL, param->fp_lmd,
 					  param->fp_lum_size, GET_LMD_INFO);
 			if (rc == 0)
-				dent->d_type = IFTODT(st->st_mode);
+				dent->d_type = IFTODT(stx->stx_mode);
 			else if (ret == 0)
 				ret = rc;
 
@@ -3450,13 +3552,14 @@ struct lov_user_mds_data *lov_forge_comp_v1(struct lov_user_mds_data *orig,
 	int lum_size = lov_user_md_size(is_dir ? 0 : lum->lmm_stripe_count,
 					lum->lmm_magic);
 
-	new = malloc(sizeof(lstat_t) + lum_off + lum_size);
+	new = malloc(offsetof(typeof(*new), lmd_lmm) + lum_off + lum_size);
 	if (new == NULL) {
 		llapi_printf(LLAPI_MSG_NORMAL, "out of memory\n");
 		return new;
 	}
 
-	memcpy(new, orig, sizeof(lstat_t));
+	memcpy(new, orig, sizeof(new->lmd_stx) + sizeof(new->lmd_flags)
+	       + sizeof(new->lmd_lmmsize));
 
 	comp_v1 = (struct lov_comp_md_v1 *)&new->lmd_lmm;
 	comp_v1->lcm_magic = lum->lmm_magic;
@@ -3643,14 +3746,14 @@ int llapi_file_lookup(int dirfd, const char *name)
  *
  * If 0 is returned, we need to do another RPC to the OSTs to obtain the
  * updated timestamps. */
-static int find_time_check(lstat_t *st, struct find_param *param, int mds)
+static int find_time_check(lstatx_t *stx, struct find_param *param, int mds)
 {
 	int rc = 1;
 	int rc2;
 
 	/* Check if file is accepted. */
 	if (param->fp_atime) {
-		rc2 = find_value_cmp(st->st_atime, param->fp_atime,
+		rc2 = find_value_cmp(stx->stx_atime.tv_sec, param->fp_atime,
 				     param->fp_asign, param->fp_exclude_atime,
 				     24 * 60 * 60, mds);
 		if (rc2 < 0)
@@ -3659,7 +3762,7 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 	}
 
 	if (param->fp_mtime) {
-		rc2 = find_value_cmp(st->st_mtime, param->fp_mtime,
+		rc2 = find_value_cmp(stx->stx_mtime.tv_sec, param->fp_mtime,
 				     param->fp_msign, param->fp_exclude_mtime,
 				     24 * 60 * 60, mds);
 		if (rc2 < 0)
@@ -3672,7 +3775,7 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 	}
 
 	if (param->fp_ctime) {
-		rc2 = find_value_cmp(st->st_ctime, param->fp_ctime,
+		rc2 = find_value_cmp(stx->stx_ctime.tv_sec, param->fp_ctime,
 				     param->fp_csign, param->fp_exclude_ctime,
 				     24 * 60 * 60, mds);
 		if (rc2 < 0)
@@ -3697,13 +3800,13 @@ static int check_obd_match(struct find_param *param)
 	struct lov_user_ost_data_v1 *objects;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
-	lstat_t *st = &param->fp_lmd->lmd_st;
+	lstatx_t *stx = &param->fp_lmd->lmd_stx;
 	int i, j, k, count = 1;
 
 	if (param->fp_obd_uuid && param->fp_obd_index == OBD_NOT_FOUND)
 		return 0;
 
-	if (!S_ISREG(st->st_mode))
+	if (!S_ISREG(stx->stx_mode))
 		return 0;
 
 	/* Only those files should be accepted, which have a
@@ -3910,7 +4013,7 @@ static int find_check_pool(struct find_param *param)
 
 static int find_check_comp_options(struct find_param *param)
 {
-	lstat_t *st = &param->fp_lmd->lmd_st;
+	lstatx_t *stx = &param->fp_lmd->lmd_stx;
 	struct lov_comp_md_v1 *comp_v1, *forged_v1 = NULL;
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
 	struct lov_comp_md_entry_v1 *entry;
@@ -3925,7 +4028,7 @@ static int find_check_comp_options(struct find_param *param)
 		comp_v1 = forged_v1;
 		comp_v1->lcm_entry_count = 1;
 		entry = &comp_v1->lcm_entries[0];
-		entry->lcme_flags = S_ISDIR(st->st_mode) ? 0 : LCME_FL_INIT;
+		entry->lcme_flags = S_ISDIR(stx->stx_mode) ? 0 : LCME_FL_INIT;
 		entry->lcme_extent.e_start = 0;
 		entry->lcme_extent.e_end = LUSTRE_EOF;
 	}
@@ -4053,11 +4156,12 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	struct find_param *param = (struct find_param *)data;
 	DIR *dir = dirp == NULL ? NULL : *dirp;
 	int decision = 1; /* 1 is accepted; -1 is rejected. */
-	lstat_t *st = &param->fp_lmd->lmd_st;
+	lstatx_t *stx = &param->fp_lmd->lmd_stx;
 	int lustre_fs = 1;
 	int checked_type = 0;
 	int ret = 0;
 	__u32 stripe_count = 0;
+	__u64 flags;
 	int fd = -2;
 
 	if (parent == NULL && dir == NULL)
@@ -4131,7 +4235,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			if (dir != NULL) {
 				ret = llapi_file_fget_mdtidx(dirfd(dir),
 						     &param->fp_file_mdt_index);
-			} else if (S_ISREG(st->st_mode)) {
+			} else if (S_ISREG(stx->stx_mode)) {
 				/* FIXME: we could get the MDT index from the
 				 * file's FID in lmd->lmd_lmm.lmm_oi without
 				 * opening the file, once we are sure that
@@ -4165,7 +4269,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	}
 
 	if (param->fp_type && !checked_type) {
-		if ((st->st_mode & S_IFMT) == param->fp_type) {
+		if ((stx->stx_mode & S_IFMT) == param->fp_type) {
 			if (param->fp_exclude_type)
 				goto decided;
 		} else {
@@ -4177,7 +4281,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
         /* Prepare odb. */
 	if (param->fp_obd_uuid || param->fp_mdt_uuid) {
 		if (lustre_fs && param->fp_got_uuids &&
-		    param->fp_dev != st->st_dev) {
+		    param->fp_dev != makedev(stx->stx_dev_major,
+					     stx->stx_dev_minor)) {
 			/* A lustre/lustre mount point is crossed. */
 			param->fp_got_uuids = 0;
 			param->fp_obds_printed = 0;
@@ -4191,7 +4296,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			if (ret)
 				goto out;
 
-			param->fp_dev = st->st_dev;
+			param->fp_dev = makedev(stx->stx_dev_major,
+						stx->stx_dev_minor);
 		} else if (!lustre_fs && param->fp_got_uuids) {
 			/* A lustre/non-lustre mount point is crossed. */
 			param->fp_got_uuids = 0;
@@ -4271,7 +4377,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 
 obd_matches:
 	if (param->fp_check_uid) {
-		if (st->st_uid == param->fp_uid) {
+		if (stx->stx_uid == param->fp_uid) {
 			if (param->fp_exclude_uid)
 				goto decided;
 		} else {
@@ -4281,7 +4387,7 @@ obd_matches:
 	}
 
 	if (param->fp_check_gid) {
-		if (st->st_gid == param->fp_gid) {
+		if (stx->stx_gid == param->fp_gid) {
 			if (param->fp_exclude_gid)
 				goto decided;
 		} else {
@@ -4336,21 +4442,34 @@ obd_matches:
                 int for_mds;
 
 		for_mds = lustre_fs ?
-			(S_ISREG(st->st_mode) && stripe_count) : 0;
-                decision = find_time_check(st, param, for_mds);
-                if (decision == -1)
-                        goto decided;
-        }
+			(S_ISREG(stx->stx_mode) && stripe_count) : 0;
+		decision = find_time_check(stx, param, for_mds);
+		if (decision == -1)
+			goto decided;
+	}
 
-        /* If file still fits the request, ask ost for updated info.
-           The regular stat is almost of the same speed as some new
-           'glimpse-size-ioctl'. */
-
-	if ((param->fp_check_size || param->fp_check_blocks) &&
-	    ((S_ISREG(st->st_mode) && stripe_count) || S_ISDIR(st->st_mode)))
+	flags = param->fp_lmd->lmd_flags;
+	if (param->fp_check_size &&
+	    ((S_ISREG(stx->stx_mode) && stripe_count) ||
+	      S_ISDIR(stx->stx_mode)) &&
+	    !(flags & OBD_MD_FLSIZE ||
+	      (param->fp_lazy && flags & OBD_MD_FLLAZYSIZE)))
 		decision = 0;
 
+	if (param->fp_check_blocks &&
+	    ((S_ISREG(stx->stx_mode) && stripe_count) ||
+	      S_ISDIR(stx->stx_mode)) &&
+	    !(flags & OBD_MD_FLBLOCKS ||
+	      (param->fp_lazy && flags & OBD_MD_FLLAZYBLOCKS)))
+		decision = 0;
+
+	/* If file still fits the request, ask ost for updated info.
+	 * The regular stat is almost of the same speed as some new
+	 * 'glimpse-size-ioctl'.
+	 */
 	if (!decision) {
+		lstat_t st;
+
                 /* For regular files with the stripe the decision may have not
                  * been taken yet if *time or size is to be checked. */
 		if (param->fp_obd_index != OBD_NOT_FOUND)
@@ -4360,36 +4479,37 @@ obd_matches:
                         print_failed_tgt(param, path, LL_STATFS_LMV);
 
 		if (dir != NULL)
-			ret = fstat_f(dirfd(dir), st);
+			ret = fstat_f(dirfd(dir), &st);
 		else if (de != NULL)
-			ret = fstatat_f(dirfd(parent), de->d_name, st,
+			ret = fstatat_f(dirfd(parent), de->d_name, &st,
 					AT_SYMLINK_NOFOLLOW);
 		else
-			ret = lstat_f(path, st);
+			ret = lstat_f(path, &st);
 
-                if (ret) {
-                        if (errno == ENOENT) {
-                                llapi_error(LLAPI_MSG_ERROR, -ENOENT,
-                                            "warning: %s: %s does not exist",
-                                            __func__, path);
-                                goto decided;
-                        } else {
+		if (ret) {
+			if (errno == ENOENT) {
+				llapi_error(LLAPI_MSG_ERROR, -ENOENT,
+					    "warning: %s: %s does not exist",
+					    __func__, path);
+				goto decided;
+			} else {
 				ret = -errno;
 				llapi_error(LLAPI_MSG_ERROR, ret,
-					    "%s: IOC_LOV_GETINFO on %s failed",
+					    "%s: stat on %s failed",
 					    __func__, path);
 				goto out;
 			}
 		}
 
+		convert_lmd_statx(param->fp_lmd, &st, true);
 		/* Check the time on osc. */
-		decision = find_time_check(st, param, 0);
+		decision = find_time_check(stx, param, 0);
 		if (decision == -1)
 			goto decided;
 	}
 
 	if (param->fp_check_size) {
-		decision = find_value_cmp(st->st_size, param->fp_size,
+		decision = find_value_cmp(stx->stx_size, param->fp_size,
 					  param->fp_size_sign,
 					  param->fp_exclude_size,
 					  param->fp_size_units, 0);
@@ -4398,7 +4518,8 @@ obd_matches:
 	}
 
 	if (param->fp_check_blocks) { /* convert st_blocks to bytes */
-		decision = find_value_cmp(st->st_blocks * 512, param->fp_blocks,
+		decision = find_value_cmp(stx->stx_blocks * 512,
+					  param->fp_blocks,
 					  param->fp_blocks_sign,
 					  param->fp_exclude_blocks,
 					  param->fp_blocks_units, 0);

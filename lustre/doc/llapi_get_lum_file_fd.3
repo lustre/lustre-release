@@ -1,0 +1,164 @@
+.TH llapi_get_lum_file_fd 3 "2019 July 15" "Lustre User API"
+.SH NAME
+llapi_get_lum_file_fd, llapi_get_lum_dir_fd, llapi_get_lum_file,
+llapi_get_lum_dir \- get valid file attrbutes and LOV stripe information to
+the user.
+
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_get_lum_file_fd(int " dir_fd ", const char *" fname ",
+.BI "                          __u64 *" valid ", lstatx_t *" statx ",
+.BI "                          struct lov_user_md *" lum ",
+.BI "                          size_t " lumsize ");"
+.PP
+.BI "int llapi_get_lum_dir_fd(int " dir_fd ", __u64 *" valid ",
+.BI "                        lstatx_t *" statx ", struct lov_user_md *" lum ",
+.BI "                        size_t " lumsize ");"
+.PP
+.BI "int llapi_get_lum_file(const char *" path ", __u64 *" valid ",
+.BI "                       lstatx_t *" statx ", struct lov_user_md *" lum ",
+.BI "                       size_t " lumsize ");"
+.PP
+.BI "int llapi_get_lum_dir(const char *" path ", __u64 *" valid ",
+.BI "                      lstatx_t *" statx ", struct lov_user_md *" lum ",
+.BI "                      size_t " lumsize ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.BR llapi_get_lum_file_fd() ,
+.BR llapi_get_lum_dir_fd() ,
+.BR llapi_get_lum_file() ,
+and
+.BR llapi_get_lum_dir()
+returns file attributes and LOV stripe information by an ioctl on the dir.
+.BR dir_fd
+is a file descriptor that refers to a directory. For function
+.BR llapi_get_lum_file_fd() ,
+if
+.BR fname
+is provided, it is a relative pathname that is interpreted relative to the
+directory referred to by
+.BR dir_fd .
+
+The function
+.BR llapi_get_lum_dir_fd() ,
+.BR llapi_get_lum_file() ,
+and
+.BR llapi_get_lum_dir()
+can be used for applications that are only processing a single file or directory
+referred to by
+.BR dir_fd
+or
+.BR path .
+
+The function
+.BR llapi_get_lum_file_fd()
+can be used for applications that process lots of files. It avoids opening,
+locking, and closing each file on the client if that is not needed. Multiple
+calls of this llapi can be done on the parent dir referenced by
+.B dir_fd
+with a single open for all files in that directory, and it also does not
+pollute the client dcache with millions of dentries when traversing a large
+filesystem.
+
+The stripe information for the target file is returned to the user in the
+.B struct lov_user_md
+pointed to by
+.BR lum
+if it is not a NULL pointer. The file attribute information for the target file
+is returned in the
+.BR lstatx_t
+structure pointed to by
+.BR statx
+if it is not a NULL pointer.
+The output argument
+.BR valid
+contains the flags to indicate which fields in the returned file attributes
+have been valid filled in.
+
+The valid flags are as follows:
+.TP
+OBD_MD_FLSIZE
+The returned file size is known strictly correct.
+.TP
+OBD_MD_FLBLOCKS
+The returned file blocks is known strictly correct.
+.TP
+OBD_MD_FLLAZYSIZE
+The returned file size is approximate, may never have been strictly correct.
+.TP
+OBD_MD_FLLAZYBLOCKS
+The returned file blocks is approximate, may never have been strictly correct.
+.TP
+OBD_MD_FLID
+The returned object ID is valid.
+.TP
+OBD_MD_FLATIME
+The returned access time is valid.
+.TP
+OBD_MD_FLMTIME
+The returned data modification time is valid.
+.TP
+OBD_MD_FLCTIME
+The returned change time is valid.
+.TP
+OBD_MD_FLBLKSZ
+The returned block size is valid.
+.TP
+OBD_MD_FLMODE
+The returned access bits (mode & ~S_IFMT) is valid.
+.TP
+OBD_MD_FLTYPE
+The returned object type (mode & S_IFMT) is valid.
+.TP
+OBD_MD_FLUID
+The returned user ID is vaild.
+.TP
+OBD_MD_FLGID
+The returned group ID is valid.
+.TP
+OBD_MD_FLFLAGS
+The returned flags word is valid.
+.TP
+OBD_MD_FLNLINK
+The returned link count is valid.
+.TP
+OBD_MD_FLRDEV
+The returned device number is valid.
+.SH RETURN VALUES
+.LP
+.BR llapi_get_lum_file_fd() ,
+.BR llapi_get_lum_dir_fd() ,
+.BR llapi_get_lum_file() ,
+and
+.BR llapi_get_lum_dir()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EOPNOTSUPP
+The operation is not supported.
+.TP
+.SM -ENOTTY
+File does not reside on a Lustre filesystem.
+.TP
+.SM -ENOENT
+.I path
+does not exist.
+.TP
+.SM -EBADF
+.I dir_fd
+is not a valid open file descriptor.
+.SH "SEE ALSO"
+.BR lustreapi (7)

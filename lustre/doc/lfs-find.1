@@ -14,8 +14,11 @@ lfs-find \- Lustre client utility to list files with specific attributes
       [[\fB!\fR] \fB--mirror-state\fR <[^]\fIstate\fR>]
       [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
       [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
-[\fB--maxdepth\fR|\fB-D\fI n\fR]
-      [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR <\fIuuid\fR|\fIindex\fR,...>]
+[[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
+      [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
+[\fB--lazy\fR]
+      [\fB--maxdepth\fR|\fB-D\fI n\fR]
+[[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR <\fIuuid\fR|\fIindex\fR,...>]
       [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
 [[\fB!\fR] \fB--mdt-hash\fR|\fB-H <\fIhashtype\fR>]
       [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn\fR]
@@ -113,6 +116,14 @@ The mirrored file is in a state of being written.
 .B sp
 The mirrored file is in a state of being resynchronized.
 .RE
+.BR --foreign
+File has a foreign (non-Lustre/free format) layout and is of the given
+.IR type ,
+if specified.  Presently only
+.B none
+or
+.B daos
+are defined types, though 32-bit numeric types can also be used.
 .TP
 .BR --gid | -g
 File has specified numeric group ID.
@@ -133,6 +144,9 @@ HSM-archived files that are not resident in the filesystem.
 .B mdt
 Files that have the first data component on an MDT.
 .RE
+.TP
+.BR --lazy
+Use file size and blocks from MDT, if available, to avoid extra RPCs.
 .TP
 .BR --maxdepth
 Limits find to decend at most \fIn\fR levels of directory tree.
@@ -178,7 +192,6 @@ and replacement using
 Layout was created with the specified
 .I pool
 name.  For composite files, this may match the pool of any component.
-.TP
 .BR --print | -P
 Prints the file or directory name to standard output if it matches
 all specified parameters, one file per line with a trailing linefeed.

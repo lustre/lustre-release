@@ -5158,45 +5158,228 @@ test_56r() {
 	setup_56 $dir $NUMFILES $NUMDIRS
 
 	local expected=12
-	local cmd="$LFS find -size 0 -type f $dir"
+	local cmd="$LFS find -size 0 -type f -lazy $dir"
 	local nums=$($cmd | wc -l)
 
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
+	cmd="$LFS find -size 0 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
 	expected=0
+	cmd="$LFS find ! -size 0 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find ! -size 0 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
+
 	echo "test" > $dir/$tfile
 	echo "test2" > $dir/$tfile.2 && sync
 	expected=1
+	cmd="$LFS find -size 5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size 5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
+
 	expected=1
+	cmd="$LFS find -size +5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size +5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
+
 	expected=2
+	cmd="$LFS find -size +0 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size +0 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
+
 	expected=2
+	cmd="$LFS find ! -size -5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find ! -size -5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
+
 	expected=12
+	cmd="$LFS find -size -5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size -5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
 }
 run_test 56r "check lfs find -size works"
+
+test_56ra() {
+	local dir=$DIR/$tdir
+
+	[[ $OSC == "mdc" ]] && skip "DoM files" && return
+
+	setup_56 $dir $NUMFILES $NUMDIRS "-c 1"
+
+	cancel_lru_locks $OSC
+
+	local rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	local expected=12
+	local cmd="$LFS find -size 0 -type f -lazy $dir"
+	local nums=$($cmd | wc -l)
+
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	local rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_before -eq $rpcs_after ] ||
+		error "'$cmd' should not send glimpse RPCs to OST"
+	cmd="$LFS find -size 0 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+	$LCTL get_param osc.*.stats
+	[ $rpcs_after -eq $((rpcs_before + 12)) ] ||
+		error "'$cmd' should send 12 glimpse RPCs to OST"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	expected=0
+	cmd="$LFS find ! -size 0 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	$LCTL get_param mdc.*.stats
+	[ $rpcs_before -eq $rpcs_after ] ||
+		error "'$cmd' should not send glimpse RPCs to OST"
+	cmd="$LFS find ! -size 0 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+	[ $rpcs_after -eq $((rpcs_before + 12)) ] ||
+		error "'$cmd' should send 12 glimpse RPCs to OST"
+
+	echo "test" > $dir/$tfile
+	echo "test2" > $dir/$tfile.2 && sync
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	expected=1
+	cmd="$LFS find -size 5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_before -eq $rpcs_after ] ||
+		error "'$cmd' should not send glimpse RPCs to OST"
+	cmd="$LFS find -size 5 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
+		error "'$cmd' should send 14 glimpse RPCs to OST"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	expected=1
+	cmd="$LFS find -size +5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_before -eq $rpcs_after ] ||
+		error "'$cmd' should not send glimpse RPCs to OST"
+	cmd="$LFS find -size +5 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
+		error "'$cmd' should send 14 glimpse RPCs to OST"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	expected=2
+	cmd="$LFS find -size +0 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_before -eq $rpcs_after ] ||
+		error "'$cmd' should not send glimpse RPCs to OST"
+	cmd="$LFS find -size +0 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
+		error "'$cmd' should send 14 glimpse RPCs to OST"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	expected=2
+	cmd="$LFS find ! -size -5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_before -eq $rpcs_after ] ||
+		error "'$cmd' should not send glimpse RPCs to OST"
+	cmd="$LFS find ! -size -5 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
+		error "'$cmd' should send 14 glimpse RPCs to OST"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	expected=12
+	cmd="$LFS find -size -5 -type f -lazy $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_before -eq $rpcs_after ] ||
+		error "'$cmd' should not send glimpse RPCs to OST"
+	cmd="$LFS find -size -5 -type f $dir"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
+		error "'$cmd' should send 14 glimpse RPCs to OST"
+}
+run_test 56ra "check lfs find -size -lazy works for data on OSTs"
 
 test_56s() { # LU-611 #LU-9369
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "need at least 2 OSTs"
@@ -20534,7 +20717,7 @@ test_806() {
 	done
 	check_lsom_size $DIR/$tfile $size
 
-	# multi-client wirtes
+	# multi-client writes
 	num=$(get_node_count ${CLIENTS//,/ })
 	size=$(($num * $bs))
 	offset=0

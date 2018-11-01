@@ -1300,6 +1300,9 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_FLOSTLAYOUT   (0x0080000000000000ULL) /* contain ost_layout */
 #define OBD_MD_FLPROJID      (0x0100000000000000ULL) /* project ID */
 
+#define OBD_MD_FLLAZYSIZE    (0x0400000000000000ULL) /* Lazy size */
+#define OBD_MD_FLLAZYBLOCKS  (0x0800000000000000ULL) /* Lazy blocks */
+
 #define OBD_MD_FLALLQUOTA (OBD_MD_FLUSRQUOTA | \
 			   OBD_MD_FLGRPQUOTA | \
 			   OBD_MD_FLPRJQUOTA)

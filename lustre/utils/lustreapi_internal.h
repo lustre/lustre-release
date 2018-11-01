@@ -161,6 +161,8 @@ enum get_lmd_info_type {
 	GET_LMD_STRIPE = 2,
 };
 
-int get_lmd_info_fd(char *path, int parentfd, int dirfd,
+int get_lmd_info_fd(const char *path, int parentfd, int dirfd,
 		    void *lmd_buf, int lmd_len, enum get_lmd_info_type type);
+
+int lov_comp_md_size(struct lov_comp_md_v1 *lcm);
 #endif /* _LUSTREAPI_INTERNAL_H_ */
