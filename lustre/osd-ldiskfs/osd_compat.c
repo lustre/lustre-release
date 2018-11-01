@@ -1260,7 +1260,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 			if (unlikely(rc == -ENOENT))
 				rc = 0;
 		}
-		RETURN(rc);
+		if (rc)
+			RETURN(rc);
 	}
 
 	bh = osd_ldiskfs_find_entry(src_parent, &src_child->d_name, &de,

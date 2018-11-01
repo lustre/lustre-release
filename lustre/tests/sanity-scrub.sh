@@ -1142,10 +1142,10 @@ run_test 13 "OI scrub can rebuild missed /O entries"
 
 test_14() {
 	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs special test" && return
+		skip "ldiskfs special test"
 
 	check_mount_and_prep
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	#define OBD_FAIL_OSD_COMPAT_NO_ENTRY		0x196
 	do_facet ost1 $LCTL set_param fail_loc=0x196
@@ -1168,13 +1168,19 @@ test_14() {
 	mount_client $MOUNT || error "(5) Fail to start client!"
 
 	local LF_REPAIRED=$($SHOW_SCRUB_ON_OST |
-			    awk '/^lf_repa[ri]*ed/ { print $2 }')
+			    awk '/^lf_repa[ir]*ed/ { print $2 }')
 	[ $LF_REPAIRED -ge 1000 ] ||
 		error "(6) Some entry under /lost+found should be repaired"
 
 	ls -ail $DIR/$tdir > /dev/null || error "(7) ls should succeed"
+
+	stopall
+
+	echo "run e2fsck again after LFSCK"
+	run_e2fsck $(facet_host ost1) $(ostdevname 1) "-y" ||
+		error "(8) Fail to run e2fsck error"
 }
-run_test 14 "OI scrub can repair objects under lost+found"
+run_test 14 "OI scrub can repair OST objects under lost+found"
 
 test_15() {
 	local repaired

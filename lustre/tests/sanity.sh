@@ -19188,8 +19188,7 @@ run_test 408 "drop_caches should not hang due to page leaks"
 
 test_409()
 {
-	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	check_mount_and_prep
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
 	mkdir -p $DIR/$tdir || error "(0) Fail to mkdir"
 	$LFS mkdir -i 1 -c 2 $DIR/$tdir/foo || error "(1) Fail to mkdir"
@@ -19213,6 +19212,7 @@ test_409()
 	echo "Unlink hard links start at $(date)"
 	unlinkmany $DIR/$tdir/foo/${PREFIX}_ 1000 ||
 		error "(7) Fail to unlink"
+	echo "Unlink hard links finished at $(date)"
 }
 run_test 409 "Large amount of cross-MDTs hard links on the same file"
 

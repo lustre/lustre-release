@@ -627,8 +627,8 @@ static int osd_scrub_check_local_fldb(struct osd_thread_info *info,
 	 *	quite possible for FID-on-MDT. */
 	if (dev->od_is_ost)
 		return SCRUB_NEXT_OSTOBJ_OLD;
-	else
-		return 0;
+
+	return 0;
 }
 
 static int osd_scrub_get_fid(struct osd_thread_info *info,
@@ -636,8 +636,8 @@ static int osd_scrub_get_fid(struct osd_thread_info *info,
 			     struct lu_fid *fid, bool scrub)
 {
 	struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
-	int rc;
 	bool has_lma = false;
+	int rc;
 
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
 			 &info->oti_ost_attrs);
