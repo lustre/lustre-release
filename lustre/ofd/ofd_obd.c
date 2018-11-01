@@ -70,6 +70,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct nid_stat		*stats;
 	int			 rc;
+
 	ENTRY;
 
 	if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
@@ -84,7 +85,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 	stats = exp->exp_nid_stats;
 	stats->nid_stats = lprocfs_alloc_stats(LPROC_OFD_STATS_LAST,
 					       LPROCFS_STATS_FLAG_NOPERCPU);
-	if (stats->nid_stats == NULL)
+	if (!stats->nid_stats)
 		RETURN(-ENOMEM);
 
 	ofd_stats_counter_init(stats->nid_stats);
@@ -230,18 +231,14 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	if (!data)
 		RETURN(0);
 
-	CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: %#llx"
-	       " ocd_version: %x ocd_grant: %d ocd_index: %u"
-	       " ocd_group %u\n",
+	CDEBUG(D_RPCTRACE,
+	       "%s: cli %s/%p ocd_connect_flags: %#llx ocd_version: %x ocd_grant: %d ocd_index: %u ocd_group %u\n",
 	       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
 	       data->ocd_connect_flags, data->ocd_version,
 	       data->ocd_grant, data->ocd_index, data->ocd_group);
 
 	if (fed->fed_group != 0 && fed->fed_group != data->ocd_group) {
-		CWARN("!!! This export (nid %s) used object group %d "
-		      "earlier; now it's trying to use group %d!  This could "
-		      "be a bug in the MDS. Please report to "
-		      "https://jira.whamcloud.com/\n",
+		CWARN("!!! This export (nid %s) used object group %d earlier; now it's trying to use group %d!  This could be a bug in the MDS. Please report to https://jira.whamcloud.com/\n",
 		      obd_export_nid2str(exp), fed->fed_group,
 		      data->ocd_group);
 		RETURN(-EPROTO);
@@ -267,11 +264,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		if (data->ocd_brw_size > ofd->ofd_brw_size)
 			data->ocd_brw_size = ofd->ofd_brw_size;
 		if (data->ocd_brw_size == 0) {
-			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx"
-			       " ocd_version: %x ocd_grant: %d ocd_index: %u "
-			       "ocd_brw_size is unexpectedly zero, "
-			       "network data corruption?"
-			       "Refusing connection of this client\n",
+			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx ocd_version: %x ocd_grant: %d ocd_index: %u ocd_brw_size is unexpectedly zero, network data corruption? Refusing connection of this client\n",
 			       exp->exp_obd->obd_name,
 			       exp->exp_client_uuid.uuid,
 			       exp, data->ocd_connect_flags, data->ocd_version,
@@ -286,17 +279,21 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		/* client is reporting its page size, for future use */
 		exp->exp_target_data.ted_pagebits = data->ocd_grant_blkbits;
 		data->ocd_grant_blkbits  = ofd->ofd_lut.lut_tgd.tgd_blockbits;
-		/* ddp_inodespace may not be power-of-two value, eg. for ldiskfs
-		 * it's LDISKFS_DIR_REC_LEN(20) = 28. */
+		/*
+		 * ddp_inodespace may not be power-of-two value, eg. for ldiskfs
+		 * it's LDISKFS_DIR_REC_LEN(20) = 28.
+		 */
 		data->ocd_grant_inobits = fls(ddp->ddp_inodespace - 1);
 		/* ocd_grant_tax_kb is in 1K byte blocks */
 		data->ocd_grant_tax_kb = ddp->ddp_extent_tax >> 10;
 		data->ocd_grant_max_blks = ddp->ddp_max_extent_blks;
 	}
 
-	/* Save connect_data we have so far because tgt_grant_connect()
+	/*
+	 * Save connect_data we have so far because tgt_grant_connect()
 	 * uses it to calculate grant, and we want to save the client
-	 * version before it is overwritten by LUSTRE_VERSION_CODE. */
+	 * version before it is overwritten by LUSTRE_VERSION_CODE.
+	 */
 	exp->exp_connect_data = *data;
 	if (OCD_HAS_FLAG(data, GRANT))
 		tgt_grant_connect(env, exp, data, new_connection);
@@ -306,10 +303,8 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		int		       index = lsd->lsd_osd_index;
 
 		if (index != data->ocd_index) {
-			LCONSOLE_ERROR_MSG(0x136, "Connection from %s to index"
-					   " %u doesn't match actual OST index"
-					   " %u in last_rcvd file, bad "
-					   "configuration?\n",
+			LCONSOLE_ERROR_MSG(0x136,
+					   "Connection from %s to index %u doesn't match actual OST index %u in last_rcvd file, bad configuration?\n",
 					   obd_export_nid2str(exp), index,
 					   data->ocd_index);
 			RETURN(-EBADF);
@@ -317,8 +312,10 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		if (!(lsd->lsd_feature_compat & OBD_COMPAT_OST)) {
 			/* this will only happen on the first connect */
 			lsd->lsd_feature_compat |= OBD_COMPAT_OST;
-			/* sync is not needed here as tgt_client_new will
-			 * set exp_need_sync flag */
+			/*
+			 * sync is not needed here as tgt_client_new will
+			 * set exp_need_sync flag
+			 */
 			tgt_server_data_update(env, &ofd->ofd_lut, 0);
 		}
 	}
@@ -329,20 +326,22 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		ofd_mask_cksum_types(ofd, &data->ocd_cksum_types);
 
 		if (unlikely(data->ocd_cksum_types == 0)) {
-			CERROR("%s: Connect with checksum support but no "
-			       "ocd_cksum_types is set\n",
+			CERROR("%s: Connect with checksum support but no ocd_cksum_types is set\n",
 			       exp->exp_obd->obd_name);
 			RETURN(-EPROTO);
 		}
 
-		CDEBUG(D_RPCTRACE, "%s: cli %s supports cksum type %x, return "
-		       "%x\n", exp->exp_obd->obd_name, obd_export_nid2str(exp),
+		CDEBUG(D_RPCTRACE,
+		       "%s: cli %s supports cksum type %x, return %x\n",
+		       exp->exp_obd->obd_name, obd_export_nid2str(exp),
 		       cksum_types, data->ocd_cksum_types);
 	} else {
-		/* This client does not support OBD_CONNECT_CKSUM.
-		 * Report failure to negotiate checksum at connect */
-		CDEBUG(D_RPCTRACE, "%s: cli %s does not support "
-		       "OBD_CONNECT_CKSUM\n",
+		/*
+		 * This client does not support OBD_CONNECT_CKSUM.
+		 * Report failure to negotiate checksum at connect
+		 */
+		CDEBUG(D_RPCTRACE,
+		       "%s: cli %s does not support OBD_CONNECT_CKSUM\n",
 		       exp->exp_obd->obd_name, obd_export_nid2str(exp));
 	}
 
@@ -385,12 +384,12 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_connect_data *data,
 			     void *client_nid)
 {
-	struct ofd_device	*ofd;
-	int			 rc;
+	struct ofd_device *ofd;
+	int rc;
 
 	ENTRY;
 
-	if (exp == NULL || obd == NULL || cluuid == NULL)
+	if (!exp || !obd || !cluuid)
 		RETURN(-EINVAL);
 
 	rc = nodemap_add_member(*(lnet_nid_t *)client_nid, exp);
@@ -429,13 +428,14 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
 			   struct obd_connect_data *data, void *localdata)
 {
-	struct obd_export	*exp;
-	struct ofd_device	*ofd;
-	struct lustre_handle	 conn = { 0 };
-	int			 rc;
+	struct obd_export *exp;
+	struct ofd_device *ofd;
+	struct lustre_handle conn = { 0 };
+	int rc;
+
 	ENTRY;
 
-	if (_exp == NULL || obd == NULL || cluuid == NULL)
+	if (!_exp || !obd || !cluuid)
 		RETURN(-EINVAL);
 
 	ofd = ofd_dev(obd->obd_lu_dev);
@@ -447,13 +447,14 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	exp = class_conn2export(&conn);
 	LASSERT(exp != NULL);
 
-	if (localdata != NULL) {
+	if (localdata) {
 		rc = nodemap_add_member(*(lnet_nid_t *)localdata, exp);
 		if (rc != 0 && rc != -EEXIST)
 			GOTO(out, rc);
 	} else {
-		CDEBUG(D_HA, "%s: cannot find nodemap for client %s: "
-		       "nid is null\n", obd->obd_name, cluuid->uuid);
+		CDEBUG(D_HA,
+		       "%s: cannot find nodemap for client %s: nid is null\n",
+		       obd->obd_name, cluuid->uuid);
 	}
 
 	rc = ofd_parse_connect_data(env, exp, data, true);
@@ -498,9 +499,9 @@ out:
  */
 int ofd_obd_disconnect(struct obd_export *exp)
 {
-	struct ofd_device	*ofd = ofd_exp(exp);
-	struct lu_env		 env;
-	int			 rc;
+	struct ofd_device *ofd = ofd_exp(exp);
+	struct lu_env env;
+	int rc;
 
 	ENTRY;
 
@@ -582,8 +583,8 @@ static int ofd_destroy_export(struct obd_export *exp)
 	struct ofd_device *ofd = ofd_exp(exp);
 
 	if (exp->exp_target_data.ted_pending)
-		CERROR("%s: cli %s/%p has %lu pending on destroyed export"
-		       "\n", exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
+		CERROR("%s: cli %s/%p has %lu pending on destroyed export\n",
+		       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
 		       exp, exp->exp_target_data.ted_pending);
 
 	target_destroy_export(exp);
@@ -660,9 +661,9 @@ int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
  */
 static int ofd_obd_postrecov(struct obd_device *obd)
 {
-	struct lu_env		 env;
-	struct lu_device	*ldev = obd->obd_lu_dev;
-	int			 rc;
+	struct lu_env env;
+	struct lu_device *ldev = obd->obd_lu_dev;
+	int rc;
 
 	ENTRY;
 
@@ -703,7 +704,7 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 	ENTRY;
 
-	if (exp->exp_obd == NULL) {
+	if (!exp->exp_obd) {
 		CDEBUG(D_IOCTL, "invalid export %p\n", exp);
 		RETURN(-EINVAL);
 	}
@@ -712,7 +713,7 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		rc = tgt_adapt_sptlrpc_conf(class_exp2tgt(exp));
 	} else {
 		CERROR("%s: Unsupported key %s\n",
-		       exp->exp_obd->obd_name, (char*)key);
+		       exp->exp_obd->obd_name, (char *)key);
 		rc = -EOPNOTSUPP;
 	}
 	RETURN(rc);
@@ -739,15 +740,15 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 			__u32 keylen, void *key, __u32 *vallen, void *val)
 {
-	struct ofd_thread_info		*info;
-	struct ofd_device		*ofd;
-	struct ll_fiemap_info_key	*fm_key = key;
-	struct fiemap			*fiemap = val;
-	int				 rc = 0;
+	struct ofd_thread_info *info;
+	struct ofd_device *ofd;
+	struct ll_fiemap_info_key *fm_key = key;
+	struct fiemap *fiemap = val;
+	int rc = 0;
 
 	ENTRY;
 
-	if (exp->exp_obd == NULL) {
+	if (!exp->exp_obd) {
 		CDEBUG(D_IOCTL, "invalid client export %p\n", exp);
 		RETURN(-EINVAL);
 	}
@@ -764,7 +765,8 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 
 		rc = ofd_fiemap_get(env, ofd, &info->fti_fid, fiemap);
 	} else {
-		CERROR("%s: not supported key %s\n", ofd_name(ofd), (char*)key);
+		CERROR("%s: not supported key %s\n",
+		       ofd_name(ofd), (char *)key);
 		rc = -EOPNOTSUPP;
 	}
 
@@ -795,10 +797,10 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       struct obd_statfs *osfs, time64_t max_age, __u32 flags)
 {
-        struct obd_device	*obd = class_exp2obd(exp);
-	struct ofd_device	*ofd = ofd_exp(exp);
-	struct tg_grants_data	*tgd = &ofd->ofd_lut.lut_tgd;
-	int			 rc;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct ofd_device *ofd = ofd_exp(exp);
+	struct tg_grants_data *tgd = &ofd->ofd_lut.lut_tgd;
+	int rc;
 
 	ENTRY;
 
@@ -806,12 +808,14 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	if (unlikely(rc))
 		GOTO(out, rc);
 
-	/* at least try to account for cached pages.  its still racy and
+	/*
+	 * at least try to account for cached pages.  its still racy and
 	 * might be under-reporting if clients haven't announced their
-	 * caches with brw recently */
+	 * caches with brw recently
+	 */
 
-	CDEBUG(D_SUPER | D_CACHE, "blocks cached %llu granted %llu"
-	       " pending %llu free %llu avail %llu\n",
+	CDEBUG(D_SUPER | D_CACHE,
+	       "blocks cached %llu granted %llu pending %llu free %llu avail %llu\n",
 	       tgd->tgd_tot_dirty, tgd->tgd_tot_granted,
 	       tgd->tgd_tot_pending,
 	       osfs->os_bfree << tgd->tgd_blockbits,
@@ -821,8 +825,10 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 				 ((tgd->tgd_tot_dirty + tgd->tgd_tot_pending +
 				   osfs->os_bsize - 1) >> tgd->tgd_blockbits));
 
-	/* The QoS code on the MDS does not care about space reserved for
-	 * precreate, so take it out. */
+	/*
+	 * The QoS code on the MDS does not care about space reserved for
+	 * precreate, so take it out.
+	 */
 	if (exp_connect_flags(exp) & OBD_CONNECT_MDS) {
 		struct tg_export_data *ted;
 
@@ -851,11 +857,13 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 
 	if (obd->obd_self_export != exp && !exp_grant_param_supp(exp) &&
 	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
-		/* clients which don't support OBD_CONNECT_GRANT_PARAM
+		/*
+		 * clients which don't support OBD_CONNECT_GRANT_PARAM
 		 * should not see a block size > page size, otherwise
 		 * cl_lost_grant goes mad. Therefore, we emulate a 4KB (=2^12)
 		 * block size which is the biggest block size known to work
-		 * with all client's page size. */
+		 * with all client's page size.
+		 */
 		osfs->os_blocks <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bfree  <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bavail <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
@@ -892,13 +900,13 @@ out:
 static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa)
 {
-	struct ofd_thread_info	*info;
-	struct ofd_device	*ofd = ofd_exp(exp);
-	struct ldlm_namespace	*ns = ofd->ofd_namespace;
-	struct ldlm_resource	*res;
-	struct ofd_object	*fo;
-	struct lu_fid		*fid = &oa->o_oi.oi_fid;
-	int			 rc = 0;
+	struct ofd_thread_info *info;
+	struct ofd_device *ofd = ofd_exp(exp);
+	struct ldlm_namespace *ns = ofd->ofd_namespace;
+	struct ldlm_resource *res;
+	struct ofd_object *fo;
+	struct lu_fid *fid = &oa->o_oi.oi_fid;
+	int rc = 0;
 
 	ENTRY;
 
@@ -906,8 +914,10 @@ static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 
 	ost_fid_build_resid(fid, &info->fti_resid);
 
-	/* This would be very bad - accidentally truncating a file when
-	 * changing the time or similar - bug 12203. */
+	/*
+	 * This would be very bad - accidentally truncating a file when
+	 * changing the time or similar - bug 12203.
+	 */
 	if (oa->o_valid & OBD_MD_FLSIZE) {
 		static char mdsinum[48];
 
@@ -945,12 +955,15 @@ out_unlock:
 	ofd_object_put(env, fo);
 out:
 	if (rc == 0) {
-		/* we do not call this before to avoid lu_object_find() in
+		/*
+		 * we do not call this before to avoid lu_object_find() in
 		 *  ->lvbo_update() holding another reference on the object.
 		 * otherwise concurrent destroy can make the object unavailable
 		 * for 2nd lu_object_find() waiting for the first reference
-		 * to go... deadlock! */
-		res = ldlm_resource_get(ns, NULL, &info->fti_resid, LDLM_EXTENT, 0);
+		 * to go... deadlock!
+		 */
+		res = ldlm_resource_get(ns, NULL, &info->fti_resid,
+					LDLM_EXTENT, 0);
 		if (!IS_ERR(res)) {
 			ldlm_res_lvbo_update(env, res, NULL, 0);
 			ldlm_resource_putref(res);
@@ -991,8 +1004,10 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 	if (IS_ERR(fo))
 		RETURN(PTR_ERR(fo));
 
-	/* Tell the clients that the object is gone now and that they should
-	 * throw away any cached pages. */
+	/*
+	 * Tell the clients that the object is gone now and that they should
+	 * throw away any cached pages.
+	 */
 	ost_fid_build_resid(fid, &info->fti_resid);
 	rc = ldlm_cli_enqueue_local(env, ofd->ofd_namespace, &info->fti_resid,
 				    LDLM_EXTENT, &policy, LCK_PW, &flags,
@@ -1032,9 +1047,9 @@ int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 static int ofd_echo_destroy(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa)
 {
-	struct ofd_device	*ofd = ofd_exp(exp);
-	struct lu_fid		*fid = &oa->o_oi.oi_fid;
-	int			 rc = 0;
+	struct ofd_device *ofd = ofd_exp(exp);
+	struct lu_fid *fid = &oa->o_oi.oi_fid;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1082,14 +1097,14 @@ out:
 static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 			   struct obdo *oa)
 {
-	struct ofd_device	*ofd = ofd_exp(exp);
-	u64			 seq = ostid_seq(&oa->o_oi);
-	struct ofd_seq		*oseq;
-	long			 granted;
-	u64			 next_id;
+	struct ofd_device *ofd = ofd_exp(exp);
+	u64 seq = ostid_seq(&oa->o_oi);
+	struct ofd_seq *oseq;
+	long granted;
+	u64 next_id;
 	s64 diff = 1;
 	int rc = 0;
-	int			 count;
+	int count;
 
 	ENTRY;
 
@@ -1101,9 +1116,11 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 	CDEBUG(D_INFO, "ofd_create("DOSTID")\n", POSTID(&oa->o_oi));
 
 	down_read(&ofd->ofd_lastid_rwsem);
-	/* Currently, for safe, we do not distinguish which LAST_ID is broken,
+	/*
+	 * Currently, for safe, we do not distinguish which LAST_ID is broken,
 	 * we may do that in the future.
-	 * Return -ENOSPC until the LAST_ID rebuilt. */
+	 * Return -ENOSPC until the LAST_ID rebuilt.
+	 */
 	if (unlikely(ofd->ofd_lastid_rebuilding))
 		GOTO(out_sem, rc = -ENOSPC);
 
@@ -1123,8 +1140,9 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 	if (granted < 0) {
 		rc = granted;
 		granted = 0;
-		CDEBUG(D_HA, "%s: failed to acquire grant space for "
-		       "precreate (%lld): rc = %d\n", ofd_name(ofd), diff, rc);
+		CDEBUG(D_HA,
+		       "%s: failed to acquire grant space for precreate (%lld): rc = %d\n",
+		       ofd_name(ofd), diff, rc);
 		diff = 0;
 		GOTO(out, rc);
 	}
@@ -1175,11 +1193,11 @@ out_sem:
 static int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
 			    struct obdo *oa)
 {
-	struct ofd_device	*ofd = ofd_exp(exp);
-	struct ofd_thread_info	*info;
-	struct lu_fid		*fid = &oa->o_oi.oi_fid;
-	struct ofd_object	*fo;
-	int			 rc = 0;
+	struct ofd_device *ofd = ofd_exp(exp);
+	struct ofd_thread_info *info;
+	struct lu_fid *fid = &oa->o_oi.oi_fid;
+	struct ofd_object *fo;
+	int rc = 0;
 
 	ENTRY;
 
@@ -1228,21 +1246,21 @@ static int ofd_ioc_get_obj_version(const struct lu_env *env,
 				   struct ofd_device *ofd, void *karg)
 {
 	struct obd_ioctl_data *data = karg;
-	struct lu_fid	       fid;
-	struct ofd_object     *fo;
-	dt_obj_version_t       version;
-	int		       rc = 0;
+	struct lu_fid fid;
+	struct ofd_object *fo;
+	dt_obj_version_t version;
+	int rc = 0;
 
 	ENTRY;
 
-	if (data->ioc_inlbuf2 == NULL || data->ioc_inllen2 != sizeof(version))
+	if (!data->ioc_inlbuf2 || data->ioc_inllen2 != sizeof(version))
 		GOTO(out, rc = -EINVAL);
 
-	if (data->ioc_inlbuf1 != NULL && data->ioc_inllen1 == sizeof(fid)) {
+	if (data->ioc_inlbuf1 && data->ioc_inllen1 == sizeof(fid)) {
 		fid = *(struct lu_fid *)data->ioc_inlbuf1;
-	} else if (data->ioc_inlbuf3 != NULL &&
+	} else if (data->ioc_inlbuf3 &&
 		   data->ioc_inllen3 == sizeof(__u64) &&
-		   data->ioc_inlbuf4 != NULL &&
+		   data->ioc_inlbuf4 &&
 		   data->ioc_inllen4 == sizeof(__u64)) {
 		struct ost_id ostid = { };
 
@@ -1302,10 +1320,10 @@ out:
 static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			 void *karg, void __user *uarg)
 {
-	struct lu_env		 env;
-	struct ofd_device	*ofd = ofd_exp(exp);
-	struct obd_device	*obd = ofd_obd(ofd);
-	int			 rc;
+	struct lu_env env;
+	struct ofd_device *ofd = ofd_exp(exp);
+	struct obd_device *obd = ofd_obd(ofd);
+	int rc;
 
 	ENTRY;
 
@@ -1333,7 +1351,7 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		struct obd_ioctl_data *data = karg;
 		struct lfsck_start_param lsp;
 
-		if (unlikely(data == NULL)) {
+		if (unlikely(!data)) {
 			rc = -EINVAL;
 			break;
 		}
@@ -1349,7 +1367,7 @@ static int ofd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 		stop.ls_status = LS_STOPPED;
 		/* Old lfsck utils may pass NULL @stop. */
-		if (data->ioc_inlbuf1 == NULL)
+		if (!data->ioc_inlbuf1)
 			stop.ls_flags = 0;
 		else
 			stop.ls_flags =
@@ -1428,13 +1446,13 @@ static int ofd_ping(const struct lu_env *env, struct obd_export *exp)
  */
 static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 {
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	struct ofd_thread_info	*info;
-	struct lu_env		 env;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct ofd_thread_info *info;
+	struct lu_env env;
 #ifdef USE_HEALTH_CHECK_WRITE
-	struct thandle		*th;
+	struct thandle *th;
 #endif
-	int			 rc = 0;
+	int rc = 0;
 
 	/* obd_proc_read_health pass NULL env, we need real one */
 	rc = lu_env_init(&env, LCT_DT_THREAD);
@@ -1451,7 +1469,7 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 
 #ifdef USE_HEALTH_CHECK_WRITE
 	OBD_ALLOC(info->fti_buf.lb_buf, PAGE_SIZE);
-	if (info->fti_buf.lb_buf == NULL)
+	if (!info->fti_buf.lb_buf)
 		GOTO(out, rc = -ENOMEM);
 
 	info->fti_buf.lb_len = PAGE_SIZE;
@@ -1475,7 +1493,8 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 
 	OBD_FREE(info->fti_buf.lb_buf, PAGE_SIZE);
 
-	CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
+	CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",
+	       rc);
 #endif
 out:
 	lu_env_fini(&env);
