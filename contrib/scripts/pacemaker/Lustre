@@ -4,7 +4,7 @@
 # Description:  Manages Lustre server on a shared storage
 # Written by:   Gabriele Paciucci, Nathaniel Clark
 # Release Date: 28 February 2017
-# Release Version: 1.0.0
+# Release Version: 1.0.1
 # Copyright (c) 2017, Intel Corporation
 #
 # This program is free software; you can redistribute it and/or modify
@@ -37,7 +37,7 @@
 # USAGE
 
 usage() {
-    usage: $0 {start|stop|status|monitor|validate-all|meta-data}
+    echo "usage: $0 {start|stop|status|monitor|validate-all|meta-data}"
 }
 
 # META-DATA
@@ -47,7 +47,7 @@ meta_data() {
 <?xml version="1.0"?>
 <!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
 <resource-agent name="Lustre">
-<version>1.0.0</version>
+<version>1.0.1</version>
 <longdesc lang="en">
 This script manages Lustre Targets (MGT, MDT, OST).
 The script is able to mount/umount Lustre Targets.
@@ -98,7 +98,9 @@ lustre_is_mounted () {
     # Verify if this is consistent, check pointpoint and filesystem
     # against source (i.e. device)
     local dev=$(findmnt -t lustre -ln -o SOURCE -T $(realpath "$OCF_RESKEY_mountpoint"))
-    [ "$dev" == "$OCF_RESKEY_target" ]
+
+    [ -n "$dev" ] &&
+    [ "$dev" == "$OCF_RESKEY_target" -o "$dev" == $(realpath "$OCF_RESKEY_target") ]
 }
 
 lustre_monitor () {
@@ -126,6 +128,7 @@ lustre_mount () {
 	ocf_log err "$OCF_RESKEY_volume mount failed"
 	return $OCF_ERR_GENERIC
     fi
+    return $OCF_SUCCESS
 }
 
 lustre_umount () {
@@ -139,6 +142,7 @@ lustre_umount () {
 	ocf_log err "$OCF_RESKEY_target unmount failed"
 	return $OCF_ERR_GENERIC
     fi
+    return $OCF_SUCCESS
 }
 
 all_start () {
@@ -162,7 +166,7 @@ all_stop () {
 }
 
 validate () {
-    if [ ! -d "$OCF_RESKEY_mountpoint" ]; then
+    if [ ! -d "$(realpath $OCF_RESKEY_mountpoint)" ]; then
 	ocf_log err "$OCF_RESKEY_mountpoint can not be found"
 	return $OCF_ERR_INSTALLED
     fi
