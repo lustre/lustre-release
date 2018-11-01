@@ -126,38 +126,78 @@ mds# lctl set_param osp.<replaceable>fsname</replaceable>-OST<replaceable>nnnn</
 </screen>
     </section>
     <section remap="h3">
-      <title>
-      <indexterm>
+      <title><indexterm>
         <primary>migrating metadata</primary>
-      </indexterm>Migrating Directories to a new MDT</title>
-      <para condition='l28'>Lustre software version 2.8 includes a feature
-      to migrate metadata (directories and inodes therein) between MDTs.
-      This migration can only be performed on whole directories. For example,
-      to migrate the contents of the <literal>/testfs/testremote</literal>
-      directory from the MDT it currently resides on to MDT0000, the
-      sequence of commands is as follows:</para>
-      <screen>$ cd /testfs
-lfs getdirstripe -M ./testremote <lineannotation>which MDT is dir on?</lineannotation>
+      </indexterm>Migrating Metadata within a Filesystem</title>
+      <section remap="h3" condition='l28'>
+        <title><indexterm>
+          <primary>migrating metadata</primary>
+        </indexterm>Whole Directory Migration</title>
+        <para>Lustre software version 2.8 includes a feature
+          to migrate metadata (directories and inodes therein) between MDTs.
+          This migration can only be performed on whole directories. Striped
+          directories are not supported until Lustre 2.12. For example, to
+          migrate the contents of the <literal>/testfs/remotedir</literal>
+          directory from the MDT where it currently is located to MDT0000 to
+          allow that MDT to be removed, the sequence of commands is as follows:
+        </para>
+        <screen>$ cd /testfs
+$ lfs getdirstripe -m ./remotedir <lineannotation>which MDT is dir on?</lineannotation>
 1
-$ for i in $(seq 3); do touch ./testremote/${i}.txt; done <lineannotation>create test files</lineannotation>
-$ for i in $(seq 3); do lfs getstripe -M ./testremote/${i}.txt; done <lineannotation>check files are on MDT 1</lineannotation>
+$ touch ./remotedir/file.{1,2,3}.txt<lineannotation>create test files</lineannotation>
+$ lfs getstripe -m ./remotedir/file.*.txt<lineannotation>check files are on MDT0001</lineannotation>
 1
 1
 1
-$ lfs migrate -m 0 ./testremote <lineannotation>migrate testremote to MDT 0</lineannotation>
-$ lfs getdirstripe -M ./testremote <lineannotation>which MDT is dir on now?</lineannotation>
+$ lfs migrate -m 0 ./remotedir <lineannotation>migrate testremote to MDT0000</lineannotation>
+$ lfs getdirstripe -m ./remotedir <lineannotation>which MDT is dir on now?</lineannotation>
 0
-$ for i in $(seq 3); do lfs getstripe -M ./testremote/${i}.txt; done <lineannotation>check files are on MDT 0 too</lineannotation>
+$ lfs getstripe -m ./remotedir/file.*.txt<lineannotation>check files are on MDT0000</lineannotation>
 0
 0
 0</screen>
-      <para>For more information, see <literal>man lfs-migrate</literal></para>
-      <warning><para>Currently, only whole directories can be migrated
-      between MDTs. During migration each file receives a new identifier
-      (FID). As a consequence, the file will report a new inode number. Some
-      system tools (for example, backup and archiving tools) may consider
-      the migrated files to be new, even though the contents are unchanged.
-      </para></warning>
+        <para>For more information, see <literal>man lfs-migrate</literal>.
+        </para>
+         <warning><para>During migration each file receives a new identifier
+           (FID). As a consequence, the file will report a new inode number to
+           userspace applications. Some system tools (for example, backup and
+           archiving tools, NFS, Samba) that identify files by inode number may
+           consider the migrated files to be new, even though the contents are
+           unchanged.  If a Lustre system is re-exporting to NFS, the migrated
+           files may become inaccessible during and after migration if the
+           client or server are caching a stale file handle with the old FID.
+           Restarting the NFS service will flush the local file handle cache,
+           but clients may also need to be restarted as they may cache stale
+           file handles as well.
+        </para></warning>
+      </section>
+      <section remap="h3" condition='l2C'>
+        <title><indexterm>
+          <primary>migrating metadata</primary>
+        </indexterm>Striped Directory Migration</title>
+        <para>Lustre 2.8 included a feature to migrate metadata (directories
+          and inodes therein) between MDTs, however it did not support migration
+          of striped directories, or changing the stripe count of an existing
+          directory. Lustre 2.12 adds support for migrating and restriping
+          directories. The <literal>lfs migrate -m</literal> command can only
+          only be performed on whole directories, though it will migrate both
+          the specified directory and its sub-entries recursively.
+          For example, to migrate the contents of a large directory
+          <literal>/testfs/largedir</literal> from its current location on
+          MDT0000 to MDT0001 and MDT0003, run the following command:</para>
+          <screen>$ lfs migrate -m 1,3 /testfs/largedir</screen>
+        <para>Metadata migration will migrate file dirent and inode to other
+          MDTs, but it won't touch file data.  During migration, directory and
+          its sub-files can be accessed like normal ones, though the same
+          warning above applies to tools that depend on the file inode number.
+          Migration may fail for various reasons such as MDS restart, or disk
+          full.  In those cases, some of the sub-files may have been migrated to
+          the new MDTs, while others are still on the original MDT.  The files
+          can be accessed normally. The same <literal>lfs migrate -m</literal>
+          command should be executed again when these issues are fixed to finish
+          this migration.  However, you cannot abort a failed migration, or
+          migrate to different MDTs from previous migration command.</para>
+      </section>
     </section>
   </section>
   <section xml:id="dbdoclet.50438211_75549">
