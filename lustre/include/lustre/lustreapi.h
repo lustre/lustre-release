@@ -273,7 +273,8 @@ struct find_param {
 				 fp_check_foreign:1,
 				 fp_exclude_foreign:1,
 				 fp_check_ext_size:1, /* extension size */
-				 fp_exclude_ext_size:1;
+				 fp_exclude_ext_size:1,
+				 fp_lazy:1;
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;
@@ -403,6 +404,16 @@ int llapi_fid2path(const char *device, const char *fidstr, char *path,
 int llapi_path2fid(const char *path, struct lu_fid *fid);
 int llapi_get_mdt_index_by_fid(int fd, const struct lu_fid *fid,
 			       int *mdt_index);
+int llapi_get_lum_file(const char *path, __u64 *valid, lstatx_t *statx,
+		       struct lov_user_md *lum, size_t lumsize);
+int llapi_get_lum_dir(const char *path, __u64 *valid, lstatx_t *statx,
+		      struct lov_user_md *lum, size_t lumsize);
+int llapi_get_lum_file_fd(int dir_fd, const char *fname, __u64 *valid,
+			  lstatx_t *statx, struct lov_user_md *lum,
+			  size_t lumsize);
+int llapi_get_lum_dir_fd(int dir_fd, __u64 *valid, lstatx_t *statx,
+			 struct lov_user_md *lum, size_t lumsize);
+
 int llapi_fd2fid(int fd, struct lu_fid *fid);
 /* get FID of parent dir + the related name of entry in this parent dir */
 int llapi_path2parent(const char *path, unsigned int linkno,

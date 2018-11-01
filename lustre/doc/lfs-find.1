@@ -14,8 +14,11 @@ lfs-find \- Lustre client utility to list files with specific attributes
       [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
       [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
       [[\fB!\fR] \fB--foreign\fR [<\fItype\fR>]]
-[\fB--maxdepth\fR|\fB-D\fI n\fR]
-      [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR <\fIuuid\fR|\fIindex\fR,...>]
+[[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
+      [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
+[\fB--lazy\fR]
+      [\fB--maxdepth\fR|\fB-D\fI n\fR]
+[[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR <\fIuuid\fR|\fIindex\fR,...>]
       [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
 [[\fB!\fR] \fB--mdt-hash\fR|\fB-H <\fIhashtype\fR>]
       [[\fB!\fR] \fB--mirror-count|\fB-N\fR [\fB+-\fR]\fIn\fR]
@@ -24,7 +27,6 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [[\fB!\fR] \fB--name\fR|\fB-n <\fIpattern\fR>]
       [[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIindex\fR,...>]
 [[\fB!\fR] \fB--pool\fR <\fIpool\fR>]
-[[\fB!\fR] \fB--foreign\fR [<\fItype\fR>]]
 [\fB--print\fR|\fB-P\fR]
       [\fB--print0\fR|\fB-0\fR]
 [[\fB!\fR] \fB--projid\fR |<\fIprojid\fR>]
@@ -104,6 +106,15 @@ local on the network to clients.
 .BR --component-start | --comp-start
 The file has component start offset \fIn\fR (in bytes) for any component.
 .TP
+.BR --foreign
+File has a foreign (non-Lustre/free format) layout and is of the given
+.IR type ,
+if specified.  Presently only
+.B none
+or
+.B daos
+are defined types, though 32-bit numeric types can also be used.
+.TP
 .BR --gid | -g
 File has specified numeric group ID.
 .TP
@@ -124,10 +135,8 @@ HSM-archived files that are not resident in the filesystem.
 Files that have the first data component on an MDT.
 .RE
 .TP
-.BR --foreign[=<type>]
-File is foreign (non-Lustre layout) and is of type if specified.
-Presently only none or daos are defined types.
-.RE
+.BR --lazy
+Use file size and blocks from MDT, if available, to avoid extra RPCs.
 .TP
 .BR --maxdepth
 Limits find to decend at most \fIn\fR levels of directory tree.
@@ -199,16 +208,6 @@ and replacement using
 Layout was created with the specified
 .I pool
 name.  For composite files, this may match the pool of any component.
-.TP
-.BR --foreign[=<type>]
-Directory striping format is foreign (non-Lustre/free format) and is of type
-.BR <type>
-if specified. Presently only
-.BR none
-or
-.BR daos
-are defined types , though 32-bit numeric types can also be used.
-.TP
 .BR --print | -P
 Prints the file or directory name to standard output if it matches
 all specified parameters, one file per line with a trailing linefeed.

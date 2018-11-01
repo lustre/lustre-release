@@ -3313,3 +3313,119 @@ int llapi_layout_dom_size(struct llapi_layout *layout, uint64_t *size)
 	return 0;
 }
 
+int lov_comp_md_size(struct lov_comp_md_v1 *lcm)
+{
+	if (lcm->lcm_magic == LOV_MAGIC_V1 || lcm->lcm_magic == LOV_MAGIC_V3) {
+		struct lov_user_md *lum = (void *)lcm;
+
+		return lov_user_md_size(lum->lmm_stripe_count, lum->lmm_magic);
+	}
+
+	if (lcm->lcm_magic == LOV_MAGIC_FOREIGN) {
+		struct lov_foreign_md *lfm = (void *)lcm;
+
+		return lfm->lfm_length;
+	}
+
+	if (lcm->lcm_magic != LOV_MAGIC_COMP_V1)
+		return -EOPNOTSUPP;
+
+	return lcm->lcm_size;
+}
+
+int llapi_get_lum_file_fd(int dir_fd, const char *fname, __u64 *valid,
+			  lstatx_t *statx, struct lov_user_md *lum,
+			  size_t lumsize)
+{
+	struct lov_user_mds_data *lmd;
+	char buf[65536 + offsetof(typeof(*lmd), lmd_lmm)];
+	int parent_fd = -1;
+	int rc;
+
+	if (lum && lumsize < sizeof(*lum))
+		return -EINVAL;
+
+	/* If a file name is provided, it is relative to the parent directory */
+	if (fname) {
+		parent_fd = dir_fd;
+		dir_fd = -1;
+	}
+
+	lmd = (struct lov_user_mds_data *)buf;
+	rc = get_lmd_info_fd(fname, parent_fd, dir_fd, buf, sizeof(buf),
+			     GET_LMD_INFO);
+	if (rc)
+		return rc;
+
+	*valid = lmd->lmd_flags;
+	if (statx)
+		memcpy(statx, &lmd->lmd_stx, sizeof(*statx));
+
+	if (lum) {
+		if (lmd->lmd_lmmsize > lumsize)
+			return -EOVERFLOW;
+		memcpy(lum, &lmd->lmd_lmm, lmd->lmd_lmmsize);
+	}
+
+	return 0;
+}
+
+int llapi_get_lum_dir_fd(int dir_fd, __u64 *valid, lstatx_t *statx,
+			 struct lov_user_md *lum, size_t lumsize)
+{
+	return llapi_get_lum_file_fd(dir_fd, NULL, valid, statx, lum, lumsize);
+}
+
+int llapi_get_lum_file(const char *path, __u64 *valid, lstatx_t *statx,
+		       struct lov_user_md *lum, size_t lumsize)
+{
+	char parent[PATH_MAX];
+	const char *fname;
+	char *tmp;
+	int offset;
+	int dir_fd;
+	int rc;
+
+	tmp = strrchr(path, '/');
+	if (!tmp) {
+		strncpy(parent, ".", sizeof(parent) - 1);
+		offset = -1;
+	} else {
+		strncpy(parent, path, tmp - path);
+		offset = tmp - path - 1;
+		parent[tmp - path] = 0;
+	}
+
+	fname = path;
+	if (offset >= 0)
+		fname += offset + 2;
+
+	dir_fd = open(parent, O_RDONLY);
+	if (dir_fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'", path);
+		return rc;
+	}
+
+	rc = llapi_get_lum_file_fd(dir_fd, fname, valid, statx, lum, lumsize);
+	close(dir_fd);
+	return rc;
+}
+
+int llapi_get_lum_dir(const char *path, __u64 *valid, lstatx_t *statx,
+		      struct lov_user_md *lum, size_t lumsize)
+{
+	int dir_fd;
+	int rc;
+
+	dir_fd = open(path, O_RDONLY);
+	if (dir_fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'", path);
+		return rc;
+	}
+
+	rc = llapi_get_lum_dir_fd(dir_fd, valid, statx, lum, lumsize);
+	close(dir_fd);
+	return rc;
+}

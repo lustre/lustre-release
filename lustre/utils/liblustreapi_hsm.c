@@ -81,7 +81,7 @@ struct hsm_copyaction_private {
 	__s32					 data_fd;
 	const struct hsm_copytool_private	*ct_priv;
 	struct hsm_copy				 copy;
-	lstat_t					 stat;
+	lstatx_t				 statx;
 };
 
 enum ct_progress_type {
@@ -996,7 +996,7 @@ static int ct_open_by_fid(const struct hsm_copytool_private *ct,
  */
 static int ct_md_getattr(const struct hsm_copytool_private *ct,
 			 const struct lu_fid *fid,
-			 lstat_t *st)
+			 lstatx_t *stx)
 {
 	struct lov_user_mds_data *lmd;
 	char fname[FID_NOBRACE_LEN + 1] = "";
@@ -1009,11 +1009,11 @@ static int ct_md_getattr(const struct hsm_copytool_private *ct,
 	if (rc >= sizeof(fname) || rc == 0)
 		return -EINVAL;
 
-	lmd_size = sizeof(lmd->lmd_st) +
+	lmd_size = offsetof(typeof(*lmd), lmd_lmm) +
 		lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
 
-	if (lmd_size < sizeof(lmd->lmd_st) + XATTR_SIZE_MAX)
-		lmd_size = sizeof(lmd->lmd_st) + XATTR_SIZE_MAX;
+	if (lmd_size < offsetof(typeof(*lmd), lmd_lmm) + XATTR_SIZE_MAX)
+		lmd_size = offsetof(typeof(*lmd), lmd_lmm) + XATTR_SIZE_MAX;
 
 	lmd = malloc(lmd_size);
 	if (lmd == NULL)
@@ -1024,7 +1024,7 @@ static int ct_md_getattr(const struct hsm_copytool_private *ct,
 	if (rc)
 		goto out;
 
-	*st = lmd->lmd_st;
+	*stx = lmd->lmd_stx;
 out:
 	free(lmd);
 
@@ -1060,7 +1060,7 @@ static int create_restore_volatile(struct hsm_copyaction_private *hcp,
 	if (fd < 0)
 		return fd;
 
-	rc = fchown(fd, hcp->stat.st_uid, hcp->stat.st_gid);
+	rc = fchown(fd, hcp->statx.stx_uid, hcp->statx.stx_gid);
 	if (rc < 0)
 		goto err_cleanup;
 
@@ -1130,7 +1130,7 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 
 		hcp->source_fd = fd;
 	} else if (hai->hai_action == HSMA_RESTORE) {
-		rc = ct_md_getattr(hcp->ct_priv, &hai->hai_fid, &hcp->stat);
+		rc = ct_md_getattr(hcp->ct_priv, &hai->hai_fid, &hcp->statx);
 		if (rc < 0)
 			goto err_out;
 
@@ -1229,12 +1229,12 @@ int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
 
 	if (hai->hai_action == HSMA_RESTORE && errval == 0) {
 		struct ll_futimes_3 lfu = {
-			.lfu_atime_sec = hcp->stat.st_atim.tv_sec,
-			.lfu_atime_nsec = hcp->stat.st_atim.tv_nsec,
-			.lfu_mtime_sec = hcp->stat.st_mtim.tv_sec,
-			.lfu_mtime_nsec = hcp->stat.st_mtim.tv_nsec,
-			.lfu_ctime_sec = hcp->stat.st_ctim.tv_sec,
-			.lfu_ctime_nsec = hcp->stat.st_ctim.tv_nsec,
+			.lfu_atime_sec = hcp->statx.stx_atime.tv_sec,
+			.lfu_atime_nsec = hcp->statx.stx_atime.tv_nsec,
+			.lfu_mtime_sec = hcp->statx.stx_mtime.tv_sec,
+			.lfu_mtime_nsec = hcp->statx.stx_mtime.tv_nsec,
+			.lfu_ctime_sec = hcp->statx.stx_ctime.tv_sec,
+			.lfu_ctime_nsec = hcp->statx.stx_ctime.tv_nsec,
 		};
 
 		rc = fsync(hcp->data_fd);

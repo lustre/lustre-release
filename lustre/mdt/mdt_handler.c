@@ -801,10 +801,15 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 		} else if (info->mti_som_valid) { /* som is valid */
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+		} else if (ma->ma_valid & MA_SOM) { /* lsom is valid */
+			b->mbo_valid |= OBD_MD_FLLAZYSIZE | OBD_MD_FLLAZYBLOCKS;
+			b->mbo_size = ma->ma_som.ms_size;
+			b->mbo_blocks = ma->ma_som.ms_blocks;
 		}
 	}
 
-	if (fid != NULL && (b->mbo_valid & OBD_MD_FLSIZE))
+	if (fid != NULL && (b->mbo_valid & OBD_MD_FLSIZE ||
+			    b->mbo_valid & OBD_MD_FLLAZYSIZE))
 		CDEBUG(D_VFSTRACE, DFID": returning size %llu\n",
 		       PFID(fid), (unsigned long long)b->mbo_size);
 
