@@ -1665,7 +1665,7 @@ static int common_param_init(struct find_param *param, char *path)
 		lum_size = PATH_MAX + 1;
 
 	param->fp_lum_size = lum_size;
-	param->fp_lmd = calloc(1, sizeof(lstat_t) + lum_size);
+	param->fp_lmd = calloc(1, sizeof(lstat_t) + sizeof(__u64) + lum_size);
 	if (param->fp_lmd == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
 			    "error: allocation of %zu bytes for ioctl",
@@ -1771,11 +1771,32 @@ again:
 	return ret;
 }
 
+static int convert_lmdbuf_v1v2(void *lmdbuf, int lmdlen)
+{	struct lov_user_mds_data *lmd = lmdbuf;
+	struct lov_user_mds_data_v1 *lmd_v1;
+	int offset;
+
+	lmd_v1 = malloc(lmdlen);
+	if (lmd_v1 == NULL) {
+		llapi_printf(LLAPI_MSG_ERROR, "out of memory\n");
+		return -ENOMEM;
+	}
+
+	memcpy(lmd_v1, lmdbuf, lmdlen);
+	lmd->lmd_flags = 0;
+	offset = sizeof(lstat_t) + sizeof(__u64);
+	memcpy((char *)lmdbuf + offset, &lmd_v1->lmd_lmm, lmdlen - offset);
+	free(lmd_v1);
+	return 0;
+}
+
 int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
 		    void *lmdbuf, int lmdlen, enum get_lmd_info_type type)
 {
 	struct lov_user_mds_data *lmd = lmdbuf;
 	lstat_t *st = &lmd->lmd_st;
+	static bool use_old_ioctl;
+	unsigned long cmd;
 	int ret = 0;
 
 	if (parent_fd < 0 && dir_fd < 0)
@@ -1788,9 +1809,22 @@ int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
 		 * and returns struct lov_user_mds_data, while
 		 * LL_IOC_LOV_GETSTRIPE returns only struct lov_user_md.
 		 */
-		ret = ioctl(dir_fd, type == GET_LMD_INFO ? LL_IOC_MDC_GETINFO :
-							   LL_IOC_LOV_GETSTRIPE,
-			    lmdbuf);
+		if (type == GET_LMD_INFO)
+			cmd = use_old_ioctl ? LL_IOC_MDC_GETINFO_OLD :
+					      LL_IOC_MDC_GETINFO;
+		else
+			cmd = LL_IOC_LOV_GETSTRIPE;
+
+retry_getinfo:
+		ret = ioctl(dir_fd, cmd, lmdbuf);
+		if (ret < 0 && errno == ENOTTY && cmd == LL_IOC_MDC_GETINFO) {
+			cmd = LL_IOC_MDC_GETINFO_OLD;
+			use_old_ioctl = true;
+			goto retry_getinfo;
+		}
+
+		if (cmd == LL_IOC_MDC_GETINFO_OLD && !ret)
+			ret = convert_lmdbuf_v1v2(lmdbuf, lmdlen);
 	} else if (parent_fd >= 0) {
 		char *fname = strrchr(path, '/');
 
@@ -1812,10 +1846,25 @@ int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
 			errno = -ret;
 		else if (ret >= lmdlen || ret++ == 0)
 			errno = EINVAL;
-		else
-			ret = ioctl(parent_fd, type == GET_LMD_INFO ?
-						IOC_MDC_GETFILEINFO :
-						IOC_MDC_GETFILESTRIPE, lmdbuf);
+		else {
+			if (type == GET_LMD_INFO)
+				cmd = use_old_ioctl ? IOC_MDC_GETFILEINFO_OLD :
+						      IOC_MDC_GETFILEINFO;
+			else
+				cmd = IOC_MDC_GETFILESTRIPE;
+
+retry_getfileinfo:
+			ret = ioctl(parent_fd, cmd, lmdbuf);
+			if (ret < 0 && errno == ENOTTY &&
+			    cmd == IOC_MDC_GETFILEINFO) {
+				cmd = IOC_MDC_GETFILEINFO_OLD;
+				use_old_ioctl = true;
+				goto retry_getfileinfo;
+			}
+
+			if (cmd == IOC_MDC_GETFILEINFO_OLD && !ret)
+				ret = convert_lmdbuf_v1v2(lmdbuf, lmdlen);
+		}
 	}
 
 	if (ret && type == GET_LMD_INFO) {
@@ -1830,6 +1879,12 @@ int get_lmd_info_fd(char *path, int parent_fd, int dir_fd,
 					    "error: %s: lstat failed for %s",
 					    __func__, path);
 			}
+
+			/* It may be wrong to set use_old_ioctl with true as
+			 * the file is not a lustre fs. So reset it with false
+			 * directly here.
+			 */
+			use_old_ioctl = false;
 		} else if (errno == ENOENT) {
 			ret = -errno;
 			llapi_error(LLAPI_MSG_WARN, ret,
@@ -4052,6 +4107,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	int checked_type = 0;
 	int ret = 0;
 	__u32 stripe_count = 0;
+	__u64 flags;
 	int fd = -2;
 
 	if (parent == NULL && dir == NULL)
@@ -4331,17 +4387,27 @@ obd_matches:
 
 		for_mds = lustre_fs ?
 			(S_ISREG(st->st_mode) && stripe_count) : 0;
-                decision = find_time_check(st, param, for_mds);
-                if (decision == -1)
-                        goto decided;
-        }
+		decision = find_time_check(st, param, for_mds);
+		if (decision == -1)
+			goto decided;
+	}
 
-        /* If file still fits the request, ask ost for updated info.
-           The regular stat is almost of the same speed as some new
-           'glimpse-size-ioctl'. */
+	/* If file still fits the request, ask ost for updated info.
+	 * The regular stat is almost of the same speed as some new
+	 * 'glimpse-size-ioctl'.
+	 */
 
-	if ((param->fp_check_size || param->fp_check_blocks) &&
-	    ((S_ISREG(st->st_mode) && stripe_count) || S_ISDIR(st->st_mode)))
+	flags = param->fp_lmd->lmd_flags;
+	if (param->fp_check_size &&
+	    ((S_ISREG(st->st_mode) && stripe_count) || S_ISDIR(st->st_mode)) &&
+	    !(flags & OBD_MD_FLSIZE ||
+	      (param->fp_lazy && flags & OBD_MD_FLLSIZE)))
+		decision = 0;
+
+	if (param->fp_check_blocks &&
+	    ((S_ISREG(st->st_mode) && stripe_count) || S_ISDIR(st->st_mode)) &&
+	    !(flags & OBD_MD_FLBLOCKS ||
+	      (param->fp_lazy && flags & OBD_MD_FLLBLOCKS)))
 		decision = 0;
 
 	if (!decision) {
@@ -4361,16 +4427,16 @@ obd_matches:
 		else
 			ret = lstat_f(path, st);
 
-                if (ret) {
-                        if (errno == ENOENT) {
-                                llapi_error(LLAPI_MSG_ERROR, -ENOENT,
-                                            "warning: %s: %s does not exist",
-                                            __func__, path);
-                                goto decided;
-                        } else {
+		if (ret) {
+			if (errno == ENOENT) {
+				llapi_error(LLAPI_MSG_ERROR, -ENOENT,
+					    "warning: %s: %s does not exist",
+					    __func__, path);
+				goto decided;
+			} else {
 				ret = -errno;
 				llapi_error(LLAPI_MSG_ERROR, ret,
-					    "%s: IOC_LOV_GETINFO on %s failed",
+					    "%s: stat on %s failed",
 					    __func__, path);
 				goto out;
 			}

@@ -3616,6 +3616,7 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
 /* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
 /* getstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
+	{ .val = 'z',	.name = "lazy",		.has_arg = no_argument },
 	{ .name = NULL } };
         int pathstart = -1;
         int pathend = -1;
@@ -3629,7 +3630,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-			"-0A:b:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:v",
+			"-0A:b:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz",
 			long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -4108,6 +4109,9 @@ err_free:
 			}
 			param.fp_check_mdt_count = 1;
 			param.fp_exclude_mdt_count = !!neg_opt;
+			break;
+		case 'z':
+			param.fp_lazy = 1;
 			break;
                 default:
                         ret = CMD_HELP;

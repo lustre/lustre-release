@@ -1569,38 +1569,45 @@ out_rmdir:
 	case LL_IOC_LOV_GETSTRIPE:
 	case LL_IOC_LOV_GETSTRIPE_NEW:
 	case LL_IOC_MDC_GETINFO:
+	case LL_IOC_MDC_GETINFO_OLD:
 	case IOC_MDC_GETFILEINFO:
+	case IOC_MDC_GETFILEINFO_OLD:
 	case IOC_MDC_GETFILESTRIPE: {
 		struct ptlrpc_request *request = NULL;
 		struct lov_user_md __user *lump;
-                struct lov_mds_md *lmm = NULL;
-                struct mdt_body *body;
-                char *filename = NULL;
-                int lmmsize;
+		struct lov_mds_md *lmm = NULL;
+		struct mdt_body *body;
+		char *filename = NULL;
+		lstat_t __user *statp = NULL;
+		__u64 __user *flags = NULL;
+		int lmmsize;
 
-                if (cmd == IOC_MDC_GETFILEINFO ||
-                    cmd == IOC_MDC_GETFILESTRIPE) {
+		if (cmd == IOC_MDC_GETFILEINFO_OLD ||
+		    cmd == IOC_MDC_GETFILEINFO ||
+		    cmd == IOC_MDC_GETFILESTRIPE) {
 			filename = ll_getname((const char __user *)arg);
-                        if (IS_ERR(filename))
-                                RETURN(PTR_ERR(filename));
+			if (IS_ERR(filename))
+				RETURN(PTR_ERR(filename));
 
-                        rc = ll_lov_getstripe_ea_info(inode, filename, &lmm,
-                                                      &lmmsize, &request);
+			rc = ll_lov_getstripe_ea_info(inode, filename, &lmm,
+						      &lmmsize, &request);
 		} else {
 			rc = ll_dir_getstripe(inode, (void **)&lmm, &lmmsize,
 					      &request, 0);
 		}
 
-                if (request) {
-                        body = req_capsule_server_get(&request->rq_pill,
-                                                      &RMF_MDT_BODY);
-                        LASSERT(body != NULL);
-                } else {
-                        GOTO(out_req, rc);
-                }
+		if (request) {
+			body = req_capsule_server_get(&request->rq_pill,
+						      &RMF_MDT_BODY);
+			LASSERT(body != NULL);
+		} else {
+			GOTO(out_req, rc);
+		}
 
 		if (rc == -ENODATA && (cmd == IOC_MDC_GETFILEINFO ||
-				       cmd == LL_IOC_MDC_GETINFO)) {
+				       cmd == LL_IOC_MDC_GETINFO ||
+				       cmd == IOC_MDC_GETFILEINFO_OLD ||
+				       cmd == LL_IOC_MDC_GETINFO_OLD)) {
 			lmmsize = 0;
 			rc = 0;
 		}
@@ -1612,11 +1619,21 @@ out_rmdir:
 		    cmd == LL_IOC_LOV_GETSTRIPE ||
 		    cmd == LL_IOC_LOV_GETSTRIPE_NEW) {
 			lump = (struct lov_user_md __user *)arg;
-                } else {
+		} else if (cmd == IOC_MDC_GETFILEINFO_OLD ||
+			   cmd == LL_IOC_MDC_GETINFO_OLD){
+			struct lov_user_mds_data_v1 __user *lmdp;
+
+			lmdp = (struct lov_user_mds_data_v1 __user *)arg;
+			statp = &lmdp->lmd_st;
+			lump = &lmdp->lmd_lmm;
+		} else {
 			struct lov_user_mds_data __user *lmdp;
+
 			lmdp = (struct lov_user_mds_data __user *)arg;
-                        lump = &lmdp->lmd_lmm;
-                }
+			statp = &lmdp->lmd_st;
+			flags = &lmdp->lmd_flags;
+			lump = &lmdp->lmd_lmm;
+		}
 
 		if (lmmsize == 0) {
 			/* If the file has no striping then zero out *lump so
@@ -1629,9 +1646,10 @@ out_rmdir:
 			rc = -EOVERFLOW;
 		}
 
-                if (cmd == IOC_MDC_GETFILEINFO || cmd == LL_IOC_MDC_GETINFO) {
-			struct lov_user_mds_data __user *lmdp;
-                        lstat_t st = { 0 };
+		if (cmd == IOC_MDC_GETFILEINFO || cmd == LL_IOC_MDC_GETINFO ||
+		    cmd == IOC_MDC_GETFILEINFO_OLD ||
+		    cmd == LL_IOC_MDC_GETINFO_OLD) {
+			lstat_t st = { 0 };
 
 			st.st_dev	= inode->i_sb->s_dev;
 			st.st_mode	= body->mbo_mode;
@@ -1649,9 +1667,27 @@ out_rmdir:
 						sbi->ll_flags &
 						LL_SBI_32BIT_API);
 
-			lmdp = (struct lov_user_mds_data __user *)arg;
-			if (copy_to_user(&lmdp->lmd_st, &st, sizeof(st)))
+			if (copy_to_user(statp, &st, sizeof(st)))
                                 GOTO(out_req, rc = -EFAULT);
+
+			if (cmd == IOC_MDC_GETFILEINFO ||
+			    cmd == LL_IOC_MDC_GETINFO) {
+				__u64 valid = body->mbo_valid;
+
+				/*
+				 * For a striped directory, do not return
+				 * the valid FLSIZE and FLBLOCKS flags to
+				 * the caller.
+				 */
+				if (cmd == LL_IOC_MDC_GETINFO &&
+				    ll_i2info(inode)->lli_lsm_md != NULL)
+					valid &= ~(OBD_MD_FLSIZE |
+						   OBD_MD_FLBLOCKS);
+
+				if (flags && copy_to_user(flags, &valid,
+							  sizeof(*flags)))
+					GOTO(out_req, rc = -EFAULT);
+			}
                 }
 
                 EXIT;
