@@ -103,15 +103,16 @@ EXPORT_SYMBOL(fld_server_create);
 /**
  * Extract index information from fld name like srv-fsname-MDT0000
  **/
-int fld_name_to_index(const char *name, __u32 *index)
+int fld_name_to_index(const char *name, u32 *index)
 {
 	char *dash;
 	int rc;
+
 	ENTRY;
 
 	CDEBUG(D_INFO, "get index from %s\n", name);
 	dash = strrchr(name, '-');
-	if (dash == NULL)
+	if (!dash)
 		RETURN(-EINVAL);
 	dash++;
 	rc = target_name2index(dash, index, NULL);
@@ -124,17 +125,20 @@ int fld_name_to_index(const char *name, __u32 *index)
 int fld_update_from_controller(const struct lu_env *env,
 			       struct lu_server_fld *fld)
 {
-	struct fld_thread_info	  *info;
-	struct lu_seq_range	  *range;
+	struct fld_thread_info *info;
+	struct lu_seq_range *range;
 	struct lu_seq_range_array *lsra;
-	__u32			  index;
-	struct ptlrpc_request	  *req;
-	int			  rc;
-	int			  i;
+	u32 index;
+	struct ptlrpc_request *req;
+	int rc;
+	int i;
+
 	ENTRY;
 
-	/* Update only happens during initalization, i.e. local FLDB
-	 * does not exist yet */
+	/*
+	 * Update only happens during initalization, i.e. local FLDB
+	 * does not exist yet
+	 */
 	if (!fld->lsf_new)
 		RETURN(0);
 
@@ -162,7 +166,7 @@ int fld_update_from_controller(const struct lu_env *env,
 		LASSERT(req != NULL);
 		lsra = (struct lu_seq_range_array *)req_capsule_server_get(
 					  &req->rq_pill, &RMF_GENERIC_DATA);
-		if (lsra == NULL)
+		if (!lsra)
 			GOTO(out, rc = -EPROTO);
 
 		range_array_le_to_cpu(lsra, lsra);
@@ -188,7 +192,7 @@ int fld_update_from_controller(const struct lu_env *env,
 
 	fld->lsf_new = 1;
 out:
-	if (req != NULL)
+	if (req)
 		ptlrpc_req_finished(req);
 
 	RETURN(rc);
@@ -204,6 +208,7 @@ int fld_local_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 	struct lu_seq_range *erange;
 	struct fld_thread_info *info;
 	int rc;
+
 	ENTRY;
 
 	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
@@ -215,9 +220,9 @@ int fld_local_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 	if (rc == 0) {
 		if (unlikely(fld_range_type(erange) != fld_range_type(range) &&
 			     !fld_range_is_any(range))) {
-			CERROR("%s: FLD cache range "DRANGE" does not match"
-			       "requested flag %x: rc = %d\n", fld->lsf_name,
-			       PRANGE(erange), range->lsr_flags, -EIO);
+			CERROR("%s: FLD cache range "DRANGE" does not match requested flag %x: rc = %d\n",
+			       fld->lsf_name, PRANGE(erange), range->lsr_flags,
+			       -EIO);
 			RETURN(-EIO);
 		}
 		*range = *erange;
@@ -237,8 +242,9 @@ EXPORT_SYMBOL(fld_local_lookup);
 int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		      u64 seq, struct lu_seq_range *range)
 {
-	__u32 index;
+	u32 index;
 	int rc;
+
 	ENTRY;
 
 	rc = fld_local_lookup(env, fld, seq, range);
@@ -250,18 +256,21 @@ int fld_server_lookup(const struct lu_env *env, struct lu_server_fld *fld,
 		RETURN(rc);
 
 	if (index == 0 && rc == LDD_F_SV_TYPE_MDT) {
-		/* On server side, all entries should be in cache.
-		 * If we can not find it in cache, just return error */
+		/*
+		 * On server side, all entries should be in cache.
+		 * If we can not find it in cache, just return error
+		 */
 		CERROR("%s: Cannot find sequence %#llx: rc = %d\n",
 		       fld->lsf_name, seq, -ENOENT);
 		RETURN(-ENOENT);
 	} else {
-		if (fld->lsf_control_exp == NULL) {
-			CERROR("%s: lookup %#llx, but not connects to MDT0"
-			       "yet: rc = %d.\n", fld->lsf_name, seq, -EIO);
+		if (!fld->lsf_control_exp) {
+			CERROR("%s: lookup %#llx, but not connects to MDT0 yet: rc = %d.\n",
+			       fld->lsf_name, seq, -EIO);
 			RETURN(-EIO);
 		}
-		/* send request to mdt0 i.e. super seq. controller.
+		/*
+		 * send request to mdt0 i.e. super seq. controller.
 		 * This is temporary solution, long term solution is fld
 		 * replication on all mdt servers.
 		 */
@@ -281,17 +290,17 @@ EXPORT_SYMBOL(fld_server_lookup);
  */
 static int fld_handle_lookup(struct tgt_session_info *tsi)
 {
-	struct obd_export	*exp = tsi->tsi_exp;
-	struct lu_site		*site = exp->exp_obd->obd_lu_dev->ld_site;
-	struct lu_server_fld	*fld;
-	struct lu_seq_range	*in;
-	struct lu_seq_range	*out;
-	int			rc;
+	struct obd_export *exp = tsi->tsi_exp;
+	struct lu_site *site = exp->exp_obd->obd_lu_dev->ld_site;
+	struct lu_server_fld *fld;
+	struct lu_seq_range *in;
+	struct lu_seq_range *out;
+	int rc;
 
 	ENTRY;
 
 	in = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
-	if (in == NULL)
+	if (!in)
 		RETURN(err_serious(-EPROTO));
 
 	rc = req_capsule_server_pack(tsi->tsi_pill);
@@ -299,7 +308,7 @@ static int fld_handle_lookup(struct tgt_session_info *tsi)
 		RETURN(err_serious(rc));
 
 	out = req_capsule_server_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
-	if (out == NULL)
+	if (!out)
 		RETURN(err_serious(-EPROTO));
 	*out = *in;
 
@@ -315,18 +324,18 @@ static int fld_handle_lookup(struct tgt_session_info *tsi)
 
 static int fld_handle_read(struct tgt_session_info *tsi)
 {
-	struct obd_export	*exp = tsi->tsi_exp;
-	struct lu_site		*site = exp->exp_obd->obd_lu_dev->ld_site;
-	struct lu_seq_range	*in;
-	void			*data;
-	int			rc;
+	struct obd_export *exp = tsi->tsi_exp;
+	struct lu_site *site = exp->exp_obd->obd_lu_dev->ld_site;
+	struct lu_seq_range *in;
+	void *data;
+	int rc;
 
 	ENTRY;
 
 	req_capsule_set(tsi->tsi_pill, &RQF_FLD_READ);
 
 	in = req_capsule_client_get(tsi->tsi_pill, &RMF_FLD_MDFLD);
-	if (in == NULL)
+	if (!in)
 		RETURN(err_serious(-EPROTO));
 
 	req_capsule_set_size(tsi->tsi_pill, &RMF_GENERIC_DATA, RCL_SERVER,
@@ -365,12 +374,13 @@ static int fld_handle_query(struct tgt_session_info *tsi)
  * fid_is_local() is supposed to be used in assertion checks only.
  */
 int fid_is_local(const struct lu_env *env,
-                 struct lu_site *site, const struct lu_fid *fid)
+		 struct lu_site *site, const struct lu_fid *fid)
 {
 	int result;
 	struct seq_server_site *ss_site;
 	struct lu_seq_range *range;
 	struct fld_thread_info *info;
+
 	ENTRY;
 
 	info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
@@ -378,7 +388,7 @@ int fid_is_local(const struct lu_env *env,
 
 	result = 1; /* conservatively assume fid is local */
 	ss_site = lu_site2seq(site);
-	if (ss_site->ss_client_fld != NULL) {
+	if (ss_site->ss_client_fld) {
 		int rc;
 
 		rc = fld_cache_lookup(ss_site->ss_client_fld->lcf_cache,
@@ -469,7 +479,7 @@ void fld_server_fini(const struct lu_env *env, struct lu_server_fld *fld)
 	fld_server_debugfs_fini(fld);
 	fld_index_fini(env, fld);
 
-	if (fld->lsf_cache != NULL) {
+	if (fld->lsf_cache) {
 		if (!IS_ERR(fld->lsf_cache))
 			fld_cache_fini(fld->lsf_cache);
 		fld->lsf_cache = NULL;
