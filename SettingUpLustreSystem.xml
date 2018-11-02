@@ -221,7 +221,7 @@
         </indexterm> Determining MDT Space Requirements</title>
       <para>When calculating the MDT size, the important factor to consider
       is the number of files to be stored in the file system, which depends on
-      at least 4 KiB per inode of usable space on the MDT.  Since MDTs typically
+      at least 2 KiB per inode of usable space on the MDT.  Since MDTs typically
       use RAID-1+0 mirroring, the total storage needed will be double this.
       </para>
       <para>Please note that the actual used space per MDT depends on the number
@@ -230,41 +230,50 @@
       storage required for Lustre file system metadata is typically 1-2
       percent of the total file system capacity depending upon file size.
       If the <xref linkend="dataonmdt.title"/> feature is in use for Lustre
-      2.11 or later, MDT space should typically be 5 percent of the total space,
-      depending on the distribution of small files within the filesystem.</para>
+      2.11 or later, MDT space should typically be 5 percent or more of the
+      total space, depending on the distribution of small files within the
+      filesystem and the <literal>lod.*.dom_stripesize</literal> limit on
+      the MDT and file layout used.</para>
       <para>For ZFS-based MDT filesystems, the number of inodes created on
       the MDT and OST is dynamic, so there is less need to determine the
       number of inodes in advance, though there still needs to be some thought
       given to the total MDT space compared to the total filesystem size.</para>
       <para>For example, if the average file size is 5 MiB and you have
-      100 TiB of usable OST space, then you can calculate the minimum total
-      number of inodes each for MDTs and OSTs as follows:</para>
+      100 TiB of usable OST space, then you can calculate the
+      <emphasis>minimum</emphasis> total number of inodes for MDTs and OSTs
+      as follows:</para>
       <informalexample>
         <para>(500 TB * 1000000 MB/TB) / 5 MB/inode = 100M inodes</para>
       </informalexample>
-      <para>For details about formatting options for ldiskfs MDT and OST file
-      systems, see <xref linkend="dbdoclet.ldiskfs_mdt_mkfs"/>.</para>
-      <para>It is recommended that the MDT have at least twice the minimum
+      <para>It is recommended that the MDT(s) have at least twice the minimum
       number of inodes to allow for future expansion and allow for an average
-      file size smaller than expected. Thus, the minimum space for an ldiskfs
-      MDT should be approximately:
+      file size smaller than expected. Thus, the minimum space for ldiskfs
+      MDT(s) should be approximately:
       </para>
       <informalexample>
         <para>2 KiB/inode x 100 million inodes x 2 = 400 GiB ldiskfs MDT</para>
       </informalexample>
+      <para>For details about formatting options for ldiskfs MDT and OST file
+      systems, see <xref linkend="dbdoclet.ldiskfs_mdt_mkfs"/>.</para>
       <note>
-        <para>If the average file size is very small, 4 KB for example, the
-        MDT will use as much space for each file as the space used on the OST,
-	so the use of Data-on-MDT is strongly recommended.</para>
+        <para>If the median file size is very small, 4 KB for example, the
+        MDT would use as much space for each file as the space used on the OST,
+        so the use of Data-on-MDT is strongly recommended in that case.
+        The MDT space per inode should be increased correspondingly to
+        account for the extra data space usage for each inode:
+      <informalexample>
+        <para>6 KiB/inode x 100 million inodes x 2 = 1200 GiB ldiskfs MDT</para>
+      </informalexample>
+      </para>
       </note>
       <note>
         <para>If the MDT has too few inodes, this can cause the space on the
         OSTs to be inaccessible since no new files can be created.  In this
-	case, the <literal>lfs df -i</literal> and <literal>df -i</literal>
-	commands will limit the number of available inodes reported for the
-	filesystem to match the total number of available objects on the OSTs.
-	Be sure to determine the appropriate MDT size needed to support the
-	filesystem before formatting. It is possible to increase the
+        case, the <literal>lfs df -i</literal> and <literal>df -i</literal>
+        commands will limit the number of available inodes reported for the
+        filesystem to match the total number of available objects on the OSTs.
+        Be sure to determine the appropriate MDT size needed to support the
+        filesystem before formatting. It is possible to increase the
         number of inodes after the file system is formatted, depending on the
         storage.  For ldiskfs MDT filesystems the <literal>resize2fs</literal>
         tool can be used if the underlying block device is on a LVM logical
@@ -287,9 +296,9 @@
       </note>
       <note condition='l24'>
         <para>Starting in release 2.4, using the DNE remote directory feature
-	it is possible to increase the total number of inodes of a Lustre
-	filesystem, as well as increasing the aggregate metadata performance,
-	by configuring additional MDTs into the filesystem, see
+        it is possible to increase the total number of inodes of a Lustre
+        filesystem, as well as increasing the aggregate metadata performance,
+        by configuring additional MDTs into the filesystem, see
         <xref linkend="dbdoclet.adding_new_mdt"/> for details.
         </para>
       </note>
@@ -619,7 +628,8 @@
               typically go beyond the stated limit per OST because Lustre
               can add capacity and performance with additional OSTs, and
               having more OSTs improves aggregate I/O performance,
-              minimizes contention, and allows parallel recovery (e2fsck).
+              minimizes contention, and allows parallel recovery (e2fsck
+              for ldiskfs OSTs, scrub for ZFS OSTs).
               </para>
               <para>
               With 32-bit kernels, due to page cache limits, 16TB is the
@@ -638,7 +648,7 @@
             <entry>
               <para>The maximum number of clients is a constant that can
               be changed at compile time. Up to 30000 clients have been
-              used in production.</para>
+              used in production accessing a single filesystem.</para>
             </entry>
           </row>
           <row>
@@ -690,8 +700,10 @@
               <para>64 KiB</para>
             </entry>
             <entry>
-              <para>Due to the 64 KiB PAGE_SIZE on some 64-bit machines,
-              the minimum stripe size is set to 64 KiB.</para>
+              <para>Due to the use of 64 KiB PAGE_SIZE on some CPU
+              architectures such as ARM and POWER, the minimum stripe
+              size is 64 KiB so that a single page is not split over
+              multiple servers.</para>
             </entry>
           </row>
           <row>

@@ -55,8 +55,9 @@
           <para>The <literal>lfs setstripe</literal> command is used to create
           DoM files.</para>
           <section><title>Command</title>
-              <para><screen>lfs setstripe --component-end|-E end1 --layout|-L \
-mdt [--component-end|-E end2 [STRIPE_OPTIONS] ...] &lt;filename&gt;
+              <para><screen>
+lfs setstripe --component-end|-E end1 --layout|-L mdt \
+        [--component-end|-E end2 [STRIPE_OPTIONS] ...] &lt;filename&gt;
               </screen>
               The command above creates a file with the special composite
               layout, which defines the first component as an MDT component. The
@@ -65,8 +66,9 @@ mdt [--component-end|-E end2 [STRIPE_OPTIONS] ...] &lt;filename&gt;
               <replaceable>end1</replaceable> is also the stripe size of this
               component, and is limited by the
               <literal>lod.*.dom_stripesize</literal> of the MDT the file is
-              created on. No other options are required. The rest of the
-              components use the normal syntax for composite files creation.
+              created on. No other options are required for this component.
+              The rest of the components use the normal syntax for composite
+              files creation.
               </para>
               <note><para>If the next component doesn't specify striping, such
               as:
@@ -256,18 +258,22 @@ client$ lfs getstripe /mnt/lustre/domdir/domfile
           </para>
           <section><title>LFS limits for DoM component size</title>
               <para><literal>lfs setstripe</literal> allows for setting the
-              component size for MDT layouts up to 1GB, however, the size must
+              component size for MDT layouts up to 1GB (this is a compile-time
+              limit to avoid improper configuration), however, the size must
               also be aligned by 64KB due to the minimum stripe size in Lustre
-              (see <xref linkend="settinguplustresystem.tab2"/>). This value
-              represents the maximum possible size of the component on the MDT.
-              Meanwhile, there is another limit which is checked by
-              <literal>lfs setstripe</literal> and is provided by the MDT
-              server itself.</para>
+              (see <xref linkend="settinguplustresystem.tab2"/>
+              <literal>Minimum stripe size</literal>).  There is also a limit
+              imposed on each file by <literal>lfs setstripe -E end</literal>
+              that may be smaller than the MDT-imposed limit if this is better
+              for a particular usage.</para>
           </section>
           <section><title>MDT Server Limits</title>
-              <para>The LOD parameter <literal>dom_stripesize</literal> is used
-              to control the per-server maximum size for a DoM component. It is
-              1MB by default and can be changed with the
+              <para>The <literal>lod.$fsname-MDTxxxx.dom_stripesize</literal>
+              is used to control the per-MDT maximum size for a DoM component.
+              Larger DoM components specified by the user will be truncated to
+              the MDT-specified limit, and as such may be different on each
+              MDT to balance DoM space usage on each MDT separately, if needed.
+              It is 1MB by default and can be changed with the
               <literal>lctl</literal> tool.  For more information on setting
               <literal>dom_stripesize</literal> please see
               <xref linkend="dbdoclet.dom_stripesize" />.</para>
@@ -380,7 +386,7 @@ client$ lfs find -L mdt -S +200K -type f /mnt/lustre
           the parameter <literal>dom_stripesize</literal> in the LOD device.
           The <literal>dom_stripesize</literal> can be set differently for each
           MDT, if necessary. The default value of the parameter is 1MB and can
-          be changed with <literal>lclt</literal> tool.</para>
+          be changed with <literal>lctl</literal> tool.</para>
           <section><title>Get Command</title>
               <para><screen>lctl get_param lod.*MDT&lt;index&gt;*.dom_stripesize
               </screen></para>
@@ -445,12 +451,16 @@ mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
                   <primary>dom</primary>
                   <secondary>disabledom</secondary>
               </indexterm>Disable DoM</title>
-          <para>When <literal>lclt set_param</literal> or
-          <literal>lctl conf_param</literal> sets
-          <literal>dom_stripesize</literal> to <literal>0</literal>, DoM
-          file creation will be prohibited on the selected server.</para>
+          <para>When <literal>lctl set_param</literal> or
+            <literal>lctl conf_param</literal> sets
+            <literal>dom_stripesize</literal> to <literal>0</literal>, DoM
+            component creation will be disabled on the selected server, and
+            any <emphasis>new</emphasis> layouts with a specified DoM component
+            will have that component removed from the file layout. Existing
+            files and layouts with DoM components on that MDT are not changed.
+          </para>
           <note><para>DoM files can still be created in existing directories
-          with the default DoM layout</para></note>
+          with a default DoM layout.</para></note>
       </section>
   </section>
 </chapter>
