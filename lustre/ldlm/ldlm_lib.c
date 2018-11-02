@@ -1251,7 +1251,9 @@ no_export:
 		/* allow "new" MDT to be connected during recovery, since we
 		 * need retrieve recovery update records from it */
 		if (target->obd_recovering && !lw_client && !mds_mds_conn) {
+			time64_t now;
 			time64_t t;
+			char *msg;
 			int c; /* connected */
 			int i; /* in progress */
 			int k; /* known */
@@ -1263,14 +1265,22 @@ no_export:
 			s = target->obd_stale_clients;
 			t = jiffies_to_msecs(target->obd_recovery_timer.expires);
 			t /= MSEC_PER_SEC;
-			t -= ktime_get_seconds();
+			now = ktime_get_seconds();
+			if (now > t) {
+				t = now - t;
+				msg = "already passed deadline";
+			} else {
+				t -= now;
+				msg = "to recover in";
+			}
+
 			LCONSOLE_WARN("%s: Denying connection for new client %s"
 				      "(at %s), waiting for %d known clients "
 				      "(%d recovered, %d in progress, and %d "
-				      "evicted) to recover in %lld:%.02lld\n",
+				      "evicted) %s %lld:%.02lld\n",
 				      target->obd_name, cluuid.uuid,
 				      libcfs_nid2str(req->rq_peer.nid), k,
-				      c - i, i, s, t / 60, t % 60);
+				      c - i, i, s, msg, t / 60, t % 60);
 			rc = -EBUSY;
 		} else {
 dont_check_exports:
