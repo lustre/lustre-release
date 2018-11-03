@@ -237,13 +237,24 @@ static int zfs_set_prop_params(zfs_handle_t *zhp, char *params)
 
 static int zfs_check_hostid(struct mkfs_opts *mop)
 {
-	FILE *f;
 	unsigned long hostid;
+#ifndef HAVE_ZFS_MULTIHOST
+	FILE *f;
 	int rc;
+#endif
 
 	if (strstr(mop->mo_ldd.ldd_params, PARAM_FAILNODE) == NULL)
 		return 0;
 
+#ifdef HAVE_ZFS_MULTIHOST
+	hostid = get_system_hostid();
+#else
+	/* This reimplements libzfs2::get_system_hostid() from 0.7+ because
+	 * prior to 0.7.0 (MULTIHOST support), get_system_hostid() would return
+	 * gethostid() if spl_hostid was 0, which would generate a hostid if
+	 * /etc/hostid wasn't set, which is incompatible with the kernel
+	 * implementation.
+	 */
 	f = fopen("/sys/module/spl/parameters/spl_hostid", "r");
 	if (f == NULL) {
 		fatal();
@@ -276,6 +287,7 @@ static int zfs_check_hostid(struct mkfs_opts *mop)
 	}
 
 out:
+#endif
 	if (hostid == 0) {
 		if (mop->mo_flags & MO_NOHOSTID_CHECK) {
 			fprintf(stderr, "WARNING: spl_hostid not set. ZFS has "
@@ -477,8 +489,22 @@ int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 
 	ldd->ldd_mount_type = LDD_MT_ZFS;
 	ret = 0;
+
+#ifdef HAVE_ZFS_MULTIHOST
+	if (strstr(ldd->ldd_params, PARAM_FAILNODE) != NULL) {
+		zpool_handle_t *pool = zfs_get_pool_handle(zhp);
+		uint64_t mh = zpool_get_prop_int(pool, ZPOOL_PROP_MULTIHOST,
+						 NULL);
+		if (!mh)
+			fprintf(stderr, "%s: %s is configured for failover "
+				"but zpool does not have multihost enabled\n",
+				progname, ds);
+	}
+#endif
+
 out_close:
 	zfs_close(zhp);
+
 out:
 	return ret;
 }
@@ -709,13 +735,18 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	 * 0.7.0 - multihost=on
 	 * 0.7.0 - feature@userobj_accounting=enabled
 	 */
+#if defined(HAVE_ZFS_MULTIHOST) || defined(HAVE_DMU_USEROBJ_ACCOUNTING)
 	php = zpool_open(g_zfs, pool);
 	if (php) {
+#ifdef HAVE_ZFS_MULTIHOST
 		zpool_set_prop(php, "multihost", "on");
+#endif
+#ifdef HAVE_DMU_USEROBJ_ACCOUNTING
 		zpool_set_prop(php, "feature@userobj_accounting", "enabled");
-
+#endif
 		zpool_close(php);
 	}
+#endif
 
 	/*
 	 * Create the ZFS filesystem with any required mkfs options:

@@ -533,6 +533,19 @@ your distribution.
 			AC_DEFINE(HAVE_DMU_USEROBJ_ACCOUNTING, 1,
 				[Have native dnode accounting in ZFS])
 		])
+		dnl #
+		dnl # ZFS 0.7.0 feature: MULTIHOST
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has multihost protection],
+		spa_multihost, [
+			#include <sys/spa.h>
+		],[
+			spa_multihost(NULL);
+		],[
+			AC_DEFINE(HAVE_ZFS_MULTIHOST, 1,
+				[Have multihost protection in ZFS])
+		])
+		dnl #
 		dnl # ZFS 0.7.x adds new method zap_lookup_by_dnode
 		dnl #
 		LB_CHECK_COMPILE([if ZFS has 'zap_lookup_by_dnode'],
