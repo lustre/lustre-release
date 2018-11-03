@@ -739,24 +739,26 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 		 * (assuming all files are in composite layout and has
 		 * 3 components):
 		 *
-		 *   ldiskfs inode size: 156
-		 *   extended attributes size, including:
+		 *   ldiskfs inode size: 160
+		 *   MDT extended attributes size, including:
 		 *	ext4_xattr_header: 32
 		 *	LOV EA size: 32(lov_comp_md_v1) +
 		 *		     3 * 40(lov_comp_md_entry_v1) +
 		 *		     3 * 32(lov_mds_md) +
 		 *		     stripes * 24(lov_ost_data) +
-		 *		     16(xattr_entry) + 3(lov)
+		 *		     16(xattr_entry) + 4("lov")
 		 *	LMA EA size: 24(lustre_mdt_attrs) +
-		 *		     16(xattr_entry) + 3(lma)
+		 *		     16(xattr_entry) + 4("lma")
+		 *	SOM EA size: 24(lustre_som_attrs) +
+		 *		     16(xattr_entry) + 4("som")
 		 *	link EA size: 24(link_ea_header) + 18(link_ea_entry) +
-		 *		      (filename) + 16(xattr_entry) + 4(link)
+		 *		      16(filename) + 16(xattr_entry) + 4("link")
 		 *   and some margin for 4-byte alignment, ACLs and other EAs.
 		 *
 		 * If we say the average filename length is about 32 bytes,
 		 * the calculation looks like:
-		 * 156 + 32 + (32+3*(40 + 32)+24*N+19) + (24+19) +
-		 * (24+18+~32+20) + other <= 512*2^m, {m=0,1,2,3}
+		 * 160 + 32 + (32+3*(40+32)+24*stripes+20) + (24+20) + (24+20) +
+		 *  (24+20) + (~42+16+20) + other <= 512*2^m, {m=0,1,2,3}
 		 */
 		if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
 			if (IS_MDT(&mop->mo_ldd)) {
@@ -769,7 +771,16 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 					inode_size = 1024;
 			} else if (IS_OST(&mop->mo_ldd)) {
 				/* We store MDS FID and necessary composite
-				 * layout information in the OST object EA. */
+				 * layout information in the OST object EA:
+				 *   ldiskfs inode size: 160
+				 *   OST extended attributes size, including:
+				 *	ext4_xattr_header: 32
+				 *	LMA EA size: 24(lustre_mdt_attrs) +
+				 *		     16(xattr_entry) + 4("lma")
+				 *	FID EA size: 52(filter_fid) +
+				 *		     16(xattr_entry) + 4("fid")
+				 * 160 + 32 + (24+20) + (52+20) = 308
+				 */
 				inode_size = 512;
 			}
 
