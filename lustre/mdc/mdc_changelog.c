@@ -466,31 +466,6 @@ out_kbuf:
 }
 
 /**
- * Find the OBD device associated to a changelog character device.
- * @param[in]  cdev  character device instance descriptor
- * @return corresponding OBD device or NULL if none was found.
- */
-static struct obd_device *chlg_obd_get(dev_t cdev)
-{
-	int minor = MINOR(cdev);
-	struct obd_device *obd = NULL;
-	struct chlg_registered_dev *curr;
-
-	mutex_lock(&chlg_registered_dev_lock);
-	list_for_each_entry(curr, &chlg_registered_devices, ced_link) {
-		if (curr->ced_misc.minor == minor) {
-			/* take the first available OBD device attached */
-			obd = list_first_entry(&curr->ced_obds,
-					       struct obd_device,
-					       u.cli.cl_chg_dev_linkage);
-			break;
-		}
-	}
-	mutex_unlock(&chlg_registered_dev_lock);
-	return obd;
-}
-
-/**
  * Open handler, initialize internal CRS state and spawn prefetch thread if
  * needed.
  * @param[in]  inode  Inode struct for the open character device.
@@ -500,13 +475,17 @@ static struct obd_device *chlg_obd_get(dev_t cdev)
 static int chlg_open(struct inode *inode, struct file *file)
 {
 	struct chlg_reader_state *crs;
-	struct obd_device *obd = chlg_obd_get(inode->i_rdev);
+	struct miscdevice *misc = file->private_data;
+	struct chlg_registered_dev *dev;
+	struct obd_device *obd;
 	struct task_struct *task;
 	int rc;
 	ENTRY;
 
-	if (!obd)
-		RETURN(-ENODEV);
+	dev = container_of(misc, struct chlg_registered_dev, ced_misc);
+	obd = list_first_entry(&dev->ced_obds,
+			       struct obd_device,
+			       u.cli.cl_chg_dev_linkage);
 
 	OBD_ALLOC_PTR(crs);
 	if (!crs)
@@ -695,13 +674,16 @@ int mdc_changelog_cdev_init(struct obd_device *obd)
 		GOTO(out_unlock, rc = 0);
 	}
 
-	/* Register new character device */
-	rc = misc_register(&entry->ced_misc);
-	if (rc != 0)
-		GOTO(out_unlock, rc);
-
 	list_add_tail(&obd->u.cli.cl_chg_dev_linkage, &entry->ced_obds);
 	list_add_tail(&entry->ced_link, &chlg_registered_devices);
+
+	/* Register new character device */
+	rc = misc_register(&entry->ced_misc);
+	if (rc != 0) {
+		list_del_init(&obd->u.cli.cl_chg_dev_linkage);
+		list_del(&entry->ced_link);
+		GOTO(out_unlock, rc);
+	}
 
 	entry = NULL;	/* prevent it from being freed below */
 
