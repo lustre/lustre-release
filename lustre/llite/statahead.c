@@ -325,7 +325,11 @@ __sa_make_ready(struct ll_statahead_info *sai, struct sa_entry *entry, int ret)
 		}
 	}
 	list_add(&entry->se_list, pos);
-	entry->se_state = ret < 0 ? SA_ENTRY_INVA : SA_ENTRY_SUCC;
+	/*
+	 * LU-9210: ll_statahead_interpet must be able to see this before
+	 * we wake it up
+	 */
+	smp_store_release(&entry->se_state, ret < 0 ? SA_ENTRY_INVA : SA_ENTRY_SUCC);
 
 	return (index == sai->sai_index_wait);
 }
@@ -767,7 +771,6 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 	}
 	sai->sai_replied++;
 
-	smp_mb();
 	if (waitq != NULL)
 		wake_up(waitq);
 	spin_unlock(&lli->lli_sa_lock);
@@ -1481,7 +1484,12 @@ static int revalidate_statahead_dentry(struct inode *dir,
 		}
 	}
 
-	if (entry->se_state == SA_ENTRY_SUCC && entry->se_inode != NULL) {
+	/*
+	 * We need to see the value that was set immediately before we
+	 * were woken up.
+	 */
+	if (smp_load_acquire(&entry->se_state) == SA_ENTRY_SUCC &&
+	    entry->se_inode) {
 		struct inode *inode = entry->se_inode;
 		struct lookup_intent it = { .it_op = IT_GETATTR,
 					    .it_lock_handle =
