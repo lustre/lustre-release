@@ -163,6 +163,9 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	int i;
 
 	/* Are agents full? */
+	if (atomic_read(&cdt->cdt_request_count) >= cdt->cdt_max_requests)
+		RETURN(hsd->hsd_housekeeping ? 0 : LLOG_PROC_BREAK);
+
 	if (hsd->hsd_action_count + atomic_read(&cdt->cdt_request_count) >=
 	    cdt->cdt_max_requests) {
 		/* We cannot send any more request
@@ -224,8 +227,10 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 
 			/* Discard the (whole) last hal */
 			hsd->hsd_request_count--;
+			LASSERT(hsd->hsd_request_count >= 0);
 			tmp = &hsd->hsd_request[hsd->hsd_request_count];
 			hsd->hsd_action_count -= tmp->hal->hal_count;
+			LASSERT(hsd->hsd_action_count >= 0);
 			OBD_FREE(tmp->hal, tmp->hal_sz);
 		} else {
 			/* Bailing out, this code path is too hot */
