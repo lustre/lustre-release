@@ -1150,7 +1150,7 @@ retry:
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
-	th->th_sync |= ofd->ofd_syncjournal;
+	th->th_sync |= ofd->ofd_sync_journal;
 	if (th->th_sync == 0) {
 		for (i = 0; i < niocount; i++) {
 			if (!(lnb[i].lnb_flags & OBD_BRW_ASYNC)) {

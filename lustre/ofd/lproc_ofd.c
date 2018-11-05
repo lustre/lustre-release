@@ -395,14 +395,14 @@ LUSTRE_RO_ATTR(fstype);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static ssize_t syncjournal_show(struct kobject *kobj, struct attribute *attr,
+static ssize_t sync_journal_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	return sprintf(buf, "%u\n", ofd->ofd_syncjournal);
+	return sprintf(buf, "%u\n", ofd->ofd_sync_journal);
 }
 
 /**
@@ -418,7 +418,7 @@ static ssize_t syncjournal_show(struct kobject *kobj, struct attribute *attr,
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t syncjournal_store(struct kobject *kobj, struct attribute *attr,
+static ssize_t sync_journal_store(struct kobject *kobj, struct attribute *attr,
 				 const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
@@ -432,13 +432,13 @@ static ssize_t syncjournal_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	spin_lock(&ofd->ofd_flags_lock);
-	ofd->ofd_syncjournal = val;
+	ofd->ofd_sync_journal = val;
 	ofd_slc_set(ofd);
 	spin_unlock(&ofd->ofd_flags_lock);
 
 	return count;
 }
-LUSTRE_RW_ATTR(syncjournal);
+LUSTRE_RW_ATTR(sync_journal);
 
 /* This must be longer than the longest string below */
 #define SYNC_STATES_MAXLEN 16
@@ -927,7 +927,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_client_cache_seconds.attr,
 	&lustre_attr_degraded.attr,
 	&lustre_attr_fstype.attr,
-	&lustre_attr_syncjournal.attr,
+	&lustre_attr_sync_journal.attr,
 	&lustre_attr_sync_lock_cancel.attr,
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_lfsck_speed_limit.attr,

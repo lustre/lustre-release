@@ -142,7 +142,7 @@ struct ofd_device {
 	spinlock_t		 ofd_flags_lock;
 	unsigned long		 ofd_raid_degraded:1,
 				 /* sync journal on writes */
-				 ofd_syncjournal:1,
+				 ofd_sync_journal:1,
 				 /* Protected by ofd_lastid_rwsem. */
 				 ofd_lastid_rebuilding:1,
 				 ofd_record_fid_accessed:1,
@@ -485,7 +485,7 @@ static inline struct ofd_thread_info *tsi2ofd_info(struct tgt_session_info *tsi)
  * sync on lock cancel if it is not enabled already. */
 static inline void ofd_slc_set(struct ofd_device *ofd)
 {
-	if (ofd->ofd_syncjournal == 1)
+	if (ofd->ofd_sync_journal == 1)
 		ofd->ofd_lut.lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
 	else if (ofd->ofd_lut.lut_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
 		ofd->ofd_lut.lut_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;

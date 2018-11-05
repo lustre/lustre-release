@@ -2854,7 +2854,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	spin_lock_init(&m->ofd_flags_lock);
 	m->ofd_raid_degraded = 0;
 	m->ofd_checksum_t10pi_enforce = 0;
-	m->ofd_syncjournal = 0;
+	m->ofd_sync_journal = 0;
 	ofd_slc_set(m);
 	m->ofd_soft_sync_limit = OFD_SOFT_SYNC_LIMIT_DEFAULT;
 
