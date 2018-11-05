@@ -1,3 +1,17 @@
+11-05-2018 Whamcloud, Inc.
+	* version 2.12.0
+	* Support for networks:
+	 socklnd - any kernel supported by Lustre
+	 o2iblnd - OFED from any kernels supported by Lustre
+	 o2ilbnd - MLNX_OFED 3.4-2.0.0.0, MLNX_OFED 4.0-1.0.1.0
+		   MLNX_OFED 4.0-2.0.0.1, MLNX_OFED 4.1-1.0.2.0
+		   MLNX_OFED 4.2-1.0.0.0, MLNX_OFED 4.2-1.2.0.0
+		   MLNX_OFED 4.3-1.0.1.0. MLNX_OFED 4.4-1.0.0.0
+		   MLNX_OFED 4.4-2.0.7.0
+	* Features:
+	  LNet Health: Keep track of network interface health and select
+		       healthiest interface.
+
 TBD       Intel Corporation
 	* version 2.2.0
 	* Support for networks:
