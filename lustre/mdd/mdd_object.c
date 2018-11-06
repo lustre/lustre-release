@@ -1099,6 +1099,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 
 /*
  * LU-3671
+ * LU-7239
  *
  * permission changes may require sync operation, to mitigate performance
  * impact, only do this for dir and when permission is reduced.
@@ -1113,17 +1114,24 @@ static inline bool permission_needs_sync(const struct lu_attr *old,
 	if (!S_ISDIR(old->la_mode))
 		return false;
 
-	if (new->la_valid & (LA_UID | LA_GID))
+	if (new->la_valid & LA_UID && old->la_uid != new->la_uid)
 		return true;
 
-	if (new->la_valid & LA_MODE &&
-	    new->la_mode & (S_ISUID | S_ISGID | S_ISVTX))
+	if (new->la_valid & LA_GID && old->la_gid != new->la_gid)
 		return true;
 
-	if ((new->la_valid & LA_MODE) &&
-	    ((new->la_mode & old->la_mode) & S_IRWXUGO) !=
-	     (old->la_mode & S_IRWXUGO))
-		return true;
+	if (new->la_valid & LA_MODE) {
+		/* turned on sticky bit */
+		if (!(old->la_mode & S_ISVTX) && (new->la_mode & S_ISVTX))
+			return true;
+
+		/* set-GID has no impact on what is allowed, not checked */
+
+		/* turned off setuid bit, or one of rwx for someone */
+		if (((new->la_mode & old->la_mode) & (0777 | S_ISUID)) !=
+		     (old->la_mode & (0777 | S_ISUID)))
+			return true;
+	}
 
 	return false;
 }
