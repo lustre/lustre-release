@@ -49,29 +49,20 @@ MDSDEV1_2=$fs2mds_DEV
 OSTDEV1_2=$fs2ost_DEV
 OSTDEV2_2=$fs3ost_DEV
 
+# bug number for skipped test: LU-11915
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT   110"
+
 if ! combined_mgs_mds; then
-	# bug number for skipped test: LU-9860 LU-9860 LU-9860
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  43b     53b     54b"
-	# bug number for skipped test: LU-9875 LU-9879 LU-9879 LU-9879 LU-9879
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  70e     80      84      87      100"
-	# bug number for skipped test: LU-8110 LU-9879 LU-9879 LU-9879
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  102     104     105     107"
+	# bug number for skipped test: LU-11991			LU-11990
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  32a 32b 32c 32d 32e	66"
+	# bug number for skipped test: LU-9897	LU-12032
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  84	123F"
 fi
 
 # pass "-E lazy_itable_init" to mke2fs to speed up the formatting time
 if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 	LDISKFS_MKFS_OPTS=$(csa_add "$LDISKFS_MKFS_OPTS" -E lazy_itable_init)
 fi
-
-[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-[ $MDSCOUNT -ge 2 ] &&
-# bug number for skipped test: LU-11915
-	ALWAYS_EXCEPT+="       110"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 init_logging
 
@@ -986,6 +977,8 @@ run_test 24a "Multiple MDTs on a single node"
 
 test_24b() {
 	local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
+	combined_mgs_mds ||
+		skip "needs combined MGT and MDT device"
 
 	if [ -z "$fs2mds_DEV" ]; then
 		local dev=${SINGLEMDS}_dev
@@ -1000,15 +993,17 @@ test_24b() {
 	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev} ) --mgs --fsname=${FSNAME}2 \
 		--reformat $fs2mdsdev $fs2mdsvdev || exit 10
 	setup
-	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS &&
+	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && {
+		cleanup
 		error "start MDS should fail"
+	}
 	stop fs2mds -f
 	cleanup || error "cleanup failed with rc $?"
 }
 run_test 24b "Multiple MGSs on a single node (should return err)"
 
 test_25() {
-	setup
+	setup_noconfig
 	check_mount || error "check_mount failed"
 	local MODULES=$($LCTL modules | awk '{ print $2 }')
 	rmmod $MODULES 2>/dev/null || true
@@ -1034,6 +1029,7 @@ test_26() {
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
 
 test_27a() {
+	cleanup
 	start_ost || error "Unable to start OST1"
 	start_mds || error "Unable to start MDS"
 	echo "Requeue thread should have started: "
@@ -1047,7 +1043,7 @@ run_test 27a "Reacquire MGS lock if OST started first"
 
 test_27b() {
 	# FIXME. ~grev
-	setup
+	setup_noconfig
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
 			awk '($3 ~ "mdt" && $4 ~ "MDT0000") { print $4 }')
 
@@ -1064,7 +1060,7 @@ test_27b() {
 run_test 27b "Reacquire MGS lock after failover"
 
 test_28A() { # was test_28
-	setup
+	setup_noconfig
 	TEST="llite.$FSNAME-*.max_read_ahead_whole_mb"
 	PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
 	ORIG=$($LCTL get_param -n $TEST)
@@ -1098,7 +1094,7 @@ test_28a() { # LU-4221
 	local new
 	local device="$FSNAME-OST0000"
 
-	setup
+	setup_noconfig
 
 	# In this test we will set three kinds of proc parameters with
 	# lctl set_param -P or lctl conf_param:
@@ -1135,7 +1131,7 @@ run_test 28a "set symlink parameters permanently with lctl"
 
 test_29() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs"
-	setup > /dev/null 2>&1
+	setup_noconfig > /dev/null 2>&1
 	start_ost2 || error "Unable to start OST2"
 	sleep 10
 
@@ -1145,8 +1141,8 @@ test_29() {
 	# on the MDS servers which is tested with wait_osp_* below.
 	# For ost_server_uuid that only exist on client so filtering
 	# is safe.
-	local PROC_ACT="osc.$FSNAME-OST0001-osc-*.active"
-	local PROC_UUID="osc.$FSNAME-OST0001-osc-[!M]*.ost_server_uuid"
+	local PROC_ACT="osc.$FSNAME-OST0001-osc-[^M]*.active"
+	local PROC_UUID="osc.$FSNAME-OST0001-osc-[^M]*.ost_server_uuid"
 
 	ACTV=$($LCTL get_param -n $PROC_ACT)
 	DEAC=$((1 - $ACTV))
@@ -1188,7 +1184,7 @@ test_29() {
 run_test 29 "permanently remove an OST"
 
 test_30a() {
-	setup
+	setup_noconfig
 
 	echo Big config llog
 	TEST="llite.$FSNAME-*.max_read_ahead_whole_mb"
@@ -1226,7 +1222,7 @@ test_30a() {
 run_test 30a "Big config llog and permanent parameter deletion"
 
 test_30b() {
-	setup
+	setup_noconfig
 
 	local orignids=$($LCTL get_param -n \
 		osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
@@ -2718,6 +2714,7 @@ test_36() { # 12743
 	local fs2ostvdev=$(ostvdevname 1_2)
 	local fs3ostvdev=$(ostvdevname 2_2)
 
+	load_modules
 	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev}) --mgs --fsname=${FSNAME2} \
 		--reformat $fs2mdsdev $fs2mdsvdev || exit 10
 	# XXX after we support non 4K disk blocksize in ldiskfs, specify a
@@ -2798,6 +2795,8 @@ test_37() {
 	if ! do_facet $SINGLEMDS test -b $mdsdev; then
 		opts=$(csa_add "$opts" -o loop)
 	fi
+
+	load_modules
 	mount_op=$(do_facet $SINGLEMDS mount -v -t lustre $opts \
 		$mdsdev_sym $mntpt 2>&1)
 	rc=${PIPESTATUS[0]}
@@ -4260,7 +4259,7 @@ test_55() {
 		stopall
 	done
 
-	reformat
+	reformat_and_config
 }
 run_test 55 "check lov_objid size"
 
@@ -4298,7 +4297,7 @@ test_56a() {
 
 	stopall
 	MDSJOURNALSIZE=$mds_journal_size_orig
-	reformat
+	reformat_and_config
 }
 run_test 56a "check big OST indexes and out-of-index-order start"
 
@@ -4310,7 +4309,7 @@ cleanup_56b() {
 	stop mds2
 	stop mds3
 	stopall
-	reformat
+	reformat_and_config
 }
 
 test_56b() {
@@ -4409,7 +4408,7 @@ test_57a() { # bug 22656
 		error "tunefs failed"
 	start_mgsmds
 	start_ost && error "OST registration from failnode should fail"
-	reformat
+	cleanup
 }
 run_test 57a "initial registration from failnode should fail (should return errs)"
 
@@ -4423,7 +4422,7 @@ test_57b() {
 		error "tunefs failed"
 	start_mgsmds
 	start_ost || error "OST registration from servicenode should not fail"
-	reformat
+	cleanup
 }
 run_test 57b "initial registration from servicenode should not fail"
 
@@ -4451,7 +4450,7 @@ test_58() { # bug 22658
 	# restart MDS with missing llog files
 	start_mds || error "unable to start MDS"
 	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0"
-	reformat
+	cleanup
 }
 run_test 58 "missing llog files must not prevent MDT from mounting"
 
@@ -4511,7 +4510,8 @@ test_60() { # LU-471
 	echo $dump | grep uninit_bg > /dev/null && error "uninit_bg is set"
 	# we set stride extended options
 	echo $dump | grep stride > /dev/null || error "stride is not set"
-	reformat
+	stop_mds
+	reformat_and_config
 }
 run_test 60 "check mkfs.lustre --mkfsoptions -E -O options setting"
 
@@ -4532,8 +4532,7 @@ test_61() { # LU-80
 		done
 	fi
 
-	combined_mgs_mds || stop_mgs || error "stopping MGS service failed"
-	setup_noconfig || error "setting up the filesystem failed"
+	setup || error "setting up the filesystem failed"
 	client_up || error "starting client failed"
 
 	local file=$DIR/$tfile
@@ -4588,7 +4587,7 @@ test_61() { # LU-80
 
 	# need to delete this file to avoid problems in other tests
 	rm -f $file
-	stopall || error "stopping systems failed"
+	cleanup || error "stopping systems failed"
 }
 run_test 61 "large xattr"
 
@@ -4785,7 +4784,7 @@ test_66() {
 
 	check_mount || error "error after nid replace"
 	cleanup || error "cleanup failed"
-	reformat
+	reformat_and_config
 }
 run_test 66 "replace nids"
 
@@ -4858,12 +4857,8 @@ test_68() {
 
 	umount_client $MOUNT || error "umount client failed"
 
-	if ! combined_mgs_mds; then
-		start_mgs || error "start mgs failed"
-	fi
-
-	start_mdt 1 || error "MDT start failed"
-	start_ost || error "Unable to start OST1"
+	start_mgsmds
+	start_ost
 
 	# START-END - the sequences we'll be reserving
 	START=$(do_facet $SINGLEMDS \
@@ -5081,7 +5076,9 @@ test_70e() {
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.62) ] ||
 		skip "Need MDS version at least 2.7.62"
 
-	cleanup || error "cleanup failed with $?"
+	reformat || error "reformat failed with $?"
+
+	load_modules
 
 	local mdsdev=$(mdsdevname 1)
 	local ostdev=$(ostdevname 1)
@@ -5089,6 +5086,10 @@ test_70e() {
 	local ostvdev=$(ostvdevname 1)
 	local opts_mds="$(mkfs_opts mds1 $mdsdev) --reformat $mdsdev $mdsvdev"
 	local opts_ost="$(mkfs_opts ost1 $ostdev) --reformat $ostdev $ostvdev"
+
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
 
 	add mds1 $opts_mds || error "add mds1 failed"
 	start_mdt 1 || error "start mdt1 failed"
@@ -5290,6 +5291,9 @@ test_72() { #LU-2634
 	local fn=3
 	local add_options
 
+	cleanup
+	load_modules
+
 	if combined_mgs_mds; then
 		add_options='--reformat'
 	else
@@ -5341,8 +5345,8 @@ test_73() { #LU-3006
 	$LCTL get_param -n osc.*OST0000-osc-[^M]*.import | grep failover_nids |
 		grep 1.2.3.4@$NETTYPE || error "failover nids haven't changed"
 	umount_client $MOUNT || error "umount client failed"
-	stopall
-	reformat
+	stop_ost
+	stop_mds
 }
 run_test 73 "failnode to update from mountdata properly"
 
@@ -5352,9 +5356,9 @@ test_75() { # LU-2374
 
 	local index=0
 	local opts_mds="$(mkfs_opts mds1 $(mdsdevname 1)) \
-		--reformat $(mdsdevname 1) $(mdsvdevname 1)"
+		--replace --reformat $(mdsdevname 1) $(mdsvdevname 1)"
 	local opts_ost="$(mkfs_opts ost1 $(ostdevname 1)) \
-		--reformat $(ostdevname 1) $(ostvdevname 1)"
+		--replace --reformat $(ostdevname 1) $(ostvdevname 1)"
 
 	#check with default parameters
 	add mds1 $opts_mds || error "add mds1 failed for default params"
@@ -5369,10 +5373,8 @@ test_75() { # LU-2374
 
 	add mds1 $opts_mds || error "add mds1 failed for new params"
 	add ost1 $opts_ost || error "add ost1 failed for new params"
-	if ! combined_mgs_mds; then
-		stop_mgs || error "stop mgs failed"
-	fi
-	reformat
+
+	reformat_and_config
 	return 0
 }
 run_test 75 "The order of --index should be irrelevant"
@@ -5381,9 +5383,6 @@ test_76a() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.4.52) ]] ||
 		skip "Need MDS version at least 2.4.52"
 
-	if ! combined_mgs_mds; then
-		start_mgs || error "start mgs failed"
-	fi
 	setup
 	local MDMB_PARAM="osc.*.max_dirty_mb"
 	echo "Change MGS params"
@@ -5677,7 +5676,8 @@ test_78() {
 	# check whether the MDT or OST filesystem was shrunk or not
 	if ! $shrunk; then
 		combined_mgs_mds || stop_mgs || error "(9) stop mgs failed"
-		reformat || error "(10) reformat Lustre filesystem failed"
+		reformat_and_config ||
+			error "(10) reformat Lustre filesystem failed"
 		return 0
 	fi
 
@@ -5702,7 +5702,7 @@ test_78() {
 
 	MDSCOUNT=$saved_MDSCOUNT
 	OSTCOUNT=$saved_OSTCOUNT
-	reformat || error "(14) reformat Lustre filesystem failed"
+	reformat_and_config || error "(14) reformat Lustre filesystem failed"
 }
 run_test 78 "run resize2fs on MDT and OST filesystems"
 
@@ -5735,7 +5735,7 @@ test_79() { # LU-4227
 			if ( $i ~ "--mgsnode" ) { print $i; break } }')
 	[ -n $mgsnode_opt ] &&
 		opts_ost1=$(echo $opts_ost1 | sed -e "s/$mgsnode_opt//")
-
+	load_modules
 	# -MGS, format a mdt without --mgs option
 	add mds1 $opts_mds1 $mdsdev1 $mdsvdev1 &&
 		error "Must specify --mgs when formatting mdt combined with mgs"
@@ -5748,7 +5748,7 @@ test_79() { # LU-4227
 	add ost1 $opts_ost1 $ostdev1 $ostvdev2 &&
 		error "Must specify --mgsnode when formatting an ost"
 
-	reformat
+	reformat_and_config
 }
 run_test 79 "format MDT/OST without mgs option (should return errors)"
 
@@ -5764,7 +5764,9 @@ test_80() {
 	start_ost2 || error "Failed to start OST2"
 
 	do_facet ost1 "$LCTL set_param fail_loc=0"
-	stopall
+	stop_ost2
+	stop_ost
+	stop_mds
 }
 run_test 80 "mgc import reconnect race"
 
@@ -5795,7 +5797,10 @@ restore_ostindex() {
 	done
 	OSTCOUNT=$saved_ostcount
 
-	formatall
+	reformat
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
 }
 
 # The main purpose of this test is to ensure the OST_INDEX_LIST functions as
@@ -6127,7 +6132,7 @@ test_83() {
 	err=$(do_facet ost1 dmesg | grep "VFS: Busy inodes after unmount of")
 	echo "string err $err"
 	[ -z "$err" ] || error $err
-	reformat
+	reformat_and_config
 }
 run_test 83 "ENOSPACE on OST doesn't cause message VFS: \
 Busy inodes after unmount ..."
@@ -6298,6 +6303,10 @@ test_87() { #LU-6544
 	unload_modules
 	reformat
 
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+
 	add mds1 $(mkfs_opts mds1 ${mdsdev}) --stripe-count-hint=$stripe_cnt \
 		--reformat $mdsdev $mdsvdev || error "add mds1 failed"
 	start_mdt 1 > /dev/null || error "start mdt1 failed"
@@ -6337,7 +6346,11 @@ test_87() { #LU-6544
 		       more than $left_size-byte space left in inode."
 	echo "Verified: at most $left_size-byte space left in inode."
 
-	stopall
+	umount_ldiskfs $SINGLEMDS
+
+	for i in $(seq $OSTCOUNT); do
+		stop ost$i -f || error "stop ost$i failed"
+	done
 }
 run_test 87 "check if MDT inode can hold EAs with N stripes properly"
 
@@ -6435,7 +6448,7 @@ test_89() { # LU-7131
 	[ $(echo $params | tr ' ' '\n') == "$key=$val1" ] ||
 		error "on-disk param not added correctly with --erase-params"
 
-	reformat
+	reformat_and_config
 }
 run_test 89 "check tunefs --param and --erase-param{s} options"
 
@@ -6524,10 +6537,6 @@ check_max_mod_rpcs_in_flight() {
 }
 
 test_90a() {
-	reformat
-	if ! combined_mgs_mds ; then
-		start_mgs
-	fi
 	setup
 
 	[[ $($LCTL get_param mdc.*.import |
@@ -7262,18 +7271,18 @@ test_99()
 
 	echo "params: $opts"
 
+	load_modules
 	add ost1 $opts || error "add ost1 failed with new params"
 
 	do_facet ost1 $DEBUGFS -c -R stats `ostdevname 1` | grep "meta_bg" ||
 		error "meta_bg is not set"
-
-	reformat
 }
 run_test 99 "Adding meta_bg option"
 
 test_100() {
 	reformat
-	start_mds || error "MDS start failed"
+
+	start_mgsmds || error "MDS start failed"
 	start_ost || error "unable to start OST"
 	mount_client $MOUNT || error "client start failed"
 	check_mount || error "check_mount failed"
@@ -7330,6 +7339,10 @@ run_test 101 "Race MDT->OST reconnection with create"
 test_102() {
 	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.53) ]] ||
 		skip "Need server version greater than 2.9.53"
+	[[ “$(mdsdevname 1)” != “$(mgsdevname)” ]] &&
+		[[ “$(facet_host mds1)” = “$(facet_host mgs)” ]] &&
+		skip "MGS must be on different node or combined"
+
 	cleanup || error "cleanup failed with $?"
 
 	local mds1dev=$(mdsdevname 1)
@@ -7531,6 +7544,10 @@ test_104() { # LU-6952
 
 	#reformat/remount the MDT to apply the MDT_MOUNT_FS_OPT options
 	formatall
+	if ! combined_mgs_mds ; then
+		start_mgs
+	fi
+
 	if [ -z "$MDS_MOUNT_OPTS" ]; then
 		MDS_MOUNT_OPTS="-o noacl"
 	else
@@ -7554,9 +7571,6 @@ test_104() { # LU-6952
 	MDS_MOUNT_OPTS=$mds_mountopts
 	OST_MOUNT_OPTS=$ost_mountopts
 	MDS_MOUNT_FS_OPTS=$mds_mountfsopts
-
-	formatall
-	setupall
 }
 run_test 104 "Make sure user defined options are reflected in mount"
 
@@ -7569,7 +7583,7 @@ error_and_umount() {
 test_105() {
 	cleanup -f
 	reformat
-	setup
+	setup_noconfig
 	mkdir -p $TMP/$tdir
 	mount --bind $DIR $TMP/$tdir || error "mount bind mnt pt failed"
 	rm -f $TMP/$tdir/$tfile
@@ -7602,7 +7616,7 @@ test_106() {
 	local repeat=5
 
 	reformat
-	setupall
+	setup_noconfig
 	mkdir -p $DIR/$tdir || error "create $tdir failed"
 	lfs setstripe -c 1 -i 0 $DIR/$tdir
 #define OBD_FAIL_CAT_RECORDS                        0x1312
@@ -7620,7 +7634,7 @@ test_106() {
 #shows that osp code is buggy
 	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
 
-	stopall
+	cleanup
 }
 run_test 106 "check osp llog processing when catalog is wrapped"
 
@@ -7923,7 +7937,7 @@ test_109_clear_conf()
 
 	local mgsdev
 	if ! combined_mgs_mds ; then
-		mgsdev=$MGSDEV
+		mgsdev=$(mgsdevname)
 		stop_mgs || error "stop_mgs failed"
 		start_mgs "-o nosvc" || error "start_mgs nosvc failed"
 	else
@@ -7964,16 +7978,23 @@ test_109a()
 {
 	[ "$(facet_fstype mgs)" == "zfs" ] &&
 		skip "LU-8727: no implementation for ZFS"
+
 	stopall
 	reformat
 	setup_noconfig
 	client_up || error "client_up failed"
+	#pool commands requires a client on MGS for procfs interfaces
+	if ! combined_mgs_mds ; then
+		mount_mgs_client
+		stack_trap umount_mgs_client EXIT
+	fi
 
 	#
 	# set number of permanent parameters
 	#
 	test_109_set_params $FSNAME
 
+	combined_mgs_mds || umount_mgs_client
 	umount_client $MOUNT || error "umount_client failed"
 	stop_ost || error "stop_ost failed"
 	stop_mds || error "stop_mds failed"
@@ -7988,6 +8009,7 @@ test_109a()
 		error "failed to clear client config"
 
 	setup_noconfig
+	combined_mgs_mds || mount_mgs_client
 
 	#
 	# check that configurations are intact
@@ -7999,6 +8021,7 @@ test_109a()
 	#
 	destroy_test_pools || error "destroy test pools failed"
 
+	combined_mgs_mds || umount_mgs_client
 	cleanup
 }
 run_test 109a "test lctl clear_conf fsname"
@@ -8007,16 +8030,23 @@ test_109b()
 {
 	[ "$(facet_fstype mgs)" == "zfs" ] &&
 		skip "LU-8727: no implementation for ZFS"
+
 	stopall
 	reformat
 	setup_noconfig
 	client_up || error "client_up failed"
+	#pool commands requires a client on MGS for procfs interfaces
+	if ! combined_mgs_mds ; then
+		mount_mgs_client
+		stack_trap umount_mgs_client EXIT
+	fi
 
 	#
 	# set number of permanent parameters
 	#
 	test_109_set_params $FSNAME
 
+	combined_mgs_mds || umount_mgs_client
 	umount_client $MOUNT || error "umount_client failed"
 	stop_ost || error "stop_ost failed"
 	stop_mds || error "stop_mds failed"
@@ -8031,7 +8061,7 @@ test_109b()
 		error "failed to clear client config"
 
 	setup_noconfig
-
+	combined_mgs_mds || mount_mgs_client
 	#
 	# check that configurations are intact
 	#
@@ -8042,6 +8072,7 @@ test_109b()
 	#
 	destroy_test_pools || error "destroy test pools failed"
 
+	combined_mgs_mds || umount_mgs_client
 	cleanup
 }
 run_test 109b "test lctl clear_conf one config"
@@ -8057,7 +8088,10 @@ test_110()
 		skip "large_dir option is not supported on OSS"
 
 	stopall # stop all targets before modifying the target counts
-	stack_trap "MDSCOUNT=$MDSCOUNT OSTCOUNT=$OSTCOUNT" EXIT
+	local old_mdscount=$MDSCOUNT
+	local old_ostcount=$OSTCOUNT
+	local replace=""
+	stack_trap "MDSCOUNT=$old_mdscount OSTCOUNT=$old_ostcount" EXIT
 	MDSCOUNT=1
 	OSTCOUNT=1
 
@@ -8079,8 +8113,9 @@ test_110()
 	(( MDSSIZE < CONF_SANITY_110_LINKS / 3 * 4/3 * 4/3 )) &&
 		CONF_SANITY_110_LINKS=$((MDSSIZE * 3 * 3/4 * 3/4))
 
+	combined_mgs_mds || replace=" --replace "
 	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
-		    --reformat $(mdsdevname 1) $(mdsvdevname 1)"
+		    $replace --reformat $(mdsdevname 1) $(mdsvdevname 1)"
 	if [[ $opts != *mkfsoptions* ]]; then
 		opts+=" --mkfsoptions=\\\"-O large_dir -b 1024 -i 65536\\\""
 	else
@@ -8088,11 +8123,13 @@ test_110()
 			--mkfsoptions=\\\"-O large_dir -b 1024 -i 65536 }"
 	fi
 	echo "MDT params: $opts"
+	load_modules
+	combined_mgs_mds || start_mgs
 	add mds1 $opts || error "add mds1 failed with new params"
 	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
 
 	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
-		--reformat $(ostdevname 1) $(ostvdevname 1)"
+		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
 
 	if [[ $opts != *mkfsoptions* ]]; then
 		opts+=" --mkfsoptions=\\\"-O large_dir\\\" "
@@ -8129,9 +8166,12 @@ test_110()
 	echo "waiting for PIDs$pids to complete"
 	wait $pids || error "createmany failed after $group groups"
 
+	umount_client $MOUNT2 -f
 	cleanup
 
 	run_e2fsck $(facet_active_host mds1) $(mdsdevname 1) -n
+	MDSCOUNT=$old_mdscount
+	OSTCOUNT=$old_ostcount
 }
 run_test 110 "Adding large_dir with 3-level htree"
 
@@ -8150,15 +8190,19 @@ test_111() {
 
 	# cleanup before changing target counts
 	cleanup
+	local old_mdscount=$MDSCOUNT
+	local old_ostcount=$OSTCOUNT
+	local old_mdssize=$MDSSIZE
+	local replace=""
 	stack_trap "MDSSIZE=$MDSSIZE MDSCOUNT=$MDSCOUNT OSTCOUNT=$OSTCOUNT" EXIT
 	MDSCOUNT=1
 	OSTCOUNT=1
 	(( MDSSIZE < 2400000 )) && MDSSIZE=2400000 # need at least 2.4GB
 
 	local mdsdev=$(mdsdevname 1)
-
+	combined_mgs_mds || replace=" --replace "
 	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
-		    --reformat $(mdsdevname 1) $(mdsvdevname 1)"
+		    $replace --reformat $(mdsdevname 1) $(mdsvdevname 1)"
 	if [[ $opts != *mkfsoptions* ]]; then
 		opts+=" --mkfsoptions=\\\"-O large_dir -i 1048576 \\\" "
 	else
@@ -8166,12 +8210,14 @@ test_111() {
 			--mkfsoptions=\\\"-O large_dir -i 1048576 }"
 	fi
 	echo "MDT params: $opts"
+	load_modules
+	combined_mgs_mds || start_mgs
 	__touch_device mds 1
 	add mds1 $opts || error "add mds1 failed with new params"
 	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
 
 	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
-		--reformat $(ostdevname 1) $(ostvdevname 1)"
+		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
 	if [[ $opts != *mkfsoptions* ]]; then
 		opts+=" --mkfsoptions=\\\"-O large_dir \\\""
 	else
@@ -8237,11 +8283,15 @@ test_111() {
 		(( left > 1200 )) && needskip=1
 	done
 
+	umount_client $MOUNT2 -f
 	cleanup
 
 	(( $needskip )) && skip "ETA ${left}s after $num files / ${taken}s is too long"
 
 	run_e2fsck $(facet_active_host mds1) $(mdsdevname 1) -n
+	MDSCOUNT=$old_mdscount
+	OSTCOUNT=$old_ostcount
+	MDSSIZE=$old_mdssize
 }
 run_test 111 "Adding large_dir with over 2GB directory"
 
@@ -8251,7 +8301,7 @@ cleanup_115()
 	trap 0
 	stopall
 	rm -f $TMP/$tdir/lustre-mdt
-	formatall
+	reformat_and_config
 }
 
 test_115() {
@@ -8350,6 +8400,7 @@ test_116() {
 
 	do_facet $SINGLEMDS $TUNE2FS -l $tmpmnt/$mdtimg |
 		grep -qw 'features.*extent' || error "extent should be enabled"
+	reformat_and_config
 }
 run_test 116 "big size MDT support"
 
@@ -8397,20 +8448,20 @@ test_122() {
 #define OBD_FAIL_OFD_SET_OID 0x1e0
 	do_facet ost1 $LCTL set_param fail_loc=0x00001e0
 
-	setupall
+	setup_noconfig
 	$LFS mkdir -i1 -c1 $DIR/$tdir
 	$LFS setstripe -i0 -c1 $DIR/$tdir
 	do_facet ost1 $LCTL set_param fail_loc=0
 	createmany -o $DIR/$tdir/file_ 1000 ||
 		error "Fail to create a new sequence"
 
-	reformat
+	cleanup
 }
 run_test 122 "Check OST sequence update"
 
 test_123aa() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	# test old logid format until removal from llog_ioctl.c::str2logid()
 	if [ $MGS_VERSION -lt $(version_code 3.1.53) ]; then
@@ -8433,7 +8484,7 @@ test_123ab() {
 	[[ $MGS_VERSION -gt $(version_code 2.11.51) ]] ||
 		skip "Need server with working llog_print support"
 
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	local yaml
 	local orig_val
@@ -8461,7 +8512,7 @@ test_123ac() { # LU-11566
 	local start=10
 	local end=50
 
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	# - { index: 10, event: add_uuid, nid: 192.168.20.1@tcp(0x20000c0a81401,
 	#     node: 192.168.20.1@tcp }
@@ -8480,7 +8531,7 @@ test_123ad() { # LU-11566
 	do_facet mgs "$LCTL help llog_print" 2>&1 | grep -q -- --start ||
 		skip "Need 'lctl llog_print --start' on MGS"
 
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	# append a new record, to avoid issues if last record was cancelled
 	local old=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
@@ -8554,7 +8605,9 @@ test_123ae() { # LU-11566
 run_test 123ae "llog_cancel can cancel requested record"
 
 test_123F() {
-	setupall
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+
+	[ -d $MOUNT/.lustre ] || setup
 	local yaml_file="$TMP/$tfile.yaml"
 	do_facet mgs rm "$yaml_file"
 	local cfgfiles=$(do_facet mgs "lctl --device MGS llog_catlist" |
@@ -8589,6 +8642,7 @@ test_123F() {
 		error "$set_val is not testname"
 
 	do_facet mgs rm "$yaml_file"
+	cleanup
 }
 run_test 123F "clear and reset all parameters using set_param -F"
 
