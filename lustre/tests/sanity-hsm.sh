@@ -4416,38 +4416,63 @@ test_228() {
 run_test 228 "On released file, return extend to FIEMAP. For [cp,tar] --sparse"
 
 test_250() {
-	# test needs a running copytool
+	local file="$DIR/$tdir/$tfile"
+
+	# set max_requests to allow one request of each type to be started (3)
+	stack_trap \
+		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
+	set_hsm_param max_requests 3
+	# speed up test
+	stack_trap \
+		"set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
+	set_hsm_param loop_period 1
+
+	# send 1 requests of each kind twice
 	copytool setup
+	# setup the files
+	for action in archive restore remove; do
+		local filepath="$file"-to-$action
+		local fid=$(create_empty_file "$filepath")
+		local fid2=$(create_empty_file "$filepath".bis)
 
-	mkdir -p $DIR/$tdir
-	local maxrequest=$(get_hsm_param max_requests)
-	local rqcnt=$(($maxrequest * 3))
-	local i=""
+		if [ "$action" != archive ]; then
+			"$LFS" hsm_archive "$filepath"
+			wait_request_state $fid ARCHIVE SUCCEED
+			"$LFS" hsm_archive "$filepath".bis
+			wait_request_state $fid2 ARCHIVE SUCCEED
+		fi
+		if [ "$action" == restore ]; then
+			"$LFS" hsm_release "$filepath"
+			"$LFS" hsm_release "$filepath".bis
+		fi
+	done
 
-	cdt_disable
-	for i in $(seq -w 1 $rqcnt); do
-		rm -f $DIR/$tdir/$i
-		dd if=/dev/urandom of=$DIR/$tdir/$i bs=1M count=10 conv=fsync
+	# suspend the copytool to prevent requests from completing
+	stack_trap "copytool_continue" EXIT
+	copytool_suspend
+
+	# send `max_requests' requests (one of each kind)
+	for action in archive restore remove; do
+		filepath="$file"-to-$action
+		"$LFS" hsm_${action} "$filepath"
+		wait_request_state $(path2fid "$filepath") "${action^^}" STARTED
 	done
-	# we do it in 2 steps, so all requests arrive at the same time
-	for i in $(seq -w 1 $rqcnt); do
-		$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $DIR/$tdir/$i
+
+	# send another batch of requests
+	for action in archive restore remove; do
+		"$LFS" hsm_${action} "$file-to-$action".bis
 	done
-	cdt_enable
-	local cnt=$rqcnt
-	local wt=$rqcnt
-	while [[ $cnt != 0 || $wt != 0 ]]; do
-		sleep 1
-		cnt=$(do_facet $SINGLEMDS "$LCTL get_param -n\
-			$HSM_PARAM.actions |\
-			grep STARTED | grep -v CANCEL | wc -l")
-		[[ $cnt -le $maxrequest ]] ||
-			error "$cnt > $maxrequest too many started requests"
-		wt=$(do_facet $SINGLEMDS "$LCTL get_param\
-			$HSM_PARAM.actions |\
-			grep WAITING | wc -l")
-		echo "max=$maxrequest started=$cnt waiting=$wt"
-	done
+	# wait for `loop_period' seconds to make sure the coordinator has time
+	# to register those, even though it should not
+	sleep 1
+
+	# only the first batch of request should be started
+	local -i count
+	count=$(do_facet $SINGLEMDS "$LCTL" get_param -n $HSM_PARAM.actions |
+		grep -c STARTED)
+
+	((count == 3)) ||
+		error "expected 3 STARTED requests, found $count"
 }
 run_test 250 "Coordinator max request"
 
