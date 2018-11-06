@@ -297,21 +297,21 @@ extern void cfs_trace_assertion_failed(const char *str,
                                        struct libcfs_debug_msg_data *m);
 
 /* ASSERTION that is safe to use within the debug system */
-#define __LASSERT(cond)                                                 \
-do {                                                                    \
-        if (unlikely(!(cond))) {                                        \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);     \
-                cfs_trace_assertion_failed("ASSERTION("#cond") failed", \
-                                           &msgdata);                   \
-        }                                                               \
+#define __LASSERT(cond)							\
+do {									\
+	if (unlikely(!(cond))) {					\
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);	\
+		cfs_trace_assertion_failed("ASSERTION("#cond") failed",	\
+					   &msgdata);			\
+	}								\
 } while (0)
 
-#define __LASSERT_TAGE_INVARIANT(tage)                                  \
-do {                                                                    \
-        __LASSERT(tage != NULL);                                        \
-        __LASSERT(tage->page != NULL);                                  \
-	__LASSERT(tage->used <= PAGE_SIZE);                         \
-	__LASSERT(page_count(tage->page) > 0);                      \
+#define __LASSERT_TAGE_INVARIANT(tage)					\
+do {									\
+	__LASSERT(tage != NULL);					\
+	__LASSERT(tage->page != NULL);					\
+	__LASSERT(tage->used <= PAGE_SIZE);				\
+	__LASSERT(page_count(tage->page) > 0);				\
 } while (0)
 
 #endif	/* LUSTRE_TRACEFILE_PRIVATE */

@@ -57,10 +57,10 @@ static int osc_io_unplug_async(const struct lu_env *env,
 static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 			   unsigned int lost_grant, unsigned int dirty_grant);
 
-static void osc_extent_tree_dump0(int level, struct osc_object *obj,
+static void osc_extent_tree_dump0(int mask, struct osc_object *obj,
 				  const char *func, int line);
-#define osc_extent_tree_dump(lvl, obj) \
-	osc_extent_tree_dump0(lvl, obj, __func__, __LINE__)
+#define osc_extent_tree_dump(mask, obj) \
+	osc_extent_tree_dump0(mask, obj, __func__, __LINE__)
 
 static void osc_unreserve_grant(struct client_obd *cli, unsigned int reserved,
 				unsigned int unused);
@@ -104,18 +104,19 @@ static inline char list_empty_marker(struct list_head *list)
 static const char *oes_strings[] = {
 	"inv", "active", "cache", "locking", "lockdone", "rpc", "trunc", NULL };
 
-#define OSC_EXTENT_DUMP(lvl, extent, fmt, ...) do {			      \
+#define OSC_EXTENT_DUMP_WITH_LOC(file, func, line, mask, extent, fmt, ...) do {\
+	static struct cfs_debug_limit_state cdls;			      \
 	struct osc_extent *__ext = (extent);				      \
 	char __buf[16];							      \
 									      \
-	CDEBUG(lvl,							      \
+	__CDEBUG_WITH_LOC(file, func, line, mask, &cdls,		      \
 		"extent %p@{" EXTSTR ", "				      \
 		"[%d|%d|%c|%s|%s|%p], [%d|%d|%c|%c|%p|%u|%p]} " fmt,	      \
 		/* ----- extent part 0 ----- */				      \
 		__ext, EXTPARA(__ext),					      \
 		/* ----- part 1 ----- */				      \
-		atomic_read(&__ext->oe_refc),			      \
-		atomic_read(&__ext->oe_users),			      \
+		atomic_read(&__ext->oe_refc),				      \
+		atomic_read(&__ext->oe_users),				      \
 		list_empty_marker(&__ext->oe_link),			      \
 		oes_strings[__ext->oe_state], ext_flags(__ext, __buf),	      \
 		__ext->oe_obj,						      \
@@ -126,11 +127,15 @@ static const char *oes_strings[] = {
 		__ext->oe_dlmlock, __ext->oe_mppr, __ext->oe_owner,	      \
 		/* ----- part 4 ----- */				      \
 		## __VA_ARGS__);					      \
-	if (lvl == D_ERROR && __ext->oe_dlmlock != NULL)		      \
+	if (mask == D_ERROR && __ext->oe_dlmlock != NULL)		      \
 		LDLM_ERROR(__ext->oe_dlmlock, "extent: %p", __ext);	      \
 	else								      \
 		LDLM_DEBUG(__ext->oe_dlmlock, "extent: %p", __ext);	      \
 } while (0)
+
+#define OSC_EXTENT_DUMP(mask, ext, fmt, ...)				\
+	OSC_EXTENT_DUMP_WITH_LOC(__FILE__, __func__, __LINE__,		\
+				 mask, ext, fmt, ## __VA_ARGS__)
 
 #undef EASSERTF
 #define EASSERTF(expr, ext, fmt, args...) do {				\
@@ -263,9 +268,9 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 
 out:
 	if (rc != 0)
-		OSC_EXTENT_DUMP(D_ERROR, ext,
-				"%s:%d sanity check %p failed with rc = %d\n",
-				func, line, ext, rc);
+		OSC_EXTENT_DUMP_WITH_LOC(__FILE__, func, line, D_ERROR, ext,
+					 "sanity check %p failed: rc = %d\n",
+					 ext, rc);
 	return rc;
 }
 
@@ -1228,34 +1233,34 @@ out:
 	RETURN(rc);
 }
 
-static void osc_extent_tree_dump0(int level, struct osc_object *obj,
+static void osc_extent_tree_dump0(int mask, struct osc_object *obj,
 				  const char *func, int line)
 {
 	struct osc_extent *ext;
 	int cnt;
 
-	if (!cfs_cdebug_show(level, DEBUG_SUBSYSTEM))
+	if (!cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))
 		return;
 
-	CDEBUG(level, "Dump object %p extents at %s:%d, mppr: %u.\n",
+	CDEBUG(mask, "Dump object %p extents at %s:%d, mppr: %u.\n",
 	       obj, func, line, osc_cli(obj)->cl_max_pages_per_rpc);
 
 	/* osc_object_lock(obj); */
 	cnt = 1;
 	for (ext = first_extent(obj); ext != NULL; ext = next_extent(ext))
-		OSC_EXTENT_DUMP(level, ext, "in tree %d.\n", cnt++);
+		OSC_EXTENT_DUMP(mask, ext, "in tree %d.\n", cnt++);
 
 	cnt = 1;
 	list_for_each_entry(ext, &obj->oo_hp_exts, oe_link)
-		OSC_EXTENT_DUMP(level, ext, "hp %d.\n", cnt++);
+		OSC_EXTENT_DUMP(mask, ext, "hp %d.\n", cnt++);
 
 	cnt = 1;
 	list_for_each_entry(ext, &obj->oo_urgent_exts, oe_link)
-		OSC_EXTENT_DUMP(level, ext, "urgent %d.\n", cnt++);
+		OSC_EXTENT_DUMP(mask, ext, "urgent %d.\n", cnt++);
 
 	cnt = 1;
 	list_for_each_entry(ext, &obj->oo_reading_exts, oe_link)
-		OSC_EXTENT_DUMP(level, ext, "reading %d.\n", cnt++);
+		OSC_EXTENT_DUMP(mask, ext, "reading %d.\n", cnt++);
 	/* osc_object_unlock(obj); */
 }
 
@@ -1375,9 +1380,9 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 	RETURN(0);
 }
 
-#define OSC_DUMP_GRANT(lvl, cli, fmt, args...) do {			\
+#define OSC_DUMP_GRANT(mask, cli, fmt, args...) do {			\
 	struct client_obd *__tmp = (cli);				\
-	CDEBUG(lvl, "%s: grant { dirty: %ld/%ld dirty_pages: %ld/%lu "	\
+	CDEBUG(mask, "%s: grant { dirty: %ld/%ld dirty_pages: %ld/%lu "	\
 	       "dropped: %ld avail: %ld, dirty_grant: %ld, "		\
 	       "reserved: %ld, flight: %d } lru {in list: %ld, "	\
 	       "left: %ld, waiters: %d }" fmt "\n",			\
