@@ -665,9 +665,9 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 		if (bits & MDS_INODELOCK_LOOKUP)
 			d_lustre_revalidate(*de);
 	} else if (!it_disposition(it, DISP_OPEN_CREATE)) {
-		/* If file created on server, don't depend on parent UPDATE
-		 * lock to unhide it. It is left hidden and next lookup can
-		 * find it in ll_splice_alias.
+		/*
+		 * If file was created on the server, the dentry is revalidated
+		 * in ll_create_it if the lock allows for it.
 		 */
 		/* Check that parent has UPDATE lock. */
 		struct lookup_intent parent_it = {
@@ -1148,6 +1148,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 			void *secctx, __u32 secctxlen)
 {
 	struct inode *inode;
+	__u64 bits = 0;
 	int rc = 0;
 	ENTRY;
 
@@ -1182,6 +1183,10 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 		if (rc)
 			RETURN(rc);
 	}
+
+	ll_set_lock_data(ll_i2sbi(dir)->ll_md_exp, inode, it, &bits);
+	if (bits & MDS_INODELOCK_LOOKUP)
+		d_lustre_revalidate(dentry);
 
 	RETURN(0);
 }
