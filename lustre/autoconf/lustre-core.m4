@@ -331,9 +331,7 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 
 	int main(void) {
 		int rc;
-		HMAC_CTX ctx;
-		HMAC_CTX_init(&ctx);
-		rc = HMAC_Init_ex(&ctx, "test", 4, EVP_md_null(), NULL);
+		rc = HMAC_Init_ex(NULL, "test", 4, EVP_md_null(), NULL);
 	}
 ])],[AC_DEFINE(HAVE_OPENSSL_SSK, 1,
 	       [OpenSSL HMAC functions needed for SSK])],

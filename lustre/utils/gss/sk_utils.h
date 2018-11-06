@@ -33,6 +33,7 @@
 #include <linux/lustre/lustre_idl.h>
 #include <openssl/dh.h>
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 #include <sys/types.h>
 
 #include <libcfs/libcfs_crypto.h>
@@ -49,6 +50,74 @@
 #define LL_CRYPTO_MAX_NAME 128
 #else
 #define LL_CRYPTO_MAX_NAME 64
+#endif
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+static inline HMAC_CTX *HMAC_CTX_new(void)
+{
+	HMAC_CTX *ctx = OPENSSL_malloc(sizeof(*ctx));
+
+	if (ctx != NULL)
+		HMAC_CTX_init(ctx);
+	return ctx;
+}
+
+static inline void HMAC_CTX_free(HMAC_CTX *ctx)
+{
+	if (ctx != NULL) {
+		HMAC_CTX_cleanup(ctx);
+		OPENSSL_cleanse(ctx, sizeof(*ctx));
+		OPENSSL_free(ctx);
+	}
+}
+static inline void DH_get0_pqg(const DH *dh,
+			       const BIGNUM **p, const BIGNUM **q,
+			       const BIGNUM **g)
+{
+	if (p != NULL)
+		*p = dh->p;
+	if (q != NULL)
+		*q = dh->q;
+	if (g != NULL)
+		*g = dh->g;
+}
+
+static inline int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g)
+{
+	/* If the fields p and g in dh are NULL, the corresponding input
+	 * parameters MUST be non-NULL.  q may remain NULL.
+	 */
+	if ((dh->p == NULL && p == NULL)
+	    || (dh->g == NULL && g == NULL))
+		return 0;
+
+	if (p != NULL) {
+		BN_free(dh->p);
+		dh->p = p;
+	}
+	if (q != NULL) {
+		BN_free(dh->q);
+		dh->q = q;
+	}
+	if (g != NULL) {
+		BN_free(dh->g);
+		dh->g = g;
+	}
+
+	if (q != NULL)
+		dh->length = BN_num_bits(q);
+
+	return 1;
+}
+
+static inline void DH_get0_key(const DH *dh, const BIGNUM **pub_key,
+			       const BIGNUM **priv_key)
+{
+	if (pub_key != NULL)
+		*pub_key = dh->pub_key;
+	if (priv_key != NULL)
+		*priv_key = dh->priv_key;
+}
 #endif
 
 /* Some limits and defaults */

@@ -298,7 +298,7 @@ int main(int argc, char **argv)
 	int opt;
 	enum sk_key_type type = SK_TYPE_INVALID;
 	bool generate_prime = false;
-	DH *dh;
+	DH *dh = NULL;
 
 	static struct option long_opts[] = {
 	{ .name = "crypt",	.has_arg = required_argument, .val = 'c'},
@@ -556,20 +556,38 @@ int main(int argc, char **argv)
 	}
 
 	if (generate_prime) {
+		const BIGNUM *p;
+		int rc;
+
 		printf("Generating DH parameters, this can take a while...\n");
-		dh = DH_generate_parameters(config->skc_prime_bits,
-					    SK_GENERATOR, NULL, NULL);
-		if (BN_num_bytes(dh->p) > SK_MAX_P_BYTES) {
+		dh = DH_new();
+		if (!dh) {
+			fprintf(stderr, "error: dh cannot be allocated\n");
+			goto error;
+		}
+
+		rc = DH_generate_parameters_ex(dh, config->skc_prime_bits,
+					       SK_GENERATOR, NULL);
+		if (rc != 1) {
+			fprintf(stderr, "error generating DH parameters\n");
+			goto error;
+		}
+
+		DH_get0_pqg(dh, &p, NULL, NULL);
+
+		if (BN_num_bytes(p) > SK_MAX_P_BYTES) {
 			fprintf(stderr, "error: cannot generate DH parameters: "
 				"requested length %d exceeds maximum %d\n",
 				config->skc_prime_bits, SK_MAX_P_BYTES * 8);
 			goto error;
 		}
-		if (BN_bn2bin(dh->p, config->skc_p) != BN_num_bytes(dh->p)) {
+		if (BN_bn2bin(p, config->skc_p) != BN_num_bytes(p)) {
 			fprintf(stderr,
 				"error: convert BIGNUM p to binary failed\n");
 			goto error;
 		}
+
+		DH_free(dh);
 	}
 
 	if (write_config_file(modify ?: output, config, modify))
@@ -578,6 +596,7 @@ int main(int argc, char **argv)
 	return EXIT_SUCCESS;
 
 error:
+	DH_free(dh);
 	free(config);
 	return EXIT_FAILURE;
 }

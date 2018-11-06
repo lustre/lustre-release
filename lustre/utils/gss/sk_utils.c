@@ -691,6 +691,8 @@ out_err:
 uint32_t sk_gen_params(struct sk_cred *skc)
 {
 	uint32_t random;
+	BIGNUM *p, *g;
+	const BIGNUM *pub_key;
 	int rc;
 
 	/* Random value used by both the request and response as part of the
@@ -716,20 +718,25 @@ uint32_t sk_gen_params(struct sk_cred *skc)
 		return GSS_S_FAILURE;
 	}
 
-	skc->sc_params->p = BN_bin2bn(skc->sc_p.value, skc->sc_p.length, NULL);
-	if (!skc->sc_params->p) {
+	p = BN_bin2bn(skc->sc_p.value, skc->sc_p.length, NULL);
+	if (!p) {
 		printerr(0, "Failed to convert binary to BIGNUM\n");
 		return GSS_S_FAILURE;
 	}
 
 	/* We use a static generator for shared key */
-	skc->sc_params->g = BN_new();
-	if (!skc->sc_params->g) {
+	g = BN_new();
+	if (!g) {
 		printerr(0, "Failed to allocate new BIGNUM\n");
 		return GSS_S_FAILURE;
 	}
-	if (BN_set_word(skc->sc_params->g, SK_GENERATOR) != 1) {
+	if (BN_set_word(g, SK_GENERATOR) != 1) {
 		printerr(0, "Failed to set g value for DH params\n");
+		return GSS_S_FAILURE;
+	}
+
+	if (!DH_set0_pqg(skc->sc_params, p, NULL, g)) {
+		printerr(0, "Failed to set pqg\n");
 		return GSS_S_FAILURE;
 	}
 
@@ -748,14 +755,15 @@ uint32_t sk_gen_params(struct sk_cred *skc)
 		return GSS_S_FAILURE;
 	}
 
-	skc->sc_pub_key.length = BN_num_bytes(skc->sc_params->pub_key);
+	DH_get0_key(skc->sc_params, &pub_key, NULL);
+	skc->sc_pub_key.length = BN_num_bytes(pub_key);
 	skc->sc_pub_key.value = malloc(skc->sc_pub_key.length);
 	if (!skc->sc_pub_key.value) {
 		printerr(0, "Failed to allocate memory for public key\n");
 		return GSS_S_FAILURE;
 	}
 
-	BN_bn2bin(skc->sc_params->pub_key, skc->sc_pub_key.value);
+	BN_bn2bin(pub_key, skc->sc_pub_key.value);
 
 	return GSS_S_COMPLETE;
 }
@@ -797,7 +805,7 @@ static inline const EVP_MD *sk_hash_to_evp_md(enum cfs_crypto_hash_alg alg)
 int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		 const EVP_MD *hash_alg, gss_buffer_desc *hmac)
 {
-	HMAC_CTX hctx;
+	HMAC_CTX *hctx;
 	unsigned int hashlen = EVP_MD_size(hash_alg);
 	int i;
 	int rc = -1;
@@ -807,7 +815,7 @@ int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		return -1;
 	}
 
-	HMAC_CTX_init(&hctx);
+	hctx = HMAC_CTX_new();
 
 	hmac->length = hashlen;
 	hmac->value = malloc(hashlen);
@@ -816,20 +824,20 @@ int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		goto out;
 	}
 
-	if (HMAC_Init_ex(&hctx, key->value, key->length, hash_alg, NULL) != 1) {
+	if (HMAC_Init_ex(hctx, key->value, key->length, hash_alg, NULL) != 1) {
 		printerr(0, "Failed to init HMAC\n");
 		goto out;
 	}
 
 	for (i = 0; i < numbufs; i++) {
-		if (HMAC_Update(&hctx, bufs[i].value, bufs[i].length) != 1) {
+		if (HMAC_Update(hctx, bufs[i].value, bufs[i].length) != 1) {
 			printerr(0, "Failed to update HMAC\n");
 			goto out;
 		}
 	}
 
 	/* The result gets populated in hmac */
-	if (HMAC_Final(&hctx, hmac->value, &hashlen) != 1) {
+	if (HMAC_Final(hctx, hmac->value, &hashlen) != 1) {
 		printerr(0, "Failed to finalize HMAC\n");
 		goto out;
 	}
@@ -841,7 +849,7 @@ int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 
 	rc = 0;
 out:
-	HMAC_CTX_cleanup(&hctx);
+	HMAC_CTX_free(hctx);
 	return rc;
 }
 
