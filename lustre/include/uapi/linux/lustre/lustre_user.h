@@ -201,15 +201,47 @@ struct ost_layout {
 	__u32	ol_comp_id;
 } __attribute__((packed));
 
-/* keep this one for compatibility */
-struct filter_fid_old {
-	struct lu_fid	ff_parent;
-	__u64		ff_objid;
-	__u64		ff_seq;
+/* The filter_fid structure has changed several times over its lifetime.
+ * For a long time "trusted.fid" held the MDT inode parent FID/IGIF and
+ * stripe_index and the "self FID" (objid/seq) to be able to recover the
+ * OST objects in case of corruption.  With the move to 2.4 and OSD-API for
+ * the OST, the "trusted.lma" xattr was added to the OST objects to store
+ * the "self FID" to be consistent with the MDT on-disk format, and the
+ * filter_fid only stored the MDT inode parent FID and stripe index.
+ *
+ * In 2.10, the addition of PFL composite layouts required more information
+ * to be stored into the filter_fid in order to be able to identify which
+ * component the OST object belonged.  As well, the stripe size may vary
+ * between components, so it was no longer safe to assume the stripe size
+ * or stripe_count of a file.  This is also more robust for plain layouts.
+ *
+ * For ldiskfs OSTs that were formatted with 256-byte inodes, there is not
+ * enough space to store both the filter_fid and LMA in the inode, so they
+ * are packed into struct lustre_ost_attrs on disk in trusted.lma to avoid
+ * an extra seek for every OST object access.
+ *
+ * In 2.11, FLR mirror layouts also need to store the layout version and
+ * range so that writes to old versions of the layout are not allowed.
+ * That ensures that mirrored objects are not modified by evicted clients,
+ * and ensures that the components are correctly marked stale on the MDT.
+ */
+struct filter_fid_18_23 {
+	struct lu_fid		ff_parent;	/* stripe_idx in f_ver */
+	__u64			ff_objid;
+	__u64			ff_seq;
+};
+
+struct filter_fid_24_29 {
+	struct lu_fid		ff_parent;	/* stripe_idx in f_ver */
+};
+
+struct filter_fid_210 {
+	struct lu_fid		ff_parent;	/* stripe_idx in f_ver */
+	struct ost_layout	ff_layout;
 };
 
 struct filter_fid {
-	struct lu_fid		ff_parent;
+	struct lu_fid		ff_parent;	/* stripe_idx in f_ver */
 	struct ost_layout	ff_layout;
 	__u32			ff_layout_version;
 	__u32			ff_range; /* range of layout version that

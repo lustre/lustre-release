@@ -163,13 +163,13 @@ static int
 osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 		     struct inode *inode, const struct lu_fid *fid)
 {
-	struct filter_fid_old   *ff	 = &info->oti_ff;
-	struct dentry		*dentry  = &info->oti_obj_dentry;
-	struct lu_fid		*tfid	 = &info->oti_fid;
-	handle_t		*jh;
-	int			 size	 = 0;
-	int			 rc;
-	bool			 reset   = false;
+	struct filter_fid_18_23 *ff = &info->oti_ff_old;
+	struct dentry *dentry = &info->oti_obj_dentry;
+	struct lu_fid *tfid = &info->oti_fid;
+	bool fid_18_23 = false;
+	handle_t *jh;
+	int size = 0;
+	int rc;
 	ENTRY;
 
 	if (dev->od_scrub.os_scrub.os_file.sf_param & SP_DRYRUN)
@@ -212,14 +212,14 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 		if (rc)
 			GOTO(stop, rc);
 
-		reset = true;
-	} else if (rc != -ENODATA && rc != sizeof(struct filter_fid)) {
+		fid_18_23 = true;
+	} else if (rc != -ENODATA && rc < (int)sizeof(struct filter_fid_24_29)) {
 		GOTO(stop, rc = -EINVAL);
 	}
 
 	/* 3) make new LMA and add it */
 	rc = osd_ea_fid_set(info, inode, tfid, LMAC_FID_ON_OST, 0);
-	if (reset) {
+	if (fid_18_23) {
 		if (rc)
 			/* If failed, we should try to add the old back. */
 			size = sizeof(*ff);
@@ -674,7 +674,7 @@ static int osd_scrub_get_fid(struct osd_thread_info *info,
 		rc = osd_get_idif(info, inode, &info->oti_obj_dentry, fid);
 		if (rc == 0) {
 			if (scrub)
-				/* It is old 2.x (x <= 3) or 1.8 OST-object. */
+				/* It is 2.3 or older OST-object. */
 				rc = SCRUB_NEXT_OSTOBJ_OLD;
 			return rc;
 		}
@@ -685,7 +685,7 @@ static int osd_scrub_get_fid(struct osd_thread_info *info,
 				 * to generate its FID, ignore it directly. */
 				rc = SCRUB_NEXT_CONTINUE;
 			else
-				/* It is 2.4 OST-object. */
+				/* It is 2.4 or newer OST-object. */
 				rc = SCRUB_NEXT_OSTOBJ_OLD;
 			return rc;
 		}
@@ -2014,7 +2014,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 
 /**
  * It scans the /lost+found, and for the OST-object (with filter_fid
- * or filter_fid_old), move them back to its proper /O/<seq>/d<x>.
+ * or filter_fid_18_23), move them back to its proper /O/<seq>/d<x>.
  */
 #ifdef HAVE_FILLDIR_USE_CTX
 static int osd_ios_lf_fill(struct dir_context *buf,
@@ -2649,7 +2649,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		 * an old device, it can be found and cleared later.
 		 *
 		 * For the system with "SIF_NO_HANDLE_OLD_FID", we do not
-		 * need to check "filter_fid_old" and to convert it to
+		 * need to check "filter_fid_18_23" and to convert it to
 		 * "filter_fid" for each object, and all the IGIF should
 		 * have their FID mapping in OI files already. */
 		if (dev->od_maybe_new && rc == -ENOENT)

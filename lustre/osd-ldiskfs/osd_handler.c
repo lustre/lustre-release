@@ -706,29 +706,30 @@ put:
 }
 
 /**
- * \retval +v: new filter_fid, does not contain self-fid
- * \retval 0:  filter_fid_old, contains self-fid
+ * \retval +v: new filter_fid does not contain self-fid
+ * \retval 0:  filter_fid_18_23, contains self-fid
  * \retval -v: other failure cases
  */
 int osd_get_idif(struct osd_thread_info *info, struct inode *inode,
 		 struct dentry *dentry, struct lu_fid *fid)
 {
-	struct filter_fid_old *ff = &info->oti_ff;
+	struct filter_fid *ff = &info->oti_ff;
 	struct ost_id *ostid = &info->oti_ostid;
 	int rc;
 
 	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_FID, ff, sizeof(*ff));
-	if (rc == sizeof(*ff)) {
-		rc = 0;
-		ostid_set_seq(ostid, le64_to_cpu(ff->ff_seq));
-		rc = ostid_set_id(ostid, le64_to_cpu(ff->ff_objid));
+	if (rc == sizeof(struct filter_fid_18_23)) {
+		struct filter_fid_18_23 *ff_old = (void *)ff;
+
+		ostid_set_seq(ostid, le64_to_cpu(ff_old->ff_seq));
+		rc = ostid_set_id(ostid, le64_to_cpu(ff_old->ff_objid));
 		/*
 		 * XXX: use 0 as the index for compatibility, the caller will
 		 * handle index related issues when necessary.
 		 */
 		if (!rc)
 			ostid_to_fid(fid, ostid, 0);
-	} else if (rc == sizeof(struct filter_fid)) {
+	} else if (rc >= (int)sizeof(struct filter_fid_24_29)) {
 		rc = 1;
 	} else if (rc >= 0) {
 		rc = -EINVAL;
@@ -782,7 +783,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	if (rc == -ENODATA && !fid_is_igif(rfid) && osd->od_check_ff) {
 		fid = &lma->lma_self_fid;
 		rc = osd_get_idif(info, inode, dentry, fid);
-		if ((rc > 0) || (rc == -ENODATA && osd->od_index_in_idif)) {
+		if (rc > 0 || (rc == -ENODATA && osd->od_index_in_idif)) {
 			/*
 			 * For the given OST-object, if it has neither LMA nor
 			 * FID in XATTR_NAME_FID, then the given FID (which is
