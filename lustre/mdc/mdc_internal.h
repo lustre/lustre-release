@@ -173,7 +173,8 @@ int mdc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
 int mdc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data);
 int mdc_fill_lvb(struct ptlrpc_request *req, struct ost_lvb *lvb);
 
-#define MDC_DOM_DEF_INLINE_REPSIZE 8192
+/* the minimum inline repsize should be PAGE_SIZE at least */
+#define MDC_DOM_DEF_INLINE_REPSIZE max(8192UL, PAGE_SIZE)
 #define MDC_DOM_MAX_INLINE_REPSIZE XATTR_SIZE_MAX
 
 #endif

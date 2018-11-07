@@ -443,8 +443,26 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	if (rnb == NULL || rnb->rnb_len == 0)
 		RETURN_EXIT;
 
-	CDEBUG(D_INFO, "Get data buffer along with open, len %i, i_size %llu\n",
-	       rnb->rnb_len, i_size_read(inode));
+	/* LU-11595: Server may return whole file and that is OK always or
+	 * it may return just file tail and its offset must be aligned with
+	 * client PAGE_SIZE to be used on that client, if server's PAGE_SIZE is
+	 * smaller then offset may be not aligned and that data is just ignored.
+	 */
+	if (rnb->rnb_offset % PAGE_SIZE)
+		RETURN_EXIT;
+
+	/* Server returns whole file or just file tail if it fills in
+	 * reply buffer, in both cases total size should be inode size.
+	 */
+	if (rnb->rnb_offset + rnb->rnb_len < i_size_read(inode)) {
+		CERROR("%s: server returns off/len %llu/%u < i_size %llu\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0), rnb->rnb_offset,
+		       rnb->rnb_len, i_size_read(inode));
+		RETURN_EXIT;
+	}
+
+	CDEBUG(D_INFO, "Get data along with open at %llu len %i, i_size %llu\n",
+	       rnb->rnb_offset, rnb->rnb_len, i_size_read(inode));
 
 	data = (char *)rnb + sizeof(*rnb);
 

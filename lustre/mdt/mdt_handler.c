@@ -2169,7 +2169,7 @@ out_shrink:
 	 * Data-on-MDT optimization - read data along with OPEN and return it
 	 * in reply. Do that only if we have both DOM and LAYOUT locks.
 	 */
-	if (rc == 0 && op == REINT_OPEN &&
+	if (rc == 0 && op == REINT_OPEN && !req_is_replay(pill->rc_req) &&
 	    info->mti_attr.ma_lmm != NULL &&
 	    mdt_lmm_dom_entry(info->mti_attr.ma_lmm) == LMM_DOM_ONLY) {
 		rc = mdt_dom_read_on_open(info, info->mti_mdt,

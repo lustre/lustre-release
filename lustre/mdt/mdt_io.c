@@ -1465,9 +1465,26 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		len = mbo->mbo_dom_size;
 		offset = 0;
 	} else {
-		int tail = mbo->mbo_dom_size % PAGE_SIZE;
+		int tail, pgbits;
 
-		/* no tail or tail can't fit in reply */
+		/* File tail offset must be aligned with larger page size
+		 * between client and server, so the maximum page size is
+		 * used here to align offset.
+		 *
+		 * NB: DOM feature was introduced when server supports pagebits
+		 * already, so it should be always non-zero value. Report error
+		 * if it is not for some reason.
+		 */
+		if (!req->rq_export->exp_target_data.ted_pagebits) {
+			CERROR("%s: client page bits are not saved on server\n",
+			       mdt_obd_name(mdt));
+			RETURN(0);
+		}
+		pgbits = max_t(int, PAGE_SHIFT,
+			       req->rq_export->exp_target_data.ted_pagebits);
+		tail = mbo->mbo_dom_size % (1 << pgbits);
+
+		/* no partial tail or tail can't fit in reply */
 		if (tail == 0 || len < tail)
 			RETURN(0);
 
@@ -1482,22 +1499,23 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		GOTO(out, rc = -E2BIG);
 	}
 
-	/* re-take MDT_BODY buffer after the buffer growing above */
+	/* re-take MDT_BODY and NIOBUF_INLINE buffers after the buffer grow */
 	mbo = req_capsule_server_get(pill, &RMF_MDT_BODY);
 	fid = &mbo->mbo_fid1;
 	if (!fid_is_sane(fid))
-		RETURN(0);
+		GOTO(out, rc = -EINVAL);
 
 	rnb = req_capsule_server_get(tsi->tsi_pill, &RMF_NIOBUF_INLINE);
 	if (rnb == NULL)
 		GOTO(out, rc = -EPROTO);
+
 	buf = (char *)rnb + sizeof(*rnb);
 	rnb->rnb_len = len;
 	rnb->rnb_offset = offset;
 
 	mo = dt_locate(env, dt, fid);
 	if (IS_ERR(mo))
-		GOTO(out, rc = PTR_ERR(mo));
+		GOTO(out_rnb, rc = PTR_ERR(mo));
 	LASSERT(mo != NULL);
 
 	dt_read_lock(env, mo, 0);
@@ -1535,11 +1553,14 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	}
 	CDEBUG(D_INFO, "Read %i (wanted %u) bytes from %llu\n", copied,
 	       len, offset);
-	if (copied < len)
+	if (copied < len) {
 		CWARN("%s: read %i bytes for "DFID
 		      " but wanted %u, is size wrong?\n",
 		      tsi->tsi_exp->exp_obd->obd_name, copied,
 		      PFID(&tsi->tsi_fid), len);
+		/* Ignore partially copied data */
+		copied = 0;
+	}
 	EXIT;
 buf_put:
 	dt_bufs_put(env, mo, lnb, nr_local);
@@ -1548,9 +1569,15 @@ free:
 unlock:
 	dt_read_unlock(env, mo);
 	lu_object_put(env, &mo->do_lu);
+out_rnb:
+	rnb->rnb_len = copied;
 out:
-	if (rnb != NULL)
-		rnb->rnb_len = copied;
+	/* Don't fail OPEN request if read-on-open is failed, but drop
+	 * a message in log about the error.
+	 */
+	if (rc)
+		CDEBUG(D_INFO, "Read-on-open is failed, rc = %d", rc);
+
 	RETURN(0);
 }
 
