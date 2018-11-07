@@ -619,31 +619,31 @@ struct osd_thread_info {
 	struct osd_idmap_cache oti_cache;
 
 	/* dedicated OI cache for insert (which needs inum) */
-	struct osd_idmap_cache *oti_ins_cache;
-	int		       oti_ins_cache_size;
-	int		       oti_ins_cache_used;
+	struct osd_idmap_cache		*oti_ins_cache;
+	int				oti_ins_cache_size;
+	int				oti_ins_cache_used;
 	/* inc by osd_trans_create and dec by osd_trans_stop */
-	int		       oti_ins_cache_depth;
+	int				oti_ins_cache_depth;
 
-        int                    oti_r_locks;
-        int                    oti_w_locks;
-        int                    oti_txns;
-        /** used in osd_fid_set() to put xattr */
-        struct lu_buf          oti_buf;
-	struct lu_buf	       oti_big_buf;
-        /** used in osd_ea_fid_set() to set fid into common ea */
+	int				oti_r_locks;
+	int				oti_w_locks;
+	int				oti_txns;
+	/** used in osd_fid_set() to put xattr */
+	struct lu_buf			oti_buf;
+	struct lu_buf			oti_big_buf;
+	/** used in osd_ea_fid_set() to set fid into common ea */
 	union {
 		struct lustre_ost_attrs oti_ost_attrs;
-		struct filter_fid_old	oti_ff;
-		struct filter_fid	oti_ff_new;
+		struct filter_fid_18_23	oti_ff_old;
+		struct filter_fid	oti_ff;
 	};
 	/** 0-copy IO */
-	struct osd_iobuf       oti_iobuf;
+	struct osd_iobuf		oti_iobuf;
 	/* used to access objects in /O */
-	struct inode          *oti_inode;
+	struct inode			*oti_inode;
 #define OSD_FID_REC_SZ 32
-	char		       oti_ldp[OSD_FID_REC_SZ];
-	char		       oti_ldp2[OSD_FID_REC_SZ];
+	char				oti_ldp[OSD_FID_REC_SZ];
+	char				oti_ldp2[OSD_FID_REC_SZ];
 
 	/* used by quota code */
 	union {
