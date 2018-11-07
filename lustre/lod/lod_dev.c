@@ -961,6 +961,7 @@ static int lod_process_config(const struct lu_env *env,
 
 	case LCFG_PARAM: {
 		struct obd_device *obd;
+		ssize_t count;
 		char *param;
 
 		/* Check if it is activate/deactivate mdc
@@ -1033,16 +1034,13 @@ static int lod_process_config(const struct lu_env *env,
 		}
 
 
-		obd = lod2obd(lod);
 		if (strstr(param, PARAM_LOD) != NULL)
-			rc = class_process_proc_param(PARAM_LOD, obd->obd_vars,
-					      lcfg, obd);
+			count = class_modify_config(lcfg, PARAM_LOD,
+						    &lod->lod_dt_dev.dd_kobj);
 		else
-			rc = class_process_proc_param(PARAM_LOV, obd->obd_vars,
-					      lcfg, obd);
-		if (rc > 0)
-			rc = 0;
-
+			count = class_modify_config(lcfg, PARAM_LOV,
+						    &lod->lod_dt_dev.dd_kobj);
+		rc = count > 0 ? 0 : count;
 		GOTO(out, rc);
 	}
 	case LCFG_PRE_CLEANUP: {

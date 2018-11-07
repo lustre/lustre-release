@@ -322,12 +322,15 @@ static ssize_t stripecount_store(struct kobject *kobj, struct attribute *attr,
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
-	u32 stripe_count;
+	int stripe_count;
 	int rc;
 
-	rc = kstrtouint(buffer, 0, &stripe_count);
+	rc = kstrtoint(buffer, 0, &stripe_count);
 	if (rc)
 		return rc;
+
+	if (stripe_count < -1)
+		return -ERANGE;
 
 	lod_fix_desc_stripe_count(&stripe_count);
 	lod->lod_desc.ld_default_stripe_count = stripe_count;
