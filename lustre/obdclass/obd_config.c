@@ -1711,6 +1711,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		lustre_cfg_bufs_init(&bufs, lcfg);
 
 		if (cfg->cfg_instance &&
+		    lcfg->lcfg_command != LCFG_SPTLRPC_CONF &&
 		    LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
 			inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
 				   sizeof(cfg->cfg_instance) * 2 + 4;
@@ -1739,14 +1740,16 @@ int class_config_llog_handler(const struct lu_env *env,
                  * moving them to index [1] and [2], and insert MGC's
                  * obdname at index [0].
                  */
-		if (cfg->cfg_instance == NULL &&
+		if (cfg->cfg_instance &&
 		    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
+			struct obd_device *obd = cfg->cfg_instance;
+
 			lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
 					    bufs.lcfg_buflen[1]);
 			lustre_cfg_bufs_set(&bufs, 1, bufs.lcfg_buf[0],
 					    bufs.lcfg_buflen[0]);
 			lustre_cfg_bufs_set_string(&bufs, 0,
-						   cfg->cfg_obdname);
+						   obd->obd_name);
 		}
 
 		/* Add net info to setup command

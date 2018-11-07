@@ -189,7 +189,6 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg);
 
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
-	char			*cfg_obdname;
 	void			*cfg_instance;
 	struct super_block	*cfg_sb;
 	struct obd_uuid		 cfg_uuid;
