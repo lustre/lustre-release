@@ -22,6 +22,7 @@
 /lustre_rsync
 /ll_decode_filter_fid
 /ll_decode_linkea
+/llsom_sync
 /lhsmd_posix
 /lhsmtool_posix
 /l_tunedisk
