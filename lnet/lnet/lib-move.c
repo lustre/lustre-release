@@ -1972,6 +1972,11 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni,
 		return 0;
 	}
 
+	if (!lnet_msg_discovery(msg) || lnet_peer_is_uptodate(peer)) {
+		lnet_peer_ni_decref_locked(lpni);
+		return 0;
+	}
+
 	rc = lnet_discover_peer_locked(lpni, cpt, false);
 	if (rc) {
 		lnet_peer_ni_decref_locked(lpni);
@@ -2001,6 +2006,7 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 			     struct lnet_peer_ni **gw_lpni,
 			     struct lnet_peer **gw_peer)
 {
+	int rc;
 	struct lnet_peer *gw;
 	struct lnet_route *best_route;
 	struct lnet_route *last_route;
@@ -2031,12 +2037,11 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	 * This means we might delay the message until discovery has
 	 * completed
 	 */
-	if (lnet_msg_discovery(sd->sd_msg) &&
-	    !lnet_peer_is_uptodate(gw)) {
-		sd->sd_msg->msg_src_nid_param = sd->sd_src_nid;
-		return lnet_initiate_peer_discovery(lpni, sd->sd_msg,
-						    sd->sd_rtr_nid, sd->sd_cpt);
-	}
+	sd->sd_msg->msg_src_nid_param = sd->sd_src_nid;
+	rc = lnet_initiate_peer_discovery(lpni, sd->sd_msg, sd->sd_rtr_nid,
+					  sd->sd_cpt);
+	if (rc)
+		return rc;
 
 	if (!sd->sd_best_ni)
 		sd->sd_best_ni = lnet_find_best_ni_on_spec_net(NULL, gw,
@@ -2597,8 +2602,8 @@ again:
 	 * trigger discovery.
 	 */
 	peer = lpni->lpni_peer_net->lpn_peer;
-	if (lnet_msg_discovery(msg) && !lnet_peer_is_uptodate(peer)) {
-		rc = lnet_initiate_peer_discovery(lpni, msg, rtr_nid, cpt);
+	rc = lnet_initiate_peer_discovery(lpni, msg, rtr_nid, cpt);
+	if (rc) {
 		lnet_peer_ni_decref_locked(lpni);
 		lnet_net_unlock(cpt);
 		return rc;

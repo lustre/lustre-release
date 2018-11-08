@@ -976,6 +976,7 @@ lnet_peer_ni_is_primary(struct lnet_peer_ni *lpni)
 }
 
 bool lnet_peer_is_uptodate(struct lnet_peer *lp);
+bool lnet_is_discovery_disabled(struct lnet_peer *lp);
 bool lnet_peer_gw_discovery(struct lnet_peer *lp);
 
 static inline bool
@@ -986,6 +987,9 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 	if (lp->lp_state & LNET_PEER_FORCE_PUSH)
 		return true;
 	if (lp->lp_state & LNET_PEER_NO_DISCOVERY)
+		return false;
+	/* if discovery is not enabled then no need to push */
+	if (lnet_peer_discovery_disabled)
 		return false;
 	if (lp->lp_node_seqno < atomic_read(&the_lnet.ln_ping_target_seqno))
 		return true;

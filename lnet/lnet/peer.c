@@ -1450,7 +1450,11 @@ lnet_peer_ni_traffic_add(lnet_nid_t nid, lnet_nid_t pref)
 	struct lnet_peer *lp;
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
-	unsigned flags = 0;
+	/*
+	 * Assume peer is Multi-Rail capable and let discovery find out
+	 * otherwise.
+	 */
+	unsigned flags = LNET_PEER_MULTI_RAIL;
 	int rc = 0;
 
 	if (nid == LNET_NID_ANY) {
@@ -1750,9 +1754,34 @@ out_mutex_unlock:
 	return lpni;
 }
 
+bool
+lnet_is_discovery_disabled_locked(struct lnet_peer *lp)
+{
+	if (lnet_peer_discovery_disabled)
+		return true;
+
+	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL) ||
+	    (lp->lp_state & LNET_PEER_NO_DISCOVERY)) {
+		return true;
+	}
+
+	return false;
+}
+
 /*
  * Peer Discovery
  */
+bool
+lnet_is_discovery_disabled(struct lnet_peer *lp)
+{
+	bool rc = false;
+
+	spin_lock(&lp->lp_lock);
+	rc = lnet_is_discovery_disabled_locked(lp);
+	spin_unlock(&lp->lp_lock);
+
+	return rc;
+}
 
 bool
 lnet_peer_gw_discovery(struct lnet_peer *lp)
@@ -1785,13 +1814,8 @@ lnet_peer_is_uptodate(struct lnet_peer *lp)
 			    LNET_PEER_FORCE_PING |
 			    LNET_PEER_FORCE_PUSH)) {
 		rc = false;
-	} else if (lp->lp_state & LNET_PEER_NO_DISCOVERY) {
-		rc = true;
 	} else if (lp->lp_state & LNET_PEER_REDISCOVER) {
-		if (lnet_peer_discovery_disabled)
-			rc = true;
-		else
-			rc = false;
+		rc = false;
 	} else if (lnet_peer_needs_push(lp)) {
 		rc = false;
 	} else if (lp->lp_state & LNET_PEER_DISCOVERED) {
@@ -2102,6 +2126,9 @@ again:
 		if (lnet_peer_is_uptodate(lp))
 			break;
 		lnet_peer_queue_for_discovery(lp);
+
+		if (lnet_is_discovery_disabled(lp))
+			break;
 		/*
 		 * if caller requested a non-blocking operation then
 		 * return immediately. Once discovery is complete then the
@@ -2141,7 +2168,7 @@ again:
 		rc = lp->lp_dc_error;
 	else if (!block)
 		CDEBUG(D_NET, "non-blocking discovery\n");
-	else if (!lnet_peer_is_uptodate(lp))
+	else if (!lnet_peer_is_uptodate(lp) && !lnet_is_discovery_disabled(lp))
 		goto again;
 
 	CDEBUG(D_NET, "peer %s NID %s: %d. %s\n",
@@ -2212,6 +2239,36 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 		goto out;
 	}
 
+
+	/*
+	 * Only enable the multi-rail feature on the peer if both sides of
+	 * the connection have discovery on
+	 */
+	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL) {
+		CDEBUG(D_NET, "Peer %s has Multi-Rail feature enabled\n",
+		       libcfs_nid2str(lp->lp_primary_nid));
+		lp->lp_state |= LNET_PEER_MULTI_RAIL;
+	} else {
+		CDEBUG(D_NET, "Peer %s has Multi-Rail feature disabled\n",
+		       libcfs_nid2str(lp->lp_primary_nid));
+		lp->lp_state &= ~LNET_PEER_MULTI_RAIL;
+	}
+
+	/*
+	 * The peer may have discovery disabled at its end. Set
+	 * NO_DISCOVERY as appropriate.
+	 */
+	if ((pbuf->pb_info.pi_features & LNET_PING_FEAT_DISCOVERY) &&
+	    !lnet_peer_discovery_disabled) {
+		CDEBUG(D_NET, "Peer %s has discovery enabled\n",
+		       libcfs_nid2str(lp->lp_primary_nid));
+		lp->lp_state &= ~LNET_PEER_NO_DISCOVERY;
+	} else {
+		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
+		       libcfs_nid2str(lp->lp_primary_nid));
+		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
+	}
+
 	/*
 	 * Update the MULTI_RAIL flag based on the reply. If the peer
 	 * was configured with DLC then the setting should match what
@@ -2224,8 +2281,17 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 			CWARN("Reply says %s is Multi-Rail, DLC says not\n",
 			      libcfs_nid2str(lp->lp_primary_nid));
 		} else {
-			lp->lp_state |= LNET_PEER_MULTI_RAIL;
-			lnet_peer_clr_non_mr_pref_nids(lp);
+			/*
+			 * if discovery is disabled then we don't want to
+			 * update the state of the peer. All we'll do is
+			 * update the peer_nis which were reported back in
+			 * the initial ping
+			 */
+
+			if (!lnet_is_discovery_disabled_locked(lp)) {
+				lp->lp_state |= LNET_PEER_MULTI_RAIL;
+				lnet_peer_clr_non_mr_pref_nids(lp);
+			}
 		}
 	} else if (lp->lp_state & LNET_PEER_MULTI_RAIL) {
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
@@ -2244,20 +2310,6 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	 */
 	if (lp->lp_data_nnis < pbuf->pb_info.pi_nnis)
 		lp->lp_data_nnis = pbuf->pb_info.pi_nnis;
-
-	/*
-	 * The peer may have discovery disabled at its end. Set
-	 * NO_DISCOVERY as appropriate.
-	 */
-	if (!(pbuf->pb_info.pi_features & LNET_PING_FEAT_DISCOVERY)) {
-		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
-		       libcfs_nid2str(lp->lp_primary_nid));
-		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
-	} else if (lp->lp_state & LNET_PEER_NO_DISCOVERY) {
-		CDEBUG(D_NET, "Peer %s has discovery enabled\n",
-		       libcfs_nid2str(lp->lp_primary_nid));
-		lp->lp_state &= ~LNET_PEER_NO_DISCOVERY;
-	}
 
 	/*
 	 * Check for truncation of the Reply. Clear PING_SENT and set
@@ -2291,8 +2343,8 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	}
 
 	/* We're happy with the state of the data in the buffer. */
-	CDEBUG(D_NET, "peer %s data present %u\n",
-	       libcfs_nid2str(lp->lp_primary_nid), lp->lp_peer_seqno);
+	CDEBUG(D_NET, "peer %s data present %u. state = 0x%x\n",
+	       libcfs_nid2str(lp->lp_primary_nid), lp->lp_peer_seqno, lp->lp_state);
 	if (lp->lp_state & LNET_PEER_DATA_PRESENT)
 		lnet_ping_buffer_decref(lp->lp_data);
 	else
@@ -2524,6 +2576,15 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 			delnis[ndelnis++] = curnis[i];
 	}
 
+	/*
+	 * If we get here and the discovery is disabled then we don't want
+	 * to add or delete any NIs. We just updated the ones we have some
+	 * information on, and call it a day
+	 */
+	rc = 0;
+	if (lnet_is_discovery_disabled(lp))
+		goto out;
+
 	for (i = 0; i < naddnis; i++) {
 		rc = lnet_peer_add_nid(lp, addnis[i].ns_nid, flags);
 		if (rc) {
@@ -2569,7 +2630,7 @@ out:
 	LIBCFS_FREE(addnis, nnis * sizeof(*addnis));
 	LIBCFS_FREE(delnis, nnis * sizeof(*delnis));
 	lnet_ping_buffer_decref(pbuf);
-	CDEBUG(D_NET, "peer %s: %d\n", libcfs_nid2str(lp->lp_primary_nid), rc);
+	CDEBUG(D_NET, "peer %s (%p): %d\n", libcfs_nid2str(lp->lp_primary_nid), lp, rc);
 
 	if (rc) {
 		spin_lock(&lp->lp_lock);
@@ -2642,6 +2703,18 @@ lnet_peer_set_primary_data(struct lnet_peer *lp, struct lnet_ping_buffer *pbuf)
 	return 0;
 }
 
+static bool lnet_is_nid_in_ping_info(lnet_nid_t nid, struct lnet_ping_info *pinfo)
+{
+	int i;
+
+	for (i = 0; i < pinfo->pi_nnis; i++) {
+		if (pinfo->pi_ni[i].ns_nid == nid)
+			return true;
+	}
+
+	return false;
+}
+
 /*
  * Update a peer using the data received.
  */
@@ -2709,7 +2782,17 @@ __must_hold(&lp->lp_lock)
 		rc = lnet_peer_set_primary_nid(lp, nid, flags);
 		if (!rc)
 			rc = lnet_peer_merge_data(lp, pbuf);
-	} else if (lp->lp_primary_nid == nid) {
+	/*
+	 * if the primary nid of the peer is present in the ping info returned
+	 * from the peer, but it's not the local primary peer we have
+	 * cached and discovery is disabled, then we don't want to update
+	 * our local peer info, by adding or removing NIDs, we just want
+	 * to update the status of the nids that we currently have
+	 * recorded in that peer.
+	 */
+	} else if (lp->lp_primary_nid == nid ||
+		   (lnet_is_nid_in_ping_info(lp->lp_primary_nid, &pbuf->pb_info) &&
+		    lnet_is_discovery_disabled(lp))) {
 		rc = lnet_peer_merge_data(lp, pbuf);
 	} else {
 		lpni = lnet_find_peer_ni_locked(nid);
@@ -2725,13 +2808,24 @@ __must_hold(&lp->lp_lock)
 		} else {
 			struct lnet_peer *new_lp;
 			new_lp = lpni->lpni_peer_net->lpn_peer;
+			/*
+			 * if lp has discovery/MR enabled that means new_lp
+			 * should have discovery/MR enabled as well, since
+			 * it's the same peer, which we're about to merge
+			 */
+			if (!(lp->lp_state & LNET_PEER_NO_DISCOVERY))
+				new_lp->lp_state &= ~LNET_PEER_NO_DISCOVERY;
+			if (lp->lp_state & LNET_PEER_MULTI_RAIL)
+				new_lp->lp_state |= LNET_PEER_MULTI_RAIL;
+
 			rc = lnet_peer_set_primary_data(new_lp, pbuf);
 			lnet_consolidate_routes_locked(lp, new_lp);
 			lnet_peer_ni_decref_locked(lpni);
 		}
 	}
 out:
-	CDEBUG(D_NET, "peer %s: %d\n", libcfs_nid2str(lp->lp_primary_nid), rc);
+	CDEBUG(D_NET, "peer %s(%p): %d. state = 0x%x\n", libcfs_nid2str(lp->lp_primary_nid), lp, rc,
+	       lp->lp_state);
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	spin_lock(&lp->lp_lock);
@@ -2951,7 +3045,7 @@ fail_unlink:
 	LNetMDUnlink(lp->lp_push_mdh);
 	LNetInvalidateMDHandle(&lp->lp_push_mdh);
 fail_error:
-	CDEBUG(D_NET, "peer %s: %d\n", libcfs_nid2str(lp->lp_primary_nid), rc);
+	CDEBUG(D_NET, "peer %s(%p): %d\n", libcfs_nid2str(lp->lp_primary_nid), lp, rc);
 	/*
 	 * The errors that get us here are considered hard errors and
 	 * cause Discovery to terminate. So we clear PUSH_SENT, but do
@@ -2995,19 +3089,6 @@ __must_hold(&lp->lp_lock)
 	return 0;
 }
 
-/*
- * Mark the peer as to be rediscovered.
- */
-static int lnet_peer_rediscover(struct lnet_peer *lp)
-__must_hold(&lp->lp_lock)
-{
-	lp->lp_state |= LNET_PEER_REDISCOVER;
-	lp->lp_state &= ~LNET_PEER_DISCOVERING;
-
-	CDEBUG(D_NET, "peer %s\n", libcfs_nid2str(lp->lp_primary_nid));
-
-	return 0;
-}
 
 /*
  * Discovering this peer is taking too long. Cancel any Ping or Push
@@ -3182,8 +3263,8 @@ static int lnet_peer_discovery(void *arg)
 			 * forcing a Ping or Push.
 			 */
 			spin_lock(&lp->lp_lock);
-			CDEBUG(D_NET, "peer %s state %#x\n",
-				libcfs_nid2str(lp->lp_primary_nid),
+			CDEBUG(D_NET, "peer %s(%p) state %#x\n",
+				libcfs_nid2str(lp->lp_primary_nid), lp,
 				lp->lp_state);
 			if (lp->lp_state & LNET_PEER_DATA_PRESENT)
 				rc = lnet_peer_data_present(lp);
@@ -3195,16 +3276,14 @@ static int lnet_peer_discovery(void *arg)
 				rc = lnet_peer_send_ping(lp);
 			else if (lp->lp_state & LNET_PEER_FORCE_PUSH)
 				rc = lnet_peer_send_push(lp);
-			else if (lnet_peer_discovery_disabled)
-				rc = lnet_peer_rediscover(lp);
 			else if (!(lp->lp_state & LNET_PEER_NIDS_UPTODATE))
 				rc = lnet_peer_send_ping(lp);
 			else if (lnet_peer_needs_push(lp))
 				rc = lnet_peer_send_push(lp);
 			else
 				rc = lnet_peer_discovered(lp);
-			CDEBUG(D_NET, "peer %s state %#x rc %d\n",
-				libcfs_nid2str(lp->lp_primary_nid),
+			CDEBUG(D_NET, "peer %s(%p) state %#x rc %d\n",
+				libcfs_nid2str(lp->lp_primary_nid), lp,
 				lp->lp_state, rc);
 			spin_unlock(&lp->lp_lock);
 
