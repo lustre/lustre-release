@@ -254,6 +254,11 @@ debs: undef.h
 		echo "SPL: $${SPL_SRC}"; \
 		echo "ZFS: $${ZFS_SRC}"; \
 	fi; \
+	if test "x@ENABLE_GSS@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gss"; \
+	elif test "x@ENABLE_GSS@" = "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogss"; \
+	fi; \
 	export KERNEL_CFG="$(LINUX_CONFIG)"; \
 	export KERNEL_SRC="$(LINUX)"; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \

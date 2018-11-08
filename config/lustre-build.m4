@@ -534,6 +534,10 @@ if test x$enable_gss_keyring = xyes ; then
 fi
 if test x$enable_gss = xyes ; then
 	RPMBINARGS="$RPMBINARGS --with gss"
+	AC_SUBST(ENABLE_GSS, yes)
+elif test x$enable_gss = xno ; then
+	RPMBINARGS="$RPMBINARGS --without gss"
+	AC_SUBST(ENABLE_GSS, no)
 fi
 if test x$enable_iokit != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_iokit"

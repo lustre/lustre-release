@@ -159,7 +159,7 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "server"; then \
 		export EXTRAFLAGS="--enable-server"; \
 	else \
-		export EXTRAFLAGS="--disable-server --disable-modules"; \
+		export EXTRAFLAGS="--disable-server"; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \
@@ -171,6 +171,11 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 			--enable-ldiskfs --enable-quilt"; \
 	else \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-ldiskfs"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -qw "gss"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-gss"; \
+	elif echo "$${DEB_BUILD_PROFILES}" | grep -qw "nogss"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-gss"; \
 	fi; \
 	echo "Final value of EXTRAFLAGS: $${EXTRAFLAGS}"; \
 	( cd $(BUILDDIR) && \

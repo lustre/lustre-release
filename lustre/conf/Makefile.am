@@ -59,10 +59,12 @@ sysconfigdir = $(sysconfdir)/sysconfig
 sysconfig_DATA = lustre
 if GSS_KEYRING
 sysconfig_DATA += lsvcgss
+endif
+endif
+endif
+if GSS_KEYRING
 requestkeydir = $(sysconfdir)/request-key.d
 requestkey_DATA = lgssc.conf
-endif
-endif
 endif
 
 modprobedir = $(sysconfdir)/modprobe.d

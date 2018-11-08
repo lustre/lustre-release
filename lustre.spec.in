@@ -384,13 +384,15 @@ echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
 %if %{with gss_keyring}
 echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
 echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
-echo '%config(noreplace) %{_sysconfdir}/request-key.d/lgssc.conf' >>lustre.files
 %endif
 %endif
 
 %if %{without systemd}
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 %endif
+%endif
+%if %{with gss_keyring}
+echo '%config(noreplace) %{_sysconfdir}/request-key.d/lgssc.conf' >>lustre.files
 %endif
 
 # fc18 needs 'x' permission for library files
