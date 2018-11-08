@@ -339,10 +339,10 @@ static int bio_dif_compare(__u16 *expected_guard_buf, void *bio_prot_buf,
 	return 0;
 }
 
-static int osd_bio_integrity_compare(struct bio *bio, struct osd_iobuf *iobuf,
-				     int index)
+static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
+				     struct osd_iobuf *iobuf, int index)
 {
-	struct blk_integrity *bi = bdev_get_integrity(bio->bi_bdev);
+	struct blk_integrity *bi = bdev_get_integrity(bdev);
 	struct bio_integrity_payload *bip = bio->bi_integrity;
 	struct niobuf_local *lnb;
 	unsigned short sector_size = blk_integrity_interval(bi);
@@ -380,6 +380,7 @@ static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 				    int start_page_idx, bool fault_inject,
 				    bool integrity_enabled)
 {
+	struct super_block *sb = osd_sb(osd);
 	int rc;
 #ifdef HAVE_BIO_INTEGRITY_PREP_FN
 	integrity_gen_fn *generate_fn = NULL;
@@ -406,7 +407,7 @@ static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 	/* Verify and inject fault only when writing */
 	if (iobuf->dr_rw == 1) {
 		if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_CMP))) {
-			rc = osd_bio_integrity_compare(bio, iobuf,
+			rc = osd_bio_integrity_compare(bio, sb->s_bdev, iobuf,
 						       start_page_idx);
 			if (rc)
 				RETURN(rc);
