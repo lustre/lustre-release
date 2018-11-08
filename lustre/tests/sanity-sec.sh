@@ -2232,8 +2232,8 @@ test_31() {
 	# add network ${NETTYPE}999 on all nodes
 	do_nodes $(comma_list $(all_nodes)) \
 		 "$LNETCTL lnet configure && $LNETCTL net add --if \
-		  $($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
-		  {if (inf==1) print $2; fi; inf=0} /interfaces/{inf=1}') \
+		  \$($LNETCTL net show --net $net | awk 'BEGIN{inf=0} \
+		  {if (inf==1) print \$2; fi; inf=0} /interfaces/{inf=1}') \
 		  --net ${NETTYPE}999" ||
 		error "unable to configure NID ${NETTYPE}999"
 
