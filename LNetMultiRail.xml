@@ -7,6 +7,7 @@
       <para><xref linkend="dbdoclet.mroverview"/></para>
       <para><xref linkend="dbdoclet.mrconfiguring"/></para>
       <para><xref linkend="dbdoclet.mrrouting"/></para>
+      <para><xref linkend="dbdoclet.mrhealth"/></para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.mroverview">
@@ -26,34 +27,34 @@
     Multi-Rail High-Level Design</link></para>
   </section>
   <section xml:id="dbdoclet.mrconfiguring">
-      <title><indexterm><primary>MR</primary><secondary>configuring</secondary>
-      </indexterm>Configuring Multi-Rail</title>
-      <para>Every node using multi-rail networking needs to be properly
-      configured.  Multi-rail uses <literal>lnetctl</literal> and the LNet
-      Configuration Library for configuration.  Configuring multi-rail for a
-      given node involves two tasks:</para>
-      <orderedlist>
-        <listitem><para>Configuring multiple network interfaces present on the
-        local node.</para></listitem>
-        <listitem><para>Adding remote peers that are multi-rail capable (are
-        connected to one or more common networks with at least two interfaces).
-        </para></listitem>
-      </orderedlist>
-      <para>This section is a supplement to
-          <xref linkend="lnet_config.lnetaddshowdelete" /> and contains further
-          examples for Multi-Rail configurations.</para>
-      <para>For information on the dynamic peer discovery feature added in
-        Lustre Release 2.11.0, see
-        <xref linkend="lnet_config.dynamic_discovery" />.</para>
-      <section xml:id="dbdoclet.addinterfaces">
-          <title><indexterm><primary>MR</primary>
-          <secondary>multipleinterfaces</secondary>
-          </indexterm>Configure Multiple Interfaces on the Local Node</title>
-          <para>Example <literal>lnetctl add</literal> command with multiple
-          interfaces in a Multi-Rail configuration:</para>
-          <screen>lnetctl net add --net tcp --if eth0,eth1</screen>
-          <para>Example of YAML net show:</para>
-          <screen>lnetctl net show -v
+    <title><indexterm><primary>MR</primary><secondary>configuring</secondary>
+    </indexterm>Configuring Multi-Rail</title>
+    <para>Every node using multi-rail networking needs to be properly
+    configured.  Multi-rail uses <literal>lnetctl</literal> and the LNet
+    Configuration Library for configuration.  Configuring multi-rail for a
+    given node involves two tasks:</para>
+    <orderedlist>
+      <listitem><para>Configuring multiple network interfaces present on the
+      local node.</para></listitem>
+      <listitem><para>Adding remote peers that are multi-rail capable (are
+      connected to one or more common networks with at least two interfaces).
+      </para></listitem>
+    </orderedlist>
+    <para>This section is a supplement to
+      <xref linkend="lnet_config.lnetaddshowdelete" /> and contains further
+      examples for Multi-Rail configurations.</para>
+    <para>For information on the dynamic peer discovery feature added in
+      Lustre Release 2.11.0, see
+      <xref linkend="lnet_config.dynamic_discovery" />.</para>
+    <section xml:id="dbdoclet.addinterfaces">
+      <title><indexterm><primary>MR</primary>
+      <secondary>multipleinterfaces</secondary>
+      </indexterm>Configure Multiple Interfaces on the Local Node</title>
+      <para>Example <literal>lnetctl add</literal> command with multiple
+      interfaces in a Multi-Rail configuration:</para>
+      <screen>lnetctl net add --net tcp --if eth0,eth1</screen>
+      <para>Example of YAML net show:</para>
+      <screen>lnetctl net show -v
 net:
     - net type: lo
       local NI(s):
@@ -108,18 +109,18 @@ net:
           tcp bonding: 0
           dev cpt: -1
           CPT: "[0]"</screen>
-      </section>
-      <section xml:id="dbdoclet.deleteinterfaces">
-          <title><indexterm><primary>MR</primary>
-              <secondary>deleteinterfaces</secondary>
-          </indexterm>Deleting Network Interfaces</title>
-          <para>Example delete with <literal>lnetctl net del</literal>:</para>
-          <para>Assuming the network configuration is as shown above with the
-          <literal>lnetctl net show -v</literal> in the previous section, we can
-          delete a net with following command:</para>
-          <screen>lnetctl net del --net tcp --if eth0</screen>
-          <para>The resultant net information would look like:</para>
-          <screen>lnetctl net show -v
+    </section>
+    <section xml:id="dbdoclet.deleteinterfaces">
+      <title><indexterm><primary>MR</primary>
+        <secondary>deleteinterfaces</secondary>
+        </indexterm>Deleting Network Interfaces</title>
+      <para>Example delete with <literal>lnetctl net del</literal>:</para>
+      <para>Assuming the network configuration is as shown above with the
+      <literal>lnetctl net show -v</literal> in the previous section, we can
+      delete a net with following command:</para>
+      <screen>lnetctl net del --net tcp --if eth0</screen>
+      <para>The resultant net information would look like:</para>
+      <screen>lnetctl net show -v
 net:
     - net type: lo
       local NI(s):
@@ -138,24 +139,24 @@ net:
           tcp bonding: 0
           dev cpt: 0
           CPT: "[0,1,2,3]"</screen>
-          <para>The syntax of a YAML file to perform a delete would be:</para>
-          <screen>- net type: tcp
+      <para>The syntax of a YAML file to perform a delete would be:</para>
+      <screen>- net type: tcp
    local NI(s):
      - nid: 192.168.122.10@tcp
        interfaces:
            0: eth0</screen>
-      </section>
-      <section xml:id="dbdoclet.addremotepeers">
-          <title><indexterm><primary>MR</primary>
-              <secondary>addremotepeers</secondary>
-          </indexterm>Adding Remote Peers that are Multi-Rail Capable</title>
-          <para>The following example <literal>lnetctl peer add</literal>
-          command adds a peer with 2 nids, with
-          <literal>192.168.122.30@tcp</literal> being the primary nid:</para>
-          <screen>lnetctl peer add --prim_nid 192.168.122.30@tcp --nid 192.168.122.30@tcp,192.168.122.31@tcp
-          </screen>
-          <para>The resulting <literal>lnetctl peer show</literal> would be:
-          <screen>lnetctl peer show -v
+    </section>
+    <section xml:id="dbdoclet.addremotepeers">
+      <title><indexterm><primary>MR</primary>
+        <secondary>addremotepeers</secondary>
+        </indexterm>Adding Remote Peers that are Multi-Rail Capable</title>
+      <para>The following example <literal>lnetctl peer add</literal>
+      command adds a peer with 2 nids, with
+        <literal>192.168.122.30@tcp</literal> being the primary nid:</para>
+      <screen>lnetctl peer add --prim_nid 192.168.122.30@tcp --nid 192.168.122.30@tcp,192.168.122.31@tcp
+      </screen>
+      <para>The resulting <literal>lnetctl peer show</literal> would be:
+        <screen>lnetctl peer show -v
 peer:
     - primary nid: 192.168.122.30@tcp
       Multi-Rail: True
@@ -186,26 +187,26 @@ peer:
               send_count: 1
               recv_count: 1
               drop_count: 0</screen>
-          </para>
-          <para>The following is an example YAML file for adding a peer:</para>
-          <screen>addPeer.yaml
+      </para>
+      <para>The following is an example YAML file for adding a peer:</para>
+      <screen>addPeer.yaml
 peer:
     - primary nid: 192.168.122.30@tcp
       Multi-Rail: True
       peer ni:
         - nid: 192.168.122.31@tcp</screen>
-      </section>
-      <section xml:id="dbdoclet.deleteremotepeers">
-          <title><indexterm><primary>MR</primary>
-              <secondary>deleteremotepeers</secondary>
-          </indexterm>Deleting Remote Peers</title>
-          <para>Example of deleting a single nid of a peer (192.168.122.31@tcp):
-          </para>
-          <screen>lnetctl peer del --prim_nid 192.168.122.30@tcp --nid 192.168.122.31@tcp</screen>
-          <para>Example of deleting the entire peer:</para>
-          <screen>lnetctl peer del --prim_nid 192.168.122.30@tcp</screen>
-          <para>Example of deleting a peer via YAML:</para>
-          <screen>Assuming the following peer configuration:
+    </section>
+    <section xml:id="dbdoclet.deleteremotepeers">
+      <title><indexterm><primary>MR</primary>
+        <secondary>deleteremotepeers</secondary>
+        </indexterm>Deleting Remote Peers</title>
+      <para>Example of deleting a single nid of a peer (192.168.122.31@tcp):
+      </para>
+      <screen>lnetctl peer del --prim_nid 192.168.122.30@tcp --nid 192.168.122.31@tcp</screen>
+      <para>Example of deleting the entire peer:</para>
+      <screen>lnetctl peer del --prim_nid 192.168.122.30@tcp</screen>
+      <para>Example of deleting a peer via YAML:</para>
+      <screen>Assuming the following peer configuration:
 peer:
     - primary nid: 192.168.122.30@tcp
       Multi-Rail: True
@@ -227,32 +228,32 @@ peer:
         - nid: 192.168.122.32@tcp
     
 % lnetctl import --del &lt; delPeer.yaml</screen>
-      </section>
+    </section>
   </section>
   <section xml:id="dbdoclet.mrrouting">
-      <title><indexterm><primary>MR</primary>
-          <secondary>mrrouting</secondary>
+    <title><indexterm><primary>MR</primary>
+      <secondary>mrrouting</secondary>
       </indexterm>Notes on routing with Multi-Rail</title>
-      <para>Multi-Rail configuration can be applied on the Router to aggregate
-      the interfaces performance.</para>
-      <section xml:id="dbdoclet.mrroutingex">
-          <title><indexterm><primary>MR</primary>
-              <secondary>mrrouting</secondary>
-              <tertiary>routingex</tertiary>
-          </indexterm>Multi-Rail Cluster Example</title>
+    <para>Multi-Rail configuration can be applied on the Router to aggregate
+    the interfaces performance.</para>
+    <section xml:id="dbdoclet.mrroutingex">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrrouting</secondary>
+        <tertiary>routingex</tertiary>
+        </indexterm>Multi-Rail Cluster Example</title>
       <para>The below example outlines a simple system where all the Lustre
       nodes are MR capable.  Each node in the cluster has two interfaces.</para>
       <figure xml:id="lnetmultirail.fig.routingdiagram">
-          <title>Routing Configuration with Multi-Rail</title>
-          <mediaobject>
+        <title>Routing Configuration with Multi-Rail</title>
+        <mediaobject>
           <imageobject>
-              <imagedata scalefit="1" width="100%"
-              fileref="./figures/MR_RoutingConfig.png" />
+            <imagedata scalefit="1" width="100%"
+            fileref="./figures/MR_RoutingConfig.png" />
           </imageobject>
           <textobject>
-               <phrase>Routing Configuration with Multi-Rail</phrase>
+            <phrase>Routing Configuration with Multi-Rail</phrase>
           </textobject>
-          </mediaobject>
+        </mediaobject>
       </figure>
       <para>The routers can aggregate the interfaces on each side of the network
       by configuring them on the appropriate network.</para>
@@ -282,12 +283,12 @@ lnetctl peer add --nid &lt;rtrX-nidA&gt;@o2ib1,&lt;rtrX-nidB&gt;@o2ib1</screen>
       <para>However, as of the Lustre 2.10 release LNet Resiliency is still
       under development and single interface failure will still cause the entire
       router to go down.</para>
-      </section>
-      <section xml:id="dbdoclet.mrroutingresiliency">
-          <title><indexterm><primary>MR</primary>
-              <secondary>mrrouting</secondary>
-              <tertiary>routingresiliency</tertiary>
-          </indexterm>Utilizing Router Resiliency</title>
+    </section>
+    <section xml:id="dbdoclet.mrroutingresiliency">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrrouting</secondary>
+        <tertiary>routingresiliency</tertiary>
+        </indexterm>Utilizing Router Resiliency</title>
       <para>Currently, LNet provides a mechanism to monitor each route entry.
       LNet pings each gateway identified in the route entry on regular,
       configurable interval to ensure that it is alive. If sending over a
@@ -315,36 +316,426 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidA&gt;@o2ib1
 lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       <para>There are a few things to note in the above configuration:</para>
       <orderedlist>
-          <listitem>
-              <para>The clients and the servers are now configured with two
-              routes, each route's gateway is one of the interfaces of the
-              route.  The clients and servers will view each interface of the
-              same router as a separate gateway and will monitor them as
-              described above.</para>
-          </listitem>
-          <listitem>
-              <para>The clients and the servers are not configured to view the
-              routers as MR capable. This is important because we want to deal
-              with each interface as a separate peers and not different
-              interfaces of the same peer.</para>
-          </listitem>
-          <listitem>
-              <para>The routers are configured to view the peers as MR capable.
-              This is an oddity in the configuration, but is currently required
-              in order to allow the routers to load balance the traffic load
-              across its interfaces evenly.</para>
-          </listitem>
-        </orderedlist>
+        <listitem>
+          <para>The clients and the servers are now configured with two
+          routes, each route's gateway is one of the interfaces of the
+          route.  The clients and servers will view each interface of the
+          same router as a separate gateway and will monitor them as
+          described above.</para>
+        </listitem>
+        <listitem>
+          <para>The clients and the servers are not configured to view the
+          routers as MR capable. This is important because we want to deal
+          with each interface as a separate peers and not different
+          interfaces of the same peer.</para>
+        </listitem>
+        <listitem>
+          <para>The routers are configured to view the peers as MR capable.
+          This is an oddity in the configuration, but is currently required
+          in order to allow the routers to load balance the traffic load
+          across its interfaces evenly.</para>
+        </listitem>
+      </orderedlist>
+    </section>
+    <section xml:id="dbdoclet.mrroutingmixed">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrrouting</secondary>
+        <tertiary>routingmixed</tertiary>
+      </indexterm>Mixed Multi-Rail/Non-Multi-Rail Cluster</title>
+      <para>The above principles can be applied to mixed MR/Non-MR cluster.
+      For example, the same configuration shown above can be applied if the
+      clients and the servers are non-MR while the routers are MR capable.
+      This appears to be a common cluster upgrade scenario.</para>
+    </section>
+  </section>
+  <section xml:id="dbdoclet.mrhealth" condition="l2C">
+    <title><indexterm><primary>MR</primary><secondary>health</secondary>
+    </indexterm>LNet Health</title>
+    <para>LNet Multi-Rail has implemented the ability for multiple interfaces
+    to be used on the same LNet network or across multiple LNet networks.  The
+    LNet Health feature adds the ability to maintain a health value for each
+    local and remote interface. This allows the Multi-Rail algorithm to
+    consider the health of the interface before selecting it for sending.
+    The feature also adds the ability to resend messages across different
+    interfaces when interface or network failures are detected. This allows
+    LNet to mitigate communication failures before passing the failures to
+    upper layers for further error handling. To accomplish this, LNet Health
+    monitors the status of the send and receive operations and uses this
+    status to increment the interface's health value in case of success and
+    decrement it in case of failure.</para>
+    <section xml:id="dbdoclet.mrhealthvalue">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrhealth</secondary>
+        <tertiary>value</tertiary>
+      </indexterm>Health Value</title>
+      <para>The initial health value of a local or remote interface is set to
+      <literal>LNET_MAX_HEALTH_VALUE</literal>, currently set to be
+      <literal>1000</literal>.  The value itself is arbitrary and is meant to
+      allow for health granularity, as opposed to having a simple boolean state.
+      The granularity allows the Multi-Rail algorithm to select the interface
+      that has the highest likelihood of sending or receiving a message.</para>
+    </section>
+    <section xml:id="dbdoclet.mrhealthfailuretypes">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrhealth</secondary>
+        <tertiary>failuretypes</tertiary>
+      </indexterm>Failure Types and Behavior</title>
+      <para>LNet health behavior depends on the type of failure detected:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+        <colspec colname="c1" colwidth="50*"/>
+        <colspec colname="c2" colwidth="50*"/>
+        <thead>
+          <row>
+            <entry>
+              <para><emphasis role="bold">Failure Type</emphasis></para>
+            </entry>
+            <entry>
+              <para><emphasis role="bold">Behavior</emphasis></para>
+            </entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <para><literal>localresend</literal></para>
+            </entry>
+            <entry>
+              <para>A local failure has occurred, such as no route found or an
+              address resolution error. These failures could be temporary,
+              therefore LNet will attempt to resend the message. LNet will
+              decrement the health value of the local interface and will
+              select it less often if there are multiple available interfaces.
+              </para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para><literal>localno-resend</literal></para>
+            </entry>
+            <entry>
+              <para>A local non-recoverable error occurred in the system, such
+              as out of memory error. In these cases LNet will not attempt to
+              resend the message. LNet will decrement the health value of the
+              local interface and will select it less often if there are
+              multiple available interfaces.
+              </para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para><literal>remoteno-resend</literal></para>
+            </entry>
+            <entry>
+              <para>If LNet successfully sends a message, but the message does
+              not complete or an expected reply is not received, then it is
+              classified as a remote error. LNet will not attempt to resend the
+              message to avoid duplicate messages on the remote end. LNet will
+              decrement the health value of the remote interface and will
+              select it less often if there are multiple available interfaces.
+              </para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para><literal>remoteresend</literal></para>
+            </entry>
+            <entry>
+              <para>There are a set of failures where we can be reasonably sure
+              that the message was dropped before getting to the remote end. In
+              this case, LNet will attempt to resend the message. LNet will
+              decrement the health value of the remote interface and will
+              select it less often if there are multiple available interfaces.
+              </para>
+            </entry>
+          </row>
+        </tbody></tgroup>
+      </informaltable>
+    </section>
+    <section xml:id="dbdoclet.mrhealthinterface">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrhealth</secondary>
+        <tertiary>interface</tertiary>
+      </indexterm>User Interface</title>
+      <para>LNet Health is turned off by default. There are multiple module
+      parameters available to control the LNet Health feature.</para>
+      <para>All the module parameters are implemented in sysfs and are located
+      in /sys/module/lnet/parameters/. They can be set directly by echoing a
+      value into them as well as from lnetctl.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+        <colspec colname="c1" colwidth="50*"/>
+        <colspec colname="c2" colwidth="50*"/>
+        <thead>
+          <row>
+            <entry>
+              <para><emphasis role="bold">Parameter</emphasis></para>
+            </entry>
+            <entry>
+              <para><emphasis role="bold">Description</emphasis></para>
+            </entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <para><literal>lnet_health_sensitivity</literal></para>
+            </entry>
+            <entry>
+              <para>When LNet detects a failure on a particular interface it
+              will decrement its Health Value by
+              <literal>lnet_health_sensitivity</literal>. The greater the value,
+              the longer it takes for that interface to become healthy again.
+              The default value of <literal>lnet_health_sensitivity</literal>
+              is set to 0, which means the health value will not be decremented.
+              In essense, the health feature is turned off.</para>
+              <para>The sensitivity value can be set greater than 0.  A
+              <literal>lnet_health_sensitivity</literal> of 100 would mean that
+              10 consecutive message failures or a steady-state failure rate
+              over 1% would degrade the interface Health Value until it is
+              disabled, while a lower failure rate would steer traffic away from
+              the interface but it would continue to be available.  When a
+              failure occurs on an interface then its Health Value is
+              decremented and the interface is flagged for recovery.</para>
+              <screen>lnetctl set health_sensitivity: sensitivity to failure
+      0 - turn off health evaluation
+      &gt;0 - sensitivity value not more than 1000</screen>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para><literal>lnet_recovery_interval</literal></para>
+            </entry>
+            <entry>
+              <para>When LNet detects a failure on a local or remote interface
+              it will place that interface on a recovery queue. There is a
+              recovery queue for local interfaces and another for remote
+              interfaces. The interfaces on the recovery queues will be LNet
+              PINGed every <literal>lnet_recovery_interval</literal>. This value
+              defaults to <literal>1</literal> second. On every successful PING
+              the health value of the interface pinged will be incremented by
+              <literal>1</literal>.</para>
+              <para>Having this value configurable allows system administrators
+              to control the amount of control traffic on the network.</para>
+              <screen>lnetctl set recovery_interval: interval to ping unhealthy interfaces
+      &gt;0 - timeout in seconds</screen>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para><literal>lnet_transaction_timeout</literal></para>
+            </entry>
+            <entry>
+              <para>This timeout is somewhat of an overloaded value. It carries
+              the following functionality:</para>
+              <itemizedlist>
+                <listitem>
+                  <para>A message is abandoned if it is not sent successfully
+                  when the lnet_transaction_timeout expires and the retry_count
+                  is not reached.</para>
+                </listitem>
+                <listitem>
+                  <para>A GET or a PUT which expects an ACK expires if a REPLY
+                  or an ACK respectively, is not received within the
+                  <literal>lnet_transaction_timeout</literal>.</para>
+                </listitem>
+              </itemizedlist>
+              <para>This value defaults to 30 seconds.</para>
+              <screen>lnetctl set transaction_timeout: Message/Response timeout
+      &gt;0 - timeout in seconds</screen>
+              <note><para>The LND timeout will now be a fraction of the
+              <literal>lnet_transaction_timeout</literal> as described in the
+              next section.</para>
+              <para>This means that in networks where very large delays are
+              expected then it will be necessary to increase this value
+              accordingly.</para></note>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para><literal>lnet_retry_count</literal></para>
+            </entry>
+            <entry>
+              <para>When LNet detects a failure which it deems appropriate for
+              re-sending a message it will check if a message has passed the
+              maximum retry_count specified. After which if a message wasn't
+              sent successfully a failure event will be passed up to the layer
+              which initiated message sending.</para>
+              <para>Since the message retry interval
+              (<literal>lnet_lnd_timeout</literal>) is computed from
+              <literal>lnet_transaction_timeout / lnet_retry_count</literal>,
+              the <literal>lnet_retry_count</literal> should be kept low enough
+              that the retry interval is not shorter than the round-trip message
+              delay in the network.  A <literal>lnet_retry_count</literal> of 5
+              is reasonable for the default
+              <literal>lnet_transaction_timeout</literal> of 50 seconds.</para>
+              <screen>lnetctl set retry_count: number of retries
+      0 - turn off retries
+      &gt;0 - number of retries, cannot be more than <literal>lnet_transaction_timeout</literal></screen>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para><literal>lnet_lnd_timeout</literal></para>
+            </entry>
+            <entry>
+              <para>This is not a configurable parameter. But it is derived from
+              two configurable parameters:
+              <literal>lnet_transaction_timeout</literal> and
+              <literal>retry_count</literal>.</para>
+              <screen>lnet_lnd_timeout = lnet_transaction_timeout / retry_count
+              </screen>
+              <para>As such there is a restriction that
+              <literal>lnet_transaction_timeout &gt;= retry_count</literal>
+              </para>
+              <para>The core assumption here is that in a healthy network,
+              sending and receiving LNet messages should not have large delays.
+              There could be large delays with RPC messages and their responses,
+              but that's handled at the PtlRPC layer.</para>
+            </entry>
+          </row>
+        </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section xml:id="dbdoclet.mrhealthdisplay">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrhealth</secondary>
+        <tertiary>display</tertiary>
+      </indexterm>Displaying Information</title>
+      <section xml:id="dbdoclet.mrhealthdisplayhealth">
+        <title>Showing LNet Health Configuration Settings</title>
+        <para><literal>lnetctl</literal> can be used to show all the LNet health
+        configuration settings using the <literal>lnetctl global show</literal>
+        command.</para>
+        <screen>#&gt; lnetctl global show
+      global:
+      numa_range: 0
+      max_intf: 200
+      discovery: 1
+      retry_count: 3
+      transaction_timeout: 10
+      health_sensitivity: 100
+      recovery_interval: 1</screen>
       </section>
-      <section xml:id="dbdoclet.mrroutingmixed">
-          <title><indexterm><primary>MR</primary>
-              <secondary>mrrouting</secondary>
-              <tertiary>routingmixed</tertiary>
-          </indexterm>Mixed Multi-Rail/Non-Multi-Rail Cluster</title>
-          <para>The above principles can be applied to mixed MR/Non-MR cluster.
-          For example, the same configuration shown above can be applied if the
-          clients and the servers are non-MR while the routers are MR capable.
-          This appears to be a common cluster upgrade scenario.</para>
+      <section xml:id="dbdoclet.mrhealthdisplaystats">
+        <title>Showing LNet Health Statistics</title>
+        <para>LNet Health statistics are shown under a higher verbosity
+        settings.  To show the local interface health statistics:</para>
+        <screen>lnetctl net show -v 3</screen>
+        <para>To show the remote interface health statistics:</para>
+        <screen>lnetctl peer show -v 3</screen>
+        <para>Sample output:</para>
+        <screen>#&gt; lnetctl net show -v 3
+      net:
+      - net type: tcp
+        local NI(s):
+           - nid: 192.168.122.108@tcp
+             status: up
+             interfaces:
+                 0: eth2
+             statistics:
+                 send_count: 304
+                 recv_count: 284
+                 drop_count: 0
+             sent_stats:
+                 put: 176
+                 get: 138
+                 reply: 0
+                 ack: 0
+                 hello: 0
+             received_stats:
+                 put: 145
+                 get: 137
+                 reply: 0
+                 ack: 2
+                 hello: 0
+             dropped_stats:
+                 put: 10
+                 get: 0
+                 reply: 0
+                 ack: 0
+                 hello: 0
+             health stats:
+                 health value: 1000
+                 interrupts: 0
+                 dropped: 10
+                 aborted: 0
+                 no route: 0
+                 timeouts: 0
+                 error: 0
+             tunables:
+                 peer_timeout: 180
+                 peer_credits: 8
+                 peer_buffer_credits: 0
+                 credits: 256
+             dev cpt: -1
+             tcp bonding: 0
+             CPT: "[0]"
+      CPT: &quot;[0]&quot;</screen>
+        <para>There is a new YAML block, <literal>health stats</literal>, which
+        displays the health statistics for each local or remote network
+        interface.</para>
+        <para>Global statistics also dump the global health statistics as shown
+        below:</para>
+        <screen>#&gt; lnetctl stats show
+        statistics:
+            msgs_alloc: 0
+            msgs_max: 33
+            rst_alloc: 0
+            errors: 0
+            send_count: 901
+            resend_count: 4
+            response_timeout_count: 0
+            local_interrupt_count: 0
+            local_dropped_count: 10
+            local_aborted_count: 0
+            local_no_route_count: 0
+            local_timeout_count: 0
+            local_error_count: 0
+            remote_dropped_count: 0
+            remote_error_count: 0
+            remote_timeout_count: 0
+            network_timeout_count: 0
+            recv_count: 851
+            route_count: 0
+            drop_count: 10
+            send_length: 425791628
+            recv_length: 69852
+            route_length: 0
+            drop_length: 0</screen>
       </section>
+    </section>
+    <section xml:id="dbdoclet.mrhealthinitialsetup">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrhealth</secondary>
+        <tertiary>initialsetup</tertiary>
+      </indexterm>Initial Settings Recommendations</title>
+      <para>LNet Health is off by default. This means that
+      <literal>lnet_health_sensitivity</literal> and
+      <literal>lnet_retry_count</literal> are set to <literal>0</literal>.
+      </para>
+      <para>Setting <literal>lnet_health_sensitivity</literal> to
+      <literal>0</literal> will not decrement the health of the interface on
+      failure and will not change the interface selection behavior. Furthermore,
+      the failed interfaces will not be placed on the recovery queues. In
+      essence, turning off the LNet Health feature.</para>
+      <para>The LNet Health settings will need to be tuned for each cluster.
+      However, the base configuration would be as follows:</para>
+      <screen>#&gt; lnetctl global show
+    global:
+        numa_range: 0
+        max_intf: 200
+        discovery: 1
+        retry_count: 3
+        transaction_timeout: 10
+        health_sensitivity: 100
+        recovery_interval: 1</screen>
+      <para>This setting will allow a maximum of two retries for failed messages
+      within the 5 second transaction timeout.</para>
+      <para>If there is a failure on the interface the health value will be
+      decremented by 1 and the interface will be LNet PINGed every 1 second.
+      </para>
+    </section>
   </section>
 </chapter>
