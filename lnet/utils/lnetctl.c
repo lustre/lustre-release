@@ -118,7 +118,8 @@ command_t route_cmds[] = {
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--gateway: gateway nid (e.g. 10.1.1.2@tcp)\n"
 	 "\t--hop: number to final destination (1 < hops < 255)\n"
-	 "\t--priority: priority of route (0 - highest prio\n"},
+	 "\t--priority: priority of route (0 - highest prio\n"
+	 "\t--health_sensitivity: gateway health sensitivity (>= 1)\n"},
 	{"del", jt_del_route, 0, "delete a route\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--gateway: gateway nid (e.g. 10.1.1.2@tcp)\n"},
@@ -127,6 +128,7 @@ command_t route_cmds[] = {
 	 "\t--gateway: gateway nid (e.g. 10.1.1.2@tcp) to filter on\n"
 	 "\t--hop: number to final destination (1 < hops < 255) to filter on\n"
 	 "\t--priority: priority of route (0 - highest prio to filter on\n"
+	 "\t--health_sensitivity: gateway health sensitivity (>= 1)\n"
 	 "\t--verbose: display detailed output per route\n"},
 	{ 0, 0, 0, NULL }
 };
@@ -741,7 +743,7 @@ static int jt_unconfig_lnet(int argc, char **argv)
 static int jt_add_route(int argc, char **argv)
 {
 	char *network = NULL, *gateway = NULL;
-	long int hop = -1, prio = -1;
+	long int hop = -1, prio = -1, sen = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
 
@@ -751,6 +753,7 @@ static int jt_add_route(int argc, char **argv)
 	{ .name = "gateway",   .has_arg = required_argument, .val = 'g' },
 	{ .name = "hop-count", .has_arg = required_argument, .val = 'c' },
 	{ .name = "priority",  .has_arg = required_argument, .val = 'p' },
+	{ .name = "health_sensitivity",  .has_arg = required_argument, .val = 's' },
 	{ .name = NULL } };
 
 	rc = check_cmd(route_cmds, "route", "add", 0, argc, argv);
@@ -782,6 +785,15 @@ static int jt_add_route(int argc, char **argv)
 				continue;
 			}
 			break;
+		case 's':
+			rc = parse_long(optarg, &sen);
+			if (rc != 0) {
+				/* ingore option */
+				sen = -1;
+				continue;
+			}
+			break;
+
 		case '?':
 			print_help(route_cmds, "route", "add");
 		default:
@@ -789,7 +801,8 @@ static int jt_add_route(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_config_route(network, gateway, hop, prio, -1, &err_rc);
+	rc = lustre_lnet_config_route(network, gateway, hop, prio, sen, -1,
+				      &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

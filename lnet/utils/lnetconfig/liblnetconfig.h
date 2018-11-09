@@ -92,11 +92,12 @@ int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
  *   gw - gateway
  *   hops - number of hops passed down by the user
  *   prio - priority of the route
+ *   sen - health sensitivity value for the gateway
  *   seq_no - sequence number of the request
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
 int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
-			     int seq_no, struct cYAML **err_rc);
+			     int sen, int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_del_route

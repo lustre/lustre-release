@@ -979,7 +979,7 @@ out:
 }
 
 int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
-			     int seq_no, struct cYAML **err_rc)
+			     int sen, int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_config_data data;
 	lnet_nid_t gateway_nid;
@@ -1040,6 +1040,17 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 		goto out;
 	}
 
+	if (sen == -1) {
+		sen = 1;
+	} else if (sen < 1) {
+		snprintf(err_str,
+			 sizeof(err_str),
+			"\"invalid health sensitivity %d, must be 1 or greater\"",
+			sen );
+		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
+		goto out;
+	}
+
 	rc = lnet_expr2ips(gw, ip_list,
 			   &ip2nets, &net, err_str);
 	if (rc == LUSTRE_CFG_RC_LAST_ELEM)
@@ -1053,6 +1064,7 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 	data.cfg_net = rnet;
 	data.cfg_config_u.cfg_route.rtr_hop = hops;
 	data.cfg_config_u.cfg_route.rtr_priority = prio;
+	data.cfg_config_u.cfg_route.rtr_sensitivity = sen;
 
 	for (i = MAX_NUM_IPS - 1; i > ip_idx; i--) {
 		gateway_nid = LNET_MKNID(net, ip_list[i]);
@@ -1281,6 +1293,11 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 			if (cYAML_create_number(item, "priority",
 						data.cfg_config_u.
 						cfg_route.rtr_priority) == NULL)
+				goto out;
+
+			if (cYAML_create_number(item, "health_sensitivity",
+						data.cfg_config_u.
+						cfg_route.rtr_sensitivity) == NULL)
 				goto out;
 
 			if (!backup &&
@@ -3930,18 +3947,20 @@ typedef int (*cmd_handler_t)(struct cYAML *tree,
 static int handle_yaml_config_route(struct cYAML *tree, struct cYAML **show_rc,
 				    struct cYAML **err_rc)
 {
-	struct cYAML *net, *gw, *hop, *prio, *seq_no;
+	struct cYAML *net, *gw, *hop, *prio, *sen, *seq_no;
 
 	net = cYAML_get_object_item(tree, "net");
 	gw = cYAML_get_object_item(tree, "gateway");
 	hop = cYAML_get_object_item(tree, "hop");
 	prio = cYAML_get_object_item(tree, "priority");
+	sen = cYAML_get_object_item(tree, "health_sensitivity");
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
 	return lustre_lnet_config_route((net) ? net->cy_valuestring : NULL,
 					(gw) ? gw->cy_valuestring : NULL,
 					(hop) ? hop->cy_valueint : -1,
 					(prio) ? prio->cy_valueint : -1,
+					(sen) ? sen->cy_valueint : -1,
 					(seq_no) ? seq_no->cy_valueint : -1,
 					err_rc);
 }
