@@ -157,6 +157,7 @@ init_test_env() {
 	export DO_CLEANUP=${DO_CLEANUP:-true}
 	export KEEP_ZPOOL=${KEEP_ZPOOL:-false}
 	export CLEANUP_DM_DEV=false
+	export PAGE_SIZE=$(get_page_size client)
 
 	export MKE2FS=$MKE2FS
 	if [ -z "$MKE2FS" ]; then
@@ -8111,13 +8112,15 @@ get_obd_size() {
 
 #
 # Get the page size (bytes) on a given facet node.
+# The local client page_size is directly available in PAGE_SIZE.
 #
 get_page_size() {
 	local facet=$1
-	local size=$(getconf PAGE_SIZE 2>/dev/null)
+	local page_size=$(getconf PAGE_SIZE 2>/dev/null)
 
-	[ -z "$CLIENTONLY" ] && size=$(do_facet $facet getconf PAGE_SIZE)
-	echo -n ${size:-4096}
+	[ -z "$CLIENTONLY" -a "$facet" != "client" ] &&
+		page_size=$(do_facet $facet getconf PAGE_SIZE)
+	echo -n ${page_size:-4096}
 }
 
 #

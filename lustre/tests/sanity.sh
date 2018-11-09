@@ -1139,12 +1139,6 @@ test_24u() { # bug12192
 }
 run_test 24u "create stripe file"
 
-page_size() {
-	local size
-	size=$(getconf PAGE_SIZE 2>/dev/null)
-	echo -n ${size:-4096}
-}
-
 simple_cleanup_common() {
 	local rc=0
 	trap 0
@@ -1202,7 +1196,7 @@ test_24v() {
 	# take into account of overhead in lu_dirpage header and end mark in
 	# each page, plus one in rpc_num calculation.
 	local dirent_size=$((32 + (${#tfile} | 7) + 1 + 8))
-	local page_entries=$((($(page_size) - 24) / dirent_size))
+	local page_entries=$(((PAGE_SIZE - 24) / dirent_size))
 	local mdt_idx=$($LFS getdirstripe -i $(dirname $fname))
 	local rpc_pages=$(max_pages_per_rpc $mdt_idx)
 	local rpc_max=$((nrfiles / (page_entries * rpc_pages) + stripes))
@@ -3209,7 +3203,7 @@ test_34h() {
 	# Since just timed wait is not good enough, let's do a sync write
 	# that way we are sure enough time for a roundtrip + processing
 	# passed + 2 seconds of extra margin.
-	dd if=/dev/zero of=$DIR/${tfile}-1 bs=4096 oflag=direct count=1
+	dd if=/dev/zero of=$DIR/${tfile}-1 bs=$PAGE_SIZE oflag=direct count=1
 	rm $DIR/${tfile}-1
 	sleep 2
 
@@ -3995,7 +3989,6 @@ test_42e() { # bug22074
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local TDIR=$DIR/${tdir}e
-	local pagesz=$(page_size)
 	local pages=16 # hardcoded 16 pages, don't change it.
 	local files=$((OSTCOUNT * 500)) # hopefully 500 files on each OST
 	local proc_osc0="osc.${FSNAME}-OST0000-osc-[^MDT]*"
@@ -4041,7 +4034,7 @@ test_42e() { # bug22074
 	$LCTL set_param $proc_osc0/rpc_stats 0
 	for ((;i<$files; i++)); do
 		[ $($GETSTRIPE -i $TDIR/f$i) -eq 0 ] || continue
-		dd if=/dev/zero of=$TDIR/f$i bs=$pagesz count=$pages 2>/dev/null
+		dd if=/dev/zero of=$TDIR/f$i bs=$PAGE_SIZE count=$pages 2>/dev/null
 	done
 	sync
 	$LCTL get_param $proc_osc0/rpc_stats
@@ -4220,10 +4213,10 @@ test_46() {
 	f="$DIR/f46"
 	stop_writeback
 	sync
-	dd if=/dev/zero of=$f bs=`page_size` seek=511 count=1
+	dd if=/dev/zero of=$f bs=$PAGE_SIZE seek=511 count=1
 	sync
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=1023 count=1
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=511 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=$PAGE_SIZE seek=1023 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=$PAGE_SIZE seek=511 count=1
 	sync
 	start_writeback
 }
@@ -4664,7 +4657,7 @@ test_54b() {
 	f="$DIR/f54b"
 	mknod $f c 1 3
 	chmod 0666 $f
-	dd if=/dev/zero of=$f bs=$(page_size) count=1
+	dd if=/dev/zero of=$f bs=$PAGE_SIZE count=1
 }
 run_test 54b "char device works in lustre ======================"
 
@@ -4703,17 +4696,17 @@ test_54c() {
 	trap cleanup_54c EXIT
 	mknod $loopdev b 7 $LOOPNUM
 	echo "make a loop file system with $DIR/$tfile on $loopdev ($LOOPNUM)."
-	dd if=/dev/zero of=$DIR/$tfile bs=$(get_page_size client) seek=1024 count=1 > /dev/null
+	dd if=/dev/zero of=$DIR/$tfile bs=$PAGE_SIZE seek=1024 count=1 > /dev/null
 	losetup $loopdev $DIR/$tfile ||
 		error "can't set up $loopdev for $DIR/$tfile"
 	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
 	test_mkdir $DIR/$tdir
 	mount -t ext2 $loopdev $DIR/$tdir ||
 		error "error mounting $loopdev on $DIR/$tdir"
-	dd if=/dev/zero of=$DIR/$tdir/tmp bs=$(get_page_size client) count=30 ||
+	dd if=/dev/zero of=$DIR/$tdir/tmp bs=$PAGE_SIZE count=30 ||
 		error "dd write"
 	df $DIR/$tdir
-	dd if=$DIR/$tdir/tmp of=/dev/zero bs=$(get_page_size client) count=30 ||
+	dd if=$DIR/$tdir/tmp of=/dev/zero bs=$PAGE_SIZE count=30 ||
 		error "dd read"
 	cleanup_54c
 }
@@ -6384,7 +6377,7 @@ test_61() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	f="$DIR/f61"
-	dd if=/dev/zero of=$f bs=$(page_size) count=1 || error "dd $f failed"
+	dd if=/dev/zero of=$f bs=$PAGE_SIZE count=1 || error "dd $f failed"
 	cancel_lru_locks osc
 	$MULTIOP $f OSMWUc || error "$MULTIOP $f failed"
 	sync
@@ -6475,8 +6468,6 @@ run_test 64c "verify grant shrink"
 want_grant() {
 	local tgt=$1
 
-	local page_size=$(get_page_size client)
-
 	local nrpages=$($LCTL get_param -n osc.${tgt}.max_pages_per_rpc)
 	local rpc_in_flight=$($LCTL get_param -n osc.${tgt}.max_rpcs_in_flight)
 
@@ -6485,15 +6476,15 @@ want_grant() {
 
 	local dirty_max_pages=$($LCTL get_param -n osc.${tgt}.max_dirty_mb)
 
-	dirty_max_pages=$((dirty_max_pages * 1024 * 1024 / page_size))
+	dirty_max_pages=$((dirty_max_pages * 1024 * 1024 / PAGE_SIZE))
 
 	[[ $dirty_max_pages -gt $nrpages ]] && nrpages=$dirty_max_pages
-	local undirty=$((nrpages * page_size))
+	local undirty=$((nrpages * PAGE_SIZE))
 
 	local max_extent_pages
 	max_extent_pages=$($LCTL get_param osc.${tgt}.import |
 	    grep grant_max_extent_size | awk '{print $2}')
-	max_extent_pages=$((max_extent_pages / page_size))
+	max_extent_pages=$((max_extent_pages / PAGE_SIZE))
 	local nrextents=$(((nrpages + max_extent_pages - 1) / max_extent_pages))
 	local grant_extent_tax
 	grant_extent_tax=$($LCTL get_param osc.${tgt}.import |
@@ -7842,7 +7833,7 @@ run_test 101f "check mmap read performance"
 
 test_101g_brw_size_test() {
 	local mb=$1
-	local pages=$((mb * 1048576 / $(page_size)))
+	local pages=$((mb * 1048576 / PAGE_SIZE))
 	local file=$DIR/$tfile
 
 	$LCTL set_param osc.*.max_pages_per_rpc=${mb}M ||
@@ -10188,38 +10179,44 @@ run_test 127a "verify the client stats are sane"
 
 test_127b() { # bug LU-333
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	local name count samp unit min max sum sumsq
 
 	$LCTL set_param llite.*.stats=0
-	FSIZE=65536 # sized fixed to match PAGE_SIZE for most clients
 
 	# perform 2 reads and writes so MAX is different from SUM.
-	dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
-	dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
+	dd if=/dev/zero of=$DIR/$tfile bs=$PAGE_SIZE count=1
+	dd if=/dev/zero of=$DIR/$tfile bs=$PAGE_SIZE count=1
 	cancel_lru_locks osc
-	dd if=$DIR/$tfile of=/dev/null bs=$FSIZE count=1
-	dd if=$DIR/$tfile of=/dev/null bs=$FSIZE count=1
+	dd if=$DIR/$tfile of=/dev/null bs=$PAGE_SIZE count=1
+	dd if=$DIR/$tfile of=/dev/null bs=$PAGE_SIZE count=1
 
-        $LCTL get_param llite.*.stats | grep samples > $TMP/${tfile}.tmp
-        while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
-                echo "got $COUNT $NAME"
-                eval $NAME=$COUNT || error "Wrong proc format"
+	$LCTL get_param llite.*.stats | grep samples > $TMP/$tfile.tmp
+	while read name count samp unit min max sum sumsq; do
+		echo "got $count $name"
+		eval $name=$count || error "Wrong proc format"
 
-        case $NAME in
-                read_bytes)
-                        [ $COUNT -ne 2 ] && error "count is not 2: $COUNT"
-                        [ $MIN -ne $FSIZE ] && error "min is not $FSIZE: $MIN"
-                        [ $MAX -ne $FSIZE ] && error "max is incorrect: $MAX"
-                        [ $SUM -ne $((FSIZE * 2)) ] && error "sum is wrong: $SUM"
-                        ;;
-                write_bytes)
-                        [ $COUNT -ne 2 ] && error "count is not 2: $COUNT"
-                        [ $MIN -ne $FSIZE ] && error "min is not $FSIZE: $MIN"
-                        [ $MAX -ne $FSIZE ] && error "max is incorrect: $MAX"
-                        [ $SUM -ne $((FSIZE * 2)) ] && error "sum is wrong: $SUM"
-                        ;;
-                        *) ;;
-                esac
-        done < $TMP/${tfile}.tmp
+		case $name in
+		read_bytes)
+			[ $count -ne 2 ] && error "count is not 2: $count"
+			[ $min -ne $PAGE_SIZE ] &&
+				error "min is not $PAGE_SIZE: $min"
+			[ $max -ne $PAGE_SIZE ] &&
+				error "max is incorrect: $max"
+			[ $sum -ne $((PAGE_SIZE * 2)) ] &&
+				error "sum is wrong: $sum"
+			;;
+		write_bytes)
+			[ $count -ne 2 ] && error "count is not 2: $count"
+			[ $min -ne $PAGE_SIZE ] &&
+				error "min is not $PAGE_SIZE: $min"
+			[ $max -ne $PAGE_SIZE ] &&
+				error "max is incorrect: $max"
+			[ $sum -ne $((PAGE_SIZE * 2)) ] &&
+				error "sum is wrong: $sum"
+			;;
+		*) ;;
+		esac
+	done < $TMP/$tfile.tmp
 
 	#check that we actually got some stats
 	[ "$read_bytes" ] || error "Missing read_bytes stats"
@@ -15471,7 +15468,7 @@ test_231a()
 	# For simplicity this test assumes that max_pages_per_rpc
 	# is the same across all OSCs
 	local max_pages=$($LCTL get_param -n osc.*.max_pages_per_rpc | head -n1)
-	local bulk_size=$((max_pages * 4096))
+	local bulk_size=$((max_pages * PAGE_SIZE))
 	local brw_size=$(do_facet ost1 $LCTL get_param -n obdfilter.*.brw_size |
 				       head -n 1)
 
@@ -15750,36 +15747,48 @@ test_240() {
 run_test 240 "race between ldlm enqueue and the connection RPC (no ASSERT)"
 
 test_241_bio() {
-	for LOOP in $(seq $1); do
-		dd if=$DIR/$tfile of=/dev/null bs=40960 count=1 2>/dev/null
+	local count=$1
+	local bsize=$2
+
+	for LOOP in $(seq $count); do
+		dd if=$DIR/$tfile of=/dev/null bs=$bsize count=1 2>/dev/null
 		cancel_lru_locks $OSC || true
 	done
 }
 
 test_241_dio() {
+	local count=$1
+	local bsize=$2
+
 	for LOOP in $(seq $1); do
-		dd if=$DIR/$tfile of=/dev/null bs=40960 count=1 \
-						iflag=direct 2>/dev/null
+		dd if=$DIR/$tfile of=/dev/null bs=$bsize count=1 iflag=direct \
+			2>/dev/null
 	done
 }
 
 test_241a() { # was test_241
-	dd if=/dev/zero of=$DIR/$tfile count=1 bs=40960
+	local bsize=$PAGE_SIZE
+
+	(( bsize < 40960 )) && bsize=40960
+	dd if=/dev/zero of=$DIR/$tfile count=1 bs=$bsize
 	ls -la $DIR/$tfile
 	cancel_lru_locks $OSC
-	test_241_bio 1000 &
+	test_241_bio 1000 $bsize &
 	PID=$!
-	test_241_dio 1000
+	test_241_dio 1000 $bsize
 	wait $PID
 }
 run_test 241a "bio vs dio"
 
 test_241b() {
-	dd if=/dev/zero of=$DIR/$tfile count=1 bs=40960
+	local bsize=$PAGE_SIZE
+
+	(( bsize < 40960 )) && bsize=40960
+	dd if=/dev/zero of=$DIR/$tfile count=1 bs=$bsize
 	ls -la $DIR/$tfile
-	test_241_dio 1000 &
+	test_241_dio 1000 $bsize &
 	PID=$!
-	test_241_dio 1000
+	test_241_dio 1000 $bsize
 	wait $PID
 }
 run_test 241b "dio vs dio"
@@ -18399,7 +18408,6 @@ test_312() { # LU-4856
 	local max_blksz=$(do_facet ost1 \
 			  $ZFS get -p recordsize $(facet_device ost1) |
 			  awk '!/VALUE/{print $3}')
-	local min_blksz=$(getconf PAGE_SIZE)
 
 	# to make life a little bit easier
 	$LFS mkdir -c 1 -i 0 $DIR/$tdir
@@ -18411,30 +18419,31 @@ test_312() { # LU-4856
 
 	# Get ZFS object id
 	local zfs_objid=$(zfs_oid_to_objid ost1 $oid)
+	# block size change by sequential overwrite
+	local bs
 
-	# block size change by sequential over write
-	local blksz
-	for ((bs=$min_blksz; bs <= max_blksz; bs <<= 2)); do
+	for ((bs=$PAGE_SIZE; bs <= max_blksz; bs *= 4)) ; do
 		dd if=/dev/zero of=$tf bs=$bs count=1 oflag=sync conv=notrunc
 
-		blksz=$(zfs_object_blksz ost1 $zfs_objid)
+		local blksz=$(zfs_object_blksz ost1 $zfs_objid)
 		[ $blksz -eq $bs ] || error "blksz error: $blksz, expected: $bs"
 	done
 	rm -f $tf
 
 	# block size change by sequential append write
-	dd if=/dev/zero of=$tf bs=$min_blksz count=1 oflag=sync conv=notrunc
+	dd if=/dev/zero of=$tf bs=$PAGE_SIZE count=1 oflag=sync conv=notrunc
 	oid=$($LFS getstripe $tf | awk '/obdidx/{getline; print $2}')
 	zfs_objid=$(zfs_oid_to_objid ost1 $oid)
+	local count
 
-	for ((count = 1; count < $((max_blksz / min_blksz)); count *= 2)); do
-		dd if=/dev/zero of=$tf bs=$min_blksz count=$count seek=$count \
+	for ((count = 1; count < $((max_blksz / PAGE_SIZE)); count *= 2)); do
+		dd if=/dev/zero of=$tf bs=$PAGE_SIZE count=$count seek=$count \
 			oflag=sync conv=notrunc
 
 		blksz=$(zfs_object_blksz ost1 $zfs_objid)
-		[ $blksz -eq $((2 * count * min_blksz)) ] ||
-			error "blksz error, actual $blksz, "	\
-				"expected: 2 * $count * $min_blksz"
+		[ $blksz -eq $((2 * count * PAGE_SIZE)) ] ||
+			error "blksz error, actual $blksz, " \
+				"expected: 2 * $count * $PAGE_SIZE"
 	done
 	rm -f $tf
 
@@ -18445,8 +18454,8 @@ test_312() { # LU-4856
 
 	dd if=/dev/zero of=$tf bs=1K count=1 oflag=sync conv=notrunc
 	blksz=$(zfs_object_blksz ost1 $zfs_objid)
-	[ $blksz -eq $min_blksz ] ||
-		error "blksz error: $blksz, expected: $min_blksz"
+	[ $blksz -eq $PAGE_SIZE ] ||
+		error "blksz error: $blksz, expected: $PAGE_SIZE"
 
 	dd if=/dev/zero of=$tf bs=64K count=1 oflag=sync conv=notrunc seek=128
 	blksz=$(zfs_object_blksz ost1 $zfs_objid)
@@ -18462,12 +18471,13 @@ test_313() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local file=$DIR/$tfile
+
 	rm -f $file
 	$SETSTRIPE -c 1 -i 0 $file || error "setstripe failed"
 
 	# define OBD_FAIL_TGT_RCVD_EIO		 0x720
 	do_facet ost1 "$LCTL set_param fail_loc=0x720"
-	dd if=/dev/zero of=$file bs=4096 oflag=direct count=1 &&
+	dd if=/dev/zero of=$file bs=$PAGE_SIZE oflag=direct count=1 &&
 		error "write should failed"
 	do_facet ost1 "$LCTL set_param fail_loc=0"
 	rm -f $file
@@ -18489,8 +18499,9 @@ test_315() { # LU-618
 	local file=$DIR/$tfile
 	rm -f $file
 
-	$MULTIOP $file oO_CREAT:O_DIRECT:O_RDWR:w4096000c
-	$MULTIOP $file oO_RDONLY:r4096000_c &
+	$MULTIOP $file oO_CREAT:O_DIRECT:O_RDWR:w4063232c ||
+		error "multiop file write failed"
+	$MULTIOP $file oO_RDONLY:r4063232_c &
 	PID=$!
 
 	sleep 2
@@ -18996,7 +19007,7 @@ test_407() {
 run_test 407 "transaction fail should cause operation fail"
 
 test_408() {
-	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 oflag=direct
+	dd if=/dev/zero of=$DIR/$tfile bs=$PAGE_SIZE count=1 oflag=direct
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ2        0x40a
 	lctl set_param fail_loc=0x8000040a
