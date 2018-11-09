@@ -1295,7 +1295,7 @@ $ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
     <para>This section describes how to check available free space on disks and how free space is
       allocated. It then describes how to set the threshold and weighting factors for the allocation
       algorithms.</para>
-    <section xml:id="dbdoclet.50438209_35838">
+    <section xml:id="dbdoclet.checking_free_space">
       <title>Checking File System Free Space</title>
       <para>Free space is an important consideration in assigning file stripes. The <literal>lfs
           df</literal> command can be used to show available disk space on the mounted Lustre file

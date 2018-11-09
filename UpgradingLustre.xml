@@ -381,8 +381,8 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
       is MGT, OSTs, MDT(s), clients.</para>
     </note>
     <para>If you have a problem upgrading a Lustre file system, see 
-    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-    linkend="dbdoclet.50438198_30989" />for some ways to get help.</para>
+      <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+      linkend="dbdoclet.reporting_lustre_problem"/>for ways to get help.</para>
   </section>
   <section xml:id="Upgrading_2.x.x">
     <title>
@@ -500,7 +500,7 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
     </orderedlist>
     <para>If you have a problem upgrading a Lustre file system, see 
     <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-    linkend="dbdoclet.50438198_30989" />for some suggestions for how to get
-    help.</para>
+    linkend="dbdoclet.reporting_lustre_problem" />for some suggestions for
+    how to get help.</para>
   </section>
 </chapter>

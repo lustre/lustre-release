@@ -8,7 +8,7 @@
       <para><xref linkend="dbdoclet.50438198_11171"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438198_30989"/></para>
+      <para><xref linkend="dbdoclet.reporting_lustre_problem"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438198_93109"/></para>
@@ -212,34 +212,36 @@
       </note>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438198_30989">
+  <section xml:id="dbdoclet.reporting_lustre_problem">
       <title><indexterm>
         <primary>troubleshooting</primary>
         <secondary>reporting bugs</secondary>
       </indexterm><indexterm>
         <primary>reporting bugs</primary>
         <see>troubleshooting</see>
-      </indexterm> Reporting a Lustre File System Bug</title>
-    <para>If you cannot resolve a problem by troubleshooting your Lustre file system, other options are:<itemizedlist>
+      </indexterm>Reporting a Lustre File System Bug</title>
+    <para>If you cannot resolve a problem by troubleshooting your Lustre file
+      system, other options are:<itemizedlist>
         <listitem>
           <para>Post a question to the <link xmlns:xlink="http://www.w3.org/1999/xlink"
-              xlink:href="https://lists.01.org/mailman/listinfo/hpdd-discuss">hppd-discuss</link>
+              xlink:href="http://lists.lustre.org/listinfo.cgi/lustre-discuss-lustre.org">lustre-discuss</link>
             email list or search the archives for information about your issue.</para>
         </listitem>
         <listitem>
           <para>Submit a ticket to the <link xmlns:xlink="http://www.w3.org/1999/xlink"
-              xlink:href="https://jira.whamcloud.com/secure/Dashboard.jspa"
-                >Jira</link><abbrev><superscript>*</superscript></abbrev> bug tracking and project
-            management tool used for the Lustre software project. If you are a first-time user,
-            you'll need to open an account by clicking on <emphasis role="bold">Sign up</emphasis>
-            on the Welcome page.</para>
+              xlink:href="https://jira.whamcloud.com/secure/Dashboard.jspa">Jira</link><abbrev><superscript>*</superscript></abbrev>
+           bug tracking and project management tool used for the Lustre project.
+           If you are a first-time user, you'll need to open an account by
+           clicking on <emphasis role="bold">Sign up</emphasis> on the
+           Welcome page.</para>
         </listitem>
       </itemizedlist> To submit a Jira ticket, follow these steps:<orderedlist>
         <listitem>
-          <para>To avoid filing a duplicate ticket, search for existing tickets for your issue.
-              <emphasis role="italic">For search tips, see <xref
-                xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_jj2_4b1_kk"
-              />.</emphasis></para>
+          <para>To avoid filing a duplicate ticket, search for existing
+            tickets for your issue.
+            <emphasis role="italic">For search tips, see
+            <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+              linkend="dbdoclet.searching_jira"/>.</emphasis></para>
         </listitem>
         <listitem>
           <para>To create a ticket, click <emphasis role="bold">+Create Issue</emphasis> in the
@@ -291,29 +293,31 @@
             to reporting an issue. You can leave these in their default state.</para>
         </listitem>
       </orderedlist></para>
-    <section xml:id="section_jj2_4b1_kk">
-      <title>Searching the Jira<superscript>*</superscript> Bug Tracker for Duplicate
-        Tickets</title>
-      <para>Before submitting a ticket, always search the Jira bug tracker for an existing ticket
-        for your issue.This avoids duplicating effort and may immediately provide you with a
-        solution to your problem. </para>
-      <para>To do a search in the Jira bug tracker, select the <emphasis role="bold"
-          >Issues</emphasis> tab and click on <emphasis role="bold">New filter</emphasis>. Use the
-        filters provided to select criteria for your search. To search for specific text, enter the
-        text in the "Contains text" field and click the magnifying glass icon.</para>
-      <para>When searching for text such as an ASSERTION or LustreError message, you can remove NIDS
-        and other installation-specific text from your search string by following the example
-        below.</para>
+    <section xml:id="dbdoclet.searching_jira">
+      <title>Searching Jira<superscript>*</superscript>for Duplicate Tickets</title>
+      <para>Before submitting a ticket, always search the Jira bug tracker for
+        an existing ticket for your issue.  This avoids duplicating effort and
+        may immediately provide you with a solution to your problem. </para>
+      <para>To do a search in the Jira bug tracker, select the
+        <emphasis role="bold">Issues</emphasis> tab and click on
+        <emphasis role="bold">New filter</emphasis>. Use the filters provided
+        to select criteria for your search. To search for specific text, enter
+        the text in the "Contains text" field and click the magnifying glass
+        icon.</para>
+      <para>When searching for text such as an ASSERTION or LustreError
+        message, you can remove NIDs, pointers, and other installation-specific
+        and possibly version-specific text from your search string such as line
+        numbers by following the example below.</para>
       <para><emphasis role="italic">Original error message:</emphasis></para>
-      <para><code>"(filter_io_26.c:</code><emphasis role="bold"
-          >791</emphasis><code>:filter_commitrw_write()) ASSERTION(oti-&gt;oti_transno
-          &lt;=obd-&gt;obd_last_committed) failed: oti_transno </code><emphasis role="bold"
-          >752</emphasis>
-        <code>last_committed </code><emphasis role="bold">750</emphasis><code>"</code></para>
-      <para><emphasis role="italic">Optimized search string :</emphasis></para>
-      <para><code>"(filter_io_26.c:" </code><emphasis role="bold">AND</emphasis>
-        <code>":filter_commitrw_write()) ASSERTION(oti-&gt;oti_transno
-          &lt;=obd-&gt;obd_last_committed) failed:</code></para>
+      <para><code>"(filter_io_26.c:</code>
+        <emphasis role="bold">791</emphasis><code>:filter_commitrw_write())
+        ASSERTION(oti-&gt;oti_transno&lt;=obd-&gt;obd_last_committed) failed:
+        oti_transno </code><emphasis role="bold">752</emphasis>
+        <code>last_committed </code><emphasis role="bold">750</emphasis>
+        <code>"</code></para>
+      <para><emphasis role="italic">Optimized search string</emphasis></para>
+      <para><code>filter_commitrw_write ASSERTION oti_transno
+        obd_last_committed failed:</code></para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438198_93109">
@@ -321,31 +325,56 @@
         <primary>troubleshooting</primary>
         <secondary>common problems</secondary>
       </indexterm>Common Lustre File System Problems</title>
-    <para>This section describes how to address common issues encountered with a Lustre file
-      system.</para>
+    <para>This section describes how to address common issues encountered with
+      a Lustre file system.</para>
     <section remap="h3">
       <title>OST Object is Missing or Damaged</title>
-      <para>If the OSS fails to find an object or finds a damaged object, this message appears:</para>
+      <para>If the OSS fails to find an object or finds a damaged object,
+        this message appears:</para>
       <para><screen>OST object missing or damaged (OST &quot;ost1&quot;, object 98148, error -2)</screen></para>
-      <para>If the reported error is -2 (<literal>-ENOENT</literal>, or &quot;No such file or directory&quot;), then the object is missing. This can occur either because the MDS and OST are out of sync, or because an OST object was corrupted and deleted.</para>
-      <para>If you have recovered the file system from a disk failure by using e2fsck, then unrecoverable objects may have been deleted or moved to /lost+found on the raw OST partition. Because files on the MDS still reference these objects, attempts to access them produce this error.</para>
-      <para>If you have recovered a backup of the raw MDS or OST partition, then the restored partition is very likely to be out of sync with the rest of your cluster. No matter which server partition you restored from backup, files on the MDS may reference objects which no longer exist (or did not exist when the backup was taken); accessing those files produces this error.</para>
-      <para>If neither of those descriptions is applicable to your situation, then it is possible
-        that you have discovered a programming error that allowed the servers to get out of sync.
+      <para>If the reported error is -2 (<literal>-ENOENT</literal>, or
+        &quot;No such file or directory&quot;), then the object is no longer
+        present on the OST, even though a file on the MDT is referencing it.
+        This can occur either because the MDT and OST are out of sync, or
+        because an OST object was corrupted and deleted by e2fsck.</para>
+      <para>If you have recovered the file system from a disk failure by using
+        e2fsck, then unrecoverable objects may have been deleted or moved to
+        /lost+found in the underlying OST filesystem. Because files on the MDT
+        still reference these objects, attempts to access them produce this
+        error.</para>
+      <para>If you have restored the filesystem from a backup of the raw MDT
+        or OST partition, then the restored partition is very likely to be out
+        of sync with the rest of your cluster. No matter which server partition
+        you restored from backup, files on the MDT may reference objects which
+        no longer exist (or did not exist when the backup was taken); accessing
+        those files produces this error.</para>
+      <para>If neither of those descriptions is applicable to your situation,
+        then it is possible that you have discovered a programming error that
+        allowed the servers to get out of sync.
         Please submit a Jira ticket (see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-          linkend="dbdoclet.50438198_30989"/>).</para>
-      <para>If the reported error is anything else (such as -5, &quot;<literal>I/O error</literal>&quot;), it likely indicates a storage failure. The low-level file system returns this error if it is unable to read from the storage device.</para>
+          linkend="dbdoclet.reporting_lustre_problem"/>).</para>
+      <para>If the reported error is anything else (such as -5,
+      &quot;<literal>I/O error</literal>&quot;), it likely indicates a storage
+      device failure. The low-level file system returns this error if it is
+      unable to read from the storage device.</para>
       <para><emphasis role="bold">Suggested Action</emphasis></para>
-      <para>If the reported error is -2, you can consider checking in <literal>/lost+found</literal> on your raw OST device, to see if the missing object is there. However, it is likely that this object is lost forever, and that the file that references the object is now partially or completely lost. Restore this file from backup, or salvage what you can and delete it.</para>
-      <para>If the reported error is anything else, then you should immediately inspect this server for storage problems.</para>
+      <para>If the reported error is -2, you can consider checking in
+        <literal>lost+found/</literal> on your raw OST device, to see if the
+        missing object is there. However, it is likely that this object is
+        lost forever, and that the file that references the object is now
+        partially or completely lost. Restore this file from backup, or
+        salvage what you can using <literal>dd conv=noerror</literal>and
+        delete it using the <literal>unlink</literal> command.</para>
+      <para>If the reported error is anything else, then you should
+        immediately inspect this server for storage problems.</para>
     </section>
     <section remap="h3">
       <title>OSTs Become Read-Only</title>
-      <para>If the SCSI devices are inaccessible to the Lustre file system at the block device
-        level, then <literal>ldiskfs</literal> remounts the device read-only to prevent file system
-        corruption. This is a normal behavior. The status in
-          <literal>/proc/fs/lustre/health_check</literal> also shows &quot;not healthy&quot; on the
-        affected nodes.</para>
+      <para>If the SCSI devices are inaccessible to the Lustre file system
+        at the block device level, then <literal>ldiskfs</literal> remounts
+        the device read-only to prevent file system corruption. This is a normal
+        behavior. The status in <literal>/proc/fs/lustre/health_check</literal>
+        also shows &quot;not healthy&quot; on the affected nodes.</para>
       <para>To determine what caused the &quot;not healthy&quot; condition:</para>
       <itemizedlist>
         <listitem>
@@ -384,7 +413,7 @@
         </listitem>
         <listitem>
           <para>Determine all files that are striped over the missing OST, run:</para>
-          <screen># lfs getstripe -r -O {OST_UUID} /mountpoint</screen>
+          <screen># lfs find -O {OST_UUID} /mountpoint</screen>
           <para>This returns a simple list of filenames from the affected file system.</para>
         </listitem>
         <listitem>
@@ -392,128 +421,73 @@
           <screen># dd if=filename of=new_filename bs=4k conv=sync,noerror</screen>
         </listitem>
         <listitem>
-          <para>You can delete these files with the unlink or munlink command.</para>
-          <screen># unlink|munlink filename {filename ...} </screen>
+          <para>You can delete these files with the <literal>unlink</literal> command.</para>
+          <screen># unlink filename {filename ...} </screen>
           <note>
-            <para>There is no functional difference between the <literal>unlink</literal> and <literal>munlink</literal> commands. The unlink command is for newer Linux distributions. You can run <literal>munlink</literal> if <literal>unlink</literal> is not available.</para>
-            <para>When you run the <literal>unlink</literal> or <literal>munlink</literal> command, the file on the MDS is permanently removed.</para>
+            <para>When you run the <literal>unlink</literal> command, it may
+              return an error that the file could not be found, but the file
+              on the MDS has been permanently removed.</para>
           </note>
         </listitem>
-        <listitem>
-          <para>If you need to know, specifically, which parts of the file are missing data, then you first need to determine the file layout (striping pattern), which includes the index of the missing OST). Run:</para>
-          <screen># lfs getstripe -v {filename}</screen>
-        </listitem>
-        <listitem>
-          <para>Use this computation is to determine which offsets in the file are affected: [(C*N + X)*S, (C*N + X)*S + S - 1], N = { 0, 1, 2, ...}</para>
-          <para>where:</para>
-          <para>C = stripe count</para>
-          <para>S = stripe size</para>
-          <para>X = index of bad OST for this file</para>
-        </listitem>
       </orderedlist>
-      <para>For example, for a 2 stripe file, stripe size = 1M, the bad OST is at index 0, and you have holes in the file at: [(2*N + 0)*1M, (2*N + 0)*1M + 1M - 1], N = { 0, 1, 2, ...}</para>
-      <para>If the file system cannot be mounted, currently there is no way that parses metadata directly from an MDS. If the bad OST does not start, options to mount the file system are to provide a loop device OST in its place or replace it with a newly-formatted OST. In that case, the missing objects are created and are read as zero-filled.</para>
+      <para>If the file system cannot be mounted, currently there is no way
+        that parses metadata directly from an MDS. If the bad OST does not
+        start, options to mount the file system are to provide a loop device
+        OST in its place or replace it with a newly-formatted OST. In that case,
+        the missing objects are created and are read as zero-filled.</para>
     </section>
     <section xml:id="dbdoclet.repair_ost_lastid">
       <title>Fixing a Bad LAST_ID on an OST</title>
-      <para>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote>
-          <para>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para>
-        </footnote>. The MDT contains a lov_objid file, with values that represent the last object the MDS has allocated to a file.</para>
-      <para>During normal operation, the MDT keeps some pre-created (but unallocated) objects on the OST, and the relationship between LAST_ID and lov_objid should be LAST_ID &lt;= lov_objid. Any difference in the file values results in objects being created on the OST when it next connects to the MDS. These objects are never actually allocated to a file, since they are of 0 length (empty), but they do no harm. Creating empty objects enables the OST to catch up to the MDS, so normal operations resume.</para>
-      <para>However, in the case where lov_objid &lt; LAST_ID, bad things can happen as the MDS is not aware of objects that have already been allocated on the OST, and it reallocates them to new files, overwriting their existing contents.</para>
-      <para>Here is the rule to avoid this scenario:</para>
-      <para>LAST_ID &gt;= lov_objid and LAST_ID == last_physical_object and lov_objid &gt;= last_used_object</para>
-      <para>Although the lov_objid value should be equal to the last_used_object value, the above
-        rule suffices to keep the Lustre file system happy at the expense of a few leaked
-        objects.</para>
-      <para>In situations where there is on-disk corruption of the OST, for example caused by running with write cache enabled on the disks, the LAST_ID value may become inconsistent and result in a message similar to:</para>
-      <screen>&quot;filter_precreate()) HOME-OST0003: Serious error: 
-objid 3478673 already exists; is this filesystem corrupt?&quot;</screen>
-      <para>A related situation may happen if there is a significant discrepancy between the record of previously-created objects on the OST and the previously-allocated objects on the MDS, for example if the MDS has been corrupted, or restored from backup, which may cause significant data loss if left unchecked. This produces a message like:</para>
-      <screen>&quot;HOME-OST0003: ignoring bogus orphan destroy request: 
-obdid 3438673 last_id 3478673&quot;</screen>
-      <para>To recover from this situation, determine and set a reasonable LAST_ID value.</para>
-      <note>
-        <para>The file system must be stopped on all servers before performing this procedure.</para>
-      </note>
-      <para>For hex-to-decimal translations:</para>
-      <para>Use GDB:</para>
-      <screen>(gdb) p /x 15028
-$2 = 0x3ab4</screen>
-      <para>Or <literal>bc</literal>:</para>
-      <screen>echo &quot;obase=16; 15028&quot; | bc</screen>
-      <orderedlist>
-        <listitem>
-          <para>Determine a reasonable value for the LAST_ID file. Check on the MDS:</para>
-          <screen># mount -t ldiskfs <replaceable>/dev/mdt_device</replaceable> /mnt/mds
-# od -Ax -td8 /mnt/mds/lov_objid
-</screen>
-          <para>There is one entry for each OST, in OST index order. This is what the MDS thinks is the last in-use object.</para>
-        </listitem>
-        <listitem>
-          <para>Determine the OST index for this OST.</para>
-          <screen># od -Ax -td4 /mnt/ost/last_rcvd
-</screen>
-          <para>It will have it at offset 0x8c.</para>
-        </listitem>
-        <listitem>
-          <para>Check on the OST. Use debugfs to check the LAST_ID value:</para>
-          <screen>debugfs -c -R &apos;dump /O/0/LAST_ID /tmp/LAST_ID&apos; /dev/XXX ; od -Ax -td8 /tmp/\
-LAST_ID&quot;
-</screen>
-        </listitem>
-        <listitem>
-          <para>Check the objects on the OST:</para>
-          <screen>mount -rt ldiskfs /dev/{ostdev} /mnt/ost
-# note the ls below is a number one and not a letter L
-ls -1s /mnt/ost/O/0/d* | grep -v [a-z] |
-sort -k2 -n &gt; /tmp/objects.{diskname}
- 
-tail -30 /tmp/objects.{diskname}</screen>
-          <para>This shows you the OST state. There may be some pre-created orphans. Check for zero-length objects. Any zero-length objects with IDs higher than LAST_ID should be deleted. New objects will be pre-created.</para>
-        </listitem>
-      </orderedlist>
-      <para>If the OST LAST_ID value matches that for the objects existing on the OST, then it is possible the lov_objid file on the MDS is incorrect. Delete the lov_objid file on the MDS and it will be re-created from the LAST_ID on the OSTs.</para>
-      <para>If you determine the LAST_ID file on the OST is incorrect (that is, it does not match what objects exist, does not match the MDS lov_objid value), then you have decided on a proper value for LAST_ID.</para>
-      <para>Once you have decided on a proper value for LAST_ID, use this repair procedure.</para>
-      <orderedlist>
-        <listitem>
-          <para>Access:</para>
-          <screen>mount -t ldiskfs /dev/{ostdev} /mnt/ost</screen>
-        </listitem>
-        <listitem>
-          <para>Check the current:</para>
-          <screen>od -Ax -td8 /mnt/ost/O/0/LAST_ID</screen>
-        </listitem>
-        <listitem>
-          <para>Be very safe, only work on backups:</para>
-          <screen>cp /mnt/ost/O/0/LAST_ID /tmp/LAST_ID</screen>
-        </listitem>
-        <listitem>
-          <para>Convert binary to text:</para>
-          <screen>xxd /tmp/LAST_ID /tmp/LAST_ID.asc</screen>
-        </listitem>
-        <listitem>
-          <para>Fix:</para>
-          <screen>vi /tmp/LAST_ID.asc</screen>
-        </listitem>
-        <listitem>
-          <para>Convert to binary:</para>
-          <screen>xxd -r /tmp/LAST_ID.asc /tmp/LAST_ID.new</screen>
-        </listitem>
-        <listitem>
-          <para>Verify:</para>
-          <screen>od -Ax -td8 /tmp/LAST_ID.new</screen>
-        </listitem>
-        <listitem>
-          <para>Replace:</para>
-          <screen>cp /tmp/LAST_ID.new /mnt/ost/O/0/LAST_ID</screen>
-        </listitem>
-        <listitem>
-          <para>Clean up:</para>
-          <screen>umount /mnt/ost</screen>
-        </listitem>
-      </orderedlist>
+      <para>Each OST contains a <literal>LAST_ID</literal> file, which holds
+        the last object (pre-)created by the MDS
+        <footnote><para>The contents of the <literal>LAST_ID</literal>
+          file must be accurate regarding the actual objects that exist
+          on the OST.</para></footnote>.
+        The MDT contains a <literal>lov_objid</literal> file, with values
+        that represent the last object the MDS has allocated to a file.</para>
+      <para>During normal operation, the MDT keeps pre-created (but unused)
+        objects on the OST, and normally <literal>LAST_ID</literal> should be
+        larger than <literal>lov_objid</literal>.  Any small difference in the
+        values is a result of objects being precreated on the OST to improve
+        MDS file creation performance. These precreated objects are not yet
+        allocated to a file, since they are of zero length (empty).</para>
+      <para>However, in the case where <literal>lov_objid</literal> is
+        larger than <literal>LAST_ID</literal>, it indicates the MDS has
+        allocated objects to files that do not exist on the OST.  Conversely,
+        if <literal>lov_objid</literal> is significantly less than
+        <literal>LAST_ID</literal> (by at least 20,000 objects) it indicates
+        the OST previously allocated objects at the request of the MDS (which
+        likely contain data) but it doesn't know about them.</para>
+      <para condition='l25'>Since Lustre 2.5 the MDS and OSS will resync the
+        <literal>lov_objid</literal> and <literal>LAST_ID</literal> files
+        automatically if they become out of sync.  This may result in some
+        space on the OSTs becoming unavailable until LFSCK is next run, but
+        avoids issues with mounting the filesystem.</para>
+      <para condition='l26'>Since Lustre 2.6 the LFSCK will repair the
+        <literal>LAST_ID</literal> file on the OST automatically based on
+        the objects that exist on the OST, in case it was corrupted.</para>
+      <para>In situations where there is on-disk corruption of the OST, for
+        example caused by the disk write cache being lost, or if the OST
+        was restored from an old backup or reformatted, the
+        <literal>LAST_ID</literal> value may become inconsistent and result
+        in a message similar to:</para>
+      <screen>&quot;myth-OST0002: Too many FIDs to precreate,
+OST replaced or reformatted: LFSCK will clean up&quot;</screen>
+      <para>A related situation may happen if there is a significant
+        discrepancy between the record of previously-created objects on the
+        OST and the previously-allocated objects on the MDT, for example if
+        the MDT has been corrupted, or restored from backup, which would cause
+        significant data loss if left unchecked. This produces a message
+        like:</para>
+      <screen>&quot;myth-OST0002: too large difference between
+MDS LAST_ID [0x1000200000000:0x100048:0x0] (1048648) and
+OST LAST_ID [0x1000200000000:0x2232123:0x0] (35856675), trust the OST&quot;</screen>
+      <para>In such cases, the MDS will advance the <literal>lov_objid</literal>
+        value to match that of the OST to avoid deleting existing objects,
+        which may contain data.  Files on the MDT that reference these objects
+        will not be lost.  Any unreferenced OST objects will be attached to
+        the <literal>.lustre/lost+found</literal> directory the next time
+        LFSCK <literal>layout</literal> check is run.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>troubleshooting</primary><secondary>'Address already in use'</secondary></indexterm>Handling/Debugging &quot;<literal>Bind: Address already in use</literal>&quot; Error</title>
@@ -548,31 +522,96 @@ tail -30 /tmp/objects.{diskname}</screen>
     </section>
     <section remap="h3">
       <title><indexterm><primary>troubleshooting</primary><secondary>'Error -28'</secondary></indexterm>Handling/Debugging Error &quot;- 28&quot;</title>
-      <para>A Linux error -28 (<literal>ENOSPC</literal>) that occurs during a write or sync operation indicates that an existing file residing on an OST could not be rewritten or updated because the OST was full, or nearly full. To verify if this is the case, on a client on which the OST is mounted, enter :</para>
-      <screen>lfs df -h</screen>
-      <para>To address this issue, you can do one of the following:</para>
-      <itemizedlist>
-        <listitem>
-          <para>Expand the disk space on the OST.</para>
-        </listitem>
-        <listitem>
-          <para>Copy or stripe the file to a less full OST.</para>
-        </listitem>
-      </itemizedlist>
-      <para>A Linux error -28 (<literal>ENOSPC</literal>) that occurs when a new file is being created may indicate that the MDS has run out of inodes and needs to be made larger. Newly created files do not written to full OSTs, while existing files continue to reside on the OST where they were initially created. To view inode information on the MDS, enter:</para>
-      <screen>lfs df -i</screen>
-      <para>Typically, the Lustre software reports this error to your application. If the
-        application is checking the return code from its function calls, then it decodes it into a
-        textual error message such as <literal>No space left on device</literal>. Both versions of
-        the error message also appear in the system log.</para>
-      <para>For more information about the <literal>lfs df</literal> command, see <xref linkend="dbdoclet.50438209_35838"/>.</para>
-      <para>Although it is less efficient, you can also use the grep command to determine which OST or MDS is running out of space. To check the free space and inodes on a client, enter:</para>
-      <screen>grep &apos;[0-9]&apos; /proc/fs/lustre/osc/*/kbytes{free,avail,total}
-grep &apos;[0-9]&apos; /proc/fs/lustre/osc/*/files{free,total}
-grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/kbytes{free,avail,total}
-grep &apos;[0-9]&apos; /proc/fs/lustre/mdc/*/files{free,total}</screen>
+      <para>A Linux error -28 (<literal>ENOSPC</literal>) that occurs during
+        a write or sync operation indicates that an existing file residing
+        on an OST could not be rewritten or updated because the OST was full,
+        or nearly full. To verify if this is the case, run on a client:</para>
+        <screen>
+client$ lfs df -h
+UUID                       bytes        Used   Available Use% Mounted on
+myth-MDT0000_UUID          12.9G        1.5G       10.6G  12% /myth[MDT:0]
+myth-OST0000_UUID           3.6T        3.1T      388.9G  89% /myth[OST:0]
+myth-OST0001_UUID           3.6T        3.6T       64.0K 100% /myth[OST:1]
+myth-OST0002_UUID           3.6T        3.1T      394.6G  89% /myth[OST:2]
+myth-OST0003_UUID           5.4T        5.0T      267.8G  95% /myth[OST:3]
+myth-OST0004_UUID           5.4T        2.9T        2.2T  57% /myth[OST:4]
+
+filesystem_summary:        21.6T       17.8T        3.2T  85% /myth
+        </screen>
+      <para>To address this issue, you can expand the disk space on the OST,
+          or use the <literal>lfs_migrate</literal> command to migrate (move)
+          files to a less full OST.  For details on both of these options
+          see <xref linkend="dbdoclet.adding_new_ost" /></para>
+      <para condition='l26'>In some cases, there may be processes holding
+        files open that are consuming a significant amount of space (e.g.
+        runaway process writing lots of data to an open file that has been
+        deleted).  It is possible to get a list of all open file handles in the
+        filesystem from the MDS:
+        <screen>
+mds# lctl get_param mdt.*.exports.*.open_files
+mdt.myth-MDT0000.exports.192.168.20.159@tcp.open_files=
+[0x200003ab4:0x435:0x0]
+[0x20001e863:0x1c1:0x0]
+[0x20001e863:0x1c2:0x0]
+:
+:
+        </screen>
+        These file handles can be converted into pathnames on any client via
+        the <literal>lfs fid2path</literal> command (as root):
+        <screen>
+client# lfs fid2path /myth [0x200003ab4:0x435:0x0] [0x20001e863:0x1c1:0x0] [0x20001e863:0x1c2:0x0]
+lfs fid2path: cannot find '[0x200003ab4:0x435:0x0]': No such file or directory
+/myth/tmp/4M
+/myth/tmp/1G
+:
+:
+        </screen>
+	In some cases, if the file has been deleted from the filesystem,
+	<literal>fid2path</literal> will return an error that the file is
+	not found.  You can use the client NID
+	(<literal>192.168.20.159@tcp</literal> in the above example) to
+	determine which node the file is open on, and <literal>lsof</literal>
+	to find and kill the process that is holding the file open:
+	<screen>
+# lsof /myth
+COMMAND   PID   USER  FD TYPE    DEVICE      SIZE/OFF               NODE NAME
+logger  13806 mythtv  0r REG  35,632494 1901048576384 144115440203858997 /myth/logs/job.1283929.log (deleted)
+	</screen>
+      </para>
+      <para>A Linux error -28 (<literal>ENOSPC</literal>) that occurs when
+        a new file is being created may indicate that the MDT has run out
+        of inodes and needs to be made larger. Newly created files are not
+        written to full OSTs, while existing files continue to reside on
+        the OST where they were initially created. To view inode information
+        on the MDT, run on a client:</para>
+        <screen>
+lfs df -i
+UUID                      Inodes       IUsed       IFree IUse% Mounted on
+myth-MDT0000_UUID        1910263     1910263           0 100% /myth[MDT:0]
+myth-OST0000_UUID         947456      360059      587397  89% /myth[OST:0]
+myth-OST0001_UUID         948864      233748      715116  91% /myth[OST:1]
+myth-OST0002_UUID         947456      549961      397495  89% /myth[OST:2]
+myth-OST0003_UUID        1426144      477595      948549  95% /myth[OST:3]
+myth-OST0004_UUID        1426080      465248     1420832  57% /myth[OST:4]
+
+filesystem_summary:      1910263     1910263           0 100% /myth
+        </screen>
+      <para>Typically, the Lustre software reports this error to your
+        application. If the application is checking the return code from
+        its function calls, then it decodes it into a textual error message
+        such as <literal>No space left on device</literal>. The numeric
+        error message may also appear in the system log.</para>
+      <para>For more information about the <literal>lfs df</literal> command,
+        see <xref linkend="dbdoclet.checking_free_space"/>.</para>
+      <para>You can also use the <literal>lctl get_param</literal> command to
+        monitor the space and object usage on the OSTs and MDTs from any
+        client:</para>
+        <screen>lctl get_param {osc,mdc}.*.{kbytes,files}{free,avail,total}
+        </screen>
       <note>
-        <para>You can find other numeric error codes along with a short name and text description in <literal>/usr/include/asm/errno.h</literal>.</para>
+        <para>You can find other numeric error codes along with a short name
+        and text description in <literal>/usr/include/asm/errno.h</literal>.
+        </para>
       </note>
     </section>
     <section remap="h3">
