@@ -16778,7 +16778,7 @@ run_test 260 "Check mdc_close fail"
 ### Data-on-MDT sanity tests ###
 test_270a() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55"
+		skip "Need MDS version at least 2.10.55 for DoM"
 
 	# create DoM file
 	local dom=$DIR/$tdir/dom_file
@@ -16787,14 +16787,13 @@ test_270a() {
 	mkdir -p $DIR/$tdir
 
 	# basic checks for DoM component creation
-	$LFS setstripe -E 1024K -E 1024K -L mdt $dom 2>/dev/null &&
+	$LFS setstripe -E 1024K -E 2048K -L mdt $dom 2>/dev/null &&
 		error "Can set MDT layout to non-first entry"
 
-	$LFS setstripe -E 1024K -L mdt -E 1024K -L mdt $dom 2>/dev/null &&
+	$LFS setstripe -E 1024K -L mdt -E 2048K -L mdt $dom 2>/dev/null &&
 		error "Can define multiple entries as MDT layout"
 
-	$LFS setstripe -E 1M -L mdt $dom ||
-		error "Can't create DoM layout"
+	$LFS setstripe -E 1M -L mdt $dom || error "Can't create DoM layout"
 
 	[ $($LFS getstripe -L $dom) == "mdt" ] || error "bad pattern"
 	[ $($LFS getstripe -c $dom) == 0 ] || error "bad stripe count"
@@ -16806,46 +16805,61 @@ test_270a() {
 	local space_check=1
 
 	# Skip free space checks with ZFS
-	if [ "$(facet_fstype $facet)" == "zfs" ]; then
-		space_check=0
-	fi
+	[ "$(facet_fstype $facet)" == "zfs" ] && space_check=0
 
 	# write
 	sync
+	local size_tmp=$((65536 * 3))
 	local mdtfree1=$(do_facet $facet \
-		lctl get_param -n osd*.*$mdtname.kbytesfree)
-	dd if=/dev/urandom of=$tmp bs=1024 count=100
+			 lctl get_param -n osd*.*$mdtname.kbytesfree)
+
+	dd if=/dev/urandom of=$tmp bs=1024 count=$((size_tmp / 1024))
 	# check also direct IO along write
-	dd if=$tmp of=$dom bs=102400 count=1 oflag=direct
+	# IO size must be a multiple of PAGE_SIZE on all platforms (ARM=64KB)
+	dd if=$tmp of=$dom bs=65536 count=$((size_tmp / 65536)) oflag=direct
 	sync
 	cmp $tmp $dom || error "file data is different"
-	[ $(stat -c%s $dom) == 102400 ] || error "bad size after write"
+	[ $(stat -c%s $dom) == $size_tmp ] ||
+		error "bad size after write: $(stat -c%s $dom) != $size_tmp"
 	if [ $space_check == 1 ]; then
 		local mdtfree2=$(do_facet $facet \
-				lctl get_param -n osd*.*$mdtname.kbytesfree)
-		[ $(($mdtfree1 - $mdtfree2)) -ge 102 ] ||
-			error "MDT free space is wrong after write"
+				 lctl get_param -n osd*.*$mdtname.kbytesfree)
+
+		# increase in usage from by $size_tmp
+		[ $(($mdtfree1 - $mdtfree2)) -ge $((size_tmp / 1024)) ] ||
+			error "MDT free space wrong after write: " \
+			      "$mdtfree1 >= $mdtfree2 + $size_tmp/1024"
 	fi
 
 	# truncate
-	$TRUNCATE $dom 10000
-	[ $(stat -c%s $dom) == 10000 ] || error "bad size after truncate"
+	local size_dom=10000
+
+	$TRUNCATE $dom $size_dom
+	[ $(stat -c%s $dom) == $size_dom ] ||
+		error "bad size after truncate: $(stat -c%s $dom) != $size_dom"
 	if [ $space_check == 1 ]; then
 		mdtfree1=$(do_facet $facet \
 				lctl get_param -n osd*.*$mdtname.kbytesfree)
-		[ $(($mdtfree1 - $mdtfree2)) -ge 92 ] ||
-			error "MDT free space is wrong after truncate"
+		# decrease in usage from $size_tmp to new $size_dom
+		[ $(($mdtfree1 - $mdtfree2)) -ge \
+		  $(((size_tmp - size_dom) / 1024)) ] ||
+			error "MDT free space is wrong after truncate: " \
+			      "$mdtfree1 >= $mdtfree2 + ($size_tmp - $size_dom) / 1024"
 	fi
 
 	# append
 	cat $tmp >> $dom
 	sync
-	[ $(stat -c%s $dom) == 112400 ] || error "bad size after append"
+	size_dom=$((size_dom + size_tmp))
+	[ $(stat -c%s $dom) == $size_dom ] ||
+		error "bad size after append: $(stat -c%s $dom) != $size_dom"
 	if [ $space_check == 1 ]; then
 		mdtfree2=$(do_facet $facet \
 				lctl get_param -n osd*.*$mdtname.kbytesfree)
-		[ $(($mdtfree1 - $mdtfree2)) -ge 102 ] ||
-			error "MDT free space is wrong after append"
+		# increase in usage by $size_tmp from previous
+		[ $(($mdtfree1 - $mdtfree2)) -ge $((size_tmp / 1024)) ] ||
+			error "MDT free space is wrong after append: " \
+			      "$mdtfree1 >= $mdtfree2 + $size_tmp/1024"
 	fi
 
 	# delete
@@ -16853,22 +16867,25 @@ test_270a() {
 	if [ $space_check == 1 ]; then
 		mdtfree1=$(do_facet $facet \
 				lctl get_param -n osd*.*$mdtname.kbytesfree)
-		[ $(($mdtfree1 - $mdtfree2)) -ge 112 ] ||
-			error "MDT free space is wrong after removal"
+		# decrease in usage by $size_dom from previous
+		[ $(($mdtfree1 - $mdtfree2)) -ge $((size_dom / 1024)) ] ||
+			error "MDT free space is wrong after removal: " \
+			      "$mdtfree1 >= $mdtfree2 + $size_dom/1024"
 	fi
 
 	# combined striping
 	$LFS setstripe -E 1024K -L mdt -E EOF $dom ||
 		error "Can't create DoM + OST striping"
 
-	dd if=/dev/urandom of=$tmp bs=1024 count=2000
+	size_tmp=2031616 # must be a multiple of PAGE_SIZE=65536 on ARM
+	dd if=/dev/urandom of=$tmp bs=1024 count=$((size_tmp / 1024))
 	# check also direct IO along write
-	dd if=$tmp of=$dom bs=102400 count=20 oflag=direct
+	dd if=$tmp of=$dom bs=65536 count=$((size_tmp / 65536)) oflag=direct
 	sync
 	cmp $tmp $dom || error "file data is different"
-	[ $(stat -c%s $dom) == 2048000 ] || error "bad size after write"
-	rm $dom
-	rm $tmp
+	[ $(stat -c%s $dom) == $size_tmp ] ||
+		error "bad size after write: $(stat -c%s $dom) != $size_tmp"
+	rm $dom $tmp
 
 	return 0
 }
