@@ -139,6 +139,7 @@ struct lnet_ioctl_config_data {
 			__u32 rtr_hop;
 			__u32 rtr_priority;
 			__u32 rtr_flags;
+			__u32 rtr_sensitivity;
 		} cfg_route;
 		struct {
 			char net_intf[LNET_MAX_STR_LEN];

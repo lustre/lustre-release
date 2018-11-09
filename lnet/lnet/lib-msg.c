@@ -440,14 +440,14 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 }
 
 static void
-lnet_dec_healthv_locked(atomic_t *healthv)
+lnet_dec_healthv_locked(atomic_t *healthv, int sensitivity)
 {
 	int h = atomic_read(healthv);
 
-	if (h < lnet_health_sensitivity) {
+	if (h < sensitivity) {
 		atomic_set(healthv, 0);
 	} else {
-		h -= lnet_health_sensitivity;
+		h -= sensitivity;
 		atomic_set(healthv, h);
 	}
 }
@@ -466,7 +466,7 @@ lnet_handle_local_failure(struct lnet_ni *local_ni)
 		return;
 	}
 
-	lnet_dec_healthv_locked(&local_ni->ni_healthv);
+	lnet_dec_healthv_locked(&local_ni->ni_healthv, lnet_health_sensitivity);
 	/*
 	 * add the NI to the recovery queue if it's not already there
 	 * and it's health value is actually below the maximum. It's
@@ -489,11 +489,22 @@ lnet_handle_local_failure(struct lnet_ni *local_ni)
 void
 lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 {
+	__u32 sensitivity = lnet_health_sensitivity;
+	__u32 lp_sensitivity;
+
 	/* lpni could be NULL if we're in the LOLND case */
 	if (!lpni)
 		return;
 
-	lnet_dec_healthv_locked(&lpni->lpni_healthv);
+	/*
+	 * If there is a health sensitivity in the peer then use that
+	 * instead of the globally set one.
+	 */
+	lp_sensitivity = lpni->lpni_peer_net->lpn_peer->lp_health_sensitivity;
+	if (lp_sensitivity)
+		sensitivity = lp_sensitivity;
+
+	lnet_dec_healthv_locked(&lpni->lpni_healthv, sensitivity);
 	/*
 	 * add the peer NI to the recovery queue if it's not already there
 	 * and it's health value is actually below the maximum. It's
