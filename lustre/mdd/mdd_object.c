@@ -3129,7 +3129,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 	int is_orphan = 0;
 	int rc;
 	bool blocked = false;
-	int last_close_by_uid = 0;
+	bool last_close_by_uid = false;
 	const struct lu_ucred *uc = lu_ucred(env);
 	ENTRY;
 
@@ -3211,8 +3211,9 @@ cont:
 	mdd_obj->mod_count--; /*release open count */
 
 	/* under mdd write lock */
-	/* If recording, see if we need to remove UID from list */
-	if (mdd_changelog_enabled(env, mdd, CL_OPEN)) {
+	/* If recording, see if we need to remove UID from list. uc is not
+	 * initialized if the client has been evicted. */
+	if (mdd_changelog_enabled(env, mdd, CL_OPEN) && uc) {
 		struct mdd_object_user *mou;
 
 		/* look for UID in list */
@@ -3226,7 +3227,7 @@ cont:
 			mou->mou_opencount--;
 			if (mou->mou_opencount == 0) {
 				mdd_obj_user_remove(mdd_obj, mou);
-				last_close_by_uid = 1;
+				last_close_by_uid = true;
 			}
 		}
 	}
