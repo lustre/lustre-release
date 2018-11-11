@@ -382,11 +382,6 @@ static inline int radix_tree_exceptional_entry(void *arg)
 static inline void truncate_inode_pages_final(struct address_space *map)
 {
 	truncate_inode_pages(map, 0);
-		/* Workaround for LU-118 */
-	if (map->nrpages) {
-		spin_lock_irq(&map->tree_lock);
-		spin_unlock_irq(&map->tree_lock);
-	}	/* Workaround end */
 }
 #endif
 
