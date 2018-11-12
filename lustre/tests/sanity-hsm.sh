@@ -737,7 +737,7 @@ wait_request_state() {
 	local cmd="$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.actions"
 	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$13}' | cut -f2 -d="
 
-	wait_result $mds "$cmd" $state 200 ||
+	wait_result $mds "$cmd" "$state" 200 ||
 		error "request on $fid is not $state on $mds"
 }
 
@@ -4653,6 +4653,55 @@ test_254b()
 	done
 }
 run_test 254b "Request counters are correctly incremented and decremented"
+
+test_255()
+{
+	local file="$DIR/$tdir/$tfile"
+	local fid=$(create_empty_file "$file")
+
+	# How do you make sure the coordinator has consumed any outstanding
+	# event, without triggering an event yourself?
+	#
+	# You wait for a request to disappear from the coordinator's llog.
+
+	# Warning: the setup represents 90% of this test
+
+	# Create and process an HSM request
+	copytool setup
+	"$LFS" hsm_archive "$file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	kill_copytools
+	wait_copytools || error "failed to stop copytools"
+
+	# Launch a new HSM request
+	rm "$file"
+	create_empty_file "$file"
+	"$LFS" hsm_archive "$file"
+
+	cdt_shutdown
+
+	# Have the completed request be removed as soon as the cdt wakes up
+	stack_trap "set_hsm_param grace_delay $(get_hsm_param grace_delay)" EXIT
+	set_hsm_param grace_delay 1
+	# (Hopefully, time on the MDS will behave nicely)
+	do_facet $SINGLEMDS sleep 2 &
+
+	# Increase `loop_period' as a mean to prevent the coordinator from
+	# waking itself up to do some housekeeping.
+	stack_trap "set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
+	set_hsm_param loop_period 1000
+
+	wait $! || error "waiting failed"
+	cdt_enable
+	wait_request_state $fid ARCHIVE ""
+	# The coordinator will not wake up on its own for ~`loop_period' secs...
+
+	# ... Unless a copytool registers. Now the real test begins
+	copytool setup
+	wait_request_state $(path2fid "$file") ARCHIVE SUCCEED
+}
+run_test 255 "Copytool registration wakes the coordinator up"
 
 # tests 260[a-c] rely on the parsing of the copytool's log file, they might
 # break in the future because of that.

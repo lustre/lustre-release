@@ -140,6 +140,10 @@ out_free:
 	if (ha != NULL)
 		OBD_FREE_PTR(ha);
 out:
+	/* wake the coordinator to potentially schedule requests */
+	if (rc == -EEXIST || rc == 0)
+		mdt_hsm_cdt_event(cdt);
+
 	return rc;
 }
 
