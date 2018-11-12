@@ -1,0 +1,24 @@
+Index: linux-3.10.0-957.el7.x86_64/drivers/md/raid5.c
+===================================================================
+--- linux-3.10.0-957.el7.x86_64.orig/drivers/md/raid5.c
++++ linux-3.10.0-957.el7.x86_64/drivers/md/raid5.c
+@@ -3266,6 +3266,8 @@ static int add_stripe_bio(struct stripe_
+ 	*bip = bi;
+ 	bio_inc_remaining(bi);
+ 	md_write_inc(conf->mddev, bi);
++	if ((bi->bi_rw & REQ_SYNC) && !forwrite)
++		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags);	/* force to read from disk. */
+ 
+ 	if (forwrite) {
+ 		/* check if page is covered */
+@@ -5753,6 +5755,10 @@ static bool raid5_make_request(struct md
+ 	if (rw == WRITE)
+ 		md_write_end(mddev);
+ 	bio_endio(bi, 0);
++
++	if (bi->bi_rw & REQ_SYNC)
++		md_wakeup_thread(mddev->thread);
++
+ 	return true;
+ }
+ 
