@@ -146,22 +146,49 @@ out:
 
 int mdt_hsm_ct_register(struct tgt_session_info *tsi)
 {
-	struct mdt_thread_info	*info;
-	__u32			*archives;
-	int			 rc;
+	struct mdt_thread_info *info = tsi2mdt_info(tsi);
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct obd_export *exp = req->rq_export;
+	size_t archives_size;
+	__u32 *archives;
+	int archive_count;
+	int rc;
 	ENTRY;
 
-	archives = req_capsule_client_get(tsi->tsi_pill, &RMF_MDS_HSM_ARCHIVE);
-	if (archives == NULL)
-		RETURN(err_serious(-EPROTO));
-
-	info = tsi2mdt_info(tsi);
 	if (!mdt_hsm_is_admin(info))
 		GOTO(out, rc = -EPERM);
 
-	/* XXX: directly include this function here? */
-	rc = mdt_hsm_agent_register_mask(info, &tsi->tsi_exp->exp_client_uuid,
-					 *archives);
+	archives = req_capsule_client_get(tsi->tsi_pill, &RMF_MDS_HSM_ARCHIVE);
+	if (archives == NULL)
+		GOTO(out, rc = err_serious(-EPROTO));
+
+	archives_size = req_capsule_get_size(tsi->tsi_pill,
+					     &RMF_MDS_HSM_ARCHIVE, RCL_CLIENT);
+
+	/* compatibility check for the old clients */
+	if (!exp_connect_archive_id_array(exp)) {
+		if (archives_size != sizeof(*archives))
+			GOTO(out, rc = err_serious(-EPROTO));
+
+		/* XXX: directly include this function here? */
+		rc = mdt_hsm_agent_register_mask(info,
+						 &tsi->tsi_exp->exp_client_uuid,
+						 *archives);
+		GOTO(out, rc);
+	}
+
+	if (archives_size % sizeof(*archives) != 0)
+		GOTO(out, rc = err_serious(-EPROTO));
+
+	archive_count = archives_size / sizeof(*archives);
+	if (archive_count == 1 && *archives == 0) {
+		archive_count = 0;
+		archives = NULL;
+	}
+
+	rc = mdt_hsm_agent_register(info, &tsi->tsi_exp->exp_client_uuid,
+				    archive_count, archives);
+
 out:
 	mdt_thread_info_fini(info);
 	RETURN(rc);
@@ -313,6 +340,9 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 
 	/* Change archive_id if provided. */
 	if (hss->hss_valid & HSS_ARCHIVE_ID) {
+		struct ptlrpc_request *req = mdt_info_req(info);
+		struct obd_export *exp = req->rq_export;
+
 		if (!(ma->ma_hsm.mh_flags & HS_EXISTS)) {
 			CDEBUG(D_HSM, "Could not set an archive number for "
 			       DFID "if HSM EXISTS flag is not set.\n",
@@ -320,10 +350,11 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 			GOTO(out_unlock, rc);
 		}
 
-		/* Detect out-of range archive id */
-		if (hss->hss_archive_id > LL_HSM_MAX_ARCHIVE) {
-			CDEBUG(D_HSM, "archive id %u exceeds maximum %zu.\n",
-			       hss->hss_archive_id, LL_HSM_MAX_ARCHIVE);
+		if (!exp_connect_archive_id_array(exp) &&
+		    hss->hss_archive_id > LL_HSM_ORIGIN_MAX_ARCHIVE) {
+			CDEBUG(D_HSM, "archive id %u from old clients "
+			       "exceeds maximum %zu.\n",
+			       hss->hss_archive_id, LL_HSM_ORIGIN_MAX_ARCHIVE);
 			GOTO(out_unlock, rc = -EINVAL);
 		}
 

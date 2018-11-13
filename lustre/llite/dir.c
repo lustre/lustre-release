@@ -987,25 +987,110 @@ progress:
 }
 
 
-static int copy_and_ioctl(int cmd, struct obd_export *exp,
-			  const void __user *data, size_t size)
+static int copy_and_ct_start(int cmd, struct obd_export *exp,
+			     const struct lustre_kernelcomm __user *data)
 {
-	void *copy;
+	struct lustre_kernelcomm *lk;
+	struct lustre_kernelcomm *tmp;
+	size_t size = sizeof(*lk);
+	size_t new_size;
+	int i;
 	int rc;
 
-	OBD_ALLOC(copy, size);
-	if (copy == NULL)
+	/* copy data from userspace to get numbers of archive_id */
+	OBD_ALLOC(lk, size);
+	if (lk == NULL)
 		return -ENOMEM;
 
-	if (copy_from_user(copy, data, size)) {
-		rc = -EFAULT;
-		goto out;
+	if (copy_from_user(lk, data, size))
+		GOTO(out_lk, rc = -EFAULT);
+
+	if (lk->lk_flags & LK_FLG_STOP)
+		goto do_ioctl;
+
+	if (!(lk->lk_flags & LK_FLG_DATANR)) {
+		__u32 archive_mask = lk->lk_data_count;
+		int count;
+
+		/* old hsm agent to old MDS */
+		if (!exp_connect_archive_id_array(exp))
+			goto do_ioctl;
+
+		/* old hsm agent to new MDS */
+		lk->lk_flags |= LK_FLG_DATANR;
+
+		if (archive_mask == 0)
+			goto do_ioctl;
+
+		count = hweight32(archive_mask);
+		new_size = offsetof(struct lustre_kernelcomm, lk_data[count]);
+		OBD_ALLOC(tmp, new_size);
+		if (tmp == NULL)
+			GOTO(out_lk, rc = -ENOMEM);
+
+		memcpy(tmp, lk, size);
+		tmp->lk_data_count = count;
+		OBD_FREE(lk, size);
+		lk = tmp;
+		size = new_size;
+
+		count = 0;
+		for (i = 0; i < sizeof(archive_mask) * 8; i++) {
+			if ((1 << i) & archive_mask) {
+				lk->lk_data[count] = i + 1;
+				count++;
+			}
+		}
+		goto do_ioctl;
 	}
 
-	rc = obd_iocontrol(cmd, exp, size, copy, NULL);
-out:
-	OBD_FREE(copy, size);
+	/* new hsm agent to new mds */
+	if (lk->lk_data_count > 0) {
+		new_size = offsetof(struct lustre_kernelcomm,
+				    lk_data[lk->lk_data_count]);
+		OBD_ALLOC(tmp, new_size);
+		if (tmp == NULL)
+			GOTO(out_lk, rc = -ENOMEM);
 
+		OBD_FREE(lk, size);
+		lk = tmp;
+		size = new_size;
+
+		if (copy_from_user(lk, data, size))
+			GOTO(out_lk, rc = -EFAULT);
+	}
+
+	/* new hsm agent to old MDS */
+	if (!exp_connect_archive_id_array(exp)) {
+		__u32 archives = 0;
+
+		if (lk->lk_data_count > LL_HSM_ORIGIN_MAX_ARCHIVE)
+			GOTO(out_lk, rc = -EINVAL);
+
+		for (i = 0; i < lk->lk_data_count; i++) {
+			if (lk->lk_data[i] > LL_HSM_ORIGIN_MAX_ARCHIVE) {
+				rc = -EINVAL;
+				CERROR("%s: archive id %d requested but only "
+				       "[0 - %zu] supported: rc = %d\n",
+				       exp->exp_obd->obd_name, lk->lk_data[i],
+				       LL_HSM_ORIGIN_MAX_ARCHIVE, rc);
+				GOTO(out_lk, rc);
+			}
+
+			if (lk->lk_data[i] == 0) {
+				archives = 0;
+				break;
+			}
+
+			archives |= (1 << (lk->lk_data[i] - 1));
+		}
+		lk->lk_flags &= ~LK_FLG_DATANR;
+		lk->lk_data_count = archives;
+	}
+do_ioctl:
+	rc = obd_iocontrol(cmd, exp, size, lk, NULL);
+out_lk:
+	OBD_FREE(lk, size);
 	return rc;
 }
 
@@ -1738,8 +1823,8 @@ out_hur:
 		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 			RETURN(-EPERM);
 
-		rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void __user *)arg,
-				    sizeof(struct lustre_kernelcomm));
+		rc = copy_and_ct_start(cmd, sbi->ll_md_exp,
+				       (struct lustre_kernelcomm __user *)arg);
 		RETURN(rc);
 
 	case LL_IOC_HSM_COPY_START: {

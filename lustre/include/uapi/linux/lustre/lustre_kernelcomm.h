@@ -73,17 +73,26 @@ enum kuc_generic_message_type {
 #define KUC_GRP_HSM	0x02
 #define KUC_GRP_MAX	KUC_GRP_HSM
 
-#define LK_FLG_STOP 0x01
+enum lk_flags {
+	LK_FLG_STOP	= 0x0001,
+	LK_FLG_DATANR	= 0x0002,
+};
 #define LK_NOFD -1U
 
-/* kernelcomm control structure, passed from userspace to kernel */
+/* kernelcomm control structure, passed from userspace to kernel.
+ * For compatibility with old copytools, users who pass ARCHIVE_IDs
+ * to kernel using lk_data_count and lk_data should fill lk_flags with
+ * LK_FLG_DATANR. Otherwise kernel will take lk_data_count as bitmap of
+ * ARCHIVE IDs.
+ */
 struct lustre_kernelcomm {
 	__u32 lk_wfd;
 	__u32 lk_rfd;
 	__u32 lk_uid;
 	__u32 lk_group;
-	__u32 lk_data;
+	__u32 lk_data_count;
 	__u32 lk_flags;
+	__u32 lk_data[0];
 } __attribute__((packed));
 
 #endif	/* __UAPI_KERNELCOMM_H__ */

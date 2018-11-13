@@ -1684,29 +1684,53 @@ out:
 	ptlrpc_req_finished(req);
 	return rc;
 }
-
-static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archives)
+/**
+ * Send hsm_ct_register to MDS
+ *
+ * \param[in]	imp		import
+ * \param[in]	archive_count	if in bitmap format, it is the bitmap,
+ *				else it is the count of archive_ids
+ * \param[in]	archives	if in bitmap format, it is NULL,
+ *				else it is archive_id lists
+ */
+static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archive_count,
+				   __u32 *archives)
 {
-	__u32			*archive_mask;
-	struct ptlrpc_request	*req;
-	int			 rc;
+	struct ptlrpc_request *req;
+	__u32 *archive_array;
+	size_t archives_size;
+	int rc;
 	ENTRY;
 
-	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_HSM_CT_REGISTER,
-					LUSTRE_MDS_VERSION,
-					MDS_HSM_CT_REGISTER);
+	req = ptlrpc_request_alloc(imp, &RQF_MDS_HSM_CT_REGISTER);
 	if (req == NULL)
-		GOTO(out, rc = -ENOMEM);
+		RETURN(-ENOMEM);
+
+	if (archives != NULL)
+		archives_size = sizeof(*archive_array) * archive_count;
+	else
+		archives_size = sizeof(archive_count);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_MDS_HSM_ARCHIVE,
+			     RCL_CLIENT, archives_size);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_HSM_CT_REGISTER);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(-ENOMEM);
+	}
 
 	mdc_pack_body(req, NULL, 0, 0, -1, 0);
 
-	/* Copy hsm_progress struct */
-	archive_mask = req_capsule_client_get(&req->rq_pill,
-					      &RMF_MDS_HSM_ARCHIVE);
-	if (archive_mask == NULL)
+	archive_array = req_capsule_client_get(&req->rq_pill,
+					       &RMF_MDS_HSM_ARCHIVE);
+	if (archive_array == NULL)
 		GOTO(out, rc = -EPROTO);
 
-	*archive_mask = archives;
+	if (archives != NULL)
+		memcpy(archive_array, archives, archives_size);
+	else
+		*archive_array = archive_count;
 
 	ptlrpc_request_set_replen(req);
 
@@ -2227,9 +2251,8 @@ static void lustre_swab_kuch(struct kuc_hdr *l)
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
 				struct lustre_kernelcomm *lk)
 {
-	struct obd_import  *imp = class_exp2cliimp(exp);
-	__u32		    archive = lk->lk_data;
-	int		    rc = 0;
+	struct obd_import *imp = class_exp2cliimp(exp);
+	int rc = 0;
 
 	if (lk->lk_group != KUC_GRP_HSM) {
 		CERROR("Bad copytool group %d\n", lk->lk_group);
@@ -2243,7 +2266,12 @@ static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
 		/* Unregister with the coordinator */
 		rc = mdc_ioc_hsm_ct_unregister(imp);
 	} else {
-		rc = mdc_ioc_hsm_ct_register(imp, archive);
+		__u32 *archives = NULL;
+
+		if ((lk->lk_flags & LK_FLG_DATANR) && lk->lk_data_count > 0)
+			archives = lk->lk_data;
+
+		rc = mdc_ioc_hsm_ct_register(imp, lk->lk_data_count, archives);
 	}
 
 	return rc;
@@ -2294,17 +2322,29 @@ static int mdc_hsm_copytool_send(const struct obd_uuid *uuid,
  */
 static int mdc_hsm_ct_reregister(void *data, void *cb_arg)
 {
-	struct kkuc_ct_data	*kcd = data;
-	struct obd_import	*imp = (struct obd_import *)cb_arg;
-	int			 rc;
+	struct obd_import *imp = (struct obd_import *)cb_arg;
+	struct kkuc_ct_data *kcd = data;
+	__u32 *archives = NULL;
+	int rc;
 
-	if (kcd == NULL || kcd->kcd_magic != KKUC_CT_DATA_MAGIC)
+	if (kcd == NULL ||
+	    (kcd->kcd_magic != KKUC_CT_DATA_ARRAY_MAGIC &&
+	     kcd->kcd_magic != KKUC_CT_DATA_BITMAP_MAGIC))
 		return -EPROTO;
 
-	CDEBUG(D_HA, "%s: recover copytool registration to MDT (archive=%#x)\n",
-	       imp->imp_obd->obd_name, kcd->kcd_archive);
-	rc = mdc_ioc_hsm_ct_register(imp, kcd->kcd_archive);
+	if (kcd->kcd_magic == KKUC_CT_DATA_BITMAP_MAGIC) {
+		CDEBUG(D_HA, "%s: recover copytool registration to MDT "
+		       "(archive=%#x)\n", imp->imp_obd->obd_name,
+		       kcd->kcd_nr_archives);
+	} else {
+		CDEBUG(D_HA, "%s: recover copytool registration to MDT "
+		       "(archive nr = %u)\n",
+		       imp->imp_obd->obd_name, kcd->kcd_nr_archives);
+		if (kcd->kcd_nr_archives != 0)
+			archives = kcd->kcd_archives;
+	}
 
+	rc = mdc_ioc_hsm_ct_register(imp, kcd->kcd_nr_archives, archives);
 	/* ignore error if the copytool is already registered */
 	return (rc == -EEXIST) ? 0 : rc;
 }

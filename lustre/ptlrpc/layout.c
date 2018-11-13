@@ -1193,7 +1193,7 @@ struct req_msg_field RMF_MDS_HSM_USER_ITEM =
 EXPORT_SYMBOL(RMF_MDS_HSM_USER_ITEM);
 
 struct req_msg_field RMF_MDS_HSM_ARCHIVE =
-	DEFINE_MSGF("hsm_archive", 0,
+	DEFINE_MSGF("hsm_archive", RMF_F_STRUCT_ARRAY,
 		    sizeof(__u32), lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_MDS_HSM_ARCHIVE);
 

@@ -993,10 +993,26 @@ test_1c() {
 	[[ $st == $LOCAL_HSM_ARCHIVE_NUMBER ]] ||
 		error "wrong archive number, $st != $LOCAL_HSM_ARCHIVE_NUMBER"
 
-	# Test whether setting archive number > 32 results in error.
-	$LFS hsm_set --exists --archive-id 33 $f &&
-		error "archive number is larger than 32"
-	check_hsm_flags_user $f "0x00000001"
+	LOCAL_HSM_ARCHIVE_NUMBER=33
+	if [ $(lustre_version_code client) -ge $(version_code 2.11.56) ] &&
+	   [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.11.56) ]; then
+		# lustre in the new version supports unlimited archiveID.
+		# Test whether setting archive number > 32 is supported
+		$LFS hsm_set --exists --archive-id $LOCAL_HSM_ARCHIVE_NUMBER $f ||
+			error "archive ID $LOCAL_HSM_ARCHIVE_NUMBER too large?"
+		check_hsm_flags_user $f "0x00000001"
+
+		echo "verifying archive number is $LOCAL_HSM_ARCHIVE_NUMBER"
+		st=$(get_hsm_archive_id $f)
+		[[ $st == $LOCAL_HSM_ARCHIVE_NUMBER ]] ||
+			error "wrong archive number, $st != $LOCAL_HSM_ARCHIVE_NUMBER"
+	else
+		# old client or old mds can only support at most 32 archiveID
+		# test whether setting archive number > 32 results in error.
+		$LFS hsm_set --exists --archive-id $LOCAL_HSM_ARCHIVE_NUMBER $f &&
+			error "bitmap archive number is larger than 32"
+		check_hsm_flags_user $f "0x00000001"
+	fi
 
 	# Test whether setting archive number 16 and archived flag.
 	LOCAL_HSM_ARCHIVE_NUMBER=16
@@ -5307,7 +5323,16 @@ test_500()
 		skip "HSM migrate is not supported"
 
 	test_mkdir -p $DIR/$tdir
-	llapi_hsm_test -d $DIR/$tdir || error "One llapi HSM test failed"
+
+	if [ $(lustre_version_code client) -lt $(version_code 2.11.56) ] ||
+	     [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ];
+	then
+		llapi_hsm_test -d $DIR/$tdir -b ||
+			error "One llapi HSM test failed"
+	else
+		llapi_hsm_test -d $DIR/$tdir ||
+			error "One llapi HSM test failed"
+	fi
 }
 run_test 500 "various LLAPI HSM tests"
 

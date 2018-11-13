@@ -66,13 +66,12 @@
 /****** HSM Copytool API ********/
 #define CT_PRIV_MAGIC 0xC0BE2001
 struct hsm_copytool_private {
-	int			 magic;
-	char			*mnt;
-	struct kuc_hdr		*kuch;
-	int			 mnt_fd;
-	int			 open_by_fid_fd;
-	struct lustre_kernelcomm kuc;
-	__u32			 archives;
+	int				 magic;
+	char				*mnt;
+	struct kuc_hdr			*kuch;
+	int				 mnt_fd;
+	int				 open_by_fid_fd;
+	struct lustre_kernelcomm	*kuc;
 };
 
 #define CP_PRIV_MAGIC 0x19880429
@@ -282,7 +281,7 @@ static int llapi_hsm_log_ct_registration(struct hsm_copytool_private **priv,
 		goto err;
 
 	rc = llapi_json_add_item(&json_items, "archive", LLAPI_JSON_INTEGER,
-				 &ct->archives);
+				 &ct->kuc->lk_data_count);
 	if (rc < 0)
 		goto err;
 
@@ -687,11 +686,14 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		return -EINVAL;
 	}
 
-	if (archive_count > LL_HSM_MAX_ARCHIVE) {
-		llapi_err_noerrno(LLAPI_MSG_ERROR, "%d requested when maximum "
-				  "of %zu archives supported", archive_count,
-				  LL_HSM_MAX_ARCHIVE);
-		return -EINVAL;
+	for (rc = 0; rc < archive_count; rc++) {
+		/* in the list we have an all archive wildcard
+		 * so move to all archives mode
+		 */
+		if (archives[rc] == 0) {
+			archive_count = 0;
+			break;
+		}
 	}
 
 	ct = calloc(1, sizeof(*ct));
@@ -701,8 +703,6 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 	ct->magic = CT_PRIV_MAGIC;
 	ct->mnt_fd = -1;
 	ct->open_by_fid_fd = -1;
-	ct->kuc.lk_rfd = LK_NOFD;
-	ct->kuc.lk_wfd = LK_NOFD;
 
 	ct->mnt = strdup(mnt);
 	if (ct->mnt == NULL) {
@@ -710,7 +710,7 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		goto out_err;
 	}
 
-	ct->kuch = malloc(HAL_MAXSIZE + sizeof(*ct->kuch));
+	ct->kuch = calloc(1, HAL_MAXSIZE + sizeof(*ct->kuch));
 	if (ct->kuch == NULL) {
 		rc = -ENOMEM;
 		goto out_err;
@@ -728,34 +728,34 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 		goto out_err;
 	}
 
-	/* no archives specified means "match all". */
-	ct->archives = 0;
-	for (rc = 0; rc < archive_count; rc++) {
-		if ((archives[rc] > LL_HSM_MAX_ARCHIVE) || (archives[rc] < 0)) {
-			llapi_err_noerrno(LLAPI_MSG_ERROR, "%d requested when "
-					  "archive id [0 - %zu] is supported",
-					  archives[rc], LL_HSM_MAX_ARCHIVE);
-			rc = -EINVAL;
-			goto out_err;
-		}
-		/* in the list we have an all archive wildcard
-		 * so move to all archives mode
-		 */
-		if (archives[rc] == 0) {
-			ct->archives = 0;
-			archive_count = 0;
-			break;
-		}
-		ct->archives |= (1 << (archives[rc] - 1));
+	ct->kuc = malloc(sizeof(*ct) + archive_count * sizeof(__u32));
+	if (ct->kuc == NULL) {
+		rc = -ENOMEM;
+		goto out_err;
 	}
 
-	rc = libcfs_ukuc_start(&ct->kuc, KUC_GRP_HSM, rfd_flags);
-	if (rc < 0)
-		goto out_err;
+	ct->kuc->lk_rfd = LK_NOFD;
+	ct->kuc->lk_wfd = LK_NOFD;
 
-	/* Storing archive(s) in lk_data; see mdc_ioc_hsm_ct_start */
-	ct->kuc.lk_data = ct->archives;
-	rc = ioctl(ct->mnt_fd, LL_IOC_HSM_CT_START, &ct->kuc);
+	rc = libcfs_ukuc_start(ct->kuc, KUC_GRP_HSM, rfd_flags);
+	if (rc < 0)
+		goto out_free_kuc;
+
+	ct->kuc->lk_flags = LK_FLG_DATANR;
+	ct->kuc->lk_data_count = archive_count;
+	for (rc = 0; rc < archive_count; rc++) {
+		if (archives[rc] < 0) {
+			llapi_err_noerrno(LLAPI_MSG_ERROR, "%d requested when "
+					  "archive id >= 0 is supported",
+					  archives[rc]);
+			rc = -EINVAL;
+			goto out_kuc;
+		}
+
+		ct->kuc->lk_data[rc] = archives[rc];
+	}
+
+	rc = ioctl(ct->mnt_fd, LL_IOC_HSM_CT_START, ct->kuc);
 	if (rc < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc,
@@ -766,15 +766,18 @@ int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
 	llapi_hsm_log_ct_registration(&ct, CT_REGISTER);
 
 	/* Only the kernel reference keeps the write side open */
-	close(ct->kuc.lk_wfd);
-	ct->kuc.lk_wfd = LK_NOFD;
+	close(ct->kuc->lk_wfd);
+	ct->kuc->lk_wfd = LK_NOFD;
 	*priv = ct;
 
 	return 0;
 
 out_kuc:
 	/* cleanup the kuc channel */
-	libcfs_ukuc_stop(&ct->kuc);
+	libcfs_ukuc_stop(ct->kuc);
+
+out_free_kuc:
+	free(ct->kuc);
 
 out_err:
 	if (!(ct->mnt_fd < 0))
@@ -813,11 +816,11 @@ int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
 	 * enters libcfs_kkuc_group_put() acquires kg_sem and blocks
 	 * in pipe_write() due to full pipe; then we attempt to
 	 * unregister and block on kg_sem. */
-	libcfs_ukuc_stop(&ct->kuc);
+	libcfs_ukuc_stop(ct->kuc);
 
 	/* Tell the kernel to stop sending us messages */
-	ct->kuc.lk_flags = LK_FLG_STOP;
-	ioctl(ct->mnt_fd, LL_IOC_HSM_CT_START, &ct->kuc);
+	ct->kuc->lk_flags = LK_FLG_STOP;
+	ioctl(ct->mnt_fd, LL_IOC_HSM_CT_START, ct->kuc);
 
 	llapi_hsm_log_ct_registration(&ct, CT_UNREGISTER);
 
@@ -825,6 +828,7 @@ int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv)
 	close(ct->mnt_fd);
 	free(ct->mnt);
 	free(ct->kuch);
+	free(ct->kuc);
 	free(ct);
 	*priv = NULL;
 
@@ -841,7 +845,7 @@ int llapi_hsm_copytool_get_fd(struct hsm_copytool_private *ct)
 	if (ct == NULL || ct->magic != CT_PRIV_MAGIC)
 		return -EINVAL;
 
-	return libcfs_ukuc_get_rfd(&ct->kuc);
+	return libcfs_ukuc_get_rfd(ct->kuc);
 }
 
 /** Wait for the next hsm_action_list
@@ -869,7 +873,7 @@ int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
 	kuch = ct->kuch;
 
 repeat:
-	rc = libcfs_ukuc_msg_get(&ct->kuc, (char *)kuch,
+	rc = libcfs_ukuc_msg_get(ct->kuc, (char *)kuch,
 				 HAL_MAXSIZE + sizeof(*kuch),
 				 KUC_TRANSPORT_HSM);
 	if (rc < 0)
@@ -905,15 +909,16 @@ repeat:
 
 	/* Check that we have registered for this archive #
 	 * if 0 registered, we serve any archive */
-	if (ct->archives &&
-	    ((1 << (hal->hal_archive_id - 1)) & ct->archives) == 0) {
-		llapi_err_noerrno(LLAPI_MSG_INFO,
-				  "This copytool does not service archive #%d,"
-				  " ignoring this request."
-				  " Mask of served archive is 0x%.8X",
-				  hal->hal_archive_id, ct->archives);
+	if (ct->kuc != NULL && ct->kuc->lk_data_count != 0) {
+		int i;
 
-		goto repeat;
+		for (i = 0; i < ct->kuc->lk_data_count; i++) {
+			if (hal->hal_archive_id == ct->kuc->lk_data[i])
+				break;
+		}
+
+		if (i >= ct->kuc->lk_data_count)
+			goto repeat;
 	}
 
 	*halh = hal;

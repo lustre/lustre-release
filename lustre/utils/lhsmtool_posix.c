@@ -87,8 +87,9 @@ struct options {
 	int			 o_shadow_tree;
 	int			 o_verbose;
 	int			 o_copy_xattrs;
-	int			 o_archive_cnt;
-	int			 o_archive_id[LL_HSM_MAX_ARCHIVE + 1];
+	int			 o_archive_id_used;
+	int			 o_archive_id_cnt;
+	int			*o_archive_id;
 	int			 o_report_int;
 	unsigned long long	 o_bandwidth;
 	size_t			 o_chunk_size;
@@ -250,11 +251,20 @@ static int ct_parseopts(int argc, char * const *argv)
 						.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
-	int			 c, rc;
-	unsigned long long	 value;
-	unsigned long long	 unit;
+	unsigned long long value;
+	unsigned long long unit;
+	bool all_id = false;
+	int c, rc;
+	int i;
 
 	optind = 0;
+
+	opt.o_archive_id_cnt = LL_HSM_ORIGIN_MAX_ARCHIVE;
+	opt.o_archive_id = malloc(opt.o_archive_id_cnt *
+				  sizeof(*opt.o_archive_id));
+	if (opt.o_archive_id == NULL)
+		return -ENOMEM;
+repeat:
 	while ((c = getopt_long(argc, argv, "A:b:c:f:hiMp:qru:v",
 				long_opts, NULL)) != -1) {
 		switch (c) {
@@ -268,16 +278,41 @@ static int ct_parseopts(int argc, char * const *argv)
 					 optarg);
 				return rc;
 			}
+			/* if archiveID is zero, any archiveID is accepted */
+			if (all_id == true)
+				goto repeat;
 
-			if (opt.o_archive_cnt > LL_HSM_MAX_ARCHIVE ||
-			    val > LL_HSM_MAX_ARCHIVE) {
-				rc = -EINVAL;
-				CT_ERROR(rc, "archive number must be less"
-					 " than %zu", LL_HSM_MAX_ARCHIVE + 1);
-				return rc;
+			if (val == 0) {
+				free(opt.o_archive_id);
+				opt.o_archive_id = NULL;
+				opt.o_archive_id_cnt = 0;
+				opt.o_archive_id_used = 0;
+				all_id = true;
+				CT_WARN("archive-id = 0 is found, any backend"
+					"will be served\n");
+				goto repeat;
 			}
-			opt.o_archive_id[opt.o_archive_cnt] = val;
-			opt.o_archive_cnt++;
+
+			/* skip the duplicated id */
+			for (i = 0; i < opt.o_archive_id_used; i++) {
+				if (opt.o_archive_id[i] == val)
+					goto repeat;
+			}
+			/* extend the space */
+			if (opt.o_archive_id_used >= opt.o_archive_id_cnt) {
+				int *tmp;
+
+				opt.o_archive_id_cnt *= 2;
+				tmp = realloc(opt.o_archive_id,
+					      sizeof(*opt.o_archive_id) *
+					      opt.o_archive_id_cnt);
+				if (tmp == NULL)
+					return -ENOMEM;
+
+				opt.o_archive_id = tmp;
+			}
+
+			opt.o_archive_id[opt.o_archive_id_used++] = val;
 			break;
 		}
 		case 'b': /* -b and -c have both a number with unit as arg */
@@ -1426,7 +1461,8 @@ static int ct_import_one(const char *src, const char *dst)
 		return 0;
 
 	rc = llapi_hsm_import(dst,
-			      opt.o_archive_cnt ? opt.o_archive_id[0] : 0,
+			      opt.o_archive_id_used ?
+			      opt.o_archive_id[0] : 0,
 			      &st, 0, 0, 0, 0, NULL, &fid);
 	if (rc < 0) {
 		CT_ERROR(rc, "cannot import '%s' from '%s'", dst, src);
@@ -1836,7 +1872,7 @@ static int ct_run(void)
 	}
 
 	rc = llapi_hsm_copytool_register(&ctdata, opt.o_mnt,
-					 opt.o_archive_cnt,
+					 opt.o_archive_id_used,
 					 opt.o_archive_id, 0);
 	if (rc < 0) {
 		CT_ERROR(rc, "cannot start copytool interface");
@@ -1967,6 +2003,12 @@ static int ct_cleanup(void)
 			CT_ERROR(rc, "cannot close archive root directory");
 			return rc;
 		}
+	}
+
+	if (opt.o_archive_id_cnt > 0) {
+		free(opt.o_archive_id);
+		opt.o_archive_id = NULL;
+		opt.o_archive_id_cnt = 0;
 	}
 
 	return 0;

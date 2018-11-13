@@ -47,6 +47,7 @@
 
 static char fsmountdir[PATH_MAX];      /* Lustre mountpoint */
 static char *lustre_dir;               /* Test directory inside Lustre */
+static bool is_bitmap;
 
 #define ERROR(fmt, ...)							\
 	fprintf(stderr, "%s: %s:%d: %s: " fmt "\n",			\
@@ -131,19 +132,26 @@ int test3(void)
 	int rc;
 	struct hsm_copytool_private *ctdata;
 	int archives[33];
+	int count = sizeof(archives) / sizeof(*archives);
 
 	rc = llapi_hsm_copytool_register(&ctdata, fsmountdir, 1, NULL, 0);
 	ASSERTF(rc == -EINVAL, "llapi_hsm_copytool_register error: %s",
 		strerror(-rc));
 
-	rc = llapi_hsm_copytool_register(&ctdata, fsmountdir, 33, NULL, 0);
+	rc = llapi_hsm_copytool_register(&ctdata, fsmountdir, count, NULL, 0);
 	ASSERTF(rc == -EINVAL, "llapi_hsm_copytool_register error: %s",
 		strerror(-rc));
 
-	memset(archives, 1, sizeof(archives));
-	rc = llapi_hsm_copytool_register(&ctdata, fsmountdir, 34, archives, 0);
-	ASSERTF(rc == -EINVAL, "llapi_hsm_copytool_register error: %s",
-		strerror(-rc));
+	if (is_bitmap) {
+		int i;
+
+		for (i = 0; i < count; i++)
+			archives[i] = i + 1;
+		rc = llapi_hsm_copytool_register(&ctdata, fsmountdir,
+						 count, archives, 0);
+		ASSERTF(rc == -EINVAL, "llapi_hsm_copytool_register error: %s",
+			strerror(-rc));
+	}
 
 #if 0
 	/* BUG? Should that fail or not? */
@@ -355,6 +363,7 @@ void test51(void)
 	int rc;
 	int fd;
 	int i;
+	int test_count;
 	struct hsm_user_state hus;
 
 	fd = create_testfile(100);
@@ -363,13 +372,17 @@ void test51(void)
 	ASSERTF(rc == 0, "llapi_hsm_state_set_fd failed: %s", strerror(-rc));
 
 	/* Set archive id */
-	for (i = 0; i <= 32; i++) {
+	if (is_bitmap)
+		test_count = 32;
+	else
+		test_count = 48;
+	for (i = 0; i <= test_count; i++) {
 		rc = llapi_hsm_state_set_fd(fd, HS_EXISTS, 0, i);
 		ASSERTF(rc == 0, "llapi_hsm_state_set_fd failed: %s",
 			strerror(-rc));
 
 		rc = llapi_hsm_state_get_fd(fd, &hus);
-		ASSERTF(rc == 0, "llapi_hsm_state_set_fd failed: %s",
+		ASSERTF(rc == 0, "llapi_hsm_state_get_fd failed: %s",
 			strerror(-rc));
 		ASSERTF(hus.hus_states == HS_EXISTS, "state=%u",
 			hus.hus_states);
@@ -377,15 +390,20 @@ void test51(void)
 			hus.hus_archive_id, i);
 	}
 
-	/* Invalid archive numbers */
-	rc = llapi_hsm_state_set_fd(fd, HS_EXISTS, 0, 33);
-	ASSERTF(rc == -EINVAL, "llapi_hsm_state_set_fd: %s", strerror(-rc));
+	if (is_bitmap) {
+		/* Invalid archive numbers */
+		rc = llapi_hsm_state_set_fd(fd, HS_EXISTS, 0, 33);
+		ASSERTF(rc == -EINVAL, "llapi_hsm_state_set_fd: %s",
+			strerror(-rc));
 
-	rc = llapi_hsm_state_set_fd(fd, HS_EXISTS, 0, 151);
-	ASSERTF(rc == -EINVAL, "llapi_hsm_state_set_fd: %s", strerror(-rc));
+		rc = llapi_hsm_state_set_fd(fd, HS_EXISTS, 0, 151);
+		ASSERTF(rc == -EINVAL, "llapi_hsm_state_set_fd: %s",
+			strerror(-rc));
 
-	rc = llapi_hsm_state_set_fd(fd, HS_EXISTS, 0, -1789);
-	ASSERTF(rc == -EINVAL, "llapi_hsm_state_set_fd: %s", strerror(-rc));
+		rc = llapi_hsm_state_set_fd(fd, HS_EXISTS, 0, -1789);
+		ASSERTF(rc == -EINVAL, "llapi_hsm_state_set_fd: %s",
+			strerror(-rc));
+	}
 
 	/* Settable flags, with respect of the HSM file state transition rules:
 	 *	DIRTY without EXISTS: no dirty if no archive was created
@@ -1013,10 +1031,13 @@ static void process_args(int argc, char *argv[])
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "d:")) != -1) {
+	while ((c = getopt(argc, argv, "bd:")) != -1) {
 		switch (c) {
 		case 'd':
 			lustre_dir = optarg;
+			break;
+		case 'b':
+			is_bitmap = true;
 			break;
 		case '?':
 		default:

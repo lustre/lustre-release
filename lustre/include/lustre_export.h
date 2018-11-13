@@ -457,10 +457,23 @@ static inline int exp_connect_lock_convert(struct obd_export *exp)
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);
 
-#define KKUC_CT_DATA_MAGIC	0x092013cea
+static inline int exp_connect_archive_id_array(struct obd_export *exp)
+{
+	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_ARCHIVE_ID_ARRAY);
+}
+
+enum {
+	/* archive_ids in array format */
+	KKUC_CT_DATA_ARRAY_MAGIC	= 0x092013cea,
+	/* archive_ids in bitmap format */
+	KKUC_CT_DATA_BITMAP_MAGIC	= 0x082018cea,
+};
+
+
 struct kkuc_ct_data {
 	__u32		kcd_magic;
-	__u32		kcd_archive;
+	__u32		kcd_nr_archives;
+	__u32		kcd_archives[0];
 };
 
 /** @} export */

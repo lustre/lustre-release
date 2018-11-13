@@ -173,12 +173,14 @@ extern void lustre_loa_init(struct lustre_ost_attrs *loa,
 			    const struct lu_fid *fid,
 			    __u32 compat, __u32 incompat);
 
-/* copytool uses a 32b bitmask field to encode archive-Ids during register
- * with MDT thru kuc.
+/* copytool can use any nonnegative integer to represent archive-Ids during
+ * register with MDT thru kuc.
  * archive num = 0 => all
- * archive num from 1 to 32
+ * archive num from 1 to MAX_U32
  */
-#define LL_HSM_MAX_ARCHIVE (sizeof(__u32) * 8)
+#define LL_HSM_ORIGIN_MAX_ARCHIVE	(sizeof(__u32) * 8)
+/* the max count of archive ids that one agent can support */
+#define LL_HSM_MAX_ARCHIVES_PER_AGENT	1024
 
 /**
  * HSM on-disk attributes stored in a separate xattr.
@@ -881,7 +883,8 @@ struct ptlrpc_body_v2 {
 #define MDT_CONNECT_SUPPORTED2 (OBD_CONNECT2_FILE_SECCTX | OBD_CONNECT2_FLR | \
                                 OBD_CONNECT2_SUM_STATFS | \
 				OBD_CONNECT2_LOCK_CONVERT | \
-				OBD_CONNECT2_DIR_MIGRATE)
+				OBD_CONNECT2_DIR_MIGRATE | \
+				OBD_CONNECT2_ARCHIVE_ID_ARRAY)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
