@@ -4801,7 +4801,7 @@ test_260c()
 	# Set a few hsm parameters
 	stack_trap \
 		"set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
-	set_hsm_param loop_period 10
+	set_hsm_param loop_period 1000
 	stack_trap \
 		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
 	set_hsm_param max_requests 3
@@ -4816,6 +4816,10 @@ test_260c()
 	kill_copytools
 	wait_copytools || error "copytools failed to stop"
 
+	# Force the next coordinator run to do housekeeping
+	cdt_shutdown
+	cdt_enable
+
 	"$LFS" hsm_archive "${files[1]}"
 
 	# Launch a copytool
@@ -4823,6 +4827,10 @@ test_260c()
 	copytool setup --archive-id 2
 
 	wait_request_state "$(path2fid "${files[1]}")" ARCHIVE SUCCEED
+	# The coordinator just did a housekeeping run it won't do another one
+	# for around `loop_period' seconds => requests will not be reordered
+	# if it costs too much (ie. when the coordinator has to discard a whole
+	# hal)
 
 	# Send several archive requests
 	for file in "${files[@]:2}"; do
@@ -4854,7 +4862,7 @@ test_260c()
 	done
 	return 0
 }
-run_test 260c "Restore request have priority over other requests"
+run_test 260c "Requests are not reordered on the 'hot' path of the coordinator"
 
 test_300() {
 	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return
