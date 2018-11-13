@@ -377,25 +377,8 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 		tgt = lov->lov_tgts[index];
 		if (!tgt)
 			continue;
-		/*
-		 * LU-642, initially inactive OSC could miss the obd_connect,
-		 * we make up for it here.
-		 */
-		if (ev == OBD_NOTIFY_ACTIVATE && tgt->ltd_exp == NULL &&
-		    obd_uuid_equals(uuid, &tgt->ltd_uuid)) {
-			struct obd_uuid lov_osc_uuid = {"LOV_OSC_UUID"};
-
-			obd_connect(NULL, &tgt->ltd_exp, tgt->ltd_obd,
-				    &lov_osc_uuid, &lov->lov_ocd, NULL);
-		}
-		if (!tgt->ltd_exp)
-			continue;
-
-		CDEBUG(D_INFO, "lov idx %d is %s conn %#llx\n",
-                       index, obd_uuid2str(&tgt->ltd_uuid),
-                       tgt->ltd_exp->exp_handle.h_cookie);
-                if (obd_uuid_equals(uuid, &tgt->ltd_uuid))
-                        break;
+		if (obd_uuid_equals(uuid, &tgt->ltd_uuid))
+			break;
         }
 
         if (index == lov->desc.ld_tgt_count)
@@ -403,6 +386,27 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 
         if (ev == OBD_NOTIFY_DEACTIVATE || ev == OBD_NOTIFY_ACTIVATE) {
                 activate = (ev == OBD_NOTIFY_ACTIVATE) ? 1 : 0;
+
+		/*
+		 * LU-642, initially inactive OSC could miss the obd_connect,
+		 * we make up for it here.
+		 */
+		if (activate && !tgt->ltd_exp) {
+			int rc;
+			struct obd_uuid lov_osc_uuid = {"LOV_OSC_UUID"};
+
+			rc = obd_connect(NULL, &tgt->ltd_exp, tgt->ltd_obd,
+					 &lov_osc_uuid, &lov->lov_ocd, NULL);
+			if (rc || tgt->ltd_exp == NULL)
+				GOTO(out, index = rc);
+			rc = obd_set_info_async(NULL, tgt->ltd_exp,
+						sizeof(KEY_CACHE_SET),
+						KEY_CACHE_SET,
+						sizeof(struct cl_client_cache),
+						lov->lov_cache, NULL);
+			if (rc < 0)
+				GOTO(out, index = rc);
+		}
 
                 if (lov->lov_tgts[index]->ltd_activate == activate) {
                         CDEBUG(D_INFO, "OSC %s already %sactivate!\n",
@@ -437,6 +441,10 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 		CERROR("%s: unknown event %d for uuid %s\n", obd->obd_name,
 		       ev, uuid->uuid);
 	}
+
+	if (tgt->ltd_exp)
+		CDEBUG(D_INFO, "%s: lov idx %d conn %llx\n", obd_uuid2str(uuid),
+		       index, tgt->ltd_exp->exp_handle.h_cookie);
 
  out:
 	obd_putref(obd);
