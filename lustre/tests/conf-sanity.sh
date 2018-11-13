@@ -3830,14 +3830,15 @@ test_50h() {
 	$SETSTRIPE -c -1 -i 0 $DIR/$tdir/2 ||
 		error "$SETSTRIPE $DIR/$tdir/2 failed"
 	sleep 1 && echo "create a file after OST1 is activated"
-	# create some file
-	createmany -o $DIR/$tdir/2/$tfile-%d 1
+	# doing some io, shouldn't crash
+	dd if=/dev/zero of=$DIR/$tdir/2/$tfile-io bs=1M count=10
 
 	# check OSC import is working
 	stat $DIR/$tdir/2/* >/dev/null 2>&1 ||
 		error "some OSC imports are still not connected"
 
 	# cleanup
+	rm -rf $DIR/$tdir
 	umount_client $MOUNT || error "Unable to umount client"
 	stop_ost2 || error "Unable to stop OST2"
 	cleanup_nocli || error "cleanup_nocli failed with $?"
