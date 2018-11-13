@@ -114,7 +114,7 @@ case $with_o2ib in
 				OFED_INFO="ofed_info"
 				LSPKG="rpm -ql"
 			])
-			O2IBPATHS=$(eval $OFED_INFO | egrep -w 'mlnx-ofed-kernel-dkms|mlnx-ofa_kernel-devel|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel' | xargs $LSPKG | grep '\(/openib\|/ofa_kernel/default\)$' | head -n1)
+			O2IBPATHS=$(eval $OFED_INFO | egrep -w 'mlnx-ofed-kernel-dkms|mlnx-ofa_kernel-devel|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel' | xargs $LSPKG | grep '\(/openib\|/ofa_kernel/default\|/ofa_kernel\)$' | head -n1)
 			AS_IF([test -z "$O2IBPATHS"], [
 				AC_MSG_ERROR([
 You seem to have an OFED installed but have not installed it's devel package.
@@ -129,6 +129,9 @@ If you still want to build Lustre for your OFED I/B stack, you need to install a
 Instead, if you want to build Lustre for your kernel's built-in I/B stack rather than your installed OFED stack, either remove the OFED package(s) or use --with-o2ib=no.
 					     ])
 			])
+			if test -e $O2IBPATHS/default; then
+			    O2IBPATHS=$O2IBPATHS/default
+			fi
 			OFED="yes"
 		], [
 			O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
