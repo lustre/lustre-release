@@ -1163,6 +1163,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	const struct lu_attr *la = &ma->ma_attr;
 	struct lu_ucred  *uc;
+	bool chrgrp_by_unprivileged_user = false;
 	int rc;
 	ENTRY;
 
@@ -1194,15 +1195,23 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	uc = lu_ucred_check(env);
 	if (S_ISREG(attr->la_mode) && la->la_valid & LA_GID &&
 	    la->la_gid != attr->la_gid && uc != NULL && uc->uc_fsuid != 0) {
+		/* LU-10048: disable synchronous chgrp operation for it will
+		 * cause deadlock between MDT and OST.
 		la_copy->la_valid |= LA_FLAGS;
 		la_copy->la_flags |= LUSTRE_SET_SYNC_FL;
+		 */
+		chrgrp_by_unprivileged_user = true;
 
-		/* Flush the possible existing sync requests to OSTs to
-		 * keep the order of sync for the current setattr operation
+		/* Flush the possible existing client setattr requests to OSTs
+		 * to keep the order with the current setattr operation that
 		 * will be sent directly to OSTs. see LU-5152 */
+		/* LU-11303 disable sync as this is too heavyweight.
+		 * This should be replaced with a sync only for the object
+		 * being modified here, not the whole filesystem.
 		rc = dt_sync(env, mdd->mdd_child);
 		if (rc)
 			GOTO(out, rc);
+		 */
 	}
 
 	handle = mdd_trans_create(env, mdd);
@@ -1221,7 +1230,8 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		GOTO(out, rc);
 
-	if (mdd->mdd_sync_permission && permission_needs_sync(attr, la))
+	if (!chrgrp_by_unprivileged_user && mdd->mdd_sync_permission &&
+	    permission_needs_sync(attr, la))
 		handle->th_sync = 1;
 
 	if (la->la_valid & (LA_MTIME | LA_CTIME))
