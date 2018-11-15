@@ -45,31 +45,43 @@
 #include <libcfs/libcfs_string.h>
 #include "mdd_internal.h"
 
-static ssize_t
-mdd_atime_diff_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
+static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+	struct obd_device *obd = mdd2obd_dev(mdd);
+
+	return sprintf(buf, "%s\n", obd->obd_uuid.uuid);
+}
+LUSTRE_RO_ATTR(uuid);
+
+static ssize_t atime_diff_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+
+	return sprintf(buf, "%lld\n", mdd->mdd_atime_diff);
+}
+
+static ssize_t atime_diff_store(struct kobject *kobj,
+				struct attribute *attr,
+				const char *buffer, size_t count)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	time64_t diff = 0;
 	int rc;
 
-	rc = kstrtoll_from_user(buffer, count, 0, &diff);
+	rc = kstrtoll(buffer, 10, &diff);
 	if (rc)
 		return rc;
 
         mdd->mdd_atime_diff = diff;
         return count;
 }
-
-static int mdd_atime_diff_seq_show(struct seq_file *m, void *data)
-{
-	struct mdd_device *mdd = m->private;
-
-	seq_printf(m, "%lld\n", mdd->mdd_atime_diff);
-	return 0;
-}
-LPROC_SEQ_FOPS(mdd_atime_diff);
+LUSTRE_RW_ATTR(atime_diff);
 
 /**** changelogs ****/
 static int mdd_changelog_mask_seq_show(struct seq_file *m, void *data)
@@ -113,7 +125,7 @@ out:
 	OBD_FREE(kernbuf, PAGE_SIZE);
 	return rc;
 }
-LPROC_SEQ_FOPS(mdd_changelog_mask);
+LDEBUGFS_SEQ_FOPS(mdd_changelog_mask);
 
 static int lprocfs_changelog_users_cb(const struct lu_env *env,
 				      struct llog_handle *llh,
@@ -166,7 +178,7 @@ static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 	llog_ctxt_put(ctxt);
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(mdd_changelog_users);
+LDEBUGFS_SEQ_FOPS_RO(mdd_changelog_users);
 
 static int mdd_changelog_size_ctxt(const struct lu_env *env,
 				   struct mdd_device *mdd,
@@ -193,12 +205,15 @@ static int mdd_changelog_size_ctxt(const struct lu_env *env,
 	return 0;
 }
 
-static int mdd_changelog_size_seq_show(struct seq_file *m, void *data)
+static ssize_t changelog_size_show(struct kobject *kobj,
+				   struct attribute *attr,
+				   char *buf)
 {
-	struct lu_env		 env;
-	struct mdd_device	*mdd = m->private;
-	__u64			 tmp = 0;
-	int			 rc;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+	struct lu_env env;
+	u64 tmp = 0;
+	int rc;
 
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc)
@@ -213,32 +228,32 @@ static int mdd_changelog_size_seq_show(struct seq_file *m, void *data)
 	rc = mdd_changelog_size_ctxt(&env, mdd, LLOG_CHANGELOG_USER_ORIG_CTXT,
 				     &tmp);
 
-	seq_printf(m, "%llu\n", tmp);
+	rc = sprintf(buf, "%llu\n", tmp);
 	lu_env_fini(&env);
 	return rc;
 }
-LPROC_SEQ_FOPS_RO(mdd_changelog_size);
+LUSTRE_RO_ATTR(changelog_size);
 
-static int mdd_changelog_gc_seq_show(struct seq_file *m, void *data)
+static ssize_t changelog_gc_show(struct kobject *kobj,
+				 struct attribute *attr,
+				 char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_gc);
-	return 0;
+	return sprintf(buf, "%u\n", mdd->mdd_changelog_gc);
 }
 
-static ssize_t
-mdd_changelog_gc_seq_write(struct file *file, const char __user *buffer,
-			   size_t count, loff_t *off)
+static ssize_t changelog_gc_store(struct kobject *kobj,
+				  struct attribute *attr,
+				  const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	bool val;
 	int rc;
 
-	LASSERT(mdd != NULL);
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -246,30 +261,28 @@ mdd_changelog_gc_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdd_changelog_gc);
+LUSTRE_RW_ATTR(changelog_gc);
 
-static int mdd_changelog_max_idle_time_seq_show(struct seq_file *m, void *data)
+static ssize_t changelog_max_idle_time_show(struct kobject *kobj,
+					    struct attribute *attr,
+					    char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%lld\n", mdd->mdd_changelog_max_idle_time);
-	return 0;
+	return sprintf(buf, "%lld\n", mdd->mdd_changelog_max_idle_time);
 }
 
-static ssize_t
-mdd_changelog_max_idle_time_seq_write(struct file *file,
-				      const char __user *buffer, size_t count,
-				      loff_t *off)
+static ssize_t changelog_max_idle_time_store(struct kobject *kobj,
+					     struct attribute *attr,
+					     const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	time64_t val;
 	int rc;
 
-	LASSERT(mdd != NULL);
-
-	rc = kstrtoll_from_user(buffer, count, 0, &val);
+	rc = kstrtoll(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -284,30 +297,30 @@ mdd_changelog_max_idle_time_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdd_changelog_max_idle_time);
+LUSTRE_RW_ATTR(changelog_max_idle_time);
 
-static int mdd_changelog_max_idle_indexes_seq_show(struct seq_file *m,
-						   void *data)
+static ssize_t changelog_max_idle_indexes_show(struct kobject *kobj,
+					       struct attribute *attr,
+					       char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%lu\n", mdd->mdd_changelog_max_idle_indexes);
-	return 0;
+	return sprintf(buf, "%lu\n", mdd->mdd_changelog_max_idle_indexes);
 }
 
-static ssize_t
-mdd_changelog_max_idle_indexes_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
+static ssize_t changelog_max_idle_indexes_store(struct kobject *kobj,
+						struct attribute *attr,
+						const char *buffer,
+						size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	unsigned long val;
 	int rc;
 
 	LASSERT(mdd != NULL);
-	rc = kstrtoul_from_user(buffer, count, 0, &val);
+	rc = kstrtoul(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -318,30 +331,29 @@ mdd_changelog_max_idle_indexes_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdd_changelog_max_idle_indexes);
+LUSTRE_RW_ATTR(changelog_max_idle_indexes);
 
-static int mdd_changelog_min_gc_interval_seq_show(struct seq_file *m,
-						  void *data)
+static ssize_t changelog_min_gc_interval_show(struct kobject *kobj,
+					      struct attribute *attr,
+					      char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%lld\n", mdd->mdd_changelog_min_gc_interval);
-	return 0;
+	return sprintf(buf, "%lld\n", mdd->mdd_changelog_min_gc_interval);
 }
 
-static ssize_t
-mdd_changelog_min_gc_interval_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off)
+static ssize_t changelog_min_gc_interval_store(struct kobject *kobj,
+					       struct attribute *attr,
+					       const char *buffer,
+					       size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	time64_t val;
 	int rc;
 
-	LASSERT(mdd != NULL);
-	rc = kstrtoll_from_user(buffer, count, 0, &val);
+	rc = kstrtoll(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -353,30 +365,29 @@ mdd_changelog_min_gc_interval_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdd_changelog_min_gc_interval);
+LUSTRE_RW_ATTR(changelog_min_gc_interval);
 
-static int mdd_changelog_min_free_cat_entries_seq_show(struct seq_file *m,
-						       void *data)
+static ssize_t changelog_min_free_cat_entries_show(struct kobject *kobj,
+						   struct attribute *attr,
+						   char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_min_free_cat_entries);
-	return 0;
+	return sprintf(buf, "%u\n", mdd->mdd_changelog_min_free_cat_entries);
 }
 
-static ssize_t
-mdd_changelog_min_free_cat_entries_seq_write(struct file *file,
-					     const char __user *buffer,
-					     size_t count, loff_t *off)
+static ssize_t changelog_min_free_cat_entries_store(struct kobject *kobj,
+						    struct attribute *attr,
+						    const char *buffer,
+						    size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	unsigned int val;
 	int rc;
 
-	LASSERT(mdd != NULL);
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -388,63 +399,55 @@ mdd_changelog_min_free_cat_entries_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdd_changelog_min_free_cat_entries);
+LUSTRE_RW_ATTR(changelog_min_free_cat_entries);
 
-static int mdd_changelog_deniednext_seq_show(struct seq_file *m, void *data)
+static ssize_t changelog_deniednext_show(struct kobject *kobj,
+					 struct attribute *attr,
+					 char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	seq_printf(m, "%u\n", mdd->mdd_cl.mc_deniednext);
-	return 0;
+	return sprintf(buf, "%u\n", mdd->mdd_cl.mc_deniednext);
 }
 
-static ssize_t
-mdd_changelog_deniednext_seq_write(struct file *file, const char __user *buffer,
-				   size_t count, loff_t *off)
+static ssize_t changelog_deniednext_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer,
+					  size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
-	char kernbuf[11];
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	unsigned int time = 0;
 	int rc;
 
-	if (count > (sizeof(kernbuf) - 1))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-
-	kernbuf[count] = '\0';
-
-	rc = kstrtoul(kernbuf, 0, (unsigned long int *)&time);
+	rc = kstrtouint(buffer, 0, &time);
 	if (rc)
 		return rc;
 
 	mdd->mdd_cl.mc_deniednext = time;
 	return count;
 }
-LPROC_SEQ_FOPS(mdd_changelog_deniednext);
+LUSTRE_RW_ATTR(changelog_deniednext);
 
-static int mdd_sync_perm_seq_show(struct seq_file *m, void *data)
+static ssize_t sync_perm_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%d\n", mdd->mdd_sync_permission);
-	return 0;
+	return sprintf(buf, "%d\n", mdd->mdd_sync_permission);
 }
 
-static ssize_t
-mdd_sync_perm_seq_write(struct file *file, const char __user *buffer,
-			size_t count, loff_t *off)
+static ssize_t sync_perm_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	bool val;
 	int rc;
 
-	LASSERT(mdd != NULL);
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -452,54 +455,54 @@ mdd_sync_perm_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdd_sync_perm);
+LUSTRE_RW_ATTR(sync_perm);
 
-static int mdd_lfsck_speed_limit_seq_show(struct seq_file *m, void *data)
+static ssize_t lfsck_speed_limit_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	return lfsck_get_speed(m, NULL, mdd->mdd_bottom);
+	return lfsck_get_speed(NULL, buf, mdd->mdd_bottom);
 }
 
-static ssize_t
-mdd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t lfsck_speed_limit_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	unsigned int val;
 	int rc;
 
-	LASSERT(mdd != NULL);
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 10, &val);
 	if (rc != 0)
 		return rc;
 
 	rc = lfsck_set_speed(mdd->mdd_bottom, val);
 	return rc != 0 ? rc : count;
 }
-LPROC_SEQ_FOPS(mdd_lfsck_speed_limit);
+LUSTRE_RW_ATTR(lfsck_speed_limit);
 
-static int mdd_lfsck_async_windows_seq_show(struct seq_file *m, void *data)
+static ssize_t lfsck_async_windows_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
 {
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 
-	LASSERT(mdd != NULL);
-	return lfsck_get_windows(m, mdd->mdd_bottom);
+	return lfsck_get_windows(buf, mdd->mdd_bottom);
 }
 
-static ssize_t
-mdd_lfsck_async_windows_seq_write(struct file *file, const char __user *buffer,
-				  size_t count, loff_t *off)
+static ssize_t lfsck_async_windows_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
 	unsigned int val;
 	int rc;
 
-	LASSERT(mdd != NULL);
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -507,7 +510,7 @@ mdd_lfsck_async_windows_seq_write(struct file *file, const char __user *buffer,
 
 	return rc != 0 ? rc : count;
 }
-LPROC_SEQ_FOPS(mdd_lfsck_async_windows);
+LUSTRE_RW_ATTR(lfsck_async_windows);
 
 static int mdd_lfsck_namespace_seq_show(struct seq_file *m, void *data)
 {
@@ -517,7 +520,7 @@ static int mdd_lfsck_namespace_seq_show(struct seq_file *m, void *data)
 
 	return lfsck_dump(m, mdd->mdd_bottom, LFSCK_TYPE_NAMESPACE);
 }
-LPROC_SEQ_FOPS_RO(mdd_lfsck_namespace);
+LDEBUGFS_SEQ_FOPS_RO(mdd_lfsck_namespace);
 
 static int mdd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 {
@@ -527,35 +530,13 @@ static int mdd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 
 	return lfsck_dump(m, mdd->mdd_bottom, LFSCK_TYPE_LAYOUT);
 }
-LPROC_SEQ_FOPS_RO(mdd_lfsck_layout);
+LDEBUGFS_SEQ_FOPS_RO(mdd_lfsck_layout);
 
 static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
-	{ .name =	"atime_diff",
-	  .fops =	&mdd_atime_diff_fops		},
 	{ .name =	"changelog_mask",
 	  .fops =	&mdd_changelog_mask_fops	},
 	{ .name =	"changelog_users",
 	  .fops =	&mdd_changelog_users_fops	},
-	{ .name =	"changelog_size",
-	  .fops =	&mdd_changelog_size_fops	},
-	{ .name =	"changelog_gc",
-	  .fops =	&mdd_changelog_gc_fops		},
-	{ .name =	"changelog_max_idle_time",
-	  .fops =	&mdd_changelog_max_idle_time_fops	},
-	{ .name =	"changelog_max_idle_indexes",
-	  .fops =	&mdd_changelog_max_idle_indexes_fops	},
-	{ .name =	"changelog_min_gc_interval",
-	  .fops =	&mdd_changelog_min_gc_interval_fops	},
-	{ .name =	"changelog_min_free_cat_entries",
-	  .fops =	&mdd_changelog_min_free_cat_entries_fops	},
-	{ .name =	"changelog_deniednext",
-	  .fops =	&mdd_changelog_deniednext_fops	},
-	{ .name =	"sync_permission",
-	  .fops =	&mdd_sync_perm_fops		},
-	{ .name =	"lfsck_speed_limit",
-	  .fops =	&mdd_lfsck_speed_limit_fops	},
-	{ .name =	"lfsck_async_windows",
-	  .fops =	&mdd_lfsck_async_windows_fops	},
 	{ .name =	"lfsck_namespace",
 	  .fops =	&mdd_lfsck_namespace_fops	},
 	{ .name	=	"lfsck_layout",
@@ -563,42 +544,81 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
 	{ NULL }
 };
 
+static struct attribute *mdd_attrs[] = {
+	&lustre_attr_uuid.attr,
+	&lustre_attr_atime_diff.attr,
+	&lustre_attr_changelog_size.attr,
+	&lustre_attr_changelog_gc.attr,
+	&lustre_attr_changelog_max_idle_time.attr,
+	&lustre_attr_changelog_max_idle_indexes.attr,
+	&lustre_attr_changelog_min_gc_interval.attr,
+	&lustre_attr_changelog_min_free_cat_entries.attr,
+	&lustre_attr_changelog_deniednext.attr,
+	&lustre_attr_lfsck_async_windows.attr,
+	&lustre_attr_lfsck_speed_limit.attr,
+	&lustre_attr_sync_perm.attr,
+	NULL,
+};
+
+static void mdd_sysfs_release(struct kobject *kobj)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+
+	complete(&mdd->mdd_kobj_unregister);
+}
+
 int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 {
 	struct obd_device *obd = mdd2obd_dev(mdd);
-	struct obd_type   *type;
-	int		   rc;
-	ENTRY;
+	struct obd_type *type;
+	int rc;
 
+	ENTRY;
 	/* at the moment there is no linkage between lu_type
-	 * and obd_type, so we lookup obd_type this way */
+	 * and obd_type, so we lookup obd_type this way
+	 */
 	type = class_search_type(LUSTRE_MDD_NAME);
 
 	LASSERT(name != NULL);
 	LASSERT(type != NULL);
 	LASSERT(obd  != NULL);
 
+	mdd->mdd_ktype.default_attrs = mdd_attrs;
+	mdd->mdd_ktype.release = mdd_sysfs_release;
+	mdd->mdd_ktype.sysfs_ops = &lustre_sysfs_ops;
+
+	init_completion(&mdd->mdd_kobj_unregister);
+	rc = kobject_init_and_add(&mdd->mdd_kobj, &mdd->mdd_ktype,
+				  type->typ_kobj, "%s", name);
+	if (rc)
+		return rc;
+
 	/* Find the type procroot and add the proc entry for this device */
 	obd->obd_vars = lprocfs_mdd_obd_vars;
-	mdd->mdd_proc_entry = lprocfs_register(name, type->typ_procroot,
-					       obd->obd_vars, mdd);
-	if (IS_ERR(mdd->mdd_proc_entry)) {
-		rc = PTR_ERR(mdd->mdd_proc_entry);
-		CERROR("Error %d setting up lprocfs for %s\n",
+	obd->obd_debugfs_entry = ldebugfs_register(name,
+						   type->typ_debugfs_entry,
+						   obd->obd_vars, mdd);
+	if (IS_ERR_OR_NULL(obd->obd_debugfs_entry)) {
+		rc = obd->obd_debugfs_entry ? PTR_ERR(obd->obd_debugfs_entry)
+					    : -ENOMEM;
+		CERROR("Error %d setting up debugfs for %s\n",
 		       rc, name);
-		mdd->mdd_proc_entry = NULL;
-		GOTO(out, rc);
+		obd->obd_debugfs_entry = NULL;
+
+		kobject_put(&mdd->mdd_kobj);
 	}
-	rc = 0;
-	EXIT;
-out:
-	if (rc)
-		mdd_procfs_fini(mdd);
-	return rc;
+
+	RETURN(rc);
 }
 
 void mdd_procfs_fini(struct mdd_device *mdd)
 {
-	if (mdd->mdd_proc_entry)
-		lprocfs_remove(&mdd->mdd_proc_entry);
+	struct obd_device *obd = mdd2obd_dev(mdd);
+
+	kobject_put(&mdd->mdd_kobj);
+	wait_for_completion(&mdd->mdd_kobj_unregister);
+
+	if (!IS_ERR_OR_NULL(obd->obd_debugfs_entry))
+		ldebugfs_remove(&obd->obd_debugfs_entry);
 }

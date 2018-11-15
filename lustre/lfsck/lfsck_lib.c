@@ -2804,7 +2804,7 @@ int lfsck_set_speed(struct dt_device *key, __u32 val)
 }
 EXPORT_SYMBOL(lfsck_set_speed);
 
-int lfsck_get_windows(struct seq_file *m, struct dt_device *key)
+int lfsck_get_windows(char *buf, struct dt_device *key)
 {
 	struct lu_env		env;
 	struct lfsck_instance  *lfsck;
@@ -2817,7 +2817,8 @@ int lfsck_get_windows(struct seq_file *m, struct dt_device *key)
 
 	lfsck = lfsck_instance_find(key, true, false);
 	if (likely(lfsck != NULL)) {
-		seq_printf(m, "%u\n", lfsck->li_bookmark_ram.lb_async_windows);
+		rc = sprintf(buf, "%u\n",
+			     lfsck->li_bookmark_ram.lb_async_windows);
 		lfsck_instance_put(&env, lfsck);
 	} else {
 		rc = -ENXIO;

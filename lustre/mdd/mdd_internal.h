@@ -139,7 +139,6 @@ struct mdd_device {
 	struct lu_fid			 mdd_local_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans; /* PENDING directory */
-	struct proc_dir_entry            *mdd_proc_entry;
         struct mdd_changelog             mdd_cl;
 	unsigned int			 mdd_changelog_gc;
 	time64_t			 mdd_changelog_max_idle_time;
@@ -153,6 +152,9 @@ struct mdd_device {
 	int				 mdd_connects;
 	struct local_oid_storage	*mdd_los;
 	struct mdd_generic_thread	 mdd_orphan_cleanup_thread;
+	struct kobject			 mdd_kobj;
+	struct kobj_type		 mdd_ktype;
+	struct completion		 mdd_kobj_unregister;
 };
 
 enum mod_flags {

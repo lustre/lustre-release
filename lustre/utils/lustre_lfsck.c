@@ -203,6 +203,7 @@ static int lfsck_get_dev_name(struct obd_ioctl_data *data, char *device,
 			      int types, bool multipe_devices)
 {
 	glob_t param = { 0 };
+	size_t count = 0;
 	char *ptr;
 	int rc;
 	int i;
@@ -226,7 +227,16 @@ static int lfsck_get_dev_name(struct obd_ioctl_data *data, char *device,
 		}
 	}
 
-	if (param.gl_pathc == 1)
+	/* we have both sysfs and debugfs entries so to get the correct number
+	 * of devices only count the entries in the sysfs tree
+	 */
+	for (i = 0; i < param.gl_pathc; i++) {
+		if (strstr(param.gl_pathv[i], "/sys/kernel/debug/lustre"))
+			continue;
+		count++;
+	}
+
+	if (count == 1)
 		goto pack;
 
 	if (!multipe_devices) {
@@ -245,8 +255,12 @@ static int lfsck_get_dev_name(struct obd_ioctl_data *data, char *device,
 	}
 
 	for (i = 1; i < param.gl_pathc; i++) {
-		char *ptr2 = strrchr(param.gl_pathv[i], '-');
+		char *ptr2;
 
+		if (strstr(param.gl_pathv[i], "/sys/kernel/debug/lustre"))
+			continue;
+
+		ptr2 = strrchr(param.gl_pathv[i], '-');
 		if (ptr2 == NULL) {
 			rc = -EINVAL;
 			goto out;
