@@ -1144,7 +1144,7 @@ run_test 24u "create stripe file"
 simple_cleanup_common() {
 	local rc=0
 	trap 0
-	[ -z "$DIR" -o -z "$tdir" ] && return 0
+	[ -z "$DIR" ] || [ -z "$tdir" ] && return 0
 
 	local start=$SECONDS
 	rm -rf $DIR/$tdir
@@ -1186,10 +1186,10 @@ test_24v() {
 	local num_ls=$(ls $DIR/$tdir | wc -l)
 	local num_uniq=$(ls $DIR/$tdir | sort -u | wc -l)
 	local num_all=$(ls -a $DIR/$tdir | wc -l)
-	if [ $num_ls -ne $nrfiles -o $num_uniq -ne $nrfiles -o \
-	     $num_all -ne $((nrfiles + 2)) ]; then
-		error "Expected $nrfiles files, got $num_ls " \
-			"($num_uniq unique $num_all .&..)"
+	if [ $num_ls -ne $nrfiles ] || [ $num_uniq -ne $nrfiles ] ||
+		[ $num_all -ne $((nrfiles + 2)) ]; then
+			error "Expected $nrfiles files, got $num_ls " \
+				"($num_uniq unique $num_all .&..)"
 	fi
 	# LU-5 large readdir
 	# dirent_size = 32 bytes for sizeof(struct lu_dirent) +
@@ -1324,7 +1324,8 @@ test_24A() { # LU-3182
 	local t=$(ls $DIR/$tdir | wc -l)
 	local u=$(ls $DIR/$tdir | sort -u | wc -l)
 	local v=$(ls -ai $DIR/$tdir | sort -u | wc -l)
-	if [ $t -ne $NFILES -o $u -ne $NFILES -o $v -ne $((NFILES + 2)) ] ; then
+	if [ $t -ne $NFILES ] || [ $u -ne $NFILES ] ||
+	   [ $v -ne $((NFILES + 2)) ] ; then
 		error "Expected $NFILES files, got $t ($u unique $v .&..)"
 	fi
 
@@ -2235,9 +2236,9 @@ test_27D() {
 	local skip27D
 	[ $MDS1_VERSION -lt $(version_code 2.8.55) ] &&
 		skip27D+="-s 29"
-	[ $MDS1_VERSION -lt $(version_code 2.9.55) -o \
-	  $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
-		skip27D+=" -s 30,31"
+	[ $MDS1_VERSION -lt $(version_code 2.9.55) ] ||
+		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
+			skip27D+=" -s 30,31"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
 
@@ -7088,11 +7089,11 @@ test_72a() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	$RUNAS dd if=/dev/zero of=$DIR/$tfile bs=512 count=1 ||
 		error "$RUNAS dd $DIR/$tfile failed"
 	# See if we are still setuid/sgid
-	test -u $DIR/$tfile -o -g $DIR/$tfile &&
+	[ -u $DIR/$tfile ] || [ -g $DIR/$tfile ] &&
 		error "S/gid is not dropped on write"
 	# Now test that MDS is updated too
 	cancel_lru_locks mdc
-	test -u $DIR/$tfile -o -g $DIR/$tfile &&
+	[ -u $DIR/$tfile ] || [ -g $DIR/$tfile ] &&
 		error "S/gid is not dropped on MDS"
 	rm -f $DIR/$tfile
 }
@@ -7974,7 +7975,7 @@ test_101d() {
 	rm -f $file
 	wait_delete_completed
 
-	[ $raOFF -le 1 -o $raON -lt $raOFF ] ||
+	[ $raOFF -le 1 ] || [ $raON -lt $raOFF ] ||
 		error "readahead ${raON}s > no-readahead ${raOFF}s ${sz_MB}M"
 }
 run_test 101d "file read with and without read-ahead enabled"
@@ -8098,13 +8099,17 @@ test_101g() {
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 
 	local orig_mb=$(do_facet ost1 $LCTL get_param -n $brw_size | head -n 1)
-	if [ $OST1_VERSION -ge $(version_code 2.8.52) -o \
-	     \( $OST1_VERSION -ge $(version_code 2.7.17) -a \
-		$OST1_VERSION -lt $(version_code 2.7.50) \) ] &&
-	   [ $CLIENT_VERSION -ge $(version_code 2.8.52) -o \
-	     \( $CLIENT_VERSION -ge $(version_code 2.7.17) -a \
-		$CLIENT_VERSION -lt $(version_code 2.7.50) \) ]; then
-		[ $OST1_VERSION -ge $(version_code 2.9.52) ] && suffix="M"
+
+	if { [ $OST1_VERSION -ge $(version_code 2.8.52) ] ||
+		{ [ $OST1_VERSION -ge $(version_code 2.7.17) ] &&
+		  [ $OST1_VERSION -lt $(version_code 2.7.50) ]; }; } &&
+	   { [ $CLIENT_VERSION -ge $(version_code 2.8.52) ] ||
+		{ [ $CLIENT_VERSION -ge $(version_code 2.7.17) ] &&
+		  [ $CLIENT_VERSION -lt $(version_code 2.7.50) ]; }; }; then
+
+		[ $OST1_VERSION -ge $(version_code 2.9.52) ] &&
+			suffix="M"
+
 		if [[ $orig_mb -lt 16 ]]; then
 			save_lustre_params $osts "$brw_size" > $p
 			do_nodes $list $LCTL set_param -n $brw_size=16$suffix ||
@@ -8740,9 +8745,9 @@ test_103a() {
 	echo "performing permissions..."
 	run_acl_subtest permissions || error "permissions failed"
 	# LU-1482 mdd: Setting xattr are properly checked with and without ACLs
-	if [ $MDS1_VERSION -gt $(version_code 2.8.55) -o \
-	     \( $MDS1_VERSION -lt $(version_code 2.6) -a \
-	     $MDS1_VERSION -ge $(version_code 2.5.29) \) ]
+	if [ $MDS1_VERSION -gt $(version_code 2.8.55) ] ||
+		{ [ $MDS1_VERSION -lt $(version_code 2.6) ] &&
+			[ $MDS1_VERSION -ge $(version_code 2.5.29) ]; }
 	then
 		echo "performing permissions xattr..."
 		run_acl_subtest permissions_xattr ||
@@ -10534,7 +10539,7 @@ test_129() {
 		# check two errors:
 		# ENOSPC for new ext4 max_dir_size (kernel commit df981d03ee)
 		# EFBIG for previous versions included in ldiskfs series
-		if [ $rc -eq $EFBIG -o $rc -eq $ENOSPC ]; then
+		if [ $rc -eq $EFBIG ] || [ $rc -eq $ENOSPC ]; then
 			set_dir_limits 0 0
 			echo "return code $rc received as expected"
 
@@ -11499,8 +11504,8 @@ test_140() { #bug-17379
 	done
 	i=$((i - 1))
 	echo "The symlink depth = $i"
-	[ $i -eq 5 -o $i -eq 7 -o $i -eq 8 -o $i -eq 40 ] ||
-					error "Invalid symlink depth"
+	[ $i -eq 5 ] || [ $i -eq 7 ] || [ $i -eq 8 ] || [ $i -eq 40 ] ||
+		error "Invalid symlink depth"
 
 	# Test recursive symlink
 	ln -s symlink_self symlink_self
@@ -13549,12 +13554,12 @@ obdecho_test() {
 			   "test_brw $count w v $pages $id" || rc=4; }
 	[ $rc -eq 0 ] && { do_facet $node "$LCTL --device ec destroy $id 1" ||
 			   rc=4; }
-	[ $rc -eq 0 -o $rc -gt 2 ] && { do_facet $node "$LCTL --device ec "    \
-                                        "cleanup" || rc=5; }
-        [ $rc -eq 0 -o $rc -gt 1 ] && { do_facet $node "$LCTL --device ec "    \
-                                        "detach" || rc=6; }
-        [ $rc -ne 0 ] && echo "obecho_create_test failed: $rc"
-        return $rc
+	[ $rc -eq 0 ] || [ $rc -gt 2 ] &&
+		{ do_facet $node "$LCTL --device ec cleanup" || rc=5; }
+	[ $rc -eq 0 ] || [ $rc -gt 1 ] &&
+		{ do_facet $node "$LCTL --device ec detach" || rc=6; }
+	[ $rc -ne 0 ] && echo "obecho_create_test failed: $rc"
+	return $rc
 }
 
 test_180a() {
@@ -16354,7 +16359,7 @@ run_test 251 "Handling short read and write correctly"
 test_252() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	if [ "$ost1_FSTYPE" != "ldiskfs" -o "$mds1_FSTYPE" != "ldiskfs" ]; then
+	if [ "$ost1_FSTYPE" != ldiskfs ] || [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip_env "ldiskfs only test"
 	fi
 
@@ -18096,11 +18101,12 @@ test_300_check_default_striped_dir()
 	for dir in $(find $DIR/$tdir/$dirname/*); do
 		stripe_count=$($LFS getdirstripe -c $dir)
 		[ $stripe_count -eq $default_count ] ||
-		[ $stripe_count -eq 0 -o $default_count -eq 1 ] ||
+		[ $stripe_count -eq 0 ] || [ $default_count -eq 1 ] ||
 		error "stripe count $default_count != $stripe_count for $dir"
 
 		stripe_index=$($LFS getdirstripe -i $dir)
-		[ $default_index -eq -1 -o $stripe_index -eq $default_index ] ||
+		[ $default_index -eq -1 ] ||
+			[ $stripe_index -eq $default_index ] ||
 			error "$stripe_index != $default_index for $dir"
 
 		#check default stripe
@@ -18432,13 +18438,13 @@ test_300o() {
 
 	numfree1=$(lctl get_param -n mdc.*MDT0000*.filesfree)
 	numfree2=$(lctl get_param -n mdc.*MDT0001*.filesfree)
-	if [ $numfree1 -lt 66000 -o $numfree2 -lt 66000 ]; then
+	if [ $numfree1 -lt 66000 ] || [ $numfree2 -lt 66000 ]; then
 		skip "not enough free inodes $numfree1 $numfree2"
 	fi
 
 	numfree1=$(lctl get_param -n mdc.*MDT0000-mdc-*.kbytesfree)
 	numfree2=$(lctl get_param -n mdc.*MDT0001-mdc-*.kbytesfree)
-	if [ $numfree1 -lt 300000 -o $numfree2 -lt 300000 ]; then
+	if [ $numfree1 -lt 300000 ] || [ $numfree2 -lt 300000 ]; then
 		skip "not enough free space $numfree1 $numfree2"
 	fi
 
@@ -19213,9 +19219,10 @@ run_test 404 "validate manual {de}activated works properly for OSPs"
 
 test_405() {
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
-	[ $MDS1_VERSION -lt $(version_code 2.6.92) -o \
-	[ $CLIENT_VERSION -lt $(version_code 2.6.99) ] &&
-		skip "Layout swap lock is not supported"
+	[ $MDS1_VERSION -lt $(version_code 2.6.92) ] ||
+		[ $CLIENT_VERSION -lt $(version_code 2.6.99) ] &&
+			skip "Layout swap lock is not supported"
+
 	check_swap_layouts_support
 
 	test_mkdir $DIR/$tdir
@@ -19847,7 +19854,7 @@ test_801c() {
 	do_facet mgs $LCTL barrier_freeze $FSNAME 30
 
 	local b_status=$(barrier_stat)
-	[ "$b_status" = "'expired'" -o "$b_status" = "'failed'" ] || {
+	[ "$b_status" = "'expired'" ] || [ "$b_status" = "'failed'" ] || {
 		do_facet mgs $LCTL barrier_thaw $FSNAME
 		error "(2) unexpected barrier status $b_status"
 	}
