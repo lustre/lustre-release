@@ -4956,8 +4956,12 @@ static int ll_layout_fetch(struct inode *inode, struct ldlm_lock *lock)
 
 	rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), OBD_MD_FLXATTR,
 			 XATTR_NAME_LOV, lmmsize, &req);
-	if (rc < 0)
-		RETURN(rc);
+	if (rc < 0) {
+		if (rc == -ENODATA)
+			GOTO(out, rc = 0); /* empty layout */
+		else
+			RETURN(rc);
+	}
 
 	lmmsize = rc;
 	rc = 0;
