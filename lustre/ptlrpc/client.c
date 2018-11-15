@@ -1896,10 +1896,6 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 					spin_lock(&req->rq_lock);
 					req->rq_resend = 1;
 					spin_unlock(&req->rq_lock);
-
-					if (req->rq_bulk != NULL &&
-					    !ptlrpc_unregister_bulk(req, 1))
-						continue;
                                 }
                                 /*
                                  * rq_wait_ctx is only touched by ptlrpcd,
@@ -1925,6 +1921,12 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 					req->rq_wait_ctx = 0;
 					spin_unlock(&req->rq_lock);
 				}
+
+				/* In any case, the previous bulk should be
+				 * cleaned up to prepare for the new sending */
+				if (req->rq_bulk != NULL &&
+				    !ptlrpc_unregister_bulk(req, 1))
+					continue;
 
 				rc = ptl_send_rpc(req, 0);
 				if (rc == -ENOMEM) {
