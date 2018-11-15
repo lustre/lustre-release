@@ -1348,7 +1348,7 @@ static atomic_t lu_key_initing_cnt = ATOMIC_INIT(0);
  * lu_context_refill(). No locking is provided, as initialization and shutdown
  * are supposed to be externally serialized.
  */
-static unsigned key_set_version = 0;
+static atomic_t key_set_version = ATOMIC_INIT(0);
 
 /**
  * Register new key.
@@ -1372,7 +1372,7 @@ int lu_context_key_register(struct lu_context_key *key)
                         lu_keys[i] = key;
                         lu_ref_init(&key->lct_reference);
                         result = 0;
-                        ++key_set_version;
+			atomic_inc(&key_set_version);
                         break;
                 }
         }
@@ -1415,7 +1415,6 @@ void lu_context_key_degister(struct lu_context_key *key)
 	lu_context_key_quiesce(key);
 
 	write_lock(&lu_keys_guard);
-	++key_set_version;
 	key_fini(&lu_shrink_env.le_ctx, key->lct_index);
 
 	/**
@@ -1576,7 +1575,6 @@ void lu_context_key_quiesce(struct lu_context_key *key)
 				    lc_remember)
 			key_fini(ctx, key->lct_index);
 
-		++key_set_version;
 		write_unlock(&lu_keys_guard);
 	}
 }
@@ -1585,7 +1583,7 @@ void lu_context_key_revive(struct lu_context_key *key)
 {
 	write_lock(&lu_keys_guard);
 	key->lct_tags &= ~LCT_QUIESCENT;
-	++key_set_version;
+	atomic_inc(&key_set_version);
 	write_unlock(&lu_keys_guard);
 }
 
@@ -1606,7 +1604,6 @@ static void keys_fini(struct lu_context *ctx)
 static int keys_fill(struct lu_context *ctx)
 {
 	unsigned int i;
-	unsigned pre_version;
 
 	/*
 	 * A serialisation with lu_context_key_quiesce() is needed, but some
@@ -1619,16 +1616,15 @@ static int keys_fill(struct lu_context *ctx)
 	 */
 	read_lock(&lu_keys_guard);
 	atomic_inc(&lu_key_initing_cnt);
-	pre_version = key_set_version;
 	read_unlock(&lu_keys_guard);
+	ctx->lc_version = atomic_read(&key_set_version);
 
-refill:
-	LINVRNT(ctx->lc_value != NULL);
+	LINVRNT(ctx->lc_value);
 	for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
 		struct lu_context_key *key;
 
 		key = lu_keys[i];
-		if (ctx->lc_value[i] == NULL && key != NULL &&
+		if (!ctx->lc_value[i] && key &&
 		    (key->lct_tags & ctx->lc_tags) &&
 		    /*
 		     * Don't create values for a LCT_QUIESCENT key, as this
@@ -1666,17 +1662,7 @@ refill:
 		}
 	}
 
-	read_lock(&lu_keys_guard);
-	if (pre_version != key_set_version) {
-		pre_version = key_set_version;
-		read_unlock(&lu_keys_guard);
-		goto refill;
-	}
-
-	ctx->lc_version = key_set_version;
-
 	atomic_dec(&lu_key_initing_cnt);
-	read_unlock(&lu_keys_guard);
 	return 0;
 }
 
@@ -1785,13 +1771,9 @@ EXPORT_SYMBOL(lu_context_exit);
  */
 int lu_context_refill(struct lu_context *ctx)
 {
-	read_lock(&lu_keys_guard);
-	if (likely(ctx->lc_version == key_set_version)) {
-		read_unlock(&lu_keys_guard);
+	if (likely(ctx->lc_version == atomic_read(&key_set_version)))
 		return 0;
-	}
 
-	read_unlock(&lu_keys_guard);
 	return keys_fill(ctx);
 }
 
@@ -1802,14 +1784,15 @@ int lu_context_refill(struct lu_context *ctx)
  * predefined when the lu_device type are registered, during the module probe
  * phase.
  */
-__u32 lu_context_tags_default = 0;
-__u32 lu_session_tags_default = 0;
+u32 lu_context_tags_default;
+u32 lu_session_tags_default;
 
+#ifdef HAVE_SERVER_SUPPORT
 void lu_context_tags_update(__u32 tags)
 {
 	write_lock(&lu_keys_guard);
 	lu_context_tags_default |= tags;
-	key_set_version++;
+	atomic_inc(&key_set_version);
 	write_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_context_tags_update);
@@ -1818,7 +1801,7 @@ void lu_context_tags_clear(__u32 tags)
 {
 	write_lock(&lu_keys_guard);
 	lu_context_tags_default &= ~tags;
-	key_set_version++;
+	atomic_inc(&key_set_version);
 	write_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_context_tags_clear);
@@ -1827,7 +1810,7 @@ void lu_session_tags_update(__u32 tags)
 {
 	write_lock(&lu_keys_guard);
 	lu_session_tags_default |= tags;
-	key_set_version++;
+	atomic_inc(&key_set_version);
 	write_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_session_tags_update);
@@ -1836,10 +1819,11 @@ void lu_session_tags_clear(__u32 tags)
 {
 	write_lock(&lu_keys_guard);
 	lu_session_tags_default &= ~tags;
-	key_set_version++;
+	atomic_inc(&key_set_version);
 	write_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_session_tags_clear);
+#endif /* HAVE_SERVER_SUPPORT */
 
 int lu_env_init(struct lu_env *env, __u32 tags)
 {
