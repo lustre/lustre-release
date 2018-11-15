@@ -1095,10 +1095,11 @@ static int mdd_process_config(const struct lu_env *env,
 
         switch (cfg->lcfg_command) {
 	case LCFG_PARAM: {
-		struct obd_device *obd = mdd2obd_dev(m);
+		ssize_t count;
 
-		rc = class_process_proc_param(PARAM_MDD, obd->obd_vars, cfg, m);
-		if (rc > 0 || rc == -ENOSYS)
+		count = class_modify_config(cfg, PARAM_MDD, &m->mdd_kobj);
+		rc = count > 0 ? 0 : count;
+		if (rc)
 			/* we don't understand; pass it on */
 			rc = next->ld_ops->ldo_process_config(env, next, cfg);
 		break;
@@ -1982,7 +1983,7 @@ static int __init mdd_init(void)
 	if (rc)
 		return rc;
 
-	rc = class_register_type(&mdd_obd_device_ops, NULL, true, NULL,
+	rc = class_register_type(&mdd_obd_device_ops, NULL, false, NULL,
 				 LUSTRE_MDD_NAME, &mdd_device_type);
 	if (rc)
 		lu_kmem_fini(mdd_caches);
