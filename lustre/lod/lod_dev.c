@@ -119,11 +119,12 @@ static const char lod_update_log_dir_name[] = "update_log_dir";
  * \retval negative		negated errno on error
  **/
 int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
-		   const struct lu_fid *fid, __u32 *tgt, int *type)
+		   const struct lu_fid *fid, u32 *tgt, int *type)
 {
-	struct lu_seq_range	range = { 0 };
-	struct lu_server_fld	*server_fld;
+	struct lu_seq_range range = { 0 };
+	struct lu_server_fld *server_fld;
 	int rc;
+
 	ENTRY;
 
 	if (!fid_is_sane(fid)) {
@@ -153,7 +154,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	}
 
 	server_fld = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_server_fld;
-	if (server_fld == NULL)
+	if (!server_fld)
 		RETURN(-EIO);
 
 	fld_range_set_type(&range, *type);
@@ -205,12 +206,13 @@ static struct lu_object *lod_object_alloc(const struct lu_env *env,
 					  const struct lu_object_header *hdr,
 					  struct lu_device *dev)
 {
-	struct lod_object	*lod_obj;
-	struct lu_object	*lu_obj;
+	struct lod_object *lod_obj;
+	struct lu_object *lu_obj;
+
 	ENTRY;
 
 	OBD_SLAB_ALLOC_PTR_GFP(lod_obj, lod_object_kmem, GFP_NOFS);
-	if (lod_obj == NULL)
+	if (!lod_obj)
 		RETURN(ERR_PTR(-ENOMEM));
 
 	mutex_init(&lod_obj->ldo_layout_mutex);
@@ -260,9 +262,9 @@ static int lod_sub_process_config(const struct lu_env *env,
 		next = &tgt->ltd_tgt->dd_lu_dev;
 		rc1 = next->ld_ops->ldo_process_config(env, next, lcfg);
 		if (rc1) {
-			CERROR("%s: error cleaning up LOD index %u: cmd %#x"
-			       ": rc = %d\n", lod2obd(lod)->obd_name, i,
-			       lcfg->lcfg_command, rc1);
+			CERROR("%s: error cleaning up LOD index %u: cmd %#x : rc = %d\n",
+			       lod2obd(lod)->obd_name, i, lcfg->lcfg_command,
+			       rc1);
 			rc = rc1;
 		}
 	}
@@ -274,7 +276,7 @@ struct lod_recovery_data {
 	struct lod_device	*lrd_lod;
 	struct lod_tgt_desc	*lrd_ltd;
 	struct ptlrpc_thread	*lrd_thread;
-	__u32			lrd_idx;
+	u32			lrd_idx;
 };
 
 
@@ -299,13 +301,14 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 					struct llog_rec_hdr *rec,
 					void *data)
 {
-	struct lod_recovery_data	*lrd = data;
-	struct llog_cookie	*cookie = &lod_env_info(env)->lti_cookie;
-	struct lu_target		*lut;
-	__u32				index = 0;
+	struct lod_recovery_data *lrd = data;
+	struct llog_cookie *cookie = &lod_env_info(env)->lti_cookie;
+	struct lu_target *lut;
+	u32 index = 0;
+
 	ENTRY;
 
-	if (lrd->lrd_ltd == NULL) {
+	if (!lrd->lrd_ltd) {
 		int rc;
 
 		rc = lodname2mdt_index(lod2obd(lrd->lrd_lod)->obd_name, &index);
@@ -317,8 +320,8 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 
 	if (rec->lrh_len !=
 		llog_update_record_size((struct llog_update_record *)rec)) {
-		CERROR("%s broken update record! index %u "DFID".%u :"
-		       " rc = %d\n", lod2obd(lrd->lrd_lod)->obd_name, index,
+		CERROR("%s: broken update record! index %u "DFID".%u: rc = %d\n",
+		       lod2obd(lrd->lrd_lod)->obd_name, index,
 		       PFID(&llh->lgh_id.lgl_oi.oi_fid), rec->lrh_index, -EIO);
 		return -EINVAL;
 	}
@@ -367,6 +370,7 @@ static int lod_sub_recovery_thread(void *arg)
 	int retries = 0;
 	int i;
 	int rc;
+
 	ENTRY;
 
 	thread->t_flags = SVC_RUNNING;
@@ -382,7 +386,7 @@ static int lod_sub_recovery_thread(void *arg)
 
 	lut = lod2lu_dev(lod)->ld_site->ls_tgt;
 	atomic_inc(&lut->lut_tdtd->tdtd_recovery_threads_count);
-	if (lrd->lrd_ltd == NULL)
+	if (!lrd->lrd_ltd)
 		dt = lod->lod_child;
 	else
 		dt = lrd->lrd_ltd->ltd_tgt;
@@ -406,14 +410,16 @@ again:
 		struct lu_device *top_device;
 
 		top_device = lod->lod_dt_dev.dd_lu_dev.ld_site->ls_top_dev;
-		/* Because the remote target might failover at the same time,
-		 * let's retry here */
+		/*
+		 * Because the remote target might failover at the same time,
+		 * let's retry here
+		 */
 		if ((rc == -ETIMEDOUT || rc == -EAGAIN || rc == -EIO) &&
 		     dt != lod->lod_child &&
 		    !top_device->ld_obd->obd_abort_recovery &&
 		    !top_device->ld_obd->obd_stopping) {
-			if (ctxt != NULL) {
-				if (ctxt->loc_handle != NULL)
+			if (ctxt) {
+				if (ctxt->loc_handle)
 					llog_cat_close(&env,
 						       ctxt->loc_handle);
 				llog_ctxt_put(ctxt);
@@ -443,7 +449,7 @@ again:
 	       retries);
 
 	spin_lock(&lod->lod_lock);
-	if (lrd->lrd_ltd == NULL)
+	if (!lrd->lrd_ltd)
 		lod->lod_child_got_update_log = 1;
 	else
 		lrd->lrd_ltd->ltd_got_update_log = 1;
@@ -491,24 +497,25 @@ out:
 void lod_sub_fini_llog(const struct lu_env *env,
 		       struct dt_device *dt, struct ptlrpc_thread *thread)
 {
-	struct obd_device       *obd;
-	struct llog_ctxt        *ctxt;
+	struct obd_device *obd;
+	struct llog_ctxt *ctxt;
+
 	ENTRY;
 
 	obd = dt->dd_lu_dev.ld_obd;
 	CDEBUG(D_INFO, "%s: finish sub llog\n", obd->obd_name);
 	/* Stop recovery thread first */
-	if (thread != NULL && thread->t_flags & SVC_RUNNING) {
+	if (thread && thread->t_flags & SVC_RUNNING) {
 		thread->t_flags = SVC_STOPPING;
 		wake_up(&thread->t_ctl_waitq);
 		wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 	}
 
 	ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
-	if (ctxt == NULL)
+	if (!ctxt)
 		RETURN_EXIT;
 
-	if (ctxt->loc_handle != NULL)
+	if (ctxt->loc_handle)
 		llog_cat_close(env, ctxt->loc_handle);
 
 	llog_cleanup(env, ctxt);
@@ -528,43 +535,49 @@ void lod_sub_fini_llog(const struct lu_env *env,
  * \retval 0		on success
  * \retval -EINVAL	if the name is invalid
  */
-int lodname2mdt_index(char *lodname, __u32 *mdt_index)
+int lodname2mdt_index(char *lodname, u32 *mdt_index)
 {
 	unsigned long index;
 	char *ptr, *tmp;
+	int rc;
 
 	/* 1.8 configs don't have "-MDT0000" at the end */
 	ptr = strstr(lodname, "-MDT");
-	if (ptr == NULL) {
+	if (!ptr) {
 		*mdt_index = 0;
 		return 0;
 	}
 
 	ptr = strrchr(lodname, '-');
-	if (ptr == NULL) {
-		CERROR("invalid MDT index in '%s'\n", lodname);
-		return -EINVAL;
+	if (!ptr) {
+		rc = -EINVAL;
+		CERROR("invalid MDT index in '%s': rc = %d\n", lodname, rc);
+		return rc;
 	}
 
 	if (strncmp(ptr, "-mdtlov", 7) != 0) {
-		CERROR("invalid MDT index in '%s'\n", lodname);
-		return -EINVAL;
+		rc = -EINVAL;
+		CERROR("invalid MDT index in '%s': rc = %d\n", lodname, rc);
+		return rc;
 	}
 
 	if ((unsigned long)ptr - (unsigned long)lodname <= 8) {
-		CERROR("invalid MDT index in '%s'\n", lodname);
-		return -EINVAL;
+		rc = -EINVAL;
+		CERROR("invalid MDT index in '%s': rc = %d\n", lodname, rc);
+		return rc;
 	}
 
 	if (strncmp(ptr - 8, "-MDT", 4) != 0) {
-		CERROR("invalid MDT index in '%s'\n", lodname);
-		return -EINVAL;
+		rc = -EINVAL;
+		CERROR("invalid MDT index in '%s': rc = %d\n", lodname, rc);
+		return rc;
 	}
 
 	index = simple_strtol(ptr - 4, &tmp, 16);
 	if (*tmp != '-' || index > INT_MAX) {
-		CERROR("invalid MDT index in '%s'\n", lodname);
-		return -EINVAL;
+		rc = -EINVAL;
+		CERROR("invalid MDT index in '%s': rc = %d\n", lodname, rc);
+		return rc;
 	}
 	*mdt_index = index;
 	return 0;
@@ -587,15 +600,16 @@ int lodname2mdt_index(char *lodname, __u32 *mdt_index)
 int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		      struct dt_device *dt)
 {
-	struct obd_device		*obd;
-	struct lod_recovery_data	*lrd = NULL;
-	struct ptlrpc_thread		*thread;
-	struct task_struct		*task;
-	struct l_wait_info		lwi = { 0 };
-	struct lod_tgt_desc		*sub_ltd = NULL;
-	__u32				index;
-	__u32				master_index;
-	int				rc;
+	struct obd_device *obd;
+	struct lod_recovery_data *lrd = NULL;
+	struct ptlrpc_thread *thread;
+	struct task_struct *task;
+	struct l_wait_info lwi = { 0 };
+	struct lod_tgt_desc *sub_ltd = NULL;
+	u32 index;
+	u32 master_index;
+	int rc;
+
 	ENTRY;
 
 	rc = lodname2mdt_index(lod2obd(lod)->obd_name, &master_index);
@@ -603,16 +617,16 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		RETURN(rc);
 
 	OBD_ALLOC_PTR(lrd);
-	if (lrd == NULL)
+	if (!lrd)
 		RETURN(-ENOMEM);
 
 	if (lod->lod_child == dt) {
 		thread = &lod->lod_child_recovery_thread;
 		index = master_index;
 	} else {
-		struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
-		struct lod_tgt_desc	*tgt = NULL;
-		unsigned int		i;
+		struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+		struct lod_tgt_desc *tgt = NULL;
+		unsigned int i;
 
 		cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
 			tgt = LTD_TGT(ltd, i);
@@ -624,7 +638,7 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		}
 		LASSERT(sub_ltd != NULL);
 		OBD_ALLOC_PTR(sub_ltd->ltd_recovery_thread);
-		if (sub_ltd->ltd_recovery_thread == NULL)
+		if (!sub_ltd->ltd_recovery_thread)
 			GOTO(free_lrd, rc = -ENOMEM);
 
 		thread = sub_ltd->ltd_recovery_thread;
@@ -686,14 +700,16 @@ static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 					  struct lod_device *lod)
 {
 	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	struct ptlrpc_thread	*thread;
+	struct ptlrpc_thread *thread;
 	unsigned int i;
 
-	/* Stop the update log commit cancel threads and finish master
-	 * llog ctxt */
+	/*
+	 * Stop the update log commit cancel threads and finish master
+	 * llog ctxt
+	 */
 	thread = &lod->lod_child_recovery_thread;
 	/* Stop recovery thread first */
-	if (thread != NULL && thread->t_flags & SVC_RUNNING) {
+	if (thread && thread->t_flags & SVC_RUNNING) {
 		thread->t_flags = SVC_STOPPING;
 		wake_up(&thread->t_ctl_waitq);
 		wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
@@ -705,7 +721,7 @@ static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 
 		tgt = LTD_TGT(ltd, i);
 		thread = tgt->ltd_recovery_thread;
-		if (thread != NULL && thread->t_flags & SVC_RUNNING) {
+		if (thread && thread->t_flags & SVC_RUNNING) {
 			thread->t_flags = SVC_STOPPING;
 			wake_up(&thread->t_ctl_waitq);
 			wait_event(thread->t_ctl_waitq,
@@ -732,13 +748,15 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
 	unsigned int i;
 
-	/* Stop the update log commit cancel threads and finish master
-	 * llog ctxt */
+	/*
+	 * Stop the update log commit cancel threads and finish master
+	 * llog ctxt
+	 */
 	lod_sub_fini_llog(env, lod->lod_child,
 			  &lod->lod_child_recovery_thread);
 	lod_getref(ltd);
 	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		struct lod_tgt_desc	*tgt;
+		struct lod_tgt_desc *tgt;
 
 		tgt = LTD_TGT(ltd, i);
 		lod_sub_fini_llog(env, tgt->ltd_tgt,
@@ -750,14 +768,14 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 
 static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
 {
-	struct lod_device	*lod = (struct lod_device *)data;
-	struct lu_target	*lut = lod2lu_dev(lod)->ld_site->ls_tgt;
-	struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
-	struct lod_tgt_desc	*tgt = NULL;
-	char			*buf;
-	int			 len = 0;
-	int			 rc;
-	int			 i;
+	struct lod_device *lod = (struct lod_device *)data;
+	struct lu_target *lut = lod2lu_dev(lod)->ld_site->ls_tgt;
+	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lod_tgt_desc *tgt = NULL;
+	char *buf;
+	int len = 0;
+	int rc;
+	int i;
 
 	*count = atomic_read(&lut->lut_tdtd->tdtd_recovery_threads_count);
 	if (*count == 0) {
@@ -767,7 +785,7 @@ static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
 
 	*size = 5 * *count + 1;
 	OBD_ALLOC(buf, *size);
-	if (buf == NULL)
+	if (!buf)
 		return NULL;
 
 	*count = 0;
@@ -814,13 +832,14 @@ static int lod_prepare_distribute_txn(const struct lu_env *env,
 				      struct lod_device *lod)
 {
 	struct target_distribute_txn_data *tdtd;
-	struct lu_target		  *lut;
-	int				  rc;
+	struct lu_target *lut;
+	int rc;
+
 	ENTRY;
 
 	/* Init update recovery data */
 	OBD_ALLOC_PTR(tdtd);
-	if (tdtd == NULL)
+	if (!tdtd)
 		RETURN(-ENOMEM);
 
 	lut = lod2lu_dev(lod)->ld_site->ls_tgt;
@@ -856,11 +875,11 @@ static int lod_prepare_distribute_txn(const struct lu_env *env,
 static void lod_fini_distribute_txn(const struct lu_env *env,
 				    struct lod_device *lod)
 {
-	struct lu_target		  *lut;
+	struct lu_target *lut;
 
 	lut = lod2lu_dev(lod)->ld_site->ls_tgt;
 	target_recovery_fini(lut->lut_obd);
-	if (lut->lut_tdtd == NULL)
+	if (!lut->lut_tdtd)
 		return;
 
 	distribute_txn_fini(env, lut->lut_tdtd);
@@ -907,23 +926,26 @@ static int lod_process_config(const struct lu_env *env,
 			      struct lustre_cfg *lcfg)
 {
 	struct lod_device *lod = lu2lod_dev(dev);
-	struct lu_device  *next = &lod->lod_child->dd_lu_dev;
-	char		  *arg1;
-	int		   rc = 0;
+	struct lu_device *next = &lod->lod_child->dd_lu_dev;
+	char *arg1;
+	int rc = 0;
+
 	ENTRY;
 
-	switch(lcfg->lcfg_command) {
+	switch (lcfg->lcfg_command) {
 	case LCFG_LOV_DEL_OBD:
 	case LCFG_LOV_ADD_INA:
 	case LCFG_LOV_ADD_OBD:
 	case LCFG_ADD_MDC: {
-		__u32 index;
-		__u32 mdt_index;
+		u32 index;
+		u32 mdt_index;
 		int gen;
-		/* lov_modify_tgts add  0:lov_mdsA  1:osp  2:0  3:1
+		/*
+		 * lov_modify_tgts add  0:lov_mdsA  1:osp  2:0  3:1
 		 * modify_mdc_tgts add  0:lustre-MDT0001
 		 *		      1:lustre-MDT0001-mdc0002
-		 *		      2:2  3:1*/
+		 *		      2:2  3:1
+		 */
 		arg1 = lustre_cfg_string(lcfg, 1);
 
 		if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", &index) != 1)
@@ -932,7 +954,7 @@ static int lod_process_config(const struct lu_env *env,
 			GOTO(out, rc = -EINVAL);
 
 		if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD) {
-			__u32 mdt_index;
+			u32 mdt_index;
 
 			rc = lodname2mdt_index(lustre_cfg_string(lcfg, 0),
 					       &mdt_index);
@@ -964,13 +986,14 @@ static int lod_process_config(const struct lu_env *env,
 		ssize_t count;
 		char *param;
 
-		/* Check if it is activate/deactivate mdc
-		 * lustre-MDTXXXX-osp-MDTXXXX.active=1 */
+		/*
+		 * Check if it is activate/deactivate mdc
+		 * lustre-MDTXXXX-osp-MDTXXXX.active=1
+		 */
 		param = lustre_cfg_buf(lcfg, 1);
-		if (strstr(param, "osp") != NULL &&
-		    strstr(param, ".active=") != NULL) {
-			struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
-			struct lod_tgt_desc	*sub_tgt = NULL;
+		if (strstr(param, "osp") && strstr(param, ".active=")) {
+			struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+			struct lod_tgt_desc *sub_tgt = NULL;
 			char *ptr;
 			char *tmp;
 			int i;
@@ -978,7 +1001,7 @@ static int lod_process_config(const struct lu_env *env,
 			ptr = strstr(param, ".");
 			*ptr = '\0';
 			obd = class_name2obd(param);
-			if (obd == NULL) {
+			if (!obd) {
 				CERROR("%s: can not find %s: rc = %d\n",
 				       lod2obd(lod)->obd_name, param, -EINVAL);
 				*ptr = '.';
@@ -995,7 +1018,7 @@ static int lod_process_config(const struct lu_env *env,
 				}
 			}
 
-			if (sub_tgt == NULL) {
+			if (!sub_tgt) {
 				CERROR("%s: can not find %s: rc = %d\n",
 				       lod2obd(lod)->obd_name, param, -EINVAL);
 				*ptr = '.';
@@ -1011,7 +1034,7 @@ static int lod_process_config(const struct lu_env *env,
 				obd = sub_tgt->ltd_tgt->dd_lu_dev.ld_obd;
 				ctxt = llog_get_context(obd,
 						LLOG_UPDATELOG_ORIG_CTXT);
-				if (ctxt == NULL) {
+				if (!ctxt) {
 					rc = llog_setup(env, obd, &obd->obd_olg,
 						       LLOG_UPDATELOG_ORIG_CTXT,
 						    NULL, &llog_common_cat_ops);
@@ -1058,7 +1081,7 @@ static int lod_process_config(const struct lu_env *env,
 		break;
 	}
 	case LCFG_CLEANUP: {
-		if (lod->lod_md_root != NULL) {
+		if (lod->lod_md_root) {
 			dt_object_put(env, &lod->lod_md_root->ldo_obj);
 			lod->lod_md_root = NULL;
 		}
@@ -1073,19 +1096,20 @@ static int lod_process_config(const struct lu_env *env,
 		next = &lod->lod_child->dd_lu_dev;
 		rc = next->ld_ops->ldo_process_config(env, next, lcfg);
 		if (rc)
-			CERROR("%s: can't process %u: %d\n",
+			CERROR("%s: can't process %u: rc = %d\n",
 			       lod2obd(lod)->obd_name, lcfg->lcfg_command, rc);
 
 		rc = obd_disconnect(lod->lod_child_exp);
 		if (rc)
-			CERROR("error in disconnect from storage: %d\n", rc);
+			CERROR("error in disconnect from storage: rc = %d\n",
+			       rc);
 		break;
 	}
 	default:
-	       CERROR("%s: unknown command %u\n", lod2obd(lod)->obd_name,
-		      lcfg->lcfg_command);
-	       rc = -EINVAL;
-	       break;
+		CERROR("%s: unknown command %u\n", lod2obd(lod)->obd_name,
+		       lcfg->lcfg_command);
+		rc = -EINVAL;
+		break;
 	}
 
 out:
@@ -1103,10 +1127,11 @@ out:
 static int lod_recovery_complete(const struct lu_env *env,
 				 struct lu_device *dev)
 {
-	struct lod_device   *lod = lu2lod_dev(dev);
-	struct lu_device    *next = &lod->lod_child->dd_lu_dev;
-	unsigned int	     i;
-	int		     rc;
+	struct lod_device *lod = lu2lod_dev(dev);
+	struct lu_device *next = &lod->lod_child->dd_lu_dev;
+	unsigned int i;
+	int rc;
+
 	ENTRY;
 
 	LASSERT(lod->lod_recovery_completed == 0);
@@ -1118,13 +1143,14 @@ static int lod_recovery_complete(const struct lu_env *env,
 	if (lod->lod_osts_size > 0) {
 		cfs_foreach_bit(lod->lod_ost_bitmap, i) {
 			struct lod_tgt_desc *tgt;
+
 			tgt = OST_TGT(lod, i);
 			LASSERT(tgt && tgt->ltd_tgt);
 			next = &tgt->ltd_ost->dd_lu_dev;
 			rc = next->ld_ops->ldo_recovery_complete(env, next);
 			if (rc)
-				CERROR("%s: can't complete recovery on #%d:"
-					"%d\n", lod2obd(lod)->obd_name, i, rc);
+				CERROR("%s: can't complete recovery on #%d: rc = %d\n",
+				       lod2obd(lod)->obd_name, i, rc);
 		}
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
@@ -1145,13 +1171,16 @@ static int lod_recovery_complete(const struct lu_env *env,
  */
 static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 {
-	struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
-	int			rc;
-	unsigned int		i;
+	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	int rc;
+	unsigned int i;
+
 	ENTRY;
 
-	/* llog must be setup after LOD is initialized, because llog
-	 * initialization include FLD lookup */
+	/*
+	 * llog must be setup after LOD is initialized, because llog
+	 * initialization include FLD lookup
+	 */
 	LASSERT(lod->lod_initialized);
 
 	/* Init the llog in its own stack */
@@ -1160,7 +1189,7 @@ static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 		RETURN(rc);
 
 	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		struct lod_tgt_desc	*tgt;
+		struct lod_tgt_desc *tgt;
 
 		tgt = LTD_TGT(ltd, i);
 		rc = lod_sub_init_llog(env, lod, tgt->ltd_tgt);
@@ -1179,13 +1208,14 @@ static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 		       struct lu_device *cdev)
 {
-	struct lod_device	*lod = lu2lod_dev(cdev);
-	struct lu_device	*next = &lod->lod_child->dd_lu_dev;
-	struct lu_fid		*fid = &lod_env_info(env)->lti_fid;
-	int			rc;
-	struct dt_object	*root;
-	struct dt_object	*dto;
-	__u32			index;
+	struct lod_device *lod = lu2lod_dev(cdev);
+	struct lu_device *next = &lod->lod_child->dd_lu_dev;
+	struct lu_fid *fid = &lod_env_info(env)->lti_fid;
+	int rc;
+	struct dt_object *root;
+	struct dt_object *dto;
+	u32 index;
+
 	ENTRY;
 
 	rc = next->ld_ops->ldo_prepare(env, pdev, next);
@@ -1212,7 +1242,7 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 	dto = local_file_find_or_create_with_fid(env, lod->lod_child,
 						 fid, root,
 						 lod_update_log_name,
-						 S_IFREG | S_IRUGO | S_IWUSR);
+						 S_IFREG | 0644);
 	if (IS_ERR(dto))
 		GOTO(out_put, rc = PTR_ERR(dto));
 
@@ -1223,7 +1253,7 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 	dto = local_file_find_or_create_with_fid(env, lod->lod_child,
 						 fid, root,
 						 lod_update_log_dir_name,
-						 S_IFDIR | S_IRUGO | S_IWUSR);
+						 S_IFDIR | 0644);
 	if (IS_ERR(dto))
 		GOTO(out_put, rc = PTR_ERR(dto));
 
@@ -1293,10 +1323,10 @@ static void lod_statfs_sum(struct obd_statfs *sfs,
 static int lod_statfs(const struct lu_env *env,
 		      struct dt_device *dev, struct obd_statfs *sfs)
 {
-	struct lod_device   *lod = dt2lod_dev(dev);
+	struct lod_device *lod = dt2lod_dev(dev);
 	struct lod_ost_desc *ost;
 	struct lod_mdt_desc *mdt;
-	struct obd_statfs    ost_sfs;
+	struct obd_statfs ost_sfs;
 	int i, rc, bs;
 	bool mdtonly;
 
@@ -1325,9 +1355,11 @@ static int lod_statfs(const struct lu_env *env,
 	}
 	lod_putref(lod, &lod->lod_mdt_descs);
 
-	/* at some point we can check whether DoM is enabled and
+	/*
+	 * at some point we can check whether DoM is enabled and
 	 * decide how to account MDT space. for simplicity let's
-	 * just fallback to pre-DoM policy if any OST is alive */
+	 * just fallback to pre-DoM policy if any OST is alive
+	 */
 	mdtonly = true;
 
 	lod_getref(&lod->lod_ost_descs);
@@ -1339,8 +1371,10 @@ static int lod_statfs(const struct lu_env *env,
 		if (rc || ost_sfs.os_bsize == 0)
 			continue;
 		if (mdtonly) {
-			/* if only MDTs and DoM report MDT space,
-			 * otherwise only OST space */
+			/*
+			 * if only MDTs and DoM report MDT space,
+			 * otherwise only OST space
+			 */
 			sfs->os_bavail = 0;
 			sfs->os_blocks = 0;
 			sfs->os_bfree = 0;
@@ -1429,7 +1463,7 @@ static int lod_add_noop_records(const struct lu_env *env,
 	int rc = 0;
 
 	top_th = container_of(th, struct top_thandle, tt_super);
-	if (top_th->tt_multiple_thandle == NULL)
+	if (!top_th->tt_multiple_thandle)
 		return 0;
 
 	fid_zero(fid);
@@ -1486,11 +1520,12 @@ static void lod_conf_get(const struct lu_env *env,
  */
 static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 {
-	struct lod_device   *lod = dt2lod_dev(dev);
+	struct lod_device *lod = dt2lod_dev(dev);
 	struct lod_ost_desc *ost;
 	struct lod_mdt_desc *mdt;
-	unsigned int         i;
-	int                  rc = 0;
+	unsigned int i;
+	int rc = 0;
+
 	ENTRY;
 
 	lod_getref(&lod->lod_ost_descs);
@@ -1502,7 +1537,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 		rc = dt_sync(env, ost->ltd_ost);
 		if (rc) {
 			if (rc != -ENOTCONN) {
-				CERROR("%s: can't sync ost %u: %d\n",
+				CERROR("%s: can't sync ost %u: rc = %d\n",
 				       lod2obd(lod)->obd_name, i, rc);
 				break;
 			}
@@ -1523,7 +1558,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 		rc = dt_sync(env, mdt->ltd_mdt);
 		if (rc) {
 			if (rc != -ENOTCONN) {
-				CERROR("%s: can't sync mdt %u: %d\n",
+				CERROR("%s: can't sync mdt %u: rc = %d\n",
 				       lod2obd(lod)->obd_name, i, rc);
 				break;
 			}
@@ -1593,15 +1628,17 @@ static int lod_connect_to_osd(const struct lu_env *env, struct lod_device *lod,
 			      struct lustre_cfg *cfg)
 {
 	struct obd_connect_data *data = NULL;
-	struct obd_device	*obd;
-	char			*nextdev = NULL, *p, *s;
-	int			 rc, len = 0;
+	struct obd_device *obd;
+	char *nextdev = NULL, *p, *s;
+	int rc, len = 0;
+
 	ENTRY;
 
 	LASSERT(cfg);
 	LASSERT(lod->lod_child_exp == NULL);
 
-	/* compatibility hack: we still use old config logs
+	/*
+	 * compatibility hack: we still use old config logs
 	 * which specify LOV, but we need to learn underlying
 	 * OSD device, which is supposed to be:
 	 *  <fsname>-MDTxxxx-osd
@@ -1611,19 +1648,20 @@ static int lod_connect_to_osd(const struct lu_env *env, struct lod_device *lod,
 	 * 1.8 MGS generates lines like the following:
 	 *   #03 (168)lov_setup 0:lustre-mdtlov  1:(struct lov_desc)
 	 *
-	 * we use "-MDT" to differentiate 2.x from 1.8 */
-
-	if ((p = lustre_cfg_string(cfg, 0)) && strstr(p, "-mdtlov")) {
+	 * we use "-MDT" to differentiate 2.x from 1.8
+	 */
+	p = lustre_cfg_string(cfg, 0);
+	if (p && strstr(p, "-mdtlov")) {
 		len = strlen(p) + 6;
 		OBD_ALLOC(nextdev, len);
-		if (nextdev == NULL)
+		if (!nextdev)
 			GOTO(out, rc = -ENOMEM);
 
 		strcpy(nextdev, p);
 		s = strstr(nextdev, "-mdtlov");
-		if (unlikely(s == NULL)) {
-			CERROR("unable to parse device name %s\n",
-			       lustre_cfg_string(cfg, 0));
+		if (unlikely(!s)) {
+			CERROR("%s: unable to parse device name: rc = %d\n",
+			       lustre_cfg_string(cfg, 0), -EINVAL);
 			GOTO(out, rc = -EINVAL);
 		}
 
@@ -1635,18 +1673,19 @@ static int lod_connect_to_osd(const struct lu_env *env, struct lod_device *lod,
 			strcpy(s, "-MDT0000-osd");
 		}
 	} else {
-		CERROR("unable to parse device name %s\n",
-		       lustre_cfg_string(cfg, 0));
+		CERROR("%s: unable to parse device name: rc = %d\n",
+		       lustre_cfg_string(cfg, 0), -EINVAL);
 		GOTO(out, rc = -EINVAL);
 	}
 
 	OBD_ALLOC_PTR(data);
-	if (data == NULL)
+	if (!data)
 		GOTO(out, rc = -ENOMEM);
 
 	obd = class_name2obd(nextdev);
-	if (obd == NULL) {
-		CERROR("can not locate next device: %s\n", nextdev);
+	if (!obd) {
+		CERROR("%s: can not locate next device: rc = %d\n",
+		       nextdev, -ENOTCONN);
 		GOTO(out, rc = -ENOTCONN);
 	}
 
@@ -1656,7 +1695,8 @@ static int lod_connect_to_osd(const struct lu_env *env, struct lod_device *lod,
 	rc = obd_connect(env, &lod->lod_child_exp, obd, &obd->obd_uuid,
 			 data, NULL);
 	if (rc) {
-		CERROR("cannot connect to next dev %s (%d)\n", nextdev, rc);
+		CERROR("%s: cannot connect to next dev: rc = %d\n",
+		       nextdev, rc);
 		GOTO(out, rc);
 	}
 
@@ -1689,10 +1729,12 @@ static int lod_tgt_desc_init(struct lod_tgt_descs *ltd)
 	mutex_init(&ltd->ltd_mutex);
 	init_rwsem(&ltd->ltd_rw_sem);
 
-	/* the OST array and bitmap are allocated/grown dynamically as OSTs are
-	 * added to the LOD, see lod_add_device() */
+	/*
+	 * the OST array and bitmap are allocated/grown dynamically as OSTs are
+	 * added to the LOD, see lod_add_device()
+	 */
 	ltd->ltd_tgt_bitmap = CFS_ALLOCATE_BITMAP(32);
-	if (ltd->ltd_tgt_bitmap == NULL)
+	if (!ltd->ltd_tgt_bitmap)
 		RETURN(-ENOMEM);
 
 	ltd->ltd_tgts_size  = 32;
@@ -1722,15 +1764,17 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
 	struct dt_device_param ddp;
-	struct obd_device     *obd;
-	int		       rc;
+	struct obd_device *obd;
+	int rc;
+
 	ENTRY;
 
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
-	if (obd == NULL) {
-		CERROR("Cannot find obd with name %s\n",
-		       lustre_cfg_string(cfg, 0));
-		RETURN(-ENODEV);
+	if (!obd) {
+		rc = -ENODEV;
+		CERROR("Cannot find obd with name '%s': rc = %d\n",
+		       lustre_cfg_string(cfg, 0), rc);
+		RETURN(rc);
 	}
 
 	obd->obd_lu_dev = &lod->lod_dt_dev.dd_lu_dev;
@@ -1781,6 +1825,7 @@ static struct lu_device *lod_device_free(const struct lu_env *env,
 {
 	struct lod_device *lod = lu2lod_dev(lu);
 	struct lu_device  *next = &lod->lod_child->dd_lu_dev;
+
 	ENTRY;
 
 	if (atomic_read(&lu->ld_ref) > 0 &&
@@ -1806,10 +1851,10 @@ static struct lu_device *lod_device_alloc(const struct lu_env *env,
 					  struct lustre_cfg *lcfg)
 {
 	struct lod_device *lod;
-	struct lu_device  *lu_dev;
+	struct lu_device *lu_dev;
 
 	OBD_ALLOC_PTR(lod);
-	if (lod == NULL) {
+	if (!lod) {
 		lu_dev = ERR_PTR(-ENOMEM);
 	} else {
 		int rc;
@@ -1830,7 +1875,7 @@ static void lod_avoid_guide_fini(struct lod_avoid_guide *lag)
 {
 	if (lag->lag_oss_avoid_array)
 		OBD_FREE(lag->lag_oss_avoid_array,
-			 sizeof(__u32) * lag->lag_oaa_size);
+			 sizeof(u32) * lag->lag_oaa_size);
 	if (lag->lag_ost_avoid_bitmap)
 		CFS_FREE_BITMAP(lag->lag_ost_avoid_bitmap);
 }
@@ -1846,7 +1891,8 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct lod_device *lod = lu2lod_dev(d);
-	int		   rc;
+	int rc;
+
 	ENTRY;
 
 	lod_pools_fini(lod);
@@ -1855,12 +1901,12 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
 
 	rc = lod_fini_tgt(env, lod, &lod->lod_ost_descs, true);
 	if (rc)
-		CERROR("%s:can not fini ost descs %d\n",
+		CERROR("%s: can not fini ost descriptors: rc =  %d\n",
 			lod2obd(lod)->obd_name, rc);
 
 	rc = lod_fini_tgt(env, lod, &lod->lod_mdt_descs, false);
 	if (rc)
-		CERROR("%s:can not fini mdt descs %d\n",
+		CERROR("%s: can not fini mdt descriptors: rc =  %d\n",
 			lod2obd(lod)->obd_name, rc);
 
 	RETURN(NULL);
@@ -1886,9 +1932,10 @@ static int lod_obd_connect(const struct lu_env *env, struct obd_export **exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
 			   struct obd_connect_data *data, void *localdata)
 {
-	struct lod_device    *lod = lu2lod_dev(obd->obd_lu_dev);
-	struct lustre_handle  conn;
-	int                   rc;
+	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
+	struct lustre_handle conn;
+	int rc;
+
 	ENTRY;
 
 	CDEBUG(D_CONFIG, "connect #%d\n", lod->lod_connects);
@@ -1925,7 +1972,8 @@ static int lod_obd_disconnect(struct obd_export *exp)
 {
 	struct obd_device *obd = exp->exp_obd;
 	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
-	int                rc, release = 0;
+	int rc, release = 0;
+
 	ENTRY;
 
 	/* Only disconnect the underlying layers on the final disconnect. */
@@ -1960,7 +2008,8 @@ static void lod_key_fini(const struct lu_context *ctx,
 	struct lod_layout_component *lds =
 				info->lti_def_striping.lds_def_comp_entries;
 
-	/* allocated in lod_get_lov_ea
+	/*
+	 * allocated in lod_get_lov_ea
 	 * XXX: this is overload, a tread may have such store but used only
 	 * once. Probably better would be pool of such stores per LOD.
 	 */
@@ -1971,12 +2020,12 @@ static void lod_key_fini(const struct lu_context *ctx,
 	}
 	lu_buf_free(&info->lti_linkea_buf);
 
-	if (lds != NULL)
+	if (lds)
 		lod_free_def_comp_entries(&info->lti_def_striping);
 
 	if (info->lti_comp_size > 0)
 		OBD_FREE(info->lti_comp_idx,
-			 info->lti_comp_size * sizeof(__u32));
+			 info->lti_comp_size * sizeof(u32));
 
 	lod_avoid_guide_fini(&info->lti_avoid);
 
@@ -2029,16 +2078,16 @@ static struct lu_device_type lod_device_type = {
  * \retval			-EINVAL if not supported key is requested
  **/
 static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
-			    __u32 keylen, void *key, __u32 *vallen, void *val)
+			    u32 keylen, void *key, u32 *vallen, void *val)
 {
 	int rc = -EINVAL;
 
 	if (KEY_IS(KEY_OSP_CONNECTED)) {
-		struct obd_device	*obd = exp->exp_obd;
-		struct lod_device	*d;
-		struct lod_tgt_desc	*tgt;
-		unsigned int		i;
-		int			rc = 1;
+		struct obd_device *obd = exp->exp_obd;
+		struct lod_device *d;
+		struct lod_tgt_desc *tgt;
+		unsigned int i;
+		int rc = 1;
 
 		if (!obd->obd_set_up || obd->obd_stopping)
 			RETURN(-EAGAIN);
@@ -2049,7 +2098,7 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 			tgt = OST_TGT(d, i);
 			LASSERT(tgt && tgt->ltd_tgt);
 			rc = obd_get_info(env, tgt->ltd_exp, keylen, key,
- 					  vallen, val);
+					  vallen, val);
 			/* one healthy device is enough */
 			if (rc == 0)
 				break;
@@ -2068,14 +2117,14 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 
 			ctxt = llog_get_context(tgt->ltd_tgt->dd_lu_dev.ld_obd,
 						LLOG_UPDATELOG_ORIG_CTXT);
-			if (ctxt == NULL) {
+			if (!ctxt) {
 				CDEBUG(D_INFO, "%s: %s is not ready.\n",
 				       obd->obd_name,
 				      tgt->ltd_tgt->dd_lu_dev.ld_obd->obd_name);
 				rc = -EAGAIN;
 				break;
 			}
-			if (ctxt->loc_handle == NULL) {
+			if (!ctxt->loc_handle) {
 				CDEBUG(D_INFO, "%s: %s is not ready.\n",
 				       obd->obd_name,
 				      tgt->ltd_tgt->dd_lu_dev.ld_obd->obd_name);
@@ -2095,8 +2144,8 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 
 static int lod_obd_set_info_async(const struct lu_env *env,
 				  struct obd_export *exp,
-				  __u32 keylen, void *key,
-				  __u32 vallen, void *val,
+				  u32 keylen, void *key,
+				  u32 vallen, void *val,
 				  struct ptlrpc_request_set *set)
 {
 	struct obd_device *obd = class_exp2obd(exp);
@@ -2104,9 +2153,10 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 	struct lod_tgt_desc *tgt;
 	int no_set = 0;
 	int i, rc = 0, rc2;
+
 	ENTRY;
 
-	if (set == NULL) {
+	if (!set) {
 		no_set = 1;
 		set = ptlrpc_prep_set();
 		if (!set)
@@ -2168,7 +2218,7 @@ static struct obd_type sym;
 static int __init lod_init(void)
 {
 	struct dentry *symlink;
-	struct obd_type	*type;
+	struct obd_type *type;
 	struct kobject *kobj;
 	struct qstr dname;
 	int rc;
@@ -2218,7 +2268,7 @@ static int __init lod_init(void)
 
 try_proc:
 	type = class_search_type(LUSTRE_LOV_NAME);
-	if (type != NULL && type->typ_procroot != NULL)
+	if (type && type->typ_procroot)
 		GOTO(no_lov, rc);
 
 	type = class_search_type(LUSTRE_LOD_NAME);
