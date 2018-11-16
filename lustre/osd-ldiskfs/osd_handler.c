@@ -2430,7 +2430,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 				struct osd_object *obj,
 				struct osd_thandle *oh, long long bspace,
 				qid_t old_id, qid_t new_id, bool enforce,
-				unsigned type, bool ignore_edquot)
+				unsigned type)
 {
 	int rc;
 	struct osd_thread_info *info = osd_oti_get(env);
@@ -2445,7 +2445,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	qi->lqi_space      = 1;
 	/* Reserve credits for the new id */
 	rc = osd_declare_qid(env, oh, qi, NULL, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		RETURN(rc);
@@ -2454,7 +2454,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	qi->lqi_id.qid_uid = old_id;
 	qi->lqi_space      = -1;
 	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		RETURN(rc);
@@ -2470,7 +2470,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	 * to save credit reservation.
 	 */
 	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		RETURN(rc);
@@ -2479,7 +2479,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	qi->lqi_id.qid_uid = old_id;
 	qi->lqi_space      = -bspace;
 	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
 		rc = 0;
 
 	RETURN(rc);
@@ -2517,30 +2517,22 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	if (attr == NULL || obj->oo_inode == NULL)
 		RETURN(rc);
 
-	bspace   = obj->oo_inode->i_blocks << 9;
+	bspace   = obj->oo_inode->i_blocks;
+	bspace <<= obj->oo_inode->i_sb->s_blocksize_bits;
 	bspace   = toqb(bspace);
 
 	/* Changing ownership is always preformed by super user, it should not
-	 * fail with EDQUOT unless required explicitly.
+	 * fail with EDQUOT.
 	 *
 	 * We still need to call the osd_declare_qid() to calculate the journal
 	 * credits for updating quota accounting files and to trigger quota
 	 * space adjustment once the operation is completed.*/
 	if (attr->la_valid & LA_UID || attr->la_valid & LA_GID) {
-		bool ignore_edquot = !(attr->la_flags & LUSTRE_SET_SYNC_FL);
-
-		if (!ignore_edquot)
-			CDEBUG(D_QUOTA, "%s: enforce quota on UID %u, GID %u"
-			       "(the quota space is %lld)\n",
-			       obj->oo_inode->i_sb->s_id, attr->la_uid,
-			       attr->la_gid, bspace);
-
 		/* USERQUOTA */
 		uid = i_uid_read(obj->oo_inode);
 		enforce = (attr->la_valid & LA_UID) && (attr->la_uid != uid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace, uid,
-					  attr->la_uid, enforce, USRQUOTA,
-					  true);
+					  attr->la_uid, enforce, USRQUOTA);
 		if (rc)
 			RETURN(rc);
 
@@ -2548,8 +2540,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		enforce = (attr->la_valid & LA_GID) && (attr->la_gid != gid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace,
 					  i_gid_read(obj->oo_inode),
-					  attr->la_gid, enforce, GRPQUOTA,
-					  ignore_edquot);
+					  attr->la_gid, enforce, GRPQUOTA);
 		if (rc)
 			RETURN(rc);
 
@@ -2561,7 +2552,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 					(attr->la_projid != projid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace,
 					  (qid_t)projid, (qid_t)attr->la_projid,
-					  enforce, PRJQUOTA, true);
+					  enforce, PRJQUOTA);
 		if (rc)
 			RETURN(rc);
 	}

@@ -657,10 +657,6 @@ int out_attr_set_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
 	if (rc != 0)
 		return rc;
 
-	if (attr->la_valid & LA_FLAGS &&
-	    attr->la_flags & LUSTRE_SET_SYNC_FL)
-		th->th_sync |= 1;
-
 	arg = tx_add_exec(ta, out_tx_attr_set_exec, out_tx_attr_set_undo,
 			  file, line);
 	if (IS_ERR(arg))

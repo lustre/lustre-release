@@ -861,11 +861,10 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct mdd_device *mdd = mdo2mdd(obj);
-	struct thandle *handle = NULL;
+	struct thandle *handle;
 	struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	const struct lu_attr *la = &ma->ma_attr;
-	struct lu_ucred  *uc;
 	int rc;
 	ENTRY;
 
@@ -891,38 +890,17 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		RETURN(0);
 	}
 
-	/* If an unprivileged user changes group of some file,
-	 * the setattr operation will be processed synchronously to
-	 * honor the quota limit of the corresponding group. see LU-5152 */
-	uc = lu_ucred_check(env);
-	if (S_ISREG(attr->la_mode) && la->la_valid & LA_GID &&
-	    la->la_gid != attr->la_gid && uc != NULL && uc->uc_fsuid != 0) {
-		la_copy->la_valid |= LA_FLAGS;
-		la_copy->la_flags |= LUSTRE_SET_SYNC_FL;
-
-		/* Flush the possible existing sync requests to OSTs to
-		 * keep the order of sync for the current setattr operation
-		 * will be sent directly to OSTs. see LU-5152 */
-		rc = dt_sync(env, mdd->mdd_child);
-		if (rc)
-			GOTO(out, rc);
-	}
-
-	handle = mdd_trans_create(env, mdd);
-	if (IS_ERR(handle)) {
-		rc = PTR_ERR(handle);
-		handle = NULL;
-
-		GOTO(out, rc);
-	}
+        handle = mdd_trans_create(env, mdd);
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
 
 	rc = mdd_declare_attr_set(env, mdd, mdd_obj, la_copy, handle);
-	if (rc)
-		GOTO(out, rc);
+        if (rc)
+                GOTO(stop, rc);
 
-	rc = mdd_trans_start(env, mdd, handle);
-	if (rc)
-		GOTO(out, rc);
+        rc = mdd_trans_start(env, mdd, handle);
+        if (rc)
+                GOTO(stop, rc);
 
 	if (mdd->mdd_sync_permission && permission_needs_sync(attr, la))
 		handle->th_sync = 1;
@@ -932,25 +910,20 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		       la->la_mtime, la->la_ctime);
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-	if (la_copy->la_valid) {
+	if (la_copy->la_valid & LA_FLAGS)
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-
-		if (rc == -EDQUOT && la_copy->la_flags & LUSTRE_SET_SYNC_FL) {
-			/* rollback to the original gid */
-			la_copy->la_flags &= ~LUSTRE_SET_SYNC_FL;
-			la_copy->la_gid = attr->la_gid;
-			mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-		}
-	}
+	else if (la_copy->la_valid) /* setattr */
+		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
 	mdd_write_unlock(env, mdd_obj);
 
-out:
 	if (rc == 0)
 		rc = mdd_attr_set_changelog(env, obj, handle,
 					    la_copy->la_valid);
 
-	if (handle != NULL)
-		rc = mdd_trans_stop(env, mdd, rc, handle);
+	GOTO(stop, rc);
+
+stop:
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	return rc;
 }
