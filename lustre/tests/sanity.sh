@@ -19623,11 +19623,12 @@ test_803() {
 	done
 
 	sync; sleep 3
+	wait_delete_completed # ensure old test cleanups are finished
 	echo "before create:"
 	$LFS df -i $MOUNT
 	local before_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
 
-	for ((i=0; i<10; i++)); do
+	for i in {1..10}; do
 		$LFS mkdir -c 1 -i 1 $DIR/$tdir/foo$i ||
 			error "Fail to create $DIR/$tdir/foo$i"
 	done
@@ -19637,10 +19638,11 @@ test_803() {
 	$LFS df -i $MOUNT
 	local after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
 
-	[ $after_used -ge $((before_used + 10)) ] ||
+	# allow for an llog to be cleaned up during the test
+	[ $after_used -ge $((before_used + 10 - 1)) ] ||
 		error "before ($before_used) + 10 > after ($after_used)"
 
-	for ((i=0; i<10; i++)); do
+	for i in {1..10}; do
 		rm -rf $DIR/$tdir/foo$i ||
 			error "Fail to remove $DIR/$tdir/foo$i"
 	done
@@ -19649,11 +19651,11 @@ test_803() {
 	wait_delete_completed
 	echo "after unlink:"
 	$LFS df -i $MOUNT
-	before_used=$after_used
 	after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
 
-	[ $after_used -le $((before_used - 8)) ] ||
-		error "before ($before_used) - 8 < after ($after_used)"
+	# allow for an llog to be created during the test
+	[ $after_used -le $((before_used + 1)) ] ||
+		error "after ($after_used) > before ($before_used) + 1"
 }
 run_test 803 "verify agent object for remote object"
 
