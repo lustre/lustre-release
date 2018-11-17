@@ -259,11 +259,11 @@ debs: undef.h
 	elif test "x@ENABLE_GSS@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogss"; \
 	fi; \
-	export KERNEL_CFG="$(LINUX_CONFIG)"; \
+	export KERNEL_OBJ="$(LINUX_OBJ)"; \
 	export KERNEL_SRC="$(LINUX)"; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
 	echo "Kernel Source: $${KERNEL_SRC}"; \
-	echo "Kernel Config: $${KERNEL_CFG}"; \
+	echo "Kernel Object: $${KERNEL_OBJ}"; \
 	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \
 		[ $${rc} -gt 1 ] && exit $${rc}; \
@@ -318,11 +318,11 @@ dkms-debs: undef.h
 	fi; \
 	rm -rf debs; \
 	export DEB_BUILD_PROFILES="client"; \
-	export KERNEL_CFG="$(LINUX_CONFIG)"; \
+	export KERNEL_OBJ="$(LINUX_OBJ)"; \
 	export KERNEL_SRC="$(LINUX)"; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
 	echo "Kernel Source: $${KERNEL_SRC}"; \
-	echo "Kernel Config: $${KERNEL_CFG}"; \
+	echo "Kernel Object: $${KERNEL_OBJ}"; \
 	export BUILD_DKMS="true" && \
 	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \

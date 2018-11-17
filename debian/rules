@@ -142,7 +142,7 @@ autogen-stamp: patch-stamp
 # modules, whereas the modules build omits the utilities, to create two
 # neatly separated debian files.
 #
-# Note: KERNEL_SRC, KERNEL_CFG, ZFS_SRC and SPL_SRC need to be set from the
+# Note: KERNEL_SRC, KERNEL_OBJ, ZFS_SRC and SPL_SRC need to be set from the
 # outside. This is done by "make debs". As such, invoking "debuild" or such
 # direct debian build tools will lead to a client-only build.
 configure: configure-stamp
@@ -181,7 +181,7 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	( cd $(BUILDDIR) && \
 		$(SRCDIR)/configure --disable-dependency-tracking \
 			--with-linux=$${KERNEL_SRC} \
-			--with-linux-config=$${KERNEL_CFG} \
+			--with-linux-obj=$${KERNEL_OBJ} \
 			--disable-snmp \
 			--enable-quota \
 			$${EXTRAFLAGS} \
