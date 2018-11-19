@@ -1518,13 +1518,15 @@ struct ptlrpc_thread {
 	 */
 	unsigned int t_id;
 	/**
-	 * service thread pid
+	 * service thread
 	 */
+	struct task_struct *t_task;
 	pid_t t_pid;
+	ktime_t t_touched;
 	/**
 	 * put watchdog in the structure per thread b=14840
 	 */
-	struct lc_watchdog *t_watchdog;
+	struct delayed_work t_watchdog;
 	/**
 	 * the svc this thread belonged to b=18582
 	 */

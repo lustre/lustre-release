@@ -14,7 +14,7 @@ default: all
 
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
 
-libcfs-all-objs := debug.o fail.o module.o tracefile.o watchdog.o \
+libcfs-all-objs := debug.o fail.o module.o tracefile.o \
 		   libcfs_string.o hash.o \
 		   prng.o workitem.o libcfs_cpu.o \
 		   libcfs_mem.o libcfs_lock.o heap.o \

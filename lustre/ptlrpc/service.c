@@ -33,6 +33,8 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/kthread.h>
+#include <linux/ratelimit.h>
+
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
@@ -2446,6 +2448,57 @@ ptlrpc_at_check(struct ptlrpc_service_part *svcpt)
 	return svcpt->scp_at_check;
 }
 
+/*
+ * If a thread runs too long or spends to much time on a single request,
+ * we want to know about it, so we set up a delayed work item as a watchdog.
+ * If it fires, we display a stack trace of the delayed thread,
+ * providing we aren't rate-limited
+ *
+ * Watchdog stack traces are limited to 3 per 'libcfs_watchdog_ratelimit'
+ * seconds
+ */
+static struct ratelimit_state watchdog_limit;
+
+static void ptlrpc_watchdog_fire(struct work_struct *w)
+{
+	struct ptlrpc_thread *thread = container_of(w, struct ptlrpc_thread,
+						    t_watchdog.work);
+	u64 ms_lapse = ktime_ms_delta(ktime_get(), thread->t_touched);
+	u32 ms_frac = do_div(ms_lapse, MSEC_PER_SEC);
+
+	if (!__ratelimit(&watchdog_limit)) {
+		LCONSOLE_WARN("%s: service thread pid %u was inactive for %llu.%03u seconds. The thread might be hung, or it might only be slow and will resume later. Dumping the stack trace for debugging purposes:\n",
+			      thread->t_task->comm, thread->t_task->pid,
+			      ms_lapse, ms_frac);
+
+		libcfs_debug_dumpstack(thread->t_task);
+	} else {
+		LCONSOLE_WARN("%s: service thread pid %u was inactive for %llu.%03u seconds. Watchdog stack traces are limited to 3 per %u seconds, skipping this one.\n",
+			      thread->t_task->comm, thread->t_task->pid,
+			      ms_lapse, ms_frac, libcfs_watchdog_ratelimit);
+	}
+}
+
+static void ptlrpc_watchdog_init(struct delayed_work *work, time_t time)
+{
+	INIT_DELAYED_WORK(work, ptlrpc_watchdog_fire);
+	schedule_delayed_work(work, cfs_time_seconds(time));
+}
+
+static void ptlrpc_watchdog_disable(struct delayed_work *work)
+{
+	cancel_delayed_work_sync(work);
+}
+
+static void ptlrpc_watchdog_touch(struct delayed_work *work, time_t time)
+{
+	struct ptlrpc_thread *thread = container_of(&work->work,
+						    struct ptlrpc_thread,
+						    t_watchdog.work);
+	thread->t_touched = ktime_get();
+	mod_delayed_work(system_wq, work, cfs_time_seconds(time));
+}
+
 /**
  * requests wait on preprocessing
  * user can call it w/o any lock but need to hold
@@ -2465,7 +2518,7 @@ ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 	struct l_wait_info lwi = LWI_TIMEOUT(svcpt->scp_rqbd_timeout,
 					     ptlrpc_retry_rqbds, svcpt);
 
-	lc_watchdog_disable(thread->t_watchdog);
+	ptlrpc_watchdog_disable(&thread->t_watchdog);
 
 	cond_resched();
 
@@ -2479,8 +2532,8 @@ ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 	if (ptlrpc_thread_stopping(thread))
 		return -EINTR;
 
-	lc_watchdog_touch(thread->t_watchdog,
-			  ptlrpc_server_get_timeout(svcpt));
+	ptlrpc_watchdog_touch(&thread->t_watchdog,
+			      ptlrpc_server_get_timeout(svcpt));
 	return 0;
 }
 
@@ -2501,6 +2554,7 @@ static int ptlrpc_main(void *arg)
 	int counter = 0, rc = 0;
 	ENTRY;
 
+	thread->t_task = current;
 	thread->t_pid = current_pid();
 	unshare_fs_struct();
 
@@ -2578,8 +2632,9 @@ static int ptlrpc_main(void *arg)
 	/* wake up our creator in case he's still waiting. */
 	wake_up(&thread->t_ctl_waitq);
 
-	thread->t_watchdog = lc_watchdog_add(ptlrpc_server_get_timeout(svcpt),
-					     NULL, NULL);
+	thread->t_touched = ktime_get();
+	ptlrpc_watchdog_init(&thread->t_watchdog,
+			 ptlrpc_server_get_timeout(svcpt));
 
 	spin_lock(&svcpt->scp_rep_lock);
 	list_add(&rs->rs_list, &svcpt->scp_rep_idle);
@@ -2635,8 +2690,7 @@ static int ptlrpc_main(void *arg)
                 }
         }
 
-        lc_watchdog_delete(thread->t_watchdog);
-        thread->t_watchdog = NULL;
+	ptlrpc_watchdog_disable(&thread->t_watchdog);
 
 out_srv_fini:
         /*
@@ -3017,6 +3071,9 @@ int ptlrpc_hr_init(void)
 						   sizeof(*hrp));
 	if (ptlrpc_hr.hr_partitions == NULL)
 		RETURN(-ENOMEM);
+
+	ratelimit_state_init(&watchdog_limit,
+			     cfs_time_seconds(libcfs_watchdog_ratelimit), 3);
 
 	init_waitqueue_head(&ptlrpc_hr.hr_waitq);
 

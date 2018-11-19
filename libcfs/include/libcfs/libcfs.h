@@ -66,27 +66,6 @@
 # endif /* !__CHECKER__ */
 #endif /* !__must_hold */
 
-/* libcfs watchdogs */
-struct lc_watchdog;
-
-/* Add a watchdog which fires after "time" milliseconds of delay.  You have to
- * touch it once to enable it. */
-struct lc_watchdog *lc_watchdog_add(int time,
-                                    void (*cb)(pid_t pid, void *),
-                                    void *data);
-
-/* Enables a watchdog and resets its timer. */
-void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout);
-#define CFS_GET_TIMEOUT(svc) (max_t(int, obd_timeout,                   \
-                          AT_OFF ? 0 : at_get(&svc->srv_at_estimate)) * \
-                          svc->srv_watchdog_factor)
-
-/* Disable a watchdog; touch it to restart it. */
-void lc_watchdog_disable(struct lc_watchdog *lcw);
-
-/* Clean up the watchdog */
-void lc_watchdog_delete(struct lc_watchdog *lcw);
-
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
