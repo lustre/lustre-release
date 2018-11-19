@@ -102,6 +102,7 @@ F:	*/Makefile.in
 
 Lustre Client IO stack
 R:	Bobijam Xu <bobijam@whamcloud.com>
+R:	Patrick Farrell <paf@cray.com>
 S:	Supported
 F:	Documentation/clio.txt
 F:	lustre/include/cl_object.h
@@ -211,6 +212,16 @@ F:	lustre/osd-zfs/osd_scrub.c
 F:	lustre/tests/sanity-lfsck.sh
 F:	lustre/tests/sanity-scrub.sh
 
+Lustre Grant Space
+R:	Patrick Farrell <paf@cray.com>
+S:	Supported
+F:	lustre/ofd/ofd_dev.c
+F:	lustre/ofd/ofd_io.c
+F:	lustre/ofd/ofd_obd.c
+F:	lustre/osc/osc_cache.c
+F:	lustre/osc/osc_request.c
+F:	lustre/target/tgt_grant.c
+
 Lustre GSSAPI
 M:	Sebastien Buisson <sbuisson@whamcloud.com>
 S:	Maintained
@@ -299,6 +310,7 @@ F:	lustre/mdt/
 
 Lustre Network Request Scheduler - NRS
 R:	Qian Yingjin <qian@whamcloud.com>
+R:	Nikitas Angelinas <nangelinas@cray.com>
 S:	Maintained
 F:	lustre/include/lustre_nrs*.c
 F:	lustre/ptlrpc/nrs*.c
