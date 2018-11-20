@@ -8687,15 +8687,15 @@ check_stripe_count() {
 	[[ -z "$file" || -z "$expected" ]] &&
 		error "check_stripe_count: invalid argument"
 
-	local cmd="$GETSTRIPE -c $file"
+	local cmd="$LFS getstripe -c $file"
 	actual=$($cmd) || error "$cmd failed"
 	actual=${actual%% *}
 
 	if [[ $actual -ne $expected ]]; then
-		[[ $expected -eq -1 ]] ||
-			error "$cmd wrong: found $actual, expected $expected"
-		[[ $actual -eq $OSTCOUNT ]] ||
-			error "$cmd wrong: found $actual, expected $OSTCOUNT"
+		[[ $expected -eq -1 ]] || { $LFS getstripe $file;
+			error "$cmd not expected ($expected): found $actual"; }
+		[[ $actual -eq $OSTCOUNT ]] || { $LFS getstripe $file;
+			error "$cmd not OST count ($OSTCOUNT): found $actual"; }
 	fi
 }
 
