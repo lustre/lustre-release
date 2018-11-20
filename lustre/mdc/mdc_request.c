@@ -2103,9 +2103,6 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case IOC_OSC_SET_ACTIVE:
 		rc = ptlrpc_set_import_active(imp, data->ioc_offset);
 		GOTO(out, rc);
-	case OBD_IOC_PING_TARGET:
-		rc = ptlrpc_obd_ping(obd);
-		GOTO(out, rc);
 	/*
 	 * Normally IOC_OBD_STATFS, OBD_IOC_QUOTACTL iocontrol are handled by
 	 * LMV instead of MDC. But when the cluster is upgraded from 1.8,

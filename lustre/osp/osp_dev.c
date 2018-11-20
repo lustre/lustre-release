@@ -1679,9 +1679,6 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = ptlrpc_set_import_active(obd->u.cli.cl_import,
 					      data->ioc_offset);
 		break;
-	case OBD_IOC_PING_TARGET:
-		rc = ptlrpc_obd_ping(obd);
-		break;
 	default:
 		CERROR("%s: unrecognized ioctl %#x by %s\n", obd->obd_name,
 		       cmd, current_comm());
