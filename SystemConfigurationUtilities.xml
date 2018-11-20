@@ -7,7 +7,7 @@
       <para><xref linkend="dbdoclet.50438219_55923"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438219_76969"/></para>
+      <para><xref linkend="dbdoclet.l_getidentity"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438219_38274"/></para>
@@ -130,23 +130,29 @@
       </informaltable>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438219_76969">
+  <section xml:id="dbdoclet.l_getidentity">
     <title><indexterm><primary>l_getidentity</primary></indexterm>
 l_getidentity</title>
-    <para>The l_getidentity utility handles Lustre user / group cache upcall.</para>
+    <para>The l_getidentity tool normally handles Lustre user/group mapping
+      upcall.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>l_getidentity ${FSNAME}-MDT{xxxx} {uid}</screen>
+      <screen>l_getidentity { $FSNAME-MDT{xxxx}| -d} {uid}</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable file that is invoked to resolve
-        a numeric UID to a group membership list. This utility opens
-          <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</literal> and writes the
-        related <literal>identity_downcall_data</literal> structure (see <xref
-          linkend="dbdoclet.50438291_33759"/>.) The data is persisted with <literal>lctl set_param
-          mdt.${FSNAME}-MDT{xxxx}.identity_info</literal>.</para>
-      <para>The l_getidentity utility is the reference implementation of the user or group cache upcall.</para>
+      <para>The <literal>l_getidentity</literal> utility is called from the
+        MDS to map a numeric UID value into the list of supplementary group
+        values for that UID, and writes this into the
+        <literal>mdt.*.identity_info</literal> parameter file.  The list of
+        supplementary groups is cached in the kernel to avoid repeated
+        upcalls.  See <xref linkend="dbdoclet.identity_upcall"/> for more
+        details.</para>
+      <para>The <literal>l_getidentity</literal> utility can also be run
+        directly for debugging purposes to ensure that the UID mapping for a
+        particular user is configured correctly, by using the
+        <literal>-d</literal> argument instead of the MDT name.
+      </para>
     </section>
     <section remap="h5">
       <title>Options</title>

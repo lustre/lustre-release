@@ -387,7 +387,7 @@ over all OSTs.</screen>
         </listitem>
         <listitem>
           <para>On the server side, view the statistics at:</para>
-          <screen>/proc/fs/lustre/obdecho/<replaceable>echo_srv</replaceable>/stats</screen>
+          <screen>lctl get_param obdecho.<replaceable>echo_srv</replaceable>.stats</screen>
           <para>where <literal><replaceable>echo_srv</replaceable></literal>
             is the <literal>obdecho</literal> server created by the script.</para>
         </listitem>
@@ -620,7 +620,7 @@ over all OSTs.</screen>
         numbers of I/Os in flight.</para>
         <para>It is also useful to monitor and record average disk I/O sizes
         during each test using the &apos;disk io size&apos; histogram in the
-        file <literal>/proc/fs/lustre/obdfilter/*/brw_stats</literal>
+        file <literal>lctl get_param obdfilter.*.brw_stats</literal>
         (see <xref linkend="dbdoclet.50438271_55057"/> for details). These
         numbers help identify problems in the system when full-sized I/Os are
         not submitted to the underlying disk. This may be caused by problems in

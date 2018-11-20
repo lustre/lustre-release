@@ -485,8 +485,9 @@ Total allocated inode limit: 2560, total allocated block limit: 24576
 </screen>
     <para>Global quota limits are stored in dedicated index files (there is one
     such index per quota type) on the quota master target (aka QMT). The QMT
-    runs on MDT0000 and exports the global indexes via /proc. The global
-    indexes can thus be dumped via the following command:
+    runs on MDT0000 and exports the global indices via <replaceable>lctl
+    get_param</replaceable>. The global indices can thus be dumped via the
+    following command:
     <screen>
 # lctl get_param qmt.testfs-QMT0000.*.glb-*
 </screen>The format of global indexes depends on the OSD type. The ldiskfs OSD
@@ -499,8 +500,7 @@ uses an IAM files while the ZFS OSD creates dedicated ZAPs.</para>
     slave is disconnected, the index version is used to determine whether the
     slave copy of the global index isn't up to date any more. If so, the slave
     fetches the whole index again and updates the local copy. The slave copy of
-    the global index is also exported via /proc and can be accessed via the
-    following command:
+    the global index can also be accessed via the following command:
     <screen>
 lctl get_param osd-*.*.quota_slave.limit*
 </screen></para>

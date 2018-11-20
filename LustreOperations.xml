@@ -579,8 +579,8 @@ mds# tunefs.lustre --erase-params --param=
 <replaceable>new_parameters</replaceable> 
 </screen>
       <para>The tunefs.lustre command can be used to set any parameter settable
-      in a /proc/fs/lustre file and that has its own OBD device, so it can be
-      specified as 
+      via <literal>lctl conf_param</literal> and that has its own OBD device,
+      so it can be specified as 
       <literal>
       <replaceable>obdname|fsname</replaceable>.
       <replaceable>obdtype</replaceable>.
@@ -602,8 +602,8 @@ mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
       are active as long as the server or client is not shut down. Permanent
       parameters live through server and client reboots.</para>
       <note>
-        <para>The lctl list_param command enables users to list all parameters
-        that can be set. See 
+        <para>The <literal>lctl list_param</literal> command enables users to
+          list all parameters that can be set. See 
         <xref linkend="dbdoclet.50438194_88217" />.</para>
       </note>
       <para>For more details about the 
@@ -618,7 +618,7 @@ mds# tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1
         <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The 
         <literal>lctl set_param</literal> command uses this syntax:</para>
         <screen>
-lctl set_param [-n] 
+lctl set_param [-n] [-P]
 <replaceable>obdtype</replaceable>.
 <replaceable>obdname</replaceable>.
 <replaceable>proc_file_name</replaceable>=
@@ -636,7 +636,7 @@ osc.myth-OST0004-osc.max_dirty_mb=32
       </section>
       <section xml:id="dbdoclet.50438194_64195">
         <title>Setting Permanent Parameters</title>
-        <para>Use the 
+        <para>Use <literal>lctl set_param -P</literal> or
         <literal>lctl conf_param</literal> command to set permanent parameters.
         In general, the 
         <literal>lctl conf_param</literal> command can be used to specify any
@@ -671,13 +671,12 @@ $ lctl conf_param testfs.sys.timeout=40
       </section>
       <section xml:id="dbdoclet.setparamp" condition='l25'>
         <title>Setting Permanent Parameters with lctl set_param -P</title>
-        <para>Use the 
-        <literal>lctl set_param -P</literal> to set parameters permanently. This
-        command must be issued on the MGS. The given parameter is set on every
-        host using 
-        <literal>lctl</literal> upcall. Parameters map to items in 
-        <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The 
-        <literal>lctl set_param</literal> command uses this syntax:</para>
+        <para>The <literal>lctl set_param -P</literal> command can also
+          set parameters permanently. This command must be issued on the MGS.
+          The given parameter is set on every host using 
+          <literal>lctl</literal> upcall. Parameters map to items in 
+          <literal>/proc/{fs,sys}/{lnet,lustre}</literal>. The 
+          <literal>lctl set_param</literal> command uses this syntax:</para>
         <screen>
 lctl set_param -P 
 <replaceable>obdtype</replaceable>.

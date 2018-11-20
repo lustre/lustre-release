@@ -16,32 +16,53 @@
   <section xml:id="dbdoclet.50438274_15874">
     <title><indexterm><primary>debugging</primary></indexterm>
 Diagnostic and Debugging Tools</title>
-    <para>A variety of diagnostic and analysis tools are available to debug issues with the Lustre software. Some of these are provided in Linux distributions, while others have been developed and are made available by the Lustre project.</para>
+    <para>A variety of diagnostic and analysis tools are available to debug
+      issues with the Lustre software. Some of these are provided in Linux
+      distributions, while others have been developed and are made available
+      by the Lustre project.</para>
     <section remap="h3" xml:id="section_dms_q21_kk">
       <title><indexterm>
           <primary>debugging</primary>
           <secondary>tools</secondary>
         </indexterm> Lustre Debugging Tools</title>
-      <para>The following in-kernel debug mechanisms are incorporated into the Lustre
-        software:</para>
+      <para>The following in-kernel debug mechanisms are incorporated into
+        the Lustre software:</para>
       <itemizedlist>
         <listitem>
-          <para xml:id="para_fkj_rld_hk"><emphasis role="bold">Debug logs</emphasis> - A circular
-            debug buffer to which Lustre internal debug messages are written (in contrast to error
-            messages, which are printed to the syslog or console). Entries to the Lustre debug log
-            are controlled by the mask set by <literal>/proc/sys/lnet/debug</literal>. The log size
-            defaults to 5 MB per CPU but can be increased as a busy system will quickly overwrite 5
-            MB. When the buffer fills, the oldest information is discarded.</para>
-        </listitem>
-        <listitem>
-          <para><emphasis role="bold">Debug daemon</emphasis> - The debug daemon controls logging of
-            debug messages.</para>
+          <para xml:id="para_fkj_rld_hk"><emphasis role="bold">Debug logs</emphasis>
+            - A circular debug buffer to which Lustre internal debug messages
+            are written (in contrast to error messages, which are printed to the
+            syslog or console). Entries in the Lustre debug log are controlled
+            by a mask set by <literal>lctl set_param debug=<replaceable>mask</replaceable></literal>.
+            The log size defaults to 5 MB per CPU but can be increased as a
+            busy system will quickly overwrite 5 MB. When the buffer fills,
+            the oldest log records are discarded.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">
-              <literal>/proc/sys/lnet/debug</literal>
-            </emphasis> - This file contains a mask that can be used to delimit the debugging
-            information written out to the kernel debug logs.</para>
+              <literal>lctl get_param debug</literal>
+            </emphasis> - This shows the current debug mask used to delimit
+            the debugging information written out to the kernel debug logs.
+          </para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">
+              <literal>lctl debug_kernel <replaceable>file</replaceable></literal>
+            </emphasis> - Dump the Lustre kernel debug log to the specified
+            file as ASCII text for further debugging and analysis.
+          </para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">
+              <literal>lctl set_param debug_mb=<replaceable>size</replaceable></literal>
+            </emphasis> - This sets the maximum size of the in-kernel Lustre
+            debug buffer, in units of MiB.
+          </para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Debug daemon</emphasis>
+            - The debug daemon controls the continuous logging of debug
+            messages to a log file in userspace.</para>
         </listitem>
       </itemizedlist>
       <para>The following tools are also provided with the Lustre software:</para>
@@ -49,9 +70,10 @@ Diagnostic and Debugging Tools</title>
         <listitem>
           <para><emphasis role="bold">
               <literal>lctl</literal>
-            </emphasis> - This tool is used with the debug_kernel option to manually dump the Lustre
-            debugging log or post-process debugging logs that are dumped automatically. For more
-            information about the lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref
+            </emphasis> - This tool is used with the debug_kernel option to
+            manually dump the Lustre debugging log or post-process debugging
+            logs that are dumped automatically. For more information about the
+            lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref
               linkend="dbdoclet.50438219_38274"/>.</para>
         </listitem>
         <listitem>
@@ -240,7 +262,7 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">trace</emphasis></para>
                       </entry>
                       <entry>
-                        <para> Entry/Exit markers</para>
+                        <para> Function entry/exit markers</para>
                       </entry>
                     </row>
                     <row>
@@ -248,7 +270,7 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">dlmtrace</emphasis></para>
                       </entry>
                       <entry>
-                        <para> Locking-related information</para>
+                        <para> Distributed locking-related information</para>
                       </entry>
                     </row>
                     <row>
@@ -269,18 +291,10 @@ Diagnostic and Debugging Tools</title>
                     </row>
                     <row>
                       <entry>
-                        <para> <emphasis role="bold">ext2</emphasis></para>
-                      </entry>
-                      <entry>
-                        <para> Anything from the ext2_debug</para>
-                      </entry>
-                    </row>
-                    <row>
-                      <entry>
                         <para> <emphasis role="bold">malloc</emphasis></para>
                       </entry>
                       <entry>
-                        <para> Print malloc or free information</para>
+                        <para> Memory allocation or free information</para>
                       </entry>
                     </row>
                     <row>
@@ -296,55 +310,7 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">info</emphasis></para>
                       </entry>
                       <entry>
-                        <para> General information</para>
-                      </entry>
-                    </row>
-                    <row>
-                      <entry>
-                        <para> <emphasis role="bold">ioctl</emphasis></para>
-                      </entry>
-                      <entry>
-                        <para> IOCTL-related information</para>
-                      </entry>
-                    </row>
-                    <row>
-                      <entry>
-                        <para> <emphasis role="bold">blocks</emphasis></para>
-                      </entry>
-                      <entry>
-                        <para> Ext2 block allocation information</para>
-                      </entry>
-                    </row>
-                    <row>
-                      <entry>
-                        <para> <emphasis role="bold">net</emphasis></para>
-                      </entry>
-                      <entry>
-                        <para> Networking</para>
-                      </entry>
-                    </row>
-                    <row>
-                      <entry>
-                        <para> <emphasis role="bold">warning</emphasis></para>
-                      </entry>
-                      <entry>
-                        <para> &#160;</para>
-                      </entry>
-                    </row>
-                    <row>
-                      <entry>
-                        <para> <emphasis role="bold">buffs</emphasis></para>
-                      </entry>
-                      <entry>
-                        <para> &#160;</para>
-                      </entry>
-                    </row>
-                    <row>
-                      <entry>
-                        <para> <emphasis role="bold">other</emphasis></para>
-                      </entry>
-                      <entry>
-                        <para> &#160;</para>
+                        <para> Non-critical general information</para>
                       </entry>
                     </row>
                     <row>
@@ -352,15 +318,15 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">dentry</emphasis></para>
                       </entry>
                       <entry>
-                        <para> &#160;</para>
+                        <para> kernel namespace cache handling</para>
                       </entry>
                     </row>
                     <row>
                       <entry>
-                        <para> <emphasis role="bold">portals</emphasis></para>
+                        <para> <emphasis role="bold">mmap</emphasis></para>
                       </entry>
                       <entry>
-                        <para> Entry/Exit markers</para>
+                        <para> Memory-mapped IO interface</para>
                       </entry>
                     </row>
                     <row>
@@ -368,7 +334,40 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">page</emphasis></para>
                       </entry>
                       <entry>
-                        <para> Bulk page handling</para>
+                        <para> Page cache and bulk data transfers</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para> <emphasis role="bold">info</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para> Miscellaneous informational messages</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para> <emphasis role="bold">net</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para> LNet network related debugging</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para> <emphasis role="bold">console</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Significant system events, printed to console</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para> <emphasis role="bold">warning</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Significant but non-fatal exceptions, printed
+                          to console</para>
                       </entry>
                     </row>
                     <row>
@@ -376,7 +375,15 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">error</emphasis></para>
                       </entry>
                       <entry>
-                        <para> Error messages</para>
+                        <para>Critical error messages, printed to console</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para> <emphasis role="bold">neterror</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Significant LNet error messages</para>
                       </entry>
                     </row>
                     <row>
@@ -384,7 +391,81 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">emerg</emphasis></para>
                       </entry>
                       <entry>
-                        <para> &#160;</para>
+                        <para>Fatal system errors, printed to console</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">config</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Configuration and setup, enabled by default</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">ha</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Failover and recovery-related information,
+                        enabled by default</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">hsm</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Hierarchical space management/tiering</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">ioctl</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>IOCTL-related information, enabled by default</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">layout</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>File layout handling (PFL, FLR, DoM)</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">lfsck</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Filesystem consistency checking, enabled by
+                        default</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">other</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Miscellaneious other debug messages</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">quota</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Space accounting and management</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">reada</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Client readahead management</para>
                       </entry>
                     </row>
                     <row>
@@ -392,15 +473,31 @@ Diagnostic and Debugging Tools</title>
                         <para> <emphasis role="bold">rpctrace</emphasis></para>
                       </entry>
                       <entry>
-                        <para> For distributed debugging</para>
+                        <para>Remote request/reply tracing and debugging</para>
                       </entry>
                     </row>
                     <row>
                       <entry>
-                        <para> <emphasis role="bold">ha</emphasis></para>
+                        <para><emphasis role="bold">sec</emphasis></para>
                       </entry>
                       <entry>
-                        <para> Failover and recovery-related information</para>
+                        <para>Security, Kerberos, Shared Secret Key handling</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">snapshot</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Filesystem snapshot management</para>
+                      </entry>
+                    </row>
+                    <row>
+                      <entry>
+                        <para><emphasis role="bold">vfstrace</emphasis></para>
+                      </entry>
+                      <entry>
+                        <para>Kernel VFS interface operations</para>
                       </entry>
                     </row>
                   </tbody>
@@ -1001,7 +1098,7 @@ lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
           <para>Buffers are culled from the service request buffer history if it has grown above <literal>req_buffer_history_max</literal> and its reqs are removed from the service request history.</para>
         </listitem>
       </orderedlist>
-      <para>Request history is accessed and controlled using the following /proc files under the service directory:</para>
+      <para>Request history is accessed and controlled using the following parameters for each service:</para>
       <itemizedlist>
         <listitem>
           <para><literal>req_buffer_history_len </literal></para>

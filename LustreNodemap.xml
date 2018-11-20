@@ -197,7 +197,7 @@ drwxr-xr-x 3 root root     4096 Jul 23 09:02 ..
       <para>If UID 11002 or GID 11001 do not exist on the Lustre MDS or MGS,
       create them in LDAP or other data sources, or trust clients by setting
       <literal>identity_upcall</literal> to <literal>NONE</literal>. For more
-      information, see <xref linkend="dbdoclet.50438291_32926"/>.</para>
+      information, see <xref linkend="dbdoclet.identity_upcall"/>.</para>
 
       <para>Building a larger and more complex configuration is possible by
       iterating through the <literal>lctl</literal> commands above. In
@@ -366,19 +366,18 @@ oss# lctl set_param nodemap.add_nodemap_idmap='<replaceable>SiteName</replaceabl
   <section xml:id="verifyingsettings">
     <title>Verifying Settings</title>
 
-    <para>By using <literal>lctl nodemap_info all</literal>, existing
-    nodemap configuration is listed for easy export. This command
-    acts as a shortcut into the /proc interface for nodemap.
-    Within /proc/fs/lustre/nodemap/ on the Lustre MGS, the
-    file <literal>active</literal> contains a 1 if nodemap is active on the
-    system. Each policy group creates a directory containing the
-    following parameters:</para>
+    <para>By using <literal>lctl nodemap_info all</literal>, existing nodemap
+    configuration is listed for easy export. This command acts as a shortcut
+    into the configuration interface for nodemap.  On the Lustre MGS, the
+    <literal>nodemap.active</literal> parameter contains a <literal>1</literal>
+    if nodemap is active on the system. Each policy group
+    creates a directory containing the following parameters:</para>
 
     <itemizedlist>
       <listitem>
-        <para><literal>admin</literal> and
-        <literal>trusted</literal> each contain a ‘1’ if the values
-        are set, and a ‘0’ otherwise.</para>
+        <para><literal>admin</literal> and <literal>trusted</literal> each
+          contain a <literal>1</literal> if the values are set, and
+          <literal>0</literal> otherwise.</para>
       </listitem>
 
       <listitem>

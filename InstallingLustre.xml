@@ -331,9 +331,8 @@ xml:id="installinglustre">
             <emphasis role="bold">Use the same user IDs (UID) and group IDs
             (GID) on all clients.</emphasis>
           </emphasis>If use of supplemental groups is required, see 
-          <xref linkend="dbdoclet.50438291_32926" />for information about
-          supplementary user and group cache upcall (
-          <code>identity_upcall</code>).</para>
+          <xref linkend="dbdoclet.identity_upcall" /> for information about
+          supplementary user and group cache upcall (<code>identity_upcall</code>).</para>
         </listitem>
         <listitem>
           <para>

@@ -23,6 +23,10 @@
     </para>
     <para>Typically, metrics are accessed via <literal>lctl get_param</literal>
     files and settings are changed by via <literal>lctl set_param</literal>.
+    While it is possible to access parameters in <literal>/proc</literal>
+    and <literal>/sys</literal> directly, the location of these parameters may
+    change between releases, so it is recommended to always use
+    <literal>lctl</literal> to access the parameters from userspace scripts.
     Some data is server-only, some data is client-only, and some data is
     exported from the client to the server and is thus duplicated in both
     locations.</para>
@@ -47,7 +51,7 @@ osc.testfs-OST0006-osc-ffff881071d5cc00
 osc.testfs-OST0007-osc-ffff881071d5cc00
 osc.testfs-OST0008-osc-ffff881071d5cc00</screen>
         <para>In this example, information about OST connections available
-	on a client is displayed (indicated by "osc").</para>
+        on a client is displayed (indicated by "osc").</para>
       </listitem>
     </itemizedlist>
     <itemizedlist>
@@ -92,7 +96,7 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.rpc_stats</screen></para>
       </listitem>
       <listitem>
         <para>Prepend the path with the appropriate directory component:
-	  <screen>/{proc,sys}/{fs,sys}/{lustre,lnet}</screen></para>
+          <screen>/{proc,sys}/{fs,sys}/{lustre,lnet}</screen></para>
       </listitem>
     </itemizedlist>
     <para>For example, an <literal>lctl get_param</literal> command may look like
@@ -121,7 +125,7 @@ osc.testfs-OST0001-osc-ffff881071d5cc00.uuid=594db456-0685-bd16-f59b-e72ee90e981
 # hash ldlm_stats stats uuid</screen></para>
     <section remap="h3">
       <title>Identifying Lustre File Systems and Servers</title>
-      <para>Several <literal>/proc</literal> files on the MGS list existing
+      <para>Several parameter files on the MGS list existing
       Lustre file systems and file system servers. The examples below are for
       a Lustre file system called
           <literal>testfs</literal> with one MDT and three OSTs.</para>
@@ -155,8 +159,7 @@ imperative_recovery_state:
     notify_count: 4</screen>
         </listitem>
         <listitem>
-          <para>To view the names of all live servers in the file system as listed in
-              <literal>/proc/fs/lustre/devices</literal>, enter:</para>
+          <para>To list all configured devices on the local node, enter:</para>
           <screen># lctl device_list
 0 UP mgs MGS MGS 11
 1 UP mgc MGC192.168.10.34@tcp 1f45bb57-d9be-2ddb-c0b0-5431a49226705
@@ -284,7 +287,7 @@ testfs-MDT0000</screen></para>
           <row>
             <entry>
               <para>
-                <literal>mb_prealloc_table</literal></para>
+                <literal>prealloc_table</literal></para>
             </entry>
             <entry>
               <para>A table of values used to preallocate space when a new request is received. By
@@ -316,7 +319,7 @@ testfs-MDT0000</screen></para>
       </tgroup>
     </informaltable>
     <para>Buddy group cache information found in
-          <literal>/proc/fs/ldiskfs/<replaceable>disk_device</replaceable>/mb_groups</literal> may
+          <literal>/sys/fs/ldiskfs/<replaceable>disk_device</replaceable>/mb_groups</literal> may
       be useful for assessing on-disk fragmentation. For
       example:<screen>cat /proc/fs/ldiskfs/loop0/mb_groups 
 #group: free free frags first pa [ 2^0 2^1 2^2 2^3 2^4 2^5 2^6 2^7 2^8 2^9 
@@ -1856,23 +1859,26 @@ rpcs in flight        rpcs   % cum %
       </informaltable>
       <section>
         <title>Interpreting Adaptive Timeout Information</title>
-        <para>Adaptive timeout information can be obtained from the <literal>timeouts</literal>
-          files in <literal>/proc/fs/lustre/*/</literal> on each server and client using the
-            <literal>lctl</literal> command. To read information from a <literal>timeouts</literal>
-          file, enter a command similar to:</para>
+        <para>Adaptive timeout information can be obtained via
+          <literal>lctl get_param {osc,mdc}.*.timeouts</literal> files on each
+          client and <literal>lctl get_param {ost,mds}.*.*.timeouts</literal>
+          on each server.  To read information from a
+          <literal>timeouts</literal> file, enter a command similar to:</para>
         <screen># lctl get_param -n ost.*.ost_io.timeouts
-service : cur 33  worst 34 (at 1193427052, 0d0h26m40s ago) 1 1 33 2</screen>
-        <para>In this example, the <literal>ost_io</literal> service on this node is currently
-          reporting an estimated RPC service time of 33 seconds. The worst RPC service time was 34
-          seconds, which occurred 26 minutes ago.</para>
-        <para>The output also provides a history of service times. Four &quot;bins&quot; of adaptive
-          timeout history are shown, with the maximum RPC time in each bin reported. In both the
-          0-150s bin and the 150-300s bin, the maximum RPC time was 1. The 300-450s bin shows the
-          worst (maximum) RPC time at 33 seconds, and the 450-600s bin shows a maximum of RPC time
-          of 2 seconds. The estimated service time is the maximum value across the four bins (33
-          seconds in this example).</para>
-        <para>Service times (as reported by the servers) are also tracked in the client OBDs, as
-          shown in this example:</para>
+service : cur 33  worst 34 (at 1193427052, 1600s ago) 1 1 33 2</screen>
+        <para>In this example, the <literal>ost_io</literal> service on this
+          node is currently reporting an estimated RPC service time of 33
+          seconds. The worst RPC service time was 34 seconds, which occurred
+          26 minutes ago.</para>
+        <para>The output also provides a history of service times.
+          Four &quot;bins&quot; of adaptive timeout history are shown, with the
+          maximum RPC time in each bin reported. In both the 0-150s bin and the
+          150-300s bin, the maximum RPC time was 1. The 300-450s bin shows the
+          worst (maximum) RPC time at 33 seconds, and the 450-600s bin shows a
+          maximum of RPC time of 2 seconds. The estimated service time is the
+          maximum value in the four bins (33 seconds in this example).</para>
+        <para>Service times (as reported by the servers) are also tracked in
+          the client OBDs, as shown in this example:</para>
         <screen># lctl get_param osc.*.timeouts
 last reply : 1193428639, 0d0h00m00s ago
 network    : cur  1 worst  2 (at 1193427053, 0d0h26m26s ago)  1  1  1  1
@@ -1881,10 +1887,11 @@ portal 28  : cur  1 worst  1 (at 1193426141, 0d0h41m38s ago)  1  1  1  1
 portal 7   : cur  1 worst  1 (at 1193426141, 0d0h41m38s ago)  1  0  1  1
 portal 17  : cur  1 worst  1 (at 1193426177, 0d0h41m02s ago)  1  0  0  1
 </screen>
-        <para>In this example, portal 6, the <literal>ost_io</literal> service portal, shows the
-          history of service estimates reported by the portal.</para>
-        <para>Server statistic files also show the range of estimates including min, max, sum, and
-          sumsq. For example:</para>
+        <para>In this example, portal 6, the <literal>ost_io</literal> service
+          portal, shows the history of service estimates reported by the portal.
+        </para>
+        <para>Server statistic files also show the range of estimates including
+          min, max, sum, and sum-squared. For example:</para>
         <screen># lctl get_param mdt.*.mdt.stats
 ...
 req_timeout               6 samples [sec] 1 10 15 105
@@ -2007,10 +2014,12 @@ req_timeout               6 samples [sec] 1 10 15 105
         <primary>LNet</primary>
         <secondary>proc</secondary>
       </indexterm>Monitoring LNet</title>
-    <para>LNet information is located in <literal>/proc/sys/lnet</literal> in these files:<itemizedlist>
+    <para>LNet information is located via <literal>lctl get_param</literal>
+      in these parameters:
+      <itemizedlist>
         <listitem>
-          <para><literal>peers</literal> - Shows all NIDs known to this node and provides
-            information on the queue state.</para>
+          <para><literal>peers</literal> - Shows all NIDs known to this node
+            and provides information on the queue state.</para>
           <para>Example:</para>
           <screen># lctl get_param peers
 nid                refs   state  max  rtr  min   tx    min   queue
@@ -2250,18 +2259,18 @@ nid                    refs   peer    max   tx    min
     maximizes network balancing. The weighted allocator is used when any two
     OSTs are out of balance by more than a specified threshold.</para>
     <para>Free space distribution can be tuned using these two
-    <literal>/proc</literal> tunables:</para>
+    tunable parameters:</para>
     <itemizedlist>
       <listitem>
-        <para><literal>qos_threshold_rr</literal> - The threshold at which
+        <para><literal>lod.*.qos_threshold_rr</literal> - The threshold at which
         the allocation method switches from round-robin to weighted is set
         in this file. The default is to switch to the weighted algorithm when
         any two OSTs are out of balance by more than 17 percent.</para>
       </listitem>
       <listitem>
-        <para><literal>qos_prio_free</literal> - The weighting priority used
-        by the weighted allocator can be adjusted in this file. Increasing the
-        value of <literal>qos_prio_free</literal> puts more weighting on the
+        <para><literal>lod.*.qos_prio_free</literal> - The weighting priority
+        used by the weighted allocator can be adjusted in this file. Increasing
+        the value of <literal>qos_prio_free</literal> puts more weighting on the
         amount of free space available on each OST and less on how stripes are
         distributed across OSTs. The default value is 91 percent weighting for
         free space rebalancing and 9 percent for OST balancing. When the
@@ -2269,14 +2278,14 @@ nid                    refs   peer    max   tx    min
         space and location is no longer used by the striping algorithm.</para>
       </listitem>
       <listitem>
-        <para condition="l29"><literal>reserved_mb_low</literal> - The low
-        watermark used to stop object allocation if available space is less
-        than it. The default is 0.1 percent of total OST size.</para>
+        <para condition="l29"><literal>osp.*.reserved_mb_low</literal>
+          - The low watermark used to stop object allocation if available space
+          is less than this. The default is 0.1% of total OST size.</para>
       </listitem>
        <listitem>
-        <para condition="l29"><literal>reserved_mb_high</literal> - The high watermark used to start
-          object allocation if available space is more than it. The default is 0.2 percent of total
-          OST size.</para>
+        <para condition="l29"><literal>osp.*.reserved_mb_high</literal>
+          - The high watermark used to start object allocation if available
+          space is more than this. The default is 0.2% of total OST size.</para>
       </listitem>
     </itemizedlist>
     <para>For more information about monitoring and managing free space, see <xref
@@ -2443,12 +2452,12 @@ ldlm.namespaces.myth-MDT0000-mdc-ffff8804296c2800.lru_max_age=900000
         </tbody>
       </tgroup>
     </informaltable>
-    <para>For each service, an entry as shown below is
-      created:<screen>/proc/fs/lustre/<replaceable>service</replaceable>/*/threads_<replaceable>min|max|started</replaceable></screen></para>
+    <para>For each service, tunable parameters as shown below are available.
+    </para>
     <itemizedlist>
       <listitem>
-        <para>To temporarily set this tunable, run:</para>
-        <screen># lctl <replaceable>get|set</replaceable>_param <replaceable>service</replaceable>.threads_<replaceable>min|max|started</replaceable> </screen>
+        <para>To temporarily set these tunables, run:</para>
+        <screen># lctl set_param <replaceable>service</replaceable>.threads_<replaceable>min|max|started=num</replaceable> </screen>
         </listitem>
       <listitem>
         <para>To permanently set this tunable, run:</para>
@@ -2480,8 +2489,8 @@ ost.OSS.ost_io.threads_max=256</screen>
       <listitem>
         <para>To set the maximum thread count to 256 instead of 512 permanently, run:</para>
         <screen># lctl conf_param testfs.ost.ost_io.threads_max=256</screen>
-	<para condition='l25'>For version 2.5 or later, run:
-	<screen># lctl set_param -P ost.OSS.ost_io.threads_max=256
+        <para condition='l25'>For version 2.5 or later, run:
+        <screen># lctl set_param -P ost.OSS.ost_io.threads_max=256
 ost.OSS.ost_io.threads_max=256 </screen> </para>
       </listitem>
       <listitem>
@@ -2503,79 +2512,69 @@ ost.OSS.ost_io.threads_max=256</screen>
         <primary>proc</primary>
         <secondary>debug</secondary>
       </indexterm>Enabling and Interpreting Debugging Logs</title>
-    <para>By default, a detailed log of all operations is generated to aid in debugging. Flags that
-      control debugging are found in <literal>/proc/sys/lnet/debug</literal>. </para>
-    <para>The overhead of debugging can affect the performance of Lustre file system. Therefore, to
-      minimize the impact on performance, the debug level can be lowered, which affects the amount
-      of debugging information kept in the internal log buffer but does not alter the amount of
-      information to goes into syslog. You can raise the debug level when you need to collect logs
-      to debug problems. </para>
-    <para>The debugging mask can be set using &quot;symbolic names&quot;. The symbolic format is
-      shown in the examples below.<itemizedlist>
+    <para>By default, a detailed log of all operations is generated to aid in
+      debugging. Flags that control debugging are found via
+      <literal>lctl get_param debug</literal>.</para>
+    <para>The overhead of debugging can affect the performance of Lustre file
+      system. Therefore, to minimize the impact on performance, the debug level
+      can be lowered, which affects the amount of debugging information kept in
+      the internal log buffer but does not alter the amount of information to
+      goes into syslog. You can raise the debug level when you need to collect
+      logs to debug problems. </para>
+    <para>The debugging mask can be set using &quot;symbolic names&quot;. The
+      symbolic format is shown in the examples below.
+      <itemizedlist>
         <listitem>
-          <para>To verify the debug level used, examine the <literal>sysctl</literal> that controls
-            debugging by running:</para>
-          <screen># sysctl lnet.debug 
-lnet.debug = ioctl neterror warning error emerg ha config console</screen>
+          <para>To verify the debug level used, examine the parameter that
+            controls debugging by running:</para>
+          <screen># lctl get_param debug 
+debug=
+ioctl neterror warning error emerg ha config console</screen>
         </listitem>
         <listitem>
-          <para>To turn off debugging (except for network error debugging), run the following
-            command on all nodes concerned:</para>
+          <para>To turn off debugging except for network error debugging, run
+          the following command on all nodes concerned:</para>
           <screen># sysctl -w lnet.debug=&quot;neterror&quot; 
-lnet.debug = neterror</screen>
+debug=neterror</screen>
         </listitem>
-      </itemizedlist><itemizedlist>
+      </itemizedlist>
+      <itemizedlist>
         <listitem>
-          <para>To turn off debugging completely, run the following command on all nodes
+          <para>To turn off debugging completely (except for the minimum error
+            reporting to the console), run the following command on all nodes
             concerned:</para>
-          <screen># sysctl -w lnet.debug=0 
-lnet.debug = 0</screen>
+          <screen># lctl set_param debug=0 
+debug=0</screen>
         </listitem>
         <listitem>
-          <para>To set an appropriate debug level for a production environment, run:</para>
-          <screen># sysctl -w lnet.debug=&quot;warning dlmtrace error emerg ha rpctrace vfstrace&quot; 
-lnet.debug = warning dlmtrace error emerg ha rpctrace vfstrace</screen>
-          <para>The flags shown in this example collect enough high-level information to aid
-            debugging, but they do not cause any serious performance impact.</para>
+          <para>To set an appropriate debug level for a production environment,
+            run:</para>
+          <screen># lctl set_param debug=&quot;warning dlmtrace error emerg ha rpctrace vfstrace&quot; 
+debug=warning dlmtrace error emerg ha rpctrace vfstrace</screen>
+          <para>The flags shown in this example collect enough high-level
+            information to aid debugging, but they do not cause any serious
+            performance impact.</para>
         </listitem>
-      </itemizedlist><itemizedlist>
+      </itemizedlist>
+      <itemizedlist>
         <listitem>
-          <para>To clear all flags and set new flags, run:</para>
-          <screen># sysctl -w lnet.debug=&quot;warning&quot; 
-lnet.debug = warning</screen>
-        </listitem>
-      </itemizedlist><itemizedlist>
-        <listitem>
-          <para>To add new flags to flags that have already been set, precede each one with a
-              &quot;<literal>+</literal>&quot;:</para>
-          <screen># sysctl -w lnet.debug=&quot;+neterror +ha&quot; 
-lnet.debug = +neterror +ha
-# sysctl lnet.debug 
-lnet.debug = neterror warning ha</screen>
+          <para>To add new flags to flags that have already been set,
+            precede each one with a &quot;<literal>+</literal>&quot;:</para>
+          <screen># lctl set_param debug=&quot;+neterror +ha&quot; 
+debug=+neterror +ha
+# lctl get_param debug 
+debug=neterror warning error emerg ha console</screen>
         </listitem>
         <listitem>
           <para>To remove individual flags, precede them with a
             &quot;<literal>-</literal>&quot;:</para>
-          <screen># sysctl -w lnet.debug=&quot;-ha&quot; 
-lnet.debug = -ha
-# sysctl lnet.debug 
-lnet.debug = neterror warning</screen>
+          <screen># lctl set_param debug=&quot;-ha&quot; 
+debug=-ha
+# lctl get_param debug 
+debug=neterror warning error emerg console</screen>
         </listitem>
-        <listitem>
-          <para>To verify or change the debug level, run commands such as the following: :</para>
-          <screen># lctl get_param debug
-debug=
-neterror warning
-# lctl set_param debug=+ha
-# lctl get_param debug
-debug=
-neterror warning ha
-# lctl set_param debug=-warning
-# lctl get_param debug
-debug=
-neterror ha</screen>
-        </listitem>
-      </itemizedlist></para>
+      </itemizedlist>
+    </para>
     <para>Debugging parameters include:</para>
     <itemizedlist>
       <listitem>
@@ -2587,7 +2586,7 @@ neterror ha</screen>
             <literal>/tmp/lustre-log</literal>.</para>
       </listitem>
     </itemizedlist>
-    <para>These parameters are also set using:<screen>sysctl -w lnet.debug={value}</screen></para>
+    <para>These parameters can also be set using:<screen>sysctl -w lnet.debug={value}</screen></para>
     <para>Additional useful parameters: <itemizedlist>
         <listitem>
           <para><literal>panic_on_lbug</literal> - Causes &apos;&apos;panic&apos;&apos; to be called
@@ -2623,11 +2622,12 @@ ost_set_info               1
 obd_ping                   212</screen>
       <para>Use the <literal>llstat</literal> utility to monitor statistics over time.</para>
       <para>To clear the statistics, use the <literal>-c</literal> option to
-          <literal>llstat</literal>. To specify how frequently the statistics should be reported (in
-        seconds), use the <literal>-i</literal> option. In the example below, the
-          <literal>-c</literal> option clears the statistics and <literal>-i10</literal> option
-        reports statistics every 10 seconds:</para>
-      <screen role="smaller">$ llstat -c -i10 /proc/fs/lustre/ost/OSS/ost_io/stats
+        <literal>llstat</literal>. To specify how frequently the statistics
+        should be reported (in seconds), use the <literal>-i</literal> option.
+        In the example below, the <literal>-c</literal> option clears the
+        statistics and <literal>-i10</literal> option reports statistics every
+        10 seconds:</para>
+<screen role="smaller">$ llstat -c -i10 ost_io
  
 /usr/bin/llstat: STATS on 06/06/07 
         /proc/fs/lustre/ost/OSS/ost_io/ stats on 192.168.16.35@tcp
