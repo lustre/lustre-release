@@ -5906,7 +5906,7 @@ test_82a() { # LU-4665
 	done
 	ost_indices=$(comma_list $ost_indices)
 
-	trap "restore_ostindex" EXIT
+	stack_trap "restore_ostindex" EXIT
 	echo -e "\nFormat $OSTCOUNT OSTs with sparse indices $ost_indices"
 	OST_INDEX_LIST=[$ost_indices] formatall
 
@@ -5917,11 +5917,18 @@ test_82a() { # LU-4665
 			error "start ost$i failed"
 	done
 
+	# Collect debug information - start of test
+	do_nodes $(comma_list $(mdts_nodes)) \
+		   $LCTL get_param osc.*.prealloc_*_id
+
 	mount_client $MOUNT || error "mount client $MOUNT failed"
 	wait_osts_up
 
 	$LFS df $MOUNT || error "$LFS df $MOUNT failed"
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
+		   $LCTL get_param osc.*.prealloc_*_id" EXIT
 
 	# 1. If the file does not exist, new file will be created
 	#    with specified OSTs.
