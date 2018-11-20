@@ -8238,7 +8238,7 @@ test_123() {
 	local orig_val=$(do_facet mgs $LCTL get_param jobid_var)
 	do_facet mgs $LCTL set_param -P jobid_var="testname"
 
-	for i in params $cfgfiles; do
+	for i in $cfgfiles params; do
 		do_facet mgs "lctl --device MGS llog_print ${i} >> $yaml_file"
 	done
 
