@@ -75,14 +75,6 @@ struct libcfs_ioctl_data {
 	char ioc_bulk[0];
 };
 
-struct libcfs_debug_ioctl_data {
-	struct libcfs_ioctl_hdr hdr;
-	unsigned int subs;
-	unsigned int debug;
-};
-
-/* 'f' ioctls are defined in lustre_ioctl.h and lustre_user.h except for: */
-#define LIBCFS_IOC_DEBUG_MASK             _IOWR('f', 250, long)
 #define IOCTL_LIBCFS_TYPE		  long
 
 #define IOC_LIBCFS_TYPE				      ('e')

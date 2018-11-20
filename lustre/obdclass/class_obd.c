@@ -290,27 +290,18 @@ EXPORT_SYMBOL(obd_ioctl_getdata);
 
 int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 {
-        char *buf = NULL;
-        struct obd_ioctl_data *data;
-        struct libcfs_debug_ioctl_data *debug_data;
-        struct obd_device *obd = NULL;
-        int err = 0, len = 0;
-        ENTRY;
+	char *buf = NULL;
+	struct obd_ioctl_data *data;
+	struct obd_device *obd = NULL;
+	int err = 0, len = 0;
 
-        /* only for debugging */
-        if (cmd == LIBCFS_IOC_DEBUG_MASK) {
-                debug_data = (struct libcfs_debug_ioctl_data*)arg;
-                libcfs_subsystem_debug = debug_data->subs;
-                libcfs_debug = debug_data->debug;
-                return 0;
-        }
-
-        CDEBUG(D_IOCTL, "cmd = %x\n", cmd);
+	ENTRY;
+	CDEBUG(D_IOCTL, "cmd = %x\n", cmd);
 	if (obd_ioctl_getdata(&buf, &len, (void __user *)arg)) {
-                CERROR("OBD ioctl: data error\n");
-                RETURN(-EINVAL);
-        }
-        data = (struct obd_ioctl_data *)buf;
+		CERROR("OBD ioctl: data error\n");
+		RETURN(-EINVAL);
+	}
+	data = (struct obd_ioctl_data *)buf;
 
         switch (cmd) {
         case OBD_IOC_PROCESS_CFG: {

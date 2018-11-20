@@ -240,7 +240,7 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 #define OBD_IOC_STOP_LFSCK	_IOW('f', 231, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_QUERY_LFSCK	_IOR('f', 232, struct obd_ioctl_data)
 /*	lustre/lustre_user.h	240-249 */
-/*	LIBCFS_IOC_DEBUG_MASK	250 */
+/* was	LIBCFS_IOC_DEBUG_MASK	_IOWR('f', 250, long) until 2.11 */
 
 #define OBD_IOC_BARRIER		_IOWR('f', 261, OBD_IOC_DATA_TYPE)
 
