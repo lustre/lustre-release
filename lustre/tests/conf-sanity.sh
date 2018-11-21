@@ -1139,7 +1139,7 @@ test_29() {
 
 	local PARAM="$FSNAME-OST0001.osc.active"
 	# With lctl set_param -P the value $PROC_ACT will be sent to
-	# all nodes. The [^M] filter out the ability to set active
+	# all nodes. The [!M] filter out the ability to set active
 	# on the MDS servers which is tested with wait_osp_* below.
 	# For ost_server_uuid that only exist on client so filtering
 	# is safe.
@@ -1164,12 +1164,15 @@ test_29() {
 	# test new client starts deactivated
 	umount_client $MOUNT || error "umount_client $MOUNT failed"
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	RESULT=$($LCTL get_param -n $PROC_UUID | grep DEACTIV | grep NEW)
-	if [ -z "$RESULT" ]; then
-		error "New client start active: $(lctl get_param -n $PROC_UUID)"
-	else
-		echo "New client success: got $RESULT"
-	fi
+
+	# the 2nd and 3rd field of ost_server_uuid do not update at the same
+	# time when using lctl set_param -P
+	wait_update_facet client					\
+		"$LCTL get_param -n $PROC_UUID | awk '{print \\\$3 }'"	\
+		"DEACTIVATED" ||
+		error "New client start active: $($LCTL get_param -n $PROC_UUID)"
+
+	echo "New client success: got '$($LCTL get_param -n $PROC_UUID)'"
 
 	# make sure it reactivates
 	set_persistent_param_and_check client $PROC_ACT $PARAM $ACTV
@@ -1201,7 +1204,7 @@ test_30a() {
 	pass
 
 	echo Erase parameter setting
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs "$PERM_CMD -d $TEST" ||
 			error "Erase param $TEST failed"
 	else
@@ -1240,7 +1243,7 @@ test_30b() {
 
 	local TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import |
 		grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		PARAM="osc.$FSNAME-OST0000-osc-[^M]*.import"
 		echo "Setting $PARAM from $TEST to $NEW"
 		do_facet mgs "$PERM_CMD $PARAM='connection=$NEW'" ||
@@ -1262,7 +1265,7 @@ test_30b() {
 	[ $NIDCOUNT -eq $((orignidcount + 1)) ] ||
 		error "Failover nid not added"
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs "$PERM_CMD -d osc.$FSNAME-OST0000-osc-*.import"
 	else
 		do_facet mgs "$PERM_CMD -d $FSNAME-OST0000.failover.node" ||
@@ -1901,7 +1904,7 @@ t32_test() {
 		return 1
 	fi
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		$r $PERM_CMD osc.$fsname-OST0000*.import=connection=$nid || {
 			error_noexit "Setting OST \"failover.node\""
 			return 1
@@ -1985,7 +1988,7 @@ t32_test() {
 	fi
 
 	if [ "$dne_upgrade" != "no" ]; then
-		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		if [[ $PERM_CMD == *"set_param -P"* ]]; then
 			$r $PERM_CMD mdc.$fsname-MDT0001*.import=connection=$nid || {
 				error_noexit "Setting MDT1 \"failover.node\""
 				return 1
@@ -2477,7 +2480,7 @@ test_33a() { # bug 12333, was test_33
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs "$PERM_CMD timeout=200" ||
 			error "$PERM_CMD timeout=200 failed"
 	else
@@ -2558,7 +2561,7 @@ test_35a() { # bug 12459
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
 		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs "$PERM_CMD \
 			      mdc.*${device}*.import=connection=$(h2nettype $FAKENID)" ||
 			error "Setting mdc.*${device}*.import=connection=\
@@ -2623,7 +2626,7 @@ test_35b() { # bug 18674
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
 		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs "$PERM_CMD \
 			      mdc.*${device}*.import=connection=$(h2nettype $FAKENID)" ||
 			error "Set mdc.*${device}*.import=connection=\
@@ -3130,7 +3133,7 @@ test_42() { #bug 14693
 	setup
 	check_mount || error "client was not mounted"
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		PARAM="llite.$FSNAME-*.some_wrong_param"
 	else
 		PARAM="$FSNAME.llite.some_wrong_param"
@@ -3781,7 +3784,7 @@ test_50g() {
         wait_osc_import_state mds ost2 FULL
 	wait_osc_import_ready client ost2
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		local PARAM="osc.${FSNAME}-OST0001*.active"
 	else
 		local PARAM="${FSNAME}-OST0001.osc.active"
@@ -3859,7 +3862,7 @@ test_50i() {
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		$PERM_CMD mdc.${FSNAME}-MDT0001-mdc-*.active=0 &&
 			error "deactive MDC0 succeeds"
 	else
@@ -7649,7 +7652,7 @@ test_107() {
 	start_ost || error "unable to start OST"
 
 	# add unknown configuration parameter.
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		cmd="$PERM_CMD ost.$FSNAME-OST0000*.unknown_param"
 	else
 		cmd="$PERM_CMD $FSNAME-OST0000*.ost.unknown_param"

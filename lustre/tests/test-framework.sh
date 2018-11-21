@@ -2059,7 +2059,7 @@ ost_quota_type() {
 # restore old quota type settings
 restore_quota() {
 	if [ "$old_MDT_QUOTA_TYPE" ]; then
-		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		if [[ $PERM_CMD == *"set_param -P"* ]]; then
 			do_facet mgs $PERM_CMD \
 				osd-*.$FSNAME-MDT*.quota_slave.enable = \
 				$old_MDT_QUOTA_TYPE
@@ -2069,7 +2069,7 @@ restore_quota() {
 		fi
 	fi
 	if [ "$old_OST_QUOTA_TYPE" ]; then
-		if [[ $PERM_CMD = *"set_param -P"* ]]; then
+		if [[ $PERM_CMD == *"set_param -P"* ]]; then
 			do_facet mgs $PERM_CMD \
 				osd-*.$FSNAME-OST*.quota_slave.enable = \
 				$old_OST_QUOTA_TYPE
@@ -2129,7 +2129,7 @@ setup_quota(){
 	export old_MDT_QUOTA_TYPE=$mdt_qtype
 	export old_OST_QUOTA_TYPE=$ost_qtype
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs $PERM_CMD \
 			osd-*.$FSNAME-MDT*.quota_slave.enable=$QUOTA_TYPE
 		do_facet mgs $PERM_CMD \
@@ -4813,7 +4813,7 @@ set_persistent_param() {
 		final=$((orig + 5))
 	fi
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		echo "Setting $test_param from $orig to $final"
 		do_facet mgs "$PERM_CMD $test_param='$final'" ||
 			error "$PERM_CMD $test_param failed"
@@ -7198,7 +7198,7 @@ wait_osp_active() {
 
 			[ ${PIPESTATUS[0]} = 0 ] || error "Can't read $mproc"
 			if [ $result -eq $expected ]; then
-				echo -n "target updated after"
+				echo -n "target updated after "
 				echo "$wait sec (got $result)"
 				break
 			fi

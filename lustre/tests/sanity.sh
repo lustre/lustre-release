@@ -13991,7 +13991,7 @@ test_205() { # Job stats
 	local old_jobenv=$($LCTL get_param -n jobid_var)
 	[ $old_jobenv != $JOBENV ] && jobstats_set $JOBENV
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		stack_trap "do_facet mgs $PERM_CMD jobid_var=$old_jobenv" EXIT
 	else
 		stack_trap "do_facet mgs $PERM_CMD \

@@ -5236,6 +5236,7 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 	/* obdname2fsname reports devname as an obd device */
 	len = strcspn(param, ".=");
 	if (len && param[len] != '=') {
+		struct list_head *tmp;
 		char *ptr;
 
 		param += len + 1;
@@ -5250,8 +5251,30 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 		snprintf(mti->mti_svname, sizeof(mti->mti_svname), "%.*s",
 			(int)len, param);
 
-		obdname2fsname(mti->mti_svname, mti->mti_fsname,
-			       sizeof(mti->mti_fsname));
+		mutex_lock(&mgs->mgs_mutex);
+		if (unlikely(list_empty(&mgs->mgs_fs_db_list))) {
+			mutex_unlock(&mgs->mgs_mutex);
+			GOTO(out, rc = -ENODEV);
+		}
+
+		list_for_each(tmp, &mgs->mgs_fs_db_list) {
+			fsdb = list_entry(tmp, struct fs_db, fsdb_list);
+			if (fsdb->fsdb_has_lproc_entry &&
+			    strcmp(fsdb->fsdb_name, "params") != 0 &&
+			    strstr(param, fsdb->fsdb_name)) {
+				snprintf(mti->mti_svname,
+					 sizeof(mti->mti_svname), "%s",
+					 fsdb->fsdb_name);
+				break;
+			}
+			fsdb = NULL;
+		}
+
+		if (!fsdb) {
+			snprintf(mti->mti_svname, sizeof(mti->mti_svname),
+				 "general");
+		}
+		mutex_unlock(&mgs->mgs_mutex);
 	} else {
 		snprintf(mti->mti_svname, sizeof(mti->mti_svname), "general");
 	}

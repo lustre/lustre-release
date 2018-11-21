@@ -231,7 +231,7 @@ set_mdt_qtype() {
 	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
 		qtype=$(tr -d 'p' <<<$qtype)
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs $PERM_CMD \
 			osd-*.$FSNAME-MDT*.quota_slave.enable=$qtype
 	else
@@ -261,7 +261,7 @@ set_ost_qtype() {
 	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
 		qtype=$(tr -d 'p' <<<$qtype)
 
-	if [[ $PERM_CMD = *"set_param -P"* ]]; then
+	if [[ $PERM_CMD == *"set_param -P"* ]]; then
 		do_facet mgs $PERM_CMD \
 			osd-*.$FSNAME-OST*.quota_slave.enable=$qtype
 	else
