@@ -129,7 +129,9 @@ If you still want to build Lustre for your OFED I/B stack, you need to install a
 Instead, if you want to build Lustre for your kernel's built-in I/B stack rather than your installed OFED stack, either remove the OFED package(s) or use --with-o2ib=no.
 					     ])
 			])
-			if test -e $O2IBPATHS/default; then
+			if test -e $O2IBPATHS/${LINUXRELEASE}; then
+			    O2IBPATHS=$O2IBPATHS/${LINUXRELEASE}
+			elif test -e $O2IBPATHS/default; then
 			    O2IBPATHS=$O2IBPATHS/default
 			fi
 			OFED="yes"
