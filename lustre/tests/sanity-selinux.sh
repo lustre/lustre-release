@@ -381,8 +381,304 @@ test_20c() {
 }
 run_test 20c "[atomicity] concurrent access from another client (dir via lfs)"
 
+check_nodemap() {
+	local nm=$1
+	local key=$2
+	local val=$3
+	local i
+
+	if [ "$nm" == "active" ]; then
+		proc_param="active"
+	else
+		proc_param="$nm.$key"
+	fi
+	is_sync=false
+	for i in $(seq 1 20); do
+		out=$(do_facet mds1 $LCTL get_param -n \
+				   nodemap.$proc_param 2>/dev/null)
+		echo "On mds1, ${proc_param} = $out"
+		[ "$val" == "$out" ] && is_sync=true && break
+		sleep 1
+	done
+	if ! $is_sync; then
+		error "$proc_param not updated on mds1 after 20 secs"
+	fi
+}
+
+create_nodemap() {
+	local nm=$1
+	local sepol
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+
+	do_facet mgs $LCTL nodemap_activate 1
+
+	do_facet mgs $LCTL nodemap_add $nm
+	do_facet mgs $LCTL nodemap_add_range \
+			--name $nm --range $client_nid
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+			--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+			--property trusted --value 1
+
+	check_nodemap $nm admin_nodemap 1
+	check_nodemap $nm trusted_nodemap 1
+
+	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
+	do_facet mgs $LCTL set_param nodemap.$nm.sepol="$sepol"
+	do_facet mgs $LCTL set_param -P nodemap.$nm.sepol="$sepol"
+
+	check_nodemap $nm sepol $sepol
+}
+
+remove_nodemap() {
+	local nm=$1
+
+	do_facet mgs $LCTL nodemap_del $nm
+
+	do_facet mgs $LCTL nodemap_activate 0
+
+	check_nodemap active x  0
+}
+
+test_21a() {
+	local sepol
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS >= 2.11.56"
+
+	# umount client
+	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if $(grep -q $MOUNT' ' /proc/mounts); then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# create nodemap entry with sepol
+	create_nodemap nm1
+
+	# mount client without sending sepol
+	mount_client $MOUNT $MOUNT_OPTS &&
+		error "client mount without sending sepol should be refused"
+
+	# mount client with sepol
+	echo -1 > /sys/module/ptlrpc/parameters/send_sepol
+	mount_client $MOUNT $MOUNT_OPTS ||
+		error "client mount with sepol failed"
+
+	# umount client
+	umount_client $MOUNT || error "umount $MOUNT failed"
+
+	# store wrong sepol in nodemap
+	sepol="0:policy:0:0000000000000000000000000000000000000000000000000000000000000000"
+	do_facet mgs $LCTL set_param nodemap.nm1.sepol="$sepol"
+	do_facet mgs $LCTL set_param -P nodemap.nm1.sepol="$sepol"
+	check_nodemap nm1 sepol $sepol
+
+	# mount client with sepol
+	mount_client $MOUNT $MOUNT_OPTS &&
+		error "client mount without matching sepol should be refused"
+
+	# remove nodemap
+	remove_nodemap nm1
+
+	# remount client normally
+	echo 0 > /sys/module/ptlrpc/parameters/send_sepol
+	mountcli || error "normal client mount failed"
+}
+run_test 21a "Send sepol at connect"
+
+test_21b() {
+	local sepol
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS >= 2.11.56"
+
+	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	echo test > $DIR/$tdir/toopen ||
+		error "failed to write to $DIR/$tdir/toopen"
+	touch $DIR/$tdir/ftoremove ||
+		error "failed to create $DIR/$tdir/ftoremove"
+	touch $DIR/$tdir/ftoremove2 ||
+		error "failed to create $DIR/$tdir/ftoremove2"
+	touch $DIR/$tdir/ftoremove3 ||
+		error "failed to create $DIR/$tdir/ftoremove3"
+	touch $DIR/$tdir/ftoremove4 ||
+		error "failed to create $DIR/$tdir/ftoremove4"
+	mkdir $DIR/$tdir/dtoremove ||
+		error "failed to create $DIR/$tdir/dtoremove"
+	mkdir $DIR/$tdir/dtoremove2 ||
+		error "failed to create $DIR/$tdir/dtoremove2"
+	mkdir $DIR/$tdir/dtoremove3 ||
+		error "failed to create $DIR/$tdir/dtoremove3"
+	mkdir $DIR/$tdir/dtoremove4 ||
+		error "failed to create $DIR/$tdir/dtoremove4"
+	touch $DIR/$tdir/ftorename ||
+		error "failed to create $DIR/$tdir/ftorename"
+	mkdir $DIR/$tdir/dtorename ||
+		error "failed to create $DIR/$tdir/dtorename"
+	setfattr -n user.myattr -v myval $DIR/$tdir/toopen ||
+		error "failed to set xattr on $DIR/$tdir/toopen"
+	echo 3 > /proc/sys/vm/drop_caches
+
+	# create nodemap entry with sepol
+	create_nodemap nm1
+
+	# metadata ops without sending sepol
+	touch $DIR/$tdir/f0 && error "touch (1)"
+	lfs setstripe -c1 $DIR/$tdir/f1 && error "lfs setstripe (1)"
+	mkdir $DIR/$tdir/d0 && error "mkdir (1)"
+	lfs setdirstripe -i0 -c1 $DIR/$tdir/d1 && error "lfs setdirstripe (1)"
+	cat $DIR/$tdir/toopen && error "cat (1)"
+	rm -f $DIR/$tdir/ftoremove && error "rm (1)"
+	rmdir $DIR/$tdir/dtoremove && error "rmdir (1)"
+	mv $DIR/$tdir/ftorename $DIR/$tdir/ftorename2 && error "mv (1)"
+	mv $DIR/$tdir/dtorename $DIR/$tdir/dtorename2 && error "mv (2)"
+	getfattr -n user.myattr $DIR/$tdir/toopen && error "getfattr (1)"
+	setfattr -n user.myattr -v myval2 $DIR/$tdir/toopen &&
+		error "setfattr (1)"
+	chattr +i $DIR/$tdir/toopen && error "chattr (1)"
+	lsattr $DIR/$tdir/toopen && error "lsattr (1)"
+	chattr -i $DIR/$tdir/toopen && error "chattr (1)"
+	ln -s $DIR/$tdir/toopen $DIR/$tdir/toopen_sl1 && error "symlink (1)"
+	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl1 && error "hardlink (1)"
+
+	# metadata ops with sepol
+	echo -1 > /sys/module/ptlrpc/parameters/send_sepol
+	touch $DIR/$tdir/f2 || error "touch (2)"
+	lfs setstripe -c1 $DIR/$tdir/f3 || error "lfs setstripe (2)"
+	mkdir $DIR/$tdir/d2 || error "mkdir (2)"
+	lfs setdirstripe -i0 -c1 $DIR/$tdir/d3 || error "lfs setdirstripe (2)"
+	cat $DIR/$tdir/toopen || error "cat (2)"
+	rm -f $DIR/$tdir/ftoremove || error "rm (2)"
+	rmdir $DIR/$tdir/dtoremove || error "rmdir (2)"
+	mv $DIR/$tdir/ftorename $DIR/$tdir/ftorename2 || error "mv (3)"
+	mv $DIR/$tdir/dtorename $DIR/$tdir/dtorename2 || error "mv (4)"
+	getfattr -n user.myattr $DIR/$tdir/toopen || error "getfattr (2)"
+	setfattr -n user.myattr -v myval2 $DIR/$tdir/toopen ||
+		error "setfattr (2)"
+	chattr +i $DIR/$tdir/toopen || error "chattr (2)"
+	lsattr $DIR/$tdir/toopen || error "lsattr (2)"
+	chattr -i $DIR/$tdir/toopen || error "chattr (2)"
+	ln -s $DIR/$tdir/toopen $DIR/$tdir/toopen_sl2 || error "symlink (2)"
+	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl2 || error "hardlink (2)"
+	echo 3 > /proc/sys/vm/drop_caches
+
+	# store wrong sepol in nodemap
+	sepol="0:policy:0:0000000000000000000000000000000000000000000000000000000000000000"
+	do_facet mgs $LCTL set_param nodemap.nm1.sepol="$sepol"
+	do_facet mgs $LCTL set_param -P nodemap.nm1.sepol="$sepol"
+	check_nodemap nm1 sepol $sepol
+
+	# metadata ops with sepol
+	touch $DIR/$tdir/f4 && error "touch (3)"
+	lfs setstripe -c1 $DIR/$tdir/f5 && error "lfs setstripe (3)"
+	mkdir $DIR/$tdir/d4 && error "mkdir (3)"
+	lfs setdirstripe -i0 -c1 $DIR/$tdir/d5 && error "lfs setdirstripe (3)"
+	cat $DIR/$tdir/toopen && error "cat (3)"
+	rm -f $DIR/$tdir/ftoremove2 && error "rm (3)"
+	rmdir $DIR/$tdir/dtoremove2 && error "rmdir (3)"
+	mv $DIR/$tdir/ftorename2 $DIR/$tdir/ftorename && error "mv (5)"
+	mv $DIR/$tdir/dtorename2 $DIR/$tdir/dtorename && error "mv (6)"
+	getfattr -n user.myattr $DIR/$tdir/toopen && error "getfattr (3)"
+	setfattr -n user.myattr -v myval3 $DIR/$tdir/toopen &&
+		error "setfattr (3)"
+	chattr +i $DIR/$tdir/toopen && error "chattr (3)"
+	lsattr $DIR/$tdir/toopen && error "lsattr (3)"
+	chattr -i $DIR/$tdir/toopen && error "chattr (3)"
+	ln -s $DIR/$tdir/toopen $DIR/$tdir/toopen_sl3 && error "symlink (3)"
+	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl3 && error "hardlink (3)"
+
+	# reset correct sepol
+	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
+	do_facet mgs $LCTL set_param nodemap.nm1.sepol="$sepol"
+	do_facet mgs $LCTL set_param -P nodemap.nm1.sepol="$sepol"
+	check_nodemap nm1 sepol $sepol
+
+	# metadata ops with sepol every 10 seconds only
+	echo 10 > /sys/module/ptlrpc/parameters/send_sepol
+	touch $DIR/$tdir/f6 || error "touch (4)"
+	lfs setstripe -c1 $DIR/$tdir/f7 || error "lfs setstripe (4)"
+	mkdir $DIR/$tdir/d6 || error "mkdir (4)"
+	lfs setdirstripe -i0 -c1 $DIR/$tdir/d7 || error "lfs setdirstripe (4)"
+	cat $DIR/$tdir/toopen || error "cat (4)"
+	rm -f $DIR/$tdir/ftoremove2 || error "rm (4)"
+	rmdir $DIR/$tdir/dtoremove2 || error "rmdir (4)"
+	mv $DIR/$tdir/ftorename2 $DIR/$tdir/ftorename || error "mv (7)"
+	mv $DIR/$tdir/dtorename2 $DIR/$tdir/dtorename || error "mv (8)"
+	getfattr -n user.myattr $DIR/$tdir/toopen || error "getfattr (4)"
+	setfattr -n user.myattr -v myval3 $DIR/$tdir/toopen ||
+		error "setfattr (4)"
+	chattr +i $DIR/$tdir/toopen || error "chattr (4)"
+	lsattr $DIR/$tdir/toopen || error "lsattr (4)"
+	chattr -i $DIR/$tdir/toopen || error "chattr (4)"
+	ln -s $DIR/$tdir/toopen $DIR/$tdir/toopen_sl4 || error "symlink (4)"
+	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl4 || error "hardlink (4)"
+	echo 3 > /proc/sys/vm/drop_caches
+
+	# change one SELinux boolean value
+	sebool=$(getsebool deny_ptrace | awk '{print $3}')
+	if [ "$sebool" == "off" ]; then
+		setsebool -P deny_ptrace on
+	else
+		setsebool -P deny_ptrace off
+	fi
+
+	# sepol should not be checked yet, so metadata ops without matching
+	# sepol should succeed
+	touch $DIR/$tdir/f8 || error "touch (5)"
+	lfs setstripe -c1 $DIR/$tdir/f9 || error "lfs setstripe (5)"
+	mkdir $DIR/$tdir/d8 || error "mkdir (5)"
+	lfs setdirstripe -i0 -c1 $DIR/$tdir/d9 || error "lfs setdirstripe (5)"
+	cat $DIR/$tdir/toopen || error "cat (5)"
+	rm -f $DIR/$tdir/ftoremove3 || error "rm (5)"
+	rmdir $DIR/$tdir/dtoremove3 || error "rmdir (5)"
+	mv $DIR/$tdir/ftorename $DIR/$tdir/ftorename2 || error "mv (9)"
+	mv $DIR/$tdir/dtorename $DIR/$tdir/dtorename2 || error "mv (10)"
+	getfattr -n user.myattr $DIR/$tdir/toopen || error "getfattr (5)"
+	setfattr -n user.myattr -v myval4 $DIR/$tdir/toopen ||
+		error "setfattr (5)"
+	chattr +i $DIR/$tdir/toopen || error "chattr (5)"
+	lsattr $DIR/$tdir/toopen || error "lsattr (5)"
+	chattr -i $DIR/$tdir/toopen || error "chattr (5)"
+	ln -s $DIR/$tdir/toopen $DIR/$tdir/toopen_sl5 || error "symlink (5)"
+	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl5 || error "hardlink (5)"
+	echo 3 > /proc/sys/vm/drop_caches
+
+	sleep 10
+	# metadata ops without matching sepol: should fail now
+	touch $DIR/$tdir/f10 && error "touch (6)"
+	lfs setstripe -c1 $DIR/$tdir/f11 && error "lfs setstripe (6)"
+	mkdir $DIR/$tdir/d10 && error "mkdir (6)"
+	lfs setdirstripe -i0 -c1 $DIR/$tdir/d11 && error "lfs setdirstripe (6)"
+	cat $DIR/$tdir/toopen && error "cat (6)"
+	rm -f $DIR/$tdir/ftoremove4 && error "rm (6)"
+	rmdir $DIR/$tdir/dtoremove4 && error "rmdir (6)"
+	mv $DIR/$tdir/ftorename2 $DIR/$tdir/ftorename && error "mv (11)"
+	mv $DIR/$tdir/dtorename2 $DIR/$tdir/dtorename && error "mv (12)"
+	getfattr -n user.myattr $DIR/$tdir/toopen && error "getfattr (6)"
+	setfattr -n user.myattr -v myval5 $DIR/$tdir/toopen &&
+		error "setfattr (6)"
+	chattr +i $DIR/$tdir/toopen && error "chattr (6)"
+	lsattr $DIR/$tdir/toopen && error "lsattr (6)"
+	chattr -i $DIR/$tdir/toopen && error "chattr (6)"
+	ln -s $DIR/$tdir/toopen $DIR/$tdir/toopen_sl6 && error "symlink (6)"
+	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl6 && error "hardlink (6)"
+
+	# restore SELinux boolean value
+	if [ "$sebool" == "off" ]; then
+		setsebool -P deny_ptrace off
+	else
+		setsebool -P deny_ptrace on
+	fi
+
+	# remove nodemap
+	remove_nodemap nm1
+	echo 0 > /sys/module/ptlrpc/parameters/send_sepol
+}
+run_test 21b "Send sepol for metadata ops"
 
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
-
