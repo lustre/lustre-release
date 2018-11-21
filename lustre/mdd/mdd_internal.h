@@ -255,7 +255,7 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
 			    struct mdd_object *cobj,
 			    const struct lu_attr *cattr);
 int mdd_finish_unlink(const struct lu_env *env, struct mdd_object *obj,
-		      struct md_attr *ma, const struct mdd_object *pobj,
+		      struct md_attr *ma, struct mdd_object *pobj,
 		      const struct lu_name *lname, struct thandle *th);
 
 int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid);
@@ -430,15 +430,15 @@ static inline int lu_device_is_mdd(struct lu_device *d)
         return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
 }
 
-static inline struct mdd_device* lu2mdd_dev(struct lu_device *d)
+static inline struct mdd_device *lu2mdd_dev(struct lu_device *d)
 {
         LASSERT(lu_device_is_mdd(d));
         return container_of0(d, struct mdd_device, mdd_md_dev.md_lu_dev);
 }
 
-static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
+static inline struct lu_device *mdd2lu_dev(struct mdd_device *mdd)
 {
-        return (&d->mdd_md_dev.md_lu_dev);
+	return &mdd->mdd_md_dev.md_lu_dev;
 }
 
 static inline struct mdd_object *lu2mdd_obj(struct lu_object *o)
@@ -447,31 +447,31 @@ static inline struct mdd_object *lu2mdd_obj(struct lu_object *o)
         return container_of0(o, struct mdd_object, mod_obj.mo_lu);
 }
 
-static inline struct mdd_device* mdo2mdd(struct md_object *mdo)
+static inline struct mdd_device *mdo2mdd(struct md_object *mdo)
 {
         return lu2mdd_dev(mdo->mo_lu.lo_dev);
 }
 
-static inline struct mdd_object* md2mdd_obj(struct md_object *mdo)
+static inline struct mdd_object *md2mdd_obj(struct md_object *mdo)
 {
-        return container_of0(mdo, struct mdd_object, mod_obj);
+	return container_of0(mdo, struct mdd_object, mod_obj);
 }
 
-static inline const struct dt_device_operations *
-mdd_child_ops(struct mdd_device *d)
+static inline const
+struct dt_device_operations *mdd_child_ops(struct mdd_device *mdd)
 {
-        return d->mdd_child->dd_ops;
+	return mdd->mdd_child->dd_ops;
 }
 
 static inline struct lu_object *mdd2lu_obj(struct mdd_object *obj)
 {
-        return &obj->mod_obj.mo_lu;
+	return &obj->mod_obj.mo_lu;
 }
 
-static inline struct dt_object* mdd_object_child(struct mdd_object *o)
+static inline struct dt_object *mdd_object_child(struct mdd_object *obj)
 {
-        return container_of0(lu_object_next(mdd2lu_obj(o)),
-                             struct dt_object, do_lu);
+	return container_of0(lu_object_next(mdd2lu_obj(obj)),
+			     struct dt_object, do_lu);
 }
 
 static inline struct obd_device *mdd2obd_dev(struct mdd_device *mdd)
@@ -481,47 +481,42 @@ static inline struct obd_device *mdd2obd_dev(struct mdd_device *mdd)
 
 static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)
 {
-        return mdo2mdd(&obj->mod_obj);
+	return mdo2mdd(&obj->mod_obj);
 }
 
-static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
+static inline umode_t mdd_object_type(const struct mdd_object *mdd_obj)
 {
-        return lu_object_fid(&obj->mod_obj.mo_lu);
+	return lu_object_attr(&mdd_obj->mod_obj.mo_lu);
 }
 
-static inline umode_t mdd_object_type(const struct mdd_object *obj)
+static inline int mdd_is_dead_obj(struct mdd_object *mdd_obj)
 {
-        return lu_object_attr(&obj->mod_obj.mo_lu);
+	return mdd_obj && mdd_obj->mod_flags & DEAD_OBJ;
 }
 
-static inline int mdd_is_dead_obj(struct mdd_object *obj)
+static inline bool mdd_is_volatile_obj(struct mdd_object *mdd_obj)
 {
-        return obj && obj->mod_flags & DEAD_OBJ;
+	return mdd_obj->mod_flags & VOLATILE_OBJ;
 }
 
-static inline bool mdd_is_volatile_obj(struct mdd_object *obj)
+static inline bool mdd_is_orphan_obj(struct mdd_object *mdd_obj)
 {
-	return obj->mod_flags & VOLATILE_OBJ;
+	return mdd_obj->mod_flags & ORPHAN_OBJ;
 }
 
-static inline bool mdd_is_orphan_obj(struct mdd_object *obj)
+static inline int mdd_object_exists(struct mdd_object *mdd_obj)
 {
-	return obj->mod_flags & ORPHAN_OBJ;
+	return lu_object_exists(mdd2lu_obj(mdd_obj));
 }
 
-static inline int mdd_object_exists(struct mdd_object *obj)
+static inline int mdd_object_remote(struct mdd_object *mdd_obj)
 {
-        return lu_object_exists(mdd2lu_obj(obj));
+	return lu_object_remote(mdd2lu_obj(mdd_obj));
 }
 
-static inline int mdd_object_remote(struct mdd_object *obj)
+static inline const struct lu_fid *mdd_object_fid(struct mdd_object *mdd_obj)
 {
-	return lu_object_remote(mdd2lu_obj(obj));
-}
-
-static inline const struct lu_fid *mdd_object_fid(struct mdd_object *obj)
-{
-        return lu_object_fid(mdd2lu_obj(obj));
+	return lu_object_fid(mdd2lu_obj(mdd_obj));
 }
 
 static inline struct seq_server_site *mdd_seq_site(struct mdd_device *mdd)
@@ -529,9 +524,9 @@ static inline struct seq_server_site *mdd_seq_site(struct mdd_device *mdd)
 	return mdd2lu_dev(mdd)->ld_site->ld_seq_site;
 }
 
-static inline const char *mdd_obj_dev_name(const struct mdd_object *obj)
+static inline const char *mdd_obj_dev_name(const struct mdd_object *mdd_obj)
 {
-        return lu_dev_name(obj->mod_obj.mo_lu.lo_dev);
+	return lu_dev_name(mdd_obj->mod_obj.mo_lu.lo_dev);
 }
 
 #define MAX_ATIME_DIFF 60

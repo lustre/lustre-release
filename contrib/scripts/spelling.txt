@@ -146,6 +146,7 @@ LPX64i||%llx
 LPX64||%#llx
 \bMAX\(||max_t
 \bMIN\(||min_t
+mdo2fid||mdd_object_fid
 mktemp||mkstemp
 page_cache_get||get_page
 PAGE_CACHE_MASK||PAGE_MASK

@@ -72,12 +72,12 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 	     const struct lu_attr *pattr, const struct lu_name *lname,
 	     struct lu_fid* fid, int mask)
 {
-	const char *name		= lname->ln_name;
-	const struct dt_key *key	= (const struct dt_key *)name;
-	struct mdd_object *mdd_obj	= md2mdd_obj(pobj);
-	struct mdd_device *m		= mdo2mdd(pobj);
-	struct dt_object *dir		= mdd_object_child(mdd_obj);
-        int rc;
+	const char *name = lname->ln_name;
+	const struct dt_key *key = (const struct dt_key *)name;
+	struct mdd_object *mdd_obj = md2mdd_obj(pobj);
+	struct dt_object *dir = mdd_object_child(mdd_obj);
+	int rc;
+
 	ENTRY;
 
 	if (unlikely(mdd_is_dead_obj(mdd_obj)))
@@ -87,8 +87,9 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 		RETURN(-ESTALE);
 
 	if (mdd_object_remote(mdd_obj)) {
-		CDEBUG(D_INFO, "%s: Object "DFID" locates on remote server\n",
-		       mdd2obd_dev(m)->obd_name, PFID(mdo2fid(mdd_obj)));
+		CDEBUG(D_INFO, "%s: Object "DFID" located on remote server\n",
+		       mdd_obj_dev_name(mdd_obj),
+		       PFID(mdd_object_fid(mdd_obj)));
 	}
 
 	rc = mdd_permission_internal_locked(env, mdd_obj, pattr, mask,
@@ -277,10 +278,10 @@ static int mdd_is_parent(const struct lu_env *env,
 	struct lu_fid *pfid;
 	int rc;
 
-	LASSERT(!lu_fid_eq(mdo2fid(mo), tfid));
+	LASSERT(!lu_fid_eq(mdd_object_fid(mo), tfid));
 	pfid = &mdd_env_info(env)->mti_fid;
 
-	if (mdd_is_root(mdd, mdo2fid(mo)))
+	if (mdd_is_root(mdd, mdd_object_fid(mo)))
 		return 0;
 
 	if (mdd_is_root(mdd, tfid))
@@ -580,12 +581,11 @@ int mdd_may_delete(const struct lu_env *env, struct mdd_object *tpobj,
 	/* additional check the rename case */
 	if (cattr) {
 		if (S_ISDIR(cattr->la_mode)) {
-			struct mdd_device *mdd = mdo2mdd(&tobj->mod_obj);
-
 			if (!S_ISDIR(tattr->la_mode))
 				RETURN(-ENOTDIR);
 
-			if (lu_fid_eq(mdo2fid(tobj), &mdd->mdd_root_fid))
+			if (mdd_is_root(mdo2mdd(&tobj->mod_obj),
+					mdd_object_fid(tobj)))
 				RETURN(-EBUSY);
 		} else if (S_ISDIR(tattr->la_mode))
 			RETURN(-EISDIR);
@@ -1054,7 +1054,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		mdd_changelog_rec_ext_jobid(&rec->cr, uc->uc_jobid);
 
 	if (likely(target != NULL)) {
-		rec->cr.cr_tfid = *mdo2fid(target);
+		rec->cr.cr_tfid = *mdd_object_fid(target);
 		target->mod_cltime = ktime_get();
 	} else {
 		fid_zero(&rec->cr.cr_tfid);
@@ -1340,7 +1340,7 @@ static int mdd_declare_link(const struct lu_env *env,
 			    struct lu_attr *la,
 			    struct linkea_data *data)
 {
-	struct lu_fid tfid = *mdo2fid(c);
+	struct lu_fid tfid = *mdd_object_fid(c);
 	int rc;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
@@ -1421,8 +1421,8 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 	/* Note: even this function will change ldata, but it comes from
 	 * thread_info, which is completely temporary and only seen in
 	 * this function, so we do not need reset ldata once it fails.*/
-	rc = mdd_linkea_prepare(env, mdd_sobj, NULL, NULL, mdo2fid(mdd_tobj),
-				lname, 0, 0, ldata);
+	rc = mdd_linkea_prepare(env, mdd_sobj, NULL, NULL,
+				mdd_object_fid(mdd_tobj), lname, 0, 0, ldata);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1447,7 +1447,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 			GOTO(out_unlock, rc);
 	}
 
-	*tfid = *mdo2fid(mdd_sobj);
+	*tfid = *mdd_object_fid(mdd_sobj);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING3))
 		tfid->f_oid = cfs_fail_val;
 
@@ -1468,7 +1468,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 	if (rc == 0)
 		/* Note: The failure of links_add should not cause the
 		 * link failure, so do not check return value. */
-		mdd_links_add(env, mdd_sobj, mdo2fid(mdd_tobj),
+		mdd_links_add(env, mdd_sobj, mdd_object_fid(mdd_tobj),
 			      lname, handle, ldata, 0);
 
 	EXIT;
@@ -1476,8 +1476,8 @@ out_unlock:
 	mdd_write_unlock(env, mdd_sobj);
 	if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
-					    mdo2fid(mdd_tobj), NULL, NULL,
-					    lname, NULL, handle);
+					    mdd_object_fid(mdd_tobj), NULL,
+					    NULL, lname, NULL, handle);
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
 	if (is_vmalloc_addr(ldata->ld_buf))
@@ -1532,7 +1532,7 @@ static int mdd_declare_finish_unlink(const struct lu_env *env,
 /* caller should take a lock before calling */
 int mdd_finish_unlink(const struct lu_env *env,
 		      struct mdd_object *obj, struct md_attr *ma,
-		      const struct mdd_object *pobj,
+		      struct mdd_object *pobj,
 		      const struct lu_name *lname,
 		      struct thandle *th)
 {
@@ -1570,7 +1570,7 @@ int mdd_finish_unlink(const struct lu_env *env,
 		}
 	} else if (!is_dir) {
 		/* old files may not have link ea; ignore errors */
-		mdd_links_del(env, obj, mdo2fid(pobj), lname, th);
+		mdd_links_del(env, obj, mdd_object_fid(pobj), lname, th);
 	}
 
 	RETURN(rc);
@@ -1767,7 +1767,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		rc = mdo_ref_del(env, mdd_cobj, handle);
 		if (rc != 0) {
 			__mdd_index_insert_only(env, mdd_pobj,
-						mdo2fid(mdd_cobj),
+						mdd_object_fid(mdd_cobj),
 						mdd_object_type(mdd_cobj),
 						name, handle);
 			GOTO(cleanup, rc);
@@ -1838,8 +1838,8 @@ cleanup:
 
 		rc = mdd_changelog_ns_store(env, mdd,
 			is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
-			mdd_cobj, mdo2fid(mdd_pobj), NULL, NULL, lname, NULL,
-			handle);
+			mdd_cobj, mdd_object_fid(mdd_pobj), NULL, NULL,
+			lname, NULL, handle);
 	}
 
 stop:
@@ -1960,8 +1960,8 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
 	if (!S_ISDIR(attr->la_mode))
 		RETURN(0);
 
-	rc = mdo_declare_index_insert(env, child, mdo2fid(child), S_IFDIR,
-				      dot, handle);
+	rc = mdo_declare_index_insert(env, child, mdd_object_fid(child),
+				      S_IFDIR, dot, handle);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -1969,8 +1969,8 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
 	if (rc != 0)
 		RETURN(rc);
 
-	rc = mdo_declare_index_insert(env, child, mdo2fid(parent), S_IFDIR,
-				      dotdot, handle);
+	rc = mdo_declare_index_insert(env, child, mdd_object_fid(parent),
+				      S_IFDIR, dotdot, handle);
 
 	RETURN(rc);
 }
@@ -1985,9 +1985,9 @@ static int mdd_object_initialize(const struct lu_env *env,
 	ENTRY;
 
 	if (S_ISDIR(attr->la_mode)) {
-                /* Add "." and ".." for newly created dir */
-                mdo_ref_add(env, child, handle);
-                rc = __mdd_index_insert_only(env, child, mdo2fid(child),
+		/* Add "." and ".." for newly created dir */
+		mdo_ref_add(env, child, handle);
+		rc = __mdd_index_insert_only(env, child, mdd_object_fid(child),
 					     S_IFDIR, dot, handle);
 		if (rc == 0)
 			rc = __mdd_index_insert_only(env, child, pfid, S_IFDIR,
@@ -2259,8 +2259,9 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
 		enum changelog_rec_type type;
 
-		rc = mdo_declare_index_insert(env, p, mdo2fid(c), attr->la_mode,
-					      name->ln_name, handle);
+		rc = mdo_declare_index_insert(env, p, mdd_object_fid(c),
+					      attr->la_mode, name->ln_name,
+					      handle);
 		if (rc != 0)
 			return rc;
 
@@ -2353,7 +2354,8 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 	 * created in declare phase, they also needs to be added to master
 	 * object as sub-directory entry. So it has to initialize the master
 	 * object, then set dir striped EA.(in mdo_xattr_set) */
-	rc = mdd_object_initialize(env, mdo2fid(pobj), son, attr, handle);
+	rc = mdd_object_initialize(env, mdd_object_fid(pobj), son, attr,
+				   handle);
 	if (rc != 0)
 		GOTO(err_destroy, rc);
 
@@ -2653,13 +2655,13 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		rc = mdd_orphan_insert(env, son, handle);
 		GOTO(out_volatile, rc);
 	} else {
-		rc = __mdd_index_insert(env, mdd_pobj, mdo2fid(son),
-				      attr->la_mode, name, handle);
+		rc = __mdd_index_insert(env, mdd_pobj, mdd_object_fid(son),
+					attr->la_mode, name, handle);
 		if (rc != 0)
 			GOTO(err_created, rc);
 
-		mdd_links_add(env, son, mdo2fid(mdd_pobj), lname, handle,
-			      ldata, 1);
+		mdd_links_add(env, son, mdd_object_fid(mdd_pobj), lname,
+			      handle, ldata, 1);
 
 		/* update parent directory mtime/ctime */
 		*la = *attr;
@@ -2709,14 +2711,14 @@ out_volatile:
 		mdd_write_unlock(env, son);
 	}
 
-	if (rc == 0 && fid_is_namespace_visible(mdo2fid(son)) &&
+	if (rc == 0 && fid_is_namespace_visible(mdd_object_fid(son)) &&
 	    likely((spec->sp_cr_flags & MDS_OPEN_VOLATILE) == 0))
 		rc = mdd_changelog_ns_store(env, mdd,
 				S_ISDIR(attr->la_mode) ? CL_MKDIR :
 				S_ISREG(attr->la_mode) ? CL_CREATE :
 				S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
-				0, son, mdo2fid(mdd_pobj), NULL, NULL, lname,
-				NULL, handle);
+				0, son, mdd_object_fid(mdd_pobj), NULL, NULL,
+				lname, NULL, handle);
 out_stop:
 	rc2 = mdd_trans_stop(env, mdd, rc, handle);
 	if (rc == 0) {
@@ -2755,36 +2757,36 @@ enum rename_order {
 };
 
 static int mdd_rename_order(const struct lu_env *env,
-                            struct mdd_device *mdd,
-                            struct mdd_object *src_pobj,
+			    struct mdd_device *mdd,
+			    struct mdd_object *src_pobj,
 			    const struct lu_attr *pattr,
-                            struct mdd_object *tgt_pobj)
+			    struct mdd_object *tgt_pobj)
 {
-        /* order of locking, 1 - tgt-src, 0 - src-tgt*/
-        int rc;
-        ENTRY;
+	/* order of locking, 1 - tgt-src, 0 - src-tgt*/
+	int rc;
 
-        if (src_pobj == tgt_pobj)
-                RETURN(MDD_RN_SAME);
+	ENTRY;
+	if (src_pobj == tgt_pobj)
+		RETURN(MDD_RN_SAME);
 
-        /* compared the parent child relationship of src_p&tgt_p */
-        if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(src_pobj))){
-                rc = MDD_RN_SRCTGT;
-        } else if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(tgt_pobj))) {
-                rc = MDD_RN_TGTSRC;
-        } else {
+	/* compared the parent child relationship of src_p & tgt_p */
+	if (lu_fid_eq(&mdd->mdd_root_fid, mdd_object_fid(src_pobj))) {
+		rc = MDD_RN_SRCTGT;
+	} else if (lu_fid_eq(&mdd->mdd_root_fid, mdd_object_fid(tgt_pobj))) {
+		rc = MDD_RN_TGTSRC;
+	} else {
 		rc = mdd_is_parent(env, mdd, src_pobj, pattr,
-				   mdo2fid(tgt_pobj));
-                if (rc == -EREMOTE)
-                        rc = 0;
+				   mdd_object_fid(tgt_pobj));
+		if (rc == -EREMOTE)
+			rc = 0;
 
-                if (rc == 1)
-                        rc = MDD_RN_TGTSRC;
-                else if (rc == 0)
-                        rc = MDD_RN_SRCTGT;
-        }
+		if (rc == 1)
+			rc = MDD_RN_TGTSRC;
+		else if (rc == 0)
+			rc = MDD_RN_SRCTGT;
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* has not mdd_write{read}_lock on any obj yet. */
@@ -2851,28 +2853,27 @@ static int mdd_declare_rename(const struct lu_env *env,
 			      struct linkea_data *ldata,
 			      struct thandle *handle)
 {
-	struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
+	struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
 	int rc;
 
 	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
 	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
-        LASSERT(mdd_spobj);
-        LASSERT(mdd_tpobj);
-        LASSERT(mdd_sobj);
+	LASSERT(mdd_spobj);
+	LASSERT(mdd_tpobj);
+	LASSERT(mdd_sobj);
 
-        /* name from source dir */
-        rc = mdo_declare_index_delete(env, mdd_spobj, sname->ln_name, handle);
-        if (rc)
-                return rc;
+	/* name from source dir */
+	rc = mdo_declare_index_delete(env, mdd_spobj, sname->ln_name, handle);
+	if (rc)
+		return rc;
 
-        /* .. from source child */
-        if (S_ISDIR(mdd_object_type(mdd_sobj))) {
-                /* source child can be directory,
-                 * counted by source dir's nlink */
-                rc = mdo_declare_ref_del(env, mdd_spobj, handle);
-                if (rc)
-                        return rc;
+	/* .. from source child */
+	if (S_ISDIR(mdd_object_type(mdd_sobj))) {
+		/* source child can be directory, count by source dir's nlink */
+		rc = mdo_declare_ref_del(env, mdd_spobj, handle);
+		if (rc)
+			return rc;
 		if (mdd_spobj != mdd_tpobj) {
 			rc = mdo_declare_index_delete(env, mdd_sobj, dotdot,
 						      handle);
@@ -2880,7 +2881,7 @@ static int mdd_declare_rename(const struct lu_env *env,
 				return rc;
 
 			rc = mdo_declare_index_insert(env, mdd_sobj,
-						      mdo2fid(mdd_tpobj),
+						      mdd_object_fid(mdd_tpobj),
 						      S_IFDIR, dotdot, handle);
 			if (rc != 0)
 				return rc;
@@ -2912,7 +2913,7 @@ static int mdd_declare_rename(const struct lu_env *env,
 		return rc;
 
 	/* new name */
-	rc = mdo_declare_index_insert(env, mdd_tpobj, mdo2fid(mdd_sobj),
+	rc = mdo_declare_index_insert(env, mdd_tpobj, mdd_object_fid(mdd_sobj),
 				      mdd_object_type(mdd_sobj),
 				      tname->ln_name, handle);
 	if (rc != 0)
@@ -2981,8 +2982,8 @@ static int mdd_rename(const struct lu_env *env,
 	struct lu_attr *tpattr = MDD_ENV_VAR(env, tpattr);
 	struct thandle *handle;
 	struct linkea_data  *ldata = &mdd_env_info(env)->mti_link_data;
-	const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
-	const struct lu_fid *spobj_fid = mdo2fid(mdd_spobj);
+	const struct lu_fid *tpobj_fid = mdd_object_fid(mdd_tpobj);
+	const struct lu_fid *spobj_fid = mdd_object_fid(mdd_spobj);
 	bool is_dir;
 	bool tobj_ref = 0;
 	bool tobj_locked = 0;
@@ -3100,12 +3101,12 @@ static int mdd_rename(const struct lu_env *env,
 
 	/* Update the linkEA for the source object */
 	mdd_write_lock(env, mdd_sobj, DT_SRC_CHILD);
-	rc = mdd_links_rename(env, mdd_sobj, mdo2fid(mdd_spobj), lsname,
-			      mdo2fid(mdd_tpobj), ltname, handle, ldata,
-			      0, 0);
+	rc = mdd_links_rename(env, mdd_sobj, mdd_object_fid(mdd_spobj),
+			      lsname, mdd_object_fid(mdd_tpobj), ltname,
+			      handle, ldata, 0, 0);
 	if (rc == -ENOENT)
 		/* Old files might not have EA entry */
-		mdd_links_add(env, mdd_sobj, mdo2fid(mdd_spobj),
+		mdd_links_add(env, mdd_sobj, mdd_object_fid(mdd_spobj),
 			      lsname, handle, NULL, 0);
 	mdd_write_unlock(env, mdd_sobj);
 	/* We don't fail the transaction if the link ea can't be
@@ -3219,9 +3220,9 @@ fixup_tpobj:
 			}
 
 			rc2 = __mdd_index_insert(env, mdd_tpobj,
-						  mdo2fid(mdd_tobj),
-						  mdd_object_type(mdd_tobj),
-						  tname, handle);
+						 mdd_object_fid(mdd_tobj),
+						 mdd_object_type(mdd_tobj),
+						 tname, handle);
 			if (rc2 != 0)
 				CWARN("tp obj fix error: rc = %d\n", rc2);
 		}
@@ -3292,7 +3293,8 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 		mdd_read_lock(env, sobj, DT_SRC_CHILD);
 		if (sobj->mod_count > 0) {
 			CDEBUG(D_INFO, "%s: "DFID" is opened, count %d\n",
-			       mdd2obd_dev(mdd)->obd_name, PFID(mdo2fid(sobj)),
+			       mdd_obj_dev_name(sobj),
+			       PFID(mdd_object_fid(sobj)),
 			       sobj->mod_count);
 			mdd_read_unlock(env, sobj);
 			RETURN(-EBUSY);
@@ -3670,7 +3672,7 @@ static int mdd_declare_update_link(const struct lu_env *env,
 
 	rc = mdo_declare_index_delete(env, pobj, lname->ln_name, handle);
 	if (!rc)
-		rc = mdo_declare_index_insert(env, pobj, mdo2fid(tobj),
+		rc = mdo_declare_index_insert(env, pobj, mdd_object_fid(tobj),
 					      mdd_object_type(sobj),
 					      lname->ln_name, handle);
 	mdd_object_put(env, pobj);
@@ -3709,7 +3711,7 @@ static int mdd_update_link(const struct lu_env *env,
 		RETURN(0);
 
 	CDEBUG(D_INFO, "update "DFID"/"DNAME":"DFID"\n",
-	       PFID(fid), PNAME(lname), PFID(mdo2fid(tobj)));
+	       PFID(fid), PNAME(lname), PFID(mdd_object_fid(tobj)));
 
 	pobj = mdd_object_find(env, mdd, fid);
 	if (IS_ERR(pobj)) {
@@ -3727,7 +3729,7 @@ static int mdd_update_link(const struct lu_env *env,
 	mdd_write_lock(env, pobj, DT_TGT_PARENT);
 	rc = __mdd_index_delete_only(env, pobj, lname->ln_name, handle);
 	if (!rc)
-		rc = __mdd_index_insert_only(env, pobj, mdo2fid(tobj),
+		rc = __mdd_index_insert_only(env, pobj, mdd_object_fid(tobj),
 					     mdd_object_type(sobj),
 					     lname->ln_name, handle);
 	mdd_write_unlock(env, pobj);
@@ -3860,8 +3862,8 @@ static int migrate_linkea_prepare(const struct lu_env *env,
 	ENTRY;
 
 	memset(ldata, 0, sizeof(*ldata));
-	rc = mdd_linkea_prepare(env, sobj, mdo2fid(spobj), lname,
-				mdo2fid(tpobj), lname, 1, 0, ldata);
+	rc = mdd_linkea_prepare(env, sobj, mdd_object_fid(spobj), lname,
+				mdd_object_fid(tpobj), lname, 1, 0, ldata);
 	if (rc)
 		RETURN(rc);
 
@@ -3883,12 +3885,12 @@ static int migrate_linkea_prepare(const struct lu_env *env,
 	if (unlikely(ldata->ld_leh->leh_overflow_time))
 		RETURN(-EOVERFLOW);
 
-	rc = mdd_fld_lookup(env, mdd, mdo2fid(sobj), &source_mdt_index);
+	rc = mdd_fld_lookup(env, mdd, mdd_object_fid(sobj), &source_mdt_index);
 	if (rc)
 		RETURN(rc);
 
-	rc = mdd_iterate_linkea(env, sobj, NULL, lname, mdo2fid(tpobj), ldata,
-				&source_mdt_index, NULL,
+	rc = mdd_iterate_linkea(env, sobj, NULL, lname, mdd_object_fid(tpobj),
+				ldata, &source_mdt_index, NULL,
 				mdd_is_link_on_source_mdt);
 	RETURN(rc);
 }
@@ -3997,7 +3999,8 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 			memset(lmv, 0, sizeof(*lmv));
 			lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
 			lmv->lmv_stripe_count = cpu_to_le32(1);
-			fid_le_to_cpu(&lmv->lmv_stripe_fids[0], mdo2fid(sobj));
+			fid_le_to_cpu(&lmv->lmv_stripe_fids[0],
+				      mdd_object_fid(sobj));
 			sbuf->lb_buf = lmv;
 			sbuf->lb_len = lmv_mds_md_size(1, LMV_MAGIC_V1);
 
@@ -4034,7 +4037,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 		handle->th_complex = 1;
 
 		/* target may be remote, update PFID via sobj. */
-		fid_buf.lb_buf = (void *)mdo2fid(tobj);
+		fid_buf.lb_buf = (void *)mdd_object_fid(tobj);
 		fid_buf.lb_len = sizeof(struct lu_fid);
 		rc = mdo_declare_xattr_set(env, sobj, &fid_buf, XATTR_NAME_FID,
 					   0, handle);
@@ -4047,9 +4050,9 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 	}
 
 	if (!S_ISDIR(attr->la_mode)) {
-		rc = mdd_iterate_linkea(env, sobj, tobj, lname, mdo2fid(tpobj),
-					ldata, NULL, handle,
-					mdd_declare_update_link);
+		rc = mdd_iterate_linkea(env, sobj, tobj, lname,
+					mdd_object_fid(tpobj), ldata, NULL,
+					handle, mdd_declare_update_link);
 		if (rc)
 			return rc;
 
@@ -4156,7 +4159,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 		struct lu_buf fid_buf;
 
 		/* target may be remote, update PFID via sobj. */
-		fid_buf.lb_buf = (void *)mdo2fid(tobj);
+		fid_buf.lb_buf = (void *)mdd_object_fid(tobj);
 		fid_buf.lb_len = sizeof(struct lu_fid);
 		rc = mdo_xattr_set(env, sobj, &fid_buf, XATTR_NAME_FID, 0,
 				   handle);
@@ -4172,8 +4175,9 @@ static int mdd_migrate_create(const struct lu_env *env,
 	}
 
 	if (!S_ISDIR(attr->la_mode))
-		rc = mdd_iterate_linkea(env, sobj, tobj, lname, mdo2fid(tpobj),
-					ldata, NULL, handle, mdd_update_link);
+		rc = mdd_iterate_linkea(env, sobj, tobj, lname,
+					mdd_object_fid(tpobj), ldata,
+					NULL, handle, mdd_update_link);
 
 	RETURN(rc);
 }
@@ -4194,7 +4198,7 @@ static int mdd_declare_migrate_update(const struct lu_env *env,
 				      struct thandle *handle)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	const struct lu_fid *fid = mdo2fid(do_create ? tobj : sobj);
+	const struct lu_fid *fid = mdd_object_fid(do_create ? tobj : sobj);
 	struct lu_attr *la = &info->mti_la_for_fix;
 	int rc;
 
@@ -4266,15 +4270,15 @@ static int mdd_migrate_update(const struct lu_env *env,
 			      struct thandle *handle)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	const struct lu_fid *fid = mdo2fid(do_create ? tobj : sobj);
+	const struct lu_fid *fid = mdd_object_fid(do_create ? tobj : sobj);
 	struct lu_attr *la = &info->mti_la_for_fix;
 	int rc;
 
 	ENTRY;
 
 	CDEBUG(D_INFO, "update %s "DFID"/"DFID" to "DFID"/"DFID"\n",
-	       lname->ln_name, PFID(mdo2fid(spobj)),
-	       PFID(mdo2fid(sobj)), PFID(mdo2fid(tpobj)),
+	       lname->ln_name, PFID(mdd_object_fid(spobj)),
+	       PFID(mdd_object_fid(sobj)), PFID(mdd_object_fid(tpobj)),
 	       PFID(fid));
 
 	rc = __mdd_index_delete(env, spobj, lname->ln_name,
@@ -4550,8 +4554,8 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 		if (rc <= 0) {
 			rc = rc ?: -EFAULT;
 			CERROR("%s: "DFID" readlink failed: rc = %d\n",
-			       mdd2obd_dev(mdd)->obd_name,
-			       PFID(mdo2fid(sobj)), rc);
+			       mdd_obj_dev_name(sobj),
+			       PFID(mdd_object_fid(sobj)), rc);
 			GOTO(out, rc);
 		}
 		spec->u.sp_symname = sbuf.lb_buf;
@@ -4620,8 +4624,9 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 		GOTO(stop_trans, rc);
 
 	rc = mdd_changelog_ns_store(env, mdd, CL_MIGRATE, 0, tobj,
-				    mdo2fid(spobj), mdo2fid(sobj),
-				    mdo2fid(tpobj), lname, lname, handle);
+				    mdd_object_fid(spobj), mdd_object_fid(sobj),
+				    mdd_object_fid(tpobj), lname, lname,
+				    handle);
 	if (rc)
 		GOTO(stop_trans, rc);
 
@@ -4684,8 +4689,8 @@ static int __mdd_dir_declare_layout_shrink(const struct lu_env *env,
 		return mdo_declare_xattr_set(env, obj, lmv_buf,
 					     XATTR_NAME_LMV".set", 0, handle);
 
-	rc = mdo_declare_index_insert(env, stripe, mdo2fid(pobj), S_IFDIR,
-				      dotdot, handle);
+	rc = mdo_declare_index_insert(env, stripe, mdd_object_fid(pobj),
+				      S_IFDIR, dotdot, handle);
 	if (rc)
 		return rc;
 
@@ -4706,8 +4711,8 @@ static int __mdd_dir_declare_layout_shrink(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	rc = mdo_declare_index_insert(env, pobj, mdo2fid(stripe), attr->la_mode,
-				      lname->ln_name, handle);
+	rc = mdo_declare_index_insert(env, pobj, mdd_object_fid(stripe),
+				      attr->la_mode, lname->ln_name, handle);
 	if (rc)
 		return rc;
 
@@ -4807,8 +4812,8 @@ static int __mdd_dir_layout_shrink(const struct lu_env *env,
 	mdd_write_lock(env, obj, DT_SRC_CHILD);
 
 	/* insert dotdot to stripe which points to parent */
-	rc = __mdd_index_insert_only(env, stripe, mdo2fid(pobj), S_IFDIR,
-				     dotdot, handle);
+	rc = __mdd_index_insert_only(env, stripe, mdd_object_fid(pobj),
+				     S_IFDIR, dotdot, handle);
 	if (rc)
 		GOTO(out, rc);
 
@@ -4835,8 +4840,8 @@ static int __mdd_dir_layout_shrink(const struct lu_env *env,
 		GOTO(out, rc);
 
 	/* insert stripe to parent with dir name */
-	rc = __mdd_index_insert_only(env, pobj, mdo2fid(stripe), attr->la_mode,
-				     lname->ln_name, handle);
+	rc = __mdd_index_insert_only(env, pobj, mdd_object_fid(stripe),
+				     attr->la_mode, lname->ln_name, handle);
 	if (rc)
 		GOTO(out, rc);
 

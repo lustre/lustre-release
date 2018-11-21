@@ -431,7 +431,7 @@ static int mdd_xattr_get(const struct lu_env *env,
 		struct thandle *handle;
 		int rc2;
 
-		LASSERT(mdo2fid(mdd_obj) != NULL);
+		LASSERT(mdd_object_fid(mdd_obj) != NULL);
 
 		handle = mdd_trans_create(env, mdd);
 		if (IS_ERR(handle))
@@ -447,8 +447,8 @@ static int mdd_xattr_get(const struct lu_env *env,
 			GOTO(stop, rc2);
 
 		rc2 = mdd_changelog_data_store_by_fid(env, mdd, CL_GETXATTR, 0,
-						      mdo2fid(mdd_obj), name,
-						      handle);
+						      mdd_object_fid(mdd_obj),
+						      name, handle);
 
 stop:
 		rc2 = mdd_trans_stop(env, mdd, rc2, handle);
@@ -966,7 +966,8 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 	}
 
 	rc = mdd_changelog_data_store_by_fid(env, mdd, type, clf_flags,
-					     mdo2fid(mdd_obj), NULL, handle);
+					     mdd_object_fid(mdd_obj),
+					     NULL, handle);
 	if (rc == 0)
 		mdd_obj->mod_cltime = ktime_get();
 
@@ -1002,8 +1003,8 @@ int mdd_changelog_data_store_xattr(const struct lu_env *env,
 	}
 
 	rc = mdd_changelog_data_store_by_fid(env, mdd, type, clf_flags,
-					     mdo2fid(mdd_obj), xattr_name,
-					     handle);
+					     mdd_object_fid(mdd_obj),
+					     xattr_name, handle);
 	if (rc == 0)
 		mdd_obj->mod_cltime = ktime_get();
 
@@ -1219,9 +1220,9 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	/* no need to setattr anymore */
 	if (la_copy->la_valid == 0) {
 		CDEBUG(D_INODE,
-		       "%s: no valid attribute on "DFID", previous valid is %#llx\n",
-		       mdd2obd_dev(mdd)->obd_name,
-		       PFID(mdo2fid(mdd_obj)), la->la_valid);
+		       "%s: no valid attribute on "DFID", previous was %#llx\n",
+		       mdd_obj_dev_name(mdd_obj),
+		       PFID(mdd_object_fid(mdd_obj)), la->la_valid);
 
 		RETURN(0);
 	}
@@ -1531,7 +1532,7 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 	int rc;
 	ENTRY;
 
-	rc = lu_fid_cmp(mdo2fid(obj), mdo2fid(vic));
+	rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
 	if (rc == 0) /* same fid */
 		RETURN(-EPERM);
 
@@ -1599,9 +1600,9 @@ out_restore:
 		int rc2 = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV,
 					LU_XATTR_REPLACE, handle);
 		if (rc2)
-			CERROR("%s: failed to rollback of layout of: "DFID
-			       ": %d, file state unknown\n",
-			       mdd_obj_dev_name(obj), PFID(mdo2fid(obj)), rc2);
+			CERROR("%s: failed rollback of "DFID" layout: file state unknown: rc = %d\n",
+			       mdd_obj_dev_name(obj),
+			       PFID(mdd_object_fid(obj)), rc2);
 	}
 
 out:
@@ -1762,7 +1763,7 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 
 	ENTRY;
 
-	rc = lu_fid_cmp(mdo2fid(obj), mdo2fid(vic));
+	rc = lu_fid_cmp(mdd_object_fid(obj), mdd_object_fid(vic));
 	if (rc == 0) /* same fid */
 		RETURN(-EPERM);
 
@@ -1838,9 +1839,9 @@ out_restore:
 		int rc2 = mdo_xattr_set(env, obj, buf_save, XATTR_NAME_LOV,
 					LU_XATTR_REPLACE, handle);
 		if (rc2)
-			CERROR("%s: failed to rollback of layout of: "DFID
-			       ": %d, file state unkonwn.\n",
-			       mdd_obj_dev_name(obj), PFID(mdo2fid(obj)), rc2);
+			CERROR("%s: failed rollback "DFID" layout: file state unkonwn: rc = %d\n",
+			       mdd_obj_dev_name(obj),
+			       PFID(mdd_object_fid(obj)), rc2);
 	}
 out:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
@@ -2148,11 +2149,11 @@ static int mdd_layout_swap_allowed(const struct lu_env *env,
 				   const struct lu_attr *attr2,
 				   __u64 flags)
 {
-	const struct lu_fid	*fid1, *fid2;
+	const struct lu_fid *fid1, *fid2;
 	ENTRY;
 
-	fid1 = mdo2fid(o1);
-	fid2 = mdo2fid(o2);
+	fid1 = mdd_object_fid(o1);
+	fid2 = mdd_object_fid(o2);
 
 	if (!fid_is_norm(fid1) &&
 	    (!fid_is_igif(fid1) || IS_ERR(mdd_links_get(env, o1))))
@@ -2293,8 +2294,8 @@ stop:
 out:
 	/* Ignore failure but report the error */
 	if (rc)
-		CERROR("%s: "DFID" can't truncate DOM inode data, rc = %d\n",
-		       mdd_obj_dev_name(mo), PFID(mdo2fid(mo)), rc);
+		CERROR("%s: can't truncate DOM inode "DFID" data: rc = %d\n",
+		       mdd_obj_dev_name(mo), PFID(mdd_object_fid(mo)), rc);
 	return rc;
 }
 
@@ -2330,7 +2331,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 	/* we have to sort the 2 obj, so locking will always
 	 * be in the same order, even in case of 2 concurrent swaps */
-	rc = lu_fid_cmp(mdo2fid(fst_o), mdo2fid(snd_o));
+	rc = lu_fid_cmp(mdd_object_fid(fst_o), mdd_object_fid(snd_o));
 	if (rc == 0) /* same fid ? */
 		RETURN(-EPERM);
 
@@ -2395,15 +2396,17 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 	if (domsize_vlt > 0 && domsize_dom == 0) {
 		rc = -EOPNOTSUPP;
-		CDEBUG(D_LAYOUT, "cannot swap layout for "DFID": OST to DOM "
-		       "migration is not supported: rc = %d\n",
-		       PFID(mdo2fid(snd_o)), rc);
+		CDEBUG(D_LAYOUT,
+		       "%s: cannot swap "DFID" layout: OST to DOM migration not supported: rc = %d\n",
+		       mdd_obj_dev_name(snd_o),
+		       PFID(mdd_object_fid(snd_o)), rc);
 		GOTO(stop, rc);
 	} else if (domsize_vlt > 0 && domsize_dom != domsize_vlt) {
 		rc = -EOPNOTSUPP;
-		CDEBUG(D_LAYOUT, "cannot swap layout for "DFID": new layout "
-		       "must have the same DoM component size: rc = %d\n",
-		       PFID(mdo2fid(fst_o)), rc);
+		CDEBUG(D_LAYOUT,
+		       "%s: cannot swap "DFID" layout: new layout must have same DoM component size: rc = %d\n",
+		       mdd_obj_dev_name(fst_o),
+		       PFID(mdd_object_fid(fst_o)), rc);
 		GOTO(stop, rc);
 	} else if (domsize_vlt > 0) {
 		/* Migration with the same DOM component size, no need to
@@ -2536,9 +2539,9 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 			rc2 = mdd_xattr_hsm_replace(env, fst_o, fst_hsm_buf,
 						    handle);
 			if (rc2 < 0)
-				CERROR("%s: restore "DFID" HSM error: %d/%d\n",
+				CERROR("%s: HSM error restoring "DFID": rc = %d/%d\n",
 				       mdd_obj_dev_name(fst_o),
-				       PFID(mdo2fid(fst_o)), rc, rc2);
+				       PFID(mdd_object_fid(fst_o)), rc, rc2);
 			GOTO(stop, rc);
 		}
 	}
@@ -2597,10 +2600,10 @@ out_restore:
 	do_lbug:
 		if (rc2 < 0) {
 			/* very bad day */
-			CERROR("%s: unable to roll back layout swap. FIDs: "
-			       DFID" and "DFID "error: %d/%d, steps: %d\n",
+			CERROR("%s: unable to roll back layout swap of "DFID" and "DFID", steps: %d: rc = %d/%d\n",
 			       mdd_obj_dev_name(fst_o),
-			       PFID(mdo2fid(snd_o)), PFID(mdo2fid(fst_o)),
+			       PFID(mdd_object_fid(snd_o)),
+			       PFID(mdd_object_fid(fst_o)),
 			       rc, rc2, steps);
 			/* a solution to avoid journal commit is to panic,
 			 * but it has strong consequences so we use LBUG to
@@ -3175,7 +3178,7 @@ find:
 	}
 
 	/* FYI, only the bottom 32 bits of open_flags are recorded */
-	mdd_changelog(env, type, open_flags, md_dev, mdo2fid(mdd_obj));
+	mdd_changelog(env, type, open_flags, md_dev, mdd_object_fid(mdd_obj));
 
 	EXIT;
 out:
