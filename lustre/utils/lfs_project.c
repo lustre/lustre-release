@@ -261,10 +261,6 @@ lfs_project_handle_dir(struct list_head *head, const char *pathname,
 		}
 	}
 
-	if (ret)
-		fprintf(stderr, "%s: failed to handle dir '%s': %s\n",
-			progname, pathname, strerror(errno));
-
 	closedir(dir);
 	return ret;
 }
@@ -304,12 +300,10 @@ static int lfs_project_iterate(const char *pathname,
 	while (!list_empty(&head)) {
 		lpi = list_entry(head.next, struct lfs_project_item, lpi_list);
 		list_del(&lpi->lpi_list);
-		if (rc == 0) {
-			rc = lfs_project_handle_dir(&head, lpi->lpi_pathname,
-						     phc, func);
-			if (!ret && rc)
-				ret = rc;
-		}
+		rc = lfs_project_handle_dir(&head, lpi->lpi_pathname,
+					     phc, func);
+		if (!ret && rc)
+			ret = rc;
 		free(lpi);
 	}
 

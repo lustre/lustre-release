@@ -3014,10 +3014,12 @@ test_57() {
 			" failed to get xattr for '$dir/pipe'" || return 1
 	#command can process further if it hit some errors
 	touch $dir/aaa $dir/bbb
+	mkdir $dir/subdir -p
+	touch $dir/subdir/aaa $dir/subdir/bbb
 	#create one invalid link file
 	ln -s $dir/not_exist_file $dir/ccc
 	local cnt=$(lfs project -r $dir 2>/dev/null | wc -l)
-	[ $cnt -eq 2 ] || error "expected 2 got $cnt"
+	[ $cnt -eq 5 ] || error "expected 5 got $cnt"
 
 	cleanup_quota_test
 }
