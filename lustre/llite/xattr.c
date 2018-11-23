@@ -398,7 +398,8 @@ int ll_xattr_list(struct inode *inode, const char *name, int type, void *buffer,
 		GOTO(out_xattr, rc = -EPERM);
 
 	if (sbi->ll_xattr_cache_enabled && type != XATTR_ACL_ACCESS_T &&
-	    (type != XATTR_SECURITY_T || strcmp(name, "security.selinux"))) {
+	    (type != XATTR_SECURITY_T || strcmp(name, "security.selinux")) &&
+	    (type != XATTR_TRUSTED_T || strcmp(name, XATTR_NAME_SOM))) {
 		rc = ll_xattr_cache_get(inode, name, buffer, size, valid);
 		if (rc == -EAGAIN)
 			goto getxattr_nocache;
