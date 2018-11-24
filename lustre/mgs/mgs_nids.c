@@ -75,64 +75,66 @@ static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
  */
 static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 			   struct mgs_config_res *res, struct page **pages,
-                           int nrpages, int units_total, int unit_size)
+			   int nrpages, int units_total, int unit_size)
 {
-        struct mgs_nidtbl_target *tgt;
-        struct mgs_nidtbl_entry  *entry;
-        struct mgs_nidtbl_entry  *last_in_unit = NULL;
-        struct mgs_target_info   *mti;
-        __u64 version = res->mcr_offset;
-        bool nobuf = false;
-        void *buf = NULL;
-        int bytes_in_unit = 0;
-        int units_in_page = 0;
-        int index = 0;
-        int rc = 0;
-        ENTRY;
+	struct mgs_nidtbl_target *tgt;
+	struct mgs_nidtbl_entry *entry;
+	struct mgs_nidtbl_entry *last_in_unit = NULL;
+	struct mgs_target_info *mti;
+	__u64 version = res->mcr_offset;
+	bool nobuf = false;
+	void *buf = NULL;
+	int bytes_in_unit = 0;
+	int units_in_page = 0;
+	int index = 0;
+	int rc = 0;
 
-        /* make sure unit_size is power 2 */
-        LASSERT((unit_size & (unit_size - 1)) == 0);
+	ENTRY;
+
+	/* make sure unit_size is power 2 */
+	LASSERT((unit_size & (unit_size - 1)) == 0);
 	LASSERT(nrpages << PAGE_SHIFT >= units_total * unit_size);
 
 	mutex_lock(&tbl->mn_lock);
-        LASSERT(nidtbl_is_sane(tbl));
+	LASSERT(nidtbl_is_sane(tbl));
 
-        /* no more entries ? */
-        if (version > tbl->mn_version) {
-                version = tbl->mn_version;
-                goto out;
-        }
+	/* no more entries ? */
+	if (version > tbl->mn_version) {
+		version = tbl->mn_version;
+		goto out;
+	}
 
-        /* iterate over all targets to compose a bitmap by the type of llog.
-         * If the llog is for MDTs, llog entries for OSTs will be returned;
-         * otherwise, it's for clients, then llog entries for both OSTs and
-         * MDTs will be returned.
-         */
+	/*
+	 * iterate over all targets to compose a bitmap by the type of llog.
+	 * If the llog is for MDTs, llog entries for OSTs will be returned;
+	 * otherwise, it's for clients, then llog entries for both OSTs and
+	 * MDTs will be returned.
+	 */
 	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
-                int entry_len = sizeof(*entry);
+		int entry_len = sizeof(*entry);
 
-                if (tgt->mnt_version < version)
-                        continue;
+		if (tgt->mnt_version < version)
+			continue;
 
-                /* write target recover information */
-                mti  = &tgt->mnt_mti;
-                LASSERT(mti->mti_nid_count < MTI_NIDS_MAX);
-                entry_len += mti->mti_nid_count * sizeof(lnet_nid_t);
+		/* write target recover information */
+		mti  = &tgt->mnt_mti;
+		LASSERT(mti->mti_nid_count < MTI_NIDS_MAX);
+		entry_len += mti->mti_nid_count * sizeof(lnet_nid_t);
 
-                if (entry_len > unit_size) {
-                        CWARN("nidtbl: too large entry: entry length %d,"
-                              "unit size: %d\n", entry_len, unit_size);
-                        GOTO(out, rc = -EOVERFLOW);
-                }
+		if (entry_len > unit_size) {
+			CWARN("nidtbl: too large entry: entry length %d, unit size: %d\n",
+			      entry_len, unit_size);
+			GOTO(out, rc = -EOVERFLOW);
+		}
 
-                if (bytes_in_unit < entry_len) {
-                        if (units_total == 0) {
-                                nobuf = true;
-                                break;
-                        }
+		if (bytes_in_unit < entry_len) {
+			if (units_total == 0) {
+				nobuf = true;
+				break;
+			}
 
 			/* check if we need to consume remaining bytes. */
-			if (last_in_unit != NULL && bytes_in_unit) {
+			if (last_in_unit && bytes_in_unit) {
 				last_in_unit->mne_length += bytes_in_unit;
 				rc  += bytes_in_unit;
 				buf += bytes_in_unit;
@@ -143,7 +145,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 			if (units_in_page == 0) {
 				/* allocate a new page */
 				pages[index] = alloc_page(GFP_KERNEL);
-				if (pages[index] == NULL) {
+				if (!pages[index]) {
 					rc = -ENOMEM;
 					break;
 				}
@@ -160,22 +162,22 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 				LASSERT(units_in_page > 0);
 			}
 
-                        /* allocate an unit */
-                        LASSERT(((long)buf & (unit_size - 1)) == 0);
-                        bytes_in_unit = unit_size;
-                        --units_in_page;
-                        --units_total;
-                }
+			/* allocate an unit */
+			LASSERT(((long)buf & (unit_size - 1)) == 0);
+			bytes_in_unit = unit_size;
+			--units_in_page;
+			--units_total;
+		}
 
-                /* fill in entry. */
-                entry = (struct mgs_nidtbl_entry *)buf;
-                entry->mne_version   = tgt->mnt_version;
-                entry->mne_instance  = mti->mti_instance;
-                entry->mne_index     = mti->mti_stripe_index;
-                entry->mne_length    = entry_len;
-                entry->mne_type      = tgt->mnt_type;
-                entry->mne_nid_type  = 0;
-                entry->mne_nid_size  = sizeof(lnet_nid_t);
+		/* fill in entry. */
+		entry = (struct mgs_nidtbl_entry *)buf;
+		entry->mne_version   = tgt->mnt_version;
+		entry->mne_instance  = mti->mti_instance;
+		entry->mne_index     = mti->mti_stripe_index;
+		entry->mne_length    = entry_len;
+		entry->mne_type      = tgt->mnt_type;
+		entry->mne_nid_type  = 0;
+		entry->mne_nid_size  = sizeof(lnet_nid_t);
 		entry->mne_nid_count = mti->mti_nid_count;
 		memcpy(entry->u.nids, mti->mti_nids,
 		       mti->mti_nid_count * sizeof(lnet_nid_t));
@@ -184,25 +186,25 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 		rc     += entry_len;
 		buf    += entry_len;
 
-                bytes_in_unit -= entry_len;
-                last_in_unit   = entry;
+		bytes_in_unit -= entry_len;
+		last_in_unit   = entry;
 
-                CDEBUG(D_MGS, "fsname %s, entry size %d, pages %d/%d/%d/%d.\n",
-                       tbl->mn_fsdb->fsdb_name, entry_len,
-                       bytes_in_unit, index, nrpages, units_total);
-        }
-        if (index > 0)
+		CDEBUG(D_MGS, "fsname %s, entry size %d, pages %d/%d/%d/%d.\n",
+		       tbl->mn_fsdb->fsdb_name, entry_len,
+		       bytes_in_unit, index, nrpages, units_total);
+	}
+	if (index > 0)
 		kunmap(pages[index - 1]);
 out:
-        LASSERT(version <= tbl->mn_version);
-        res->mcr_size = tbl->mn_version;
-        res->mcr_offset = nobuf ? version : tbl->mn_version;
+	LASSERT(version <= tbl->mn_version);
+	res->mcr_size = tbl->mn_version;
+	res->mcr_offset = nobuf ? version : tbl->mn_version;
 	mutex_unlock(&tbl->mn_lock);
-        LASSERT(ergo(version == 1, rc == 0)); /* get the log first time */
+	LASSERT(ergo(version == 1, rc == 0)); /* get the log first time */
 
-        CDEBUG(D_MGS, "Read IR logs %s return with %d, version %llu\n",
-               tbl->mn_fsdb->fsdb_name, rc, version);
-        RETURN(rc);
+	CDEBUG(D_MGS, "Read IR logs %s return with %d, version %llu\n",
+	       tbl->mn_fsdb->fsdb_name, rc, version);
+	RETURN(rc);
 }
 
 static int nidtbl_update_version(const struct lu_env *env,
@@ -210,15 +212,16 @@ static int nidtbl_update_version(const struct lu_env *env,
 				 struct mgs_nidtbl *tbl)
 {
 	struct dt_object *fsdb;
-	struct thandle   *th;
-	u64		  version;
-	struct lu_buf	  buf = {
-				.lb_buf = &version,
-				.lb_len = sizeof(version)
-			  };
-	loff_t		  off = 0;
-	int		  rc;
-        ENTRY;
+	struct thandle *th;
+	u64 version;
+	struct lu_buf buf = {
+			.lb_buf = &version,
+			.lb_len = sizeof(version)
+	};
+	loff_t off = 0;
+	int rc;
+
+	ENTRY;
 
 	if (mgs->mgs_bottom->dd_rdonly)
 		RETURN(0);
@@ -261,15 +264,16 @@ static int nidtbl_read_version(const struct lu_env *env,
 			       u64 *version)
 {
 	struct dt_object *fsdb;
-	struct lu_fid     fid;
-	u64               tmpver;
-	struct lu_buf     buf = {
-				.lb_buf = &tmpver,
-				.lb_len = sizeof(tmpver)
-			  };
-        loff_t               off = 0;
-        int                  rc;
-        ENTRY;
+	struct lu_fid fid;
+	u64 tmpver;
+	struct lu_buf buf = {
+		.lb_buf = &tmpver,
+		.lb_len = sizeof(tmpver)
+	};
+	loff_t off = 0;
+	int rc;
+
+	ENTRY;
 
 	LASSERT(mutex_is_locked(&tbl->mn_lock));
 
@@ -305,36 +309,37 @@ static int nidtbl_read_version(const struct lu_env *env,
 static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 			    struct mgs_target_info *mti)
 {
-        struct mgs_nidtbl        *tbl;
-        struct mgs_nidtbl_target *tgt;
-        bool found = false;
-        int type   = mti->mti_flags & LDD_F_SV_TYPE_MASK;
-        int rc     = 0;
-        ENTRY;
+	struct mgs_nidtbl *tbl;
+	struct mgs_nidtbl_target *tgt;
+	bool found = false;
+	int type = mti->mti_flags & LDD_F_SV_TYPE_MASK;
+	int rc = 0;
 
-        type &= ~LDD_F_SV_TYPE_MGS;
-        LASSERT(type != 0);
+	ENTRY;
+
+	type &= ~LDD_F_SV_TYPE_MGS;
+	LASSERT(type != 0);
 
 	tbl = &fsdb->fsdb_nidtbl;
 	mutex_lock(&tbl->mn_lock);
 	list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
 		struct mgs_target_info *info = &tgt->mnt_mti;
 
-                if (type == tgt->mnt_type &&
-                    mti->mti_stripe_index == info->mti_stripe_index) {
-                        found = true;
-                        break;
-                }
-        }
-        if (!found) {
-                OBD_ALLOC_PTR(tgt);
-                if (tgt == NULL)
-                        GOTO(out, rc = -ENOMEM);
+		if (type == tgt->mnt_type &&
+		    mti->mti_stripe_index == info->mti_stripe_index) {
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		OBD_ALLOC_PTR(tgt);
+		if (!tgt)
+			GOTO(out, rc = -ENOMEM);
 
 		INIT_LIST_HEAD(&tgt->mnt_list);
-		tgt->mnt_fs	 = tbl;
-		tgt->mnt_version = 0;	/* 0 means invalid */
-		tgt->mnt_type	 = type;
+		tgt->mnt_fs = tbl;
+		tgt->mnt_version = 0; /* 0 means invalid */
+		tgt->mnt_type = type;
 
 		++tbl->mn_nr_targets;
 	}
@@ -349,39 +354,40 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
 
 out:
 	mutex_unlock(&tbl->mn_lock);
-        if (rc)
-                CERROR("Write NID table version for file system %s error %d\n",
+	if (rc)
+		CERROR("Write NID table version for file system %s error %d\n",
                        fsdb->fsdb_name, rc);
-        return rc;
+	return rc;
 }
 
 static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 {
-        struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
+	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
 	struct list_head head = LIST_HEAD_INIT(head);
 
 	mutex_lock(&tbl->mn_lock);
-        tbl->mn_nr_targets = 0;
+	tbl->mn_nr_targets = 0;
 	list_splice_init(&tbl->mn_targets, &head);
 	mutex_unlock(&tbl->mn_lock);
 
 	while (!list_empty(&head)) {
-                struct mgs_nidtbl_target *tgt;
-                tgt = list_entry(head.next, struct mgs_nidtbl_target, mnt_list);
+		struct mgs_nidtbl_target *tgt;
+
+		tgt = list_entry(head.next, struct mgs_nidtbl_target, mnt_list);
 		list_del(&tgt->mnt_list);
-                OBD_FREE_PTR(tgt);
-        }
+		OBD_FREE_PTR(tgt);
+	}
 }
 
 static int mgs_nidtbl_init_fs(const struct lu_env *env, struct fs_db *fsdb)
 {
-        struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
+	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
 	int rc;
 
 	INIT_LIST_HEAD(&tbl->mn_targets);
 	mutex_init(&tbl->mn_lock);
-        tbl->mn_nr_targets = 0;
-        tbl->mn_fsdb = fsdb;
+	tbl->mn_nr_targets = 0;
+	tbl->mn_fsdb = fsdb;
 	mutex_lock(&tbl->mn_lock);
 	rc = nidtbl_read_version(env, fsdb->fsdb_mgs, tbl, &tbl->mn_version);
 	mutex_unlock(&tbl->mn_lock);
@@ -492,49 +498,49 @@ void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb)
 /* caller must have held fsdb_mutex */
 static inline void ir_state_graduate(struct fs_db *fsdb)
 {
-        if (fsdb->fsdb_ir_state == IR_STARTUP) {
+	if (fsdb->fsdb_ir_state == IR_STARTUP) {
 		if (ktime_get_real_seconds() >
 		    fsdb->fsdb_mgs->mgs_start_time + ir_timeout) {
-                        fsdb->fsdb_ir_state = IR_FULL;
-                        if (fsdb->fsdb_nonir_clients)
-                                fsdb->fsdb_ir_state = IR_PARTIAL;
-                }
-        }
+			fsdb->fsdb_ir_state = IR_FULL;
+			if (fsdb->fsdb_nonir_clients)
+				fsdb->fsdb_ir_state = IR_PARTIAL;
+		}
+	}
 }
 
 int mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
 		  struct mgs_target_info *mti)
 {
-        struct fs_db *fsdb;
-        bool notify = true;
-        int rc;
+	struct fs_db *fsdb;
+	bool notify = true;
+	int rc;
 
-        if (mti->mti_instance == 0)
-                return -EINVAL;
+	if (mti->mti_instance == 0)
+		return -EINVAL;
 
 	rc = mgs_find_or_make_fsdb(env, mgs, mti->mti_fsname, &fsdb);
-        if (rc)
-                return rc;
+	if (rc)
+		return rc;
 
 	rc = mgs_nidtbl_write(env, fsdb, mti);
-        if (rc)
+	if (rc)
 		GOTO(out, rc);
 
-        /* check ir state */
+	/* check ir state */
 	mutex_lock(&fsdb->fsdb_mutex);
-        ir_state_graduate(fsdb);
-        switch (fsdb->fsdb_ir_state) {
-        case IR_FULL:
-                mti->mti_flags |= LDD_F_IR_CAPABLE;
-                break;
-        case IR_DISABLED:
-                notify = false;
-        case IR_STARTUP:
-        case IR_PARTIAL:
-                break;
-        default:
-                LBUG();
-        }
+	ir_state_graduate(fsdb);
+	switch (fsdb->fsdb_ir_state) {
+	case IR_FULL:
+		mti->mti_flags |= LDD_F_IR_CAPABLE;
+		break;
+	case IR_DISABLED:
+		notify = false;
+	case IR_STARTUP:
+	case IR_PARTIAL:
+		break;
+	default:
+		LBUG();
+	}
 	mutex_unlock(&fsdb->fsdb_mutex);
 
 	LASSERT(ergo(mti->mti_flags & LDD_F_IR_CAPABLE, notify));
@@ -552,72 +558,74 @@ out:
 
 /* NID table can be cached by two entities: Clients and MDTs */
 enum {
-        IR_CLIENT  = 1,
-        IR_MDT     = 2
+	IR_CLIENT  = 1,
+	IR_MDT     = 2
 };
 
 static int delogname(char *logname, char *fsname, int *typ)
 {
-        char *ptr;
-        int   type;
-        int   len;
+	char *ptr;
+	int type;
+	int len;
 
-        ptr = strrchr(logname, '-');
-        if (ptr == NULL)
-                return -EINVAL;
+	ptr = strrchr(logname, '-');
+	if (!ptr)
+		return -EINVAL;
 
-        /* decouple file system name. The llog name may be:
-         * - "prefix-fsname", prefix is "cliir" or "mdtir"
-         */
-        if (strncmp(ptr, "-mdtir", 6) == 0)
-                type = IR_MDT;
-        else if (strncmp(ptr, "-cliir", 6) == 0)
-                type = IR_CLIENT;
-        else
-                return -EINVAL;
+	/*
+	 * decouple file system name. The llog name may be:
+	 * - "prefix-fsname", prefix is "cliir" or "mdtir"
+	 */
+	if (strncmp(ptr, "-mdtir", 6) == 0)
+		type = IR_MDT;
+	else if (strncmp(ptr, "-cliir", 6) == 0)
+		type = IR_CLIENT;
+	else
+		return -EINVAL;
 
-        len = ptr - logname;
-        if (len == 0)
-                return -EINVAL;
+	len = ptr - logname;
+	if (len == 0)
+		return -EINVAL;
 
-        memcpy(fsname, logname, len);
-        fsname[len] = 0;
-        if (typ)
-                *typ = type;
-        return 0;
+	memcpy(fsname, logname, len);
+	fsname[len] = 0;
+	if (typ)
+		*typ = type;
+	return 0;
 }
 
 int mgs_get_ir_logs(struct ptlrpc_request *req)
 {
-	struct lu_env     *env = req->rq_svc_thread->t_env;
+	struct lu_env *env = req->rq_svc_thread->t_env;
 	struct mgs_device *mgs = exp2mgs_dev(req->rq_export);
 	struct fs_db *fsdb = NULL;
-        struct mgs_config_body  *body;
-        struct mgs_config_res   *res;
-        struct ptlrpc_bulk_desc *desc;
-        struct l_wait_info lwi;
-        char               fsname[16];
-        long               bufsize;
-        int                unit_size;
-        int                type;
-        int                rc = 0;
-        int                i;
-        int                bytes;
-        int                page_count;
-        int                nrpages;
-	struct page       **pages = NULL;
-        ENTRY;
+	struct mgs_config_body *body;
+	struct mgs_config_res *res;
+	struct ptlrpc_bulk_desc *desc;
+	struct l_wait_info lwi;
+	char fsname[16];
+	long bufsize;
+	int unit_size;
+	int type;
+	int rc = 0;
+	int i;
+	int bytes;
+	int page_count;
+	int nrpages;
+	struct page **pages = NULL;
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_MGS_CONFIG_BODY);
-        if (body == NULL)
-                RETURN(-EINVAL);
+	ENTRY;
 
-        if (body->mcb_type != CONFIG_T_RECOVER)
-                RETURN(-EINVAL);
+	body = req_capsule_client_get(&req->rq_pill, &RMF_MGS_CONFIG_BODY);
+	if (!body)
+		RETURN(-EINVAL);
 
-        rc = delogname(body->mcb_name, fsname, &type);
-        if (rc)
-                RETURN(rc);
+	if (body->mcb_type != CONFIG_T_RECOVER)
+		RETURN(-EINVAL);
+
+	rc = delogname(body->mcb_name, fsname, &type);
+	if (rc)
+		RETURN(rc);
 
 	bufsize = body->mcb_units << body->mcb_bits;
 	nrpages = (bufsize + PAGE_SIZE - 1) >> PAGE_SHIFT;
@@ -689,33 +697,33 @@ out:
 
 static int lprocfs_ir_set_state(struct fs_db *fsdb, const char *buf)
 {
-        const char *strings[] = IR_STRINGS;
-        int         state = -1;
-        int         i;
+	const char *strings[] = IR_STRINGS;
+	int state = -1;
+	int i;
 
-        for (i = 0; i < ARRAY_SIZE(strings); i++) {
-                if (strcmp(strings[i], buf) == 0) {
-                        state = i;
-                        break;
-                }
-        }
-        if (state < 0)
-                return -EINVAL;
+	for (i = 0; i < ARRAY_SIZE(strings); i++) {
+		if (strcmp(strings[i], buf) == 0) {
+			state = i;
+			break;
+		}
+	}
+	if (state < 0)
+		return -EINVAL;
 
-        CDEBUG(D_MGS, "change fsr state of %s from %s to %s\n",
-               fsdb->fsdb_name, strings[fsdb->fsdb_ir_state], strings[state]);
+	CDEBUG(D_MGS, "change fsr state of %s from %s to %s\n",
+	       fsdb->fsdb_name, strings[fsdb->fsdb_ir_state], strings[state]);
 	mutex_lock(&fsdb->fsdb_mutex);
-        if (state == IR_FULL && fsdb->fsdb_nonir_clients)
-                state = IR_PARTIAL;
-        fsdb->fsdb_ir_state = state;
+	if (state == IR_FULL && fsdb->fsdb_nonir_clients)
+		state = IR_PARTIAL;
+	fsdb->fsdb_ir_state = state;
 	mutex_unlock(&fsdb->fsdb_mutex);
 
-        return 0;
+	return 0;
 }
 
 static int lprocfs_ir_set_timeout(struct fs_db *fsdb, const char *buf)
 {
-        return -EINVAL;
+	return -EINVAL;
 }
 
 static int lprocfs_ir_clear_stats(struct fs_db *fsdb, const char *buf)
@@ -730,28 +738,28 @@ static int lprocfs_ir_clear_stats(struct fs_db *fsdb, const char *buf)
 }
 
 static struct lproc_ir_cmd {
-        char *name;
-        int   namelen;
-        int (*handler)(struct fs_db *, const char *);
+	char *name;
+	int namelen;
+	int (*handler)(struct fs_db *, const char *);
 } ir_cmds[] = {
-        { "state=",   6, lprocfs_ir_set_state },
-        { "timeout=", 8, lprocfs_ir_set_timeout },
-        { "0",        1, lprocfs_ir_clear_stats }
+	{ "state=",   6, lprocfs_ir_set_state },
+	{ "timeout=", 8, lprocfs_ir_set_timeout },
+	{ "0",        1, lprocfs_ir_clear_stats }
 };
 
 int lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
 			size_t count, void *data)
 {
-        struct fs_db *fsdb = data;
-        char *kbuf;
-        char *ptr;
-        int rc = 0;
+	struct fs_db *fsdb = data;
+	char *kbuf;
+	char *ptr;
+	int rc = 0;
 
 	if (count == 0 || count >= PAGE_SIZE)
 		return -EINVAL;
 
 	OBD_ALLOC(kbuf, count + 1);
-	if (kbuf == NULL)
+	if (!kbuf)
 		return -ENOMEM;
 
 	if (copy_from_user(kbuf, buffer, count)) {
@@ -759,42 +767,42 @@ int lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
 		return -EFAULT;
 	}
 
-        kbuf[count] = 0; /* buffer is supposed to end with 0 */
-        if (kbuf[count - 1] == '\n')
-                kbuf[count - 1] = 0;
-        ptr = kbuf;
+	kbuf[count] = 0; /* buffer is supposed to end with 0 */
+	if (kbuf[count - 1] == '\n')
+		kbuf[count - 1] = 0;
+	ptr = kbuf;
 
-        /* fsname=<file system name> must be the 1st entry */
-        while (ptr != NULL) {
-                char *tmpptr;
-                int i;
+	/* fsname=<file system name> must be the 1st entry */
+	while (ptr) {
+		char *tmpptr;
+		int i;
 
-                tmpptr = strchr(ptr, ';');
-                if (tmpptr)
-                        *tmpptr++ = 0;
+		tmpptr = strchr(ptr, ';');
+		if (tmpptr)
+			*tmpptr++ = 0;
 
-                rc = -EINVAL;
-                for (i = 0; i < ARRAY_SIZE(ir_cmds); i++) {
-                        struct lproc_ir_cmd *cmd;
-                        int cmdlen;
+		rc = -EINVAL;
+		for (i = 0; i < ARRAY_SIZE(ir_cmds); i++) {
+			struct lproc_ir_cmd *cmd;
+			int cmdlen;
 
-                        cmd    = &ir_cmds[i];
-                        cmdlen = cmd->namelen;
-                        if (strncmp(cmd->name, ptr, cmdlen) == 0) {
-                                ptr += cmdlen;
+			cmd    = &ir_cmds[i];
+			cmdlen = cmd->namelen;
+			if (strncmp(cmd->name, ptr, cmdlen) == 0) {
+				ptr += cmdlen;
                                 rc = cmd->handler(fsdb, ptr);
                                 break;
-                        }
-                }
-                if (rc)
-                        break;
+			}
+		}
+		if (rc)
+			break;
 
-                ptr = tmpptr;
-        }
-        if (rc)
-                CERROR("Unable to process command: %s(%d)\n", ptr, rc);
-        OBD_FREE(kbuf, count + 1);
-        return rc ?: count;
+		ptr = tmpptr;
+	}
+	if (rc)
+		CERROR("Unable to process command: %s(%d)\n", ptr, rc);
+	OBD_FREE(kbuf, count + 1);
+	return rc ?: count;
 }
 
 int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
@@ -805,16 +813,16 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
 	struct timespec64 ts_max;
 	struct timespec64 ts;
 
-        /* mgs_live_seq_show() already holds fsdb_mutex. */
-        ir_state_graduate(fsdb);
+	/* mgs_live_seq_show() already holds fsdb_mutex. */
+	ir_state_graduate(fsdb);
 
-        seq_printf(seq, "\nimperative_recovery_state:\n");
-        seq_printf(seq,
-                   "    state: %s\n"
-                   "    nonir_clients: %d\n"
-                   "    nidtbl_version: %lld\n",
-                   ir_strings[fsdb->fsdb_ir_state], fsdb->fsdb_nonir_clients,
-                   tbl->mn_version);
+	seq_printf(seq, "\nimperative_recovery_state:\n");
+	seq_printf(seq,
+		   "    state: %s\n"
+		   "    nonir_clients: %d\n"
+		   "    nidtbl_version: %lld\n",
+		   ir_strings[fsdb->fsdb_ir_state], fsdb->fsdb_nonir_clients,
+		   tbl->mn_version);
 
 	ts = ktime_to_timespec64(fsdb->fsdb_notify_total);
 	ts_max = ktime_to_timespec64(fsdb->fsdb_notify_max);
@@ -850,18 +858,19 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 	struct mgs_export_data *data = &exp->u.eu_mgs_data;
 	struct mgs_device *mgs = exp2mgs_dev(exp);
 	struct fs_db *fsdb = NULL;
-        struct mgs_fsc    *fsc     = NULL;
-        struct mgs_fsc    *new_fsc = NULL;
-        bool               found   = false;
-        int                rc;
-        ENTRY;
+	struct mgs_fsc *fsc = NULL;
+	struct mgs_fsc *new_fsc = NULL;
+	bool found = false;
+	int rc;
+
+	ENTRY;
 
 	rc = mgs_find_or_make_fsdb(env, mgs, fsname, &fsdb);
-        if (rc)
-                RETURN(rc);
+	if (rc)
+		RETURN(rc);
 
-        /* allocate a new fsc in case we need it in spinlock. */
-        OBD_ALLOC_PTR(new_fsc);
+	/* allocate a new fsc in case we need it in spinlock. */
+	OBD_ALLOC_PTR(new_fsc);
 	if (!new_fsc)
 		GOTO(out, rc = -ENOMEM);
 
@@ -878,34 +887,34 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 	/* tend to find it in export list because this list is shorter. */
 	spin_lock(&data->med_lock);
 	list_for_each_entry(fsc, &data->med_clients, mfc_export_list) {
-                if (strcmp(fsname, fsc->mfc_fsdb->fsdb_name) == 0) {
-                        found = true;
-                        break;
-                }
-        }
-        if (!found) {
-                fsc = new_fsc;
-                new_fsc = NULL;
+		if (strcmp(fsname, fsc->mfc_fsdb->fsdb_name) == 0) {
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		fsc = new_fsc;
+		new_fsc = NULL;
 
-                /* add it into export list. */
+		/* add it into export list. */
 		list_add(&fsc->mfc_export_list, &data->med_clients);
 
-                /* add into fsdb list. */
+		/* add into fsdb list. */
 		list_add(&fsc->mfc_fsdb_list, &fsdb->fsdb_clients);
-                if (!fsc->mfc_ir_capable) {
-                        ++fsdb->fsdb_nonir_clients;
-                        if (fsdb->fsdb_ir_state == IR_FULL)
-                                fsdb->fsdb_ir_state = IR_PARTIAL;
-                }
-                rc = 0;
-        }
+		if (!fsc->mfc_ir_capable) {
+			++fsdb->fsdb_nonir_clients;
+			if (fsdb->fsdb_ir_state == IR_FULL)
+				fsdb->fsdb_ir_state = IR_PARTIAL;
+		}
+		rc = 0;
+	}
 	spin_unlock(&data->med_lock);
 	mutex_unlock(&fsdb->fsdb_mutex);
 
-        if (new_fsc) {
-                class_export_put(new_fsc->mfc_export);
-                OBD_FREE_PTR(new_fsc);
-        }
+	if (new_fsc) {
+		class_export_put(new_fsc->mfc_export);
+		OBD_FREE_PTR(new_fsc);
+	}
 
 out:
 	mgs_put_fsdb(mgs, fsdb);
@@ -946,23 +955,23 @@ void mgs_fsc_cleanup(struct obd_export *exp)
 /* must be called with fsdb->fsdb_mutex held */
 void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb)
 {
-        struct mgs_fsc *fsc, *tmp;
+	struct mgs_fsc *fsc, *tmp;
 
 	list_for_each_entry_safe(fsc, tmp, &fsdb->fsdb_clients,
                                      mfc_fsdb_list) {
-                struct mgs_export_data *data = &fsc->mfc_export->u.eu_mgs_data;
+		struct mgs_export_data *data = &fsc->mfc_export->u.eu_mgs_data;
 
-                LASSERT(fsdb == fsc->mfc_fsdb);
+		LASSERT(fsdb == fsc->mfc_fsdb);
 		list_del_init(&fsc->mfc_fsdb_list);
 
 		spin_lock(&data->med_lock);
 		list_del_init(&fsc->mfc_export_list);
 		spin_unlock(&data->med_lock);
-                class_export_put(fsc->mfc_export);
-                OBD_FREE_PTR(fsc);
-        }
+		class_export_put(fsc->mfc_export);
+		OBD_FREE_PTR(fsc);
+	}
 
-        fsdb->fsdb_nonir_clients = 0;
-        if (fsdb->fsdb_ir_state == IR_PARTIAL)
-                fsdb->fsdb_ir_state = IR_FULL;
+	fsdb->fsdb_nonir_clients = 0;
+	if (fsdb->fsdb_ir_state == IR_PARTIAL)
+		fsdb->fsdb_ir_state = IR_FULL;
 }
