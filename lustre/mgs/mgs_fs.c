@@ -61,6 +61,7 @@ int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
 	lnet_nid_t *client_nid = localdata;
 	struct nid_stat *stats;
 	int rc;
+
 	ENTRY;
 
 	rc = lprocfs_exp_setup(exp, client_nid);
@@ -96,26 +97,26 @@ out:
  * crash all connections are treated as new connections.
  */
 int mgs_client_add(struct obd_device *obd, struct obd_export *exp,
-			  void *localdata)
+		   void *localdata)
 {
-        return 0;
+	return 0;
 }
 
 /* Remove client export data from the MGS */
 int mgs_client_free(struct obd_export *exp)
 {
-        return 0;
+	return 0;
 }
 
 int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 {
-	struct lu_fid		 fid;
-	struct dt_object	*o;
-	struct lu_fid		 rfid;
-	struct dt_object	*root;
-	struct dt_object	*nm_config_file_obj;
-	struct nm_config_file	*nm_config_file;
-	int			 rc;
+	struct lu_fid fid;
+	struct dt_object *o;
+	struct lu_fid rfid;
+	struct dt_object *root;
+	struct dt_object *nm_config_file_obj;
+	struct nm_config_file *nm_config_file;
+	int rc;
 
 	ENTRY;
 
@@ -146,7 +147,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 
 	o = local_file_find_or_create(env, mgs->mgs_los, root,
 				      MOUNT_CONFIGS_DIR,
-				      S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
+				      S_IFDIR | 0755);
 	if (IS_ERR(o))
 		GOTO(out_root, rc = PTR_ERR(o));
 
@@ -161,8 +162,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 	nm_config_file_obj = local_index_find_or_create(env, mgs->mgs_los,
 							mgs->mgs_configs_dir,
 							LUSTRE_NODEMAP_NAME,
-							S_IFREG | S_IRUGO |
-								  S_IWUSR,
+							S_IFREG | 0644,
 							&dt_nodemap_features);
 	if (IS_ERR(nm_config_file_obj))
 		GOTO(out_configs, rc = PTR_ERR(nm_config_file_obj));
@@ -189,7 +189,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 
 	/* create directory to store nid table versions */
 	o = local_file_find_or_create(env, mgs->mgs_los, root, MGS_NIDTBL_DIR,
-				      S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
+				      S_IFDIR | 0755);
 	if (IS_ERR(o))
 		GOTO(out_nm, rc = PTR_ERR(o));
 
@@ -223,8 +223,10 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 	struct lustre_cfg_bufs bufs;
 	struct lustre_cfg *lcfg;
 
-	/* For the MGS on independent device from MDT, it notifies the lower
-	 * layer OSD to backup index before the umount via LCFG_PRE_CLEANUP. */
+	/*
+	 * For the MGS on independent device from MDT, it notifies the lower
+	 * layer OSD to backup index before the umount via LCFG_PRE_CLEANUP.
+	 */
 	lustre_cfg_bufs_reset(&bufs, mgs->mgs_obd->obd_name);
 	lustre_cfg_bufs_set_string(&bufs, 1, NULL);
 	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
@@ -249,8 +251,9 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 		mgs->mgs_nidtbl_dir = NULL;
 	}
 	if (mgs->mgs_obd->u.obt.obt_nodemap_config_file != NULL) {
-		struct nm_config_file *ncf = mgs->mgs_obd->u.obt.obt_nodemap_config_file;
+		struct nm_config_file *ncf;
 
+		ncf = mgs->mgs_obd->u.obt.obt_nodemap_config_file;
 		nm_config_file_deregister_mgs(env, ncf);
 		mgs->mgs_obd->u.obt.obt_nodemap_config_file = NULL;
 	}
