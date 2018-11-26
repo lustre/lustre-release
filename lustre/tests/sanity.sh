@@ -19940,7 +19940,7 @@ test_806() {
 	local offset=0
 	local i
 
-	echo "Test SOM for single client muti-threaded($num) write"
+	echo "Test SOM for single client multi-threaded($num) write"
 	$TRUNCATE $DIR/$tfile 0
 	for ((i = 0; i < $num; i++)); do
 		$MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
@@ -19969,7 +19969,7 @@ test_806() {
 	offset=0
 	i=0
 
-	echo "Test SOM for muti-client ($num) writes"
+	echo "Test SOM for multi-client ($num) writes"
 	$TRUNCATE $DIR/$tfile 0
 	for client in ${CLIENTS//,/ }; do
 		do_node $client $MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
@@ -20042,7 +20042,7 @@ test_807() {
 	local offset=0
 	local i=0
 
-	echo "Test SOM for muti-client ($num) writes"
+	echo "Test SOM for multi-client ($num) writes"
 	touch $DIR/$tfile || error "touch $tfile failed"
 	$TRUNCATE $DIR/$tfile 0
 	for client in ${CLIENTS//,/ }; do

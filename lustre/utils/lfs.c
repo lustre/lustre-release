@@ -9475,7 +9475,7 @@ static int lfs_getsom(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	return rc;
+	return 0;
 }
 
 /**
