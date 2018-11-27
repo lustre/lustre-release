@@ -823,8 +823,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 		if (lnb[i].lnb_page->mapping == (void *)obj) {
 			osd_dmu_write(osd, obj->oo_dn, lnb[i].lnb_file_offset,
-				      lnb[i].lnb_len, kmap(lnb[i].lnb_page),
-				      oh->ot_tx);
+				      lnb[i].lnb_len, kmap(lnb[i].lnb_page) +
+				      lnb[i].lnb_page_offset, oh->ot_tx);
 			kunmap(lnb[i].lnb_page);
 			iosize += lnb[i].lnb_len;
 		} else if (lnb[i].lnb_data) {
