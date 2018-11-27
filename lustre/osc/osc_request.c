@@ -1155,7 +1155,8 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		 * The left guard number should be able to hold checksums of a
 		 * whole page
 		 */
-		rc = obd_page_dif_generate_buffer(obd_name, pga[i]->pg, 0,
+		rc = obd_page_dif_generate_buffer(obd_name, pga[i]->pg,
+						  pga[i]->off & ~PAGE_MASK,
 						  count,
 						  guard_start + used_number,
 						  guard_number - used_number,
