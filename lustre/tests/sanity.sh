@@ -20021,6 +20021,24 @@ test_809() {
 }
 run_test 809 "Verify no SOM xattr store for DoM-only files"
 
+test_810() {
+	local ORIG
+	local CSUM
+
+	# t10 seem to dislike partial pages
+	lctl set_param osc.*.checksum_type=adler
+	lctl set_param fail_loc=0x411
+	dd if=/dev/urandom of=$DIR/$tfile bs=10240 count=2
+	ORIG=$(md5sum $DIR/$tfile)
+	lctl set_param ldlm.namespaces.*osc*.lru_size=clear
+	CSUM=$(md5sum $DIR/$tfile)
+	set_checksum_type adler
+	if [ "$ORIG" != "$CSUM" ]; then
+		error "$ORIG != $CSUM"
+	fi
+}
+run_test 810 "partial page writes on ZFS (LU-11663)"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
