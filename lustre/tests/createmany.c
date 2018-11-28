@@ -171,6 +171,8 @@ int main(int argc, char ** argv)
 
 	for (i = 0, start = last_t = now(), end += start;
 	     i < count && now() < end; i++, begin++) {
+		double tmp;
+
 		filename = get_file_name(fmt, begin, has_fmt_spec);
 		if (do_open) {
 			int fd = open(filename, O_CREAT|O_RDWR, 0644);
@@ -223,9 +225,9 @@ int main(int argc, char ** argv)
 			}
 		}
 
-		if ((i != 0 && (i % 10000) == 0) || now() - last_t >= 10.0) {
-			double tmp = now();
-
+		tmp = now();
+		if (tmp - last_t >= 10.0 ||
+		    (tmp - last_t > 2.0 && (i % 10000) == 0)) {
 			printf(" - %s%s %ld (time %.2f total %.2f last %.2f)"
 			       "\n",
 			       do_open ? do_keep ? "open/keep" : "open/close" :
