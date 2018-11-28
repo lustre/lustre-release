@@ -174,6 +174,17 @@ declare     ha_fail_file=$ha_tmp_dir/fail
 declare     ha_status_file_prefix=$ha_tmp_dir/status
 declare -a  ha_status_files
 declare     ha_machine_file=$ha_tmp_dir/machine_file
+declare     ha_lfsck_log=$ha_tmp_dir/lfsck.log
+declare     ha_lfsck_lock=$ha_tmp_dir/lfsck.lock
+declare     ha_lfsck_stop=$ha_tmp_dir/lfsck.stop
+declare     ha_lfsck_bg=${LFSCK_BG:-false}
+declare     ha_lfsck_after=${LFSCK_AFTER:-false}
+declare     ha_lfsck_node=${LFSCK_NODE:-""}
+declare     ha_lfsck_device=${LFSCK_DEV:-""}
+declare     ha_lfsck_types=${LFSCK_TYPES:-"namespace layout"}
+declare     ha_lfsck_custom_params=${LFSCK_CUSTOM_PARAMS:-""}
+declare     ha_lfsck_wait=${LFSCK_WAIT:-1200}
+declare     ha_lfsck_fail_on_repaired=${LFSCK_FAIL_ON_REPAIRED:-false}
 declare     ha_power_down_cmd=${POWER_DOWN:-"pm -0"}
 declare     ha_power_up_cmd=${POWER_UP:-"pm -1"}
 declare     ha_power_delay=${POWER_DELAY:-60}
@@ -339,6 +350,15 @@ ha_sleep()
     # sleep(1) could interrupted.
     #
     sleep $n || true
+}
+
+ha_wait_unlock()
+{
+	local lock=$1
+
+	while [ -e $lock ]; do
+		sleep 1
+	done
 }
 
 ha_lock()
@@ -531,6 +551,117 @@ ha_start_nonmpi_loads()
     done
 }
 
+ha_lfsck_bg () {
+	rm -f $ha_lfsck_log
+	rm -f $ha_lfsck_stop
+
+	ha_info "LFSCK BG"
+	while [ true ]; do
+		[ -f $ha_lfsck_stop ] && ha_info "LFSCK stopped" && break
+		[ -f $ha_stop_file ] &&
+			ha_info "$ha_stop_file found! LFSCK not started" &&
+			break
+		ha_start_lfsck 2>&1 | tee -a $ha_lfsck_log
+		sleep 1
+	done &
+	LFSCK_BG_PID=$!
+	ha_info LFSCK BG PID: $LFSCK_BG_PID
+}
+
+ha_wait_lfsck_completed () {
+	local -a status
+	local -a types=($ha_lfsck_types)
+	local type
+	local s
+
+	local nodes="${ha_servers[@]}"
+	nodes=${nodes// /,}
+
+	# -A start LFSCK on all nodes
+	# -t default all
+	[ ${#types[@]} -eq 0 ] && types=(namespace layout)
+	ha_info "Waiting LFSCK completed in $ha_lfsck_wait sec: types ${types[@]}"
+	for type in ${types[@]}; do
+		eval var_$type=0
+		for (( i=0; i<=ha_lfsck_wait; i++)); do
+			status=($(ha_on $nodes lctl get_param -n *.*.lfsck_$type 2>/dev/null | \
+				awk '/status/ { print $3 }'))
+			for (( s=0; s<${#status[@]}; s++ )); do
+				# "partial" is expected after HARD failover
+				[[ "${status[s]}" = "completed" ]] ||
+				[[ "${status[s]}" = "partial" ]] ||  break
+			done
+			[[ $s -eq ${#status[@]} ]] && eval var_$type=1 && break
+			sleep 1
+		done
+		ha_info "LFSCK $type status in $i sec:"
+		ha_on $nodes lctl get_param -n *.*.lfsck_$type 2>/dev/null | grep status
+
+	done
+
+	for type in ${types[@]}; do
+		local var=var_$type
+		ha_on $nodes lctl get_param -n *.*.lfsck_$type 2>/dev/null
+		[[ ${!var} -eq 1 ]] ||
+			{ ha_info "lfsck not completed in $ha_lfsck_wait sec";
+			return 1; }
+	done
+	return 0
+}
+
+ha_start_lfsck()
+{
+	local -a types=($ha_lfsck_types)
+	local rc=0
+
+	# -A: start LFSCK on all nodes via the specified MDT device
+	# (see "-M" option) by single LFSCK command
+	local params=" -A -r $ha_lfsck_custom_params"
+
+	# use specified device if set
+	[ -n "$ha_lfsck_device" ] && params="-M $ha_lfsck_device $params"
+
+	# -t: check type(s) to be performed (default all)
+	# check only specified types if set
+	if [ ${#types[@]} -ne 0 ]; then
+		local type="${types[@]}"
+		params="$params -t ${type// /,}"
+	fi
+
+	ha_info "LFSCK start $params"
+	ha_on $ha_lfsck_node "lctl lfsck_start $params" || rc=1
+	if [ $rc -ne 0 ]; then
+		if [ -e $ha_lfsck_lock ]; then
+			rc=0
+			ha_wait_unlock $ha_lfsck_lock
+			ha_sleep 120
+			ha_on $ha_lfsck_node "lctl lfsck_start $params" || rc=1
+		fi
+	fi
+
+	[ $rc -eq 0 ] ||
+		{ touch "$ha_fail_file"; touch "$ha_stop_file";
+		touch $ha_lfsck_stop; return 1; }
+
+	ha_wait_lfsck_completed ||
+		{ touch "$ha_fail_file"; touch "$ha_stop_file";
+		touch $ha_lfsck_stop; return 1; }
+
+	return 0
+}
+
+ha_lfsck_repaired()
+{
+	local n=0
+
+	n=$(cat $ha_lfsck_log | awk '/repaired/ {print $3}' |\
+		awk '{sum += $1} END { print sum }')
+	[ $n -eq 0] ||
+		{ ha_info "Total repaired: $n";
+		touch "$ha_fail_file"; return 1; }
+	return 0
+}
+
 ha_start_loads()
 {
     trap ha_trap_stop_signals $ha_stop_signals
@@ -590,6 +721,11 @@ ha_power_down()
 	local nodes=$1
 	local rc=1
 	local i
+
+	if $ha_lfsck_bg && [[ ${nodes//,/ /} =~ $ha_lfsck_node ]]; then
+		ha_info "$ha_lfsck_node down, delay start LFSCK"
+		ha_lock $ha_lfsck_lock
+	fi
 
 	ha_info "Powering down $nodes"
 	for i in $(seq 1 5); do
@@ -672,6 +808,7 @@ ha_failback()
 	}
 
 	$ha_failback_cmd $nodes
+	[ -e $ha_lfsck_lock ] && ha_unlock $ha_lfsck_lock || true
 }
 
 ha_summarize()
@@ -741,6 +878,8 @@ ha_main()
 	ha_on ${ha_clients[0]} " \
 		$LFS setstripe $ha_stripe_params $ha_test_dir"
 
+	$ha_lfsck_bg && ha_lfsck_bg
+
 	ha_start_loads
 	ha_wait_loads
 
@@ -752,6 +891,13 @@ ha_main()
 	fi
 
 	ha_stop_loads
+
+	$ha_lfsck_after && ha_start_lfsck | tee -a $ha_lfsck_log
+
+	$ha_lfsck_fail_on_repaired && ha_lfsck_repaired
+
+	# true because of lfsck_bg could be stopped already
+	$ha_lfsck_bg && wait $LFSCK_BG_PID || true
 
 	if [ -e "$ha_fail_file" ]; then
 		exit 1
