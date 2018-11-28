@@ -89,7 +89,6 @@
 
 extern char *progname;
 
-#define L_BLOCK_SIZE 4096
 /* keep it less than LL_FID_NAMELEN */
 #define DUMMY_FILE_NAME_LEN             25
 #define EXT3_DIRENT_SIZE                DUMMY_FILE_NAME_LEN
@@ -545,7 +544,7 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	int enable_64bit = 0;
 
 	/* Enable large block addresses if the LUN is over 2^32 blocks. */
-	if ((mop->mo_device_kb / (L_BLOCK_SIZE >> 10) > UINT32_MAX) &&
+	if (mop->mo_device_kb / mop->mo_blocksize_kb > 0xffffffffULL &&
 	     is_e2fsprogs_feature_supp("-O 64bit") == 0)
 		enable_64bit = 1;
 
@@ -611,7 +610,7 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 		if (IS_OST(&mop->mo_ldd) &&
 		    strstr(mop->mo_mkfsopts, "-G") == NULL) {
 			snprintf(tmp_buf, sizeof(tmp_buf), " -G %u",
-				 (1 << 20) / L_BLOCK_SIZE);
+				 1024 / mop->mo_blocksize_kb);
 			strscat(anchor, tmp_buf, maxbuflen);
 		}
 	}
@@ -666,41 +665,75 @@ static char *moveopts_to_end(char *start)
 /* Build fs according to type */
 int ldiskfs_make_lustre(struct mkfs_opts *mop)
 {
-	__u64 device_kb = mop->mo_device_kb, block_count = 0;
 	char mkfs_cmd[PATH_MAX];
 	char buf[64];
 	char *start;
 	char *dev;
 	int ret = 0, ext_opts = 0;
+	bool have_64bit = false;
 	size_t maxbuflen;
 
-	if (!(mop->mo_flags & MO_IS_LOOP)) {
-		mop->mo_device_kb = get_device_size(mop->mo_device);
+	mop->mo_blocksize_kb = 4;
 
-		if (mop->mo_device_kb == 0)
+	start = strstr(mop->mo_mkfsopts, "-b");
+	if (start) {
+		char *end = NULL;
+		long blocksize;
+
+		blocksize = strtol(start + 2, &end, 0);
+		if (end && (*end == 'k' || *end == 'K'))
+			blocksize *= 1024;
+		/* EXT4_MIN_BLOCK_SIZE || EXT4_MAX_BLOCK_SIZE */
+		if (blocksize < 1024 || blocksize > 65536) {
+			fprintf(stderr,
+				"%s: blocksize %lu not in 1024-65536 bytes, normally 4096 bytes\n",
+				progname, blocksize);
+			return EINVAL;
+		}
+
+		if ((blocksize & (blocksize - 1)) != 0) {
+			fprintf(stderr,
+				"%s: blocksize %lu not a power-of-two value\n",
+				progname, blocksize);
+			return EINVAL;
+		}
+		mop->mo_blocksize_kb = blocksize >> 10;
+	}
+
+	if (!(mop->mo_flags & MO_IS_LOOP)) {
+		__u64 device_kb = get_device_size(mop->mo_device);
+
+		if (device_kb == 0)
 			return ENODEV;
 
 		/* Compare to real size */
-		if (device_kb == 0 || device_kb > mop->mo_device_kb)
-			device_kb = mop->mo_device_kb;
-		else
+		if (mop->mo_device_kb == 0 || device_kb < mop->mo_device_kb)
 			mop->mo_device_kb = device_kb;
 	}
 
 	if (mop->mo_device_kb != 0) {
+		__u64 block_count;
+
 		if (mop->mo_device_kb < 32384) {
 			fprintf(stderr, "%s: size of filesystem must be larger "
 				"than 32MB, but is set to %lldKB\n",
 				progname, (long long)mop->mo_device_kb);
 			return EINVAL;
 		}
-		block_count = mop->mo_device_kb / (L_BLOCK_SIZE >> 10);
-		/* If the LUN size is just over 2^32 blocks, limit the
-		 * filesystem size to 2^32-1 blocks to avoid problems with
-		 * ldiskfs/mkfs not handling this size.  Bug 22906 */
-		if (block_count > 0xffffffffULL && block_count < 0x100002000ULL)
-			block_count = 0xffffffffULL;
+		block_count = mop->mo_device_kb / mop->mo_blocksize_kb;
+		if (block_count > 0xffffffffULL) {
+			/* If the LUN size is just over 2^32 blocks, limit the
+			 * filesystem size to 2^32-1 blocks to avoid problems
+			 * with ldiskfs/mkfs not handling this well. b=22906
+			 */
+			if (block_count < 0x100002000ULL)
+				mop->mo_device_kb =
+					0xffffffffULL * mop->mo_blocksize_kb;
+			else
+				have_64bit = true;
+		}
 	}
+
 
 	if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
 	    (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) ||
@@ -709,7 +742,7 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 
 		/* Journal size in MB */
 		if (strstr(mop->mo_mkfsopts, "-J") == NULL &&
-		    device_kb > 1024 * 1024) {
+		    mop->mo_device_kb > 1024 * 1024) {
 			/* Choose our own default journal size */
 			long journal_mb = 0, max_mb;
 
@@ -723,7 +756,7 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 				max_mb = 0;
 
 			/* Use at most 4% of device for journal */
-			journal_mb = device_kb * 4 / (1024 * 100);
+			journal_mb = mop->mo_device_kb * 4 / (1024 * 100);
 			if (journal_mb > max_mb)
 				journal_mb = max_mb;
 
@@ -816,18 +849,18 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 			 * this, but it is impossible to know in advance. */
 			if (IS_OST(&mop->mo_ldd)) {
 				/* OST > 16TB assume average file size 1MB */
-				if (device_kb > (16ULL << 30))
+				if (mop->mo_device_kb > (16ULL << 30))
 					bytes_per_inode = 1024 * 1024;
 				/* OST > 4TB assume average file size 512kB */
-				else if (device_kb > (4ULL << 30))
+				else if (mop->mo_device_kb > (4ULL << 30))
 					bytes_per_inode = 512 * 1024;
 				/* OST > 1TB assume average file size 256kB */
-				else if (device_kb > (1ULL << 30))
+				else if (mop->mo_device_kb > (1ULL << 30))
 					bytes_per_inode = 256 * 1024;
 				/* OST > 10GB assume average file size 64kB,
 				 * plus a bit so that inodes will fit into a
 				 * 256x flex_bg without overflowing */
-				else if (device_kb > (10ULL << 20))
+				else if (mop->mo_device_kb > (10ULL << 20))
 					bytes_per_inode = 69905;
 			}
 
@@ -855,12 +888,14 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 			start = moveopts_to_end(start);
 			maxbuflen = sizeof(mop->mo_mkfsopts) -
 				(start - mop->mo_mkfsopts) - strlen(start);
-			ret = enable_default_ext4_features(mop, start, maxbuflen, 1);
+			ret = enable_default_ext4_features(mop, start,
+							   maxbuflen, 1);
 		} else {
 			start = mop->mo_mkfsopts + strlen(mop->mo_mkfsopts),
 			      maxbuflen = sizeof(mop->mo_mkfsopts) -
 				      strlen(mop->mo_mkfsopts);
-			ret = enable_default_ext4_features(mop, start, maxbuflen, 0);
+			ret = enable_default_ext4_features(mop, start,
+							   maxbuflen, 0);
 		}
 		if (ret)
 			return ret;
@@ -891,10 +926,11 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 		 * limitations. */
 		if (strstr(mop->mo_mkfsopts, "meta_bg") == NULL &&
 		    IS_OST(&mop->mo_ldd) && mop->mo_device_kb > 100 * 1024 &&
-		    mop->mo_device_kb * 1024 / L_BLOCK_SIZE <= 0xffffffffULL) {
-			unsigned group_blocks = L_BLOCK_SIZE * 8;
-			unsigned desc_per_block = L_BLOCK_SIZE / 32;
-			unsigned resize_blks;
+		    !have_64bit) {
+			unsigned int group_blocks = mop->mo_blocksize_kb * 8192;
+			unsigned int desc_per_block =
+				mop->mo_blocksize_kb * 1024 / 32;
+			unsigned int resize_blks;
 
 			resize_blks = (1ULL<<32) - desc_per_block*group_blocks;
 			snprintf(buf, sizeof(buf), "%u", resize_blks);
@@ -914,8 +950,8 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 		strscat(mop->mo_mkfsopts, " -F", sizeof(mop->mo_mkfsopts));
 
 		snprintf(mkfs_cmd, sizeof(mkfs_cmd),
-			 "%s -j -b %d -L %s ", MKE2FS, L_BLOCK_SIZE,
-			 mop->mo_ldd.ldd_svname);
+			 "%s -j -b %d -L %s ", MKE2FS,
+			 mop->mo_blocksize_kb * 1024, mop->mo_ldd.ldd_svname);
 	} else {
 		fprintf(stderr,"%s: unsupported fs type: %d (%s)\n",
 			progname, mop->mo_ldd.ldd_mount_type,
@@ -931,16 +967,16 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 	vprint("formatting backing filesystem %s on %s\n",
 	       MT_STR(&mop->mo_ldd), dev);
 	vprint("\ttarget name   %s\n", mop->mo_ldd.ldd_svname);
-	vprint("\t4k blocks     %ju\n", (uintmax_t)block_count);
+	vprint("\tkilobytes     %llu\n", mop->mo_device_kb);
 	vprint("\toptions       %s\n", mop->mo_mkfsopts);
 
 	/* mkfs_cmd's trailing space is important! */
 	strscat(mkfs_cmd, mop->mo_mkfsopts, sizeof(mkfs_cmd));
 	strscat(mkfs_cmd, " ", sizeof(mkfs_cmd));
 	strscat(mkfs_cmd, dev, sizeof(mkfs_cmd));
-	if (block_count != 0) {
-		snprintf(buf, sizeof(buf), " %ju",
-			 (uintmax_t)block_count);
+	if (mop->mo_device_kb != 0) {
+		snprintf(buf, sizeof(buf), " %lluk",
+			 (unsigned long long)mop->mo_device_kb);
 		strscat(mkfs_cmd, buf, sizeof(mkfs_cmd));
 	}
 
