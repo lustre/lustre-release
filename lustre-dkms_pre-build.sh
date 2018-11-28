@@ -19,11 +19,7 @@ case $1 in
 	    LDISKFS="--disable-ldiskfs"
 	fi
 
-	SPL_VERSION=$(dkms status -m spl -k $3 -a $5 | awk -F', ' '{print $2; exit 0}' | grep -v ': added$')
-	if [ -z $SPL_VERSION ] ; then
-		echo "spl-dkms package must already be installed and built under DKMS control"
-		exit 1
-	fi
+	# ZFS and SPL are version locked
 	ZFS_VERSION=$(dkms status -m zfs -k $3 -a $5 | awk -F', ' '{print $2; exit 0}' | grep -v ': added$')
 	if [ -z $ZFS_VERSION ] ; then
 		echo "zfs-dkms package must already be installed and built under DKMS control"
@@ -32,8 +28,8 @@ case $1 in
 
 	SERVER="--enable-server $LDISKFS \
 		--with-linux=$4 --with-linux-obj=$4 \
-		--with-spl=$6/spl-${SPL_VERSION} \
-		--with-spl-obj=$7/spl/${SPL_VERSION}/$3/$5 \
+		--with-spl=$6/spl-${ZFS_VERSION} \
+		--with-spl-obj=$7/spl/${ZFS_VERSION}/$3/$5 \
 		--with-zfs=$6/zfs-${ZFS_VERSION} \
 		--with-zfs-obj=$7/zfs/${ZFS_VERSION}/$3/$5"
 
