@@ -359,18 +359,21 @@ ha_unlock()
 
 ha_dump_logs()
 {
-    local nodes=${1// /,}
-    local file=/tmp/$(basename $0)-$$-$(date +%s).dk
-    local lock=$ha_tmp_dir/lock-dump-logs
+	local nodes=${1// /,}
+	local file=/tmp/$(basename $0)-$$-$(date +%s).dk
+	local lock=$ha_tmp_dir/lock-dump-logs
+	local rc=0
 
-    ha_lock "$lock"
-    ha_info "Dumping lctl log to $file"
+	ha_lock "$lock"
+	ha_info "Dumping lctl log to $file"
 
 	#
 	# some nodes could crash, so
 	# do not exit with error if not all logs are dumped
 	#
-	ha_on $nodes "lctl dk >$file" ||
+	ha_on $nodes "lctl dk >>$file" || rc=$?
+
+	[ $rc -eq 0 ] ||
 		ha_error "not all logs are dumped! Some nodes are unreachable."
 	ha_unlock "$lock"
 }
@@ -387,6 +390,7 @@ ha_repeat_mpi_load()
 	local log=$ha_tmp_dir/$client-$tag
 	local rc=0
 	local nr_loops=0
+	local avg_loop_time=0
 	local start_time=$(date +%s)
 
 	cmd=${cmd//"{}"/$dir}
@@ -424,7 +428,8 @@ ha_repeat_mpi_load()
 		nr_loops=$((nr_loops + 1))
 	done
 
-	avg_loop_time=$((($(date +%s) - start_time) / nr_loops))
+	[ $nr_loops -ne 0 ] &&
+		avg_loop_time=$((($(date +%s) - start_time) / nr_loops))
 
 	ha_info "$tag stopped: rc $rc avg loop time $avg_loop_time"
 }
@@ -472,16 +477,17 @@ ha_start_mpi_loads()
 
 ha_repeat_nonmpi_load()
 {
-    local client=$1
-    local load=$2
-    local status=$3
-    local tag=${ha_nonmpi_load_tags[$load]}
-    local cmd=${ha_nonmpi_load_cmds[$load]}
-    local dir=$ha_test_dir/$client-$tag
-    local log=$ha_tmp_dir/$client-$tag
-    local rc=0
-    local nr_loops=0
-    local start_time=$(date +%s)
+	local client=$1
+	local load=$2
+	local status=$3
+	local tag=${ha_nonmpi_load_tags[$load]}
+	local cmd=${ha_nonmpi_load_cmds[$load]}
+	local dir=$ha_test_dir/$client-$tag
+	local log=$ha_tmp_dir/$client-$tag
+	local rc=0
+	local nr_loops=0
+	local avg_loop_time=0
+	local start_time=$(date +%s)
 
     cmd=${cmd//"{}"/$dir}
 
@@ -502,9 +508,10 @@ ha_repeat_nonmpi_load()
 		nr_loops=$((nr_loops + 1))
 	done
 
-    avg_loop_time=$((($(date +%s) - start_time) / nr_loops))
+	[ $nr_loops -ne 0 ] &&
+		avg_loop_time=$((($(date +%s) - start_time) / nr_loops))
 
-    ha_info "$tag on $client stopped: rc $rc avg loop time ${avg_loop_time}s"
+	ha_info "$tag on $client stopped: rc $rc avg loop time ${avg_loop_time}s"
 }
 
 ha_start_nonmpi_loads()
