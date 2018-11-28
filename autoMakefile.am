@@ -259,6 +259,9 @@ debs: undef.h
 	elif test "x@ENABLE_GSS@" = "xno"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nogss"; \
 	fi; \
+	if test "x@systemdsystemunitdir@" != "x"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"; \
+	fi; \
 	export KERNEL_OBJ="$(LINUX_OBJ)"; \
 	export KERNEL_SRC="$(LINUX)"; \
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
