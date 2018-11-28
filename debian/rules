@@ -158,8 +158,22 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "server"; then \
 		export EXTRAFLAGS="--enable-server"; \
+		if echo "$${DEB_BUILD_PROFILES}" | grep -q "systemd"; then \
+			cp debian/lustre-server-utils.install.in \
+				debian/lustre-server-utils.install; \
+		else \
+			sed /systemd/d debian/lustre-server-utils.install.in \
+				> debian/lustre-server-utils.install; \
+		fi; \
 	else \
 		export EXTRAFLAGS="--disable-server"; \
+		if echo "$${DEB_BUILD_PROFILES}" | grep -q "systemd"; then \
+			cp debian/lustre-client-utils.install.in \
+				debian/lustre-client-utils.install; \
+		else \
+			sed /systemd/d debian/lustre-client-utils.install.in \
+				> debian/lustre-client-utils.install; \
+		fi; \
 	fi; \
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \
