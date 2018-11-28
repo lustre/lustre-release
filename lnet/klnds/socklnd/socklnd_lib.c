@@ -71,7 +71,8 @@ ksocknal_lib_zc_capable(struct ksock_conn *conn)
 }
 
 int
-ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx)
+ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx,
+		      struct kvec *scratchiov)
 {
 	struct socket  *sock = conn->ksnc_sock;
 	int		nob;
@@ -92,7 +93,6 @@ ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx)
 		struct kvec *scratchiov = &scratch;
 		unsigned int niov = 1;
 #else
-		struct kvec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
 		unsigned int niov = tx->tx_niov;
 #endif
 		struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
@@ -113,41 +113,42 @@ ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx)
 }
 
 int
-ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx)
+ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
+		       struct kvec *scratchiov)
 {
-        struct socket *sock = conn->ksnc_sock;
-        lnet_kiov_t   *kiov = tx->tx_kiov;
-        int            rc;
-        int            nob;
+	struct socket *sock = conn->ksnc_sock;
+	lnet_kiov_t   *kiov = tx->tx_kiov;
+	int            rc;
+	int            nob;
 
-        /* Not NOOP message */
-        LASSERT (tx->tx_lnetmsg != NULL);
+	/* Not NOOP message */
+	LASSERT(tx->tx_lnetmsg != NULL);
 
-        /* NB we can't trust socket ops to either consume our iovs
-         * or leave them alone. */
-        if (tx->tx_msg.ksm_zc_cookies[0] != 0) {
-                /* Zero copy is enabled */
-                struct sock   *sk = sock->sk;
-                struct page   *page = kiov->kiov_page;
-                int            offset = kiov->kiov_offset;
-                int            fragsize = kiov->kiov_len;
-                int            msgflg = MSG_DONTWAIT;
+	/* NB we can't trust socket ops to either consume our iovs
+	 * or leave them alone. */
+	if (tx->tx_msg.ksm_zc_cookies[0] != 0) {
+		/* Zero copy is enabled */
+		struct sock   *sk = sock->sk;
+		struct page   *page = kiov->kiov_page;
+		int            offset = kiov->kiov_offset;
+		int            fragsize = kiov->kiov_len;
+		int            msgflg = MSG_DONTWAIT;
 
-                CDEBUG(D_NET, "page %p + offset %x for %d\n",
-                               page, offset, kiov->kiov_len);
+		CDEBUG(D_NET, "page %p + offset %x for %d\n",
+			       page, offset, kiov->kiov_len);
 
 		if (!list_empty(&conn->ksnc_tx_queue) ||
-                    fragsize < tx->tx_resid)
-                        msgflg |= MSG_MORE;
+		    fragsize < tx->tx_resid)
+			msgflg |= MSG_MORE;
 
-                if (sk->sk_prot->sendpage != NULL) {
-                        rc = sk->sk_prot->sendpage(sk, page,
-                                                   offset, fragsize, msgflg);
-                } else {
-                        rc = cfs_tcp_sendpage(sk, page, offset, fragsize,
-                                              msgflg);
-                }
-        } else {
+		if (sk->sk_prot->sendpage != NULL) {
+			rc = sk->sk_prot->sendpage(sk, page,
+						   offset, fragsize, msgflg);
+		} else {
+			rc = cfs_tcp_sendpage(sk, page, offset, fragsize,
+					      msgflg);
+		}
+	} else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
 		struct kvec	scratch;
 		struct kvec   *scratchiov = &scratch;
@@ -156,7 +157,6 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx)
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
-		struct kvec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
 		unsigned int  niov = tx->tx_nkiov;
 #endif
 		struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
@@ -196,14 +196,13 @@ ksocknal_lib_eager_ack(struct ksock_conn *conn)
 }
 
 int
-ksocknal_lib_recv_iov(struct ksock_conn *conn)
+ksocknal_lib_recv_iov(struct ksock_conn *conn, struct kvec *scratchiov)
 {
 #if SOCKNAL_SINGLE_FRAG_RX
 	struct kvec  scratch;
 	struct kvec *scratchiov = &scratch;
 	unsigned int  niov = 1;
 #else
-	struct kvec *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
 	unsigned int  niov = conn->ksnc_rx_niov;
 #endif
 	struct kvec *iov = conn->ksnc_rx_iov;
@@ -301,7 +300,8 @@ ksocknal_lib_kiov_vmap(lnet_kiov_t *kiov, int niov,
 }
 
 int
-ksocknal_lib_recv_kiov(struct ksock_conn *conn)
+ksocknal_lib_recv_kiov(struct ksock_conn *conn, struct page **pages,
+		       struct kvec *scratchiov)
 {
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
 	struct kvec   scratch;
@@ -312,8 +312,6 @@ ksocknal_lib_recv_kiov(struct ksock_conn *conn)
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
-	struct kvec  *scratchiov = conn->ksnc_scheduler->kss_scratch_iov;
-	struct page  **pages      = conn->ksnc_scheduler->kss_rx_scratch_pgs;
 	unsigned int   niov       = conn->ksnc_rx_nkiov;
 #endif
 	lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
