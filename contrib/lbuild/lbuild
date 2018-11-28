@@ -1024,20 +1024,22 @@ build_spl_zfs() {
     export RPM_BUILD_ROOT=$TOPDIR
     SPLZFSVER=${SPLZFSVER:-0.7.13}
     SPLZFSTAG=${SPLZFSTAG:-}
+    # "spl zfs" prior to 0.8.0
+    # "zfs" for 0.8.0 and later
+    SPLZFSPKGS="spl zfs"
 
     # The files expect a kver to be set to the kernel version .
     local kver=$(find_linux_release)
 
     # build and install the spl and zfs (and -devel) RPMs for lustre to use
     local pkg
-    for pkg in spl zfs; do
+    local spldir
+    for pkg in $SPLZFSPKGS; do
 
-        local rpmpkg
+	local rpmpkg
 
-        [ "$pkg" == "zfs" ] && spldir="$(ls -d $TOPDIR/usr/src/spl-*|tail -1)"
-
-        # need to fetch the repo in order to build it.
-        # default to github but allow override
+	# need to fetch the repo in order to build it.
+	# default to github but allow override
 	git clone -n ${SPLZFSGITREPO:-"https://github.com/zfsonlinux"}/$pkg.git $pkg 2>&1
 
 	pushd $pkg || return 255
@@ -1049,91 +1051,98 @@ build_spl_zfs() {
 	fi
 	git checkout -b lbuild $tag || fatal 1 "Failed to checkout \"$tag\" for $pkg.git"
 
-        # This differentiates between older zfs versions
-        if [ -f $pkg-modules.spec.in ]; then
-            rpmpkg=$pkg-modules
-            specdir=.
-            speclist="$pkg.spec $rpmpkg.spec"
-        else
-            rpmpkg=kmod-$pkg-devel
-            specdir=rpm/generic
-            speclist="$pkg.spec $pkg-kmod.spec $pkg-dkms.spec"
-        fi
+	# This differentiates between older zfs versions
+	if [ -f $pkg-modules.spec.in ]; then
+	    rpmpkg=$pkg-modules
+	    specdir=.
+	    speclist="$pkg.spec $rpmpkg.spec"
+	else
+	    rpmpkg=kmod-$pkg-devel
+	    specdir=rpm/generic
+	    speclist="$pkg.spec $pkg-kmod.spec $pkg-dkms.spec"
+	fi
 
-        sh autogen.sh || return 255
+	sh autogen.sh || return 255
 
-        if  ! ./configure --with-linux=${LINUX} --with-linux-obj=${LINUXOBJ:-$LINUX} \
-                          ${spldir:+--with-spl="${spldir}"} 2>&1 ||
-            ! make dist 2>&1; then
-            popd
-            return 255
-        fi
-        popd
+	if  ! ./configure --with-linux=${LINUX} --with-linux-obj=${LINUXOBJ:-$LINUX} \
+	    ${spldir:+--with-spl="${spldir}"} 2>&1 ||
+	    ! make dist 2>&1; then
+	    popd
+	    return 255
+	fi
+	popd
 
-        ln -f $pkg/$pkg-*.tar.gz $TOPDIR/SOURCES ||
-           error "failed to link $pkg/$pkg-*.tar.gz into $TOPDIR/SOURCES"
-        if [ -f $pkg/scripts/kmodtool ]; then
-            ln -f $pkg/scripts/kmodtool $TOPDIR/SOURCES/
-        fi
+	ln -f $pkg/$pkg-*.tar.gz $TOPDIR/SOURCES ||
+	error "failed to link $pkg/$pkg-*.tar.gz into $TOPDIR/SOURCES"
+	if [ -f $pkg/scripts/kmodtool ]; then
+	    ln -f $pkg/scripts/kmodtool $TOPDIR/SOURCES/
+	fi
 
-        local rpmb
-        if $DO_SRC; then
-            rpmb=-ba
-        else
-            rpmb=-bb
-        fi
+	local rpmb
+	if $DO_SRC; then
+	    rpmb=-ba
+	else
+	    rpmb=-bb
+	fi
 
-        # set search dir for our own kmodtool to find correct
-        # directories
-        export KERNELSOURCE=$(dirname ${LINUX})
-        # Manually build rpms
-        for spec in $speclist; do
-            echo "Building RPMs from $pkg/$specdir/$spec"
-            if ! rpmbuild $rpmb $pkg/$specdir/$spec \
-                --nodeps -v \
-                --define "_use_internal_dependency_generator 0" \
-                --define "require_kdir ${LINUX}" \
-                ${LINUXOBJ:+--define "require_kobj ${LINUXOBJ}"} \
-                ${spldir:+--define "require_spldir ${spldir}"} \
-                --define "kver $kver" \
-                --define "kernels $kver" \
-                --define "_tmppath /var/tmp" \
-                --define "kernelbuildroot $TOPDIR/reused" \
-                --define "_topdir $TOPDIR" 2>&1; then
-                return 255
-            fi
-        done
+	# set search dir for our own kmodtool to find correct
+	# directories
+	export KERNELSOURCE=$(dirname ${LINUX})
+	# Manually build rpms
+	for spec in $speclist; do
+	    echo "Building RPMs from $pkg/$specdir/$spec"
+	    if ! rpmbuild $rpmb $pkg/$specdir/$spec \
+		--nodeps -v \
+		--define "_use_internal_dependency_generator 0" \
+		--define "require_kdir ${LINUX}" \
+		${LINUXOBJ:+--define "require_kobj ${LINUXOBJ}"} \
+		${spldir:+--define "require_spldir ${spldir}"} \
+		--define "kver $kver" \
+		--define "kernels $kver" \
+		--define "_tmppath /var/tmp" \
+		--define "kernelbuildroot $TOPDIR/reused" \
+		--define "_topdir $TOPDIR" 2>&1; then
+		return 255
+	    fi
+	done
 
-        # We have built the rpms for the package. Now we need to extract the
-        # contained files so we can build further things against them
-        local rpms=$(ls -1 $TOPDIR/RPMS/*/$rpmpkg-*.rpm)
+	# We have built the rpms for the package. Now we need to extract the
+	# contained files so we can build further things against them
+	local rpms=$(ls -1 $TOPDIR/RPMS/*/$rpmpkg-*.rpm)
 
-        # cpio only extract to pwd so we need to go there.
-        pushd $TOPDIR
-        local rpm
-        for rpm in $rpms; do
-            rpm2cpio $rpm | cpio -id
-        done
+	# cpio only extract to pwd so we need to go there.
+	pushd $TOPDIR
+	local rpm
+	for rpm in $rpms; do
+	    rpm2cpio $rpm | cpio -id
+	done
 
-        if [ "$pkg" == "zfs" ]; then
-            # We also need to extract both the zfs and zfs-devel rpms
-            # the zfs rpm is needed because it has the actual libraries in
-            # it and the zfs-devel rpm only has unversioned symlinks to the
-            # libraries in the zfs rpm
-            # this will all change one day when we have a libzfs rpm per
-            # https://github.com/zfsonlinux/zfs/issues/2329
-            # and it looks like it could be one day soon:
-            # https://github.com/zfsonlinux/zfs/pull/2341
-            local devel_rpms=$(ls -1 $TOPDIR/RPMS/*/{$pkg-devel,$pkg-$SPLZFSVER,lib*}-*.rpm)
-            for rpm in $devel_rpms; do
-                rpm2cpio $rpm | cpio -id
-            done
-            CONFIGURE_FLAGS="--with-$pkg-devel=$TOPDIR ${CONFIGURE_FLAGS}"
-        fi
-        popd
+	if [ "$pkg" == "zfs" ]; then
+	    # We also need to extract both the zfs and zfs-devel rpms
+	    # the zfs rpm is needed because it has the actual libraries in
+	    # it and the zfs-devel rpm only has unversioned symlinks to the
+	    # libraries in the zfs rpm
+	    # this will all change one day when we have a libzfs rpm per
+	    # https://github.com/zfsonlinux/zfs/issues/2329
+	    # and it looks like it could be one day soon:
+	    # https://github.com/zfsonlinux/zfs/pull/2341
+	    local devel_rpms=$(ls -1 $TOPDIR/RPMS/*/{$pkg-devel,$pkg-$SPLZFSVER,lib*}-*.rpm)
+	    for rpm in $devel_rpms; do
+		rpm2cpio $rpm | cpio -id
+	    done
+	    CONFIGURE_FLAGS="--with-$pkg-devel=$TOPDIR ${CONFIGURE_FLAGS}"
+	    if [ -z "$spldir" ]; then
+		# if spldir is empty, then we are only building ZFS and need to define SPL config flags
+		CONFIGURE_FLAGS="--with-spl=$(ls -d $TOPDIR/usr/src/spl-*|tail -1) ${CONFIGURE_FLAGS}"
+		CONFIGURE_FLAGS="--with-spl-obj=$(ls -d $TOPDIR/usr/src/$pkg-*/$kver*|tail -1) ${CONFIGURE_FLAGS}"
+	    fi
+	elif [ "$pkg" == "spl" ]; then
+	    spldir="$(ls -d $TOPDIR/usr/src/spl-*|tail -1)"
+	fi
+	popd
 
-        CONFIGURE_FLAGS="--with-$pkg=$(ls -d $TOPDIR/usr/src/$pkg-*|tail -1) ${CONFIGURE_FLAGS}"
-        CONFIGURE_FLAGS="--with-$pkg-obj=$(ls -d $TOPDIR/usr/src/$pkg-*/$kver*|tail -1) ${CONFIGURE_FLAGS}"
+	CONFIGURE_FLAGS="--with-$pkg=$(ls -d $TOPDIR/usr/src/$pkg-*|tail -1) ${CONFIGURE_FLAGS}"
+	CONFIGURE_FLAGS="--with-$pkg-obj=$(ls -d $TOPDIR/usr/src/$pkg-*/$kver*|tail -1) ${CONFIGURE_FLAGS}"
     done
 
     OSDZFSRPM=true

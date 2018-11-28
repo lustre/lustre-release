@@ -64,7 +64,6 @@ Requires:	libyaml-devel
 # the packages are split into independent client/server/common packages.
 Obsoletes:	@PACKAGE@-client < %{version}
 %if %{with zfs}
-Requires:       spl-dkms >= 0.6.5
 Requires:       zfs-dkms >= 0.6.5
 Requires:	@PACKAGE@-osd-zfs-mount
 Conflicts:	@PACKAGE@-ldiskfs-dkms
