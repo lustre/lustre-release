@@ -2190,6 +2190,31 @@ test_27F() { # LU-5346/LU-7975
 }
 run_test 27F "Client resend delayed layout creation with non-zero size"
 
+test_27G() { #LU-10629
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	local POOL=${POOL:-testpool}
+	local ostrange="0 0 1"
+
+	test_mkdir $DIR/$tdir
+	pool_add $POOL || error "pool_add failed"
+	pool_add_targets $POOL $ostrange || error "pool_add_targets failed"
+	$LFS setstripe -p $POOL $DIR/$tdir
+
+	local pool=$($LFS getstripe -p $DIR/$tdir)
+
+	[ "$pool" = "$POOL" ] || error "Striping failed got '$pool' not '$POOL'"
+
+	$LFS setstripe -d $DIR/$tdir
+
+	pool=$($LFS getstripe -p $DIR/$tdir)
+
+	rmdir $DIR/$tdir
+
+	[ -z "$pool" ] || error "'$pool' is not empty"
+}
+run_test 27G "Clear OST pool from stripe"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

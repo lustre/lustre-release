@@ -6769,7 +6769,7 @@ create_pool() {
 	local fsname=${1%%.*}
 	local poolname=${1##$fsname.}
 
-	trap "destroy_test_pools $fsname" EXIT
+	stack_trap "destroy_test_pools $fsname" EXIT
 	do_facet mgs lctl pool_new $1
 	local RC=$?
 	# get param should return err unless pool is created
