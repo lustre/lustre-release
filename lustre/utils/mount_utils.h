@@ -112,16 +112,17 @@ struct lustre_disk_data {
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
 	struct lustre_disk_data	mo_ldd; /* to be written in MOUNT_DATA_FILE */
-	char	mo_device[128];   /* disk device name */
-	char	**mo_pool_vdevs;  /* list of pool vdevs */
-	char	mo_loopdev[128];  /* in case a loop dev is needed */
-	char	mo_mkfsopts[512]; /* options to the backing-store mkfs */
-	char	*mo_mountopts;    /* mount options for backing fs */
-	__u64	mo_device_kb;     /* in KB */
-	int	mo_stripe_count;
-	int	mo_flags;
-	int	mo_mgs_failnodes;
-	int	mo_inode_size;
+	char		mo_device[128];   /* disk device name */
+	char		**mo_pool_vdevs;  /* list of pool vdevs */
+	char		mo_loopdev[128];  /* in case a loop dev is needed */
+	char		mo_mkfsopts[512]; /* options for backing-store mkfs */
+	char		*mo_mountopts;    /* mount options for backing fs */
+	long long	mo_device_kb;     /* in KB */
+	int		mo_blocksize_kb;  /* blocksize in KB */
+	int		mo_stripe_count;
+	int		mo_flags;
+	int		mo_mgs_failnodes;
+	int		mo_inode_size;
 };
 #endif
 
