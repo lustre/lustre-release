@@ -88,32 +88,25 @@
 # define SOCKNAL_RISK_KMAP_DEADLOCK  1
 #endif
 
-struct ksock_sched_info;
-
-struct ksock_sched {				/* per scheduler state */
-	spinlock_t		kss_lock;	/* serialise */
-	struct list_head	kss_rx_conns;	/* conn waiting to be read */
+/* per scheduler state */
+struct ksock_sched {
+	/* serialise */
+	spinlock_t kss_lock;
 	/* conn waiting to be written */
-	struct list_head	kss_tx_conns;
+	struct list_head kss_rx_conns;
+	struct list_head kss_tx_conns;
 	/* zombie noop tx list */
-	struct list_head	kss_zombie_noop_txs;
-	wait_queue_head_t	kss_waitq;	/* where scheduler sleeps */
+	struct list_head kss_zombie_noop_txs;
+	/* where scheduler sleeps */
+	wait_queue_head_t kss_waitq;
 	/* # connections assigned to this scheduler */
-	int			kss_nconns;
-	struct ksock_sched_info	*kss_info;	/* owner of it */
-#if !SOCKNAL_SINGLE_FRAG_RX
-	struct page		*kss_rx_scratch_pgs[LNET_MAX_IOV];
-#endif
-#if !SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_SINGLE_FRAG_RX
-	struct kvec		kss_scratch_iov[LNET_MAX_IOV];
-#endif
-};
-
-struct ksock_sched_info {
-	int			ksi_nthreads_max; /* max allowed threads */
-	int			ksi_nthreads;	/* number of threads */
-	int			ksi_cpt;	/* CPT id */
-	struct ksock_sched	*ksi_scheds;	/* array of schedulers */
+	int kss_nconns;
+	/* max allowed threads */
+	int kss_nthreads_max;
+	/* number of threads */
+	int kss_nthreads;
+	/* CPT id */
+	int kss_cpt;
 };
 
 #define KSOCK_CPT_SHIFT			16
@@ -199,7 +192,7 @@ struct ksock_nal_data {
 	int			ksnd_nthreads;	/* # live threads */
 	int			ksnd_shuttingdown; /* tell threads to exit */
 	/* schedulers information */
-	struct ksock_sched_info	**ksnd_sched_info;
+	struct ksock_sched	**ksnd_schedulers;
 
 	atomic_t      ksnd_nactive_txs;    /* #active txs */
 
@@ -662,11 +655,15 @@ extern void ksocknal_lib_reset_callback(struct socket *sock,
 extern void ksocknal_lib_push_conn(struct ksock_conn *conn);
 extern int ksocknal_lib_get_conn_addrs(struct ksock_conn *conn);
 extern int ksocknal_lib_setup_sock(struct socket *so);
-extern int ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx);
-extern int ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx);
+extern int ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx,
+				 struct kvec *scratch_iov);
+extern int ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
+				  struct kvec *scratch_iov);
 extern void ksocknal_lib_eager_ack(struct ksock_conn *conn);
-extern int ksocknal_lib_recv_iov(struct ksock_conn *conn);
-extern int ksocknal_lib_recv_kiov(struct ksock_conn *conn);
+extern int ksocknal_lib_recv_iov(struct ksock_conn *conn,
+				 struct kvec *scratchiov);
+extern int ksocknal_lib_recv_kiov(struct ksock_conn *conn, struct page **pages,
+		       struct kvec *scratchiov);
 extern int ksocknal_lib_get_conn_tunables(struct ksock_conn *conn, int *txmem,
 					  int *rxmem, int *nagle);
 
