@@ -2034,8 +2034,18 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		}
 
 		LASSERT(used <= MAX_GUARD_NUMBER);
-		/* If disk support T10PI checksum, copy guards to local_nb */
-		if (t10_cksum_type && opc == OST_WRITE) {
+		/*
+		 * If disk support T10PI checksum, copy guards to local_nb.
+		 * If the write is partial page, do not use the guards for bio
+		 * submission since the data might not be full-sector. The bio
+		 * guards will be generated later based on the full sectors. If
+		 * the sector size is 512B rather than 4 KB, or the page size
+		 * is larger than 4KB, this might drop some useful guards for
+		 * partial page write, but it will only add minimal extra time
+		 * of checksum calculation.
+		 */
+		if (t10_cksum_type && opc == OST_WRITE &&
+		    local_nb[i].lnb_len == PAGE_SIZE) {
 			local_nb[i].lnb_guard_rpc = 1;
 			memcpy(local_nb[i].lnb_guards,
 			       guard_start + used_number,
