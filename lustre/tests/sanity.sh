@@ -6157,7 +6157,7 @@ test_60a() {
 			skip_env "missing subtest run-llog.sh"
 
 	log "$TEST60_HEAD - from kernel mode"
-	do_facet mgs "$LCTL set_param debug=warning; $LCTL dk > /dev/null"
+	do_facet mgs "$LCTL dk > /dev/null"
 	do_facet mgs "bash run-llog.sh" || error "run-llog.sh failed"
 	do_facet mgs $LCTL dk > $TMP/$tfile
 

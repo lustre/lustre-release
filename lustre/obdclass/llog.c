@@ -64,6 +64,7 @@ static struct llog_handle *llog_alloc_handle(void)
 
 	init_rwsem(&loghandle->lgh_lock);
 	mutex_init(&loghandle->lgh_hdr_mutex);
+	init_rwsem(&loghandle->lgh_last_sem);
 	INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
 	atomic_set(&loghandle->lgh_refcount, 1);
 
@@ -477,6 +478,7 @@ static int llog_process_thread(void *arg)
 		unsigned int buf_offset = 0;
 		bool partial_chunk;
 		int	lh_last_idx;
+		int	synced_idx = 0;
 
 		/* skip records not set in bitmap */
 		while (index <= last_index &&
@@ -494,7 +496,8 @@ repeat:
 		/* get the buf with our target record; avoid old garbage */
 		memset(buf, 0, chunk_size);
 		/* the record index for outdated chunk data */
-		lh_last_idx = loghandle->lgh_last_idx + 1;
+		/* it is safe to process buffer until saved lgh_last_idx */
+		lh_last_idx = LLOG_HDR_TAIL(llh)->lrt_index;
 		rc = llog_next_block(lpi->lpi_env, loghandle, &saved_index,
 				     index, &cur_offset, buf, chunk_size);
 		if (repeated && rc)
@@ -538,40 +541,42 @@ repeat:
 			CDEBUG(D_OTHER, "after swabbing, type=%#x idx=%d\n",
 			       rec->lrh_type, rec->lrh_index);
 
-			/* for partial chunk the end of it is zeroed, check
-			 * for index 0 to distinguish it. */
-			if (partial_chunk && rec->lrh_index == 0) {
-				/* concurrent llog_add() might add new records
-				 * while llog_processing, check this is not
-				 * the case and re-read the current chunk
-				 * otherwise. */
-				int records;
-				/* lgh_last_idx could be less then index
-				 * for catalog, if catalog is wrapped */
-				if ((index > loghandle->lgh_last_idx &&
-				    !(loghandle->lgh_hdr->llh_flags &
-				      LLOG_F_IS_CAT)) || repeated ||
-				    (loghandle->lgh_obj != NULL &&
-				     dt_object_remote(loghandle->lgh_obj)))
-					GOTO(out, rc = 0);
-				/* <2 records means no more records
-				 * if the last record we processed was
-				 * the final one, then the underlying
-				 * object might have been destroyed yet.
-				 * we better don't access that.. */
-				mutex_lock(&loghandle->lgh_hdr_mutex);
-				records = loghandle->lgh_hdr->llh_count;
-				mutex_unlock(&loghandle->lgh_hdr_mutex);
-				if (records <= 1)
-					GOTO(out, rc = 0);
-				CDEBUG(D_OTHER, "Re-read last llog buffer for "
-				       "new records, index %u, last %u\n",
-				       index, loghandle->lgh_last_idx);
+			if (index == (synced_idx + 1) &&
+			    synced_idx == LLOG_HDR_TAIL(llh)->lrt_index)
+				GOTO(out, rc = 0);
+
+			/* the bitmap could be changed during processing
+			 * records from the chunk. For wrapped catalog
+			 * it means we can read deleted record and try to
+			 * process it. Check this case and reread the chunk.
+			 * It is safe to process to lh_last_idx, including
+			 * lh_last_idx if it was synced. We can not do <=
+			 * comparison, cause for wrapped catalog lgh_last_idx
+			 * could be less than index. So we detect last index
+			 * for processing as index == lh_last_idx+1. But when
+			 * catalog is wrapped and full lgh_last_idx=llh_cat_idx,
+			 * the first processing index is llh_cat_idx+1.
+			 */
+
+			if ((index == lh_last_idx && synced_idx != index) ||
+			    (index == (lh_last_idx + 1) &&
+			     !(index == (llh->llh_cat_idx + 1) &&
+			       (llh->llh_flags & LLOG_F_IS_CAT))) ||
+			    (rec->lrh_index == 0 && !repeated)) {
+
 				/* save offset inside buffer for the re-read */
 				buf_offset = (char *)rec - (char *)buf;
 				cur_offset = chunk_offset;
 				repeated = true;
+				/* We need to be sure lgh_last_idx
+				 * record was saved to disk
+				 */
+				down_read(&loghandle->lgh_last_sem);
+				synced_idx = LLOG_HDR_TAIL(llh)->lrt_index;
+				up_read(&loghandle->lgh_last_sem);
+				CDEBUG(D_OTHER, "synced_idx: %d\n", synced_idx);
 				goto repeat;
+
 			}
 
 			repeated = false;
@@ -611,30 +616,24 @@ repeat:
 			loghandle->lgh_cur_offset = (char *)rec - (char *)buf +
 						    chunk_offset;
 
-			OBD_FAIL_TIMEOUT(OBD_FAIL_LLOG_PROCESS_TIMEOUT, 2);
-
+			if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
+				index == lh_last_idx &&
+				cfs_fail_val == (unsigned int)
+					(loghandle->lgh_id.lgl_oi.oi.oi_id &
+					 0xFFFFFFFF)) {
+				OBD_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
+			}
 			/* if set, process the callback on this record */
 			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh))) {
 				struct llog_cookie *lgc;
 				__u64	tmp_off;
 				int	tmp_idx;
-			/* the bitmap could be changed during processing
-			 * records from the chunk. For wrapped catalog
-			 * it means we can read deleted record and try to
-			 * process it. Check this case and reread the chunk.
-			 * Checking the race with llog_add the bit is set
-			 * after incrementation of lgh_last_idx */
-				if (index == lh_last_idx &&
-				    lh_last_idx !=
-				    (loghandle->lgh_last_idx + 1)) {
-					/* save offset inside buffer for
-					 *  the re-read */
-					buf_offset = (char *)rec - (char *)buf;
-					cur_offset = chunk_offset;
-					repeated = true;
-					goto repeat;
 
-				}
+				CDEBUG(D_OTHER, "index: %d, lh_last_idx: %d "
+				       "synced_idx: %d lgh_last_idx: %d\n",
+				       index, lh_last_idx, synced_idx,
+				       loghandle->lgh_last_idx);
+
 				if (lti != NULL) {
 					lgc = &lti->lgi_cookie;
 					/* store lu_env for recursive calls */
