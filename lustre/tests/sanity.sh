@@ -19441,6 +19441,82 @@ test_417() {
 }
 run_test 417 "disable remote dir, striped dir and dir migration"
 
+# Checks that the outputs of df [-i] and lfs df [-i] match
+#
+# usage: check_lfs_df <blocks | inodes> <mountpoint>
+check_lfs_df() {
+	local dir=$2
+	local inodes
+	local df_out
+	local lfs_df_out
+
+	# blocks or inodes
+	[ "$1" == "blocks" ] && inodes= || inodes="-i"
+
+	# read the lines of interest
+	df_out=($(df $inodes $dir | tail -n +2)) ||
+		error "df $inodes $dir | tail -n +2 failed"
+	lfs_df_out=($($LFS df $inodes $dir | grep filesystem_summary:)) ||
+		error "lfs df $inodes $dir | grep filesystem_summary: failed"
+
+	# skip the first substrings of each command output as they are different
+	# <NID>:/<fsname for df, filesystem_summary: for lfs df
+	df_out=(${df_out[@]:1})
+	lfs_df_out=(${lfs_df_out[@]:1})
+
+	# compare the two outputs
+	for i in {0..4}; do
+		[ "${df_out[i]}" != "${lfs_df_out[i]}" ] &&
+			error "df and lfs df output mismatch:" \
+			      "df${inodes}: ${df_out[*]}," \
+			      "lfs df${inodes}: ${lfs_df_out[*]}"
+	done
+}
+
+test_418() {
+	local dir=$DIR/$tdir
+	local numfiles=$((RANDOM % 4096 + 2))
+	local numblocks=$((RANDOM % 256 + 1))
+
+	wait_delete_completed
+	test_mkdir $dir
+
+	# check block output
+	check_lfs_df blocks $dir
+	# check inode output
+	check_lfs_df inodes $dir
+
+	# create a single file and retest
+	echo "Creating a single file and testing"
+	createmany -o $dir/$tfile- 1 &>/dev/null ||
+		error "creating 1 file in $dir failed"
+	cancel_lru_locks osc
+	sync; sleep 2
+	check_lfs_df blocks $dir
+	check_lfs_df inodes $dir
+
+	# create a random number of files
+	echo "Creating $((numfiles - 1)) files and testing"
+	createmany -o $dir/$tfile- 1 $((numfiles - 1)) &>/dev/null ||
+		error "creating $((numfiles - 1)) files in $dir failed"
+
+	# write a random number of blocks to the first test file
+	echo "Writing $numblocks 4K blocks and testing"
+	dd if=/dev/urandom of=$dir/${tfile}-0 bs=4K conv=fsync \
+		count=$numblocks &>/dev/null ||
+		error "dd to $dir/${tfile}-0 failed"
+
+	# retest
+	cancel_lru_locks osc
+	sync; sleep 10
+	check_lfs_df blocks $dir
+	check_lfs_df inodes $dir
+
+	unlinkmany $dir/$tfile- $numfiles &>/dev/null ||
+		error "unlinking $numfiles files in $dir failed"
+}
+run_test 418 "df and lfs df outputs match"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&

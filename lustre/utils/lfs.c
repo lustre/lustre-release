@@ -4606,16 +4606,22 @@ enum mntdf_flags {
 #define RSF     "%4s"
 #define RDF     "%3d%%"
 
-static inline int obd_statfs_ratio(const struct obd_statfs *st)
+static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 {
 	double avail, used, ratio = 0;
 
-	avail = st->os_bavail;
-	used  = st->os_blocks - st->os_bfree;
+	if (inodes) {
+		avail = st->os_ffree;
+		used = st->os_files - st->os_ffree;
+	} else {
+		avail = st->os_bavail;
+		used = st->os_blocks - st->os_bfree;
+	}
 	if (avail + used > 0)
-		ratio = used / (used + avail) * 100 + 0.5;
+		ratio = used / (used + avail) * 100;
 
-	return (int)ratio;
+	/* Round up to match df(1) usage percentage */
+	return (ratio - (int)ratio) > 0 ? (int)(ratio + 1) : (int)ratio;
 }
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
@@ -4649,7 +4655,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			total = (stat->os_blocks * stat->os_bsize) >> shift;
 		}
 
-		ratio = obd_statfs_ratio(stat);
+		ratio = obd_statfs_ratio(stat, flags & MNTDF_INODES);
 
 		if (flags & MNTDF_COOKED) {
 			int i;
@@ -4893,8 +4899,8 @@ static int ll_statfs_data_comp(const void *sd1, const void *sd2)
 						sd_st;
 	const struct obd_statfs *st2 = &((const struct ll_statfs_data *)sd2)->
 						sd_st;
-	int r1 = obd_statfs_ratio(st1);
-	int r2 = obd_statfs_ratio(st2);
+	int r1 = obd_statfs_ratio(st1, false);
+	int r2 = obd_statfs_ratio(st2, false);
 	int64_t result = r1 - r2;
 
 	/* if both space usage are above 90, compare free inodes */
@@ -5174,8 +5180,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 				/* don't use server whose usage is above 90% */
 				while (nr != param->lsp_stripe_count &&
-				       obd_statfs_ratio(&lsb->sb_buf[nr].sd_st)
-				       > 90)
+				       obd_statfs_ratio(&lsb->sb_buf[nr].sd_st,
+							false) > 90)
 					nr = MAX(param->lsp_stripe_count,
 						 nr / 2);
 
