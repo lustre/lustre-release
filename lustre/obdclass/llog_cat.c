@@ -903,7 +903,10 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 			/* processing the catalog part at the end */
 			cd.lpcd_first_idx = (startcat ? startcat :
 					     llh->llh_cat_idx);
-			cd.lpcd_last_idx = 0;
+			if (OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS))
+				cd.lpcd_last_idx = cfs_fail_val;
+			else
+				cd.lpcd_last_idx = 0;
 			rc = llog_process_or_fork(env, cat_llh, cat_cb,
 						  &d, &cd, fork);
 			/* Reset the startcat becasue it has already reached
@@ -930,6 +933,7 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 
 	RETURN(rc);
 }
+EXPORT_SYMBOL(llog_cat_process_or_fork);
 
 int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		     llog_cb_t cb, void *data, int startcat, int startidx)

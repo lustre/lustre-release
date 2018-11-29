@@ -44,6 +44,8 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
+#include <linux/delay.h>
+
 #include <dt_object.h>
 #include <llog_swab.h>
 #include <lustre_fid.h>
@@ -590,6 +592,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			RETURN(-ENOSPC);
 	}
 
+	down_write(&loghandle->lgh_last_sem);
 	/* increment the last_idx along with llh_tail index, they should
 	 * be equal for a llog lifetime */
 	loghandle->lgh_last_idx++;
@@ -673,6 +676,12 @@ out_unlock:
 	if (rc)
 		GOTO(out, rc);
 
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
+	   cfs_fail_val == (unsigned int)(loghandle->lgh_id.lgl_oi.oi.oi_id &
+					  0xFFFFFFFF)) {
+		OBD_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
+		msleep(1 * MSEC_PER_SEC);
+	}
 	/* computed index can be used to determine offset for fixed-size
 	 * records. This also allows to handle Catalog wrap around case */
 	if (llh->llh_flags & LLOG_F_IS_FIXSIZE) {
@@ -692,6 +701,8 @@ out_unlock:
 	rc = dt_record_write(env, o, &lgi->lgi_buf, &lgi->lgi_off, th);
 	if (rc < 0)
 		GOTO(out, rc);
+
+	up_write(&loghandle->lgh_last_sem);
 
 	CDEBUG(D_HA, "added record "DFID".%u, %u off%llu\n",
 	       PFID(lu_object_fid(&o->do_lu)), index, rec->lrh_len,
@@ -726,6 +737,7 @@ out:
 	}
 
 	LLOG_HDR_TAIL(llh)->lrt_index = loghandle->lgh_last_idx;
+	up_write(&loghandle->lgh_last_sem);
 
 	RETURN(rc);
 }
