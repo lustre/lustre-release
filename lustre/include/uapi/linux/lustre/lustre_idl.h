@@ -2915,6 +2915,11 @@ enum llog_flag {
 			  LLOG_F_EXT_X_OMODE | LLOG_F_EXT_X_XATTR,
 };
 
+/* means first record of catalog */
+enum {
+	LLOG_CAT_FIRST = -1,
+};
+
 /* On-disk header structure of each log object, stored in little endian order */
 #define LLOG_MIN_CHUNK_SIZE	8192
 #define LLOG_HEADER_SIZE        (96) /* sizeof (llog_log_hdr) + sizeof(llh_tail)

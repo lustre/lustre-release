@@ -1233,14 +1233,15 @@ static int osp_sync_thread(void *_arg)
 		       cfs_fail_val : (LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1);
 		/* processing reaches catalog bottom */
 		if (d->opd_sync_last_catalog_idx == size)
-			d->opd_sync_last_catalog_idx = 0;
+			d->opd_sync_last_catalog_idx = LLOG_CAT_FIRST;
 		else if (wrapped)
 			/* If catalog is wrapped we can`t predict last index of
 			 * processing because lgh_last_idx could be changed.
 			 * Starting form the next one */
 			d->opd_sync_last_catalog_idx++;
 
-	} while (rc == 0 && (wrapped || d->opd_sync_last_catalog_idx == 0));
+	} while (rc == 0 && (wrapped ||
+			     d->opd_sync_last_catalog_idx == LLOG_CAT_FIRST));
 
 	if (rc < 0) {
 		CERROR("%s: llog process with osp_sync_process_queues "
