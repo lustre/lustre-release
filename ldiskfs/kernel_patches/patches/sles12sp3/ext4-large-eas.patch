@@ -356,7 +356,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			size_t offs = le16_to_cpu(last->e_value_offs);
  			if (offs < *min_offs)
  				*min_offs = offs;
-@@ -651,11 +769,195 @@ static size_t ext4_xattr_free_space(stru
+@@ -651,12 +769,195 @@ static size_t ext4_xattr_free_space(stru
  	return (*min_offs - ((void *)last - base) - sizeof(__u32));
  }
  
@@ -537,8 +537,8 @@ Index: linux-stage/fs/ext4/xattr.c
 +}
 +
  static int
--ext4_xattr_set_entry(struct ext4_xattr_info *i, struct ext4_xattr_search *s)
-+ext4_xattr_set_entry(struct ext4_xattr_info *i, struct ext4_xattr_search *s,
+ ext4_xattr_set_entry(struct ext4_xattr_info *i, struct ext4_xattr_search *s,
+-		     struct inode *inode)
 +		     handle_t *handle, struct inode *inode)
  {
  	struct ext4_xattr_entry *last, *next;
@@ -553,16 +553,16 @@ Index: linux-stage/fs/ext4/xattr.c
  
  	/* Compute min_offs and last. */
  	last = s->first;
-@@ -663,7 +965,7 @@ ext4_xattr_set_entry(struct ext4_xattr_i
- 		next = EXT4_XATTR_NEXT(last);
- 		if ((void *)next >= s->end)
+@@ -666,7 +967,7 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+ 			EXT4_ERROR_INODE(inode, "corrupted xattr entries");
  			return -EFSCORRUPTED;
+ 		}
 -		if (!last->e_value_block && last->e_value_size) {
 +		if (!last->e_value_inum && last->e_value_size) {
  			size_t offs = le16_to_cpu(last->e_value_offs);
  			if (offs < min_offs)
  				min_offs = offs;
-@@ -671,15 +973,20 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -674,15 +975,20 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  	}
  	free = min_offs - ((void *)last - s->base) - sizeof(__u32);
  	if (!s->not_found) {
@@ -586,7 +586,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			return -ENOSPC;
  	}
  
-@@ -693,7 +1000,8 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -696,7 +1002,8 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  		s->here->e_name_len = name_len;
  		memcpy(s->here->e_name, i->name, name_len);
  	} else {
@@ -596,7 +596,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			void *first_val = s->base + min_offs;
  			size_t offs = le16_to_cpu(s->here->e_value_offs);
  			void *val = s->base + offs;
-@@ -727,13 +1035,18 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -730,13 +1037,18 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  			last = s->first;
  			while (!IS_LAST_ENTRY(last)) {
  				size_t o = le16_to_cpu(last->e_value_offs);
@@ -616,7 +616,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (!i->value) {
  			/* Remove the old name. */
  			size_t size = EXT4_XATTR_LEN(name_len);
-@@ -747,10 +1060,17 @@ ext4_xattr_set_entry(struct ext4_xattr_i
+@@ -750,10 +1062,17 @@ ext4_xattr_set_entry(struct ext4_xattr_i
  	if (i->value) {
  		/* Insert the new value. */
  		s->here->e_value_size = cpu_to_le32(i->value_len);
@@ -635,7 +635,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			if (i->value == EXT4_ZERO_XATTR_VALUE) {
  				memset(val, 0, size);
  			} else {
-@@ -800,7 +1120,7 @@ ext4_xattr_block_find(struct inode *inod
+@@ -803,7 +1122,7 @@ ext4_xattr_block_find(struct inode *inod
  		bs->s.end = bs->bh->b_data + bs->bh->b_size;
  		bs->s.here = bs->s.first;
  		error = ext4_xattr_find_entry(&bs->s.here, i->name_index,
@@ -644,7 +644,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (error && error != -ENODATA)
  			goto cleanup;
  		bs->s.not_found = error;
-@@ -825,8 +1145,6 @@ ext4_xattr_block_set(handle_t *handle, s
+@@ -828,8 +1147,6 @@ ext4_xattr_block_set(handle_t *handle, s
  
  #define header(x) ((struct ext4_xattr_header *)(x))
  
@@ -653,25 +653,25 @@ Index: linux-stage/fs/ext4/xattr.c
  	if (s->base) {
  		BUFFER_TRACE(bs->bh, "get_write_access");
  		error = ext4_journal_get_write_access(handle, bs->bh);
-@@ -845,7 +1163,7 @@ ext4_xattr_block_set(handle_t *handle, s
+@@ -848,7 +1165,7 @@ ext4_xattr_block_set(handle_t *handle, s
  			mb_cache_entry_delete_block(ext4_mb_cache, hash,
  						    bs->bh->b_blocknr);
  			ea_bdebug(bs->bh, "modifying in-place");
--			error = ext4_xattr_set_entry(i, s);
+-			error = ext4_xattr_set_entry(i, s, inode);
 +			error = ext4_xattr_set_entry(i, s, handle, inode);
  			if (!error) {
  				if (!IS_LAST_ENTRY(s->first))
  					ext4_xattr_rehash(header(s->base),
-@@ -891,7 +1209,7 @@ ext4_xattr_block_set(handle_t *handle, s
+@@ -894,7 +1211,7 @@ ext4_xattr_block_set(handle_t *handle, s
  		s->end = s->base + sb->s_blocksize;
  	}
  
--	error = ext4_xattr_set_entry(i, s);
+-	error = ext4_xattr_set_entry(i, s, inode);
 +	error = ext4_xattr_set_entry(i, s, handle, inode);
  	if (error == -EFSCORRUPTED)
  		goto bad_block;
  	if (error)
-@@ -1069,7 +1387,7 @@ int ext4_xattr_ibody_find(struct inode *
+@@ -1072,7 +1389,7 @@ int ext4_xattr_ibody_find(struct inode *
  		/* Find the named attribute. */
  		error = ext4_xattr_find_entry(&is->s.here, i->name_index,
  					      i->name, is->s.end -
@@ -680,25 +680,25 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (error && error != -ENODATA)
  			return error;
  		is->s.not_found = error;
-@@ -1087,7 +1405,7 @@ int ext4_xattr_ibody_inline_set(handle_t
+@@ -1090,7 +1407,7 @@ int ext4_xattr_ibody_inline_set(handle_t
  
  	if (EXT4_I(inode)->i_extra_isize == 0)
  		return -ENOSPC;
--	error = ext4_xattr_set_entry(i, s);
+-	error = ext4_xattr_set_entry(i, s, inode);
 +	error = ext4_xattr_set_entry(i, s, handle, inode);
  	if (error)
  		return error;
  	header = IHDR(inode, ext4_raw_inode(&is->iloc));
-@@ -1111,7 +1429,7 @@ static int ext4_xattr_ibody_set(handle_t
+@@ -1114,7 +1431,7 @@ static int ext4_xattr_ibody_set(handle_t
  
  	if (EXT4_I(inode)->i_extra_isize == 0)
  		return -ENOSPC;
--	error = ext4_xattr_set_entry(i, s);
+-	error = ext4_xattr_set_entry(i, s, inode);
 +	error = ext4_xattr_set_entry(i, s, handle, inode);
  	if (error)
  		return error;
  	header = IHDR(inode, ext4_raw_inode(&is->iloc));
-@@ -1158,7 +1476,7 @@ ext4_xattr_set_handle(handle_t *handle, 
+@@ -1161,7 +1478,7 @@ ext4_xattr_set_handle(handle_t *handle, 
  		.name = name,
  		.value = value,
  		.value_len = value_len,
@@ -707,7 +707,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	};
  	struct ext4_xattr_ibody_find is = {
  		.s = { .not_found = -ENODATA, },
-@@ -1228,6 +1546,15 @@ ext4_xattr_set_handle(handle_t *handle, 
+@@ -1231,6 +1548,15 @@ ext4_xattr_set_handle(handle_t *handle, 
  					goto cleanup;
  			}
  			error = ext4_xattr_block_set(handle, inode, &i, &bs);
@@ -723,7 +723,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			if (error)
  				goto cleanup;
  			if (!is.s.not_found) {
-@@ -1272,9 +1599,22 @@ ext4_xattr_set(struct inode *inode, int 
+@@ -1275,9 +1601,22 @@ ext4_xattr_set(struct inode *inode, int 
  	       const void *value, size_t value_len, int flags)
  {
  	handle_t *handle;
@@ -746,7 +746,7 @@ Index: linux-stage/fs/ext4/xattr.c
  retry:
  	handle = ext4_journal_start(inode, EXT4_HT_XATTR, credits);
  	if (IS_ERR(handle)) {
-@@ -1286,7 +1626,7 @@ retry:
+@@ -1289,7 +1628,7 @@ retry:
  					      value, value_len, flags);
  		error2 = ext4_journal_stop(handle);
  		if (error == -ENOSPC &&
@@ -755,7 +755,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			goto retry;
  		if (error == 0)
  			error = error2;
-@@ -1308,7 +1648,7 @@ static void ext4_xattr_shift_entries(str
+@@ -1311,7 +1650,7 @@ static void ext4_xattr_shift_entries(str
  
  	/* Adjust the value offsets of the entries */
  	for (; !IS_LAST_ENTRY(last); last = EXT4_XATTR_NEXT(last)) {
@@ -764,7 +764,7 @@ Index: linux-stage/fs/ext4/xattr.c
  			new_offs = le16_to_cpu(last->e_value_offs) +
  							value_offs_shift;
  			BUG_ON(new_offs + le32_to_cpu(last->e_value_size)
-@@ -1562,21 +1902,135 @@ cleanup:
+@@ -1565,21 +1904,135 @@ cleanup:
  }
  
  
@@ -905,7 +905,7 @@ Index: linux-stage/fs/ext4/xattr.c
  	bh = sb_bread(inode->i_sb, EXT4_I(inode)->i_file_acl);
  	if (!bh) {
  		EXT4_ERROR_INODE(inode, "block %llu read error",
-@@ -1589,11 +2043,69 @@ ext4_xattr_delete_inode(handle_t *handle
+@@ -1592,11 +2045,69 @@ ext4_xattr_delete_inode(handle_t *handle
  				 EXT4_I(inode)->i_file_acl);
  		goto cleanup;
  	}
@@ -975,7 +975,7 @@ Index: linux-stage/fs/ext4/xattr.c
  }
  
  /*
-@@ -1645,10 +2157,9 @@ ext4_xattr_cmp(struct ext4_xattr_header 
+@@ -1648,10 +2159,9 @@ ext4_xattr_cmp(struct ext4_xattr_header 
  		    entry1->e_name_index != entry2->e_name_index ||
  		    entry1->e_name_len != entry2->e_name_len ||
  		    entry1->e_value_size != entry2->e_value_size ||
@@ -987,7 +987,7 @@ Index: linux-stage/fs/ext4/xattr.c
  		if (memcmp((char *)header1 + le16_to_cpu(entry1->e_value_offs),
  			   (char *)header2 + le16_to_cpu(entry2->e_value_offs),
  			   le32_to_cpu(entry1->e_value_size)))
-@@ -1720,7 +2231,7 @@ static inline void ext4_xattr_hash_entry
+@@ -1723,7 +2233,7 @@ static inline void ext4_xattr_hash_entry
  		       *name++;
  	}
  
