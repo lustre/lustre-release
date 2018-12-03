@@ -1892,9 +1892,8 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 	/* The lum has been verifed in lod_verify_md_striping */
 	LASSERT(le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC ||
 		le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC);
-	LASSERT(le32_to_cpu(lum->lum_stripe_count) > 0);
 
-	stripe_count = le32_to_cpu(lum->lum_stripe_count);
+	stripe_count = lo->ldo_dir_stripe_count;
 
 	OBD_ALLOC(idx_array, sizeof(idx_array[0]) * stripe_count);
 	if (idx_array == NULL)
