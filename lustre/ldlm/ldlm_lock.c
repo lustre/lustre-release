@@ -1285,6 +1285,8 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 	};
 	int idx;
 
+	data->lmd_lock = NULL;
+
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		struct ldlm_interval_tree *tree = &res->lr_itree[idx];
 
@@ -1296,8 +1298,11 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 
 		interval_search(tree->lit_root, &ext,
 				itree_overlap_cb, data);
+		if (data->lmd_lock)
+			return data->lmd_lock;
 	}
-	return data->lmd_lock;
+
+	return NULL;
 }
 EXPORT_SYMBOL(search_itree);
 
@@ -1316,11 +1321,14 @@ static struct ldlm_lock *search_queue(struct list_head *queue,
 	struct ldlm_lock *lock;
 	int rc;
 
+	data->lmd_lock = NULL;
+
 	list_for_each_entry(lock, queue, l_res_link) {
 		rc = lock_matches(lock, data);
 		if (rc == INTERVAL_ITER_STOP)
 			return data->lmd_lock;
 	}
+
 	return NULL;
 }
 
