@@ -176,7 +176,27 @@ BuildRequires: systemd
 Userspace tools and files for the Lustre file system.
 
 %if %{with lustre_modules}
-%kernel_module_package -n %{name} -p %SOURCE1 -f %SOURCE2 default
+%if 0%{?rhel} == 7
+# until we have achieved full kABI compatibility we need to
+# restrict the kernel range that can be used to the kernel
+# version from the RHEL minor release
+# this is supposed to be done for kmods automatically but
+# RHBZ#1467319 seems to be getting in the way
+# this is true for el7.0 through el7.4
+%define preamble %{expand:%(
+TMPFILE=`mktemp`
+cat %{SOURCE1} > $TMPFILE
+kver=%{kver}
+linuxversion=${kver%%%%-*}
+linuxrelease=${kver##*-}
+kabiminor=${linuxrelease%%%%.*}
+echo "Requires:       kernel < $linuxversion-$((kabiminor+1)), kernel >= $linuxversion-$((kabiminor))" >> $TMPFILE
+echo $TMPFILE
+)}
+%else
+%define preamble %{SOURCE1}
+%endif
+%kernel_module_package -n %{name} -p %preamble -f %SOURCE2 default
 
 %if %{with ldiskfs}
 %kernel_module_package -n %{name}-osd-ldiskfs -p %SOURCE3 -f %SOURCE4 default
