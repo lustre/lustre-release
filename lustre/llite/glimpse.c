@@ -50,9 +50,9 @@
 #include "vvp_internal.h"
 
 static const struct cl_lock_descr whole_file = {
-        .cld_start = 0,
-        .cld_end   = CL_PAGE_EOF,
-        .cld_mode  = CLM_READ
+	.cld_start = 0,
+	.cld_end   = CL_PAGE_EOF,
+	.cld_mode  = CLM_READ
 };
 
 /*
@@ -63,18 +63,18 @@ static const struct cl_lock_descr whole_file = {
  */
 blkcnt_t dirty_cnt(struct inode *inode)
 {
-        blkcnt_t cnt = 0;
+	blkcnt_t cnt = 0;
 	struct vvp_object *vob = cl_inode2vvp(inode);
-        void              *results[1];
+	void *results[1];
 
-        if (inode->i_mapping != NULL)
-                cnt += radix_tree_gang_lookup_tag(&inode->i_mapping->page_tree,
-                                                  results, 0, 1,
-                                                  PAGECACHE_TAG_DIRTY);
+	if (inode->i_mapping != NULL)
+		cnt += radix_tree_gang_lookup_tag(&inode->i_mapping->page_tree,
+						  results, 0, 1,
+						  PAGECACHE_TAG_DIRTY);
 	if (cnt == 0 && atomic_read(&vob->vob_mmap_cnt) > 0)
 		cnt = 1;
 
-        return (cnt > 0) ? 1 : 0;
+	return (cnt > 0) ? 1 : 0;
 }
 
 int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
@@ -149,46 +149,48 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
  * \retval negative	negative errno on error
  */
 int cl_io_get(struct inode *inode, struct lu_env **envout,
-		     struct cl_io **ioout, __u16 *refcheck)
+	      struct cl_io **ioout, u16 *refcheck)
 {
-	struct lu_env		*env;
-	struct cl_io		*io;
-	struct ll_inode_info	*lli = ll_i2info(inode);
-	struct cl_object	*clob = lli->lli_clob;
+	struct lu_env *env;
+	struct cl_io *io;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct cl_object *clob = lli->lli_clob;
 	int result;
 
 	if (S_ISREG(inode->i_mode)) {
-                env = cl_env_get(refcheck);
-                if (!IS_ERR(env)) {
+		env = cl_env_get(refcheck);
+		if (!IS_ERR(env)) {
 			io = vvp_env_thread_io(env);
-                        io->ci_obj = clob;
-                        *envout = env;
-                        *ioout  = io;
-                        result = +1;
-                } else
-                        result = PTR_ERR(env);
-        } else
-                result = 0;
-        return result;
+			io->ci_obj = clob;
+			*envout = env;
+			*ioout  = io;
+			result = 1;
+		} else {
+			result = PTR_ERR(env);
+		}
+	} else {
+		result = 0;
+	}
+	return result;
 }
 
 int cl_glimpse_size0(struct inode *inode, int agl)
 {
-        /*
-         * We don't need ast_flags argument to cl_glimpse_size(), because
-         * osc_lock_enqueue() takes care of the possible deadlock that said
-         * argument was introduced to avoid.
-         */
-        /*
-         * XXX but note that ll_file_seek() passes LDLM_FL_BLOCK_NOWAIT to
-         * cl_glimpse_size(), which doesn't make sense: glimpse locks are not
-         * blocking anyway.
-         */
-        struct lu_env          *env = NULL;
-        struct cl_io           *io  = NULL;
-	__u16			refcheck;
-	int			retried = 0;
-	int                     result;
+	/*
+	 * We don't need ast_flags argument to cl_glimpse_size(), because
+	 * osc_lock_enqueue() takes care of the possible deadlock that said
+	 * argument was introduced to avoid.
+	 */
+	/*
+	 * XXX but note that ll_file_seek() passes LDLM_FL_BLOCK_NOWAIT to
+	 * cl_glimpse_size(), which doesn't make sense: glimpse locks are not
+	 * blocking anyway.
+	 */
+	struct lu_env *env = NULL;
+	struct cl_io *io  = NULL;
+	u16 refcheck;
+	int retried = 0;
+	int result;
 
 	ENTRY;
 
