@@ -120,16 +120,6 @@ cleanup_rpmmacros() {
 }
 
 apply_kmod_requires_conflicts() {
-    # until we have achieved full kABI compatibility we need to
-    # restrict the kernel range that can be used to the kernel
-    # version from the RHEL minor release
-    # this is supposed to be done for kmods automatically but
-    # RHBZ#1467319 seems to be getting in the way
-    local kver=$(find_linux_release)
-    local linuxversion=${kver%%-*}
-    local linuxrelease=${kver##*-}
-    local kabiminor=${linuxrelease%%.*}
-    echo "Requires:       kernel < $linuxversion-$((kabiminor+1)), kernel >= $linuxversion-$((kabiminor))" >> rpm/kmp-lustre.preamble
     if $PATCHLESS; then
         # don't allow the patched kernel to be considered as a valid kernel
         # for the patchless client
