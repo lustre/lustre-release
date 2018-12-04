@@ -3114,28 +3114,26 @@ test_85a() { #bug 16774
 run_test 85a "check the cancellation of unused locks during recovery(IBITS)"
 
 test_85b() { #bug 16774
+	rm -rf $DIR/$tdir
+	mkdir $DIR/$tdir
+
 	lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
 
 	if ! combined_mgs_mds ; then
 		mount_mgs_client
 	fi
 
-	create_pool $FSNAME.$TESTNAME ||
-		error "unable to create pool $TESTNAME"
-	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $FSNAME-OST0000 ||
-		error "unable to add pool $TESTNAME"
-
-	$SETSTRIPE -c 1 -p $FSNAME.$TESTNAME $DIR
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	for i in $(seq 100); do
-		dd if=/dev/urandom of=$DIR/$tfile-$i bs=4096 \
+		dd if=/dev/urandom of=$DIR/$tdir/$tfile-$i bs=4096 \
 			count=32 >/dev/null 2>&1
 	done
 
 	cancel_lru_locks osc
 
 	for i in $(seq 100); do
-		dd if=$DIR/$tfile-$i of=/dev/null bs=4096 \
+		dd if=$DIR/$tdir/$tfile-$i of=/dev/null bs=4096 \
 			count=32 >/dev/null 2>&1
 	done
 
@@ -3152,11 +3150,6 @@ test_85b() { #bug 16774
 		 -n ldlm.namespaces.*OST0000*$addr.lock_unused_count)
 	echo "after recovery: unused locks count = $count2"
 
-	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $FSNAME-OST0000 ||
-		error "unable to remove pool $TESTNAME"
-	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME ||
-		error "unable to destroy the pool $TESTNAME"
-
 	if ! combined_mgs_mds ; then
 		umount_mgs_client
 	fi
@@ -3164,6 +3157,8 @@ test_85b() { #bug 16774
 	if [ $count2 -ge $count ]; then
 		error "unused locks are not canceled"
 	fi
+
+	rm -rf $DIR/$tdir
 }
 run_test 85b "check the cancellation of unused locks during recovery(EXTENT)"
 
