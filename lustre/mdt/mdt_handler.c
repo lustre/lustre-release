@@ -2937,6 +2937,11 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
 	/* Only enqueue LOOKUP lock for remote object */
 	LASSERT(ergo(mdt_object_remote(o), *ibits == MDS_INODELOCK_LOOKUP));
 
+	/* Lease lock are granted with LDLM_FL_CANCEL_ON_BLOCK */
+	if (lh->mlh_type == MDT_REG_LOCK && lh->mlh_reg_mode == LCK_EX &&
+	    *ibits == MDS_INODELOCK_OPEN)
+		dlmflags |= LDLM_FL_CANCEL_ON_BLOCK;
+
 	if (lh->mlh_type == MDT_PDO_LOCK) {
                 /* check for exists after object is locked */
                 if (mdt_object_exists(o) == 0) {

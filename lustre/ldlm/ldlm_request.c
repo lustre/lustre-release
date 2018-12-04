@@ -478,6 +478,9 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
         if (*flags & LDLM_FL_ATOMIC_CB)
 		ldlm_set_atomic_cb(lock);
 
+	if (*flags & LDLM_FL_CANCEL_ON_BLOCK)
+		ldlm_set_cancel_on_block(lock);
+
         if (policy != NULL)
                 lock->l_policy_data = *policy;
         if (client_cookie != NULL)
@@ -1545,6 +1548,10 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 
 	ldlm_set_canceling(lock);
 	unlock_res_and_lock(lock);
+
+	if (cancel_flags & LCF_LOCAL)
+		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_LOCAL_CANCEL_PAUSE,
+				 cfs_fail_val);
 
 	rc = ldlm_cli_cancel_local(lock);
 	if (rc == LDLM_FL_LOCAL_ONLY || cancel_flags & LCF_LOCAL) {

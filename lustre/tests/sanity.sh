@@ -18846,6 +18846,31 @@ test_317() {
 }
 run_test 317 "Verify blocks get correctly update after truncate"
 
+test_319() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+	local before=$(date +%s)
+	local evict
+	local mdir=$DIR/$tdir
+	local file=$mdir/xxx
+
+	$LFS mkdir -i0 $mdir || error "mkdir $mdir fails"
+	touch $file
+
+#define OBD_FAIL_LDLM_LOCAL_CANCEL_PAUSE 0x32c
+	$LCTL set_param fail_val=5 fail_loc=0x8000032c
+	$LFS mv -m1 $file &
+
+	sleep 1
+	dd if=$file of=/dev/null
+	wait
+	evict=$($LCTL get_param mdc.$FSNAME-MDT*.state |
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] || error "eviction happened"
+}
+run_test 319 "lost lease lock on migrate error"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then

@@ -902,7 +902,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 		CDEBUG(D_INODE, "normal open:"DFID" lease count: %d, lm: %d\n",
 			PFID(mdt_object_fid(obj)),
-			atomic_read(&obj->mot_open_count), lm);
+			atomic_read(&obj->mot_lease_count), lm);
 	}
 
 	mdt_lock_reg_init(lhc, lm);

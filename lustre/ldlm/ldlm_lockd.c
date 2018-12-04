@@ -1385,7 +1385,7 @@ existing_lock:
                          * granted lock will be cancelled immediately after
                          * sending completion AST.
                          */
-                        if (dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK) {
+			if (ldlm_is_cancel_on_block(lock)) {
                                 unlock_res_and_lock(lock);
                                 ldlm_lock_cancel(lock);
                                 lock_res_and_lock(lock);
@@ -1755,9 +1755,6 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
 			lock->l_policy_data.l_inodebits.cancel_bits = 0;
 	}
 	ldlm_set_cbpending(lock);
-
-	if (ldlm_is_cancel_on_block(lock))
-		ldlm_set_cancel(lock);
 
         do_ast = (!lock->l_readers && !lock->l_writers);
         unlock_res_and_lock(lock);
