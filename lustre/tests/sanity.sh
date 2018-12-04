@@ -23,8 +23,8 @@ fi
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596 (all below)
 	ALWAYS_EXCEPT+=" 42d 42e 63a 63b 64a 64b 64c"
-	# bug number:	 LU-11671 LU-11665 LU-11594 LU-11667 LU-11729
-	ALWAYS_EXCEPT+=" 45	  101c	   103a	    317      810"
+	# bug number:	 LU-11671 LU-11594 LU-11667 LU-11729
+	ALWAYS_EXCEPT+=" 45	  103a	    317      810"
 fi
 
 # Check Grants after these tests
@@ -8390,13 +8390,14 @@ test_101c() {
 	local STRIPE_SIZE=1048576
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
 	local nreads=10000
+	local rsize=65536
 	local osc_rpc_stats
 
 	setup_test101bc $STRIPE_SIZE $FILE_LENGTH
 
 	cancel_lru_locks osc
 	$LCTL set_param osc.*.rpc_stats 0
-	$READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
+	$READS -f $DIR/$tfile -s$FILE_LENGTH -b$rsize -n$nreads -t 180
 	for osc_rpc_stats in $($LCTL get_param -N osc.*.rpc_stats); do
 		local stats=$($LCTL get_param -n $osc_rpc_stats)
 		local lines=$(echo "$stats" | awk 'END {print NR;}')
@@ -8408,8 +8409,8 @@ test_101c() {
 		for size in 1 2 4 8; do
 			local rpc=$(echo "$stats" |
 				    awk '($1 == "'$size':") {print $2; exit; }')
-			[ $rpc != 0 ] &&
-				error "Small $((size*4))k read IO $rpc !"
+			[ $rpc != 0 ] && ((size * PAGE_SIZE < rsize)) &&
+				error "Small $((size*PAGE_SIZE)) read IO $rpc!"
 		done
 		echo "$osc_rpc_stats check passed!"
 	done
