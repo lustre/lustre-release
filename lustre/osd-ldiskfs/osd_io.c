@@ -2234,7 +2234,7 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	u64 len;
 	int rc;
-
+	mm_segment_t cur_fs;
 
 	LASSERT(inode);
 	if (inode->i_op->fiemap == NULL)
@@ -2254,9 +2254,17 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 	if (fieinfo.fi_flags & FIEMAP_FLAG_SYNC)
 		filemap_write_and_wait(inode->i_mapping);
 
+	/* Save previous value address limit */
+	cur_fs = get_fs();
+	/* Set the address limit of the kernel */
+	set_fs(get_ds());
+
 	rc = inode->i_op->fiemap(inode, &fieinfo, fm->fm_start, len);
 	fm->fm_flags = fieinfo.fi_flags;
 	fm->fm_mapped_extents = fieinfo.fi_extents_mapped;
+
+	/* Restore the previous address limt */
+	set_fs(cur_fs);
 
 	return rc;
 }
