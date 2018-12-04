@@ -290,8 +290,9 @@ int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
 	data->ioc_version = OBD_IOCTL_VERSION;
 
 	if (*pbuf != NULL && data->ioc_len > max_len) {
-		fprintf(stderr, "pbuf = %p, ioc_len = %u, max_len = %d\n",
-			*pbuf, data->ioc_len, max_len);
+		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+			    "pbuf = %p, ioc_len = %u, max_len = %d\n",
+			    *pbuf, data->ioc_len, max_len);
 		return -EINVAL;
 	}
 
@@ -4482,19 +4483,22 @@ migrate:
 			goto migrate;
 		} else if (errno == EALREADY) {
 			if (param->fp_verbose & VERBOSE_DETAIL)
-				fprintf(stdout,
-					"%s was migrated to MDT%d already\n",
-					path, lmu->lum_stripe_offset);
+				llapi_printf(LLAPI_MSG_NORMAL,
+					     "%s was migrated to MDT%d already\n",
+					     path, lmu->lum_stripe_offset);
 			ret = 0;
 		} else {
 			ret = -errno;
-			fprintf(stderr, "%s migrate failed: %s (%d)\n",
-				path, strerror(-ret), ret);
+			llapi_error(LLAPI_MSG_ERROR, ret,
+				    "%s migrate failed: %s (%d)\n",
+				    path, strerror(-ret), ret);
 			goto out;
 		}
 	} else if (param->fp_verbose & VERBOSE_DETAIL) {
-		fprintf(stdout, "migrate %s to MDT%d stripe count %d\n",
-			path, lmu->lum_stripe_offset, lmu->lum_stripe_count);
+		llapi_printf(LLAPI_MSG_NORMAL,
+			     "migrate %s to MDT%d stripe count %d\n",
+			     path, lmu->lum_stripe_offset,
+			     lmu->lum_stripe_count);
 	}
 
 out:
