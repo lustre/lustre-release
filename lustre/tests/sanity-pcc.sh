@@ -135,7 +135,8 @@ check_lpcc_state()
 	local lustre_path="$1"
 	local expected_state="$2"
 	local facet=${3:-$SINGLEAGT}
-	local state=$(do_facet $facet $LFS pcc state $lustre_path |
+	local myRUNAS="$4"
+	local state=$(do_facet $facet $myRUNAS $LFS pcc state $lustre_path |
 			awk -F 'type: ' '{print $2}' | awk -F ',' '{print $1}')
 
 	[[ "x$state" == "x$expected_state" ]] || error \
@@ -230,6 +231,7 @@ lpcc_rw_test() {
 	check_hsm_flags $file "0x0000000d"
 	check_lpcc_data $SINGLEAGT $lpcc_path $file "file_data"
 
+	echo "Restore testing..."
 	if [ $CLIENTCOUNT -lt 2 -o $restore ]; then
 		$LFS hsm_restore $file || error \
 			"failed to restore $file"
@@ -299,6 +301,7 @@ test_1e() {
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
+	$LCTL pcc list $MOUNT
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
 
@@ -640,12 +643,11 @@ test_4() {
 run_test 4 "Auto cache test for mmap"
 
 test_5() {
-	local file=$DIR/$tdir/$tfile
+	local file=$DIR/$tfile
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
-	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	do_facet $SINGLEAGT "echo -n attach_mmap_data > $file" ||
 		error "echo $file failed"
 
@@ -668,14 +670,34 @@ test_5() {
 }
 run_test 5 "Mmap & cat a RW-PCC cached file"
 
+setup_loopdev() {
+	local facet=$1
+	local file=$2
+	local mntpt=$3
+	local size=${4:-50}
+
+	do_facet $facet mkdir -p $mntpt || error "mkdir -p $hsm_root failed"
+	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
+	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
+	stack_trap "do_facet $facet rm -f $file" EXIT
+	do_facet $facet mkfs.ext4 $file ||
+		error "mkfs.ext4 $file failed"
+	do_facet $facet file $file
+	do_facet $facet mount -t ext4 -o loop,usrquota,grpquota $file $mntpt ||
+		error "mount -o loop,usrquota,grpquota $file $mntpt failed"
+	stack_trap "do_facet $facet $UMOUNT $mntpt" EXIT
+}
+
 test_6() {
-	local file=$DIR/$tdir/$tfile
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
 	local content
 
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
-
-	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	echo -n mmap_write_data > $file || error "echo write $file failed"
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
@@ -702,13 +724,16 @@ test_6() {
 run_test 6 "Test mmap write on RW-PCC "
 
 test_7a() {
-	local file=$DIR/$tdir/$tfile
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
 	local content
 
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
-	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	echo "QQQQQ" > $file
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
@@ -729,14 +754,17 @@ test_7a() {
 run_test 7a "Fake file detached between fault() and page_mkwrite() for RW-PCC"
 
 test_7b() {
-	local file=$DIR/$tdir/$tfile
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
 	local content
 	local pid
 
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
-	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	echo "QQQQQ" > $file
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
@@ -762,12 +790,10 @@ test_7b() {
 run_test 7b "Test the race with concurrent mkwrite and detach"
 
 test_8() {
-	local file=$DIR/$tdir/$tfile
+	local file=$DIR/$tfile
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
-
-	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	echo "QQQQQ" > $file
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
@@ -784,24 +810,6 @@ test_8() {
 	check_file_data $SINGLEAGT $file "ENOSPC_write"
 }
 run_test 8 "Test fake -ENOSPC tolerance for RW-PCC"
-
-setup_loopdev() {
-	local facet=$1
-	local file=$2
-	local mntpt=$3
-	local size=${4:-50}
-
-	do_facet $facet mkdir -p $mntpt || error "mkdir -p $hsm_root failed"
-	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
-	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
-	stack_trap "do_facet $facet rm -f $file" EXIT
-	do_facet $facet mkfs.ext4 $file ||
-		error "mkfs.ext4 $file failed"
-	do_facet $facet file $file
-	do_facet $facet mount -t ext4 -o loop,usrquota,grpquota $file $mntpt ||
-		error "mount -o loop,usrquota,grpquota $file $mntpt failed"
-	stack_trap "do_facet $facet $UMOUNT $mntpt" EXIT
-}
 
 test_9() {
 	local loopfile="$TMP/$tfile"
@@ -889,16 +897,17 @@ test_10b() {
 run_test 10b "Test RW-PCC with group quota on loop PCC device"
 
 test_11() {
-	local file=$DIR/$tdir/$tfile
-	local hsm_root=$(hsm_root)
-	local file=$DIR/$tdir/$tfile
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
 	local -a lpcc_path
 	local lpcc_dir
 
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
-	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	do_facet $SINGLEAGT "echo -n QQQQQ > $file"
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
 	lpcc_dir=$(dirname $lpcc_path)
@@ -995,8 +1004,6 @@ test_rule_id() {
 	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
-
-	cleanup_pcc_mapping
 }
 
 test_13a() {
@@ -1049,8 +1056,6 @@ test_13b() {
 		error "failed to dd write to $file"
 	check_lpcc_state $file "none"
 	rm $file || error "rm $file failed"
-
-	cleanup_pcc_mapping
 }
 run_test 13b "Test auto RW-PCC create caching for file name with wildcard"
 
@@ -1112,10 +1117,94 @@ test_13c() {
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "failed to detach $file"
 	rm $file || error "rm $file failed"
-
-	cleanup_pcc_mapping
 }
 run_test 13c "Check auto RW-PCC create caching for UID/GID/ProjID/fname rule"
+
+test_14() {
+	local file=$DIR/$tdir/$tfile
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	mkdir -p $DIR/$tdir || error "mkdir -p $DIR/$tdir failed"
+	do_facet $SINGLEAGT "echo -n autodetach_data > $file"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+
+	# Revoke the layout lock, the PCC-cached file will be
+	# detached automatically.
+	do_facet $SINGLEAGT $LCTL \
+		set_param ldlm.namespaces.*mdc*.lru_size=clear
+	check_file_data $SINGLEAGT $file "autodetach_data"
+	check_lpcc_state $file "none"
+}
+run_test 14 "Revocation of the layout lock should detach the file automatically"
+
+test_15() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tdir/$tfile
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=1"
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
+
+	echo "Check open attach for non-root user"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "failed to attach file $file"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc state $file
+	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
+	# Revoke the layout lock, the PCC-cached file will be
+	# detached automatically.
+	do_facet $SINGLEAGT $LCTL \
+		set_param ldlm.namespaces.*mdc*.lru_size=clear
+	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
+	# Detach the file directly, as the file layout generation
+	# is not changed, so the file is still valid cached in PCC,
+	# and can be reused from PCC cache directly.
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
+		error "PCC detach $file failed"
+	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
+		error "PCC detach $file failed"
+	rm $file || error "rm $file failed"
+
+	echo "check open attach for root user"
+	do_facet $SINGLEAGT "echo -n autoattach_data > $file"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+
+	# Revoke the layout lock, the PCC-cached file will be
+	# detached automatically.
+	do_facet $SINGLEAGT $LCTL \
+		set_param ldlm.namespaces.*mdc*.lru_size=clear
+	check_file_data $SINGLEAGT $file "autoattach_data"
+	check_lpcc_state $file "readwrite"
+
+	# Detach the file directly, as the file layout generation
+	# is not changed, so the file is still valid cached in PCC,
+	# and can be reused from PCC cache directly.
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "PCC detach $file failed"
+	check_lpcc_state $file "readwrite"
+	# HSM released exists archived status
+	check_hsm_flags $file "0x0000000d"
+	check_file_data $SINGLEAGT $file "autoattach_data"
+
+	$LFS hsm_restore $file || error "failed to restore $file"
+	wait_request_state $(path2fid $file) RESTORE SUCCEED
+	check_lpcc_state $file "none"
+}
+run_test 15 "Test auto attach at open when file is still valid cached"
 
 complete $SECONDS
 check_and_cleanup_lustre

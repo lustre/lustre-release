@@ -2335,6 +2335,8 @@ enum lu_pcc_state_flags {
 	PCC_STATE_FL_ATTR_VALID		= 0x01,
 	/* The file is being attached into PCC */
 	PCC_STATE_FL_ATTACHING		= 0x02,
+	/* Allow to auto attach at open */
+	PCC_STATE_FL_OPEN_ATTACH	= 0x04,
 };
 
 struct lu_pcc_state {

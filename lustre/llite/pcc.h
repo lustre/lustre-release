@@ -90,12 +90,23 @@ struct pcc_matcher {
 	struct qstr	*pm_name;
 };
 
+enum pcc_dataset_flags {
+	PCC_DATASET_NONE	= 0x0,
+	/* Try auto attach at open, disabled by default */
+	PCC_DATASET_OPEN_ATTACH	= 0x1,
+	/* PCC backend is only used for RW-PCC */
+	PCC_DATASET_RWPCC	= 0x2,
+	/* PCC backend is only used for RO-PCC */
+	PCC_DATASET_ROPCC	= 0x4,
+	/* PCC backend provides caching services for both RW-PCC and RO-PCC */
+	PCC_DATASET_PCC_ALL	= PCC_DATASET_RWPCC | PCC_DATASET_ROPCC,
+};
+
 struct pcc_dataset {
 	__u32			pccd_rwid;	 /* Archive ID */
 	__u32			pccd_roid;	 /* Readonly ID */
 	struct pcc_match_rule	pccd_rule;	 /* Match rule */
-	__u32			pccd_rwonly:1, /* Only use as RW-PCC */
-				pccd_roonly:1; /* Only use as RO-PCC */
+	enum pcc_dataset_flags	pccd_flags;	 /* flags of PCC backend */
 	char			pccd_pathname[PATH_MAX]; /* full path */
 	struct path		pccd_path;	 /* Root path */
 	struct list_head	pccd_linkage;  /* Linked to pccs_datasets */
@@ -104,7 +115,7 @@ struct pcc_dataset {
 
 struct pcc_super {
 	/* Protect pccs_datasets */
-	spinlock_t		 pccs_lock;
+	struct rw_semaphore	 pccs_rw_sem;
 	/* List of datasets */
 	struct list_head	 pccs_datasets;
 	/* creds of process who forced instantiation of super block */
@@ -157,6 +168,7 @@ struct pcc_cmd {
 			__u32			 pccc_roid;
 			struct list_head	 pccc_conds;
 			char			*pccc_conds_str;
+			enum pcc_dataset_flags	 pccc_flags;
 		} pccc_add;
 		struct pcc_cmd_del {
 			__u32			 pccc_pad;
