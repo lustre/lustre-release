@@ -2673,6 +2673,7 @@ struct lnet_mt_event_info {
 	lnet_nid_t mt_nid;
 };
 
+/* called with res_lock held */
 void
 lnet_detach_rsp_tracker(struct lnet_libmd *md, int cpt)
 {
@@ -2683,11 +2684,9 @@ lnet_detach_rsp_tracker(struct lnet_libmd *md, int cpt)
 	 * The rspt queue for the cpt is protected by
 	 * the lnet_net_lock(cpt). cpt is the cpt of the MD cookie.
 	 */
-	lnet_res_lock(cpt);
-	if (!md->md_rspt_ptr) {
-		lnet_res_unlock(cpt);
+	if (!md->md_rspt_ptr)
 		return;
-	}
+
 	rspt = md->md_rspt_ptr;
 	md->md_rspt_ptr = NULL;
 
@@ -2700,7 +2699,6 @@ lnet_detach_rsp_tracker(struct lnet_libmd *md, int cpt)
 	 * the rspt block.
 	 */
 	LNetInvalidateMDHandle(&rspt->rspt_mdh);
-	lnet_res_unlock(cpt);
 }
 
 static void
@@ -4416,6 +4414,8 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 			struct lnet_libmd *md, struct lnet_handle_md mdh)
 {
 	s64 timeout_ns;
+	bool new_entry = true;
+	struct lnet_rsp_tracker *local_rspt;
 
 	/*
 	 * MD has a refcount taken by message so it's not going away.
@@ -4425,27 +4425,36 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 	 * added to the list.
 	 */
 
-	/* debug code */
-	LASSERT(md->md_rspt_ptr == NULL);
-
-	/* we'll use that same event in case we never get a response  */
-	rspt->rspt_mdh = mdh;
-	rspt->rspt_cpt = cpt;
-	timeout_ns = lnet_transaction_timeout * NSEC_PER_SEC;
-	rspt->rspt_deadline = ktime_add_ns(ktime_get(), timeout_ns);
-
 	lnet_res_lock(cpt);
-	/* store the rspt so we can access it when we get the REPLY */
-	md->md_rspt_ptr = rspt;
-	lnet_res_unlock(cpt);
+	local_rspt = md->md_rspt_ptr;
+	timeout_ns = lnet_transaction_timeout * NSEC_PER_SEC;
+	if (local_rspt != NULL) {
+		/*
+		 * we already have an rspt attached to the md, so we'll
+		 * update the deadline on that one.
+		 */
+		LIBCFS_FREE(rspt, sizeof(*rspt));
+		new_entry = false;
+	} else {
+		/* new md */
+		rspt->rspt_mdh = mdh;
+		rspt->rspt_cpt = cpt;
+		/* store the rspt so we can access it when we get the REPLY */
+		md->md_rspt_ptr = rspt;
+		local_rspt = rspt;
+	}
+	local_rspt->rspt_deadline = ktime_add_ns(ktime_get(), timeout_ns);
 
 	/*
 	 * add to the list of tracked responses. It's added to tail of the
 	 * list in order to expire all the older entries first.
 	 */
 	lnet_net_lock(cpt);
-	list_add_tail(&rspt->rspt_on_list, the_lnet.ln_mt_rstq[cpt]);
+	if (!new_entry && !list_empty(&local_rspt->rspt_on_list))
+		list_del_init(&local_rspt->rspt_on_list);
+	list_add_tail(&local_rspt->rspt_on_list, the_lnet.ln_mt_rstq[cpt]);
 	lnet_net_unlock(cpt);
+	lnet_res_unlock(cpt);
 }
 
 /**
@@ -4586,7 +4595,6 @@ LNetPut(lnet_nid_t self, struct lnet_handle_md mdh, enum lnet_ack_req ack,
 		CNETERR("Error sending PUT to %s: %d\n",
 			libcfs_id2str(target), rc);
 		msg->msg_no_resend = true;
-		lnet_detach_rsp_tracker(msg->msg_md, cpt);
 		lnet_finalize(msg, rc);
 	}
 
@@ -4800,7 +4808,6 @@ LNetGet(lnet_nid_t self, struct lnet_handle_md mdh,
 		CNETERR("Error sending GET to %s: %d\n",
 			libcfs_id2str(target), rc);
 		msg->msg_no_resend = true;
-		lnet_detach_rsp_tracker(msg->msg_md, cpt);
 		lnet_finalize(msg, rc);
 	}
 

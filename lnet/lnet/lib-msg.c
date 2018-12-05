@@ -363,29 +363,6 @@ lnet_msg_attach_md(struct lnet_msg *msg, struct lnet_libmd *md,
 	lnet_md_deconstruct(md, &msg->msg_ev.md);
 }
 
-void
-lnet_msg_detach_md(struct lnet_msg *msg, int status)
-{
-	struct lnet_libmd *md = msg->msg_md;
-	int unlink;
-
-	/* Now it's safe to drop my caller's ref */
-	md->md_refcount--;
-	LASSERT(md->md_refcount >= 0);
-
-	unlink = lnet_md_unlinkable(md);
-	if (md->md_eq != NULL) {
-		msg->msg_ev.status   = status;
-		msg->msg_ev.unlinked = unlink;
-		lnet_eq_enqueue_event(md->md_eq, &msg->msg_ev);
-	}
-
-	if (unlink)
-		lnet_md_unlink(md);
-
-	msg->msg_md = NULL;
-}
-
 static int
 lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 {
@@ -775,12 +752,43 @@ resend:
 }
 
 static void
+lnet_msg_detach_md(struct lnet_msg *msg, int cpt, int status)
+{
+	struct lnet_libmd *md = msg->msg_md;
+	int unlink;
+
+	/* Now it's safe to drop my caller's ref */
+	md->md_refcount--;
+	LASSERT(md->md_refcount >= 0);
+
+	unlink = lnet_md_unlinkable(md);
+	if (md->md_eq != NULL) {
+		msg->msg_ev.status   = status;
+		msg->msg_ev.unlinked = unlink;
+		lnet_eq_enqueue_event(md->md_eq, &msg->msg_ev);
+	}
+
+	if (unlink) {
+		/*
+		 * if this is an ACK or a REPLY then make sure to remove the
+		 * response tracker.
+		 */
+		if (msg->msg_ev.type == LNET_EVENT_REPLY ||
+		    msg->msg_ev.type == LNET_EVENT_ACK)
+			lnet_detach_rsp_tracker(msg->msg_md, cpt);
+		lnet_md_unlink(md);
+	}
+
+	msg->msg_md = NULL;
+}
+
+static void
 lnet_detach_md(struct lnet_msg *msg, int status)
 {
 	int cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
 
 	lnet_res_lock(cpt);
-	lnet_msg_detach_md(msg, status);
+	lnet_msg_detach_md(msg, cpt, status);
 	lnet_res_unlock(cpt);
 }
 
@@ -881,16 +889,6 @@ lnet_finalize(struct lnet_msg *msg, int status)
 		return;
 
 	msg->msg_ev.status = status;
-
-	/*
-	 * if this is an ACK or a REPLY then make sure to remove the
-	 * response tracker.
-	 */
-	if (msg->msg_ev.type == LNET_EVENT_REPLY ||
-	    msg->msg_ev.type == LNET_EVENT_ACK) {
-		cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
-		lnet_detach_rsp_tracker(msg->msg_md, cpt);
-	}
 
 	/* if the message is successfully sent, no need to keep the MD around */
 	if (msg->msg_md != NULL && !status)
