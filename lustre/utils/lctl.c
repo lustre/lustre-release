@@ -330,6 +330,9 @@ command_t cmdlist[] = {
 	{"nodemap_set_fileset", jt_nodemap_set_fileset, 0,
 	 "set a fileset on a nodemap\n"
 	 "usage: nodemap_set_fileset <fileset>"},
+	{"nodemap_set_sepol", jt_nodemap_set_sepol, 0,
+	 "set SELinux policy info on a nodemap\n"
+	 "usage: nodemap_set_sepol <SELinux policy info>"},
 	{"nodemap_test_nid", jt_nodemap_test_nid, 0,
 	 "usage: nodemap_test_nid <nid>"},
 	{"nodemap_test_id", jt_nodemap_test_id, 0,
