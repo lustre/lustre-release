@@ -150,6 +150,7 @@ enum lcfg_command_type {
 						 */
 	LCFG_NODEMAP_MAP_MODE	  = 0x00ce059, /**< set the mapping mode */
 	LCFG_NODEMAP_AUDIT_MODE	  = 0x00ce05a, /**< set the audit mode */
+	LCFG_NODEMAP_SET_SEPOL	  = 0x00ce05b, /**< set SELinux policy */
 };
 
 struct lustre_cfg_bufs {
