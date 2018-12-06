@@ -349,6 +349,7 @@ struct kib_fmr_pool {
 	time64_t		fpo_deadline;	/* deadline of this pool */
 	int			fpo_failed;	/* fmr pool is failed */
 	int			fpo_map_count;	/* # of mapped FMR */
+	bool			fpo_is_fmr; /* True if FMR pools allocated */
 };
 
 struct kib_fmr {

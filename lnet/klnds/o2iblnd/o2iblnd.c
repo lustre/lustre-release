@@ -1459,9 +1459,8 @@ kiblnd_destroy_fmr_pool(struct kib_fmr_pool *fpo)
 {
 	LASSERT(fpo->fpo_map_count == 0);
 
-	if (!IS_ERR_OR_NULL(fpo->fmr.fpo_fmr_pool)) {
+	if (fpo->fpo_is_fmr && fpo->fmr.fpo_fmr_pool) {
 		ib_destroy_fmr_pool(fpo->fmr.fpo_fmr_pool);
-		fpo->fmr.fpo_fmr_pool = NULL;
 	} else {
 		struct kib_fast_reg_descriptor *frd, *tmp;
 		int i = 0;
@@ -1540,6 +1539,7 @@ static int kiblnd_alloc_fmr_pool(struct kib_fmr_poolset *fps,
 		else
 			CERROR("FMRs are not supported\n");
 	}
+	fpo->fpo_is_fmr = true;
 
 	return rc;
 }
@@ -1550,6 +1550,8 @@ static int kiblnd_alloc_freg_pool(struct kib_fmr_poolset *fps,
 {
 	struct kib_fast_reg_descriptor *frd, *tmp;
 	int i, rc;
+
+	fpo->fpo_is_fmr = false;
 
 	INIT_LIST_HEAD(&fpo->fast_reg.fpo_pool_list);
 	fpo->fast_reg.fpo_pool_size = 0;
@@ -1782,7 +1784,7 @@ kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status)
 		return;
 
 	fps = fpo->fpo_owner;
-	if (!IS_ERR_OR_NULL(fpo->fmr.fpo_fmr_pool)) {
+	if (fpo->fpo_is_fmr) {
 		if (fmr->fmr_pfmr) {
 			rc = ib_fmr_pool_unmap(fmr->fmr_pfmr);
 			LASSERT(!rc);
@@ -1844,7 +1846,7 @@ again:
 		fpo->fpo_deadline = ktime_get_seconds() + IBLND_POOL_DEADLINE;
 		fpo->fpo_map_count++;
 
-		if (!IS_ERR_OR_NULL(fpo->fmr.fpo_fmr_pool)) {
+		if (fpo->fpo_is_fmr) {
 			struct ib_pool_fmr *pfmr;
 
 			spin_unlock(&fps->fps_lock);
