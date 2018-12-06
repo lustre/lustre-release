@@ -1238,6 +1238,13 @@ static int tune_block_dev(const char *src, struct mount_opts *mop)
 	char *real_sys_path = NULL;
 	int rc;
 
+	/*
+	 * Don't apply block device tuning for MDT or MGT devices,
+	 * since we don't need huge IO sizes to get good performance
+	 */
+	if (!IS_OST(&mop->mo_ldd))
+		return 0;
+
 	if (src == NULL)
 		return EINVAL;
 
@@ -1267,8 +1274,7 @@ static int tune_block_dev(const char *src, struct mount_opts *mop)
 			goto have_whole_dev;
 
 		if (verbose)
-			fprintf(stderr,
-				"warning: cannot access '%s': %s\n",
+			fprintf(stderr, "warning: cannot access '%s': %s\n",
 				partition_path, strerror(errno));
 		rc = errno;
 		goto out;
