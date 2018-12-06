@@ -3680,6 +3680,70 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 }
 
 /**
+ * set SELinux policy info on a nodemap
+ *
+ * \param	argc		number of args
+ * \param	argv[]		variable string arguments
+ *
+ * --name			nodemap name
+ * --sepol			SELinux policy info
+ *
+ * \retval			0 on success
+ */
+int jt_nodemap_set_sepol(int argc, char **argv)
+{
+	char *nodemap_name = NULL;
+	char *sepol = NULL;
+	int   rc = 0;
+	int   c;
+
+	static struct option long_options[] = {
+		{
+			.name		= "name",
+			.has_arg	= required_argument,
+			.val		= 'n',
+		},
+		{
+			.name		= "sepol",
+			.has_arg	= required_argument,
+			.val		= 's',
+		},
+		{
+			.name = NULL,
+		}
+	};
+
+	while ((c = getopt_long(argc, argv, "n:s:",
+				long_options, NULL)) != -1) {
+		switch (c) {
+		case 'n':
+			nodemap_name = optarg;
+			break;
+		case 's':
+			sepol = optarg;
+			break;
+		}
+	}
+
+	if (nodemap_name == NULL || sepol == NULL) {
+		fprintf(stderr, "usage: nodemap_set_sepol --name <name> "
+				"--sepol <sepol>\n");
+		return -1;
+	}
+
+	rc = nodemap_cmd(LCFG_NODEMAP_SET_SEPOL, NULL, 0, argv[0],
+			 nodemap_name, sepol, NULL);
+	if (rc != 0) {
+		errno = -rc;
+		fprintf(stderr, "error: %s: cannot set sepol '%s' on nodemap "
+				"'%s': rc = %d\n",
+			jt_cmdname(argv[0]), sepol, nodemap_name, rc);
+	}
+
+	return rc;
+}
+
+/**
  * modify a nodemap's behavior
  *
  * \param	argc		number of args

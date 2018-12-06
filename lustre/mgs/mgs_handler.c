@@ -862,6 +862,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	case LCFG_NODEMAP_ADD_GIDMAP:
 	case LCFG_NODEMAP_DEL_GIDMAP:
 	case LCFG_NODEMAP_SET_FILESET:
+	case LCFG_NODEMAP_SET_SEPOL:
 		if (lcfg->lcfg_bufcount != 3)
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);

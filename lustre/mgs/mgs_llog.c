@@ -5496,6 +5496,9 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	case LCFG_NODEMAP_SET_FILESET:
 		rc = nodemap_set_fileset(nodemap_name, param);
 		break;
+	case LCFG_NODEMAP_SET_SEPOL:
+		rc = nodemap_set_sepol(nodemap_name, param);
+		break;
 	default:
 		rc = -EINVAL;
 	}

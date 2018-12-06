@@ -106,6 +106,8 @@ struct lu_nodemap {
 	struct nodemap_pde	*nm_pde_data;
 	/* fileset the nodes of this nodemap are restricted to */
 	char			 nm_fileset[PATH_MAX+1];
+	/* information about the expected SELinux policy on the nodes */
+	char			 nm_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
 
 	/* used when loading/unloading nodemaps */
 	struct list_head	 nm_list;
@@ -144,6 +146,8 @@ int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);
 int nodemap_set_fileset(const char *name, const char *fileset);
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap);
+int nodemap_set_sepol(const char *name, const char *sepol);
+const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);
 __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,
 		     enum nodemap_tree_type tree_type, __u32 id);
