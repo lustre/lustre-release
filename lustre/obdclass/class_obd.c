@@ -429,14 +429,17 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (!obd)
                         GOTO(out, err = -ENOENT);
 
-                if (obd->obd_stopping)
-                        status = "ST";
-                else if (obd->obd_set_up)
-                        status = "UP";
-                else if (obd->obd_attached)
-                        status = "AT";
-                else
-                        status = "--";
+		if (obd->obd_stopping)
+			status = "ST";
+		else if (obd->obd_inactive)
+			status = "IN";
+		else if (obd->obd_set_up)
+			status = "UP";
+		else if (obd->obd_attached)
+			status = "AT";
+		else
+			status = "--";
+
                 str = (char *)data->ioc_bulk;
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
