@@ -42,6 +42,7 @@
 #include <lustre_net.h>
 #include <lustre_disk.h>
 #include <uapi/linux/lustre/lustre_lfsck_user.h>
+#include <uapi/linux/lustre/lustre_cfg.h>
 
 void lustre_assert_wire_constants(void)
 {
@@ -1335,6 +1336,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_LOCK_CONVERT);
 	LASSERTF(OBD_CONNECT2_ARCHIVE_ID_ARRAY == 0x100ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_ARCHIVE_ID_ARRAY);
+	LASSERTF(OBD_CONNECT2_SELINUX_POLICY == 0x400ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT2_SELINUX_POLICY);
 	LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OBD_CKSUM_CRC32);
 	LASSERTF(OBD_CKSUM_ADLER == 0x00000002UL, "found 0x%.8xUL\n",
@@ -5473,4 +5476,146 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_update_record, lur_update_rec));
 	LASSERTF((int)sizeof(((struct llog_update_record *)0)->lur_update_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_update_record *)0)->lur_update_rec));
+
+	/* Checks for struct lustre_cfg */
+	LASSERTF((int)sizeof(struct lustre_cfg) == 32, "found %lld\n",
+		 (long long)(int)sizeof(struct lustre_cfg));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_version) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_version));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_version) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_version));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_command) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_command));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_command) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_command));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_num) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_num));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_num) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_num));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_flags) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_flags));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_flags));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_nid) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_nid));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_nid) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_nid));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_nal) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_nal));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_nal) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_nal));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_bufcount) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_bufcount));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_bufcount) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_bufcount));
+	LASSERTF((int)offsetof(struct lustre_cfg, lcfg_buflens[0]) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_cfg, lcfg_buflens[0]));
+	LASSERTF((int)sizeof(((struct lustre_cfg *)0)->lcfg_buflens[0]) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_cfg *)0)->lcfg_buflens[0]));
+	LASSERTF(LCFG_ATTACH == 0x000cf001UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_ATTACH);
+	LASSERTF(LCFG_DETACH == 0x000cf002UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_DETACH);
+	LASSERTF(LCFG_SETUP == 0x000cf003UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_SETUP);
+	LASSERTF(LCFG_CLEANUP == 0x000cf004UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_CLEANUP);
+	LASSERTF(LCFG_ADD_UUID == 0x000cf005UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_ADD_UUID);
+	LASSERTF(LCFG_DEL_UUID == 0x000cf006UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_DEL_UUID);
+	LASSERTF(LCFG_MOUNTOPT == 0x000cf007UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_MOUNTOPT);
+	LASSERTF(LCFG_DEL_MOUNTOPT == 0x000cf008UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_DEL_MOUNTOPT);
+	LASSERTF(LCFG_SET_TIMEOUT == 0x000cf009UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_SET_TIMEOUT);
+	LASSERTF(LCFG_SET_UPCALL == 0x000cf00aUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_SET_UPCALL);
+	LASSERTF(LCFG_ADD_CONN == 0x000cf00bUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_ADD_CONN);
+	LASSERTF(LCFG_DEL_CONN == 0x000cf00cUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_DEL_CONN);
+	LASSERTF(LCFG_LOV_ADD_OBD == 0x000cf00dUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_LOV_ADD_OBD);
+	LASSERTF(LCFG_LOV_DEL_OBD == 0x000cf00eUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_LOV_DEL_OBD);
+	LASSERTF(LCFG_PARAM == 0x000cf00fUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_PARAM);
+	LASSERTF(LCFG_MARKER == 0x000cf010UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_MARKER);
+	LASSERTF(LCFG_LOG_START == 0x000ce011UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_LOG_START);
+	LASSERTF(LCFG_LOG_END == 0x000ce012UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_LOG_END);
+	LASSERTF(LCFG_LOV_ADD_INA == 0x000ce013UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_LOV_ADD_INA);
+	LASSERTF(LCFG_ADD_MDC == 0x000cf014UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_ADD_MDC);
+	LASSERTF(LCFG_DEL_MDC == 0x000cf015UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_DEL_MDC);
+	LASSERTF(LCFG_SPTLRPC_CONF == 0x000ce016UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_SPTLRPC_CONF);
+	LASSERTF(LCFG_POOL_NEW == 0x000ce020UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_POOL_NEW);
+	LASSERTF(LCFG_POOL_ADD == 0x000ce021UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_POOL_ADD);
+	LASSERTF(LCFG_POOL_REM == 0x000ce022UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_POOL_REM);
+	LASSERTF(LCFG_POOL_DEL == 0x000ce023UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_POOL_DEL);
+	LASSERTF(LCFG_SET_LDLM_TIMEOUT == 0x000ce030UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_SET_LDLM_TIMEOUT);
+	LASSERTF(LCFG_PRE_CLEANUP == 0x000cf031UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_PRE_CLEANUP);
+	LASSERTF(LCFG_SET_PARAM == 0x000ce032UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_SET_PARAM);
+	LASSERTF(LCFG_NODEMAP_ADD == 0x000ce040UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_ADD);
+	LASSERTF(LCFG_NODEMAP_DEL == 0x000ce041UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_DEL);
+	LASSERTF(LCFG_NODEMAP_ADD_RANGE == 0x000ce042UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_ADD_RANGE);
+	LASSERTF(LCFG_NODEMAP_DEL_RANGE == 0x000ce043UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_DEL_RANGE);
+	LASSERTF(LCFG_NODEMAP_ADD_UIDMAP == 0x000ce044UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_ADD_UIDMAP);
+	LASSERTF(LCFG_NODEMAP_DEL_UIDMAP == 0x000ce045UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_DEL_UIDMAP);
+	LASSERTF(LCFG_NODEMAP_ADD_GIDMAP == 0x000ce046UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_ADD_GIDMAP);
+	LASSERTF(LCFG_NODEMAP_DEL_GIDMAP == 0x000ce047UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_DEL_GIDMAP);
+	LASSERTF(LCFG_NODEMAP_ACTIVATE == 0x000ce048UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_ACTIVATE);
+	LASSERTF(LCFG_NODEMAP_ADMIN == 0x000ce049UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_ADMIN);
+	LASSERTF(LCFG_NODEMAP_TRUSTED == 0x000ce050UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_TRUSTED);
+	LASSERTF(LCFG_NODEMAP_SQUASH_UID == 0x000ce051UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_SQUASH_UID);
+	LASSERTF(LCFG_NODEMAP_SQUASH_GID == 0x000ce052UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_SQUASH_GID);
+	LASSERTF(LCFG_NODEMAP_ADD_SHKEY == 0x000ce053UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_ADD_SHKEY);
+	LASSERTF(LCFG_NODEMAP_DEL_SHKEY == 0x000ce054UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_DEL_SHKEY);
+	LASSERTF(LCFG_NODEMAP_TEST_NID == 0x000ce055UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_TEST_NID);
+	LASSERTF(LCFG_NODEMAP_TEST_ID == 0x000ce056UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_TEST_ID);
+	LASSERTF(LCFG_NODEMAP_SET_FILESET == 0x000ce057UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_SET_FILESET);
+	LASSERTF(LCFG_NODEMAP_DENY_UNKNOWN == 0x000ce058UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_DENY_UNKNOWN);
+	LASSERTF(LCFG_NODEMAP_MAP_MODE == 0x000ce059UL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_MAP_MODE);
+	LASSERTF(LCFG_NODEMAP_AUDIT_MODE == 0x000ce05aUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_AUDIT_MODE);
+	LASSERTF(LCFG_NODEMAP_SET_SEPOL == 0x000ce05bUL, "found 0x%.8xUL\n",
+		(unsigned)LCFG_NODEMAP_SET_SEPOL);
+	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
+		 (long long)PORTALS_CFG_TYPE);
+	LASSERTF(LUSTRE_CFG_TYPE == 123, "found %lld\n",
+		 (long long)LUSTRE_CFG_TYPE);
 }
