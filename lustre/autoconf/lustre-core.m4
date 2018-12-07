@@ -3536,6 +3536,7 @@ lustre/include/uapi/linux/lustre/Makefile
 lustre/kernel_patches/targets/3.10-rhel7.6.target
 lustre/kernel_patches/targets/3.10-rhel7.5.target
 lustre/kernel_patches/targets/4.14-rhel7.5.target
+lustre/kernel_patches/targets/4.14-rhel7.6.target
 lustre/kernel_patches/targets/2.6-rhel6.9.target
 lustre/kernel_patches/targets/2.6-rhel6.8.target
 lustre/kernel_patches/targets/2.6-rhel6.7.target
