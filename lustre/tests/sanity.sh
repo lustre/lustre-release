@@ -15518,6 +15518,18 @@ test_230k() {
 }
 run_test 230k "file data not changed after dir migration"
 
+test_230l() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS version at least 2.11.56"
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir failed"
+	createmany -o $DIR/$tdir/f___________________________________ 1000 ||
+		error "create files under remote dir failed $i"
+	$LFS migrate -m 1 $DIR/$tdir || error "migrate failed"
+}
+run_test 230l "readdir between MDTs won't crash"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

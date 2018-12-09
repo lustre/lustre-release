@@ -534,12 +534,15 @@ static inline size_t lu_dirent_calc_size(size_t namelen, __u16 attr)
 
 	if (attr & LUDA_TYPE) {
 		const size_t align = sizeof(struct luda_type) - 1;
-                size = (sizeof(struct lu_dirent) + namelen + align) & ~align;
-                size += sizeof(struct luda_type);
-        } else
-                size = sizeof(struct lu_dirent) + namelen;
 
-        return (size + 7) & ~7;
+		size = (sizeof(struct lu_dirent) + namelen + 1 + align) &
+		       ~align;
+		size += sizeof(struct luda_type);
+	} else {
+		size = sizeof(struct lu_dirent) + namelen + 1;
+	}
+
+	return (size + 7) & ~7;
 }
 
 #define MDS_DIR_END_OFF 0xfffffffffffffffeULL
