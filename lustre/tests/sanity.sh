@@ -6293,48 +6293,6 @@ test_60a() {
 }
 run_test 60a "llog_test run from kernel module and test llog_reader"
 
-test_60aa() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh"
-
-	# test old logid format
-	if [ $MGS_VERSION -le $(version_code 3.1.53) ]; then
-		do_facet mgs $LCTL dl | grep MGS
-		do_facet mgs "$LCTL --device %MGS llog_print \\\\\\\$$FSNAME-client" ||
-			error "old llog_print failed"
-	fi
-
-	# test new logid format
-	if [ $MGS_VERSION -ge $(version_code 2.9.53) ]; then
-		do_facet mgs "$LCTL --device MGS llog_print $FSNAME-client" ||
-			error "new llog_print failed"
-	fi
-}
-run_test 60aa "llog_print works with FIDs and simple names"
-
-test_60ab() {
-	# test llog_print with params
-
-	[[ $MDS1_VERSION -gt $(version_code 2.11.51) ]] ||
-		skip "Need server version greater than 2.11.51"
-
-	local yaml
-	local orig_val
-
-	orig_val=$(do_facet mgs $LCTL get_param jobid_name)
-	do_facet mgs $LCTL set_param -P jobid_name="testname"
-
-	yaml=$(do_facet mgs $LCTL --device MGS llog_print params |
-	    grep jobid_name | tail -n 1)
-
-	local param=`awk '{ print $10 }' <<< "$yaml"`
-	local val=`awk '{ print $12 }' <<< "$yaml"`
-	#return to the default
-	do_facet mgs $LCTL set_param -P jobid_name=$orig_val
-	[ $val = "testname" ] || error "bad value: $val"
-	[ $param = "jobid_name," ] || error "Bad param: $param"
-}
-run_test 60ab "llog_print params output values from set_param -P"
-
 test_60b() { # bug 6411
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
