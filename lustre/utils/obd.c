@@ -2651,90 +2651,269 @@ int jt_llog_info(int argc, char **argv)
         return rc;
 }
 
+int jt_llog_print_cb(const char *record, void *private)
+{
+	printf("%s\n", record);
+
+	return 0;
+}
+
+/**
+ * Iterate over llog records, typically YAML-formatted configuration logs
+ *
+ * \param logname[in]	name of llog file or FID
+ * \param start[in]	first record to process
+ * \param end[in]	last record to process (inclusive)
+ * \param cb[in]	callback for records. Return -ve error, or +ve abort.
+ * \param private[in,out] private data passed to the \a record_cb function
+ */
+int jt_llog_print_iter(char *logname, long start, long end,
+		       int (record_cb)(const char *record, void *private),
+		       void *private)
+{
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	char startbuf[16], endbuf[16];
+	static long inc = sizeof(rawbuf) / 128;
+	long rec;
+	int rc = 0;
+
+	if (end == -1)
+		end = 0x7fffffff;
+
+	data.ioc_dev = cur_device;
+	data.ioc_inlbuf1 = logname;
+	data.ioc_inllen1 = strlen(logname) + 1;
+
+	/*
+	 * Estimate about 128 characters per configuration record.  Not all
+	 * records will be printed in any case, so they should easily fit.  If
+	 * not, the kernel will return -EOVERFLOW and ask for fewer records.
+	 *
+	 * We don't want to request records from the kernel one-at-a-time, as
+	 * it restarts the config llog iteration from the beginning, so we
+	 * fetch multiple records from the kernel per call and split locally.
+	 */
+	for (rec = start; rec < end; rec += inc) {
+		char *record = ((struct obd_ioctl_data *)buf)->ioc_bulk;
+		char *ptr;
+
+retry:
+		snprintf(startbuf, sizeof(startbuf), "%lu", rec);
+		snprintf(endbuf, sizeof(endbuf), "%lu",
+			 end < rec + inc - 1 ? end : rec + inc - 1);
+
+		/* start and end record numbers are passed as ASCII digits */
+		data.ioc_inlbuf2 = startbuf;
+		data.ioc_inllen2 = strlen(startbuf) + 1;
+		data.ioc_inlbuf3 = endbuf;
+		data.ioc_inllen3 = strlen(endbuf) + 1;
+
+		data.ioc_inllen4 = sizeof(rawbuf) -
+			__ALIGN_KERNEL(sizeof(data), 8) -
+			__ALIGN_KERNEL(data.ioc_inllen1, 8) -
+			__ALIGN_KERNEL(data.ioc_inllen2, 8) -
+			__ALIGN_KERNEL(data.ioc_inllen3, 8);
+		memset(buf, 0, sizeof(rawbuf));
+		rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		if (rc) {
+			fprintf(stderr, "%s: invalid ioctl data\n", logname);
+			goto out;
+		}
+
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_PRINT, buf);
+		if (rc == -EOVERFLOW && inc > 2) {
+			inc /= 2;
+			goto retry;
+		}
+		if (rc) {
+			fprintf(stderr, "%s: OBD_IOC_LLOG_PRINT failed: %s\n",
+				logname, strerror(errno));
+			rc = -errno;
+			goto out;
+		}
+
+		/* There is no "end of list" marker, record was not modified */
+		if (strcmp(record, logname) == 0)
+			break;
+
+		do {
+			ptr = strchr(record, '\n');
+			if (ptr)
+				*ptr = '\0';
+			rc = record_cb(record, private);
+			if (rc) {
+				if (rc > 0)
+					rc = 0;
+				goto out;
+			}
+
+			if (ptr)
+				record = ptr + 1;
+		} while (ptr && *(ptr + 1));
+	}
+
+out:
+	return rc;
+}
+
+static int llog_parse_catalog_start_end(int *argc, char **argv[],
+					char **catalog, long *start, long *end)
+{
+	const struct option long_opts[] = {
+	/* the --catalog option is not required, just for consistency */
+	{ .val = 'c',	.name = "catalog",	.has_arg = required_argument },
+	{ .val = 'e',	.name = "end",		.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 's',	.name = "start",	.has_arg = required_argument },
+	{ .name = NULL } };
+	char *cmd = (*argv)[0];
+	char *endp;
+	int c;
+
+	if (catalog == NULL || start == NULL || end == NULL)
+		return -EINVAL;
+
+	/* now process command line arguments*/
+	while ((c = getopt_long(*argc, *argv, "c:e:hs:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'c':
+			*catalog = optarg;
+			break;
+		case 'e':
+			*end = strtol(optarg, &endp, 0);
+			if (*endp != '\0') {
+				fprintf(stderr, "%s: bad end value '%s'\n",
+					cmd, optarg);
+				return CMD_HELP;
+			}
+			break;
+		case 's':
+			*start = strtol(optarg, &endp, 0);
+			if (*endp != '\0') {
+				fprintf(stderr, "%s: bad start value '%s'\n",
+					cmd, optarg);
+				return CMD_HELP;
+			}
+			break;
+		case 'h':
+		default:
+			return CMD_HELP;
+		}
+	}
+	*argc -= optind;
+	*argv += optind;
+
+	/* support old optional positional parameters only if they were
+	 * not already specified with named arguments: logname [start [end]]
+	 */
+	if (*argc >= 1) {
+		if (*catalog) {
+			fprintf(stderr,
+				"%s: catalog is set, unknown argument '%s'\n",
+				cmd, (*argv)[0]);
+			return CMD_HELP;
+		}
+		*catalog = (*argv)[0];
+		(*argc)--;
+		(*argv)++;
+	}
+
+	if (*argc >= 1) {
+		if (*start != 1) {
+			fprintf(stderr,
+				"%s: --start is set, unknown argument '%s'\n",
+				cmd, (*argv)[0]);
+			return CMD_HELP;
+		}
+
+		*start = strtol((*argv)[0], &endp, 0);
+		if (*endp != '\0') {
+			fprintf(stderr, "%s: bad start value '%s'\n",
+				cmd, (*argv)[0]);
+			return CMD_HELP;
+		}
+		(*argc)--;
+		(*argv)++;
+	}
+	if (*argc >= 1) {
+		if (*end != -1) {
+			fprintf(stderr,
+				"%s: --end is set, unknown argument '%s'\n",
+				cmd, (*argv)[0]);
+			return CMD_HELP;
+		}
+
+		*end = strtol((*argv)[0], &endp, 0);
+		if (*endp != '\0') {
+			fprintf(stderr, "%s: bad end value '%s'\n",
+				cmd, (*argv)[0]);
+			return CMD_HELP;
+		}
+		(*argc)--;
+		(*argv)++;
+	}
+	if (*argc > 1) {
+		fprintf(stderr, "%s: unknown argument '%s'\n", cmd, (*argv)[0]);
+		return CMD_HELP;
+	}
+
+	if (*end != -1 && *end < *start) {
+		fprintf(stderr, "%s: end '%lu' less than than start '%lu'\n",
+			cmd, *end, *start);
+		return CMD_HELP;
+	}
+
+	return 0;
+}
+
 int jt_llog_print(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	char *catalog = NULL;
+	long start = 1, end = -1;
+	int rc;
 
-        if (argc != 2 && argc != 4)
-                return CMD_HELP;
+	rc = llog_parse_catalog_start_end(&argc, &argv, &catalog, &start, &end);
+	if (rc)
+		return rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-        if (argc == 4) {
-                data.ioc_inllen2 = strlen(argv[2]) + 1;
-                data.ioc_inlbuf2 = argv[2];
-                data.ioc_inllen3 = strlen(argv[3]) + 1;
-                data.ioc_inlbuf3 = argv[3];
-        } else {
-                char from[2] = "1", to[3] = "-1";
-                data.ioc_inllen2 = strlen(from) + 1;
-                data.ioc_inlbuf2 = from;
-                data.ioc_inllen3 = strlen(to) + 1;
-                data.ioc_inlbuf3 = to;
-        }
-        data.ioc_inllen4 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
-                cfs_size_round(data.ioc_inllen1) -
-                cfs_size_round(data.ioc_inllen2) -
-                cfs_size_round(data.ioc_inllen3);
-        memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
+	rc = jt_llog_print_iter(catalog, start, end, jt_llog_print_cb, NULL);
 
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_PRINT, buf);
-        if (rc == 0)
-                fprintf(stdout, "%s", ((struct obd_ioctl_data*)buf)->ioc_bulk);
-        else
-                fprintf(stderr, "OBD_IOC_LLOG_PRINT failed: %s\n",
-                        strerror(errno));
-
-        return rc;
+	return rc;
 }
 
 static int llog_cancel_parse_optional(int argc, char **argv,
 				      struct obd_ioctl_data *data)
 {
-	int cOpt;
-	const char *const short_options = "c:l:i:h";
-	const struct option long_options[] = {
-		{"catalog", required_argument, NULL, 'c'},
-		{"log_id", required_argument, NULL, 'l'},
-		{"log_idx", required_argument, NULL, 'i'},
-		{"help", no_argument, NULL, 'h'},
-		{NULL, 0, NULL, 0}
-	};
+	const struct option long_opts[] = {
+	{ .val = 'c',	.name = "catalog",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'i',	.name = "log_idx",	.has_arg = required_argument },
+	{ .val = 'l',	.name = "log_id",	.has_arg = required_argument },
+	{ .name = NULL } };
+	int c;
 
 	/* sanity check */
-	if (!data || argc <= 1) {
+	if (!data || argc <= 1)
 		return -1;
-	}
 
-	/*now process command line arguments*/
-	while ((cOpt = getopt_long(argc, argv, short_options,
-					long_options, NULL)) != -1) {
-		switch (cOpt) {
+	/* now process command line arguments*/
+	while ((c = getopt_long(argc, argv, "c:hi:l:",
+				long_opts, NULL)) != -1) {
+		switch (c) {
 		case 'c':
 			data->ioc_inllen1 = strlen(optarg) + 1;
 			data->ioc_inlbuf1 = optarg;
 			break;
-
 		case 'l':
 			data->ioc_inllen2 = strlen(optarg) + 1;
 			data->ioc_inlbuf2 = optarg;
 			break;
-
 		case 'i':
 			data->ioc_inllen3 = strlen(optarg) + 1;
 			data->ioc_inlbuf3 = optarg;
 			break;
-
 		case 'h':
 		default:
 			return -1;
@@ -2787,7 +2966,7 @@ int jt_llog_cancel(int argc, char **argv)
 			data.ioc_inlbuf3 = argv[2];
 		}
 	} else {
-		if (llog_cancel_parse_optional(argc, argv, &data) != 0)
+		if (llog_cancel_parse_optional(argc, argv, &data))
 			return CMD_HELP;
 	}
 

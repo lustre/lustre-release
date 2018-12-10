@@ -7766,6 +7766,98 @@ test_122() {
 }
 run_test 122 "Check OST sequence update"
 
+test_123aa() {
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ -d $MOUNT/.lustre ] || setupall
+
+	# test old logid format until removal from llog_ioctl.c::str2logid()
+	if [ $(lustre_version_code MGS) -lt $(version_code 3.1.53) ]; then
+		do_facet mgs $LCTL dl | grep MGS
+		do_facet mgs "$LCTL --device %MGS llog_print \
+			      \\\\\\\$$FSNAME-client 1 10" ||
+			error "old llog_print failed"
+	fi
+
+	# test new logid format
+	if [ $(lustre_version_code MGS) -ge $(version_code 2.9.53) ]; then
+		do_facet mgs "$LCTL --device MGS llog_print $FSNAME-client" ||
+			error "new llog_print failed"
+	fi
+}
+run_test 123aa "llog_print works with FIDs and simple names"
+
+test_123ab() {
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[[ $(lustre_version_code MGS) -gt $(version_code 2.11.51) ]] ||
+		skip "Need server with working llog_print support"
+
+	[ -d $MOUNT/.lustre ] || setupall
+
+	local yaml
+	local orig_val
+
+	orig_val=$(do_facet mgs $LCTL get_param jobid_name)
+	do_facet mgs $LCTL set_param -P jobid_name="testname"
+
+	yaml=$(do_facet mgs $LCTL --device MGS llog_print params |
+	       grep jobid_name | tail -n 1)
+
+	local param=$(awk '{ print $10 }' <<< "$yaml")
+	local val=$(awk '{ print $12 }' <<< "$yaml")
+	#return to the default
+	do_facet mgs $LCTL set_param -P jobid_name=$orig_val
+	[ $val = "testname" ] || error "bad value: $val"
+	[ $param = "jobid_name," ] || error "Bad param: $param"
+}
+run_test 123ab "llog_print params output values from set_param -P"
+
+test_123ac() { # LU-11566
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	do_facet mgs "$LCTL help llog_print" 2>&1 | grep -q -- --start ||
+		skip "Need 'lctl llog_print --start' on MGS"
+
+	local start=10
+	local end=50
+
+	[ -d $MOUNT/.lustre ] || setupall
+
+	# - { index: 10, event: add_uuid, nid: 192.168.20.1@tcp(0x20000c0a81401,
+	#     node: 192.168.20.1@tcp }
+	do_facet mgs $LCTL --device MGS \
+		llog_print --start $start --end $end $FSNAME-client | tr -d , |
+		while read DASH BRACE INDEX idx EVENT BLAH BLAH BLAH; do
+		(( idx >= start )) || error "llog_print index $idx < $start"
+		(( idx <= end )) || error "llog_print index $idx > $end"
+	done
+}
+run_test 123ac "llog_print with --start and --end"
+
+test_123ad() { # LU-11566
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	# older versions of lctl may not print all records properly
+	do_facet mgs "$LCTL help llog_print" 2>&1 | grep -q -- --start ||
+		skip "Need 'lctl llog_print --start' on MGS"
+
+	[ -d $MOUNT/.lustre ] || setupall
+
+	# append a new record, to avoid issues if last record was cancelled
+	local old=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
+	do_facet mgs $LCTL conf_param $FSNAME-OST0000.osc.max_dirty_mb=$old
+
+	# logid:            [0x3:0xa:0x0]:0
+	# flags:            4 (plain)
+	# records_count:    72
+	# last_index:       72
+	local num=$(do_facet mgs $LCTL --device MGS llog_info $FSNAME-client |
+		    awk '/last_index:/ { print $2 - 1 }')
+
+	# - { index: 71, event: set_timeout, num: 0x14, param: sys.timeout=20 }
+	local last=$(do_facet mgs $LCTL --device MGS llog_print $FSNAME-client |
+		     tail -1 | awk '{ print $4 }' | tr -d , )
+	(( last == num )) || error "llog_print only showed $last/$num records"
+}
+run_test 123ad "llog_print shows all records"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

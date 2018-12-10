@@ -497,8 +497,8 @@ command_t cmdlist[] = {
 	 "       oid, ogr and ogen are hexadecimal."},
 	{"llog_print", jt_llog_print, 0,
 	 "print log content information.\n"
-	 "usage: llog_print <logname|[FID]> [start_index [end_index]]\n"
-	 "       print all records from index 1 by default."},
+	 "usage: llog_print <logname|FID> [--start <index>] [--end <index>j]\n"
+	 "       print all records by default, or within given index range."},
 	{"llog_check", jt_llog_check, 0,
 	 "print log content information.\n"
 	 "usage: llog_check <logname|[FID]> [start_index] [end_index]\n"

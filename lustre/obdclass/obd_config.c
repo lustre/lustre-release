@@ -1791,11 +1791,11 @@ static struct lcfg_type_data *lcfg_cmd2data(__u32 cmd)
  */
 int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 {
-	struct lustre_cfg	*lcfg = (struct lustre_cfg *)(rec + 1);
-	char			*ptr = buf;
-	char			*end = buf + size;
-	int			 rc = 0, i;
-	struct lcfg_type_data	*ldata;
+	struct lustre_cfg *lcfg = (struct lustre_cfg *)(rec + 1);
+	char *ptr = buf;
+	char *end = buf + size;
+	int rc = 0, i;
+	struct lcfg_type_data *ldata;
 
 	LASSERT(rec->lrh_type == OBD_CFG_REC);
 	rc = lustre_cfg_sanity_check(lcfg, rec->lrh_len);
@@ -1812,24 +1812,37 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 	/* form YAML entity */
 	ptr += snprintf(ptr, end - ptr, "- { index: %u, event: %s",
 			rec->lrh_index, ldata->ltd_name);
+	if (end - ptr <= 0)
+		goto out_overflow;
 
-	if (lcfg->lcfg_flags)
+	if (lcfg->lcfg_flags) {
 		ptr += snprintf(ptr, end - ptr, ", flags: %#08x",
 				lcfg->lcfg_flags);
-	if (lcfg->lcfg_num)
+		if (end - ptr <= 0)
+			goto out_overflow;
+	}
+	if (lcfg->lcfg_num) {
 		ptr += snprintf(ptr, end - ptr, ", num: %#08x",
 				lcfg->lcfg_num);
+		if (end - ptr <= 0)
+			goto out_overflow;
+	}
 	if (lcfg->lcfg_nid) {
 		char nidstr[LNET_NIDSTR_SIZE];
 
 		libcfs_nid2str_r(lcfg->lcfg_nid, nidstr, sizeof(nidstr));
 		ptr += snprintf(ptr, end - ptr, ", nid: %s(%#llx)",
 				nidstr, lcfg->lcfg_nid);
+		if (end - ptr <= 0)
+			goto out_overflow;
 	}
 
-	if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0)
+	if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
 		ptr += snprintf(ptr, end - ptr, ", device: %s",
 				lustre_cfg_string(lcfg, 0));
+		if (end - ptr <= 0)
+			goto out_overflow;
+	}
 
 	if (lcfg->lcfg_command == LCFG_SET_PARAM) {
 		/*
@@ -1842,7 +1855,7 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 		size_t len;
 
 		if (tmp == NULL)
-			return -ENOTTY;
+			goto out_done;
 
 		ptr += snprintf(ptr, end - ptr, ", %s: ", ldata->ltd_bufs[0]);
 		len = tmp - cfg_str + 1;
@@ -1856,16 +1869,25 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 	}
 
 	for (i = 1; i < lcfg->lcfg_bufcount; i++) {
-		if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0)
+		if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0) {
 			ptr += snprintf(ptr, end - ptr, ", %s: %s",
 					ldata->ltd_bufs[i - 1],
 					lustre_cfg_string(lcfg, i));
+			if (end - ptr <= 0)
+				goto out_overflow;
+		}
 	}
 
 out_done:
 	ptr += snprintf(ptr, end - ptr, " }\n");
-	/* return consumed bytes */
+out_overflow:
+	/* Return consumed bytes.  If the buffer overflowed, zero last byte */
 	rc = ptr - buf;
+	if (rc > size) {
+		rc = -EOVERFLOW;
+		*(end - 1) = '\0';
+	}
+
 	return rc;
 }
 

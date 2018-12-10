@@ -3,9 +3,11 @@
 lctl llog_print \- print the content of a configuration log
 .SH SYNOPSIS
 .B lctl llog_print
+.RB [ --start
+.IR start_index ]
+.RB [ --end
+.IR end_index ]
 .RI < logname >
-.RI [ start_index ]
-.RI [ end_index ]
 
 .SH DESCRIPTION
 .B lctl llog_print
@@ -18,6 +20,14 @@ saved via
 on the MGS.
 .SH OPTIONS
 .TP
+.B --end
+Stop printing records at
+.IR end_index .
+.TP
+.B --start
+Start printing records at
+.IR start_index .
+.TP
 .B logname
 The name of the configuration log, in the form
 .IR fsname - target ,
@@ -26,12 +36,13 @@ like
 or
 .BR lustrefs-MDT0000 .
 .TP
-.B start_index
+.I start_index
 The first record number in the config log to dump.  Note that deactivated
 records and comment records will not be printed.
 .TP
-.B end_index
-The last record number in the config log to dump.
+.I end_index
+The last record number in the config log to dump, including the specified
+index number.
 .SH EXAMPLES
 .TP
 To print all of the records from the testfs-client configuration log:
