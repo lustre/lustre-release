@@ -229,7 +229,7 @@
       have ACLs or user xattrs, and the number of hard links per file.  The
       storage required for Lustre file system metadata is typically 1-2
       percent of the total file system capacity depending upon file size.
-      If the <xref linkend="dataonmdt.title"/> feature is in use for Lustre
+      If the <xref linkend="dataonmdt"/> feature is in use for Lustre
       2.11 or later, MDT space should typically be 5 percent or more of the
       total space, depending on the distribution of small files within the
       filesystem and the <literal>lod.*.dom_stripesize</literal> limit on
