@@ -220,6 +220,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	struct obd_uuid		obd_uuid;
 	bool			for_ost;
 	bool lock = false;
+	bool connected = false;
 	ENTRY;
 
 	CDEBUG(D_CONFIG, "osp:%s idx:%d gen:%d\n", osp, index, gen);
@@ -302,11 +303,12 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		       obd->obd_name, osp, rc);
 		GOTO(out_cleanup, rc);
 	}
+	connected = true;
 
 	/* Allocate ost descriptor and fill it */
 	OBD_ALLOC_PTR(tgt_desc);
 	if (!tgt_desc)
-		GOTO(out_conn, rc = -ENOMEM);
+		GOTO(out_cleanup, rc = -ENOMEM);
 
 	tgt_desc->ltd_tgt    = dt_dev;
 	tgt_desc->ltd_exp    = exp;
@@ -426,8 +428,6 @@ out_mutex:
 	}
 out_desc:
 	OBD_FREE_PTR(tgt_desc);
-out_conn:
-	obd_disconnect(exp);
 out_cleanup:
 	/* XXX OSP needs us to send down LCFG_CLEANUP because it uses
 	 * objects from the MDT stack. See LU-7184. */
@@ -436,6 +436,9 @@ out_cleanup:
 	lcfg->lcfg_version = LUSTRE_CFG_VERSION;
 	lcfg->lcfg_command = LCFG_CLEANUP;
 	lu_dev->ld_ops->ldo_process_config(env, lu_dev, lcfg);
+
+	if (connected)
+		obd_disconnect(exp);
 
 	return rc;
 }
