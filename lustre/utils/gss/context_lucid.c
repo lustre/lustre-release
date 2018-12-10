@@ -330,8 +330,8 @@ derive_key_lucid(const gss_krb5_lucid_key_t *in, gss_krb5_lucid_key_t *out,
 	if (code)
 		goto out;
 
-	code = krb5int_derive_key(enc, key_in, &key_out, &datain,
-				  DERIVE_RFC3961);
+	code = ll_krb5int_derive_key(enc, key_in, &key_out, &datain,
+				     DERIVE_RFC3961);
 
 	krb5_k_free_key(kcontext, key_in);
 	if (code == 0) {

@@ -50,10 +50,23 @@ enum deriv_alg {
 #endif
 };
 
+#ifdef HAVE_AES_SHA2_SUPPORT
+extern krb5_error_code krb5int_derive_key(const void *enc,
+					  const void *hash,
+					  krb5_key inkey, krb5_key *outkey,
+					  const krb5_data *in_constant,
+					  enum deriv_alg alg);
+#define ll_krb5int_derive_key(enc, inkey, outkey, in_constant, alg)	    \
+	krb5int_derive_key((enc), (NULL), (inkey), (outkey), (in_constant), \
+			   (alg))
+#else
 extern krb5_error_code krb5int_derive_key(const void *enc,
 					  krb5_key inkey, krb5_key *outkey,
 					  const krb5_data *in_constant,
 					  enum deriv_alg alg);
+#define ll_krb5int_derive_key(enc, inkey, outkey, in_constant, alg)	    \
+	krb5int_derive_key((enc), (inkey), (outkey), (in_constant), (alg))
+#endif
 extern krb5_error_code krb5_k_create_key(krb5_context context,
 					 const krb5_keyblock *key_data,
 					 krb5_key *out);

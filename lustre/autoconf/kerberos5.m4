@@ -114,6 +114,13 @@ Kerberos v5 with GSS support not found at $krb5_with
     AC_CHECK_LIB($gssapi_lib, krb5int_derive_key,
       [HAVE_KRB5INT_DERIVE_KEY=1; AC_DEFINE(HAVE_KRB5INT_DERIVE_KEY, 1, [Define this if the function krb5int_derive_key is available])], ,$KRBLIBS)
 
+    dnl Version 1.15 introduced aes-sha2 support, which changes the
+    dnl number of paramters of function krb5int_derive_key.
+    if test $K5VERS -ge 1150; then
+       AC_DEFINE(HAVE_AES_SHA2_SUPPORT, 1,
+		[aes-sha2 is supported by krb5])
+    fi
+
     dnl Check for krb5_derive_key
     AC_CHECK_LIB($gssapi_lib, krb5_derive_key,
       [HAVE_KRB5_DERIVE_KEY=1; AC_DEFINE(HAVE_KRB5_DERIVE_KEY, 1, [Define this if the function krb5_derive_key is available])], ,$KRBLIBS)
