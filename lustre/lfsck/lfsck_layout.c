@@ -2809,6 +2809,9 @@ again:
 		__u64 start;
 		__u64 end;
 
+		if (bk->lb_param & LPF_DRYRUN)
+			GOTO(unlock_parent, rc = 1);
+
 		lcm = buf->lb_buf;
 		count = le16_to_cpu(lcm->lcm_entry_count);
 		for (i = 0; i < count; i++) {
