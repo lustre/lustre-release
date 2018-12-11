@@ -2910,6 +2910,9 @@ again:
 		__u16 mirror_id0 = mirror_id_of(ol->ol_comp_id);
 		__u16 mirror_id1;
 
+		if (bk->lb_param & LPF_DRYRUN)
+			GOTO(unlock_parent, rc = 1);
+
 		lcm = buf->lb_buf;
 		count = le16_to_cpu(lcm->lcm_entry_count);
 		for (i = 0; i < count; pos = ++i) {
