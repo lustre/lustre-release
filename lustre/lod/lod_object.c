@@ -6786,15 +6786,21 @@ static inline int lod_comp_index(struct lod_object *lo,
 /**
  * Stale other mirrors by writing extent.
  */
-static void lod_stale_components(struct lod_object *lo, int primary,
-				 struct lu_extent *extent)
+static int lod_stale_components(const struct lu_env *env, struct lod_object *lo,
+				int primary, struct lu_extent *extent,
+				struct thandle *th)
 {
 	struct lod_layout_component *pri_comp, *lod_comp;
+	struct lu_extent pri_extent;
+	int rc = 0;
 	int i;
+	ENTRY;
 
 	/* The writing extent decides which components in the primary
 	 * are affected... */
 	CDEBUG(D_LAYOUT, "primary mirror %d, "DEXT"\n", primary, PEXT(extent));
+
+restart:
 	lod_foreach_mirror_comp(pri_comp, lo, primary) {
 		if (!lu_extent_is_overlapped(extent, &pri_comp->llc_extent))
 			continue;
@@ -6803,15 +6809,27 @@ static void lod_stale_components(struct lod_object *lo, int primary,
 		       lod_comp_index(lo, pri_comp),
 		       PEXT(&pri_comp->llc_extent));
 
+		pri_extent.e_start = pri_comp->llc_extent.e_start;
+		pri_extent.e_end = pri_comp->llc_extent.e_end;
+
 		for (i = 0; i < lo->ldo_mirror_count; i++) {
 			if (i == primary)
 				continue;
+			rc = lod_declare_update_extents(env, lo, &pri_extent,
+							th, i, 0);
+			/* if update_extents changed the layout, it may have
+			 * reallocated the component array, so start over to
+			 * avoid using stale pointers */
+			if (rc == 1)
+				goto restart;
+			if (rc < 0)
+				RETURN(rc);
 
 			/* ... and then stale other components that are
 			 * overlapping with primary components */
 			lod_foreach_mirror_comp(lod_comp, lo, i) {
 				if (!lu_extent_is_overlapped(
-							&pri_comp->llc_extent,
+							&pri_extent,
 							&lod_comp->llc_extent))
 					continue;
 
@@ -6823,6 +6841,8 @@ static void lod_stale_components(struct lod_object *lo, int primary,
 			}
 		}
 	}
+
+	RETURN(rc);
 }
 
 /**
@@ -7058,6 +7078,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 
 	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
 		struct layout_intent *layout = mlc->mlc_intent;
+		int write = layout->li_opc == LAYOUT_INTENT_WRITE;
 		int picked;
 
 		extent = layout->li_extent;
@@ -7072,6 +7093,12 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 		       PFID(lod_object_fid(lo)),
 		       lo->ldo_mirrors[picked].lme_id);
 
+		/* Update extents of primary before staling */
+		rc = lod_declare_update_extents(env, lo, &extent, th, picked,
+						write);
+		if (rc < 0)
+			GOTO(out, rc);
+
 		if (layout->li_opc == LAYOUT_INTENT_TRUNC) {
 			/**
 			 * trunc transfers [0, size) in the intent extent, we'd
@@ -7082,7 +7109,9 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 		}
 
 		/* stale overlapping components from other mirrors */
-		lod_stale_components(lo, picked, &extent);
+		rc = lod_stale_components(env, lo, picked, &extent, th);
+		if (rc < 0)
+			GOTO(out, rc);
 
 		/* restore truncate intent extent */
 		if (layout->li_opc == LAYOUT_INTENT_TRUNC)
@@ -7222,12 +7251,21 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 	 * 2. transfer layout version to all objects to close write era. */
 
 	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
+		struct layout_intent *layout = mlc->mlc_intent;
+		int write = layout->li_opc == LAYOUT_INTENT_WRITE;
+
 		LASSERT(mlc->mlc_intent != NULL);
 
 		extent = mlc->mlc_intent->li_extent;
 
 		CDEBUG(D_LAYOUT, DFID": intent to write: "DEXT"\n",
 		       PFID(lod_object_fid(lo)), PEXT(&extent));
+
+		/* 1. Update extents of primary before staling */
+		rc = lod_declare_update_extents(env, lo, &extent, th, primary,
+						write);
+		if (rc < 0)
+			GOTO(out, rc);
 
 		if (mlc->mlc_intent->li_opc == LAYOUT_INTENT_TRUNC) {
 			/**
@@ -7237,10 +7275,13 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 			extent.e_start = extent.e_end;
 			extent.e_end = OBD_OBJECT_EOF;
 		}
-		/* 1. stale overlapping components */
-		lod_stale_components(lo, primary, &extent);
 
-		/* 2. find out the components need instantiating.
+		/* 2. stale overlapping components */
+		rc = lod_stale_components(env, lo, primary, &extent, th);
+		if (rc < 0)
+			GOTO(out, rc);
+
+		/* 3. find the components which need instantiating.
 		 * instantiate [0, mlc->mlc_intent->e_end) */
 
 		/* restore truncate intent extent */
@@ -7380,9 +7421,9 @@ static int lod_declare_update_sync_pending(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	CDEBUG(D_LAYOUT, DFID": resynced %u/%zu components\n",
+	CDEBUG(D_LAYOUT, DFID": synced %u resynced %u/%zu components\n",
 	       PFID(lod_object_fid(lo)),
-	       resync_components, mlc->mlc_resync_count);
+	       sync_components, resync_components, mlc->mlc_resync_count);
 
 	lo->ldo_flr_state = LCM_FL_RDONLY;
 	lod_obj_inc_layout_gen(lo);

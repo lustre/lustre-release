@@ -2286,6 +2286,186 @@ test_203() {
 }
 run_test 203 "mirror file preserve mirror ID"
 
+# Simple test of FLR + self-extending layout, SEL in non-primary mirror
+test_204a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir $DIR/$tdir
+
+	# first mirror is 0-10M, then 10M-(-1), second mirror is 1M followed
+	# by extension space to -1
+	$LFS setstripe -N -E 10M -E-1 -N -E 1M -E-1 -z64M $comp_file ||
+		error "Create $comp_file failed"
+
+	# Write to first component, extending & staling second mirror
+	dd if=/dev/zero bs=2M count=1 of=$comp_file conv=notrunc ||
+		error "dd to extend + stale failed"
+
+	$LFS getstripe $comp_file
+
+	flg_opts="--component-flags init,stale"
+	found=$($LFS find --component-end 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: Second comp end incorrect"
+
+	flg_opts="--component-flags extension"
+	found=$($LFS find --component-start 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: Third comp start incorrect"
+
+	# mirror resync should not change the extents
+	$LFS mirror resync $comp_file
+
+	flg_opts="--component-flags init"
+	found=$($LFS find --component-end 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: Second comp end incorrect"
+
+	flg_opts="--component-flags extension"
+	found=$($LFS find --component-start 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: Third comp start incorrect"
+
+	sel_layout_sanity $comp_file 5
+
+	rm -f $comp_file
+}
+run_test 204a "FLR write/stale/resync tests with self-extending mirror"
+
+# Simple test of FLR + self-extending layout, SEL in primary mirror
+test_204b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir $DIR/$tdir
+
+	# first mirror is 1M followed by extension space to -1, second mirror
+	# is 0-10M, then 10M-(-1),
+	$LFS setstripe -N -E 1M -E-1 -z64M -N -E 10M -E-1 $comp_file ||
+		error "Create $comp_file failed"
+
+	# Write to first component, extending first component & staling
+	# other mirror
+	dd if=/dev/zero bs=2M count=1 of=$comp_file conv=notrunc ||
+		error "dd to extend + stale failed"
+
+	$LFS getstripe $comp_file
+
+	flg_opts="--component-flags init"
+	found=$($LFS find --component-end 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: First comp end incorrect"
+
+	flg_opts="--component-flags extension"
+	found=$($LFS find --component-start 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: Second comp start incorrect"
+
+	flg_opts="--component-flags init,stale"
+	found=$($LFS find --component-end 10M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: First mirror comp flags incorrect"
+
+	# This component is staled because it overlaps the extended first
+	# component of the primary mirror, even though it doesn't overlap
+	# the actual write - thus not inited.
+	flg_opts="--component-flags stale"
+	found=$($LFS find --component-start 10M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: Second mirror comp flags incorrect"
+
+	# mirror resync should not change the extents
+	$LFS mirror resync $comp_file
+
+	$LFS getstripe $comp_file
+
+	flg_opts="--component-flags init"
+	found=$($LFS find --component-end 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: First comp end incorrect"
+
+	flg_opts="--component-flags extension"
+	found=$($LFS find --component-start 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: Second comp start incorrect"
+
+	flg_opts="--component-flags init"
+	found=$($LFS find --component-end 10M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: First mirror comp flags incorrect"
+
+	flg_opts="--component-flags init"
+	found=$($LFS find --component-start 10M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: Second mirror comp flags incorrect"
+
+	sel_layout_sanity $comp_file 5
+
+	rm -f $comp_file
+}
+run_test 204b "FLR write/stale/resync tests with self-extending primary"
+
+# FLR + SEL failed extension & component removal
+# extension space in second mirror
+test_204c() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local found=""
+	local ost_idx1=0
+	local ost_name=$(ostname_from_index $ost_idx1)
+
+	test_mkdir $DIR/$tdir
+
+	# first mirror is is 0-10M, then 10M-(-1), second mirror is 0-1M, then
+	# extension space from 1M to 1G, then normal space to -1
+	$LFS setstripe -N -E 10M -E-1 -N -E 1M -E 1G -i $ost_idx1 -z 64M \
+		-E -1 $comp_file || error "Create $comp_file failed"
+
+	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=1
+	sleep_maxage
+
+	# write to first comp (0 - 10M) of mirror 1, extending + staling
+	# first + second comp of mirror 2
+	dd if=/dev/zero bs=2M count=1 of=$comp_file conv=notrunc
+	RC=$?
+
+	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=0
+	sleep_maxage
+
+	[ $RC -eq 0 ] || error "dd to extend + stale failed"
+
+	$LFS getstripe $comp_file
+
+	found=$($LFS find --component-start 0m --component-end 1m \
+		--comp-flags init,stale $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: First mirror comp incorrect"
+
+	found=$($LFS find --component-start 1m --component-end EOF \
+		--comp-flags stale,^init $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: Second mirror comp incorrect"
+
+	local mirror_id=$($LFS getstripe --component-start=1m	\
+			 --component-end=EOF $comp_file |	\
+			 grep lcme_mirror_id | awk '{ print $2 }')
+
+	[[ $mirror_id -eq 2 ]] ||
+		error "component not in correct mirror? $mirror_id"
+
+	$LFS mirror resync $comp_file
+
+	$LFS getstripe $comp_file
+
+	# component dimensions should not change from resync
+	found=$($LFS find --component-start 1m --component-end EOF \
+		--component-flags init $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: Second mirror comp incorrect"
+
+	sel_layout_sanity $comp_file 4
+
+	rm -f $comp_file
+}
+run_test 204c "FLR write/stale/resync test with component removal"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
