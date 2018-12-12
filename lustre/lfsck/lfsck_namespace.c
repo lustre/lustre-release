@@ -1113,6 +1113,99 @@ log:
 	return rc;
 }
 
+static int lfsck_lmv_set(const struct lu_env *env,
+			 struct lfsck_instance *lfsck,
+			 struct dt_object *obj,
+			 struct lmv_mds_md_v1 *lmv)
+{
+	struct dt_device *dev = lfsck->li_next;
+	struct thandle *th = NULL;
+	struct lu_buf buf = { lmv, sizeof(*lmv) };
+	int rc;
+
+	ENTRY;
+
+	th = dt_trans_create(env, dev);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_xattr_set(env, obj, &buf, XATTR_NAME_LMV".set", 0, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, dev, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_xattr_set(env, obj, &buf, XATTR_NAME_LMV".set", 0, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	EXIT;
+stop:
+	dt_trans_stop(env, dev, th);
+
+	return rc;
+}
+
+static int lfsck_lmv_delete(const struct lu_env *env,
+			    struct lfsck_instance *lfsck,
+			    struct dt_object *obj)
+{
+	struct dt_device *dev = lfsck->li_next;
+	struct thandle *th = NULL;
+	int rc;
+
+	ENTRY;
+
+	th = dt_trans_create(env, dev);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	rc = dt_declare_xattr_del(env, obj, XATTR_NAME_LMV, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, dev, th);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_xattr_del(env, obj, XATTR_NAME_LMV, th);
+	if (rc)
+		GOTO(stop, rc);
+
+	EXIT;
+stop:
+	dt_trans_stop(env, dev, th);
+
+	return rc;
+}
+
+static inline int lfsck_object_is_shard(const struct lu_env *env,
+					struct lfsck_instance *lfsck,
+					struct dt_object *obj,
+					const struct lu_name *lname)
+{
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lmv_mds_md_v1 *lmv = &info->lti_lmv;
+	int rc;
+
+	rc = lfsck_shard_name_to_index(env, lname->ln_name, lname->ln_namelen,
+				       lfsck_object_type(obj),
+				       lfsck_dto2fid(obj));
+	if (rc < 0)
+		return 0;
+
+	rc = lfsck_read_stripe_lmv(env, lfsck, obj, lmv);
+	if (rc == -ENODATA)
+		return 0;
+
+	if (!rc && lmv->lmv_magic == LMV_MAGIC_STRIPE)
+		return 1;
+
+	return rc;
+}
+
 /**
  * Add the specified name entry back to namespace.
  *
@@ -1123,13 +1216,17 @@ log:
  * it is quite possible that the name entry is lost. Then the LFSCK
  * should add the name entry back to the namespace.
  *
+ * If \a child is shard, which means \a parent is a striped directory,
+ * if \a parent has LMV, we need to delete it before insertion because
+ * now parent's striping is broken and can't be parsed correctly.
+ *
  * \param[in] env	pointer to the thread context
  * \param[in] com	pointer to the lfsck component
  * \param[in] parent	pointer to the directory under which the name entry
  *			will be inserted into
  * \param[in] child	pointer to the object referenced by the name entry
  *			that to be inserted into the parent
- * \param[in] name	the name for the child in the parent directory
+ * \param[in] lname	the name for the child in the parent directory
  *
  * \retval		positive number for repaired cases
  * \retval		0 if nothing to be repaired
@@ -1139,19 +1236,26 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 					 struct lfsck_component *com,
 					 struct dt_object *parent,
 					 struct dt_object *child,
-					 const char *name)
+					 const struct lu_name *lname)
 {
-	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct lu_attr			*la	= &info->lti_la;
-	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
-	struct lfsck_instance		*lfsck	= com->lc_lfsck;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_attr *la = &info->lti_la;
+	struct dt_insert_rec *rec = &info->lti_dt_rec;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
 	/* The child and its name may be on different MDTs. */
-	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
-	const struct lu_fid		*cfid	= lfsck_dto2fid(child);
-	struct dt_device		*dev	= lfsck->li_next;
-	struct thandle			*th	= NULL;
-	struct lfsck_lock_handle	*llh	= &info->lti_llh;
-	int				 rc	= 0;
+	const struct lu_fid *pfid = lfsck_dto2fid(parent);
+	const struct lu_fid *cfid = lfsck_dto2fid(child);
+	struct dt_device *dev = lfsck->li_next;
+	struct thandle *th = NULL;
+	struct lfsck_lock_handle *llh = &info->lti_llh;
+	struct lmv_mds_md_v1 *lmv = &info->lti_lmv;
+	struct lu_buf buf = { lmv, sizeof(*lmv) };
+	/* whether parent's LMV is deleted before insertion */
+	bool parent_lmv_deleted = false;
+	/* whether parent's LMV is missing */
+	bool parent_lmv_lost = false;
+	int rc = 0;
+
 	ENTRY;
 
 	/* @parent/@child may be based on lfsck->li_bottom,
@@ -1161,9 +1265,6 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	if (IS_ERR(parent))
 		GOTO(log, rc = PTR_ERR(parent));
 
-	if (unlikely(!dt_try_as_dir(env, parent)))
-		GOTO(log, rc = -ENOTDIR);
-
 	child = lfsck_object_locate(dev, child);
 	if (IS_ERR(child))
 		GOTO(log, rc = PTR_ERR(child));
@@ -1171,10 +1272,56 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		GOTO(log, rc = 1);
 
-	rc = lfsck_lock(env, lfsck, parent, name, llh,
-			MDS_INODELOCK_UPDATE, LCK_PW);
-	if (rc != 0)
+	rc = lfsck_lock(env, lfsck, parent, lname->ln_name, llh,
+			MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
+			MDS_INODELOCK_XATTR, LCK_EX);
+	if (rc)
 		GOTO(log, rc);
+
+	rc = lfsck_object_is_shard(env, lfsck, child, lname);
+	if (rc < 0)
+		GOTO(unlock, rc);
+
+	if (rc == 1) {
+		rc = lfsck_read_stripe_lmv(env, lfsck, parent, lmv);
+		if (!rc) {
+			/*
+			 * To add a shard, we need to convert parent to a
+			 * plain directory by deleting its LMV, and after
+			 * insertion set it back.
+			 */
+			rc = lfsck_lmv_delete(env, lfsck, parent);
+			if (rc)
+				GOTO(unlock, rc);
+			parent_lmv_deleted = true;
+			lmv->lmv_layout_version++;
+			lfsck_lmv_header_cpu_to_le(lmv, lmv);
+		} else if (rc == -ENODATA) {
+			struct lu_seq_range *range = &info->lti_range;
+			struct seq_server_site *ss = lfsck_dev_site(lfsck);
+
+			rc = lfsck_read_stripe_lmv(env, lfsck, child, lmv);
+			if (rc)
+				GOTO(unlock, rc);
+
+			fld_range_set_mdt(range);
+			rc = fld_server_lookup(env, ss->ss_server_fld,
+				       fid_seq(lfsck_dto2fid(parent)), range);
+			if (rc)
+				GOTO(unlock, rc);
+
+			parent_lmv_lost = true;
+			lmv->lmv_magic = LMV_MAGIC;
+			lmv->lmv_master_mdt_index = range->lsr_index;
+			lmv->lmv_layout_version++;
+			lfsck_lmv_header_cpu_to_le(lmv, lmv);
+		} else {
+			GOTO(unlock, rc);
+		}
+	}
+
+	if (unlikely(!dt_try_as_dir(env, parent)))
+		GOTO(unlock, rc = -ENOTDIR);
 
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
@@ -1183,7 +1330,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	rec->rec_type = lfsck_object_type(child) & S_IFMT;
 	rec->rec_fid = cfid;
 	rc = dt_declare_insert(env, parent, (const struct dt_rec *)rec,
-			       (const struct dt_key *)name, th);
+			       (const struct dt_key *)lname->ln_name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1193,7 +1340,13 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 			GOTO(stop, rc);
 	}
 
-	memset(la, 0, sizeof(*la));
+	if (parent_lmv_lost) {
+		rc = dt_declare_xattr_set(env, parent, &buf,
+					  XATTR_NAME_LMV".set", 0, th);
+		if (rc)
+			GOTO(stop, rc);
+	}
+
 	la->la_ctime = ktime_get_real_seconds();
 	la->la_valid = LA_CTIME;
 	rc = dt_declare_attr_set(env, parent, la, th);
@@ -1209,7 +1362,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 		GOTO(stop, rc);
 
 	rc = dt_insert(env, parent, (const struct dt_rec *)rec,
-		       (const struct dt_key *)name, th);
+		       (const struct dt_key *)lname->ln_name, th);
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -1221,7 +1374,13 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 			GOTO(stop, rc);
 	}
 
-	la->la_ctime = ktime_get_real_seconds();
+	if (parent_lmv_lost) {
+		rc = dt_xattr_set(env, parent, &buf, XATTR_NAME_LMV".set", 0,
+				  th);
+		if (rc)
+			GOTO(stop, rc);
+	}
+
 	rc = dt_attr_set(env, parent, la, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -1234,12 +1393,15 @@ stop:
 	dt_trans_stop(env, dev, th);
 
 unlock:
+	if (parent_lmv_deleted)
+		lfsck_lmv_set(env, lfsck, parent, lmv);
+
 	lfsck_unlock(llh);
 
 log:
 	CDEBUG(D_LFSCK, "%s: namespace LFSCK insert object "DFID" with "
 	       "the name %s and type %o to the parent "DFID": rc = %d\n",
-	       lfsck_lfsck2name(lfsck), PFID(cfid), name,
+	       lfsck_lfsck2name(lfsck), PFID(cfid), lname->ln_name,
 	       lfsck_object_type(child) & S_IFMT, PFID(pfid), rc);
 
 	if (rc != 0) {
@@ -2476,7 +2638,7 @@ lost_parent:
 		if (rc >= 0) {
 			/* Add the missing name entry to the parent. */
 			rc = lfsck_namespace_insert_normal(env, com, parent,
-							child, cname->ln_name);
+							   child, cname);
 			if (unlikely(rc == -EEXIST)) {
 				/* Unfortunately, someone reused the name
 				 * under the parent by race. So we have
@@ -2559,7 +2721,7 @@ lost_parent:
 
 		/* Add the missing name entry back to the namespace. */
 		rc = lfsck_namespace_insert_normal(env, com, parent, child,
-						   cname->ln_name);
+						   cname);
 		if (unlikely(rc == -ESTALE))
 			/* It may happen when the remote object has been
 			 * removed, but the local MDT is not aware of that. */
@@ -3668,7 +3830,7 @@ lost_parent:
 
 				/* Add the missing name entry to the parent. */
 				rc = lfsck_namespace_insert_normal(env, com,
-						parent, child, cname->ln_name);
+							parent, child, cname);
 				if (unlikely(rc == -EEXIST))
 					/* Unfortunately, someone reused the
 					 * name under the parent by race. So we
@@ -3815,7 +3977,7 @@ lost_parent:
 
 		/* Add the missing name entry back to the namespace. */
 		rc = lfsck_namespace_insert_normal(env, com, parent, child,
-						   cname->ln_name);
+						   cname);
 		if (unlikely(rc == -ESTALE))
 			/* It may happen when the remote object has been
 			 * removed, but the local MDT is not aware of that. */

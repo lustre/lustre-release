@@ -4638,7 +4638,13 @@ static int lod_declare_xattr_del(const struct lu_env *env,
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr))
 		RETURN(0);
 
-	/* set xattr to each stripes, if needed */
+	/* NB: don't delete stripe LMV, because when we do this, normally we
+	 * will remove stripes, besides, if directory LMV is corrupt, this will
+	 * prevent deleting its LMV and fixing it (via LFSCK).
+	 */
+	if (!strcmp(name, XATTR_NAME_LMV))
+		RETURN(0);
+
 	rc = lod_striping_load(env, lo);
 	if (rc != 0)
 		RETURN(rc);
@@ -4683,6 +4689,9 @@ static int lod_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	rc = lod_sub_xattr_del(env, next, name, th);
 	if (rc != 0 || !S_ISDIR(dt->do_lu.lo_header->loh_attr))
 		RETURN(rc);
+
+	if (!strcmp(name, XATTR_NAME_LMV))
+		RETURN(0);
 
 	if (lo->ldo_dir_stripe_count == 0)
 		RETURN(0);
