@@ -342,19 +342,8 @@ static inline void osc_object_unlock(struct osc_object *obj)
 	spin_unlock(&obj->oo_lock);
 }
 
-static inline int osc_object_is_locked(struct osc_object *obj)
-{
-#if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)
-	return spin_is_locked(&obj->oo_lock);
-#else
-	/*
-	 * It is not perfect to return true all the time.
-	 * But since this function is only used for assertion
-	 * and checking, it seems OK.
-	 */
-	return 1;
-#endif
-}
+#define assert_osc_object_is_locked(obj)	\
+	assert_spin_locked(&obj->oo_lock)
 
 static inline void osc_object_set_contended(struct osc_object *obj)
 {
