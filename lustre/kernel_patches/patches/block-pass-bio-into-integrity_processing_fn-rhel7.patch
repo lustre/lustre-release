@@ -10,8 +10,8 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  		bix.data_size = bv->bv_len;
  		bix.prot_buf = prot_buf;
  		bix.sector = sector;
-+		bix.bio = bio;
 +		bix.bi_idx = i;
++		bix.bio = bio;
  
  		generate_fn(&bix);
  
@@ -19,8 +19,8 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  		bix.data_size = bv->bv_len;
  		bix.prot_buf = prot_buf;
  		bix.sector = sector;
-+		bix.bio = bio;
 +		bix.bi_idx = i;
++		bix.bio = bio;
  
  		ret = verify_fn(&bix);
  
@@ -28,14 +28,13 @@ Index: linux-3.10.0-862.9.1.el7/include/linux/blkdev.h
 ===================================================================
 --- linux-3.10.0-862.9.1.el7.orig/include/linux/blkdev.h
 +++ linux-3.10.0-862.9.1.el7/include/linux/blkdev.h
-@@ -1696,8 +1696,10 @@ static inline uint64_t rq_io_start_time_
- struct blk_integrity_exchg {
- 	void			*prot_buf;
- 	void			*data_buf;
-+	struct bio		*bio;
+@@ -1699,7 +1699,9 @@ struct blk_integrity_exchg {
  	sector_t		sector;
  	unsigned int		data_size;
-+	unsigned int		bi_idx;
  	unsigned short		sector_size;
++	unsigned short		bi_idx;
  	const char		*disk_name;
++	struct bio		*bio;
  };
+ 
+ typedef void (integrity_set_tag_fn) (void *, void *, unsigned int);

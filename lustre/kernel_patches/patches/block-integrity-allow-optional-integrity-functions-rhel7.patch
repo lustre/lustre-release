@@ -52,16 +52,21 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  	bio->bi_integrity = bip;
  
  	return bip;
-@@ -88,7 +92,7 @@ err:
+@@ -88,6 +92,13 @@ err:
  	mempool_free(bip, bs->bio_integrity_pool);
  	return NULL;
  }
--EXPORT_SYMBOL(bio_integrity_alloc);
 +EXPORT_SYMBOL(bio_integrity_alloc_fn);
++
++struct bio_integrity_payload *bio_integrity_alloc(struct bio *bio, gfp_t gfp,
++						  unsigned int nr)
++{
++	return bio_integrity_alloc_fn(bio, gfp, nr, NULL, NULL);
++}
+ EXPORT_SYMBOL(bio_integrity_alloc);
  
  /**
-  * bio_integrity_free - Free bio integrity payload
-@@ -312,10 +316,13 @@ static void bio_integrity_generate(struc
+@@ -312,10 +323,12 @@ static void bio_integrity_generate(struc
  {
  	struct blk_integrity *bi = bdev_get_integrity(bio->bi_bdev);
  	struct blk_integrity_exchg bix;
@@ -70,12 +75,11 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  	sector_t sector = bio->bi_sector;
  	unsigned int i, sectors, total;
  	void *prot_buf = bio->bi_integrity->bip_buf;
-+	integrity_gen_fn *generate_fn = bip->bip_generate_fn ?:
-+					bi->generate_fn;
++	integrity_gen_fn *generate_fn = bip->bip_generate_fn ?: bi->generate_fn;
  
  	total = 0;
  	bix.disk_name = bio->bi_bdev->bd_disk->disk_name;
-@@ -328,7 +335,7 @@ static void bio_integrity_generate(struc
+@@ -328,7 +341,7 @@ static void bio_integrity_generate(struc
  		bix.prot_buf = prot_buf;
  		bix.sector = sector;
  
@@ -84,7 +88,7 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  
  		sectors = bv->bv_len / bi->sector_size;
  		sector += sectors;
-@@ -349,7 +356,7 @@ static inline unsigned short blk_integri
+@@ -349,7 +362,7 @@ static inline unsigned short blk_integri
  }
  
  /**
@@ -93,7 +97,7 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
   * @bio:	bio to prepare
   *
   * Description: Allocates a buffer for integrity metadata, maps the
-@@ -359,7 +366,8 @@ static inline unsigned short blk_integri
+@@ -359,7 +372,8 @@ static inline unsigned short blk_integri
   * block device's integrity function.  In the READ case, the buffer
   * will be prepared for DMA and a suitable end_io handler set up.
   */
@@ -103,7 +107,7 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  {
  	struct bio_integrity_payload *bip;
  	struct blk_integrity *bi;
-@@ -390,7 +398,8 @@ int bio_integrity_prep(struct bio *bio)
+@@ -390,7 +404,8 @@ int bio_integrity_prep(struct bio *bio)
  	nr_pages = end - start;
  
  	/* Allocate bio integrity payload and integrity vectors */
@@ -113,16 +117,20 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  	if (unlikely(bip == NULL)) {
  		printk(KERN_ERR "could not allocate data integrity bioset\n");
  		kfree(buf);
-@@ -440,7 +449,7 @@ int bio_integrity_prep(struct bio *bio)
+@@ -440,6 +455,12 @@ int bio_integrity_prep(struct bio *bio)
  
  	return 0;
  }
--EXPORT_SYMBOL(bio_integrity_prep);
 +EXPORT_SYMBOL(bio_integrity_prep_fn);
++
++int bio_integrity_prep(struct bio *bio)
++{
++	return bio_integrity_prep_fn(bio, NULL, NULL);
++}
+ EXPORT_SYMBOL(bio_integrity_prep);
  
  /**
-  * bio_integrity_verify - Verify integrity metadata for a bio
-@@ -454,10 +463,13 @@ static int bio_integrity_verify(struct b
+@@ -454,10 +475,13 @@ static int bio_integrity_verify(struct b
  {
  	struct blk_integrity *bi = bdev_get_integrity(bio->bi_bdev);
  	struct blk_integrity_exchg bix;
@@ -136,7 +144,7 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  
  	ret = total = 0;
  	bix.disk_name = bio->bi_bdev->bd_disk->disk_name;
-@@ -474,7 +486,7 @@ static int bio_integrity_verify(struct b
+@@ -474,7 +498,7 @@ static int bio_integrity_verify(struct b
  		bix.prot_buf = prot_buf;
  		bix.sector = sector;
  
@@ -145,7 +153,7 @@ Index: linux-3.10.0-862.9.1.el7/fs/bio-integrity.c
  
  		if (ret) {
  			kunmap_atomic(kaddr);
-@@ -711,7 +723,9 @@ int bio_integrity_clone(struct bio *bio,
+@@ -711,7 +735,9 @@ int bio_integrity_clone(struct bio *bio,
  
  	BUG_ON(bip_src == NULL);
  
@@ -160,44 +168,37 @@ Index: linux-3.10.0-862.9.1.el7/include/linux/bio.h
 ===================================================================
 --- linux-3.10.0-862.9.1.el7.orig/include/linux/bio.h
 +++ linux-3.10.0-862.9.1.el7/include/linux/bio.h
-@@ -194,6 +194,9 @@ struct bio_integrity_payload {
- 
+@@ -195,6 +195,11 @@ struct bio_integrity_payload {
  	struct work_struct	bip_work;	/* I/O completion */
  
+ 	struct bio_vec		*bip_vec;
++
++	/* put after bip_vec as that is last externally-accessed bip_ field */
 +	integrity_gen_fn	*bip_generate_fn;
 +	integrity_vrfy_fn	*bip_verify_fn;
-+
- 	struct bio_vec		*bip_vec;
++ 
  	struct bio_vec		bip_inline_vecs[0];/* embedded bvec array */
  };
-@@ -617,13 +620,28 @@ struct biovec_slab {
- 
+ #endif /* CONFIG_BLK_DEV_INTEGRITY */
+@@ -618,6 +623,11 @@ struct biovec_slab {
  #define bio_integrity(bio) (bio->bi_integrity != NULL)
  
--extern struct bio_integrity_payload *bio_integrity_alloc(struct bio *, gfp_t, unsigned int);
-+extern struct bio_integrity_payload *bio_integrity_alloc_fn(struct bio *, gfp_t,
-+							    unsigned int,
-+							    integrity_gen_fn *,
-+							    integrity_vrfy_fn *);
-+static inline struct bio_integrity_payload *bio_integrity_alloc(struct bio *bio,
-+								gfp_t gfp,
-+								unsigned int nr)
-+{
-+	return bio_integrity_alloc_fn(bio, gfp, nr, NULL, NULL);
-+}
+ extern struct bio_integrity_payload *bio_integrity_alloc(struct bio *, gfp_t, unsigned int);
++extern struct bio_integrity_payload *bio_integrity_alloc_fn(struct bio *bio,
++						gfp_t gfp_mask,
++						unsigned int nr_vecs,
++						integrity_gen_fn *generate_fn,
++						integrity_vrfy_fn *verify_fn);
  extern void bio_integrity_free(struct bio *);
  extern int bio_integrity_add_page(struct bio *, struct page *, unsigned int, unsigned int);
  extern int bio_integrity_enabled(struct bio *bio);
+@@ -624,6 +634,9 @@ struct biovec_slab {
  extern int bio_integrity_set_tag(struct bio *, void *, unsigned int);
  extern int bio_integrity_get_tag(struct bio *, void *, unsigned int);
--extern int bio_integrity_prep(struct bio *);
-+extern int bio_integrity_prep_fn(struct bio *,
-+				 integrity_gen_fn *,
-+				 integrity_vrfy_fn *);
-+static inline int bio_integrity_prep(struct bio *bio)
-+{
-+	return bio_integrity_prep_fn(bio, NULL, NULL);
-+}
+ extern int bio_integrity_prep(struct bio *);
++extern int bio_integrity_prep_fn(struct bio *bio,
++				 integrity_gen_fn *generate_fn,
++				 integrity_vrfy_fn *verify_fn);
  extern void bio_integrity_endio(struct bio *, int);
  extern void bio_integrity_advance(struct bio *, unsigned int);
  extern void bio_integrity_trim(struct bio *, unsigned int, unsigned int);
@@ -212,8 +213,8 @@ Index: linux-3.10.0-862.9.1.el7/include/linux/blk_types.h
 +struct blk_integrity_exchg;
  typedef void (bio_end_io_t) (struct bio *, int);
  typedef void (bio_destructor_t) (struct bio *);
-+typedef void (integrity_gen_fn) (struct blk_integrity_exchg *);
-+typedef int (integrity_vrfy_fn) (struct blk_integrity_exchg *);
++typedef void (integrity_gen_fn) (struct blk_integrity_exchg *bix);
++typedef int (integrity_vrfy_fn) (struct blk_integrity_exchg *bix);
  
  /*
   * was unsigned short, but we might as well be ready for > 64kB I/O pages
