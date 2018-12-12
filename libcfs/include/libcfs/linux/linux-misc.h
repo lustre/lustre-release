@@ -99,6 +99,13 @@ int cfs_apply_workqueue_attrs(struct workqueue_struct *wq,
 int kstrtobool_from_user(const char __user *s, size_t count, bool *res);
 #endif /* HAVE_KSTRTOBOOL_FROM_USER */
 
+#ifndef HAVE_KREF_READ
+static inline int kref_read(const struct kref *kref)
+{
+	return atomic_read(&kref->refcount);
+}
+#endif /* HAVE_KREF_READ */
+
 void cfs_arch_init(void);
 
 #ifndef container_of_safe

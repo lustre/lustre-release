@@ -887,7 +887,7 @@ struct osc_extent {
 	/** osc_object of this extent */
 	struct osc_object	*oe_obj;
 	/** refcount, removed from red-black tree if reaches zero. */
-	atomic_t		oe_refc;
+	struct kref		oe_refc;
 	/** busy if non-zero */
 	atomic_t		oe_users;
 	/** link list of osc_object's oo_{hp|urgent|locking}_exts. */

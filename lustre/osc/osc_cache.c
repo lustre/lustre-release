@@ -110,7 +110,7 @@ static const char *oes_strings[] = {
 		/* ----- extent part 0 ----- */				      \
 		__ext, EXTPARA(__ext),					      \
 		/* ----- part 1 ----- */				      \
-		atomic_read(&__ext->oe_refc),				      \
+		kref_read(&__ext->oe_refc),				      \
 		atomic_read(&__ext->oe_users),				      \
 		list_empty_marker(&__ext->oe_link),			      \
 		oes_strings[__ext->oe_state], ext_flags(__ext, __buf),	      \
@@ -186,10 +186,10 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 	if (ext->oe_state >= OES_STATE_MAX)
 		GOTO(out, rc = 10);
 
-	if (atomic_read(&ext->oe_refc) <= 0)
+	if (kref_read(&ext->oe_refc) <= 0)
 		GOTO(out, rc = 20);
 
-	if (atomic_read(&ext->oe_refc) < atomic_read(&ext->oe_users))
+	if (kref_read(&ext->oe_refc) < atomic_read(&ext->oe_users))
 		GOTO(out, rc = 30);
 
 	switch (ext->oe_state) {
@@ -329,7 +329,7 @@ static struct osc_extent *osc_extent_alloc(struct osc_object *obj)
 	RB_CLEAR_NODE(&ext->oe_node);
 	ext->oe_obj = obj;
 	cl_object_get(osc2cl(obj));
-	atomic_set(&ext->oe_refc, 1);
+	kref_init(&ext->oe_refc);
 	atomic_set(&ext->oe_users, 0);
 	INIT_LIST_HEAD(&ext->oe_link);
 	ext->oe_state = OES_INV;
@@ -340,35 +340,50 @@ static struct osc_extent *osc_extent_alloc(struct osc_object *obj)
 	return ext;
 }
 
-static void osc_extent_free(struct osc_extent *ext)
+static void osc_extent_free(struct kref *kref)
 {
+	struct osc_extent *ext = container_of(kref, struct osc_extent,
+					      oe_refc);
+
+	LASSERT(list_empty(&ext->oe_link));
+	LASSERT(atomic_read(&ext->oe_users) == 0);
+	LASSERT(ext->oe_state == OES_INV);
+	LASSERT(RB_EMPTY_NODE(&ext->oe_node));
+
+	if (ext->oe_dlmlock) {
+		lu_ref_del(&ext->oe_dlmlock->l_reference,
+			   "osc_extent", ext);
+		LDLM_LOCK_PUT(ext->oe_dlmlock);
+		ext->oe_dlmlock = NULL;
+	}
+#if 0
+	/* If/When cl_object_put drops the need for 'env',
+	 * this code can be enabled, and matching code in
+	 * osc_extent_put removed.
+	 */
+	cl_object_put(osc2cl(ext->oe_obj));
+
 	OBD_SLAB_FREE_PTR(ext, osc_extent_kmem);
+#endif
 }
 
 static struct osc_extent *osc_extent_get(struct osc_extent *ext)
 {
-	LASSERT(atomic_read(&ext->oe_refc) >= 0);
-	atomic_inc(&ext->oe_refc);
+	LASSERT(kref_read(&ext->oe_refc) >= 0);
+	kref_get(&ext->oe_refc);
 	return ext;
 }
 
 static void osc_extent_put(const struct lu_env *env, struct osc_extent *ext)
 {
-	LASSERT(atomic_read(&ext->oe_refc) > 0);
-	if (atomic_dec_and_test(&ext->oe_refc)) {
-		LASSERT(list_empty(&ext->oe_link));
-		LASSERT(atomic_read(&ext->oe_users) == 0);
-		LASSERT(ext->oe_state == OES_INV);
-		LASSERT(RB_EMPTY_NODE(&ext->oe_node));
-
-		if (ext->oe_dlmlock != NULL) {
-			lu_ref_del(&ext->oe_dlmlock->l_reference,
-				   "osc_extent", ext);
-			LDLM_LOCK_RELEASE(ext->oe_dlmlock);
-			ext->oe_dlmlock = NULL;
-		}
+	LASSERT(kref_read(&ext->oe_refc) > 0);
+	if (kref_put(&ext->oe_refc, osc_extent_free)) {
+		/* This should be in osc_extent_free(), but
+		 * while we need to pass 'env' it cannot be.
+		 */
 		cl_object_put(env, osc2cl(ext->oe_obj));
-		osc_extent_free(ext);
+
+		OBD_SLAB_FREE_PTR(ext, osc_extent_kmem);
 	}
 }
 
@@ -379,9 +394,9 @@ static void osc_extent_put(const struct lu_env *env, struct osc_extent *ext)
  */
 static void osc_extent_put_trust(struct osc_extent *ext)
 {
-	LASSERT(atomic_read(&ext->oe_refc) > 1);
+	LASSERT(kref_read(&ext->oe_refc) > 1);
 	assert_osc_object_is_locked(ext->oe_obj);
-	atomic_dec(&ext->oe_refc);
+	osc_extent_put(NULL, ext);
 }
 
 /**

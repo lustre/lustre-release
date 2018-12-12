@@ -750,6 +750,22 @@ LB_CHECK_LINUX_HEADER([linux/sched/signal.h], [
 ]) # LIBCFS_SCHED_HEADERS
 
 #
+# Kernel version 4.11-rc1 commit 2c935bc57221cc2edc787c72ea0e2d30cdcd3d5e
+# introduce kref_read
+#
+AC_DEFUN([LIBCFS_KREF_READ], [
+LB_CHECK_COMPILE([if 'kref_read' exists],
+kref_read, [
+	#include <linux/kref.h>
+],[
+	kref_read(NULL);
+],[
+	AC_DEFINE(HAVE_KREF_READ, 1,
+		[kref_read() is available])
+])
+]) LIBCFS_KREF_READ
+
+#
 # Kernel version 4.11-rc1 commit da20420f83ea0fbcf3d03afda08d971ea1d8a356
 # introduced rht_bucket_var
 #
@@ -1245,6 +1261,7 @@ LIBCFS_REFCOUNT_T
 # 4.11
 LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 LIBCFS_SCHED_HEADERS
+LIBCFS_KREF_READ
 LIBCFS_RHT_BUCKET_VAR
 # 4.12
 LIBCFS_HAVE_PROCESSOR_HEADER
