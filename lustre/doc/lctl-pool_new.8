@@ -1,0 +1,48 @@
+.TH LCTL-POOL_NEW 8 2018-10-27 "Lustre" "Lustre Utilities"
+.SH NAME
+lctl pool_new \- create a new OST pool
+.SH SYNOPSIS
+.B lctl pool_new \fI<fsname>.<poolname>\fR
+
+.SH DESCRIPTION
+Create a list of OSTs with the name
+.I poolname
+in the filesystem named
+.IR fsname .
+The
+.B lctl pool_new
+command must be run on the MGS node and can only be used by the
+root user.  If the MGS is on a separate node from the MDS, a
+Lustre client must be mounted while the
+.B lctl
+commands are being run.
+
+This named list of OSTs can be used by
+.BR lfs-setstripe (1)
+to specify the OSTs on which new files can be created, and
+.BR lfs-find (1)
+to locate files that were created on the specified pool.  As well,
+.BR lfs-df (1)
+can show only the free space or inodes in a named pool.
+
+.SH EXAMPLES
+.TP
+.B # lfs pool_new testfs.local
+Create a pool named
+.B local
+in the
+.B testfs
+filesystem.
+.TP
+.B # lfs pool_add testfs.local 12 13 14
+Add OSTs numbered 12, 13, and 14 to the
+.B testfs.local
+pool.
+
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-pool_add (8),
+.BR lfs-df (1),
+.BR lfs-find (1),
+.BR lfs-setstripe (1),
+.BR lustre (7)

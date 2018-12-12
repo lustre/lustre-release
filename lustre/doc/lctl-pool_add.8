@@ -1,0 +1,71 @@
+.TH LCTL-POOL_ADD 8 2018-10-27 "Lustre" "Lustre Utilities"
+.SH NAME
+lctl pool_add \- add OSTs to a named pool
+.SH SYNOPSIS
+.B lctl pool_add \fI<fsname>.<poolname>\fR \fI<ost_index> ...\fR
+.br
+.B lctl pool_add \fI<fsname>.<poolname>\fR \fI<ost_range> ...\fR
+
+.SH DESCRIPTION
+Add one or more OSTs to the pool named
+.I poolname
+in the filesystem named
+.IR fsname .
+There are several formats that the OSTs can be specified.  Simplest is
+to just specify a list of
+.RI < ost_index >
+numbers or OST names.  It is also possible to specify an
+.RI < ost_range >
+expression of the form
+.BI [ start - end ]
+or
+.BI [ start - end / step ]
+that adds multiple OSTs with index numbers in the range from
+.I start
+to
+.I end
+(inclusive), optionally skipping every
+.I step
+index values.  The
+.B lctl pool_add
+command must be run on the MGS node and can only be used by the
+root user.  If the MGS is on a separate node from the MDS, a
+Lustre client must be mounted while the
+.B lctl
+commands are being run.
+
+The OST pool can be used by
+.BR lfs-setstripe (1)
+to specify the OSTs on which new files can be created, and
+.BR lfs-find (1)
+to locate files that were initially created on the specified
+.IR poolname .
+Note however, that the OSTs that make up a specific pool may change
+over time, and it is the
+.I poolname
+used at creation time that is stored on each file, not necessarily
+OSTs that are in the current pool.  As well,
+.BR lfs-df (1)
+can show only the free space or inodes in a named pool.
+
+.SH EXAMPLES
+.TP
+.B # lfs pool_new testfs.local
+Create a pool named
+.B local
+in the
+.B testfs
+filesystem.
+.TP
+.B # lfs pool_add testfs.local 12 13 14
+Add OSTs numbered 12, 13, and 14 to the
+.B testfs.local
+pool.
+
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-pool_new (8),
+.BR lfs-df (1),
+.BR lfs-find (1),
+.BR lfs-setstripe (1),
+.BR lustre (7)
