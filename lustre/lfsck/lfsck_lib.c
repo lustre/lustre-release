@@ -432,6 +432,36 @@ int lfsck_ibits_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 }
 
 /**
+ * Request the remote LOOKUP lock for the given object.
+ *
+ * If \a pobj is remote, the LOOKUP lock of \a obj is on the MDT where
+ * \a pobj is, acquire LOOKUP lock there.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] lfsck	pointer to the lfsck instance
+ * \param[in] pobj	pointer to parent dt_object
+ * \param[in] obj	pointer to the dt_object to be locked
+ * \param[out] lh	pointer to the lock handle
+ * \param[in] mode	the mode for the ldlm lock to be acquired
+ *
+ * \retval		0 for success
+ * \retval		negative error number on failure
+ */
+int lfsck_remote_lookup_lock(const struct lu_env *env,
+			     struct lfsck_instance *lfsck,
+			     struct dt_object *pobj, struct dt_object *obj,
+			     struct lustre_handle *lh, enum ldlm_mode mode)
+{
+	struct ldlm_res_id *resid = &lfsck_env_info(env)->lti_resid;
+
+	LASSERT(!lustre_handle_is_used(lh));
+
+	fid_build_reg_res_name(lfsck_dto2fid(obj), resid);
+	return __lfsck_ibits_lock(env, lfsck, pobj, resid, lh,
+				  MDS_INODELOCK_LOOKUP, mode);
+}
+
+/**
  * Release the the specified ibits lock.
  *
  * If the lock has been acquired before, release it
