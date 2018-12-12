@@ -6928,13 +6928,16 @@ run_test 60e "no space while new llog is being created"
 
 test_60g() {
 	local pid
+	local i
 
 	test_mkdir -c $MDSCOUNT $DIR/$tdir
-	$LFS setdirstripe -D -i -1 -c $MDSCOUNT $DIR/$tdir
 
 	(
 		local index=0
 		while true; do
+			$LFS setdirstripe -i $(($index % $MDSCOUNT)) \
+				-c $MDSCOUNT $DIR/$tdir/subdir$index \
+				2>/dev/null
 			mkdir $DIR/$tdir/subdir$index 2>/dev/null
 			rmdir $DIR/$tdir/subdir$index 2>/dev/null
 			index=$((index + 1))
@@ -6943,16 +6946,34 @@ test_60g() {
 
 	pid=$!
 
-	for i in $(seq 100); do 
+	for i in {0..100}; do
 		# define OBD_FAIL_OSD_TXN_START    0x19a
-		do_facet mds1 lctl set_param fail_loc=0x8000019a
+		local index=$((i % MDSCOUNT + 1))
+
+		do_facet mds$index $LCTL set_param fail_loc=0x8000019a \
+			> /dev/null
 		usleep 100
 	done
 
 	kill -9 $pid
 
+	for i in $(seq $MDSCOUNT); do
+		do_facet mds$i $LCTL set_param fail_loc=0 > /dev/null
+	done
+
 	mkdir $DIR/$tdir/new || error "mkdir failed"
 	rmdir $DIR/$tdir/new || error "rmdir failed"
+
+	do_facet mds1 $LCTL lfsck_start -M $(facet_svc mds1) -A -C \
+		-t namespace
+	for i in $(seq $MDSCOUNT); do
+		wait_update_facet mds$i "$LCTL get_param -n \
+			mdd.$(facet_svc mds$i).lfsck_namespace |
+			awk '/^status/ { print \\\$2 }'" "completed"
+	done
+
+	ls -R $DIR/$tdir || error "ls failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
 }
 run_test 60g "transaction abort won't cause MDT hung"
 
