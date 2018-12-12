@@ -189,7 +189,7 @@ LUSTRE_RW_ATTR(max_dirty_mb);
 LUSTRE_ATTR(ost_conn_uuid, 0444, conn_uuid_show, NULL);
 LUSTRE_RO_ATTR(conn_uuid);
 
-LUSTRE_WO_ATTR(ping);
+LUSTRE_RW_ATTR(ping);
 
 static int osc_cached_mb_seq_show(struct seq_file *m, void *v)
 {
