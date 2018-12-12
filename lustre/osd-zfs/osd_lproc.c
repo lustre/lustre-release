@@ -46,8 +46,6 @@
 
 #ifdef CONFIG_PROC_FS
 
-#define pct(a, b) (b ? a * 100 / b : 0)
-
 static void display_brw_stats(struct seq_file *seq, char *name, char *units,
 			      struct obd_histogram *read,
 			      struct obd_histogram *write, int scale)
@@ -78,7 +76,7 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
 		else
 			seq_printf(seq, "%uM", scale << (i-20));
 
-		seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %4lu %3lu %3lu\n",
+		seq_printf(seq, ":\t\t%10lu %3u %3u   | %4lu %3u %3u\n",
 			   r, pct(r, read_tot), pct(read_cum, read_tot),
 			   w, pct(w, write_tot), pct(write_cum, write_tot));
 
@@ -123,8 +121,6 @@ static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 			  &brw_stats->hist[BRW_R_DISK_IOSIZE],
 			  &brw_stats->hist[BRW_W_DISK_IOSIZE], 1);
 }
-
-#undef pct
 
 static int osd_brw_stats_seq_show(struct seq_file *seq, void *v)
 {

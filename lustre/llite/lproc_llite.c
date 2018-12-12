@@ -1492,8 +1492,6 @@ void ll_debugfs_unregister_super(struct super_block *sb)
 }
 #undef MAX_STRING_SIZE
 
-#define pct(a,b) (b ? a * 100 / b : 0)
-
 static void ll_display_extents_info(struct ll_rw_extents_info *io_extents,
                                    struct seq_file *seq, int which)
 {
@@ -1518,8 +1516,8 @@ static void ll_display_extents_info(struct ll_rw_extents_info *io_extents,
                 read_cum += r;
                 write_cum += w;
 		end = BIT(i + LL_HIST_START - units);
-                seq_printf(seq, "%4lu%c - %4lu%c%c: %14lu %4lu %4lu  | "
-                           "%14lu %4lu %4lu\n", start, *unitp, end, *unitp,
+		seq_printf(seq, "%4lu%c - %4lu%c%c: %14lu %4u %4u  | "
+			   "%14lu %4u %4u\n", start, *unitp, end, *unitp,
                            (i == LL_HIST_MAX - 1) ? '+' : ' ',
                            r, pct(r, read_tot), pct(read_cum, read_tot),
                            w, pct(w, write_tot), pct(write_cum, write_tot));
