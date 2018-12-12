@@ -1545,6 +1545,9 @@ test_27() {
 
 	create_pool_nofail $POOL
 	do_facet mgs lctl pool_add $FSNAME.$POOL $TGT_ALL
+	wait_update_facet $SINGLEMDS \
+		"lctl pool_list $FSNAME.$POOL | wc -l" "$((OSTCOUNT + 1))" ||
+		error "MDS: pool_list $FSNAME.$POOL failed"
 	osts=$(list_pool $FSNAME.$POOL)
 	for ost in ${osts}; do
 		((count--))
