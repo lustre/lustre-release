@@ -88,23 +88,16 @@ struct fld_cache *fld_cache_init(const char *name,
  */
 void fld_cache_fini(struct fld_cache *cache)
 {
-        __u64 pct;
         ENTRY;
 
         LASSERT(cache != NULL);
         fld_cache_flush(cache);
 
-        if (cache->fci_stat.fst_count > 0) {
-                pct = cache->fci_stat.fst_cache * 100;
-                do_div(pct, cache->fci_stat.fst_count);
-        } else {
-                pct = 0;
-        }
-
         CDEBUG(D_INFO, "FLD cache statistics (%s):\n", cache->fci_name);
 	CDEBUG(D_INFO, "  Total reqs: %llu\n", cache->fci_stat.fst_count);
 	CDEBUG(D_INFO, "  Cache reqs: %llu\n", cache->fci_stat.fst_cache);
-	CDEBUG(D_INFO, "  Cache hits: %llu%%\n", pct);
+	CDEBUG(D_INFO, "  Cache hits: %u%%\n",
+	       pct(cache->fci_stat.fst_cache, cache->fci_stat.fst_count));
 
         OBD_FREE_PTR(cache);
 

@@ -2225,8 +2225,6 @@ int obd_set_max_mod_rpcs_in_flight(struct client_obd *cli, __u16 max)
 }
 EXPORT_SYMBOL(obd_set_max_mod_rpcs_in_flight);
 
-
-#define pct(a, b) (b ? a * 100 / b : 0)
 int obd_mod_rpc_stats_seq_show(struct client_obd *cli,
 			       struct seq_file *seq)
 {
@@ -2252,7 +2250,7 @@ int obd_mod_rpc_stats_seq_show(struct client_obd *cli,
 	for (i = 0; i < OBD_HIST_MAX; i++) {
 		unsigned long mod = cli->cl_mod_rpcs_hist.oh_buckets[i];
 		mod_cum += mod;
-		seq_printf(seq, "%d:\t\t%10lu %3lu %3lu\n",
+		seq_printf(seq, "%d:\t\t%10lu %3u %3u\n",
 			   i, mod, pct(mod, mod_tot),
 			   pct(mod_cum, mod_tot));
 		if (mod_cum == mod_tot)
@@ -2264,8 +2262,6 @@ int obd_mod_rpc_stats_seq_show(struct client_obd *cli,
 	return 0;
 }
 EXPORT_SYMBOL(obd_mod_rpc_stats_seq_show);
-#undef pct
-
 
 /* The number of modify RPCs sent in parallel is limited
  * because the server has a finite number of slots per client to

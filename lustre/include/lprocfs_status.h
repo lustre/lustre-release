@@ -58,6 +58,11 @@ struct lprocfs_vars {
 	mode_t				 proc_mode;
 };
 
+static inline u32 pct(s64 a, s64 b)
+{
+	return b ? a * 100 / b : 0;
+}
+
 /**
  * Append a space separated list of current set flags to str.
  */

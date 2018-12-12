@@ -76,8 +76,6 @@
  *     16kB: { samples: 12, pct: 3, cum_pct: 81 }
  **/
 
-#define pct(a, b) (b ? a * 100 / b : 0)
-
 static void display_rename_stats(struct seq_file *seq, char *name,
                                  struct obd_histogram *hist)
 {
@@ -101,8 +99,8 @@ static void display_rename_stats(struct seq_file *seq, char *name,
                 else
                         seq_printf(seq, "%6s%d%s", " ", 1<<(i-20), "MB:");
 
-                seq_printf(seq, " { sample: %3lu, pct: %3lu, cum_pct: %3lu }\n",
-                           t, pct(t, tot), pct(cum, tot));
+		seq_printf(seq, " { sample: %3lu, pct: %3u, cum_pct: %3u }\n",
+			   t, pct(t, tot), pct(cum, tot));
 
                 if (cum == tot)
                         break;
@@ -127,8 +125,6 @@ static void rename_stats_show(struct seq_file *seq,
         display_rename_stats(seq, "crossdir_tgt",
                              &rename_stats->hist[RENAME_CROSSDIR_TGT_SIZE]);
 }
-
-#undef pct
 
 static int mdt_rename_stats_seq_show(struct seq_file *seq, void *v)
 {
