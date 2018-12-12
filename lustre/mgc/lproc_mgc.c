@@ -72,7 +72,7 @@ struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
 LUSTRE_ATTR(mgs_conn_uuid, 0444, conn_uuid_show, NULL);
 LUSTRE_RO_ATTR(conn_uuid);
 
-LUSTRE_WO_ATTR(ping);
+LUSTRE_RW_ATTR(ping);
 
 static struct attribute *mgc_attrs[] = {
 	&lustre_attr_mgs_conn_uuid.attr,

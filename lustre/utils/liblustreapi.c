@@ -4827,26 +4827,32 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
 
 int llapi_ping(char *obd_type, char *obd_name)
 {
+	int flags = O_RDONLY;
+	char buf[1] = { 0 };
 	glob_t path;
-	char buf[1];
 	int rc, fd;
 
 	rc = cfs_get_param_paths(&path, "%s/%s/ping",
 				obd_type, obd_name);
 	if (rc != 0)
 		return -errno;
-
-	fd = open(path.gl_pathv[0], O_WRONLY);
+retry_open:
+	fd = open(path.gl_pathv[0], flags);
 	if (fd < 0) {
+		if (errno == EACCES && flags == O_RDONLY) {
+			flags = O_WRONLY;
+			goto retry_open;
+		}
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error opening %s",
 			    path.gl_pathv[0]);
 		goto failed;
 	}
 
-	/* The purpose is to send a byte as a ping, whatever this byte is. */
-	/* coverity[uninit_use_in_call] */
-	rc = write(fd, buf, 1);
+	if (flags == O_RDONLY)
+		rc = read(fd, buf, sizeof(buf));
+	else
+		rc = write(fd, buf, sizeof(buf));
 	if (rc < 0)
 		rc = -errno;
 	close(fd);

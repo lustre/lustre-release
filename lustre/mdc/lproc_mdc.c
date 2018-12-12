@@ -225,7 +225,7 @@ LUSTRE_RW_ATTR(contention_seconds);
 LUSTRE_ATTR(mds_conn_uuid, 0444, conn_uuid_show, NULL);
 LUSTRE_RO_ATTR(conn_uuid);
 
-LUSTRE_WO_ATTR(ping);
+LUSTRE_RW_ATTR(ping);
 
 static int mdc_cached_mb_seq_show(struct seq_file *m, void *v)
 {

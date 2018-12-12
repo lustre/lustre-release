@@ -8739,7 +8739,6 @@ test_104b() {
 	[ $RUNAS_ID -eq $UID ] &&
 		skip_env "RUNAS_ID = UID = $UID -- skipping"
 
-	chmod 666 /dev/obd
 	denied_cnt=$(($($RUNAS $LFS check servers 2>&1 |
 			grep "Permission denied" | wc -l)))
 	if [ $denied_cnt -ne 0 ]; then

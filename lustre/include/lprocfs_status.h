@@ -598,9 +598,9 @@ lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
 #endif
 ssize_t ping_store(struct kobject *kobj, struct attribute *attr,
 		   const char *buffer, size_t count);
-extern ssize_t
-lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
-		       size_t count, loff_t *off);
+ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
+		  char *buffer);
+
 extern ssize_t
 lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 			 size_t count, loff_t *off);
