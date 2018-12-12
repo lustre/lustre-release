@@ -716,23 +716,6 @@ blk_plug, [
 ]) # LC_HAVE_BLK_PLUG
 
 #
-# LC_IOP_TRUNCATE
-#
-# truncate callback removed since 2.6.39
-#
-AC_DEFUN([LC_IOP_TRUNCATE], [
-LB_CHECK_COMPILE([if 'inode_operations' has '.truncate' member function],
-inode_ops_truncate, [
-	#include <linux/fs.h>
-],[
-	((struct inode_operations *)0)->truncate(NULL);
-],[
-	AC_DEFINE(HAVE_INODEOPS_TRUNCATE, 1,
-		[inode_operations has .truncate member function])
-])
-]) # LC_IOP_TRUNCATE
-
-#
 # LC_HAVE_FSTYPE_MOUNT
 #
 # 2.6.39 replace get_sb with mount in struct file_system_type
@@ -1770,81 +1753,6 @@ inode_ops_set_acl, [
 ]) # LC_IOP_SET_ACL
 
 #
-# LC_HAVE_BI_CNT
-#
-# 4.4 redefined bi_cnt as __bi_cnt
-#
-AC_DEFUN([LC_HAVE_BI_CNT], [
-LB_CHECK_COMPILE([if Linux kernel has bi_cnt in struct bio],
-have_bi_cnt, [
-	#include <asm/atomic.h>
-	#include <linux/bio.h>
-],[
-	struct bio bio = { };
-	int cnt;
-	cnt = atomic_read(&bio.bi_cnt);
-], [
-	AC_DEFINE(HAVE_BI_CNT, 1,
-		[struct bio has bi_cnt])
-])
-]) # LC_HAVE_BI_CNT
-
-#
-# LC_HAVE_BI_RW
-#
-# 4.4 redefined bi_rw as bi_opf
-#
-AC_DEFUN([LC_HAVE_BI_RW], [
-LB_CHECK_COMPILE([if Linux kernel has bi_rw in struct bio],
-have_bi_rw, [
-	#include <linux/bio.h>
-],[
-	struct bio bio;
-
-	bio.bi_rw = 0;
-], [
-	AC_DEFINE(HAVE_BI_RW, 1,
-		[struct bio has bi_rw])
-])
-]) # LC_HAVE_BI_RW
-
-#
-# LC_HAVE_SUBMIT_BIO_2ARGS
-#
-# 4.4 removed an argument from submit_bio
-#
-AC_DEFUN([LC_HAVE_SUBMIT_BIO_2ARGS], [
-LB_CHECK_COMPILE([if submit_bio takes two arguments],
-have_submit_bio_2args, [
-	#include <linux/bio.h>
-],[
-	struct bio bio;
-	submit_bio(READ, &bio);
-], [
-	AC_DEFINE(HAVE_SUBMIT_BIO_2ARGS, 1,
-		[submit_bio takes two arguments])
-])
-]) # LC_HAVE_SUBMIT_BIO_2_ARGS
-
-#
-# LC_HAVE_CLEAN_BDEV_ALIASES
-#
-# 4.4 unmap_underlying_metadata was replaced by clean_bdev_aliases
-#
-AC_DEFUN([LC_HAVE_CLEAN_BDEV_ALIASES], [
-LB_CHECK_COMPILE([if kernel has clean_bdev_aliases],
-have_clean_bdev_aliases, [
-	#include <linux/buffer_head.h>
-],[
-	struct block_device bdev;
-	clean_bdev_aliases(&bdev,1,1);
-], [
-	AC_DEFINE(HAVE_CLEAN_BDEV_ALIASES, 1,
-		[kernel has clean_bdev_aliases])
-])
-]) # LC_HAVE_CLEAN_BDEV_ALIASES
-
-#
 # LC_HAVE_TRUNCATE_IPAGE_FINAL
 #
 # 3.14 bring truncate_inode_pages_final for evict_inode
@@ -2203,6 +2111,27 @@ LB_CHECK_EXPORT([new_sync_read], [fs/read_write.c],
 ]) # LC_HAVE_SYNC_READ_WRITE
 
 #
+# LC_HAVE___BI_CNT
+#
+# 4.1 redefined bi_cnt as __bi_cnt in commit dac56212e8127dbc0
+#
+AC_DEFUN([LC_HAVE___BI_CNT], [
+LB_CHECK_COMPILE([if Linux kernel has __bi_cnt in struct bio],
+have___bi_cnt, [
+	#include <asm/atomic.h>
+	#include <linux/bio.h>
+	#include <linux/blk_types.h>
+],[
+	struct bio bio = { };
+	int cnt;
+	cnt = atomic_read(&bio.__bi_cnt);
+], [
+	AC_DEFINE(HAVE___BI_CNT, 1,
+		[struct bio has __bi_cnt])
+])
+]) # LC_HAVE___BI_CNT
+
+#
 # LC_NEW_CANCEL_DIRTY_PAGE
 #
 # 4.2 kernel has new cancel_dirty_page
@@ -2380,6 +2309,62 @@ bio_integrity_prep_fn, [
 	AC_SUBST(PATCHED_INTEGRITY_INTF, [#])
 ])
 ]) # LC_BIO_INTEGRITY_PREP_FN
+
+#
+# LC_HAVE_BI_OPF
+#
+# 4.4/4.8 redefined bi_rw as bi_opf (SLES12/kernel commit 4382e33ad37486)
+#
+AC_DEFUN([LC_HAVE_BI_OPF], [
+LB_CHECK_COMPILE([if Linux kernel has bi_opf in struct bio],
+have_bi_opf, [
+	#include <linux/bio.h>
+],[
+	struct bio bio;
+
+	bio.bi_opf = 0;
+], [
+	AC_DEFINE(HAVE_BI_OPF, 1,
+		[struct bio has bi_opf])
+])
+]) # LC_HAVE_BI_OPF
+
+#
+# LC_HAVE_SUBMIT_BIO_2ARGS
+#
+# 4.4 removed an argument from submit_bio
+#
+AC_DEFUN([LC_HAVE_SUBMIT_BIO_2ARGS], [
+LB_CHECK_COMPILE([if submit_bio takes two arguments],
+have_submit_bio_2args, [
+	#include <linux/bio.h>
+],[
+	struct bio bio;
+	submit_bio(READ, &bio);
+], [
+	AC_DEFINE(HAVE_SUBMIT_BIO_2ARGS, 1,
+		[submit_bio takes two arguments])
+])
+]) # LC_HAVE_SUBMIT_BIO_2_ARGS
+
+#
+# LC_HAVE_CLEAN_BDEV_ALIASES
+#
+# 4.4/4.9 unmap_underlying_metadata was replaced by clean_bdev_aliases
+# (SLES12/kernel commit 29f3ad7d8380364c)
+#
+AC_DEFUN([LC_HAVE_CLEAN_BDEV_ALIASES], [
+LB_CHECK_COMPILE([if kernel has clean_bdev_aliases],
+have_clean_bdev_aliases, [
+	#include <linux/buffer_head.h>
+],[
+	struct block_device bdev;
+	clean_bdev_aliases(&bdev,1,1);
+], [
+	AC_DEFINE(HAVE_CLEAN_BDEV_ALIASES, 1,
+		[kernel has clean_bdev_aliases])
+])
+]) # LC_HAVE_CLEAN_BDEV_ALIASES
 
 #
 # LC_HAVE_LOCKS_LOCK_FILE_WAIT
@@ -3048,7 +3033,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 2.6.39
 	LC_HAVE_FHANDLE_SYSCALLS
 	LC_HAVE_FSTYPE_MOUNT
-	LC_IOP_TRUNCATE
 	LC_HAVE_INODE_OWNER_OR_CAPABLE
 	LC_HAVE_SECURITY_IINITSEC
 
@@ -3165,6 +3149,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.1.0
 	LC_IOV_ITER_RW
 	LC_HAVE_SYNC_READ_WRITE
+	LC_HAVE___BI_CNT
 
 	# 4.2
 	LC_NEW_CANCEL_DIRTY_PAGE
@@ -3181,8 +3166,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT
 	LC_HAVE_KEY_PAYLOAD_DATA_ARRAY
 	LC_HAVE_XATTR_HANDLER_NAME
-	LC_HAVE_BI_CNT
-	LC_HAVE_BI_RW
+	LC_HAVE_BI_OPF
 	LC_HAVE_SUBMIT_BIO_2ARGS
 	LC_HAVE_CLEAN_BDEV_ALIASES
 

@@ -1407,11 +1407,7 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 #ifndef HAVE_BIO_INTEGRITY_ENABLED
 bool bio_integrity_enabled(struct bio *bio)
 {
-# ifdef HAVE_BI_BDEV
-	struct blk_integrity *bi = bdev_get_integrity(bio->bi_bdev);
-# else
-	struct blk_integrity *bi = blk_get_integrity(bio->bi_disk);
-# endif
+	struct blk_integrity *bi = blk_get_integrity(bio_get_disk(bio));
 
 	if (bio_op(bio) != REQ_OP_READ && bio_op(bio) != REQ_OP_WRITE)
 		return false;

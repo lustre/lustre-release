@@ -158,11 +158,7 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 #ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_complete_routine(struct bio *bio)
 {
-# ifdef HAVE_BI_STATUS
 	int error = bio->bi_status;
-# else
-	int error = bio->bi_error;
-# endif
 #else
 static void dio_complete_routine(struct bio *bio, int error)
 {
@@ -183,28 +179,13 @@ static void dio_complete_routine(struct bio *bio, int error)
 		       "(like SCSI errors, perhaps).  Because bi_private is "
 		       "NULL, I can't wake up the thread that initiated this "
 		       "IO - you will probably have to reboot this node.\n");
-		CERROR("bi_next: %p, bi_flags: %lx, "
-#ifdef HAVE_BI_RW
-		       "bi_rw: %lu,"
-#else
-		       "bi_opf: %u,"
-#endif
-		       "bi_vcnt: %d, bi_idx: %d, bi->size: %d, bi_end_io: %p,"
-		       "bi_cnt: %d, bi_private: %p\n", bio->bi_next,
-			(unsigned long)bio->bi_flags,
-#ifdef HAVE_BI_RW
-			bio->bi_rw,
-#else
-			bio->bi_opf,
-#endif
-			bio->bi_vcnt, bio_idx(bio),
-			bio_sectors(bio) << 9, bio->bi_end_io,
-#ifdef HAVE_BI_CNT
-			atomic_read(&bio->bi_cnt),
-#else
-			atomic_read(&bio->__bi_cnt),
-#endif
-			bio->bi_private);
+		CERROR("bi_next: %p, bi_flags: %lx, " __stringify(bi_opf)
+		       ": %x, bi_vcnt: %d, bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, bi_private: %p\n",
+		       bio->bi_next, (unsigned long)bio->bi_flags,
+		       (unsigned int)bio->bi_opf, bio->bi_vcnt, bio_idx(bio),
+		       bio_sectors(bio) << 9, bio->bi_end_io,
+		       atomic_read(&bio->__bi_cnt),
+		       bio->bi_private);
 		return;
 	}
 
@@ -273,15 +254,12 @@ static void record_start_io(struct osd_iobuf *iobuf, int size)
 
 static void osd_submit_bio(int rw, struct bio *bio)
 {
-        LASSERTF(rw == 0 || rw == 1, "%x\n", rw);
+	LASSERTF(rw == 0 || rw == 1, "%x\n", rw);
 #ifdef HAVE_SUBMIT_BIO_2ARGS
-        if (rw == 0)
-                submit_bio(READ, bio);
-        else
-                submit_bio(WRITE, bio);
+	submit_bio(rw ? WRITE : READ, bio);
 #else
-        bio->bi_opf |= rw;
-        submit_bio(bio);
+	bio->bi_opf |= rw;
+	submit_bio(bio);
 #endif
 }
 
@@ -381,26 +359,20 @@ static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 				    bool integrity_enabled)
 {
 	struct super_block *sb = osd_sb(osd);
-	int rc;
-#ifdef HAVE_BIO_INTEGRITY_PREP_FN
 	integrity_gen_fn *generate_fn = NULL;
 	integrity_vrfy_fn *verify_fn = NULL;
-#endif
+	int rc;
 
 	ENTRY;
 
 	if (!integrity_enabled)
 		RETURN(0);
 
-#ifdef HAVE_BIO_INTEGRITY_PREP_FN
 	rc = osd_get_integrity_profile(osd, &generate_fn, &verify_fn);
 	if (rc)
 		RETURN(rc);
 
 	rc = bio_integrity_prep_fn(bio, generate_fn, verify_fn);
-#else
-	rc = bio_integrity_prep(bio);
-#endif
 	if (rc)
 		RETURN(rc);
 
@@ -423,19 +395,14 @@ static int osd_bio_integrity_handle(struct osd_device *osd, struct bio *bio,
 #ifdef HAVE_BIO_INTEGRITY_PREP_FN
 #  ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_integrity_complete_routine(struct bio *bio)
-{
 #  else
 static void dio_integrity_complete_routine(struct bio *bio, int error)
-{
 #  endif
+{
 	struct osd_bio_private *bio_private = bio->bi_private;
 
 	bio->bi_private = bio_private->obp_iobuf;
-#  ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
-	dio_complete_routine(bio);
-#  else
-	dio_complete_routine(bio, error);
-#  endif
+	osd_dio_complete_routine(bio, error);
 
 	OBD_FREE_PTR(bio_private);
 }
@@ -445,13 +412,14 @@ static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
 			bool integrity_enabled, int start_page_idx,
 			struct osd_bio_private **pprivate)
 {
-#ifdef HAVE_BIO_INTEGRITY_PREP_FN
-	struct osd_bio_private *bio_private;
-
 	ENTRY;
 
 	*pprivate = NULL;
+
+#ifdef HAVE_BIO_INTEGRITY_PREP_FN
 	if (integrity_enabled) {
+		struct osd_bio_private *bio_private = NULL;
+
 		OBD_ALLOC_GFP(bio_private, sizeof(*bio_private), GFP_NOIO);
 		if (bio_private == NULL)
 			RETURN(-ENOMEM);
@@ -460,18 +428,14 @@ static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
 		bio_private->obp_start_page_idx = start_page_idx;
 		bio_private->obp_iobuf = iobuf;
 		*pprivate = bio_private;
-	} else {
+	} else
+#endif
+	{
 		bio->bi_end_io = dio_complete_routine;
 		bio->bi_private = iobuf;
 	}
-	RETURN(0);
-#else
-	ENTRY;
 
-	bio->bi_end_io = dio_complete_routine;
-	bio->bi_private = iobuf;
 	RETURN(0);
-#endif
 }
 
 static int osd_do_bio(struct osd_device *osd, struct inode *inode,
@@ -588,11 +552,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
 			bio_set_dev(bio, bdev);
 			bio_set_sector(bio, sector);
-#ifdef HAVE_BI_RW
-			bio->bi_rw = (iobuf->dr_rw == 0) ? READ : WRITE;
-#else
-			bio->bi_opf = (iobuf->dr_rw == 0) ? READ : WRITE;
-#endif
+			bio->bi_opf = iobuf->dr_rw ? WRITE : READ;
 			rc = osd_bio_init(bio, iobuf, integrity_enabled,
 					  bio_start_page_idx, &bio_private);
 			if (rc) {
@@ -1081,17 +1041,12 @@ map:
 					i, cex->ec_len);
 		for (; i < cex->ec_len && bp->num; i++) {
 			*(bp->blocks) = cex->ec_start + i;
-			if (pblock != 0) {
-				/* unmap any possible underlying metadata from
-				 * the block device mapping.  bug 6998. */
-#ifndef HAVE_CLEAN_BDEV_ALIASES
-				unmap_underlying_metadata(inode->i_sb->s_bdev,
-							  *(bp->blocks));
-#else
+			/* unmap any underlying metadata from
+			 * the block device mapping.  b=6998.
+			 */
+			if (pblock != 0)
 				clean_bdev_aliases(inode->i_sb->s_bdev,
 						   *(bp->blocks), 1);
-#endif
-			}
 			bp->blocks++;
 			bp->num--;
 			bp->start++;
@@ -1279,15 +1234,9 @@ cont_map:
 					 * mapping.  bug 6998. */
 					if ((map.m_flags & LDISKFS_MAP_NEW) &&
 					    create)
-#ifndef HAVE_CLEAN_BDEV_ALIASES
-						unmap_underlying_metadata(
-							inode->i_sb->s_bdev,
-							map.m_pblk + c);
-#else
 						clean_bdev_aliases(
 							inode->i_sb->s_bdev,
 							map.m_pblk + c, 1);
-#endif
 				}
 			}
 			rc = 0;
@@ -2432,12 +2381,7 @@ void osd_execute_truncate(struct osd_object *obj)
 		return;
 	}
 
-#ifdef HAVE_INODEOPS_TRUNCATE
-	if (inode->i_op->truncate)
-		inode->i_op->truncate(inode);
-	else
-#endif
-		ldiskfs_truncate(inode);
+	ldiskfs_truncate(inode);
 
 	/*
 	 * For a partial-page truncate, flush the page to disk immediately to

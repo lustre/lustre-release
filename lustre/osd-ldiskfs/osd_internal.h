@@ -1371,10 +1371,13 @@ bool bio_integrity_enabled(struct bio *bio);
 #endif
 
 #ifdef HAVE_BI_BDEV
-# define bio_set_dev(bio, bdev) ((bio)->bi_bdev = bdev)
-# define bio_get_queue(bio)	bdev_get_queue((bio)->bi_bdev)
+# define bio_get_dev(bio)	((bio)->bi_bdev)
+# define bio_get_disk(bio)	(bio_get_dev(bio)->bd_disk)
+# define bio_get_queue(bio)	bdev_get_queue(bio_get_dev(bio))
+# define bio_set_dev(bio, bdev) (bio_get_dev(bio) = (bdev))
 #else
-# define bio_get_queue(bio)	((bio)->bi_disk->queue)
+# define bio_get_disk(bio)	((bio)->bi_disk)
+# define bio_get_queue(bio)	(bio_get_disk(bio)->queue)
 #endif
 
 void ldiskfs_inc_count(handle_t *handle, struct inode *inode);
@@ -1444,6 +1447,29 @@ void osd_trunc_unlock_all(struct list_head *list);
 void osd_process_truncates(struct list_head *list);
 void osd_execute_truncate(struct osd_object *obj);
 
+#ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
+#define osd_dio_complete_routine(bio, error) dio_complete_routine(bio)
+#else
+#define osd_dio_complete_routine(bio, error) dio_complete_routine(bio, error)
+#endif
+
+#ifndef HAVE___BI_CNT
+#define __bi_cnt bi_cnt
+#endif
+
+#ifndef HAVE_BI_OPF
+#define bi_opf bi_rw
+#endif
+
+#ifndef HAVE_CLEAN_BDEV_ALIASES
+#define clean_bdev_aliases(bdev, block, len)	\
+	unmap_underlying_metadata((bdev), (block))
+#endif
+
+#ifndef HAVE_BI_STATUS
+#define bi_status bi_error
+#endif
+
 /*
  * Maximum size of xattr attributes for FEATURE_INCOMPAT_EA_INODE 1Mb
  * This limit is arbitrary, but is reasonable for the xattr API.
@@ -1460,6 +1486,22 @@ struct osd_bio_private {
 int osd_get_integrity_profile(struct osd_device *osd,
 			      integrity_gen_fn **generate_fn,
 			      integrity_vrfy_fn **verify_fn);
+#else
+#define integrity_gen_fn void
+#define integrity_vrfy_fn int
+static inline int osd_get_integrity_profile(struct osd_device *osd,
+					    integrity_gen_fn **generate_fn,
+					    integrity_vrfy_fn **verify_fn)
+{
+	return 0;
+}
+
+static inline bool bio_integrity_prep_fn(struct bio *bio,
+					 integrity_gen_fn *generate_fn,
+					 integrity_vrfy_fn *verify_fn)
+{
+	return bio_integrity_prep(bio);
+}
 #endif
 
 #endif /* _OSD_INTERNAL_H */
