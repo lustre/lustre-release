@@ -7629,6 +7629,8 @@ destroy_pool_int() {
 	for ost in $OSTS; do
 		do_facet mgs lctl pool_remove $1 $ost
 	done
+	wait_update_facet $SINGLEMDS "lctl pool_list $1 | wc -l" "1" ||
+		error "MDS: pool_list $1 failed"
 	do_facet mgs lctl pool_destroy $1
 }
 

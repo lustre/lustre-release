@@ -2683,6 +2683,48 @@ int jt_llog_print_cb(const char *record, void *private)
 	return 0;
 }
 
+static int
+llog_process_records(int (record_cb)(const char *record, void *private),
+		     const char *record, void *private, bool reverse)
+{
+	char *ptr = NULL;
+	char *tmp = NULL;
+	int rc = 0;
+
+	if (!reverse) {
+		do {
+			ptr = strchr(record, '\n');
+			if (ptr)
+				*ptr = '\0';
+			rc = record_cb(record, private);
+			if (rc)
+				goto out;
+			if (ptr)
+				record = ptr + 1;
+		} while (ptr && *(ptr + 1));
+	} else {
+		tmp = (char *)record;
+
+		ptr = strrchr(record, '\n');
+		if (ptr)
+			*ptr = '\0';
+		else
+			goto out;
+		while ((ptr = strrchr(record, '\n'))) {
+			tmp = ptr + 1;
+			*ptr = '\0';
+			rc = record_cb(tmp, private);
+			if (rc)
+				goto out;
+		};
+		rc = record_cb(record, private);
+		if (rc)
+			goto out;
+	}
+out:
+	return rc;
+}
+
 /**
  * Iterate over llog records, typically YAML-formatted configuration logs
  *
@@ -2691,10 +2733,14 @@ int jt_llog_print_cb(const char *record, void *private)
  * \param end[in]	last record to process (inclusive)
  * \param cb[in]	callback for records. Return -ve error, or +ve abort.
  * \param private[in,out] private data passed to the \a record_cb function
+ * \param reverse[in]	print the llog records from the beginning or the end
+ *
+ * \retval		0 on success
+ *			others handled by the caller
  */
 int jt_llog_print_iter(char *logname, long start, long end,
 		       int (record_cb)(const char *record, void *private),
-		       void *private)
+		       void *private, bool reverse)
 {
 	struct obd_ioctl_data data = { 0 };
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
@@ -2721,7 +2767,6 @@ int jt_llog_print_iter(char *logname, long start, long end,
 	 */
 	for (rec = start; rec < end; rec += inc) {
 		char *record = ((struct obd_ioctl_data *)buf)->ioc_bulk;
-		char *ptr;
 
 retry:
 		snprintf(startbuf, sizeof(startbuf), "%lu", rec);
@@ -2762,20 +2807,9 @@ retry:
 		if (strcmp(record, logname) == 0)
 			break;
 
-		do {
-			ptr = strchr(record, '\n');
-			if (ptr)
-				*ptr = '\0';
-			rc = record_cb(record, private);
-			if (rc) {
-				if (rc > 0)
-					rc = 0;
-				goto out;
-			}
-
-			if (ptr)
-				record = ptr + 1;
-		} while (ptr && *(ptr + 1));
+		rc = llog_process_records(record_cb, record, private, reverse);
+		if (rc)
+			goto out;
 	}
 
 out:
@@ -2903,7 +2937,8 @@ int jt_llog_print(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	rc = jt_llog_print_iter(catalog, start, end, jt_llog_print_cb, NULL);
+	rc = jt_llog_print_iter(catalog, start, end, jt_llog_print_cb,
+				NULL, false);
 
 	return rc;
 }
@@ -3138,13 +3173,294 @@ void obd_finalize(int argc, char **argv)
         do_disconnect(argv[0], 1);
 }
 
+/**
+ * Get the index of the last llog record
+ *
+ * logid:            [0x3:0xa:0x0]:0
+ * flags:            4 (plain)
+ * records_count:    57
+ * last_index:       57
+ *
+ * \param logname[in]	pointer to config log name
+ *
+ * \retval		> 0 on success
+ *			<= 0 on error
+ */
+static long llog_last_index(char *logname)
+{
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "", *buf = rawbuf;
+	char *last_index;
+	long rc;
+
+	data.ioc_dev = cur_device;
+	data.ioc_inllen1 = strlen(logname) + 1;
+	data.ioc_inlbuf1 = logname;
+	data.ioc_inllen2 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen1, 8);
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "%s: ioctl_pack failed for catalog '%s': %s\n",
+			__func__, logname, strerror(-rc));
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_INFO, buf);
+	if (rc == 0) {
+		last_index = strstr(((struct obd_ioctl_data *)buf)->ioc_bulk,
+				    "last_index:");
+		return strtol(last_index + 11, NULL, 10);
+	} else {
+		rc = -errno;
+	}
+
+	return rc;
+}
+
+/**
+ * Callback to search ostname in llog
+ * - { index: 23, event: attach, device: lustre-OST0000-osc, type: osc,
+ *     UUID: lustre-clilov_UUID }
+ * - { index: 24, event: setup, device: lustre-OST0000-osc,
+ *     UUID: lustre-OST0000_UUID, node: 192.168.0.120@tcp }
+ * - { index: 25, event: add_osc, device: lustre-clilov,
+ *     ost: lustre-OST0000_UUID, index: 0, gen: 1 }
+ *
+ * \param record[in]	pointer to llog record
+ * \param data[in]	pointer to ostname
+ *
+ * \retval		1 if ostname is found
+ *			0 if ostname is not found
+ *			-ENOENT if ostname is deleted
+ */
+static int llog_search_ost_cb(const char *record, void *data)
+{
+	char *ostname = data;
+	char ost_filter[MAX_STRING_SIZE] = {'\0'};
+
+	if (ostname && ostname[0])
+		snprintf(ost_filter, sizeof(ost_filter), " %s,", ostname);
+
+	if (strstr(record, ost_filter)) {
+		if (strstr(record, "event: add_osc, ") ||
+		    strstr(record, "event: setup, "))
+			return 1;
+		if (strstr(record, "event: del_osc, ") ||
+		    strstr(record, "event: cleanup, "))
+			return -ENOENT;
+	}
+
+	return 0;
+}
+
+/**
+ * Search ost in llog
+ *
+ * \param logname[in]		pointer to config log name
+ * \param last_index[in]	the index of the last llog record
+ * \param ostname[in]		pointer to ost name
+ *
+ * \retval			1 if ostname is found
+ * 				0 if ostname is not found
+ */
+static int llog_search_ost(char *logname, long last_index, char *ostname)
+{
+	long start, end, inc = MAX_IOC_BUFLEN / 128;
+	int rc = 0;
+
+	for (end = last_index; end > 1; end -= inc) {
+		start = end - inc > 0 ? end - inc : 1;
+		rc = jt_llog_print_iter(logname, start, end, llog_search_ost_cb,
+					ostname, true);
+		if (rc)
+			break;
+	}
+
+	return (rc == 1 ? 1 : 0);
+}
+
+struct llog_pool_data {
+	char lpd_fsname[LUSTRE_MAXFSNAME + 1];
+	char lpd_poolname[LOV_MAXPOOLNAME + 1];
+	char lpd_ostname[MAX_OBD_NAME + 1];
+	enum lcfg_command_type lpd_cmd_type;
+	bool lpd_pool_exists;
+	int lpd_ost_num;
+};
+
+/**
+ * Called for each formatted line in the config log (within range).
+ *
+ * - { index: 74, event: new_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
+ * - { index: 77, event: add_pool, device: tfs-clilov, fsname: tfs, pool: tmp,
+ *     ost: tfs-OST0000_UUID }
+ * - { index: 224, event: remove_pool, device: tfs-clilov, fsname: tfs,
+ *     pool: tmp, ost: tfs-OST0003_UUID }
+ * - { index: 227, event: del_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
+ *
+ * \param record[in]	pointer to llog record
+ * \param data[in]	pointer to llog_pool_data
+ *
+ * \retval		1 if pool or OST is found
+ *			0 if pool or OST is not found
+ *			-ENOENT if pool or OST is removed
+ */
+static int llog_search_pool_cb(const char *record, void *data)
+{
+	struct llog_pool_data *lpd = data;
+	char pool_filter[MAX_STRING_SIZE] = "";
+	char *found = NULL;
+	int fs_pool_len = 0;
+
+	fs_pool_len = 16 + strlen(lpd->lpd_fsname) + strlen(lpd->lpd_poolname);
+	snprintf(pool_filter, fs_pool_len + 1, "fsname: %s, pool: %s",
+		 lpd->lpd_fsname, lpd->lpd_poolname);
+
+	/* search poolname */
+	found = strstr(record, pool_filter);
+	if (found &&
+	    (found[fs_pool_len] == ' ' || found[fs_pool_len] == ',')) {
+		if (strstr(record, "event: new_pool,")) {
+			lpd->lpd_pool_exists = true;
+			return 1;
+		}
+		if (strstr(record, "event: del_pool,")) {
+			lpd->lpd_pool_exists = false;
+			return -ENOENT;
+		}
+
+		if (lpd->lpd_cmd_type == LCFG_POOL_NEW ||
+		    lpd->lpd_cmd_type == LCFG_POOL_DEL) {
+			if (strstr(record, "event: add_pool,"))
+				lpd->lpd_ost_num++;
+			if (strstr(record, "event: remove_pool,"))
+				lpd->lpd_ost_num--;
+		} else if (lpd->lpd_ostname && lpd->lpd_ostname[0]) {
+			if (strstr(record, lpd->lpd_ostname)) {
+				lpd->lpd_pool_exists = true;
+				if (strstr(record, "event: add_pool,")) {
+					lpd->lpd_ost_num = 1;
+					return 1;
+				}
+				if (strstr(record, "event: remove_pool,")) {
+					lpd->lpd_ost_num = 0;
+					return -ENOENT;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+/* Search pool and its ost in llog
+ *
+ * \param logname[in]		pointer to config log name
+ * \param last_index[in]	the index of the last llog record
+ * \param fsname[in]		pointer to filesystem name
+ * \param poolname[in]		pointer pool name
+ * \param ostname[in]		pointer to OST name(OSTnnnn-UUID)
+ * \param cmd[in]		pool command type
+ *
+ * \retval			< 0 on error
+ *				0 if pool is empty or OST is not found
+ *				1 if pool is not empty or OST is found
+ */
+static int llog_search_pool(char *logname, long last_index, char *fsname,
+			    char *poolname, char *ostname,
+			    enum lcfg_command_type cmd)
+{
+	struct llog_pool_data lpd;
+	long start, end, inc = MAX_IOC_BUFLEN / 128;
+	int rc = 0;
+
+	memset(&lpd, 0, sizeof(lpd));
+	lpd.lpd_cmd_type = cmd;
+	lpd.lpd_pool_exists = false;
+	lpd.lpd_ost_num = 0;
+	strncpy(lpd.lpd_fsname, fsname, sizeof(lpd.lpd_fsname) - 1);
+	if (poolname && poolname[0])
+		strncpy(lpd.lpd_poolname, poolname,
+			sizeof(lpd.lpd_poolname) - 1);
+	if (ostname && ostname[0])
+		strncpy(lpd.lpd_ostname, ostname, sizeof(lpd.lpd_ostname) - 1);
+
+	for (end = last_index; end > 1; end -= inc) {
+		start = end - inc > 0 ? end - inc : 1;
+		rc = jt_llog_print_iter(logname, start, end,
+					llog_search_pool_cb, &lpd, true);
+		if (rc) {
+			if (rc == 1 && lpd.lpd_pool_exists)
+				rc = lpd.lpd_ost_num ? 1 : 0;
+			else if (rc == -ENOENT && lpd.lpd_pool_exists &&
+				 !lpd.lpd_ost_num)
+				rc = 0;
+			goto out;
+		}
+	}
+
+	rc = -ENOENT;
+out:
+	return rc;
+}
+
+static bool combined_mgs_mds(char *fsname)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "mdt/%s-MDT0000", fsname);
+	if (!rc)
+		cfs_free_param_data(&path);
+
+	if (get_mgs_device() > 0 && !rc)
+		return true;
+
+	return false;
+}
+
+/*
+ * if pool is NULL, search ostname in target_obd
+ * if pool is not NULL:
+ *  - if pool not found returns errno < 0
+ *  - if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
+ *  - if ostname is not NULL, returns 1 if OST is in pool and 0 if not
+ */
+int lctl_search_ost(char *fsname, char *poolname, char *ostname,
+		    enum lcfg_command_type cmd)
+{
+	char logname[MAX_OBD_NAME] = {'\0'};
+	long last_index;
+
+	if (fsname && fsname[0] == '\0')
+		fsname = NULL;
+	if (!fsname)
+		return -EINVAL;
+
+	if (combined_mgs_mds(fsname))
+		return llapi_search_ost(fsname, poolname, ostname);
+
+	/* fetch the last_index of llog record */
+	snprintf(logname, sizeof(logname), "%s-client", fsname);
+	last_index = llog_last_index(logname);
+	if (last_index < 0)
+		return last_index;
+
+	/* if pool is NULL, search ostname in target_obd */
+	if (!poolname && ostname)
+		return llog_search_ost(logname, last_index, ostname);
+
+	return llog_search_pool(logname, last_index, fsname, poolname,
+				ostname, cmd);
+}
+
 static int check_pool_cmd(enum lcfg_command_type cmd,
                           char *fsname, char *poolname,
                           char *ostname)
 {
         int rc;
 
-        rc = llapi_search_ost(fsname, poolname, ostname);
+	rc = lctl_search_ost(fsname, poolname, ostname, cmd);
         if (rc < 0 && (cmd != LCFG_POOL_NEW)) {
                 fprintf(stderr, "Pool %s.%s not found\n",
                         fsname, poolname);
@@ -3181,7 +3497,7 @@ static int check_pool_cmd(enum lcfg_command_type cmd,
                                 ostname, fsname, poolname);
                         return -EEXIST;
                 }
-                rc = llapi_search_ost(fsname, NULL, ostname);
+		rc = lctl_search_ost(fsname, NULL, ostname, cmd);
                 if (rc == 0) {
                         fprintf(stderr, "OST %s is not part of the '%s' fs.\n",
                                 ostname, fsname);
@@ -3218,7 +3534,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         switch (cmd) {
         case LCFG_POOL_NEW: {
                 do {
-                        rc = llapi_search_ost(fsname, poolname, NULL);
+			rc = lctl_search_ost(fsname, poolname, NULL, cmd);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc < 0)
@@ -3237,7 +3553,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         }
         case LCFG_POOL_DEL: {
                 do {
-                        rc = llapi_search_ost(fsname, poolname, NULL);
+			rc = lctl_search_ost(fsname, poolname, NULL, cmd);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc >= 0)
@@ -3256,7 +3572,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         }
         case LCFG_POOL_ADD: {
                 do {
-                        rc = llapi_search_ost(fsname, poolname, ostname);
+			rc = lctl_search_ost(fsname, poolname, ostname, cmd);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc != 1)
@@ -3275,7 +3591,7 @@ static int check_pool_cmd_result(enum lcfg_command_type cmd,
         }
         case LCFG_POOL_REM: {
                 do {
-                        rc = llapi_search_ost(fsname, poolname, ostname);
+			rc = lctl_search_ost(fsname, poolname, ostname, cmd);
                         if (rc == -ENODEV)
                                 return rc;
                         if (rc == 1)
