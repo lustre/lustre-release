@@ -900,9 +900,8 @@ struct osc_extent {
 	/** state of this extent */
 	enum osc_extent_state	oe_state;
 	/** flags for this extent. */
-	unsigned int		oe_intree:1,
 	/** 0 is write, 1 is read */
-				oe_rw:1,
+	unsigned int		oe_rw:1,
 	/** sync extent, queued by osc_queue_sync_pages() */
 				oe_sync:1,
 	/** set if this extent has partial, sync pages.

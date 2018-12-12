@@ -74,7 +74,7 @@ static inline char *ext_flags(struct osc_extent *ext, char *flags)
 {
 	char *buf = flags;
 	*buf++ = ext->oe_rw ? 'r' : 'w';
-	if (ext->oe_intree)
+	if (!RB_EMPTY_NODE(&ext->oe_node))
 		*buf++ = 'i';
 	if (ext->oe_sync)
 		*buf++ = 'S';
@@ -154,7 +154,7 @@ static inline struct osc_extent *next_extent(struct osc_extent *ext)
 	if (ext == NULL)
 		return NULL;
 
-	LASSERT(ext->oe_intree);
+	LASSERT(!RB_EMPTY_NODE(&ext->oe_node));
 	return rb_extent(rb_next(&ext->oe_node));
 }
 
@@ -163,7 +163,7 @@ static inline struct osc_extent *prev_extent(struct osc_extent *ext)
 	if (ext == NULL)
 		return NULL;
 
-	LASSERT(ext->oe_intree);
+	LASSERT(!RB_EMPTY_NODE(&ext->oe_node));
 	return rb_extent(rb_prev(&ext->oe_node));
 }
 
@@ -359,7 +359,7 @@ static void osc_extent_put(const struct lu_env *env, struct osc_extent *ext)
 		LASSERT(list_empty(&ext->oe_link));
 		LASSERT(atomic_read(&ext->oe_users) == 0);
 		LASSERT(ext->oe_state == OES_INV);
-		LASSERT(!ext->oe_intree);
+		LASSERT(RB_EMPTY_NODE(&ext->oe_node));
 
 		if (ext->oe_dlmlock != NULL) {
 			lu_ref_del(&ext->oe_dlmlock->l_reference,
@@ -431,7 +431,7 @@ static void osc_extent_insert(struct osc_object *obj, struct osc_extent *ext)
 	struct rb_node    *parent = NULL;
 	struct osc_extent *tmp;
 
-	LASSERT(ext->oe_intree == 0);
+	LASSERT(RB_EMPTY_NODE(&ext->oe_node));
 	LASSERT(ext->oe_obj == obj);
 	assert_osc_object_is_locked(obj);
 	while (*n != NULL) {
@@ -448,7 +448,6 @@ static void osc_extent_insert(struct osc_object *obj, struct osc_extent *ext)
 	rb_link_node(&ext->oe_node, parent, n);
 	rb_insert_color(&ext->oe_node, &obj->oo_root);
 	osc_extent_get(ext);
-	ext->oe_intree = 1;
 }
 
 /* caller must have held object lock. */
@@ -456,9 +455,9 @@ static void osc_extent_erase(struct osc_extent *ext)
 {
 	struct osc_object *obj = ext->oe_obj;
 	assert_osc_object_is_locked(obj);
-	if (ext->oe_intree) {
+	if (!RB_EMPTY_NODE(&ext->oe_node)) {
 		rb_erase(&ext->oe_node, &obj->oo_root);
-		ext->oe_intree = 0;
+		RB_CLEAR_NODE(&ext->oe_node);
 		/* rbtree held a refcount */
 		osc_extent_put_trust(ext);
 	}
