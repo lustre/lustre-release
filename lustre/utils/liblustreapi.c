@@ -2828,7 +2828,8 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 	}
 
 	if (verbose & VERBOSE_HASH_TYPE) {
-		unsigned int type = lum->lum_hash_type;
+		unsigned int type = lum->lum_hash_type & LMV_HASH_TYPE_MASK;
+		unsigned int flags = lum->lum_hash_type & ~LMV_HASH_TYPE_MASK;
 
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_HASH_TYPE)
@@ -2837,9 +2838,18 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s",
 				     mdt_hash_name[type]);
 		else
-			llapi_printf(LLAPI_MSG_NORMAL, "%d",
-				     (int)type);
+			llapi_printf(LLAPI_MSG_NORMAL, "%#x", type);
+
+		if (flags & LMV_HASH_FLAG_MIGRATION)
+			llapi_printf(LLAPI_MSG_NORMAL, ",migrating");
+		if (flags & LMV_HASH_FLAG_DEAD)
+			llapi_printf(LLAPI_MSG_NORMAL, ",dead");
+		if (flags & LMV_HASH_FLAG_BAD_TYPE)
+			llapi_printf(LLAPI_MSG_NORMAL, ",bad_type");
+		if (flags & LMV_HASH_FLAG_LOST_LMV)
+			llapi_printf(LLAPI_MSG_NORMAL, ",lost_lmv");
 		separator = "\n";
+
 	}
 
 	if (verbose & VERBOSE_OBJID && lum->lum_magic != LMV_USER_MAGIC) {
