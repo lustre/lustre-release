@@ -2286,6 +2286,16 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 				} else if (!strcmp(string, "pattern")) {
 					if (!strcmp(node->cy_valuestring, "mdt"))
 						lsa->lsa_pattern = LLAPI_LAYOUT_MDT;
+				} else if (!strcmp(string, "lcme_flags")) {
+					rc = comp_str2flags(node->cy_valuestring,
+							    &lsa->lsa_comp_flags,
+							    &lsa->lsa_comp_neg_flags);
+					if (rc)
+						return rc;
+					/* Only template flags have meaning in
+					 * the layout for a new file
+					 */
+					lsa->lsa_comp_flags &= LCME_TEMPLATE_FLAGS;
 				}
 			} else if (node->cy_type == CYAML_TYPE_NUMBER) {
 				if (!strcmp(string, "lcm_mirror_count")) {

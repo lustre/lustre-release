@@ -9376,3 +9376,23 @@ save_layout_restore_at_exit() {
 
 	stack_trap "restore_layout $dir $layout" EXIT
 }
+
+verify_yaml_layout() {
+	local src=$1
+	local dst=$2
+	local temp=$3
+	local msg_prefix=$4
+
+	echo "getstripe --yaml $src"
+	$LFS getstripe --yaml $src > $temp || error "getstripe $src failed"
+	echo "setstripe --yaml=$temp $dst"
+	$LFS setstripe --yaml=$temp $dst|| error "setstripe $dst failed"
+
+	echo "compare"
+	local layout1=$(get_layout_param $src)
+	local layout2=$(get_layout_param $dst)
+	# compare their layout info
+	[ "$layout1" == "$layout2" ] ||
+		error "$msg_prefix $src/$dst layouts are not equal"
+}
+
