@@ -1820,7 +1820,7 @@ test_44() {
 run_test 44 "lfs mirror split check"
 
 test_45() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
 	local file=$DIR/$tdir/$tfile
 	local dir=$DIR/$tdir/$dir
@@ -1832,16 +1832,14 @@ test_45() {
 		-N -E3m -S1m -Eeof -N -E8m -Eeof $file ||
 			error "Create $file failed"
 
-	echo "getstripe --yaml $file"
-	$LFS getstripe --yaml $file > $temp || error "getstripe $file failed"
-	echo "setstripe --yaml=$temp $file.2"
-	$LFS setstripe --yaml=$temp $file.2 || error "setstripe $file.2 failed"
+	verify_yaml_layout $file $file.copy $temp "1. FLR file"
+	rm -f $file $file.copy
 
-	echo "compare layout"
-	local layout1=$(get_layout_param $file)
-	local layout2=$(get_layout_param $file.2)
-	[ "$layout1" == "$layout2" ] ||
-		error "FLR file $file/$file.2 layouts are not equal"
+	$LFS setstripe -N -E1m -S1m -c2 -o0,1 -E2m -Eeof -N -E4m -Eeof \
+		-N -E3m -S1m -Eeof -N -E8m --flags=prefer -Eeof $file ||
+			error "Create $file failed"
+
+	verify_yaml_layout $file $file.copy $temp "2. FLR file with flags"
 }
 run_test 45 "Verify setstripe/getstripe with YAML with FLR file"
 
