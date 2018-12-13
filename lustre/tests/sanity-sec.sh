@@ -1814,18 +1814,18 @@ test_23b() { #LU-9929
 		error "add idmap $ID0:$fs_id to nodemap c0 failed"
 	wait_nm_sync c0 idmap
 
-	# set/getfacl default acl on client0 (unmapped gid=500)
-	rm -rf $testdir
-	mkdir -p $testdir
+	# set/getfacl default acl on client 1 (unmapped gid=500)
+	do_node ${clients_arr[0]} rm -rf $testdir
+	do_node ${clients_arr[0]} mkdir -p $testdir
 	# Here, USER0=$(getent passwd | grep :$ID0:$ID0: | cut -d: -f1)
-	setfacl -R -d -m group:$USER0:rwx $testdir ||
+	do_node ${clients_arr[0]} setfacl -R -d -m group:$USER0:rwx $testdir ||
 		error "setfacl $testdir on ${clients_arr[0]} failed"
-	unmapped_id=$(getfacl $testdir | grep -E "default:group:.*:rwx" |
-			awk -F: '{print $3}')
+	unmapped_id=$(do_node ${clients_arr[0]} getfacl $testdir |
+			grep -E "default:group:.*:rwx" | awk -F: '{print $3}')
 	[ "$unmapped_id" = "$USER0" ] ||
 		error "gid=$ID0 was not unmapped correctly on ${clients_arr[0]}"
 
-	# getfacl default acl on client2 (mapped gid=60010)
+	# getfacl default acl on client 2 (mapped gid=60010)
 	mapped_id=$(do_node ${clients_arr[1]} getfacl $testdir |
 			grep -E "default:group:.*:rwx" | awk -F: '{print $3}')
 	fs_user=$(do_node ${clients_arr[1]} getent passwd |
