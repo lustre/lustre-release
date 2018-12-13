@@ -525,10 +525,12 @@ int llapi_pcc_attach_fid(const char *mntpath, const struct lu_fid *fid,
 			 __u32 id, enum lu_pcc_type type);
 int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
 			     __u32 id, enum lu_pcc_type type);
-int llapi_pcc_detach_fd(int fd);
-int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid);
-int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr);
-int llapi_pcc_detach_file(const char *path);
+int llapi_pcc_detach_fd(int fd, __u32 option);
+int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
+			 __u32 option);
+int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
+			     __u32 option);
+int llapi_pcc_detach_file(const char *path, __u32 option);
 int llapi_pcc_state_get_fd(int fd, struct lu_pcc_state *state);
 int llapi_pcc_state_get(const char *path, struct lu_pcc_state *state);
 int llapi_pccdev_set(const char *mntpath, const char *cmd);

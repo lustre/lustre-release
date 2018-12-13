@@ -1,0 +1,44 @@
+.TH LFS-PCC-DETACH 1 2019-04-15 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs pcc detach|detach_fid \- Detach given files from PCC
+.SH SYNOPSIS
+.B lfs pcc detach [\fB--keep\fR|\fB-k\fR] <\fIfile \fR...>
+.br
+.B lfs pcc detach_fid [\fB--keep\fR|\fB-k\fR] <\fImntpath\fR> <\fIfid \fR...>
+.SH DESCRIPTION
+.TP
+.B lfs pcc detach [\fB--keep\fR|\fB-k\fR] <\fIfile \fR...>
+Detach given files from the persistent client cache.
+.TP
+.B lfs pcc detach_fid [\fB--keep\fR|\fB-k\fR] <\fImntpath\fR> <\fIfid \fR...>
+Detach files from the persistent client cache by FID(s).
+.SH OPTIONS
+.TP
+.B --keep | -k
+By default, the detach command will detach the file from PCC permanently and
+remove the PCC copy after detach. This option will only detach the file, but
+keep the PCC copy in cache. It allows the detaching file to be attached
+automatically at next open if the cached copy of the file is still valid.
+.SH EXAMPLES
+.TP
+.B $ lfs pcc detach /mnt/lustre/test
+Detach the file permanently from PCC. The cached file on PCC will be removed
+after detach. IO to the file will come to Lustre OSTs after this command.
+.TP
+.B $ lfs pcc detach_fid /mnt/lustre 0x200000401:0x1:0x0
+Detach the file referenced by FID "0x200000401:0x1:0x0" from PCC permanently, and
+the cached file on PCC will be removed after detach.
+.TP
+.B $ lfs pcc detach -k /mnt/lustre/test
+Detach the file "/mnt/lustre/test" from PCC. The client will try to attach
+this file again at the next open if the cached copy is still valid.
+.TP
+.B $ lfs pcc detach_fid -k /mnt/lustre 0x200000401:0x1:0x0
+Detach the file referenced by FID "0x200000401:0x1:0x0" from PCC. The client
+will try to attach this file again at the next open if the cached copy is still
+valid.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-hsm (1),
+.BR lfs-pcc (1),
+.BR lctl-pcc (8)

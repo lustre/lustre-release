@@ -1,29 +1,22 @@
 .TH LFS-PCC 1 2019-04-15 "Lustre" "Lustre Utilities"
 .SH NAME
-lfs pcc commands used to interact with PCC features.
+lfs pcc commands used to interact with the Persistent Client Cache (PCC).
 .SH SYNOPSIS
 .B lfs pcc attach <\fB--id\fR|\fB-i\fR \fINUM\fR>  <\fIfile \fR...>
 .br
 .B lfs pcc attach <\fB--id\fR|\fB-i\fR \fINUM\fR>  <\fB--mnt\fR|\fB-m\fR \fImntpath\fR> <\fIfid \fR...>
 .br
-.B lfs pcc detach <\fIfile \fR...>
-.br
-.B lfs pcc detach_fid <\fImntpath\fR> <\fIfid \fR...>
-.br
 .B lfs pcc state <\fIfile \fR...>
 .SH DESCRIPTION
 .TP
 .B lfs pcc attach <\fB--id\fR|\fB-i\fR \fINUM\fR>  <\fIfile \fR...>
-Attach given files on the persistent client cache.
+Attach given files on the persistent client cache. Use
+.B lfs pcc detach
+to remove the cached files from PCC either manually, or through automatic
+mechanisms for the purpose of the cache space management.
 .TP
 .B lfs pcc attach <\fB--id\fR|\fB-i\fR \fINUM\fR>  <\fB--mnt\fR|\fB-m\fR \fImntpath\fR> <\fIfid \fR...>
-Attach given fils into the persistent client cache by FID(s).
-.TP
-.B lfs pcc detach <\fIfile \fR...>
-Detach given files from the persistent client cache.
-.TP
-.B lfs pcc detach_fid <\fImntpath\fR> <\fIfid \fR...>
-Detach files from the persistent client cache by FID(s).
+Attach given files into the persistent client cache by FID(s).
 .TP
 .B lfs pcc state <\fIfile \fR...>
 Display the PCC state for given files.
@@ -78,11 +71,11 @@ any I/O to the Lustre file will direct to the RW-PCC copy.
 .B $ lfs pcc attach_fid -i 1 -m /mnt/lustre 0x200000401:0x1:0x0
 Attach an existing file referenced by FID "0x200000401:0x1:0x0" into PCC.
 .TP
-.B $ lfs pcc detach /mnt/lustre/file
-Detach the file from RW-PCC, IO to the file will come to Lustre after this
-command.
-.B $ lfs pcc detach_fid /mnt/lustre 0x200000401:0x1:0x0
-Detach the file referenced by FID "0x200000401:0x1:0x0" from PCC.
+.B $ lfs pcc state /mnt/lustre/file
+.br
+file: /mnt/lustre/file, type: readwrite, PCC file: /mnt/pcc/0004/0000/0bd1/0000/0002/0000/0x200000bd1:0x4:0x0, user number: 1, flags: 6
+.br
+Display the PCC state of the file "/mnt/lustre/file".
 .TP
 .B $ lfs pcc state /mnt/lustre/file
 .br
@@ -93,4 +86,5 @@ Display the PCC state of the file "/mnt/lustre/file".
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-hsm (1),
+.BR lfs-pcc-detach (1),
 .BR lctl-pcc (8)

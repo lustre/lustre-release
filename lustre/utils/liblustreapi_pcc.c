@@ -182,14 +182,17 @@ int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
  * detach PCC cache of a file by using fd.
  *
  * \param fd		File handle.
+ * \param option	Detach option
  *
  * \return 0 on success, an error code otherwise.
  */
-int llapi_pcc_detach_fd(int fd)
+int llapi_pcc_detach_fd(int fd, __u32 option)
 {
+	struct lu_pcc_detach detach;
 	int rc;
 
-	rc = ioctl(fd, LL_IOC_PCC_DETACH);
+	detach.pccd_opt = option;
+	rc = ioctl(fd, LL_IOC_PCC_DETACH, &detach);
 	return rc;
 }
 
@@ -198,14 +201,16 @@ int llapi_pcc_detach_fd(int fd)
  *
  * \param mntpath	Fullpath to the client mount point.
  * \param fid		FID of the file.
+ * \param option	Detach option.
  *
  * \return 0 on success, an error code otherwise.
  */
-int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid)
+int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
+			 __u32 option)
 {
 	int rc;
 	int fd;
-	struct lu_pcc_detach detach;
+	struct lu_pcc_detach_fid detach;
 
 	rc = get_root_path(WANT_FD, NULL, &fd, (char *)mntpath, -1);
 	if (rc) {
@@ -222,6 +227,7 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid)
 	 * files.
 	 */
 	detach.pccd_fid = *fid;
+	detach.pccd_opt = option;
 	rc = ioctl(fd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	close(fd);
 	return rc;
@@ -231,11 +237,13 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid)
  * detach PCC cache of a file via FID.
  *
  * \param mntpath	Fullpath to the client mount point.
- * \param fid		FID string of the file.
+ * \param fidstr	FID string of the file.
+ * \param option	Detach option.
  *
  * \return 0 on success, an error code otherwise.
  */
-int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr)
+int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
+			     __u32 option)
 {
 	int rc;
 	struct lu_fid fid;
@@ -252,7 +260,7 @@ int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr)
 		return -EINVAL;
 	}
 
-	rc = llapi_pcc_detach_fid(mntpath, &fid);
+	rc = llapi_pcc_detach_fid(mntpath, &fid, option);
 
 	return rc;
 }
@@ -260,11 +268,12 @@ int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr)
 /**
  * detach PCC cache of a file.
  *
- * \param path	  Fullpath to the file to operate on.
+ * \param path		Fullpath to the file to operate on.
+ * \param option	Detach option.
  *
  * \return 0 on success, an error code otherwise.
  */
-int llapi_pcc_detach_file(const char *path)
+int llapi_pcc_detach_file(const char *path, __u32 option)
 {
 	int rc;
 	int fd;
@@ -277,7 +286,7 @@ int llapi_pcc_detach_file(const char *path)
 		return rc;
 	}
 
-	rc = llapi_pcc_detach_fd(fd);
+	rc = llapi_pcc_detach_fd(fd, option);
 	close(fd);
 	return rc;
 }

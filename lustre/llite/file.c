@@ -3846,14 +3846,29 @@ out_ladvise:
 		rc = ll_heat_set(inode, flags);
 		RETURN(rc);
 	}
-	case LL_IOC_PCC_DETACH:
+	case LL_IOC_PCC_DETACH: {
+		struct lu_pcc_detach *detach;
+
+		OBD_ALLOC_PTR(detach);
+		if (detach == NULL)
+			RETURN(-ENOMEM);
+
+		if (copy_from_user(detach,
+				   (const struct lu_pcc_detach __user *)arg,
+				   sizeof(*detach)))
+			GOTO(out_detach_free, rc = -EFAULT);
+
 		if (!S_ISREG(inode->i_mode))
-			RETURN(-EINVAL);
+			GOTO(out_detach_free, rc = -EINVAL);
 
 		if (!inode_owner_or_capable(inode))
-			RETURN(-EPERM);
+			GOTO(out_detach_free, rc = -EPERM);
 
-		RETURN(pcc_ioctl_detach(inode));
+		rc = pcc_ioctl_detach(inode, detach->pccd_opt);
+out_detach_free:
+		OBD_FREE_PTR(detach);
+		RETURN(rc);
+	}
 	case LL_IOC_PCC_STATE: {
 		struct lu_pcc_state __user *ustate =
 			(struct lu_pcc_state __user *)arg;

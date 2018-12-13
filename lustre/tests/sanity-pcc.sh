@@ -268,9 +268,11 @@ lpcc_rw_test() {
 	echo "Start to detach the $file"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "PCC detach $file failed"
+	wait_request_state $(path2fid $file) REMOVE SUCCEED
+
 	check_lpcc_state $file "none"
-	# HSM released exists archived status
-	check_hsm_flags $file "0x0000000d"
+	# The file is removed from PCC
+	check_hsm_flags $file "0x00000000"
 	check_file_data $SINGLEAGT $file "attach_detach"
 }
 
@@ -320,6 +322,10 @@ test_1e() {
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
 
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach -k $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+
 	# non-root user is forbidden to access PCC file directly
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
 	do_facet $SINGLEAGT $RUNAS touch $lpcc_path &&
@@ -333,9 +339,14 @@ test_1e() {
 
 	[[ $perm == "0" ]] || error "PCC file permission ($perm) is not zero"
 
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+
 	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
+	wait_request_state $(path2fid $file) REMOVE SUCCEED
 }
 run_test 1e "Test RW-PCC with non-root user"
 
@@ -382,6 +393,7 @@ test_1f() {
 	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
+	wait_request_state $(path2fid $file) REMOVE SUCCEED
 }
 run_test 1f "Test auto RW-PCC cache with non-root user"
 
@@ -410,6 +422,7 @@ test_1g() {
 	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
+	wait_request_state $(path2fid $file) REMOVE SUCCEED
 	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1024 count=1 ||
 		error "non-root user cannot read to $file with permisson (777)"
 }
@@ -557,7 +570,7 @@ test_3a() {
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
 
@@ -565,7 +578,7 @@ test_3a() {
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
 }
@@ -591,7 +604,7 @@ test_3b() {
 	do_facet agt1 $LFS pcc attach -i 1 $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite" agt1
-	do_facet agt1 $LFS pcc detach $file ||
+	do_facet agt1 $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none" agt1
 
@@ -599,7 +612,7 @@ test_3b() {
 	do_facet agt2 $LFS pcc attach -i 2 $file ||
 		error "failed to attach file $file"
 	check_lpcc_state $file "readwrite" agt2
-	do_facet agt2 $LFS pcc detach $file ||
+	do_facet agt2 $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none" agt2
 
@@ -613,7 +626,7 @@ test_3b() {
 	# The later attach PCC agent should succeed,
 	# the former agent should be detached automatically.
 	check_lpcc_state $file "none" agt1
-	do_facet agt2 $LFS pcc detach $file ||
+	do_facet agt2 $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none" agt2
 }
@@ -714,7 +727,7 @@ test_6() {
 		error "mmap write data mismatch: $content"
 	check_lpcc_state $file "readwrite"
 
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 
 	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
@@ -775,11 +788,11 @@ test_7b() {
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 
-	# multiop mmap write increase the first character of each page with 1
+	# multiop mmap write increases the first character of each page with 1
 	do_facet $SINGLEAGT $MULTIOP $file OSMWUc &
 	pid=$!
 
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 
 	wait $pid || error "multiop mmap write failed"
@@ -881,7 +894,7 @@ test_usrgrp_quota() {
 		error "dd write $file1 failed"
 	# -EDQUOT error should be tolerated via fallback to normal Lustre path.
 	check_lpcc_state $file1 "none"
-	do_facet $SINGLEAGT $LFS pcc detach $file1 ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file1 ||
 		error "failed to detach file $file"
 	rm $file1 $file2
 }
@@ -918,7 +931,7 @@ test_11() {
 		error "failed to attach $file"
 	check_lpcc_state $file "readwrite"
 	check_file_data $SINGLEAGT $file "QQQQQ"
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach $file"
 	rm $file || error "rm $file failed"
 
@@ -950,15 +963,19 @@ run_test 11 "Test attach fault injection with simulated PCC file path"
 
 test_12() {
 	local file=$DIR/$tfile
+	local hsm_root=$(hsm_root)
+	local -a lpcc_path
 	local pid
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
 	echo  -n race_rw_attach_hsmremove > $file
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
 		error "attach $file failed"
-	do_facet $SINGLEAGT $LFS pcc detach $file || error "detach $file failed"
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "detach $file failed"
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 	# define OBD_FAIL_LLITE_PCC_ATTACH_PAUSE	0x1414
@@ -970,6 +987,8 @@ test_12() {
 	wait_request_state $(path2fid $file) RESTORE SUCCEED
 	$LFS hsm_remove $file || error "hsm remove $file failed"
 	wait $pid && error "RW-PCC attach $file should fail"
+	do_facet $SINGLEAGT "[ -f $lpcc_path ]"	&&
+		error "RW-PCC cached file '$lpcc_path' should be removed"
 
 	return 0
 }
@@ -1001,7 +1020,7 @@ test_rule_id() {
 		error "failed to dd write from $file"
 	check_lpcc_state $file "readwrite"
 
-	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
 }
@@ -1028,7 +1047,7 @@ test_13b() {
 	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
 	rm $file || error "rm $file failed"
@@ -1037,7 +1056,7 @@ test_13b() {
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
 	rm $file || error "rm $file failed"
@@ -1046,7 +1065,7 @@ test_13b() {
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
 	rm $file || error "rm $file failed"
@@ -1091,7 +1110,7 @@ test_13c() {
 	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach $file"
 	rm $file || error "rm $file failed"
 
@@ -1105,7 +1124,7 @@ test_13c() {
 	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach $file"
 	rm $file || error "rm $file failed"
 
@@ -1114,7 +1133,7 @@ test_13c() {
 	do_facet $SINGLEAGT $myRUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "failed to dd write to $file"
 	check_lpcc_state $file "readwrite"
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach $file"
 	rm $file || error "rm $file failed"
 }
@@ -1167,10 +1186,10 @@ test_15() {
 	do_facet $SINGLEAGT $LCTL \
 		set_param ldlm.namespaces.*mdc*.lru_size=clear
 	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
-	# Detach the file directly, as the file layout generation
-	# is not changed, so the file is still valid cached in PCC,
-	# and can be reused from PCC cache directly.
-	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
+	# Detach the file but keep the cache , as the file layout generation
+	# is not changed, so the file is still valid cached in PCC, and can
+	# be reused from PCC cache directly.
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach -k $file ||
 		error "PCC detach $file failed"
 	check_lpcc_state $file "readwrite" $SINGLEAGT "$RUNAS"
 	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
@@ -1190,21 +1209,69 @@ test_15() {
 	check_file_data $SINGLEAGT $file "autoattach_data"
 	check_lpcc_state $file "readwrite"
 
-	# Detach the file directly, as the file layout generation
+	# Detach the file with -k option, as the file layout generation
 	# is not changed, so the file is still valid cached in PCC,
 	# and can be reused from PCC cache directly.
-	do_facet $SINGLEAGT $LFS pcc detach $file ||
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "PCC detach $file failed"
 	check_lpcc_state $file "readwrite"
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 	check_file_data $SINGLEAGT $file "autoattach_data"
 
+	# HSM restore the PCC cached file, the layout generation
+	# was changed, so the file can not be auto attached.
 	$LFS hsm_restore $file || error "failed to restore $file"
 	wait_request_state $(path2fid $file) RESTORE SUCCEED
 	check_lpcc_state $file "none"
+	# HSM exists archived status
+	check_hsm_flags $file "0x00000009"
+
 }
 run_test 15 "Test auto attach at open when file is still valid cached"
+
+test_16() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local -a lpcc_path
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=1"
+
+	do_facet $SINGLEAGT "echo -n detach_data > $file"
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+	# HSM released exists archived status
+	check_hsm_flags $file "0x0000000d"
+
+	echo "Test for reusing valid PCC cache"
+	# Valid PCC cache can be reused
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "PCC detach $file failed"
+	check_lpcc_state $file "readwrite"
+	# HSM released exists archived status
+	check_hsm_flags $file "0x0000000d"
+
+	echo "Test for the default detach"
+	# Permanent detach by default, it will remove the PCC copy
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "PCC detach $file failed"
+	wait_request_state $(path2fid $file) REMOVE SUCCEED
+	check_lpcc_state $file "none"
+	# File is removed from PCC backend
+	check_hsm_flags $file "0x00000000"
+	do_facet $SINGLEAGT "[ -f $lpcc_path ]"	&&
+		error "RW-PCC cached file '$lpcc_path' should be removed"
+
+	return 0
+}
+run_test 16 "Test detach with different options"
 
 complete $SECONDS
 check_and_cleanup_lustre

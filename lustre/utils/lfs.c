@@ -10516,16 +10516,30 @@ static int lfs_pcc_attach_fid(int argc, char **argv)
 
 static int lfs_pcc_detach(int argc, char **argv)
 {
+	struct option long_opts[] = {
+	{ .val = 'k',	.name = "keep",	.has_arg = no_argument },
+	{ .name = NULL } };
+	char			 short_opts[] = "k";
+	int			 c;
 	int			 rc = 0;
 	const char		*path;
 	char			 fullpath[PATH_MAX];
+	__u32			 detach_opt = PCC_DETACH_OPT_UNCACHE;
 
-	optind = 1;
-
-	if (argc <= 1) {
-		fprintf(stderr, "%s: must specify one or more file names\n",
-			argv[0]);
-		return CMD_HELP;
+	optind = 0;
+	while ((c = getopt_long(argc, argv, short_opts,
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'k':
+			detach_opt = PCC_DETACH_OPT_NONE;
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
 	}
 
 	while (optind < argc) {
@@ -10540,7 +10554,7 @@ static int lfs_pcc_detach(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = llapi_pcc_detach_file(fullpath);
+		rc2 = llapi_pcc_detach_file(fullpath, detach_opt);
 		if (rc2 < 0) {
 			rc2 = -errno;
 			fprintf(stderr, "%s: cannot detach '%s' from PCC: "
@@ -10554,16 +10568,30 @@ static int lfs_pcc_detach(int argc, char **argv)
 
 static int lfs_pcc_detach_fid(int argc, char **argv)
 {
+	struct option long_opts[] = {
+	{ .val = 'k',	.name = "keep",	.has_arg = no_argument },
+	{ .name = NULL } };
+	char		 short_opts[] = "k";
+	int		 c;
 	int		 rc = 0;
 	const char	*fid;
 	const char	*mntpath;
+	__u32		 detach_opt = PCC_DETACH_OPT_UNCACHE;
 
-	optind = 1;
-
-	if (argc <= 2) {
-		fprintf(stderr, "%s: not enough argument\n",
-			argv[0]);
-		return CMD_HELP;
+	optind = 0;
+	while ((c = getopt_long(argc, argv, short_opts,
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'k':
+			detach_opt = PCC_DETACH_OPT_NONE;
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
 	}
 
 	mntpath = argv[optind++];
@@ -10573,7 +10601,7 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 
 		fid = argv[optind++];
 
-		rc2 = llapi_pcc_detach_fid_str(mntpath, fid);
+		rc2 = llapi_pcc_detach_fid_str(mntpath, fid, detach_opt);
 		if (rc2 < 0) {
 			fprintf(stderr, "%s: cannot detach '%s' on '%s' "
 				"from PCC: %s\n", argv[0], fid, mntpath,
