@@ -2985,10 +2985,13 @@ int osc_reconnect(const struct lu_env *env, struct obd_export *exp,
 
 		spin_lock(&cli->cl_loi_list_lock);
 		grant = cli->cl_avail_grant + cli->cl_reserved_grant;
-		if (data->ocd_connect_flags & OBD_CONNECT_GRANT_PARAM)
+		if (data->ocd_connect_flags & OBD_CONNECT_GRANT_PARAM) {
+			/* restore ocd_grant_blkbits as client page bits */
+			data->ocd_grant_blkbits = PAGE_SHIFT;
 			grant += cli->cl_dirty_grant;
-		else
+		} else {
 			grant += cli->cl_dirty_pages << PAGE_SHIFT;
+		}
 		data->ocd_grant = grant ? : 2 * cli_brw_size(obd);
 		lost_grant = cli->cl_lost_grant;
 		cli->cl_lost_grant = 0;
