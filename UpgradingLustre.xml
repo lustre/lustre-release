@@ -193,9 +193,9 @@ xml:id="upgradinglustre">
       <listitem>
         <para>Download the Lustre server RPMs for your platform from the 
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-        Lustre Releases</link>repository. See 
+        Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="table_cnh_5m3_gk" />for a list of required packages.</para>
+        linkend="table_cnh_5m3_gk" /> for a list of required packages.</para>
       </listitem>
       <listitem>
         <para>Install the Lustre server packages on all Lustre servers (MGS,
@@ -226,9 +226,9 @@ xml:id="upgradinglustre">
       <listitem>
         <para>Download the Lustre client RPMs for your platform from the 
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-        Lustre Releases</link>repository. See 
+        Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="table_j3r_ym3_gk" />for a list of required packages.</para>
+        linkend="table_j3r_ym3_gk" /> for a list of required packages.</para>
         <note>
           <para>The version of the kernel running on a Lustre client must be
           the same as the version of the 
@@ -415,9 +415,9 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
       <listitem>
         <para>Download the Lustre server RPMs for your platform from the 
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-        Lustre Releases</link>repository. See 
+        Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="table_cnh_5m3_gk" />for a list of required packages.</para>
+        linkend="table_cnh_5m3_gk" /> for a list of required packages.</para>
       </listitem>
       <listitem>
         <para>For a rolling upgrade, complete any procedures required to keep
@@ -462,9 +462,9 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
       <listitem>
         <para>Download the Lustre client RPMs for your platform from the 
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-        Lustre Releases</link>repository. See 
+        Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="table_j3r_ym3_gk" />for a list of required packages.</para>
+        linkend="table_j3r_ym3_gk" /> for a list of required packages.</para>
       </listitem>
       <listitem>
         <para>Install the Lustre client packages on each of the Lustre clients

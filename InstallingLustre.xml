@@ -256,7 +256,7 @@ xml:id="installinglustre">
               <emphasis role="italic">Optional packages.</emphasis>
             </emphasis>Optional packages provided in the 
             <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-            Lustre Releases</link>repository may include the following
+            Lustre Releases</link> repository may include the following
             (depending on the operating system and platform):
             <itemizedlist>
               <listitem>
@@ -394,12 +394,12 @@ xml:id="installinglustre">
         <para>Download the 
         <literal>e2fsprogs</literal> RPMs for your platform from the 
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-        Lustre Releases</link>repository.</para>
+        Lustre Releases</link> repository.</para>
       </listitem>
       <listitem>
         <para>Download the Lustre server RPMs for your platform from the 
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-        Lustre Releases</link>repository. See 
+        Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
         linkend="table_cnh_5m3_gk" />for a list of required packages.</para>
       </listitem>
@@ -440,7 +440,7 @@ rpm -qa|egrep "lustre|wc"|sort
       <listitem>
         <para>Download the Lustre client RPMs for your platform from the 
         <link xl:href="https://wiki.whamcloud.com/display/PUB/Lustre+Releases">
-        Lustre Releases</link>repository. See 
+        Lustre Releases</link> repository. See 
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
         linkend="table_j3r_ym3_gk" />for a list of required packages.</para>
       </listitem>
