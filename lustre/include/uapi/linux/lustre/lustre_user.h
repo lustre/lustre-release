@@ -52,12 +52,12 @@
 # include <linux/version.h>
 # include <uapi/linux/lustre/lustre_fiemap.h>
 #else /* !__KERNEL__ */
-# define NEED_QUOTA_DEFS
 # include <limits.h>
 # include <stdbool.h>
 # include <stdio.h> /* snprintf() */
 # include <string.h>
-# include <sys/quota.h>
+# define NEED_QUOTA_DEFS
+/* # include <sys/quota.h> - this causes complaints about caddr_t */
 # include <sys/stat.h>
 # include <linux/lustre/lustre_fiemap.h>
 #endif /* __KERNEL__ */
@@ -85,7 +85,15 @@ extern "C" {
     "project",	/* PRJQUOTA */ \
     "undefined", \
 };
+#ifndef USRQUOTA
+#define USRQUOTA 0
+#endif
+#ifndef GRPQUOTA
+#define GRPQUOTA 1
+#endif
+#ifndef PRJQUOTA
 #define PRJQUOTA 2
+#endif
 
 /*
  * We need to always use 64bit version because the structure
@@ -478,6 +486,9 @@ struct fsxattr {
 /* To be compatible with old statically linked binary we keep the check for
  * the older 0100000000 flag.  This is already removed upstream.  LU-812. */
 #define O_LOV_DELAY_CREATE_1_8	0100000000 /* FMODE_NONOTIFY masked in 2.6.36 */
+#ifndef FASYNC
+#define FASYNC			00020000   /* fcntl, for BSD compatibility */
+#endif
 #define O_LOV_DELAY_CREATE_MASK	(O_NOCTTY | FASYNC)
 #define O_LOV_DELAY_CREATE		(O_LOV_DELAY_CREATE_1_8 | \
 					 O_LOV_DELAY_CREATE_MASK)

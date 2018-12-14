@@ -1406,7 +1406,7 @@ lmv_out_free:
 			(struct lov_user_md_v1 __user *)arg;
 		struct lov_user_md_v3 __user *lumv3p =
 			(struct lov_user_md_v3 __user *)arg;
-		int lum_size;
+		int lum_size = 0;
 
 		int set_default = 0;
 
