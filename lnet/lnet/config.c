@@ -33,6 +33,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/ctype.h>
+#include <linux/rtnetlink.h>
 #include <linux/inetdevice.h>
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>

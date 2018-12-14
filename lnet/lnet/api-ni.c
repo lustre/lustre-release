@@ -85,13 +85,13 @@ MODULE_PARM_DESC(lnet_numa_range,
  */
 unsigned int lnet_health_sensitivity = 0;
 static int sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp);
+#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_health_sensitivity = {
 	.set = sensitivity_set,
 	.get = param_get_int,
 };
 #define param_check_health_sensitivity(name, p) \
 		__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_health_sensitivity, health_sensitivity, S_IRUGO|S_IWUSR);
 #else
 module_param_call(lnet_health_sensitivity, sensitivity_set, param_get_int,
@@ -106,13 +106,13 @@ MODULE_PARM_DESC(lnet_health_sensitivity,
  */
 unsigned int lnet_recovery_interval = 1;
 static int recovery_interval_set(const char *val, cfs_kernel_param_arg_t *kp);
+#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_recovery_interval = {
 	.set = recovery_interval_set,
 	.get = param_get_int,
 };
 #define param_check_recovery_interval(name, p) \
 		__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_recovery_interval, recovery_interval, S_IRUGO|S_IWUSR);
 #else
 module_param_call(lnet_recovery_interval, recovery_interval_set, param_get_int,
@@ -124,6 +124,7 @@ MODULE_PARM_DESC(lnet_recovery_interval,
 static int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
 static int intf_max_set(const char *val, cfs_kernel_param_arg_t *kp);
 
+#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_interfaces_max = {
 	.set = intf_max_set,
 	.get = param_get_int,
@@ -132,11 +133,10 @@ static struct kernel_param_ops param_ops_interfaces_max = {
 #define param_check_interfaces_max(name, p) \
 		__param_check(name, p, int)
 
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_interfaces_max, interfaces_max, 0644);
 #else
 module_param_call(lnet_interfaces_max, intf_max_set, param_get_int,
-		  &param_ops_interfaces_max, 0644);
+		  &lnet_interfaces_max, 0644);
 #endif
 MODULE_PARM_DESC(lnet_interfaces_max,
 		"Maximum number of interfaces in a node.");
@@ -144,6 +144,7 @@ MODULE_PARM_DESC(lnet_interfaces_max,
 unsigned lnet_peer_discovery_disabled = 0;
 static int discovery_set(const char *val, cfs_kernel_param_arg_t *kp);
 
+#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_discovery_disabled = {
 	.set = discovery_set,
 	.get = param_get_int,
@@ -151,11 +152,10 @@ static struct kernel_param_ops param_ops_discovery_disabled = {
 
 #define param_check_discovery_disabled(name, p) \
 		__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_peer_discovery_disabled, discovery_disabled, 0644);
 #else
 module_param_call(lnet_peer_discovery_disabled, discovery_set, param_get_int,
-		  &param_ops_discovery_disabled, 0644);
+		  &lnet_peer_discovery_disabled, 0644);
 #endif
 MODULE_PARM_DESC(lnet_peer_discovery_disabled,
 		"Set to 1 to disable peer discovery on this node.");
@@ -163,6 +163,7 @@ MODULE_PARM_DESC(lnet_peer_discovery_disabled,
 unsigned int lnet_drop_asym_route;
 static int drop_asym_route_set(const char *val, cfs_kernel_param_arg_t *kp);
 
+#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_drop_asym_route = {
 	.set = drop_asym_route_set,
 	.get = param_get_int,
@@ -170,17 +171,17 @@ static struct kernel_param_ops param_ops_drop_asym_route = {
 
 #define param_check_drop_asym_route(name, p)	\
 	__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_drop_asym_route, drop_asym_route, 0644);
 #else
 module_param_call(lnet_drop_asym_route, drop_asym_route_set, param_get_int,
-		  &param_ops_drop_asym_route, 0644);
+		  &lnet_drop_asym_route, 0644);
 #endif
 MODULE_PARM_DESC(lnet_drop_asym_route,
 		 "Set to 1 to drop asymmetrical route messages.");
 
 unsigned lnet_transaction_timeout = 50;
 static int transaction_to_set(const char *val, cfs_kernel_param_arg_t *kp);
+#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_transaction_timeout = {
 	.set = transaction_to_set,
 	.get = param_get_int,
@@ -188,7 +189,6 @@ static struct kernel_param_ops param_ops_transaction_timeout = {
 
 #define param_check_transaction_timeout(name, p) \
 		__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_transaction_timeout, transaction_timeout, S_IRUGO|S_IWUSR);
 #else
 module_param_call(lnet_transaction_timeout, transaction_to_set, param_get_int,
@@ -199,6 +199,7 @@ MODULE_PARM_DESC(lnet_transaction_timeout,
 
 unsigned lnet_retry_count = 0;
 static int retry_count_set(const char *val, cfs_kernel_param_arg_t *kp);
+#ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_retry_count = {
 	.set = retry_count_set,
 	.get = param_get_int,
@@ -206,7 +207,6 @@ static struct kernel_param_ops param_ops_retry_count = {
 
 #define param_check_retry_count(name, p) \
 		__param_check(name, p, int)
-#ifdef HAVE_KERNEL_PARAM_OPS
 module_param(lnet_retry_count, retry_count, S_IRUGO|S_IWUSR);
 #else
 module_param_call(lnet_retry_count, retry_count_set, param_get_int,
