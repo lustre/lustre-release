@@ -50,12 +50,12 @@
 # include <linux/string.h> /* snprintf() */
 # include <linux/version.h>
 #else /* !__KERNEL__ */
-# define NEED_QUOTA_DEFS
 # include <limits.h>
 # include <stdbool.h>
 # include <stdio.h> /* snprintf() */
 # include <string.h>
-# include <sys/quota.h>
+# define NEED_QUOTA_DEFS
+/* # include <sys/quota.h> - this causes complaints about caddr_t */
 # include <sys/stat.h>
 #endif /* __KERNEL__ */
 #include <lustre/ll_fiemap.h>
@@ -73,7 +73,15 @@
     "project",	/* PRJQUOTA */ \
     "undefined", \
 };
+#ifndef USRQUOTA
+#define USRQUOTA 0
+#endif
+#ifndef GRPQUOTA
+#define GRPQUOTA 1
+#endif
+#ifndef PRJQUOTA
 #define PRJQUOTA 2
+#endif
 
 #if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
     defined(__craynv) || defined(__mips64__) || defined(__powerpc64__) || \
@@ -410,6 +418,9 @@ enum ll_lease_type {
 /* To be compatible with old statically linked binary we keep the check for
  * the older 0100000000 flag.  This is already removed upstream.  LU-812. */
 #define O_LOV_DELAY_CREATE_1_8	0100000000 /* FMODE_NONOTIFY masked in 2.6.36 */
+#ifndef FASYNC
+#define FASYNC			00020000   /* fcntl, for BSD compatibility */
+#endif
 #define O_LOV_DELAY_CREATE_MASK	(O_NOCTTY | FASYNC)
 #define O_LOV_DELAY_CREATE		(O_LOV_DELAY_CREATE_1_8 | \
 					 O_LOV_DELAY_CREATE_MASK)
