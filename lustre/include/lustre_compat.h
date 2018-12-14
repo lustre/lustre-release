@@ -148,6 +148,14 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define SLAB_DESTROY_BY_RCU 0
 #endif
 
+#ifndef HAVE_INIT_LIST_HEAD_RCU
+static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
+{
+	WRITE_ONCE(list->next, list);
+	WRITE_ONCE(list->prev, list);
+}
+#endif
+
 #ifndef HAVE_DQUOT_SUSPEND
 # define ll_vfs_dq_init             vfs_dq_init
 # define ll_vfs_dq_drop             vfs_dq_drop
