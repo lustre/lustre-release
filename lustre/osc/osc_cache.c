@@ -1533,15 +1533,26 @@ out:
 	return rc;
 }
 
-static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
+/* Following two inlines exist to pass code fragments
+ * to wait_event_idle_exclusive_timeout_cmd().  Passing
+ * code fragments as macro args can look confusing, so
+ * we provide inlines to encapsulate them.
+ */
+static inline void cli_unlock_and_unplug(const struct lu_env *env,
+					 struct client_obd *cli,
+					 struct osc_async_page *oap)
 {
-	int rc;
-	spin_lock(&cli->cl_loi_list_lock);
-	rc = list_empty(&ocw->ocw_entry);
 	spin_unlock(&cli->cl_loi_list_lock);
-	return rc;
+	osc_io_unplug_async(env, cli, NULL);
+	CDEBUG(D_CACHE,
+	       "%s: sleeping for cache space for %p\n",
+	       cli_name(cli), oap);
 }
 
+static inline void cli_lock_after_unplug(struct client_obd *cli)
+{
+	spin_lock(&cli->cl_loi_list_lock);
+}
 /**
  * The main entry to reserve dirty page accounting. Usually the grant reserved
  * in this function will be freed in bulk in osc_free_grant() unless it fails
@@ -1554,8 +1565,11 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 {
 	struct osc_object	*osc = oap->oap_obj;
 	struct lov_oinfo	*loi = osc->oo_oinfo;
-	struct osc_cache_waiter	 ocw;
 	int			 rc = -EDQUOT;
+	unsigned long timeout = cfs_time_seconds(AT_OFF ? obd_timeout : at_max);
+	int remain;
+	bool entered = false;
+
 	ENTRY;
 
 	OSC_DUMP_GRANT(D_CACHE, cli, "need:%d\n", bytes);
@@ -1571,119 +1585,46 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 		GOTO(out, rc = -EDQUOT);
 	}
 
-	/* Hopefully normal case - cache space and write credits available */
-	if (list_empty(&cli->cl_cache_waiters) &&
-	    osc_enter_cache_try(cli, oap, bytes)) {
-		OSC_DUMP_GRANT(D_CACHE, cli, "granted from cache\n");
-		GOTO(out, rc = 0);
-	}
-
-	/* We can get here for two reasons: too many dirty pages in cache, or
+	/*
+	 * We can wait here for two reasons: too many dirty pages in cache, or
 	 * run out of grants. In both cases we should write dirty pages out.
 	 * Adding a cache waiter will trigger urgent write-out no matter what
 	 * RPC size will be.
-	 * The exiting condition is no avail grants and no dirty pages caching,
-	 * that really means there is no space on the OST. */
-	init_waitqueue_head(&ocw.ocw_waitq);
-	ocw.ocw_oap   = oap;
-	ocw.ocw_grant = bytes;
-	while (cli->cl_dirty_pages > 0 || cli->cl_w_in_flight > 0) {
-		list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
-		ocw.ocw_rc = 0;
-		spin_unlock(&cli->cl_loi_list_lock);
+	 * The exiting condition (other than success) is no avail grants
+	 * and no dirty pages caching, that really means there is no space
+	 * on the OST.
+	 */
+	remain = wait_event_idle_exclusive_timeout_cmd(
+		cli->cl_cache_waiters,
+		(entered = osc_enter_cache_try(cli, oap, bytes)) ||
+		(cli->cl_dirty_pages == 0 && cli->cl_w_in_flight == 0),
+		timeout,
+		cli_unlock_and_unplug(env, cli, oap),
+		cli_lock_after_unplug(cli));
 
-		osc_io_unplug_async(env, cli, NULL);
-
-		CDEBUG(D_CACHE, "%s: sleeping for cache space @ %p for %p\n",
-		       cli_name(cli), &ocw, oap);
-
-		rc = wait_event_idle_timeout(ocw.ocw_waitq,
-					     ocw_granted(cli, &ocw),
-					     cfs_time_seconds(AT_OFF ?
-							      obd_timeout :
-							      at_max));
-
-		spin_lock(&cli->cl_loi_list_lock);
-
-		if (rc <= 0) {
-			/* wait_event_idle_timeout timed out */
-			list_del_init(&ocw.ocw_entry);
-			if (rc == 0)
-				rc = -ETIMEDOUT;
-			break;
-		}
-		LASSERT(list_empty(&ocw.ocw_entry));
-		rc = ocw.ocw_rc;
-
-		if (rc != -EDQUOT)
-			break;
-		if (osc_enter_cache_try(cli, oap, bytes)) {
-			rc = 0;
-			break;
-		}
-	}
-
-	switch (rc) {
-	case 0:
-		OSC_DUMP_GRANT(D_CACHE, cli, "finally got grant space\n");
-		break;
-	case -ETIMEDOUT:
+	if (entered) {
+		if (remain == timeout)
+			OSC_DUMP_GRANT(D_CACHE, cli, "granted from cache\n");
+		else
+			OSC_DUMP_GRANT(D_CACHE, cli,
+				       "finally got grant space\n");
+		wake_up(&cli->cl_cache_waiters);
+		rc = 0;
+	} else if (remain == 0) {
 		OSC_DUMP_GRANT(D_CACHE, cli,
 			       "timeout, fall back to sync i/o\n");
 		osc_extent_tree_dump(D_CACHE, osc);
 		/* fall back to synchronous I/O */
-		rc = -EDQUOT;
-		break;
-	case -EINTR:
-		/* Ensures restartability - LU-3581 */
-		OSC_DUMP_GRANT(D_CACHE, cli, "interrupted\n");
-		rc = -ERESTARTSYS;
-		break;
-	case -EDQUOT:
+	} else {
 		OSC_DUMP_GRANT(D_CACHE, cli,
 			       "no grant space, fall back to sync i/o\n");
-		break;
-	default:
-		CDEBUG(D_CACHE, "%s: event for cache space @ %p never arrived "
-		       "due to %d, fall back to sync i/o\n",
-		       cli_name(cli), &ocw, rc);
-		break;
+		wake_up_all(&cli->cl_cache_waiters);
 	}
 	EXIT;
 out:
 	spin_unlock(&cli->cl_loi_list_lock);
 	RETURN(rc);
 }
-
-/* caller must hold loi_list_lock */
-void osc_wake_cache_waiters(struct client_obd *cli)
-{
-	struct list_head *l, *tmp;
-	struct osc_cache_waiter *ocw;
-
-	ENTRY;
-	list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
-		ocw = list_entry(l, struct osc_cache_waiter, ocw_entry);
-
-		ocw->ocw_rc = -EDQUOT;
-
-		if (osc_enter_cache_try(cli, ocw->ocw_oap, ocw->ocw_grant))
-			ocw->ocw_rc = 0;
-
-		if (ocw->ocw_rc == 0 ||
-		    !(cli->cl_dirty_pages > 0 || cli->cl_w_in_flight > 0)) {
-			list_del_init(&ocw->ocw_entry);
-			CDEBUG(D_CACHE, "wake up %p for oap %p, avail grant "
-			       "%ld, %d\n", ocw, ocw->ocw_oap,
-			       cli->cl_avail_grant, ocw->ocw_rc);
-
-			wake_up(&ocw->ocw_waitq);
-		}
-	}
-
-	EXIT;
-}
-EXPORT_SYMBOL(osc_wake_cache_waiters);
 
 static int osc_max_rpc_in_flight(struct client_obd *cli, struct osc_object *osc)
 {
@@ -1724,8 +1665,9 @@ static int osc_makes_rpc(struct client_obd *cli, struct osc_object *osc,
 		}
 		/* trigger a write rpc stream as long as there are dirtiers
 		 * waiting for space.  as they're waiting, they're not going to
-		 * create more pages to coalesce with what's waiting.. */
-		if (!list_empty(&cli->cl_cache_waiters)) {
+		 * create more pages to coalesce with what's waiting..
+		 */
+		if (waitqueue_active(&cli->cl_cache_waiters)) {
 			CDEBUG(D_CACHE, "cache waiters forcing RPC\n");
 			RETURN(1);
 		}
@@ -2177,8 +2119,9 @@ static struct osc_object *osc_next_obj(struct client_obd *cli)
 	/* then if we have cache waiters, return all objects with queued
 	 * writes.  This is especially important when many small files
 	 * have filled up the cache and not been fired into rpcs because
-	 * they don't pass the nr_pending/object threshhold */
-	if (!list_empty(&cli->cl_cache_waiters) &&
+	 * they don't pass the nr_pending/object threshhold
+	 */
+	if (waitqueue_active(&cli->cl_cache_waiters) &&
 	    !list_empty(&cli->cl_loi_write_list))
 		RETURN(list_to_obj(&cli->cl_loi_write_list, write_item));
 

@@ -99,14 +99,6 @@ static inline struct osc_async_page *brw_page2oap(struct brw_page *pga)
 	return container_of(pga, struct osc_async_page, oap_brw_page);
 }
 
-struct osc_cache_waiter {
-	struct list_head	ocw_entry;
-	wait_queue_head_t	ocw_waitq;
-	struct osc_async_page	*ocw_oap;
-	int			ocw_grant;
-	int			ocw_rc;
-};
-
 struct osc_device {
 	struct cl_device	od_cl;
 	struct obd_export	*od_exp;
@@ -598,7 +590,10 @@ int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end);
 int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 		   struct osc_object *osc, int async);
-void osc_wake_cache_waiters(struct client_obd *cli);
+static inline void osc_wake_cache_waiters(struct client_obd *cli)
+{
+	wake_up(&cli->cl_cache_waiters);
+}
 
 static inline int osc_io_unplug_async(const struct lu_env *env,
 				      struct client_obd *cli,

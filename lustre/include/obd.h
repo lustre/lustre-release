@@ -221,7 +221,7 @@ struct client_obd {
 	 * grant before trying to dirty a page and unreserve the rest.
 	 * See osc_{reserve|unreserve}_grant for details. */
 	long			cl_reserved_grant;
-	struct list_head	cl_cache_waiters; /* waiting for cache/grant */
+	wait_queue_head_t	cl_cache_waiters; /* waiting for cache/grant */
 	time64_t		cl_next_shrink_grant;	/* seconds */
 	struct list_head	cl_grant_chain;
 	time64_t		cl_grant_shrink_interval; /* seconds */

@@ -42,7 +42,6 @@ extern atomic_t osc_pool_req_count;
 extern unsigned int osc_reqpool_maxreqcount;
 extern struct ptlrpc_request_pool *osc_rq_pool;
 
-void osc_wake_cache_waiters(struct client_obd *cli);
 int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes);
 void osc_schedule_grant_work(void);
 void osc_update_next_shrink(struct client_obd *cli);
