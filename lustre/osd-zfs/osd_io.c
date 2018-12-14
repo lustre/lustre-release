@@ -94,22 +94,16 @@ static void record_end_io(struct osd_device *osd, int rw,
 {
 	struct obd_histogram *h = osd->od_brw_stats.hist;
 
-	if (rw == READ) {
+	if (rw == READ)
 		atomic_dec(&osd->od_r_in_flight);
-		lprocfs_oh_tally_log2(&h[BRW_R_PAGES], npages);
-		if (disksize > 0)
-			lprocfs_oh_tally_log2(&h[BRW_R_DISK_IOSIZE], disksize);
-		if (elapsed)
-			lprocfs_oh_tally_log2(&h[BRW_R_IO_TIME], elapsed);
-
-	} else {
+	else
 		atomic_dec(&osd->od_w_in_flight);
-		lprocfs_oh_tally_log2(&h[BRW_W_PAGES], npages);
-		if (disksize > 0)
-			lprocfs_oh_tally_log2(&h[BRW_W_DISK_IOSIZE], disksize);
-		if (elapsed)
-			lprocfs_oh_tally_log2(&h[BRW_W_IO_TIME], elapsed);
-	}
+
+	lprocfs_oh_tally_log2(&h[BRW_R_PAGES + rw], npages);
+	if (disksize > 0)
+		lprocfs_oh_tally_log2(&h[BRW_R_DISK_IOSIZE + rw], disksize);
+	if (elapsed)
+		lprocfs_oh_tally_log2(&h[BRW_R_IO_TIME + rw], elapsed);
 }
 
 static ssize_t __osd_read(const struct lu_env *env, struct dt_object *dt,
