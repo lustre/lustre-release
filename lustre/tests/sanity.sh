@@ -23,8 +23,8 @@ fi
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596 (all below)
 	ALWAYS_EXCEPT+=" 42d 42e 63a 63b 64a 64b 64c"
-	# bug number:	 LU-11671 LU-11665 LU-11594 LU-11667
-	ALWAYS_EXCEPT+=" 45	  101c	   103a	    317"
+	# bug number:	 LU-11671 LU-11665 LU-11594 LU-11667 LU-11729
+	ALWAYS_EXCEPT+=" 45	  101c	   103a	    317      810"
 fi
 
 # Check Grants after these tests
