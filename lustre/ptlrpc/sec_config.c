@@ -911,11 +911,11 @@ void sptlrpc_conf_client_adapt(struct obd_device *obd)
 
 	imp = obd->u.cli.cl_import;
 	if (imp) {
-		spin_lock(&imp->imp_lock);
+		write_lock(&imp->imp_sec_lock);
 		if (imp->imp_sec)
 			imp->imp_sec_expire = ktime_get_real_seconds() +
 				SEC_ADAPT_DELAY;
-		spin_unlock(&imp->imp_lock);
+		write_unlock(&imp->imp_sec_lock);
 	}
 
 	up_read(&obd->u.cli.cl_sem);

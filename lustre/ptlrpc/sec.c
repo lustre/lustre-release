@@ -366,13 +366,13 @@ static int import_sec_check_expire(struct obd_import *imp)
 {
 	int adapt = 0;
 
-	spin_lock(&imp->imp_lock);
+	write_lock(&imp->imp_sec_lock);
 	if (imp->imp_sec_expire &&
 	    imp->imp_sec_expire < ktime_get_real_seconds()) {
 		adapt = 1;
 		imp->imp_sec_expire = 0;
 	}
-	spin_unlock(&imp->imp_lock);
+	write_unlock(&imp->imp_sec_lock);
 
 	if (!adapt)
 		return 0;
@@ -1392,9 +1392,9 @@ struct ptlrpc_sec *sptlrpc_import_sec_ref(struct obd_import *imp)
 {
 	struct ptlrpc_sec *sec;
 
-	spin_lock(&imp->imp_lock);
+	read_lock(&imp->imp_sec_lock);
 	sec = sptlrpc_sec_get(imp->imp_sec);
-	spin_unlock(&imp->imp_lock);
+	read_unlock(&imp->imp_sec_lock);
 
 	return sec;
 }
@@ -1407,10 +1407,10 @@ static void sptlrpc_import_sec_install(struct obd_import *imp,
 
 	LASSERT_ATOMIC_POS(&sec->ps_refcount);
 
-	spin_lock(&imp->imp_lock);
+	write_lock(&imp->imp_sec_lock);
 	old_sec = imp->imp_sec;
 	imp->imp_sec = sec;
-	spin_unlock(&imp->imp_lock);
+	write_unlock(&imp->imp_sec_lock);
 
 	if (old_sec) {
 		sptlrpc_sec_kill(old_sec);
@@ -1506,8 +1506,6 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
 		       sptlrpc_flavor2name(&sf, str, sizeof(str)));
 	}
 
-	mutex_lock(&imp->imp_sec_mutex);
-
 	newsec = sptlrpc_sec_create(imp, svc_ctx, &sf, sp);
 	if (newsec) {
 		sptlrpc_import_sec_install(imp, newsec);
@@ -1518,7 +1516,6 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
 		rc = -EPERM;
 	}
 
-	mutex_unlock(&imp->imp_sec_mutex);
 out:
 	sptlrpc_sec_put(sec);
 	RETURN(rc);
