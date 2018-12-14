@@ -47,14 +47,14 @@ racer_cleanup()
 		done
 		if [[ $rc -eq 0 ]]; then
 			echo there should be NO racer processes:
-			ps uww -C "${RACER_PROGS// /,}"
+			ps uww -C "${RACER_PROGS// /.sh,}.sh"
 			return 0
 		fi
 		echo -n "Waited $(( TOT_WAIT + SHORT_WAIT)), rc=$rc "
 		(( SHORT_WAIT+=SHORT_WAIT ))
 		(( TOT_WAIT+=SHORT_WAIT ))
 	done
-	ps uww -C "${RACER_PROGS// /,}"
+	ps uww -C "${RACER_PROGS// /.sh,}.sh"
 	return 1
 }
 

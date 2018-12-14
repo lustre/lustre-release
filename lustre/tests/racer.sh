@@ -98,6 +98,7 @@ test_1() {
 			RACER_ENABLE_DOM=$RACER_ENABLE_DOM \
 			RACER_ENABLE_FLR=$RACER_ENABLE_FLR \
 			LFS=$LFS \
+			LCTL=$LCTL \
 			$racer $rdir $NUM_RACER_THREADS" &
 		pid=$!
 		rpids="$rpids $pid"
