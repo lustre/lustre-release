@@ -24,7 +24,6 @@
 #define __LIBCFS_LINUX_HASH_H__
 
 #include <linux/dcache.h>
-#include <linux/rhashtable.h>
 
 u64 cfs_hashlen_string(const void *salt, const char *name);
 
@@ -38,6 +37,8 @@ u64 cfs_hashlen_string(const void *salt, const char *name);
 #endif
 #endif /* !HAVE_STRINGHASH */
 
+#ifdef HAVE_LINUX_RHASHTABLE_H
+#include <linux/rhashtable.h>
 #ifndef HAVE_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 /**
  * rhashtable_lookup_get_insert_fast - lookup and insert object into hash table
@@ -73,5 +74,6 @@ static inline void *rhashtable_lookup_get_insert_fast(
 	return ret;
 }
 #endif /* !HAVE_RHASHTABLE_LOOKUP_GET_INSERT_FAST */
+#endif /* HAVE_LINUX_RHASHTABLE_H */
 
 #endif /* __LIBCFS_LINUX_MISC_H__ */
