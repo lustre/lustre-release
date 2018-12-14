@@ -389,6 +389,16 @@ shrinker_count_objects, [
 ]) # LIBCFS_SHRINKER_COUNT
 
 #
+# Kernel version 3.16 added rhashtable.h in 7e1e77636e36075eb
+#
+AC_DEFUN([LIBCFS_LINUX_RHASHTABLE_H],[
+LB_CHECK_LINUX_HEADER([linux/rhashtable.h], [
+	AC_DEFINE(HAVE_LINUX_RHASHTABLE_H, 1,
+		[linux/rhashtable.h is present])
+])
+]) # LIBCFS_LINUX_RHASHTABLE_H
+
+#
 # Kernel version 3.17 changed hlist_add_after to
 # hlist_add_behind
 #
@@ -1013,6 +1023,8 @@ LIBCFS_KTIME_AFTER
 LIBCFS_KTIME_BEFORE
 LIBCFS_KTIME_COMPARE
 LIBCFS_SHRINKER_COUNT
+# 3.16
+LIBCFS_LINUX_RHASHTABLE_H
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
 LIBCFS_TIMESPEC64

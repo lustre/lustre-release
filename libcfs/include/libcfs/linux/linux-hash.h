@@ -24,7 +24,6 @@
 #define __LIBCFS_LINUX_HASH_H__
 
 #include <linux/dcache.h>
-#include <linux/rhashtable.h>
 
 u64 cfs_hashlen_string(const void *salt, const char *name);
 
@@ -37,6 +36,9 @@ u64 cfs_hashlen_string(const void *salt, const char *name);
 #define hashlen_create(hash, len) ((u64)(len)<<32 | (u32)(hash))
 #endif
 #endif /* !HAVE_STRINGHASH */
+
+#ifdef HAVE_LINUX_RHASHTABLE_H
+#include <linux/rhashtable.h>
 
 #ifndef HAVE_RHLTABLE
 struct rhlist_head {
@@ -209,5 +211,9 @@ restart:
 	return NULL;
 }
 #endif /* !HAVE_RHASHTABLE_LOOKUP */
+#else
+#define rhashtable_init(ht, param) 0
+#define rhashtable_destroy(ht) do {} while (0)
+#endif /* HAVE_LINUX_RHASHTABLE_H */
 
 #endif /* __LIBCFS_LINUX_HASH_H__ */
