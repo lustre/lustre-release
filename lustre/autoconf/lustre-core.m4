@@ -1717,6 +1717,27 @@ kiocb_ki_left, [
 ]) # LC_KIOCB_KI_LEFT
 
 #
+# LC_INIT_LIST_HEAD_RCU
+#
+# 3.12 added INIT_LIST_HEAD_RCU in commit 2a855b644c310d5db5
+# which is unfortunately an inline function and not a macro
+# that can be tested directly, so it needs a configure check.
+#
+AC_DEFUN([LC_INIT_LIST_HEAD_RCU], [
+LB_CHECK_COMPILE([if 'INIT_LIST_HEAD_RCU' exists],
+init_list_head_rcu, [
+	#include <linux/list.h>
+	#include <linux/rculist.h>
+],[
+	struct list_head list;
+	INIT_LIST_HEAD_RCU(&list);
+],[
+	AC_DEFINE(HAVE_INIT_LIST_HEAD_RCU, 1,
+		  [INIT_LIST_HEAD_RCU exists])
+])
+]) # LC_INIT_LIST_HEAD_RCU
+
+#
 # LC_VFS_RENAME_5ARGS
 #
 # 3.13 has vfs_rename with 5 args
@@ -3185,6 +3206,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_OLDSIZE_TRUNCATE_PAGECACHE
 	LC_PTR_ERR_OR_ZERO_MISSING
 	LC_KIOCB_KI_LEFT
+	LC_INIT_LIST_HEAD_RCU
 
 	# 3.13
 	LC_VFS_RENAME_5ARGS
