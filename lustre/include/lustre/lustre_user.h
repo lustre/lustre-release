@@ -42,4 +42,7 @@
 
 #include <linux/lustre/lustre_user.h>
 
-#warning "Including lustre_user.h is deprecated. Include linux/lustre/lustre_user.h directly."
+/* Disable warning until 2.16 or 3.0, until new header is widely available.
+ * This gives apps time to move to the new header without spurious warnings.
+#warning "Including lustre/lustre_user.h is deprecated. Include linux/lustre/lustre_user.h instead."
+*/
