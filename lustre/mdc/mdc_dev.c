@@ -172,8 +172,8 @@ again:
 /**
  * Check if page @page is covered by an extra lock or discard it.
  */
-static int mdc_check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
-				    struct osc_page *ops, void *cbdata)
+static bool mdc_check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
+				     struct osc_page *ops, void *cbdata)
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct osc_object *osc = cbdata;
@@ -200,7 +200,7 @@ static int mdc_check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 	}
 
 	info->oti_next_index = index + 1;
-	return CLP_GANG_OKAY;
+	return true;
 }
 
 /**
@@ -219,7 +219,6 @@ static int mdc_lock_discard_pages(const struct lu_env *env,
 	struct osc_thread_info *info = osc_env_info(env);
 	struct cl_io *io = &info->oti_io;
 	osc_page_gang_cbt cb;
-	int res;
 	int result;
 
 	ENTRY;
@@ -232,15 +231,9 @@ static int mdc_lock_discard_pages(const struct lu_env *env,
 
 	cb = discard ? osc_discard_cb : mdc_check_and_discard_cb;
 	info->oti_fn_index = info->oti_next_index = start;
-	do {
-		res = osc_page_gang_lookup(env, io, osc, info->oti_next_index,
-					   end, cb, (void *)osc);
-		if (info->oti_next_index > end)
-			break;
 
-		if (res == CLP_GANG_RESCHED)
-			cond_resched();
-	} while (res != CLP_GANG_OKAY);
+	osc_page_gang_lookup(env, io, osc, info->oti_next_index,
+			     end, cb, (void *)osc);
 out:
 	cl_io_fini(env, io);
 	RETURN(result);

@@ -614,13 +614,13 @@ static inline void osc_io_unplug(const struct lu_env *env,
 	(void)osc_io_unplug0(env, cli, osc, 0);
 }
 
-typedef int (*osc_page_gang_cbt)(const struct lu_env *, struct cl_io *,
-				 struct osc_page *, void *);
-int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
-			struct osc_object *osc, pgoff_t start, pgoff_t end,
-			osc_page_gang_cbt cb, void *cbdata);
-int osc_discard_cb(const struct lu_env *env, struct cl_io *io,
-		   struct osc_page *ops, void *cbdata);
+typedef bool (*osc_page_gang_cbt)(const struct lu_env *, struct cl_io *,
+				  struct osc_page *, void *);
+bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
+			  struct osc_object *osc, pgoff_t start, pgoff_t end,
+			  osc_page_gang_cbt cb, void *cbdata);
+bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
+		    struct osc_page *ops, void *cbdata);
 
 /* osc_dev.c */
 int osc_device_init(const struct lu_env *env, struct lu_device *d,

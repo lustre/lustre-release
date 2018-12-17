@@ -498,7 +498,7 @@ static int osc_async_upcall(void *a, int rc)
 /**
  * Checks that there are no pages being written in the extent being truncated.
  */
-static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
+static bool trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 			  struct osc_page *ops , void *cbdata)
 {
 	struct cl_page *page = ops->ops_cl.cpl_page;
@@ -515,7 +515,7 @@ static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 		CDEBUG(D_CACHE, "page %p index %lu locked for %d.\n",
 		       ops, osc_index(ops), oap->oap_cmd & OBD_BRW_RWMASK);
 
-	return CLP_GANG_OKAY;
+	return true;
 }
 
 static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,

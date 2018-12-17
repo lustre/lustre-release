@@ -2148,14 +2148,6 @@ static inline int cl_object_refc(struct cl_object *clob)
 
 /** \defgroup cl_page cl_page
  * @{ */
-enum {
-        CLP_GANG_OKAY = 0,
-        CLP_GANG_RESCHED,
-        CLP_GANG_AGAIN,
-        CLP_GANG_ABORT
-};
-/* callback of cl_page_gang_lookup() */
-
 struct cl_page *cl_page_find        (const struct lu_env *env,
                                      struct cl_object *obj,
                                      pgoff_t idx, struct page *vmpage,

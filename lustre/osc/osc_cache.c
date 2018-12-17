@@ -3045,18 +3045,14 @@ EXPORT_SYMBOL(osc_cache_writeback_range);
 /**
  * Returns a list of pages by a given [start, end] of \a obj.
  *
- * \param resched If not NULL, then we give up before hogging CPU for too
- * long and set *resched = 1, in that case caller should implement a retry
- * logic.
- *
  * Gang tree lookup (radix_tree_gang_lookup()) optimization is absolutely
  * crucial in the face of [offset, EOF] locks.
  *
  * Return at least one page in @queue unless there is no covered page.
  */
-int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
-			struct osc_object *osc, pgoff_t start, pgoff_t end,
-			osc_page_gang_cbt cb, void *cbdata)
+bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
+			  struct osc_object *osc, pgoff_t start, pgoff_t end,
+			  osc_page_gang_cbt cb, void *cbdata)
 {
 	struct osc_page *ops;
 	struct pagevec	*pagevec;
@@ -3065,7 +3061,7 @@ int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 	unsigned int    nr;
 	unsigned int    i;
 	unsigned int    j;
-	int             res = CLP_GANG_OKAY;
+	bool            res = true;
 	bool            tree_lock = true;
 	ENTRY;
 
@@ -3114,7 +3110,7 @@ int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 
 		for (i = 0; i < j; ++i) {
 			ops = pvec[i];
-			if (res == CLP_GANG_OKAY)
+			if (res)
 				res = (*cb)(env, io, ops, cbdata);
 
 			page = ops->ops_cl.cpl_page;
@@ -3126,10 +3122,10 @@ int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 		if (nr < OTI_PVEC_SIZE || end_of_region)
 			break;
 
-		if (res == CLP_GANG_OKAY && need_resched())
-			res = CLP_GANG_RESCHED;
-		if (res != CLP_GANG_OKAY)
+		if (!res)
 			break;
+		if (need_resched())
+			cond_resched();
 
 		spin_lock(&osc->oo_tree_lock);
 		tree_lock = true;
@@ -3143,7 +3139,7 @@ EXPORT_SYMBOL(osc_page_gang_lookup);
 /**
  * Check if page @page is covered by an extra lock or discard it.
  */
-static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
+static bool check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 				struct osc_page *ops, void *cbdata)
 {
 	struct osc_thread_info *info = osc_env_info(env);
@@ -3178,10 +3174,10 @@ static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 	}
 
 	info->oti_next_index = index + 1;
-	return CLP_GANG_OKAY;
+	return true;
 }
 
-int osc_discard_cb(const struct lu_env *env, struct cl_io *io,
+bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
 		   struct osc_page *ops, void *cbdata)
 {
 	struct osc_thread_info *info = osc_env_info(env);
@@ -3202,7 +3198,7 @@ int osc_discard_cb(const struct lu_env *env, struct cl_io *io,
 		LASSERT(page->cp_state == CPS_FREEING);
 	}
 
-	return CLP_GANG_OKAY;
+	return true;
 }
 EXPORT_SYMBOL(osc_discard_cb);
 
@@ -3220,7 +3216,6 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 	struct osc_thread_info *info = osc_env_info(env);
 	struct cl_io *io = osc_env_thread_io(env);
 	osc_page_gang_cbt cb;
-	int res;
 	int result;
 
 	ENTRY;
@@ -3233,15 +3228,9 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 
 	cb = discard ? osc_discard_cb : check_and_discard_cb;
 	info->oti_fn_index = info->oti_next_index = start;
-	do {
-		res = osc_page_gang_lookup(env, io, osc,
-					   info->oti_next_index, end, cb, osc);
-		if (info->oti_next_index > end)
-			break;
 
-		if (res == CLP_GANG_RESCHED)
-			cond_resched();
-	} while (res != CLP_GANG_OKAY);
+	osc_page_gang_lookup(env, io, osc,
+			     info->oti_next_index, end, cb, osc);
 out:
 	cl_io_fini(env, io);
 	RETURN(result);

@@ -649,17 +649,17 @@ out:
 }
 EXPORT_SYMBOL(osc_ldlm_glimpse_ast);
 
-static int weigh_cb(const struct lu_env *env, struct cl_io *io,
-		    struct osc_page *ops, void *cbdata)
+static bool weigh_cb(const struct lu_env *env, struct cl_io *io,
+		     struct osc_page *ops, void *cbdata)
 {
 	struct cl_page *page = ops->ops_cl.cpl_page;
 
 	if (cl_page_is_vmlocked(env, page) || PageDirty(page->cp_vmpage) ||
 	    PageWriteback(page->cp_vmpage))
-		return CLP_GANG_ABORT;
+		return false;
 
 	*(pgoff_t *)cbdata = osc_index(ops) + 1;
-	return CLP_GANG_OKAY;
+	return true;
 }
 
 static unsigned long osc_lock_weight(const struct lu_env *env,
@@ -680,18 +680,14 @@ static unsigned long osc_lock_weight(const struct lu_env *env,
 		RETURN(result);
 
 	page_index = cl_index(obj, start);
-	do {
-		result = osc_page_gang_lookup(env, io, oscobj,
-					      page_index, cl_index(obj, end),
-					      weigh_cb, (void *)&page_index);
-		if (result == CLP_GANG_ABORT)
-			break;
-		if (result == CLP_GANG_RESCHED)
-			cond_resched();
-	} while (result != CLP_GANG_OKAY);
+
+	if (!osc_page_gang_lookup(env, io, oscobj,
+				  page_index, cl_index(obj, end),
+				  weigh_cb, (void *)&page_index))
+		result = 1;
 	cl_io_fini(env, io);
 
-	return result == CLP_GANG_ABORT ? 1 : 0;
+	return result;
 }
 
 /**
