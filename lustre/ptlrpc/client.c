@@ -2363,17 +2363,6 @@ void ptlrpc_expired_set(struct ptlrpc_request_set *set)
 }
 
 /**
- * Sets rq_intr flag in \a req under spinlock.
- */
-void ptlrpc_mark_interrupted(struct ptlrpc_request *req)
-{
-	spin_lock(&req->rq_lock);
-	req->rq_intr = 1;
-	spin_unlock(&req->rq_lock);
-}
-EXPORT_SYMBOL(ptlrpc_mark_interrupted);
-
-/**
  * Interrupts (sets interrupted flag) all uncompleted requests in
  * a set \a data. Callback for l_wait_event for interruptible waits.
  */
@@ -2396,7 +2385,9 @@ static void ptlrpc_interrupted_set(struct ptlrpc_request_set *set)
 		    !req->rq_allow_intr)
 			continue;
 
-		ptlrpc_mark_interrupted(req);
+		spin_lock(&req->rq_lock);
+		req->rq_intr = 1;
+		spin_unlock(&req->rq_lock);
 	}
 }
 

@@ -993,23 +993,6 @@ struct cl_page_operations {
         void (*cpo_clip)(const struct lu_env *env,
                          const struct cl_page_slice *slice,
                          int from, int to);
-        /**
-         * \pre  the page was queued for transferring.
-         * \post page is removed from client's pending list, or -EBUSY
-         *       is returned if it has already been in transferring.
-         *
-         * This is one of seldom page operation which is:
-         * 0. called from top level;
-         * 1. don't have vmpage locked;
-         * 2. every layer should synchronize execution of its ->cpo_cancel()
-         *    with completion handlers. Osc uses client obd lock for this
-         *    purpose. Based on there is no vvp_page_cancel and
-         *    lov_page_cancel(), cpo_cancel is defacto protected by client lock.
-         *
-         * \see osc_page_cancel().
-         */
-        int (*cpo_cancel)(const struct lu_env *env,
-                          const struct cl_page_slice *slice);
 	/**
 	 * Write out a page by kernel. This is only called by ll_writepage
 	 * right now.
@@ -2237,7 +2220,6 @@ int  cl_page_cache_add  (const struct lu_env *env, struct cl_io *io,
                          struct cl_page *pg, enum cl_req_type crt);
 void cl_page_clip       (const struct lu_env *env, struct cl_page *pg,
                          int from, int to);
-int  cl_page_cancel     (const struct lu_env *env, struct cl_page *page);
 int  cl_page_flush      (const struct lu_env *env, struct cl_io *io,
 			 struct cl_page *pg);
 
@@ -2375,8 +2357,6 @@ int   cl_io_read_ahead   (const struct lu_env *env, struct cl_io *io,
 			  pgoff_t start, struct cl_read_ahead *ra);
 void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,
                           size_t nob);
-int   cl_io_cancel       (const struct lu_env *env, struct cl_io *io,
-                          struct cl_page_list *queue);
 
 /**
  * True, iff \a io is an O_APPEND write(2).

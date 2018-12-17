@@ -129,7 +129,7 @@ static int osc_page_print(const struct lu_env *env,
 	struct client_obd *cli = &osc_export(obj)->exp_obd->u.cli;
 
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
-			  "1< %#x %d %u %c %c > "
+			  "1< %#x %d %c %c > "
 			  "2< %lld %u %u %#x %#x | %p %p %p > "
 			  "3< %d %lld %d > "
 			  "4< %d %d %d %lu %c | %c %c %c %c > "
@@ -137,7 +137,6 @@ static int osc_page_print(const struct lu_env *env,
 			  opg, osc_index(opg),
 			  /* 1 */
 			  oap->oap_magic, oap->oap_cmd,
-			  oap->oap_interrupted,
 			  list_empty_marker(&oap->oap_pending_item),
 			  list_empty_marker(&oap->oap_rpc_item),
 			  /* 2 */
@@ -221,21 +220,6 @@ static void osc_page_clip(const struct lu_env *env,
 	spin_unlock(&oap->oap_lock);
 }
 
-static int osc_page_cancel(const struct lu_env *env,
-			   const struct cl_page_slice *slice)
-{
-	struct osc_page *opg = cl2osc_page(slice);
-	int rc = 0;
-
-	/* Check if the transferring against this page
-	 * is completed, or not even queued. */
-	if (opg->ops_transfer_pinned)
-		/* FIXME: may not be interrupted.. */
-		rc = osc_cancel_async_page(env, opg);
-	LASSERT(ergo(rc == 0, opg->ops_transfer_pinned == 0));
-	return rc;
-}
-
 static int osc_page_flush(const struct lu_env *env,
 			  const struct cl_page_slice *slice,
 			  struct cl_io *io)
@@ -260,7 +244,6 @@ static const struct cl_page_operations osc_page_ops = {
 	.cpo_print         = osc_page_print,
 	.cpo_delete        = osc_page_delete,
 	.cpo_clip           = osc_page_clip,
-	.cpo_cancel         = osc_page_cancel,
 	.cpo_flush          = osc_page_flush,
 	.cpo_page_touch	   = osc_page_touch,
 };

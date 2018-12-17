@@ -684,25 +684,6 @@ int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 EXPORT_SYMBOL(cl_io_submit_sync);
 
 /**
- * Cancel an IO which has been submitted by cl_io_submit_rw.
- */
-int cl_io_cancel(const struct lu_env *env, struct cl_io *io,
-                 struct cl_page_list *queue)
-{
-        struct cl_page *page;
-        int result = 0;
-
-        CERROR("Canceling ongoing page trasmission\n");
-        cl_page_list_for_each(page, queue) {
-                int rc;
-
-                rc = cl_page_cancel(env, page);
-                result = result ?: rc;
-        }
-        return result;
-}
-
-/**
  * Main io loop.
  *
  * Pumps io through iterations calling

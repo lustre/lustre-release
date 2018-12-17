@@ -73,7 +73,6 @@ enum async_flags {
 struct osc_async_page {
 	int			oap_magic;
 	unsigned short		oap_cmd;
-	unsigned short		oap_interrupted:1;
 
 	struct list_head	oap_pending_item;
 	struct list_head	oap_rpc_item;
@@ -575,7 +574,6 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 		    long target, bool force);
 
 /* osc_cache.c */
-int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops);
 int osc_set_async_flags(struct osc_object *obj, struct osc_page *opg,
 			u32 async_flags);
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,

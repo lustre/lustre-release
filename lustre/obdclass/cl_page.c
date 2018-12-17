@@ -1071,26 +1071,6 @@ void cl_page_print(const struct lu_env *env, void *cookie,
 EXPORT_SYMBOL(cl_page_print);
 
 /**
- * Cancel a page which is still in a transfer.
- */
-int cl_page_cancel(const struct lu_env *env, struct cl_page *page)
-{
-	const struct cl_page_slice *slice;
-	int			    result = 0;
-
-	list_for_each_entry(slice, &page->cp_layers, cpl_linkage) {
-		if (slice->cpl_ops->cpo_cancel != NULL)
-			result = (*slice->cpl_ops->cpo_cancel)(env, slice);
-		if (result != 0)
-			break;
-	}
-	if (result > 0)
-		result = 0;
-
-	return result;
-}
-
-/**
  * Converts a byte offset within object \a obj into a page index.
  */
 loff_t cl_offset(const struct cl_object *obj, pgoff_t idx)
