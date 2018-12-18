@@ -17506,14 +17506,13 @@ test_272a() {
 	$LFS migrate -E 256K -L mdt -E -1 -c2 $dom ||
 		error "failed to migrate to the same DoM component"
 
-	[ $($LFS getstripe -c $dom) -eq 2 ] ||
-		error "layout was not changed silently"
-
 	local new_md5=$(md5sum $dom)
 
-	[ "$old_md5" != "$new_md5" ] &&
+	[ "$old_md5" == "$new_md5" ] ||
 		error "md5sum differ: $old_md5, $new_md5"
-	return 0
+
+	[ $($LFS getstripe -c $dom) -eq 2 ] ||
+		error "migrate stripe count bad: $(LFS getstripe -c $dom) != 2"
 }
 run_test 272a "DoM migration: new layout with the same DOM component"
 
