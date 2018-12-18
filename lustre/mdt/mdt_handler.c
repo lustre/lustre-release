@@ -2087,6 +2087,12 @@ static int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 	return 0;
 }
 
+static inline bool mdt_is_readonly_open(struct mdt_thread_info *info, __u32 op)
+{
+	return op == REINT_OPEN &&
+	     !(info->mti_spec.sp_cr_flags & (MDS_FMODE_WRITE | MDS_OPEN_CREAT));
+}
+
 static int mdt_reint_internal(struct mdt_thread_info *info,
                               struct mdt_lock_handle *lhc,
                               __u32 op)
@@ -2097,15 +2103,21 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 
 	ENTRY;
 
-        rc = mdt_reint_unpack(info, op);
-        if (rc != 0) {
-                CERROR("Can't unpack reint, rc %d\n", rc);
-                RETURN(err_serious(rc));
-        }
+	rc = mdt_reint_unpack(info, op);
+	if (rc != 0) {
+		CERROR("Can't unpack reint, rc %d\n", rc);
+		RETURN(err_serious(rc));
+	}
 
-        /* for replay (no_create) lmm is not needed, client has it already */
-        if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
-                req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
+
+	/* check if the file system is set to readonly. O_RDONLY open
+	 * is still allowed even the file system is set to readonly mode */
+	if (mdt_rdonly(info->mti_exp) && !mdt_is_readonly_open(info, op))
+		RETURN(err_serious(-EROFS));
+
+	/* for replay (no_create) lmm is not needed, client has it already */
+	if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+		req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
 				     DEF_REP_MD_SIZE);
 
 	/* llog cookies are always 0, the field is kept for compatibility */

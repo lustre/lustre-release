@@ -19717,7 +19717,7 @@ saved_MGS_MOUNT_OPTS=$MGS_MOUNT_OPTS
 saved_MDS_MOUNT_OPTS=$MDS_MOUNT_OPTS
 saved_OST_MOUNT_OPTS=$OST_MOUNT_OPTS
 
-cleanup_802() {
+cleanup_802a() {
 	trap 0
 
 	stopall
@@ -19727,7 +19727,7 @@ cleanup_802() {
 	setupall
 }
 
-test_802() {
+test_802a() {
 
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
@@ -19740,7 +19740,7 @@ test_802() {
 	cp $LUSTRE/tests/test-framework.sh $DIR/$tdir/ ||
 		error "(2) Fail to copy"
 
-	trap cleanup_802 EXIT
+	trap cleanup_802a EXIT
 
 	# sync by force before remount as readonly
 	sync; sync_all_data; sleep 3; sync_all_data
@@ -19769,9 +19769,40 @@ test_802() {
 	diff $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
 		error "(7) Read should succeed under ro mode"
 
-	cleanup_802
+	cleanup_802a
 }
-run_test 802 "simulate readonly device"
+run_test 802a "simulate readonly device"
+
+test_802b() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+        remote_mds_nodsh && skip "remote MDS with nodsh"
+
+	do_facet $SINGLEMDS $LCTL get_param mdt.*.readonly ||
+		skip "readonly option not available"
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "(1) fail to mkdir"
+
+	cp $LUSTRE/tests/test-framework.sh $DIR/$tdir/ ||
+		error "(2) Fail to copy"
+
+	# write back all cached data before setting MDT to readonly
+	cancel_lru_locks
+	sync_all_data
+
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.readonly=1
+	stack_trap "do_facet $SINGLEMDS $LCTL set_param mdt.*.readonly=0" EXIT
+
+	echo "Modify should be refused"
+	touch $DIR/$tdir/guard && error "(6) Touch should fail under ro mode"
+
+	echo "Read should be allowed"
+	diff $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
+		error "(7) Read should succeed under ro mode"
+
+	# disable readonly
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.readonly=0
+}
+run_test 802b "be able to set MDTs to readonly"
 
 test_803() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"

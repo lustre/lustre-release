@@ -251,7 +251,8 @@ struct mdt_device {
 				   mdt_enable_remote_dir:1,
 				   mdt_enable_striped_dir:1,
 				   mdt_enable_dir_migration:1,
-				   mdt_skip_lfsck:1;
+				   mdt_skip_lfsck:1,
+				   mdt_readonly:1;
 
 				   /* user with gid can create remote/striped
 				    * dir, and set default dir stripe */
@@ -1089,10 +1090,9 @@ static inline struct mdt_device *mdt_exp2dev(struct obd_export *exp)
 
 static inline bool mdt_rdonly(struct obd_export *exp)
 {
-	if (exp_connect_flags(exp) & OBD_CONNECT_RDONLY ||
-	    mdt_exp2dev(exp)->mdt_bottom->dd_rdonly)
-		return true;
-	return false;
+	return (exp_connect_flags(exp) & OBD_CONNECT_RDONLY ||
+		mdt_exp2dev(exp)->mdt_bottom->dd_rdonly ||
+		mdt_exp2dev(exp)->mdt_readonly);
 }
 
 typedef void (*mdt_reconstruct_t)(struct mdt_thread_info *mti,
