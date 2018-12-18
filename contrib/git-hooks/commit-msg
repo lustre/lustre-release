@@ -19,6 +19,7 @@ init() {
 	readonly SAVE="$(basename $ORIGINAL).$(date +%Y%m%d.%H%M%S)"
 	readonly SIGNOFF="Signed-off-by:"
 	readonly CHANGEID="Change-Id:"
+	readonly FIXES="Fixes:"
 	readonly TESTPARAMS="Test-Parameters:"
 	readonly INNOCUOUS=$(echo \
 			Acked-by \
@@ -106,6 +107,14 @@ function do_testparams() {
 		error "mdsfilesystemtype is deprecated, use mdtfilesystemtype"
 }
 
+function do_fixes() {
+	ck_wrapup
+
+	local commit=$(awk '{ print $2 }' <<<$LINE)
+	git describe --tags $commit 2>&1 | grep "[Nn]ot a valid" &&
+		error "has invalid $FIXES commit hash '$commit'"
+}
+
 # All "innocuous" lines specify a person and email address
 #
 function do_innocuous() {
@@ -181,33 +190,35 @@ usage() {
 	LU-nnn component: short description of change under 64 columns
 
 	The "component:" should be a lower-case single-word subsystem of the
-	Lustre code that best encompasses the change being made.  Examples of
-	components include modules like: llite, lov, lmv, osc, mdc, ldlm, lnet,
-	ptlrpc, mds, oss, osd, ldiskfs, libcfs, socklnd, o2iblnd; functional
-	subsystems like: recovery, quota, grant; and auxilliary areas like:
-	build, tests, docs.  This list is not exhaustive, but is a guideline.
+	Lustre code best covering the patch.  Example components include:
+	   llite, lov, lmv, osc, mdc, ldlm, lnet, ptlrpc, mds, oss, osd,
+	   ldiskfs, libcfs, socklnd, o2iblnd; recovery, quota, grant;
+	   build, tests, docs.
+	This list is not exhaustive, but a guideline.
 
-	The commit comment should contain a detailed explanation of the change
-	being made.  This can be as long as you'd like.  Please give details
-	of what problem was solved (including error messages or problems that
-	were seen), a good high-level description of how it was solved, and
-	which parts of the code were changed (including important functions
-	that were changed, if this is useful to understand the patch, and
-	for easier searching).  Wrap lines at/under $WIDTH_REG columns.
+	The comment body should explan the change being made.  This can be
+	as long as needed.  Please include details of the problem that was
+	solved (including error messages that were seen), a good high-level
+	description of how it was solved, and which parts of the code were
+	changed (including important functions that were changed, if this is
+	useful to understand the patch, and for easier searching).
+	Performance patches should quanify the improvements being seen.
+	Wrap lines at/under $WIDTH_REG columns.
 
-	Finish the comment with a blank line and a blank-line-free
-	sign off section:
+	Finish the comment with a blank line followed by the signoff section:
 
 	$SIGNOFF Your Real Name <your_email@domain.name>
 	$CHANGEID Ixxxx(added automatically if missing)xxxx
 
-	The "$CHANGEID" line should only be there when updating a previous
-	commit/submission.  Copy the one from the original commit.
+	The "$CHANGEID" line should only be present when updating a previous
+	commit/submission.  Copy the $CHANGEID from the original commit. It
+	will automatically be added by the Git commit-msg hook if missing.
 
-	The "sign off section" may also include several other tag lines:
+	The "signoff section" may optionally include other tag lines:
 	$(for T in $(tr '|' ' ' <<< "$INNOCUOUS"); do       \
 	     echo "    $T: Some Person <email@domain.com>"; \
 	  done)
+	$FIXES 12chrgithash ("summary of original broken patch")
 	$TESTPARAMS optional additional test parameters
 	{Organization}-bug-id: associated external change identifier
 	EOF
@@ -222,9 +233,10 @@ exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
 while IFS= read -u3 LINE; do
 	((NUM += 1))
 	case "$LINE" in
-	$SIGNOFF* )   do_signoff     ;;
-	$CHANGEID* )  do_changeid    ;;
-	$TESTPARAMS* ) do_testparams ;;
+	$SIGNOFF* )	do_signoff ;;
+	$CHANGEID* )	do_changeid ;;
+	$FIXES* )	do_fixes ;;
+	$TESTPARAMS* )	do_testparams ;;
 
 	"")
 		HAS_LAST_BLANK=true
