@@ -46,3 +46,4 @@ rhel6.3/ext4-dont-check-in-ro.patch
 rhel6.3/ext4-dont-check-before-replay.patch
 rhel7/ext4-export-orphan-add.patch
 rhel6.3/ext4-mmp-dont-mark-bh-dirty.patch
+rhel7/ext4-include-terminating-u32-in-size-of-xattr-entries-when-expanding-inodes.patch
