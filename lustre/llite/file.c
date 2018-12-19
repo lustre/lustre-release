@@ -415,6 +415,7 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	struct address_space *mapping = inode->i_mapping;
 	struct page *vmpage;
 	struct niobuf_remote *rnb;
+	struct mdt_body *body;
 	char *data;
 	struct lustre_handle lockh;
 	struct ldlm_lock *lock;
@@ -453,18 +454,19 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	if (rnb->rnb_offset % PAGE_SIZE)
 		RETURN_EXIT;
 
-	/* Server returns whole file or just file tail if it fills in
-	 * reply buffer, in both cases total size should be inode size.
+	/* Server returns whole file or just file tail if it fills in reply
+	 * buffer, in both cases total size should be equal to the file size.
 	 */
-	if (rnb->rnb_offset + rnb->rnb_len < i_size_read(inode)) {
-		CERROR("%s: server returns off/len %llu/%u < i_size %llu\n",
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	if (rnb->rnb_offset + rnb->rnb_len != body->mbo_dom_size) {
+		CERROR("%s: server returns off/len %llu/%u but size %llu\n",
 		       ll_get_fsname(inode->i_sb, NULL, 0), rnb->rnb_offset,
-		       rnb->rnb_len, i_size_read(inode));
+		       rnb->rnb_len, body->mbo_dom_size);
 		RETURN_EXIT;
 	}
 
-	CDEBUG(D_INFO, "Get data along with open at %llu len %i, i_size %llu\n",
-	       rnb->rnb_offset, rnb->rnb_len, i_size_read(inode));
+	CDEBUG(D_INFO, "Get data along with open at %llu len %i, size %llu\n",
+	       rnb->rnb_offset, rnb->rnb_len, body->mbo_dom_size);
 
 	data = (char *)rnb + sizeof(*rnb);
 
