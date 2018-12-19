@@ -1,0 +1,31 @@
+Date: Fri, 14 Dec 2018 22:43:43 -0500
+From: "Theodore Ts'o" <tytso@mit.edu>
+List-Id: <linux-ext4.vger.kernel.org>
+
+In ext4_expand_extra_isize_ea(), we calculate the total size of the
+xattr header, plus the xattr entries so we know how much of the
+beginning part of the xattrs to move when expanding the inode extra
+size.  We need to include the terminating u32 at the end of the xattr
+entries, or else if there is uninitialized, non-zero bytes after the
+xattr entries and before the xattr values, the list of xattr entries
+won't be properly terminated.
+
+Reported-by: Steve Graham <stgraham2000@gmail.com>
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+ fs/ext4/xattr.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+Index: linux-3.10.0-862.14.4.el7/fs/ext4/xattr.c
+===================================================================
+--- linux-3.10.0-862.14.4.el7.orig/fs/ext4/xattr.c
++++ linux-3.10.0-862.14.4.el7/fs/ext4/xattr.c
+@@ -1628,7 +1628,7 @@ retry:
+ 	end = (void *)raw_inode + EXT4_SB(inode->i_sb)->s_inode_size;
+ 	min_offs = end - base;
+ 	last = entry;
+-	total_ino = sizeof(struct ext4_xattr_ibody_header);
++	total_ino = sizeof(struct ext4_xattr_ibody_header) + sizeof(u32);
+ 
+ 	ifree = ext4_xattr_free_space(last, &min_offs, base, &total_ino);
+ 	if (ifree >= isize_diff)
