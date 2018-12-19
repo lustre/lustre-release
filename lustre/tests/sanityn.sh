@@ -4493,7 +4493,7 @@ run_test 93 "alloc_rr should not allocate on same ost"
 test_100a() {
 	skip "Reserved for glimpse-ahead" && return
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
 
@@ -4517,7 +4517,7 @@ run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
 
 test_100b() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
 
@@ -4540,7 +4540,7 @@ run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
 
 test_100c() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
 
@@ -4563,7 +4563,7 @@ run_test 100c "DoM: write vs stat without IO lock (combined file)"
 
 test_100d() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
 
@@ -4585,6 +4585,28 @@ test_100d() {
 	rm -f $dom
 }
 run_test 100d "DoM: write+truncate vs stat without IO lock (combined file)"
+
+test_100e() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS version at least 2.11.50"
+
+	local dom=$DIR/$tdir/dom
+	local dom2=$DIR2/$tdir/dom
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
+
+	cancel_lru_locks mdc
+	dd if=/dev/urandom of=$dom bs=12000 count=1
+	$TRUNCATE $dom2 6000
+	cancel_lru_locks mdc
+	lctl set_param -n mdc.*.stats=clear
+	# expect read-on-open to return all data before write
+	cat /etc/hosts >> $dom
+	local read=$(lctl get_param -n mdc.*.stats | grep -c ost_read)
+	[[ $read -eq 0 ]] || error "Unexpected $read READ RPCs"
+}
+run_test 100e "DoM: read on open and file size"
 
 test_101a() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
