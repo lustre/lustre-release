@@ -40,3 +40,4 @@ sles11sp3/ext4_s_max_ext_tree_depth.patch
 sles11sp1/ext4-notalloc_under_idatasem.patch
 rhel6.5/ext4-fix-journal-quota.patch
 sles11sp2/ext4-mmp-dont-mark-bh-dirty.patch
+rhel7/ext4-include-terminating-u32-in-size-of-xattr-entries-when-expanding-inodes.patch
