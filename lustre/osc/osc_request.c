@@ -236,10 +236,7 @@ int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 		sa->sa_upcall = upcall;
 		sa->sa_cookie = cookie;
 
-		if (rqset == PTLRPCD_SET)
-			ptlrpcd_add_req(req);
-		else
-			ptlrpc_set_add_req(rqset, req);
+		ptlrpc_set_add_req(rqset, req);
 	}
 
 	RETURN(0);
@@ -324,10 +321,7 @@ int osc_ladvise_base(struct obd_export *exp, struct obdo *oa,
 	la->la_upcall = upcall;
 	la->la_cookie = cookie;
 
-	if (rqset == PTLRPCD_SET)
-		ptlrpcd_add_req(req);
-	else
-		ptlrpc_set_add_req(rqset, req);
+	ptlrpc_set_add_req(rqset, req);
 
 	RETURN(0);
 }
@@ -499,10 +493,7 @@ int osc_sync_base(struct osc_object *obj, struct obdo *oa,
 	fa->fa_upcall = upcall;
 	fa->fa_cookie = cookie;
 
-	if (rqset == PTLRPCD_SET)
-		ptlrpcd_add_req(req);
-	else
-		ptlrpc_set_add_req(rqset, req);
+	ptlrpc_set_add_req(rqset, req);
 
 	RETURN (0);
 }
@@ -2468,8 +2459,6 @@ int osc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 	RETURN(rc);
 }
 
-struct ptlrpc_request_set *PTLRPCD_SET = (void *)1;
-
 /* When enqueuing asynchronously, locks are not ordered, we can obtain a lock
  * from the 2nd OSC before a lock from the 1st one. This does not deadlock with
  * other synchronous requests, however keeping some locks and trying to obtain
@@ -2608,10 +2597,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 			}
 
 			req->rq_interpret_reply = osc_enqueue_interpret;
-			if (rqset == PTLRPCD_SET)
-				ptlrpcd_add_req(req);
-			else
-				ptlrpc_set_add_req(rqset, req);
+			ptlrpc_set_add_req(rqset, req);
 		} else if (intent) {
 			ptlrpc_req_finished(req);
 		}

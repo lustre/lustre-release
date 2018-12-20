@@ -2116,6 +2116,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set);
 int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *);
 void ptlrpc_set_destroy(struct ptlrpc_request_set *);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
+#define PTLRPCD_SET ((struct ptlrpc_request_set *)1)
 
 void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool);
 int ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);

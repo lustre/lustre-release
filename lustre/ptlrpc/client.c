@@ -1177,6 +1177,11 @@ EXPORT_SYMBOL(ptlrpc_set_destroy);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
 			struct ptlrpc_request *req)
 {
+	if (set == PTLRPCD_SET) {
+		ptlrpcd_add_req(req);
+		return;
+	}
+
 	LASSERT(req->rq_import->imp_state != LUSTRE_IMP_IDLE);
 	LASSERT(list_empty(&req->rq_set_chain));
 

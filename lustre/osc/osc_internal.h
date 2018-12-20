@@ -53,8 +53,6 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
 int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 			   pgoff_t start, pgoff_t end, bool discard);
 
-extern struct ptlrpc_request_set *PTLRPCD_SET;
-
 void osc_lock_lvb_update(const struct lu_env *env,
 			 struct osc_object *osc,
 			 struct ldlm_lock *dlmlock,
