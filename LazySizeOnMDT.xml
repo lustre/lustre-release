@@ -1,0 +1,267 @@
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lsom"
+    condition="l212">
+  <title xml:id="lsom.title">Lazy Size on MDT (LSoM)</title>
+  <para>This chapter describes Lazy Size on MDT (LSoM).</para>
+  <section xml:id="dbdoclet.lsomintro">
+    <title>
+    <indexterm>
+      <primary>lsom</primary>
+      <secondary>intro</secondary>
+    </indexterm>Introduction to Lazy Size on MDT (LSoM)</title>
+    <para>In the Lustre file system, MDSs store the ctime, mtime, owner,
+    and other file attributes. The OSSs store the size and number of
+    blocks used for each file. To obtain the correct file size, the client
+    must contact each OST that the file is stored across, which means
+    multiple RPCs to get the size and blocks for a file when a file is
+    striped over multiple OSTs. The Lazy Size on MDT (LSoM) feature stores
+    the file size on the MDS and avoids the need to fetch the file size
+    from the OST(s) in cases where the application understands that the
+    size may not be accurate. Lazy means there is no guarantee of the
+    accuracy of the attributes stored on the MDS.</para>
+    <para>Since many Lustre installations use SSD for MDT storage, the
+    motivation for the LSoM work is to speed up the time it takes to get
+    the size of a file from the Lustre file system by storing that data on
+    the MDTs. We expect this feature to be initially used by Lustre policy
+    engines that scan the backend MDT storage, make decisions based on broad
+    size categories, and do not depend on a totally accurate file size.
+    Examples include Lester, Robinhood, Zester, and DDN’s Lustre Integrated
+    Policy Engine (LiPE). Future improvements will allow the LSoM data to be
+    accessed by tools such as <literal>lfs find</literal>.</para>
+  </section>
+  <section xml:id="dbdoclet.enablelsom">
+    <title><indexterm><primary>lsom</primary>
+      <secondary>enablelsom</secondary></indexterm>Enable LSoM</title>
+    <para> LSoM is always enabled and nothing needs to be done to enable the
+    feature for fetching the LSoM data when scanning the MDT inodes with a
+    policy engine. It is also possible to access the LSoM data on the client
+    via the <literal>lfs getsom</literal> command.  Because the LSoM data is
+    currently accessed on the client via the xattr interface, the
+    <literal>xattr_cache</literal> will cache the file size and block count on
+    the client as long as the inode is cached.  In most cases this is
+    desirable, since it improves access to the LSoM data.  However, it also
+    means that the LSoM data may be stale if the file size is changed after the
+    xattr is first accessed or if the xattr is accessed shortly after the file
+    is first created.</para>
+    <para>If it is necessary to access up-to-date LSoM data that has gone
+    stale, it is possible to flush the xattr cache from the client by
+    cancelling the MDC locks via
+    <literal>ldlm set_param ldlm.namespaces.*mdc*.lru_size=clear</literal>.
+    Otherwise, the file attributes will be dropped from the client cache if
+    the file has not been accessed before the LDLM lock timeout.  The timeout
+    is stored via
+    <literal>lctl get_param ldlm.namespaces.*mdc*.lru_max_age</literal>.</para>
+    <para>If repeated access to LSoM attributes for files that are recently
+    created or frequently modified from a specific client, such as an HSM agent
+    node, it is possible to disable xattr caching on a client via:
+    <literal>lctl set_param llite.*.xattr_cache=0</literal>.  This may cause
+    extra overhead when accessing files, and is not recommended for normal
+    usage.</para>
+  </section>
+  <section xml:id="dbdoclet.usercmds">
+    <title><indexterm><primary>lsom</primary>
+      <secondary>usercommands</secondary></indexterm>User Commands</title>
+    <para>Lustre provides the <literal>lfs getsom</literal> command to list
+    file attributes that are stored on the MDT.</para>
+    <para>The <literal>llsom_sync</literal> command allows the user to sync
+    the file attributes on the MDT with the valid/up-to-date data on the
+    OSTs. <literal>llsom_sync</literal> is called on the client with the
+    Lustre file system mount point. <literal>llsom_sync</literal> uses Lustre
+    MDS changelogs and, thus, a changelog user must be registered to use this
+    utility.</para>
+    <section xml:id="dbdoclet.lfsgetsom">
+      <title><indexterm><primary>lsom</primary>
+        <secondary>lfsgetsom</secondary></indexterm>lfs getsom for LSoM data
+      </title>
+      <para>The <literal>lfs getsom</literal> command lists file attributes
+      that are stored on the MDT. <literal>lfs getsom</literal> is called
+      with the full path and file name for a file on the Lustre file
+      system. If no flags are used, then all file attributes stored on the
+      MDS will be shown.</para>
+      <section><title>lfs getsom Command</title>
+        <para><screen>lfs getsom [-s] [-b] [-f] &lt;filename&gt;</screen>
+          The various <literal>lfs getsom</literal> options are listed and
+          described below.</para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="3*" />
+            <colspec colname="c2" colwidth="7*" />
+            <thead>
+              <row>
+                <entry>
+                  <para>
+                    <emphasis role="bold">Option</emphasis>
+                  </para>
+                </entry>
+                <entry>
+                  <para>
+                    <emphasis role="bold">Description</emphasis>
+                  </para>
+                </entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>
+                  <para>
+                    <literal>-s</literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>Only show the size value of the LSoM data for a given
+                  file. This is an optional flag</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>-b</literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>Only show the blocks value of the LSoM data for a
+                  given file. This is an optional flag</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>-f</literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>Only show the flag value of the LSoM data for a given
+                  file. This is an optional flag. Valid flags are:</para>
+                  <para>SOM_FL_UNKNOWN = 0x0000 - Unknown or no SoM data,
+                   must get size from OSTs.</para>
+                  <para>SOM_FL_STRICT = 0x0001 - Known strictly correct, FLR
+                  file (SoM guaranteed)</para>
+                  <para>SOM_FL_STALE = 0x0002 - Known stale -was right at
+                  some point in the past, but it is known (or likely) to be
+                  incorrect now (e.g. opened for write)</para>
+                  <para>SOM_FL_LAZY= 0x0004 - Approximate, may never have
+                  been strictly correct, need to sync SOM data to achieve
+                  eventual consistency.</para>
+                </entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+      </section>
+    </section>
+    <section><title>Syncing LSoM data</title>
+    <para>The <literal>llsom_sync</literal> command allows the user to sync
+      the file attributes on the MDT with the valid/up-to-date data on the
+      OSTs. <literal>llsom_sync</literal> is called on the client with the
+      client mount point for the Lustre file system.
+      <literal>llsom_sync</literal> uses Lustre MDS changelogs and, thus, a
+      changelog user must be registered to use this utility.</para>
+    <section><title>llsom_sync Command</title>
+      <screen>llsom_sync --mdt|-m &lt;mdt&gt; --user|-u &lt;user_id&gt;
+              [--daemonize|-d] [--verbose|-v] [--interval|-i] [--min-age|-a]
+              [--max-cache|-c] [--sync|-s] &lt;lustre_mount_point&gt;</screen>
+      <para>The various <literal>llsom_sync</literal> options are
+      listed and described below.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="3*" />
+          <colspec colname="c2" colwidth="7*" />
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para><literal>--mdt | -m &lt;mdt&gt;</literal></para>
+              </entry>
+              <entry>
+                <para>The metadata device which need to be synced the LSoM
+                xattr of files. A changelog user must be registered for
+                this device.Required flag.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--user | -u &lt;user_id&gt;</literal></para>
+              </entry>
+              <entry>
+                <para>The changelog user id for the MDT device. Required
+                flag.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--daemonize | -d</literal></para>
+              </entry>
+              <entry>
+                <para>Optional flag to “daemonize” the program. In daemon
+                mode, the utility will scan, process the changelog records
+                and sync the LSoM xattr for files periodically.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--verbose | -v</literal></para>
+              </entry>
+              <entry>
+                <para>Optional flag to produce verbose output.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--interval | -i</literal></para>
+              </entry>
+              <entry>
+                <para>Optional flag for the time interval to scan the
+                Lustre changelog and process the log record in daemon
+                mode.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--min-age | -a</literal></para>
+              </entry>
+              <entry>
+                <para>Optional flag for the time that
+                <literal>llsom_sync</literal> tool will not try to sync the
+                LSoM data for any files closed less than this many seconds
+                old. The default min-age value is 600s(10 minutes).</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--max-cache | -c</literal></para>
+              </entry>
+              <entry>
+                <para>Optional flag for the total memory used for the FID
+                cache which can be with a suffix [KkGgMm].The default
+                max-cache value is 256MB. For the parameter value &lt; 100,
+                it is taken as the percentage of total memory size used for
+                the FID cache instead of the cache size.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>--sync | -s</literal></para>
+              </entry>
+              <entry>
+                <para>Optional flag to sync file data to make the dirty
+                data out of cache to ensure the blocks count is correct
+                when update the file LSoM xattr. This option could hurt
+                server performance significantly if thousands of fsync
+                requests are sent.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    </section>
+  </section>
+</chapter>
