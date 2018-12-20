@@ -170,18 +170,18 @@ static
 struct config_llog_data *config_log_find(char *logname,
                                          struct config_llog_instance *cfg)
 {
-        struct config_llog_data *cld;
-        struct config_llog_data *found = NULL;
-        void *                   instance;
-        ENTRY;
+	struct config_llog_data *cld;
+	struct config_llog_data *found = NULL;
+	unsigned long cfg_instance;
 
-        LASSERT(logname != NULL);
+	ENTRY;
+	LASSERT(logname != NULL);
 
-        instance = cfg ? cfg->cfg_instance : NULL;
+	cfg_instance = cfg ? cfg->cfg_instance : 0;
 	spin_lock(&config_list_lock);
 	list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
-		/* check if instance equals */
-		if (instance != cld->cld_cfg.cfg_instance)
+		/* check if cfg_instance is the one we want */
+		if (cfg_instance != cld->cld_cfg.cfg_instance)
 			continue;
 
 		/* instance may be NULL, should check name */
@@ -207,8 +207,8 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 
 	ENTRY;
 
-	CDEBUG(D_MGC, "do adding config log %s:%p\n", logname,
-	       cfg ? cfg->cfg_instance : NULL);
+	CDEBUG(D_MGC, "do adding config log %s-%016lx\n", logname,
+	       cfg ? cfg->cfg_instance : 0);
 
 	OBD_ALLOC(cld, sizeof(*cld) + strlen(logname) + 1);
 	if (!cld)
@@ -253,47 +253,49 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 }
 
 static struct config_llog_data *config_recover_log_add(struct obd_device *obd,
-        char *fsname,
-        struct config_llog_instance *cfg,
-        struct super_block *sb)
+					char *fsname,
+					struct config_llog_instance *cfg,
+					struct super_block *sb)
 {
-        struct config_llog_instance lcfg = *cfg;
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        struct config_llog_data *cld;
-        char logname[32];
+	struct config_llog_instance lcfg = *cfg;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct config_llog_data *cld;
+	char logname[32];
 
 	if (IS_OST(lsi))
-                return NULL;
+		return NULL;
 
 	/* for osp-on-ost, see lustre_start_osp() */
 	if (IS_MDT(lsi) && lcfg.cfg_instance)
 		return NULL;
 
-        /* we have to use different llog for clients and mdts for cmd
-         * where only clients are notified if one of cmd server restarts */
-        LASSERT(strlen(fsname) < sizeof(logname) / 2);
-        strcpy(logname, fsname);
+	/* We have to use different llog for clients and MDTs for DNE,
+	 * where only clients are notified if one of DNE server restarts.
+	 */
+	LASSERT(strlen(fsname) < sizeof(logname) / 2);
+	strncpy(logname, fsname, sizeof(logname));
 	if (IS_SERVER(lsi)) { /* mdt */
-                LASSERT(lcfg.cfg_instance == NULL);
-                lcfg.cfg_instance = sb;
-                strcat(logname, "-mdtir");
-        } else {
-                LASSERT(lcfg.cfg_instance != NULL);
-                strcat(logname, "-cliir");
-        }
+		LASSERT(lcfg.cfg_instance == 0);
+		lcfg.cfg_instance = ll_get_cfg_instance(sb);
+		strncat(logname, "-mdtir", sizeof(logname));
+	} else {
+		LASSERT(lcfg.cfg_instance != 0);
+		strncat(logname, "-cliir", sizeof(logname));
+	}
 
-        cld = do_config_log_add(obd, logname, CONFIG_T_RECOVER, &lcfg, sb);
-        return cld;
+	cld = do_config_log_add(obd, logname, CONFIG_T_RECOVER, &lcfg, sb);
+	return cld;
 }
 
 static struct config_llog_data *config_log_find_or_add(struct obd_device *obd,
 				char *logname, struct super_block *sb, int type,
 				struct config_llog_instance *cfg)
 {
-	struct config_llog_instance	lcfg = *cfg;
-	struct config_llog_data		*cld;
+	struct config_llog_instance lcfg = *cfg;
+	struct config_llog_data *cld;
 
-	lcfg.cfg_instance = sb != NULL ? (void *)sb : (void *)obd;
+	/* Note class_config_llog_handler() depends on getting "obd" back */
+	lcfg.cfg_instance = sb ? ll_get_cfg_instance(sb) : (unsigned long)obd;
 
 	cld = config_log_find(logname, &lcfg);
 	if (unlikely(cld != NULL))
@@ -323,7 +325,8 @@ config_log_add(struct obd_device *obd, char *logname,
 	bool locked = false;
 	ENTRY;
 
-	CDEBUG(D_MGC, "adding config log %s:%p\n", logname, cfg->cfg_instance);
+	CDEBUG(D_MGC, "add config log %s-%016lx\n", logname,
+	       cfg->cfg_instance);
 
 	/*
 	 * for each regular log, the depended sptlrpc log name is
@@ -1402,34 +1405,34 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 				  __u64 max_version,
 				  void *data, int datalen, bool mne_swab)
 {
-        struct config_llog_instance *cfg = &cld->cld_cfg;
-        struct lustre_sb_info       *lsi = s2lsi(cfg->cfg_sb);
-        struct mgs_nidtbl_entry *entry;
-        struct lustre_cfg       *lcfg;
-        struct lustre_cfg_bufs   bufs;
-        u64   prev_version = 0;
-        char *inst;
-        char *buf;
-        int   bufsz;
-        int   pos;
-        int   rc  = 0;
-        int   off = 0;
-        ENTRY;
+	struct config_llog_instance *cfg = &cld->cld_cfg;
+	struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
+	struct mgs_nidtbl_entry *entry;
+	struct lustre_cfg *lcfg;
+	struct lustre_cfg_bufs bufs;
+	u64 prev_version = 0;
+	char *inst;
+	char *buf;
+	int bufsz;
+	int pos;
+	int rc  = 0;
+	int off = 0;
 
-        LASSERT(cfg->cfg_instance != NULL);
-        LASSERT(cfg->cfg_sb == cfg->cfg_instance);
+	ENTRY;
+	LASSERT(cfg->cfg_instance != 0);
+	LASSERT(ll_get_cfg_instance(cfg->cfg_sb) == cfg->cfg_instance);
 
 	OBD_ALLOC(inst, PAGE_SIZE);
 	if (inst == NULL)
 		RETURN(-ENOMEM);
 
 	if (!IS_SERVER(lsi)) {
-		pos = snprintf(inst, PAGE_SIZE, "%p", cfg->cfg_instance);
+		pos = snprintf(inst, PAGE_SIZE, "%016lx", cfg->cfg_instance);
 		if (pos >= PAGE_SIZE) {
 			OBD_FREE(inst, PAGE_SIZE);
 			return -E2BIG;
 		}
-        } else {
+	} else {
 		LASSERT(IS_MDT(lsi));
 		rc = server_name2svname(lsi->lsi_svname, inst, NULL,
 					PAGE_SIZE);
@@ -2047,12 +2050,12 @@ restart:
 	mutex_lock(&cld->cld_lock);
 	if (cld->cld_stopping) {
 		mutex_unlock(&cld->cld_lock);
-                RETURN(0);
-        }
+		RETURN(0);
+	}
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PAUSE_PROCESS_LOG, 20);
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MGC_PAUSE_PROCESS_LOG, 20);
 
-	CDEBUG(D_MGC, "Process log %s:%p from %d\n", cld->cld_logname,
+	CDEBUG(D_MGC, "Process log %s-%016lx from %d\n", cld->cld_logname,
 	       cld->cld_cfg.cfg_instance, cld->cld_cfg.cfg_last_idx + 1);
 
 	/* Get the cfg lock on the llog */

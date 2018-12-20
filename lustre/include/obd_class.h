@@ -189,7 +189,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg);
 
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
-	void			*cfg_instance;
+	unsigned long		 cfg_instance;
 	struct super_block	*cfg_sb;
 	struct obd_uuid		 cfg_uuid;
 	llog_cb_t		 cfg_callback;
@@ -200,6 +200,19 @@ struct config_llog_instance {
 };
 int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 			    char *name, struct config_llog_instance *cfg);
+
+/**
+ * Generate a unique configuration instance for this mount
+ *
+ * Temporary hack to bypass ASLR in 4.15+ kernels, a better fix soon.
+ * For now, use the same value as before - the superblock pointer value.
+ *
+ * Using the client UUID would be an option, but it needs more testing.
+ */
+static inline unsigned long ll_get_cfg_instance(struct super_block *sb)
+{
+	return (unsigned long)sb;
+}
 
 #define CONFIG_SUB_SPTLRPC	0x01
 #define CONFIG_SUB_RECOVER	0x02

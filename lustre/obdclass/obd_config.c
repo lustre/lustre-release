@@ -806,7 +806,7 @@ static int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 static LIST_HEAD(lustre_profile_list);
 static DEFINE_SPINLOCK(lustre_profile_list_lock);
 
-struct lustre_profile *class_get_profile(const char * prof)
+struct lustre_profile *class_get_profile(const char *prof)
 {
 	struct lustre_profile *lprof;
 
@@ -1636,8 +1636,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		 */
 		if (!(cfg->cfg_flags & CFG_F_MARKER) &&
 		    (lcfg->lcfg_command != LCFG_MARKER)) {
-			CWARN("Config not inside markers, ignoring! "
-			      "(inst: %p, uuid: %s, flags: %#x)\n",
+			CWARN("Skip config outside markers, (inst: %016lx, uuid: %s, flags: %#x)\n",
 				cfg->cfg_instance,
 				cfg->cfg_uuid.uuid, cfg->cfg_flags);
 			cfg->cfg_flags |= CFG_F_SKIP;
@@ -1718,7 +1717,7 @@ int class_config_llog_handler(const struct lu_env *env,
 			OBD_ALLOC(inst_name, inst_len);
 			if (inst_name == NULL)
 				GOTO(out, rc = -ENOMEM);
-			snprintf(inst_name, inst_len, "%s-%p",
+			snprintf(inst_name, inst_len, "%s-%016lx",
 				lustre_cfg_string(lcfg, 0),
 				cfg->cfg_instance);
 			lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
@@ -1726,23 +1725,22 @@ int class_config_llog_handler(const struct lu_env *env,
 			       lcfg->lcfg_command, inst_name);
 		}
 
-                /* we override the llog's uuid for clients, to insure they
-                are unique */
-		if (cfg->cfg_instance != NULL &&
-		    lcfg->lcfg_command == LCFG_ATTACH) {
+		/* override llog UUID for clients, to insure they are unique */
+		if (cfg->cfg_instance && lcfg->lcfg_command == LCFG_ATTACH)
 			lustre_cfg_bufs_set_string(&bufs, 2,
 						   cfg->cfg_uuid.uuid);
-		}
-                /*
-                 * sptlrpc config record, we expect 2 data segments:
-                 *  [0]: fs_name/target_name,
-                 *  [1]: rule string
-                 * moving them to index [1] and [2], and insert MGC's
-                 * obdname at index [0].
-                 */
+		/*
+		 * sptlrpc config record, we expect 2 data segments:
+		 *  [0]: fs_name/target_name,
+		 *  [1]: rule string
+		 * moving them to index [1] and [2], and insert MGC's
+		 * obdname at index [0].
+		 */
 		if (cfg->cfg_instance &&
 		    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
-			struct obd_device *obd = cfg->cfg_instance;
+			/* After ASLR changes cfg_instance this needs fixing */
+			/* "obd" is set in config_log_find_or_add() */
+			struct obd_device *obd = (void *)cfg->cfg_instance;
 
 			lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
 					    bufs.lcfg_buflen[1]);

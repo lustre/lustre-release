@@ -1344,26 +1344,36 @@ int llapi_search_rootpath(char *pathname, const char *fsname)
 
 int llapi_getname(const char *path, char *buf, size_t size)
 {
-        struct obd_uuid uuid_buf;
-        char *uuid = uuid_buf.uuid;
-        int rc, nr;
+	struct obd_uuid uuid_buf;
+	char *uuid = uuid_buf.uuid;
+	char *cfg_instance;
+	int rc, len, fsname_len;
 
-        memset(&uuid_buf, 0, sizeof(uuid_buf));
-        rc = llapi_file_get_lov_uuid(path, &uuid_buf);
-        if (rc)
-                return rc;
+	memset(&uuid_buf, 0, sizeof(uuid_buf));
+	rc = llapi_file_get_lov_uuid(path, &uuid_buf);
+	if (rc)
+		return rc;
 
-        /* We want to turn lustre-clilov-ffff88002738bc00 into
-         * lustre-ffff88002738bc00. */
+	/*
+	 * We want to turn testfs-clilov-ffff88002738bc00 into
+	 * testfs-ffff88002738bc00 in a portable way that doesn't depend
+	 * on what is after "-clilov-" as it may change in the future.
+	 * Unfortunately, the "fsname" part may contain a dash, so we
+	 * can't just skip to the first dash, and the "instance" may be a
+	 * UUID in the future, so we can't necessarily go to the last dash.
+	 */
+	cfg_instance = strstr(uuid, "-clilov-");
+	if (!cfg_instance)
+		return -EINVAL;
 
-        nr = snprintf(buf, size, "%.*s-%s",
-                      (int) (strlen(uuid) - 24), uuid,
-                      uuid + strlen(uuid) - 16);
+	fsname_len = cfg_instance - uuid;
+	cfg_instance += strlen("-clilov-");
+	len = snprintf(buf, size, "%.*s-%s", fsname_len, uuid, cfg_instance);
 
-        if (nr >= size)
-                rc = -ENAMETOOLONG;
+	if (len >= size)
+		rc = -ENAMETOOLONG;
 
-        return rc;
+	return rc;
 }
 
 /**

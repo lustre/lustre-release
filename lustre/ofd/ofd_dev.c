@@ -789,18 +789,19 @@ int ofd_fid_fini(const struct lu_env *env, struct ofd_device *ofd)
  */
 int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 {
-	struct seq_server_site	*ss = &ofd->ofd_seq_site;
-	struct lu_device	*lu = &ofd->ofd_dt_dev.dd_lu_dev;
-	char			*obd_name = ofd_name(ofd);
-	char			*name = NULL;
-	int			rc = 0;
+	struct seq_server_site *ss = &ofd->ofd_seq_site;
+	struct lu_device *lu = &ofd->ofd_dt_dev.dd_lu_dev;
+	char *obd_name = ofd_name(ofd);
+	char *name = NULL;
+	int len = strlen(obd_name) + 7;
+	int rc = 0;
 
 	ss = &ofd->ofd_seq_site;
 	lu->ld_site->ld_seq_site = ss;
 	ss->ss_lu = lu->ld_site;
 	ss->ss_node_id = ofd->ofd_lut.lut_lsd.lsd_osd_index;
 
-	OBD_ALLOC(name, sizeof(obd_name) * 2 + 10);
+	OBD_ALLOC(name, len);
 	if (name == NULL)
 		return -ENOMEM;
 
@@ -811,7 +812,7 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 	rc = seq_server_init(env, ss->ss_server_seq, ofd->ofd_osd, obd_name,
 			     LUSTRE_SEQ_SERVER, ss);
 	if (rc) {
-		CERROR("%s : seq server init error %d\n", obd_name, rc);
+		CERROR("%s: seq server init error: rc = %d\n", obd_name, rc);
 		GOTO(out_server, rc);
 	}
 	ss->ss_server_seq->lss_space.lsr_index = ss->ss_node_id;
@@ -820,15 +821,11 @@ int ofd_fid_init(const struct lu_env *env, struct ofd_device *ofd)
 	if (ss->ss_client_seq == NULL)
 		GOTO(out_server, rc = -ENOMEM);
 
-	/*
-	 * It always printed as "%p", so that the name is unique in the kernel,
-	 * even if the filesystem is mounted twice. So sizeof(.) * 2 is enough.
-	 */
-	snprintf(name, sizeof(obd_name) * 2 + 7, "%p-super", obd_name);
+	snprintf(name, len, "%s-super", obd_name);
 	rc = seq_client_init(ss->ss_client_seq, NULL, LUSTRE_SEQ_DATA,
 			     name, NULL);
 	if (rc) {
-		CERROR("%s : seq client init error %d\n", obd_name, rc);
+		CERROR("%s: seq client init error: rc = %d\n", obd_name, rc);
 		GOTO(out_client, rc);
 	}
 
@@ -845,7 +842,7 @@ out_server:
 		ss->ss_server_seq = NULL;
 	}
 out_name:
-	OBD_FREE(name, sizeof(obd_name) * 2 + 10);
+	OBD_FREE(name, len);
 
 	return rc;
 }
