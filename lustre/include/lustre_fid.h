@@ -345,7 +345,6 @@ static inline void ost_layout_le_to_cpu(struct ost_layout *dst,
 	dst->ol_comp_id = __le32_to_cpu(src->ol_comp_id);
 }
 
-/* Both filter_fid_*cpu* functions not currently used */
 static inline void filter_fid_cpu_to_le(struct filter_fid *dst,
 					const struct filter_fid *src, int size)
 {

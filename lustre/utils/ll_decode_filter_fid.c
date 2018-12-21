@@ -87,6 +87,7 @@ int main(int argc, char *argv[])
 	for (i = 1; i < argc; i++) {
 		char buf[1024]; /* allow xattr that may be larger */
 		struct filter_fid *ff = (void *)buf;
+		static int printed;
 		int size;
 
 		size = getxattr(argv[i], "trusted.fid", buf,
@@ -146,16 +147,21 @@ int main(int argc, char *argv[])
 		}
 
 		if (size != sizeof(struct filter_fid) &&
-		    size != sizeof(struct filter_fid_old) &&
-		    size != sizeof(struct lu_fid)) {
-			fprintf(stderr, "%s: warning: fid larger than expected"
-				" (%d bytes), recompile?\n", argv[i], size);
-			continue;
+		    size != sizeof(struct filter_fid_18_23) &&
+		    size != sizeof(struct filter_fid_24_29) &&
+		    size != sizeof(struct filter_fid_210) && !printed) {
+			fprintf(stderr,
+				"%s: warning: ffid size is unexpected (%d bytes), recompile?\n",
+				argv[i], size);
+			printed = 1;
+
+			if (size < sizeof(struct filter_fid_24_29))
+				continue;
 		}
 
 		printf("%s: ", argv[i]);
-		if (size == sizeof(struct filter_fid_old)) {
-			struct filter_fid_old *ffo = (void *)buf;
+		if (size == sizeof(struct filter_fid_18_23)) {
+			struct filter_fid_18_23 *ffo = (void *)buf;
 
 			printf("objid=%llu seq=%llu ",
 			       (unsigned long long)__le64_to_cpu(ffo->ff_objid),
@@ -168,7 +174,7 @@ int main(int argc, char *argv[])
 		       /* this is stripe_nr actually */
 		       __le32_to_cpu(ff->ff_parent.f_stripe_idx));
 
-		if (size >= sizeof(struct filter_fid)) {
+		if (size >= sizeof(struct filter_fid_210)) {
 			struct ost_layout *ol = &ff->ff_layout;
 
 			/* new filter_fid, support PFL */
@@ -183,6 +189,10 @@ int main(int argc, char *argv[])
 				       __le64_to_cpu(ol->ol_comp_start),
 				       __le64_to_cpu(ol->ol_comp_end));
 		}
+		if (size >= sizeof(struct filter_fid))
+			printf(" layout_version=%u range=%u",
+			       __le32_to_cpu(ff->ff_layout_version),
+			       __le32_to_cpu(ff->ff_range));
 
 		printf("\n");
 	}
