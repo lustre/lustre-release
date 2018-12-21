@@ -1106,7 +1106,7 @@ static int fid_is_for_ostobj(const struct lu_env *env,
 	loa = &lfsck_env_info(env)->lti_loa;
 	rc = dt_xattr_get(env, obj, lfsck_buf_get(env, loa, sizeof(*loa)),
 			  XATTR_NAME_LMA);
-	if (rc >= sizeof(struct lustre_mdt_attrs)) {
+	if (rc >= (int)sizeof(struct lustre_mdt_attrs)) {
 		lustre_lma_swab(&loa->loa_lma);
 
 		return loa->loa_lma.lma_compat & LMAC_FID_ON_OST ? 1 : 0;
