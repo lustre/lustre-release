@@ -1175,6 +1175,9 @@ test_6() {
 	#define OBD_FAIL_PTLRPC_DROP_REQ_OPC 0x513
 	lustre_fail mds 0x513 601
 
+	do_facet ost1 $LCTL set_param \
+			osd-*.$FSNAME-OST*.quota_slave.timeout=$((TIMEOUT / 2))
+
 	# write to un-enforced ID ($TSTUSR2) should succeed
 	$RUNAS2 $DD of=$TESTFILE2 count=$LIMIT seek=1 oflag=sync conv=notrunc ||
 		error "write failure, expect success"
