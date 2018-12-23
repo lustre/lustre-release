@@ -85,22 +85,6 @@ stacktrace_ops_warning, [
 ]) # LIBCFS_STACKTRACE_WARNING
 
 #
-# LIBCFS_REINIT_COMPLETION
-#
-AC_DEFUN([LIBCFS_REINIT_COMPLETION], [
-LB_CHECK_COMPILE([if 'reinit_completion' exists],
-reinit_completion, [
-	#include <linux/completion.h>
-],[
-	struct completion x;
-	reinit_completion(&x);
-],[
-	AC_DEFINE(HAVE_REINIT_COMPLETION, 1,
-		[reinit_completion is exist])
-])
-]) # LIBCFS_REINIT_COMPLETION
-
-#
 # LC_SHRINKER_WANT_SHRINK_PTR
 #
 # RHEL6/2.6.32 want to have pointer to shrinker self pointer in handler function
@@ -581,27 +565,6 @@ ktime_get_seconds, [
 ]) # LIBCFS_KTIME_GET_SECONDS
 
 #
-# Kernel version 3.19 commit 5aaba36318e5995e8c95d077a46d9a4d00fcc1cd
-# This patch creates a new helper function cpumap_print_to_pagebuf in
-# cpumask.h using newly added bitmap_print_to_pagebuf and consolidates
-# most of those sysfs functions using the new helper function.
-#
-AC_DEFUN([LIBCFS_HAVE_CPUMASK_PRINT_TO_PAGEBUF],[
-LB_CHECK_COMPILE([does function 'cpumap_print_to_pagebuf' exist],
-cpumap_print_to_pagebuf, [
-	#include <linux/topology.h>
-],[
-	int n;
-	char *buf = NULL;
-	const struct cpumask *mask = NULL;
-	n = cpumap_print_to_pagebuf(true, buf, mask);
-],[
-	AC_DEFINE(HAVE_CPUMASK_PRINT_TO_PAGEBUF, 1,
-		[cpumap_print_to_pagebuf is available])
-])
-]) # LIBCFS_HAVE_CPUMASK_PRINT_TO_PAGEBUF
-
-#
 # Kernel version 4.0 commit 41fbf3b39d5eca01527338b4d0ee15ee1ae1023c
 # introduced the helper function ktime_ms_delta.
 #
@@ -967,7 +930,6 @@ LIBCFS_DUMP_TRACE_ADDRESS
 LC_SHRINK_CONTROL
 # 3.0
 LIBCFS_STACKTRACE_WARNING
-LIBCFS_REINIT_COMPLETION
 # 3.5
 LIBCFS_PROCESS_NAMESPACE
 LIBCFS_I_UID_READ
@@ -997,7 +959,6 @@ LIBCFS_TIMESPEC64_SUB
 LIBCFS_TIMESPEC64_TO_KTIME
 # 3.19
 LIBCFS_KTIME_GET_SECONDS
-LIBCFS_HAVE_CPUMASK_PRINT_TO_PAGEBUF
 # 4.0
 LIBCFS_KTIME_MS_DELTA
 # 4.1
