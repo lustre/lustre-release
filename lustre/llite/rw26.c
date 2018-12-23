@@ -664,7 +664,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 	int result = 0;
 	ENTRY;
 
-	CDEBUG(D_PAGE, "Writing %lu of %d to %d bytes\n", index, from, len);
+	CDEBUG(D_VFSTRACE, "Writing %lu of %d to %d bytes\n", index, from, len);
 
 	lcc = ll_cl_find(file);
 	if (lcc == NULL) {
@@ -864,7 +864,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		if (plist->pl_nr >= PTLRPC_MAX_BRW_PAGES)
 			unplug = true;
 
-		CL_PAGE_DEBUG(D_PAGE, env, page,
+		CL_PAGE_DEBUG(D_VFSTRACE, env, page,
 			      "queued page: %d.\n", plist->pl_nr);
 	} else {
 		cl_page_disown(env, io, page);
@@ -876,7 +876,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		/* page list is not contiguous now, commit it now */
 		unplug = true;
 	}
-	if (unplug || io->u.ci_rw.rw_sync)
+	if (unplug || io->u.ci_wr.wr_sync)
 		result = vvp_io_write_commit(env, io);
 
 	if (result < 0)

@@ -44,8 +44,8 @@
 #include <lustre_intent.h>
 #include <linux/compat.h>
 #include <linux/aio.h>
-
 #include <lustre_compat.h>
+
 #include "vvp_internal.h"
 #include "range_lock.h"
 
@@ -135,8 +135,7 @@ struct ll_inode_info {
 
 	/* update atime from MDS no matter if it's older than
 	 * local inode atime. */
-	unsigned int	lli_update_atime:1,
-			lli_inode_locked:1;
+	unsigned int	lli_update_atime:1;
 
 	/* Try to make the d::member and f::member are aligned. Before using
 	 * these members, make clear whether it is directory or not. */
@@ -451,7 +450,6 @@ enum stats_track_type {
 				       * suppress_pings */
 #define LL_SBI_FAST_READ     0x400000 /* fast read support */
 #define LL_SBI_FILE_SECCTX   0x800000 /* set file security context at create */
-#define LL_SBI_PIO          0x1000000 /* parallel IO support */
 #define LL_SBI_TINY_WRITE   0x2000000 /* tiny write support */
 
 #define LL_SBI_FLAGS { 	\
@@ -479,8 +477,7 @@ enum stats_track_type {
 	"always_ping",	\
 	"fast_read",	\
 	"file_secctx",	\
-	"pio",		\
-	"tiny_write",		\
+	"tiny_write",	\
 }
 
 /* This is embedded into llite super-blocks to keep track of connect

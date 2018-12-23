@@ -92,7 +92,6 @@
 #include <linux/fs.h>
 
 #include <libcfs/libcfs.h>
-#include <libcfs/libcfs_ptask.h>
 #include <lu_object.h>
 #include <linux/atomic.h>
 #include <linux/mutex.h>
@@ -121,8 +120,6 @@ struct cl_io;
 struct cl_io_slice;
 
 struct cl_req_attr;
-
-extern struct cfs_ptask_engine *cl_io_engine;
 
 /**
  * Device in the client stack.
@@ -1759,22 +1756,10 @@ enum cl_fsync_mode {
 	CL_FSYNC_ALL   = 3
 };
 
-struct cl_io_range {
-	loff_t cir_pos;
-	size_t cir_count;
-};
-
-struct cl_io_pt {
-	struct cl_io_pt		*cip_next;
-	struct cfs_ptask	 cip_task;
-	struct kiocb		 cip_iocb;
-	struct iov_iter		 cip_iter;
-	struct file		*cip_file;
-	enum cl_io_type		 cip_iot;
-	unsigned int		 cip_need_restart:1;
-	loff_t			 cip_pos;
-	size_t			 cip_count;
-	ssize_t			 cip_result;
+struct cl_io_rw_common {
+	loff_t	crw_pos;
+	size_t	crw_count;
+	int	crw_nonblock;
 };
 
 /**
@@ -1806,17 +1791,16 @@ struct cl_io {
         enum cl_io_lock_dmd            ci_lockreq;
 	/** layout version when this IO occurs */
 	__u32				ci_layout_version;
-        union {
-		struct cl_rw_io {
-			struct iov_iter		 rw_iter;
-			struct kiocb		 rw_iocb;
-			struct cl_io_range	 rw_range;
-			struct file		*rw_file;
-			unsigned int		 rw_nonblock:1,
-						 rw_append:1,
-						 rw_sync:1;
-			int (*rw_ptask)(struct cfs_ptask *ptask);
-		} ci_rw;
+	union {
+		struct cl_rd_io {
+			struct cl_io_rw_common rd;
+		} ci_rd;
+		struct cl_wr_io {
+			struct cl_io_rw_common wr;
+			int                    wr_append;
+			int                    wr_sync;
+		} ci_wr;
+		struct cl_io_rw_common ci_rw;
 		struct cl_setattr_io {
 			struct ost_lvb		 sa_attr;
 			unsigned int		 sa_attr_flags;
@@ -1905,8 +1889,6 @@ struct cl_io {
 	 * O_NOATIME
 	 */
 			     ci_noatime:1,
-	/** Set to 1 if parallel execution is allowed for current I/O? */
-			     ci_pio:1,
 	/* Tell sublayers not to expand LDLM locks requested for this IO */
 			     ci_lock_no_expand:1,
 	/**
@@ -2369,12 +2351,12 @@ int   cl_io_cancel       (const struct lu_env *env, struct cl_io *io,
  */
 static inline int cl_io_is_append(const struct cl_io *io)
 {
-	return io->ci_type == CIT_WRITE && io->u.ci_rw.rw_append;
+	return io->ci_type == CIT_WRITE && io->u.ci_wr.wr_append;
 }
 
 static inline int cl_io_is_sync_write(const struct cl_io *io)
 {
-	return io->ci_type == CIT_WRITE && io->u.ci_rw.rw_sync;
+	return io->ci_type == CIT_WRITE && io->u.ci_wr.wr_sync;
 }
 
 static inline int cl_io_is_mkwrite(const struct cl_io *io)

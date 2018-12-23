@@ -60,7 +60,13 @@ struct vvp_io {
 	/** super class */
 	struct cl_io_slice     vui_cl;
 	struct cl_io_lock_link vui_link;
-	/** Total size for the left IO. */
+	/**
+	 * I/O vector information to or from which read/write is going.
+	 */
+	struct iov_iter *vui_iter;
+	/**
+	 * Total size for the left IO.
+	 */
 	size_t vui_tot_count;
 
 	union {
@@ -110,6 +116,7 @@ struct vvp_io {
 	* File descriptor against which IO is done.
 	*/
 	struct ll_file_data	*vui_fd;
+	struct kiocb		*vui_iocb;
 
 	/* Readahead state. */
 	pgoff_t	vui_ra_start;

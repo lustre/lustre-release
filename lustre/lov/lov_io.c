@@ -136,7 +136,6 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
 	sub_io->ci_type    = io->ci_type;
 	sub_io->ci_no_srvlock = io->ci_no_srvlock;
 	sub_io->ci_noatime = io->ci_noatime;
-	sub_io->ci_pio = io->ci_pio;
 	sub_io->ci_lock_no_expand = io->ci_lock_no_expand;
 	sub_io->ci_ndelay = io->ci_ndelay;
 	sub_io->ci_layout_version = io->ci_layout_version;
@@ -478,8 +477,8 @@ static int lov_io_slice_init(struct lov_io *lio,
 	switch (io->ci_type) {
 	case CIT_READ:
 	case CIT_WRITE:
-		lio->lis_pos = io->u.ci_rw.rw_range.cir_pos;
-		lio->lis_endpos = lio->lis_pos + io->u.ci_rw.rw_range.cir_count;
+		lio->lis_pos = io->u.ci_rw.crw_pos;
+		lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_count;
 		lio->lis_io_endpos = lio->lis_endpos;
 		if (cl_io_is_append(io)) {
 			LASSERT(io->ci_type == CIT_WRITE);
@@ -639,7 +638,6 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 	int index = lov_comp_entry(sub->sub_subio_index);
 	int stripe = lov_comp_stripe(sub->sub_subio_index);
 
-	io->ci_pio = parent->ci_pio;
 	switch (io->ci_type) {
 	case CIT_SETATTR: {
 		io->u.ci_setattr.sa_attr = parent->u.ci_setattr.sa_attr;
@@ -685,16 +683,12 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 	}
 	case CIT_READ:
 	case CIT_WRITE: {
-		io->u.ci_rw.rw_ptask = parent->u.ci_rw.rw_ptask;
-		io->u.ci_rw.rw_iter = parent->u.ci_rw.rw_iter;
-		io->u.ci_rw.rw_iocb = parent->u.ci_rw.rw_iocb;
-		io->u.ci_rw.rw_file = parent->u.ci_rw.rw_file;
-		io->u.ci_rw.rw_sync = parent->u.ci_rw.rw_sync;
+		io->u.ci_wr.wr_sync = cl_io_is_sync_write(parent);
 		if (cl_io_is_append(parent)) {
-			io->u.ci_rw.rw_append = 1;
+			io->u.ci_wr.wr_append = 1;
 		} else {
-			io->u.ci_rw.rw_range.cir_pos = start;
-			io->u.ci_rw.rw_range.cir_count = end - start;
+			io->u.ci_rw.crw_pos = start;
+			io->u.ci_rw.crw_count = end - start;
 		}
 		break;
 	}
@@ -787,9 +781,8 @@ static int lov_io_iter_init(const struct lu_env *env,
 			if (rc != 0)
 				break;
 
-			CDEBUG(D_VFSTRACE,
-				"shrink stripe: {%d, %d} range: [%llu, %llu)\n",
-				index, stripe, start, end);
+			CDEBUG(D_VFSTRACE, "shrink: %d [%llu, %llu)\n",
+			       stripe, start, end);
 
 			list_add_tail(&sub->sub_linkage, &lio->lis_active);
 		}
@@ -802,11 +795,10 @@ static int lov_io_iter_init(const struct lu_env *env,
 static int lov_io_rw_iter_init(const struct lu_env *env,
 			       const struct cl_io_slice *ios)
 {
-	struct cl_io *io = ios->cis_io;
 	struct lov_io *lio = cl2lov_io(env, ios);
+	struct cl_io *io = ios->cis_io;
 	struct lov_stripe_md_entry *lse;
-	struct cl_io_range *range = &io->u.ci_rw.rw_range;
-	loff_t start = range->cir_pos;
+	loff_t start = io->u.ci_rw.crw_pos;
 	loff_t next;
 	int index;
 
@@ -816,7 +808,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	if (cl_io_is_append(io))
 		RETURN(lov_io_iter_init(env, ios));
 
-	index = lov_io_layout_at(lio, range->cir_pos);
+	index = lov_io_layout_at(lio, io->u.ci_rw.crw_pos);
 	if (index < 0) { /* non-existing layout component */
 		if (io->ci_type == CIT_READ) {
 			/*
@@ -824,8 +816,6 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 			 * then set the next pos
 			 */
 			io->ci_continue = 0;
-			/* execute it in main thread */
-			io->ci_pio = 0;
 
 			RETURN(lov_io_iter_init(env, ios));
 		}
@@ -849,28 +839,20 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 			next = MAX_LFS_FILESIZE;
 	}
 
-	LASSERTF(range->cir_pos >= lse->lsme_extent.e_start,
-		 "pos %lld, [%lld, %lld)\n", range->cir_pos,
+	LASSERTF(io->u.ci_rw.crw_pos >= lse->lsme_extent.e_start,
+		 "pos %lld, [%lld, %lld)\n", io->u.ci_rw.crw_pos,
 		 lse->lsme_extent.e_start, lse->lsme_extent.e_end);
 	next = min_t(__u64, next, lse->lsme_extent.e_end);
 	next = min_t(loff_t, next, lio->lis_io_endpos);
 
-	io->ci_continue  = next < lio->lis_io_endpos;
-	range->cir_count = next - range->cir_pos;
-	lio->lis_pos     = range->cir_pos;
-	lio->lis_endpos  = range->cir_pos + range->cir_count;
+	io->ci_continue = next < lio->lis_io_endpos;
+	io->u.ci_rw.crw_count = next - io->u.ci_rw.crw_pos;
+	lio->lis_pos    = io->u.ci_rw.crw_pos;
+	lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_count;
 	CDEBUG(D_VFSTRACE,
-	       "stripe: {%d, %llu} range: [%llu, %llu) end: %llu, count: %zd\n",
-	       index, start, lio->lis_pos, lio->lis_endpos,
-	       lio->lis_io_endpos, range->cir_count);
-
-	if (!io->ci_continue) {
-		/* the last piece of IO, execute it in main thread */
-		io->ci_pio = 0;
-	}
-
-	if (io->ci_pio)
-		RETURN(0);
+	       "stripe: %llu chunk: [%llu, %llu) %llu, %zd\n",
+	       (__u64)start, lio->lis_pos, lio->lis_endpos,
+	       (__u64)lio->lis_io_endpos, io->u.ci_rw.crw_count);
 
 	/*
 	 * XXX The following call should be optimized: we know, that

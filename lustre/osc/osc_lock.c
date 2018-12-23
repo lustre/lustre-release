@@ -1142,9 +1142,9 @@ void osc_lock_set_writer(const struct lu_env *env, const struct cl_io *io,
 		return;
 
 	if (likely(io->ci_type == CIT_WRITE)) {
-		io_start = cl_index(obj, io->u.ci_rw.rw_range.cir_pos);
-		io_end = cl_index(obj, io->u.ci_rw.rw_range.cir_pos +
-				  io->u.ci_rw.rw_range.cir_count - 1);
+		io_start = cl_index(obj, io->u.ci_rw.crw_pos);
+		io_end = cl_index(obj, io->u.ci_rw.crw_pos +
+						io->u.ci_rw.crw_count - 1);
 	} else {
 		LASSERT(cl_io_is_mkwrite(io));
 		io_start = io_end = io->u.ci_fault.ft_index;
