@@ -1039,8 +1039,6 @@ static struct lu_kmem_descr cl_object_caches[] = {
         }
 };
 
-struct cfs_ptask_engine *cl_io_engine;
-
 /**
  * Global initialization of cl-data. Create kmem caches, register
  * lu_context_key's, etc.
@@ -1068,17 +1066,8 @@ int cl_global_init(void)
 	if (result) /* no cl_env_percpu_fini on error */
 		GOTO(out_keys, result);
 
-	cl_io_engine = cfs_ptengine_init("clio", cpu_online_mask);
-	if (IS_ERR(cl_io_engine)) {
-		result = PTR_ERR(cl_io_engine);
-		cl_io_engine = NULL;
-		GOTO(out_percpu, result);
-	}
-
 	return 0;
 
-out_percpu:
-	cl_env_percpu_fini();
 out_keys:
 	lu_context_key_degister(&cl_key);
 out_kmem:
@@ -1094,8 +1083,6 @@ out:
  */
 void cl_global_fini(void)
 {
-	cfs_ptengine_fini(cl_io_engine);
-	cl_io_engine = NULL;
 	cl_env_percpu_fini();
 	lu_context_key_degister(&cl_key);
 	lu_kmem_fini(cl_object_caches);

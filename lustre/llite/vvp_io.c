@@ -305,7 +305,7 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
-	       "need write layout %d, restore needed %d\n",
+			   "need write layout %d, restore needed %d\n",
 	       PFID(lu_object_fid(&obj->co_lu)),
 	       io->ci_ignore_layout, io->ci_verify_layout,
 	       vio->vui_layout_gen, io->ci_need_write_intent,
@@ -429,7 +429,8 @@ static enum cl_lock_mode vvp_mode_from_vma(struct vm_area_struct *vma)
         return CLM_READ;
 }
 
-static int vvp_mmap_locks(const struct lu_env *env, struct cl_io *io)
+static int vvp_mmap_locks(const struct lu_env *env,
+			  struct vvp_io *vio, struct cl_io *io)
 {
 	struct vvp_thread_info *vti = vvp_env_info(env);
 	struct mm_struct *mm = current->mm;
@@ -446,11 +447,15 @@ static int vvp_mmap_locks(const struct lu_env *env, struct cl_io *io)
 	if (!cl_is_normalio(env, io))
 		RETURN(0);
 
+	/* nfs or loop back device write */
+	if (vio->vui_iter == NULL)
+		RETURN(0);
+
 	/* No MM (e.g. NFS)? No vmas too. */
 	if (mm == NULL)
 		RETURN(0);
 
-	iov_for_each(iov, i, io->u.ci_rw.rw_iter) {
+	iov_for_each(iov, i, *(vio->vui_iter)) {
 		unsigned long addr = (unsigned long)iov.iov_base;
 		size_t count = iov.iov_len;
 
@@ -523,39 +528,38 @@ static void vvp_io_advance(const struct lu_env *env,
 		return;
 
 	vio->vui_tot_count -= nob;
-	if (io->ci_pio) {
-		iov_iter_advance(&io->u.ci_rw.rw_iter, nob);
-		io->u.ci_rw.rw_iocb.ki_pos = io->u.ci_rw.rw_range.cir_pos;
-#ifdef HAVE_KIOCB_KI_LEFT
-		io->u.ci_rw.rw_iocb.ki_left = vio->vui_tot_count;
-#elif defined(HAVE_KI_NBYTES)
-		io->u.ci_rw.rw_iocb.ki_nbytes = vio->vui_tot_count;
-#endif
-	} else {
-		/* It was truncated to stripe size in vvp_io_rw_lock() */
-		iov_iter_reexpand(&io->u.ci_rw.rw_iter, vio->vui_tot_count);
-	}
+	iov_iter_reexpand(vio->vui_iter, vio->vui_tot_count);
+}
+
+static void vvp_io_update_iov(const struct lu_env *env,
+			      struct vvp_io *vio, struct cl_io *io)
+{
+	size_t size = io->u.ci_rw.crw_count;
+
+	if (!cl_is_normalio(env, io) || vio->vui_iter == NULL)
+		return;
+
+	iov_iter_truncate(vio->vui_iter, size);
 }
 
 static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
                           enum cl_lock_mode mode, loff_t start, loff_t end)
 {
+	struct vvp_io *vio = vvp_env_io(env);
 	int result;
 	int ast_flags = 0;
 
 	LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
 	ENTRY;
 
-	if (cl_is_normalio(env, io))
-		iov_iter_truncate(&io->u.ci_rw.rw_iter,
-				  io->u.ci_rw.rw_range.cir_count);
+	vvp_io_update_iov(env, vio, io);
 
-	if (io->u.ci_rw.rw_nonblock)
+	if (io->u.ci_rw.crw_nonblock)
 		ast_flags |= CEF_NONBLOCK;
 	if (io->ci_lock_no_expand)
 		ast_flags |= CEF_LOCK_NO_EXPAND;
 
-	result = vvp_mmap_locks(env, io);
+	result = vvp_mmap_locks(env, vio, io);
 	if (result == 0)
 		result = vvp_io_one_lock(env, io, ast_flags, mode, start, end);
 
@@ -566,13 +570,13 @@ static int vvp_io_read_lock(const struct lu_env *env,
                             const struct cl_io_slice *ios)
 {
 	struct cl_io *io = ios->cis_io;
-	struct cl_io_range *range = &io->u.ci_rw.rw_range;
-	int rc;
+	struct cl_io_rw_common *rd = &io->u.ci_rd.rd;
+	int result;
 
 	ENTRY;
-	rc = vvp_io_rw_lock(env, io, CLM_READ, range->cir_pos,
-			    range->cir_pos + range->cir_count - 1);
-	RETURN(rc);
+	result = vvp_io_rw_lock(env, io, CLM_READ, rd->crw_pos,
+				rd->crw_pos + rd->crw_count - 1);
+	RETURN(result);
 }
 
 static int vvp_io_fault_lock(const struct lu_env *env,
@@ -591,27 +595,26 @@ static int vvp_io_fault_lock(const struct lu_env *env,
 }
 
 static int vvp_io_write_lock(const struct lu_env *env,
-                             const struct cl_io_slice *ios)
+			     const struct cl_io_slice *ios)
 {
 	struct cl_io *io = ios->cis_io;
 	loff_t start;
 	loff_t end;
-	int rc;
 
-	ENTRY;
-	if (io->u.ci_rw.rw_append) {
+	if (io->u.ci_wr.wr_append) {
 		start = 0;
 		end   = OBD_OBJECT_EOF;
 	} else {
-		start = io->u.ci_rw.rw_range.cir_pos;
-		end   = start + io->u.ci_rw.rw_range.cir_count - 1;
+		start = io->u.ci_wr.wr.crw_pos;
+		end   = start + io->u.ci_wr.wr.crw_count - 1;
 	}
-	rc = vvp_io_rw_lock(env, io, CLM_WRITE, start, end);
-	RETURN(rc);
+
+	RETURN(vvp_io_rw_lock(env, io, CLM_WRITE, start, end));
 }
 
 static int vvp_io_setattr_iter_init(const struct lu_env *env,
 				    const struct cl_io_slice *ios)
+
 {
 	return 0;
 }
@@ -761,18 +764,18 @@ static int vvp_io_read_start(const struct lu_env *env,
 	struct inode		*inode = vvp_object_inode(obj);
 	struct ll_inode_info	*lli   = ll_i2info(inode);
 	struct file		*file  = vio->vui_fd->fd_file;
-	struct cl_io_range	*range = &io->u.ci_rw.rw_range;
-	loff_t pos = range->cir_pos; /* for generic_file_splice_read() only */
-	size_t tot = vio->vui_tot_count;
-	int exceed = 0;
-	int result;
+	loff_t  pos = io->u.ci_rd.rd.crw_pos;
+	long    cnt = io->u.ci_rd.rd.crw_count;
+	long    tot = vio->vui_tot_count;
+	int     exceed = 0;
+	int     result;
 	ENTRY;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	CDEBUG(D_VFSTRACE, "%s: read [%llu, %llu)\n",
 		file_dentry(file)->d_name.name,
-		range->cir_pos, range->cir_pos + range->cir_count);
+		pos, pos + cnt);
 
 	if (vio->vui_io_subtype == IO_NORMAL)
 		down_read(&lli->lli_trunc_sem);
@@ -782,8 +785,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 	/* Unless this is reading a sparse file, otherwise the lock has already
 	 * been acquired so vvp_prep_size() is an empty op. */
-	result = vvp_prep_size(env, obj, io, range->cir_pos, range->cir_count,
-				&exceed);
+	result = vvp_prep_size(env, obj, io, pos, cnt, &exceed);
 	if (result != 0)
 		RETURN(result);
 	else if (exceed != 0)
@@ -791,8 +793,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 	LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
 			 "Read ino %lu, %lu bytes, offset %lld, size %llu\n",
-			 inode->i_ino, range->cir_count, range->cir_pos,
-			 i_size_read(inode));
+			 inode->i_ino, cnt, pos, i_size_read(inode));
 
 	/* turn off the kernel's read-ahead */
 	vio->vui_fd->fd_file->f_ra.ra_pages = 0;
@@ -800,7 +801,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 	/* initialize read-ahead window once per syscall */
 	if (!vio->vui_ra_valid) {
 		vio->vui_ra_valid = true;
-		vio->vui_ra_start = cl_index(obj, range->cir_pos);
+		vio->vui_ra_start = cl_index(obj, pos);
 		vio->vui_ra_count = cl_index(obj, tot + PAGE_SIZE - 1);
 		ll_ras_enter(file);
 	}
@@ -809,17 +810,12 @@ static int vvp_io_read_start(const struct lu_env *env,
 	file_accessed(file);
 	switch (vio->vui_io_subtype) {
 	case IO_NORMAL:
-		LASSERTF(io->u.ci_rw.rw_iocb.ki_pos == range->cir_pos,
-			 "ki_pos %lld [%lld, %lld)\n",
-			 io->u.ci_rw.rw_iocb.ki_pos,
-			 range->cir_pos, range->cir_pos + range->cir_count);
-		result = generic_file_read_iter(&io->u.ci_rw.rw_iocb,
-						&io->u.ci_rw.rw_iter);
+		LASSERT(vio->vui_iocb->ki_pos == pos);
+		result = generic_file_read_iter(vio->vui_iocb, vio->vui_iter);
 		break;
 	case IO_SPLICE:
 		result = generic_file_splice_read(file, &pos,
-						  vio->u.splice.vui_pipe,
-						  range->cir_count,
+						  vio->u.splice.vui_pipe, cnt,
 						  vio->u.splice.vui_flags);
 		/* LU-1109: do splice read stripe by stripe otherwise if it
 		 * may make nfsd stuck if this read occupied all internal pipe
@@ -834,11 +830,11 @@ static int vvp_io_read_start(const struct lu_env *env,
 
 out:
 	if (result >= 0) {
-		if (result < range->cir_count)
+		if (result < cnt)
 			io->ci_continue = 0;
 		io->ci_nob += result;
 		ll_rw_stats_tally(ll_i2sbi(inode), current->pid, vio->vui_fd,
-				  range->cir_pos, result, READ);
+				  pos, result, READ);
 		result = 0;
 	}
 
@@ -894,6 +890,7 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 			SetPageUptodate(cl_page_vmpage(page));
 			cl_page_disown(env, io, page);
 
+			/* held in ll_cl_init() */
 			lu_ref_del(&page->cp_reference, "cl_io", io);
 			cl_page_put(env, page);
 		}
@@ -912,6 +909,7 @@ static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
 
 	cl_page_disown(env, io, page);
 
+	/* held in ll_cl_init() */
 	lu_ref_del(&page->cp_reference, "cl_io", cl_io_top(io));
 	cl_page_put(env, page);
 }
@@ -1012,6 +1010,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io)
 
 		cl_page_disown(env, io, page);
 
+		/* held in ll_cl_init() */
 		lu_ref_del(&page->cp_reference, "cl_io", io);
 		cl_page_put(env, page);
 	}
@@ -1029,10 +1028,11 @@ static int vvp_io_write_start(const struct lu_env *env,
 	struct inode		*inode = vvp_object_inode(obj);
 	struct ll_inode_info	*lli   = ll_i2info(inode);
 	struct file		*file  = vio->vui_fd->fd_file;
-	struct cl_io_range	*range = &io->u.ci_rw.rw_range;
-	bool			 lock_inode = !lli->lli_inode_locked &&
-					      !IS_NOSEC(inode);
 	ssize_t			 result = 0;
+	loff_t			 pos = io->u.ci_wr.wr.crw_pos;
+	size_t			 cnt = io->u.ci_wr.wr.crw_count;
+	bool			 lock_inode = !IS_NOSEC(inode);
+
 	ENTRY;
 
 	if (vio->vui_io_subtype == IO_NORMAL)
@@ -1047,29 +1047,28 @@ static int vvp_io_write_start(const struct lu_env *env,
 		 * out-of-order writes.
 		 */
 		ll_merge_attr(env, inode);
-		range->cir_pos = i_size_read(inode);
-		io->u.ci_rw.rw_iocb.ki_pos = range->cir_pos;
+		pos = io->u.ci_wr.wr.crw_pos = i_size_read(inode);
+		vio->vui_iocb->ki_pos = pos;
 	} else {
-		LASSERTF(io->u.ci_rw.rw_iocb.ki_pos == range->cir_pos,
+		LASSERTF(vio->vui_iocb->ki_pos == pos,
 			 "ki_pos %lld [%lld, %lld)\n",
-			 io->u.ci_rw.rw_iocb.ki_pos,
-			 range->cir_pos, range->cir_pos + range->cir_count);
+			 vio->vui_iocb->ki_pos,
+			 pos, pos + cnt);
 	}
 
 	CDEBUG(D_VFSTRACE, "%s: write [%llu, %llu)\n",
 		file_dentry(file)->d_name.name,
-		range->cir_pos, range->cir_pos + range->cir_count);
+		pos, pos + cnt);
 
 	/* The maximum Lustre file size is variable, based on the OST maximum
 	 * object size and number of stripes.  This needs another check in
 	 * addition to the VFS checks earlier. */
-	if (range->cir_pos + range->cir_count > ll_file_maxbytes(inode)) {
+	if (pos + cnt > ll_file_maxbytes(inode)) {
 		CDEBUG(D_INODE,
 		       "%s: file %s ("DFID") offset %llu > maxbytes %llu\n",
 		       ll_get_fsname(inode->i_sb, NULL, 0),
 		       file_dentry(file)->d_name.name,
-		       PFID(ll_inode2fid(inode)),
-		       range->cir_pos + range->cir_count,
+		       PFID(ll_inode2fid(inode)), pos + cnt,
 		       ll_file_maxbytes(inode));
 		RETURN(-EFBIG);
 	}
@@ -1081,34 +1080,41 @@ static int vvp_io_write_start(const struct lu_env *env,
 	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_NOSEC) && lock_inode)
 		RETURN(-EINVAL);
 
-	/*
-	 * When using the locked AIO function (generic_file_aio_write())
-	 * testing has shown the inode mutex to be a limiting factor
-	 * with multi-threaded single shared file performance. To get
-	 * around this, we now use the lockless version. To maintain
-	 * consistency, proper locking to protect against writes,
-	 * trucates, etc. is handled in the higher layers of lustre.
-	 */
-	if (lock_inode)
-		inode_lock(inode);
-	result = __generic_file_write_iter(&io->u.ci_rw.rw_iocb,
-					   &io->u.ci_rw.rw_iter);
-	if (lock_inode)
-		inode_unlock(inode);
+	if (vio->vui_iter == NULL) {
+		/* from a temp io in ll_cl_init(). */
+		result = 0;
+	} else {
+		/*
+		 * When using the locked AIO function (generic_file_aio_write())
+		 * testing has shown the inode mutex to be a limiting factor
+		 * with multi-threaded single shared file performance. To get
+		 * around this, we now use the lockless version. To maintain
+		 * consistency, proper locking to protect against writes,
+		 * trucates, etc. is handled in the higher layers of lustre.
+		 */
+		bool lock_node = !IS_NOSEC(inode);
 
-	if (result > 0 || result == -EIOCBQUEUED)
+		if (lock_node)
+			inode_lock(inode);
+		result = __generic_file_write_iter(vio->vui_iocb,
+						   vio->vui_iter);
+		if (lock_node)
+			inode_unlock(inode);
+
+		if (result > 0 || result == -EIOCBQUEUED)
 #ifdef HAVE_GENERIC_WRITE_SYNC_2ARGS
-		result = generic_write_sync(&io->u.ci_rw.rw_iocb, result);
+			result = generic_write_sync(vio->vui_iocb, result);
 #else
-	{
-		ssize_t err;
+		{
+			ssize_t err;
 
-		err = generic_write_sync(io->u.ci_rw.rw_iocb.ki_filp,
-					 range->cir_pos, result);
-		if (err < 0 && result > 0)
-			result = err;
-	}
+			err = generic_write_sync(vio->vui_iocb->ki_filp, pos,
+						 result);
+			if (err < 0 && result > 0)
+				result = err;
+		}
 #endif
+	}
 
 	if (result > 0) {
 		result = vvp_io_write_commit(env, io);
@@ -1123,10 +1129,10 @@ static int vvp_io_write_start(const struct lu_env *env,
 	if (result > 0) {
 		ll_file_set_flag(ll_i2info(inode), LLIF_DATA_MODIFIED);
 
-		if (result < range->cir_count)
+		if (result < cnt)
 			io->ci_continue = 0;
 		ll_rw_stats_tally(ll_i2sbi(inode), current->pid,
-				  vio->vui_fd, range->cir_pos, result, WRITE);
+				  vio->vui_fd, pos, result, WRITE);
 		result = 0;
 	}
 
@@ -1458,13 +1464,16 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 	vio->vui_ra_valid = false;
 	result = 0;
 	if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
+		size_t count;
 		struct ll_inode_info *lli = ll_i2info(inode);
 
-		vio->vui_tot_count = io->u.ci_rw.rw_range.cir_count;
+		count = io->u.ci_rw.crw_count;
 		/* "If nbyte is 0, read() will return 0 and have no other
 		 *  results."  -- Single Unix Spec */
-		if (vio->vui_tot_count == 0)
+		if (count == 0)
 			result = 1;
+		else
+			vio->vui_tot_count = count;
 
 		/* for read/write, we store the jobid in the inode, and
 		 * it'll be fetched by osc when building RPC.
