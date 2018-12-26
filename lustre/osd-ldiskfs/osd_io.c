@@ -293,6 +293,7 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 	return bio_end_sector(bio) == sector ? 1 : 0;
 }
 
+#if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
 /*
  * This function will change the data written, thus it should only be
  * used when checking data integrity feature
@@ -439,7 +440,11 @@ static void dio_integrity_complete_routine(struct bio *bio, int error)
 
 	OBD_FREE_PTR(bio_private);
 }
-#endif
+#endif /* HAVE_BIO_INTEGRITY_PREP_FN */
+#else  /* !CONFIG_BLK_DEV_INTEGRITY */
+#define osd_bio_integrity_handle(osd, bio, iobuf, start_page_idx, \
+				 fault_inject, integrity_enabled) 0
+#endif /* CONFIG_BLK_DEV_INTEGRITY */
 
 static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
 			bool integrity_enabled, int start_page_idx,

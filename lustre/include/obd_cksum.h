@@ -144,6 +144,7 @@ static inline void obd_t10_cksum2dif(enum cksum_types cksum_type,
 	*fn = NULL;
 	*sector_size = 0;
 
+#if IS_ENABLED(CONFIG_CRC_T10DIF)
 	switch (cksum_type) {
 	case OBD_CKSUM_T10IP512:
 		*fn = obd_dif_ip_fn;
@@ -164,6 +165,7 @@ static inline void obd_t10_cksum2dif(enum cksum_types cksum_type,
 	default:
 		break;
 	}
+#endif /* CONFIG_CRC_T10DIF */
 }
 
 enum obd_t10_cksum_type {

@@ -35,6 +35,7 @@
 
 #include "osd_internal.h"
 
+#if IS_ENABLED(CONFIG_CRC_T10DIF)
 /*
  * Data Integrity Field tuple.
  */
@@ -262,3 +263,4 @@ int osd_get_integrity_profile(struct osd_device *osd,
 
 	return 0;
 }
+#endif /* CONFIG_CRC_T10DIF */

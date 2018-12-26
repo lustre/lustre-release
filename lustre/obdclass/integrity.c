@@ -31,6 +31,7 @@
 #include <obd_class.h>
 #include <obd_cksum.h>
 
+#if IS_ENABLED(CONFIG_CRC_T10DIF)
 __u16 obd_dif_crc_fn(void *data, unsigned int len)
 {
 	return cpu_to_be16(crc_t10dif(data, len));
@@ -251,10 +252,12 @@ out:
 		       obd_t10_cksum_speeds[index]);
 	}
 }
+#endif /* CONFIG_CRC_T10DIF */
 
 int obd_t10_cksum_speed(const char *obd_name,
 			enum cksum_types cksum_type)
 {
+#if IS_ENABLED(CONFIG_CRC_T10DIF)
 	enum obd_t10_cksum_type index = obd_t10_cksum2type(cksum_type);
 
 	if (unlikely(obd_t10_cksum_speeds[index] == 0)) {
@@ -267,5 +270,8 @@ int obd_t10_cksum_speed(const char *obd_name,
 	}
 
 	return obd_t10_cksum_speeds[index];
+#else /* !CONFIG_CRC_T10DIF */
+	return 0;
+#endif /* !CONFIG_CRC_T10DIF */
 }
 EXPORT_SYMBOL(obd_t10_cksum_speed);
