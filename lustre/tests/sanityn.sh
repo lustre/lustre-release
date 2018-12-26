@@ -2881,7 +2881,7 @@ test_71a() {
 		{ skip "checkfiemap not runnable: $?" && return; }
 	# write data this way: hole - data - hole - data
 	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=1 count=1
-	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR1/$tfile) + 1)))" = \
+	[ "$(facet_fstype ost$(($($LFS getstripe -i $DIR1/$tfile) + 1)))" = \
 		"zfs" ] &&
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
 	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=3 count=1
@@ -2929,7 +2929,7 @@ test_71b() {
 
 	$LFS setstripe -c -1 $DIR1/$tdir || error "setstripe failed"
 	dd if=/dev/urandom of=$DIR1/$tdir/$tfile bs=40K count=1
-	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR1/$tdir/$tfile) + 1)))" = \
+	[ "$(facet_fstype ost$(($($LFS getstripe -i $DIR1/$tdir/$tfile) + 1)))" = \
 		"zfs" ] &&
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
 	checkfiemap $DIR1/$tdir/$tfile 40960 || error "checkfiemap failed"
@@ -4270,10 +4270,10 @@ test_93() {
 	#define OBD_FAIL_MDS_LOV_CREATE_RACE     0x163
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x00000163"
 
-	$SETSTRIPE -c -1 $DIR1/$tfile-1/file1 &
+	$LFS setstripe -c -1 $DIR1/$tfile-1/file1 &
 	local PID1=$!
 	sleep 1
-	$SETSTRIPE -c -1 $DIR2/$tfile-2/file2 &
+	$LFS setstripe -c -1 $DIR2/$tfile-2/file2 &
 	local PID2=$!
 	wait $PID2
 	wait $PID1
@@ -4281,11 +4281,11 @@ test_93() {
 	do_facet $SINGLEMDS "lctl set_param -n \
 		'lod.lustre-MDT*/qos_threshold_rr' $old_rr"
 
-	$GETSTRIPE $DIR1/$tfile-1/file1
-	rc1=$($GETSTRIPE -q $DIR1/$tfile-1/file1 |
+	$LFS getstripe $DIR1/$tfile-1/file1
+	rc1=$($LFS getstripe -q $DIR1/$tfile-1/file1 |
 		awk '{if (/[0-9]/) print $1 }' | sort | uniq -d | wc -l)
-	$GETSTRIPE $DIR2/$tfile-2/file2
-	rc2=$($GETSTRIPE -q $DIR2/$tfile-2/file2 |
+	$LFS getstripe $DIR2/$tfile-2/file2
+	rc2=$($LFS getstripe -q $DIR2/$tfile-2/file2 |
 		awk '{if (/[0-9]/) print $1 }' | sort | uniq -d | wc -l)
 	echo "rc1=$rc1 and rc2=$rc2 "
 	[ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] ||
