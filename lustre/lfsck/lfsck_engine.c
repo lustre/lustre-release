@@ -234,7 +234,7 @@ static int lfsck_load_stripe_lmv(const struct lu_env *env,
 	LASSERT(lfsck->li_obj_dir == NULL);
 	LASSERT(lfsck->li_lmv == NULL);
 
-	rc = lfsck_read_stripe_lmv(env, obj, lmv);
+	rc = lfsck_read_stripe_lmv(env, lfsck, obj, lmv);
 	if (rc == -ENODATA) {
 		lfsck->li_obj_dir = lfsck_object_get(obj);
 

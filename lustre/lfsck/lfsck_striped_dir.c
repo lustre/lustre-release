@@ -836,14 +836,34 @@ out:
 	return rc > 0 ? 0 : rc;
 }
 
-int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
+/**
+ * Read LMV from bottom object, so it doesn't contain stripe FIDs.
+ *
+ * TODO: test migrating/foreign directory lfsck
+ *
+ * \param[in] env	thread env
+ * \param[in] lfsck	lfsck instance
+ * \param[in] obj	dt object
+ * \param[out] lmv	LMV data pointer
+ *
+ * \retval		0 on success
+ * \retval		-ENODATA on no LMV, corrupt LMV, dir is dead or foreign
+ *			-ev on other failures
+ */
+int lfsck_read_stripe_lmv(const struct lu_env *env,
+			  struct lfsck_instance *lfsck,
+			  struct dt_object *obj,
 			  struct lmv_mds_md_v1 *lmv)
 {
 	struct lfsck_thread_info *info = lfsck_env_info(env);
 	struct lu_buf *buf = &info->lti_buf;
-	int size = sizeof(*lmv) + sizeof(struct lu_fid) * 2;
 	struct lmv_foreign_md *lfm;
 	int rc;
+
+	/* use bottom object to avoid reading in shard FIDs */
+	obj = lfsck_object_find_bottom(env, lfsck, lu_object_fid(&obj->do_lu));
+	if (IS_ERR(obj))
+		return PTR_ERR(obj);
 
 	dt_read_lock(env, obj, 0);
 	buf->lb_buf = lmv;
@@ -851,10 +871,7 @@ int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 	rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMV);
 	if (unlikely(rc == -ERANGE)) {
 		buf = &info->lti_big_buf;
-		/* For the in-migration directory, its LMV EA contains
-		 * not only the LMV header, but also the FIDs for both
-		 * source and target. So the LMV EA size is larger.
-		 * Or may be this is a foreign LMV */
+		/* this may be a foreign LMV */
 		rc = dt_xattr_get(env, obj, &LU_BUF_NULL, XATTR_NAME_LMV);
 		if (rc > sizeof(*lmv)) {
 			int rc1;
@@ -862,14 +879,16 @@ int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 			lu_buf_check_and_alloc(buf, rc);
 			rc1 = dt_xattr_get(env, obj, buf, XATTR_NAME_LMV);
 			if (rc != rc1)
-				rc = -EINVAL;
+				rc = -ENODATA;
 		} else {
-			rc = -EINVAL;
+			rc = -ENODATA;
 		}
 	}
 	dt_read_unlock(env, obj);
 
-	if (rc > 0 && rc > offsetof(typeof(*lfm), lfm_value) &&
+	lfsck_object_put(env, obj);
+
+	if (rc > offsetof(typeof(*lfm), lfm_value) &&
 	    *((__u32 *)buf->lb_buf) == LMV_MAGIC_FOREIGN) {
 		__u32 value_len;
 
@@ -890,20 +909,19 @@ int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 		return -ENODATA;
 	}
 
-	if (rc == size) {
-		rc = sizeof(*lmv);
-		memcpy(lmv, buf->lb_buf, rc);
+	if (rc == sizeof(*lmv)) {
+		rc = 0;
+		lfsck_lmv_header_le_to_cpu(lmv, lmv);
+		/* if LMV is corrupt, return -ENODATA */
+		if (lmv->lmv_magic != LMV_MAGIC_V1 &&
+		    lmv->lmv_magic != LMV_MAGIC_STRIPE) 
+			rc = -ENODATA;
+	} else if (rc >= 0) {
+		/* LMV is corrupt */
+		rc = -ENODATA;
 	}
-	if (rc != sizeof(*lmv))
-		return rc > 0 ? -EINVAL : rc;
 
-	lfsck_lmv_header_le_to_cpu(lmv, lmv);
-	if ((lmv->lmv_magic == LMV_MAGIC &&
-	     !(lmv->lmv_hash_type & LMV_HASH_FLAG_MIGRATION)) ||
-	    lmv->lmv_magic == LMV_MAGIC_STRIPE)
-		return 0;
-
-	return -ENODATA;
+	return rc;
 }
 
 /**
@@ -992,6 +1010,7 @@ bool lfsck_is_valid_slave_name_entry(const struct lu_env *env,
  * \retval		negative error number on failure
  */
 int lfsck_namespace_check_name(const struct lu_env *env,
+			       struct lfsck_instance *lfsck,
 			       struct dt_object *parent,
 			       struct dt_object *child,
 			       const struct lu_name *cname)
@@ -1000,7 +1019,7 @@ int lfsck_namespace_check_name(const struct lu_env *env,
 	int			 idx;
 	int			 rc;
 
-	rc = lfsck_read_stripe_lmv(env, parent, lmv);
+	rc = lfsck_read_stripe_lmv(env, lfsck, parent, lmv);
 	if (rc != 0)
 		RETURN(rc == -ENODATA ? 0 : rc);
 
@@ -1324,7 +1343,7 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		RETURN(0);
 
-	rc = lfsck_read_stripe_lmv(env, obj, lmv4);
+	rc = lfsck_read_stripe_lmv(env, lfsck, obj, lmv4);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -1433,7 +1452,7 @@ static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(log, rc);
 
-	rc = lfsck_read_stripe_lmv(env, obj, lmv3);
+	rc = lfsck_read_stripe_lmv(env, lfsck, obj, lmv3);
 	if (rc == -ENODATA) {
 		if (!(flags & LEF_SET_LMV_ALL))
 			GOTO(log, rc);
@@ -1611,7 +1630,7 @@ int lfsck_namespace_scan_shard(const struct lu_env *env,
 	__u16				 type;
 	ENTRY;
 
-	rc = lfsck_read_stripe_lmv(env, child, lmv);
+	rc = lfsck_read_stripe_lmv(env, lfsck, child, lmv);
 	if (rc != 0)
 		RETURN(rc == -ENODATA ? 1 : rc);
 
@@ -1767,7 +1786,7 @@ int lfsck_namespace_verify_stripe_slave(const struct lu_env *env,
 	if (unlikely(!dt_try_as_dir(env, parent)))
 		GOTO(out, rc = -ENOTDIR);
 
-	rc = lfsck_read_stripe_lmv(env, parent, plmv);
+	rc = lfsck_read_stripe_lmv(env, lfsck, parent, plmv);
 	if (rc != 0) {
 		int rc1;
 
@@ -2398,7 +2417,7 @@ dangling:
 		GOTO(out, rc = 0);
 	}
 
-	rc = lfsck_read_stripe_lmv(env, obj, lmv);
+	rc = lfsck_read_stripe_lmv(env, lfsck, obj, lmv);
 	if (unlikely(rc == -ENOENT))
 		/* It may happen when the remote object has been removed,
 		 * but the local MDT does not aware of that. */

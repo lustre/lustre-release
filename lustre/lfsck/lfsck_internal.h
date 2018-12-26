@@ -1051,7 +1051,9 @@ int lfsck_namespace_setup(const struct lu_env *env,
 
 /* lfsck_striped_dir.c */
 void lfsck_lmv_put(const struct lu_env *env, struct lfsck_lmv *llmv);
-int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
+int lfsck_read_stripe_lmv(const struct lu_env *env,
+			  struct lfsck_instance *lfsck,
+			  struct dt_object *obj,
 			  struct lmv_mds_md_v1 *lmv);
 int lfsck_shard_name_to_index(const struct lu_env *env, const char *name,
 			      int namelen, __u16 type,
@@ -1060,6 +1062,7 @@ bool lfsck_is_valid_slave_name_entry(const struct lu_env *env,
 				     struct lfsck_lmv *llmv,
 				     const char *name, int namelen);
 int lfsck_namespace_check_name(const struct lu_env *env,
+			       struct lfsck_instance *lfsck,
 			       struct dt_object *parent,
 			       struct dt_object *child,
 			       const struct lu_name *cname);

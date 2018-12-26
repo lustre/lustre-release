@@ -2447,7 +2447,7 @@ lfsck_namespace_dsd_single(const struct lu_env *env,
 
 lost_parent:
 		lmv = &info->lti_lmv;
-		rc = lfsck_read_stripe_lmv(env, child, lmv);
+		rc = lfsck_read_stripe_lmv(env, lfsck, child, lmv);
 		if (rc != 0 && rc != -ENODATA)
 			GOTO(out, rc);
 
@@ -2534,7 +2534,8 @@ lost_parent:
 		}
 
 		lfsck_ibits_unlock(lh, LCK_EX);
-		rc = lfsck_namespace_check_name(env, parent, child, cname);
+		rc = lfsck_namespace_check_name(env, lfsck, parent, child,
+						cname);
 		if (rc == -ENOENT)
 			goto lost_parent;
 
@@ -3787,7 +3788,8 @@ lost_parent:
 			GOTO(out, rc = 0);
 		}
 
-		rc = lfsck_namespace_check_name(env, parent, child, cname);
+		rc = lfsck_namespace_check_name(env, lfsck, parent, child,
+						cname);
 		if (rc == -ENOENT)
 			goto lost_parent;
 
