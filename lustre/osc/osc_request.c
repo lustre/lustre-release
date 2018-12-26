@@ -1100,6 +1100,7 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
         return (p1->off + p1->count == p2->off);
 }
 
+#if IS_ENABLED(CONFIG_CRC_T10DIF)
 static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 				   size_t pg_count, struct brw_page **pga,
 				   int opc, obd_dif_csum_fn *fn,
@@ -1197,6 +1198,12 @@ out:
 	__free_page(__page);
 	return rc;
 }
+#else /* !CONFIG_CRC_T10DIF */
+#define obd_dif_ip_fn NULL
+#define obd_dif_crc_fn NULL
+#define osc_checksum_bulk_t10pi(name, nob, pgc, pga, opc, fn, ssize, csum)  \
+	-EOPNOTSUPP
+#endif /* CONFIG_CRC_T10DIF */
 
 static int osc_checksum_bulk(int nob, size_t pg_count,
 			     struct brw_page **pga, int opc,
@@ -1626,7 +1633,6 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 	enum cksum_types cksum_type;
 	obd_dif_csum_fn *fn = NULL;
 	int sector_size = 0;
-	bool t10pi = false;
 	__u32 new_cksum;
 	char *msg;
 	int rc;
@@ -1645,22 +1651,18 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 
 	switch (cksum_type) {
 	case OBD_CKSUM_T10IP512:
-		t10pi = true;
 		fn = obd_dif_ip_fn;
 		sector_size = 512;
 		break;
 	case OBD_CKSUM_T10IP4K:
-		t10pi = true;
 		fn = obd_dif_ip_fn;
 		sector_size = 4096;
 		break;
 	case OBD_CKSUM_T10CRC512:
-		t10pi = true;
 		fn = obd_dif_crc_fn;
 		sector_size = 512;
 		break;
 	case OBD_CKSUM_T10CRC4K:
-		t10pi = true;
 		fn = obd_dif_crc_fn;
 		sector_size = 4096;
 		break;
@@ -1668,13 +1670,10 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 		break;
 	}
 
-	if (t10pi)
+	if (fn)
 		rc = osc_checksum_bulk_t10pi(obd_name, aa->aa_requested_nob,
-					     aa->aa_page_count,
-					     aa->aa_ppga,
-					     OST_WRITE,
-					     fn,
-					     sector_size,
+					     aa->aa_page_count, aa->aa_ppga,
+					     OST_WRITE, fn, sector_size,
 					     &new_cksum);
 	else
 		rc = osc_checksum_bulk(aa->aa_requested_nob, aa->aa_page_count,
