@@ -2502,7 +2502,8 @@ test_33a() { # bug 12333, was test_33
 	echo "ok."
 
 	cp /etc/hosts $MOUNT2/ || error "copy /etc/hosts $MOUNT2/ failed"
-	$GETSTRIPE $MOUNT2/hosts || error "$GETSTRIPE $MOUNT2/hosts failed"
+	$LFS getstripe $MOUNT2/hosts ||
+		error "$LFS getstripe $MOUNT2/hosts failed"
 
 	umount $MOUNT2
 	stop fs2ost -f
@@ -3429,12 +3430,13 @@ test_46a() {
 	#second client see all ost's
 
 	mount_client $MOUNT2 || error "mount_client failed"
-	$SETSTRIPE -c -1 $MOUNT2 || error "$SETSTRIPE -c -1 $MOUNT2 failed"
-	$GETSTRIPE $MOUNT2 || error "$GETSTRIPE $MOUNT2 failed"
+	$LFS setstripe -c -1 $MOUNT2 ||
+		error "$LFS setstripe -c -1 $MOUNT2 failed"
+	$LFS getstripe $MOUNT2 || error "$LFS getstripe $MOUNT2 failed"
 
 	echo "ok" > $MOUNT2/widestripe
-	$GETSTRIPE $MOUNT2/widestripe ||
-		error "$GETSTRIPE $MOUNT2/widestripe failed"
+	$LFS getstripe $MOUNT2/widestripe ||
+		error "$LFS getstripe $MOUNT2/widestripe failed"
 	# fill acl buffer for avoid expand lsm to them
 	awk -F : '{if (FNR < 25) { print "u:"$1":rwx" }}' /etc/passwd |
 		while read acl; do
@@ -3500,12 +3502,13 @@ test_48() { # bz-17636 LU-7473
 	setup_noconfig
 	check_mount || error "check_mount failed"
 
-	$SETSTRIPE -c -1 $MOUNT || error "$SETSTRIPE -c -1 $MOUNT failed"
-	$GETSTRIPE $MOUNT || error "$GETSTRIPE $MOUNT failed"
+	$LFS setstripe -c -1 $MOUNT ||
+		error "$LFS setstripe -c -1 $MOUNT failed"
+	$LFS getstripe $MOUNT || error "$LFS getstripe $MOUNT failed"
 
 	echo "ok" > $MOUNT/widestripe
-	$GETSTRIPE $MOUNT/widestripe ||
-		error "$GETSTRIPE $MOUNT/widestripe failed"
+	$LFS getstripe $MOUNT/widestripe ||
+		error "$LFS getstripe $MOUNT/widestripe failed"
 
 	# In the future, we may introduce more EAs, such as selinux, enlarged
 	# LOV EA, and so on. These EA will use some EA space that is shared by
@@ -3800,7 +3803,7 @@ test_50g() {
 		local PARAM="${FSNAME}-OST0001.osc.active"
 	fi
 
-	$SETSTRIPE -c -1 $DIR/$tfile || error "$SETSTRIPE failed"
+	$LFS setstripe -c -1 $DIR/$tfile || error "$LFS setstripe failed"
 	do_facet mgs $PERM_CMD $PARAM=0 || error "Unable to deactivate OST"
 
 	umount_client $MOUNT || error "Unable to unmount client"
@@ -3840,8 +3843,8 @@ test_50h() {
 		"${FSNAME}-OST0000.osc.active" 1
 
 	mkdir $DIR/$tdir/2 || error "mkdir $DIR/$tdir/2 failed"
-	$SETSTRIPE -c -1 -i 0 $DIR/$tdir/2 ||
-		error "$SETSTRIPE $DIR/$tdir/2 failed"
+	$LFS setstripe -c -1 -i 0 $DIR/$tdir/2 ||
+		error "$LFS setstripe $DIR/$tdir/2 failed"
 	sleep 1 && echo "create a file after OST1 is activated"
 	# doing some io, shouldn't crash
 	dd if=/dev/zero of=$DIR/$tdir/2/$tfile-io bs=1M count=10
@@ -3930,8 +3933,8 @@ test_51() {
 	check_mount || error "check_mount failed"
 
 	mkdir $MOUNT/$tdir || error "mkdir $MOUNT/$tdir failed"
-	$SETSTRIPE -c -1 $MOUNT/$tdir ||
-		error "$SETSTRIPE -c -1 $MOUNT/$tdir failed"
+	$LFS setstripe -c -1 $MOUNT/$tdir ||
+		error "$LFS setstripe -c -1 $MOUNT/$tdir failed"
 	#define OBD_FAIL_MDS_REINT_DELAY         0x142
 	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x142"
 	touch $MOUNT/$tdir/$tfile &
@@ -4019,7 +4022,7 @@ test_52() {
 		error "Unable to create temporary file"
 	sleep 1
 
-	$SETSTRIPE -c -1 -S 1M $DIR/$tdir || error "$SETSTRIPE failed"
+	$LFS setstripe -c -1 -S 1M $DIR/$tdir || error "$LFS setstripe failed"
 
 	for (( i=0; i < nrfiles; i++ )); do
 		multiop $DIR/$tdir/$tfile-$i Ow1048576w1048576w524288c ||
@@ -4314,7 +4317,7 @@ test_56a() {
 	      $server_version -lt $(version_code 2.5.11) ]]; then
 		wait_osc_import_state mds ost1 FULL
 		wait_osc_import_state mds ost2 FULL
-		$SETSTRIPE --stripe-count=-1 $DIR/$tfile ||
+		$LFS setstripe --stripe-count=-1 $DIR/$tfile ||
 			error "Unable to setstripe $DIR/$tfile"
 		n=$($LFS getstripe --stripe-count $DIR/$tfile)
 		[ "$n" -eq 2 ] || error "Stripe count not two: $n"
@@ -4966,8 +4969,8 @@ test_69() {
 		local ifree=$($LFS df -i $MOUNT | awk '/OST0000/ { print $4 }')
 		log "On OST0, $ifree inodes available. Want $num_create."
 
-		$SETSTRIPE -i 0 $DIR/$tdir ||
-			error "$SETSTRIPE -i 0 $DIR/$tdir failed"
+		$LFS setstripe -i 0 $DIR/$tdir ||
+			error "$LFS setstripe -i 0 $DIR/$tdir failed"
 		if [ $ifree -lt 10000 ]; then
 			files=$(( ifree - 50 ))
 		else
@@ -4997,7 +5000,7 @@ test_69() {
 
 	mount_client $MOUNT || error "mount client failed"
 	touch $DIR/$tdir/$tfile-last || error "create file after reformat"
-	local idx=$($GETSTRIPE -i $DIR/$tdir/$tfile-last)
+	local idx=$($LFS getstripe -i $DIR/$tdir/$tfile-last)
 	[ $idx -ne 0 ] && error "$DIR/$tdir/$tfile-last on $idx not 0" || true
 
 	local iused=$($LFS df -i $MOUNT | awk '/OST0000/ { print $3 }')
@@ -5943,7 +5946,7 @@ test_82a() { # LU-4665
 	# 1. If the file does not exist, new file will be created
 	#    with specified OSTs.
 	local file=$DIR/$tdir/$tfile-1
-	local cmd="$SETSTRIPE -o $ost_indices $file"
+	local cmd="$LFS setstripe -o $ost_indices $file"
 	echo -e "\n$cmd"
 	eval $cmd || error "$cmd failed"
 	check_stripe_count $file $OSTCOUNT
@@ -5955,7 +5958,7 @@ test_82a() { # LU-4665
 	#    will be attached with specified layout.
 	file=$DIR/$tdir/$tfile-2
 	mcreate $file || error "mcreate $file failed"
-	cmd="$SETSTRIPE -o $ost_indices $file"
+	cmd="$LFS setstripe -o $ost_indices $file"
 	echo -e "\n$cmd"
 	eval $cmd || error "$cmd failed"
 	dd if=/dev/urandom of=$file count=1 bs=1M > /dev/null 2>&1 ||
@@ -5972,7 +5975,7 @@ test_82a() { # LU-4665
 	#    be in the OST indices list.
 	local start_ost_idx=${ost_indices##*,}
 	file=$DIR/$tdir/$tfile-3
-	cmd="$SETSTRIPE -o $ost_indices -i $start_ost_idx $file"
+	cmd="$LFS setstripe -o $ost_indices -i $start_ost_idx $file"
 	echo -e "\n$cmd"
 	eval $cmd || error "$cmd failed"
 	check_stripe_count $file $OSTCOUNT
@@ -5980,7 +5983,7 @@ test_82a() { # LU-4665
 	check_start_ost_idx $file $start_ost_idx
 
 	file=$DIR/$tdir/$tfile-4
-	cmd="$SETSTRIPE"
+	cmd="$LFS setstripe"
 	cmd+=" -o $(exclude_items_from_list $ost_indices $start_ost_idx)"
 	cmd+=" -i $start_ost_idx $file"
 	echo -e "\n$cmd"
@@ -5989,7 +5992,7 @@ test_82a() { # LU-4665
 	# 5. Specifying OST indices for directory should succeed.
 	local dir=$DIR/$tdir/$tdir
 	mkdir $dir || error "mkdir $dir failed"
-	cmd="$SETSTRIPE -o $ost_indices $dir"
+	cmd="$LFS setstripe -o $ost_indices $dir"
 	if [[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.11.53) &&
 	   $(lustre_version_code client -gt $(version_code 2.11.53)) ]]; then
 		echo -e "\n$cmd"
@@ -6090,17 +6093,17 @@ test_82b() { # LU-4665
 	# If [--pool|-p <pool_name>] is set with [--ost-list|-o <ost_indices>],
 	# then the OSTs must be the members of the pool.
 	local file=$DIR/$tdir/$tfile
-	cmd="$SETSTRIPE -p $ost_pool -o $ost_idx_in_list $file"
+	cmd="$LFS setstripe -p $ost_pool -o $ost_idx_in_list $file"
 	echo -e "\n$cmd"
 	eval $cmd && error "OST with index $ost_idx_in_list should be" \
 			   "in OST pool $ost_pool"
 
 	# Only select OST $ost_idx_in_list from $ost_pool for file.
 	ost_idx_in_list=${ost_idx_in_pool#*,}
-	cmd="$SETSTRIPE -p $ost_pool -o $ost_idx_in_list $file"
+	cmd="$LFS setstripe -p $ost_pool -o $ost_idx_in_list $file"
 	echo -e "\n$cmd"
 	eval $cmd || error "$cmd failed"
-	cmd="$GETSTRIPE $file"
+	cmd="$LFS getstripe $file"
 	echo -e "\n$cmd"
 	eval $cmd || error "$cmd failed"
 	check_stripe_count $file 2
@@ -6343,10 +6346,10 @@ test_87() { #LU-6544
 	check_mount || error "check client $MOUNT failed"
 
 	#set xattr
-	$SETSTRIPE -E 1M -S 1M -c 1 -E 64M -c 1 -E -1 -c -1 $file ||
+	$LFS setstripe -E 1M -S 1M -c 1 -E 64M -c 1 -E -1 -c -1 $file ||
 		error "Create file with 3 components failed"
 	$TRUNCATE $file $((1024*1024*64+1)) || error "truncate file failed"
-	i=$($GETSTRIPE -I3 -c $file) || error "get 3rd stripe count failed"
+	i=$($LFS getstripe -I3 -c $file) || error "get 3rd stripe count failed"
 	if [ $i -ne $OSTCOUNT ]; then
 		left_size=$(expr $left_size + $(expr $OSTCOUNT - $i) \* 24)
 		echo -n "Since only $i out $OSTCOUNT OSTs are used, "
@@ -7491,7 +7494,7 @@ test_103() {
 
 	test_103_set_pool $FSNAME OST0000
 
-	$SETSTRIPE -p $FSNAME $DIR/$tdir/d0 ||
+	$LFS setstripe -p $FSNAME $DIR/$tdir/d0 ||
 		error "(6) Fail to setstripe on $DIR/$tdir/d0"
 
 	if ! combined_mgs_mds ; then
@@ -7515,7 +7518,7 @@ test_103() {
 		test_103_set_pool $save_fsname OST0001
 	fi
 
-	$SETSTRIPE -p $save_fsname $DIR/$tdir/f0 ||
+	$LFS setstripe -p $save_fsname $DIR/$tdir/f0 ||
 		error "(16) Fail to setstripe on $DIR/$tdir/f0"
 	if ! combined_mgs_mds ; then
 		umount_mgs_client

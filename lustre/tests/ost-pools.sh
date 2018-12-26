@@ -593,31 +593,31 @@ test_6() {
 	add_pool $POOL $TGT_ALL "$TGT_UUID"
 
 	mkdir -p $POOL_DIR
-	$SETSTRIPE -c -1 -p $POOL $POOL_DIR
-	[[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL failed."
+	$LFS setstripe -c -1 -p $POOL $POOL_DIR
+	[[ $? -eq 0 ]] || error "$LFS setstripe -p $POOL failed."
 	check_dir_in_pool $POOL_DIR $POOL
 
 	# If an invalid pool name is specified, the command should fail
-	$SETSTRIPE -c 2 -p $INVALID_POOL $POOL_DIR 2>/dev/null
+	$LFS setstripe -c 2 -p $INVALID_POOL $POOL_DIR 2>/dev/null
 	[[ $? -ne 0 ]] || error "setstripe to invalid pool did not fail."
 
 	# If the pool name does not exist, the command should fail
-	$SETSTRIPE -c 2 -p $NON_EXISTANT_POOL $POOL_DIR 2>/dev/null
+	$LFS setstripe -c 2 -p $NON_EXISTANT_POOL $POOL_DIR 2>/dev/null
 	[[ $? -ne 0 ]] || error "setstripe to non-existant pool did not fail."
 
 	# lfs setstripe should work as before if a pool name is not specified.
-	$SETSTRIPE -c -1 $POOL_DIR
-	[[ $? -eq 0 ]] || error "$SETSTRIPE -c -1 $POOL_DIR failed."
-	$SETSTRIPE -c -1 $POOL_FILE
-	[[ $? -eq 0 ]] || error "$SETSTRIPE -c -1 $POOL_FILE failed."
+	$LFS setstripe -c -1 $POOL_DIR
+	[[ $? -eq 0 ]] || error "$LFS setstripe -c -1 $POOL_DIR failed."
+	$LFS setstripe -c -1 $POOL_FILE
+	[[ $? -eq 0 ]] || error "$LFS setstripe -c -1 $POOL_FILE failed."
 
 	# lfs setstripe should fail if a start index that is outside the
 	# pool is specified.
 	create_pool_nofail $POOL2
 	add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
-	$SETSTRIPE -i 1 -p $POOL2 $ROOT_POOL/$tfile 2>/dev/null
+	$LFS setstripe -i 1 -p $POOL2 $ROOT_POOL/$tfile 2>/dev/null
 	[[ $? -ne 0 ]] ||
-	error "$SETSTRIPE with start index outside the pool did not fail."
+	error "$LFS setstripe with start index outside the pool did not fail."
 }
 run_test 6 "getstripe/setstripe"
 
@@ -629,15 +629,15 @@ helper_test_7a()
 	pool_add $pool || error "pool_add failed"
 	pool_add_targets $pool 0 1 || error "pool_add_targets failed"
 
-	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "$pool" ||
+	$LFS setstripe -c 1 $DIR/$tdir/testfile1 --pool "$pool" ||
 		error "setstripe failed"
-	$SETSTRIPE -c 1 $DIR/$tdir/testfile2 --pool "$FSNAME.$pool" ||
+	$LFS setstripe -c 1 $DIR/$tdir/testfile2 --pool "$FSNAME.$pool" ||
 		error "setstripe failed"
 
 	mkdir $DIR/$tdir/testdir
-	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$pool" ||
+	$LFS setstripe -c 1 $DIR/$tdir/testdir  -p "$pool" ||
 		error "setstripe failed"
-	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$FSNAME.$pool" ||
+	$LFS setstripe -c 1 $DIR/$tdir/testdir  -p "$FSNAME.$pool" ||
 		error "setstripe failed"
 
 	rm -f $DIR/$tdir/testfile1
@@ -698,11 +698,11 @@ test_7c()
 	pool_add_targets $pool 0 1 || error "pool_add_targets failed"
 
 	# setstripe with the same pool name plus 1 letter
-	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "${pool}X" && \
+	$LFS setstripe -c 1 $DIR/$tdir/testfile1 --pool "${pool}X" &&
 		error "setstripe succedeed"
 
 	# setstripe with the same pool name minus 1 letter
-	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "${pool%?}" && \
+	$LFS setstripe -c 1 $DIR/$tdir/testfile1 --pool "${pool%?}" &&
 		error "setstripe succedeed"
 
 	rm -f $DIR/$tdir/testfile1
@@ -1136,10 +1136,10 @@ test_20() {
 	create_dir $dir2 $POOL2
 	touch $dir2/file2		# Should inherit $POOL2 from $dir2
 	mkdir $dir3			# Should inherit $POOL from $dir1
-	$SETSTRIPE -c 1 $dir3		# Should remain existing $POOL
+	$LFS setstripe -c 1 $dir3	# Should remain existing $POOL
 	touch $dir3/file3		# Should inherit $POOL from $dir3
-	$SETSTRIPE -c 1 $dir2/file4	# Should inherit $POOL2 from dir2
-	$SETSTRIPE -S 64K $dir1/file5	# Should inderit $POOL from $dir1
+	$LFS setstripe -c 1 $dir2/file4 # Should inherit $POOL2 from dir2
+	$LFS setstripe -S 64K $dir1/file5 # Should inderit $POOL from $dir1
 
 	check_file_in_pool $dir1/file1 $POOL2
 	check_file_in_pool $dir2/file2 $POOL2
@@ -1267,7 +1267,7 @@ test_23a() {
 	sleep 3
 	$LFS quota -v -u $RUNAS_ID $dir
 
-	$SETSTRIPE -c 1 -p $POOL $file
+	$LFS setstripe -c 1 -p $POOL $file
 	chown $RUNAS_ID.$RUNAS_GID $file
 	ls -l $file
 
@@ -1403,12 +1403,12 @@ test_24() {
 	create_dir $POOL_ROOT/dir1 $POOL $OSTCOUNT
 
 	mkdir $POOL_ROOT/dir2
-	$SETSTRIPE -p $POOL -S 65536 -i 0 -c 1 $POOL_ROOT/dir2 ||
-		error "$SETSTRIPE $POOL_ROOT/dir2 failed"
+	$LFS setstripe -p $POOL -S 65536 -i 0 -c 1 $POOL_ROOT/dir2 ||
+		error "$LFS setstripe $POOL_ROOT/dir2 failed"
 
 	mkdir $POOL_ROOT/dir3
-	$SETSTRIPE -S 65536 -i 0 -c 1 $POOL_ROOT/dir3 ||
-		error "$SETSTRIPE $POOL_ROOT/dir3 failed"
+	$LFS setstripe -S 65536 -i 0 -c 1 $POOL_ROOT/dir3 ||
+		error "$LFS setstripe $POOL_ROOT/dir3 failed"
 
 	mkdir $POOL_ROOT/dir4
 
@@ -1481,7 +1481,7 @@ test_25() {
 		sleep 5
 
 		# Make sure OST0 can be striped on
-		$SETSTRIPE -i 0 -c 1 $POOL_ROOT/$tfile
+		$LFS setstripe -i 0 -c 1 $POOL_ROOT/$tfile
 		local STR=$($LFS getstripe -i $POOL_ROOT/$tfile)
 		rm $POOL_ROOT/$tfile
 		if [[ "$STR" == "0" ]]; then

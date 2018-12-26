@@ -541,7 +541,7 @@ test_1() {
 	local USED=$(getquota -u $TSTUSR global curspace)
 	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
 
-	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	log "Write..."
@@ -575,7 +575,7 @@ test_1() {
 	USED=$(getquota -g $TSTUSR global curspace)
 	[ $USED -ne 0 ] && error "Used space ($USED) for group $TSTUSR isn't 0"
 
-	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	log "Write ..."
@@ -614,7 +614,7 @@ test_1() {
 	$LFS setquota -p $TSTPRJID -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
 		error "set project quota failed"
 
-	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR:$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 	change_project -p $TSTPRJID $TESTFILE
 
@@ -756,7 +756,7 @@ test_block_soft() {
 	setup_quota_test
 	trap cleanup_quota_test EXIT
 
-	$SETSTRIPE $TESTFILE -c 1 -i 0
+	$LFS setstripe $TESTFILE -c 1 -i 0
 	chown $TSTUSR.$TSTUSR $TESTFILE
 	[ "$qtype" == "p" ] && is_project_quota_supported &&
 		change_project -p $TSTPRJID $TESTFILE
@@ -823,7 +823,7 @@ test_block_soft() {
 	$SHOW_QUOTA_INFO_GROUP
 	$SHOW_QUOTA_INFO_PROJID
 
-	$SETSTRIPE $TESTFILE -c 1 -i 0
+	$LFS setstripe $TESTFILE -c 1 -i 0
 	chown $TSTUSR.$TSTUSR $TESTFILE
 	[ "$qtype" == "p" ] && change_project -p $TSTPRJID $TESTFILE
 
@@ -1153,12 +1153,12 @@ test_6() {
 
 	# create file for $TSTUSR
 	local TESTFILE=$DIR/$tdir/$tfile-$TSTUSR
-	$SETSTRIPE $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	# create file for $TSTUSR2
 	local TESTFILE2=$DIR/$tdir/$tfile-$TSTUSR2
-	$SETSTRIPE $TESTFILE2 -c 1 -i 0 || error "setstripe $TESTFILE2 failed"
+	$LFS setstripe $TESTFILE2 -c 1 -i 0 || error "setstripe $TESTFILE2 failed"
 	chown $TSTUSR2.$TSTUSR2 $TESTFILE2 || error "chown $TESTFILE2 failed"
 
 	# cache per-ID lock for $TSTUSR on slave
@@ -1251,7 +1251,7 @@ test_7a() {
 		error "limit($USED) on $OSTUUID for user $TSTUSR isn't 0"
 
 	# create test file
-	$SETSTRIPE $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	echo "Stop ost1..."
@@ -1322,7 +1322,7 @@ test_7b() {
 		error "limit($USED) on $OSTUUID for user $TSTUSR isn't 0"
 
 	# create test file
-	$SETSTRIPE $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	# consume some space to make sure the granted space will not
@@ -1620,7 +1620,7 @@ test_9() {
 	quota_show_check a g $TSTUSR
 
 	echo "Create test file"
-	$SETSTRIPE $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	log "Write the big file of 4.5G ..."
@@ -1660,7 +1660,7 @@ test_10() {
 		error "set quota failed"
 	quota_show_check b u $TSTUSR
 
-	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	runas -u 0 -g 0 $DD of=$TESTFILE count=3 oflag=sync ||
@@ -1712,8 +1712,8 @@ test_12a() {
 	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $DIR ||
 		error "set quota failed"
 
-	$SETSTRIPE $TESTFILE0 -c 1 -i 0 || error "setstripe $TESTFILE0 failed"
-	$SETSTRIPE $TESTFILE1 -c 1 -i 1 || error "setstripe $TESTFILE1 failed"
+	$LFS setstripe $TESTFILE0 -c 1 -i 0 || error "setstripe $TESTFILE0 failed"
+	$LFS setstripe $TESTFILE1 -c 1 -i 1 || error "setstripe $TESTFILE1 failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE0 || error "chown $TESTFILE0 failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE1 || error "chown $TESTFILE1 failed"
 
@@ -1797,7 +1797,7 @@ test_13(){
 
 	$LFS setquota -u $TSTUSR -b 0 -B 10M -i 0 -I 0 $DIR ||
 		error "set quota failed"
-	$SETSTRIPE $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	# clear the locks in cache first
@@ -1949,7 +1949,7 @@ test_18_sub () {
 		error "set quota failed"
 	quota_show_check b u $TSTUSR
 
-	$SETSTRIPE $TESTFILE -i 0 -c 1 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -i 0 -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	local timeout=$(sysctl -n lustre.timeout)
@@ -2026,7 +2026,7 @@ test_19() {
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# bind file to a single OST
-	$SETSTRIPE -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
+	$LFS setstripe -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	echo "Set user quota (limit: ${blimit}M)"
@@ -2224,7 +2224,7 @@ test_23_sub() {
 		error "set quota failed"
 	quota_show_check b u $TSTUSR
 
-	$SETSTRIPE $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	log "Step1: trigger EDQUOT with O_DIRECT"
@@ -2283,7 +2283,7 @@ test_24() {
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# bind file to a single OST
-	$SETSTRIPE -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
+	$LFS setstripe -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	echo "Set user quota (limit: ${blimit}M)"
@@ -2387,7 +2387,7 @@ test_30() {
 
 	set_ost_qtype "u" || error "enable ost quota failed"
 
-	$SETSTRIPE $TESTFILE -i 0 -c 1 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -i 0 -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	$LFS setquota -t -u --block-grace $GRACE --inode-grace \
@@ -2712,7 +2712,7 @@ test_37() {
 		error "Used space ($USED) for user $TSTID isn't 0."
 
 	# create file with MDS_OPEN_DELAY_CREATE flag
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir/$tfile ||
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile ||
 		error "Create file failed"
 	# write to file
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 conv=notrunc \
@@ -3212,7 +3212,7 @@ test_default_quota() {
 	local USED=$(getquota $qtype $qid global curspace)
 	[ $USED -ne 0 ] && error "Used space for $qid isn't 0."
 
-	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
+	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	[ $qtype == "-p" ] && change_project -sp $TSTPRJID $DIR/$tdir
@@ -3372,7 +3372,7 @@ test_dom() {
 	chown $TSTUSR.$TSTUSR $DIR/$tdir || error "chown $tdir failed"
 
 	mkdir $DIR/$tdir_dom || error "mkdir $tdir_dom failed"
-	$SETSTRIPE -E 1M -L mdt $DIR/$tdir_dom ||
+	$LFS setstripe -E 1M -L mdt $DIR/$tdir_dom ||
 		error "setstripe $tdir_dom failed"
 	chown $TSTUSR.$TSTUSR $DIR/$tdir_dom || error "chown $tdir_dom failed"
 
