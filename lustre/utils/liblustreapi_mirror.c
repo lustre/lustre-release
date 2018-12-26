@@ -252,7 +252,7 @@ ssize_t llapi_mirror_copy_many(int fd, unsigned int src, unsigned int *dst,
 
 		/* round up to page align to make direct IO happy.
 		 * this implies the last segment to write. */
-		to_write = (bytes_read + page_size - 1) & ~(page_size - 1);
+		to_write = ((bytes_read - 1) | (page_size - 1)) + 1;
 
 		for (i = 0; i < nr; i++) {
 			ssize_t written;

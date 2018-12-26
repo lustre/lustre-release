@@ -195,19 +195,22 @@ void lsm_free(struct lov_stripe_md *lsm);
 })
 #elif BITS_PER_LONG == 32
 # define lov_do_div64(n, base) ({					\
+	uint64_t __num = (n);						\
 	uint64_t __rem;							\
 	if ((sizeof(base) > 4) && (((base) & 0xffffffff00000000ULL) != 0)) {  \
-		int __remainder;					      \
-		LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)), "64 bit lov " \
-			 "division %llu / %llu\n", (n), (uint64_t)(base));    \
-		__remainder = (n) & (LOV_MIN_STRIPE_SIZE - 1);		\
-		(n) >>= LOV_MIN_STRIPE_BITS;				\
-		__rem = do_div(n, (base) >> LOV_MIN_STRIPE_BITS);	\
+		int __remainder;					\
+		LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)),		\
+			 "64 bit lov division %llu / %llu\n",		\
+			 __num, (uint64_t)(base));			\
+		__remainder = __num & (LOV_MIN_STRIPE_SIZE - 1);	\
+		__num >>= LOV_MIN_STRIPE_BITS;				\
+		__rem = do_div(__num, (base) >> LOV_MIN_STRIPE_BITS);	\
 		__rem <<= LOV_MIN_STRIPE_BITS;				\
 		__rem += __remainder;					\
 	} else {							\
-		__rem = do_div(n, base);				\
+		__rem = do_div(__num, base);				\
 	}								\
+	(n) = __num;							\
 	__rem;								\
 })
 #endif
