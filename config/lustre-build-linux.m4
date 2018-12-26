@@ -419,8 +419,7 @@ LC_MODULE_LOADING
 AC_DEFUN([LB_USES_DPKG], [
 AC_CACHE_CHECK([if this distro uses dpkg], lb_cv_uses_dpkg, [
 lb_cv_uses_dpkg="no"
-AS_CASE([$(lsb_release -i -s 2>/dev/null)],
-	[Ubuntu | Debian], [lb_cv_uses_dpkg="yes"])
+AS_CASE([$(which dpkg 2>/dev/null)],[*/dpkg], [lb_cv_uses_dpkg="yes"])
 ])
 uses_dpkg=$lb_cv_uses_dpkg
 ])

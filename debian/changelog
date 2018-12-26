@@ -1,3 +1,9 @@
+lustre (2.12.0-dirty-1) unstable; urgency=low
+
+  * Automated changelog entry update
+
+ -- Andreas Dilger <adilger@whamcloud.com>  Sat, 22 Dec 2018 17:20:13 -0700
+
 lustre (2.11.55-dirty-1) unstable; urgency=low
 
   * Automated changelog entry update

@@ -24,7 +24,7 @@ Description: source for Lustre filesystem client kernel modules
 
 Package: lustre-client-utils
 Section: utils
-Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp30, zlib1g, perl
 Description: Userspace utilities for the Lustre filesystem (client)
@@ -38,7 +38,7 @@ Description: Userspace utilities for the Lustre filesystem (client)
 
 Package: lustre-server-utils
 Section: utils
-Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}, libyaml-0-2, libselinux1, libsnmp30, zlib1g, perl
 Provides: lustre-server-utils, lustre-client-utils (= ${binary:Version})
@@ -56,7 +56,7 @@ Description: Userspace utilities for the Lustre filesystem (server)
 
 Package: lustre-resource-agents
 Section: ha
-Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: lustre-server-utils (= ${binary:Version}), resource-agents
 Description: HA Resuable Cluster Resource Scripts for Lustre
@@ -70,7 +70,7 @@ Description: HA Resuable Cluster Resource Scripts for Lustre
 
 Package: lustre-iokit
 Section: utils
-Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: lustre-client-utils (= ${binary:Version}), python, perl, sg3-utils
 Description: Collection of benchmark tools for the Lustre filesystem
@@ -82,7 +82,7 @@ Description: Collection of benchmark tools for the Lustre filesystem
 
 Package: lustre-tests
 Section: utils
-Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: lustre-iokit (= ${binary:Version}), attr, rsync, perl, lsof, mpi-default-bin
 Description: Test suite for the Lustre filesystem
@@ -95,7 +95,7 @@ Description: Test suite for the Lustre filesystem
 Package: lustre-dev
 Section: libdevel
 Priority: optional
-Architecture: i386 powerpc ppc64el amd64 ia64 arm64
+Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Depends: lustre-client-utils (= ${binary:Version})
 Description: Development files for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
@@ -106,7 +106,7 @@ Description: Development files for the Lustre filesystem
 
 Package: lustre-client-modules-dkms
 Section: admin
-Architecture: i386 powerpc ppc64el amd64 ia64
+Architecture: i386 armhf powerpc ppc64el amd64 ia64
 Priority: optional
 Depends: dkms, automake, libtool, linux-headers-generic | linux-headers | linux-headers-amd64
 Recommends: linux-image, lustre-utils
