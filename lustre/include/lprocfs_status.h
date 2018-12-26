@@ -58,7 +58,7 @@ struct lprocfs_vars {
 	mode_t				 proc_mode;
 };
 
-static inline u32 pct(s64 a, s64 b)
+static inline unsigned int pct(unsigned long a, unsigned long b)
 {
 	return b ? a * 100 / b : 0;
 }
