@@ -2595,7 +2595,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 			     struct llapi_resync_comp *comp_array,
 			     int comp_size,  uint64_t start, uint64_t end)
 {
-	size_t count;
+	uint64_t count;
 	size_t page_size = sysconf(_SC_PAGESIZE);
 	const size_t buflen = 4 << 20; /* 4M */
 	void *buf;
@@ -2615,6 +2615,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 	while (count > 0) {
 		uint32_t src;
 		uint64_t mirror_end = 0;
+		uint64_t bytes_left;
 		ssize_t bytes_read;
 		size_t to_read;
 		size_t to_write;
@@ -2624,12 +2625,12 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 			return -ENOENT;
 
 		if (mirror_end == OBD_OBJECT_EOF) {
-			to_read = count;
+			bytes_left = count;
 		} else {
-			to_read = MIN(count, mirror_end - pos);
-			to_read = (to_read + page_size - 1) & ~(page_size - 1);
+			bytes_left = MIN(count, mirror_end - pos);
+			bytes_left = ((bytes_left - 1) | (page_size - 1)) + 1;
 		}
-		to_read = MIN(buflen, to_read);
+		to_read = MIN(buflen, bytes_left);
 
 		bytes_read = llapi_mirror_read(fd, src, buf, to_read, pos);
 		if (bytes_read == 0) {
@@ -2642,7 +2643,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 		}
 
 		/* round up to page align to make direct IO happy. */
-		to_write = (bytes_read + page_size - 1) & ~(page_size - 1);
+		to_write = ((bytes_read - 1) | (page_size - 1)) + 1;
 
 		for (i = 0; i < comp_size; i++) {
 			ssize_t written;

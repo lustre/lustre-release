@@ -364,7 +364,7 @@ ssize_t mirror_resync_one(int fd, struct llapi_layout *layout,
 {
 	uint64_t mirror_end = 0;
 	ssize_t result = 0;
-	size_t count;
+	uint64_t count;
 
 	if (end == OBD_OBJECT_EOF)
 		count = OBD_OBJECT_EOF;
@@ -373,7 +373,7 @@ ssize_t mirror_resync_one(int fd, struct llapi_layout *layout,
 
 	while (count > 0) {
 		uint32_t src;
-		size_t to_copy;
+		uint64_t to_copy;
 		ssize_t copied;
 
 		src = llapi_mirror_find(layout, start, end, &mirror_end);

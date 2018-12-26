@@ -2362,7 +2362,7 @@ ssize_t short_io_bytes_show(struct kobject *kobj, struct attribute *attr,
 EXPORT_SYMBOL(short_io_bytes_show);
 
 /* Used to catch people who think they're specifying pages. */
-#define MIN_SHORT_IO_BYTES 64
+#define MIN_SHORT_IO_BYTES 64U
 
 ssize_t short_io_bytes_store(struct kobject *kobj, struct attribute *attr,
 			     const char *buffer, size_t count)
