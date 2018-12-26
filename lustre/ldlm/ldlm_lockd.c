@@ -1267,20 +1267,6 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 GOTO(out, rc = -EFAULT);
         }
 
-	if (exp_connect_flags(req->rq_export) & OBD_CONNECT_IBITS) {
-                if (unlikely(dlm_req->lock_desc.l_resource.lr_type ==
-                             LDLM_PLAIN)) {
-                        DEBUG_REQ(D_ERROR, req,
-                                  "PLAIN lock request from IBITS client?");
-                        GOTO(out, rc = -EPROTO);
-                }
-        } else if (unlikely(dlm_req->lock_desc.l_resource.lr_type ==
-                            LDLM_IBITS)) {
-                DEBUG_REQ(D_ERROR, req,
-                          "IBITS lock request from unaware client?");
-                GOTO(out, rc = -EPROTO);
-        }
-
 	if (unlikely((flags & LDLM_FL_REPLAY) ||
 		     (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))) {
                 /* Find an existing lock in the per-export lock hash */

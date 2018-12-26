@@ -5332,15 +5332,6 @@ static int mdt_connect_internal(struct obd_export *exp,
 
 	data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
-	if (!(data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
-	    !(data->ocd_connect_flags & OBD_CONNECT_IBITS)) {
-		CWARN("%s: client %s does not support ibits lock, either "
-		      "very old or an invalid client: flags %#llx\n",
-		      mdt_obd_name(mdt), exp->exp_client_uuid.uuid,
-		      data->ocd_connect_flags);
-		return -EBADE;
-	}
-
 	if (!mdt->mdt_opts.mo_acl)
 		data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
 
