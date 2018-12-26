@@ -559,7 +559,7 @@ again:
 }
 EXPORT_SYMBOL(lustre_notify_lwp_list);
 
-static int lustre_lwp_connect(struct obd_device *lwp)
+static int lustre_lwp_connect(struct obd_device *lwp, bool is_mdt)
 {
 	struct lu_env		 env;
 	struct lu_context	 session_ctx;
@@ -585,11 +585,14 @@ static int lustre_lwp_connect(struct obd_device *lwp)
 
 	data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX;
 	data->ocd_version = LUSTRE_VERSION_CODE;
-	data->ocd_connect_flags |= OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID |
-		OBD_CONNECT_AT | OBD_CONNECT_LRU_RESIZE |
-		OBD_CONNECT_FULL20 | OBD_CONNECT_LVB_TYPE |
-		OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_LFSCK |
-		OBD_CONNECT_BULK_MBITS;
+	data->ocd_connect_flags |= OBD_CONNECT_FID | OBD_CONNECT_AT |
+		OBD_CONNECT_LRU_RESIZE | OBD_CONNECT_FULL20 |
+		OBD_CONNECT_LVB_TYPE | OBD_CONNECT_LIGHTWEIGHT |
+		OBD_CONNECT_LFSCK | OBD_CONNECT_BULK_MBITS;
+
+	if (is_mdt)
+		data->ocd_connect_flags |= OBD_CONNECT_MDS_MDS;
+
 	OBD_ALLOC_PTR(uuid);
 	if (uuid == NULL)
 		GOTO(out, rc = -ENOMEM);
@@ -673,7 +676,7 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 	obd = class_name2obd(lwpname);
 	LASSERT(obd != NULL);
 
-	rc = lustre_lwp_connect(obd);
+	rc = lustre_lwp_connect(obd, strstr(lsi->lsi_svname, "-MDT") != NULL);
 	if (rc == 0) {
 		obd->u.cli.cl_max_mds_easize = MAX_MD_SIZE;
 		spin_lock(&lsi->lsi_lwp_lock);

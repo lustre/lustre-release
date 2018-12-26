@@ -1164,6 +1164,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 			 * cause namespace inconsistency */
 			spin_lock(&export->exp_lock);
 			export->exp_connecting = 1;
+			export->exp_conn_cnt = 0;
 			spin_unlock(&export->exp_lock);
 			conn.cookie = export->exp_handle.h_cookie;
 			rc = EALREADY;
@@ -1205,18 +1206,19 @@ no_export:
                               target->obd_name, cluuid.uuid,
                               libcfs_nid2str(req->rq_peer.nid),
 			      atomic_read(&export->exp_refcount));
-                GOTO(out, rc = -EBUSY);
-        } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1) {
-                if (!strstr(cluuid.uuid, "mdt"))
-                        LCONSOLE_WARN("%s: Rejecting reconnect from the "
-                                      "known client %s (at %s) because it "
-                                      "is indicating it is a new client",
-                                      target->obd_name, cluuid.uuid,
-                                      libcfs_nid2str(req->rq_peer.nid));
-                GOTO(out, rc = -EALREADY);
-        } else {
-                OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
-        }
+			GOTO(out, rc = -EBUSY);
+	} else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1 &&
+		   rc != EALREADY) {
+		if (!strstr(cluuid.uuid, "mdt"))
+			LCONSOLE_WARN("%s: Rejecting reconnect from the "
+				      "known client %s (at %s) because it "
+				      "is indicating it is a new client",
+				      target->obd_name, cluuid.uuid,
+				      libcfs_nid2str(req->rq_peer.nid));
+		GOTO(out, rc = -EALREADY);
+	} else {
+		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_DELAY_RECONNECT, 2 * obd_timeout);
+	}
 
         if (rc < 0) {
                 GOTO(out, rc);
