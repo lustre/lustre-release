@@ -39,7 +39,7 @@ static int config_on_load = 0;
 module_param(config_on_load, int, 0444);
 MODULE_PARM_DESC(config_on_load, "configure network at module load");
 
-static struct mutex lnet_config_mutex;
+static DEFINE_MUTEX(lnet_config_mutex);
 
 static int
 lnet_configure(void *arg)
@@ -234,8 +234,6 @@ static int __init lnet_init(void)
 {
 	int rc;
 	ENTRY;
-
-	mutex_init(&lnet_config_mutex);
 
 	rc = lnet_lib_init();
 	if (rc != 0) {
