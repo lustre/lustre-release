@@ -49,7 +49,7 @@ static char fname[4096];
 module_param_string(fname, fname, sizeof(fname), 0644);
 MODULE_PARM_DESC(fname, "name of file to stat");
 
-struct completion thr_start;
+static DECLARE_COMPLETION(thr_start);
 
 #define PREFIX "lustre_kinode_%u:"
 
@@ -131,7 +131,6 @@ static int __init kinode_init(void)
 	}
 
 	/* Run the same from a kthread. */
-	init_completion(&thr_start);
 	thr = kthread_run(stat_thread, &stbuf2, "kinode_%u", run_id);
 	if (IS_ERR(thr)) {
 		pr_err(PREFIX " Cannot create kthread\n", run_id);
