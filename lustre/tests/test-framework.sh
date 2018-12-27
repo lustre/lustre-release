@@ -295,8 +295,6 @@ init_test_env() {
 	[ ! -f "$LCTL" ] && export LCTL=$(which lctl)
 	export LFS=${LFS:-"$LUSTRE/utils/lfs"}
 	[ ! -f "$LFS" ] && export LFS=$(which lfs)
-	SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
-	GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 
 	export PERM_CMD=${PERM_CMD:-"$LCTL conf_param"}
 
@@ -8740,7 +8738,7 @@ check_file_in_pool()
 	local file=$1
 	local pool=$2
 	local tlist="$3"
-	local res=$($GETSTRIPE $file | grep 0x | cut -f2)
+	local res=$($LFS getstripe $file | grep 0x | cut -f2)
 	for i in $res
 	do
 		for t in $tlist ; do
@@ -8812,7 +8810,7 @@ pool_set_dir() {
 	local tdir=$2
 	echo "Setting pool on directory $tdir"
 
-	$SETSTRIPE -c 2 -p $pool $tdir && return 0
+	$LFS setstripe -c 2 -p $pool $tdir && return 0
 
 	error_noexit "Cannot set pool $pool to $tdir"
 	return 1
@@ -8823,7 +8821,7 @@ pool_check_dir() {
 	local tdir=$2
 	echo "Checking pool on directory $tdir"
 
-	local res=$($GETSTRIPE --pool $tdir | sed "s/\s*$//")
+	local res=$($LFS getstripe --pool $tdir | sed "s/\s*$//")
 	[ "$res" = "$pool" ] && return 0
 
 	error_noexit "Pool on '$tdir' is '$res', not '$pool'"
@@ -8878,7 +8876,7 @@ pool_create_files() {
 	for i in $(seq -w 1 $count)
 	do
 		local file=$tdir/spoo-$i
-		$SETSTRIPE -p $pool $file
+		$LFS setstripe -p $pool $file
 		check_file_in_pool $file $pool "$tlist" || \
 			failed=$((failed + 1))
 	done
@@ -8912,11 +8910,11 @@ pool_file_rel_path() {
 	mkdir -p $tdir ||
 		{ error_noexit "unable to create $tdir"; return 1 ; }
 	local file="/..$tdir/$tfile-1"
-	$SETSTRIPE -p $pool $file ||
+	$LFS setstripe -p $pool $file ||
 		{ error_noexit "unable to create $file" ; return 2 ; }
 
 	cd $tdir
-	$SETSTRIPE -p $pool $tfile-2 || {
+	$LFS setstripe -p $pool $tfile-2 || {
 		error_noexit "unable to create $tfile-2 in $tdir"
 		return 3
 	}
@@ -8975,7 +8973,7 @@ pool_remove_all_targets() {
 		return 2
 	}
 	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $pool $file 2>/dev/null && {
+	$LFS setstripe -p $pool $file 2>/dev/null && {
 		error_noexit "expected failure when creating file" \
 							"with empty pool"
 		return 3
@@ -8998,7 +8996,7 @@ pool_remove() {
 		return 1
 	}
 	# setstripe on an empty pool should fail
-	$SETSTRIPE -p $pool $file 2>/dev/null && {
+	$LFS setstripe -p $pool $file 2>/dev/null && {
 		error_noexit "expected failure when creating file" \
 							"with missing pool"
 		return 2
@@ -9047,7 +9045,7 @@ check_obdidx() {
 	[[ -z "$file" || -z "$expected" ]] &&
 		error "check_obdidx: invalid argument!"
 
-	obdidx=$(comma_list $($GETSTRIPE $file | grep -A $OSTCOUNT obdidx |
+	obdidx=$(comma_list $($LFS getstripe $file | grep -A $OSTCOUNT obdidx |
 			      grep -v obdidx | awk '{print $1}' | xargs))
 
 	[[ $obdidx = $expected ]] ||
@@ -9065,8 +9063,8 @@ check_start_ost_idx() {
 	[[ -z "$file" || -z "$expected" ]] &&
 		error "check_start_ost_idx: invalid argument!"
 
-	start_ost_idx=$($GETSTRIPE $file | grep -A 1 obdidx | grep -v obdidx |
-			awk '{print $1}')
+	start_ost_idx=$($LFS getstripe $file | grep -A 1 obdidx |
+			 grep -v obdidx | awk '{print $1}')
 
 	[[ $start_ost_idx = $expected ]] ||
 		error "OST index of the first stripe on $file is" \
