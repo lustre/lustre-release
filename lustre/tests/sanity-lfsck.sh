@@ -1329,7 +1329,7 @@ ost_remove_lastid() {
 
 test_11a() {
 	check_mount_and_prep
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 	createmany -o $DIR/$tdir/f 64 || error "(0) Fail to create 64 files."
 
 	echo "stopall"
@@ -1370,7 +1370,7 @@ run_test 11a "LFSCK can rebuild lost last_id"
 
 test_11b() {
 	check_mount_and_prep
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	echo "set fail_loc=0x160d to skip the updating LAST_ID on-disk"
 	#define OBD_FAIL_LFSCK_SKIP_LASTID	0x160d

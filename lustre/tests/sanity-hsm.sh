@@ -1051,7 +1051,7 @@ test_11a() {
 	echo "Verifying imported size $LSZ=$ASZ"
 	[[ $LSZ -eq $ASZ ]] || error "Incorrect size $LSZ != $ASZ"
 	echo -n "Verifying released pattern: "
-	local PTRN=$($GETSTRIPE -L $f)
+	local PTRN=$($LFS getstripe -L $f)
 	echo $PTRN
 	[[ $PTRN == released ]] || error "Is not released"
 	local fid=$(path2fid $f)

@@ -968,7 +968,7 @@ run_rr_alloc() {
 		[ -e $DIR/$tdir ] || $LFS mkdir -i 0 $DIR/$tdir
 	fi
 	chmod 0777 $DIR/$tdir
-	$SETSTRIPE -c 1 /$DIR/$tdir
+	$LFS setstripe -c 1 /$DIR/$tdir
 
 	trap "cleanup_rr_alloc $clients $mntpt_root $rr_alloc_MNTPTS" EXIT ERR
 	for i in $(seq 0 $((rr_alloc_MNTPTS - 1))); do
@@ -1033,7 +1033,7 @@ run_rr_alloc() {
 	restore_lustre_params < $qos_prec_objs
 	rm -f $qos_prec_objs
 
-	diff_max_min_arr=($($GETSTRIPE -r $DIR/$tdir/ |
+	diff_max_min_arr=($($LFS getstripe -r $DIR/$tdir/ |
 		grep "lmm_stripe_offset:" | awk '{print $2}' | sort -n |
 		uniq -c | awk 'NR==1 {min=max=$1} \
 		{ $1<min ? min=$1 : min; $1>max ? max=$1 : max} \

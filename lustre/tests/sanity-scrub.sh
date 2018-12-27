@@ -1092,7 +1092,7 @@ run_test 11 "OI scrub skips the new created objects only once"
 
 test_12() {
 	check_mount_and_prep
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	#define OBD_FAIL_OSD_COMPAT_INVALID_ENTRY		0x195
 	do_facet ost1 $LCTL set_param fail_loc=0x195
@@ -1130,7 +1130,7 @@ run_test 12 "OI scrub can rebuild invalid /O entries"
 
 test_13() {
 	check_mount_and_prep
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	#define OBD_FAIL_OSD_COMPAT_NO_ENTRY		0x196
 	do_facet ost1 $LCTL set_param fail_loc=0x196

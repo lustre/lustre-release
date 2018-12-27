@@ -1542,8 +1542,8 @@ test_65() {
 	mount_client $DIR2
 
 	#grant lock1, export2
-	$SETSTRIPE -i -0 $DIR2/$tfile || return 1
-	$MULTIOP $DIR2/$tfile Ow  || return 2
+	$LFS setstripe -i -0 $DIR2/$tfile || error "setstripe failed"
+	$MULTIOP $DIR2/$tfile Ow  || error "multiop failed"
 
 #define OBD_FAIL_LDLM_BL_EVICT            0x31e
 	do_facet ost $LCTL set_param fail_loc=0x31e
@@ -1940,7 +1940,7 @@ test_105()
 	# Since the client just mounted, its last_rcvd entry is not on disk.
 	# Send an RPC so exp_need_sync forces last_rcvd to commit this export
 	# so the client can reconnect during OST recovery (LU-924, LU-1582)
-	$SETSTRIPE -i 0 $DIR/$tfile
+	$LFS setstripe -i 0 $DIR/$tfile
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 conv=sync
 
         # make sure MGS's state is Partial
@@ -2042,7 +2042,7 @@ run_test 107 "drop reint reply, then restart MDT"
 
 test_108() {
 	mkdir -p $DIR/$tdir
-	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=256 &
 	local dd_pid=$!
@@ -2105,7 +2105,7 @@ test_110c () {
 	drop_update_reply $mdtidx "$LFS mkdir -i $mdtidx -c2 $remote_dir" ||
 		error "lfs mkdir failed"
 
-	diridx=$($GETSTRIPE -m $remote_dir)
+	diridx=$($LFS getstripe -m $remote_dir)
 	[ $diridx -eq $mdtidx ] || error "$diridx != $mdtidx"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
@@ -2680,7 +2680,7 @@ test_132() {
 
 	rm -f $DIR/$tfile
 	# get a lock on client so that export would reach the stale list
-	$SETSTRIPE -i 0 $DIR/$tfile || error "setstripe failed"
+	$LFS setstripe -i 0 $DIR/$tfile || error "setstripe failed"
 	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 conv=fsync ||
 		error "dd failed"
 
@@ -2712,7 +2712,7 @@ test_131() {
 
 	rm -f $DIR/$tfile
 	# get a lock on client so that export would reach the stale list
-	$SETSTRIPE -i 0 $DIR/$tfile || error "setstripe failed"
+	$LFS setstripe -i 0 $DIR/$tfile || error "setstripe failed"
 	dd if=/dev/zero of=$DIR/$tfile count=1 || error "dd failed"
 
 	# another IO under the same lock
