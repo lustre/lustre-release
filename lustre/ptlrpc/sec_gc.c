@@ -48,12 +48,11 @@
 
 #define SEC_GC_INTERVAL (30 * 60)
 
-static struct mutex sec_gc_mutex;
-static spinlock_t sec_gc_list_lock;
-static struct list_head sec_gc_list;
-
-static spinlock_t sec_gc_ctx_list_lock;
-static struct list_head sec_gc_ctx_list;
+static DEFINE_MUTEX(sec_gc_mutex);
+static DEFINE_SPINLOCK(sec_gc_list_lock);
+static DEFINE_SPINLOCK(sec_gc_ctx_list_lock);
+static LIST_HEAD(sec_gc_list);
+static LIST_HEAD(sec_gc_ctx_list);
 
 static atomic_t sec_gc_wait_del = ATOMIC_INIT(0);
 
@@ -190,13 +189,6 @@ again:
 
 int sptlrpc_gc_init(void)
 {
-	mutex_init(&sec_gc_mutex);
-	spin_lock_init(&sec_gc_list_lock);
-	spin_lock_init(&sec_gc_ctx_list_lock);
-
-	INIT_LIST_HEAD(&sec_gc_list);
-	INIT_LIST_HEAD(&sec_gc_ctx_list);
-
 	schedule_delayed_work(&sec_gc_work, cfs_time_seconds(SEC_GC_INTERVAL));
 	return 0;
 }
