@@ -148,6 +148,23 @@ print_summary () {
     fi
 }
 
+# Get information about the Lustre environment. The information collected
+# will be used in Lustre tests.
+# usage: get_lustre_env
+# input: No required or optional arguments
+# output: No return values, environment variables are exported
+
+get_lustre_env() {
+
+	export mds1_FSTYPE=${mds1_FSTYPE:-$(facet_fstype mds1)}
+	export ost1_FSTYPE=${ost1_FSTYPE:-$(facet_fstype ost1)}
+
+	export MGS_VERSION=$(lustre_version_code mgs)
+	export MDS1_VERSION=$(lustre_version_code mds1)
+	export OST1_VERSION=$(lustre_version_code ost1)
+	export CLIENT_VERSION=$(lustre_version_code client)
+}
+
 init_test_env() {
 	export LUSTRE=$(absolute_path $LUSTRE)
 	export TESTSUITE=$(basename $0 .sh)

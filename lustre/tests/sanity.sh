@@ -68,6 +68,7 @@ LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
+get_lustre_env
 init_logging
 
 if [[ $MDSCOUNT -gt 1 ]]; then
@@ -78,7 +79,7 @@ fi
 #                                  5          12          (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
 
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+if [ "$mds1_FSTYPE" = "zfs" ]; then
 	# bug number for skipped test: LU-1957
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  180"
 	#                                               13    (min)"
@@ -154,7 +155,8 @@ MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 rm -rf $DIR/[Rdfs][0-9]*
 
 # $RUNAS_ID may get set incorrectly somewhere else
-[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
+	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
@@ -198,7 +200,7 @@ test_0c() {
 run_test 0c "check import proc"
 
 test_0d() { # LU-3397
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.57) ] &&
+	[ $MGS_VERSION -lt $(version_code 2.10.57) ] &&
 		skip "proc exports not supported before 2.10.57"
 
 	local mgs_exp="mgs.MGS.exports"
@@ -230,7 +232,7 @@ test_0d() { # LU-3397
 	# Compare the value of client version
 	exp_client_version=$(awk '/target_version:/ { print $2 }' $temp_exp)
 	exp_val=$(version_code $exp_client_version)
-	imp_val=$(lustre_version_code client)
+	imp_val=$CLIENT_VERSION
 	[ "$exp_val" == "$imp_val" ] ||
 		error "export client version '$exp_val' != '$imp_val'"
 }
@@ -548,12 +550,12 @@ test_17g() {
 	local TESTS="59 60 61 4094 4095"
 
 	# Fix for inode size boundary in 2.1.4
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.1.4) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.1.4) ] &&
 		TESTS="4094 4095"
 
 	# Patch not applied to 2.2 or 2.3 branches
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
-	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.3.55) ] &&
+	[ $MDS1_VERSION -ge $(version_code 2.2.0) ] &&
+	[ $MDS1_VERSION -le $(version_code 2.3.55) ] &&
 		TESTS="4094 4095"
 
 	# skip long symlink name for rhel6.5.
@@ -638,11 +640,10 @@ run_test 17l "Ensure lgetxattr's returned xattr size is consistent"
 # LU-1540
 test_17m() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip_env "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
-	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.2.93) ] &&
+	[ $MDS1_VERSION -ge $(version_code 2.2.0) ] &&
+	[ $MDS1_VERSION -le $(version_code 2.2.93) ] &&
 		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks"
 
 	local short_sym="0123456789"
@@ -715,11 +716,10 @@ check_fs_consistency_17n() {
 test_17n() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip_env "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
-	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.2.93) ] &&
+	[ $MDS1_VERSION -ge $(version_code 2.2.0) ] &&
+	[ $MDS1_VERSION -le $(version_code 2.2.93) ] &&
 		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks"
 
 	local i
@@ -743,7 +743,7 @@ test_17n() {
 	check_fs_consistency_17n ||
 		error "e2fsck report error after unlink files under remote dir"
 
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.50) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.4.50) ] &&
 		skip "lustre < 2.4.50 does not support migrate mv"
 
 	for ((i = 0; i < 10; i++)); do
@@ -766,7 +766,7 @@ run_test 17n "run e2fsck against master/slave MDT which contains remote dir"
 
 test_17o() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.64) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.3.64) ] &&
 		skip "Need MDS version at least 2.3.64"
 
 	local wdir=$DIR/${tdir}o
@@ -1169,7 +1169,7 @@ test_24v() {
 	local fname="$DIR/$tdir/$tfile"
 
 	# Performance issue on ZFS see LU-4072 (c.f. LU-2887)
-	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && nrfiles=${COUNT:-10000}
+	[ "$mds1_FSTYPE" = "zfs" ] && nrfiles=${COUNT:-10000}
 
 	test_mkdir "$(dirname $fname)"
 	# assume MDT0000 has the fewest inodes
@@ -1229,7 +1229,7 @@ run_test 24w "Reading a file larger than 4Gb"
 test_24x() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.56) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.7.56) ]] &&
 		skip "Need MDS version at least 2.7.56"
 
 	local MDTIDX=1
@@ -1496,7 +1496,7 @@ run_test 27d "create file with default settings"
 
 test_27e() {
 	# LU-5839 adds check for existed layout before setting it
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.56) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.7.56) ]] &&
 		skip "Need MDS version at least 2.7.56"
 
 	test_mkdir $DIR/$tdir
@@ -2050,7 +2050,7 @@ check_seq_oid()
 			error "FF stripe $ff_pstripe != $stripe_nr"
 
 		stripe_nr=$((stripe_nr + 1))
-		[ $(lustre_version_code client) -lt $(version_code 2.9.55) ] &&
+		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
 			continue
 		if grep -q 'stripe_count=' <<<$ff; then
 			local ff_scnt=$(sed -e 's/.*stripe_count=//' \
@@ -2186,10 +2186,10 @@ test_27D() {
 	pool_add_targets $POOL $ost_range || error "pool_add_targets failed"
 
 	local skip27D
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.8.55) ] &&
 		skip27D+="-s 29"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.55) -o \
-	  $(lustre_version_code client) -lt $(version_code 2.9.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.9.55) -o \
+	  $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
 		skip27D+=" -s 30,31"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
@@ -2206,7 +2206,7 @@ run_test 27D "validate llapi_layout API"
 # accessing a widely striped file.
 test_27E() {
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
-	[ $(lustre_version_code client) -lt $(version_code 2.5.57) ] &&
+	[ $CLIENT_VERSION -lt $(version_code 2.5.57) ] &&
 		skip "client does not have LU-3338 fix"
 
 	# 72 bytes is the minimum space required to store striping
@@ -2236,7 +2236,7 @@ run_test 27E "check that default extended attribute size properly increases"
 test_27F() { # LU-5346/LU-7975
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $OSTCOUNT -lt 2 ]] && skip "needs >= 2 OSTs"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.51) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.8.51) ]] &&
 		skip "Need MDS version at least 2.8.51"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
@@ -2300,7 +2300,7 @@ test_27G() { #LU-10629
 run_test 27G "Clear OST pool from stripe"
 
 test_27H() {
-	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.11.54) ]] &&
+	[[ $MDS1_VERSION -le $(version_code 2.11.54) ]] &&
 		skip "Need MDS version newer than 2.11.54"
 	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
 	test_mkdir $DIR/$tdir
@@ -4232,8 +4232,8 @@ run_test 46 "dirtying a previously written page ================"
 # test_47 is removed "Device nodes check" is moved to test_28
 
 test_48a() { # bug 2399
-	[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.63) ] &&
+	[ "$mds1_FSTYPE" = "zfs" ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.3.63) ] &&
 		skip "MDS prior to 2.3.63 handle ZFS dir .. incorrectly"
 
 	test_mkdir $DIR/$tdir
@@ -4495,7 +4495,7 @@ test_51d() {
 run_test 51d "check object distribution"
 
 test_51e() {
-	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
+	if [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip_env "ldiskfs only test"
 	fi
 
@@ -4601,7 +4601,7 @@ test_53() {
 	local found=false
 	local support_last_seq=true
 
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.60) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.3.60) ]] ||
 		support_last_seq=false
 
 	# only test MDT0000
@@ -5388,7 +5388,7 @@ test_56w() {
 
 	check_stripe_count $dir/file1 $expected
 
-	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.90) ];
+	if [ $MDS1_VERSION -ge $(version_code 2.6.90) ];
 	then
 		# lfs_migrate file onto OST 0 if it is on OST 1, or onto
 		# OST 1 if it is on OST 0. This file is small enough to
@@ -5789,7 +5789,7 @@ check_migrate_links() {
 }
 
 test_56xb() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	local dir="$DIR/$tdir"
@@ -5814,7 +5814,7 @@ test_56xb() {
 run_test 56xb "lfs migration hard link support"
 
 test_56y() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"
 
 	local res=""
@@ -5909,7 +5909,7 @@ test_56ab() { # LU-10705
 run_test 56ab "lfs find --blocks"
 
 test_56ba() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.50) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.50) ] &&
 		skip "Need MDS version at least 2.10.50"
 
 	# Create composite files with one component
@@ -5974,7 +5974,7 @@ test_56ba() {
 run_test 56ba "test lfs find --component-end, -start, -count, and -flags"
 
 test_56ca() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.57) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.10.57) ]] ||
 		skip "Need MDS version at least 2.10.57"
 
 	local td=$DIR/$tdir
@@ -6050,7 +6050,7 @@ run_test 56ca "check lfs find --mirror-count|-N and --mirror-state"
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local
-	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
+	if [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip_env "ldiskfs only test"
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -6070,7 +6070,7 @@ run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
+	if [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip_env "ldiskfs only test"
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -6246,14 +6246,14 @@ test_60aa() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 
 	# test old logid format
-	if [ $(lustre_version_code mgs) -le $(version_code 3.1.53) ]; then
+	if [ $MGS_VERSION -le $(version_code 3.1.53) ]; then
 		do_facet mgs $LCTL dl | grep MGS
 		do_facet mgs "$LCTL --device %MGS llog_print \\\\\\\$$FSNAME-client" ||
 			error "old llog_print failed"
 	fi
 
 	# test new logid format
-	if [ $(lustre_version_code mgs) -ge $(version_code 2.9.53) ]; then
+	if [ $MGS_VERSION -ge $(version_code 2.9.53) ]; then
 		do_facet mgs "$LCTL --device MGS llog_print $FSNAME-client" ||
 			error "new llog_print failed"
 	fi
@@ -6263,7 +6263,7 @@ run_test 60aa "llog_print works with FIDs and simple names"
 test_60ab() {
 	# test llog_print with params
 
-	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.11.51) ]] ||
+	[[ $MDS1_VERSION -gt $(version_code 2.11.51) ]] ||
 		skip "Need server version greater than 2.11.51"
 
 	local yaml
@@ -6519,7 +6519,7 @@ grant_chunk() {
 }
 
 test_64d() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.10.56) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.10.56) ] &&
 		skip "OST < 2.10.55 doesn't limit grants enough"
 
 	local tgt=$($LCTL dl | grep "0000-osc-[^mM]" | awk '{print $4}')
@@ -6723,7 +6723,7 @@ test_65k() { # bug11679
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local disable_precreate=true
-	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.8.54) ] &&
+	[ $MDS1_VERSION -le $(version_code 2.8.54) ] &&
 		disable_precreate=false
 
 	echo "Check OST status: "
@@ -7121,7 +7121,7 @@ test_77c() {
 		error "dd write error: $?"
 	fid=$($LFS path2fid $DIR/$tfile)
 
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.9.57) ]
+	if [ $OST1_VERSION -ge $(version_code 2.9.57) ]
 	then
 		check_ost=true
 		ost_file_prefix=$(do_facet ost1 $LCTL get_param -n debug_path)
@@ -7386,7 +7386,7 @@ test_80() { # bug 10718
 	local soc_old=$(do_facet ost1 lctl get_param -n $soc | head -n1)
 	local hosts=
 	if [ "$soc_old" != "never" ] &&
-		[ "$(facet_fstype ost1)" != "ldiskfs" ]; then
+		[ "$ost1_FSTYPE" != "ldiskfs" ]; then
 			hosts=$(for host in $(seq -f "ost%g" 1 $OSTCOUNT); do
 				facet_active_host $host; done | sort -u)
 			do_nodes $hosts lctl set_param $soc=never
@@ -7871,19 +7871,17 @@ test_101g() {
 	local list=$(comma_list $(osts_nodes))
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 	local brw_size="obdfilter.*.brw_size"
-	local ostver=$(lustre_version_code ost1)
-	local cliver=$(lustre_version_code client)
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 
 	local orig_mb=$(do_facet ost1 $LCTL get_param -n $brw_size | head -n 1)
-	if [ $ostver -ge $(version_code 2.8.52) -o \
-	     \( $ostver -ge $(version_code 2.7.17) -a \
-		$ostver -lt $(version_code 2.7.50) \) ] &&
-	   [ $cliver -ge $(version_code 2.8.52) -o \
-	     \( $cliver -ge $(version_code 2.7.17) -a \
-		$cliver -lt $(version_code 2.7.50) \) ]; then
-		[ $ostver -ge $(version_code 2.9.52) ] && suffix="M"
+	if [ $OST1_VERSION -ge $(version_code 2.8.52) -o \
+	     \( $OST1_VERSION -ge $(version_code 2.7.17) -a \
+		$OST1_VERSION -lt $(version_code 2.7.50) \) ] &&
+	   [ $CLIENT_VERSION -ge $(version_code 2.8.52) -o \
+	     \( $CLIENT_VERSION -ge $(version_code 2.7.17) -a \
+		$CLIENT_VERSION -lt $(version_code 2.7.50) \) ]; then
+		[ $OST1_VERSION -ge $(version_code 2.9.52) ] && suffix="M"
 		if [[ $orig_mb -lt 16 ]]; then
 			save_lustre_params $osts "$brw_size" > $p
 			do_nodes $list $LCTL set_param -n $brw_size=16$suffix ||
@@ -8279,7 +8277,7 @@ getxattr() { # getxattr path name
 test_102n() { # LU-4101 mdt: protect internal xattrs
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
 		skip "could not find setfattr"
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.50) ]
+	if [ $MDS1_VERSION -lt $(version_code 2.5.50) ]
 	then
 		skip "MDT < 2.5.50 allows setxattr on internal trusted xattrs"
 	fi
@@ -8298,7 +8296,7 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 	# Get 'before' xattrs of $file1.
 	getfattr --absolute-names --dump --match=- $file1 > $xattr0
 
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.53) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.8.53) ] &&
 		namelist+=" lfsck_namespace"
 	for name in $namelist; do
 		# Try to copy xattr from $file0 to $file1.
@@ -8324,7 +8322,7 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 		setfattr --remove=$trusted.$name $file1 2> /dev/null
 	done
 
-	if [ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.6.50) ]
+	if [ $MDS1_VERSION -gt $(version_code 2.6.50) ]
 	then
 		name="lfsck_ns"
 		# Try to copy xattr from $file0 to $file1.
@@ -8359,7 +8357,7 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 run_test 102n "silently ignore setxattr on internal trusted xattrs"
 
 test_102p() { # LU-4703 setxattr did not check ownership
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.5.56) ] &&
 		skip "MDS needs to be at least 2.5.56"
 
 	local testfile=$DIR/$tfile
@@ -8378,7 +8376,7 @@ test_102p() { # LU-4703 setxattr did not check ownership
 run_test 102p "check setxattr(2) correctly fails without permission"
 
 test_102q() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.6.92) ] &&
 		skip "MDS needs to be at least 2.6.92"
 
 	orphan_linkea_check $DIR/$tfile || error "orphan_linkea_check"
@@ -8386,7 +8384,7 @@ test_102q() {
 run_test 102q "flistxattr should not return trusted.link EAs for orphans"
 
 test_102r() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.93) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.6.93) ] &&
 		skip "MDS needs to be at least 2.6.93"
 
 	touch $DIR/$tfile || error "touch"
@@ -8419,7 +8417,7 @@ test_102r() {
 run_test 102r "set EAs with empty values"
 
 test_102s() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "MDS needs to be at least 2.11.52"
 
 	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
@@ -8445,7 +8443,7 @@ test_102s() {
 run_test 102s "getting nonexistent xattrs should fail"
 
 test_102t() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "MDS needs to be at least 2.11.52"
 
 	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
@@ -8506,9 +8504,9 @@ test_103a() {
 	echo "performing permissions..."
 	run_acl_subtest permissions || error "permissions failed"
 	# LU-1482 mdd: Setting xattr are properly checked with and without ACLs
-	if [ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.8.55) -o \
-	     \( $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6) -a \
-	     $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.29) \) ]
+	if [ $MDS1_VERSION -gt $(version_code 2.8.55) -o \
+	     \( $MDS1_VERSION -lt $(version_code 2.6) -a \
+	     $MDS1_VERSION -ge $(version_code 2.5.29) \) ]
 	then
 		echo "performing permissions xattr..."
 		run_acl_subtest permissions_xattr ||
@@ -8532,7 +8530,7 @@ test_103a() {
 	fi
 
 	echo "LU-2561 newly created file is same size as directory..."
-	if [ $(facet_fstype $SINGLEMDS) != "zfs" ]; then
+	if [ "$mds1_FSTYPE" != "zfs" ]; then
 		run_acl_subtest 2561 || error "LU-2561 test failed"
 	else
 		run_acl_subtest 2561_zfs || error "LU-2561 zfs test failed"
@@ -10265,9 +10263,9 @@ check_mds_dmesg() {
 
 test_129() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.56) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.5.56) ]] ||
 		skip "Need MDS version with at least 2.5.56"
-	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
+	if [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip_env "ldiskfs only test"
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -10740,7 +10738,7 @@ test_133a() {
 	touch ${testdir}/${tfile} || error "touch failed"
 	check_stats $SINGLEMDS "open" 1
 	check_stats $SINGLEMDS "close" 1
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.8.54) ] && {
+	[ $MDS1_VERSION -ge $(version_code 2.8.54) ] && {
 		mknod ${testdir}/${tfile}-pipe p || error "mknod failed"
 		check_stats $SINGLEMDS "mknod" 2
 	}
@@ -10788,7 +10786,7 @@ test_133b() {
 	chmod 444 ${testdir}/${tfile} || error "chmod failed"
 	check_stats $SINGLEMDS "setattr" 1
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
-	if [ $(lustre_version_code $SINGLEMDS) -ne $(version_code 2.2.0) ]
+	if [ $MDS1_VERSION -ne $(version_code 2.2.0) ]
 	then		# LU-1740
 		ls -l ${testdir}/${tfile} > /dev/null|| error "ls failed"
 		check_stats $SINGLEMDS "getattr" 1
@@ -10808,9 +10806,9 @@ test_133b() {
 	check_stats $SINGLEMDS "statfs" 1
 
 	# check aggregated statfs (LU-10018)
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.54) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.54) ] &&
 		return 0
-	[ $(lustre_version_code client) -lt $(version_code 2.11.54) ] &&
+	[ $CLIENT_VERSION -lt $(version_code 2.11.54) ] &&
 		return 0
 	sleep 2
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
@@ -11126,7 +11124,7 @@ run_test 133g "Check reads/writes of server lustre proc files with bad area io"
 test_133h() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.54) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.9.54) ]] &&
 		skip "Need MDS version at least 2.9.54"
 
 	local facet
@@ -11154,7 +11152,7 @@ run_test 133h "Proc files should end with newlines"
 
 test_134a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.7.54) ]] &&
 		skip "Need MDS version at least 2.7.54"
 
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
@@ -11190,7 +11188,7 @@ run_test 134a "Server reclaims locks when reaching lock_reclaim_threshold"
 
 test_134b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.7.54) ]] &&
 		skip "Need MDS version at least 2.7.54"
 
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
@@ -11537,7 +11535,7 @@ dot_lustre_fid_permission_check() {
 	mrename $test_dir/$tdir $MOUNT/.lustre/fid &&
 		error "rename to $MOUNT/.lustre/fid should fail."
 
-	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.51) ]
+	if [ $MDS1_VERSION -ge $(version_code 2.3.51) ]
 	then		# LU-3547
 		local old_obf_mode=$(stat --format="%a" $DIR/.lustre/fid)
 		local new_obf_mode=777
@@ -11558,7 +11556,7 @@ dot_lustre_fid_permission_check() {
 	$OPENFILE -f O_LOV_DELAY_CREATE:O_CREAT $test_dir/$tfile-2
 	fid=$($LFS path2fid $test_dir/$tfile-2)
 
-	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.50) ]
+	if [ $MDS1_VERSION -ge $(version_code 2.6.50) ]
 	then # LU-5424
 		echo "cp /etc/passwd $MOUNT/.lustre/fid/$fid"
 		cp /etc/passwd $MOUNT/.lustre/fid/$fid ||
@@ -11576,7 +11574,7 @@ dot_lustre_fid_permission_check() {
 }
 
 test_154A() {
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.4.1) ]] &&
 		skip "Need MDS version at least 2.4.1"
 
 	local tf=$DIR/$tfile
@@ -11594,7 +11592,7 @@ test_154A() {
 run_test 154A "lfs path2fid and fid2path basic checks"
 
 test_154B() {
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.4.1) ]] &&
 		skip "Need MDS version at least 2.4.1"
 
 	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
@@ -11619,7 +11617,7 @@ run_test 154B "verify the ll_decode_linkea tool"
 test_154a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.2.51) ]] ||
 		skip "Need MDS version at least 2.2.51"
 	[ -z "$(which setfacl)" ] && skip_env "must have setfacl tool"
 
@@ -11650,7 +11648,7 @@ test_154b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.2.51) ]] ||
 		skip "Need MDS version at least 2.2.51"
 
 	local remote_dir=$DIR/$tdir/remote_dir
@@ -11674,7 +11672,7 @@ test_154b() {
 run_test 154b "Open-by-FID for remote directory"
 
 test_154c() {
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.4.1) ]] &&
 		skip "Need MDS version at least 2.4.1"
 
 	touch $DIR/$tfile.1 $DIR/$tfile.2 $DIR/$tfile.3
@@ -11703,7 +11701,7 @@ run_test 154c "lfs path2fid and fid2path multiple arguments"
 
 test_154d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.53) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.5.53) ]] &&
 		skip "Need MDS version at least 2.5.53"
 
 	if remote_mds; then
@@ -11737,7 +11735,7 @@ run_test 154d "Verify open file fid"
 
 test_154e()
 {
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.6.50) ]] &&
 		skip "Need MDS version at least 2.6.50"
 
 	if ls -a $MOUNT | grep -q '^\.lustre$'; then
@@ -11828,8 +11826,8 @@ run_test 154f "get parent fids by reading link ea"
 test_154g()
 {
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.92) && \
-	   $(lustre_version_code client) -gt $(version_code 2.6.99) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.6.92) &&
+	   $CLIENT_VERSION -gt $(version_code 2.6.99) ]] ||
 		skip "Need MDS version at least 2.6.92"
 
 	mkdir -p $DIR/$tdir
@@ -12022,8 +12020,8 @@ run_test 155h "Verify big file correctness: read cache:off write_cache:off"
 test_156() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[ "$(facet_fstype ost1)" = "zfs" -a \
-	   $(lustre_version_code ost1 -lt $(version_code 2.6.93)) ] &&
+	[ "$ost1_FSTYPE" = "zfs" -a \
+	   $OST1_VERSION -lt $(version_code 2.6.93) ] &&
 		skip "LU-1956/LU-2261: stats not implemented on OSD ZFS"
 
 	local CPAGES=3
@@ -12168,7 +12166,7 @@ run_test 156 "Verification of tunables"
 test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
+	[ $MDS1_VERSION -ge $(version_code 2.2.0) ] ||
 		skip "Need MDS version at least 2.2.0"
 
 	changelog_register || error "changelog_register failed"
@@ -12288,7 +12286,7 @@ run_test 160a "changelog sanity"
 test_160b() { # LU-3587
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
+	[ $MDS1_VERSION -ge $(version_code 2.2.0) ] ||
 		skip "Need MDS version at least 2.2.0"
 
 	changelog_register || error "changelog_register failed"
@@ -12314,13 +12312,12 @@ test_160c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	local rc=0
-	local server_version=$(lustre_version_code $SINGLEMDS)
-
-	[[ $server_version -gt $(version_code 2.5.57) ]] ||
-		[[ $server_version -gt $(version_code 2.5.1) &&
-		   $server_version -lt $(version_code 2.5.50) ]] ||
+	[[ $MDS1_VERSION -gt $(version_code 2.5.57) ]] ||
+		[[ $MDS1_VERSION -gt $(version_code 2.5.1) &&
+		   $MDS1_VERSION -lt $(version_code 2.5.50) ]] ||
 		skip "Need MDS version at least 2.5.58 or 2.5.2+"
+
+	local rc=0
 
 	# Registration step
 	changelog_register || error "changelog_register failed"
@@ -12342,7 +12339,7 @@ test_160d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.60) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.7.60) ]] ||
 		skip "Need MDS version at least 2.7.60"
 
 	# Registration step
@@ -12389,8 +12386,8 @@ run_test 160e "changelog negative testing (should return errors)"
 
 test_160f() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-		{ skip "Need MDS version at least 2.10.56"; return 0; }
+	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
+		skip "Need MDS version at least 2.10.56"
 
 	local mdts=$(comma_list $(mdts_nodes))
 
@@ -12503,7 +12500,7 @@ run_test 160f "changelog garbage collect (timestamped users)"
 
 test_160g() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
 		skip "Need MDS version at least 2.10.56"
 
 	local mdts=$(comma_list $(mdts_nodes))
@@ -12617,8 +12614,8 @@ run_test 160g "changelog garbage collect (old users)"
 
 test_160h() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-		{ skip "Need MDS version at least 2.10.56"; return 0; }
+	[[ $MDS1_VERSION -ge $(version_code 2.10.56) ]] ||
+		skip "Need MDS version at least 2.10.56"
 
 	local mdts=$(comma_list $(mdts_nodes))
 
@@ -12931,7 +12928,7 @@ run_test 161b "link ea sanity under remote directory"
 test_161c() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.1.5) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.1.5) ]] &&
 		skip "Need MDS version at least 2.1.5"
 
 	# define CLF_RENAME_LAST 0x0001
@@ -13133,7 +13130,7 @@ run_test 162b "striped directory path lookup sanity"
 
 # LU-4239: Verify fid2path works with paths 100 or more directories deep
 test_162c() {
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.51) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.7.51) ]] &&
 		skip "Need MDS version at least 2.7.51"
 
 	local lpath=$tdir.local
@@ -13365,7 +13362,7 @@ run_test 180b "test obdecho directly on obdfilter"
 test_180c() { # LU-2598
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.0) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.4.0) ]] &&
 		skip "Need MDS version at least 2.4.0"
 
 	do_rpc_nodes $(facet_active_host ost1) load_module obdecho/obdecho &&
@@ -13437,7 +13434,7 @@ run_test 182 "Test parallel modify metadata operations ================"
 test_183() { # LU-2275
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.56) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.3.56) ]] &&
 		skip "Need MDS version at least 2.3.56"
 
 	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
@@ -13606,7 +13603,7 @@ test_184d() {
 run_test 184d "allow stripeless layouts swap"
 
 test_184e() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.94) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.6.94) ]] ||
 		skip "Need MDS version at least 2.6.94"
 	check_swap_layouts_support
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
@@ -13657,7 +13654,7 @@ run_test 184f "IOC_MDC_GETFILEINFO for files with long names but no striping"
 
 test_185() { # LU-2441
 	# LU-3553 - no volatile file support in old servers
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.60) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.3.60) ]] ||
 		skip "Need MDS version at least 2.3.60"
 
 	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
@@ -13694,7 +13691,7 @@ run_test 185 "Volatile file support"
 
 test_187a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.0) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.3.0) ] &&
 		skip "Need MDS version at least 2.3.0"
 
 	local dir0=$DIR/$tdir/$testnum
@@ -13715,7 +13712,7 @@ run_test 187a "Test data version change"
 
 test_187b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.0) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.3.0) ] &&
 		skip "Need MDS version at least 2.3.0"
 
 	local dir0=$DIR/$tdir/$testnum
@@ -13969,7 +13966,7 @@ jobstats_set() {
 
 test_205() { # Job stats
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.1) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.7.1) ]] ||
 		skip "Need MDS version with at least 2.7.1"
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -14047,7 +14044,7 @@ test_205() { # Job stats
 	    grep -c "job_id.*mkdir") -gt 1 ] && error "old jobstats not expired"
 
 	# Ensure that jobid are present in changelog (if supported by MDS)
-	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.52) ];then
+	if [ $MDS1_VERSION -ge $(version_code 2.6.52) ];then
 		changelog_dump | tail -10
 		jobids=$(changelog_dump | tail -9 | grep -c "j=")
 		[ $jobids -eq 9 ] ||
@@ -14123,7 +14120,7 @@ test_208() {
 	# is done, this test suite should be revised. - Jinshan
 
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.4.52) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.4.52) ]] ||
 		skip "Need MDS version at least 2.4.52"
 
 	echo "==== test 1: verify get lease work"
@@ -14651,7 +14648,7 @@ test_225a () {
 	if [ -z ${MDSSURVEY} ]; then
 		skip_env "mds-survey not found"
 	fi
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ] ||
+	[ $MDS1_VERSION -ge $(version_code 2.2.51) ] ||
 		skip "Need MDS version at least 2.2.51"
 
 	local mds=$(facet_host $SINGLEMDS)
@@ -14675,7 +14672,7 @@ test_225b () {
 	if [ -z ${MDSSURVEY} ]; then
 		skip_env "mds-survey not found"
 	fi
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ] ||
+	[ $MDS1_VERSION -ge $(version_code 2.2.51) ] ||
 		skip "Need MDS version at least 2.2.51"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -14785,8 +14782,7 @@ run_test 227 "running truncated executable does not cause OOM"
 test_228a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip_env "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -14827,8 +14823,7 @@ run_test 228a "try to reuse idle OI blocks"
 test_228b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip_env "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -14877,8 +14872,7 @@ run_test 228b "idle OI blocks can be reused after MDT restart"
 test_228c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip_env "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -14923,7 +14917,7 @@ run_test 228c "NOT shrink the last entry in OI index node to recycle idle leaf"
 test_229() { # LU-2482, LU-3448
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.4.53) ] &&
 		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"
 
 	rm -f $DIR/$tfile
@@ -14956,7 +14950,7 @@ run_test 229 "getstripe/stat/rm/attr changes work on released files"
 test_230a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	local MDTIDX=1
@@ -14984,7 +14978,7 @@ run_test 230a "Create remote directory and files under the remote directory"
 test_230b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	local MDTIDX=1
@@ -15152,7 +15146,7 @@ test_230c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	local MDTIDX=1
@@ -15233,10 +15227,10 @@ run_test 230c "check directory accessiblity if migration failed"
 test_230d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 	# LU-11235
-	[ "$(facet_fstype mds1)" == "zfs" ] && skip "skip ZFS backend"
+	[ "$mds1_FSTYPE" == "zfs" ] && skip "skip ZFS backend"
 
 	local migrate_dir=$DIR/$tdir/migrate_dir
 	local old_index
@@ -15292,7 +15286,7 @@ run_test 230d "check migrate big directory"
 test_230e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	local i
@@ -15340,7 +15334,7 @@ run_test 230e "migrate mulitple local link files"
 test_230f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	local a_fid
@@ -15391,7 +15385,7 @@ run_test 230f "migrate mulitple remote link files"
 test_230g() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	mkdir -p $DIR/$tdir/migrate_dir
@@ -15405,7 +15399,7 @@ run_test 230g "migrate dir to non-exist MDT"
 test_230h() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	local mdt_index
@@ -15429,7 +15423,7 @@ run_test 230h "migrate .. and root"
 test_230i() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	mkdir -p $DIR/$tdir/migrate_dir
@@ -15444,7 +15438,7 @@ run_test 230i "lfs migrate -m tolerates trailing slashes"
 
 test_230j() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
 
 	$LFS mkdir -m 0 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
@@ -15461,7 +15455,7 @@ run_test 230j "DoM file data not changed after dir migration"
 
 test_230k() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
 		skip "Need MDS version at least 2.11.56"
 
 	local total=20
@@ -15511,7 +15505,7 @@ run_test 230k "file data not changed after dir migration"
 
 test_230l() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
 		skip "Need MDS version at least 2.11.56"
 
 	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir failed"
@@ -15599,7 +15593,7 @@ test_232a() {
 run_test 232a "failed lock should not block umount"
 
 test_232b() {
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.58) ] ||
+	[ $MDS1_VERSION -ge $(version_code 2.10.58) ] ||
 		skip "Need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -15623,7 +15617,7 @@ test_232b() {
 run_test 232b "failed data version lock should not block umount"
 
 test_233a() {
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.64) ] ||
+	[ $MDS1_VERSION -ge $(version_code 2.3.64) ] ||
 		skip "Need MDS version at least 2.3.64"
 	[ -n "$FILESET" ] && skip_env "SKIP due to FILESET set"
 
@@ -15635,7 +15629,7 @@ test_233a() {
 run_test 233a "checking that OBF of the FS root succeeds"
 
 test_233b() {
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.90) ] ||
+	[ $MDS1_VERSION -ge $(version_code 2.5.90) ] ||
 		skip "Need MDS version at least 2.5.90"
 	[ -n "$FILESET" ] && skip_env "SKIP due to FILESET set"
 
@@ -15671,7 +15665,7 @@ test_234() {
 run_test 234 "xattr cache should not crash on ENOMEM"
 
 test_235() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.4.52) ] &&
 		skip "Need MDS version at least 2.4.52"
 
 	flock_deadlock $DIR/$tfile
@@ -15718,11 +15712,9 @@ run_test 236 "Layout swap on open unlinked file"
 
 # LU-4659 linkea consistency
 test_238() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-
-	[[ $server_version -gt $(version_code 2.5.57) ]] ||
-		[[ $server_version -gt $(version_code 2.5.1) &&
-		   $server_version -lt $(version_code 2.5.50) ]] ||
+	[[ $MDS1_VERSION -gt $(version_code 2.5.57) ]] ||
+		[[ $MDS1_VERSION -gt $(version_code 2.5.1) &&
+		   $MDS1_VERSION -lt $(version_code 2.5.50) ]] ||
 		skip "Need MDS version at least 2.5.58 or 2.5.2+"
 
 	touch $DIR/$tfile
@@ -15741,7 +15733,7 @@ test_238() {
 run_test 238 "Verify linkea consistency"
 
 test_239A() { # was test_239
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.60) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.5.60) ] &&
 		skip "Need MDS version at least 2.5.60"
 
 	local list=$(comma_list $(mdts_nodes))
@@ -15749,7 +15741,7 @@ test_239A() { # was test_239
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/f- 5000
 	unlinkmany $DIR/$tdir/f- 5000
-	[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.10.53) ] &&
+	[ $MDS1_VERSION -gt $(version_code 2.10.53) ] &&
 		do_nodes $list "lctl set_param -n osp.*.force_sync=1"
 	changes=$(do_nodes $list "lctl get_param -n osp.*MDT*.sync_changes \
 			osp.*MDT*.sync_in_flight" | calc_sum)
@@ -15910,7 +15902,7 @@ run_test 245 "check mdc connection flag/data: multiple modify RPCs"
 
 test_246() { # LU-7371
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[ $(lustre_version_code ost1) -lt $(version_code 2.7.62) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.7.62) ] &&
 		skip "Need OST version >= 2.7.62"
 
 	do_facet ost1 $LCTL set_param fail_val=4095
@@ -16069,7 +16061,7 @@ test_248() {
 run_test 248 "fast read verification"
 
 test_249() { # LU-7890
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.53) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.8.53) ] &&
 		skip "Need at least version 2.8.54"
 
 	rm -f $DIR/$tfile
@@ -16114,8 +16106,7 @@ run_test 251 "Handling short read and write correctly"
 test_252() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	if [ "$(facet_fstype ost1)" != "ldiskfs" -o \
-	     "$(facet_fstype mds1)" != "ldiskfs" ]; then
+	if [ "$ost1_FSTYPE" != "ldiskfs" -o "$mds1_FSTYPE" != "ldiskfs" ]; then
 		skip_env "ldiskfs only test"
 	fi
 
@@ -16430,7 +16421,7 @@ ladvise_willread_performance()
 	# the test won't work on ZFS until it supports 'ladvise dontneed', but
 	# it is still good to run until then to exercise 'ladvise willread'
 	! $LFS ladvise -a dontneed $DIR/$tfile &&
-		[ "$(facet_fstype ost1)" = "zfs" ] &&
+		[ "$ost1_FSTYPE" = "zfs" ] &&
 		echo "osd-zfs does not support dontneed or drop_caches" &&
 		return 0
 
@@ -16441,7 +16432,7 @@ ladvise_willread_performance()
 }
 
 test_255a() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not support ladvise "
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
@@ -16528,7 +16519,7 @@ facet_meminfo() {
 }
 
 test_255b() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not support ladvise "
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
@@ -16541,7 +16532,7 @@ test_255b() {
 		skip "ladvise ioctl is not supported"
 
 	! $LFS ladvise -a dontneed $DIR/$tfile &&
-		[ "$(facet_fstype ost1)" = "zfs" ] &&
+		[ "$ost1_FSTYPE" = "zfs" ] &&
 		skip "zfs-osd does not support 'ladvise dontneed'"
 
 	local size_mb=100
@@ -16591,7 +16582,7 @@ test_255b() {
 run_test 255b "check 'lfs ladvise -a dontneed'"
 
 test_255c() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.10.50) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.10.50) ] &&
 		skip "lustre < 2.10.53 does not support lockahead"
 
 	local count
@@ -16677,8 +16668,7 @@ run_test 255c "suite of ladvise lockahead tests"
 test_256() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip "ldiskfs only test"
 	changelog_users $SINGLEMDS | grep "^cl" &&
 		skip "active changelog user"
 
@@ -16732,7 +16722,7 @@ run_test 256 "Check llog delete for empty and not full state"
 
 test_257() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.8.55) ]] &&
 		skip "Need MDS version at least 2.8.55"
 
 	test_mkdir $DIR/$tdir
@@ -16791,8 +16781,7 @@ test_259() {
 	local before
 	local after
 
-	[ "$(facet_fstype mds1)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip "ldiskfs only test"
 
 	stack_trap "rm -f $file" EXIT
 
@@ -16835,7 +16824,7 @@ run_test 260 "Check mdc_close fail"
 
 ### Data-on-MDT sanity tests ###
 test_270a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55 for DoM"
 
 	# create DoM file
@@ -16950,7 +16939,7 @@ test_270a() {
 run_test 270a "DoM: basic functionality tests"
 
 test_270b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom_file
@@ -16975,7 +16964,7 @@ test_270b() {
 run_test 270b "DoM: maximum size overflow checks for DoM-only file"
 
 test_270c() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
@@ -17004,7 +16993,7 @@ test_270c() {
 run_test 270c "DoM: DoM EA inheritance tests"
 
 test_270d() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
@@ -17026,7 +17015,7 @@ test_270d() {
 run_test 270d "DoM: change striping from DoM to RAID0"
 
 test_270e() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir/dom
@@ -17067,7 +17056,7 @@ test_270e() {
 run_test 270e "DoM: lfs find with DoM files test"
 
 test_270f() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	local mdtname=${FSNAME}-MDT0000-mdtlov
@@ -17149,7 +17138,7 @@ test_270f() {
 run_test 270f "DoM: maximum DoM stripe size checks"
 
 test_271a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
@@ -17169,7 +17158,7 @@ test_271a() {
 run_test 271a "DoM: data is cached for read after write"
 
 test_271b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
@@ -17191,7 +17180,7 @@ test_271b() {
 run_test 271b "DoM: no glimpse RPC for stat (DoM only file)"
 
 test_271ba() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
@@ -17229,7 +17218,7 @@ get_mdc_stats() {
 }
 
 test_271c() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
@@ -17274,8 +17263,8 @@ cleanup_271def_tests() {
 }
 
 test_271d() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.57) ] &&
-		skip "Need MDS version at least 2.10.57" && return
+	[ $MDS1_VERSION -lt $(version_code 2.10.57) ] &&
+		skip "Need MDS version at least 2.10.57"
 
 	local dom=$DIR/$tdir/dom
 	local tmp=$TMP/$tfile
@@ -17330,8 +17319,8 @@ test_271d() {
 run_test 271d "DoM: read on open (1K file in reply buffer)"
 
 test_271e() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.57) ] &&
-		skip "Need MDS version at least 2.10.57" && return
+	[ $MDS1_VERSION -lt $(version_code 2.10.57) ] &&
+		skip "Need MDS version at least 2.10.57"
 
 	local dom=$DIR/$tdir/dom
 	local tmp=$TMP/${tfile}.data
@@ -17385,8 +17374,8 @@ test_271e() {
 run_test 271e "DoM: read on open (30K file with reply buffer adjusting)"
 
 test_271f() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.57) ] &&
-		skip "Need MDS version at least 2.10.57" && return
+	[ $MDS1_VERSION -lt $(version_code 2.10.57) ] &&
+		skip "Need MDS version at least 2.10.57"
 
 	local dom=$DIR/$tdir/dom
 	local tmp=$TMP/$tfile
@@ -17439,7 +17428,7 @@ test_271f() {
 run_test 271f "DoM: read on open (200K file and read tail)"
 
 test_272a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS version at least 2.11.50"
 
 	local dom=$DIR/$tdir/dom
@@ -17465,7 +17454,7 @@ test_272a() {
 run_test 272a "DoM migration: new layout with the same DOM component"
 
 test_272b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS version at least 2.11.50"
 
 	local dom=$DIR/$tdir/dom
@@ -17507,7 +17496,7 @@ test_272b() {
 run_test 272b "DoM migration: DOM file to the OST-striped file (plain)"
 
 test_272c() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS version at least 2.11.50"
 
 	local dom=$DIR/$tdir/$tfile
@@ -17547,7 +17536,7 @@ test_272c() {
 run_test 272c "DoM migration: DOM file to the OST-striped file (composite)"
 
 test_273a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS version at least 2.11.50"
 
 	# Layout swap cannot be done if either file has DOM component,
@@ -17574,7 +17563,7 @@ run_test 273a "DoM: layout swapping should fail with DOM"
 
 test_275() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[ $(lustre_version_code ost1) -lt $(version_code 2.10.57) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.10.57) ] &&
 		skip "Need OST version >= 2.10.57"
 
 	local file=$DIR/$tfile
@@ -17697,7 +17686,7 @@ test_striped_dir() {
 }
 
 test_300a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.0) ] &&
 		skip "skipped for lustre < 2.7.0"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
@@ -17708,7 +17697,7 @@ test_300a() {
 run_test 300a "basic striped dir sanity test"
 
 test_300b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.0) ] &&
 		skip "skipped for lustre < 2.7.0"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
@@ -17737,7 +17726,7 @@ test_300b() {
 run_test 300b "check ctime/mtime for striped dir"
 
 test_300c() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.0) ] &&
 		skip "skipped for lustre < 2.7.0"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
@@ -17763,7 +17752,7 @@ test_300c() {
 run_test 300c "chown && check ls under striped directory"
 
 test_300d() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.0) ] &&
 		skip "skipped for lustre < 2.7.0"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
@@ -17797,7 +17786,7 @@ test_300d() {
 run_test 300d "check default stripe under striped directory"
 
 test_300e() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
@@ -17846,7 +17835,7 @@ run_test 300e "check rename under striped directory"
 test_300f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	local stripe_count
@@ -17935,7 +17924,7 @@ test_300_check_default_striped_dir()
 
 test_300g() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	local dir
@@ -17987,7 +17976,7 @@ run_test 300g "check default striped directory for normal directory"
 
 test_300h() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	local dir
@@ -18018,7 +18007,7 @@ run_test 300h "check default striped directory for striped directory"
 test_300i() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	local stripe_count
@@ -18073,7 +18062,7 @@ run_test 300i "client handle unknown hash type striped directory"
 test_300j() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	local stripe_count
@@ -18100,7 +18089,7 @@ run_test 300j "test large update record"
 test_300k() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	# this test needs a huge transaction
@@ -18131,7 +18120,7 @@ run_test 300k "test large striped directory"
 test_300l() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	local stripe_index
@@ -18155,7 +18144,7 @@ run_test 300l "non-root user to create dir under striped dir with stale layout"
 test_300m() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -ge 2 ] && skip_env "Only for single MDT"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	mkdir -p $DIR/$tdir/striped_dir
@@ -18197,7 +18186,7 @@ cleanup_300n() {
 test_300n() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
@@ -18240,7 +18229,7 @@ run_test 300n "non-root user to create dir under striped dir with default EA"
 test_300o() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55"
 
 	local numfree1
@@ -18421,7 +18410,7 @@ run_test 310c "open-unlink remote file with multiple links"
 test_311() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.54) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not contain LU-4825 fix"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
@@ -18507,7 +18496,7 @@ zfs_object_blksz() {
 
 test_312() { # LU-4856
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[ $(facet_fstype ost1) = "zfs" ] ||
+	[ "$ost1_FSTYPE" = "zfs" ] ||
 		skip_env "the test only applies to zfs"
 
 	local max_blksz=$(do_facet ost1 \
@@ -18766,7 +18755,7 @@ run_test 399a "fake write should not be slower than normal write"
 
 test_399b() { # LU-8726 for OST fake read
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	if [ "$(facet_fstype ost1)" != "ldiskfs" ]; then
+	if [ "$ost1_FSTYPE" != "ldiskfs" ]; then
 		skip_env "ldiskfs only test"
 	fi
 
@@ -18926,12 +18915,11 @@ test_401d() {
 run_test 401d "Verify 'lctl set_param' accepts values containing '='"
 
 test_402() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-	[[ $server_version -ge $(version_code 2.7.66) ]] ||
-	[[ $server_version -ge $(version_code 2.7.18.4) &&
-		$server_version -lt $(version_code 2.7.50) ]] ||
-	[[ $server_version -ge $(version_code 2.7.2) &&
-		$server_version -lt $(version_code 2.7.11) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.7.66) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.7.18.4) &&
+		$MDS1_VERSION -lt $(version_code 2.7.50) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.7.2) &&
+		$MDS1_VERSION -lt $(version_code 2.7.11) ]] ||
 		skip "Need MDS version 2.7.2+ or 2.7.18.4+ or 2.7.66+"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
@@ -18973,8 +18961,7 @@ test_403() {
 run_test 403 "i_nlink should not drop to zero due to aliasing"
 
 test_404() { # LU-6601
-	local server_version=$(lustre_version_code $SINGLEMDS)
-	[[ $server_version -ge $(version_code 2.8.53) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.8.53) ]] ||
 		skip "Need server version newer than 2.8.52"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
@@ -19004,8 +18991,8 @@ test_404() { # LU-6601
 run_test 404 "validate manual {de}activated works properly for OSPs"
 
 test_405() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) -o \
-	[ $(lustre_version_code client) -lt $(version_code 2.6.99) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.6.92) -o \
+	[ $CLIENT_VERSION -lt $(version_code 2.6.99) ] &&
 		skip "Layout swap lock is not supported"
 	check_swap_layouts_support
 
@@ -19020,7 +19007,7 @@ test_406() {
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.50) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.8.50) ] &&
 		skip "Need MDS version at least 2.8.50"
 
 	local def_stripe_size=$($LFS getstripe -S $MOUNT)
@@ -19090,7 +19077,7 @@ run_test 406 "DNE support fs default striping"
 
 test_407() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.8.55) ]] &&
 		skip "Need MDS version at least 2.8.55"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
@@ -19163,7 +19150,7 @@ run_test 409 "Large amount of cross-MDTs hard links on the same file"
 
 test_410()
 {
-	[[ $(lustre_version_code client) -lt $(version_code 2.9.59) ]] &&
+	[[ $CLIENT_VERSION -lt $(version_code 2.9.59) ]] &&
 		skip "Need client version at least 2.9.59"
 
 	# Create a file, and stat it from the kernel
@@ -19293,7 +19280,7 @@ test_415() {
 
 	total=500
 	# this test may be slow on ZFS
-	[ "$(facet_fstype mds1)" == "zfs" ] && total=100
+	[ "$mds1_FSTYPE" == "zfs" ] && total=100
 
 	# though this test is designed for striped directory, let's test normal
 	# directory too since lock is always saved as CoS lock.
@@ -19346,9 +19333,9 @@ cleanup_417() {
 }
 
 test_417() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ]] &&
-		skip "Need MDS version at least 2.11.56" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[[ $MDS1_VERSION -lt $(version_code 2.11.56) ]] &&
+		skip "Need MDS version at least 2.11.56"
 
 	trap cleanup_417 RETURN EXIT
 
@@ -19373,7 +19360,7 @@ run_test 417 "disable remote dir, striped dir and dir migration"
 
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
-	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
+	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
 		skip "Need server version at least 2.9.55"
 
 	start_full_debug_logging
@@ -19384,7 +19371,7 @@ post_801() {
 }
 
 barrier_stat() {
-	if [ $(lustre_version_code mgs) -le $(version_code 2.10.0) ]; then
+	if [ $MGS_VERSION -le $(version_code 2.10.0) ]; then
 		local st=$(do_facet mgs $LCTL barrier_stat $FSNAME |
 			   awk '/The barrier for/ { print $7 }')
 		echo $st
@@ -19397,7 +19384,7 @@ barrier_stat() {
 barrier_expired() {
 	local expired
 
-	if [ $(lustre_version_code mgs) -le $(version_code 2.10.0) ]; then
+	if [ $MGS_VERSION -le $(version_code 2.10.0) ]; then
 		expired=$(do_facet mgs $LCTL barrier_stat $FSNAME |
 			  awk '/will be expired/ { print $7 }')
 	else
@@ -19599,7 +19586,7 @@ cleanup_802() {
 test_802() {
 
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
-	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
+	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
 		skip "Need server version at least 2.9.55"
 
 	[[ $ENABLE_QUOTA ]] && skip "Quota enabled for read-only test"
@@ -19644,7 +19631,7 @@ run_test 802 "simulate readonly device"
 
 test_803() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.54) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.54) ] &&
 		skip "MDS needs to be newer than 2.10.54"
 
 	mkdir -p $DIR/$tdir
@@ -19694,10 +19681,9 @@ run_test 803 "verify agent object for remote object"
 
 test_804() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.54) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.54) ] &&
 		skip "MDS needs to be newer than 2.10.54"
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip_env "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip_env "ldiskfs only test"
 
 	mkdir -p $DIR/$tdir
 	$LFS mkdir -c 1 -i 1 $DIR/$tdir/dir0 ||
@@ -19783,11 +19769,10 @@ cleanup_805() {
 
 test_805() {
 	local zfs_version=$(do_node $SINGLEMDS cat /sys/module/zfs/version)
-	[ "$(facet_fstype mds1)" != "zfs" ] &&
-		skip "ZFS specific test"
+	[ "$mds1_FSTYPE" != "zfs" ] && skip "ZFS specific test"
 	[ $(version_code $zfs_version) -lt $(version_code 0.7.2) ] &&
 		skip "netfree not implemented before 0.7"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.57) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.10.57) ]] ||
 		skip "Need MDS version at least 2.10.57"
 
 	local fsset
@@ -19847,8 +19832,8 @@ check_lsom_size()
 }
 
 test_806() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
-		skip "Need MDS version at least 2.11.52" && return
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	local bs=1048576
 
@@ -19942,8 +19927,8 @@ test_806() {
 run_test 806 "Verify Lazy Size on MDS"
 
 test_807() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
-		skip "Need MDS version at least 2.11.52" && return
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	# Registration step
 	changelog_register || error "changelog_register failed"
@@ -20005,8 +19990,8 @@ check_som_nologged()
 }
 
 test_808() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ] &&
-		skip "Need MDS version at least 2.11.55" && return
+	[ $MDS1_VERSION -lt $(version_code 2.11.55) ] &&
+		skip "Need MDS version at least 2.11.55"
 
 	# Registration step
 	changelog_register || error "changelog_register failed"
@@ -20036,8 +20021,8 @@ check_som_nodata()
 }
 
 test_809() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
-		skip "Need MDS version at least 2.11.56" && return
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS version at least 2.11.56"
 
 	$LFS setstripe -E 1M -L mdt $DIR/$tfile ||
 		error "failed to create DoM-only file $DIR/$tfile"
