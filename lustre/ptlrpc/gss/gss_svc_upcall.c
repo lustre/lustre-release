@@ -71,7 +71,7 @@
 
 #define GSS_SVC_UPCALL_TIMEOUT  (20)
 
-static spinlock_t __ctx_index_lock;
+static DEFINE_SPINLOCK(__ctx_index_lock);
 static __u64 __ctx_index;
 
 __u64 gss_get_next_ctx_index(void)
@@ -1161,7 +1161,6 @@ int __init gss_init_svc_upcall(void)
 {
 	int	i, rc;
 
-	spin_lock_init(&__ctx_index_lock);
 	/*
 	 * this helps reducing context index confliction. after server reboot,
 	 * conflicting request from clients might be filtered out by initial
