@@ -694,8 +694,8 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		/* Do not ask for more than OBD_MAX_GRANT - a margin for server
 		 * to add extent tax, etc.
 		 */
-		oa->o_undirty = min(undirty, OBD_MAX_GRANT -
-				    (PTLRPC_MAX_BRW_PAGES << PAGE_SHIFT)*4UL);
+		oa->o_undirty = min(undirty, OBD_MAX_GRANT &
+				    ~(PTLRPC_MAX_BRW_SIZE * 4UL));
         }
 	oa->o_grant = cli->cl_avail_grant + cli->cl_reserved_grant;
         oa->o_dropped = cli->cl_lost_grant;
