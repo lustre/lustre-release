@@ -34,6 +34,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+get_lustre_env
 init_logging
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
@@ -3097,8 +3098,11 @@ test_59() {
 run_test 59 "lfs project dosen't crash kernel with project disabled"
 
 test_60() {
+	[ $MDS1_VERSION -lt $(version_code 2.11.53) ] &&
+		skip "Needs MDS version 2.11.53 or later."
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
+
 	local testfile=$DIR/$tdir/$tfile
 	local limit=100
 
