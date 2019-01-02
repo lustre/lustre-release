@@ -111,12 +111,10 @@ MANFILES =					\
 	llapi_path2fid.3			\
 	llapi_path2parent.3			\
 	llapi_quotactl.3			\
-	ll_decode_filter_fid.8			\
 	ll_decode_linkea.8			\
 	llobdstat.8				\
 	llog_reader.8				\
 	llstat.8				\
-	llverdev.8				\
 	lnetctl.8				\
 	lst.8					\
 	lustre.7				\
@@ -153,6 +151,8 @@ SERVER_MANFILES =				\
 	lctl-snapshot-list.8			\
 	lctl-snapshot-mount.8			\
 	lctl-snapshot-umount.8			\
+	ll_decode_filter_fid.8			\
+	llverdev.8				\
 	lshowmount.8				\
 	mkfs.lustre.8				\
 	tunefs.lustre.8
