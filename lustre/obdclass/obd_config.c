@@ -1712,8 +1712,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		if (cfg->cfg_instance &&
 		    lcfg->lcfg_command != LCFG_SPTLRPC_CONF &&
 		    LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
-			inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
-				   sizeof(cfg->cfg_instance) * 2 + 4;
+			inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) + 16 + 4;
 			OBD_ALLOC(inst_name, inst_len);
 			if (inst_name == NULL)
 				GOTO(out, rc = -ENOMEM);
