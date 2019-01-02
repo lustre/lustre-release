@@ -499,8 +499,7 @@ static void tgt_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 	struct tg_export_data	*ted = &exp->exp_target_data;
 	struct obd_device	*obd = exp->exp_obd;
 	struct tg_grants_data	*tgd = &obd->u.obt.obt_lut->lut_tgd;
-	long			 dirty;
-	long			 dropped;
+	long long		 dirty, dropped;
 	ENTRY;
 
 	assert_spin_locked(&tgd->tgd_grant_lock);
@@ -524,10 +523,19 @@ static void tgt_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 
 	/* inflate grant counters if required */
 	if (!exp_grant_param_supp(exp)) {
+		u64 tmp;
 		oa->o_grant	= tgt_grant_inflate(tgd, oa->o_grant);
 		oa->o_dirty	= tgt_grant_inflate(tgd, oa->o_dirty);
-		oa->o_dropped	= tgt_grant_inflate(tgd, (u64)oa->o_dropped);
-		oa->o_undirty	= tgt_grant_inflate(tgd, oa->o_undirty);
+		/* inflation can bump client's wish to >4GB which doesn't fit
+		 * 32bit o_undirty, limit that ..  */
+		tmp = tgt_grant_inflate(tgd, oa->o_undirty);
+		if (tmp >= OBD_MAX_GRANT)
+			tmp = OBD_MAX_GRANT & ~(1ULL << tgd->tgd_blockbits);
+		oa->o_undirty = tmp;
+		tmp = tgt_grant_inflate(tgd, oa->o_dropped);
+		if (tmp >= OBD_MAX_GRANT)
+			tmp = OBD_MAX_GRANT & ~(1ULL << tgd->tgd_blockbits);
+		oa->o_dropped = tmp;
 	}
 
 	dirty = oa->o_dirty;
@@ -542,13 +550,13 @@ static void tgt_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 	tgd->tgd_tot_dirty += dirty - ted->ted_dirty;
 	if (ted->ted_grant < dropped) {
 		CDEBUG(D_CACHE,
-		       "%s: cli %s/%p reports %lu dropped > grant %lu\n",
+		       "%s: cli %s/%p reports %llu dropped > grant %lu\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp, dropped,
 		       ted->ted_grant);
 		dropped = 0;
 	}
 	if (tgd->tgd_tot_granted < dropped) {
-		CERROR("%s: cli %s/%p reports %lu dropped > tot_grant %llu\n",
+		CERROR("%s: cli %s/%p reports %llu dropped > tot_grant %llu\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       dropped, tgd->tgd_tot_granted);
 		dropped = 0;
