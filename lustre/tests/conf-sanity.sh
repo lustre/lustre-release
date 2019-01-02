@@ -8032,6 +8032,8 @@ test_109_file_shortened() {
 
 test_109a()
 {
+	[ $MDS1_VERSION -lt $(version_code 2.10.59) ] &&
+		skip "Needs MDS version 2.10.59 or later."
 	[ "$(facet_fstype mgs)" == "zfs" ] &&
 		skip "LU-8727: no implementation for ZFS"
 
@@ -8084,6 +8086,8 @@ run_test 109a "test lctl clear_conf fsname"
 
 test_109b()
 {
+	[ $MDS1_VERSION -lt $(version_code 2.10.59) ] &&
+		skip "Needs MDS version 2.10.59 or later."
 	[ "$(facet_fstype mgs)" == "zfs" ] &&
 		skip "LU-8727: no implementation for ZFS"
 
