@@ -443,19 +443,20 @@ EXPORT_SYMBOL(cl_io_iter_init);
  */
 void cl_io_iter_fini(const struct lu_env *env, struct cl_io *io)
 {
-        const struct cl_io_slice *scan;
+	const struct cl_io_slice *scan;
 
-        LINVRNT(cl_io_is_loopable(io));
-        LINVRNT(io->ci_state == CIS_UNLOCKED);
-        LINVRNT(cl_io_invariant(io));
+	LINVRNT(cl_io_is_loopable(io));
+	LINVRNT(io->ci_state <= CIS_IT_STARTED ||
+		io->ci_state > CIS_IO_FINISHED);
+	LINVRNT(cl_io_invariant(io));
 
-        ENTRY;
+	ENTRY;
 	list_for_each_entry_reverse(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->op[io->ci_type].cio_iter_fini != NULL)
 			scan->cis_iop->op[io->ci_type].cio_iter_fini(env, scan);
 	}
-        io->ci_state = CIS_IT_ENDED;
-        EXIT;
+	io->ci_state = CIS_IT_ENDED;
+	EXIT;
 }
 EXPORT_SYMBOL(cl_io_iter_fini);
 
