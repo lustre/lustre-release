@@ -597,7 +597,6 @@ LB_CONFIG_SERVERS
 # Tests depends from utils (multiop from liblustreapi)
 AS_IF([test "x$enable_utils" = xno], [enable_tests="no"])
 
-m4_ifdef([LC_NODEMAP_PROC_DEBUG], [LC_NODEMAP_PROC_DEBUG])
 LIBCFS_CONFIG_CDEBUG
 LC_QUOTA
 

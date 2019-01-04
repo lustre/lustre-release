@@ -451,256 +451,6 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 }
 EXPORT_SYMBOL(cfs_print_nidlist);
 
-/**
- * Determines minimum and maximum addresses for a single
- * numeric address range
- *
- * \param	ar
- * \param[out]	*min_nid __u32 representation of min NID
- * \param[out]	*max_nid __u32 representation of max NID
- * \retval	-EINVAL unsupported LNET range
- * \retval	-ERANGE non-contiguous LNET range
- */
-static int cfs_ip_ar_min_max(struct addrrange *ar, __u32 *min_nid,
-			      __u32 *max_nid)
-{
-	struct cfs_expr_list *expr_list;
-	struct cfs_range_expr *range;
-	unsigned int min_ip[4] = {0};
-	unsigned int max_ip[4] = {0};
-	int cur_octet = 0;
-	bool expect_full_octet = false;
-
-	list_for_each_entry(expr_list, &ar->ar_numaddr_ranges, el_link) {
-		int re_count = 0;
-
-		list_for_each_entry(range, &expr_list->el_exprs, re_link) {
-			/* XXX: add support for multiple & non-contig. re's */
-			if (re_count > 0)
-				return -EINVAL;
-
-			/* if a previous octet was ranged, then all remaining
-			 * octets must be full for contiguous range */
-			if (expect_full_octet && (range->re_lo != 0 ||
-						  range->re_hi != 255))
-				return -ERANGE;
-
-			if (range->re_stride != 1)
-				return -ERANGE;
-
-			if (range->re_lo > range->re_hi)
-				return -EINVAL;
-
-			if (range->re_lo != range->re_hi)
-				expect_full_octet = true;
-
-			min_ip[cur_octet] = range->re_lo;
-			max_ip[cur_octet] = range->re_hi;
-
-			re_count++;
-		}
-
-		cur_octet++;
-	}
-
-	if (min_nid != NULL)
-		*min_nid = ((min_ip[0] << 24) | (min_ip[1] << 16) |
-			    (min_ip[2] << 8) | min_ip[3]);
-
-	if (max_nid != NULL)
-		*max_nid = ((max_ip[0] << 24) | (max_ip[1] << 16) |
-			    (max_ip[2] << 8) | max_ip[3]);
-
-	return 0;
-}
-
-/**
- * Determines minimum and maximum addresses for a single
- * numeric address range
- *
- * \param	ar
- * \param[out]	*min_nid __u32 representation of min NID
- * \param[out]	*max_nid __u32 representation of max NID
- * \retval	-EINVAL unsupported LNET range
- */
-static int cfs_num_ar_min_max(struct addrrange *ar, __u32 *min_nid,
-			       __u32 *max_nid)
-{
-	struct cfs_expr_list *el;
-	struct cfs_range_expr *re;
-	unsigned int min_addr = 0;
-	unsigned int max_addr = 0;
-
-	list_for_each_entry(el, &ar->ar_numaddr_ranges, el_link) {
-		int re_count = 0;
-
-		list_for_each_entry(re, &el->el_exprs, re_link) {
-			if (re_count > 0)
-				return -EINVAL;
-			if (re->re_lo > re->re_hi)
-				return -EINVAL;
-
-			if (re->re_lo < min_addr || min_addr == 0)
-				min_addr = re->re_lo;
-			if (re->re_hi > max_addr)
-				max_addr = re->re_hi;
-
-			re_count++;
-		}
-	}
-
-	if (min_nid != NULL)
-		*min_nid = min_addr;
-	if (max_nid != NULL)
-		*max_nid = max_addr;
-
-	return 0;
-}
-
-/**
- * Takes a linked list of nidrange expressions, determines the minimum
- * and maximum nid and creates appropriate nid structures
- *
- * \param[out]	*min_nid string representation of min NID
- * \param[out]	*max_nid string representation of max NID
- * \retval	-EINVAL unsupported LNET range
- * \retval	-ERANGE non-contiguous LNET range
- */
-int cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
-			      char *max_nid, size_t nidstr_length)
-{
-	struct nidrange *first_nidrange;
-	int netnum;
-	struct netstrfns *nf;
-	char *lndname;
-	__u32 min_addr;
-	__u32 max_addr;
-	char min_addr_str[IPSTRING_LENGTH];
-	char max_addr_str[IPSTRING_LENGTH];
-	int rc;
-
-	first_nidrange = list_entry(nidlist->next, struct nidrange, nr_link);
-
-	netnum = first_nidrange->nr_netnum;
-	nf = first_nidrange->nr_netstrfns;
-	lndname = nf->nf_name;
-
-	rc = nf->nf_min_max(nidlist, &min_addr, &max_addr);
-	if (rc < 0)
-		return rc;
-
-	nf->nf_addr2str(min_addr, min_addr_str, sizeof(min_addr_str));
-	nf->nf_addr2str(max_addr, max_addr_str, sizeof(max_addr_str));
-
-	snprintf(min_nid, nidstr_length, "%s@%s%d", min_addr_str, lndname,
-		 netnum);
-	snprintf(max_nid, nidstr_length, "%s@%s%d", max_addr_str, lndname,
-		 netnum);
-
-	return 0;
-}
-EXPORT_SYMBOL(cfs_nidrange_find_min_max);
-
-/**
- * Determines the min and max NID values for num LNDs
- *
- * \param	*nidlist
- * \param[out]	*min_nid if provided, returns string representation of min NID
- * \param[out]	*max_nid if provided, returns string representation of max NID
- * \retval	-EINVAL unsupported LNET range
- * \retval	-ERANGE non-contiguous LNET range
- */
-static int cfs_num_min_max(struct list_head *nidlist, __u32 *min_nid,
-			    __u32 *max_nid)
-{
-	struct nidrange *nr;
-	struct addrrange *ar;
-	unsigned int tmp_min_addr = 0;
-	unsigned int tmp_max_addr = 0;
-	unsigned int min_addr = 0;
-	unsigned int max_addr = 0;
-	int nidlist_count = 0;
-	int rc;
-
-	list_for_each_entry(nr, nidlist, nr_link) {
-		if (nidlist_count > 0)
-			return -EINVAL;
-
-		list_for_each_entry(ar, &nr->nr_addrranges, ar_link) {
-			rc = cfs_num_ar_min_max(ar, &tmp_min_addr,
-						&tmp_max_addr);
-			if (rc < 0)
-				return rc;
-
-			if (tmp_min_addr < min_addr || min_addr == 0)
-				min_addr = tmp_min_addr;
-			if (tmp_max_addr > max_addr)
-				max_addr = tmp_min_addr;
-		}
-	}
-	if (max_nid != NULL)
-		*max_nid = max_addr;
-	if (min_nid != NULL)
-		*min_nid = min_addr;
-
-	return 0;
-}
-
-/**
- * Takes an nidlist and determines the minimum and maximum
- * ip addresses.
- *
- * \param	*nidlist
- * \param[out]	*min_nid if provided, returns string representation of min NID
- * \param[out]	*max_nid if provided, returns string representation of max NID
- * \retval	-EINVAL unsupported LNET range
- * \retval	-ERANGE non-contiguous LNET range
- */
-static int cfs_ip_min_max(struct list_head *nidlist, __u32 *min_nid,
-			   __u32 *max_nid)
-{
-	struct nidrange *nr;
-	struct addrrange *ar;
-	__u32 tmp_min_ip_addr = 0;
-	__u32 tmp_max_ip_addr = 0;
-	__u32 min_ip_addr = 0;
-	__u32 max_ip_addr = 0;
-	int nidlist_count = 0;
-	int rc;
-
-	list_for_each_entry(nr, nidlist, nr_link) {
-		if (nidlist_count > 0)
-			return -EINVAL;
-
-		if (nr->nr_all) {
-			min_ip_addr = 0;
-			max_ip_addr = 0xffffffff;
-			break;
-		}
-
-		list_for_each_entry(ar, &nr->nr_addrranges, ar_link) {
-			rc = cfs_ip_ar_min_max(ar, &tmp_min_ip_addr,
-					       &tmp_max_ip_addr);
-			if (rc < 0)
-				return rc;
-
-			if (tmp_min_ip_addr < min_ip_addr || min_ip_addr == 0)
-				min_ip_addr = tmp_min_ip_addr;
-			if (tmp_max_ip_addr > max_ip_addr)
-				max_ip_addr = tmp_max_ip_addr;
-		}
-
-		nidlist_count++;
-	}
-
-	if (max_nid != NULL)
-		*max_nid = max_ip_addr;
-	if (min_nid != NULL)
-		*min_nid = min_ip_addr;
-
-	return 0;
-}
-
 static int
 libcfs_lo_str2addr(const char *str, int nob, __u32 *addr)
 {
@@ -908,8 +658,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr		= libcfs_lo_str2addr,
 	  .nf_parse_addrlist	= libcfs_num_parse,
 	  .nf_print_addrlist	= libcfs_num_addr_range_print,
-	  .nf_match_addr	= libcfs_num_match,
-	  .nf_min_max		= cfs_num_min_max },
+	  .nf_match_addr	= libcfs_num_match
+	},
 	{ .nf_type		= SOCKLND,
 	  .nf_name		= "tcp",
 	  .nf_modname		= "ksocklnd",
@@ -917,8 +667,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr		= libcfs_ip_str2addr,
 	  .nf_parse_addrlist	= cfs_ip_addr_parse,
 	  .nf_print_addrlist	= libcfs_ip_addr_range_print,
-	  .nf_match_addr	= cfs_ip_addr_match,
-	  .nf_min_max		= cfs_ip_min_max },
+	  .nf_match_addr	= cfs_ip_addr_match
+	},
 	{ .nf_type		= O2IBLND,
 	  .nf_name		= "o2ib",
 	  .nf_modname		= "ko2iblnd",
@@ -926,8 +676,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr		= libcfs_ip_str2addr,
 	  .nf_parse_addrlist	= cfs_ip_addr_parse,
 	  .nf_print_addrlist	= libcfs_ip_addr_range_print,
-	  .nf_match_addr	= cfs_ip_addr_match,
-	  .nf_min_max		= cfs_ip_min_max },
+	  .nf_match_addr	= cfs_ip_addr_match
+	},
 	{ .nf_type		= GNILND,
 	  .nf_name		= "gni",
 	  .nf_modname		= "kgnilnd",
@@ -935,8 +685,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr		= libcfs_num_str2addr,
 	  .nf_parse_addrlist	= libcfs_num_parse,
 	  .nf_print_addrlist	= libcfs_num_addr_range_print,
-	  .nf_match_addr	= libcfs_num_match,
-	  .nf_min_max		= cfs_num_min_max },
+	  .nf_match_addr	= libcfs_num_match
+	},
 	{ .nf_type		= GNIIPLND,
 	  .nf_name		= "gip",
 	  .nf_modname		= "kgnilnd",
@@ -944,8 +694,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr		= libcfs_ip_str2addr,
 	  .nf_parse_addrlist	= cfs_ip_addr_parse,
 	  .nf_print_addrlist	= libcfs_ip_addr_range_print,
-	  .nf_match_addr	= cfs_ip_addr_match,
-	  .nf_min_max		= cfs_ip_min_max },
+	  .nf_match_addr	= cfs_ip_addr_match
+	},
 	{ .nf_type		= PTL4LND,
 	  .nf_name		= "ptlf",
 	  .nf_modname		= "kptl4lnd",
@@ -953,8 +703,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 	  .nf_str2addr		= libcfs_num_str2addr,
 	  .nf_parse_addrlist	= libcfs_num_parse,
 	  .nf_print_addrlist	= libcfs_num_addr_range_print,
-	  .nf_match_addr	= libcfs_num_match,
-	  .nf_min_max		= cfs_num_min_max},
+	  .nf_match_addr	= libcfs_num_match
+	},
 };
 
 static const size_t libcfs_nnetstrfns = ARRAY_SIZE(libcfs_netstrfns);

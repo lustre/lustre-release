@@ -3336,23 +3336,6 @@ AS_IF([test "x$enable_quota" != xno -a "x$enable_utils" != xno], [
 ]) # LC_QUOTA
 
 #
-# LC_CONFIG_NODEMAP_PROC_DEBUG
-#
-# enable nodemap proc file debugging
-#
-AC_DEFUN([LC_NODEMAP_PROC_DEBUG], [
-AC_MSG_CHECKING([whether to enable nodemap proc debug])
-AC_ARG_ENABLE([nodemap_proc_debug],
-	AC_HELP_STRING([--enable-nodemap-proc-debug],
-		[enable nodemap proc debug]),
-	[], [enable_nodemap_proc_debug="no"])
-AC_MSG_RESULT([$enable_nodemap_proc_debug])
-AS_IF([test "x$enable_nodemap_proc_debug" != xno],
-	[AC_DEFINE(NODEMAP_PROC_DEBUG, 1,
-		[enable nodemap proc debug support])])
-]) # LC_NODEMAP_PROC_DEBUG
-
-#
 # LC_OSD_ADDON
 #
 # configure support for optional OSD implementation
