@@ -1414,7 +1414,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	char *inst;
 	char *buf;
 	int bufsz;
-	int pos;
+	int pos = 0;
 	int rc  = 0;
 	int off = 0;
 
@@ -1432,6 +1432,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 			OBD_FREE(inst, PAGE_SIZE);
 			return -E2BIG;
 		}
+#ifdef HAVE_SERVER_SUPPORT
 	} else {
 		LASSERT(IS_MDT(lsi));
 		rc = server_name2svname(lsi->lsi_svname, inst, NULL,
@@ -1441,7 +1442,8 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 			RETURN(-EINVAL);
 		}
 		pos = strlen(inst);
-        }
+#endif /* HAVE_SERVER_SUPPORT */
+	}
 
         ++pos;
         buf   = inst + pos;

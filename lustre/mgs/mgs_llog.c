@@ -5233,7 +5233,6 @@ static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
 	    sizeof(mti->mti_params))
 		GOTO(out, rc = -E2BIG);
 
-	/* obdname2fsname reports devname as an obd device */
 	len = strcspn(param, ".=");
 	if (len && param[len] != '=') {
 		struct list_head *tmp;
