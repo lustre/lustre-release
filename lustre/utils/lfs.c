@@ -1674,6 +1674,12 @@ static int lfs_setstripe(int argc, char **argv)
 	}
 
 	if (mdt_idx_arg != NULL) {
+		fprintf(stderr,
+			"error: %s: Directory migration unsafe in Lustre 2.10.  "
+			"See https://jira.whamcloud.com/browse/LU-11481\n",
+			argv[0]);
+		goto error;
+
 		/* initialize migrate mdt parameters */
 		migrate_mdt_param.fp_mdt_index = strtoul(mdt_idx_arg, &end, 0);
 		if (*end != '\0') {

@@ -695,8 +695,8 @@ test_17n() {
 	check_fs_consistency_17n ||
 		error "e2fsck report error after unlink files under remote dir"
 
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.50) ] &&
-		skip "lustre < 2.4.50 does not support migrate mv " && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
 
 	for ((i = 0; i < 10; i++)); do
 		mkdir -p $DIR/$tdir/remote_dir_${i}
@@ -11531,6 +11531,9 @@ test_160d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	local server_version=$(lustre_version_code mds1)
 	local CL_MASK_PARAM="mdd.$MDT0.changelog_mask"
 
@@ -13768,6 +13771,9 @@ test_230b() {
 	local migrate_dir=$DIR/$tdir/migrate_dir
 	local other_dir=$DIR/$tdir/other_dir
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	test_mkdir $DIR/$tdir
 	test_mkdir -i0 -c1 $migrate_dir
 	test_mkdir -i0 -c1 $other_dir
@@ -13929,6 +13935,9 @@ test_230c() {
 	local file
 	local migrate_dir=$DIR/$tdir/migrate_dir
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	#If migrating directory fails in the middle, all entries of
 	#the directory is still accessiable.
 	test_mkdir $DIR/$tdir
@@ -13983,6 +13992,9 @@ test_230d() {
 	local i
 	local j
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	test_mkdir $DIR/$tdir
 	test_mkdir -i0 -c1 $migrate_dir
 
@@ -14009,6 +14021,9 @@ run_test 230d "check migrate big directory"
 test_230e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	local i
 	local j
 	local a_fid
@@ -14057,6 +14072,9 @@ test_230f() {
 	local a_fid
 	local ln_fid
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	mkdir -p $DIR/$tdir
 	mkdir $DIR/$tdir/migrate_dir
 	$LFS mkdir -i1 $DIR/$tdir/other_dir
@@ -14103,6 +14121,9 @@ test_230g() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	mkdir -p $DIR/$tdir/migrate_dir
 
 	$LFS migrate -m 1000 $DIR/$tdir/migrate_dir &&
@@ -14114,8 +14135,9 @@ run_test 230g "migrate dir to non-exist MDT"
 test_230h() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
-		skip "Need MDS version at least 2.7.64" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	local mdt_index
 
 	mkdir -p $DIR/$tdir/migrate_dir
@@ -14141,6 +14163,9 @@ run_test 230h "migrate .. and root"
 test_230i() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
 
 	mkdir -p $DIR/$tdir/migrate_dir
 

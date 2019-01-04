@@ -12,7 +12,7 @@ lfs migrate \- migrate files or directories between MDTs or OSTs.
 Migrate MDT inodes or OST objects between MDTs and OSTs respectively. For the
 case of MDT inode migration:
 .TP
-.B migrate -m|--mdt-index <mdt_idx> \fIdirectory\fR
+.B migrate -m|--mdt-index <mdt_idx> \fIOPTION DISABLED\fR
 .br
 Move the file metadata (inode) from one MDT to MDT with index \fBmdt_idx\fR.
 Migration of striped directories or individual files between MDTs is not
@@ -20,6 +20,10 @@ currently supported. Only the root user can migrate directories.  Files that
 have been archived by HSM or are currently open are skipped by MDT inode
 migration. Access to files within the directory is blocked until migration is
 complete.
+.TP
+\fIWARNING\fR
+Lustre 2.10 has bugs that make migrate -m unsafe.  See
+https://jira.whamcloud.com/browse/LU-11481.
 .TP
 \fIWARNING\fR
 A migrated file or directory will have a new inode number and FID.  As

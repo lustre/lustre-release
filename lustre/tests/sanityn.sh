@@ -1043,8 +1043,9 @@ test_33d() {
 			touch $DIR/$tdir/d1/src" \
 		"mv $DIR/$tdir/d1/src $DIR/$tdir/d2/tgt"
 	# migrate
-	op_trigger_cos "$LFS mkdir -i 0 $DIR/$tdir" \
-		"$LFS migrate -m 1 $DIR/$tdir"
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.11.56) ] &&
+		op_trigger_cos "$LFS mkdir -i 0 $DIR/$tdir" \
+			"$LFS migrate -m 1 $DIR/$tdir"
 
 	return 0
 }
@@ -3700,6 +3701,10 @@ run_test 79 "xattr: intent error"
 
 test_80a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	local MDTIDX=1
 	local mdt_index
 	local i
@@ -3747,6 +3752,10 @@ cleanup_80b() {
 
 test_80b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	local migrate_dir1=$DIR1/$tdir/migrate_dir
 	local migrate_dir2=$DIR2/$tdir/migrate_dir
 	local migrate_run=$LUSTRE/tests/migrate.sh

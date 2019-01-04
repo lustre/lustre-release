@@ -4451,6 +4451,9 @@ run_test 29b "LFSCK can repair bad nlink count (2)"
 
 test_29c()
 {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+		skip "lustre < 2.11.56 does not support migrate -m "
+
 	echo "#####"
 	echo "The namespace LFSCK will create many hard links to the target"
 	echo "file as to exceed the linkEA size limitation. Under such case"
