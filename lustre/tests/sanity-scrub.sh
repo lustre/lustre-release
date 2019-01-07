@@ -49,7 +49,6 @@ build_test_filter
 
 MDT_DEV="${FSNAME}-MDT0000"
 OST_DEV="${FSNAME}-OST0000"
-MDT_DEVNAME=$(mdsdevname ${SINGLEMDS//mds/})
 
 scrub_start() {
 	local error_id=$1
@@ -371,7 +370,7 @@ test_1a() {
 	stop $SINGLEMDS > /dev/null || error "(6) Fail to stop MDS!"
 
 	echo "start $SINGLEMDS with disabling OI scrub"
-	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
+	start $SINGLEMDS $(mdsdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
 		error "(7) Fail to start MDS!"
 
 	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
@@ -649,6 +648,28 @@ test_4c() {
 	done
 }
 run_test 4c "Auto trigger OI scrub if bad OI mapping was found (3)"
+
+test_4d() {
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && skip "ldiskfs only test"
+
+	check_mount_and_prep
+
+	#define OBD_FAIL_OSD_DUPLICATE_MAP	0x19b
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x19b
+	for i in {1..100}; do
+		echo $i > $DIR/$tdir/f_$i || error "write f_$i failed"
+	done
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+
+	for i in {101..200}; do
+		echo $i > $DIR/$tdir/f_$i || error "write f_$i failed"
+	done
+
+	for i in {1..200}; do
+		echo $i | cmp $DIR/$tdir/f_$i - || error "f_$i data corrupt"
+	done
+}
+run_test 4d "FID in LMA mismatch with object FID won't block create"
 
 test_5() {
 	formatall > /dev/null
