@@ -70,11 +70,6 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-if [[ $MDSCOUNT -gt 1 ]]; then
-	# bug number:    LU-11161
-	ALWAYS_EXCEPT+=" 160g"
-fi
-
 #                                  5          12          (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
 
@@ -12540,7 +12535,10 @@ test_160g() {
 	local nbcl=$(changelog_dump | wc -l)
 	[[ $nbcl -eq 0 ]] && error "no changelogs found"
 
-	for param in "changelog_max_idle_indexes=$((nbcl / 2))" \
+	# reduce the max_idle_indexes value to make sure we exceed it
+	max_ndx=$((nbcl / 2 - 1))
+
+	for param in "changelog_max_idle_indexes=$max_ndx" \
 		     "changelog_gc=1" \
 		     "changelog_min_gc_interval=2" \
 		     "changelog_min_free_cat_entries=3"; do
