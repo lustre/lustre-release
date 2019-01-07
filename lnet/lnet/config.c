@@ -33,6 +33,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/ctype.h>
+#include <linux/inetdevice.h>
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 #include <lnet/lib-lnet.h>
@@ -1609,68 +1610,61 @@ lnet_ipaddr_free_enumeration(__u32 *ipaddrs, int nip)
 }
 
 static int
-lnet_ipaddr_enumerate (__u32 **ipaddrsp)
+lnet_ipaddr_enumerate(u32 **ipaddrsp)
 {
-	int	   up;
-	__u32	   netmask;
-	__u32	  *ipaddrs;
-	__u32	  *ipaddrs2;
-	int	   nip;
-	char	 **ifnames;
-	int	   nif = lnet_ipif_enumerate(&ifnames);
-	int	   i;
-	int	   rc;
+	struct net_device *dev;
+	u32 *ipaddrs;
+	int nalloc = 64;
+	int nip = 0;
 
-	if (nif <= 0)
-		return nif;
-
-	LIBCFS_ALLOC(ipaddrs, nif * sizeof(*ipaddrs));
-	if (ipaddrs == NULL) {
-		CERROR("Can't allocate ipaddrs[%d]\n", nif);
-		lnet_ipif_free_enumeration(ifnames, nif);
+	LIBCFS_ALLOC(ipaddrs, nalloc * sizeof(*ipaddrs));
+	if (!ipaddrs) {
+		CERROR("Can't allocate ipaddrs[%d]\n", nalloc);
 		return -ENOMEM;
 	}
 
-	for (i = nip = 0; i < nif; i++) {
-		if (!strcmp(ifnames[i], "lo"))
+	rtnl_lock();
+	for_each_netdev(&init_net, dev) {
+		struct in_device *in_dev;
+
+		if (strcmp(dev->name, "lo") == 0)
 			continue;
 
-		rc = lnet_ipif_query(ifnames[i], &up,
-				       &ipaddrs[nip], &netmask);
-		if (rc != 0) {
-			CWARN("Can't query interface %s: %d\n",
-			      ifnames[i], rc);
-			continue;
-		}
-
-		if (!up) {
-			CWARN("Ignoring interface %s: it's down\n",
-			      ifnames[i]);
+		if (!(dev_get_flags(dev) & IFF_UP)) {
+			CWARN("Ignoring interface %s: it's down\n", dev->name);
 			continue;
 		}
 
-		nip++;
-	}
+		in_dev = __in_dev_get_rtnl(dev);
+		if (!in_dev) {
+			CWARN("Interface %s has no IPv4 status.\n", dev->name);
+			continue;
+		}
 
-	lnet_ipif_free_enumeration(ifnames, nif);
+		if (nip >= nalloc) {
+			u32 *ipaddrs2;
 
-	if (nip == nif) {
-		*ipaddrsp = ipaddrs;
-	} else {
-		if (nip > 0) {
-			LIBCFS_ALLOC(ipaddrs2, nip * sizeof(*ipaddrs2));
-			if (ipaddrs2 == NULL) {
+			nalloc += nalloc;
+			ipaddrs2 = krealloc(ipaddrs, nalloc * sizeof(*ipaddrs2),
+					    GFP_KERNEL);
+			if (!ipaddrs2) {
+				kfree(ipaddrs);
 				CERROR("Can't allocate ipaddrs[%d]\n", nip);
-				nip = -ENOMEM;
-			} else {
-				memcpy(ipaddrs2, ipaddrs,
-					nip * sizeof(*ipaddrs));
-				*ipaddrsp = ipaddrs2;
-				rc = nip;
+				return -ENOMEM;
 			}
+			ipaddrs = ipaddrs2;
 		}
-		lnet_ipaddr_free_enumeration(ipaddrs, nif);
+
+		for_primary_ifa(in_dev)
+			if (strcmp(ifa->ifa_label, dev->name) == 0) {
+				ipaddrs[nip++] = ifa->ifa_local;
+				break;
+			}
+		endfor_ifa(in_dev);
 	}
+	rtnl_unlock();
+
+	*ipaddrsp = ipaddrs;
 	return nip;
 }
 
