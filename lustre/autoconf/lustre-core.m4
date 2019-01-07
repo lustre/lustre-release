@@ -2899,7 +2899,9 @@ LB_CHECK_COMPILE([if CURRENT_TIME has been replaced with current_time],
 current_time, [
 	#include <linux/fs.h>
 ],[
-	struct timespec ts = current_time(NULL);
+	struct iattr attr;
+
+	attr.ia_atime = current_time(NULL);
 ],[
 	AC_DEFINE(HAVE_CURRENT_TIME, 1,
 		[current_time() has replaced CURRENT_TIME])
