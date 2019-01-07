@@ -283,6 +283,8 @@ extern char obd_jobid_var[];
 
 #define OBD_FAIL_OSD_TXN_START				0x19a
 
+#define OBD_FAIL_OSD_DUPLICATE_MAP			0x19b
+
 #define OBD_FAIL_OFD_SET_OID				0x1e0
 
 #define OBD_FAIL_OST                     0x200

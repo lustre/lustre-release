@@ -1128,6 +1128,12 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 		goto trigger;
 	}
 
+	/* -ESTALE is returned if inode of OST object doesn't exist */
+	if (result == -ESTALE &&
+	    fid_is_on_ost(info, dev, fid, OI_CHECK_FLD)) {
+		GOTO(out, result = 0);
+	}
+
 	if (result)
 		GOTO(out, result);
 
@@ -1289,6 +1295,19 @@ check_lma:
 		GOTO(out, result);
 
 	LASSERT(!updated);
+
+	/*
+	 * if two OST objects map to the same inode, and inode mode is
+	 * (S_IFREG | S_ISUID | S_ISGID | S_ISVTX | 0666), which means it's
+	 * reserved by precreate, and not written yet, in this case, don't
+	 * set inode for the object whose FID mismatch, so that it can create
+	 * inode and not block precreate.
+	 */
+	if (fid_is_on_ost(info, dev, fid, OI_CHECK_FLD) &&
+	    inode->i_mode == (S_IFREG | S_ISUID | S_ISGID | S_ISVTX | 0666)) {
+		obj->oo_inode = NULL;
+		GOTO(out, result = 0);
+	}
 
 	result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
 	/*
@@ -3392,6 +3411,19 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 	osd_id_gen(id, obj->oo_inode->i_ino, obj->oo_inode->i_generation);
 	rc = osd_oi_insert(info, osd, fid, id, oh->ot_handle,
 			   OI_CHECK_FLD, NULL);
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_DUPLICATE_MAP) && osd->od_is_ost) {
+		struct lu_fid next_fid = *fid;
+
+		/* insert next object in advance, and map to the same inode */
+		next_fid.f_oid++;
+		if (next_fid.f_oid != 0) {
+			osd_trans_exec_op(env, th, OSD_OT_INSERT);
+			osd_oi_insert(info, osd, &next_fid, id, oh->ot_handle,
+				      OI_CHECK_FLD, NULL);
+			osd_trans_exec_check(env, th, OSD_OT_INSERT);
+		}
+	}
+
 	osd_trans_exec_check(env, th, OSD_OT_INSERT);
 
 	return rc;
@@ -3455,6 +3487,9 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	 * to be changed.
 	 */
 	osd_trans_declare_op(env, oh, OSD_OT_INSERT,
+			     osd_dto_credits_noquota[DTO_INDEX_INSERT] + 1);
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_DUPLICATE_MAP))
+		osd_trans_declare_op(env, oh, OSD_OT_INSERT,
 			     osd_dto_credits_noquota[DTO_INDEX_INSERT] + 1);
 
 	/* will help to find FID->ino mapping at dt_insert() */
