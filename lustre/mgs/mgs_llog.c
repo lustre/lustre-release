@@ -191,7 +191,7 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         struct lustre_cfg *lcfg;
-        __u32 index;
+	u32 index;
         int rc = 0;
         ENTRY;
 
@@ -211,12 +211,14 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
         CDEBUG(D_INFO, "cmd %x %s %s\n", lcfg->lcfg_command,
                lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
 
-        /* Figure out ost indicies */
-        /* lov_modify_tgts add 0:lov1  1:ost1_UUID  2(index):0  3(gen):1 */
-        if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD ||
-            lcfg->lcfg_command == LCFG_LOV_DEL_OBD) {
-                index = simple_strtoul(lustre_cfg_string(lcfg, 2),
-                                       NULL, 10);
+	/* Figure out ost indicies */
+	/* lov_modify_tgts add 0:lov1  1:ost1_UUID  2(index):0  3(gen):1 */
+	if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD ||
+	    lcfg->lcfg_command == LCFG_LOV_DEL_OBD) {
+		rc = kstrtouint(lustre_cfg_string(lcfg, 2), 10, &index);
+		if (rc)
+			RETURN(rc);
+
                 CDEBUG(D_MGS, "OST index for %s is %u (%s)\n",
                        lustre_cfg_string(lcfg, 1), index,
                        lustre_cfg_string(lcfg, 2));
@@ -3359,7 +3361,14 @@ static int mgs_write_log_sys(const struct lu_env *env,
 		return -ENOMEM;
 
 	lcfg = &lcr->lcr_cfg;
-	lcfg->lcfg_num = convert ? simple_strtoul(tmp, NULL, 0) : 0;
+	if (convert) {
+		rc = kstrtouint(tmp, 0, &lcfg->lcfg_num);
+		if (rc)
+			GOTO(out_rec_free, rc);
+	} else {
+		lcfg->lcfg_num = 0;
+	}
+
 	/* truncate the comment to the parameter name */
 	ptr = tmp - 1;
 	sep = *ptr;
@@ -3383,6 +3392,7 @@ static int mgs_write_log_sys(const struct lu_env *env,
 		}
 	}
 	*ptr = sep;
+out_rec_free:
 	lustre_cfg_rec_free(lcr);
 	return rc;
 }
@@ -5385,13 +5395,13 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		    enum lcfg_command_type cmd, const char *nodemap_name,
 		    char *param)
 {
-	lnet_nid_t	nid[2];
-	__u32		idmap[2];
-	bool		bool_switch;
-	__u32		int_id;
-	int		rc = 0;
-	ENTRY;
+	lnet_nid_t nid[2];
+	u32 idmap[2];
+	bool bool_switch;
+	u32 int_id;
+	int rc = 0;
 
+	ENTRY;
 	switch (cmd) {
 	case LCFG_NODEMAP_ADD:
 		rc = nodemap_add(nodemap_name);
@@ -5412,11 +5422,15 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		rc = nodemap_del_range(nodemap_name, nid);
 		break;
 	case LCFG_NODEMAP_ADMIN:
-		bool_switch = simple_strtoul(param, NULL, 10);
+		rc = kstrtobool(param, &bool_switch);
+		if (rc)
+			break;
 		rc = nodemap_set_allow_root(nodemap_name, bool_switch);
 		break;
 	case LCFG_NODEMAP_DENY_UNKNOWN:
-		bool_switch = simple_strtoul(param, NULL, 10);
+		rc = kstrtobool(param, &bool_switch);
+		if (rc)
+			break;
 		rc = nodemap_set_deny_unknown(nodemap_name, bool_switch);
 		break;
 	case LCFG_NODEMAP_AUDIT_MODE:
@@ -5438,15 +5452,21 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 			rc = -EINVAL;
 		break;
 	case LCFG_NODEMAP_TRUSTED:
-		bool_switch = simple_strtoul(param, NULL, 10);
+		rc = kstrtobool(param, &bool_switch);
+		if (rc)
+			break;
 		rc = nodemap_set_trust_client_ids(nodemap_name, bool_switch);
 		break;
 	case LCFG_NODEMAP_SQUASH_UID:
-		int_id = simple_strtoul(param, NULL, 10);
+		rc = kstrtouint(param, 10, &int_id);
+		if (rc)
+			break;
 		rc = nodemap_set_squash_uid(nodemap_name, int_id);
 		break;
 	case LCFG_NODEMAP_SQUASH_GID:
-		int_id = simple_strtoul(param, NULL, 10);
+		rc = kstrtouint(param, 10, &int_id);
+		if (rc)
+			break;
 		rc = nodemap_set_squash_gid(nodemap_name, int_id);
 		break;
 	case LCFG_NODEMAP_ADD_UIDMAP:
