@@ -185,9 +185,9 @@ static int vvp_object_glimpse(const struct lu_env *env,
 	struct inode *inode = vvp_object_inode(obj);
 
 	ENTRY;
-	lvb->lvb_mtime = LTIME_S(inode->i_mtime);
-	lvb->lvb_atime = LTIME_S(inode->i_atime);
-	lvb->lvb_ctime = LTIME_S(inode->i_ctime);
+	lvb->lvb_mtime = inode->i_mtime.tv_sec;
+	lvb->lvb_atime = inode->i_atime.tv_sec;
+	lvb->lvb_ctime = inode->i_ctime.tv_sec;
 
 	/*
 	 * LU-417: Add dirty pages block count lest i_blocks reports 0, some

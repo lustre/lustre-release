@@ -70,20 +70,20 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid)
 	u64 newvalid = 0;
 
 	if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-		CDEBUG(D_INODE, "valid %#llx, new time %lu/%lu\n",
-			valid, LTIME_S(src->i_mtime),
-			LTIME_S(src->i_ctime));
+		CDEBUG(D_INODE, "valid %#llx, new time %lld/%lld\n",
+		       valid, (s64) src->i_mtime.tv_sec,
+		       (s64) src->i_ctime.tv_sec);
 
 	if (valid & OBD_MD_FLATIME) {
-		dst->o_atime = LTIME_S(src->i_atime);
+		dst->o_atime = src->i_atime.tv_sec;
 		newvalid |= OBD_MD_FLATIME;
 	}
 	if (valid & OBD_MD_FLMTIME) {
-		dst->o_mtime = LTIME_S(src->i_mtime);
+		dst->o_mtime = src->i_mtime.tv_sec;
 		newvalid |= OBD_MD_FLMTIME;
 	}
 	if (valid & OBD_MD_FLCTIME) {
-		dst->o_ctime = LTIME_S(src->i_ctime);
+		dst->o_ctime = src->i_ctime.tv_sec;
 		newvalid |= OBD_MD_FLCTIME;
 	}
 	if (valid & OBD_MD_FLSIZE) {

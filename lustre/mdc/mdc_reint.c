@@ -131,9 +131,9 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 	}
 
         if (op_data->op_attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
-		CDEBUG(D_INODE, "setting mtime %ld, ctime %ld\n",
-                       LTIME_S(op_data->op_attr.ia_mtime),
-                       LTIME_S(op_data->op_attr.ia_ctime));
+		CDEBUG(D_INODE, "setting mtime %lld, ctime %lld\n",
+		       (s64)op_data->op_attr.ia_mtime.tv_sec,
+		       (s64)op_data->op_attr.ia_ctime.tv_sec);
 	mdc_setattr_pack(req, op_data, ea, ealen);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,

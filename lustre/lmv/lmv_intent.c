@@ -232,9 +232,9 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			i_size_write(inode, body->mbo_size);
 			inode->i_blocks = body->mbo_blocks;
 			set_nlink(inode, body->mbo_nlink);
-			LTIME_S(inode->i_atime) = body->mbo_atime;
-			LTIME_S(inode->i_ctime) = body->mbo_ctime;
-			LTIME_S(inode->i_mtime) = body->mbo_mtime;
+			inode->i_atime.tv_sec = body->mbo_atime;
+			inode->i_ctime.tv_sec = body->mbo_ctime;
+			inode->i_mtime.tv_sec = body->mbo_mtime;
 		}
 
 		md_set_lock_data(tgt->ltd_exp, lockh, inode, NULL);

@@ -1216,17 +1216,19 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	 * if it's at least 'mdd.*.atime_diff' older.
 	 * All in all, the atime in Lustre does not strictly comply with
 	 * POSIX. Solving this problem needs to send an RPC to MDT for each
-	 * read, this will hurt performance. */
-	if (LTIME_S(inode->i_atime) < lli->lli_atime || lli->lli_update_atime) {
-		LTIME_S(inode->i_atime) = lli->lli_atime;
+	 * read, this will hurt performance.
+	 */
+	if (inode->i_atime.tv_sec < lli->lli_atime ||
+	    lli->lli_update_atime) {
+		inode->i_atime.tv_sec = lli->lli_atime;
 		lli->lli_update_atime = 0;
 	}
-	LTIME_S(inode->i_mtime) = lli->lli_mtime;
-	LTIME_S(inode->i_ctime) = lli->lli_ctime;
+	inode->i_mtime.tv_sec = lli->lli_mtime;
+	inode->i_ctime.tv_sec = lli->lli_ctime;
 
-	atime = LTIME_S(inode->i_atime);
-	mtime = LTIME_S(inode->i_mtime);
-	ctime = LTIME_S(inode->i_ctime);
+	mtime = inode->i_mtime.tv_sec;
+	atime = inode->i_atime.tv_sec;
+	ctime = inode->i_ctime.tv_sec;
 
 	cl_object_attr_lock(obj);
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDC_MERGE))
@@ -1253,9 +1255,9 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	i_size_write(inode, attr->cat_size);
 	inode->i_blocks = attr->cat_blocks;
 
-	LTIME_S(inode->i_atime) = atime;
-	LTIME_S(inode->i_mtime) = mtime;
-	LTIME_S(inode->i_ctime) = ctime;
+	inode->i_mtime.tv_sec = mtime;
+	inode->i_atime.tv_sec = atime;
+	inode->i_ctime.tv_sec = ctime;
 
 out_size_unlock:
 	ll_inode_size_unlock(inode);
@@ -4404,9 +4406,9 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 				RETURN(rc);
 		}
 
-		LTIME_S(inode->i_atime) = lli->lli_atime;
-		LTIME_S(inode->i_mtime) = lli->lli_mtime;
-		LTIME_S(inode->i_ctime) = lli->lli_ctime;
+		inode->i_atime.tv_sec = lli->lli_atime;
+		inode->i_mtime.tv_sec = lli->lli_mtime;
+		inode->i_ctime.tv_sec = lli->lli_ctime;
 	}
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_GETATTR_DELAY, 30);
