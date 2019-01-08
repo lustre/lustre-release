@@ -955,7 +955,7 @@ test_41() {
 
 	local f=$MOUNT/$tfile
 	# make sure the start of the file is ost1
-	$SETSTRIPE -S $((128 * 1024)) -i 0 $f
+	$LFS setstripe -S $((128 * 1024)) -i 0 $f
 	do_facet client dd if=/dev/zero of=$f bs=4k count=1 ||
 		error "dd on client failed"
 	cancel_lru_locks osc
@@ -1857,8 +1857,8 @@ test_65b() #bug 3055
 	$LCTL dk > /dev/null
 	# Slow down a request to the current service time, this is critical
 	# because previous tests may have caused this value to increase.
-	$SETSTRIPE --stripe-index=0 --stripe-count=1 $DIR/$tfile ||
-		error "$SETSTRIPE failed for $DIR/$tfile"
+	$LFS setstripe --stripe-index=0 --stripe-count=1 $DIR/$tfile ||
+		error "$LFS setstripe failed for $DIR/$tfile"
 
 	multiop $DIR/$tfile Ow1yc
 	REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
@@ -1870,8 +1870,8 @@ test_65b() #bug 3055
 	do_facet ost1 $LCTL set_param fail_loc=0x224
 
 	rm -f $DIR/$tfile
-	$SETSTRIPE --stripe-index=0 --stripe-count=1 $DIR/$tfile ||
-		error "$SETSTRIPE failed"
+	$LFS setstripe --stripe-index=0 --stripe-count=1 $DIR/$tfile ||
+		error "$LFS setstripe failed"
 	# force some real bulk transfer
 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 
@@ -1974,7 +1974,8 @@ test_67b() #bug 3055
         osc.$mdtosc.prealloc_next_id)
 
 	mkdir -p $DIR/$tdir/${OST} || error "mkdir $DIR/$tdir/${OST} failed"
-	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/${OST} || error "$SETSTRIPE failed"
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/${OST} ||
+		error "$LFS setstripe failed"
 	echo "Creating to objid $last_id on ost $OST..."
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
     do_facet ost1 "$LCTL set_param fail_val=20000"
@@ -2016,8 +2017,8 @@ test_68 () #bug 13813
 	do_facet ost1 "echo $TIMEOUT >> $ldlm_enqueue_min_r"
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	$SETSTRIPE --stripe-index=0 -c 1 $DIR/$tdir ||
-		error "$SETSTRIPE failed for $DIR/$tdir"
+	$LFS setstripe --stripe-index=0 -c 1 $DIR/$tdir ||
+		error "$LFS setstripe failed for $DIR/$tdir"
 	#define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
 	$LCTL set_param fail_val=$(($TIMEOUT - 1))
 	$LCTL set_param fail_loc=0x80000312
@@ -2382,7 +2383,8 @@ test_70f_loop(){
 	DD_OPTS=
 
 	mkdir -p $DIR/$tdir || error "cannot create $DIR/$tdir directory"
-	$SETSTRIPE -c -1 $DIR/$tdir || error "cannot $SETSTRIPE $DIR/$tdir"
+	$LFS setstripe -c -1 $DIR/$tdir ||
+		error "cannot $LFS setstripe $DIR/$tdir"
 
 	touch $stopflag
 	while [ -f $stopflag ]; do
@@ -3176,7 +3178,7 @@ test_87a() {
 	do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
 	replay_barrier ost1
-	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 	dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 ||
 		error "dd to $DIR/$tfile failed"
 	cksum=$(md5sum $DIR/$tfile | awk '{print $1}')
@@ -3194,7 +3196,7 @@ test_87b() {
 	do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
 	replay_barrier ost1
-	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 	dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 ||
 		error "dd to $DIR/$tfile failed"
 	sleep 1 # Give it a chance to flush dirty data
@@ -3214,7 +3216,7 @@ test_88() { #bug 17485
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	mkdir -p $TMP/$tdir || error "mkdir $TMP/$tdir failed"
 
-	$SETSTRIPE -i 0 -c 1 $DIR/$tdir || error "$SETSTRIPE"
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir || error "$LFS setstripe failed"
 
 	replay_barrier ost1
 	replay_barrier $SINGLEMDS
@@ -3307,7 +3309,7 @@ test_89() {
 	local blocks1=$(calc_osc_kbytes_used)
 	local write_size=$(fs_log_size)
 
-	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/$tfile
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile
 	[ $write_size -lt 1024 ] && write_size=1024
 	dd if=/dev/zero bs=${write_size}k count=10 of=$DIR/$tdir/$tfile
 	sync
@@ -3421,9 +3423,9 @@ test_90() { # bug 19494
     [[ $(echo $list | wc -w) -eq 2 ]] ||
         error_noexit "lfs find reports the wrong list of affected files ${#list[@]}"
 
-    echo "Check getstripe: $GETSTRIPE -r --obd $obd"
-    list=$($GETSTRIPE -r --obd $obd $dir)
-    echo "$list"
+	echo "Check getstripe: $LFS getstripe -r --obd $obd"
+	list=$($LFS getstripe -r --obd $obd $dir)
+	echo "$list"
     for file in all f$index; do
         echo "$list" | grep $dir/$file ||
             error_noexit "lfs getsripe does not report the affected $obd for $file"
@@ -3442,8 +3444,8 @@ test_93a() {
 
 	cancel_lru_locks osc
 
-	$SETSTRIPE -i 0 -c 1 $DIR/$tfile ||
-		error "$SETSTRIPE  $DIR/$tfile failed"
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile ||
+		error "$LFS setstripe  $DIR/$tfile failed"
 	dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1 ||
 		error "dd to $DIR/$tfile failed"
 	#define OBD_FAIL_TGT_REPLAY_RECONNECT     0x715

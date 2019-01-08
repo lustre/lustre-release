@@ -335,11 +335,11 @@ test_14b() {
 	local beforeused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 
 	mkdir -p $MOUNT1/$tdir
-	$SETSTRIPE -i 0 $MOUNT1/$tdir
+	$LFS setstripe -i 0 $MOUNT1/$tdir
 	replay_barrier $SINGLEMDS
 	createmany -o $MOUNT1/$tdir/$tfile- 5
 
-	$SETSTRIPE -i 0 $MOUNT2/$tfile-2
+	$LFS setstripe -i 0 $MOUNT2/$tfile-2
 	dd if=/dev/zero of=$MOUNT2/$tfile-2 bs=1M count=5
 	createmany -o $MOUNT1/$tdir/$tfile-3- 5
 	umount $MOUNT2
@@ -897,7 +897,7 @@ run_test 24 "reconstruct on non-existing object"
 test_25() {
 	cancel_lru_locks osc
 
-	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 
 	# get lock for the 1st client
 	dd if=/dev/zero of=$DIR/$tfile count=1 >/dev/null ||
@@ -1007,7 +1007,7 @@ test_26() {
 run_test 26 "dbench and tar with mds failover"
 
 test_28() {
-	$SETSTRIPE -i 0 -c 1 $DIR2/$tfile
+	$LFS setstripe -i 0 -c 1 $DIR2/$tfile
 	dd if=/dev/zero of=$DIR2/$tfile bs=4096 count=1
 
 	#define OBD_FAIL_LDLM_SRV_BL_AST	 0x324

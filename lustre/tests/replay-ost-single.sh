@@ -43,8 +43,8 @@ rm -rf $DIR/[df][0-9]*
 
 TDIR=$DIR/d0.${TESTSUITE}
 mkdir -p $TDIR
-$SETSTRIPE $TDIR -i 0 -c 1
-$GETSTRIPE $TDIR
+$LFS setstripe $TDIR -i 0 -c 1
+$LFS getstripe $TDIR
 
 test_0a() {
 	zconf_umount $(hostname) $MOUNT -f
@@ -199,7 +199,7 @@ test_6() {
 
 	local before=$(kbytesfree)
 	dd if=/dev/urandom bs=4096 count=1280 of=$f || error "dd failed"
-	$GETSTRIPE $f || error "$GETSTRIPE $f failed"
+	$LFS getstripe $f || error "$LFS getstripe $f failed"
 	local stripe_index=$(lfs getstripe -i $f)
 
 	sync
@@ -398,7 +398,7 @@ run_test 8e "Verify that ptlrpc resends request on -EINPROGRESS"
 test_9() {
 	[ $(lustre_version_code ost1) -ge $(version_code 2.6.54) ] ||
 		{ skip "Need OST version at least 2.6.54"; return; }
-	$SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
 
 	# LU-1573 - Add duplicate write to generate grants
 	dd if=/dev/zero of=$DIR/$tfile count=1 bs=1M > /dev/null ||
