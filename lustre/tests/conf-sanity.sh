@@ -3846,7 +3846,7 @@ test_50h() {
 		error "some OSC imports are still not connected"
 
 	# cleanup
-	rm -rf DIR/$tdir
+	rm -rf $DIR/$tdir
 	umount_client $MOUNT || error "Unable to umount client"
 	stop_ost2 || error "Unable to stop OST2"
 	cleanup_nocli || error "cleanup_nocli failed with $?"
