@@ -436,7 +436,22 @@ enable_project_quota() {
 	mount
 	setupall
 }
-enable_project_quota
+
+project_quota_enabled () {
+	local rc=0
+	for num in $(seq $MDSCOUNT); do
+		do_facet mds$num $DEBUGFS -R features $(mdsdevname $num) |
+			grep -q project || rc=1
+	done
+	for num in $(seq $OSTCOUNT); do
+		do_facet ost$num $DEBUGFS -R features $(ostdevname $num) |
+			grep -q project || rc=1
+	done
+	[ $rc -eq 0 ] && PQ_CLEANUP=false || PQ_CLEANUP=true
+	return $rc
+}
+
+project_quota_enabled || enable_project_quota
 
 reset_quota_settings() {
 	resetquota -u $TSTUSR
@@ -3437,7 +3452,9 @@ run_test 63 "quota on DoM tests"
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
-	disable_project_quota
+	if $PQ_CLEANUP; then
+		disable_project_quota
+	fi
 }
 reset_quota_settings
 quota_fini
