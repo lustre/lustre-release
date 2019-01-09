@@ -644,33 +644,6 @@ your distribution.
 				[Have dmu_read_by_dnode() in ZFS])
 		])
 		dnl #
-		dnl # ZFS 0.8.x changes dmu_objset_own for encryption
-		dnl #
-		LB_CHECK_COMPILE([if ZFS has 'dmu_objset_own' with 6 args],
-		dmu_objset_own, [
-			#include <sys/dmu_objset.h>
-		],[
-			objset_t *os = NULL;
-			dmu_objset_type_t type = DMU_OST_ANY;
-			dmu_objset_own(NULL, type, B_FALSE, B_FALSE, FTAG, &os);
-		],[
-			AC_DEFINE(HAVE_DMU_OBJSET_OWN_6ARG, 1,
-				[Have dmu_objset_own() with 6 args])
-		])
-		dnl #
-		dnl # ZFS 0.8.x changes dmu_objset_disown for encryption
-		dnl #
-		LB_CHECK_COMPILE([if ZFS has 'dmu_objset_disown' with 3 args],
-		dmu_objset_disown, [
-			#include <sys/dmu_objset.h>
-		],[
-			objset_t *os = NULL;
-			dmu_objset_disown(os, B_FALSE, FTAG);
-		],[
-			AC_DEFINE(HAVE_DMU_OBJSET_DISOWN_3ARG, 1,
-				[Have dmu_objset_disown() with 3 args])
-		])
-		dnl #
 		dnl # ZFS 0.7.2 adds new method dmu_tx_mark_netfree
 		dnl #
 		LB_CHECK_COMPILE([if ZFS has 'dmu_tx_mark_netfree'],
@@ -707,6 +680,33 @@ your distribution.
 		],[
 			AC_DEFINE(HAVE_ZFS_REFCOUNT_ADD, 1,
 				[Have zfs_refcount_add])
+		])
+		dnl #
+		dnl # ZFS 0.8.x changes dmu_objset_own for encryption
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_objset_own' with 6 args],
+		dmu_objset_own, [
+			#include <sys/dmu_objset.h>
+		],[
+			objset_t *os = NULL;
+			dmu_objset_type_t type = DMU_OST_ANY;
+			dmu_objset_own(NULL, type, B_FALSE, B_TRUE, FTAG, &os);
+		],[
+			AC_DEFINE(HAVE_DMU_OBJSET_OWN_6ARG, 1,
+				[Have dmu_objset_own() with 6 args])
+		])
+		dnl #
+		dnl # ZFS 0.8.x changes dmu_objset_disown for encryption
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_objset_disown' with 3 args],
+		dmu_objset_disown, [
+			#include <sys/dmu_objset.h>
+		],[
+			objset_t *os = NULL;
+			dmu_objset_disown(os, B_TRUE, FTAG);
+		],[
+			AC_DEFINE(HAVE_DMU_OBJSET_DISOWN_3ARG, 1,
+				[Have dmu_objset_disown() with 3 args])
 		])
 	])
 
