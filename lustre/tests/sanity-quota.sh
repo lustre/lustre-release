@@ -2865,13 +2865,25 @@ test_50() {
 		skip "Project quota is not supported"
 
 	setup_quota_test || error "setup quota failed with $?"
-	local dir="$DIR/$tdir/dir"
+	local dir1="$DIR/$tdir/dir1"
+	local dir2="$DIR/$tdir/dir2"
 
-	mkdir $dir && change_project -p 1 $dir
+	mkdir -p $dir1 && change_project -sp 1 $dir1
+	mkdir -p $dir2 && change_project -sp 2 $dir2
+	for num in $(seq 1 10); do
+		touch $dir1/file_$num $dir2/file_$num
+		ln -s $dir1/file_$num $dir1/file_$num"_link"
+		ln -s $dir2/file_$num $dir2/file_$num"_link"
+	done
+
 	count=$($LFS find --projid 1 $DIR | wc -l)
-	[ "$count" != 1 ] && error "expected 1 but got $count"
+	[ "$count" != 21 ] && error "expected 21 but got $count"
 
-	rm -rf $dir
+	# 1(projid 0 dir) + 1(projid 2 dir) + 20(projid 2 files)
+	count=$($LFS find ! --projid 1 $DIR/$tdir | wc -l)
+	[ "$count" != 22 ] && error "expected 22 but got $count"
+
+	rm -rf $dir1 $dir2
 	cleanup_quota_test
 }
 run_test 50 "Test if lfs find --projid works"
