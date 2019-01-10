@@ -483,45 +483,39 @@ command_t cmdlist[] = {
 	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
 	 "		     [-w | --wait]"},
 #endif /* HAVE_SERVER_SUPPORT */
-	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
-	/* some test scripts still use these */
 	{"cfg_device", jt_obd_device, 0,
 	 "set current device to <name>\n"
 	 "usage: device <name>"},
 	{"recover", jt_obd_recover, 0,
 	 "try to restore a lost connection immediately\n"
 	 "usage: recover [MDC/OSC device]"},
-	/* saving for sanity 44a */
-	{"lov_getconfig", jt_obd_lov_getconfig, 0,
-	 "read lov configuration from an mds device\n"
-	 "usage: lov_getconfig <mountpoint>"},
 	/* Llog operations */
 	{"llog_catlist", jt_llog_catlist, 0,
-	 "list all catalog logs on current device.\n"
+	 "list all catalog files on current device.\n"
 	 "usage: llog_catlist"},
 	{"llog_info", jt_llog_info, 0,
 	 "print log header information.\n"
-	 "usage: llog_info <logname|[FID]>\n"
-	 "       oid, ogr and ogen are hexadecimal."},
+	 "usage: llog_info <logname|FID>\n"},
 	{"llog_print", jt_llog_print, 0,
 	 "print log content information.\n"
 	 "usage: llog_print <logname|FID> [--start <index>] [--end <index>j]\n"
 	 "       print all records by default, or within given index range."},
-	{"llog_check", jt_llog_check, 0,
-	 "print log content information.\n"
-	 "usage: llog_check <logname|[FID]> [start_index] [end_index]\n"
-	 "       check all records from index 1 by default."},
 	{"llog_cancel", jt_llog_cancel, 0,
-	 "cancel one record in log.\n"
-	 "This command supports both positional and optional arguments\n"
-	 "usage (positional args): "
-	 "llog_cancel <catalog name|[FID]> [log id] <index>\n"
-	 "usage (optional args): "
-	 "llog_cancel --catalog <catalog id|catalog name> --log_id <log_id> "
-	 "--log_idx <index>"},
+	 "cancel one record in specified log.\n"
+	 "usage:llog_cancel <logname|FID> --log_idx <idx>\n"},
+	{"llog_check", jt_llog_check, 0,
+	 "verify that log content is valid.\n"
+	 "usage: llog_check <logname|FID> [--start <index>] [--end <index>j]\n"
+	 "       check all records from index 1 by default."},
 	{"llog_remove", jt_llog_remove, 0,
 	 "remove one log from catalog or plain log, erase it from disk.\n"
-	 "usage: llog_remove <catalog name|[FID]> <log id>"},
+	 "usage: llog_remove <logname|FID> [--log_id <id>]"},
+	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
+	/* some test scripts still use these */
+	/* saving for sanity 44a */
+	{"lov_getconfig", jt_obd_lov_getconfig, 0,
+	 "read lov configuration from an mds device\n"
+	 "usage: lov_getconfig <mountpoint>"},
 	/* network operations */
 	{"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
 	 "usage: add_interface ip [netmask]"},

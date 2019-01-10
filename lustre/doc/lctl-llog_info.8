@@ -1,4 +1,4 @@
-.TH lctl-llog_info 8 "2017 Feb 24" Lustre "configuration utilities"
+.TH lctl-llog_info 8 "2019 Jan 10" Lustre "configuration utilities"
 .SH NAME
 lctl llog_info \- print information about a Lustre configuration log
 .SH SYNOPSIS
@@ -24,8 +24,11 @@ To print all of the records from the testfs-client configuration log:
 # lctl --device MGS llog_info testfs-client
 .br
 logid:            [0x4:0xa:0x0]:0
+.br
 flags:            4 (plain)
+.br
 records_count:    48
+.br
 last_index:       47
 .SH AVAILABILITY
 .B lctl llog_info
@@ -35,6 +38,7 @@ and is distributed as part of the
 .BR lustre (7)
 filesystem package.
 .SH SEE ALSO
-.BR lctl (8)
-.BR lctl-llog_catlist (8)
+.BR lctl (8),
+.BR lctl-llog_catlist (8),
+.BR lctl-llog_cancel (8),
 .BR lctl-llog_print (8)

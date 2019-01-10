@@ -430,7 +430,7 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 			GOTO(out_close, rc = -EINVAL);
 		}
 
-		if (data->ioc_inlbuf2 > 0) {
+		if (data->ioc_inlbuf2) {
 			/* remove indicate log from the catalog */
 			rc = str2logid(&plain, data->ioc_inlbuf2,
 				       data->ioc_inllen2);

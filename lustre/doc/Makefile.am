@@ -101,6 +101,7 @@ MANFILES =					\
 	llapi_layout_get_by_fd.3		\
 	llapi_layout_get_by_fid.3		\
 	llapi_layout_get_by_path.3		\
+	llapi_layout_get_by_xattr.3		\
 	llapi_layout_ost_index_get.3		\
 	llapi_layout_ost_index_set.3		\
 	llapi_layout_pattern_get.3		\
@@ -117,6 +118,7 @@ MANFILES =					\
 	ll_decode_linkea.8			\
 	llobdstat.8				\
 	llog_reader.8				\
+	llsom_sync.8				\
 	llstat.8				\
 	lnetctl.8				\
 	lst.8					\
@@ -125,16 +127,18 @@ MANFILES =					\
 	lustre_routes_config.8			\
 	lustre_routes_conversion.8		\
 	lustre_rsync.8				\
-	llsom_sync.8				\
 	mount.lustre.8				\
 	nids.5					\
 	plot-llstat.8				\
 	routerstat.8
 
 SERVER_MANFILES =				\
+	lctl-barrier.8				\
+	lctl-lcfg.8				\
 	lctl-lfsck-query.8			\
 	lctl-lfsck-start.8			\
 	lctl-lfsck-stop.8			\
+	lctl-llog_cancel.8			\
 	lctl-llog_catlist.8			\
 	lctl-llog_info.8			\
 	lctl-llog_print.8			\
@@ -147,12 +151,10 @@ SERVER_MANFILES =				\
 	lctl-nodemap-del-range.8		\
 	lctl-nodemap-modify.8			\
 	lctl-nodemap-set-fileset.8		\
-	lctl-lcfg.8				\
-	lctl-barrier.8				\
 	lctl-snapshot-create.8			\
 	lctl-snapshot-destroy.8			\
-	lctl-snapshot-modify.8			\
 	lctl-snapshot-list.8			\
+	lctl-snapshot-modify.8			\
 	lctl-snapshot-mount.8			\
 	lctl-snapshot-umount.8			\
 	ll_decode_filter_fid.8			\

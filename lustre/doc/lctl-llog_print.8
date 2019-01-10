@@ -1,4 +1,4 @@
-.TH lctl-llog_print 8 "2017 Feb 24" Lustre "configuration utilities"
+.TH lctl-llog_print 8 "2019 Jan 10" Lustre "configuration utilities"
 .SH NAME
 lctl llog_print \- print the content of a configuration log
 .SH SYNOPSIS
@@ -17,7 +17,11 @@ configuration log on the MGS in YAML format.  This is useful for debugging
 configuration problems and to list any permanent configuration options
 saved via
 .B lctl conf_param
-on the MGS.
+on the MGS.  The
+.B lctl llog_catlist
+command can be used to list the different configuration logs, and the
+.B lctl llog_cancel
+command can be used to cancel configuration records.
 .SH OPTIONS
 .TP
 .B --end
@@ -45,7 +49,7 @@ The last record number in the config log to dump, including the specified
 index number.
 .SH EXAMPLES
 .TP
-To print all of the records from the testfs-client configuration log:
+To print the configuration records from the \fBtestfs-client\fR logfile:
 .br
 # lctl --device MGS llog_print testfs-client
 .br
@@ -68,6 +72,13 @@ To print all of the records from the testfs-client configuration log:
 :
 .br
 :
+.TP
+To print the first 10 \fBset_param -P\fR records from \fBparams\fR:
+# lctl --device MGS llog_print --end=10 params
+.br
+- { index: 2, event: set_param, device: general, parameter: osc.*.max_dirty_mb, value: 32 }
+.br
+- { index: 4, event: set_param, device: general, parameter: osc.*.checksum_type, value: crc32c }
 .SH AVAILABILITY
 .B lctl llog_print
 is a subcommand of
@@ -76,6 +87,7 @@ and is distributed as part of the
 .BR lustre (7)
 filesystem package.
 .SH SEE ALSO
-.BR lctl (8)
-.BR lctl-llog_info (8)
+.BR lctl (8),
+.BR lctl-llog_info (8),
+.BR lctl-llog_cancel (8),
 .BR lctl-llog_catlist (8)

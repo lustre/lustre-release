@@ -2281,7 +2281,7 @@ repeat:
                                desc.ld_default_stripe_count);
 		printf("default_stripe_size: %ju\n",
 		       (uintmax_t)desc.ld_default_stripe_size);
-		printf("default_stripe_offset: %ju\n",
+		printf("default_stripe_offset: %jd\n",
 		       (uintmax_t)desc.ld_default_stripe_offset);
                 printf("default_stripe_pattern: %u\n", desc.ld_pattern);
                 printf("obd_count: %u\n", desc.ld_tgt_count);
@@ -2623,35 +2623,62 @@ int jt_llog_catlist(int argc, char **argv)
 
 int jt_llog_info(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	const struct option long_opts[] = {
+	/* Allow optional "--catalog" for compatibility with llog commands. */
+	{ .val = 'c',	.name = "catalog",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .name = NULL } };
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "", *buf = rawbuf;
+	char *cmd = argv[0];
+	char *catalog = NULL;
+	int rc, c;
 
-        if (argc != 2)
-                return CMD_HELP;
+	while ((c = getopt_long(argc, argv, "c:h", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'c':
+			catalog = optarg;
+			break;
+		case 'h':
+		default:
+			return CMD_HELP;
+		}
+	}
+	argc -= optind;
+	argv += optind;
+	/* support "logname" positional parameter */
+	if (argc == 1) {
+		if (catalog) {
+			fprintf(stderr,
+				"%s: catalog is set, unknown argument '%s'\n",
+				cmd, optarg);
+			return CMD_HELP;
+		}
+		catalog = argv[0];
+	} else if (!catalog || argc > 1) {
+		return CMD_HELP;
+	}
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
+	data.ioc_dev = cur_device;
+	data.ioc_inllen1 = strlen(catalog) + 1;
+	data.ioc_inlbuf1 = catalog;
 	data.ioc_inllen2 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8) -
 			   __ALIGN_KERNEL(data.ioc_inllen1, 8);
-        memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
+	if (rc) {
+		fprintf(stderr, "%s: ioctl_pack failed for catalog '%s': %s\n",
+			jt_cmdname(cmd), catalog, strerror(-rc));
+		return rc;
+	}
 
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_INFO, buf);
-        if (rc == 0)
-                fprintf(stdout, "%s", ((struct obd_ioctl_data*)buf)->ioc_bulk);
-        else
-                fprintf(stderr, "OBD_IOC_LLOG_INFO failed: %s\n",
-                        strerror(errno));
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_INFO, buf);
+	if (rc == 0)
+		fprintf(stdout, "%s", ((struct obd_ioctl_data *)buf)->ioc_bulk);
+	else
+		fprintf(stderr, "%s: OBD_IOC_LLOG_INFO failed: %s\n",
+			jt_cmdname(cmd), strerror(errno));
 
-        return rc;
+	return rc;
 }
 
 int jt_llog_print_cb(const char *record, void *private)
@@ -2886,10 +2913,17 @@ int jt_llog_print(int argc, char **argv)
 	return rc;
 }
 
-static int llog_cancel_parse_optional(int argc, char **argv,
-				      struct obd_ioctl_data *data)
+/* Parse catalog, log ID, and optionally a log index with either optional
+ * arguments or positional arguments.  Only the initial catalog argument
+ * may be positional with other optional arguments.
+ *
+ * The positional arguments option should eventually be phased out.
+ */
+static int llog_parse_catalog_log_idx(int *argc, char ***argv, const char *opts,
+				      int max_args, struct obd_ioctl_data *data)
 {
 	const struct option long_opts[] = {
+	/* the --catalog option is not required, just for consistency */
 	{ .val = 'c',	.name = "catalog",	.has_arg = required_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "log_idx",	.has_arg = required_argument },
@@ -2898,34 +2932,44 @@ static int llog_cancel_parse_optional(int argc, char **argv,
 	int c;
 
 	/* sanity check */
-	if (!data || argc <= 1)
+	if (!data || *argc <= 1)
 		return -1;
 
+	data->ioc_dev = cur_device;
+
 	/* now process command line arguments*/
-	while ((c = getopt_long(argc, argv, "c:hi:l:",
-				long_opts, NULL)) != -1) {
+	while ((c = getopt_long(*argc, *argv, opts, long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 			data->ioc_inllen1 = strlen(optarg) + 1;
 			data->ioc_inlbuf1 = optarg;
 			break;
-		case 'l':
-			data->ioc_inllen2 = strlen(optarg) + 1;
-			data->ioc_inlbuf2 = optarg;
-			break;
 		case 'i':
 			data->ioc_inllen3 = strlen(optarg) + 1;
 			data->ioc_inlbuf3 = optarg;
 			break;
+		case 'l': /* The log_id option isn't currently needed for
+			   * cancel as mdt_iocontrol() handles IOC_LLOG_CANCEL,
+			   * but we may as well keep it for now.
+			   */
+			data->ioc_inllen2 = strlen(optarg) + 1;
+			data->ioc_inlbuf2 = optarg;
+			break;
 		case 'h':
 		default:
-			return -1;
+			return CMD_HELP;
 		}
 	}
 
-	if ((data->ioc_inlbuf1 == NULL) || (data->ioc_inlbuf3 == NULL)) {
-		/* missing mandatory parameters */
-		return -1;
+	*argc -= optind;
+	*argv += optind;
+
+	/* Allow catalog to be specified as first option without --catalog */
+	if (data->ioc_inlbuf1 == NULL && *argc > 0) {
+		data->ioc_inlbuf1 = (*argv)[0];
+		data->ioc_inllen1 = strlen((*argv)[0]) + 1;
+		(*argc)--;
+		(*argv)++;
 	}
 
 	return 0;
@@ -2933,60 +2977,44 @@ static int llog_cancel_parse_optional(int argc, char **argv,
 
 int jt_llog_cancel(int argc, char **argv)
 {
-	struct obd_ioctl_data data;
-	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	int rc, i;
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "", *buf = rawbuf;
+	char *cmd = argv[0];
+	int rc;
 
-	/* check that the arguments provided are either all
-	 * optional or all positional.  No mixing allowed
-	 *
-	 * if argc is 4 or 3 then check all arguments to ensure that none
-	 * of them start with a '-'.  If so then this is invalid.
-	 * Otherwise if arg is > 4 then assume that this is optional
-	 * arguments, and parse as such ignoring any thing that's not
-	 * optional.  The result is that user must use optional arguments
-	 * for all mandatory parameters.  Code will ignore all other args
-	 *
-	 * The positional arguments option should eventually be phased out.
+	/* Parse catalog file (in inlbuf1) and named parameters */
+	rc = llog_parse_catalog_log_idx(&argc, &argv, "c:hi:l:", 3, &data);
+
+	/* Handle old positional parameters if not using named parameters,
+	 * either "<catalog> <log_idx>" or "<catalog> <log_id> <log_idx>".
+	 * It was "inlbuf3 = log_idx", and "inlbuf2 = log_id" (ignored by
+	 * config log cancel), and shows why I hate positional parameters.
 	 */
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = cur_device;
-
-	if (argc == 3 || argc == 4) {
-		for (i = 1; i < argc; i++) {
-			if (argv[i][0] == '-')
-				return CMD_HELP;
-		}
-		data.ioc_inllen1 = strlen(argv[1]) + 1;
-		data.ioc_inlbuf1 = argv[1];
-		if (argc == 4) {
-			data.ioc_inllen2 = strlen(argv[2]) + 1;
-			data.ioc_inlbuf2 = argv[2];
-			data.ioc_inllen3 = strlen(argv[3]) + 1;
-			data.ioc_inlbuf3 = argv[3];
-		} else {
-			data.ioc_inllen3 = strlen(argv[2]) + 1;
-			data.ioc_inlbuf3 = argv[2];
-		}
-	} else {
-		if (llog_cancel_parse_optional(argc, argv, &data))
-			return CMD_HELP;
+	if (argc == 1) {
+		data.ioc_inllen3 = strlen(argv[0]) + 1;
+		data.ioc_inlbuf3 = argv[0];
+	} else if (argc == 2) {
+		data.ioc_inllen2 = strlen(argv[0]) + 1;
+		data.ioc_inlbuf2 = argv[0];
+		data.ioc_inllen3 = strlen(argv[1]) + 1;
+		data.ioc_inlbuf3 = argv[1];
 	}
 
-	memset(buf, 0, sizeof(rawbuf));
+	if (data.ioc_inlbuf1 == NULL || data.ioc_inlbuf3 == NULL)
+		/* missing mandatory parameters */
+		return CMD_HELP;
+
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
-		fprintf(stderr, "error: %s: invalid ioctl\n",
-			jt_cmdname(argv[0]));
+		fprintf(stderr, "%s: ioctl_pack for catalog '%s' failed: %s\n",
+			jt_cmdname(cmd), data.ioc_inlbuf1, strerror(-rc));
 		return rc;
 	}
 
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CANCEL, buf);
-	if (rc == 0)
-		fprintf(stdout, "index %s was canceled.\n",
-			argc == 4 ? argv[3] : argv[2]);
-	else
-		fprintf(stderr, "OBD_IOC_LLOG_CANCEL failed: %s\n",
+	if (rc)
+		fprintf(stderr, "%s: cancel catalog '%s:%s' failed: %s\n",
+			jt_cmdname(cmd), data.ioc_inlbuf1, data.ioc_inlbuf3,
 			strerror(errno));
 
 	return rc;
@@ -2994,87 +3022,89 @@ int jt_llog_cancel(int argc, char **argv)
 
 int jt_llog_check(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	char from[2] = "1", to[3] = "-1";
-        int rc;
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "", *buf = rawbuf;
+	char *catalog = NULL;
+	char startbuf[16], endbuf[16];
+	long start = 1, end = -1;
+	char *cmd = argv[0];
+	int rc;
 
-        if (argc != 2 && argc != 4)
-                return CMD_HELP;
+	rc = llog_parse_catalog_start_end(&argc, &argv, &catalog, &start, &end);
+	if (rc)
+		return rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-        if (argc == 4) {
-                data.ioc_inllen2 = strlen(argv[2]) + 1;
-                data.ioc_inlbuf2 = argv[2];
-                data.ioc_inllen3 = strlen(argv[3]) + 1;
-                data.ioc_inlbuf3 = argv[3];
-        } else {
-                data.ioc_inllen2 = strlen(from) + 1;
-                data.ioc_inlbuf2 = from;
-                data.ioc_inllen3 = strlen(to) + 1;
-                data.ioc_inlbuf3 = to;
-        }
+	if (end == -1)
+		end = 0x7fffffff;
+
+	data.ioc_dev = cur_device;
+	data.ioc_inllen1 = strlen(catalog) + 1;
+	data.ioc_inlbuf1 = catalog;
+
+	snprintf(startbuf, sizeof(startbuf), "%lu", start);
+	snprintf(endbuf, sizeof(endbuf), "%lu", end);
+	/* start and end record numbers are passed as ASCII digits */
+	data.ioc_inllen2 = strlen(startbuf) + 1;
+	data.ioc_inlbuf2 = startbuf;
+	data.ioc_inllen3 = strlen(endbuf) + 1;
+	data.ioc_inlbuf3 = endbuf;
+
 	data.ioc_inllen4 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8) -
 			   __ALIGN_KERNEL(data.ioc_inllen1, 8) -
 			   __ALIGN_KERNEL(data.ioc_inllen2, 8) -
 			   __ALIGN_KERNEL(data.ioc_inllen3, 8);
-        memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
+	if (rc) {
+		fprintf(stderr, "%s: ioctl_pack failed for catalog '%s': %s\n",
+			jt_cmdname(cmd), data.ioc_inlbuf1, strerror(-rc));
+		return rc;
+	}
 
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CHECK, buf);
-        if (rc == 0)
-                fprintf(stdout, "%s", ((struct obd_ioctl_data*)buf)->ioc_bulk);
-        else
-                fprintf(stderr, "OBD_IOC_LLOG_CHECK failed: %s\n",
-                        strerror(errno));
-        return rc;
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_CHECK, buf);
+	if (rc == 0)
+		fprintf(stdout, "%s", ((struct obd_ioctl_data *)buf)->ioc_bulk);
+	else
+		fprintf(stderr, "%s: OBD_IOC_LLOG_CHECK failed: %s\n",
+			jt_cmdname(cmd), strerror(errno));
+	return rc;
 }
 
 int jt_llog_remove(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "", *buf = rawbuf;
+	char *cmd = argv[0];
+	int rc;
 
-        if (argc != 3 && argc != 2)
-                return CMD_HELP;
+	rc = llog_parse_catalog_log_idx(&argc, &argv, "c:hl:", 2, &data);
+	if (rc)
+		return rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-        if (argc == 3){
-                data.ioc_inllen2 = strlen(argv[2]) + 1;
-                data.ioc_inlbuf2 = argv[2];
-        }
-        memset(buf, 0, sizeof(rawbuf));
+	if (argc == 1) {
+		if (data.ioc_inlbuf2) {
+			fprintf(stderr,
+				"%s: --log_id is set, unknown argument '%s'\n",
+				jt_cmdname(cmd), argv[0]);
+			return CMD_HELP;
+		}
+
+		data.ioc_inllen2 = strlen(argv[0]) + 1;
+		data.ioc_inlbuf2 = argv[0];
+	}
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
+	if (rc) {
+		fprintf(stderr, "%s: ioctl_pack for catalog '%s' failed: %s\n",
+			jt_cmdname(cmd), data.ioc_inlbuf1, strerror(-rc));
+		return rc;
+	}
 
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_REMOVE, buf);
-        if (rc == 0) {
-                if (argc == 2)
-			fprintf(stdout, "log %s is removed.\n", argv[1]);
-		else
-			fprintf(stdout, "the log in catalog %s is removed. \n",
-				argv[1]);
-        } else
-                fprintf(stderr, "OBD_IOC_LLOG_REMOVE failed: %s\n",
-                        strerror(errno));
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LLOG_REMOVE, buf);
+	if (rc)
+		fprintf(stderr, "%s: cancel catalog '%s:%s' failed: %s\n",
+			jt_cmdname(cmd), data.ioc_inlbuf1, data.ioc_inlbuf2,
+			strerror(-rc));
 
-        return rc;
+	return rc;
 }
 
 static void signal_server(int sig)

@@ -8500,6 +8500,59 @@ test_123ad() { # LU-11566
 }
 run_test 123ad "llog_print shows all records"
 
+test_123ae() { # LU-11566
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ -d $MOUNT/.lustre ] || setupall
+
+	local max=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
+
+	if do_facet mgs "$LCTL help llog_cancel" 2>&1| grep -q -- --log_id; then
+		# save one set_param -P record in case none exist
+		do_facet mgs $LCTL set_param -P osc.*.max_dirty_mb=$max
+
+		local log=params
+		local orig=$(do_facet mgs $LCTL --device MGS llog_print $log |
+			     tail -1 | awk '{ print $4 }' | tr -d , )
+		do_facet mgs $LCTL set_param -P osc.*.max_dirty_mb=$max
+		do_facet mgs $LCTL --device MGS llog_print $log | tail -1 |
+			grep "parameter: osc.*.max_dirty_mb" ||
+			error "new set_param -P wasn't stored in params log"
+
+		# - { index: 71, event: set_param, device: general,
+		#     param: osc.*.max_dirty_mb, value: 256 }
+		local id=$(do_facet mgs $LCTL --device MGS llog_print $log |
+			   tail -1 | awk '{ print $4 }' | tr -d , )
+
+		do_facet mgs $LCTL --device MGS llog_cancel $log --log_idx=$id
+		local new=$(do_facet mgs $LCTL --device MGS llog_print $log |
+			    tail -1 | awk '{ print $4 }' | tr -d , )
+		(( new == orig )) ||
+			error "new llog_cancel now $new, not at $orig records"
+	fi
+
+	# test old positional parameters for a while still
+	if [ $(lustre_version_code mgs) -le $(version_code 3.1.53) ]; then
+		log=$FSNAME-client
+		orig=$(do_facet mgs $LCTL --device MGS llog_print $log |
+		       tail -1 | awk '{ print $4 }' | tr -d , )
+		do_facet mgs $LCTL conf_param $FSNAME-OST0000.osc.max_dirty_mb=$max
+		do_facet mgs $LCTL --device MGS llog_print $log |
+			tail -1 | grep "parameter: osc.max_dirty_mb" ||
+			error "old conf_param wasn't stored in params log"
+
+		# - { index: 71, event: conf_param, device: testfs-OST0000-osc,
+		#     param: osc.max_dirty_mb=256 }
+		id=$(do_facet mgs $LCTL --device MGS llog_print $log |
+		     tail -1 | awk '{ print $4 }' | tr -d , )
+		do_facet mgs $LCTL --device MGS llog_cancel $log $id
+		new=$(do_facet mgs $LCTL --device MGS llog_print $log |
+		      tail -1 | awk '{ print $4 }' | tr -d , )
+		(( new == orig )) ||
+			error "old llog_cancel now $new, not at $orig records"
+	fi
+}
+run_test 123ae "llog_cancel can cancel requested record"
+
 test_123F() {
 	setupall
 	local yaml_file="$TMP/$tfile.yaml"
