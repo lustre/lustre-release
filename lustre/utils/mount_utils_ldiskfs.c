@@ -1116,6 +1116,13 @@ static int set_blockdev_tunables(char *source, struct mount_opts *mop)
 	if (!source)
 		return -EINVAL;
 
+	/*
+	 * Don't apply block device tuning for MDT or MGT devices,
+	 * since we don't need huge IO sizes to get good performance
+	 */
+	if (!IS_OST(&mop->mo_ldd))
+		return 0;
+
 	ret_path = realpath(source, real_path);
 	if (ret_path == NULL) {
 		if (verbose)
