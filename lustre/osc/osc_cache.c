@@ -1601,7 +1601,8 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	}
 
 	/* Hopefully normal case - cache space and write credits available */
-	if (osc_enter_cache_try(cli, oap, bytes, 0)) {
+	if (list_empty(&cli->cl_cache_waiters) &&
+	    osc_enter_cache_try(cli, oap, bytes, 0)) {
 		OSC_DUMP_GRANT(D_CACHE, cli, "granted from cache\n");
 		GOTO(out, rc = 0);
 	}
@@ -1686,27 +1687,21 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 	ENTRY;
 	list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
 		ocw = list_entry(l, struct osc_cache_waiter, ocw_entry);
-		list_del_init(&ocw->ocw_entry);
 
 		ocw->ocw_rc = -EDQUOT;
-		/* we can't dirty more */
-		if ((cli->cl_dirty_pages  >= cli->cl_dirty_max_pages) ||
-		    (1 + atomic_long_read(&obd_dirty_pages) >
-		     obd_max_dirty_pages)) {
-			CDEBUG(D_CACHE, "no dirty room: dirty: %ld "
-			       "osc max %ld, sys max %ld\n",
-			       cli->cl_dirty_pages, cli->cl_dirty_max_pages,
-			       obd_max_dirty_pages);
-			goto wakeup;
-		}
 
 		if (osc_enter_cache_try(cli, ocw->ocw_oap, ocw->ocw_grant, 0))
 			ocw->ocw_rc = 0;
-wakeup:
-		CDEBUG(D_CACHE, "wake up %p for oap %p, avail grant %ld, %d\n",
-		       ocw, ocw->ocw_oap, cli->cl_avail_grant, ocw->ocw_rc);
 
-		wake_up(&ocw->ocw_waitq);
+		if (ocw->ocw_rc == 0 ||
+		    !(cli->cl_dirty_pages > 0 || cli->cl_w_in_flight > 0)) {
+			list_del_init(&ocw->ocw_entry);
+			CDEBUG(D_CACHE, "wake up %p for oap %p, avail grant "
+			       "%ld, %d\n", ocw, ocw->ocw_oap,
+			       cli->cl_avail_grant, ocw->ocw_rc);
+
+			wake_up(&ocw->ocw_waitq);
+		}
 	}
 
 	EXIT;
