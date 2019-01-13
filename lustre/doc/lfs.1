@@ -7,7 +7,7 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 .br
 .B lfs changelog_clear <mdtname> <id> <endrec>
 .br
-.B lfs check <mds|osts|servers>
+.B lfs check <mgts|mdts|osts|all>
 .br
 .B lfs data_version [-nrw] \fB<filename>\fR
 .br
@@ -155,8 +155,9 @@ interest to a particular consumer <id>, potentially allowing the MDT to
 free up disk space. An <endrec> of 0 indicates the current last record.
 Changelog consumers must be registered on the MDT node using \fBlctl\fR.
 .TP
-.B check
-Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
+.B check <mgts|mdts|osts|all>
+Display the status of the MGTs, MDTs or OSTs (as specified in the command) or
+all the servers (MGTs, MDTs and OSTs).
 .TP
 .B data_version [-nrw] <filename>
 Display the current version of file data. If -n is specified, the data version
@@ -265,8 +266,8 @@ Provides brief help on the various arguments
 Quit the interactive lfs session
 .SH EXAMPLES
 .TP
-.B $ lfs check servers
-Check the status of all servers (MDT, OST)
+.B $ lfs check all
+Check the status of all servers (MGT, MDT, OST)
 .TP
 .B $ lfs osts
 List all the OSTs

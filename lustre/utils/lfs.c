@@ -408,9 +408,9 @@ command_t cmdlist[] = {
 	 "\t		fnv_1a_64 FNV-1a hash algorithm\n"
 	 "\t		all_char  sum of characters % MDT_COUNT\n"},
         {"check", lfs_check, 0,
-         "Display the status of MDS or OSTs (as specified in the command)\n"
-         "or all the servers (MDS and OSTs).\n"
-         "usage: check <osts|mds|servers>"},
+	 "Display the status of MGTs, MDTs or OSTs (as specified in the command)\n"
+	 "or all the servers (MGTs, MDTs and OSTs).\n"
+	 "usage: check <mgts|osts|mdts|all>"},
         {"osts", lfs_osts, 0, "list OSTs connected to client "
          "[for specified path only]\n" "usage: osts [path]"},
         {"mdts", lfs_mdts, 0, "list MDTs connected to client "
@@ -5414,12 +5414,13 @@ static int lfs_getname(int argc, char **argv)
 
 static int lfs_check(int argc, char **argv)
 {
-        int rc;
-        char mntdir[PATH_MAX] = {'\0'};
-        int num_types = 1;
-        char *obd_types[2];
-        char obd_type1[4];
-        char obd_type2[4];
+	char mntdir[PATH_MAX] = {'\0'};
+	int num_types = 1;
+	char *obd_types[3];
+	char obd_type1[4];
+	char obd_type2[4];
+	char obd_type3[4];
+	int rc;
 
 	if (argc != 2) {
 		fprintf(stderr, "%s check: server type must be specified\n",
@@ -5427,17 +5428,23 @@ static int lfs_check(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-        obd_types[0] = obd_type1;
-        obd_types[1] = obd_type2;
+	obd_types[0] = obd_type1;
+	obd_types[1] = obd_type2;
+	obd_types[2] = obd_type3;
 
-        if (strcmp(argv[1], "osts") == 0) {
-                strcpy(obd_types[0], "osc");
-        } else if (strcmp(argv[1], "mds") == 0) {
-                strcpy(obd_types[0], "mdc");
-        } else if (strcmp(argv[1], "servers") == 0) {
-                num_types = 2;
-                strcpy(obd_types[0], "osc");
-                strcpy(obd_types[1], "mdc");
+	if (strcmp(argv[1], "osts") == 0) {
+		strcpy(obd_types[0], "osc");
+	} else if (strcmp(argv[1], "mdts") == 0 ||
+		   strcmp(argv[1], "mds") == 0) {
+		strcpy(obd_types[0], "mdc");
+	} else if (strcmp(argv[1], "mgts") == 0) {
+		strcpy(obd_types[0], "mgc");
+	} else if (strcmp(argv[1], "all") == 0 ||
+		   strcmp(argv[1], "servers") == 0) {
+		num_types = 3;
+		strcpy(obd_types[0], "osc");
+		strcpy(obd_types[1], "mdc");
+		strcpy(obd_types[2], "mgc");
 	} else {
 		fprintf(stderr, "%s check: unrecognized option '%s'\n",
 			progname, argv[1]);
