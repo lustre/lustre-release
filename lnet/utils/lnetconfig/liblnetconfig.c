@@ -1397,6 +1397,8 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 	char val[LNET_MAX_STR_LEN];
 	__u32 ip;
 	int gni_num;
+	char *endp;
+	unsigned int num;
 
 
 	if (nw == NULL || nids == NULL) {
@@ -1443,15 +1445,32 @@ static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
 
 	/* look at the other interfaces */
 	list_for_each_entry(intf, &nw->nw_intflist, intf_on_network) {
-		rc = lustre_lnet_queryip(intf, &ip);
-		if (rc != LUSTRE_CFG_RC_NO_ERR) {
-			snprintf(err_str, str_len,
-				 "\"couldn't query intf %s\"", intf->intf_name);
-			err_str[str_len - 1] = '\0';
-			goto failed;
+		if (LNET_NETTYP(nw->nw_id) == PTL4LND) {
+			/* handle LNDs with numeric interface name */
+			num = strtoul(intf->intf_name, &endp, 0);
+			if (endp == intf->intf_name || *endp != '\0') {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				snprintf(err_str, str_len,
+					 "\"couldn't query intf %s\"",
+					 intf->intf_name);
+				err_str[str_len - 1] = '\0';
+				goto failed;
+			}
+			(*nids)[i] = LNET_MKNID(nw->nw_id, num);
+			i++;
+		} else {
+			/* handle LNDs with ip interface name */
+			rc = lustre_lnet_queryip(intf, &ip);
+			if (rc != LUSTRE_CFG_RC_NO_ERR) {
+				snprintf(err_str, str_len,
+					 "\"couldn't query intf %s\"",
+					 intf->intf_name);
+				err_str[str_len - 1] = '\0';
+				goto failed;
+			}
+			(*nids)[i] = LNET_MKNID(nw->nw_id, ip);
+			i++;
 		}
-		(*nids)[i] = LNET_MKNID(nw->nw_id, ip);
-		i++;
 	}
 
 out:
