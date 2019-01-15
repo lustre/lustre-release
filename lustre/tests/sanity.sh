@@ -8,8 +8,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: LU-9693 LU-6493 LU-9693 LU-11058
-ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c     77k"
+# bug number for skipped test: LU-9693 LU-6493 LU-9693
+ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skipped tests: LU-8411 LU-9096 LU-9054 ..
@@ -7320,6 +7320,9 @@ test_77k() { # LU-10906
 		checksum=$(eval $get_checksum)
 		[ $checksum -eq $i ] || error "checksum($checksum) != $i"
 	done
+	# remove persistent param to avoid races with checksum mountopt below
+	do_facet mgs $LCTL set_param -P -d $cksum_param ||
+		error "failed to delete checksum on MGS"
 
 	for opt in "checksum" "nochecksum"; do
 		#remount with mount option
