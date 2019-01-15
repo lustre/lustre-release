@@ -1882,6 +1882,11 @@ test_16() {
 	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=1
 	cancel_lru_locks osc
 
+	# created but no setattr or write to the file.
+	mkdir $DIR/$tdir/d1
+	chown $RUNAS_ID:$RUNAS_GID $DIR/$tdir/d1
+	$RUNAS createmany -o $DIR/$tdir/d1/o 100 || error "create failed"
+
 	echo "Inject failure stub to skip OST-object owner changing"
 	#define OBD_FAIL_LFSCK_BAD_OWNER	0x1613
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1613

@@ -3979,6 +3979,7 @@ static int lfsck_layout_repair_owner(const struct lu_env *env,
 	struct dt_device		*dev	= lfsck_obj2dev(child);
 	struct thandle			*handle;
 	int				 rc;
+	dt_obj_version_t		 version;
 	ENTRY;
 
 	tla->la_uid = pla->la_uid;
@@ -4001,14 +4002,18 @@ static int lfsck_layout_repair_owner(const struct lu_env *env,
 	if (unlikely(lfsck_is_dead_obj(parent)))
 		GOTO(unlock, rc = 1);
 
+	version = dt_version_get(env, child);
+	if (version == -EOPNOTSUPP)
+		version = 0;
+
 	/* Get the latest parent's owner. */
 	rc = dt_attr_get(env, parent, pla);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
 	/* Some others chown/chgrp during the LFSCK, needs to do nothing. */
-	if (unlikely(tla->la_uid != pla->la_uid ||
-		     tla->la_gid != pla->la_gid))
+	if (unlikely((!version && tla->la_ctime == 0) ||
+		     tla->la_uid != pla->la_uid || tla->la_gid != pla->la_gid))
 		rc = 1;
 	else
 		rc = dt_attr_set(env, child, tla, handle);
