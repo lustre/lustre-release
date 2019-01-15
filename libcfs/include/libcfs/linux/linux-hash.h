@@ -134,6 +134,34 @@ static inline void rhltable_walk_enter(struct rhltable *hlt,
 }
 #endif /* !HAVE_RHLTABLE */
 
+#ifdef HAVE_BROKEN_HASH_64
+
+#define GOLDEN_RATIO_32 0x61C88647
+#define GOLDEN_RATIO_64 0x61C8864680B583EBull
+
+static inline u32 cfs_hash_32(u32 val, unsigned int bits)
+{
+	/* High bits are more random, so use them. */
+	return (val * GOLDEN_RATIO_32) >> (32 - bits);
+}
+
+static __always_inline u32 cfs_hash_64(u64 val, unsigned int bits)
+{
+#if BITS_PER_LONG == 64
+	/* 64x64-bit multiply is efficient on all 64-bit processors */
+	return val * GOLDEN_RATIO_64 >> (64 - bits);
+#else
+	/* Hash 64 bits using only 32x32-bit multiply. */
+	return cfs_hash_32(((u32)val ^ ((val >> 32) * GOLDEN_RATIO_32)), bits);
+#endif
+}
+#else
+
+#define cfs_hash_32	hash_32
+#define cfs_hash_64	hash_64
+
+#endif /* HAVE_BROKEN_HASH_64 */
+
 #ifndef HAVE_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 /**
  * rhashtable_lookup_get_insert_fast - lookup and insert object into hash table

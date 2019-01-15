@@ -685,6 +685,22 @@ LB_CHECK_EXPORT([kset_find_obj], [lib/kobject.c],
 ]) # LIBCFS_EXPORT_KSET_FIND_OBJ
 
 #
+# Kernel version 4.6+ commit ef703f49a6c5b909a85149bb6625c4ed0d697186
+# fixed the brokenness of hash_64(). The fix removed GOLDEN_RATIO_PRIME_64
+# since it was a poor prime value.
+#
+AC_DEFUN([LIBCFS_BROKEN_HASH_64], [
+LB_CHECK_COMPILE([kernel has fixed hash_64()],
+broken_hash_64, [
+	#include <linux/hash.h>
+],[
+	int tmp = GOLDEN_RATIO_PRIME_64;
+],[
+	AC_DEFINE(HAVE_BROKEN_HASH_64, 1, [kernel hash_64() is broken])
+])
+]) # LIBCFS_BROKEN_HASH_64
+
+#
 # LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 #
 # linux 4.6 kernel changed stacktrace_ops address to return an int
@@ -1050,6 +1066,7 @@ LIBCFS_KSTRTOBOOL_FROM_USER
 LIBCFS_CRYPTO_HASH_HELPERS
 LIBCFS_EXPORT_KSET_FIND_OBJ
 # 4.6
+LIBCFS_BROKEN_HASH_64
 LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 LIBCFS_GET_USER_PAGES_6ARG
 LIBCFS_STRINGHASH
