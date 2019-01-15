@@ -17,6 +17,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+get_lustre_env
 init_logging
 
 [[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
@@ -674,6 +675,9 @@ test_0g() {
 run_test 0g "lfs mirror create flags support"
 
 test_0h() {
+	[ $MDS1_VERSION -lt $(version_code 2.11.57) ] &&
+		skip "Need MDS version at least 2.11.57"
+
 	local td=$DIR/$tdir
 	local tf=$td/$tfile
 	local ids
@@ -1270,6 +1274,9 @@ create_files_37() {
 
 test_37()
 {
+	[ $MDS1_VERSION -lt $(version_code 2.11.57) ] &&
+		skip "Need MDS version at least 2.11.57"
+
 	local tf=$DIR/$tfile
 	local tf2=$DIR/$tfile-2
 	local tf3=$DIR/$tfile-3
@@ -1981,6 +1988,9 @@ test_47() {
 run_test 47 "Verify mirror obj alloc"
 
 test_48() {
+	[ $MDS1_VERSION -lt $(version_code 2.11.55) ] &&
+		skip "Need MDS version at least 2.11.55"
+
 	local tf=$DIR/$tfile
 
 	rm -f $tf
@@ -2254,7 +2264,9 @@ test_202() {
 run_test 202 "lfs setstripe --add-component wide striping"
 
 test_203() {
-	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
+	[ $MDS1_VERSION -lt $(version_code 2.11.55) ] &&
+		skip "Need MDS version at least 2.11.55"
+	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs"
 
 	local tf=$DIR/$tfile
 
