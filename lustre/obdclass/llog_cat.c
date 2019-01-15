@@ -49,6 +49,15 @@
 
 #include "llog_internal.h"
 
+
+/**
+ * lockdep markers for nested struct llog_handle::lgh_lock locking.
+ */
+enum {
+	LLOGH_CAT,
+	LLOGH_LOG,
+};
+
 /* Create a new log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.
  *
@@ -458,14 +467,6 @@ int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_close);
-
-/**
- * lockdep markers for nested struct llog_handle::lgh_lock locking.
- */
-enum {
-        LLOGH_CAT,
-        LLOGH_LOG
-};
 
 /** Return the currently active log handle.  If the current log handle doesn't
  * have enough space left for the current record, start a new one.
