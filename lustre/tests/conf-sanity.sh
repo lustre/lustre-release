@@ -1087,22 +1087,35 @@ run_test 27b "Reacquire MGS lock after failover"
 
 test_28A() { # was test_28
 	setup_noconfig
-	TEST="llite.$FSNAME-*.max_read_ahead_whole_mb"
-	PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
-	ORIG=$($LCTL get_param -n $TEST)
-	FINAL=$(($ORIG + 1))
-	set_persistent_param_and_check client "$TEST" "$PARAM" $FINAL
-	FINAL=$(($FINAL + 1))
-	set_persistent_param_and_check client "$TEST" "$PARAM" $FINAL
+
+	local TEST="llite.$FSNAME-*.max_read_ahead_whole_mb"
+	local PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
+	local orig=$($LCTL get_param -n $TEST)
+	local max=$($LCTL get_param -n \
+			llite.$FSNAME-*.max_read_ahead_per_file_mb)
+
+	orig=${orig%%.[0-9]*}
+	max=${max%%.[0-9]*}
+	echo "ORIG:$orig MAX:$max"
+	[[ $max -le $orig ]] && orig=$((max - 3))
+	echo "ORIG:$orig MAX:$max"
+
+	local final=$((orig + 1))
+
+	set_persistent_param_and_check client "$TEST" "$PARAM" $final
+	final=$((final + 1))
+	set_persistent_param_and_check client "$TEST" "$PARAM" $final
 	umount_client $MOUNT || error "umount_client $MOUNT failed"
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
-	RESULT=$($LCTL get_param -n $TEST)
-	if [ $RESULT -ne $FINAL ]; then
-		error "New config not seen: wanted $FINAL got $RESULT"
+
+	local result=$($LCTL get_param -n $TEST)
+
+	if [ $result -ne $final ]; then
+		error "New config not seen: wanted $final got $result"
 	else
-		echo "New config success: got $RESULT"
+		echo "New config success: got $result"
 	fi
-	set_persistent_param_and_check client "$TEST" "$PARAM" $ORIG
+	set_persistent_param_and_check client "$TEST" "$PARAM" $orig
 	cleanup || error "cleanup failed with rc $?"
 }
 run_test 28A "permanent parameter setting"
@@ -1240,6 +1253,8 @@ test_30a() {
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
 	FINAL=$($LCTL get_param -n $TEST)
 	echo "deleted (default) value=$FINAL, orig=$ORIG"
+	ORIG=${ORIG%%.[0-9]*}
+	FINAL=${FINAL%%.[0-9]*}
 	# assumes this parameter started at the default value
 	[ "$FINAL" -eq "$ORIG" ] || fail "Deleted value=$FINAL, orig=$ORIG"
 

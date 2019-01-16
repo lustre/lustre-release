@@ -485,10 +485,15 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	sbi->ll_dt_exp->exp_connect_data = *data;
 
 	/* Don't change value if it was specified in the config log */
-	if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages == -1)
+	if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages == -1) {
 		sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
 			max_t(unsigned long, SBI_DEFAULT_READAHEAD_WHOLE_MAX,
 			      (data->ocd_brw_size >> PAGE_SHIFT));
+		if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages >
+		    sbi->ll_ra_info.ra_max_pages_per_file)
+			sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
+				sbi->ll_ra_info.ra_max_pages_per_file;
+	}
 
 	err = obd_fid_init(sbi->ll_dt_exp->exp_obd, sbi->ll_dt_exp,
 			   LUSTRE_SEQ_METADATA);

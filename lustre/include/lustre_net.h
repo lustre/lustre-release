@@ -76,7 +76,7 @@
  * value.  The client is free to limit the actual RPC size for any bulk
  * transfer via cl_max_pages_per_rpc to some non-power-of-two value.
  * NOTE: This is limited to 16 (=64GB RPCs) by IOOBJ_MAX_BRW_BITS. */
-#define PTLRPC_BULK_OPS_BITS	4
+#define PTLRPC_BULK_OPS_BITS	6
 #if PTLRPC_BULK_OPS_BITS > 16
 #error "More than 65536 BRW RPCs not allowed by IOOBJ_MAX_BRW_BITS."
 #endif

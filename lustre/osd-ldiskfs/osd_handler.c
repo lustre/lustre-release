@@ -2267,12 +2267,12 @@ static void osd_conf_get(const struct lu_env *env,
 	 */
 	param->ddp_inodespace     = PER_OBJ_USAGE;
 	/*
-	 * EXT_INIT_MAX_LEN is the theoretical maximum extent size  (32k blocks
-	 * = 128MB) which is unlikely to be hit in real life. Report a smaller
-	 * maximum length to not under count the actual number of extents
-	 * needed for writing a file.
+	 * EXT_INIT_MAX_LEN is the theoretical maximum extent size (32k blocks
+	 * is 128MB) which is unlikely to be hit in real life. Report a smaller
+	 * maximum length to not under-count the actual number of extents
+	 * needed for writing a file if there are sub-optimal block allocations.
 	 */
-	param->ddp_max_extent_blks = EXT_INIT_MAX_LEN >> 2;
+	param->ddp_max_extent_blks = EXT_INIT_MAX_LEN >> 1;
 	/* worst-case extent insertion metadata overhead */
 	param->ddp_extent_tax = 6 * LDISKFS_BLOCK_SIZE(sb);
 	param->ddp_mntopts = 0;
