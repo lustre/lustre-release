@@ -2761,6 +2761,21 @@ test_134() {
 }
 run_test 134 "race between failover and search for reply data free slot"
 
+test_135() {
+	[[ $MDS1_VERSION -ge $(version_code 2.12.5) ]] ||
+		skip "Need MDS version at least 2.12.5"
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt $DIR/$tdir
+	# to have parent dir write lock before open/resend
+	touch $DIR/$tdir/$tfile
+	#define OBD_FAIL_MDS_LDLM_REPLY_NET 0x157
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x80000157
+	openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tdir/$tfile ||
+		error "Failed to open DOM file"
+}
+run_test 135 "DOM: open/create resend to return size"
+
 test_136() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[[ $MDS1_VERSION -ge $(version_code 2.12.52) ]] ||

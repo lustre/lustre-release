@@ -705,41 +705,35 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 		}
 
 		if (unlikely(mdt_object_remote(child))) {
+			mdt_object_put(env, parent);
+			mdt_object_put(env, child);
 			/* the child object was created on remote server */
-			if (!mdt_is_dne_client(exp)) {
+			if (!mdt_is_dne_client(exp))
 				/* Return -EIO for old client */
-				mdt_object_put(env, parent);
-				mdt_object_put(env, child);
 				GOTO(out, rc = -EIO);
-			}
 			repbody->mbo_fid1 = *rr->rr_fid2;
 			repbody->mbo_valid |= (OBD_MD_FLID | OBD_MD_MDS);
-			rc = 0;
-		} else {
-			if (mdt_object_exists(child)) {
-				mdt_prep_ma_buf_from_rep(info, child, ma);
-				rc = mdt_attr_get_complex(info, child, ma);
-				if (rc == 0)
-					rc = mdt_finish_open(info, parent,
-							     child, open_flags,
-							     1, ldlm_rep);
-			} else {
-				/* the child does not exist, we should do
-				 * regular open */
-				mdt_object_put(env, parent);
-				mdt_object_put(env, child);
-				GOTO(regular_open, 0);
-			}
+			GOTO(out, rc = 0);
 		}
+		if (mdt_object_exists(child)) {
+			mdt_prep_ma_buf_from_rep(info, child, ma);
+			rc = mdt_attr_get_complex(info, child, ma);
+			if (!rc)
+				rc = mdt_finish_open(info, parent, child,
+						     open_flags, 1, ldlm_rep);
+			mdt_object_put(env, parent);
+			mdt_object_put(env, child);
+			if (!rc)
+				mdt_pack_size2body(info, rr->rr_fid2,
+						   &lhc->mlh_reg_lh);
+			GOTO(out, rc);
+		}
+		/* the child does not exist, we should do regular open */
 		mdt_object_put(env, parent);
 		mdt_object_put(env, child);
-		GOTO(out, rc);
-	} else {
-regular_open:
-		/* We did not try to create, so we are a pure open */
-		rc = mdt_reint_open(info, lhc);
 	}
-
+	/* We did not try to create, so we are a pure open */
+	rc = mdt_reint_open(info, lhc);
 	EXIT;
 out:
 	req->rq_status = rc;
