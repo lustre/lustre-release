@@ -746,7 +746,7 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 
 		body = req_capsule_server_get(pill, &RMF_MDT_BODY);
 		if (!(body->mbo_valid & OBD_MD_DOM_SIZE)) {
-			LDLM_ERROR(lock, "%s: DoM lock without size.\n",
+			LDLM_ERROR(lock, "%s: DoM lock without size.",
 				   exp->exp_obd->obd_name);
 			GOTO(out_lock, rc = -EPROTO);
 		}
