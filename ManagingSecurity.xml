@@ -9,6 +9,9 @@
     <listitem>
       <para><xref linkend="managingSecurity.root_squash"/></para>
     </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.isolation"/></para>
+    </listitem>
   </itemizedlist>
   <section xml:id="managingSecurity.acl">
     <title><indexterm><primary>Access Control List (ACL)</primary></indexterm>
@@ -305,6 +308,81 @@ lctl get_param mdt.*.nosquash_nids</screen>
           numeric addresses, <literal>1.2.3.4@elan</literal> is incorrect.
         </para>
       </note>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.isolation">
+    <title><indexterm><primary>Isolation</primary></indexterm>
+    Isolating Clients to a Sub-directory Tree</title>
+    <para>Isolation is the Lustre implementation of the generic concept of
+      multi-tenancy, which aims at providing separated namespaces from a single
+      filesystem. Lustre Isolation enables different populations of users on
+      the same file system beyond normal Unix permissions/ACLs, even when users
+      on the clients may have root access. Those tenants share the same file
+      system, but they are isolated from each other: they cannot access or even
+      see each other’s files, and are not aware that they are sharing common
+      file system resources.</para>
+    <para>Lustre Isolation leverages the Fileset feature
+      (<xref linkend="SystemConfigurationUtilities.fileset" />)
+      to mount only a subdirectory of the filesystem rather than the root
+      directory.
+      In order to achieve isolation, the subdirectory mount, which presents to
+      tenants only their own fileset, has to be imposed to the clients. To that
+      extent, we make use of the nodemap feature
+      (<xref linkend="lustrenodemap.title" />). We group all clients used by a
+      tenant under a common nodemap entry, and we assign to this nodemap entry
+      the fileset to which the tenant is restricted.</para>
+    <section xml:id="managingSecurity.isolation.clientid" remap="h3">
+      <title><indexterm><primary>Isolation</primary><secondary>
+        client identification</secondary></indexterm>Identifying Clients</title>
+      <para>Enforcing multi-tenancy on Lustre relies on the ability to properly
+        identify the client nodes used by a tenant, and trust those identities.
+        This can be achieved by having physical hardware and/or network
+        security, so that client nodes have well-known NIDs. It is also possible
+        to make use of strong authentication with Kerberos or Shared-Secret Key
+	(see <xref linkend="lustressk" />).
+	Kerberos prevents NID spoofing, as every client needs its own
+	credentials, based on its NID, in order to connect to the servers.
+	Shared-Secret Key also prevents tenant impersonation, because keys
+	can be linked to a specific nodemap. See
+	<xref linkend="ssknodemaprole" /> for detailed explanations.
+</para>
+    </section>
+    <section xml:id="managingSecurity.isolation.configuring" remap="h3">
+      <title><indexterm><primary>Isolation</primary><secondary>
+        configuring</secondary></indexterm>Configuring Isolation</title>
+      <para>Isolation on Lustre can be achieved by setting the
+        <literal>fileset</literal> parameter on a nodemap entry. All clients
+	belonging to this nodemap entry will automatically mount this fileset
+	instead of the root directory. For example:</para>
+      <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'</screen>
+      <para>So all clients matching the <literal>tenant1</literal> nodemap will
+        be automatically presented the fileset <literal>/dir1</literal> when
+	mounting. This means these clients are doing an implicit subdirectory
+	mount on the subdirectory <literal>/dir1</literal>.
+      </para>
+      <note>
+        <para>
+	  If subdirectory defined as fileset does not exist on the file system,
+	  it will prevent any client belonging to the nodemap from mounting
+	  Lustre.
+	</para>
+      </note>
+      <para>To delete the fileset parameter, just set it to an empty string:
+      </para>
+      <screen>mgs# lctl nodemap_set_fileset --name tenant1 --fileset ''</screen>
+    </section>
+    <section xml:id="managingSecurity.isolation.permanent" remap="h3">
+      <title><indexterm><primary>Isolation</primary><secondary>
+        making permanent</secondary></indexterm>Making Isolation Permanent
+      </title>
+      <para>In order to make isolation permanent, the fileset parameter on the
+        nodemap has to be set with <literal>lctl set_param</literal> with the
+      <literal>-P</literal> option.</para>
+      <screen>mgs# lctl set_param nodemap.tenant1.fileset=/dir1
+mgs# lctl set_param -P nodemap.tenant1.fileset=/dir1</screen>
+      <para>This way the fileset parameter will be stored in the Lustre config
+      logs, letting the servers retrieve the information after a restart.
+      </para>
     </section>
   </section>
 </chapter>

@@ -2863,7 +2863,7 @@ lr_reader</title>
         <para>The stats-collect utility contains scripts used to collect application profiling information from Lustre clients and servers.</para>
       </section>
     </section>
-    <section remap="h3" condition='l29'>
+    <section remap="h3" condition='l29' xml:id="SystemConfigurationUtilities.fileset">
       <title><indexterm><primary>fileset</primary></indexterm>Fileset Feature</title>
       <para> With the fileset feature, Lustre now provides subdirectory mount
       support.  Subdirectory mounts, also referred to as filesets, allow a
