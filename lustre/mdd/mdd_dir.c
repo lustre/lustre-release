@@ -2509,7 +2509,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		GOTO(out_free, rc = PTR_ERR(handle));
 
 	lu_buf_check_and_alloc(&info->mti_xattr_buf,
-			       mdd->mdd_dt_conf.ddp_max_ea_size);
+			MIN(mdd->mdd_dt_conf.ddp_max_ea_size, XATTR_SIZE_MAX));
 	acl_buf = info->mti_xattr_buf;
 	def_acl_buf.lb_buf = info->mti_key;
 	def_acl_buf.lb_len = sizeof(info->mti_key);

@@ -812,7 +812,8 @@ static int mdc_enqueue_base(struct obd_export *exp,
 
 	generation = obddev->u.cli.cl_import->imp_generation;
 	if (!it || (it->it_op & (IT_OPEN | IT_CREAT)))
-		acl_bufsize = imp->imp_connect_data.ocd_max_easize;
+		acl_bufsize = MIN(imp->imp_connect_data.ocd_max_easize,
+				  XATTR_SIZE_MAX);
 	else
 		acl_bufsize = LUSTRE_POSIX_ACL_MAX_SIZE_OLD;
 
@@ -934,10 +935,11 @@ resend:
 
 	if ((int)lockrep->lock_policy_res2 == -ERANGE &&
 	    it->it_op & (IT_OPEN | IT_GETATTR | IT_LOOKUP) &&
-	    acl_bufsize != imp->imp_connect_data.ocd_max_easize) {
+	    acl_bufsize == LUSTRE_POSIX_ACL_MAX_SIZE_OLD) {
 		mdc_clear_replay_flag(req, -ERANGE);
 		ptlrpc_req_finished(req);
-		acl_bufsize = imp->imp_connect_data.ocd_max_easize;
+		acl_bufsize = MIN(imp->imp_connect_data.ocd_max_easize,
+				  XATTR_SIZE_MAX);
 		goto resend;
 	}
 

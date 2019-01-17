@@ -597,25 +597,26 @@ again:
 			    exp_connect_large_acl(info->mti_exp) &&
 			    buf->lb_buf != info->mti_big_acl) {
 				if (info->mti_big_acl == NULL) {
+					info->mti_big_aclsize =
+							MIN(mdt->mdt_max_ea_size,
+							    XATTR_SIZE_MAX);
 					OBD_ALLOC_LARGE(info->mti_big_acl,
-							mdt->mdt_max_ea_size);
+							info->mti_big_aclsize);
 					if (info->mti_big_acl == NULL) {
+						info->mti_big_aclsize = 0;
 						CERROR("%s: unable to grow "
 						       DFID" ACL buffer\n",
 						       mdt_obd_name(mdt),
 						       PFID(mdt_object_fid(o)));
 						RETURN(-ENOMEM);
 					}
-
-					info->mti_big_aclsize =
-							mdt->mdt_max_ea_size;
 				}
 
 				CDEBUG(D_INODE, "%s: grow the "DFID
 				       " ACL buffer to size %d\n",
 				       mdt_obd_name(mdt),
 				       PFID(mdt_object_fid(o)),
-				       mdt->mdt_max_ea_size);
+				       info->mti_big_aclsize);
 
 				buf->lb_buf = info->mti_big_acl;
 				buf->lb_len = info->mti_big_aclsize;
