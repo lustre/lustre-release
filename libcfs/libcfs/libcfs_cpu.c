@@ -904,7 +904,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create(int ncpt)
 			int ncpu = cpumask_weight(part->cpt_cpumask);
 
 			rc = cfs_cpt_choose_ncpus(cptab, cpt, node_mask,
-						  num - ncpu);
+						  (rem > 0) + num - ncpu);
 			if (rc < 0) {
 				rc = -EINVAL;
 				goto failed_mask;
