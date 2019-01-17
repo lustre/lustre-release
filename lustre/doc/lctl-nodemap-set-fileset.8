@@ -1,0 +1,57 @@
+.TH lctl-nodemap-set-fileset 8 "2019 Jan 17" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-set-fileset \- Add a fileset to a nodemap.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_set_fileset --name
+.RI < nodemap >
+.B --fileset
+.RI < fileset >
+.br
+.SH DESCRIPTION
+.B nodemap_set_fileset
+adds
+.I fileset
+to the specified
+.IR nodemap .
+The
+.I fileset
+must
+begin with '/'. Clients belonging to
+.I nodemap
+will be automatically
+presented the corresponding
+.I fileset
+when mounting. This means these clients
+are doing an implicit subdirectory mount on the subdirectory represented by
+the defined
+.IR fileset .
+
+.SH OPTIONS
+.I nodemap
+is the name of the nodemap that this fileset should be associated with.
+
+.I fileset
+is the fileset to restrict the clients to. The fileset must begin with '/'.
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_set_fileset --name tenant1 --fileset '/dir1'
+# lctl nodemap_set_fileset --name admins --fileset ''
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-modify (8)

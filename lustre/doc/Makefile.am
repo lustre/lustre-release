@@ -143,6 +143,7 @@ SERVER_MANFILES =				\
 	lctl-nodemap-del-idmap.8		\
 	lctl-nodemap-del-range.8		\
 	lctl-nodemap-modify.8			\
+	lctl-nodemap-set-fileset.8		\
 	lctl-lcfg.8				\
 	lctl-barrier.8				\
 	lctl-snapshot-create.8			\
