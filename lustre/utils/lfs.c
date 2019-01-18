@@ -234,15 +234,15 @@ static inline int lfs_mirror_split(int argc, char **argv)
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
-	"                 [--block|-b]\n"				\
-	"                 [--non-block|-n]\n"				\
-	"                 [--non-direct|-D]\n"				\
+	"                 [--block|-b] [--non-block|-n]\n"		\
+	"                 [--non-direct|-D] [--verbose|-v]\n"		\
 	"                 <filename>\n"					\
 	SSM_HELP_COMMON							\
 	"\n"								\
 	"\tblock:        Block file access during data migration (default)\n" \
 	"\tnon-block:    Abort migrations if concurrent access is detected\n" \
-	"\tnon-direct:   Do not use direct I/O to copy file contents\n" \
+	"\tnon-direct:   Do not use direct I/O to copy file contents\n"	\
+	"\tverbose:      Print each filename as it is migrated\n"	\
 
 #define SETDIRSTRIPE_USAGE						\
 	"		[--mdt-count|-c stripe_count>\n"		\
@@ -625,9 +625,10 @@ static int check_hashtype(const char *hashtype)
 static const char *error_loc = "syserror";
 
 enum {
-	MIGRATION_NONBLOCK	= 1 << 0,
-	MIGRATION_MIRROR	= 1 << 1,
-	MIGRATION_NONDIRECT	= 1 << 2,
+	MIGRATION_NONBLOCK	= 0x0001,
+	MIGRATION_MIRROR	= 0x0002,
+	MIGRATION_NONDIRECT	= 0x0004,
+	MIGRATION_VERBOSE	= 0x0008,
 };
 
 static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
@@ -1129,6 +1130,9 @@ out:
 	if (rc < 0)
 		fprintf(stderr, "error: %s: %s: %s: %s\n",
 			progname, name, error_loc, strerror(-rc));
+	else if (migration_flags & MIGRATION_VERBOSE)
+		printf("%s\n", name);
+
 	return rc;
 }
 
@@ -3024,6 +3028,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
+			migration_flags = MIGRATION_VERBOSE;
 			break;
 		case 'y':
 			from_yaml = true;

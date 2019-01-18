@@ -3,7 +3,9 @@
 lfs migrate \- migrate files or directories between MDTs or OSTs.
 .SH SYNOPSIS
 .B lfs migrate
-.RI [ SETSTRIPE_OPTIONS " ... ] <" file "> ..."
+.RI [ SETSTRIPE_OPTIONS " ... ]"
+.RB [ -v ]
+.RI < file "> ..."
 .br
 .B lfs migrate -m \fIstart_mdt_index
 .RB [ -cHv ]
@@ -64,6 +66,9 @@ write operations synchronous.  Using the
 .B --non-direct
 option uses buffered read/write operations, which may improve migration
 speed at the cost of more CPU and memory overhead.
+.TP
+.BR -v , --verbose
+Print each filename as it is migrated.
 .P
 NOTE:
 .B lfs migrate
