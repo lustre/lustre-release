@@ -58,6 +58,7 @@ BuildArch:      noarch
 Requires:       dkms >= 2.2.0.3-28.git.7c3e7c5
 # for lnetctl
 Requires:	libyaml-devel
+Requires:	zlib-devel
 %if %{with servers}
 # If client package is installed when installing server, remove it since
 # the server package also includes the client.  This can be removed if/when
