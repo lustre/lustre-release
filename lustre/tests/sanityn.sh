@@ -814,11 +814,13 @@ enable_lockless_truncate() {
 }
 
 test_32a() { # bug 11270
-	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
 	local stripe_size=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
 
-	save_lustre_params client "$OSC.*.lockless_truncate" > $p
+	save_lustre_params client "$OSC.*.lockless_truncate" > $save
+	# restore lockless_truncate default values on exit
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
 	cancel_lru_locks $OSC
 	enable_lockless_truncate 1
 	rm -f $DIR1/$tfile
@@ -846,10 +848,7 @@ test_32a() { # bug 11270
 	$CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
 	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -eq 0 ] ||
 		error "lockless truncate disabling failed"
-	rm $DIR1/$tfile
-	# restore lockless_truncate default values
-	restore_lustre_params < $p
-	rm -f $p
+	rm -f $DIR1/$tfile
 }
 run_test 32a "lockless truncate"
 
