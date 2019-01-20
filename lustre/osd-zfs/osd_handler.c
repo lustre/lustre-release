@@ -1521,6 +1521,16 @@ static int osd_fid_init(const struct lu_env *env, struct osd_device *osd)
 		osd->od_cl_seq = NULL;
 	}
 
+	if (ss->ss_node_id == 0) {
+		/*
+		 * If the OSD on the sequence controller(MDT0), then allocate
+		 * sequence here, otherwise allocate sequence after connected
+		 * to MDT0 (see mdt_register_lwp_callback()).
+		 */
+		rc = seq_server_alloc_meta(osd->od_cl_seq->lcs_srv,
+				   &osd->od_cl_seq->lcs_space, env);
+	}
+
 	RETURN(rc);
 }
 
