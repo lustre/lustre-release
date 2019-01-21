@@ -1,0 +1,76 @@
+.TH lctl-nodemap-set-sepol 8 "2019 Jan 21" Lustre "configuration utilities"
+.SH NAME
+lctl-nodemap-set-sepol \- Set SELinux policy info on a nodemap.
+
+.SH SYNOPSIS
+.br
+.B lctl nodemap_set_sepol --name
+.RI < nodemap >
+.B --sepol
+.RI < sepol >
+.br
+.SH DESCRIPTION
+.B nodemap_set_sepol
+adds SELinux policy info as described by
+.I sepol
+to the specified
+.IR nodemap .
+The
+.I sepol
+string describing the SELinux policy has the following syntax:
+
+<mode>:<name>:<version>:<hash>
+
+where:
+.RS 4
+- <mode> is a digit telling if SELinux is in Permissive mode (0) or Enforcing
+mode (1)
+
+- <name> is the name of the SELinux policy
+
+- <version> is the version of the SELinux policy
+
+- <hash> is the computed hash of the binary representation of the policy, as
+exported in /etc/selinux/<name>/policy/policy.<version>
+.RE
+
+The reference
+.I sepol
+string can be obtained on a client node known to enforce the right SELinux policy,
+by calling the l_getsepol command line utility.
+
+Clients belonging to
+.I nodemap
+must enforce the SELinux policy described by
+.IR sepol ,
+otherwise they are denied access to the Lustre file system.
+
+.SH OPTIONS
+.I nodemap
+is the name of the nodemap that this SELinux policy info should be associated
+with.
+
+.I sepol
+is the string describing the SELinux policy that clients must enforce. It has
+to conform to the syntax described above.
+
+.SH EXAMPLES
+.nf
+# lctl nodemap_set_sepol --name restricted --sepol '1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f'
+# lctl nodemap_set_sepol --name admins --sepol ''
+.fi
+
+.SH AVAILABILITY
+.B lctl
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-modify (8)
