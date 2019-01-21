@@ -44,6 +44,7 @@
 #include <asm/uaccess.h>
 
 #include <linux/fs.h>
+#include <linux/file.h>
 #include <linux/stat.h>
 #include <asm/uaccess.h>
 #include <linux/mm.h>
@@ -130,14 +131,15 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which)
 #define RAS_CDEBUG(ras) \
 	CDEBUG(D_READA,                                                      \
 	       "lrp %lu cr %lu cp %lu ws %lu wl %lu nra %lu rpc %lu "        \
-	       "r %lu ri %lu csr %lu sf %lu sp %lu sl %lu\n",                \
+	       "r %lu ri %lu csr %lu sf %lu sp %lu sl %lu lr %lu\n", \
 	       ras->ras_last_readpage, ras->ras_consecutive_requests,        \
 	       ras->ras_consecutive_pages, ras->ras_window_start,            \
 	       ras->ras_window_len, ras->ras_next_readahead,                 \
 	       ras->ras_rpc_size,                                            \
 	       ras->ras_requests, ras->ras_request_index,                    \
 	       ras->ras_consecutive_stride_requests, ras->ras_stride_offset, \
-	       ras->ras_stride_pages, ras->ras_stride_length)
+	       ras->ras_stride_pages, ras->ras_stride_length,		     \
+	       ras->ras_async_last_readpage)
 
 static int index_in_window(unsigned long index, unsigned long point,
                            unsigned long before, unsigned long after)
@@ -425,13 +427,172 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 	return count;
 }
 
+static void ll_readahead_work_free(struct ll_readahead_work *work)
+{
+	fput(work->lrw_file);
+	OBD_FREE_PTR(work);
+}
+
+static void ll_readahead_handle_work(struct work_struct *wq);
+static void ll_readahead_work_add(struct inode *inode,
+				  struct ll_readahead_work *work)
+{
+	INIT_WORK(&work->lrw_readahead_work, ll_readahead_handle_work);
+	queue_work(ll_i2sbi(inode)->ll_ra_info.ll_readahead_wq,
+		   &work->lrw_readahead_work);
+}
+
+static int ll_readahead_file_kms(const struct lu_env *env,
+				struct cl_io *io, __u64 *kms)
+{
+	struct cl_object *clob;
+	struct inode *inode;
+	struct cl_attr *attr = vvp_env_thread_attr(env);
+	int ret;
+
+	clob = io->ci_obj;
+	inode = vvp_object_inode(clob);
+
+	cl_object_attr_lock(clob);
+	ret = cl_object_attr_get(env, clob, attr);
+	cl_object_attr_unlock(clob);
+
+	if (ret != 0)
+		RETURN(ret);
+
+	*kms = attr->cat_kms;
+	return 0;
+}
+
+static void ll_readahead_handle_work(struct work_struct *wq)
+{
+	struct ll_readahead_work *work;
+	struct lu_env *env;
+	__u16 refcheck;
+	struct ra_io_arg *ria;
+	struct inode *inode;
+	struct ll_file_data *fd;
+	struct ll_readahead_state *ras;
+	struct cl_io *io;
+	struct cl_2queue *queue;
+	pgoff_t ra_end = 0;
+	unsigned long len, mlen = 0;
+	struct file *file;
+	__u64 kms;
+	int rc;
+	unsigned long end_index;
+
+	work = container_of(wq, struct ll_readahead_work,
+			    lrw_readahead_work);
+	fd = LUSTRE_FPRIVATE(work->lrw_file);
+	ras = &fd->fd_ras;
+	file = work->lrw_file;
+	inode = file_inode(file);
+
+	env = cl_env_alloc(&refcheck, LCT_NOREF);
+	if (IS_ERR(env))
+		GOTO(out_free_work, rc = PTR_ERR(env));
+
+	io = vvp_env_thread_io(env);
+	ll_io_init(io, file, CIT_READ);
+
+	rc = ll_readahead_file_kms(env, io, &kms);
+	if (rc != 0)
+		GOTO(out_put_env, rc);
+
+	if (kms == 0) {
+		ll_ra_stats_inc(inode, RA_STAT_ZERO_LEN);
+		GOTO(out_put_env, rc = 0);
+	}
+
+	ria = &ll_env_info(env)->lti_ria;
+	memset(ria, 0, sizeof(*ria));
+
+	ria->ria_start = work->lrw_start;
+	/* Truncate RA window to end of file */
+	end_index = (unsigned long)((kms - 1) >> PAGE_SHIFT);
+	if (end_index <= work->lrw_end) {
+		work->lrw_end = end_index;
+		ria->ria_eof = true;
+	}
+	if (work->lrw_end <= work->lrw_start)
+		GOTO(out_put_env, rc = 0);
+
+	ria->ria_end = work->lrw_end;
+	len = ria->ria_end - ria->ria_start + 1;
+	ria->ria_reserved = ll_ra_count_get(ll_i2sbi(inode), ria,
+					    ria_page_count(ria), mlen);
+
+	CDEBUG(D_READA,
+	       "async reserved pages: %lu/%lu/%lu, ra_cur %d, ra_max %lu\n",
+	       ria->ria_reserved, len, mlen,
+	       atomic_read(&ll_i2sbi(inode)->ll_ra_info.ra_cur_pages),
+	       ll_i2sbi(inode)->ll_ra_info.ra_max_pages);
+
+	if (ria->ria_reserved < len) {
+		ll_ra_stats_inc(inode, RA_STAT_MAX_IN_FLIGHT);
+		if (PAGES_TO_MiB(ria->ria_reserved) < 1) {
+			ll_ra_count_put(ll_i2sbi(inode), ria->ria_reserved);
+			GOTO(out_put_env, rc = 0);
+		}
+	}
+
+	rc = cl_io_rw_init(env, io, CIT_READ, ria->ria_start, len);
+	if (rc)
+		GOTO(out_put_env, rc);
+
+	vvp_env_io(env)->vui_io_subtype = IO_NORMAL;
+	vvp_env_io(env)->vui_fd = fd;
+	io->ci_state = CIS_LOCKED;
+	io->ci_async_readahead = true;
+	rc = cl_io_start(env, io);
+	if (rc)
+		GOTO(out_io_fini, rc);
+
+	queue = &io->ci_queue;
+	cl_2queue_init(queue);
+
+	rc = ll_read_ahead_pages(env, io, &queue->c2_qin, ras, ria, &ra_end);
+	if (ria->ria_reserved != 0)
+		ll_ra_count_put(ll_i2sbi(inode), ria->ria_reserved);
+	if (queue->c2_qin.pl_nr > 0) {
+		int count = queue->c2_qin.pl_nr;
+
+		rc = cl_io_submit_rw(env, io, CRT_READ, queue);
+		if (rc == 0)
+			task_io_account_read(PAGE_SIZE * count);
+	}
+	if (ria->ria_end == ra_end && ra_end == (kms >> PAGE_SHIFT))
+		ll_ra_stats_inc(inode, RA_STAT_EOF);
+
+	if (ra_end != ria->ria_end)
+		ll_ra_stats_inc(inode, RA_STAT_FAILED_REACH_END);
+
+	/* TODO: discard all pages until page reinit route is implemented */
+	cl_page_list_discard(env, io, &queue->c2_qin);
+
+	/* Unlock unsent read pages in case of error. */
+	cl_page_list_disown(env, io, &queue->c2_qin);
+
+	cl_2queue_fini(env, queue);
+out_io_fini:
+	cl_io_end(env, io);
+	cl_io_fini(env, io);
+out_put_env:
+	cl_env_put(env, &refcheck);
+out_free_work:
+	if (ra_end > 0)
+		ll_ra_stats_inc_sbi(ll_i2sbi(inode), RA_STAT_ASYNC);
+	ll_readahead_work_free(work);
+}
+
 static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 			struct cl_page_list *queue,
-			struct ll_readahead_state *ras, bool hit)
+			struct ll_readahead_state *ras, bool hit,
+			struct file *file)
 {
 	struct vvp_io *vio = vvp_env_io(env);
 	struct ll_thread_info *lti = ll_env_info(env);
-	struct cl_attr *attr = vvp_env_thread_attr(env);
 	unsigned long len, mlen = 0;
 	pgoff_t ra_end = 0, start = 0, end = 0;
 	struct inode *inode;
@@ -445,14 +606,10 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	inode = vvp_object_inode(clob);
 
 	memset(ria, 0, sizeof *ria);
-
-	cl_object_attr_lock(clob);
-	ret = cl_object_attr_get(env, clob, attr);
-	cl_object_attr_unlock(clob);
-
+	ret = ll_readahead_file_kms(env, io, &kms);
 	if (ret != 0)
 		RETURN(ret);
-	kms = attr->cat_kms;
+
 	if (kms == 0) {
 		ll_ra_stats_inc(inode, RA_STAT_ZERO_LEN);
 		RETURN(0);
@@ -1125,7 +1282,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		int rc2;
 
 		rc2 = ll_readahead(env, io, &queue->c2_qin, ras,
-				   uptodate);
+				   uptodate, file);
 		CDEBUG(D_READA, DFID "%d pages read ahead at %lu\n",
 		       PFID(ll_inode2fid(inode)), rc2, vvp_index(vpg));
 	}
@@ -1166,6 +1323,60 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	RETURN(rc);
 }
 
+/*
+ * Possible return value:
+ * 0 no async readahead triggered and fast read could not be used.
+ * 1 no async readahead, but fast read could be used.
+ * 2 async readahead triggered and fast read could be used too.
+ * < 0 on error.
+ */
+static int kickoff_async_readahead(struct file *file, unsigned long pages)
+{
+	struct ll_readahead_work *lrw;
+	struct inode *inode = file_inode(file);
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_readahead_state *ras = &fd->fd_ras;
+	struct ll_ra_info *ra = &sbi->ll_ra_info;
+	unsigned long throttle;
+	unsigned long start = ras_align(ras, ras->ras_next_readahead, NULL);
+	unsigned long end = start + pages - 1;
+
+	throttle = min(ra->ra_async_pages_per_file_threshold,
+		       ra->ra_max_pages_per_file);
+	/*
+	 * If this is strided i/o or the window is smaller than the
+	 * throttle limit, we do not do async readahead. Otherwise,
+	 * we do async readahead, allowing the user thread to do fast i/o.
+	 */
+	if (stride_io_mode(ras) || !throttle ||
+	    ras->ras_window_len < throttle)
+		return 0;
+
+	if ((atomic_read(&ra->ra_cur_pages) + pages) > ra->ra_max_pages)
+		return 0;
+
+	if (ras->ras_async_last_readpage == start)
+		return 1;
+
+	/* ll_readahead_work_free() free it */
+	OBD_ALLOC_PTR(lrw);
+	if (lrw) {
+		lrw->lrw_file = get_file(file);
+		lrw->lrw_start = start;
+		lrw->lrw_end = end;
+		spin_lock(&ras->ras_lock);
+		ras->ras_next_readahead = end + 1;
+		ras->ras_async_last_readpage = start;
+		spin_unlock(&ras->ras_lock);
+		ll_readahead_work_add(inode, lrw);
+	} else {
+		return -ENOMEM;
+	}
+
+	return 2;
+}
+
 int ll_readpage(struct file *file, struct page *vmpage)
 {
 	struct inode *inode = file_inode(file);
@@ -1174,6 +1385,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	const struct lu_env  *env = NULL;
 	struct cl_io   *io = NULL;
 	struct cl_page *page;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	int result;
 	ENTRY;
 
@@ -1199,12 +1411,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		page = cl_vmpage_page(vmpage, clob);
 		if (page == NULL) {
 			unlock_page(vmpage);
+			ll_ra_stats_inc_sbi(sbi, RA_STAT_FAILED_FAST_READ);
 			RETURN(result);
-		}
-
-		if (!env) {
-			local_env = cl_env_percpu_get();
-			env = local_env;
 		}
 
 		vpg = cl2vvp_page(cl_object_page_slice(page->cp_obj, page));
@@ -1217,8 +1425,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			/* For fast read, it updates read ahead state only
 			 * if the page is hit in cache because non cache page
 			 * case will be handled by slow read later. */
-			ras_update(ll_i2sbi(inode), inode, ras, vvp_index(vpg),
-				   flags);
+			ras_update(sbi, inode, ras, vvp_index(vpg), flags);
 			/* avoid duplicate ras_update() call */
 			vpg->vpg_ra_updated = 1;
 
@@ -1226,14 +1433,23 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			 * the case, we can't do fast IO because we will need
 			 * a cl_io to issue the RPC. */
 			if (ras->ras_window_start + ras->ras_window_len <
-			    ras->ras_next_readahead + fast_read_pages) {
-				/* export the page and skip io stack */
-				vpg->vpg_ra_used = 1;
-				cl_page_export(env, page, 1);
+			    ras->ras_next_readahead + fast_read_pages ||
+			    kickoff_async_readahead(file, fast_read_pages) > 0)
 				result = 0;
-			}
 		}
 
+		if (!env) {
+			local_env = cl_env_percpu_get();
+			env = local_env;
+		}
+
+		/* export the page and skip io stack */
+		if (result == 0) {
+			vpg->vpg_ra_used = 1;
+			cl_page_export(env, page, 1);
+		} else {
+			ll_ra_stats_inc_sbi(sbi, RA_STAT_FAILED_FAST_READ);
+		}
 		/* release page refcount before unlocking the page to ensure
 		 * the object won't be destroyed in the calling path of
 		 * cl_page_put(). Please see comment in ll_releasepage(). */

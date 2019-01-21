@@ -780,6 +780,11 @@ static int vvp_io_read_start(const struct lu_env *env,
 	if (vio->vui_io_subtype == IO_NORMAL)
 		down_read(&lli->lli_trunc_sem);
 
+	if (io->ci_async_readahead) {
+		file_accessed(file);
+		RETURN(0);
+	}
+
 	if (!can_populate_pages(env, io, inode))
 		RETURN(0);
 

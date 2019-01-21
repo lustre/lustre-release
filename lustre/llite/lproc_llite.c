@@ -1054,6 +1054,87 @@ static ssize_t tiny_write_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(tiny_write);
 
+static ssize_t max_read_ahead_async_active_show(struct kobject *kobj,
+					       struct attribute *attr,
+					       char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			sbi->ll_ra_info.ra_async_max_active);
+}
+
+static ssize_t max_read_ahead_async_active_store(struct kobject *kobj,
+						struct attribute *attr,
+						const char *buffer,
+						size_t count)
+{
+	unsigned int val;
+	int rc;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1 || val > WQ_UNBOUND_MAX_ACTIVE) {
+		CERROR("%s: cannot set max_read_ahead_async_active=%u %s than %u\n",
+		       sbi->ll_fsname, val,
+		       val < 1 ? "smaller" : "larger",
+		       val < 1 ? 1 : WQ_UNBOUND_MAX_ACTIVE);
+		return -ERANGE;
+	}
+
+	sbi->ll_ra_info.ra_async_max_active = val;
+	workqueue_set_max_active(sbi->ll_ra_info.ll_readahead_wq, val);
+
+	return count;
+}
+LUSTRE_RW_ATTR(max_read_ahead_async_active);
+
+static ssize_t read_ahead_async_file_threshold_mb_show(struct kobject *kobj,
+						       struct attribute *attr,
+						       char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%lu\n",
+	     PAGES_TO_MiB(sbi->ll_ra_info.ra_async_pages_per_file_threshold));
+}
+
+static ssize_t
+read_ahead_async_file_threshold_mb_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	unsigned long pages_number;
+	unsigned long max_ra_per_file;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	int rc;
+
+	rc = kstrtoul(buffer, 10, &pages_number);
+	if (rc)
+		return rc;
+
+	pages_number = MiB_TO_PAGES(pages_number);
+	max_ra_per_file = sbi->ll_ra_info.ra_max_pages_per_file;
+	if (pages_number < 0 || pages_number > max_ra_per_file) {
+		CERROR("%s: can't set read_ahead_async_file_threshold_mb=%lu > "
+		       "max_read_readahead_per_file_mb=%lu\n", sbi->ll_fsname,
+		       PAGES_TO_MiB(pages_number),
+		       PAGES_TO_MiB(max_ra_per_file));
+		return -ERANGE;
+	}
+	sbi->ll_ra_info.ra_async_pages_per_file_threshold = pages_number;
+
+	return count;
+}
+LUSTRE_RW_ATTR(read_ahead_async_file_threshold_mb);
+
 static ssize_t fast_read_show(struct kobject *kobj,
 			      struct attribute *attr,
 			      char *buf)
@@ -1404,6 +1485,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_file_heat.attr,
 	&lustre_attr_heat_decay_percentage.attr,
 	&lustre_attr_heat_period_second.attr,
+	&lustre_attr_max_read_ahead_async_active.attr,
+	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
 	NULL,
 };
 
@@ -1502,7 +1585,9 @@ static const char *ra_stat_string[] = {
 	[RA_STAT_EOF] = "read-ahead to EOF",
 	[RA_STAT_MAX_IN_FLIGHT] = "hit max r-a issue",
 	[RA_STAT_WRONG_GRAB_PAGE] = "wrong page from grab_cache_page",
-	[RA_STAT_FAILED_REACH_END] = "failed to reach end"
+	[RA_STAT_FAILED_REACH_END] = "failed to reach end",
+	[RA_STAT_ASYNC] = "async readahead",
+	[RA_STAT_FAILED_FAST_READ] = "failed to fast read",
 };
 
 int ll_debugfs_register_super(struct super_block *sb, const char *name)

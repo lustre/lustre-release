@@ -372,6 +372,8 @@ enum ra_stat {
         RA_STAT_MAX_IN_FLIGHT,
         RA_STAT_WRONG_GRAB_PAGE,
 	RA_STAT_FAILED_REACH_END,
+	RA_STAT_ASYNC,
+	RA_STAT_FAILED_FAST_READ,
 	_NR_RA_STAT,
 };
 
@@ -380,6 +382,16 @@ struct ll_ra_info {
 	unsigned long	ra_max_pages;
 	unsigned long	ra_max_pages_per_file;
 	unsigned long	ra_max_read_ahead_whole_pages;
+	struct workqueue_struct  *ll_readahead_wq;
+	/*
+	 * Max number of active works for readahead workqueue,
+	 * default is 0 which make workqueue init number itself,
+	 * unless there is a specific need for throttling the
+	 * number of active work items, specifying '0' is recommended.
+	 */
+	unsigned int ra_async_max_active;
+	/* Threshold to control when to trigger async readahead */
+	unsigned long ra_async_pages_per_file_threshold;
 };
 
 /* ra_io_arg will be filled in the beginning of ll_readahead with
@@ -682,6 +694,20 @@ struct ll_readahead_state {
          * stride read-ahead will be enable
          */
         unsigned long   ras_consecutive_stride_requests;
+	/* index of the last page that async readahead starts */
+	unsigned long	ras_async_last_readpage;
+};
+
+struct ll_readahead_work {
+	/** File to readahead */
+	struct file			*lrw_file;
+	/** Start bytes */
+	unsigned long			 lrw_start;
+	/** End bytes */
+	unsigned long			 lrw_end;
+
+	/* async worker to handler read */
+	struct work_struct		 lrw_readahead_work;
 };
 
 extern struct kmem_cache *ll_file_data_slab;
@@ -889,6 +915,7 @@ int ll_md_real_close(struct inode *inode, fmode_t fmode);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
                               struct ll_file_data *file, loff_t pos,
                               size_t count, int rw);
+void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot);
 #ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 int ll_getattr(const struct path *path, struct kstat *stat,
 	       u32 request_mask, unsigned int flags);

@@ -1900,7 +1900,11 @@ struct cl_io {
 	 * mirror is inaccessible, non-delay RPC would error out quickly so
 	 * that the upper layer can try to access the next mirror.
 	 */
-			     ci_ndelay:1;
+			     ci_ndelay:1,
+	/**
+	 * Set if IO is triggered by async workqueue readahead.
+	 */
+			     ci_async_readahead:1;
 	/**
 	 * How many times the read has retried before this one.
 	 * Set by the top level and consumed by the LOV.

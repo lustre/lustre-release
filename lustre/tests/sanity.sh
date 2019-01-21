@@ -19378,6 +19378,51 @@ test_317() {
 }
 run_test 317 "Verify blocks get correctly update after truncate"
 
+test_318() {
+	local old_max_active=$($LCTL get_param -n \
+			    llite.*.max_read_ahead_async_active 2>/dev/null)
+
+	$LCTL set_param llite.*.max_read_ahead_async_active=256
+	local max_active=$($LCTL get_param -n \
+			   llite.*.max_read_ahead_async_active 2>/dev/null)
+	[ $max_active -ne 256 ] && error "expected 256 but got $max_active"
+
+	# currently reset to 0 is unsupported, leave it 512 for now.
+	$LCTL set_param llite.*.max_read_ahead_async_active=0 &&
+		error "set max_read_ahead_async_active should fail"
+
+	$LCTL set_param llite.*.max_read_ahead_async_active=512
+	max_active=$($LCTL get_param -n \
+		     llite.*.max_read_ahead_async_active 2>/dev/null)
+	[ $max_active -eq 512 ] || error "expected 512 but got $max_active"
+
+	# restore @max_active
+	[ $old_max_active -ne 0 ] && $LCTL set_param \
+		llite.*.max_read_ahead_async_active=$old_max_active
+
+	local old_threshold=$($LCTL get_param -n \
+		llite.*.read_ahead_async_file_threshold_mb 2>/dev/null)
+	local max_per_file_mb=$($LCTL get_param -n \
+		llite.*.max_read_ahead_per_file_mb 2>/dev/null)
+
+	local invalid=$(($max_per_file_mb + 1))
+	$LCTL set_param \
+		llite.*.read_ahead_async_file_threshold_mb=$invalid\
+			&& error "set $invalid should fail"
+
+	local valid=$(($invalid - 1))
+	$LCTL set_param \
+		llite.*.read_ahead_async_file_threshold_mb=$valid ||
+			error "set $valid should succeed"
+	local threshold=$($LCTL get_param -n \
+		llite.*.read_ahead_async_file_threshold_mb 2>/dev/null)
+	[ $threshold -eq $valid ] || error \
+		"expect threshold $valid got $threshold"
+	$LCTL set_param \
+		llite.*.read_ahead_async_file_threshold_mb=$old_threshold
+}
+run_test 318 "Verify async readahead tunables"
+
 test_319() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 
