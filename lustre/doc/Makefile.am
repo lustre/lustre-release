@@ -151,6 +151,7 @@ SERVER_MANFILES =				\
 	lctl-nodemap-del-range.8		\
 	lctl-nodemap-modify.8			\
 	lctl-nodemap-set-fileset.8		\
+	lctl-nodemap-set-sepol.8		\
 	lctl-snapshot-create.8			\
 	lctl-snapshot-destroy.8			\
 	lctl-snapshot-list.8			\
