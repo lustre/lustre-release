@@ -3813,7 +3813,7 @@ lnet_parse_get(struct lnet_ni *ni, struct lnet_msg *msg, int rdma_get)
 	lnet_ni_recv(ni, msg->msg_private, NULL, 0, 0, 0, 0);
 	msg->msg_receiving = 0;
 
-	rc = lnet_send(ni->ni_nid, msg, LNET_NID_ANY);
+	rc = lnet_send(ni->ni_nid, msg, msg->msg_from);
 	if (rc < 0) {
 		/* didn't get as far as lnet_ni_send() */
 		CERROR("%s: Unable to send REPLY for GET from %s: %d\n",

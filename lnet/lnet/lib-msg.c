@@ -393,7 +393,7 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 
 		/* NB: we probably want to use NID of msg::msg_from as 3rd
 		 * parameter (router NID) if it's routed message */
-		rc = lnet_send(msg->msg_ev.target.nid, msg, LNET_NID_ANY);
+		rc = lnet_send(msg->msg_ev.target.nid, msg, msg->msg_from);
 
 		lnet_net_lock(cpt);
 		/*
