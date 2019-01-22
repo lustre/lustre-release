@@ -191,4 +191,11 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_ALL_CHARS;
 }
 
+static inline bool lmv_magic_supported(__u32 lum_magic)
+{
+	return lum_magic == LMV_USER_MAGIC ||
+	       lum_magic == LMV_USER_MAGIC_SPECIFIC ||
+	       lum_magic == LMV_MAGIC_FOREIGN;
+}
+
 #endif

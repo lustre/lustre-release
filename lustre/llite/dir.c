@@ -367,6 +367,14 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 				     LUSTRE_OPC_ANY, inode);
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
+
+	/* foreign dirs are browsed out of Lustre */
+	if (unlikely(op_data->op_mea1 != NULL &&
+		     op_data->op_mea1->lsm_md_magic == LMV_MAGIC_FOREIGN)) {
+		ll_finish_md_op_data(op_data);
+		RETURN(-ENODATA);
+	}
+
 	op_data->op_fid3 = pfid;
 
 #ifdef HAVE_DIR_CONTEXT
@@ -454,14 +462,22 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	int err;
 	ENTRY;
 
-	if (unlikely(lump->lum_magic != LMV_USER_MAGIC &&
-		     lump->lum_magic != LMV_USER_MAGIC_SPECIFIC))
+	if (unlikely(!lmv_magic_supported(lump->lum_magic)))
 		RETURN(-EINVAL);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) name %s "
-	       "stripe_offset %d, stripe_count: %u\n",
-	       PFID(ll_inode2fid(parent)), parent, dirname,
-	       (int)lump->lum_stripe_offset, lump->lum_stripe_count);
+	if (lump->lum_magic != LMV_MAGIC_FOREIGN) {
+		CDEBUG(D_VFSTRACE,
+		       "VFS Op:inode="DFID"(%p) name %s stripe_offset %d, stripe_count: %u\n",
+		       PFID(ll_inode2fid(parent)), parent, dirname,
+		       (int)lump->lum_stripe_offset, lump->lum_stripe_count);
+	} else {
+		struct lmv_foreign_md *lfm = (struct lmv_foreign_md *)lump;
+
+		CDEBUG(D_VFSTRACE,
+		       "VFS Op:inode="DFID"(%p) name %s foreign, length %u, value '%.*s'\n",
+		       PFID(ll_inode2fid(parent)), parent, dirname,
+		       lfm->lfm_length, lfm->lfm_length, lfm->lfm_value);
+	}
 
 	if (lump->lum_stripe_count > 1 &&
 	    !(exp_connect_flags(sbi->ll_md_exp) & OBD_CONNECT_DIR_STRIPE))
@@ -471,8 +487,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	    !OBD_FAIL_CHECK(OBD_FAIL_LLITE_NO_CHECK_DEAD))
 		RETURN(-ENOENT);
 
-	if (lump->lum_magic != cpu_to_le32(LMV_USER_MAGIC) &&
-	    lump->lum_magic != cpu_to_le32(LMV_USER_MAGIC_SPECIFIC))
+	if (unlikely(!lmv_magic_supported(cpu_to_le32(lump->lum_magic))))
 		lustre_swab_lmv_user_md(lump);
 
 	if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
@@ -768,6 +783,17 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 			}
 		}
 		break;
+	case LMV_MAGIC_FOREIGN: {
+		struct lmv_foreign_md *lfm = (struct lmv_foreign_md *)lmm;
+
+		if (LMV_MAGIC_FOREIGN != cpu_to_le32(LMV_MAGIC_FOREIGN)) {
+			__swab32s(&lfm->lfm_magic);
+			__swab32s(&lfm->lfm_length);
+			__swab32s(&lfm->lfm_type);
+			__swab32s(&lfm->lfm_flags);
+		}
+		break;
+	}
 	default:
 		CERROR("unknown magic: %lX\n", (unsigned long)lmm->lmm_magic);
 		rc = -EPROTO;
@@ -1361,9 +1387,22 @@ out_free:
 		lum = (struct lmv_user_md *)data->ioc_inlbuf2;
 		lumlen = data->ioc_inllen2;
 
-		if ((lum->lum_magic != LMV_USER_MAGIC &&
-		     lum->lum_magic != LMV_USER_MAGIC_SPECIFIC) ||
+		if (!lmv_magic_supported(lum->lum_magic)) {
+			CERROR("%s: wrong lum magic %x : rc = %d\n", filename,
+			       lum->lum_magic, -EINVAL);
+			GOTO(lmv_out_free, rc = -EINVAL);
+		}
+
+		if ((lum->lum_magic == LMV_USER_MAGIC ||
+		     lum->lum_magic == LMV_USER_MAGIC_SPECIFIC) &&
 		    lumlen < sizeof(*lum)) {
+			CERROR("%s: wrong lum size %d for magic %x : rc = %d\n",
+			       filename, lumlen, lum->lum_magic, -EINVAL);
+			GOTO(lmv_out_free, rc = -EINVAL);
+		}
+
+		if (lum->lum_magic == LMV_MAGIC_FOREIGN &&
+		    lumlen < sizeof(struct lmv_foreign_md)) {
 			CERROR("%s: wrong lum magic %x or size %d: rc = %d\n",
 			       filename, lum->lum_magic, lumlen, -EFAULT);
 			GOTO(lmv_out_free, rc = -EINVAL);
@@ -1491,12 +1530,43 @@ out:
 			GOTO(finish_req, rc);
 		}
 
-		stripe_count = lmv_mds_md_stripe_count_get(lmm);
+		/* if foreign LMV case, fake stripes number */
+		if (lmm->lmv_magic == LMV_MAGIC_FOREIGN) {
+			struct lmv_foreign_md *lfm;
+
+			lfm = (struct lmv_foreign_md *)lmm;
+			if (lfm->lfm_length < XATTR_SIZE_MAX -
+			    offsetof(typeof(*lfm), lfm_value)) {
+				__u32 size = lfm->lfm_length +
+					     offsetof(typeof(*lfm), lfm_value);
+
+				stripe_count = lmv_foreign_to_md_stripes(size);
+			} else {
+				CERROR("invalid %d foreign size returned\n",
+					    lfm->lfm_length);
+				return -EINVAL;
+			}
+		} else {
+			stripe_count = lmv_mds_md_stripe_count_get(lmm);
+		}
 		if (max_stripe_count < stripe_count) {
 			lum.lum_stripe_count = stripe_count;
 			if (copy_to_user(ulmv, &lum, sizeof(lum)))
 				GOTO(finish_req, rc = -EFAULT);
 			GOTO(finish_req, rc = -E2BIG);
+		}
+
+		/* enough room on user side and foreign case */
+		if (lmm->lmv_magic == LMV_MAGIC_FOREIGN) {
+			struct lmv_foreign_md *lfm;
+			__u32 size;
+
+			lfm = (struct lmv_foreign_md *)lmm;
+			size = lfm->lfm_length +
+			       offsetof(struct lmv_foreign_md, lfm_value);
+			if (copy_to_user(ulmv, lfm, size))
+				GOTO(finish_req, rc = -EFAULT);
+			GOTO(finish_req, rc);
 		}
 
 		lum_size = lmv_user_md_size(stripe_count,

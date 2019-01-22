@@ -2,13 +2,18 @@
 .SH NAME
 lfs setdirstripe, mkdir \- set striping pattern of a directory.
 .SH SYNOPSIS
-.B lfs setdirstripe [\fR-cdDHioT\fR] \fIDIR\fR...
+.B lfs setdirstripe [\fR-cdDHioTx\fR] \fIDIR\fR...
 .br
 .SH DESCRIPTION
 Create a striped directory with specified striping pattern. This lfs utility
 is similar to
 .BR lfs setstripe
 , but is used to create striped directory.
+Can also be used to create directory with a foreign (free format) striping pattern (see
+.BR --foreign
+and
+.BR --xattr
+options).
 .B lfs mkdir
 is an alias for this command.
 .SH OPTIONS
@@ -73,6 +78,23 @@ numeric
 .BR chmod (1).
 It is not affected by the current
 .BR umask (1p).
+.TP
+.BR \-\-foreign[=type]
+Create a directory with a foreign (non-Lustre/free format, see
+.BR \-\-xattr
+option) striping. Where
+.BR type
+specifies a known foreign type (like
+.BR none
+,
+.BR daos
+, ...) or a 32-bit numeric type.
+.TP
+.BR \-\-flags =\fI<hex>\fR
+Specify a bitmask of flags.
+.TP
+.BR \-x ", " \-\-xattr =\fISTRING\fR
+Specify a string to be used as a foreign (free format) striping.
 .SH NOTE
 .PP
 The
@@ -102,6 +124,13 @@ This creates a directory striped on two MDTs, whose first stripe is on
 .B MDT0001
 (MDT index 1), and whose hash type is
 .BR all_char .
+.TP
+.B $ lfs mkdir --foreign=daos --xattr PUUID:CUUID /mnt/lustre/dir1
+This creates
+.B dir1
+with foreign (non-lustre/free format)
+.B PUUID:CUUID
+striping/LMV EA.
 .SH AVAILABILITY
 The
 .B lfs setdirstripe

@@ -23,6 +23,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [[\fB!\fR] \fB--name\fR|\fB-n <\fIpattern\fR>]
       [[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIindex\fR,...>]
 [[\fB!\fR] \fB--pool\fR <\fIpool\fR>]
+[[\fB!\fR] \fB--foreign\fR [<\fItype\fR>]]
 [\fB--print\fR|\fB-P\fR]
       [\fB--print0\fR|\fB-0\fR]
 [[\fB!\fR] \fB--projid\fR |<\fIprojid\fR>]
@@ -198,6 +199,15 @@ Layout was created with the specified
 .I pool
 name.  For composite files, this may match the pool of any component.
 .TP
+.BR --foreign[=<type>]
+Directory striping format is foreign (non-Lustre/free format) and is of type
+.BR <type>
+if specified. Presently only
+.BR none
+or
+.BR daos
+are defined types , though 32-bit numeric types can also be used.
+.TP
 .BR --print | -P
 Prints the file or directory name to standard output if it matches
 all specified parameters, one file per line with a trailing linefeed.
@@ -298,7 +308,9 @@ Recursively list all mirrored files that have more than 2 mirrors.
 Recursively list all out-of-sync mirrored files.
 .TP
 .B $ lfs find ! --foreign=daos /mnt/lustre
-Recursively list all but foreign files of daos type.
+Recursively list all but foreign files/dirs of
+.B daos
+type.
 .SH BUGS
 The
 .B lfs find

@@ -2202,11 +2202,21 @@ struct lmv_mds_md_v1 {
 	struct lu_fid lmv_stripe_fids[0];	/* FIDs for each stripe */
 };
 
+/* foreign LMV EA */
+struct lmv_foreign_md {
+	__u32 lfm_magic;	/* magic number = LMV_MAGIC_FOREIGN */
+	__u32 lfm_length;	/* length of lfm_value */
+	__u32 lfm_type;		/* type, see LU_FOREIGN_TYPE_ */
+	__u32 lfm_flags;	/* flags, type specific */
+	char lfm_value[];	/* free format value */
+};
+
 #define LMV_MAGIC_V1	0x0CD20CD0    /* normal stripe lmv magic */
 #define LMV_MAGIC	LMV_MAGIC_V1
 
 /* #define LMV_USER_MAGIC 0x0CD30CD0 */
 #define LMV_MAGIC_STRIPE 0x0CD40CD0 /* magic for dir sub_stripe */
+#define LMV_MAGIC_FOREIGN 0x0CD50CD0 /* magic for lmv foreign */
 
 /* Right now only the lower part(0-16bits) of lmv_hash_type is being used,
  * and the higher part will be the flag to indicate the status of object,
@@ -2262,6 +2272,7 @@ union lmv_mds_md {
 	__u32			 lmv_magic;
 	struct lmv_mds_md_v1	 lmv_md_v1;
 	struct lmv_user_md	 lmv_user_md;
+	struct lmv_foreign_md	 lmv_foreign_md;
 };
 
 static inline int lmv_mds_md_size(int stripe_count, unsigned int lmm_magic)

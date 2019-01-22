@@ -681,10 +681,24 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid)
 void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv)
 {
 	const struct lmv_mds_md_v1 *lmm1;
+	const struct lmv_foreign_md *lfm;
 	int			   i;
 
 	if (likely(!cfs_cdebug_show(level, DEBUG_SUBSYSTEM)))
 		return;
+
+	/* foreign LMV case */
+	lfm = &lmv->lmv_foreign_md;
+	if (le32_to_cpu(lfm->lfm_magic) == LMV_MAGIC_FOREIGN) {
+		CDEBUG_LIMIT(level,
+			     "foreign magic 0x%08X, length %u, type %u, flags %u, value '%.*s'\n",
+			     le32_to_cpu(lfm->lfm_magic),
+			     le32_to_cpu(lfm->lfm_length),
+			     le32_to_cpu(lfm->lfm_type),
+			     le32_to_cpu(lfm->lfm_flags),
+			     le32_to_cpu(lfm->lfm_length), lfm->lfm_value);
+		return;
+	}
 
 	lmm1 = &lmv->lmv_md_v1;
 	CDEBUG(level,

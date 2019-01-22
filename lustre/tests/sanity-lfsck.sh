@@ -5661,6 +5661,106 @@ test_38()
 }
 run_test 38 "LFSCK does not break foreign file and reverse is also true"
 
+test_39()
+{
+	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.12.51) ]] &&
+		skip "Need MDS version newer than 2.12.51"
+
+	test_mkdir $DIR/$tdir
+	local uuid1=$(cat /proc/sys/kernel/random/uuid)
+	local uuid2=$(cat /proc/sys/kernel/random/uuid)
+
+	# create foreign dir
+	$LFS mkdir --foreign=daos --xattr="${uuid1}@${uuid2}" --flags=0xda05 \
+		$DIR/$tdir/${tdir}2 ||
+		error "$DIR/$tdir/${tdir}2: create failed"
+
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 |
+		grep "lfm_magic:.*0x0CD50CD0" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA magic"
+	# lfm_length is LMV EA size - sizeof(lfm_magic) - sizeof(lfm_length)
+	# - sizeof(lfm_type) - sizeof(lfm_flags)
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_length:.*73" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA size"
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_type:.*daos" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA type"
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 |
+		grep "lfm_flags:.*0x0000DA05" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA flags"
+	$LFS getdirstripe $DIR/$tdir/${tdir}2 |
+		grep "lfm_value.*${uuid1}@${uuid2}" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA value"
+
+	# file create in dir should fail
+	touch $DIR/$tdir/${tdir}2/$tfile &&
+		"$DIR/${tdir}2: file create should fail"
+
+	# chmod should work
+	chmod 777 $DIR/$tdir/${tdir}2 ||
+		error "$DIR/${tdir}2: chmod failed"
+
+	# chown should work
+	chown $RUNAS_ID:$RUNAS_GID $DIR/$tdir/${tdir}2 ||
+		error "$DIR/${tdir}2: chown failed"
+
+	$START_NAMESPACE -r -A || error "Fail to start LFSCK for namespace"
+
+	wait_all_targets_blocked namespace completed 1
+
+	# check that "global" namespace_repaired == 0 !!!
+	local repaired=$(do_facet mds1 \
+			 "$LCTL lfsck_query -t all -M ${FSNAME}-MDT0000 |
+			 awk '/^namespace_repaired/ { print \\\$2 }'")
+	[ $repaired -eq 0 ] ||
+		error "(2) Expect nothing to be repaired, but got: $repaired"
+
+	$START_LAYOUT -A -r || error "Fail to start LFSCK for layout"
+
+	wait_all_targets_blocked layout completed 2
+
+	# check that "global" layout_repaired == 0 !!!
+	local repaired=$(do_facet mds1 \
+			 "$LCTL lfsck_query -t all -M ${FSNAME}-MDT0000 |
+			 awk '/^layout_repaired/ { print \\\$2 }'")
+	[ $repaired -eq 0 ] ||
+		error "(2) Expect no layout repair, but got: $repaired"
+
+	echo "post-lfsck checks of foreign dir"
+
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 |
+		grep "lfm_magic:.*0x0CD50CD0" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA magic"
+	# lfm_length is LMV EA size - sizeof(lfm_magic) - sizeof(lfm_length)
+	# - sizeof(lfm_type) - sizeof(lfm_flags)
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_length:.*73" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA size"
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_type:.*daos" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA type"
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 |
+		grep "lfm_flags:.*0x0000DA05" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA flags"
+	$LFS getdirstripe $DIR/$tdir/${tdir}2 |
+		grep "lfm_value.*${uuid1}@${uuid2}" ||
+		error "$DIR/$tdir/${tdir}2: invalid LMV EA value"
+
+	# file create in dir should fail
+	touch $DIR/$tdir/${tdir}2/$tfile &&
+		"$DIR/${tdir}2: file create should fail"
+
+	# chmod should work
+	chmod 777 $DIR/$tdir/${tdir}2 ||
+		error "$DIR/${tdir}2: chmod failed"
+
+	# chown should work
+	chown $RUNAS_ID:$RUNAS_GID $DIR/$tdir/${tdir}2 ||
+		error "$DIR/${tdir}2: chown failed"
+
+	#remove foreign dir
+	rmdir $DIR/$tdir/${tdir}2 ||
+		error "$DIR/$tdir/${tdir}2: remove of foreign dir has failed"
+}
+run_test 39 "LFSCK does not break foreign dir and reverse is also true"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

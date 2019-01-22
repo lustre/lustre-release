@@ -842,6 +842,7 @@ int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 	struct lfsck_thread_info *info = lfsck_env_info(env);
 	struct lu_buf *buf = &info->lti_buf;
 	int size = sizeof(*lmv) + sizeof(struct lu_fid) * 2;
+	struct lmv_foreign_md *lfm;
 	int rc;
 
 	dt_read_lock(env, obj, 0);
@@ -850,17 +851,49 @@ int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 	rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMV);
 	if (unlikely(rc == -ERANGE)) {
 		buf = &info->lti_big_buf;
-		lu_buf_check_and_alloc(buf, size);
-		rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMV);
 		/* For the in-migration directory, its LMV EA contains
 		 * not only the LMV header, but also the FIDs for both
-		 * source and target. So the LMV EA size is larger. */
-		if (rc == size) {
-			rc = sizeof(*lmv);
-			memcpy(lmv, buf->lb_buf, rc);
+		 * source and target. So the LMV EA size is larger.
+		 * Or may be this is a foreign LMV */
+		rc = dt_xattr_get(env, obj, &LU_BUF_NULL, XATTR_NAME_LMV);
+		if (rc > sizeof(*lmv)) {
+			int rc1;
+
+			lu_buf_check_and_alloc(buf, rc);
+			rc1 = dt_xattr_get(env, obj, buf, XATTR_NAME_LMV);
+			if (rc != rc1)
+				rc = -EINVAL;
+		} else {
+			rc = -EINVAL;
 		}
 	}
 	dt_read_unlock(env, obj);
+
+	if (rc > 0 && rc > offsetof(typeof(*lfm), lfm_value) &&
+	    *((__u32 *)buf->lb_buf) == LMV_MAGIC_FOREIGN) {
+		__u32 value_len;
+
+		lfm = buf->lb_buf;
+		value_len = le32_to_cpu(lfm->lfm_length);
+		CDEBUG(D_INFO,
+		       "foreign LMV EA, magic %x, len %u, type %x, flags %x, for dir "DFID"\n",
+		       le32_to_cpu(lfm->lfm_magic), value_len,
+		       le32_to_cpu(lfm->lfm_type), le32_to_cpu(lfm->lfm_flags),
+		       PFID(lfsck_dto2fid(obj)));
+
+		if (rc != value_len + offsetof(typeof(*lfm), lfm_value))
+			CDEBUG(D_LFSCK,
+			       "foreign LMV EA internal size %u does not match EA full size %d for dir "DFID"\n",
+			       value_len, rc, PFID(lfsck_dto2fid(obj)));
+
+		/* no further usage/decode of foreign LMV outside */
+		return -ENODATA;
+	}
+
+	if (rc == size) {
+		rc = sizeof(*lmv);
+		memcpy(lmv, buf->lb_buf, rc);
+	}
 	if (rc != sizeof(*lmv))
 		return rc > 0 ? -EINVAL : rc;
 

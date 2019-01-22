@@ -76,6 +76,7 @@ THETESTS += llapi_layout_test orphan_linkea_check llapi_hsm_test
 THETESTS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
 THETESTS += swap_lock_test lockahead_test mirror_io mmap_mknod_test
 THETESTS += create_foreign_file parse_foreign_file
+THETESTS += create_foreign_dir parse_foreign_dir
 
 if TESTS
 if MPITESTS
@@ -107,4 +108,5 @@ lockahead_test_LDADD = $(LIBLUSTREAPI)
 mirror_io_LDADD = $(LIBLUSTREAPI)
 ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI)
 flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
+create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 endif # TESTS

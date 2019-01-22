@@ -602,10 +602,17 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 				GOTO(out, rc);
 
 			if (rc < (typeof(rc))sizeof(*md->lmv)) {
-				CDEBUG(D_INFO, "size too small:  "
-				       "rc < sizeof(*md->lmv) (%d < %d)\n",
-					rc, (int)sizeof(*md->lmv));
-				GOTO(out, rc = -EPROTO);
+				struct lmv_foreign_md   *lfm = md->lfm;
+
+				/* short (< sizeof(struct lmv_stripe_md))
+				 * foreign LMV case
+				 */
+				if (lfm->lfm_magic != LMV_MAGIC_FOREIGN) {
+					CDEBUG(D_INFO,
+					       "size too small: rc < sizeof(*md->lmv) (%d < %d)\n",
+					       rc, (int)sizeof(*md->lmv));
+					GOTO(out, rc = -EPROTO);
+				}
 			}
 		}
         }

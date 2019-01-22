@@ -323,7 +323,9 @@ struct lod_object {
 			__u32		ldo_dir_slave_stripe:1,
 					ldo_dir_striped:1,
 					/* the stripe has been loaded */
-					ldo_dir_stripe_loaded:1;
+					ldo_dir_stripe_loaded:1,
+					/* foreign directory */
+					ldo_dir_is_foreign;
 			/*
 			 * default striping is not cached, so this field is
 			 * invalid after create, make sure it's used by
@@ -337,6 +339,11 @@ struct lod_object {
 			/* foreign/raw format LOV */
 			char				*ldo_foreign_lov;
 			size_t				 ldo_foreign_lov_size;
+		};
+		struct {
+			/* foreign/raw format LMV */
+			char				*ldo_foreign_lmv;
+			size_t				 ldo_foreign_lmv_size;
 		};
 		struct {
 			/* file stripe (LOV) */

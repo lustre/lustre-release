@@ -256,7 +256,12 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"	fnv_1a_64 FNV-1a hash algorithm (default)\n"		\
 	"	all_char  sum of characters % MDT_COUNT (not recommended)\n" \
 	"\tdefault_stripe: set default dirstripe of the directory\n"	\
-	"\tmode: the file access permission of the directory (octal)\n"
+	"\tmode: the file access permission of the directory (octal)\n" \
+	"To create dir with a foreign (free format) layout :\n" \
+	"setdirstripe|mkdir --foreign[=<foreign_type>] -x|-xattr <string> " \
+		"[--mode|-m mode] [--flags <hex>] <dir>\n" \
+	"\tmode: the mode of the directory\n" \
+	"\tforeign_type: none or daos\n"
 
 /**
  * command_t mirror_cmdlist - lfs mirror commands.
@@ -373,7 +378,7 @@ command_t cmdlist[] = {
 	 "usage: getdirstripe [--mdt-count|-c] [--mdt-index|-m|-i]\n"
 	 "		      [--mdt-hash|-H] [--obd|-O <uuid>]\n"
 	 "		      [--recursive|-r] [--yaml|-y]\n"
-	 "		      [--default|-D] <dir> ..."},
+	 "		      [--verbose|-v] [--default|-D] <dir> ..."},
 	{"mkdir", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
 	 "be done on MDT0 with the right of administrator.\n"
@@ -402,6 +407,7 @@ command_t cmdlist[] = {
 	 "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
 	 "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
 	 "     [[!] --projid <projid>]\n"
+	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --layout|-L released,raid0,mdt]\n"
 	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
@@ -637,19 +643,19 @@ static int check_hashtype(const char *hashtype)
 	return 0;
 }
 
-static uint32_t lov_check_foreign_type_name(const char *foreign_type_name)
+static uint32_t check_foreign_type_name(const char *foreign_type_name)
 {
 	uint32_t i;
 
-	for (i = 0; i < LOV_FOREIGN_TYPE_UNKNOWN; i++) {
-		if (lov_foreign_type[i].lft_name == NULL)
+	for (i = 0; i < LU_FOREIGN_TYPE_UNKNOWN; i++) {
+		if (lu_foreign_types[i].lft_name == NULL)
 			break;
 		if (strcmp(foreign_type_name,
-			   lov_foreign_type[i].lft_name) == 0)
-			return lov_foreign_type[i].lft_type;
+			   lu_foreign_types[i].lft_name) == 0)
+			return lu_foreign_types[i].lft_type;
 	}
 
-	return LOV_FOREIGN_TYPE_UNKNOWN;
+	return LU_FOREIGN_TYPE_UNKNOWN;
 }
 
 static const char *error_loc = "syserror";
@@ -2630,7 +2636,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	char *template = NULL;
 	bool foreign_mode = false;
 	char *xattr = NULL;
-	uint32_t type = LOV_FOREIGN_TYPE_NONE, flags = 0;
+	uint32_t type = LU_FOREIGN_TYPE_NONE, flags = 0;
 	char *mode_opt = NULL;
 	mode_t previous_umask = 0;
 	mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
@@ -2822,8 +2828,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				type = strtoul(optarg, &end, 0);
 				if (*end) {
 					/* check name */
-					type = lov_check_foreign_type_name(optarg);
-					if (type == LOV_FOREIGN_TYPE_UNKNOWN) {
+					type = check_foreign_type_name(optarg);
+					if (type == LU_FOREIGN_TYPE_UNKNOWN) {
 						fprintf(stderr,
 							"%s %s: unrecognized foreign type '%s'\n",
 							progname, argv[0],
@@ -2840,7 +2846,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				mode = strtoul(mode_opt, &end, 8);
 				if (*end != '\0') {
 					fprintf(stderr,
-						"%s %s: bad MODE '%s'\n",
+						"%s %s: bad mode '%s'\n",
 						progname, argv[0], mode_opt);
 					return CMD_HELP;
 				}
@@ -3497,7 +3503,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 	}
 
-	if (mode_opt != NULL && previous_umask != 0)
+	if (mode_opt != NULL)
 		umask(previous_umask);
 
 	free(param);
@@ -3697,6 +3703,8 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument },
 /* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
+	{ .val = LFS_LAYOUT_FOREIGN_OPT,
+			.name = "foreign",	.has_arg = optional_argument},
 	{ .val = 'g',	.name = "gid",		.has_arg = required_argument },
 	{ .val = 'G',	.name = "group",	.has_arg = required_argument },
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument },
@@ -3896,30 +3904,6 @@ static int lfs_find(int argc, char **argv)
 				param.fp_mirror_state = state;
 			}
 			break;
-		case LFS_LAYOUT_FOREIGN_OPT: {
-			/* all types by default */
-			uint32_t type = LOV_FOREIGN_TYPE_UNKNOWN;
-
-			if (optarg != NULL) {
-				/* check pure numeric */
-				type = strtoul(optarg, &endptr, 0);
-				if (*endptr) {
-					/* check name */
-					type = lov_check_foreign_type_name(optarg);
-					if (type == LOV_FOREIGN_TYPE_UNKNOWN) {
-						fprintf(stderr,
-							"%s %s: unrecognized foreign type '%s'\n",
-							progname, argv[0],
-							optarg);
-						return CMD_HELP;
-					}
-				}
-			}
-			param.fp_foreign_type = type;
-			param.fp_check_foreign = 1;
-			param.fp_exclude_foreign = !!neg_opt;
-			break;
-		}
                 case 'c':
                         if (optarg[0] == '+') {
 				param.fp_stripe_count_sign = -1;
@@ -3968,6 +3952,30 @@ static int lfs_find(int argc, char **argv)
 			param.fp_check_comp_end = 1;
 			param.fp_exclude_comp_end = !!neg_opt;
 			break;
+		case LFS_LAYOUT_FOREIGN_OPT: {
+			/* all types by default */
+			uint32_t type = LU_FOREIGN_TYPE_UNKNOWN;
+
+			if (optarg != NULL) {
+				/* check pure numeric */
+				type = strtoul(optarg, &endptr, 0);
+				if (*endptr) {
+					/* check name */
+					type = check_foreign_type_name(optarg);
+					if (type == LU_FOREIGN_TYPE_UNKNOWN) {
+						fprintf(stderr,
+							"%s %s: unknown foreign type '%s'\n",
+							progname, argv[0],
+							optarg);
+						return CMD_HELP;
+					}
+				}
+			}
+			param.fp_foreign_type = type;
+			param.fp_check_foreign = 1;
+			param.fp_exclude_foreign = !!neg_opt;
+			break;
+		}
 		case 'g':
 		case 'G':
 			rc = name2gid(&param.fp_gid, optarg);
@@ -4707,6 +4715,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'r',	.name = "recursive",	.has_arg = no_argument },
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = no_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
 	{ .name = NULL } };
 	int c, rc;
@@ -4714,7 +4723,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDHimO:rtTy", long_opts, NULL)) != -1)
+				"cDHimO:rtTvy", long_opts, NULL)) != -1)
 	{
 		switch (c) {
 		case 'c':
@@ -4748,10 +4757,15 @@ static int lfs_getdirstripe(int argc, char **argv)
 		case 'r':
 			param.fp_recursive = 1;
 			break;
+		case 'v':
+			param.fp_verbose |= VERBOSE_DETAIL;
+			break;
 		case 'y':
 			param.fp_yaml = 1;
 			break;
 		default:
+			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
+				progname, argv[0], argv[optind - 1]);
 			return CMD_HELP;
 		}
 	}
@@ -5126,6 +5140,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 	struct ll_statfs_buf	*lsb = NULL;
 	char			mntdir[PATH_MAX] = "";
 	bool			auto_distributed = false;
+	bool			foreign_mode = false;
+	char			*xattr = NULL;
+	__u32			type = LU_FOREIGN_TYPE_DAOS, flags = 0;
 
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
@@ -5133,6 +5150,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument },
 	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
 	{ .val = 'D',	.name = "default_stripe", .has_arg = no_argument },
+	{ .val = LFS_LAYOUT_FLAGS_OPT,
+			.name = "flags",	.has_arg = required_argument },
+	{ .val = LFS_LAYOUT_FOREIGN_OPT,
+			.name = "foreign",	.has_arg = optional_argument},
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	{ .val = 'i',	.name = "mdt-index",	.has_arg = required_argument },
@@ -5150,12 +5171,13 @@ static int lfs_setdirstripe(int argc, char **argv)
 #endif
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
 /* setstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
+	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
 	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);
 
-	while ((c = getopt_long(argc, argv, "c:dDi:H:m:o:t:T:", long_opts,
-				NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv, "c:dDi:H:m:o:t:T:x:",
+				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
 			/* Long options. */
@@ -5176,6 +5198,33 @@ static int lfs_setdirstripe(int argc, char **argv)
 			break;
 		case 'D':
 			default_stripe = true;
+			break;
+		case LFS_LAYOUT_FOREIGN_OPT:
+			if (optarg != NULL) {
+				/* check pure numeric */
+				type = strtoul(optarg, &end, 0);
+				if (*end) {
+					/* check name */
+					type = check_foreign_type_name(optarg);
+					if (type == LU_FOREIGN_TYPE_UNKNOWN) {
+						fprintf(stderr,
+							"%s %s: unknown foreign type '%s'\n",
+							progname, argv[0],
+							optarg);
+						return CMD_HELP;
+					}
+				}
+			}
+			foreign_mode = true;
+			break;
+		case LFS_LAYOUT_FLAGS_OPT:
+			flags = strtoul(optarg, &end, 16);
+			if (*end != '\0') {
+				fprintf(stderr,
+					"%s %s: bad flags '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
@@ -5223,6 +5272,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'o':
 			mode_opt = optarg;
 			break;
+		case 'x':
+			xattr = optarg;
+			break;
 		default:
 			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
 				progname, argv[0], argv[optind - 1]);
@@ -5236,8 +5288,30 @@ static int lfs_setdirstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+	if (xattr && !foreign_mode) {
+		/* only print a warning as this is armless and will be
+		 * ignored
+		 */
+		fprintf(stderr,
+			"%s %s: xattr has been specified for non-foreign layout\n",
+			progname, argv[0]);
+	} else if (foreign_mode && !xattr) {
+		fprintf(stderr,
+			"%s %s: xattr must be provided in foreign mode\n",
+			progname, argv[0]);
+		return CMD_HELP;
+	}
+
+	if (foreign_mode && (delete || default_stripe || lsa.lsa_nr_tgts ||
+	    lsa.lsa_tgts || setstripe_args_specified(&lsa))) {
+		fprintf(stderr,
+			"%s %s: only --xattr/--flags/--mode options are valid with --foreign\n",
+			progname, argv[0]);
+		return CMD_HELP;
+	}
+
 	if (!delete && lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT &&
-	    lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT) {
+	    lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT && !foreign_mode) {
 		fprintf(stderr,
 			"%s %s: stripe offset and count must be specified\n",
 			progname, argv[0]);
@@ -5262,6 +5336,25 @@ static int lfs_setdirstripe(int argc, char **argv)
 			return CMD_HELP;
 		}
 		previous_mode = umask(0);
+	}
+
+	/* foreign LMV/dir case */
+	if (foreign_mode) {
+		if (argc > optind + 1) {
+			fprintf(stderr,
+				"%s %s: cannot specify multiple foreign dirs\n",
+				progname, argv[0]);
+			return CMD_HELP;
+		}
+
+		dname = argv[optind];
+		result = llapi_dir_create_foreign(dname, mode, type, flags,
+						  xattr);
+		if (result != 0)
+			fprintf(stderr,
+				"%s mkdir: can't create foreign dir '%s': %s\n",
+				progname, dname, strerror(-result));
+		return result;
 	}
 
 	/*

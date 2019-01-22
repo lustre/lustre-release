@@ -630,7 +630,7 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 struct lov_foreign_md {
 	__u32 lfm_magic;	/* magic number = LOV_MAGIC_FOREIGN */
 	__u32 lfm_length;	/* length of lfm_value */
-	__u32 lfm_type;		/* type, see LOV_FOREIGN_TYPE_ */
+	__u32 lfm_type;		/* type, see LU_FOREIGN_TYPE_ */
 	__u32 lfm_flags;	/* flags, type specific */
 	char lfm_value[];
 };
@@ -799,19 +799,22 @@ enum lmv_hash_type {
 
 extern char *mdt_hash_name[LMV_HASH_TYPE_MAX];
 
-/**
- * LOV foreign types
- **/
-#define LOV_FOREIGN_TYPE_NONE 0
-#define LOV_FOREIGN_TYPE_DAOS 0xda05
-#define LOV_FOREIGN_TYPE_UNKNOWN UINT32_MAX
-
 struct lustre_foreign_type {
 	uint32_t lft_type;
 	const char *lft_name;
 };
 
-extern struct lustre_foreign_type lov_foreign_type[];
+/**
+ * LOV/LMV foreign types
+ **/
+enum lustre_foreign_types {
+	LU_FOREIGN_TYPE_NONE = 0,
+	LU_FOREIGN_TYPE_DAOS = 0xda05,
+	/* must be the max/last one */
+	LU_FOREIGN_TYPE_UNKNOWN = 0xffffffff,
+};
+
+extern struct lustre_foreign_type lu_foreign_types[];
 
 /* Got this according to how get LOV_MAX_STRIPE_COUNT, see above,
  * (max buffer size - lmv+rpc header) / sizeof(struct lmv_user_mds_data) */
@@ -829,6 +832,16 @@ struct lmv_user_md_v1 {
 	char	lum_pool_name[LOV_MAXPOOLNAME + 1];
 	struct	lmv_user_mds_data  lum_objects[0];
 } __attribute__((packed));
+
+static inline __u32 lmv_foreign_to_md_stripes(__u32 size)
+{
+	if (size <= sizeof(struct lmv_user_md))
+		return 0;
+
+	size -= sizeof(struct lmv_user_md);
+	return (size + sizeof(struct lmv_user_mds_data) - 1) /
+	       sizeof(struct lmv_user_mds_data);
+}
 
 static inline int lmv_user_md_size(int stripes, int lmm_magic)
 {

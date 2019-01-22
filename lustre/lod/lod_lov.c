@@ -1513,6 +1513,22 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 			lo->ldo_comp_cached = 1;
 	} else if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
 		rc = lod_get_lmv_ea(env, lo);
+		if (rc > sizeof(struct lmv_foreign_md)) {
+			struct lmv_foreign_md *lfm = info->lti_ea_store;
+
+			if (le32_to_cpu(lfm->lfm_magic) == LMV_MAGIC_FOREIGN) {
+				lo->ldo_foreign_lmv = info->lti_ea_store;
+				lo->ldo_foreign_lmv_size =
+					info->lti_ea_store_size;
+				info->lti_ea_store = NULL;
+				info->lti_ea_store_size = 0;
+
+				lo->ldo_dir_stripe_loaded = 1;
+				lo->ldo_dir_is_foreign = 1;
+				GOTO(unlock, rc = 0);
+			}
+		}
+
 		if (rc < (typeof(rc))sizeof(struct lmv_mds_md_v1)) {
 			/* Let's set stripe_loaded to avoid further
 			 * stripe loading especially for non-stripe directory,

@@ -341,6 +341,8 @@ int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
 				     const char *pool_name);
 int llapi_dir_create(const char *name, mode_t mode,
 		     const struct llapi_stripe_param *param);
+int llapi_dir_create_foreign(const char *name, mode_t mode, __u32 type,
+			     __u32 flags, const char *value);
 int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 			  int stripe_count, int stripe_pattern,
 			  const char *poolname);

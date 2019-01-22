@@ -276,6 +276,11 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 
 	ENTRY;
 
+	/* do not allow file creation in foreign dir */
+	if ((it->it_op & IT_CREAT) && op_data->op_mea1 != NULL &&
+	    op_data->op_mea1->lsm_md_magic == LMV_MAGIC_FOREIGN)
+		RETURN(-ENODATA);
+
 	if ((it->it_op & IT_CREAT) && !(flags & MDS_OPEN_BY_FID)) {
 		/* don't allow create under dir with bad hash */
 		if (lmv_is_dir_bad_hash(op_data->op_mea1))
@@ -421,6 +426,15 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	struct mdt_body *body;
 	int rc;
 	ENTRY;
+
+	/* foreign dir is not striped */
+	if (op_data->op_mea1 &&
+	    op_data->op_mea1->lsm_md_magic == LMV_MAGIC_FOREIGN) {
+		/* only allow getattr/lookup for itself */
+		if (op_data->op_name != NULL)
+			RETURN(-ENODATA);
+		RETURN(0);
+	}
 
 retry:
 	tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);

@@ -4474,6 +4474,11 @@ static int ll_merge_md_attr(struct inode *inode)
 	int rc;
 
 	LASSERT(lli->lli_lsm_md != NULL);
+
+	/* foreign dir is not striped dir */
+	if (lli->lli_lsm_md->lsm_md_magic == LMV_MAGIC_FOREIGN)
+		RETURN(0);
+
 	down_read(&lli->lli_lsm_sem);
 	rc = md_merge_attr(ll_i2mdexp(inode), ll_i2info(inode)->lli_lsm_md,
 			   &attr, ll_md_blocking_ast);

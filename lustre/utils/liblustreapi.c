@@ -86,11 +86,11 @@ char *mdt_hash_name[] = { "none",
 			  LMV_HASH_NAME_ALL_CHARS,
 			  LMV_HASH_NAME_FNV_1A_64 };
 
-struct lustre_foreign_type lov_foreign_type[] = {
-	{.lft_type = LOV_FOREIGN_TYPE_NONE, .lft_name = "none"},
-	{.lft_type = LOV_FOREIGN_TYPE_DAOS, .lft_name = "daos"},
+struct lustre_foreign_type lu_foreign_types[] = {
+	{.lft_type = LU_FOREIGN_TYPE_NONE, .lft_name = "none"},
+	{.lft_type = LU_FOREIGN_TYPE_DAOS, .lft_name = "daos"},
 	/* must be the last element */
-	{.lft_type = LOV_FOREIGN_TYPE_UNKNOWN, .lft_name = NULL}
+	{.lft_type = LU_FOREIGN_TYPE_UNKNOWN, .lft_name = NULL}
 	/* array max dimension must be <= UINT32_MAX */
 };
 
@@ -1161,6 +1161,106 @@ out:
 	return rc;
 }
 
+/**
+ * Create a foreign directory.
+ *
+ * \param name     the name of the directory to be created
+ * \param mode     permission of the file if it is created, see mode in open(2)
+ * \param type     foreign type to be set in LMV EA
+ * \param flags    foreign flags to be set in LMV EA
+ * \param value    foreign pattern to be set in LMV EA
+ *
+ * \retval         0 on success
+ * \retval         negative errno on failure
+ */
+int llapi_dir_create_foreign(const char *name, mode_t mode, __u32 type,
+			     __u32 flags, const char *value)
+{
+	struct lmv_foreign_md *lfm = NULL;
+	size_t lfm_size, len;
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[8192];
+	char *buf = rawbuf;
+	char *dirpath = NULL;
+	char *namepath = NULL;
+	char *dir;
+	char *filename;
+	int fd, rc;
+
+	len = strlen(value);
+	if (len > XATTR_SIZE_MAX - offsetof(struct lmv_foreign_md, lfm_value) ||
+	    len <= 0) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc, "invalid LOV EA length %zu "
+			"(must be 0 < len < %zu)\n", len,
+			XATTR_SIZE_MAX -
+			offsetof(struct lmv_foreign_md, lfm_value));
+		return rc;
+	}
+	lfm_size = len + offsetof(struct lmv_foreign_md, lfm_value);
+	lfm = calloc(1, lfm_size);
+	if (lfm == NULL)
+		return -ENOMEM;
+
+	dirpath = strdup(name);
+	if (!dirpath) {
+		free(lfm);
+		return -ENOMEM;
+	}
+
+	namepath = strdup(name);
+	if (!namepath) {
+		free(dirpath);
+		free(lfm);
+		return -ENOMEM;
+	}
+
+	lfm->lfm_magic = LMV_MAGIC_FOREIGN;
+	lfm->lfm_length = len;
+	lfm->lfm_type = type;
+	lfm->lfm_flags = flags;
+	strncpy(lfm->lfm_value, value, len);
+
+	filename = basename(namepath);
+	dir = dirname(dirpath);
+
+	data.ioc_inlbuf1 = (char *)filename;
+	data.ioc_inllen1 = strlen(filename) + 1;
+	data.ioc_inlbuf2 = (char *)lfm;
+	data.ioc_inllen2 = lfm_size;
+	data.ioc_type = mode;
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: LL_IOC_LMV_SETSTRIPE pack failed '%s'.",
+			    name);
+		goto out;
+	}
+
+	fd = open(dir, O_DIRECTORY | O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'", name);
+		goto out;
+	}
+
+	if (ioctl(fd, LL_IOC_LMV_SETSTRIPE, buf)) {
+		char *errmsg = "stripe already set";
+
+		rc = -errno;
+		if (errno != EEXIST && errno != EALREADY)
+			errmsg = strerror(errno);
+
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "dirstripe error on '%s': %s", name, errmsg);
+	}
+	close(fd);
+out:
+	free(namepath);
+	free(dirpath);
+	free(lfm);
+	return rc;
+}
 
 int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
 			  int stripe_count, int stripe_pattern,
@@ -1835,7 +1935,27 @@ again:
 		int stripe_count;
 		int lmv_size;
 
-		stripe_count = (__u32)param->fp_lmv_md->lum_stripe_count;
+		/* if foreign LMV case, fake stripes number */
+		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
+			struct lmv_foreign_md *lfm;
+
+			lfm = (struct lmv_foreign_md *)param->fp_lmv_md;
+			if (lfm->lfm_length < XATTR_SIZE_MAX -
+			    offsetof(typeof(*lfm), lfm_value)) {
+				uint32_t size = lfm->lfm_length +
+					     offsetof(typeof(*lfm), lfm_value);
+
+				stripe_count = lmv_foreign_to_md_stripes(size);
+			} else {
+				llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+					    "error: invalid %d foreign size "
+					    "returned from ioctl",
+					    lfm->lfm_length);
+				return -EINVAL;
+			}
+		} else {
+			stripe_count = param->fp_lmv_md->lum_stripe_count;
+		}
 		if (stripe_count <= param->fp_lmv_stripe_count)
 			return ret;
 
@@ -3597,18 +3717,18 @@ static void lov_dump_plain_user_lmm(struct find_param *param, char *path,
 	}
 }
 
-static uint32_t lov_check_foreign_type(uint32_t foreign_type)
+static uint32_t check_foreign_type(uint32_t foreign_type)
 {
 	uint32_t i;
 
-	for (i = 0; i < LOV_FOREIGN_TYPE_UNKNOWN; i++) {
-		if (lov_foreign_type[i].lft_name == NULL)
+	for (i = 0; i < LU_FOREIGN_TYPE_UNKNOWN; i++) {
+		if (lu_foreign_types[i].lft_name == NULL)
 			break;
-		if (foreign_type == lov_foreign_type[i].lft_type)
+		if (foreign_type == lu_foreign_types[i].lft_type)
 			return i;
 	}
 
-	return LOV_FOREIGN_TYPE_UNKNOWN;
+	return LU_FOREIGN_TYPE_UNKNOWN;
 }
 
 static void lov_dump_foreign_lmm(struct find_param *param, char *path,
@@ -3621,7 +3741,7 @@ static void lov_dump_foreign_lmm(struct find_param *param, char *path,
 		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
 
 	if (param->fp_verbose & VERBOSE_DETAIL) {
-		uint32_t type = lov_check_foreign_type(lfm->lfm_type);
+		uint32_t type = check_foreign_type(lfm->lfm_type);
 
 		llapi_printf(LLAPI_MSG_NORMAL, "lfm_magic:         0x%08X\n",
 			     lfm->lfm_magic);
@@ -3629,16 +3749,47 @@ static void lov_dump_foreign_lmm(struct find_param *param, char *path,
 			     lfm->lfm_length);
 		llapi_printf(LLAPI_MSG_NORMAL, "lfm_type:          0x%08X",
 			     lfm->lfm_type);
-		if (type < LOV_FOREIGN_TYPE_UNKNOWN)
+		if (type < LU_FOREIGN_TYPE_UNKNOWN)
 			llapi_printf(LLAPI_MSG_NORMAL, " (%s)\n",
-				     lov_foreign_type[type].lft_name);
+				     lu_foreign_types[type].lft_name);
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, " (unknown)\n");
 
 		llapi_printf(LLAPI_MSG_NORMAL, "lfm_flags:          0x%08X\n",
 			     lfm->lfm_flags);
 	}
+	llapi_printf(LLAPI_MSG_NORMAL, "lfm_value:     '%.*s'\n",
+		     lfm->lfm_length, lfm->lfm_value);
+	llapi_printf(LLAPI_MSG_NORMAL, "\n");
+}
 
+static void lmv_dump_foreign_lmm(struct find_param *param, char *path,
+				    enum lov_dump_flags flags)
+{
+	struct lmv_foreign_md *lfm = (struct lmv_foreign_md *)param->fp_lmv_md;
+	bool yaml = flags & LDF_YAML;
+
+	if (!yaml && param->fp_depth && path)
+		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
+
+	if (param->fp_verbose & VERBOSE_DETAIL) {
+		uint32_t type = check_foreign_type(lfm->lfm_type);
+
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_magic:         0x%08X\n",
+			     lfm->lfm_magic);
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_length:          %u\n",
+			     lfm->lfm_length);
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_type:          0x%08X",
+			     lfm->lfm_type);
+		if (type < LU_FOREIGN_TYPE_UNKNOWN)
+			llapi_printf(LLAPI_MSG_NORMAL, " (%s)\n",
+				     lu_foreign_types[type].lft_name);
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, " (unknown)\n");
+
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_flags:          0x%08X\n",
+			     lfm->lfm_flags);
+	}
 	llapi_printf(LLAPI_MSG_NORMAL, "lfm_value:     '%.*s'\n",
 		     lfm->lfm_length, lfm->lfm_value);
 	llapi_printf(LLAPI_MSG_NORMAL, "\n");
@@ -3683,6 +3834,9 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 	}
 	case LOV_USER_MAGIC_COMP_V1:
 		lov_dump_comp_v1(param, path, flags);
+		break;
+	case LMV_MAGIC_FOREIGN:
+		lmv_dump_foreign_lmm(param, path, flags);
 		break;
 	default:
 		llapi_printf(LLAPI_MSG_NORMAL, "unknown lmm_magic:  %#x "
@@ -4022,11 +4176,27 @@ static int find_check_foreign(struct find_param *param)
 
 		lfm = (void *)&param->fp_lmd->lmd_lmm;
 		if (lfm->lfm_magic != LOV_USER_MAGIC_FOREIGN) {
-			if (param->fp_foreign_type == LOV_FOREIGN_TYPE_UNKNOWN)
+			if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN)
 				return param->fp_exclude_foreign ? 1 : -1;
 			return -1;
 		} else {
-			if (param->fp_foreign_type == LOV_FOREIGN_TYPE_UNKNOWN ||
+			if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN ||
+			    lfm->lfm_type == param->fp_foreign_type)
+				return param->fp_exclude_foreign ? -1 : 1;
+			return param->fp_exclude_foreign ? 1 : -1;
+		}
+	}
+
+	if (S_ISDIR(param->fp_lmd->lmd_st.st_mode)) {
+		struct lmv_foreign_md *lfm;
+
+		lfm = (void *)param->fp_lmv_md;
+		if (lfm->lfm_magic != LMV_MAGIC_FOREIGN) {
+			if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN)
+				return param->fp_exclude_foreign ? 1 : -1;
+			return -1;
+		} else {
+			if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN ||
 			    lfm->lfm_type == param->fp_foreign_type)
 				return param->fp_exclude_foreign ? -1 : 1;
 			return param->fp_exclude_foreign ? 1 : -1;
@@ -4274,11 +4444,22 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
                 decision = 0;
 
 	if (decision == 0) {
-		if (param->fp_check_mdt_count || param->fp_check_hash_type) {
+		if (dir && (param->fp_check_mdt_count ||
+		    param->fp_check_hash_type || param->fp_check_foreign)) {
 			param->fp_get_lmv = 1;
 			ret = cb_get_dirstripe(path, dir, param);
-			if (ret != 0)
+			if (ret != 0) {
+				/* XXX this works to decide for foreign
+				 * criterion only
+				 */
+				if (errno == ENODATA &&
+				    param->fp_check_foreign) {
+					if (param->fp_exclude_foreign)
+						goto foreign;
+					goto decided;
+				}
 				return ret;
+			}
 		}
 
 		param->fp_lmd->lmd_lmm.lmm_magic = 0;
@@ -4393,6 +4574,11 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	}
 
 	if (param->fp_check_mdt_count) {
+		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
+			decision = -1;
+			goto decided;
+		}
+
 		decision = find_value_cmp(
 				param->fp_lmv_md->lum_stripe_count,
 				param->fp_mdt_count,
@@ -4410,6 +4596,11 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 
 	if (param->fp_check_hash_type) {
 		__u32 found;
+
+		if (param->fp_lmv_md->lum_magic == LMV_MAGIC_FOREIGN) {
+			decision = -1;
+			goto decided;
+		}
 
 		found = param->fp_lmv_md->lum_hash_type & param->fp_hash_type;
 		if ((found && param->fp_exclude_hash_type) ||
@@ -4584,6 +4775,7 @@ obd_matches:
 			goto decided;
 	}
 
+foreign:
 	llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
 	if (param->fp_zero_end)
 		llapi_printf(LLAPI_MSG_NORMAL, "%c", '\0');

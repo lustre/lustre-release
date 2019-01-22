@@ -1454,21 +1454,35 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	rc = dt_xattr_get(env, dt_object_child(dt), buf, name);
 	if (strcmp(name, XATTR_NAME_LMV) == 0) {
 		struct lmv_mds_md_v1	*lmv1;
+		struct lmv_foreign_md	*lfm;
 		int			 rc1 = 0;
 
 		if (rc > (typeof(rc))sizeof(*lmv1))
 			RETURN(rc);
 
-		if (rc < (typeof(rc))sizeof(*lmv1))
+		/* short (<= sizeof(struct lmv_mds_md_v1)) foreign LMV case */
+		/* XXX empty foreign LMV is not allowed */
+		if (rc <= offsetof(typeof(*lfm), lfm_value))
 			RETURN(rc = rc > 0 ? -EINVAL : rc);
 
 		if (buf->lb_buf == NULL || buf->lb_len == 0) {
 			CLASSERT(sizeof(*lmv1) <= sizeof(info->lti_key));
 
+			/* lti_buf is large enough for *lmv1 or a short
+			 * (<= sizeof(struct lmv_mds_md_v1)) foreign LMV
+			 */
 			info->lti_buf.lb_buf = info->lti_key;
 			info->lti_buf.lb_len = sizeof(*lmv1);
 			rc = dt_xattr_get(env, dt_object_child(dt),
 					  &info->lti_buf, name);
+			if (unlikely(rc <= offsetof(typeof(*lfm),
+						    lfm_value)))
+				RETURN(rc = rc > 0 ? -EINVAL : rc);
+
+			lfm = info->lti_buf.lb_buf;
+			if (le32_to_cpu(lfm->lfm_magic) == LMV_MAGIC_FOREIGN)
+				RETURN(rc);
+
 			if (unlikely(rc != sizeof(*lmv1)))
 				RETURN(rc = rc > 0 ? -EINVAL : rc);
 
@@ -1481,6 +1495,13 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 					le32_to_cpu(lmv1->lmv_stripe_count),
 					LMV_MAGIC_V1);
 		} else {
+			lfm = buf->lb_buf;
+			if (le32_to_cpu(lfm->lfm_magic) == LMV_MAGIC_FOREIGN)
+				RETURN(rc);
+
+			if (rc != sizeof(*lmv1))
+				RETURN(rc = rc > 0 ? -EINVAL : rc);
+
 			rc1 = lod_load_lmv_shards(env, lod_dt_obj(dt),
 						  buf, false);
 		}
@@ -1661,6 +1682,10 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 	ENTRY;
 
 	LASSERT(mutex_is_locked(&lo->ldo_layout_mutex));
+
+	/* XXX may be useless as not called for foreign LMV ?? */
+	if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_FOREIGN)
+		RETURN(0);
 
 	if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_STRIPE) {
 		lo->ldo_dir_slave_stripe = 1;
@@ -2050,6 +2075,27 @@ out_free:
 }
 
 /**
+ *
+ * Alloc cached foreign LMV
+ *
+ * \param[in] lo        object
+ * \param[in] size      size of foreign LMV
+ *
+ * \retval              0 on success
+ * \retval              negative if failed
+ */
+int lod_alloc_foreign_lmv(struct lod_object *lo, size_t size)
+{
+	OBD_ALLOC_LARGE(lo->ldo_foreign_lmv, size);
+	if (lo->ldo_foreign_lmv == NULL)
+		return -ENOMEM;
+	lo->ldo_foreign_lmv_size = size;
+	lo->ldo_dir_is_foreign = 1;
+
+	return 0;
+}
+
+/**
  * Declare create striped md object.
  *
  * The function declares intention to create a striped directory. This is a
@@ -2086,8 +2132,16 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 	       le32_to_cpu(lum->lum_magic), le32_to_cpu(lum->lum_stripe_count),
 	       (int)le32_to_cpu(lum->lum_stripe_offset));
 
-	if (lo->ldo_dir_stripe_count == 0)
+	if (lo->ldo_dir_stripe_count == 0) {
+		if (lo->ldo_dir_is_foreign) {
+			rc = lod_alloc_foreign_lmv(lo, lum_buf->lb_len);
+			if (rc != 0)
+				GOTO(out, rc);
+			memcpy(lo->ldo_foreign_lmv, lum, lum_buf->lb_len);
+			lo->ldo_dir_stripe_loaded = 1;
+		}
 		GOTO(out, rc = 0);
+	}
 
 	/* prepare dir striped objects */
 	rc = lod_prep_md_striped_create(env, dt, attr, lum, dof, th);
@@ -3629,8 +3683,15 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 
 	/* The stripes are supposed to be allocated in declare phase,
 	 * if there are no stripes being allocated, it will skip */
-	if (lo->ldo_dir_stripe_count == 0)
+	if (lo->ldo_dir_stripe_count == 0) {
+		if (lo->ldo_dir_is_foreign) {
+			rc = lod_sub_xattr_set(env, dt_object_child(dt), buf,
+					       XATTR_NAME_LMV, fl, th);
+			if (rc != 0)
+				RETURN(rc);
+		}
 		RETURN(0);
+	}
 
 	rc = dt_attr_get(env, dt_object_child(dt), attr);
 	if (rc != 0)
@@ -3822,6 +3883,26 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 					       th);
 		if (rc != 0)
 			RETURN(rc);
+	} else {
+		/* foreign LMV EA case */
+		if (lmu) {
+			struct lmv_foreign_md *lfm = lmu->lb_buf;
+
+			if (lfm->lfm_magic == LMV_MAGIC_FOREIGN) {
+				rc = lod_declare_xattr_set_lmv(env, dt, attr,
+							       lmu, dof, th);
+			}
+		} else {
+			if (lo->ldo_dir_is_foreign) {
+				LASSERT(lo->ldo_foreign_lmv != NULL &&
+					lo->ldo_foreign_lmv_size > 0);
+				info->lti_buf.lb_buf = lo->ldo_foreign_lmv;
+				info->lti_buf.lb_len = lo->ldo_foreign_lmv_size;
+				lmu = &info->lti_buf;
+				rc = lod_xattr_set_lmv(env, dt, lmu,
+						       XATTR_NAME_LMV, 0, th);
+			}
+		}
 	}
 
 	/* Transfer default LMV striping from the parent */
@@ -4764,6 +4845,17 @@ static void lod_ah_init(const struct lu_env *env,
 
 		/* other default values are 0 */
 		lc->ldo_dir_stripe_offset = -1;
+
+		/* no default striping configuration is needed for
+		 * foreign dirs
+		 */
+		if (ah->dah_eadata != NULL && ah->dah_eadata_len != 0 &&
+		    le32_to_cpu(lum1->lum_magic) == LMV_MAGIC_FOREIGN) {
+			lc->ldo_dir_is_foreign = true;
+			/* keep stripe_count 0 and stripe_offset -1 */
+			CDEBUG(D_INFO, "no default striping for foreign dir\n");
+			RETURN_EXIT;
+		}
 
 		/*
 		 * If parent object is not root directory,
@@ -6858,6 +6950,21 @@ void lod_free_foreign_lov(struct lod_object *lo)
 
 /**
  *
+ * Free cached foreign LMV
+ *
+ * \param[in] lo        object
+ */
+void lod_free_foreign_lmv(struct lod_object *lo)
+{
+	if (lo->ldo_foreign_lmv != NULL)
+		OBD_FREE_LARGE(lo->ldo_foreign_lmv, lo->ldo_foreign_lmv_size);
+	lo->ldo_foreign_lmv = NULL;
+	lo->ldo_foreign_lmv_size = 0;
+	lo->ldo_dir_is_foreign = 0;
+}
+
+/**
+ *
  * Release resources associated with striping.
  *
  * If the object is striped (regular or directory), then release
@@ -6874,6 +6981,9 @@ void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo)
 	if (unlikely(lo->ldo_is_foreign)) {
 		lod_free_foreign_lov(lo);
 		lo->ldo_comp_cached = 0;
+	} else if (unlikely(lo->ldo_dir_is_foreign)) {
+		lod_free_foreign_lmv(lo);
+		lo->ldo_dir_stripe_loaded = 0;
 	} else if (lo->ldo_stripe != NULL) {
 		LASSERT(lo->ldo_comp_entries == NULL);
 		LASSERT(lo->ldo_dir_stripes_allocated > 0);
