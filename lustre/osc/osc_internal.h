@@ -147,7 +147,7 @@ struct osc_async_args {
 
 int osc_quota_setup(struct obd_device *obd);
 int osc_quota_cleanup(struct obd_device *obd);
-int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
+int osc_quota_setdq(struct client_obd *cli, __u64 xid, const unsigned int qid[],
 		    u64 valid, u32 flags);
 int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[]);
 int osc_quotactl(struct obd_device *unused, struct obd_export *exp,

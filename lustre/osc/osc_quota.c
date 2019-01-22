@@ -96,7 +96,7 @@ static inline u32 fl_quota_flag(int qtype)
 	}
 }
 
-int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
+int osc_quota_setdq(struct client_obd *cli, __u64 xid, const unsigned int qid[],
 		    u64 valid, u32 flags)
 {
 	int type;
@@ -107,6 +107,11 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 	if ((valid & (OBD_MD_FLALLQUOTA)) == 0)
 		RETURN(0);
 
+	mutex_lock(&cli->cl_quota_mutex);
+	if (cli->cl_quota_last_xid > xid)
+		GOTO(out_unlock, rc);
+
+	cli->cl_quota_last_xid = xid;
 	for (type = 0; type < LL_MAXQUOTAS; type++) {
 		struct osc_quota_info *oqi;
 
@@ -153,6 +158,8 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 		}
 	}
 
+out_unlock:
+	mutex_unlock(&cli->cl_quota_mutex);
 	RETURN(rc);
 }
 
@@ -231,6 +238,8 @@ int osc_quota_setup(struct obd_device *obd)
 	struct client_obd *cli = &obd->u.cli;
 	int i, type;
 	ENTRY;
+
+	mutex_init(&cli->cl_quota_mutex);
 
 	for (type = 0; type < LL_MAXQUOTAS; type++) {
 		cli->cl_quota_hash[type] = cfs_hash_create("QUOTA_HASH",
