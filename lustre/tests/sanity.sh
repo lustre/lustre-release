@@ -8598,6 +8598,7 @@ test_103a() {
 run_test 103a "acl test"
 
 test_103b() {
+	declare -a pids
 	local U
 
 	for U in {0..511}; do
@@ -8622,6 +8623,12 @@ test_103b() {
 			error "lfs setstripe -N2 $DIR/$tfile.m$O '$S' != '$O'"
 		rm -f $DIR/$tfile.[smp]$0
 		} &
+		local pid=$!
+
+		# limit the concurrently running threads to 64. LU-11878
+		local idx=$((U % 64))
+		[ -z "${pids[idx]}" ] || wait ${pids[idx]}
+		pids[idx]=$pid
 	done
 	wait
 }
