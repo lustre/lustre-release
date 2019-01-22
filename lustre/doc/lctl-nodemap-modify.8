@@ -53,6 +53,16 @@ trusted are set to off and the user is not mapped.
 Note: directory entries cached by a Lustre client may be visible to unknown
 users located on the same client, though the contents of the files will not be.
 .RE
+.PP
+audit_mode
+.RS 4
+Defaults to on, which lets clients record file system access events to the
+Changelogs, if Changelogs are otherwise activated. If set to 0, events from
+these clients are not logged into the Changelogs, no matter if Changelogs are
+activated or not.
+The reason not to record file system events from given clients is to prevent
+some nodes (e.g. backup, HSM agent nodes) from flooding the Changelogs.
+.RE
 
 .I value
 is the value to set for the property. Should be 0 or 1 for admin and trusted.
