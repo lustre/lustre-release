@@ -19,6 +19,7 @@ LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+get_lustre_env
 init_logging
 
 NODEMAP_TESTS=$(seq 7 26)
@@ -559,6 +560,71 @@ test_nid() {
 	return 1
 }
 
+wait_nm_sync() {
+	local nodemap_name=$1
+	local key=$2
+	local value=$3
+	local opt=$4
+	local proc_param
+	local is_active=$(do_facet mgs $LCTL get_param -n nodemap.active)
+	local max_retries=20
+	local is_sync
+	local out1=""
+	local out2
+	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
+	local i
+
+	if [ "$nodemap_name" == "active" ]; then
+		proc_param="active"
+	elif [ -z "$key" ]; then
+		proc_param=${nodemap_name}
+	else
+		proc_param="${nodemap_name}.${key}"
+	fi
+	(( is_active == 0 )) && [ "$proc_param" != "active" ] && return
+
+	if [ -z "$value" ]; then
+		out1=$(do_facet mgs $LCTL get_param $opt nodemap.${proc_param})
+		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
+	else
+		out1=$value;
+	fi
+
+	# wait up to 10 seconds for other servers to sync with mgs
+	for i in $(seq 1 10); do
+		for node in $(all_server_nodes); do
+		    local node_ip=$(host_nids_address $node $NETTYPE |
+				    cut -d' ' -f1)
+
+		    is_sync=true
+		    if [ -z "$value" ]; then
+			[ $node_ip == $mgs_ip ] && continue
+		    fi
+
+		    out2=$(do_node $node_ip $LCTL get_param $opt \
+				   nodemap.$proc_param 2>/dev/null)
+		    echo "On $node ${node_ip}, ${proc_param} = $out2"
+		    [ "$out1" != "$out2" ] && is_sync=false && break
+		done
+		$is_sync && break
+		sleep 1
+	done
+	if ! $is_sync; then
+		echo MGS
+		echo $out1
+		echo OTHER - IP: $node_ip
+		echo $out2
+		error "mgs and $nodemap_name ${key} mismatch, $i attempts"
+	fi
+	echo "waited $((i - 1)) seconds for sync"
+}
+
+cleanup_active() {
+	# restore activation state
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active
+}
+
 test_idmap() {
 	local i
 	local cmd="$LCTL nodemap_test_id"
@@ -1076,6 +1142,11 @@ test_15() {
 	add_idmaps
 	rc=$?
 	[[ $rc != 0 ]] && error "nodemap_add_idmap failed with $rc" && return 3
+
+	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
+	if [[ "$activedefault" != "1" ]]; then
+		stack_trap cleanup_active EXIT
+	fi
 
 	rc=0
 	test_idmap
@@ -2529,12 +2600,61 @@ test_33() {
 }
 run_test 33 "correct srpc flags for MGS connection"
 
+cleanup_34_deny() {
+	# restore deny_unknown
+	do_facet mgs $LCTL nodemap_modify --name default \
+			   --property deny_unknown --value $denydefault
+	if [ $? -ne 0 ]; then
+		error_noexit "cannot reset deny_unknown on default nodemap"
+		return
+	fi
+
+	wait_nm_sync default deny_unknown
+}
+
+test_34() {
+	local denynew
+	local activedefault
+
+	[ $MGS_VERSION -lt $(version_code 2.12.51) ] &&
+		skip "deny_unknown on default nm not supported before 2.12.51"
+
+	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
+
+	if [[ "$activedefault" != "1" ]]; then
+		do_facet mgs $LCTL nodemap_activate 1
+		wait_nm_sync active
+		stack_trap cleanup_active EXIT
+	fi
+
+	denydefault=$(do_facet mgs $LCTL get_param -n \
+		      nodemap.default.deny_unknown)
+	[ -z "$denydefault" ] &&
+		error "cannot get deny_unknown on default nodemap"
+	if [ "$denydefault" -eq 0 ]; then
+		denynew=1;
+	else
+		denynew=0;
+	fi
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property deny_unknown --value $denynew ||
+		error "cannot set deny_unknown on default nodemap"
+
+	[ "$(do_facet mgs $LCTL get_param -n nodemap.default.deny_unknown)" \
+			-eq $denynew ] ||
+		error "setting deny_unknown on default nodemap did not work"
+
+	stack_trap cleanup_34_deny EXIT
+
+	wait_nm_sync default deny_unknown
+}
+run_test 34 "deny_unknown on default nodemap"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
 	## nodemap deactivated
-	do_facet mgs $LCTL nodemap_activate 0
-
 	for num in $(seq $MDSCOUNT); do
 		if [ "${identity_old[$num]}" = 1 ]; then
 			switch_identity $num false || identity_old[$num]=$?

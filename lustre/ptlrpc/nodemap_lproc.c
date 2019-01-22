@@ -748,6 +748,10 @@ static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
 		.fops		= &nodemap_admin_fops,
 	},
 	{
+		.name		= "deny_unknown",
+		.fops		= &nodemap_deny_unknown_fops,
+	},
+	{
 		.name		= "squash_uid",
 		.fops		= &nodemap_squash_uid_fops,
 	},
