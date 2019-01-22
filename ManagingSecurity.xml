@@ -12,6 +12,9 @@
     <listitem>
       <para><xref linkend="managingSecurity.isolation"/></para>
     </listitem>
+    <listitem>
+      <para><xref linkend="managingSecurity.sepol"/></para>
+    </listitem>
   </itemizedlist>
   <section xml:id="managingSecurity.acl">
     <title><indexterm><primary>Access Control List (ACL)</primary></indexterm>
@@ -383,6 +386,143 @@ mgs# lctl set_param -P nodemap.tenant1.fileset=/dir1</screen>
       <para>This way the fileset parameter will be stored in the Lustre config
       logs, letting the servers retrieve the information after a restart.
       </para>
+    </section>
+  </section>
+  <section xml:id="managingSecurity.sepol" condition='l2D'>
+    <title><indexterm><primary>selinux policy check</primary></indexterm>
+    Checking SELinux Policy Enforced by Lustre Clients</title>
+    <para>SELinux provides a mechanism in Linux for supporting Mandatory Access
+      Control (MAC) policies. When a MAC policy is enforced, the operating
+      system’s (OS) kernel defines application rights, firewalling applications
+      from compromising the entire system. Regular users do not have the ability to
+      override the policy.</para>
+    <para>One purpose of SELinux is to protect the
+      <emphasis role="bold">OS</emphasis> from privilege escalation. To that
+      extent, SELinux defines confined and unconfined domains for processes and
+      users. Each process, user, file is assigned a security context, and
+      rules define the allowed operations by processes and users on files.
+    </para>
+    <para>Another purpose of SELinux can be to protect
+      <emphasis role="bold">data</emphasis> sensitivity, thanks to Multi-Level
+      Security (MLS). MLS works on top of SELinux, by defining the concept of
+      security levels in addition to domains. Each process, user and file is
+      assigned a security level, and the model states that processes and users
+      can read the same or lower security level, but can only write to their own
+      or higher security level.
+    </para>
+    <para>From a file system perspective, the security context of files must be
+      stored permanently. Lustre makes use of the
+      <literal>security.selinux</literal> extended attributes on files to hold
+      this information. Lustre supports SELinux on the client side. All you have
+      to do to have MAC and MLS on Lustre is to enforce the appropriate SELinux
+      policy (as provided by the Linux distribution) on all Lustre clients. No
+      SELinux is required on Lustre servers.
+    </para>
+    <para>Because Lustre is a distributed file system, the specificity when
+      using MLS is that Lustre really needs to make sure data is always accessed
+      by nodes with the SELinux MLS policy properly enforced. Otherwise, data is
+      not protected. This means Lustre has to check that SELinux is properly
+      enforced on client side, with the right, unaltered policy. And if SELinux
+      is not enforced as expected on a client, the server denies its access to
+      Lustre.
+    </para>
+    <section xml:id="managingSecurity.sepol.determining" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        determining</secondary></indexterm>Determining SELinux Policy Info
+      </title>
+      <para>A string that represents the SELinux Status info will be used by
+        servers as a reference, to check if clients are enforcing SELinux
+	properly. This reference string can be obtained on a client node known
+	to enforce the right SELinux policy, by calling the
+	<literal>l_getsepol</literal> command line utility:</para>
+	<screen>client# l_getsepol
+SELinux status info: 1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</screen>
+	<para>The string describing the SELinux policy has the following
+	  syntax:</para>
+	<para><literal>mode:name:version:hash</literal></para>
+	<para>where:</para>
+	  <itemizedlist>
+	    <listitem>
+	      <para><literal>mode</literal> is a digit telling if SELinux is in
+	        Permissive mode (0) or Enforcing mode (1)</para>
+	    </listitem>
+	    <listitem>
+	      <para><literal>name</literal> is the name of the SELinux policy
+	      </para>
+	    </listitem>
+	    <listitem>
+	      <para><literal>version</literal> is the version of the SELinux
+	      policy</para>
+	    </listitem>
+	    <listitem>
+	      <para><literal>hash</literal> is the computed hash of the binary
+	        representation of the policy, as exported in
+	        /etc/selinux/<literal>name</literal>/policy/policy.
+		<literal>version</literal></para>
+	    </listitem>
+	  </itemizedlist>
+    </section>
+    <section xml:id="managingSecurity.sepol.configuring" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        enforcing</secondary></indexterm>Enforcing SELinux Policy Check</title>
+      <para>SELinux policy check can be enforced by setting the
+        <literal>sepol</literal> parameter on a nodemap entry. All clients
+	belonging to this nodemap entry must enforce the SELinux policy
+	described by this parameter, otherwise they are denied access to the
+	Lustre file system. For example:</para>
+      <screen>mgs# lctl nodemap_set_sepol --name restricted
+     --sepol '1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f'</screen>
+      <para>So all clients matching the <literal>restricted</literal> nodemap
+        must enforce the SELinux policy which description matches
+	<literal>1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</literal>.
+	If not, they will get Permission Denied when trying to mount or access
+	files on the Lustre file system.</para>
+      <para>To delete the <literal>sepol</literal> parameter, just set it to an
+        empty string:</para>
+      <screen>mgs# lctl nodemap_set_sepol --name restricted --sepol ''</screen>
+      <para>See <xref linkend="lustrenodemap.title" /> for more details about
+        the Nodemap feature.</para>
+    </section>
+    <section xml:id="managingSecurity.sepol.permanent" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        making permanent</secondary></indexterm>Making SELinux Policy Check
+	Permanent</title>
+      <para>In order to make SELinux Policy check permanent, the sepol parameter
+        on the nodemap has to be set with <literal>lctl set_param</literal> with
+        the <literal>-P</literal> option.</para>
+      <screen>mgs# lctl set_param nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f
+mgs# lctl set_param -P nodemap.restricted.sepol=1:mls:31:40afb76d077c441b69af58cccaaa2ca63641ed6e21b0a887dc21a684f508b78f</screen>
+      <para>This way the sepol parameter will be stored in the Lustre config
+      logs, letting the servers retrieve the information after a restart.
+      </para>
+    </section>
+    <section xml:id="managingSecurity.sepol.client" remap="h3">
+      <title><indexterm><primary>selinux policy check</primary><secondary>
+        sending client</secondary></indexterm>Sending SELinux Status Info from
+	Clients</title>
+      <para>In order for Lustre clients to send their SELinux status
+	information, in	case SELinux is enabled locally, the
+	<literal>send_sepol</literal> ptlrpc kernel module's parameter has to be
+	set to a non-zero value. <literal>send_sepol</literal> accepts various
+	values:</para>
+	<itemizedlist>
+	    <listitem>
+	      <para>0: do not send SELinux policy info;</para>
+	    </listitem>
+	    <listitem>
+	      <para>-1: fetch SELinux policy info for every request;</para>
+	    </listitem>
+	    <listitem>
+	      <para>N > 0: only fetch SELinux policy info every N seconds. Use
+	        <literal>N = 2^31-1</literal> to have SELinux policy info
+		fetched only at mount time.</para>
+	    </listitem>
+	</itemizedlist>
+	<para>Clients that are part of a nodemap on which
+	  <literal>sepol</literal> is defined must send SELinux status info.
+	  And the SELinux policy they enforce must match the representation
+	  stored into the nodemap. Otherwise they will be denied access to the
+	  Lustre file system.</para>
     </section>
   </section>
 </chapter>

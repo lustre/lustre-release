@@ -313,21 +313,6 @@ xml:id="installinglustre">
           <para>
           <emphasis role="italic">(Required)</emphasis>
           <emphasis role="italic">
-            <emphasis role="bold">Disable Security-Enhanced Linux
-            <superscript>*</superscript>(SELinux) on all Lustre servers 
-            </emphasis>
-          </emphasis>The Lustre software does not support SELinux. Therefore,
-          the SELinux system extension must be disabled on all Lustre nodes.
-          Also, make sure other security extensions (such as the Novell
-          AppArmor
-          <superscript>*</superscript>security system) and network packet
-          filtering tools (such as iptables) do not interfere with the Lustre
-          software.</para>
-        </listitem>
-        <listitem>
-          <para>
-          <emphasis role="italic">(Required)</emphasis>
-          <emphasis role="italic">
             <emphasis role="bold">Use the same user IDs (UID) and group IDs
             (GID) on all clients.</emphasis>
           </emphasis>If use of supplemental groups is required, see 
@@ -360,6 +345,19 @@ xml:id="installinglustre">
           keep client and server clocks in sync with each other. For more
           information about NTP, see: 
           <link xl:href="http://www.ntp.org/">http://www.ntp.org</link>.</para>
+        </listitem>
+        <listitem>
+          <para>
+          <emphasis role="italic">(Recommended)</emphasis>
+          <emphasis role="italic">
+            <emphasis role="bold">Make sure security extensions</emphasis>
+	    </emphasis>
+	    (such as the Novell AppArmor <superscript>*</superscript>security
+	    system) and
+	  <emphasis role="italic">
+            <emphasis role="bold">network packet filtering tools</emphasis>
+	  </emphasis>
+	    (such as iptables) do not interfere with the Lustre software.</para>
         </listitem>
       </itemizedlist></para>
     </section>
