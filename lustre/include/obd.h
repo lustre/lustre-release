@@ -346,8 +346,11 @@ struct client_obd {
 	/* ptlrpc work for writeback in ptlrpcd context */
 	void			*cl_writeback_work;
 	void			*cl_lru_work;
+	struct mutex		  cl_quota_mutex;
 	/* hash tables for osc_quota_info */
 	struct cfs_hash		*cl_quota_hash[LL_MAXQUOTAS];
+	/* the xid of the request updating the hash tables */
+	__u64			 cl_quota_last_xid;
 	/* Links to the global list of registered changelog devices */
 	struct list_head	 cl_chg_dev_linkage;
 };
