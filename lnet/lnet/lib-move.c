@@ -3718,7 +3718,7 @@ lnet_parse_put(struct lnet_ni *ni, struct lnet_msg *msg)
 	info.mi_rlength	= hdr->payload_length;
 	info.mi_roffset	= hdr->msg.put.offset;
 	info.mi_mbits	= hdr->msg.put.match_bits;
-	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_rxpeer->lpni_nid, ni);
+	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_initiator, ni);
 
 	msg->msg_rx_ready_delay = ni->ni_net->net_lnd->lnd_eager_recv == NULL;
 	ready_delay = msg->msg_rx_ready_delay;
@@ -3781,7 +3781,7 @@ lnet_parse_get(struct lnet_ni *ni, struct lnet_msg *msg, int rdma_get)
 	info.mi_rlength	= hdr->msg.get.sink_length;
 	info.mi_roffset	= hdr->msg.get.src_offset;
 	info.mi_mbits	= hdr->msg.get.match_bits;
-	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_rxpeer->lpni_nid, ni);
+	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_initiator, ni);
 
 	rc = lnet_ptl_match_md(&info, msg);
 	if (rc == LNET_MATCHMD_DROP) {
