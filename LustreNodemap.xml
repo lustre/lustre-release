@@ -23,6 +23,10 @@
     </listitem>
 
     <listitem>
+      <para><xref linkend="defaultNodemap"/></para>
+    </listitem>
+
+    <listitem>
       <para><xref linkend="verifyingsettings"/></para>
     </listitem>
 
@@ -361,6 +365,45 @@ oss# lctl set_param nodemap.add_nodemap_idmap='<replaceable>SiteName</replaceabl
     configuration is saved on the MGS and distributed automatically to
     MGS, MDS, and OSS nodes, a process which takes approximately
     ten seconds in normal circumstances.</para>
+  </section>
+
+  <section xml:id="defaultNodemap">
+    <title><literal>default</literal> Nodemap</title>
+
+    <para>There is a special nodemap called <literal>default</literal>. As the
+      name suggests, it is created by default and cannot be removed. It is like
+      a fallback nodemap, setting the behaviour for Lustre clients that do not
+      match any other nodemap.</para>
+    <para>Because of its special role, only some parameters can be set on the
+      <literal>default</literal> nodemap:</para>
+    <itemizedlist>
+      <listitem>
+        <para><literal>admin</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>trusted</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>squash_uid</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>squash_gid</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>fileset</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>audit_mode</literal></para>
+      </listitem>
+    </itemizedlist>
+    <para>In particular, no UID/GID mapping can be defined on the
+      <literal>default</literal> nodemap.</para>
+    <note>
+      <para>Be careful when altering the <literal>admin</literal> and
+        <literal>trusted</literal> properties of the <literal>default</literal>
+        nodemap, especially if your Lustre servers fall into this nodemap.
+      </para>
+    </note>
   </section>
 
   <section xml:id="verifyingsettings">
