@@ -40,8 +40,11 @@ Files with composite layouts allow different
 to be specified for non-overlapping extents of the file. Files will
 inherit options not explicitly specified on the command line either from
 the default layout on the parent directory, or from the filesystem-wide
-default.  The default layout set on a directory will be copied to any new
-subdirectories created within that directory at the time they are created.
+default. New subdirectories created under root directory will not explicitly
+copy the default layout at creation time, but will implicitly inherit the
+default layout at runtime. The default layout set on a non-root directory
+will be copied to any new subdirectories created within that directory
+at the time they are created.
 .TP
 .B lfs setstripe \fR[\fISTRIPE_OPTIONS\fR ...] <\fIdirectory\fR|\fIfile\fR>
 Create a new
