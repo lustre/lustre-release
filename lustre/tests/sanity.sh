@@ -1387,6 +1387,26 @@ test_24E() {
 }
 run_test 24E "cross MDT rename/link"
 
+test_24F () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+	local repeats=1000
+	[ "$SLOW" = "no" ] && repeats=100
+
+	mkdir -p $DIR/$tdir
+
+	echo "$repeats repeats"
+	for ((i = 0; i < repeats; i++)); do
+		$LFS mkdir -i0 -c2 $DIR/$tdir/test || error "mkdir fails"
+		touch $DIR/$tdir/test/a || error "touch fails"
+		mkdir $DIR/$tdir/test/b || error "mkdir fails"
+		rm -rf $DIR/$tdir/test || error "rmdir fails"
+	done
+
+	true
+}
+run_test 24F "hash order vs readdir (LU-11330)"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 

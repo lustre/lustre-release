@@ -1219,7 +1219,7 @@ static struct dt_it *osd_dir_it_init(const struct lu_env *env,
 
 	it = (struct osd_zap_it *)osd_index_it_init(env, dt, unused);
 	if (!IS_ERR(it))
-		it->ozi_pos = 0;
+		it->ozi_pos = OZI_POS_INIT;
 
 	RETURN((struct dt_it *)it);
 }
@@ -1254,22 +1254,22 @@ static int osd_dir_it_get(const struct lu_env *env,
 	LASSERT(((const char *)key)[0] == 0);
 
 	if (name[0] == 0) {
-		it->ozi_pos = 0;
+		it->ozi_pos = OZI_POS_INIT;
 		RETURN(1);
 	}
 
 	if (name[0] == '.') {
 		if (name[1] == 0) {
-			it->ozi_pos = 1;
+			it->ozi_pos = OZI_POS_DOT;
 			GOTO(out, rc = 1);
 		} else if (name[1] == '.' && name[2] == 0) {
-			it->ozi_pos = 2;
+			it->ozi_pos = OZI_POS_DOTDOT;
 			GOTO(out, rc = 1);
 		}
 	}
 
 	/* neither . nor .. - some real record */
-	it->ozi_pos = 3;
+	it->ozi_pos = OZI_POS_REAL;
 	rc = +1;
 
 out:
@@ -1337,9 +1337,9 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 	 * the second ->next() moves the cursor to ..
 	 * then we get to the real records and have to verify any exist
 	 */
-	if (it->ozi_pos <= 2) {
+	if (it->ozi_pos <= OZI_POS_DOTDOT) {
 		it->ozi_pos++;
-		if (it->ozi_pos <=2)
+		if (it->ozi_pos <= OZI_POS_DOTDOT)
 			RETURN(0);
 
 	} else {
@@ -1368,10 +1368,10 @@ static struct dt_key *osd_dir_it_key(const struct lu_env *env,
 	int		   rc = 0;
 	ENTRY;
 
-	if (it->ozi_pos <= 1) {
-		it->ozi_pos = 1;
+	if (it->ozi_pos <= OZI_POS_DOT) {
+		it->ozi_pos = OZI_POS_DOT;
 		RETURN((struct dt_key *)".");
-	} else if (it->ozi_pos == 2) {
+	} else if (it->ozi_pos == OZI_POS_DOTDOT) {
 		RETURN((struct dt_key *)"..");
 	}
 
@@ -1390,10 +1390,10 @@ static int osd_dir_it_key_size(const struct lu_env *env, const struct dt_it *di)
 	int		   rc;
 	ENTRY;
 
-	if (it->ozi_pos <= 1) {
-		it->ozi_pos = 1;
+	if (it->ozi_pos <= OZI_POS_DOT) {
+		it->ozi_pos = OZI_POS_DOT;
 		RETURN(2);
-	} else if (it->ozi_pos == 2) {
+	} else if (it->ozi_pos == OZI_POS_DOTDOT) {
 		RETURN(3);
 	}
 
@@ -1481,8 +1481,12 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 	ENTRY;
 
 	lde->lde_attrs = 0;
-	if (it->ozi_pos <= 1) {
-		lde->lde_hash = cpu_to_le64(1);
+	if (it->ozi_pos <= OZI_POS_DOT) {
+		/* notice hash=0 here, this is needed to avoid
+		 * case when some real entry (after ./..) may
+		 * have hash=0. in this case the client would
+		 * be confused having records out of hash order. */
+		lde->lde_hash = cpu_to_le64(0);
 		strcpy(lde->lde_name, ".");
 		lde->lde_namelen = cpu_to_le16(1);
 		fid_cpu_to_le(&lde->lde_fid,
@@ -1491,10 +1495,11 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 		/* append lustre attributes */
 		osd_it_append_attrs(lde, attr, 1, IFTODT(S_IFDIR));
 		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(1, attr));
-		it->ozi_pos = 1;
+		it->ozi_pos = OZI_POS_DOT;
 		RETURN(0);
-	} else if (it->ozi_pos == 2) {
-		lde->lde_hash = cpu_to_le64(2);
+	} else if (it->ozi_pos == OZI_POS_DOTDOT) {
+		/* same as for . above */
+		lde->lde_hash = cpu_to_le64(0);
 		strcpy(lde->lde_name, "..");
 		lde->lde_namelen = cpu_to_le16(2);
 		rc = osd_find_parent_fid(env, &it->ozi_obj->oo_dt, fid, NULL);
@@ -1607,9 +1612,9 @@ static int osd_dir_it_rec_size(const struct lu_env *env, const struct dt_it *di,
 	int		     rc;
 	ENTRY;
 
-	if (it->ozi_pos <= 1)
+	if (it->ozi_pos <= OZI_POS_DOT)
 		namelen = 1;
-	else if (it->ozi_pos == 2)
+	else if (it->ozi_pos == OZI_POS_DOTDOT)
 		namelen = 2;
 
 	if (namelen > 0) {
@@ -1643,8 +1648,8 @@ static __u64 osd_dir_it_store(const struct lu_env *env, const struct dt_it *di)
 	__u64		   pos;
 	ENTRY;
 
-	if (it->ozi_pos <= 2)
-		pos = it->ozi_pos;
+	if (it->ozi_pos <= OZI_POS_DOTDOT)
+		pos = 0;
 	else
 		pos = osd_zap_cursor_serialize(it->ozi_zc);
 
@@ -1670,11 +1675,11 @@ static int osd_dir_it_load(const struct lu_env *env,
 	zap_cursor_fini(it->ozi_zc);
 	osd_obj_cursor_init_serialized(it->ozi_zc, obj, hash);
 
-	if (hash <= 2) {
-		it->ozi_pos = hash;
-		rc = +1;
+	if (hash == 0) {
+		it->ozi_pos = OZI_POS_INIT;
+		rc = +1; /* there will be ./.. at least */
 	} else {
-		it->ozi_pos = 3;
+		it->ozi_pos = OZI_POS_REAL;
 		/* to return whether the end has been reached */
 		rc = osd_index_retrieve_skip_dots(it, za);
 		if (rc == 0)
