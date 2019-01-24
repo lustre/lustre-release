@@ -119,6 +119,13 @@ struct osd_it_quota {
 	unsigned		 oiq_reset:1; /* 1 -- no need to advance */
 };
 
+enum osd_zap_pos {
+	OZI_POS_INIT = 0,
+	OZI_POS_DOT = 1,	/* cursor at . */
+	OZI_POS_DOTDOT = 2,	/* cursor at .. */
+	OZI_POS_REAL = 3,	/* cursor at real entries */
+};
+
 /**
  * Iterator's in-memory data structure for ZAPs
  *
@@ -130,12 +137,8 @@ struct osd_zap_it {
 	zap_cursor_t		*ozi_zc;
 	struct osd_object	*ozi_obj;
 	unsigned		 ozi_reset:1;	/* 1 -- no need to advance */
-	/* ozi_pos - position of the cursor:
-	 * 0 - before any record
-	 * 1 - "."
-	 * 2 - ".."
-	 * 3 - real records */
-	unsigned		 ozi_pos:3;
+	/* ozi_pos - position of the cursor */
+	enum osd_zap_pos	ozi_pos;
 	union {
 		char		 ozi_name[MAXNAMELEN]; /* file name for dir */
 		__u64		 ozi_key; /* binary key for index files */

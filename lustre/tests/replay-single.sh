@@ -31,10 +31,6 @@ ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 # bug number for skipped test: LU-11388
 	ALWAYS_EXCEPT+="131b"
-       if [ $MDSCOUNT -gt 1 ]; then
-# bug number for skipped test:   LU-11330
-		ALWAYS_EXCEPT+="  70d"
-       fi
 fi
 if $SHARED_KEY; then
 # bug number for skipped tests: LU-9795 (all below)
