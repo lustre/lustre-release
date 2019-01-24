@@ -16694,7 +16694,7 @@ test_255c() {
 		cancel_lru_locks osc
 
 		count=$($LCTL get_param -n \
-		       ldlm.namespaces.$FSNAME-OST0000*osc-f*.lock_unused_count)
+		       ldlm.namespaces.$FSNAME-OST0000*osc-[-0-9a-f]*.lock_unused_count)
 
 		lockahead_test -d $DIR/$tdir -t $i -f $tfile
 		rc=$?
@@ -16703,7 +16703,7 @@ test_255c() {
 		fi
 
 		new_count=$($LCTL get_param -n \
-		       ldlm.namespaces.$FSNAME-OST0000*osc-f*.lock_unused_count)
+		       ldlm.namespaces.$FSNAME-OST0000*osc-[-0-9a-f]*.lock_unused_count)
 		difference="$((new_count - count))"
 
 		# Test 15 output is divided by 100 to map down to valid return
