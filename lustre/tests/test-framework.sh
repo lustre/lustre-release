@@ -4424,6 +4424,9 @@ __touch_device()
 	[[ ! "$device" =~ ^/dev/ ]] || [[ "$device" =~ ^/dev/shm/ ]] ||
 		error "$facet: device '$device' does not exist"
 
+	# zpool create doesn't like empty files
+	[[ $(facet_fstype $facet) == zfs ]] && return 0
+
 	do_facet $facet "touch \"${device}\""
 }
 
