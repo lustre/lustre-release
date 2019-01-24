@@ -53,7 +53,6 @@
 #include <lustre_kernelcomm.h>
 #include <lustre_lmv.h>
 #include <lustre_log.h>
-#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
 #include <lustre_osc.h>
@@ -2742,15 +2741,6 @@ static int mdc_cleanup(struct obd_device *obd)
 	return osc_cleanup_common(obd);
 }
 
-int mdc_process_config(struct obd_device *obd, size_t len, void *buf)
-{
-	struct lustre_cfg *lcfg = buf;
-	size_t count  = class_modify_config(lcfg, PARAM_MDC,
-					    &obd->obd_kset.kobj);
-
-	return count > 0 ? 0 : count;
-}
-
 static struct obd_ops mdc_obd_ops = {
         .o_owner            = THIS_MODULE,
         .o_setup            = mdc_setup,
@@ -2769,7 +2759,6 @@ static struct obd_ops mdc_obd_ops = {
         .o_fid_alloc        = mdc_fid_alloc,
         .o_import_event     = mdc_import_event,
         .o_get_info         = mdc_get_info,
-        .o_process_config   = mdc_process_config,
         .o_get_uuid         = mdc_get_uuid,
         .o_quotactl         = mdc_quotactl,
 };

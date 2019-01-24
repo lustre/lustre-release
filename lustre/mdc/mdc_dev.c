@@ -34,6 +34,7 @@
 
 #include <obd_class.h>
 #include <lustre_osc.h>
+#include <uapi/linux/lustre/lustre_param.h>
 
 #include "mdc_internal.h"
 
@@ -1454,15 +1455,17 @@ struct lu_object *mdc_object_alloc(const struct lu_env *env,
 	return obj;
 }
 
-static int mdc_cl_process_config(const struct lu_env *env,
-				 struct lu_device *d, struct lustre_cfg *cfg)
+static int mdc_process_config(const struct lu_env *env, struct lu_device *d,
+			      struct lustre_cfg *cfg)
 {
-	return mdc_process_config(d->ld_obd, 0, cfg);
+	size_t count  = class_modify_config(cfg, PARAM_MDC,
+					    &d->ld_obd->obd_kset.kobj);
+	return count > 0 ? 0 : count;
 }
 
 const struct lu_device_operations mdc_lu_ops = {
 	.ldo_object_alloc = mdc_object_alloc,
-	.ldo_process_config = mdc_cl_process_config,
+	.ldo_process_config = mdc_process_config,
 	.ldo_recovery_complete = NULL,
 };
 
