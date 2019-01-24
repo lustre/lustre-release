@@ -52,8 +52,8 @@ fi
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="61"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-	# bug number for skipped test: LU-6836
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  4a"
+	# bug number for skipped test:
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT"
 
 	# bug number:                        LU-2887
 	# Test duration:                     21      9 min"
@@ -984,6 +984,8 @@ test_4a() {
 		$GRACE $DIR || error "set user grace time failed"
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR ||
 		error "set user quota failed"
+
+	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && GRACE=20
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
 	resetquota -u $TSTUSR
