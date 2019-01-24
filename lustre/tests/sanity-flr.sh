@@ -668,7 +668,7 @@ test_0g() {
 	cat $tf &> /dev/null || error "error reading file '$tf'"
 
 	# verify that the data was provided by OST1 where mirror 1 resides
-	local nr_read=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-ffff*.stats |
+	local nr_read=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[-0-9a-f]*.stats |
 			awk '/ost_read/{print $2}')
 	[ -n "$nr_read" ] || error "read was not provided by OST1"
 }
@@ -899,7 +899,7 @@ get_osc_lock_count() {
 		local osc_name
 		local count
 
-		osc_name=${FSNAME}-OST$(printf "%04x" $((idx-1)))-osc-'ffff*'
+		osc_name=${FSNAME}-OST$(printf "%04x" $((idx-1)))-osc-'[-0-9a-f]*'
 		count=$($LCTL get_param -n ldlm.namespaces.$osc_name.lock_count)
 		lock_count=$((lock_count + count))
 	done
@@ -1064,7 +1064,7 @@ test_33() {
 	start_osts 1
 
 	# read file again with ost2 failed
-	$LCTL set_param ldlm.namespaces.lustre-*-osc-ffff*.lru_size=clear
+	$LCTL set_param ldlm.namespaces.lustre-*-osc-[-0-9a-f]*.lru_size=clear
 
 	fail ost2 &
 	sleep 1
