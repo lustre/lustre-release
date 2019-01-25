@@ -75,9 +75,41 @@ lfs_project_item_alloc(struct list_head *head, const char *pathname)
 	return 0;
 }
 
+static const char *mode_to_type(mode_t mode)
+{
+	switch (mode & S_IFMT) {
+	case S_IFDIR:	return "dir";
+	case S_IFREG:	return "regular";
+	case S_IFLNK:	return "symlink";
+	case S_IFCHR:	return "char device";
+	case S_IFBLK:	return "block device";
+	case S_IFIFO:	return "fifo";
+	case S_IFSOCK:	return "sock";
+	}
+
+	return "unknown";
+}
+
 static int project_get_xattr(const char *pathname, struct fsxattr *fsx)
 {
 	int ret, fd;
+	struct stat st;
+
+	ret = lstat(pathname, &st);
+	if (ret) {
+		fprintf(stderr, "%s: failed to stat '%s': %s\n",
+			progname, pathname, strerror(errno));
+		return -errno;
+	}
+
+	/* currently, only file and dir supported */
+	if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode)) {
+		errno = ENOTSUP;
+		fprintf(stderr, "%s: unable to get xattr for %s '%s': %s\n",
+				progname, mode_to_type(st.st_mode), pathname,
+				strerror(errno));
+		return -errno;
+	}
 
 	fd = open(pathname, O_RDONLY | O_NOCTTY | O_NDELAY);
 	if (fd < 0) {
@@ -100,15 +132,7 @@ static int
 project_check_one(const char *pathname, struct project_handle_control *phc)
 {
 	struct fsxattr fsx;
-	struct stat st;
 	int ret;
-
-	ret = stat(pathname, &st);
-	if (ret) {
-		fprintf(stderr, "%s: failed to stat '%s': %s\n",
-			progname, pathname, strerror(errno));
-		return -errno;
-	}
 
 	ret = project_get_xattr(pathname, &fsx);
 	if (ret < 0)
