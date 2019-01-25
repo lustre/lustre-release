@@ -3085,7 +3085,7 @@ test_57() {
 	#try to change pipe file should not hang and return failure
 	wait_update_facet client "$LFS project -sp 1 $dir/pipe 2>&1 |
 		awk -F ':' '{ print \\\$2 }'" \
-			" failed to get xattr for '$dir/pipe'" || return 1
+			" unable to get xattr for fifo '$dir/pipe'" || return 1
 	#command can process further if it hit some errors
 	touch $dir/aaa $dir/bbb
 	mkdir $dir/subdir -p
@@ -3453,6 +3453,25 @@ test_63() {
 	test_dom "p"
 }
 run_test 63 "quota on DoM tests"
+
+test_64() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported"
+	setup_quota_test || error "setup quota failed with $?"
+	local dir1="$DIR/$tdir/"
+
+	touch $dir1/file
+	ln -s $dir1/file $dir1/file_link
+
+	$LFS project -sp $TSTPRJID $dir1/file_link >&/dev/null &&
+		error "set symlink file's project should fail"
+
+	$LFS project $TSTPRJID $dir1/file_link >&/dev/null &&
+		error "get symlink file's project should fail"
+
+	cleanup_quota_test
+}
+run_test 64 "lfs project on symlink files should fail"
 
 quota_fini()
 {
