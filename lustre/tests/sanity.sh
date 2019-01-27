@@ -18141,7 +18141,7 @@ test_271d() {
 
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
-	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
+	local mdtidx=$($LFS getstripe --mdt-index $DIR/$tdir)
 
 	cancel_lru_locks mdc
 	dd if=/dev/urandom of=$tmp bs=1000 count=1
@@ -18197,7 +18197,7 @@ test_271f() {
 
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
-	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
+	local mdtidx=$($LFS getstripe --mdt-index $DIR/$tdir)
 
 	cancel_lru_locks mdc
 	dd if=/dev/urandom of=$tmp bs=200000 count=1

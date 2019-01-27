@@ -246,16 +246,16 @@ static inline int lfs_mirror_split(int argc, char **argv)
 
 #define SETDIRSTRIPE_USAGE						\
 	"		[--mdt-count|-c stripe_count>\n"		\
-	"		[--mdt-index|-i mdt_index[,mdt_index,...]\n"	\
 	"		[--mdt-hash|-H mdt_hash]\n"			\
-	"		[--default|-D] [--mode|-m mode] <dir>\n"	\
+	"		[--mdt-index|-i mdt_index[,mdt_index,...]\n"	\
+	"		[--default|-D] [--mode|-o mode] <dir>\n"	\
 	"\tstripe_count: stripe count of the striped directory\n"	\
 	"\tmdt_index: MDT index of first stripe\n"			\
 	"\tmdt_hash:  hash type of the striped directory. mdt types:\n"	\
 	"	fnv_1a_64 FNV-1a hash algorithm (default)\n"		\
 	"	all_char  sum of characters % MDT_COUNT (not recommended)\n" \
 	"\tdefault_stripe: set default dirstripe of the directory\n"	\
-	"\tmode: the mode of the directory\n"
+	"\tmode: the file access permission of the directory (octal)\n"
 
 /**
  * command_t mirror_cmdlist - lfs mirror commands.
@@ -388,7 +388,6 @@ command_t cmdlist[] = {
 	 "usage: find <directory|filename> ...\n"
 	 "     [[!] --atime|-A [+-]N] [[!] --ctime|-C [+-]N]\n"
 	 "     [[!] --mtime|-M [+-]N] [--maxdepth|-D N] [[!] --blocks|-b N]\n"
-	 "     [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
 	 "     [--print|-P] [--print0|-0] [[!] --size|-s [+-]N[bkMGTPE]]\n"
 	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
@@ -406,6 +405,7 @@ command_t cmdlist[] = {
 	 "     [[!] --mirror-state <[^]state>]\n"
 	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
 	 "     [[!] --mdt-hash|-H <hashtype>\n"
+	 "     [[!] --mdt-index|-m <uuid|index,...>]\n"
          "\t !: used before an option indicates 'NOT' requested attribute\n"
          "\t -: used before a value indicates less than requested value\n"
          "\t +: used before a value indicates more than requested value\n"
@@ -542,9 +542,9 @@ command_t cmdlist[] = {
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe_migrate, 0,
 	 "migrate a directory between MDTs.\n"
-	 "usage: migrate [--mdt|-m] <start_mdt_index>\n"
-	 "               [--mdt-count|-c] <stripe_count>\n"
+	 "usage: migrate [--mdt-count|-c] <stripe_count>\n"
 	 "		 [--mdt-hash|-H] <hash_type>\n"
+	 "               [--mdt-index|-m] <start_mdt_index>\n"
 	 "		 [--verbose|-v]\n"
 	 "		 <directory>\n"
 	 "\tmdt:	MDTs to stripe over, if only one MDT is specified\n"
@@ -3035,7 +3035,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'm':
 			if (!migrate_mode) {
 				fprintf(stderr,
-					"%s %s: -m|--mdt is valid only for migrate command\n",
+					"%s %s: -m|--mdt-index is valid only for migrate command\n",
 					progname, argv[0]);
 				goto usage_error;
 			}
@@ -5103,8 +5103,14 @@ static int lfs_setdirstripe(int argc, char **argv)
 	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
 	{ .val = 'D',	.name = "default_stripe", .has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument },
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 53, 0)
 	{ .val = 'i',	.name = "mdt-index",	.has_arg = required_argument },
+	{ .val = 'i',	.name = "mdt",		.has_arg = required_argument },
+#else
 /* find { .val = 'l',	.name = "lazy",		.has_arg = no_argument }, */
+	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
+	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
+#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{ .val = 'i',	.name = "index",	.has_arg = required_argument },
 #endif
@@ -5156,6 +5162,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 			}
 			break;
 		case 'i':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 17, 53, 0)
+		case 'm':
+#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 			if (strcmp(argv[optind - 1], "--index") == 0)
 				fprintf(stderr,
@@ -5176,7 +5185,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
 				lsa.lsa_stripe_off = mdts[0];
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 15, 53, 0)
 		case 'm':
 			fprintf(stderr, "warning: '-m' is deprecated, "
 				"use '--mode' or '-o' instead\n");
@@ -5422,6 +5431,7 @@ static int lfs_mv(int argc, char **argv)
 	int c;
 	int rc = 0;
 	struct option long_opts[] = {
+	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
