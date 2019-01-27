@@ -12020,8 +12020,9 @@ run_test 155h "Verify big file correctness: read cache:off write_cache:off"
 test_156() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
-	[ "$ost1_FSTYPE" = "zfs" -a \
-	   $OST1_VERSION -lt $(version_code 2.6.93) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.6.93) ] &&
+		skip "stats not implemented on old servers"
+	[ "$ost1_FSTYPE" = "zfs" ] &&
 		skip "LU-1956/LU-2261: stats not implemented on OSD ZFS"
 
 	local CPAGES=3
