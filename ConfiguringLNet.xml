@@ -117,7 +117,8 @@
         global:
         numa_range: 0
         max_intf: 200
-        discovery: 1</screen>
+        discovery: 1
+        drop_asym_route: 0</screen>
     </section>
     <section xml:id="lnet_config.lnetaddshowdelete">
       <title><indexterm><primary>LNet</primary>
@@ -507,6 +508,37 @@ set large_buffers: set large routing buffers
       <screen>> lnetctl set tiny_buffers 0
 > lnetctl set small_buffers 0
 > lnetctl set large_buffers 0</screen>
+    </section>
+    <section condition='l2D' xml:id="lnet_config.asym_route">
+      <title><indexterm>
+          <primary>LNet</primary>
+          <secondary>cli</secondary>
+	  <tertiary>asymmetrical route</tertiary>
+        </indexterm>Asymmetrical Routes</title>
+	<section xml:id="lnet_config.asym_route.overview">
+        <title>Overview</title>
+	<para>An asymmetrical route is when a message from a remote peer is
+	  coming through a router that is not known by this node
+	  to reach the remote peer.</para>
+	<para>Asymmetrical routes can be an issue when debugging network, and
+	  allowing them also opens the door to attacks where hostile clients
+	  inject data to the servers.</para>
+	<para>So it is possible to activate a check in LNet, that will detect
+	  any asymmetrical route message and drop it.</para>
+	</section>
+	<section xml:id="lnet_config.dynamic_discovery.configuration">
+        <title>Configuration</title>
+	<para>In order to switch asymmetric route detection on or off, the
+	  following command is used:</para>
+	<screen>lnetctl set drop_asym_route [0 | 1]</screen>
+	<para>This command works on a per-node basis. This means each node in a
+	  Lustre cluster can decide whether it accepts asymmetrical route
+	  messages.</para>
+	<para>To check the current <literal>drop_asym_route</literal> setting, the
+          <literal>lnetctl global show</literal> command can be used as shown in
+          <xref linkend="lnet_config.show_global_settings"/>.</para>
+	<para>By default, asymmetric route detection is off.</para>
+	</section>
     </section>
     <section>
       <title><indexterm>
