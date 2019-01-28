@@ -4223,6 +4223,52 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		goto drop;
 	}
 
+	if (lnet_drop_asym_route && for_me &&
+	    LNET_NIDNET(src_nid) != LNET_NIDNET(from_nid)) {
+		struct lnet_net *net;
+		struct lnet_remotenet *rnet;
+		bool found = true;
+
+		/* we are dealing with a routed message,
+		 * so see if route to reach src_nid goes through from_nid
+		 */
+		lnet_net_lock(cpt);
+		net = lnet_get_net_locked(LNET_NIDNET(ni->ni_nid));
+		if (!net) {
+			lnet_net_unlock(cpt);
+			CERROR("net %s not found\n",
+			       libcfs_net2str(LNET_NIDNET(ni->ni_nid)));
+			return -EPROTO;
+		}
+
+		rnet = lnet_find_rnet_locked(LNET_NIDNET(src_nid));
+		if (rnet) {
+			struct lnet_peer_ni *gw = NULL;
+			struct lnet_route *route;
+
+			list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
+				found = false;
+				gw = route->lr_gateway;
+				if (gw->lpni_net != net)
+					continue;
+				if (gw->lpni_nid == from_nid) {
+					found = true;
+					break;
+				}
+			}
+		}
+		lnet_net_unlock(cpt);
+		if (!found) {
+			/* we would not use from_nid to route a message to
+			 * src_nid
+			 * => asymmetric routing detected but forbidden
+			 */
+			CERROR("%s, src %s: Dropping asymmetrical route %s\n",
+			       libcfs_nid2str(from_nid),
+			       libcfs_nid2str(src_nid), lnet_msgtyp2str(type));
+			goto drop;
+		}
+	}
 
 	msg = lnet_msg_alloc();
 	if (msg == NULL) {

@@ -245,6 +245,12 @@ When routing is disabled the values of the buffers that might have been changed
 are not remembered, and the next time routing is enabled the default buffer
 count will be used\.
 .
+.TP
+\fBlnetctl set\fR drop_asym_route \fI[0, 1]\fR
+0 value indicates to accept asymmetrical route messages\. 1 value indicates to
+drop them\. Asymmetrical route is when a message from a remote peer is coming
+through a router that would not be used by this node to reach the remote peer\.
+.
 .SS "Import and Export YAML Configuration Files"
 LNet configuration can be represented in YAML format\. A YAML configuration
 file can be passed to the lnetctl utility via the \fBimport\fR command\. The
