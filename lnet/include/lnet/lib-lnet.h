@@ -561,6 +561,7 @@ extern unsigned int lnet_numa_range;
 extern unsigned int lnet_health_sensitivity;
 extern unsigned int lnet_recovery_interval;
 extern unsigned int lnet_peer_discovery_disabled;
+extern unsigned int lnet_drop_asym_route;
 extern int portal_rotor;
 
 int lnet_notify(struct lnet_ni *ni, lnet_nid_t peer, int alive,

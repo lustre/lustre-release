@@ -62,6 +62,7 @@ static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
 static int jt_set_discovery(int argc, char **argv);
+static int jt_set_drop_asym_route(int argc, char **argv);
 static int jt_list_peer(int argc, char **argv);
 /*static int jt_show_peer(int argc, char **argv);*/
 static int lnetctl_list_commands(int argc, char **argv);
@@ -193,6 +194,10 @@ command_t set_cmds[] = {
 	{"discovery", jt_set_discovery, 0, "enable/disable peer discovery\n"
 	 "\t0 - disable peer discovery\n"
 	 "\t1 - enable peer discovery (default)\n"},
+	{"drop_asym_route", jt_set_drop_asym_route, 0,
+	 "drop/accept asymmetrical route messages\n"
+	 "\t0 - accept asymmetrical route messages (default)\n"
+	 "\t1 - drop asymmetrical route messages\n"},
 	{"retry_count", jt_set_retry_count, 0, "number of retries\n"
 	 "\t0 - turn of retries\n"
 	 "\t>0 - number of retries\n"},
@@ -493,6 +498,35 @@ static int jt_set_discovery(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_discovery(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_drop_asym_route(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "drop_asym_route", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse drop_asym_route value",
+				  &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_drop_asym_route(value, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -1235,6 +1269,12 @@ static int jt_show_global(int argc, char **argv)
 		goto out;
 	}
 
+	rc = lustre_lnet_show_drop_asym_route(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
 	rc = lustre_lnet_show_retry_count(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
@@ -1539,6 +1579,13 @@ static int jt_export(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_discovery(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_drop_asym_route(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
