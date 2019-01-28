@@ -722,10 +722,10 @@ static int mdt_coordinator(void *data)
 		updates_sz = updates_cnt * sizeof(*updates);
 		OBD_ALLOC_LARGE(updates, updates_sz);
 		if (updates == NULL) {
-			CERROR("%s: Cannot allocate memory (%d o) "
-			       "for %d updates\n",
+			CERROR("%s: Cannot allocate memory (%d bytes) "
+                               "for %d updates. Too many HSM requests?\n",
 			       mdt_obd_name(mdt), updates_sz, updates_cnt);
-			continue;
+			goto clean_cb_alloc;
 		}
 
 		/* here hsd contains a list of requests to be started */
