@@ -90,6 +90,7 @@ static int project_get_xattr(const char *pathname, struct fsxattr *fsx)
 	if (ret) {
 		fprintf(stderr, "%s: failed to get xattr for '%s': %s\n",
 			progname, pathname, strerror(errno));
+		close(fd);
 		return -errno;
 	}
 	return fd;

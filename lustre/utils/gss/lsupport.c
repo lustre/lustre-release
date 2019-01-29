@@ -246,6 +246,7 @@ int external_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
         head = fgets(buf, bufsize, fghn);
         if (head == NULL) {
                 printerr(0, "can't read from %s\n", gethostname_ex);
+		pclose(fghn);
                 return -1;
         }
         if (pclose(fghn) == -1)
