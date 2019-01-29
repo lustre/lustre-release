@@ -816,12 +816,6 @@ struct ldlm_lock {
 	wait_queue_head_t	l_waitq;
 
 	/**
-	 * Seconds. It will be updated if there is any activity related to
-	 * the lock, e.g. enqueue the lock or send blocking AST.
-	 */
-	time64_t		l_last_activity;
-
-	/**
 	 * Time, in nanoseconds, last used by e.g. being matched by lock match.
 	 */
 	ktime_t			l_last_used;
@@ -844,6 +838,16 @@ struct ldlm_lock {
 
 	/** Private storage for lock user. Opaque to LDLM. */
 	void			*l_ast_data;
+
+	union {
+	/**
+	 * Seconds. It will be updated if there is any activity related to
+	 * the lock at client, e.g. enqueue the lock. For server it is the
+	 * time when blocking ast was sent.
+	 */
+		time64_t        l_activity;
+		time64_t        l_blast_sent;
+	};
 
 	/*
 	 * Server-side-only members.

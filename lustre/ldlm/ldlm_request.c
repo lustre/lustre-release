@@ -125,9 +125,9 @@ int ldlm_expired_completion_wait(void *data)
 
 		LDLM_ERROR(lock, "lock timed out (enqueued at %lld, %llds ago); "
 			   "not entering recovery in server code, just going back to sleep",
-			   (s64)lock->l_last_activity,
+			   (s64)lock->l_activity,
 			   (s64)(ktime_get_real_seconds() -
-				 lock->l_last_activity));
+				 lock->l_activity));
                 if (cfs_time_after(cfs_time_current(), next_dump)) {
                         last_dump = next_dump;
                         next_dump = cfs_time_shift(300);
@@ -143,8 +143,8 @@ int ldlm_expired_completion_wait(void *data)
         imp = obd->u.cli.cl_import;
         ptlrpc_fail_import(imp, lwd->lwd_conn_cnt);
 	LDLM_ERROR(lock, "lock timed out (enqueued at %lld, %llds ago), entering recovery for %s@%s",
-		  (s64)lock->l_last_activity,
-		  (s64)(ktime_get_real_seconds() - lock->l_last_activity),
+		  (s64)lock->l_activity,
+		  (s64)(ktime_get_real_seconds() - lock->l_activity),
                   obd2cli_tgt(obd), imp->imp_connection->c_remote_uuid.uuid);
 
         RETURN(0);
@@ -192,7 +192,7 @@ static int ldlm_completion_tail(struct ldlm_lock *lock, void *data)
 		LDLM_DEBUG(lock, "client-side enqueue: granted");
 	} else {
 		/* Take into AT only CP RPC, not immediately granted locks */
-		delay = ktime_get_real_seconds() - lock->l_last_activity;
+		delay = ktime_get_real_seconds() - lock->l_activity;
 		LDLM_DEBUG(lock, "client-side enqueue: granted after %llds",
 			   (s64)delay);
 
@@ -285,7 +285,7 @@ noreproc:
 	timeout = ldlm_cp_timeout(lock);
 
 	lwd.lwd_lock = lock;
-	lock->l_last_activity = cfs_time_current_sec();
+	lock->l_activity = cfs_time_current_sec();
 
 	if (ldlm_is_no_timeout(lock)) {
                 LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
@@ -948,7 +948,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	lock->l_export = NULL;
 	lock->l_blocking_ast = einfo->ei_cb_bl;
 	lock->l_flags |= (*flags & (LDLM_FL_NO_LRU | LDLM_FL_EXCL));
-        lock->l_last_activity = cfs_time_current_sec();
+        lock->l_activity = cfs_time_current_sec();
 
 	/* lock not sent to server yet */
 	if (reqp == NULL || *reqp == NULL) {
