@@ -479,7 +479,8 @@ int libcfs_debug_init(unsigned long bufsize)
 
 	libcfs_register_panic_notifier();
 	kernel_param_lock(THIS_MODULE);
-	libcfs_debug_mb = cfs_trace_get_debug_mb();
+	if (libcfs_debug_mb == 0)
+		libcfs_debug_mb = cfs_trace_get_debug_mb();
 	kernel_param_unlock(THIS_MODULE);
 	return rc;
 }
