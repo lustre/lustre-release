@@ -379,7 +379,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	 * be even larger, it is not possible to know that at this point.
 	 */
 	req->rq_reqmsg->lm_repsize = repsize;
-	return req;
+	RETURN(req);
 }
 
 #define GA_DEFAULT_EA_NAME_LEN 20
