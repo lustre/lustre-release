@@ -8,7 +8,7 @@ Build-Depends: debhelper (>= 9.0.0), bzip2
 
 Package: lustre-client-modules-_KVERS_
 Architecture: any
-Recommends: linux-image, lustre-utils
+Recommends: linux-image, lustre-client-utils
 Provides: lustre-client-modules
 Description: Lustre Linux kernel module (kernel _KVERS_)
  This package contains the lustre loadable kernel modules for the
@@ -18,7 +18,7 @@ Description: Lustre Linux kernel module (kernel _KVERS_)
 
 Package: lustre-server-modules-_KVERS_
 Architecture: any
-Recommends: linux-image, lustre-utils
+Recommends: linux-image, lustre-server-utils
 Provides: lustre-server-modules, lustre-client-modules
 Conflicts: lustre-client-modules-_KVERS_
 Replaces: lustre-client-modules-_KVERS_

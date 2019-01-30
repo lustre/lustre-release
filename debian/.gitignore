@@ -7,7 +7,6 @@
 /lustre-iokit
 /lustre-tests
 /lustre-resource-agents
-/lustre-utils
 /lustre-*.substvars
 /lustre-*-utils
 /tmp

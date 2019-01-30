@@ -63,7 +63,7 @@ UPVERSION=$(shell echo $(VERSION) | sed -e 's/-[^-]*$$//')
 KVER?=$(LINUXRELEASE)
 
 # KVERS, KSRC are the kernel version and source to use when building lustre
-# Will be the default when building lustre-utils, etc but whatever module-assistant
+# Will be the default when building lustre-{server,client}-utils, etc but whatever module-assistant
 # supplied when building modules
 KVERS?=$(KVER)
 KSRC?=$(LINUX_OBJ)
