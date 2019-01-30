@@ -3944,6 +3944,42 @@ test_112() {
 }
 run_test 112 "State of recorded request"
 
+test_113() {
+	local file1=$DIR/$tdir/$tfile
+	local file2=$DIR2/$tdir/$tfile
+
+	local fid=$(create_small_sync_file $file1)
+
+	stack_trap "zconf_umount \"$(facet_host $SINGLEAGT)\" \"$MOUNT3\"" EXIT
+	zconf_mount "$(facet_host $SINGLEAGT)" "$MOUNT3" ||
+		error "cannot mount '$MOUNT3' on '$SINGLEAGT'"
+
+	copytool setup -m  "$MOUNT3"
+
+	do_nodes $(comma_list $(nodes_list)) $LCTL clear
+
+	$LFS hsm_archive $file1 || error "Fail to archive $file1"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	$LFS hsm_release $file1
+	echo "Verifying released state: "
+	check_hsm_flags $file1 "0x0000000d"
+
+	multiop_bg_pause $file1 oO_WRONLY:O_APPEND:_w4c || error "multiop failed"
+	MULTIPID=$!
+	stat $file2 &
+	kill -USR1 $MULTIPID
+
+	wait
+	sync
+
+	local size1=$(stat -c "%s" $file1)
+	local size2=$(stat -c "%s" $file2)
+
+	[ $size1 -eq $size2 ] || error "sizes are different $size1 $size2"
+}
+run_test 113 "wrong stat after restore"
+
 test_200() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")

@@ -1551,6 +1551,8 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 	 * if no retry will be attempted and if object is still alive,
 	 * in other cases we just unlock the object */
 	if (car->car_hai->hai_action == HSMA_RESTORE) {
+		struct mdt_lock_handle *lh;
+
 		/* restore in data FID done, we swap the layouts
 		 * only if restore is successful */
 		if (pgs->hpk_errval == 0 && !IS_ERR(obj)) {
@@ -1574,6 +1576,13 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		need_changelog = false;
 
 		cdt_restore_handle_del(mti, cdt, &car->car_hai->hai_fid);
+		if (!IS_ERR_OR_NULL(obj)) {
+			/* flush UPDATE lock so attributes are upadated */
+			lh = &mti->mti_lh[MDT_LH_OLD];
+			mdt_lock_reg_init(lh, LCK_EX);
+			mdt_object_lock(mti, obj, lh, MDS_INODELOCK_UPDATE);
+			mdt_object_unlock(mti, obj, lh, 1);
+		}
 	}
 
 	GOTO(out, rc);
