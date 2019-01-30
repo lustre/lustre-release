@@ -22,7 +22,7 @@ and Installation Howtos from Lustre.
 
 #2. Preparing the system
     In the next step install:
-     - lustre-utils
+     - lustre-server-utils or lustre-client-utils
 
     This have to be done on every server system.
 

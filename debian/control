@@ -109,7 +109,7 @@ Section: admin
 Architecture: i386 armhf powerpc ppc64el amd64 ia64
 Priority: optional
 Depends: dkms, automake, libtool, linux-headers-generic | linux-headers | linux-headers-amd64
-Recommends: linux-image, lustre-utils
+Recommends: linux-image, lustre-client-utils
 Provides: lustre-client-modules
 Description: Lustre Linux kernel module (DKMS)
  This package contains the loadable kernel modules for the patchless client

@@ -10,7 +10,7 @@ Lustre is Copyright (C) 2002-2009 Sun Microsystems, Inc. and is licensed
 under the GNU Public License Version 2; it was downloaded from
 https://wiki.whamcloud.com/display/PUB/Lustre+Releases
 
-The documentation (included in lustre-utils) is covered by
+The documentation (included in lustre-{server,client}-utils) is covered by
 the GNU Free Documentation License; there are no invariant-clauses included
 in this documentation, and hence it is considered to be free under
 the Debian Free Software Guidelines (DFSG).
