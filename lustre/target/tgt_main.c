@@ -259,6 +259,11 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	dt_txn_callback_add(lut->lut_bottom, &lut->lut_txn_cb);
 	lut->lut_bottom->dd_lu_dev.ld_site->ls_tgt = lut;
 
+	lut->lut_fmd_max_num = LUT_FMD_MAX_NUM_DEFAULT;
+	lut->lut_fmd_max_age = LUT_FMD_MAX_AGE_DEFAULT;
+
+	atomic_set(&lut->lut_sync_count, 0);
+
 	/* reply_data is supported by MDT targets only for now */
 	if (strncmp(obd->obd_type->typ_name, LUSTRE_MDT_NAME, 3) != 0)
 		RETURN(0);
@@ -287,8 +292,6 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	rc = tgt_reply_data_init(env, lut);
 	if (rc < 0)
 		GOTO(out, rc);
-
-	atomic_set(&lut->lut_sync_count, 0);
 
 	RETURN(0);
 

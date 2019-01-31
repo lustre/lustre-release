@@ -546,8 +546,8 @@ static int ofd_init_export(struct obd_export *exp)
 {
 	int rc;
 
-	spin_lock_init(&exp->exp_filter_data.fed_lock);
-	INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
+	spin_lock_init(&exp->exp_target_data.ted_fmd_lock);
+	INIT_LIST_HEAD(&exp->exp_target_data.ted_fmd_list);
 	atomic_set(&exp->exp_filter_data.fed_soft_sync_count, 0);
 	spin_lock(&exp->exp_lock);
 	exp->exp_connecting = 1;
@@ -603,7 +603,6 @@ static int ofd_destroy_export(struct obd_export *exp)
 	 * interaction with the client is possible
 	 */
 	tgt_grant_discard(exp);
-	ofd_fmd_cleanup(exp);
 
 	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
 		ofd->ofd_lut.lut_tgd.tgd_tot_granted_clients--;
@@ -611,7 +610,6 @@ static int ofd_destroy_export(struct obd_export *exp)
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
 		tgt_grant_sanity_check(exp->exp_obd, __func__);
 
-	LASSERT(list_empty(&exp->exp_filter_data.fed_mod_list));
 	return 0;
 }
 

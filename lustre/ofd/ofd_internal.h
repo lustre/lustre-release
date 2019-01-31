@@ -51,17 +51,14 @@
 #define OFD_VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
 			 LA_BLKSIZE | LA_ATIME | LA_MTIME | LA_CTIME)
 
-/* per-client-per-object persistent state (LRU) */
-struct ofd_mod_data {
-	struct list_head fmd_list;	  /* linked to fed_mod_list */
+/* FMD tracking data */
+struct tgt_fmd_data {
+	struct list_head fmd_list;	  /* linked to tgt_fmd_list */
 	struct lu_fid	 fmd_fid;	  /* FID being written to */
 	__u64		 fmd_mactime_xid; /* xid highest {m,a,c}time setattr */
 	time64_t	 fmd_expire;	  /* time when the fmd should expire */
 	int		 fmd_refcount;	  /* reference counter - list holds 1 */
 };
-
-#define OFD_FMD_MAX_NUM_DEFAULT 128
-#define OFD_FMD_MAX_AGE_DEFAULT (obd_timeout + 10)
 
 #define OFD_SOFT_SYNC_LIMIT_DEFAULT 16
 
@@ -135,10 +132,6 @@ struct ofd_device {
 	__u32			 ofd_brw_size;
 	/* checksum types supported on this node */
 	enum cksum_types	 ofd_cksum_types_supported;
-
-	/* ofd mod data: ofd_device wide values */
-	int			 ofd_fmd_max_num; /* per ofd ofd_mod_data */
-	time64_t		 ofd_fmd_max_age; /* time to fmd expiry */
 
 	spinlock_t		 ofd_flags_lock;
 	unsigned long		 ofd_raid_degraded:1,
@@ -404,13 +397,7 @@ struct ofd_object *ofd_object_find_exists(const struct lu_env *env,
 }
 
 /* ofd_fmd.c */
-int ofd_fmd_init(void);
-void ofd_fmd_exit(void);
-struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
-				  const struct lu_fid *fid);
-struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp,
-				 const struct lu_fid *fid);
-void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd);
+extern struct kmem_cache *tgt_fmd_kmem;
 void ofd_fmd_expire(struct obd_export *exp);
 void ofd_fmd_cleanup(struct obd_export *exp);
 #ifdef DO_FMD_DROP

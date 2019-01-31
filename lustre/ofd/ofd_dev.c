@@ -82,12 +82,18 @@
 
 /* Slab for OFD object allocation */
 static struct kmem_cache *ofd_object_kmem;
+struct kmem_cache *tgt_fmd_kmem;
 
 static struct lu_kmem_descr ofd_caches[] = {
 	{
 		.ckd_cache = &ofd_object_kmem,
 		.ckd_name  = "ofd_obj",
 		.ckd_size  = sizeof(struct ofd_object)
+	},
+	{
+		.ckd_cache = &tgt_fmd_kmem,
+		.ckd_name  = "ll_fmd_cache",
+		.ckd_size  = sizeof(struct tgt_fmd_data)
 	},
 	{
 		.ckd_cache = NULL
@@ -2850,9 +2856,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	obt = &obd->u.obt;
 	obt->obt_magic = OBT_MAGIC;
 
-	m->ofd_fmd_max_num = OFD_FMD_MAX_NUM_DEFAULT;
-	m->ofd_fmd_max_age = OFD_FMD_MAX_AGE_DEFAULT;
-
 	spin_lock_init(&m->ofd_flags_lock);
 	m->ofd_raid_degraded = 0;
 	m->ofd_checksum_t10pi_enforce = 0;
@@ -3149,13 +3152,6 @@ static int __init ofd_init(void)
 	rc = lu_kmem_init(ofd_caches);
 	if (rc)
 		return rc;
-
-	rc = ofd_fmd_init();
-	if (rc) {
-		lu_kmem_fini(ofd_caches);
-		return(rc);
-	}
-
 	rc = class_register_type(&ofd_obd_ops, NULL, true, NULL,
 				 LUSTRE_OST_NAME, &ofd_device_type);
 	return rc;
@@ -3169,7 +3165,6 @@ static int __init ofd_init(void)
  */
 static void __exit ofd_exit(void)
 {
-	ofd_fmd_exit();
 	lu_kmem_fini(ofd_caches);
 	class_unregister_type(LUSTRE_OST_NAME);
 }

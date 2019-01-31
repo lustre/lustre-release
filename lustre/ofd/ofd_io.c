@@ -1268,12 +1268,11 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 struct niobuf_remote *rnb, int npages,
 		 struct niobuf_local *lnb, int old_rc)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	struct ofd_mod_data	*fmd;
-	__u64			 valid;
-	struct ofd_device	*ofd = ofd_exp(exp);
-	const struct lu_fid	*fid = &oa->o_oi.oi_fid;
-	int			 rc = 0;
+	struct ofd_thread_info *info = ofd_info(env);
+	struct ofd_device *ofd = ofd_exp(exp);
+	const struct lu_fid *fid = &oa->o_oi.oi_fid;
+	__u64 valid;
+	int rc = 0;
 
 	LASSERT(npages > 0);
 
@@ -1282,17 +1281,11 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 		/* Don't update timestamps if this write is older than a
 		 * setattr which modifies the timestamps. b=10150 */
-
-		/* XXX when we start having persistent reservations this needs
-		 * to be changed to ofd_fmd_get() to create the fmd if it
-		 * doesn't already exist so we can store the reservation handle
-		 * there. */
 		valid = OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID;
-		fmd = ofd_fmd_find(exp, fid);
-		if (!fmd || fmd->fmd_mactime_xid < info->fti_xid)
+		if (tgt_fmd_check(exp, fid, info->fti_xid))
 			valid |= OBD_MD_FLATIME | OBD_MD_FLMTIME |
 				 OBD_MD_FLCTIME;
-		ofd_fmd_put(exp, fmd);
+
 		la_from_obdo(&info->fti_attr, oa, valid);
 
 		rc = ofd_commitrw_write(env, exp, ofd, fid, &info->fti_attr,

@@ -101,6 +101,13 @@ struct tg_export_data {
 	long			ted_grant;    /* in bytes */
 	long			ted_pending;  /* bytes just being written */
 	__u8			ted_pagebits; /* log2 of client page size */
+
+	/**
+	 * File Modification Data (FMD) tracking
+	 */
+	spinlock_t		ted_fmd_lock; /* protects ted_fmd_list */
+	struct list_head	ted_fmd_list; /* FIDs being modified */
+	int			ted_fmd_count;/* items in ted_fmd_list */
 };
 
 /**
@@ -121,13 +128,10 @@ struct ec_export_data { /* echo client */
 /** Filter (oss-side) specific import data */
 struct filter_export_data {
 	struct tg_export_data	fed_ted;
-	spinlock_t		fed_lock;	/**< protects fed_mod_list */
 	__u64			fed_lastid_gen;
-	struct list_head	fed_mod_list; /* files being modified */
 	/* count of SOFT_SYNC RPCs, which will be reset after
 	 * ofd_soft_sync_limit number of RPCs, and trigger a sync. */
 	atomic_t		fed_soft_sync_count;
-	int			fed_mod_count;/* items in fed_writing list */
 	__u32			fed_group;
 };
 
