@@ -204,7 +204,14 @@ struct lu_target {
 
 	/* target grants fields */
 	struct tg_grants_data	 lut_tgd;
+
+	/* FMD (file modification data) values */
+	int			 lut_fmd_max_num;
+	time64_t		 lut_fmd_max_age;
 };
+
+#define LUT_FMD_MAX_NUM_DEFAULT 128
+#define LUT_FMD_MAX_AGE_DEFAULT (obd_timeout + 10)
 
 /* number of slots in reply bitmap */
 #define LUT_REPLY_SLOTS_PER_CHUNK (1<<20)
@@ -529,6 +536,12 @@ int tgt_grant_compat_disable_seq_show(struct seq_file *m, void *data);
 ssize_t tgt_grant_compat_disable_seq_write(struct file *file,
 					   const char __user *buffer,
 					   size_t count, loff_t *off);
+
+/* FMD */
+void tgt_fmd_update(struct obd_export *exp, const struct lu_fid *fid,
+		    __u64 xid);
+bool tgt_fmd_check(struct obd_export *exp, const struct lu_fid *fid,
+		   __u64 xid);
 
 /* target/update_trans.c */
 int distribute_txn_init(const struct lu_env *env,

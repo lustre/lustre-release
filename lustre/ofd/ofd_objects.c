@@ -585,26 +585,21 @@ int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la, struct obdo *oa)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	struct ofd_device	*ofd = ofd_obj2dev(fo);
-	struct filter_fid	*ff = &info->fti_mds_fid;
-	struct thandle		*th;
-	struct ofd_mod_data	*fmd;
-	int			fl;
-	int			rc;
-	int			rc2;
+	struct ofd_thread_info *info = ofd_info(env);
+	struct ofd_device *ofd = ofd_obj2dev(fo);
+	struct filter_fid *ff = &info->fti_mds_fid;
+	struct thandle *th;
+	int fl, rc, rc2;
+
 	ENTRY;
 
 	ofd_write_lock(env, fo);
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);
 
-	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME)) {
-		fmd = ofd_fmd_get(info->fti_exp, &fo->ofo_header.loh_fid);
-		if (fmd && fmd->fmd_mactime_xid < info->fti_xid)
-			fmd->fmd_mactime_xid = info->fti_xid;
-		ofd_fmd_put(info->fti_exp, fmd);
-	}
+	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+		tgt_fmd_update(info->fti_exp, &fo->ofo_header.loh_fid,
+			       info->fti_xid);
 
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);
@@ -700,15 +695,12 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		     __u64 start, __u64 end, struct lu_attr *la,
 		     struct obdo *oa)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	struct ofd_device	*ofd = ofd_obj2dev(fo);
-	struct ofd_mod_data	*fmd;
-	struct dt_object	*dob = ofd_object_child(fo);
-	struct filter_fid	*ff = &info->fti_mds_fid;
-	struct thandle		*th;
-	int			fl;
-	int			rc;
-	int			rc2;
+	struct ofd_thread_info *info = ofd_info(env);
+	struct ofd_device *ofd = ofd_obj2dev(fo);
+	struct dt_object *dob = ofd_object_child(fo);
+	struct filter_fid *ff = &info->fti_mds_fid;
+	struct thandle *th;
+	int fl, rc, rc2;
 
 	ENTRY;
 
@@ -716,10 +708,9 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 	LASSERT(end == OBD_OBJECT_EOF);
 
 	ofd_write_lock(env, fo);
-	fmd = ofd_fmd_get(info->fti_exp, &fo->ofo_header.loh_fid);
-	if (fmd && fmd->fmd_mactime_xid < info->fti_xid)
-		fmd->fmd_mactime_xid = info->fti_xid;
-	ofd_fmd_put(info->fti_exp, fmd);
+	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+		tgt_fmd_update(info->fti_exp, &fo->ofo_header.loh_fid,
+			       info->fti_xid);
 
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);

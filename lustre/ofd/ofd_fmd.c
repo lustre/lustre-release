@@ -50,47 +50,40 @@
 
 #include "ofd_internal.h"
 
-static struct kmem_cache *ll_fmd_cachep;
-
 /**
  * Drop FMD reference and free it if reference drops to zero.
  *
- * Must be called with fed_lock held.
+ * Must be called with ted_fmd_lock held.
  *
  * \param[in] exp	OBD export
  * \param[in] fmd	FMD to put
  */
 static inline void ofd_fmd_put_nolock(struct obd_export *exp,
-				      struct ofd_mod_data *fmd)
+				      struct tgt_fmd_data *fmd)
 {
-	struct filter_export_data *fed = &exp->exp_filter_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
 
-	assert_spin_locked(&fed->fed_lock);
+	assert_spin_locked(&ted->ted_fmd_lock);
 	if (--fmd->fmd_refcount == 0) {
-		/* XXX when we have persistent reservations and the handle
-		 * is stored herein we need to drop it here. */
-		fed->fed_mod_count--;
+		ted->ted_fmd_count--;
 		list_del(&fmd->fmd_list);
-		OBD_SLAB_FREE(fmd, ll_fmd_cachep, sizeof(*fmd));
+		OBD_SLAB_FREE_PTR(fmd, tgt_fmd_kmem);
 	}
 }
 
 /**
- * Wrapper to drop FMD reference with fed_lock held.
+ * Wrapper to drop FMD reference with ted_fmd_lock held.
  *
  * \param[in] exp	OBD export
  * \param[in] fmd	FMD to put
  */
-void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd)
+void ofd_fmd_put(struct obd_export *exp, struct tgt_fmd_data *fmd)
 {
-	struct filter_export_data *fed = &exp->exp_filter_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
 
-	if (fmd == NULL)
-		return;
-
-	spin_lock(&fed->fed_lock);
+	spin_lock(&ted->ted_fmd_lock);
 	ofd_fmd_put_nolock(exp, fmd); /* caller reference */
-	spin_unlock(&fed->fed_lock);
+	spin_unlock(&ted->ted_fmd_lock);
 }
 
 /**
@@ -99,7 +92,7 @@ void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd)
  * Expire entries from the FMD list if there are too many
  * of them or they are too old.
  *
- * This function must be called with fed_lock held.
+ * This function must be called with ted_fmd_lock held.
  *
  * The \a keep FMD is not to be expired in any case. This parameter is used
  * by ofd_fmd_find_nolock() to prohibit a FMD that was just found from
@@ -109,19 +102,19 @@ void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd)
  * \param[in] keep	FMD to keep always
  */
 static void ofd_fmd_expire_nolock(struct obd_export *exp,
-				  struct ofd_mod_data *keep)
+				  struct tgt_fmd_data *keep)
 {
-	struct filter_export_data *fed = &exp->exp_filter_data;
-	struct ofd_device *ofd = ofd_exp(exp);
+	struct tg_export_data *ted = &exp->exp_target_data;
+	struct lu_target *lut = exp->exp_obd->u.obt.obt_lut;
 	time64_t now = ktime_get_seconds();
-	struct ofd_mod_data *fmd, *tmp;
+	struct tgt_fmd_data *fmd, *tmp;
 
-	list_for_each_entry_safe(fmd, tmp, &fed->fed_mod_list, fmd_list) {
+	list_for_each_entry_safe(fmd, tmp, &ted->ted_fmd_list, fmd_list) {
 		if (fmd == keep)
 			break;
 
 		if (now < fmd->fmd_expire &&
-		    fed->fed_mod_count < ofd->ofd_fmd_max_num)
+		    ted->ted_fmd_count < lut->lut_fmd_max_num)
 			break;
 
 		list_del_init(&fmd->fmd_list);
@@ -138,42 +131,41 @@ static void ofd_fmd_expire_nolock(struct obd_export *exp,
  */
 void ofd_fmd_expire(struct obd_export *exp)
 {
-	struct filter_export_data *fed = &exp->exp_filter_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
 
-	spin_lock(&fed->fed_lock);
+	spin_lock(&ted->ted_fmd_lock);
 	ofd_fmd_expire_nolock(exp, NULL);
-	spin_unlock(&fed->fed_lock);
+	spin_unlock(&ted->ted_fmd_lock);
 }
 
 /**
  * Find FMD by specified FID.
  *
- * Function finds FMD entry by FID in the filter_export_data::fed_fmd_list.
+ * Function finds FMD entry by FID in the tg_export_data::ted_fmd_list.
  *
- * Caller must hold filter_export_data::fed_lock and take FMD reference.
+ * Caller must hold tg_export_data::ted_fmd_lock and take FMD reference.
  *
  * \param[in] exp	OBD export
  * \param[in] fid	FID of FMD to find
  *
- * \retval		struct ofd_mod_data found by FID
+ * \retval		struct tgt_fmd_data found by FID
  * \retval		NULL is FMD is not found
  */
-static struct ofd_mod_data *ofd_fmd_find_nolock(struct obd_export *exp,
+static struct tgt_fmd_data *ofd_fmd_find_nolock(struct obd_export *exp,
 						const struct lu_fid *fid)
 {
-	struct filter_export_data *fed = &exp->exp_filter_data;
-	struct ofd_mod_data *found = NULL, *fmd;
-	struct ofd_device *ofd = ofd_exp(exp);
-	time64_t now = ktime_get_seconds();
+	struct tg_export_data *ted = &exp->exp_target_data;
+	struct tgt_fmd_data *found = NULL, *fmd;
+	struct lu_target *lut = exp->exp_obd->u.obt.obt_lut;
 
-	assert_spin_locked(&fed->fed_lock);
+	assert_spin_locked(&ted->ted_fmd_lock);
 
-	list_for_each_entry_reverse(fmd, &fed->fed_mod_list, fmd_list) {
+	list_for_each_entry_reverse(fmd, &ted->ted_fmd_list, fmd_list) {
 		if (lu_fid_eq(&fmd->fmd_fid, fid)) {
 			found = fmd;
-			list_del(&fmd->fmd_list);
-			list_add_tail(&fmd->fmd_list, &fed->fed_mod_list);
-			fmd->fmd_expire = now + ofd->ofd_fmd_max_age;
+			list_move_tail(&fmd->fmd_list, &ted->ted_fmd_list);
+			fmd->fmd_expire = ktime_get_seconds() +
+					  lut->lut_fmd_max_age;
 			break;
 		}
 	}
@@ -191,20 +183,20 @@ static struct ofd_mod_data *ofd_fmd_find_nolock(struct obd_export *exp,
  * \param[in] exp	OBD export
  * \param[in] fid	FID of FMD to find
  *
- * \retval		struct ofd_mod_data found by FID
+ * \retval		struct tgt_fmd_data found by FID
  * \retval		NULL indicates FMD is not found
  */
-struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
+struct tgt_fmd_data *ofd_fmd_find(struct obd_export *exp,
 				  const struct lu_fid *fid)
 {
-	struct filter_export_data	*fed = &exp->exp_filter_data;
-	struct ofd_mod_data		*fmd;
+	struct tg_export_data *ted = &exp->exp_target_data;
+	struct tgt_fmd_data *fmd;
 
-	spin_lock(&fed->fed_lock);
+	spin_lock(&ted->ted_fmd_lock);
 	fmd = ofd_fmd_find_nolock(exp, fid);
 	if (fmd)
 		fmd->fmd_refcount++;    /* caller reference */
-	spin_unlock(&fed->fed_lock);
+	spin_unlock(&ted->ted_fmd_lock);
 
 	return fmd;
 }
@@ -220,38 +212,40 @@ struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
  * \param[in] exp	OBD export
  * \param[in] fid	FID of FMD to find
  *
- * \retval		struct ofd_mod_data found by FID
+ * \retval		struct tgt_fmd_data found by FID
  * \retval		NULL indicates FMD is not found
  */
-struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, const struct lu_fid *fid)
+struct tgt_fmd_data *ofd_fmd_get(struct obd_export *exp,
+				 const struct lu_fid *fid)
 {
-	struct filter_export_data	*fed = &exp->exp_filter_data;
-	struct ofd_device		*ofd = ofd_exp(exp);
-	struct ofd_mod_data		*found = NULL, *fmd_new = NULL;
-	time64_t now = ktime_get_seconds();
+	struct tg_export_data *ted = &exp->exp_target_data;
+	struct tgt_fmd_data *found = NULL, *fmd_new = NULL;
 
-	OBD_SLAB_ALLOC_PTR(fmd_new, ll_fmd_cachep);
+	OBD_SLAB_ALLOC_PTR(fmd_new, tgt_fmd_kmem);
 
-	spin_lock(&fed->fed_lock);
+	spin_lock(&ted->ted_fmd_lock);
 	found = ofd_fmd_find_nolock(exp, fid);
 	if (fmd_new) {
 		if (found == NULL) {
-			list_add_tail(&fmd_new->fmd_list,
-				      &fed->fed_mod_list);
+			list_add_tail(&fmd_new->fmd_list, &ted->ted_fmd_list);
 			fmd_new->fmd_fid = *fid;
 			fmd_new->fmd_refcount++;   /* list reference */
 			found = fmd_new;
-			fed->fed_mod_count++;
+			ted->ted_fmd_count++;
 		} else {
-			OBD_SLAB_FREE_PTR(fmd_new, ll_fmd_cachep);
+			OBD_SLAB_FREE_PTR(fmd_new, tgt_fmd_kmem);
 		}
 	}
 	if (found) {
 		found->fmd_refcount++; /* caller reference */
-		found->fmd_expire = now + ofd->ofd_fmd_max_age;
+		found->fmd_expire = ktime_get_seconds() +
+			class_exp2tgt(exp)->lut_fmd_max_age;
+	} else {
+		LCONSOLE_WARN("%s: cannot allocate FMD for "DFID
+			      ", timestamps may be out of sync\n",
+			      exp->exp_obd->obd_name, PFID(fid));
 	}
-
-	spin_unlock(&fed->fed_lock);
+	spin_unlock(&ted->ted_fmd_lock);
 
 	return found;
 }
@@ -274,16 +268,16 @@ struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, const struct lu_fid *fi
  */
 void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid)
 {
-	struct filter_export_data	*fed = &exp->exp_filter_data;
-	struct ofd_mod_data		*found = NULL;
+	struct tg_export_data *ted = &exp->exp_target_data;
+	struct tgt_fmd_data *found = NULL;
 
-	spin_lock(&fed->fed_lock);
+	spin_lock(&ted->ted_fmd_lock);
 	found = ofd_fmd_find_nolock(exp, fid);
 	if (found) {
 		list_del_init(&found->fmd_list);
 		ofd_fmd_put_nolock(exp, found);
 	}
-	spin_unlock(&fed->fed_lock);
+	spin_unlock(&ted->ted_fmd_lock);
 }
 #endif
 
@@ -296,48 +290,65 @@ void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid)
  */
 void ofd_fmd_cleanup(struct obd_export *exp)
 {
-	struct filter_export_data	*fed = &exp->exp_filter_data;
-	struct ofd_mod_data		*fmd = NULL, *tmp;
+	struct tg_export_data *ted = &exp->exp_target_data;
+	struct tgt_fmd_data *fmd = NULL, *tmp;
 
-	spin_lock(&fed->fed_lock);
-	list_for_each_entry_safe(fmd, tmp, &fed->fed_mod_list, fmd_list) {
+	spin_lock(&ted->ted_fmd_lock);
+	list_for_each_entry_safe(fmd, tmp, &ted->ted_fmd_list, fmd_list) {
 		list_del_init(&fmd->fmd_list);
 		if (fmd->fmd_refcount > 1) {
-			CDEBUG(D_INFO, "fmd %p still referenced (refcount = %d)\n",
+			CDEBUG(D_INFO,
+			       "fmd %p is still referenced (refcount = %d)\n",
 			       fmd, fmd->fmd_refcount);
 		}
 		ofd_fmd_put_nolock(exp, fmd);
 	}
-	spin_unlock(&fed->fed_lock);
+	spin_unlock(&ted->ted_fmd_lock);
 }
 
 /**
- * Initialize FMD subsystem.
+ * Update FMD with the latest request XID.
  *
- * This function is called upon OFD setup and initialize memory to be used
- * by FMD entries.
+ * Save a new setattr/punch XID in FMD if exists.
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fid	FID of FMD to find
+ * \param[in] xid	request XID
  */
-int ofd_fmd_init(void)
+void tgt_fmd_update(struct obd_export *exp, const struct lu_fid *fid, __u64 xid)
 {
-	ll_fmd_cachep = kmem_cache_create("ll_fmd_cache",
-					  sizeof(struct ofd_mod_data),
-					  0, 0, NULL);
-	if (!ll_fmd_cachep)
-		return -ENOMEM;
-	else
-		return 0;
-}
+	struct tgt_fmd_data *fmd;
 
-/**
- * Stop FMD subsystem.
- *
- * This function is called upon OFD cleanup and destroy memory used
- * by FMD entries.
- */
-void ofd_fmd_exit(void)
-{
-	if (ll_fmd_cachep) {
-		kmem_cache_destroy(ll_fmd_cachep);
-		ll_fmd_cachep = NULL;
+	fmd = ofd_fmd_get(exp, fid);
+	if (fmd) {
+		if (fmd->fmd_mactime_xid < xid)
+			fmd->fmd_mactime_xid = xid;
+		ofd_fmd_put(exp, fmd);
 	}
 }
+
+/**
+ * Chech that time can be updated by the request with given XID.
+ *
+ * Check FMD XID if exists to be less than supplied XID
+ *
+ * \param[in] exp	OBD export
+ * \param[in] fid	FID of FMD to find
+ * \param[in] xid	request XID
+ *
+ * \retval true if FMD has no greater XID, so time attr can be updated
+ */
+bool tgt_fmd_check(struct obd_export *exp, const struct lu_fid *fid, __u64 xid)
+{
+	struct tgt_fmd_data *fmd;
+	bool can_update = true;
+
+	fmd = ofd_fmd_find(exp, fid);
+	if (fmd) {
+		can_update = fmd->fmd_mactime_xid < xid;
+		ofd_fmd_put(exp, fmd);
+	}
+
+	return can_update;
+}
+

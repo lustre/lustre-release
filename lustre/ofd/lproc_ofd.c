@@ -197,9 +197,9 @@ static ssize_t client_cache_count_show(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target *lut = obd->u.obt.obt_lut;
 
-	return sprintf(buf, "%u\n", ofd->ofd_fmd_max_num);
+	return sprintf(buf, "%u\n", lut->lut_fmd_max_num);
 }
 
 /**
@@ -221,7 +221,7 @@ static ssize_t client_cache_count_store(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target *lut = obd->u.obt.obt_lut;
 	int val;
 	int rc;
 
@@ -232,7 +232,7 @@ static ssize_t client_cache_count_store(struct kobject *kobj,
 	if (val < 1 || val > 65536)
 		return -EINVAL;
 
-	ofd->ofd_fmd_max_num = val;
+	lut->lut_fmd_max_num = val;
 	return count;
 }
 LUSTRE_RW_ATTR(client_cache_count);
@@ -252,9 +252,9 @@ static ssize_t client_cache_seconds_show(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target *lut = obd->u.obt.obt_lut;
 
-	return sprintf(buf, "%lld\n", ofd->ofd_fmd_max_age);
+	return sprintf(buf, "%lld\n", lut->lut_fmd_max_age);
 }
 
 /**
@@ -276,7 +276,7 @@ static ssize_t client_cache_seconds_store(struct kobject *kobj,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_target *lut = obd->u.obt.obt_lut;
 	time64_t val;
 	int rc;
 
@@ -287,7 +287,7 @@ static ssize_t client_cache_seconds_store(struct kobject *kobj,
 	if (val < 1 || val > 65536) /* ~ 18 hour max */
 		return -EINVAL;
 
-	ofd->ofd_fmd_max_age = val;
+	lut->lut_fmd_max_age = val;
 	return count;
 }
 LUSTRE_RW_ATTR(client_cache_seconds);
