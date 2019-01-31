@@ -142,10 +142,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
 #endif
 
-#ifndef SLAB_DESTROY_BY_RCU
-#define SLAB_DESTROY_BY_RCU 0
-#endif
-
 #ifndef HAVE_INIT_LIST_HEAD_RCU
 static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
 {

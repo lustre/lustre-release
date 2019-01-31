@@ -255,7 +255,6 @@
 \batomic_sub_and_test\b
 \bcall_wait_handler\b
 \binit_completion_module\b
-\bSLAB_DESTROY_BY_RCU\b
 \bSLAB_KERNEL\b
 \bSLAB_NOFS\b
 \bTASK_INTERRUPTIBLE\b

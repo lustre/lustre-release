@@ -3193,7 +3193,7 @@ int ldlm_init(void)
 
 	ldlm_lock_slab = kmem_cache_create("ldlm_locks",
 			      sizeof(struct ldlm_lock), 0,
-			      SLAB_HWCACHE_ALIGN | SLAB_DESTROY_BY_RCU, NULL);
+			      SLAB_HWCACHE_ALIGN, NULL);
 	if (ldlm_lock_slab == NULL)
 		goto out_resource;
 
