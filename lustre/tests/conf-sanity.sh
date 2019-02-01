@@ -6956,7 +6956,7 @@ test_93() {
 	start_ost || error "OST0 start fail"
 
 	#define OBD_FAIL_MGS_WRITE_TARGET_DELAY	 0x90e
-	do_facet mgs "$LCTL set_param fail_val = 10 fail_loc=0x8000090e"
+	do_facet mgs "$LCTL set_param fail_val=10 fail_loc=0x8000090e"
 	for num in $(seq 2 $MDSCOUNT); do
 		start_mdt $num &
 	done
