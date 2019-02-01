@@ -994,14 +994,15 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		if (!lov->lov_tgts[index])
 			/* Try again with the next index */
 			RETURN(-EAGAIN);
-		imp = lov->lov_tgts[index]->ltd_exp->exp_obd->u.cli.cl_import;
-		if (!lov->lov_tgts[index]->ltd_active &&
-		    imp->imp_state != LUSTRE_IMP_IDLE)
-			RETURN(-ENODATA);
 
 		osc_obd = class_exp2obd(lov->lov_tgts[index]->ltd_exp);
 		if (!osc_obd)
 			RETURN(-EINVAL);
+
+		imp = osc_obd->u.cli.cl_import;
+		if (!lov->lov_tgts[index]->ltd_active &&
+		    imp->imp_state != LUSTRE_IMP_IDLE)
+			RETURN(-ENODATA);
 
 		/* copy UUID */
 		if (copy_to_user(data->ioc_pbuf2, obd2cli_tgt(osc_obd),
