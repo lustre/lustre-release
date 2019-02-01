@@ -384,6 +384,30 @@ int lprocfs_exp_replydata_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_replydata);
 
+int lprocfs_exp_print_fmd_count_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+				    struct hlist_node *hnode, void *cb_data)
+
+{
+	struct obd_export *exp = cfs_hash_object(hs, hnode);
+	struct seq_file *m = cb_data;
+	struct tg_export_data *ted = &exp->exp_target_data;
+
+	seq_printf(m, "%d\n", ted->ted_fmd_count);
+
+	return 0;
+}
+
+int lprocfs_exp_fmd_count_seq_show(struct seq_file *m, void *data)
+{
+	struct nid_stat *stats = m->private;
+	struct obd_device *obd = stats->nid_obd;
+
+	cfs_hash_for_each_key(obd->obd_nid_hash, &stats->nid,
+			      lprocfs_exp_print_fmd_count_seq, m);
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(lprocfs_exp_fmd_count);
+
 int lprocfs_nid_stats_clear_seq_show(struct seq_file *m, void *data)
 {
 	seq_puts(m, "Write into this file to clear all nid stats and stale nid entries\n");
@@ -546,6 +570,15 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid)
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CWARN("%s: error adding the reply_data file: rc = %d\n",
+		      obd->obd_name, rc);
+		GOTO(destroy_new_ns, rc);
+	}
+
+	entry = lprocfs_add_simple(new_stat->nid_proc, "fmd_count", new_stat,
+				   &lprocfs_exp_fmd_count_fops);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CWARN("%s: error adding the fmd_count file: rc = %d\n",
 		      obd->obd_name, rc);
 		GOTO(destroy_new_ns, rc);
 	}

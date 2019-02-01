@@ -702,7 +702,10 @@ int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 * doesn't already exist so we can store the reservation handle
 		 * there. */
 		valid = OBD_MD_FLUID | OBD_MD_FLGID;
-		valid |= OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+		if (tgt_fmd_check(exp, mdt_object_fid(mo),
+				  mdt_info_req(info)->rq_xid))
+			valid |= OBD_MD_FLATIME | OBD_MD_FLMTIME |
+				 OBD_MD_FLCTIME;
 
 		la_from_obdo(la, oa, valid);
 
@@ -889,6 +892,11 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 	la_from_obdo(la, oa, OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
 	la->la_size = start;
 	la->la_valid |= LA_SIZE;
+
+	/* MDT supports FMD for Data-on-MDT needs */
+	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+		tgt_fmd_update(tsi->tsi_exp, &tsi->tsi_fid,
+			       tgt_ses_req(tsi)->rq_xid);
 
 	rc = mdt_object_punch(tsi->tsi_env, mdt->mdt_bottom, dob,
 			      start, end, la);

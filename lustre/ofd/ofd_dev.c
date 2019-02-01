@@ -82,18 +82,11 @@
 
 /* Slab for OFD object allocation */
 static struct kmem_cache *ofd_object_kmem;
-struct kmem_cache *tgt_fmd_kmem;
-
 static struct lu_kmem_descr ofd_caches[] = {
 	{
 		.ckd_cache = &ofd_object_kmem,
 		.ckd_name  = "ofd_obj",
 		.ckd_size  = sizeof(struct ofd_object)
-	},
-	{
-		.ckd_cache = &tgt_fmd_kmem,
-		.ckd_name  = "ll_fmd_cache",
-		.ckd_size  = sizeof(struct tgt_fmd_data)
 	},
 	{
 		.ckd_cache = NULL
@@ -756,6 +749,7 @@ static void ofd_procfs_fini(struct ofd_device *ofd)
 {
 	struct obd_device *obd = ofd_obd(ofd);
 
+	tgt_tunables_fini(&ofd->ofd_lut);
 	lprocfs_free_per_client_stats(obd);
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_obd_stats(obd);
@@ -2871,12 +2865,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	/* set this lu_device to obd, because error handling need it */
 	obd->obd_lu_dev = &m->ofd_dt_dev.dd_lu_dev;
 
-	rc = ofd_tunables_init(m);
-	if (rc) {
-		CERROR("Can't init ofd lprocfs, rc %d\n", rc);
-		RETURN(rc);
-	}
-
 	/* No connection accepted until configurations will finish */
 	spin_lock(&obd->obd_dev_lock);
 	obd->obd_no_conn = 1;
@@ -2893,12 +2881,13 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	info = ofd_info_init(env, NULL);
 	if (info == NULL)
-		GOTO(err_fini_proc, rc = -EFAULT);
+		RETURN(-EFAULT);
 
 	rc = ofd_stack_init(env, m, cfg);
 	if (rc) {
-		CERROR("Can't init device stack, rc %d\n", rc);
-		GOTO(err_fini_proc, rc);
+		CERROR("%s: can't init device stack, rc %d\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
 	}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
@@ -2928,6 +2917,10 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc)
 		GOTO(err_free_ns, rc);
 
+	rc = ofd_tunables_init(m);
+	if (rc)
+		GOTO(err_fini_lut, rc);
+
 	tgd->tgd_reserved_pcnt = 0;
 
 	m->ofd_brw_size = m->ofd_lut.lut_dt_conf.ddp_brw_size;
@@ -2940,7 +2933,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	rc = ofd_fs_setup(env, m, obd);
 	if (rc)
-		GOTO(err_fini_lut, rc);
+		GOTO(err_fini_proc, rc);
 
 	fid.f_seq = FID_SEQ_LOCAL_NAME;
 	fid.f_oid = 1;
@@ -2976,6 +2969,8 @@ err_fini_los:
 	m->ofd_los = NULL;
 err_fini_fs:
 	ofd_fs_cleanup(env, m);
+err_fini_proc:
+	ofd_procfs_fini(m);
 err_fini_lut:
 	tgt_fini(env, &m->ofd_lut);
 err_free_ns:
@@ -2983,8 +2978,6 @@ err_free_ns:
 	obd->obd_namespace = m->ofd_namespace = NULL;
 err_fini_stack:
 	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
-err_fini_proc:
-	ofd_procfs_fini(m);
 	return rc;
 }
 
@@ -3015,6 +3008,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
 
+	ofd_procfs_fini(m);
 	tgt_fini(env, &m->ofd_lut);
 	ofd_stop_inconsistency_verification_thread(m);
 	lfsck_degister(env, m->ofd_osd);
@@ -3028,7 +3022,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	}
 
 	ofd_stack_fini(env, m, &m->ofd_dt_dev.dd_lu_dev);
-	ofd_procfs_fini(m);
+
 	LASSERT(atomic_read(&d->ld_ref) == 0);
 	server_put_mount(obd->obd_name, true);
 	EXIT;

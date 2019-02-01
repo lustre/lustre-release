@@ -51,15 +51,6 @@
 #define OFD_VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
 			 LA_BLKSIZE | LA_ATIME | LA_MTIME | LA_CTIME)
 
-/* FMD tracking data */
-struct tgt_fmd_data {
-	struct list_head fmd_list;	  /* linked to tgt_fmd_list */
-	struct lu_fid	 fmd_fid;	  /* FID being written to */
-	__u64		 fmd_mactime_xid; /* xid highest {m,a,c}time setattr */
-	time64_t	 fmd_expire;	  /* time when the fmd should expire */
-	int		 fmd_refcount;	  /* reference counter - list holds 1 */
-};
-
 #define OFD_SOFT_SYNC_LIMIT_DEFAULT 16
 
 /* request stats */
@@ -390,16 +381,6 @@ struct ofd_object *ofd_object_find_exists(const struct lu_env *env,
 	}
 	return fo;
 }
-
-/* ofd_fmd.c */
-extern struct kmem_cache *tgt_fmd_kmem;
-void ofd_fmd_expire(struct obd_export *exp);
-void ofd_fmd_cleanup(struct obd_export *exp);
-#ifdef DO_FMD_DROP
-void ofd_fmd_drop(struct obd_export *exp, const struct lu_fid *fid);
-#else
-#define ofd_fmd_drop(exp, fid) do {} while (0)
-#endif
 
 /* ofd_dev.c */
 int ofd_fid_set_index(const struct lu_env *env, struct ofd_device *ofd,

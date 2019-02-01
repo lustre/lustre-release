@@ -2873,12 +2873,6 @@ added:
 	RETURN(0);
 }
 
-int target_handle_ping(struct ptlrpc_request *req)
-{
-        obd_ping(req->rq_svc_thread->t_env, req->rq_export);
-        return req_capsule_server_pack(&req->rq_pill);
-}
-
 void target_committed_to_req(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
