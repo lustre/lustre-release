@@ -16804,6 +16804,7 @@ test_257() {
 	stop $facet || error "stop MDS failed"
 	start $facet $(mdsdevname $((mdtidx + 1))) $MDS_MOUNT_OPTS ||
 		error "start MDS fail"
+	wait_recovery_complete $facet
 }
 run_test 257 "xattr locks are not lost"
 
