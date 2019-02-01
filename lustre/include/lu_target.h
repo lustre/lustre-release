@@ -205,6 +205,9 @@ struct lu_target {
 	/* target grants fields */
 	struct tg_grants_data	 lut_tgd;
 
+	/* target tunables */
+	const struct attribute	**lut_attrs;
+
 	/* FMD (file modification data) values */
 	int			 lut_fmd_max_num;
 	time64_t		 lut_fmd_max_age;
@@ -492,6 +495,8 @@ int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 		       struct thandle *th, bool update_lrd_file);
 struct tg_reply_data *tgt_lookup_reply_by_xid(struct tg_export_data *ted,
 					       __u64 xid);
+int tgt_tunables_init(struct lu_target *lut);
+void tgt_tunables_fini(struct lu_target *lut);
 
 /* target/tgt_grant.c */
 static inline int exp_grant_param_supp(struct obd_export *exp)
@@ -534,6 +539,11 @@ void tgt_fmd_update(struct obd_export *exp, const struct lu_fid *fid,
 		    __u64 xid);
 bool tgt_fmd_check(struct obd_export *exp, const struct lu_fid *fid,
 		   __u64 xid);
+#ifdef DO_FMD_DROP
+void tgt_fmd_drop(struct obd_export *exp, const struct lu_fid *fid);
+#else
+#define tgt_fmd_drop(exp, fid) do {} while (0)
+#endif
 
 /* target/update_trans.c */
 int distribute_txn_init(const struct lu_env *env,

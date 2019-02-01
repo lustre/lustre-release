@@ -288,4 +288,18 @@ void tgt_cancel_slc_locks(struct lu_target *tgt, __u64 transno);
 void barrier_init(void);
 void barrier_fini(void);
 
+/* FMD tracking data */
+struct tgt_fmd_data {
+	struct list_head fmd_list;	  /* linked to tgt_fmd_list */
+	struct lu_fid	 fmd_fid;	  /* FID being written to */
+	__u64		 fmd_mactime_xid; /* xid highest {m,a,c}time setattr */
+	time64_t	 fmd_expire;	  /* time when the fmd should expire */
+	int		 fmd_refcount;	  /* reference counter - list holds 1 */
+};
+
+/* tgt_fmd.c */
+extern struct kmem_cache *tgt_fmd_kmem;
+void tgt_fmd_expire(struct obd_export *exp);
+void tgt_fmd_cleanup(struct obd_export *exp);
+
 #endif /* _TG_INTERNAL_H */

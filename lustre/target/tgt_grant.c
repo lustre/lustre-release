@@ -71,7 +71,7 @@
  * Author: Johann Lombardi <johann.lombardi@intel.com>
  */
 
-#define DEBUG_SUBSYSTEM S_FILTER
+#define DEBUG_SUBSYSTEM S_CLASS
 
 #include <obd.h>
 #include <obd_class.h>

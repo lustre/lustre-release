@@ -395,6 +395,8 @@ int tgt_client_alloc(struct obd_export *exp)
 
 	spin_lock_init(&exp->exp_target_data.ted_nodemap_lock);
 	INIT_LIST_HEAD(&exp->exp_target_data.ted_nodemap_member);
+	spin_lock_init(&exp->exp_target_data.ted_fmd_lock);
+	INIT_LIST_HEAD(&exp->exp_target_data.ted_fmd_list);
 
 	OBD_ALLOC_PTR(exp->exp_target_data.ted_lcd);
 	if (exp->exp_target_data.ted_lcd == NULL)
@@ -417,6 +419,8 @@ void tgt_client_free(struct obd_export *exp)
 	struct tg_reply_data	*trd, *tmp;
 
 	LASSERT(exp != exp->exp_obd->obd_self_export);
+
+	tgt_fmd_cleanup(exp);
 
 	/* free reply data */
 	mutex_lock(&ted->ted_lcd_lock);

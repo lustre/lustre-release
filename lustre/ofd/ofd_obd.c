@@ -546,8 +546,6 @@ static int ofd_init_export(struct obd_export *exp)
 {
 	int rc;
 
-	spin_lock_init(&exp->exp_target_data.ted_fmd_lock);
-	INIT_LIST_HEAD(&exp->exp_target_data.ted_fmd_list);
 	atomic_set(&exp->exp_filter_data.fed_soft_sync_count, 0);
 	spin_lock(&exp->exp_lock);
 	exp->exp_connecting = 1;
@@ -595,8 +593,6 @@ static int ofd_destroy_export(struct obd_export *exp)
 
 	ldlm_destroy_export(exp);
 	tgt_client_free(exp);
-
-	ofd_fmd_cleanup(exp);
 
 	/*
 	 * discard grants once we're sure no more
@@ -1405,26 +1401,6 @@ static int ofd_precleanup(struct obd_device *obd)
 }
 
 /**
- * Implementation of obd_ops::o_ping.
- *
- * This is OFD-specific part of OBD_PING request handling.
- * It controls Filter Modification Data (FMD) expiration each time PING is
- * received.
- *
- * \see  ofd_fmd_expire() and ofd_fmd.c for details
- *
- * \param[in] env	execution environment
- * \param[in] exp	OBD export of client
- *
- * \retval		0
- */
-static int ofd_ping(const struct lu_env *env, struct obd_export *exp)
-{
-	ofd_fmd_expire(exp);
-	return 0;
-}
-
-/**
  * Implementation of obd_ops::o_health_check.
  *
  * This function checks the OFD device health - ability to respond on
@@ -1516,7 +1492,6 @@ struct obd_ops ofd_obd_ops = {
 	.o_getattr		= ofd_echo_getattr,
 	.o_iocontrol		= ofd_iocontrol,
 	.o_precleanup		= ofd_precleanup,
-	.o_ping			= ofd_ping,
 	.o_health_check		= ofd_health_check,
 	.o_set_info_async	= ofd_set_info_async,
 	.o_get_info		= ofd_get_info,

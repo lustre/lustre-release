@@ -704,6 +704,12 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		if (ma->ma_valid & MA_LOV)
 			GOTO(out_put, rc = -EPROTO);
 
+		/* MDT supports FMD for regular files due to Data-on-MDT */
+		if (S_ISREG(lu_object_attr(&mo->mot_obj)) &&
+		    ma->ma_attr.la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+			tgt_fmd_update(info->mti_exp, mdt_object_fid(mo),
+				       req->rq_xid);
+
 		rc = mdt_attr_set(info, mo, ma);
 		if (rc)
 			GOTO(out_put, rc);

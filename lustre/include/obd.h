@@ -1015,8 +1015,6 @@ struct obd_ops {
 	int (*o_quotactl)(struct obd_device *, struct obd_export *,
 			  struct obd_quotactl *);
 
-	int (*o_ping)(const struct lu_env *, struct obd_export *exp);
-
 	/* pools methods */
 	int (*o_pool_new)(struct obd_device *obd, char *poolname);
 	int (*o_pool_del)(struct obd_device *obd, char *poolname);

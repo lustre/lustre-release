@@ -911,19 +911,6 @@ static inline int obd_fid_alloc(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static inline int obd_ping(const struct lu_env *env, struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-	if (!exp->exp_obd->obd_type ||
-	    !exp->exp_obd->obd_type->typ_dt_ops->o_ping)
-		RETURN(0);
-
-        rc = OBP(exp->exp_obd, ping)(env, exp);
-        RETURN(rc);
-}
-
 static inline int obd_pool_new(struct obd_device *obd, char *poolname)
 {
         int rc;

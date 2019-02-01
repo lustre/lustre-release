@@ -708,27 +708,6 @@ mdt_enable_dir_migration_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_enable_dir_migration);
 
-
-/**
- * Show MDT policy for handling dirty metadata under a lock being cancelled.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int mdt_slc_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct lu_target *tgt = obd->u.obt.obt_lut;
-	char *slc_states[] = {"never", "blocking", "always" };
-
-	seq_printf(m, "%s\n", slc_states[tgt->lut_sync_lock_cancel]);
-	return 0;
-}
-LPROC_SEQ_FOPS_RO(mdt_slc);
-
 /**
  * Show MDT async commit count.
  *
@@ -1078,8 +1057,6 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_recovery_time_hard_fops	},
 	{ .name =	"recovery_time_soft",
 	  .fops =	&mdt_recovery_time_soft_fops	},
-	{ .name =	"sync_lock_cancel",
-	  .fops =	&mdt_slc_fops				},
 	{ .name =	"async_commit_count",
 	  .fops =	&mdt_async_commit_count_fops		},
 	{ .name =	"sync_count",
@@ -1214,6 +1191,13 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 		return rc;
 	}
 
+	rc = tgt_tunables_init(&mdt->mdt_lut);
+	if (rc) {
+		CERROR("%s: failed to init target tunables: rc = %d\n",
+		       mdt_obd_name(mdt), rc);
+		return rc;
+	}
+
 	rc = hsm_cdt_procfs_init(mdt);
 	if (rc) {
 		CERROR("%s: cannot create hsm proc entries: rc = %d\n",
@@ -1265,6 +1249,7 @@ void mdt_procfs_fini(struct mdt_device *mdt)
 
 	lprocfs_free_per_client_stats(obd);
 	hsm_cdt_procfs_fini(mdt);
+	tgt_tunables_fini(&mdt->mdt_lut);
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);
 	lprocfs_free_obd_stats(obd);

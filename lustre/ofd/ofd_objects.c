@@ -854,7 +854,7 @@ int ofd_destroy(const struct lu_env *env, struct ofd_object *fo,
 	if (rc)
 		GOTO(stop, rc);
 
-	ofd_fmd_drop(ofd_info(env)->fti_exp, &fo->ofo_header.loh_fid);
+	tgt_fmd_drop(ofd_info(env)->fti_exp, &fo->ofo_header.loh_fid);
 
 	dt_ref_del(env, ofd_object_child(fo), th);
 	dt_destroy(env, ofd_object_child(fo), th);

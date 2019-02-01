@@ -183,116 +183,6 @@ static int ofd_last_id_seq_show(struct seq_file *m, void *data)
 LPROC_SEQ_FOPS_RO(ofd_last_id);
 
 /**
- * Show maximum number of Filter Modification Data (FMD) maintained by OFD.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static ssize_t client_cache_count_show(struct kobject *kobj,
-				       struct attribute *attr,
-				       char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
-
-	return sprintf(buf, "%u\n", lut->lut_fmd_max_num);
-}
-
-/**
- * Change number of FMDs maintained by OFD.
- *
- * This defines how large the list of FMDs can be.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t client_cache_count_store(struct kobject *kobj,
-					struct attribute *attr,
-					const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
-	int val;
-	int rc;
-
-	rc = kstrtoint(buffer, 0, &val);
-	if (rc)
-		return rc;
-
-	if (val < 1 || val > 65536)
-		return -EINVAL;
-
-	lut->lut_fmd_max_num = val;
-	return count;
-}
-LUSTRE_RW_ATTR(client_cache_count);
-
-/**
- * Show the maximum age of FMD data in seconds.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static ssize_t client_cache_seconds_show(struct kobject *kobj,
-					 struct attribute *attr,
-					 char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
-
-	return sprintf(buf, "%lld\n", lut->lut_fmd_max_age);
-}
-
-/**
- * Set the maximum age of FMD data in seconds.
- *
- * This defines how long FMD data stays in the FMD list.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents maximum number
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t client_cache_seconds_store(struct kobject *kobj,
-					  struct attribute *attr,
-					  const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct lu_target *lut = obd->u.obt.obt_lut;
-	time64_t val;
-	int rc;
-
-	rc = kstrtoll(buffer, 0, &val);
-	if (rc)
-		return rc;
-
-	if (val < 1 || val > 65536) /* ~ 18 hour max */
-		return -EINVAL;
-
-	lut->lut_fmd_max_age = val;
-	return count;
-}
-LUSTRE_RW_ATTR(client_cache_seconds);
-
-/**
  * Show if the OFD is in degraded mode.
  *
  * Degraded means OFD has a failed drive or is undergoing RAID rebuild.
@@ -440,9 +330,6 @@ static ssize_t sync_journal_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(sync_journal);
 
-/* This must be longer than the longest string below */
-#define SYNC_STATES_MAXLEN 16
-
 static int ofd_brw_size_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
@@ -481,88 +368,6 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 }
 
 LPROC_SEQ_FOPS(ofd_brw_size);
-
-static char *sync_on_cancel_states[] = {"never",
-					"blocking",
-					"always" };
-
-/**
- * Show OFD policy for handling dirty data under a lock being cancelled.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static ssize_t sync_lock_cancel_show(struct kobject *kobj,
-				     struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct lu_target *tgt = obd->u.obt.obt_lut;
-
-	return sprintf(buf, "%s\n",
-		       sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
-}
-
-/**
- * Change OFD policy for handling dirty data under a lock being cancelled.
- *
- * This variable defines what action OFD takes upon lock cancel
- * There are three possible modes:
- * 1) never - never do sync upon lock cancel. This can lead to data
- *    inconsistencies if both the OST and client crash while writing a file
- *    that is also concurrently being read by another client. In these cases,
- *    this may allow the file data to "rewind" to an earlier state.
- * 2) blocking - do sync only if there is blocking lock, e.g. if another
- *    client is trying to access this same object
- * 3) always - do sync always
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents policy
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t sync_lock_cancel_store(struct kobject *kobj,
-				      struct attribute *attr,
-				      const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct lu_target *tgt = obd->u.obt.obt_lut;
-	int val = -1;
-	int i;
-
-	if (count == 0 || count >= SYNC_STATES_MAXLEN)
-		return -EINVAL;
-
-	for (i = 0 ; i < NUM_SYNC_ON_CANCEL_STATES; i++) {
-		if (strcmp(buffer, sync_on_cancel_states[i]) == 0) {
-			val = i;
-			break;
-		}
-	}
-
-	/* Legacy numeric codes */
-	if (val == -1) {
-		int rc = kstrtoint(buffer, 0, &val);
-		if (rc)
-			return rc;
-	}
-
-	if (val < 0 || val > 2)
-		return -EINVAL;
-
-	spin_lock(&tgt->lut_flags_lock);
-	tgt->lut_sync_lock_cancel = val;
-	spin_unlock(&tgt->lut_flags_lock);
-	return count;
-}
-LUSTRE_RW_ATTR(sync_lock_cancel);
 
 /**
  * Show the limit of soft sync RPCs.
@@ -1049,12 +854,9 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_seqs_allocated.attr,
 	&lustre_attr_grant_precreate.attr,
 	&lustre_attr_precreate_batch.attr,
-	&lustre_attr_client_cache_count.attr,
-	&lustre_attr_client_cache_seconds.attr,
 	&lustre_attr_degraded.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_sync_journal.attr,
-	&lustre_attr_sync_lock_cancel.attr,
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
@@ -1093,11 +895,18 @@ int ofd_tunables_init(struct ofd_device *ofd)
 		RETURN(rc);
 	}
 
+	rc = tgt_tunables_init(&ofd->ofd_lut);
+	if (rc) {
+		CERROR("%s: tgt_tunables_init failed: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(obd_cleanup, rc);
+	}
+
 	rc = lprocfs_alloc_obd_stats(obd, LPROC_OFD_STATS_LAST);
 	if (rc) {
 		CERROR("%s: lprocfs_alloc_obd_stats failed: %d.\n",
 		       obd->obd_name, rc);
-		GOTO(obd_cleanup, rc);
+		GOTO(tgt_cleanup, rc);
 	}
 
 	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
@@ -1129,6 +938,8 @@ int ofd_tunables_init(struct ofd_device *ofd)
 
 obd_free_stats:
 	lprocfs_free_obd_stats(obd);
+tgt_cleanup:
+	tgt_tunables_fini(&ofd->ofd_lut);
 obd_cleanup:
 	lprocfs_obd_cleanup(obd);
 

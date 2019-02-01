@@ -1029,7 +1029,16 @@ int tgt_obd_ping(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	rc = target_handle_ping(tgt_ses_req(tsi));
+	/* The target-specific part of OBD_PING request handling.
+	 * It controls Filter Modification Data (FMD) expiration each time
+	 * PING is received.
+	 *
+	 * Valid only for replayable targets, e.g. MDT and OFD
+	 */
+	if (tsi->tsi_exp->exp_obd->obd_replayable)
+		tgt_fmd_expire(tsi->tsi_exp);
+
+	rc = req_capsule_server_pack(tsi->tsi_pill);
 	if (rc)
 		RETURN(err_serious(rc));
 

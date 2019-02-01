@@ -3302,7 +3302,7 @@ subr_36fh() {
 	sleep 1
 	touch --date="$DATESTR" $DIR/$tdir/$tfile # setattr timestamp in past
 	LS_BEFORE="`ls -l $DIR/$tdir/$tfile`" # old timestamp from client cache
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	LS_AFTER="`ls -l $DIR/$tdir/$tfile`"  # timestamp from OST object
 	date; date +%s
 	[ "$LS_BEFORE" != "$LS_AFTER" ] && \
@@ -3325,30 +3325,36 @@ run_test 36f "utime on file racing with OST BRW write =========="
 test_36g() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDS1_VERSION -lt $(version_code 2.12.51) ] &&
+		skip "Need MDS version at least 2.12.51"
 
 	local fmd_max_age
-	local fmd_before
-	local fmd_after
+	local fmd
+	local facet="ost1"
+	local tgt="obdfilter"
+
+	[[ $OSC == "mdc" ]] && tgt="mdt" && facet="mds1"
 
 	test_mkdir $DIR/$tdir
-	fmd_max_age=$(do_facet ost1 \
-		"lctl get_param -n obdfilter.*.client_cache_seconds 2> /dev/null | \
+	fmd_max_age=$(do_facet $facet \
+		"lctl get_param -n $tgt.*.tgt_fmd_seconds 2> /dev/null | \
 		head -n 1")
 
-	fmd_before=$(do_facet ost1 \
-		"awk '/ll_fmd_cache/ {print \\\$2}' /proc/slabinfo")
+	echo "FMD max age: ${fmd_max_age}s"
 	touch $DIR/$tdir/$tfile
+	fmd=$(do_facet $facet "lctl get_param -n $tgt.*.exports.*.fmd_count" |
+		gawk '{cnt=cnt+$1}  END{print cnt}')
+	echo "FMD before: $fmd"
+	[[ $fmd == 0 ]] &&
+		error "FMD wasn't create by touch"
 	sleep $((fmd_max_age + 12))
-	fmd_after=$(do_facet ost1 \
-		"awk '/ll_fmd_cache/ {print \\\$2}' /proc/slabinfo")
-
-	echo "fmd_before: $fmd_before"
-	echo "fmd_after: $fmd_after"
-	[[ $fmd_after -gt $fmd_before ]] &&
-		echo "AFTER: $fmd_after > BEFORE: $fmd_before" &&
-		error "fmd didn't expire after ping" || true
+	fmd=$(do_facet $facet "lctl get_param -n $tgt.*.exports.*.fmd_count" |
+		gawk '{cnt=cnt+$1}  END{print cnt}')
+	echo "FMD after: $fmd"
+	[[ $fmd == 0 ]] ||
+		error "FMD wasn't expired by ping"
 }
-run_test 36g "filter mod data cache expiry ====================="
+run_test 36g "FMD cache expiry ====================="
 
 test_36h() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
@@ -3445,7 +3451,7 @@ test_39b() {
 		[ $unlink_new2 -eq $unlink_new ] || error "unlink file reverses mtime"
 		[ $rename_new2 -eq $rename_new ] || error "rename file reverses mtime"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
@@ -3479,7 +3485,7 @@ test_39c() {
 		[ "$mtime2" = "$mtime3" ] || \
 			error "mtime ($mtime2) changed (to $mtime3) on rename"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
@@ -3497,7 +3503,7 @@ test_39d() {
 		[ $mtime = $TEST_39_MTIME ] || \
 			error "mtime($mtime) is not set to $TEST_39_MTIME"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
@@ -3517,7 +3523,7 @@ test_39e() {
 		[ $mtime2 = $TEST_39_MTIME ] || \
 			error "mtime($mtime2) is not set to $TEST_39_MTIME"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
@@ -3538,7 +3544,7 @@ test_39f() {
 		[ $mtime2 = $TEST_39_MTIME ] || \
 			error "mtime($mtime2) is not set to $TEST_39_MTIME"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
@@ -3559,7 +3565,7 @@ test_39g() {
 		[ "$mtime1" = "$mtime2" ] || \
 			error "lost mtime: $mtime2, should be $mtime1"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
@@ -3586,7 +3592,7 @@ test_39h() {
 			[ "$mtime2" = $TEST_39_MTIME ] || \
 				error "lost mtime: $mtime2, should be $TEST_39_MTIME"
 
-			cancel_lru_locks osc
+			cancel_lru_locks $OSC
 			if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 		done
 	fi
@@ -3610,7 +3616,7 @@ test_39i() {
 		[ "$mtime1" = "$mtime2" ] || \
 			error "lost mtime: $mtime2, should be $mtime1"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
@@ -3641,7 +3647,7 @@ test_39j() {
 			error "mtime is lost on close: $mtime2, " \
 			      "should be $mtime1"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 	lctl set_param fail_loc=0
@@ -3745,7 +3751,7 @@ test_39m() {
 		[ "$timestamps" = "$far_past_atime $far_past_mtime" ] || \
 			error "atime or mtime set incorrectly"
 
-		cancel_lru_locks osc
+		cancel_lru_locks $OSC
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }
