@@ -33,6 +33,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 check_and_setup_lustre
 
 DIR=${DIR:-$MOUNT}

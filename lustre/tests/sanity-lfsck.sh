@@ -2127,6 +2127,8 @@ test_18a() {
 run_test 18a "Find out orphan OST-object and repair it (1)"
 
 test_18b() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 	echo "#####"
 	echo "The target MDT-object is lost. The LFSCK should re-create the"
 	echo "MDT-object under .lustre/lost+found/MDTxxxx. The admin should"
@@ -2262,6 +2264,8 @@ test_18b() {
 run_test 18b "Find out orphan OST-object and repair it (2)"
 
 test_18c() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 	echo "#####"
 	echo "The target MDT-object is lost, and the OST-object FID is missing."
 	echo "The LFSCK should re-create the MDT-object with new FID under the "
@@ -2487,6 +2491,8 @@ test_18d() {
 run_test 18d "Find out orphan OST-object and repair it (4)"
 
 test_18e() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 	echo "#####"
 	echo "The target MDT-object layout EA slot is occpuied by some new"
 	echo "created OST-object when repair dangling reference case. Such"
@@ -2777,6 +2783,8 @@ test_18f() {
 run_test 18f "Skip the failed OST(s) when handle orphan OST-objects"
 
 test_18g() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 	echo "#####"
 	echo "The target MDT-object is lost, but related OI mapping is there"
 	echo "The LFSCK should recreate the lost MDT-object without affected"
@@ -2990,6 +2998,7 @@ PATTERN_WITHOUT_HOLE="raid0"
 
 test_20a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	echo "#####"
 	echo "The target MDT-object and some of its OST-object are lost."
@@ -3329,6 +3338,7 @@ run_test 20a "Handle the orphan with dummy LOV EA slot properly"
 
 test_20b() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	echo "#####"
 	echo "The target MDT-object and some of its OST-object are lost."
@@ -4011,6 +4021,7 @@ run_test 23c "LFSCK can repair dangling name entry (3)"
 
 test_24() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	echo "#####"
 	echo "Two MDT-objects back reference the same name entry via their"
@@ -4221,6 +4232,8 @@ test_26b() {
 run_test 26b "LFSCK can add the missing remote name entry back to the namespace"
 
 test_27a() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 	echo "#####"
 	echo "The local parent referenced by the MDT-object linkEA is lost."
 	echo "The namespace LFSCK will re-create the lost parent as orphan."
@@ -4274,6 +4287,7 @@ run_test 27a "LFSCK can recreate the lost local parent directory as orphan"
 
 test_27b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	echo "#####"
 	echo "The remote parent referenced by the MDT-object linkEA is lost."
@@ -4604,6 +4618,7 @@ run_test 29c "verify linkEA size limitation"
 test_30() {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
 		skip "ldiskfs only test" && return
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 	echo "#####"
 	echo "The namespace LFSCK will move the orphans from backend"

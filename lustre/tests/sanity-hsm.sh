@@ -26,6 +26,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 MULTIOP=${MULTIOP:-multiop}
 OPENFILE=${OPENFILE:-openfile}
 MMAP_CAT=${MMAP_CAT:-mmap_cat}

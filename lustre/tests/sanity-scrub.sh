@@ -354,6 +354,8 @@ test_0() {
 run_test 0 "Do not auto trigger OI scrub for non-backup/restore case"
 
 test_1a() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
+
 	scrub_prep 0
 	echo "start $SINGLEMDS without disabling OI scrub"
 	scrub_start_mds 1 "$MOUNT_OPTS_SCRUB"
