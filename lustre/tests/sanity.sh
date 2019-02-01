@@ -19417,31 +19417,45 @@ check_lfs_df() {
 	local inodes
 	local df_out
 	local lfs_df_out
+	local tries=100
+	local count=0
+	local passed=false
 
 	# blocks or inodes
 	[ "$1" == "blocks" ] && inodes= || inodes="-i"
 
-	# read the lines of interest
-	df_out=($(df $inodes $dir | tail -n +2)) ||
-		error "df $inodes $dir | tail -n +2 failed"
-	lfs_df_out=($($LFS df $inodes $dir | grep filesystem_summary:)) ||
-		error "lfs df $inodes $dir | grep filesystem_summary: failed"
+	while (( count < tries )); do
+		cancel_lru_locks
+		sync; sleep 0.2
 
-	# skip the first substrings of each command output as they are different
-	# <NID>:/<fsname for df, filesystem_summary: for lfs df
-	df_out=(${df_out[@]:1})
-	lfs_df_out=(${lfs_df_out[@]:1})
+		# read the lines of interest
+		df_out=($(df $inodes $dir | tail -n +2)) ||
+			error "df $inodes $dir | tail -n +2 failed"
+		lfs_df_out=($($LFS df $inodes $dir | grep summary:)) ||
+			error "lfs df $inodes $dir | grep summary: failed"
 
-	# compare the two outputs
-	for i in {0..4}; do
-		[ "${df_out[i]}" != "${lfs_df_out[i]}" ] &&
-			error "df and lfs df output mismatch:" \
-			      "df${inodes}: ${df_out[*]}," \
-			      "lfs df${inodes}: ${lfs_df_out[*]}"
+		# skip first substrings of each output as they are different
+		# <NID>:/<fsname for df, filesystem_summary: for lfs df
+		df_out=(${df_out[@]:1})
+		lfs_df_out=(${lfs_df_out[@]:1})
+
+		# compare the two outputs
+		passed=true
+
+		for i in {0..4}; do
+			[ "${df_out[i]}" != "${lfs_df_out[i]}" ] && passed=false
+		done
+		$passed && break
 	done
+
+	$passed || error "df and lfs df $1 output mismatch: "	\
+			 "df ${inodes}: ${df_out[*]}, "		\
+			 "lfs df ${inodes}: ${lfs_df_out[*]}"
 }
 
 test_418() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local dir=$DIR/$tdir
 	local numfiles=$((RANDOM % 4096 + 2))
 	local numblocks=$((RANDOM % 256 + 1))
@@ -19458,8 +19472,6 @@ test_418() {
 	echo "Creating a single file and testing"
 	createmany -o $dir/$tfile- 1 &>/dev/null ||
 		error "creating 1 file in $dir failed"
-	cancel_lru_locks osc
-	sync; sleep 2
 	check_lfs_df blocks $dir
 	check_lfs_df inodes $dir
 
@@ -19475,8 +19487,6 @@ test_418() {
 		error "dd to $dir/${tfile}-0 failed"
 
 	# retest
-	cancel_lru_locks osc
-	sync; sleep 10
 	check_lfs_df blocks $dir
 	check_lfs_df inodes $dir
 
