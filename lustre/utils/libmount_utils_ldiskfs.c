@@ -1209,7 +1209,9 @@ static int tune_block_dev_scheduler(const char *sys_path, const char *new_sched)
 	*e = '\0';
 
 	if (strcmp(old_sched, "noop") == 0 ||
-	    strcmp(old_sched, new_sched) == 0)
+	    strcmp(old_sched, "deadline") == 0 ||
+	    strcmp(old_sched, "mq-deadline") == 0 ||
+	    strstr(old_sched, new_sched) == 0)
 		return 0;
 
 	rc = write_file(path, new_sched);
