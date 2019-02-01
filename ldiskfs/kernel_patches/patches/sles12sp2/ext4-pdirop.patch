@@ -210,7 +210,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/htree_lock.c
 ===================================================================
 --- /dev/null
 +++ linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/htree_lock.c
-@@ -0,0 +1,880 @@
+@@ -0,0 +1,891 @@
 +/*
 + * fs/ext4/htree_lock.c
 + *
@@ -852,12 +852,23 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/htree_lock.c
 +		lck->lk_task = current;
 +		list_add_tail(&lck->lk_blocked_list, &lhead->lh_blocked_list);
 +
++retry:
 +		set_current_state(TASK_UNINTERRUPTIBLE);
 +		htree_spin_unlock(lhead, HTREE_DEP_ROOT);
 +		/* wait to be given the lock */
 +		if (lck->lk_task != NULL)
 +			schedule();
-+		/* granted, no doubt. wake up will set me RUNNING */
++		/* granted, no doubt. wake up will set me RUNNING.
++		 * Since thread would be waken up accidentally,
++		 * so we need check lock whether granted or not again. */
++		if (!list_empty(&lck->lk_blocked_list)) {
++			htree_spin_lock(lhead, HTREE_DEP_ROOT);
++			if (list_empty(&lck->lk_blocked_list)) {
++				htree_spin_unlock(lhead, HTREE_DEP_ROOT);
++				return 0;
++			}
++			goto retry;
++		}
 +		return 0; /* without lh_lock */
 +	}
 +	lhead->lh_ngranted[lck->lk_mode]++;
