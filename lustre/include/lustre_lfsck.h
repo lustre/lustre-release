@@ -101,7 +101,7 @@ int lfsck_query(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_request *req, struct lfsck_reply *rep,
 		struct lfsck_query *que);
 
-int lfsck_get_speed(struct seq_file *m, char *buf, struct dt_device *key);
+int lfsck_get_speed(char *buf, struct dt_device *key);
 int lfsck_set_speed(struct dt_device *key, __u32 val);
 int lfsck_get_windows(char *buf, struct dt_device *key);
 int lfsck_set_windows(struct dt_device *key, unsigned int val);

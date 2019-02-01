@@ -7878,6 +7878,7 @@ static int osd_process_config(const struct lu_env *env,
 			      struct lu_device *d, struct lustre_cfg *cfg)
 {
 	struct osd_device *o = osd_dev(d);
+	ssize_t count;
 	int rc;
 
 	ENTRY;
@@ -7897,15 +7898,12 @@ static int osd_process_config(const struct lu_env *env,
 		break;
 	case LCFG_PARAM:
 		LASSERT(&o->od_dt_dev);
-		rc = class_process_proc_param(PARAM_OSD, lprocfs_osd_obd_vars,
-					      cfg, &o->od_dt_dev);
-		if (rc > 0 || rc == -ENOSYS) {
-			rc = class_process_proc_param(PARAM_OST,
-						      lprocfs_osd_obd_vars,
-						      cfg, &o->od_dt_dev);
-			if (rc > 0)
-				rc = 0;
-		}
+		count  = class_modify_config(cfg, PARAM_OSD,
+					     &o->od_dt_dev.dd_kobj);
+		if (count < 0)
+			count = class_modify_config(cfg, PARAM_OST,
+						    &o->od_dt_dev.dd_kobj);
+		rc = count > 0 ? 0 : count;
 		break;
 	case LCFG_PRE_CLEANUP:
 		osd_scrub_stop(o);
@@ -8105,8 +8103,33 @@ static struct obd_ops osd_obd_device_ops = {
 	.o_health_check = osd_health_check,
 };
 
+static ssize_t track_declares_assert_show(struct kobject *kobj,
+				   struct attribute *attr,
+				   char *buf)
+{
+	return sprintf(buf, "%d\n", ldiskfs_track_declares_assert);
+}
+
+static ssize_t track_declares_assert_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
+{
+	bool track_declares_assert;
+	int rc;
+
+	rc = kstrtobool(buffer, &track_declares_assert);
+	if (rc)
+		return rc;
+
+	ldiskfs_track_declares_assert = track_declares_assert;
+
+	return count;
+}
+LUSTRE_RW_ATTR(track_declares_assert);
+
 static int __init osd_init(void)
 {
+	struct kobject *kobj;
 	int rc;
 
 	CLASSERT(BH_DXLock < sizeof(((struct buffer_head *)0)->b_state) * 8);
@@ -8127,16 +8150,36 @@ static int __init osd_init(void)
 		(void *)kallsyms_lookup_name("dev_check_rdonly");
 #endif
 
-	rc = class_register_type(&osd_obd_device_ops, NULL, true,
-				 lprocfs_osd_module_vars,
+	rc = class_register_type(&osd_obd_device_ops, NULL, true, NULL,
 				 LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
-	if (rc)
+	if (rc) {
 		lu_kmem_fini(ldiskfs_caches);
+		return rc;
+	}
+
+	kobj = kset_find_obj(lustre_kset, LUSTRE_OSD_LDISKFS_NAME);
+	if (kobj) {
+		rc = sysfs_create_file(kobj,
+				       &lustre_attr_track_declares_assert.attr);
+		kobject_put(kobj);
+		if (rc) {
+			CWARN("osd-ldiskfs: track_declares_assert failed to register with sysfs\n");
+			rc = 0;
+		}
+	}
 	return rc;
 }
 
 static void __exit osd_exit(void)
 {
+	struct kobject *kobj;
+
+	kobj = kset_find_obj(lustre_kset, LUSTRE_OSD_LDISKFS_NAME);
+	if (kobj) {
+		sysfs_remove_file(kobj,
+				  &lustre_attr_track_declares_assert.attr);
+		kobject_put(kobj);
+	}
 	class_unregister_type(LUSTRE_OSD_LDISKFS_NAME);
 	lu_kmem_fini(ldiskfs_caches);
 }

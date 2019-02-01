@@ -320,13 +320,7 @@ static bool match_symlink_param(char *param)
 		sval = strchr(param, '=');
 		if (sval != NULL) {
 			paramlen = sval - param;
-			if (strncmp(param, "writethrough_cache_enable",
-				    paramlen) == 0 ||
-			    strncmp(param, "readcache_max_filesize",
-				    paramlen) == 0 ||
-			    strncmp(param, "read_cache_enable",
-				    paramlen) == 0 ||
-			    strncmp(param, "brw_stats", paramlen) == 0)
+			if (strncmp(param, "brw_stats", paramlen) == 0)
 				return true;
 		}
 	}
@@ -715,28 +709,37 @@ static struct lu_device_operations ofd_lu_ops = {
  */
 static void ofd_procfs_add_brw_stats_symlink(struct ofd_device *ofd)
 {
-	struct obd_device	*obd = ofd_obd(ofd);
-	struct obd_device	*osd_obd = ofd->ofd_osd_exp->exp_obd;
+	struct obd_device *obd = ofd_obd(ofd);
+	struct obd_device *osd_obd = ofd->ofd_osd_exp->exp_obd;
+	struct kobj_type *osd_type;
+	int i;
+
+	osd_type = get_ktype(&ofd->ofd_osd->dd_kobj);
+	for (i = 0; osd_type->default_attrs[i]; i++) {
+		if (strcmp(osd_type->default_attrs[i]->name,
+			   "read_cache_enable") == 0) {
+			ofd->ofd_read_cache_enable =
+				osd_type->default_attrs[i];
+		}
+
+		if (strcmp(osd_type->default_attrs[i]->name,
+			   "readcache_max_filesize") == 0) {
+			ofd->ofd_read_cache_max_filesize =
+				osd_type->default_attrs[i];
+		}
+
+		if (strcmp(osd_type->default_attrs[i]->name,
+			   "writethrough_cache_enable") == 0) {
+			ofd->ofd_write_cache_enable =
+				osd_type->default_attrs[i];
+		}
+	}
 
 	if (obd->obd_proc_entry == NULL)
 		return;
 
 	lprocfs_add_symlink("brw_stats", obd->obd_proc_entry,
 			    "../../%s/%s/brw_stats",
-			    osd_obd->obd_type->typ_name, obd->obd_name);
-
-	lprocfs_add_symlink("read_cache_enable", obd->obd_proc_entry,
-			    "../../%s/%s/read_cache_enable",
-			    osd_obd->obd_type->typ_name, obd->obd_name);
-
-	lprocfs_add_symlink("readcache_max_filesize",
-			    obd->obd_proc_entry,
-			    "../../%s/%s/readcache_max_filesize",
-			    osd_obd->obd_type->typ_name, obd->obd_name);
-
-	lprocfs_add_symlink("writethrough_cache_enable",
-			    obd->obd_proc_entry,
-			    "../../%s/%s/writethrough_cache_enable",
 			    osd_obd->obd_type->typ_name, obd->obd_name);
 }
 #endif

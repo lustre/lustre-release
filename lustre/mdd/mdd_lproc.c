@@ -463,7 +463,7 @@ static ssize_t lfsck_speed_limit_show(struct kobject *kobj,
 	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
 					      mdd_kobj);
 
-	return lfsck_get_speed(NULL, buf, mdd->mdd_bottom);
+	return lfsck_get_speed(buf, mdd->mdd_bottom);
 }
 
 static ssize_t lfsck_speed_limit_store(struct kobject *kobj,

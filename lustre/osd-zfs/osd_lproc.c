@@ -207,41 +207,6 @@ out:
 	RETURN(result);
 }
 
-static int zfs_osd_auto_scrub_seq_show(struct seq_file *m, void *data)
-{
-	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
-
-	LASSERT(dev != NULL);
-	if (!dev->od_os)
-		return -EINPROGRESS;
-
-	seq_printf(m, "%lld\n", dev->od_auto_scrub_interval);
-	return 0;
-}
-
-static ssize_t
-zfs_osd_auto_scrub_seq_write(struct file *file, const char __user *buffer,
-			     size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct dt_device *dt = m->private;
-	struct osd_device *dev = osd_dt_dev(dt);
-	int rc;
-	__s64 val;
-
-	LASSERT(dev != NULL);
-	if (!dev->od_os)
-		return -EINPROGRESS;
-
-	rc = kstrtoull_from_user(buffer, count, 0, &val);
-	if (rc)
-		return rc;
-
-	dev->od_auto_scrub_interval = val;
-	return count;
-}
-LPROC_SEQ_FOPS(zfs_osd_auto_scrub);
-
 static int zfs_osd_oi_scrub_seq_show(struct seq_file *m, void *data)
 {
 	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
@@ -253,78 +218,118 @@ static int zfs_osd_oi_scrub_seq_show(struct seq_file *m, void *data)
 	scrub_dump(m, &dev->od_scrub);
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(zfs_osd_oi_scrub);
+LDEBUGFS_SEQ_FOPS_RO(zfs_osd_oi_scrub);
 
-static int zfs_osd_fstype_seq_show(struct seq_file *m, void *data)
+static ssize_t auto_scrub_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	seq_puts(m, "zfs\n");
-	return 0;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *dev = osd_dt_dev(dt);
+
+	LASSERT(dev);
+	if (!dev->od_os)
+		return -EINPROGRESS;
+
+	return sprintf(buf, "%lld\n", dev->od_auto_scrub_interval);
 }
-LPROC_SEQ_FOPS_RO(zfs_osd_fstype);
 
-static int zfs_osd_mntdev_seq_show(struct seq_file *m, void *data)
+static ssize_t auto_scrub_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
-	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *dev = osd_dt_dev(dt);
+	s64 val;
+	int rc;
 
-	LASSERT(osd != NULL);
-	seq_printf(m, "%s\n", osd->od_mntdev);
-	return 0;
+	LASSERT(dev);
+	if (!dev->od_os)
+		return -EINPROGRESS;
+
+	rc = kstrtoull(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	dev->od_auto_scrub_interval = val;
+	return count;
 }
-LPROC_SEQ_FOPS_RO(zfs_osd_mntdev);
+LUSTRE_RW_ATTR(auto_scrub);
 
-static ssize_t
-lprocfs_osd_force_sync_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
+			  char *buf)
 {
-	struct seq_file	  *m = file->private_data;
-	struct dt_device  *dt = m->private;
-	struct lu_env      env;
+	return sprintf(buf, "zfs\n");
+}
+LUSTRE_RO_ATTR(fstype);
+
+static ssize_t mntdev_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+
+	return sprintf(buf, "%s\n", osd->od_mntdev);
+}
+LUSTRE_RO_ATTR(mntdev);
+
+ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
+			 const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lu_env env;
 	int rc;
 
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc)
 		return rc;
+
 	rc = dt_sync(&env, dt);
 	lu_env_fini(&env);
 
 	return rc == 0 ? count : rc;
 }
-LPROC_SEQ_FOPS_WR_ONLY(zfs, osd_force_sync);
+LUSTRE_WO_ATTR(force_sync);
 
-static int zfs_osd_index_backup_seq_show(struct seq_file *m, void *data)
+static ssize_t index_backup_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
 {
-	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *dev = osd_dt_dev(dt);
 
-	LASSERT(dev != NULL);
+	LASSERT(dev);
 	if (!dev->od_os)
 		return -EINPROGRESS;
 
-	seq_printf(m, "%d\n", dev->od_index_backup_policy);
-	return 0;
+	return sprintf(buf, "%d\n", dev->od_index_backup_policy);
 }
 
-static ssize_t zfs_osd_index_backup_seq_write(struct file *file,
-					      const char __user *buffer,
-					      size_t count, loff_t *off)
+ssize_t index_backup_store(struct kobject *kobj, struct attribute *attr,
+			   const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct dt_device *dt = m->private;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
 	struct osd_device *dev = osd_dt_dev(dt);
 	int val;
 	int rc;
 
-	LASSERT(dev != NULL);
+	LASSERT(dev);
 	if (!dev->od_os)
 		return -EINPROGRESS;
 
-	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	rc = kstrtoint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
 	dev->od_index_backup_policy = val;
 	return count;
 }
-LPROC_SEQ_FOPS(zfs_osd_index_backup);
+LUSTRE_RW_ATTR(index_backup);
 
 static int zfs_osd_readcache_seq_show(struct seq_file *m, void *data)
 {
@@ -362,64 +367,54 @@ zfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 					 OSD_MAX_CACHE_SIZE : val;
 	return count;
 }
-LPROC_SEQ_FOPS(zfs_osd_readcache);
+LDEBUGFS_SEQ_FOPS(zfs_osd_readcache);
 
-LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_blksize);
-LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytestotal);
-LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytesfree);
-LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_kbytesavail);
-LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_filestotal);
-LPROC_SEQ_FOPS_RO_TYPE(zfs, dt_filesfree);
+static struct attribute *zfs_attrs[] = {
+	&lustre_attr_fstype.attr,
+	&lustre_attr_mntdev.attr,
+	&lustre_attr_force_sync.attr,
+	&lustre_attr_index_backup.attr,
+	&lustre_attr_auto_scrub.attr,
+	NULL,
+};
 
 struct lprocfs_vars lprocfs_osd_obd_vars[] = {
-	{ .name	=	"blocksize",
-	  .fops	=	&zfs_dt_blksize_fops		},
-	{ .name	=	"kbytestotal",
-	  .fops	=	&zfs_dt_kbytestotal_fops	},
-	{ .name	=	"kbytesfree",
-	  .fops	=	&zfs_dt_kbytesfree_fops		},
-	{ .name	=	"kbytesavail",
-	  .fops	=	&zfs_dt_kbytesavail_fops	},
-	{ .name	=	"filestotal",
-	  .fops	=	&zfs_dt_filestotal_fops		},
-	{ .name	=	"filesfree",
-	  .fops	=	&zfs_dt_filesfree_fops		},
-	{ .name	=	"auto_scrub",
-	  .fops	=	&zfs_osd_auto_scrub_fops	},
 	{ .name	=	"oi_scrub",
 	  .fops	=	&zfs_osd_oi_scrub_fops		},
-	{ .name	=	"fstype",
-	  .fops	=	&zfs_osd_fstype_fops		},
-	{ .name	=	"mntdev",
-	  .fops	=	&zfs_osd_mntdev_fops		},
-	{ .name	=	"force_sync",
-	  .fops	=	&zfs_osd_force_sync_fops	},
-	{ .name	=	"index_backup",
-	  .fops	=	&zfs_osd_index_backup_fops	},
-	{ .name	=	"readcache_max_filesize",
-	  .fops	=	&zfs_osd_readcache_fops	},
+	{ .name =	"readcache_max_filesize",
+	  .fops =	&zfs_osd_readcache_fops		},
 	{ 0 }
 };
 
 int osd_procfs_init(struct osd_device *osd, const char *name)
 {
 	struct obd_type *type;
-	int		 rc;
+	int rc;
+
 	ENTRY;
+
+	/* at the moment there is no linkage between lu_type
+	 * and obd_type, so we lookup obd_type this way
+	 */
+	type = class_search_type(LUSTRE_OSD_ZFS_NAME);
+
+	LASSERT(type);
+	LASSERT(name);
+
+	osd->od_dt_dev.dd_ktype.default_attrs = zfs_attrs;
+	rc = dt_tunables_init(&osd->od_dt_dev, type, name,
+			      lprocfs_osd_obd_vars);
+	if (rc) {
+		CERROR("%s: cannot setup sysfs / debugfs entry: %d\n",
+		       name, rc);
+		GOTO(out, rc);
+	}
 
 	if (osd->od_proc_entry)
 		RETURN(0);
 
-	/* at the moment there is no linkage between lu_type
-	 * and obd_type, so we lookup obd_type this way */
-	type = class_search_type(LUSTRE_OSD_ZFS_NAME);
-
-	LASSERT(name != NULL);
-	LASSERT(type != NULL);
-
 	osd->od_proc_entry = lprocfs_register(name, type->typ_procroot,
-					      lprocfs_osd_obd_vars,
-					      &osd->od_dt_dev);
+					      NULL, &osd->od_dt_dev);
 	if (IS_ERR(osd->od_proc_entry)) {
 		rc = PTR_ERR(osd->od_proc_entry);
 		CERROR("Error %d setting up lprocfs for %s\n", rc, name);
@@ -448,7 +443,7 @@ int osd_procfs_fini(struct osd_device *osd)
 		osd->od_proc_entry = NULL;
 	}
 
-	RETURN(0);
+	return dt_tunables_fini(&osd->od_dt_dev);
 }
 
 #endif

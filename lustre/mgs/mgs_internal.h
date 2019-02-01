@@ -175,8 +175,8 @@ struct mgs_device {
 	spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
 	struct proc_dir_entry		*mgs_proc_live;
 	struct proc_dir_entry           *mgs_proc_osd;
-	struct proc_dir_entry           *mgs_proc_fstype;
-	struct proc_dir_entry		*mgs_proc_mntdev;
+	struct attribute		*mgs_fstype;
+	struct attribute		*mgs_mntdev;
 	time64_t			 mgs_start_time;
 	struct obd_device		*mgs_obd;
 	struct local_oid_storage	*mgs_los;

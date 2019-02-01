@@ -2745,7 +2745,7 @@ int lfsck_load_sub_trace_files(const struct lu_env *env,
 }
 
 /* external interfaces */
-int lfsck_get_speed(struct seq_file *m, char *buf, struct dt_device *key)
+int lfsck_get_speed(char *buf, struct dt_device *key)
 {
 	struct lu_env		env;
 	struct lfsck_instance  *lfsck;
@@ -2757,14 +2757,9 @@ int lfsck_get_speed(struct seq_file *m, char *buf, struct dt_device *key)
 		RETURN(rc);
 
 	lfsck = lfsck_instance_find(key, true, false);
-	if (likely(lfsck != NULL)) {
-		if (m) {
-			seq_printf(m, "%u\n",
-				   lfsck->li_bookmark_ram.lb_speed_limit);
-		} else if (buf) {
-			rc = sprintf(buf, "%u\n",
-				     lfsck->li_bookmark_ram.lb_speed_limit);
-		}
+	if (lfsck && buf) {
+		rc = sprintf(buf, "%u\n",
+			     lfsck->li_bookmark_ram.lb_speed_limit);
 		lfsck_instance_put(&env, lfsck);
 	} else {
 		rc = -ENXIO;

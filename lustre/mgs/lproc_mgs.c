@@ -219,14 +219,55 @@ static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
 	{ NULL }
 };
 
+static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mgs_device *mgs = lu2mgs_dev(obd->obd_lu_dev);
+	struct kobject *osd_kobj;
+
+	if (!mgs || !mgs->mgs_fstype || !mgs->mgs_bottom)
+		return -ENODEV;
+
+	osd_kobj = &mgs->mgs_bottom->dd_kobj;
+	return lustre_attr_show(osd_kobj, mgs->mgs_fstype, buf);
+}
+LUSTRE_RO_ATTR(fstype);
+
+static ssize_t mntdev_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mgs_device *mgs = lu2mgs_dev(obd->obd_lu_dev);
+	struct kobject *osd_kobj;
+
+	if (!mgs || !mgs->mgs_mntdev || !mgs->mgs_bottom)
+		return -ENODEV;
+
+	osd_kobj = &mgs->mgs_bottom->dd_kobj;
+	return lustre_attr_show(osd_kobj, mgs->mgs_mntdev, buf);
+}
+LUSTRE_RO_ATTR(mntdev);
+
+static struct attribute *mgs_attrs[] = {
+	&lustre_attr_fstype.attr,
+	&lustre_attr_mntdev.attr,
+	NULL,
+};
+
 int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 {
+	int osd_len = strlen(osd_name) - strlen("-osd");
 	struct obd_device *obd = mgs->mgs_obd;
-	struct obd_device *osd_obd = mgs->mgs_bottom->dd_lu_dev.ld_obd;
-	int		   osd_len = strlen(osd_name) - strlen("-osd");
-	int		   rc;
+	struct kobj_type *bottom_type;
+	struct obd_device *osd_obd;
+	int rc;
+	int i;
 
 	obd->obd_vars = lprocfs_mgs_obd_vars;
+	obd->obd_ktype.default_attrs = mgs_attrs;
 	rc = lprocfs_obd_setup(obd, true);
 	if (rc != 0)
 		GOTO(out, rc);
@@ -258,6 +299,32 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 		GOTO(out, rc);
         }
 
+	rc = sysfs_create_link(&obd->obd_kset.kobj, &mgs->mgs_bottom->dd_kobj,
+			       "osd");
+	if (rc) {
+		CWARN("%s: failed to create symlink osd -> %s, rc = %d\n",
+		      kobject_name(&obd->obd_kset.kobj),
+		      kobject_name(&mgs->mgs_bottom->dd_kobj), rc);
+		rc = 0;
+	}
+
+	bottom_type = get_ktype(&mgs->mgs_bottom->dd_kobj);
+
+	for (i = 0; bottom_type->default_attrs[i]; i++) {
+		if (strcmp(bottom_type->default_attrs[i]->name, "fstype") == 0) {
+			mgs->mgs_fstype = bottom_type->default_attrs[i];
+			break;
+		}
+	}
+
+	for (i = 0; bottom_type->default_attrs[i]; i++) {
+		if (strcmp(bottom_type->default_attrs[i]->name, "mntdev") == 0) {
+			mgs->mgs_mntdev = bottom_type->default_attrs[i];
+			break;
+		}
+	}
+
+	osd_obd = mgs->mgs_bottom->dd_lu_dev.ld_obd;
 	mgs->mgs_proc_osd = lprocfs_add_symlink("osd",
 						obd->obd_proc_entry,
 						"../../%s/%.*s",
@@ -265,20 +332,7 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 						osd_len, /* Strip "-osd". */
 						osd_name);
 	if (mgs->mgs_proc_osd == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-	mgs->mgs_proc_mntdev = lprocfs_add_symlink("mntdev",
-						   obd->obd_proc_entry,
-						   "osd/mntdev");
-	if (mgs->mgs_proc_mntdev == NULL)
-		GOTO(out, rc = -ENOMEM);
-
-	mgs->mgs_proc_fstype = lprocfs_add_symlink("fstype",
-						   obd->obd_proc_entry,
-						   "osd/fstype");
-	if (mgs->mgs_proc_fstype == NULL)
-		GOTO(out, rc = -ENOMEM);
-
+		rc = -ENOMEM;
 out:
 	if (rc != 0)
 		lproc_mgs_cleanup(mgs);
@@ -296,11 +350,7 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
 	if (mgs->mgs_proc_osd != NULL)
 		lprocfs_remove(&mgs->mgs_proc_osd);
 
-	if (mgs->mgs_proc_fstype != NULL)
-		lprocfs_remove(&mgs->mgs_proc_fstype);
-
-	if (mgs->mgs_proc_mntdev != NULL)
-		lprocfs_remove(&mgs->mgs_proc_mntdev);
+	sysfs_remove_link(&obd->obd_kset.kobj, "osd");
 
 	if (mgs->mgs_proc_live != NULL) {
 		/* Should be no live entries */

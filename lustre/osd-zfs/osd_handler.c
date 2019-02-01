@@ -1388,10 +1388,11 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 static int osd_process_config(const struct lu_env *env,
 			      struct lu_device *d, struct lustre_cfg *cfg)
 {
-	struct osd_device	*o = osd_dev(d);
-	int			rc;
-	ENTRY;
+	struct osd_device *o = osd_dev(d);
+	ssize_t count;
+	int rc;
 
+	ENTRY;
 	switch(cfg->lcfg_command) {
 	case LCFG_SETUP:
 		rc = osd_mount(env, o, cfg);
@@ -1404,15 +1405,12 @@ static int osd_process_config(const struct lu_env *env,
 		break;
 	case LCFG_PARAM: {
 		LASSERT(&o->od_dt_dev);
-		rc = class_process_proc_param(PARAM_OSD, lprocfs_osd_obd_vars,
-					      cfg, &o->od_dt_dev);
-		if (rc > 0 || rc == -ENOSYS) {
-			rc = class_process_proc_param(PARAM_OST,
-						      lprocfs_osd_obd_vars,
-						      cfg, &o->od_dt_dev);
-			if (rc > 0)
-				rc = 0;
-		}
+		count  = class_modify_config(cfg, PARAM_OSD,
+					     &o->od_dt_dev.dd_kobj);
+		if (count < 0)
+			count = class_modify_config(cfg, PARAM_OST,
+						    &o->od_dt_dev.dd_kobj);
+		rc = count > 0 ? 0 : count;
 		break;
 	}
 	case LCFG_PRE_CLEANUP:

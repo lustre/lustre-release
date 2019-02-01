@@ -239,7 +239,7 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 	if (enable_proc) {
 		type->typ_procroot = lprocfs_register(type->typ_name,
 						      proc_lustre_root,
-						      vars, type);
+						      NULL, type);
 		if (IS_ERR(type->typ_procroot)) {
 			rc = PTR_ERR(type->typ_procroot);
 			type->typ_procroot = NULL;
@@ -262,7 +262,7 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 
 	type->typ_debugfs_entry = ldebugfs_register(type->typ_name,
 						    debugfs_lustre_root,
-						    NULL, type);
+						    vars, type);
 	if (IS_ERR_OR_NULL(type->typ_debugfs_entry)) {
 		rc = type->typ_debugfs_entry ? PTR_ERR(type->typ_debugfs_entry)
 					     : -ENOMEM;

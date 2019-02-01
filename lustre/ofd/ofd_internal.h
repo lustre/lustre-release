@@ -159,6 +159,10 @@ struct ofd_device {
 	struct ptlrpc_thread	 ofd_inconsistency_thread;
 	struct list_head	 ofd_inconsistency_list;
 	spinlock_t		 ofd_inconsistency_lock;
+	/* Backwards compatibility */
+	struct attribute	*ofd_read_cache_enable;
+	struct attribute	*ofd_read_cache_max_filesize;
+	struct attribute	*ofd_write_cache_enable;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)
