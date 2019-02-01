@@ -8458,3 +8458,36 @@ get_layout_param()
 	local param=$($LFS getstripe -d $1 | parse_layout_param)
 	echo "$param"
 }
+
+# restore the layout saved by save_layout(). Only work with directories
+restore_layout() {
+	local dir=$1
+	local layout=$2
+
+	[ ! -d "$dir" ] && return
+
+	[ -z "$layout" ] && {
+		$LFS setstripe -d $dir || error "error deleting stripe '$dir'"
+		return
+	}
+
+	setfattr -n trusted.lov -v $layout $dir ||
+		error "error restoring layout '$layout' to '$dir'"
+}
+
+# save the layout of a directory, the returned string will be used by
+# restore_layout() to restore the layout
+save_layout() {
+	local dir=$1
+	local str=$(getfattr -n trusted.lov --absolute-names -e hex $dir \
+		    2> /dev/null | awk -F'=' '/trusted.lov/{ print $2 }')
+	echo "$str"
+}
+
+# save layout of a directory and restore it at exit
+save_layout_restore_at_exit() {
+	local dir=$1
+	local layout=$(save_layout $dir)
+
+	stack_trap "restore_layout $dir $layout" EXIT
+}
