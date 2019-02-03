@@ -19525,40 +19525,40 @@ check_lfs_df() {
 	local inodes
 	local df_out
 	local lfs_df_out
-	local tries=100
-	local count=0
+	local count
 	local passed=false
 
 	# blocks or inodes
 	[ "$1" == "blocks" ] && inodes= || inodes="-i"
 
-	while (( count < tries )); do
+	for count in {1..100}; do
 		cancel_lru_locks
 		sync; sleep 0.2
 
 		# read the lines of interest
-		df_out=($(df $inodes $dir | tail -n +2)) ||
+		df_out=($(df -P $inodes $dir | tail -n +2)) ||
 			error "df $inodes $dir | tail -n +2 failed"
 		lfs_df_out=($($LFS df $inodes $dir | grep summary:)) ||
 			error "lfs df $inodes $dir | grep summary: failed"
 
 		# skip first substrings of each output as they are different
-		# <NID>:/<fsname for df, filesystem_summary: for lfs df
-		df_out=(${df_out[@]:1})
-		lfs_df_out=(${lfs_df_out[@]:1})
-
+		# "<NID>:/<fsname>" for df, "filesystem_summary:" for lfs df
 		# compare the two outputs
 		passed=true
-
-		for i in {0..4}; do
+		for i in {1..5}; do
 			[ "${df_out[i]}" != "${lfs_df_out[i]}" ] && passed=false
 		done
 		$passed && break
 	done
 
-	$passed || error "df and lfs df $1 output mismatch: "	\
-			 "df ${inodes}: ${df_out[*]}, "		\
-			 "lfs df ${inodes}: ${lfs_df_out[*]}"
+	if ! $passed; then
+		df -P $inodes $dir
+		echo
+		lfs df $inodes $dir
+		error "df and lfs df $1 output mismatch: "	\
+		      "df ${inodes}: ${df_out[*]}, "		\
+		      "lfs df ${inodes}: ${lfs_df_out[*]}"
+	fi
 }
 
 test_418() {

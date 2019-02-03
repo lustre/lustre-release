@@ -1327,8 +1327,9 @@ static int lod_statfs(const struct lu_env *env,
 	struct lod_ost_desc *ost;
 	struct lod_mdt_desc *mdt;
 	struct obd_statfs ost_sfs;
+	u64 ost_files = 0;
+	u64 ost_ffree = 0;
 	int i, rc, bs;
-	bool mdtonly;
 
 	rc = dt_statfs(env, dt2lod_dev(dev)->lod_child, sfs);
 	if (rc)
@@ -1360,8 +1361,6 @@ static int lod_statfs(const struct lu_env *env,
 	 * decide how to account MDT space. for simplicity let's
 	 * just fallback to pre-DoM policy if any OST is alive
 	 */
-	mdtonly = true;
-
 	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, i) {
 		ost = OST_TGT(lod, i);
@@ -1370,17 +1369,18 @@ static int lod_statfs(const struct lu_env *env,
 		/* ignore errors */
 		if (rc || ost_sfs.os_bsize == 0)
 			continue;
-		if (mdtonly) {
+		if (!ost_files) {
 			/*
-			 * if only MDTs and DoM report MDT space,
-			 * otherwise only OST space
+			 * if only MDTs with DoM then report only MDT blocks,
+			 * otherwise show only OST blocks, and DoM is "free"
 			 */
 			sfs->os_bavail = 0;
 			sfs->os_blocks = 0;
 			sfs->os_bfree = 0;
 			sfs->os_granted = 0;
-			mdtonly = false;
 		}
+		ost_files += sfs->os_files;
+		ost_ffree += sfs->os_ffree;
 		ost_sfs.os_bavail += ost_sfs.os_granted;
 		lod_statfs_sum(sfs, &ost_sfs, &bs);
 		LASSERTF(bs == ost_sfs.os_bsize, "%d != %d\n",
@@ -1388,6 +1388,16 @@ static int lod_statfs(const struct lu_env *env,
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
 	sfs->os_state |= OS_STATE_SUM;
+
+	/* If we have _some_ OSTs, but don't have as many free objects on the
+	 * OSTs as inodes on the MDTs, reduce the reported number of inodes
+	 * to compensate, so that the "inodes in use" number is correct.
+	 * This should be kept in sync with ll_statfs_internal().
+	 */
+	if (ost_files && ost_ffree < sfs->os_ffree) {
+		sfs->os_files = (sfs->os_files - sfs->os_ffree) + ost_ffree;
+		sfs->os_ffree = ost_ffree;
+	}
 
 	/* a single successful statfs should be enough */
 	rc = 0;
