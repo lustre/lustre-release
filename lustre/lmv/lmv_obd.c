@@ -1410,8 +1410,8 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 		rc = obd_statfs(env, lmv->tgts[idx]->ltd_exp, temp,
 				max_age, flags);
 		if (rc) {
-			CERROR("can't stat MDS #%d (%s), error %d\n", i,
-			       lmv->tgts[idx]->ltd_exp->exp_obd->obd_name,
+			CERROR("%s: can't stat MDS #%d: rc = %d\n",
+			       lmv->tgts[idx]->ltd_exp->exp_obd->obd_name, i,
 			       rc);
 			GOTO(out_free_temp, rc);
 		}
