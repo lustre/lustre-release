@@ -359,6 +359,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 		     sizeof(server_uuid)));
 
 	cli->cl_dirty_pages = 0;
+	cli->cl_dirty_max_pages = 0;
 	cli->cl_avail_grant = 0;
 	/* FIXME: Should limit this for the sum of all cl_dirty_max_pages. */
 	/* cl_dirty_max_pages may be changed at connect time in
