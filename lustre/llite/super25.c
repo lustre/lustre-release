@@ -39,6 +39,7 @@
 #include <lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
+#include <linux/random.h>
 #include <lprocfs_status.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"
@@ -98,8 +99,7 @@ struct super_operations lustre_super_operations =
 static int __init lustre_init(void)
 {
 	struct lnet_process_id lnet_id;
-	struct timespec64 ts;
-	int i, rc, seed[2];
+	int i, rc;
 
 	CLASSERT(sizeof(LUSTRE_VOLATILE_HDR) == LUSTRE_VOLATILE_HDR_LEN + 1);
 
@@ -125,20 +125,14 @@ static int __init lustre_init(void)
 	if (rc)
 		GOTO(out_cache, rc);
 
-	cfs_get_random_bytes(seed, sizeof(seed));
-
 	/* Nodes with small feet have little entropy. The NID for this
 	 * node gives the most entropy in the low bits. */
 	for (i = 0;; i++) {
 		if (LNetGetId(i, &lnet_id) == -ENOENT)
 			break;
 
-		if (LNET_NETTYP(LNET_NIDNET(lnet_id.nid)) != LOLND)
-			seed[0] ^= LNET_NIDADDR(lnet_id.nid);
+		add_device_randomness(&lnet_id.nid, sizeof(lnet_id.nid));
 	}
-
-	ktime_get_ts64(&ts);
-	cfs_srand(ts.tv_sec ^ seed[0], ts.tv_nsec ^ seed[1]);
 
 	rc = vvp_global_init();
 	if (rc != 0)

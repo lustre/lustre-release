@@ -21,6 +21,8 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
+
+#include <linux/random.h>
 #include <lnet/lib-lnet.h>
 
 #define LNET_NRB_TINY_MIN	512	/* min value for each CPT */
@@ -261,27 +263,17 @@ lnet_find_rnet_locked(__u32 net)
 static void lnet_shuffle_seed(void)
 {
 	static int seeded;
-	__u32 lnd_type;
-	__u32 seed[2];
-	struct timespec64 ts;
 	struct lnet_ni *ni = NULL;
 
 	if (seeded)
 		return;
 
-	cfs_get_random_bytes(seed, sizeof(seed));
-
 	/* Nodes with small feet have little entropy
-	 * the NID for this node gives the most entropy in the low bits */
-	while ((ni = lnet_get_next_ni_locked(NULL, ni))) {
-		lnd_type = LNET_NETTYP(LNET_NIDNET(ni->ni_nid));
+	 * the NID for this node gives the most entropy in the low bits
+	 */
+	while ((ni = lnet_get_next_ni_locked(NULL, ni)))
+		add_device_randomness(&ni->ni_nid, sizeof(ni->ni_nid));
 
-		if (lnd_type != LOLND)
-			seed[0] ^= (LNET_NIDADDR(ni->ni_nid) | lnd_type);
-	}
-
-	ktime_get_ts64(&ts);
-	cfs_srand(ts.tv_sec ^ seed[0], ts.tv_nsec ^ seed[1]);
 	seeded = 1;
 	return;
 }
