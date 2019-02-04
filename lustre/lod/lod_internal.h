@@ -556,7 +556,8 @@ lod_lds_buf_get(const struct lu_env *env)
 {
 	struct lod_thread_info *info = lod_env_info(env);
 
-	memset(&info->lti_def_striping, 0, sizeof(info->lti_def_striping));
+	info->lti_def_striping.lds_def_striping_set = 0;
+	info->lti_def_striping.lds_dir_def_striping_set = 0;
 	return &info->lti_def_striping;
 }
 
