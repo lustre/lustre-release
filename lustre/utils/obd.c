@@ -2996,6 +2996,7 @@ int jt_llog_check(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	char from[2] = "1", to[3] = "-1";
         int rc;
 
         if (argc != 2 && argc != 4)
@@ -3011,7 +3012,6 @@ int jt_llog_check(int argc, char **argv)
                 data.ioc_inllen3 = strlen(argv[3]) + 1;
                 data.ioc_inlbuf3 = argv[3];
         } else {
-                char from[2] = "1", to[3] = "-1";
                 data.ioc_inllen2 = strlen(from) + 1;
                 data.ioc_inlbuf2 = from;
                 data.ioc_inllen3 = strlen(to) + 1;
