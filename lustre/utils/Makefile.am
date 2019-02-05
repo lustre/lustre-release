@@ -43,7 +43,9 @@ sbin_PROGRAMS += lhsmtool_posix
 endif
 
 if SELINUX
+if GETSEPOL
 sbin_PROGRAMS += l_getsepol
+endif
 endif
 
 lib_LIBRARIES =

@@ -340,6 +340,31 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 AC_MSG_RESULT([$enable_ssk])
 ]) # LC_OPENSSL_SSK
 
+# LC_OPENSSL_GETSEPOL
+#
+# OpenSSL is needed for l_getsepol
+AC_DEFUN([LC_OPENSSL_GETSEPOL], [
+AC_MSG_CHECKING([whether openssl-devel is present])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+	#include <openssl/evp.h>
+
+	int main(void) {
+		EVP_MD_CTX *mdctx = EVP_MD_CTX_create();
+	}
+])],[
+	AC_DEFINE(HAVE_OPENSSL_GETSEPOL, 1, [openssl-devel is present])
+	enable_getsepol="yes"
+
+],[
+	enable_getsepol="no"
+	AC_MSG_WARN([
+
+No openssk-devel headers found, unable to build l_getsepol and SELinux status checking
+])
+])
+AC_MSG_RESULT([$enable_getsepol])
+]) # LC_OPENSSL_GETSEPOL
+
 # LC_INODE_PERMISION_2ARGS
 #
 # up to v2.6.27 had a 3 arg version (inode, mask, nameidata)
@@ -2988,6 +3013,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_GLIBC_SUPPORT_FHANDLES
 	LC_CONFIG_GSS
 	LC_OPENSSL_SSK
+	LC_OPENSSL_GETSEPOL
 
 	# 2.6.32
 	LC_BLK_QUEUE_MAX_SEGMENTS
@@ -3515,6 +3541,7 @@ AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
 AM_CONDITIONAL(HAVE_SYSTEMD, test "x$with_systemdsystemunitdir" != "xno")
 AM_CONDITIONAL(XATTR_HANDLER, test "x$lb_cv_compile_xattr_handler_flags" = xyes)
 AM_CONDITIONAL(SELINUX, test "$SELINUX" = "-lselinux")
+AM_CONDITIONAL(GETSEPOL, test x$enable_getsepol = xyes)
 ]) # LC_CONDITIONALS
 
 #
