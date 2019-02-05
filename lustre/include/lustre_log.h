@@ -95,6 +95,8 @@ int llog_reverse_process(const struct lu_env *env,
 			 void *data, void *catdata);
 int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 		    int index);
+int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
+		    int num, int *index);
 int llog_open(const struct lu_env *env, struct llog_ctxt *ctxt,
 	      struct llog_handle **lgh, struct llog_logid *logid,
 	      char *name, enum llog_open_param open_param);
@@ -150,6 +152,9 @@ int llog_cat_declare_add_rec(const struct lu_env *env,
 			     struct llog_rec_hdr *rec, struct thandle *th);
 int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
 		 struct llog_rec_hdr *rec, struct llog_cookie *reccookie);
+int llog_cat_cancel_arr_rec(const struct lu_env *env,
+			    struct llog_handle *cathandle,
+			    struct llog_logid *lgl, int count, int *index);
 int llog_cat_cancel_records(const struct lu_env *env,
 			    struct llog_handle *cathandle, int count,
 			    struct llog_cookie *cookies);

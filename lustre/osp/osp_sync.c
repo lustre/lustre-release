@@ -1006,8 +1006,10 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	struct ptlrpc_request	*req;
 	struct llog_ctxt	*ctxt;
 	struct llog_handle	*llh;
-	struct list_head	 list;
-	int			 rc, done = 0;
+	int			*arr;
+	struct list_head	 list, *le;
+	struct llog_logid	 lgid;
+	int			 rc, i, count = 0, done = 0;
 
 	ENTRY;
 
@@ -1042,6 +1044,13 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	INIT_LIST_HEAD(&d->opd_sync_committed_there);
 	spin_unlock(&d->opd_sync_lock);
 
+	list_for_each(le, &list)
+		count++;
+	if (count > 2)
+		OBD_ALLOC_WAIT(arr, sizeof(int) * count);
+	else
+		arr = NULL;
+	i = 0;
 	while (!list_empty(&list)) {
 		struct osp_job_req_args	*jra;
 
@@ -1058,11 +1067,20 @@ static void osp_sync_process_committed(const struct lu_env *env,
 		/* import can be closing, thus all commit cb's are
 		 * called we can check committness directly */
 		if (req->rq_import_generation == imp->imp_generation) {
-			rc = llog_cat_cancel_records(env, llh, 1,
-						     &jra->jra_lcookie);
-			if (rc)
-				CERROR("%s: can't cancel record: %d\n",
-				       obd->obd_name, rc);
+			if (arr && (!i ||
+				    !memcmp(&jra->jra_lcookie.lgc_lgl, &lgid,
+					   sizeof(lgid)))) {
+				if (unlikely(!i))
+					lgid = jra->jra_lcookie.lgc_lgl;
+
+				arr[i++] = jra->jra_lcookie.lgc_index;
+			} else {
+				rc = llog_cat_cancel_records(env, llh, 1,
+							     &jra->jra_lcookie);
+				if (rc)
+					CERROR("%s: can't cancel record: %d\n",
+					       obd->obd_name, rc);
+			}
 		} else {
 			DEBUG_REQ(D_OTHER, req, "imp_committed = %llu",
 				  imp->imp_peer_committed_transno);
@@ -1070,14 +1088,27 @@ static void osp_sync_process_committed(const struct lu_env *env,
 		ptlrpc_req_finished(req);
 		done++;
 	}
+	if (arr && i > 0) {
+		rc = llog_cat_cancel_arr_rec(env, llh, &lgid, i, arr);
+
+		if (rc)
+			CERROR("%s: can't cancel %d records rc: %d\n",
+			       obd->obd_name, i, rc);
+		else
+			CDEBUG(D_OTHER, "%s: massive records cancel id "DFID\
+			       " num %d\n", obd->obd_name,
+			       PFID(&lgid.lgl_oi.oi_fid), i);
+	}
+	if (arr)
+		OBD_FREE(arr, sizeof(int) * count);
 
 	llog_ctxt_put(ctxt);
 
 	LASSERT(atomic_read(&d->opd_sync_rpcs_in_progress) >= done);
 	atomic_sub(done, &d->opd_sync_rpcs_in_progress);
-	CDEBUG(D_OTHER, "%s: %d in flight, %d in progress\n",
+	CDEBUG(D_OTHER, "%s: %d in flight, %d in progress, done %d\n",
 	       d->opd_obd->obd_name, atomic_read(&d->opd_sync_rpcs_in_flight),
-	       atomic_read(&d->opd_sync_rpcs_in_progress));
+	       atomic_read(&d->opd_sync_rpcs_in_progress), done);
 
 	osp_sync_check_for_work(d);
 
