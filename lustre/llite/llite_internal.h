@@ -450,6 +450,8 @@ enum stats_track_type {
 				       * suppress_pings */
 #define LL_SBI_FAST_READ     0x400000 /* fast read support */
 #define LL_SBI_FILE_SECCTX   0x800000 /* set file security context at create */
+/*	LL_SBI_PIO	    0x1000000    parallel IO support, introduced in
+					 2.10, abandoned */
 #define LL_SBI_TINY_WRITE   0x2000000 /* tiny write support */
 
 #define LL_SBI_FLAGS { 	\
@@ -477,6 +479,7 @@ enum stats_track_type {
 	"always_ping",	\
 	"fast_read",	\
 	"file_secctx",	\
+	"pio",		\
 	"tiny_write",	\
 }
 
