@@ -47,7 +47,11 @@ prepare_and_build_srpm() {
 
 	pushd $TOPDIR >/dev/null
 	# create the buildid
-	local buildid="_lustre${EXTRA_VERSION##*_lustre}"
+	if $ENABLE_KERNEL_DEBUG; then
+		local buildid="_lustre_debug${EXTRA_VERSION##*_lustre}"
+	else
+		local buildid="_lustre${EXTRA_VERSION##*_lustre}"
+	fi
 
 	# edit the SPEC with our changes
 	patch_spec

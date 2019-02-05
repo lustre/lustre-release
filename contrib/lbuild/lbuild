@@ -29,7 +29,7 @@ push_exit_trap "kill -INT -$$ || true" kill_children
 
 # increment this if you have made a change that should force a new kernel
 # to build built
-BUILD_GEN=8
+BUILD_GEN=9
 
 TOPDIR="$PWD"
 
@@ -71,6 +71,7 @@ DISTRO=
 KERNELTREE=
 # default to not adding -lustre- into the kernel RPM package names
 KERNEL_LUSTRE_NAMING=false
+ENABLE_KERNEL_DEBUG=false
 # default not use kabi check.
 USE_KABI=false
 
@@ -156,6 +157,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
   --kerneltree=KERNELTREE
     Directory containing dirs with Linux source tarballs referenced by target
     files. Dir names in format kernel version ('2.6.9', etc.)
+
+  --enable-kernel-debug
+    Build with kernel-<version>.config-debug instead
 
   --linux=LINUX --with-linux=LINUX
     Directory of Linux kernel sources.  When this option is used, only
@@ -713,9 +717,15 @@ load_target() {
         XENPOSTFIX="-xen"
     fi
 
-    if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config ]; then
-        CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH.config"
-    fi
+	if $ENABLE_KERNEL_DEBUG; then
+		if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config-debug ]; then
+			CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH.config-debug"
+		fi
+	else
+		if [ -f $TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET-$TARGET_ARCH.config ]; then
+			CONFIG_FILE="$TOPDIR/lustre/lustre/kernel_patches/kernel_configs/kernel-$lnxmaj-$TARGET$XENPOSTFIX-$TARGET_ARCH.config"
+		fi
+	fi
 
     local lnxrelnew=${lnxrel//-/_}
 
@@ -1945,7 +1955,7 @@ set -E
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
 options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,\
-patchless,patchless-server,ccache,norpm,external-patches:,timestamp:,\
+patchless,patchless-server,enable-kernel-debug,ccache,norpm,external-patches:,timestamp:,\
 extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-type:,\
 ofed-version:,mlnx-version:,ofed-src:,publish,disable-zfs,release,set-value:,\
 src,stage:,target:,with-linux:,xen -- "$@")
@@ -2019,6 +2029,10 @@ while [ "$1" ]; do
             ;;
 	--patchless-server)
 		PATCHLESS_SERVER=true
+		shift
+		;;
+	--enable-kernel-debug)
+		ENABLE_KERNEL_DEBUG=true
 		shift
 		;;
         --kernelrpm)
