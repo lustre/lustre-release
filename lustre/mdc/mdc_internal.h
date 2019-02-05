@@ -72,6 +72,11 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 		const union ldlm_policy_data *policy,
 		struct md_op_data *op_data,
 		struct lustre_handle *lockh, __u64 extra_lock_flags);
+
+int mdc_enqueue_async(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+		      obd_enqueue_update_f upcall, struct md_op_data *op_data,
+		      const union ldlm_policy_data *policy, __u64 lock_flags);
+
 int mdc_resource_get_unused_res(struct obd_export *exp,
 				struct ldlm_res_id *res_id,
 				struct list_head *cancels,

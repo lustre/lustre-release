@@ -1244,6 +1244,10 @@ struct md_ops {
 			 const union ldlm_policy_data *, struct md_op_data *,
 			 struct lustre_handle *, __u64);
 
+	int (*m_enqueue_async)(struct obd_export *, struct ldlm_enqueue_info *,
+			       obd_enqueue_update_f, struct md_op_data *,
+			       const union ldlm_policy_data *, __u64);
+
 	int (*m_getattr)(struct obd_export *, struct md_op_data *,
 			 struct ptlrpc_request **);
 

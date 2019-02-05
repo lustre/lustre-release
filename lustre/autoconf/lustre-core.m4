@@ -1146,6 +1146,23 @@ AC_DEFUN([LC_HAVE_BLK_INTEGRITY_ITER], [
 ]) # LC_HAVE_BLK_INTEGRITY_ITER
 
 #
+# LC_HAVE_LM_GRANT_2ARGS
+#
+# 3.17 removed unused argument from lm_grant
+#
+AC_DEFUN([LC_HAVE_LM_GRANT_2ARGS], [
+LB_CHECK_COMPILE([if 'lock_manager_operations.lm_grant' takes two args],
+lm_grant, [
+	#include <linux/fs.h>
+],[
+	((struct lock_manager_operations *)NULL)->lm_grant(NULL, 0);
+],[
+	AC_DEFINE(HAVE_LM_GRANT_2ARGS, 1,
+		[lock_manager_operations.lm_grant takes two args])
+])
+]) # LC_HAVE_LM_GRANT_2ARGS
+
+#
 # LC_NFS_FILLDIR_USE_CTX
 #
 # 3.18 kernel moved from void cookie to struct dir_context
@@ -4255,6 +4272,8 @@ AC_DEFUN([LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK], [
 			[kernel has locks_lock_file_wait in filelock.h])
 		AC_DEFINE(HAVE_LINUX_FILELOCK_HEADER, 1,
 			[linux/filelock.h is present])
+		AC_DEFINE(HAVE_LM_GRANT_2ARGS, 1,
+			[lock_manager_operations.lm_grant takes two args])
 	])
 ]) # LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 
@@ -5079,6 +5098,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_INTERVAL_BLK_INTEGRITY
 	LC_KEY_MATCH_DATA
 	LC_HAVE_BLK_INTEGRITY_ITER
+	LC_HAVE_LM_GRANT_2ARGS
 
 	# 3.18
 	LC_PERCPU_COUNTER_INIT

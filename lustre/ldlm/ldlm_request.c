@@ -945,6 +945,15 @@ struct ptlrpc_request *ldlm_enqueue_pack(struct obd_export *exp, int lvb_len)
 }
 EXPORT_SYMBOL(ldlm_enqueue_pack);
 
+static void ldlm_lock_add_to_enqueueing(struct ldlm_lock *lock)
+{
+	struct ldlm_resource *res = lock->l_resource;
+
+	lock_res(res);
+	ldlm_resource_add_lock(res, &res->lr_enqueueing, lock);
+	unlock_res(res);
+}
+
 /**
  * Client-side lock enqueue.
  *
@@ -1013,6 +1022,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 				LBUG();
 
 			lock->l_req_extent = policy->l_extent;
+		} else if (einfo->ei_type == LDLM_FLOCK) {
+			ldlm_lock_add_to_enqueueing(lock);
 		}
 		LDLM_DEBUG(lock, "client-side enqueue START, flags %#llx",
 			   *flags);

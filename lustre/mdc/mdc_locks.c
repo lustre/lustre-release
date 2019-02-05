@@ -33,6 +33,14 @@ struct mdc_getattr_args {
 	struct md_op_item	*ga_item;
 };
 
+struct mdc_enqueue_args {
+	struct ldlm_lock		*mea_lock;
+	struct obd_export		*mea_exp;
+	enum ldlm_mode			mea_mode;
+	__u64				mea_flags;
+	obd_enqueue_update_f		mea_upcall;
+};
+
 int it_open_error(int phase, struct lookup_intent *it)
 {
 	if (it_disposition(it, DISP_OPEN_LEASE)) {
@@ -1178,6 +1186,86 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 {
 	return mdc_enqueue_base(exp, einfo, policy, NULL,
 				op_data, lockh, extra_lock_flags);
+}
+
+static int mdc_enqueue_async_interpret(const struct lu_env *env,
+				       struct ptlrpc_request *req,
+				       void *args, int rc)
+{
+	struct mdc_enqueue_args	*mea = args;
+	struct obd_export	*exp = mea->mea_exp;
+	struct ldlm_lock	*lock = mea->mea_lock;
+	struct lustre_handle	lockh;
+	struct ldlm_enqueue_info  einfo = {
+			.ei_type = LDLM_FLOCK,
+			.ei_mode = mea->mea_mode,
+	};
+
+	ENTRY;
+	CDEBUG(D_INFO, "req=%p rc=%d\n", req, rc);
+
+	ldlm_lock2handle(lock, &lockh);
+	rc = ldlm_cli_enqueue_fini(exp, &req->rq_pill, &einfo, 1,
+				  &mea->mea_flags, NULL, 0, &lockh, rc, true);
+	if (rc == -ENOLCK)
+		LDLM_LOCK_RELEASE(lock);
+
+	/* we expect failed_lock_cleanup() to destroy lock */
+	if (rc != 0)
+		LASSERT(list_empty(&lock->l_res_link));
+
+	if (mea->mea_upcall != NULL)
+		mea->mea_upcall(lock, rc);
+
+	LDLM_LOCK_PUT(lock);
+
+	RETURN(rc);
+}
+
+int mdc_enqueue_async(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
+		      obd_enqueue_update_f upcall, struct md_op_data *op_data,
+		      const union ldlm_policy_data *policy, __u64 flags)
+{
+	struct mdc_enqueue_args *mea;
+	struct ptlrpc_request *req;
+	int                    rc;
+	struct ldlm_res_id res_id;
+	struct lustre_handle lockh;
+
+	ENTRY;
+	fid_build_reg_res_name(&op_data->op_fid1, &res_id);
+
+	LASSERTF(einfo->ei_type == LDLM_FLOCK, "lock type %d\n",
+		 einfo->ei_type);
+	res_id.name[3] = LDLM_FLOCK;
+
+	req = ldlm_enqueue_pack(exp, 0);
+	if (IS_ERR(req))
+		RETURN(PTR_ERR(req));
+
+	einfo->ei_req_slot = 1;
+	einfo->ei_mod_slot = 1;
+
+	rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, policy, &flags, NULL,
+			      0, 0, &lockh, 1);
+	if (rc) {
+		ptlrpc_req_put(req);
+		RETURN(rc);
+	}
+
+	mea = ptlrpc_req_async_args(mea, req);
+	mea->mea_exp = exp;
+	mea->mea_lock = ldlm_handle2lock(&lockh);
+	LASSERT(mea->mea_lock != NULL);
+
+	mea->mea_mode = einfo->ei_mode;
+	mea->mea_flags = flags;
+	mea->mea_upcall = upcall;
+
+	req->rq_interpret_reply = mdc_enqueue_async_interpret;
+	ptlrpcd_add_req(req);
+
+	RETURN(0);
 }
 
 static int mdc_finish_intent_lock(struct obd_export *exp,

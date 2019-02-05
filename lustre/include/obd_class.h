@@ -1393,6 +1393,7 @@ enum mps_stat_idx {
 	LPROC_MD_CLOSE,
 	LPROC_MD_CREATE,
 	LPROC_MD_ENQUEUE,
+	LPROC_MD_ENQUEUE_ASYNC,
 	LPROC_MD_GETATTR,
 	LPROC_MD_INTENT_LOCK,
 	LPROC_MD_LINK,
@@ -1506,6 +1507,29 @@ static inline int md_enqueue(struct obd_export *exp,
 	return exp->exp_obd->obd_type->typ_md_ops->m_enqueue(exp, einfo, policy,
 							     op_data, lockh,
 							     extra_lock_flags);
+}
+
+static inline int md_enqueue_async(struct obd_export *exp,
+				   struct ldlm_enqueue_info *einfo,
+				   obd_enqueue_update_f upcall,
+				   struct md_op_data *op_data,
+				   const union ldlm_policy_data *policy,
+				   __u64 lock_flags)
+{
+	int rc;
+
+	ENTRY;
+	rc = exp_check_ops(exp);
+	if (rc)
+		RETURN(rc);
+
+	lprocfs_counter_incr(exp->exp_obd->obd_md_stats,
+			     LPROC_MD_ENQUEUE_ASYNC);
+
+	rc = exp->exp_obd->obd_type->typ_md_ops->m_enqueue_async(exp, einfo,
+			upcall, op_data,
+			policy, lock_flags);
+	RETURN(rc);
 }
 
 static inline int md_getattr_name(struct obd_export *exp,

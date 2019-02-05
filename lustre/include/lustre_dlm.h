@@ -30,6 +30,9 @@
 #include <lustre_import.h>
 #include <lustre_handles.h>
 #include <linux/interval_tree_generic.h>
+#ifdef HAVE_LINUX_FILELOCK_HEADER
+#include <linux/filelock.h>
+#endif
 
 #include "lustre_dlm_flags.h"
 
@@ -1113,6 +1116,8 @@ struct ldlm_resource {
 	 * that are waiting for conflicts to go away
 	 */
 	struct list_head	lr_waiting;
+	/* List of locks that waiting to enqueueing for flock */
+	struct list_head	lr_enqueueing;
 	/** @} */
 
 	/** Resource name */
@@ -1287,6 +1292,27 @@ struct ldlm_enqueue_info {
 
 #define ei_res_id	ei_cb_gl
 
+enum ldlm_flock_flags {
+	FA_FL_CANCEL_RQST	= 1,
+	FA_FL_CANCELED		= 2,
+};
+
+struct ldlm_flock_info {
+	struct file		*fa_file;
+	struct file_lock	*fa_fl; /* original file_lock */
+	struct file_lock	fa_flc; /* lock copy */
+	enum ldlm_flock_flags	fa_flags;
+	enum ldlm_mode		fa_mode;
+#ifdef HAVE_LM_GRANT_2ARGS
+	int (*fa_notify)(struct file_lock *, int);
+#else
+	int (*fa_notify)(struct file_lock *, struct file_lock *, int);
+#endif
+	int			fa_err;
+	int			fa_ready;
+	wait_queue_head_t       fa_waitq;
+};
+
 extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 extern const char *ldlm_it2str(enum ldlm_intent_flags it);
@@ -1421,6 +1447,9 @@ int ldlm_replay_locks(struct obd_import *imp);
 
 /* ldlm_flock.c */
 int ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data);
+struct ldlm_flock_info *
+ldlm_flock_completion_ast_async(struct ldlm_lock *lock, __u64 flags,
+				void *data);
 
 /* ldlm_extent.c */
 __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms);

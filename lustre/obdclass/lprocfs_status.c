@@ -1614,6 +1614,7 @@ static const char * const mps_stats[] = {
 	[LPROC_MD_CLOSE]		= "close",
 	[LPROC_MD_CREATE]		= "create",
 	[LPROC_MD_ENQUEUE]		= "enqueue",
+	[LPROC_MD_ENQUEUE_ASYNC]	= "enqueue_async",
 	[LPROC_MD_GETATTR]		= "getattr",
 	[LPROC_MD_INTENT_LOCK]		= "intent_lock",
 	[LPROC_MD_LINK]			= "link",
