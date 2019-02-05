@@ -1,0 +1,49 @@
+.TH l_getsepol 8 "2019 Feb 5" Lustre "configuration utilities"
+.SH NAME
+l_getsepol \- Lustre SELinux policy info
+
+.SH SYNOPSIS
+.br
+.B l_getsepol
+.br
+.SH DESCRIPTION
+.B l_getsepol
+generates the Lustre SELinux policy info to set as reference on a nodemap with
+.BR lctl
+.BR nodemap_set_sepol (8).
+
+.br
+The info string describing the SELinux policy has the following syntax:
+
+<mode>:<name>:<version>:<hash>
+
+where:
+.RS 4
+- <mode> is a digit telling if SELinux is in Permissive mode (0) or Enforcing
+mode (1)
+
+- <name> is the name of the SELinux policy
+
+- <version> is the version of the SELinux policy
+
+- <hash> is the computed hash of the binary representation of the policy, as
+exported in /etc/selinux/<name>/policy/policy.<version>
+.RE
+
+.B l_getsepol
+should be run on a client node known to enforce the right SELinux policy.
+
+.SH EXAMPLES
+.nf
+# l_getsepol
+SELinux status info: 1:mls:31:c79984bb42c0151cb0d8cc34a196a6ca95c2791190c403804efb3e9d81b6109c
+.fi
+
+.SH AVAILABILITY
+.B l_getsepol
+is part of the
+.BR Lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-nodemap-set-sepol (8)
