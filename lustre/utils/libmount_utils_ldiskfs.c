@@ -95,7 +95,7 @@ extern char *progname;
 
 static void append_unique(char *buf, char *prefix, char *key, char *val,
 			  size_t maxbuflen);
-static int is_e2fsprogs_feature_supp(const char *feature);
+static bool is_e2fsprogs_feature_supp(const char *feature);
 static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs);
 
 /*
@@ -219,7 +219,7 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	/* Multiple mount protection enabled if failover node specified */
 	if (mop->mo_flags & MO_FAILOVER &&
 	    !is_feature_enabled("mmp", dev)) {
-		if (is_e2fsprogs_feature_supp("-O mmp") == 0) {
+		if (is_e2fsprogs_feature_supp("-O mmp")) {
 			char *command = filepnm;
 
 			snprintf(command, sizeof(filepnm),
@@ -229,8 +229,9 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 				fprintf(stderr,
 					"%s: Unable to set 'mmp' on %s: %d\n",
 					progname, dev, ret);
-		} else
+		} else {
 			disp_old_e2fsprogs_msg("mmp", 1);
+		}
 	}
 
 	ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0,
@@ -458,14 +459,14 @@ int ldiskfs_is_lustre(char *dev, unsigned *mount_type)
  * Firstly we try to use "debugfs supported_features" command to check if
  * the feature is supported. If this fails we try to set this feature with
  * mke2fs to check for its support. */
-static int is_e2fsprogs_feature_supp(const char *feature)
+static bool is_e2fsprogs_feature_supp(const char *feature)
 {
 	static char supp_features[4096] = "";
 	FILE *fp;
 	char cmd[PATH_MAX];
 	char imgname[] = "/tmp/test-img-XXXXXX";
-	int fd = -1;
-	int ret = 1;
+	int fd;
+	int ret;
 
 	if (supp_features[0] == '\0') {
 		snprintf(cmd, sizeof(cmd), "%s -c -R supported_features 2>&1",
@@ -476,20 +477,22 @@ static int is_e2fsprogs_feature_supp(const char *feature)
 		fp = popen(cmd, "r");
 		if (!fp) {
 			fprintf(stderr, "%s: %s\n", progname, strerror(errno));
-			return 0;
+		} else {
+			ret = fread(supp_features, 1,
+				    sizeof(supp_features) - 1, fp);
+			supp_features[ret] = '\0';
+			pclose(fp);
 		}
-		ret = fread(supp_features, 1, sizeof(supp_features) - 1, fp);
-		supp_features[ret] = '\0';
-		pclose(fp);
 	}
-	if (ret > 0 && strstr(supp_features,
-			      strncmp(feature, "-O ", 3) ? feature : feature+3))
-		return 0;
+
+	if (strstr(supp_features,
+		   strncmp(feature, "-O ", 3) ? feature : feature + 3))
+		return true;
 
 	if ((fd = mkstemp(imgname)) < 0)
-		return -1;
-	else
-		close(fd);
+		return false;
+
+	close(fd);
 
 	snprintf(cmd, sizeof(cmd), "%s -F %s %s 100 >/dev/null 2>&1",
 		 MKE2FS, feature, imgname);
@@ -498,9 +501,8 @@ static int is_e2fsprogs_feature_supp(const char *feature)
 	ret = system(cmd);
 	unlink(imgname);
 
-	return ret;
+	return ret == 0;
 }
-
 
 /**
  * append_unique: append @key or @key=@val pair to @buf only if @key does not
@@ -539,14 +541,14 @@ static void append_unique(char *buf, char *prefix, char *key, char *val,
 }
 
 static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
-					size_t maxbuflen, int user_spec)
+					size_t maxbuflen, bool user_spec)
 {
-	int enable_64bit = 0;
+	unsigned long long blocks = mop->mo_device_kb / mop->mo_blocksize_kb;
+	bool enable_64bit = false;
 
 	/* Enable large block addresses if the LUN is over 2^32 blocks. */
-	if (mop->mo_device_kb / mop->mo_blocksize_kb > 0xffffffffULL &&
-	     is_e2fsprogs_feature_supp("-O 64bit") == 0)
-		enable_64bit = 1;
+	if (blocks > 0xffffffffULL && is_e2fsprogs_feature_supp("-O 64bit"))
+		enable_64bit = true;
 
 	if (IS_OST(&mop->mo_ldd)) {
 		append_unique(anchor, user_spec ? "," : " -O ",
@@ -567,14 +569,14 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 
 	/* Multiple mount protection enabled only if failover node specified */
 	if (mop->mo_flags & MO_FAILOVER) {
-		if (is_e2fsprogs_feature_supp("-O mmp") == 0)
+		if (is_e2fsprogs_feature_supp("-O mmp"))
 			append_unique(anchor, ",", "mmp", NULL, maxbuflen);
 		else
 			disp_old_e2fsprogs_msg("mmp", 1);
 	}
 
 	/* Allow more than 65000 subdirectories */
-	if (is_e2fsprogs_feature_supp("-O dir_nlink") == 0)
+	if (is_e2fsprogs_feature_supp("-O dir_nlink"))
 		append_unique(anchor, ",", "dir_nlink", NULL, maxbuflen);
 
 	/* The following options are only valid for ext4-based ldiskfs.
@@ -583,7 +585,7 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 		return 0;
 
 	/* Enable quota by default */
-	if (is_e2fsprogs_feature_supp("-O quota") == 0) {
+	if (is_e2fsprogs_feature_supp("-O quota")) {
 		append_unique(anchor, ",", "quota", NULL, maxbuflen);
 	} else {
 		fatal();
@@ -593,16 +595,22 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	}
 
 	/* Allow files larger than 2TB.  Also needs LU-16, but not harmful. */
-	if (is_e2fsprogs_feature_supp("-O huge_file") == 0)
+	if (is_e2fsprogs_feature_supp("-O huge_file"))
 		append_unique(anchor, ",", "huge_file", NULL, maxbuflen);
 
 	if (enable_64bit)
 		append_unique(anchor, ",", "64bit", NULL, maxbuflen);
 
+	if (blocks >= 0x1000000000 && is_e2fsprogs_feature_supp("-O meta_bg"))
+		append_unique(anchor, ",", "meta_bg", NULL, maxbuflen);
+
+	if (enable_64bit || strstr(mop->mo_mkfsopts, "meta_bg"))
+		append_unique(anchor, ",", "^resize_inode", NULL, maxbuflen);
+
 	/* Cluster inode/block bitmaps and inode table for more efficient IO.
 	 * Align the flex groups on a 1MB boundary for better performance. */
 	/* This -O feature needs to go last, since it adds the "-G" option. */
-	if (is_e2fsprogs_feature_supp("-O flex_bg") == 0) {
+	if (is_e2fsprogs_feature_supp("-O flex_bg")) {
 		char tmp_buf[64];
 
 		append_unique(anchor, ",", "flex_bg", NULL, maxbuflen);
@@ -670,7 +678,8 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 	char *start;
 	char *dev;
 	int ret = 0, ext_opts = 0;
-	bool have_64bit = false;
+	bool enable_64bit = false;
+	long inode_size = 0;
 	size_t maxbuflen;
 
 	mop->mo_blocksize_kb = 4;
@@ -730,234 +739,230 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 				mop->mo_device_kb =
 					0xffffffffULL * mop->mo_blocksize_kb;
 			else
-				have_64bit = true;
+				enable_64bit = true;
 		}
 	}
 
-
-	if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
-	    (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) ||
-	    (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS2)) {
-		long inode_size = 0;
-
-		/* Journal size in MB */
-		if (strstr(mop->mo_mkfsopts, "-J") == NULL &&
-		    mop->mo_device_kb > 1024 * 1024) {
-			/* Choose our own default journal size */
-			long journal_mb = 0, max_mb;
-
-			/* cap journal size at 4GB for MDT,
-			 * leave it at 400MB for OSTs. */
-			if (IS_MDT(&mop->mo_ldd))
-				max_mb = 4096;
-			else if (IS_OST(&mop->mo_ldd))
-				max_mb = 400;
-			else /* Use mke2fs default size for MGS */
-				max_mb = 0;
-
-			/* Use at most 4% of device for journal */
-			journal_mb = mop->mo_device_kb * 4 / (1024 * 100);
-			if (journal_mb > max_mb)
-				journal_mb = max_mb;
-
-			if (journal_mb) {
-				sprintf(buf, " -J size=%ld", journal_mb);
-				strscat(mop->mo_mkfsopts, buf,
-					sizeof(mop->mo_mkfsopts));
-			}
-		}
-
-		/*
-		 * The inode size is constituted by following elements
-		 * (assuming all files are in composite layout and has
-		 * 3 components):
-		 *
-		 *   ldiskfs inode size: 160
-		 *   MDT extended attributes size, including:
-		 *	ext4_xattr_header: 32
-		 *	LOV EA size: 32(lov_comp_md_v1) +
-		 *		     3 * 40(lov_comp_md_entry_v1) +
-		 *		     3 * 32(lov_mds_md) +
-		 *		     stripes * 24(lov_ost_data) +
-		 *		     16(xattr_entry) + 4("lov")
-		 *	LMA EA size: 24(lustre_mdt_attrs) +
-		 *		     16(xattr_entry) + 4("lma")
-		 *	SOM EA size: 24(lustre_som_attrs) +
-		 *		     16(xattr_entry) + 4("som")
-		 *	link EA size: 24(link_ea_header) + 18(link_ea_entry) +
-		 *		      16(filename) + 16(xattr_entry) + 4("link")
-		 *   and some margin for 4-byte alignment, ACLs and other EAs.
-		 *
-		 * If we say the average filename length is about 32 bytes,
-		 * the calculation looks like:
-		 * 160 + 32 + (32+3*(40+32)+24*stripes+20) + (24+20) + (24+20) +
-		 *  (24+20) + (~42+16+20) + other <= 512*2^m, {m=0,1,2,3}
-		 */
-		if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
-			if (IS_MDT(&mop->mo_ldd)) {
-				if (mop->mo_stripe_count > 59)
-					inode_size = 512; /* bz 7241 */
-				/* see also "-i" below for EA blocks */
-				else if (mop->mo_stripe_count > 16)
-					inode_size = 2048;
-				else
-					inode_size = 1024;
-			} else if (IS_OST(&mop->mo_ldd)) {
-				/* We store MDS FID and necessary composite
-				 * layout information in the OST object EA:
-				 *   ldiskfs inode size: 160
-				 *   OST extended attributes size, including:
-				 *	ext4_xattr_header: 32
-				 *	LMA EA size: 24(lustre_mdt_attrs) +
-				 *		     16(xattr_entry) + 4("lma")
-				 *	FID EA size: 52(filter_fid) +
-				 *		     16(xattr_entry) + 4("fid")
-				 * 160 + 32 + (24+20) + (52+20) = 308
-				 */
-				inode_size = 512;
-			}
-
-			if (inode_size > 0) {
-				sprintf(buf, " -I %ld", inode_size);
-				strscat(mop->mo_mkfsopts, buf,
-					sizeof(mop->mo_mkfsopts));
-			}
-		}
-
-		/* Bytes_per_inode: disk size / num inodes */
-		if (strstr(mop->mo_mkfsopts, "-i") == NULL &&
-		    strstr(mop->mo_mkfsopts, "-N") == NULL) {
-			long bytes_per_inode = 0;
-
-			/* Allocate more inodes on MDT devices.  There is
-			 * no data stored on the MDT, and very little extra
-			 * metadata beyond the inode.  It could go down as
-			 * low as 1024 bytes, but this is conservative.
-			 * Account for external EA blocks for wide striping. */
-			if (IS_MDT(&mop->mo_ldd)) {
-				bytes_per_inode = inode_size + 1536;
-
-				if (mop->mo_stripe_count > 59) {
-					int extra = mop->mo_stripe_count * 24;
-					extra = ((extra - 1) | 4095) + 1;
-					bytes_per_inode += extra;
-				}
-			}
-
-			/* Allocate fewer inodes on large OST devices.  Most
-			 * filesystems can be much more aggressive than even
-			 * this, but it is impossible to know in advance. */
-			if (IS_OST(&mop->mo_ldd)) {
-				/* OST > 16TB assume average file size 1MB */
-				if (mop->mo_device_kb > (16ULL << 30))
-					bytes_per_inode = 1024 * 1024;
-				/* OST > 4TB assume average file size 512kB */
-				else if (mop->mo_device_kb > (4ULL << 30))
-					bytes_per_inode = 512 * 1024;
-				/* OST > 1TB assume average file size 256kB */
-				else if (mop->mo_device_kb > (1ULL << 30))
-					bytes_per_inode = 256 * 1024;
-				/* OST > 10GB assume average file size 64kB,
-				 * plus a bit so that inodes will fit into a
-				 * 256x flex_bg without overflowing */
-				else if (mop->mo_device_kb > (10ULL << 20))
-					bytes_per_inode = 69905;
-			}
-
-			if (bytes_per_inode > 0) {
-				sprintf(buf, " -i %ld", bytes_per_inode);
-				strscat(mop->mo_mkfsopts, buf,
-					sizeof(mop->mo_mkfsopts));
-				mop->mo_inode_size = bytes_per_inode;
-			}
-		}
-
-		if (verbose < 2) {
-			strscat(mop->mo_mkfsopts, " -q",
-				sizeof(mop->mo_mkfsopts));
-		}
-
-		/* start handle -O mkfs options */
-		if ((start = strstr(mop->mo_mkfsopts, "-O")) != NULL) {
-			if (strstr(start + 2, "-O") != NULL) {
-				fprintf(stderr,
-					"%s: don't specify multiple -O options\n",
-					progname);
-				return EINVAL;
-			}
-			start = moveopts_to_end(start);
-			maxbuflen = sizeof(mop->mo_mkfsopts) -
-				(start - mop->mo_mkfsopts) - strlen(start);
-			ret = enable_default_ext4_features(mop, start,
-							   maxbuflen, 1);
-		} else {
-			start = mop->mo_mkfsopts + strlen(mop->mo_mkfsopts),
-			      maxbuflen = sizeof(mop->mo_mkfsopts) -
-				      strlen(mop->mo_mkfsopts);
-			ret = enable_default_ext4_features(mop, start,
-							   maxbuflen, 0);
-		}
-		if (ret)
-			return ret;
-		/* end handle -O mkfs options */
-
-		/* start handle -E mkfs options */
-		if ((start = strstr(mop->mo_mkfsopts, "-E")) != NULL) {
-			if (strstr(start + 2, "-E") != NULL) {
-				fprintf(stderr,
-					"%s: don't specify multiple -E options\n",
-					progname);
-				return EINVAL;
-			}
-			start = moveopts_to_end(start);
-			maxbuflen = sizeof(mop->mo_mkfsopts) -
-				(start - mop->mo_mkfsopts) - strlen(start);
-			ext_opts = 1;
-		} else {
-			start = mop->mo_mkfsopts + strlen(mop->mo_mkfsopts);
-			maxbuflen = sizeof(mop->mo_mkfsopts) -
-				strlen(mop->mo_mkfsopts);
-		}
-
-		/* In order to align the filesystem metadata on 1MB boundaries,
-		 * give a resize value that will reserve a power-of-two group
-		 * descriptor blocks, but leave one block for the superblock.
-		 * Only useful for filesystems with < 2^32 blocks due to resize
-		 * limitations. */
-		if (strstr(mop->mo_mkfsopts, "meta_bg") == NULL &&
-		    IS_OST(&mop->mo_ldd) && mop->mo_device_kb > 100 * 1024 &&
-		    !have_64bit) {
-			unsigned int group_blocks = mop->mo_blocksize_kb * 8192;
-			unsigned int desc_per_block =
-				mop->mo_blocksize_kb * 1024 / 32;
-			unsigned int resize_blks;
-
-			resize_blks = (1ULL<<32) - desc_per_block*group_blocks;
-			snprintf(buf, sizeof(buf), "%u", resize_blks);
-			append_unique(start, ext_opts ? "," : " -E ",
-				      "resize", buf, maxbuflen);
-			ext_opts = 1;
-		}
-
-		/* Avoid zeroing out the full journal - speeds up mkfs */
-		if (is_e2fsprogs_feature_supp("-E lazy_journal_init") == 0)
-			append_unique(start, ext_opts ? "," : " -E ",
-				      "lazy_journal_init", NULL, maxbuflen);
-		/* end handle -E mkfs options */
-
-		/* Allow reformat of full devices (as opposed to
-		   partitions.)  We already checked for mounted dev. */
-		strscat(mop->mo_mkfsopts, " -F", sizeof(mop->mo_mkfsopts));
-
-		snprintf(mkfs_cmd, sizeof(mkfs_cmd),
-			 "%s -j -b %d -L %s ", MKE2FS,
-			 mop->mo_blocksize_kb * 1024, mop->mo_ldd.ldd_svname);
-	} else {
-		fprintf(stderr,"%s: unsupported fs type: %d (%s)\n",
+	if ((mop->mo_ldd.ldd_mount_type != LDD_MT_EXT3) &&
+	    (mop->mo_ldd.ldd_mount_type != LDD_MT_LDISKFS) &&
+	    (mop->mo_ldd.ldd_mount_type != LDD_MT_LDISKFS2)) {
+		fprintf(stderr, "%s: unsupported fs type: %d (%s)\n",
 			progname, mop->mo_ldd.ldd_mount_type,
 			MT_STR(&mop->mo_ldd));
+
 		return EINVAL;
 	}
+
+	/* Journal size in MB */
+	if (strstr(mop->mo_mkfsopts, "-J") == NULL &&
+	    mop->mo_device_kb > 1024 * 1024) {
+		/* Choose our own default journal size */
+		long journal_mb = 0, max_mb;
+
+		/* cap journal size at 4GB for MDT, leave at 1GB for OSTs */
+		if (IS_MDT(&mop->mo_ldd))
+			max_mb = 4096;
+		else if (IS_OST(&mop->mo_ldd))
+			max_mb = 1024;
+		else /* Use mke2fs default size for MGS */
+			max_mb = 0;
+
+		/* Use at most 4% of device for journal */
+		journal_mb = mop->mo_device_kb * 4 / (1024 * 100);
+		if (journal_mb > max_mb)
+			journal_mb = max_mb;
+
+		if (journal_mb) {
+			snprintf(buf, sizeof(buf), " -J size=%ld", journal_mb);
+			strscat(mop->mo_mkfsopts, buf,
+				sizeof(mop->mo_mkfsopts));
+		}
+	}
+
+	/*
+	 * The inode size is constituted by following elements
+	 * (assuming all files are in composite layout and has
+	 * 3 components):
+	 *
+	 *   ldiskfs inode size: 160
+	 *   MDT extended attributes size, including:
+	 *	ext4_xattr_header: 32
+	 *	LOV EA size: 32(lov_comp_md_v1) +
+	 *		     3 * 40(lov_comp_md_entry_v1) +
+	 *		     3 * 32(lov_mds_md) +
+	 *		     stripes * 24(lov_ost_data) +
+	 *		     16(xattr_entry) + 4("lov")
+	 *	LMA EA size: 24(lustre_mdt_attrs) +
+	 *		     16(xattr_entry) + 4("lma")
+	 *	SOM EA size: 24(lustre_som_attrs) +
+	 *		     16(xattr_entry) + 4("som")
+	 *	link EA size: 24(link_ea_header) + 18(link_ea_entry) +
+	 *		      16(filename) + 16(xattr_entry) + 4("link")
+	 *   and some margin for 4-byte alignment, ACLs and other EAs.
+	 *
+	 * If we say the average filename length is about 32 bytes,
+	 * the calculation looks like:
+	 * 160 + 32 + (32+3*(40+32)+24*stripes+20) + (24+20) + (24+20) +
+	 *  (24+20) + (~42+16+20) + other <= 512*2^m, {m=0,1,2,3}
+	 */
+	if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
+		if (IS_MDT(&mop->mo_ldd)) {
+			if (mop->mo_stripe_count > 59)
+				inode_size = 512; /* bz 7241 */
+			/* see also "-i" below for EA blocks */
+			else if (mop->mo_stripe_count > 16)
+				inode_size = 2048;
+			else
+				inode_size = 1024;
+		} else if (IS_OST(&mop->mo_ldd)) {
+			/* We store MDS FID and necessary composite
+			 * layout information in the OST object EA:
+			 *   ldiskfs inode size: 160
+			 *   OST extended attributes size, including:
+			 *	ext4_xattr_header: 32
+			 *	LMA EA size: 24(lustre_mdt_attrs) +
+			 *		     16(xattr_entry) + 4("lma")
+			 *	FID EA size: 52(filter_fid) +
+			 *		     16(xattr_entry) + 4("fid")
+			 * 160 + 32 + (24+20) + (52+20) = 308
+			 */
+			inode_size = 512;
+		}
+
+		if (inode_size > 0) {
+			snprintf(buf, sizeof(buf), " -I %ld", inode_size);
+			strscat(mop->mo_mkfsopts, buf,
+				sizeof(mop->mo_mkfsopts));
+		}
+	}
+
+	/* Bytes_per_inode: disk size / num inodes */
+	if (strstr(mop->mo_mkfsopts, "-i") == NULL &&
+	    strstr(mop->mo_mkfsopts, "-N") == NULL) {
+		long bytes_per_inode = 0;
+
+		/* Allocate more inodes on MDT devices.  There is
+		 * no data stored on the MDT, and very little extra
+		 * metadata beyond the inode.  It could go down as
+		 * low as 1024 bytes, but this is conservative.
+		 * Account for external EA blocks for wide striping.
+		 */
+		if (IS_MDT(&mop->mo_ldd)) {
+			bytes_per_inode = inode_size + 1536;
+
+			if (mop->mo_stripe_count > 59) {
+				int extra = mop->mo_stripe_count * 24;
+
+				extra = ((extra - 1) | 4095) + 1;
+				bytes_per_inode += extra;
+			}
+		}
+
+		/* Allocate fewer inodes on large OST devices.  Most
+		 * filesystems can be much more aggressive than even
+		 * this, but it is impossible to know in advance.
+		 */
+		if (IS_OST(&mop->mo_ldd)) {
+			/* OST > 16TB assume average file size 1MB */
+			if (mop->mo_device_kb > (16ULL << 30))
+				bytes_per_inode = 1024 * 1024;
+			/* OST > 4TB assume average file size 512kB */
+			else if (mop->mo_device_kb > (4ULL << 30))
+				bytes_per_inode = 512 * 1024;
+			/* OST > 1TB assume average file size 256kB */
+			else if (mop->mo_device_kb > (1ULL << 30))
+				bytes_per_inode = 256 * 1024;
+			/* OST > 10GB assume average file size 64kB,
+			 * plus a bit so that inodes will fit into a
+			 * 256x flex_bg without overflowing.
+			 */
+			else if (mop->mo_device_kb > (10ULL << 20))
+				bytes_per_inode = 69905;
+		}
+
+		if (bytes_per_inode > 0) {
+			snprintf(buf, sizeof(buf), " -i %ld", bytes_per_inode);
+			strscat(mop->mo_mkfsopts, buf,
+				sizeof(mop->mo_mkfsopts));
+			mop->mo_inode_size = bytes_per_inode;
+		}
+	}
+
+	if (verbose < 2)
+		strscat(mop->mo_mkfsopts, " -q", sizeof(mop->mo_mkfsopts));
+
+	/* start handle -O mkfs options */
+	start = strstr(mop->mo_mkfsopts, "-O");
+	if (start) {
+		if (strstr(start + 2, "-O") != NULL) {
+			fprintf(stderr,
+				"%s: don't specify multiple -O options\n",
+				progname);
+			return EINVAL;
+		}
+		start = moveopts_to_end(start);
+		maxbuflen = sizeof(mop->mo_mkfsopts) -
+			(start - mop->mo_mkfsopts) - strlen(start);
+		ret = enable_default_ext4_features(mop, start, maxbuflen, 1);
+	} else {
+		start = mop->mo_mkfsopts + strlen(mop->mo_mkfsopts);
+		maxbuflen = sizeof(mop->mo_mkfsopts) - strlen(mop->mo_mkfsopts);
+		ret = enable_default_ext4_features(mop, start, maxbuflen, 0);
+	}
+	if (ret)
+		return ret;
+	/* end handle -O mkfs options */
+
+	/* start handle -E mkfs options */
+	start = strstr(mop->mo_mkfsopts, "-E");
+	if (start) {
+		if (strstr(start + 2, "-E") != NULL) {
+			fprintf(stderr,
+				"%s: don't specify multiple -E options\n",
+				progname);
+			return EINVAL;
+		}
+		start = moveopts_to_end(start);
+		maxbuflen = sizeof(mop->mo_mkfsopts) -
+			(start - mop->mo_mkfsopts) - strlen(start);
+		ext_opts = 1;
+	} else {
+		start = mop->mo_mkfsopts + strlen(mop->mo_mkfsopts);
+		maxbuflen = sizeof(mop->mo_mkfsopts) - strlen(mop->mo_mkfsopts);
+	}
+
+	/* In order to align the filesystem metadata on 1MB boundaries,
+	 * give a resize value that will reserve a power-of-two group
+	 * descriptor blocks, but leave one block for the superblock.
+	 * Only useful for filesystems with < 2^32 blocks due to resize
+	 * limitations.
+	 */
+	if (!enable_64bit && strstr(mop->mo_mkfsopts, "meta_bg") == NULL &&
+	    IS_OST(&mop->mo_ldd) && mop->mo_device_kb > 100 * 1024) {
+		unsigned int group_blocks = mop->mo_blocksize_kb * 8192;
+		unsigned int desc_per_block = mop->mo_blocksize_kb * 1024 / 32;
+		unsigned int resize_blks;
+
+		resize_blks = (1ULL<<32) - desc_per_block*group_blocks;
+		snprintf(buf, sizeof(buf), "%u", resize_blks);
+		append_unique(start, ext_opts ? "," : " -E ",
+			      "resize", buf, maxbuflen);
+		ext_opts = 1;
+	}
+
+	/* Avoid zeroing out the full journal - speeds up mkfs */
+	if (is_e2fsprogs_feature_supp("-E lazy_journal_init"))
+		append_unique(start, ext_opts ? "," : " -E ",
+			      "lazy_journal_init", NULL, maxbuflen);
+	/* end handle -E mkfs options */
+
+	/* Allow reformat of full devices (as opposed to partitions).
+	 * We already checked for mounted dev.
+	 */
+	strscat(mop->mo_mkfsopts, " -F", sizeof(mop->mo_mkfsopts));
+
+	snprintf(mkfs_cmd, sizeof(mkfs_cmd), "%s -j -b %d -L %s ", MKE2FS,
+		 mop->mo_blocksize_kb * 1024, mop->mo_ldd.ldd_svname);
 
 	/* For loop device format the dev, not the filename */
 	dev = mop->mo_device;
@@ -1442,7 +1447,7 @@ int ldiskfs_enable_quota(struct mkfs_opts *mop)
 	char cmd[512];
 	int cmdsz = sizeof(cmd), ret;
 
-	if (is_e2fsprogs_feature_supp("-O quota") != 0) {
+	if (!is_e2fsprogs_feature_supp("-O quota")) {
 		fprintf(stderr, "%s: \"-O quota\" is is not supported by "
 			"current e2fsprogs\n", progname);
 		return EINVAL;
