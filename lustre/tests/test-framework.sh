@@ -5384,7 +5384,7 @@ skip_noexit() {
 }
 
 skip() {
-	skip_noexit
+	skip_noexit $@
 	exit 0
 }
 
