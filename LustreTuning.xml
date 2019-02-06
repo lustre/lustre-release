@@ -2336,10 +2336,9 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
           16MB.  To temporarily change <literal>brw_size</literal>, the
           following command should be run on the OSS:</para>
           <screen>oss# lctl set_param obdfilter.<replaceable>fsname</replaceable>-OST*.brw_size=16</screen>
-          <para>To persistently change <literal>brw_size</literal>, one of the following
-          commands should be run on the OSS:</para>
+          <para>To persistently change <literal>brw_size</literal>, the
+          following command should be run:</para>
           <screen>oss# lctl set_param -P obdfilter.<replaceable>fsname</replaceable>-OST*.brw_size=16</screen>
-          <screen>oss# lctl conf_param <replaceable>fsname</replaceable>-OST*.obdfilter.brw_size=16</screen>
           <para>When a client connects to an OST target, it will fetch
           <literal>brw_size</literal> from the target and pick the maximum value
           of <literal>brw_size</literal> and its local setting for
@@ -2352,7 +2351,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
           <screen>client$ lctl set_param osc.<replaceable>fsname</replaceable>-OST*.max_pages_per_rpc=16M</screen>
           <para>To persistently make this change, the following command should
           be run:</para>
-          <screen>client$ lctl conf_param <replaceable>fsname</replaceable>-OST*.osc.max_pages_per_rpc=16M</screen>
+          <screen>client$ lctl set_param -P obdfilter.<replaceable>fsname</replaceable>-OST*.osc.max_pages_per_rpc=16M</screen>
           <caution><para>The <literal>brw_size</literal> of an OST can be
           changed on the fly.  However, clients have to be remounted to
           renegotiate the new maximum RPC size.</para></caution>
