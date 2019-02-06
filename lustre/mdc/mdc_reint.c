@@ -136,9 +136,8 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 		       (s64)op_data->op_attr.ia_ctime.tv_sec);
 	mdc_setattr_pack(req, op_data, ea, ealen);
 
-	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER,
-			     MIN(req->rq_import->imp_connect_data.ocd_max_easize,
-				 XATTR_SIZE_MAX));
+	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
+
         ptlrpc_request_set_replen(req);
 
 	rc = mdc_reint(req, LUSTRE_IMP_FULL);
