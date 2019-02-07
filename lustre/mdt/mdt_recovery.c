@@ -103,7 +103,6 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
 	/* prepare transactions callbacks */
 	mdt->mdt_txn_cb.dtc_txn_start = NULL;
 	mdt->mdt_txn_cb.dtc_txn_stop = mdt_txn_stop_cb;
-	mdt->mdt_txn_cb.dtc_txn_commit = NULL;
 	mdt->mdt_txn_cb.dtc_cookie = NULL;
 	mdt->mdt_txn_cb.dtc_tag = LCT_MD_THREAD;
 	INIT_LIST_HEAD(&mdt->mdt_txn_cb.dtc_linkage);
