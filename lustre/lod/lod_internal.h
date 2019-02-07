@@ -493,6 +493,16 @@ lod_name_get(const struct lu_env *env, const void *area, int len)
 	return lname;
 }
 
+static inline struct lod_default_striping *
+lod_lds_buf_get(const struct lu_env *env)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+
+	info->lti_def_striping.lds_def_striping_set = 0;
+	info->lti_def_striping.lds_dir_def_striping_set = 0;
+	return &info->lti_def_striping;
+}
+
 static inline void lod_layout_get_pool(struct lod_layout_component *entries,
 				       int count, char *pool, int len)
 {

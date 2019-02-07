@@ -23,9 +23,11 @@ Create a file with specified layout, or set or replace the default file
 layout on an existing directory.  If the default file layout is set on
 the filesystem root directory, it will be used as the filesystem-wide
 default layout for all files that do not explicitly specify a layout and
-do not have a default layout on the parent directory.  The default layout
-set on a directory will be copied to any new subdirectories created within
-that directory at the time they are created.
+do not have a default layout on the parent directory. New subdirectories
+created under root directory will not explicitly copy the default layout
+at creation time, but will implicitly inherit the default layout at runtime.
+The default layout set on a non-root directory will be copied to any new
+subdirectories created within that directory at the time they are created.
 .TP
 .B lfs setstripe \fR{\fB--component-end\fR|\fB-E \fIend1\fR} [\fISTRIPE_OPTIONS\fR] \
 [{\fB--component-end\fR|\fB-E \fIend2\fR} [\fISTRIPE_OPTIONS\fR] ...] <\fIfilename\fR>

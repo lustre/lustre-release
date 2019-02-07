@@ -3389,8 +3389,7 @@ static int lod_xattr_set(const struct lu_env *env,
 
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
 	    strcmp(name, XATTR_NAME_LOV) == 0) {
-		struct lod_thread_info *info = lod_env_info(env);
-		struct lod_default_striping *lds = &info->lti_def_striping;
+		struct lod_default_striping *lds = lod_lds_buf_get(env);
 		struct lov_user_md_v1 *v1 = buf->lb_buf;
 		char pool[LOV_MAXPOOLNAME + 1];
 		bool is_del;
@@ -3897,7 +3896,7 @@ static void lod_ah_init(const struct lu_env *env,
 {
 	struct lod_device *d = lu2lod_dev(child->do_lu.lo_dev);
 	struct lod_thread_info *info = lod_env_info(env);
-	struct lod_default_striping *lds = &info->lti_def_striping;
+	struct lod_default_striping *lds = lod_lds_buf_get(env);
 	struct dt_object *nextp = NULL;
 	struct dt_object *nextc;
 	struct lod_object *lp = NULL;
@@ -3932,8 +3931,12 @@ static void lod_ah_init(const struct lu_env *env,
 		/* other default values are 0 */
 		lc->ldo_dir_stripe_offset = -1;
 
-		/* get default striping from parent object */
-		if (likely(lp != NULL))
+		/*
+		 * If parent object is not root directory,
+		 * then get default striping from parent object.
+		 */
+		if (likely(lp != NULL) &&
+		    !fid_is_root(lu_object_fid(lod2lu_obj(lp))))
 			lod_get_default_striping(env, lp, lds);
 
 		/* set child default striping info, default value is NULL */
