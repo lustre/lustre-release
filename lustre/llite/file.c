@@ -1601,8 +1601,9 @@ out:
 static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 {
 	ssize_t count = iov_iter_count(iter);
-	struct file *file = iocb->ki_filp;
-	struct inode *inode = file_inode(file);
+	struct  file *file = iocb->ki_filp;
+	struct  inode *inode = file_inode(file);
+	bool    lock_inode = !IS_NOSEC(inode);
 	ssize_t result = 0;
 
 	ENTRY;
@@ -1614,7 +1615,12 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 	    (iocb->ki_pos & (PAGE_SIZE-1)) + count > PAGE_SIZE)
 		RETURN(0);
 
+	if (unlikely(lock_inode))
+		inode_lock(inode);
 	result = __generic_file_write_iter(iocb, iter);
+
+	if (unlikely(lock_inode))
+		inode_unlock(inode);
 
 	/* If the page is not already dirty, ll_tiny_write_begin returns
 	 * -ENODATA.  We continue on to normal write.
