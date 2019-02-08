@@ -1089,22 +1089,25 @@ void tgt_grant_discard(struct obd_export *exp)
 
 	tgd = &lut->lut_tgd;
 	spin_lock(&tgd->tgd_grant_lock);
-	LASSERTF(tgd->tgd_tot_granted >= ted->ted_grant,
-		 "%s: tot_granted %llu cli %s/%p ted_grant %ld\n",
-		 obd->obd_name, tgd->tgd_tot_granted,
-		 exp->exp_client_uuid.uuid, exp, ted->ted_grant);
+	if (tgd->tgd_tot_granted < ted->ted_grant) {
+		CERROR("%s: tot_granted %llu < cli %s/%p ted_grant %ld\n",
+		       obd->obd_name, tgd->tgd_tot_granted,
+		       exp->exp_client_uuid.uuid, exp, ted->ted_grant);
+	}
 	tgd->tgd_tot_granted -= ted->ted_grant;
 	ted->ted_grant = 0;
-	LASSERTF(tgd->tgd_tot_pending >= ted->ted_pending,
-		 "%s: tot_pending %llu cli %s/%p ted_pending %ld\n",
-		 obd->obd_name, tgd->tgd_tot_pending,
-		 exp->exp_client_uuid.uuid, exp, ted->ted_pending);
+	if (tgd->tgd_tot_pending < ted->ted_pending) {
+		CERROR("%s: tot_pending %llu < cli %s/%p ted_pending %ld\n",
+		       obd->obd_name, tgd->tgd_tot_pending,
+		       exp->exp_client_uuid.uuid, exp, ted->ted_pending);
+	}
 	/* tgd_tot_pending is handled in tgt_grant_commit as bulk
 	 * commmits */
-	LASSERTF(tgd->tgd_tot_dirty >= ted->ted_dirty,
-		 "%s: tot_dirty %llu cli %s/%p ted_dirty %ld\n",
-		 obd->obd_name, tgd->tgd_tot_dirty,
-		 exp->exp_client_uuid.uuid, exp, ted->ted_dirty);
+	if (tgd->tgd_tot_dirty < ted->ted_dirty) {
+		CERROR("%s: tot_dirty %llu < cli %s/%p ted_dirty %ld\n",
+		       obd->obd_name, tgd->tgd_tot_dirty,
+		       exp->exp_client_uuid.uuid, exp, ted->ted_dirty);
+	}
 	tgd->tgd_tot_dirty -= ted->ted_dirty;
 	ted->ted_dirty = 0;
 	spin_unlock(&tgd->tgd_grant_lock);
