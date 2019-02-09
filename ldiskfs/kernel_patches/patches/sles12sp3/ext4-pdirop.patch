@@ -1875,7 +1875,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  			    dx_get_limit((frame - 1)->entries)) {
 @@ -2496,8 +2842,32 @@ again:
  			restart = 1;
- 			goto cleanup;
+ 			goto journal_error;
  		}
 +	} else if (!ext4_htree_dx_locked(lck)) {
 +		struct ext4_dir_lock_data *ld = ext4_htree_lock_data(lck);
@@ -1909,7 +1909,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  		goto cleanup;
 @@ -2508,6 +2878,8 @@ again:
  journal_error:
- 	ext4_std_error(dir->i_sb, err);
+ 	ext4_std_error(dir->i_sb, err); /* this is a no-op if err == 0 */
  cleanup:
 +	ext4_htree_dx_unlock(lck);
 +	ext4_htree_de_unlock(lck);

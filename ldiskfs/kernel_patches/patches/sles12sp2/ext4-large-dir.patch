@@ -240,7 +240,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  			if (err)
  				goto journal_error;
  
-@@ -2203,19 +2240,25 @@ static int ext4_dx_add_entry(handle_t *h
+@@ -2203,19 +2240,27 @@ static int ext4_dx_add_entry(handle_t *h
  				frame->entries = entries = entries2;
  				swap(frame->bh, bh2);
  			}
@@ -255,12 +255,14 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  			if (err)
  				goto journal_error;
  			brelse (bh2);
-+			ext4_handle_dirty_dirent_node(handle, dir,
-+						      (frame - 1)->bh);
++			err = ext4_handle_dirty_dx_node(handle, dir,
++						   (frame - 1)->bh);
++			if (err)
++				goto journal_error;
 +			if (restart) {
-+				ext4_handle_dirty_dirent_node(handle, dir,
-+							      frame->bh);
-+				goto cleanup;
++				err = ext4_handle_dirty_dx_node(handle, dir,
++							   frame->bh);
++				goto journal_error;
 +			}
  		} else {
  			struct dx_root_info *info;
@@ -272,7 +274,7 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  			       icount * sizeof(struct dx_entry));
  			dx_set_limit(entries2, dx_node_limit(dir));
  
-@@ -2224,21 +2267,14 @@ static int ext4_dx_add_entry(handle_t *h
+@@ -2224,22 +2267,17 @@ static int ext4_dx_add_entry(handle_t *h
  			dx_set_block(entries + 0, newblock);
  			info = dx_get_dx_info((struct ext4_dir_entry_2*)
  					      frames[0].bh->b_data);
@@ -285,24 +287,31 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
 -			frame->bh = bh2;
 -			err = ext4_journal_get_write_access(handle,
 -							     frame->bh);
--			if (err)
--				goto journal_error;
--		}
--		err = ext4_handle_dirty_dx_node(handle, dir, frames[0].bh);
--		if (err) {
--			ext4_std_error(inode->i_sb, err);
 +			info->indirect_levels += 1;
 +			dxtrace(printk(KERN_DEBUG
 +				       "Creating %d level index...\n",
 +				       info->indirect_levels));
-+			ext4_handle_dirty_dirent_node(handle, dir, frame->bh);
-+			ext4_handle_dirty_dirent_node(handle, dir, bh2);
++			err = ext4_handle_dirty_dx_node(handle, dir, frame->bh);
+ 			if (err)
+ 				goto journal_error;
+-		}
+-		err = ext4_handle_dirty_dx_node(handle, dir, frames[0].bh);
+-		if (err) {
+-			ext4_std_error(inode->i_sb, err);
+-			goto cleanup;
++			err = ext4_handle_dirty_dx_node(handle, dir, bh2);
 +			brelse(bh2);
 +			restart = 1;
- 			goto cleanup;
++			goto journal_error;
  		}
  	}
-@@ -2253,6 +2289,10 @@ journal_error:
+ 	de = do_split(handle, dir, &bh, frame, &fname->hinfo);
+@@ -2249,10 +2285,14 @@ static int ext4_dx_add_entry(handle_t *h
+ 	goto cleanup;
+ 
+ journal_error:
+-	ext4_std_error(dir->i_sb, err);
++	ext4_std_error(dir->i_sb, err); /* this is a no-op if err == 0 */
  cleanup:
  	brelse(bh);
  	dx_release(frames);
