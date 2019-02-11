@@ -1010,6 +1010,8 @@ int tgt_disconnect(struct tgt_session_info *tsi)
 
 	ENTRY;
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_DISCONNECT_DELAY, cfs_fail_val);
+
 	rc = target_handle_disconnect(tgt_ses_req(tsi));
 	if (rc)
 		RETURN(err_serious(rc));

@@ -20277,6 +20277,27 @@ test_811() {
 }
 run_test 811 "orphan name stub can be cleaned up in startup"
 
+test_812() {
+	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
+		skip "OST < 2.12.51 doesn't support this fail_loc"
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile
+	# ensure ost1 is connected
+	stat $DIR/$tfile >/dev/null || error "can't stat"
+	wait_osc_import_state client ost1 FULL
+	# no locks, no reqs to let the connection idle
+	cancel_lru_locks osc
+
+	# delay OST_DISCONNECT on OST1 to put OSC into intermediate state
+#define OBD_FAIL_OST_DISCONNECT_DELAY	 0x245
+	do_facet ost1 "$LCTL set_param fail_loc=0x245 fail_val=8"
+	wait_osc_import_state client ost1 CONNECTING
+	do_facet ost1 "$LCTL set_param fail_loc=0 fail_val=0"
+
+	stat $DIR/$tfile >/dev/null || error "can't stat file"
+}
+run_test 812 "do not drop reqs generated when imp is going to idle (LU-11951)"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
