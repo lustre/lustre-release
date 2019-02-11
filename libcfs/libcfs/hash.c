@@ -114,7 +114,7 @@ module_param(warn_on_depth, uint, 0644);
 MODULE_PARM_DESC(warn_on_depth, "warning when hash depth is high.");
 #endif
 
-struct cfs_wi_sched *cfs_sched_rehash;
+struct workqueue_struct *cfs_rehash_wq;
 
 static inline void
 cfs_hash_nl_lock(union cfs_hash_lock *lock, int exclusive) {}
@@ -519,7 +519,7 @@ cfs_hash_bd_dep_record(struct cfs_hash *hs, struct cfs_hash_bd *bd, int dep_cur)
 	hs->hs_dep_bits = hs->hs_cur_bits;
 	spin_unlock(&hs->hs_dep_lock);
 
-	cfs_wi_schedule(cfs_sched_rehash, &hs->hs_dep_wi);
+	queue_work(cfs_rehash_wq, &hs->hs_dep_work);
 # endif
 }
 
@@ -940,12 +940,12 @@ cfs_hash_buckets_realloc(struct cfs_hash *hs, struct cfs_hash_bucket **old_bkts,
  * @flags    - CFS_HASH_REHASH enable synamic hash resizing
  *           - CFS_HASH_SORT enable chained hash sort
  */
-static int cfs_hash_rehash_worker(struct cfs_workitem *wi);
+static void cfs_hash_rehash_worker(struct work_struct *work);
 
 #if CFS_HASH_DEBUG_LEVEL >= CFS_HASH_DEBUG_1
-static int cfs_hash_dep_print(struct cfs_workitem *wi)
+static void cfs_hash_dep_print(struct work_struct *work)
 {
-	struct cfs_hash *hs = container_of(wi, struct cfs_hash, hs_dep_wi);
+	struct cfs_hash *hs = container_of(work, struct cfs_hash, hs_dep_work);
 	int         dep;
 	int         bkt;
 	int         off;
@@ -969,21 +969,12 @@ static int cfs_hash_dep_print(struct cfs_workitem *wi)
 static void cfs_hash_depth_wi_init(struct cfs_hash *hs)
 {
 	spin_lock_init(&hs->hs_dep_lock);
-	cfs_wi_init(&hs->hs_dep_wi, hs, cfs_hash_dep_print);
+	INIT_WORK(&hs->hs_dep_work, cfs_hash_dep_print);
 }
 
 static void cfs_hash_depth_wi_cancel(struct cfs_hash *hs)
 {
-	if (cfs_wi_deschedule(cfs_sched_rehash, &hs->hs_dep_wi))
-		return;
-
-	spin_lock(&hs->hs_dep_lock);
-	while (hs->hs_dep_bits != 0) {
-		spin_unlock(&hs->hs_dep_lock);
-		cond_resched();
-		spin_lock(&hs->hs_dep_lock);
-	}
-	spin_unlock(&hs->hs_dep_lock);
+	cancel_work_sync(&hs->hs_dep_work);
 }
 
 #else /* CFS_HASH_DEBUG_LEVEL < CFS_HASH_DEBUG_1 */
@@ -1050,7 +1041,7 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
         hs->hs_ops         = ops;
         hs->hs_extra_bytes = extra_bytes;
         hs->hs_rehash_bits = 0;
-	cfs_wi_init(&hs->hs_rehash_wi, hs, cfs_hash_rehash_worker);
+	INIT_WORK(&hs->hs_rehash_work, cfs_hash_rehash_worker);
         cfs_hash_depth_wi_init(hs);
 
         if (cfs_hash_with_rehash(hs))
@@ -1371,16 +1362,17 @@ cfs_hash_for_each_enter(struct cfs_hash *hs)
          */
         hs->hs_iterating = 1;
 
-        cfs_hash_lock(hs, 1);
-        hs->hs_iterators++;
+	cfs_hash_lock(hs, 1);
+	hs->hs_iterators++;
+	cfs_hash_unlock(hs, 1);
 
-        /* NB: iteration is mostly called by service thread,
+	/* NB: iteration is mostly called by service thread,
 	 * we tend to cancel pending rehash-request, instead of
-         * blocking service thread, we will relaunch rehash request
-         * after iteration */
-        if (cfs_hash_is_rehashing(hs))
-                cfs_hash_rehash_cancel_locked(hs);
-        cfs_hash_unlock(hs, 1);
+	 * blocking service thread, we will relaunch rehash request
+	 * after iteration
+	 */
+	if (cfs_hash_is_rehashing(hs))
+		cfs_hash_rehash_cancel(hs);
 }
 
 static void
@@ -1790,42 +1782,13 @@ EXPORT_SYMBOL(cfs_hash_for_each_key);
  * theta thresholds for @hs are tunable via cfs_hash_set_theta().
  */
 void
-cfs_hash_rehash_cancel_locked(struct cfs_hash *hs)
+cfs_hash_rehash_cancel(struct cfs_hash *hs)
 {
-        int     i;
-
-        /* need hold cfs_hash_lock(hs, 1) */
-        LASSERT(cfs_hash_with_rehash(hs) &&
-                !cfs_hash_with_no_lock(hs));
-
-        if (!cfs_hash_is_rehashing(hs))
-                return;
-
-	if (cfs_wi_deschedule(cfs_sched_rehash, &hs->hs_rehash_wi)) {
-                hs->hs_rehash_bits = 0;
-                return;
-        }
-
-        for (i = 2; cfs_hash_is_rehashing(hs); i++) {
-		cfs_hash_unlock(hs, 1);
-		/* raise console warning while waiting too long */
-		CDEBUG(is_power_of_2(i >> 3) ? D_WARNING : D_INFO,
-		       "hash %s is still rehashing, rescheded %d\n",
-		       hs->hs_name, i - 1);
-		cond_resched();
-		cfs_hash_lock(hs, 1);
-	}
+	LASSERT(cfs_hash_with_rehash(hs));
+	cancel_work_sync(&hs->hs_rehash_work);
 }
 
 void
-cfs_hash_rehash_cancel(struct cfs_hash *hs)
-{
-        cfs_hash_lock(hs, 1);
-        cfs_hash_rehash_cancel_locked(hs);
-        cfs_hash_unlock(hs, 1);
-}
-
-int
 cfs_hash_rehash(struct cfs_hash *hs, int do_rehash)
 {
         int     rc;
@@ -1834,24 +1797,24 @@ cfs_hash_rehash(struct cfs_hash *hs, int do_rehash)
 
         cfs_hash_lock(hs, 1);
 
-        rc = cfs_hash_rehash_bits(hs);
-        if (rc <= 0) {
-                cfs_hash_unlock(hs, 1);
-                return rc;
-        }
+	rc = cfs_hash_rehash_bits(hs);
+	if (rc <= 0) {
+		cfs_hash_unlock(hs, 1);
+		return;
+	}
 
-        hs->hs_rehash_bits = rc;
-        if (!do_rehash) {
-                /* launch and return */
-		cfs_wi_schedule(cfs_sched_rehash, &hs->hs_rehash_wi);
-                cfs_hash_unlock(hs, 1);
-                return 0;
-        }
+	hs->hs_rehash_bits = rc;
+	if (!do_rehash) {
+		/* launch and return */
+		queue_work(cfs_rehash_wq, &hs->hs_rehash_work);
+		cfs_hash_unlock(hs, 1);
+		return;
+	}
 
-        /* rehash right now */
-        cfs_hash_unlock(hs, 1);
+	/* rehash right now */
+	cfs_hash_unlock(hs, 1);
 
-        return cfs_hash_rehash_worker(&hs->hs_rehash_wi);
+	cfs_hash_rehash_worker(&hs->hs_rehash_work);
 }
 
 static int
@@ -1884,11 +1847,11 @@ cfs_hash_rehash_bd(struct cfs_hash *hs, struct cfs_hash_bd *old)
 	return c;
 }
 
-static int
-cfs_hash_rehash_worker(struct cfs_workitem *wi)
+static void
+cfs_hash_rehash_worker(struct work_struct *work)
 {
-	struct cfs_hash		*hs =
-		container_of(wi, struct cfs_hash, hs_rehash_wi);
+	struct cfs_hash *hs = container_of(work, struct cfs_hash,
+					   hs_rehash_work);
 	struct cfs_hash_bucket **bkts;
 	struct cfs_hash_bd	bd;
 	unsigned int		old_size;
@@ -1969,20 +1932,16 @@ cfs_hash_rehash_worker(struct cfs_workitem *wi)
         hs->hs_buckets = hs->hs_rehash_buckets;
         hs->hs_rehash_buckets = NULL;
 
-        hs->hs_cur_bits = hs->hs_rehash_bits;
- out:
-        hs->hs_rehash_bits = 0;
-	if (rc == -ESRCH) /* never be scheduled again */
-		cfs_wi_exit(cfs_sched_rehash, wi);
-        bsize = cfs_hash_bkt_size(hs);
-        cfs_hash_unlock(hs, 1);
-        /* can't refer to @hs anymore because it could be destroyed */
-        if (bkts != NULL)
-                cfs_hash_buckets_free(bkts, bsize, new_size, old_size);
-        if (rc != 0)
+	hs->hs_cur_bits = hs->hs_rehash_bits;
+out:
+	hs->hs_rehash_bits = 0;
+	bsize = cfs_hash_bkt_size(hs);
+	cfs_hash_unlock(hs, 1);
+	/* can't refer to @hs anymore because it could be destroyed */
+	if (bkts != NULL)
+		cfs_hash_buckets_free(bkts, bsize, new_size, old_size);
+	if (rc != 0)
 		CDEBUG(D_INFO, "early quit of rehashing: %d\n", rc);
-	/* return 1 only if cfs_wi_exit is called */
-	return rc == -ESRCH;
 }
 
 /**

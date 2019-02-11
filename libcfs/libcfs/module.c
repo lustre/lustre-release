@@ -600,12 +600,11 @@ static int __init libcfs_init(void)
 		goto cleanup_deregister;
 	}
 
-	/* max to 4 threads, should be enough for rehash */
-	rc = min(cfs_cpt_weight(cfs_cpt_table, CFS_CPT_ANY), 4);
-	rc = cfs_wi_sched_create("cfs_rh", cfs_cpt_table, CFS_CPT_ANY,
-				 rc, &cfs_sched_rehash);
-	if (rc != 0) {
-		CERROR("Startup workitem scheduler: error: %d\n", rc);
+	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS, 4);
+	if (!cfs_rehash_wq) {
+		rc = -ENOMEM;
+		CERROR("libcfs: failed to start rehash workqueue: rc = %d\n",
+		       rc);
 		goto cleanup_deregister;
 	}
 
@@ -639,9 +638,9 @@ static void __exit libcfs_exit(void)
 	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
 	       atomic_read(&libcfs_kmemory));
 
-	if (cfs_sched_rehash != NULL) {
-		cfs_wi_sched_destroy(cfs_sched_rehash);
-		cfs_sched_rehash = NULL;
+	if (cfs_rehash_wq) {
+		destroy_workqueue(cfs_rehash_wq);
+		cfs_rehash_wq = NULL;
 	}
 
 	cfs_crypto_unregister();

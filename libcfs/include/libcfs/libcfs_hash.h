@@ -39,6 +39,8 @@
 #define __LIBCFS_HASH_H__
 
 #include <linux/hash.h>
+#include <linux/spinlock.h>
+#include <linux/workqueue.h>
 
 /*
  * Knuth recommends primes in approximately golden ratio to the maximum
@@ -241,7 +243,7 @@ struct cfs_hash {
         /** # of iterators (caller of cfs_hash_for_each_*) */
         __u32                       hs_iterators;
 	/** rehash workitem */
-	struct cfs_workitem		hs_rehash_wi;
+	struct work_struct		hs_rehash_work;
 	/** refcount on this hash table */
 	atomic_t			hs_refcount;
 	/** rehash buckets-table */
@@ -258,7 +260,7 @@ struct cfs_hash {
         /** bits when we found the max depth */
         unsigned int                hs_dep_bits;
         /** workitem to output max depth */
-	struct cfs_workitem	    hs_dep_wi;
+	struct work_struct		hs_dep_work;
 #endif
         /** name of htable */
         char                        hs_name[0];
@@ -729,7 +731,7 @@ __u64 cfs_hash_size_get(struct cfs_hash *hs);
  */
 void cfs_hash_rehash_cancel_locked(struct cfs_hash *hs);
 void cfs_hash_rehash_cancel(struct cfs_hash *hs);
-int  cfs_hash_rehash(struct cfs_hash *hs, int do_rehash);
+void cfs_hash_rehash(struct cfs_hash *hs, int do_rehash);
 void cfs_hash_rehash_key(struct cfs_hash *hs, const void *old_key,
 			void *new_key, struct hlist_node *hnode);
 

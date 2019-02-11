@@ -35,6 +35,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/workqueue.h>
 
 #include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-time.h>
@@ -112,6 +113,8 @@ static inline void *__container_of(const void *ptr, unsigned long shift)
 
 #define container_of0(ptr, type, member) \
 	((type *)__container_of((ptr), offsetof(type, member)))
+
+extern struct workqueue_struct *cfs_rehash_wq;
 
 struct lnet_debugfs_symlink_def {
 	const char *name;
