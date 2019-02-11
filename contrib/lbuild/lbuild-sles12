@@ -184,6 +184,9 @@ find_linux_rpm-sles12() {
 	fi
 	site="http://mgmt/cobbler/repo_mirror/$kdir"
 	;;
+    4.12)
+	site="http://mgmt/cobbler/repo_mirror/updates-sles12.4-x86_64"
+	;;
     esac
     if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
         fetch_url "$site/x86_64/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms

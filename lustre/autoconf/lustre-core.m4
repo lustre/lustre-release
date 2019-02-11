@@ -3609,6 +3609,7 @@ lustre/kernel_patches/targets/3.0-sles11sp4.target
 lustre/kernel_patches/targets/3.12-sles12.target
 lustre/kernel_patches/targets/4.4-sles12.target
 lustre/kernel_patches/targets/4.4-sles12sp3.target
+lustre/kernel_patches/targets/4.12-sles12sp4.target
 lustre/kernel_patches/targets/2.6-fc11.target
 lustre/kernel_patches/targets/2.6-fc12.target
 lustre/kernel_patches/targets/2.6-fc15.target
