@@ -740,6 +740,70 @@ LB_CHECK_LINUX_HEADER([linux/stringhash.h], [
 ]) # LIBCFS_STRINGHASH
 
 #
+# LIBCFS_RHASHTABLE_INSERT_FAST
+#
+# 4.7+ kernel commit 5ca8cc5bf11faed257c762018aea9106d529232f
+# changed __rhashtable_insert_fast to support the new function
+# rhashtable_lookup_get_insert_key().
+#
+AC_DEFUN([LIBCFS_RHASHTABLE_INSERT_FAST], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if internal '__rhashtable_insert_fast()' returns int],
+rhashtable_insert_fast, [
+	#include <linux/rhashtable.h>
+],[
+	const struct rhashtable_params params = { 0 };
+	int rc;
+
+	rc = __rhashtable_insert_fast(NULL, NULL, NULL, params);
+],[
+	AC_DEFINE(HAVE_HASHTABLE_INSERT_FAST_RETURN_INT, 1,
+		  ['__rhashtable_insert_fast()' returns int])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_RHASHTABLE_INSERT_FAST
+
+#
+# Kernel version 4.8-rc6 commit ca26893f05e86497a86732768ec53cd38c0819ca
+# introduced rhashtable_lookup
+#
+AC_DEFUN([LIBCFS_RHASHTABLE_LOOKUP], [
+LB_CHECK_COMPILE([if 'rhashtable_lookup' exist],
+rhashtable_lookup, [
+	#include <linux/rhashtable.h>
+],[
+	const struct rhashtable_params params = { 0 };
+	void *ret;
+
+	ret = rhashtable_lookup(NULL, NULL, params);
+],[
+	AC_DEFINE(HAVE_RHASHTABLE_LOOKUP, 1,
+		[rhashtable_lookup() is available])
+])
+]) # LIBCFS_RHASHTABLE_LOOKUP
+
+#
+# LIBCFS_RHLTABLE
+# Kernel version 4.8-rc6 commit ca26893f05e86497a86732768ec53cd38c0819ca
+# created the rhlist interface to allow inserting duplicate objects
+# into the same table.
+#
+AC_DEFUN([LIBCFS_RHLTABLE], [
+LB_CHECK_COMPILE([does 'struct rhltable' exist],
+rhtable, [
+	#include <linux/rhashtable.h>
+],[
+	struct rhltable *hlt;
+
+	rhltable_destroy(hlt);
+],[
+	AC_DEFINE(HAVE_RHLTABLE, 1,
+		  [struct rhltable exist])
+])
+]) # LIBCFS_RHLTABLE
+
+#
 # LIBCFS_STACKTRACE_OPS
 #
 # Kernel version 4.8 commit c8fe4609827aedc9c4b45de80e7cdc8ccfa8541b
@@ -976,7 +1040,11 @@ LIBCFS_BROKEN_HASH_64
 LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 LIBCFS_GET_USER_PAGES_6ARG
 LIBCFS_STRINGHASH
+# 4.7
+LIBCFS_RHASHTABLE_INSERT_FAST
 # 4.8
+LIBCFS_RHASHTABLE_LOOKUP
+LIBCFS_RHLTABLE
 LIBCFS_STACKTRACE_OPS
 # 4.9
 LIBCFS_GET_USER_PAGES_GUP_FLAGS
