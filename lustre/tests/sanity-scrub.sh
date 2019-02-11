@@ -100,7 +100,7 @@ scrub_prep() {
 	echo "preparing... $(date)"
 	for n in $(seq $MDSCOUNT); do
 		echo "creating $nfiles files on mds$n"
-		test_mkdir -i $((n - 1)) $DIR/$tdir/mds$n ||
+		test_mkdir -i $((n - 1)) -c1 $DIR/$tdir/mds$n ||
 			error "Failed to create directory mds$n"
 		cp $LUSTRE/tests/*.sh $DIR/$tdir/mds$n ||
 			error "Failed to copy files to mds$n"
@@ -1025,7 +1025,7 @@ test_11() {
 	check_mount_and_prep
 
 	for n in $(seq $MDSCOUNT); do
-		test_mkdir -i $((n - 1)) $DIR/$tdir/mds$n ||
+		test_mkdir -i $((n - 1)) -c1 $DIR/$tdir/mds$n ||
 			error "(1) Fail to mkdir $DIR/$tdir/mds$n"
 
 		createmany -o $DIR/$tdir/mds$n/f $CREATED ||

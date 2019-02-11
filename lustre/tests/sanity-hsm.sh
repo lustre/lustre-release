@@ -33,7 +33,6 @@ OPENFILE=${OPENFILE:-openfile}
 MMAP_CAT=${MMAP_CAT:-mmap_cat}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
-MDS_VERSION_CODE=$(lustre_version_code $SINGLEMDS)
 
 # script only handles up to 10 MDTs (because of MDT_PREFIX)
 [ $MDSCOUNT -gt 9 ] &&
@@ -41,7 +40,7 @@ MDS_VERSION_CODE=$(lustre_version_code $SINGLEMDS)
 
 check_and_setup_lustre
 
-if [[ $MDS_VERSION_CODE -lt $(version_code 2.4.53) ]]; then
+if [[ $MDS1_VERSION -lt $(version_code 2.4.53) ]]; then
 	skip_env "Need MDS version at least 2.4.53"
 fi
 

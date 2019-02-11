@@ -7944,6 +7944,8 @@ init_logging() {
 		    do_facet $SINGLEMDS $LCTL --version)"
 	log "OSS: $(do_facet ost1 $LCTL lustre_build_version 2> /dev/null ||
 		    do_facet ost1 $LCTL --version)"
+
+	get_lustre_env
 }
 
 log_test() {
@@ -8350,14 +8352,14 @@ generate_logname() {
 test_mkdir() {
 	local path
 	local p_option
-	local stripe_count=2
-	local stripe_index=-1
+	local dirstripe_count=${DIRSTRIPE_COUNT:-"-1"}
+	local dirstripe_index=${DIRSTRIPE_INDEX:-"-1"}
 	local OPTIND=1
 
 	while getopts "c:i:p" opt; do
 		case $opt in
-			c) stripe_count=$OPTARG;;
-			i) stripe_index=$OPTARG;;
+			c) dirstripe_count=$OPTARG;;
+			i) dirstripe_index=$OPTARG;;
 			p) p_option="-p";;
 			\?) error "only support -i -c -p";;
 		esac
@@ -8380,17 +8382,25 @@ test_mkdir() {
 	if [ $MDSCOUNT -le 1 ]; then
 		mkdir $path || error "mkdir '$path' failed"
 	else
-		local test_num=$(echo $testnum | sed -e 's/[^0-9]*//g')
 		local mdt_index
 
-		if [ $stripe_index -eq -1 ]; then
-			mdt_index=$((test_num % MDSCOUNT))
+		if [ $dirstripe_index -eq -1 ]; then
+			mdt_index=$((RANDOM % MDSCOUNT))
 		else
-			mdt_index=$stripe_index
+			mdt_index=$dirstripe_index
 		fi
-		echo "striped dir -i$mdt_index -c$stripe_count $path"
-		$LFS mkdir -i$mdt_index -c$stripe_count $path ||
-			error "mkdir -i $mdt_index -c$stripe_count $path failed"
+
+		if (($MDS1_VERSION >= $(version_code 2.8.0))); then
+			if [ $dirstripe_count -eq -1 ]; then
+				dirstripe_count=$((RANDOM % MDSCOUNT + 1))
+			fi
+		else
+			dirstripe_count=1
+		fi
+
+		echo "striped dir -i$mdt_index -c$dirstripe_count $path"
+		$LFS mkdir -i$mdt_index -c$dirstripe_count $path ||
+			error "mkdir -i $mdt_index -c$dirstripe_count $path failed"
 	fi
 }
 
