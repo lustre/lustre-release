@@ -82,6 +82,7 @@ CFS_PAGE_MASK||PAGE_MASK
 CFS_PAGE_SIZE||PAGE_SIZE
 cfs_proc_dir_entry_t||struct proc_dir_entry
 cfs_rcu_head_t||struct rcu_head
+cfs_trimwhite||strim
 cfs_time_add_64||ktime_add
 cfs_time_after||time_after
 cfs_time_aftereq||time_after_eq

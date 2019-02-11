@@ -948,7 +948,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 		return ERR_PTR(-ENOMEM);
 	}
 
-	str = cfs_trimwhite(pattern_dup);
+	str = strim(pattern_dup);
 	if (*str == 'n' || *str == 'N') {
 		str++; /* skip 'N' char */
 		node = 1; /* NUMA pattern */
@@ -1006,7 +1006,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 
 	high = node ? nr_node_ids - 1 : nr_cpu_ids - 1;
 
-	for (str = cfs_trimwhite(str), c = 0; /* until break */; c++) {
+	for (str = strim(str), c = 0; /* until break */; c++) {
 		struct cfs_range_expr *range;
 		struct cfs_expr_list *el;
 		int n;
@@ -1045,7 +1045,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 			goto err_free_table;
 		}
 
-		str = cfs_trimwhite(str + n);
+		str = strim(str + n);
 		if (str != bracket) {
 			CERROR("Invalid pattern '%s'\n", str);
 			rc = -EINVAL;
@@ -1091,7 +1091,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 			goto err_free_table;
 		}
 
-		str = cfs_trimwhite(bracket + 1);
+		str = strim(bracket + 1);
 	}
 
 	kfree(pattern_dup);
