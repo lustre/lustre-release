@@ -1078,7 +1078,7 @@ test_33() {
 	[[ "$rs" == "ost1" ]] ||
 		error "file content error: expected: \"ost1\", actual: \"$rs\""
 
-	wait_osc_import_state client ost2 FULL
+	wait_osc_import_ready client ost2
 }
 run_test 33 "read can choose available mirror to read"
 

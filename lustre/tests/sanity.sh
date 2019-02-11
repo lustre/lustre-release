@@ -8688,7 +8688,7 @@ test_104a() {
 	lfs df || error "lfs df with deactivated OSC failed"
 	lctl --device %$OSC activate
 	# wait the osc back to normal
-	wait_osc_import_state client ost FULL
+	wait_osc_import_ready client ost
 
 	lfs df || error "lfs df with reactivated OSC failed"
 	rm -f $DIR/$tfile
