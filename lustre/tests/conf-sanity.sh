@@ -6981,7 +6981,7 @@ test_93() {
 
 	mount_client $MOUNT || error "mount client fails"
 	wait_osc_import_state mds ost FULL
-	wait_osc_import_state client ost FULL
+	wait_osc_import_ready client ost
 	check_mount || error "check_mount failed"
 
 	cleanup || error "cleanup failed with $?"
