@@ -1674,6 +1674,22 @@ out:
 }
 EXPORT_SYMBOL(ptlrpc_disconnect_import);
 
+static void ptlrpc_reset_reqs_generation(struct obd_import *imp)
+{
+	struct ptlrpc_request *old, *tmp;
+
+	/* tag all resendable requests generated before disconnection
+	 * notice this code is part of disconnect-at-idle path only */
+	list_for_each_entry_safe(old, tmp, &imp->imp_delayed_list,
+			rq_list) {
+		spin_lock(&old->rq_lock);
+		if (old->rq_import_generation == imp->imp_generation - 1 &&
+		    !old->rq_no_resend)
+			old->rq_import_generation = imp->imp_generation;
+		spin_unlock(&old->rq_lock);
+	}
+}
+
 static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 					    struct ptlrpc_request *req,
 					    void *args, int rc)
@@ -1681,7 +1697,7 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 	struct obd_import *imp = req->rq_import;
 	int connect = 0;
 
-	DEBUG_REQ(D_HA, req, "inflight=%d, refcount=%d: rc = %d\n",
+	DEBUG_REQ(D_HA, req, "inflight=%d, refcount=%d: rc = %d ",
 		  atomic_read(&imp->imp_inflight),
 		  atomic_read(&imp->imp_refcount), rc);
 
@@ -1700,6 +1716,7 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 			imp->imp_generation++;
 			imp->imp_initiated_at = imp->imp_generation;
 			IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_NEW);
+			ptlrpc_reset_reqs_generation(imp);
 			connect = 1;
 		}
 	}
