@@ -363,6 +363,9 @@ static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
 			   LPROC_LL_FAULT, 1);
 
+	/* make sure offset is not a negative number */
+	if (vmf->pgoff > (MAX_LFS_FILESIZE >> PAGE_SHIFT))
+		return VM_FAULT_SIGBUS;
 restart:
 	result = ll_fault0(vma, vmf);
 	if (!(result & (VM_FAULT_RETRY | VM_FAULT_ERROR | VM_FAULT_LOCKED))) {
