@@ -98,8 +98,6 @@ static int lfs_quota(int argc, char **argv);
 static int lfs_project(int argc, char **argv);
 #endif
 static int lfs_flushctx(int argc, char **argv);
-static int lfs_cp(int argc, char **argv);
-static int lfs_ls(int argc, char **argv);
 static int lfs_poollist(int argc, char **argv);
 static int lfs_changelog(int argc, char **argv);
 static int lfs_changelog_clear(int argc, char **argv);
@@ -485,12 +483,6 @@ command_t cmdlist[] = {
 #endif
         {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
          "usage: flushctx [-k] [mountpoint...]"},
-        {"cp", lfs_cp, 0,
-         "Remote user copy files and directories.\n"
-         "usage: cp [OPTION]... [-T] SOURCE DEST\n\tcp [OPTION]... SOURCE... DIRECTORY\n\tcp [OPTION]... -t DIRECTORY SOURCE..."},
-        {"ls", lfs_ls, 0,
-         "Remote user list directory contents.\n"
-         "usage: ls [OPTION]... [FILE]..."},
         {"changelog", lfs_changelog, 0,
          "Show the metadata changes on an MDT."
          "\nusage: changelog <mdtname> [startrec [endrec]]"},
@@ -6694,20 +6686,6 @@ static int lfs_flushctx(int argc, char **argv)
                 }
         }
         return rc;
-}
-
-static int lfs_cp(int argc, char **argv)
-{
-	fprintf(stderr, "remote client copy file(s).\n"
-		"obsolete, does not support it anymore.\n");
-	return 0;
-}
-
-static int lfs_ls(int argc, char **argv)
-{
-	fprintf(stderr, "remote client lists directory contents.\n"
-		"obsolete, does not support it anymore.\n");
-	return 0;
 }
 
 static int lfs_changelog(int argc, char **argv)
