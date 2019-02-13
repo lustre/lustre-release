@@ -701,6 +701,20 @@ enum lnet_ack_req {
 	/** Request that no acknowledgment should be generated. */
 	LNET_NOACK_REQ
 };
+
+/**
+ * UDSP action types. There are two available actions:
+ *	1. PRIORITY - set priority of matching LNet constructs
+ *	2. PREFERRED LIST - set preferred list of matching LNet constructs
+ */
+enum lnet_udsp_action_type {
+	EN_LNET_UDSP_ACTION_NONE = 0,
+	/** assign a priority to matching constructs */
+	EN_LNET_UDSP_ACTION_PRIORITY = 1,
+	/** assign a preferred list of NIDs to matching constructs */
+	EN_LNET_UDSP_ACTION_PREFERRED_LIST = 2,
+};
+
 /** @} lnet_data */
 
 /** @} lnet */

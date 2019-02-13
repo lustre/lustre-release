@@ -1228,6 +1228,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 	INIT_LIST_HEAD(&the_lnet.ln_dc_expired);
 	INIT_LIST_HEAD(&the_lnet.ln_mt_localNIRecovq);
 	INIT_LIST_HEAD(&the_lnet.ln_mt_peerNIRecovq);
+	INIT_LIST_HEAD(&the_lnet.ln_udsp_list);
 	init_waitqueue_head(&the_lnet.ln_dc_waitq);
 	the_lnet.ln_mt_handler = NULL;
 	init_completion(&the_lnet.ln_started);
