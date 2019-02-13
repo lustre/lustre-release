@@ -722,7 +722,6 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 			if (nodemap_id == LUSTRE_NODEMAP_DEFAULT_ID) {
 				nodemap = nodemap_create(rec->ncr.ncr_name,
 							 config, 1);
-				config->nmc_default_nodemap = nodemap;
 			} else {
 				nodemap = nodemap_create(rec->ncr.ncr_name,
 							 config, 0);
@@ -937,10 +936,10 @@ out:
 
 	if (new_config->nmc_default_nodemap == NULL) {
 		/* new MGS won't have a default nm on disk, so create it here */
-		new_config->nmc_default_nodemap =
+		struct lu_nodemap *nodemap =
 			nodemap_create(DEFAULT_NODEMAP, new_config, 1);
-		if (IS_ERR(new_config->nmc_default_nodemap)) {
-			rc = PTR_ERR(new_config->nmc_default_nodemap);
+		if (IS_ERR(nodemap)) {
+			rc = PTR_ERR(nodemap);
 		} else {
 			rc = nodemap_idx_nodemap_add_update(
 					new_config->nmc_default_nodemap,
