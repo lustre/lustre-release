@@ -84,7 +84,9 @@ const char *liblustreapi_cmd;
 
 char *mdt_hash_name[] = { "none",
 			  LMV_HASH_NAME_ALL_CHARS,
-			  LMV_HASH_NAME_FNV_1A_64 };
+			  LMV_HASH_NAME_FNV_1A_64,
+			  LMV_HASH_NAME_SPACE,
+};
 
 struct lustre_foreign_type lu_foreign_types[] = {
 	{.lft_type = LU_FOREIGN_TYPE_NONE, .lft_name = "none"},

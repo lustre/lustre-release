@@ -259,6 +259,7 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"\tmdt_hash:  hash type of the striped directory. mdt types:\n"	\
 	"	fnv_1a_64 FNV-1a hash algorithm (default)\n"		\
 	"	all_char  sum of characters % MDT_COUNT (not recommended)\n" \
+	"	space     create subdirectories with balanced space usage\n" \
 	"\tdefault_stripe: set default dirstripe of the directory\n"	\
 	"\tmode: the file access permission of the directory (octal)\n" \
 	"To create dir with a foreign (free format) layout :\n" \
@@ -5180,25 +5181,23 @@ static int ll_statfs_data_comp(const void *sd1, const void *sd2)
 /* functions */
 static int lfs_setdirstripe(int argc, char **argv)
 {
-	char			*dname;
-	int			result;
-	struct lfs_setstripe_args	 lsa = { 0 };
-	struct llapi_stripe_param	*param = NULL;
-	__u32			mdts[LMV_MAX_STRIPE_COUNT] = { 0 };
-	char			*end;
-	int			c;
-	char			*mode_opt = NULL;
-	bool			default_stripe = false;
-	mode_t			mode = S_IRWXU | S_IRWXG | S_IRWXO;
-	mode_t			previous_mode = 0;
-	bool			delete = false;
-	struct ll_statfs_buf	*lsb = NULL;
-	char			mntdir[PATH_MAX] = "";
-	bool			auto_distributed = false;
-	bool			foreign_mode = false;
-	char			*xattr = NULL;
-	__u32			type = LU_FOREIGN_TYPE_DAOS, flags = 0;
-
+	char *dname;
+	struct lfs_setstripe_args lsa = { 0 };
+	struct llapi_stripe_param *param = NULL;
+	__u32 mdts[LMV_MAX_STRIPE_COUNT] = { 0 };
+	char *end;
+	int c;
+	char *mode_opt = NULL;
+	bool default_stripe = false;
+	bool delete = false;
+	bool auto_distributed = false;
+	bool foreign_mode = false;
+	mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO;
+	mode_t previous_mode = 0;
+	struct ll_statfs_buf *lsb = NULL;
+	char mntdir[PATH_MAX] = "";
+	char *xattr = NULL;
+	__u32 type = LU_FOREIGN_TYPE_DAOS, flags = 0;
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument },
@@ -5228,6 +5227,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 /* setstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
 	{ .name = NULL } };
+	int result = 0;
 
 	setstripe_args_init(&lsa);
 
@@ -5456,113 +5456,124 @@ static int lfs_setdirstripe(int argc, char **argv)
 		memcpy(param->lsp_tgts, mdts, sizeof(*mdts) * lsa.lsa_nr_tgts);
 	}
 
+	if (!default_stripe && lsa.lsa_pattern == LMV_HASH_TYPE_SPACE) {
+		fprintf(stderr, "%s %s: can only specify -H space with -D\n",
+			progname, argv[0]);
+		free(param);
+		return CMD_HELP;
+	}
+
 	dname = argv[optind];
 	do {
 		if (default_stripe) {
 			result = llapi_dir_set_default_lmv(dname, param);
-		} else {
-			/* if current \a dname isn't under the same \a mntdir
-			 * as the last one, and the last one was
-			 * auto-distributed, restore \a param.
-			 */
-			if (mntdir[0] != '\0' &&
-			    strncmp(dname, mntdir, strlen(mntdir)) &&
-			    auto_distributed) {
-				param->lsp_is_specific = false;
-				param->lsp_stripe_offset = -1;
-				auto_distributed = false;
-			}
+			if (result)
+				fprintf(stderr,
+					"%s setdirstripe: cannot set default stripe on dir '%s': %s\n",
+					progname, dname, strerror(-result));
+			continue;
+		}
 
-			if (!param->lsp_is_specific &&
-			    param->lsp_stripe_offset == -1) {
-				char path[PATH_MAX] = "";
+		/*
+		 * if current \a dname isn't under the same \a mntdir as the
+		 * last one, and the last one was auto-distributed, restore
+		 * \a param.
+		 */
+		if (mntdir[0] != '\0' &&
+		    strncmp(dname, mntdir, strlen(mntdir)) &&
+		    auto_distributed) {
+			param->lsp_is_specific = false;
+			param->lsp_stripe_offset = -1;
+			auto_distributed = false;
+		}
 
+		/*
+		 * TODO: when MDT can allocate object with QoS (LU-9435), below
+		 * code should be removed, instead we should let LMV to allocate
+		 * the starting MDT object, and then let LOD allocate other MDT
+		 * objects.
+		 */
+		if (!param->lsp_is_specific && param->lsp_stripe_offset == -1) {
+			char path[PATH_MAX] = "";
+
+			if (!lsb) {
+				lsb = malloc(sizeof(*lsb));
 				if (!lsb) {
-					lsb = malloc(sizeof(*lsb));
-					if (!lsb) {
-						result = -ENOMEM;
-						break;
-					}
-				}
-				lsb->sb_count = 0;
-
-				/* use mntdir for dirname() temporarily */
-				strncpy(mntdir, dname, sizeof(mntdir) - 1);
-				if (!realpath(dirname(mntdir), path)) {
-					result = -errno;
-					fprintf(stderr,
-						"error: invalid path '%s': %s\n",
-						argv[optind], strerror(errno));
+					result = -ENOMEM;
 					break;
-				}
-				mntdir[0] = '\0';
-
-				result = llapi_search_mounts(path, 0, mntdir,
-							     NULL);
-				if (result < 0 || mntdir[0] == '\0') {
-					fprintf(stderr,
-						"No suitable Lustre mount found\n");
-					break;
-				}
-
-				result = mntdf(mntdir, NULL, NULL, 0,
-					       LL_STATFS_LMV, lsb);
-				if (result < 0)
-					break;
-
-				if (param->lsp_stripe_count > lsb->sb_count) {
-					fprintf(stderr,
-						"error: stripe count %d is too big\n",
-						param->lsp_stripe_count);
-					result = -ERANGE;
-					break;
-				}
-
-				qsort(lsb->sb_buf, lsb->sb_count,
-				      sizeof(struct ll_statfs_data),
-				      ll_statfs_data_comp);
-
-				auto_distributed = true;
-			}
-
-			if (auto_distributed) {
-				int r;
-				int nr = MAX(param->lsp_stripe_count,
-					     lsb->sb_count / 2);
-
-				/* don't use server whose usage is above 90% */
-				while (nr != param->lsp_stripe_count &&
-				       obd_statfs_ratio(&lsb->sb_buf[nr].sd_st,
-							false) > 90)
-					nr = MAX(param->lsp_stripe_count,
-						 nr / 2);
-
-				/* get \a r between [0, nr) */
-				r = rand() % nr;
-
-				param->lsp_stripe_offset =
-					lsb->sb_buf[r].sd_index;
-				if (param->lsp_stripe_count > 1) {
-					int i = 0;
-
-					param->lsp_is_specific = true;
-					for (; i < param->lsp_stripe_count; i++)
-						param->lsp_tgts[(i + r) % nr] =
-							lsb->sb_buf[i].sd_index;
 				}
 			}
+			lsb->sb_count = 0;
 
-			result = llapi_dir_create(dname, mode, param);
+			/* use mntdir for dirname() temporarily */
+			strncpy(mntdir, dname, sizeof(mntdir));
+			if (!realpath(dirname(mntdir), path)) {
+				result = -errno;
+				fprintf(stderr,
+					"error: invalid path '%s': %s\n",
+					argv[optind], strerror(errno));
+				break;
+			}
+			mntdir[0] = '\0';
+
+			result = llapi_search_mounts(path, 0, mntdir, NULL);
+			if (result < 0 || mntdir[0] == '\0') {
+				fprintf(stderr,
+					"No suitable Lustre mount found\n");
+				break;
+			}
+
+			result = mntdf(mntdir, NULL, NULL, 0, LL_STATFS_LMV,
+				       lsb);
+			if (result < 0)
+				break;
+
+			if (param->lsp_stripe_count > lsb->sb_count) {
+				fprintf(stderr,
+					"error: stripe count %d is too big\n",
+					param->lsp_stripe_count);
+				result = -ERANGE;
+				break;
+			}
+
+			qsort(lsb->sb_buf, lsb->sb_count,
+			      sizeof(struct ll_statfs_data),
+			      ll_statfs_data_comp);
+
+			auto_distributed = true;
 		}
 
-		if (result) {
+		if (auto_distributed) {
+			int r;
+			int nr = MAX(param->lsp_stripe_count,
+				     lsb->sb_count / 2);
+
+			/* don't use server whose usage is above 90% */
+			while (nr != param->lsp_stripe_count &&
+			       obd_statfs_ratio(&lsb->sb_buf[nr].sd_st, false) >
+			       90)
+				nr = MAX(param->lsp_stripe_count, nr / 2);
+
+			/* get \a r between [0, nr) */
+			r = rand() % nr;
+
+			param->lsp_stripe_offset = lsb->sb_buf[r].sd_index;
+			if (param->lsp_stripe_count > 1) {
+				int i = 0;
+
+				param->lsp_is_specific = true;
+				for (; i < param->lsp_stripe_count; i++)
+					param->lsp_tgts[(i + r) % nr] =
+						lsb->sb_buf[i].sd_index;
+			}
+		}
+
+		result = llapi_dir_create(dname, mode, param);
+		if (result)
 			fprintf(stderr,
-				"%s setdirstripe: cannot create stripe dir '%s': %s\n",
+				"%s setdirstripe: cannot create dir '%s': %s\n",
 				progname, dname, strerror(-result));
-			break;
-		}
-		dname = argv[++optind];
-	} while (dname != NULL);
+	} while (!result && (dname = argv[++optind]));
 
 	if (mode_opt != NULL)
 		umask(previous_mode);

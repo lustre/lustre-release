@@ -3685,7 +3685,8 @@ static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
 
 	if (LMVEA_DELETE_VALUES((le32_to_cpu(lum->lum_stripe_count)),
 				 le32_to_cpu(lum->lum_stripe_offset)) &&
-				le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC) {
+	    le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC &&
+	    le32_to_cpu(lum->lum_hash_type) == LMV_HASH_TYPE_UNKNOWN) {
 		rc = lod_xattr_del_internal(env, dt, name, th);
 		if (rc == -ENODATA)
 			rc = 0;
@@ -3971,8 +3972,10 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 
 	/* Transfer default LMV striping from the parent */
 	if (lds != NULL && lds->lds_dir_def_striping_set &&
-	    !LMVEA_DELETE_VALUES(lds->lds_dir_def_stripe_count,
-				 lds->lds_dir_def_stripe_offset)) {
+	    !(LMVEA_DELETE_VALUES(lds->lds_dir_def_stripe_count,
+				 lds->lds_dir_def_stripe_offset) &&
+	      le32_to_cpu(lds->lds_dir_def_hash_type) !=
+	      LMV_HASH_TYPE_UNKNOWN)) {
 		struct lmv_user_md_v1 *v1 = info->lti_ea_store;
 
 		if (info->lti_ea_store_size < sizeof(*v1)) {

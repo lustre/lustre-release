@@ -804,11 +804,16 @@ enum lmv_hash_type {
 	LMV_HASH_TYPE_UNKNOWN	= 0,	/* 0 is reserved for testing purpose */
 	LMV_HASH_TYPE_ALL_CHARS = 1,
 	LMV_HASH_TYPE_FNV_1A_64 = 2,
+	LMV_HASH_TYPE_SPACE	= 3,	/*
+					 * distribute subdirs among all MDTs
+					 * with balanced space usage.
+					 */
 	LMV_HASH_TYPE_MAX,
 };
 
 #define LMV_HASH_NAME_ALL_CHARS	"all_char"
 #define LMV_HASH_NAME_FNV_1A_64	"fnv_1a_64"
+#define LMV_HASH_NAME_SPACE	"space"
 
 extern char *mdt_hash_name[LMV_HASH_TYPE_MAX];
 
@@ -838,7 +843,7 @@ struct lmv_user_md_v1 {
 	__u32	lum_stripe_count;  /* dirstripe count */
 	__u32	lum_stripe_offset; /* MDT idx for default dirstripe */
 	__u32	lum_hash_type;     /* Dir stripe policy */
-	__u32	lum_type;	  /* LMV type: default or normal */
+	__u32	lum_type;	  /* LMV type: default */
 	__u32	lum_padding1;
 	__u32	lum_padding2;
 	__u32	lum_padding3;
@@ -855,6 +860,15 @@ static inline __u32 lmv_foreign_to_md_stripes(__u32 size)
 	return (size + sizeof(struct lmv_user_mds_data) - 1) /
 	       sizeof(struct lmv_user_mds_data);
 }
+
+/*
+ * NB, historically default layout didn't set type, but use XATTR name to differ
+ * from normal layout, for backward compatibility, define LMV_TYPE_DEFAULT 0x0,
+ * and still use the same method.
+ */
+enum lmv_type {
+	LMV_TYPE_DEFAULT = 0x0000,
+};
 
 static inline int lmv_user_md_size(int stripes, int lmm_magic)
 {

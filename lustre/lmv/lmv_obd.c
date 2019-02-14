@@ -3105,7 +3105,6 @@ static int lmv_unpackmd(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 		 */
 		lsm_size = lmv_stripe_md_size(0);
 
-	lsm_size = lmv_stripe_md_size(lmv_mds_md_stripe_count_get(lmm));
 	if (lsm == NULL) {
 		OBD_ALLOC(lsm, lsm_size);
 		if (lsm == NULL)
