@@ -486,6 +486,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDC_LIGHTWEIGHT	 0x805
 #define OBD_FAIL_MDC_CLOSE		 0x806
 #define OBD_FAIL_MDC_MERGE		 0x807
+#define OBD_FAIL_MDC_GLIMPSE_DDOS	 0x808
 
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901

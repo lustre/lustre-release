@@ -12,15 +12,6 @@ ALWAYS_EXCEPT="$SANITY_DOM_EXCEPT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:
-	ALWAYS_EXCEPT+=""
-	if [ $MDSCOUNT -gt 1 ]; then
-# bug number for skipped test:
-		ALWAYS_EXCEPT+=""
-	fi
-fi
-
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
 . $LUSTRE/tests/test-framework.sh
@@ -29,6 +20,15 @@ SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+# bug number for skipped test:
+	ALWAYS_EXCEPT+=""
+	if [ $MDSCOUNT -gt 1 ]; then
+# bug number for skipped test:
+		ALWAYS_EXCEPT+=""
+	fi
+fi
 
 [[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
 	{ skip "Need MDS version at least 2.10.56"; exit 0; }
@@ -95,6 +95,30 @@ test_3() {
 		error "Wrong size after second truncate on other node"
 }
 run_test 3 "Truncate over DoM size on different nodes"
+
+test_4() {
+	local before=0
+	local after=0
+
+	dd if=/dev/zero of=$DIR1/$tfile bs=2M count=1
+	cancel_lru_locks mdc
+
+	#define OBD_FAIL_MDC_GLIMPSE_DDOS 0x808
+	$LCTL set_param fail_loc=0x80000808
+	before=$(lctl get_param -n ldlm.namespaces.*mdc*.lock_count |
+		gawk '{cnt=cnt+$1}  END{print cnt}')
+	for ((i=1; i < 100; i++))
+	do
+		tail -n100 $DIR1/$tfile > /dev/null
+		stat -f $DIR2/$tfile > /dev/null
+	done
+	after=$(lctl get_param -n ldlm.namespaces.*mdc*.lock_count |
+		gawk '{cnt=cnt+$1}  END{print cnt}')
+	[[ $((after - before)) -ge 20 ]] &&
+		error "Too many locks found $((after - before))"
+	return 0
+}
+run_test 4 "DoM: glimpse doesn't produce duplicated locks"
 
 test_fsx() {
 	local file1=$DIR1/$tfile
