@@ -1146,6 +1146,7 @@ struct lock_match_data {
 	enum ldlm_mode		*lmd_mode;
 	union ldlm_policy_data	*lmd_policy;
 	__u64			 lmd_flags;
+	__u64			 lmd_skip_flags;
 	int			 lmd_unref;
 };
 
@@ -1215,6 +1216,10 @@ static int lock_matches(struct ldlm_lock *lock, struct lock_match_data *data)
 		return INTERVAL_ITER_CONT;
 
 	if (!equi(data->lmd_flags & LDLM_FL_LOCAL_ONLY, ldlm_is_local(lock)))
+		return INTERVAL_ITER_CONT;
+
+	/* Filter locks by skipping flags */
+	if (data->lmd_skip_flags & lock->l_flags)
 		return INTERVAL_ITER_CONT;
 
 	if (data->lmd_flags & LDLM_FL_TEST_LOCK) {
@@ -1372,24 +1377,27 @@ EXPORT_SYMBOL(ldlm_lock_allow_match);
  * keep caller code unchanged), the context failure will be discovered by
  * caller sometime later.
  */
-enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns, __u64 flags,
-			       const struct ldlm_res_id *res_id,
-			       enum ldlm_type type,
-			       union ldlm_policy_data *policy,
-			       enum ldlm_mode mode,
-			       struct lustre_handle *lockh, int unref)
+enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
+					 __u64 flags, __u64 skip_flags,
+					 const struct ldlm_res_id *res_id,
+					 enum ldlm_type type,
+					 union ldlm_policy_data *policy,
+					 enum ldlm_mode mode,
+					 struct lustre_handle *lockh, int unref)
 {
 	struct lock_match_data data = {
-		.lmd_old	= NULL,
-		.lmd_lock	= NULL,
-		.lmd_mode	= &mode,
-		.lmd_policy	= policy,
-		.lmd_flags	= flags,
-		.lmd_unref	= unref,
+		.lmd_old = NULL,
+		.lmd_lock = NULL,
+		.lmd_mode = &mode,
+		.lmd_policy = policy,
+		.lmd_flags = flags,
+		.lmd_skip_flags = skip_flags,
+		.lmd_unref = unref,
 	};
 	struct ldlm_resource *res;
 	struct ldlm_lock *lock;
-	int rc = 0;
+	int matched;
+
 	ENTRY;
 
 	if (ns == NULL) {
@@ -1410,98 +1418,78 @@ enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns, __u64 flags,
 
 	LDLM_RESOURCE_ADDREF(res);
 	lock_res(res);
-
 	if (res->lr_type == LDLM_EXTENT)
 		lock = search_itree(res, &data);
 	else
 		lock = search_queue(&res->lr_granted, &data);
-	if (lock != NULL)
-		GOTO(out, rc = 1);
-	if (flags & LDLM_FL_BLOCK_GRANTED)
-		GOTO(out, rc = 0);
-	lock = search_queue(&res->lr_waiting, &data);
-	if (lock != NULL)
-		GOTO(out, rc = 1);
+	if (!lock && !(flags & LDLM_FL_BLOCK_GRANTED))
+		lock = search_queue(&res->lr_waiting, &data);
+	matched = lock ? mode : 0;
+	unlock_res(res);
+	LDLM_RESOURCE_DELREF(res);
+	ldlm_resource_putref(res);
 
-        EXIT;
- out:
-        unlock_res(res);
-        LDLM_RESOURCE_DELREF(res);
-        ldlm_resource_putref(res);
-
-        if (lock) {
-                ldlm_lock2handle(lock, lockh);
-                if ((flags & LDLM_FL_LVB_READY) &&
+	if (lock) {
+		ldlm_lock2handle(lock, lockh);
+		if ((flags & LDLM_FL_LVB_READY) &&
 		    (!ldlm_is_lvb_ready(lock))) {
 			__u64 wait_flags = LDLM_FL_LVB_READY |
 				LDLM_FL_DESTROYED | LDLM_FL_FAIL_NOTIFIED;
-                        struct l_wait_info lwi;
-                        if (lock->l_completion_ast) {
-                                int err = lock->l_completion_ast(lock,
-                                                          LDLM_FL_WAIT_NOREPROC,
-                                                                 NULL);
-                                if (err) {
-                                        if (flags & LDLM_FL_TEST_LOCK)
-                                                LDLM_LOCK_RELEASE(lock);
-                                        else
-                                                ldlm_lock_decref_internal(lock,
-                                                                          mode);
-                                        rc = 0;
-                                        goto out2;
-                                }
-                        }
+			struct l_wait_info lwi;
 
-                        lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
-                                               NULL, LWI_ON_SIGNAL_NOOP, NULL);
+			if (lock->l_completion_ast) {
+				int err = lock->l_completion_ast(lock,
+							LDLM_FL_WAIT_NOREPROC,
+							NULL);
+				if (err)
+					GOTO(out_fail_match, matched = 0);
+			}
+
+			lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(obd_timeout),
+					       NULL, LWI_ON_SIGNAL_NOOP, NULL);
 
 			/* XXX FIXME see comment on CAN_MATCH in lustre_dlm.h */
-			l_wait_event(lock->l_waitq,
-				     lock->l_flags & wait_flags,
+			l_wait_event(lock->l_waitq, lock->l_flags & wait_flags,
 				     &lwi);
-			if (!ldlm_is_lvb_ready(lock)) {
-                                if (flags & LDLM_FL_TEST_LOCK)
-                                        LDLM_LOCK_RELEASE(lock);
-                                else
-                                        ldlm_lock_decref_internal(lock, mode);
-                                rc = 0;
-                        }
-                }
-        }
- out2:
-        if (rc) {
+			if (!ldlm_is_lvb_ready(lock))
+				GOTO(out_fail_match, matched = 0);
+		}
+
+		/* check user's security context */
+		if (lock->l_conn_export &&
+		    sptlrpc_import_check_ctx(
+				class_exp2cliimp(lock->l_conn_export)))
+			GOTO(out_fail_match, matched = 0);
+
 		LDLM_DEBUG(lock, "matched (%llu %llu)",
-                           (type == LDLM_PLAIN || type == LDLM_IBITS) ?
-                                res_id->name[2] : policy->l_extent.start,
-                           (type == LDLM_PLAIN || type == LDLM_IBITS) ?
-                                res_id->name[3] : policy->l_extent.end);
+			   (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+			   res_id->name[2] : policy->l_extent.start,
+			   (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+			   res_id->name[3] : policy->l_extent.end);
 
-                /* check user's security context */
-                if (lock->l_conn_export &&
-                    sptlrpc_import_check_ctx(
-                                class_exp2cliimp(lock->l_conn_export))) {
-                        if (!(flags & LDLM_FL_TEST_LOCK))
-                                ldlm_lock_decref_internal(lock, mode);
-                        rc = 0;
-                }
+out_fail_match:
+		if (flags & LDLM_FL_TEST_LOCK)
+			LDLM_LOCK_RELEASE(lock);
+		else if (!matched)
+			ldlm_lock_decref_internal(lock, mode);
+	}
 
-                if (flags & LDLM_FL_TEST_LOCK)
-                        LDLM_LOCK_RELEASE(lock);
-
-        } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
-                LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
+	/* less verbose for test-only */
+	if (!matched && !(flags & LDLM_FL_TEST_LOCK)) {
+		LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
 				  "%llu/%llu (%llu %llu)", ns,
-                                  type, mode, res_id->name[0], res_id->name[1],
-                                  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
-                                        res_id->name[2] :policy->l_extent.start,
-                                  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
-                                        res_id->name[3] : policy->l_extent.end);
-        }
+				  type, mode, res_id->name[0], res_id->name[1],
+				  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+				  res_id->name[2] : policy->l_extent.start,
+				  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
+				  res_id->name[3] : policy->l_extent.end);
+	}
 	if (data.lmd_old != NULL)
 		LDLM_LOCK_PUT(data.lmd_old);
 
-	return rc ? mode : 0;
+	return matched;
 }
-EXPORT_SYMBOL(ldlm_lock_match);
+EXPORT_SYMBOL(ldlm_lock_match_with_skip);
 
 enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 					   __u64 *bits)

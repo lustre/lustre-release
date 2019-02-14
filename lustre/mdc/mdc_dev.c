@@ -692,10 +692,16 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 	if (einfo->ei_mode == LCK_PR)
 		mode |= LCK_PW;
 
-	if (!glimpse)
+	if (glimpse)
 		match_flags |= LDLM_FL_BLOCK_GRANTED;
-	mode = ldlm_lock_match(obd->obd_namespace, match_flags, res_id,
-			       einfo->ei_type, policy, mode, &lockh, 0);
+	/* DOM locking uses LDLM_FL_KMS_IGNORE to mark locks wich have no valid
+	 * LVB information, e.g. canceled locks or locks of just pruned object,
+	 * such locks should be skipped.
+	 */
+	mode = ldlm_lock_match_with_skip(obd->obd_namespace, match_flags,
+					 LDLM_FL_KMS_IGNORE, res_id,
+					 einfo->ei_type, policy, mode,
+					 &lockh, 0);
 	if (mode) {
 		struct ldlm_lock *matched;
 
@@ -703,8 +709,16 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 			RETURN(ELDLM_OK);
 
 		matched = ldlm_handle2lock(&lockh);
-		if (!matched || ldlm_is_kms_ignore(matched))
+		/* this shouldn't happen but this check is kept to make
+		 * related test fail if problem occurs
+		 */
+		if (unlikely(ldlm_is_kms_ignore(matched))) {
+			LDLM_ERROR(matched, "matched lock has KMS ignore flag");
 			goto no_match;
+		}
+
+		if (OBD_FAIL_CHECK(OBD_FAIL_MDC_GLIMPSE_DDOS))
+			ldlm_set_kms_ignore(matched);
 
 		if (mdc_set_dom_lock_data(env, matched, einfo->ei_cbdata)) {
 			*flags |= LDLM_FL_LVB_READY;
@@ -1369,11 +1383,9 @@ static int mdc_object_ast_clear(struct ldlm_lock *lock, void *data)
 {
 	ENTRY;
 
-	if ((lock->l_ast_data == NULL && !ldlm_is_kms_ignore(lock)) ||
-	    (lock->l_ast_data == data)) {
+	if (lock->l_ast_data == data)
 		lock->l_ast_data = NULL;
-		ldlm_set_kms_ignore(lock);
-	}
+	ldlm_set_kms_ignore(lock);
 	RETURN(LDLM_ITER_CONTINUE);
 }
 
