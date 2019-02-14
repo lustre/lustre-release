@@ -72,6 +72,48 @@ struct lnet_dlc_intf_descr {
 	struct cfs_expr_list *cpt_expr;
 };
 
+/* This UDSP structures need to match the kernel space structures
+ * in order for the marshall and unmarshall functions to be the same.
+ */
+
+/* Net is described as a
+ *  1. net type
+ *  2. num range
+ */
+struct lnet_ud_net_descr {
+	__u32 udn_net_type;
+	struct list_head udn_net_num_range;
+};
+
+/* each NID range is defined as
+ *  1. net descriptor
+ *  2. address range descriptor
+ */
+struct lnet_ud_nid_descr {
+	struct lnet_ud_net_descr ud_net_id;
+	struct list_head ud_addr_range;
+};
+
+/* a UDSP rule can have up to three user defined NID descriptors
+ *	- src: defines the local NID range for the rule
+ *	- dst: defines the peer NID range for the rule
+ *	- rte: defines the router NID range for the rule
+ *
+ * An action union defines the action to take when the rule
+ * is matched
+ */
+struct lnet_udsp {
+	struct list_head udsp_on_list;
+	__u32 udsp_idx;
+	struct lnet_ud_nid_descr udsp_src;
+	struct lnet_ud_nid_descr udsp_dst;
+	struct lnet_ud_nid_descr udsp_rte;
+	enum lnet_udsp_action_type udsp_action_type;
+	union {
+		__u32 udsp_priority;
+	} udsp_action;
+};
+
 /* forward declaration of the cYAML structure. */
 struct cYAML;
 
