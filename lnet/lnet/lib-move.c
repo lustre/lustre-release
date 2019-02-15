@@ -1302,9 +1302,11 @@ lnet_select_peer_ni(struct lnet_ni *best_ni, lnet_nid_t dst_nid,
 		INT_MIN;
 	int best_lpni_healthv = (best_lpni) ?
 		atomic_read(&best_lpni->lpni_healthv) : 0;
-	bool preferred = false;
-	bool ni_is_pref;
+	bool best_lpni_is_preferred = false;
+	bool lpni_is_preferred;
 	int lpni_healthv;
+	__u32 lpni_sel_prio;
+	__u32 best_sel_prio = LNET_MAX_SELECTION_PRIORITY;
 
 	while ((lpni = lnet_get_next_peer_ni_locked(peer, peer_net, lpni))) {
 		/*
@@ -1312,56 +1314,76 @@ lnet_select_peer_ni(struct lnet_ni *best_ni, lnet_nid_t dst_nid,
 		 * preferred, then let's use it
 		 */
 		if (best_ni) {
-			ni_is_pref = lnet_peer_is_pref_nid_locked(lpni,
+			lpni_is_preferred = lnet_peer_is_pref_nid_locked(lpni,
 								best_ni->ni_nid);
-			CDEBUG(D_NET, "%s ni_is_pref = %d\n",
-			       libcfs_nid2str(best_ni->ni_nid), ni_is_pref);
+			CDEBUG(D_NET, "%s lpni_is_preferred = %d\n",
+			       libcfs_nid2str(best_ni->ni_nid),
+			       lpni_is_preferred);
 		} else {
-			ni_is_pref = false;
+			lpni_is_preferred = false;
 		}
 
 		lpni_healthv = atomic_read(&lpni->lpni_healthv);
+		lpni_sel_prio = lpni->lpni_sel_priority;
 
 		if (best_lpni)
-			CDEBUG(D_NET, "%s c:[%d, %d], s:[%d, %d]\n",
+			CDEBUG(D_NET, "n:[%s, %s] h:[%d, %d] p:[%d, %d] c:[%d, %d] s:[%d, %d]\n",
 				libcfs_nid2str(lpni->lpni_nid),
+				libcfs_nid2str(best_lpni->lpni_nid),
+				lpni_healthv, best_lpni_healthv,
+				lpni_sel_prio, best_sel_prio,
 				lpni->lpni_txcredits, best_lpni_credits,
 				lpni->lpni_seq, best_lpni->lpni_seq);
+		else
+			goto select_lpni;
 
 		/* pick the healthiest peer ni */
-		if (lpni_healthv < best_lpni_healthv) {
+		if (lpni_healthv < best_lpni_healthv)
 			continue;
-		} else if (lpni_healthv > best_lpni_healthv) {
-			best_lpni_healthv = lpni_healthv;
+		else if (lpni_healthv > best_lpni_healthv) {
+			if (best_lpni_is_preferred)
+				best_lpni_is_preferred = false;
+			goto select_lpni;
+		}
+
+		if (lpni_sel_prio > best_sel_prio)
+			continue;
+		else if (lpni_sel_prio < best_sel_prio) {
+			if (best_lpni_is_preferred)
+				best_lpni_is_preferred = false;
+			goto select_lpni;
+		}
+
 		/* if this is a preferred peer use it */
-		} else if (!preferred && ni_is_pref) {
-			preferred = true;
-		} else if (preferred && !ni_is_pref) {
-			/*
-			 * this is not the preferred peer so let's ignore
+		if (!best_lpni_is_preferred && lpni_is_preferred) {
+			best_lpni_is_preferred = true;
+			goto select_lpni;
+		} else if (best_lpni_is_preferred && !lpni_is_preferred) {
+			/* this is not the preferred peer so let's ignore
 			 * it.
 			 */
 			continue;
-		} else if (lpni->lpni_txcredits < best_lpni_credits) {
-			/*
-			 * We already have a peer that has more credits
+		}
+
+		if (lpni->lpni_txcredits < best_lpni_credits)
+			/* We already have a peer that has more credits
 			 * available than this one. No need to consider
 			 * this peer further.
 			 */
 			continue;
-		} else if (lpni->lpni_txcredits == best_lpni_credits) {
-			/*
-			 * The best peer found so far and the current peer
-			 * have the same number of available credits let's
-			 * make sure to select between them using Round
-			 * Robin
-			 */
-			if (best_lpni) {
-				if (best_lpni->lpni_seq <= lpni->lpni_seq)
-					continue;
-			}
-		}
+		else if (lpni->lpni_txcredits > best_lpni_credits)
+			goto select_lpni;
 
+		/* The best peer found so far and the current peer
+		 * have the same number of available credits let's
+		 * make sure to select between them using Round Robin
+		 */
+		if (best_lpni && (best_lpni->lpni_seq <= lpni->lpni_seq))
+			continue;
+select_lpni:
+		best_lpni_is_preferred = lpni_is_preferred;
+		best_lpni_healthv = lpni_healthv;
+		best_sel_prio = lpni_sel_prio;
 		best_lpni = lpni;
 		best_lpni_credits = lpni->lpni_txcredits;
 	}
@@ -1585,6 +1607,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 	unsigned int shortest_distance;
 	int best_credits;
 	int best_healthv;
+	__u32 best_sel_prio;
 
 	/*
 	 * If there is no peer_ni that we can send to on this network,
@@ -1594,6 +1617,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		return best_ni;
 
 	if (best_ni == NULL) {
+		best_sel_prio = LNET_MAX_SELECTION_PRIORITY;
 		shortest_distance = UINT_MAX;
 		best_credits = INT_MIN;
 		best_healthv = 0;
@@ -1602,6 +1626,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 						     best_ni->ni_dev_cpt);
 		best_credits = atomic_read(&best_ni->ni_tx_credits);
 		best_healthv = atomic_read(&best_ni->ni_healthv);
+		best_sel_prio = best_ni->ni_sel_priority;
 	}
 
 	while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
@@ -1609,10 +1634,12 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		int ni_credits;
 		int ni_healthv;
 		int ni_fatal;
+		__u32 ni_sel_prio;
 
 		ni_credits = atomic_read(&ni->ni_tx_credits);
 		ni_healthv = atomic_read(&ni->ni_healthv);
 		ni_fatal = atomic_read(&ni->ni_fatal_error_on);
+		ni_sel_prio = ni->ni_sel_priority;
 
 		/*
 		 * calculate the distance from the CPT on which
@@ -1622,12 +1649,6 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		distance = cfs_cpt_distance(lnet_cpt_table(),
 					    md_cpt,
 					    ni->ni_dev_cpt);
-
-		CDEBUG(D_NET, "compare ni %s [c:%d, d:%d, s:%d] with best_ni %s [c:%d, d:%d, s:%d]\n",
-		       libcfs_nid2str(ni->ni_nid), ni_credits, distance,
-		       ni->ni_seq, (best_ni) ? libcfs_nid2str(best_ni->ni_nid)
-			: "not seleced", best_credits, shortest_distance,
-			(best_ni) ? best_ni->ni_seq : 0);
 
 		/*
 		 * All distances smaller than the NUMA range
@@ -1640,31 +1661,47 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		 * Select on health, shorter distance, available
 		 * credits, then round-robin.
 		 */
-		if (ni_fatal) {
+		if (ni_fatal)
 			continue;
-		} else if (ni_healthv < best_healthv) {
+
+		if (best_ni)
+			CDEBUG(D_NET, "compare ni %s [c:%d, d:%d, s:%d, p:%u] with best_ni %s [c:%d, d:%d, s:%d, p:%u]\n",
+			       libcfs_nid2str(ni->ni_nid), ni_credits, distance,
+			       ni->ni_seq, ni_sel_prio,
+			       (best_ni) ? libcfs_nid2str(best_ni->ni_nid)
+			       : "not selected", best_credits, shortest_distance,
+			       (best_ni) ? best_ni->ni_seq : 0,
+			       best_sel_prio);
+		else
+			goto select_ni;
+
+		if (ni_healthv < best_healthv)
 			continue;
-		} else if (ni_healthv > best_healthv) {
-			best_healthv = ni_healthv;
-			/*
-			 * If we're going to prefer this ni because it's
-			 * the healthiest, then we should set the
-			 * shortest_distance in the algorithm in case
-			 * there are multiple NIs with the same health but
-			 * different distances.
-			 */
-			if (distance < shortest_distance)
-				shortest_distance = distance;
-		} else if (distance > shortest_distance) {
+		else if (ni_healthv > best_healthv)
+			goto select_ni;
+
+		if (ni_sel_prio > best_sel_prio)
 			continue;
-		} else if (distance < shortest_distance) {
-			shortest_distance = distance;
-		} else if (ni_credits < best_credits) {
+		else if (ni_sel_prio < best_sel_prio)
+			goto select_ni;
+
+		if (distance > shortest_distance)
 			continue;
-		} else if (ni_credits == best_credits) {
-			if (best_ni && best_ni->ni_seq <= ni->ni_seq)
-				continue;
-		}
+		else if (distance < shortest_distance)
+			goto select_ni;
+
+		if (ni_credits < best_credits)
+			continue;
+		else if (ni_credits > best_credits)
+			goto select_ni;
+
+		if (best_ni && best_ni->ni_seq <= ni->ni_seq)
+			continue;
+
+select_ni:
+		best_sel_prio = ni_sel_prio;
+		shortest_distance = distance;
+		best_healthv = ni_healthv;
 		best_ni = ni;
 		best_credits = ni_credits;
 	}
