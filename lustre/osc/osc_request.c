@@ -2730,6 +2730,22 @@ static int osc_statfs_async(struct obd_export *exp,
 	int rc;
         ENTRY;
 
+	if (obd->obd_osfs_age >= max_age) {
+		CDEBUG(D_SUPER,
+		       "%s: use %p cache blocks %llu/%llu objects %llu/%llu\n",
+		       obd->obd_name, &obd->obd_osfs,
+		       obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
+		       obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
+		spin_lock(&obd->obd_osfs_lock);
+		memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
+		spin_unlock(&obd->obd_osfs_lock);
+		oinfo->oi_flags |= OBD_STATFS_FROM_CACHE;
+		if (oinfo->oi_cb_up)
+			oinfo->oi_cb_up(oinfo, 0);
+
+		RETURN(0);
+	}
+
         /* We could possibly pass max_age in the request (as an absolute
          * timestamp or a "seconds.usec ago") so the target can avoid doing
          * extra calls into the filesystem if that isn't necessary (e.g.

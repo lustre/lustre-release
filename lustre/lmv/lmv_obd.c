@@ -360,6 +360,8 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 		mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
 		atomic_read(&obd->obd_refcount));
 
+	lmv_statfs_check_update(obd, tgt);
+
 	if (lmv->lmv_tgts_kobj)
 		/* Even if we failed to create the link, that's fine */
 		rc = sysfs_create_link(lmv->lmv_tgts_kobj,
@@ -1289,6 +1291,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	obd_str2uuid(&lmv->desc.ld_uuid, desc->ld_uuid.uuid);
 	lmv->desc.ld_tgt_count = 0;
 	lmv->desc.ld_active_tgt_count = 0;
+	lmv->desc.ld_qos_maxage = 60;
 	lmv->max_def_easize = 0;
 	lmv->max_easize = 0;
 
@@ -1452,6 +1455,47 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 out_free_temp:
         OBD_FREE(temp, sizeof(*temp));
         return rc;
+}
+
+static int lmv_statfs_update(void *cookie, int rc)
+{
+	struct obd_info *oinfo = cookie;
+	struct obd_device *obd = oinfo->oi_obd;
+	struct lmv_obd *lmv = &obd->u.lmv;
+	struct lmv_tgt_desc *tgt = oinfo->oi_tgt;
+	struct obd_statfs *osfs = oinfo->oi_osfs;
+
+	/*
+	 * NB: don't deactivate TGT upon error, because we may not trigger async
+	 * statfs any longer, then there is no chance to activate TGT.
+	 */
+	if (!rc) {
+		spin_lock(&lmv->lmv_lock);
+		tgt->ltd_statfs = *osfs;
+		tgt->ltd_statfs_age = ktime_get_seconds();
+		spin_unlock(&lmv->lmv_lock);
+	}
+
+	return rc;
+}
+
+/* update tgt statfs async if it's ld_qos_maxage old */
+int lmv_statfs_check_update(struct obd_device *obd, struct lmv_tgt_desc *tgt)
+{
+	struct obd_info oinfo = {
+		.oi_obd	= obd,
+		.oi_tgt = tgt,
+		.oi_cb_up = lmv_statfs_update,
+	};
+	int rc;
+
+	if (ktime_get_seconds() - tgt->ltd_statfs_age <
+	    obd->u.lmv.desc.ld_qos_maxage)
+		return 0;
+
+	rc = obd_statfs_async(tgt->ltd_exp, &oinfo, 0, NULL);
+
+	return rc;
 }
 
 static int lmv_get_root(struct obd_export *exp, const char *fileset,

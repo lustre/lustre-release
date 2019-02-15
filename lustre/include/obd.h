@@ -87,6 +87,8 @@ typedef int (*obd_enqueue_update_f)(void *cookie, int rc);
 struct obd_info {
 	/* OBD_STATFS_* flags */
 	__u64                   oi_flags;
+	struct obd_device      *oi_obd;
+	struct lmv_tgt_desc    *oi_tgt;
         /* statfs data specific for every OSC, if needed at all. */
         struct obd_statfs      *oi_osfs;
         /* An update callback which is called to update some data on upper
@@ -440,6 +442,8 @@ struct lmv_tgt_desc {
 	struct obd_export	*ltd_exp;
 	__u32			ltd_idx;
 	struct mutex		ltd_fid_mutex;
+	struct obd_statfs	ltd_statfs;
+	time64_t		ltd_statfs_age;
 	unsigned long		ltd_active:1; /* target up for requests */
 };
 

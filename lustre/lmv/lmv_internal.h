@@ -61,6 +61,8 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 int lmv_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
 		     struct ptlrpc_request **preq);
 
+int lmv_statfs_check_update(struct obd_device *obd, struct lmv_tgt_desc *tgt);
+
 static inline struct obd_device *lmv2obd_dev(struct lmv_obd *lmv)
 {
 	return container_of0(lmv, struct obd_device, u.lmv);

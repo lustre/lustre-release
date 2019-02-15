@@ -1023,21 +1023,8 @@ static inline int obd_statfs_async(struct obd_export *exp,
 
 	CDEBUG(D_SUPER, "%s: age %lld, max_age %lld\n",
 	       obd->obd_name, obd->obd_osfs_age, max_age);
-	if (obd->obd_osfs_age < max_age) {
-		rc = OBP(obd, statfs_async)(exp, oinfo, max_age, rqset);
-	} else {
-		CDEBUG(D_SUPER,
-		       "%s: use %p cache blocks %llu/%llu objects %llu/%llu\n",
-		       obd->obd_name, &obd->obd_osfs,
-		       obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
-		       obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
-		spin_lock(&obd->obd_osfs_lock);
-		memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
-		spin_unlock(&obd->obd_osfs_lock);
-		oinfo->oi_flags |= OBD_STATFS_FROM_CACHE;
-		if (oinfo->oi_cb_up)
-			oinfo->oi_cb_up(oinfo, 0);
-	}
+	rc = OBP(obd, statfs_async)(exp, oinfo, max_age, rqset);
+
 	RETURN(rc);
 }
 
