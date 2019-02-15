@@ -1738,8 +1738,14 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
 		 * NOTE: ld can be NULL or can be not NULL but zeroed if
 		 * passed from ldlm_bl_thread_blwi(), check below used bits
 		 * in ld to make sure it is valid description.
+		 *
+		 * If server may replace lock resource keeping the same cookie,
+		 * never use cancel bits from different resource, full cancel
+		 * is to be used.
 		 */
-		if (ld && ld->l_policy_data.l_inodebits.bits)
+		if (ld && ld->l_policy_data.l_inodebits.bits &&
+		    ldlm_res_eq(&ld->l_resource.lr_name,
+				&lock->l_resource->lr_name))
 			lock->l_policy_data.l_inodebits.cancel_bits =
 				ld->l_policy_data.l_inodebits.cancel_bits;
 		/* if there is no valid ld and lock is cbpending already
