@@ -292,16 +292,15 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 	ENTRY;
 
 	/* do not allow file creation in foreign dir */
-	if ((it->it_op & IT_CREAT) && op_data->op_mea1 != NULL &&
-	    op_data->op_mea1->lsm_md_magic == LMV_MAGIC_FOREIGN)
+	if ((it->it_op & IT_CREAT) && lmv_dir_foreign(op_data->op_mea1))
 		RETURN(-ENODATA);
 
 	if ((it->it_op & IT_CREAT) && !(flags & MDS_OPEN_BY_FID)) {
 		/* don't allow create under dir with bad hash */
-		if (lmv_is_dir_bad_hash(op_data->op_mea1))
+		if (lmv_dir_bad_hash(op_data->op_mea1))
 			RETURN(-EBADF);
 
-		if (lmv_is_dir_migrating(op_data->op_mea1)) {
+		if (lmv_dir_migrating(op_data->op_mea1)) {
 			if (flags & O_EXCL) {
 				/*
 				 * open(O_CREAT | O_EXCL) needs to check
@@ -310,8 +309,7 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 				 * file under old layout, check old layout on
 				 * client side.
 				 */
-				tgt = lmv_locate_tgt(lmv, op_data,
-						     &op_data->op_fid1);
+				tgt = lmv_locate_tgt(lmv, op_data);
 				if (IS_ERR(tgt))
 					RETURN(PTR_ERR(tgt));
 
@@ -345,7 +343,7 @@ retry:
 		/* for striped directory, we can't know parent stripe fid
 		 * without name, but we can set it to child fid, and MDT
 		 * will obtain it from linkea in open in such case. */
-		if (op_data->op_mea1 != NULL)
+		if (lmv_dir_striped(op_data->op_mea1))
 			op_data->op_fid1 = op_data->op_fid2;
 
 		tgt = lmv_find_target(lmv, &op_data->op_fid2);
@@ -358,7 +356,7 @@ retry:
 		LASSERT(fid_is_zero(&op_data->op_fid2));
 		LASSERT(op_data->op_name != NULL);
 
-		tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
+		tgt = lmv_locate_tgt(lmv, op_data);
 		if (IS_ERR(tgt))
 			RETURN(PTR_ERR(tgt));
 	}
@@ -443,8 +441,7 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	ENTRY;
 
 	/* foreign dir is not striped */
-	if (op_data->op_mea1 &&
-	    op_data->op_mea1->lsm_md_magic == LMV_MAGIC_FOREIGN) {
+	if (lmv_dir_foreign(op_data->op_mea1)) {
 		/* only allow getattr/lookup for itself */
 		if (op_data->op_name != NULL)
 			RETURN(-ENODATA);
@@ -452,7 +449,7 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	}
 
 retry:
-	tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
+	tgt = lmv_locate_tgt(lmv, op_data);
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
@@ -475,7 +472,7 @@ retry:
 	if (*reqp == NULL) {
 		/* If RPC happens, lsm information will be revalidated
 		 * during update_inode process (see ll_update_lsm_md) */
-		if (op_data->op_mea2 != NULL) {
+		if (lmv_dir_striped(op_data->op_mea2)) {
 			rc = lmv_revalidate_slaves(exp, op_data->op_mea2,
 						   cb_blocking,
 						   extra_lock_flags);

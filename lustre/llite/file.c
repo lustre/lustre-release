@@ -4216,7 +4216,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	if (!(exp_connect_flags2(ll_i2sbi(parent)->ll_md_exp) &
 	      OBD_CONNECT2_DIR_MIGRATE)) {
 		if (le32_to_cpu(lum->lum_stripe_count) > 1 ||
-		    ll_i2info(child_inode)->lli_lsm_md) {
+		    ll_dir_striped(child_inode)) {
 			CERROR("%s: MDT doesn't support stripe directory "
 			       "migration!\n", ll_i2sbi(parent)->ll_fsname);
 			GOTO(out_iput, rc = -EOPNOTSUPP);
@@ -4403,8 +4403,7 @@ static int ll_inode_revalidate_fini(struct inode *inode, int rc)
 		/* If it is striped directory, and there is bad stripe
 		 * Let's revalidate the dentry again, instead of returning
 		 * error */
-		if (S_ISDIR(inode->i_mode) &&
-		    ll_i2info(inode)->lli_lsm_md != NULL)
+		if (ll_dir_striped(inode))
 			return 0;
 
 		/* This path cannot be hit for regular files unless in
@@ -4481,8 +4480,7 @@ static int ll_merge_md_attr(struct inode *inode)
 
 	LASSERT(lli->lli_lsm_md != NULL);
 
-	/* foreign dir is not striped dir */
-	if (lli->lli_lsm_md->lsm_md_magic == LMV_MAGIC_FOREIGN)
+	if (!lmv_dir_striped(lli->lli_lsm_md))
 		RETURN(0);
 
 	down_read(&lli->lli_lsm_sem);
@@ -4550,8 +4548,7 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 		}
 	} else {
 		/* If object isn't regular a file then don't validate size. */
-		if (S_ISDIR(inode->i_mode) &&
-		    lli->lli_lsm_md != NULL) {
+		if (ll_dir_striped(inode)) {
 			rc = ll_merge_md_attr(inode);
 			if (rc < 0)
 				RETURN(rc);

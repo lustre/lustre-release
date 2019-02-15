@@ -1165,6 +1165,13 @@ static inline struct lu_fid *ll_inode2fid(struct inode *inode)
         return fid;
 }
 
+static inline bool ll_dir_striped(struct inode *inode)
+{
+	LASSERT(inode);
+	return S_ISDIR(inode->i_mode) &&
+	       lmv_dir_striped(ll_i2info(inode)->lli_lsm_md);
+}
+
 static inline loff_t ll_file_maxbytes(struct inode *inode)
 {
 	struct cl_object *obj = ll_i2info(inode)->lli_clob;

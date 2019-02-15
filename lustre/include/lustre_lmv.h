@@ -54,6 +54,47 @@ struct lmv_stripe_md {
 	struct lmv_oinfo lsm_md_oinfo[0];
 };
 
+/* NB: LMV_HASH_TYPE_SPACE is set in default LMV only */
+static inline bool lmv_is_known_hash_type(__u32 type)
+{
+	return (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_FNV_1A_64 ||
+	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_ALL_CHARS;
+}
+
+static inline bool lmv_dir_striped(const struct lmv_stripe_md *lsm)
+{
+	return lsm && lsm->lsm_md_magic == LMV_MAGIC;
+}
+
+static inline bool lmv_dir_foreign(const struct lmv_stripe_md *lsm)
+{
+	return lsm && lsm->lsm_md_magic == LMV_MAGIC_FOREIGN;
+}
+
+static inline bool lmv_dir_migrating(const struct lmv_stripe_md *lsm)
+{
+	return lmv_dir_striped(lsm) &&
+	       lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION;
+}
+
+static inline bool lmv_dir_bad_hash(const struct lmv_stripe_md *lsm)
+{
+	if (!lmv_dir_striped(lsm))
+		return false;
+
+	if (lmv_dir_migrating(lsm) &&
+	    lsm->lsm_md_stripe_count - lsm->lsm_md_migrate_offset <= 1)
+		return false;
+
+	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type);
+}
+
+/* NB, this is checking directory default LMV */
+static inline bool lmv_dir_space_hashed(const struct lmv_stripe_md *lsm)
+{
+	return lsm && lsm->lsm_md_hash_type == LMV_HASH_TYPE_SPACE;
+}
+
 static inline bool
 lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 {
@@ -74,7 +115,7 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 		      lsm2->lsm_md_pool_name) != 0)
 		return false;
 
-	if (lsm1->lsm_md_magic == LMV_MAGIC_V1) {
+	if (lmv_dir_striped(lsm1)) {
 		for (idx = 0; idx < lsm1->lsm_md_stripe_count; idx++) {
 			if (!lu_fid_eq(&lsm1->lsm_md_oinfo[idx].lmo_fid,
 				       &lsm2->lsm_md_oinfo[idx].lmo_fid))
@@ -96,7 +137,7 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 		lsm->lsm_md_layout_version, lsm->lsm_md_migrate_offset,
 		lsm->lsm_md_migrate_hash, lsm->lsm_md_pool_name);
 
-	if (lsm->lsm_md_magic != LMV_MAGIC_V1)
+	if (!lmv_dir_striped(lsm))
 		return;
 
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++)
@@ -188,12 +229,6 @@ static inline int lmv_name_to_stripe_index(__u32 lmv_hash_type,
 	       lmv_hash_type, idx, stripe_count);
 
 	return idx;
-}
-
-static inline bool lmv_is_known_hash_type(__u32 type)
-{
-	return (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_FNV_1A_64 ||
-	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_ALL_CHARS;
 }
 
 static inline bool lmv_magic_supported(__u32 lum_magic)

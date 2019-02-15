@@ -327,8 +327,9 @@ struct lod_object {
 					/* foreign directory */
 					ldo_dir_is_foreign;
 			/*
-			 * default striping is not cached, so this field is
-			 * invalid after create, make sure it's used by
+			 * This default LMV is parent default LMV, which will be
+			 * used in child creation, and it's not cached, so this
+			 * field is invalid after create, make sure it's used by
 			 * lod_dir_striping_create_internal() only.
 			 */
 			struct lod_default_striping	*ldo_def_striping;

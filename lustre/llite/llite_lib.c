@@ -1367,6 +1367,9 @@ static int ll_init_lsm_md(struct inode *inode, struct lustre_md *md)
 	       ll_i2sbi(inode)->ll_fsname, PFID(&lli->lli_fid));
 	lsm_md_dump(D_INODE, lsm);
 
+	if (!lmv_dir_striped(lsm))
+		goto out;
+
 	/* XXX sigh, this lsm_root initialization should be in
 	 * LMV layer, but it needs ll_iget right now, so we
 	 * put this here right now. */
@@ -1394,7 +1397,7 @@ static int ll_init_lsm_md(struct inode *inode, struct lustre_md *md)
 			return rc;
 		}
 	}
-
+out:
 	lli->lli_lsm_md = lsm;
 
 	return 0;
@@ -1478,10 +1481,9 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	 *
 	 * foreign LMV should not change.
 	 */
-	if (lli->lli_lsm_md &&
-	    lli->lli_lsm_md->lsm_md_magic != LMV_MAGIC_FOREIGN &&
-	   !lsm_md_eq(lli->lli_lsm_md, lsm)) {
-		if (lsm->lsm_md_layout_version <=
+	if (lli->lli_lsm_md && !lsm_md_eq(lli->lli_lsm_md, lsm)) {
+		if (lmv_dir_striped(lli->lli_lsm_md) &&
+		    lsm->lsm_md_layout_version <=
 		    lli->lli_lsm_md->lsm_md_layout_version) {
 			CERROR("%s: "DFID" dir layout mismatch:\n",
 			       ll_i2sbi(inode)->ll_fsname,
@@ -1501,15 +1503,6 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	if (!lli->lli_lsm_md) {
 		struct cl_attr	*attr;
 
-		if (lsm->lsm_md_magic == LMV_MAGIC_FOREIGN) {
-			/* set md->lmv to NULL, so the following free lustre_md
-			 * will not free this lsm */
-			md->lmv = NULL;
-			lli->lli_lsm_md = lsm;
-			up_write(&lli->lli_lsm_sem);
-			RETURN(0);
-		}
-
 		rc = ll_init_lsm_md(inode, md);
 		up_write(&lli->lli_lsm_sem);
 		if (rc != 0)
@@ -1524,6 +1517,9 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 		 * switch to read lock.
 		 */
 		down_read(&lli->lli_lsm_sem);
+
+		if (!lmv_dir_striped(lli->lli_lsm_md))
+			GOTO(unlock, rc);
 
 		OBD_ALLOC_PTR(attr);
 		if (attr == NULL)

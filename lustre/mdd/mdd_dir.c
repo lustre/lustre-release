@@ -4501,7 +4501,7 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 	if (rc)
 		GOTO(out, rc);
 
-	mdd_object_make_hint(env, NULL, tobj, attr, spec, hint);
+	mdd_object_make_hint(env, tpobj, tobj, attr, spec, hint);
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))

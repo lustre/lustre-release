@@ -163,8 +163,7 @@ void ll_release_page(struct inode *inode, struct page *page,
 
 	/* Always remove the page for striped dir, because the page is
 	 * built from temporarily in LMV layer */
-	if (inode != NULL && S_ISDIR(inode->i_mode) &&
-	    ll_i2info(inode)->lli_lsm_md != NULL) {
+	if (inode && ll_dir_striped(inode)) {
 		__free_page(page);
 		return;
 	}
@@ -341,7 +340,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		 */
 		GOTO(out, rc = 0);
 
-	if (unlikely(ll_i2info(inode)->lli_lsm_md != NULL)) {
+	if (unlikely(ll_dir_striped(inode))) {
 		/*
 		 * This is only needed for striped dir to fill ..,
 		 * see lmv_read_page()

@@ -3672,8 +3672,9 @@ static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
 					    const char *name, int fl,
 					    struct thandle *th)
 {
-	struct lmv_user_md_v1	*lum;
-	int			 rc;
+	struct lmv_user_md_v1 *lum;
+	int rc;
+
 	ENTRY;
 
 	LASSERT(buf != NULL && buf->lb_buf != NULL);
@@ -4558,13 +4559,12 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	struct lov_user_md_v1 *v1 = NULL;
 	struct lov_user_md_v3 *v3 = NULL;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
-	__u16	comp_cnt;
-	__u16	mirror_cnt;
-	bool	composite;
-	int	rc, i, j;
-	ENTRY;
+	__u16 comp_cnt;
+	__u16 mirror_cnt;
+	bool composite;
+	int rc, i, j;
 
-	lds->lds_def_striping_set = 0;
+	ENTRY;
 
 	rc = lod_get_lov_ea(env, lo);
 	if (rc < 0)
@@ -4695,27 +4695,30 @@ static int lod_get_default_lmv_striping(const struct lu_env *env,
 					struct lod_object *lo,
 					struct lod_default_striping *lds)
 {
-	struct lod_thread_info	*info = lod_env_info(env);
-	struct lmv_user_md_v1	*v1 = NULL;
-	int			 rc;
-	ENTRY;
+	struct lmv_user_md *lmu;
+	int rc;
 
 	lds->lds_dir_def_striping_set = 0;
+
 	rc = lod_get_default_lmv_ea(env, lo);
 	if (rc < 0)
-		RETURN(rc);
+		return rc;
 
-	if (rc < (typeof(rc))sizeof(struct lmv_user_md))
-		RETURN(0);
+	if (rc >= (int)sizeof(*lmu)) {
+		struct lod_thread_info *info = lod_env_info(env);
 
-	v1 = info->lti_ea_store;
+		lmu = info->lti_ea_store;
 
-	lds->lds_dir_def_stripe_count = le32_to_cpu(v1->lum_stripe_count);
-	lds->lds_dir_def_stripe_offset = le32_to_cpu(v1->lum_stripe_offset);
-	lds->lds_dir_def_hash_type = le32_to_cpu(v1->lum_hash_type);
-	lds->lds_dir_def_striping_set = 1;
+		lds->lds_dir_def_stripe_count =
+				le32_to_cpu(lmu->lum_stripe_count);
+		lds->lds_dir_def_stripe_offset =
+				le32_to_cpu(lmu->lum_stripe_offset);
+		lds->lds_dir_def_hash_type =
+				le32_to_cpu(lmu->lum_hash_type);
+		lds->lds_dir_def_striping_set = 1;
+	}
 
-	RETURN(0);
+	return 0;
 }
 
 /**
@@ -5238,6 +5241,36 @@ out:
 	RETURN(rc);
 }
 
+static inline int dt_object_space_hashed(const struct lu_env *env,
+					 struct lu_device *dev,
+					 struct dt_object *dt)
+{
+	struct lu_object *obj;
+	struct lod_object *lo;
+	struct lmv_user_md *lmu;
+	int rc = 0;
+
+	obj = lu_object_find_slice(env, dev, lu_object_fid(&dt->do_lu), NULL);
+	if (IS_ERR(obj))
+		return PTR_ERR(obj);
+
+	lo = lu2lod_obj(obj);
+
+	rc = lod_get_default_lmv_ea(env, lo);
+	if (rc < 0)
+		return rc;
+
+	if (rc >= (int)sizeof(*lmu)) {
+		struct lod_thread_info *info = lod_env_info(env);
+
+		lmu = info->lti_ea_store;
+		rc = le32_to_cpu(lmu->lum_hash_type) == LMV_HASH_TYPE_SPACE;
+	}
+	dt_object_put(env, dt);
+
+	return rc;
+}
+
 /**
  * Implementation of dt_object_operations::do_declare_create.
  *
@@ -5302,10 +5335,18 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 				GOTO(out, rc = -EREMOTE);
 
 			if (lo->ldo_dir_stripe_offset == -1) {
-				/* child and parent should be in the same MDT */
-				if (hint->dah_parent != NULL &&
-				    dt_object_remote(hint->dah_parent))
-					GOTO(out, rc = -EREMOTE);
+				/*
+				 * child and parent should be in the same MDT,
+				 * but if parent has plain layout, it's allowed.
+				 */
+				if (hint->dah_parent &&
+				    dt_object_remote(hint->dah_parent)) {
+					rc = dt_object_space_hashed(env,
+						       lo->ldo_obj.do_lu.lo_dev,
+						       hint->dah_parent);
+					if (rc <= 0)
+						GOTO(out, rc ? rc : -EREMOTE);
+				}
 			} else if (lo->ldo_dir_stripe_offset !=
 				   ss->ss_node_id) {
 				struct lod_device *lod;

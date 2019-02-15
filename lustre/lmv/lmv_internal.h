@@ -136,6 +136,8 @@ lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 	__u32 stripe_count = lsm->lsm_md_stripe_count;
 	int stripe_index;
 
+	LASSERT(lmv_dir_striped(lsm));
+
 	if (hash_type & LMV_HASH_FLAG_MIGRATION) {
 		if (post_migrate) {
 			hash_type &= ~LMV_HASH_FLAG_MIGRATION;
@@ -166,26 +168,6 @@ lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 	return &lsm->lsm_md_oinfo[stripe_index];
 }
 
-static inline bool lmv_is_dir_migrating(const struct lmv_stripe_md *lsm)
-{
-	return lsm ? lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION : false;
-}
-
-static inline bool lmv_is_dir_bad_hash(const struct lmv_stripe_md *lsm)
-{
-	if (!lsm)
-		return false;
-
-	if (lmv_is_dir_migrating(lsm)) {
-		if (lsm->lsm_md_stripe_count - lsm->lsm_md_migrate_offset > 1)
-			return !lmv_is_known_hash_type(
-					lsm->lsm_md_migrate_hash);
-		return false;
-	}
-
-	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type);
-}
-
 static inline bool lmv_dir_retry_check_update(struct md_op_data *op_data)
 {
 	const struct lmv_stripe_md *lsm = op_data->op_mea1;
@@ -193,12 +175,12 @@ static inline bool lmv_dir_retry_check_update(struct md_op_data *op_data)
 	if (!lsm)
 		return false;
 
-	if (lmv_is_dir_migrating(lsm) && !op_data->op_post_migrate) {
+	if (lmv_dir_migrating(lsm) && !op_data->op_post_migrate) {
 		op_data->op_post_migrate = true;
 		return true;
 	}
 
-	if (lmv_is_dir_bad_hash(lsm) &&
+	if (lmv_dir_bad_hash(lsm) &&
 	    op_data->op_stripe_index < lsm->lsm_md_stripe_count - 1) {
 		op_data->op_stripe_index++;
 		return true;
@@ -208,8 +190,8 @@ static inline bool lmv_dir_retry_check_update(struct md_op_data *op_data)
 }
 
 struct lmv_tgt_desc *lmv_locate_tgt(struct lmv_obd *lmv,
-				    struct md_op_data *op_data,
-				    struct lu_fid *fid);
+				    struct md_op_data *op_data);
+
 /* lproc_lmv.c */
 int lmv_tunables_init(struct obd_device *obd);
 

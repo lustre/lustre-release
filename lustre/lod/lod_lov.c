@@ -1526,7 +1526,7 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 			}
 		}
 
-		if (rc < (typeof(rc))sizeof(struct lmv_mds_md_v1)) {
+		if (rc < (int)sizeof(struct lmv_mds_md_v1)) {
 			/* Let's set stripe_loaded to avoid further
 			 * stripe loading especially for non-stripe directory,
 			 * which can hurt performance. (See LU-9840)
