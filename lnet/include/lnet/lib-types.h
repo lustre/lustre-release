@@ -62,6 +62,7 @@
  * All local and peer NIs created have their health default to this value.
  */
 #define LNET_MAX_HEALTH_VALUE 1000
+#define LNET_MAX_SELECTION_PRIORITY UINT_MAX
 
 /* forward refs */
 struct lnet_libmd;
@@ -369,14 +370,14 @@ struct lnet_net {
 	 * lnet/include/lnet/nidstr.h */
 	__u32			net_id;
 
-	/* priority of the network */
-	__u32			net_prio;
-
 	/* total number of CPTs in the array */
 	__u32			net_ncpts;
 
 	/* cumulative CPTs of all NIs in this net */
 	__u32			*net_cpts;
+
+	/* relative net selection priority */
+	__u32			net_sel_priority;
 
 	/* network tunables */
 	struct lnet_ioctl_config_lnd_cmn_tunables net_tunables;
@@ -404,6 +405,9 @@ struct lnet_net {
 
 	/* protects access to net_last_alive */
 	spinlock_t		net_lock;
+
+	/* list of router nids preferred for this network */
+	struct list_head	net_rtr_pref_nids;
 };
 
 struct lnet_ni {
@@ -483,6 +487,9 @@ struct lnet_ni {
 	 */
 	atomic_t		ni_fatal_error_on;
 
+	/* the relative selection priority of this NI */
+	__u32			ni_sel_priority;
+
 	/*
 	 * equivalent interfaces to use
 	 * This is an array because socklnd bonding can still be configured
@@ -513,6 +520,11 @@ struct lnet_ping_buffer {
 
 #define LNET_PING_INFO_TO_BUFFER(PINFO)	\
 	container_of((PINFO), struct lnet_ping_buffer, pb_info)
+
+struct lnet_nid_list {
+	struct list_head nl_list;
+	lnet_nid_t nl_nid;
+};
 
 struct lnet_peer_ni {
 	/* chain on lpn_peer_nis */
@@ -573,8 +585,12 @@ struct lnet_peer_ni {
 	/* preferred local nids: if only one, use lpni_pref.nid */
 	union lpni_pref {
 		lnet_nid_t	nid;
-		lnet_nid_t	*nids;
+		struct list_head nids;
 	} lpni_pref;
+	/* list of router nids preferred for this peer NI */
+	struct list_head	lpni_rtr_pref_nids;
+	/* The relative selection priority of this peer NI */
+	__u32			lpni_sel_priority;
 	/* number of preferred NIDs in lnpi_pref_nids */
 	__u32			lpni_pref_nnids;
 };
@@ -767,6 +783,9 @@ struct lnet_peer_net {
 
 	/* selection sequence number */
 	__u32			lpn_seq;
+
+	/* relative peer net selection priority */
+	__u32			lpn_sel_priority;
 
 	/* reference count */
 	atomic_t		lpn_refcount;

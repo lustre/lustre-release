@@ -373,10 +373,13 @@ lnet_net_alloc(__u32 net_id, struct list_head *net_list)
 	INIT_LIST_HEAD(&net->net_ni_list);
 	INIT_LIST_HEAD(&net->net_ni_added);
 	INIT_LIST_HEAD(&net->net_ni_zombie);
+	INIT_LIST_HEAD(&net->net_rtr_pref_nids);
 	spin_lock_init(&net->net_lock);
 
 	net->net_id = net_id;
 	net->net_last_alive = ktime_get_real_seconds();
+
+	net->net_sel_priority = LNET_MAX_SELECTION_PRIORITY;
 
 	/* initialize global paramters to undefiend */
 	net->net_tunables.lct_peer_timeout = -1;
@@ -481,6 +484,7 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 		ni->ni_net_ns = get_net(&init_net);
 
 	ni->ni_state = LNET_NI_STATE_INIT;
+	ni->ni_sel_priority = LNET_MAX_SELECTION_PRIORITY;
 	list_add_tail(&ni->ni_netlist, &net->net_ni_added);
 
 	/*
