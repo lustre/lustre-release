@@ -3006,6 +3006,21 @@ lnet_get_ni_idx_locked(int idx)
 	return NULL;
 }
 
+int lnet_get_net_healthv_locked(struct lnet_net *net)
+{
+	struct lnet_ni *ni;
+	int best_healthv = 0;
+	int healthv;
+
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+		healthv = atomic_read(&ni->ni_healthv);
+		if (healthv > best_healthv)
+			best_healthv = healthv;
+	}
+
+	return best_healthv;
+}
+
 struct lnet_ni *
 lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
 {

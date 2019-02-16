@@ -548,6 +548,7 @@ int lnet_get_rtr_pool_cfg(int idx, struct lnet_ioctl_pool_cfg *pool_cfg);
 struct lnet_ni *lnet_get_next_ni_locked(struct lnet_net *mynet,
 					struct lnet_ni *prev);
 struct lnet_ni *lnet_get_ni_idx_locked(int idx);
+int lnet_get_net_healthv_locked(struct lnet_net *net);
 
 extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 				struct libcfs_ioctl_hdr __user *uparam);
