@@ -148,8 +148,6 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 				osd_dt_dev(th->th_dev)->od_svname, th, error);
 	}
 
-	dt_txn_hook_commit(th);
-
 	/* call per-transaction callbacks if any */
 	list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage) {
 		LASSERTF(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC,

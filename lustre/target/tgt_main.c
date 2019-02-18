@@ -218,7 +218,6 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	/* prepare transactions callbacks */
 	lut->lut_txn_cb.dtc_txn_start = tgt_txn_start_cb;
 	lut->lut_txn_cb.dtc_txn_stop = tgt_txn_stop_cb;
-	lut->lut_txn_cb.dtc_txn_commit = NULL;
 	lut->lut_txn_cb.dtc_cookie = lut;
 	lut->lut_txn_cb.dtc_tag = LCT_DT_THREAD | LCT_MD_THREAD;
 	INIT_LIST_HEAD(&lut->lut_txn_cb.dtc_linkage);

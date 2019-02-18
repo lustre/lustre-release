@@ -136,24 +136,6 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *th)
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
-void dt_txn_hook_commit(struct thandle *th)
-{
-	struct dt_txn_callback *cb;
-
-	if (th->th_local)
-		return;
-
-	list_for_each_entry(cb, &th->th_dev->dd_txn_callbacks,
-			    dtc_linkage) {
-		/* Right now, the bottom device (OSD) will use this hook
-		 * commit to notify OSP, so we do not check and replace
-		 * the thandle to top thandle now */
-		if (cb->dtc_txn_commit)
-			cb->dtc_txn_commit(th, cb->dtc_cookie);
-	}
-}
-EXPORT_SYMBOL(dt_txn_hook_commit);
-
 int dt_device_init(struct dt_device *dev, struct lu_device_type *t)
 {
 	INIT_LIST_HEAD(&dev->dd_txn_callbacks);

@@ -1919,7 +1919,6 @@ struct dt_txn_callback {
                              struct thandle *txn, void *cookie);
         int (*dtc_txn_stop)(const struct lu_env *env,
                             struct thandle *txn, void *cookie);
-        void (*dtc_txn_commit)(struct thandle *txn, void *cookie);
 	void			*dtc_cookie;
 	__u32			dtc_tag;
 	struct list_head	dtc_linkage;
@@ -1931,7 +1930,6 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb);
 int dt_txn_hook_start(const struct lu_env *env,
                       struct dt_device *dev, struct thandle *txn);
 int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
-void dt_txn_hook_commit(struct thandle *txn);
 
 int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj);
 
