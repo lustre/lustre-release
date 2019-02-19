@@ -565,8 +565,8 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags);
 
 /**
  * Return a pointer to a newly-allocated opaque data type containing the
- * layout for the file associated with Lustre file identifier string
- * \a fidstr.  The string \a path must name a path within the
+ * layout for the file associated with Lustre file identifier
+ * \a fid.  The string \a path must name a path within the
  * filesystem that contains the file being looked up, such as the
  * filesystem root.  The returned pointer should be freed with
  * llapi_layout_free() when it is no longer needed.  Failure is
@@ -576,6 +576,32 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags);
 struct llapi_layout *llapi_layout_get_by_fid(const char *path,
 					     const struct lu_fid *fid,
 					     uint32_t flags);
+
+enum llapi_layout_xattr_flags {
+	LLAPI_LXF_CHECK = 0x0001,
+	LLAPI_LXF_COPY  = 0x0002,
+};
+
+/**
+ * Return a pointer to a newly-allocated opaque data type containing the
+ * layout for the file associated with extended attribute \a lov_xattr.  The
+ * length of the extended attribute is \a lov_xattr_size. The \a lov_xattr
+ * should be raw xattr without being swapped, since this function will swap it
+ * properly. Thus, \a lov_xattr will be modified during the process. If the
+ * \a LLAPI_LXF_CHECK flag of \a flags is set, this function will check whether
+ * the objects count in lum is consistent with the stripe count in lum. This
+ * check only apply to regular file, so \a LLAPI_LXF_CHECK flag should be
+ * cleared if the xattr belongs to a directory. If the \a LLAPI_LXF_COPY flag
+ * of \a flags is set, this function will use a temporary buffer for byte
+ * swapping when necessary, leaving \a lov_xattr untouched. Otherwise, the byte
+ * swapping will be done to the \a lov_xattr buffer directly.  The returned
+ * pointer should be freed with llapi_layout_free() when it is no longer
+ * needed.  Failure is  * indicated with a NULL return value and an appropriate
+ * error code stored in errno.
+ */
+struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
+					       ssize_t lov_xattr_size,
+					       uint32_t flags);
 
 /**
  * Allocate a new layout. Use this when creating a new file with

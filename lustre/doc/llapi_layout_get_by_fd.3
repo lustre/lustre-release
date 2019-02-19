@@ -6,8 +6,6 @@ obtain the layout of a Lustre file
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
-.BI "struct llapi_layout *llapi_layout_get_by_xattr(const void *"lov_xattr ",
-.BI "                                               ssize_t " lov_xattr_size );
 .BI "struct llapi_layout *llapi_layout_get_by_fd(int "fd ", uint32_t " flags );
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_fid(const char *"lustre_path ,
@@ -16,6 +14,10 @@ obtain the layout of a Lustre file
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_path(const char *"path ,
 .BI "                                              uint32_t " flags );
+.PP
+.BI "struct llapi_layout *llapi_layout_get_by_xattr(void *"lov_xattr ,
+.BI "                                               ssize_t " lov_xattr_size ,
+.BI "                                               uint32_t " xattr_flags );
 .fi
 .SH DESCRIPTION
 .PP
@@ -46,7 +48,10 @@ For
 .BR llapi_layout_get_by_xattr() ,
 .I lov_xattr
 is a Lustre layout extended attribute (LOV EA) from a file or directory in
-a Lustre filesystem.
+a Lustre filesystem. The
+.I lov_xattr
+should be the raw xattr without being byte-swapped, since this function will
+swap it properly.
 .PP
 For
 .BR llapi_layout_get_by_fd() ,
@@ -76,13 +81,17 @@ argument that names a file or directory in a Lustre filesystem.
 .PP
 Zero or more flags may be bitwise-or'd together in
 .I flags
+or
+.I xattr_flags
 to control how a layout is retrieved.  Currently
 .B llapi_layout_get_by_path()
 accepts only one flag, and
 .B llapi_layout_get_by_fd()
 and
 .B llapi_layout_get_by_fid()
-do not accept any flags. The list of flags is as follows:
+do not accept any flags. The list of flags that can be used in
+.I flags
+is as follows:
 .TP 5
 .SM LAYOUT_GET_EXPECTED
 Unspecified attribute values are replaced by the literal default values
@@ -117,6 +126,29 @@ since stripe size is unspecified, while
 .B llapi_layout_get_by_path(D, LAYOUT_GET_EXPECTED)
 reports the literal value 1048576.  Both forms report a stripe count
 of 2, since that attribute is specified.
+.PP
+The list of flags that can be used in
+.I xattr_flags
+is as follows:
+.TP 5
+.SM LLAPI_LXF_CHECK
+If the
+.B LLAPI_LXF_CHECK
+flag is set, this function will check whether the objects count in lum
+is consistent with the stripe count in lum. This check only apply to
+regular file, so
+.B LLAPI_LXF_CHECK
+flag should be cleared if the xattr belongs to a directory.
+.TP
+.SM LLAPI_LXF_COPY
+If the
+.B LLAPI_LXF_COPY
+flag is set, this function will use a temporary buffer for byte swapping
+when necessary, leaving
+.I lov_xattr
+untouched. Otherwise, the byte swapping will be done to the
+.I lov_xattr
+buffer directly.
 .SH RETURN VALUES
 .LP
 .BR llapi_layout_get_by_fd() ,
