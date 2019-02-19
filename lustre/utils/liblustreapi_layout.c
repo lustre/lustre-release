@@ -357,29 +357,134 @@ struct llapi_layout *llapi_layout_alloc(void)
 }
 
 /**
+ * Check if the given \a lum_size is large enough to hold the required
+ * fields in \a lum.
+ *
+ * \param[in] lum	the struct lov_user_md to check
+ * \param[in] lum_size	the number of bytes in \a lum
+ *
+ * \retval true		the \a lum_size is too small
+ * \retval false	the \a lum_size is large enough
+ */
+static bool llapi_layout_lum_truncated(struct lov_user_md *lum, size_t lum_size)
+{
+	uint32_t magic;
+
+	if (lum_size < sizeof(lum->lmm_magic))
+		return true;
+
+	if (lum->lmm_magic == LOV_MAGIC_V1 ||
+	    lum->lmm_magic == __swab32(LOV_MAGIC_V1))
+		magic = LOV_MAGIC_V1;
+	else if (lum->lmm_magic == LOV_MAGIC_V3 ||
+		 lum->lmm_magic == __swab32(LOV_MAGIC_V3))
+		magic = LOV_MAGIC_V3;
+	else if (lum->lmm_magic == LOV_MAGIC_COMP_V1 ||
+		 lum->lmm_magic == __swab32(LOV_MAGIC_COMP_V1))
+		magic = LOV_MAGIC_COMP_V1;
+	else
+		return true;
+
+	if (magic == LOV_MAGIC_V1 || magic == LOV_MAGIC_V3)
+		return lum_size < lov_user_md_size(0, magic);
+	else
+		return lum_size < sizeof(struct lov_comp_md_v1);
+}
+
+/* Verify if the objects count in lum is consistent with the
+ * stripe count in lum. It applies to regular file only. */
+static bool llapi_layout_lum_valid(struct lov_user_md *lum, int lum_size)
+{
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	int i, ent_count, obj_count;
+
+	if (lum->lmm_magic == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lum;
+		ent_count = comp_v1->lcm_entry_count;
+	} else if (lum->lmm_magic == LOV_MAGIC_V1 ||
+		   lum->lmm_magic == LOV_MAGIC_V3) {
+		ent_count = 1;
+	} else {
+		return false;
+	}
+
+	for (i = 0; i < ent_count; i++) {
+		if (comp_v1) {
+			lum = (struct lov_user_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[i].lcme_offset);
+			lum_size = comp_v1->lcm_entries[i].lcme_size;
+		}
+		obj_count = llapi_layout_objects_in_lum(lum, lum_size);
+
+		if (comp_v1) {
+			if (!(comp_v1->lcm_entries[i].lcme_flags &
+				 LCME_FL_INIT) && obj_count != 0)
+				return false;
+		} else if (obj_count != lum->lmm_stripe_count) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
  * Convert the data from a lov_user_md to a newly allocated llapi_layout.
  * The caller is responsible for freeing the returned pointer.
  *
  * \param[in] lov_xattr		LOV user metadata xattr to copy data from
  * \param[in] lov_xattr_size	size the lov_xattr_size passed in
+ * \param[in] flags		bitwise-or'd flags to control the behavior
  *
  * \retval		valid llapi_layout pointer on success
  * \retval		NULL if memory allocation fails
  */
-struct llapi_layout *llapi_layout_get_by_xattr(const void *lov_xattr,
-					       ssize_t lov_xattr_size)
+struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
+					       ssize_t lov_xattr_size,
+					       uint32_t flags)
 {
-	const struct lov_user_md *lum = lov_xattr;
+	struct lov_user_md *lum = lov_xattr;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	struct lov_comp_md_entry_v1 *ent;
 	struct lov_user_md *v1;
-	struct llapi_layout *layout;
+	struct llapi_layout *layout = NULL;
 	struct llapi_layout_comp *comp;
 	int i, ent_count = 0, obj_count;
 
-	layout = __llapi_layout_alloc();
-	if (layout == NULL)
+	if (lov_xattr == NULL || lov_xattr_size <= 0) {
+		errno = EINVAL;
 		return NULL;
+	}
+
+	/* Return an error if we got back a partial layout. */
+	if (llapi_layout_lum_truncated(lov_xattr, lov_xattr_size)) {
+		errno = ERANGE;
+		return NULL;
+	}
+
+#if __BYTE_ORDER == __BIG_ENDIAN
+	if (flags & LLAPI_LXF_COPY) {
+		lum = malloc(lov_xattr_size);
+		if (lum == NULL) {
+			errno = ENOMEM;
+			return NULL;
+		}
+		memcpy(lum, lov_xattr, lov_xattr_size);
+	}
+#endif
+
+	llapi_layout_swab_lov_user_md(lum, lov_xattr_size);
+
+	if ((flags & LLAPI_LXF_CHECK) &&
+	    !llapi_layout_lum_valid(lum, lov_xattr_size)) {
+		errno = EBADSLT;
+		goto out;
+	}
+
+	layout = __llapi_layout_alloc();
+	if (layout == NULL) {
+		errno = ENOMEM;
+		goto out;
+	}
 
 	if (lum->lmm_magic == LOV_MAGIC_COMP_V1) {
 		comp_v1 = (struct lov_comp_md_v1 *)lum;
@@ -396,16 +501,16 @@ struct llapi_layout *llapi_layout_get_by_xattr(const void *lov_xattr,
 
 		if (lov_xattr_size <= 0) {
 			errno = EINVAL;
-			goto error;
+			goto out_layout;
 		}
 	} else {
 		errno = EOPNOTSUPP;
-		goto error;
+		goto out_layout;
 	}
 
 	if (ent_count == 0) {
 		errno = EINVAL;
-		goto error;
+		goto out_layout;
 	}
 
 	v1 = (struct lov_user_md *)lum;
@@ -422,7 +527,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(const void *lov_xattr,
 		obj_count = llapi_layout_objects_in_lum(v1, lov_xattr_size);
 		comp = __llapi_comp_alloc(obj_count);
 		if (comp == NULL)
-			goto error;
+			goto out_layout;
 
 		if (ent != NULL) {
 			comp->llc_extent.e_start = ent->lcme_extent.e_start;
@@ -485,10 +590,14 @@ struct llapi_layout *llapi_layout_get_by_xattr(const void *lov_xattr,
 		layout->llot_cur_comp = comp;
 	}
 
+out:
+	if (lum != lov_xattr)
+		free(lum);
 	return layout;
-error:
+out_layout:
 	llapi_layout_free(layout);
-	return NULL;
+	layout = NULL;
+	goto out;
 }
 
 /**
@@ -764,77 +873,6 @@ static bool is_any_specified(const struct llapi_layout *layout)
 }
 
 /**
- * Check if the given \a lum_size is large enough to hold the required
- * fields in \a lum.
- *
- * \param[in] lum	the struct lov_user_md to check
- * \param[in] lum_size	the number of bytes in \a lum
- *
- * \retval true		the \a lum_size is too small
- * \retval false	the \a lum_size is large enough
- */
-static bool llapi_layout_lum_truncated(struct lov_user_md *lum, size_t lum_size)
-{
-	uint32_t magic;
-
-	if (lum_size < sizeof(lum->lmm_magic))
-		return true;
-
-	if (lum->lmm_magic == LOV_MAGIC_V1 ||
-	    lum->lmm_magic == __swab32(LOV_MAGIC_V1))
-		magic = LOV_MAGIC_V1;
-	else if (lum->lmm_magic == LOV_MAGIC_V3 ||
-		 lum->lmm_magic == __swab32(LOV_MAGIC_V3))
-		magic = LOV_MAGIC_V3;
-	else if (lum->lmm_magic == LOV_MAGIC_COMP_V1 ||
-		 lum->lmm_magic == __swab32(LOV_MAGIC_COMP_V1))
-		magic = LOV_MAGIC_COMP_V1;
-	else
-		return true;
-
-	if (magic == LOV_MAGIC_V1 || magic == LOV_MAGIC_V3)
-		return lum_size < lov_user_md_size(0, magic);
-	else
-		return lum_size < sizeof(struct lov_comp_md_v1);
-}
-
-/* Verify if the objects count in lum is consistent with the
- * stripe count in lum. It applies to regular file only. */
-static bool llapi_layout_lum_valid(struct lov_user_md *lum, int lum_size)
-{
-	struct lov_comp_md_v1 *comp_v1 = NULL;
-	int i, ent_count, obj_count;
-
-	if (lum->lmm_magic == LOV_MAGIC_COMP_V1) {
-		comp_v1 = (struct lov_comp_md_v1 *)lum;
-		ent_count = comp_v1->lcm_entry_count;
-	} else if (lum->lmm_magic == LOV_MAGIC_V1 ||
-		   lum->lmm_magic == LOV_MAGIC_V3) {
-		ent_count = 1;
-	} else {
-		return false;
-	}
-
-	for (i = 0; i < ent_count; i++) {
-		if (comp_v1) {
-			lum = (struct lov_user_md *)((char *)comp_v1 +
-				comp_v1->lcm_entries[i].lcme_offset);
-			lum_size = comp_v1->lcm_entries[i].lcme_size;
-		}
-		obj_count = llapi_layout_objects_in_lum(lum, lum_size);
-
-		if (comp_v1) {
-			if (!(comp_v1->lcm_entries[i].lcme_flags &
-				 LCME_FL_INIT) && obj_count != 0)
-				return false;
-		} else if (obj_count != lum->lmm_stripe_count) {
-			return false;
-		}
-	}
-	return true;
-}
-
-/**
  * Get the striping layout for the file referenced by file descriptor \a fd.
  *
  * If the filesystem does not support the "lustre." xattr namespace, the
@@ -873,14 +911,6 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
 		goto out;
 	}
 
-	/* Return an error if we got back a partial layout. */
-	if (llapi_layout_lum_truncated(lum, bytes_read)) {
-		errno = EINTR;
-		goto out;
-	}
-
-	llapi_layout_swab_lov_user_md(lum, bytes_read);
-
 	/* Directories may have a positive non-zero lum->lmm_stripe_count
 	 * yet have an empty lum->lmm_objects array. For non-directories the
 	 * amount of data returned from the kernel must be consistent
@@ -888,12 +918,8 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
 	if (fstat(fd, &st) < 0)
 		goto out;
 
-	if (!S_ISDIR(st.st_mode) && !llapi_layout_lum_valid(lum, bytes_read)) {
-		errno = EINTR;
-		goto out;
-	}
-
-	layout = llapi_layout_get_by_xattr(lum, bytes_read);
+	layout = llapi_layout_get_by_xattr(lum, bytes_read,
+		S_ISDIR(st.st_mode) ? 0 : LLAPI_LXF_CHECK);
 out:
 	free(lum);
 	return layout;
