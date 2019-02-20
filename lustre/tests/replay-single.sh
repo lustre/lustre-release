@@ -137,6 +137,9 @@ test_2c() {
 run_test 2c "setstripe replay"
 
 test_2d() {
+	[[ $mds1_FSTYPE = "zfs" ]] &&
+		[[ $MDS1_VERSION -lt $(version_code 2.12.51) ]] &&
+		skip "requires LU-10143 fix on MDS"
 	replay_barrier $SINGLEMDS
 	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir
 	fail $SINGLEMDS
@@ -2651,6 +2654,9 @@ test_80b() {
 run_test 80b "DNE: create remote dir, drop update rep from MDT0, fail MDT1"
 
 test_80c() {
+	[[ $mds1_FSTYPE = "zfs" ]] &&
+		[[ $MDS1_VERSION -lt $(version_code 2.12.51) ]] &&
+		skip "requires LU-10143 fix on MDS"
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
@@ -2681,6 +2687,9 @@ test_80c() {
 run_test 80c "DNE: create remote dir, drop update rep from MDT1, fail MDT[0,1]"
 
 test_80d() {
+	[[ $mds1_FSTYPE = "zfs" ]] &&
+		[[ $MDS1_VERSION -lt $(version_code 2.12.51) ]] &&
+		skip "requires LU-10143 fix on MDS"
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
