@@ -930,6 +930,10 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 					lvb_len, lvb_type);
 		if (IS_ERR(lock))
 			RETURN(PTR_ERR(lock));
+
+		if (einfo->ei_cb_created)
+			einfo->ei_cb_created(lock);
+
                 /* for the local lock, add the reference */
                 ldlm_lock_addref_internal(lock, einfo->ei_mode);
                 ldlm_lock2handle(lock, lockh);
