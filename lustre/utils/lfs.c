@@ -570,8 +570,8 @@ command_t cmdlist[] = {
 	 "\tstripe_size:      number of bytes to store before moving to the next OST\n"
 	 "\tpool_name:        name of the predefined pool of OSTs\n"
 	 "\tost_indices:      OSTs to stripe over, in order\n"
-	 "\tblock:            wait for the operation to return before continuing\n"
-	 "\tnon-block:        do not wait for the operation to return\n"
+	 "\tblock:        Block file access during data migration (default)\n"
+	 "\tnon-block:    Abort migrations if concurrent access is detected\n"
 	 "\tnon-direct:       do not use direct I/O to copy file contents.\n"},
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs. This command is deprecated, "
