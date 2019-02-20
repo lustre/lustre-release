@@ -592,6 +592,9 @@ typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, __u64 flags,
 /** Type for glimpse callback function of a lock. */
 typedef int (*ldlm_glimpse_callback)(struct ldlm_lock *lock, void *data);
 
+/** Type for created callback function of a lock. */
+typedef void (*ldlm_created_callback)(struct ldlm_lock *lock);
+
 /** Work list for sending GL ASTs to multiple locks. */
 struct ldlm_glimpse_work {
 	struct ldlm_lock	*gl_lock; /* lock to glimpse */
@@ -1197,6 +1200,7 @@ struct ldlm_enqueue_info {
 	void		*ei_cb_local_bl; /** blocking local lock callback */
 	void		*ei_cb_cp;	/** lock completion callback */
 	void		*ei_cb_gl;	/** lock glimpse callback */
+	ldlm_created_callback ei_cb_created;	/** lock created callback */
 	void		*ei_cbdata;	/** Data to be passed into callbacks. */
 	void		*ei_namespace;	/** lock namespace **/
 	u64		ei_inodebits;	/** lock inode bits **/

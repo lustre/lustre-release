@@ -3115,6 +3115,11 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 	return 1;
 }
 
+static void mdt_remote_object_lock_created_cb(struct ldlm_lock *lock)
+{
+	mdt_object_get(NULL, lock->l_ast_data);
+}
+
 int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 			       struct mdt_object *o, const struct lu_fid *fid,
 			       struct lustre_handle *lh, enum ldlm_mode mode,
@@ -3143,8 +3148,8 @@ int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 		 * if we cache lock, couple lock with mdt_object, so that object
 		 * can be easily found in lock ASTs.
 		 */
-		mdt_object_get(mti->mti_env, o);
 		einfo->ei_cbdata = o;
+		einfo->ei_cb_created = mdt_remote_object_lock_created_cb;
 	}
 
 	memset(policy, 0, sizeof(*policy));
@@ -3153,8 +3158,6 @@ int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 
 	rc = mo_object_lock(mti->mti_env, mdt_object_child(o), lh, einfo,
 			    policy);
-	if (rc < 0 && cache)
-		mdt_object_put(mti->mti_env, o);
 
 	/* Return successfully acquired bits to a caller */
 	if (rc == 0) {
