@@ -1478,6 +1478,7 @@ static int cat_check_old_cb(const struct lu_env *env, struct llog_handle *llh,
 		cfs_fail_loc = OBD_FAIL_ONCE | OBD_FAIL_LLOG_PROCESS_TIMEOUT;
 		cfs_fail_val = (unsigned int) (llh->lgh_id.lgl_oi.oi.oi_id &
 					       0xFFFFFFFF);
+		msleep(1 * MSEC_PER_SEC);
 	}
 	*prev_fid = fid;
 
@@ -2040,6 +2041,7 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 
 	kthread_run(llog_test_process_thread, &lpi, "llog_test_process_thread");
 
+	msleep(1 * MSEC_PER_SEC / 2);
 	enospc = 0;
 	eok = 0;
 	CWARN("10h: write %d more log records\n", llog_test_recnum);

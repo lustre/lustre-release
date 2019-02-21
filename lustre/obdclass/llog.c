@@ -554,6 +554,13 @@ repeat:
 			    synced_idx == LLOG_HDR_TAIL(llh)->lrt_index)
 				GOTO(out, rc = 0);
 
+			if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
+				cfs_fail_val == (unsigned int)
+					(loghandle->lgh_id.lgl_oi.oi.oi_id &
+					 0xFFFFFFFF)) {
+				OBD_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
+			}
+
 			/* the bitmap could be changed during processing
 			 * records from the chunk. For wrapped catalog
 			 * it means we can read deleted record and try to
@@ -625,13 +632,6 @@ repeat:
 			loghandle->lgh_cur_offset = (char *)rec - (char *)buf +
 						    chunk_offset;
 
-			if (OBD_FAIL_PRECHECK(OBD_FAIL_LLOG_PROCESS_TIMEOUT) &&
-				index == lh_last_idx &&
-				cfs_fail_val == (unsigned int)
-					(loghandle->lgh_id.lgl_oi.oi.oi_id &
-					 0xFFFFFFFF)) {
-				OBD_RACE(OBD_FAIL_LLOG_PROCESS_TIMEOUT);
-			}
 			/* if set, process the callback on this record */
 			if (ext2_test_bit(index, LLOG_HDR_BITMAP(llh))) {
 				struct llog_cookie *lgc;
