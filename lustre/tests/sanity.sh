@@ -6790,6 +6790,100 @@ test_65m() {
 }
 run_test 65m "normal user can't set filesystem default stripe"
 
+test_65n() {
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.12.0) ]] ||
+		skip "Need MDS version at least 2.12.0"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	[[ $OSTCOUNT -ge 2 ]] || skip_env "needs >= 2 OSTs"
+	which getfattr > /dev/null 2>&1 || skip_env "no getfattr command"
+	which setfattr > /dev/null 2>&1 || skip_env "no setfattr command"
+
+	local root_layout=$(save_layout $MOUNT)
+	stack_trap "restore_layout $MOUNT $root_layout" EXIT
+
+	# new subdirectory under root directory should not inherit
+	# the default layout from root
+	local dir1=$MOUNT/$tdir-1
+	mkdir $dir1 || error "mkdir $dir1 failed"
+	! getfattr -n trusted.lov $dir1 &> /dev/null ||
+		error "$dir1 shouldn't have LOV EA"
+
+	# delete the default layout on root directory
+	$LFS setstripe -d $MOUNT || error "delete root default layout failed"
+
+	local dir2=$MOUNT/$tdir-2
+	mkdir $dir2 || error "mkdir $dir2 failed"
+	! getfattr -n trusted.lov $dir2 &> /dev/null ||
+		error "$dir2 shouldn't have LOV EA"
+
+	# set a new striping pattern on root directory
+	local def_stripe_size=$($LFS getstripe -S $MOUNT)
+	local new_def_stripe_size=$((def_stripe_size * 2))
+	$LFS setstripe -S $new_def_stripe_size $MOUNT ||
+		error "set stripe size on $MOUNT failed"
+
+	# new file created in $dir2 should inherit the new stripe size from
+	# the filesystem default
+	local file2=$dir2/$tfile-2
+	touch $file2 || error "touch $file2 failed"
+
+	local file2_stripe_size=$($LFS getstripe -S $file2)
+	[[ $file2_stripe_size -eq $new_def_stripe_size ]] ||
+		error "$file2 didn't inherit stripe size $new_def_stripe_size"
+
+	local dir3=$MOUNT/$tdir-3
+	mkdir $dir3 || error "mkdir $dir3 failed"
+	! getfattr -n trusted.lov $dir3 &> /dev/null ||
+		error "$dir3 shouldn't have LOV EA"
+
+	# set OST pool on root directory
+	local pool=$TESTNAME
+	pool_add $pool || error "add $pool failed"
+	pool_add_targets $pool 0 $((OSTCOUNT - 1)) 1 ||
+		error "add targets to $pool failed"
+
+	$LFS setstripe -p $pool $MOUNT ||
+		error "set OST pool on $MOUNT failed"
+
+	# new file created in $dir3 should inherit the pool from
+	# the filesystem default
+	local file3=$dir3/$tfile-3
+	touch $file3 || error "touch $file3 failed"
+
+	local file3_pool=$($LFS getstripe -p $file3)
+	[[ "$file3_pool" = "$pool" ]] ||
+		error "$file3 didn't inherit OST pool $pool"
+
+	local dir4=$MOUNT/$tdir-4
+	mkdir $dir4 || error "mkdir $dir4 failed"
+	! getfattr -n trusted.lov $dir4 &> /dev/null ||
+		error "$dir4 shouldn't have LOV EA"
+
+	# new file created in $dir4 should inherit the pool from
+	# the filesystem default
+	local file4=$dir4/$tfile-4
+	touch $file4 || error "touch $file4 failed"
+
+	local file4_pool=$($LFS getstripe -p $file4)
+	[[ "$file4_pool" = "$pool" ]] ||
+		error "$file4 didn't inherit OST pool $pool"
+
+	# new subdirectory under non-root directory should inherit
+	# the default layout from its parent directory
+	$LFS setstripe -S $new_def_stripe_size -p $pool $dir4 ||
+		error "set directory layout on $dir4 failed"
+
+	local dir5=$dir4/$tdir-5
+	mkdir $dir5 || error "mkdir $dir5 failed"
+
+	local dir4_layout=$(get_layout_param $dir4)
+	local dir5_layout=$(get_layout_param $dir5)
+	[[ "$dir4_layout" = "$dir5_layout" ]] ||
+		error "$dir5 should inherit the default layout from $dir4"
+}
+run_test 65n "don't inherit default layout from root for new subdirectories"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
