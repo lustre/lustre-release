@@ -4358,52 +4358,66 @@ failed:
 int llapi_target_iterate(int type_num, char **obd_type,
                          void *args, llapi_cb_t cb)
 {
-	char buf[MAX_STRING_SIZE];
 	int i, rc = 0;
 	glob_t param;
 	FILE *fp;
 
-	rc = cfs_get_param_paths(&param, "devices");
-	if (rc != 0)
-		return -ENOENT;
+	for (i = 0; i < type_num; i++) {
+		int j;
 
-	fp = fopen(param.gl_pathv[0], "r");
-	if (fp == NULL) {
-		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "error: opening '%s'",
-			    param.gl_pathv[0]);
-		goto free_path;
+		rc = cfs_get_param_paths(&param, "%s/*/uuid", obd_type[i]);
+		if (rc != 0)
+			continue;
+
+		for (j = 0; j < param.gl_pathc; j++) {
+			char obd_uuid[UUID_MAX + 1];
+			char *obd_name;
+			char *ptr;
+
+			fp = fopen(param.gl_pathv[j], "r");
+			if (fp == NULL) {
+				rc = -errno;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "error: opening '%s'",
+					    param.gl_pathv[j]);
+				goto free_path;
+			}
+
+			if (fgets(obd_uuid, sizeof(obd_uuid), fp) == NULL) {
+				rc = -errno;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "error: reading '%s'",
+					    param.gl_pathv[j]);
+				goto free_path;
+			}
+
+			/* Extract the obd_name from the sysfs path.
+			 * 'topsysfs'/fs/lustre/'obd_type'/'obd_name'.
+			 */
+			obd_name = strstr(param.gl_pathv[j], "/fs/lustre/");
+			if (!obd_name) {
+				rc = -EINVAL;
+				goto free_path;
+			}
+
+			/* skip /fs/lustre/'obd_type'/ */
+			obd_name += strlen(obd_type[i]) + 12;
+			/* chop off after obd_name */
+			ptr = strrchr(obd_name, '/');
+			if (ptr)
+				*ptr = '\0';
+
+			cb(obd_type[i], obd_name, obd_uuid, args);
+
+			fclose(fp);
+			fp = NULL;
+		}
 	}
-
-        while (fgets(buf, sizeof(buf), fp) != NULL) {
-                char *obd_type_name = NULL;
-                char *obd_name = NULL;
-                char *obd_uuid = NULL;
-                char *bufp = buf;
-                struct obd_statfs osfs_buffer;
-
-                while(bufp[0] == ' ')
-                        ++bufp;
-
-                for(i = 0; i < 3; i++) {
-                        obd_type_name = strsep(&bufp, " ");
-                }
-                obd_name = strsep(&bufp, " ");
-                obd_uuid = strsep(&bufp, " ");
-
-                memset(&osfs_buffer, 0, sizeof (osfs_buffer));
-
-                for (i = 0; i < type_num; i++) {
-                        if (strcmp(obd_type_name, obd_type[i]) != 0)
-                                continue;
-
-                        cb(obd_type_name, obd_name, obd_uuid, args);
-                }
-	}
-	fclose(fp);
 free_path:
+	if (fp)
+		fclose(fp);
 	cfs_free_param_data(&param);
-	return 0;
+	return rc;
 }
 
 static void do_target_check(char *obd_type_name, char *obd_name,
