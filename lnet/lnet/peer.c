@@ -1058,6 +1058,12 @@ lnet_peer_ni_clr_non_mr_pref_nid(struct lnet_peer_ni *lpni)
 	return rc;
 }
 
+void
+lnet_peer_ni_set_selection_priority(struct lnet_peer_ni *lpni, __u32 priority)
+{
+	lpni->lpni_sel_priority = priority;
+}
+
 /*
  * Clear the preferred NIDs from a non-multi-rail peer.
  */

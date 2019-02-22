@@ -94,6 +94,11 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *list);
 int cfs_match_nid(lnet_nid_t nid, struct list_head *list);
 int cfs_expand_nidlist(struct list_head *nidlist, lnet_nid_t *lnet_nidlist,
 		       int max_nids);
+int cfs_match_nid_net(lnet_nid_t nid, __u32 net, struct list_head *net_num_list,
+		      struct list_head *addr);
+int cfs_match_net(__u32 net_id, __u32 net_type,
+		  struct list_head *net_num_list);
+
 int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
 int cfs_ip_addr_match(__u32 addr, struct list_head *list);
 int cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,

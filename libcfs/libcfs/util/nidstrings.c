@@ -1027,6 +1027,71 @@ int cfs_match_nid(lnet_nid_t nid, struct list_head *nidlist)
 	return 0;
 }
 
+static struct netstrfns *
+type2net_info(__u32 net_type)
+{
+	int i;
+
+	for (i = 0; i < libcfs_nnetstrfns; i++) {
+		if (libcfs_netstrfns[i].nf_type == net_type)
+			return &libcfs_netstrfns[i];
+	}
+
+	return NULL;
+}
+
+int
+cfs_match_net(__u32 net_id, __u32 net_type, struct list_head *net_num_list)
+{
+	__u32 net_num;
+
+	if (!net_num_list)
+		return 0;
+
+	if (net_type != LNET_NETTYP(net_id))
+		return 0;
+
+	net_num = LNET_NETNUM(net_id);
+
+	/*
+	 * if there is a net number but the list passed in is empty, then
+	 * there is no match.
+	 */
+	if (!net_num && list_empty(net_num_list))
+		return 1;
+	else if (list_empty(net_num_list))
+		return 0;
+
+	if (!libcfs_num_match(net_num, net_num_list))
+		return 0;
+
+	return 1;
+}
+
+int
+cfs_match_nid_net(lnet_nid_t nid, __u32 net_type,
+		  struct list_head *net_num_list,
+		  struct list_head *addr)
+{
+	__u32 address;
+	struct netstrfns *fns;
+
+	if (!addr || !net_num_list)
+		return 0;
+
+	fns = type2net_info(LNET_NETTYP(LNET_NIDNET(nid)));
+	if (!fns || !net_num_list || !addr)
+		return 0;
+
+	address = LNET_NIDADDR(nid);
+
+	/* if either the address or net number don't match then no match */
+	if (!fns->nf_match_addr(address, addr) ||
+	    !cfs_match_net(LNET_NIDNET(nid), net_type, net_num_list))
+		return 0;
+
+	return 1;
+}
 /**
  * Print the network part of the nidrange \a nr into the specified \a buffer.
  *
