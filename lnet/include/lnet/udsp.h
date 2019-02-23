@@ -113,4 +113,17 @@ void lnet_udsp_free(struct lnet_udsp *udsp);
  */
 void lnet_udsp_destroy(bool shutdown);
 
+/**
+ * lnet_get_udsp_size
+ *	Return the size needed to store the marshalled UDSP
+ */
+size_t lnet_get_udsp_size(struct lnet_udsp *udsp);
+
+/**
+ * lnet_udsp_marshal
+ *	Marshal the udsp into the bulk memory provided.
+ *	Return success/failure.
+ */
+int lnet_udsp_marshal(struct lnet_udsp *udsp,
+		      struct lnet_ioctl_udsp *ioc_udsp);
 #endif /* UDSP_H */
