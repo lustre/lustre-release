@@ -74,13 +74,6 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 	LASSERT((body->mbo_valid & OBD_MD_MDS));
 
 	/*
-	 * Unfortunately, we have to lie to MDC/MDS to retrieve
-	 * attributes llite needs and provideproper locking.
-	 */
-	if (it->it_op & IT_LOOKUP)
-		it->it_op = IT_GETATTR;
-
-	/*
 	 * We got LOOKUP lock, but we really need attrs.
 	 */
 	pmode = it->it_lock_mode;

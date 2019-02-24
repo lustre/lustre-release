@@ -1653,12 +1653,15 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			mdt_lock_reg_init(lhc, LCK_PR);
 
 			/*
-			 * Object's name is on another MDS, no lookup or layout
-			 * lock is needed here but update lock is.
+			 * Object's name entry is on another MDS, it will
+			 * request PERM lock only because LOOKUP lock is owned
+			 * by the MDS where name entry resides.
+			 *
+			 * TODO: it should try layout lock too. - Jinshan
 			 */
 			child_bits &= ~(MDS_INODELOCK_LOOKUP |
 					MDS_INODELOCK_LAYOUT);
-			child_bits |= MDS_INODELOCK_PERM | MDS_INODELOCK_UPDATE;
+			child_bits |= MDS_INODELOCK_PERM;
 
 			rc = mdt_object_lock(info, child, lhc, child_bits);
 			if (rc < 0)
