@@ -639,6 +639,10 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 	char			*name;
 	ENTRY;
 
+	/* do not try to start a new thread as this can lead to a deadlock */
+	if (current->flags & (PF_MEMALLOC | PF_KSWAPD))
+		RETURN(0);
+
 	if (qsd->qsd_dev->dd_rdonly)
 		RETURN(0);
 
