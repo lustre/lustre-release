@@ -353,6 +353,43 @@ ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_WO_ATTR(force_sync);
 
+static ssize_t nonrotational_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	return sprintf(buf, "%u\n", osd->od_nonrotational);
+}
+
+static ssize_t nonrotational_store(struct kobject *kobj,
+				   struct attribute *attr, const char *buffer,
+				   size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+	bool val;
+	int rc;
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	osd->od_nonrotational = val;
+	return count;
+}
+LUSTRE_RW_ATTR(nonrotational);
+
 static ssize_t pdo_show(struct kobject *kobj, struct attribute *attr,
 			char *buf)
 {
@@ -668,6 +705,7 @@ static struct attribute *ldiskfs_attrs[] = {
 	&lustre_attr_fstype.attr,
 	&lustre_attr_mntdev.attr,
 	&lustre_attr_force_sync.attr,
+	&lustre_attr_nonrotational.attr,
 	&lustre_attr_index_backup.attr,
 	&lustre_attr_auto_scrub.attr,
 	&lustre_attr_pdo.attr,

@@ -132,6 +132,7 @@ enum obd_statfs_state {
 	OS_STATE_ENOSPC		= 0x00000020, /**< not enough free space */
 	OS_STATE_ENOINO		= 0x00000040, /**< not enough inodes */
 	OS_STATE_SUM		= 0x00000100, /**< aggregated for all tagrets */
+	OS_STATE_NONROT		= 0x00000200, /**< non-rotational device */
 };
 
 /** filesystem statistics/attributes for target device */

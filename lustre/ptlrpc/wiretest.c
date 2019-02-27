@@ -1945,6 +1945,20 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_statfs, os_spare9));
 	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_spare9) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_spare9));
+	LASSERTF(OS_STATE_DEGRADED == 0x1, "found %lld\n",
+		 (long long)OS_STATE_DEGRADED);
+	LASSERTF(OS_STATE_READONLY == 0x2, "found %lld\n",
+		 (long long)OS_STATE_READONLY);
+	LASSERTF(OS_STATE_NOPRECREATE == 0x4, "found %lld\n",
+		 (long long)OS_STATE_NOPRECREATE);
+	LASSERTF(OS_STATE_ENOSPC == 0x20, "found %lld\n",
+		 (long long)OS_STATE_ENOSPC);
+	LASSERTF(OS_STATE_ENOINO == 0x40, "found %lld\n",
+		 (long long)OS_STATE_ENOINO);
+	LASSERTF(OS_STATE_SUM == 0x100, "found %lld\n",
+		 (long long)OS_STATE_SUM);
+	LASSERTF(OS_STATE_NONROT == 0x200, "found %lld\n",
+		 (long long)OS_STATE_NONROT);
 
 	/* Checks for struct obd_ioobj */
 	LASSERTF((int)sizeof(struct obd_ioobj) == 24, "found %lld\n",

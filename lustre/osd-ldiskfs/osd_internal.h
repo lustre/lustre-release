@@ -267,7 +267,9 @@ struct osd_device {
 				  od_check_ff:1,
 				  od_is_ost:1,
 				  od_in_init:1,
-				  od_index_in_idif:1;
+				  od_index_in_idif:1,
+	/* Other flags */
+				  od_nonrotational:1;
 
 	__s64			  od_auto_scrub_interval;
 	__u32			  od_dirent_journal;
