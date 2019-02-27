@@ -3646,7 +3646,7 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 	if (param->fp_atime) {
 		rc2 = find_value_cmp(st->st_atime, param->fp_atime,
 				     param->fp_asign, param->fp_exclude_atime,
-				     24 * 60 * 60, mds);
+				     param->fp_time_margin, mds);
 		if (rc2 < 0)
 			return rc2;
 		rc = rc2;
@@ -3655,7 +3655,7 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 	if (param->fp_mtime) {
 		rc2 = find_value_cmp(st->st_mtime, param->fp_mtime,
 				     param->fp_msign, param->fp_exclude_mtime,
-				     24 * 60 * 60, mds);
+				     param->fp_time_margin, mds);
 		if (rc2 < 0)
 			return rc2;
 
@@ -3668,7 +3668,7 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 	if (param->fp_ctime) {
 		rc2 = find_value_cmp(st->st_ctime, param->fp_ctime,
 				     param->fp_csign, param->fp_exclude_ctime,
-				     24 * 60 * 60, mds);
+				     param->fp_time_margin, mds);
 		if (rc2 < 0)
 			return rc2;
 

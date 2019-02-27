@@ -386,8 +386,9 @@ command_t cmdlist[] = {
 	{"find", lfs_find, 0,
 	 "find files matching given attributes recursively in directory tree.\n"
 	 "usage: find <directory|filename> ...\n"
-	 "     [[!] --atime|-A [+-]N] [[!] --ctime|-C [+-]N]\n"
-	 "     [[!] --mtime|-M [+-]N] [--maxdepth|-D N] [[!] --blocks|-b N]\n"
+	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --ctime|-C [+-]N[smhdwy]]\n"
+	 "     [[!] --mtime|-M [+-]N[smhdwy]] [[!] --blocks|-b N]\n"
+	 "     [--maxdepth|-D N] [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
 	 "     [--print|-P] [--print0|-0] [[!] --size|-s [+-]N[bkMGTPE]]\n"
 	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
@@ -3406,11 +3407,13 @@ static int lfs_poollist(int argc, char **argv)
         return llapi_poollist(argv[1]);
 }
 
-static int set_time(time_t *time, time_t *set, char *str)
+static time_t set_time(struct find_param *param, time_t *time, time_t *set,
+		       char *str)
 {
-	time_t t;
+	long long t = 0;
 	int res = 0;
-	char *endptr;
+	char *endptr = "AD";
+	char *timebuf;
 
 	if (str[0] == '+')
 		res = 1;
@@ -3420,23 +3423,45 @@ static int set_time(time_t *time, time_t *set, char *str)
 	if (res)
 		str++;
 
-	t = strtol(str, &endptr, 0);
-	if (*endptr != '\0') {
-		fprintf(stderr,
-			"%s find: bad time '%s': %s\n",
-			progname, str, strerror(EINVAL));
-		return INT_MAX;
+	for (timebuf = str; *endptr && *(endptr + 1); timebuf = endptr + 1) {
+		long long val = strtoll(timebuf, &endptr, 0);
+		int unit = 1;
+
+		switch (*endptr) {
+		case  'y':
+			unit *= 52; /* 52 weeks + 1 day below */
+		case  'w':	/* fallthrough */
+			unit *= 7;
+		case '\0': /* days are default unit if none used */
+		case  'd':	/* fallthrough */
+			unit = (unit + (*endptr == 'y')) * 24;
+		case  'h':	/* fallthrough */
+			unit *= 60;
+		case  'm':	/* fallthrough */
+			unit *= 60;
+		case  's':	/* fallthrough */
+			break;
+			/* don't need to multiply by 1 for seconds */
+		default:
+			fprintf(stderr,
+				"%s find: bad time string '%s': %s\n",
+				progname, timebuf, strerror(EINVAL));
+			return LONG_MAX;
+		}
+		if (*endptr && unit < 24 * 60 * 60)
+			param->fp_time_margin = unit;
+
+		t += val * unit;
 	}
-	if (*time < t * 24 * 60 * 60) {
+	if (*time < t) {
 		if (res != 0)
 			str--;
-		fprintf(stderr,
-			"%s find: bad time '%s': too large\n",
+		fprintf(stderr, "%s find: bad time '%s': too large\n",
 			progname, str);
-		return INT_MAX;
+		return LONG_MAX;
 	}
 
-	*set = *time - t * 24 * 60 * 60;
+	*set = *time - t;
 	return res;
 }
 
@@ -3522,6 +3547,7 @@ static int lfs_find(int argc, char **argv)
 	struct find_param param = {
 		.fp_max_depth = -1,
 		.fp_quiet = 1,
+		.fp_time_margin = 24 * 60 * 60,
 	};
         struct option long_opts[] = {
 	{ .val = 'A',	.name = "atime",	.has_arg = required_argument },
@@ -3654,8 +3680,8 @@ static int lfs_find(int argc, char **argv)
 				xsign = &param.fp_msign;
 				param.fp_exclude_mtime = !!neg_opt;
 			}
-			rc = set_time(&t, xtime, optarg);
-			if (rc == INT_MAX) {
+			rc = set_time(&param, &t, xtime, optarg);
+			if (rc == LONG_MAX) {
 				ret = -1;
 				goto err;
 			}

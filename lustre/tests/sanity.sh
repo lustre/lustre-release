@@ -5080,6 +5080,41 @@ test_56o() {
 }
 run_test 56o "check lfs find -mtime for old files"
 
+test_56ob() {
+	local dir=$DIR/$tdir
+	local expected=1
+	local count=0
+
+	# just to make sure there is something that won't be found
+	test_mkdir $dir
+	touch $dir/$tfile.now
+
+	for age in year week day hour min; do
+		count=$((count + 1))
+
+		touch $dir/$tfile-a.$age $dir/$tfile-m.$age
+		touch --date="$count $age ago" -a $dir/$tfile-a.$age
+		touch --date="$count $age ago" -m $dir/$tfile-m.$age
+
+		local cmd="$LFS find $dir -mtime $count${age:0:1}"
+		local nums=$($cmd | wc -l)
+		[ $nums -eq $expected ] ||
+			error "'$cmd' wrong: found $nums, expected $expected"
+
+		cmd="$LFS find $dir -atime $count${age:0:1}"
+		nums=$($cmd | wc -l)
+		[ $nums -eq $expected ] ||
+			error "'$cmd' wrong: found $nums, expected $expected"
+	done
+
+	sleep 2
+	cmd="$LFS find $dir -ctime +1s -type f"
+	nums=$($cmd | wc -l)
+	(( $nums == $count * 2 + 1)) ||
+		error "'$cmd' wrong: found $nums, expected $((expected*2+1))"
+}
+run_test 56ob "check lfs find -atime -mtime -ctime with units"
+
 test_56p() {
 	[ $RUNAS_ID -eq $UID ] &&
 		skip_env "RUNAS_ID = UID = $UID -- skipping"

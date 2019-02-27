@@ -3,24 +3,24 @@
 lfs-find \- Lustre client utility to list files with specific attributes
 .SH SYNOPSIS
 .B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
-      [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn\fR]
+      [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn[smhdwy]\fR]
 [[\fB!\fR] \fB--blocks\fR|\fB-b\fR [\fB+-\fR]\fIn\fR]
-      [[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn[smhdwy]\fR]
       [[\fB!\fR] \fB--component-count|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
       [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR <[^]\fIflag\fB,\fR...>]
       [[\fB!\fR] \fB--component-start|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
-      [[\fB!\fR] \fB--mirror-count|\fB-N\fR [\fB+-\fR]\fIn\fR]
-      [[\fB!\fR] \fB--mirror-state\fR <[^]\fIstate\fR>]
       [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
       [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
 [\fB--maxdepth\fR|\fB-D\fI n\fR]
       [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR <\fIuuid\fR|\fIindex\fR,...>]
       [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
 [[\fB!\fR] \fB--mdt-hash\fR|\fB-H <\fIhashtype\fR>]
-      [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn\fR]
+      [[\fB!\fR] \fB--mirror-count|\fB-N\fR [\fB+-\fR]\fIn\fR]
+[[\fB!\fR] \fB--mirror-state\fR <[^]\fIstate\fR>]
+      [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn[smhdwy]\fR]
 [[\fB!\fR] \fB--name\fR|\fB-n <\fIpattern\fR>]
-      [[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIuuid\fR|\fIindex\fR,...>]
+      [[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIindex\fR,...>]
 [[\fB!\fR] \fB--pool\fR <\fIpool\fR>]
 [\fB--print\fR|\fB-P\fR]
       [\fB--print0\fR|\fB-0\fR]
@@ -45,15 +45,22 @@ OST and MDT location, and composite layout attributes.
 .SH OPTIONS
 .TP
 .BR --atime | -A
-File was last accessed \fIn\fR*24 hours ago.
+File was last accessed \fIn\fR*24 hours ago (if no units are given),
+or \fIn\fR*\fBs\fReconds, \fBm\fRinutes, \fBh\fRours, \fBd\fRays,
+\fBw\fReeks, or \fBy\fRears ago within a margin of error of 24h,
+or smaller if a unit is specified.  Multiple units can be specified,
+for example \fB8h20m\fR is equivalent to \fB500m\fR.  If multipe units
+are specified, the margin of error is based on the smallest unit used.
 .TP
 .BR --blocks | -b
-Blocks allocated by the file is \fIn\fR kibibytes (if no units are given),
+Blocks allocated by the file is \fIn\fR Kibibytes (if no units are given),
 \fIn\fR 512-byte \fBb\fRlocks, or \fBK\fRibi-, \fBM\fRebi-, \fBG\fRibi-,
 \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-bytes if that suffix is given.
 .TP
 .BR --ctime | -C
-File's status was last changed \fIn\fR*24 hours ago.
+File's status was last changed \fIn\fR*24 hours ago, see
+--atime
+for full details and options.
 .TP
 .BR --component-count | --comp-count
 The file has \fIn\fR components in its layout.
@@ -89,30 +96,6 @@ local on the network to clients.
 .TP
 .BR --component-start | --comp-start
 The file has component start offset \fIn\fR (in bytes) for any component.
-.TP
-.BR --mirror-count | -N
-The file has \fIn\fR mirrors in its layout.
-.TP
-.BR --mirror-state
-The file has a state of
-.I state.
-If
-.BI ^ state
-is used, print only files not matching
-.IR state.
-Only one state can be specified. Valid state name is:
-.RS 1.2i
-.TP
-.B ro
-The mirrored file is in read-only state. All of the mirrors contain
-the up-to-date data.
-.TP
-.B wp
-The mirrored file is in a state of being written.
-.TP
-.B sp
-The mirrored file is in a state of being resynchronized.
-.RE
 .TP
 .BR --gid | -g
 File has specified numeric group ID.
@@ -156,8 +139,34 @@ sequential filenames.
 .BR --mdt-count | -T
 The DNE striped directory has the given number of MDT shards.
 .TP
+.BR --mirror-count | -N
+The file has \fIn\fR mirrors in its layout.
+.TP
+.BR --mirror-state
+The file has a state of
+.I state.
+If
+.BI ^ state
+is used, print only files not matching
+.IR state.
+Only one state can be specified. Valid state name is:
+.RS 1.2i
+.TP
+.B ro
+The mirrored file is in read-only state. All of the mirrors contain
+the up-to-date data.
+.TP
+.B wp
+The mirrored file is in a state of being written.
+.TP
+.B sp
+The mirrored file is in a state of being resynchronized.
+.RE
+.TP
 .BR --mtime | -M
-File's data was last modified \fIn\fR*24 hours ago.
+File's data was last modified \fIn\fR*24 hours ago, see
+--atime
+for full details and options.
 .TP
 .BR --name | -n
 Filename matches the given filename, or regular expression using
@@ -170,7 +179,7 @@ File has an object on the specified OST(s).  The OST names can be specified
 using the whole OST target name, or just the OST index number. If multiple
 OSTs are given in a comma-separated list, the file may have an object on
 any of the given OSTs.  Specifying multiple OSTs allows scanning the
-filesystem only once when migrating objects off the OSTs for evacuation
+filesystem only once when migrating objects off multiple OSTs for evacuation
 and replacement using
 .BR lfs-migrate (1).
 .TP
