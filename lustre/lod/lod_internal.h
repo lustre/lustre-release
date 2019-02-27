@@ -306,7 +306,8 @@ struct lod_object {
 			struct lod_mirror_entry	*ldo_mirrors;
 			__u32		ldo_is_composite:1,
 					ldo_flr_state:2,
-					ldo_comp_cached:1;
+					ldo_comp_cached:1,
+					ldo_is_foreign:1;
 		};
 		/* directory stripe (LMV) */
 		struct {
@@ -331,10 +332,19 @@ struct lod_object {
 			struct lod_default_striping	*ldo_def_striping;
 		};
 	};
-	/* file stripe (LOV) */
-	struct lod_layout_component	*ldo_comp_entries;
-	/* slave stripes of striped directory (LMV) */
-	struct dt_object		**ldo_stripe;
+	union {
+		struct {
+			/* foreign/raw format LOV */
+			char				*ldo_foreign_lov;
+			size_t				 ldo_foreign_lov_size;
+		};
+		struct {
+			/* file stripe (LOV) */
+			struct lod_layout_component	*ldo_comp_entries;
+			/* slave stripes of striped directory (LMV) */
+			struct dt_object		**ldo_stripe;
+		};
+	};
 };
 
 #define lod_foreach_mirror_comp(comp, lo, mirror_idx)                      \
@@ -518,6 +528,9 @@ static inline bool lod_obj_is_striped(struct dt_object *dt)
 
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
 		return lo->ldo_dir_stripe_count != 0;
+
+	if (lo->ldo_is_foreign)
+		return false;
 
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		if (lo->ldo_comp_entries[i].llc_stripe == NULL)
@@ -763,6 +776,8 @@ int lod_declare_striped_create(const struct lu_env *env, struct dt_object *dt,
 int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 			struct lu_attr *attr, struct dt_object_format *dof,
 			struct thandle *th);
+int lod_alloc_foreign_lov(struct lod_object *lo, size_t size);
+void lod_free_foreign_lov(struct lod_object *lo);
 void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo);
 void lod_striping_free(const struct lu_env *env, struct lod_object *lo);
 

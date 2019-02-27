@@ -2578,7 +2578,7 @@ static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
 	int magic, size = 0, i;
 	struct lod_layout_component *comp_entries;
 	__u16 comp_cnt;
-	bool is_composite;
+	bool is_composite, is_foreign = false;
 
 	if (is_dir) {
 		comp_cnt = lo->ldo_def_striping->lds_def_comp_cnt;
@@ -2589,8 +2589,11 @@ static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
 		comp_cnt = lo->ldo_comp_cnt;
 		comp_entries = lo->ldo_comp_entries;
 		is_composite = lo->ldo_is_composite;
+		is_foreign = lo->ldo_is_foreign;
 	}
 
+	if (is_foreign)
+		return lo->ldo_foreign_lov_size;
 
 	LASSERT(comp_cnt != 0 && comp_entries != NULL);
 	if (is_composite) {
@@ -3940,7 +3943,7 @@ static int lod_generate_and_set_lovea(const struct lu_env *env,
 
 	LASSERT(lo);
 
-	if (lo->ldo_comp_cnt == 0) {
+	if (lo->ldo_comp_cnt == 0 && !lo->ldo_is_foreign) {
 		lod_striping_free(env, lo);
 		rc = lod_sub_xattr_del(env, next, XATTR_NAME_LOV, th);
 		RETURN(rc);
@@ -5256,7 +5259,8 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 	int	rc = 0, i, j;
 	ENTRY;
 
-	LASSERT(lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL);
+	LASSERT((lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL) ||
+		lo->ldo_is_foreign);
 
 	mirror_id = 0; /* non-flr file's mirror_id is 0 */
 	if (lo->ldo_mirror_count > 1) {
@@ -6819,6 +6823,41 @@ static int lod_object_init(const struct lu_env *env, struct lu_object *lo,
 
 /**
  *
+ * Alloc cached foreign LOV
+ *
+ * \param[in] lo        object
+ * \param[in] size      size of foreign LOV
+ *
+ * \retval		0 on success
+ * \retval		negative if failed
+ */
+int lod_alloc_foreign_lov(struct lod_object *lo, size_t size)
+{
+	OBD_ALLOC_LARGE(lo->ldo_foreign_lov, size);
+	if (lo->ldo_foreign_lov == NULL)
+		return -ENOMEM;
+	lo->ldo_foreign_lov_size = size;
+	lo->ldo_is_foreign = 1;
+	return 0;
+}
+
+/**
+ *
+ * Free cached foreign LOV
+ *
+ * \param[in] lo        object
+ */
+void lod_free_foreign_lov(struct lod_object *lo)
+{
+	if (lo->ldo_foreign_lov != NULL)
+		OBD_FREE_LARGE(lo->ldo_foreign_lov, lo->ldo_foreign_lov_size);
+	lo->ldo_foreign_lov = NULL;
+	lo->ldo_foreign_lov_size = 0;
+	lo->ldo_is_foreign = 0;
+}
+
+/**
+ *
  * Release resources associated with striping.
  *
  * If the object is striped (regular or directory), then release
@@ -6832,7 +6871,10 @@ void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo)
 	struct lod_layout_component *lod_comp;
 	int i, j;
 
-	if (lo->ldo_stripe != NULL) {
+	if (unlikely(lo->ldo_is_foreign)) {
+		lod_free_foreign_lov(lo);
+		lo->ldo_comp_cached = 0;
+	} else if (lo->ldo_stripe != NULL) {
 		LASSERT(lo->ldo_comp_entries == NULL);
 		LASSERT(lo->ldo_dir_stripes_allocated > 0);
 

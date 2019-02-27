@@ -122,6 +122,7 @@ enum lov_layout_type {
 	LLT_EMPTY,	/** empty file without body (mknod + truncate) */
 	LLT_RELEASED,	/** file with no objects (data in HSM) */
 	LLT_COMP,	/** support composite layout */
+	LLT_FOREIGN,	/** foreign layout */
 	LLT_NR
 };
 
@@ -134,6 +135,8 @@ static inline char *llt2str(enum lov_layout_type llt)
 		return "RELEASED";
 	case LLT_COMP:
 		return "COMPOSITE";
+	case LLT_FOREIGN:
+		return "FOREIGN";
 	case LLT_NR:
 		LBUG();
 	}
@@ -623,9 +626,12 @@ int   lov_page_init_empty (const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
 int   lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 			   struct cl_page *page, pgoff_t index);
+int   lov_page_init_foreign(const struct lu_env *env, struct cl_object *obj,
+			     struct cl_page *page, pgoff_t index);
 struct lu_object *lov_object_alloc   (const struct lu_env *env,
                                       const struct lu_object_header *hdr,
                                       struct lu_device *dev);
+
 struct lu_object *lovsub_object_alloc(const struct lu_env *env,
                                       const struct lu_object_header *hdr,
                                       struct lu_device *dev);

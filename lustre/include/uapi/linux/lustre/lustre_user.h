@@ -55,6 +55,7 @@
 # include <limits.h>
 # include <stdbool.h>
 # include <stdio.h> /* snprintf() */
+# include <stdint.h>
 # include <string.h>
 # define NEED_QUOTA_DEFS
 /* # include <sys/quota.h> - this causes complaints about caddr_t */
@@ -540,6 +541,7 @@ struct fsxattr {
 /* 0x0BD40BD0 is occupied by LOV_MAGIC_MIGRATE */
 #define LOV_USER_MAGIC_SPECIFIC 0x0BD50BD0	/* for specific OSTs */
 #define LOV_USER_MAGIC_COMP_V1	0x0BD60BD0
+#define LOV_USER_MAGIC_FOREIGN	0x0BD70BD0
 
 #define LMV_USER_MAGIC		0x0CD30CD0    /* default lmv magic */
 #define LMV_USER_MAGIC_V0	0x0CD20CD0    /* old default lmv magic*/
@@ -624,6 +626,21 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* pool name */
 	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
+
+struct lov_foreign_md {
+	__u32 lfm_magic;	/* magic number = LOV_MAGIC_FOREIGN */
+	__u32 lfm_length;	/* length of lfm_value */
+	__u32 lfm_type;		/* type, see LOV_FOREIGN_TYPE_ */
+	__u32 lfm_flags;	/* flags, type specific */
+	char lfm_value[];
+};
+
+#define foreign_size(lfm) (((struct lov_foreign_md *)lfm)->lfm_length + \
+			   offsetof(struct lov_foreign_md, lfm_value))
+
+#define foreign_size_le(lfm) \
+	(le32_to_cpu(((struct lov_foreign_md *)lfm)->lfm_length) + \
+	offsetof(struct lov_foreign_md, lfm_value))
 
 struct lu_extent {
 	__u64	e_start;
@@ -781,6 +798,20 @@ enum lmv_hash_type {
 #define LMV_HASH_NAME_FNV_1A_64	"fnv_1a_64"
 
 extern char *mdt_hash_name[LMV_HASH_TYPE_MAX];
+
+/**
+ * LOV foreign types
+ **/
+#define LOV_FOREIGN_TYPE_NONE 0
+#define LOV_FOREIGN_TYPE_DAOS 0xda05
+#define LOV_FOREIGN_TYPE_UNKNOWN UINT32_MAX
+
+struct lustre_foreign_type {
+	uint32_t lft_type;
+	const char *lft_name;
+};
+
+extern struct lustre_foreign_type lov_foreign_type[];
 
 /* Got this according to how get LOV_MAX_STRIPE_COUNT, see above,
  * (max buffer size - lmv+rpc header) / sizeof(struct lmv_user_mds_data) */

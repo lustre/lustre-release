@@ -128,6 +128,8 @@ struct llapi_stripe_param {
 
 int llapi_file_open_param(const char *name, int flags, mode_t mode,
 			  const struct llapi_stripe_param *param);
+int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
+			      __u32 flags, char *foreign_lov);
 int llapi_file_create(const char *name, unsigned long long stripe_size,
 		      int stripe_offset, int stripe_count, int stripe_pattern);
 int llapi_file_open(const char *name, int flags, int mode,
@@ -263,7 +265,9 @@ struct find_param {
 				 fp_exclude_hash_type:1,
 				 fp_yaml:1,	/* output layout in YAML */
 				 fp_check_blocks:1,
-				 fp_exclude_blocks:1;
+				 fp_exclude_blocks:1,
+				 fp_check_foreign:1,
+				 fp_exclude_foreign:1;
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;
@@ -321,6 +325,7 @@ struct find_param {
 	unsigned int		 fp_depth;
 	unsigned int		 fp_hash_type;
 	unsigned int		 fp_time_margin; /* time margin in seconds */
+	__u32			 fp_foreign_type;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

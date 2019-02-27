@@ -63,6 +63,7 @@ MANFILES =					\
 	llapi_create_volatile_param.3		\
 	llapi_fd2parent.3			\
 	llapi_file_create.3			\
+	llapi_file_create_foreign.3		\
 	llapi_file_get_stripe.3			\
 	llapi_file_open.3			\
 	llapi_group_lock.3			\

@@ -148,6 +148,13 @@ int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 	RETURN(0);
 }
 
+int lov_page_init_foreign(const struct lu_env *env, struct cl_object *obj,
+			struct cl_page *page, pgoff_t index)
+{
+	CDEBUG(D_PAGE, DFID" has no data\n", PFID(lu_object_fid(&obj->co_lu)));
+	RETURN(-ENODATA);
+}
+
 bool lov_page_is_empty(const struct cl_page *page)
 {
 	const struct cl_page_slice *slice = cl_page_at(page, &lov_device_type);

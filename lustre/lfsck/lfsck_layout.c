@@ -379,8 +379,29 @@ static int lfsck_layout_verify_header_v1v3(struct dt_object *obj,
 	return 0;
 }
 
+static int lfsck_layout_verify_header_foreign(struct dt_object *obj,
+					      struct lov_foreign_md *lfm,
+					      size_t len)
+{
+	/* magic has been verified already */
+	__u32 value_len = le32_to_cpu(lfm->lfm_length);
+	/* type and flags are not checked for instance */
+
+	CDEBUG(D_INFO, "foreign LOV EA, magic %x, len %u, type %x, flags %x, for file "DFID"\n",
+	       le32_to_cpu(lfm->lfm_magic), value_len,
+	       le32_to_cpu(lfm->lfm_type), le32_to_cpu(lfm->lfm_flags),
+	       PFID(lfsck_dto2fid(obj)));
+
+	if (len != value_len + offsetof(typeof(*lfm), lfm_value))
+		CDEBUG(D_LFSCK, "foreign LOV EA internal size %u does not match EA full size %zu for file "DFID"\n",
+		       value_len, len, PFID(lfsck_dto2fid(obj)));
+
+	/* nothing to repair */
+	return -ENODATA;
+}
+
 static int lfsck_layout_verify_header(struct dt_object *obj,
-				      struct lov_mds_md_v1 *lmm)
+				      struct lov_mds_md_v1 *lmm, size_t len)
 {
 	int rc = 0;
 
@@ -430,6 +451,10 @@ static int lfsck_layout_verify_header(struct dt_object *obj,
 					le32_to_cpu(lcme->lcme_offset)), start,
 					comp_id);
 		}
+	} else if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_FOREIGN) {
+		rc = lfsck_layout_verify_header_foreign(obj,
+						(struct lov_foreign_md *)lmm,
+						len);
 	} else {
 		rc = lfsck_layout_verify_header_v1v3(obj, lmm, 1, 0);
 	}
@@ -468,7 +493,7 @@ again:
 		goto again;
 	}
 
-	rc1 = lfsck_layout_verify_header(obj, buf->lb_buf);
+	rc1 = lfsck_layout_verify_header(obj, buf->lb_buf, rc);
 
 	return rc1 ? rc1 : rc;
 }
@@ -2881,7 +2906,7 @@ again:
 	}
 
 	lmm = buf->lb_buf;
-	rc1 = lfsck_layout_verify_header(parent, lmm);
+	rc1 = lfsck_layout_verify_header(parent, lmm, lovea_size);
 
 	/* If the LOV EA crashed, the rebuild it. */
 	if (rc1 == -EINVAL) {

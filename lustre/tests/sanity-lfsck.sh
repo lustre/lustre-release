@@ -5574,6 +5574,92 @@ test_37()
 }
 run_test 37 "LFSCK must skip a ORPHAN"
 
+test_38()
+{
+	[[ $MDS1_VERSION -le $(version_code 2.12.51) ]] &&
+		skip "Need MDS version newer than 2.12.51"
+
+	test_mkdir $DIR/$tdir
+	local uuid1=$(cat /proc/sys/kernel/random/uuid)
+	local uuid2=$(cat /proc/sys/kernel/random/uuid)
+
+	# create foreign file
+	$LFS setstripe --foreign=daos --flags 0xda05 \
+		-x "${uuid1}@${uuid2}" $DIR/$tdir/$tfile ||
+		error "$DIR/$tdir/$tfile: create failed"
+
+	$LFS getstripe -v $DIR/$tdir/$tfile |
+		grep "lfm_magic:.*0x0BD70BD0" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign magic"
+	# lfm_length is LOV EA size - sizeof(lfm_magic) - sizeof(lfm_length)
+	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_length:.*73" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign size"
+	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_type:.*daos" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign type"
+	$LFS getstripe -v $DIR/$tdir/$tfile |
+		grep "lfm_flags:.*0x0000DA05" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign flags"
+	$LFS getstripe $DIR/$tdir/$tfile |
+		grep "lfm_value:.*${uuid1}@${uuid2}" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign value"
+
+	# modify striping should fail
+	$LFS setstripe -c 2 $DIR/$tdir/$tfile &&
+		error "$DIR/$tdir/$tfile: setstripe should fail"
+
+	$START_NAMESPACE -r -A || error "Fail to start LFSCK for namespace"
+
+	wait_all_targets_blocked namespace completed 1
+
+	# check that "global" namespace_repaired == 0 !!!
+	local repaired=$(do_facet mds1 \
+			 "$LCTL lfsck_query -t all -M ${FSNAME}-MDT0000 |
+			 awk '/^namespace_repaired/ { print \\\$2 }'")
+	[ $repaired -eq 0 ] ||
+		error "(2) Expect no namespace repair, but got: $repaired"
+
+	$START_LAYOUT -A -r || error "Fail to start LFSCK for layout"
+
+	wait_all_targets_blocked layout completed 2
+
+	# check that "global" layout_repaired == 0 !!!
+	local repaired=$(do_facet mds1 \
+			 "$LCTL lfsck_query -t all -M ${FSNAME}-MDT0000 |
+			 awk '/^layout_repaired/ { print \\\$2 }'")
+	[ $repaired -eq 0 ] ||
+		error "(2) Expect no layout repair, but got: $repaired"
+
+	echo "post-lfsck checks of foreign file"
+
+	$LFS getstripe -v $DIR/$tdir/$tfile |
+		grep "lfm_magic:.*0x0BD70BD0" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign magic"
+	# lfm_length is LOV EA size - sizeof(lfm_magic) - sizeof(lfm_length)
+	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_length:.*73" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign size"
+	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_type:.*daos" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign type"
+	$LFS getstripe -v $DIR/$tdir/$tfile |
+		grep "lfm_flags:.*0x0000DA05" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign flags"
+	$LFS getstripe $DIR/$tdir/$tfile |
+		grep "lfm_value:.*${uuid1}@${uuid2}" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign value"
+
+	# modify striping should fail
+	$LFS setstripe -c 2 $DIR/$tdir/$tfile &&
+		error "$DIR/$tdir/$tfile: setstripe should fail"
+
+	# R/W should fail
+	cat $DIR/$tdir/$tfile && "$DIR/$tdir/$tfile: read should fail"
+	cat /etc/passwd > $DIR/$tdir/$tfile &&
+		error "$DIR/$tdir/$tfile: write should fail"
+
+	#remove foreign file
+	rm $DIR/$tdir/$tfile ||
+		error "$DIR/$tdir/$tfile: remove of foreign file has failed"
+}
+run_test 38 "LFSCK does not break foreign file and reverse is also true"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}

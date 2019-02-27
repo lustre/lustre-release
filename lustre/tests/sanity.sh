@@ -2405,6 +2405,101 @@ test_27I() {
 }
 run_test 27I "check that root dir striping does not break parent dir one"
 
+test_27J() {
+	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.12.51) ]] &&
+		skip "Need MDS version newer than 2.12.51"
+
+	test_mkdir $DIR/$tdir
+	local uuid1=$(cat /proc/sys/kernel/random/uuid)
+	local uuid2=$(cat /proc/sys/kernel/random/uuid)
+
+	# create foreign file (raw way)
+	create_foreign_file -f $DIR/$tdir/$tfile -x "${uuid1}@${uuid2}" \
+		-t 1 -F 0xda08 || error "create_foreign_file failed"
+
+	# verify foreign file (raw way)
+	parse_foreign_file -f $DIR/$tdir/$tfile |
+		grep "lov_foreign_magic: 0x0BD70BD0" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign magic"
+	parse_foreign_file -f $DIR/$tdir/$tfile | grep "lov_xattr_size: 89" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign size"
+	parse_foreign_file -f $DIR/$tdir/$tfile |
+		grep "lov_foreign_size: 73" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign size"
+	parse_foreign_file -f $DIR/$tdir/$tfile |
+		grep "lov_foreign_type: 1" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign type"
+	parse_foreign_file -f $DIR/$tdir/$tfile |
+		grep "lov_foreign_flags: 0x0000DA08" ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign flags"
+	local lov=$(parse_foreign_file -f $DIR/$tdir/$tfile |
+		grep "lov_foreign_value: 0x" |
+		sed -e 's/lov_foreign_value: 0x//')
+	local lov2=$(echo -n "${uuid1}@${uuid2}" | od -A n -t x1 -w160)
+	[[ $lov = ${lov2// /} ]] ||
+		error "$DIR/$tdir/$tfile: invalid LOV EA foreign value"
+
+	# create foreign file (lfs + API)
+	$LFS setstripe --foreign=daos --flags 0xda08 \
+		-x "${uuid1}@${uuid2}" $DIR/$tdir/${tfile}2 ||
+		error "$DIR/$tdir/${tfile}2: create failed"
+
+	$LFS getstripe -v $DIR/$tdir/${tfile}2 |
+		grep "lfm_magic:.*0x0BD70BD0" ||
+		error "$DIR/$tdir/${tfile}2: invalid LOV EA foreign magic"
+	# lfm_length is LOV EA size - sizeof(lfm_magic) - sizeof(lfm_length)
+	$LFS getstripe -v $DIR/$tdir/${tfile}2 | grep "lfm_length:.*73" ||
+		error "$DIR/$tdir/${tfile}2: invalid LOV EA foreign size"
+	$LFS getstripe -v $DIR/$tdir/${tfile}2 | grep "lfm_type:.*daos" ||
+		error "$DIR/$tdir/${tfile}2: invalid LOV EA foreign type"
+	$LFS getstripe -v $DIR/$tdir/${tfile}2 |
+		grep "lfm_flags:.*0x0000DA08" ||
+		error "$DIR/$tdir/${tfile}2: invalid LOV EA foreign flags"
+	$LFS getstripe -v $DIR/$tdir/${tfile}2 |
+		grep "lfm_value:.*${uuid1}@${uuid2}" ||
+		error "$DIR/$tdir/${tfile}2: invalid LOV EA foreign value"
+
+	# modify striping should fail
+	$LFS setstripe -c 2 $DIR/$tdir/$tfile &&
+		error "$DIR/$tdir/$tfile: setstripe should fail"
+	$LFS setstripe -c 2 $DIR/$tdir/${tfile}2 &&
+		error "$DIR/$tdir/${tfile}2: setstripe should fail"
+
+	# R/W should fail
+	cat $DIR/$tdir/$tfile && error "$DIR/$tdir/$tfile: read should fail"
+	cat $DIR/$tdir/${tfile}2 &&
+		error "$DIR/$tdir/${tfile}2: read should fail"
+	cat /etc/passwd > $DIR/$tdir/$tfile &&
+		error "$DIR/$tdir/$tfile: write should fail"
+	cat /etc/passwd > $DIR/$tdir/${tfile}2 &&
+		error "$DIR/$tdir/${tfile}2: write should fail"
+
+	# chmod should work
+	chmod 222 $DIR/$tdir/$tfile ||
+		error "$DIR/$tdir/$tfile: chmod failed"
+	chmod 222 $DIR/$tdir/${tfile}2 ||
+		error "$DIR/$tdir/${tfile}2: chmod failed"
+
+	# chown should work
+	chown $RUNAS_ID:$RUNAS_GID $DIR/$tdir/$tfile ||
+		error "$DIR/$tdir/$tfile: chown failed"
+	chown $RUNAS_ID:$RUNAS_GID $DIR/$tdir/${tfile}2 ||
+		error "$DIR/$tdir/${tfile}2: chown failed"
+
+	# rename should work
+	mv $DIR/$tdir/$tfile $DIR/$tdir/${tfile}.new ||
+		error "$DIR/$tdir/$tfile: rename of foreign file has failed"
+	mv $DIR/$tdir/${tfile}2 $DIR/$tdir/${tfile}2.new ||
+		error "$DIR/$tdir/${tfile}2: rename of foreign file has failed"
+
+	#remove foreign file
+	rm $DIR/$tdir/${tfile}.new ||
+		error "$DIR/$tdir/${tfile}.new: remove of foreign file has failed"
+	rm $DIR/$tdir/${tfile}2.new ||
+		error "$DIR/$tdir/${tfile}2.new: remove of foreign file has failed"
+}
+run_test 27J "basic ops on file with foreign LOV"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

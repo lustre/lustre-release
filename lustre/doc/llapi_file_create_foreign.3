@@ -1,0 +1,91 @@
+.TH lustreapi 3 "2009 Jul 10" The Lustre user application interface library
+.SH NAME
+llapi_file_create_foreign \- create a file with foreign layout on a Lustre filesystem
+.SH SYNOPSIS
+.nf
+.B #include <sys/types.h>
+.B #include <sys/stat.h>
+.B #include <fcntl.h>
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_file_create_foreign(const char *" name ", mode_t " mode ","
+.BI "                    __u32 " type ", __u32 " flags ", char *" foreign_lov );
+.sp
+.fi
+.SH DESCRIPTION
+.LP
+.B llapi_file_create_foreign(\|)
+creates a file with
+.I foreign_lov
+free format layout and
+.I mode
+and
+.I name
+on a Lustre filesystem, followed by file close.
+.TP 15
+.I mode
+specifies the permission bits.
+Refer to
+.BR open(2)
+man page for a detailed description.
+.TP 15
+.I type
+specifies a type of foreign layout.
+.TP 15
+.I flags
+specifies any flags for foreign layout.
+.TP 15
+.I foreign_lov
+free-format string to be set as file layout/LOV EA.
+.SH RETURN VALUES
+.LP
+.B llapi_file_create_foreign(\|)
+return:
+.TP
+>=0
+on success, for
+.B llapi_file_open
+the return value is a file descriptor.
+.TP
+<0
+on failure, the absolute value is an error code.
+.SH ERRORS
+.TP 15
+.SM EEXIST
+.I name
+already exists.
+.TP
+.SM ENOTTY
+.I name
+may not point to a Lustre filesystem.
+.SH "EXAMPLE"
+.nf
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdio.h>
+#include <lustre/lustreapi.h>
+int main(int argc, char *argv[])
+{
+        int rc;
+
+        if (argc != 2)
+                return -1;
+
+        rc = llapi_file_create_foreign(argv[1], 0600, LOV_FOREIGN_TYPE_DAOS,
+				       0xda08, "PUUID@CUUID");
+        if (rc < 0) {
+                fprintf(stderr, "file creation has failed, %s\\n", strerror(-rc));
+                return -1;
+        }
+        printf("foreign file %s has been created with 'PUUID@CUUID' layout!\\n",
+               argv[1]);
+        return 0;
+}
+.fi
+.SH "SEE ALSO"
+.BR llapi_file_open (3)
+.BR lustre (7),
+.BR lustreapi (7)
+.BR open (2),

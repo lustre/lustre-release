@@ -321,6 +321,7 @@ command_t cmdlist[] = {
 	 "To create a file with specified striping/composite layout, or\n"
 	 "create/replace the default layout on an existing directory:\n"
 	 SSM_CMD_COMMON("setstripe")
+	 "                 [--mode <mode>]\n"
 	 "                 <directory|filename>\n"
 	 " or\n"
 	 "To add component(s) to an existing composite file:\n"
@@ -340,7 +341,11 @@ command_t cmdlist[] = {
 	 "\tcomp_id:     Unique component ID to delete\n"
 	 "\tcomp_flags:  'init' indicating all instantiated components\n"
 	 "\t             '^init' indicating all uninstantiated components\n"
-	 "\t-I and -F cannot be specified at the same time\n"},
+	 "\t-I and -F cannot be specified at the same time\n"
+	 "To create a file with a foreign (free format) layout:\n"
+	 "usage: setstripe --foreign[=<foreign_type>]\n"
+	 "                 --xattr|-x <layout_string> [--flags <hex>]\n"
+	 "                 [--mode <mode>] <filename>\n"},
 	{"getstripe", lfs_getstripe, 0,
 	 "To list the layout pattern for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
@@ -398,6 +403,7 @@ command_t cmdlist[] = {
 	 "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
 	 "     [[!] --projid <projid>]\n"
 	 "     [[!] --layout|-L released,raid0,mdt]\n"
+	 "     [[!] --foreign[=<foreign_type>]]\n"
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
@@ -631,6 +637,20 @@ static int check_hashtype(const char *hashtype)
 	return 0;
 }
 
+static uint32_t lov_check_foreign_type_name(const char *foreign_type_name)
+{
+	uint32_t i;
+
+	for (i = 0; i < LOV_FOREIGN_TYPE_UNKNOWN; i++) {
+		if (lov_foreign_type[i].lft_name == NULL)
+			break;
+		if (strcmp(foreign_type_name,
+			   lov_foreign_type[i].lft_name) == 0)
+			return lov_foreign_type[i].lft_type;
+	}
+
+	return LOV_FOREIGN_TYPE_UNKNOWN;
+}
 
 static const char *error_loc = "syserror";
 
@@ -2559,11 +2579,13 @@ enum {
 	LFS_COMP_ADD_OPT,
 	LFS_COMP_NO_VERIFY_OPT,
 	LFS_PROJID_OPT,
-	LFS_MIRROR_FLAGS_OPT,
+	LFS_LAYOUT_FLAGS_OPT, /* used for mirror and foreign flags */
 	LFS_MIRROR_ID_OPT,
 	LFS_MIRROR_STATE_OPT,
 	LFS_LAYOUT_COPY,
 	LFS_MIRROR_INDEX_OPT,
+	LFS_LAYOUT_FOREIGN_OPT,
+	LFS_MODE_OPT,
 };
 
 /* functions */
@@ -2585,6 +2607,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	unsigned long long		 size_units = 1;
 	bool				 migrate_mode = false;
 	bool				 migrate_mdt_mode = false;
+	bool				 setstripe_mode = false;
 	bool				 migration_block = false;
 	__u64				 migration_flags = 0;
 	__u32				 tgts[LOV_MAX_STRIPE_COUNT] = { 0 };
@@ -2605,6 +2628,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	bool from_yaml = false;
 	bool from_copy = false;
 	char *template = NULL;
+	bool foreign_mode = false;
+	char *xattr = NULL;
+	uint32_t type = LOV_FOREIGN_TYPE_NONE, flags = 0;
+	char *mode_opt = NULL;
+	mode_t previous_umask = 0;
+	mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
 
 	struct option long_opts[] = {
 /* find { .val = '0',	.name = "null",		.has_arg = no_argument }, */
@@ -2631,10 +2660,14 @@ static int lfs_setstripe_internal(int argc, char **argv,
 						.has_arg = no_argument},
 	{ .val = LFS_COMP_NO_VERIFY_OPT,
 			.name = "no-verify",	.has_arg = no_argument},
-	{ .val = LFS_MIRROR_FLAGS_OPT,
+	{ .val = LFS_LAYOUT_FLAGS_OPT,
 			.name = "flags",	.has_arg = required_argument},
+	{ .val = LFS_LAYOUT_FOREIGN_OPT,
+			.name = "foreign",	.has_arg = optional_argument},
 	{ .val = LFS_MIRROR_ID_OPT,
 			.name = "mirror-id",	.has_arg = required_argument},
+	{ .val = LFS_MODE_OPT,
+			.name = "mode",		.has_arg = required_argument},
 	{ .val = LFS_LAYOUT_COPY,
 			.name = "copy",		.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
@@ -2683,6 +2716,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	/* --verbose is only valid in migrate mode */
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
+	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
 	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument },
 	{ .name = NULL } };
 
@@ -2690,12 +2724,13 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	migrate_mode = (opc == SO_MIGRATE);
 	mirror_mode = (opc == SO_MIRROR_CREATE || opc == SO_MIRROR_EXTEND);
+	setstripe_mode = (opc == SO_SETSTRIPE);
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
 	while ((c = getopt_long(argc, argv,
-				"bc:dDE:f:H:i:I:m:N::no:p:L:s:S:vy:", long_opts,
-				NULL)) >= 0) {
+				"bc:dDE:f:H:i:I:m:N::no:p:L:s:S:vx:y:",
+				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
 			/* Long options. */
@@ -2740,8 +2775,20 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 			break;
-		case LFS_MIRROR_FLAGS_OPT: {
-			__u32 flags;
+		case LFS_LAYOUT_FLAGS_OPT: {
+			uint32_t neg_flags;
+
+			/* check for numeric flags (foreign and mirror cases) */
+			if (setstripe_mode && !mirror_mode && !last_mirror) {
+				flags = strtoul(optarg, &end, 16);
+				if (*end != '\0') {
+					fprintf(stderr,
+						"%s %s: bad flags '%s'\n",
+						progname, argv[0], optarg);
+					return CMD_HELP;
+				}
+				break;
+			}
 
 			if (!mirror_mode || !last_mirror) {
 				fprintf(stderr, "error: %s: --flags must be specified with --mirror-count|-N option\n",
@@ -2750,11 +2797,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 
 			result = comp_str2flags(optarg, &last_mirror->m_flags,
-						&flags);
+						&neg_flags);
 			if (result != 0)
 				goto usage_error;
 
-			if (flags) {
+			if (neg_flags) {
 				fprintf(stderr, "%s: inverted flags are not supported\n",
 					progname);
 				result = -EINVAL;
@@ -2769,6 +2816,37 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		}
+		case LFS_LAYOUT_FOREIGN_OPT:
+			if (optarg != NULL) {
+				/* check pure numeric */
+				type = strtoul(optarg, &end, 0);
+				if (*end) {
+					/* check name */
+					type = lov_check_foreign_type_name(optarg);
+					if (type == LOV_FOREIGN_TYPE_UNKNOWN) {
+						fprintf(stderr,
+							"%s %s: unrecognized foreign type '%s'\n",
+							progname, argv[0],
+							optarg);
+						return CMD_HELP;
+					}
+				}
+			}
+			foreign_mode = true;
+			break;
+		case LFS_MODE_OPT:
+			mode_opt = optarg;
+			if (mode_opt != NULL) {
+				mode = strtoul(mode_opt, &end, 8);
+				if (*end != '\0') {
+					fprintf(stderr,
+						"%s %s: bad MODE '%s'\n",
+						progname, argv[0], mode_opt);
+					return CMD_HELP;
+				}
+				previous_umask = umask(0);
+			}
+			break;
 		case LFS_LAYOUT_COPY:
 			from_copy = true;
 			template = optarg;
@@ -3050,6 +3128,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
 			migration_flags = MIGRATION_VERBOSE;
 			break;
+		case 'x':
+			xattr = optarg;
+			break;
 		case 'y':
 			from_yaml = true;
 			template = optarg;
@@ -3067,6 +3148,29 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		fprintf(stderr, "%s %s: FILE must be specified\n",
 			progname, argv[0]);
 		goto usage_error;
+	}
+
+	if (xattr && !foreign_mode) {
+		/* only print a warning as this is harmless and will be ignored
+		 */
+		fprintf(stderr,
+			"%s %s: xattr has been specified for non-foreign layout\n",
+			progname, argv[0]);
+	} else if (foreign_mode && !xattr) {
+		fprintf(stderr,
+			"%s %s: xattr must be provided in foreign mode\n",
+			progname, argv[0]);
+		goto usage_error;
+	}
+
+	if (foreign_mode && (!setstripe_mode || comp_add | comp_del ||
+	    comp_set || comp_id || delete || from_copy ||
+	    setstripe_args_specified(&lsa) || lsa.lsa_nr_tgts ||
+	    lsa.lsa_tgts)) {
+		fprintf(stderr,
+			"%s %s: only --xattr/--flags/--mode options are valid with --foreign\n",
+			progname, argv[0]);
+		return CMD_HELP;
 	}
 
 	if (mirror_mode && mirror_count == 0) {
@@ -3364,7 +3468,14 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					      NULL);
 		} else if (layout != NULL) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
-						      0666, layout);
+						      mode, layout);
+			if (result >= 0) {
+				close(result);
+				result = 0;
+			}
+		} else if (foreign_mode) {
+			result = llapi_file_create_foreign(fname, mode, type,
+							   flags, xattr);
 			if (result >= 0) {
 				close(result);
 				result = 0;
@@ -3372,7 +3483,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		} else {
 			result = llapi_file_open_param(fname,
 						       O_CREAT | O_WRONLY,
-						       0666, param);
+						       mode, param);
 			if (result >= 0) {
 				close(result);
 				result = 0;
@@ -3385,6 +3496,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			continue;
 		}
 	}
+
+	if (mode_opt != NULL && previous_umask != 0)
+		umask(previous_umask);
 
 	free(param);
 	free(migrate_mdt_param.fp_lmv_md);
@@ -3572,6 +3686,8 @@ static int lfs_find(int argc, char **argv)
 						.has_arg = required_argument },
 	{ .val = LFS_MIRROR_STATE_OPT,
 			.name = "mirror-state",	.has_arg = required_argument },
+	{ .val = LFS_LAYOUT_FOREIGN_OPT,
+			.name = "foreign",	.has_arg = optional_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument },
 	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument },
@@ -3780,6 +3896,30 @@ static int lfs_find(int argc, char **argv)
 				param.fp_mirror_state = state;
 			}
 			break;
+		case LFS_LAYOUT_FOREIGN_OPT: {
+			/* all types by default */
+			uint32_t type = LOV_FOREIGN_TYPE_UNKNOWN;
+
+			if (optarg != NULL) {
+				/* check pure numeric */
+				type = strtoul(optarg, &endptr, 0);
+				if (*endptr) {
+					/* check name */
+					type = lov_check_foreign_type_name(optarg);
+					if (type == LOV_FOREIGN_TYPE_UNKNOWN) {
+						fprintf(stderr,
+							"%s %s: unrecognized foreign type '%s'\n",
+							progname, argv[0],
+							optarg);
+						return CMD_HELP;
+					}
+				}
+			}
+			param.fp_foreign_type = type;
+			param.fp_check_foreign = 1;
+			param.fp_exclude_foreign = !!neg_opt;
+			break;
+		}
                 case 'c':
                         if (optarg[0] == '+') {
 				param.fp_stripe_count_sign = -1;

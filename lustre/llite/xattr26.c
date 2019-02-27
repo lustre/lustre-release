@@ -451,6 +451,7 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 			.cl_buf.lb_len = buf_size,
 		};
 		__u16 refcheck;
+		__u32 magic;
 
 		if (obj == NULL)
 			RETURN(-ENODATA);
@@ -477,7 +478,8 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 		 * otherwise it would confuse tar --xattr by
 		 * recognizing layout gen as stripe offset when the
 		 * file is restored. See LU-2809. */
-		if (((struct lov_mds_md *)buf)->lmm_magic == LOV_MAGIC_COMP_V1)
+		magic = ((struct lov_mds_md *)buf)->lmm_magic;
+		if (magic == LOV_MAGIC_COMP_V1 || magic == LOV_MAGIC_FOREIGN)
 			goto out_env;
 
 		((struct lov_mds_md *)buf)->lmm_layout_gen = 0;

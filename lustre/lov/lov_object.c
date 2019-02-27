@@ -811,10 +811,25 @@ static int lov_init_released(const struct lu_env *env,
 	return 0;
 }
 
+static int lov_init_foreign(const struct lu_env *env,
+			    struct lov_device *dev, struct lov_object *lov,
+			    struct lov_stripe_md *lsm,
+			    const struct cl_object_conf *conf,
+			    union lov_layout_state *state)
+{
+	LASSERT(lsm != NULL);
+	LASSERT(lov->lo_type == LLT_FOREIGN);
+	LASSERT(lov->lo_lsm == NULL);
+
+	lov->lo_lsm = lsm_addref(lsm);
+	return 0;
+}
+
 static int lov_delete_empty(const struct lu_env *env, struct lov_object *lov,
 			    union lov_layout_state *state)
 {
-	LASSERT(lov->lo_type == LLT_EMPTY || lov->lo_type == LLT_RELEASED);
+	LASSERT(lov->lo_type == LLT_EMPTY || lov->lo_type == LLT_RELEASED ||
+		lov->lo_type == LLT_FOREIGN);
 
 	lov_layout_wait(env, lov);
 	return 0;
@@ -936,6 +951,23 @@ static int lov_print_released(const struct lu_env *env, void *cookie,
 	return 0;
 }
 
+static int lov_print_foreign(const struct lu_env *env, void *cookie,
+				lu_printer_t p, const struct lu_object *o)
+{
+	struct lov_object	*lov = lu2lov(o);
+	struct lov_stripe_md	*lsm = lov->lo_lsm;
+
+	(*p)(env, cookie,
+		"foreign: %s, lsm{%p 0x%08X %d %u}:\n",
+		lov->lo_layout_invalid ? "invalid" : "valid", lsm,
+		lsm->lsm_magic, atomic_read(&lsm->lsm_refc),
+		lsm->lsm_layout_gen);
+	(*p)(env, cookie,
+		"raw_ea_content '%.*s'\n",
+		(int)lsm->lsm_foreign_size, (char *)lsm_foreign(lsm));
+	return 0;
+}
+
 /**
  * Implements cl_object_operations::coo_attr_get() method for an object
  * without stripes (LLT_EMPTY layout type).
@@ -1034,6 +1066,16 @@ const static struct lov_layout_operations lov_dispatch[] = {
 		.llo_io_init   = lov_io_init_composite,
 		.llo_getattr   = lov_attr_get_composite,
 	},
+	[LLT_FOREIGN] = {
+		.llo_init      = lov_init_foreign,
+		.llo_delete    = lov_delete_empty,
+		.llo_fini      = lov_fini_released,
+		.llo_print     = lov_print_foreign,
+		.llo_page_init = lov_page_init_foreign,
+		.llo_lock_init = lov_lock_init_empty,
+		.llo_io_init   = lov_io_init_empty,
+		.llo_getattr   = lov_attr_get_empty,
+	},
 };
 
 /**
@@ -1064,6 +1106,9 @@ static enum lov_layout_type lov_type(struct lov_stripe_md *lsm)
 	    lsm->lsm_magic == LOV_MAGIC_V3 ||
 	    lsm->lsm_magic == LOV_MAGIC_COMP_V1)
 		return LLT_COMP;
+
+	if (lsm->lsm_magic == LOV_MAGIC_FOREIGN)
+		return LLT_FOREIGN;
 
 	return LLT_EMPTY;
 }
@@ -2136,6 +2181,8 @@ int lov_read_and_clear_async_rc(struct cl_object *clob)
 		}
 		case LLT_RELEASED:
 		case LLT_EMPTY:
+			/* fall through */
+		case LLT_FOREIGN:
 			break;
 		default:
 			LBUG();

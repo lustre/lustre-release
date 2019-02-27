@@ -86,6 +86,14 @@ char *mdt_hash_name[] = { "none",
 			  LMV_HASH_NAME_ALL_CHARS,
 			  LMV_HASH_NAME_FNV_1A_64 };
 
+struct lustre_foreign_type lov_foreign_type[] = {
+	{.lft_type = LOV_FOREIGN_TYPE_NONE, .lft_name = "none"},
+	{.lft_type = LOV_FOREIGN_TYPE_DAOS, .lft_name = "daos"},
+	/* must be the last element */
+	{.lft_type = LOV_FOREIGN_TYPE_UNKNOWN, .lft_name = NULL}
+	/* array max dimension must be <= UINT32_MAX */
+};
+
 void llapi_msg_set_level(int level)
 {
         /* ensure level is in the good range */
@@ -796,6 +804,76 @@ int llapi_file_open(const char *name, int flags, int mode,
         return llapi_file_open_pool(name, flags, mode, stripe_size,
                                     stripe_offset, stripe_count,
                                     stripe_pattern, NULL);
+}
+
+int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
+			      __u32 flags, char *foreign_lov)
+{
+	size_t len;
+	struct lov_foreign_md *lfm;
+	int fd, rc;
+
+	if (foreign_lov == NULL) {
+		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+			    "foreign LOV EA content must be provided");
+		return -EINVAL;
+	}
+
+	len = strlen(foreign_lov);
+	if (len > XATTR_SIZE_MAX - offsetof(struct lov_foreign_md, lfm_value) ||
+	    len <= 0) {
+		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+			    "foreign LOV EA size %zu (must be 0 < len < %zu)",
+			    len, XATTR_SIZE_MAX -
+			    offsetof(struct lov_foreign_md, lfm_value));
+		return -EINVAL;
+	}
+
+	lfm = malloc(len + offsetof(struct lov_foreign_md, lfm_value));
+	if (lfm == NULL) {
+		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
+			    "failed to allocate lov_foreign_md");
+		return -ENOMEM;
+	}
+
+	fd = open(name, O_WRONLY|O_CREAT|O_LOV_DELAY_CREATE, mode);
+	if (fd == -1) {
+		perror("open()");
+		rc = -errno;
+		goto out_free;
+	}
+
+	lfm->lfm_magic = LOV_USER_MAGIC_FOREIGN;
+	lfm->lfm_length = len;
+	lfm->lfm_type = type;
+	lfm->lfm_flags = flags;
+	memcpy(lfm->lfm_value, foreign_lov, len);
+
+	if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, lfm) != 0) {
+		char *errmsg = "stripe already set";
+		char fsname[MAX_OBD_NAME + 1] = { 0 };
+
+		rc = -errno;
+		if (errno != EEXIST && errno != EALREADY)
+			errmsg = strerror(errno);
+
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "setstripe error for '%s': %s", name, errmsg);
+
+		/* Make sure we are on a Lustre file system */
+		if (rc == -ENOTTY && llapi_search_fsname(name, fsname))
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "'%s' is not on a Lustre filesystem",
+				    name);
+
+		close(fd);
+		fd = rc;
+	}
+
+out_free:
+	free(lfm);
+
+	return fd;
 }
 
 int llapi_file_create(const char *name, unsigned long long stripe_size,
@@ -3519,6 +3597,53 @@ static void lov_dump_plain_user_lmm(struct find_param *param, char *path,
 	}
 }
 
+static uint32_t lov_check_foreign_type(uint32_t foreign_type)
+{
+	uint32_t i;
+
+	for (i = 0; i < LOV_FOREIGN_TYPE_UNKNOWN; i++) {
+		if (lov_foreign_type[i].lft_name == NULL)
+			break;
+		if (foreign_type == lov_foreign_type[i].lft_type)
+			return i;
+	}
+
+	return LOV_FOREIGN_TYPE_UNKNOWN;
+}
+
+static void lov_dump_foreign_lmm(struct find_param *param, char *path,
+				 enum lov_dump_flags flags)
+{
+	struct lov_foreign_md *lfm = (void *)&param->fp_lmd->lmd_lmm;
+	bool yaml = flags & LDF_YAML;
+
+	if (!yaml && param->fp_depth && path)
+		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
+
+	if (param->fp_verbose & VERBOSE_DETAIL) {
+		uint32_t type = lov_check_foreign_type(lfm->lfm_type);
+
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_magic:         0x%08X\n",
+			     lfm->lfm_magic);
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_length:          %u\n",
+			     lfm->lfm_length);
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_type:          0x%08X",
+			     lfm->lfm_type);
+		if (type < LOV_FOREIGN_TYPE_UNKNOWN)
+			llapi_printf(LLAPI_MSG_NORMAL, " (%s)\n",
+				     lov_foreign_type[type].lft_name);
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, " (unknown)\n");
+
+		llapi_printf(LLAPI_MSG_NORMAL, "lfm_flags:          0x%08X\n",
+			     lfm->lfm_flags);
+	}
+
+	llapi_printf(LLAPI_MSG_NORMAL, "lfm_value:     '%.*s'\n",
+		     lfm->lfm_length, lfm->lfm_value);
+	llapi_printf(LLAPI_MSG_NORMAL, "\n");
+}
+
 static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 				    enum lov_dump_flags flags)
 {
@@ -3539,6 +3664,9 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 	case LOV_USER_MAGIC_V3:
 	case LOV_USER_MAGIC_SPECIFIC:
 		lov_dump_plain_user_lmm(param, path, flags);
+		break;
+	case LOV_USER_MAGIC_FOREIGN:
+		lov_dump_foreign_lmm(param, path, flags);
 		break;
 	case LMV_MAGIC_V1:
 	case LMV_USER_MAGIC: {
@@ -3707,6 +3835,10 @@ static int check_obd_match(struct find_param *param)
 	if (!S_ISREG(st->st_mode))
 		return 0;
 
+	/* exclude foreign */
+	if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+		return param->fp_exclude_obd;
+
 	/* Only those files should be accepted, which have a
 	 * stripe on the specified OST. */
 	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
@@ -3789,6 +3921,9 @@ static int find_check_stripe_size(struct find_param *param)
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
 	int ret, i, count = 1;
 
+	if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+		return param->fp_exclude_stripe_size ? 1 : -1;
+
 	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
 		count = comp_v1->lcm_entry_count;
@@ -3817,6 +3952,9 @@ static __u32 find_get_stripe_count(struct find_param *param)
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
 	int i, count = 1;
 	__u32 stripe_count = 0;
+
+	if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+		return 0;
 
 	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
@@ -3850,6 +3988,10 @@ static int find_check_layout(struct find_param *param)
 		if (comp_v1)
 			v1 = lov_comp_entry(comp_v1, i);
 
+		/* foreign file have a special magic but no pattern field */
+		if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+			continue;
+
 		if (v1->lmm_pattern == LOV_PATTERN_INVALID)
 			continue;
 
@@ -3867,6 +4009,29 @@ static int find_check_layout(struct find_param *param)
 	    (!found && param->fp_exclude_layout))
 		return 1;
 
+	return -1;
+}
+
+/* if no type specified, check/exclude all foreign
+ * if type specified, check all foreign&type and exclude !foreign + foreign&type
+ */
+static int find_check_foreign(struct find_param *param)
+{
+	if (S_ISREG(param->fp_lmd->lmd_st.st_mode)) {
+		struct lov_foreign_md *lfm;
+
+		lfm = (void *)&param->fp_lmd->lmd_lmm;
+		if (lfm->lfm_magic != LOV_USER_MAGIC_FOREIGN) {
+			if (param->fp_foreign_type == LOV_FOREIGN_TYPE_UNKNOWN)
+				return param->fp_exclude_foreign ? 1 : -1;
+			return -1;
+		} else {
+			if (param->fp_foreign_type == LOV_FOREIGN_TYPE_UNKNOWN ||
+			    lfm->lfm_type == param->fp_foreign_type)
+				return param->fp_exclude_foreign ? -1 : 1;
+			return param->fp_exclude_foreign ? 1 : -1;
+		}
+	}
 	return -1;
 }
 
@@ -3889,6 +4054,9 @@ static int find_check_pool(struct find_param *param)
 	for (i = 0; i < count; i++) {
 		if (comp_v1 != NULL)
 			v1 = lov_comp_entry(comp_v1, i);
+
+		if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+			continue;
 
 		if (((v1->lmm_magic == LOV_USER_MAGIC_V1) &&
 		     (param->fp_poolname[0] == '\0')) ||
@@ -3916,6 +4084,9 @@ static int find_check_comp_options(struct find_param *param)
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
 	struct lov_comp_md_entry_v1 *entry;
 	int i, ret = 0;
+
+	if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+		return -1;
 
 	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
@@ -4025,7 +4196,7 @@ static bool find_check_lmm_info(struct find_param *param)
 	       param->fp_check_stripe_size || param->fp_check_layout ||
 	       param->fp_check_comp_count || param->fp_check_comp_end ||
 	       param->fp_check_comp_start || param->fp_check_comp_flags ||
-	       param->fp_check_mirror_count ||
+	       param->fp_check_mirror_count || param->fp_check_foreign ||
 	       param->fp_check_mirror_state ||
 	       param->fp_check_projid;
 }
@@ -4200,6 +4371,12 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			param->fp_obd_index = OBD_NOT_FOUND;
                 }
         }
+
+	if (param->fp_check_foreign) {
+		decision = find_check_foreign(param);
+		if (decision == -1)
+			goto decided;
+	}
 
 	if (param->fp_check_stripe_size) {
 		decision = find_check_stripe_size(param);

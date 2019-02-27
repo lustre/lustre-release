@@ -6,6 +6,7 @@
 	liblustreapi_initialized;
 	l_ioctl;
 	mdt_hash_name;
+	lov_foreign_type;
 	Parser_*;
 	register_ioc_*;
     local:

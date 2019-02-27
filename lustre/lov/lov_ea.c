@@ -132,10 +132,16 @@ void lsm_free(struct lov_stripe_md *lsm)
 	unsigned int i;
 	size_t lsm_size;
 
-	for (i = 0; i < entry_count; i++)
-		lsme_free(lsm->lsm_entries[i]);
+	if (lsm->lsm_magic == LOV_MAGIC_FOREIGN) {
+		OBD_FREE_LARGE(lsm_foreign(lsm), lsm->lsm_foreign_size);
+	} else {
+		for (i = 0; i < entry_count; i++)
+			lsme_free(lsm->lsm_entries[i]);
+	}
 
-	lsm_size = offsetof(typeof(*lsm), lsm_entries[entry_count]);
+	lsm_size = lsm->lsm_magic == LOV_MAGIC_FOREIGN ?
+		   offsetof(typeof(*lsm), lsm_entries[1]) :
+		   offsetof(typeof(*lsm), lsm_entries[entry_count]);
 	OBD_FREE(lsm, lsm_size);
 }
 
@@ -510,15 +516,63 @@ const struct lsm_operations lsm_comp_md_v1_ops = {
 	.lsm_unpackmd         = lsm_unpackmd_comp_md_v1,
 };
 
+static struct
+lov_stripe_md *lsm_unpackmd_foreign(struct lov_obd *lov, void *buf,
+				    size_t buf_size)
+{
+	struct lov_foreign_md *lfm = buf;
+	struct lov_stripe_md *lsm;
+	size_t lsm_size;
+	struct lov_stripe_md_entry *lsme;
+
+	lsm_size = offsetof(typeof(*lsm), lsm_entries[1]);
+	OBD_ALLOC(lsm, lsm_size);
+	if (lsm == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	atomic_set(&lsm->lsm_refc, 1);
+	spin_lock_init(&lsm->lsm_lock);
+	lsm->lsm_magic = le32_to_cpu(lfm->lfm_magic);
+	lsm->lsm_foreign_size = foreign_size_le(lfm);
+
+	/* alloc for full foreign EA including format fields */
+	OBD_ALLOC_LARGE(lsme, lsm->lsm_foreign_size);
+	if (lsme == NULL) {
+		OBD_FREE(lsm, lsm_size);
+		RETURN(ERR_PTR(-ENOMEM));
+	}
+
+	/* copy full foreign EA including format fields */
+	memcpy(lsme, buf, lsm->lsm_foreign_size);
+
+	lsm_foreign(lsm) = lsme;
+
+	return lsm;
+}
+
+const struct lsm_operations lsm_foreign_ops = {
+	.lsm_unpackmd         = lsm_unpackmd_foreign,
+};
+
 void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 {
 	int i, j;
 
-	CDEBUG(level, "lsm %p, objid "DOSTID", maxbytes %#llx, magic 0x%08X, "
-	       "refc: %d, entry: %u, layout_gen %u\n",
+	CDEBUG_LIMIT(level,
+		     "lsm %p, objid "DOSTID", maxbytes %#llx, magic 0x%08X, refc: %d, entry: %u, layout_gen %u\n",
 	       lsm, POSTID(&lsm->lsm_oi), lsm->lsm_maxbytes, lsm->lsm_magic,
 	       atomic_read(&lsm->lsm_refc), lsm->lsm_entry_count,
 	       lsm->lsm_layout_gen);
+
+	if (lsm->lsm_magic == LOV_MAGIC_FOREIGN) {
+		struct lov_foreign_md *lfm = (void *)lsm_foreign(lsm);
+
+		CDEBUG_LIMIT(level,
+			     "foreign LOV EA, magic %x, length %u, type %x, flags %x, value '%.*s'\n",
+		       lfm->lfm_magic, lfm->lfm_length, lfm->lfm_type,
+		       lfm->lfm_flags, lfm->lfm_length, lfm->lfm_value);
+		return;
+	}
 
 	for (i = 0; i < lsm->lsm_entry_count; i++) {
 		struct lov_stripe_md_entry *lse = lsm->lsm_entries[i];

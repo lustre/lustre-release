@@ -23,6 +23,9 @@ lfs setstripe \- set striping pattern of a file or directory default
 .B lfs setstripe --yaml=\fR<\fIyaml_template_file.lyl\fR> <\fIfile\fR>
 .br
 .B lfs setstripe --copy=\fR<\fIsource_template_file\fR> <\fIfile\fR>
+.br
+.B lfs setstripe --foreign[=\fR<\fIforeign_type\fR>\fB] \
+[--flags=\fR<\fIhex\fR>\fB] --xattr=\fR<\fIlayout_string\fR> <\fIfile\fR>
 .SH DESCRIPTION
 The
 .B lfs setstripe
@@ -123,6 +126,18 @@ This is similar to the
 option but avoids the need for the intermediate
 .B .lyl
 file.
+.TP
+.B lfs setstripe --foreign[=\fR<\fIforeign_type\fR>\fB] \
+[--flags=\fR<\fIhex\fR>\fB] --xattr=\fR<\fIlayout_string\fR> <\fIfile\fR>
+.br
+Create a new
+.I file
+with a foreign/non-lustre layout of type
+.I foreign_type \fR(\fBnone\fR, \fBdaos\fR, ...)
+with flags
+.I hex
+and a free-format layout value of
+.I layout_string.
 .SH STRIPE_OPTIONS
 The various OST stripe related options are listed and explained below:
 .TP
@@ -231,6 +246,29 @@ or
 .BR pool_name=none
 (since Lustre 2.11) to force a component to inherit the pool from the parent
 or root directory instead of the previous component.
+.TP
+.B --foreign \fR[<\fIforeign_type\fR>]
+file layout is non-lustre/free-format and of type <
+.IR foreign_type
+>, if specified (see also
+.IR --xattr
+and
+.IR --flags
+options).
+Current known types are
+.BR none
+and
+.BR daos
+, default is
+.BR none
+.
+.B -x\fR, \fB--xattr \fR<\fIlayout_string\fR>
+Mandatory non-lustre/free-format layout/LOV EA content for
+.I foreign
+file.
+.TP
+.B -F\fR, \fB--flags \fR<\fIhex\fR>
+Optional bitmap of flags for foreign type.
 .SH COMPONENT_OPTIONS
 The various component related options are listed and explained below.  The
 .B --component-*
@@ -436,6 +474,18 @@ file
 which can be created with the
 .B lfs getstripe --yaml
 command.
+.TP
+.B lfs setstripe --foreign=daos --flags=0xda08 \
+	--xattr=PUUID:CUUID /mnt/lustre/file1
+This creates foreign
+.BR file1
+of type
+.BR daos
+with non-lustre/free-format
+.BR PUUID:CUUID
+layout/LOV EA and flags
+.BR 0xda08
+.
 .SH SEE ALSO
 .BR lctl (1),
 .BR lfs (1),

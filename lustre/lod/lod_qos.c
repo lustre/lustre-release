@@ -1835,7 +1835,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 	magic = le32_to_cpu(v1->lmm_magic) & ~LOV_MAGIC_DEFINED;
 
 	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3 &&
-	    magic != LOV_MAGIC_COMP_V1)
+	    magic != LOV_MAGIC_COMP_V1 && magic != LOV_MAGIC_FOREIGN)
 		GOTO(unlock, rc = -EINVAL);
 
 	if (magic == LOV_MAGIC_COMP_V1) {
@@ -1847,6 +1847,32 @@ int lod_use_defined_striping(const struct lu_env *env,
 		mo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
 					LCM_FL_FLR_MASK;
 		mo->ldo_is_composite = 1;
+	} else if (magic == LOV_MAGIC_FOREIGN) {
+		struct lov_foreign_md *foreign;
+		size_t length;
+
+		if (buf->lb_len < offsetof(typeof(*foreign), lfm_value)) {
+			CDEBUG(D_LAYOUT,
+			       "buf len %zu < min lov_foreign_md size (%zu)\n",
+			       buf->lb_len,
+			       offsetof(typeof(*foreign), lfm_value));
+			GOTO(out, rc = -EINVAL);
+		}
+		foreign = (struct lov_foreign_md *)buf->lb_buf;
+		length = foreign_size_le(foreign);
+		if (buf->lb_len < length) {
+			CDEBUG(D_LAYOUT,
+			       "buf len %zu < this lov_foreign_md size (%zu)\n",
+			       buf->lb_len, length);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		/* just cache foreign LOV EA raw */
+		rc = lod_alloc_foreign_lov(mo, length);
+		if (rc)
+			GOTO(out, rc);
+		memcpy(mo->ldo_foreign_lov, buf->lb_buf, length);
+		GOTO(out, rc);
 	} else {
 		mo->ldo_is_composite = 0;
 		comp_cnt = 1;
@@ -1951,16 +1977,17 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			 const struct lu_buf *buf)
 {
 	struct lod_layout_component *lod_comp;
-	struct lod_device	*d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	struct lov_desc		*desc = &d->lod_desc;
-	struct lov_user_md_v1	*v1 = NULL;
-	struct lov_user_md_v3	*v3 = NULL;
-	struct lov_comp_md_v1	*comp_v1 = NULL;
-	char	def_pool[LOV_MAXPOOLNAME + 1];
-	__u32	magic;
-	__u16	comp_cnt;
-	__u16	mirror_cnt;
-	int	i, rc;
+	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct lov_desc *desc = &d->lod_desc;
+	struct lov_user_md_v1 *v1 = NULL;
+	struct lov_user_md_v3 *v3 = NULL;
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	struct lov_foreign_md *lfm = NULL;
+	char def_pool[LOV_MAXPOOLNAME + 1];
+	__u32 magic;
+	__u16 comp_cnt;
+	__u16 mirror_cnt;
+	int i, rc;
 	ENTRY;
 
 	if (buf == NULL || buf->lb_buf == NULL || buf->lb_len == 0)
@@ -1972,7 +1999,10 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 				    def_pool, sizeof(def_pool));
 
 	/* free default striping info */
-	lod_free_comp_entries(lo);
+	if (lo->ldo_is_foreign)
+		lod_free_foreign_lov(lo);
+	else
+		lod_free_comp_entries(lo);
 
 	rc = lod_verify_striping(d, lo, buf, false);
 	if (rc)
@@ -1981,6 +2011,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	v3 = buf->lb_buf;
 	v1 = buf->lb_buf;
 	comp_v1 = buf->lb_buf;
+	/* {lmm,lfm}_magic position/length work for all LOV formats */
 	magic = v1->lmm_magic;
 
 	if (unlikely(le32_to_cpu(magic) & LOV_MAGIC_DEFINED)) {
@@ -2016,6 +2047,22 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		/* fall trhough */
 	case LOV_USER_MAGIC_COMP_V1:
 		break;
+	case __swab32(LOV_USER_MAGIC_FOREIGN):
+		lfm = buf->lb_buf;
+		__swab32s(&lfm->lfm_magic);
+		__swab32s(&lfm->lfm_length);
+		__swab32s(&lfm->lfm_type);
+		__swab32s(&lfm->lfm_flags);
+		magic = lfm->lfm_magic;
+		/* fall through */
+	case LOV_USER_MAGIC_FOREIGN:
+		if (!lfm)
+			lfm = buf->lb_buf;
+		rc = lod_alloc_foreign_lov(lo, foreign_size(lfm));
+		if (rc)
+			RETURN(rc);
+		memcpy(lo->ldo_foreign_lov, buf->lb_buf, foreign_size(lfm));
+		RETURN(0);
 	default:
 		CERROR("%s: unrecognized magic %X\n",
 		       lod2obd(d)->obd_name, magic);
