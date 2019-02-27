@@ -50,7 +50,11 @@ or \fIn\fR*\fBs\fReconds, \fBm\fRinutes, \fBh\fRours, \fBd\fRays,
 \fBw\fReeks, or \fBy\fRears ago within a margin of error of 24h,
 or smaller if a unit is specified.  Multiple units can be specified,
 for example \fB8h20m\fR is equivalent to \fB500m\fR.  If multipe units
-are specified, the margin of error is based on the smallest unit used.
+are specified, the margin of error is based on the smallest unit used, so
+.B -atime 3d
+has a margin of error of one day, while
+.B -atime 72h
+has a margin of error of one hour.
 .TP
 .BR --blocks | -b
 Blocks allocated by the file is \fIn\fR Kibibytes (if no units are given),

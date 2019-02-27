@@ -320,7 +320,7 @@ struct find_param {
 				 fp_obds_printed:1;
 	unsigned int		 fp_depth;
 	unsigned int		 fp_hash_type;
-	unsigned int		 fp_time_margin;
+	unsigned int		 fp_time_margin; /* time margin in seconds */
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

@@ -3110,12 +3110,12 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
  * (limit - margin, limit]. */
 static int find_value_cmp(unsigned long long file, unsigned long long limit,
 			  int sign, int negopt, unsigned long long margin,
-			  int mds)
+			  bool mds)
 {
 	int ret = -1;
 
 	if (sign > 0) {
-		/* Drop the fraction of margin (of days). */
+		/* Drop the fraction of margin (of days or size). */
 		if (file + margin <= limit)
 			ret = mds ? 0 : 1;
 	} else if (sign == 0) {

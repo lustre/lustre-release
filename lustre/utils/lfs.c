@@ -3448,7 +3448,9 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 				progname, timebuf, strerror(EINVAL));
 			return LONG_MAX;
 		}
-		if (*endptr && unit < 24 * 60 * 60)
+
+		if (param->fp_time_margin == 0 ||
+		    (*endptr && unit < param->fp_time_margin))
 			param->fp_time_margin = unit;
 
 		t += val * unit;
@@ -3462,6 +3464,7 @@ static time_t set_time(struct find_param *param, time_t *time, time_t *set,
 	}
 
 	*set = *time - t;
+
 	return res;
 }
 
