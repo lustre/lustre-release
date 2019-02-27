@@ -38,6 +38,7 @@
  * CRR-N, Client Round Robin over NIDs
  * @{
  */
+#include <libcfs/linux/linux-hash.h>
 
 /**
  * private data structure for CRR-N NRS
@@ -45,7 +46,8 @@
 struct nrs_crrn_net {
 	struct ptlrpc_nrs_resource	cn_res;
 	struct cfs_binheap	       *cn_binheap;
-	struct cfs_hash		       *cn_cli_hash;
+	/* CRR-N NRS - NID hash body */
+	struct rhashtable		cn_cli_hash;
 	/**
 	 * Used when a new scheduling round commences, in order to synchronize
 	 * all clients with the new round number.
@@ -68,7 +70,7 @@ struct nrs_crrn_net {
  */
 struct nrs_crrn_client {
 	struct ptlrpc_nrs_resource	cc_res;
-	struct hlist_node		cc_hnode;
+	struct rhash_head		cc_rhead;
 	lnet_nid_t			cc_nid;
 	/**
 	 * The round number against which this client is currently scheduling

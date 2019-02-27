@@ -96,80 +96,45 @@ static struct cfs_binheap_ops nrs_crrn_heap_ops = {
 };
 
 /**
- * libcfs_hash operations for nrs_crrn_net::cn_cli_hash
+ * rhashtable operations for nrs_crrn_net::cn_cli_hash
  *
  * This uses ptlrpc_request::rq_peer.nid as its key, in order to hash
  * nrs_crrn_client objects.
  */
-#define NRS_NID_BKT_BITS	8
-#define NRS_NID_BITS		16
-
-static unsigned nrs_crrn_hop_hash(struct cfs_hash *hs, const void *key,
-				  unsigned mask)
+static u32 nrs_crrn_hashfn(const void *data, u32 len, u32 seed)
 {
-	return cfs_hash_djb2_hash(key, sizeof(lnet_nid_t), mask);
+	const lnet_nid_t *nid = data;
+
+	seed ^= cfs_hash_64((u64)nid, 32);
+	return seed;
 }
 
-static int nrs_crrn_hop_keycmp(const void *key, struct hlist_node *hnode)
+static int nrs_crrn_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
 {
-	lnet_nid_t		*nid = (lnet_nid_t *)key;
-	struct nrs_crrn_client	*cli = hlist_entry(hnode,
-						       struct nrs_crrn_client,
-						       cc_hnode);
-	return *nid == cli->cc_nid;
+	const struct nrs_crrn_client *cli = obj;
+	const lnet_nid_t *nid = arg->key;
+
+	return *nid != cli->cc_nid;
 }
 
-static void *nrs_crrn_hop_key(struct hlist_node *hnode)
-{
-	struct nrs_crrn_client	*cli = hlist_entry(hnode,
-						       struct nrs_crrn_client,
-						       cc_hnode);
-	return &cli->cc_nid;
-}
+static const struct rhashtable_params nrs_crrn_hash_params = {
+	.key_len        = sizeof(lnet_nid_t),
+	.key_offset	= offsetof(struct nrs_crrn_client, cc_nid),
+	.head_offset	= offsetof(struct nrs_crrn_client, cc_rhead),
+	.hashfn		= nrs_crrn_hashfn,
+	.obj_cmpfn	= nrs_crrn_cmpfn,
+};
 
-static void *nrs_crrn_hop_object(struct hlist_node *hnode)
+static void nrs_crrn_exit(void *vcli, void *data)
 {
-	return hlist_entry(hnode, struct nrs_crrn_client, cc_hnode);
-}
+	struct nrs_crrn_client *cli = vcli;
 
-static void nrs_crrn_hop_get(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct nrs_crrn_client *cli = hlist_entry(hnode,
-						      struct nrs_crrn_client,
-						      cc_hnode);
-	atomic_inc(&cli->cc_ref);
-}
-
-static void nrs_crrn_hop_put(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct nrs_crrn_client	*cli = hlist_entry(hnode,
-						       struct nrs_crrn_client,
-						       cc_hnode);
-	atomic_dec(&cli->cc_ref);
-}
-
-static void nrs_crrn_hop_exit(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct nrs_crrn_client	*cli = hlist_entry(hnode,
-						       struct nrs_crrn_client,
-						       cc_hnode);
 	LASSERTF(atomic_read(&cli->cc_ref) == 0,
 		 "Busy CRR-N object from client with NID %s, with %d refs\n",
 		 libcfs_nid2str(cli->cc_nid), atomic_read(&cli->cc_ref));
 
 	OBD_FREE_PTR(cli);
 }
-
-static struct cfs_hash_ops nrs_crrn_hash_ops = {
-	.hs_hash	= nrs_crrn_hop_hash,
-	.hs_keycmp	= nrs_crrn_hop_keycmp,
-	.hs_key		= nrs_crrn_hop_key,
-	.hs_object	= nrs_crrn_hop_object,
-	.hs_get		= nrs_crrn_hop_get,
-	.hs_put		= nrs_crrn_hop_put,
-	.hs_put_locked	= nrs_crrn_hop_put,
-	.hs_exit	= nrs_crrn_hop_exit,
-};
 
 /**
  * Called when a CRR-N policy instance is started.
@@ -196,15 +161,9 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 	if (net->cn_binheap == NULL)
 		GOTO(out_net, rc = -ENOMEM);
 
-	net->cn_cli_hash = cfs_hash_create("nrs_crrn_nid_hash",
-					   NRS_NID_BITS, NRS_NID_BITS,
-					   NRS_NID_BKT_BITS, 0,
-					   CFS_HASH_MIN_THETA,
-					   CFS_HASH_MAX_THETA,
-					   &nrs_crrn_hash_ops,
-					   CFS_HASH_RW_BKTLOCK);
-	if (net->cn_cli_hash == NULL)
-		GOTO(out_binheap, rc = -ENOMEM);
+	rc = rhashtable_init(&net->cn_cli_hash, &nrs_crrn_hash_params);
+	if (rc)
+		GOTO(out_binheap, rc);
 
 	/**
 	 * Set default quantum value to max_rpcs_in_flight for non-MDS OSCs;
@@ -247,11 +206,10 @@ static void nrs_crrn_stop(struct ptlrpc_nrs_policy *policy)
 
 	LASSERT(net != NULL);
 	LASSERT(net->cn_binheap != NULL);
-	LASSERT(net->cn_cli_hash != NULL);
 	LASSERT(cfs_binheap_is_empty(net->cn_binheap));
 
+	rhashtable_free_and_destroy(&net->cn_cli_hash, nrs_crrn_exit, NULL);
 	cfs_binheap_destroy(net->cn_binheap);
-	cfs_hash_putref(net->cn_cli_hash);
 
 	OBD_FREE_PTR(net);
 }
@@ -345,8 +303,9 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 	net = container_of(parent, struct nrs_crrn_net, cn_res);
 	req = container_of(nrq, struct ptlrpc_request, rq_nrq);
 
-	cli = cfs_hash_lookup(net->cn_cli_hash, &req->rq_peer.nid);
-	if (cli != NULL)
+	cli = rhashtable_lookup_fast(&net->cn_cli_hash, &req->rq_peer.nid,
+				     nrs_crrn_hash_params);
+	if (cli)
 		goto out;
 
 	OBD_CPT_ALLOC_GFP(cli, nrs_pol2cptab(policy), nrs_pol2cptid(policy),
@@ -356,14 +315,20 @@ static int nrs_crrn_res_get(struct ptlrpc_nrs_policy *policy,
 
 	cli->cc_nid = req->rq_peer.nid;
 
-	atomic_set(&cli->cc_ref, 1);
-	tmp = cfs_hash_findadd_unique(net->cn_cli_hash, &cli->cc_nid,
-				      &cli->cc_hnode);
-	if (tmp != cli) {
+	atomic_set(&cli->cc_ref, 0);
+
+	tmp = rhashtable_lookup_get_insert_fast(&net->cn_cli_hash,
+						&cli->cc_rhead,
+						nrs_crrn_hash_params);
+	if (tmp) {
+		/* insertion failed */
 		OBD_FREE_PTR(cli);
+		if (IS_ERR(tmp))
+			return PTR_ERR(tmp);
 		cli = tmp;
 	}
 out:
+	atomic_inc(&cli->cc_ref);
 	*resp = &cli->cc_res;
 
 	return 1;
@@ -379,8 +344,7 @@ out:
 static void nrs_crrn_res_put(struct ptlrpc_nrs_policy *policy,
 			     const struct ptlrpc_nrs_resource *res)
 {
-	struct nrs_crrn_net	*net;
-	struct nrs_crrn_client	*cli;
+	struct nrs_crrn_client *cli;
 
 	/**
 	 * Do nothing for freeing parent, nrs_crrn_net resources
@@ -389,9 +353,8 @@ static void nrs_crrn_res_put(struct ptlrpc_nrs_policy *policy,
 		return;
 
 	cli = container_of(res, struct nrs_crrn_client, cc_res);
-	net = container_of(res->res_parent, struct nrs_crrn_net, cn_res);
 
-	cfs_hash_put(net->cn_cli_hash, &cli->cc_hnode);
+	atomic_dec(&cli->cc_ref);
 }
 
 /**
