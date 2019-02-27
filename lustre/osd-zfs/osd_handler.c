@@ -542,7 +542,7 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 
 	if (!spa_writeable(dmu_objset_spa(os)) ||
 	    osd->od_dev_set_rdonly || osd->od_prop_rdonly)
-		osfs->os_state |= OS_STATE_READONLY;
+		osfs->os_state |= OS_STATFS_READONLY;
 
 	return 0;
 }
@@ -568,7 +568,7 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	/* ZFS does not support reporting nonrotional status yet, so return
 	 * flag only if user has set nonrotational.
 	 */
-	osfs->os_state |= osd->od_nonrotational ? OS_STATE_NONROT : 0;
+	osfs->os_state |= osd->od_nonrotational ? OS_STATFS_NONROT : 0;
 
 	RETURN(0);
 }

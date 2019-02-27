@@ -1263,7 +1263,7 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 			GOTO(out_free_temp, rc);
 		}
 
-		if (temp->os_state & OS_STATE_SUM ||
+		if (temp->os_state & OS_STATFS_SUM ||
 		    flags == OBD_STATFS_FOR_MDT0) {
 			/* reset to the last aggregated values
 			 * and don't sum with non-aggrated data */

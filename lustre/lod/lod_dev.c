@@ -1396,7 +1396,7 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 			(int)sfs->os_bsize, (int)ost_sfs.os_bsize);
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
-	sfs->os_state |= OS_STATE_SUM;
+	sfs->os_state |= OS_STATFS_SUM;
 
 	/* If we have _some_ OSTs, but don't have as many free objects on the
 	 * OSTs as inodes on the MDTs, reduce the reported number of inodes

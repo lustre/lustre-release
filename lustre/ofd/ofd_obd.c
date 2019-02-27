@@ -777,7 +777,7 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
  * \see  ofd_statfs_hdl() for request handler function.
  *
  * Report also the state of the OST to the caller in osfs->os_state
- * (OS_STATE_READONLY, OS_STATE_DEGRADED).
+ * (OS_STATFS_READONLY, OS_STATFS_DEGRADED).
  *
  * \param[in]  env	execution environment
  * \param[in]  exp	OBD export of OFD device
@@ -845,12 +845,12 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		osfs->os_ffree -= osfs->os_ffree;
 	}
 
-	/* OS_STATE_READONLY can be set by OSD already */
+	/* OS_STATFS_READONLY can be set by OSD already */
 	if (ofd->ofd_raid_degraded)
-		osfs->os_state |= OS_STATE_DEGRADED;
+		osfs->os_state |= OS_STATFS_DEGRADED;
 
 	if (ofd->ofd_no_precreate)
-		osfs->os_state |= OS_STATE_NOPRECREATE;
+		osfs->os_state |= OS_STATFS_NOPRECREATE;
 
 	if (obd->obd_self_export != exp && !exp_grant_param_supp(exp) &&
 	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
@@ -1444,7 +1444,7 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 	if (unlikely(rc))
 		GOTO(out, rc);
 
-	if (info->fti_u.osfs.os_state & OS_STATE_READONLY)
+	if (info->fti_u.osfs.os_state & OS_STATFS_READONLY)
 		GOTO(out, rc = -EROFS);
 
 #ifdef USE_HEALTH_CHECK_WRITE

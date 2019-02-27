@@ -257,15 +257,15 @@ typedef struct statx lstatx_t;
 #define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)
 
 enum obd_statfs_state {
-	OS_STATE_DEGRADED	= 0x00000001, /**< RAID degraded/rebuilding */
-	OS_STATE_READONLY	= 0x00000002, /**< filesystem is read-only */
-	OS_STATE_NOPRECREATE	= 0x00000004, /**< no object precreation */
-	OS_STATE_UNUSED1	= 0x00000008, /**< obsolete 1.6, was EROFS=30 */
-	OS_STATE_UNUSED2	= 0x00000010, /**< obsolete 1.6, was EROFS=30 */
-	OS_STATE_ENOSPC		= 0x00000020, /**< not enough free space */
-	OS_STATE_ENOINO		= 0x00000040, /**< not enough inodes */
-	OS_STATE_SUM		= 0x00000100, /**< aggregated for all tagrets */
-	OS_STATE_NONROT		= 0x00000200, /**< non-rotational device */
+	OS_STATFS_DEGRADED	= 0x00000001, /**< RAID degraded/rebuilding */
+	OS_STATFS_READONLY	= 0x00000002, /**< filesystem is read-only */
+	OS_STATFS_NOPRECREATE	= 0x00000004, /**< no object precreation */
+	OS_STATFS_UNUSED1	= 0x00000008, /**< obsolete 1.6, was EROFS=30 */
+	OS_STATFS_UNUSED2	= 0x00000010, /**< obsolete 1.6, was EROFS=30 */
+	OS_STATFS_ENOSPC	= 0x00000020, /**< not enough free space */
+	OS_STATFS_ENOINO	= 0x00000040, /**< not enough inodes */
+	OS_STATFS_SUM		= 0x00000100, /**< aggregated for all tagrets */
+	OS_STATFS_NONROT	= 0x00000200, /**< non-rotational device */
 };
 
 /** filesystem statistics/attributes for target device */
@@ -280,7 +280,7 @@ struct obd_statfs {
 	__u32		os_bsize;	/* block size in bytes for os_blocks */
 	__u32		os_namelen;	/* maximum length of filename in bytes*/
 	__u64		os_maxbytes;	/* maximum object size in bytes */
-	__u32		os_state;       /**< obd_statfs_state OS_STATE_* flag */
+	__u32		os_state;       /**< obd_statfs_state OS_STATFS_* */
 	__u32		os_fprecreated;	/* objs available now to the caller */
 					/* used in QoS code to find preferred
 					 * OSTs */

@@ -5644,15 +5644,15 @@ static struct obd_statfs_state_names {
 	const char		osn_name;
 	bool			osn_err;
 } oss_names[] = {
-	{ .osn_state = OS_STATE_DEGRADED,    .osn_name = 'D', .osn_err = true },
-	{ .osn_state = OS_STATE_READONLY,    .osn_name = 'R', .osn_err = true },
-	{ .osn_state = OS_STATE_NOPRECREATE, .osn_name = 'N', .osn_err = true },
-	{ .osn_state = OS_STATE_UNUSED1,     .osn_name = '?', .osn_err = true },
-	{ .osn_state = OS_STATE_UNUSED2,     .osn_name = '?', .osn_err = true },
-	{ .osn_state = OS_STATE_ENOSPC,	     .osn_name = 'S', .osn_err = true },
-	{ .osn_state = OS_STATE_ENOINO,	     .osn_name = 'I', .osn_err = true },
-	{ .osn_state = OS_STATE_SUM,	     .osn_name = 'a', /* aggregate */ },
-	{ .osn_state = OS_STATE_NONROT,      .osn_name = 'f', /* flash */     },
+	{ .osn_state = OS_STATFS_DEGRADED,   .osn_name = 'D', .osn_err = true },
+	{ .osn_state = OS_STATFS_READONLY,   .osn_name = 'R', .osn_err = true },
+	{ .osn_state = OS_STATFS_NOPRECREATE,.osn_name = 'N', .osn_err = true },
+	{ .osn_state = OS_STATFS_UNUSED1,    .osn_name = '?', .osn_err = true },
+	{ .osn_state = OS_STATFS_UNUSED2,    .osn_name = '?', .osn_err = true },
+	{ .osn_state = OS_STATFS_ENOSPC,     .osn_name = 'S', .osn_err = true },
+	{ .osn_state = OS_STATFS_ENOINO,     .osn_name = 'I', .osn_err = true },
+	{ .osn_state = OS_STATFS_SUM,	     .osn_name = 'a', /* aggregate */ },
+	{ .osn_state = OS_STATFS_NONROT,     .osn_name = 'f', /* flash */     },
 };
 
 static int showdf(char *mntdir, struct obd_statfs *stat,

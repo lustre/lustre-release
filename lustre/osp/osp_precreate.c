@@ -1025,9 +1025,9 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 
 	available_mb = (msfs->os_bavail * (msfs->os_bsize >> 10)) >> 10;
 	if (msfs->os_ffree < reserved_ino_low)
-		msfs->os_state |= OS_STATE_ENOINO;
+		msfs->os_state |= OS_STATFS_ENOINO;
 	else if (msfs->os_ffree <= reserved_ino_high)
-		msfs->os_state |= old_state & OS_STATE_ENOINO;
+		msfs->os_state |= old_state & OS_STATFS_ENOINO;
 	/* else don't clear flags in new msfs->os_state sent from OST */
 
 	CDEBUG(D_INFO,
@@ -1037,21 +1037,21 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 	       msfs->os_files, msfs->os_ffree, msfs->os_state,
 	       d->opd_pre_status);
 	if (available_mb < d->opd_reserved_mb_low)
-		msfs->os_state |= OS_STATE_ENOSPC;
+		msfs->os_state |= OS_STATFS_ENOSPC;
 	else if (available_mb <= d->opd_reserved_mb_high)
-		msfs->os_state |= old_state & OS_STATE_ENOSPC;
+		msfs->os_state |= old_state & OS_STATFS_ENOSPC;
 	/* else don't clear flags in new msfs->os_state sent from OST */
 
-	if (msfs->os_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)) {
+	if (msfs->os_state & (OS_STATFS_ENOINO | OS_STATFS_ENOSPC)) {
 		d->opd_pre_status = -ENOSPC;
-		if (!(old_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)))
+		if (!(old_state & (OS_STATFS_ENOINO | OS_STATFS_ENOSPC)))
 			CDEBUG(D_INFO, "%s: full: state=%x: rc = %x\n",
 			       d->opd_obd->obd_name, msfs->os_state,
 			       d->opd_pre_status);
 		CDEBUG(D_INFO, "uncommitted changes=%u in_progress=%u\n",
 		       atomic_read(&d->opd_sync_changes),
 		       atomic_read(&d->opd_sync_rpcs_in_progress));
-	} else if (old_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)) {
+	} else if (old_state & (OS_STATFS_ENOINO | OS_STATFS_ENOSPC)) {
 		d->opd_pre_status = 0;
 		spin_lock(&d->opd_pre_lock);
 		d->opd_pre_create_slow = 0;
@@ -1070,7 +1070,7 @@ static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 
 	/* Object precreation skipped on OST if manually disabled */
 	if (d->opd_pre_max_create_count == 0)
-		msfs->os_state |= OS_STATE_NOPRECREATE;
+		msfs->os_state |= OS_STATFS_NOPRECREATE;
 	/* else don't clear flags in new msfs->os_state sent from OST */
 
 	/* copy only new statfs state to make it visible to MDS threads */

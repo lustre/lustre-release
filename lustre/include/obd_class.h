@@ -1060,14 +1060,14 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 	       obd->obd_name, obd->obd_osfs_age, max_age);
 	/* ignore cache if aggregated isn't expected */
 	if (obd->obd_osfs_age < max_age ||
-	    ((obd->obd_osfs.os_state & OS_STATE_SUM) &&
+	    ((obd->obd_osfs.os_state & OS_STATFS_SUM) &&
 	     !(flags & OBD_STATFS_SUM))) {
 		/* the RPC will block anyway, so avoid sending many at once */
 		rc = mutex_lock_interruptible(&obd->obd_dev_mutex);
 		if (rc)
 			RETURN(rc);
 		if (obd->obd_osfs_age < max_age ||
-		    ((obd->obd_osfs.os_state & OS_STATE_SUM) &&
+		    ((obd->obd_osfs.os_state & OS_STATFS_SUM) &&
 		     !(flags & OBD_STATFS_SUM))) {
 			rc = OBP(obd, statfs)(env, exp, osfs, max_age, flags);
 		} else {

@@ -1991,20 +1991,20 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_statfs, os_spare9));
 	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_spare9) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_spare9));
-	LASSERTF(OS_STATE_DEGRADED == 0x00000001UL, "found 0x%.8xUL\n",
-		(unsigned)OS_STATE_DEGRADED);
-	LASSERTF(OS_STATE_READONLY == 0x00000002UL, "found 0x%.8xUL\n",
-		(unsigned)OS_STATE_READONLY);
-	LASSERTF(OS_STATE_NOPRECREATE == 0x00000004UL, "found 0x%.8xUL\n",
-		(unsigned)OS_STATE_NOPRECREATE);
-	LASSERTF(OS_STATE_ENOSPC == 0x00000020UL, "found 0x%.8xUL\n",
-		(unsigned)OS_STATE_ENOSPC);
-	LASSERTF(OS_STATE_ENOINO == 0x00000040UL, "found 0x%.8xUL\n",
-		(unsigned)OS_STATE_ENOINO);
-	LASSERTF(OS_STATE_SUM == 0x00000100UL, "found 0x%.8xUL\n",
-		(unsigned)OS_STATE_SUM);
-	LASSERTF(OS_STATE_NONROT == 0x00000200UL, "found 0x%.8xUL\n",
-		(unsigned)OS_STATE_NONROT);
+	LASSERTF(OS_STATFS_DEGRADED == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATFS_DEGRADED);
+	LASSERTF(OS_STATFS_READONLY == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATFS_READONLY);
+	LASSERTF(OS_STATFS_NOPRECREATE == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATFS_NOPRECREATE);
+	LASSERTF(OS_STATFS_ENOSPC == 0x00000020UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATFS_ENOSPC);
+	LASSERTF(OS_STATFS_ENOINO == 0x00000040UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATFS_ENOINO);
+	LASSERTF(OS_STATFS_SUM == 0x00000100UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATFS_SUM);
+	LASSERTF(OS_STATFS_NONROT == 0x00000200UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATFS_NONROT);
 
 	/* Checks for struct obd_ioobj */
 	LASSERTF((int)sizeof(struct obd_ioobj) == 24, "found %lld\n",

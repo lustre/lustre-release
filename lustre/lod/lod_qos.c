@@ -65,17 +65,17 @@ static inline int lod_statfs_check(struct lu_tgt_descs *ltd,
 {
 	struct obd_statfs *sfs = &tgt->ltd_statfs;
 
-	if (((sfs->os_state & OS_STATE_ENOSPC) ||
-	    (!ltd->ltd_is_mdt && sfs->os_state & OS_STATE_ENOINO &&
+	if (((sfs->os_state & OS_STATFS_ENOSPC) ||
+	    (!ltd->ltd_is_mdt && sfs->os_state & OS_STATFS_ENOINO &&
 	     sfs->os_fprecreated == 0)))
 		return -ENOSPC;
 
 	/* If the OST is readonly then we can't allocate objects there */
-	if (sfs->os_state & OS_STATE_READONLY)
+	if (sfs->os_state & OS_STATFS_READONLY)
 		return -EROFS;
 
 	/* object precreation is skipped on the OST with max_create_count=0 */
-	if (!ltd->ltd_is_mdt && sfs->os_state & OS_STATE_NOPRECREATE)
+	if (!ltd->ltd_is_mdt && sfs->os_state & OS_STATFS_NOPRECREATE)
 		return -ENOBUFS;
 
 	return 0;
@@ -642,7 +642,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	/*
 	 * try to use another OSP if this one is degraded
 	 */
-	if (ost->ltd_statfs.os_state & OS_STATE_DEGRADED && speed < 2) {
+	if (ost->ltd_statfs.os_state & OS_STATFS_DEGRADED && speed < 2) {
 		QOS_DEBUG("#%d: degraded\n", ost_idx);
 		RETURN(rc);
 	}
@@ -1008,7 +1008,7 @@ repeat_find:
 		}
 
 		/* try to use another OSP if this one is degraded */
-		if (mdt->ltd_statfs.os_state & OS_STATE_DEGRADED &&
+		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED &&
 		    !use_degraded) {
 			QOS_DEBUG("#%d: degraded\n", mdt_idx);
 			continue;
@@ -1470,7 +1470,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			continue;
 		}
 
-		if (ost->ltd_statfs.os_state & OS_STATE_DEGRADED)
+		if (ost->ltd_statfs.os_state & OS_STATFS_DEGRADED)
 			continue;
 
 		/* Fail Check before osc_precreate() is called
@@ -1712,7 +1712,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		if (rc)
 			continue;
 
-		if (mdt->ltd_statfs.os_state & OS_STATE_DEGRADED)
+		if (mdt->ltd_statfs.os_state & OS_STATFS_DEGRADED)
 			continue;
 
 		mdt->ltd_qos.ltq_usable = 1;

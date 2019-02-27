@@ -2210,9 +2210,9 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 
 	statfs_pack(sfs, ksfs);
 	if (unlikely(sb->s_flags & SB_RDONLY))
-		sfs->os_state |= OS_STATE_READONLY;
+		sfs->os_state |= OS_STATFS_READONLY;
 
-	sfs->os_state |= osd->od_nonrotational ? OS_STATE_NONROT : 0;
+	sfs->os_state |= osd->od_nonrotational ? OS_STATFS_NONROT : 0;
 
 	if (ldiskfs_has_feature_extents(sb))
 		sfs->os_maxbytes = sb->s_maxbytes;
