@@ -937,6 +937,9 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         req->rq_request_portal = MDS_READPAGE_PORTAL;
         ptlrpc_at_set_req_timeout(req);
 
+	if (!(exp_connect_flags2(exp) & OBD_CONNECT2_LSOM))
+		op_data->op_xvalid &= ~(OP_XVALID_LAZYSIZE |
+					OP_XVALID_LAZYBLOCKS);
 
         mdc_close_pack(req, op_data);
 

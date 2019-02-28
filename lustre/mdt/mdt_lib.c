@@ -995,7 +995,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 		MDS_ATTR_FROM_OPEN | MDS_ATTR_LSIZE | MDS_ATTR_LBLOCKS |
 		MDS_ATTR_OVERRIDE);
 	if (in != 0)
-		CERROR("Unknown attr bits: %#llx\n", in);
+		CDEBUG(D_INFO, "Unknown attr bits: %#llx\n", in);
 	return out;
 }
 
