@@ -10,4 +10,6 @@
 /lustre-utils
 /lustre-*.substvars
 /lustre-*-utils
+/lustre-server-utils.install
+/lustre-client-utils.install
 /tmp
