@@ -56,8 +56,7 @@
  *
  */
 
-/*
- **
+/**
  * Check whether statfs data is expired
  *
  * OSP device caches statfs data for the target, the function checks
@@ -97,6 +96,37 @@ static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
 		wake_up(&d->opd_pre_waitq);
 }
 
+static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs);
+
+/*
+ * The function updates current precreation status if broken, and
+ * updates that cached statfs state if functional, then wakes up waiters.
+ * We don't clear opd_pre_status directly here, but rather leave this
+ * to osp_pre_update_msfs() to do if everything is OK so that we don't
+ * have a race to clear opd_pre_status and then set it to -ENOSPC again.
+ *
+ * \param[in] d		OSP device
+ * \param[in] msfs	statfs data
+ * \param[in] rc	new precreate status for device \a d
+ */
+static void osp_pre_update_status_msfs(struct osp_device *d,
+				       struct obd_statfs *msfs, int rc)
+{
+	if (rc)
+		d->opd_pre_status = rc;
+	else
+		osp_pre_update_msfs(d, msfs);
+
+	wake_up(&d->opd_pre_user_waitq);
+}
+
+/* Pass in the old statfs data in case the limits have changed */
+void osp_pre_update_status(struct osp_device *d, int rc)
+{
+	osp_pre_update_status_msfs(d, &d->opd_statfs, rc);
+}
+
+
 /**
  * RPC interpret callback for OST_STATFS RPC
  *
@@ -135,10 +165,10 @@ static int osp_statfs_interpret(const struct lu_env *env,
 	if (msfs == NULL)
 		GOTO(out, rc = -EPROTO);
 
-	d->opd_statfs = *msfs;
-
 	if (d->opd_pre)
-		osp_pre_update_status(d, rc);
+		osp_pre_update_status_msfs(d, msfs, 0);
+	else
+		d->opd_statfs = *msfs;
 
 	/* schedule next update */
 	maxage_ns = d->opd_statfs_maxage * NSEC_PER_SEC;
@@ -567,9 +597,9 @@ static int osp_precreate_fids(const struct lu_env *env, struct osp_device *osp,
  *
  * The function finds how many objects should be precreated.  Then allocates,
  * prepares and schedules precreate RPC synchronously. Upon reply the function
- * wake ups the threads waiting for the new objects on this target. If the
+ * wakes up the threads waiting for the new objects on this target. If the
  * target wasn't able to create all the objects requested, then the next
- * precreate will be asking less objects (i.e. slow precreate down).
+ * precreate will be asking for fewer objects (i.e. slow precreate down).
  *
  * \param[in] env	LU environment provided by the caller
  * \param[in] d		OSP device
@@ -964,99 +994,106 @@ out:
  * data is used to make this decision. If the latest result of statfs
  * request (rc argument) is not success, then just mark OSP unavailable
  * right away.
-
- * Add a bit of hysteresis so this flag isn't continually flapping,
- * and ensure that new files don't get extremely fragmented due to
- * only a small amount of available space in the filesystem.
- * We want to set the ENOSPC when there is less than reserved size
- * free and clear it when there is at least 2*reserved size free space.
- * the function updates current precreation status used: functional or not
+ *
+ * The new statfs data is passed in \a msfs and needs to be stored into
+ * opd_statfs, but only after the various flags in os_state are set, so
+ * that the new statfs data is not visible without appropriate flags set.
+ * As such, there is no need to clear the flags here, since this is called
+ * with new statfs data, and they should not be cleared if sent from OST.
+ *
+ * Add a bit of hysteresis so this flag isn't continually flapping, and
+ * ensure that new files don't get extremely fragmented due to only a
+ * small amount of available space in the filesystem.  We want to set
+ * the ENOSPC/ENOINO flags unconditionally when there is less than the
+ * reserved size free, and still copy them from the old state when there
+ * is less than 2*reserved size free space or inodes.
  *
  * \param[in] d		OSP device
- * \param[in] rc	new precreate status for device \a d
- *
- * \retval 0		on success
- * \retval negative	negated errno on error
+ * \param[in] msfs	statfs data
  */
-void osp_pre_update_status(struct osp_device *d, int rc)
+static void osp_pre_update_msfs(struct osp_device *d, struct obd_statfs *msfs)
 {
-	struct obd_statfs	*msfs = &d->opd_statfs;
-	int			 old = d->opd_pre_status;
-	__u64			 available;
+	u32 old_state = d->opd_statfs.os_state;
+	u32 reserved_ino_low = 32;	/* could be tunable in the future */
+	u32 reserved_ino_high = reserved_ino_low * 2;
+	u64 available_mb;
 
-	d->opd_pre_status = rc;
-	if (rc)
-		goto out;
+	/* statfs structure not initialized yet */
+	if (unlikely(!msfs->os_type))
+		return;
 
-	if (likely(msfs->os_type)) {
-		if (unlikely(d->opd_reserved_mb_high == 0 &&
-			     d->opd_reserved_mb_low == 0)) {
-			/* Use ~0.1% by default to disable object allocation,
-			 * and ~0.2% to enable, size in MB, set both watermark
-			 */
-			spin_lock(&d->opd_pre_lock);
-			if (d->opd_reserved_mb_high == 0 &&
-			    d->opd_reserved_mb_low == 0) {
-				d->opd_reserved_mb_low =
-					((msfs->os_bsize >> 10) *
-					msfs->os_blocks) >> 20;
-				if (d->opd_reserved_mb_low == 0)
-					d->opd_reserved_mb_low = 1;
-				d->opd_reserved_mb_high =
-					(d->opd_reserved_mb_low << 1) + 1;
-			}
-			spin_unlock(&d->opd_pre_lock);
+	/* if the low and high watermarks have not been initialized yet */
+	if (unlikely(d->opd_reserved_mb_high == 0 &&
+		     d->opd_reserved_mb_low == 0)) {
+		/* Use ~0.1% by default to disable object allocation,
+		 * and ~0.2% to enable, size in MB, set both watermark
+		 */
+		spin_lock(&d->opd_pre_lock);
+		if (d->opd_reserved_mb_high == 0 &&
+		    d->opd_reserved_mb_low == 0) {
+			d->opd_reserved_mb_low = ((msfs->os_bsize >> 10) *
+						  msfs->os_blocks) >> 20;
+			if (d->opd_reserved_mb_low == 0)
+				d->opd_reserved_mb_low = 1;
+			d->opd_reserved_mb_high =
+				(d->opd_reserved_mb_low << 1) + 1;
 		}
-		/* in MB */
-		available = (msfs->os_bavail * (msfs->os_bsize >> 10)) >> 10;
-		if (msfs->os_ffree < 32)
-			msfs->os_state |= OS_STATE_ENOINO;
-		else if (msfs->os_ffree > 64)
-			msfs->os_state &= ~OS_STATE_ENOINO;
-
-		if (available < d->opd_reserved_mb_low)
-			msfs->os_state |= OS_STATE_ENOSPC;
-		else if (available > d->opd_reserved_mb_high)
-			msfs->os_state &= ~OS_STATE_ENOSPC;
-		if (msfs->os_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)) {
-			d->opd_pre_status = -ENOSPC;
-			if (old != -ENOSPC)
-				CDEBUG(D_INFO, "%s: status: %llu blocks, %llu "
-				       "free, %llu avail, %llu MB avail, %u "
-				       "hwm -> %d: rc = %d\n",
-				       d->opd_obd->obd_name, msfs->os_blocks,
-				       msfs->os_bfree, msfs->os_bavail,
-				       available, d->opd_reserved_mb_high,
-				       d->opd_pre_status, rc);
-			CDEBUG(D_INFO,
-			       "non-committed changes: %u, in progress: %u\n",
-			       atomic_read(&d->opd_sync_changes),
-			       atomic_read(&d->opd_sync_rpcs_in_progress));
-		} else if (unlikely(old == -ENOSPC)) {
-			d->opd_pre_status = 0;
-			spin_lock(&d->opd_pre_lock);
-			d->opd_pre_create_slow = 0;
-			d->opd_pre_create_count = OST_MIN_PRECREATE;
-			spin_unlock(&d->opd_pre_lock);
-			wake_up(&d->opd_pre_waitq);
-
-			CDEBUG(D_INFO, "%s: space available: %llu blocks, %llu"
-			       " free, %llu avail, %lluMB avail, %u lwm"
-			       " -> %d: rc = %d\n", d->opd_obd->obd_name,
-			       msfs->os_blocks, msfs->os_bfree, msfs->os_bavail,
-			       available, d->opd_reserved_mb_low,
-			       d->opd_pre_status, rc);
-		}
-
-		/* Object precreation is skipped on the OST with
-		 * max_create_count=0. */
-		if (d->opd_pre_max_create_count == 0)
-			msfs->os_state |= OS_STATE_NOPRECREATE;
-		else
-			msfs->os_state &= ~OS_STATE_NOPRECREATE;
+		spin_unlock(&d->opd_pre_lock);
 	}
-out:
-	wake_up(&d->opd_pre_user_waitq);
+
+	available_mb = (msfs->os_bavail * (msfs->os_bsize >> 10)) >> 10;
+	if (msfs->os_ffree < reserved_ino_low)
+		msfs->os_state |= OS_STATE_ENOINO;
+	else if (msfs->os_ffree <= reserved_ino_high)
+		msfs->os_state |= old_state & OS_STATE_ENOINO;
+	/* else don't clear flags in new msfs->os_state sent from OST */
+
+	CDEBUG(D_INFO,
+	       "%s: blocks=%llu free=%llu avail=%llu avail_mb=%llu hwm_mb=%u files=%llu ffree=%llu state=%x: rc = %d\n",
+	       d->opd_obd->obd_name, msfs->os_blocks, msfs->os_bfree,
+	       msfs->os_bavail, available_mb, d->opd_reserved_mb_high,
+	       msfs->os_files, msfs->os_ffree, msfs->os_state,
+	       d->opd_pre_status);
+	if (available_mb < d->opd_reserved_mb_low)
+		msfs->os_state |= OS_STATE_ENOSPC;
+	else if (available_mb <= d->opd_reserved_mb_high)
+		msfs->os_state |= old_state & OS_STATE_ENOSPC;
+	/* else don't clear flags in new msfs->os_state sent from OST */
+
+	if (msfs->os_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)) {
+		d->opd_pre_status = -ENOSPC;
+		if (!(old_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)))
+			CDEBUG(D_INFO, "%s: full: state=%x: rc = %x\n",
+			       d->opd_obd->obd_name, msfs->os_state,
+			       d->opd_pre_status);
+		CDEBUG(D_INFO, "uncommitted changes=%u in_progress=%u\n",
+		       atomic_read(&d->opd_sync_changes),
+		       atomic_read(&d->opd_sync_rpcs_in_progress));
+	} else if (old_state & (OS_STATE_ENOINO | OS_STATE_ENOSPC)) {
+		d->opd_pre_status = 0;
+		spin_lock(&d->opd_pre_lock);
+		d->opd_pre_create_slow = 0;
+		d->opd_pre_create_count = OST_MIN_PRECREATE;
+		spin_unlock(&d->opd_pre_lock);
+		wake_up(&d->opd_pre_waitq);
+
+		CDEBUG(D_INFO,
+		       "%s: available: state=%x: rc = %d\n",
+		       d->opd_obd->obd_name, msfs->os_state,
+		       d->opd_pre_status);
+	} else {
+		/* we only get here if rc == 0 in the caller */
+		d->opd_pre_status = 0;
+	}
+
+	/* Object precreation skipped on OST if manually disabled */
+	if (d->opd_pre_max_create_count == 0)
+		msfs->os_state |= OS_STATE_NOPRECREATE;
+	/* else don't clear flags in new msfs->os_state sent from OST */
+
+	/* copy only new statfs state to make it visible to MDS threads */
+	if (&d->opd_statfs != msfs)
+		d->opd_statfs = *msfs;
 }
 
 /**

@@ -849,6 +849,9 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	if (ofd->ofd_raid_degraded)
 		osfs->os_state |= OS_STATE_DEGRADED;
 
+	if (ofd->ofd_no_precreate)
+		osfs->os_state |= OS_STATE_NOPRECREATE;
+
 	if (obd->obd_self_export != exp && !exp_grant_param_supp(exp) &&
 	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
 		/*

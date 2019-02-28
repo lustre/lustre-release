@@ -191,11 +191,7 @@ LPROC_SEQ_FOPS_RO(ofd_last_id);
  * this OST are slowed down.  It also reduces the contention on the OST
  * RAID device, allowing it to rebuild more quickly.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
+ * \retval		count of bytes written
  */
 static ssize_t degraded_show(struct kobject *kobj, struct attribute *attr,
 			     char *buf)
@@ -214,10 +210,6 @@ static ssize_t degraded_show(struct kobject *kobj, struct attribute *attr,
  * the underlying RAID storage, so that they can mark an OST
  * as having degraded performance.
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents mode
- *			1: set degraded mode
- *			0: unset degraded mode
  * \param[in] count	\a buffer length
  * \param[in] off	unused for single entry
  *
@@ -243,6 +235,57 @@ static ssize_t degraded_store(struct kobject *kobj, struct attribute *attr,
 	return count;
 }
 LUSTRE_RW_ATTR(degraded);
+
+/**
+ * Show if the OFD is in no precreate mode.
+ *
+ * This means OFD has been adminstratively disabled at the OST to prevent
+ * the MDS from creating any new files on the OST, though existing files
+ * can still be read, written, and unlinked.
+ *
+ * \retval		number of bytes written
+ */
+static ssize_t no_precreate_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_no_precreate);
+}
+
+/**
+ * Set OFD to no precreate mode.
+ *
+ * This is used to interface to userspace administrative tools to
+ * disable new object creation on the OST.
+ *
+ * \param[in] count	\a buffer length
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t no_precreate_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_no_precreate = val;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(no_precreate);
 
 /**
  * Show OFD filesystem type.
@@ -730,6 +773,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_precreate_batch.attr,
 	&lustre_attr_degraded.attr,
 	&lustre_attr_fstype.attr,
+	&lustre_attr_no_precreate.attr,
 	&lustre_attr_sync_journal.attr,
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_lfsck_speed_limit.attr,

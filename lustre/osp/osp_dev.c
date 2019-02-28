@@ -750,8 +750,8 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 		RETURN(0);
 
 	/*
-	 * layer above osp (usually lod) can use ffree to estimate
-	 * how many objects are available for immediate creation
+	 * The layer above osp (usually lod) can use f_precreated to
+	 * estimate how many objects are available for immediate usage.
 	 */
 	spin_lock(&d->opd_pre_lock);
 	LASSERTF(fid_seq(&d->opd_pre_last_created_fid) ==
