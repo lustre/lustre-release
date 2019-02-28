@@ -4622,7 +4622,7 @@ test_63() {
 	# If kmalloc-128 is also 1 per page - this is a debug kernel
 	# and so this is not an error.
 	local kmalloc128=$(do_facet $SINGLEMDS "cat /proc/slabinfo" |
-			   awk '/^(kmalloc|size)-128 / { print $5 / $6 }')
+			   awk '/^(dma-kmalloc|size)-128 / { print $5 / $6 }')
 	# 32 128-byte chunks in 4k
 	[ "${kmalloc128%.*}" -lt "32" ] ||
 		error "ldiskfs inode too big, only $inode_slab objs/page, " \
