@@ -578,12 +578,7 @@ retry:
 			up_write(&loghandle->lgh_lock);
 			/* nobody should be trying to use this llog */
 			down_write(&cathandle->lgh_lock);
-			/* only reset current log if still room in catalog, to
-			 * avoid unnecessarily and racy creation of new and
-			 * partially initialized llog_handle
-			 */
-			if ((cathandle->u.chd.chd_current_log == loghandle) &&
-			    rc != -ENOSPC)
+			if (cathandle->u.chd.chd_current_log == loghandle)
 				cathandle->u.chd.chd_current_log = NULL;
 			up_write(&cathandle->lgh_lock);
 			RETURN(rc);
