@@ -133,6 +133,7 @@ struct ofd_device {
 				 ofd_lastid_rebuilding:1,
 				 ofd_record_fid_accessed:1,
 				 ofd_lfsck_verify_pfid:1,
+				 ofd_no_precreate:1,
 				 ofd_skip_lfsck:1,
 				 /* Whether to enforce T10PI checksum of RPC */
 				 ofd_checksum_t10pi_enforce:1;

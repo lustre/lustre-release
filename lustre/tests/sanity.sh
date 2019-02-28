@@ -5495,19 +5495,27 @@ test_56c() {
 		skip_env "OST $ost_name is in $old_status status"
 
 	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=1
+	[[ $OST1_VERSION -ge $(version_code 2.12.55) ]] && do_facet ost1 \
+		$LCTL set_param -n obdfilter.$ost_name.no_precreate=1
 	sleep_maxage
 
 	local new_status=$(ost_dev_status $ost_idx)
 
-	[[ "$new_status" = "D" ]] ||
-		error "OST $ost_name is in status of '$new_status', not 'D'"
+	[[ "$new_status" =~ "D" ]] ||
+		error "$ost_name status is '$new_status', missing 'D'"
+	if [[ $OST1_VERSION -ge $(version_code 2.12.55) ]]; then
+		[[ "$new_status" =~ "N" ]] ||
+			error "$ost_name status is '$new_status', missing 'N'"
+	fi
 
 	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=0
+	[[ $OST1_VERSION -ge $(version_code 2.12.55) ]] && do_facet ost1 \
+		$LCTL set_param -n obdfilter.$ost_name.no_precreate=0
 	sleep_maxage
 
 	new_status=$(ost_dev_status $ost_idx)
-	[[ -z "$new_status" ]] ||
-		error "OST $ost_name is in status of '$new_status', not ''"
+	[[ ! "$new_status" =~ "D" && ! "$new_status" =~ "N" ]] ||
+		error "$ost_name status is '$new_status', has 'D' and/or 'N'"
 }
 run_test 56c "check 'lfs df' showing device status"
 
