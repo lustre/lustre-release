@@ -40,6 +40,7 @@
 #endif
 #include <linux/uaccess.h>
 
+#include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
 
@@ -1366,6 +1367,8 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 				unsigned flags)
 {
 	struct lnet_peer_table *ptable;
+	bool new_lpn = false;
+	int rc;
 
 	/* Install the new peer_ni */
 	lnet_net_lock(LNET_LOCK_EX);
@@ -1396,6 +1399,7 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 
 	/* Add peer_net to peer */
 	if (!lpn->lpn_peer) {
+		new_lpn = true;
 		lpn->lpn_peer = lp;
 		list_add_tail(&lpn->lpn_peer_nets, &lp->lp_peer_nets);
 		lnet_peer_addref_locked(lp);
@@ -1424,6 +1428,18 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 	spin_unlock(&lp->lp_lock);
 
 	lp->lp_nnis++;
+
+	/* apply UDSPs */
+	if (new_lpn) {
+		rc = lnet_udsp_apply_policies_on_lpn(lpn);
+		if (rc)
+			CERROR("Failed to apply UDSPs on lpn %s\n",
+			       libcfs_net2str(lpn->lpn_net_id));
+	}
+	rc = lnet_udsp_apply_policies_on_lpni(lpni);
+	if (rc)
+		CERROR("Failed to apply UDSPs on lpni %s\n",
+		       libcfs_nid2str(lpni->lpni_nid));
 
 	CDEBUG(D_NET, "peer %s NID %s flags %#x\n",
 	       libcfs_nid2str(lp->lp_primary_nid),

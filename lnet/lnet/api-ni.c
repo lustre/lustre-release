@@ -3242,12 +3242,13 @@ int lnet_get_ni_stats(struct lnet_ioctl_element_msg_stats *msg_stats)
 static int lnet_add_net_common(struct lnet_net *net,
 			       struct lnet_ioctl_config_lnd_tunables *tun)
 {
-	__u32			net_id;
+	struct lnet_handle_md ping_mdh;
 	struct lnet_ping_buffer *pbuf;
-	struct lnet_handle_md	ping_mdh;
-	int			rc;
 	struct lnet_remotenet *rnet;
-	int			net_ni_count;
+	struct lnet_ni *ni;
+	int net_ni_count;
+	__u32 net_id;
+	int rc;
 
 	lnet_net_lock(LNET_LOCK_EX);
 	rnet = lnet_find_rnet_locked(net->net_id);
@@ -3297,9 +3298,24 @@ static int lnet_add_net_common(struct lnet_net *net,
 
 	lnet_net_lock(LNET_LOCK_EX);
 	net = lnet_get_net_locked(net_id);
-	lnet_net_unlock(LNET_LOCK_EX);
-
 	LASSERT(net);
+
+	/* apply the UDSPs */
+	rc = lnet_udsp_apply_policies_on_net(net);
+	if (rc)
+		CERROR("Failed to apply UDSPs on local net %s\n",
+		       libcfs_net2str(net->net_id));
+
+	/* At this point we lost track of which NI was just added, so we
+	 * just re-apply the policies on all of the NIs on this net
+	 */
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+		rc = lnet_udsp_apply_policies_on_ni(ni);
+		if (rc)
+			CERROR("Failed to apply UDSPs on ni %s\n",
+			       libcfs_nid2str(ni->ni_nid));
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
 
 	/*
 	 * Start the acceptor thread if this is the first network
