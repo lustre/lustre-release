@@ -8769,9 +8769,8 @@ test_77k() { # LU-10906
 	local i
 
 	[ "$ORIG_CSUM" ] || ORIG_CSUM=$(eval $get_checksum)
-	stack_trap "wait_update $HOSTNAME '$get_checksum' $ORIG_CSUM" EXIT
-	stack_trap "do_facet mgs $LCTL set_param -P $cksum_param=$ORIG_CSUM" \
-		EXIT
+	stack_trap "wait_update $HOSTNAME '$get_checksum' $ORIG_CSUM || true"
+	stack_trap "do_facet mgs $LCTL set_param -P $cksum_param=$ORIG_CSUM"
 
 	for i in 0 1; do
 		do_facet mgs $LCTL set_param -P $cksum_param=$i ||

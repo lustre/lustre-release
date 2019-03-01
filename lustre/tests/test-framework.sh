@@ -2983,54 +2983,103 @@ cleanup_check() {
 	return 0
 }
 
-wait_update () {
+##
+# wait for a command to return the expected result
+#
+# This will run @check on @node repeatedly until the output matches @expect
+# based on the supplied condition, or until @max_wait seconds have elapsed,
+# whichever comes first.  @cond may be one of the normal bash operators,
+# "-gt", "-ge", "-eq", "-le", "-lt", "==", "!=", or "=~", and must be quoted
+# in the caller to avoid unintentional evaluation by the shell in the caller.
+#
+# If @max_wait is not specified, the condition will be checked for up to 90s.
+#
+# If --verbose is passed as the first argument, the result is printed on each
+# value change, otherwise it is only printed after every 10s interval.
+#
+# Using wait_update_cond() or related helper function is preferable to adding
+# a "long enough" wait for some state to change in the background, since
+# "long enough" may be too short due to tunables, system config, or running in
+# a VM, and must by necessity wait too long for most cases or risk failure.
+#
+# usage: wait_update_cond [--verbose] node check cond expect [max_wait]
+wait_update_cond() {
 	local verbose=false
-	if [[ "$1" == "--verbose" ]]; then
-		shift
-		verbose=true
-	fi
+	[[ "$1" == "--verbose" ]] && verbose=true && shift
 
 	local node=$1
-	local TEST=$2
-	local FINAL=$3
-	local MAX=${4:-90}
-	local RESULT
-	local PREV_RESULT
-	local WAIT=0
+	local check="$2"
+	local cond="$3"
+	local expect="$4"
+	local max_wait=${5:-90}
+	local result
+	local prev_result
+	local waited=0
+	local begin=$SECONDS
 	local sleep=1
 	local print=10
 
-	PREV_RESULT=$(do_node $node "$TEST")
-	while [ true ]; do
-		RESULT=$(do_node $node "$TEST")
-		if [[ "$RESULT" == "$FINAL" ]]; then
-			[[ -z "$RESULT" || $WAIT -le $sleep ]] ||
-				echo "Updated after ${WAIT}s: wanted '$FINAL'"\
-				     "got '$RESULT'"
+	while (( $waited <= $max_wait )); do
+		result=$(do_node $node "$check")
+
+		eval [[ "'$result'" $cond "'$expect'" ]]
+		if [[ $? == 0 ]]; then
+			[[ -z "$result" || $waited -le $sleep ]] ||
+				echo "Updated after ${waited}s: want '$expect' got '$result'"
 			return 0
 		fi
-		if [[ $verbose && "$RESULT" != "$PREV_RESULT" ]]; then
-			echo "Changed after ${WAIT}s: from '$PREV_RESULT'"\
-			     "to '$RESULT'"
-			PREV_RESULT=$RESULT
+		if $verbose && [[ "$result" != "$prev_result" ]]; then
+			[[ -n "$prev_result" ]] &&
+				echo "Changed after ${waited}s: from '$prev_result' to '$result'"
+			prev_result="$result"
 		fi
-		[[ $WAIT -ge $MAX ]] && break
-		[[ $((WAIT % print)) -eq 0 ]] &&
-			echo "Waiting $((MAX - WAIT)) secs for update"
-		WAIT=$((WAIT + sleep))
+		(( $waited % $print == 0 )) &&
+			echo "Waiting $((max_wait - waited))s for '$expect'"
 		sleep $sleep
+		waited=$((SECONDS - begin))
 	done
-	echo "Update not seen after ${MAX}s: wanted '$FINAL' got '$RESULT'"
+	echo "Update not seen after ${max_wait}s: want '$expect' got '$result'"
 	return 3
 }
 
+# usage: wait_update [--verbose] node check expect [max_wait]
+wait_update() {
+	local verbose=
+	[ "$1" = "--verbose" ] && verbose="$1" && shift
+
+	local node="$1"
+	local check="$2"
+	local expect="$3"
+	local max_wait=$4
+
+	wait_update_cond $verbose $node "$check" "==" "$expect" $max_wait
+}
+
+# usage: wait_update_facet_cond [--verbose] facet check cond expect [max_wait]
+wait_update_facet_cond() {
+	local verbose=
+	[ "$1" = "--verbose" ] && verbose="$1" && shift
+
+	local node=$(facet_active_host $1)
+	local check="$2"
+	local cond="$3"
+	local expect="$4"
+	local max_wait=$5
+
+	wait_update_cond $verbose $node "$check" "$cond" "$expect" $max_wait
+}
+
+# usage: wait_update_facet [--verbose] facet check expect [max_wait]
 wait_update_facet() {
 	local verbose=
 	[ "$1" = "--verbose" ] && verbose="$1" && shift
 
-	local facet=$1
-	shift
-	wait_update $verbose $(facet_active_host $facet) "$@"
+	local node=$(facet_active_host $1)
+	local check="$2"
+	local expect="$3"
+	local max_wait=$4
+
+	wait_update_cond $verbose $node "$check" "==" "$expect" $max_wait
 }
 
 sync_all_data() {
@@ -10270,20 +10319,15 @@ mdts_set_param() {
 	return $rc
 }
 
-wait_result() {
-	local facet=$1
-	shift
-	wait_update --verbose $(facet_active_host $facet) "$@"
-}
-
 mdts_check_param() {
 	local key="$1"
 	local target="$2"
 	local timeout="$3"
 	local mdtno
+
 	for mdtno in $(seq 1 $MDSCOUNT); do
 		local idx=$(($mdtno - 1))
-		wait_result mds${mdtno} \
+		wait_update_facet --verbose mds${mdtno} \
 			"$LCTL get_param -n $MDT_PREFIX${idx}.$key" "$target" \
 			$timeout ||
 			error "$key state is not '$target' on mds${mdtno}"
@@ -10334,7 +10378,7 @@ wait_request_state() {
 	local cmd="$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.actions"
 	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$13}' | cut -f2 -d="
 
-	wait_result $mds "$cmd" "$state" 200 ||
+	wait_update_facet --verbose $mds "$cmd" "$state" 200 ||
 		error "request on $fid is not $state on $mds"
 }
 

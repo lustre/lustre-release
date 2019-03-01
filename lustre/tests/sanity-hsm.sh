@@ -506,7 +506,7 @@ wait_all_done() {
 	[[ -n $fid ]] && cmd+=" | grep '$fid'"
 	cmd+=" | egrep 'WAITING|STARTED'"
 
-	wait_result $SINGLEMDS "$cmd" "" $timeout ||
+	wait_update_facet --verbose mds1 "$cmd" "" $timeout ||
 		error "requests did not complete"
 }
 

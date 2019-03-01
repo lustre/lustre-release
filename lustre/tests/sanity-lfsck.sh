@@ -1381,9 +1381,8 @@ test_11b() {
 	local proc_path="${FSNAME}-OST0000-osc-MDT0000"
 	local seq=$(do_facet mds1 $LCTL get_param -n \
 		    osp.${proc_path}.prealloc_last_seq)
-	local lastid1=$(do_facet ost1 "lctl get_param -n \
-		obdfilter.${ost1_svc}.last_id" | grep $seq |
-		awk -F: '{ print $2 }')
+	local id_used=$(do_facet mds1 $LCTL get_param -n \
+			osp.${proc_path}.prealloc_last_id)
 
 	umount_client $MOUNT
 	stop ost1 || error "(1) Fail to stop ost1"
@@ -1395,23 +1394,23 @@ test_11b() {
 		error "(2) Fail to start ost1"
 
 	for ((i = 0; i < 60; i++)); do
-		lastid2=$(do_facet ost1 "lctl get_param -n \
-			obdfilter.${ost1_svc}.last_id" | grep $seq |
-			awk -F: '{ print $2 }')
-		[ ! -z $lastid2 ] && break;
+		id_ost1=$(do_facet ost1 \
+			  "$LCTL get_param -n obdfilter.$ost1_svc.last_id" |
+			  awk -F: "/$seq/ { print \$2 }")
+		[ -n "$id_ost1" ] && break
 		sleep 1
 	done
 
 	echo "the on-disk LAST_ID should be smaller than the expected one"
-	[ $lastid1 -gt $lastid2 ] ||
-		error "(4) expect lastid1 [ $lastid1 ] > lastid2 [ $lastid2 ]"
+	[ $id_used -gt $id_ost1 ] ||
+		error "(4) expect id_used '$id_used' > id_ost1 '$id_ost1'"
 
 	echo "trigger LFSCK for layout on ost1 to rebuild the on-disk LAST_ID"
 	$START_LAYOUT_ON_OST -r || error "(5) Fail to start LFSCK on OST!"
 
-	wait_update_facet ost1 "$LCTL get_param -n \
-		obdfilter.${OST_DEV}.lfsck_layout |
-		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+	wait_update_facet ost1 \
+		"$LCTL get_param -n obdfilter.$ost1_svc.lfsck_layout |
+		 awk '/^status/ { print \\\$2 }'" "completed" 32 || {
 		$SHOW_LAYOUT_ON_OST
 		error "(6) unexpected status"
 	}
@@ -1422,12 +1421,12 @@ test_11b() {
 		error "(8) Fail to start ost1"
 
 	echo "the on-disk LAST_ID should have been rebuilt"
-	wait_update_facet ost1 "$LCTL get_param -n \
-		obdfilter.${ost1_svc}.last_id | grep $seq |
-		awk -F: '{ print \\\$2 }'" "$lastid1" 60 || {
-		do_facet ost1 $LCTL get_param -n \
-		obdfilter.${ost1_svc}.last_id
-		error "(9) expect lastid1 $seq:$lastid1"
+	# last_id may be larger than $id_used if objects were created/skipped
+	wait_update_facet_cond ost1 \
+		"$LCTL get_param -n obdfilter.$ost1_svc.last_id |
+		 awk -F: '/$seq/ { print \\\$2 }'" "-ge" "$id_used" 60 || {
+		do_facet ost1 $LCTL get_param obdfilter.$ost1_svc.last_id
+		error "(9) expect last_id >= id_used $seq:$id_used"
 	}
 
 	do_facet ost1 $LCTL set_param fail_loc=0
