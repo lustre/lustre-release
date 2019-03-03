@@ -1309,10 +1309,14 @@ int tgt_mk_reply_data(const struct lu_env *env,
 	struct lsd_reply_data	*lrd;
 	__u64			*pre_versions = NULL;
 	int			rc;
+	struct tgt_session_info *tsi = NULL;
 
 	OBD_ALLOC_PTR(trd);
 	if (unlikely(trd == NULL))
 		RETURN(-ENOMEM);
+
+	if (env != NULL)
+		tsi = tgt_ses_info(env);
 
 	/* fill reply data information */
 	lrd = &trd->trd_reply;
@@ -1326,10 +1330,7 @@ int tgt_mk_reply_data(const struct lu_env *env,
 			lrd->lrd_result = th->th_result;
 		}
 	} else {
-		struct tgt_session_info *tsi;
-
 		LASSERT(env != NULL);
-		tsi = tgt_ses_info(env);
 		LASSERT(tsi->tsi_xid != 0);
 
 		lrd->lrd_xid = tsi->tsi_xid;
@@ -1344,6 +1345,9 @@ int tgt_mk_reply_data(const struct lu_env *env,
 		trd->trd_pre_versions[2] = pre_versions[2];
 		trd->trd_pre_versions[3] = pre_versions[3];
 	}
+
+	if (tsi && tsi->tsi_open_obj)
+		trd->trd_object = *lu_object_fid(&tsi->tsi_open_obj->do_lu);
 
 	rc = tgt_add_reply_data(env, tgt, ted, trd, req,
 				th, write_update);
@@ -2108,6 +2112,7 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			trd->trd_pre_versions[3] = 0;
 			trd->trd_index = idx;
 			trd->trd_tag = 0;
+			fid_zero(&trd->trd_object);
 			list_add(&trd->trd_list, &ted->ted_reply_list);
 			ted->ted_reply_cnt++;
 			if (ted->ted_reply_cnt > ted->ted_reply_max)

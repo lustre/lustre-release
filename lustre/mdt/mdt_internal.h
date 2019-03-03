@@ -423,6 +423,7 @@ struct mdt_reint_record {
 
 enum mdt_reint_flag {
 	MRF_OPEN_TRUNC = BIT(0),
+	MRF_OPEN_RESEND = BIT(1),
 };
 
 /*

@@ -243,6 +243,8 @@ struct tg_reply_data {
 	int			trd_index;
 	/** tag the client used */
 	__u16			trd_tag;
+	/** child fid to reconstruct open */
+	struct lu_fid		trd_object;
 };
 
 extern struct lu_context_key tgt_session_key;
@@ -274,6 +276,8 @@ struct tgt_session_info {
 
 	/* object affected by VBR, for last_rcvd_update */
 	struct dt_object	*tsi_vbr_obj;
+	/* open child object, for last_rcvd_update */
+	struct dt_object	*tsi_open_obj;
 	/* opdata for mdt_reint_open(), has the same value as
 	 * ldlm_reply:lock_policy_res1.  The tgt_update_last_rcvd() stores
 	 * this value onto disk for recovery when tgt_txn_stop_cb() is called.
@@ -312,6 +316,17 @@ static inline void tgt_vbr_obj_set(const struct lu_env *env,
 	if (env->le_ses != NULL) {
 		tsi = tgt_ses_info(env);
 		tsi->tsi_vbr_obj = obj;
+	}
+}
+
+static inline void tgt_open_obj_set(const struct lu_env *env,
+				   struct dt_object *obj)
+{
+	struct tgt_session_info	*tsi;
+
+	if (env->le_ses != NULL) {
+		tsi = tgt_ses_info(env);
+		tsi->tsi_open_obj = obj;
 	}
 }
 

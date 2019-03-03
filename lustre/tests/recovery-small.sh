@@ -1280,12 +1280,28 @@ test_52() {
 run_test 52 "failover OST under load"
 
 # test of open reconstruct
-test_53() {
+test_53a() {
 	touch $DIR/$tfile
 	drop_mdt_ldlm_reply "openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||\
 		return 2
 }
-run_test 53 "touch: drop rep"
+run_test 53a "touch: drop rep"
+
+test_53b() {
+	touch $DIR/$tfile
+	sync
+	drop_mdt_ldlm_reply "openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||
+		return 2
+}
+run_test 53b "touch: drop rep"
+
+test_53c() {
+	rm -rf $DIR/$tfile
+	sync
+	drop_mdt_ldlm_reply "openfile -f O_RDWR:O_CREAT -m 0755 $DIR/$tfile" ||
+		return 2
+}
+run_test 53c "touch: drop rep"
 
 test_54() {
 	zconf_mount $(hostname) $MOUNT2
