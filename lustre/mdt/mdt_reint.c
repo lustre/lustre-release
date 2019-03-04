@@ -1932,10 +1932,12 @@ close:
  *  9. unlock above locks
  * 10. sync device if source has links
  */
-static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
+static int mdt_reint_migrate(struct mdt_thread_info *info,
+			     struct mdt_lock_handle *unused)
 {
 	const struct lu_env *env = info->mti_env;
 	struct mdt_device *mdt = info->mti_mdt;
+	struct ptlrpc_request *req = mdt_info_req(info);
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct lu_ucred *uc = mdt_ucred(info);
 	struct md_attr *ma = &info->mti_attr;
@@ -1945,6 +1947,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 	struct mdt_object *spobj = NULL;
 	struct mdt_object *sobj = NULL;
 	struct mdt_object *tobj;
+	struct lustre_handle rename_lh = { 0 };
 	struct mdt_lock_handle *lhp;
 	struct mdt_lock_handle *lhs;
 	struct mdt_lock_handle *lht;
@@ -1959,6 +1962,13 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 	CDEBUG(D_INODE, "migrate "DFID"/"DNAME" to "DFID"\n", PFID(rr->rr_fid1),
 	       PNAME(&rr->rr_name), PFID(rr->rr_fid2));
 
+	if (info->mti_dlm_req)
+		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
+
+	if (!fid_is_md_operative(rr->rr_fid1) ||
+	    !fid_is_md_operative(rr->rr_fid2))
+		RETURN(-EPERM);
+
 	/* don't allow migrate . or .. */
 	if (lu_name_is_dot_or_dotdot(&rr->rr_name))
 		RETURN(-EBUSY);
@@ -1971,10 +1981,25 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 	    mdt->mdt_enable_remote_dir_gid != -1)
 		RETURN(-EPERM);
 
+	/*
+	 * Note: do not enqueue rename lock for replay request, because
+	 * if other MDT holds rename lock, but being blocked to wait for
+	 * this MDT to finish its recovery, and the failover MDT can not
+	 * get rename lock, which will cause deadlock.
+	 */
+	if (!req_is_replay(req)) {
+		rc = mdt_rename_lock(info, &rename_lh);
+		if (rc != 0) {
+			CERROR("%s: can't lock FS for rename: rc = %d\n",
+			       mdt_obd_name(info->mti_mdt), rc);
+			RETURN(rc);
+		}
+	}
+
 	/* pobj is master object of parent */
 	pobj = mdt_parent_find_check(info, rr->rr_fid1, 0);
 	if (IS_ERR(pobj))
-		RETURN(PTR_ERR(pobj));
+		GOTO(unlock_rename, rc = PTR_ERR(pobj));
 
 	if (unlikely(!info->mti_big_lmm)) {
 		info->mti_big_lmmsize = lmv_mds_md_size(64, LMV_MAGIC);
@@ -2107,6 +2132,9 @@ unlock_parent:
 				  &parent_slave_locks, rc);
 put_parent:
 	mdt_object_put(env, pobj);
+unlock_rename:
+	if (lustre_handle_is_used(&rename_lh))
+		mdt_rename_unlock(&rename_lh);
 
 	if (!rc && do_sync)
 		mdt_device_sync(env, mdt);
@@ -2240,8 +2268,8 @@ static int mdt_rename_determine_lock_order(struct mdt_thread_info *info,
  *    And tgt_c will be still in the same MDT as the original
  *    src_c.
  */
-static int mdt_reint_rename_internal(struct mdt_thread_info *info,
-				     struct mdt_lock_handle *lhc)
+static int mdt_reint_rename(struct mdt_thread_info *info,
+			    struct mdt_lock_handle *unused)
 {
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct md_attr *ma = &info->mti_attr;
@@ -2250,6 +2278,7 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 	struct mdt_object *mtgtdir = NULL;
 	struct mdt_object *mold;
 	struct mdt_object *mnew = NULL;
+	struct lustre_handle rename_lh = { 0 };
 	struct mdt_lock_handle *lh_srcdirp;
 	struct mdt_lock_handle *lh_tgtdirp;
 	struct mdt_lock_handle *lh_oldp = NULL;
@@ -2266,10 +2295,32 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 		  PFID(rr->rr_fid1), PNAME(&rr->rr_name),
 		  PFID(rr->rr_fid2), PNAME(&rr->rr_tgt_name));
 
+	if (info->mti_dlm_req)
+		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
+
+	if (!fid_is_md_operative(rr->rr_fid1) ||
+	    !fid_is_md_operative(rr->rr_fid2))
+		RETURN(-EPERM);
+
+	/*
+	 * Note: do not enqueue rename lock for replay request, because
+	 * if other MDT holds rename lock, but being blocked to wait for
+	 * this MDT to finish its recovery, and the failover MDT can not
+	 * get rename lock, which will cause deadlock.
+	 */
+	if (!req_is_replay(req)) {
+		rc = mdt_rename_lock(info, &rename_lh);
+		if (rc != 0) {
+			CERROR("%s: can't lock FS for rename: rc = %d\n",
+			       mdt_obd_name(info->mti_mdt), rc);
+			RETURN(rc);
+		}
+	}
+
 	/* find both parents. */
 	msrcdir = mdt_parent_find_check(info, rr->rr_fid1, 0);
 	if (IS_ERR(msrcdir))
-		RETURN(PTR_ERR(msrcdir));
+		GOTO(out_unlock_rename, rc = PTR_ERR(msrcdir));
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
 
@@ -2566,6 +2617,9 @@ out_put_tgtdir:
 	mdt_object_put(info->mti_env, mtgtdir);
 out_put_srcdir:
 	mdt_object_put(info->mti_env, msrcdir);
+out_unlock_rename:
+	if (lustre_handle_is_used(&rename_lh))
+		mdt_rename_unlock(&rename_lh);
 
 	/* If 'discard' is set then new_fid must exits.
 	 * DOM data discard need neither object nor lock,
@@ -2575,58 +2629,6 @@ out_put_srcdir:
 		mdt_dom_discard_data(info, new_fid);
 
 	return rc;
-}
-
-static int mdt_reint_rename_or_migrate(struct mdt_thread_info *info,
-				       struct mdt_lock_handle *lhc, bool rename)
-{
-	struct mdt_reint_record *rr = &info->mti_rr;
-	struct ptlrpc_request   *req = mdt_info_req(info);
-	struct lustre_handle	rename_lh = { 0 };
-	int			rc;
-	ENTRY;
-
-	if (info->mti_dlm_req)
-		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
-
-	if (!fid_is_md_operative(rr->rr_fid1) ||
-	    !fid_is_md_operative(rr->rr_fid2))
-		RETURN(-EPERM);
-
-	/* Note: do not enqueue rename lock for replay request, because
-	 * if other MDT holds rename lock, but being blocked to wait for
-	 * this MDT to finish its recovery, and the failover MDT can not
-	 * get rename lock, which will cause deadlock. */
-	if (!req_is_replay(req)) {
-		rc = mdt_rename_lock(info, &rename_lh);
-		if (rc != 0) {
-			CERROR("%s: can't lock FS for rename: rc = %d\n",
-			       mdt_obd_name(info->mti_mdt), rc);
-			RETURN(rc);
-		}
-	}
-
-	if (rename)
-		rc = mdt_reint_rename_internal(info, lhc);
-	else
-		rc = mdt_reint_migrate_internal(info);
-
-	if (lustre_handle_is_used(&rename_lh))
-		mdt_rename_unlock(&rename_lh);
-
-	RETURN(rc);
-}
-
-static int mdt_reint_rename(struct mdt_thread_info *info,
-			    struct mdt_lock_handle *lhc)
-{
-	return mdt_reint_rename_or_migrate(info, lhc, true);
-}
-
-static int mdt_reint_migrate(struct mdt_thread_info *info,
-			    struct mdt_lock_handle *lhc)
-{
-	return mdt_reint_rename_or_migrate(info, lhc, false);
 }
 
 static int mdt_reint_resync(struct mdt_thread_info *info,
