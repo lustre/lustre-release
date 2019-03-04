@@ -398,6 +398,7 @@ int fid_is_local(const struct lu_env *env,
 	}
 	return result;
 }
+EXPORT_SYMBOL(fid_is_local);
 
 static void fld_server_debugfs_fini(struct lu_server_fld *fld)
 {
