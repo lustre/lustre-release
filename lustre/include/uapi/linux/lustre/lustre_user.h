@@ -556,6 +556,8 @@ struct fsxattr {
 #define LOV_PATTERN_F_RELEASED	0x80000000 /* HSM released file */
 #define LOV_PATTERN_DEFAULT	0xffffffff
 
+#define LOV_OFFSET_DEFAULT      ((__u16)-1)
+
 static inline bool lov_pattern_supported(__u32 pattern)
 {
 	return (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_RAID0 ||

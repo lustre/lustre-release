@@ -220,7 +220,7 @@ int mdc_save_lovea(struct ptlrpc_request *req,
 		   void *data, u32 size)
 {
 	struct req_capsule *pill = &req->rq_pill;
-	void *lmm;
+	struct lov_user_md *lmm;
 	int rc = 0;
 
 	if (req_capsule_get_size(pill, field, RCL_CLIENT) < size) {
@@ -237,8 +237,12 @@ int mdc_save_lovea(struct ptlrpc_request *req,
 
 	req_capsule_set_size(pill, field, RCL_CLIENT, size);
 	lmm = req_capsule_client_get(pill, field);
-	if (lmm)
+	if (lmm) {
 		memcpy(lmm, data, size);
+		/* overwrite layout generation returned from the MDS */
+		lmm->lmm_stripe_offset =
+		  (typeof(lmm->lmm_stripe_offset))LOV_OFFSET_DEFAULT;
+	}
 
 	return rc;
 }
