@@ -1282,6 +1282,36 @@ test_24y() {
 }
 run_test 24y "rename/link on the same dir should succeed"
 
+test_24z() {
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	[[ $MDS1_VERSION -lt $(version_code 2.12.51) ]] &&
+		skip "Need MDS version at least 2.12.51"
+
+	local index
+
+	for index in 0 1; do
+		$LFS mkdir -i $index $DIR/$tdir.$index || error "mkdir failed"
+		touch $DIR/$tdir.0/$tfile.$index || error "touch failed"
+	done
+
+	mv $DIR/$tdir.0/$tfile.0 $DIR/$tdir.1 || error "mv $tfile.0 failed"
+
+	index=$($LFS getstripe -m $DIR/$tdir.1/$tfile.0)
+	[ $index -eq 0 ] || error "$tfile.0 is on MDT$index"
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	do_nodes $mdts $LCTL set_param mdt.*.enable_remote_rename=0
+	stack_trap "do_nodes $mdts $LCTL \
+		set_param mdt.*.enable_remote_rename=1" EXIT
+
+	mv $DIR/$tdir.0/$tfile.1 $DIR/$tdir.1 || error "mv $tfile.1 failed"
+
+	index=$($LFS getstripe -m $DIR/$tdir.1/$tfile.1)
+	[ $index -eq 1 ] || error "$tfile.1 is on MDT$index"
+}
+run_test 24z "cross-MDT rename is done as cp"
+
 test_24A() { # LU-3182
 	local NFILES=5000
 

@@ -2263,20 +2263,10 @@ static int mdt_rename_determine_lock_order(struct mdt_thread_info *info,
  * 2 - srcdir child; 3 - tgtdir child.
  * Update on disk version of srcdir child.
  */
-/**
- * For DNE phase I, only these renames are allowed
- *	mv src_p/src_c tgt_p/tgt_c
- * 1. src_p/src_c/tgt_p/tgt_c are in the same MDT.
- * 2. src_p and tgt_p are same directory, and tgt_c does not
- *    exists. In this case, all of modification will happen
- *    in the MDT where ithesource parent is, only one remote
- *    update is needed, i.e. set c_time/m_time on the child.
- *    And tgt_c will be still in the same MDT as the original
- *    src_c.
- */
 static int mdt_reint_rename(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *unused)
 {
+	struct mdt_device *mdt = info->mti_mdt;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct md_attr *ma = &info->mti_attr;
 	struct ptlrpc_request *req = mdt_info_req(info);
@@ -2308,25 +2298,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	    !fid_is_md_operative(rr->rr_fid2))
 		RETURN(-EPERM);
 
-	/*
-	 * Note: do not enqueue rename lock for replay request, because
-	 * if other MDT holds rename lock, but being blocked to wait for
-	 * this MDT to finish its recovery, and the failover MDT can not
-	 * get rename lock, which will cause deadlock.
-	 */
-	if (!req_is_replay(req)) {
-		rc = mdt_rename_lock(info, &rename_lh);
-		if (rc != 0) {
-			CERROR("%s: can't lock FS for rename: rc = %d\n",
-			       mdt_obd_name(info->mti_mdt), rc);
-			RETURN(rc);
-		}
-	}
-
 	/* find both parents. */
 	msrcdir = mdt_parent_find_check(info, rr->rr_fid1, 0);
 	if (IS_ERR(msrcdir))
-		GOTO(out_unlock_rename, rc = PTR_ERR(msrcdir));
+		RETURN(PTR_ERR(msrcdir));
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME3, 5);
 
@@ -2339,9 +2314,36 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 			GOTO(out_put_srcdir, rc = PTR_ERR(mtgtdir));
 	}
 
+	/*
+	 * Note: do not enqueue rename lock for replay request, because
+	 * if other MDT holds rename lock, but being blocked to wait for
+	 * this MDT to finish its recovery, and the failover MDT can not
+	 * get rename lock, which will cause deadlock.
+	 */
+	if (!req_is_replay(req)) {
+		/*
+		 * Normally rename RPC is handled on the MDT with the target
+		 * directory (if target exists, it's on the MDT with the
+		 * target), if the source directory is remote, it's a hint that
+		 * source is remote too (this may not be true, but it won't
+		 * cause any issue), return -EXDEV early to avoid taking
+		 * rename_lock.
+		 */
+		if (!mdt->mdt_enable_remote_rename &&
+		    mdt_object_remote(msrcdir))
+			GOTO(out_put_tgtdir, rc = -EXDEV);
+
+		rc = mdt_rename_lock(info, &rename_lh);
+		if (rc != 0) {
+			CERROR("%s: can't lock FS for rename: rc = %d\n",
+			       mdt_obd_name(mdt), rc);
+			GOTO(out_put_tgtdir, rc);
+		}
+	}
+
 	rc = mdt_rename_determine_lock_order(info, msrcdir, mtgtdir);
 	if (rc < 0)
-		GOTO(out_put_tgtdir, rc);
+		GOTO(out_unlock_rename, rc);
 
 	reverse = rc;
 
@@ -2366,7 +2368,7 @@ relock:
 		rc = mdt_object_lock_save(info, mtgtdir, lh_tgtdirp, 1,
 					  cos_incompat);
 		if (rc)
-			GOTO(out_put_tgtdir, rc);
+			GOTO(out_unlock_rename, rc);
 
 		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
 
@@ -2374,13 +2376,13 @@ relock:
 					  cos_incompat);
 		if (rc != 0) {
 			mdt_object_unlock(info, mtgtdir, lh_tgtdirp, rc);
-			GOTO(out_put_tgtdir, rc);
+			GOTO(out_unlock_rename, rc);
 		}
 	} else {
 		rc = mdt_object_lock_save(info, msrcdir, lh_srcdirp, 0,
 					  cos_incompat);
 		if (rc)
-			GOTO(out_put_tgtdir, rc);
+			GOTO(out_unlock_rename, rc);
 
 		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_RENAME, 5);
 
@@ -2397,7 +2399,7 @@ relock:
 		}
 		if (rc != 0) {
 			mdt_object_unlock(info, msrcdir, lh_srcdirp, rc);
-			GOTO(out_put_tgtdir, rc);
+			GOTO(out_unlock_rename, rc);
 		}
 	}
 
@@ -2426,6 +2428,9 @@ relock:
 				"object does not exist");
 		GOTO(out_put_old, rc = -ENOENT);
 	}
+
+	if (mdt_object_remote(mold) && !mdt->mdt_enable_remote_rename)
+		GOTO(out_put_old, rc = -EXDEV);
 
 	/* Check if @mtgtdir is subdir of @mold, before locking child
 	 * to avoid reverse locking. */
@@ -2619,13 +2624,13 @@ out_put_old:
 out_unlock_parents:
 	mdt_object_unlock(info, mtgtdir, lh_tgtdirp, rc);
 	mdt_object_unlock(info, msrcdir, lh_srcdirp, rc);
+out_unlock_rename:
+	if (lustre_handle_is_used(&rename_lh))
+		mdt_rename_unlock(&rename_lh);
 out_put_tgtdir:
 	mdt_object_put(info->mti_env, mtgtdir);
 out_put_srcdir:
 	mdt_object_put(info->mti_env, msrcdir);
-out_unlock_rename:
-	if (lustre_handle_is_used(&rename_lh))
-		mdt_rename_unlock(&rename_lh);
 
 	/* If 'discard' is set then new_fid must exits.
 	 * DOM data discard need neither object nor lock,

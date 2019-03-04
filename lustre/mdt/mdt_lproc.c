@@ -958,6 +958,34 @@ mdt_migrate_hsm_allowed_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_migrate_hsm_allowed);
 
+static int mdt_enable_remote_rename_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	seq_printf(m, "%u\n",  mdt->mdt_enable_remote_rename);
+	return 0;
+}
+
+static ssize_t
+mdt_enable_remote_rename_seq_write(struct file *file, const char __user *buffer,
+				   size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_remote_rename = val;
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_enable_remote_rename);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, target_instance);
@@ -1027,6 +1055,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_enable_striped_dir_fops		},
 	{ .name =	"enable_dir_migration",
 	  .fops =	&mdt_enable_dir_migration_fops		},
+	{ .name =	"enable_remote_rename",
+	  .fops =	&mdt_enable_remote_rename_fops		},
 	{ .name =	"hsm_control",
 	  .fops =	&mdt_hsm_cdt_control_fops		},
 	{ .name =	"recovery_time_hard",
