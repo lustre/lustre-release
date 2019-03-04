@@ -137,7 +137,7 @@ test_2b() {
 	mds_path=${mds_path#/}
 
 	$LFS setdirstripe -i0 -c1 ${DIR}/$tdir || error "create dir failed"
-	$LFS mkdir -c0 $dirname1 || error "cannot 'lfs mkdir' $dirname1"
+	$LFS mkdir -c0 -i0 $dirname1 || error "cannot 'lfs mkdir' $dirname1"
 
 	local xattrval=$(check_selinux_xattr "mds1" $mds_path)
 
@@ -354,7 +354,7 @@ test_20c() {
 	do_facet client "$LCTL set_param fail_val=$req_delay fail_loc=0x140b"
 
 	# create file on first mount point
-	lfs mkdir -c0 $dirname1 &
+	$LFS mkdir -c0 -i0 $dirname1 &
 	local mkdirpid=$!
 	sleep 5
 
