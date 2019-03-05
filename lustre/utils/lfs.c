@@ -5017,8 +5017,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 17, 53, 0)
 		case 'm':
 #endif
-			fprintf(stderr, "warning: '-m' is deprecated, "
-				"use '--mode' or '-o' instead\n");
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 			if (strcmp(argv[optind - 1], "--index") == 0)
 				fprintf(stderr,
