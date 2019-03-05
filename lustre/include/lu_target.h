@@ -330,30 +330,22 @@ enum tgt_handler_flags {
 	/*
 	 * struct *_body is passed in the incoming message, and object
 	 * identified by this fid exists on disk.
-	 *                            *
-	 * "habeo corpus" == "I have a body"
 	 */
-	HABEO_CORPUS = (1 << 0),
+	HAS_BODY = (1 << 0),
 	/*
 	 * struct ldlm_request is passed in the incoming message.
-	 *
-	 * "habeo clavis" == "I have a key"
-	 *                                     */
-	HABEO_CLAVIS = (1 << 1),
+	 */
+	HAS_KEY = (1 << 1),
 	/*
 	 * this request has fixed reply format, so that reply message can be
 	 * packed by generic code.
-	 *
-	 * "habeo refero" == "I have a reply"
 	 */
-	HABEO_REFERO = (1 << 2),
+	HAS_REPLY = (1 << 2),
 	/*
 	 * this request will modify something, so check whether the file system
 	 * is readonly or not, then return -EROFS to client asap if necessary.
-	 *
-	 * "mutabor" == "I shall modify"
 	 */
-	MUTABOR      = (1 << 3)
+	IS_MUTABLE = (1 << 3)
 };
 
 struct tgt_handler {

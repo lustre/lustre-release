@@ -446,7 +446,7 @@ static int seq_handler(struct tgt_session_info *tsi)
 }
 
 struct tgt_handler seq_handlers[] = {
-TGT_SEQ_HDL(HABEO_REFERO,	SEQ_QUERY,	seq_handler),
+TGT_SEQ_HDL(HAS_REPLY,	SEQ_QUERY,	seq_handler),
 };
 EXPORT_SYMBOL(seq_handlers);
 

@@ -63,7 +63,7 @@ EXPORT_SYMBOL(tgt_name);
  *  - create lu_object, corresponding to the fid in mdt_body, and save it in
  *  @tsi;
  *
- *  - if HABEO_CORPUS flag is set for this request type check whether object
+ *  - if HAS_BODY flag is set for this request type check whether object
  *  actually exists on storage (lu_object_exists()).
  *
  */
@@ -100,7 +100,7 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 			     &tsi->tsi_tgt->lut_bottom->dd_lu_dev,
 			     &body->mbo_fid1, NULL);
 	if (!IS_ERR(obj)) {
-		if ((flags & HABEO_CORPUS) && !lu_object_exists(obj)) {
+		if ((flags & HAS_BODY) && !lu_object_exists(obj)) {
 			lu_object_put(tsi->tsi_env, obj);
 			rc = -ENOENT;
 		} else {
@@ -277,9 +277,8 @@ static int tgt_ost_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 	}
 
 	if (!(body->oa.o_valid & OBD_MD_FLID)) {
-		if (flags & HABEO_CORPUS) {
-			CERROR("%s: OBD_MD_FLID flag is not set in ost_body "
-			       "but OID/FID is mandatory with HABEO_CORPUS\n",
+		if (flags & HAS_BODY) {
+			CERROR("%s: OBD_MD_FLID flag is not set in ost_body but OID/FID is mandatory with HAS_BODY\n",
 			       tgt_name(tsi->tsi_tgt));
 			RETURN(-EPROTO);
 		} else {
@@ -317,7 +316,7 @@ static int tgt_request_preprocess(struct tgt_session_info *tsi,
 	LASSERT(h->th_opc == lustre_msg_get_opc(req->rq_reqmsg));
 	LASSERT(current->journal_info == NULL);
 
-	LASSERT(ergo(flags & (HABEO_CORPUS | HABEO_REFERO),
+	LASSERT(ergo(flags & (HAS_BODY | HAS_REPLY),
 		     h->th_fmt != NULL));
 	if (h->th_fmt != NULL) {
 		req_capsule_set(pill, h->th_fmt);
@@ -333,10 +332,10 @@ static int tgt_request_preprocess(struct tgt_session_info *tsi,
 		}
 	}
 
-	if (flags & MUTABOR && tgt_conn_flags(tsi) & OBD_CONNECT_RDONLY)
+	if (flags & IS_MUTABLE && tgt_conn_flags(tsi) & OBD_CONNECT_RDONLY)
 		RETURN(-EROFS);
 
-	if (flags & HABEO_CLAVIS) {
+	if (flags & HAS_KEY) {
 		struct ldlm_request *dlm_req;
 
 		LASSERT(h->th_fmt != NULL);
@@ -418,7 +417,7 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 
 	rc = tgt_request_preprocess(tsi, h, req);
 	/* pack reply if reply format is fixed */
-	if (rc == 0 && h->th_flags & HABEO_REFERO) {
+	if (rc == 0 && h->th_flags & HAS_REPLY) {
 		/* Pack reply */
 		if (req_capsule_has_field(tsi->tsi_pill, &RMF_MDT_MD,
 					  RCL_SERVER))
@@ -1375,10 +1374,10 @@ int tgt_cp_callback(struct tgt_session_info *tsi)
 
 /* generic LDLM target handler */
 struct tgt_handler tgt_dlm_handlers[] = {
-TGT_DLM_HDL    (HABEO_CLAVIS,	LDLM_ENQUEUE,		tgt_enqueue),
-TGT_DLM_HDL    (HABEO_CLAVIS,	LDLM_CONVERT,		tgt_convert),
-TGT_DLM_HDL_VAR(0,		LDLM_BL_CALLBACK,	tgt_bl_callback),
-TGT_DLM_HDL_VAR(0,		LDLM_CP_CALLBACK,	tgt_cp_callback)
+TGT_DLM_HDL(HAS_KEY, LDLM_ENQUEUE, tgt_enqueue),
+TGT_DLM_HDL(HAS_KEY, LDLM_CONVERT, tgt_convert),
+TGT_DLM_HDL_VAR(0, LDLM_BL_CALLBACK, tgt_bl_callback),
+TGT_DLM_HDL_VAR(0, LDLM_CP_CALLBACK, tgt_cp_callback)
 };
 EXPORT_SYMBOL(tgt_dlm_handlers);
 
@@ -1540,8 +1539,8 @@ static int tgt_handle_lfsck_query(struct tgt_session_info *tsi)
 }
 
 struct tgt_handler tgt_lfsck_handlers[] = {
-TGT_LFSCK_HDL(HABEO_REFERO,	LFSCK_NOTIFY,	tgt_handle_lfsck_notify),
-TGT_LFSCK_HDL(HABEO_REFERO,	LFSCK_QUERY,	tgt_handle_lfsck_query),
+TGT_LFSCK_HDL(HAS_REPLY,	LFSCK_NOTIFY,	tgt_handle_lfsck_notify),
+TGT_LFSCK_HDL(HAS_REPLY,	LFSCK_QUERY,	tgt_handle_lfsck_query),
 };
 EXPORT_SYMBOL(tgt_lfsck_handlers);
 

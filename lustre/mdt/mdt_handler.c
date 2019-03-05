@@ -3291,7 +3291,7 @@ void mdt_object_unlock_put(struct mdt_thread_info * info,
  *  - create lu_object, corresponding to the fid in mdt_body, and save it in
  *  @info;
  *
- *  - if HABEO_CORPUS flag is set for this request type check whether object
+ *  - if HAS_BODY flag is set for this request type check whether object
  *  actually exists on storage (lu_object_exists()).
  *
  */
@@ -3322,7 +3322,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info,
 
 	obj = mdt_object_find(env, info->mti_mdt, &body->mbo_fid1);
 	if (!IS_ERR(obj)) {
-		if ((flags & HABEO_CORPUS) && !mdt_object_exists(obj)) {
+		if ((flags & HAS_BODY) && !mdt_object_exists(obj)) {
 			mdt_object_put(env, obj);
 			rc = -ENOENT;
                 } else {
@@ -3338,21 +3338,22 @@ static int mdt_body_unpack(struct mdt_thread_info *info,
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info,
 				   enum tgt_handler_flags flags)
 {
-        struct req_capsule *pill = info->mti_pill;
-        int rc;
-        ENTRY;
+	struct req_capsule *pill = info->mti_pill;
+	int rc;
 
-        if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_CLIENT))
-                rc = mdt_body_unpack(info, flags);
-        else
-                rc = 0;
+	ENTRY;
 
-        if (rc == 0 && (flags & HABEO_REFERO)) {
-                /* Pack reply. */
-                if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
-                        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
+	if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_CLIENT))
+		rc = mdt_body_unpack(info, flags);
+	else
+		rc = 0;
+
+	if (rc == 0 && (flags & HAS_REPLY)) {
+		/* Pack reply. */
+		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+			req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
 					     DEF_REP_MD_SIZE);
-                if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
+		if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
 			req_capsule_set_size(pill, &RMF_LOGCOOKIES,
 					     RCL_SERVER, 0);
 
@@ -3363,9 +3364,9 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info,
 			req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
 					     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
-                rc = req_capsule_server_pack(pill);
-        }
-        RETURN(rc);
+		rc = req_capsule_server_pack(pill);
+	}
+	RETURN(rc);
 }
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh)
@@ -3994,7 +3995,7 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 	case IT_OPEN:
 	case IT_OPEN|IT_CREAT:
 		/*
-		 * OCREAT is not a MUTABOR request since the file may
+		 * OCREAT is not a IS_MUTABLE request since the file may
 		 * already exist. We do the extra check of
 		 * OBD_CONNECT_RDONLY in mdt_reint_open() when we
 		 * really need to create the object.
@@ -4006,12 +4007,12 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 	case IT_LOOKUP:
 		it_format = &RQF_LDLM_INTENT_GETATTR;
 		it_handler = &mdt_intent_getattr;
-		it_handler_flags = HABEO_REFERO;
+		it_handler_flags = HAS_REPLY;
 		break;
 	case IT_GETXATTR:
 		it_format = &RQF_LDLM_INTENT_GETXATTR;
 		it_handler = &mdt_intent_getxattr;
-		it_handler_flags = HABEO_CORPUS;
+		it_handler_flags = HAS_BODY;
 		break;
 	case IT_LAYOUT:
 		it_format = &RQF_LDLM_INTENT_LAYOUT;
@@ -4054,7 +4055,7 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 	if (rc < 0)
 		RETURN(rc);
 
-	if (it_handler_flags & MUTABOR && mdt_rdonly(req->rq_export))
+	if (it_handler_flags & IS_MUTABLE && mdt_rdonly(req->rq_export))
 		RETURN(-EROFS);
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_INTENT_DELAY, 10);
@@ -4832,47 +4833,47 @@ TGT_RPC_HANDLER(MDS_FIRST_OPC,
 		0,			MDS_DISCONNECT,	tgt_disconnect,
 		&RQF_MDS_DISCONNECT, LUSTRE_OBD_VERSION),
 TGT_RPC_HANDLER(MDS_FIRST_OPC,
-		HABEO_REFERO,		MDS_SET_INFO,	mdt_set_info,
+		HAS_REPLY,		MDS_SET_INFO,	mdt_set_info,
 		&RQF_OBD_SET_INFO, LUSTRE_MDS_VERSION),
 TGT_MDT_HDL(0,				MDS_GET_INFO,	mdt_get_info),
-TGT_MDT_HDL(0		| HABEO_REFERO,	MDS_GET_ROOT,	mdt_get_root),
-TGT_MDT_HDL(HABEO_CORPUS,		MDS_GETATTR,	mdt_getattr),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_GETATTR_NAME,
+TGT_MDT_HDL(HAS_REPLY,		MDS_GET_ROOT,	mdt_get_root),
+TGT_MDT_HDL(HAS_BODY,		MDS_GETATTR,	mdt_getattr),
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY,	MDS_GETATTR_NAME,
 							mdt_getattr_name),
-TGT_MDT_HDL(HABEO_CORPUS,		MDS_GETXATTR,	mdt_tgt_getxattr),
-TGT_MDT_HDL(0		| HABEO_REFERO,	MDS_STATFS,	mdt_statfs),
-TGT_MDT_HDL(0		| MUTABOR,	MDS_REINT,	mdt_reint),
-TGT_MDT_HDL(HABEO_CORPUS,		MDS_CLOSE,	mdt_close),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_READPAGE,	mdt_readpage),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_SYNC,	mdt_sync),
+TGT_MDT_HDL(HAS_BODY,		MDS_GETXATTR,	mdt_tgt_getxattr),
+TGT_MDT_HDL(HAS_REPLY,		MDS_STATFS,	mdt_statfs),
+TGT_MDT_HDL(IS_MUTABLE,		MDS_REINT,	mdt_reint),
+TGT_MDT_HDL(HAS_BODY,		MDS_CLOSE,	mdt_close),
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY,	MDS_READPAGE,	mdt_readpage),
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY,	MDS_SYNC,	mdt_sync),
 TGT_MDT_HDL(0,				MDS_QUOTACTL,	mdt_quotactl),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR, MDS_HSM_PROGRESS,
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY | IS_MUTABLE, MDS_HSM_PROGRESS,
 							mdt_hsm_progress),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR, MDS_HSM_CT_REGISTER,
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY | IS_MUTABLE, MDS_HSM_CT_REGISTER,
 							mdt_hsm_ct_register),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR, MDS_HSM_CT_UNREGISTER,
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY | IS_MUTABLE, MDS_HSM_CT_UNREGISTER,
 							mdt_hsm_ct_unregister),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO, MDS_HSM_STATE_GET,
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY, MDS_HSM_STATE_GET,
 							mdt_hsm_state_get),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO | MUTABOR, MDS_HSM_STATE_SET,
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY | IS_MUTABLE, MDS_HSM_STATE_SET,
 							mdt_hsm_state_set),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO, MDS_HSM_ACTION,	mdt_hsm_action),
-TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO, MDS_HSM_REQUEST,
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY, MDS_HSM_ACTION,	mdt_hsm_action),
+TGT_MDT_HDL(HAS_BODY | HAS_REPLY, MDS_HSM_REQUEST,
 							mdt_hsm_request),
-TGT_MDT_HDL(HABEO_CLAVIS | HABEO_CORPUS | HABEO_REFERO | MUTABOR,
+TGT_MDT_HDL(HAS_KEY | HAS_BODY | HAS_REPLY | IS_MUTABLE,
 	    MDS_SWAP_LAYOUTS,
 	    mdt_swap_layouts),
 };
 
 static struct tgt_handler mdt_io_ops[] = {
-TGT_OST_HDL_HP(HABEO_CORPUS | HABEO_REFERO, OST_BRW_READ, tgt_brw_read,
+TGT_OST_HDL_HP(HAS_BODY | HAS_REPLY, OST_BRW_READ, tgt_brw_read,
 							mdt_hp_brw),
-TGT_OST_HDL_HP(HABEO_CORPUS | MUTABOR,	 OST_BRW_WRITE,	tgt_brw_write,
+TGT_OST_HDL_HP(HAS_BODY | IS_MUTABLE,	 OST_BRW_WRITE,	tgt_brw_write,
 							mdt_hp_brw),
-TGT_OST_HDL_HP(HABEO_CORPUS | HABEO_REFERO | MUTABOR,
+TGT_OST_HDL_HP(HAS_BODY | HAS_REPLY | IS_MUTABLE,
 					 OST_PUNCH,	mdt_punch_hdl,
 					 		mdt_hp_punch),
-TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO, OST_SYNC,	mdt_data_sync),
+TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_SYNC,	mdt_data_sync),
 };
 
 static struct tgt_handler mdt_sec_ctx_ops[] = {
@@ -4882,7 +4883,7 @@ TGT_SEC_HDL_VAR(0,			SEC_CTX_FINI,	  mdt_sec_ctx_handle)
 };
 
 static struct tgt_handler mdt_quota_ops[] = {
-TGT_QUOTA_HDL(HABEO_REFERO,		QUOTA_DQACQ,	  mdt_quota_dqacq),
+TGT_QUOTA_HDL(HAS_REPLY,		QUOTA_DQACQ,	  mdt_quota_dqacq),
 };
 
 static struct tgt_opc_slice mdt_common_slice[] = {

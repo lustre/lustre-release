@@ -1203,11 +1203,11 @@ TGT_RPC_HANDLER(MGS_FIRST_OPC,
 		&RQF_MDS_DISCONNECT, LUSTRE_OBD_VERSION),
 TGT_MGS_HDL_VAR(0,			MGS_EXCEPTION,	 mgs_exception),
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-TGT_MGS_HDL    (HABEO_REFERO | MUTABOR,	MGS_SET_INFO,	 mgs_set_info),
+TGT_MGS_HDL(HAS_REPLY | IS_MUTABLE,	MGS_SET_INFO,	 mgs_set_info),
 #endif
-TGT_MGS_HDL    (HABEO_REFERO | MUTABOR,	MGS_TARGET_REG,	 mgs_target_reg),
+TGT_MGS_HDL(HAS_REPLY | IS_MUTABLE,	MGS_TARGET_REG,	 mgs_target_reg),
 TGT_MGS_HDL_VAR(0,			MGS_TARGET_DEL,	 mgs_target_del),
-TGT_MGS_HDL    (HABEO_REFERO,		MGS_CONFIG_READ, mgs_config_read),
+TGT_MGS_HDL(HAS_REPLY,			MGS_CONFIG_READ, mgs_config_read),
 };
 
 static struct tgt_handler mgs_obd_handlers[] = {
@@ -1224,7 +1224,7 @@ static struct tgt_handler mgs_dlm_handlers[] = {
 	 * * instead of common OBD_FAIL_LDLM_ENQUEUE_NET */
 	.th_fail_id = 0,
 	.th_opc = LDLM_ENQUEUE,
-	.th_flags = HABEO_CLAVIS,
+	.th_flags = HAS_KEY,
 	.th_act = tgt_enqueue,
 	.th_fmt = &RQF_LDLM_ENQUEUE,
 	.th_version = LUSTRE_DLM_VERSION,

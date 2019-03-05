@@ -784,34 +784,34 @@ static int out_noop(struct tgt_session_info *tsi)
 }
 
 static struct tgt_handler out_update_ops[] = {
-	DEF_OUT_HNDL(OUT_CREATE, "out_create", MUTABOR | HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_CREATE, "out_create", IS_MUTABLE | HAS_REPLY,
 		     out_create),
-	DEF_OUT_HNDL(OUT_DESTROY, "out_create", MUTABOR | HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_DESTROY, "out_create", IS_MUTABLE | HAS_REPLY,
 		     out_destroy),
-	DEF_OUT_HNDL(OUT_REF_ADD, "out_ref_add", MUTABOR | HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_REF_ADD, "out_ref_add", IS_MUTABLE | HAS_REPLY,
 		     out_ref_add),
-	DEF_OUT_HNDL(OUT_REF_DEL, "out_ref_del", MUTABOR | HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_REF_DEL, "out_ref_del", IS_MUTABLE | HAS_REPLY,
 		     out_ref_del),
-	DEF_OUT_HNDL(OUT_ATTR_SET, "out_attr_set",  MUTABOR | HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_ATTR_SET, "out_attr_set",  IS_MUTABLE | HAS_REPLY,
 		     out_attr_set),
-	DEF_OUT_HNDL(OUT_ATTR_GET, "out_attr_get",  HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_ATTR_GET, "out_attr_get",  HAS_REPLY,
 		     out_attr_get),
-	DEF_OUT_HNDL(OUT_XATTR_SET, "out_xattr_set", MUTABOR | HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_XATTR_SET, "out_xattr_set", IS_MUTABLE | HAS_REPLY,
 		     out_xattr_set),
-	DEF_OUT_HNDL(OUT_XATTR_DEL, "out_xattr_del", MUTABOR | HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_XATTR_DEL, "out_xattr_del", IS_MUTABLE | HAS_REPLY,
 		     out_xattr_del),
-	DEF_OUT_HNDL(OUT_XATTR_GET, "out_xattr_get", HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_XATTR_GET, "out_xattr_get", HAS_REPLY,
 		     out_xattr_get),
-	DEF_OUT_HNDL(OUT_INDEX_LOOKUP, "out_index_lookup", HABEO_REFERO,
+	DEF_OUT_HNDL(OUT_INDEX_LOOKUP, "out_index_lookup", HAS_REPLY,
 		     out_index_lookup),
 	DEF_OUT_HNDL(OUT_INDEX_INSERT, "out_index_insert",
-		     MUTABOR | HABEO_REFERO, out_index_insert),
+		     IS_MUTABLE | HAS_REPLY, out_index_insert),
 	DEF_OUT_HNDL(OUT_INDEX_DELETE, "out_index_delete",
-		     MUTABOR | HABEO_REFERO, out_index_delete),
-	DEF_OUT_HNDL(OUT_WRITE, "out_write", MUTABOR | HABEO_REFERO, out_write),
-	DEF_OUT_HNDL(OUT_READ, "out_read", HABEO_REFERO, out_read),
-	DEF_OUT_HNDL(OUT_NOOP, "out_noop", HABEO_REFERO, out_noop),
-	DEF_OUT_HNDL(OUT_XATTR_LIST, "out_xattr_list", HABEO_REFERO,
+		     IS_MUTABLE | HAS_REPLY, out_index_delete),
+	DEF_OUT_HNDL(OUT_WRITE, "out_write", IS_MUTABLE | HAS_REPLY, out_write),
+	DEF_OUT_HNDL(OUT_READ, "out_read", HAS_REPLY, out_read),
+	DEF_OUT_HNDL(OUT_NOOP, "out_noop", HAS_REPLY, out_noop),
+	DEF_OUT_HNDL(OUT_XATTR_LIST, "out_xattr_list", HAS_REPLY,
 		     out_xattr_list),
 };
 
@@ -1154,7 +1154,7 @@ int out_handle(struct tgt_session_info *tsi)
 			}
 
 			/* Check resend case only for modifying RPC */
-			if (h->th_flags & MUTABOR) {
+			if (h->th_flags & IS_MUTABLE) {
 				struct ptlrpc_request *req = tgt_ses_req(tsi);
 
 				if (out_check_resent(env, dt, dt_obj, req,
@@ -1167,7 +1167,7 @@ int out_handle(struct tgt_session_info *tsi)
 			}
 
 			/* start transaction for modification RPC only */
-			if (h->th_flags & MUTABOR && current_batchid == -1) {
+			if (h->th_flags & IS_MUTABLE && current_batchid == -1) {
 				current_batchid = update->ou_batchid;
 				rc = out_tx_start(env, dt, ta, tsi->tsi_exp);
 				if (rc != 0)
@@ -1180,7 +1180,7 @@ int out_handle(struct tgt_session_info *tsi)
 			/* Stop the current update transaction, if the update
 			 * has different batchid, or read-only update */
 			if (((current_batchid != update->ou_batchid) ||
-			     !(h->th_flags & MUTABOR)) &&
+			     !(h->th_flags & IS_MUTABLE)) &&
 			     ta->ta_handle != NULL) {
 				rc = out_tx_end(env, ta, rc);
 				current_batchid = -1;
@@ -1188,7 +1188,7 @@ int out_handle(struct tgt_session_info *tsi)
 					GOTO(next, rc);
 
 				/* start a new transaction if needed */
-				if (h->th_flags & MUTABOR) {
+				if (h->th_flags & IS_MUTABLE) {
 					rc = out_tx_start(env, dt, ta,
 							  tsi->tsi_exp);
 					if (rc != 0)
@@ -1234,7 +1234,7 @@ out_free:
 }
 
 struct tgt_handler tgt_out_handlers[] = {
-TGT_UPDATE_HDL(MUTABOR,	OUT_UPDATE,	out_handle),
+TGT_UPDATE_HDL(IS_MUTABLE,	OUT_UPDATE,	out_handle),
 };
 EXPORT_SYMBOL(tgt_out_handlers);
 
