@@ -2330,7 +2330,8 @@ relock:
 		if (mtgtdir != msrcdir) {
 			rc = mdt_object_lock_save(info, mtgtdir, lh_tgtdirp, 1,
 						  cos_incompat);
-		} else if (lh_srcdirp->mlh_pdo_hash !=
+		} else if (!mdt_object_remote(mtgtdir) &&
+			   lh_srcdirp->mlh_pdo_hash !=
 			   lh_tgtdirp->mlh_pdo_hash) {
 			rc = mdt_pdir_hash_lock(info, lh_tgtdirp, mtgtdir,
 						MDS_INODELOCK_UPDATE,
