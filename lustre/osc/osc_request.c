@@ -2893,23 +2893,6 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
                 RETURN(0);
         }
 
-	if (KEY_IS(KEY_CACHE_SET)) {
-		struct client_obd *cli = &obd->u.cli;
-
-		LASSERT(cli->cl_cache == NULL); /* only once */
-		cli->cl_cache = (struct cl_client_cache *)val;
-		cl_cache_incref(cli->cl_cache);
-		cli->cl_lru_left = &cli->cl_cache->ccc_lru_left;
-
-		/* add this osc into entity list */
-		LASSERT(list_empty(&cli->cl_lru_osc));
-		spin_lock(&cli->cl_cache->ccc_lru_lock);
-		list_add(&cli->cl_lru_osc, &cli->cl_cache->ccc_lru);
-		spin_unlock(&cli->cl_cache->ccc_lru_lock);
-
-		RETURN(0);
-	}
-
 	if (KEY_IS(KEY_CACHE_LRU_SHRINK)) {
 		struct client_obd *cli = &obd->u.cli;
 		long nr = atomic_long_read(&cli->cl_lru_in_list) >> 1;
@@ -3355,7 +3338,7 @@ static struct obd_ops osc_obd_ops = {
 	.o_cleanup              = osc_cleanup_common,
         .o_add_conn             = client_import_add_conn,
         .o_del_conn             = client_import_del_conn,
-        .o_connect              = client_connect_import,
+	.o_connect              = client_connect_import,
         .o_reconnect            = osc_reconnect,
         .o_disconnect           = osc_disconnect,
         .o_statfs               = osc_statfs,

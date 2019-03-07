@@ -281,7 +281,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	data->ocd_brw_size = MD_MAX_BRW_SIZE;
 
 	err = obd_connect(NULL, &sbi->ll_md_exp, sbi->ll_md_obd,
-			  &sbi->ll_sb_uuid, data, NULL);
+			  &sbi->ll_sb_uuid, data, sbi->ll_cache);
         if (err == -EBUSY) {
                 LCONSOLE_ERROR_MSG(0x14f, "An MDT (md %s) is performing "
                                    "recovery, of which this client is not a "
@@ -469,7 +469,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	data->ocd_brw_size = DT_MAX_BRW_SIZE;
 
 	err = obd_connect(NULL, &sbi->ll_dt_exp, sbi->ll_dt_obd,
-			  &sbi->ll_sb_uuid, data, NULL);
+			  &sbi->ll_sb_uuid, data, sbi->ll_cache);
 	if (err == -EBUSY) {
 		LCONSOLE_ERROR_MSG(0x150, "An OST (dt %s) is performing "
 				   "recovery, of which this client is not a "
@@ -590,15 +590,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		}
 	}
 	cl_sb_init(sb);
-
-	err = obd_set_info_async(NULL, sbi->ll_dt_exp, sizeof(KEY_CACHE_SET),
-				 KEY_CACHE_SET, sizeof(*sbi->ll_cache),
-				 sbi->ll_cache, NULL);
-	if (err) {
-		CERROR("%s: Set cache_set failed: rc = %d\n",
-		       sbi->ll_dt_exp->exp_obd->obd_name, err);
-		GOTO(out_root, err);
-	}
 
 	sb->s_root = d_make_root(root);
 	if (sb->s_root == NULL) {

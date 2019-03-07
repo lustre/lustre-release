@@ -113,7 +113,7 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 		      enum obd_notify_event ev);
 
-int lov_connect_obd(struct obd_device *obd, u32 index, int activate,
+int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
 		    struct obd_connect_data *data)
 {
 	struct lov_obd *lov = &obd->u.lov;
@@ -160,15 +160,14 @@ int lov_connect_obd(struct obd_device *obd, u32 index, int activate,
                 RETURN(rc);
         }
 
+	if (imp->imp_invalid) {
+		CDEBUG(D_CONFIG, "%s: not connecting - administratively disabled\n",
+		       obd_uuid2str(tgt_uuid));
+		RETURN(0);
+	}
 
-        if (imp->imp_invalid) {
-                CDEBUG(D_CONFIG, "not connecting OSC %s; administratively "
-                       "disabled\n", obd_uuid2str(tgt_uuid));
-                RETURN(0);
-        }
-
-        rc = obd_connect(NULL, &lov->lov_tgts[index]->ltd_exp, tgt_obd,
-                         &lov_osc_uuid, data, NULL);
+	rc = obd_connect(NULL, &lov->lov_tgts[index]->ltd_exp, tgt_obd,
+			 &lov_osc_uuid, data, lov->lov_cache);
         if (rc || !lov->lov_tgts[index]->ltd_exp) {
                 CERROR("Target %s connect error %d\n",
                        obd_uuid2str(tgt_uuid), rc);
@@ -225,12 +224,17 @@ static int lov_connect(const struct lu_env *env,
 
 	lov_tgts_getref(obd);
 
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                tgt = lov->lov_tgts[i];
-                if (!tgt || obd_uuid_empty(&tgt->ltd_uuid))
-                        continue;
-                /* Flags will be lowest common denominator */
-                rc = lov_connect_obd(obd, i, tgt->ltd_activate, &lov->lov_ocd);
+	if (localdata) {
+		lov->lov_cache = localdata;
+		cl_cache_incref(lov->lov_cache);
+	}
+
+	for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+		tgt = lov->lov_tgts[i];
+		if (!tgt || obd_uuid_empty(&tgt->ltd_uuid))
+			continue;
+		/* Flags will be lowest common denominator */
+		rc = lov_connect_osc(obd, i, tgt->ltd_activate, &lov->lov_ocd);
                 if (rc) {
                         CERROR("%s: lov connect tgt %d failed: %d\n",
                                obd->obd_name, i, rc);
@@ -380,15 +384,9 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 			struct obd_uuid lov_osc_uuid = {"LOV_OSC_UUID"};
 
 			rc = obd_connect(NULL, &tgt->ltd_exp, tgt->ltd_obd,
-					 &lov_osc_uuid, &lov->lov_ocd, NULL);
+					 &lov_osc_uuid, &lov->lov_ocd,
+					 lov->lov_cache);
 			if (rc || tgt->ltd_exp == NULL)
-				GOTO(out, index = rc);
-			rc = obd_set_info_async(NULL, tgt->ltd_exp,
-						sizeof(KEY_CACHE_SET),
-						KEY_CACHE_SET,
-						sizeof(struct cl_client_cache),
-						lov->lov_cache, NULL);
-			if (rc < 0)
 				GOTO(out, index = rc);
 		}
 
@@ -572,31 +570,22 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
 
-        if (lov->lov_connects == 0) {
-                /* lov_connect hasn't been called yet. We'll do the
-                   lov_connect_obd on this target when that fn first runs,
-                   because we don't know the connect flags yet. */
-                RETURN(0);
-        }
+	if (lov->lov_connects == 0) {
+		/* lov_connect hasn't been called yet. We'll do the
+		   lov_connect_osc on this target when that fn first runs,
+		   because we don't know the connect flags yet. */
+		RETURN(0);
+	}
 
 	lov_tgts_getref(obd);
 
-        rc = lov_connect_obd(obd, index, active, &lov->lov_ocd);
+	rc = lov_connect_osc(obd, index, active, &lov->lov_ocd);
         if (rc)
                 GOTO(out, rc);
 
         /* connect to administrative disabled ost */
         if (!tgt->ltd_exp)
                 GOTO(out, rc = 0);
-
-	if (lov->lov_cache != NULL) {
-		rc = obd_set_info_async(NULL, tgt->ltd_exp,
-				sizeof(KEY_CACHE_SET), KEY_CACHE_SET,
-				sizeof(struct cl_client_cache), lov->lov_cache,
-				NULL);
-		if (rc < 0)
-			GOTO(out, rc);
-	}
 
 	rc = lov_notify(obd, tgt->ltd_exp->exp_obd,
 			active ? OBD_NOTIFY_CONNECT : OBD_NOTIFY_INACTIVE);
@@ -1218,14 +1207,8 @@ static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 	lov_tgts_getref(obddev);
 
-	if (KEY_IS(KEY_CHECKSUM)) {
+	if (KEY_IS(KEY_CHECKSUM))
 		do_inactive = true;
-	} else if (KEY_IS(KEY_CACHE_SET)) {
-		LASSERT(lov->lov_cache == NULL);
-		lov->lov_cache = val;
-		do_inactive = true;
-		cl_cache_incref(lov->lov_cache);
-	}
 
 	for (i = 0; i < lov->desc.ld_tgt_count; i++) {
 		tgt = lov->lov_tgts[i];

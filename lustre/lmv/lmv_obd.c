@@ -212,6 +212,7 @@ static int lmv_connect(const struct lu_env *env,
 
 	lmv->connected = 0;
 	lmv->conn_data = *data;
+	lmv->lmv_cache = localdata;
 
 	lmv->lmv_tgts_kobj = kobject_create_and_add("target_obds",
 						    &obd->obd_kset.kobj);
@@ -310,7 +311,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         }
 
 	rc = obd_connect(NULL, &mdc_exp, mdc_obd, &obd->obd_uuid,
-			 &lmv->conn_data, NULL);
+			 &lmv->conn_data, lmv->lmv_cache);
         if (rc) {
                 CERROR("target %s connect error %d\n", tgt->ltd_uuid.uuid, rc);
                 RETURN(rc);

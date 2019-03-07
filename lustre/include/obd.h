@@ -451,6 +451,7 @@ struct lmv_obd {
 
 	struct obd_connect_data	conn_data;
 	struct kobject		*lmv_tgts_kobj;
+	void			*lmv_cache;
 };
 
 /* Minimum sector size is 512 */
@@ -779,7 +780,6 @@ struct obd_device {
 /*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
 
-#define KEY_CACHE_SET		"cache_set"
 #define KEY_CACHE_LRU_SHRINK	"cache_lru_shrink"
 #define KEY_OSP_CONNECTED	"osp_connected"
 

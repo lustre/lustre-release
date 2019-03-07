@@ -39,6 +39,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <cl_object.h>
 #include <linux/jiffies.h>
 #include <linux/kthread.h>
 #include <libcfs/libcfs.h>
@@ -624,6 +625,19 @@ out_ldlm:
 	}
 out_sem:
 	up_write(&cli->cl_sem);
+
+	if (!rc && localdata) {
+		LASSERT(cli->cl_cache == NULL); /* only once */
+		cli->cl_cache = (struct cl_client_cache *)localdata;
+		cl_cache_incref(cli->cl_cache);
+		cli->cl_lru_left = &cli->cl_cache->ccc_lru_left;
+
+		/* add this osc into entity list */
+		LASSERT(list_empty(&cli->cl_lru_osc));
+		spin_lock(&cli->cl_cache->ccc_lru_lock);
+		list_add(&cli->cl_lru_osc, &cli->cl_cache->ccc_lru);
+		spin_unlock(&cli->cl_cache->ccc_lru_lock);
+	}
 
 	return rc;
 }
