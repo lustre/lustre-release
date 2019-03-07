@@ -134,7 +134,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
 	int rc;
 	ENTRY;
 
-	LASSERT(lock->l_granted_mode != lock->l_req_mode);
+	LASSERT(!ldlm_is_granted(lock));
 	check_res_locked(res);
 	*err = ELDLM_OK;
 

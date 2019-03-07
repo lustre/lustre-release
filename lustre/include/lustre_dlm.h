@@ -1042,6 +1042,11 @@ struct ldlm_resource {
 	struct lu_ref		lr_reference;
 };
 
+static inline int ldlm_is_granted(struct ldlm_lock *lock)
+{
+	return lock->l_req_mode == lock->l_granted_mode;
+}
+
 static inline bool ldlm_has_layout(struct ldlm_lock *lock)
 {
 	return lock->l_resource->lr_type == LDLM_IBITS &&

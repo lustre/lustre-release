@@ -555,8 +555,8 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                     lock->l_policy_data.l_extent.gid) {
                                         /* If existing lock with matched gid is granted,
                                            we grant new one too. */
-                                        if (lock->l_req_mode == lock->l_granted_mode)
-                                                RETURN(2);
+					if (ldlm_is_granted(lock))
+						RETURN(2);
 
                                         /* Otherwise we are scanning queue of waiting
                                          * locks and it means current request would
@@ -584,8 +584,8 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                 }
                         }
 
-                        if (unlikely(req_mode == LCK_GROUP &&
-                                     (lock->l_req_mode != lock->l_granted_mode))) {
+			if (unlikely(req_mode == LCK_GROUP &&
+				     !ldlm_is_granted(lock))) {
                                 scan = 1;
                                 compat = 0;
                                 if (lock->l_req_mode != LCK_GROUP) {
@@ -792,7 +792,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 							NULL : work_list;
 	ENTRY;
 
-	LASSERT(lock->l_granted_mode != lock->l_req_mode);
+	LASSERT(!ldlm_is_granted(lock));
 	LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
 		!ldlm_is_ast_discard_data(lock));
 	check_res_locked(res);
@@ -1035,7 +1035,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
         struct ldlm_extent *extent;
 	int idx, rc;
 
-        LASSERT(lock->l_granted_mode == lock->l_req_mode);
+	LASSERT(ldlm_is_granted(lock));
 
         node = lock->l_tree_node;
         LASSERT(node != NULL);
