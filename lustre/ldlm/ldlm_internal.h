@@ -357,8 +357,7 @@ static inline int is_granted_or_cancelled(struct ldlm_lock *lock)
         int ret = 0;
 
         lock_res_and_lock(lock);
-	if ((lock->l_req_mode == lock->l_granted_mode) &&
-	     !ldlm_is_cp_reqd(lock))
+	if (ldlm_is_granted(lock) && !ldlm_is_cp_reqd(lock))
 		ret = 1;
 	else if (ldlm_is_failed(lock) || ldlm_is_cancel(lock))
                 ret = 1;

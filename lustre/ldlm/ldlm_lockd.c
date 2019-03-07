@@ -397,7 +397,7 @@ static void ldlm_add_blocked_lock(struct ldlm_lock *lock)
 {
 	spin_lock_bh(&lock->l_export->exp_bl_list_lock);
 	if (list_empty(&lock->l_exp_list)) {
-		if (lock->l_granted_mode != lock->l_req_mode)
+		if (!ldlm_is_granted(lock))
 			list_add_tail(&lock->l_exp_list,
 				      &lock->l_export->exp_bl_list);
 		else
@@ -884,7 +884,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 		RETURN(0);
 	}
 
-	if (lock->l_granted_mode != lock->l_req_mode) {
+	if (!ldlm_is_granted(lock)) {
 		/* this blocking AST will be communicated as part of the
 		 * completion AST instead */
 		ldlm_add_blocked_lock(lock);
@@ -914,7 +914,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
 		req->rq_no_resend = 1;
 	} else {
-		LASSERT(lock->l_granted_mode == lock->l_req_mode);
+		LASSERT(ldlm_is_granted(lock));
 		ldlm_add_waiting_lock(lock, ldlm_bl_timeout(lock));
 		unlock_res_and_lock(lock);
 
@@ -1374,7 +1374,7 @@ existing_lock:
 				bl_lock->l_policy_data.l_inodebits.bits;
 		}
 		dlm_rep->lock_flags |= ldlm_flags_to_wire(LDLM_FL_AST_SENT);
-                if (lock->l_granted_mode == lock->l_req_mode) {
+		if (ldlm_is_granted(lock)) {
                         /*
                          * Only cancel lock if it was granted, because it would
                          * be destroyed immediately and would never be granted
@@ -1793,7 +1793,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 		while (to > 0) {
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(to);
-			if (lock->l_granted_mode == lock->l_req_mode ||
+			if (ldlm_is_granted(lock) ||
 			    ldlm_is_destroyed(lock))
 				break;
 		}
@@ -1835,7 +1835,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 	}
 
 	if (ldlm_is_destroyed(lock) ||
-	    lock->l_granted_mode == lock->l_req_mode) {
+	    ldlm_is_granted(lock)) {
 		/* bug 11300: the lock has already been granted */
 		unlock_res_and_lock(lock);
 		LDLM_DEBUG(lock, "Double grant race happened");
@@ -2468,10 +2468,10 @@ static int ldlm_revoke_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 
         lock_res_and_lock(lock);
 
-        if (lock->l_req_mode != lock->l_granted_mode) {
-                unlock_res_and_lock(lock);
-                return 0;
-        }
+	if (!ldlm_is_granted(lock)) {
+		unlock_res_and_lock(lock);
+		return 0;
+	}
 
         LASSERT(lock->l_resource);
         if (lock->l_resource->lr_type != LDLM_IBITS &&

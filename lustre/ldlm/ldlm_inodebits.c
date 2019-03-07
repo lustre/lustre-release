@@ -210,7 +210,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 
 	ENTRY;
 
-	LASSERT(lock->l_granted_mode != lock->l_req_mode);
+	LASSERT(!ldlm_is_granted(lock));
 	check_res_locked(res);
 
 	if (intention == LDLM_PROCESS_RESCAN) {

@@ -3153,7 +3153,7 @@ static int osc_cancel_weight(struct ldlm_lock *lock)
 	 * Cancel all unused and granted extent lock.
 	 */
 	if (lock->l_resource->lr_type == LDLM_EXTENT &&
-	    lock->l_granted_mode == lock->l_req_mode &&
+	    ldlm_is_granted(lock) &&
 	    osc_ldlm_weigh_ast(lock) == 0)
 		RETURN(1);
 

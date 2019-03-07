@@ -389,7 +389,7 @@ static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 	}
 
 	/* Only fill layout if layout lock is granted */
-	if (!ldlm_has_layout(lock) || lock->l_granted_mode != lock->l_req_mode)
+	if (!ldlm_has_layout(lock) || !ldlm_is_granted(lock))
 		GOTO(out, rc = 0);
 
 	/* XXX get fid by resource id. why don't include fid in ldlm_resource */

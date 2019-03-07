@@ -516,9 +516,8 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
 
         /* Set a flag to prevent us from sending a CANCEL (bug 407) */
         lock_res_and_lock(lock);
-        /* Check that lock is not granted or failed, we might race. */
-        if ((lock->l_req_mode != lock->l_granted_mode) &&
-	    !ldlm_is_failed(lock)) {
+	/* Check that lock is not granted or failed, we might race. */
+	if (!ldlm_is_granted(lock) && !ldlm_is_failed(lock)) {
 		/* Make sure that this lock will not be found by raced
 		 * bl_ast and -EINVAL reply is sent to server anyways.
 		 * b=17645*/
@@ -702,7 +701,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 		 * Cannot unlock after the check either, a that still leaves
 		 * a tiny window for completion to get in */
 		lock_res_and_lock(lock);
-		if (lock->l_req_mode != lock->l_granted_mode)
+		if (!ldlm_is_granted(lock))
 			rc = ldlm_fill_lvb(lock, &req->rq_pill, RCL_SERVER,
 					   lock->l_lvb_data, lvb_len);
 		unlock_res_and_lock(lock);
@@ -2444,7 +2443,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 	 * This happens whenever a lock enqueue is the request that triggers
 	 * recovery.
 	 */
-	if (lock->l_granted_mode == lock->l_req_mode)
+	if (ldlm_is_granted(lock))
 		flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_GRANTED;
 	else if (!list_empty(&lock->l_res_link))
 		flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_WAIT;

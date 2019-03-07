@@ -466,6 +466,10 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		break;
 	}
 	case LDLM_CB_CANCELING:
+		/* Nothing to do for non-granted locks */
+		if (!ldlm_is_granted(lock))
+			break;
+
 		if (ldlm_is_converting(lock)) {
 			/* this is called on already converted lock, so
 			 * ibits has remained bits only and cancel_bits

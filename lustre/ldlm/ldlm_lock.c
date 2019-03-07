@@ -1084,7 +1084,7 @@ void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock)
 {
 	struct sl_insert_point prev;
 
-	LASSERT(lock->l_req_mode == lock->l_granted_mode);
+	LASSERT(ldlm_is_granted(lock));
 
 	search_granted_lock(&lock->l_resource->lr_granted, lock, &prev);
 	ldlm_granted_list_add_lock(lock, &prev);
@@ -1751,7 +1751,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
                         *flags |= LDLM_FL_LOCK_CHANGED;
                         RETURN(0);
 		} else if (rc != ELDLM_OK &&
-			   lock->l_req_mode == lock->l_granted_mode) {
+			   ldlm_is_granted(lock)) {
 			LASSERT(*flags & LDLM_FL_RESENT);
 			/* It may happen that ns_policy returns an error in
 			 * resend case, object may be unlinked or just some
@@ -1774,7 +1774,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 		 * Take NO_TIMEOUT from the lock as it is inherited through
 		 * LDLM_FL_INHERIT_MASK */
 		*flags |= LDLM_FL_LOCK_CHANGED;
-		if (lock->l_req_mode != lock->l_granted_mode)
+		if (!ldlm_is_granted(lock))
 			*flags |= LDLM_FL_BLOCK_GRANTED;
 		*flags |= lock->l_flags & LDLM_FL_NO_TIMEOUT;
 		RETURN(ELDLM_OK);
@@ -1787,8 +1787,8 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 	if (!local && (*flags & LDLM_FL_REPLAY) && res->lr_type == LDLM_EXTENT)
 		OBD_SLAB_ALLOC_PTR_GFP(node, ldlm_interval_slab, GFP_NOFS);
 
-        lock_res_and_lock(lock);
-        if (local && lock->l_req_mode == lock->l_granted_mode) {
+	lock_res_and_lock(lock);
+	if (local && ldlm_is_granted(lock)) {
                 /* The server returned a blocked lock, but it was granted
                  * before we got a chance to actually enqueue it.  We don't
                  * need to do anything else. */
@@ -1985,7 +1985,7 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 			RETURN(-EAGAIN);
 
 		/* lock was granted while resource was unlocked. */
-		if (lock->l_granted_mode == lock->l_req_mode) {
+		if (ldlm_is_granted(lock)) {
 			/* bug 11300: if the lock has been granted,
 			 * break earlier because otherwise, we will go
 			 * to restart and ldlm_resource_unlink will be
@@ -2439,8 +2439,8 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy_nolock(lock);
 
-        if (lock->l_granted_mode == lock->l_req_mode)
-                ldlm_pool_del(&ns->ns_pool, lock);
+	if (ldlm_is_granted(lock))
+		ldlm_pool_del(&ns->ns_pool, lock);
 
         /* Make sure we will not be called again for same lock what is possible
          * if not to zero out lock->l_granted_mode */
