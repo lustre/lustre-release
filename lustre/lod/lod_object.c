@@ -4876,7 +4876,8 @@ static void lod_ah_init(const struct lu_env *env,
 			if (lod_comp->llc_stripe_size <= 0)
 				lod_comp->llc_stripe_size =
 					def_comp->llc_stripe_size;
-			if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT)
+			if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT &&
+			    (!lod_comp->llc_pool || !lod_comp->llc_pool[0]))
 				lod_comp->llc_stripe_offset =
 					def_comp->llc_stripe_offset;
 			if (lod_comp->llc_pool == NULL)
