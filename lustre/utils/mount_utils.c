@@ -74,49 +74,49 @@ static struct module_backfs_ops *backfs_ops[LDD_MT_LAST];
 
 void fatal(void)
 {
-        verbose = 0;
-        fprintf(stderr, "\n%s FATAL: ", progname);
+	verbose = 0;
+	fprintf(stderr, "\n%s FATAL: ", progname);
 }
 
 int run_command(char *cmd, int cmdsz)
 {
-        char log[] = "/tmp/run_command_logXXXXXX";
-        int fd = -1, rc;
+	char log[] = "/tmp/run_command_logXXXXXX";
+	int fd = -1, rc;
 
-        if ((cmdsz - strlen(cmd)) < 6) {
-                fatal();
-                fprintf(stderr, "Command buffer overflow: %.*s...\n",
-                        cmdsz, cmd);
-                return ENOMEM;
-        }
+	if ((cmdsz - strlen(cmd)) < 6) {
+		fatal();
+		fprintf(stderr, "Command buffer overflow: %.*s...\n",
+			cmdsz, cmd);
+		return ENOMEM;
+	}
 
-        if (verbose > 1) {
-                printf("cmd: %s\n", cmd);
-        } else {
-                if ((fd = mkstemp(log)) >= 0) {
-                        close(fd);
-                        strcat(cmd, " >");
-                        strcat(cmd, log);
-                }
-        }
-        strcat(cmd, " 2>&1");
+	if (verbose > 1) {
+		printf("cmd: %s\n", cmd);
+	} else {
+		if ((fd = mkstemp(log)) >= 0) {
+			close(fd);
+			strcat(cmd, " >");
+			strcat(cmd, log);
+		}
+	}
+	strcat(cmd, " 2>&1");
 
-        /* Can't use popen because we need the rv of the command */
-        rc = system(cmd);
-        if (rc && (fd >= 0)) {
-                char buf[128];
-                FILE *fp;
-                fp = fopen(log, "r");
-                if (fp) {
-                        while (fgets(buf, sizeof(buf), fp) != NULL) {
-                                printf("   %s", buf);
-                        }
-                        fclose(fp);
-                }
-        }
-        if (fd >= 0)
-                remove(log);
-        return rc;
+	/* Can't use popen because we need the rv of the command */
+	rc = system(cmd);
+	if (rc && (fd >= 0)) {
+		char buf[128];
+		FILE *fp;
+
+		fp = fopen(log, "r");
+		if (fp) {
+			while (fgets(buf, sizeof(buf), fp))
+				printf("   %s", buf);
+			fclose(fp);
+		}
+	}
+	if (fd >= 0)
+		remove(log);
+	return rc;
 }
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -146,7 +146,7 @@ int get_param(char *buf, char *key, char **val)
 	ptr = strstr(buf, key);
 	if (ptr) {
 		*val = strdup(ptr + key_len);
-		if (*val == NULL)
+		if (!(*val))
 			return ENOMEM;
 
 		for (i = 0; i < strlen(*val); i++)
@@ -169,30 +169,31 @@ int append_param(char *buf, char *key, char *val, char sep)
 		ptr = strstr(buf, key);
 
 	/* key doesn't exist yet, so just add it */
-	if (ptr == NULL)
+	if (!ptr)
 		return add_param(buf, key, val);
 
 	key_len = strlen(key);
 
 	/* Copy previous values to str */
 	for (i = 0; i < sizeof(str); ++i) {
-		if ((ptr[i+key_len] == ' ') || (ptr[i+key_len] == '\0'))
+		if ((ptr[i + key_len] == ' ') || (ptr[i + key_len] == '\0'))
 			break;
-		str[i] = ptr[i+key_len];
+		str[i] = ptr[i + key_len];
 	}
 	if (i == sizeof(str))
 		return E2BIG;
 	old_val_len = i;
 
-	offset = old_val_len+key_len;
+	offset = old_val_len + key_len;
 
 	/* Move rest of buf to overwrite previous key and value */
-	for (i = 0; ptr[i+offset] != '\0'; ++i)
-		ptr[i] = ptr[i+offset];
+	for (i = 0; ptr[i + offset] != '\0'; ++i)
+		ptr[i] = ptr[i + offset];
 
 	ptr[i] = '\0';
 
-	snprintf(str+old_val_len, sizeof(str)-old_val_len, "%c%s", sep, val);
+	snprintf(str + old_val_len, sizeof(str) - old_val_len,
+		 "%c%s", sep, val);
 
 	return add_param(buf, key, str);
 }
@@ -202,8 +203,9 @@ char *strscat(char *dst, char *src, int buflen)
 {
 	dst[buflen - 1] = 0;
 	if (strlen(dst) + strlen(src) >= buflen) {
-		fprintf(stderr, "string buffer overflow (max %d): '%s' + '%s'"
-			"\n", buflen, dst, src);
+		fprintf(stderr,
+			"string buffer overflow (max %d): '%s' + '%s'\n",
+			buflen, dst, src);
 		exit(EOVERFLOW);
 	}
 	return strcat(dst, src);
@@ -221,16 +223,16 @@ int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
 	struct mntent *mnt;
 
 	fp = setmntent(MOUNTED, "r");
-	if (fp == NULL)
+	if (!fp)
 		return 0;
 
 	while ((mnt = getmntent(fp)) != NULL) {
 		if ((strcmp(mnt->mnt_fsname, spec1) == 0 ||
 		     strcmp(mnt->mnt_fsname, spec2) == 0) &&
-		    (mtpt == NULL || strcmp(mnt->mnt_dir, mtpt) == 0) &&
-		    (type == NULL || strcmp(mnt->mnt_type, type) == 0)) {
+		    (!mtpt || strcmp(mnt->mnt_dir, mtpt) == 0) &&
+		    (!type || strcmp(mnt->mnt_type, type) == 0)) {
 			endmntent(fp);
-			return(EEXIST);
+			return EEXIST;
 		}
 	}
 	endmntent(fp);
@@ -244,6 +246,7 @@ int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
 static int mtab_is_proc(const char *mtab)
 {
 	struct statfs s;
+
 	if (statfs(mtab, &s) < 0)
 		return 0;
 
@@ -297,7 +300,7 @@ int update_utab_entry(struct mount_opts *mop)
 #endif /* HAVE_LIBMOUNT */
 
 int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
-		int flags, int freq, int pass)
+		      int flags, int freq, int pass)
 {
 	FILE *fp;
 	struct mntent mnt;
@@ -315,14 +318,14 @@ int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 	mnt.mnt_passno = pass;
 
 	fp = setmntent(MOUNTED, "a+");
-	if (fp == NULL) {
+	if (!fp) {
 		fprintf(stderr, "%s: setmntent(%s): %s\n",
-			progname, MOUNTED, strerror (errno));
+			progname, MOUNTED, strerror(errno));
 		rc = 16;
 	} else {
 		if ((addmntent(fp, &mnt)) == 1) {
 			fprintf(stderr, "%s: addmntent: %s\n",
-				progname, strerror (errno));
+				progname, strerror(errno));
 			rc = 16;
 		}
 		endmntent(fp);
@@ -426,14 +429,16 @@ int loop_setup(struct mkfs_opts *mop)
 #ifdef HAVE_LOOP_CTL_GET_FREE
 		ret = open("/dev/loop-control", O_RDWR);
 		if (ret < 0) {
-			fprintf(stderr, "%s: can't access loop control\n", progname);
+			fprintf(stderr, "%s: can't access loop control\n",
+				progname);
 			return EACCES;
 		}
 		/* find or allocate a free loop device to use */
 		i = ioctl(ret, LOOP_CTL_GET_FREE);
 		close(ret);
 		if (i < 0) {
-			fprintf(stderr, "%s: access loop control error\n", progname);
+			fprintf(stderr, "%s: access loop control error\n",
+				progname);
 			return EACCES;
 		}
 		sprintf(l_device, "%s%d", loop_base, i);
@@ -452,8 +457,10 @@ int loop_setup(struct mkfs_opts *mop)
 				 mop->mo_device);
 			ret = run_command(cmd, cmdsz);
 			if (ret == 256)
-				/* someone else picked up this loop device
-				 * behind our back */
+				/*
+				 * someone else picked up this loop device
+				 * behind our back
+				 */
 				continue;
 			if (ret) {
 				fprintf(stderr, "%s: error %d on losetup: %s\n",
@@ -500,12 +507,12 @@ int loop_format(struct mkfs_opts *mop)
 
 	if (mop->mo_device_kb == 0) {
 		fatal();
-		fprintf(stderr, "loop device requires a --device-size= "
-			"param\n");
+		fprintf(stderr,
+			"loop device requires a --device-size= param\n");
 		return EINVAL;
 	}
 
-	fd = creat(mop->mo_device, S_IRUSR|S_IWUSR);
+	fd = creat(mop->mo_device, 0600);
 	if (fd < 0) {
 		fatal();
 		fprintf(stderr, "%s: Unable to create backing store: %s\n",
@@ -549,8 +556,10 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	char *error, filename[PATH_MAX], fsname[512], *name;
 	void *handle;
 
-	/* This deals with duplicate ldd_mount_types resolving to same OSD layer
-	 * plugin (e.g. ext3/ldiskfs/ldiskfs2 all being ldiskfs) */
+	/*
+	 * This deals with duplicate ldd_mount_types resolving to same OSD layer
+	 * plugin (e.g. ext3/ldiskfs/ldiskfs2 all being ldiskfs)
+	 */
 	strncpy(fsname, mt_type(mount_type), sizeof(fsname));
 	name = fsname + sizeof("osd-") - 1;
 
@@ -561,11 +570,13 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 
 	handle = dlopen(filename, RTLD_LAZY);
 
-	/* Check for $LUSTRE environment variable from test-framework.
+	/*
+	 * Check for $LUSTRE environment variable from test-framework.
 	 * This allows using locally built modules to be used.
 	 */
-	if (handle == NULL) {
+	if (!handle) {
 		char *dirname;
+
 		dirname = getenv("LUSTRE");
 		if (dirname) {
 			snprintf(filename, sizeof(filename),
@@ -576,11 +587,11 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	}
 
 	/* Do not clutter up console with missing types */
-	if (handle == NULL)
+	if (!handle)
 		return NULL;
 
 	ops = malloc(sizeof(*ops));
-	if (ops == NULL) {
+	if (!ops) {
 		dlclose(handle);
 		return NULL;
 	}
@@ -603,7 +614,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 	DLSYM(name, ops, enable_quota);
 
 	error = dlerror();
-	if (error != NULL) {
+	if (error) {
 		fatal();
 		fprintf(stderr, "%s\n", error);
 		dlclose(handle);
@@ -640,7 +651,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 void unload_backfs_module(struct module_backfs_ops *ops)
 {
 #ifdef PLUGIN_DIR
-	if (ops == NULL)
+	if (!ops)
 		return;
 
 	dlclose(ops->dl_handle);
@@ -656,7 +667,7 @@ int backfs_mount_type_okay(enum ldd_mount_type mount_type)
 		fprintf(stderr, "fs type out of range %d\n", mount_type);
 		return 0;
 	}
-	if (backfs_ops[mount_type] == NULL) {
+	if (!backfs_ops[mount_type]) {
 		fatal();
 		fprintf(stderr, "unhandled/unloaded fs type %d '%s'\n",
 			mount_type, mt_str(mount_type));
@@ -716,14 +727,14 @@ void osd_print_ldd_params(struct mkfs_opts *mop)
 }
 
 /* Was this device formatted for Lustre */
-int osd_is_lustre(char *dev, unsigned *mount_type)
+int osd_is_lustre(char *dev, unsigned int *mount_type)
 {
 	int i;
 
 	vprint("checking for existing Lustre data: ");
 
 	for (i = 0; i < LDD_MT_LAST; ++i) {
-		if (backfs_ops[i] != NULL &&
+		if (backfs_ops[i] &&
 		    backfs_ops[i]->is_lustre(dev, mount_type)) {
 			vprint("found\n");
 			return 1;
@@ -770,7 +781,7 @@ int osd_fix_mountopts(struct mkfs_opts *mop, char *mountopts, size_t len)
 	if (!backfs_mount_type_okay(ldd->ldd_mount_type))
 		return EINVAL;
 
-	if (backfs_ops[ldd->ldd_mount_type]->fix_mountopts == NULL)
+	if (!backfs_ops[ldd->ldd_mount_type]->fix_mountopts)
 		return 0;
 
 	return backfs_ops[ldd->ldd_mount_type]->fix_mountopts(mop, mountopts,
@@ -839,14 +850,15 @@ int osd_init(void)
 	for (i = 0; i < LDD_MT_LAST; ++i) {
 		rc = 0;
 		backfs_ops[i] = load_backfs_module(i);
-		if (backfs_ops[i] != NULL) {
+		if (backfs_ops[i]) {
 			rc = backfs_ops[i]->init();
 			if (rc != 0) {
 				backfs_ops[i]->fini();
 				unload_backfs_module(backfs_ops[i]);
 				backfs_ops[i] = NULL;
-			} else
+			} else {
 				ret = 0;
+			}
 		}
 	}
 
@@ -858,7 +870,7 @@ void osd_fini(void)
 	int i;
 
 	for (i = 0; i < LDD_MT_LAST; ++i) {
-		if (backfs_ops[i] != NULL) {
+		if (backfs_ops[i]) {
 			backfs_ops[i]->fini();
 			unload_backfs_module(backfs_ops[i]);
 			backfs_ops[i] = NULL;
@@ -866,7 +878,7 @@ void osd_fini(void)
 	}
 }
 
-__u64 get_device_size(char* device)
+__u64 get_device_size(char *device)
 {
 	int ret, fd;
 	__u64 size = 0;
@@ -880,12 +892,12 @@ __u64 get_device_size(char* device)
 
 #ifdef BLKGETSIZE64
 	/* size in bytes. bz5831 */
-	ret = ioctl(fd, BLKGETSIZE64, (void*)&size);
+	ret = ioctl(fd, BLKGETSIZE64, (void *)&size);
 #else
 	{
 		__u32 lsize = 0;
 		/* size in blocks */
-		ret = ioctl(fd, BLKGETSIZE, (void*)&lsize);
+		ret = ioctl(fd, BLKGETSIZE, (void *)&lsize);
 		size = (__u64)lsize * 512;
 	}
 #endif
@@ -914,9 +926,9 @@ int file_create(char *path, __u64 size)
 	 */
 	size_max = (off_t)1 << (_FILE_OFFSET_BITS - 1 - 10);
 	if (size >= size_max) {
-		fprintf(stderr, "%s: %ju KB: Backing store size must be "
-			"smaller than %ju KB\n", progname, (uintmax_t) size,
-			(uintmax_t)size_max);
+		fprintf(stderr,
+			"%s: %ju KB: Backing store size must be smaller than %ju KB\n",
+			progname, (uintmax_t)size, (uintmax_t)size_max);
 		return EFBIG;
 	}
 
@@ -927,7 +939,7 @@ int file_create(char *path, __u64 size)
 			return errno;
 	}
 
-	fd = creat(path, S_IRUSR|S_IWUSR);
+	fd = creat(path, 0600);
 	if (fd < 0) {
 		fatal();
 		fprintf(stderr, "%s: Unable to create backing store: %s\n",
@@ -1099,12 +1111,14 @@ config:
 		snprintf(filepnm, sizeof(filepnm), "%s/%s", cfg_dir,
 			 lce->lce_name);
 		if (IS_MGS(ldd))
-			/* Store the new fsname in the XATTR_TARGET_RENAME EA.
+			/*
+			 * Store the new fsname in the XATTR_TARGET_RENAME EA.
 			 * When the MGS start, it will scan config logs, and
 			 * for the ones which have the XATTR_TARGET_RENAME EA,
 			 * it will replace old fsname with the new fsname in
 			 * the config log by some shared kernel level config
-			 * logs {fork,erase} functionalities automatically. */
+			 * logs {fork,erase} functionalities automatically.
+			 */
 			ret = setxattr(filepnm, XATTR_TARGET_RENAME,
 				       ldd->ldd_fsname,
 				       strlen(ldd->ldd_fsname), 0);
@@ -1168,17 +1182,19 @@ int load_shared_keys(struct mount_opts *mop)
 	}
 
 	dir = opendir(path);
-	if (dir == NULL) {
+	if (!dir) {
 		fprintf(stderr, "Unable to open shared key directory: %s\n",
 			path);
 		return -ENOENT;
 	}
 
-	/* Loop through the files in the directory attempting to load them.
+	/*
+	 * Loop through the files in the directory attempting to load them.
 	 * Any issue with loading the keyfile is treated as an error although
 	 * the loop continues until all files have been attempted.  This will
 	 * allow all errors be reported at once rather then requiring
-	 * incremental corrections to fix each one and try again. */
+	 * incremental corrections to fix each one and try again.
+	 */
 	while ((dentry = readdir(dir)) != NULL) {
 		if (strcmp(".", dentry->d_name) == 0 ||
 		    strcmp("..", dentry->d_name) == 0)
@@ -1205,9 +1221,8 @@ int load_shared_keys(struct mount_opts *mop)
 			continue;
 
 		rc = sk_load_keyfile(fullpath);
-		if (rc) {
+		if (rc)
 			fprintf(stderr, "Failed to load key %s\n", fullpath);
-		}
 	}
 	closedir(dir);
 
