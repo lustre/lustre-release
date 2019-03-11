@@ -458,6 +458,13 @@ fi
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}
 
+%if %{with servers}
+if ! grep -q define[[:space:]]*HAVE_SERVER_SUPPORT config.h 2> /dev/null; then
+	echo "Error: Server Support configured but not found"
+	false
+fi
+%endif
+
 make %{?_smp_mflags} -s %{?make_args}
 
 %install
