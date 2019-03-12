@@ -240,9 +240,6 @@ static inline int to_fault_error(int result)
 	case 0:
 		result = VM_FAULT_LOCKED;
 		break;
-	case -EFAULT:
-		result = VM_FAULT_NOPAGE;
-		break;
 	case -ENOMEM:
 		result = VM_FAULT_OOM;
 		break;
@@ -368,7 +365,8 @@ static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 		return VM_FAULT_SIGBUS;
 restart:
 	result = ll_fault0(vma, vmf);
-	if (!(result & (VM_FAULT_RETRY | VM_FAULT_ERROR | VM_FAULT_LOCKED))) {
+	if (vmf->page &&
+	    !(result & (VM_FAULT_RETRY | VM_FAULT_ERROR | VM_FAULT_LOCKED))) {
                 struct page *vmpage = vmf->page;
 
                 /* check if this page has been truncated */
