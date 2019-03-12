@@ -75,7 +75,7 @@ THETESTS += write_time_limit rwv lgetxattr_size_check checkfiemap
 THETESTS += listxattr_size_check check_fhandle_syscalls badarea_io
 THETESTS += llapi_layout_test orphan_linkea_check llapi_hsm_test
 THETESTS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
-THETESTS += swap_lock_test lockahead_test mirror_io
+THETESTS += swap_lock_test lockahead_test mirror_io mmap_mknod_test
 
 if TESTS
 if MPITESTS

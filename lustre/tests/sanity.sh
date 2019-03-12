@@ -6389,7 +6389,7 @@ test_60g() {
 }
 run_test 60g "transaction abort won't cause MDT hung"
 
-test_61() {
+test_61a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	f="$DIR/f61"
@@ -6398,7 +6398,12 @@ test_61() {
 	$MULTIOP $f OSMWUc || error "$MULTIOP $f failed"
 	sync
 }
-run_test 61 "mmap() writes don't make sync hang ================"
+run_test 61a "mmap() writes don't make sync hang ================"
+
+test_61b() {
+	mmap_mknod_test $tfile || error "mmap_mknod_test failed"
+}
+run_test 61b "mmap() of unstriped file is successful"
 
 # bug 2330 - insufficient obd_match error checking causes LBUG
 test_62() {
