@@ -46,18 +46,40 @@
 static struct kobject *llite_kobj;
 static struct dentry *llite_root;
 
+static void llite_kobj_release(struct kobject *kobj)
+{
+	if (!IS_ERR_OR_NULL(llite_root)) {
+		debugfs_remove(llite_root);
+		llite_root = NULL;
+	}
+
+	kfree(kobj);
+}
+
+static struct kobj_type llite_kobj_ktype = {
+	.release	= llite_kobj_release,
+	.sysfs_ops	= &lustre_sysfs_ops,
+};
+
 int llite_tunables_register(void)
 {
-	int rc = 0;
+	int rc;
 
-	llite_kobj = class_setup_tunables("llite");
-	if (IS_ERR(llite_kobj))
-		return PTR_ERR(llite_kobj);
+	llite_kobj = kzalloc(sizeof(*llite_kobj), GFP_KERNEL);
+	if (!llite_kobj)
+		return -ENOMEM;
+
+	llite_kobj->kset = lustre_kset;
+	rc = kobject_init_and_add(llite_kobj, &llite_kobj_ktype,
+				  &lustre_kset->kobj, "%s", "llite");
+	if (rc)
+		goto free_kobj;
 
 	llite_root = debugfs_create_dir("llite", debugfs_lustre_root);
 	if (IS_ERR_OR_NULL(llite_root)) {
 		rc = llite_root ? PTR_ERR(llite_root) : -ENOMEM;
 		llite_root = NULL;
+free_kobj:
 		kobject_put(llite_kobj);
 		llite_kobj = NULL;
 	}
@@ -67,15 +89,8 @@ int llite_tunables_register(void)
 
 void llite_tunables_unregister(void)
 {
-	if (llite_kobj) {
-		kobject_put(llite_kobj);
-		llite_kobj = NULL;
-	}
-
-	if (!IS_ERR_OR_NULL(llite_root)) {
-		debugfs_remove(llite_root);
-		llite_root = NULL;
-	}
+	kobject_put(llite_kobj);
+	llite_kobj = NULL;
 }
 
 /* <debugfs>/lustre/llite mount point registration */
@@ -1258,17 +1273,17 @@ static struct attribute *llite_attrs[] = {
 	NULL,
 };
 
-static void llite_kobj_release(struct kobject *kobj)
+static void sbi_kobj_release(struct kobject *kobj)
 {
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 	complete(&sbi->ll_kobj_unregister);
 }
 
-static struct kobj_type llite_ktype = {
+static struct kobj_type sbi_ktype = {
 	.default_attrs  = llite_attrs,
 	.sysfs_ops      = &lustre_sysfs_ops,
-	.release        = llite_kobj_release,
+	.release        = sbi_kobj_release,
 };
 
 static const struct llite_file_opcode {
@@ -1443,7 +1458,7 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 out_ll_kset:
 	/* Yes we also register sysfs mount kset here as well */
 	sbi->ll_kset.kobj.parent = llite_kobj;
-	sbi->ll_kset.kobj.ktype = &llite_ktype;
+	sbi->ll_kset.kobj.ktype = &sbi_ktype;
 	init_completion(&sbi->ll_kobj_unregister);
 	err = kobject_set_name(&sbi->ll_kset.kobj, "%s", name);
 	if (err)
