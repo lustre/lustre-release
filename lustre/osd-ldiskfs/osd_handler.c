@@ -7775,7 +7775,8 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
-
+	o->od_readcache_max_iosize = OSD_READCACHE_MAX_IO_MB << 20;
+	o->od_writethrough_max_iosize = OSD_WRITECACHE_MAX_IO_MB << 20;
 	o->od_auto_scrub_interval = AS_DEFAULT;
 
 	cplen = strlcpy(o->od_svname, lustre_cfg_string(cfg, 4),

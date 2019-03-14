@@ -285,7 +285,18 @@ struct osd_device {
 	struct osd_obj_map	*od_ost_map;
 	struct osd_mdobj_map	*od_mdt_map;
 
+	/* objects with size > od_readcache_max_filesize will be
+	 * served bypassing pagecache unless already cached */
 	unsigned long long	od_readcache_max_filesize;
+
+	/* reads > od_readcache_max_iosize will be
+	 * served bypassing pagecache unless already cached */
+	unsigned long		od_readcache_max_iosize;
+
+	/* writes > od_writethough_max_iosize will be
+	 * served bypassing pagecache unless already cached */
+	unsigned long		od_writethrough_max_iosize;
+
 	int			od_read_cache;
 	int			od_writethrough_cache;
 
@@ -977,6 +988,8 @@ static inline int osd_invariant(const struct osd_object *obj)
 #endif
 
 #define OSD_MAX_CACHE_SIZE OBD_OBJECT_EOF
+#define OSD_READCACHE_MAX_IO_MB		8
+#define OSD_WRITECACHE_MAX_IO_MB	8
 
 extern const struct dt_index_operations osd_otable_ops;
 

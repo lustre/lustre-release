@@ -579,6 +579,89 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 
 LDEBUGFS_SEQ_FOPS(ldiskfs_osd_readcache);
 
+static int ldiskfs_osd_readcache_max_io_seq_show(struct seq_file *m, void *data)
+{
+	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	seq_printf(m, "%lu\n", osd->od_readcache_max_iosize >> 20);
+	return 0;
+}
+
+static ssize_t
+ldiskfs_osd_readcache_max_io_seq_write(struct file *file,
+				       const char __user *buffer,
+				       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct dt_device *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
+	s64 val;
+	int rc;
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
+	if (rc)
+		return rc;
+	if (val < 0)
+		return -ERANGE;
+
+	if (val > PTLRPC_MAX_BRW_SIZE)
+		return -ERANGE;
+	osd->od_readcache_max_iosize = val;
+	return count;
+}
+
+LDEBUGFS_SEQ_FOPS(ldiskfs_osd_readcache_max_io);
+
+static int ldiskfs_osd_writethrough_max_io_seq_show(struct seq_file *m,
+						    void *data)
+{
+	struct osd_device *osd = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	seq_printf(m, "%lu\n", osd->od_writethrough_max_iosize >> 20);
+	return 0;
+}
+
+static ssize_t
+ldiskfs_osd_writethrough_max_io_seq_write(struct file *file,
+				       const char __user *buffer,
+				       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct dt_device *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
+	s64 val;
+	int rc;
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
+	if (rc)
+		return rc;
+	if (val < 0)
+		return -ERANGE;
+
+	if (val > PTLRPC_MAX_BRW_SIZE)
+		return -ERANGE;
+	osd->od_writethrough_max_iosize = val;
+	return count;
+}
+
+LDEBUGFS_SEQ_FOPS(ldiskfs_osd_writethrough_max_io);
+
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 52, 0)
 static ssize_t index_in_idif_show(struct kobject *kobj, struct attribute *attr,
 				  char *buf)
@@ -694,6 +777,10 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&ldiskfs_osd_oi_scrub_fops	},
 	{ .name	=	"readcache_max_filesize",
 	  .fops	=	&ldiskfs_osd_readcache_fops	},
+	{ .name	=	"readcache_max_io_mb",
+	  .fops	=	&ldiskfs_osd_readcache_max_io_fops	},
+	{ .name	=	"writethrough_max_io_mb",
+	  .fops	=	&ldiskfs_osd_writethrough_max_io_fops	},
 	{ NULL }
 };
 

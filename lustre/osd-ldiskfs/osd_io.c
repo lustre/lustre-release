@@ -652,51 +652,60 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 }
 
 static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
-				 loff_t offset, gfp_t gfp_mask)
+				 loff_t offset, gfp_t gfp_mask, bool cache)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	struct osd_device *d = osd_obj2dev(osd_dt_obj(dt));
 	struct page *page;
-	int cur = oti->oti_dio_pages_used;
+	int cur;
 
         LASSERT(inode);
 
-	if (osd_use_page_cache(d)) {
+	if (cache) {
 		page = find_or_create_page(inode->i_mapping,
-					   offset >> PAGE_SHIFT,
-					   gfp_mask);
+					   offset >> PAGE_SHIFT, gfp_mask);
 
 		if (likely(page))
 			LASSERT(!test_bit(PG_private_2, &page->flags));
 		else
 			lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_PAGE, 1);
-	} else {
 
-		LASSERT(oti->oti_dio_pages);
-
-		if (unlikely(!oti->oti_dio_pages[cur])) {
-			LASSERT(cur < PTLRPC_MAX_BRW_PAGES);
-			page = alloc_page(gfp_mask);
-			if (!page)
-				return NULL;
-			oti->oti_dio_pages[cur] = page;
-		}
-
-		page = oti->oti_dio_pages[cur];
-		LASSERT(!test_bit(PG_private_2, &page->flags));
-		set_bit(PG_private_2, &page->flags);
-		oti->oti_dio_pages_used++;
-
-		LASSERT(!PageLocked(page));
-		lock_page(page);
-
-		LASSERT(!page->mapping);
-		LASSERT(!PageWriteback(page));
-		ClearPageUptodate(page);
-
-		page->index = offset >> PAGE_SHIFT;
+		return page;
 	}
+
+	if (inode->i_mapping->nrpages) {
+		/* consult with pagecache, but do not create new pages */
+		/* this is normally used once */
+		page = find_lock_page(inode->i_mapping, offset >> PAGE_SHIFT);
+		if (page)
+			return page;
+	}
+
+	LASSERT(oti->oti_dio_pages);
+	cur = oti->oti_dio_pages_used;
+
+	if (unlikely(!oti->oti_dio_pages[cur])) {
+		LASSERT(cur < PTLRPC_MAX_BRW_PAGES);
+		page = alloc_page(gfp_mask);
+		if (!page)
+			return NULL;
+		oti->oti_dio_pages[cur] = page;
+	}
+
+	page = oti->oti_dio_pages[cur];
+	LASSERT(!test_bit(PG_private_2, &page->flags));
+	set_bit(PG_private_2, &page->flags);
+	oti->oti_dio_pages_used++;
+
+	LASSERT(!PageLocked(page));
+	lock_page(page);
+
+	LASSERT(!page->mapping);
+	LASSERT(!PageWriteback(page));
+	ClearPageUptodate(page);
+
+	page->index = offset >> PAGE_SHIFT;
 
 	return page;
 }
@@ -804,30 +813,70 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_object *obj = osd_dt_obj(dt);
-	int npages, i, rc = 0;
+	struct osd_device *osd   = osd_obj2dev(obj);
+	int npages, i, iosize, rc = 0;
+	bool cache, write;
+	loff_t fsize;
 	gfp_t gfp_mask;
 
 	LASSERT(obj->oo_inode);
 
-	if (!osd_use_page_cache(osd_obj2dev(obj))) {
-		if (unlikely(!oti->oti_dio_pages)) {
-			OBD_ALLOC(oti->oti_dio_pages,
-				  sizeof(struct page *) * PTLRPC_MAX_BRW_PAGES);
-			if (!oti->oti_dio_pages)
-				return -ENOMEM;
-		}
-	}
-
 	rc = osd_map_remote_to_local(pos, len, &npages, lnb, maxlnb);
 	if (rc)
 		RETURN(rc);
+
+	write = rw & DT_BUFS_TYPE_WRITE;
+
+	fsize = lnb[npages - 1].lnb_file_offset + lnb[npages - 1].lnb_len;
+	iosize = fsize - lnb[0].lnb_file_offset;
+	fsize = max(fsize, i_size_read(obj->oo_inode));
+
+	cache = rw & DT_BUFS_TYPE_READAHEAD;
+	if (cache)
+		goto bypass_checks;
+
+	cache = osd_use_page_cache(osd);
+	while (cache) {
+		if (write) {
+			if (!osd->od_writethrough_cache) {
+				cache = false;
+				break;
+			}
+			if (iosize > osd->od_writethrough_max_iosize) {
+				cache = false;
+				break;
+			}
+		} else {
+			if (!osd->od_read_cache) {
+				cache = false;
+				break;
+			}
+			if (iosize > osd->od_readcache_max_iosize) {
+				cache = false;
+				break;
+			}
+		}
+		/* don't use cache on large files */
+		if (osd->od_readcache_max_filesize &&
+		    fsize > osd->od_readcache_max_filesize)
+			cache = false;
+		break;
+	}
+
+bypass_checks:
+	if (!cache && unlikely(!oti->oti_dio_pages)) {
+		OBD_ALLOC(oti->oti_dio_pages,
+			  sizeof(struct page *) * PTLRPC_MAX_BRW_PAGES);
+		if (!oti->oti_dio_pages)
+			return -ENOMEM;
+	}
 
 	/* this could also try less hard for DT_BUFS_TYPE_READAHEAD pages */
 	gfp_mask = rw & DT_BUFS_TYPE_LOCAL ? (GFP_NOFS | __GFP_HIGHMEM) :
 					     GFP_HIGHUSER;
 	for (i = 0; i < npages; i++, lnb++) {
 		lnb->lnb_page = osd_get_page(env, dt, lnb->lnb_file_offset,
-					     gfp_mask);
+					     gfp_mask, cache);
 		if (lnb->lnb_page == NULL)
 			GOTO(cleanup, rc = -ENOMEM);
 
@@ -837,6 +886,17 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 
 		lu_object_get(&dt->do_lu);
 	}
+
+#if 0
+	/* XXX: this version doesn't invalidate cached pages, but use them */
+	if (!cache && write && obj->oo_inode->i_mapping->nrpages) {
+		/* do not allow data aliasing, invalidate pagecache */
+		/* XXX: can be quite expensive in mixed case */
+		invalidate_mapping_pages(obj->oo_inode->i_mapping,
+				lnb[0].lnb_file_offset >> PAGE_SHIFT,
+				lnb[npages - 1].lnb_file_offset >> PAGE_SHIFT);
+	}
+#endif
 
 	RETURN(i);
 
@@ -939,14 +999,11 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
         struct osd_iobuf       *iobuf = &oti->oti_iobuf;
         struct inode           *inode = osd_dt_obj(dt)->oo_inode;
         struct osd_device      *osd   = osd_obj2dev(osd_dt_obj(dt));
-	ktime_t start;
-	ktime_t end;
+	ktime_t start, end;
 	s64 timediff;
-        ssize_t                 isize;
-        __s64                   maxidx;
-        int                     rc = 0;
-        int                     i;
-        int                     cache = 0;
+	ssize_t isize;
+	__s64  maxidx;
+	int i, rc = 0;
 
         LASSERT(inode);
 
@@ -957,17 +1014,8 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 	isize = i_size_read(inode);
 	maxidx = ((isize + PAGE_SIZE - 1) >> PAGE_SHIFT) - 1;
 
-        if (osd->od_writethrough_cache)
-                cache = 1;
-        if (isize > osd->od_readcache_max_filesize)
-                cache = 0;
-
 	start = ktime_get();
 	for (i = 0; i < npages; i++) {
-
-		if (cache == 0)
-			generic_error_remove_page(inode->i_mapping,
-						  lnb[i].lnb_page);
 
 		/*
 		 * till commit the content of the page is undefined
@@ -1294,7 +1342,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         struct osd_iobuf *iobuf = &oti->oti_iobuf;
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
         struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
-	int rc = 0, i, cache = 0, cache_hits = 0, cache_misses = 0;
+	int rc = 0, i, cache_hits = 0, cache_misses = 0;
 	ktime_t start, end;
 	s64 timediff;
 	loff_t isize;
@@ -1306,11 +1354,6 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 
 	isize = i_size_read(inode);
-
-	if (osd->od_read_cache)
-		cache = 1;
-	if (isize > osd->od_readcache_max_filesize)
-		cache = 0;
 
 	start = ktime_get();
 	for (i = 0; i < npages; i++) {
@@ -1328,10 +1371,6 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		/* Bypass disk read if fail_loc is set properly */
 		if (OBD_FAIL_CHECK(OBD_FAIL_OST_FAKE_RW))
 			SetPageUptodate(lnb[i].lnb_page);
-
-		if (cache == 0)
-			generic_error_remove_page(inode->i_mapping,
-						  lnb[i].lnb_page);
 
 		if (PageUptodate(lnb[i].lnb_page)) {
 			cache_hits++;
@@ -1988,17 +2027,16 @@ static int osd_fiemap_get(const struct lu_env *env, struct dt_object *dt,
 static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
 		       __u64 start, __u64 end, enum lu_ladvise_type advice)
 {
-	int		 rc = 0;
-	struct inode	*inode = osd_dt_obj(dt)->oo_inode;
+	struct osd_object *obj = osd_dt_obj(dt);
+	int rc = 0;
 	ENTRY;
 
 	switch (advice) {
 	case LU_LADVISE_DONTNEED:
-		if (end == 0)
-			break;
-		invalidate_mapping_pages(inode->i_mapping,
-					 start >> PAGE_SHIFT,
-					 (end - 1) >> PAGE_SHIFT);
+		if (end)
+			invalidate_mapping_pages(obj->oo_inode->i_mapping,
+						 start >> PAGE_SHIFT,
+						 (end - 1) >> PAGE_SHIFT);
 		break;
 	default:
 		rc = -ENOTSUPP;
