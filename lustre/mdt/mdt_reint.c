@@ -2139,7 +2139,7 @@ unlock_open_sem:
 	if (open_sem_locked)
 		up_write(&sobj->mot_open_sem);
 unlock_links:
-	mdt_unlock_list(info, &link_locks, do_sync ?: rc);
+	mdt_unlock_list(info, &link_locks, do_sync ? 1 : rc);
 put_source:
 	mdt_object_put(env, sobj);
 	mdt_object_put(env, spobj);
