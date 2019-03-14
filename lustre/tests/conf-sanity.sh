@@ -7807,7 +7807,7 @@ run_test 122 "Check OST sequence update"
 
 test_123aa() {
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	# test old logid format until removal from llog_ioctl.c::str2logid()
 	if [ $(lustre_version_code MGS) -lt $(version_code 3.1.53) ]; then
@@ -7830,7 +7830,7 @@ test_123ab() {
 	[[ $(lustre_version_code MGS) -gt $(version_code 2.11.51) ]] ||
 		skip "Need server with working llog_print support"
 
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	local yaml
 	local orig_val
@@ -7858,7 +7858,7 @@ test_123ac() { # LU-11566
 	local start=10
 	local end=50
 
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	# - { index: 10, event: add_uuid, nid: 192.168.20.1@tcp(0x20000c0a81401,
 	#     node: 192.168.20.1@tcp }
@@ -7877,7 +7877,7 @@ test_123ad() { # LU-11566
 	do_facet mgs "$LCTL help llog_print" 2>&1 | grep -q -- --start ||
 		skip "Need 'lctl llog_print --start' on MGS"
 
-	[ -d $MOUNT/.lustre ] || setupall
+	[ -d $MOUNT/.lustre ] || setup
 
 	# append a new record, to avoid issues if last record was cancelled
 	local old=$($LCTL get_param -n osc.*-OST0000-*.max_dirty_mb | head -1)
