@@ -3,7 +3,6 @@
 AM_CFLAGS := -fPIC \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
 	     -D_GNU_SOURCE
-AM_LDFLAGS := -no-install
 
 sbin_PROGRAMS = lsvcgssd l_idmap
 

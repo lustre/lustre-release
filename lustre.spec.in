@@ -252,7 +252,7 @@ Requires: %{name} = %{version}
 %endif
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
-Requires: attr, rsync, perl, lsof, /usr/bin/getconf
+Requires: attr, rsync, perl, lsof, libtool, /usr/bin/getconf
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
