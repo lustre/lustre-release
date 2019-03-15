@@ -20,15 +20,17 @@ if $SHARED_KEY; then
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	17n	60a	133g	300f"
 fi
 
+# Check Grants after these tests
+GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c 64d"
+
+# skip the grant tests for ARM until they are fixed
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596 (all below)
-	ALWAYS_EXCEPT+=" 42d 42e 63a 63b 64a 64b 64c"
+	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
 	# bug number:	 LU-11671 LU-11594 LU-11667 LU-11729
 	ALWAYS_EXCEPT+=" 45	  103a	    317      810"
 fi
 
-# Check Grants after these tests
-GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
 SRCDIR=$(cd $(dirname $0); echo $PWD)
 export PATH=$PATH:/sbin
 
