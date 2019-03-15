@@ -969,8 +969,8 @@ static int
 param_display(struct param_opts *popt, char *pattern, char *value,
 	      enum parameter_operation mode)
 {
-	int dir_count = 0;
-	char **dir_cache;
+	int dup_count = 0;
+	char **dup_cache;
 	glob_t paths;
 	char *opname = parameter_opname[mode];
 	int rc, i;
@@ -985,11 +985,11 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		return rc;
 	}
 
-	dir_cache = calloc(paths.gl_pathc, sizeof(char *));
-	if (dir_cache == NULL) {
+	dup_cache = calloc(paths.gl_pathc, sizeof(char *));
+	if (dup_cache == NULL) {
 		rc = -ENOMEM;
 		fprintf(stderr,
-			"error: %s: allocating '%s' dir_cache[%zd]: %s\n",
+			"error: %s: allocating '%s' dup_cache[%zd]: %s\n",
 			opname, pattern, paths.gl_pathc, strerror(-rc));
 		goto out_param;
 	}
@@ -998,7 +998,7 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		char *param_name = NULL, *tmp;
 		char pathname[PATH_MAX];
 		struct stat st;
-		int rc2;
+		int rc2, j;
 
 		if (stat(paths.gl_pathv[i], &st) == -1) {
 			fprintf(stderr, "error: %s: stat '%s': %s\n",
@@ -1021,35 +1021,6 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			continue;
 		}
 
-		/**
-		 * For the upstream client the parameter files locations
-		 * are split between under both /sys/kernel/debug/lustre
-		 * and /sys/fs/lustre. The parameter files containing
-		 * small amounts of data, less than a page in size, are
-		 * located under /sys/fs/lustre and in the case of large
-		 * parameter data files, think stats for example, are
-		 * located in the debugfs tree. Since the files are split
-		 * across two trees the directories are often duplicated
-		 * which means these directories are listed twice which
-		 * leads to duplicate output to the user. To avoid scanning
-		 * a directory twice we have to cache any directory and
-		 * check if a search has been requested twice.
-		 */
-		if (S_ISDIR(st.st_mode)) {
-			int j;
-
-			for (j = 0; j < dir_count; j++) {
-				if (!strcmp(dir_cache[j], param_name))
-					break;
-			}
-			if (j != dir_count) {
-				free(param_name);
-				param_name = NULL;
-				continue;
-			}
-			dir_cache[dir_count++] = strdup(param_name);
-		}
-
 		switch (mode) {
 		case GET_PARAM:
 			/* Read the contents of file to stdout */
@@ -1069,6 +1040,32 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 			}
 			break;
 		case LIST_PARAM:
+			/**
+			 * For the upstream client the parameter files locations
+			 * are split between under both /sys/kernel/debug/lustre
+			 * and /sys/fs/lustre. The parameter files containing
+			 * small amounts of data, less than a page in size, are
+			 * located under /sys/fs/lustre and in the case of large
+			 * parameter data files, think stats for example, are
+			 * located in the debugfs tree. Since the files are split
+			 * across two trees the directories are often duplicated
+			 * which means these directories are listed twice which
+			 * leads to duplicate output to the user. To avoid
+			 * scanning a directory twice we have to cache any
+			 * directory and check if a search has been requested
+			 * twice.
+			 */
+			for (j = 0; j < dup_count; j++) {
+				if (!strcmp(dup_cache[j], param_name))
+					break;
+			}
+			if (j != dup_count) {
+				free(param_name);
+				param_name = NULL;
+				continue;
+			}
+			dup_cache[dup_count++] = strdup(param_name);
+
 			if (popt->po_show_path)
 				printf("%s\n", param_name);
 			break;
@@ -1131,9 +1128,9 @@ param_display(struct param_opts *popt, char *pattern, char *value,
 		}
 	}
 
-	for (i = 0; i < dir_count; i++)
-		free(dir_cache[i]);
-	free(dir_cache);
+	for (i = 0; i < dup_count; i++)
+		free(dup_cache[i]);
+	free(dup_cache);
 out_param:
 	cfs_free_param_data(&paths);
 	return rc;

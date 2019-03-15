@@ -209,10 +209,8 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 	size_t len = 0;
 	int i;
 
-	if (libcfs_catastrophe) {
-		len = sprintf(buf, "LBUG\n");
-		healthy = false;
-	}
+	if (libcfs_catastrophe)
+		return sprintf(buf, "LBUG\n");
 
 	read_lock(&obd_dev_lock);
 	for (i = 0; i < class_devno_max(); i++) {
@@ -226,16 +224,17 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 		if (obd->obd_stopping)
 			continue;
 
-		class_incref(obd, __FUNCTION__, current);
+		class_incref(obd, __func__, current);
 		read_unlock(&obd_dev_lock);
 
-		if (obd_health_check(NULL, obd)) {
-			len = sprintf(buf, "device %s reported unhealthy\n",
-				      obd->obd_name);
+		if (obd_health_check(NULL, obd))
 			healthy = false;
-		}
-		class_decref(obd, __FUNCTION__, current);
+
+		class_decref(obd, __func__, current);
 		read_lock(&obd_dev_lock);
+
+		if (!healthy)
+			break;
 	}
 	read_unlock(&obd_dev_lock);
 
@@ -433,6 +432,40 @@ static const struct file_operations obd_device_list_fops = {
 	.release = seq_release,
 };
 
+static int
+health_check_seq_show(struct seq_file *m, void *unused)
+{
+	int i;
+
+	read_lock(&obd_dev_lock);
+	for (i = 0; i < class_devno_max(); i++) {
+		struct obd_device *obd;
+
+		obd = class_num2obd(i);
+		if (obd == NULL || !obd->obd_attached || !obd->obd_set_up)
+			continue;
+
+		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+		if (obd->obd_stopping)
+			continue;
+
+		class_incref(obd, __func__, current);
+		read_unlock(&obd_dev_lock);
+
+		if (obd_health_check(NULL, obd)) {
+			seq_printf(m, "device %s reported unhealthy\n",
+				   obd->obd_name);
+		}
+		class_decref(obd, __func__, current);
+		read_lock(&obd_dev_lock);
+	}
+	read_unlock(&obd_dev_lock);
+
+	return 0;
+}
+
+LDEBUGFS_SEQ_FOPS_RO(health_check);
+
 struct kset *lustre_kset;
 EXPORT_SYMBOL_GPL(lustre_kset);
 
@@ -497,6 +530,15 @@ int class_procfs_init(void)
 	if (IS_ERR_OR_NULL(file)) {
 		rc = file ? PTR_ERR(file) : -ENOMEM;
 		debugfs_remove(debugfs_lustre_root);
+		kset_unregister(lustre_kset);
+		goto out;
+	}
+
+	file = debugfs_create_file("health_check", 0444, debugfs_lustre_root,
+				   NULL, &health_check_fops);
+	if (IS_ERR_OR_NULL(file)) {
+		rc = file ? PTR_ERR(file) : -ENOMEM;
+		debugfs_remove_recursive(debugfs_lustre_root);
 		kset_unregister(lustre_kset);
 		goto out;
 	}
