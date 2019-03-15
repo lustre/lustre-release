@@ -2177,6 +2177,10 @@ unlock_open_sem:
 	if (open_sem_locked)
 		up_write(&sobj->mot_open_sem);
 unlock_links:
+	/* if we've got too many locks to save into RPC,
+	 * then just commit before the locks are released */
+	if (!rc && do_sync)
+		mdt_device_sync(env, mdt);
 	mdt_unlock_list(info, &link_locks, do_sync ? 1 : rc);
 put_source:
 	mdt_object_put(env, sobj);
@@ -2189,9 +2193,6 @@ put_parent:
 unlock_rename:
 	if (lustre_handle_is_used(&rename_lh))
 		mdt_rename_unlock(&rename_lh);
-
-	if (!rc && do_sync)
-		mdt_device_sync(env, mdt);
 
 	return rc;
 }
