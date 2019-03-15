@@ -76,19 +76,39 @@ Set the NID(s) of all service partner. This option treats all nodes as equal
 service nodes. Cannot be used with --failnode.
 .TP
 .BI \--fsname= filesystem_name
-The Lustre filesystem this service will be part of. The maximum filesystem_name
-length is 8 characters. Required for all targets other than MGS.
+The Lustre filesystem this target will be part of. Valid
+.IR filesystem_name s
+are between 1 and 8 characters long and must only use upper- and lower-case
+English letters, numbers, and '\-', or '_' (regexp [-_a\-zA\-Z0\-9]).  All
+targets in a single filesystem must specify the same
+.IR filesystem_name ,
+and it must be unique between all filesystems mounted by a single client
+at one time.  Using "lustre" as the filesystem name is discouraged, to avoid
+future problems if a client needs to mount two such filesystems, and to
+reduce confusion for administrators/users between "lustre" as the
+.I filesystem_name
+and "lustre" as the literal string that must be used in places for the
+.BR filesystem_type .
+The
+.B \--fsname
+option is not valid for the MGS, since it may be used for multiple filesystems.
 .TP
 .BI \--index= index
-Specify a particular OST or MDT index. Required for all targets other than the MGS.
-The index parameter may either be a decimal number or a hexadecimal number
-starting with '0x'.
+Specify a particular OST or MDT index. Required for all targets other than
+the MGS, and must be unique for all targets in the same filesystem. Typically
+sequential values starting from 0 are used.  The index parameter may either
+be a decimal number, or a hexadecimal number starting with '0x'.
 .TP
 .BI \--mkfsoptions= opts
-Format options for the backing fs. For example, ext3 options could be set here.
+Additional formatting options passed through to the backing filesystem. For
+example, options for
+.B mke2fs
+or
+.B zpool
+could be set here.
 .TP
 .BI \--mountfsoptions= opts
-Set the persistent mount options that will be used when mounting Lustre fs.
+Set persistent mount options that will be used when mounting Lustre targets.
 WARNING: unlike earlier versions of \fBmkfs.lustre\fR, this version completely
 replaces the default mount options with those specified on the command line,
 issuing a warning on stderr if any of the default mount options are omitted.
@@ -101,7 +121,7 @@ MGS/MDT: \fIerrors=remount-ro,user_xattr\fR.
 Use these options for mounting backing fs while mkfs.lustre is working.
 .TP
 .BI \--network= net,...
-Network(s) to restrict this ost/mdt to. This option can be repeated as desired.
+Network(s) to restrict this OST/MDT to. This option can be repeated as desired.
 .TP
 .BI \--mgsnode= nid,...
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
@@ -145,13 +165,14 @@ some reason (e.g. multiple disk failure or massive corruption).  This
 avoids having the target try to register as a new target with the MGS.
 .TP
 .BI \--stripe-count-hint= stripes
-Used for optizing MDT inode size
+Specify the expected common number of stripes on a file so that the MDT
+inode size can be optimized for the typical use case.
 .TP
 .BI \--force-nohostid
 Ignore unset hostid for ZFS import protection. To set hostid either set
 spl_hostid parameter for spl.ko or set /etc/hostid, see zgenhostid(8).  To
-populate the spl_hostid parameter, spl.ko must be (re)loaded after /etc/hostid is
-created.
+populate the spl_hostid parameter, spl.ko must be (re)loaded after /etc/hostid
+is created.
 
 .TP
 .BI \--verbose
@@ -182,7 +203,7 @@ OST for filesystem 'testfs' on any node using the above MGS.
 .B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs --servicenode=cfs21@tcp0,cfs21ib@o2ib0 --servicenode=cfs22@tcp0,cfs22ib@o2ib0 /dev/sda1
 Combined MGS and MDT for filesystem 'testfs' on failover pair cfs21 and cfs22.
 .TP
-.B mkfs.lustre --fsname=testfs --index=0 --ost --mgsnode=cfs21@tcp0,cfs21ib@o2ib0:cfs22@tcp0,cfs22ib@o2ib0 --failnode=cfs24@tcp0,cfs24ib@o2ib0 /dev/sdb
+.B mkfs.lustre --fsname=testfs --index=1 --ost --mgsnode=cfs21@tcp0,cfs21ib@o2ib0:cfs22@tcp0,cfs22ib@o2ib0 --failnode=cfs24@tcp0,cfs24ib@o2ib0 /dev/sdb
 OST for filesystem 'testfs' using the above MGS and having a failover partner
 cfs24.
 .TP
@@ -193,8 +214,8 @@ Standalone MGS on e.g. node cfs22
 MDT for filesystem 'myfs1' on any node, using the above MGS
 .TP
 .B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs zfspool/mdt1 mirror /dev/sdb /dev/sdc mirror /dev/sdd /dev/sde
-Create zfs pool 'zfspool' on two root vdevs each a mirror of two disks and create mdt/mgs on
-filesystem 'zfspool/mdt1'.
+Create zfs pool 'zfspool' on two root vdevs each a mirror of two disks and
+create mdt/mgs on filesystem 'zfspool/mdt1'.
 
 .SH AVAILABILITY
 .B mkfs.lustre
@@ -202,9 +223,10 @@ is part of the
 .BR lustre (7)
 filesystem package.
 .SH SEE ALSO
-.BR lustre (7),
-.BR mount.lustre (8),
-.BR tunefs.lustre (8),
 .BR lctl (8),
 .BR lfs (1),
+.BR lustre (7),
+.BR mke2fs (8),
+.BR mount.lustre (8),
+.BR tunefs.lustre (8),
 .BR zpool (8)
