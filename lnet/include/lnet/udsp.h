@@ -126,4 +126,11 @@ size_t lnet_get_udsp_size(struct lnet_udsp *udsp);
  */
 int lnet_udsp_marshal(struct lnet_udsp *udsp,
 		      struct lnet_ioctl_udsp *ioc_udsp);
+/**
+ * lnet_udsp_demarshal_add
+ *	Given a bulk containing a single UDSP,
+ *	demarshal and populate a udsp structure then add policy
+ */
+int lnet_udsp_demarshal_add(void *bulk, __u32 bulk_size);
+
 #endif /* UDSP_H */

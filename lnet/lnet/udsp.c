@@ -1118,7 +1118,7 @@ copy_exprs(struct cfs_expr_list *expr, void __user **bulk,
 
 static int
 copy_nid_range(struct lnet_ud_nid_descr *nid_descr, char *type,
-		void **bulk, __u32 *bulk_size)
+		void __user **bulk, __u32 *bulk_size)
 {
 	struct lnet_ioctl_udsp_descr ioc_udsp_descr;
 	struct cfs_expr_list *expr;
@@ -1255,5 +1255,205 @@ lnet_udsp_marshal(struct lnet_udsp *udsp, struct lnet_ioctl_udsp *ioc_udsp)
 
 fail:
 	CERROR("Failed to marshal udsp: %d\n", rc);
+	return rc;
+}
+
+static void
+copy_range_info(void **bulk, void **buf, struct list_head *list,
+		int count)
+{
+	struct lnet_range_expr *range_expr;
+	struct cfs_range_expr *range;
+	struct cfs_expr_list *exprs;
+	int range_count = count;
+	int i;
+
+	if (range_count == 0)
+		return;
+
+	if (range_count == -1) {
+		struct lnet_expressions *e;
+
+		e = *bulk;
+		range_count = e->le_count;
+		*bulk += sizeof(*e);
+	}
+
+	exprs = *buf;
+	INIT_LIST_HEAD(&exprs->el_link);
+	INIT_LIST_HEAD(&exprs->el_exprs);
+	list_add_tail(&exprs->el_link, list);
+	*buf += sizeof(*exprs);
+
+	for (i = 0; i < range_count; i++) {
+		range_expr = *bulk;
+		range = *buf;
+		INIT_LIST_HEAD(&range->re_link);
+		range->re_lo = range_expr->re_lo;
+		range->re_hi = range_expr->re_hi;
+		range->re_stride = range_expr->re_stride;
+		CDEBUG(D_NET, "Copy Range %u:%u:%u\n",
+		       range->re_lo,
+		       range->re_hi,
+		       range->re_stride);
+		list_add_tail(&range->re_link, &exprs->el_exprs);
+		*bulk += sizeof(*range_expr);
+		*buf += sizeof(*range);
+	}
+}
+
+static int
+copy_ioc_udsp_descr(struct lnet_ud_nid_descr *nid_descr, char *type,
+		    void **bulk, __u32 *bulk_size)
+{
+	struct lnet_ioctl_udsp_descr *ioc_nid = *bulk;
+	struct lnet_expressions *exprs;
+	__u32 descr_type;
+	int expr_count = 0;
+	int range_count = 0;
+	int i;
+	__u32 size;
+	int remaining_size = *bulk_size;
+	void *tmp = *bulk;
+	__u32 alloc_size;
+	void *buf;
+	size_t range_expr_s = sizeof(struct lnet_range_expr);
+	size_t lnet_exprs_s = sizeof(struct lnet_expressions);
+
+	CDEBUG(D_NET, "%s: bulk = %p:%u\n", type, *bulk, *bulk_size);
+
+	/* criteria not present, skip over the static part of the
+	 * bulk, which is included for each NID descriptor
+	 */
+	if (ioc_nid->iud_net.ud_net_type == 0) {
+		remaining_size -= sizeof(*ioc_nid);
+		if (remaining_size < 0) {
+			CERROR("Truncated userspace udsp buffer given\n");
+			return -EINVAL;
+		}
+		*bulk += sizeof(*ioc_nid);
+		*bulk_size = remaining_size;
+		return 0;
+	}
+
+	descr_type = ioc_nid->iud_src_hdr.ud_descr_type;
+	if (descr_type != *(__u32 *)type) {
+		CERROR("Bad NID descriptor type. Expected %s, given %c%c%c\n",
+			type, (__u8)descr_type, (__u8)(descr_type << 4),
+			(__u8)(descr_type << 8));
+		return -EINVAL;
+	}
+
+	/* calculate the total size to verify we have enough buffer.
+	 * Start of by finding how many ranges there are for the net
+	 * expression.
+	 */
+	range_count = ioc_nid->iud_net.ud_net_num_expr.le_count;
+	size = sizeof(*ioc_nid) + (range_count * range_expr_s);
+	remaining_size -= size;
+	if (remaining_size < 0) {
+		CERROR("Truncated userspace udsp buffer given\n");
+		return -EINVAL;
+	}
+
+	CDEBUG(D_NET, "Total net num ranges in %s: %d:%u\n", type,
+	       range_count, size);
+	/* the number of expressions for the NID. IE 4 for IP, 1 for GNI */
+	expr_count = ioc_nid->iud_src_hdr.ud_descr_count;
+	CDEBUG(D_NET, "addr as %d exprs\n", expr_count);
+	/* point tmp to the beginning of the NID expressions */
+	tmp += size;
+	for (i = 0; i < expr_count; i++) {
+		/* get the number of ranges per expression */
+		exprs = tmp;
+		range_count += exprs->le_count;
+		size = (range_expr_s * exprs->le_count) + lnet_exprs_s;
+		remaining_size -= size;
+		CDEBUG(D_NET, "expr %d:%d:%u:%d:%d\n", i, exprs->le_count,
+		       size, remaining_size, range_count);
+		if (remaining_size < 0) {
+			CERROR("Truncated userspace udsp buffer given\n");
+			return -EINVAL;
+		}
+		tmp += size;
+	}
+
+	*bulk_size = remaining_size;
+
+	/* copy over the net type */
+	nid_descr->ud_net_id.udn_net_type = ioc_nid->iud_net.ud_net_type;
+
+	CDEBUG(D_NET, "%u\n", nid_descr->ud_net_id.udn_net_type);
+
+	/* allocate the total memory required to copy this NID descriptor */
+	alloc_size = (sizeof(struct cfs_expr_list) * (expr_count + 1)) +
+		     (sizeof(struct cfs_range_expr) * (range_count));
+	LIBCFS_ALLOC(buf, alloc_size);
+	if (!buf)
+		return -ENOMEM;
+
+	/* store the amount of memory allocated so we can free it later on */
+	nid_descr->ud_mem_size = alloc_size;
+
+	/* copy over the net number range */
+	range_count = ioc_nid->iud_net.ud_net_num_expr.le_count;
+	*bulk += sizeof(*ioc_nid);
+	CDEBUG(D_NET, "bulk = %p\n", *bulk);
+	copy_range_info(bulk, &buf, &nid_descr->ud_net_id.udn_net_num_range,
+			range_count);
+	CDEBUG(D_NET, "bulk = %p\n", *bulk);
+
+	/* copy over the NID descriptor */
+	for (i = 0; i < expr_count; i++) {
+		copy_range_info(bulk, &buf, &nid_descr->ud_addr_range, -1);
+		CDEBUG(D_NET, "bulk = %p\n", *bulk);
+	}
+
+	return 0;
+}
+
+int
+lnet_udsp_demarshal_add(void *bulk, __u32 bulk_size)
+{
+	struct lnet_ioctl_udsp *ioc_udsp;
+	struct lnet_udsp *udsp;
+	int rc = -ENOMEM;
+	int idx;
+
+	if (bulk_size < sizeof(*ioc_udsp))
+		return -ENOSPC;
+
+	udsp = lnet_udsp_alloc();
+	if (!udsp)
+		return rc;
+
+	ioc_udsp = bulk;
+
+	udsp->udsp_action_type = ioc_udsp->iou_action_type;
+	udsp->udsp_action.udsp_priority = ioc_udsp->iou_action.priority;
+	idx = ioc_udsp->iou_idx;
+
+	CDEBUG(D_NET, "demarshal descr %u:%u:%d:%u\n", udsp->udsp_action_type,
+	       udsp->udsp_action.udsp_priority, idx, bulk_size);
+
+	bulk += sizeof(*ioc_udsp);
+	bulk_size -= sizeof(*ioc_udsp);
+
+	rc = copy_ioc_udsp_descr(&udsp->udsp_src, "SRC", &bulk, &bulk_size);
+	if (rc < 0)
+		goto free_udsp;
+
+	rc = copy_ioc_udsp_descr(&udsp->udsp_dst, "DST", &bulk, &bulk_size);
+	if (rc < 0)
+		goto free_udsp;
+
+	rc = copy_ioc_udsp_descr(&udsp->udsp_rte, "RTE", &bulk, &bulk_size);
+	if (rc < 0)
+		goto free_udsp;
+
+	return lnet_udsp_add_policy(udsp, idx);
+
+free_udsp:
+	lnet_udsp_free(udsp);
 	return rc;
 }
