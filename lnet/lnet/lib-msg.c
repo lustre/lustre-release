@@ -516,6 +516,11 @@ lnet_handle_remote_failure(struct lnet_peer_ni *lpni)
 		return;
 
 	lnet_net_lock(0);
+	/* the mt could've shutdown and cleaned up the queues */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
+		lnet_net_unlock(0);
+		return;
+	}
 	lnet_handle_remote_failure_locked(lpni);
 	lnet_net_unlock(0);
 }
