@@ -175,7 +175,7 @@ srpc_init_server_rpc(struct srpc_server_rpc *rpc,
 		     struct srpc_buffer *buffer)
 {
 	memset(rpc, 0, sizeof(*rpc));
-	swi_init_workitem(&rpc->srpc_wi, rpc, srpc_handle_rpc,
+	swi_init_workitem(&rpc->srpc_wi, srpc_handle_rpc,
 			  srpc_serv_is_framework(scd->scd_svc) ?
 			  lst_sched_serial : lst_sched_test[scd->scd_cpt]);
 
@@ -278,7 +278,7 @@ srpc_service_init(struct srpc_service *svc)
 
 		/* NB: don't use lst_sched_serial for adding buffer,
 		 * see details in srpc_service_add_buffers() */
-		swi_init_workitem(&scd->scd_buf_wi, scd,
+		swi_init_workitem(&scd->scd_buf_wi,
 				  srpc_add_buffer, lst_sched_test[i]);
 
 		if (i != 0 && srpc_serv_is_framework(svc)) {
@@ -509,9 +509,9 @@ __must_hold(&scd->scd_lock)
 int
 srpc_add_buffer(struct swi_workitem *wi)
 {
-	struct srpc_service_cd	*scd = wi->swi_workitem.wi_data;
-	struct srpc_buffer	*buf;
-	int			rc = 0;
+	struct srpc_service_cd *scd = container_of(wi, struct srpc_service_cd, scd_buf_wi);
+	struct srpc_buffer *buf;
+	int rc = 0;
 
 	/* it's called by workitem scheduler threads, these threads
 	 * should have been set CPT affinity, so buffers will be posted
@@ -953,7 +953,7 @@ srpc_server_rpc_done(struct srpc_server_rpc *rpc, int status)
 /* handles an incoming RPC */
 static int srpc_handle_rpc(struct swi_workitem *wi)
 {
-	struct srpc_server_rpc	*rpc = wi->swi_workitem.wi_data;
+	struct srpc_server_rpc *rpc = container_of(wi, struct srpc_server_rpc, srpc_wi);
 	struct srpc_service_cd	*scd = rpc->srpc_scd;
 	struct srpc_service	*sv = scd->scd_svc;
 	struct srpc_event *ev = &rpc->srpc_ev;
@@ -1173,7 +1173,7 @@ srpc_send_rpc(struct swi_workitem *wi)
 
 	LASSERT(wi != NULL);
 
-	rpc = wi->swi_workitem.wi_data;
+	rpc = container_of(wi, struct srpc_client_rpc, crpc_wi);
 
         LASSERT (rpc != NULL);
         LASSERT (wi == &rpc->crpc_wi);

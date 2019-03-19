@@ -957,7 +957,7 @@ sfw_create_test_rpc(struct sfw_test_unit *tsu, struct lnet_process_id peer,
 static int
 sfw_run_test(struct swi_workitem *wi)
 {
-	struct sfw_test_unit *tsu = wi->swi_workitem.wi_data;
+	struct sfw_test_unit *tsu = container_of(wi, struct sfw_test_unit, tsu_worker);
 	struct sfw_test_instance *tsi = tsu->tsu_instance;
 	struct srpc_client_rpc *rpc = NULL;
 
@@ -1029,10 +1029,8 @@ sfw_run_batch(struct sfw_batch *tsb)
 			atomic_inc(&tsi->tsi_nactive);
 			tsu->tsu_loop = tsi->tsi_loop;
 			wi = &tsu->tsu_worker;
-			swi_init_workitem(wi, tsu, sfw_run_test,
-					  lst_sched_test[\
-					  lnet_cpt_of_nid(tsu->tsu_dest.nid,
-							  NULL)]);
+			swi_init_workitem(wi, sfw_run_test,
+					  lst_sched_test[lnet_cpt_of_nid(tsu->tsu_dest.nid, NULL)]);
 			swi_schedule_workitem(wi);
 		}
 	}
