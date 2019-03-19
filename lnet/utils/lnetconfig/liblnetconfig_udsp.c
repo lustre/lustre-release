@@ -1,0 +1,276 @@
+/*
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+ *
+ * Copyright (c) 2011, 2017, Intel Corporation.
+ *
+ * Copyright (c) 2018-2020 Data Direct Networks.
+ *
+ *   This file is part of Lustre, https://wiki.whamcloud.com/
+ *
+ *   Portals is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Portals is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   version 2 along with this program; If not, see
+ *   http://www.gnu.org/licenses/gpl-2.0.html
+ *
+ * Author: Sonia Sharma
+ */
+/*
+ * Copyright (c) 2020, Whamcloud.
+ *
+ */
+
+#include <errno.h>
+#include <limits.h>
+#include <byteswap.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <libcfs/util/ioctl.h>
+#include <linux/lnet/lnetctl.h>
+#include "liblnd.h"
+#include <sys/types.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include "liblnetconfig.h"
+
+static inline bool
+lnet_udsp_criteria_present(struct lnet_ud_nid_descr *descr)
+{
+	return descr->ud_net_id.udn_net_type != 0;
+}
+
+struct lnet_udsp *lnet_udsp_alloc(void)
+{
+	struct lnet_udsp *udsp;
+
+	udsp = calloc(1, sizeof(*udsp));
+
+	if (!udsp)
+		return NULL;
+
+	INIT_LIST_HEAD(&udsp->udsp_on_list);
+	INIT_LIST_HEAD(&udsp->udsp_src.ud_addr_range);
+	INIT_LIST_HEAD(&udsp->udsp_src.ud_net_id.udn_net_num_range);
+	INIT_LIST_HEAD(&udsp->udsp_dst.ud_addr_range);
+	INIT_LIST_HEAD(&udsp->udsp_dst.ud_net_id.udn_net_num_range);
+	INIT_LIST_HEAD(&udsp->udsp_rte.ud_addr_range);
+	INIT_LIST_HEAD(&udsp->udsp_rte.ud_net_id.udn_net_num_range);
+
+	return udsp;
+}
+
+static void
+lnet_udsp_nid_descr_free(struct lnet_ud_nid_descr *nid_descr, bool blk)
+{
+	struct list_head *net_range = &nid_descr->ud_net_id.udn_net_num_range;
+
+	if (!lnet_udsp_criteria_present(nid_descr))
+		return;
+
+	/* memory management is a bit tricky here. When we allocate the
+	 * memory to store the NID descriptor we allocate a large buffer
+	 * for all the data, so we need to free the entire buffer at
+	 * once. If the net is present the net_range->next points to that
+	 * buffer otherwise if the ud_addr_range is present then it's the
+	 * ud_addr_range.next
+	 */
+	if (blk) {
+		if (!list_empty(net_range))
+			free(net_range->next);
+		else if (!list_empty(&nid_descr->ud_addr_range))
+			free(nid_descr->ud_addr_range.next);
+	} else {
+		cfs_expr_list_free_list(net_range);
+		cfs_expr_list_free_list(&nid_descr->ud_addr_range);
+	}
+}
+
+void
+lnet_udsp_free(struct lnet_udsp *udsp, bool blk)
+{
+	lnet_udsp_nid_descr_free(&udsp->udsp_src, blk);
+	lnet_udsp_nid_descr_free(&udsp->udsp_dst, blk);
+	lnet_udsp_nid_descr_free(&udsp->udsp_rte, blk);
+
+	free(udsp);
+}
+
+static void
+copy_range_info(void __user **bulk, void **buf, struct list_head *list,
+		int count)
+{
+	struct lnet_range_expr *range_expr;
+	struct cfs_range_expr *range;
+	struct cfs_expr_list *exprs;
+	int range_count = count;
+	int i;
+
+	if (range_count == 0)
+		return;
+
+	if (range_count == -1) {
+		struct lnet_expressions *e;
+
+		e = *bulk;
+		range_count = e->le_count;
+		*bulk += sizeof(*e);
+	}
+
+	exprs = *buf;
+	INIT_LIST_HEAD(&exprs->el_link);
+	INIT_LIST_HEAD(&exprs->el_exprs);
+	list_add_tail(&exprs->el_link, list);
+	*buf += sizeof(*exprs);
+
+	for (i = 0; i < range_count; i++) {
+		range_expr = *bulk;
+		range = *buf;
+		INIT_LIST_HEAD(&range->re_link);
+		range->re_lo = range_expr->re_lo;
+		range->re_hi = range_expr->re_hi;
+		range->re_stride = range_expr->re_stride;
+		list_add_tail(&range->re_link, &exprs->el_exprs);
+		*bulk += sizeof(*range_expr);
+		*buf += sizeof(*range);
+	}
+}
+
+static int
+copy_ioc_udsp_descr(struct lnet_ud_nid_descr *nid_descr, char *type,
+		    void **bulk, __u32 *bulk_size)
+{
+	struct lnet_ioctl_udsp_descr *ioc_nid = *bulk;
+	struct lnet_expressions *exprs;
+	__u32 descr_type;
+	int expr_count = 0;
+	int range_count = 0;
+	int i;
+	__u32 size;
+	int remaining_size = *bulk_size;
+	void *tmp = *bulk;
+	__u32 alloc_size;
+	void *buf;
+	size_t range_expr_s = sizeof(struct lnet_range_expr);
+	size_t lnet_exprs_s = sizeof(struct lnet_expressions);
+
+	/* criteria not present, skip over the static part of the
+	 * bulk, which is included for each NID descriptor
+	 */
+	if (ioc_nid->iud_net.ud_net_type == 0) {
+		remaining_size -= sizeof(*ioc_nid);
+		if (remaining_size < 0)
+			return -EINVAL;
+		*bulk += sizeof(*ioc_nid);
+		*bulk_size = remaining_size;
+		return 0;
+	}
+
+	descr_type = ioc_nid->iud_src_hdr.ud_descr_type;
+	if (descr_type != *(__u32 *)type)
+		return -EINVAL;
+
+	/* calculate the total size to verify we have enough buffer.
+	 * Start of by finding how many ranges there are for the net
+	 * expression.
+	 */
+	range_count = ioc_nid->iud_net.ud_net_num_expr.le_count;
+	size = sizeof(*ioc_nid) + (range_count * range_expr_s);
+	remaining_size -= size;
+	if (remaining_size < 0)
+		return -EINVAL;
+
+	/* the number of expressions for the NID. IE 4 for IP, 1 for GNI */
+	expr_count = ioc_nid->iud_src_hdr.ud_descr_count;
+	/* point tmp to the beginning of the NID expressions */
+	tmp += size;
+	for (i = 0; i < expr_count; i++) {
+		/* get the number of ranges per expression */
+		exprs = tmp;
+		range_count += exprs->le_count;
+		size = (range_expr_s * exprs->le_count) + lnet_exprs_s;
+		remaining_size -= size;
+		if (remaining_size < 0)
+			return -EINVAL;
+		tmp += size;
+	}
+
+	*bulk_size = remaining_size;
+
+	/* copy over the net type */
+	nid_descr->ud_net_id.udn_net_type = ioc_nid->iud_net.ud_net_type;
+
+	/* allocate the total memory required to copy this NID descriptor */
+	alloc_size = (sizeof(struct cfs_expr_list) * (expr_count + 1)) +
+		     (sizeof(struct cfs_range_expr) * (range_count));
+	buf = calloc(alloc_size, 1);
+	if (!buf)
+		return -ENOMEM;
+
+	/* copy over the net number range */
+	range_count = ioc_nid->iud_net.ud_net_num_expr.le_count;
+	*bulk += sizeof(*ioc_nid);
+	copy_range_info(bulk, &buf, &nid_descr->ud_net_id.udn_net_num_range,
+			range_count);
+
+	/* copy over the NID descriptor */
+	for (i = 0; i < expr_count; i++)
+		copy_range_info(bulk, &buf, &nid_descr->ud_addr_range, -1);
+
+	return 0;
+}
+
+struct lnet_udsp *
+lnet_udsp_demarshal(void *bulk, __u32 bulk_size)
+{
+	struct lnet_ioctl_udsp *ioc_udsp;
+	struct lnet_udsp *udsp;
+	int rc = -ENOMEM;
+
+	if (bulk_size < sizeof(*ioc_udsp))
+		return NULL;
+
+	udsp = lnet_udsp_alloc();
+	if (!udsp)
+		return NULL;
+
+	ioc_udsp = bulk;
+
+	udsp->udsp_action_type = ioc_udsp->iou_action_type;
+	udsp->udsp_action.udsp_priority = ioc_udsp->iou_action.priority;
+	udsp->udsp_idx = ioc_udsp->iou_idx;
+
+	bulk = ioc_udsp->iou_bulk;
+	bulk_size -= sizeof(*ioc_udsp);
+
+	if (bulk_size != ioc_udsp->iou_bulk_size)
+		goto failed;
+
+	rc = copy_ioc_udsp_descr(&udsp->udsp_src, "SRC", &bulk, &bulk_size);
+	if (rc < 0)
+		goto failed;
+
+	rc = copy_ioc_udsp_descr(&udsp->udsp_dst, "DST", &bulk, &bulk_size);
+	if (rc < 0)
+		goto failed;
+
+	rc = copy_ioc_udsp_descr(&udsp->udsp_rte, "RTE", &bulk, &bulk_size);
+	if (rc < 0)
+		goto failed;
+
+	return udsp;
+
+failed:
+	lnet_udsp_free(udsp, true);
+	return NULL;
+}
