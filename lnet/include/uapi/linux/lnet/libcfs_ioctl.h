@@ -149,7 +149,8 @@ struct libcfs_ioctl_data {
 #define IOC_LIBCFS_SET_HEALHV		   _IOWR(IOC_LIBCFS_TYPE, 102, IOCTL_CONFIG_SIZE)
 #define IOC_LIBCFS_GET_LOCAL_HSTATS	   _IOWR(IOC_LIBCFS_TYPE, 103, IOCTL_CONFIG_SIZE)
 #define IOC_LIBCFS_GET_RECOVERY_QUEUE	   _IOWR(IOC_LIBCFS_TYPE, 104, IOCTL_CONFIG_SIZE)
-#define IOC_LIBCFS_MAX_NR					  104
+#define IOC_LIBCFS_ADD_UDSP		   _IOWR(IOC_LIBCFS_TYPE, 105, IOCTL_CONFIG_SIZE)
+#define IOC_LIBCFS_MAX_NR					  105
 
 extern int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
