@@ -274,3 +274,172 @@ failed:
 	lnet_udsp_free(udsp, true);
 	return NULL;
 }
+
+static inline int
+lnet_get_list_len(struct list_head *list)
+{
+	struct list_head *l;
+	int count = 0;
+
+	list_for_each(l, list)
+		count++;
+
+	return count;
+}
+
+static size_t
+lnet_size_marshaled_nid_descr(struct lnet_ud_nid_descr *descr)
+{
+	struct cfs_expr_list *expr;
+	int expr_count = 0;
+	int range_count = 0;
+	size_t size = sizeof(struct lnet_ioctl_udsp_descr);
+
+	if (!lnet_udsp_criteria_present(descr))
+		return size;
+
+	if (!list_empty(&descr->ud_net_id.udn_net_num_range)) {
+		expr = list_entry(descr->ud_net_id.udn_net_num_range.next,
+				  struct cfs_expr_list, el_link);
+		range_count = lnet_get_list_len(&expr->el_exprs);
+	}
+
+	/* count the number of cfs_range_expr in the address expressions */
+	list_for_each_entry(expr, &descr->ud_addr_range, el_link) {
+		expr_count++;
+		range_count += lnet_get_list_len(&expr->el_exprs);
+	}
+
+	size += (sizeof(struct lnet_expressions) * expr_count);
+	size += (sizeof(struct lnet_range_expr) * range_count);
+
+	return size;
+}
+
+size_t
+lnet_get_udsp_size(struct lnet_udsp *udsp)
+{
+	size_t size = sizeof(struct lnet_ioctl_udsp);
+
+	size += lnet_size_marshaled_nid_descr(&udsp->udsp_src);
+	size += lnet_size_marshaled_nid_descr(&udsp->udsp_dst);
+	size += lnet_size_marshaled_nid_descr(&udsp->udsp_rte);
+
+	return size;
+}
+
+static void
+copy_exprs(struct cfs_expr_list *expr, void __user **bulk,
+	   __s32 *bulk_size)
+{
+	struct cfs_range_expr *range;
+	struct lnet_range_expr range_expr;
+
+	/* copy over the net range expressions to the bulk */
+	list_for_each_entry(range, &expr->el_exprs, re_link) {
+		range_expr.re_lo = range->re_lo;
+		range_expr.re_hi = range->re_hi;
+		range_expr.re_stride = range->re_stride;
+		memcpy(*bulk, &range_expr, sizeof(range_expr));
+		*bulk += sizeof(range_expr);
+		*bulk_size -= sizeof(range_expr);
+	}
+}
+
+static int
+copy_nid_range(struct lnet_ud_nid_descr *nid_descr, char *type,
+		void __user **bulk, __s32 *bulk_size)
+{
+	struct lnet_ioctl_udsp_descr ioc_udsp_descr = { { 0 } };
+	struct cfs_expr_list *expr;
+	struct lnet_expressions ioc_expr;
+	int expr_count;
+	int net_expr_count = 0;
+
+	ioc_udsp_descr.iud_src_hdr.ud_descr_type = *(__u32 *)type;
+
+	/* if criteria not present, copy over the static part of the NID
+	 * descriptor
+	 */
+	if (!lnet_udsp_criteria_present(nid_descr)) {
+		memcpy(*bulk, &ioc_udsp_descr,
+			sizeof(ioc_udsp_descr));
+		*bulk += sizeof(ioc_udsp_descr);
+		*bulk_size -= sizeof(ioc_udsp_descr);
+		return 0;
+	}
+
+	expr_count = lnet_get_list_len(&nid_descr->ud_addr_range);
+
+	/* copy the net information */
+	if (!list_empty(&nid_descr->ud_net_id.udn_net_num_range)) {
+		expr = list_entry(nid_descr->ud_net_id.udn_net_num_range.next,
+				  struct cfs_expr_list, el_link);
+		net_expr_count = lnet_get_list_len(&expr->el_exprs);
+	} else {
+		net_expr_count = 0;
+	}
+
+	/* set the total expression count */
+	ioc_udsp_descr.iud_src_hdr.ud_descr_count = expr_count;
+	ioc_udsp_descr.iud_net.ud_net_type =
+		nid_descr->ud_net_id.udn_net_type;
+	ioc_udsp_descr.iud_net.ud_net_num_expr.le_count = net_expr_count;
+
+	/* copy over the header info to the bulk */
+	memcpy(*bulk, &ioc_udsp_descr, sizeof(ioc_udsp_descr));
+	*bulk += sizeof(ioc_udsp_descr);
+	*bulk_size -= sizeof(ioc_udsp_descr);
+
+	/* copy over the net num expression if it exists */
+	if (net_expr_count)
+		copy_exprs(expr, bulk, bulk_size);
+
+	/* copy the address range */
+	list_for_each_entry(expr, &nid_descr->ud_addr_range, el_link) {
+		ioc_expr.le_count = lnet_get_list_len(&expr->el_exprs);
+		memcpy(*bulk, &ioc_expr, sizeof(ioc_expr));
+		*bulk += sizeof(ioc_expr);
+		*bulk_size -= sizeof(ioc_expr);
+
+		copy_exprs(expr, bulk, bulk_size);
+	}
+
+	return 0;
+}
+
+int
+lnet_udsp_marshal(struct lnet_udsp *udsp, void *bulk,
+		  __s32 bulk_size)
+{
+	struct lnet_ioctl_udsp *ioc_udsp;
+	int rc = -ENOMEM;
+
+	/* make sure user space allocated enough buffer to marshal the
+	 * udsp
+	 */
+	if (bulk_size < lnet_get_udsp_size(udsp))
+		return -EINVAL;
+
+	ioc_udsp = bulk;
+
+	ioc_udsp->iou_idx = udsp->udsp_idx;
+	ioc_udsp->iou_action_type = udsp->udsp_action_type;
+	ioc_udsp->iou_action.priority = udsp->udsp_action.udsp_priority;
+
+	bulk += sizeof(*ioc_udsp);
+	bulk_size -= sizeof(*ioc_udsp);
+
+	rc = copy_nid_range(&udsp->udsp_src, "SRC", &bulk, &bulk_size);
+	if (rc != 0)
+		return rc;
+
+	rc = copy_nid_range(&udsp->udsp_dst, "DST", &bulk, &bulk_size);
+	if (rc != 0)
+		return rc;
+
+	rc = copy_nid_range(&udsp->udsp_rte, "RTE", &bulk, &bulk_size);
+
+	return rc;
+}
+
