@@ -480,6 +480,7 @@ struct ll_ioc_lease_id {
 #define LL_IOC_LMV_SETSTRIPE		_IOWR('f', 240, struct lmv_user_md)
 #define LL_IOC_LMV_GETSTRIPE		_IOWR('f', 241, struct lmv_user_md)
 #define LL_IOC_REMOVE_ENTRY		_IOWR('f', 242, __u64)
+#define LL_IOC_RMFID			_IOR('f', 242, struct fid_array)
 #define LL_IOC_SET_LEASE		_IOWR('f', 243, struct ll_ioc_lease)
 #define LL_IOC_SET_LEASE_OLD		_IOWR('f', 243, long)
 #define LL_IOC_GET_LEASE		_IO('f', 244)
@@ -2404,6 +2405,15 @@ struct lu_pcc_state {
 	__u32	pccs_padding;
 	char	pccs_path[PATH_MAX];
 };
+
+struct fid_array {
+	__u32 fa_nr;
+	/* make header's size equal lu_fid */
+	__u32 fa_padding0;
+	__u64 fa_padding1;
+	struct lu_fid fa_fids[0];
+};
+#define OBD_MAX_FIDS_IN_ARRAY	4096
 
 #if defined(__cplusplus)
 }

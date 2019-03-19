@@ -337,6 +337,21 @@ static const struct req_msg_field *mdt_swap_layouts[] = {
 	&RMF_DLM_REQ
 };
 
+static const struct req_msg_field *mds_rmfid_client[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_FID_ARRAY,
+	&RMF_CAPA1,
+	&RMF_CAPA2,
+};
+
+static const struct req_msg_field *mds_rmfid_server[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_FID_ARRAY,
+	&RMF_RCS,
+};
+
 static const struct req_msg_field *obd_connect_client[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_TGTUUID,
@@ -784,6 +799,7 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_ACTION,
 	&RQF_MDS_HSM_REQUEST,
 	&RQF_MDS_SWAP_LAYOUTS,
+	&RQF_MDS_RMFID,
 	&RQF_OUT_UPDATE,
 	&RQF_OST_CONNECT,
 	&RQF_OST_DISCONNECT,
@@ -993,6 +1009,10 @@ EXPORT_SYMBOL(RMF_SETINFO_KEY);
 struct req_msg_field RMF_NAME =
         DEFINE_MSGF("name", RMF_F_STRING, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_NAME);
+
+struct req_msg_field RMF_FID_ARRAY =
+	DEFINE_MSGF("fid_array", 0, -1, NULL, NULL);
+EXPORT_SYMBOL(RMF_FID_ARRAY);
 
 struct req_msg_field RMF_SYMTGT =
         DEFINE_MSGF("symtgt", RMF_F_STRING, -1, NULL, NULL);
@@ -1621,6 +1641,11 @@ struct req_format RQF_MDS_SWAP_LAYOUTS =
 	DEFINE_REQ_FMT0("MDS_SWAP_LAYOUTS",
 			mdt_swap_layouts, empty);
 EXPORT_SYMBOL(RQF_MDS_SWAP_LAYOUTS);
+
+struct req_format RQF_MDS_RMFID =
+	DEFINE_REQ_FMT0("MDS_RMFID", mds_rmfid_client,
+			mds_rmfid_server);
+EXPORT_SYMBOL(RQF_MDS_RMFID);
 
 struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_CREATE",

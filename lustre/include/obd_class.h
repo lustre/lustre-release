@@ -1783,6 +1783,18 @@ static inline int md_unpackmd(struct obd_export *exp,
 	return MDP(exp->exp_obd, unpackmd)(exp, plsm, lmm, lmm_size);
 }
 
+static inline int md_rmfid(struct obd_export *exp, struct fid_array *fa,
+			   int *rcs, struct ptlrpc_request_set *set)
+{
+	int rc;
+
+	rc = exp_check_ops(exp);
+	if (rc)
+		return rc;
+
+	return MDP(exp->exp_obd, rmfid)(exp, fa, rcs, set);
+}
+
 /* OBD Metadata Support */
 
 extern int obd_init_caches(void);

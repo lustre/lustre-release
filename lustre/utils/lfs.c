@@ -103,6 +103,7 @@ static int lfs_changelog(int argc, char **argv);
 static int lfs_changelog_clear(int argc, char **argv);
 static int lfs_fid2path(int argc, char **argv);
 static int lfs_path2fid(int argc, char **argv);
+static int lfs_rmfid(int argc, char **argv);
 static int lfs_data_version(int argc, char **argv);
 static int lfs_hsm_state(int argc, char **argv);
 static int lfs_hsm_set(int argc, char **argv);
@@ -557,6 +558,8 @@ command_t cmdlist[] = {
 		/* [ --rec <recno> ] */ },
 	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
 	 "usage: path2fid [--parents] <path> ..."},
+	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"
+	 "usage: rmfid <fsname|rootpath> <fid> ..."},
 	{"data_version", lfs_data_version, 0, "Display file data version for "
 	 "a given path.\n" "usage: data_version -[n|r|w] <path>"},
 	{"hsm_state", lfs_hsm_state, 0, "Display the HSM information (states, "
@@ -7696,6 +7699,85 @@ static int lfs_path2fid(int argc, char **argv)
 				errno = -err;
 			}
 		}
+	}
+
+	return rc;
+}
+
+#define MAX_ERRNO	4095
+#define IS_ERR_VALUE(x) ((unsigned long)(x) >= (unsigned long)-MAX_ERRNO)
+
+static int lfs_rmfid_and_show_errors(const char *device, struct fid_array *fa)
+{
+	int rc, rc2 = 0, k;
+
+	rc = llapi_rmfid(device, fa);
+	if (rc) {
+		fprintf(stderr, "rmfid(): rc = %d\n", rc);
+		return rc;
+	}
+
+	for (k = 0; k < fa->fa_nr; k++) {
+		rc = (__s32)fa->fa_fids[k].f_ver;
+		if (!IS_ERR_VALUE(rc))
+			continue;
+		if (!rc2 && rc)
+			rc2 = rc;
+		if (!rc)
+			continue;
+		fa->fa_fids[k].f_ver = 0;
+		fprintf(stderr, "rmfid("DFID"): rc = %d\n",
+			PFID(&fa->fa_fids[k]), rc);
+	}
+
+	return rc2;
+}
+
+static int lfs_rmfid(int argc, char **argv)
+{
+	char *fidstr, *device;
+	int rc = 0, rc2, nr;
+	struct fid_array *fa;
+
+	if (optind > argc - 1) {
+		fprintf(stderr, "%s rmfid: missing dirname\n", progname);
+		return CMD_HELP;
+	}
+
+	device = argv[optind++];
+
+	nr = argc - optind;
+	fa = malloc(offsetof(struct fid_array, fa_fids[nr + 1]));
+	if (fa == NULL)
+		return -ENOMEM;
+
+	fa->fa_nr = 0;
+	rc = 0;
+	while (optind < argc) {
+		int found;
+
+		fidstr = argv[optind++];
+		while (*fidstr == '[')
+			fidstr++;
+		found = sscanf(fidstr, SFID, RFID(&fa->fa_fids[fa->fa_nr]));
+		if (found != 3) {
+			fprintf(stderr, "unrecognized FID: %s\n",
+				argv[optind - 1]);
+			exit(1);
+		}
+		fa->fa_nr++;
+		if (fa->fa_nr == OBD_MAX_FIDS_IN_ARRAY) {
+			/* start another batch */
+			rc2 = lfs_rmfid_and_show_errors(device, fa);
+			if (rc2 && !rc)
+				rc = rc2;
+			fa->fa_nr = 0;
+		}
+	}
+	if (fa->fa_nr) {
+		rc2 = lfs_rmfid_and_show_errors(device, fa);
+		if (rc2 && !rc)
+			rc = rc2;
 	}
 
 	return rc;

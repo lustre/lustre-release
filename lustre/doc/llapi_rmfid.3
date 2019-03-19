@@ -1,0 +1,50 @@
+.TH llapi_rmfid 3 "2014 Oct 13" "Lustre User API"
+.SH NAME
+llapi_rmfid \- Remove files by their FIDs in Lustre.
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_rmfid(const char *" path ", struct fid_array *" fa ");
+
+.sp
+.fi
+.SH DESCRIPTION
+.PP
+.BR llapi_rmfid()
+tries to remove
+.I fa->fa_nr
+Lustre files by FIDs stored in
+.I fa->fa_fids
+All file's hardlinks are subject to removal. This functionality is available
+only for root or regular users on filesystems mounted with
+.I user_fid2path
+mount option to delete files that they own and are in a directory in which
+they have write permission.
+
+.SH RETURN VALUES
+.LP
+.B llapi_rmfid()
+return 0 on success or a negative errno value on failure. Result for each file
+is stored in the corresponding
+.I fa->fa_fid[N].f_ver
+.SH ERRORS
+.TP 15
+.TP
+.SM -ENOENT
+.I file
+does not exist.
+.TP
+.SM -EBUSY
+file is open and can't be removed
+.TP
+.SM -EPERM
+The file cannot be open by user or CAP_DAC_READ_SEARCH is not granted.
+.TP
+.SM -EINVAL
+Invalid FID is passed
+.TP
+.SM -ENOMEM
+Not enough memory to process the request
+.SH "SEE ALSO"
+.BR lustreapi (7)

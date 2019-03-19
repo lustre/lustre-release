@@ -926,6 +926,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *lh,
 			    __u64 flags, int result);
 
+int hsm_init_ucred(struct lu_ucred *uc);
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 		     const struct md_hsm *mh);
 

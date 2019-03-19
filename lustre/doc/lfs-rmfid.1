@@ -1,0 +1,25 @@
+.TH LFS-RMFID 1 2017-07-25 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs rmfid \- remove file by FID
+.SH SYNOPSIS
+.B lfs rmfid
+<\fIdirectory\fR> <\fIFID1\fR> [<\fIFID2\fR>...]
+.SH DESCRIPTION
+This command removes file(s) specified by the \fIFID\fR.
+.br
+In some cases it is more optimal to remove files by their FIDs.
+The \fBdirectory\fR specifies a mountpoint of Lustre filesystem where given
+\fBFIDs\fR are stored. The mountpoint should be mounted with
+\fBuser_fid2path\fR mount option and the caller has to have a right to
+modify the given files. rmfid will be trying to remove all hardlinks of the
+given file. FIDs can be wrapped with square brackets.
+.SH EXAMPLES
+.TP
+.B lfs rmfid /mnt/lustre [0x200000400:0x1:0x0] [0x200000402:0x20:0x0]
+Remove files with FIDs [0x200000400:0x1:0x0] [0x200000402:0x20:0x0]
+.SH AUTHOR
+The \fBlfs rmfid\fR command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-path2fid (1),
+.BR lfs-fid2path (1)
