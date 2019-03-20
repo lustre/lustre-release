@@ -1130,6 +1130,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 	INIT_LIST_HEAD(&the_lnet.ln_mt_localNIRecovq);
 	INIT_LIST_HEAD(&the_lnet.ln_mt_peerNIRecovq);
 	init_waitqueue_head(&the_lnet.ln_dc_waitq);
+	LNetInvalidateEQHandle(&the_lnet.ln_mt_eqh);
 
 	rc = lnet_descriptor_setup();
 	if (rc != 0)
@@ -1198,6 +1199,8 @@ lnet_prepare(lnet_pid_t requested_pid)
 static int
 lnet_unprepare (void)
 {
+	int rc;
+
 	/* NB no LNET_LOCK since this is the last reference.  All LND instances
 	 * have shut down already, so it is safe to unlink and free all
 	 * descriptors, even those that appear committed to a network op (eg MD
@@ -1208,6 +1211,12 @@ lnet_unprepare (void)
 	LASSERT(the_lnet.ln_refcount == 0);
 	LASSERT(list_empty(&the_lnet.ln_test_peers));
 	LASSERT(list_empty(&the_lnet.ln_nets));
+
+	if (!LNetEQHandleIsInvalid(the_lnet.ln_mt_eqh)) {
+		rc = LNetEQFree(the_lnet.ln_mt_eqh);
+		LNetInvalidateEQHandle(&the_lnet.ln_mt_eqh);
+		LASSERT(rc == 0);
+	}
 
 	lnet_portals_destroy();
 
@@ -2585,6 +2594,12 @@ LNetNIInit(lnet_pid_t requested_pid)
 		goto err_acceptor_stop;
 
 	lnet_ping_target_update(pbuf, ping_mdh);
+
+	rc = LNetEQAlloc(0, lnet_mt_event_handler, &the_lnet.ln_mt_eqh);
+	if (rc != 0) {
+		CERROR("Can't allocate monitor thread EQ: %d\n", rc);
+		goto err_stop_ping;
+	}
 
 	rc = lnet_monitor_thr_start();
 	if (rc != 0)

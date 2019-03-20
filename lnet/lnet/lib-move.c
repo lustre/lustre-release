@@ -3521,7 +3521,7 @@ lnet_handle_recovery_reply(struct lnet_mt_event_info *ev_info,
 	}
 }
 
-static void
+void
 lnet_mt_event_handler(struct lnet_event *event)
 {
 	struct lnet_mt_event_info *ev_info = event->md.user_ptr;
@@ -3599,12 +3599,6 @@ int lnet_monitor_thr_start(void)
 	if (rc)
 		goto clean_queues;
 
-	rc = LNetEQAlloc(0, lnet_mt_event_handler, &the_lnet.ln_mt_eqh);
-	if (rc != 0) {
-		CERROR("Can't allocate monitor thread EQ: %d\n", rc);
-		goto clean_queues;
-	}
-
 	/* Pre monitor thread start processing */
 	rc = lnet_router_pre_mt_start();
 	if (rc)
@@ -3643,7 +3637,6 @@ free_mem:
 	lnet_clean_local_ni_recoveryq();
 	lnet_clean_peer_ni_recoveryq();
 	lnet_clean_resendqs();
-	LNetEQFree(the_lnet.ln_mt_eqh);
 	LNetInvalidateEQHandle(&the_lnet.ln_mt_eqh);
 	return rc;
 clean_queues:
@@ -3656,8 +3649,6 @@ clean_queues:
 
 void lnet_monitor_thr_stop(void)
 {
-	int rc;
-
 	if (the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN)
 		return;
 
@@ -3679,8 +3670,7 @@ void lnet_monitor_thr_stop(void)
 	lnet_clean_local_ni_recoveryq();
 	lnet_clean_peer_ni_recoveryq();
 	lnet_clean_resendqs();
-	rc = LNetEQFree(the_lnet.ln_mt_eqh);
-	LASSERT(rc == 0);
+
 	return;
 }
 
