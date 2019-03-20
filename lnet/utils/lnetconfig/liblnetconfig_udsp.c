@@ -42,6 +42,7 @@
 #include <sys/types.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <linux/lnet/lnet-dlc.h>
 #include "liblnetconfig.h"
 
 static inline bool
@@ -408,7 +409,7 @@ copy_nid_range(struct lnet_ud_nid_descr *nid_descr, char *type,
 	return 0;
 }
 
-int
+static int
 lnet_udsp_marshal(struct lnet_udsp *udsp, void *bulk,
 		  __s32 bulk_size)
 {
@@ -443,3 +444,151 @@ lnet_udsp_marshal(struct lnet_udsp *udsp, void *bulk,
 	return rc;
 }
 
+static enum lnet_udsp_action_type
+lnet_str2udsp_action(char *type)
+{
+	if (!type)
+		return EN_LNET_UDSP_ACTION_NONE;
+
+	if (!strncmp(type, "priority", strlen("priority")))
+		return EN_LNET_UDSP_ACTION_PRIORITY;
+
+	if (!strncmp(type, "pref", strlen("pref")))
+		return EN_LNET_UDSP_ACTION_PREFERRED_LIST;
+
+	return EN_LNET_UDSP_ACTION_NONE;
+}
+
+int lustre_lnet_add_udsp(char *src, char *dst, char *rte,
+			 char *type, union lnet_udsp_action *action,
+			 int idx, int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_udsp *udsp = NULL;
+	struct lnet_ioctl_udsp *udsp_bulk;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	void *bulk = NULL;
+	__u32 bulk_size;
+	char err_str[LNET_MAX_STR_LEN];
+	enum lnet_udsp_action_type action_type;
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	action_type = lnet_str2udsp_action(type);
+	if (action_type == EN_LNET_UDSP_ACTION_NONE) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"bad action type specified: %s\"", type);
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	/* sanitize parameters:
+	 * src-dst can be simultaneously present
+	 * dst-rte can be simultaneously present
+	 */
+	if ((!src && !rte && !dst) ||
+	    (src && rte && dst) ||
+	    (src && rte && !dst)) {
+		snprintf(err_str, sizeof(err_str),
+		  "\"The combination of src, dst and rte is not supported\"");
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	udsp = lnet_udsp_alloc();
+	if (!udsp) {
+		snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+		goto out;
+	}
+
+	udsp->udsp_idx = idx;
+	udsp->udsp_action_type = action_type;
+
+	/* a priority of -1 will result in the lowest possible priority */
+	if (action_type == EN_LNET_UDSP_ACTION_PRIORITY)
+		udsp->udsp_action.udsp_priority = action->udsp_priority;
+
+	 /* override with the default
+	  * if priority is expected, but not specified
+	  */
+	if (!rte && ((dst && !src) || (src && !dst)) &&
+	     action_type != EN_LNET_UDSP_ACTION_PRIORITY) {
+		udsp->udsp_action_type = EN_LNET_UDSP_ACTION_PRIORITY;
+		udsp->udsp_action.udsp_priority = 0;
+	}
+
+	if (src) {
+		rc = cfs_parse_nid_parts(src, &udsp->udsp_src.ud_addr_range,
+				&udsp->udsp_src.ud_net_id.udn_net_num_range,
+				&udsp->udsp_src.ud_net_id.udn_net_type);
+		if (rc < 0) {
+			snprintf(err_str,
+				 sizeof(err_str),
+				 "\failed to parse src parameter\"");
+			goto out;
+		}
+	}
+	if (dst) {
+		rc = cfs_parse_nid_parts(dst, &udsp->udsp_dst.ud_addr_range,
+				&udsp->udsp_dst.ud_net_id.udn_net_num_range,
+				&udsp->udsp_dst.ud_net_id.udn_net_type);
+		if (rc < 0) {
+			snprintf(err_str,
+				 sizeof(err_str),
+				 "\failed to parse dst parameter\"");
+			goto out;
+		}
+	}
+	if (rte) {
+		rc = cfs_parse_nid_parts(rte, &udsp->udsp_rte.ud_addr_range,
+				&udsp->udsp_rte.ud_net_id.udn_net_num_range,
+				&udsp->udsp_rte.ud_net_id.udn_net_type);
+		if (rc < 0) {
+			snprintf(err_str,
+				 sizeof(err_str),
+				 "\failed to parse rte parameter\"");
+			goto out;
+		}
+	}
+
+	bulk_size = lnet_get_udsp_size(udsp);
+	bulk = calloc(1, bulk_size);
+	if (!bulk) {
+		rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+		snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+		goto out;
+	}
+
+	udsp_bulk = bulk;
+	LIBCFS_IOC_INIT_V2(*udsp_bulk, iou_hdr);
+	udsp_bulk->iou_hdr.ioc_len = bulk_size;
+	udsp_bulk->iou_bulk_size = bulk_size - sizeof(*udsp_bulk);
+
+	rc = lnet_udsp_marshal(udsp, bulk, bulk_size);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		rc = LUSTRE_CFG_RC_MARSHAL_FAIL;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"failed to marshal udsp\"");
+		goto out;
+	}
+
+	udsp_bulk->iou_bulk = bulk + sizeof(*udsp_bulk);
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_UDSP, bulk);
+	if (rc < 0) {
+		rc = errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot add udsp: %s\"", strerror(errno));
+		goto out;
+	}
+
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
+out:
+	if (bulk)
+		free(bulk);
+	if (udsp)
+		lnet_udsp_free(udsp, false);
+	cYAML_build_error(rc, seq_no, ADD_CMD, "udsp", err_str, err_rc);
+	return rc;
+}

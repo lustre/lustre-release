@@ -65,6 +65,7 @@ static int jt_set_max_intf(int argc, char **argv);
 static int jt_set_discovery(int argc, char **argv);
 static int jt_set_drop_asym_route(int argc, char **argv);
 static int jt_list_peer(int argc, char **argv);
+static int jt_add_udsp(int argc, char **argv);
 /*static int jt_show_peer(int argc, char **argv);*/
 static int lnetctl_list_commands(int argc, char **argv);
 static int jt_import(int argc, char **argv);
@@ -85,6 +86,7 @@ static int jt_set_peer_ni_value(int argc, char **argv);
 static int jt_calc_service_id(int argc, char **argv);
 static int jt_set_response_tracking(int argc, char **argv);
 static int jt_set_recovery_limit(int argc, char **argv);
+static int jt_udsp(int argc, char **argv);
 
 command_t cmd_list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
@@ -106,6 +108,7 @@ command_t cmd_list[] = {
 	{"ping", jt_ping, 0, "ping nid,[nid,...]"},
 	{"discover", jt_discover, 0, "discover nid[,nid,...]"},
 	{"service-id", jt_calc_service_id, 0, "Calculate IB Lustre service ID\n"},
+	{"udsp", jt_udsp, 0, "udsp {add | help}"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -256,6 +259,17 @@ command_t peer_cmds[] = {
 	 "\t--nid: Peer NI NID to set the\n"
 	 "\t--health: specify health value to set\n"
 	 "\t--all: set all peer_nis values to the one specified\n"},
+	{ 0, 0, 0, NULL }
+};
+
+command_t udsp_cmds[] = {
+	{"add", jt_add_udsp, 0, "add a udsp\n"
+	 "\t--src: ip2nets syntax specifying the local NID to match\n"
+	 "\t--dst: ip2nets syntax specifying the remote NID to match\n"
+	 "\t--rte: ip2nets syntax specifying the router NID to match\n"
+	 "\t--priority: priority value (0 - highest priority)\n"
+	 "\t--idx: index of where to insert the rule.\n"
+	 "\t       By default, appends to the end of the rule list.\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -1570,6 +1584,17 @@ static int jt_set(int argc, char **argv)
 	return Parser_execarg(argc - 1, &argv[1], set_cmds);
 }
 
+static int jt_udsp(int argc, char **argv)
+{
+	int rc;
+
+	rc = check_cmd(udsp_cmds, "udsp", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
+
+	return Parser_execarg(argc - 1, &argv[1], udsp_cmds);
+}
+
 static int jt_import(int argc, char **argv)
 {
 	char *file = NULL;
@@ -2050,6 +2075,70 @@ static int jt_discover(int argc, char **argv)
 
 	cYAML_free_tree(err_rc);
 	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
+static int jt_add_udsp(int argc, char **argv)
+{
+	char *src = NULL, *dst = NULL, *rte = NULL;
+	struct cYAML *err_rc = NULL;
+	union lnet_udsp_action udsp_action;
+	long int idx = -1, priority = -1;
+	int opt, rc = 0;
+	char *action_type = "pref";
+
+	const char *const short_options = "s:d:r:p:i:";
+	static const struct option long_options[] = {
+	{ .name = "src",	 .has_arg = required_argument, .val = 's' },
+	{ .name = "dst",	 .has_arg = required_argument, .val = 'd' },
+	{ .name = "rte",	 .has_arg = required_argument, .val = 'r' },
+	{ .name = "priority",	 .has_arg = required_argument, .val = 'p' },
+	{ .name = "idx",	 .has_arg = required_argument, .val = 'i' },
+	{ .name = NULL } };
+
+	rc = check_cmd(udsp_cmds, "udsp", "add", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 's':
+			src = optarg;
+			break;
+		case 'd':
+			dst = optarg;
+			break;
+		case 'r':
+			rte = optarg;
+			break;
+		case 'p':
+			rc = parse_long(optarg, &priority);
+			if (rc != 0)
+				priority = -1;
+			action_type = "priority";
+			udsp_action.udsp_priority = priority;
+			break;
+		case 'i':
+			rc = parse_long(optarg, &idx);
+			if (rc != 0)
+				idx = 0;
+			break;
+		case '?':
+			print_help(udsp_cmds, "udsp", "add");
+		default:
+			return 0;
+		}
+	}
+
+	rc = lustre_lnet_add_udsp(src, dst, rte, action_type, &udsp_action,
+				  idx, -1, &err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
 
 	return rc;
 }

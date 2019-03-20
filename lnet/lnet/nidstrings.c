@@ -607,7 +607,7 @@ libcfs_num_str2addr(const char *str, int nob, __u32 *addr)
  * \retval 0 if \a str parsed to numeric address
  * \retval errno otherwise
  */
-static int
+int
 libcfs_num_parse(char *str, int len, struct list_head *list)
 {
 	struct cfs_expr_list *el;

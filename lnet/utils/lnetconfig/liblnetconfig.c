@@ -55,20 +55,6 @@
 #include <glob.h>
 #include <libcfs/util/param.h>
 
-#define CONFIG_CMD		"configure"
-#define UNCONFIG_CMD		"unconfigure"
-#define ADD_CMD			"add"
-#define DEL_CMD			"del"
-#define SHOW_CMD		"show"
-#define DBG_CMD			"dbg"
-#define MANAGE_CMD		"manage"
-
-#define MAX_NUM_IPS		128
-
-#define modparam_path "/sys/module/lnet/parameters/"
-#define o2ib_modparam_path "/sys/module/ko2iblnd/parameters/"
-#define gni_nid_path "/proc/cray_xt/"
-
 #ifndef HAVE_USRSPC_RDMA_PS_TCP
 #define RDMA_PS_TCP 0x0106
 #endif
@@ -4548,6 +4534,31 @@ static int handle_yaml_show_numa(struct cYAML *tree, struct cYAML **show_rc,
 					   show_rc, err_rc);
 }
 
+static int handle_yaml_config_udsp(struct cYAML *tree, struct cYAML **show_rc,
+				   struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *src, *rte, *dst, *prio, *idx;
+	union lnet_udsp_action action;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	src = cYAML_get_object_item(tree, "src");
+	rte = cYAML_get_object_item(tree, "rte");
+	dst = cYAML_get_object_item(tree, "dst");
+	prio = cYAML_get_object_item(tree, "priority");
+	idx = cYAML_get_object_item(tree, "idx");
+
+	action.udsp_priority = prio ? prio->cy_valueint : -1;
+
+	return lustre_lnet_add_udsp(src ? src->cy_valuestring : NULL,
+				    dst ? dst->cy_valuestring : NULL,
+				    rte ? rte->cy_valuestring : NULL,
+				    prio ? "priority" : "",
+				    &action,
+				    idx ? idx->cy_valueint : -1,
+				    seq_no ? seq_no->cy_valueint : -1,
+				    err_rc);
+}
+
 static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **show_rc,
 					      struct cYAML **err_rc)
@@ -4810,6 +4821,7 @@ static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{ .name = "numa",	.cb = handle_yaml_config_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
+	{ .name = "udsp",	.cb = handle_yaml_config_udsp },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
