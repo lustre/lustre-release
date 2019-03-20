@@ -45,8 +45,10 @@
 
 #include "echo_internal.h"
 
-/* The echo objid needs to be below 2^32, because regular FID numbers are
- * limited to 2^32 objects in f_oid for the FID_SEQ_ECHO range. b=23335 */
+/*
+ * The echo objid needs to be below 2^32, because regular FID numbers are
+ * limited to 2^32 objects in f_oid for the FID_SEQ_ECHO range. b=23335
+ */
 #define ECHO_INIT_OID        0x10000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
 
@@ -54,9 +56,9 @@
 static struct page *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
 
 enum {
-        LPROC_ECHO_READ_BYTES = 1,
-        LPROC_ECHO_WRITE_BYTES = 2,
-        LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
+	LPROC_ECHO_READ_BYTES = 1,
+	LPROC_ECHO_WRITE_BYTES = 2,
+	LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES + 1
 };
 
 struct echo_srv_device {
@@ -75,9 +77,9 @@ static inline struct obd_device *echo_srv_obd(struct echo_srv_device *esd)
 }
 
 static int echo_connect(const struct lu_env *env,
-                        struct obd_export **exp, struct obd_device *obd,
-                        struct obd_uuid *cluuid, struct obd_connect_data *data,
-                        void *localdata)
+			struct obd_export **exp, struct obd_device *obd,
+			struct obd_uuid *cluuid, struct obd_connect_data *data,
+			void *localdata)
 {
 	struct lustre_handle conn = { 0 };
 	int rc;
@@ -99,24 +101,24 @@ static int echo_connect(const struct lu_env *env,
 
 static int echo_disconnect(struct obd_export *exp)
 {
-        LASSERT (exp != NULL);
+	LASSERT(exp != NULL);
 
-        return server_disconnect_export(exp);
+	return server_disconnect_export(exp);
 }
 
 static int echo_init_export(struct obd_export *exp)
 {
-        return ldlm_init_export(exp);
+	return ldlm_init_export(exp);
 }
 
 static int echo_destroy_export(struct obd_export *exp)
 {
-        ENTRY;
+	ENTRY;
 
-        target_destroy_export(exp);
-        ldlm_destroy_export(exp);
+	target_destroy_export(exp);
+	ldlm_destroy_export(exp);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static u64 echo_next_id(struct obd_device *obddev)
@@ -137,22 +139,22 @@ echo_page_debug_setup(struct page *page, int rw, u64 id,
 	int   page_offset = offset & ~PAGE_MASK;
 	char *addr        = ((char *)kmap(page)) + page_offset;
 
-        if (len % OBD_ECHO_BLOCK_SIZE != 0)
-                CERROR("Unexpected block size %d\n", len);
+	if (len % OBD_ECHO_BLOCK_SIZE != 0)
+		CERROR("Unexpected block size %d\n", len);
 
-        while (len > 0) {
-                if (rw & OBD_BRW_READ)
-                        block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
-                                          offset, id);
-                else
-                        block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
-                                          0xecc0ecc0ecc0ecc0ULL,
-                                          0xecc0ecc0ecc0ecc0ULL);
+	while (len > 0) {
+		if (rw & OBD_BRW_READ)
+			block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
+					  offset, id);
+		else
+			block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
+					  0xecc0ecc0ecc0ecc0ULL,
+					  0xecc0ecc0ecc0ecc0ULL);
 
-                addr   += OBD_ECHO_BLOCK_SIZE;
-                offset += OBD_ECHO_BLOCK_SIZE;
-                len    -= OBD_ECHO_BLOCK_SIZE;
-        }
+		addr   += OBD_ECHO_BLOCK_SIZE;
+		offset += OBD_ECHO_BLOCK_SIZE;
+		len    -= OBD_ECHO_BLOCK_SIZE;
+	}
 
 	kunmap(page);
 }
@@ -166,20 +168,20 @@ echo_page_debug_check(struct page *page, u64 id,
 	int   rc          = 0;
 	int   rc2;
 
-        if (len % OBD_ECHO_BLOCK_SIZE != 0)
-                CERROR("Unexpected block size %d\n", len);
+	if (len % OBD_ECHO_BLOCK_SIZE != 0)
+		CERROR("Unexpected block size %d\n", len);
 
-        while (len > 0) {
-                rc2 = block_debug_check("echo", addr, OBD_ECHO_BLOCK_SIZE,
-                                        offset, id);
+	while (len > 0) {
+		rc2 = block_debug_check("echo", addr, OBD_ECHO_BLOCK_SIZE,
+					offset, id);
 
-                if (rc2 != 0 && rc == 0)
-                        rc = rc2;
+		if (rc2 != 0 && rc == 0)
+			rc = rc2;
 
-                addr   += OBD_ECHO_BLOCK_SIZE;
-                offset += OBD_ECHO_BLOCK_SIZE;
-                len    -= OBD_ECHO_BLOCK_SIZE;
-        }
+		addr   += OBD_ECHO_BLOCK_SIZE;
+		offset += OBD_ECHO_BLOCK_SIZE;
+		len    -= OBD_ECHO_BLOCK_SIZE;
+	}
 
 	kunmap(page);
 
@@ -187,8 +189,8 @@ echo_page_debug_check(struct page *page, u64 id,
 }
 
 static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
-                             struct niobuf_remote *nb, int *pages,
-                             struct niobuf_local *lb, int cmd, int *left)
+			     struct niobuf_remote *nb, int *pages,
+			     struct niobuf_local *lb, int cmd, int *left)
 {
 	gfp_t gfp_mask = (ostid_id(&obj->ioo_oid) & 1) ?
 			GFP_HIGHUSER : GFP_KERNEL;
@@ -201,13 +203,14 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 	int len = nb->rnb_len;
 
 	while (len > 0) {
-		int plen = PAGE_SIZE - (offset & (PAGE_SIZE-1));
+		int plen = PAGE_SIZE - (offset & (PAGE_SIZE - 1));
+
 		if (len < plen)
 			plen = len;
 
-                /* check for local buf overflow */
-                if (*left == 0)
-                        return -EINVAL;
+		/* check for local buf overflow */
+		if (*left == 0)
+			return -EINVAL;
 
 		res->lnb_file_offset = offset;
 		res->lnb_len = plen;
@@ -224,7 +227,7 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 			get_page(res->lnb_page);
 		} else {
 			res->lnb_page = alloc_page(gfp_mask);
-			if (res->lnb_page == NULL) {
+			if (!res->lnb_page) {
 				CERROR("can't get page for id " DOSTID"\n",
 				       POSTID(&obj->ioo_oid));
 				return -ENOMEM;
@@ -243,15 +246,15 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 					      res->lnb_file_offset,
 					      res->lnb_len);
 
-                offset += plen;
-                len -= plen;
-                res++;
+		offset += plen;
+		len -= plen;
+		res++;
 
-                (*left)--;
-                (*pages)++;
-        }
+		(*left)--;
+		(*pages)++;
+	}
 
-        return 0;
+	return 0;
 }
 
 static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
@@ -270,7 +273,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 		struct page *page = res->lnb_page;
 		void       *addr;
 
-		if (page == NULL) {
+		if (!page) {
 			CERROR("null page objid %llu:%p, buf %d/%d\n",
 			       ostid_id(&obj->ioo_oid), page, i,
 			       obj->ioo_bufcnt);
@@ -306,66 +309,69 @@ static int echo_preprw(const struct lu_env *env, int cmd,
 		       struct niobuf_remote *nb, int *pages,
 		       struct niobuf_local *res)
 {
-        struct obd_device *obd;
-        int tot_bytes = 0;
-        int rc = 0;
-        int i, left;
-        ENTRY;
+	struct obd_device *obd;
+	int tot_bytes = 0;
+	int rc = 0;
+	int i, left;
 
-        obd = export->exp_obd;
-        if (obd == NULL)
-                RETURN(-EINVAL);
+	ENTRY;
 
-        /* Temp fix to stop falling foul of osc_announce_cached() */
-        oa->o_valid &= ~(OBD_MD_FLBLOCKS | OBD_MD_FLGRANT);
+	obd = export->exp_obd;
+	if (!obd)
+		RETURN(-EINVAL);
 
-        memset(res, 0, sizeof(*res) * *pages);
+	/* Temp fix to stop falling foul of osc_announce_cached() */
+	oa->o_valid &= ~(OBD_MD_FLBLOCKS | OBD_MD_FLGRANT);
 
-        CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
-               cmd == OBD_BRW_READ ? "reading" : "writing", objcount, *pages);
+	memset(res, 0, sizeof(*res) * *pages);
 
-        left = *pages;
-        *pages = 0;
+	CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
+	       cmd == OBD_BRW_READ ? "reading" : "writing", objcount, *pages);
 
-        for (i = 0; i < objcount; i++, obj++) {
-                int j;
+	left = *pages;
+	*pages = 0;
 
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++) {
+	for (i = 0; i < objcount; i++, obj++) {
+		int j;
 
-                        rc = echo_map_nb_to_lb(oa, obj, nb, pages,
-                                               res + *pages, cmd, &left);
-                        if (rc)
-                                GOTO(preprw_cleanup, rc);
+		for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++) {
+			rc = echo_map_nb_to_lb(oa, obj, nb, pages,
+					       res + *pages, cmd, &left);
+			if (rc)
+				GOTO(preprw_cleanup, rc);
 
 			tot_bytes += nb->rnb_len;
-                }
-        }
+		}
+	}
 
 	atomic_add(*pages, &obd->u.echo.eo_prep);
 
-        if (cmd & OBD_BRW_READ)
-                lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
-                                    tot_bytes);
-        else
-                lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
-                                    tot_bytes);
+	if (cmd & OBD_BRW_READ)
+		lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_READ_BYTES,
+				    tot_bytes);
+	else
+		lprocfs_counter_add(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
+				    tot_bytes);
 
-        CDEBUG(D_PAGE, "%d pages allocated after prep\n",
+	CDEBUG(D_PAGE, "%d pages allocated after prep\n",
 	       atomic_read(&obd->u.echo.eo_prep));
 
-        RETURN(0);
+	RETURN(0);
 
 preprw_cleanup:
-        /* It is possible that we would rather handle errors by  allow
-         * any already-set-up pages to complete, rather than tearing them
-         * all down again.  I believe that this is what the in-kernel
-         * prep/commit operations do.
-         */
-        CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
-        for (i = 0; i < *pages; i++) {
+	/*
+	 * It is possible that we would rather handle errors by  allow
+	 * any already-set-up pages to complete, rather than tearing them
+	 * all down again.  I believe that this is what the in-kernel
+	 * prep/commit operations do.
+	 */
+	CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
+	for (i = 0; i < *pages; i++) {
 		kunmap(res[i].lnb_page);
-		/* NB if this is a persistent page, __free_page() will just
-		 * lose the extra ref gained above */
+		/*
+		 * NB if this is a persistent page, __free_page() will just
+		 * lose the extra ref gained above
+		 */
 		__free_page(res[i].lnb_page);
 		res[i].lnb_page = NULL;
 		atomic_dec(&obd->u.echo.eo_prep);
@@ -380,30 +386,31 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 			 struct niobuf_remote *rb, int niocount,
 			 struct niobuf_local *res, int rc)
 {
-        struct obd_device *obd;
-        int pgs = 0;
-        int i;
-        ENTRY;
+	struct obd_device *obd;
+	int pgs = 0;
+	int i;
 
-        obd = export->exp_obd;
-        if (obd == NULL)
-                RETURN(-EINVAL);
+	ENTRY;
 
-        if (rc)
-                GOTO(commitrw_cleanup, rc);
+	obd = export->exp_obd;
+	if (!obd)
+		RETURN(-EINVAL);
 
-        if ((cmd & OBD_BRW_RWMASK) == OBD_BRW_READ) {
-                CDEBUG(D_PAGE, "reading %d obdos with %d IOs\n",
-                       objcount, niocount);
-        } else {
-                CDEBUG(D_PAGE, "writing %d obdos with %d IOs\n",
-                       objcount, niocount);
-        }
+	if (rc)
+		GOTO(commitrw_cleanup, rc);
 
-        if (niocount && res == NULL) {
-                CERROR("NULL res niobuf with niocount %d\n", niocount);
-                RETURN(-EINVAL);
-        }
+	if ((cmd & OBD_BRW_RWMASK) == OBD_BRW_READ) {
+		CDEBUG(D_PAGE, "reading %d obdos with %d IOs\n",
+		       objcount, niocount);
+	} else {
+		CDEBUG(D_PAGE, "writing %d obdos with %d IOs\n",
+		       objcount, niocount);
+	}
+
+	if (niocount && !res) {
+		CERROR("NULL res niobuf with niocount %d\n", niocount);
+		RETURN(-EINVAL);
+	}
 
 	for (i = 0; i < objcount; i++, obj++) {
 		int verify = (rc == 0 &&
@@ -424,14 +431,13 @@ static int echo_commitrw(const struct lu_env *env, int cmd,
 			if (rc == 0)
 				rc = vrc;
 		}
-
 	}
 
 	atomic_sub(pgs, &obd->u.echo.eo_prep);
 
-        CDEBUG(D_PAGE, "%d pages remain after commit\n",
+	CDEBUG(D_PAGE, "%d pages remain after commit\n",
 	       atomic_read(&obd->u.echo.eo_prep));
-        RETURN(rc);
+	RETURN(rc);
 
 commitrw_cleanup:
 	atomic_sub(pgs, &obd->u.echo.eo_prep);
@@ -442,7 +448,7 @@ commitrw_cleanup:
 	while (pgs < niocount) {
 		struct page *page = res[pgs++].lnb_page;
 
-		if (page == NULL)
+		if (!page)
 			continue;
 
 		/* NB see comment above regarding persistent pages */
@@ -490,7 +496,7 @@ static int esd_create_hdl(struct tgt_session_info *tsi)
 	ENTRY;
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
-	if (repbody == NULL)
+	if (!repbody)
 		RETURN(-ENOMEM);
 
 	if (!(oa->o_mode & S_IFMT)) {
@@ -596,7 +602,7 @@ static int esd_getattr_hdl(struct tgt_session_info *tsi)
 	}
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
-	if (repbody == NULL)
+	if (!repbody)
 		RETURN(-ENOMEM);
 
 	repbody->oa.o_oi = oa->o_oi;
@@ -637,7 +643,7 @@ static int esd_setattr_hdl(struct tgt_session_info *tsi)
 	}
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
-	if (repbody == NULL)
+	if (!repbody)
 		RETURN(-ENOMEM);
 
 	repbody->oa.o_oi = body->oa.o_oi;
@@ -734,7 +740,7 @@ static int echo_srv_init0(const struct lu_env *env,
 	ENTRY;
 
 	obd = class_name2obd(dev);
-	if (obd == NULL) {
+	if (!obd) {
 		CERROR("Cannot find obd with name %s\n", dev);
 		RETURN(-ENODEV);
 	}
@@ -760,19 +766,19 @@ static int echo_srv_init0(const struct lu_env *env,
 						LDLM_NAMESPACE_SERVER,
 						LDLM_NAMESPACE_MODEST,
 						LDLM_NS_TYPE_OST);
-	if (obd->obd_namespace == NULL)
+	if (!obd->obd_namespace)
 		RETURN(-ENOMEM);
 
 	obd->obd_vars = lprocfs_echo_obd_vars;
 	if (!lprocfs_obd_setup(obd, true) &&
-            lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
-                lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "read_bytes", "bytes");
-                lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
-                                     LPROCFS_CNTR_AVGMINMAX,
-                                     "write_bytes", "bytes");
-        }
+	    lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
+		lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
+				     LPROCFS_CNTR_AVGMINMAX,
+				     "read_bytes", "bytes");
+		lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
+				     LPROCFS_CNTR_AVGMINMAX,
+				     "write_bytes", "bytes");
+	}
 
 	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
 			   "echo_ldlm_cb_client", &obd->obd_ldlm_client);
@@ -817,7 +823,7 @@ static void echo_srv_fini(const struct lu_env *env,
 	ENTRY;
 
 	class_disconnect_exports(obd);
-	if (obd->obd_namespace != NULL)
+	if (obd->obd_namespace)
 		ldlm_namespace_free_prior(obd->obd_namespace, NULL,
 					  obd->obd_force);
 
@@ -826,7 +832,7 @@ static void echo_srv_fini(const struct lu_env *env,
 
 	tgt_fini(env, &esd->esd_lut);
 
-	if (obd->obd_namespace != NULL) {
+	if (obd->obd_namespace) {
 		ldlm_namespace_free_post(obd->obd_namespace);
 		obd->obd_namespace = NULL;
 	}
@@ -903,7 +909,7 @@ static struct lu_device *echo_srv_device_alloc(const struct lu_env *env,
 	int rc;
 
 	OBD_ALLOC_PTR(esd);
-	if (esd == NULL)
+	if (!esd)
 		return ERR_PTR(-ENOMEM);
 
 	l = &esd->esd_dev;
@@ -935,7 +941,7 @@ void echo_persistent_pages_fini(void)
 	int i;
 
 	for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
-		if (echo_persistent_pages[i] != NULL) {
+		if (echo_persistent_pages[i]) {
 			__free_page(echo_persistent_pages[i]);
 			echo_persistent_pages[i] = NULL;
 		}
@@ -947,11 +953,11 @@ int echo_persistent_pages_init(void)
 	int          i;
 
 	for (i = 0; i < ECHO_PERSISTENT_PAGES; i++) {
-		gfp_t gfp_mask = (i < ECHO_PERSISTENT_PAGES/2) ?
+		gfp_t gfp_mask = (i < ECHO_PERSISTENT_PAGES / 2) ?
 			GFP_KERNEL : GFP_HIGHUSER;
 
 		pg = alloc_page(gfp_mask);
-		if (pg == NULL) {
+		if (!pg) {
 			echo_persistent_pages_fini();
 			return -ENOMEM;
 		}
