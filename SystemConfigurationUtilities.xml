@@ -2200,7 +2200,7 @@ mount.lustre</title>
                 <para> <literal>max_sectors_kb=<replaceable>KB</replaceable></literal></para>
               </entry>
               <entry>
-                <para condition='l210'>Sets the block device parameter
+                <para condition='l2A'>Sets the block device parameter
                 <literal>max_sectors_kb</literal> limit for the MDT or OST
                 target being mounted to specified maximum number of kilobytes.
                 When <literal>max_sectors_kb</literal> isn't specified as a
