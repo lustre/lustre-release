@@ -159,8 +159,6 @@ LNetEQFree(struct lnet_handle_eq eqh)
 	int		size = 0;
 	int		i;
 
-	LASSERT(the_lnet.ln_refcount > 0);
-
 	lnet_res_lock(LNET_LOCK_EX);
 	/* NB: hold lnet_eq_wait_lock for EQ link/unlink, so we can do
 	 * both EQ lookup and poll event with only lnet_eq_wait_lock */
