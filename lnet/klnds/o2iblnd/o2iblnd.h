@@ -162,8 +162,7 @@ extern struct kib_tunables  kiblnd_tunables;
 #define IBLND_RECV_WRS(c)            IBLND_RX_MSGS(c)
 
 /* 2 = LNet msg + Transfer chain */
-#define IBLND_CQ_ENTRIES(c)	\
-	(IBLND_RECV_WRS(c) + 2 * c->ibc_queue_depth)
+#define IBLND_CQ_ENTRIES(c)	(IBLND_RECV_WRS(c) + kiblnd_send_wrs(c))
 
 struct kib_hca_dev;
 
