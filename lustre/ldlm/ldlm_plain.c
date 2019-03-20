@@ -71,15 +71,17 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	enum ldlm_mode req_mode = req->l_req_mode;
 	struct ldlm_lock *lock, *next_lock;
 	int compat = 1;
-	ENTRY;
 
+	ENTRY;
 	lockmode_verify(req_mode);
 
 	list_for_each_entry_safe(lock, next_lock, queue, l_res_link) {
 
-		/* We stop walking the queue if we hit ourselves so we don't
+		/*
+		 * We stop walking the queue if we hit ourselves so we don't
 		 * take conflicting locks enqueued after us into account,
-		 * or we'd wait forever. */
+		 * or we'd wait forever.
+		 */
 		if (req == lock)
 			RETURN(compat);
 
@@ -90,30 +92,32 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				       struct ldlm_lock, l_res_link);
 
 		if (lockmode_compat(lock->l_req_mode, req_mode))
-                        continue;
+			continue;
 
-                if (!work_list)
-                        RETURN(0);
+		if (!work_list)
+			RETURN(0);
 
-                compat = 0;
+		compat = 0;
 
-		/* Add locks of the mode group to \a work_list as
-		 * blocking locks for \a req. */
-                if (lock->l_blocking_ast)
-                        ldlm_add_ast_work_item(lock, req, work_list);
+		/*
+		 * Add locks of the mode group to \a work_list as
+		 * blocking locks for \a req.
+		 */
+		if (lock->l_blocking_ast)
+			ldlm_add_ast_work_item(lock, req, work_list);
 
-                {
+		{
 			struct list_head *head;
 
-                        head = &lock->l_sl_mode;
+			head = &lock->l_sl_mode;
 			list_for_each_entry(lock, head, l_sl_mode)
-                                if (lock->l_blocking_ast)
-                                        ldlm_add_ast_work_item(lock, req,
-                                                               work_list);
-                }
-        }
+				if (lock->l_blocking_ast)
+					ldlm_add_ast_work_item(lock, req,
+							       work_list);
+		}
+	}
 
-        RETURN(compat);
+	RETURN(compat);
 }
 
 /**
@@ -132,25 +136,25 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
 	struct list_head *grant_work = intention == LDLM_PROCESS_ENQUEUE ?
 							NULL : work_list;
 	int rc;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(!ldlm_is_granted(lock));
 	check_res_locked(res);
 	*err = ELDLM_OK;
 
 	if (intention == LDLM_PROCESS_RESCAN) {
-                LASSERT(work_list != NULL);
-                rc = ldlm_plain_compat_queue(&res->lr_granted, lock, NULL);
-                if (!rc)
-                        RETURN(LDLM_ITER_STOP);
-                rc = ldlm_plain_compat_queue(&res->lr_waiting, lock, NULL);
-                if (!rc)
-                        RETURN(LDLM_ITER_STOP);
+		LASSERT(work_list != NULL);
+		rc = ldlm_plain_compat_queue(&res->lr_granted, lock, NULL);
+		if (!rc)
+			RETURN(LDLM_ITER_STOP);
+		rc = ldlm_plain_compat_queue(&res->lr_waiting, lock, NULL);
+		if (!rc)
+			RETURN(LDLM_ITER_STOP);
 
-                ldlm_resource_unlink_lock(lock);
+		ldlm_resource_unlink_lock(lock);
 		ldlm_grant_lock(lock, grant_work);
-                RETURN(LDLM_ITER_CONTINUE);
-        }
+		RETURN(LDLM_ITER_CONTINUE);
+	}
 
 	rc = ldlm_plain_compat_queue(&res->lr_granted, lock, work_list);
 	rc += ldlm_plain_compat_queue(&res->lr_waiting, lock, work_list);
