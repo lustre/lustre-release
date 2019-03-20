@@ -840,9 +840,6 @@ int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
-int lnet_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
-int lnet_ipif_enumerate(char ***names);
-void lnet_ipif_free_enumeration(char **names, int n);
 int lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
 int lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
 int lnet_sock_getaddr(struct socket *socket, bool remote, __u32 *ip, int *port);
