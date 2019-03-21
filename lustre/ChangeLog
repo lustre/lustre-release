@@ -9,7 +9,7 @@ TBD Whamcloud
          2.6.32-642.15.1.el6 (RHEL6.8)
          2.6.32-696.30.1.el6 (RHEL6.9)
          3.10.0-862.14.4.el7 (RHEL7.5)
-         3.10.0-957.el7      (RHEL7.6)
+         3.10.0-957.1.3.el7  (RHEL7.6)
          3.0.101-0.47.71     (SLES11 SP3)
          3.0.101-107         (SLES11 SP4)
          3.12.74-60.64.40    (SLES12 SP1)
@@ -24,7 +24,7 @@ TBD Whamcloud
          2.6.32-696.30.1.el6 (RHEL6.9)
          2.6.32-754.10.1.el6 (RHEL6.10)
          3.10.0-862.14.4.el7 (RHEL7.5)
-         3.10.0-957.el7      (RHEL7.6)
+         3.10.0-957.1.3.el7  (RHEL7.6)
          3.0.101-0.47.71     (SLES11 SP3)
          3.0.101-107         (SLES11 SP4)
          3.12.74-60.64.40    (SLES12 SP1)
@@ -32,7 +32,7 @@ TBD Whamcloud
          4.4.162-94.69       (SLES12 SP3)
          4.4.0-131           (Ubuntu 16.04)
          vanilla linux 4.6.7
-       * Recommended e2fsprogs version: 1.42.13.wc6 or newer
+       * Recommended e2fsprogs version: 1.44.3.wc1 or newer
        * Recommended ZFS / SPL version: 0.7.9
        * Tested with ZFS / SPL version: 0.7.9
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
