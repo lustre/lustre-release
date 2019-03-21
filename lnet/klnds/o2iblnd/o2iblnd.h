@@ -162,7 +162,9 @@ extern struct kib_tunables  kiblnd_tunables;
 #define IBLND_RECV_WRS(c)            IBLND_RX_MSGS(c)
 
 /* 2 = LNet msg + Transfer chain */
-#define IBLND_CQ_ENTRIES(c)	(IBLND_RECV_WRS(c) + kiblnd_send_wrs(c))
+#define IBLND_CQ_ENTRIES(c)	\
+	(IBLND_RECV_WRS(c) + 2 * kiblnd_concurrent_sends(c->ibc_version, \
+							 c->ibc_peer->ibp_ni))
 
 struct kib_hca_dev;
 
@@ -775,6 +777,26 @@ extern struct kib_data kiblnd_data;
 extern void kiblnd_hdev_destroy(struct kib_hca_dev *hdev);
 
 int kiblnd_msg_queue_size(int version, struct lnet_ni *ni);
+
+static inline int
+kiblnd_concurrent_sends(int version, struct lnet_ni *ni)
+{
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+	int concurrent_sends;
+
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+	concurrent_sends = tunables->lnd_concurrent_sends;
+
+	if (version == IBLND_MSG_VERSION_1) {
+		if (concurrent_sends > IBLND_MSG_QUEUE_SIZE_V1 * 2)
+			return IBLND_MSG_QUEUE_SIZE_V1 * 2;
+
+		if (concurrent_sends < IBLND_MSG_QUEUE_SIZE_V1 / 2)
+			return IBLND_MSG_QUEUE_SIZE_V1 / 2;
+	}
+
+	return concurrent_sends;
+}
 
 static inline void
 kiblnd_hdev_addref_locked(struct kib_hca_dev *hdev)
