@@ -357,17 +357,19 @@ int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios)
 {
 	struct osc_object *osc = cl2osc(ios->cis_obj);
 	struct obd_import *imp = osc_cli(osc)->cl_import;
+	struct osc_io *oio = osc_env_io(env);
 	int rc = -EIO;
 
 	spin_lock(&imp->imp_lock);
 	if (likely(!imp->imp_invalid)) {
-		struct osc_io *oio = osc_env_io(env);
-
 		atomic_inc(&osc->oo_nr_ios);
 		oio->oi_is_active = 1;
 		rc = 0;
 	}
 	spin_unlock(&imp->imp_lock);
+
+	if (cfs_capable(CFS_CAP_SYS_RESOURCE))
+		oio->oi_cap_sys_resource = 1;
 
 	return rc;
 }
