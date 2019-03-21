@@ -2363,9 +2363,6 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	oap->oap_obj_off = offset;
 	LASSERT(!(offset & ~PAGE_MASK));
 
-	if (cfs_capable(CFS_CAP_SYS_RESOURCE))
-		oap->oap_brw_flags = OBD_BRW_NOQUOTA;
-
 	INIT_LIST_HEAD(&oap->oap_pending_item);
 	INIT_LIST_HEAD(&oap->oap_rpc_item);
 
@@ -2405,7 +2402,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 
 	/* Set the OBD_BRW_SRVLOCK before the page is queued. */
 	brw_flags |= ops->ops_srvlock ? OBD_BRW_SRVLOCK : 0;
-	if (cfs_capable(CFS_CAP_SYS_RESOURCE)) {
+	if (oio->oi_cap_sys_resource) {
 		brw_flags |= OBD_BRW_NOQUOTA;
 		cmd |= OBD_BRW_NOQUOTA;
 	}

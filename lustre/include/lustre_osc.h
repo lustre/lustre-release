@@ -135,7 +135,9 @@ struct osc_io {
 	/** true if this io is lockless. */
 	unsigned int	   oi_lockless:1,
 	/** true if this io is counted as active IO */
-			   oi_is_active:1;
+			   oi_is_active:1,
+	/** true if this io has CAP_SYS_RESOURCE */
+			   oi_cap_sys_resource:1;
 	/** how many LRU pages are reserved for this IO */
 	unsigned long	   oi_lru_reserved;
 

@@ -327,6 +327,7 @@ EXPORT_SYMBOL(osc_page_init);
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		     enum cl_req_type crt, int brw_flags)
 {
+	struct osc_io *oio = osc_env_io(env);
 	struct osc_async_page *oap = &opg->ops_oap;
 
 	LASSERTF(oap->oap_magic == OAP_MAGIC, "Bad oap magic: oap %p, "
@@ -339,7 +340,7 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 	oap->oap_count     = opg->ops_to - opg->ops_from;
 	oap->oap_brw_flags = OBD_BRW_SYNC | brw_flags;
 
-	if (cfs_capable(CFS_CAP_SYS_RESOURCE)) {
+	if (oio->oi_cap_sys_resource) {
 		oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
 		oap->oap_cmd |= OBD_BRW_NOQUOTA;
 	}
