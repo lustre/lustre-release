@@ -108,7 +108,7 @@ MODULE_PARM_DESC(ib_mtu, "IB MTU 256/512/1024/2048/4096");
 
 static int concurrent_sends;
 module_param(concurrent_sends, int, 0444);
-MODULE_PARM_DESC(concurrent_sends, "send work-queue sizing (obsolete)");
+MODULE_PARM_DESC(concurrent_sends, "send work-queue sizing");
 
 static int use_fastreg_gaps;
 module_param(use_fastreg_gaps, int, 0444);
@@ -285,6 +285,22 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 	if (tunables->lnd_peercredits_hiw >= net_tunables->lct_peer_tx_credits)
 		tunables->lnd_peercredits_hiw = net_tunables->lct_peer_tx_credits - 1;
 
+	if (tunables->lnd_concurrent_sends == 0)
+			tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits;
+
+	if (tunables->lnd_concurrent_sends > net_tunables->lct_peer_tx_credits * 2)
+		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits * 2;
+
+	if (tunables->lnd_concurrent_sends < net_tunables->lct_peer_tx_credits / 2)
+		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits / 2;
+
+	if (tunables->lnd_concurrent_sends < net_tunables->lct_peer_tx_credits) {
+		CWARN("Concurrent sends %d is lower than message "
+		      "queue size: %d, performance may drop slightly.\n",
+		      tunables->lnd_concurrent_sends,
+		      net_tunables->lct_peer_tx_credits);
+	}
+
 	if (!tunables->lnd_fmr_pool_size)
 		tunables->lnd_fmr_pool_size = fmr_pool_size;
 	if (!tunables->lnd_fmr_flush_trigger)
@@ -307,6 +323,7 @@ kiblnd_tunables_init(void)
 	default_tunables.lnd_version = CURRENT_LND_VERSION;
 	default_tunables.lnd_peercredits_hiw = peer_credits_hiw;
 	default_tunables.lnd_map_on_demand = map_on_demand;
+	default_tunables.lnd_concurrent_sends = concurrent_sends;
 	default_tunables.lnd_fmr_pool_size = fmr_pool_size;
 	default_tunables.lnd_fmr_flush_trigger = fmr_flush_trigger;
 	default_tunables.lnd_fmr_cache = fmr_cache;
