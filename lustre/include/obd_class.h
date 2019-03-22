@@ -247,6 +247,7 @@ static inline bool logname_is_barrier(const char *logname)
 /* list of active configuration logs  */
 struct config_llog_data {
 	struct ldlm_res_id	    cld_resid;
+	struct lustre_handle	    cld_lockh;
 	struct config_llog_instance cld_cfg;
 	struct list_head	    cld_list_chain;/* on config_llog_list */
 	atomic_t		    cld_refcount;

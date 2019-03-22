@@ -22718,6 +22718,31 @@ test_900() {
 }
 run_test 900 "umount should not race with any mgc requeue thread"
 
+# LUS-6253/LU-11185
+test_901() {
+	local oldc
+	local newc
+	local olds
+	local news
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	# some get_param have a bug to handle dot in param name
+	cancel_lru_locks MGC
+	oldc=$($LCTL get_param -n 'ldlm.namespaces.MGC*.lock_count')
+	olds=$(do_facet mgs $LCTL get_param -n 'ldlm.namespaces.MGS*.lock_count')
+	umount_client $MOUNT || error "umount failed"
+	mount_client $MOUNT || error "mount failed"
+	cancel_lru_locks MGC
+	newc=$($LCTL get_param -n 'ldlm.namespaces.MGC*.lock_count')
+	news=$(do_facet mgs $LCTL get_param -n 'ldlm.namespaces.MGS*.lock_count')
+
+	[ $oldc -lt $newc ] && error "mgc lock leak ($oldc != $newc)"
+	[ $olds -lt $news ] && error "mgs lock leak ($olds != $news)"
+
+	return 0
+}
+run_test 901 "don't leak a mgc lock on client umount"
+
 complete $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true
 check_and_cleanup_lustre

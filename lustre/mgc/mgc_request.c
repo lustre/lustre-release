@@ -126,7 +126,7 @@ static int config_log_get(struct config_llog_data *cld)
 {
 	ENTRY;
 	atomic_inc(&cld->cld_refcount);
-	CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
+	CDEBUG(D_INFO, "log %s (%p) refs %d\n", cld->cld_logname, cld,
 		atomic_read(&cld->cld_refcount));
 	RETURN(0);
 }
@@ -140,7 +140,7 @@ static void config_log_put(struct config_llog_data *cld)
 	if (unlikely(!cld))
 		RETURN_EXIT;
 
-	CDEBUG(D_INFO, "log %s refs %d\n", cld->cld_logname,
+	CDEBUG(D_INFO, "log %s(%p) refs %d\n", cld->cld_logname, cld,
 		atomic_read(&cld->cld_refcount));
 	LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
@@ -447,13 +447,26 @@ out_sptlrpc:
 	return ERR_PTR(rc);
 }
 
+DEFINE_MUTEX(llog_process_lock);
+
+static inline void config_mark_cld_stop_nolock(struct config_llog_data *cld)
+{
+	ENTRY;
+
+	spin_lock(&config_list_lock);
+	cld->cld_stopping = 1;
+	spin_unlock(&config_list_lock);
+
+	CDEBUG(D_INFO, "lockh %#llx\n", cld->cld_lockh.cookie);
+	if (!ldlm_lock_addref_try(&cld->cld_lockh, LCK_CR))
+		ldlm_lock_decref_and_cancel(&cld->cld_lockh, LCK_CR);
+}
+
 static inline void config_mark_cld_stop(struct config_llog_data *cld)
 {
 	if (cld) {
 		mutex_lock(&cld->cld_lock);
-		spin_lock(&config_list_lock);
-		cld->cld_stopping = 1;
-		spin_unlock(&config_list_lock);
+		config_mark_cld_stop_nolock(cld);
 		mutex_unlock(&cld->cld_lock);
 	}
 }
@@ -491,10 +504,6 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 		RETURN(rc);
 	}
 
-	spin_lock(&config_list_lock);
-	cld->cld_stopping = 1;
-	spin_unlock(&config_list_lock);
-
 	cld_recover = cld->cld_recover;
 	cld->cld_recover = NULL;
 	cld_params = cld->cld_params;
@@ -505,24 +514,20 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 	cld->cld_barrier = NULL;
 	cld_sptlrpc = cld->cld_sptlrpc;
 	cld->cld_sptlrpc = NULL;
+
+	config_mark_cld_stop_nolock(cld);
 	mutex_unlock(&cld->cld_lock);
 
 	config_mark_cld_stop(cld_recover);
-	config_log_put(cld_recover);
-
 	config_mark_cld_stop(cld_params);
-	config_log_put(cld_params);
+	config_mark_cld_stop(cld_barrier);
+	config_mark_cld_stop(cld_sptlrpc);
 
+	config_log_put(cld_params);
+	config_log_put(cld_recover);
 	/* don't set cld_stopping on nm lock as other targets may be active */
 	config_log_put(cld_nodemap);
-
-	if (cld_barrier) {
-		mutex_lock(&cld_barrier->cld_lock);
-		cld_barrier->cld_stopping = 1;
-		mutex_unlock(&cld_barrier->cld_lock);
-		config_log_put(cld_barrier);
-	}
-
+	config_log_put(cld_barrier);
 	config_log_put(cld_sptlrpc);
 
 	/* drop the ref from the find */
@@ -711,9 +716,14 @@ static void mgc_requeue_add(struct config_llog_data *cld)
 		cld->cld_stopping, rq_state);
 	LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
+	/* lets cancel an existent lock to mark cld as "lostlock" */
+	CDEBUG(D_INFO, "lockh %#llx\n", cld->cld_lockh.cookie);
+	if (!ldlm_lock_addref_try(&cld->cld_lockh, LCK_CR))
+		ldlm_lock_decref_and_cancel(&cld->cld_lockh, LCK_CR);
+
 	mutex_lock(&cld->cld_lock);
 	spin_lock(&config_list_lock);
-	if (!(rq_state & RQ_STOP) && !cld->cld_stopping && !cld->cld_lostlock) {
+	if (!(rq_state & RQ_STOP) && !cld->cld_stopping) {
 		cld->cld_lostlock = 1;
 		rq_state |= RQ_NOW;
 		wakeup = true;
@@ -1025,6 +1035,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		LASSERT(atomic_read(&cld->cld_refcount) > 0);
 
 		lock->l_ast_data = NULL;
+		cld->cld_lockh.cookie = 0;
 		/* Are we done with this log? */
 		if (cld->cld_stopping) {
 			CDEBUG(D_MGC, "log %s: stopping, won't requeue\n",
@@ -2063,9 +2074,12 @@ restart:
 		/* Get the cld, it will be released in mgc_blocking_ast. */
 		config_log_get(cld);
 		rc = ldlm_lock_set_data(&lockh, (void *)cld);
+		LASSERT(!lustre_handle_is_used(&cld->cld_lockh));
 		LASSERT(rc == 0);
+		cld->cld_lockh = lockh;
 	} else {
 		CDEBUG(D_MGC, "Can't get cfg lock: %d\n", rcl);
+		cld->cld_lockh.cookie = 0;
 
 		if (rcl == -ESHUTDOWN &&
 		    atomic_read(&mgc->u.cli.cl_mgc_refcount) > 0 && !retry) {
@@ -2117,16 +2131,6 @@ restart:
 		else if (cld_is_nodemap(cld))
 			rc = rcl;
 
-		if (cld_is_recover(cld) && rc) {
-			if (!rcl) {
-				CERROR("%s: recover log %s failed, not fatal: rc = %d\n",
-				       mgc->obd_name, cld->cld_logname, rc);
-				spin_lock(&config_list_lock);
-				cld->cld_lostlock = 1;
-				spin_unlock(&config_list_lock);
-			}
-			rc = 0; /* this is not a fatal error for recover log */
-		}
 	} else if (!cld_is_barrier(cld)) {
 		rc = mgc_process_cfg_log(mgc, cld, rcl != 0);
 	}
@@ -2134,17 +2138,20 @@ restart:
 	CDEBUG(D_MGC, "%s: configuration from log '%s' %sed (%d).\n",
 	       mgc->obd_name, cld->cld_logname, rc ? "fail" : "succeed", rc);
 
-	mutex_unlock(&cld->cld_lock);
-
 	/* Now drop the lock so MGS can revoke it */
 	if (!rcl) {
 		rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, LCK_CR, &lockh);
 		if (rcl)
 			CERROR("Can't drop cfg lock: %d\n", rcl);
 	}
+	mutex_unlock(&cld->cld_lock);
 
 	/* requeue nodemap lock immediately if transfer was interrupted */
-	if (cld_is_nodemap(cld) && rc == -EAGAIN) {
+	if ((cld_is_nodemap(cld) && rc == -EAGAIN) ||
+	    (cld_is_recover(cld) && rc)) {
+		if (cld_is_recover(cld))
+			CWARN("%s: IR log %s failed, not fatal: rc = %d\n",
+			      mgc->obd_name, cld->cld_logname, rc);
 		mgc_requeue_add(cld);
 		rc = 0;
 	}
