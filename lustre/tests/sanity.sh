@@ -19952,7 +19952,7 @@ test_412() {
 }
 run_test 412 "mkdir on specific MDTs"
 
-test_413() {
+test_413a() {
 	[ $MDSCOUNT -lt 2 ] &&
 		skip "We need at least 2 MDTs for this test"
 
@@ -19986,7 +19986,129 @@ test_413() {
 			error "don't expect $max"
 	done
 }
-run_test 413 "mkdir on less full MDTs"
+run_test 413a "mkdir on less full MDTs"
+
+test_413b() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDTs for this test"
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.52) ] &&
+		skip "Need server version at least 2.12.52"
+
+	mkdir $DIR/$tdir || error "mkdir failed"
+	$LFS setdirstripe -D -i -1 -H space $DIR/$tdir ||
+		error "setdirstripe failed"
+
+	local qos_prio_free
+	local qos_threshold_rr
+	local count
+
+	qos_prio_free=$($LCTL get_param -n lmv.*.qos_prio_free | head -n1)
+	qos_prio_free=${qos_prio_free%%%}
+	qos_threshold_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -n1)
+	qos_threshold_rr=${qos_threshold_rr%%%}
+
+	stack_trap "$LCTL set_param lmv.*.qos_prio_free=$qos_prio_free" EXIT
+	stack_trap "$LCTL set_param lmv.*.qos_threshold_rr=$qos_threshold_rr" \
+		EXIT
+
+	echo "mkdir with roundrobin"
+
+	$LCTL set_param lmv.*.qos_threshold_rr=100
+	for i in $(seq $((100 * MDSCOUNT))); do
+		mkdir $DIR/$tdir/subdir$i || error "mkdir subdir$i failed"
+	done
+	for i in $(seq $MDSCOUNT); do
+		count=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$((i - 1))$ |
+			wc -w)
+		echo "$count directories created on MDT$((i - 1))"
+		[ $count -eq 100 ] || error "subdirs are not evenly distributed"
+	done
+
+	rm -rf $DIR/$tdir/*
+
+	$LCTL set_param lmv.*.qos_threshold_rr=$qos_threshold_rr
+
+	local ffree
+	local max
+	local min
+	local max_index
+	local min_index
+
+	ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.filesfree | uniq))
+	echo "MDT filesfree available: ${ffree[@]}"
+	max=${ffree[0]}
+	min=${ffree[0]}
+	max_index=0
+	min_index=0
+	for ((i = 0; i < ${#ffree[@]}; i++)); do
+		if [[ ${ffree[i]} -gt $max ]]; then
+			max=${ffree[i]}
+			max_index=$i
+		fi
+		if [[ ${ffree[i]} -lt $min ]]; then
+			min=${ffree[i]}
+			min_index=$i
+		fi
+	done
+	echo "Min free files: MDT$min_index: $min"
+	echo "Max free files: MDT$max_index: $max"
+
+	[ $min -eq 0 ] && skip "no free files in MDT$min_index"
+	[ $min -gt 10000000 ] && skip "too much free files in MDT$min_index"
+
+	# Check if we need to generate uneven MDTs
+	test_mkdir -i $min_index -c 1 -p $DIR/$tdir-MDT$min_index
+	local threshold=10
+	local diff=$((max - min))
+	local diff2=$((diff * 100 / min))
+
+	echo -n "Check for uneven MDTs: "
+	echo -n "diff=$diff files ($diff2%) must be > $threshold% ..."
+
+	if [ $diff2 -gt $threshold ]; then
+		echo "ok"
+		echo "Don't need to fill MDT$min_index"
+	else
+		# generate uneven MDTs, create till 25% diff
+		echo "no"
+		diff2=$((threshold - diff2))
+		diff=$((min * diff2 / 100))
+		# 50 sec per 10000 files in vm
+		[ $diff -gt 40000 ] && [ "$SLOW" = "no" ] &&
+			skip "$diff files to create"
+		echo "Fill $diff2% diff in MDT$min_index with $diff files"
+		local i
+		local value="$(generate_string 1024)"
+		for i in $(seq $diff); do
+			$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE \
+				$DIR/$tdir-MDT$min_index/f$i > /dev/null ||
+				error "create f$i failed"
+			setfattr -n user.413b -v $value \
+				$DIR/$tdir-MDT$min_index/f$i ||
+				error "setfattr f$i failed"
+		done
+	fi
+
+	min=$((100 *MDSCOUNT))
+	max=0
+
+	echo "mkdir with balanced space usage"
+	$LCTL set_param lmv.*.qos_prio_free=100
+	for i in $(seq $((100 * MDSCOUNT))); do
+		mkdir $DIR/$tdir/subdir$i || error "mkdir subdir$i failed"
+	done
+	for i in $(seq $MDSCOUNT); do
+		count=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$((i - 1))$ |
+			wc -w)
+		echo "$count directories created on MDT$((i - 1))"
+		[ $min -gt $count ] && min=$count
+		[ $max -lt $count ] && max=$count
+	done
+	[ $((max - min)) -gt $MDSCOUNT ] ||
+		error "subdirs shouldn't be evenly distributed"
+}
+run_test 413b "mkdir with balanced space usage"
 
 test_414() {
 #define OBD_FAIL_PTLRPC_BULK_ATTACH      0x521

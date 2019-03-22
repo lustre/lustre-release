@@ -88,7 +88,7 @@ struct obd_info {
 	/* OBD_STATFS_* flags */
 	__u64                   oi_flags;
 	struct obd_device      *oi_obd;
-	struct lmv_tgt_desc    *oi_tgt;
+	struct lu_tgt_desc     *oi_tgt;
         /* statfs data specific for every OSC, if needed at all. */
         struct obd_statfs      *oi_osfs;
         /* An update callback which is called to update some data on upper
@@ -379,29 +379,10 @@ struct echo_client_obd {
 	__u64			ec_unique;
 };
 
-/* Generic subset of OSTs */
-struct ost_pool {
-        __u32              *op_array;      /* array of index of
-                                                   lov_obd->lov_tgts */
-        unsigned int        op_count;      /* number of OSTs in the array */
-        unsigned int        op_size;       /* allocated size of lp_array */
-	struct rw_semaphore op_rw_sem;     /* to protect ost_pool use */
-};
-
 /* allow statfs data caching for 1 second */
 #define OBD_STATFS_CACHE_SECONDS 1
 
-struct lov_tgt_desc {
-	struct list_head    ltd_kill;
-        struct obd_uuid     ltd_uuid;
-        struct obd_device  *ltd_obd;
-        struct obd_export  *ltd_exp;
-        __u32               ltd_gen;
-        __u32               ltd_index;   /* index in lov_obd->tgts */
-        unsigned long       ltd_active:1,/* is this target up for requests */
-                            ltd_activate:1,/* should  target be activated */
-                            ltd_reap:1;  /* should this target be deleted */
-};
+#define lov_tgt_desc lu_tgt_desc
 
 struct lov_md_tgt_desc {
 	struct obd_device *lmtd_mdc;
@@ -436,16 +417,7 @@ struct lov_obd {
 	struct kobject		*lov_tgts_kobj;
 };
 
-struct lmv_tgt_desc {
-	struct obd_uuid		ltd_uuid;
-	struct obd_device	*ltd_obd;
-	struct obd_export	*ltd_exp;
-	__u32			ltd_idx;
-	struct mutex		ltd_fid_mutex;
-	struct obd_statfs	ltd_statfs;
-	time64_t		ltd_statfs_age;
-	unsigned long		ltd_active:1; /* target up for requests */
-};
+#define lmv_tgt_desc lu_tgt_desc
 
 struct lmv_obd {
 	struct lu_client_fld	lmv_fld;
@@ -464,6 +436,9 @@ struct lmv_obd {
 	struct obd_connect_data	conn_data;
 	struct kobject		*lmv_tgts_kobj;
 	void			*lmv_cache;
+
+	struct lu_qos		lmv_qos;
+	__u32			lmv_qos_rr_index;
 };
 
 /* Minimum sector size is 512 */

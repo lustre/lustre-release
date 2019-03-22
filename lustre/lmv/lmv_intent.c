@@ -106,7 +106,7 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 
 	op_data->op_bias = MDS_CROSS_REF;
 	CDEBUG(D_INODE, "REMOTE_INTENT with fid="DFID" -> mds #%u\n",
-	       PFID(&body->mbo_fid1), tgt->ltd_idx);
+	       PFID(&body->mbo_fid1), tgt->ltd_index);
 
 	/* ask for security context upon intent */
 	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_OPEN) &&
@@ -206,7 +206,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			GOTO(cleanup, rc = PTR_ERR(tgt));
 
 		CDEBUG(D_INODE, "Revalidate slave "DFID" -> mds #%u\n",
-		       PFID(&fid), tgt->ltd_idx);
+		       PFID(&fid), tgt->ltd_index);
 
 		if (req != NULL) {
 			ptlrpc_req_finished(req);
@@ -350,7 +350,7 @@ retry:
 		if (IS_ERR(tgt))
 			RETURN(PTR_ERR(tgt));
 
-		op_data->op_mds = tgt->ltd_idx;
+		op_data->op_mds = tgt->ltd_index;
 	} else {
 		LASSERT(fid_is_sane(&op_data->op_fid1));
 		LASSERT(fid_is_zero(&op_data->op_fid2));
@@ -375,7 +375,7 @@ retry:
 
 	CDEBUG(D_INODE, "OPEN_INTENT with fid1="DFID", fid2="DFID","
 	       " name='%s' -> mds #%u\n", PFID(&op_data->op_fid1),
-	       PFID(&op_data->op_fid2), op_data->op_name, tgt->ltd_idx);
+	       PFID(&op_data->op_fid2), op_data->op_name, tgt->ltd_index);
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp, cb_blocking,
 			    extra_lock_flags);
@@ -460,7 +460,7 @@ retry:
 	       ", name='%s' -> mds #%u\n",
 	       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2),
 	       op_data->op_name ? op_data->op_name : "<NULL>",
-	       tgt->ltd_idx);
+	       tgt->ltd_index);
 
 	op_data->op_bias &= ~MDS_CROSS_REF;
 

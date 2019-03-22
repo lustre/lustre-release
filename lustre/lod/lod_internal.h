@@ -54,20 +54,11 @@
 #define LMVEA_DELETE_VALUES(count, offset)				\
 	((count) == 0 && (offset) == (typeof(offset))(-1))
 
-struct lod_qos_rr {
-	spinlock_t		 lqr_alloc;	/* protect allocation index */
-	__u32			 lqr_start_idx;	/* start index of new inode */
-	__u32			 lqr_offset_idx;/* aliasing for start_idx */
-	int			 lqr_start_count;/* reseed counter */
-	struct ost_pool		 lqr_pool;	/* round-robin optimized list */
-	unsigned long		 lqr_dirty:1;	/* recalc round-robin list */
-};
-
 struct pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
 	struct ost_pool		 pool_obds;	/* pool members */
 	atomic_t		 pool_refcount;
-	struct lod_qos_rr	 pool_rr;
+	struct lu_qos_rr	 pool_rr;
 	struct hlist_node	 pool_hash;	/* access by poolname */
 	struct list_head	 pool_list;
 	struct proc_dir_entry	*pool_proc_entry;
@@ -78,57 +69,7 @@ struct pool_desc {
 #define pool_tgt_array(p)  ((p)->pool_obds.op_array)
 #define pool_tgt_rw_sem(p) ((p)->pool_obds.op_rw_sem)
 
-struct lod_qos {
-	struct list_head	 lq_oss_list;
-	struct rw_semaphore	 lq_rw_sem;
-	__u32			 lq_active_oss_count;
-	unsigned int		 lq_prio_free;   /* priority for free space */
-	unsigned int		 lq_threshold_rr;/* priority for rr */
-	struct lod_qos_rr	 lq_rr;          /* round robin qos data */
-	bool			 lq_dirty:1,     /* recalc qos data */
-				 lq_same_space:1,/* the ost's all have approx.
-						    the same space avail */
-				 lq_reset:1;     /* zero current penalties */
-};
-
-struct lod_qos_oss {
-	struct obd_uuid		 lqo_uuid;	/* ptlrpc's c_remote_uuid */
-	struct list_head	 lqo_oss_list;	/* link to lov_qos */
-	__u64			 lqo_bavail;	/* total bytes avail on OSS */
-	__u64			 lqo_penalty;	/* current penalty */
-	__u64			 lqo_penalty_per_obj; /* penalty decrease
-							 every obj*/
-	time64_t		 lqo_used;	/* last used time, seconds */
-	__u32			 lqo_ost_count;	/* number of osts on this oss */
-	__u32			 lqo_id;	/* unique oss id */
-};
-
-struct ltd_qos {
-	struct lod_qos_oss	*ltq_oss;	/* oss info */
-	__u64			 ltq_penalty;	/* current penalty */
-	__u64			 ltq_penalty_per_obj; /* penalty decrease
-							 every obj*/
-	__u64			 ltq_weight;	/* net weighting */
-	time64_t		 ltq_used;	/* last used time, seconds */
-	bool			 ltq_usable:1;	/* usable for striping */
-};
-
-struct lod_tgt_desc {
-	struct dt_device  *ltd_tgt;
-	struct list_head   ltd_kill;
-	struct obd_export *ltd_exp;
-	struct obd_uuid    ltd_uuid;
-	__u32              ltd_gen;
-	__u32              ltd_index;
-	struct ltd_qos     ltd_qos; /* qos info per target */
-	struct obd_statfs  ltd_statfs;
-	struct ptlrpc_thread	*ltd_recovery_thread;
-	unsigned long      ltd_active:1,/* is this target up for requests */
-			   ltd_activate:1,/* should  target be activated */
-			   ltd_reap:1,  /* should this target be deleted */
-			   ltd_got_update_log:1, /* Already got update log */
-			   ltd_connecting:1; /* target is connecting */
-};
+#define lod_tgt_desc	lu_tgt_desc
 
 #define TGT_PTRS		256     /* number of pointers at 1st level */
 #define TGT_PTRS_PER_BLOCK      256     /* number of pointers at 2nd level */
@@ -210,7 +151,7 @@ struct lod_device {
 	 * structure should be moved to lod_tgt_descs as well.
 	 */
 	/* QoS info per LOD */
-	struct lod_qos	      lod_qos; /* qos info per lod */
+	struct lu_qos	      lod_qos; /* qos info per lod */
 
 	/* OST pool data */
 	struct ost_pool		lod_pool_info; /* all OSTs in a packed array */
@@ -233,14 +174,14 @@ struct lod_device {
 #define lod_ostnr	lod_ost_descs.ltd_tgtnr
 #define lod_osts_size	lod_ost_descs.ltd_tgts_size
 #define ltd_ost		ltd_tgt
-#define lod_ost_desc	lod_tgt_desc
+#define lod_ost_desc	lu_tgt_desc
 
 #define lod_mdts		lod_mdt_descs.ltd_tgts
 #define lod_mdt_bitmap		lod_mdt_descs.ltd_tgt_bitmap
 #define lod_remote_mdt_count	lod_mdt_descs.ltd_tgtnr
 #define lod_mdts_size		lod_mdt_descs.ltd_tgts_size
 #define ltd_mdt			ltd_tgt
-#define lod_mdt_desc		lod_tgt_desc
+#define lod_mdt_desc		lu_tgt_desc
 
 struct lod_layout_component {
 	struct lu_extent	  llc_extent;
@@ -751,9 +692,7 @@ struct lod_obj_stripe_cb_data {
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		       struct lu_attr *attr, const struct lu_buf *buf,
 		       struct thandle *th);
-int qos_add_tgt(struct lod_device*, struct lod_tgt_desc *);
-int qos_del_tgt(struct lod_device *, struct lod_tgt_desc *);
-void lod_qos_rr_init(struct lod_qos_rr *lqr);
+void lod_qos_rr_init(struct lu_qos_rr *lqr);
 int lod_use_defined_striping(const struct lu_env *, struct lod_object *,
 			     const struct lu_buf *);
 int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,

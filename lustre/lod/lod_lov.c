@@ -111,7 +111,7 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 			list_del(&tgt_desc->ltd_kill);
 			if (ltd == &lod->lod_ost_descs) {
 				/* remove from QoS structures */
-				rc = qos_del_tgt(lod, tgt_desc);
+				rc = lqos_del_tgt(&lod->lod_qos, tgt_desc);
 				if (rc)
 					CERROR("%s: qos_del_tgt(%s) failed:"
 					       "rc = %d\n",
@@ -364,7 +364,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 			GOTO(out_mutex, rc);
 		}
 
-		rc = qos_add_tgt(lod, tgt_desc);
+		rc = lqos_add_tgt(&lod->lod_qos, tgt_desc);
 		if (rc) {
 			CERROR("%s: qos_add_tgt failed with %d\n",
 				obd->obd_name, rc);
@@ -2192,7 +2192,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	lod->lod_sp_me = LUSTRE_SP_CLI;
 
 	/* Set up allocation policy (QoS and RR) */
-	INIT_LIST_HEAD(&lod->lod_qos.lq_oss_list);
+	INIT_LIST_HEAD(&lod->lod_qos.lq_svr_list);
 	init_rwsem(&lod->lod_qos.lq_rw_sem);
 	lod->lod_qos.lq_dirty = 1;
 	lod->lod_qos.lq_rr.lqr_dirty = 1;

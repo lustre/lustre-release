@@ -12,6 +12,7 @@ obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
 obdclass-all-objs += linkea.o
 obdclass-all-objs += kernelcomm.o jobid.o
 obdclass-all-objs += integrity.o obd_cksum.o
+obdclass-all-objs += lu_qos.o
 
 @SERVER_TRUE@obdclass-all-objs += acl.o
 @SERVER_TRUE@obdclass-all-objs += idmap.o

@@ -59,122 +59,6 @@
 		       OST_TGT(lod,i)->ltd_statfs.os_bsize)
 
 /**
- * Add a new target to Quality of Service (QoS) target table.
- *
- * Add a new OST target to the structure representing an OSS. Resort the list
- * of known OSSs by the number of OSTs attached to each OSS. The OSS list is
- * protected internally and no external locking is required.
- *
- * \param[in] lod		LOD device
- * \param[in] ost_desc		OST description
- *
- * \retval 0			on success
- * \retval -ENOMEM		on error
- */
-int qos_add_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
-{
-	struct lod_qos_oss *oss = NULL, *temposs;
-	struct obd_export  *exp = ost_desc->ltd_exp;
-	int		    rc = 0, found = 0;
-	struct list_head   *list;
-	__u32 id = 0;
-	ENTRY;
-
-	down_write(&lod->lod_qos.lq_rw_sem);
-	/*
-	 * a bit hacky approach to learn NID of corresponding connection
-	 * but there is no official API to access information like this
-	 * with OSD API.
-	 */
-	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
-		if (obd_uuid_equals(&oss->lqo_uuid,
-				    &exp->exp_connection->c_remote_uuid)) {
-			found++;
-			break;
-		}
-		if (oss->lqo_id > id)
-			id = oss->lqo_id;
-	}
-
-	if (!found) {
-		OBD_ALLOC_PTR(oss);
-		if (!oss)
-			GOTO(out, rc = -ENOMEM);
-		memcpy(&oss->lqo_uuid, &exp->exp_connection->c_remote_uuid,
-		       sizeof(oss->lqo_uuid));
-		++id;
-		oss->lqo_id = id;
-	} else {
-		/* Assume we have to move this one */
-		list_del(&oss->lqo_oss_list);
-	}
-
-	oss->lqo_ost_count++;
-	ost_desc->ltd_qos.ltq_oss = oss;
-
-	CDEBUG(D_QOS, "add tgt %s to OSS %s (%d OSTs)\n",
-	       obd_uuid2str(&ost_desc->ltd_uuid), obd_uuid2str(&oss->lqo_uuid),
-	       oss->lqo_ost_count);
-
-	/* Add sorted by # of OSTs.  Find the first entry that we're
-	   bigger than... */
-	list = &lod->lod_qos.lq_oss_list;
-	list_for_each_entry(temposs, list, lqo_oss_list) {
-		if (oss->lqo_ost_count > temposs->lqo_ost_count)
-			break;
-	}
-	/* ...and add before it.  If we're the first or smallest, temposs
-	   points to the list head, and we add to the end. */
-	list_add_tail(&oss->lqo_oss_list, &temposs->lqo_oss_list);
-
-	lod->lod_qos.lq_dirty = 1;
-	lod->lod_qos.lq_rr.lqr_dirty = 1;
-
-out:
-	up_write(&lod->lod_qos.lq_rw_sem);
-	RETURN(rc);
-}
-
-/**
- * Remove OST target from QoS table.
- *
- * Removes given OST target from QoS table and releases related OSS structure
- * if no OSTs remain on the OSS.
- *
- * \param[in] lod		LOD device
- * \param[in] ost_desc		OST description
- *
- * \retval 0			on success
- * \retval -ENOENT		if no OSS was found
- */
-int qos_del_tgt(struct lod_device *lod, struct lod_tgt_desc *ost_desc)
-{
-	struct lod_qos_oss *oss;
-	int                 rc = 0;
-	ENTRY;
-
-	down_write(&lod->lod_qos.lq_rw_sem);
-	oss = ost_desc->ltd_qos.ltq_oss;
-	if (!oss)
-		GOTO(out, rc = -ENOENT);
-
-	oss->lqo_ost_count--;
-	if (oss->lqo_ost_count == 0) {
-		CDEBUG(D_QOS, "removing OSS %s\n",
-		       obd_uuid2str(&oss->lqo_uuid));
-		list_del(&oss->lqo_oss_list);
-		ost_desc->ltd_qos.ltq_oss = NULL;
-		OBD_FREE_PTR(oss);
-	}
-
-	lod->lod_qos.lq_dirty = 1;
-	lod->lod_qos.lq_rr.lqr_dirty = 1;
-out:
-	up_write(&lod->lod_qos.lq_rw_sem);
-	RETURN(rc);
-}
-
-/**
  * Check whether the target is available for new OST objects.
  *
  * Request statfs data from the given target and verify it's active and not
@@ -324,12 +208,13 @@ out:
  */
 static int lod_qos_calc_ppo(struct lod_device *lod)
 {
-	struct lod_qos_oss *oss;
-	__u64		    ba_max, ba_min, temp;
-	__u32		    num_active;
-	unsigned int	    i;
-	int		    rc, prio_wide;
-	time64_t	    now, age;
+	struct lu_svr_qos *oss;
+	__u64 ba_max, ba_min, temp;
+	__u32 num_active;
+	unsigned int i;
+	int rc, prio_wide;
+	time64_t now, age;
+
 	ENTRY;
 
 	if (!lod->lod_qos.lq_dirty)
@@ -340,9 +225,9 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 		GOTO(out, rc = -EAGAIN);
 
 	/* find bavail on each OSS */
-	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list)
-			    oss->lqo_bavail = 0;
-	lod->lod_qos.lq_active_oss_count = 0;
+	list_for_each_entry(oss, &lod->lod_qos.lq_svr_list, lsq_svr_list)
+		oss->lsq_bavail = 0;
+	lod->lod_qos.lq_active_svr_count = 0;
 
 	/*
 	 * How badly user wants to select OSTs "widely" (not recently chosen
@@ -366,9 +251,9 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 		ba_max = max(temp, ba_max);
 
 		/* Count the number of usable OSS's */
-		if (OST_TGT(lod,i)->ltd_qos.ltq_oss->lqo_bavail == 0)
-			lod->lod_qos.lq_active_oss_count++;
-		OST_TGT(lod,i)->ltd_qos.ltq_oss->lqo_bavail += temp;
+		if (OST_TGT(lod, i)->ltd_qos.ltq_svr->lsq_bavail == 0)
+			lod->lod_qos.lq_active_svr_count++;
+		OST_TGT(lod, i)->ltd_qos.ltq_svr->lsq_bavail += temp;
 
 		/* per-OST penalty is prio * TGT_bavail / (num_ost - 1) / 2 */
 		temp >>= 1;
@@ -386,7 +271,7 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 				(age / lod->lod_desc.ld_qos_maxage);
 	}
 
-	num_active = lod->lod_qos.lq_active_oss_count - 1;
+	num_active = lod->lod_qos.lq_active_svr_count - 1;
 	if (num_active < 1) {
 		/* If there's only 1 OSS, we can't penalize it, so instead
 		   we have to double the OST penalty */
@@ -396,18 +281,18 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 	}
 
 	/* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
-	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
-		temp = oss->lqo_bavail >> 1;
-		do_div(temp, oss->lqo_ost_count * num_active);
-		oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
+	list_for_each_entry(oss, &lod->lod_qos.lq_svr_list, lsq_svr_list) {
+		temp = oss->lsq_bavail >> 1;
+		do_div(temp, oss->lsq_tgt_count * num_active);
+		oss->lsq_penalty_per_obj = (temp * prio_wide) >> 8;
 
-		age = (now - oss->lqo_used) >> 3;
+		age = (now - oss->lsq_used) >> 3;
 		if (lod->lod_qos.lq_reset ||
 		    age > 32 * lod->lod_desc.ld_qos_maxage)
-			oss->lqo_penalty = 0;
+			oss->lsq_penalty = 0;
 		else if (age > lod->lod_desc.ld_qos_maxage)
 			/* Decay OSS penalty. */
-			oss->lqo_penalty >>= age / lod->lod_desc.ld_qos_maxage;
+			oss->lsq_penalty >>= age / lod->lod_desc.ld_qos_maxage;
 	}
 
 	lod->lod_qos.lq_dirty = 0;
@@ -447,12 +332,12 @@ static int lod_qos_calc_weight(struct lod_device *lod, int i)
 	__u64 temp, temp2;
 
 	temp = TGT_BAVAIL(i);
-	temp2 = OST_TGT(lod,i)->ltd_qos.ltq_penalty +
-		OST_TGT(lod,i)->ltd_qos.ltq_oss->lqo_penalty;
+	temp2 = OST_TGT(lod, i)->ltd_qos.ltq_penalty +
+		OST_TGT(lod, i)->ltd_qos.ltq_svr->lsq_penalty;
 	if (temp < temp2)
-		OST_TGT(lod,i)->ltd_qos.ltq_weight = 0;
+		OST_TGT(lod, i)->ltd_qos.ltq_weight = 0;
 	else
-		OST_TGT(lod,i)->ltd_qos.ltq_weight = temp - temp2;
+		OST_TGT(lod, i)->ltd_qos.ltq_weight = temp - temp2;
 	return 0;
 }
 
@@ -474,7 +359,7 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 			__u32 index, __u64 *total_wt)
 {
 	struct lod_tgt_desc *ost;
-	struct lod_qos_oss  *oss;
+	struct lu_svr_qos  *oss;
 	unsigned int j;
 	ENTRY;
 
@@ -484,28 +369,28 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 	/* Don't allocate on this devuce anymore, until the next alloc_qos */
 	ost->ltd_qos.ltq_usable = 0;
 
-	oss = ost->ltd_qos.ltq_oss;
+	oss = ost->ltd_qos.ltq_svr;
 
 	/* Decay old penalty by half (we're adding max penalty, and don't
 	   want it to run away.) */
 	ost->ltd_qos.ltq_penalty >>= 1;
-	oss->lqo_penalty >>= 1;
+	oss->lsq_penalty >>= 1;
 
 	/* mark the OSS and OST as recently used */
-	ost->ltd_qos.ltq_used = oss->lqo_used = ktime_get_real_seconds();
+	ost->ltd_qos.ltq_used = oss->lsq_used = ktime_get_real_seconds();
 
 	/* Set max penalties for this OST and OSS */
 	ost->ltd_qos.ltq_penalty +=
 		ost->ltd_qos.ltq_penalty_per_obj * lod->lod_ostnr;
-	oss->lqo_penalty += oss->lqo_penalty_per_obj *
-		lod->lod_qos.lq_active_oss_count;
+	oss->lsq_penalty += oss->lsq_penalty_per_obj *
+		lod->lod_qos.lq_active_svr_count;
 
 	/* Decrease all OSS penalties */
-	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
-		if (oss->lqo_penalty < oss->lqo_penalty_per_obj)
-			oss->lqo_penalty = 0;
+	list_for_each_entry(oss, &lod->lod_qos.lq_svr_list, lsq_svr_list) {
+		if (oss->lsq_penalty < oss->lsq_penalty_per_obj)
+			oss->lsq_penalty = 0;
 		else
-			oss->lqo_penalty -= oss->lqo_penalty_per_obj;
+			oss->lsq_penalty -= oss->lsq_penalty_per_obj;
 	}
 
 	*total_wt = 0;
@@ -539,20 +424,19 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 			  i, ost->ltd_qos.ltq_usable, TGT_BAVAIL(i) >> 10,
 			  ost->ltd_qos.ltq_penalty_per_obj >> 10,
 			  ost->ltd_qos.ltq_penalty >> 10,
-			  ost->ltd_qos.ltq_oss->lqo_penalty_per_obj >> 10,
-			  ost->ltd_qos.ltq_oss->lqo_penalty >> 10,
+			  ost->ltd_qos.ltq_svr->lsq_penalty_per_obj >> 10,
+			  ost->ltd_qos.ltq_svr->lsq_penalty >> 10,
 			  ost->ltd_qos.ltq_weight >> 10);
 	}
 
 	RETURN(0);
 }
 
-void lod_qos_rr_init(struct lod_qos_rr *lqr)
+void lod_qos_rr_init(struct lu_qos_rr *lqr)
 {
 	spin_lock_init(&lqr->lqr_alloc);
 	lqr->lqr_dirty = 1;
 }
-
 
 #define LOV_QOS_EMPTY ((__u32)-1)
 
@@ -573,9 +457,9 @@ void lod_qos_rr_init(struct lod_qos_rr *lqr)
  * \retval -ENOMEM	fails to allocate the array
  */
 static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
-			   struct lod_qos_rr *lqr)
+			   struct lu_qos_rr *lqr)
 {
-	struct lod_qos_oss  *oss;
+	struct lu_svr_qos  *oss;
 	struct lod_tgt_desc *ost;
 	unsigned placed, real_count;
 	unsigned int i;
@@ -617,7 +501,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 
 	/* Place all the OSTs from 1 OSS at the same time. */
 	placed = 0;
-	list_for_each_entry(oss, &lod->lod_qos.lq_oss_list, lqo_oss_list) {
+	list_for_each_entry(oss, &lod->lod_qos.lq_svr_list, lsq_svr_list) {
 		int j = 0;
 
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
@@ -629,11 +513,11 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 
 			ost = OST_TGT(lod,src_pool->op_array[i]);
 			LASSERT(ost && ost->ltd_ost);
-			if (ost->ltd_qos.ltq_oss != oss)
+			if (ost->ltd_qos.ltq_svr != oss)
 				continue;
 
 			/* Evenly space these OSTs across arrayspace */
-			next = j * lqr->lqr_pool.op_count / oss->lqo_ost_count;
+			next = j * lqr->lqr_pool.op_count / oss->lsq_tgt_count;
 			while (lqr->lqr_pool.op_array[next] != LOV_QOS_EMPTY)
 				next = (next + 1) % lqr->lqr_pool.op_count;
 
@@ -894,7 +778,7 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_tgt_desc *ost = OST_TGT(lod, index);
-	struct lod_qos_oss *lqo = ost->ltd_qos.ltq_oss;
+	struct lu_svr_qos *lsq = ost->ltd_qos.ltq_svr;
 	bool used = false;
 	int i;
 
@@ -913,7 +797,7 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 
 	/* check OSS use */
 	for (i = 0; i < lag->lag_oaa_count; i++) {
-		if (lag->lag_oss_avoid_array[i] == lqo->lqo_id) {
+		if (lag->lag_oss_avoid_array[i] == lsq->lsq_id) {
 			used = true;
 			break;
 		}
@@ -1057,7 +941,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct pool_desc  *pool = NULL;
 	struct ost_pool   *osts;
-	struct lod_qos_rr *lqr;
+	struct lu_qos_rr *lqr;
 	unsigned int	i, array_idx;
 	__u32 ost_start_idx_temp;
 	__u32 stripe_idx = 0;
@@ -2361,11 +2245,11 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 			 */
 			for (j = 0; j < comp->llc_stripe_count; j++) {
 				struct lod_tgt_desc *ost;
-				struct lod_qos_oss *lqo;
+				struct lu_svr_qos *lsq;
 				int k;
 
 				ost = OST_TGT(lod, comp->llc_ost_indices[j]);
-				lqo = ost->ltd_qos.ltq_oss;
+				lsq = ost->ltd_qos.ltq_svr;
 
 				if (cfs_bitmap_check(bitmap, ost->ltd_index))
 					continue;
@@ -2377,12 +2261,12 @@ void lod_collect_avoidance(struct lod_object *lo, struct lod_avoid_guide *lag,
 
 				for (k = 0; k < lag->lag_oaa_count; k++) {
 					if (lag->lag_oss_avoid_array[k] ==
-					    lqo->lqo_id)
+					    lsq->lsq_id)
 						break;
 				}
 				if (k == lag->lag_oaa_count) {
 					lag->lag_oss_avoid_array[k] =
-								lqo->lqo_id;
+								lsq->lsq_id;
 					lag->lag_oaa_count++;
 				}
 			}

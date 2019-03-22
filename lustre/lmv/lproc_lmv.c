@@ -75,6 +75,109 @@ static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(desc_uuid);
 
+static ssize_t qos_maxage_show(struct kobject *kobj,
+			       struct attribute *attr,
+			       char *buf)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return sprintf(buf, "%u\n", dev->u.lmv.desc.ld_qos_maxage);
+}
+
+static ssize_t qos_maxage_store(struct kobject *kobj,
+				struct attribute *attr,
+				const char *buffer,
+				size_t count)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	dev->u.lmv.desc.ld_qos_maxage = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(qos_maxage);
+
+static ssize_t qos_prio_free_show(struct kobject *kobj,
+				  struct attribute *attr,
+				  char *buf)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return sprintf(buf, "%u%%\n",
+		       (dev->u.lmv.lmv_qos.lq_prio_free * 100 + 255) >> 8);
+}
+
+static ssize_t qos_prio_free_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer,
+				   size_t count)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lmv_obd *lmv = &dev->u.lmv;
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val > 100)
+		return -EINVAL;
+
+	lmv->lmv_qos.lq_prio_free = (val << 8) / 100;
+	lmv->lmv_qos.lq_dirty = 1;
+	lmv->lmv_qos.lq_reset = 1;
+
+	return count;
+}
+LUSTRE_RW_ATTR(qos_prio_free);
+
+static ssize_t qos_threshold_rr_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return sprintf(buf, "%u%%\n",
+		       (dev->u.lmv.lmv_qos.lq_threshold_rr * 100 + 255) >> 8);
+}
+
+static ssize_t qos_threshold_rr_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer,
+				      size_t count)
+{
+	struct obd_device *dev = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct lmv_obd *lmv = &dev->u.lmv;
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val > 100)
+		return -EINVAL;
+
+	lmv->lmv_qos.lq_threshold_rr = (val << 8) / 100;
+	lmv->lmv_qos.lq_dirty = 1;
+
+	return count;
+}
+LUSTRE_RW_ATTR(qos_threshold_rr);
+
 #ifdef CONFIG_PROC_FS
 static void *lmv_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
@@ -117,7 +220,7 @@ static int lmv_tgt_seq_show(struct seq_file *p, void *v)
 		return 0;
 
 	seq_printf(p, "%u: %s %sACTIVE\n",
-		   tgt->ltd_idx, tgt->ltd_uuid.uuid,
+		   tgt->ltd_index, tgt->ltd_uuid.uuid,
 		   tgt->ltd_active ? "" : "IN");
 	return 0;
 }
@@ -156,6 +259,9 @@ static struct attribute *lmv_attrs[] = {
 	&lustre_attr_activeobd.attr,
 	&lustre_attr_desc_uuid.attr,
 	&lustre_attr_numobd.attr,
+	&lustre_attr_qos_maxage.attr,
+	&lustre_attr_qos_prio_free.attr,
+	&lustre_attr_qos_threshold_rr.attr,
 	NULL,
 };
 

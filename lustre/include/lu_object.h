@@ -1387,5 +1387,89 @@ static inline bool lu_object_is_cl(const struct lu_object *o)
 	return lu_device_is_cl(o->lo_dev);
 }
 
+/* Generic subset of OSTs */
+struct ost_pool {
+	__u32		   *op_array;	/* array of index of
+					 * lov_obd->lov_tgts */
+	unsigned int	    op_count;	/* number of OSTs in the array */
+	unsigned int	    op_size;	/* allocated size of lp_array */
+	struct rw_semaphore op_rw_sem;	/* to protect ost_pool use */
+};
+
+/* round-robin QoS data for LOD/LMV */
+struct lu_qos_rr {
+	spinlock_t		 lqr_alloc;	/* protect allocation index */
+	__u32			 lqr_start_idx;	/* start index of new inode */
+	__u32			 lqr_offset_idx;/* aliasing for start_idx */
+	int			 lqr_start_count;/* reseed counter */
+	struct ost_pool		 lqr_pool;	/* round-robin optimized list */
+	unsigned long		 lqr_dirty:1;	/* recalc round-robin list */
+};
+
+/* QoS data per MDS/OSS */
+struct lu_svr_qos {
+	struct obd_uuid		 lsq_uuid;	/* ptlrpc's c_remote_uuid */
+	struct list_head	 lsq_svr_list;	/* link to lq_svr_list */
+	__u64			 lsq_bavail;	/* total bytes avail on svr */
+	__u64			 lsq_iavail;	/* tital inode avail on svr */
+	__u64			 lsq_penalty;	/* current penalty */
+	__u64			 lsq_penalty_per_obj; /* penalty decrease
+						       * every obj*/
+	time64_t		 lsq_used;	/* last used time, seconds */
+	__u32			 lsq_tgt_count;	/* number of tgts on this svr */
+	__u32			 lsq_id;	/* unique svr id */
+};
+
+/* QoS data per MDT/OST */
+struct lu_tgt_qos {
+	struct lu_svr_qos	*ltq_svr;	/* svr info */
+	__u64			 ltq_penalty;	/* current penalty */
+	__u64			 ltq_penalty_per_obj; /* penalty decrease
+						       * every obj*/
+	__u64			 ltq_weight;	/* net weighting */
+	time64_t		 ltq_used;	/* last used time, seconds */
+	bool			 ltq_usable:1;	/* usable for striping */
+};
+
+/* target descriptor */
+struct lu_tgt_desc {
+	union {
+		struct dt_device	*ltd_tgt;
+		struct obd_device	*ltd_obd;
+	};
+	struct obd_export *ltd_exp;
+	struct obd_uuid    ltd_uuid;
+	__u32              ltd_index;
+	__u32		   ltd_gen;
+	struct list_head   ltd_kill;
+	struct ptlrpc_thread	*ltd_recovery_thread;
+	struct mutex	   ltd_fid_mutex;
+	struct lu_tgt_qos  ltd_qos; /* qos info per target */
+	struct obd_statfs  ltd_statfs;
+	time64_t	   ltd_statfs_age;
+	unsigned long      ltd_active:1,/* is this target up for requests */
+			   ltd_activate:1,/* should target be activated */
+			   ltd_reap:1,  /* should this target be deleted */
+			   ltd_got_update_log:1, /* Already got update log */
+			   ltd_connecting:1; /* target is connecting */
+};
+
+/* QoS data for LOD/LMV */
+struct lu_qos {
+	struct list_head	 lq_svr_list;	/* lu_svr_qos list */
+	struct rw_semaphore	 lq_rw_sem;
+	__u32			 lq_active_svr_count;
+	unsigned int		 lq_prio_free;   /* priority for free space */
+	unsigned int		 lq_threshold_rr;/* priority for rr */
+	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
+	unsigned long		 lq_dirty:1,     /* recalc qos data */
+				 lq_same_space:1,/* the servers all have approx.
+						  * the same space avail */
+				 lq_reset:1;     /* zero current penalties */
+};
+
+int lqos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
+int lqos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
+
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */
