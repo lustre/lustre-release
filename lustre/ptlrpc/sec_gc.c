@@ -58,8 +58,8 @@ static atomic_t sec_gc_wait_del = ATOMIC_INIT(0);
 
 void sptlrpc_gc_add_sec(struct ptlrpc_sec *sec)
 {
-        LASSERT(sec->ps_policy->sp_cops->gc_ctx);
-        LASSERT(sec->ps_gc_interval > 0);
+	LASSERT(sec->ps_policy->sp_cops->gc_ctx);
+	LASSERT(sec->ps_gc_interval > 0);
 	LASSERT(list_empty(&sec->ps_gc_list));
 
 	sec->ps_gc_next = ktime_get_real_seconds() + sec->ps_gc_interval;
@@ -137,20 +137,20 @@ static void sec_process_ctx_list(void)
 
 static void sec_do_gc(struct ptlrpc_sec *sec)
 {
-        LASSERT(sec->ps_policy->sp_cops->gc_ctx);
+	LASSERT(sec->ps_policy->sp_cops->gc_ctx);
 
-        if (unlikely(sec->ps_gc_next == 0)) {
-                CDEBUG(D_SEC, "sec %p(%s) has 0 gc time\n",
-                      sec, sec->ps_policy->sp_name);
-                return;
-        }
+	if (unlikely(sec->ps_gc_next == 0)) {
+		CDEBUG(D_SEC, "sec %p(%s) has 0 gc time\n",
+		       sec, sec->ps_policy->sp_name);
+		return;
+	}
 
-        CDEBUG(D_SEC, "check on sec %p(%s)\n", sec, sec->ps_policy->sp_name);
+	CDEBUG(D_SEC, "check on sec %p(%s)\n", sec, sec->ps_policy->sp_name);
 
 	if (sec->ps_gc_next > ktime_get_real_seconds())
-                return;
+		return;
 
-        sec->ps_policy->sp_cops->gc_ctx(sec);
+	sec->ps_policy->sp_cops->gc_ctx(sec);
 	sec->ps_gc_next = ktime_get_real_seconds() + sec->ps_gc_interval;
 }
 
@@ -160,7 +160,8 @@ static void sec_gc_main(struct work_struct *ws)
 
 	sec_process_ctx_list();
 again:
-	/* go through sec list do gc.
+	/*
+	 * go through sec list do gc.
 	 * FIXME here we iterate through the whole list each time which
 	 * is not optimal. we perhaps want to use balanced binary tree
 	 * to trace each sec as order of expiry time.
@@ -169,7 +170,8 @@ again:
 	 */
 	mutex_lock(&sec_gc_mutex);
 	list_for_each_entry(sec, &sec_gc_list, ps_gc_list) {
-		/* if someone is waiting to be deleted, let it
+		/*
+		 * if someone is waiting to be deleted, let it
 		 * proceed as soon as possible.
 		 */
 		if (atomic_read(&sec_gc_wait_del)) {
