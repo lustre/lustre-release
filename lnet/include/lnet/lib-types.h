@@ -415,6 +415,12 @@ struct lnet_net {
 
 	/* network state */
 	enum lnet_net_state	net_state;
+
+	/* when I was last alive */
+	time64_t		net_last_alive;
+
+	/* protects access to net_last_alive */
+	spinlock_t		net_lock;
 };
 
 struct lnet_ni {
@@ -449,9 +455,6 @@ struct lnet_ni {
 
 	/* percpt reference count */
 	int			**ni_refs;
-
-	/* when I was last alive */
-	time64_t		ni_last_alive;
 
 	/* pointer to parent network */
 	struct lnet_net		*ni_net;

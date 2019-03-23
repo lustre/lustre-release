@@ -777,10 +777,29 @@ lnet_wait_known_routerstate(void)
 	}
 }
 
+static inline bool
+lnet_net_set_status_locked(struct lnet_net *net, __u32 status)
+{
+	struct lnet_ni *ni;
+	bool update = false;
+
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+		lnet_ni_lock(ni);
+		if (ni->ni_status &&
+		    ni->ni_status->ns_status != status) {
+		    ni->ni_status->ns_status = status;
+		    update = true;
+		}
+		lnet_ni_unlock(ni);
+	}
+
+	return update;
+}
+
 static bool
 lnet_update_ni_status_locked(void)
 {
-	struct lnet_ni *ni = NULL;
+	struct lnet_net *net;
 	bool push = false;
 	time64_t now;
 	time64_t timeout;
@@ -790,31 +809,27 @@ lnet_update_ni_status_locked(void)
 	timeout = router_ping_timeout + alive_router_check_interval;
 
 	now = ktime_get_real_seconds();
-	while ((ni = lnet_get_next_ni_locked(NULL, ni))) {
-		if (ni->ni_net->net_lnd->lnd_type == LOLND)
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		if (net->net_lnd->lnd_type == LOLND)
 			continue;
 
-		if (now < ni->ni_last_alive + timeout)
+		if (now < net->net_last_alive + timeout)
 			continue;
 
-		lnet_ni_lock(ni);
+		spin_lock(&net->net_lock);
 		/* re-check with lock */
-		if (now < ni->ni_last_alive + timeout) {
-			lnet_ni_unlock(ni);
+		if (now < net->net_last_alive + timeout) {
+			spin_unlock(&net->net_lock);
 			continue;
 		}
+		spin_unlock(&net->net_lock);
 
-		LASSERT(ni->ni_status != NULL);
-
-		if (ni->ni_status->ns_status != LNET_NI_STATUS_DOWN) {
-			CDEBUG(D_NET, "NI(%s:%lld) status changed to down\n",
-			       libcfs_nid2str(ni->ni_nid), timeout);
-			/* NB: so far, this is the only place to set
-			 * NI status to "down" */
-			ni->ni_status->ns_status = LNET_NI_STATUS_DOWN;
-			push = true;
-		}
-		lnet_ni_unlock(ni);
+		/*
+		 * if the net didn't receive any traffic for past the
+		 * timeout on any of its constituent NIs, then mark all
+		 * the NIs down.
+		 */
+		push = lnet_net_set_status_locked(net, LNET_NI_STATUS_DOWN);
 	}
 
 	return push;
