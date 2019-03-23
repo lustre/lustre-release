@@ -224,9 +224,11 @@ void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
 	if (count == i) {
 		wake_up(&new->set_waitq);
 
-		/* XXX: It maybe unnecessary to wakeup all the partners. But to
+		/*
+		 * XXX: It maybe unnecessary to wakeup all the partners. But to
 		 *      guarantee the async RPC can be processed ASAP, we have
-		 *      no other better choice. It maybe fixed in future. */
+		 *      no other better choice. It maybe fixed in future.
+		 */
 		for (i = 0; i < pc->pc_npartners; i++)
 			wake_up(&pc->pc_partners[i]->pc_set->set_waitq);
 	}
@@ -236,7 +238,7 @@ void ptlrpcd_add_rqset(struct ptlrpc_request_set *set)
  * Return transferred RPCs count.
  */
 static int ptlrpcd_steal_rqset(struct ptlrpc_request_set *des,
-                               struct ptlrpc_request_set *src)
+			       struct ptlrpc_request_set *src)
 {
 	struct list_head *tmp, *pos;
 	struct ptlrpc_request *req;
@@ -279,8 +281,10 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
 		spin_unlock(&req->rq_lock);
 		l_wait_event(req->rq_set_waitq, (req->rq_set == NULL), &lwi);
 	} else if (req->rq_set) {
-		/* If we have a vaid "rq_set", just reuse it to avoid double
-		 * linked. */
+		/*
+		 * If we have a vaid "rq_set", just reuse it to avoid double
+		 * linked.
+		 */
 		LASSERT(req->rq_phase == RQ_PHASE_NEW);
 		LASSERT(req->rq_send_state == LUSTRE_IMP_REPLAY);
 
@@ -314,11 +318,12 @@ static inline void ptlrpc_reqset_get(struct ptlrpc_request_set *set)
 static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 {
 	struct list_head *tmp, *pos;
-        struct ptlrpc_request *req;
-        struct ptlrpc_request_set *set = pc->pc_set;
-        int rc = 0;
-        int rc2;
-        ENTRY;
+	struct ptlrpc_request *req;
+	struct ptlrpc_request_set *set = pc->pc_set;
+	int rc = 0;
+	int rc2;
+
+	ENTRY;
 
 	if (atomic_read(&set->set_new_count)) {
 		spin_lock(&set->set_new_req_lock);
@@ -336,7 +341,8 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 		spin_unlock(&set->set_new_req_lock);
 	}
 
-	/* We should call lu_env_refill() before handling new requests to make
+	/*
+	 * We should call lu_env_refill() before handling new requests to make
 	 * sure that env key the requests depending on really exists.
 	 */
 	rc2 = lu_env_refill(env);
@@ -358,8 +364,10 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 	if (atomic_read(&set->set_remaining))
 		rc |= ptlrpc_check_set(env, set);
 
-	/* NB: ptlrpc_check_set has already moved complted request at the
-	 * head of seq::set_requests */
+	/*
+	 * NB: ptlrpc_check_set has already moved complted request at the
+	 * head of seq::set_requests
+	 */
 	list_for_each_safe(pos, tmp, &set->set_requests) {
 		req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
 		if (req->rq_phase != RQ_PHASE_COMPLETE)
@@ -376,19 +384,21 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 		 */
 		rc = atomic_read(&set->set_new_count);
 
-                /* If we have nothing to do, check whether we can take some
-                 * work from our partner threads. */
-                if (rc == 0 && pc->pc_npartners > 0) {
-                        struct ptlrpcd_ctl *partner;
-                        struct ptlrpc_request_set *ps;
-                        int first = pc->pc_cursor;
+		/*
+		 * If we have nothing to do, check whether we can take some
+		 * work from our partner threads.
+		 */
+		if (rc == 0 && pc->pc_npartners > 0) {
+			struct ptlrpcd_ctl *partner;
+			struct ptlrpc_request_set *ps;
+			int first = pc->pc_cursor;
 
-                        do {
-                                partner = pc->pc_partners[pc->pc_cursor++];
-                                if (pc->pc_cursor >= pc->pc_npartners)
-                                        pc->pc_cursor = 0;
-                                if (partner == NULL)
-                                        continue;
+			do {
+				partner = pc->pc_partners[pc->pc_cursor++];
+				if (pc->pc_cursor >= pc->pc_npartners)
+					pc->pc_cursor = 0;
+				if (partner == NULL)
+					continue;
 
 				spin_lock(&partner->pc_lock);
 				ps = partner->pc_set;
@@ -403,8 +413,8 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 				if (atomic_read(&ps->set_new_count)) {
 					rc = ptlrpcd_steal_rqset(set, ps);
 					if (rc > 0)
-						CDEBUG(D_RPCTRACE, "transfer %d"
-						       " async RPCs [%d->%d]\n",
+						CDEBUG(D_RPCTRACE,
+						       "transfer %d async RPCs [%d->%d]\n",
 						       rc, partner->pc_index,
 						       pc->pc_index);
 				}
@@ -420,7 +430,6 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
  * Main ptlrpcd thread.
  * ptlrpc's code paths like to execute in process context, so we have this
  * thread which spins on a set which contains the rpcs and sends them.
- *
  */
 static int ptlrpcd(void *arg)
 {
@@ -430,6 +439,7 @@ static int ptlrpcd(void *arg)
 	struct lu_env			env = { .le_ses = &ses };
 	int				rc = 0;
 	int				exit = 0;
+
 	ENTRY;
 
 	unshare_fs_struct();
@@ -468,17 +478,17 @@ static int ptlrpcd(void *arg)
 
 	complete(&pc->pc_starting);
 
-        /*
-         * This mainloop strongly resembles ptlrpc_set_wait() except that our
-         * set never completes.  ptlrpcd_check() calls ptlrpc_check_set() when
-         * there are requests in the set. New requests come in on the set's
-         * new_req_list and ptlrpcd_check() moves them into the set.
-         */
-        do {
-                struct l_wait_info lwi;
+	/*
+	 * This mainloop strongly resembles ptlrpc_set_wait() except that our
+	 * set never completes.  ptlrpcd_check() calls ptlrpc_check_set() when
+	 * there are requests in the set. New requests come in on the set's
+	 * new_req_list and ptlrpcd_check() moves them into the set.
+	 */
+	do {
+		struct l_wait_info lwi;
 		time64_t timeout;
 
-                timeout = ptlrpc_set_next_timeout(set);
+		timeout = ptlrpc_set_next_timeout(set);
 		lwi = LWI_TIMEOUT(cfs_time_seconds(timeout),
 				ptlrpc_expired_set, set);
 
@@ -493,15 +503,15 @@ static int ptlrpcd(void *arg)
 		 */
 		if (test_bit(LIOD_STOP, &pc->pc_flags)) {
 			if (test_bit(LIOD_FORCE, &pc->pc_flags))
-                                ptlrpc_abort_set(set);
-                        exit++;
-                }
+				ptlrpc_abort_set(set);
+			exit++;
+		}
 
-                /*
-                 * Let's make one more loop to make sure that ptlrpcd_check()
-                 * copied all raced new rpcs into the set so we can kill them.
-                 */
-        } while (exit < 2);
+		/*
+		 * Let's make one more loop to make sure that ptlrpcd_check()
+		 * copied all raced new rpcs into the set so we can kill them.
+		 */
+	} while (exit < 2);
 
 	/*
 	 * Wait for inflight requests to drain.
@@ -567,6 +577,7 @@ static int ptlrpcd_partners(struct ptlrpcd *pd, int index)
 	int			first;
 	int			i;
 	int			rc = 0;
+
 	ENTRY;
 
 	LASSERT(index >= 0 && index < pd->pd_nthreads);
@@ -597,6 +608,7 @@ int ptlrpcd_start(struct ptlrpcd_ctl *pc)
 {
 	struct task_struct	*task;
 	int			rc = 0;
+
 	ENTRY;
 
 	/*
@@ -653,6 +665,7 @@ out:
 void ptlrpcd_free(struct ptlrpcd_ctl *pc)
 {
 	struct ptlrpc_request_set *set = pc->pc_set;
+
 	ENTRY;
 
 	if (!test_bit(LIOD_START, &pc->pc_flags)) {
@@ -672,16 +685,16 @@ void ptlrpcd_free(struct ptlrpcd_ctl *pc)
 	clear_bit(LIOD_FORCE, &pc->pc_flags);
 
 out:
-        if (pc->pc_npartners > 0) {
-                LASSERT(pc->pc_partners != NULL);
+	if (pc->pc_npartners > 0) {
+		LASSERT(pc->pc_partners != NULL);
 
-                OBD_FREE(pc->pc_partners,
-                         sizeof(struct ptlrpcd_ctl *) * pc->pc_npartners);
-                pc->pc_partners = NULL;
-        }
-        pc->pc_npartners = 0;
+		OBD_FREE(pc->pc_partners,
+			 sizeof(struct ptlrpcd_ctl *) * pc->pc_npartners);
+		pc->pc_partners = NULL;
+	}
+	pc->pc_npartners = 0;
 	pc->pc_error = 0;
-        EXIT;
+	EXIT;
 }
 
 static void ptlrpcd_fini(void)
@@ -689,6 +702,7 @@ static void ptlrpcd_fini(void)
 	int	i;
 	int	j;
 	int	ncpts;
+
 	ENTRY;
 
 	if (ptlrpcds != NULL) {
@@ -731,6 +745,7 @@ static int ptlrpcd_init(void)
 	int			ncpts;
 	int			cpt;
 	struct ptlrpcd		*pd;
+
 	ENTRY;
 
 	/*
@@ -739,7 +754,7 @@ static int ptlrpcd_init(void)
 	cptable = cfs_cpt_table;
 	ncpts = cfs_cpt_number(cptable);
 	if (ptlrpcd_cpts != NULL) {
-		struct cfs_expr_list	*el;
+		struct cfs_expr_list *el;
 
 		size = ncpts * sizeof(ptlrpcds_cpt_idx[0]);
 		OBD_ALLOC(ptlrpcds_cpt_idx, size);
@@ -884,6 +899,7 @@ static int ptlrpcd_init(void)
 
 		size = offsetof(struct ptlrpcd, pd_threads[nthreads]);
 		OBD_CPT_ALLOC(pd, cptable, cpt, size);
+
 		if (!pd)
 			GOTO(out, rc = -ENOMEM);
 		pd->pd_size      = size;
@@ -940,25 +956,26 @@ out:
 
 int ptlrpcd_addref(void)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+
+	ENTRY;
 
 	mutex_lock(&ptlrpcd_mutex);
-        if (++ptlrpcd_users == 1) {
+	if (++ptlrpcd_users == 1) {
 		rc = ptlrpcd_init();
 		if (rc < 0)
 			ptlrpcd_users--;
 	}
 	mutex_unlock(&ptlrpcd_mutex);
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ptlrpcd_addref);
 
 void ptlrpcd_decref(void)
 {
 	mutex_lock(&ptlrpcd_mutex);
-        if (--ptlrpcd_users == 0)
-                ptlrpcd_fini();
+	if (--ptlrpcd_users == 0)
+		ptlrpcd_fini();
 	mutex_unlock(&ptlrpcd_mutex);
 }
 EXPORT_SYMBOL(ptlrpcd_decref);
