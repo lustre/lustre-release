@@ -686,7 +686,7 @@ struct obd_device {
 	int			obd_requests_queued_for_recovery;
 	wait_queue_head_t	obd_next_transno_waitq;
 	/* protected by obd_recovery_task_lock */
-	struct timer_list	obd_recovery_timer;
+	struct hrtimer		obd_recovery_timer;
 	/* seconds */
 	time64_t		obd_recovery_start;
 	/* seconds, for lprocfs_status */
