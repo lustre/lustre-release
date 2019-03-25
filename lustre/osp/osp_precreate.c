@@ -1224,6 +1224,8 @@ static int osp_precreate_thread(void *_args)
 			if (!d->opd_new_connection)
 				continue;
 
+			OBD_FAIL_TIMEOUT(OBD_FAIL_OSP_CON_EVENT_DELAY,
+					 cfs_fail_val);
 			d->opd_new_connection = 0;
 			d->opd_got_disconnected = 0;
 			break;

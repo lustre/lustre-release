@@ -1635,8 +1635,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 	case IMP_EVENT_ACTIVE:
 		d->opd_imp_active = 1;
 
-		if (d->opd_got_disconnected)
-			d->opd_new_connection = 1;
+		d->opd_new_connection = 1;
 		d->opd_imp_connected = 1;
 		d->opd_imp_seen_connected = 1;
 		d->opd_obd->obd_inactive = 0;
