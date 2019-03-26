@@ -855,12 +855,15 @@ struct lfsck_assistant_data {
 	int					 lad_prefetched;
 	int					 lad_assistant_status;
 	int					 lad_post_result;
-	unsigned int				 lad_to_post:1,
-						 lad_to_double_scan:1,
-						 lad_in_double_scan:1,
-						 lad_exit:1,
-						 lad_incomplete:1;
+	unsigned long				 lad_flags;
 	bool					 lad_advance_lock;
+};
+enum {
+	LAD_TO_POST = 0,
+	LAD_TO_DOUBLE_SCAN = 1,
+	LAD_IN_DOUBLE_SCAN = 2,
+	LAD_EXIT = 3,
+	LAD_INCOMPLETE = 4,
 };
 
 #define LFSCK_TMPBUF_LEN	64
@@ -1430,7 +1433,7 @@ static inline void lfsck_lad_set_bitmap(const struct lu_env *env,
 
 	if (likely(bitmap->size > index)) {
 		cfs_bitmap_set(bitmap, index);
-		lad->lad_incomplete = 1;
+		set_bit(LAD_INCOMPLETE, &lad->lad_flags);
 	} else if (com->lc_type == LFSCK_TYPE_NAMESPACE) {
 		struct lfsck_namespace *ns = com->lc_file_ram;
 

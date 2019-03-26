@@ -312,7 +312,7 @@ static int lfsck_namespace_load_bitmap(const struct lu_env *env,
 	}
 
 	if (ns->ln_bitmap_size == 0) {
-		lad->lad_incomplete = 0;
+		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 		CFS_RESET_BITMAP(bitmap);
 
 		RETURN(0);
@@ -326,9 +326,9 @@ static int lfsck_namespace_load_bitmap(const struct lu_env *env,
 		RETURN(rc >= 0 ? -EINVAL : rc);
 
 	if (cfs_bitmap_check_empty(bitmap))
-		lad->lad_incomplete = 0;
+		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 	else
-		lad->lad_incomplete = 1;
+		set_bit(LAD_INCOMPLETE, &lad->lad_flags);
 
 	RETURN(0);
 }
@@ -4100,7 +4100,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	lad->lad_incomplete = 0;
+	clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 	CFS_RESET_BITMAP(lad->lad_bitmap);
 
 	rc = lfsck_namespace_store(env, com);
@@ -6555,7 +6555,7 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 	int				   rc    = 0;
 	ENTRY;
 
-	if (!lad->lad_incomplete)
+	if (!test_bit(LAD_INCOMPLETE, &lad->lad_flags))
 		RETURN_EXIT;
 
 	set = ptlrpc_prep_set();

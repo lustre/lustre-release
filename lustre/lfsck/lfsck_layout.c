@@ -270,7 +270,7 @@ static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 	int				   rc    = 0;
 	ENTRY;
 
-	if (!lad->lad_incomplete)
+	if (!test_bit(LAD_INCOMPLETE, &lad->lad_flags))
 		RETURN_EXIT;
 
 	/* If the MDT has ever failed to verfiy some OST-objects,
@@ -908,7 +908,7 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
 	}
 
 	if (lo->ll_bitmap_size == 0) {
-		lad->lad_incomplete = 0;
+		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 		CFS_RESET_BITMAP(bitmap);
 
 		RETURN(0);
@@ -920,9 +920,9 @@ static int lfsck_layout_load_bitmap(const struct lu_env *env,
 		RETURN(rc >= 0 ? -EINVAL : rc);
 
 	if (cfs_bitmap_check_empty(bitmap))
-		lad->lad_incomplete = 0;
+		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 	else
-		lad->lad_incomplete = 1;
+		set_bit(LAD_INCOMPLETE, &lad->lad_flags);
 
 	RETURN(0);
 }
@@ -1467,7 +1467,7 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 			if (lfsck->li_master) {
 				struct lfsck_assistant_data *lad = com->lc_data;
 
-				if (lad->lad_incomplete)
+				if (test_bit(LAD_INCOMPLETE, &lad->lad_flags))
 					lo->ll_status = LS_PARTIAL;
 				else
 					lo->ll_status = LS_COMPLETED;
@@ -4346,7 +4346,7 @@ out:
 	if (rc < 0) {
 		struct lfsck_assistant_data *lad = com->lc_data;
 
-		if (unlikely(lad->lad_exit)) {
+		if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags))) {
 			rc = 0;
 		} else if (rc == -ENOTCONN || rc == -ESHUTDOWN ||
 			   rc == -ETIMEDOUT || rc == -EHOSTDOWN ||
@@ -4536,7 +4536,7 @@ static int lfsck_layout_assistant_handler_p2(const struct lu_env *env,
 			if (rc != 0 && bk->lb_param & LPF_FAILOUT)
 				RETURN(rc);
 
-			if (unlikely(lad->lad_exit ||
+			if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags) ||
 				     !thread_is_running(&lfsck->li_thread)))
 				RETURN(0);
 			spin_lock(&ltds->ltd_lock);
@@ -5083,7 +5083,7 @@ static int lfsck_layout_reset(const struct lu_env *env,
 	if (com->lc_lfsck->li_master) {
 		struct lfsck_assistant_data *lad = com->lc_data;
 
-		lad->lad_incomplete = 0;
+		clear_bit(LAD_INCOMPLETE, &lad->lad_flags);
 		CFS_RESET_BITMAP(lad->lad_bitmap);
 	}
 

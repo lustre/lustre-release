@@ -2510,10 +2510,7 @@ int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 
 	lad->lad_assistant_status = 0;
 	lad->lad_post_result = 0;
-	lad->lad_to_post = 0;
-	lad->lad_to_double_scan = 0;
-	lad->lad_in_double_scan = 0;
-	lad->lad_exit = 0;
+	lad->lad_flags = 0;
 	lad->lad_advance_lock = false;
 	thread_set_flags(athread, 0);
 
@@ -2577,8 +2574,8 @@ void lfsck_post_generic(const struct lu_env *env,
 
 	lad->lad_post_result = *result;
 	if (*result <= 0)
-		lad->lad_exit = 1;
-	lad->lad_to_post = 1;
+		set_bit(LAD_EXIT, &lad->lad_flags);
+	set_bit(LAD_TO_POST, &lad->lad_flags);
 
 	CDEBUG(D_LFSCK, "%s: waiting for assistant to do %s post, rc = %d\n",
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, *result);
@@ -2605,9 +2602,9 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 	struct l_wait_info		 lwi	 = { 0 };
 
 	if (status != LS_SCANNING_PHASE2)
-		lad->lad_exit = 1;
+		set_bit(LAD_EXIT, &lad->lad_flags);
 	else
-		lad->lad_to_double_scan = 1;
+		set_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags);
 
 	CDEBUG(D_LFSCK, "%s: waiting for assistant to do %s double_scan, "
 	       "status %d\n",
@@ -2615,7 +2612,7 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 
 	wake_up_all(&athread->t_ctl_waitq);
 	l_wait_event(mthread->t_ctl_waitq,
-		     lad->lad_in_double_scan ||
+		     test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags) ||
 		     thread_is_stopped(athread),
 		     &lwi);
 
@@ -2637,7 +2634,7 @@ void lfsck_quit_generic(const struct lu_env *env,
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
 	struct l_wait_info		 lwi     = { 0 };
 
-	lad->lad_exit = 1;
+	set_bit(LAD_EXIT, &lad->lad_flags);
 	wake_up_all(&athread->t_ctl_waitq);
 	l_wait_event(mthread->t_ctl_waitq,
 		     thread_is_init(athread) ||

@@ -1617,7 +1617,7 @@ int lfsck_assistant_engine(void *args)
 		while (!list_empty(&lad->lad_req_list)) {
 			bool wakeup = false;
 
-			if (unlikely(lad->lad_exit ||
+			if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags) ||
 				     !thread_is_running(mthread)))
 				GOTO(cleanup, rc = lad->lad_post_result);
 
@@ -1649,25 +1649,25 @@ int lfsck_assistant_engine(void *args)
 
 		l_wait_event(athread->t_ctl_waitq,
 			     !lfsck_assistant_req_empty(lad) ||
-			     lad->lad_exit ||
-			     lad->lad_to_post ||
-			     lad->lad_to_double_scan,
+			     test_bit(LAD_EXIT, &lad->lad_flags) ||
+			     test_bit(LAD_TO_POST, &lad->lad_flags) ||
+			     test_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags),
 			     &lwi);
 
-		if (unlikely(lad->lad_exit))
+		if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags)))
 			GOTO(cleanup, rc = lad->lad_post_result);
 
 		if (!list_empty(&lad->lad_req_list))
 			continue;
 
-		if (lad->lad_to_post) {
+		if (test_bit(LAD_TO_POST, &lad->lad_flags)) {
 			CDEBUG(D_LFSCK, "%s: %s LFSCK assistant thread post\n",
 			       lfsck_lfsck2name(lfsck), lad->lad_name);
 
-			if (unlikely(lad->lad_exit))
+			if (unlikely(test_bit(LAD_EXIT, &lad->lad_flags)))
 				GOTO(cleanup, rc = lad->lad_post_result);
 
-			lad->lad_to_post = 0;
+			clear_bit(LAD_TO_POST, &lad->lad_flags);
 			LASSERT(lad->lad_post_result > 0);
 
 			/* Wakeup the master engine to go ahead. */
@@ -1684,10 +1684,10 @@ int lfsck_assistant_engine(void *args)
 			       lad->lad_name, rc);
 		}
 
-		if (lad->lad_to_double_scan) {
-			lad->lad_to_double_scan = 0;
+		if (test_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags)) {
+			clear_bit(LAD_TO_DOUBLE_SCAN, &lad->lad_flags);
 			atomic_inc(&lfsck->li_double_scan_count);
-			lad->lad_in_double_scan = 1;
+			set_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags);
 			wake_up_all(&mthread->t_ctl_waitq);
 
 			com->lc_new_checked = 0;
@@ -1711,7 +1711,7 @@ int lfsck_assistant_engine(void *args)
 			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_DOUBLESCAN))
 				GOTO(cleanup, rc = 0);
 
-			while (lad->lad_in_double_scan) {
+			while (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags)) {
 				rc = lfsck_assistant_query_others(env, com);
 				if (lfsck_phase2_next_ready(lad))
 					goto p2_next;
@@ -1726,12 +1726,13 @@ int lfsck_assistant_engine(void *args)
 							   NULL, NULL);
 				rc = l_wait_event(athread->t_ctl_waitq,
 					lfsck_phase2_next_ready(lad) ||
-					lad->lad_exit ||
+					test_bit(LAD_EXIT, &lad->lad_flags) ||
 					!thread_is_running(mthread),
 					&lwi);
 
-				if (unlikely(lad->lad_exit ||
-					     !thread_is_running(mthread)))
+				if (unlikely(
+					test_bit(LAD_EXIT, &lad->lad_flags) ||
+					!thread_is_running(mthread)))
 					GOTO(cleanup, rc = 0);
 
 				if (rc == -ETIMEDOUT)
@@ -1745,8 +1746,9 @@ p2_next:
 				if (rc != 0)
 					GOTO(cleanup, rc);
 
-				if (unlikely(lad->lad_exit ||
-					     !thread_is_running(mthread)))
+				if (unlikely(
+					test_bit(LAD_EXIT, &lad->lad_flags) ||
+					!thread_is_running(mthread)))
 					GOTO(cleanup, rc = 0);
 			}
 		}
@@ -1758,7 +1760,7 @@ cleanup:
 	if (rc < 0)
 		lad->lad_assistant_status = rc;
 
-	if (lad->lad_exit && lad->lad_post_result <= 0)
+	if (test_bit(LAD_EXIT, &lad->lad_flags) && lad->lad_post_result <= 0)
 		lao->la_fill_pos(env, com, &lfsck->li_pos_checkpoint);
 
 	thread_set_flags(athread, SVC_STOPPING);
@@ -1832,8 +1834,8 @@ cleanup:
 	/* Under force exit case, some requests may be just freed without
 	 * verification, those objects should be re-handled when next run.
 	 * So not update the on-disk trace file under such case. */
-	if (lad->lad_in_double_scan) {
-		if (!lad->lad_exit)
+	if (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags)) {
+		if (!test_bit(LAD_EXIT, &lad->lad_flags))
 			rc1 = lao->la_double_scan_result(env, com, rc);
 
 		CDEBUG(D_LFSCK, "%s: LFSCK assistant phase2 scan "
@@ -1842,7 +1844,7 @@ cleanup:
 	}
 
 fini:
-	if (lad->lad_in_double_scan)
+	if (test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags))
 		atomic_dec(&lfsck->li_double_scan_count);
 
 	spin_lock(&lad->lad_lock);
