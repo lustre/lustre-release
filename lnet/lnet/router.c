@@ -35,6 +35,8 @@
 #define LNET_NRB_LARGE_PAGES	((LNET_MTU + PAGE_SIZE - 1) >> \
 				  PAGE_SHIFT)
 
+extern unsigned int lnet_current_net_count;
+
 static char *forwarding = "";
 module_param(forwarding, charp, 0444);
 MODULE_PARM_DESC(forwarding, "Explicitly enable/disable forwarding between networks");
@@ -387,8 +389,9 @@ static void lnet_shuffle_seed(void)
 static void
 lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
 {
-	unsigned int len = 0;
+	struct lnet_peer_net *lpn;
 	unsigned int offset = 0;
+	unsigned int len = 0;
 	struct list_head *e;
 
 	lnet_shuffle_seed();
@@ -412,7 +415,10 @@ lnet_add_route_to_rnet(struct lnet_remotenet *rnet, struct lnet_route *route)
 	 * force a router check on the gateway to make sure the route is
 	 * alive
 	 */
-	route->lr_gateway->lp_rtrcheck_timestamp = 0;
+	list_for_each_entry(lpn, &route->lr_gateway->lp_peer_nets,
+			    lpn_peer_nets) {
+		lpn->lpn_rtrcheck_timestamp = 0;
+	}
 
 	the_lnet.ln_remote_nets_version++;
 
@@ -642,6 +648,18 @@ lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 	}
 
 delete_zombies:
+	/*
+	 * check if there are any routes remaining on the gateway
+	 * If there are no more routes make sure to set the peer's
+	 * lp_disc_net_id to 0 (invalid), in case we add more routes in
+	 * the future on that gateway, then we start our discovery process
+	 * from scratch
+	 */
+	if (lpni) {
+		if (list_empty(&lp->lp_routes))
+			lp->lp_disc_net_id = 0;
+	}
+
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	while (!list_empty(&zombies)) {
@@ -864,11 +882,15 @@ lnet_router_checker_active(void)
 void
 lnet_check_routers(void)
 {
+	struct lnet_peer_net *first_lpn = NULL;
+	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
 	struct list_head *entry;
 	struct lnet_peer *rtr;
 	bool push = false;
+	bool found_lpn;
 	__u64 version;
+	__u32 net_id;
 	time64_t now;
 	int cpt;
 	int rc;
@@ -889,8 +911,31 @@ rescan:
 		 * interfaces could be down and in that case they would be
 		 * undergoing recovery separately from this discovery.
 		 */
-		if (now - rtr->lp_rtrcheck_timestamp <
-		    alive_router_check_interval)
+		/* find next peer net which is also local */
+		net_id = rtr->lp_disc_net_id;
+		do {
+			lpn = lnet_get_next_peer_net_locked(rtr, net_id);
+			if (!lpn) {
+				CERROR("gateway %s has no networks\n",
+				libcfs_nid2str(rtr->lp_primary_nid));
+				break;
+			}
+			if (first_lpn == lpn)
+				break;
+			if (!first_lpn)
+				first_lpn = lpn;
+			found_lpn = lnet_islocalnet_locked(lpn->lpn_net_id);
+			net_id = lpn->lpn_net_id;
+		} while (!found_lpn);
+
+		if (!found_lpn || !lpn) {
+			CERROR("no local network found for gateway %s\n",
+			       libcfs_nid2str(rtr->lp_primary_nid));
+			continue;
+		}
+
+		if (now - lpn->lpn_rtrcheck_timestamp <
+		    alive_router_check_interval / lnet_current_net_count)
 		       continue;
 
 		/*
@@ -916,6 +961,9 @@ rescan:
 		}
 		lnet_peer_ni_addref_locked(lpni);
 
+		/* specify the net to use */
+		rtr->lp_disc_net_id = lpn->lpn_net_id;
+
 		/* discover the router */
 		CDEBUG(D_NET, "discover %s, cpt = %d\n",
 		       libcfs_nid2str(lpni->lpni_nid), cpt);
@@ -925,7 +973,7 @@ rescan:
 		lnet_peer_ni_decref_locked(lpni);
 
 		if (!rc)
-			rtr->lp_rtrcheck_timestamp = now;
+			lpn->lpn_rtrcheck_timestamp = now;
 		else
 			CERROR("Failed to discover router %s\n",
 			       libcfs_nid2str(rtr->lp_primary_nid));

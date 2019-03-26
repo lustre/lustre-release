@@ -716,6 +716,39 @@ lnet_find_peer(lnet_nid_t nid)
 	return lp;
 }
 
+struct lnet_peer_net *
+lnet_get_next_peer_net_locked(struct lnet_peer *lp, __u32 prev_lpn_id)
+{
+	struct lnet_peer_net *net;
+
+	if (!prev_lpn_id) {
+		/* no net id provided return the first net */
+		net = list_first_entry_or_null(&lp->lp_peer_nets,
+					       struct lnet_peer_net,
+					       lpn_peer_nets);
+
+		return net;
+	}
+
+	/* find the net after the one provided */
+	list_for_each_entry(net, &lp->lp_peer_nets, lpn_peer_nets) {
+		if (net->lpn_net_id == prev_lpn_id) {
+			/*
+			 * if we reached the end of the list loop to the
+			 * beginning.
+			 */
+			if (net->lpn_peer_nets.next == &lp->lp_peer_nets)
+				return list_first_entry_or_null(&lp->lp_peer_nets,
+								struct lnet_peer_net,
+								lpn_peer_nets);
+			else
+				return list_next_entry(net, lpn_peer_nets);
+		}
+	}
+
+	return NULL;
+}
+
 struct lnet_peer_ni *
 lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 			     struct lnet_peer_net *peer_net,

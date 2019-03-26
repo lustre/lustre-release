@@ -221,6 +221,7 @@ MODULE_PARM_DESC(lnet_retry_count,
 
 
 unsigned lnet_lnd_timeout = LNET_LND_DEFAULT_TIMEOUT;
+unsigned int lnet_current_net_count;
 
 /*
  * This sequence number keeps track of how many times DLC was used to
@@ -1368,17 +1369,27 @@ lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni)
 EXPORT_SYMBOL(lnet_cpt_of_nid);
 
 int
-lnet_islocalnet(__u32 net_id)
+lnet_islocalnet_locked(__u32 net_id)
 {
 	struct lnet_net *net;
-	int		cpt;
-	bool		local;
-
-	cpt = lnet_net_lock_current();
+	bool local;
 
 	net = lnet_get_net_locked(net_id);
 
 	local = net != NULL;
+
+	return local;
+}
+
+int
+lnet_islocalnet(__u32 net_id)
+{
+	int cpt;
+	bool local;
+
+	cpt = lnet_net_lock_current();
+
+	local = lnet_islocalnet_locked(net_id);
 
 	lnet_net_unlock(cpt);
 
@@ -1529,6 +1540,23 @@ lnet_get_ni_count(void)
 	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
 		list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
 			count++;
+	}
+
+	lnet_net_unlock(0);
+
+	return count;
+}
+
+int
+lnet_get_net_count(void)
+{
+	struct lnet_net *net;
+	int count = 0;
+
+	lnet_net_lock(0);
+
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		count++;
 	}
 
 	lnet_net_unlock(0);
@@ -2381,6 +2409,9 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		list_add_tail(&net->net_list, &the_lnet.ln_nets);
 		lnet_net_unlock(LNET_LOCK_EX);
 	}
+
+	/* update net count */
+	lnet_current_net_count = lnet_get_net_count();
 
 	return ni_count;
 
