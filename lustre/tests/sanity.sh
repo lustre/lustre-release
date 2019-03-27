@@ -9179,8 +9179,10 @@ test_56xc() {
 	# Test 2: File is small enough to fit within the available space on
 	# sqrt(size_in_gb) + 1 OSTs but is larger than 1GB.  The file must
 	# have at least an additional 1KB for each desired stripe for test 3
+	local avail=$($LCTL get_param -n llite.$FSNAME*.kbytesavail)
+	(( $avail >= 2048*1024+100 )) || skip_env "Need at least 2GB free space"
 	echo -n "Setting stripe for 1GB test file..."
-	$LFS setstripe -c 1 -i 0 "$dir/1gb" || error "cannot setstripe 1GB file"
+	$LFS setstripe -c 1 -i -1 "$dir/1gb" || error "cannot setstripe 1GB file"
 	echo "done"
 	echo -n "Sizing 1GB test file..."
 	# File size is 1GB + 3KB
