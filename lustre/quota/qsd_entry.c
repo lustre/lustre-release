@@ -122,7 +122,7 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 			lqe->lqe_enforced = true;
 		}
 
-		if (lqe_def != NULL)
+		if (!IS_ERR(lqe_def))
 			lqe_putref(lqe_def);
 	}
 
