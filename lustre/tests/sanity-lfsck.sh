@@ -786,7 +786,8 @@ test_6b() {
 
 	echo "Additional debug for 6b"
 	$SHOW_NAMESPACE
-	if [ "$D_POS0" == "N/A" -o "$D_POS1" == "N/A" ]; then
+	if [ "$D_POS0" == "N/A" -o "$D_POS0" == "0x0" \
+	     -o "$D_POS1" == "0x0" -o "$D_POS1" == "N/A" ]; then
 		[[ $O_POS0 -lt $O_POS1 ]] ||
 			error "(7.1) $O_POS1 is not larger than $O_POS0"
 	else
