@@ -91,92 +91,71 @@ quite file system.</para>
     <literal>lctl get_param version</literal> to identify
     <xref linkend="whichversion"/> you are currently using.
     </para>
-    <section>
-      <title>Enabling Disk Quotas (Lustre Software Prior to Release 2.4)
-      </title>
-      <para>
-      For Lustre software releases older than release 2.4,
-      <literal>lfs quotacheck</literal> must be first run from a client node to
-      create quota files on the Lustre targets (i.e. the MDT and OSTs).
-      <literal>lfs quotacheck</literal> requires the file system to be quiescent
-      (i.e. no modifying operations like write, truncate, create or delete
-      should run concurrently). Failure to follow this caution may result in
-      inaccurate user/group disk usage. Operations that do not change Lustre
-      files (such as read or mount) are okay to run.
-      <literal>lfs quotacheck</literal> performs a scan on all the Lustre
-      targets to calculates the block/inode usage for each user/group. If the
-      Lustre file system has many files,
-      <literal>quotacheck</literal> may take a long time to complete. Several
-      options can be passed to
-      <literal>lfs quotacheck</literal>:</para>
-      <screen>
-# lfs quotacheck -ug /mnt/testfs
-</screen>
-      <itemizedlist>
-        <listitem>
-          <para>
-          <literal>u</literal>-- checks the user disk quota information</para>
-        </listitem>
-        <listitem>
-          <para>
-          <literal>g</literal>-- checks the group disk quota information</para>
-        </listitem>
-      </itemizedlist>
-      <para>By default, quota is turned on after
-      <literal>quotacheck</literal> completes. However, this setting isn't
-      persistent and quota will have to be enabled again (via
-      <literal>lfs quotaon</literal>) if one of the Lustre targets is
-      restarted.
-      <literal>lfs quotaoff</literal> is used to turn off quota.</para>
-      <para>To enable quota permanently with a Lustre software release older
-      than release 2.4, the
-      <literal>quota_type</literal> parameter must be used. This requires
-      setting
-      <literal>mdd.quota_type</literal> and
-      <literal>ost.quota_type</literal>, respectively, on the MDT and OSTs.
-      <literal>quota_type</literal> can be set to the string
-      <literal>u</literal> (user),
-      <literal>g</literal> (group) or
-      <literal>ug</literal> for both users and groups. This parameter can be
-      specified at
-      <literal>mkfs</literal> time (
-      <literal>mkfs.lustre --param mdd.quota_type=ug</literal>) or with
-      <literal>tunefs.lustre</literal>. As an example:</para>
-      <screen>
-tunefs.lustre --param ost.quota_type=ug $ost_dev
-</screen>
-      <para>When using
-      <literal>mkfs.lustre --param mdd.quota_type=ug</literal> or
-      <literal>tunefs.lustre --param ost.quota_type=ug</literal>, be sure to
-      run the command on all OSTs and the MDT. Otherwise, abnormal results may
-      occur.</para>
-      <warning>
-        <para>
-        In Lustre software releases before 2.4, when new OSTs are
-        added to the file system, quotas are not automatically propagated to
-        the new OSTs. As a workaround, clear and then reset quotas for each
-        user or group using the
-        <literal>lfs setquota</literal> command. In the example below, quotas
-        are cleared and reset for user
-        <literal>bob</literal> on file system
-        <literal>testfs</literal>:
-        <screen>
-$ lfs setquota -u bob -b 0 -B 0 -i 0 -I 0 /mnt/testfs
-$ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs
-</screen></para>
-      </warning>
-    </section>
-    <section remap="h3" condition="l24">
+    <section remap="h3" condition="l24" xml:id="enabling_disk_quota_after24">
       <title>Enabling Disk Quotas (Lustre Software Release 2.4 and
       later)</title>
-	  <para>Quota setup is orchestrated by the MGS and <emphasis>all setup
-      commands in this section must be run on the MGS and project quotas need
-      lustre Relase 2.10 and later</emphasis>. Once setup, verification of the
-      quota state must be performed on the MDT. Although quota enforcement is
-      managed by the Lustre software, each OSD implementation relies on the
-      back-end file system to maintain per-user/group/project block and inode
-      usage. Hence, differences exist when setting up quotas with ldiskfs or
-      ZFS back-ends:</para>
+      <caution>
+        <para>Quota setup is orchestrated by the MGS and <emphasis>all setup
+        commands in this section must be run directly on the MGS</emphasis>.
+        Support for project quotas specifically requires Lustre Release 2.10 or
+        later.  A <emphasis>patched server</emphasis> may be required, depending
+        on the kernel version and backend filesystem type:</para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*" />
+          <colspec colname="c2" colwidth="50*" align="center" />
+          <thead>
+            <row>
+              <entry>
+                <para>
+                  <emphasis role="bold">Configuration</emphasis>
+                </para>
+              </entry>
+              <entry>
+                <para>
+                  <emphasis role="bold">Patched Server Required?</emphasis>
+                </para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry><para>
+                <emphasis>ldiskfs with kernel version &lt; 4.5</emphasis>
+              </para></entry>
+              <entry><para>Yes</para></entry>
+            </row>
+            <row>
+              <entry><para>
+                <emphasis>ldiskfs with kernel version &gt;= 4.5</emphasis>
+              </para></entry>
+              <entry><para>No</para></entry>
+            </row>
+            <row>
+              <entry><para>
+                <emphasis>zfs version &gt;=0.8 with kernel
+                version &lt; 4.5</emphasis>
+              </para></entry>
+              <entry><para>Yes</para></entry>
+            </row>
+            <row>
+              <entry><para>
+                <emphasis>zfs version &gt;=0.8 with kernel
+                version &gt; 4.5</emphasis>
+              </para></entry>
+              <entry><para>No</para></entry>
+            </row>
+          </tbody>
+          </tgroup>
+        </informaltable>
+        <para>*Note:  Project quotas are not supported on zfs versions earlier
+        than 0.8.</para>
+      </caution>
+      <para>Once setup, verification of the quota state must be performed on the
+      MDT. Although quota enforcement is managed by the Lustre software, each
+      OSD implementation relies on the back-end file system to maintain
+      per-user/group/project block and inode usage. Hence, differences exist
+      when setting up quotas with ldiskfs or ZFS back-ends:</para>
       <itemizedlist>
         <listitem>
           <para>For ldiskfs backends,
@@ -184,17 +163,18 @@ $ lfs setquota -u bob -b 307200 -B 309200 -i 10000 -I 11000 /mnt/testfs
           enables the QUOTA feature flag in the superblock which turns quota
           accounting on at mount time automatically. e2fsck was also modified
           to fix the quota files when the QUOTA feature flag is present. The
-	      project quota feature is disabled by default, and
+	        project quota feature is disabled by default, and
           <literal>tune2fs</literal> needs to be run to enable every target
           manually.</para>
         </listitem>
         <listitem>
           <para>For ZFS backend, <emphasis>the project quota feature is not
-	      supported yet.</emphasis> Accounting ZAPs are created and maintained
-          by the ZFS file system itself. While ZFS tracks per-user and group
-	      block usage, it does not handle inode accounting for ZFS versions
-          prior to zfs-0.7.0. The ZFS OSD implements its own support for inode
-          tracking. Two options are available:</para>
+          supported on zfs versions less than 0.8.0.</emphasis> Accounting ZAPs
+          are created and maintained by the ZFS file system itself. While ZFS
+          tracks per-user and group block usage, it does not handle inode
+          accounting for ZFS versions prior to zfs-0.7.0. The ZFS OSD previously
+          implemented its own support for inode tracking. Two options are
+          available:</para>
           <orderedlist>
             <listitem>
               <para>The ZFS OSD can estimate the number of inodes in-use based
@@ -314,7 +294,7 @@ lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</re
 </screen>
       <screen>$ lctl conf_param testfs3.quota.mdt=none
 </screen>
-      <section>
+      <section xml:id="quota_verification">
 	    <title>
 	    <indexterm>
 	      <primary>Quotas</primary>
@@ -634,7 +614,10 @@ $ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
     Lustre 2.10, <emphasis role="bold">all Lustre servers and clients must be
     upgraded to Lustre release 2.10 or later for project quota to work
     correctly</emphasis>.  Otherwise, project quota will be inaccessible on
-    clients and not be accounted for on OSTs.</para>
+    clients and not be accounted for on OSTs.  Furthermore, the
+    <emphasis role="bold">servers may be required to use a patched kernel,
+    </emphasis> for more information see
+    <xref linkend="enabling_disk_quota_after24"/>.</para>
   </section>
   <section xml:id="granted_cache_and_quota_limits">
     <title>
