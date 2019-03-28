@@ -602,6 +602,8 @@ int  lnet_rtrpools_adjust(int tiny, int small, int large);
 int lnet_rtrpools_enable(void);
 void lnet_rtrpools_disable(void);
 void lnet_rtrpools_free(int keep_pools);
+void lnet_rtr_transfer_to_peer(struct lnet_peer *src,
+			       struct lnet_peer *target);
 struct lnet_remotenet *lnet_find_rnet_locked(__u32 net);
 int lnet_dyn_add_net(struct lnet_ioctl_config_data *conf);
 int lnet_dyn_del_net(__u32 net);

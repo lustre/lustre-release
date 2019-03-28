@@ -141,6 +141,35 @@ rtr_sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 	return 0;
 }
 
+void
+lnet_rtr_transfer_to_peer(struct lnet_peer *src, struct lnet_peer *target)
+{
+	struct lnet_route *route;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	target->lp_rtr_refcount += src->lp_rtr_refcount;
+	/* move the list of queued messages to the new peer */
+	list_splice_init(&src->lp_rtrq, &target->lp_rtrq);
+	/* move all the routes that reference the peer */
+	list_splice_init(&src->lp_routes, &target->lp_routes);
+	/* update all the routes to point to the new peer */
+	list_for_each_entry(route, &target->lp_routes, lr_gwlist)
+		route->lr_gateway = target;
+	/* remove the old peer from the ln_routers list */
+	list_del_init(&src->lp_rtr_list);
+	/* add the new peer to the ln_routers list */
+	if (list_empty(&target->lp_rtr_list)) {
+		lnet_peer_addref_locked(target);
+		list_add_tail(&target->lp_rtr_list, &the_lnet.ln_routers);
+	}
+	/* reset the ref count on the old peer and decrement its ref count */
+	src->lp_rtr_refcount = 0;
+	lnet_peer_decref_locked(src);
+	/* update the router version */
+	the_lnet.ln_routers_version++;
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+
 int
 lnet_peers_start_down(void)
 {

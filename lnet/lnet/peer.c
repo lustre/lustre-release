@@ -1362,6 +1362,18 @@ lnet_peer_add_nid(struct lnet_peer *lp, lnet_nid_t nid, unsigned flags)
 		}
 		/* If this is the primary NID, destroy the peer. */
 		if (lnet_peer_ni_is_primary(lpni)) {
+			struct lnet_peer *rtr_lp =
+			  lpni->lpni_peer_net->lpn_peer;
+			int rtr_refcount = rtr_lp->lp_rtr_refcount;
+			/*
+			 * if we're trying to delete a router it means
+			 * we're moving this peer NI to a new peer so must
+			 * transfer router properties to the new peer
+			 */
+			if (rtr_refcount > 0) {
+				flags |= LNET_PEER_RTR_NI_FORCE_DEL;
+				lnet_rtr_transfer_to_peer(rtr_lp, lp);
+			}
 			lnet_peer_del(lpni->lpni_peer_net->lpn_peer);
 			lpni = lnet_peer_ni_alloc(nid);
 			if (!lpni) {
