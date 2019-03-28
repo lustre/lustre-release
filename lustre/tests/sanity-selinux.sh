@@ -456,7 +456,24 @@ test_21a() {
 	fi
 
 	# create nodemap entry with sepol
-	create_nodemap nm1
+	create_nodemap c0
+
+	if $GSS_SK; then
+		# update mount option with skpath
+		MOUNT_OPTS=$(add_sk_mntflag $MOUNT_OPTS)
+		export SK_UNIQUE_NM=true
+
+		# load specific key on servers
+		do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server \
+						    -l $SK_PATH/nodemap/c0.key"
+
+		# set perms for per-nodemap keys else permission denied
+		do_nodes $(comma_list $(all_server_nodes)) \
+		 "keyctl show | grep lustre | cut -c1-11 |
+				sed -e 's/ //g;' |
+				xargs -IX keyctl setperm X 0x3f3f3f3f"
+
+	fi
 
 	# mount client without sending sepol
 	mount_client $MOUNT $MOUNT_OPTS &&
@@ -472,16 +489,20 @@ test_21a() {
 
 	# store wrong sepol in nodemap
 	sepol="0:policy:0:0000000000000000000000000000000000000000000000000000000000000000"
-	do_facet mgs $LCTL set_param nodemap.nm1.sepol="$sepol"
-	do_facet mgs $LCTL set_param -P nodemap.nm1.sepol="$sepol"
-	check_nodemap nm1 sepol $sepol
+	do_facet mgs $LCTL set_param nodemap.c0.sepol="$sepol"
+	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
+	check_nodemap c0 sepol $sepol
 
 	# mount client with sepol
 	mount_client $MOUNT $MOUNT_OPTS &&
 		error "client mount without matching sepol should be refused"
 
 	# remove nodemap
-	remove_nodemap nm1
+	remove_nodemap c0
+
+	if $GSS_SK; then
+		export SK_UNIQUE_NM=false
+	fi
 
 	# remount client normally
 	echo 0 > /sys/module/ptlrpc/parameters/send_sepol
@@ -523,7 +544,22 @@ test_21b() {
 	echo 3 > /proc/sys/vm/drop_caches
 
 	# create nodemap entry with sepol
-	create_nodemap nm1
+	create_nodemap c0
+
+	if $GSS_SK; then
+		export SK_UNIQUE_NM=true
+
+		# load specific key on servers
+		do_nodes $(comma_list $(all_server_nodes)) "lgss_sk -t server \
+						    -l $SK_PATH/nodemap/c0.key"
+
+		# set perms for per-nodemap keys else permission denied
+		do_nodes $(comma_list $(all_server_nodes)) \
+		 "keyctl show | grep lustre | cut -c1-11 |
+				sed -e 's/ //g;' |
+				xargs -IX keyctl setperm X 0x3f3f3f3f"
+
+	fi
 
 	# metadata ops without sending sepol
 	touch $DIR/$tdir/f0 && error "touch (1)"
@@ -567,9 +603,9 @@ test_21b() {
 
 	# store wrong sepol in nodemap
 	sepol="0:policy:0:0000000000000000000000000000000000000000000000000000000000000000"
-	do_facet mgs $LCTL set_param nodemap.nm1.sepol="$sepol"
-	do_facet mgs $LCTL set_param -P nodemap.nm1.sepol="$sepol"
-	check_nodemap nm1 sepol $sepol
+	do_facet mgs $LCTL set_param nodemap.c0.sepol="$sepol"
+	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
+	check_nodemap c0 sepol $sepol
 
 	# metadata ops with sepol
 	touch $DIR/$tdir/f4 && error "touch (3)"
@@ -592,9 +628,9 @@ test_21b() {
 
 	# reset correct sepol
 	sepol=$(l_getsepol | cut -d':' -f2- | xargs)
-	do_facet mgs $LCTL set_param nodemap.nm1.sepol="$sepol"
-	do_facet mgs $LCTL set_param -P nodemap.nm1.sepol="$sepol"
-	check_nodemap nm1 sepol $sepol
+	do_facet mgs $LCTL set_param nodemap.c0.sepol="$sepol"
+	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
+	check_nodemap c0 sepol $sepol
 
 	# metadata ops with sepol every 10 seconds only
 	echo 10 > /sys/module/ptlrpc/parameters/send_sepol
@@ -674,8 +710,12 @@ test_21b() {
 	fi
 
 	# remove nodemap
-	remove_nodemap nm1
+	remove_nodemap c0
 	echo 0 > /sys/module/ptlrpc/parameters/send_sepol
+
+	if $GSS_SK; then
+		export SK_UNIQUE_NM=false
+	fi
 }
 run_test 21b "Send sepol for metadata ops"
 

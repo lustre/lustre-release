@@ -20294,6 +20294,8 @@ run_test 811 "orphan name stub can be cleaned up in startup"
 test_812() {
 	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
 		skip "OST < 2.12.51 doesn't support this fail_loc"
+	[ "$SHARED_KEY" = true ] &&
+		skip "OSC connections never go IDLE with Shared-Keys enabled"
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	# ensure ost1 is connected
