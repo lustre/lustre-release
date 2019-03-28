@@ -31,6 +31,7 @@ CLEANUP=${CLEANUP:-:}
 SETUP=${SETUP:-:}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+get_lustre_env
 init_logging
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
@@ -4475,6 +4476,9 @@ run_test 101c "Discard DoM data on close-unlink"
 # This test opens the file normally on $DIR1, which is on one mount, and then
 # opens it by handle on $DIR2, which is on a different mount.
 test_102() {
+	[ $MDS1_VERSION -lt $(version_code 2.11.57) ] &&
+		skip "Needs MDS version 2.11.57 or later"
+
 	echo "Test file_handle syscalls" > $DIR/$tfile ||
 		error "write failed"
 	check_fhandle_syscalls $DIR/$tfile $DIR2 ||
