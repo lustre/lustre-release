@@ -2289,8 +2289,10 @@ test_27F() { # LU-5346/LU-7975
 run_test 27F "Client resend delayed layout creation with non-zero size"
 
 test_27G() { #LU-10629
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $MDS1_VERSION -lt $(version_code 2.11.51) ] &&
+		skip "Need MDS version at least 2.11.51"
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	local POOL=${POOL:-testpool}
 	local ostrange="0 0 1"
 
@@ -15870,7 +15872,7 @@ test_239A() { # was test_239
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/f- 5000
 	unlinkmany $DIR/$tdir/f- 5000
-	[ $MDS1_VERSION -gt $(version_code 2.10.53) ] &&
+	[ $MDS1_VERSION -gt $(version_code 2.10.4) ] &&
 		do_nodes $list "lctl set_param -n osp.*.force_sync=1"
 	changes=$(do_nodes $list "lctl get_param -n osp.*MDT*.sync_changes \
 			osp.*MDT*.sync_in_flight" | calc_sum)
@@ -18562,7 +18564,7 @@ test_311() {
 
 	do_nodes $mdts "$LCTL set_param -n \
 			osp.*OST0000*.max_create_count=$max_count"
-	[ $(lustre_version_code $facet) -lt $(version_code 2.11.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.12.51) ] &&
 		do_nodes $mdts "$LCTL set_param -n \
 				osp.*OST0000*.create_count=$count"
 	do_nodes $mdts "$LCTL get_param osp.*OST0000*.create_count" |
@@ -18745,6 +18747,8 @@ test_316() {
 run_test 316 "lfs mv"
 
 test_317() {
+	[ $MDS1_VERSION -lt $(version_code 2.11.53) ] &&
+		skip "Need MDS version at least 2.11.53"
 	local trunc_sz
 	local grant_blk_size
 
