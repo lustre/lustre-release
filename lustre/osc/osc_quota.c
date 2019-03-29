@@ -108,10 +108,16 @@ int osc_quota_setdq(struct client_obd *cli, __u64 xid, const unsigned int qid[],
 		RETURN(0);
 
 	mutex_lock(&cli->cl_quota_mutex);
-	if (cli->cl_quota_last_xid > xid)
+	/* still mark the quots is running out for the old request, because it
+	 * could be processed after the new request at OST, the side effect is
+	 * the following request will be processed synchronously, but it will
+	 * not break the quota enforcement. */
+	if (cli->cl_quota_last_xid > xid && !(flags & OBD_FL_NO_QUOTA_ALL))
 		GOTO(out_unlock, rc);
 
-	cli->cl_quota_last_xid = xid;
+	if (cli->cl_quota_last_xid < xid)
+		cli->cl_quota_last_xid = xid;
+
 	for (type = 0; type < LL_MAXQUOTAS; type++) {
 		struct osc_quota_info *oqi;
 
