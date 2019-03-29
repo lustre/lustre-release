@@ -857,6 +857,11 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		objs = &v3->lmm_objects[0];
 	}
 	stripe_count = lod_comp_entry_stripe_count(lo, lod_comp, is_dir);
+	if (stripe_count == 0 && !is_dir &&
+	    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
+	    !(lod_comp->llc_pattern & LOV_PATTERN_MDT))
+		RETURN(-E2BIG);
+
 	if (!is_dir && lo->ldo_is_composite)
 		lod_comp_shrink_stripe_count(lod_comp, &stripe_count);
 
@@ -1330,6 +1335,10 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			if (objs[0].l_ost_idx != (__u32)-1UL) {
 				stripe_count = lod_comp_entry_stripe_count(
 							lo, lod_comp, false);
+				if (stripe_count == 0 &&
+				    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
+				    !(lod_comp->llc_pattern & LOV_PATTERN_MDT))
+					GOTO(out, rc = -E2BIG);
 				/**
 				 * load the user specified ost list, when this
 				 * component is instantiated later, it will be

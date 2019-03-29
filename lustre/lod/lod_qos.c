@@ -1732,12 +1732,15 @@ out_nolock:
 }
 
 /**
- * Find largest stripe count the caller can use.
+ * Check stripe count the caller can use.
  *
+ * For new layouts (no initialized components), check the total size of the
+ * layout against the maximum EA size from the backing file system.  This
+ * stops us from creating a layout which will be too large once initialized.
+ *
+ * For existing layouts (with initialized components):
  * Find the maximal possible stripe count not greater than \a stripe_count.
- * Sometimes suggested stripecount can't be reached for a number of reasons:
- * lack of enough active OSTs or the backend does not support EAs that large.
- * If the passed one is 0, then the filesystem's default one is used.
+ * If the provided stripe count is 0, then the filesystem's default is used.
  *
  * \param[in] lod	LOD device
  * \param[in] lo	The lod_object
@@ -1749,6 +1752,10 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 			   __u16 stripe_count)
 {
 	__u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
+	/* max stripe count is based on OSD ea size */
+	unsigned int easize = lod->lod_osd_max_easize;
+	int i;
+
 
 	if (!stripe_count)
 		stripe_count = lod->lod_desc.ld_default_stripe_count;
@@ -1757,32 +1764,37 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 	if (!stripe_count)
 		stripe_count = 1;
 
-	/* stripe count is based on whether OSD can handle larger EA sizes */
-	if (lod->lod_osd_max_easize > 0) {
-		unsigned int easize = lod->lod_osd_max_easize;
-		int i;
+	if (lo->ldo_is_composite) {
+		struct lod_layout_component *lod_comp;
+		unsigned int header_sz = sizeof(struct lov_comp_md_v1);
+		unsigned int init_comp_sz = 0;
+		unsigned int total_comp_sz = 0;
+		unsigned int comp_sz;
 
-		if (lo->ldo_is_composite) {
-			struct lod_layout_component *lod_comp;
-			unsigned int header_sz = sizeof(struct lov_comp_md_v1);
+		header_sz += sizeof(struct lov_comp_md_entry_v1) *
+				lo->ldo_comp_cnt;
 
-			header_sz += sizeof(struct lov_comp_md_entry_v1) *
-					lo->ldo_comp_cnt;
-			for (i = 0; i < lo->ldo_comp_cnt; i++) {
-				lod_comp = &lo->ldo_comp_entries[i];
-				if (lod_comp->llc_flags & LCME_FL_INIT)
-					header_sz += lov_mds_md_size(
-						lod_comp->llc_stripe_count,
-						LOV_MAGIC_V3);
-			}
-			if (easize > header_sz)
-				easize -= header_sz;
-			else
-				easize = 0;
+		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			lod_comp = &lo->ldo_comp_entries[i];
+			comp_sz = lov_mds_md_size(lod_comp->llc_stripe_count,
+						  LOV_MAGIC_V3);
+			total_comp_sz += comp_sz;
+			if (lod_comp->llc_flags & LCME_FL_INIT)
+				init_comp_sz += comp_sz;
 		}
 
-		max_stripes = lov_mds_md_max_stripe_count(easize, LOV_MAGIC_V3);
+		if (init_comp_sz > 0)
+			total_comp_sz = init_comp_sz;
+
+		header_sz += total_comp_sz;
+
+		if (easize > header_sz)
+			easize -= header_sz;
+		else
+			easize = 0;
 	}
+
+	max_stripes = lov_mds_md_max_stripe_count(easize, LOV_MAGIC_V3);
 
 	return (stripe_count < max_stripes) ? stripe_count : max_stripes;
 }
