@@ -8,8 +8,19 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-#
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT $LNET_SELFTEST_EXCEPT"
+ALWAYS_EXCEPT="$LNET_SELFTEST_EXCEPT"
+if [[ $(uname -m) = aarch64 ]]; then
+	# bug number for skipped test: LU-10073
+	ALWAYS_EXCEPT+="               smoke"
+fi
+
+# Check if running on Ubuntu client
+if [ -r /etc/os-release ]; then
+	if grep -qi ubuntu /etc/os-release; then
+		# bug number for skipped test: LU-10073
+		ALWAYS_EXCEPT+="               smoke"
+	fi
+fi
 
 [ x$LST = x ] && skip_env "lst not found LST=$LST"
 
