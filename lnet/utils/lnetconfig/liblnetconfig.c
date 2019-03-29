@@ -4534,6 +4534,19 @@ static int handle_yaml_show_numa(struct cYAML *tree, struct cYAML **show_rc,
 					   show_rc, err_rc);
 }
 
+static int handle_yaml_del_udsp(struct cYAML *tree, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *idx;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	idx = cYAML_get_object_item(tree, "idx");
+
+	return lustre_lnet_del_udsp(idx ? idx->cy_valueint : -1,
+				    seq_no ? seq_no->cy_valueint : -1,
+				    err_rc);
+}
+
 static int handle_yaml_config_udsp(struct cYAML *tree, struct cYAML **show_rc,
 				   struct cYAML **err_rc)
 {
@@ -4836,6 +4849,7 @@ static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{ .name = "numa",	.cb = handle_yaml_del_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
+	{ .name = "udsp",	.cb = handle_yaml_del_udsp },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {

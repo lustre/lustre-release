@@ -786,4 +786,13 @@ int lustre_lnet_add_udsp(char *src, char *dst, char *rte, char *type,
 			 union lnet_udsp_action *action, int idx,
 			 int seq_no, struct cYAML **err_rc);
 
+/* lustre_lnet_del_udsp
+ *	Delete a net selection policy.
+ *	idx - the index to delete
+ *	seq_no - sequence number of the request
+ *	err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *	caller
+ */
+int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc);
+
 #endif /* LIB_LNET_CONFIG_API_H */

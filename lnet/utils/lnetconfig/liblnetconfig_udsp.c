@@ -592,3 +592,25 @@ out:
 	cYAML_build_error(rc, seq_no, ADD_CMD, "udsp", err_str, err_rc);
 	return rc;
 }
+
+int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc)
+{
+	int rc;
+	char err_str[LNET_MAX_STR_LEN];
+	struct lnet_ioctl_udsp udsp_bulk;
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	LIBCFS_IOC_INIT_V2(udsp_bulk, iou_hdr);
+	udsp_bulk.iou_idx = idx;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_UDSP, &udsp_bulk);
+	if (rc < 0) {
+		rc = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot del udsp: %s\"", strerror(rc));
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "udsp", err_str, err_rc);
+	return rc;
+}
