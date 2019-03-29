@@ -213,9 +213,8 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 
 	spin_lock_init(&r0->lo_sub_lock);
 	r0->lo_nr = lse->lsme_stripe_count;
-	LASSERT(r0->lo_nr <= lov_targets_nr(dev));
 
-	OBD_ALLOC_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
+	OBD_ALLOC_LARGE(r0->lo_sub, r0->lo_nr * sizeof(r0->lo_sub[0]));
 	if (r0->lo_sub == NULL)
 		GOTO(out, result = -ENOMEM);
 
