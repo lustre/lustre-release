@@ -1163,10 +1163,7 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
 	lov_tgts_getref(obddev);
 
 	if (KEY_IS(KEY_MAX_EASIZE)) {
-		u32 max_stripe_count = min_t(u32, ld->ld_active_tgt_count,
-					     LOV_MAX_STRIPE_COUNT);
-
-		*((u32 *)val) = lov_mds_md_size(max_stripe_count, LOV_MAGIC_V3);
+		*((u32 *)val) = exp->exp_connect_data.ocd_max_easize;
 	} else if (KEY_IS(KEY_DEFAULT_EASIZE)) {
 		u32 def_stripe_count = min_t(u32, ld->ld_default_stripe_count,
 					     LOV_MAX_STRIPE_COUNT);

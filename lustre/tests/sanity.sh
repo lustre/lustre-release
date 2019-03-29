@@ -8355,11 +8355,19 @@ grow_xattr() {
 	local file=$DIR/$tfile
 	local value="$(generate_string $xsize)"
 	local xbig=trusted.big
+	local toobig=$2
 
 	touch $file
 	log "save $xbig on $file"
-	setfattr -n $xbig -v $value $file ||
-		error "saving $xbig on $file failed"
+	if [ -z "$toobig" ]
+	then
+		setfattr -n $xbig -v $value $file ||
+			error "saving $xbig on $file failed"
+	else
+		setfattr -n $xbig -v $value $file &&
+			error "saving $xbig on $file succeeded"
+		return 0
+	fi
 
 	local orig=$(get_xattr_value $xbig $file)
 	[[ "$orig" != "$value" ]] && error "$xbig different after saving $xbig"
@@ -8390,7 +8398,12 @@ run_test 102h "grow xattr from inside inode to external block"
 test_102ha() {
 	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
+	echo "setting xattr of max xattr size: $(max_xattr_size)"
 	grow_xattr $(max_xattr_size)
+
+	echo "setting xattr of > max xattr size: $(max_xattr_size) + 10"
+	echo "This should fail:"
+	grow_xattr $(($(max_xattr_size) + 10)) 1
 }
 run_test 102ha "grow xattr from inside inode to external inode"
 

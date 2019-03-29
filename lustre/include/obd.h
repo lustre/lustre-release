@@ -151,7 +151,15 @@ enum {
  * vmalloc(). Excessive use of vmalloc() may cause spinlock contention
  * on the MDS.
  */
-#define OBD_MAX_DEFAULT_EA_SIZE		4096
+#define OBD_MAX_DEFAULT_EA_SIZE	4096
+
+/*
+ * Lustre can handle larger xattrs internally, but we must respect the Linux
+ * VFS limitation or tools like tar cannot interact with Lustre volumes
+ * correctly.
+ */
+#define OBD_MAX_EA_SIZE		XATTR_SIZE_MAX
+
 
 enum obd_cl_sem_lock_class {
 	OBD_CLI_SEM_NORMAL,

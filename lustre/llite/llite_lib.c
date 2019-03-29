@@ -677,11 +677,15 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 		RETURN(rc);
 	}
 
+	CDEBUG(D_INFO, "max LOV ea size: %d\n", *lmmsize);
+
 	size = sizeof(int);
 	rc = obd_get_info(NULL, sbi->ll_md_exp, sizeof(KEY_MAX_EASIZE),
 			  KEY_MAX_EASIZE, &size, lmmsize);
 	if (rc)
 		CERROR("Get max mdsize error rc %d\n", rc);
+
+	CDEBUG(D_INFO, "max LMV ea size: %d\n", *lmmsize);
 
 	RETURN(rc);
 }

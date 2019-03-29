@@ -256,6 +256,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	struct ldlm_intent	*lit;
 	const void		*lmm = op_data->op_data;
 	__u32			 lmmsize = op_data->op_data_size;
+	__u32			 mdt_md_capsule_size;
 	struct list_head	 cancels = LIST_HEAD_INIT(cancels);
 	int			 count = 0;
 	enum ldlm_mode		 mode;
@@ -263,6 +264,8 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	int repsize, repsize_estimate;
 
 	ENTRY;
+
+	mdt_md_capsule_size = obddev->u.cli.cl_default_mds_easize;
 
 	it->it_create_mode = (it->it_create_mode & ~S_IFMT) | S_IFREG;
 
@@ -352,7 +355,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
                       lmmsize);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
-			     obddev->u.cli.cl_max_mds_easize);
+			     mdt_md_capsule_size);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
 
 	if (!(it->it_op & IT_CREAT) && it->it_op & IT_OPEN &&
@@ -391,7 +394,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 				      lustre_msg_early_size());
 	/* Estimate free space for DoM files in repbuf */
 	repsize_estimate = repsize - (req->rq_replen -
-			   obddev->u.cli.cl_max_mds_easize +
+			   mdt_md_capsule_size +
 			   sizeof(struct lov_comp_md_v1) +
 			   sizeof(struct lov_comp_md_entry_v1) +
 			   lov_mds_md_size(0, LOV_MAGIC_V3));
@@ -546,10 +549,7 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 	lit->opc = (__u64)it->it_op;
 
-	if (obddev->u.cli.cl_default_mds_easize > 0)
-		easize = obddev->u.cli.cl_default_mds_easize;
-	else
-		easize = obddev->u.cli.cl_max_mds_easize;
+	easize = obddev->u.cli.cl_default_mds_easize;
 
 	/* pack the intended request */
 	mdc_getattr_pack(req, valid, it->it_flags, op_data, easize);

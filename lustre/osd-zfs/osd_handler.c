@@ -608,7 +608,8 @@ static void osd_conf_get(const struct lu_env *env,
 	param->ddp_mntopts	= MNTOPT_USERXATTR;
 	if (osd->od_posix_acl)
 		param->ddp_mntopts |= MNTOPT_ACL;
-	param->ddp_max_ea_size	= DXATTR_MAX_ENTRY_SIZE;
+	/* Previously DXATTR_MAX_ENTRY_SIZE */
+	param->ddp_max_ea_size	= OBD_MAX_EA_SIZE;
 
 	/* for maxbytes, report same value as ZPL */
 	param->ddp_maxbytes	= MAX_LFS_FILESIZE;

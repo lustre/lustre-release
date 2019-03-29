@@ -583,8 +583,7 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		return rc;
 
 	LASSERT(obj->oo_sa_xattr);
-	/* Limited to 32k to keep nvpair memory allocations small */
-	if (buf->lb_len > DXATTR_MAX_ENTRY_SIZE) {
+	if (buf->lb_len > OBD_MAX_EA_SIZE) {
 		too_big = 1;
 	} else {
 		/* Prevent the DXATTR SA from consuming the entire SA

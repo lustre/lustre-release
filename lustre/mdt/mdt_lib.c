@@ -1162,6 +1162,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
                 rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
                 rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
                                                         RCL_CLIENT);
+
 		if (rr->rr_eadatalen > 0) {
 			const struct lmv_user_md	*lum;
 
@@ -1503,6 +1504,7 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 			rr->rr_eadatalen = req_capsule_get_size(pill,
 								&RMF_EADATA,
 								RCL_CLIENT);
+
 			if (rr->rr_eadatalen > 0) {
 				rr->rr_eadata = req_capsule_client_get(pill,
 								&RMF_EADATA);
@@ -1591,6 +1593,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
                                                         RCL_CLIENT);
+
                 if (rr->rr_eadatalen > 0) {
                         rr->rr_eadata = req_capsule_client_get(pill,
                                                                &RMF_EADATA);
@@ -1662,6 +1665,10 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
                                                         RCL_CLIENT);
+
+		if (rr->rr_eadatalen > info->mti_mdt->mdt_max_ea_size)
+			RETURN(-E2BIG);
+
                 if (rr->rr_eadatalen > 0) {
                         rr->rr_eadata = req_capsule_client_get(pill,
                                                                &RMF_EADATA);

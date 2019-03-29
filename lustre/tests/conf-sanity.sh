@@ -3494,11 +3494,11 @@ test_48() { # bz-17636 LU-7473
 	then
 		count=28	# hard coded of RPC protocol
 	elif [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		count=4000	# max_num 4091 max_ea_size = 32768
+		count=4000	# max_num 4091 max_ea_size = ~65536
 	elif ! large_xattr_enabled; then
 		count=450	# max_num 497 max_ea_size = 4012
 	else
-		count=4500	# max_num 8187 max_ea_size = 1048492
+		count=4500	# max_num 8187 max_ea_size = 65452
 				# not create too much (>5000) to save test time
 	fi
 
@@ -5847,8 +5847,23 @@ test_81() { # LU-4665
 
 	# Check max_easize.
 	local max_easize=$($LCTL get_param -n llite.*.max_easize)
-	[[ $max_easize -eq 128 ]] ||
-		error "max_easize is $max_easize, should be 128 bytes"
+	if [ $MDS1_VERSION -lt $(version_code 2.12.51) ]
+	then
+		[[ $max_easize -eq 128 ]] ||
+			error "max_easize is $max_easize, should be 128 bytes"
+	else
+		# LU-11868
+		# 4012 is 4096 - ldiskfs ea overhead
+		[[ $max_easize -ge 4012 ]] ||
+		error "max_easize is $max_easize, should be at least 4012 bytes"
+
+		# 65452 is XATTR_SIZE_MAX - ldiskfs ea overhead
+		if large_xattr_enabled;
+		then
+			[[ $max_easize -ge 65452 ]] ||
+			error "max_easize is $max_easize, should be at least 65452 bytes"
+		fi
+	fi
 
 	restore_ostindex
 }

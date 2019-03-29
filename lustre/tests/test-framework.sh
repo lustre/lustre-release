@@ -8202,8 +8202,7 @@ max_xattr_size() {
     local size
 
     if large_xattr_enabled; then
-        # include/linux/limits.h: #define XATTR_SIZE_MAX 65536
-        size=65536
+	size=$($LCTL get_param -n llite.*.max_easize)
     else
         local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
         local block_size=$(get_block_size $SINGLEMDS $mds_dev)
