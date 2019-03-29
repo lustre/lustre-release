@@ -4207,6 +4207,26 @@ LNetCtl(unsigned int cmd, void *arg)
 		return rc;
 	}
 
+	case IOC_LIBCFS_DEL_UDSP: {
+		struct lnet_ioctl_udsp *ioc_udsp = arg;
+		int idx = ioc_udsp->iou_idx;
+
+		if (ioc_udsp->iou_hdr.ioc_len < sizeof(*ioc_udsp))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_udsp_del_policy(idx);
+		if (!rc) {
+			rc = lnet_udsp_apply_policies(NULL, false);
+			CDEBUG(D_NET, "policy re-application returned %d\n",
+			       rc);
+			rc = 0;
+		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return rc;
+	}
+
 	default:
 		ni = lnet_net2ni_addref(data->ioc_net);
 		if (ni == NULL)
