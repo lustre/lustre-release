@@ -1284,7 +1284,7 @@ test_35() { # bug 17645
 	for g in $gen; do
 	    if ! test "$g" -eq "${generation[count]}"; then
 		list=$(lctl list_param mdc.$FSNAME-MDT*-mdc-*.import)
-		local c = 0
+		local c=0
 		for imp in $list; do
 			if [ $c = $count ]; then
 				break
