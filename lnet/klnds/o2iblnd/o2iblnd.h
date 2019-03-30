@@ -117,16 +117,15 @@ extern struct kib_tunables  kiblnd_tunables;
 			min(t->lnd_peercredits_hiw, (__u32)conn->ibc_queue_depth - 1))
 
 #ifdef HAVE_RDMA_CREATE_ID_5ARG
-# define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) rdma_create_id(ns, cb, \
-								    dev, ps, \
-								    qpt)
+# define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
+	 rdma_create_id((ns) ? (ns) : &init_net, cb, dev, ps, qpt)
 #else
 # ifdef HAVE_RDMA_CREATE_ID_4ARG
-#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) rdma_create_id(cb, dev, \
-								     ps, qpt)
+#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
+	  rdma_create_id(cb, dev, ps, qpt)
 # else
-#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) rdma_create_id(cb, dev, \
-								     ps)
+#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
+	  rdma_create_id(cb, dev, ps)
 # endif
 #endif
 
