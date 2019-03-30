@@ -480,14 +480,15 @@ lnet_acceptor_start(void)
 
 	if (lnet_count_acceptor_nets() == 0)  /* not required */
 		return 0;
-
-	lnet_acceptor_state.pta_ns = current->nsproxy->net_ns;
+	if (current->nsproxy && current->nsproxy->net_ns)
+		lnet_acceptor_state.pta_ns = current->nsproxy->net_ns;
+	else
+		lnet_acceptor_state.pta_ns = &init_net;
 	task = kthread_run(lnet_acceptor, (void *)(uintptr_t)secure,
 			   "acceptor_%03ld", secure);
 	if (IS_ERR(task)) {
 		rc2 = PTR_ERR(task);
 		CERROR("Can't start acceptor thread: %ld\n", rc2);
-
 		return -ESRCH;
 	}
 

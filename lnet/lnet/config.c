@@ -479,10 +479,10 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 	ni->ni_nid = LNET_MKNID(net->net_id, 0);
 
 	/* Store net namespace in which current ni is being created */
-	if (current->nsproxy->net_ns != NULL)
+	if (current->nsproxy && current->nsproxy->net_ns)
 		ni->ni_net_ns = get_net(current->nsproxy->net_ns);
 	else
-		ni->ni_net_ns = NULL;
+		ni->ni_net_ns = get_net(&init_net);
 
 	ni->ni_last_alive = ktime_get_real_seconds();
 	ni->ni_state = LNET_NI_STATE_INIT;
@@ -1686,7 +1686,10 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
 	int	   rc;
 	int i;
 
-	nip = lnet_inet_enumerate(&ifaces, current->nsproxy->net_ns);
+	if (current->nsproxy && current->nsproxy->net_ns)
+		nip = lnet_inet_enumerate(&ifaces, current->nsproxy->net_ns);
+	else
+		nip = lnet_inet_enumerate(&ifaces, &init_net);
 	if (nip < 0) {
 		if (nip != -ENOENT) {
 			LCONSOLE_ERROR_MSG(0x117,
