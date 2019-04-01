@@ -491,11 +491,13 @@ static ssize_t lnet_debugfs_read(struct file *filp, char __user *buf,
 				 size_t count, loff_t *ppos)
 {
 	struct ctl_table *table = filp->private_data;
-	ssize_t rc;
+	ssize_t rc = -EINVAL;
 
-	rc = table->proc_handler(table, 0, buf, &count, ppos);
-	if (!rc)
-		rc = count;
+	if (table) {
+		rc = table->proc_handler(table, 0, buf, &count, ppos);
+		if (!rc)
+			rc = count;
+	}
 
 	return rc;
 }
@@ -504,11 +506,14 @@ static ssize_t lnet_debugfs_write(struct file *filp, const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
 	struct ctl_table *table = filp->private_data;
-	ssize_t rc;
+	ssize_t rc = -EINVAL;
 
-	rc = table->proc_handler(table, 1, (void __user *)buf, &count, ppos);
-	if (!rc)
-		rc = count;
+	if (table) {
+		rc = table->proc_handler(table, 1, (void __user *)buf, &count,
+					 ppos);
+		if (!rc)
+			rc = count;
+	}
 
 	return rc;
 }
