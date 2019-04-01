@@ -186,7 +186,7 @@ Userspace tools and files for the Lustre file system.
 %define preamble %{expand:%(
 TMPFILE=`mktemp`
 cat %{SOURCE1} > $TMPFILE
-kver=%{kver}
+kver=%{kversion}
 linuxversion=${kver%%%%-*}
 linuxrelease=${kver##*-}
 kabiminor=${linuxrelease%%%%.*}
