@@ -50,6 +50,7 @@ static int jt_show_stats(int argc, char **argv);
 static int jt_show_peer(int argc, char **argv);
 static int jt_show_recovery(int argc, char **argv);
 static int jt_show_global(int argc, char **argv);
+static int jt_show_udsp(int argc, char **argv);
 static int jt_set_tiny(int argc, char **argv);
 static int jt_set_small(int argc, char **argv);
 static int jt_set_large(int argc, char **argv);
@@ -273,6 +274,8 @@ command_t udsp_cmds[] = {
 	 "\t       By default, appends to the end of the rule list.\n"},
 	{"del", jt_del_udsp, 0, "delete a udsp\n"
 	"\t--idx: index of the Policy.\n"},
+	{"show", jt_show_udsp, 0, "show udsps\n"
+	 "\t --idx: index of the policy to show.\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -1397,6 +1400,48 @@ static int jt_show_stats(int argc, char **argv)
 	return rc;
 }
 
+static int jt_show_udsp(int argc, char **argv)
+{
+	int idx = -1;
+	int rc, opt;
+	struct cYAML *err_rc = NULL, *show_rc = NULL;
+
+	const char *const short_options = "i:";
+	static const struct option long_options[] = {
+		{ .name = "idx", .has_arg = required_argument, .val = 'i' },
+		{ .name = NULL }
+	};
+
+	rc = check_cmd(udsp_cmds, "udsp", "show", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				   long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'i':
+			idx = atoi(optarg);
+			break;
+		case '?':
+			print_help(net_cmds, "net", "show");
+		default:
+			return 0;
+		}
+	}
+
+	rc = lustre_lnet_show_udsp(idx, -1, &show_rc, &err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+	else if (show_rc)
+		cYAML_print_tree(show_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
 static int jt_show_global(int argc, char **argv)
 {
 	int rc;
@@ -1826,6 +1871,13 @@ static int jt_export(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_recovery_limit(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_udsp(-1, -1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);

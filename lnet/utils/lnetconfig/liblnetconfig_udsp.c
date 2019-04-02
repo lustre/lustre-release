@@ -614,3 +614,246 @@ int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc)
 	cYAML_build_error(rc, seq_no, ADD_CMD, "udsp", err_str, err_rc);
 	return rc;
 }
+
+int lustre_lnet_nid_descr2str(struct lnet_ud_nid_descr *d,
+				     char *str, size_t size)
+{
+	int left = size;
+	int len;
+	char *net;
+	bool addr_found = false;
+
+	/* criteria not defined */
+	if (d->ud_net_id.udn_net_type == 0) {
+		strncat(str, "NA", left - 1);
+		return 0;
+	}
+
+	left = cfs_expr2str(&d->ud_addr_range, str, left);
+	if (left < 0)
+		return left;
+	net = libcfs_net2str(LNET_MKNET(d->ud_net_id.udn_net_type, 0));
+	if (left < size) {
+		len = strlen(net) + 2; /* account for @ and NULL termination */
+		addr_found = true;
+	} else {
+		len = strlen(net) + 1; /* account for NULL termination */
+	}
+
+	if (left - len < 0)
+		return -ENOBUFS;
+
+	if (addr_found) {
+		strncat(str, "@", left);
+		left -= 1;
+	}
+
+	strncat(str, net, left);
+
+	left -= strlen(net) + 1;
+
+	left = cfs_expr2str(&d->ud_net_id.udn_net_num_range, str, left);
+	if (left < 0)
+		return left;
+
+	return 0;
+}
+
+int yaml_add_udsp_action(struct cYAML *y, struct lnet_udsp *udsp)
+{
+	struct cYAML *action;
+
+	switch (udsp->udsp_action_type) {
+		case EN_LNET_UDSP_ACTION_PRIORITY:
+			action = cYAML_create_object(y, "action");
+			if (!action)
+				return -ENOMEM;
+			if (!cYAML_create_number(action, "priority",
+				udsp->udsp_action.udsp_priority))
+				return -ENOMEM;
+
+		default:
+			return 0;
+	}
+
+	return 0;
+}
+
+int lustre_lnet_show_udsp(int idx, int seq_no, struct cYAML **show_rc,
+			  struct cYAML **err_rc)
+{
+	struct lnet_ioctl_udsp *data = NULL;
+	char *ioctl_buf = NULL;
+	struct lnet_ioctl_udsp get_size;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i;
+	int l_errno = 0;
+	int use_idx = 0;
+	struct cYAML *root = NULL, *udsp_node = NULL,
+		     *first_seq = NULL;
+	struct cYAML *item = NULL;
+	char err_str[LNET_MAX_STR_LEN];
+	char tmp[LNET_MAX_STR_LEN];
+	struct lnet_udsp *udsp = NULL;
+	bool exist = false;
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	root = cYAML_create_object(NULL, NULL);
+	if (!root)
+		goto out;
+
+	udsp_node = cYAML_create_seq(root, "udsp");
+	if (!udsp_node)
+		goto out;
+
+	for (i = 0;; i++) {
+		data = NULL;
+		ioctl_buf = NULL;
+		udsp = NULL;
+
+		LIBCFS_IOC_INIT_V2(get_size, iou_hdr);
+		if (idx != -1)
+			use_idx = idx;
+		else
+			use_idx = i;
+
+		get_size.iou_idx = use_idx;
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_UDSP_SIZE, &get_size);
+		if (rc != 0) {
+			l_errno = errno;
+			break;
+		}
+
+		ioctl_buf = calloc(get_size.iou_idx, 1);
+		if (!ioctl_buf) {
+			l_errno = errno;
+			break;
+		}
+
+		data = (struct lnet_ioctl_udsp *)ioctl_buf;
+
+		LIBCFS_IOC_INIT_V2(*data, iou_hdr);
+		data->iou_bulk_size = get_size.iou_idx - sizeof(*data);
+		data->iou_bulk = ioctl_buf + sizeof(*data);
+		data->iou_idx = use_idx;
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_UDSP, ioctl_buf);
+		if (rc != 0) {
+			l_errno = errno;
+			break;
+		}
+
+		udsp = lnet_udsp_demarshal(ioctl_buf,
+			data->iou_hdr.ioc_len + data->iou_bulk_size);
+		if (!udsp) {
+			l_errno = -EFAULT;
+			break;
+		}
+
+		rc = -EINVAL;
+		exist = true;
+
+		/* create the tree to be printed. */
+		item = cYAML_create_seq_item(udsp_node);
+		if (item == NULL)
+			goto out;
+
+		if (!first_seq)
+			first_seq = item;
+
+		if (cYAML_create_number(item, "idx",
+					udsp->udsp_idx) == NULL)
+			goto out;
+
+		memset(tmp, 0, LNET_MAX_STR_LEN);
+		rc = lustre_lnet_nid_descr2str(&udsp->udsp_src, tmp,
+					       LNET_MAX_STR_LEN);
+
+		if (rc)
+			goto out;
+
+		if (cYAML_create_string(item, "src", tmp) == NULL)
+			goto out;
+		memset(tmp, 0, LNET_MAX_STR_LEN);
+		rc = lustre_lnet_nid_descr2str(&udsp->udsp_dst, tmp,
+					       LNET_MAX_STR_LEN);
+
+		if (rc)
+			goto out;
+
+		if (cYAML_create_string(item, "dst", tmp) == NULL)
+			goto out;
+
+		memset(tmp, 0, LNET_MAX_STR_LEN);
+		rc = lustre_lnet_nid_descr2str(&udsp->udsp_rte, tmp,
+					       LNET_MAX_STR_LEN);
+
+		if (rc)
+			goto out;
+
+		if (cYAML_create_string(item, "rte", tmp) == NULL)
+			goto out;
+
+		if (yaml_add_udsp_action(item, udsp))
+			goto out;
+
+		if (ioctl_buf)
+			free(ioctl_buf);
+		if (udsp)
+			lnet_udsp_free(udsp, true);
+		/* did we show the given index? */
+		if (idx != -1)
+			break;
+	}
+
+	/* Print out the net information only if show_rc is not provided */
+	if (show_rc == NULL)
+		cYAML_print_tree(root);
+
+	if (l_errno != ENOENT) {
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot get udsp: %s\"",
+			 strerror(l_errno));
+		rc = -l_errno;
+		goto out;
+	} else {
+		rc = LUSTRE_CFG_RC_NO_ERR;
+	}
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+out:
+	if (ioctl_buf)
+		free(ioctl_buf);
+	if (udsp)
+		lnet_udsp_free(udsp, true);
+
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR || !exist) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		struct cYAML *show_node;
+		/* find the net node, if one doesn't exist
+		 * then insert one.  Otherwise add to the one there
+		 */
+		show_node = cYAML_get_object_item(*show_rc, "udsp");
+		if (show_node != NULL && cYAML_is_sequence(show_node)) {
+			cYAML_insert_child(show_node, first_seq);
+			free(udsp_node);
+			free(root);
+		} else if (show_node == NULL) {
+			cYAML_insert_sibling((*show_rc)->cy_child,
+						udsp_node);
+			free(root);
+		} else {
+			cYAML_free_tree(root);
+		}
+	} else {
+		*show_rc = root;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "udsp", err_str, err_rc);
+
+	return rc;
+}
+

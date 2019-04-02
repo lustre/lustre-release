@@ -189,6 +189,77 @@ out:
 	return rc;
 }
 
+int
+cfs_expr2str(struct list_head *list, char *str, size_t size)
+{
+	struct cfs_expr_list *expr;
+	struct cfs_range_expr *range;
+	char tmp[LNET_NIDSTR_SIZE];
+	size_t len;
+	bool first;
+	bool bracket = false;
+	char *format;
+	char *tmpc;
+
+	list_for_each_entry(expr, list, el_link) {
+		first = true;
+		list_for_each_entry(range, &expr->el_exprs, re_link) {
+			if (range->re_lo == range->re_hi) {
+				snprintf(tmp,
+					 LNET_NIDSTR_SIZE,
+					 "%u.", range->re_lo);
+			} else if (range->re_lo < range->re_hi) {
+				if (range->re_stride > 1) {
+					if (first)
+						format = "[%u-%u/%u,";
+					else
+						format = "%u-%u/%u,";
+					snprintf(tmp, LNET_NIDSTR_SIZE,
+						format, range->re_lo,
+						range->re_hi, range->re_stride);
+					bracket = true;
+				} else {
+					if (first)
+						format = "[%u-%u,";
+					else
+						format = "%u-%u,";
+					snprintf(tmp, LNET_NIDSTR_SIZE,
+						format, range->re_lo,
+						range->re_hi);
+					bracket = true;
+				}
+			} else {
+				return -EINVAL;
+			}
+			len = strlen(tmp);
+			size -= (len + 1);
+			if (size < 0)
+				return -ENOBUFS;
+
+			strncat(str, tmp, size + len);
+			first = false;
+		}
+		if (bracket) {
+			tmpc = str + (strlen(str) - 1);
+			size -= 1;
+			if (size < 0)
+				return -ENOBUFS;
+			*tmpc = ']';
+			*(tmpc+1) = '.';
+			bracket = false;
+		}
+	}
+
+	/*
+	 * get rid of the trailing '.' at the end of the string
+	 * only if we actually had something on the list passed in.
+	 * otherwise we could write outside the array
+	 */
+	if (!list_empty(list))
+		str[strlen(str)-1] = '\0';
+	return size;
+}
+
 static int
 libcfs_num_addr_range_expand(struct list_head *addrranges, __u32 *addrs,
 			     int max_addrs)

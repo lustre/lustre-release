@@ -795,4 +795,15 @@ int lustre_lnet_add_udsp(char *src, char *dst, char *rte, char *type,
  */
 int lustre_lnet_del_udsp(unsigned int idx, int seq_no, struct cYAML **err_rc);
 
+/* lustre_lnet_show_udsp
+ *	show selection policy.
+ *	idx - the index to show. -1 to show all policies
+ *	seq_no - sequence number of the request
+ *	err_rc - [IN/OUT] struct cYAML tree containing udsp info
+ *	err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *	caller
+ */
+int lustre_lnet_show_udsp(int idx, int seq_no, struct cYAML **show_rc,
+			  struct cYAML **err_rc);
+
 #endif /* LIB_LNET_CONFIG_API_H */
