@@ -196,6 +196,7 @@ test_6() {
 	# (( $before > $after_dd)) test counting on that
 	wait_mds_ost_sync || error "first wait_mds_ost_sync failed"
 	wait_destroy_complete || error "first wait_destroy_complete failed"
+	sync_all_data
 
 	local before=$(kbytesfree)
 	dd if=/dev/urandom bs=4096 count=1280 of=$f || error "dd failed"
@@ -219,9 +220,10 @@ test_6() {
 		after_dd=$(kbytesfree)
 	done
 
-	log "before: $before after_dd: $after_dd took $i seconds"
+	log "before_free: $before after_dd_free: $after_dd took $i seconds"
 	(( $before > $after_dd )) ||
-		error "space grew after dd: before:$before after_dd:$after_dd"
+		error "free grew after dd: before:$before after_dd:$after_dd"
+
 	rm -f $f
 	fail ost$((stripe_index + 1))
 	wait_recovery_complete ost$((stripe_index + 1)) ||
@@ -232,7 +234,7 @@ test_6() {
 	wait_mds_ost_sync || error "second wait_mds_ost_sync failed"
 	wait_delete_completed || error "second wait_delete_completed failed"
 	local after=$(kbytesfree)
-	log "before: $before after: $after"
+	log "free_before: $before free_after: $after"
 	(( $before <= $after + $(fs_log_size) )) ||
 		error "$before > $after + logsize $(fs_log_size)"
 }
