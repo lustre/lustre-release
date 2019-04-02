@@ -59,6 +59,7 @@ int main(int argc, char **argv)
     } else {
         strncpy(parent, base, t - base);
         offset = t - base - 1;
+	parent[t - base] = 0;
     }
 
     fd = open(parent, O_RDONLY);
