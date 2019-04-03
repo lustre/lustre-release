@@ -140,7 +140,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	/* on success, pack lvb in reply */
 	lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
 	lvb_len = ldlm_lvbo_size(*lockp);
-	lvb_len = ldlm_lvbo_fill(env, *lockp, lvb, &lvb_len);
+	lvb_len = ldlm_lvbo_fill(*lockp, lvb, &lvb_len);
 	if (lvb_len < 0)
 		GOTO(out, rc = lvb_len);
 
@@ -173,14 +173,8 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 	    res->lr_name.name[LUSTRE_RES_ID_SEQ_OFF] != FID_SEQ_QUOTA_GLB)
 		RETURN(0);
 
-	OBD_ALLOC_PTR(env);
-	if (env == NULL)
-		RETURN(-ENOMEM);
-
-	/* initialize environment */
-	rc = lu_env_init(env, LCT_MD_THREAD);
-	if (rc != 0)
-		GOTO(out_free, rc);
+	env = lu_env_find();
+	LASSERT(env);
 	qti = qmt_info(env);
 
 	/* extract global index FID and quota identifier */
@@ -228,9 +222,6 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 	res->lr_lvb_len = sizeof(struct lquota_lvb);
 	EXIT;
 out:
-	lu_env_fini(env);
-out_free:
-	OBD_FREE_PTR(env);
 	return rc;
 }
 
@@ -281,18 +272,12 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 		if (lvb->lvb_id_may_rel != 0)
 			/* but might still release later ... */
 			lqe->lqe_may_rel += lvb->lvb_id_may_rel;
-		GOTO(out_lqe, rc = 0);
+		GOTO(out, rc = 0);
 	}
 
 	/* allocate environement */
-	OBD_ALLOC_PTR(env);
-	if (env == NULL)
-		GOTO(out_lqe, rc = -ENOMEM);
-
-	/* initialize environment */
-	rc = lu_env_init(env, LCT_MD_THREAD);
-	if (rc)
-		GOTO(out_env, rc);
+	env = lu_env_find();
+	LASSERT(env);
 	qti = qmt_info(env);
 
 	/* The request is a glimpse callback which was sent via the
@@ -306,14 +291,14 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 	if (IS_ERR(lock)) {
 		CERROR("%s: failed to get lock from request!\n",
 		       qmt->qmt_svname);
-		GOTO(out_env_init, rc = PTR_ERR(lock));
+		GOTO(out, rc = PTR_ERR(lock));
 	}
 
 	exp = class_export_get(lock->l_export);
 	if (exp == NULL) {
 		CERROR("%s: failed to get export from lock!\n",
 		       qmt->qmt_svname);
-		GOTO(out_env_init, rc = -EFAULT);
+		GOTO(out, rc = -EFAULT);
 	}
 
 	/* release quota space */
@@ -325,13 +310,9 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 			     lvb->lvb_id_rel, rc);
 	class_export_put(exp);
 	if (rc)
-		GOTO(out_env_init, rc);
+		GOTO(out, rc);
 	EXIT;
-out_env_init:
-	lu_env_fini(env);
-out_env:
-	OBD_FREE_PTR(env);
-out_lqe:
+out:
 	lqe_putref(lqe);
 	return rc;
 }
@@ -376,26 +357,10 @@ int qmt_lvbo_fill(struct lu_device *ld, struct ldlm_lock *lock, void *lvb,
 		lqe_putref(lqe);
 	} else {
 		/* global quota lock */
-		struct lu_env		*env;
-		int			 rc;
-		struct dt_object	*obj = res->lr_lvb_data;
-
-		OBD_ALLOC_PTR(env);
-		if (env == NULL)
-			RETURN(-ENOMEM);
-
-		/* initialize environment */
-		rc = lu_env_init(env, LCT_LOCAL);
-		if (rc) {
-			OBD_FREE_PTR(env);
-			RETURN(rc);
-		}
+		struct dt_object *obj = res->lr_lvb_data;
 
 		/* return current version of global index */
-		qlvb->lvb_glb_ver = dt_version_get(env, obj);
-
-		lu_env_fini(env);
-		OBD_FREE_PTR(env);
+		qlvb->lvb_glb_ver = dt_version_get(lu_env_find(), obj);
 	}
 
 	RETURN(sizeof(struct lquota_lvb));
@@ -419,25 +384,9 @@ int qmt_lvbo_free(struct lu_device *ld, struct ldlm_resource *res)
 		/* release lqe reference */
 		lqe_putref(lqe);
 	} else {
-		struct dt_object	*obj = res->lr_lvb_data;
-		struct lu_env		*env;
-		int			 rc;
-
-		OBD_ALLOC_PTR(env);
-		if (env == NULL)
-			RETURN(-ENOMEM);
-
-		/* initialize environment */
-		rc = lu_env_init(env, LCT_LOCAL);
-		if (rc) {
-			OBD_FREE_PTR(env);
-			RETURN(rc);
-		}
-
+		struct dt_object *obj = res->lr_lvb_data;
 		/* release object reference */
-		dt_object_put(env, obj);
-		lu_env_fini(env);
-		OBD_FREE_PTR(env);
+		dt_object_put(lu_env_find(), obj);
 	}
 
 	res->lr_lvb_data = NULL;
@@ -810,9 +759,11 @@ static int qmt_reba_thread(void *arg)
 	rc = lu_env_init(env, LCT_MD_THREAD);
 	if (rc) {
 		CERROR("%s: failed to init env.", qmt->qmt_svname);
-		OBD_FREE_PTR(env);
-		RETURN(rc);
+		GOTO(out_env, rc);
 	}
+	rc = lu_env_add(env);
+	if (rc)
+		GOTO(out_env_fini, rc);
 
 	thread_set_flags(thread, SVC_RUNNING);
 	wake_up(&thread->t_ctl_waitq);
@@ -839,7 +790,10 @@ static int qmt_reba_thread(void *arg)
 		if (!thread_is_running(thread))
 			break;
 	}
+	lu_env_remove(env);
+out_env_fini:
 	lu_env_fini(env);
+out_env:
 	OBD_FREE_PTR(env);
 	thread_set_flags(thread, SVC_STOPPED);
 	wake_up(&thread->t_ctl_waitq);

@@ -34,7 +34,7 @@
 #include "mdt_internal.h"
 
 /* Called with res->lr_lvb_sem held */
-static int mdt_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
+static int mdt_lvbo_init(struct ldlm_resource *res)
 {
 	if (IS_LQUOTA_RES(res)) {
 		struct mdt_device	*mdt;
@@ -140,11 +140,11 @@ int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,
 	RETURN(rc);
 }
 
-int mdt_dom_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
-			struct ldlm_lock *lock, struct ptlrpc_request *req,
-			bool increase_only)
+int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
+			struct ptlrpc_request *req, bool increase_only)
 {
 	struct obd_export *exp = lock ? lock->l_export : NULL;
+	const struct lu_env *env = lu_env_find();
 	struct mdt_device *mdt;
 	struct mdt_object *mo;
 	struct mdt_thread_info *info;
@@ -251,9 +251,8 @@ out_env:
 	return rc;
 }
 
-static int mdt_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
-			   struct ldlm_lock *lock, struct ptlrpc_request *req,
-			   int increase_only)
+static int mdt_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
+			   struct ptlrpc_request *req, int increase_only)
 {
 	ENTRY;
 
@@ -275,8 +274,7 @@ static int mdt_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
 	 * by MDT for DOM objects only.
 	 */
 	if (lock == NULL || ldlm_has_dom(lock))
-		return mdt_dom_lvbo_update(env, res, lock, req,
-					   !!increase_only);
+		return mdt_dom_lvbo_update(res, lock, req, !!increase_only);
 	return 0;
 }
 
@@ -321,40 +319,35 @@ static int mdt_lvbo_size(struct ldlm_lock *lock)
  *			and the needed lvb buffer size will be returned in
  *			@lvblen
  */
-static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
+static int mdt_lvbo_fill(struct ldlm_lock *lock,
 			 void *lvb, int *lvblen)
 {
 	struct mdt_thread_info *info;
 	struct mdt_device *mdt;
+	struct lu_env *env;
 	struct lu_fid *fid;
 	struct mdt_object *obj = NULL;
 	struct md_object *child = NULL;
-	struct lu_env _env;
 	int rc;
 	ENTRY;
 
-	if (!env) {
-		rc = lu_env_init(&_env, LCT_DT_THREAD);
-		if (rc)
-			RETURN(rc);
-		env = &_env;
-	}
+	env = lu_env_find();
+	LASSERT(env);
 
 	mdt = ldlm_lock_to_ns(lock)->ns_lvbp;
 	if (IS_LQUOTA_RES(lock->l_resource)) {
 		if (mdt->mdt_qmt_dev == NULL)
-			GOTO(out_env, rc = 0);
+			GOTO(out, rc = 0);
 
 		/* call lvbo fill function of quota master */
 		rc = qmt_hdls.qmth_lvbo_fill(mdt->mdt_qmt_dev, lock, lvb,
 					     *lvblen);
-		GOTO(out_env, rc);
+		GOTO(out, rc);
 	}
 
 	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 	if (!info) {
-		rc = lu_env_refill_by_tags((struct lu_env *)env,
-					   LCT_MD_THREAD, 0);
+		rc = lu_env_refill_by_tags(env, LCT_MD_THREAD, 0);
 		if (rc)
 			GOTO(out, rc);
 		info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
@@ -375,8 +368,7 @@ static int mdt_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
 		int lvb_len = sizeof(struct ost_lvb);
 
 		if (!mdt_dom_lvb_is_valid(res))
-			mdt_dom_lvbo_update(env, lock->l_resource,
-					    lock, NULL, 0);
+			mdt_dom_lvbo_update(lock->l_resource, lock, NULL, 0);
 
 		if (lvb_len > *lvblen)
 			lvb_len = *lvblen;
@@ -445,9 +437,6 @@ out_put:
 out:
 	if (rc < 0 && rc != -ERANGE)
 		rc = 0;
-out_env:
-	if (env == &_env)
-		lu_env_fini(&_env);
 	RETURN(rc);
 }
 

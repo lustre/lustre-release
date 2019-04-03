@@ -2460,18 +2460,16 @@ static int target_recovery_thread(void *arg)
         if (thread == NULL)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC_PTR(env);
-        if (env == NULL) {
-                OBD_FREE_PTR(thread);
-                RETURN(-ENOMEM);
-        }
+	OBD_ALLOC_PTR(env);
+	if (env == NULL)
+		GOTO(out_thread, rc = -ENOMEM);
+	rc = lu_env_add(env);
+	if (rc)
+		GOTO(out_env, rc);
 
         rc = lu_context_init(&env->le_ctx, LCT_MD_THREAD | LCT_DT_THREAD);
-        if (rc) {
-                OBD_FREE_PTR(thread);
-                OBD_FREE_PTR(env);
-                RETURN(rc);
-        }
+	if (rc)
+		GOTO(out_env_remove, rc);
 
         thread->t_env = env;
         thread->t_id = -1; /* force filter_iobuf_get/put to use local buffers */
@@ -2563,8 +2561,12 @@ static int target_recovery_thread(void *arg)
 	complete(&trd->trd_finishing);
 
 	tgt_io_thread_done(thread);
-	OBD_FREE_PTR(thread);
+out_env_remove:
+	lu_env_remove(env);
+out_env:
 	OBD_FREE_PTR(env);
+out_thread:
+	OBD_FREE_PTR(thread);
 	RETURN(rc);
 }
 

@@ -574,12 +574,19 @@ static inline int obd_precleanup(struct obd_device *obd)
 	ENTRY;
 
 	if (ldt != NULL && d != NULL) {
-		struct lu_env env;
+		struct lu_env *env = lu_env_find();
+		struct lu_env _env;
 
-		rc = lu_env_init(&env, ldt->ldt_ctx_tags);
-		if (rc == 0) {
-			ldt->ldt_ops->ldto_device_fini(&env, d);
-			lu_env_fini(&env);
+		if (!env) {
+			env = &_env;
+			rc = lu_env_init(env, ldt->ldt_ctx_tags);
+			LASSERT(rc == 0);
+			lu_env_add(env);
+		}
+		ldt->ldt_ops->ldto_device_fini(env, d);
+		if (env == &_env) {
+			lu_env_remove(env);
+			lu_env_fini(env);
 		}
 	}
 

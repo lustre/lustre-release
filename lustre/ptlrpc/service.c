@@ -2513,30 +2513,30 @@ static int ptlrpc_main(void *arg)
 	}
 
 	ginfo = groups_alloc(0);
-	if (!ginfo) {
-		rc = -ENOMEM;
-		goto out;
-	}
+	if (!ginfo)
+		GOTO(out, rc = -ENOMEM);
 
 	set_current_groups(ginfo);
 	put_group_info(ginfo);
 
 	if (svc->srv_ops.so_thr_init != NULL) {
 		rc = svc->srv_ops.so_thr_init(thread);
-                if (rc)
-                        goto out;
-        }
 
-        OBD_ALLOC_PTR(env);
-        if (env == NULL) {
-                rc = -ENOMEM;
-                goto out_srv_fini;
-        }
+		if (rc)
+			GOTO(out, rc);
+	}
 
-        rc = lu_context_init(&env->le_ctx,
-                             svc->srv_ctx_tags|LCT_REMEMBER|LCT_NOREF);
-        if (rc)
-                goto out_srv_fini;
+	OBD_ALLOC_PTR(env);
+	if (env == NULL)
+		GOTO(out_srv_fini, rc = -ENOMEM);
+	rc = lu_env_add(env);
+	if (rc)
+		GOTO(out_env, rc);
+
+	rc = lu_context_init(&env->le_ctx,
+			     svc->srv_ctx_tags|LCT_REMEMBER|LCT_NOREF);
+	if (rc)
+		GOTO(out_env_remove, rc);
 
         thread->t_env = env;
         env->le_ctx.lc_thread = thread;
@@ -2549,15 +2549,13 @@ static int ptlrpc_main(void *arg)
 
 		CERROR("Failed to post rqbd for %s on CPT %d: %d\n",
 			svc->srv_name, svcpt->scp_cpt, rc);
-		goto out_srv_fini;
+		GOTO(out_ctx_fini, rc);
 	}
 
 	/* Alloc reply state structure for this one */
 	OBD_ALLOC_LARGE(rs, svc->srv_max_reply_size);
-	if (!rs) {
-		rc = -ENOMEM;
-		goto out_srv_fini;
-	}
+	if (!rs)
+		GOTO(out_ctx_fini, rc = -ENOMEM);
 
 	spin_lock(&svcpt->scp_lock);
 
@@ -2638,17 +2636,18 @@ static int ptlrpc_main(void *arg)
         lc_watchdog_delete(thread->t_watchdog);
         thread->t_watchdog = NULL;
 
+out_ctx_fini:
+	lu_context_fini(&env->le_ctx);
+out_env_remove:
+	lu_env_remove(env);
+out_env:
+	OBD_FREE_PTR(env);
 out_srv_fini:
         /*
          * deconstruct service specific state created by ptlrpc_start_thread()
          */
 	if (svc->srv_ops.so_thr_done != NULL)
 		svc->srv_ops.so_thr_done(thread);
-
-        if (env != NULL) {
-                lu_context_fini(&env->le_ctx);
-                OBD_FREE_PTR(env);
-        }
 out:
         CDEBUG(D_RPCTRACE, "service thread [ %p : %u ] %d exiting: rc %d\n",
                thread, thread->t_pid, thread->t_id, rc);

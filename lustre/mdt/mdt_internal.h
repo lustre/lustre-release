@@ -1201,9 +1201,8 @@ int mdt_lsom_update(struct mdt_thread_info *info, struct mdt_object *obj,
 /* mdt_lvb.c */
 extern struct ldlm_valblock_ops mdt_lvbo;
 int mdt_dom_lvb_is_valid(struct ldlm_resource *res);
-int mdt_dom_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
-			struct ldlm_lock *lock, struct ptlrpc_request *req,
-			bool increase_only);
+int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
+			struct ptlrpc_request *req, bool increase_only);
 
 void mdt_enable_cos(struct mdt_device *dev, bool enable);
 int mdt_cos_is_enabled(struct mdt_device *);

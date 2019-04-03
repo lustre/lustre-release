@@ -462,7 +462,7 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
 	if (IS_ERR(lock))
 		GOTO(out_nolock, err = PTR_ERR(lock));
 
-	err = ldlm_lvbo_init(env, lock->l_resource);
+	err = ldlm_lvbo_init(lock->l_resource);
 	if (err < 0) {
 		LDLM_ERROR(lock, "delayed lvb init failed (rc %d)", err);
 		ldlm_lock_destroy_nolock(lock);
