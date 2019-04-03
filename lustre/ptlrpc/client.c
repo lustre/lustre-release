@@ -2408,7 +2408,6 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 	struct list_head *tmp;
 	struct ptlrpc_request *req;
 	struct l_wait_info lwi;
-	struct lu_env _env;
 	time64_t timeout;
 	int rc;
 
@@ -2425,20 +2424,6 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 
 	if (list_empty(&set->set_requests))
 		RETURN(0);
-
-	/*
-	 * ideally we want env provide by the caller all the time,
-	 * but at the moment that would mean a massive change in
-	 * LDLM while benefits would be close to zero, so just
-	 * initialize env here for those rare cases
-	 */
-	if (!env) {
-		/* XXX: skip on the client side? */
-		rc = lu_env_init(&_env, LCT_DT_THREAD);
-		if (rc)
-			RETURN(rc);
-		env = &_env;
-	}
 
 	do {
 		timeout = ptlrpc_set_next_timeout(set);
@@ -2472,7 +2457,7 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 					  ptlrpc_expired_set, set);
 
 		rc = l_wait_event(set->set_waitq,
-				  ptlrpc_check_set(env, set), &lwi);
+				  ptlrpc_check_set(NULL, set), &lwi);
 
 		/*
 		 * LU-769 - if we ignored the signal because it was already
@@ -2528,9 +2513,6 @@ int ptlrpc_set_wait(const struct lu_env *env, struct ptlrpc_request_set *set)
 		if (req->rq_status != 0)
 			rc = req->rq_status;
 	}
-
-	if (env && env == &_env)
-		lu_env_fini(&_env);
 
 	RETURN(rc);
 }

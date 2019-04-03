@@ -1041,7 +1041,7 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 
 	/* Update lvbo data if DoM lock returned or if LVB is not yet valid. */
 	if (dom_lock || !mdt_dom_lvb_is_valid(res))
-		mdt_dom_lvbo_update(env, res, NULL, NULL, false);
+		mdt_dom_lvbo_update(res, NULL, NULL, false);
 
 	mdt_lvb2body(res, mb);
 	ldlm_resource_putref(res);
@@ -1139,7 +1139,7 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 fill_mbo:
 	/* LVB can be without valid data in case of DOM */
 	if (!mdt_dom_lvb_is_valid(res))
-		mdt_dom_lvbo_update(mti->mti_env, res, lock, NULL, false);
+		mdt_dom_lvbo_update(res, lock, NULL, false);
 	mdt_lvb2body(res, mbo);
 	RETURN(rc);
 }

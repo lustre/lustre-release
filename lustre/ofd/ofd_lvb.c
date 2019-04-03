@@ -82,13 +82,13 @@ static int ofd_lvbo_free(struct ldlm_resource *res)
  * \retval		0 on successful setup
  * \retval		negative value on error
  */
-static int ofd_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
+static int ofd_lvbo_init(struct ldlm_resource *res)
 {
 	struct ost_lvb		*lvb;
 	struct ofd_device	*ofd;
 	struct ofd_object	*fo;
 	struct ofd_thread_info	*info;
-	struct lu_env _env;
+	struct lu_env *env;
 	int rc = 0;
 	ENTRY;
 
@@ -104,12 +104,8 @@ static int ofd_lvbo_init(const struct lu_env *env, struct ldlm_resource *res)
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_LVB))
 		RETURN(-ENOMEM);
 
-	if (!env) {
-		rc = lu_env_init(&_env, LCT_DT_THREAD);
-		if (rc)
-			RETURN(rc);
-		env = &_env;
-	}
+	env = lu_env_find();
+	LASSERT(env);
 
 	OBD_ALLOC_PTR(lvb);
 	if (lvb == NULL)
@@ -166,8 +162,6 @@ out_lvb:
 		OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
 out:
 	/* Don't free lvb data on lookup error */
-	if (env && env == &_env)
-		lu_env_fini(&_env);
 	return rc;
 }
 
@@ -200,18 +194,19 @@ out:
  * \retval		0 on successful setup
  * \retval		negative value on error
  */
-static int ofd_lvbo_update(const struct lu_env *env, struct ldlm_resource *res,
-			   struct ldlm_lock *lock, struct ptlrpc_request *req,
-			   int increase_only)
+static int ofd_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
+			   struct ptlrpc_request *req, int increase_only)
 {
-	struct ofd_thread_info	*info;
-	struct ofd_device	*ofd;
-	struct ofd_object	*fo;
-	struct ost_lvb		*lvb;
-	int			 rc = 0;
+	struct ofd_thread_info *info;
+	struct ofd_device *ofd;
+	struct ofd_object *fo;
+	struct ost_lvb	*lvb;
+	const struct lu_env *env;
+	int rc = 0;
 
 	ENTRY;
 
+	env = lu_env_find();
 	LASSERT(env);
 	info = ofd_info(env);
 	LASSERT(res != NULL);
@@ -376,8 +371,7 @@ static int ofd_lvbo_size(struct ldlm_lock *lock)
  *
  * \retval		size of LVB data written into \a buf buffer
  */
-static int ofd_lvbo_fill(const struct lu_env *env, struct ldlm_lock *lock,
-			 void *buf, int *buflen)
+static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int *buflen)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	int lvb_len;

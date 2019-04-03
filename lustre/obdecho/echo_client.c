@@ -2758,6 +2758,9 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	rc = lu_env_init(env, LCT_DT_THREAD);
 	if (rc)
 		GOTO(out_alloc, rc = -ENOMEM);
+	lu_env_add(env);
+	if (rc)
+		GOTO(out_env_fini, rc = -ENOMEM);
 
 #ifdef HAVE_SERVER_SUPPORT
 	env->le_ses = &echo_session;
@@ -2899,6 +2902,8 @@ out:
 	lu_context_fini(env->le_ses);
 out_env:
 #endif
+	lu_env_remove(env);
+out_env_fini:
         lu_env_fini(env);
 out_alloc:
         OBD_FREE_PTR(env);
