@@ -3056,13 +3056,19 @@ static struct dentry *osd_child_dentry_get(const struct lu_env *env,
 
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 		      umode_t mode, struct dt_allocation_hint *hint,
-		      struct thandle *th)
+		      struct thandle *th, struct lu_attr *attr)
 {
 	int result;
 	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oth;
 	struct dt_object *parent = NULL;
 	struct inode *inode;
+	uid_t owner[2] = {0, 0};
+
+	if (attr->la_valid & LA_UID)
+		owner[0] = attr->la_uid;
+	if (attr->la_valid & LA_GID)
+		owner[1] = attr->la_gid;
 
 	LINVRNT(osd_invariant(obj));
 	LASSERT(obj->oo_inode == NULL);
@@ -3085,7 +3091,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 	inode = ldiskfs_create_inode(oth->ot_handle,
 				     parent ? osd_dt_obj(parent)->oo_inode :
 					      osd_sb(osd)->s_root->d_inode,
-				     mode);
+				     mode, owner);
 	if (!IS_ERR(inode)) {
 		/* Do not update file c/mtime in ldiskfs. */
 		inode->i_flags |= S_NOCMTIME;
@@ -3127,7 +3133,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 
 	oth = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oth->ot_handle->h_transaction != NULL);
-	result = osd_mkfile(info, obj, mode, hint, th);
+	result = osd_mkfile(info, obj, mode, hint, th, attr);
 
 	return result;
 }
@@ -3149,7 +3155,7 @@ static int osd_mk_index(struct osd_thread_info *info, struct osd_object *obj,
 	oth = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oth->ot_handle->h_transaction != NULL);
 
-	result = osd_mkfile(info, obj, mode, hint, th);
+	result = osd_mkfile(info, obj, mode, hint, th, attr);
 	if (result == 0) {
 		LASSERT(obj->oo_inode != NULL);
 		if (feat->dif_flags & DT_IND_VARKEY)
@@ -3176,7 +3182,8 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
 {
 	LASSERT(S_ISREG(attr->la_mode));
 	return osd_mkfile(info, obj, (attr->la_mode &
-			 (S_IFMT | S_IALLUGO | S_ISVTX)), hint, th);
+			 (S_IFMT | S_IALLUGO | S_ISVTX)), hint, th,
+			  attr);
 }
 
 static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
@@ -3187,7 +3194,8 @@ static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
 {
 	LASSERT(S_ISLNK(attr->la_mode));
 	return osd_mkfile(info, obj, (attr->la_mode &
-			 (S_IFMT | S_IALLUGO | S_ISVTX)), hint, th);
+			 (S_IFMT | S_IALLUGO | S_ISVTX)), hint, th,
+			  attr);
 }
 
 static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
@@ -3204,7 +3212,7 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
 	LASSERT(S_ISCHR(mode) || S_ISBLK(mode) ||
 		S_ISFIFO(mode) || S_ISSOCK(mode));
 
-	result = osd_mkfile(info, obj, mode, hint, th);
+	result = osd_mkfile(info, obj, mode, hint, th, attr);
 	if (result == 0) {
 		LASSERT(obj->oo_inode != NULL);
 		/*
@@ -3755,7 +3763,8 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
-	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, type);
+	local = ldiskfs_create_inode(oh->ot_handle, pobj->oo_inode, type,
+				     NULL);
 	if (IS_ERR(local)) {
 		CERROR("%s: create local error %d\n", osd_name(osd),
 		       (int)PTR_ERR(local));

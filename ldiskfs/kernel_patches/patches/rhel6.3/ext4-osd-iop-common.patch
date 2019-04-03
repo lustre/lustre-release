@@ -1,11 +1,14 @@
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 1d41eef..87b4ea3 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -1778,6 +1778,13 @@ extern int ext4_orphan_add(handle_t *, s
+@@ -1825,6 +1825,14 @@ extern int ext4_orphan_add(handle_t *, struct inode *);
  extern int ext4_orphan_del(handle_t *, struct inode *);
  extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
  				__u32 start_minor_hash, __u32 *next_hash);
 +extern struct inode *ext4_create_inode(handle_t *handle,
-+				       struct inode * dir, int mode);
++				       struct inode * dir, int mode,
++				       uid_t *owner);
 +extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
 +			     struct ext4_dir_entry_2 * de_del,
 +			     struct buffer_head * bh);
@@ -14,6 +17,8 @@
  
  /* resize.c */
  extern int ext4_group_add(struct super_block *sb,
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index 6433d87..0f3783b 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -24,6 +24,7 @@
@@ -24,7 +29,7 @@
  #include <linux/fs.h>
  #include <linux/pagemap.h>
  #include <linux/jbd2.h>
-@@ -1704,10 +1707,10 @@ cleanup:
+@@ -1691,10 +1692,10 @@ cleanup:
   * ext4_delete_entry deletes a directory entry by merging it with the
   * previous entry
   */
@@ -39,7 +44,7 @@
  {
  	struct ext4_dir_entry_2 *de, *pde;
  	unsigned int blocksize = dir->i_sb->s_blocksize;
-@@ -1742,7 +1745,7 @@ static int ext4_delete_entry(handle_t *h
+@@ -1729,7 +1730,7 @@ static int ext4_delete_entry(handle_t *handle,
  	}
  	return -ENOENT;
  }
@@ -48,13 +53,14 @@
  /*
   * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
   * since this indicates that nlinks count was previously 1.
-@@ -1806,6 +1809,29 @@ static unsigned ext4_dentry_goal(struct
- 	return inum;
+@@ -1776,6 +1777,30 @@ static int ext4_add_nondir(handle_t *handle,
+ 	return err;
  }
  
 + /* Return locked inode, then the caller can modify the inode's states/flags
 +  * before others finding it. The caller should unlock the inode by itself. */
-+struct inode *ext4_create_inode(handle_t *handle, struct inode *dir, int mode)
++struct inode *ext4_create_inode(handle_t *handle, struct inode *dir, int mode,
++				uid_t *owner)
 +{
 +	struct inode *inode;
 +
@@ -78,7 +84,7 @@
  /*
   * By the time this is called, we already have created
   * the directory cache entry for the new file, but it
-@@ -1882,44 +1908,32 @@ retry:
+@@ -1850,44 +1875,32 @@ retry:
  	return err;
  }
  
@@ -96,11 +102,11 @@
 +	struct ext4_dir_entry_2 * de;
  	unsigned int blocksize = dir->i_sb->s_blocksize;
 -	int err, retries = 0;
-+	int err = 0;
- 
+-
 -	if (EXT4_DIR_LINK_MAX(dir))
 -		return -EMLINK;
--
++	int err = 0;
+ 
 -retry:
 -	handle = ext4_journal_start(dir, EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
 -					EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3 +
@@ -132,7 +138,7 @@
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
-@@ -1938,18 +1952,46 @@ retry:
+@@ -1906,18 +1919,46 @@ retry:
  	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
  	err = ext4_handle_dirty_metadata(handle, inode, dir_block);
  	if (err)
@@ -189,7 +195,7 @@
  	ext4_inc_count(handle, dir);
  	ext4_update_dx_flag(dir);
  	err = ext4_mark_inode_dirty(handle, dir);
-@@ -1958,11 +2001,16 @@ out_clear_inode:
+@@ -1926,11 +1967,16 @@ out_clear_inode:
  	d_instantiate(dentry, inode);
  	unlock_new_inode(inode);
  out_stop:
