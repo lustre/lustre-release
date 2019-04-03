@@ -973,6 +973,94 @@ lnet_udsp_del_policy(int idx)
 	return 0;
 }
 
+static void
+lnet_udsp_get_ni_info(struct lnet_ioctl_construct_udsp_info *info,
+		      struct lnet_ni *ni)
+{
+	struct lnet_nid_list *ne;
+	struct lnet_net *net = ni->ni_net;
+	int i = 0;
+
+	LASSERT(ni);
+
+	info->cud_nid_priority = ni->ni_sel_priority;
+	if (net) {
+		info->cud_net_priority = ni->ni_net->net_sel_priority;
+		list_for_each_entry(ne, &net->net_rtr_pref_nids, nl_list) {
+			if (i < LNET_MAX_SHOW_NUM_NID)
+				info->cud_pref_rtr_nid[i] = ne->nl_nid;
+			else
+				break;
+			i++;
+		}
+	}
+}
+
+static void
+lnet_udsp_get_peer_info(struct lnet_ioctl_construct_udsp_info *info,
+			struct lnet_peer_ni *lpni)
+{
+	struct lnet_nid_list *ne;
+	int i = 0;
+
+	/* peer tree structure needs to be in existence */
+	LASSERT(lpni && lpni->lpni_peer_net &&
+		lpni->lpni_peer_net->lpn_peer);
+
+	info->cud_nid_priority = lpni->lpni_sel_priority;
+	CDEBUG(D_NET, "lpni %s has %d pref nids\n",
+	       libcfs_nid2str(lpni->lpni_nid),
+	       lpni->lpni_pref_nnids);
+	if (lpni->lpni_pref_nnids == 1) {
+		info->cud_pref_nid[0] = lpni->lpni_pref.nid;
+	} else if (lpni->lpni_pref_nnids > 1) {
+		struct list_head *list = &lpni->lpni_pref.nids;
+
+		list_for_each_entry(ne, list, nl_list) {
+			if (i < LNET_MAX_SHOW_NUM_NID)
+				info->cud_pref_nid[i] = ne->nl_nid;
+			else
+				break;
+			i++;
+		}
+	}
+
+	i = 0;
+	list_for_each_entry(ne, &lpni->lpni_rtr_pref_nids, nl_list) {
+		if (i < LNET_MAX_SHOW_NUM_NID)
+			info->cud_pref_rtr_nid[i] = ne->nl_nid;
+		else
+			break;
+		i++;
+	}
+
+	info->cud_net_priority = lpni->lpni_peer_net->lpn_sel_priority;
+}
+
+void
+lnet_udsp_get_construct_info(struct lnet_ioctl_construct_udsp_info *info)
+{
+	struct lnet_ni *ni;
+	struct lnet_peer_ni *lpni;
+
+	lnet_net_lock(0);
+	if (!info->cud_peer) {
+		ni = lnet_nid2ni_locked(info->cud_nid, 0);
+		if (ni)
+			lnet_udsp_get_ni_info(info, ni);
+	} else {
+		lpni = lnet_find_peer_ni_locked(info->cud_nid);
+		if (!lpni) {
+			CDEBUG(D_NET, "nid %s is not found\n",
+			       libcfs_nid2str(info->cud_nid));
+		} else {
+			lnet_udsp_get_peer_info(info, lpni);
+			lnet_peer_ni_decref_locked(lpni);
+		}
+	}
+	lnet_net_unlock(0);
+}
+
 struct lnet_udsp *
 lnet_udsp_alloc(void)
 {

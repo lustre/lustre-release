@@ -4227,6 +4227,70 @@ LNetCtl(unsigned int cmd, void *arg)
 		return rc;
 	}
 
+	case IOC_LIBCFS_GET_UDSP_SIZE: {
+		struct lnet_ioctl_udsp *ioc_udsp = arg;
+		struct lnet_udsp *udsp;
+
+		if (ioc_udsp->iou_hdr.ioc_len < sizeof(*ioc_udsp))
+			return -EINVAL;
+
+		rc = 0;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		udsp = lnet_udsp_get_policy(ioc_udsp->iou_idx);
+		if (!udsp) {
+			rc = -ENOENT;
+		} else {
+			/* coming in iou_idx will hold the idx of the udsp
+			 * to get the size of. going out the iou_idx will
+			 * hold the size of the UDSP found at the passed
+			 * in index.
+			 */
+			ioc_udsp->iou_idx = lnet_get_udsp_size(udsp);
+			if (ioc_udsp->iou_idx < 0)
+				rc = -EINVAL;
+		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_UDSP: {
+		struct lnet_ioctl_udsp *ioc_udsp = arg;
+		struct lnet_udsp *udsp;
+
+		if (ioc_udsp->iou_hdr.ioc_len < sizeof(*ioc_udsp))
+			return -EINVAL;
+
+		rc = 0;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		udsp = lnet_udsp_get_policy(ioc_udsp->iou_idx);
+		if (!udsp)
+			rc = -ENOENT;
+		else
+			rc = lnet_udsp_marshal(udsp, ioc_udsp);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_CONST_UDSP_INFO: {
+		struct lnet_ioctl_construct_udsp_info *info = arg;
+
+		if (info->cud_hdr.ioc_len < sizeof(*info))
+			return -EINVAL;
+
+		CDEBUG(D_NET, "GET_UDSP_INFO for %s\n",
+		       libcfs_nid2str(info->cud_nid));
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lnet_udsp_get_construct_info(info);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
+		return 0;
+	}
+
 	default:
 		ni = lnet_net2ni_addref(data->ioc_net);
 		if (ni == NULL)
