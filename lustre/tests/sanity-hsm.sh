@@ -24,6 +24,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+get_lustre_env
 init_logging
 
 [ -n "$FILESET" ] && skip "Not functional for FILESET set"
@@ -4672,6 +4673,9 @@ run_test 254b "Request counters are correctly incremented and decremented"
 
 test_255()
 {
+	[ $MDS1_VERSION -lt $(version_code 2.12.0) ] &&
+		skip "Need MDS version at least 2.12.0"
+
 	local file="$DIR/$tdir/$tfile"
 	local fid=$(create_empty_file "$file")
 
@@ -4856,6 +4860,9 @@ run_test 260b "Restore request have priority over other requests"
 # mechanism in the coordinator. It might not make sense to keep it in the future
 test_260c()
 {
+	[ $MDS1_VERSION -lt $(version_code 2.12.0) ] &&
+		skip "Need MDS version at least 2.12.0"
+
 	local -a files=("$DIR/$tdir/$tfile".{0..15})
 	local file
 
