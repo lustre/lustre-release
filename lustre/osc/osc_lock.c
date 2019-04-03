@@ -726,7 +726,7 @@ unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
 	unlock_res_and_lock(dlmlock);
 
 	if (obj == NULL)
-		GOTO(out, weight = 1);
+		GOTO(out, weight = 0);
 
 	spin_lock(&obj->oo_ol_spin);
 	list_for_each_entry(oscl, &obj->oo_ol_list, ols_nextlock_oscobj) {
