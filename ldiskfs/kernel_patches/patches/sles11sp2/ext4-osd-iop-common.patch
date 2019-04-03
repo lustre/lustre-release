@@ -1,35 +1,35 @@
----
- fs/ext4/ext4.h  |   13 +++++
- fs/ext4/namei.c |  131 +++++++++++++++++++++++++++++++++++++-------------------
- 2 files changed, 101 insertions(+), 43 deletions(-)
-
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 986e058..344ed3a 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -1895,6 +1895,13 @@ extern int ext4_orphan_add(handle_t *, s
+@@ -1879,6 +1879,14 @@ extern int ext4_orphan_add(handle_t *, struct inode *);
  extern int ext4_orphan_del(handle_t *, struct inode *);
  extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
  				__u32 start_minor_hash, __u32 *next_hash);
 +extern struct inode *ext4_create_inode(handle_t *handle,
-+				       struct inode * dir, int mode);
++				       struct inode * dir, int mode,
++				       uid_t *owner);
 +extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
 +			     struct ext4_dir_entry_2 * de_del,
 +			     struct buffer_head * bh);
 +extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +			       struct inode *inode);
-
+ 
  /* resize.c */
  extern int ext4_group_add(struct super_block *sb,
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+index cb049fe..2071f02 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -24,6 +24,7 @@
   *	Theodore Ts'o, 2002
   */
-
+ 
 +#include <linux/module.h>
  #include <linux/fs.h>
  #include <linux/pagemap.h>
  #include <linux/jbd2.h>
-@@ -1698,10 +1701,10 @@ cleanup:
+@@ -1688,10 +1689,10 @@ cleanup:
   * ext4_delete_entry deletes a directory entry by merging it with the
   * previous entry
   */
@@ -44,7 +44,7 @@
  {
  	struct ext4_dir_entry_2 *de, *pde;
  	unsigned int blocksize = dir->i_sb->s_blocksize;
-@@ -1744,7 +1747,7 @@ static int ext4_delete_entry(handle_t *h
+@@ -1734,7 +1735,7 @@ static int ext4_delete_entry(handle_t *handle,
  	}
  	return -ENOENT;
  }
@@ -53,13 +53,14 @@
  /*
   * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
   * since this indicates that nlinks count was previously 1.
-@@ -1808,6 +1811,29 @@ static unsigned ext4_dentry_goal(struct
- 	return inum;
+@@ -1781,6 +1782,30 @@ static int ext4_add_nondir(handle_t *handle,
+ 	return err;
  }
-
+ 
 + /* Return locked inode, then the caller can modify the inode's states/flags
 +  * before others finding it. The caller should unlock the inode by itself. */
-+struct inode *ext4_create_inode(handle_t *handle, struct inode *dir, int mode)
++struct inode *ext4_create_inode(handle_t *handle, struct inode *dir, int mode,
++				uid_t *owner)
 +{
 +	struct inode *inode;
 +
@@ -83,10 +84,10 @@
  /*
   * By the time this is called, we already have created
   * the directory cache entry for the new file, but it
-@@ -1886,46 +1912,32 @@ retry:
+@@ -1857,46 +1882,32 @@ retry:
  	return err;
  }
-
+ 
 -static int ext4_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 +/* Initialize @inode as a subdirectory of @dir, and add the
 + * "." and ".." entries into the first directory block. */
@@ -100,23 +101,23 @@
  	struct ext4_dir_entry_2 *de;
  	unsigned int blocksize = dir->i_sb->s_blocksize;
 -	int err, retries = 0;
-+	int err = 0;
-
+-
 -	if (EXT4_DIR_LINK_MAX(dir))
 -		return -EMLINK;
 -
 -	dquot_initialize(dir);
--
++	int err = 0;
+ 
 -retry:
 -	handle = ext4_journal_start(dir, EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
 -					EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3 +
 -					EXT4_MAXQUOTAS_INIT_BLOCKS(dir->i_sb));
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
-
+ 
  	if (IS_DIRSYNC(dir))
  		ext4_handle_sync(handle);
-
+ 
 -	inode = ext4_new_inode(handle, dir, S_IFDIR | mode,
 -			       &dentry->d_name, 0);
 -	err = PTR_ERR(inode);
@@ -138,7 +139,7 @@
  	de = (struct ext4_dir_entry_2 *) dir_block->b_data;
  	de->inode = cpu_to_le32(inode->i_ino);
  	de->name_len = 1;
-@@ -1944,18 +1956,46 @@ retry:
+@@ -1915,18 +1926,46 @@ retry:
  	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
  	err = ext4_handle_dirty_metadata(handle, inode, dir_block);
  	if (err)
@@ -195,7 +196,7 @@
  	ext4_inc_count(handle, dir);
  	ext4_update_dx_flag(dir);
  	err = ext4_mark_inode_dirty(handle, dir);
-@@ -1964,11 +2005,16 @@ out_clear_inode:
+@@ -1935,11 +1974,16 @@ out_clear_inode:
  	d_instantiate(dentry, inode);
  	unlock_new_inode(inode);
  out_stop:
@@ -211,5 +212,5 @@
 +	iput(inode);
 +	goto out_stop;
  }
-
+ 
  /*
