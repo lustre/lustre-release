@@ -3,27 +3,27 @@
 lfs \- client utility for Lustre-specific file layout and other attributes
 .SH SYNOPSIS
 .br
-.B lfs changelog [--follow] <mdtname> [startrec [endrec]]
+.B lfs changelog \fR[\fB--follow\fR] <\fImdtname\fR> [\fIstartrec \fR[\fIendrec\fR]]
 .br
-.B lfs changelog_clear <mdtname> <id> <endrec>
+.B lfs changelog_clear <\fImdtname\fR> <\fIid\fR> <\fIendrec\fR>
 .br
-.B lfs check <mgts|mdts|osts|all>
+.B lfs check \fR<\fBmgts\fR|\fBmdts\fR|\fBosts\fR|\fBall\fR>
 .br
-.B lfs data_version [-nrw] \fB<filename>\fR
+.B lfs data_version \fR[\fB-nrw\fR] \fB<\fIfilename\fR>
 .br
-.B lfs df [-ihlv] [--pool|-p <fsname>[.<pool>]] [path]
+.B lfs df \fR[\fB-ihlv\fR] [\fB--pool\fR|\fB-p \fR<\fIfsname\fR>[.<\fIpool\fR>]] [\fIpath\fR]
 .br
-.B lfs fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
+.B lfs fid2path \fR[\fB--link \fR<\fIlinkno\fR>] <\fIfsname\fR|\fIrootpath\fR> <fid\fR> ...
 .br
 .B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
       [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn\fR]
 [[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn\fR]
-      [[\fB!\fR] \fB--component-count|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
-      [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR <[\fB^\fR]\fIflag\fB,\fR...>]
-      [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
-      [[\fB!\fR] \fB--component-start|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
-      [[\fB!\fR] \fB--mirror-count|\fB-N\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--component-count\fR|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--component-flags\fR|\fB--comp-flags\fR <[\fB^\fR]\fIflag\fB,\fR...>]
+      [[\fB!\fR] \fB--component-end\fR|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--component-start\fR|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--mirror-count\fR|\fB-N\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--mirror-state\fR <[^]\fIstate\fR>]
       [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
       [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
@@ -37,21 +37,21 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 [\fB--print\fR|\fB-P\fR] [\fB--print0\fR|\fB-0\fR]
       [[\fB!\fR] \fB--projid\fR |<\fIprojid\fR>]
 [[\fB!\fR] \fB--size|\fB-s\fR [\fB-+\fR]\fIn\fR[\fBKMGTPE\fR]]
-      [[\fB!\fR] \fB--stripe-count|\fB-c\fR [\fB+-\fR]\fIn\fR]
-      [[\fB!\fR] \fB--stripe-index|\fB-i\fR \fIn\fR,...]
-      [[\fB!\fR] \fB--stripe-size|\fB-S\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
+      [[\fB!\fR] \fB--stripe-count\fR|\fB-c\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--stripe-index\fR|\fB-i\fR \fIn\fR,...]
+      [[\fB!\fR] \fB--stripe-size\fR|\fB-S\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
 [[\fB!\fR] \fB--type\fR|\fB-t\fR {\fBbcdflps\fR}]
       [[\fB!\fR] \fB--uid\fR|\fB-u\fR|\fB--user\fR|\fB-U
-<\fIuname\fR>|<\fIuid>\fR]
+\fR<\fIuname\fR>|<\fIuid\fR>]
 .br
 .B lfs getname [-h]|[path ...]
 .br
 .B lfs getstripe
 [\fB--component-count\fR|\fB--comp-count\fR]
-        [\fB--component-end\fR[=[\fB+-\fR]\fIN\fR[kMGTPE]]|\fB-E\fR[[+-]\fIN\fR[kMGTPE]]]
+        [\fB--component-end\fR|\fB-E\fR[=[\fB+-\fR]\fIN\fR[\fBKMGTPE\fR]]
         [\fB--component-flags\fR[=[\fB^\fR]\fIflag\fB,\fR...]]
-        [\fB--component-id\fR[=\fIcomp_id\fR]|\fB-I\fR[<\fIcomp_id\fR>]]
-        [\fB--component-start\fR[=[\fB+-\fR]\fIN\fR[kMGTPE]]]
+        [\fB--component-id\fR|\fB-I \fR[=\fIcomp_id\fR]]
+        [\fB--component-start\fR[=[\fB+-\fR]\fIN\fR[\fBKMGTPE\fR]]]
         [\fB--directory\fR|\fB-d\fR]
 [\fB--fid\fR|\fB-F\fR]
 [\fB--generation\fR|\fB-g\fR]
@@ -69,68 +69,69 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 [\fB--yaml\fR|\fB-y\fR]
         <\fIdirname\fR|\fIfilename\fR> ...
 .br
-.B lfs migrate { --mdt-index | -m } \fI<mdt_index>\fR
-.IR directory
+.B lfs migrate \fR{\fB--mdt-index\fR|\fB-m\fR} <\fImdt_index\fR> \fIdirectory\fR
 .br
-.B lfs migrate [\fB-c | --stripe-count <stripe_count>\fR]
-            [\fB-i | --stripe-index <start_ost_idx>\fR]
-            [\fB-S | --stripe-size <stripe_size>\fR]
-            [\fB-p | --pool <pool_name>\fR]
-            [\fB-o | --ost-list <ost_indices>\fR]
-            [\fB-b | --block\fR]
-            [\fB-n | --non-block\fR]
-.IR file|directory
+.B lfs migrate \fR[\fB--stripe-count\fR|\fB-c\fR \fR<\fIstripe_count\fR>]
+            [\fB--stripe-index\fR|\fB-i\fR \fR<\fIstart_ost_idx\fR>]
+            [\fB--stripe-size\fR|\fB-S\fR \fR<\fIstripe_size\fR>]
+[\fB--pool\fR|\fB-p\fR \fR<\fIpool_name\fR>]
+            [\fB-o\fR|\fB--ost-list \fR<\fIost_indices\fR>]
+[\fB--block\fR|\fB-b\fR]
+            [\fB--non-block\fR|\fB-n\fR] <\fIfile\fR|\fIdirectory\fR>
 .br
-.B lfs migrate <\fB-E | --component-end comp_end1\fR> [\fBSTRIPE_OPTIONS\fR]
-            <\fB-E | --component-end comp_end2\fR> [\fBSTRIPE_OPTIONS\fR]
-            \fB...\fR
-.IR filename
+.B lfs migrate \fR<\fB--component-end\fR|\fB-E\fR \fIcomp_end1\fR>
+[\fISTRIPE_OPTIONS\fR]
+            <\fB--component-end\fR|\fB-E\fR \fIcomp_end2\fR>
+[\fISTRIPE_OPTIONS\fR]
+            ... \fIfilename\fR
 .br
-.B lfs mkdir [\fB-c | --count <stripe_count>\fR]
-           [\fB-i | --index <mdt_idx>\fR]
-           [\fB-h | --hash-type <hash_name>\fR]
-           [\fB-m | --mode <mode>\fR]
-           [\fB-D | --default\fR]
-.IR directory
+.B lfs mkdir \fR[\fB-c\fR|\fB--count \fR<\fIstripe_count\fR>]
+[\fB-i\fR|\fB--index \fR<\fImdt_idx\fR>]
+          [\fB-h\fR|\fB--hash-type \fR<\fIhash_name\fR>]
+[\fB-m\fR|\fB--mode \fR<\fImode\fR>]
+          [\fB-D\fR|\fB--default\fR] \fIdirectory\fR
 .br
-.B lfs osts
-.RB [ path ]
+.B lfs osts \fR[<\fIpath\fR>]
 .br
-.B lfs mdts
-.RB [ path ]
+.B lfs mdts \fR[<\fIpath\fR>]
 .br
-.B lfs path2fid [--parents] <path> ...
+.B lfs path2fid \fR[\fB--parents\fR] <\fIpath\fR> ...
 .br
-.B lfs pool_list <filesystem>[.<pool>] | <pathname>
+.B lfs pool_list \fR<\fIfilesystem\fR>[\fB.\fR<\fIpool\fR>] | <\fIpathname\fR>
 .br
-.B lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u <uname>| -u <uid>|-g <gname>| -g <gid>] [-p <projid>] <filesystem>
+.B lfs quota \fR[\fB-qv\fR] [\fB-o \fIobd_uuid\fR|\fB-I \fIost_idx\fR|\fB-i \fImdt_idx\fR]
+          [\fB-u <\fIuname\fR|\fIuid\fR>|\fB-g <\fIgname\fR|\fIgid\fR>]
+[\fB-p <\fIprojid\fR>] <\fIfilesystem\fR>
 .br
-.B lfs quota -t <-u|-g|-p> <filesystem>
+.B lfs quota -t \fR<\fB-u\fR|\fB-g\fR|\fB-p\fR> <\fIfilesystem\fR>
 .br
-.B lfs quotacheck [-ug] <filesystem>
+.B lfs quotacheck \fR[\fB-ug\fR] <\fIfilesystem\fR>
 .br
-.B lfs quota <-U|-G|-P> <filesystem>
+.B lfs quota \fR<\fB-U\fR|\fB-G\fR|\fB-P\fR> <\fIfilesystem\fR>
 .br
-.B lfs quotaon [-ugf] <filesystem>
+.B lfs quotaon \fR[\fB-ugf\fR] <\fIfilesystem\fR>
 .br
-.B lfs quotaoff [-ug] <filesystem>
+.B lfs quotaoff \fR[\fB-ug\fR] <\fIfilesystem\fR>
 .br
-.B lfs setstripe [--stripe-size|-S <size>] [--stripe-count|-c <count>]
-        \fB[--stripe-index|-i <start_ost_index>] [--pool|-p <poolname>]
-        \fB[--ost-list|-o <ost_indices>] <directory|filename>\fR
+.B lfs setstripe \fR[\fB--stripe-size\fR|\fB-S <\fIsize\fR>] [\fB--stripe-count\fR|-c <\fIcount\fR>]
+        [\fB--stripe-index\fR|\fB-i <\fIstart_ost_index\fR>] [\fB--pool\fR|\fB-p \fR<\fIpoolname\fR>]
+        [\fB--ost-list\fR|\fB-o <\fIost_indices\fR>] <\fIdirectory\fR|\fIfilename\fR>
 .br
-.B lfs setstripe -d <dir>
+.B lfs setstripe -d \fR<\fIdir\fR>
 .br
-.B lfs setstripe --component-end|-E <end1> [STRIPE_OPTIONS]
-     [\fB--component-end|-E <end2> [STRIPE_OPTIONS]] ... <filename>\fR
+.B lfs setstripe --component-end\fR|\fB-E <\fIend1> [\fISTRIPE_OPTIONS\fR]
+             [\fB--component-end\fR|\fB-E \fR<\fIend2\fR> [\fISTRIPE_OPTIONS\fR]]
+             ... <\fIfilename>\fR
 .br
-.B lfs setstripe --component-add --component-end|-E <end1> [STRIPE_OPTIONS]
-     \fB<--component-end|-E <end2>> [STRIPE_OPTIONS]] ... <filename>\fR
+.B lfs setstripe --component-add \fB-E\fR <\fIend1> [\fISTRIPE_OPTIONS]
+             [\fB--component-end\fR|\fB-E \fR<\fIend2\fR> [\fISTRIPE_OPTIONS\fR]]
+             ... <\fIfilename\fR>
 .br
-.B lfs setstripe --component-del {--component-id|-I id |
-     \fB--component-flags <flags>} <filename>
+.B lfs setstripe --component-del \fR{\fB--component-id\fR|\fB-I \fR<\fIid\fR> |
+                               \fB--component-flags \fR<\fIflags\fR>}
+<\fIfilename\fR>
 .br
-.B lfs setstripe --yaml=<yaml_template_file> <filename>
+.B lfs setstripe --yaml=\fR<\fIyaml_template_file\fR> <\fIfilename\fR>
 .br
 .B lfs --version
 .br
@@ -143,8 +144,13 @@ can be used to create a new file with a specific striping pattern, determine
 the default striping pattern, gather the extended attributes (object numbers
 and location) for a specific file. It can be invoked interactively without any
 arguments or in a non-interactive mode with one of the arguments supported.
-.SH OPTIONS
-The various options supported by lfs are listed and explained below:
+.SH COMMANDS
+A number of sub-commands supported by lfs are listed below.  Other commands
+are described in separate man pages of the form
+.BI lfs- command
+as listed in the
+.B SEE ALSO
+section at the end.
 .TP
 .B changelog
 Show the metadata changes on an MDT.  Start and end points are optional.  The --follow option will block on new changes; this option is only valid when run direclty on the MDT node.
