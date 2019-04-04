@@ -2094,8 +2094,9 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 	osd_index_fini(obj);
 	if (inode != NULL) {
 		struct qsd_instance *qsd = osd_def_qsd(osd_obj2dev(obj));
-		qid_t		     uid = i_uid_read(inode);
-		qid_t		     gid = i_gid_read(inode);
+		qid_t uid = i_uid_read(inode);
+		qid_t gid = i_gid_read(inode);
+		__u64 projid = i_projid_read(inode);
 
 		obj->oo_inode = NULL;
 		iput(inode);
@@ -2110,7 +2111,7 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 			qi->lqi_id.qid_uid = gid;
 			qsd_op_adjust(env, qsd, &qi->lqi_id, GRPQUOTA);
 
-			qi->lqi_id.qid_uid = i_projid_read(inode);
+			qi->lqi_id.qid_uid = projid;
 			qsd_op_adjust(env, qsd, &qi->lqi_id, PRJQUOTA);
 		}
 	}
