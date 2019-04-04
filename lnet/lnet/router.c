@@ -566,29 +566,29 @@ lnet_destroy_routes (void)
 	lnet_del_route(LNET_NIDNET(LNET_NID_ANY), LNET_NID_ANY);
 }
 
-int lnet_get_rtr_pool_cfg(int idx, struct lnet_ioctl_pool_cfg *pool_cfg)
+int lnet_get_rtr_pool_cfg(int cpt, struct lnet_ioctl_pool_cfg *pool_cfg)
 {
+	struct lnet_rtrbufpool *rbp;
 	int i, rc = -ENOENT, j;
 
 	if (the_lnet.ln_rtrpools == NULL)
 		return rc;
 
-	for (i = 0; i < LNET_NRBPOOLS; i++) {
-		struct lnet_rtrbufpool *rbp;
 
-		lnet_net_lock(LNET_LOCK_EX);
-		cfs_percpt_for_each(rbp, j, the_lnet.ln_rtrpools) {
-			if (i++ != idx)
-				continue;
+	cfs_percpt_for_each(rbp, i, the_lnet.ln_rtrpools) {
+		if (i != cpt)
+			continue;
 
-			pool_cfg->pl_pools[i].pl_npages = rbp[i].rbp_npages;
-			pool_cfg->pl_pools[i].pl_nbuffers = rbp[i].rbp_nbuffers;
-			pool_cfg->pl_pools[i].pl_credits = rbp[i].rbp_credits;
-			pool_cfg->pl_pools[i].pl_mincredits = rbp[i].rbp_mincredits;
-			rc = 0;
-			break;
+		lnet_net_lock(i);
+		for (j = 0; j < LNET_NRBPOOLS; j++) {
+			pool_cfg->pl_pools[j].pl_npages = rbp[j].rbp_npages;
+			pool_cfg->pl_pools[j].pl_nbuffers = rbp[j].rbp_nbuffers;
+			pool_cfg->pl_pools[j].pl_credits = rbp[j].rbp_credits;
+			pool_cfg->pl_pools[j].pl_mincredits = rbp[j].rbp_mincredits;
 		}
-		lnet_net_unlock(LNET_LOCK_EX);
+		lnet_net_unlock(i);
+		rc = 0;
+		break;
 	}
 
 	lnet_net_lock(LNET_LOCK_EX);
