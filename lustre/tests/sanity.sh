@@ -6312,7 +6312,7 @@ check_migrate_links() {
 	# make sure hard links were properly detected, and migration was
 	# performed only once for the entire link set; nonlinked files should
 	# also be migrated
-	local actual=$(grep -c 'done migrate' <<< "$migrate_out")
+	local actual=$(grep -c 'done' <<< "$migrate_out")
 	local expected=$(($uniq_count + 1))
 
 	[ "$actual" -eq  "$expected" ] ||
@@ -6363,13 +6363,14 @@ test_56xc() {
 
 	# Test 1: ensure file < 1 GB is always migrated with 1 stripe
 	echo -n "Setting initial stripe for 20MB test file..."
-	$LFS setstripe -c 2 -i 0 "$dir/20mb" || error "cannot setstripe"
+	$LFS setstripe -c 2 -i 0 "$dir/20mb" ||
+		error "cannot setstripe 20MB file"
 	echo "done"
 	echo -n "Sizing 20MB test file..."
 	truncate "$dir/20mb" 20971520 || error "cannot create 20MB test file"
 	echo "done"
 	echo -n "Verifying small file autostripe count is 1..."
-	$LFS_MIGRATE -y -A -C 1 "$dir/20mb" &> /dev/null ||
+	$LFS_MIGRATE -y -A -C 1 "$dir/20mb" ||
 		error "cannot migrate 20MB file"
 	local stripe_count=$($LFS getstripe -c "$dir/20mb") ||
 		error "cannot get stripe for $dir/20mb"
@@ -6382,23 +6383,27 @@ test_56xc() {
 	# sqrt(size_in_gb) + 1 OSTs but is larger than 1GB.  The file must
 	# have at least an additional 1KB for each desired stripe for test 3
 	echo -n "Setting stripe for 1GB test file..."
-	$LFS setstripe -c 1 -i 0 "$dir/1gb" || error "cannot setstripe"
+	$LFS setstripe -c 1 -i 0 "$dir/1gb" || error "cannot setstripe 1GB file"
 	echo "done"
 	echo -n "Sizing 1GB test file..."
 	# File size is 1GB + 3KB
-	truncate "$dir/1gb" 1073744896 &> /dev/null ||
-		error "cannot create 1GB test file"
+	truncate "$dir/1gb" 1073744896 || error "cannot create 1GB test file"
 	echo "done"
-	echo -n "Migrating 1GB file..."
-	$LFS_MIGRATE -y -A -C 1 "$dir/1gb" &> /dev/null ||
-		error "cannot migrate file"
-	echo "done"
-	echo -n "Verifying autostripe count is sqrt(n) + 1..."
-	stripe_count=$($LFS getstripe -c "$dir/1gb") ||
-		error "cannot get stripe for $dir/1gb"
-	[ $stripe_count -eq 2 ] ||
-		error "unexpected stripe count $stripe_count (expected 2)"
-	echo "done"
+
+	# need at least 512MB per OST for 1GB file to fit in 2 stripes
+	local avail=$($LCTL get_param -n llite.$FSNAME*.kbytesavail)
+	if (( avail > 524288 * OSTCOUNT )); then
+		echo -n "Migrating 1GB file..."
+		$LFS_MIGRATE -y -A -C 1 "$dir/1gb" ||
+			error "cannot migrate 1GB file"
+		echo "done"
+		echo -n "Verifying autostripe count is sqrt(n) + 1..."
+		stripe_count=$($LFS getstripe -c "$dir/1gb") ||
+			error "cannot getstripe for 1GB file"
+		[ $stripe_count -eq 2 ] ||
+			error "unexpected stripe count $stripe_count != 2"
+		echo "done"
+	fi
 
 	# Test 3: File is too large to fit within the available space on
 	# sqrt(n) + 1 OSTs.  Simulate limited available space with -X
@@ -6407,15 +6412,15 @@ test_56xc() {
 		# file size (1GB + 3KB) / OST count (3).
 		local kb_per_ost=349526
 
-		echo -n "Migrating 1GB file..."
-		$LFS_MIGRATE -y -A -C 1 -X $kb_per_ost "$dir/1gb" &>> \
-			/dev/null || error "cannot migrate file"
+		echo -n "Migrating 1GB file with limit..."
+		$LFS_MIGRATE -y -A -C 1 -X $kb_per_ost "$dir/1gb" ||
+			error "cannot migrate 1GB file with limit"
 		echo "done"
 
 		stripe_count=$($LFS getstripe -c "$dir/1gb")
-		echo -n "Verifying autostripe count with limited space..."
-		[ "$stripe_count" -a $stripe_count -eq 3 ] ||
-			error "unexpected stripe count $stripe_count (wanted 3)"
+		echo -n "Verifying 1GB autostripe count with limited space..."
+		[ "$stripe_count" -a $stripe_count -ge 3 ] ||
+			error "unexpected stripe count $stripe_count (min 3)"
 		echo "done"
 	fi
 
@@ -6466,18 +6471,20 @@ test_56z() { # LU-4824
 	test_mkdir $dir
 	for i in d{0..9}; do
 		test_mkdir $dir/$i
+		touch $dir/$i/$tfile
 	done
-	touch $dir/d{0..9}/$tfile
 	$LFS find $DIR/non_existent_dir $dir &&
 		error "$LFS find did not return an error"
 	# Make a directory unsearchable. This should NOT be the last entry in
 	# directory order.  Arbitrarily pick the 6th entry
 	chmod 700 $($LFS find $dir -type d | sed '6!d')
 
+	$RUNAS $LFS find $DIR/non_existent $dir
 	local count=$($RUNAS $LFS find $DIR/non_existent $dir | wc -l)
 
 	# The user should be able to see 10 directories and 9 files
-	[ $count == 19 ] || error "$LFS find did not continue after error"
+	(( count == 19 )) ||
+		error "$LFS find found $count != 19 entries after error"
 }
 run_test 56z "lfs find should continue after an error"
 
