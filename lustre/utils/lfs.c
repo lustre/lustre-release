@@ -413,26 +413,26 @@ command_t cmdlist[] = {
 	 "\thashtype:	hash type of the striped directory.\n"
 	 "\t		fnv_1a_64 FNV-1a hash algorithm\n"
 	 "\t		all_char  sum of characters % MDT_COUNT\n"},
-        {"check", lfs_check, 0,
+	{"check", lfs_check, 0,
 	 "Display the status of MGTs, MDTs or OSTs (as specified in the command)\n"
 	 "or all the servers (MGTs, MDTs and OSTs).\n"
 	 "usage: check <mgts|osts|mdts|all>"},
-        {"osts", lfs_osts, 0, "list OSTs connected to client "
-         "[for specified path only]\n" "usage: osts [path]"},
-        {"mdts", lfs_mdts, 0, "list MDTs connected to client "
-         "[for specified path only]\n" "usage: mdts [path]"},
-        {"df", lfs_df, 0,
-         "report filesystem disk space usage or inodes usage"
-         "of each MDS and all OSDs or a batch belonging to a specific pool .\n"
-         "Usage: df [-i] [-h] [--lazy|-l] [--pool|-p <fsname>[.<pool>] [path]"},
-        {"getname", lfs_getname, 0, "list instances and specified mount points "
-         "[for specified path only]\n"
-         "Usage: getname [-h]|[path ...] "},
+	{"osts", lfs_osts, 0, "list OSTs connected to client "
+	 "[for specified path only]\n" "usage: osts [path]"},
+	{"mdts", lfs_mdts, 0, "list MDTs connected to client "
+	 "[for specified path only]\n" "usage: mdts [path]"},
+	{"df", lfs_df, 0,
+	 "report filesystem disk space usage or inodes usage "
+	 "of each MDS and all OSDs or a batch belonging to a specific pool.\n"
+	 "Usage: df [-i] [-h] [--lazy|-l] [--pool|-p <fsname>[.<pool>] [path]"},
+	{"getname", lfs_getname, 0,
+	 "list instances and specified mount points [for specified path only]\n"
+	 "Usage: getname [--help|-h] [--instance|-i] [--fsname|-n] [path ...]"},
 #ifdef HAVE_SYS_QUOTA_H
-        {"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
+	{"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
 	 "usage: setquota <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>\n"
-         "                -b <block-softlimit> -B <block-hardlimit>\n"
-         "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
+	 "                -b <block-softlimit> -B <block-hardlimit>\n"
+	 "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
 	 "       setquota <-u|--user|-g|--group|-p|--projid> <uname>|<uid>|<gname>|<gid>|<projid>\n"
          "                [--block-softlimit <block-softlimit>]\n"
          "                [--block-hardlimit <block-hardlimit>]\n"
@@ -5442,43 +5442,104 @@ static int lfs_df(int argc, char **argv)
 	return rc;
 }
 
+static int print_instance(const char *mntdir, char *fsname, size_t fsnamelen,
+			  bool opt_instance, bool opt_fsname, bool opt_mntdir)
+{
+	char *buf = fsname;
+
+	/* llapi_search_mounts() fills "fsname", but that is not called if
+	 * explicit paths are specified on the command-line
+	 */
+	if (opt_instance || (opt_fsname && fsname[0] == '\0')) {
+		int rc = llapi_getname(mntdir, fsname, fsnamelen);
+
+		if (rc < 0) {
+			fprintf(stderr, "cannot get instance for '%s': %s\n",
+				mntdir, strerror(-rc));
+			return rc;
+		}
+		buf = fsname;
+		if (!opt_instance) {
+			/* print only the fsname name */
+			buf = strchr(fsname, '-');
+			if (buf)
+				*buf = '\0';
+			buf = fsname;
+		} else if (!opt_fsname) {
+			/* print only the instance name */
+			buf = strchr(fsname, '-');
+			if (buf)
+				buf++;
+			else
+				buf = fsname;
+		}
+	} else if (opt_fsname) {
+		/* print only the fsname */
+		buf = fsname;
+	}
+
+	printf("%s %s\n", buf, opt_mntdir ? mntdir : "");
+
+	return 0;
+}
+
 static int lfs_getname(int argc, char **argv)
 {
-        char mntdir[PATH_MAX] = "", path[PATH_MAX] = "", fsname[PATH_MAX] = "";
-        int rc = 0, index = 0, c;
-        char buf[sizeof(struct obd_uuid)];
+	struct option long_opts[] = {
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'i',	.name = "instance",	.has_arg = no_argument },
+	{ .val = 'n',	.name = "fsname",	.has_arg = no_argument },
+	{ .name = NULL} };
+	bool opt_instance = false, opt_fsname = false;
+	char fsname[PATH_MAX] = "";
+	int rc = 0, rc2, c;
 
-        while ((c = getopt(argc, argv, "h")) != -1)
-                return CMD_HELP;
+	while ((c = getopt_long(argc, argv, "hin", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'i':
+			opt_instance = true;
+			break;
+		case 'n':
+			opt_fsname = true;
+			break;
+		case 'h':
+		default:
+			return CMD_HELP;
+		}
+	}
 
-        if (optind == argc) { /* no paths specified, get all paths. */
-                while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
-                        rc = llapi_getname(mntdir, buf, sizeof(buf));
-                        if (rc < 0) {
-                                fprintf(stderr,
-                                        "cannot get name for `%s': %s\n",
-                                        mntdir, strerror(-rc));
-                                break;
-                        }
+	/* If neither option is given, print both instance and fsname */
+	if (!opt_instance && !opt_fsname)
+		opt_instance = opt_fsname = true;
 
-                        printf("%s %s\n", buf, mntdir);
+	if (optind == argc) { /* no paths specified, get all paths. */
+		char mntdir[PATH_MAX] = "", path[PATH_MAX] = "";
+		int index = 0;
 
-                        path[0] = fsname[0] = mntdir[0] = 0;
-                }
-        } else { /* paths specified, only attempt to search these. */
-                for (; optind < argc; optind++) {
-                        rc = llapi_getname(argv[optind], buf, sizeof(buf));
-                        if (rc < 0) {
-                                fprintf(stderr,
-                                        "cannot get name for `%s': %s\n",
-                                        argv[optind], strerror(-rc));
-                                break;
-                        }
+		while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
+			rc2 = print_instance(mntdir, fsname, sizeof(fsname),
+					     opt_instance, opt_fsname, true);
+			if (!rc)
+				rc = rc2;
+			path[0] = fsname[0] = mntdir[0] = '\0';
+		}
+	} else { /* paths specified, only attempt to search these. */
+		bool opt_mntdir;
 
-                        printf("%s %s\n", buf, argv[optind]);
-                }
-        }
-        return rc;
+		/* if only one path is given, print only requested info */
+		opt_mntdir = argc - optind > 1 || (opt_instance == opt_fsname);
+
+		for (; optind < argc; optind++) {
+			rc2 = print_instance(argv[optind], fsname,
+					     sizeof(fsname), opt_instance,
+					     opt_fsname, opt_mntdir);
+			if (!rc)
+				rc = rc2;
+			fsname[0] = '\0';
+		}
+	}
+
+	return rc;
 }
 
 static int lfs_check(int argc, char **argv)

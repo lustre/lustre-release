@@ -44,7 +44,9 @@ lfs \- client utility for Lustre-specific file layout and other attributes
       [[\fB!\fR] \fB--uid\fR|\fB-u\fR|\fB--user\fR|\fB-U
 \fR<\fIuname\fR>|<\fIuid\fR>]
 .br
-.B lfs getname [-h]|[path ...]
+.B lfs getname
+.RB [ --help | -h "] [" --instance | -i "] [" --fsname | -n "] ["
+.IR path ...]
 .br
 .B lfs getstripe
 [\fB--component-count\fR|\fB--comp-count\fR]
@@ -184,12 +186,6 @@ data has not been changed during an archive operation or before a release
 operation, and by OST migration, primarily for verifying that file data has not
 been changed during a data copy, when done in non-blocking mode.
 .TP
-.B getname [-h]|[path ...]
-Report all the Lustre mount points and the corresponding Lustre filesystem
-instance. If one or more \fBpath\fR entries are provided, then only the
-Lustre instance for these mount points is returned. If the path given is not on
-a Lustre instance 'No such device' is reported.
-.TP
 .B osts
 .RB [ path ]
 List all the OSTs for all mounted filesystems. If a \fBpath\fR is provided
@@ -312,8 +308,9 @@ The lfs command is part of the Lustre filesystem.
 .BR lctl (8),
 .BR lfs-df (1),
 .BR lfs-find (1),
-.BR lfs-getstripe (1),
 .BR lfs-getdirstripe (1),
+.BR lfs-getname (1),
+.BR lfs-getstripe (1),
 .BR lfs-hsm (1),
 .BR lfs-mkdir (1),
 .BR lfs-migrate (1),
