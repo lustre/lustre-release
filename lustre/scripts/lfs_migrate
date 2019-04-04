@@ -27,7 +27,7 @@ add_to_set() {
 	local old_fid="$1"
 	local path="$2"
 
-	echo -e "$old_fid $path" >> "$MIGRATED_SET"
+	echo "$old_fid $path" >> "$MIGRATED_SET"
 }
 
 path_in_set() {
@@ -139,7 +139,7 @@ while [ -n "$*" ]; do
 	-q|--quiet) ECHO=:;;
 	-R|--restripe) OPT_RESTRIPE=true;;
 	-s|--skip) OPT_CHECK=false;;
-	-v|--verbose) OPT_DEBUG=true; ECHO=echo; OPT_PASSTHROUGH+=("$arg");;
+	-v|--verbose) OPT_DEBUG=true; ECHO=echo;;
 	-y|--yes) OPT_YES=true;;
 	-0) OPT_NULL=true;;
 	-b|--block|--non-block|--non-direct|--no-verify)
@@ -256,7 +256,7 @@ function calc_stripe()
 			return
 		fi
 
-		if [ "$ost_min_kb" -eq $((1 << 62)) ]; then
+		if (( ost_min_kb == (1 << 62) )); then
 			echo "warning: unable to determine minimum OST size, " \
 			     "object size not capped" >&2
 			obj_max_kb=0
@@ -272,9 +272,10 @@ function calc_stripe()
 		return
 	fi
 
-	# If disk usage would exceed the cap, increase the number of stripes
-	[ $filekb -gt $((stripe_count * $obj_max_kb)) ] &&
-		stripe_count=$((filekb / $obj_max_kb))
+	# If disk usage would exceed the cap, increase the number of stripes.
+	# Round up to the nearest MB to ensure file will fit.
+	(( filekb > stripe_count * obj_max_kb )) &&
+		stripe_count=$(((filekb + obj_max_kb - 1024) / obj_max_kb))
 
 	# Limit the count to the number of eligible OSTs
 	if [ "$stripe_count" -gt $ost_max_count ]; then
@@ -304,13 +305,13 @@ lfs_migrate() {
 		# skip non-regular files, since they don't have any objects
 		# and there is no point in trying to migrate them.
 		if [ "${nlink_type[1]}" != "regular" ]; then
-			echo -e "$OLDNAME: not a regular file, skipped" 1>&2
+			echo -e "\r$OLDNAME: not a regular file, skipped" 1>&2
 			continue
 		fi
 
 		# working out write perms is hard, let the shell do it
 		if [ ! -w "$OLDNAME" ]; then
-			echo -e "$OLDNAME: no write permission, skipped" 1>&2
+			echo -e "\r$OLDNAME: no write permission, skipped" 1>&2
 			continue
 		fi
 
@@ -323,7 +324,7 @@ lfs_migrate() {
 		# also absolute so that the names can be compared
 		local oldname_absolute=$(readlink -f "$OLDNAME")
 		if [ -z "$oldname_absolute" ]; then
-			echo -e "$OLDNAME: cannot resolve full path, skipped" 1>&2
+			echo -e "\r$OLDNAME: cannot resolve full path, skipped" 1>&2
 			continue
 		fi
 		OLDNAME=$oldname_absolute
@@ -334,17 +335,15 @@ lfs_migrate() {
 		# for detecting unlisted hard links could then be removed.
 		local fid=$($LFS path2fid "$OLDNAME" 2> /dev/null)
 		if [ $? -ne 0 ]; then
-			echo -n "\r\e[K$OLDNAME: cannot determine FID; skipping; "
-			echo "is this a Lustre file system?"
-			echo -e "$OLDNAME: cannot determine FID; skipping; " 1>&2
-			echo "is this a Lustre file system?" 1>&2
+			echo -e "\r$OLDNAME: cannot determine FID; skipping; " \
+				"is this a Lustre file system?" 1>&2
 			continue
 		fi
 
 		if [[ ${nlink_type[0]} -gt 1 ]] || $RSYNC_WITH_HLINKS; then
 			# don't migrate a hard link if it was already migrated
 			if path_in_set "$OLDNAME"; then
-				$ECHO "\r\e[Kalready migrated via another hard link"
+				$ECHO "already migrated via another hard link"
 				continue
 			fi
 
@@ -355,7 +354,7 @@ lfs_migrate() {
 			# being migrated.
 			local migrated=$(old_fid_in_set "$fid")
 			if [ -n "$migrated" ]; then
-				$ECHO -e "$OLDNAME: already migrated via another hard link"
+				$ECHO "already migrated via another hard link"
 				if $OPT_RSYNC; then
 					# Only the rsync case has to relink.
 					# The lfs migrate case preserves the
@@ -383,6 +382,7 @@ lfs_migrate() {
 
 			if $OPT_AUTOSTRIPE; then
 				local filekb=$((${nlink_type[3]} / 1024))
+
 				read stripe_count OBJ_MAX_KB < <(calc_stripe \
 					"$OLDNAME" "$filekb" "$OBJ_MAX_KB")
 				[ -z "$stripe_count" ] && exit 1
@@ -417,15 +417,16 @@ lfs_migrate() {
 					       /dev/null)
 			fi
 
-			$ECHO -n "stripe" \
-				"count=${stripe_count:-$parent_count}," \
-				"size=${stripe_size:-$parent_size}," \
-				"pool=${stripe_pool}," \
-				"mirror_count=${mirror_count}"
+			$ECHO -n "stripe_count=${stripe_count:-$parent_count},stripe_size=${stripe_size:-$parent_size}"
+			[ -n "$stripe_pool" ] &&
+				$ECHO -n ",pool=${stripe_pool}"
+			[ -n "$mirror_count" ] &&
+				$ECHO -n ",mirror_count=${mirror_count}"
+			$ECHO -n " "
 		fi
 
 		if $OPT_DRYRUN; then
-			$ECHO "dry run, skipped"
+			$ECHO " dry run, skipped"
 			continue
 		fi
 
@@ -441,12 +442,12 @@ lfs_migrate() {
 		local mntpoint=$(df -P "$OLDNAME" |
 				awk 'NR==2 { print $NF; exit }')
 		if [ -z "$mntpoint" ]; then
-			echo -e "$OLDNAME: cannot determine mount point; skipped" 1>&2
+			echo -e "\r$OLDNAME: cannot determine mount point; skipped" 1>&2
 			continue
 		fi
 		hlinks=$($LFS fid2path "$mntpoint" "$fid" 2> /dev/null)
 		if [ $? -ne 0 ]; then
-			echo -e "$OLDNAME: cannot determine hard link paths, skipped" 1>&2
+			echo -e "\r$OLDNAME: cannot determine hard link paths, skipped" 1>&2
 			continue
 		fi
 		hlinks+=("$OLDNAME")
@@ -455,13 +456,13 @@ lfs_migrate() {
 		if ! $OPT_RSYNC; then
 			if $LFS migrate "${OPT_PASSTHROUGH[@]}" $layout \
 			   "$OLDNAME"; then
-				$ECHO "done migrate"
+				$ECHO "done"
 				for link in ${hlinks[*]}; do
 					add_to_set "$fid" "$link"
 				done
 				continue
 			elif $OPT_NO_RSYNC; then
-				echo -e "$OLDNAME: refusing to fall back to rsync, skipped" 1>&2
+				echo -e "\r$OLDNAME: refusing to fall back to rsync, skipped" 1>&2
 				continue
 			else
 				$ECHO -n "falling back to rsync: "
@@ -471,35 +472,35 @@ lfs_migrate() {
 
 		NEWNAME=$(mktemp $UNLINK "$OLDNAME-lfs_migrate.tmp.XXXXXX")
 		if [ $? -ne 0 -o -z "$NEWNAME" ]; then
-			echo -e "$OLDNAME: cannot make temp file, skipped" 1>&2
+			echo -e "\r$OLDNAME: cannot make temp file, skipped" 1>&2
 			continue
 		fi
 
 		if [ "$UNLINK" ]; then
 			if ! $LFS setstripe "${OPT_PASSTHROUGH[@]}" $layout \
 			     "$NEWNAME"; then
-				echo -e "\r\e[K$NEWNAME: setstripe failed, exiting" 1>&2
+				echo -e "\r$NEWNAME: setstripe failed, exiting" 1>&2
 				exit 2
 			fi
 		fi
 
 		# we use --inplace, since we created our own temp file already
 		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
-			echo -e "$OLDNAME: copy error, exiting" 1>&2
+			echo -e "\r$OLDNAME: copy error, exiting" 1>&2
 			exit 4
 		fi
 
 		if $OPT_CHECK && ! cmp -s "$OLDNAME" "$NEWNAME"; then
-			echo -e "$NEWNAME: compare failed, exiting" 1>&2
+			echo -e "\r$NEWNAME: compare failed, exiting" 1>&2
 			exit 8
 		fi
 
 		if ! mv "$NEWNAME" "$OLDNAME"; then
-			echo -e "$OLDNAME: rename error, exiting" 1>&2
+			echo -e "\r$OLDNAME: rename error, exiting" 1>&2
 			exit 12
 		fi
 
-		$ECHO "done migrate via rsync"
+		$ECHO "done rsync"
 		for link in ${hlinks[*]}; do
 			if [ "$link" != "$OLDNAME" ]; then
 				ln -f "$OLDNAME" "$link"
