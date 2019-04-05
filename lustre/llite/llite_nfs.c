@@ -199,7 +199,7 @@ static int ll_encode_fh(struct inode *inode, u32 *fh, int *plen,
 	ENTRY;
 
 	CDEBUG(D_INFO, "%s: encoding for ("DFID") maxlen=%d minlen=%d\n",
-	       ll_get_fsname(inode->i_sb, NULL, 0),
+	       ll_i2sbi(inode)->ll_fsname,
 	       PFID(ll_inode2fid(inode)), *plen, fileid_len);
 
 	if (*plen < fileid_len) {
@@ -329,8 +329,7 @@ int ll_dir_get_parent_fid(struct inode *dir, struct lu_fid *parent_fid)
 	sbi = ll_s2sbi(dir->i_sb);
 
 	CDEBUG(D_INFO, "%s: getting parent for ("DFID")\n",
-	       ll_get_fsname(dir->i_sb, NULL, 0),
-	       PFID(ll_inode2fid(dir)));
+	       sbi->ll_fsname, PFID(ll_inode2fid(dir)));
 
 	rc = ll_get_default_mdsize(sbi, &lmmsize);
 	if (rc != 0)
@@ -346,8 +345,7 @@ int ll_dir_get_parent_fid(struct inode *dir, struct lu_fid *parent_fid)
 	ll_finish_md_op_data(op_data);
 	if (rc != 0) {
 		CERROR("%s: failure inode "DFID" get parent: rc = %d\n",
-		       ll_get_fsname(dir->i_sb, NULL, 0),
-		       PFID(ll_inode2fid(dir)), rc);
+		       sbi->ll_fsname, PFID(ll_inode2fid(dir)), rc);
 		RETURN(rc);
 	}
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);

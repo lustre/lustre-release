@@ -582,6 +582,9 @@ struct ll_sb_info {
 	/* File heat */
 	unsigned int		  ll_heat_decay_weight;
 	unsigned int		  ll_heat_period_second;
+
+	/* filesystem fsname */
+	char			  ll_fsname[LUSTRE_MAXFSNAME + 1];
 };
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
@@ -998,7 +1001,6 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      __u32 mode, __u32 opc, void *data);
 void ll_finish_md_op_data(struct md_op_data *op_data);
 int ll_get_obd_name(struct inode *inode, unsigned int cmd, unsigned long arg);
-char *ll_get_fsname(struct super_block *sb, char *buf, int buflen);
 void ll_compute_rootsquash_state(struct ll_sb_info *sbi);
 ssize_t ll_copy_user_md(const struct lov_user_md __user *md,
 			struct lov_user_md **kbuf);

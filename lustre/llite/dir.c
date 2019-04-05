@@ -646,8 +646,8 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 
 		buf = param;
 		/* Get fsname and assume devname to be -MDT0000. */
-		ll_get_fsname(inode->i_sb, buf, MTI_NAME_MAXLEN);
-		strcat(buf, "-MDT0000.lov");
+		snprintf(buf, MGS_PARAM_MAXLEN, "%s-MDT0000.lov",
+			 sbi->ll_fsname);
 		buf += strlen(buf);
 
 		/* Set root stripesize */
@@ -1325,8 +1325,7 @@ static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = ll_get_fid_by_name(inode, filename, namelen, NULL, NULL);
 		if (rc < 0) {
 			CERROR("%s: lookup %.*s failed: rc = %d\n",
-			       ll_get_fsname(inode->i_sb, NULL, 0), namelen,
-			       filename, rc);
+			       sbi->ll_fsname, namelen, filename, rc);
 			GOTO(out_free, rc);
 		}
 out_free:

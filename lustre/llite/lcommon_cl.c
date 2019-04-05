@@ -164,8 +164,7 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 		if (!(inode->i_state & I_NEW)) {
 			result = -EIO;
 			CERROR("%s: unexpected not-NEW inode "DFID": rc = %d\n",
-			       ll_get_fsname(inode->i_sb, NULL, 0), PFID(fid),
-			       result);
+			       ll_i2sbi(inode)->ll_fsname, PFID(fid), result);
 			goto out;
 		}
 
@@ -192,7 +191,7 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 
 	if (result != 0)
 		CERROR("%s: failed to initialize cl_object "DFID": rc = %d\n",
-			ll_get_fsname(inode->i_sb, NULL, 0), PFID(fid), result);
+		       ll_i2sbi(inode)->ll_fsname, PFID(fid), result);
 
 out:
 	cl_env_put(env, &refcheck);

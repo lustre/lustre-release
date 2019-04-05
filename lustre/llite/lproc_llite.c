@@ -356,7 +356,7 @@ ll_max_readahead_mb_seq_write(struct file *file, const char __user *buffer,
 	if (pages_number < 0 || pages_number > totalram_pages / 2) {
 		/* 1/2 of RAM */
 		CERROR("%s: can't set max_readahead_mb=%lu > %luMB\n",
-		       ll_get_fsname(sb, NULL, 0),
+		       sbi->ll_fsname,
 		       (unsigned long)pages_number >> (20 - PAGE_SHIFT),
 		       totalram_pages >> (20 - PAGE_SHIFT + 1));
 		return -ERANGE;
@@ -405,7 +405,7 @@ ll_max_readahead_per_file_mb_seq_write(struct file *file,
 
 	if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
 		CERROR("%s: can't set max_readahead_per_file_mb=%lu > "
-		       "max_read_ahead_mb=%lu\n", ll_get_fsname(sb, NULL, 0),
+		       "max_read_ahead_mb=%lu\n", sbi->ll_fsname,
 		       (unsigned long)pages_number >> (20 - PAGE_SHIFT),
 		       sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_SHIFT));
 		return -ERANGE;
@@ -459,7 +459,7 @@ ll_max_read_ahead_whole_mb_seq_write(struct file *file,
 		int pages_shift = 20 - PAGE_SHIFT;
 		CERROR("%s: can't set max_read_ahead_whole_mb=%lu > "
 		       "max_read_ahead_per_file_mb=%lu\n",
-		       ll_get_fsname(sb, NULL, 0),
+		       sbi->ll_fsname,
 		       (unsigned long)pages_number >> pages_shift,
 		       sbi->ll_ra_info.ra_max_pages_per_file >> pages_shift);
 		return -ERANGE;
@@ -532,7 +532,7 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 
 	if (pages_number < 0 || pages_number > totalram_pages) {
 		CERROR("%s: can't set max cache more than %lu MB\n",
-		       ll_get_fsname(sb, NULL, 0),
+		       sbi->ll_fsname,
 		       totalram_pages >> (20 - PAGE_SHIFT));
 		RETURN(-ERANGE);
 	}
@@ -979,7 +979,7 @@ static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 	while (flags != 0) {
 		if (ARRAY_SIZE(str) <= i) {
 			CERROR("%s: Revise array LL_SBI_FLAGS to match sbi "
-				"flags please.\n", ll_get_fsname(sb, NULL, 0));
+				"flags please.\n", ll_s2sbi(sb)->ll_fsname);
 			return -EINVAL;
 		}
 
@@ -1273,8 +1273,7 @@ static ssize_t ll_root_squash_seq_write(struct file *file,
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct root_squash_info *squash = &sbi->ll_squash;
 
-	return lprocfs_wr_root_squash(buffer, count, squash,
-				      ll_get_fsname(sb, NULL, 0));
+	return lprocfs_wr_root_squash(buffer, count, squash, sbi->ll_fsname);
 }
 
 LDEBUGFS_SEQ_FOPS(ll_root_squash);
@@ -1310,8 +1309,7 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 	struct root_squash_info *squash = &sbi->ll_squash;
 	int rc;
 
-	rc = lprocfs_wr_nosquash_nids(buffer, count, squash,
-				      ll_get_fsname(sb, NULL, 0));
+	rc = lprocfs_wr_nosquash_nids(buffer, count, squash, sbi->ll_fsname);
 	if (rc < 0)
 		return rc;
 

@@ -430,8 +430,8 @@ getxattr_nocache:
 out_xattr:
 	if (rc == -EOPNOTSUPP && xattr_type == XATTR_USER_T) {
 		LCONSOLE_INFO("%s: disabling user_xattr feature because "
-				"it is not supported on the server: rc = %d\n",
-				ll_get_fsname(inode->i_sb, NULL, 0), rc);
+			      "it is not supported on the server: rc = %d\n",
+			      ll_i2sbi(inode)->ll_fsname, rc);
 		sbi->ll_flags &= ~LL_SBI_USER_XATTR;
 	}
 out:

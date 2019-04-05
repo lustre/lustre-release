@@ -667,9 +667,8 @@ static void sa_instantiate(struct ll_statahead_info *sai,
 		GOTO(out, rc);
 
 	CDEBUG(D_READA, "%s: setting %.*s"DFID" l_data to inode %p\n",
-	       ll_get_fsname(child->i_sb, NULL, 0),
-	       entry->se_qstr.len, entry->se_qstr.name,
-	       PFID(ll_inode2fid(child)), child);
+	       ll_i2sbi(dir)->ll_fsname, entry->se_qstr.len,
+	       entry->se_qstr.name, PFID(ll_inode2fid(child)), child);
 	ll_set_lock_data(ll_i2sbi(dir)->ll_md_exp, child, it, NULL);
 
 	entry->se_inode = child;
@@ -1319,7 +1318,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			rc = PTR_ERR(page);
 			CERROR("%s: reading dir "DFID" at %llu"
 			       "opendir_pid = %u : rc = %d\n",
-			       ll_get_fsname(dir->i_sb, NULL, 0),
+			       ll_i2sbi(dir)->ll_fsname,
 			       PFID(ll_inode2fid(dir)), pos,
 			       lli->lli_opendir_pid, rc);
 			break;
@@ -1517,8 +1516,7 @@ static int revalidate_statahead_dentry(struct inode *dir,
 					"%s: stale dentry %.*s inode "
 					DFID", statahead inode "DFID
 					"\n",
-					ll_get_fsname((*dentryp)->d_inode->i_sb,
-						      NULL, 0),
+					ll_i2sbi(inode)->ll_fsname,
 					(*dentryp)->d_name.len,
 					(*dentryp)->d_name.name,
 					PFID(ll_inode2fid((*dentryp)->d_inode)),

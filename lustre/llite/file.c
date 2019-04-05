@@ -139,8 +139,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
 
 	if (class_exp2obd(md_exp) == NULL) {
 		CERROR("%s: invalid MDC connection handle closing "DFID"\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0),
-		       PFID(&lli->lli_fid));
+		       ll_i2sbi(inode)->ll_fsname, PFID(&lli->lli_fid));
 		GOTO(out, rc = 0);
 	}
 
@@ -456,7 +455,7 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 	 */
 	if (rnb->rnb_offset + rnb->rnb_len < i_size_read(inode)) {
 		CERROR("%s: server returns off/len %llu/%u < i_size %llu\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0), rnb->rnb_offset,
+		       ll_i2sbi(inode)->ll_fsname, rnb->rnb_offset,
 		       rnb->rnb_len, i_size_read(inode));
 		RETURN_EXIT;
 	}
@@ -482,8 +481,8 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req,
 		if (IS_ERR(vmpage)) {
 			CWARN("%s: cannot fill page %lu for "DFID
 			      " with data: rc = %li\n",
-			      ll_get_fsname(inode->i_sb, NULL, 0),
-			      index + start, PFID(lu_object_fid(&obj->co_lu)),
+			      ll_i2sbi(inode)->ll_fsname, index + start,
+			      PFID(lu_object_fid(&obj->co_lu)),
 			      PTR_ERR(vmpage));
 			break;
 		}
@@ -1052,8 +1051,7 @@ out_close:
 	rc2 = ll_close_inode_openhandle(inode, och, 0, NULL);
 	if (rc2 < 0)
 		CERROR("%s: error closing file "DFID": %d\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0),
-		       PFID(&ll_i2info(inode)->lli_fid), rc2);
+		       sbi->ll_fsname, PFID(&ll_i2info(inode)->lli_fid), rc2);
 	och = NULL; /* och has been freed in ll_close_inode_openhandle() */
 out_release_it:
 	ll_intent_release(&it);
@@ -1097,7 +1095,7 @@ static int ll_swap_layouts_close(struct obd_client_handle *och,
 	ENTRY;
 
 	CDEBUG(D_INODE, "%s: biased close of file "DFID"\n",
-	       ll_get_fsname(inode->i_sb, NULL, 0), PFID(fid1));
+	       ll_i2sbi(inode)->ll_fsname, PFID(fid1));
 
 	rc = ll_check_swap_layouts_validity(inode, inode2);
 	if (rc < 0)
@@ -2445,7 +2443,7 @@ int ll_hsm_release(struct inode *inode)
 	ENTRY;
 
 	CDEBUG(D_INODE, "%s: Releasing file "DFID".\n",
-	       ll_get_fsname(inode->i_sb, NULL, 0),
+	       ll_i2sbi(inode)->ll_fsname,
 	       PFID(&ll_i2info(inode)->lli_fid));
 
 	och = ll_lease_open(inode, NULL, FMODE_WRITE, MDS_OPEN_RELEASE);
@@ -2853,6 +2851,7 @@ static const char *const ladvise_names[] = LU_LADVISE_NAMES;
 static int ll_ladvise_sanity(struct inode *inode,
 			     struct llapi_lu_ladvise *ladvise)
 {
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	enum lu_ladvise_type advice = ladvise->lla_advice;
 	/* Note the peradvice flags is a 32 bit field, so per advice flags must
 	 * be in the first 32 bits of enum ladvise_flags */
@@ -2864,7 +2863,7 @@ static int ll_ladvise_sanity(struct inode *inode,
 		rc = -EINVAL;
 		CDEBUG(D_VFSTRACE, "%s: advice with value '%d' not recognized,"
 		       "last supported advice is %s (value '%d'): rc = %d\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0), advice,
+		       sbi->ll_fsname, advice,
 		       ladvise_names[LU_LADVISE_MAX-1], LU_LADVISE_MAX-1, rc);
 		GOTO(out, rc);
 	}
@@ -2875,8 +2874,7 @@ static int ll_ladvise_sanity(struct inode *inode,
 		if (flags & ~LF_LOCKNOEXPAND_MASK) {
 			rc = -EINVAL;
 			CDEBUG(D_VFSTRACE, "%s: Invalid flags (%x) for %s: "
-			       "rc = %d\n",
-			       ll_get_fsname(inode->i_sb, NULL, 0), flags,
+			       "rc = %d\n", sbi->ll_fsname, flags,
 			       ladvise_names[advice], rc);
 			GOTO(out, rc);
 		}
@@ -2887,8 +2885,7 @@ static int ll_ladvise_sanity(struct inode *inode,
 		    ladvise->lla_lockahead_mode == 0) {
 			rc = -EINVAL;
 			CDEBUG(D_VFSTRACE, "%s: Invalid mode (%d) for %s: "
-			       "rc = %d\n",
-			       ll_get_fsname(inode->i_sb, NULL, 0),
+			       "rc = %d\n", sbi->ll_fsname,
 			       ladvise->lla_lockahead_mode,
 			       ladvise_names[advice], rc);
 			GOTO(out, rc);
@@ -2901,16 +2898,14 @@ static int ll_ladvise_sanity(struct inode *inode,
 		if (flags & ~LF_DEFAULT_MASK) {
 			rc = -EINVAL;
 			CDEBUG(D_VFSTRACE, "%s: Invalid flags (%x) for %s: "
-			       "rc = %d\n",
-			       ll_get_fsname(inode->i_sb, NULL, 0), flags,
+			       "rc = %d\n", sbi->ll_fsname, flags,
 			       ladvise_names[advice], rc);
 			GOTO(out, rc);
 		}
 		if (ladvise->lla_start >= ladvise->lla_end) {
 			rc = -EINVAL;
 			CDEBUG(D_VFSTRACE, "%s: Invalid range (%llu to %llu) "
-			       "for %s: rc = %d\n",
-			       ll_get_fsname(inode->i_sb, NULL, 0),
+			       "for %s: rc = %d\n", sbi->ll_fsname,
 			       ladvise->lla_start, ladvise->lla_end,
 			       ladvise_names[advice], rc);
 			GOTO(out, rc);
@@ -4201,8 +4196,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 		if (le32_to_cpu(lum->lum_stripe_count) > 1 ||
 		    ll_i2info(child_inode)->lli_lsm_md) {
 			CERROR("%s: MDT doesn't support stripe directory "
-			       "migration!\n",
-			       ll_get_fsname(parent->i_sb, NULL, 0));
+			       "migration!\n", ll_i2sbi(parent)->ll_fsname);
 			GOTO(out_iput, rc = -EOPNOTSUPP);
 		}
 	}
@@ -4224,7 +4218,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	op_data->op_fid3 = *ll_inode2fid(child_inode);
 	if (!fid_is_sane(&op_data->op_fid3)) {
 		CERROR("%s: migrate %s, but FID "DFID" is insane\n",
-		       ll_get_fsname(parent->i_sb, NULL, 0), name,
+		       ll_i2sbi(parent)->ll_fsname, name,
 		       PFID(&op_data->op_fid3));
 		GOTO(out_unlock, rc = -EINVAL);
 	}
@@ -4399,7 +4393,7 @@ static int ll_inode_revalidate_fini(struct inode *inode, int rc)
 	} else if (rc != 0) {
 		CDEBUG_LIMIT((rc == -EACCES || rc == -EIDRM) ? D_INFO : D_ERROR,
 			     "%s: revalidate FID "DFID" error: rc = %d\n",
-			     ll_get_fsname(inode->i_sb, NULL, 0),
+			     ll_i2sbi(inode)->ll_fsname,
 			     PFID(ll_inode2fid(inode)), rc);
 	}
 
@@ -5074,8 +5068,7 @@ out:
 	/* wait for IO to complete if it's still being used. */
 	if (wait_layout) {
 		CDEBUG(D_INODE, "%s: "DFID"(%p) wait for layout reconf\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0),
-		       PFID(&lli->lli_fid), inode);
+		       sbi->ll_fsname, PFID(&lli->lli_fid), inode);
 
 		memset(&conf, 0, sizeof conf);
 		conf.coc_opc = OBJECT_CONF_WAIT;
@@ -5085,8 +5078,7 @@ out:
 			rc = -EAGAIN;
 
 		CDEBUG(D_INODE, "%s file="DFID" waiting layout return: %d\n",
-		       ll_get_fsname(inode->i_sb, NULL, 0),
-		       PFID(&lli->lli_fid), rc);
+		       sbi->ll_fsname, PFID(&lli->lli_fid), rc);
 	}
 	RETURN(rc);
 }
@@ -5124,8 +5116,7 @@ static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 		it.it_flags = FMODE_WRITE;
 
 	LDLM_DEBUG_NOLOCK("%s: requeue layout lock for file "DFID"(%p)",
-			  ll_get_fsname(inode->i_sb, NULL, 0),
-			  PFID(&lli->lli_fid), inode);
+			  sbi->ll_fsname, PFID(&lli->lli_fid), inode);
 
 	rc = md_intent_lock(sbi->ll_md_exp, op_data, &it, &req,
 			    &ll_md_blocking_ast, 0);
