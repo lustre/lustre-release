@@ -2622,10 +2622,16 @@ again:
 
 	rc = lnet_handle_send_case_locked(&send_data);
 
+	/*
+	 * Update the local cpt since send_data.sd_cpt might've been
+	 * updated as a result of calling lnet_handle_send_case_locked().
+	 */
+	cpt = send_data.sd_cpt;
+
 	if (rc == REPEAT_SEND)
 		goto again;
 
-	lnet_net_unlock(send_data.sd_cpt);
+	lnet_net_unlock(cpt);
 
 	return rc;
 }
