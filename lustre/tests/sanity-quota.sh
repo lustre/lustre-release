@@ -85,7 +85,8 @@ is_project_quota_supported() {
 		[ $(lustre_version_code $SINGLEMDS) -le \
 			$(version_code 2.10.53) ] && return 1
 
-		$ZPOOL upgrade -v | grep project_quota && return 0
+		do_facet mds1 $ZPOOL upgrade -v |
+			grep project_quota && return 0
 	fi
 
 	return 1
