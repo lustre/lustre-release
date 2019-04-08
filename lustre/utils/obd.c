@@ -530,16 +530,21 @@ static void shmem_snap(int total_threads, int live_threads)
         }
 
         secs = difftime(&this_time, &prev_time);
-        if (prev_valid && secs > 1.0)    /* someone screwed with the time? */
-                printf("%d/%d Total: %f/second\n", non_zero, total_threads,
-                       total / secs);
+	if (prev_valid && secs > 1.0) {   /* someone screwed with the time? */
+		printf("%d/%d Total: %f/second\n", non_zero, total_threads,
+		       total / secs);
 
-        memcpy(counter_snapshot[1], counter_snapshot[0],
-               total_threads * sizeof(counter_snapshot[0][0]));
-        prev_time = this_time;
-        if (!prev_valid &&
-            running == total_threads)
-                prev_valid = 1;
+		memcpy(counter_snapshot[1], counter_snapshot[0],
+		       total_threads * sizeof(counter_snapshot[0][0]));
+		prev_time = this_time;
+	}
+	if (!prev_valid && running == total_threads) {
+		prev_valid = 1;
+		/* drop counters when all threads were started */
+		memcpy(counter_snapshot[1], counter_snapshot[0],
+		       total_threads * sizeof(counter_snapshot[0][0]));
+		prev_time = this_time;
+	}
 }
 
 static void shmem_stop(void)
