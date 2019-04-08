@@ -765,6 +765,8 @@ struct lnet_peer_net {
 	/* time of last router net check attempt */
 	time64_t		lpn_rtrcheck_timestamp;
 
+	/* selection sequence number */
+	__u32			lpn_seq;
 
 	/* reference count */
 	atomic_t		lpn_refcount;

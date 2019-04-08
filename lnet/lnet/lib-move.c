@@ -2010,21 +2010,59 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 {
 	int rc;
 	struct lnet_peer *gw;
+	struct lnet_peer *lp;
+	struct lnet_peer_net *lpn;
+	struct lnet_peer_net *best_lpn = NULL;
+	struct lnet_remotenet *rnet;
 	struct lnet_route *best_route;
 	struct lnet_route *last_route;
 	struct lnet_peer_ni *lpni = NULL;
+	struct lnet_peer_ni *gwni = NULL;
 	lnet_nid_t src_nid = sd->sd_src_nid;
 
-	best_route = lnet_find_route_locked(NULL, LNET_NIDNET(dst_nid),
+	/* we've already looked up the initial lpni using dst_nid */
+	lpni = sd->sd_best_lpni;
+	/* the peer tree must be in existence */
+	LASSERT(lpni && lpni->lpni_peer_net && lpni->lpni_peer_net->lpn_peer);
+	lp = lpni->lpni_peer_net->lpn_peer;
+
+	list_for_each_entry(lpn, &lp->lp_peer_nets, lpn_peer_nets) {
+		/* is this remote network reachable?  */
+		rnet = lnet_find_rnet_locked(lpn->lpn_net_id);
+		if (!rnet)
+			continue;
+
+		if (!best_lpn)
+			best_lpn = lpn;
+
+		if (best_lpn->lpn_seq <= lpn->lpn_seq)
+			continue;
+
+		best_lpn = lpn;
+	}
+
+	if (!best_lpn) {
+		CERROR("peer %s has no available nets \n",
+		       libcfs_nid2str(sd->sd_dst_nid));
+		return -EHOSTUNREACH;
+	}
+
+	sd->sd_best_lpni = lnet_find_best_lpni_on_net(sd, lp, best_lpn->lpn_net_id);
+	if (!sd->sd_best_lpni) {
+		CERROR("peer %s down\n", libcfs_nid2str(sd->sd_dst_nid));
+		return -EHOSTUNREACH;
+	}
+
+	best_route = lnet_find_route_locked(NULL, best_lpn->lpn_net_id,
 					    sd->sd_rtr_nid, &last_route,
-					    &lpni);
+					    &gwni);
 	if (!best_route) {
 		CERROR("no route to %s from %s\n",
 		       libcfs_nid2str(dst_nid), libcfs_nid2str(src_nid));
 		return -EHOSTUNREACH;
 	}
 
-	if (!lpni) {
+	if (!gwni) {
 		CERROR("Internal Error. Route expected to %s from %s\n",
 			libcfs_nid2str(dst_nid),
 			libcfs_nid2str(src_nid));
@@ -2032,7 +2070,7 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	}
 
 	gw = best_route->lr_gateway;
-	LASSERT(gw == lpni->lpni_peer_net->lpn_peer);
+	LASSERT(gw == gwni->lpni_peer_net->lpn_peer);
 
 	/*
 	 * Discover this gateway if it hasn't already been discovered.
@@ -2040,7 +2078,7 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	 * completed
 	 */
 	sd->sd_msg->msg_src_nid_param = sd->sd_src_nid;
-	rc = lnet_initiate_peer_discovery(lpni, sd->sd_msg, sd->sd_rtr_nid,
+	rc = lnet_initiate_peer_discovery(gwni, sd->sd_msg, sd->sd_rtr_nid,
 					  sd->sd_cpt);
 	if (rc)
 		return rc;
@@ -2060,15 +2098,16 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 		return -EFAULT;
 	}
 
-	*gw_lpni = lpni;
+	*gw_lpni = gwni;
 	*gw_peer = gw;
 
 	/*
-	 * increment the route sequence number since now we're sure we're
-	 * going to use it
+	 * increment the sequence numbers since now we're sure we're
+	 * going to use this path
 	 */
 	LASSERT(best_route && last_route);
 	best_route->lr_seq = last_route->lr_seq + 1;
+	best_lpn->lpn_seq++;
 
 	return 0;
 }
@@ -2439,11 +2478,11 @@ lnet_handle_any_mr_dst(struct lnet_send_data *sd)
 		return rc;
 
 	/*
-	 * TODO; One possible enhancement is to run the selection
-	 * algorithm on the peer. However for remote peers the credits are
-	 * not decremented, so we'll be basically going over the peer NIs
-	 * in round robin. An MR router will run the selection algorithm
-	 * on the next-hop interfaces.
+	 * Now that we must route to the destination, we must consider the
+	 * MR case, where the destination has multiple interfaces, some of
+	 * which we can route to and others we do not. For this reason we
+	 * need to select the destination which we can route to and if
+	 * there are multiple, we need to round robin.
 	 */
 	rc = lnet_handle_find_routed_path(sd, sd->sd_dst_nid, &gw_lpni,
 					  &gw_peer);
@@ -2702,8 +2741,13 @@ lnet_send(lnet_nid_t src_nid, struct lnet_msg *msg, lnet_nid_t rtr_nid)
 	LASSERT(!msg->msg_tx_committed);
 
 	rc = lnet_select_pathway(src_nid, dst_nid, msg, rtr_nid);
-	if (rc < 0)
+	if (rc < 0) {
+		if (rc == -EHOSTUNREACH)
+			msg->msg_health_status = LNET_MSG_STATUS_REMOTE_ERROR;
+		else
+			msg->msg_health_status = LNET_MSG_STATUS_LOCAL_ERROR;
 		return rc;
+	}
 
 	if (rc == LNET_CREDIT_OK)
 		lnet_ni_send(msg->msg_txni, msg);
