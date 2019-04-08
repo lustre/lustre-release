@@ -19690,6 +19690,23 @@ test_418() {
 }
 run_test 418 "df and lfs df outputs match"
 
+test_419()
+{
+	local dir=$DIR/$tdir
+
+	mkdir -p $dir
+	touch $dir/file
+
+	cancel_lru_locks mdc
+
+	#OBD_FAIL_LLITE_OPEN_BY_NAME	0x1410
+	$LCTL set_param fail_loc=0x1410
+	cat $dir/file
+	$LCTL set_param fail_loc=0
+	rm -rf $dir
+}
+run_test 419 "Verify open file by name doesn't crash kernel"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

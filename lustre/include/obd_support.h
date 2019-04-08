@@ -562,6 +562,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LLITE_CREATE_NODE_PAUSE	    0x140c
 #define OBD_FAIL_LLITE_IMUTEX_SEC		    0x140e
 #define OBD_FAIL_LLITE_IMUTEX_NOSEC		    0x140f
+#define OBD_FAIL_LLITE_OPEN_BY_NAME		    0x1410
 
 #define OBD_FAIL_FID_INDIR	0x1501
 #define OBD_FAIL_FID_INLMA	0x1502

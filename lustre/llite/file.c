@@ -509,12 +509,14 @@ static int ll_intent_file_open(struct dentry *de, void *lmm, int lmmsize,
 
 	/* if server supports open-by-fid, or file name is invalid, don't pack
 	 * name in open request */
-	if (!(exp_connect_flags(sbi->ll_md_exp) & OBD_CONNECT_OPEN_BY_FID)) {
+	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_OPEN_BY_NAME) ||
+	    !(exp_connect_flags(sbi->ll_md_exp) & OBD_CONNECT_OPEN_BY_FID)) {
 retry:
 		len = de->d_name.len;
-		name = kmalloc(len, GFP_NOFS);
+		name = kmalloc(len + 1, GFP_NOFS);
 		if (!name)
 			RETURN(-ENOMEM);
+
 		/* race here */
 		spin_lock(&de->d_lock);
 		if (len != de->d_name.len) {
@@ -523,12 +525,12 @@ retry:
 			goto retry;
 		}
 		memcpy(name, de->d_name.name, len);
+		name[len] = '\0';
 		spin_unlock(&de->d_lock);
 
 		if (!lu_name_is_valid_2(name, len)) {
 			kfree(name);
-			name = NULL;
-			len = 0;
+			RETURN(-ESTALE);
 		}
 	}
 
