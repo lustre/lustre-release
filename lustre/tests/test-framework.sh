@@ -962,6 +962,16 @@ init_gss() {
 		return
 	fi
 
+	case $LUSTRE in
+	/usr/lib/lustre/* | /usr/lib64/lustre/* | /usr/lib/lustre | \
+	/usr/lib64/lustre )
+		from_build_tree=false
+		;;
+	*)
+		from_build_tree=true
+		;;
+	esac
+
 	if ! module_loaded ptlrpc_gss; then
 		load_module ptlrpc/gss/ptlrpc_gss
 		module_loaded ptlrpc_gss ||
@@ -978,30 +988,41 @@ init_gss() {
 
 		# security ctx config for keyring
 		SK_NO_KEY=false
-		mkdir -p $SK_OM_PATH
-		if grep -q request-key /proc/mounts > /dev/null; then
-			echo "SSK: Request key already mounted."
-		else
-			mount -o bind $SK_OM_PATH /etc/request-key.d/
-		fi
-		local lgssc_conf_line='create lgssc * * '
-		lgssc_conf_line+=$(which lgss_keyring)
-		lgssc_conf_line+=' %o %k %t %d %c %u %g %T %P %S'
-
 		local lgssc_conf_file="/etc/request-key.d/lgssc.conf"
-		echo "$lgssc_conf_line" > $lgssc_conf_file
+
+		if $from_build_tree; then
+			mkdir -p $SK_OM_PATH
+			if grep -q request-key /proc/mounts > /dev/null; then
+				echo "SSK: Request key already mounted."
+			else
+				mount -o bind $SK_OM_PATH /etc/request-key.d/
+			fi
+			local lgssc_conf_line='create lgssc * * '
+			lgssc_conf_line+=$(which lgss_keyring)
+			lgssc_conf_line+=' %o %k %t %d %c %u %g %T %P %S'
+			echo "$lgssc_conf_line" > $lgssc_conf_file
+		fi
+
 		[ -e $lgssc_conf_file ] ||
 			error_exit "Could not find key options in $lgssc_conf_file"
+		echo "$lgssc_conf_file content is:"
+		cat $lgssc_conf_file
 
 		if ! local_mode; then
-			do_nodes $(comma_list $(all_nodes)) "mkdir -p \
-				$SK_OM_PATH"
-			do_nodes $(comma_list $(all_nodes)) "mount \
-				-o bind $SK_OM_PATH \
-				/etc/request-key.d/"
-			do_nodes $(comma_list $(all_nodes)) "rsync -aqv \
-				$HOSTNAME:$lgssc_conf_file \
-				$lgssc_conf_file >/dev/null 2>&1"
+			if $from_build_tree; then
+				do_nodes $(comma_list $(all_nodes)) "mkdir -p \
+					$SK_OM_PATH"
+				do_nodes $(comma_list $(all_nodes)) "mount \
+					-o bind $SK_OM_PATH \
+					/etc/request-key.d/"
+				do_nodes $(comma_list $(all_nodes)) "rsync \
+					-aqv $HOSTNAME:$lgssc_conf_file \
+					$lgssc_conf_file >/dev/null 2>&1"
+			else
+				do_nodes $(comma_list $(all_nodes)) \
+					"echo $lgssc_conf_file: ; \
+					cat $lgssc_conf_file"
+			fi
 		fi
 
 		# create shared key on all nodes
@@ -1030,8 +1051,9 @@ init_gss() {
 		done
 		# Distribute keys
 		if ! local_mode; then
-			do_nodes $(comma_list $(all_nodes)) "rsync -av \
-				$HOSTNAME:$SK_PATH/ $SK_PATH >/dev/null 2>&1"
+			for lnode in $(all_nodes); do
+				scp -r $SK_PATH ${lnode}:$(dirname $SK_PATH)/
+			done
 		fi
 		# Set client keys to client type to generate prime P
 		if local_mode; then
@@ -1084,6 +1106,16 @@ cleanup_gss() {
 
 cleanup_sk() {
 	if $GSS_SK; then
+		case $LUSTRE in
+		/usr/lib/lustre/* | /usr/lib64/lustre/* | /usr/lib/lustre | \
+		/usr/lib64/lustre )
+			from_build_tree=false
+			;;
+		*)
+			from_build_tree=true
+			;;
+		esac
+
 		if $SK_S2S; then
 			do_node $(mgs_node) "$LCTL nodemap_del $SK_S2SNM"
 			do_node $(mgs_node) "$LCTL nodemap_del $SK_S2SNMCLI"
@@ -1096,13 +1128,16 @@ cleanup_sk() {
 			$SK_PATH/$FSNAME*.key $SK_PATH/nodemap/$FSNAME*.key"
 		do_nodes $(comma_list $(all_nodes)) "keyctl show | \
 		  awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
-		# Remove the mount and clean up the files we added to SK_PATH
-		do_nodes $(comma_list $(all_nodes)) "while grep -q \
-			request-key.d /proc/mounts; do umount \
-			/etc/request-key.d/; done"
-		do_nodes $(comma_list $(all_nodes)) "rm -f \
-			$SK_OM_PATH/lgssc.conf"
-		do_nodes $(comma_list $(all_nodes)) "rmdir $SK_OM_PATH"
+		if $from_build_tree; then
+			# Remove the mount and clean up the files we added to
+			# SK_PATH
+			do_nodes $(comma_list $(all_nodes)) "while grep -q \
+				request-key.d /proc/mounts; do umount \
+				/etc/request-key.d/; done"
+			do_nodes $(comma_list $(all_nodes)) "rm -f \
+				$SK_OM_PATH/lgssc.conf"
+			do_nodes $(comma_list $(all_nodes)) "rmdir $SK_OM_PATH"
+		fi
 		SK_NO_KEY=true
 	fi
 }
