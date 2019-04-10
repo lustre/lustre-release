@@ -3318,7 +3318,14 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 		       old_mbits, req->rq_mbits);
 	} else if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
 		/* Request being sent first time, use xid as matchbits. */
-		req->rq_mbits = req->rq_xid;
+		if (OCD_HAS_FLAG(&bd->bd_import->imp_connect_data, BULK_MBITS)
+		    || req->rq_mbits == 0) {
+			req->rq_mbits = req->rq_xid;
+		} else {
+			int total_md = (bd->bd_iov_count + LNET_MAX_IOV - 1) /
+					LNET_MAX_IOV;
+			req->rq_mbits -= total_md - 1;
+		}
 	} else {
 		/* Replay request, xid and matchbits have already been
 		 * correctly assigned. */
