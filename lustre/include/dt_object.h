@@ -254,6 +254,13 @@ struct dt_device_operations {
                              struct dt_device_param *param);
 
 	/**
+	 * Return device's super block.
+	 *
+	 * \param[in] dev	dt device
+	 */
+	struct super_block *(*dt_mnt_sb_get)(const struct dt_device *dev);
+
+	/**
 	 * Sync the device.
 	 *
 	 * Sync all the cached state (dirty buffers, pages, etc) to the
@@ -2532,6 +2539,16 @@ static inline void dt_conf_get(const struct lu_env *env,
         LASSERT(dev->dd_ops);
         LASSERT(dev->dd_ops->dt_conf_get);
         return dev->dd_ops->dt_conf_get(env, dev, param);
+}
+
+static inline struct super_block *dt_mnt_sb_get(const struct dt_device *dev)
+{
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	if (dev->dd_ops->dt_mnt_sb_get)
+		return dev->dd_ops->dt_mnt_sb_get(dev);
+
+	return ERR_PTR(-EOPNOTSUPP);
 }
 
 static inline int dt_sync(const struct lu_env *env, struct dt_device *dev)

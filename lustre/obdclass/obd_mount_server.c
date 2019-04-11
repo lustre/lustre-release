@@ -1769,12 +1769,53 @@ static ssize_t lustre_listxattr(struct dentry *d_entry, char *name,
 	return -EOPNOTSUPP;
 }
 
+static bool is_cmd_supported(unsigned int command)
+{
+	switch (command) {
+	case FITRIM:
+		return true;
+	default:
+		return false;
+	}
+
+	return false;
+}
+
+static long server_ioctl(struct file *filp, unsigned int command,
+			 unsigned long arg)
+{
+	struct file active_filp;
+	struct inode *inode = file_inode(filp);
+	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+	struct super_block *dd_sb = dt_mnt_sb_get(lsi->lsi_dt_dev);
+	struct inode *active_inode;
+	int err = -EOPNOTSUPP;
+
+	if (IS_ERR(dd_sb) || !is_cmd_supported(command))
+		return err;
+
+	active_inode = igrab(dd_sb->s_root->d_inode);
+	if (!active_inode)
+		return -EACCES;
+
+	active_filp.f_inode = active_inode;
+	if (active_inode->i_fop && active_inode->i_fop->unlocked_ioctl)
+		err = active_inode->i_fop->unlocked_ioctl(&active_filp,
+							  command, arg);
+	iput(active_inode);
+	return err;
+}
+
 static const struct inode_operations server_inode_operations = {
 #ifdef HAVE_IOP_XATTR
 	.setxattr       = lustre_setxattr,
 	.getxattr       = lustre_getxattr,
 #endif
 	.listxattr      = lustre_listxattr,
+};
+
+static const struct file_operations server_file_operations = {
+	.unlocked_ioctl = server_ioctl,
 };
 
 #define log2(n) ffz(~(n))
@@ -1805,6 +1846,7 @@ static int server_fill_super_common(struct super_block *sb)
 	/* apparently we need to be a directory for the mount to finish */
 	root->i_mode = S_IFDIR;
 	root->i_op = &server_inode_operations;
+	root->i_fop = &server_file_operations;
 	sb->s_root = d_make_root(root);
 	if (!sb->s_root) {
 		CERROR("%s: can't make root dentry\n", sb->s_id);

@@ -2360,6 +2360,11 @@ static void osd_conf_get(const struct lu_env *env,
 	}
 }
 
+static struct super_block *osd_mnt_sb_get(const struct dt_device *d)
+{
+	return osd_sb(osd_dt_dev(d));
+}
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -2522,6 +2527,7 @@ static const struct dt_device_operations osd_dt_ops = {
 	.dt_trans_stop     = osd_trans_stop,
 	.dt_trans_cb_add   = osd_trans_cb_add,
 	.dt_conf_get       = osd_conf_get,
+	.dt_mnt_sb_get	   = osd_mnt_sb_get,
 	.dt_sync           = osd_sync,
 	.dt_ro             = osd_ro,
 	.dt_commit_async   = osd_commit_async,
