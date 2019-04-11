@@ -112,10 +112,20 @@
 
 struct kmem_cache *pcc_inode_slab;
 
-void pcc_super_init(struct pcc_super *super)
+int pcc_super_init(struct pcc_super *super)
 {
+	struct cred *cred;
+
+	super->pccs_cred = cred = prepare_creds();
+	if (!cred)
+		return -ENOMEM;
+
+	/* Never override disk quota limits or use reserved space */
+	cap_lower(cred->cap_effective, CAP_SYS_RESOURCE);
 	spin_lock_init(&super->pccs_lock);
 	INIT_LIST_HEAD(&super->pccs_datasets);
+
+	return 0;
 }
 
 /**
@@ -250,7 +260,7 @@ pcc_super_dump(struct pcc_super *super, struct seq_file *m)
 	return 0;
 }
 
-void pcc_super_fini(struct pcc_super *super)
+static void pcc_remove_datasets(struct pcc_super *super)
 {
 	struct pcc_dataset *dataset, *tmp;
 
@@ -261,6 +271,11 @@ void pcc_super_fini(struct pcc_super *super)
 	}
 }
 
+void pcc_super_fini(struct pcc_super *super)
+{
+	pcc_remove_datasets(super);
+	put_cred(super->pccs_cred);
+}
 
 static bool pathname_is_valid(const char *pathname)
 {
@@ -361,7 +376,7 @@ int pcc_cmd_handle(char *buffer, unsigned long count,
 		rc = pcc_dataset_del(super, cmd->pccc_pathname);
 		break;
 	case PCC_CLEAR_ALL:
-		pcc_super_fini(super);
+		pcc_remove_datasets(super);
 		break;
 	default:
 		rc = -EINVAL;
@@ -444,6 +459,11 @@ static int pcc_fid2dataset_path(char *buf, int sz, struct lu_fid *fid)
 			PFID(fid));
 }
 
+static inline const struct cred *pcc_super_cred(struct super_block *sb)
+{
+	return ll_s2sbi(sb)->ll_pcc_super.pccs_cred;
+}
+
 void pcc_file_init(struct pcc_file *pccf)
 {
 	pccf->pccf_file = NULL;
@@ -486,11 +506,13 @@ int pcc_file_open(struct inode *inode, struct file *file)
 	dname = &path->dentry->d_name;
 	CDEBUG(D_CACHE, "opening pcc file '%.*s'\n", dname->len,
 	       dname->name);
+
 #ifdef HAVE_DENTRY_OPEN_USE_PATH
-	pcc_file = dentry_open(path, file->f_flags, current_cred());
+	pcc_file = dentry_open(path, file->f_flags,
+			       pcc_super_cred(inode->i_sb));
 #else
-	pcc_file = dentry_open(path->dentry, path->mnt,
-			       file->f_flags, current_cred());
+	pcc_file = dentry_open(path->dentry, path->mnt, file->f_flags,
+			       pcc_super_cred(inode->i_sb));
 #endif
 	if (IS_ERR_OR_NULL(pcc_file)) {
 		rc = pcc_file == NULL ? -EINVAL : PTR_ERR(pcc_file);
@@ -716,6 +738,7 @@ int pcc_inode_setattr(struct inode *inode, struct iattr *attr,
 		      bool *cached)
 {
 	int rc;
+	const struct cred *old_cred;
 	struct iattr attr2 = *attr;
 	struct dentry *pcc_dentry;
 	struct pcc_inode *pcci;
@@ -733,11 +756,13 @@ int pcc_inode_setattr(struct inode *inode, struct iattr *attr,
 
 	attr2.ia_valid = attr->ia_valid & (ATTR_SIZE | ATTR_ATIME |
 			 ATTR_ATIME_SET | ATTR_MTIME | ATTR_MTIME_SET |
-			 ATTR_CTIME);
+			 ATTR_CTIME | ATTR_UID | ATTR_GID);
 	pcci = ll_i2pcci(inode);
 	pcc_dentry = pcci->pcci_path.dentry;
 	inode_lock(pcc_dentry->d_inode);
+	old_cred = override_creds(pcc_super_cred(inode->i_sb));
 	rc = pcc_dentry->d_inode->i_op->setattr(pcc_dentry, &attr2);
+	revert_creds(old_cred);
 	inode_unlock(pcc_dentry->d_inode);
 
 	pcc_io_fini(inode);
@@ -747,6 +772,7 @@ int pcc_inode_setattr(struct inode *inode, struct iattr *attr,
 int pcc_inode_getattr(struct inode *inode, bool *cached)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
+	const struct cred *old_cred;
 	struct kstat stat;
 	s64 atime;
 	s64 mtime;
@@ -764,7 +790,9 @@ int pcc_inode_getattr(struct inode *inode, bool *cached)
 	if (!*cached)
 		RETURN(0);
 
+	old_cred = override_creds(pcc_super_cred(inode->i_sb));
 	rc = ll_vfs_getattr(&ll_i2pcci(inode)->pcci_path, &stat);
+	revert_creds(old_cred);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1215,14 +1243,14 @@ static int __pcc_inode_create(struct pcc_dataset *dataset,
 
 	pcc_fid2dataset_path(path, MAX_PCC_DATABASE_PATH, fid);
 
-	base = pcc_mkdir_p(dataset->pccd_path.dentry, path, 0700);
+	base = pcc_mkdir_p(dataset->pccd_path.dentry, path, 0);
 	if (IS_ERR(base)) {
 		rc = PTR_ERR(base);
 		GOTO(out, rc);
 	}
 
 	snprintf(path, MAX_PCC_DATABASE_PATH, DFID_NOBRACE, PFID(fid));
-	child = pcc_create(base, path, 0600);
+	child = pcc_create(base, path, 0);
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
 		GOTO(out_base, rc);
@@ -1236,25 +1264,58 @@ out:
 	return rc;
 }
 
-int pcc_inode_create(struct pcc_dataset *dataset, struct lu_fid *fid,
-		     struct dentry **pcc_dentry)
+/* TODO: Set the project ID for PCC copy */
+int pcc_inode_store_ugpid(struct dentry *dentry, kuid_t uid, kgid_t gid)
 {
-	return __pcc_inode_create(dataset, fid, pcc_dentry);
+	struct inode *inode = dentry->d_inode;
+	struct iattr attr;
+	int rc;
+
+	ENTRY;
+
+	attr.ia_valid = ATTR_UID | ATTR_GID;
+	attr.ia_uid = uid;
+	attr.ia_gid = gid;
+
+	inode_lock(inode);
+	rc = notify_change(dentry, &attr, NULL);
+	inode_unlock(inode);
+
+	RETURN(rc);
+}
+
+int pcc_inode_create(struct super_block *sb, struct pcc_dataset *dataset,
+		     struct lu_fid *fid, struct dentry **pcc_dentry)
+{
+	const struct cred *old_cred;
+	int rc;
+
+	old_cred = override_creds(pcc_super_cred(sb));
+	rc = __pcc_inode_create(dataset, fid, pcc_dentry);
+	revert_creds(old_cred);
+	return rc;
 }
 
 int pcc_inode_create_fini(struct pcc_dataset *dataset, struct inode *inode,
 			  struct dentry *pcc_dentry)
 {
+	const struct cred *old_cred;
 	struct pcc_inode *pcci;
 	int rc = 0;
 
 	ENTRY;
 
+	old_cred = override_creds(pcc_super_cred(inode->i_sb));
 	pcc_inode_lock(inode);
 	LASSERT(ll_i2pcci(inode) == NULL);
 	OBD_SLAB_ALLOC_PTR_GFP(pcci, pcc_inode_slab, GFP_NOFS);
 	if (pcci == NULL)
 		GOTO(out_unlock, rc = -ENOMEM);
+
+	rc = pcc_inode_store_ugpid(pcc_dentry, old_cred->suid,
+				   old_cred->sgid);
+	if (rc)
+		GOTO(out_unlock, rc);
 
 	pcc_inode_init(pcci, ll_i2info(inode));
 	pcc_inode_attach_init(dataset, pcci, pcc_dentry, LU_PCC_READWRITE);
@@ -1273,6 +1334,10 @@ out_unlock:
 	}
 
 	pcc_inode_unlock(inode);
+	revert_creds(old_cred);
+	if (rc && pcci)
+		OBD_SLAB_FREE_PTR(pcci, pcc_inode_slab);
+
 	RETURN(rc);
 }
 
@@ -1357,6 +1422,7 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 	struct pcc_dataset *dataset;
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct pcc_inode *pcci;
+	const struct cred *old_cred;
 	struct dentry *dentry;
 	struct file *pcc_filp;
 	struct path path;
@@ -1373,9 +1439,12 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 	if (dataset == NULL)
 		RETURN(-ENOENT);
 
+	old_cred = override_creds(pcc_super_cred(inode->i_sb));
 	rc = __pcc_inode_create(dataset, &lli->lli_fid, &dentry);
-	if (rc)
+	if (rc) {
+		revert_creds(old_cred);
 		GOTO(out_dataset_put, rc);
+	}
 
 	path.mnt = dataset->pccd_path.mnt;
 	path.dentry = dentry;
@@ -1389,8 +1458,14 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 #endif
 	if (IS_ERR_OR_NULL(pcc_filp)) {
 		rc = pcc_filp == NULL ? -EINVAL : PTR_ERR(pcc_filp);
+		revert_creds(old_cred);
 		GOTO(out_dentry, rc);
 	}
+
+	rc = pcc_inode_store_ugpid(dentry, old_cred->uid, old_cred->gid);
+	revert_creds(old_cred);
+	if (rc)
+		GOTO(out_fput, rc);
 
 	rc = pcc_copy_data(file, pcc_filp);
 	if (rc)
@@ -1416,7 +1491,9 @@ out_dentry:
 	if (rc) {
 		int rc2;
 
+		old_cred = override_creds(pcc_super_cred(inode->i_sb));
 		rc2 = ll_vfs_unlink(dentry->d_parent->d_inode, dentry);
+		revert_creds(old_cred);
 		if (rc2)
 			CWARN("failed to unlink PCC file, rc = %d\n", rc2);
 
@@ -1432,6 +1509,7 @@ int pcc_readwrite_attach_fini(struct file *file, struct inode *inode,
 			      bool attached)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
+	const struct cred *old_cred;
 	struct pcc_inode *pcci;
 	__u32 gen2;
 
@@ -1440,7 +1518,7 @@ int pcc_readwrite_attach_fini(struct file *file, struct inode *inode,
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
 	lli->lli_pcc_state &= ~PCC_STATE_FL_ATTACHING;
-	if ((rc || lease_broken)) {
+	if (rc || lease_broken) {
 		if (attached && pcci)
 			pcc_inode_put(pcci);
 
@@ -1466,7 +1544,9 @@ int pcc_readwrite_attach_fini(struct file *file, struct inode *inode,
 
 out_put:
 	if (rc) {
+		old_cred = override_creds(pcc_super_cred(inode->i_sb));
 		pcc_inode_remove(pcci);
+		revert_creds(old_cred);
 		pcc_inode_put(pcci);
 	}
 out_unlock:

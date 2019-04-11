@@ -176,7 +176,7 @@ setup_pcc_mapping() {
 	local param="$2"
 
 	[ -z "$param" ] && param="$HSM_ARCHIVE_NUMBER\ 100"
-	cleanup_pcc_mapping $facet
+	stack_trap "cleanup_pcc_mapping $facet" EXIT
 	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p $param
 }
 
@@ -270,8 +270,6 @@ lpcc_rw_test() {
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 	check_file_data $SINGLEAGT $file "attach_detach"
-
-	cleanup_pcc_mapping
 }
 
 test_1a() {
@@ -293,6 +291,126 @@ test_1d() {
 	lpcc_rw_test false true
 }
 run_test 1d "Test Project ID with remote access"
+
+test_1e() {
+	local file=$DIR/$tdir/$tfile
+	local hsm_root=$(hsm_root)
+	local -a lpcc_path
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
+
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file || error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1024 count=1 ||
+		error "failed to dd read from $file"
+	do_facet $SINGLEAGT $RUNAS $TRUNCATE $file 256 ||
+		error "failed to truncate $file"
+	do_facet $SINGLEAGT $RUNAS $TRUNCATE $file 2048 ||
+		error "failed to truncate $file"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+
+	# non-root user is forbidden to access PCC file directly
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $RUNAS touch $lpcc_path &&
+		error "non-root user can touch access PCC file $lpcc_path"
+	do_facet $SINGLEAGT $RUNAS dd if=$lpcc_path of=/dev/null bs=1024 \
+		count=1 && error "non-root user can read PCC file $lpcc_path"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$lpcc_path bs=1024 \
+		count=1 && error "non-root user can write PCC file $lpcc_path"
+
+	local perm=$(do_facet $SINGLEAGT stat -c %a $lpcc_path)
+
+	[[ $perm == "0" ]] || error "PCC file permission ($perm) is not zero"
+
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+}
+run_test 1e "Test RW-PCC with non-root user"
+
+test_1f() {
+	local project_id=100
+	local agt_facet=$SINGLEAGT
+	local hsm_root=$(hsm_root)
+	local file=$DIR/$tdir/$tfile
+
+	! is_project_quota_supported &&
+		skip "project quota is not supported"
+
+	enable_project_quota
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
+	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
+	$LFS project -sp $project_id $DIR/$tdir ||
+		error "failed to set project for $DIR/$tdir"
+
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1024 count=1 ||
+		error "failed to dd read from $file"
+	do_facet $SINGLEAGT $RUNAS $TRUNCATE $file 256 ||
+		error "failed to truncate $file"
+	do_facet $SINGLEAGT $RUNAS $TRUNCATE $file 2048 ||
+		error "failed to truncate $file"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write from $file"
+	check_lpcc_state $file "readwrite"
+
+	# non-root user is forbidden to access PCC file directly
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $RUNAS touch $lpcc_path &&
+		error "non-root user can touch access PCC file $lpcc_path"
+	do_facet $SINGLEAGT $RUNAS dd if=$lpcc_path of=/dev/null bs=1024 \
+		count=1 && error "non-root user can read PCC file $lpcc_path"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$lpcc_path bs=1024 \
+		count=1 && error "non-root user can write PCC file $lpcc_path"
+
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+}
+run_test 1f "Test auto RW-PCC cache with non-root user"
+
+test_1g() {
+	local file=$DIR/$tfile
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping
+
+	dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 &&
+		error "non-root user can dd write to $file"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach file $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 &&
+		error "non-root user can dd write to $file"
+	chmod 777 $file || error "chmod 777 $file failed"
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "non-root user cannot write $file with permission (777)"
+
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file &&
+		error "non-root user or non owner can detach $file"
+	chown $RUNAS_ID $file || error "chown $RUNAS_ID $file failed"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT $RUNAS dd if=$file of=/dev/null bs=1024 count=1 ||
+		error "non-root user cannot read to $file with permisson (777)"
+}
+run_test 1g "General permission test for RW-PCC"
 
 #
 # When a process created a LPCC file and holding the open,
@@ -330,7 +448,6 @@ test_2a() {
 	check_hsm_flags $file "0x0000000d"
 
 	rmultiop_stop $agt_host || error "close $file failed"
-	cleanup_pcc_mapping
 }
 run_test 2a "Test multi open when creating"
 
@@ -387,7 +504,6 @@ test_2b() {
 		"cat $file on remote client failed"
 	do_node $remote_client echo -n "multiopen_data" > $file \
 		|| error "write $file on remote client failed"
-	cleanup_pcc_mapping
 }
 run_test 2b "Test multi remote open when creating"
 
@@ -421,8 +537,6 @@ test_2c() {
 	cat $file2 || error "cat $file on mount $MOUNT2 failed"
 	echo -n "multiopen_data" > $file2 ||
 		error "write $file on mount $MOUNT2 failed"
-
-	cleanup_pcc_mapping
 }
 run_test 2c "Test multi open on different mount points when creating"
 
@@ -451,8 +565,6 @@ test_3a() {
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none"
-
-	cleanup_pcc_mapping
 }
 run_test 3a "Repeat attach/detach operations"
 
@@ -501,10 +613,6 @@ test_3b() {
 	do_facet agt2 $LFS pcc detach $file ||
 		error "failed to detach file $file"
 	check_lpcc_state $file "none" agt2
-
-	for n in $(seq $AGTCOUNT); do
-		cleanup_pcc_mapping agt$n
-	done
 }
 run_test 3b "Repeat attach/detach operations on multiple clients"
 
@@ -528,8 +636,6 @@ test_4() {
 	$LUSTRE/tests/mmap_sanity -d $DIR/$tdir -m $DIR2/$tdir -e 7 ||
 		error "mmap_sanity test failed"
 	sync; sleep 1; sync
-
-	cleanup_pcc_mapping
 }
 run_test 4 "Auto cache test for mmap"
 
@@ -559,8 +665,6 @@ test_5() {
 	content=$($MMAP_CAT $file)
 	[[ $content == "attach_mmap_data" ]] ||
 		error "mmap cat data mismatch: $content"
-
-	cleanup_pcc_mapping
 }
 run_test 5 "Mmap & cat a RW-PCC cached file"
 
@@ -594,8 +698,6 @@ test_6() {
 	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
 	[[ $content == "nmap_write_data" ]] ||
 		error "mmap write data mismatch: $content"
-
-	cleanup_pcc_mapping
 }
 run_test 6 "Test mmap write on RW-PCC "
 
@@ -623,8 +725,6 @@ test_7a() {
 	check_lpcc_state $file "none"
 	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
 	[[ $content == "RQQQQ" ]] || error "data mismatch: $content"
-
-	cleanup_pcc_mapping
 }
 run_test 7a "Fake file detached between fault() and page_mkwrite() for RW-PCC"
 
@@ -658,8 +758,6 @@ test_7b() {
 	check_lpcc_state $file "none"
 	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
 	[[ $content == "RQQQQ" ]] || error "data mismatch: $content"
-
-	cleanup_pcc_mapping
 }
 run_test 7b "Test the race with concurrent mkwrite and detach"
 
@@ -684,8 +782,6 @@ test_8() {
 	# IO path. It will restore the HSM released file.
 	check_lpcc_state $file "none"
 	check_file_data $SINGLEAGT $file "ENOSPC_write"
-
-	cleanup_pcc_mapping
 }
 run_test 8 "Test fake -ENOSPC tolerance for RW-PCC"
 
@@ -728,12 +824,71 @@ test_9() {
 		error "fail to dd write $file"
 	check_lpcc_state $file "none"
 	check_file_size $SINGLEAGT $file 62914560
-
-	cleanup_pcc_mapping
 }
 run_test 9 "Test -ENOSPC tolerance on loop PCC device for RW-PCC"
 
-test_10() {
+test_usrgrp_quota() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local ug=$1
+	local id=$RUNAS_ID
+
+	[[ $ug == "g" ]] && id=$RUNAS_GID
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	do_facet $SINGLEAGT quotacheck -c$ug $mntpt ||
+		error "quotacheck -c$ug $mntpt failed"
+	do_facet $SINGLEAGT quotaon -$ug $mntpt ||
+		error "quotaon -$ug $mntpt failed"
+	do_facet $SINGLEAGT setquota -$ug $id 0 20480 0 0 $mntpt ||
+		error "setquota -$ug $id on $mntpt failed"
+	do_facet $SINGLEAGT repquota -${ug}vs $mntpt
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMVER" -h "$hsm_root"
+	setup_pcc_mapping
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	local file1=$DIR/$tdir/${ug}quotaA
+	local file2=$DIR/$tdir/${ug}quotaB
+
+	dd if=/dev/zero of=$file1 bs=1M count=15 ||
+		error "dd write $file1 failed"
+	dd if=/dev/zero of=$file2 bs=1M count=15 ||
+		error "dd write $file2 failed"
+	chown $RUNAS_ID:$RUNAS_GID $file1 ||
+		error "chown $RUNAS_ID:$RUNAS_GID $file1 failed"
+	chown $RUNAS_ID:$RUNAS_GID $file2 ||
+		error "chown $RUNAS_ID:$RUNAS_GID $file2 failed"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file1 || error "attach $file1 failed"
+	do_facet $SINGLEAGT $RUNAS $LFS pcc attach -i $HSM_ARCHIVE_NUMBER \
+		$file2 && error "attach $file2 should fail due to quota limit"
+	check_lpcc_state $file1 "readwrite"
+	check_lpcc_state $file2 "none"
+
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file1 bs=1M count=30 ||
+		error "dd write $file1 failed"
+	# -EDQUOT error should be tolerated via fallback to normal Lustre path.
+	check_lpcc_state $file1 "none"
+	do_facet $SINGLEAGT $LFS pcc detach $file1 ||
+		error "failed to detach file $file"
+	rm $file1 $file2
+}
+
+test_10a() {
+	test_usrgrp_quota "u"
+}
+run_test 10a "Test RW-PCC with user quota on loop PCC device"
+
+test_10b() {
+	test_usrgrp_quota "g"
+}
+run_test 10b "Test RW-PCC with group quota on loop PCC device"
+
+test_11() {
 	local file=$DIR/$tdir/$tfile
 	local hsm_root=$(hsm_root)
 	local file=$DIR/$tdir/$tfile
@@ -781,12 +936,10 @@ test_10() {
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file &&
 		error "attach $file should fail as PCC path is a directory"
 	rm $file || error "rm $file failed"
-
-	cleanup_pcc_mapping
 }
-run_test 10 "Test attach fault injection with simulated PCC file path"
+run_test 11 "Test attach fault injection with simulated PCC file path"
 
-test_11() {
+test_12() {
 	local file=$DIR/$tfile
 	local pid
 
@@ -809,9 +962,9 @@ test_11() {
 	$LFS hsm_remove $file || error "hsm remove $file failed"
 	wait $pid && error "RW-PCC attach $file should fail"
 
-	cleanup_pcc_mapping
+	return 0
 }
-run_test 11 "RW-PCC attach races with concurrent HSM remove"
+run_test 12 "RW-PCC attach races with concurrent HSM remove"
 
 complete $SECONDS
 check_and_cleanup_lustre

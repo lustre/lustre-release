@@ -73,12 +73,18 @@ static struct ll_sb_info *ll_init_sbi(void)
 	unsigned long pages;
 	unsigned long lru_page_max;
 	struct sysinfo si;
+	int rc;
 	int i;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(sbi);
 	if (sbi == NULL)
-		RETURN(NULL);
+		RETURN(ERR_PTR(-ENOMEM));
+
+	rc = pcc_super_init(&sbi->ll_pcc_super);
+	if (rc < 0)
+		GOTO(out_sbi, rc);
 
 	spin_lock_init(&sbi->ll_lock);
 	mutex_init(&sbi->ll_lco.lco_lock);
@@ -92,10 +98,8 @@ static struct ll_sb_info *ll_init_sbi(void)
 
 	/* initialize ll_cache data */
 	sbi->ll_cache = cl_cache_init(lru_page_max);
-	if (sbi->ll_cache == NULL) {
-		OBD_FREE(sbi, sizeof(*sbi));
-		RETURN(NULL);
-	}
+	if (sbi->ll_cache == NULL)
+		GOTO(out_pcc, rc = -ENOMEM);
 
 	sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
 					   SBI_DEFAULT_READAHEAD_MAX);
@@ -138,12 +142,16 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_squash.rsi_gid = 0;
 	INIT_LIST_HEAD(&sbi->ll_squash.rsi_nosquash_nids);
 	init_rwsem(&sbi->ll_squash.rsi_sem);
-	pcc_super_init(&sbi->ll_pcc_super);
 
 	/* Per-filesystem file heat */
 	sbi->ll_heat_decay_weight = SBI_DEFAULT_HEAT_DECAY_WEIGHT;
 	sbi->ll_heat_period_second = SBI_DEFAULT_HEAT_PERIOD_SECOND;
 	RETURN(sbi);
+out_pcc:
+	pcc_super_fini(&sbi->ll_pcc_super);
+out_sbi:
+	OBD_FREE_PTR(sbi);
+	RETURN(ERR_PTR(rc));
 }
 
 static void ll_free_sbi(struct super_block *sb)
@@ -1059,8 +1067,8 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 
 	/* client additional sb info */
 	lsi->lsi_llsbi = sbi = ll_init_sbi();
-	if (!sbi)
-		GOTO(out_free_cfg, err = -ENOMEM);
+	if (IS_ERR(sbi))
+		GOTO(out_free_cfg, err = PTR_ERR(sbi));
 
 	err = ll_options(lsi->lsi_lmd->lmd_opts, sbi);
 	if (err)
@@ -1190,7 +1198,7 @@ void ll_put_super(struct super_block *sb)
 	int next, force = 1, rc = 0;
 	ENTRY;
 
-	if (!sbi)
+	if (IS_ERR(sbi))
 		GOTO(out_no_sbi, 0);
 
 	/* Should replace instance_id with something better for ASLR */

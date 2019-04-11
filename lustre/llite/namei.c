@@ -842,7 +842,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 		if (rc)
 			GOTO(out, retval = ERR_PTR(rc));
 
-		rc = pcc_inode_create(dataset, &op_data->op_fid2,
+		rc = pcc_inode_create(parent->i_sb, dataset, &op_data->op_fid2,
 				      &pca->pca_dentry);
 		if (rc)
 			GOTO(out, retval = ERR_PTR(rc));

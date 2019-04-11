@@ -52,8 +52,12 @@ struct pcc_dataset {
 };
 
 struct pcc_super {
-	spinlock_t		pccs_lock;	/* Protect pccs_datasets */
-	struct list_head	pccs_datasets;	/* List of datasets */
+	/* Protect pccs_datasets */
+	spinlock_t		 pccs_lock;
+	/* List of datasets */
+	struct list_head	 pccs_datasets;
+	/* creds of process who forced instantiation of super block */
+	const struct cred	*pccs_cred;
 };
 
 struct pcc_inode {
@@ -107,7 +111,7 @@ struct pcc_cmd {
 	} u;
 };
 
-void pcc_super_init(struct pcc_super *super);
+int pcc_super_init(struct pcc_super *super);
 void pcc_super_fini(struct pcc_super *super);
 int pcc_cmd_handle(char *buffer, unsigned long count,
 		   struct pcc_super *super);
@@ -140,10 +144,10 @@ void pcc_vm_close(struct vm_area_struct *vma);
 int pcc_fault(struct vm_area_struct *mva, struct vm_fault *vmf, bool *cached);
 int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 		     bool *cached);
-int pcc_inode_create(struct pcc_dataset *dataset, struct lu_fid *fid,
-		     struct dentry **pcc_dentry);
+int pcc_inode_create(struct super_block *sb, struct pcc_dataset *dataset,
+		     struct lu_fid *fid, struct dentry **pcc_dentry);
 int pcc_inode_create_fini(struct pcc_dataset *dataset, struct inode *inode,
-			  struct dentry *pcc_dentry);
+			   struct dentry *pcc_dentry);
 struct pcc_dataset *pcc_dataset_get(struct pcc_super *super, __u32 projid,
 				    __u32 archive_id);
 void pcc_dataset_put(struct pcc_dataset *dataset);
