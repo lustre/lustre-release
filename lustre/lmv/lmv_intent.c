@@ -145,13 +145,14 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			  ldlm_blocking_callback cb_blocking,
 			  int extra_lock_flags)
 {
-	struct obd_device      *obd = exp->exp_obd;
-	struct lmv_obd         *lmv = &obd->u.lmv;
-	struct ptlrpc_request	*req = NULL;
-	struct mdt_body		*body;
-	struct md_op_data      *op_data;
-	int                     i;
-	int                     rc = 0;
+	struct obd_device *obd = exp->exp_obd;
+	struct lmv_obd *lmv = &obd->u.lmv;
+	struct ptlrpc_request *req = NULL;
+	struct mdt_body *body;
+	struct md_op_data *op_data;
+	int i;
+	int valid_stripe_count = 0;
+	int rc = 0;
 
 	ENTRY;
 
@@ -177,6 +178,9 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		fid = lsm->lsm_md_oinfo[i].lmo_fid;
 		inode = lsm->lsm_md_oinfo[i].lmo_root;
 
+		if (!inode)
+			continue;
+
 		/*
 		 * Prepare op_data for revalidating. Note that @fid2 shluld be
 		 * defined otherwise it will go to server and take new lock
@@ -200,6 +204,12 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 
 		rc = md_intent_lock(tgt->ltd_exp, op_data, &it, &req,
 				    cb_blocking, extra_lock_flags);
+		if (rc == -ENOENT) {
+			/* skip stripe is not exists */
+			rc = 0;
+			continue;
+		}
+
 		if (rc < 0)
 			GOTO(cleanup, rc);
 
@@ -235,16 +245,21 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			ldlm_lock_decref(lockh, it.it_lock_mode);
 			it.it_lock_mode = 0;
 		}
+
+		valid_stripe_count++;
 	}
 
 cleanup:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
+	/* if all stripes are invalid, return -ENOENT to notify user */
+	if (!rc && !valid_stripe_count)
+		rc = -ENOENT;
+
 	OBD_FREE_PTR(op_data);
 	RETURN(rc);
 }
-
 
 /*
  * IT_OPEN is intended to open (and create, possible) an object. Parent (pid)

@@ -6785,6 +6785,39 @@ test_60g() {
 }
 run_test 60g "transaction abort won't cause MDT hung"
 
+test_60h() {
+	[ $MDS1_VERSION -le $(version_code 2.12.52) ] ||
+		skip "Need MDS version at least 2.12.52"
+	[ $MDSCOUNT -le 2 ] && skip "Need >= 2 MDTs"
+
+	local f
+
+	#define OBD_FAIL_MDS_STRIPE_CREATE	 0x188
+	#define OBD_FAIL_MDS_STRIPE_FID		 0x189
+	for fail_loc in 0x80000188 0x80000189; do
+		do_facet mds1 "$LCTL set_param fail_loc=$fail_loc"
+		$LFS mkdir -c $MDSCOUNT -i 0 $DIR/$tdir-$fail_loc ||
+			error "mkdir $dir-$fail_loc failed"
+		for i in {0..10}; do
+			# create may fail on missing stripe
+			echo $i > $DIR/$tdir-$fail_loc/$i
+		done
+		$LFS getdirstripe $DIR/$tdir-$fail_loc ||
+			error "getdirstripe $tdir-$fail_loc failed"
+		$LFS migrate -m 1 $DIR/$tdir-$fail_loc ||
+			error "migrate $tdir-$fail_loc failed"
+		$LFS getdirstripe $DIR/$tdir-$fail_loc ||
+			error "getdirstripe $tdir-$fail_loc failed"
+		pushd $DIR/$tdir-$fail_loc
+		for f in *; do
+			echo $f | cmp $f - || error "$f data mismatch"
+		done
+		popd
+		rm -rf $DIR/$tdir-$fail_loc
+	done
+}
+run_test 60h "striped directory with missing stripes can be accessed"
+
 test_61a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
