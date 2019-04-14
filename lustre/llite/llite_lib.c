@@ -1362,6 +1362,10 @@ static int ll_init_lsm_md(struct inode *inode, struct lustre_md *md)
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
 		fid = &lsm->lsm_md_oinfo[i].lmo_fid;
 		LASSERT(lsm->lsm_md_oinfo[i].lmo_root == NULL);
+
+		if (!fid_is_sane(fid))
+			continue;
+
 		/* Unfortunately ll_iget will call ll_update_inode,
 		 * where the initialization of slave inode is slightly
 		 * different, so it reset lsm_md to NULL to avoid

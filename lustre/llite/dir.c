@@ -342,11 +342,13 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 		GOTO(out, rc = 0);
 
 	if (unlikely(ll_i2info(inode)->lli_lsm_md != NULL)) {
-		/* This is only needed for striped dir to fill ..,
-		 * see lmv_read_entry */
+		/*
+		 * This is only needed for striped dir to fill ..,
+		 * see lmv_read_page()
+		 */
 		if (file_dentry(filp)->d_parent != NULL &&
 		    file_dentry(filp)->d_parent->d_inode != NULL) {
-			__u64 ibits = MDS_INODELOCK_UPDATE;
+			__u64 ibits = MDS_INODELOCK_LOOKUP;
 			struct inode *parent =
 				file_dentry(filp)->d_parent->d_inode;
 
@@ -1587,12 +1589,15 @@ out:
 			struct lu_fid	fid;
 
 			fid_le_to_cpu(&fid, &lmm->lmv_md_v1.lmv_stripe_fids[i]);
-			mdt_index = ll_get_mdt_idx_by_fid(sbi, &fid);
-			if (mdt_index < 0)
-				GOTO(out_tmp, rc = mdt_index);
+			if (fid_is_sane(&fid)) {
+				mdt_index = ll_get_mdt_idx_by_fid(sbi, &fid);
+				if (mdt_index < 0)
+					GOTO(out_tmp, rc = mdt_index);
 
-			tmp->lum_objects[i].lum_mds = mdt_index;
-			tmp->lum_objects[i].lum_fid = fid;
+				tmp->lum_objects[i].lum_mds = mdt_index;
+				tmp->lum_objects[i].lum_fid = fid;
+			}
+
 			tmp->lum_stripe_count++;
 		}
 

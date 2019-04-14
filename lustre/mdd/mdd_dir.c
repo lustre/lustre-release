@@ -385,8 +385,12 @@ static int mdd_dir_is_empty(const struct lu_env *env,
 
 		iops->put(env, it);
 		iops->fini(env, it);
-	} else
+	} else {
 		result = PTR_ERR(it);
+		/* -ENODEV means no valid stripe */
+		if (result == -ENODEV)
+			RETURN(0);
+	}
 	RETURN(result);
 }
 
@@ -3441,6 +3445,9 @@ static int mdd_dir_iterate_stripes(const struct lu_env *env,
 
 	for (i = 0; i < le32_to_cpu(lmv->lmv_stripe_count); i++) {
 		fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[i]);
+		if (!fid_is_sane(fid))
+			continue;
+
 		stripe = mdd_object_find(env, mdd, fid);
 		if (IS_ERR(stripe))
 			RETURN(PTR_ERR(stripe));

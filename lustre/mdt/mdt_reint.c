@@ -1639,6 +1639,9 @@ static int mdt_lock_remote_slaves(struct mdt_thread_info *info,
 	for (i = 0; i < le32_to_cpu(lmv->lmv_stripe_count); i++) {
 		fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[i]);
 
+		if (!fid_is_sane(fid))
+			continue;
+
 		slave = mdt_object_find(info->mti_env, mdt, fid);
 		if (IS_ERR(slave))
 			GOTO(out, rc = PTR_ERR(slave));

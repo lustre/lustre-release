@@ -2441,6 +2441,11 @@ static struct lu_dirent *stripe_dirent_load(struct lmv_dir_ctxt *ctxt,
 		}
 
 		oinfo = &op_data->op_mea1->lsm_md_oinfo[stripe_index];
+		if (!oinfo->lmo_root) {
+			rc = -ENOENT;
+			break;
+		}
+
 		tgt = lmv_get_target(ctxt->ldc_lmv, oinfo->lmo_mds, NULL);
 		if (IS_ERR(tgt)) {
 			rc = PTR_ERR(tgt);
@@ -3001,10 +3006,22 @@ static int lmv_unpack_md_v1(struct obd_export *exp, struct lmv_stripe_md *lsm,
 	for (i = 0; i < stripe_count; i++) {
 		fid_le_to_cpu(&lsm->lsm_md_oinfo[i].lmo_fid,
 			      &lmm1->lmv_stripe_fids[i]);
+		/*
+		 * set default value -1, so lmv_locate_tgt() knows this stripe
+		 * target is not initialized.
+		 */
+		lsm->lsm_md_oinfo[i].lmo_mds = (u32)-1;
+		if (!fid_is_sane(&lsm->lsm_md_oinfo[i].lmo_fid))
+			continue;
+
 		rc = lmv_fld_lookup(lmv, &lsm->lsm_md_oinfo[i].lmo_fid,
 				    &lsm->lsm_md_oinfo[i].lmo_mds);
-		if (rc != 0)
+		if (rc == -ENOENT)
+			continue;
+
+		if (rc)
 			RETURN(rc);
+
 		CDEBUG(D_INFO, "unpack fid #%d "DFID"\n", i,
 		       PFID(&lsm->lsm_md_oinfo[i].lmo_fid));
 	}
@@ -3038,8 +3055,10 @@ static int lmv_unpackmd(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 			RETURN(0);
 		}
 
-		for (i = 0; i < lsm->lsm_md_stripe_count; i++)
-			iput(lsm->lsm_md_oinfo[i].lmo_root);
+		for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
+			if (lsm->lsm_md_oinfo[i].lmo_root)
+				iput(lsm->lsm_md_oinfo[i].lmo_root);
+		}
 		lsm_size = lmv_stripe_md_size(lsm->lsm_md_stripe_count);
 		OBD_FREE(lsm, lsm_size);
 		*lsmp = NULL;
@@ -3399,6 +3418,9 @@ static int lmv_merge_attr(struct obd_export *exp,
 
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
 		struct inode *inode = lsm->lsm_md_oinfo[i].lmo_root;
+
+		if (!inode)
+			continue;
 
 		CDEBUG(D_INFO,
 		       "" DFID " size %llu, blocks %llu nlink %u, atime %lld ctime %lld, mtime %lld.\n",
