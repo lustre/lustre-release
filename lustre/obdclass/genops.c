@@ -445,7 +445,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 
 	newdev->obd_conn_inprogress = 0;
 
-	strncpy(newdev->obd_uuid.uuid, uuid, strlen(uuid));
+	strncpy(newdev->obd_uuid.uuid, uuid, UUID_MAX);
 
 	CDEBUG(D_IOCTL, "Allocate new device %s (%p)\n",
 	       newdev->obd_name, newdev);

@@ -89,7 +89,7 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 {
 	CLASSERT(sizeof(nr->ncr.ncr_name) == sizeof(nodemap->nm_name));
 
-	strncpy(nr->ncr.ncr_name, nodemap->nm_name, sizeof(nodemap->nm_name));
+	strncpy(nr->ncr.ncr_name, nodemap->nm_name, sizeof(nr->ncr.ncr_name));
 	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
 	nr->ncr.ncr_squash_gid = cpu_to_le32(nodemap->nm_squash_gid);
 	nr->ncr.ncr_flags = cpu_to_le32(

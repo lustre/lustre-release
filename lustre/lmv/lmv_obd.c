@@ -660,6 +660,7 @@ repeat_fid2path:
 	if (remote_gf != NULL) {
 		struct getinfo_fid2path *ori_gf;
 		char *ptr;
+		int len;
 
 		ori_gf = (struct getinfo_fid2path *)karg;
 		if (strlen(ori_gf->gf_u.gf_path) + 1 +
@@ -668,13 +669,12 @@ repeat_fid2path:
 
 		ptr = ori_gf->gf_u.gf_path;
 
-		memmove(ptr + strlen(gf->gf_u.gf_path) + 1, ptr,
-			strlen(ori_gf->gf_u.gf_path));
-
-		strncpy(ptr, gf->gf_u.gf_path,
-			strlen(gf->gf_u.gf_path));
-		ptr += strlen(gf->gf_u.gf_path);
-		*ptr = '/';
+		len = strlen(gf->gf_u.gf_path);
+		/* move the current path to the right to release space
+		 * for closer-to-root part */
+		memmove(ptr + len + 1, ptr, strlen(ori_gf->gf_u.gf_path));
+		memcpy(ptr, gf->gf_u.gf_path, len);
+		ptr[len] = '/';
 	}
 
 	CDEBUG(D_INFO, "%s: get path %s "DFID" rec: %llu ln: %u\n",
