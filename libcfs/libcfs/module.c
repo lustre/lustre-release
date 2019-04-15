@@ -548,8 +548,7 @@ static const struct file_operations *lnet_debugfs_fops_select(umode_t mode)
 	return &lnet_debugfs_file_operations_rw;
 }
 
-void lnet_insert_debugfs(struct ctl_table *table,
-			 const struct lnet_debugfs_symlink_def *symlinks)
+void lnet_insert_debugfs(struct ctl_table *table)
 {
 	if (!lnet_debugfs_root)
 		lnet_debugfs_root = debugfs_create_dir("lnet", NULL);
@@ -565,19 +564,29 @@ void lnet_insert_debugfs(struct ctl_table *table,
 		debugfs_create_file(table->procname, table->mode,
 				    lnet_debugfs_root, table,
 				    lnet_debugfs_fops_select(table->mode));
+}
+EXPORT_SYMBOL_GPL(lnet_insert_debugfs);
 
+static void lnet_insert_debugfs_links(
+		const struct lnet_debugfs_symlink_def *symlinks)
+{
 	for (; symlinks && symlinks->name; symlinks++)
 		debugfs_create_symlink(symlinks->name, lnet_debugfs_root,
 				       symlinks->target);
 }
-EXPORT_SYMBOL_GPL(lnet_insert_debugfs);
 
-static void lnet_remove_debugfs(void)
+void lnet_remove_debugfs(struct ctl_table *table)
 {
-	debugfs_remove_recursive(lnet_debugfs_root);
+	for (; table && table->procname; table++) {
+		struct qstr dname = QSTR_INIT(table->procname,
+					      strlen(table->procname));
+		struct dentry *dentry;
 
-	lnet_debugfs_root = NULL;
+		dentry = d_hash_and_lookup(lnet_debugfs_root, &dname);
+		debugfs_remove(dentry);
+	}
 }
+EXPORT_SYMBOL_GPL(lnet_remove_debugfs);
 
 static int __init libcfs_init(void)
 {
@@ -619,7 +628,9 @@ static int __init libcfs_init(void)
 		goto cleanup_wi;
 	}
 
-	lnet_insert_debugfs(lnet_table, lnet_debugfs_symlinks);
+	lnet_insert_debugfs(lnet_table);
+	if (!IS_ERR_OR_NULL(lnet_debugfs_root))
+		lnet_insert_debugfs_links(lnet_debugfs_symlinks);
 
 	CDEBUG (D_OTHER, "portals setup OK\n");
 	return 0;
@@ -638,7 +649,9 @@ static void __exit libcfs_exit(void)
 {
 	int rc;
 
-	lnet_remove_debugfs();
+	/* Remove everthing */
+	debugfs_remove_recursive(lnet_debugfs_root);
+	lnet_debugfs_root = NULL;
 
 	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
 	       atomic_read(&libcfs_kmemory));

@@ -2657,7 +2657,7 @@ LNetNIFini()
 
 		lnet_fault_fini();
 
-		lnet_router_debugfs_init();
+		lnet_router_debugfs_fini();
 		lnet_peer_discovery_stop();
 		lnet_push_target_fini();
 		lnet_monitor_thr_stop();
