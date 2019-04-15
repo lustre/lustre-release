@@ -741,6 +741,27 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_SOCK_ACCEPT
 
 #
+# LN_CONFIG_SOCK_GETNAME
+#
+# 4.17 commit 9b2c45d479d0fb8647c9e83359df69162b5fbe5f getname()
+# does not take the length *int argument and returns the length
+#
+AC_DEFUN([LN_CONFIG_SOCK_GETNAME], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'getname' has two args],
+kern_sock_getname_2args, [
+	#include <linux/net.h>
+],[
+	kernel_getsockname(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_KERN_SOCK_GETNAME_2ARGS, 1,
+		['getname' has two args])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_CONFIG_SOCK_GETNAME
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -765,6 +786,8 @@ LN_CONFIG_SK_DATA_READY
 LN_CONFIG_SOCK_CREATE_KERN
 # 4.11
 LN_CONFIG_SOCK_ACCEPT
+# 4.17
+LN_CONFIG_SOCK_GETNAME
 ]) # LN_PROG_LINUX
 
 #

@@ -453,14 +453,18 @@ int
 lnet_sock_getaddr(struct socket *sock, bool remote, __u32 *ip, int *port)
 {
 	struct sockaddr_in sin;
-	int		   len = sizeof(sin);
-	int		   rc;
+	int rc;
+#ifndef HAVE_KERN_SOCK_GETNAME_2ARGS
+	int len = sizeof(sin);
+#endif
 
 	if (remote)
-		rc = kernel_getpeername(sock, (struct sockaddr *)&sin, &len);
+		rc = lnet_kernel_getpeername(sock,
+					     (struct sockaddr *)&sin, &len);
 	else
-		rc = kernel_getsockname(sock, (struct sockaddr *)&sin, &len);
-	if (rc != 0) {
+		rc = lnet_kernel_getsockname(sock,
+					     (struct sockaddr *)&sin, &len);
+	if (rc < 0) {
 		CERROR("Error %d getting sock %s IP/port\n",
 			rc, remote ? "peer" : "local");
 		return rc;
