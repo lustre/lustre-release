@@ -137,13 +137,13 @@ static int qsd_enabled_seq_show(struct seq_file *m, void *data)
 
 	memset(enabled, 0, sizeof(enabled));
 	if (qsd_type_enabled(qsd, USRQUOTA))
-		strcat(enabled, "u");
+		strncat(enabled, "u", sizeof(enabled) - strlen(enabled));
 	if (qsd_type_enabled(qsd, GRPQUOTA))
-		strcat(enabled, "g");
+		strncat(enabled, "g", sizeof(enabled) - strlen(enabled));
 	if (qsd_type_enabled(qsd, PRJQUOTA))
-		strncat(enabled, "p", 1);
+		strncat(enabled, "p", sizeof(enabled) - strlen(enabled));
 	if (strlen(enabled) == 0)
-		strcat(enabled, "none");
+		strncat(enabled, "none", sizeof(enabled) - strlen(enabled));
 
 	seq_printf(m, "%s\n", enabled);
 	return 0;

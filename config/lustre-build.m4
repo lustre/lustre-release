@@ -362,6 +362,50 @@ AC_DEFUN([LB_CC_NO_FORMAT_TRUNCATION], [
 ])
 
 #
+# Check if gcc supports -Wno-stringop-truncation
+#
+# To supress many warnings with gcc8
+#
+AC_DEFUN([LB_CC_NO_STRINGOP_TRUNCATION], [
+	AC_MSG_CHECKING([for -Wno-stringop-truncation support])
+
+	saved_flags="$CFLAGS"
+	CFLAGS="$CFLAGS -Wno-stringop-truncation"
+
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-stringop-truncation"
+		AC_SUBST(EXTRA_KCFLAGS)
+		AC_MSG_RESULT([yes])
+	], [
+		AC_MSG_RESULT([no])
+	])
+
+	CFLAGS="$saved_flags"
+])
+
+#
+# Check if gcc supports -Wno-stringop-overflow
+#
+# To supress many warnings with gcc8
+#
+AC_DEFUN([LB_CC_NO_STRINGOP_OVERFLOW], [
+	AC_MSG_CHECKING([for -Wno-stringop-overflow support])
+
+	saved_flags="$CFLAGS"
+	CFLAGS="$CFLAGS -Wno-stringop-overflow"
+
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-stringop-overflow"
+		AC_SUBST(EXTRA_KCFLAGS)
+		AC_MSG_RESULT([yes])
+	], [
+		AC_MSG_RESULT([no])
+	])
+
+	CFLAGS="$saved_flags"
+])
+
+#
 # LB_CONDITIONALS
 #
 # AM_CONDITIONAL instances for everything
@@ -583,6 +627,8 @@ LB_PATH_DEFAULTS
 
 LB_PROG_CC
 LB_CC_NO_FORMAT_TRUNCATION
+LB_CC_NO_STRINGOP_TRUNCATION
+LB_CC_NO_STRINGOP_OVERFLOW
 
 LC_OSD_ADDON
 

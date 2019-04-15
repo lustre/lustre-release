@@ -742,7 +742,7 @@ static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
 	/* Also make sure poolname is not to long. */
 	if (strlen(ptr) > LOV_MAXPOOLNAME)
 		return -ENAMETOOLONG;
-	strncpy(poolname, ptr, strlen(ptr));
+	strncpy(poolname, ptr, LOV_MAXPOOLNAME);
 
 	/* Test if fsname is empty */
 	len = strlen(arg) - strlen(ptr) - 1;

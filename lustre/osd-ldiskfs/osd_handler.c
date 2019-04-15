@@ -7585,7 +7585,7 @@ static int osd_mount(const struct lu_env *env,
 			"force_over_512tb",
 			NULL
 		};
-		strcat(options, opts);
+		strncat(options, opts, PAGE_SIZE);
 		for (rc = 0, str = options; sout[rc]; ) {
 			char *op = strstr(str, sout[rc]);
 
@@ -7605,13 +7605,13 @@ static int osd_mount(const struct lu_env *env,
 				;
 		}
 	} else {
-		strncat(options, "user_xattr,acl", 14);
+		strncat(options, "user_xattr,acl", PAGE_SIZE);
 	}
 
 	/* Glom up mount options */
 	if (*options != '\0')
-		strcat(options, ",");
-	strlcat(options, "no_mbcache,nodelalloc", PAGE_SIZE);
+		strncat(options, ",", PAGE_SIZE);
+	strncat(options, "no_mbcache,nodelalloc", PAGE_SIZE);
 
 	type = get_fs_type("ldiskfs");
 	if (!type) {
