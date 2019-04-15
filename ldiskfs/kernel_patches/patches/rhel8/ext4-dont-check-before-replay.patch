@@ -1,0 +1,36 @@
+When ldiskfs run in failover mode whith read-only disk.
+Part of allocation updates are lost and ldiskfs may fail
+while mounting this is due to inconsistent state of
+group-descriptor. Group-descriptor check is added after
+journal replay.
+
+Index: linux-4.18.0-32.el8.x86_64/fs/ext4/super.c
+===================================================================
+--- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/super.c
++++ linux-4.18.0-32.el8.x86_64/fs/ext4/super.c
+@@ -4092,11 +4092,6 @@ static int ext4_fill_super(struct super_
+ 		}
+ 	}
+ 	sbi->s_gdb_count = db_count;
+-	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
+-		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
+-		ret = -EFSCORRUPTED;
+-		goto failed_mount2;
+-	}
+ 
+ 	timer_setup(&sbi->s_err_report, print_daily_error_info, 0);
+ 
+@@ -4238,6 +4233,13 @@ static int ext4_fill_super(struct super_
+ 	sbi->s_journal->j_commit_callback = ext4_journal_commit_callback;
+ 
+ no_journal:
++
++	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
++		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
++		ret = -EFSCORRUPTED;
++		goto failed_mount_wq;
++	}
++
+ 	if (!test_opt(sb, NO_MBCACHE)) {
+ 		sbi->s_ea_block_cache = ext4_xattr_create_cache();
+ 		if (!sbi->s_ea_block_cache) {

@@ -72,7 +72,7 @@ Index: linux-4.15.0/fs/ext4/namei.c
 +        if (info->hash_version != DX_HASH_TEA &&
 +            info->hash_version != DX_HASH_HALF_MD4 &&
 +            info->hash_version != DX_HASH_LEGACY) {
-+		ldiskfs_warning(dir->i_sb, "Unrecognised inode hash code %d for directory "
++		ext4_warning(dir->i_sb, "Unrecognised inode hash code %d for directory "
 +                             "#%lu", info->hash_version, dir->i_ino);
  		goto fail;
  	}

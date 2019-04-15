@@ -1,0 +1,18 @@
+Index: linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/ext4.h
++++ linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
+@@ -655,6 +655,13 @@ enum {
+ #define EXT4_GOING_FLAGS_LOGFLUSH		0x1	/* flush log but not data */
+ #define EXT4_GOING_FLAGS_NOLOGFLUSH		0x2	/* don't flush log nor data */
+ 
++static inline struct timespec64 ext4_current_time(struct inode *inode)
++{
++	if (IS_NOCMTIME(inode))
++		return inode->i_ctime;
++	return current_time(inode);
++}
++#define current_time(a) ext4_current_time(a)
+ 
+ #if defined(__KERNEL__) && defined(CONFIG_COMPAT)
+ /*

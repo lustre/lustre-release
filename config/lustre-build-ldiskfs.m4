@@ -13,6 +13,7 @@ esac
 AS_IF([test -z "$LDISKFS_SERIES"], [
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
+	80)     LDISKFS_SERIES="4.18-rhel8.series"      ;;
 	76)	LDISKFS_SERIES="3.10-rhel7.6.series"	;;
 	75)	LDISKFS_SERIES="3.10-rhel7.5.series"	;;
 	74)	LDISKFS_SERIES="3.10-rhel7.4.series"	;;
@@ -204,6 +205,42 @@ ext4_info_dquot, [
 ]) # LB_EXT4_HAVE_INFO_DQUOT
 
 #
+# LB_EXT4_HAVE_I_CRYPT_INFO
+#
+# in linux 4.8 i_crypt_info moved from ext4_inode_info to struct inode
+#
+# Determine if we need to enable CONFIG_LDISKFS_FS_ENCRYPTION.
+# If we have i_crypt_info in ext4_inode_info, the config option
+# should be enabled to make the ldiskfs module compilation happy.
+# Otherwise i_crypy_info is in struct inode, we need to check kernel
+# config option to determine that.
+#
+AC_DEFUN([LB_EXT4_HAVE_I_CRYPT_INFO], [
+LB_CHECK_COMPILE([if i_crypt_info is in ext4_inode_info],
+ext4_i_crypt_info, [
+	#define CONFIG_EXT4_FS_ENCRYPTION 1
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+],[
+	struct ext4_inode_info in;
+
+	in.i_crypt_info = NULL;
+],[
+	AC_DEFINE(
+		CONFIG_LDISKFS_FS_ENCRYPTION, 1,
+		[enable encryption for ldiskfs]
+	)
+],[
+	LB_CHECK_CONFIG([EXT4_FS_ENCRYPTION],[
+		AC_DEFINE(
+			CONFIG_LDISKFS_FS_ENCRYPTION, 1,
+			[enable encryption for ldiskfs]
+		)
+	])
+])
+]) # LB_EXT4_HAVE_I_CRYPT_INFO
+
+#
 # LDISKFS_AC_PATCH_PROGRAM
 #
 # Determine which program should be used to apply the patches to
@@ -285,11 +322,11 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_LDISKFS_MAP_BLOCKS
 	LB_EXT4_BREAD_4ARGS
 	LB_EXT4_HAVE_INFO_DQUOT
+	LB_EXT4_HAVE_I_CRYPT_INFO
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_RW, 1, [enable rw access for ldiskfs])
-	AC_DEFINE(CONFIG_LDISKFS_FS_ENCRYPTION, 1, [enable encryption for ldiskfs])
 	AC_SUBST(LDISKFS_SUBDIR, ldiskfs)
 	AC_DEFINE(HAVE_LDISKFS_OSD, 1, Enable ldiskfs osd)
 ], [
