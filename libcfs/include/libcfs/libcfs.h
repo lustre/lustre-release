@@ -139,8 +139,8 @@ struct lnet_debugfs_symlink_def {
 	const char *target;
 };
 
-void lnet_insert_debugfs(struct ctl_table *table,
-			 const struct lnet_debugfs_symlink_def *symlinks);
+void lnet_insert_debugfs(struct ctl_table *table);
+void lnet_remove_debugfs(struct ctl_table *table);
 
 /* helper for sysctl handlers */
 int lprocfs_call_handler(void *data, int write, loff_t *ppos,
