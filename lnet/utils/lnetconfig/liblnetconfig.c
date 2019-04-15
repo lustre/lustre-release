@@ -719,7 +719,7 @@ static int lnet_expr2ips(char *nidstr, __u32 *ip_list,
 	if (ip_range_len >= LNET_MAX_STR_LEN) {
 		snprintf(err_str,
 			LNET_MAX_STR_LEN,
-			"\"cannot parse ip_range '%s'\"", ip_range);
+			"\"too long ip_range '%s'\"", nidstr);
 		err_str[LNET_MAX_STR_LEN - 1] = '\0';
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
@@ -747,7 +747,7 @@ static int lnet_expr2ips(char *nidstr, __u32 *ip_list,
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		snprintf(err_str,
 			LNET_MAX_STR_LEN,
-			"\"cannot parse ip_range '%s'\"", ip_range);
+			"\"cannot parse ip_range '%.100s'\"", ip_range);
 		err_str[LNET_MAX_STR_LEN - 1] = '\0';
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
@@ -4313,13 +4313,11 @@ static int yaml_copy_peer_nids(struct cYAML *nids_entry, char ***nidsppp,
 		if (!entry || !entry->cy_valuestring)
 			continue;
 
-		nids[num] = calloc(strlen(entry->cy_valuestring) + 1, 1);
+		nids[num] = strdup(entry->cy_valuestring);
 		if (!nids[num]) {
 			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 			goto failed;
 		}
-		strncpy(nids[num], entry->cy_valuestring,
-			strlen(entry->cy_valuestring));
 		num++;
 	}
 	rc = num;

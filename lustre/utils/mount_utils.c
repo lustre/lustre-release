@@ -546,7 +546,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 {
 	struct module_backfs_ops *ops;
 #ifdef PLUGIN_DIR
-	char *error, filename[512], fsname[512], *name;
+	char *error, filename[PATH_MAX], fsname[512], *name;
 	void *handle;
 
 	/* This deals with duplicate ldd_mount_types resolving to same OSD layer
@@ -977,7 +977,7 @@ int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	struct lr_server_data lsd;
-	char filepnm[128];
+	char filepnm[132];
 	char cfg_dir[128];
 	DIR *dir = NULL;
 	struct dirent64 *dirent;

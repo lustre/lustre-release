@@ -86,10 +86,10 @@ int run_command(char *cmd, size_t cmdsz)
 	fd = mkstemp(log);
 	if (fd >= 0) {
 		close(fd);
-		strncat(cmd, " >", 2);
-		strncat(cmd, log, strlen(log));
+		strncat(cmd, " >", cmdsz);
+		strncat(cmd, log, cmdsz);
 	}
-	strncat(cmd, " 2>&1", 5);
+	strncat(cmd, " 2>&1", cmdsz - strlen(cmd));
 
 	/* Can't use popen because we need the rv of the command */
 	rc = system(cmd);

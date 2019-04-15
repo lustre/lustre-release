@@ -775,7 +775,7 @@ static void get_parent_dir(const char *path, char *buf, size_t size)
 {
 	char *p;
 
-	strncpy(buf, path, size);
+	strncpy(buf, path, size - 1);
 	p = strrchr(buf, '/');
 
 	if (p != NULL) {

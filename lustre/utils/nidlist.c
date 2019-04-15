@@ -262,9 +262,9 @@ char *nl_string(NIDList nl, char *sep)
 		nl_oom();
 	s[0] = '\0';
 	for (i = 0; i < nl->count; i++) {
-		if (i > 0)
-			strncat(s, sep, len);
-		strncat(s, nl->nids[i], len);
+		int cur = strlen(s);
+		snprintf(s + cur, len - cur, "%s%s",
+			 i > 0 ? sep : "", nl->nids[i]);
 	}
 	return s;
 }
@@ -312,7 +312,7 @@ static void nl_strxcat(char *s, char **nids, int len, const int max_len)
 					 "-%s", savedn);
 				free(savedn);
 			}
-			strncat(s, "]", 1);
+			strncat(s, "]", max_len - strlen(s));
 			if (lnet)
 				snprintf(s + strlen(s), max_len - strlen(s),
 					 "@%s", lnet);

@@ -568,7 +568,7 @@ int llapi_search_tgt(char *fsname, char *poolname, char *tgtname, bool is_mdt)
 					   "target_obd", &param);
 		if (rc == 0) {
 			strncpy(buffer, param.gl_pathv[0],
-				sizeof(buffer));
+				sizeof(buffer) - 1);
 		}
 	} else {
 		return -EINVAL;
@@ -680,7 +680,7 @@ int llapi_file_open_param(const char *name, int flags, mode_t mode,
 
 	/* sanity check of target list */
 	if (param->lsp_is_specific) {
-		char ostname[MAX_OBD_NAME + 1];
+		char ostname[MAX_OBD_NAME + 64];
 		bool found = false;
 		int i;
 
@@ -961,7 +961,7 @@ static int verify_dir_param(const char *name,
 
 	/* sanity check of target list */
 	if (param->lsp_is_specific) {
-		char mdtname[MAX_OBD_NAME + 1];
+		char mdtname[MAX_OBD_NAME + 64];
 		bool found = false;
 		int i;
 
@@ -1219,7 +1219,7 @@ int llapi_dir_create_foreign(const char *name, mode_t mode, __u32 type,
 	lfm->lfm_length = len;
 	lfm->lfm_type = type;
 	lfm->lfm_flags = flags;
-	strncpy(lfm->lfm_value, value, len);
+	memcpy(lfm->lfm_value, value, len);
 
 	filename = basename(namepath);
 	dir = dirname(dirpath);
@@ -1369,7 +1369,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 
                 /* If the path isn't set return the first one we find */
 		if (path == NULL || strlen(path) == 0) {
-			strncpy(mntdir, mnt.mnt_dir, strlen(mnt.mnt_dir));
+			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir) - 1);
 			mntdir[strlen(mnt.mnt_dir)] = '\0';
 			if ((want & WANT_FSNAME) && fsname != NULL) {
 				strncpy(fsname, ptr, ptr_end - ptr);
@@ -1380,7 +1380,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 		/* Otherwise find the longest matching path */
 		} else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
 			   (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
-			strncpy(mntdir, mnt.mnt_dir, strlen(mnt.mnt_dir));
+			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir));
 			mntdir[strlen(mnt.mnt_dir)] = '\0';
 			len = mntlen;
 			if ((want & WANT_FSNAME) && fsname != NULL) {
@@ -1395,7 +1395,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 	/* Found it */
 	if (rc == 0) {
 		if ((want & WANT_PATH) && path != NULL) {
-			strncpy(path, mntdir, strlen(mntdir));
+			strncpy(path, mntdir, PATH_MAX);
 			path[strlen(mntdir)] = '\0';
 		}
 		if (want & WANT_FD) {
@@ -5949,7 +5949,7 @@ int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
 		      int flags)
 {
 	char mntdir[PATH_MAX];
-	char path[PATH_MAX];
+	char path[PATH_MAX + 64];
 	int rc;
 
 	rc = llapi_search_mounts(lustre_dir, 0, mntdir, NULL);

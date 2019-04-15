@@ -292,8 +292,7 @@ static int erase_param(const char *const buf, const char *const param,
 			return EINVAL;
 		strncpy(&search[1], param, keyend - param + 1);
 	} else {
-		strncpy(&search[1], param, strlen(param));
-		strncat(search, "=", 1);
+		snprintf(search + 1, sizeof(search) - 1, "%s=", param);
 	}
 
 	while (1) {

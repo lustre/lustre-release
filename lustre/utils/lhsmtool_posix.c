@@ -469,7 +469,7 @@ static int ct_mkdir_p(const char *path)
 
 static int ct_save_stripe(int src_fd, const char *src, const char *dst)
 {
-	char			 lov_file[PATH_MAX];
+	char			 lov_file[PATH_MAX + 8];
 	char			 lov_buf[XATTR_SIZE_MAX];
 	struct lov_user_md	*lum;
 	int			 rc;
@@ -529,7 +529,7 @@ err_cleanup:
 
 static int ct_load_stripe(const char *src, void *lovea, size_t *lovea_size)
 {
-	char	 lov_file[PATH_MAX];
+	char	 lov_file[PATH_MAX + 4];
 	int	 rc;
 	int	 fd;
 
@@ -1042,8 +1042,8 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 	}
 
 	if (rename_needed == true) {
-		char	 tmp_src[PATH_MAX];
-		char	 tmp_dst[PATH_MAX];
+		char	 tmp_src[PATH_MAX + 8];
+		char	 tmp_dst[PATH_MAX + 8];
 
 		/* atomically replace old archived file */
 		ct_path_archive(src, sizeof(src), opt.o_hsm_root,

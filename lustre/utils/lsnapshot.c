@@ -244,27 +244,19 @@ static int snapshot_load_conf_ldev(struct snapshot_instance *si, char *buf,
 	if (*ptr == '/') {
 		ptr1 = strrchr(ptr, '/');
 		*ptr1 = '\0';
-		len = strlen(ptr);
-		st->st_dir = malloc(len + 1);
+		st->st_dir = strdup(ptr);
 		if (!st->st_dir) {
 			rc = -ENOMEM;
 			goto out;
 		}
-
-		strncpy(st->st_dir, ptr, len);
-		st->st_dir[len] = '\0';
 		ptr = ptr1 + 1;
 	}
 
-	len = strlen(ptr);
-	st->st_pool = malloc(len + 1);
+	st->st_pool = strdup(ptr);
 	if (!st->st_pool) {
 		rc = -ENOMEM;
 		goto out;
 	}
-
-	strncpy(st->st_pool, ptr, len);
-	st->st_pool[len] = '\0';
 
 	/* Format of label:
 	 * fsname-<role><index> or <role><index> */
@@ -658,21 +650,15 @@ static void snapshot_unload_conf(struct snapshot_instance *si)
 static int snapshot_handle_string_option(char **dst, const char *option,
 					 const char *opt_name)
 {
-	int len;
-
 	if (*dst && *dst != snapshot_rsh_default) {
 		fprintf(stderr,
 			"%s option has been specified repeatedly.\n", opt_name);
 		return -EINVAL;
 	}
 
-	len = strlen(option);
-	*dst = malloc(len + 1);
+	*dst = strdup(option);
 	if (!*dst)
 		return -ENOMEM;
-
-	strncpy(*dst, option, len);
-	(*dst)[len] = '\0';
 	return 0;
 }
 
@@ -922,7 +908,7 @@ static char *snapshot_first_skip_blank(char *buf)
 static int mdt0_is_lustre_snapshot(struct snapshot_instance *si)
 {
 	struct snapshot_target *st = si->si_mdt0;
-	char buf[MAX_BUF_SIZE];
+	char buf[MAX_BUF_SIZE * 3];
 	FILE *fp;
 	int rc;
 
@@ -1007,7 +993,7 @@ static int snapshot_get_fsname(struct snapshot_instance *si,
 			       char *fsname, int fslen)
 {
 	struct snapshot_target *st = si->si_mdt0;
-	char buf[MAX_BUF_SIZE];
+	char buf[MAX_BUF_SIZE * 3];
 	FILE *fp;
 	int rc = 0;
 
@@ -1033,7 +1019,7 @@ static int snapshot_get_fsname(struct snapshot_instance *si,
 static int snapshot_get_mgsnode(struct snapshot_instance *si,
 				char *node, int size)
 {
-	char buf[MAX_BUF_SIZE];
+	char buf[MAX_BUF_SIZE * 2];
 	struct snapshot_target *st;
 	FILE *fp;
 	int rc = 0;
@@ -1061,7 +1047,7 @@ static int snapshot_get_mgsnode(struct snapshot_instance *si,
 static int snapshot_exists_check(struct snapshot_instance *si,
 				 struct snapshot_target *st)
 {
-	char buf[MAX_BUF_SIZE];
+	char buf[MAX_BUF_SIZE * 2];
 	FILE *fp;
 	int rc = 0;
 
@@ -1128,7 +1114,7 @@ static int snapshot_inherit_prop(struct snapshot_instance *si,
 				 struct snapshot_target *st,
 				 char *cmd, int size)
 {
-	char buf[MAX_BUF_SIZE];
+	char buf[MAX_BUF_SIZE * 3];
 	FILE *fp;
 	int len = 0;
 	int rc = 0;
@@ -1597,7 +1583,7 @@ static int __snapshot_destroy(struct snapshot_instance *si,
 
 		/* child */
 		if (pid == 0) {
-			char cmd[MAX_BUF_SIZE];
+			char cmd[MAX_BUF_SIZE * 2];
 
 			memset(cmd, 0, sizeof(cmd));
 			if (si->si_force)
@@ -1801,7 +1787,7 @@ static int __snapshot_modify(struct snapshot_instance *si,
 
 		/* child */
 		if (pid == 0) {
-			char cmd[MAX_BUF_SIZE];
+			char cmd[MAX_BUF_SIZE * 5];
 
 			memset(cmd, 0, sizeof(cmd));
 			if (si->si_new_ssname && si->si_comment)
@@ -1942,7 +1928,7 @@ static void snapshot_list_usage(void)
 static int snapshot_list_one(struct snapshot_instance *si,
 			     struct snapshot_target *st)
 {
-	char buf[MAX_BUF_SIZE];
+	char buf[MAX_BUF_SIZE * 3];
 	FILE *fp;
 	int rc;
 
@@ -2074,7 +2060,7 @@ static int snapshot_list_all(struct snapshot_instance *si)
 
 	struct list_head list_sub_items;
 	struct list_sub_item *lsi;
-	char buf[MAX_BUF_SIZE];
+	char buf[MAX_BUF_SIZE * 2];
 	FILE *fp;
 	int rc = 0;
 
@@ -2101,8 +2087,7 @@ static int snapshot_list_all(struct snapshot_instance *si)
 			break;
 		}
 
-		strncpy(lsi->lsi_ssname, buf, len);
-		lsi->lsi_ssname[len] = '\0';
+		memcpy(lsi->lsi_ssname, buf, len + 1);
 		list_add(&lsi->lsi_list, &list_sub_items);
 	}
 
@@ -2198,7 +2183,7 @@ static int snapshot_mount_check(struct snapshot_instance *si, char *fsname,
 static int snapshot_mount_target(struct snapshot_instance *si,
 				 struct snapshot_target *st, const char *optstr)
 {
-	char cmd[MAX_BUF_SIZE];
+	char cmd[MAX_BUF_SIZE * 2];
 	char name[8];
 	int rc;
 
