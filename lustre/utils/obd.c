@@ -4513,7 +4513,7 @@ int __jt_barrier_stat(const char *fsname, struct barrier_ctl *bc)
 	memset(bc, 0, sizeof(*bc));
 	bc->bc_version = BARRIER_VERSION_V1;
 	bc->bc_cmd = BC_STAT;
-	strncpy(bc->bc_name, fsname, sizeof(bc->bc_name));
+	strncpy(bc->bc_name, fsname, sizeof(bc->bc_name) - 1);
 	data.ioc_inlbuf1 = (char *)bc;
 	data.ioc_inllen1 = sizeof(*bc);
 	memset(buf, 0, sizeof(rawbuf));

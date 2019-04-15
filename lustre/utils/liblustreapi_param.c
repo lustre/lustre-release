@@ -83,7 +83,7 @@ get_lustre_param_path(const char *obd_type, const char *filter,
 		}
 		if (strlen(pattern) + 3 > sizeof(pattern))
 			return -E2BIG;
-		strncat(pattern, "-*", sizeof(pattern));
+		strncat(pattern, "-*", sizeof(pattern) - 1);
 		break;
 	case FILTER_BY_FS_NAME:
 		rc = snprintf(pattern, sizeof(pattern) - 1, "%s-*", filter);

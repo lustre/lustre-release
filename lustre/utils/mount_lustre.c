@@ -348,7 +348,8 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 				free(options);
 				return EINVAL;
 			}
-			strncpy(mop->mo_skpath, val + 1, strlen(val + 1));
+			strncpy(mop->mo_skpath, val + 1,
+				sizeof(mop->mo_skpath) - 1);
 #endif
 		} else if (parse_one_option(opt, flagp) == 0) {
 			/* pass this on as an option */

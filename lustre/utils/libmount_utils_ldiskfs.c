@@ -1212,7 +1212,7 @@ static int tune_block_dev_slaves(const char *sys_path, struct mount_opts *mop)
 	}
 
 	while ((d = readdir(slaves_dir)) != NULL) {
-		char path[PATH_MAX];
+		char path[PATH_MAX * 2];
 		int rc2;
 
 		if (d->d_type != DT_LNK)
@@ -1236,7 +1236,7 @@ static int tune_block_dev(const char *src, struct mount_opts *mop)
 {
 	struct stat st;
 	char sys_path[PATH_MAX];
-	char partition_path[PATH_MAX];
+	char partition_path[PATH_MAX + sizeof("partition")];
 	char *real_sys_path = NULL;
 	int rc;
 

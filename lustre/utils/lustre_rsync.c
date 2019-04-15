@@ -192,8 +192,8 @@ int quit;       /* Flag to stop processing the changelog; set on the
                    receipt of a signal */
 int abort_on_err = 0;
 
-char rsync[PATH_MAX];
-char rsync_ver[PATH_MAX];
+char rsync[PATH_MAX + 128];
+char rsync_ver[PATH_MAX * 2];
 struct lr_parent_child_list *parents;
 
 FILE *debug_log;

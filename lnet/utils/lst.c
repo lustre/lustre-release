@@ -535,7 +535,7 @@ lst_new_session_ioctl(char *name, int timeout, int force, struct lst_sid *sid)
 int
 jt_lst_new_session(int argc, char **argv)
 {
-	char  buf[LST_NAME_SIZE];
+	char  buf[LST_NAME_SIZE * 2 + 1];
 	char *name;
 	int   optidx = 0;
 	int   timeout = 300;

@@ -669,7 +669,8 @@ display_name(const char *filename, struct stat *st, struct param_opts *popt)
 		tmp = realloc(param_name, suffix_len + strlen(param_name) + 1);
 		if (tmp != NULL) {
 			param_name = tmp;
-			strncat(param_name, suffix, suffix_len);
+			strncat(param_name, suffix,
+				strlen(param_name) + suffix_len);
 		}
 	}
 
@@ -1426,9 +1427,9 @@ int lcfg_setparam_yaml(char *func, char *filename)
 	enum paramtype confset = PT_NONE;
 	int param = PS_NONE;
 	char *tmp;
-	char parameter[PARAM_SZ];
-	char value[PARAM_SZ];
-	char device[PARAM_SZ];
+	char parameter[PARAM_SZ + 1];
+	char value[PARAM_SZ + 1];
+	char device[PARAM_SZ + 1];
 
 	file = fopen(filename, "rb");
 	yaml_parser_initialize(&parser);
@@ -1491,7 +1492,7 @@ int lcfg_setparam_yaml(char *func, char *filename)
 			 */
 			tmp = strchrnul(parameter, '=');
 			if (*tmp == '=') {
-				strncpy(value, tmp+1, sizeof(value));
+				strncpy(value, tmp + 1, sizeof(value) - 1);
 				*tmp = '\0';
 				param |= PS_VAL_SET;
 			} else {
