@@ -1640,6 +1640,8 @@ int mdd_changelog_user_purge(const struct lu_env *env,
 			      mdd_changelog_user_purge_cb, &mcup,
 			      0, 0);
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_LLOG_PURGE_DELAY, cfs_fail_val);
+
 	if ((rc == 0) && (mcup.mcup_usercount == 0)) {
 		spin_lock(&mdd->mdd_cl.mc_user_lock);
 		if (mdd->mdd_cl.mc_users == 0) {
@@ -1887,7 +1889,15 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 		if (unlikely(!barrier_entry(mdd->mdd_bottom)))
 			RETURN(-EINPROGRESS);
 
-		rc = mdd_changelog_user_purge(env, mdd, data->ioc_u32_1);
+		/* explicitly clear changelog first, to protect from crash in
+		 * the middle of purge that would lead to unregistered consumer
+		 * but pending changelog entries
+		 */
+		rc = mdd_changelog_clear(env, mdd, data->ioc_u32_1, 0);
+		if (!rc)
+			rc = mdd_changelog_user_purge(env,
+						      mdd, data->ioc_u32_1);
+
 		barrier_exit(mdd->mdd_bottom);
 		break;
 	default:

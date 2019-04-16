@@ -2773,6 +2773,61 @@ test_135() {
 }
 run_test 135 "DOM: open/create resend to return size"
 
+test_136() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $MDS1_VERSION -ge $(version_code 2.12.52) ]] ||
+		skip "Need MDS version at least 2.12.52"
+
+	local mdts=$(comma_list $(mdts_nodes))
+	local MDT0=$(facet_svc $SINGLEMDS)
+
+	local clog=$(do_facet mds1 $LCTL --device $MDT0 changelog_register -n)
+	[ -n "$clog" ] || error "changelog_register failed"
+	cl_mask=$(do_facet mds1 $LCTL get_param \
+				mdd.$MDT0.changelog_mask -n)
+	changelog_chmask "ALL"
+
+	# generate some changelog records to accumulate
+	test_mkdir -i 0 -c 0 $DIR/$tdir || error "mkdir $tdir failed"
+	createmany -m $DIR/$tdir/$tfile 10000 ||
+		error "create $DIR/$tdir/$tfile failed"
+
+	local size1=$(do_facet $SINGLEMDS \
+		      $LCTL get_param -n mdd.$MDT0.changelog_size)
+	echo "Changelog size $size1"
+
+	#define OBD_FAIL_LLOG_PURGE_DELAY		    0x1318
+	do_nodes $mdts $LCTL set_param fail_loc=0x1318 fail_val=30
+
+	# launch changelog_deregister in background on MDS
+	do_facet mds1 "nohup $LCTL --device $MDT0 changelog_deregister $clog \
+			> foo.out 2> foo.err < /dev/null &"
+	# give time to reach fail_loc
+	sleep 15
+
+	# fail_loc will make MDS sleep in the middle of changelog_deregister
+	# take this opportunity to abruptly kill MDS
+	FAILURE_MODE_save=$FAILURE_MODE
+	FAILURE_MODE=HARD
+	fail mds1
+	FAILURE_MODE=$FAILURE_MODE_save
+
+	do_nodes $mdts $LCTL set_param fail_loc=0x0 fail_val=0
+
+	local size2=$(do_facet $SINGLEMDS \
+		      $LCTL get_param -n mdd.$MDT0.changelog_size)
+	echo "Changelog size $size2"
+	local clog2=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+			mdd.$MDT0.changelog_users | grep $clog")
+	echo "After crash, changelog user $clog2"
+
+	[ -n "$clog2" -o $size2 -lt $size1 ] ||
+		error "changelog record count unchanged"
+
+	do_facet mds1 $LCTL set_param mdd.$MDT0.changelog_mask=\'$cl_mask\' -n
+}
+run_test 136 "changelog_deregister leaving pending records"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
