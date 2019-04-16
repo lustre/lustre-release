@@ -3078,6 +3078,27 @@ i_pages, [
 ]) # LC_I_PAGES
 
 #
+# LC_INODE_TIMESPEC64
+#
+# kernel 4.18 commit 95582b00838837fc07e042979320caf917ce3fe6
+# inode timestamps switched to timespec64
+#
+AC_DEFUN([LC_INODE_TIMESPEC64], [
+LB_CHECK_COMPILE([if inode timestamps are struct timespec64],
+inode_timespec64, [
+	#include <linux/fs.h>
+],[
+	struct inode inode = {};
+	struct timespec64 ts = {};
+
+	inode.i_atime = ts;
+],[
+	AC_DEFINE(HAVE_INODE_TIMESPEC64, 1,
+		[inode times are using timespec64])
+])
+]) # LC_INODE_TIMESPEC64
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3324,6 +3345,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.17
 	LC_I_PAGES
+
+	# 4.18
+	LC_INODE_TIMESPEC64
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
