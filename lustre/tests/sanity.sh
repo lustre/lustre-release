@@ -6401,7 +6401,7 @@ test_61a() {
 run_test 61a "mmap() writes don't make sync hang ================"
 
 test_61b() {
-	mmap_mknod_test $tfile || error "mmap_mknod_test failed"
+	mmap_mknod_test $DIR/$tfile || error "mmap_mknod_test failed"
 }
 run_test 61b "mmap() of unstriped file is successful"
 
