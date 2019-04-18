@@ -130,9 +130,11 @@ struct md_attr {
 	struct md_som		 ma_som;
 	struct lov_mds_md	*ma_lmm;
 	union lmv_mds_md	*ma_lmv;
+	struct lmv_user_md	*ma_default_lmv;
 	void			*ma_acl;
 	int			 ma_lmm_size;
 	int			 ma_lmv_size;
+	int			 ma_default_lmv_size;
 	int			 ma_acl_size;
 };
 

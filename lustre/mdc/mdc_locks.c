@@ -508,15 +508,16 @@ static struct ptlrpc_request *
 mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 			struct md_op_data *op_data, __u32 acl_bufsize)
 {
-	struct ptlrpc_request	*req;
-	struct obd_device	*obddev = class_exp2obd(exp);
-	u64			 valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
-					 OBD_MD_FLMODEASIZE | OBD_MD_FLDIREA |
-					 OBD_MD_MEA | OBD_MD_FLACL;
-	struct ldlm_intent	*lit;
-	int			 rc;
-	__u32			 easize;
-	bool			 have_secctx = false;
+	struct ptlrpc_request *req;
+	struct obd_device *obddev = class_exp2obd(exp);
+	u64 valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE |
+		    OBD_MD_FLDIREA | OBD_MD_MEA | OBD_MD_FLACL |
+		    OBD_MD_DEFAULT_MEA;
+	struct ldlm_intent *lit;
+	__u32 easize;
+	bool have_secctx = false;
+	int rc;
+
 	ENTRY;
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
@@ -556,6 +557,8 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, easize);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
+	req_capsule_set_size(&req->rq_pill, &RMF_DEFAULT_MDT_MD, RCL_SERVER,
+			     sizeof(struct lmv_user_md));
 
 	if (have_secctx) {
 		char *secctx_name;

@@ -933,8 +933,8 @@ int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 		buf->lb_len = ma->ma_lmv_size;
 		LASSERT(!(ma->ma_valid & MA_LMV));
 	} else if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {
-		buf->lb_buf = ma->ma_lmv;
-		buf->lb_len = ma->ma_lmv_size;
+		buf->lb_buf = ma->ma_default_lmv;
+		buf->lb_len = ma->ma_default_lmv_size;
 		LASSERT(!(ma->ma_valid & MA_LMV_DEF));
 	} else {
 		return -EINVAL;
@@ -967,7 +967,7 @@ got:
 			ma->ma_lmv_size = rc;
 			ma->ma_valid |= MA_LMV;
 		} else if (strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {
-			ma->ma_lmv_size = rc;
+			ma->ma_default_lmv_size = rc;
 			ma->ma_valid |= MA_LMV_DEF;
 		}
 
@@ -1188,18 +1188,41 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		       req->rq_export->exp_client_uuid.uuid);
 	}
 
-	/* If it is dir object and client require MEA, then we got MEA */
+	/* from 2.12.58 intent_getattr pack default LMV in reply */
 	if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
-	    (reqbody->mbo_valid & (OBD_MD_MEA | OBD_MD_DEFAULT_MEA))) {
+	    ((reqbody->mbo_valid & (OBD_MD_MEA | OBD_MD_DEFAULT_MEA)) ==
+		    (OBD_MD_MEA | OBD_MD_DEFAULT_MEA)) &&
+	    req_capsule_has_field(&req->rq_pill, &RMF_DEFAULT_MDT_MD,
+				  RCL_SERVER)) {
+		ma->ma_lmv = buffer->lb_buf;
+		ma->ma_lmv_size = buffer->lb_len;
+		ma->ma_default_lmv = req_capsule_server_get(pill,
+						&RMF_DEFAULT_MDT_MD);
+		ma->ma_default_lmv_size = req_capsule_get_size(pill,
+						&RMF_DEFAULT_MDT_MD,
+						RCL_SERVER);
+		ma->ma_need = MA_INODE;
+		if (ma->ma_lmv_size > 0)
+			ma->ma_need |= MA_LMV;
+		if (ma->ma_default_lmv_size > 0)
+			ma->ma_need |= MA_LMV_DEF;
+	} else if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
+		   (reqbody->mbo_valid & (OBD_MD_MEA | OBD_MD_DEFAULT_MEA))) {
+		/* If it is dir and client require MEA, then we got MEA */
 		/* Assumption: MDT_MD size is enough for lmv size. */
 		ma->ma_lmv = buffer->lb_buf;
 		ma->ma_lmv_size = buffer->lb_len;
 		ma->ma_need = MA_INODE;
 		if (ma->ma_lmv_size > 0) {
-			if (reqbody->mbo_valid & OBD_MD_MEA)
+			if (reqbody->mbo_valid & OBD_MD_MEA) {
 				ma->ma_need |= MA_LMV;
-			else if (reqbody->mbo_valid & OBD_MD_DEFAULT_MEA)
+			} else if (reqbody->mbo_valid & OBD_MD_DEFAULT_MEA) {
 				ma->ma_need |= MA_LMV_DEF;
+				ma->ma_default_lmv = buffer->lb_buf;
+				ma->ma_lmv = NULL;
+				ma->ma_default_lmv_size = buffer->lb_len;
+				ma->ma_lmv_size = 0;
+			}
 		}
 	} else {
 		ma->ma_lmm = buffer->lb_buf;
@@ -1271,8 +1294,13 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			if (!mdt_is_striped_client(req->rq_export))
 				RETURN(-ENOTSUPP);
 			LASSERT(S_ISDIR(la->la_mode));
-			mdt_dump_lmv(D_INFO, ma->ma_lmv);
-			repbody->mbo_eadatasize = ma->ma_lmv_size;
+			/*
+			 * when ll_dir_getstripe() gets default LMV, it
+			 * checks mbo_eadatasize.
+			 */
+			if (!(ma->ma_valid & MA_LMV))
+				repbody->mbo_eadatasize =
+					ma->ma_default_lmv_size;
 			repbody->mbo_valid |= (OBD_MD_FLDIREA |
 					       OBD_MD_DEFAULT_MEA);
 		}

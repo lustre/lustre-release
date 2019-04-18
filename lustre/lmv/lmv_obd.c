@@ -1187,13 +1187,12 @@ static int lmv_placement_policy(struct obd_device *obd,
 	    le32_to_cpu(lum->lum_magic != LMV_MAGIC_FOREIGN) &&
 	    le32_to_cpu(lum->lum_stripe_offset) != (__u32)-1) {
 		*mds = le32_to_cpu(lum->lum_stripe_offset);
-	} else if (op_data->op_default_stripe_offset != (__u32)-1) {
-		*mds = op_data->op_default_stripe_offset;
+	} else if (op_data->op_code == LUSTRE_OPC_MKDIR &&
+		   op_data->op_default_mea1 &&
+		   op_data->op_default_mea1->lsm_md_master_mdt_index !=
+			 (__u32)-1) {
+		*mds = op_data->op_default_mea1->lsm_md_master_mdt_index;
 		op_data->op_mds = *mds;
-		/* Correct the stripe offset in lum */
-		if (lum != NULL &&
-		    le32_to_cpu(lum->lum_magic != LMV_MAGIC_FOREIGN))
-			lum->lum_stripe_offset = cpu_to_le32(*mds);
 	} else {
 		*mds = op_data->op_mds;
 	}
@@ -3029,6 +3028,18 @@ static int lmv_unpack_md_v1(struct obd_export *exp, struct lmv_stripe_md *lsm,
 	RETURN(rc);
 }
 
+static inline int lmv_unpack_user_md(struct obd_export *exp,
+				     struct lmv_stripe_md *lsm,
+				     const struct lmv_user_md *lmu)
+{
+	lsm->lsm_md_magic = le32_to_cpu(lmu->lum_magic);
+	lsm->lsm_md_stripe_count = le32_to_cpu(lmu->lum_stripe_count);
+	lsm->lsm_md_master_mdt_index = le32_to_cpu(lmu->lum_stripe_offset);
+	lsm->lsm_md_hash_type = le32_to_cpu(lmu->lum_hash_type);
+
+	return 0;
+}
+
 static int lmv_unpackmd(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 			const union lmv_mds_md *lmm, size_t lmm_size)
 {
@@ -3055,11 +3066,15 @@ static int lmv_unpackmd(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 			RETURN(0);
 		}
 
-		for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
-			if (lsm->lsm_md_oinfo[i].lmo_root)
-				iput(lsm->lsm_md_oinfo[i].lmo_root);
+		if (lsm->lsm_md_magic == LMV_MAGIC) {
+			for (i = 0; i < lsm->lsm_md_stripe_count; i++) {
+				if (lsm->lsm_md_oinfo[i].lmo_root)
+					iput(lsm->lsm_md_oinfo[i].lmo_root);
+			}
+			lsm_size = lmv_stripe_md_size(lsm->lsm_md_stripe_count);
+		} else {
+			lsm_size = lmv_stripe_md_size(0);
 		}
-		lsm_size = lmv_stripe_md_size(lsm->lsm_md_stripe_count);
 		OBD_FREE(lsm, lsm_size);
 		*lsmp = NULL;
 		RETURN(0);
@@ -3116,6 +3131,9 @@ static int lmv_unpackmd(struct obd_export *exp, struct lmv_stripe_md **lsmp,
 	switch (le32_to_cpu(lmm->lmv_magic)) {
 	case LMV_MAGIC_V1:
 		rc = lmv_unpack_md_v1(exp, lsm, &lmm->lmv_md_v1);
+		break;
+	case LMV_USER_MAGIC:
+		rc = lmv_unpack_user_md(exp, lsm, &lmm->lmv_user_md);
 		break;
 	default:
 		CERROR("%s: unrecognized magic %x\n", exp->exp_obd->obd_name,
@@ -3243,6 +3261,10 @@ int lmv_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
 	struct lmv_tgt_desc	*tgt = lmv->tgts[0];
 	ENTRY;
 
+	if (md->default_lmv) {
+		lmv_free_memmd(md->default_lmv);
+		md->default_lmv = NULL;
+	}
 	if (md->lmv != NULL) {
 		lmv_free_memmd(md->lmv);
 		md->lmv = NULL;

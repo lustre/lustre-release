@@ -250,17 +250,25 @@ static int mdt_unlock_slaves(struct mdt_thread_info *mti,
 static inline int mdt_object_striped(struct mdt_thread_info *mti,
 				     struct mdt_object *obj)
 {
+	struct lu_device *bottom_dev;
+	struct lu_object *bottom_obj;
 	int rc;
 
 	if (!S_ISDIR(obj->mot_header.loh_attr))
 		return 0;
 
-	rc = mo_xattr_get(mti->mti_env, mdt_object_child(obj), &LU_BUF_NULL,
-			  XATTR_NAME_LMV);
-	if (rc <= 0)
-		return rc == -ENODATA ? 0 : rc;
+	/* getxattr from bottom obj to avoid reading in shard FIDs */
+	bottom_dev = dt2lu_dev(mti->mti_mdt->mdt_bottom);
+	bottom_obj = lu_object_find_slice(mti->mti_env, bottom_dev,
+					  mdt_object_fid(obj), NULL);
+	if (IS_ERR(bottom_obj))
+		return PTR_ERR(bottom_obj);
 
-	return 1;
+	rc = dt_xattr_get(mti->mti_env, lu2dt(bottom_obj), &LU_BUF_NULL,
+			  XATTR_NAME_LMV);
+	lu_object_put(mti->mti_env, bottom_obj);
+
+	return (rc > 0) ? 1 : (rc == -ENODATA) ? 0 : rc;
 }
 
 /**
@@ -728,6 +736,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		struct lu_buf *buf = &info->mti_buf;
 		struct lu_ucred *uc = mdt_ucred(info);
 		struct mdt_lock_handle *lh;
+		const char *name;
+		__u64 lockpart = MDS_INODELOCK_XATTR;
 
 		/* reject if either remote or striped dir is disabled */
 		if (ma->ma_valid & MA_LMV) {
@@ -741,27 +751,48 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 				GOTO(out_put, rc = -EPERM);
 		}
 
+		if (!S_ISDIR(lu_object_attr(&mo->mot_obj)))
+			GOTO(out_put, rc = -ENOTDIR);
+
 		if (ma->ma_attr.la_valid != 0)
 			GOTO(out_put, rc = -EPROTO);
-
-		lh = &info->mti_lh[MDT_LH_PARENT];
-		mdt_lock_reg_init(lh, LCK_PW);
-
-		rc = mdt_object_lock(info, mo, lh, MDS_INODELOCK_XATTR);
-		if (rc != 0)
-			GOTO(out_put, rc);
 
 		if (ma->ma_valid & MA_LOV) {
 			buf->lb_buf = ma->ma_lmm;
 			buf->lb_len = ma->ma_lmm_size;
+			name = XATTR_NAME_LOV;
 		} else {
-			buf->lb_buf = ma->ma_lmv;
+			struct lmv_user_md *lmu = &ma->ma_lmv->lmv_user_md;
+
+			buf->lb_buf = lmu;
 			buf->lb_len = ma->ma_lmv_size;
+
+			if (le32_to_cpu(lmu->lum_hash_type) ==
+			    LMV_HASH_TYPE_SPACE) {
+				/*
+				 * only allow setting "space" hash type for
+				 * plain directory.
+				 */
+				rc = mdt_object_striped(info, mo);
+				if (rc)
+					GOTO(out_put,
+					     rc = (rc == 1) ? -EPERM : rc);
+			}
+
+			name = XATTR_NAME_DEFAULT_LMV;
+			/* force client to update dir default layout */
+			lockpart |= MDS_INODELOCK_LOOKUP;
 		}
+
+		lh = &info->mti_lh[MDT_LH_PARENT];
+		mdt_lock_reg_init(lh, LCK_PW);
+
+		rc = mdt_object_lock(info, mo, lh, lockpart);
+		if (rc != 0)
+			GOTO(out_put, rc);
+
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo), buf,
-				  (ma->ma_valid & MA_LOV) ?
-					XATTR_NAME_LOV : XATTR_NAME_DEFAULT_LMV,
-				  0);
+				  name, 0);
 
 		mdt_object_unlock(info, mo, lh, rc);
 		if (rc)

@@ -269,6 +269,7 @@ extern struct req_msg_field RMF_DLM_GL_DESC;
 extern struct req_msg_field RMF_LDLM_INTENT;
 extern struct req_msg_field RMF_LAYOUT_INTENT;
 extern struct req_msg_field RMF_MDT_MD;
+extern struct req_msg_field RMF_DEFAULT_MDT_MD;
 extern struct req_msg_field RMF_REC_REINT;
 extern struct req_msg_field RMF_EADATA;
 extern struct req_msg_field RMF_EAVALS;

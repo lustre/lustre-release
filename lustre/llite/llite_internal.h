@@ -169,12 +169,8 @@ struct ll_inode_info {
 			struct rw_semaphore		lli_lsm_sem;
 			/* directory stripe information */
 			struct lmv_stripe_md		*lli_lsm_md;
-			/* default directory stripe offset.  This is extracted
-			 * from the "dmv" xattr in order to decide which MDT to
-			 * create a subdirectory on.  The MDS itself fetches
-			 * "dmv" and gets the rest of the default layout itself
-			 * (count, hash, etc). */
-			__u32				lli_def_stripe_offset;
+			/* directory default LMV */
+			struct lmv_stripe_md		*lli_default_lsm_md;
 		};
 
 		/* for non-directory */
@@ -984,19 +980,12 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 int ll_get_default_mdsize(struct ll_sb_info *sbi, int *default_mdsize);
 int ll_set_default_mdsize(struct ll_sb_info *sbi, int default_mdsize);
 
-enum {
-	LUSTRE_OPC_MKDIR	= 0,
-	LUSTRE_OPC_SYMLINK	= 1,
-	LUSTRE_OPC_MKNOD	= 2,
-	LUSTRE_OPC_CREATE	= 3,
-	LUSTRE_OPC_ANY		= 5,
-};
-
 void ll_unlock_md_op_lsm(struct md_op_data *op_data);
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 				      struct inode *i1, struct inode *i2,
 				      const char *name, size_t namelen,
-				      __u32 mode, __u32 opc, void *data);
+				      __u32 mode, enum md_op_code opc,
+				      void *data);
 void ll_finish_md_op_data(struct md_op_data *op_data);
 int ll_get_obd_name(struct inode *inode, unsigned int cmd, unsigned long arg);
 void ll_compute_rootsquash_state(struct ll_sb_info *sbi);

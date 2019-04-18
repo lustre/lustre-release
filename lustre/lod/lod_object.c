@@ -4831,6 +4831,13 @@ static void lod_striping_from_default(struct lod_object *lo,
 		if (lo->ldo_dir_hash_type == 0)
 			lo->ldo_dir_hash_type = lds->lds_dir_def_hash_type;
 
+		/*
+		 * "space" hash type can only be set in default LMV, child use
+		 * FNV_1A_64 in case it's striped.
+		 */
+		if (lo->ldo_dir_hash_type == LMV_HASH_TYPE_SPACE)
+			lo->ldo_dir_hash_type = LMV_HASH_TYPE_FNV_1A_64;
+
 		CDEBUG(D_LAYOUT, "striping from default dir: count:%hu, "
 		       "offset:%u, hash_type:%u\n",
 		       lo->ldo_dir_stripe_count, lo->ldo_dir_stripe_offset,

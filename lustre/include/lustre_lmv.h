@@ -74,10 +74,12 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 		      lsm2->lsm_md_pool_name) != 0)
 		return false;
 
-	for (idx = 0; idx < lsm1->lsm_md_stripe_count; idx++) {
-		if (!lu_fid_eq(&lsm1->lsm_md_oinfo[idx].lmo_fid,
-			       &lsm2->lsm_md_oinfo[idx].lmo_fid))
-			return false;
+	if (lsm1->lsm_md_magic == LMV_MAGIC_V1) {
+		for (idx = 0; idx < lsm1->lsm_md_stripe_count; idx++) {
+			if (!lu_fid_eq(&lsm1->lsm_md_oinfo[idx].lmo_fid,
+				       &lsm2->lsm_md_oinfo[idx].lmo_fid))
+				return false;
+		}
 	}
 
 	return true;
@@ -93,6 +95,9 @@ static inline void lsm_md_dump(int mask, const struct lmv_stripe_md *lsm)
 		lsm->lsm_md_master_mdt_index, lsm->lsm_md_hash_type,
 		lsm->lsm_md_layout_version, lsm->lsm_md_migrate_offset,
 		lsm->lsm_md_migrate_hash, lsm->lsm_md_pool_name);
+
+	if (lsm->lsm_md_magic != LMV_MAGIC_V1)
+		return;
 
 	for (i = 0; i < lsm->lsm_md_stripe_count; i++)
 		CDEBUG(mask, "stripe[%d] "DFID"\n",
