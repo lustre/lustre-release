@@ -8352,8 +8352,8 @@ generate_logname() {
 test_mkdir() {
 	local path
 	local p_option
-	local dirstripe_count=${DIRSTRIPE_COUNT:-"-1"}
-	local dirstripe_index=${DIRSTRIPE_INDEX:-"-1"}
+	local dirstripe_count=${DIRSTRIPE_COUNT:-"2"}
+	local dirstripe_index=${DIRSTRIPE_INDEX:-$((base % $MDSCOUNT))}
 	local OPTIND=1
 
 	while getopts "c:i:p" opt; do
@@ -8385,7 +8385,7 @@ test_mkdir() {
 		local mdt_index
 
 		if [ $dirstripe_index -eq -1 ]; then
-			mdt_index=$((RANDOM % MDSCOUNT))
+			mdt_index=$((base % MDSCOUNT))
 		else
 			mdt_index=$dirstripe_index
 		fi
