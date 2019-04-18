@@ -1646,6 +1646,27 @@ typedef int (semantic_func_t)(char *path, DIR *parent, DIR **d,
 
 #define OBD_NOT_FOUND           (-1)
 
+static void find_param_fini(struct find_param *param)
+{
+	if (param->fp_migrate)
+		return;
+
+	if (param->fp_obd_indexes) {
+		free(param->fp_obd_indexes);
+		param->fp_obd_indexes = NULL;
+	}
+
+	if (param->fp_lmd) {
+		free(param->fp_lmd);
+		param->fp_lmd = NULL;
+	}
+
+	if (param->fp_lmv_md) {
+		free(param->fp_lmv_md);
+		param->fp_lmv_md = NULL;
+	}
+}
+
 static int common_param_init(struct find_param *param, char *path)
 {
 	int lum_size = get_mds_md_size(path);
@@ -1678,6 +1699,7 @@ static int common_param_init(struct find_param *param, char *path)
 			    "error: allocation of %d bytes for ioctl",
 			    lmv_user_md_size(param->fp_lmv_stripe_count,
 					     LMV_USER_MAGIC_SPECIFIC));
+		find_param_fini(param);
 		return -ENOMEM;
 	}
 
@@ -1686,21 +1708,6 @@ static int common_param_init(struct find_param *param, char *path)
 	param->fp_obd_index = OBD_NOT_FOUND;
 	param->fp_mdt_index = OBD_NOT_FOUND;
 	return 0;
-}
-
-static void find_param_fini(struct find_param *param)
-{
-	if (param->fp_migrate)
-		return;
-
-	if (param->fp_obd_indexes)
-		free(param->fp_obd_indexes);
-
-	if (param->fp_lmd)
-		free(param->fp_lmd);
-
-	if (param->fp_lmv_md)
-		free(param->fp_lmv_md);
 }
 
 static int cb_common_fini(char *path, DIR *parent, DIR **dirp, void *data,
@@ -3582,8 +3589,7 @@ int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
 	fd = open(dname, O_RDONLY | O_NONBLOCK);
 	if (fd == -1) {
 		rc = -errno;
-		free(dname);
-		return rc;
+		goto out_free;
 	}
 
 	strcpy((char *)lum, fname);
@@ -3593,6 +3599,7 @@ int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
 	if (close(fd) == -1 && rc == 0)
 		rc = -errno;
 
+out_free:
 	free(dname);
 	return rc;
 }
@@ -3970,7 +3977,7 @@ static int find_check_comp_options(struct find_param *param)
 		break;
 	}
 out:
-	if (forged_v1 != NULL)
+	if (forged_v1)
 		free(forged_v1);
 	return ret;
 }

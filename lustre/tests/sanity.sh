@@ -1570,6 +1570,16 @@ test_27g() {
 }
 run_test 27g "$LFS getstripe with no objects"
 
+test_27ga() {
+	test_mkdir $DIR/$tdir
+	touch $DIR/$tdir/$tfile || error "touch failed"
+	ln -s bogus $DIR/$tdir/$tfile.2 || error "ln failed"
+	$LFS getstripe -m $DIR/$tdir/$tfile $DIR/$tdir/$tfile.2
+	local rc=$?
+	(( rc == 2 )) || error "getstripe did not return ENOENT"
+}
+run_test 27ga "$LFS getstripe with missing file (should return error)"
+
 test_27i() {
 	test_mkdir $DIR/$tdir
 	touch $DIR/$tdir/$tfile || error "touch failed"
