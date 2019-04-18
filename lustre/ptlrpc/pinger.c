@@ -61,34 +61,35 @@ EXPORT_SYMBOL(ptlrpc_pinger_suppress_pings);
 struct ptlrpc_request *
 ptlrpc_prep_ping(struct obd_import *imp)
 {
-        struct ptlrpc_request *req;
+	struct ptlrpc_request *req;
 
-        req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING,
-                                        LUSTRE_OBD_VERSION, OBD_PING);
-        if (req) {
-                ptlrpc_request_set_replen(req);
-                req->rq_no_resend = req->rq_no_delay = 1;
-        }
-        return req;
+	req = ptlrpc_request_alloc_pack(imp, &RQF_OBD_PING,
+					LUSTRE_OBD_VERSION, OBD_PING);
+	if (req) {
+		ptlrpc_request_set_replen(req);
+		req->rq_no_resend = req->rq_no_delay = 1;
+	}
+	return req;
 }
 
 int ptlrpc_obd_ping(struct obd_device *obd)
 {
-        int rc;
-        struct ptlrpc_request *req;
-        ENTRY;
+	int rc;
+	struct ptlrpc_request *req;
 
-        req = ptlrpc_prep_ping(obd->u.cli.cl_import);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	ENTRY;
 
-        req->rq_send_state = LUSTRE_IMP_FULL;
+	req = ptlrpc_prep_ping(obd->u.cli.cl_import);
+	if (!req)
+		RETURN(-ENOMEM);
 
-        rc = ptlrpc_queue_wait(req);
+	req->rq_send_state = LUSTRE_IMP_FULL;
 
-        ptlrpc_req_finished(req);
+	rc = ptlrpc_queue_wait(req);
 
-        RETURN(rc);
+	ptlrpc_req_finished(req);
+
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ptlrpc_obd_ping);
 
@@ -100,7 +101,8 @@ static bool ptlrpc_check_import_is_idle(struct obd_import *imp)
 	if (!imp->imp_idle_timeout)
 		return false;
 
-	/* 4 comes from:
+	/*
+	 * 4 comes from:
 	 *  - client_obd_setup() - hashed import
 	 *  - ptlrpcd_alloc_work()
 	 *  - ptlrpcd_alloc_work()
@@ -122,14 +124,15 @@ static bool ptlrpc_check_import_is_idle(struct obd_import *imp)
 
 static int ptlrpc_ping(struct obd_import *imp)
 {
-	struct ptlrpc_request	*req;
+	struct ptlrpc_request *req;
+
 	ENTRY;
 
 	if (ptlrpc_check_import_is_idle(imp))
 		RETURN(ptlrpc_disconnect_and_idle_import(imp));
 
 	req = ptlrpc_prep_ping(imp);
-	if (req == NULL) {
+	if (!req) {
 		CERROR("OOM trying to ping %s->%s\n",
 		       imp->imp_obd->obd_uuid.uuid,
 		       obd2cli_tgt(imp->imp_obd));
@@ -165,8 +168,8 @@ void ptlrpc_ping_import_soon(struct obd_import *imp)
 
 static inline int imp_is_deactive(struct obd_import *imp)
 {
-        return (imp->imp_deactive ||
-                OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE));
+	return imp->imp_deactive ||
+	       OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE);
 }
 
 static inline time64_t ptlrpc_next_reconnect(struct obd_import *imp)
@@ -179,7 +182,7 @@ static inline time64_t ptlrpc_next_reconnect(struct obd_import *imp)
 
 static time64_t pinger_check_timeout(time64_t time)
 {
-        struct timeout_item *item;
+	struct timeout_item *item;
 	time64_t timeout = PING_INTERVAL;
 
 	/* This list is sorted in increasing timeout order */
@@ -241,8 +244,8 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 
 	spin_unlock(&imp->imp_lock);
 
-	CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA, "%s->%s: level %s/%u "
-	       "force %u force_next %u deactive %u pingable %u suppress %u\n",
+	CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
+	       "%s->%s: level %s/%u force %u force_next %u deactive %u pingable %u suppress %u\n",
 	       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
 	       ptlrpc_import_state_name(level), level, force, force_next,
 	       imp->imp_deactive, imp->imp_pingable, suppress);
@@ -256,8 +259,8 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 	} else if (level != LUSTRE_IMP_FULL ||
 		   imp->imp_obd->obd_no_recov ||
 		   imp_is_deactive(imp)) {
-		CDEBUG(D_HA, "%s->%s: not pinging (in recovery "
-		       "or recovery disabled: %s)\n",
+		CDEBUG(D_HA,
+		       "%s->%s: not pinging (in recovery or recovery disabled: %s)\n",
 		       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
 		       ptlrpc_import_state_name(level));
 		if (force) {
@@ -303,12 +306,14 @@ static void ptlrpc_pinger_main(struct work_struct *ws)
 
 		/* Wait until the next ping time, or until we're stopped. */
 		time_to_next_wake = pinger_check_timeout(this_ping);
-		/* The ping sent by ptlrpc_send_rpc may get sent out
+		/*
+		 * The ping sent by ptlrpc_send_rpc may get sent out
 		 * say .01 second after this.
 		 * ptlrpc_pinger_sending_on_import will then set the
 		 * next ping time to next_ping + .01 sec, which means
 		 * we will SKIP the next ping at next_ping, and the
-		 * ping will get sent 2 timeouts from now!  Beware. */
+		 * ping will get sent 2 timeouts from now!  Beware.
+		 */
 		CDEBUG(D_INFO, "next wakeup in %lld (%lld)\n",
 		       time_to_next_wake, this_ping + PING_INTERVAL);
 	} while (time_to_next_wake <= 0);
@@ -332,11 +337,7 @@ int ptlrpc_start_pinger(void)
 	queue_delayed_work(pinger_wq, &ping_work, 0);
 
 	if (suppress_pings)
-		CWARN("Pings will be suppressed at the request of the "
-		      "administrator.  The configuration shall meet the "
-		      "additional requirements described in the manual.  "
-		      "(Search for the \"suppress_pings\" kernel module "
-		      "parameter.)\n");
+		CWARN("Pings will be suppressed at the request of the administrator. The configuration shall meet the additional requirements described in the manual. (Search for the \"suppress_pings\" kernel module parameter.)\n");
 #endif
 	return 0;
 }
@@ -360,7 +361,7 @@ int ptlrpc_stop_pinger(void)
 
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
-        ptlrpc_update_next_ping(imp, 0);
+	ptlrpc_update_next_ping(imp, 0);
 }
 
 void ptlrpc_pinger_commit_expected(struct obd_import *imp)
@@ -380,24 +381,24 @@ void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)
 {
-        ENTRY;
+	ENTRY;
 	if (!list_empty(&imp->imp_pinger_chain))
-                RETURN(-EALREADY);
+		RETURN(-EALREADY);
 
 	mutex_lock(&pinger_mutex);
-        CDEBUG(D_HA, "adding pingable import %s->%s\n",
-               imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
-        /* if we add to pinger we want recovery on this import */
-        imp->imp_obd->obd_no_recov = 0;
-        ptlrpc_update_next_ping(imp, 0);
-        /* XXX sort, blah blah */
+	CDEBUG(D_HA, "adding pingable import %s->%s\n",
+	       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
+	/* if we add to pinger we want recovery on this import */
+	imp->imp_obd->obd_no_recov = 0;
+	ptlrpc_update_next_ping(imp, 0);
+	/* XXX sort, blah blah */
 	list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
-        class_import_get(imp);
+	class_import_get(imp);
 
-        ptlrpc_pinger_wake_up();
+	ptlrpc_pinger_wake_up();
 	mutex_unlock(&pinger_mutex);
 
-        RETURN(0);
+	RETURN(0);
 }
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);
 
@@ -428,20 +429,20 @@ static struct timeout_item *ptlrpc_new_timeout(time64_t time,
 					       enum timeout_event event,
 					       timeout_cb_t cb, void *data)
 {
-        struct timeout_item *ti;
+	struct timeout_item *ti;
 
-        OBD_ALLOC_PTR(ti);
-        if (!ti)
-                return(NULL);
+	OBD_ALLOC_PTR(ti);
+	if (!ti)
+		return NULL;
 
 	INIT_LIST_HEAD(&ti->ti_obd_list);
 	INIT_LIST_HEAD(&ti->ti_chain);
-        ti->ti_timeout = time;
-        ti->ti_event = event;
-        ti->ti_cb = cb;
-        ti->ti_cb_data = data;
+	ti->ti_timeout = time;
+	ti->ti_event = event;
+	ti->ti_cb = cb;
+	ti->ti_cb_data = data;
 
-        return ti;
+	return ti;
 }
 
 /**
@@ -450,7 +451,7 @@ static struct timeout_item *ptlrpc_new_timeout(time64_t time,
  */
 static struct timeout_item*
 ptlrpc_pinger_register_timeout(time64_t time, enum timeout_event event,
-                               timeout_cb_t cb, void *data)
+			       timeout_cb_t cb, void *data)
 {
 	struct timeout_item *item, *tmp;
 
@@ -478,20 +479,20 @@ out:
  * happens, the callback(@cb) will be called.
  */
 int ptlrpc_add_timeout_client(time64_t time, enum timeout_event event,
-                              timeout_cb_t cb, void *data,
+			      timeout_cb_t cb, void *data,
 			      struct list_head *obd_list)
 {
-        struct timeout_item *ti;
+	struct timeout_item *ti;
 
 	mutex_lock(&pinger_mutex);
-        ti = ptlrpc_pinger_register_timeout(time, event, cb, data);
-        if (!ti) {
+	ti = ptlrpc_pinger_register_timeout(time, event, cb, data);
+	if (!ti) {
 		mutex_unlock(&pinger_mutex);
-                return (-EINVAL);
-        }
+		return -EINVAL;
+	}
 	list_add(obd_list, &ti->ti_obd_list);
 	mutex_unlock(&pinger_mutex);
-        return 0;
+	return 0;
 }
 EXPORT_SYMBOL(ptlrpc_add_timeout_client);
 
@@ -514,7 +515,7 @@ int ptlrpc_del_timeout_client(struct list_head *obd_list,
 			break;
 		}
 	}
-	LASSERTF(ti != NULL, "ti is NULL !\n");
+	LASSERTF(ti, "ti is NULL !\n");
 	if (list_empty(&ti->ti_obd_list)) {
 		list_del(&ti->ti_chain);
 		OBD_FREE_PTR(ti);
@@ -526,16 +527,16 @@ EXPORT_SYMBOL(ptlrpc_del_timeout_client);
 
 int ptlrpc_pinger_remove_timeouts(void)
 {
-        struct timeout_item *item, *tmp;
+	struct timeout_item *item, *tmp;
 
 	mutex_lock(&pinger_mutex);
 	list_for_each_entry_safe(item, tmp, &timeout_list, ti_chain) {
 		LASSERT(list_empty(&item->ti_obd_list));
 		list_del(&item->ti_chain);
-                OBD_FREE_PTR(item);
-        }
+		OBD_FREE_PTR(item);
+	}
 	mutex_unlock(&pinger_mutex);
-        return 0;
+	return 0;
 }
 
 void ptlrpc_pinger_wake_up()
@@ -549,10 +550,10 @@ void ptlrpc_pinger_wake_up()
 #define PET_READY     1
 #define PET_TERMINATE 2
 
-static int               pet_refcount = 0;
-static int               pet_state;
+static int pet_refcount;
+static int pet_state;
 static wait_queue_head_t pet_waitq;
-static struct list_head	 pet_list;
+static struct list_head pet_list;
 static DEFINE_SPINLOCK(pet_lock);
 
 int ping_evictor_wake(struct obd_export *exp)
@@ -591,15 +592,17 @@ static int ping_evictor_main(void *arg)
 	pet_state = PET_READY;
 	while (1) {
 		l_wait_event(pet_waitq, (!list_empty(&pet_list)) ||
-			    (pet_state == PET_TERMINATE), &lwi);
+			     (pet_state == PET_TERMINATE), &lwi);
 
 		/* loop until all obd's will be removed */
 		if ((pet_state == PET_TERMINATE) && list_empty(&pet_list))
 			break;
 
-		/* we only get here if pet_exp != NULL, and the end of this
+		/*
+		 * we only get here if pet_exp != NULL, and the end of this
 		 * loop is the only place which sets it NULL again, so lock
-		 * is not strictly necessary. */
+		 * is not strictly necessary.
+		 */
 		spin_lock(&pet_lock);
 		obd = list_entry(pet_list.next, struct obd_device,
 				 obd_evict_list);
@@ -610,35 +613,36 @@ static int ping_evictor_main(void *arg)
 		CDEBUG(D_HA, "evicting all exports of obd %s older than %lld\n",
 		       obd->obd_name, expire_time);
 
-		/* Exports can't be deleted out of the list while we hold
+		/*
+		 * Exports can't be deleted out of the list while we hold
 		 * the obd lock (class_unlink_export), which means we can't
 		 * lose the last ref on the export.  If they've already been
-		 * removed from the list, we won't find them here. */
+		 * removed from the list, we won't find them here.
+		 */
 		spin_lock(&obd->obd_dev_lock);
 		while (!list_empty(&obd->obd_exports_timed)) {
 			exp = list_entry(obd->obd_exports_timed.next,
 					 struct obd_export,
 					 exp_obd_chain_timed);
 			if (expire_time > exp->exp_last_request_time) {
+				struct obd_uuid *client_uuid;
+
 				class_export_get(exp);
+				client_uuid = &exp->exp_client_uuid;
 				spin_unlock(&obd->obd_dev_lock);
-				LCONSOLE_WARN("%s: haven't heard from client %s"
-					      " (at %s) in %lld seconds. I think"
-                                              " it's dead, and I am evicting"
-					      " it. exp %p, cur %lld expire %lld"
-					      " last %lld\n",
-                                              obd->obd_name,
-                                              obd_uuid2str(&exp->exp_client_uuid),
-                                              obd_export_nid2str(exp),
+				LCONSOLE_WARN("%s: haven't heard from client %s (at %s) in %lld seconds. I think it's dead, and I am evicting it. exp %p, cur %lld expire %lld last %lld\n",
+					      obd->obd_name,
+					      obd_uuid2str(client_uuid),
+					      obd_export_nid2str(exp),
 					      ktime_get_real_seconds() -
 					      exp->exp_last_request_time,
 					      exp, ktime_get_real_seconds(),
 					      expire_time,
 					      exp->exp_last_request_time);
 				CDEBUG(D_HA, "Last request was at %lld\n",
-                                       exp->exp_last_request_time);
-                                class_fail_export(exp);
-                                class_export_put(exp);
+				       exp->exp_last_request_time);
+				class_fail_export(exp);
+				class_export_put(exp);
 				spin_lock(&obd->obd_dev_lock);
 			} else {
 				/* List is sorted, so everyone below is ok */
@@ -651,11 +655,11 @@ static int ping_evictor_main(void *arg)
 		list_del_init(&obd->obd_evict_list);
 		spin_unlock(&pet_lock);
 
-                class_decref(obd, "evictor", obd);
-        }
-        CDEBUG(D_HA, "Exiting Ping Evictor\n");
+		class_decref(obd, "evictor", obd);
+	}
+	CDEBUG(D_HA, "Exiting Ping Evictor\n");
 
-        RETURN(0);
+	RETURN(0);
 }
 
 void ping_evictor_start(void)
@@ -679,10 +683,10 @@ EXPORT_SYMBOL(ping_evictor_start);
 
 void ping_evictor_stop(void)
 {
-        if (--pet_refcount > 0)
-                return;
+	if (--pet_refcount > 0)
+		return;
 
-        pet_state = PET_TERMINATE;
+	pet_state = PET_TERMINATE;
 	wake_up(&pet_waitq);
 }
 EXPORT_SYMBOL(ping_evictor_stop);
