@@ -3706,7 +3706,7 @@ host_nids_address() {
 	local nodes=$1
 	local net=${2:-"."}
 
-	do_nodes $nodes "$LCTL list_nids | grep $net | cut -f 1 -d @"
+	do_nodes $nodes "$LCTL list_nids | grep -w $net | cut -f 1 -d @"
 }
 
 h2name_or_ip() {
