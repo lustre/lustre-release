@@ -4431,7 +4431,7 @@ formatall() {
 	# (Assumes MDS version is also OSS version)
 	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.8.54) ];
 	then
-	    do_rpc_nodes "$(comma_list $(remote_nodes_list))" set_hostid
+		do_rpc_nodes "$(comma_list $(all_server_nodes))" set_hostid
 	fi
 
 	# We need ldiskfs here, may as well load them all
