@@ -774,13 +774,7 @@ lnet_msg_detach_md(struct lnet_msg *msg, int cpt, int status)
 	}
 
 	if (unlink) {
-		/*
-		 * if this is an ACK or a REPLY then make sure to remove the
-		 * response tracker.
-		 */
-		if (msg->msg_ev.type == LNET_EVENT_REPLY ||
-		    msg->msg_ev.type == LNET_EVENT_ACK)
-			lnet_detach_rsp_tracker(msg->msg_md, cpt);
+		lnet_detach_rsp_tracker(md, cpt);
 		lnet_md_unlink(md);
 	}
 
