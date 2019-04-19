@@ -796,12 +796,32 @@ lnet_ni_eager_recv(struct lnet_ni *ni, struct lnet_msg *msg)
 	return rc;
 }
 
+static bool
+lnet_is_peer_deadline_passed(struct lnet_peer_ni *lpni, time64_t now)
+{
+	time64_t deadline;
+
+	deadline = lpni->lpni_last_alive +
+		   lpni->lpni_net->net_tunables.lct_peer_timeout;
+
+	/*
+	 * assume peer_ni is alive as long as we're within the configured
+	 * peer timeout
+	 */
+	if (deadline > now)
+		return false;
+
+	return true;
+}
+
 /* NB: returns 1 when alive, 0 when dead, negative when error;
  *     may drop the lnet_net_lock */
 static int
 lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 		       struct lnet_msg *msg)
 {
+	time64_t now = ktime_get_seconds();
+
 	if (!lnet_peer_aliveness_enabled(lpni))
 		return -ENODEV;
 
@@ -820,6 +840,9 @@ lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 	if (msg->msg_type == LNET_MSG_ACK ||
 	    msg->msg_type == LNET_MSG_REPLY)
 		return 1;
+
+	if (!lnet_is_peer_deadline_passed(lpni, now))
+		return true;
 
 	return lnet_is_peer_ni_alive(lpni);
 }
@@ -4420,6 +4443,10 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 			return 0;
 		goto drop;
 	}
+
+	if (the_lnet.ln_routing)
+		lpni->lpni_last_alive = ktime_get_seconds();
+
 	msg->msg_rxpeer = lpni;
 	msg->msg_rxni = ni;
 	lnet_ni_addref_locked(ni, cpt);

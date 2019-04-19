@@ -584,6 +584,8 @@ struct lnet_peer_ni {
 	__u32			lpni_gw_seq;
 	/* returned RC ping features. Protected with lpni_lock */
 	unsigned int		lpni_ping_feats;
+	/* time last message was received from the peer */
+	time64_t		lpni_last_alive;
 	/* preferred local nids: if only one, use lpni_pref.nid */
 	union lpni_pref {
 		lnet_nid_t	nid;
