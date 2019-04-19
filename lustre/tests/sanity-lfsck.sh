@@ -5368,6 +5368,7 @@ test_36a() {
 run_test 36a "rebuild LOV EA for mirrored file (1)"
 
 test_36b() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
 
 	echo "#####"
@@ -5455,6 +5456,7 @@ test_36b() {
 run_test 36b "rebuild LOV EA for mirrored file (2)"
 
 test_36c() {
+	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
 	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
 
 	echo "#####"
