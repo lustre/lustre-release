@@ -511,6 +511,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_QUOTA_EDQUOT            0xA02
 #define OBD_FAIL_QUOTA_DELAY_REINT       0xA03
 #define OBD_FAIL_QUOTA_RECOVERABLE_ERR   0xA04
+#define OBD_FAIL_QUOTA_INIT              0xA05
 
 #define OBD_FAIL_LPROC_REMOVE            0xB00
 

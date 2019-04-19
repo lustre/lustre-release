@@ -519,6 +519,32 @@ test_5g() {
 }
 run_test 5g "handle missing debugfs"
 
+test_5h() {
+	setup
+
+	stop mds1
+	#define OBD_FAIL_MDS_FS_SETUP            0x135
+	do_facet mds1 "$LCTL set_param fail_loc=0x80000135"
+	start_mdt 1 && error "start mdt should fail"
+	start_mdt 1 || error "start mdt failed"
+	client_up || error "client_up failed"
+	cleanup
+}
+run_test 5h "start mdt failure at mdt_fs_setup()"
+
+test_5i() {
+	setup
+
+	stop mds1
+	#define OBD_FAIL_QUOTA_INIT              0xA05
+	do_facet mds1 "$LCTL set_param fail_loc=0x80000A05"
+	start_mdt 1 && error "start mdt should fail"
+	start_mdt 1 || error "start mdt failed"
+	client_up || error "client_up failed"
+	cleanup
+}
+run_test 5i "start mdt failure at mdt_quota_init()"
+
 test_6() {
 	setup
 	manual_umount_client

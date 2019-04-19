@@ -804,12 +804,15 @@ static int qmt_reba_thread(void *arg)
 	ENTRY;
 
 	OBD_ALLOC_PTR(env);
-	if (env == NULL)
+	if (env == NULL) {
+		thread_set_flags(thread, SVC_STOPPED);
 		RETURN(-ENOMEM);
+	}
 
 	rc = lu_env_init(env, LCT_MD_THREAD);
 	if (rc) {
 		CERROR("%s: failed to init env.", qmt->qmt_svname);
+		thread_set_flags(thread, SVC_STOPPED);
 		OBD_FREE_PTR(env);
 		RETURN(rc);
 	}
