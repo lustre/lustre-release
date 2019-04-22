@@ -261,7 +261,9 @@ static int mdc_lock_flush(const struct lu_env *env, struct osc_object *obj,
 			result = 0;
 	}
 
-	rc = mdc_lock_discard_pages(env, obj, start, end, discard);
+	/* Avoid lock matching with CLM_WRITE, there can be no other locks */
+	rc = mdc_lock_discard_pages(env, obj, start, end,
+				    mode == CLM_WRITE || discard);
 	if (result == 0 && rc < 0)
 		result = rc;
 
