@@ -1626,7 +1626,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 	__u64 try_bits = 0;
 	bool is_resent;
 	int ma_need = 0;
-	bool deal_with_dom = false;
 	int rc;
 
 	ENTRY;
@@ -1853,14 +1852,17 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			GOTO(out_child, rc);
 	}
 
-	lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
-
 	/* finally, we can get attr for child. */
 	rc = mdt_getattr_internal(info, child, ma_need);
 	if (unlikely(rc != 0)) {
 		mdt_object_unlock(info, child, lhc, 1);
-		GOTO(out_lock, rc);
-	} else if (lock) {
+		GOTO(out_child, rc);
+	}
+
+	mdt_pack_secctx_in_reply(info, child);
+
+	lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
+	if (lock) {
 		/* Debugging code. */
 		LDLM_DEBUG(lock, "Returning lock to client");
 		LASSERTF(fid_res_name_eq(mdt_object_fid(child),
@@ -1871,32 +1873,27 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    mdt_object_exists(child) && !mdt_object_remote(child) &&
-		    child != parent)
-			deal_with_dom = true;
-	}
-
-	mdt_pack_secctx_in_reply(info, child);
-
-out_lock:
-	if (lock)
+		    child != parent) {
+			mdt_object_put(info->mti_env, child);
+			rc = mdt_pack_size2body(info, child_fid,
+						&lhc->mlh_reg_lh);
+			if (rc != 0 && child_bits & MDS_INODELOCK_DOM) {
+				/* DOM lock was taken in advance but this is
+				 * not DoM file. Drop the lock.
+				 */
+				lock_res_and_lock(lock);
+				ldlm_inodebits_drop(lock, MDS_INODELOCK_DOM);
+				unlock_res_and_lock(lock);
+			}
+			LDLM_LOCK_PUT(lock);
+			GOTO(out_parent, rc = 0);
+		}
 		LDLM_LOCK_PUT(lock);
+	}
 
 	EXIT;
 out_child:
 	mdt_object_put(info->mti_env, child);
-	if (deal_with_dom) {
-		rc = mdt_pack_size2body(info, child_fid,
-					&lhc->mlh_reg_lh);
-		if (rc != 0 && child_bits & MDS_INODELOCK_DOM) {
-			/* DOM lock was taken in advance but this is
-			 * not DoM file. Drop the lock.
-			 */
-			lock_res_and_lock(lock);
-			ldlm_inodebits_drop(lock, MDS_INODELOCK_DOM);
-			unlock_res_and_lock(lock);
-		}
-		rc = 0;
-	}
 out_parent:
 	if (lhp)
 		mdt_object_unlock(info, parent, lhp, 1);

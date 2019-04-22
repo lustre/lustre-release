@@ -790,6 +790,12 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 		req_capsule_shrink(pill, &RMF_LOGCOOKIES, acl_size, RCL_SERVER);
 	}
 
+	/* Shrink optional SECCTX buffer if it is not used */
+	if (req_capsule_has_field(pill, &RMF_FILE_SECCTX, RCL_SERVER) &&
+	    req_capsule_get_size(pill, &RMF_FILE_SECCTX, RCL_SERVER) != 0 &&
+	    !(body->mbo_valid & OBD_MD_SECCTX))
+		req_capsule_shrink(pill, &RMF_FILE_SECCTX, 0, RCL_SERVER);
+
 	/*
 	 * Some more field should be shrinked if needed.
 	 * This should be done by those who added fields to reply message.
