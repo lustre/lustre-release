@@ -320,9 +320,6 @@ int ll_dentry_init_security(struct dentry *dentry, int mode, struct qstr *name,
 int ll_inode_init_security(struct dentry *dentry, struct inode *inode,
 			   struct inode *dir);
 
-int ll_listsecurity(struct inode *inode, char *secctx_name,
-		    size_t secctx_name_size);
-
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
  * consistency between file size and KMS.

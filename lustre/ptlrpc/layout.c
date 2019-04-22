@@ -445,27 +445,24 @@ static const struct req_msg_field *ldlm_intent_open_server[] = {
 	&RMF_CAPA1,
 	&RMF_CAPA2,
 	&RMF_NIOBUF_INLINE,
-	&RMF_FILE_SECCTX
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {
-	&RMF_PTLRPC_BODY,
-	&RMF_DLM_REQ,
-	&RMF_LDLM_INTENT,
-	&RMF_MDT_BODY,     /* coincides with mds_getattr_name_client[] */
-	&RMF_CAPA1,
-	&RMF_NAME,
-	&RMF_FILE_SECCTX_NAME
+        &RMF_PTLRPC_BODY,
+        &RMF_DLM_REQ,
+        &RMF_LDLM_INTENT,
+        &RMF_MDT_BODY,     /* coincides with mds_getattr_name_client[] */
+        &RMF_CAPA1,
+        &RMF_NAME
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_server[] = {
-	&RMF_PTLRPC_BODY,
-	&RMF_DLM_REP,
-	&RMF_MDT_BODY,
-	&RMF_MDT_MD,
-	&RMF_ACL,
-	&RMF_CAPA1,
-	&RMF_FILE_SECCTX
+        &RMF_PTLRPC_BODY,
+        &RMF_DLM_REP,
+        &RMF_MDT_BODY,
+        &RMF_MDT_MD,
+        &RMF_ACL,
+        &RMF_CAPA1
 };
 
 static const struct req_msg_field *ldlm_intent_create_client[] = {
@@ -1016,7 +1013,7 @@ struct req_msg_field RMF_FILE_SECCTX_NAME =
 EXPORT_SYMBOL(RMF_FILE_SECCTX_NAME);
 
 struct req_msg_field RMF_FILE_SECCTX =
-	DEFINE_MSGF("file_secctx", RMF_F_NO_SIZE_CHECK, -1, NULL, NULL);
+	DEFINE_MSGF("file_secctx", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_FILE_SECCTX);
 
 struct req_msg_field RMF_LLOGD_BODY =

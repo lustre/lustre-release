@@ -1221,8 +1221,6 @@ static int mdt_cross_open(struct mdt_thread_info *info,
 			if (rc != 0)
 				GOTO(out, rc);
 
-			mdt_pack_secctx_in_reply(info, o);
-
 			rc = mdt_finish_open(info, NULL, o, open_flags, 0, rep);
 		} else {
 			/*
@@ -1575,9 +1573,7 @@ again:
 			       PNAME(&rr->rr_name), PFID(child_fid));
 			GOTO(out_child, result = -EIO);
 		}
-	}
-
-	mdt_pack_secctx_in_reply(info, child);
+        }
 
 	rc = mdt_check_resent_lock(info, child, lhc);
 	if (rc < 0) {

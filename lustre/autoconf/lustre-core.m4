@@ -1473,21 +1473,6 @@ security_dentry_init_security, [
 ]) # LC_HAVE_SECURITY_DENTRY_INIT_SECURITY
 
 #
-# 3.10 exports security_inode_listsecurity
-#
-AC_DEFUN([LC_HAVE_SECURITY_INODE_LISTSECURITY], [
-LB_CHECK_COMPILE([if security_inode_listsecurity() is available/exported],
-security_inode_listsecurity, [
-	#include <linux/security.h>
-],[
-	security_inode_listsecurity(NULL, NULL, 0);
-],[
-	AC_DEFINE(HAVE_SECURITY_INODE_LISTSECURITY, 1,
-		  [security_inode_listsecurity() is available/exported])
-])
-]) # LC_HAVE_SECURITY_INODE_LISTSECURITY
-
-#
 # LC_INVALIDATE_RANGE
 #
 # 3.11 invalidatepage requires the length of the range to invalidate
@@ -3100,7 +3085,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_PROC_REMOVE
 	LC_HAVE_PROJECT_QUOTA
 	LC_HAVE_SECURITY_DENTRY_INIT_SECURITY
-	LC_HAVE_SECURITY_INODE_LISTSECURITY
 
 	# 3.11
 	LC_INVALIDATE_RANGE

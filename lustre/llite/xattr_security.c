@@ -187,36 +187,3 @@ out_free:
 	return err;
 }
 #endif /* HAVE_SECURITY_IINITSEC_CALLBACK */
-
-/**
- * Get security context xattr name used by policy.
- *
- * \retval >= 0     length of xattr name
- * \retval < 0      failure to get security context xattr name
- */
-int
-ll_listsecurity(struct inode *inode, char *secctx_name, size_t secctx_name_size)
-{
-	int rc;
-
-	if (!selinux_is_enabled())
-		return 0;
-
-#ifdef HAVE_SECURITY_INODE_LISTSECURITY
-	rc = security_inode_listsecurity(inode, secctx_name, secctx_name_size);
-	if (rc >= secctx_name_size)
-		rc = -ERANGE;
-	else if (rc >= 0)
-		secctx_name[rc] = '\0';
-	return rc;
-#else /* !HAVE_SECURITY_INODE_LISTSECURITY */
-	rc = sizeof(XATTR_NAME_SELINUX);
-	if (secctx_name && rc < secctx_name_size) {
-		memcpy(secctx_name, XATTR_NAME_SELINUX, rc);
-		secctx_name[rc] = '\0';
-	} else {
-		rc = -ERANGE;
-	}
-	return rc;
-#endif /* HAVE_SECURITY_INODE_LISTSECURITY */
-}

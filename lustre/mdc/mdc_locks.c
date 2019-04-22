@@ -314,7 +314,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
 			     RCL_CLIENT, op_data->op_file_secctx_name != NULL ?
-			     op_data->op_file_secctx_name_size : 0);
+			     strlen(op_data->op_file_secctx_name) + 1 : 0);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX, RCL_CLIENT,
 			     op_data->op_file_secctx_size);
@@ -350,30 +350,6 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obddev->u.cli.cl_max_mds_easize);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
-
-	if (!(it->it_op & IT_CREAT) && it->it_op & IT_OPEN &&
-	    req_capsule_has_field(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
-				  RCL_CLIENT) &&
-	    op_data->op_file_secctx_name_size > 0 &&
-	    op_data->op_file_secctx_name != NULL) {
-		char *secctx_name;
-
-		secctx_name = req_capsule_client_get(&req->rq_pill,
-						     &RMF_FILE_SECCTX_NAME);
-		memcpy(secctx_name, op_data->op_file_secctx_name,
-		       op_data->op_file_secctx_name_size);
-		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
-				     RCL_SERVER,
-				     obddev->u.cli.cl_max_mds_easize);
-
-		CDEBUG(D_SEC, "packed '%.*s' as security xattr name\n",
-		       op_data->op_file_secctx_name_size,
-		       op_data->op_file_secctx_name);
-
-	} else {
-		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
-				     RCL_SERVER, 0);
-	}
 
 	/**
 	 * Inline buffer for possible data from Data-on-MDT files.
@@ -457,8 +433,6 @@ mdc_intent_getxattr_pack(struct obd_export *exp,
 	/* pack the intent */
 	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 	lit->opc = IT_GETXATTR;
-	CDEBUG(D_INFO, "%s: get xattrs for "DFID"\n",
-	       exp->exp_obd->obd_name, PFID(&op_data->op_fid1));
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	/* If the supplied buffer is too small then the server will
@@ -509,38 +483,25 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 	struct ldlm_intent	*lit;
 	int			 rc;
 	__u32			 easize;
-	bool			 have_secctx = false;
 	ENTRY;
 
-	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
-				   &RQF_LDLM_INTENT_GETATTR);
-	if (req == NULL)
-		RETURN(ERR_PTR(-ENOMEM));
+        req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+                                   &RQF_LDLM_INTENT_GETATTR);
+        if (req == NULL)
+                RETURN(ERR_PTR(-ENOMEM));
 
-	/* send name of security xattr to get upon intent */
-	if (it->it_op & (IT_LOOKUP | IT_GETATTR) &&
-	    req_capsule_has_field(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
-				  RCL_CLIENT) &&
-	    op_data->op_file_secctx_name_size > 0 &&
-	    op_data->op_file_secctx_name != NULL) {
-		have_secctx = true;
-		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
-				     RCL_CLIENT,
-				     op_data->op_file_secctx_name_size);
-	}
+        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+                             op_data->op_namelen + 1);
 
-	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
-			     op_data->op_namelen + 1);
-
-	rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
-	if (rc) {
-		ptlrpc_request_free(req);
-		RETURN(ERR_PTR(rc));
-	}
+        rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
+        if (rc) {
+                ptlrpc_request_free(req);
+                RETURN(ERR_PTR(rc));
+        }
 
         /* pack the intent */
-	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
-	lit->opc = (__u64)it->it_op;
+        lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
+        lit->opc = (__u64)it->it_op;
 
 	if (obddev->u.cli.cl_default_mds_easize > 0)
 		easize = obddev->u.cli.cl_default_mds_easize;
@@ -552,26 +513,6 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, easize);
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, acl_bufsize);
-
-	if (have_secctx) {
-		char *secctx_name;
-
-		secctx_name = req_capsule_client_get(&req->rq_pill,
-						     &RMF_FILE_SECCTX_NAME);
-		memcpy(secctx_name, op_data->op_file_secctx_name,
-		       op_data->op_file_secctx_name_size);
-
-		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
-				     RCL_SERVER, easize);
-
-		CDEBUG(D_SEC, "packed '%.*s' as security xattr name\n",
-		       op_data->op_file_secctx_name_size,
-		       op_data->op_file_secctx_name);
-	} else {
-		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
-				     RCL_SERVER, 0);
-	}
-
 	ptlrpc_request_set_replen(req);
 	RETURN(req);
 }
