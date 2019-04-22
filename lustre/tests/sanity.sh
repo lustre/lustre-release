@@ -17554,61 +17554,6 @@ test_271d() {
 }
 run_test 271d "DoM: read on open (1K file in reply buffer)"
 
-test_271e() {
-	[ $MDS1_VERSION -lt $(version_code 2.10.57) ] &&
-		skip "Need MDS version at least 2.10.57"
-
-	local dom=$DIR/$tdir/dom
-	local tmp=$TMP/${tfile}.data
-	trap "cleanup_271def_tests $tmp" EXIT
-
-	mkdir -p $DIR/$tdir
-
-	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
-
-	local mdtidx=$($LFS getstripe --mdt-index $DIR/$tdir)
-
-	cancel_lru_locks mdc
-	dd if=/dev/urandom of=$tmp bs=30K count=1
-	dd if=$tmp of=$dom bs=30K count=1
-	cancel_lru_locks mdc
-	cat /etc/hosts >> $tmp
-	lctl set_param -n mdc.*.stats=clear
-
-	echo "Append to the same page"
-	cat /etc/hosts >> $dom
-
-	local num=$(get_mdc_stats $mdtidx ost_read)
-	local ra=$(get_mdc_stats $mdtidx req_active)
-	local rw=$(get_mdc_stats $mdtidx req_waittime)
-
-	[ -z $num ] || error "$num READ RPC occured"
-	# Reply buffer can be adjusted for larger buffer by resend
-	echo "... DONE with $((ra - rw)) resends"
-
-	# compare content
-	cmp $tmp $dom || error "file miscompare"
-
-	cancel_lru_locks mdc
-	lctl set_param -n mdc.*.stats=clear
-
-	echo "Open and read file"
-	cat $dom > /dev/null
-	local num=$(get_mdc_stats $mdtidx ost_read)
-	local ra=$(get_mdc_stats $mdtidx req_active)
-	local rw=$(get_mdc_stats $mdtidx req_waittime)
-
-	[ -z $num ] || error "$num READ RPC occured"
-	# Reply buffer can be adjusted for larger buffer by resend
-	echo "... DONE with $((ra - rw)) resends"
-
-	# compare content
-	cmp $tmp $dom || error "file miscompare"
-
-	return 0
-}
-run_test 271e "DoM: read on open (30K file with reply buffer adjusting)"
-
 test_271f() {
 	[ $MDS1_VERSION -lt $(version_code 2.10.57) ] &&
 		skip "Need MDS version at least 2.10.57"

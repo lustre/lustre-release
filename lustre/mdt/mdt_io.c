@@ -1396,7 +1396,6 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	struct niobuf_remote *rnb = NULL;
 	struct niobuf_local *lnb;
 	int rc;
-	int max_reply_len;
 	loff_t offset;
 	unsigned int len, copied = 0;
 	int lnbs, nr_local, i;
@@ -1433,20 +1432,13 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	if (mbo->mbo_dom_size == 0)
 		RETURN(0);
 
-	/* check the maximum size available in reply */
-	max_reply_len =
-		req->rq_rqbd->rqbd_svcpt->scp_service->srv_max_reply_size;
-
-	CDEBUG(D_INFO, "File size %llu, reply sizes %d/%d/%d\n",
-	       mbo->mbo_dom_size, max_reply_len, req->rq_reqmsg->lm_repsize,
-	       req->rq_replen);
+	CDEBUG(D_INFO, "File size %llu, reply sizes %d/%d\n",
+	       mbo->mbo_dom_size, req->rq_reqmsg->lm_repsize, req->rq_replen);
 	len = req->rq_reqmsg->lm_repsize - req->rq_replen;
-	max_reply_len -= req->rq_replen;
 
 	/* NB: at this moment we have the following sizes:
 	 * - req->rq_replen: used data in reply
 	 * - req->rq_reqmsg->lm_repsize: total allocated reply buffer at client
-	 * - max_reply_len: maximum reply size allowed by protocol
 	 *
 	 * Ideal case when file size fits in allocated reply buffer,
 	 * that mean we can return whole data in reply. We can also fit more
@@ -1458,18 +1450,10 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	 *
 	 * At the moment the following strategy is used:
 	 * 1) try to fit into the buffer we have
-	 * 2) respond with bigger buffer so client will re-allocate it and
-	 *    resend (up to srv_max_reply_size value).
-	 * 3) return just file tail otherwise.
+	 * 2) return just file tail otherwise.
 	 */
 	if (mbo->mbo_dom_size <= len) {
 		/* can fit whole data */
-		len = mbo->mbo_dom_size;
-		offset = 0;
-	} else if (mbo->mbo_dom_size <= max_reply_len) {
-		/* It is worth to make this tunable ON/OFF because this will
-		 * cause buffer re-allocation and resend
-		 */
 		len = mbo->mbo_dom_size;
 		offset = 0;
 	} else {
