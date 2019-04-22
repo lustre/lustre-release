@@ -32,6 +32,7 @@ Run Lustre regression tests suites.
       -v        Verbose mode
       -l        Send logs to the Maloo database after run
                   (can be done later by running maloo_upload.sh)
+      -L        Script language of test suite. Default: bash
       -h        This help.
 
 Suite options
@@ -65,28 +66,30 @@ verbose=false
 repeat_count=1
 upload_logs=false
 reformat=false
+script_lang=bash
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
 export ${SLOW:=no}
 export ${NAME:=local}
-while getopts "c:d:D:nkf:S:g:i:rRslhv" opt
+while getopts "c:d:D:nkf:S:g:i:rRslL:hv" opt
 do
-    case "$opt" in
-        c) export CONFIG=$OPTARG;;
-        d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
-        D) test_logs_dir=$OPTARG;;
-        g) test_group_file=$OPTARG;;
-        S) FIRST_SUITE=$OPTARG;;
-        k) export FAIL_ON_ERROR=false;;
-        n) dry_run=:;;
-        v) verbose=:;;
-        i) repeat_count=$OPTARG;;
-        f) NAME=$OPTARG;;
-        R) do_reset=:;;
-        r) reformat=:;;
-	s) export SLOW=yes;;
-        l) upload_logs=true;;
-        h|\?) usage;;
-    esac
+	case "$opt" in
+		c) export CONFIG=$OPTARG;;
+		d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
+		D) test_logs_dir=$OPTARG;;
+		g) test_group_file=$OPTARG;;
+		S) FIRST_SUITE=$OPTARG;;
+		k) export FAIL_ON_ERROR=false;;
+		n) dry_run=:;;
+		v) verbose=:;;
+		i) repeat_count=$OPTARG;;
+		f) NAME=$OPTARG;;
+		R) do_reset=:;;
+		r) reformat=:;;
+		s) export SLOW=yes;;
+		l) upload_logs=true;;
+		L) script_lang=$OPTARG;;
+		h|\?) usage;;
+	esac
 done
 
 # If a test_group_file is specified, then ignore rest of command line
@@ -96,17 +99,6 @@ if [[ $test_group_file ]]; then
 else
     shift $((OPTIND -1))
 fi
-
-#
-# Various paramters for the tests scripts
-#
-#: ${SIZE:=$((RAMKB * 2))}
-#: ${RSIZE:=512}
-#: ${UID:=1000}
-#: ${MOUNT=/mnt/lustre}
-#: ${MOUNT2:=${MOUNT}2}
-#: ${COUNT:=1000}
-#: ${TMP:=/tmp}
 
 reset_lustre() {
     if $do_reset; then
@@ -201,7 +193,7 @@ run_suite() {
 	rm -f $TF_FAIL
 	touch $TF_SKIP
 	local start_ts=$(date +%s)
-	doit bash $suite_script
+	doit $script_lang $suite_script
 	local rc=$?
 	local duration=$(($(date +%s) - $start_ts))
 
