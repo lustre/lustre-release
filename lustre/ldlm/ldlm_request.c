@@ -2192,12 +2192,19 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 		/*
 		 * If policy is given and this is IBITS lock, add to list only
 		 * those locks that match by policy.
-		 * Skip locks with DoM bit always to don't flush data.
 		 */
-		if (policy && (lock->l_resource->lr_type == LDLM_IBITS) &&
-		    (!(lock->l_policy_data.l_inodebits.bits &
-		      policy->l_inodebits.bits) || ldlm_has_dom(lock)))
-			continue;
+		if (policy && (lock->l_resource->lr_type == LDLM_IBITS)) {
+			if (!(lock->l_policy_data.l_inodebits.bits &
+			      policy->l_inodebits.bits))
+				continue;
+			/* Skip locks with DoM bit if it is not set in policy
+			 * to don't flush data by side-bits. Lock convert will
+			 * drop those bits separately.
+			 */
+			if (ldlm_has_dom(lock) &&
+			    !(policy->l_inodebits.bits & MDS_INODELOCK_DOM))
+				continue;
+		}
 
 		/* See CBPENDING comment in ldlm_cancel_lru */
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING |

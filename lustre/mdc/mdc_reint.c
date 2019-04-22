@@ -60,15 +60,16 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
 /* Find and cancel locally locks matched by inode @bits & @mode in the resource
  * found by @fid. Found locks are added into @cancel list. Returns the amount of
  * locks added to @cancels list. */
-int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
-			    struct list_head *cancels, enum ldlm_mode mode,
-			    __u64 bits)
+int mdc_resource_get_unused_res(struct obd_export *exp,
+				struct ldlm_res_id *res_id,
+				struct list_head *cancels,
+				enum ldlm_mode mode, __u64 bits)
 {
 	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
-	union ldlm_policy_data policy = { {0} };
-	struct ldlm_res_id res_id;
+	union ldlm_policy_data policy = { { 0 } };
 	struct ldlm_resource *res;
 	int count;
+
 	ENTRY;
 
 	/* Return, i.e. cancel nothing, only if ELC is supported (flag in
@@ -80,19 +81,27 @@ int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
 	if (exp_connect_cancelset(exp) && !ns_connect_cancelset(ns))
 		RETURN(0);
 
-	fid_build_reg_res_name(fid, &res_id);
-	res = ldlm_resource_get(exp->exp_obd->obd_namespace,
-				NULL, &res_id, 0, 0);
+	res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
 	if (IS_ERR(res))
 		RETURN(0);
 	LDLM_RESOURCE_ADDREF(res);
 	/* Initialize ibits lock policy. */
 	policy.l_inodebits.bits = bits;
-	count = ldlm_cancel_resource_local(res, cancels, &policy,
-					   mode, 0, 0, NULL);
+	count = ldlm_cancel_resource_local(res, cancels, &policy, mode, 0, 0,
+					   NULL);
 	LDLM_RESOURCE_DELREF(res);
 	ldlm_resource_putref(res);
 	RETURN(count);
+}
+
+int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
+			    struct list_head *cancels, enum ldlm_mode mode,
+			    __u64 bits)
+{
+	struct ldlm_res_id res_id;
+
+	fid_build_reg_res_name(fid, &res_id);
+	return mdc_resource_get_unused_res(exp, &res_id, cancels, mode, bits);
 }
 
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
