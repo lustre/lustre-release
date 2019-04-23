@@ -2083,7 +2083,11 @@ static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 {
 	struct osd_object *obj = osd_obj(l);
+	struct qsd_instance *qsd = osd_def_qsd(osd_obj2dev(obj));
 	struct inode *inode = obj->oo_inode;
+	__u64 projid;
+	qid_t uid;
+	qid_t gid;
 
 	LINVRNT(osd_invariant(obj));
 
@@ -2092,28 +2096,36 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 	 */
 
 	osd_index_fini(obj);
-	if (inode != NULL) {
-		struct qsd_instance *qsd = osd_def_qsd(osd_obj2dev(obj));
-		qid_t uid = i_uid_read(inode);
-		qid_t gid = i_gid_read(inode);
-		__u64 projid = i_projid_read(inode);
 
-		obj->oo_inode = NULL;
-		iput(inode);
-		if (!obj->oo_header && qsd) {
-			struct osd_thread_info *info = osd_oti_get(env);
-			struct lquota_id_info *qi = &info->oti_qi;
+	if (!inode)
+		return;
 
-			/* Release granted quota to master if necessary */
-			qi->lqi_id.qid_uid = uid;
-			qsd_op_adjust(env, qsd, &qi->lqi_id, USRQUOTA);
+	uid = i_uid_read(inode);
+	gid = i_gid_read(inode);
+	projid = i_projid_read(inode);
 
-			qi->lqi_id.qid_uid = gid;
-			qsd_op_adjust(env, qsd, &qi->lqi_id, GRPQUOTA);
+	obj->oo_inode = NULL;
+	iput(inode);
 
-			qi->lqi_id.qid_uid = projid;
-			qsd_op_adjust(env, qsd, &qi->lqi_id, PRJQUOTA);
-		}
+	/* do not rebalance quota if the caller needs to release memory
+	 * otherwise qsd_refresh_usage() may went into a new ldiskfs
+	 * transaction and risk to deadlock - LU-12178 */
+	if (current->flags & (PF_MEMALLOC | PF_KSWAPD))
+		return;
+
+	if (!obj->oo_header && qsd) {
+		struct osd_thread_info *info = osd_oti_get(env);
+		struct lquota_id_info *qi = &info->oti_qi;
+
+		/* Release granted quota to master if necessary */
+		qi->lqi_id.qid_uid = uid;
+		qsd_op_adjust(env, qsd, &qi->lqi_id, USRQUOTA);
+
+		qi->lqi_id.qid_uid = gid;
+		qsd_op_adjust(env, qsd, &qi->lqi_id, GRPQUOTA);
+
+		qi->lqi_id.qid_uid = projid;
+		qsd_op_adjust(env, qsd, &qi->lqi_id, PRJQUOTA);
 	}
 }
 
