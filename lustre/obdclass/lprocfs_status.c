@@ -776,8 +776,8 @@ static const char *obd_connect_names[] = {
 	"file_secctx",	/* 0x01 */
 	"lockaheadv2",	/* 0x02 */
 	"dir_migrate",	/* 0x04 */
-	"unknown",	/* 0x08 */
-	"unknown",	/* 0x10 */
+	"sum_statfs",	/* 0x08 */
+	"overstriping",	/* 0x10 */
 	"flr",		/* 0x20 */
 	"wbc",		/* 0x40 */
 	"lock_convert",  /* 0x80 */

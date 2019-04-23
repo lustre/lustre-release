@@ -449,6 +449,11 @@ static inline int exp_connect_lockahead(struct obd_export *exp)
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_LOCKAHEAD);
 }
 
+static inline int exp_connect_overstriping(struct obd_export *exp)
+{
+	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_OVERSTRIPING);
+}
+
 static inline int exp_connect_flr(struct obd_export *exp)
 {
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_FLR);

@@ -829,6 +829,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_LOCKAHEAD		 0x2ULL /* ladvise lockahead v2 */
 #define OBD_CONNECT2_DIR_MIGRATE	 0x4ULL /* migrate striped dir */
 #define OBD_CONNECT2_SUM_STATFS		0x8ULL /* MDT return aggregated stats */
+#define OBD_CONNECT2_OVERSTRIPING	0x10ULL /* OST overstriping support */
 #define OBD_CONNECT2_FLR		0x20ULL /* FLR support */
 #define OBD_CONNECT2_WBC_INTENTS	0x40ULL /* create/unlink/... intents for wbc, also operations under client-held parent locks */
 #define OBD_CONNECT2_LOCK_CONVERT	0x80ULL /* IBITS lock convert support */
@@ -887,10 +888,11 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_GRANT_PARAM | \
 				OBD_CONNECT_SHORTIO | OBD_CONNECT_FLAGS2)
 
-#define MDT_CONNECT_SUPPORTED2 (OBD_CONNECT2_FILE_SECCTX | OBD_CONNECT2_FLR | \
-                                OBD_CONNECT2_SUM_STATFS | \
-				OBD_CONNECT2_LOCK_CONVERT | \
+#define MDT_CONNECT_SUPPORTED2 (OBD_CONNECT2_FILE_SECCTX | \
 				OBD_CONNECT2_DIR_MIGRATE | \
+				OBD_CONNECT2_SUM_STATFS | \
+				OBD_CONNECT2_FLR |\
+				OBD_CONNECT2_LOCK_CONVERT | \
 				OBD_CONNECT2_ARCHIVE_ID_ARRAY | \
 				OBD_CONNECT2_SELINUX_POLICY | \
 				OBD_CONNECT2_LSOM)
