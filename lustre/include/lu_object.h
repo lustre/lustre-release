@@ -1464,6 +1464,38 @@ struct lu_tgt_desc {
 			   ltd_connecting:1; /* target is connecting */
 };
 
+/* number of pointers at 1st level */
+#define TGT_PTRS		(PAGE_SIZE / sizeof(void *))
+/* number of pointers at 2nd level */
+#define TGT_PTRS_PER_BLOCK	(PAGE_SIZE / sizeof(void *))
+
+struct lu_tgt_desc_idx {
+	struct lu_tgt_desc *ldi_tgt[TGT_PTRS_PER_BLOCK];
+};
+
+struct lu_tgt_descs {
+	/* list of known TGTs */
+	struct lu_tgt_desc_idx	*ltd_tgt_idx[TGT_PTRS];
+	/* Size of the lu_tgts array, granted to be a power of 2 */
+	__u32			ltd_tgts_size;
+	/* number of registered TGTs */
+	__u32			ltd_tgtnr;
+	/* bitmap of TGTs available */
+	struct cfs_bitmap	*ltd_tgt_bitmap;
+	/* TGTs scheduled to be deleted */
+	__u32			ltd_death_row;
+	/* Table refcount used for delayed deletion */
+	int			ltd_refcount;
+	/* mutex to serialize concurrent updates to the tgt table */
+	struct mutex		ltd_mutex;
+	/* read/write semaphore used for array relocation */
+	struct rw_semaphore	ltd_rw_sem;
+};
+
+#define LTD_TGT(ltd, index)						\
+	 (ltd)->ltd_tgt_idx[(index) /					\
+	 TGT_PTRS_PER_BLOCK]->ldi_tgt[(index) % TGT_PTRS_PER_BLOCK]
+
 /* QoS data for LOD/LMV */
 struct lu_qos {
 	struct list_head	 lq_svr_list;	/* lu_svr_qos list */
@@ -1482,6 +1514,42 @@ void lu_qos_rr_init(struct lu_qos_rr *lqr);
 int lqos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 int lqos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 u64 lu_prandom_u64_max(u64 ep_ro);
+
+int lu_tgt_descs_init(struct lu_tgt_descs *ltd);
+void lu_tgt_descs_fini(struct lu_tgt_descs *ltd);
+int lu_tgt_descs_add(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
+void lu_tgt_descs_del(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
+
+static inline struct lu_tgt_desc *ltd_first_tgt(struct lu_tgt_descs *ltd)
+{
+	int index;
+
+	index = find_first_bit(ltd->ltd_tgt_bitmap->data,
+			       ltd->ltd_tgt_bitmap->size);
+	return (index < ltd->ltd_tgt_bitmap->size) ? LTD_TGT(ltd, index) : NULL;
+}
+
+static inline struct lu_tgt_desc *ltd_next_tgt(struct lu_tgt_descs *ltd,
+					       struct lu_tgt_desc *tgt)
+{
+	int index;
+
+	if (!tgt)
+		return NULL;
+
+	index = tgt->ltd_index;
+	LASSERT(index < ltd->ltd_tgt_bitmap->size);
+	index = find_next_bit(ltd->ltd_tgt_bitmap->data,
+			      ltd->ltd_tgt_bitmap->size, index + 1);
+	return (index < ltd->ltd_tgt_bitmap->size) ? LTD_TGT(ltd, index) : NULL;
+}
+
+#define ltd_foreach_tgt(ltd, tgt) \
+	for (tgt = ltd_first_tgt(ltd); tgt; tgt = ltd_next_tgt(ltd, tgt))
+
+#define ltd_foreach_tgt_safe(ltd, tgt, tmp)				  \
+	for (tgt = ltd_first_tgt(ltd), tmp = ltd_next_tgt(ltd, tgt); tgt; \
+	     tgt = tmp, tmp = ltd_next_tgt(ltd, tgt))
 
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

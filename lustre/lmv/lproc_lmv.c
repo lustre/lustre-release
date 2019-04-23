@@ -181,16 +181,19 @@ LUSTRE_RW_ATTR(qos_threshold_rr);
 #ifdef CONFIG_PROC_FS
 static void *lmv_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
-	struct obd_device       *dev = p->private;
-	struct lmv_obd          *lmv = &dev->u.lmv;
+	struct obd_device *dev = p->private;
+	struct lmv_obd *lmv = &dev->u.lmv;
+	struct lu_tgt_desc *tgt;
 
-	while (*pos < lmv->tgts_size) {
-		if (lmv->tgts[*pos])
-			return lmv->tgts[*pos];
+	while (*pos < lmv->lmv_mdt_descs.ltd_tgts_size) {
+		tgt = lmv_tgt(lmv, (__u32)*pos);
+		if (tgt)
+			return tgt;
+
 		++*pos;
 	}
 
-	return  NULL;
+	return NULL;
 }
 
 static void lmv_tgt_seq_stop(struct seq_file *p, void *v)
@@ -199,17 +202,20 @@ static void lmv_tgt_seq_stop(struct seq_file *p, void *v)
 
 static void *lmv_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
-	struct obd_device       *dev = p->private;
-	struct lmv_obd          *lmv = &dev->u.lmv;
+	struct obd_device *dev = p->private;
+	struct lmv_obd *lmv = &dev->u.lmv;
+	struct lu_tgt_desc *tgt;
 
 	++*pos;
-	while (*pos < lmv->tgts_size) {
-		if (lmv->tgts[*pos])
-			return lmv->tgts[*pos];
+	while (*pos < lmv->lmv_mdt_descs.ltd_tgts_size) {
+		tgt = lmv_tgt(lmv, (__u32)*pos);
+		if (tgt)
+			return tgt;
+
 		++*pos;
 	}
 
-	return  NULL;
+	return NULL;
 }
 
 static int lmv_tgt_seq_show(struct seq_file *p, void *v)

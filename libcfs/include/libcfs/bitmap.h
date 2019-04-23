@@ -41,8 +41,7 @@ struct cfs_bitmap {
 };
 
 #define CFS_BITMAP_SIZE(nbits) \
-	(((nbits / BITS_PER_LONG) + 1) * sizeof(long) + \
-	sizeof(struct cfs_bitmap))
+	(BITS_TO_LONGS(nbits) * sizeof(long) + sizeof(struct cfs_bitmap))
 
 static inline
 struct cfs_bitmap *CFS_ALLOCATE_BITMAP(int size)

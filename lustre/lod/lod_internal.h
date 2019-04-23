@@ -70,38 +70,10 @@ struct pool_desc {
 #define pool_tgt_rw_sem(p) ((p)->pool_obds.op_rw_sem)
 
 #define lod_tgt_desc	lu_tgt_desc
-
-#define TGT_PTRS		256     /* number of pointers at 1st level */
-#define TGT_PTRS_PER_BLOCK      256     /* number of pointers at 2nd level */
-
-struct lod_tgt_desc_idx {
-	struct lod_tgt_desc *ldi_tgt[TGT_PTRS_PER_BLOCK];
-};
-
-#define LTD_TGT(ltd, index)      \
-	 ((ltd)->ltd_tgt_idx[(index) / \
-	 TGT_PTRS_PER_BLOCK]->ldi_tgt[(index) % TGT_PTRS_PER_BLOCK])
+#define lod_tgt_descs	lu_tgt_descs
 
 #define OST_TGT(lod, index)   LTD_TGT(&lod->lod_ost_descs, index)
 #define MDT_TGT(lod, index)   LTD_TGT(&lod->lod_mdt_descs, index)
-struct lod_tgt_descs {
-	/* list of known TGTs */
-	struct lod_tgt_desc_idx	*ltd_tgt_idx[TGT_PTRS];
-	/* Size of the lod_tgts array, granted to be a power of 2 */
-	__u32			ltd_tgts_size;
-	/* number of registered TGTs */
-	__u32			ltd_tgtnr;
-	/* bitmap of TGTs available */
-	struct cfs_bitmap	*ltd_tgt_bitmap;
-	/* TGTs scheduled to be deleted */
-	__u32			ltd_death_row;
-	/* Table refcount used for delayed deletion */
-	int			ltd_refcount;
-	/* mutex to serialize concurrent updates to the tgt table */
-	struct mutex		ltd_mutex;
-	/* read/write semaphore used for array relocation */
-	struct rw_semaphore	ltd_rw_sem;
-};
 
 struct lod_avoid_guide {
 	/* ids of OSSs avoid guidance */

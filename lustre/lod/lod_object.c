@@ -5607,12 +5607,10 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 				struct lod_tgt_descs *ltd;
 				struct lod_tgt_desc *tgt = NULL;
 				bool found_mdt = false;
-				int i;
 
 				lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 				ltd = &lod->lod_mdt_descs;
-				cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-					tgt = LTD_TGT(ltd, i);
+				ltd_foreach_tgt(ltd, tgt) {
 					if (tgt->ltd_index ==
 						lo->ldo_dir_stripe_offset) {
 						found_mdt = true;

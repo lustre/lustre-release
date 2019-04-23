@@ -92,15 +92,13 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 				continue;
 
 			list_add(&tgt_desc->ltd_kill, &kill);
-			LTD_TGT(ltd, idx) = NULL;
 			/*FIXME: only support ost pool for now */
 			if (ltd == &lod->lod_ost_descs) {
 				lod_ost_pool_remove(&lod->lod_pool_info, idx);
 				if (tgt_desc->ltd_active)
 					lod->lod_desc.ld_active_tgt_count--;
 			}
-			ltd->ltd_tgtnr--;
-			cfs_bitmap_clear(ltd->ltd_tgt_bitmap, idx);
+			lu_tgt_descs_del(ltd, tgt_desc);
 			ltd->ltd_death_row--;
 		}
 		mutex_unlock(&ltd->ltd_mutex);
@@ -130,60 +128,6 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 		mutex_unlock(&ltd->ltd_mutex);
 		up_read(&ltd->ltd_rw_sem);
 	}
-}
-
-/**
- * Expand size of target table.
- *
- * When the target table is full, we have to extend the table. To do so,
- * we allocate new memory with some reserve, move data from the old table
- * to the new one and release memory consumed by the old table.
- * Notice we take ltd_rw_sem exclusively to ensure atomic switch.
- *
- * \param[in] ltd		target table
- * \param[in] newsize		new size of the table
- *
- * \retval			0 on success
- * \retval			-ENOMEM if reallocation failed
- */
-static int ltd_bitmap_resize(struct lod_tgt_descs *ltd, __u32 newsize)
-{
-	struct cfs_bitmap *new_bitmap, *old_bitmap = NULL;
-	int	      rc = 0;
-	ENTRY;
-
-	/* grab write reference on the lod. Relocating the array requires
-	 * exclusive access */
-
-	down_write(&ltd->ltd_rw_sem);
-	if (newsize <= ltd->ltd_tgts_size)
-		/* someone else has already resize the array */
-		GOTO(out, rc = 0);
-
-	/* allocate new bitmap */
-	new_bitmap = CFS_ALLOCATE_BITMAP(newsize);
-	if (!new_bitmap)
-		GOTO(out, rc = -ENOMEM);
-
-	if (ltd->ltd_tgts_size > 0) {
-		/* the bitmap already exists, we need
-		 * to copy data from old one */
-		cfs_bitmap_copy(new_bitmap, ltd->ltd_tgt_bitmap);
-		old_bitmap = ltd->ltd_tgt_bitmap;
-	}
-
-	ltd->ltd_tgts_size  = newsize;
-	ltd->ltd_tgt_bitmap = new_bitmap;
-
-	if (old_bitmap)
-		CFS_FREE_BITMAP(old_bitmap);
-
-	CDEBUG(D_CONFIG, "tgt size: %d\n", ltd->ltd_tgts_size);
-
-	EXIT;
-out:
-	up_write(&ltd->ltd_rw_sem);
-	return rc;
 }
 
 /**
@@ -219,7 +163,6 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	struct lustre_cfg	*lcfg;
 	struct obd_uuid		obd_uuid;
 	bool			for_ost;
-	bool lock = false;
 	bool connected = false;
 	ENTRY;
 
@@ -317,43 +260,9 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	tgt_desc->ltd_index  = index;
 	tgt_desc->ltd_active = active;
 
-	lod_getref(ltd);
-	if (index >= ltd->ltd_tgts_size) {
-		/* we have to increase the size of the lod_osts array */
-		__u32  newsize;
-
-		newsize = max(ltd->ltd_tgts_size, (__u32)2);
-		while (newsize < index + 1)
-			newsize = newsize << 1;
-
-		/* lod_bitmap_resize() needs lod_rw_sem
-		 * which we hold with th reference */
-		lod_putref(lod, ltd);
-
-		rc = ltd_bitmap_resize(ltd, newsize);
-		if (rc)
-			GOTO(out_desc, rc);
-
-		lod_getref(ltd);
-	}
-
+	down_write(&ltd->ltd_rw_sem);
 	mutex_lock(&ltd->ltd_mutex);
-	lock = true;
-	if (cfs_bitmap_check(ltd->ltd_tgt_bitmap, index)) {
-		CERROR("%s: device %d is registered already\n", obd->obd_name,
-		       index);
-		GOTO(out_mutex, rc = -EEXIST);
-	}
-
-	if (ltd->ltd_tgt_idx[index / TGT_PTRS_PER_BLOCK] == NULL) {
-		OBD_ALLOC_PTR(ltd->ltd_tgt_idx[index / TGT_PTRS_PER_BLOCK]);
-		if (ltd->ltd_tgt_idx[index / TGT_PTRS_PER_BLOCK] == NULL) {
-			CERROR("can't allocate index to add %s\n",
-			       obd->obd_name);
-			GOTO(out_mutex, rc = -ENOMEM);
-		}
-	}
-
+	lu_tgt_descs_add(ltd, tgt_desc);
 	if (for_ost) {
 		/* pool and qos are not supported for MDS stack yet */
 		rc = lod_ost_pool_add(&lod->lod_pool_info, index,
@@ -377,13 +286,9 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		if (active)
 			lod->lod_desc.ld_active_tgt_count++;
 	}
-
-	LTD_TGT(ltd, index) = tgt_desc;
-	cfs_bitmap_set(ltd->ltd_tgt_bitmap, index);
-	ltd->ltd_tgtnr++;
 	mutex_unlock(&ltd->ltd_mutex);
-	lod_putref(lod, ltd);
-	lock = false;
+	up_write(&ltd->ltd_rw_sem);
+
 	if (lod->lod_recovery_completed)
 		lu_dev->ld_ops->ldo_recovery_complete(env, lu_dev);
 
@@ -407,26 +312,20 @@ out_fini_llog:
 	lod_sub_fini_llog(env, tgt_desc->ltd_tgt,
 			  tgt_desc->ltd_recovery_thread);
 out_ltd:
-	lod_getref(ltd);
+	down_write(&ltd->ltd_rw_sem);
 	mutex_lock(&ltd->ltd_mutex);
-	lock = true;
 	if (!for_ost && LTD_TGT(ltd, index)->ltd_recovery_thread != NULL) {
 		struct ptlrpc_thread *thread;
 
 		thread = LTD_TGT(ltd, index)->ltd_recovery_thread;
 		OBD_FREE_PTR(thread);
 	}
-	ltd->ltd_tgtnr--;
-	cfs_bitmap_clear(ltd->ltd_tgt_bitmap, index);
-	LTD_TGT(ltd, index) = NULL;
 out_pool:
 	lod_ost_pool_remove(&lod->lod_pool_info, index);
 out_mutex:
-	if (lock) {
-		mutex_unlock(&ltd->ltd_mutex);
-		lod_putref(lod, ltd);
-	}
-out_desc:
+	lu_tgt_descs_del(ltd, tgt_desc);
+	mutex_unlock(&ltd->ltd_mutex);
+	up_write(&ltd->ltd_rw_sem);
 	OBD_FREE_PTR(tgt_desc);
 out_cleanup:
 	/* XXX OSP needs us to send down LCFG_CLEANUP because it uses
@@ -497,18 +396,16 @@ int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
 
 	if (ltd->ltd_tgts_size <= 0)
 		return 0;
+
 	lod_getref(ltd);
 	mutex_lock(&ltd->ltd_mutex);
 	cfs_foreach_bit(ltd->ltd_tgt_bitmap, idx)
 		__lod_del_device(env, lod, ltd, idx, for_ost);
 	mutex_unlock(&ltd->ltd_mutex);
 	lod_putref(lod, ltd);
-	CFS_FREE_BITMAP(ltd->ltd_tgt_bitmap);
-	for (idx = 0; idx < TGT_PTRS; idx++) {
-		if (ltd->ltd_tgt_idx[idx])
-			OBD_FREE_PTR(ltd->ltd_tgt_idx[idx]);
-	}
-	ltd->ltd_tgts_size = 0;
+
+	lu_tgt_descs_fini(ltd);
+
 	return 0;
 }
 

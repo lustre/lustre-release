@@ -456,9 +456,6 @@ struct lfsck_operations {
 			  struct lfsck_start_param *lsp);
 };
 
-#define TGT_PTRS		256     /* number of pointers at 1st level */
-#define TGT_PTRS_PER_BLOCK	256     /* number of pointers at 2nd level */
-
 struct lfsck_tgt_desc {
 	struct list_head   ltd_orphan_list;
 	struct dt_device  *ltd_tgt;

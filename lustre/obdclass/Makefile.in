@@ -13,6 +13,7 @@ obdclass-all-objs += linkea.o
 obdclass-all-objs += kernelcomm.o jobid.o
 obdclass-all-objs += integrity.o obd_cksum.o
 obdclass-all-objs += lu_qos.o
+obdclass-all-objs += lu_tgt_descs.o
 
 @SERVER_TRUE@obdclass-all-objs += acl.o
 @SERVER_TRUE@obdclass-all-objs += idmap.o

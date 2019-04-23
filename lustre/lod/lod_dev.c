@@ -244,27 +244,21 @@ static int lod_sub_process_config(const struct lu_env *env,
 				 struct lod_tgt_descs *ltd,
 				 struct lustre_cfg *lcfg)
 {
-	struct lu_device  *next;
+	struct lu_device *next;
+	struct lu_tgt_desc *tgt;
 	int rc = 0;
-	unsigned int i;
 
 	lod_getref(ltd);
-	if (ltd->ltd_tgts_size <= 0) {
-		lod_putref(lod, ltd);
-		return 0;
-	}
-	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		struct lod_tgt_desc *tgt;
+	ltd_foreach_tgt(ltd, tgt) {
 		int rc1;
 
-		tgt = LTD_TGT(ltd, i);
 		LASSERT(tgt && tgt->ltd_tgt);
 		next = &tgt->ltd_tgt->dd_lu_dev;
 		rc1 = next->ld_ops->ldo_process_config(env, next, lcfg);
 		if (rc1) {
 			CERROR("%s: error cleaning up LOD index %u: cmd %#x : rc = %d\n",
-			       lod2obd(lod)->obd_name, i, lcfg->lcfg_command,
-			       rc1);
+			       lod2obd(lod)->obd_name, tgt->ltd_index,
+			       lcfg->lcfg_command, rc1);
 			rc = rc1;
 		}
 	}
@@ -368,7 +362,6 @@ static int lod_sub_recovery_thread(void *arg)
 	struct lod_tgt_desc *tgt = NULL;
 	time64_t start;
 	int retries = 0;
-	int i;
 	int rc;
 
 	ENTRY;
@@ -459,8 +452,7 @@ again:
 		GOTO(out, rc = 0);
 	}
 
-	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		tgt = LTD_TGT(ltd, i);
+	ltd_foreach_tgt(ltd, tgt) {
 		if (!tgt->ltd_got_update_log) {
 			spin_unlock(&lod->lod_lock);
 			GOTO(out, rc = 0);
@@ -605,7 +597,7 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 	struct ptlrpc_thread *thread;
 	struct task_struct *task;
 	struct l_wait_info lwi = { 0 };
-	struct lod_tgt_desc *sub_ltd = NULL;
+	struct lod_tgt_desc *subtgt = NULL;
 	u32 index;
 	u32 master_index;
 	int rc;
@@ -624,30 +616,27 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		thread = &lod->lod_child_recovery_thread;
 		index = master_index;
 	} else {
-		struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-		struct lod_tgt_desc *tgt = NULL;
-		unsigned int i;
+		struct lu_tgt_desc *tgt;
 
-		cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-			tgt = LTD_TGT(ltd, i);
+		ltd_foreach_tgt(&lod->lod_mdt_descs, tgt) {
 			if (tgt->ltd_tgt == dt) {
 				index = tgt->ltd_index;
-				sub_ltd = tgt;
+				subtgt = tgt;
 				break;
 			}
 		}
-		LASSERT(sub_ltd != NULL);
-		OBD_ALLOC_PTR(sub_ltd->ltd_recovery_thread);
-		if (!sub_ltd->ltd_recovery_thread)
+		LASSERT(subtgt != NULL);
+		OBD_ALLOC_PTR(subtgt->ltd_recovery_thread);
+		if (!subtgt->ltd_recovery_thread)
 			GOTO(free_lrd, rc = -ENOMEM);
 
-		thread = sub_ltd->ltd_recovery_thread;
+		thread = subtgt->ltd_recovery_thread;
 	}
 
 	CDEBUG(D_INFO, "%s init sub log %s\n", lod2obd(lod)->obd_name,
 	       dt->dd_lu_dev.ld_obd->obd_name);
 	lrd->lrd_lod = lod;
-	lrd->lrd_ltd = sub_ltd;
+	lrd->lrd_ltd = subtgt;
 	lrd->lrd_thread = thread;
 	lrd->lrd_idx = index;
 	init_waitqueue_head(&thread->t_ctl_waitq);
@@ -680,8 +669,8 @@ out_llog:
 	lod_sub_fini_llog(env, dt, thread);
 free_thread:
 	if (lod->lod_child != dt) {
-		OBD_FREE_PTR(sub_ltd->ltd_recovery_thread);
-		sub_ltd->ltd_recovery_thread = NULL;
+		OBD_FREE_PTR(subtgt->ltd_recovery_thread);
+		subtgt->ltd_recovery_thread = NULL;
 	}
 free_lrd:
 	OBD_FREE_PTR(lrd);
@@ -701,7 +690,7 @@ static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 {
 	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
 	struct ptlrpc_thread *thread;
-	unsigned int i;
+	struct lu_tgt_desc *tgt;
 
 	/*
 	 * Stop the update log commit cancel threads and finish master
@@ -716,10 +705,7 @@ static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 	}
 
 	lod_getref(ltd);
-	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		struct lod_tgt_desc	*tgt;
-
-		tgt = LTD_TGT(ltd, i);
+	ltd_foreach_tgt(ltd, tgt) {
 		thread = tgt->ltd_recovery_thread;
 		if (thread && thread->t_flags & SVC_RUNNING) {
 			thread->t_flags = SVC_STOPPING;
@@ -746,7 +732,7 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 				   struct lod_device *lod)
 {
 	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	unsigned int i;
+	struct lu_tgt_desc *tgt;
 
 	/*
 	 * Stop the update log commit cancel threads and finish master
@@ -755,14 +741,9 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 	lod_sub_fini_llog(env, lod->lod_child,
 			  &lod->lod_child_recovery_thread);
 	lod_getref(ltd);
-	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		struct lod_tgt_desc *tgt;
-
-		tgt = LTD_TGT(ltd, i);
+	ltd_foreach_tgt(ltd, tgt)
 		lod_sub_fini_llog(env, tgt->ltd_tgt,
 				  tgt->ltd_recovery_thread);
-	}
-
 	lod_putref(lod, ltd);
 }
 
@@ -802,10 +783,10 @@ static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
 		(*count)++;
 	}
 
-	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		tgt = LTD_TGT(ltd, i);
+	ltd_foreach_tgt(ltd, tgt) {
 		if (!tgt->ltd_got_update_log) {
-			rc = snprintf(buf + len, *size - len, " %04x", i);
+			rc = snprintf(buf + len, *size - len, " %04x",
+				      tgt->ltd_index);
 			if (unlikely(rc <= 0))
 				break;
 
@@ -994,9 +975,9 @@ static int lod_process_config(const struct lu_env *env,
 		if (strstr(param, "osp") && strstr(param, ".active=")) {
 			struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
 			struct lod_tgt_desc *sub_tgt = NULL;
+			struct lu_tgt_desc *tgt;
 			char *ptr;
 			char *tmp;
-			int i;
 
 			ptr = strstr(param, ".");
 			*ptr = '\0';
@@ -1008,10 +989,7 @@ static int lod_process_config(const struct lu_env *env,
 				GOTO(out, rc);
 			}
 
-			cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-				struct lod_tgt_desc *tgt;
-
-				tgt = LTD_TGT(ltd, i);
+			ltd_foreach_tgt(ltd, tgt) {
 				if (tgt->ltd_tgt->dd_lu_dev.ld_obd == obd) {
 					sub_tgt = tgt;
 					break;
@@ -1172,8 +1150,8 @@ static int lod_recovery_complete(const struct lu_env *env,
 static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 {
 	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lu_tgt_desc *tgt;
 	int rc;
-	unsigned int i;
 
 	ENTRY;
 
@@ -1188,10 +1166,7 @@ static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 	if (rc < 0)
 		RETURN(rc);
 
-	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-		struct lod_tgt_desc *tgt;
-
-		tgt = LTD_TGT(ltd, i);
+	ltd_foreach_tgt(ltd, tgt) {
 		rc = lod_sub_init_llog(env, lod, tgt->ltd_tgt);
 		if (rc != 0)
 			break;
@@ -1724,38 +1699,6 @@ out:
 }
 
 /**
- * Allocate and initialize target table.
- *
- * A helper function to initialize the target table and allocate
- * a bitmap of the available targets.
- *
- * \param[in] ltd		target's table to initialize
- *
- * \retval 0			on success
- * \retval negative		negated errno on error
- **/
-static int lod_tgt_desc_init(struct lod_tgt_descs *ltd)
-{
-	mutex_init(&ltd->ltd_mutex);
-	init_rwsem(&ltd->ltd_rw_sem);
-
-	/*
-	 * the OST array and bitmap are allocated/grown dynamically as OSTs are
-	 * added to the LOD, see lod_add_device()
-	 */
-	ltd->ltd_tgt_bitmap = CFS_ALLOCATE_BITMAP(32);
-	if (!ltd->ltd_tgt_bitmap)
-		RETURN(-ENOMEM);
-
-	ltd->ltd_tgts_size  = 32;
-	ltd->ltd_tgtnr      = 0;
-
-	ltd->ltd_death_row = 0;
-	ltd->ltd_refcount  = 0;
-	return 0;
-}
-
-/**
  * Initialize LOD device at setup.
  *
  * Initializes the given LOD device using the original configuration command.
@@ -1811,8 +1754,8 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 
 	spin_lock_init(&lod->lod_lock);
 	spin_lock_init(&lod->lod_connects_lock);
-	lod_tgt_desc_init(&lod->lod_mdt_descs);
-	lod_tgt_desc_init(&lod->lod_ost_descs);
+	lu_tgt_descs_init(&lod->lod_mdt_descs);
+	lu_tgt_descs_init(&lod->lod_ost_descs);
 
 	RETURN(0);
 

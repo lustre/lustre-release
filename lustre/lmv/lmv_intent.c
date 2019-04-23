@@ -86,7 +86,7 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 
 	LASSERT(fid_is_sane(&body->mbo_fid1));
 
-	tgt = lmv_find_target(lmv, &body->mbo_fid1);
+	tgt = lmv_fid2tgt(lmv, &body->mbo_fid1);
 	if (IS_ERR(tgt))
 		GOTO(out, rc = PTR_ERR(tgt));
 
@@ -201,9 +201,9 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		op_data->op_fid1 = fid;
 		op_data->op_fid2 = fid;
 
-		tgt = lmv_get_target(lmv, lsm->lsm_md_oinfo[i].lmo_mds, NULL);
-		if (IS_ERR(tgt))
-			GOTO(cleanup, rc = PTR_ERR(tgt));
+		tgt = lmv_tgt(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
+		if (!tgt)
+			GOTO(cleanup, rc = -ENODEV);
 
 		CDEBUG(D_INODE, "Revalidate slave "DFID" -> mds #%u\n",
 		       PFID(&fid), tgt->ltd_index);
@@ -346,7 +346,7 @@ retry:
 		if (lmv_dir_striped(op_data->op_mea1))
 			op_data->op_fid1 = op_data->op_fid2;
 
-		tgt = lmv_find_target(lmv, &op_data->op_fid2);
+		tgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
 		if (IS_ERR(tgt))
 			RETURN(PTR_ERR(tgt));
 
