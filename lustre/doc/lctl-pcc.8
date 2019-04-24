@@ -18,11 +18,15 @@ on a Lustre filesystem client instances with the mount point referenced by
 .IR mntpath .
 The parameter
 .IR param
-is a string to config the PCC backend such as read-write attach id (archive ID)
-and auto-caching project id. i.e. the string "2 100" means that the read-write
-attach id is 2, and the project ID is 100 for the PCC backend. On this client
-any subsequently created files with the project ID of 100 will be persistently
-cached automatically.
+is a string in the form of name-value pairs to config the PCC backend such as
+read-write attach id (archive ID) or read-only attach id and auto caching rule.
+i.e. for the string "projid={500}&fname={*.h5} rwid=2", the first substring of
+the config parameter is the auto caching rule. Where "&" represents the logical
+conjunction operator while "," represents the logical disjunction operator. The
+example rule means that new files are only auto cached if the project ID is 500
+and the suffix of the file name is "h5". "rwid" represents the read-write
+attach id (2) which value is same as the archive ID of the copytool agent
+running on this PCC node.
 .TP
 .B lctl pcc del <\fImntpath\fR> <\fIpccpath\fR>
 Delete a PCC backend specified by path

@@ -34,14 +34,19 @@ Display the PCC state for given files.
 For RW-PCC, it is HSM ARCHIVE ID to choose which backend for cache files.
 .TP
 .B --mnt | -m
-Specifies Lustre mount point.
+Specify the Lustre mount point.
 .TP
 Before using RW-PCC, you need to configure HSM root and Archive ID mapping properly:
 .TP
-.B lfs pcc add $MNTPATH $PCCPATH \ "$ARCHIVE_ID $PROJID"
-Add one PCC backend to the Lustre client, you need to specify hsm root,
-archive ID, and project ID. On this client any subsequently created
-files with this project ID will be persistently cached automatically.
+.B lfs pcc add $MNTPATH $PCCPATH \ "$PARAM"
+Add one PCC backend to the Lustre client. For RW-PCC, when a file is being
+created, a rule-based policy is used to determine whether it will be cached.
+The rule expression supports logical conditional conjunction and disjunction
+operations among different users, groups, projects, or filenames including
+wildcards. You need to specify auto create caching rule and archive ID in
+.B $PARAM.
+On this client any subsequently created files matching the condition of auto
+caching rule will be persistently cached automatically.
 .TP
 .B lfs pcc del $MNTPATH $PCCPATH
  Delete one PCC backend
@@ -57,8 +62,14 @@ Enable HSM on the appropriate MDT.
 .B # lhsmtool_posix --daemon --hsm-root /mnt/pcc/ --archive=1 /mnt/lustre
 Launch one copytool on client node to connect cache storage.
 .TP
-.B # lfs pcc add /mnt/lustre /mnt/pcc \ "1\ 100"
-Add HSM root and Archive ID mapping for RW-PCC.
+.B # lfs pcc add /mnt/lustre /mnt/pcc \ "projid={500,1000}&fname={*.h5},uid=1001 rwid=1"
+Add HSM root and Archive ID (referenced by
+.IB rwid
+name-value pair) mapping for RW-PCC. Where "&" represents the logical
+conjunction operator while "," represents the logical disjunction operator.
+The example rule means that new files are only auto cached if the project ID is
+either 500 or 1000 and the suffix of the file name is “h5” or the user ID is
+1001.
 .TP
 .B $ lfs pcc attach -i 1 /mnt/lustre/file
 Attach an existing file into PCC and migrate data from lustre to Cache Device,

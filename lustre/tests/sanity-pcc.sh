@@ -175,7 +175,7 @@ setup_pcc_mapping() {
 	local hsm_root=${hsm_root:-$(hsm_root "$facet")}
 	local param="$2"
 
-	[ -z "$param" ] && param="$HSM_ARCHIVE_NUMBER\ 100"
+	[ -z "$param" ] && param="projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
 	stack_trap "cleanup_pcc_mapping $facet" EXIT
 	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p $param
 }
@@ -577,7 +577,7 @@ test_3b() {
 	# Start all of the copytools and setup PCC
 	for n in $(seq $AGTCOUNT); do
 		copytool setup -f agt$n -a $n -m $MOUNT
-		setup_pcc_mapping agt$n "$n\ 100"
+		setup_pcc_mapping agt$n "projid={100}\ rwid=$n"
 	done
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -965,6 +965,157 @@ test_12() {
 	return 0
 }
 run_test 12 "RW-PCC attach races with concurrent HSM remove"
+
+test_rule_id() {
+	local idstr="${1}id"
+	local rule="${idstr}={$2}"
+	local myRUNAS="$3"
+	local file=$DIR/$tdir/$tfile
+
+	setup_pcc_mapping $SINGLEAGT "$rule\ rwid=$HSM_ARCHIVE_NUMBER"
+	$LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
+	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
+
+	rm -f $file || error "rm $file failed"
+	do_facet $SINGLEAGT $myRUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $myRUNAS dd if=$file of=/dev/null bs=1024 count=1 ||
+		error "failed to dd read from $file"
+	do_facet $SINGLEAGT $myRUNAS $TRUNCATE $file 256 ||
+		error "failed to truncate $file"
+	do_facet $SINGLEAGT $myRUNAS $TRUNCATE $file 2048 ||
+		error "failed to truncate $file"
+	do_facet $SINGLEAGT $myRUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write from $file"
+	check_lpcc_state $file "readwrite"
+
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+
+	cleanup_pcc_mapping
+}
+
+test_13a() {
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	test_rule_id "u" "500" "runas -u 500"
+	test_rule_id "g" "500" "runas -u 500 -g 500"
+}
+run_test 13a "Test auto RW-PCC create caching for UID/GID rule"
+
+test_13b() {
+	local file
+
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"fname={*.h5\ suffix.*\ Mid*dle}\ rwid=$HSM_ARCHIVE_NUMBER"
+	$LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
+	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
+
+	file=$DIR/$tdir/prefix.h5
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/suffix.doc
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/MidPADdle
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
+		error "failed to detach file $file"
+	check_lpcc_state $file "none"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/Midpad
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "none"
+	rm $file || error "rm $file failed"
+
+	cleanup_pcc_mapping
+}
+run_test 13b "Test auto RW-PCC create caching for file name with wildcard"
+
+test_13c() {
+	local file
+	local myRUNAS
+
+	! is_project_quota_supported &&
+		echo "Skip project quota is not supported" && return 0
+
+	enable_project_quota
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100\ 200}\&fname={*.h5},uid={500}\&gid={1000}\ rwid=$HSM_ARCHIVE_NUMBER"
+	$LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
+	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
+
+	mkdir -p $DIR/$tdir/proj || error "mkdir $DIR/$tdir/proj failed"
+	mkdir -p $DIR/$tdir/proj2 || error "mkdir $DIR/$tdir/proj2 failed"
+	$LFS project -sp 100 $DIR/$tdir/proj ||
+		error "failed to set project for $DIR/$tdir/proj"
+	$LFS project -sp 200 $DIR/$tdir/proj2 ||
+		error "failed to set project for $DIR/$tdir/proj2"
+
+	file=$DIR/$tdir/proj/notcache
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "none"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/proj/autocache.h5
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/proj2/notcache
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "none"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/proj2/autocache.h5
+	do_facet $SINGLEAGT dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/ugidcache
+	myRUNAS="runas -u 500 -g 1000"
+	do_facet $SINGLEAGT $myRUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+		error "failed to dd write to $file"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+	rm $file || error "rm $file failed"
+
+	cleanup_pcc_mapping
+}
+run_test 13c "Check auto RW-PCC create caching for UID/GID/ProjID/fname rule"
 
 complete $SECONDS
 check_and_cleanup_lustre

@@ -835,7 +835,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 		lum->lmm_pattern = LOV_PATTERN_F_RELEASED | LOV_PATTERN_RAID0;
 		op_data->op_data = lum;
 		op_data->op_data_size = sizeof(*lum);
-		op_data->op_archive_id = dataset->pccd_id;
+		op_data->op_archive_id = dataset->pccd_rwid;
 
 		rc = obd_fid_alloc(NULL, ll_i2mdexp(parent), &op_data->op_fid2,
 				   op_data);
@@ -1004,9 +1004,14 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 		/* Volatile file is used for HSM restore, so do not use PCC */
 		if (!filename_is_volatile(dentry->d_name.name,
 					  dentry->d_name.len, NULL)) {
-			dataset = pcc_dataset_get(&sbi->ll_pcc_super,
-						  ll_i2info(dir)->lli_projid,
-						  0);
+			struct pcc_matcher item;
+
+			item.pm_uid = from_kuid(&init_user_ns, current_uid());
+			item.pm_gid = from_kgid(&init_user_ns, current_gid());
+			item.pm_projid = ll_i2info(dir)->lli_projid;
+			item.pm_name = &dentry->d_name;
+			dataset = pcc_dataset_match_get(&sbi->ll_pcc_super,
+							&item);
 			pca.pca_dataset = dataset;
 		}
 	}
