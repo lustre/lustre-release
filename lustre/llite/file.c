@@ -1612,6 +1612,8 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	ssize_t rc2;
 	__u16 refcheck;
 
+	ll_ras_enter(iocb->ki_filp);
+
 	result = ll_do_fast_read(iocb, to);
 	if (result < 0 || iov_iter_count(to) == 0)
 		GOTO(out, result);
@@ -1888,6 +1890,8 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
         ssize_t             result;
 	__u16               refcheck;
         ENTRY;
+
+	ll_ras_enter(in_file);
 
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))

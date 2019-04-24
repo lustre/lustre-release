@@ -803,7 +803,6 @@ static int vvp_io_read_start(const struct lu_env *env,
 		vio->vui_ra_valid = true;
 		vio->vui_ra_start = cl_index(obj, pos);
 		vio->vui_ra_count = cl_index(obj, tot + PAGE_SIZE - 1);
-		ll_ras_enter(file);
 	}
 
 	/* BUG: 5972 */
