@@ -310,8 +310,8 @@ restart_thr=1
 restart_nobj=1
 
 # machine's page size (KB)
-PAGE_SIZE=${PAGE_SIZE:-$(($(getconf PAGE_SIZE) / 1024))}
-PAGE_SIZE=${PAGE_SIZE:-4}
+PAGE_SIZE_KB=${PAGE_SIZE_KB:-$(( ${PAGE_SIZE:-$(getconf PAGE_SIZE)} / 1024))}
+PAGE_SIZE_KB=${PAGE_SIZE_KB:-4}
 
 snap=1
 clean_srv_OSS=0
@@ -504,8 +504,8 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 			# compute parameters
 			total_thr=$((ndevs * thr))
 			total_nobj=$((ndevs * nobj))
-			pages=$((rsz / PAGE_SIZE))
-			actual_rsz=$((pages * PAGE_SIZE))
+			pages=$(( (rsz + PAGE_SIZE_KB - 1) / PAGE_SIZE_KB))
+			actual_rsz=$((pages * PAGE_SIZE_KB))
 			count=$((size * 1024 / (actual_rsz * thr)))
 			actual_size=$((actual_rsz * count * thr))
 			total_size=$((actual_size * ndevs))
