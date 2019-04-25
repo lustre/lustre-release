@@ -1412,8 +1412,9 @@ kiblnd_connect_peer(struct kib_peer_ni *peer_ni)
         LASSERT (net != NULL);
         LASSERT (peer_ni->ibp_connecting > 0);
 
-        cmid = kiblnd_rdma_create_id(kiblnd_cm_callback, peer_ni, RDMA_PS_TCP,
-                                     IB_QPT_RC);
+	cmid = kiblnd_rdma_create_id(peer_ni->ibp_ni->ni_net_ns,
+				     kiblnd_cm_callback, peer_ni,
+				     RDMA_PS_TCP, IB_QPT_RC);
 
         if (IS_ERR(cmid)) {
                 CERROR("Can't create CMID for %s: %ld\n",
@@ -3901,6 +3902,7 @@ kiblnd_failover_thread(void *arg)
 {
 	rwlock_t	*glock = &kiblnd_data.kib_global_lock;
 	struct kib_dev *dev;
+	struct net *ns = arg;
 	wait_queue_entry_t wait;
 	unsigned long	 flags;
 	int		 rc;
@@ -3929,7 +3931,7 @@ kiblnd_failover_thread(void *arg)
                         dev->ibd_failover = 1;
 			write_unlock_irqrestore(glock, flags);
 
-			rc = kiblnd_dev_failover(dev);
+			rc = kiblnd_dev_failover(dev, ns);
 
 			write_lock_irqsave(glock, flags);
 

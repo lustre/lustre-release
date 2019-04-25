@@ -2732,7 +2732,7 @@ ksocknal_startup(struct lnet_ni *ni)
 		net_tunables->lct_peer_rtr_credits =
 			*ksocknal_tunables.ksnd_peerrtrcredits;
 
-	rc = lnet_inet_enumerate(&ifaces);
+	rc = lnet_inet_enumerate(&ifaces, ni->ni_net_ns);
 	if (rc < 0)
 		goto fail_1;
 

@@ -120,15 +120,16 @@ extern struct kib_tunables  kiblnd_tunables;
 			min(t->lnd_peercredits_hiw, (__u32)conn->ibc_queue_depth - 1))
 
 #ifdef HAVE_RDMA_CREATE_ID_5ARG
-# define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(current->nsproxy->net_ns, \
-								cb, dev, \
-								ps, qpt)
+# define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) rdma_create_id(ns, cb, \
+								    dev, ps, \
+								    qpt)
 #else
 # ifdef HAVE_RDMA_CREATE_ID_4ARG
-#  define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, \
-								 ps, qpt)
+#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) rdma_create_id(cb, dev, \
+								     ps, qpt)
 # else
-#  define kiblnd_rdma_create_id(cb, dev, ps, qpt) rdma_create_id(cb, dev, ps)
+#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) rdma_create_id(cb, dev, \
+								     ps)
 # endif
 #endif
 
@@ -1173,7 +1174,7 @@ int  kiblnd_cm_callback(struct rdma_cm_id *cmid,
                         struct rdma_cm_event *event);
 int  kiblnd_translate_mtu(int value);
 
-int  kiblnd_dev_failover(struct kib_dev *dev);
+int  kiblnd_dev_failover(struct kib_dev *dev, struct net *ns);
 int kiblnd_create_peer(struct lnet_ni *ni, struct kib_peer_ni **peerp,
 		       lnet_nid_t nid);
 void kiblnd_destroy_peer(struct kib_peer_ni *peer);

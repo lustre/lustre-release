@@ -1994,11 +1994,12 @@ ksocknal_connect(struct ksock_route *route)
                         goto failed;
                 }
 
-                rc = lnet_connect(&sock, peer_ni->ksnp_id.nid,
-                                  route->ksnr_myipaddr,
-                                  route->ksnr_ipaddr, route->ksnr_port);
-                if (rc != 0)
-                        goto failed;
+		rc = lnet_connect(&sock, peer_ni->ksnp_id.nid,
+				  route->ksnr_myipaddr,
+				  route->ksnr_ipaddr, route->ksnr_port,
+				  peer_ni->ksnp_ni->ni_net_ns);
+		if (rc != 0)
+			goto failed;
 
                 rc = ksocknal_create_conn(peer_ni->ksnp_ni, route, sock, type);
                 if (rc < 0) {
