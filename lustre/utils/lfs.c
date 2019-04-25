@@ -8209,16 +8209,15 @@ next:
 	return rc;
 }
 
-
 static const char *const heat_names[] = LU_HEAT_NAMES;
 
 static int lfs_heat_get(int argc, char **argv)
 {
-	struct lu_heat	*heat;
-	int		 rc = 0, rc2;
-	char		*path;
-	int		 fd;
-	int		 i;
+	struct lu_heat *heat;
+	int rc = 0, rc2;
+	char *path;
+	int fd;
+	int i;
 
 	if (argc <= 1)
 		return CMD_HELP;
@@ -8264,25 +8263,22 @@ next:
 
 static int lfs_heat_set(int argc, char **argv)
 {
-	struct option	 long_opts[] = {
-		{"clear", no_argument, 0, 'c'},
-		{"off", no_argument, 0, 'o'},
-		{"on", no_argument, 0, 'O'},
-		{0, 0, 0, 0}
-	};
-	char		 short_opts[] = "coO";
-	int		 rc = 0, rc2;
-	char		*path;
-	int		 fd;
-	__u64		 flags = 0;
-	int		 c;
+	struct option long_opts[] = {
+	{ .val = 'c',	.name = "clear",	.has_arg = no_argument },
+	{ .val = 'o',	.name = "off",		.has_arg = no_argument },
+	{ .val = 'O',	.name = "on",		.has_arg = no_argument },
+	{ .name = NULL } };
+	enum lu_heat_flag flags = 0;
+	int rc = 0, rc2;
+	char *path;
+	int fd;
+	int c;
 
 	if (argc <= 1)
 		return CMD_HELP;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, short_opts,
-				long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "coO", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 			flags |= LU_HEAT_FLAG_CLEAR;

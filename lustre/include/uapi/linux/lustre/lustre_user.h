@@ -479,7 +479,7 @@ struct ll_ioc_lease_id {
 #define LL_IOC_GETPARENT		_IOWR('f', 249, struct getparent)
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
 #define LL_IOC_HEAT_GET			_IOWR('f', 251, struct lu_heat)
-#define LL_IOC_HEAT_SET			_IOW('f', 252, long)
+#define LL_IOC_HEAT_SET			_IOW('f', 251, __u64)
 
 #ifndef	FS_IOC_FSGETXATTR
 /*
@@ -2240,8 +2240,10 @@ enum lu_heat_flag_bit {
 	LU_HEAT_FLAG_BIT_CLEAR,
 };
 
-#define LU_HEAT_FLAG_CLEAR	(1 << LU_HEAT_FLAG_BIT_CLEAR)
-#define LU_HEAT_FLAG_OFF	(1 << LU_HEAT_FLAG_BIT_OFF)
+enum lu_heat_flag {
+	LU_HEAT_FLAG_OFF	= 1ULL << LU_HEAT_FLAG_BIT_OFF,
+	LU_HEAT_FLAG_CLEAR	= 1ULL << LU_HEAT_FLAG_BIT_CLEAR,
+};
 
 enum obd_heat_type {
 	OBD_HEAT_READSAMPLE	= 0,

@@ -3301,7 +3301,7 @@ static void ll_heat_get(struct inode *inode, struct lu_heat *heat)
 	spin_unlock(&lli->lli_heat_lock);
 }
 
-static int ll_heat_set(struct inode *inode, __u64 flags)
+static int ll_heat_set(struct inode *inode, enum lu_heat_flag flags)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	int rc = 0;
