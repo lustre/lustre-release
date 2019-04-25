@@ -1605,7 +1605,7 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 	return count;
 }
 
-int lnet_inet_enumerate(struct lnet_inetdev **dev_list)
+int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 {
 	struct lnet_inetdev *ifaces = NULL;
 	struct net_device *dev;
@@ -1613,7 +1613,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list)
 	int nip = 0;
 
 	rtnl_lock();
-	for_each_netdev(&init_net, dev) {
+	for_each_netdev(ns, dev) {
 		int flags = dev_get_flags(dev);
 		struct in_device *in_dev;
 		int node_id;
@@ -1686,7 +1686,7 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
 	int	   rc;
 	int i;
 
-	nip = lnet_inet_enumerate(&ifaces);
+	nip = lnet_inet_enumerate(&ifaces, current->nsproxy->net_ns);
 	if (nip < 0) {
 		if (nip != -ENOENT) {
 			LCONSOLE_ERROR_MSG(0x117,
