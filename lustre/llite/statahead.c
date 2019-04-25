@@ -692,21 +692,19 @@ static void sa_handle_callback(struct ll_statahead_info *sai)
 
 	lli = ll_i2info(sai->sai_dentry->d_inode);
 
+	spin_lock(&lli->lli_sa_lock);
 	while (sa_has_callback(sai)) {
 		struct sa_entry *entry;
 
-		spin_lock(&lli->lli_sa_lock);
-		if (unlikely(!sa_has_callback(sai))) {
-			spin_unlock(&lli->lli_sa_lock);
-			break;
-		}
 		entry = list_entry(sai->sai_interim_entries.next,
 				   struct sa_entry, se_list);
 		list_del_init(&entry->se_list);
 		spin_unlock(&lli->lli_sa_lock);
 
 		sa_instantiate(sai, entry);
+		spin_lock(&lli->lli_sa_lock);
 	}
+	spin_unlock(&lli->lli_sa_lock);
 }
 
 /*
