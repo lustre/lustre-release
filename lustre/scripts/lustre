@@ -455,13 +455,14 @@ start_services ()
 			assemble_md_device $journal $raidtab 2>/dev/null
 		fi
 
+		if mountpt_is_active $label || \
+		   device_is_active $label; then
+			echo "$label is already mounted"
+			# no error
+			continue
+		fi
+
 		if [ "x$devtype" != "xzfs" ] ; then
-			if mountpt_is_active $label || \
-			   device_is_active $label; then
-				echo "$label is already mounted"
-				# no error
-				continue
-			fi
 			if ! mmp_test $dev; then
 				result=2
 				continue
