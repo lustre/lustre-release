@@ -219,10 +219,6 @@ static inline bool lmv_dir_retry_check_update(struct md_op_data *op_data)
 struct lmv_tgt_desc *lmv_locate_tgt(struct lmv_obd *lmv,
 				    struct md_op_data *op_data);
 
-/* lmv_qos.c */
-struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv, __u32 *mdt);
-struct lu_tgt_desc *lmv_locate_tgt_rr(struct lmv_obd *lmv, __u32 *mdt);
-
 /* lproc_lmv.c */
 int lmv_tunables_init(struct obd_device *obd);
 

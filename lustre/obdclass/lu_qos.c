@@ -209,3 +209,307 @@ u64 lu_prandom_u64_max(u64 ep_ro)
 	return rand;
 }
 EXPORT_SYMBOL(lu_prandom_u64_max);
+
+static inline __u64 tgt_statfs_bavail(struct lu_tgt_desc *tgt)
+{
+	struct obd_statfs *statfs = &tgt->ltd_statfs;
+
+	return statfs->os_bavail * statfs->os_bsize;
+}
+
+static inline __u64 tgt_statfs_iavail(struct lu_tgt_desc *tgt)
+{
+	return tgt->ltd_statfs.os_ffree;
+}
+
+/**
+ * Calculate penalties per-tgt and per-server
+ *
+ * Re-calculate penalties when the configuration changes, active targets
+ * change and after statfs refresh (all these are reflected by lq_dirty flag).
+ * On every tgt and server: decay the penalty by half for every 8x the update
+ * interval that the device has been idle. That gives lots of time for the
+ * statfs information to be updated (which the penalty is only a proxy for),
+ * and avoids penalizing server/tgt under light load.
+ * See lqos_calc_weight() for how penalties are factored into the weight.
+ *
+ * \param[in] qos		lu_qos
+ * \param[in] ltd		lu_tgt_descs
+ * \param[in] active_tgt_nr	active tgt number
+ * \param[in] maxage		qos max age
+ * \param[in] is_mdt		MDT will count inode usage
+ *
+ * \retval 0		on success
+ * \retval -EAGAIN	the number of tgt isn't enough or all tgt spaces are
+ *			almost the same
+ */
+int lqos_calc_penalties(struct lu_qos *qos, struct lu_tgt_descs *ltd,
+			__u32 active_tgt_nr, __u32 maxage, bool is_mdt)
+{
+	struct lu_tgt_desc *tgt;
+	struct lu_svr_qos *svr;
+	__u64 ba_max, ba_min, ba;
+	__u64 ia_max, ia_min, ia = 1;
+	__u32 num_active;
+	int prio_wide;
+	time64_t now, age;
+	int rc;
+
+	ENTRY;
+
+	if (!qos->lq_dirty)
+		GOTO(out, rc = 0);
+
+	num_active = active_tgt_nr - 1;
+	if (num_active < 1)
+		GOTO(out, rc = -EAGAIN);
+
+	/* find bavail on each server */
+	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
+		svr->lsq_bavail = 0;
+		/* if inode is not counted, set to 1 to ignore */
+		svr->lsq_iavail = is_mdt ? 0 : 1;
+	}
+	qos->lq_active_svr_count = 0;
+
+	/*
+	 * How badly user wants to select targets "widely" (not recently chosen
+	 * and not on recent MDS's).  As opposed to "freely" (free space avail.)
+	 * 0-256
+	 */
+	prio_wide = 256 - qos->lq_prio_free;
+
+	ba_min = (__u64)(-1);
+	ba_max = 0;
+	ia_min = (__u64)(-1);
+	ia_max = 0;
+	now = ktime_get_real_seconds();
+
+	/* Calculate server penalty per object */
+	ltd_foreach_tgt(ltd, tgt) {
+		if (!tgt->ltd_active)
+			continue;
+
+		/* when inode is counted, bavail >> 16 to avoid overflow */
+		ba = tgt_statfs_bavail(tgt);
+		if (is_mdt)
+			ba >>= 16;
+		else
+			ba >>= 8;
+		if (!ba)
+			continue;
+
+		ba_min = min(ba, ba_min);
+		ba_max = max(ba, ba_max);
+
+		/* Count the number of usable servers */
+		if (tgt->ltd_qos.ltq_svr->lsq_bavail == 0)
+			qos->lq_active_svr_count++;
+		tgt->ltd_qos.ltq_svr->lsq_bavail += ba;
+
+		if (is_mdt) {
+			/* iavail >> 8 to avoid overflow */
+			ia = tgt_statfs_iavail(tgt) >> 8;
+			if (!ia)
+				continue;
+
+			ia_min = min(ia, ia_min);
+			ia_max = max(ia, ia_max);
+
+			tgt->ltd_qos.ltq_svr->lsq_iavail += ia;
+		}
+
+		/*
+		 * per-tgt penalty is
+		 * prio * bavail * iavail / (num_tgt - 1) / 2
+		 */
+		tgt->ltd_qos.ltq_penalty_per_obj = prio_wide * ba * ia;
+		do_div(tgt->ltd_qos.ltq_penalty_per_obj, num_active);
+		tgt->ltd_qos.ltq_penalty_per_obj >>= 1;
+
+		age = (now - tgt->ltd_qos.ltq_used) >> 3;
+		if (qos->lq_reset || age > 32 * maxage)
+			tgt->ltd_qos.ltq_penalty = 0;
+		else if (age > maxage)
+			/* Decay tgt penalty. */
+			tgt->ltd_qos.ltq_penalty >>= (age / maxage);
+	}
+
+	num_active = qos->lq_active_svr_count - 1;
+	if (num_active < 1) {
+		/*
+		 * If there's only 1 server, we can't penalize it, so instead
+		 * we have to double the tgt penalty
+		 */
+		num_active = 1;
+		ltd_foreach_tgt(ltd, tgt) {
+			if (!tgt->ltd_active)
+				continue;
+
+			tgt->ltd_qos.ltq_penalty_per_obj <<= 1;
+		}
+	}
+
+	/*
+	 * Per-server penalty is
+	 * prio * bavail * iavail / server_tgts / (num_svr - 1) / 2
+	 */
+	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
+		ba = svr->lsq_bavail;
+		ia = svr->lsq_iavail;
+		svr->lsq_penalty_per_obj = prio_wide * ba  * ia;
+		do_div(ba, svr->lsq_tgt_count * num_active);
+		svr->lsq_penalty_per_obj >>= 1;
+
+		age = (now - svr->lsq_used) >> 3;
+		if (qos->lq_reset || age > 32 * maxage)
+			svr->lsq_penalty = 0;
+		else if (age > maxage)
+			/* Decay server penalty. */
+			svr->lsq_penalty >>= age / maxage;
+	}
+
+	qos->lq_dirty = 0;
+	qos->lq_reset = 0;
+
+	/*
+	 * If each tgt has almost same free space, do rr allocation for better
+	 * creation performance
+	 */
+	qos->lq_same_space = 0;
+	if ((ba_max * (256 - qos->lq_threshold_rr)) >> 8 < ba_min &&
+	    (ia_max * (256 - qos->lq_threshold_rr)) >> 8 < ia_min) {
+		qos->lq_same_space = 1;
+		/* Reset weights for the next time we enter qos mode */
+		qos->lq_reset = 1;
+	}
+	rc = 0;
+
+out:
+	if (!rc && qos->lq_same_space)
+		RETURN(-EAGAIN);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(lqos_calc_penalties);
+
+bool lqos_is_usable(struct lu_qos *qos, __u32 active_tgt_nr)
+{
+	if (!qos->lq_dirty && qos->lq_same_space)
+		return false;
+
+	if (active_tgt_nr < 2)
+		return false;
+
+	return true;
+}
+EXPORT_SYMBOL(lqos_is_usable);
+
+/**
+ * Calculate weight for a given tgt.
+ *
+ * The final tgt weight is bavail >> 16 * iavail >> 8 minus the tgt and server
+ * penalties.  See lqos_calc_ppts() for how penalties are calculated.
+ *
+ * \param[in] tgt	target descriptor
+ */
+void lqos_calc_weight(struct lu_tgt_desc *tgt)
+{
+	struct lu_tgt_qos *ltq = &tgt->ltd_qos;
+	__u64 temp, temp2;
+
+	temp = (tgt_statfs_bavail(tgt) >> 16) * (tgt_statfs_iavail(tgt) >> 8);
+	temp2 = ltq->ltq_penalty + ltq->ltq_svr->lsq_penalty;
+	if (temp < temp2)
+		ltq->ltq_weight = 0;
+	else
+		ltq->ltq_weight = temp - temp2;
+}
+EXPORT_SYMBOL(lqos_calc_weight);
+
+/**
+ * Re-calculate weights.
+ *
+ * The function is called when some target was used for a new object. In
+ * this case we should re-calculate all the weights to keep new allocations
+ * balanced well.
+ *
+ * \param[in] qos		lu_qos
+ * \param[in] ltd		lu_tgt_descs
+ * \param[in] tgt		target where a new object was placed
+ * \param[in] active_tgt_nr	active tgt number
+ * \param[out] total_wt	new total weight for the pool
+ *
+ * \retval		0
+ */
+int lqos_recalc_weight(struct lu_qos *qos, struct lu_tgt_descs *ltd,
+		       struct lu_tgt_desc *tgt, __u32 active_tgt_nr,
+		       __u64 *total_wt)
+{
+	struct lu_tgt_qos *ltq;
+	struct lu_svr_qos *svr;
+
+	ENTRY;
+
+	ltq = &tgt->ltd_qos;
+	LASSERT(ltq);
+
+	/* Don't allocate on this device anymore, until the next alloc_qos */
+	ltq->ltq_usable = 0;
+
+	svr = ltq->ltq_svr;
+
+	/*
+	 * Decay old penalty by half (we're adding max penalty, and don't
+	 * want it to run away.)
+	 */
+	ltq->ltq_penalty >>= 1;
+	svr->lsq_penalty >>= 1;
+
+	/* mark the server and tgt as recently used */
+	ltq->ltq_used = svr->lsq_used = ktime_get_real_seconds();
+
+	/* Set max penalties for this tgt and server */
+	ltq->ltq_penalty += ltq->ltq_penalty_per_obj * active_tgt_nr;
+	svr->lsq_penalty += svr->lsq_penalty_per_obj * active_tgt_nr;
+
+	/* Decrease all MDS penalties */
+	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
+		if (svr->lsq_penalty < svr->lsq_penalty_per_obj)
+			svr->lsq_penalty = 0;
+		else
+			svr->lsq_penalty -= svr->lsq_penalty_per_obj;
+	}
+
+	*total_wt = 0;
+	/* Decrease all tgt penalties */
+	ltd_foreach_tgt(ltd, tgt) {
+		if (!tgt->ltd_active)
+			continue;
+
+		if (ltq->ltq_penalty < ltq->ltq_penalty_per_obj)
+			ltq->ltq_penalty = 0;
+		else
+			ltq->ltq_penalty -= ltq->ltq_penalty_per_obj;
+
+		lqos_calc_weight(tgt);
+
+		/* Recalc the total weight of usable osts */
+		if (ltq->ltq_usable)
+			*total_wt += ltq->ltq_weight;
+
+		CDEBUG(D_OTHER, "recalc tgt %d usable=%d avail=%llu"
+			  " tgtppo=%llu tgtp=%llu svrppo=%llu"
+			  " svrp=%llu wt=%llu\n",
+			  tgt->ltd_index, ltq->ltq_usable,
+			  tgt_statfs_bavail(tgt) >> 10,
+			  ltq->ltq_penalty_per_obj >> 10,
+			  ltq->ltq_penalty >> 10,
+			  ltq->ltq_svr->lsq_penalty_per_obj >> 10,
+			  ltq->ltq_svr->lsq_penalty >> 10,
+			  ltq->ltq_weight >> 10);
+	}
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(lqos_recalc_weight);
