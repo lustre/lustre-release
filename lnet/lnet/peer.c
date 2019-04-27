@@ -168,6 +168,7 @@ lnet_peer_ni_alloc(lnet_nid_t nid)
 	INIT_LIST_HEAD(&lpni->lpni_peer_nis);
 	INIT_LIST_HEAD(&lpni->lpni_recovery);
 	INIT_LIST_HEAD(&lpni->lpni_on_remote_peer_ni_list);
+	LNetInvalidateMDHandle(&lpni->lpni_recovery_ping_mdh);
 
 	spin_lock_init(&lpni->lpni_lock);
 

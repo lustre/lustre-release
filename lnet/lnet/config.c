@@ -459,6 +459,7 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 	spin_lock_init(&ni->ni_lock);
 	INIT_LIST_HEAD(&ni->ni_netlist);
 	INIT_LIST_HEAD(&ni->ni_recovery);
+	LNetInvalidateMDHandle(&ni->ni_ping_mdh);
 	ni->ni_refs = cfs_percpt_alloc(lnet_cpt_table(),
 				       sizeof(*ni->ni_refs[0]));
 	if (ni->ni_refs == NULL)
