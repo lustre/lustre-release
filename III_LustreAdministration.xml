@@ -101,6 +101,7 @@
     <xi:include href="ManagingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ConfiguringQuotas.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="LustreHSM.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="PersistentClientCache.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="LustreNodemap.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="LustreSharedSecretKey.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ManagingSecurity.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />

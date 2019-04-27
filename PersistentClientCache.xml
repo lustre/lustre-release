@@ -1,0 +1,503 @@
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="pcc"
+    condition="l2D">
+  <title xml:id="pcc.title">Persistent Client Cache (PCC)</title>
+  <para>This chapter describes Persistent Client Cache (PCC).</para>
+  <section xml:id="pcc.intro">
+    <title>Introduction</title>
+    <para> Flash-based SSDs help to (partly) close the ever-increasing
+      performance gap between magnetic disks and CPUs. SSDs build a new level
+      in the storage hierarchy, both in terms of price and performance.  The
+      large size of data sets stored in Lustre, ranging up to hundreds of PiB
+      in the largest centers, makes it more cost-effective to store most of the
+      data on HDDs and only an active subset of data on SSDs.</para>
+    <para>The PCC mechanism allows clients equipped with internal SSDs to
+      deliver additional performance for both read and write intensive
+      applications that have node-local I/O patterns without losing the benefits
+      of the global Lustre namespace. PCC is combined with Lustre HSM and layout
+      lock mechanisms to provide persistent caching services using the local SSD
+      storage, while allowing migration of individual files between local and
+      shared storage. This enables I/O intensive applications to read and write
+      data on client nodes without losing the benefits of the global Lustre
+      namespace.</para>
+    <para>The main advantages to use this cache on the Lustre clients is
+      that the I/O stack is much simpler for the cached data, as there is no
+      interference with I/Os from other clients, which enables performance
+      optimizations. There are no special requirements on the hardware of
+      the client nodes. Any Linux filesystem, such as ext4 on an NVMe device,
+      can be used as PCC cache. Local file caching reduces the pressure on the
+      object storage targets (OSTs), as small or random I/Os can be aggregated
+      to large sequential I/Os and temporary files do not even need to be
+      flushed to OSTs.</para>
+  </section>
+  <section xml:id="pcc.design">
+    <title>Design</title>
+    <section xml:id="pcc.design.rwpcc">
+      <title>Lustre Read-Write PCC Caching</title>
+      <figure xml:id="pcc.rwpccarch.fig">
+        <title>Overview of PCC-RW Architecture</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" width="50%"
+              fileref="figures/pccarch.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Overview of PCC-RW Architecture</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <para>Lustre typically uses its integrated HSM mechanism to interface
+        with larger and slower archival storage using tapes or other media.
+        PCC-RW, on the contrary, is actually an HSM backend storage system which
+        provides a group of high-speed local caches on Lustre clients.
+        <xref linkend="pcc.rwpccarch.fig"/> shows the PCC-RW architecture. Each
+        client uses its own local storage, usually in the form of NVMe,
+        formatted as a local file system for the local cache. Cached I/Os are
+        directed to files in the local file system, while normal I/O are
+        directed to OSTs.</para>
+      <para>PCC-RW uses Lustre's HSM mechanism for data synchronization. Each
+        PCC node is actually an HSM agent and has a copy tool instance running
+        on it. The Lustre HSM copytool is used to restore files from the local
+        cache to Lustre OSTs. Any remote access for a PCC cached file from
+        another Lustre client triggers this data synchronization. If a PCC
+        client goes offline, the cached data becomes temporarily inaccessible
+        to other clients. The data will be accessible again after the PCC
+        client reboots, mounts the Lustre filesystem, and restarts the
+        copytool.</para>
+      <para>Currently, PCC clients cache entire files on their local
+        filesystems. A file has to be attached to PCC before I/O can be directed
+        to a client cache. The Lustre layout lock feature is used to ensure that
+        the caching services are consistent with the global file system state.
+        The file data can be written/read directly to/from the local PCC cache
+        after a successful attach operation. If the attach has not been
+        successful, the client will simply fall back to the normal I/O path and
+        direct I/Os to OSTs. PCC-RW cached files are automatically restored to
+        the global filesystem when a process on another client tries to read or
+        modify them. The corresponding I/O will be blocked, waiting for the
+        released file to be restored. This is transparent to the application.
+      </para>
+      <para>The revocation of the layout lock can automatically detach the file
+        from the PCC cache at any time. The PCC-RW cached file can be
+        manually detached by the <literal>lfs pcc detach</literal> command. After
+        the cached file is detached from the cache and restored to OSTs, it
+        will be removed from the PCC filesystem.</para>
+      <para>Failed PCC-RW operations usually return corresponding error codes.
+        There is a special case when the space of the local PCC file system is
+        exhausted. In this case, PCC-RW can fall back to the normal I/O path
+        automatically since the capacity of the Lustre file system is much
+        larger than the capacity of the PCC device.</para>
+    </section>
+    <section xml:id="pcc.design.rules">
+      <title>Rule-based Persistent Client Cache</title>
+      <para>PCC includes a rule-based, configurable caching infrastructure that
+        enables it to achieve various objectives, such as customizing I/O
+        caching and providing performance isolation and QoS guarantees.</para>
+      <para>For PCC-RW, when a file is being created, a rule-based policy is
+        used to determine whether it will be cached. It supports rules for
+        different users, groups, projects, or filenames extensions.</para>
+      <para>Rule-based PCC-RW caching of newly created files can determine
+        which file can use a cache on PCC directly without administrator's
+        intervention.</para>
+    </section>
+  </section>
+  <section xml:id="pcc.operations">
+    <title>PCC Command Line Tools</title>
+    <para>Lustre provides <literal>lfs</literal> and <literal>lctl</literal>
+      command line tools for users to interact with PCC feature.</para>
+    <section xml:id="pcc.operations.add">
+      <title>Add a PCC backend on a client</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>client# lctl pcc add <replaceable>mountpoint</replaceable> <replaceable>pccpath</replaceable> [--param|-p <replaceable>cfgparam</replaceable>]</screen>
+      <para>The above command will add a PCC backend to the Lustre client.</para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>mountpoint</entry>
+              <entry>
+                <para>The Lustre client mount point.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>pccpath</entry>
+              <entry>
+                <para>The directory path on local filesystem for PCC cache. The
+                  whole filesystem does not need to be exclusively dedicated to
+                  the PCC cache, but the directory should not be accessible to
+                  regular users.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>cfgparam</para>
+              </entry>
+              <entry>
+                <para>A string in the form of name-value pairs to config the
+                  PCC backend such as read-write attach id (archive ID),
+                  and auto caching rule, etc.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Note:</emphasis> when a client node has
+        more than one Lustre mount point or Lustre filesystem instance, the
+        parameter <replaceable>mountpoint</replaceable> makes sure that only
+        the PCC backend on specified Lustre filesystem instance or Lustre
+        mount point is configured. This Lustre mount point must be the same as
+        the HSM (lhsmtool_posix) configuration, if the PCC backend is used as
+        PCC-RW caching. Also, the parameter <replaceable>pccpath</replaceable>
+        should be the same as the HSM root parameter of the POSIX copytool
+        (lhsmtool_posix).</para>
+      <para>PCC-RW uses Lustre's HSM mechanism for data synchronization.
+        Before using PCC-RW on a client, it is still necessary to setup HSM on
+        the MDTs and the PCC client nodes.</para>
+      <para>First, a coordinator must be activated on each of the filesystem
+        MDTs. This can be achieved with the command:</para>
+      <screen>mds# lctl set_param mdt.<replaceable>$FSNAME-MDT0000</replaceable>.hsm_control=enabled
+mdt.lustre-MDT0000.hsm_control=enabled</screen>
+      <para>Next, launch the copytool on each agent node (PCC client node)
+        to connect to your HSM storage. This command will be of the form:</para>
+      <screen>client# lhsmtool_posix --daemon --hsm-root <replaceable>$PCCPATH</replaceable> --archive=<replaceable>$ARCHIVE_ID</replaceable> <replaceable>$LUSTREPATH</replaceable></screen>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command adds a PCC backend on a client:</para>
+      <screen>client# lctl pcc add /mnt/lustre /mnt/pcc  --param "projid={500,1000}&amp;fname={*.h5},uid=1001 rwid=2"</screen>
+      <para>The first substring of the config parameter is the auto-cache rule,
+        where "&amp;" represents the logical AND operator while "," represents
+        the logical OR operator. The example rule means that new files are only
+        auto cached if either of the following conditions are satisfied:</para>
+      <itemizedlist>
+        <listitem>
+          <para>The project ID is either 500 or 1000 and the suffix of the file
+            name is "h5";</para>
+        </listitem>
+        <listitem>
+          <para>The user ID is 1001;</para>
+        </listitem>
+      </itemizedlist>
+      <para>The currently supported name-value pairs for PCC backend
+        configuration are listing as follows:</para>
+      <itemizedlist>
+        <listitem>
+          <para><literal>rwid</literal> PCC-RW attach ID which
+            is same as the archive ID of the copytool agent running on this PCC
+            node.</para>
+        </listitem>
+        <listitem>
+          <para><literal>auto_attach</literal> <literal>"auto_attach=1"
+            </literal> enables auto attach at the next open or during I/O.
+            Enabling this option should cause automatic attaching of valid
+            PCC-cached files which were detached due to the manual <literal>
+            lfs pcc detach</literal> command or revocation of layout lock (i.e.
+            LRU lock shrinking). <literal>"auto_attach=0"</literal> means that
+            auto file attach is disabled and is the default mode.
+          </para>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section xml:id="pcc.operations.del">
+      <title>Delete a PCC backend from a client</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lctl pcc del &lt;mountpoint&gt; &lt;pccpath&gt;</screen>
+      <para>The above command will delete a PCC backend from a Lustre client.
+      </para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>mountpoint</entry>
+              <entry>
+                <para>The Lustre client mount point.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>pccpath</entry>
+              <entry>
+                <para>A PCC backend is specified by this path. Please refer to
+                  <literal>lctl pcc add</literal> for details.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will delete a PCC backend referenced by
+        <replaceable>"/mnt/pcc"</replaceable> on a client with the mount point
+        of <replaceable>"/mnt/lustre"</replaceable>.</para>
+      <screen>client# lctl pcc del /mnt/lustre /mnt/pcc</screen>
+    </section>
+    <section xml:id="pcc.operations.clear">
+      <title>Remove all PCC backends on a client</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lctl pcc clear &lt;mountpoint&gt;</screen>
+      <para>The above command will remove all PCC backends on a Lustre client.
+      </para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>mountpoint</entry>
+              <entry>
+                <para>The Lustre client mount point.
+                </para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will remove all PCC backends from a client
+        with the mount point of <replaceable>"/mnt/lustre"</replaceable>.
+      </para>
+      <screen>client# lctl pcc clear /mnt/lustre</screen>
+    </section>
+    <section xml:id="pcc.operations.list">
+      <title>List all PCC backends on a client</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lctl pcc list &lt;mountpoint&gt;</screen>
+      <para>The above command will list all PCC backends on a Lustre client.
+      </para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>mountpoint</entry>
+              <entry>
+                <para>The Lustre client mount point.
+                </para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will list all PCC backends on a client with
+        the mount point of <replaceable>"/mnt/lustre"</replaceable>.</para>
+      <screen>client# lctl pcc list /mnt/lustre</screen>
+    </section>
+    <section xml:id="pcc.operations.attach">
+      <title>Attach given files into PCC</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lfs pcc attach --id|-i &lt;NUM&gt; &lt;file...&gt;</screen>
+      <para>The above command will attach the given files onto PCC.</para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>--id|-i &lt;NUM&gt;</entry>
+              <entry>
+                <para>Attach ID to select which PCC backend to use.
+                </para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will attach the file referenced by
+        <replaceable>/mnt/lustre/test</replaceable> onto the PCC backend with
+        PCC-RW attach ID that equals 2.</para>
+      <screen>client# lfs pcc attach -i 2 /mnt/lustre/test</screen>
+    </section>
+    <section xml:id="pcc.operations.attach_fid">
+      <title>Attach given files into PCC by FID(s)</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lfs pcc attach_fid --id|-i &lt;NUM&gt; --mnt|-m &lt;mountpoint&gt; &lt;fid...&gt;</screen>
+      <para>The above command will attach the given files referenced by their
+        FIDs into PCC.</para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>--id|-i &lt;NUM&gt;</entry>
+              <entry>
+                <para>Attach ID to select which PCC backend to use.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>--mnt|-m &lt;mountpoint&gt;</entry>
+              <entry>
+                <para>The Lustre mount point.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will attach the file referenced by FID
+        <replaceable>0x200000401:0x1:0x0</replaceable> onto the PCC backend
+        with PCC-RW attach ID that equals 2.</para>
+      <screen>client# lfs pcc attach_fid -i 2 -m /mnt/lustre 0x200000401:0x1:0x0</screen>
+    </section>
+    <section xml:id="pcc.operations.detach">
+      <title>Detach given files from PCC</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lfs pcc detach [--keep|-k] &lt;file...&gt;</screen>
+      <para>The above command will detach given files from PCC.</para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>--keep|-k</entry>
+              <entry>
+                <para>By default, the <literal>detach</literal> command will
+                  detach the file from PCC permanently and remove the PCC copy
+                  after detach. This option will only detach the file, but keep
+                  the PCC copy in cache. It allows the detached file to be
+                  attached automatically at the next open if the cached copy of
+                  the file is still valid.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will detach the file referenced by
+        <replaceable>/mnt/lustre/test</replaceable> from PCC permanently and
+        remove the corresponding cached file on PCC.
+      </para>
+      <screen>client# lfs pcc detach /mnt/lustre/test</screen>
+      <para>The following command will detach the file referenced by
+        <replaceable>/mnt/lustre/test</replaceable> from PCC, but allow the file
+        to be attached automatically at the next open.</para>
+      <screen>client# lfs pcc detach -k /mnt/lustre/test</screen>
+    </section>
+    <section xml:id="pcc.operations.detach_fid">
+      <title>Detach given files from PCC by FID(s)</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lfs pcc detach_fid [--keep|-k] &lt;mountpoint&gt; &lt;fid...&gt;</screen>
+      <para>The above command will detach the given files from PCC by FID(s).
+      </para>
+      <informaltable>
+        <tgroup cols="2">
+          <colspec align="left" colwidth="1*"/>
+          <colspec align="left" colwidth="2*"/>
+          <thead>
+            <row>
+              <entry>Option</entry>
+              <entry>Description</entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>--keep|-k</entry>
+              <entry>
+                <para>Please refer to the command <literal>lfs pcc detach
+                  </literal> for details</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will detach the file referenced by FID
+        <replaceable>0x200000401:0x1:0x0</replaceable> from PCC permanently and
+        remove the corresponding cached file on PCC.</para>
+      <screen>client# lfs pcc detach_fid /mnt/lustre 0x200000401:0x1:0x0</screen>
+      <para>The following command will detach the file referenced by FID
+        <replaceable>0x200000401:0x1:0x0</replaceable> from PCC, but allow the
+        file to be attached automatically at the next open.</para>
+      <screen>client# lfs pcc detach_fid -k /mnt/lustre 0x200000401:0x1:0x0</screen>
+    </section>
+    <section xml:id="pcc.operations.state">
+      <title>Display the PCC state for given files</title>
+      <para><emphasis role="strong">Command:</emphasis></para>
+      <screen>lfs pcc state &lt;file...&gt;</screen>
+      <para>The above command will display the PCC state for given files.</para>
+      <para><emphasis role="strong">Examples:</emphasis></para>
+      <para>The following command will display the PCC state of the file
+        referenced by <replaceable>/mnt/lustre/test</replaceable>.</para>
+      <screen>client# lfs pcc state /mnt/lustre/test
+file: /mnt/lustre/test, type: readwrite, PCC file: /mnt/pcc/0004/0000/0bd1/0000/0002/0000/0x200000bd1:0x4:0x0, user number: 1, flags: 4</screen>
+      <para>If the file "/mnt/lustre/test" is not cached on PCC, the output of
+        its PCC state is as follow:</para>
+      <screen>client# lfs pcc state /mnt/lustre/test
+file: /mnt/lustre/test, type: none</screen>
+    </section>
+  </section>
+  <section xml:id="pcc.examples">
+    <title>PCC Configuration Example</title>
+    <orderedlist>
+      <listitem>
+        <para>Setup HSM on MDT</para>
+        <screen>mds# lctl set_param mdt.lustre-MDT0000.hsm_control=enabled</screen>
+      </listitem>
+      <listitem>
+        <para>Setup PCC on the clients</para>
+        <screen>client1# lhsmtool_posix --daemon --hsm-root /mnt/pcc --archive=1 /mnt/lustre &lt; /dev/null &gt; /tmp/copytool_log 2&gt;&amp;1
+client1# lctl pcc add /mnt/lustre /mnt/pcc "projid={1000},uid={500} rwid=1"</screen>
+      <screen>client2# lhsmtool_posix --daemon --hsm-root /mnt/pcc --archive=2 /mnt/lustre &lt; /dev/null &gt; /tmp/copytool_log 2&gt;&amp;1
+client2# lctl pcc add /mnt/lustre /mnt/pcc "projid={1000}&amp;gid={500} rwid=2"</screen>
+      </listitem>
+      <listitem>
+        <para>Execute PCC commands on the clients</para>
+        <screen>client1# echo "QQQQQ" > /mnt/lustre/test
+
+client2# lfs pcc attach -i 2 /mnt/lustre/test
+
+client2# lfs pcc state /mnt/lustre/test
+file: /mnt/lustre/test, type: readwrite, PCC file: /mnt/pcc/0004/0000/0bd1/0000/0002/0000/0x200000bd1:0x4:0x0, user number: 1, flags: 6
+
+client2# lfs pcc detach /mnt/lustre/test</screen>
+      </listitem>
+    </orderedlist>
+  </section>
+</chapter>
