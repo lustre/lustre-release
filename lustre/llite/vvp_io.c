@@ -1262,7 +1262,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 			inode_unlock(inode);
 
 		written = result;
-		if (result > 0 || result == -EIOCBQUEUED)
+		if (result > 0)
 #ifdef HAVE_GENERIC_WRITE_SYNC_2ARGS
 			result = generic_write_sync(vio->vui_iocb, result);
 #else
@@ -1297,12 +1297,13 @@ static int vvp_io_write_start(const struct lu_env *env,
 		/* rewind ki_pos to where it has successfully committed */
 		vio->vui_iocb->ki_pos = pos + io->ci_nob - nob;
 	}
-	if (result > 0) {
+	if (result > 0 || result == -EIOCBQUEUED) {
 		ll_file_set_flag(ll_i2info(inode), LLIF_DATA_MODIFIED);
 
 		if (result < cnt)
 			io->ci_continue = 0;
-		result = 0;
+		if (result > 0)
+			result = 0;
 	}
 
 	RETURN(result);

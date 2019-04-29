@@ -1478,7 +1478,6 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	ssize_t			result = 0;
 	int			rc = 0;
 	unsigned		retried = 0;
-	bool			restarted = false;
 	unsigned		ignore_lockless = 0;
 
 	ENTRY;
@@ -1573,7 +1572,6 @@ out:
 		/* preserve the tried count for FLR */
 		retried = io->ci_ndelay_tried;
 		ignore_lockless = io->ci_ignore_lockless;
-		restarted = true;
 		goto restart;
 	}
 

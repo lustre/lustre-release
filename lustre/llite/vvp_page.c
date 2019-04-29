@@ -89,6 +89,8 @@ static int vvp_page_own(const struct lu_env *env,
 	struct vvp_page *vpg    = cl2vvp_page(slice);
 	struct page     *vmpage = vpg->vpg_page;
 
+	ENTRY;
+
 	LASSERT(vmpage != NULL);
 	if (nonblock) {
 		if (!trylock_page(vmpage))
@@ -105,7 +107,7 @@ static int vvp_page_own(const struct lu_env *env,
 	lock_page(vmpage);
 	wait_on_page_writeback(vmpage);
 
-	return 0;
+	RETURN(0);
 }
 
 static void vvp_page_assume(const struct lu_env *env,
@@ -134,10 +136,14 @@ static void vvp_page_disown(const struct lu_env *env,
 {
 	struct page *vmpage = cl2vm_page(slice);
 
+	ENTRY;
+
 	LASSERT(vmpage != NULL);
 	LASSERT(PageLocked(vmpage));
 
 	unlock_page(cl2vm_page(slice));
+
+	EXIT;
 }
 
 static void vvp_page_discard(const struct lu_env *env,

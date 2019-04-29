@@ -1726,6 +1726,22 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAVE_DQUOT_QC_DQBLK
 
 #
+# LC_HAVE_AIO_COMPLETE
+#
+# 3.19 kernel makes aio_complete() static
+#
+AC_DEFUN([LC_HAVE_AIO_COMPLETE], [
+LB_CHECK_COMPILE([if kernel has exported aio_complete() ],
+aio_complete, [
+	#include <linux/aio.h>
+],[
+	aio_complete(NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_AIO_COMPLETE, 1, [aio_complete defined])
+])
+]) # LC_HAVE_AIO_COMPLETE
+
+#
 # LC_BACKING_DEV_INFO_REMOVAL
 #
 # 3.20 kernel removed backing_dev_info from address_space
@@ -3071,6 +3087,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 3.19
 	LC_KIOCB_HAS_NBYTES
 	LC_HAVE_DQUOT_QC_DQBLK
+	LC_HAVE_AIO_COMPLETE
 
 	# 3.20
 	LC_BACKING_DEV_INFO_REMOVAL

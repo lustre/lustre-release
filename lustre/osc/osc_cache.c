@@ -1987,9 +1987,6 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 
 		if (!can_merge(ext, tmp))
 			RETURN(0);
-
-		/* remove break for strict check */
-		break;
 	}
 
 	data->erd_max_extents--;

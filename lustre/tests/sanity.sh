@@ -20592,6 +20592,57 @@ test_398b() { # LU-4198
 }
 run_test 398b "DIO and buffer IO race"
 
+test_398c() { # LU-4198
+	which fio || skip_env "no fio installed"
+
+	saved_debug=$($LCTL get_param -n debug)
+	$LCTL set_param debug=0
+
+	local size=$(lctl get_param -n osc.$FSNAME-OST0000*.kbytesavail | head -1)
+	((size /= 1024)) # by megabytes
+	((size /= 2)) # write half of the OST at most
+	[ $size -gt 40 ] && size=40 #reduce test time anyway
+
+	$LFS setstripe -c 1 $DIR/$tfile
+
+	# it seems like ldiskfs reserves more space than necessary if the
+	# writing blocks are not mapped, so it extends the file firstly
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$size && sync
+	cancel_lru_locks osc
+
+	# clear and verify rpc_stats later
+	$LCTL set_param osc.${FSNAME}-OST0000-osc-ffff*.rpc_stats=clear
+
+	local njobs=4
+	echo "writing ${size}M to OST0 by fio with $njobs jobs..."
+	fio --name=rand-write --rw=randwrite --bs=$PAGE_SIZE --direct=1 \
+		--numjobs=$njobs --fallocate=none --ioengine=libaio \
+		--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
+		--filename=$DIR/$tfile
+	[ $? -eq 0 ] || error "fio write error"
+
+	[ $($LCTL get_param -n \
+	 ldlm.namespaces.${FSNAME}-OST0000-osc-ffff*.lock_count) -eq 0 ] ||
+		error "Locks were requested while doing AIO"
+
+	# get the percentage of 1-page I/O
+	pct=$($LCTL get_param osc.${FSNAME}-OST0000-osc-ffff*.rpc_stats |
+		grep -A 1 'pages per rpc' | grep -v 'pages per rpc' |
+		awk '{print $7}')
+	[ $pct -le 50 ] || error "$pct% of I/O are 1-page"
+
+	echo "mix rw ${size}M to OST0 by fio with $njobs jobs..."
+	fio --name=rand-rw --rw=randrw --bs=$PAGE_SIZE --direct=1 \
+		--numjobs=$njobs --fallocate=none --ioengine=libaio \
+		--iodepth=16 --allow_file_create=0 --size=$((size/njobs))M \
+		--filename=$DIR/$tfile
+	[ $? -eq 0 ] || error "fio mixed read write error"
+
+	rm -rf $DIR/$tfile
+	$LCTL set_param debug="$saved_debug"
+}
+run_test 398c "run fio to test AIO"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then
