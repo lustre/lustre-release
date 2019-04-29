@@ -121,16 +121,23 @@ EXPORT_SYMBOL(__cfs_fail_check_set);
 
 int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 {
+	ktime_t till = ktime_add_ms(ktime_get(), ms);
 	int ret = 0;
 
 	ret = __cfs_fail_check_set(id, value, set);
 	if (ret && likely(ms > 0)) {
-		CERROR("cfs_fail_timeout id %x sleeping for %dms\n",
-		       id, ms);
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(ms) / 1000);
-		set_current_state(TASK_RUNNING);
-		CERROR("cfs_fail_timeout id %x awake\n", id);
+		CERROR("cfs_fail_timeout id %x sleeping for %dms\n", id, ms);
+		while (ktime_before(ktime_get(), till)) {
+			set_current_state(TASK_UNINTERRUPTIBLE);
+			schedule_timeout(msecs_to_jiffies(1000) / 10);
+			set_current_state(TASK_RUNNING);
+			if (!cfs_fail_loc) {
+				CERROR("cfs_fail_timeout interrupted\n");
+				break;
+			}
+		}
+		if (cfs_fail_loc)
+			CERROR("cfs_fail_timeout id %x awake\n", id);
 	}
 	return ret;
 }
