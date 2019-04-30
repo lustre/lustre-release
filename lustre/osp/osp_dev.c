@@ -1881,7 +1881,7 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_fid_alloc	= osp_fid_alloc,
 };
 
-static struct obd_type sym;
+static struct obd_type *sym;
 
 /**
  * Initialize OSP module.
@@ -1899,7 +1899,6 @@ static int __init osp_init(void)
 {
 	struct dentry *symlink;
 	struct obd_type *type;
-	struct kobject *kobj;
 	struct qstr dname;
 	int rc;
 
@@ -1922,6 +1921,15 @@ static int __init osp_init(void)
 		return rc;
 	}
 
+	sym = class_setup_tunables(LUSTRE_OSC_NAME);
+	if (IS_ERR(sym)) {
+		rc = PTR_ERR(sym);
+		/* does real "osc" already exist ? */
+		if (rc == -EEXIST)
+			GOTO(try_proc, rc = 0);
+		GOTO(no_osc, rc);
+	}
+
 	/* create "osc" entry for compatibility purposes */
 	dname.name = "osc";
 	dname.len = strlen(dname.name);
@@ -1934,25 +1942,10 @@ static int __init osp_init(void)
 			rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
 			GOTO(no_osc, rc);
 		}
-		sym.typ_debugfs_entry = symlink;
+		sym->typ_debugfs_entry = symlink;
 	} else {
 		dput(symlink);
 	}
-
-	kobj = kset_find_obj(lustre_kset, dname.name);
-	if (kobj) {
-		kobject_put(kobj);
-		goto try_proc;
-	}
-
-	kobj = class_setup_tunables(dname.name);
-	if (IS_ERR(kobj)) {
-		rc = PTR_ERR(kobj);
-		if (sym.typ_debugfs_entry)
-			ldebugfs_remove(&sym.typ_debugfs_entry);
-		GOTO(no_osc, rc);
-	}
-	sym.typ_kobj = kobj;
 
 try_proc:
 	type = class_search_type(LUSTRE_OSC_NAME);
@@ -1979,8 +1972,10 @@ no_osc:
  */
 static void __exit osp_exit(void)
 {
-	ldebugfs_remove(&sym.typ_debugfs_entry);
-	kobject_put(sym.typ_kobj);
+	if (!IS_ERR_OR_NULL(sym)) {
+		ldebugfs_remove(&sym->typ_debugfs_entry);
+		kobject_put(&sym->typ_kobj);
+	}
 	class_unregister_type(LUSTRE_LWP_NAME);
 	class_unregister_type(LUSTRE_OSP_NAME);
 	lu_kmem_fini(osp_caches);

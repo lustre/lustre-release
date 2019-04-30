@@ -160,7 +160,9 @@ void class_put_type(struct obd_type *type)
 
 static void class_sysfs_release(struct kobject *kobj)
 {
-	OBD_FREE(kobj, sizeof(*kobj));
+	struct obd_type *type = container_of(kobj, struct obd_type, typ_kobj);
+
+	OBD_FREE(type, sizeof(*type));
 }
 
 static struct kobj_type class_ktype = {
@@ -168,30 +170,34 @@ static struct kobj_type class_ktype = {
 	.release        = class_sysfs_release,
 };
 
-struct kobject *class_setup_tunables(const char *name)
+#ifdef HAVE_SERVER_SUPPORT
+struct obd_type *class_setup_tunables(const char *name)
 {
+	struct obd_type *type;
 	struct kobject *kobj;
 	int rc;
 
-#ifdef HAVE_SERVER_SUPPORT
 	kobj = kset_find_obj(lustre_kset, name);
-	if (kobj)
-		return kobj;
-#endif
-	OBD_ALLOC(kobj, sizeof(*kobj));
-	if (!kobj)
+	if (kobj) {
+		kobject_put(kobj);
+		return ERR_PTR(-EEXIST);
+	}
+
+	OBD_ALLOC(type, sizeof(*type));
+	if (!type)
 		return ERR_PTR(-ENOMEM);
 
-	kobj->kset = lustre_kset;
-	kobject_init(kobj, &class_ktype);
-	rc = kobject_add(kobj, &lustre_kset->kobj, "%s", name);
+	type->typ_kobj.kset = lustre_kset;
+	kobject_init(&type->typ_kobj, &class_ktype);
+	rc = kobject_add(&type->typ_kobj, &lustre_kset->kobj, "%s", name);
 	if (rc) {
-		kobject_put(kobj);
+		kobject_put(&type->typ_kobj);
 		return ERR_PTR(rc);
 	}
-	return kobj;
+	return type;
 }
 EXPORT_SYMBOL(class_setup_tunables);
+#endif /* HAVE_SERVER_SUPPORT */
 
 #define CLASS_MAX_NAME 1024
 
@@ -201,9 +207,9 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 {
 	struct obd_type *type;
 #ifdef HAVE_SERVER_SUPPORT
-	struct qstr dname;
+	struct kobject *kobj;
 #endif /* HAVE_SERVER_SUPPORT */
-	int rc = 0;
+	int rc;
 
 	ENTRY;
 	/* sanity check */
@@ -214,11 +220,36 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
                 RETURN(-EEXIST);
         }
 
-        rc = -ENOMEM;
+#ifdef HAVE_SERVER_SUPPORT
+	kobj = kset_find_obj(lustre_kset, name);
+	if (kobj) {
+		type = container_of(kobj, struct obd_type, typ_kobj);
+
+		goto dir_exist;
+	}
+#endif /* HAVE_SERVER_SUPPORT */
+
         OBD_ALLOC(type, sizeof(*type));
         if (type == NULL)
-                RETURN(rc);
+		RETURN(-ENOMEM);
 
+	type->typ_kobj.kset = lustre_kset;
+	rc = kobject_init_and_add(&type->typ_kobj, &class_ktype,
+				  &lustre_kset->kobj, "%s", name);
+	if (rc)
+		GOTO(failed, rc);
+
+	type->typ_debugfs_entry = ldebugfs_register(name, debugfs_lustre_root,
+						    vars, type);
+	if (IS_ERR_OR_NULL(type->typ_debugfs_entry)) {
+		rc = type->typ_debugfs_entry ? PTR_ERR(type->typ_debugfs_entry)
+					     : -ENOMEM;
+		type->typ_debugfs_entry = NULL;
+		GOTO(failed, rc);
+	}
+#ifdef HAVE_SERVER_SUPPORT
+dir_exist:
+#endif /* HAVE_SERVER_SUPPORT */
         OBD_ALLOC_PTR(type->typ_dt_ops);
         OBD_ALLOC_PTR(type->typ_md_ops);
         OBD_ALLOC(type->typ_name, strlen(name) + 1);
@@ -236,7 +267,7 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 	spin_lock_init(&type->obd_type_lock);
 
 #ifdef CONFIG_PROC_FS
-	if (enable_proc) {
+	if (enable_proc && !type->typ_procroot) {
 		type->typ_procroot = lprocfs_register(type->typ_name,
 						      proc_lustre_root,
 						      NULL, type);
@@ -247,42 +278,11 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 		}
 	}
 #endif
-#ifdef HAVE_SERVER_SUPPORT
-	dname.name = name;
-	dname.len = strlen(dname.name);
-	dname.hash = ll_full_name_hash(debugfs_lustre_root, dname.name,
-				       dname.len);
-	type->typ_debugfs_entry = d_lookup(debugfs_lustre_root, &dname);
-	if (type->typ_debugfs_entry) {
-		dput(type->typ_debugfs_entry);
-		type->typ_sym_filter = true;
-		goto dir_exist;
-	}
-#endif /* HAVE_SERVER_SUPPORT */
-
-	type->typ_debugfs_entry = ldebugfs_register(type->typ_name,
-						    debugfs_lustre_root,
-						    vars, type);
-	if (IS_ERR_OR_NULL(type->typ_debugfs_entry)) {
-		rc = type->typ_debugfs_entry ? PTR_ERR(type->typ_debugfs_entry)
-					     : -ENOMEM;
-		type->typ_debugfs_entry = NULL;
-		GOTO(failed, rc);
-	}
-#ifdef HAVE_SERVER_SUPPORT
-dir_exist:
-#endif
-	type->typ_kobj = class_setup_tunables(type->typ_name);
-	if (IS_ERR(type->typ_kobj))
-		GOTO(failed, rc = PTR_ERR(type->typ_kobj));
-
 	if (ldt) {
 		type->typ_lu = ldt;
 		rc = lu_device_type_init(ldt);
-		if (rc) {
-			kobject_put(type->typ_kobj);
+		if (rc)
 			GOTO(failed, rc);
-		}
 	}
 
 	spin_lock(&obd_types_lock);
@@ -309,8 +309,9 @@ failed:
                 OBD_FREE_PTR(type->typ_md_ops);
         if (type->typ_dt_ops != NULL)
                 OBD_FREE_PTR(type->typ_dt_ops);
-        OBD_FREE(type, sizeof(*type));
-        RETURN(rc);
+	kobject_put(&type->typ_kobj);
+
+	RETURN(rc);
 }
 EXPORT_SYMBOL(class_register_type);
 
@@ -332,8 +333,6 @@ int class_unregister_type(const char *name)
                 OBD_FREE_PTR(type->typ_md_ops);
                 RETURN(-EBUSY);
         }
-
-	kobject_put(type->typ_kobj);
 
 	/* we do not use type->typ_procroot as for compatibility purposes
 	 * other modules can share names (i.e. lod can use lov entry). so
@@ -363,8 +362,9 @@ int class_unregister_type(const char *name)
                 OBD_FREE_PTR(type->typ_dt_ops);
         if (type->typ_md_ops != NULL)
                 OBD_FREE_PTR(type->typ_md_ops);
-        OBD_FREE(type, sizeof(*type));
-        RETURN(0);
+	kobject_put(&type->typ_kobj);
+
+	RETURN(0);
 } /* class_unregister_type */
 EXPORT_SYMBOL(class_unregister_type);
 

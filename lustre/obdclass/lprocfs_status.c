@@ -1204,7 +1204,7 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 	obd->obd_ktype.sysfs_ops = &lustre_sysfs_ops;
 	obd->obd_ktype.release = obd_sysfs_release;
 
-	obd->obd_kset.kobj.parent = obd->obd_type->typ_kobj;
+	obd->obd_kset.kobj.parent = &obd->obd_type->typ_kobj;
 	obd->obd_kset.kobj.ktype = &obd->obd_ktype;
 	init_completion(&obd->obd_kobj_unregister);
 	rc = kset_register(&obd->obd_kset);

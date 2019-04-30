@@ -63,7 +63,9 @@ struct lu_device_type;
 
 /* genops.c */
 struct obd_export *class_conn2export(struct lustre_handle *);
-struct kobject *class_setup_tunables(const char *name);
+#ifdef HAVE_SERVER_SUPPORT
+struct obd_type *class_setup_tunables(const char *name);
+#endif
 int class_register_type(struct obd_ops *, struct md_ops *, bool enable_proc,
 			struct lprocfs_vars *module_vars,
 			const char *nm, struct lu_device_type *ldt);

@@ -2223,13 +2223,12 @@ static struct obd_ops lod_obd_device_ops = {
 	.o_pool_del     = lod_pool_del,
 };
 
-static struct obd_type sym;
+static struct obd_type *sym;
 
 static int __init lod_init(void)
 {
 	struct dentry *symlink;
 	struct obd_type *type;
-	struct kobject *kobj;
 	struct qstr dname;
 	int rc;
 
@@ -2244,6 +2243,15 @@ static int __init lod_init(void)
 		return rc;
 	}
 
+	sym = class_setup_tunables(LUSTRE_LOV_NAME);
+	if (IS_ERR(sym)) {
+		rc = PTR_ERR(sym);
+		/* does real "lov" already exist ? */
+		if (rc == -EEXIST)
+			GOTO(try_proc, rc = 0);
+		GOTO(no_lov, rc);
+	}
+
 	/* create "lov" entry for compatibility purposes */
 	dname.name = "lov";
 	dname.len = strlen(dname.name);
@@ -2256,25 +2264,10 @@ static int __init lod_init(void)
 			rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
 			GOTO(no_lov, rc);
 		}
-		sym.typ_debugfs_entry = symlink;
+		sym->typ_debugfs_entry = symlink;
 	} else {
 		dput(symlink);
 	}
-
-	kobj = kset_find_obj(lustre_kset, dname.name);
-	if (kobj) {
-		kobject_put(kobj);
-		goto try_proc;
-	}
-
-	kobj = class_setup_tunables(dname.name);
-	if (IS_ERR(kobj)) {
-		rc = PTR_ERR(kobj);
-		if (sym.typ_debugfs_entry)
-			ldebugfs_remove(&sym.typ_debugfs_entry);
-		GOTO(no_lov, rc);
-	}
-	sym.typ_kobj = kobj;
 
 try_proc:
 	type = class_search_type(LUSTRE_LOV_NAME);
@@ -2295,8 +2288,10 @@ no_lov:
 
 static void __exit lod_exit(void)
 {
-	ldebugfs_remove(&sym.typ_debugfs_entry);
-	kobject_put(sym.typ_kobj);
+	if (!IS_ERR_OR_NULL(sym)) {
+		ldebugfs_remove(&sym->typ_debugfs_entry);
+		kobject_put(&sym->typ_kobj);
+	}
 	class_unregister_type(LUSTRE_LOD_NAME);
 	lu_kmem_fini(lod_caches);
 }

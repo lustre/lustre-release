@@ -590,7 +590,7 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 
 	init_completion(&mdd->mdd_kobj_unregister);
 	rc = kobject_init_and_add(&mdd->mdd_kobj, &mdd->mdd_ktype,
-				  type->typ_kobj, "%s", name);
+				  &type->typ_kobj, "%s", name);
 	if (rc)
 		return rc;
 

@@ -1265,7 +1265,7 @@ int dt_tunables_init(struct dt_device *dt, struct obd_type *type,
 	dt->dd_ktype.release = dt_sysfs_release;
 
 	init_completion(&dt->dd_kobj_unregister);
-	rc = kobject_init_and_add(&dt->dd_kobj, &dt->dd_ktype, type->typ_kobj,
+	rc = kobject_init_and_add(&dt->dd_kobj, &dt->dd_ktype, &type->typ_kobj,
 				  "%s", name);
 	if (rc)
 		return rc;
