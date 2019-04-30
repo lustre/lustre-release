@@ -4963,6 +4963,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 		{ .st_op = LL_STATFS_LOV,	.st_name = "OST" },
 		{ .st_name = NULL } };
 	struct ll_stat_type *tp;
+	__u64 ost_files = 0;
 	__u64 ost_ffree = 0;
 	__u32 index;
 	__u32 type;
@@ -5070,6 +5071,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 				sum.os_ffree += stat_buf.os_ffree;
 				sum.os_files += stat_buf.os_files;
 			} else /* if (tp->st_op == LL_STATFS_LOV) */ {
+				ost_files += stat_buf.os_files;
 				ost_ffree += stat_buf.os_ffree;
 			}
 			sum.os_blocks += stat_buf.os_blocks *
@@ -5083,11 +5085,12 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 
 	close(fd);
 
-	/* If we don't have as many objects free on the OST as inodes
-	 * on the MDS, we reduce the total number of inodes to
-	 * compensate, so that the "inodes in use" number is correct.
-	 * Matches ll_statfs_internal() so the results are consistent. */
-	if (ost_ffree < sum.os_ffree) {
+	/* If we have _some_ OSTs, but don't have as many free objects on the
+	 * OST as inodes on the MDTs, reduce the reported number of inodes
+	 * to compensate, so that the "inodes in use" number is correct.
+	 * This should be kept in sync with ll_statfs_internal().
+	 */
+	if (ost_files && ost_ffree < sum.os_ffree) {
 		sum.os_files = (sum.os_files - sum.os_ffree) + ost_ffree;
 		sum.os_ffree = ost_ffree;
 	}
