@@ -63,6 +63,9 @@ static inline unsigned int pct(unsigned long a, unsigned long b)
 	return b ? a * 100 / b : 0;
 }
 
+#define PAGES_TO_MiB(pages)	((pages) >> (20 - PAGE_SHIFT))
+#define MiB_TO_PAGES(mb)	((mb) << (20 - PAGE_SHIFT))
+
 /**
  * Append a space separated list of current set flags to str.
  */
@@ -609,9 +612,6 @@ extern ssize_t
 lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off);
 
-extern int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult);
-extern int lprocfs_read_frac_helper(char *buffer, unsigned long count,
-                                    long val, int mult);
 extern int lprocfs_str_with_units_to_s64(const char __user *buffer,
 					 unsigned long count, __s64 *val,
 					 char defunit);

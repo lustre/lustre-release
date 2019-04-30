@@ -326,15 +326,14 @@ static int ll_max_readahead_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	long pages_number;
-	int mult;
+	unsigned long ra_max_mb;
 
 	spin_lock(&sbi->ll_lock);
-	pages_number = sbi->ll_ra_info.ra_max_pages;
+	ra_max_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages);
 	spin_unlock(&sbi->ll_lock);
 
-	mult = 1 << (20 - PAGE_SHIFT);
-	return lprocfs_seq_read_frac_helper(m, pages_number, mult);
+	seq_printf(m, "%lu\n", ra_max_mb);
+	return 0;
 }
 
 static ssize_t
@@ -344,21 +343,19 @@ ll_max_readahead_mb_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	__s64 pages_number;
+	s64 ra_max_mb, pages_number;
 	int rc;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &ra_max_mb, 'M');
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_SHIFT;
-
+	pages_number = round_up(ra_max_mb, 1024 * 1024) >> PAGE_SHIFT;
 	if (pages_number < 0 || pages_number > totalram_pages / 2) {
 		/* 1/2 of RAM */
-		CERROR("%s: can't set max_readahead_mb=%lu > %luMB\n",
-		       sbi->ll_fsname,
-		       (unsigned long)pages_number >> (20 - PAGE_SHIFT),
-		       totalram_pages >> (20 - PAGE_SHIFT + 1));
+		CERROR("%s: can't set max_readahead_mb=%llu > %luMB\n",
+		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
+		       PAGES_TO_MiB(totalram_pages));
 		return -ERANGE;
 	}
 
@@ -375,15 +372,14 @@ static int ll_max_readahead_per_file_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	long pages_number;
-	int mult;
+	unsigned long ra_max_file_mb;
 
 	spin_lock(&sbi->ll_lock);
-	pages_number = sbi->ll_ra_info.ra_max_pages_per_file;
+	ra_max_file_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file);
 	spin_unlock(&sbi->ll_lock);
 
-	mult = 1 << (20 - PAGE_SHIFT);
-	return lprocfs_seq_read_frac_helper(m, pages_number, mult);
+	seq_printf(m, "%lu\n", ra_max_file_mb);
+	return 0;
 }
 
 static ssize_t
@@ -394,20 +390,19 @@ ll_max_readahead_per_file_mb_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	s64 ra_max_file_mb, pages_number;
 	int rc;
-	__s64 pages_number;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &ra_max_file_mb,
+					   'M');
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_SHIFT;
-
+	pages_number = round_up(ra_max_file_mb, 1024 * 1024) >> PAGE_SHIFT;
 	if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
-		CERROR("%s: can't set max_readahead_per_file_mb=%lu > "
-		       "max_read_ahead_mb=%lu\n", sbi->ll_fsname,
-		       (unsigned long)pages_number >> (20 - PAGE_SHIFT),
-		       sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_SHIFT));
+		CERROR("%s: can't set max_readahead_per_file_mb=%llu > max_read_ahead_mb=%lu\n",
+		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
+		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages));
 		return -ERANGE;
 	}
 
@@ -424,15 +419,14 @@ static int ll_max_read_ahead_whole_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	long pages_number;
-	int mult;
+	unsigned long ra_max_whole_mb;
 
 	spin_lock(&sbi->ll_lock);
-	pages_number = sbi->ll_ra_info.ra_max_read_ahead_whole_pages;
+	ra_max_whole_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_read_ahead_whole_pages);
 	spin_unlock(&sbi->ll_lock);
 
-	mult = 1 << (20 - PAGE_SHIFT);
-	return lprocfs_seq_read_frac_helper(m, pages_number, mult);
+	seq_printf(m, "%lu\n", ra_max_whole_mb);
+	return 0;
 }
 
 static ssize_t
@@ -443,25 +437,23 @@ ll_max_read_ahead_whole_mb_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	s64 ra_max_whole_mb, pages_number;
 	int rc;
-	__s64 pages_number;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &ra_max_whole_mb,
+					   'M');
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_SHIFT;
-
+	pages_number = round_up(ra_max_whole_mb, 1024 * 1024) >> PAGE_SHIFT;
 	/* Cap this at the current max readahead window size, the readahead
-	 * algorithm does this anyway so it's pointless to set it larger. */
+	 * algorithm does this anyway so it's pointless to set it larger.
+	 */
 	if (pages_number < 0 ||
 	    pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
-		int pages_shift = 20 - PAGE_SHIFT;
-		CERROR("%s: can't set max_read_ahead_whole_mb=%lu > "
-		       "max_read_ahead_per_file_mb=%lu\n",
-		       sbi->ll_fsname,
-		       (unsigned long)pages_number >> pages_shift,
-		       sbi->ll_ra_info.ra_max_pages_per_file >> pages_shift);
+		CERROR("%s: can't set max_read_ahead_whole_mb=%llu > max_read_ahead_per_file_mb=%lu\n",
+		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
+		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file));
 		return -ERANGE;
 	}
 
@@ -479,12 +471,11 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 	struct super_block     *sb    = m->private;
 	struct ll_sb_info      *sbi   = ll_s2sbi(sb);
 	struct cl_client_cache *cache = sbi->ll_cache;
-	int shift = 20 - PAGE_SHIFT;
 	long max_cached_mb;
 	long unused_mb;
 
-	max_cached_mb = cache->ccc_lru_max >> shift;
-	unused_mb = atomic_long_read(&cache->ccc_lru_left) >> shift;
+	max_cached_mb = PAGES_TO_MiB(cache->ccc_lru_max);
+	unused_mb = PAGES_TO_MiB(atomic_long_read(&cache->ccc_lru_left));
 	seq_printf(m, "users: %d\n"
 		      "max_cached_mb: %ld\n"
 		      "used_mb: %ld\n"
@@ -533,7 +524,7 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	if (pages_number < 0 || pages_number > totalram_pages) {
 		CERROR("%s: can't set max cache more than %lu MB\n",
 		       sbi->ll_fsname,
-		       totalram_pages >> (20 - PAGE_SHIFT));
+		       PAGES_TO_MiB(totalram_pages));
 		RETURN(-ERANGE);
 	}
 	/* Allow enough cache so clients can make well-formed RPCs */
