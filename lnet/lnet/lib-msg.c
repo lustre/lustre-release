@@ -793,6 +793,20 @@ lnet_is_health_check(struct lnet_msg *msg)
 	bool hc;
 	int status = msg->msg_ev.status;
 
+	if ((!msg->msg_tx_committed && !msg->msg_rx_committed) ||
+	    !msg->msg_onactivelist) {
+		CDEBUG(D_NET, "msg %p not committed for send or receive\n",
+		       msg);
+		return false;
+	}
+
+	if ((msg->msg_tx_committed && !msg->msg_txpeer) ||
+	    (msg->msg_rx_committed && !msg->msg_rxpeer)) {
+		CDEBUG(D_NET, "msg %p failed too early to retry and send\n",
+		       msg);
+		return false;
+	}
+
 	/*
 	 * perform a health check for any message committed for transmit
 	 */
