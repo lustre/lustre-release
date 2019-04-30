@@ -3386,7 +3386,9 @@ lnet_monitor_thread(void *arg)
 	lnet_prune_rc_data(1);
 
 	/* Shutting down */
+	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_mt_state = LNET_MT_STATE_SHUTDOWN;
+	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* signal that the monitor thread is exiting */
 	up(&the_lnet.ln_mt_signal);
@@ -3608,7 +3610,9 @@ int lnet_monitor_thr_start(void)
 
 	sema_init(&the_lnet.ln_mt_signal, 0);
 
+	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_mt_state = LNET_MT_STATE_RUNNING;
+	lnet_net_unlock(LNET_LOCK_EX);
 	task = kthread_run(lnet_monitor_thread, NULL, "monitor_thread");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
@@ -3622,13 +3626,17 @@ int lnet_monitor_thr_start(void)
 	return 0;
 
 clean_thread:
+	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_mt_state = LNET_MT_STATE_STOPPING;
+	lnet_net_unlock(LNET_LOCK_EX);
 	/* block until event callback signals exit */
 	down(&the_lnet.ln_mt_signal);
 	/* clean up */
 	lnet_router_cleanup();
 free_mem:
+	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_mt_state = LNET_MT_STATE_SHUTDOWN;
+	lnet_net_unlock(LNET_LOCK_EX);
 	lnet_rsp_tracker_clean();
 	lnet_clean_local_ni_recoveryq();
 	lnet_clean_peer_ni_recoveryq();
@@ -3652,7 +3660,9 @@ void lnet_monitor_thr_stop(void)
 		return;
 
 	LASSERT(the_lnet.ln_mt_state == LNET_MT_STATE_RUNNING);
+	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_mt_state = LNET_MT_STATE_STOPPING;
+	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* tell the monitor thread that we're shutting down */
 	wake_up(&the_lnet.ln_mt_waitq);
