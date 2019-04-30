@@ -149,15 +149,14 @@ static int mdc_max_dirty_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
 	struct client_obd *cli = &dev->u.cli;
-	long val;
-	int mult;
+	unsigned long val;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	val = cli->cl_dirty_max_pages;
+	val = PAGES_TO_MiB(cli->cl_dirty_max_pages);
 	spin_unlock(&cli->cl_loi_list_lock);
 
-	mult = 1 << (20 - PAGE_SHIFT);
-	return lprocfs_seq_read_frac_helper(m, val, mult);
+	seq_printf(m, "%lu\n", val);
+	return 0;
 }
 
 static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
@@ -174,10 +173,10 @@ static ssize_t mdc_max_dirty_mb_seq_write(struct file *file,
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_SHIFT;
-
+	/* MB -> pages */
+	pages_number = round_up(pages_number, 1024 * 1024) >> PAGE_SHIFT;
 	if (pages_number <= 0 ||
-	    pages_number >= OSC_MAX_DIRTY_MB_MAX << (20 - PAGE_SHIFT) ||
+	    pages_number >= MiB_TO_PAGES(OSC_MAX_DIRTY_MB_MAX) ||
 	    pages_number > totalram_pages / 4) /* 1/4 of RAM */
 		return -ERANGE;
 
