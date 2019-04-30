@@ -600,7 +600,7 @@ lnet_health_check(struct lnet_msg *msg)
 	bool lo = false;
 
 	/* if we're shutting down no point in handling health. */
-	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING)
 		return -1;
 
 	LASSERT(msg->msg_txni);
@@ -713,6 +713,12 @@ resend:
 	msg->msg_retry_count++;
 
 	lnet_net_lock(msg->msg_tx_cpt);
+
+	/* check again under lock */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
+		lnet_net_unlock(msg->msg_tx_cpt);
+		return -1;
+	}
 
 	/*
 	 * remove message from the active list and reset it in preparation
