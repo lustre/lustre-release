@@ -49,7 +49,6 @@
 struct lwp_device {
 	struct lu_device	lpd_dev;
 	struct obd_device      *lpd_obd;   /* corresponding OBD device */
-	struct obd_uuid		lpd_cluuid;/* UUID of LWP */
 	struct obd_export      *lpd_exp;   /* export of LWP */
 	struct ptlrpc_thread	lpd_notify_thread; /* notify thread */
 	int			lpd_connects; /* use count, 0 or 1 */
@@ -83,7 +82,6 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	char			*lwp_name = lwp->lpd_obd->obd_name;
 	char			*server_uuid = NULL;
 	char			*ptr;
-	class_uuid_t		 uuid;
 	struct obd_import	*imp;
 	int			 len = strlen(lwp_name) + 1;
 	int			 rc;
@@ -128,11 +126,6 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 
 	imp = lwp->lpd_obd->u.cli.cl_import;
 	rc = ptlrpc_init_import(imp);
-	if (rc)
-		GOTO(out, rc);
-
-	ll_generate_random_uuid(uuid);
-	class_uuid_unparse(uuid, &lwp->lpd_cluuid);
 out:
 	if (bufs != NULL)
 		OBD_FREE_PTR(bufs);

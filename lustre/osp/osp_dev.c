@@ -1010,7 +1010,6 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 {
 	struct obd_device	*obd;
 	struct obd_import	*imp;
-	class_uuid_t		uuid;
 	char			*src, *tgt, *mdt, *osdname = NULL;
 	int			rc;
 	long                    idx;
@@ -1202,9 +1201,6 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	/*
 	 * Initiate connect to OST
 	 */
-	ll_generate_random_uuid(uuid);
-	class_uuid_unparse(uuid, &osp->opd_cluuid);
-
 	imp = obd->u.cli.cl_import;
 
 	rc = ptlrpc_init_import(imp);

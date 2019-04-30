@@ -888,6 +888,23 @@ rhashtable_lookup_get_insert_fast, [
 ]) # LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 
 #
+# Kernel version 4.12-rc3 f9727a17db9bab71ddae91f74f11a8a2f9a0ece6
+# renamed uuid_be to uuid_t
+#
+AC_DEFUN([LIBCFS_UUID_T], [
+LB_CHECK_COMPILE([if 'uuid_t' exist],
+uuid_t, [
+	#include <linux/uuid.h>
+],[
+	uuid_t uuid;
+
+	memset(uuid.b, 0, 16);
+],[
+	AC_DEFINE(HAVE_UUID_T, 1, ['uuid_t' exist])
+])
+]) # LIBCFS_UUID_T
+
+#
 # LIBCFS_WAIT_QUEUE_ENTRY
 #
 # Kernel version 4.13 ac6424b981bce1c4bc55675c6ce11bfe1bbfa64f
@@ -1053,6 +1070,8 @@ LIBCFS_HOTPLUG_STATE_MACHINE
 # 4.11
 LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 LIBCFS_SCHED_HEADERS
+# 4.12
+LIBCFS_UUID_T
 # 4.13
 LIBCFS_WAIT_QUEUE_ENTRY
 # 4.14

@@ -1802,15 +1802,6 @@ int lustre_register_fs(void);
 int lustre_unregister_fs(void);
 int lustre_check_exclusion(struct super_block *sb, char *svname);
 
-typedef __u8 class_uuid_t[16];
-static inline void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
-{
-	snprintf(out->uuid, sizeof(out->uuid), "%02x%02x%02x%02x-%02x%02x-"
-		 "%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-		 uu[14], uu[15], uu[12], uu[13], uu[10], uu[11], uu[8], uu[9],
-		 uu[6], uu[7], uu[4], uu[5], uu[2], uu[3], uu[0], uu[1]);
-}
-
 /* lustre_peer.c    */
 int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index);
 int class_add_uuid(const char *uuid, __u64 nid);
@@ -1819,9 +1810,6 @@ int class_check_uuid(struct obd_uuid *uuid, __u64 nid);
 
 /* class_obd.c */
 extern char obd_jobid_name[];
-
-/* prng.c */
-#define ll_generate_random_uuid(uuid_out) cfs_get_random_bytes(uuid_out, sizeof(class_uuid_t))
 
 /* statfs_pack.c */
 struct kstatfs;

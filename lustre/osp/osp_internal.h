@@ -177,7 +177,6 @@ struct osp_device {
 	struct osp_rpc_lock		 opd_rpc_lock;
 	struct obd_device		*opd_obd;
 	struct obd_export		*opd_exp;
-	struct obd_uuid			 opd_cluuid;
 	struct obd_connect_data		*opd_connect_data;
 	int				 opd_connects;
 	/* connection status. */

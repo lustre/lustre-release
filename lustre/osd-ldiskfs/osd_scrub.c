@@ -2669,8 +2669,10 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 				       "failed to allocate RAM for report\n",
 				       osd_dev2name(dev));
 			} else {
-				class_uuid_unparse(sf->sf_uuid, old_uuid);
-				class_uuid_unparse(es->s_uuid, new_uuid);
+				snprintf(old_uuid->uuid, UUID_SIZE, "%pU",
+					 sf->sf_uuid);
+				snprintf(new_uuid->uuid, UUID_SIZE, "%pU",
+					 es->s_uuid);
 				CDEBUG(D_LFSCK, "%s: UUID has been changed "
 				       "from %s to %s\n", osd_dev2name(dev),
 				       old_uuid->uuid, new_uuid->uuid);

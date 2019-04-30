@@ -43,6 +43,8 @@
 
 #include <obd.h>
 #include <obd_class.h>
+#include <linux/random.h>
+#include <libcfs/linux/linux-uuid.h>
 #include <linux/version.h>
 #include <lustre_log.h>
 #include <lustre_disk.h>
@@ -222,7 +224,7 @@ int lustre_start_mgc(struct super_block *sb)
 	struct obd_device *obd;
 	struct obd_export *exp;
 	struct obd_uuid *uuid = NULL;
-	class_uuid_t uuidc;
+	uuid_t uuidc;
 	lnet_nid_t nid;
 	char nidstr[LNET_NIDSTR_SIZE];
 	char *mgcname = NULL, *niduuid = NULL, *mgssec = NULL;
@@ -405,8 +407,8 @@ int lustre_start_mgc(struct super_block *sb)
 	if (uuid == NULL)
 		GOTO(out_free, rc = -ENOMEM);
 
-	ll_generate_random_uuid(uuidc);
-	class_uuid_unparse(uuidc, uuid);
+	generate_random_uuid(uuidc.b);
+	snprintf(uuid->uuid, UUID_SIZE, "%pU", uuidc.b);
 
 	/* Start the MGC */
 	rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME,

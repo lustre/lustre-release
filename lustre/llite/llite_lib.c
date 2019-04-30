@@ -37,9 +37,11 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/module.h>
+#include <linux/random.h>
 #include <linux/statfs.h>
 #include <linux/time.h>
 #include <linux/types.h>
+#include <libcfs/linux/linux-uuid.h>
 #include <linux/version.h>
 #include <linux/mm.h>
 #include <linux/user_namespace.h>
@@ -71,7 +73,6 @@ static struct ll_sb_info *ll_init_sbi(void)
 	unsigned long pages;
 	unsigned long lru_page_max;
 	struct sysinfo si;
-	class_uuid_t uuid;
 	int i;
 	ENTRY;
 
@@ -100,10 +101,6 @@ static struct ll_sb_info *ll_init_sbi(void)
 					   SBI_DEFAULT_READAHEAD_MAX);
 	sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
 	sbi->ll_ra_info.ra_max_read_ahead_whole_pages = -1;
-
-        ll_generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
-        CDEBUG(D_CONFIG, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
         sbi->ll_flags |= LL_SBI_VERBOSE;
 #ifdef ENABLE_CHECKSUM
@@ -1031,6 +1028,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	char name[MAX_STRING_SIZE];
 	int md_len = 0;
 	int dt_len = 0;
+	uuid_t uuid;
 	char *ptr;
 	int len;
 	int err;
@@ -1055,14 +1053,16 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	if (err)
 		GOTO(out_free_cfg, err);
 
-	err = super_setup_bdi_name(sb, "lustre-%016lx", cfg_instance);
-	if (err)
-		GOTO(out_free_cfg, err);
-
 #ifndef HAVE_DCACHE_LOCK
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
 	sb->s_d_op = &ll_d_ops;
 #endif
+	/* UUID handling */
+	generate_random_uuid(uuid.b);
+	snprintf(sbi->ll_sb_uuid.uuid, UUID_SIZE, "%pU", uuid.b);
+
+	CDEBUG(D_CONFIG, "llite sb uuid: %s\n", sbi->ll_sb_uuid.uuid);
+
 	/* Get fsname */
 	len = strlen(profilenm);
 	ptr = strrchr(profilenm, '-');
@@ -1083,8 +1083,12 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	sbi->ll_fsname[len] = '\0';
 
 	/* Mount info */
-	snprintf(name, MAX_STRING_SIZE, "%.*s-%016lx", len,
+	snprintf(name, sizeof(name), "%.*s-%016lx", len,
 		 profilenm, cfg_instance);
+
+	err = super_setup_bdi_name(sb, "%s", name);
+	if (err)
+		GOTO(out_free_cfg, err);
 
 	/* Call ll_debugfs_register_super() before lustre_process_log()
 	 * so that "llite.*.*" params can be processed correctly.

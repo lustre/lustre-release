@@ -33,6 +33,7 @@
 #ifndef _LUSTRE_SCRUB_H
 # define _LUSTRE_SCRUB_H
 
+#include <libcfs/linux/linux-uuid.h>
 #include <dt_object.h>
 #include <lustre_net.h>
 
