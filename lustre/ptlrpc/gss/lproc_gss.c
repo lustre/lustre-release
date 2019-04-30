@@ -50,8 +50,8 @@
 #include "gss_internal.h"
 #include "gss_api.h"
 
-static struct proc_dir_entry *gss_proc_root = NULL;
-static struct proc_dir_entry *gss_proc_lk = NULL;
+static struct dentry *gss_debugfs_dir_lk;
+static struct dentry *gss_debugfs_dir;
 
 /*
  * statistic of "out-of-sequence-window"
@@ -112,7 +112,7 @@ static int gss_proc_oos_seq_show(struct seq_file *m, void *v)
 		   atomic_read(&gss_stat_oos.oos_svc_pass[2]));
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(gss_proc_oos);
+LDEBUGFS_SEQ_FOPS_RO(gss_proc_oos);
 
 static ssize_t
 gss_proc_write_secinit(struct file *file, const char *buffer,
@@ -132,7 +132,7 @@ static const struct file_operations gss_proc_secinit = {
 	.write = gss_proc_write_secinit,
 };
 
-static struct lprocfs_vars gss_lprocfs_vars[] = {
+static struct lprocfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
 	  .fops	=	&gss_proc_oos_fops	},
 	{ .name	=	"init_channel",
@@ -172,46 +172,43 @@ gss_lk_proc_dl_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(gss_lk_proc_dl);
+LDEBUGFS_SEQ_FOPS(gss_lk_proc_dl);
 
-static struct lprocfs_vars gss_lk_lprocfs_vars[] = {
+static struct lprocfs_vars gss_lk_debugfs_vars[] = {
 	{ .name	=	"debug_level",
 	  .fops	=	&gss_lk_proc_dl_fops	},
 	{ NULL }
 };
 
-void gss_exit_lproc(void)
+void gss_exit_tunables(void)
 {
-        if (gss_proc_lk) {
-                lprocfs_remove(&gss_proc_lk);
-                gss_proc_lk = NULL;
-        }
+	if (!IS_ERR_OR_NULL(gss_debugfs_dir_lk))
+		ldebugfs_remove(&gss_debugfs_dir_lk);
 
-        if (gss_proc_root) {
-                lprocfs_remove(&gss_proc_root);
-                gss_proc_root = NULL;
-        }
+	if (!IS_ERR_OR_NULL(gss_debugfs_dir))
+		ldebugfs_remove(&gss_debugfs_dir);
 }
 
-int gss_init_lproc(void)
+int gss_init_tunables(void)
 {
 	int	rc;
 
 	spin_lock_init(&gss_stat_oos.oos_lock);
 
-	gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
-					 gss_lprocfs_vars, NULL);
-	if (IS_ERR(gss_proc_root)) {
-		rc = PTR_ERR(gss_proc_root);
-		gss_proc_root = NULL;
+	gss_debugfs_dir = ldebugfs_register("gss", sptlrpc_debugfs_dir,
+					    gss_debugfs_vars, NULL);
+	if (IS_ERR_OR_NULL(gss_debugfs_dir)) {
+		rc = gss_debugfs_dir ? PTR_ERR(gss_debugfs_dir) : -ENOMEM;
+		gss_debugfs_dir = NULL;
 		GOTO(out, rc);
 	}
 
-	gss_proc_lk = lprocfs_register("lgss_keyring", gss_proc_root,
-				       gss_lk_lprocfs_vars, NULL);
-	if (IS_ERR(gss_proc_lk)) {
-		rc = PTR_ERR(gss_proc_lk);
-		gss_proc_lk = NULL;
+	gss_debugfs_dir_lk = ldebugfs_register("lgss_keyring", gss_debugfs_dir,
+					       gss_lk_debugfs_vars, NULL);
+	if (IS_ERR(gss_debugfs_dir_lk)) {
+		rc = gss_debugfs_dir_lk ? PTR_ERR(gss_debugfs_dir_lk)
+					  : -ENOMEM;
+		gss_debugfs_dir_lk = NULL;
 		GOTO(out, rc);
 	}
 
@@ -219,7 +216,6 @@ int gss_init_lproc(void)
 
 out:
 	CERROR("failed to initialize gss lproc entries: %d\n", rc);
-	gss_exit_lproc();
-
+	gss_exit_tunables();
 	return rc;
 }

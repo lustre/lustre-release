@@ -965,12 +965,7 @@ struct ptlrpc_bulk_sec_desc {
         __u8            bsd_data[0];    /* policy-specific token */
 };
 
-
-/*
- * lprocfs
- */
-struct proc_dir_entry;
-extern struct proc_dir_entry *sptlrpc_proc_root;
+extern struct dentry *sptlrpc_debugfs_dir;
 
 /*
  * round size up to next power of 2, for slab allocation.

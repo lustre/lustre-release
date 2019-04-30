@@ -514,8 +514,8 @@ void gss_exit_svc_upcall(void);
 void gss_stat_oos_record_cli(int behind);
 void gss_stat_oos_record_svc(int phase, int replay);
 
-int  __init gss_init_lproc(void);
-void gss_exit_lproc(void);
+int  __init gss_init_tunables(void);
+void gss_exit_tunables(void);
 
 /* gss_null_mech.c */
 int __init init_null_module(void);

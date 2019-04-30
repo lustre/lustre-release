@@ -2854,13 +2854,13 @@ static int __init sptlrpc_gss_init(void)
 {
         int rc;
 
-        rc = gss_init_lproc();
+	rc = gss_init_tunables();
         if (rc)
                 return rc;
 
         rc = gss_init_cli_upcall();
         if (rc)
-                goto out_lproc;
+		goto out_tunables;
 
         rc = gss_init_svc_upcall();
         if (rc)
@@ -2905,8 +2905,8 @@ out_svc_upcall:
 	gss_exit_svc_upcall();
 out_cli_upcall:
 	gss_exit_cli_upcall();
-out_lproc:
-	gss_exit_lproc();
+out_tunables:
+	gss_exit_tunables();
 	return rc;
 }
 
@@ -2917,7 +2917,7 @@ static void __exit sptlrpc_gss_exit(void)
         cleanup_kerberos_module();
         gss_exit_svc_upcall();
         gss_exit_cli_upcall();
-        gss_exit_lproc();
+	gss_exit_tunables();
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
