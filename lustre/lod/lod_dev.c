@@ -1379,8 +1379,8 @@ static int lod_statfs(const struct lu_env *env,
 			sfs->os_bfree = 0;
 			sfs->os_granted = 0;
 		}
-		ost_files += sfs->os_files;
-		ost_ffree += sfs->os_ffree;
+		ost_files += ost_sfs.os_files;
+		ost_ffree += ost_sfs.os_ffree;
 		ost_sfs.os_bavail += ost_sfs.os_granted;
 		lod_statfs_sum(sfs, &ost_sfs, &bs);
 		LASSERTF(bs == ost_sfs.os_bsize, "%d != %d\n",
