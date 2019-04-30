@@ -85,21 +85,21 @@ int mdt_get_som(struct mdt_thread_info *info, struct mdt_object *obj,
 
 		ma->ma_valid |= MA_SOM;
 
-		CDEBUG(D_INODE, DFID": Reading som attrs: "
-		       "valid: %x, size: %lld, blocks: %lld\n",
-		       PFID(mdt_object_fid(obj)), som->ms_valid,
-		       som->ms_size, som->ms_blocks);
-
-		if (som->ms_valid & SOM_FL_STRICT) {
+		if ((som->ms_valid & SOM_FL_STRICT)) {
 			attr->la_valid |= LA_SIZE | LA_BLOCKS;
+			attr->la_size = som->ms_size;
+			attr->la_blocks = som->ms_blocks;
 
 			/*
 			 * Size on MDS is valid and could be returned
 			 * to client.
 			 */
-			attr->la_size = som->ms_size;
-			attr->la_blocks = som->ms_blocks;
 			info->mti_som_valid = 1;
+
+			CDEBUG(D_INODE, DFID": Reading som attrs: "
+			       "valid: %x, size: %lld, blocks: %lld\n",
+			       PFID(mdt_object_fid(obj)), som->ms_valid,
+			       som->ms_size, som->ms_blocks);
 		}
 	} else if (rc == -ENODATA) {
 		rc = 0;

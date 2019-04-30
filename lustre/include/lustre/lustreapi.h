@@ -263,8 +263,7 @@ struct find_param {
 				 fp_exclude_hash_type:1,
 				 fp_yaml:1,	/* output layout in YAML */
 				 fp_check_blocks:1,
-				 fp_exclude_blocks:1,
-				 fp_lazy:1;
+				 fp_exclude_blocks:1;
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;

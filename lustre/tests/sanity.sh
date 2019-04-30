@@ -5209,73 +5209,39 @@ test_56r() {
 	setup_56 $dir $NUMFILES $NUMDIRS
 
 	local expected=12
-	local cmd="$LFS find -size 0 -type f -lazy $dir"
+	local cmd="$LFS find -size 0 -type f $dir"
 	local nums=$($cmd | wc -l)
 
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-	cmd="$LFS find -size 0 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-
 	expected=0
-	cmd="$LFS find ! -size 0 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find ! -size 0 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-
 	echo "test" > $dir/$tfile
 	echo "test2" > $dir/$tfile.2 && sync
 	expected=1
-	cmd="$LFS find -size 5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size 5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-
 	expected=1
-	cmd="$LFS find -size +5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size +5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-
 	expected=2
-	cmd="$LFS find -size +0 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size +0 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-
 	expected=2
-	cmd="$LFS find ! -size -5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find ! -size -5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||
 		error "'$cmd' wrong: found $nums, expected $expected"
-
 	expected=12
-	cmd="$LFS find -size -5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
 	cmd="$LFS find -size -5 -type f $dir"
 	nums=$($cmd | wc -l)
 	[ $nums -eq $expected ] ||

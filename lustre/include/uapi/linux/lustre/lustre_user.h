@@ -505,13 +505,11 @@ struct fsxattr {
 #define LL_STATFS_LOV		2
 #define LL_STATFS_NODELAY	4
 
-#define IOC_MDC_TYPE		'i'
-#define IOC_MDC_LOOKUP		_IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
-#define IOC_MDC_GETFILESTRIPE	_IOWR(IOC_MDC_TYPE, 21, struct lov_user_md *)
-#define IOC_MDC_GETFILEINFO_OLD	_IOWR(IOC_MDC_TYPE, 22, struct lov_user_mds_data_v1 *)
-#define IOC_MDC_GETFILEINFO	_IOWR(IOC_MDC_TYPE, 22, struct lov_user_mds_data)
-#define LL_IOC_MDC_GETINFO_OLD	_IOWR(IOC_MDC_TYPE, 23, struct lov_user_mds_data_v1 *)
-#define LL_IOC_MDC_GETINFO	_IOWR(IOC_MDC_TYPE, 23, struct lov_user_mds_data)
+#define IOC_MDC_TYPE            'i'
+#define IOC_MDC_LOOKUP          _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
+#define IOC_MDC_GETFILESTRIPE   _IOWR(IOC_MDC_TYPE, 21, struct lov_user_md *)
+#define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_user_mds_data *)
+#define LL_IOC_MDC_GETINFO      _IOWR(IOC_MDC_TYPE, 23, struct lov_user_mds_data *)
 
 #define MAX_OBD_NAME 128 /* If this changes, a NEW ioctl must be added */
 
@@ -759,16 +757,10 @@ static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
  * use this.  It is unsafe to #define those values in this header as it
  * is possible the application has already #included <sys/stat.h>. */
 #ifdef HAVE_LOV_USER_MDS_DATA
-#define lov_user_mds_data lov_user_mds_data_v2
+#define lov_user_mds_data lov_user_mds_data_v1
 struct lov_user_mds_data_v1 {
 	lstat_t lmd_st;                 /* MDS stat struct */
 	struct lov_user_md_v1 lmd_lmm;  /* LOV EA V1 user data */
-} __attribute__((packed));
-
-struct lov_user_mds_data_v2 {
-	lstat_t lmd_st;			/* MDS stat struct */
-	__u64 lmd_flags;		/* MDS stat flags */
-	struct lov_user_md_v1 lmd_lmm;	/* LOV EA V1 user data */
 } __attribute__((packed));
 #endif
 
