@@ -4159,6 +4159,8 @@ test_43a() {
 	cp -p $(which sleep) $DIR/$tdir/sleep || error "can't copy"
 	$DIR/$tdir/sleep 60 &
 	SLEEP_PID=$!
+	# Make sure exec of $tdir/sleep wins race with truncate
+	sleep 1
 	$MULTIOP $DIR/$tdir/sleep Oc && error "expected error, got success"
 	kill $SLEEP_PID
 }
@@ -4171,6 +4173,8 @@ test_43b() {
 	cp -p $(which sleep) $DIR/$tdir/sleep || error "can't copy"
 	$DIR/$tdir/sleep 60 &
 	SLEEP_PID=$!
+	# Make sure exec of $tdir/sleep wins race with truncate
+	sleep 1
 	$TRUNCATE $DIR/$tdir/sleep 0 && error "expected error, got success"
 	kill $SLEEP_PID
 }
