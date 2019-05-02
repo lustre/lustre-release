@@ -297,7 +297,9 @@ lnet_destroy_peer_locked(struct lnet_peer *lp)
 	 * Releasing the lock can cause an inconsistent state
 	 */
 	spin_lock(&the_lnet.ln_msg_resend_lock);
+	spin_lock(&lp->lp_lock);
 	list_splice(&lp->lp_dc_pendq, &the_lnet.ln_msg_resend);
+	spin_unlock(&lp->lp_lock);
 	spin_unlock(&the_lnet.ln_msg_resend_lock);
 	wake_up(&the_lnet.ln_dc_waitq);
 
@@ -1786,7 +1788,9 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp)
 	       libcfs_nid2str(lp->lp_primary_nid));
 
 	list_del_init(&lp->lp_dc_list);
+	spin_lock(&lp->lp_lock);
 	list_splice_init(&lp->lp_dc_pendq, &pending_msgs);
+	spin_unlock(&lp->lp_lock);
 	wake_up_all(&lp->lp_dc_waitq);
 
 	lnet_net_unlock(LNET_LOCK_EX);
