@@ -600,8 +600,6 @@ int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 {
 	__u32 round = size_roundup_power2(size);
 
-	LASSERT(round <=
-		lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3));
 	if (info->lti_ea_store) {
 		LASSERT(info->lti_ea_store_size);
 		LASSERT(info->lti_ea_store_size < round);
