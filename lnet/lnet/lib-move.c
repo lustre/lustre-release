@@ -2565,7 +2565,9 @@ again:
 		/* queue message and return */
 		msg->msg_rtr_nid_param = rtr_nid;
 		msg->msg_sending = 0;
+		spin_lock(&peer->lp_lock);
 		list_add_tail(&msg->msg_list, &peer->lp_dc_pendq);
+		spin_unlock(&peer->lp_lock);
 		lnet_peer_ni_decref_locked(lpni);
 		primary_nid = peer->lp_primary_nid;
 		lnet_net_unlock(cpt);
