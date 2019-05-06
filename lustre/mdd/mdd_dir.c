@@ -43,6 +43,7 @@
 #include <lustre_mds.h>
 #include <lustre_fid.h>
 #include <lustre_lmv.h>
+#include <lustre_idmap.h>
 
 #include "mdd_internal.h"
 
@@ -2038,11 +2039,23 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	if (rc != 0)
 		RETURN(rc);
 
-        /* sgid check */
+	/* sgid check */
 	if (pattr->la_mode & S_ISGID) {
+		struct lu_ucred *uc = lu_ucred(env);
+
 		cattr->la_gid = pattr->la_gid;
+
+		/* Directories are special, and always inherit S_ISGID */
 		if (S_ISDIR(cattr->la_mode)) {
 			cattr->la_mode |= S_ISGID;
+			cattr->la_valid |= LA_MODE;
+		} else if ((cattr->la_mode & (S_ISGID | S_IXGRP))
+				== (S_ISGID | S_IXGRP) &&
+			   !lustre_in_group_p(uc,
+					      (cattr->la_valid & LA_GID) ?
+					      cattr->la_gid : pattr->la_gid) &&
+			   !md_capable(uc, CFS_CAP_FSETID)) {
+			cattr->la_mode &= ~S_ISGID;
 			cattr->la_valid |= LA_MODE;
 		}
 	}
