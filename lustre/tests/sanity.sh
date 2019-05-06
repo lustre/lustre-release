@@ -16934,6 +16934,34 @@ test_410()
 }
 run_test 410 "Test inode number returned from kernel thread"
 
+test_420()
+{
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.7) ]] &&
+		skip "Need MDS version at least 2.10.7" && return
+
+	local SAVE_UMASK=$(umask)
+	local dir=$DIR/$tdir
+	local uname=$(getent passwd $RUNAS_ID | cut -d: -f1)
+
+	mkdir -p $dir
+	umask 0000
+	mkdir -m03777 $dir/testdir
+	ls -dn $dir/testdir
+	local dirperms=$(ls -dn $dir/testdir | awk '{print $1}')
+	[ $dirperms == "drwxrwsrwt" ] ||
+		error "incorrect perms on $dir/testdir"
+
+	$PDSH ${uname}@localhost "PATH=$LUSTRE/tests:\$PATH; \
+		openfile -f O_RDONLY:O_CREAT -m 02755 $dir/testdir/testfile"
+	ls -n $dir/testdir/testfile
+	local fileperms=$(ls -n $dir/testdir/testfile | awk '{print $1}')
+	[ $fileperms == "-rwxr-xr-x" ] ||
+		error "incorrect perms on $dir/testdir/testfile"
+
+	umask $SAVE_UMASK
+}
+run_test 420 "clear SGID bit on non-directories for non-members"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
