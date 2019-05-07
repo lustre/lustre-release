@@ -14,13 +14,14 @@ Cry immediately if we are not running as root.
 
 First, set up a temporary directory and create a regular file with
 defined permissions.
+# Need to remove trailing '.' when SELinux is enabled
 
 	$ mkdir d
 	$ cd d
 	$ umask 027
 	$ touch f
 	$ chown nobody:nobody f
-	$ ls -l f | awk -- '{ print $1, $3, $4 }'
+	$ ls -l f | awk -- '{ sub(/\\.$/, "", $1); print $1, $3, $4 }'
 	> -rw-r----- nobody nobody
 	$ su nobody
 	$ echo nobody > f
@@ -60,10 +61,11 @@ to set extended attributes in user.* namespace for files.
 
 
 Test if symlinks are properly followed.
+# Need to remove trailing '.' when SELinux is enabled
 
 	$ su
 	$ ln -s f l
-	$ ls -l l | awk -- '{ print $1, $3, $4 }'
+	$ ls -l l | awk -- '{ sub(/\\.$/, "", $1); print $1, $3, $4 }'
 	> lrwxrwxrwx root root
 	$ su bin
 	$ getfattr -d l
@@ -74,12 +76,13 @@ Test if symlinks are properly followed.
 
 Test the sticky directories. Only the owner and privileged user can
 write attributes.
+# Need to remove trailing '.' when SELinux is enabled
 
 	$ su
 	$ mkdir t
 	$ chown nobody:nobody t
 	$ chmod 1750 t
-	$ ls -dl t | awk -- '{ print $1, $3, $4 }'
+	$ ls -dl t | awk -- '{ sub(/\\.$/, "", $1); print $1, $3, $4 }'
 	> drwxr-x--T nobody nobody
 	$ su nobody
 	$ setfacl -m g:bin:rwx t
@@ -97,12 +100,13 @@ write attributes.
 
 Verify that the additional ACL entry grants user bin permission
 to set extended attributes in user.* namespace for directories.
+# Need to remove trailing '.' when SELinux is enabled
 
 	$ su
 	$ mkdir d
 	$ chown nobody:nobody d
 	$ chmod 750 d
-	$ ls -dl d | awk -- '{ print $1, $3, $4 }'
+	$ ls -dl d | awk -- '{ sub(/\\.$/, "", $1); print $1, $3, $4 }'
 	> drwxr-x--- nobody nobody
 	$ su nobody
 	$ setfacl -m g:bin:rwx d
