@@ -42,6 +42,12 @@
 
 #include <linux/module.h>
 #include <linux/list.h>
+#ifdef HAVE_PROCESSOR_H
+#include <linux/processor.h>
+#else
+#include <libcfs/linux/processor.h>
+#endif
+
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_hash.h> /* hash_long() */
 #include <libcfs/linux/linux-mem.h>
@@ -1560,8 +1566,11 @@ void lu_context_key_quiesce(struct lu_context_key *key)
 		up_write(&lu_key_initing);
 
 		write_lock(&lu_keys_guard);
-		list_for_each_entry(ctx, &lu_context_remembered, lc_remember)
+		list_for_each_entry(ctx, &lu_context_remembered, lc_remember) {
+			spin_until_cond(READ_ONCE(ctx->lc_state) != LCS_LEAVING);
 			key_fini(ctx, key->lct_index);
+		}
+
 		write_unlock(&lu_keys_guard);
 	}
 }
@@ -1721,28 +1730,35 @@ void lu_context_exit(struct lu_context *ctx)
 {
 	unsigned int i;
 
-        LINVRNT(ctx->lc_state == LCS_ENTERED);
-        ctx->lc_state = LCS_LEFT;
-        if (ctx->lc_tags & LCT_HAS_EXIT && ctx->lc_value != NULL) {
-		/* could race with key quiescency */
-		if (ctx->lc_tags & LCT_REMEMBER)
-			read_lock(&lu_keys_guard);
-
+	LINVRNT(ctx->lc_state == LCS_ENTERED);
+	/*
+	 * Disable preempt to ensure we get a warning if
+	 * any lct_exit ever tries to sleep.  That would hurt
+	 * lu_context_key_quiesce() which spins waiting for us.
+	 * This also ensure we aren't preempted while the state
+	 * is LCS_LEAVING, as that too would cause problems for
+	 * lu_context_key_quiesce().
+	 */
+	preempt_disable();
+	/*
+	 * Ensure lu_context_key_quiesce() sees LCS_LEAVING
+	 * or we see LCT_QUIESCENT
+	 */
+	smp_store_mb(ctx->lc_state, LCS_LEAVING);
+	if (ctx->lc_tags & LCT_HAS_EXIT && ctx->lc_value) {
                 for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-			if (ctx->lc_value[i] != NULL) {
-				struct lu_context_key *key;
+			struct lu_context_key *key;
 
-				key = lu_keys[i];
-				LASSERT(key != NULL);
-				if (key->lct_exit != NULL)
-					key->lct_exit(ctx,
-						      key, ctx->lc_value[i]);
-			}
-                }
-
-		if (ctx->lc_tags & LCT_REMEMBER)
-			read_unlock(&lu_keys_guard);
+			key = lu_keys[i];
+			if (ctx->lc_value[i] &&
+			    !(key->lct_tags & LCT_QUIESCENT) &&
+			    key->lct_exit)
+				key->lct_exit(ctx, key, ctx->lc_value[i]);
+		}
         }
+
+	smp_store_release(&ctx->lc_state, LCS_LEFT);
+	preempt_enable();
 }
 EXPORT_SYMBOL(lu_context_exit);
 

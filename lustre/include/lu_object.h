@@ -890,6 +890,7 @@ enum lu_xattr_flags {
 enum lu_context_state {
         LCS_INITIALIZED = 1,
         LCS_ENTERED,
+	LCS_LEAVING,
         LCS_LEFT,
         LCS_FINALIZED
 };
