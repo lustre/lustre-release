@@ -136,6 +136,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 	struct lfsck_thread_info *info    = lfsck_env_info(env);
 	struct lu_fid		 *fid     = &info->lti_fid;
 	struct lu_seq_range	 *range   = &info->lti_range;
+	struct lu_attr		 *la	  = &info->lti_la;
 	struct seq_server_site	 *ss	  = lfsck_dev_site(lfsck);
 	__u32			  idx	  = lfsck_dev_idx(lfsck);
 	int			  depth   = 0;
@@ -144,9 +145,21 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 	if (list_empty(&lfsck->li_list_dir) || !S_ISDIR(lfsck_object_type(obj)))
 		return 0;
 
+	*fid = *lfsck_dto2fid(obj);
+	rc = dt_attr_get(env, obj, la);
+	if (unlikely(rc || (la->la_valid & LA_FLAGS &&
+			    la->la_flags & LUSTRE_ORPHAN_FL))) {
+		/* Orphan directory is empty, does not need scan. */
+		CDEBUG(D_INFO,
+		       "%s: skip orphan dir "DFID", %llx/%x: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), PFID(fid),
+		       la->la_valid, la->la_flags, rc);
+
+		return rc;
+	}
+
 	LASSERT(ss != NULL);
 
-	*fid = *lfsck_dto2fid(obj);
 	while (1) {
 		/* Global /ROOT is visible. */
 		if (unlikely(lu_fid_eq(fid, &lfsck->li_global_root_fid)))
@@ -177,6 +190,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 		if (fid_is_norm(fid))
 			return 1;
 
+		/* Only true after "obj = NULL" set below */
 		if (obj == NULL) {
 			obj = lfsck_object_find_bottom(env, lfsck, fid);
 			if (IS_ERR(obj))
@@ -960,19 +974,8 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 				goto checkpoint;
 		}
 
-		if (dt_object_exists(target)) {
-			struct lu_attr la = { .la_valid = 0 };
-
-			rc = dt_attr_get(env, target, &la);
-			if (likely(!rc && (!(la.la_valid & LA_FLAGS) ||
-					   !(la.la_flags & LUSTRE_ORPHAN_FL))))
-				rc = lfsck_exec_oit(env, lfsck, target);
-			else
-				CDEBUG(D_INFO,
-				       "%s: orphan "DFID", %llx/%x: rc = %d\n",
-				       lfsck_lfsck2name(lfsck), PFID(fid),
-				       la.la_valid, la.la_flags, rc);
-		}
+		if (dt_object_exists(target))
+			rc = lfsck_exec_oit(env, lfsck, target);
 
 		lfsck_object_put(env, target);
 		if (rc != 0 && bk->lb_param & LPF_FAILOUT)

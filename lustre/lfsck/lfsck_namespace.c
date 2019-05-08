@@ -4538,19 +4538,31 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 				    struct lfsck_component *com,
 				    struct dt_object *obj)
 {
-	struct lfsck_thread_info *info	= lfsck_env_info(env);
-	struct lfsck_namespace	 *ns	= com->lc_file_ram;
-	struct lfsck_instance	 *lfsck	= com->lc_lfsck;
-	const struct lu_fid	 *fid	= lfsck_dto2fid(obj);
-	struct lu_fid		 *pfid	= &info->lti_fid2;
-	struct lu_name		 *cname	= &info->lti_name;
-	struct lu_seq_range	 *range = &info->lti_range;
-	struct seq_server_site	 *ss	= lfsck_dev_site(lfsck);
-	struct linkea_data	  ldata	= { NULL };
-	__u32			  idx	= lfsck_dev_idx(lfsck);
-	int			  rc;
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	const struct lu_fid *fid = lfsck_dto2fid(obj);
+	struct lu_fid *pfid = &info->lti_fid2;
+	struct lu_name *cname = &info->lti_name;
+	struct lu_seq_range *range = &info->lti_range;
+	struct seq_server_site *ss = lfsck_dev_site(lfsck);
+	struct linkea_data ldata = { NULL };
+	__u32 idx = lfsck_dev_idx(lfsck);
+	struct lu_attr la = { .la_valid = 0 };
 	bool remote = false;
+	int rc;
 	ENTRY;
+
+	rc = dt_attr_get(env, obj, &la);
+	if (unlikely(rc || (la.la_valid & LA_FLAGS &&
+			    la.la_flags & LUSTRE_ORPHAN_FL))) {
+		CDEBUG(D_INFO,
+		       "%s: skip orphan "DFID", %llx/%x: rc = %d\n",
+		       lfsck_lfsck2name(lfsck), PFID(fid),
+		       la.la_valid, la.la_flags, rc);
+
+		return rc;
+	}
 
 	rc = lfsck_links_read(env, obj, &ldata);
 	if (rc == -ENOENT)
