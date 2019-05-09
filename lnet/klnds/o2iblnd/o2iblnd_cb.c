@@ -203,7 +203,12 @@ kiblnd_post_rx(struct kib_rx *rx, int credit)
 	 * own this rx (and rx::rx_conn) anymore, LU-5678.
 	 */
 	kiblnd_conn_addref(conn);
+#ifdef HAVE_IB_POST_SEND_RECV_CONST
+	rc = ib_post_recv(conn->ibc_cmid->qp, &rx->rx_wrq,
+			  (const struct ib_recv_wr **)&bad_wrq);
+#else
 	rc = ib_post_recv(conn->ibc_cmid->qp, &rx->rx_wrq, &bad_wrq);
+#endif
 	if (unlikely(rc != 0)) {
 		CERROR("Can't post rx for %s: %d, bad_wrq: %p\n",
 		       libcfs_nid2str(conn->ibc_peer->ibp_nid), rc, bad_wrq);
@@ -974,7 +979,12 @@ __must_hold(&conn->ibc_lock)
 		if (lnet_send_error_simulation(tx->tx_lntmsg[0], &tx->tx_hstatus))
 			rc = -EINVAL;
 		else
+#ifdef HAVE_IB_POST_SEND_RECV_CONST
+			rc = ib_post_send(conn->ibc_cmid->qp, wr,
+					  (const struct ib_send_wr **)&bad);
+#else
 			rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
+#endif
 	}
 
 	conn->ibc_last_send = ktime_get();

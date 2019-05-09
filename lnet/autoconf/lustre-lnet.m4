@@ -537,6 +537,32 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			  [function ib_inc_rkey exist])
 	])
 
+	# In MOFED 4.6, the second and third parameters for
+	# ib_post_send() and ib_post_recv() are declared with
+	# 'const'.
+	tmp_flags="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="-Werror"
+	LB_CHECK_COMPILE([if 'ib_post_send() and ib_post_recv()' have const parameters],
+	ib_post_send_recv_const, [
+		#ifdef HAVE_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <rdma/ib_verbs.h>
+	],[
+		ib_post_send(NULL, (const struct ib_send_wr *)NULL,
+			     (const struct ib_send_wr **)NULL);
+	],[
+		AC_DEFINE(HAVE_IB_POST_SEND_RECV_CONST, 1,
+			[ib_post_send and ib_post_recv have const parameters])
+	])
+	EXTRA_KCFLAGS="$tmp_flags"
+
 	EXTRA_CHECK_INCLUDE=""
 ]) # ENABLEO2IB != "no"
 ]) # LN_CONFIG_O2IB
