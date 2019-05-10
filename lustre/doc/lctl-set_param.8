@@ -40,9 +40,9 @@ Set parameters from
 instead of from the command-line.  The contents of
 .I filename
 is YAML format, created as an output from
-.BR "lctl --device MGS llog_print " < \fIfsname >- client
-fR or any other valid llog configuration log as listed by
-.B lctl --device MGS llog_catlist
+.BR  ' "lctl --device MGS llog_print " < \fIfsname\fR >- client '
+or any other valid llog configuration log as listed by
+.RB ' "lctl --device MGS llog_catlist" '
 .TP
 .B -n
 Disable printing of the parameter name after setting it.

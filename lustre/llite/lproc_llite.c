@@ -321,40 +321,41 @@ static int ll_site_stats_seq_show(struct seq_file *m, void *v)
 
 LDEBUGFS_SEQ_FOPS_RO(ll_site_stats);
 
-static int ll_max_readahead_mb_seq_show(struct seq_file *m, void *v)
+static ssize_t max_read_ahead_mb_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	unsigned long ra_max_mb;
 
 	spin_lock(&sbi->ll_lock);
 	ra_max_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages);
 	spin_unlock(&sbi->ll_lock);
 
-	seq_printf(m, "%lu\n", ra_max_mb);
-	return 0;
+	return snprintf(buf, PAGE_SIZE, "%lu\n", ra_max_mb);
 }
 
-static ssize_t
-ll_max_readahead_mb_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+static ssize_t max_read_ahead_mb_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	s64 ra_max_mb, pages_number;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	u64 ra_max_mb, pages_number;
 	int rc;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &ra_max_mb, 'M');
+	rc = sysfs_memparse(buffer, count, &ra_max_mb, "MiB");
 	if (rc)
 		return rc;
 
 	pages_number = round_up(ra_max_mb, 1024 * 1024) >> PAGE_SHIFT;
-	if (pages_number < 0 || pages_number > cfs_totalram_pages() / 2) {
+	CDEBUG(D_INFO, "%s: set max_read_ahead_mb=%llu (%llu pages)\n",
+	       sbi->ll_fsname, PAGES_TO_MiB(pages_number), pages_number);
+	if (pages_number > cfs_totalram_pages() / 2) {
 		/* 1/2 of RAM */
-		CERROR("%s: can't set max_readahead_mb=%llu > %luMB\n",
+		CERROR("%s: cannot set max_read_ahead_mb=%llu > totalram/2=%luMB\n",
 		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
-		       PAGES_TO_MiB(cfs_totalram_pages()));
+		       PAGES_TO_MiB(cfs_totalram_pages() / 2));
 		return -ERANGE;
 	}
 
@@ -364,42 +365,40 @@ ll_max_readahead_mb_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
+LUSTRE_RW_ATTR(max_read_ahead_mb);
 
-LDEBUGFS_SEQ_FOPS(ll_max_readahead_mb);
-
-static int ll_max_readahead_per_file_mb_seq_show(struct seq_file *m, void *v)
+static ssize_t max_read_ahead_per_file_mb_show(struct kobject *kobj,
+					       struct attribute *attr,
+					       char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	unsigned long ra_max_file_mb;
 
 	spin_lock(&sbi->ll_lock);
 	ra_max_file_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file);
 	spin_unlock(&sbi->ll_lock);
 
-	seq_printf(m, "%lu\n", ra_max_file_mb);
-	return 0;
+	return snprintf(buf, PAGE_SIZE, "%lu\n", ra_max_file_mb);
 }
 
-static ssize_t
-ll_max_readahead_per_file_mb_seq_write(struct file *file,
-				       const char __user *buffer,
-				       size_t count, loff_t *off)
+static ssize_t max_read_ahead_per_file_mb_store(struct kobject *kobj,
+						struct attribute *attr,
+						const char *buffer,
+						size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	s64 ra_max_file_mb, pages_number;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	u64 ra_max_file_mb, pages_number;
 	int rc;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &ra_max_file_mb,
-					   'M');
+	rc = sysfs_memparse(buffer, count, &ra_max_file_mb, "MiB");
 	if (rc)
 		return rc;
 
 	pages_number = round_up(ra_max_file_mb, 1024 * 1024) >> PAGE_SHIFT;
-	if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
-		CERROR("%s: can't set max_readahead_per_file_mb=%llu > max_read_ahead_mb=%lu\n",
+	if (pages_number > sbi->ll_ra_info.ra_max_pages) {
+		CERROR("%s: cannot set max_read_ahead_per_file_mb=%llu > max_read_ahead_mb=%lu\n",
 		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
 		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages));
 		return -ERANGE;
@@ -411,36 +410,32 @@ ll_max_readahead_per_file_mb_seq_write(struct file *file,
 
 	return count;
 }
+LUSTRE_RW_ATTR(max_read_ahead_per_file_mb);
 
-LDEBUGFS_SEQ_FOPS(ll_max_readahead_per_file_mb);
-
-static int ll_max_read_ahead_whole_mb_seq_show(struct seq_file *m, void *v)
+static ssize_t max_read_ahead_whole_mb_show(struct kobject *kobj,
+					    struct attribute *attr, char *buf)
 {
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
 	unsigned long ra_max_whole_mb;
 
 	spin_lock(&sbi->ll_lock);
 	ra_max_whole_mb = PAGES_TO_MiB(sbi->ll_ra_info.ra_max_read_ahead_whole_pages);
 	spin_unlock(&sbi->ll_lock);
 
-	seq_printf(m, "%lu\n", ra_max_whole_mb);
-	return 0;
+	return snprintf(buf, PAGE_SIZE, "%lu\n", ra_max_whole_mb);
 }
 
-static ssize_t
-ll_max_read_ahead_whole_mb_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+static ssize_t max_read_ahead_whole_mb_store(struct kobject *kobj,
+					     struct attribute *attr,
+					     const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct super_block *sb = m->private;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	s64 ra_max_whole_mb, pages_number;
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	u64 ra_max_whole_mb, pages_number;
 	int rc;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &ra_max_whole_mb,
-					   'M');
+	rc = sysfs_memparse(buffer, count, &ra_max_whole_mb, "MiB");
 	if (rc)
 		return rc;
 
@@ -448,11 +443,11 @@ ll_max_read_ahead_whole_mb_seq_write(struct file *file,
 	/* Cap this at the current max readahead window size, the readahead
 	 * algorithm does this anyway so it's pointless to set it larger.
 	 */
-	if (pages_number < 0 ||
-	    pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
-		CERROR("%s: can't set max_read_ahead_whole_mb=%llu > max_read_ahead_per_file_mb=%lu\n",
+	if (pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
+		CERROR("%s: cannot set max_read_ahead_whole_mb=%llu > max_read_ahead_per_file_mb=%lu\n",
 		       sbi->ll_fsname, PAGES_TO_MiB(pages_number),
 		       PAGES_TO_MiB(sbi->ll_ra_info.ra_max_pages_per_file));
+
 		return -ERANGE;
 	}
 
@@ -462,8 +457,7 @@ ll_max_read_ahead_whole_mb_seq_write(struct file *file,
 
 	return count;
 }
-
-LDEBUGFS_SEQ_FOPS(ll_max_read_ahead_whole_mb);
+LUSTRE_RW_ATTR(max_read_ahead_whole_mb);
 
 static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 {
@@ -500,9 +494,9 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 	long diff = 0;
 	long nrpages = 0;
 	__u16 refcheck;
-	__s64 pages_number;
+	u64 pages_number;
 	int rc;
-	char kernbuf[128];
+	char kernbuf[128], *ptr;
 
 	ENTRY;
 	if (count >= sizeof(kernbuf))
@@ -510,11 +504,10 @@ static ssize_t ll_max_cached_mb_seq_write(struct file *file,
 
 	if (copy_from_user(kernbuf, buffer, count))
 		RETURN(-EFAULT);
-	kernbuf[count] = 0;
+	kernbuf[count] = '\0';
 
-	buffer += lprocfs_find_named_value(kernbuf, "max_cached_mb:", &count) -
-		  kernbuf;
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &pages_number, 'M');
+	ptr = lprocfs_find_named_value(kernbuf, "max_cached_mb:", &count);
+	rc = sysfs_memparse(ptr, count, &pages_number, "MiB");
 	if (rc)
 		RETURN(rc);
 
@@ -595,7 +588,6 @@ out:
 	}
 	return rc;
 }
-
 LDEBUGFS_SEQ_FOPS(ll_max_cached_mb);
 
 static ssize_t checksums_show(struct kobject *kobj, struct attribute *attr,
@@ -1100,14 +1092,14 @@ static ssize_t max_read_ahead_async_active_show(struct kobject *kobj,
 }
 
 static ssize_t max_read_ahead_async_active_store(struct kobject *kobj,
-						struct attribute *attr,
-						const char *buffer,
-						size_t count)
+						 struct attribute *attr,
+						 const char *buffer,
+						 size_t count)
 {
-	unsigned int val;
-	int rc;
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
+	unsigned int val;
+	int rc;
 
 	rc = kstrtouint(buffer, 10, &val);
 	if (rc)
@@ -1121,7 +1113,9 @@ static ssize_t max_read_ahead_async_active_store(struct kobject *kobj,
 		return -ERANGE;
 	}
 
+	spin_lock(&sbi->ll_lock);
 	sbi->ll_ra_info.ra_async_max_active = val;
+	spin_unlock(&sbi->ll_lock);
 	workqueue_set_max_active(sbi->ll_ra_info.ll_readahead_wq, val);
 
 	return count;
@@ -1466,12 +1460,6 @@ LPROC_SEQ_FOPS(ll_pcc);
 struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"site",
 	  .fops	=	&ll_site_stats_fops			},
-	{ .name =	"max_read_ahead_mb",
-	  .fops =	&ll_max_readahead_mb_fops		},
-	{ .name =	"max_read_ahead_per_file_mb",
-	  .fops =	&ll_max_readahead_per_file_mb_fops	},
-	{ .name =	"max_read_ahead_whole_mb",
-	  .fops =	&ll_max_read_ahead_whole_mb_fops	},
 	{ .name	=	"max_cached_mb",
 	  .fops	=	&ll_max_cached_mb_fops			},
 	{ .name	=	"statahead_stats",
@@ -1504,6 +1492,11 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_uuid.attr,
 	&lustre_attr_checksums.attr,
 	&lustre_attr_checksum_pages.attr,
+	&lustre_attr_max_read_ahead_mb.attr,
+	&lustre_attr_max_read_ahead_per_file_mb.attr,
+	&lustre_attr_max_read_ahead_whole_mb.attr,
+	&lustre_attr_max_read_ahead_async_active.attr,
+	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
 	&lustre_attr_stats_track_pid.attr,
 	&lustre_attr_stats_track_ppid.attr,
 	&lustre_attr_stats_track_gid.attr,
@@ -1520,8 +1513,6 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_file_heat.attr,
 	&lustre_attr_heat_decay_percentage.attr,
 	&lustre_attr_heat_period_second.attr,
-	&lustre_attr_max_read_ahead_async_active.attr,
-	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
 	NULL,
 };
 

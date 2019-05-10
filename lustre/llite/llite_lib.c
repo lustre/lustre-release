@@ -113,7 +113,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 		GOTO(out_destroy_ra, rc = -ENOMEM);
 
 	sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
-					   SBI_DEFAULT_READAHEAD_MAX);
+						    SBI_DEFAULT_READ_AHEAD_MAX);
 	sbi->ll_ra_info.ra_async_pages_per_file_threshold =
 				sbi->ll_ra_info.ra_max_pages_per_file;
 	sbi->ll_ra_info.ra_max_pages = sbi->ll_ra_info.ra_max_pages_per_file;
@@ -516,7 +516,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	/* Don't change value if it was specified in the config log */
 	if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages == -1) {
 		sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
-			max_t(unsigned long, SBI_DEFAULT_READAHEAD_WHOLE_MAX,
+			max_t(unsigned long, SBI_DEFAULT_READ_AHEAD_WHOLE_MAX,
 			      (data->ocd_brw_size >> PAGE_SHIFT));
 		if (sbi->ll_ra_info.ra_max_read_ahead_whole_pages >
 		    sbi->ll_ra_info.ra_max_pages_per_file)

@@ -8932,11 +8932,6 @@ test_101c() {
 }
 run_test 101c "check stripe_size aligned read-ahead ================="
 
-set_read_ahead() {
-	$LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1
-	$LCTL set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
-}
-
 test_101d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
@@ -8956,7 +8951,10 @@ test_101d() {
 	cancel_lru_locks osc
 
 	echo Disable read-ahead
-	local old_READAHEAD=$(set_read_ahead 0)
+	local old_RA=$($LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1)
+	$LCTL set_param -n llite.*.max_read_ahead_mb=0
+	stack_trap "$LCTL set_param -n llite.*.max_read_ahead_mb $old_RA" EXIT
+	$LCTL get_param -n llite.*.max_read_ahead_mb
 
 	echo Reading the test file $file with read-ahead disabled
 	local raOFF=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$sz_MB")
@@ -8964,7 +8962,7 @@ test_101d() {
 	echo Cancel LRU locks on lustre client to flush the client cache
 	cancel_lru_locks osc
 	echo Enable read-ahead with ${ra_MB}MB
-	set_read_ahead $ra_MB
+	$LCTL set_param -n llite.*.max_read_ahead_mb=$ra_MB
 
 	echo Reading the test file $file with read-ahead enabled
 	local raON=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$sz_MB")
@@ -8972,7 +8970,6 @@ test_101d() {
 	echo "read-ahead disabled time read $raOFF"
 	echo "read-ahead enabled  time read $raON"
 
-	set_read_ahead $old_READAHEAD
 	rm -f $file
 	wait_delete_completed
 
@@ -16196,8 +16193,7 @@ test_224c() { # LU-6441
 	save_writethrough $p
 	set_cache writethrough on
 
-	local pages_per_rpc=$($LCTL get_param \
-				osc.*.max_pages_per_rpc)
+	local pages_per_rpc=$($LCTL get_param osc.*.max_pages_per_rpc)
 	local at_max=$($LCTL get_param -n at_max)
 	local timeout=$($LCTL get_param -n timeout)
 	local test_at="at_max"
