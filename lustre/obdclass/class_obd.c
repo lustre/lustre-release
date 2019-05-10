@@ -524,131 +524,152 @@ struct miscdevice obd_psdev = {
 	.fops	= &obd_psdev_fops,
 };
 
-#define test_string_to_size_one(value, result, def_unit)		\
-({									\
-		u64 __size;						\
-		int __ret;						\
-									\
-		BUILD_BUG_ON(strlen(value) >= 23);			\
-		__ret = sysfs_memparse((value), (result), &__size,	\
-				       (def_unit));			\
-		if (__ret == 0 && (u64)result != __size)		\
-			CERROR("string_helper: size %llu != result %llu\n",\
-			       __size, (u64)result);			\
-		__ret;							\
+#define test_string_to_size_err(value, expect, def_unit, __rc)		       \
+({									       \
+	u64 __size;							       \
+	int __ret;							       \
+									       \
+	BUILD_BUG_ON(sizeof(value) >= 23);				       \
+	__ret = sysfs_memparse(value, sizeof(value) - 1, &__size, def_unit);   \
+	if (__ret != __rc)						       \
+		CERROR("string_helper: parsing '%s' expect rc %d != got %d\n", \
+		       value, __rc, __ret);				       \
+	else if (!__ret && (u64)expect != __size)			       \
+		CERROR("string_helper: parsing '%s' expect %llu != got %llu\n",\
+		       value, (u64)expect, __size);			       \
+	__ret;								       \
 })
+#define test_string_to_size_one(value, expect, def_unit)		       \
+	test_string_to_size_err(value, expect, def_unit, 0)
 
-static int obd_init_checks(void)
+static int __init obd_init_checks(void)
 {
-        __u64 u64val, div64val;
-        char buf[64];
-        int len, ret = 0;
+	__u64 u64val, div64val;
+	char buf[64];
+	int len, ret = 0;
 
 	CDEBUG(D_INFO, "OBD_OBJECT_EOF = %#llx\n", (__u64)OBD_OBJECT_EOF);
 
-        u64val = OBD_OBJECT_EOF;
+	u64val = OBD_OBJECT_EOF;
 	CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = %#llx\n", u64val);
-        if (u64val != OBD_OBJECT_EOF) {
+	if (u64val != OBD_OBJECT_EOF) {
 		CERROR("__u64 %#llx(%d) != 0xffffffffffffffff\n",
-                       u64val, (int)sizeof(u64val));
-                ret = -EINVAL;
-        }
+		       u64val, (int)sizeof(u64val));
+		ret = -EINVAL;
+	}
 	len = snprintf(buf, sizeof(buf), "%#llx", u64val);
-        if (len != 18) {
-		CWARN("u64 hex wrong length! strlen(%s)=%d != 18\n", buf, len);
-                ret = -EINVAL;
-        }
+	if (len != 18) {
+		CERROR("u64 hex wrong length, strlen(%s)=%d != 18\n", buf, len);
+		ret = -EINVAL;
+	}
 
-        div64val = OBD_OBJECT_EOF;
+	div64val = OBD_OBJECT_EOF;
 	CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = %#llx\n", u64val);
-        if (u64val != OBD_OBJECT_EOF) {
+	if (u64val != OBD_OBJECT_EOF) {
 		CERROR("__u64 %#llx(%d) != 0xffffffffffffffff\n",
-                       u64val, (int)sizeof(u64val));
-                ret = -EOVERFLOW;
-        }
-        if (u64val >> 8 != OBD_OBJECT_EOF >> 8) {
+		       u64val, (int)sizeof(u64val));
+		ret = -EOVERFLOW;
+	}
+	if (u64val >> 8 != OBD_OBJECT_EOF >> 8) {
 		CERROR("__u64 %#llx(%d) != 0xffffffffffffffff\n",
-                       u64val, (int)sizeof(u64val));
-                return -EOVERFLOW;
-        }
-        if (do_div(div64val, 256) != (u64val & 255)) {
+		       u64val, (int)sizeof(u64val));
+		ret = -EOVERFLOW;
+	}
+	if (do_div(div64val, 256) != (u64val & 255)) {
 		CERROR("do_div(%#llx,256) != %llu\n", u64val, u64val & 255);
-                return -EOVERFLOW;
-        }
-        if (u64val >> 8 != div64val) {
+		ret = -EOVERFLOW;
+	}
+	if (u64val >> 8 != div64val) {
 		CERROR("do_div(%#llx,256) %llu != %llu\n",
-                       u64val, div64val, u64val >> 8);
-                return -EOVERFLOW;
-        }
+		       u64val, div64val, u64val >> 8);
+		ret = -EOVERFLOW;
+	}
 	len = snprintf(buf, sizeof(buf), "%#llx", u64val);
-        if (len != 18) {
-		CWARN("u64 hex wrong length! strlen(%s)=%d != 18\n", buf, len);
-                ret = -EINVAL;
-        }
+	if (len != 18) {
+		CERROR("u64 hex wrong length! strlen(%s)=%d != 18\n", buf, len);
+		ret = -EINVAL;
+	}
 	len = snprintf(buf, sizeof(buf), "%llu", u64val);
-        if (len != 20) {
-		CWARN("u64 wrong length! strlen(%s)=%d != 20\n", buf, len);
-                ret = -EINVAL;
-        }
+	if (len != 20) {
+		CERROR("u64 wrong length! strlen(%s)=%d != 20\n", buf, len);
+		ret = -EINVAL;
+	}
 	len = snprintf(buf, sizeof(buf), "%lld", u64val);
-        if (len != 2) {
-		CWARN("s64 wrong length! strlen(%s)=%d != 2\n", buf, len);
-                ret = -EINVAL;
-        }
+	if (len != 2) {
+		CERROR("s64 wrong length! strlen(%s)=%d != 2\n", buf, len);
+		ret = -EINVAL;
+	}
 	if ((u64val & ~PAGE_MASK) >= PAGE_SIZE) {
-		CWARN("mask failed: u64val %llu >= %llu\n", u64val,
-		      (__u64)PAGE_SIZE);
-                ret = -EINVAL;
-        }
+		CERROR("mask failed: u64val %llu >= %llu\n", u64val,
+		       (__u64)PAGE_SIZE);
+		ret = -EINVAL;
+	}
+	if (ret)
+		RETURN(ret);
 
 	/* invalid string */
-	ret = test_string_to_size_one("256B34", 256, "B");
-	if (ret == 0)
+	if (!test_string_to_size_err("256B34", 256, "B", -EINVAL)) {
 		CERROR("string_helpers: format should be number then units\n");
-	ret = test_string_to_size_one("132OpQ", 132, "B");
-	if (ret == 0)
+		ret = -EINVAL;
+	}
+	if (!test_string_to_size_err("132OpQ", 132, "B", -EINVAL)) {
 		CERROR("string_helpers: invalid units should be rejected\n");
+		ret = -EINVAL;
+	}
+	if (!test_string_to_size_err("1.82B", 1, "B", -EINVAL)) {
+		CERROR("string_helpers: 'B' with '.' should be invalid\n");
+		ret = -EINVAL;
+	}
+	if (test_string_to_size_one("343\n", 343, "B")) {
+		CERROR("string_helpers: should ignore newline\n");
+		ret = -EINVAL;
+	}
+	if (ret)
+		RETURN(ret);
+
+	/* memparse unit handling */
 	ret = 0;
+	ret += test_string_to_size_one("0B", 0, "B");
+	ret += test_string_to_size_one("512B", 512, "B");
+	ret += test_string_to_size_one("1.067kB", 1067, "B");
+	ret += test_string_to_size_one("1.042KiB", 1067, "B");
+	ret += test_string_to_size_one("8", 8388608, "M");
+	ret += test_string_to_size_one("65536", 65536, "B");
+	ret += test_string_to_size_one("128", 131072, "K");
+	ret += test_string_to_size_one("1M", 1048576, "B");
+	ret += test_string_to_size_one("0.5T", 549755813888ULL, "T");
+	ret += test_string_to_size_one("256.5G", 275414777856ULL, "G");
+	if (ret)
+		RETURN(ret);
 
-	/* small values */
-	test_string_to_size_one("0B", 0, "B");
-	ret = test_string_to_size_one("1.82B", 1, "B");
-	if (ret == 0)
-		CERROR("string_helpers: number string with 'B' and '.' should be invalid\n");
-	ret = 0;
-	test_string_to_size_one("512B", 512, "B");
-	test_string_to_size_one("1.067kB", 1067, "B");
-	test_string_to_size_one("1.042KiB", 1067, "B");
-
-	/* Lustre special handling */
-	test_string_to_size_one("16", 16777216, "MiB");
-	test_string_to_size_one("65536", 65536, "B");
-	test_string_to_size_one("128K", 131072, "B");
-	test_string_to_size_one("1M", 1048576, "B");
-	test_string_to_size_one("256.5G", 275414777856ULL, "GiB");
-
-	/* normal values */
-	test_string_to_size_one("8.39MB", 8390000, "MiB");
-	test_string_to_size_one("8.00MiB", 8388608, "MiB");
-	test_string_to_size_one("256GB", 256000000, "GiB");
-	test_string_to_size_one("238.731 GiB", 256335459385ULL, "GiB");
+	/* string helper values */
+	ret += test_string_to_size_one("16", 16777216, "MiB");
+	ret += test_string_to_size_one("8.39MB", 8390000, "MiB");
+	ret += test_string_to_size_one("8.00MiB", 8388608, "MiB");
+	ret += test_string_to_size_one("256GB", 256000000000ULL, "GiB");
+	ret += test_string_to_size_one("238.731GiB", 256335459385ULL, "GiB");
+	if (ret)
+		RETURN(ret);
 
 	/* huge values */
-	test_string_to_size_one("0.4TB", 400000000000ULL, "TiB");
-	test_string_to_size_one("12.5TiB", 13743895347200ULL, "TiB");
-	test_string_to_size_one("2PB", 2000000000000000ULL, "PiB");
-	test_string_to_size_one("16PiB", 18014398509481984ULL, "PiB");
+	ret += test_string_to_size_one("0.4TB", 400000000000ULL, "TiB");
+	ret += test_string_to_size_one("12.5TiB", 13743895347200ULL, "TiB");
+	ret += test_string_to_size_one("2PB", 2000000000000000ULL, "PiB");
+	ret += test_string_to_size_one("16PiB", 18014398509481984ULL, "PiB");
+	if (ret)
+		RETURN(ret);
 
 	/* huge values should overflow */
-	ret = test_string_to_size_one("1000EiB", 0, "EiB");
-	if (ret != -EOVERFLOW)
-		CERROR("string_helpers: Failed to detect overflow\n");
-	ret = test_string_to_size_one("1000EB", 0, "EiB");
-	if (ret != -EOVERFLOW)
-		CERROR("string_helpers: Failed to detect overflow\n");
-	ret = 0;
+	if (!test_string_to_size_err("1000EiB", 0, "EiB", -EOVERFLOW)) {
+		CERROR("string_helpers: failed to detect binary overflow\n");
+		ret = -EINVAL;
+	}
+	if (!test_string_to_size_err("1000EB", 0, "EiB", -EOVERFLOW)) {
+		CERROR("string_helpers: failed to detect decimal overflow\n");
+		ret = -EINVAL;
+	}
 
-        return ret;
+	return ret;
 }
 
 static int __init obdclass_init(void)
@@ -660,7 +681,7 @@ static int __init obdclass_init(void)
 	libcfs_kkuc_init();
 
 	err = obd_init_checks();
-	if (err == -EOVERFLOW)
+	if (err)
 		return err;
 
 #ifdef CONFIG_PROC_FS

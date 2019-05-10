@@ -1650,7 +1650,7 @@ EXPORT_SYMBOL(lprocfs_read_helper);
  *
  *  - ``-EINVAL``: @buffer is not a proper numerical string
  *  - ``-EOVERFLOW``: results does not fit into 64 bits.
- *  - ``-E2BIG ``: @buffer is not large
+ *  - ``-E2BIG ``: @buffer is too large (not a valid number)
  */
 int string_to_size(u64 *size, const char *buffer, size_t count)
 {
@@ -1660,10 +1660,10 @@ int string_to_size(u64 *size, const char *buffer, size_t count)
 	 * up into block size units so we don't support ZiB or YiB.
 	 */
 	static const char *const units_10[] = {
-		"kB", "MB", "GB", "TB", "PB", "EB"
+		"kB", "MB", "GB", "TB", "PB", "EB",
 	};
 	static const char *const units_2[] = {
-		"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"
+		"K",  "M",  "G",  "T",  "P",  "E",
 	};
 	static const char *const *const units_str[] = {
 		[STRING_UNITS_2] = units_2,
@@ -1673,30 +1673,34 @@ int string_to_size(u64 *size, const char *buffer, size_t count)
 		[STRING_UNITS_10] = 1000,
 		[STRING_UNITS_2] = 1024,
 	};
-	enum string_size_units unit;
+	enum string_size_units unit = STRING_UNITS_2;
 	u64 whole, blk_size = 1;
 	char kernbuf[22], *end;
 	size_t len = count;
 	int rc;
 	int i;
 
-	if (count >= sizeof(kernbuf))
+	if (count >= sizeof(kernbuf)) {
+		CERROR("count %zd > buffer %zd\n", count, sizeof(kernbuf));
 		return -E2BIG;
+	}
 
 	*size = 0;
-	/* 'iB' is used for based 2 numbers. If @buffer contains only a 'B'
-	 * or only numbers then we treat it as a direct number which doesn't
-	 * matter if its STRING_UNITS_2 or STRING_UNIT_10.
+	/* The "iB" suffix is optionally allowed for indicating base-2 numbers.
+	 * If suffix is only "B" and not "iB" then we treat it as base-10.
 	 */
-	unit = strstr(buffer, "iB") ? STRING_UNITS_2 : STRING_UNITS_10;
+	end = strstr(buffer, "B");
+	if (end && *(end - 1) != 'i')
+		unit = STRING_UNITS_10;
+
 	i = unit == STRING_UNITS_2 ? ARRAY_SIZE(units_2) - 1 :
 				     ARRAY_SIZE(units_10) - 1;
 	do {
-		end = strstr(buffer, units_str[unit][i]);
+		end = strnstr(buffer, units_str[unit][i], count);
 		if (end) {
 			for (; i >= 0; i--)
 				blk_size *= coeff[unit];
-			len -= strlen(end);
+			len = end - buffer;
 			break;
 		}
 	} while (i--);
@@ -1706,19 +1710,21 @@ int string_to_size(u64 *size, const char *buffer, size_t count)
 	 */
 	if (!end) {
 		/* 'B' is only acceptable letter at this point */
-		end = strchr(buffer, 'B');
+		end = strnchr(buffer, count, 'B');
 		if (end) {
-			len -= strlen(end);
+			len = end - buffer;
 
 			if (count - len > 2 ||
-			    (count - len == 2 && strcmp(end, "B\n") != 0))
+			    (count - len == 2 && strcmp(end, "B\n") != 0)) {
+				CDEBUG(D_INFO, "unknown suffix '%s'\n", buffer);
 				return -EINVAL;
+			}
 		}
 		/* kstrtoull will error out if it has non digits */
 		goto numbers_only;
 	}
 
-	end = strchr(buffer, '.');
+	end = strnchr(buffer, count, '.');
 	if (end) {
 		/* need to limit 3 decimal places */
 		char rem[4] = "000";
@@ -1780,32 +1786,34 @@ EXPORT_SYMBOL(string_to_size);
 int sysfs_memparse(const char *buffer, size_t count, u64 *val,
 		   const char *defunit)
 {
-	char param[23];
+	const char *param = buffer;
+	char tmp_buf[23];
 	int rc;
 
-	if (count >= sizeof(param))
-		return -E2BIG;
-
 	count = strlen(buffer);
-	if (count && buffer[count - 1] == '\n')
+	while (count > 0 && isspace(buffer[count - 1]))
 		count--;
 
 	if (!count)
-		return -EINVAL;
+		RETURN(-EINVAL);
 
-	if (isalpha(buffer[count - 1])) {
-		if (buffer[count - 1] != 'B') {
-			scnprintf(param, sizeof(param), "%.*siB",
-				  (int)count, buffer);
-		} else {
-			memcpy(param, buffer, sizeof(param));
+	/* If there isn't already a unit on this value, append @defunit.
+	 * Units of 'B' don't affect the value, so don't bother adding.
+	 */
+	if (!isalpha(buffer[count - 1]) && defunit[0] != 'B') {
+		if (count + 3 >= sizeof(tmp_buf)) {
+			CERROR("count %zd > size %zd\n", count, sizeof(param));
+			RETURN(-E2BIG);
 		}
-	} else {
-		scnprintf(param, sizeof(param), "%.*s%s", (int)count,
+
+		scnprintf(tmp_buf, sizeof(tmp_buf), "%.*s%s", (int)count,
 			  buffer, defunit);
+		param = tmp_buf;
+		count = strlen(param);
 	}
 
-	rc = string_to_size(val, param, strlen(param));
+	rc = string_to_size(val, param, count);
+
 	return rc < 0 ? rc : 0;
 }
 EXPORT_SYMBOL(sysfs_memparse);
