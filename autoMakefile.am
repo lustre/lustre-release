@@ -264,6 +264,16 @@ debs: undef.h
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
 	echo "Kernel Source: $${KERNEL_SRC}"; \
 	echo "Kernel Object: $${KERNEL_OBJ}"; \
+	if test "x@ENABLEO2IB@" = "xno"; then \
+		export IB_OPTIONS="--with-o2ib=no"; \
+	else \
+		if test "x@ENABLEO2IB@" != "xyes" && \
+		   test -n "@O2IBPATH@"; then \
+			export IB_OPTIONS="--with-o2ib=@O2IBPATH@"; \
+		else \
+			export IB_OPTIONS="--with-o2ib=yes"; \
+		fi; \
+	fi; \
 	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \
 		[ $${rc} -gt 1 ] && exit $${rc}; \
@@ -284,16 +294,6 @@ debs: undef.h
 	echo "lustre" > usr_share_modass/compliant.list && \
 	export MA_DIR=$$(pwd)/usr_share_modass && \
 	KVERS=$${KVERS:-$(LINUXRELEASE)} && \
-	if test "x@ENABLEO2IB@" = "xno"; then \
-		export IB_OPTIONS="--with-o2ib=no"; \
-	else \
-		if test "x@ENABLEO2IB@" != "xyes" && \
-		   test -n "@O2IBPATH@"; then \
-			export IB_OPTIONS="--with-o2ib=@O2IBPATH@"; \
-		else \
-			export IB_OPTIONS="--with-o2ib=yes"; \
-		fi; \
-	fi; \
 	export KSRC_TREE=$(LINUX) && \
 	KSRC=$${KSRC:-$(LINUX_OBJ)} && \
 	m-a build $${KSRC:+-k $$KSRC} $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
