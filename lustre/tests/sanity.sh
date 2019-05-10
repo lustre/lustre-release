@@ -17213,7 +17213,7 @@ test_258a() {
 	fi
 	rm -f $DIR/$tfile
 }
-run_test 258a
+run_test 258a "verify i_mutex security behavior when suid attributes is set"
 
 # Verify we do NOT take the i_mutex in the normal case
 test_258b() {
