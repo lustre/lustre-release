@@ -2564,6 +2564,7 @@ test_47b() {
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$! ; pdo_sched
+	sleep 1 # please do not remove this sleep, see LU-10754
 	multiop $DIR2/$tfile oO_CREAT:O_EXCL:c &
 	PID2=$! ; pdo_sched
 	do_facet $SINGLEMDS lctl set_param fail_loc=0
