@@ -737,15 +737,17 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 			if (the_lnet.ln_routing)
 				last_alive = now - ni->ni_last_alive;
 
-			/* @lo forever alive */
-			if (ni->ni_net->net_lnd->lnd_type == LOLND)
-				last_alive = 0;
-
 			lnet_ni_lock(ni);
 			LASSERT(ni->ni_status != NULL);
 			stat = (ni->ni_status->ns_status ==
 				LNET_NI_STATUS_UP) ? "up" : "down";
 			lnet_ni_unlock(ni);
+
+			/* @lo forever alive */
+			if (ni->ni_net->net_lnd->lnd_type == LOLND) {
+				last_alive = 0;
+				stat = "up";
+			}
 
 			/* we actually output credits information for
 			 * TX queue of each partition */
