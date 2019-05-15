@@ -48,9 +48,7 @@ init_SCRIPTS += lnet
 endif
 
 if SERVER
-if !HAVE_SYSTEMD
 init_SCRIPTS += lustre
-endif
 if GSS_KEYRING
 init_SCRIPTS += lsvcgss
 endif
@@ -87,7 +85,7 @@ endif # UTILS
 EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     lc_servip lustre_routes_config lustre_routes_conversion \
 	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
-	     lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
+	     lustre lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
 	     zfsobj2fid ko2iblnd-probe statechange-lustre.sh
 
 CLEANFILES = $(genscripts)
