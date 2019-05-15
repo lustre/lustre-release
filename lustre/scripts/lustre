@@ -1,19 +1,12 @@
 #!/bin/bash
 #
 # lustre	This shell script takes care of starting and stopping
-#		the lustre services.
+#	       the lustre services.
 #
 # chkconfig: - 60 20
 # description:  Part of the lustre file system.
 # probe: true
 # config: /etc/sysconfig/lustre
-### BEGIN INIT INFO
-# Provides: lustre
-# Required-Start: openibd
-# Defalt-Start: -
-# Default-Stop: 0 1 6
-# Description: Lustre init script
-### END INIT INFO
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 
