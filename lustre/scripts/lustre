@@ -7,6 +7,13 @@
 # description:  Part of the lustre file system.
 # probe: true
 # config: /etc/sysconfig/lustre
+### BEGIN INIT INFO
+# Provides: lustre
+# Required-Start: lnet
+# Defalt-Start: -
+# Default-Stop: 0 1 6
+# Description: Lustre init script
+### END INIT INFO
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 
