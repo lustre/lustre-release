@@ -868,7 +868,14 @@ static struct cfs_cpt_table *cfs_cpt_table_create(int ncpt)
 	if (ncpt <= 0)
 		ncpt = num;
 
-	if (ncpt > num_online_cpus() || ncpt > 4 * num) {
+	if (ncpt > num_online_cpus()) {
+		rc = -EINVAL;
+		CERROR("libcfs: CPU partition count %d > cores %d: rc = %d\n",
+		       ncpt, num_online_cpus(), rc);
+		goto failed;
+	}
+
+	if (ncpt > 4 * num) {
 		CWARN("CPU partition number %d is larger than suggested value (%d), your system may have performance issue or run out of memory while under pressure\n",
 		      ncpt, num);
 	}
@@ -1230,7 +1237,7 @@ int cfs_cpu_init(void)
 failed_alloc_table:
 	put_online_cpus();
 
-	if (cfs_cpt_table)
+	if (!IS_ERR_OR_NULL(cfs_cpt_table))
 		cfs_cpt_table_free(cfs_cpt_table);
 
 #ifdef CONFIG_HOTPLUG_CPU
