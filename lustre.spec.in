@@ -21,7 +21,7 @@
 # request gss_keyring we must enable gss core even if
 # the builder attempts to disable gss.
 %if %{with gss_keyring}
-    %define with_gss
+    %define with_gss 1
 %endif
 
 %if %{without servers}
