@@ -203,7 +203,7 @@ echo $TMPFILE
 %if %{with lustre_utils}
 %package osd-ldiskfs-mount
 Summary: osd-ldiskfs-mount contains mount's ldiskfs specific dso.
-Provides: lustre-osd-mount = %{version}-%{fullrelease}
+Provides: lustre-osd-mount = %{version}
 Group: System Environment/Kernel
 
 %description osd-ldiskfs-mount
@@ -217,7 +217,7 @@ LDISKFS hooks for mount/mkfs into a dynamic library.
 %if %{with lustre_utils}
 %package osd-zfs-mount
 Summary: osd-zfs-mount contains mount's zfs specific dso.
-Provides: lustre-osd-mount = %{version}-%{fullrelease}
+Provides: lustre-osd-mount = %{version}
 Group: System Environment/Kernel
 
 %description osd-zfs-mount
