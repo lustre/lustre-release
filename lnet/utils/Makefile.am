@@ -32,8 +32,8 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-AM_CFLAGS  := -fPIC -D_GNU_SOURCE
-AM_LDFLAGS := -L.
+AM_CFLAGS  := -fPIC -D_GNU_SOURCE $(UTILS_CFLAGS)
+AM_LDFLAGS := -L. $(UTILS_LDFLAGS)
 
 SUBDIRS = lnetconfig
 

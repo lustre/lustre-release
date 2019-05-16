@@ -310,9 +310,30 @@ ln lnet/ChangeLog ChangeLog-lnet
 %build
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
-# override %optflags so that the vendor's overzealous flags don't create
-# build failures
+
+# Store the CFLAGS and LDFLAGS that would normally be used in the UTILS_CFLAGS
+# and UTILS_LDFLAGS environment variables so that we use can them when compiling
+# the user-space code in lustre/utils and lnet/utils. As of RHEL 8.0, the
+# __global_* variants are deprecated in favour of build_cflags, etc. If neither
+# style is available (e.g. on SLES), then these just end up as empty strings.
+export UTILS_CFLAGS="%{?build_cflags:%{build_cflags}}%{!?build_cflags:%{?__global_cflags:%{__global_cflags}}}"
+export UTILS_LDFLAGS="%{?build_ldflags:%{build_ldflags}}%{!?build_ldflags:%{?__global_ldflags:%{__global_ldflags}}}"
+
+# RHEL7 on PPC64 needs __SANE_USERSPACE_TYPES__ defined so that __s64 and __u64
+# are presented to user-land as long long instead of long long. Without this it
+# will fail the format check whenever such a variable is printed.
+%if 0%{?rhel}
+%ifarch ppc64
+export UTILS_CFLAGS="${UTILS_CFLAGS} -D__SANE_USERSPACE_TYPES__=1"
+%endif
+%endif
+
+# Disable any hardening or annotation since this doesn't make sense for
+# kernel code, and reset %optflags so that the vendor's overzealous flags don't
+# create build failures.
 %define optflags -g -O2 -Werror
+%undefine _annotated_build
+%undefine _hardened_build
 
 CONFIGURE_ARGS="%{?configure_args}"
 if [ -n "$CONFIGURE_ARGS" ]; then
