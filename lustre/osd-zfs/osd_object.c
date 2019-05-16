@@ -1187,26 +1187,28 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	}
 #ifdef ZFS_PROJINHERIT
 	if (attr && attr->la_valid & LA_PROJID) {
-		if (!osd->od_projectused_dn)
-			GOTO(out, rc = -EOPNOTSUPP);
-
-		/* Usually, if project quota is upgradable for the device,
-		 * then the upgrade will be done before or when mount the
-		 * device. So when we come here, this project should have
-		 * project ID attribute already (that is zero by default).
-		 * Otherwise, there was something wrong during the former
-		 * upgrade, let's return failure to report that.
-		 *
-		 * Please note that, different from other attributes, you
-		 * can NOT simply set the project ID attribute under such
-		 * case, because adding (NOT change) project ID attribute
-		 * needs to change the object's attribute layout to match
-		 * zfs backend quota accounting requirement. */
-		if (unlikely(!obj->oo_with_projid))
-			GOTO(out, rc = -ENXIO);
-
 		/* quota enforcement for project */
 		if (attr->la_projid != obj->oo_attr.la_projid) {
+			if (!osd->od_projectused_dn)
+				GOTO(out, rc = -EOPNOTSUPP);
+
+			/* Usually, if project quota is upgradable for the
+			 * device, then the upgrade will be done before or when
+			 * mount the device. So when we come here, this project
+			 * should have project ID attribute already (that is
+			 * zero by default).  Otherwise, there was something
+			 * wrong during the former upgrade, let's return failure
+			 * to report that.
+			 *
+			 * Please note that, different from other attributes,
+			 * you can NOT simply set the project ID attribute under
+			 * such case, because adding (NOT change) project ID
+			 * attribute needs to change the object's attribute
+			 * layout to match zfs backend quota accounting
+			 * requirement. */
+			if (unlikely(!obj->oo_with_projid))
+				GOTO(out, rc = -ENXIO);
+
 			rc = qsd_transfer(env, osd_def_qsd(osd),
 					  &oh->ot_quota_trans, PRJQUOTA,
 					  obj->oo_attr.la_projid,
@@ -1338,18 +1340,15 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 	if (valid & LA_PROJID) {
 #ifdef ZFS_PROJINHERIT
-		/* osd_declare_attr_set() must be called firstly.
-		 * If osd::od_projectused_dn is not set, then we
-		 * can not arrive at here. */
-		LASSERT(osd->od_projectused_dn);
-		LASSERT(obj->oo_with_projid);
+		if (osd->od_projectused_dn) {
+			LASSERT(obj->oo_with_projid);
 
-		osa->projid = obj->oo_attr.la_projid = la->la_projid;
-		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd), NULL,
-				 &osa->projid, 8);
-#else
-		valid &= ~LA_PROJID;
+			osa->projid = obj->oo_attr.la_projid = la->la_projid;
+			SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd), NULL,
+					 &osa->projid, 8);
+		} else
 #endif
+			valid &= ~LA_PROJID;
 	}
 
 	if (valid & LA_ATIME) {
@@ -1396,7 +1395,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 		 * copy */
 		obj->oo_attr.la_flags = attrs_zfs2fs(osa->flags);
 #ifdef ZFS_PROJINHERIT
-		if (obj->oo_with_projid)
+		if (obj->oo_with_projid && osd->od_projectused_dn)
 			osa->flags |= ZFS_PROJID;
 #endif
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(osd), NULL,
