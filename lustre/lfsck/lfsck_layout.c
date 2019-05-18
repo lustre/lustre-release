@@ -5647,7 +5647,7 @@ fix:
 		if (IS_ERR(handle))
 			GOTO(out, rc = PTR_ERR(handle));
 
-		lfsck_buf_init(&ea_buf, lmm, size);
+		lfsck_buf_init(&ea_buf, buf->lb_buf, size);
 		rc = dt_declare_xattr_set(env, obj, &ea_buf, XATTR_NAME_LOV,
 					  LU_XATTR_REPLACE, handle);
 		if (rc != 0)
