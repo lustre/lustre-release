@@ -2571,57 +2571,59 @@ ksocknal_shutdown(struct lnet_ni *ni)
 }
 
 static int
-ksocknal_enumerate_interfaces(struct ksock_net *net)
+ksocknal_enumerate_interfaces(struct ksock_net *net, char *iname)
 {
-	int j = 0;
 	struct net_device *dev;
 
 	rtnl_lock();
 	for_each_netdev(&init_net, dev) {
-		const char *name = dev->name;
+		/* The iname specified by an user land configuration can
+		 * map to an ifa_label so always treat iname as an ifa_label.
+		 * If iname is NULL then fall back to the net device name.
+		 */
+		const char *name = iname ? iname : dev->name;
 		struct in_device *in_dev;
-		struct ksock_interface *ksi;
 
-		if (strcmp(name, "lo") == 0) /* skip the loopback IF */
+		if (strcmp(dev->name, "lo") == 0) /* skip the loopback IF */
 			continue;
 
 		if (!(dev_get_flags(dev) & IFF_UP)) {
-			CWARN("Ignoring interface %s (down)\n", name);
-			continue;
-		}
-
-		if (j == LNET_INTERFACES_NUM) {
-			CWARN("Ignoring interface %s (too many interfaces)\n",
-			      name);
+			CWARN("Ignoring interface %s (down)\n", dev->name);
 			continue;
 		}
 
 		in_dev = __in_dev_get_rtnl(dev);
 		if (!in_dev) {
-			CWARN("Interface %s has no IPv4 status.\n", name);
+			CWARN("Interface %s has no IPv4 status.\n", dev->name);
 			continue;
 		}
 
-		ksi = &net->ksnn_interfaces[j];
+		for_ifa(in_dev)
+			if (strcmp(name, ifa->ifa_label) == 0) {
+				int idx = net->ksnn_ninterfaces;
+				struct ksock_interface *ksi;
 
-		for_primary_ifa(in_dev)
-			if (strcmp(ifa->ifa_label, name) == 0) {
+				if (idx >= ARRAY_SIZE(net->ksnn_interfaces)) {
+					rtnl_unlock();
+					return -E2BIG;
+				}
+
+				ksi = &net->ksnn_interfaces[idx];
 				ksi->ksni_ipaddr = ntohl(ifa->ifa_local);
 				ksi->ksni_netmask = ifa->ifa_mask;
 				strlcpy(ksi->ksni_name,
 					name, sizeof(ksi->ksni_name));
-				j++;
+				net->ksnn_ninterfaces++;
 				break;
 			}
 		endfor_ifa(in_dev);
         }
-
 	rtnl_unlock();
 
-        if (j == 0)
+	if (net->ksnn_ninterfaces == 0)
                 CERROR("Can't find any usable interfaces\n");
 
-        return j;
+	return net->ksnn_ninterfaces > 0 ? 0 : -ENOENT;
 }
 
 static int
@@ -2786,41 +2788,45 @@ ksocknal_startup(struct lnet_ni *ni)
 		net_tunables->lct_peer_rtr_credits =
 			*ksocknal_tunables.ksnd_peerrtrcredits;
 
-	if (ni->ni_interfaces[0] == NULL) {
-		rc = ksocknal_enumerate_interfaces(net);
-		if (rc <= 0)
+	if (!ni->ni_interfaces[0]) {
+		rc = ksocknal_enumerate_interfaces(net, NULL);
+		if (rc < 0)
 			goto fail_1;
-
-		net->ksnn_ninterfaces = 1;
 	} else {
+		/* Before Multi-Rail ksocklnd would manage
+		 * multiple interfaces with its own tcp bonding.
+		 * If we encounter an old configuration using
+		 * this tcp bonding approach then we need to
+		 * handle more than one ni_interfaces.
+		 *
+		 * In Multi-Rail configuration only ONE ni_interface
+		 * should exist. Each IP alias should be mapped to
+		 * each 'struct net_ni'.
+		 */
 		for (i = 0; i < LNET_INTERFACES_NUM; i++) {
-			int up;
+			int j;
 
-			if (ni->ni_interfaces[i] == NULL)
+			if (!ni->ni_interfaces[i])
 				break;
 
-			rc = lnet_ipif_query(ni->ni_interfaces[i], &up,
-				&net->ksnn_interfaces[i].ksni_ipaddr,
-				&net->ksnn_interfaces[i].ksni_netmask);
+			for (j = 0; j < net->ksnn_ninterfaces;  j++) {
+				struct ksock_interface *ksi;
 
-			if (rc != 0) {
-				CERROR("Can't get interface %s info: %d\n",
-				       ni->ni_interfaces[i], rc);
-				goto fail_1;
+				ksi = &net->ksnn_interfaces[j];
+
+				if (strcmp(ni->ni_interfaces[i],
+					   ksi->ksni_name) == 0) {
+					CERROR("found duplicate %s\n",
+					       ksi->ksni_name);
+					rc = -EEXIST;
+					goto fail_1;
+				}
 			}
 
-			if (!up) {
-				CERROR("Interface %s is down\n",
-				       ni->ni_interfaces[i]);
+			rc = ksocknal_enumerate_interfaces(net, ni->ni_interfaces[i]);
+			if (rc < 0)
 				goto fail_1;
-			}
-
-			strlcpy(net->ksnn_interfaces[i].ksni_name,
-				ni->ni_interfaces[i],
-				sizeof(net->ksnn_interfaces[i].ksni_name));
-
 		}
-		net->ksnn_ninterfaces = i;
 	}
 
 	net_dev = dev_get_by_name(&init_net,
