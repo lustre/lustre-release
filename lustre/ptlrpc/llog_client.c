@@ -46,30 +46,32 @@
 
 #include "ptlrpc_internal.h"
 
-#define LLOG_CLIENT_ENTRY(ctxt, imp) do {                             \
-	mutex_lock(&ctxt->loc_mutex);                                 \
-	if (ctxt->loc_imp) {                                          \
-		imp = class_import_get(ctxt->loc_imp);                \
-	} else {                                                      \
-		CERROR("ctxt->loc_imp == NULL for context idx %d."    \
-		       "Unable to complete MDS/OSS recovery,"         \
-		       "but I'll try again next time. Not fatal.\n", \
-		       ctxt->loc_idx);                                \
-		imp = NULL;                                           \
-		mutex_unlock(&ctxt->loc_mutex);                       \
-		return -EINVAL;                                       \
-	}                                                             \
-	mutex_unlock(&ctxt->loc_mutex);                               \
-} while (0)
+struct obd_import *llog_client_entry(struct llog_ctxt *ctxt)
+{
+	struct obd_import *imp = ERR_PTR(-EINVAL);
 
-#define LLOG_CLIENT_EXIT(ctxt, imp) do {                              \
-	mutex_lock(&ctxt->loc_mutex);                                 \
-	if (ctxt->loc_imp != imp)                                     \
-		CWARN("loc_imp has changed from %p to %p\n",          \
-		      ctxt->loc_imp, imp);                            \
-	class_import_put(imp);                                        \
-	mutex_unlock(&ctxt->loc_mutex);                               \
-} while (0)
+	mutex_lock(&ctxt->loc_mutex);
+	if (ctxt->loc_imp)
+		imp = class_import_get(ctxt->loc_imp);
+	else
+		CWARN("%s: cannot finish recovery, ctxt #%d import not set, will retry rc = %ld\n",
+		      ctxt->loc_obd ? ctxt->loc_obd->obd_name : "llog",
+		      ctxt->loc_idx, PTR_ERR(imp));
+
+	mutex_unlock(&ctxt->loc_mutex);
+	return imp;
+}
+
+void llog_client_exit(struct llog_ctxt *ctxt, struct obd_import *imp)
+{
+	mutex_lock(&ctxt->loc_mutex);
+	if (ctxt->loc_imp != imp)
+		CWARN("%s: import has changed from %p to %p\n",
+		      ctxt->loc_obd ? ctxt->loc_obd->obd_name : "llog",
+		      ctxt->loc_imp, imp);
+	class_import_put(imp);
+	mutex_unlock(&ctxt->loc_mutex);
+}
 
 /*
  * This is a callback from the llog_* functions.
@@ -87,7 +89,9 @@ static int llog_client_open(const struct lu_env *env,
 
 	ENTRY;
 
-	LLOG_CLIENT_ENTRY(ctxt, imp);
+	imp = llog_client_entry(ctxt);
+	if (IS_ERR(imp))
+		return PTR_ERR(imp);
 
 	/* client cannot create llog */
 	LASSERTF(open_param != LLOG_OPEN_NEW, "%#x\n", open_param);
@@ -138,7 +142,7 @@ static int llog_client_open(const struct lu_env *env,
 	lgh->lgh_ctxt = ctxt;
 	EXIT;
 out:
-	LLOG_CLIENT_EXIT(ctxt, imp);
+	llog_client_exit(ctxt, imp);
 	ptlrpc_req_finished(req);
 	return rc;
 }
@@ -156,7 +160,10 @@ static int llog_client_next_block(const struct lu_env *env,
 
 	ENTRY;
 
-	LLOG_CLIENT_ENTRY(loghandle->lgh_ctxt, imp);
+	imp = llog_client_entry(loghandle->lgh_ctxt);
+	if (IS_ERR(imp))
+		return PTR_ERR(imp);
+
 	req = ptlrpc_request_alloc_pack(imp, &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK,
 					LUSTRE_LOG_VERSION,
 					LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
@@ -212,7 +219,7 @@ static int llog_client_next_block(const struct lu_env *env,
 out:
 	ptlrpc_req_finished(req);
 err_exit:
-	LLOG_CLIENT_EXIT(loghandle->lgh_ctxt, imp);
+	llog_client_exit(loghandle->lgh_ctxt, imp);
 	return rc;
 }
 
@@ -228,7 +235,10 @@ static int llog_client_prev_block(const struct lu_env *env,
 
 	ENTRY;
 
-	LLOG_CLIENT_ENTRY(loghandle->lgh_ctxt, imp);
+	imp = llog_client_entry(loghandle->lgh_ctxt);
+	if (IS_ERR(imp))
+		return PTR_ERR(imp);
+
 	req = ptlrpc_request_alloc_pack(imp, &RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK,
 					LUSTRE_LOG_VERSION,
 					LLOG_ORIGIN_HANDLE_PREV_BLOCK);
@@ -262,7 +272,7 @@ static int llog_client_prev_block(const struct lu_env *env,
 out:
 	ptlrpc_req_finished(req);
 err_exit:
-	LLOG_CLIENT_EXIT(loghandle->lgh_ctxt, imp);
+	llog_client_exit(loghandle->lgh_ctxt, imp);
 	return rc;
 }
 
@@ -278,7 +288,10 @@ static int llog_client_read_header(const struct lu_env *env,
 
 	ENTRY;
 
-	LLOG_CLIENT_ENTRY(handle->lgh_ctxt, imp);
+	imp = llog_client_entry(handle->lgh_ctxt);
+	if (IS_ERR(imp))
+		return PTR_ERR(imp);
+
 	req = ptlrpc_request_alloc_pack(imp,
 					&RQF_LLOG_ORIGIN_HANDLE_READ_HEADER,
 					LUSTRE_LOG_VERSION,
@@ -327,7 +340,7 @@ static int llog_client_read_header(const struct lu_env *env,
 out:
 	ptlrpc_req_finished(req);
 err_exit:
-	LLOG_CLIENT_EXIT(handle->lgh_ctxt, imp);
+	llog_client_exit(handle->lgh_ctxt, imp);
 	return rc;
 }
 
