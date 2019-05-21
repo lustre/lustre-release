@@ -284,6 +284,21 @@ ktime_get_ts64, [
 ]) # LIBCFS_KTIME_GET_TS64
 
 #
+# Kernel version 3.12-rc4 commit c2d816443ef30 added prepare_to_wait_event()
+#
+AC_DEFUN([LIBCFS_PREPARE_TO_WAIT_EVENT],[
+LB_CHECK_COMPILE([does function 'prepare_to_wait_event' exist],
+prepare_to_wait_event, [
+	#include <linux/wait.h>
+],[
+	prepare_to_wait_event(NULL, NULL, 0);
+],[
+	AC_DEFINE(HAVE_PREPARE_TO_WAIT_EVENT, 1,
+		['prepare_to_wait_event' is available])
+])
+]) # LIBCFS_PREPARE_TO_WAIT_EVENT
+
+#
 # Linux kernel 3.12 introduced struct kernel_param_ops
 # This has been backported to all lustre supported
 # clients except RHEL6. We have to handle the differences.
@@ -908,6 +923,36 @@ rhashtable_lookup_get_insert_fast, [
 ]) # LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 
 #
+# Kernel verison 4.12-rc6 commit 5dd43ce2f69d42a71dcacdb13d17d8c0ac1fe8f7
+# created wait_bit.h
+#
+AC_DEFUN([LIBCFS_HAVE_WAIT_BIT_HEADER], [
+LB_CHECK_LINUX_HEADER([linux/wait_bit.h], [
+	AC_DEFINE(HAVE_WAIT_BIT_HEADER_H, 1,
+		[wait_bit.h is present])])
+]) # LIBCFS_HAVE_WAIT_BIT_HEADER
+
+#
+# Kernel version 4.12-rc6 commmit 2055da97389a605c8a00d163d40903afbe413921
+# changed:
+#	struct wait_queue_head::task_list       => ::head
+#	struct wait_queue_entry::task_list      => ::entry
+#
+AC_DEFUN([LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME], [
+LB_CHECK_COMPILE([if linux wait_queue_head list_head is named head],
+wait_queue_task_list, [
+	#include <linux/wait.h>
+],[
+	wait_queue_head_t e;
+
+	INIT_LIST_HEAD(&e.head);
+],[
+	AC_DEFINE(HAVE_WAIT_QUEUE_ENTRY_LIST, 1,
+		[linux wait_queue_head_t list_head is name head])
+])
+]) # LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
+
+#
 # LIBCFS_WAIT_QUEUE_ENTRY
 #
 # Kernel version 4.13 ac6424b981bce1c4bc55675c6ce11bfe1bbfa64f
@@ -1008,6 +1053,48 @@ timer_setup, [
 ]) # LIBCFS_TIMER_SETUP
 
 #
+# LIBCFS_WAIT_VAR_EVENT
+#
+# Kernel version 4.16-rc4 commit 6b2bb7265f0b62605e8caee3613449ed0db270b9
+# added wait_var_event()
+#
+AC_DEFUN([LIBCFS_WAIT_VAR_EVENT], [
+LB_CHECK_COMPILE([if 'wait_var_event' exist],
+wait_var_event, [
+	#ifdef HAVE_WAIT_BIT_HEADER_H
+	#include <linux/wait_bit.h>
+	#endif
+	#include <linux/wait.h>
+],[
+	wake_up_var(NULL);
+],[
+	AC_DEFINE(HAVE_WAIT_VAR_EVENT, 1,
+		['wait_var_event' is available])
+])
+]) # LIBCFS_WAIT_VAR_EVENT
+
+#
+# LIBCFS_CLEAR_AND_WAKE_UP_BIT
+#
+# Kernel version 4.17-rc2 commit 8236b0ae31c837d2b3a2565c5f8d77f637e824cc
+# added clear_and_wake_up_bit()
+#
+AC_DEFUN([LIBCFS_CLEAR_AND_WAKE_UP_BIT], [
+LB_CHECK_COMPILE([if 'clear_and_wake_up_bit' exist],
+clear_and_wake_up_bit, [
+	#ifdef HAVE_WAIT_BIT_HEADER_H
+	#include <linux/wait_bit.h>
+	#endif
+	#include <linux/wait.h>
+],[
+	clear_and_wake_up_bit(0, NULL);
+],[
+	AC_DEFINE(HAVE_CLEAR_AND_WAKE_UP_BIT, 1,
+		['clear_and_wake_up_bit' is available])
+])
+]) # LIBCFS_CLEAR_AND_WAKE_UP_BIT
+
+#
 # LIBCFS_CACHE_DETAIL_WRITERS
 #
 # kernel v5.3-rc2-1-g64a38e840ce5
@@ -1029,6 +1116,7 @@ cache_detail_writers_atomic, [
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_CACHE_DETAIL_WRITERS
+
 
 #
 # LIBCFS_PROG_LINUX
@@ -1067,6 +1155,7 @@ LIBCFS_ENABLE_CRC32C_ACCEL
 # 3.11
 LIBCFS_KTIME_GET_TS64
 # 3.12
+LIBCFS_PREPARE_TO_WAIT_EVENT
 LIBCFS_KERNEL_PARAM_OPS
 LIBCFS_KTIME_ADD
 LIBCFS_KTIME_AFTER
@@ -1117,6 +1206,9 @@ LIBCFS_HOTPLUG_STATE_MACHINE
 # 4.11
 LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 LIBCFS_SCHED_HEADERS
+# 4.12
+LIBCFS_HAVE_WAIT_BIT_HEADER
+LIBCFS_WAIT_QUEUE_TASK_LIST_RENAME
 # 4.13
 LIBCFS_WAIT_QUEUE_ENTRY
 # 4.14
@@ -1125,6 +1217,10 @@ LIBCFS_NEW_KERNEL_WRITE
 LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
 # 4.15
 LIBCFS_TIMER_SETUP
+# 4.16
+LIBCFS_WAIT_VAR_EVENT
+# 4.17
+LIBCFS_CLEAR_AND_WAKE_UP_BIT
 # 5.3
 LIBCFS_CACHE_DETAIL_WRITERS
 ]) # LIBCFS_PROG_LINUX

@@ -1469,7 +1469,8 @@ static void key_fini(struct lu_context *ctx, int index)
 
                 key->lct_fini(ctx, key, ctx->lc_value[index]);
                 lu_ref_del(&key->lct_reference, "ctx", ctx);
-		atomic_dec(&key->lct_used);
+		if (atomic_dec_and_test(&key->lct_used))
+			wake_up_var(&key->lct_used);
 
 		LASSERT(key->lct_owner != NULL);
 		if ((ctx->lc_tags & LCT_NOREF) == 0) {
@@ -1490,29 +1491,23 @@ void lu_context_key_degister(struct lu_context_key *key)
 
 	lu_context_key_quiesce(key);
 
-	write_lock(&lu_keys_guard);
-	++key_set_version;
 	key_fini(&lu_shrink_env.le_ctx, key->lct_index);
 
 	/**
 	 * Wait until all transient contexts referencing this key have
 	 * run lu_context_key::lct_fini() method.
 	 */
-	while (atomic_read(&key->lct_used) > 1) {
-		write_unlock(&lu_keys_guard);
-		CDEBUG(D_INFO, "lu_context_key_degister: \"%s\" %p, %d\n",
-		       key->lct_owner ? key->lct_owner->name : "", key,
-		       atomic_read(&key->lct_used));
-		schedule();
-		write_lock(&lu_keys_guard);
-	}
+	atomic_dec(&key->lct_used);
+	wait_var_event(&key->lct_used, atomic_read(&key->lct_used) == 0);
+
+	write_lock(&lu_keys_guard);
 	if (lu_keys[key->lct_index]) {
 		lu_keys[key->lct_index] = NULL;
 		lu_ref_fini(&key->lct_reference);
 	}
 	write_unlock(&lu_keys_guard);
 
-	LASSERTF(atomic_read(&key->lct_used) == 1,
+	LASSERTF(atomic_read(&key->lct_used) == 0,
 		 "key has instances: %d\n",
 		 atomic_read(&key->lct_used));
 }
