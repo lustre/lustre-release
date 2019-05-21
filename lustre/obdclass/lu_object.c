@@ -1370,19 +1370,23 @@ int lu_context_key_register(struct lu_context_key *key)
         LASSERT(key->lct_owner != NULL);
 
         result = -ENFILE;
-	write_lock(&lu_keys_guard);
+	atomic_set(&key->lct_used, 1);
+	lu_ref_init(&key->lct_reference);
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-                if (lu_keys[i] == NULL) {
-                        key->lct_index = i;
-			atomic_set(&key->lct_used, 1);
-                        lu_keys[i] = key;
-                        lu_ref_init(&key->lct_reference);
-                        result = 0;
-			atomic_inc(&key_set_version);
-                        break;
-                }
+		if (lu_keys[i])
+			continue;
+		key->lct_index = i;
+		if (cmpxchg(&lu_keys[i], NULL, key) != NULL)
+			continue;
+
+		result = 0;
+		atomic_inc(&key_set_version);
+		break;
         }
-	write_unlock(&lu_keys_guard);
+	if (result) {
+		lu_ref_fini(&key->lct_reference);
+		atomic_set(&key->lct_used, 0);
+	}
 	return result;
 }
 EXPORT_SYMBOL(lu_context_key_register);
@@ -1430,16 +1434,10 @@ void lu_context_key_degister(struct lu_context_key *key)
 	atomic_dec(&key->lct_used);
 	wait_var_event(&key->lct_used, atomic_read(&key->lct_used) == 0);
 
-	write_lock(&lu_keys_guard);
-	if (lu_keys[key->lct_index]) {
-		lu_keys[key->lct_index] = NULL;
+	if (!WARN_ON(lu_keys[key->lct_index] == NULL))
 		lu_ref_fini(&key->lct_reference);
-	}
-	write_unlock(&lu_keys_guard);
 
-	LASSERTF(atomic_read(&key->lct_used) == 0,
-		 "key has instances: %d\n",
-		 atomic_read(&key->lct_used));
+	smp_store_release(&lu_keys[key->lct_index], NULL);
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
