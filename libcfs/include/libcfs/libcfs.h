@@ -39,6 +39,7 @@
 
 #include <libcfs/linux/linux-misc.h>
 #include <libcfs/linux/linux-time.h>
+#include <libcfs/linux/linux-wait.h>
 
 #include <uapi/linux/lnet/libcfs_ioctl.h>
 #include <libcfs/libcfs_debug.h>

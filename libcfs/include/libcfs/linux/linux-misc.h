@@ -113,10 +113,6 @@ static inline bool gid_valid(kgid_t gid)
 
 int cfs_get_environ(const char *key, char *value, int *val_len);
 
-#ifndef HAVE_WAIT_QUEUE_ENTRY
-#define wait_queue_entry_t wait_queue_t
-#endif
-
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 		     loff_t *pos);
 
