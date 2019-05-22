@@ -428,7 +428,7 @@ static int mdd_xattr_get(const struct lu_env *env,
 	mdd = mdo2mdd(obj);
 
 	/* record only getting user xattrs and acls */
-	if (rc >= 0 &&
+	if (rc >= 0 && buf->lb_buf &&
 	    mdd_changelog_enabled(env, mdd, CL_GETXATTR) &&
 	    (has_prefix(name, XATTR_USER_PREFIX) ||
 	     has_prefix(name, XATTR_NAME_POSIX_ACL_ACCESS) ||
