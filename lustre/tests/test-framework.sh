@@ -5945,63 +5945,78 @@ export ALWAYS_SKIPPED=
 #
 run_test() {
 	assert_DIR
-
 	export base=$(basetest $1)
-	if [ -n "$ONLY" ]; then
-		testname=ONLY_$1
-		if [ ${!testname}x != x ]; then
-			[ -n "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
-			run_one_logged $1 "$2"
-			return $?
-		fi
-		testname=ONLY_$base
-		if [ ${!testname}x != x ]; then
-			[ -n "$LAST_SKIPPED" ] && echo "" && LAST_SKIPPED=
-			run_one_logged $1 "$2"
-			return $?
-		fi
-		LAST_SKIPPED="y"
-		return 0
-	fi
-
-	LAST_SKIPPED="y"
-	ALWAYS_SKIPPED="y"
-	testname=EXCEPT_$1
-	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip_noexit "skipping excluded test $1"
-		return 0
-	fi
-	testname=EXCEPT_$base
-	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip_noexit "skipping excluded test $1 (base $base)"
-		return 0
-	fi
-	testname=EXCEPT_ALWAYS_$1
-	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip_noexit "skipping ALWAYS excluded test $1"
-		return 0
-	fi
-	testname=EXCEPT_ALWAYS_$base
-	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip_noexit "skipping ALWAYS excluded test $1 (base $base)"
-		return 0
-	fi
-	testname=EXCEPT_SLOW_$1
-	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip_noexit "skipping SLOW test $1"
-		return 0
-	fi
-	testname=EXCEPT_SLOW_$base
-	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip_noexit "skipping SLOW test $1 (base $base)"
-		return 0
-	fi
-
+	TESTNAME=test_$1
 	LAST_SKIPPED=
 	ALWAYS_SKIPPED=
-	run_one_logged $1 "$2"
 
-	return $?
+	# Check the EXCEPT, ALWAYS_EXCEPT and SLOW lists to see if we
+	# need to skip the current test. If so, set the ALWAYS_SKIPPED flag.
+	local testname=EXCEPT_$1
+	local testname_base=EXCEPT_$base
+	if [ ${!testname}x != x ]; then
+		ALWAYS_SKIPPED="y"
+		skip_message="skipping excluded test $1"
+	elif [ ${!testname_base}x != x ]; then
+		ALWAYS_SKIPPED="y"
+		skip_message="skipping excluded test $1 (base $base)"
+	fi
+
+	testname=EXCEPT_ALWAYS_$1
+	testname_base=EXCEPT_ALWAYS_$base
+	if [ ${!testname}x != x ]; then
+		ALWAYS_SKIPPED="y"
+		skip_message="skipping ALWAYS excluded test $1"
+	elif [ ${!testname_base}x != x ]; then
+		ALWAYS_SKIPPED="y"
+		skip_message="skipping ALWAYS excluded test $1 (base $base)"
+	fi
+
+	testname=EXCEPT_SLOW_$1
+	testname_base=EXCEPT_SLOW_$base
+	if [ ${!testname}x != x ]; then
+		ALWAYS_SKIPPED="y"
+		skip_message="skipping SLOW test $1"
+	elif [ ${!testname_base}x != x ]; then
+		ALWAYS_SKIPPED="y"
+		skip_message="skipping SLOW test $1 (base $base)"
+	fi
+
+	# If there are tests on the ONLY list, check if the current test
+	# is on that list and, if so, check if the test is to be skipped
+	# and if we are supposed to honor the skip lists.
+	if [ -n "$ONLY" ]; then
+		testname=ONLY_$1
+		testname_base=ONLY_$base
+		if [[ ${!testname}x != x || ${!testname_base}x != x ]]; then
+
+			if [[ -n "$ALWAYS_SKIPPED" && -n "$HONOR_EXCEPT" ]]; then
+				LAST_SKIPPED="y"
+				skip_noexit "$skip_message"
+				return 0
+			else
+				[ -n "$LAST_SKIPPED" ] &&
+					echo "" && LAST_SKIPPED=
+				ALWAYS_SKIPPED=
+				run_one_logged $1 "$2"
+				return $?
+			fi
+
+		else
+			LAST_SKIPPED="y"
+			return 0
+		fi
+	fi
+
+	if [ -n "$ALWAYS_SKIPPED" ]; then
+		LAST_SKIPPED="y"
+		skip_noexit "$skip_message"
+		return 0
+	else
+		run_one_logged $1 "$2"
+		return $?
+	fi
+
 }
 
 log() {

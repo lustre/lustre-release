@@ -14,7 +14,7 @@ export TF_FAIL=/tmp/tf.fail
 export TF_SKIP=/tmp/tf.skip
 
 usage() {
-    less -F <<EOF
+	less -F <<EOF
 Usage ${0##*/} [options]  suite [suite options] [suite [suite options]]
 Run Lustre regression tests suites.
       -c CONFIG Test environment config file
@@ -23,6 +23,7 @@ Run Lustre regression tests suites.
       -f STR    Config name (cfg/<name>.sh)
       -g GROUP  Test group file (Overrides tests listed on command line)
       -S TESTSUITE First test suite to run allows for restarts
+      -H        Honor the EXCEPT and ALWAYS_EXCEPT list when --only is used
       -i N      Repeat tests N times (default 1). A new directory
                 will be created under LOGDIR for each iteration.
       -k        Don't stop when subtests fail
@@ -57,7 +58,7 @@ Run all tests in the regression group 5 times using large config.
   auster -f large -g test-groups/regression -i 5
 
 EOF
-    exit
+	exit
 }
 
 dry_run=false
@@ -68,9 +69,10 @@ upload_logs=false
 reformat=false
 script_lang=bash
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
+export HONOR_EXCEPT=
 export ${SLOW:=no}
 export ${NAME:=local}
-while getopts "c:d:D:nkf:S:g:i:rRslL:hv" opt
+while getopts "c:d:D:nkf:S:g:Hi:rRslL:hv" opt
 do
 	case "$opt" in
 		c) export CONFIG=$OPTARG;;
@@ -81,6 +83,7 @@ do
 		k) export FAIL_ON_ERROR=false;;
 		n) dry_run=:;;
 		v) verbose=:;;
+		H) export HONOR_EXCEPT="y";;
 		i) repeat_count=$OPTARG;;
 		f) NAME=$OPTARG;;
 		R) do_reset=:;;
