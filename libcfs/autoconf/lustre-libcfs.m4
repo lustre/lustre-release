@@ -881,6 +881,24 @@ define_timer, [
 ]) # LIBCFS_DEFINE_TIMER
 
 #
+# LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
+#
+# Kernel 2.6.27 commit 8594698ebddeef5443b7da8258ae33b3eaca61d5
+# exported save_stack_trace_tsk for x86.
+# Kernel 2.6.27 commit 01f4b8b8b8db09b88be7df7e51192e4e678b69d3
+# exported save_stack_trace_tsk for powerpc
+# Kernel 4.13 commit e27c7fa015d61c8be6a2c32b2144aad2ae6ec975
+# exported save_stack_trace_tsk for arm64
+# Kernel 4.14 commit 9a3dc3186fc3795e076a4122da9e0258651a9631
+# exported save_stack_trace_tsk for arm
+#
+AC_DEFUN([LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK], [
+LB_CHECK_EXPORT([save_stack_trace_tsk], [arch/$SUBARCH/kernel/stacktrace.c],
+	[AC_DEFINE(HAVE_SAVE_STACK_TRACE_TSK, 1,
+		[save_stack_trace_tsk is exported])])
+]) # LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
+
+#
 # LIBCFS_TIMER_SETUP
 #
 # Kernel version 4.15 commit e99e88a9d2b067465adaa9c111ada99a041bef9a
@@ -985,6 +1003,7 @@ LIBCFS_WAIT_QUEUE_ENTRY
 # 4.14
 LIBCFS_DEFINE_TIMER
 LIBCFS_NEW_KERNEL_WRITE
+LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
 # 4.15
 LIBCFS_TIMER_SETUP
 ]) # LIBCFS_PROG_LINUX
