@@ -60,13 +60,13 @@ char *testdir = NULL;
 
 void rw_file(char *name, long stride, unsigned int seed)
 {
-        char filename[MAX_FILENAME_LEN];
-        char errmsg[MAX_FILENAME_LEN+20];
-        char *buf, *o_buf;
-        struct lov_user_md lum = {0};
-        int fd, rc, i, bad = 0, root = 0;
-        long off;
-        long page_size = sysconf(_SC_PAGESIZE);
+	char filename[MAX_FILENAME_LEN];
+	char errmsg[MAX_FILENAME_LEN+32];
+	char *buf, *o_buf;
+	struct lov_user_md lum = {0};
+	int fd, rc, i, bad = 0, root = 0;
+	long off;
+	long page_size = sysconf(_SC_PAGESIZE);
 
         sprintf(filename, "%s/%s", testdir, name);
 

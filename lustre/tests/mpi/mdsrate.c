@@ -118,7 +118,7 @@ int    openflags = O_RDWR|O_CREAT|O_EXCL;
 int    ndirs = 1;
 char * dirfmt;
 char   dir[PATH_MAX];
-char   mkdir_cmd[PATH_MAX+14];
+char   mkdir_cmd[PATH_MAX+32];
 int    dirthreads;
 int    dirnum;
 DIR *  directory;

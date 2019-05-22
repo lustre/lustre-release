@@ -333,7 +333,7 @@ static void test20(void)
 	/* Create subdirectories as long as we can. Each new subdir is
 	 * "/x", so we need at least 3 characters left in testpath. */
 	while (len <= sizeof(testpath) - 3) {
-		strncat(testpath, "/x", 2);
+		strncat(testpath, "/x", sizeof(testpath) - 1);
 
 		len += 2;
 
@@ -369,7 +369,7 @@ static void test30(void)
 		bool seen;
 	} links[num_links];
 	char buf[PATH_MAX];
-	char buf2[PATH_MAX];
+	char buf2[PATH_MAX * 2];
 	struct lu_fid fid;
 	char fidstr[FID_LEN + 1];
 	int rc;
