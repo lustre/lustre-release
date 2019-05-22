@@ -100,16 +100,15 @@ int main(int argc, char** argv)
         while ((c = getopt (argc, argv, "f:m:")) != -1) {
                 switch (c) {
                 case 'f': {
-                        char *tmp;
+			char *tmp;
 
-                        cloned_flags = (char *)malloc(strlen(optarg)+1);
-                        if (cloned_flags == NULL) {
-                                fprintf(stderr, "Insufficient memory.\n");
-                                save_errno = -1;
-                                goto out;
-                        }
+			cloned_flags = strdup(optarg);
+			if (cloned_flags == NULL) {
+				fprintf(stderr, "Insufficient memory.\n");
+				save_errno = -1;
+				goto out;
+			}
 
-                        strncpy(cloned_flags, optarg, strlen(optarg)+1);
                         flags = atoi(cloned_flags);
                         if (flags > 0) {
                                 flag_set = 1;

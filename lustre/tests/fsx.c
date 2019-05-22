@@ -115,8 +115,8 @@ char	*original_buf;			/* a pointer to the original data */
 char	*good_buf;			/* a pointer to the correct data */
 char	*temp_buf;			/* a pointer to the current data */
 char	*fname;				/* name of our test file */
-char	logfile[1024];			/* name of our log file */
-char	goodfile[1024];			/* name of our test file */
+char	logfile[PATH_MAX];		/* name of our log file */
+char	goodfile[PATH_MAX];		/* name of our test file */
 
 off_t		file_size = 0;
 off_t		biggest = 0;
@@ -1278,9 +1278,9 @@ main(int argc, char **argv)
 			randomoplen = 0;
 			break;
 		case 'P':
-			strncpy(goodfile, optarg, sizeof(goodfile));
+			strncpy(goodfile, optarg, sizeof(goodfile) - 1);
 			strcat(goodfile, "/");
-			strncpy(logfile, optarg, sizeof(logfile));
+			strncpy(logfile, optarg, sizeof(logfile) - 1);
 			strcat(logfile, "/");
 			dirpath = 1;
 			break;

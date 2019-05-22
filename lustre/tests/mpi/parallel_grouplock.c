@@ -74,7 +74,7 @@ char  buf[LPGL_BUF_LEN];
 char *lgbuf;
 int   lgbuf_size;
 char  filename[MAX_FILENAME_LEN];
-char  errmsg[MAX_FILENAME_LEN+20];
+char  errmsg[MAX_FILENAME_LEN+96];
 
 static void
 alloc_lgbuf()

@@ -234,7 +234,7 @@ void test4(void)
 	uint64_t size;
 	const char *lfs = getenv("LFS");
 	char mypool[LOV_MAXPOOLNAME + 1] = { '\0' };
-	char cmd[4096];
+	char cmd[PATH_MAX + 128];
 	char path[PATH_MAX];
 
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T4FILE);
@@ -1083,7 +1083,7 @@ void test26(void)
 	uint64_t size;
 	uint64_t pattern;
 	char dir[PATH_MAX];
-	char cmd[4096];
+	char cmd[PATH_MAX + 64];
 
 	snprintf(dir, sizeof(dir), "%s/%s", lustre_dir, T26DIR);
 	rc = rmdir(dir);
@@ -1130,11 +1130,11 @@ void test27(void)
 	uint64_t count;
 	uint64_t size;
 	uint64_t pattern;
-	char dirpath[PATH_MAX];
-	char filepath[PATH_MAX];
-	char cmd[4096];
+	char dirpath[PATH_MAX + 128];
+	char filepath[PATH_MAX * 2];
+	char cmd[PATH_MAX * 2];
 
-	snprintf(dirpath, sizeof(dirpath), "%s/%s", lustre_dir, T27DIR);
+	snprintf(dirpath, sizeof(dirpath) - 1, "%s/%s", lustre_dir, T27DIR);
 	snprintf(filepath, sizeof(filepath), "%s/nonesuch", dirpath);
 
 	rc = rmdir(dirpath);
@@ -1179,7 +1179,7 @@ void test28(void)
 	const char *lfs = getenv("LFS");
 	uint64_t count;
 	char dirpath[PATH_MAX];
-	char cmd[4096];
+	char cmd[PATH_MAX + 64];
 
 	snprintf(dirpath, sizeof(dirpath), "%s/%s", lustre_dir, T28DIR);
 

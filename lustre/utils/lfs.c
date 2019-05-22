@@ -3346,7 +3346,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			lmu->lum_hash_type = LMV_HASH_TYPE_FNV_1A_64;
 		if (lsa.lsa_pool_name)
 			strncpy(lmu->lum_pool_name, lsa.lsa_pool_name,
-				sizeof(lmu->lum_pool_name));
+				sizeof(lmu->lum_pool_name) - 1);
 		if (lsa.lsa_nr_tgts > 1) {
 			int i;
 
@@ -5433,7 +5433,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 				lsb->sb_count = 0;
 
 				/* use mntdir for dirname() temporarily */
-				strncpy(mntdir, dname, sizeof(mntdir));
+				strncpy(mntdir, dname, sizeof(mntdir) - 1);
 				if (!realpath(dirname(mntdir), path)) {
 					result = -errno;
 					fprintf(stderr,

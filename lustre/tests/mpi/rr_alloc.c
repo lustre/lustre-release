@@ -117,7 +117,7 @@ int main(int argc, char **argv)
 	fname = basename(path1);
 	dname = basename(dirname(path2));
 	/* dirname looping depends on the depth of the file from mount path */
-	strncpy(mnt_path, dirname(dirname(path3)), sizeof(mnt_path));
+	strncpy(mnt_path, dirname(dirname(path3)), sizeof(mnt_path) - 1);
 
 	file_no = atoi(argv[2]);
 	if (!file_no) {
