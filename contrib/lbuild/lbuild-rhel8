@@ -1,0 +1,128 @@
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+
+source ${LBUILD_DIR}/lbuild-rhel
+
+# increment this if you have made a change that should force a new kernel
+# to build built
+BUILD_GEN+=".0"
+
+SPEC_NAME="kernel.spec"
+DEVEL_PATH_ARCH_DELIMETER="."
+USE_KABI=false
+
+# force local definition of %dist into ~/.rpmmacros
+# to avoid verbose extended strings like ".el8.centos"
+# in kernel version and rpm names
+#
+RMAC=$HOME/.rpmmacros
+grep '^%dist' $RMAC &> /dev/null || echo '%dist .el8' >> $RMAC
+
+# We modify the RHEL8 kmodtool script, because it expects
+# the kernel source to be in the correct packaged RHEL location.
+# lbuild does not put the source in correct packaged RHEL location.
+RHEL_KMODTOOL=/usr/lib/rpm/redhat/kmodtool
+LBUILD_KMODTOOL="${LBUILD_DIR}/rhel8/kmodtool"
+cp  $RHEL_KMODTOOL $LBUILD_KMODTOOL
+pushd ${LBUILD_DIR}/rhel8
+patch -p1 < kmodtool.patch
+# Replace the hardcoded /usr/src/kernels with our build path
+tmp="${TOPDIR}/reused/usr/src/kernels"
+tmp="${tmp//\//\\/}"
+sed -i "s/\/usr\/src\/kernels/${tmp}/g" ${LBUILD_DIR}/rhel8/kmodtool
+chmod 755 kmodtool
+popd
+# Next we replace %kernel_module_package with one that is nearly
+# identical, but calls lbuild's modified kmodtool script.
+# We need to cleanout the previous entry
+sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
+sed -e "s|REPLACE_ME|$LBUILD_KMODTOOL|" -e "s/\/usr\/src\/kernels/${tmp}/g" \
+    ${LBUILD_DIR}/rhel8/rpmmacros.template > ${LBUILD_DIR}/rhel8/rpmmacros
+cat ${LBUILD_DIR}/rhel8/rpmmacros >> $RMAC
+
+patch_spec() {
+    local buildid="$1"
+
+    # the el8 .spec file requires patch names to begin with "patch-3."
+    # so rename the lustre patch from lbuild to one the .spec will like
+    mv $TOPDIR/SOURCES/linux-${lnxmaj}-lustre.patch \
+	$TOPDIR/SOURCES/patch-${lnxmaj}-lustre.patch
+
+    # edit the SPEC with our changes
+    patch_spec_common "$buildid"
+    sed -i -e '/^# empty final patch to facilitate testing of kernel patches/i\
+# adds Lustre patches\
+Patch99995: patch-%{version}-lustre.patch' \
+           -e '/^ApplyOptionalPatch linux-kernel-test.patch/i\
+\
+# lustre patch\
+ApplyOptionalPatch patch-%{version}-lustre.patch\
+' \
+           -e '/rm -f include\/generated\/kernel.cross/i\
+  # lustre kernel config.\
+  if [ -f %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-4.18-rhel8-%{_target_cpu}.config ]; then\
+    echo "# $Arch" > configs/kernel-%{version}-%{_target_cpu}.config\
+    cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-4.18-rhel8-%{_target_cpu}.config >> configs/kernel-%{version}-%{_target_cpu}.config\
+  fi'\
+           -e '/^# Dynamically generate kernel/a echo "CONFIG_BH_LRU_SIZE=16" >> config-generic'\
+           -e '/^%define listnewconfig_fail 1/s/1/0/'\
+          SPECS/$SPEC_NAME 2>&1 || \
+        fatal 1 "Error while editing SPECS/$SPEC_NAME"
+
+
+    return 0
+
+}
+
+unpack_linux_devel_rpm-rhel8() {
+    local callers_rpm="$1"
+
+    unpack_linux_devel_rpm-rhel "$callers_rpm"
+
+
+    return 0
+
+}
+
+get_rpmbuildopts() {
+
+    if $KERNEL_LUSTRE_NAMING; then
+        echo -e "--define \"variant -lustre\" \c"
+    fi
+    echo "--with firmware"
+
+    return 0
+
+}
+
+find_linux_rpm-rhel8() {
+    local prefix="$1"
+    local wanted_kernel="$2"
+    local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
+
+    find_linux_rpm-rhel "$prefix" "$wanted_kernel" "$pathtorpms"
+
+}
+
+kernel_srpm_location() {
+
+    echo "http://vault.centos.org/centos/8/updates/Source/SPackages/"
+
+}
+
+kernel_debuginfo_location() {
+
+	echo "http://debuginfo.centos.org/8/x86_64/"
+
+}
+
+cleanup_rpmmacros() {
+	sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
+}
+
+apply_kmod_requires_conflicts() {
+    if $PATCHLESS; then
+        # don't allow the patched kernel to be considered as a valid kernel
+        # for the patchless client
+        echo "Conflicts:      kernel-lustre" >> rpm/kmp-lustre.preamble
+    fi
+}

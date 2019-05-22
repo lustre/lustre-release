@@ -3633,6 +3633,7 @@ lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre/Makefile
 lustre/include/uapi/linux/lustre/Makefile
+lustre/kernel_patches/targets/4.18-rhel8.target
 lustre/kernel_patches/targets/3.10-rhel7.6.target
 lustre/kernel_patches/targets/3.10-rhel7.5.target
 lustre/kernel_patches/targets/4.14-rhel7.5.target
