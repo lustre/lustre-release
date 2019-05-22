@@ -115,6 +115,16 @@ EXPORT_SYMBOL(lbug_with_loc);
 
 #ifdef CONFIG_STACKTRACE
 
+#ifndef HAVE_SAVE_STACK_TRACE_TSK
+#define save_stack_trace_tsk(tsk, trace)				       \
+do {									       \
+	if (tsk == current)						       \
+		save_stack_trace(trace);				       \
+	else								       \
+		pr_info("No stack, save_stack_trace_tsk() not exported\n");    \
+} while (0)
+#endif
+
 #define MAX_ST_ENTRIES	100
 static DEFINE_SPINLOCK(st_lock);
 
