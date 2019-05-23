@@ -1280,9 +1280,12 @@ ptlrpc_rqphase2str(struct ptlrpc_request *req)
 	FLAG(req->rq_no_resend, "N"),                                          \
 	FLAG(req->rq_waiting, "W"),                                            \
 	FLAG(req->rq_wait_ctx, "C"), FLAG(req->rq_hp, "H"),                    \
-	FLAG(req->rq_committed, "M")
+	FLAG(req->rq_committed, "M"),                                          \
+	FLAG(req->rq_req_unlinked, "Q"),                                       \
+	FLAG(req->rq_reply_unlinked, "U"),                                     \
+	FLAG(req->rq_receiving_reply, "r")
 
-#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s%s%s"
+#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s"
 
 void _debug_req(struct ptlrpc_request *req,
                 struct libcfs_debug_msg_data *data, const char *fmt, ...)
