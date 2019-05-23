@@ -8342,13 +8342,21 @@ cleanup_115()
 	trap 0
 	stopall
 	rm -f $TMP/$tdir/lustre-mdt
-	reformat_and_config
 }
 
 test_115() {
 	if [ "$mds1_FSTYPE" != ldiskfs ]; then
 		skip "Only applicable to ldiskfs-based MDTs"
 	fi
+
+	local dbfs_ver=$(do_facet $SINGLEMDS $DEBUGFS -V 2>&1)
+
+	echo "debugfs version: $dbfs_ver"
+	echo "$dbfs_ver" | egrep -w "1.44.3.wc1|1.44.5.wc1|1.45.2.wc1" &&
+		skip_env "This version of debugfs doesn't show inode number"
+
+	is_dm_flakey_dev $SINGLEMDS $(mdsdevname 1) &&
+		skip "This test can not be executed on flakey dev"
 
 	IMAGESIZE=$((3072 << 30)) # 3072 GiB
 
@@ -8365,39 +8373,38 @@ test_115() {
 	local mdsdev=$(do_facet $SINGLEMDS "losetup -f")
 	do_facet $SINGLEMDS "losetup $mdsdev $mdsimgname"
 
-	local mds_opts="$(mkfs_opts mds1 ${mdsdev}) --device-size=$IMAGESIZE   \
-		--mkfsoptions='-O lazy_itable_init,ea_inode,^resize_inode,meta_bg \
-		-i 1024'"
+	local mds_opts="$(mkfs_opts mds1 $(mdsdevname 1)) --device-size=$IMAGESIZE   \
+		--mkfsoptions='-O ea_inode,^resize_inode,meta_bg \
+		-N 2247484000 -E lazy_itable_init'"
 	add mds1 $mds_opts --mgs --reformat $mdsdev ||
 		skip_env "format large MDT failed"
-	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --index=$i \
-			--reformat $(ostdevname 1) $(ostvdevname 1)
-
-	start $SINGLEMDS ${mdsdev} $MDS_MOUNT_OPTS || error "start MDS failed"
+	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
+		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
+	add ost1 $opts || error "add ost1 failed with new params"
+	start $SINGLEMDS  $mdsdev $MDS_MOUNT_OPTS || error "start MDS failed"
 	start_ost || error "start OSS failed"
 	mount_client $MOUNT || error "mount client failed"
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir fail"
-	for goal in $(do_facet $SINGLEMDS "ls /sys/fs/ldiskfs/*/inode_goal"); do
-		do_facet $SINGLEMDS "echo 2147483947 >> $goal; grep . $goal"
-	done
-
+	goal="/sys/fs/ldiskfs/$(basename $mdsdev)/inode_goal"
+echo goal: $goal
+	# 2147483648 is 0x80000000
+	do_facet $SINGLEMDS "echo 2147483648 >> $goal; grep . $goal"
 	touch $DIR/$tdir/$tfile
 
-	# Add > 5k bytes to xattr
-	for i in {1..30}; do
-		ln $DIR/$tdir/$tfile $DIR/$tdir/$(printf "link%0250d" $i) ||
-			error "Can't make link"
+	# attrs from 1 to 15 go to block, 16th - to inode
+	for i in {1..16}; do
+		local nm="trusted.ea$i"
+		setfattr -n $nm -v $(printf "xattr%0250d" $i) $DIR/$tdir/$tfile
 	done
 
-	sync; sleep 5; sync
-
+	# inode <2147483649> trusted.ea16 (255)
 	local inode_num=$(do_facet $SINGLEMDS \
-			 "$DEBUGFS -c -R 'stat ROOT/$tdir/$tfile' $mdsimgname" |
-			 awk '/link =/ { print $4 }' |
+			"$DEBUGFS -c -R 'stat ROOT/$tdir/$tfile' $mdsdev" |
+			 awk '/ea16/ { print $2 }' |
 			 sed -e 's/>//' -e 's/<//' -e 's/\"//')
 	echo "inode num: $inode_num"
-	[ $inode_num -ge 2147483947 ] || error "inode $inode_num too small"
+	[ $inode_num -ge 2147483648 ] || error "inode $inode_num too small"
 	do_facet $SINGLEMDS "losetup -d $mdsdev"
 	cleanup_115
 }
