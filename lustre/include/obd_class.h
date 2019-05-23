@@ -58,6 +58,8 @@ int lustre_get_jobid(char *jobid, size_t len);
 void lustre_jobid_clear(const char *jobid);
 void jobid_cache_fini(void);
 int jobid_cache_init(void);
+char *jobid_current(void);
+int jobid_set_current(char *jobid);
 
 struct lu_device_type;
 

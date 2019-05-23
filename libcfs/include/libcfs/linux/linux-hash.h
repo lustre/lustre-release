@@ -66,6 +66,18 @@ static __always_inline u32 cfs_hash_64(u64 val, unsigned int bits)
 
 #endif /* HAVE_BROKEN_HASH_64 */
 
+#ifndef HAVE_RHASHTABLE_WALK_ENTER
+static int rhashtable_walk_enter(struct rhashtable *ht,
+				 struct rhashtable_iter *iter)
+{
+#ifdef HAVE_3ARG_RHASHTABLE_WALK_INIT
+	return rhashtable_walk_init(ht, iter, GFP_KERNEL);
+#else
+	return rhashtable_walk_init(ht, iter);
+#endif
+}
+#endif
+
 #ifndef HAVE_RHLTABLE
 struct rhlist_head {
 	struct rhash_head		rhead;
@@ -156,7 +168,7 @@ static inline void rhltable_destroy(struct rhltable *hlt)
 static inline void rhltable_walk_enter(struct rhltable *hlt,
 				       struct rhashtable_iter *iter)
 {
-	rhashtable_walk_init(&hlt->ht, iter);
+	rhashtable_walk_enter(&hlt->ht, iter);
 }
 #endif /* !HAVE_RHLTABLE */
 
@@ -237,5 +249,97 @@ restart:
 	return NULL;
 }
 #endif /* !HAVE_RHASHTABLE_LOOKUP */
+
+#ifndef HAVE_RHT_BUCKET_VAR
+static inline struct rhash_head __rcu **rht_bucket_var(
+	struct bucket_table *tbl, unsigned int hash)
+{
+	return &tbl->buckets[hash];
+}
+#endif
+
+#ifndef HAVE_RHASHTABLE_REPLACE
+/* Internal function, please use rhashtable_replace_fast() instead */
+static inline int __rhashtable_replace_fast(
+	struct rhashtable *ht, struct bucket_table *tbl,
+	struct rhash_head *obj_old, struct rhash_head *obj_new,
+	const struct rhashtable_params params)
+{
+	struct rhash_head __rcu **pprev;
+	struct rhash_head *he;
+	spinlock_t *lock;
+	unsigned int hash;
+	int err = -ENOENT;
+
+	/* Minimally, the old and new objects must have same hash
+	 * (which should mean identifiers are the same).
+	 */
+	hash = rht_head_hashfn(ht, tbl, obj_old, params);
+	if (hash != rht_head_hashfn(ht, tbl, obj_new, params))
+		return -EINVAL;
+
+	lock = rht_bucket_lock(tbl, hash);
+
+	spin_lock_bh(lock);
+
+	pprev = rht_bucket_var(tbl, hash);
+	rht_for_each_continue(he, *pprev, tbl, hash) {
+		if (he != obj_old) {
+			pprev = &he->next;
+			continue;
+		}
+
+		rcu_assign_pointer(obj_new->next, obj_old->next);
+		rcu_assign_pointer(*pprev, obj_new);
+		err = 0;
+		break;
+	}
+
+	spin_unlock_bh(lock);
+
+	return err;
+}
+
+/**
+ * rhashtable_replace_fast - replace an object in hash table
+ * @ht:		hash table
+ * @obj_old:	pointer to hash head inside object being replaced
+ * @obj_new:	pointer to hash head inside object which is new
+ * @params:	hash table parameters
+ *
+ * Replacing an object doesn't affect the number of elements in the hash table
+ * or bucket, so we don't need to worry about shrinking or expanding the
+ * table here.
+ *
+ * Returns zero on success, -ENOENT if the entry could not be found,
+ * -EINVAL if hash is not the same for the old and new objects.
+ */
+static inline int rhashtable_replace_fast(
+	struct rhashtable *ht, struct rhash_head *obj_old,
+	struct rhash_head *obj_new,
+	const struct rhashtable_params params)
+{
+	struct bucket_table *tbl;
+	int err;
+
+	rcu_read_lock();
+
+	tbl = rht_dereference_rcu(ht->tbl, ht);
+
+	/* Because we have already taken (and released) the bucket
+	 * lock in old_tbl, if we find that future_tbl is not yet
+	 * visible then that guarantees the entry to still be in
+	 * the old tbl if it exists.
+	 */
+	while ((err = __rhashtable_replace_fast(ht, tbl, obj_old,
+						obj_new, params)) &&
+	       (tbl = rht_dereference_rcu(tbl->future_tbl, ht)))
+		;
+
+	rcu_read_unlock();
+
+	return err;
+}
+#endif /* HAVE_RHASHTABLE_REPLACE */
 
 #endif /* __LIBCFS_LINUX_HASH_H__ */

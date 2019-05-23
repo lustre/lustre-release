@@ -392,6 +392,7 @@ struct obd_histogram;
 #define JOBSTATS_DISABLE		"disable"
 #define JOBSTATS_PROCNAME_UID		"procname_uid"
 #define JOBSTATS_NODELOCAL		"nodelocal"
+#define JOBSTATS_SESSION		"session"
 
 typedef void (*cntr_init_callback)(struct lprocfs_stats *stats);
 

@@ -680,7 +680,25 @@ crypto_hash_helpers, [
 ]) # LIBCFS_CRYPTO_HASH_HELPERS
 
 #
-# Kernerl version 4.5-rc3 commit 2fe829aca9d7bed5fd6b49c6a1452e5e486b6cc3dd
+# Kernel version 4.5-rc1 commit 3502cad73c4bbf8f6365d539e814159275252c59
+# introduced rhashtable_replace_fast
+#
+AC_DEFUN([LIBCFS_RHASHTABLE_REPLACE], [
+LB_CHECK_COMPILE([if 'rhashtable_replace_fast' exists],
+rhashtable_replace_fast, [
+	#include <linux/rhashtable.h>
+],[
+	const struct rhashtable_params params = { 0 };
+
+	rhashtable_replace_fast(NULL, NULL, NULL, params);
+],[
+	AC_DEFINE(HAVE_RHASHTABLE_REPLACE, 1,
+		[rhashtable_replace_fast() is available])
+])
+]) # LIBCFS_RHASHTABLE_REPLACE
+
+#
+# Kernel version 4.5-rc3 commit 2fe829aca9d7bed5fd6b49c6a1452e5e486b6cc3dd
 # made kset_find_obj() exportable to modules
 #
 AC_DEFUN([LIBCFS_EXPORT_KSET_FIND_OBJ], [
@@ -780,6 +798,23 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_RHASHTABLE_INSERT_FAST
 
 #
+# Kernel version 4.7-rc1 commit 8f6fd83c6c5ec66a4a70c728535ddcdfef4f3697
+# added 3rd arg to rhashtable_walk_init
+#
+AC_DEFUN([LIBCFS_RHASHTABLE_WALK_INIT_3ARG], [
+LB_CHECK_COMPILE([if 'rhashtable_walk_init' has 3 args],
+rhashtable_walk_init, [
+	#include <linux/gfp.h>
+	#include <linux/rhashtable.h>
+],[
+	rhashtable_walk_init(NULL, NULL, GFP_KERNEL);
+],[
+	AC_DEFINE(HAVE_3ARG_RHASHTABLE_WALK_INIT, 1,
+		[rhashtable_walk_init() has 3 args])
+])
+]) # LIBCFS_RHASHTABLE_REPLACE
+
+#
 # Kernel version 4.8-rc6 commit ca26893f05e86497a86732768ec53cd38c0819ca
 # introduced rhashtable_lookup
 #
@@ -840,6 +875,22 @@ stacktrace_ops, [
 ]) # LIBCFS_STACKTRACE_OPS
 
 #
+# Kernel version 4.9-rc1 commit 246779dd090bd1b74d2652b3a6ca7759f593b27a
+# introduced rhashtable_walk_enter
+#
+AC_DEFUN([LIBCFS_RHASHTABLE_WALK_ENTER], [
+LB_CHECK_COMPILE([if 'rhashtable_walk_enter' exists],
+rhashtable_walk_enter, [
+	#include <linux/rhashtable.h>
+],[
+	rhashtable_walk_enter(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_RHASHTABLE_WALK_ENTER, 1,
+		[rhashtable_walk_enter() is available])
+])
+]) # LIBCFS_RHASHTABLE_REPLACE
+
+#
 # Kernel version 4.9 commit 768ae309a96103ed02eb1e111e838c87854d8b51
 # mm: replace get_user_pages() write/force parameters with gup_flags
 #
@@ -882,6 +933,23 @@ LB_CHECK_LINUX_HEADER([linux/sched/signal.h], [
 	AC_DEFINE(HAVE_SCHED_HEADERS, 1,
 		[linux/sched header directory exist])])
 ]) # LIBCFS_SCHED_HEADERS
+
+#
+# Kernel version 4.11-rc1 commit da20420f83ea0fbcf3d03afda08d971ea1d8a356
+# introduced rht_bucket_var
+#
+AC_DEFUN([LIBCFS_RHT_BUCKET_VAR], [
+LB_CHECK_COMPILE([if 'rht_bucket_var' exists],
+rht_bucket_var, [
+	#include <linux/rhashtable.h>
+],[
+
+	rht_bucket_var(NULL, 0);
+],[
+	AC_DEFINE(HAVE_RHT_BUCKET_VAR, 1,
+		[rht_bucket_var() is available])
+])
+]) # LIBCFS_RHT_BUCKET_VAR
 
 #
 # Kernel version 4.11 commit f9fe1c12d126f9887441fa5bb165046f30ddd4b5
@@ -1191,6 +1259,7 @@ LIBCFS_KSTRTOBOOL_FROM_USER
 # 4.5
 LIBCFS_CRYPTO_HASH_HELPERS
 LIBCFS_EXPORT_KSET_FIND_OBJ
+LIBCFS_RHASHTABLE_REPLACE
 # 4.6
 LIBCFS_BROKEN_HASH_64
 LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
@@ -1198,17 +1267,20 @@ LIBCFS_GET_USER_PAGES_6ARG
 LIBCFS_STRINGHASH
 # 4.7
 LIBCFS_RHASHTABLE_INSERT_FAST
+LIBCFS_RHASHTABLE_WALK_INIT_3ARG
 # 4.8
 LIBCFS_RHASHTABLE_LOOKUP
 LIBCFS_RHLTABLE
 LIBCFS_STACKTRACE_OPS
 # 4.9
 LIBCFS_GET_USER_PAGES_GUP_FLAGS
+LIBCFS_RHASHTABLE_WALK_ENTER
 # 4.10
 LIBCFS_HOTPLUG_STATE_MACHINE
 # 4.11
 LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 LIBCFS_SCHED_HEADERS
+LIBCFS_RHT_BUCKET_VAR
 # 4.12
 LIBCFS_HAVE_PROCESSOR_HEADER
 LIBCFS_HAVE_WAIT_BIT_HEADER
