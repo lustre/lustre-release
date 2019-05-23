@@ -1,32 +1,8 @@
-diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index eeb3d05..00f317c 100644
---- a/fs/ext4/ext4.h
-+++ b/fs/ext4/ext4.h
-@@ -1170,7 +1170,9 @@ struct ext4_super_block {
- 	__le32	s_grp_quota_inum;	/* inode for tracking group quota */
- 	__le32	s_overhead_clusters;	/* overhead blocks/clusters in fs */
- 	__le32	s_backup_bgs[2];	/* groups with sparse_super2 SBs */
--	__le32	s_reserved[106];	/* Padding to the end of the block */
-+	__le32	s_padding[6];		/* reserved for upstream usage */
-+	__le32	s_prj_quota_inum;	/* inode for tracking project quota */
-+	__le32	s_reserved[99];		/* Padding to the end of the block */
- 	__le32	s_checksum;		/* crc32c(superblock) */
- };
- 
-@@ -1185,7 +1187,7 @@ struct ext4_super_block {
- #define EXT4_MF_FS_ABORTED	0x0002	/* Fatal error detected */
- 
- /* Number of quota types we support */
--#define EXT4_MAXQUOTAS 2
-+#define EXT4_MAXQUOTAS 3
- 
- /*
-  * fourth extended-fs super-block data in memory
-diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index 34877ac..9f38b3f 100644
---- a/fs/ext4/inode.c
-+++ b/fs/ext4/inode.c
-@@ -4101,7 +4101,10 @@ static inline void ext4_iget_extra_inode(struct inode *inode,
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -4195,7 +4195,10 @@ static inline void ext4_iget_extra_inode
  
  int ext4_get_projid(struct inode *inode, kprojid_t *projid)
  {
@@ -38,11 +14,11 @@ index 34877ac..9f38b3f 100644
  		return -EOPNOTSUPP;
  	*projid = EXT4_I(inode)->i_projid;
  	return 0;
-diff --git a/fs/ext4/super.c b/fs/ext4/super.c
-index 8189081..6a9d397 100644
---- a/fs/ext4/super.c
-+++ b/fs/ext4/super.c
-@@ -1043,8 +1043,8 @@ static int bdev_try_to_free_page(struct super_block *sb, struct page *page,
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -1085,8 +1085,8 @@ static int bdev_try_to_free_page(struct
  }
  
  #ifdef CONFIG_QUOTA
@@ -53,7 +29,7 @@ index 8189081..6a9d397 100644
  
  static int ext4_write_dquot(struct dquot *dquot);
  static int ext4_acquire_dquot(struct dquot *dquot);
-@@ -5101,6 +5101,48 @@ restore_opts:
+@@ -5234,6 +5234,48 @@ restore_opts:
  	return err;
  }
  
@@ -102,7 +78,7 @@ index 8189081..6a9d397 100644
  static int ext4_statfs(struct dentry *dentry, struct kstatfs *buf)
  {
  	struct super_block *sb = dentry->d_sb;
-@@ -5109,6 +5151,7 @@ static int ext4_statfs(struct dentry *dentry, struct kstatfs *buf)
+@@ -5242,6 +5284,7 @@ static int ext4_statfs(struct dentry *de
  	ext4_fsblk_t overhead = 0, resv_blocks;
  	u64 fsid;
  	s64 bfree;
@@ -110,7 +86,7 @@ index 8189081..6a9d397 100644
  	resv_blocks = EXT4_C2B(sbi, atomic64_read(&sbi->s_resv_clusters));
  
  	if (!test_opt(sb, MINIX_DF))
-@@ -5133,6 +5176,11 @@ static int ext4_statfs(struct dentry *dentry, struct kstatfs *buf)
+@@ -5266,6 +5309,11 @@ static int ext4_statfs(struct dentry *de
  	buf->f_fsid.val[0] = fsid & 0xFFFFFFFFUL;
  	buf->f_fsid.val[1] = (fsid >> 32) & 0xFFFFFFFFUL;
  
@@ -122,7 +98,7 @@ index 8189081..6a9d397 100644
  	return 0;
  }
  
-@@ -5297,7 +5345,8 @@ static int ext4_quota_enable(struct super_block *sb, int type, int format_id,
+@@ -5448,7 +5496,8 @@ static int ext4_quota_enable(struct supe
  	struct inode *qf_inode;
  	unsigned long qf_inums[EXT4_MAXQUOTAS] = {
  		le32_to_cpu(EXT4_SB(sb)->s_es->s_usr_quota_inum),
@@ -132,7 +108,7 @@ index 8189081..6a9d397 100644
  	};
  
  	BUG_ON(!EXT4_HAS_RO_COMPAT_FEATURE(sb, EXT4_FEATURE_RO_COMPAT_QUOTA));
-@@ -5325,7 +5374,8 @@ static int ext4_enable_quotas(struct super_block *sb)
+@@ -5479,7 +5528,8 @@ static int ext4_enable_quotas(struct sup
  	int type, err = 0;
  	unsigned long qf_inums[EXT4_MAXQUOTAS] = {
  		le32_to_cpu(EXT4_SB(sb)->s_es->s_usr_quota_inum),
@@ -142,3 +118,27 @@ index 8189081..6a9d397 100644
  	};
  
  	sb_dqopt(sb)->flags |= DQUOT_QUOTA_SYS_FILE;
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1138,7 +1138,7 @@ extern void ext4_set_bits(void *bm, int
+ #define EXT4_CRC32C_CHKSUM		1
+ 
+ /* Number of quota types we support */
+-#define EXT4_MAXQUOTAS 2
++#define EXT4_MAXQUOTAS 3
+ 
+ /*
+  * Structure of the super block
+@@ -1253,7 +1253,9 @@ struct ext4_super_block {
+ 	__le32	s_grp_quota_inum;	/* inode for tracking group quota */
+ 	__le32	s_overhead_clusters;	/* overhead blocks/clusters in fs */
+ 	__le32	s_backup_bgs[2];	/* groups with sparse_super2 SBs */
+-	__le32	s_reserved[106];	/* Padding to the end of the block */
++	__le32  s_padding[6];           /* reserved for upstream usage */
++	__le32  s_prj_quota_inum;       /* inode for tracking project quota */
++	__le32	s_reserved[99];	/* Padding to the end of the block */
+ 	__le32	s_checksum;		/* crc32c(superblock) */
+ };
+ 
