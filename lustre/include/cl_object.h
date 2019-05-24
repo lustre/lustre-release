@@ -1915,7 +1915,13 @@ struct cl_io {
 	/**
 	 * Set if IO is triggered by async workqueue readahead.
 	 */
-			     ci_async_readahead:1;
+			     ci_async_readahead:1,
+	/**
+	 * Set if we've tried all mirrors for this read IO, if it's not set,
+	 * the read IO will check to-be-read OSCs' status, and make fast-switch
+	 * another mirror if some of the OSTs are not healthy.
+	 */
+			     ci_tried_all_mirrors:1;
 	/**
 	 * How many times the read has retried before this one.
 	 * Set by the top level and consumed by the LOV.

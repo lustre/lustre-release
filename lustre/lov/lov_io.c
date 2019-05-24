@@ -142,6 +142,7 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
 	sub_io->ci_lock_no_expand = io->ci_lock_no_expand;
 	sub_io->ci_ndelay = io->ci_ndelay;
 	sub_io->ci_layout_version = io->ci_layout_version;
+	sub_io->ci_tried_all_mirrors = io->ci_tried_all_mirrors;
 
 	result = cl_io_sub_init(sub->sub_env, sub_io, io->ci_type, sub_obj);
 
@@ -405,13 +406,13 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 				found = true;
 				break;
 			}
-		}
-
+		} /* each component of the mirror */
 		if (found) {
 			index = (index + i) % comp->lo_mirror_count;
 			break;
 		}
-	}
+	} /* each mirror */
+
 	if (i == comp->lo_mirror_count) {
 		CERROR(DFID": failed to find a component covering "
 		       "I/O region at %llu\n",
@@ -435,16 +436,22 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 	 * of this client has been partitioned. We should relinquish CPU for
 	 * a while before trying again.
 	 */
-	++io->ci_ndelay_tried;
-	if (io->ci_ndelay && io->ci_ndelay_tried >= comp->lo_mirror_count) {
+	if (io->ci_ndelay && io->ci_ndelay_tried > 0 &&
+	    (io->ci_ndelay_tried % comp->lo_mirror_count == 0)) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1)); /* 10ms */
+		schedule_timeout(cfs_time_seconds(1) / 100); /* 10ms */
 		if (signal_pending(current))
 			RETURN(-EINTR);
 
-		/* reset retry counter */
-		io->ci_ndelay_tried = 1;
+		/**
+		 * we'd set ci_tried_all_mirrors to turn off fast mirror
+		 * switching for read after we've tried all mirrors several
+		 * rounds.
+		 */
+		io->ci_tried_all_mirrors = io->ci_ndelay_tried %
+					   (comp->lo_mirror_count * 4) == 0;
 	}
+	++io->ci_ndelay_tried;
 
 	CDEBUG(D_VFSTRACE, "use %sdelayed RPC state for this IO\n",
 	       io->ci_ndelay ? "non-" : "");
@@ -682,6 +689,7 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 	case CIT_READ:
 	case CIT_WRITE: {
 		io->u.ci_wr.wr_sync = cl_io_is_sync_write(parent);
+		io->ci_tried_all_mirrors = parent->ci_tried_all_mirrors;
 		if (cl_io_is_append(parent)) {
 			io->u.ci_wr.wr_append = 1;
 		} else {

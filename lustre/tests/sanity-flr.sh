@@ -273,6 +273,16 @@ verify_comp_attrs() {
 	verify_comp_attr_with_parent pool $tf $comp_id
 }
 
+verify_flr_state()
+{
+	local tf=$1
+	local expected_state=$2
+
+	local state=$($LFS getstripe -v $tf | awk '/lcm_flags/{ print $2 }')
+	[ $expected_state = $state ] ||
+		error "expected: $expected_state, actual $state"
+}
+
 # command line test cases
 test_0a() {
 	local td=$DIR/$tdir
@@ -1040,7 +1050,7 @@ test_32() {
 }
 run_test 32 "data should be mirrored to newly created mirror"
 
-test_33() {
+test_33a() {
 	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
 
 	rm -f $DIR/$tfile $DIR/$tfile-2
@@ -1114,7 +1124,114 @@ test_33() {
 
 	start_osts 2
 }
-run_test 33 "read can choose available mirror to read"
+run_test 33a "read can choose available mirror to read"
+
+test_33b() {
+	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
+
+	rm -f $DIR/$tfile
+
+	stack_trap "rm -f $DIR/$tfile" EXIT
+
+	# create a file with two mirrors on OST0000 and OST0001
+	$LFS setstripe -N -Eeof -o0 -N -Eeof -o1 $DIR/$tfile
+
+	# make sure that $tfile has two mirrors
+	[ $($LFS getstripe -N $DIR/$tfile) -eq 2 ] ||
+		{ $LFS getstripe $DIR/$tfile; error "expected count 2"; }
+
+	# write 50M
+	dd if=/dev/urandom of=$DIR/$tfile bs=2M count=25 ||
+		error "write failed for $DIR/$tfile"
+	$LFS mirror resync $DIR/$tfile || error "resync failed for $DIR/$tfile"
+	verify_flr_state $DIR/$tfile "ro"
+	drop_client_cache
+
+	ls -l $DIR/$tfile
+
+	# read file - all OSTs are available
+	echo "reading file (data can be provided by any ost)... "
+	local t1=$SECONDS
+	time cat $DIR/$tfile > /dev/null || error "read all"
+	local t2=$SECONDS
+	ra=$((t2 - t1))
+
+	# read file again with ost1 {OST0000} failed
+	stop_osts 1
+	drop_client_cache
+	echo "reading file (data should be provided by ost2)..."
+	t1=$SECONDS
+	time cat $DIR/$tfile > /dev/null || error "read ost2"
+	t2=$SECONDS
+	r1=$((t2 - t1))
+
+	# remount ost1
+	start_osts 1
+
+	# read file again with ost2 {OST0001} failed
+	stop_osts 2
+	drop_client_cache
+
+	echo "reading file (data should be provided by ost1)..."
+	t1=$SECONDS
+	time cat $DIR/$tfile > /dev/null || error "read ost1"
+	t2=$SECONDS
+	r2=$((t2 - t1))
+
+	# remount ost2
+	start_osts 2
+
+	[ $((r1 * 100)) -gt $((ra * 105)) -a $r1 -gt $((ra + 2)) ] &&
+		error "read mirror too slow without ost1, from $ra to $r1"
+	[ $((r2 * 100)) -gt $((ra * 105)) -a $r2 -gt $((ra + 2)) ] &&
+		error "read mirror too slow without ost2, from $ra to $r2"
+
+	wait_osc_import_ready client ost2
+}
+run_test 33b "avoid reading from unhealthy mirror"
+
+test_33c() {
+	[[ $OSTCOUNT -lt 3 ]] && skip "need >= 3 OSTs" && return
+
+	rm -f $DIR/$tfile
+
+	stack_trap "rm -f $DIR/$tfile" EXIT
+
+	# create a file with two mirrors
+	# mirror1: {OST0000, OST0001}
+	# mirror2: {OST0001, OST0002}
+	$LFS setstripe -N -Eeof -c2 -o0,1 -N -Eeof -c2 -o1,2 $DIR/$tfile
+
+	# make sure that $tfile has two mirrors
+	[ $($LFS getstripe -N $DIR/$tfile) -eq 2 ] ||
+		{ $LFS getstripe $DIR/$tfile; error "expected count 2"; }
+
+	# write 50M
+	dd if=/dev/urandom of=$DIR/$tfile bs=2M count=25 ||
+		error "write failed for $DIR/$tfile"
+	$LFS mirror resync $DIR/$tfile || error "resync failed for $DIR/$tfile"
+	verify_flr_state $DIR/$tfile "ro"
+	drop_client_cache
+
+	ls -l $DIR/$tfile
+
+	# read file - all OSTs are available
+	echo "reading file (data can be provided by any ost)... "
+	time cat $DIR/$tfile > /dev/null || error "read all"
+
+	# read file again with ost2 (OST0001) failed
+	stop_osts 2
+	drop_client_cache
+
+	echo "reading file (data should be provided by ost1 and ost3)..."
+	time cat $DIR/$tfile > /dev/null || error "read ost1 & ost3"
+
+	# remount ost2
+	start_osts 2
+
+	wait_osc_import_ready client ost2
+}
+run_test 33c "keep reading among unhealthy mirrors"
 
 test_34a() {
 	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
@@ -1375,16 +1492,6 @@ test_37()
 	rm -f $tf
 }
 run_test 37 "mirror I/O API verification"
-
-verify_flr_state()
-{
-	local tf=$1
-	local expected_state=$2
-
-	local state=$($LFS getstripe -v $tf | awk '/lcm_flags/{ print $2 }')
-	[ $expected_state = $state ] ||
-		error "expected: $expected_state, actual $state"
-}
 
 test_38() {
 	local tf=$DIR/$tfile
