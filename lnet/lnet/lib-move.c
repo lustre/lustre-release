@@ -938,6 +938,8 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 	LASSERT(!do_send || msg->msg_tx_delayed);
 	LASSERT(!msg->msg_receiving);
 	LASSERT(msg->msg_tx_committed);
+	/* can't get here if we're sending to the loopback interface */
+	LASSERT(lp->lpni_nid != the_lnet.ln_loni->ni_nid);
 
 	/* NB 'lp' is always the next hop */
 	if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
@@ -1599,6 +1601,25 @@ lnet_msg_discovery(struct lnet_msg *msg)
 #define SRC_ANY_ROUTER_NMR_DST	(SRC_ANY | REMOTE_DST | NMR_DST)
 
 static int
+lnet_handle_lo_send(struct lnet_send_data *sd)
+{
+	struct lnet_msg *msg = sd->sd_msg;
+	int cpt = sd->sd_cpt;
+
+	/* No send credit hassles with LOLND */
+	lnet_ni_addref_locked(the_lnet.ln_loni, cpt);
+	msg->msg_hdr.dest_nid = cpu_to_le64(the_lnet.ln_loni->ni_nid);
+	if (!msg->msg_routing)
+		msg->msg_hdr.src_nid =
+			cpu_to_le64(the_lnet.ln_loni->ni_nid);
+	msg->msg_target.nid = the_lnet.ln_loni->ni_nid;
+	lnet_msg_commit(msg, cpt);
+	msg->msg_txni = the_lnet.ln_loni;
+
+	return LNET_CREDIT_OK;
+}
+
+static int
 lnet_handle_send(struct lnet_send_data *sd)
 {
 	struct lnet_ni *best_ni = sd->sd_best_ni;
@@ -1923,7 +1944,10 @@ lnet_handle_spec_local_mr_dst(struct lnet_send_data *sd)
 					     sd->sd_best_ni->ni_net->net_id);
 	}
 
-	if (sd->sd_best_lpni)
+	if (sd->sd_best_lpni &&
+	    sd->sd_best_lpni->lpni_nid == the_lnet.ln_loni->ni_nid)
+		return lnet_handle_lo_send(sd);
+	else if (sd->sd_best_lpni)
 		return lnet_handle_send(sd);
 
 	CERROR("can't send to %s. no NI on %s\n",
@@ -2283,7 +2307,16 @@ lnet_handle_any_mr_dsta(struct lnet_send_data *sd)
 		 * try and see if we can reach it over another routed
 		 * network
 		 */
-		if (sd->sd_best_lpni) {
+		if (sd->sd_best_lpni &&
+		    sd->sd_best_lpni->lpni_nid == the_lnet.ln_loni->ni_nid) {
+			/*
+			 * in case we initially started with a routed
+			 * destination, let's reset to local
+			 */
+			sd->sd_send_case &= ~REMOTE_DST;
+			sd->sd_send_case |= LOCAL_DST;
+			return lnet_handle_lo_send(sd);
+		} else if (sd->sd_best_lpni) {
 			/*
 			 * in case we initially started with a routed
 			 * destination, let's reset to local
@@ -2511,19 +2544,12 @@ again:
 	 * is no need to go through any selection. We can just shortcut
 	 * the entire process and send over lolnd
 	 */
+	send_data.sd_msg = msg;
+	send_data.sd_cpt = cpt;
 	if (LNET_NETTYP(LNET_NIDNET(dst_nid)) == LOLND) {
-		/* No send credit hassles with LOLND */
-		lnet_ni_addref_locked(the_lnet.ln_loni, cpt);
-		msg->msg_hdr.dest_nid = cpu_to_le64(the_lnet.ln_loni->ni_nid);
-		if (!msg->msg_routing)
-			msg->msg_hdr.src_nid =
-				cpu_to_le64(the_lnet.ln_loni->ni_nid);
-		msg->msg_target.nid = the_lnet.ln_loni->ni_nid;
-		lnet_msg_commit(msg, cpt);
-		msg->msg_txni = the_lnet.ln_loni;
+		rc = lnet_handle_lo_send(&send_data);
 		lnet_net_unlock(cpt);
-
-		return LNET_CREDIT_OK;
+		return rc;
 	}
 
 	/*
@@ -2607,7 +2633,6 @@ again:
 		send_case |= SND_RESP;
 
 	/* assign parameters to the send_data */
-	send_data.sd_msg = msg;
 	send_data.sd_rtr_nid = rtr_nid;
 	send_data.sd_src_nid = src_nid;
 	send_data.sd_dst_nid = dst_nid;
@@ -2619,7 +2644,6 @@ again:
 	send_data.sd_final_dst_lpni = lpni;
 	send_data.sd_peer = peer;
 	send_data.sd_md_cpt = md_cpt;
-	send_data.sd_cpt = cpt;
 	send_data.sd_send_case = send_case;
 
 	rc = lnet_handle_send_case_locked(&send_data);
