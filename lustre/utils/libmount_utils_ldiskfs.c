@@ -607,6 +607,10 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	if (enable_64bit || strstr(mop->mo_mkfsopts, "meta_bg"))
 		append_unique(anchor, ",", "^resize_inode", NULL, maxbuflen);
 
+	/* Allow xattrs larger than one block, stored in a separate inode */
+	if (IS_MDT(&mop->mo_ldd) && is_e2fsprogs_feature_supp("-O ea_inode"))
+		append_unique(anchor, ",", "ea_inode", NULL, maxbuflen);
+
 	/* Cluster inode/block bitmaps and inode table for more efficient IO.
 	 * Align the flex groups on a 1MB boundary for better performance. */
 	/* This -O feature needs to go last, since it adds the "-G" option. */
