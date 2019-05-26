@@ -35,8 +35,26 @@ if [ -z "$modules" ] || [ "$modules" = "ldiskfs" ]; then
 	modules="ptlrpc lnet_selftest ldiskfs libcfs"
 fi
 
+if [ -f /sys/kernel/debug/kmemleak ] ; then
+	cat /proc/modules >/tmp/kmemleak-modules-list.txt
+	echo scan > /sys/kernel/debug/kmemleak
+	cat /sys/kernel/debug/kmemleak > /tmp/kmemleak-before-unload.txt
+	test -s /tmp/kmemleak-before-unload.txt && logger -t leak-pre -f /tmp/kmemleak-before-unload.txt
+	rm /tmp/kmemleak-before-unload.txt
+	# Clear everything here so that only new leaks show up
+	# after module unload
+	echo clear > /sys/kernel/debug/kmemleak
+fi
+
 for mod in $modules; do
 	unload_dep_modules_inclusive $mod || exit 1
 done
+
+if [ -f /sys/kernel/debug/kmemleak ] ; then
+	echo scan > /sys/kernel/debug/kmemleak
+	cat /sys/kernel/debug/kmemleak > /tmp/kmemleak-after-unload.txt
+	test -s /tmp/kmemleak-after-unload.txt && logger -t leak-mods -f /tmp/kmemleak-modules-list.txt && logger -t leak-post -f /tmp/kmemleak-after-unload.txt
+	rm -f /tmp/kmemleak-after-unload.txt /tmp/kmemleak-modules-list.txt
+fi
 
 exit 0

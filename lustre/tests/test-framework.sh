@@ -639,6 +639,15 @@ load_modules_local() {
 	udevadm control --reload-rules
 	udevadm trigger
 
+	# For kmemleak-enabled kernels we need clear all past state
+	# that obviously has nothing to do with this Lustre run
+	# Disable automatic memory scanning to avoid perf hit.
+	if [ -f /sys/kernel/debug/kmemleak ] ; then
+		echo scan=off > /sys/kernel/debug/kmemleak
+		echo scan > /sys/kernel/debug/kmemleak
+		echo clear > /sys/kernel/debug/kmemleak
+	fi
+
 	echo Loading modules from $LUSTRE
 
 	local ncpus
