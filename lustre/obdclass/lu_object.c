@@ -133,22 +133,18 @@ EXPORT_SYMBOL(lu_site_wq_from_fid);
 void lu_object_put(const struct lu_env *env, struct lu_object *o)
 {
 	struct lu_site_bkt_data *bkt;
-	struct lu_object_header *top;
-	struct lu_site *site;
-	struct lu_object *orig;
+	struct lu_object_header *top = o->lo_header;
+	struct lu_site *site = o->lo_dev->ld_site;
+	struct lu_object *orig = o;
 	struct cfs_hash_bd bd;
-	const struct lu_fid *fid;
-
-	top  = o->lo_header;
-	site = o->lo_dev->ld_site;
-	orig = o;
+	const struct lu_fid *fid = lu_object_fid(o);
+	bool is_dying;
 
 	/*
 	 * till we have full fids-on-OST implemented anonymous objects
 	 * are possible in OSP. such an object isn't listed in the site
 	 * so we should not remove it from the site.
 	 */
-	fid = lu_object_fid(o);
 	if (fid_is_zero(fid)) {
 		LASSERT(top->loh_hash.next == NULL
 			&& top->loh_hash.pprev == NULL);
@@ -166,8 +162,14 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 	cfs_hash_bd_get(site->ls_obj_hash, &top->loh_fid, &bd);
 	bkt = cfs_hash_bd_extra_get(site->ls_obj_hash, &bd);
 
+	is_dying = lu_object_is_dying(top);
 	if (!cfs_hash_bd_dec_and_lock(site->ls_obj_hash, &bd, &top->loh_ref)) {
-		if (lu_object_is_dying(top)) {
+		/* at this point the object reference is dropped and lock is
+		 * not taken, so lu_object should not be touched because it
+		 * can be freed by concurrent thread. Use local variable for
+		 * check.
+		 */
+		if (is_dying) {
 			/*
 			 * somebody may be waiting for this, currently only
 			 * used for cl_object, see cl_object_put_last().
@@ -186,6 +188,10 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 			o->lo_ops->loo_object_release(env, o);
 	}
 
+	/* don't use local 'is_dying' here because if was taken without lock
+	 * but here we need the latest actual value of it so check lu_object
+	 * directly here.
+	 */
 	if (!lu_object_is_dying(top) &&
 	    (lu_object_exists(orig) || lu_object_is_cl(orig))) {
 		LASSERT(list_empty(&top->loh_lru));
