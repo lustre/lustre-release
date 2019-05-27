@@ -959,7 +959,7 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 
 		CNETERR("Dropping message for %s: peer not alive\n",
 			libcfs_id2str(msg->msg_target));
-		msg->msg_health_status = LNET_MSG_STATUS_LOCAL_DROPPED;
+		msg->msg_health_status = LNET_MSG_STATUS_REMOTE_DROPPED;
 		if (do_send)
 			lnet_finalize(msg, -EHOSTUNREACH);
 
@@ -976,6 +976,8 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 			libcfs_id2str(msg->msg_target));
 		if (do_send) {
 			msg->msg_no_resend = true;
+			CDEBUG(D_NET, "msg %p to %s canceled and will not be resent\n",
+			       msg, libcfs_id2str(msg->msg_target));
 			lnet_finalize(msg, -ECANCELED);
 		}
 
@@ -1254,6 +1256,7 @@ lnet_drop_routed_msgs_locked(struct list_head *list, int cpt)
 			     0, 0, 0, msg->msg_hdr.payload_length);
 		list_del_init(&msg->msg_list);
 		msg->msg_no_resend = true;
+		msg->msg_health_status = LNET_MSG_STATUS_REMOTE_ERROR;
 		lnet_finalize(msg, -ECANCELED);
 	}
 
