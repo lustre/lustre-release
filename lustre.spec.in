@@ -403,7 +403,7 @@ echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
 %if %{with gss_keyring}
 echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
-echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
+echo '%config(noreplace) %{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
 %endif
 %endif
 
