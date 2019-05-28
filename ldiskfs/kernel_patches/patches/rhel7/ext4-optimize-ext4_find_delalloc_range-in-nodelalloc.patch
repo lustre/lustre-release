@@ -1,0 +1,54 @@
+From 8c48f7e88e293b9dd422bd8884842aea85d30b22 
+Subject: [PATCH] ext4: optimize ext4_find_delalloc_range() in nodelalloc mode
+
+We found performance regression when using bigalloc with "nodelalloc"
+(1MB cluster size):
+
+1. mke2fs -C 1048576 -O ^has_journal,bigalloc /dev/sda
+2. mount -o nodelalloc /dev/sda /test/
+3. time dd if=/dev/zero of=/test/io bs=1048576 count=1024
+
+The "dd" will cost about 2 seconds to finish, but if we mke2fs without
+"bigalloc", "dd" will only cost less than 1 second.
+
+The reason is: when using ext4 with "nodelalloc", it will call
+ext4_find_delalloc_cluster() nearly everytime it call
+ext4_ext_map_blocks(), and ext4_find_delalloc_range() will also scan
+all pages in cluster because no buffer is "delayed".  A cluster has
+256 pages (1MB cluster), so it will scan 256 * 256k pags when creating
+a 1G file. That severely hurts the performance.
+
+Therefore, we return immediately from ext4_find_delalloc_range() in
+nodelalloc mode, since by definition there can't be any delalloc
+pages.
+
+Signed-off-by: Robin Dong <sanbai@taobao.com>
+Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+---
+ fs/ext4/extents.c |    3 +++
+ 1 file changed, 3 insertions(+)
+
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -3909,6 +3909,9 @@ int ext4_find_delalloc_range(struct inod
+ {
+ 	struct extent_status es;
+ 
++	if (!test_opt(inode->i_sb, DELALLOC))
++		return 0;
++
+ 	ext4_es_find_delayed_extent_range(inode, lblk_start, lblk_end, &es);
+ 	if (es.es_len == 0)
+ 		return 0; /* there is no delay extent in this tree */
+@@ -5115,6 +5118,9 @@ static int ext4_find_delayed_extent(stru
+ 	struct extent_status es;
+ 	ext4_lblk_t block, next_del;
+ 
++	if (!test_opt(inode->i_sb, DELALLOC))
++		return 0;
++
+ 	if (newes->es_pblk == 0) {
+ 		ext4_es_find_delayed_extent_range(inode, newes->es_lblk,
+ 				newes->es_lblk + newes->es_len - 1, &es);
