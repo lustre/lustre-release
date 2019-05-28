@@ -1064,10 +1064,8 @@ test_33() {
 	start_osts 1
 
 	# read file again with ost2 failed
-	$LCTL set_param ldlm.namespaces.lustre-*-osc-[-0-9a-f]*.lru_size=clear
-
-	fail ost2 &
-	sleep 1
+	stop_osts 2
+	drop_client_cache
 
 	# check size, glimpse should work
 	$CHECKSTAT -t file -s $fsize $DIR/$tfile ||
@@ -1078,7 +1076,7 @@ test_33() {
 	[[ "$rs" == "ost1" ]] ||
 		error "file content error: expected: \"ost1\", actual: \"$rs\""
 
-	wait_osc_import_ready client ost2
+	start_osts 2
 }
 run_test 33 "read can choose available mirror to read"
 
