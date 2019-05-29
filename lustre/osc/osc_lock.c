@@ -684,7 +684,8 @@ unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
 		RETURN(1);
 
 	LASSERT(dlmlock->l_resource->lr_type == LDLM_EXTENT ||
-		ldlm_has_dom(dlmlock));
+		dlmlock->l_resource->lr_type == LDLM_IBITS);
+
 	lock_res_and_lock(dlmlock);
 	obj = dlmlock->l_ast_data;
 	if (obj)
@@ -709,12 +710,17 @@ unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
 		GOTO(out, weight = 1);
 	}
 
-	if (ldlm_has_dom(dlmlock))
-		weight = osc_lock_weight(env, obj, 0, OBD_OBJECT_EOF);
-	else
+	if (dlmlock->l_resource->lr_type == LDLM_EXTENT)
 		weight = osc_lock_weight(env, obj,
 					 dlmlock->l_policy_data.l_extent.start,
 					 dlmlock->l_policy_data.l_extent.end);
+	else if (ldlm_has_dom(dlmlock))
+		weight = osc_lock_weight(env, obj, 0, OBD_OBJECT_EOF);
+	/* The DOM bit can be cancelled at any time; in that case, we know
+	 * there are no pages, so just return weight of 0
+	 */
+	else
+		weight = 0;
 
 	EXIT;
 
