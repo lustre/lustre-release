@@ -418,6 +418,9 @@ init_test_env() {
 	fi
 
 	export TF_FAIL=${TF_FAIL:-$TMP/tf.fail}
+
+	# Constants used in more than one test script
+	export LOV_MAX_STRIPE_COUNT=2000
 }
 
 check_cpt_number() {
@@ -4304,11 +4307,7 @@ mkfs_opts() {
 		opts+=${L_GETIDENTITY:+" --param=mdt.identity_upcall=$L_GETIDENTITY"}
 
 		if [ $fstype == ldiskfs ]; then
-			# Check for wide striping
-			if [ $OSTCOUNT -gt 160 ]; then
-				MDSJOURNALSIZE=${MDSJOURNALSIZE:-4096}
-				fs_mkfs_opts+="-O ea_inode"
-			fi
+			fs_mkfs_opts+="-O ea_inode"
 
 			var=${facet}_JRN
 			if [ -n "${!var}" ]; then
@@ -8524,7 +8523,11 @@ pool_add_targets() {
 	local last=$3
 	local step=${4:-1}
 
-	local list=$(seq $first $step $last)
+	if [ -z $last ]; then
+		local list=$first
+	else
+		local list=$(seq $first $step $last)
+	fi
 
 	local t=$(for i in $list; do printf "$FSNAME-OST%04x_UUID " $i; done)
 	do_facet mgs $LCTL pool_add \
@@ -9464,4 +9467,3 @@ verify_yaml_layout() {
 	[ "$layout1" == "$layout2" ] ||
 		error "$msg_prefix $src/$dst layouts are not equal"
 }
-

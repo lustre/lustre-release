@@ -1346,8 +1346,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		pattern = le32_to_cpu(lmm->lmm_pattern);
-		if (lov_pattern(pattern) != LOV_PATTERN_RAID0 &&
-		    lov_pattern(pattern) != LOV_PATTERN_MDT)
+		if (!lov_pattern_supported(lov_pattern(pattern)))
 			GOTO(out, rc = -EINVAL);
 
 		lod_comp->llc_pattern = pattern;
@@ -2114,9 +2113,8 @@ void lod_fix_desc_stripe_count(__u32 *val)
 void lod_fix_desc_pattern(__u32 *val)
 {
 	/* from lov_setstripe */
-	if ((*val != 0) && (*val != LOV_PATTERN_RAID0) &&
-	    (*val != LOV_PATTERN_MDT)) {
-		LCONSOLE_WARN("Unknown stripe pattern: %#x\n", *val);
+	if ((*val != 0) && !lov_pattern_supported_normal_comp(*val)) {
+		LCONSOLE_WARN("lod: Unknown stripe pattern: %#x\n", *val);
 		*val = 0;
 	}
 }

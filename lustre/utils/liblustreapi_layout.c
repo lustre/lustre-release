@@ -545,6 +545,9 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 
 		if (v1->lmm_pattern == LOV_PATTERN_RAID0)
 			comp->llc_pattern = LLAPI_LAYOUT_RAID0;
+		else if (v1->lmm_pattern == (LOV_PATTERN_RAID0 |
+					 LOV_PATTERN_OVERSTRIPING))
+			comp->llc_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 		else
 			/* Lustre only supports RAID0 for now. */
 			comp->llc_pattern = v1->lmm_pattern;
@@ -598,6 +601,30 @@ out_layout:
 	llapi_layout_free(layout);
 	layout = NULL;
 	goto out;
+}
+
+__u32 llapi_pattern_to_lov(uint64_t pattern)
+{
+	__u32 lov_pattern;
+
+	switch (pattern) {
+	case LLAPI_LAYOUT_DEFAULT:
+		lov_pattern = LOV_PATTERN_RAID0;
+		break;
+	case LLAPI_LAYOUT_RAID0:
+		lov_pattern = LOV_PATTERN_RAID0;
+		break;
+	case LLAPI_LAYOUT_MDT:
+		lov_pattern = LOV_PATTERN_MDT;
+		break;
+	case LLAPI_LAYOUT_OVERSTRIPING:
+		lov_pattern = LOV_PATTERN_OVERSTRIPING | LOV_PATTERN_RAID0;
+		break;
+	default:
+		lov_pattern = EINVAL;
+	}
+
+	return lov_pattern;
 }
 
 /**
@@ -694,12 +721,11 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 		}
 
 		blob->lmm_magic = magic;
-		if (pattern == LLAPI_LAYOUT_DEFAULT)
-			blob->lmm_pattern = LOV_PATTERN_RAID0;
-		else if (pattern == LLAPI_LAYOUT_MDT)
-			blob->lmm_pattern = LOV_PATTERN_MDT;
-		else
-			blob->lmm_pattern = pattern;
+		blob->lmm_pattern = llapi_pattern_to_lov(pattern);
+		if (blob->lmm_pattern == EINVAL) {
+			errno = EINVAL;
+			goto error;
+		}
 
 		if (comp->llc_stripe_size == LLAPI_LAYOUT_DEFAULT)
 			blob->lmm_stripe_size = 0;
@@ -1272,7 +1298,8 @@ int llapi_layout_pattern_set(struct llapi_layout *layout, uint64_t pattern)
 		return -1;
 
 	if (pattern != LLAPI_LAYOUT_DEFAULT &&
-	    pattern != LLAPI_LAYOUT_RAID0 && pattern != LLAPI_LAYOUT_MDT) {
+	    pattern != LLAPI_LAYOUT_RAID0 && pattern != LLAPI_LAYOUT_MDT
+	    && pattern != LLAPI_LAYOUT_OVERSTRIPING) {
 		errno = EOPNOTSUPP;
 		return -1;
 	}

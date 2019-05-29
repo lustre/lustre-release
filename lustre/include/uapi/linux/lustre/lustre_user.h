@@ -547,11 +547,11 @@ struct fsxattr {
 #define LMV_USER_MAGIC_V0	0x0CD20CD0    /* old default lmv magic*/
 #define LMV_USER_MAGIC_SPECIFIC	0x0CD40CD0
 
-#define LOV_PATTERN_NONE	0x000
-#define LOV_PATTERN_RAID0	0x001
-#define LOV_PATTERN_RAID1	0x002
-#define LOV_PATTERN_MDT		0x100
-#define LOV_PATTERN_CMOBD	0x200
+#define LOV_PATTERN_NONE		0x000
+#define LOV_PATTERN_RAID0		0x001
+#define LOV_PATTERN_RAID1		0x002
+#define LOV_PATTERN_MDT			0x100
+#define LOV_PATTERN_OVERSTRIPING	0x200
 
 #define LOV_PATTERN_F_MASK	0xffff0000
 #define LOV_PATTERN_F_HOLE	0x40000000 /* there is hole in LOV EA */
@@ -563,7 +563,20 @@ struct fsxattr {
 static inline bool lov_pattern_supported(__u32 pattern)
 {
 	return (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_RAID0 ||
+	       (pattern & ~LOV_PATTERN_F_RELEASED) ==
+			(LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
 	       (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_MDT;
+}
+
+/* RELEASED and MDT patterns are not valid in many places, so rather than
+ * having many extra checks on lov_pattern_supported, we have this separate
+ * check for non-released, non-DOM components
+ */
+static inline bool lov_pattern_supported_normal_comp(__u32 pattern)
+{
+	return pattern == LOV_PATTERN_RAID0 ||
+	       pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING);
+
 }
 
 #define LOV_MAXPOOLNAME 15
@@ -581,7 +594,7 @@ static inline bool lov_pattern_supported(__u32 pattern)
  * allocation that is sufficient for the current generation of systems.
  *
  * (max buffer size - lov+rpc header) / sizeof(struct lov_ost_data_v1) */
-#define LOV_MAX_STRIPE_COUNT 2000  /* ((12 * 4096 - 256) / 24) */
+#define LOV_MAX_STRIPE_COUNT 2000  /* ~((12 * 4096 - 256) / 24) */
 #define LOV_ALL_STRIPES       0xffff /* only valid for directories */
 #define LOV_V1_INSANE_STRIPE_COUNT 65532 /* maximum stripe count bz13933 */
 

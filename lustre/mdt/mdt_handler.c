@@ -1205,8 +1205,15 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		ma->ma_lmm = buffer->lb_buf;
 		ma->ma_lmm_size = buffer->lb_len;
 		ma->ma_need = MA_INODE | MA_HSM;
-		if (ma->ma_lmm_size > 0)
+		if (ma->ma_lmm_size > 0) {
 			ma->ma_need |= MA_LOV;
+			/* Older clients may crash if they getattr overstriped
+			 * files
+			 */
+			if (!exp_connect_overstriping(exp) &&
+			    mdt_lmm_is_overstriping(ma->ma_lmm))
+				RETURN(-EOPNOTSUPP);
+		}
 	}
 
         if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&

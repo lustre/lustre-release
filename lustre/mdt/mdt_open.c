@@ -542,6 +542,11 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 		RETURN(-EOPNOTSUPP);
 	}
 
+	/* Overstriped files can crash older clients */
+	if (isreg && !exp_connect_overstriping(exp) &&
+	    mdt_lmm_is_overstriping(ma->ma_lmm))
+		RETURN(-EOPNOTSUPP);
+
 	/* LU-2275, simulate broken behaviour (esp. prevalent in
 	 * pre-2.4 servers where a very strange reply is sent on error
 	 * that looks like it was actually almost successful and a

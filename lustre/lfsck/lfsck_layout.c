@@ -368,7 +368,7 @@ static int lfsck_layout_verify_header_v1v3(struct dt_object *obj,
 	}
 #endif
 
-	if (lov_pattern(pattern) != LOV_PATTERN_RAID0) {
+	if (!lov_pattern_supported_normal_comp(lov_pattern(pattern))) {
 		CDEBUG(D_LFSCK, "Unsupported LOV EA pattern %u for the file "
 		       DFID" in the component %x\n",
 		       pattern, PFID(lfsck_dto2fid(obj)), comp_id);

@@ -146,6 +146,12 @@ The number of OSTs to stripe a file over. \fB0 \fRmeans to use the
 filesystem-wide default stripe count (default 1), and \fB-1 \fRmeans to stripe
 over all available OSTs.
 .TP
+.B -C\fR, \fB--overstripe-count \fR<\fIstripe_count\fR>
+The number of stripes to create, creating > 1 stripe per OST if count exceeds
+the number of OSTs in the file system. \fB0 \fRmeans to use the filesystem-wide
+default stripe count (default 1), and \fB-1 \fRmeans to stripe over all
+available OSTs.
+.TP
 .B -S\fR, \fB--stripe-size \fR<\fIstripe_size\fR>
 The number of bytes to store on each OST before moving to the next OST. A
 stripe size of

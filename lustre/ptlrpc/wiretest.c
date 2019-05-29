@@ -1715,8 +1715,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LOV_PATTERN_RAID1);
 	LASSERTF(LOV_PATTERN_MDT == 0x00000100UL, "found 0x%.8xUL\n",
 		(unsigned)LOV_PATTERN_MDT);
-	LASSERTF(LOV_PATTERN_CMOBD == 0x00000200UL, "found 0x%.8xUL\n",
-		(unsigned)LOV_PATTERN_CMOBD);
+	LASSERTF(LOV_PATTERN_OVERSTRIPING == 0x00000200UL, "found 0x%.8xUL\n",
+		(unsigned)LOV_PATTERN_OVERSTRIPING);
 
 	/* Checks for struct lov_comp_md_entry_v1 */
 	LASSERTF((int)sizeof(struct lov_comp_md_entry_v1) == 48, "found %lld\n",

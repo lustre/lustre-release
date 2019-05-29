@@ -39,7 +39,7 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 assert_DIR
 rm -rf $DIR/[Rdfs][0-9]*
 
-test_0() {
+test_0a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -63,9 +63,34 @@ test_0() {
 
 	rm -f $comp_file || error "Delete $comp_file failed"
 }
-run_test 0 "Create full components file, no reused OSTs"
+run_test 0a "Create full components file, no reused OSTs"
 
-test_1() {
+test_0b() {
+	[[ $($LCTL get_param mdc.*.import |
+		grep "connect_flags:.*overstriping") ]] ||
+		skip "server does not support overstriping"
+	large_xattr_enabled || skip_env "no large xattr support"
+
+	local comp_file=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir
+
+	# Create file with 1.1*LOV_MAX_STRIPE_COUNT stripes should succeed
+	$LFS setstripe -E 1m -C $((LOV_MAX_STRIPE_COUNT / 10)) -E -1 \
+		-C $LOV_MAX_STRIPE_COUNT $comp_file ||
+	error "Create $comp_file failed"
+
+	rm -f $comp_file || error "Delete $comp_file failed"
+
+	# Create file with 2*LOV_MAX_STRIPE_COUNT stripes should fail
+	$LFS setstripe -E 1m -C $LOV_MAX_STRIPE_COUNT -E -1 -C $LOV_MAX_STRIPE_COUNT \
+		$comp_file && error "Create $comp_file succeeded"
+
+	rm -f $comp_file || error "Delete $comp_file failed"
+}
+run_test 0b "Verify comp stripe count limits"
+
+test_1a() {
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M
 
@@ -87,7 +112,76 @@ test_1() {
 
 	rm -f $comp_file || error "Delete $comp_file failed"
 }
-run_test 1 "Create full components file, reused OSTs"
+run_test 1a "Create full components file, reused OSTs"
+
+# test overstriping (>1 stripe/OST within a component)
+test_1b() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[[ $($LCTL get_param mdc.*.import |
+		grep "connect_flags:.*overstriping") ]] ||
+		skip "server does not support overstriping"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local rw_len=$((3 * 1024 * 1024))	# 3M
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -E 1m -S 1m -o 0,0 -E -1 -o 1,1,0,0 $comp_file ||
+		error "Create $comp_file failed"
+
+	#instantiate all components, so that objs are allocted
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=1M
+
+	$LFS getstripe $comp_file
+	local OSTS_1=$($LFS getstripe -I1 $comp_file | grep -o 'l_ost_idx.*' |
+		      awk -e '{print $2}' | tr "\n" "\0")
+	local OSTS_2=$($LFS getstripe -I2 $comp_file | grep -o 'l_ost_idx.*' |
+		      awk -e '{print $2}' | tr "\n" "\0")
+
+	echo ":"$OSTS_1":"
+	echo ":"$OSTS_2":"
+	[ "$OSTS_1" = "0,0," ] || error "incorrect OSTs($OSTS_1) in component 1"
+	[ "$OSTS_2" = "1,1,0,0," ] ||
+		error "incorrect OSTs($OSTS_2) in component 2"
+
+	small_write $comp_file $rw_len || error "Verify RW failed"
+
+	rm -f $comp_file || error "Delete $comp_file failed"
+}
+run_test 1b "Create full components file, overstriping in components"
+
+# test overstriping with max stripe count
+test_1c() {
+	[[ $($LCTL get_param mdc.*.import |
+		grep "connect_flags:.*overstriping") ]] ||
+		skip "server does not support overstriping"
+	large_xattr_enabled || skip_env "no large xattr support"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local rw_len=$((3 * 1024 * 1024))	# 3M
+
+	test_mkdir $DIR/$tdir
+
+	$LFS setstripe -E 1m -C 10 -E 10M -C 100 -E -1 \
+	    -C $LOV_MAX_STRIPE_COUNT $comp_file ||
+		error "Create $comp_file failed"
+
+	# Seek & write in to last component so all objects are allocated
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=20000
+
+	local count=$($LFS getstripe -c -I1 $DIR/$tdir/$tfile)
+	[ $count -eq 10 ] || error "comp1 stripe count $count, should be 10"
+	count=$($LFS getstripe -c -I2 $DIR/$tdir/$tfile)
+	[ $count -eq 100 ] || error "comp2 stripe count $count, should be 100"
+	count=$($LFS getstripe -c -I3 $DIR/$tdir/$tfile)
+	[ $count -eq $LOV_MAX_STRIPE_COUNT ] ||
+		error "comp4 stripe count $count != $LOV_MAX_STRIPE_COUNT"
+
+	small_write $comp_file $rw_len || error "Verify RW failed"
+
+	rm -f $comp_file || error "Delete $comp_file failed"
+}
+run_test 1c "Test overstriping w/max stripe count"
 
 test_2() {
 	local comp_file=$DIR/$tdir/$tfile
@@ -653,8 +747,9 @@ test_15() {
 }
 run_test 15 "Verify component options for lfs find"
 
-test_16() {
+test_16a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
 
 	local file=$DIR/$tdir/$tfile
 	local dir=$DIR/$tdir/dir
@@ -700,7 +795,65 @@ test_16() {
 	echo "4. plain dir"
 	verify_yaml_layout $dir $dir.copy $temp.dir "4. plain dir"
 }
-run_test 16 "Verify setstripe/getstripe with YAML config file"
+run_test 16a "Verify setstripe/getstripe with YAML config file"
+
+test_16b() {
+	[[ $($LCTL get_param mdc.*.import |
+		grep "connect_flags:.*overstriping") ]] ||
+		skip "server does not support overstriping"
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[[ $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
+		skip_env "too many osts, skipping"
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
+
+	local file=$DIR/$tdir/$tfile
+	local dir=$DIR/$tdir/dir
+	local temp=$DIR/$tdir/template
+	# We know OSTCOUNT < (LOV_MAX_STRIPE_COUNT / 2), so this is overstriping
+	local large_count=$((LOV_MAX_STRIPE_COUNT / 2 + 10))
+
+	rm -rf $DIR/$tdir
+	test_mkdir $DIR/$tdir
+
+	#####################################################################
+	#	                    1. PFL file, overstriping in first comps
+	# set stripe for source file
+	$LFS setstripe -E1m -S 1M -o0,0 -E2m -o1,1 -E3m -C $large_count -E-1 \
+		$file || error "Create $file failed"
+
+	echo "1. PFL file"
+	verify_yaml_layout $file $file.copy $temp "1. PFL file"
+
+	#####################################################################
+	#	                    2. plain file + overstriping
+	# set stripe for source file
+	rm -f $file
+	$LFS setstripe -C $large_count -i1 $file || error "Create $file failed"
+
+	rm -f $file.copy
+	echo "2. plain file"
+	verify_yaml_layout $file $file.copy $temp "2. plain file"
+
+	#####################################################################
+	#	                    3. PFL dir + overstriping
+	# set stripe for source dir
+	test_mkdir $dir
+	$LFS setstripe -E1m -S 1M -o 0,0 -E2m -C $large_count -E-1 $dir ||
+		error "setstripe $dir failed"
+
+	test_mkdir $dir.copy
+	echo "3. PFL dir"
+	verify_yaml_layout $dir $dir.copy $temp.dir "3. PFL dir"
+
+	#####################################################################
+	#	                    4. plain dir + overstriping
+	# set stripe for source dir
+	$LFS setstripe -C $large_count $dir || error "setstripe $dir failed"
+
+	echo "4. plain dir"
+	verify_yaml_layout $dir $dir.copy $temp.dir "4. plain dir"
+}
+run_test 16b "Verify setstripe/getstripe with YAML config file + overstriping"
 
 test_17() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"

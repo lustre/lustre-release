@@ -2675,7 +2675,8 @@ inline __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 	else if ((__u16)-1 == entry->llc_stripe_count)
 		return lod->lod_desc.ld_tgt_count;
 	else
-		return lod_get_stripe_count(lod, lo, entry->llc_stripe_count);
+		return lod_get_stripe_count(lod, lo,
+					    entry->llc_stripe_count, false);
 }
 
 static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
@@ -4635,9 +4636,8 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 					LCME_TEMPLATE_FLAGS;
 		}
 
-		if (v1->lmm_pattern != LOV_PATTERN_RAID0 &&
-		    v1->lmm_pattern != LOV_PATTERN_MDT &&
-		    v1->lmm_pattern != 0) {
+		if (!lov_pattern_supported(v1->lmm_pattern) &&
+		    !(v1->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
 			lod_free_def_comp_entries(lds);
 			RETURN(-EINVAL);
 		}

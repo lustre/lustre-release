@@ -2683,12 +2683,15 @@ int sattr_cache_get_defaults(const char *const fsname,
 
 static char *layout2name(__u32 layout_pattern)
 {
-	if (layout_pattern == LOV_PATTERN_MDT)
+	if (layout_pattern & LOV_PATTERN_F_RELEASED)
+		return "released";
+	else if (layout_pattern == LOV_PATTERN_MDT)
 		return "mdt";
 	else if (layout_pattern == LOV_PATTERN_RAID0)
 		return "raid0";
-	else if (layout_pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED))
-		return "released";
+	else if (layout_pattern ==
+			(LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING))
+		return "raid0,overstriped";
 	else
 		return "unknown";
 }

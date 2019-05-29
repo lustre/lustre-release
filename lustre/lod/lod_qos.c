@@ -936,11 +936,13 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 
 static int lod_check_and_reserve_ost(const struct lu_env *env,
 				     struct lod_object *lo,
+				     struct lod_layout_component *lod_comp,
 				     struct obd_statfs *sfs, __u32 ost_idx,
 				     __u32 speed, __u32 *s_idx,
 				     struct dt_object **stripe,
 				     __u32 *ost_indices,
-				     struct thandle *th)
+				     struct thandle *th,
+				     bool *overstriped)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
@@ -989,11 +991,14 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 			  "component\n", speed, ost_idx);
 		RETURN(rc);
 	}
-	/*
-	 * do not put >1 objects on a single OST
-	 */
-	if (lod_qos_is_ost_used(env, ost_idx, stripe_idx))
-		RETURN(rc);
+
+	/* do not put >1 objects on a single OST, except for overstriping */
+	if (lod_qos_is_ost_used(env, ost_idx, stripe_idx)) {
+		if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+			*overstriped = true;
+		else
+			RETURN(rc);
+	}
 
 	o = lod_qos_declare_object_on(env, lod, ost_idx, th);
 	if (IS_ERR(o)) {
@@ -1058,6 +1063,8 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	__u32 stripe_idx = 0;
 	__u32 stripe_count, stripe_count_min, ost_idx;
 	int rc, speed = 0, ost_connecting = 0;
+	int stripes_per_ost = 1;
+	bool overstriped = false;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
@@ -1111,7 +1118,12 @@ repeat_find:
 		  stripe_count, lqr->lqr_start_idx, lqr->lqr_start_count,
 		  lqr->lqr_offset_idx, osts->op_count, osts->op_count);
 
-	for (i = 0; i < osts->op_count && stripe_idx < stripe_count; i++) {
+	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+		stripes_per_ost =
+			(lod_comp->llc_stripe_count - 1)/osts->op_count + 1;
+
+	for (i = 0; i < osts->op_count * stripes_per_ost
+	     && stripe_idx < stripe_count; i++) {
 		array_idx = (lqr->lqr_start_idx + lqr->lqr_offset_idx) %
 				osts->op_count;
 		++lqr->lqr_start_idx;
@@ -1131,9 +1143,9 @@ repeat_find:
 			continue;
 
 		spin_unlock(&lqr->lqr_alloc);
-		rc = lod_check_and_reserve_ost(env, lo, sfs, ost_idx, speed,
-					       &stripe_idx, stripe, ost_indices,
-					       th);
+		rc = lod_check_and_reserve_ost(env, lo, lod_comp, sfs, ost_idx,
+					       speed, &stripe_idx, stripe,
+					       ost_indices, th, &overstriped);
 		spin_lock(&lqr->lqr_alloc);
 
 		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_connecting)
@@ -1150,6 +1162,12 @@ repeat_find:
 
 	spin_unlock(&lqr->lqr_alloc);
 	up_read(&m->lod_qos.lq_rw_sem);
+
+	/* If there are enough OSTs, a component with overstriping requested
+	 * will not actually end up overstriped.  The comp should reflect this.
+	 */
+	if (!overstriped)
+		lod_comp->llc_pattern &= ~LOV_PATTERN_OVERSTRIPING;
 
 	if (stripe_idx) {
 		lod_comp->llc_stripe_count = stripe_idx;
@@ -1249,10 +1267,11 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 			break;
 		}
 
-		/*
-		 * do not put >1 objects on a single OST
+		/* do not put >1 objects on a single OST, except for
+		 * overstriping
 		 */
-		if (lod_qos_is_ost_used(env, ost_idx, stripe_count)) {
+		if (lod_qos_is_ost_used(env, ost_idx, stripe_count) &&
+		    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)) {
 			rc = -EINVAL;
 			break;
 		}
@@ -1315,13 +1334,15 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
-	struct dt_object  *o;
-	__u32		   ost_idx;
-	unsigned int	   i, array_idx, ost_count;
-	int		   rc, stripe_num = 0;
-	int		   speed = 0;
+	struct dt_object *o;
+	__u32 ost_idx;
+	unsigned int i, array_idx, ost_count;
+	int rc, stripe_num = 0;
+	int speed = 0;
 	struct pool_desc  *pool = NULL;
 	struct ost_pool   *osts;
+	int stripes_per_ost = 1;
+	bool overstriped = false;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
@@ -1359,7 +1380,11 @@ repeat_find:
 		GOTO(out, rc = -EINVAL);
 	}
 
-	for (i = 0; i < ost_count;
+	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+		stripes_per_ost =
+			(lod_comp->llc_stripe_count - 1)/ost_count + 1;
+
+	for (i = 0; i < ost_count * stripes_per_ost;
 			i++, array_idx = (array_idx + 1) % ost_count) {
 		ost_idx = osts->op_array[array_idx];
 
@@ -1372,10 +1397,15 @@ repeat_find:
 			continue;
 
 		/*
-		 * do not put >1 objects on a single OST
+		 * do not put >1 objects on a single OST, except for
+		 * overstriping, where it is intended
 		 */
-		if (lod_qos_is_ost_used(env, ost_idx, stripe_num))
-			continue;
+		if (lod_qos_is_ost_used(env, ost_idx, stripe_num)) {
+			if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+				overstriped = true;
+			else
+				continue;
+		}
 
 		/*
 		 * try not allocate on the OST used by other component
@@ -1437,6 +1467,13 @@ repeat_find:
 	       PFID(lu_object_fid(lod2lu_obj(lo))), stripe_num,
 	       lod_comp->llc_stripe_count);
 	rc = stripe_num == 0 ? -ENOSPC : -EFBIG;
+
+	/* If there are enough OSTs, a component with overstriping requessted
+	 * will not actually end up overstriped.  The comp should reflect this.
+	 */
+	if (rc == 0 && !overstriped)
+		lod_comp->llc_pattern &= ~LOV_PATTERN_OVERSTRIPING;
+
 out:
 	if (pool != NULL) {
 		up_read(&pool_tgt_rw_sem(pool));
@@ -1527,6 +1564,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	struct ost_pool *osts;
 	unsigned int i;
 	__u32 nfound, good_osts, stripe_count, stripe_count_min;
+	bool overstriped = false;
+	int stripes_per_ost = 1;
 	int rc = 0;
 	ENTRY;
 
@@ -1550,6 +1589,10 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	/* Detect -EAGAIN early, before expensive lock is taken. */
 	if (!lod_qos_is_usable(lod))
 		GOTO(out_nolock, rc = -EAGAIN);
+
+	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+		stripes_per_ost =
+			(lod_comp->llc_stripe_count - 1)/osts->op_count + 1;
 
 	/* Do actual allocation, use write lock here. */
 	down_write(&lod->lod_qos.lq_rw_sem);
@@ -1605,9 +1648,11 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (good_osts < stripe_count_min)
 		GOTO(out, rc = -EAGAIN);
 
-	/* We have enough osts */
-	if (good_osts < stripe_count)
-		stripe_count = good_osts;
+	/* If we do not have enough OSTs for the requested stripe count, do not
+	 * put more stripes per OST than requested.
+	 */
+	if (stripe_count / stripes_per_ost > good_osts)
+		stripe_count = good_osts * stripes_per_ost;
 
 	/* Find enough OSTs with weighted random allocation. */
 	nfound = 0;
@@ -1666,11 +1711,20 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 			QOS_DEBUG("stripe=%d to idx=%d\n", nfound, idx);
 			/*
-			 * do not put >1 objects on a single OST
+			 * do not put >1 objects on a single OST, except for
+			 * overstriping
 			 */
-			if (lod_qos_is_ost_used(env, idx, nfound) ||
-			    lod_comp_is_ost_used(env, lo, idx))
+			if ((lod_comp_is_ost_used(env, lo, idx)) &&
+			    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
 				continue;
+
+			if (lod_qos_is_ost_used(env, idx, nfound)) {
+				if (lod_comp->llc_pattern &
+				    LOV_PATTERN_OVERSTRIPING)
+					overstriped = true;
+				else
+					continue;
+			}
 
 			o = lod_qos_declare_object_on(env, lod, idx, th);
 			if (IS_ERR(o)) {
@@ -1718,6 +1772,12 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		rc = -EAGAIN;
 	}
 
+	/* If there are enough OSTs, a component with overstriping requessted
+	 * will not actually end up overstriped.  The comp should reflect this.
+	 */
+	if (rc == 0 && !overstriped)
+		lod_comp->llc_pattern &= ~LOV_PATTERN_OVERSTRIPING;
+
 out:
 	up_write(&lod->lod_qos.lq_rw_sem);
 
@@ -1749,7 +1809,7 @@ out_nolock:
  * \retval		the maximum usable stripe count
  */
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
-			   __u16 stripe_count)
+			   __u16 stripe_count, bool overstriping)
 {
 	__u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
 	/* max stripe count is based on OSD ea size */
@@ -1759,10 +1819,11 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 
 	if (!stripe_count)
 		stripe_count = lod->lod_desc.ld_default_stripe_count;
-	if (stripe_count > lod->lod_desc.ld_active_tgt_count)
-		stripe_count = lod->lod_desc.ld_active_tgt_count;
 	if (!stripe_count)
 		stripe_count = 1;
+	/* Overstriping allows more stripes than targets */
+	if (stripe_count > lod->lod_desc.ld_active_tgt_count && !overstriping)
+		stripe_count = lod->lod_desc.ld_active_tgt_count;
 
 	if (lo->ldo_is_composite) {
 		struct lod_layout_component *lod_comp;
@@ -2128,7 +2189,9 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		if (v1->lmm_pattern == 0)
 			v1->lmm_pattern = LOV_PATTERN_RAID0;
 		if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_RAID0 &&
-		    lov_pattern(v1->lmm_pattern) != LOV_PATTERN_MDT) {
+		    lov_pattern(v1->lmm_pattern) != LOV_PATTERN_MDT &&
+		    lov_pattern(v1->lmm_pattern) !=
+			(LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING)) {
 			CDEBUG(D_LAYOUT, "%s: invalid pattern: %x\n",
 			       lod2obd(d)->obd_name, v1->lmm_pattern);
 			GOTO(free_comp, rc = -EINVAL);
@@ -2172,7 +2235,8 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			}
 		}
 
-		if (lod_comp->llc_stripe_count > pool_tgt_count(pool))
+		if (lod_comp->llc_stripe_count > pool_tgt_count(pool) &&
+		    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
 			lod_comp->llc_stripe_count = pool_tgt_count(pool);
 
 		lod_pool_putref(pool);
@@ -2381,7 +2445,10 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		 */
 		lod_qos_statfs_update(env, d);
 		stripe_len = lod_get_stripe_count(d, lo,
-						  lod_comp->llc_stripe_count);
+						  lod_comp->llc_stripe_count,
+						  lod_comp->llc_pattern &
+						  LOV_PATTERN_OVERSTRIPING);
+
 		if (stripe_len == 0)
 			GOTO(out, rc = -ERANGE);
 		lod_comp->llc_stripe_count = stripe_len;

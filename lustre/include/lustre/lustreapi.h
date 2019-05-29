@@ -126,6 +126,8 @@ struct llapi_stripe_param {
 
 #define lsp_tgts	lsp_osts
 
+__u32 llapi_pattern_to_lov(uint64_t pattern);
+
 int llapi_file_open_param(const char *name, int flags, mode_t mode,
 			  const struct llapi_stripe_param *param);
 int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
@@ -656,8 +658,9 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
  * stored using RAID0.  That is, data will be split evenly and without
  * redundancy across all OSTs in the layout.
  */
-#define LLAPI_LAYOUT_RAID0	0ULL
-#define LLAPI_LAYOUT_MDT	2ULL
+#define LLAPI_LAYOUT_RAID0		0ULL
+#define LLAPI_LAYOUT_MDT		2ULL
+#define LLAPI_LAYOUT_OVERSTRIPING	4ULL
 
 /**
 * The layout includes a specific set of OSTs on which to allocate.

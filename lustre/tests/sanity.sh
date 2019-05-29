@@ -1533,6 +1533,112 @@ test_27b() {
 }
 run_test 27b "create and write to two stripe file"
 
+# 27c family tests specific striping, setstripe -o
+test_27ca() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test"
+	test_mkdir -p $DIR/$tdir
+	local osts="1"
+
+	$LFS setstripe -o $osts $DIR/$tdir/$tfile  || error "setstripe failed"
+	$LFS getstripe -i $DIR/$tdir/$tfile
+	[ $($LFS getstripe -i $DIR/$tdir/$tfile ) -eq $osts ] ||
+		error "stripe not on specified OST"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile  bs=1M count=4 || error "dd failed"
+}
+run_test 27ca "one stripe on specified OST"
+
+test_27cb() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test"
+	test_mkdir -p $DIR/$tdir
+	local osts="1,0"
+	$LFS setstripe -o $osts $DIR/$tdir/$tfile || error "setstripe failed"
+	local getstripe=$($LFS getstripe $DIR/$tdir/$tfile)
+	echo "$getstripe"
+
+	# Strip getstripe output to a space separated list of OSTs
+	local getstripe_osts=$(echo "$getstripe" | sed -e '1,/obdidx/d' |\
+		awk '{print $1}' | tr '\n' '\ ' | sed -e 's/[[:space:]]*$//')
+	[ "$getstripe_osts" = "${osts//,/ }" ] ||
+		error "stripes not on specified OSTs"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 || error "dd failed"
+}
+run_test 27cb "two stripes on specified OSTs"
+
+test_27cc() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test"
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+
+	test_mkdir -p $DIR/$tdir
+	local osts="0,0"
+	$LFS setstripe -o $osts $DIR/$tdir/$tfile || error "setstripe failed"
+	local getstripe=$($LFS getstripe $DIR/$tdir/$tfile)
+	echo "$getstripe"
+
+	# Strip getstripe output to a space separated list of OSTs
+	local getstripe_osts=$(echo "$getstripe" | sed -e '1,/obdidx/d' |\
+		awk '{print $1}' | tr '\n' '\ ' | sed -e 's/[[:space:]]*$//')
+	[ "$getstripe_osts" = "${osts//,/ }" ] ||
+		error "stripes not on specified OSTs"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 || error "dd failed"
+}
+run_test 27cc "two stripes on the same OST"
+
+test_27cd() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test"
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	test_mkdir -p $DIR/$tdir
+	local osts="0,1,1,0"
+	$LFS setstripe -o $osts $DIR/$tdir/$tfile || error "setstripe failed"
+	local getstripe=$($LFS getstripe $DIR/$tdir/$tfile)
+	echo "$getstripe"
+
+	# Strip getstripe output to a space separated list of OSTs
+	local getstripe_osts=$(echo "$getstripe" | sed -e '1,/obdidx/d' |\
+		awk '{print $1}' | tr '\n' '\ ' | sed -e 's/[[:space:]]*$//')
+	[ "$getstripe_osts" = "${osts//,/ }" ] ||
+		error "stripes not on specified OSTs"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 || error "dd failed"
+}
+run_test 27cd "four stripes on two OSTs"
+
+test_27ce() {
+	[[ $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
+		skip_env "too many osts, skipping"
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	# We do one more stripe than we have OSTs
+	[ $OSTCOUNT -ge 159 ] || large_xattr_enabled ||
+		skip_env "ea_inode feature disabled"
+
+	test_mkdir -p $DIR/$tdir
+	local osts=""
+	for i in $(seq 0 $OSTCOUNT);
+	do
+		osts=$osts"0"
+		if [ $i -ne $OSTCOUNT ]; then
+			osts=$osts","
+		fi
+	done
+	$LFS setstripe -o $osts $DIR/$tdir/$tfile || error "setstripe failed"
+	local getstripe=$($LFS getstripe $DIR/$tdir/$tfile)
+	echo "$getstripe"
+
+	# Strip getstripe output to a space separated list of OSTs
+	local getstripe_osts=$(echo "$getstripe" | sed -e '1,/obdidx/d' |\
+		awk '{print $1}' | tr '\n' '\ ' | sed -e 's/[[:space:]]*$//')
+	[ "$getstripe_osts" = "${osts//,/ }" ] ||
+		error "stripes not on specified OSTs"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 || error "dd failed"
+}
+run_test 27ce "more stripes than OSTs with -o"
+
 test_27d() {
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 0 -i -1 -S 0 $DIR/$tdir/$tfile ||
@@ -2188,7 +2294,8 @@ test_27B() { # LU-2523
 }
 run_test 27B "call setstripe on open unlinked file/rename victim"
 
-test_27C() { #LU-2871
+# 27C family tests full striping and overstriping
+test_27Ca() { #LU-2871
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	declare -a ost_idx
@@ -2224,7 +2331,143 @@ test_27C() { #LU-2871
 		done
 	done
 }
-run_test 27C "check full striping across all OSTs"
+run_test 27Ca "check full striping across all OSTs"
+
+test_27Cb() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	[[ $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
+		skip_env "too many osts, skipping"
+
+	test_mkdir -p $DIR/$tdir
+	local setcount=$(($OSTCOUNT * 2))
+	[ $setcount -ge 160 ] || large_xattr_enabled ||
+		skip_env "ea_inode feature disabled"
+
+	$LFS setstripe -C $setcount $DIR/$tdir/$tfile ||
+		error "setstripe failed"
+
+	local count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	[ $count -eq $setcount ] ||
+		error "stripe count $count, should be $setcount"
+
+	$LFS getstripe $DIR/$tdir/$tfile 2>&1 | grep "overstriped" ||
+		error "overstriped should be set in pattern"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 conv=notrunc ||
+		error "dd failed"
+}
+run_test 27Cb "more stripes than OSTs with -C"
+
+test_27Cc() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "need > 1 OST"
+
+	test_mkdir -p $DIR/$tdir
+	local setcount=$(($OSTCOUNT - 1))
+
+	[ $setcount -ge 160 ] || large_xattr_enabled ||
+		skip_env "ea_inode feature disabled"
+
+	$LFS setstripe -C $setcount $DIR/$tdir/$tfile ||
+		error "setstripe failed"
+
+	local count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	[ $count -eq $setcount ] ||
+		error "stripe count $count, should be $setcount"
+
+	$LFS getstripe $DIR/$tdir/$tfile 2>&1 | grep "overstriped" &&
+		error "overstriped should not be set in pattern"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 conv=notrunc ||
+		error "dd failed"
+}
+run_test 27Cc "fewer stripes than OSTs does not set overstriping"
+
+test_27Cd() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "need > 1 OST"
+	large_xattr_enabled || skip_env "ea_inode feature disabled"
+
+	test_mkdir -p $DIR/$tdir
+	local setcount=$LOV_MAX_STRIPE_COUNT
+
+	$LFS setstripe -C $setcount $DIR/$tdir/$tfile ||
+		error "setstripe failed"
+
+	local count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	[ $count -eq $setcount ] ||
+		error "stripe count $count, should be $setcount"
+
+	$LFS getstripe $DIR/$tdir/$tfile 2>&1 | grep "overstriped" ||
+		error "overstriped should be set in pattern"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 conv=notrunc ||
+		error "dd failed"
+
+	rm -f $DIR/$tdir/$tfile || error "Delete $tfile failed"
+}
+run_test 27Cd "test maximum stripe count"
+
+test_27Ce() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	test_mkdir -p $DIR/$tdir
+
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 || error "pool_add_targets failed"
+
+	local setcount=8
+
+	$LFS setstripe  -C $setcount -p "$TESTNAME" $DIR/$tdir/$tfile ||
+		error "setstripe failed"
+
+	local count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	[ $count -eq $setcount ] ||
+		error "stripe count $count, should be $setcount"
+
+	$LFS getstripe $DIR/$tdir/$tfile 2>&1 | grep "overstriped" ||
+		error "overstriped should be set in pattern"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 conv=notrunc ||
+		error "dd failed"
+
+	rm -f $DIR/$tdir/$tfile || error "Delete $tfile failed"
+}
+run_test 27Ce "test pool with overstriping"
+
+test_27Cf() {
+	[[ $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ]] ||
+		skip "server does not support overstriping"
+	[[ $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
+		skip_env "too many osts, skipping"
+
+	test_mkdir -p $DIR/$tdir
+
+	local setcount=$(($OSTCOUNT * 2))
+	[ $setcount -ge 160 ] || large_xattr_enabled ||
+		skip_env "ea_inode feature disabled"
+
+	$LFS setstripe  -C $setcount $DIR/$tdir/ ||
+		error "setstripe failed"
+
+	echo 1 > $DIR/$tdir/$tfile
+
+	local count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	[ $count -eq $setcount ] ||
+		error "stripe count $count, should be $setcount"
+
+	$LFS getstripe $DIR/$tdir/$tfile 2>&1 | grep "overstriped" ||
+		error "overstriped should be set in pattern"
+
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=4 conv=notrunc ||
+		error "dd failed"
+
+	rm -f $DIR/$tdir/$tfile || error "Delete $tfile failed"
+}
+run_test 27Cf "test default inheritance with overstriping"
 
 test_27D() {
 	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
@@ -2252,6 +2495,9 @@ test_27D() {
 	[ $MDS1_VERSION -lt $(version_code 2.9.55) ] ||
 		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
 			skip27D+=" -s 30,31"
+	[[ ! $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ||
+	  $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
+		skip27D+=" -s 32,33"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
 
@@ -6965,9 +7211,9 @@ test_65d() {
 
 	if [[ $STRIPECOUNT -le 0 ]]; then
 		sc=1
-	elif [[ $STRIPECOUNT -gt 2000 ]]; then
-#LOV_MAX_STRIPE_COUNT is 2000
-		[[ $OSTCOUNT -gt 2000 ]] && sc=2000 || sc=$(($OSTCOUNT - 1))
+	elif [[ $STRIPECOUNT -gt $LOV_MAX_STRIPE_COUNT ]]; then
+		[[ $OSTCOUNT -gt $LOV_MAX_STRIPE_COUNT ]] &&
+			sc=$LOV_MAX_STRIPE_COUNT || sc=$(($OSTCOUNT - 1))
 	else
 		sc=$(($STRIPECOUNT - 1))
 	fi

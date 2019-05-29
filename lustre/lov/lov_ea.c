@@ -81,33 +81,44 @@ static loff_t lov_tgt_maxbytes(struct lov_tgt_desc *tgt)
 static int lsm_lmm_verify_v1v3(struct lov_mds_md *lmm, size_t lmm_size,
 			       u16 stripe_count)
 {
+	int rc = 0;
+
 	if (stripe_count > LOV_V1_INSANE_STRIPE_COUNT) {
-		CERROR("bad stripe count %d\n", stripe_count);
+		rc = -EINVAL;
+		CERROR("lov: bad stripe count %d: rc = %d\n",
+		       stripe_count, rc);
 		lov_dump_lmm_common(D_WARNING, lmm);
-		return -EINVAL;
+		goto out;
 	}
 
 	if (lmm_oi_id(&lmm->lmm_oi) == 0) {
-		CERROR("zero object id\n");
+		rc = -EINVAL;
+		CERROR("lov: zero object id: rc = %d\n", rc);
 		lov_dump_lmm_common(D_WARNING, lmm);
-		return -EINVAL;
+		goto out;
 	}
 
 	if (lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_MDT &&
-	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_RAID0) {
-		CERROR("bad striping pattern\n");
+	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_RAID0 &&
+	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) !=
+			(LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING)) {
+		rc = -EINVAL;
+		CERROR("lov: unrecognized striping pattern: rc = %d\n", rc);
 		lov_dump_lmm_common(D_WARNING, lmm);
-		return -EINVAL;
+		goto out;
 	}
 
 	if (lmm->lmm_stripe_size == 0 ||
 	    (le32_to_cpu(lmm->lmm_stripe_size)&(LOV_MIN_STRIPE_SIZE-1)) != 0) {
-		CERROR("bad stripe size %u\n",
-		       le32_to_cpu(lmm->lmm_stripe_size));
+		rc = -EINVAL;
+		CERROR("lov: bad stripe size %u: rc = %d\n",
+		       le32_to_cpu(lmm->lmm_stripe_size), rc);
 		lov_dump_lmm_common(D_WARNING, lmm);
-		return -EINVAL;
+		goto out;
 	}
-	return 0;
+
+out:
+	return rc;
 }
 
 static void lsme_free(struct lov_stripe_md_entry *lsme)

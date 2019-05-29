@@ -49,6 +49,7 @@
 #include <sys/stat.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <sys/ioctl.h>
 
 #define ERROR(fmt, ...)							\
 	fprintf(stderr, "%s: %s:%d: %s: " fmt "\n",			\
@@ -1529,7 +1530,99 @@ void test31(void)
 		"s: %"PRIu64", e: %"PRIu64"", s, e);
 }
 
-#define TEST_DESC_LEN	50
+#define T32FILE			"t32"
+#define T32_STRIPE_COUNT	(num_osts*2)
+#define T32_DESC		"Test overstriping with layout_file_create"
+void test32(void)
+{
+	int rc;
+	int fd;
+	uint64_t count;
+	struct llapi_layout *layout = llapi_layout_alloc();
+	void *lmdbuf = NULL;
+	struct lov_user_md *lmd;
+	char path[PATH_MAX];
+
+	ASSERTF(layout != NULL, "errno %d", errno);
+
+	/* Maximum possible, to be on the safe side - num_osts could be large */
+	lmdbuf = malloc(XATTR_SIZE_MAX);
+	ASSERTF(lmdbuf != NULL, "errno %d", errno);
+	lmd = lmdbuf;
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T32FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	/* stripe count */
+	rc = llapi_layout_stripe_count_set(layout, T32_STRIPE_COUNT);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	rc = llapi_layout_stripe_count_get(layout, &count);
+	ASSERTF(rc == 0 && count == T32_STRIPE_COUNT, "%"PRIu64" != %d", count,
+		T32_STRIPE_COUNT);
+
+	rc = llapi_layout_pattern_set(layout, LLAPI_LAYOUT_OVERSTRIPING);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* create */
+	fd = llapi_layout_file_create(path, 0, 0660, layout);
+	ASSERTF(fd >= 0, "path = %s, errno = %d", path, errno);
+
+	rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE_NEW, lmdbuf);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	count = lmd->lmm_stripe_count;
+	ASSERTF(count == T32_STRIPE_COUNT,
+		"stripe count (%"PRIu64") not equal to expected (%d)",
+		count, T32_STRIPE_COUNT);
+
+	rc = close(fd);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	llapi_layout_free(layout);
+	free(lmdbuf);
+}
+
+#define T33FILE			"t33"
+#define T33_STRIPE_COUNT	(num_osts*2)
+#define T33_DESC		"Test overstriping with llapi_file_open"
+void test33(void)
+{
+	int rc;
+	int fd;
+	uint64_t count;
+	void *lmdbuf = NULL;
+	struct lov_user_md *lmd;
+	char path[PATH_MAX];
+
+	/* Maximum possible, to be on the safe side - num_osts could be large */
+	lmdbuf = malloc(XATTR_SIZE_MAX);
+	ASSERTF(lmdbuf != NULL, "errno %d", errno);
+	lmd = lmdbuf;
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T33FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	fd = llapi_file_open(path, O_CREAT | O_RDWR, 0660, 0, -1, num_osts*2,
+			     LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING);
+	ASSERTF(fd >= 0, "path = %s, errno = %d", path, errno);
+
+	rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE_NEW, lmdbuf);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	count = lmd->lmm_stripe_count;
+	ASSERTF(count == T33_STRIPE_COUNT,
+		"stripe count (%"PRIu64") not equal to expected (%d)",
+		count, T33_STRIPE_COUNT);
+
+	rc = close(fd);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	free(lmdbuf);
+}
+
+#define TEST_DESC_LEN	80
 struct test_tbl_entry {
 	void (*tte_fn)(void);
 	char tte_desc[TEST_DESC_LEN];
@@ -1569,6 +1662,8 @@ static struct test_tbl_entry test_tbl[] = {
 	{ .tte_fn = &test29, .tte_desc = T29_DESC, .tte_skip = false },
 	{ .tte_fn = &test30, .tte_desc = T30_DESC, .tte_skip = false },
 	{ .tte_fn = &test31, .tte_desc = T31_DESC, .tte_skip = false },
+	{ .tte_fn = &test32, .tte_desc = T32_DESC, .tte_skip = false },
+	{ .tte_fn = &test32, .tte_desc = T33_DESC, .tte_skip = false },
 };
 
 #define NUM_TESTS	(sizeof(test_tbl) / sizeof(struct test_tbl_entry))
@@ -1713,5 +1808,6 @@ int main(int argc, char *argv[])
 		if (test(tst->tte_fn, tst->tte_desc, tst->tte_skip, i) != 0)
 			rc++;
 	}
+
 	return rc;
 }

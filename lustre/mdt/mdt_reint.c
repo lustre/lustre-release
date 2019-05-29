@@ -681,13 +681,23 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 		/* LU-10286: compatibility check for FLR.
 		 * Please check the comment in mdt_finish_open() for details */
-		if (!exp_connect_flr(info->mti_exp)) {
+		if (!exp_connect_flr(info->mti_exp) ||
+		    !exp_connect_overstriping(info->mti_exp)) {
 			rc = mdt_big_xattr_get(info, mo, XATTR_NAME_LOV);
 			if (rc < 0 && rc != -ENODATA)
 				GOTO(out_put, rc);
 
-			if (rc > 0 && mdt_lmm_is_flr(info->mti_big_lmm))
-				GOTO(out_put, rc = -EOPNOTSUPP);
+			if (!exp_connect_flr(info->mti_exp)) {
+				if (rc > 0 &&
+				    mdt_lmm_is_flr(info->mti_big_lmm))
+					GOTO(out_put, rc = -EOPNOTSUPP);
+			}
+
+			if (!exp_connect_overstriping(info->mti_exp)) {
+				if (rc > 0 &&
+				    mdt_lmm_is_overstriping(info->mti_big_lmm))
+					GOTO(out_put, rc = -EOPNOTSUPP);
+			}
 		}
 
 		/* For truncate, the file size sent from client

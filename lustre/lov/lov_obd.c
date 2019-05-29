@@ -696,10 +696,10 @@ void lov_fix_desc_stripe_count(__u32 *val)
 void lov_fix_desc_pattern(__u32 *val)
 {
         /* from lov_setstripe */
-        if ((*val != 0) && (*val != LOV_PATTERN_RAID0)) {
-                LCONSOLE_WARN("Unknown stripe pattern: %#x\n", *val);
-                *val = 0;
-        }
+	if ((*val != 0) && !lov_pattern_supported_normal_comp(*val)) {
+		LCONSOLE_WARN("lov: Unknown stripe pattern: %#x\n", *val);
+		*val = 0;
+	}
 }
 
 void lov_fix_desc_qos_maxage(__u32 *val)
