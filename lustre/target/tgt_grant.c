@@ -605,6 +605,14 @@ static void tgt_grant_shrink(struct obd_export *exp, struct obdo *oa,
 
 	grant_shrink = oa->o_grant;
 
+	if (ted->ted_grant < grant_shrink) {
+		CDEBUG(D_CACHE,
+		       "%s: cli %s/%p wants %lu shrinked > grant %lu\n",
+		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
+		       grant_shrink, ted->ted_grant);
+		grant_shrink = ted->ted_grant;
+	}
+
 	ted->ted_grant -= grant_shrink;
 	tgd->tgd_tot_granted -= grant_shrink;
 
