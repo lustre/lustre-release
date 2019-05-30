@@ -237,6 +237,8 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
  * given an extent in an lov and a stripe, calculate the extent of the stripe
  * that is contained within the lov extent.  this returns true if the given
  * stripe does intersect with the lov extent.
+ *
+ * Closed interval [@obd_start, @obd_end] will be returned.
  */
 int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
 			  struct lu_extent *ext, u64 *obd_start, u64 *obd_end)
