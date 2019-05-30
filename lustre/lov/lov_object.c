@@ -1646,7 +1646,7 @@ int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 	if (lun_start == lun_end)
 		return 0;
 
-	req_fm_len = obd_object_end - lun_start;
+	req_fm_len = obd_object_end - lun_start + 1;
 	fs->fs_fm->fm_length = 0;
 	len_mapped_single_call = 0;
 
@@ -1689,7 +1689,7 @@ int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 			fs->fs_fm->fm_mapped_extents = 1;
 
 			fm_ext[0].fe_logical = lun_start;
-			fm_ext[0].fe_length = obd_object_end - lun_start;
+			fm_ext[0].fe_length = obd_object_end - lun_start + 1;
 			fm_ext[0].fe_flags |= FIEMAP_EXTENT_UNKNOWN;
 
 			goto inactive_tgt;

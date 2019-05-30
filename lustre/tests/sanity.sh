@@ -20297,6 +20297,15 @@ test_812() {
 }
 run_test 812 "do not drop reqs generated when imp is going to idle (LU-11951)"
 
+test_814()
+{
+	dd of=$DIR/$tfile seek=128 bs=1k < /dev/null
+	echo -n y >> $DIR/$tfile
+	cp --sparse=always $DIR/$tfile $DIR/${tfile}.cp || error "copy failed"
+	diff $DIR/$tfile $DIR/${tfile}.cp || error "files should be same"
+}
+run_test 814 "sparse cp works as expected (LU-12361)"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
