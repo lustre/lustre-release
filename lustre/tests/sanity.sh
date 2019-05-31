@@ -19634,14 +19634,17 @@ test_420()
 	umask 0000
 	mkdir -m03777 $dir/testdir
 	ls -dn $dir/testdir
-	local dirperms=$(ls -dn $dir/testdir | awk '{print $1}')
+	# Need to remove trailing '.' when SELinux is enabled
+	local dirperms=$(ls -dn $dir/testdir |
+			 awk '{ sub(/\.$/, "", $1); print $1}')
 	[ $dirperms == "drwxrwsrwt" ] ||
 		error "incorrect perms on $dir/testdir"
 
 	su - $uname -c "PATH=$LUSTRE/tests:\$PATH; \
 		openfile -f O_RDONLY:O_CREAT -m 02755 $dir/testdir/testfile"
 	ls -n $dir/testdir/testfile
-	local fileperms=$(ls -n $dir/testdir/testfile | awk '{print $1}')
+	local fileperms=$(ls -n $dir/testdir/testfile |
+			  awk '{ sub(/\.$/, "", $1); print $1}')
 	[ $fileperms == "-rwxr-xr-x" ] ||
 		error "incorrect perms on $dir/testdir/testfile"
 
