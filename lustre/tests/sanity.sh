@@ -8465,12 +8465,14 @@ test_101c() {
 	cancel_lru_locks osc
 	$LCTL set_param osc.*.rpc_stats 0
 	$READS -f $DIR/$tfile -s$FILE_LENGTH -b$rsize -n$nreads -t 180
+	$LCTL get_param osc.*.rpc_stats
 	for osc_rpc_stats in $($LCTL get_param -N osc.*.rpc_stats); do
 		local stats=$($LCTL get_param -n $osc_rpc_stats)
 		local lines=$(echo "$stats" | awk 'END {print NR;}')
 		local size
 
 		if [ $lines -le 20 ]; then
+			echo "continue debug"
 			continue
 		fi
 		for size in 1 2 4 8; do

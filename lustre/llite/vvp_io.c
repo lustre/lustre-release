@@ -817,6 +817,13 @@ static int vvp_io_read_start(const struct lu_env *env,
 		vio->vui_ra_valid = true;
 		vio->vui_ra_start = cl_index(obj, pos);
 		vio->vui_ra_count = cl_index(obj, tot + PAGE_SIZE - 1);
+		/* If both start and end are unaligned, we read one more page
+		 * than the index math suggests. */
+		if (pos % PAGE_SIZE != 0 && (pos + tot) % PAGE_SIZE != 0)
+			vio->vui_ra_count++;
+
+		CDEBUG(D_READA, "tot %ld, ra_start %lu, ra_count %lu\n", tot,
+		       vio->vui_ra_start, vio->vui_ra_count);
 	}
 
 	/* BUG: 5972 */
