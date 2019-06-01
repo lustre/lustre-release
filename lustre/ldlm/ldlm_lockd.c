@@ -3237,10 +3237,12 @@ void ldlm_exit(void)
 	if (ldlm_refcount)
 		CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
 	kmem_cache_destroy(ldlm_resource_slab);
-	/* ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
-	 * synchronize_rcu() to wait a grace period elapsed, so that
-	 * ldlm_lock_free() get a chance to be called. */
-	synchronize_rcu();
+	/*
+	 * ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
+	 * rcu_barrier() to wait all outstanding RCU callbacks to complete,
+	 * so that ldlm_lock_free() get a chance to be called.
+	 */
+	rcu_barrier();
 	kmem_cache_destroy(ldlm_lock_slab);
 	kmem_cache_destroy(ldlm_interval_slab);
 	kmem_cache_destroy(ldlm_interval_tree_slab);

@@ -183,6 +183,13 @@ static void __exit lustre_exit(void)
 	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 	vvp_global_fini();
 
+#ifdef HAVE_INODE_I_RCU
+	/*
+	 * Make sure all delayed rcu free inodes are flushed before we
+	 * destroy cache.
+	 */
+	rcu_barrier();
+#endif
 	kmem_cache_destroy(ll_inode_cachep);
 	kmem_cache_destroy(ll_file_data_slab);
 }
