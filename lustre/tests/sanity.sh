@@ -8667,7 +8667,6 @@ cleanup_101a() {
 
 test_101a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $MDSCOUNT -ge 2 ] && skip_env "needs < 2 MDTs" #LU-4322
 
 	local s
 	local discard
@@ -8692,9 +8691,12 @@ test_101a() {
 	done
 	cleanup_101a
 
-	if [[ $(($discard * 10)) -gt $nreads ]]; then
-		$LCTL get_param osc.*-osc*.rpc_stats
-		$LCTL get_param llite.*.read_ahead_stats
+	$LCTL get_param osc.*-osc*.rpc_stats
+	$LCTL get_param llite.*.read_ahead_stats
+
+	# Discard is generally zero, but sometimes a few random reads line up
+	# and trigger larger readahead, which is wasted & leads to discards.
+	if [[ $(($discard)) -gt $nreads ]]; then
 		error "too many ($discard) discarded pages"
 	fi
 	rm -f $DIR/$tfile || true
