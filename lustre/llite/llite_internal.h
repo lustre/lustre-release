@@ -349,6 +349,9 @@ static inline struct pcc_inode *ll_i2pcci(struct inode *inode)
 	return ll_i2info(inode)->lli_pcc_inode;
 }
 
+/* default to use at least 16M for fast read if possible */
+#define RA_REMAIN_WINDOW_MIN			MiB_TO_PAGES(16UL)
+
 /* default to about 64M of readahead on a given system. */
 #define SBI_DEFAULT_READAHEAD_MAX		MiB_TO_PAGES(64UL)
 
