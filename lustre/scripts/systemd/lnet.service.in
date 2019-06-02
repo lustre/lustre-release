@@ -2,7 +2,7 @@
 Description=lnet management
 
 Requires=network-online.target
-After=network-online.target openibd.service rdma.service
+After=network-online.target openibd.service rdma.service opa.service
 
 ConditionPathExists=!/proc/sys/lnet/
 
