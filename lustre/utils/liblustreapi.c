@@ -2629,6 +2629,7 @@ enum lov_dump_flags {
 	LDF_INDENT	= 0x0004,
 	LDF_SKIP_OBJS	= 0x0008,
 	LDF_YAML	= 0x0010,
+	LDF_EXTENSION	= 0x0020,
 };
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
@@ -2642,6 +2643,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	bool indent = flags & LDF_INDENT;
 	bool yaml = flags & LDF_YAML;
 	bool skip_objs = flags & LDF_SKIP_OBJS;
+	bool extension = flags & LDF_EXTENSION;
 	char *prefix = is_dir ? "" : "lmm_";
 	char *separator = "";
 	char *space = indent ? "      " : "";
@@ -2725,12 +2727,12 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 						    " stripe count.");
 			} else {
 				llapi_printf(LLAPI_MSG_NORMAL, "%d",
-					     lum->lmm_stripe_count ==
-					     (typeof(lum->lmm_stripe_count))(-1)
-					     ? -1 : lum->lmm_stripe_count);
+					     extension ? 0 :
+					     (__s16)lum->lmm_stripe_count);
 			}
 		} else {
 			llapi_printf(LLAPI_MSG_NORMAL, "%hd",
+				     extension ? 0 :
 				     (__s16)lum->lmm_stripe_count);
 		}
 		if (!yaml && is_dir)
@@ -2741,7 +2743,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 
 	if (verbose & VERBOSE_STRIPE_SIZE) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_STRIPE_SIZE)
+		if (verbose & ~VERBOSE_STRIPE_SIZE && extension)
+			llapi_printf(LLAPI_MSG_NORMAL, "%s%sextension_size: ",
+				     space, prefix);
+		else if (verbose & ~VERBOSE_STRIPE_SIZE)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_size:   ",
 				     space, prefix);
 		if (is_dir && !is_raw && lum->lmm_stripe_size == 0) {
@@ -2755,7 +2760,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 					    "Cannot determine default"
 					    " stripe size.");
 		} else {
-			llapi_printf(LLAPI_MSG_NORMAL, "%u",
+			/* Extension size is in KiB */
+			llapi_printf(LLAPI_MSG_NORMAL, "%llu",
+				     extension ?
+				     lum->lmm_stripe_size * SEL_UNIT_SIZE :
 				     lum->lmm_stripe_size);
 		}
 		if (!yaml && is_dir)
@@ -3393,7 +3401,7 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 	struct lov_user_md_v1 *v1;
 	char pool_name[LOV_MAXPOOLNAME + 1];
 	int obdindex = param->fp_obd_index;
-	int i, j, match;
+	int i, j, match, ext;
 	bool obdstripe = false;
 	__u16 mirror_index = 0;
 	__u16 mirror_id = 0;
@@ -3521,9 +3529,10 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		objects = lov_v1v3_objects(v1);
 		lov_v1v3_pool_name(v1, pool_name);
 
+		ext = entry->lcme_flags & LCME_FL_EXTENSION ? LDF_EXTENSION : 0;
 		lov_dump_user_lmm_v1v3(v1, pool_name, objects, path, obdindex,
 				       param->fp_max_depth, param->fp_verbose,
-				       flags);
+				       flags | ext);
 	}
 	if (print_last_init_comp(param)) {
 		/**
@@ -3542,9 +3551,11 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		objects = lov_v1v3_objects(v1);
 		lov_v1v3_pool_name(v1, pool_name);
 
+		entry = &comp_v1->lcm_entries[i];
+		ext = entry->lcme_flags & LCME_FL_EXTENSION ? LDF_EXTENSION : 0;
 		lov_dump_user_lmm_v1v3(v1, pool_name, objects, path, obdindex,
 				       param->fp_max_depth, param->fp_verbose,
-				       flags);
+				       flags | ext);
 	}
 }
 

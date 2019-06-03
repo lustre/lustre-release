@@ -1111,7 +1111,6 @@ static int lfs_component_del(char *fname, __u32 comp_id,
 	if ((flags && comp_id) || (!flags && !comp_id))
 		return -EINVAL;
 
-	/* LCME_FL_INIT is the only supported flag in PFL */
 	if (flags) {
 		if (flags & ~LCME_KNOWN_FLAGS) {
 			fprintf(stderr,
@@ -2099,6 +2098,7 @@ static int parse_targets(__u32 *tgts, int size, int offset, char *arg,
 struct lfs_setstripe_args {
 	unsigned long long	 lsa_comp_end;
 	unsigned long long	 lsa_stripe_size;
+	unsigned long long	 lsa_extension_size;
 	long long		 lsa_stripe_count;
 	long long		 lsa_stripe_off;
 	__u32			 lsa_comp_flags;
@@ -2107,6 +2107,7 @@ struct lfs_setstripe_args {
 	unsigned int		 lsa_mirror_count;
 	int			 lsa_nr_tgts;
 	bool			 lsa_first_comp;
+	bool			 lsa_extension_comp;
 	__u32			*lsa_tgts;
 	char			*lsa_pool_name;
 };
@@ -2180,8 +2181,10 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 {
 	struct llapi_layout *layout = *composite;
 	uint64_t prev_end = 0;
+	uint64_t size;
 	int i = 0, rc;
 
+new_comp:
 	if (layout == NULL) {
 		layout = llapi_layout_alloc();
 		if (layout == NULL) {
@@ -2190,6 +2193,7 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 			return -ENOMEM;
 		}
 		*composite = layout;
+		lsa->lsa_first_comp = true;
 	} else {
 		uint64_t start;
 
@@ -2215,18 +2219,37 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 			return rc;
 		}
 	}
-	/* reset lsa_first_comp */
-	lsa->lsa_first_comp = false;
+
+	rc = llapi_layout_comp_flags_set(layout, lsa->lsa_comp_flags);
+	if (rc) {
+		fprintf(stderr, "Set flags 0x%x failed: %s\n",
+			lsa->lsa_comp_flags, strerror(errno));
+		return rc;
+	}
 
 	if (set_extent) {
+		uint64_t comp_end = lsa->lsa_comp_end;
+
+		/* Extension space handling:
+		 * If this is the first component, length is extension_size.
+		 * If not, it is zero length, so it can be removed if there is
+		 * insufficient space to extend it.
+		 */
+		if (lsa->lsa_extension_comp && lsa->lsa_first_comp)
+			comp_end = prev_end + lsa->lsa_extension_size;
+		else if (lsa->lsa_extension_comp)
+			comp_end = prev_end;
+
 		rc = llapi_layout_comp_extent_set(layout, prev_end,
-						  lsa->lsa_comp_end);
+						  comp_end);
 		if (rc) {
-			fprintf(stderr, "Set extent [%lu, %llu) failed. %s\n",
-				prev_end, lsa->lsa_comp_end, strerror(errno));
+			fprintf(stderr, "Set extent [%lu, %lu) failed. %s\n",
+				prev_end, comp_end, strerror(errno));
 			return rc;
 		}
 	}
+	/* reset lsa_first_comp */
+	lsa->lsa_first_comp = false;
 
 	/* Data-on-MDT component setting */
 	if (lsa->lsa_pattern == LLAPI_LAYOUT_MDT) {
@@ -2280,10 +2303,17 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		}
 	}
 
-	rc = llapi_layout_stripe_size_set(layout, lsa->lsa_stripe_size);
+	size = lsa->lsa_comp_flags & LCME_FL_EXTENSION ?
+		lsa->lsa_extension_size : lsa->lsa_stripe_size;
+
+	if (lsa->lsa_comp_flags & LCME_FL_EXTENSION)
+		rc = llapi_layout_extension_size_set(layout, size);
+	else
+		rc = llapi_layout_stripe_size_set(layout, size);
+
 	if (rc) {
-		fprintf(stderr, "Set stripe size %llu failed: %s\n",
-			lsa->lsa_stripe_size, strerror(errno));
+		fprintf(stderr, "Set stripe size %lu failed: %s\n",
+			size, strerror(errno));
 		return rc;
 	}
 
@@ -2291,13 +2321,6 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 	if (rc) {
 		fprintf(stderr, "Set stripe count %lld failed: %s\n",
 			lsa->lsa_stripe_count, strerror(errno));
-		return rc;
-	}
-
-	rc = llapi_layout_comp_flags_set(layout, lsa->lsa_comp_flags);
-	if (rc) {
-		fprintf(stderr, "Set flags 0x%x failed: %s\n",
-			lsa->lsa_comp_flags, strerror(errno));
 		return rc;
 	}
 
@@ -2340,6 +2363,13 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		fprintf(stderr, "Set ost index %d failed. %s\n",
 			i, strerror(errno));
 		return rc;
+	}
+
+	/* Create the second, virtual component of extension space */
+	if (lsa->lsa_extension_comp) {
+		lsa->lsa_comp_flags |= LCME_FL_EXTENSION;
+		lsa->lsa_extension_comp = false;
+		goto new_comp;
 	}
 
 	return 0;
@@ -2806,6 +2836,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
 	{ .val = 'x',	.name = "xattr",	.has_arg = required_argument },
 	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument },
+	{ .val = 'z',   .name = "ext-size",	.has_arg = required_argument},
+	{ .val = 'z',   .name = "extension-size", .has_arg = required_argument},
 	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);
@@ -2817,7 +2849,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
 	while ((c = getopt_long(argc, argv,
-				"bc:C:dDE:f:H:i:I:m:N::no:p:L:s:S:vx:y:",
+				"bc:C:dDE:f:H:i:I:m:N::no:p:L:s:S:vx:y:z:",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -2895,7 +2927,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				result = -EINVAL;
 				goto usage_error;
 			}
-			if (last_mirror->m_flags & ~LCME_USER_FLAGS) {
+			if (last_mirror->m_flags & ~LCME_USER_MIRROR_FLAGS) {
 				fprintf(stderr,
 					"%s: unsupported mirror flags: %s\n",
 					progname, optarg);
@@ -2990,9 +3022,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			if (lsa.lsa_comp_end != 0) {
 				result = comp_args_to_layout(lpp, &lsa, true);
 				if (result) {
-					fprintf(stderr,
-						"%s %s: invalid layout\n",
-						progname, argv[0]);
+					fprintf(stderr, "%s: invalid layout\n",
+						progname);
 					goto usage_error;
 				}
 
@@ -3232,6 +3263,19 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			from_yaml = true;
 			template = optarg;
 			break;
+		case 'z':
+			result = llapi_parse_size(optarg,
+						  &lsa.lsa_extension_size,
+						  &size_units, 0);
+			if (result) {
+				fprintf(stderr,
+					"%s %s: invalid extension size '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
+			}
+
+			lsa.lsa_extension_comp = true;
+			break;
 		default:
 			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
 				progname, argv[0], argv[optind - 1]);
@@ -3285,8 +3329,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	if (lsa.lsa_comp_end != 0) {
 		result = comp_args_to_layout(lpp, &lsa, true);
-		if (result)
+		if (result) {
+			fprintf(stderr, "error: %s: invalid layout\n",
+				progname);
+			result = -EINVAL;
 			goto error;
+		}
 	}
 
 	if (mirror_flags & MF_NO_VERIFY) {
@@ -3305,9 +3353,6 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		}
 	}
 
-	/* Only LCME_FL_INIT flags is used in PFL, and it shouldn't be
-	 * altered by user space tool, so we don't need to support the
-	 * --component-set for this moment. */
 	if (comp_set && !comp_id) {
 		fprintf(stderr, "%s %s: --component-set doesn't have component-id set\n",
 			progname, argv[0]);
@@ -3374,8 +3419,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		result = adjust_first_extent(fname, layout);
 		if (result == -ENODATA)
 			comp_add = 0;
-		else if (result != 0)
+		else if (result != 0) {
+			fprintf(stderr, "error: %s: invalid layout\n",
+				progname);
 			goto error;
+		}
 	}
 
 	if (from_yaml && from_copy) {

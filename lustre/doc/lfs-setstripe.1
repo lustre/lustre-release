@@ -62,9 +62,9 @@ or replace the default file layout on an existing
 .br
 Create a new composite
 .I file
-with one or more component layouts, or set or replace the default file layout
-on an existing
-.IR directory .
+with one or more component layouts (where \fIend\fR marks the end of the
+current component), or set or replace the default file layout on an existing
+.IR directory.
 .TP
 .B lfs setstripe --component-add -E \fIend1\fR [\fISTRIPE_OPTIONS\fR] \
 ... <\fIfile\fR>
@@ -321,6 +321,28 @@ specified component, or use
 to add more components to the end of the file.
 .RE
 .TP
+.B -z, --extension-size, ext-size\fR <\fIext_size\fR>
+This option modifies the \fB-E\fR option, components which have this
+option specified are created as pairs of components, extendable and
+extension ones.
+.PP
+.RS
+The extendable component starts at offset 0 if this is the first
+component of the file. In this case it ends at offset \fIext_size\fR and
+it gets the flag \fBinit\fR (initialized). The extendable component starts
+at the end of the previous component if this is not the first component of
+the file. In this case it ends at the same offset (0-length component).
+.PP
+The extension component covers the rest of the specified region up to
+the \fIend\fR specified by \fB-E\fR option and gets the flag \fBextension\fR.
+This component covers the space reserved for the extendable component but
+not used immediately, the later extension of the extendable component is done
+by \fIext_size\fR each time until the extension component is used up. This is
+used to control the space on OSTs the stripe is located on, in case one of
+them is low on space, the remaining extension component region is added to the
+next component.
+.RE
+.TP
 .B --component-add
 Add components to the end an existing composite file.  It is not possible
 to add components incrementally to the default directory layout, since the
@@ -452,6 +474,35 @@ the first (flash) replica for both reads and writes.
 This creates a file with composite layout, the component has 1 stripe and
 covers [0, 4MiB), the second component has 4 stripes and covers [4MiB, 64MiB),
 the last component stripes over all available OSTs and covers [64MiB, EOF).
+.TP
+.B lfs setstripe -E -1 -z 64M /mnt/lustre/file1
+This creates a file with a composite layout, the component one covers [0, 64MiB)
+and the second component the rest [64MiB, EOF) originally. Once written beyond
+64MiB the component one is extended to [0, 128MiB), once written beyond 128MiB
+it is extended to [0, 192MiB), etc; the second component is shortened
+appropriately.
+.PP
+.RS
+When one of the OSTs of the first component layout is low on space, e.g. while
+writing beyond 192MiB, the first component is left as [0, 192MiB), and a new
+component is allocated between them, its layout repeats the first component
+layout but initialized on different OSTs so that the full OSTs are avoided.
+It is allocated and immediately extended to [192MiB, 256MiB), the following
+extension component is shortended again.
+.RE
+.TP
+.B lfs setstripe -E 1G -z 64M -E 100G -z 256M -E -1 -z 1G /mnt/lustre/file1
+This creates a file with a composite layout, the component one covers [0,
+64MiB), the third component covers [1G, 1G), the fifth component covers
+[100GiB, 100GiB) originally. The second, fourth and sixth extension components
+cover the left space accordingly. The process of writing is similar to above,
+but when one of the OSTs of the first component layout is low on space, e.g.
+while writing beyond 192MiB in the example above, the first component is left
+as [0, 192MiB), the second (extension) component is removed, and its range
+spills over to the third and the fourth components - they are moved left to
+start at 192MiB instead of 100GiB; the third component is immediately extended
+and becomes [192MiB, 448MiB), the fourth (the extension one) component becomes
+[448MiB, 100GiB).
 .TP
 .B lfs setstripe --component-add -E eof -c 4  /mnt/lustre/file1
 This add a component which starts at the end of last existing component to

@@ -734,6 +734,27 @@ int llapi_layout_stripe_size_get(const struct llapi_layout *layout,
  */
 int llapi_layout_stripe_size_set(struct llapi_layout *layout, uint64_t size);
 
+
+/******************** Extension Size ********************/
+
+/**
+ * Store the extension size of \a layout in \a size.
+ *
+ * \retval  0 Success.
+ * \retval -1 Invalid argument, errno set to EINVAL.
+ */
+int llapi_layout_extension_size_get(const struct llapi_layout *layout,
+				    uint64_t *size);
+
+/**
+ * Set the extension size of \a layout to \a stripe_size.
+ *
+ * \retval  0 Success.
+ * \retval -1 Invalid argument, errno set to EINVAL.
+ */
+int llapi_layout_extension_size_set(struct llapi_layout *layout, uint64_t size);
+
+
 /******************** Stripe Pattern ********************/
 
 /**
@@ -935,6 +956,7 @@ static const struct comp_flag_name {
 	{ LCME_FL_PREF_RW,	"prefer" },
 	{ LCME_FL_OFFLINE,	"offline" },
 	{ LCME_FL_NOSYNC,	"nosync" },
+	{ LCME_FL_EXTENSION,	"extension" },
 };
 
 /**

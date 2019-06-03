@@ -1152,6 +1152,13 @@ static bool llapi_layout_stripe_count_is_valid(int64_t stripe_count)
 		 llapi_stripe_count_is_valid(stripe_count));
 }
 
+static bool llapi_layout_extension_size_is_valid(uint64_t ext_size)
+{
+	return (ext_size != 0 &&
+		llapi_stripe_size_is_aligned(ext_size) &&
+		!llapi_stripe_size_is_too_big(ext_size));
+}
+
 static bool llapi_layout_stripe_size_is_valid(uint64_t stripe_size)
 {
 	return stripe_size == LLAPI_LAYOUT_DEFAULT ||
@@ -1196,18 +1203,20 @@ int llapi_layout_stripe_count_set(struct llapi_layout *layout,
 }
 
 /**
- * Get the stripe size of \a layout.
+ * Get the stripe/extension size of \a layout.
  *
  * \param[in] layout	layout to get stripe size from
  * \param[out] size	integer to store stripe size in
+ * \param[in] extension flag if extenion size is requested
  *
  * \retval	0 on success
  * \retval	-1 if arguments are invalid
  */
-int llapi_layout_stripe_size_get(const struct llapi_layout *layout,
-				 uint64_t *size)
+static int layout_stripe_size_get(const struct llapi_layout *layout,
+				  uint64_t *size, bool extension)
 {
 	struct llapi_layout_comp *comp;
+	int comp_ext;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
@@ -1218,37 +1227,80 @@ int llapi_layout_stripe_size_get(const struct llapi_layout *layout,
 		return -1;
 	}
 
+	comp_ext = comp->llc_flags & LCME_FL_EXTENSION;
+	if ((comp_ext && !extension) || (!comp_ext && extension)) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	*size = comp->llc_stripe_size;
+	if (comp->llc_flags & LCME_FL_EXTENSION)
+		*size *= SEL_UNIT_SIZE;
 
 	return 0;
 }
 
+int llapi_layout_stripe_size_get(const struct llapi_layout *layout,
+				 uint64_t *size)
+{
+	return layout_stripe_size_get(layout, size, false);
+}
+
+int llapi_layout_extension_size_get(const struct llapi_layout *layout,
+				    uint64_t *size)
+{
+	return layout_stripe_size_get(layout, size, true);
+}
+
 /**
- * Set the stripe size of \a layout.
+ * Set the stripe/extension size of \a layout.
  *
  * \param[in] layout	layout to set stripe size in
  * \param[in] size	value to be set
+ * \param[in] extension flag if extenion size is passed
  *
  * \retval	0 on success
  * \retval	-1 if arguments are invalid
  */
-int llapi_layout_stripe_size_set(struct llapi_layout *layout,
-				 uint64_t size)
+static int layout_stripe_size_set(struct llapi_layout *layout,
+				  uint64_t size, bool extension)
 {
 	struct llapi_layout_comp *comp;
+	int comp_ext;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
 		return -1;
 
-	if (!llapi_layout_stripe_size_is_valid(size)) {
+	comp_ext = comp->llc_flags & LCME_FL_EXTENSION;
+	if ((comp_ext && !extension) || (!comp_ext && extension)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (comp_ext)
+		size /= SEL_UNIT_SIZE;
+
+	if ((comp_ext && !llapi_layout_extension_size_is_valid(size)) ||
+	    (!comp_ext && !llapi_layout_stripe_size_is_valid(size))) {
 		errno = EINVAL;
 		return -1;
 	}
 
 	comp->llc_stripe_size = size;
-
 	return 0;
+}
+
+int llapi_layout_stripe_size_set(struct llapi_layout *layout,
+				 uint64_t size)
+{
+	return layout_stripe_size_set(layout, size, false);
+}
+
+int llapi_layout_extension_size_set(struct llapi_layout *layout,
+				    uint64_t size)
+{
+	return layout_stripe_size_set(layout, size, true);
 }
 
 /**
