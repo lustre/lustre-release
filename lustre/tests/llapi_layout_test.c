@@ -1663,7 +1663,7 @@ static struct test_tbl_entry test_tbl[] = {
 	{ .tte_fn = &test30, .tte_desc = T30_DESC, .tte_skip = false },
 	{ .tte_fn = &test31, .tte_desc = T31_DESC, .tte_skip = false },
 	{ .tte_fn = &test32, .tte_desc = T32_DESC, .tte_skip = false },
-	{ .tte_fn = &test32, .tte_desc = T33_DESC, .tte_skip = false },
+	{ .tte_fn = &test33, .tte_desc = T33_DESC, .tte_skip = false },
 };
 
 #define NUM_TESTS	(sizeof(test_tbl) / sizeof(struct test_tbl_entry))
