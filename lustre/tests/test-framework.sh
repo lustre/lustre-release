@@ -3350,6 +3350,10 @@ facet_failover() {
 		change_active ${affecteds[index]}
 
 		wait_for_facet ${affecteds[index]}
+		if $GSS_SK; then
+			init_gss
+			init_facets_vars_simple
+		fi
 		# start mgs first if it is affected
 		if ! combined_mgs_mds &&
 			list_member ${affecteds[index]} mgs; then
@@ -3359,6 +3363,12 @@ facet_failover() {
 		affected=$(exclude_items_from_list ${affecteds[index]} mgs)
 		echo mount facets: ${affecteds[index]}
 		mount_facets ${affecteds[index]}
+		if $GSS_SK; then
+			do_nodes $(comma_list $(all_nodes)) \
+				"keyctl show | grep lustre | cut -c1-11 |
+				sed -e 's/ //g;' |
+				xargs -IX keyctl setperm X 0x3f3f3f3f"
+		fi
 	done
 }
 
@@ -3452,7 +3462,12 @@ fail() {
 	local facets=$1
 	local clients=${CLIENTS:-$HOSTNAME}
 
+	SK_NO_KEY_save=$SK_NO_KEY
+	if $GSS_SK; then
+		export SK_NO_KEY=false
+	fi
 	facet_failover $* || error "failover: $?"
+	export SK_NO_KEY=$SK_NO_KEY_save
 	# to initiate all OSC idling connections
 	clients_up
 	wait_clients_import_state "$clients" "$facets" "\(FULL\|IDLE\)"
@@ -4814,6 +4829,31 @@ init_facets_vars () {
 		for num in $(seq $OSTCOUNT); do
 			DEVNAME=$(ostdevname $num)
 			init_facet_vars ost$num $DEVNAME $OST_MOUNT_OPTS
+		done
+	fi
+}
+
+init_facets_vars_simple () {
+	local devname
+
+	if ! remote_mds_nodsh; then
+		for num in $(seq $MDSCOUNT); do
+			devname=$(mdsdevname $num)
+			eval export mds${num}_dev=${devname}
+			eval export mds${num}_opt=\"${MDS_MOUNT_OPTS}\"
+		done
+	fi
+
+	if ! combined_mgs_mds ; then
+		eval export mgs_dev=$(mgsdevname)
+		eval export mgs_opt=\"${MGS_MOUNT_OPTS}\"
+	fi
+
+	if ! remote_ost_nodsh; then
+		for num in $(seq $OSTCOUNT); do
+			devname=$(ostdevname $num)
+			eval export ost${num}_dev=${devname}
+			eval export ost${num}_opt=\"${OST_MOUNT_OPTS}\"
 		done
 	fi
 }
