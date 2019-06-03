@@ -1886,6 +1886,7 @@ struct lu_env_item {
 	struct task_struct *lei_task;	/* rhashtable key */
 	struct rhash_head lei_linkage;
 	struct lu_env *lei_env;
+	struct rcu_head lei_rcu_head;
 };
 
 static const struct rhashtable_params lu_env_rhash_params = {
@@ -1925,6 +1926,14 @@ int lu_env_add(struct lu_env *env)
 }
 EXPORT_SYMBOL(lu_env_add);
 
+static void lu_env_item_free(struct rcu_head *head)
+{
+	struct lu_env_item *lei;
+
+	lei = container_of(head, struct lu_env_item, lei_rcu_head);
+	OBD_FREE_PTR(lei);
+}
+
 void lu_env_remove(struct lu_env *env)
 {
 	struct lu_env_item *lei;
@@ -1939,13 +1948,11 @@ void lu_env_remove(struct lu_env *env)
 		}
 	}
 
-	rcu_read_lock();
 	lei = rhashtable_lookup_fast(&lu_env_rhash, &task,
 				     lu_env_rhash_params);
 	if (lei && rhashtable_remove_fast(&lu_env_rhash, &lei->lei_linkage,
 					  lu_env_rhash_params) == 0)
-		OBD_FREE_PTR(lei);
-	rcu_read_unlock();
+		call_rcu(&lei->lei_rcu_head, lu_env_item_free);
 }
 EXPORT_SYMBOL(lu_env_remove);
 
