@@ -421,6 +421,11 @@ init_test_env() {
 
 	# Constants used in more than one test script
 	export LOV_MAX_STRIPE_COUNT=2000
+
+	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
+	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+	get_lustre_env
+
 }
 
 check_cpt_number() {
@@ -7991,8 +7996,6 @@ init_logging() {
 		    do_facet $SINGLEMDS $LCTL --version)"
 	log "OSS: $(do_facet ost1 $LCTL lustre_build_version 2> /dev/null ||
 		    do_facet ost1 $LCTL --version)"
-
-	get_lustre_env
 }
 
 log_test() {

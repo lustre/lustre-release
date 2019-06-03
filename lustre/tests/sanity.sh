@@ -1,5 +1,4 @@
 #!/bin/bash
-# -*- tab-width: 8; indent-tabs-mode: t; -*-
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -8,44 +7,17 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: LU-9693 LU-6493 LU-9693
-ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-# skipped tests: LU-8411 LU-9096 LU-9054 ..
-ALWAYS_EXCEPT="  407     253     312     $ALWAYS_EXCEPT"
-
-if $SHARED_KEY; then
-# bug number for skipped tests:	LU-9795 (all below)
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	17n	60a	133g	300f"
-fi
 
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c 64d"
 
-# skip the grant tests for ARM until they are fixed
-if [[ $(uname -m) = aarch64 ]]; then
-	# bug number:	 LU-11596 (all below)
-	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
-	# bug number:	 LU-11671 LU-11594 LU-11667 LU-11729
-	ALWAYS_EXCEPT+=" 45	  103a	    317      810"
-fi
-
-SRCDIR=$(cd $(dirname $0); echo $PWD)
-export PATH=$PATH:/sbin
-
-TMP=${TMP:-/tmp}
 OSC=${OSC:-"osc"}
 
 CC=${CC:-cc}
-CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
-LFS=${LFS:-lfs}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
-LCTL=${LCTL:-lctl}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
-export MULTIOP=${MULTIOP:-multiop}
 READS=${READS:-"reads"}
 MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
@@ -58,20 +30,32 @@ CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 export PARALLEL=${PARALLEL:-"no"}
 
-export NAME=${NAME:-local}
-
-SAVE_PWD=$PWD
-
-CLEANUP=${CLEANUP:-:}
-SETUP=${SETUP:-:}
 TRACE=${TRACE:-""}
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 
 init_logging
+
+ALWAYS_EXCEPT="$SANITY_EXCEPT "
+# bug number for skipped test: LU-9693 LU-6493 LU-9693
+ALWAYS_EXCEPT+="               42a     42b     42c "
+# bug number:    LU-8411 LU-9096 LU-9054
+ALWAYS_EXCEPT+=" 407     253     312 "
+
+if $SHARED_KEY; then
+	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795
+	ALWAYS_EXCEPT+=" 17n     60a     133g    300f "
+fi
+
+# skip the grant tests for ARM until they are fixed
+if [[ $(uname -m) = aarch64 ]]; then
+	# bug number:	 LU-11596
+	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
+	# bug number:	 LU-11671 LU-11594 LU-11667 LU-11729
+	ALWAYS_EXCEPT+=" 45	  103a	    317      810"
+fi
 
 #                                  5          12          (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
@@ -121,6 +105,7 @@ elif [ -r /etc/os-release ]; then
 	fi
 fi
 
+build_test_filter
 FAIL_ON_ERROR=false
 
 cleanup() {
@@ -156,8 +141,6 @@ rm -rf $DIR/[Rdfs][0-9]*
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
-
-build_test_filter
 
 if [ "${ONLY}" = "MOUNT" ] ; then
 	echo "Lustre is up, please go on"
@@ -7303,7 +7286,7 @@ test_65j() { # bug6367
 	sync; sleep 1
 
 	# if we aren't already remounting for each test, do so for this test
-	if [ "$CLEANUP" = ":" -a "$I_MOUNTED" = "yes" ]; then
+	if [ "$I_MOUNTED" = "yes" ]; then
 		cleanup || error "failed to unmount"
 		setup
 	fi
