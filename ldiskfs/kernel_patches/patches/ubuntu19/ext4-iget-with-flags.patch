@@ -1,0 +1,13 @@
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index 5dbdeac..dd9d65b 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -6332,7 +6332,7 @@ vm_fault_t ext4_filemap_fault(struct vm_fault *vmf)
+ }
+ EXPORT_SYMBOL(ext4_map_blocks);
+ EXPORT_SYMBOL(ext4_truncate);
+-EXPORT_SYMBOL(ext4_iget);
++EXPORT_SYMBOL(__ext4_iget);
+ EXPORT_SYMBOL(ext4_bread);
+ EXPORT_SYMBOL(ext4_itable_unused_count);
+ EXPORT_SYMBOL(ext4_force_commit);

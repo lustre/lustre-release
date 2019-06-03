@@ -59,6 +59,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	)], [LDISKFS_SERIES="4.4-sles12sp3.series"],
             [LDISKFS_SERIES="4.4-sles12sp3.series"])
 ], [test x$UBUNTU_KERNEL = xyes], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[5.0.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[4.15.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0], [],
 	[
@@ -86,7 +87,9 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 			[test $KPLEV -ge 20], [LDISKFS_SERIES="4.15.0-20-ubuntu18.series"]
 		)
 	],
-	[LDISKFS_SERIES="4.15.0-24-ubuntu18.series"])
+	[LDISKFS_SERIES="4.15.0-24-ubuntu18.series"])],
+	[LDISKFS_SERIES="5.0.0-13-ubuntu19.series"],
+	[LDISKFS_SERIES="5.0.0-13-ubuntu19.series"])
 ])
 ])
 AS_IF([test -z "$LDISKFS_SERIES"],
