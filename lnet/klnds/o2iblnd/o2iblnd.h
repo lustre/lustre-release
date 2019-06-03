@@ -204,6 +204,13 @@ struct kib_hca_dev {
 	struct ib_mr        *ibh_mrs;           /* global MR */
 #endif
 	struct ib_pd        *ibh_pd;            /* PD */
+	u8                   ibh_port;          /* port number */
+	struct ib_event_handler
+			     ibh_event_handler; /* IB event handler */
+	int                  ibh_state;         /* device status */
+#define IBLND_DEV_PORT_DOWN     0
+#define IBLND_DEV_PORT_ACTIVE   1
+#define IBLND_DEV_FATAL         2
 	struct kib_dev           *ibh_dev;           /* owner */
 	atomic_t             ibh_ref;           /* refcount */
 };
@@ -373,6 +380,7 @@ struct kib_net {
 	struct kib_fmr_poolset	**ibn_fmr_ps;	/* fmr pool-set */
 
 	struct kib_dev		*ibn_dev;	/* underlying IB device */
+	struct lnet_ni          *ibn_ni;        /* LNet interface */
 };
 
 #define KIB_THREAD_SHIFT		16

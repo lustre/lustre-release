@@ -2535,10 +2535,95 @@ kiblnd_net_init_pools(struct kib_net *net, struct lnet_ni *ni, __u32 *cpts,
 }
 
 static int
+kiblnd_port_get_attr(struct kib_hca_dev *hdev)
+{
+	struct ib_port_attr *port_attr;
+	int rc;
+	unsigned long flags;
+	rwlock_t *g_lock = &kiblnd_data.kib_global_lock;
+
+	LIBCFS_ALLOC(port_attr, sizeof(*port_attr));
+	if (port_attr == NULL) {
+		CDEBUG(D_NETERROR, "Out of memory\n");
+		return -ENOMEM;
+	}
+
+	rc = ib_query_port(hdev->ibh_ibdev, hdev->ibh_port, port_attr);
+
+	write_lock_irqsave(g_lock, flags);
+
+	if (rc == 0)
+		hdev->ibh_state = port_attr->state == IB_PORT_ACTIVE
+				 ? IBLND_DEV_PORT_ACTIVE
+				 : IBLND_DEV_PORT_DOWN;
+
+	write_unlock_irqrestore(g_lock, flags);
+	LIBCFS_FREE(port_attr, sizeof(*port_attr));
+
+	if (rc != 0) {
+		CDEBUG(D_NETERROR, "Failed to query IB port: %d\n", rc);
+		return rc;
+	}
+	return 0;
+}
+
+static inline void
+kiblnd_set_ni_fatal_on(struct kib_hca_dev *hdev, int val)
+{
+	struct kib_net  *net;
+
+	/* for health check */
+	list_for_each_entry(net, &hdev->ibh_dev->ibd_nets, ibn_list) {
+		if (val)
+			CDEBUG(D_NETERROR, "Fatal device error for NI %s\n",
+					libcfs_nid2str(net->ibn_ni->ni_nid));
+		atomic_set(&net->ibn_ni->ni_fatal_error_on, val);
+	}
+}
+
+void
+kiblnd_event_handler(struct ib_event_handler *handler, struct ib_event *event)
+{
+	rwlock_t *g_lock = &kiblnd_data.kib_global_lock;
+	struct kib_hca_dev  *hdev;
+	unsigned long flags;
+
+	hdev = container_of(handler, struct kib_hca_dev, ibh_event_handler);
+
+	write_lock_irqsave(g_lock, flags);
+
+	switch (event->event) {
+	case IB_EVENT_DEVICE_FATAL:
+		CDEBUG(D_NET, "IB device fatal\n");
+		hdev->ibh_state = IBLND_DEV_FATAL;
+		kiblnd_set_ni_fatal_on(hdev, 1);
+		break;
+	case IB_EVENT_PORT_ACTIVE:
+		CDEBUG(D_NET, "IB port active\n");
+		if (event->element.port_num == hdev->ibh_port) {
+			hdev->ibh_state = IBLND_DEV_PORT_ACTIVE;
+			kiblnd_set_ni_fatal_on(hdev, 0);
+		}
+		break;
+	case IB_EVENT_PORT_ERR:
+		CDEBUG(D_NET, "IB port err\n");
+		if (event->element.port_num == hdev->ibh_port) {
+			hdev->ibh_state = IBLND_DEV_PORT_DOWN;
+			kiblnd_set_ni_fatal_on(hdev, 1);
+		}
+		break;
+	default:
+		break;
+	}
+	write_unlock_irqrestore(g_lock, flags);
+}
+
+static int
 kiblnd_hdev_get_attr(struct kib_hca_dev *hdev)
 {
 	struct ib_device_attr *dev_attr;
 	int rc = 0;
+	int rc2 = 0;
 
 	/* It's safe to assume a HCA can handle a page size
 	 * matching that of the native system */
@@ -2592,6 +2677,10 @@ kiblnd_hdev_get_attr(struct kib_hca_dev *hdev)
 		rc = -ENOSYS;
 	}
 
+	rc2 = kiblnd_port_get_attr(hdev);
+	if (rc2 != 0)
+		return rc2;
+
 	if (rc != 0)
 		rc = -EINVAL;
 
@@ -2624,6 +2713,9 @@ kiblnd_hdev_cleanup_mrs(struct kib_hca_dev *hdev)
 void
 kiblnd_hdev_destroy(struct kib_hca_dev *hdev)
 {
+	if (hdev->ibh_event_handler.device != NULL)
+		ib_unregister_event_handler(&hdev->ibh_event_handler);
+
 #ifdef HAVE_IB_GET_DMA_MR
         kiblnd_hdev_cleanup_mrs(hdev);
 #endif
@@ -2792,6 +2884,7 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
         hdev->ibh_dev   = dev;
         hdev->ibh_cmid  = cmid;
         hdev->ibh_ibdev = cmid->device;
+	hdev->ibh_port  = cmid->port_num;
 
 #ifdef HAVE_IB_ALLOC_PD_2ARGS
 	pd = ib_alloc_pd(cmid->device, 0);
@@ -2825,6 +2918,10 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 		goto out;
 	}
 #endif
+
+	INIT_IB_EVENT_HANDLER(&hdev->ibh_event_handler,
+				hdev->ibh_ibdev, kiblnd_event_handler);
+	ib_register_event_handler(&hdev->ibh_event_handler);
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
@@ -3244,6 +3341,7 @@ kiblnd_startup(struct lnet_ni *ni)
 		goto failed;
 	}
 
+	net->ibn_ni = ni;
 	net->ibn_incarnation = ktime_get_real_ns() / NSEC_PER_USEC;
 
 	kiblnd_tunables_setup(ni);
@@ -3335,6 +3433,9 @@ kiblnd_startup(struct lnet_ni *ni)
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 	ibdev->ibd_nnets++;
 	list_add_tail(&net->ibn_list, &ibdev->ibd_nets);
+	/* for health check */
+	if (ibdev->ibd_hdev->ibh_state == IBLND_DEV_PORT_DOWN)
+		kiblnd_set_ni_fatal_on(ibdev->ibd_hdev, 1);
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	net->ibn_init = IBLND_INIT_ALL;
