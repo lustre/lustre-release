@@ -1681,29 +1681,31 @@ enum mds_reint_op {
 #define DISP_OPEN_DENY	     0x10000000
 
 /* INODE LOCK PARTS */
-#define MDS_INODELOCK_LOOKUP 0x000001	/* For namespace, dentry etc, and also
-					 * was used to protect permission (mode,
-					 * owner, group etc) before 2.4. */
-#define MDS_INODELOCK_UPDATE 0x000002	/* size, links, timestamps */
-#define MDS_INODELOCK_OPEN   0x000004	/* For opened files */
-#define MDS_INODELOCK_LAYOUT 0x000008	/* for layout */
+enum mds_ibits_locks {
+	MDS_INODELOCK_LOOKUP	= 0x000001, /* For namespace, dentry etc.  Was
+					     * used to protect permission (mode,
+					     * owner, group, etc) before 2.4. */
+	MDS_INODELOCK_UPDATE	= 0x000002, /* size, links, timestamps */
+	MDS_INODELOCK_OPEN	= 0x000004, /* For opened files */
+	MDS_INODELOCK_LAYOUT	= 0x000008, /* for layout */
 
-/* The PERM bit is added int 2.4, and it is used to protect permission(mode,
- * owner, group, acl etc), so to separate the permission from LOOKUP lock.
- * Because for remote directories(in DNE), these locks will be granted by
- * different MDTs(different ldlm namespace).
- *
- * For local directory, MDT will always grant UPDATE_LOCK|PERM_LOCK together.
- * For Remote directory, the master MDT, where the remote directory is, will
- * grant UPDATE_LOCK|PERM_LOCK, and the remote MDT, where the name entry is,
- * will grant LOOKUP_LOCK. */
-#define MDS_INODELOCK_PERM   0x000010
-#define MDS_INODELOCK_XATTR  0x000020	/* extended attributes */
-#define MDS_INODELOCK_DOM    0x000040 /* Data for data-on-mdt files */
-
-#define MDS_INODELOCK_MAXSHIFT 6
+	/* The PERM bit is added in 2.4, and is used to protect permission
+	 * (mode, owner, group, ACL, etc.) separate from LOOKUP lock.
+	 * For remote directories (in DNE) these locks will be granted by
+	 * different MDTs (different LDLM namespace).
+	 *
+	 * For local directory, the MDT always grants UPDATE|PERM together.
+	 * For remote directory, master MDT (where remote directory is) grants
+	 * UPDATE|PERM, and remote MDT (where name entry is) grants LOOKUP_LOCK.
+	 */
+	MDS_INODELOCK_PERM	= 0x000010,
+	MDS_INODELOCK_XATTR	= 0x000020, /* non-permission extended attrs */
+	MDS_INODELOCK_DOM	= 0x000040, /* Data for Data-on-MDT files */
+	/* Do not forget to increase MDS_INODELOCK_NUMBITS when adding bits */
+};
+#define MDS_INODELOCK_NUMBITS 7
 /* This FULL lock is useful to take on unlink sort of operations */
-#define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
+#define MDS_INODELOCK_FULL ((1 << MDS_INODELOCK_NUMBITS) - 1)
 /* DOM lock shouldn't be canceled early, use this macro for ELC */
 #define MDS_INODELOCK_ELC (MDS_INODELOCK_FULL & ~MDS_INODELOCK_DOM)
 
