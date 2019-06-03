@@ -419,6 +419,11 @@ init_test_env() {
 	fi
 
 	export TF_FAIL=${TF_FAIL:-$TMP/tf.fail}
+
+	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
+	. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+	get_lustre_env
+
 }
 
 check_cpt_number() {

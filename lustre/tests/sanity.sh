@@ -1,5 +1,4 @@
 #!/bin/bash
-# -*- tab-width: 8; indent-tabs-mode: t; -*-
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -8,8 +7,39 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
+
+# Check Grants after these tests
+GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c 64d"
+OSC=${OSC:-"osc"}
+
+CC=${CC:-cc}
+CREATETEST=${CREATETEST:-createtest}
+LVERIFY=${LVERIFY:-ll_dirstripe_verify}
+OPENFILE=${OPENFILE:-openfile}
+OPENUNLINK=${OPENUNLINK:-openunlink}
+READS=${READS:-"reads"}
+MUNLINK=${MUNLINK:-munlink}
+SOCKETSERVER=${SOCKETSERVER:-socketserver}
+SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
+MEMHOG=${MEMHOG:-memhog}
+DIRECTIO=${DIRECTIO:-directio}
+ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
+DEF_STRIPE_COUNT=-1
+CHECK_GRANT=${CHECK_GRANT:-"yes"}
+GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
+export PARALLEL=${PARALLEL:-"no"}
+
+TRACE=${TRACE:-""}
+LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+
+init_logging
+
+ALWAYS_EXCEPT="$SANITY_EXCEPT "
 # bug number for skipped test: LU-9693 LU-6493 LU-9693 LU-11058
-ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c     77k"
+ALWAYS_EXCEPT+="                42a     42b     42c     77k"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skipped tests: LU-8411 LU-9096 LU-9054 ..
@@ -23,53 +53,9 @@ fi
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596 (all below)
 	ALWAYS_EXCEPT+=" 42d 42e 63a 63b 64a 64b 64c"
-	# bug number:	 LU-11671 LU-11594 LU-11667 LU-11729
-	ALWAYS_EXCEPT+=" 45	  103a	    317      810"
+	# bug number:	 LU-11671 LU-11665 LU-11594 LU-11667 LU-11729
+	ALWAYS_EXCEPT+=" 45	  101c	   103a	    317      810"
 fi
-
-# Check Grants after these tests
-GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
-SRCDIR=$(cd $(dirname $0); echo $PWD)
-export PATH=$PATH:/sbin
-
-TMP=${TMP:-/tmp}
-OSC=${OSC:-"osc"}
-
-CC=${CC:-cc}
-CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
-CREATETEST=${CREATETEST:-createtest}
-LFS=${LFS:-lfs}
-LVERIFY=${LVERIFY:-ll_dirstripe_verify}
-LCTL=${LCTL:-lctl}
-OPENFILE=${OPENFILE:-openfile}
-OPENUNLINK=${OPENUNLINK:-openunlink}
-export MULTIOP=${MULTIOP:-multiop}
-READS=${READS:-"reads"}
-MUNLINK=${MUNLINK:-munlink}
-SOCKETSERVER=${SOCKETSERVER:-socketserver}
-SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
-MEMHOG=${MEMHOG:-memhog}
-DIRECTIO=${DIRECTIO:-directio}
-ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
-DEF_STRIPE_COUNT=-1
-CHECK_GRANT=${CHECK_GRANT:-"yes"}
-GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
-export PARALLEL=${PARALLEL:-"no"}
-
-export NAME=${NAME:-local}
-
-SAVE_PWD=$PWD
-
-CLEANUP=${CLEANUP:-:}
-SETUP=${SETUP:-:}
-TRACE=${TRACE:-""}
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-LUSTRE_TESTS_API_DIR=${LUSTRE_TESTS_API_DIR:-${LUSTRE}/tests/clientapi}
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
-get_lustre_env
-init_logging
 
 # skip nfs tests on kernels >= 4.14.0 until they are fixed
 if [ $LINUX_VERSION_CODE -ge $(version_code 4.14.0) ]; then
@@ -132,6 +118,7 @@ elif [ -r /etc/os-release ]; then
 	fi
 fi
 
+build_test_filter
 FAIL_ON_ERROR=false
 
 cleanup() {
@@ -167,8 +154,6 @@ rm -rf $DIR/[Rdfs][0-9]*
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
-
-build_test_filter
 
 if [ "${ONLY}" = "MOUNT" ] ; then
 	echo "Lustre is up, please go on"
@@ -7270,7 +7255,7 @@ test_65j() { # bug6367
 	sync; sleep 1
 
 	# if we aren't already remounting for each test, do so for this test
-	if [ "$CLEANUP" = ":" -a "$I_MOUNTED" = "yes" ]; then
+	if [ "$I_MOUNTED" = "yes" ]; then
 		cleanup || error "failed to unmount"
 		setup
 	fi
