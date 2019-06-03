@@ -8,6 +8,7 @@ lfs getstripe \- Lustre client command to print layout parameters of a file
       [\fB--component-flags\fR|\fB--comp-flags\fR[\fB=\fIflags\fR]]
       [\fB--component-id\fR|\fB--comp-id\fR[=\fIid\fR]|\fB-I\fR[\fIid\fR]]
       [\fB--component-start\fR[\fB=\fR[\fB+-\fR]\fIstart\fR[\fBKMGTPE\fR]]]
+      [\fB--extension-size\fR|\fB--ext-size\fR|\fB-z\fR]
       [\fB--directory\fR|\fB-d\fR]
 [\fB--fid\fR|\fB-F\fR]
 [\fB--generation\fR|\fB-g\fR]
@@ -21,10 +22,10 @@ lfs getstripe \- Lustre client command to print layout parameters of a file
 [\fB--stripe-count\fR|\fB-c\fR]
 [\fB--stripe-index\fR|\fB-i\fR]
       [\fB--stripe-size\fR|\fB-S\fR]
-[[\fB!\fR] \fB--mirror-index\fR=[\fB+-\fR]\fI<index>\fR | [\fB!\fR] \fB--mirror-id\fR=[\fB+-\fR]\fI<id>\fR]
-[\fB--verbose\fR|\fB-v\fR]
+      [[\fB!\fR] \fB--mirror-index\fR=[\fB+-\fR]\fI<index>\fR | [\fB!\fR] \fB--mirror-id\fR=[\fB+-\fR]\fI<id>\fR]
+      [\fB--verbose\fR|\fB-v\fR]
 [\fB--yaml\fR|\fB-y\fR]
-      <\fIdirname\fR|\fIfilename\fR> ...
+<\fIdirname\fR|\fIfilename\fR> ...
 .SH DESCRIPTION
 .B lfs getstripe
 is used to list the layout/striping information for a given filename or
@@ -33,6 +34,7 @@ and allocated OST objects for each file will be shown. If you only want
 specific layout information to be printed, then the
 .BR --stripe-count ,
 .BR --stripe-size ,
+.BR --extension-size ,
 .BR --stripe-index ,
 .BR --layout ,
 .BR --fid ,
@@ -234,6 +236,10 @@ Print the starting OST index for the file layout.
 .BR --stripe-size | -S
 Print the stripe size in bytes.  For composite files this is the stripe
 size of the last initialized component.
+.TP
+.BR --extension-size | --ext-size | -z
+Print the extension size in bytes. For composite files this is the extension
+size of the first extension component.
 .TP
 .BR --verbose | -v
 Also print the layout magic, FID sequence, FID object ID, and FID, in

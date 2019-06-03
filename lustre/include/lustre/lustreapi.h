@@ -172,6 +172,7 @@ enum llapi_layout_verbose  {
 	VERBOSE_HASH_TYPE	=  0x8000,
 	VERBOSE_MIRROR_COUNT	= 0x10000,
 	VERBOSE_MIRROR_ID	= 0x20000,
+	VERBOSE_EXT_SIZE	= 0x40000,
 	VERBOSE_DEFAULT		= VERBOSE_STRIPE_COUNT | VERBOSE_STRIPE_SIZE |
 				  VERBOSE_STRIPE_OFFSET | VERBOSE_POOL |
 				  VERBOSE_OBJID | VERBOSE_GENERATION |
@@ -179,7 +180,7 @@ enum llapi_layout_verbose  {
 				  VERBOSE_COMP_COUNT | VERBOSE_COMP_FLAGS |
 				  VERBOSE_COMP_START | VERBOSE_COMP_END |
 				  VERBOSE_COMP_ID | VERBOSE_MIRROR_COUNT |
-				  VERBOSE_MIRROR_ID
+				  VERBOSE_MIRROR_ID | VERBOSE_EXT_SIZE
 };
 /* Compatibility with original names */
 #define VERBOSE_SIZE	VERBOSE_STRIPE_SIZE
@@ -212,7 +213,8 @@ struct find_param {
 				 fp_mirror_index_sign:2,
 				 fp_mirror_id_sign:2,
 				 fp_mdt_count_sign:2,
-				 fp_blocks_sign:2;
+				 fp_blocks_sign:2,
+				 fp_ext_size_sign:2;
 	unsigned long long	 fp_size;
 	unsigned long long	 fp_size_units;
 
@@ -269,7 +271,9 @@ struct find_param {
 				 fp_check_blocks:1,
 				 fp_exclude_blocks:1,
 				 fp_check_foreign:1,
-				 fp_exclude_foreign:1;
+				 fp_exclude_foreign:1,
+				 fp_check_ext_size:1, /* extension size */
+				 fp_exclude_ext_size:1;
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;
@@ -320,6 +324,8 @@ struct find_param {
 	unsigned		 fp_projid;
 	unsigned long long	 fp_blocks;
 	unsigned long long	 fp_blocks_units;
+	unsigned long long	 fp_ext_size;
+	unsigned long long	 fp_ext_size_units;
 
 	/* In-process parameters. */
 	unsigned long		 fp_got_uuids:1,

@@ -974,7 +974,52 @@ test19_io_base() {
 
 	flg_opts="--comp-flags extension"
 	found=$($LFS find --comp-start 128M -E EOF $flg_opts $comp_file | wc -l)
-	[ $found -eq 1 ] || error "Write: Second component not found"
+	[ $found -eq 1 ] || error "Write: second component not found"
+
+	found=$($LFS find -z 64M $comp_file | wc -l)
+	[ $found -eq 1 ] || error "component not found by ext size"
+
+	found=$($LFS find --extension-size +63M $comp_file | wc -l)
+	[ $found -eq 1 ] || error "component not found by +ext size"
+
+	found=$($LFS find --ext-size -65M $comp_file | wc -l)
+	[ $found -eq 1 ] || error "component not found by -ext size"
+
+	found=$($LFS find -z 65M $comp_file | wc -l)
+	[ $found -eq 0 ] || error "component found by wrong ext size"
+
+	found=$($LFS find -z +65M $comp_file | wc -l)
+	[ $found -eq 0 ] || error "component found by wrong +ext size"
+
+	found=$($LFS find -z -63M $comp_file | wc -l)
+	[ $found -eq 0 ] || error "component found by wrong -ext size"
+
+	found=$($LFS find ! -z 64M $comp_file | wc -l)
+	[ $found -eq 0 ] || error "component found by negation of ext size"
+
+	found=$($LFS find ! -z +63M $comp_file | wc -l)
+	[ $found -eq 0 ] || error "component found by negation of +ext size"
+
+	found=$($LFS find ! -z -65M $comp_file | wc -l)
+	[ $found -eq 0 ] || error "component found by negation of -ext size"
+
+	found=$($LFS find ! -z 65M $comp_file | wc -l)
+	[ $found -eq 1 ] ||
+		error "component not found by negation of wrong ext size"
+
+	found=$($LFS find ! -z +65M $comp_file | wc -l)
+	[ $found -eq 1 ] ||
+		error "component not found by negation of wrong +ext size"
+
+	found=$($LFS find ! -z -63M $comp_file | wc -l)
+	[ $found -eq 1 ] ||
+		error "component not found by negation of wrong -ext size"
+
+	found=$($LFS find -S +1M $comp_file | wc -l)
+	[ $found -eq 0 ] || error "component found by wrong +stripe size"
+
+	found=$($LFS find -c 1 $comp_file | wc -l)
+	[ $found -eq 1 ] || error "component not found by stripe count"
 
 	small_write $comp_file $rw_len || error "Verify RW failed"
 

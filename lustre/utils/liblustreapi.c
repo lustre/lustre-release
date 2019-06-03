@@ -2741,12 +2741,13 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			separator = "\n";
 	}
 
-	if (verbose & VERBOSE_STRIPE_SIZE) {
+	if (((verbose & VERBOSE_STRIPE_SIZE) && !extension) ||
+	    ((verbose & VERBOSE_EXT_SIZE) && extension)) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (verbose & ~VERBOSE_STRIPE_SIZE && extension)
+		if (verbose & ~VERBOSE_EXT_SIZE && extension)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sextension_size: ",
 				     space, prefix);
-		else if (verbose & ~VERBOSE_STRIPE_SIZE)
+		if (verbose & ~VERBOSE_STRIPE_SIZE && !extension)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_size:   ",
 				     space, prefix);
 		if (is_dir && !is_raw && lum->lmm_stripe_size == 0) {
@@ -3498,8 +3499,15 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 			 */
 			if (entry->lcme_flags & LCME_FL_INIT)
 				continue;
-			else
-				break;
+
+			if (param->fp_verbose & VERBOSE_EXT_SIZE) {
+				if (entry->lcme_flags & LCME_FL_EXTENSION)
+					/* moved back below */
+					i++;
+				else
+					continue;
+			}
+			break;
 		}
 
 		if (entry->lcme_flags & LCME_FL_INIT) {
@@ -4019,21 +4027,60 @@ static int find_check_stripe_size(struct find_param *param)
 	if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
 		return param->fp_exclude_stripe_size ? 1 : -1;
 
+	ret = param->fp_exclude_stripe_size ? 1 : -1;
 	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
 		count = comp_v1->lcm_entry_count;
-		ret = param->fp_exclude_stripe_size ? 1 : -1;
 	}
 
 	for (i = 0; i < count; i++) {
-		if (comp_v1)
+		struct lov_comp_md_entry_v1 *ent;
+
+		if (comp_v1) {
 			v1 = lov_comp_entry(comp_v1, i);
+
+			ent = &comp_v1->lcm_entries[i];
+			if (ent->lcme_flags & LCME_FL_EXTENSION)
+				continue;
+		}
 
 		ret = find_value_cmp(v1->lmm_stripe_size, param->fp_stripe_size,
 				     param->fp_stripe_size_sign,
 				     param->fp_exclude_stripe_size,
 				     param->fp_stripe_size_units, 0);
 		/* If any stripe_size matches */
+		if (ret != -1)
+			break;
+	}
+
+	return ret;
+}
+
+static int find_check_ext_size(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_user_md_v1 *v1;
+	int ret, i;
+
+	ret = param->fp_exclude_ext_size ? 1 : -1;
+	comp_v1 = (struct lov_comp_md_v1 *)&param->fp_lmd->lmd_lmm;
+	if (comp_v1->lcm_magic != LOV_USER_MAGIC_COMP_V1)
+		return ret;
+
+	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+		struct lov_comp_md_entry_v1 *ent;
+
+		v1 = lov_comp_entry(comp_v1, i);
+
+		ent = &comp_v1->lcm_entries[i];
+		if (!(ent->lcme_flags & LCME_FL_EXTENSION))
+			continue;
+
+		ret = find_value_cmp(v1->lmm_stripe_size, param->fp_ext_size,
+				     param->fp_ext_size_sign,
+				     param->fp_exclude_ext_size,
+				     param->fp_ext_size_units, 0);
+		/* If any ext_size matches */
 		if (ret != -1)
 			break;
 	}
@@ -4057,8 +4104,15 @@ static __u32 find_get_stripe_count(struct find_param *param)
 	}
 
 	for (i = 0; i < count; i++) {
-		if (comp_v1)
+		if (comp_v1) {
+			struct lov_comp_md_entry_v1 *ent;
+
 			v1 = lov_comp_entry(comp_v1, i);
+
+			ent = &comp_v1->lcm_entries[i];
+			if (ent->lcme_flags & LCME_FL_EXTENSION)
+				continue;
+		}
 		stripe_count += v1->lmm_stripe_count;
 	}
 
@@ -4308,7 +4362,7 @@ static bool find_check_lmm_info(struct find_param *param)
 	       param->fp_check_comp_count || param->fp_check_comp_end ||
 	       param->fp_check_comp_start || param->fp_check_comp_flags ||
 	       param->fp_check_mirror_count || param->fp_check_foreign ||
-	       param->fp_check_mirror_state ||
+	       param->fp_check_mirror_state || param->fp_check_ext_size ||
 	       param->fp_check_projid;
 }
 
@@ -4502,6 +4556,12 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 
 	if (param->fp_check_stripe_size) {
 		decision = find_check_stripe_size(param);
+		if (decision == -1)
+			goto decided;
+	}
+
+	if (param->fp_check_ext_size) {
+		decision = find_check_ext_size(param);
 		if (decision == -1)
 			goto decided;
 	}

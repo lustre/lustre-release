@@ -10,6 +10,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
       [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
       [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR <[^]\fIflag\fB,\fR...>]
       [[\fB!\fR] \fB--component-start|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--extension-size|\fB-z\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
       [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
       [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
       [[\fB!\fR] \fB--foreign\fR [<\fItype\fR>]]
@@ -244,7 +245,13 @@ are multiple OSTs that are being replaced.
 Stripe size is \fIn\fR bytes, or \fBK\fRibi-, \fBM\fRebi-,
 \fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-abytes if a
 suffix is given.  For composite files, this matches the stripe
-size of the last initialized component.
+size of any non-extension component.
+.TP
+.BR --extension-size | --ext-size | -z
+Extension size is \fIn\fR bytes, or \fBK\fRibi-, \fBM\fRebi-,
+\fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-abytes if a
+suffix is given.  For composite files, this matches the extension
+size of any extension component.
 .TP
 .BR --type | -t
 File has type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory,
