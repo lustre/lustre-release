@@ -1946,7 +1946,7 @@ recheck:
 	for_each_comp_entry_v1(comp_v1, ent) {
 		ext = &ent->lcme_extent;
 
-		if (le64_to_cpu(ext->e_start) >= le64_to_cpu(ext->e_end)) {
+		if (le64_to_cpu(ext->e_start) > le64_to_cpu(ext->e_end)) {
 			CDEBUG(D_LAYOUT, "invalid extent "DEXT"\n",
 			       le64_to_cpu(ext->e_start),
 			       le64_to_cpu(ext->e_end));
@@ -2046,7 +2046,7 @@ recheck:
 		stripe_size = le32_to_cpu(lum->lmm_stripe_size);
 		if (stripe_size == 0)
 			stripe_size = desc->ld_default_stripe_size;
-		if (stripe_size == 0 || (prev_end & (stripe_size - 1))) {
+		if (prev_end % stripe_size) {
 			CDEBUG(D_LAYOUT, "stripe size isn't aligned, "
 			       "stripe_sz: %u, [%llu, %llu)\n",
 			       stripe_size, ext->e_start, prev_end);

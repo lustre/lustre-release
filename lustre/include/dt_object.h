@@ -133,7 +133,8 @@ struct dt_device_operations {
          */
         int   (*dt_statfs)(const struct lu_env *env,
 			   struct dt_device *dev,
-			   struct obd_statfs *osfs);
+			   struct obd_statfs *osfs,
+			   struct obd_statfs_info *info);
 
         /**
 	 * Create transaction.
@@ -2514,12 +2515,13 @@ static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,
 }
 
 static inline int dt_statfs(const struct lu_env *env, struct dt_device *dev,
-                            struct obd_statfs *osfs)
+			    struct obd_statfs *osfs,
+			    struct obd_statfs_info *info)
 {
-        LASSERT(dev);
-        LASSERT(dev->dd_ops);
-        LASSERT(dev->dd_ops->dt_statfs);
-        return dev->dd_ops->dt_statfs(env, dev, osfs);
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_statfs);
+	return dev->dd_ops->dt_statfs(env, dev, osfs, info);
 }
 
 static inline int dt_root_get(const struct lu_env *env, struct dt_device *dev,

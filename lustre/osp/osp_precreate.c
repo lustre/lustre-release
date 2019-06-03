@@ -1008,6 +1008,13 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 		else if (msfs->os_ffree > 64)
 			msfs->os_state &= ~OS_STATE_ENOINO;
 
+		CDEBUG(D_INFO, "%s: status: %llu blocks, %llu "
+		       "free, %llu avail, %llu MB avail, %u "
+		       "hwm -> %d: rc = %d\n",
+		       d->opd_obd->obd_name, msfs->os_blocks,
+		       msfs->os_bfree, msfs->os_bavail,
+		       available, d->opd_reserved_mb_high,
+		       d->opd_pre_status, rc);
 		if (available < d->opd_reserved_mb_low)
 			msfs->os_state |= OS_STATE_ENOSPC;
 		else if (available > d->opd_reserved_mb_high)

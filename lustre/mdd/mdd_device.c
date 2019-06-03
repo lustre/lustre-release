@@ -1331,7 +1331,7 @@ static int mdd_statfs(const struct lu_env *env, struct md_device *m,
 
 	ENTRY;
 
-	rc = mdd_child_ops(mdd)->dt_statfs(env, mdd->mdd_child, sfs);
+	rc = mdd_child_ops(mdd)->dt_statfs(env, mdd->mdd_child, sfs, NULL);
 
 	sfs->os_namelen = min_t(__u32, sfs->os_namelen, NAME_MAX);
 

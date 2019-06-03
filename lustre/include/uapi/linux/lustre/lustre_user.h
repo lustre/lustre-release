@@ -161,6 +161,13 @@ struct obd_statfs {
 	__u32           os_spare9;
 };
 
+/** additional filesystem attributes for target device */
+struct obd_statfs_info {
+	__u32		os_reserved_mb_low;	/* reserved mb low */
+	__u32		os_reserved_mb_high;	/* reserved mb high */
+	bool		os_enable_pre;		/* enable pre create logic */
+};
+
 /**
  * File IDentifier.
  *

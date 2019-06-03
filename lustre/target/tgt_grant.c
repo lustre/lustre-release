@@ -309,7 +309,7 @@ int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 
 		/* statfs can sleep ... hopefully not for too long since we can
 		 * call it fairly often as space fills up */
-		rc = dt_statfs(env, lut->lut_bottom, osfs);
+		rc = dt_statfs(env, lut->lut_bottom, osfs, NULL);
 		if (unlikely(rc))
 			GOTO(out, rc);
 

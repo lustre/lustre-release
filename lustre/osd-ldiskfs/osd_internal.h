@@ -742,7 +742,7 @@ int osd_register_proc_index_in_idif(struct osd_device *osd);
 
 #endif
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
-               struct obd_statfs *sfs);
+	       struct obd_statfs *sfs, struct obd_statfs_info *info);
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id);
 struct inode *

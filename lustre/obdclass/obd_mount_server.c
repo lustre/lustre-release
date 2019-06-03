@@ -1657,7 +1657,7 @@ static int server_statfs(struct dentry *dentry, struct kstatfs *buf)
 	ENTRY;
 
 	if (lsi->lsi_dt_dev) {
-		rc = dt_statfs(NULL, lsi->lsi_dt_dev, &statfs);
+		rc = dt_statfs(NULL, lsi->lsi_dt_dev, &statfs, NULL);
 		if (rc == 0) {
 			statfs_unpack(buf, &statfs);
 			buf->f_type = sb->s_magic;

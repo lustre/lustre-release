@@ -10159,3 +10159,36 @@ sleep_maxage() {
 		      awk '{ print $1 * 2; exit; }')
 	sleep $delay
 }
+
+check_component_count() {
+	local comp_cnt=$($LFS getstripe --component-count $1)
+	[ $comp_cnt -eq $2 ] || error "$1, component count $comp_cnt != $2"
+}
+
+# Verify there are no init components with "extension" flag
+verify_no_init_extension() {
+	local flg_opts="--component-flags init,extension"
+	local found=$($LFS find $flg_opts $1 | wc -l)
+	[ $found -eq 0 ] || error "$1 has component with initialized extension"
+}
+
+# Verify there is at least one component starting at 0
+verify_comp_at_zero() {
+	flg_opts="--component-flags init"
+	found=$($LFS find --component-start 0M $flg_opts $1 | wc -l)
+	[ $found -eq 1 ] ||
+		error "No component starting at zero(!)"
+}
+
+#TODO: This version is a placeholder, to be replaced before final commit
+SEL_VER="2.12.52"
+
+sel_layout_sanity() {
+	local file=$1
+	local comp_cnt=$2
+
+	verify_no_init_extension $file
+	verify_comp_at_zero $file
+	check_component_count $file $comp_cnt
+}
+

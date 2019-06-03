@@ -195,7 +195,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 	/* 2MB for the cases when free space hasn't been learned yet */
 	loghandle->lgh_max_size = 2 << 20;
 	dt = lu2dt_dev(cathandle->lgh_obj->do_lu.lo_dev);
-	rc = dt_statfs(env, dt, &lgi->lgi_statfs);
+	rc = dt_statfs(env, dt, &lgi->lgi_statfs, NULL);
 	if (rc == 0 && lgi->lgi_statfs.os_bfree > 0) {
 		__u64 freespace = (lgi->lgi_statfs.os_bfree *
 				  lgi->lgi_statfs.os_bsize) >> 6;

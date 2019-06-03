@@ -2032,7 +2032,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 				continue;
 
 			tgt_dt = tgt->ltd_tgt;
-			rc = dt_statfs(env, tgt_dt, &info->lti_osfs);
+			rc = dt_statfs(env, tgt_dt, &info->lti_osfs, NULL);
 			if (rc) {
 				/* this OSP doesn't feel well */
 				rc = 0;
@@ -6136,6 +6136,511 @@ static int lod_declare_instantiate_components(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * Check OSTs for an existing component for further extension
+ *
+ * Checks if OSTs are still healthy and not out of space.  Gets free space
+ * on OSTs (relative to allocation watermark rmb_low) and compares to
+ * the proposed new_end for this component.
+ *
+ * Decides whether or not to extend a component on its current OSTs.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		object we're checking
+ * \param[in] index		index of this component
+ * \param[in] extension_size	extension size for this component
+ * \param[in] extent		layout extent for requested operation
+ * \param[in] comp_extent	extension component extent
+ * \param[in] write		if this is write operation
+ *
+ * \retval	true - OK to extend on current OSTs
+ * \retval	false - do not extend on current OSTs
+ */
+static bool lod_sel_osts_allowed(const struct lu_env *env,
+				 struct lod_object *lo,
+				 int index, __u64 extension_size,
+				 struct lu_extent *extent,
+				 struct lu_extent *comp_extent, int write)
+{
+	struct lod_layout_component *lod_comp = &lo->ldo_comp_entries[index];
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
+	__u64 available = 0;
+	__u64 size;
+	bool ret = true;
+	int i, rc;
+
+	ENTRY;
+
+	LASSERT(lod_comp->llc_stripe_count != 0);
+
+	if (write == 0 ||
+	    (extent->e_start == 0 && extent->e_end == OBD_OBJECT_EOF)) {
+		/* truncate or append */
+		size = extension_size;
+	} else {
+		/* In case of write op, check the real write extent,
+		 * it may be larger than the extension_size */
+		size = roundup(min(extent->e_end, comp_extent->e_end) -
+			       max(extent->e_start, comp_extent->e_start),
+			       extension_size);
+	}
+	/* extension_size is file level, so we must divide by stripe count to
+	 * compare it to available space on a single OST */
+	size /= lod_comp->llc_stripe_count;
+
+	lod_getref(&lod->lod_ost_descs);
+	for (i = 0; i < lod_comp->llc_stripe_count; i++) {
+		int index = lod_comp->llc_ost_indices[i];
+		struct lod_tgt_desc *ost = OST_TGT(lod, index);
+		struct obd_statfs_info info = { 0 };
+		int j, repeated = 0;
+
+		LASSERT(ost);
+
+		/* Get the number of times this OST repeats in this component.
+		 * Note: inter-component repeats are not counted as this is
+		 * considered as a rare case: we try to not repeat OST in other
+		 * components if possible. */
+		for (j = 0; j < lod_comp->llc_stripe_count; j++) {
+			if (index != lod_comp->llc_ost_indices[j])
+				continue;
+
+			/* already handled */
+			if (j < i)
+				break;
+
+			repeated++;
+		}
+		if (j < lod_comp->llc_stripe_count)
+			continue;
+
+		if (!cfs_bitmap_check(lod->lod_ost_bitmap, index)) {
+			CDEBUG(D_LAYOUT, "ost %d no longer present\n", index);
+			ret = false;
+			break;
+		}
+
+		rc = dt_statfs(env, ost->ltd_ost, sfs, &info);
+		if (rc) {
+			CDEBUG(D_LAYOUT, "statfs failed for ost %d, error %d\n",
+			       index, rc);
+			ret = false;
+			break;
+		}
+
+		if (sfs->os_state & OS_STATE_ENOSPC ||
+		    sfs->os_state & OS_STATE_READONLY ||
+		    sfs->os_state & OS_STATE_DEGRADED) {
+			CDEBUG(D_LAYOUT, "ost %d is not availble for SEL "
+			       "extension, state %u\n", index, sfs->os_state);
+			ret = false;
+			break;
+		}
+
+		/* In bytes */
+		available = sfs->os_bavail * sfs->os_bsize;
+		/* 'available' is relative to the allocation threshold */
+		available -= (__u64) info.os_reserved_mb_low << 20;
+
+		CDEBUG(D_LAYOUT, "ost %d lowwm: %d highwm: %d, "
+		       "%llu %% blocks available, %llu %% blocks free\n",
+		       index, info.os_reserved_mb_low, info.os_reserved_mb_high,
+		       (100ull * sfs->os_bavail) / sfs->os_blocks,
+		       (100ull * sfs->os_bfree) / sfs->os_blocks);
+
+		if (size * repeated > available) {
+			ret = false;
+			CDEBUG(D_LAYOUT, "low space on ost %d, available %llu "
+			       "< extension size %llu\n", index, available,
+			       extension_size);
+			break;
+		}
+	}
+	lod_putref(lod, &lod->lod_ost_descs);
+
+	RETURN(ret);
+}
+
+/**
+ * Adjust extents after component removal
+ *
+ * When we remove an extension component, we move the start of the next
+ * component to match the start of the extension component, so no space is left
+ * without layout.
+ *
+ * \param[in] env	execution environment for this thread
+ * \param[in] lo	object
+ * \param[in] max_comp	layout component
+ * \param[in] index	index of this component
+ *
+ * \retval		0 on success
+ * \retval		negative errno on error
+ */
+static void lod_sel_adjust_extents(const struct lu_env *env,
+				   struct lod_object *lo,
+				   int max_comp, int index)
+{
+	struct lod_layout_component *lod_comp = NULL;
+	struct lod_layout_component *next = NULL;
+	struct lod_layout_component *prev = NULL;
+	__u64 new_start = 0;
+	__u64 start;
+	int i;
+
+	/* Extension space component */
+	lod_comp = &lo->ldo_comp_entries[index];
+	next = &lo->ldo_comp_entries[index + 1];
+	prev = &lo->ldo_comp_entries[index - 1];
+
+	LASSERT(lod_comp != NULL && prev != NULL && next != NULL);
+	LASSERT(lod_comp->llc_flags & LCME_FL_EXTENSION);
+
+	/* Previous is being removed */
+	if (prev && prev->llc_id == LCME_ID_INVAL)
+		new_start = prev->llc_extent.e_start;
+	else
+		new_start = lod_comp->llc_extent.e_start;
+
+	for (i = index + 1; i < max_comp; i++) {
+		lod_comp = &lo->ldo_comp_entries[i];
+
+		start = lod_comp->llc_extent.e_start;
+		lod_comp->llc_extent.e_start = new_start;
+
+		/* We only move zero length extendable components */
+		if (!(start == lod_comp->llc_extent.e_end))
+			break;
+
+		LASSERT(!(lod_comp->llc_flags & LCME_FL_INIT));
+
+		lod_comp->llc_extent.e_end = new_start;
+	}
+}
+
+/* Calculate the proposed 'new end' for a component we're extending */
+static __u64 lod_extension_new_end(__u64 extension_size, __u64 extent_end,
+				   __u32 stripe_size, __u64 component_end,
+				   __u64 extension_end)
+{
+	__u64 new_end;
+
+	LASSERT(extension_size != 0 && stripe_size != 0);
+
+	/* Round up to extension size */
+	if (extent_end == OBD_OBJECT_EOF) {
+		new_end = OBD_OBJECT_EOF;
+	} else {
+		/* Add at least extension_size to the previous component_end,
+		 * covering the req layout extent */
+		new_end = max(extent_end - component_end, extension_size);
+		new_end = roundup(new_end, extension_size);
+		new_end += component_end;
+
+		/* Component end must be min stripe size aligned */
+		if (new_end % stripe_size) {
+			CDEBUG(D_LAYOUT, "new component end is not aligned "
+			       "by the stripe size %u: [%llu, %llu) ext size "
+			       "%llu new end %llu, aligning\n",
+			       stripe_size, component_end, extent_end,
+			       extension_size, new_end);
+			new_end = roundup(new_end, stripe_size);
+		}
+
+		/* Overflow */
+		if (new_end < extent_end)
+			new_end = OBD_OBJECT_EOF;
+	}
+
+	/* Don't extend past the end of the extension component */
+	if (new_end > extension_end)
+		new_end = extension_end;
+
+	return new_end;
+}
+
+/**
+ * Process extent updates for a particular layout component
+ *
+ * Handle layout updates for a particular extension space component touched by
+ * a layout update operation.  Core function of self-extending PFL feature.
+ *
+ * In general, this function processes exactly *one* stage of an extension
+ * operation, modifying the layout accordingly, then returns to the caller.
+ * The caller is responsible for restarting processing with the new layout,
+ * which may repeatedly return to this function until the extension updates
+ * are complete.
+ *
+ * This function does one of a few things to the layout:
+ * 1. Extends the component before the current extension space component to
+ * allow it to accomodate the requested operation (if space/policy permit that
+ * component to continue on its current OSTs)
+ *
+ * 2. If extension of the existing component fails, we do one of two things:
+ *    a. If there is a component after the extension space, we remove the
+ *       extension space component, move the start of the next component down
+ *       accordingly, then notify the caller to restart processing w/the new
+ *       layout.
+ *    b. If there is no following component, we extend the current component
+ *       regardless.
+ *
+ * Note further that uninited components followed by extension space can be zero
+ * length meaning that we will try to extend them before initializing them, and
+ * if that fails, they will be removed without initialization.
+ *
+ * 3. If we extend to/beyond the end of an extension space component, that
+ * component is exhausted (all of its range has been given to real components),
+ * so we remove it and restart processing.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in,out] lo		object to update the layout of
+ * \param[in] extent		layout extent for requested operation, update
+ *				layout to fit this operation
+ * \param[in] th		transaction handle for this operation
+ * \param[in,out] max_comp	the highest comp for the portion of the layout
+ *				we are operating on (For FLR, the chosen
+ *				replica).  Updated because we may remove
+ *				components.
+ * \param[in] index		index of the extension space component we're
+ *				working on
+ * \param[in] write		if this is write op
+ * \param[in,out] force		if the extension is to be forced; set here
+				to force it on the 2nd call for the same
+				extension component
+ *
+ * \retval	0 on success
+ * \retval	negative errno on error
+ */
+static int lod_sel_handler(const struct lu_env *env,
+			  struct lod_object *lo,
+			  struct lu_extent *extent,
+			  struct thandle *th, int *max_comp,
+			  int index, int write, int *force)
+{
+	struct lod_device *d = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_layout_component *lod_comp;
+	struct lod_layout_component *prev;
+	struct lod_layout_component *next = NULL;
+	__u64 extension_size;
+	__u64 new_end = 0;
+	int change = 0;
+	int rc = 0;
+	ENTRY;
+
+	/* First component cannot be extension space */
+	if (index == 0) {
+		CERROR("%s: "DFID" first component cannot be extension space\n",
+		       lod2obd(d)->obd_name, PFID(lod_object_fid(lo)));
+		RETURN(-EINVAL);
+	}
+
+	lod_comp = &lo->ldo_comp_entries[index];
+	prev = &lo->ldo_comp_entries[index - 1];
+	if ((index + 1) < *max_comp)
+		next = &lo->ldo_comp_entries[index + 1];
+
+	/* extension size uses the stripe size field as KiB */
+	extension_size = lod_comp->llc_stripe_size * SEL_UNIT_SIZE;
+
+	CDEBUG(D_LAYOUT, "prev start %llu, extension start %llu, extension end"
+	       " %llu, extension size %llu\n", prev->llc_extent.e_start,
+	       lod_comp->llc_extent.e_start, lod_comp->llc_extent.e_end,
+	       extension_size);
+
+	/* Two extension space components cannot be adjacent & extension space
+	 * components cannot be init */
+	if ((prev->llc_flags & LCME_FL_EXTENSION) ||
+	    !(ergo(next, !(next->llc_flags & LCME_FL_EXTENSION))) ||
+	     lod_comp_inited(lod_comp)) {
+		CERROR("%s: "DFID" invalid extension space components\n",
+		       lod2obd(d)->obd_name, PFID(lod_object_fid(lo)));
+		RETURN(-EINVAL);
+	}
+
+	if (!prev->llc_stripe) {
+		CDEBUG(D_LAYOUT, "Previous component not inited\n");
+		info->lti_count = 1;
+		info->lti_comp_idx[0] = index - 1;
+		rc = lod_declare_instantiate_components(env, lo, th);
+		/* ENOSPC tells us we can't use this component, so it's the
+		 * same as if check_extension failed.  But if there is no next,
+		 * we have no fall back if we failed to stripe this, and we
+		 * should return the error. */
+		if (rc == -ENOSPC && next)
+			rc = 1;
+		if (rc < 0)
+			RETURN(rc);
+	}
+
+	if (*force == 0 && rc == 0)
+		rc = !lod_sel_osts_allowed(env, lo, index - 1,
+					   extension_size, extent,
+					   &lod_comp->llc_extent, write);
+	*force = 0;
+
+	/* Extend previous component */
+	if (rc == 0) {
+		new_end = lod_extension_new_end(extension_size, extent->e_end,
+						prev->llc_stripe_size,
+						prev->llc_extent.e_end,
+						lod_comp->llc_extent.e_end);
+
+		CDEBUG(D_LAYOUT, "new end %llu\n", new_end);
+		lod_comp->llc_extent.e_start = new_end;
+		prev->llc_extent.e_end = new_end;
+
+		if (prev->llc_extent.e_end == lod_comp->llc_extent.e_end) {
+			CDEBUG(D_LAYOUT, "Extension component exhausted\n");
+			lod_comp->llc_id = LCME_ID_INVAL;
+			change--;
+		}
+	} else {
+		/* rc == 1, failed to extend current component */
+		LASSERT(rc == 1);
+		if (next) {
+			/* Normal 'spillover' case - Remove the extension
+			 * space component & bring down the start of the next
+			 * component. */
+			lod_comp->llc_id = LCME_ID_INVAL;
+			change--;
+			if (!(prev->llc_flags & LCME_FL_INIT)) {
+				prev->llc_id = LCME_ID_INVAL;
+				change--;
+			}
+			lod_sel_adjust_extents(env, lo, *max_comp, index);
+		} else {
+			*force = 1;
+		}
+	}
+
+	if (change < 0) {
+		rc = lod_layout_del_prep_layout(env, lo, NULL);
+		if (rc < 0)
+			RETURN(rc);
+		LASSERTF(-rc == change,
+			 "number deleted %d != requested %d\n", -rc,
+			 change);
+	}
+	*max_comp = *max_comp + change;
+
+	/* lod_del_prep_layout reallocates ldo_comp_entries, so we must
+	 * refresh these pointers before using them */
+	lod_comp = &lo->ldo_comp_entries[index];
+	prev = &lo->ldo_comp_entries[index - 1];
+	CDEBUG(D_LAYOUT, "After extent updates: prev start %llu, current start "
+	       "%llu, current end %llu max_comp %d ldo_comp_cnt %d\n",
+	       prev->llc_extent.e_start, lod_comp->llc_extent.e_start,
+	       lod_comp->llc_extent.e_end, *max_comp, lo->ldo_comp_cnt);
+
+	/* Layout changed successfully */
+	RETURN(0);
+}
+
+/**
+ * Declare layout extent updates
+ *
+ * Handles extensions.  Identifies extension components touched by current
+ * operation and passes them to processing function.
+ *
+ * Restarts with updated layouts from the processing function until the current
+ * operation no longer touches an extension space component.
+ *
+ * \param[in] env	execution environment for this thread
+ * \param[in,out] lo	object to update the layout of
+ * \param[in] extent	layout extent for requested operation, update layout to
+ *			fit this operation
+ * \param[in] th	transaction handle for this operation
+ * \param[in] pick	identifies chosen mirror for FLR layouts
+ * \param[in] write	if this is write op
+ *
+ * \retval	1 on layout changed, 0 on no change
+ * \retval	negative errno on error
+ */
+static int lod_declare_update_extents(const struct lu_env *env,
+		struct lod_object *lo, struct lu_extent *extent,
+		struct thandle *th, int pick, int write)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_layout_component *lod_comp;
+	bool layout_changed = false;
+	int start_index;
+	int i = 0;
+	int max_comp = 0;
+	int rc = 0, rc2;
+	int change = 0;
+	int force = 0;
+	ENTRY;
+
+	/* This makes us work on the components of the chosen mirror */
+	start_index = lo->ldo_mirrors[pick].lme_start;
+	max_comp = lo->ldo_mirrors[pick].lme_end + 1;
+	if (lo->ldo_flr_state == LCM_FL_NONE)
+		LASSERT(start_index == 0 && max_comp == lo->ldo_comp_cnt);
+
+	CDEBUG(D_LAYOUT, "extent->e_start %llu, extent->e_end %llu\n",
+	       extent->e_start, extent->e_end);
+	for (i = start_index; i < max_comp; i++) {
+		lod_comp = &lo->ldo_comp_entries[i];
+
+		/* We've passed all components of interest */
+		if (lod_comp->llc_extent.e_start >= extent->e_end)
+			break;
+
+		if (lod_comp->llc_flags & LCME_FL_EXTENSION) {
+			layout_changed = true;
+			rc = lod_sel_handler(env, lo, extent, th, &max_comp,
+					     i, write, &force);
+			if (rc < 0)
+				GOTO(out, rc);
+
+			/* Nothing has changed behind the prev one */
+			i -= 2;
+			continue;
+		}
+	}
+
+	/* We may have removed components.  If so, we must update the start &
+	 * ends of all the mirrors after the current one, and the end of the
+	 * current mirror.
+	 */
+	change = max_comp - 1 - lo->ldo_mirrors[pick].lme_end;
+	if (change) {
+		lo->ldo_mirrors[pick].lme_end += change;
+		for (i = pick + 1; i < lo->ldo_mirror_count; i++) {
+			lo->ldo_mirrors[i].lme_start += change;
+			lo->ldo_mirrors[i].lme_end += change;
+		}
+	}
+
+	EXIT;
+out:
+	/* The amount of components has changed, adjust the lti_comp_idx */
+	rc2 = lod_layout_data_init(info, lo->ldo_comp_cnt);
+
+	return rc < 0 ? rc : rc2 < 0 ? rc2 : layout_changed;
+}
+
+/* If striping is already instantiated or INIT'ed DOM? */
+static bool lod_is_instantiation_needed(struct lod_layout_component *comp)
+{
+	return !(((lov_pattern(comp->llc_pattern) == LOV_PATTERN_MDT) &&
+		  lod_comp_inited(comp)) || comp->llc_stripe);
+}
+
+/**
+ * Declare layout update for a non-FLR layout.
+ *
+ * \param[in] env	execution environment for this thread
+ * \param[in,out] lo	object to update the layout of
+ * \param[in] layout	layout intent for requested operation, "update" is
+ *			a process of reacting to this
+ * \param[in] buf	buffer containing lov ea (see comment on usage inline)
+ * \param[in] th	transaction handle for this operation
+ *
+ * \retval	0 on success
+ * \retval	negative errno on error
+ */
 static int lod_declare_update_plain(const struct lu_env *env,
 		struct lod_object *lo, struct layout_intent *layout,
 		const struct lu_buf *buf, struct thandle *th)
@@ -6144,6 +6649,7 @@ static int lod_declare_update_plain(const struct lu_env *env,
 	struct lod_device *d = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_layout_component *lod_comp;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
+	bool layout_changed = false;
 	bool replay = false;
 	int i, rc;
 	ENTRY;
@@ -6179,6 +6685,11 @@ static int lod_declare_update_plain(const struct lu_env *env,
 		/* old on-disk EA is stored in info->lti_buf */
 		comp_v1 = (struct lov_comp_md_v1 *)info->lti_buf.lb_buf;
 		replay = true;
+		layout_changed = true;
+
+		rc = lod_layout_data_init(info, lo->ldo_comp_cnt);
+		if (rc)
+			GOTO(out, rc);
 	} else {
 		/* non replay path */
 		rc = lod_striping_load(env, lo);
@@ -6191,17 +6702,26 @@ static int lod_declare_update_plain(const struct lu_env *env,
 	if (lo->ldo_comp_cnt > 1 &&
 	    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
 	    lod_comp->llc_extent.e_end < layout->li_extent.e_end) {
-		CDEBUG(replay ? D_ERROR : D_LAYOUT,
-		       "%s: the defined layout [0, %#llx) does not covers "
-		       "the write range "DEXT"\n",
-		       lod2obd(d)->obd_name, lod_comp->llc_extent.e_end,
-		       PEXT(&layout->li_extent));
+		CDEBUG_LIMIT(replay ? D_ERROR : D_LAYOUT,
+			     "%s: the defined layout [0, %#llx) does not "
+			     "covers the write range "DEXT"\n",
+			     lod2obd(d)->obd_name, lod_comp->llc_extent.e_end,
+			     PEXT(&layout->li_extent));
 		GOTO(out, rc = -EINVAL);
 	}
 
-	CDEBUG(D_LAYOUT, "%s: "DFID": instantiate components "DEXT"\n",
+	CDEBUG(D_LAYOUT, "%s: "DFID": update components "DEXT"\n",
 	       lod2obd(d)->obd_name, PFID(lod_object_fid(lo)),
 	       PEXT(&layout->li_extent));
+
+	if (!replay) {
+		rc = lod_declare_update_extents(env, lo, &layout->li_extent,
+				th, 0, layout->li_opc == LAYOUT_INTENT_WRITE);
+		if (rc < 0)
+			GOTO(out, rc);
+		else if (rc)
+			layout_changed = true;
+	}
 
 	/*
 	 * Iterate ld->ldo_comp_entries, find the component whose extent under
@@ -6214,7 +6734,8 @@ static int lod_declare_update_plain(const struct lu_env *env,
 			break;
 
 		if (!replay) {
-			if (lod_comp_inited(lod_comp))
+			/* If striping is instantiated or INIT'ed DOM skip */
+			if (!lod_is_instantiation_needed(lod_comp))
 				continue;
 		} else {
 			/**
@@ -6238,17 +6759,19 @@ static int lod_declare_update_plain(const struct lu_env *env,
 
 		LASSERT(info->lti_comp_idx != NULL);
 		info->lti_comp_idx[info->lti_count++] = i;
+		layout_changed = true;
 	}
 
-	if (info->lti_count == 0)
+	if (!layout_changed)
 		RETURN(-EALREADY);
 
 	lod_obj_inc_layout_gen(lo);
 	rc = lod_declare_instantiate_components(env, lo, th);
+	EXIT;
 out:
 	if (rc)
 		lod_striping_free(env, lo);
-	RETURN(rc);
+	return rc;
 }
 
 static inline int lod_comp_index(struct lod_object *lo,
@@ -6573,7 +7096,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 						     &lod_comp->llc_extent))
 				break;
 
-			if (lod_comp_inited(lod_comp))
+			if (!lod_is_instantiation_needed(lod_comp))
 				continue;
 
 			info->lti_comp_idx[info->lti_count++] =
@@ -6730,7 +7253,7 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 						     &lod_comp->llc_extent))
 				break;
 
-			if (lod_comp_inited(lod_comp))
+			if (!lod_is_instantiation_needed(lod_comp))
 				continue;
 
 			CDEBUG(D_LAYOUT, "write instantiate %d / %d\n",

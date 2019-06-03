@@ -456,7 +456,7 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 							      next, osfs);
 			else
 				rc = dt_statfs(info->mti_env, mdt->mdt_bottom,
-					       osfs);
+					       osfs, NULL);
 			if (rc)
 				GOTO(out, rc);
 			spin_lock(&mdt->mdt_lock);

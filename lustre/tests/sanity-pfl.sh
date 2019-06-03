@@ -174,11 +174,6 @@ test_1c() {
 }
 run_test 1c "Test overstriping w/max stripe count"
 
-check_component_count() {
-	local comp_cnt=$($LFS getstripe --component-count $1)
-	[ $comp_cnt -ne $2 ] && error "$1, component count $comp_cnt != $2"
-}
-
 test_2() {
 	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((5 * 1024 * 1024))	# 5M
@@ -949,6 +944,734 @@ test_18() {
 
 }
 run_test 18 "check component distribution"
+
+test19_io_base() {
+	local comp_file=$1
+	local already_created=${2:-0}
+	local rw_len=$((3 * 1024 * 1024))       # 3M
+	local flg_opts=""
+	local found=""
+
+	if [ $already_created != 1 ]; then
+		test_mkdir -p $DIR/$tdir
+		$LFS setstripe --extension-size 64M -c 1 -E -1 $comp_file ||
+			error "Create $comp_file failed"
+	fi
+
+	# write past end of first component, so it is extended
+	dd if=/dev/zero of=$comp_file bs=1M count=1 seek=127 conv=notrunc ||
+		error "dd to extend failed"
+
+	local ost_idx1=$($LFS getstripe -I1 -i $comp_file)
+	local ost_idx2=$($LFS getstripe -I2 -i $comp_file)
+
+	[ $ost_idx1 -eq $ost_idx2 ] && error "$ost_idx1 == $ost_idx2"
+	[ $ost_idx2 -ne "-1" ] && error "second component init $ost_idx2"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 0 -E 128M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: Extended first component not found"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 128M -E EOF $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: Second component not found"
+
+	small_write $comp_file $rw_len || error "Verify RW failed"
+
+	sel_layout_sanity $comp_file 2
+}
+
+# Self-extending PFL tests
+test_19a() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	test19_io_base $DIR/$tdir/$tfile
+}
+run_test 19a "Simple test of extension behavior"
+
+# Same as 19a, but with default layout set on directory rather than on file
+test_19b() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+	$LFS setstripe --ext-size 64M -c 1 -E -1 $DIR/$tdir ||
+		error "Setstripe on $DIR/$tdir failed"
+
+	touch $comp_file
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 0 -E 64M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Inheritance: wrong first component size"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 64M -E EOF $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Inheritance: Second component not found"
+
+	test19_io_base $comp_file 1
+}
+run_test 19b "Simple test of SEL as default layout"
+
+# Test behavior when seeking deep in a file
+test_19c() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	$LFS setstripe -z 128M -E 1G -E -1 $comp_file ||
+		error "Create $comp_file failed"
+
+	# write past end of first component, so it is extended
+	dd if=/dev/zero of=$comp_file bs=1M count=1 seek=130 conv=notrunc ||
+		error "dd to extend failed"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 0M -E 256M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: first extension component not found"
+
+	flg_opts="--comp-flags extension,^init"
+	found=$($LFS find --comp-start 256M -E 1024M $flg_opts $comp_file |\
+		wc -l)
+	[ $found -eq 1 ] || error "Write: second extension component not found"
+
+	local end_1=$($LFS getstripe -I1 -E $comp_file)
+
+	# 256 MiB
+	[ $end_1 -eq 268435456 ] ||
+		error "end of first component $end_1 != 268435456"
+
+	# Write past end of extension space component, in to normal component
+	# should exhaust & remove extension component
+	dd if=/dev/zero bs=1M count=1 seek=1100 of=$comp_file conv=notrunc ||
+		error "dd distant seek failed"
+
+	local ost_idx1=$($LFS getstripe -I1 -i $comp_file)
+	# the last component index is 3
+	local ost_idx2=$($LFS getstripe -I3 -i $comp_file)
+
+	[ $ost_idx1 -eq $ost_idx2 ] && error "$ost_idx1 == $ost_idx2"
+
+	local start1=$($LFS getstripe -I1 --comp-start $comp_file)
+	local end1=$($LFS getstripe -I1 -E $comp_file)
+	local start2=$($LFS getstripe -I3 --comp-start $comp_file)
+	local end2=$($LFS getstripe -I3 -E $comp_file)
+
+	[ $start1 -eq 0 ] || error "start of first component incorrect"
+	[ $end1 -eq 1073741824 ] || error "end of first component incorrect"
+	[ $start2 -eq 1073741824  ] ||
+		error "start of second component incorrect"
+	[ "$end2" = "EOF" ] || error "end of second component incorrect"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 0 ] || error "Seek Write: extension component exists"
+
+	sel_layout_sanity $comp_file 2
+}
+run_test 19c "Test self-extending layout seeking behavior"
+
+test_19d() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 128M -c 1 -z 64M -E -1 $comp_file ||
+		error "Create $comp_file failed"
+
+	# This will cause component 1 to be extended to 128M, then the
+	# extension space component will be removed
+	dd if=/dev/zero of=$comp_file bs=130M count=1 ||
+		error "dd to extend failed"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 0M -E 128M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: first component not found"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 128M -E EOF $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: second component not found"
+
+	sel_layout_sanity $comp_file 2
+
+	# always remove large files in case of DO_CLEANUP=false
+	rm -f $comp_file || error "Delete $comp_file failed"
+}
+run_test 19d "Test write which completely spans extension space component"
+
+test_19e_check() {
+	comp_file=$1
+
+	local comp2_flags=$($LFS getstripe -I2 --comp-flags $comp_file)
+	local comp3_flags=$($LFS getstripe -I3 --comp-flags $comp_file)
+
+	[ "$comp2_flags" != "init" ] && error "$comp2_flags != init"
+	[ "$comp3_flags" != "extension" ] && error "$comp3_flags != extension"
+
+	local flg_opts=" --comp-start 2M -E 66M --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: extended second component not found"
+
+	flg_opts="--comp-start 66M -E EOF --comp-flags extension"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: third component not found"
+
+	sel_layout_sanity $comp_file 3
+}
+
+test_19e() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local rw_len=$((3 * 1024 * 1024))       # 3M
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 2m -E -1 -z 64M $comp_file ||
+		error "Create $comp_file failed"
+
+	replay_barrier $SINGLEMDS
+
+	#instantiate & extend second component
+	dd if=/dev/zero of=$comp_file bs=4M count=1 ||
+		error "dd to extend failed"
+
+	local ost_idx2=$($LFS getstripe -I2 -i $comp_file)
+	local ost_idx3=$($LFS getstripe -I3 -i $comp_file)
+
+	[ $ost_idx2 -eq $ost_idx3 ] && error "$ost_idx2 == $ost_idx3"
+	[ $ost_idx3 -ne "-1" ] && error "third component init $ost_idx3"
+
+	test_19e_check $comp_file
+
+	local f1=$($LFS getstripe -I2 $comp_file | awk '/l_fid:/ {print $7}')
+	echo "before MDS recovery, the ost fid of 2nd component is $f1"
+
+	fail $SINGLEMDS
+
+	local f2=$($LFS getstripe -I2 $comp_file | awk '/l_fid:/ {print $7}')
+	echo "after MDS recovery, the ost fid of 2nd component is $f2"
+	[ "x$f1" == "x$f2" ] || error "$f1 != $f2"
+
+	# simply repeat all previous checks, but also verify components are on
+	# the same OST as before
+
+	local ost_idx2_2=$($LFS getstripe -I2 -i $comp_file)
+	local ost_idx3_2=$($LFS getstripe -I3 -i $comp_file)
+
+	[ $ost_idx2_2 -eq $ost_idx3_2 ] && error "$ost_idx2_2 == $ost_idx3_2"
+	[ $ost_idx3_2 -ne "-1" ] && error "second component init $ost_idx3_2"
+
+	# verify OST id is the same after failover
+	[ $ost_idx2 -ne $ost_idx2_2 ] &&
+		error "$ost_idx2 != $ost_idx2_2, changed after failover"
+
+	test_19e_check $comp_file
+}
+run_test 19e "Replay of layout instantiation & extension"
+
+# Test out of space behavior
+test_20a() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	# without this, a previous delete can finish after we check free space
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	# First component is on OST0
+	$LFS setstripe -E 256M -i 0 -z 64M -E -1 -z 1G $comp_file ||
+		error "Create $comp_file failed"
+
+	# write past end of first component, so it is extended
+	dd if=/dev/zero of=$comp_file bs=1M count=1 seek=66 ||
+		error "dd to extend failed"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 128M -E 256M $flg_opts $comp_file |wc -l)
+	[ $found -eq 1 ] || error "Write: Second component not found"
+
+	local ost_idx1=$($LFS getstripe -I1 -i $comp_file)
+	local wms=$(ost_watermarks_set_enospc $tfile $ost_idx1 |
+		    grep "watermarks")
+	stack_trap "ost_watermarks_clear_enospc $tfile $ost_idx1 $wms" EXIT
+
+	flg_opts="--comp-flags extension"
+	# Write past current init comp, but we won't extend (because no space)
+	dd if=/dev/zero of=$comp_file bs=1M count=10 seek=200 ||
+		error "dd write past current comp failed"
+
+	$LFS getstripe $comp_file
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 128M -E 1152M $flg_opts $comp_file | \
+		wc -l)
+	[ $found -eq 1 ] || error "Write: third component not found"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 1152M -E EOF $flg_opts $comp_file |wc -l)
+	[ $found -eq 1 ] || error "Write: fourth extension component not found"
+
+	sel_layout_sanity $comp_file 3
+}
+run_test 20a "Test out of space, spillover to defined component"
+
+test_20b() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	# Pool allows us to force use of only certain OSTs
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 || error "Pool add targets failed"
+
+	# normal component to 10M, extendable component to 1G
+	# further extendable to EOF
+	$LFS setstripe -E 10M -E 1G -p $TESTNAME -z 64M -E -1 -p "" -z 512M \
+		$comp_file || error "Create $comp_file failed"
+
+	replay_barrier $SINGLEMDS
+
+	found=$($LFS find --comp-start 10M -E 10M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Zero length component not found"
+
+	local ost_idx1=0
+	local wms=$(ost_watermarks_set_enospc $tfile $ost_idx1 |
+		    grep "watermarks")
+	stack_trap "ost_watermarks_clear_enospc $tfile $ost_idx1 $wms" EXIT
+
+	# write past end of first component
+	# This should remove the next component, since OST0 is out of space
+	# and it is striped there (pool contains only OST0)
+	dd if=/dev/zero of=$comp_file bs=1M count=1 seek=14 ||
+		error "dd to extend/remove failed"
+
+	$LFS getstripe $comp_file
+
+	found=$($LFS find --comp-start 10M -E 10M $flg_opts $comp_file | wc -l)
+	[ $found -eq 0 ] || error "Write: zero length component still present"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 10M -E 522M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: second component not found"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 522M -E EOF $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: third component not found"
+
+	fail $SINGLEMDS
+
+	found=$($LFS find --comp-start 10M -E 10M $flg_opts $comp_file | wc -l)
+	[ $found -eq 0 ] || error "Failover: 0-length component still present"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 10M -E 522M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Failover: second component not found"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 522M -E EOF $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Failover: third component not found"
+
+	sel_layout_sanity $comp_file 3
+}
+run_test 20b "Remove component without instantiation when there is no space"
+
+test_20c() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	# pool is used to limit available OSTs to 0 and 1, so we can set all
+	# available OSTs out of space
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 1 || error "Pool add targets failed"
+
+	# without this, a previous delete can finish after we check free space
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	$LFS setstripe -E 100M -E -1 -p $TESTNAME -z 64M $comp_file ||
+		error "Create $comp_file failed"
+
+	local ost_idx1=0
+	local ost_idx2=1
+	local wms=$(ost_watermarks_set_enospc $tfile $ost_idx1 |
+		    grep "watermarks")
+	local wms2=$(ost_watermarks_set_enospc $tfile $ost_idx2 |
+		     grep "watermarks")
+	stack_trap "ost_watermarks_clear_enospc $tfile $ost_idx1 $wms" EXIT
+	stack_trap "ost_watermarks_clear_enospc $tfile $ost_idx2 $wms2" EXIT
+
+	dd if=/dev/zero of=$comp_file bs=1M count=1 seek=120 &&
+		error "dd should fail with ENOSPC"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 0M -E 100M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: First component not found"
+
+	flg_opts="--comp-flags ^init"
+	found=$($LFS find --comp-start 100M -E 100M $flg_opts $comp_file |wc -l)
+	[ $found -eq 1 ] || error "Write: 0-length component not found"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 100M -E EOF $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: third extension component not found"
+
+	sel_layout_sanity $comp_file 3
+}
+run_test 20c "Test inability to stripe new extension component"
+
+test_20d() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 || error "Pool add targets failed"
+	$LFS setstripe -E 64m -E -1 -p $TESTNAME -z 64M $comp_file ||
+		error "Create $comp_file failed"
+
+	replay_barrier $SINGLEMDS
+
+	local wms=$(ost_watermarks_set_low_space 0 | grep "watermarks")
+	dd if=/dev/zero bs=1M count=1 seek=100 of=$comp_file
+	RC=$?
+
+	ost_watermarks_clear_enospc $tfile 0 $wms
+	[ $RC -eq 0 ] || error "dd failed: $RC"
+
+	$LFS getstripe $comp_file
+	local flg_opts="--comp-start 64M -E 128M --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: component (64M-128M) not found"
+
+	local ost_idx=$($LFS getstripe -I3 -i $comp_file)
+	[ "$ost_idx" != "-1" ] && error "Write: EXT component disappeared"
+
+	fail $SINGLEMDS
+
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Failover: component (64M-128M) not found"
+
+	ost_idx=$($LFS getstripe -I3 -i $comp_file)
+	[ "$ost_idx" != "-1" ] && error "Failover: EXT component disappeared"
+
+	sel_layout_sanity $comp_file 3
+}
+run_test 20d "Low on space + 0-length comp: force extension"
+
+test_20e() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 || error "Pool add targets failed"
+
+	$LFS setstripe -E 64m -E 640M -z 64M -p $TESTNAME -E -1 $comp_file ||
+		error "Create $comp_file failed"
+
+	local wms=$(ost_watermarks_set_low_space 0 | grep "watermarks")
+
+	dd if=/dev/zero bs=1M count=1 seek=100 of=$comp_file
+	RC=$?
+
+	ost_watermarks_clear_enospc $tfile 0 $wms
+	[ $RC -eq 0 ] || error "dd failed $RC"
+
+	$LFS getstripe $comp_file
+	local flg_opts="--comp-start 64M -E EOF --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: component (64M-EOF) not found"
+
+	local ost_idx=$($LFS getstripe -I2 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Write: 0-length component still exists"
+	ost_idx=$($LFS getstripe -I3 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Write: extension component still exists"
+
+	sel_layout_sanity $comp_file 2
+}
+run_test 20e "ENOSPC with next real comp: spillover and backward extension"
+
+# Simple DoM interaction test
+test_21a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	# simple, correct self-extending layout after DoM component
+	$LFS setstripe -E 1M -L mdt -E -1 -z 64m $comp_file || \
+		error "Create $comp_file failed"
+
+	# Write to DoM component & to self-extending comp after it
+	dd if=/dev/zero bs=1M count=12 of=$comp_file ||
+		error "dd to extend failed"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 1M -E 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: extended component not found"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 65M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: extension component not found"
+
+	sel_layout_sanity $comp_file 3
+}
+run_test 21a "Simple DoM interaction tests"
+
+# DoM + extension + removal
+test_21b() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local ost_name=$(ostname_from_index 0)
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	# DoM, extendable component, further extendable component
+	$LFS setstripe -E 1M -L mdt -E 256M -i 0 -z 64M -E -1 -z 1G \
+		$comp_file || error "Create $comp_file failed"
+
+	found=$($LFS find --comp-start 1M -E 1M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: Zero length component not found"
+
+	# This also demonstrates that we will avoid degraded OSTs
+	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=1
+	# sleep to guarantee we see the degradation
+	sleep_maxage
+
+	# un-degrade on exit
+	stack_trap "do_facet ost1 $LCTL set_param -n \
+		obdfilter.$ost_name.degraded=0; sleep_maxage" EXIT
+
+	# This should remove the first component after DoM and spill over to
+	# the next one
+	dd if=/dev/zero bs=1M count=2 of=$comp_file ||
+		error "dd to remove+spill over failed"
+
+	found=$($LFS find --comp-start 1M -E 1M $flg_opts $comp_file | wc -l)
+	[ $found -eq 0 ] || error "Write: Zero length component still present"
+
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 1M -E 1025M $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Write: extended component not found"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 1025M -E EOF $flg_opts $comp_file |wc -l)
+	[ $found -eq 1 ] || error "Write: extension component not found"
+
+	sel_layout_sanity $comp_file 3
+}
+run_test 21b "DoM followed by extendable component with removal"
+
+test_23a() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+
+	$LFS setstripe -z 64M -c 1 -E -1 $comp_file ||
+		error "Create $comp_file failed"
+
+	dd if=/dev/zero bs=1M oflag=append count=1 of=$comp_file ||
+		error "dd append failed"
+
+	local flg_opts="--comp-start 0 -E EOF --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Append: first component (0-EOF) not found"
+
+	local ost_idx=$($LFS getstripe -I2 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Append: second component still exists"
+
+	sel_layout_sanity $comp_file 1
+}
+run_test 23a "Append: remove EXT comp"
+
+test_23b() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 64m -E -1 -z 64M $comp_file ||
+		error "Create $comp_file failed"
+
+	dd if=/dev/zero bs=1M oflag=append count=1 of=$comp_file ||
+		error "dd append failed"
+
+	local flg_opts="--comp-start 64M -E EOF --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Append: component (64M-EOF) not found"
+
+	local ost_idx=$($LFS getstripe -I3 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Append: third component still exists"
+
+	sel_layout_sanity $comp_file 2
+}
+run_test 23b "Append with 0-length comp: remove EXT comp"
+
+test_23c() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 || error "Pool add targets failed"
+	$LFS setstripe -E 64m -E -1 -p $TESTNAME -z 64M $comp_file ||
+		error "Create $comp_file failed"
+
+	local wms=$(ost_watermarks_set_low_space 0 | grep "watermarks")
+	dd if=/dev/zero bs=1M oflag=append count=1 of=$comp_file
+	RC=$?
+
+	ost_watermarks_clear_enospc $tfile 0 $wms
+	[ $RC -eq 0 ] || error "dd append failed: $RC"
+
+	local flg_opts="--comp-start 64M -E EOF --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Append: component (64M-EOF) not found"
+
+	local ost_idx=$($LFS getstripe -I3 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Append: EXT component still exists"
+
+	sel_layout_sanity $comp_file 2
+}
+run_test 23c "Append with low on space + 0-length comp: force extension"
+
+test_23d() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 64m -E 640M -z 64M -E -1 $comp_file ||
+		error "Create $comp_file failed"
+
+	dd if=/dev/zero bs=1M oflag=append count=1 of=$comp_file ||
+		error "dd append failed"
+
+	flg_opts="--comp-start 64M -E 640M --comp-flags init"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Append: component (64M-640M) not found"
+
+	ost_idx=$($LFS getstripe -I3 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Append: third component still exists"
+
+	sel_layout_sanity $comp_file 3
+}
+run_test 23d "Append with 0-length comp + next real comp: remove EXT comp"
+
+test_23e() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 || error "Pool add targets failed"
+
+	$LFS setstripe -E 64m -E 640M -z 64M -p $TESTNAME -E -1 $comp_file ||
+		error "Create $comp_file failed"
+
+	local wms=$(ost_watermarks_set_low_space 0 | grep "watermarks")
+
+	dd if=/dev/zero bs=1M oflag=append count=1 of=$comp_file
+	RC=$?
+
+	ost_watermarks_clear_enospc $tfile 0 $wms
+	[ $RC -eq 0 ] || error "dd append failed $RC"
+
+	local flg_opts="--comp-start 64M -E EOF --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "Append: component (64M-EOF) not found"
+
+	local ost_idx=$($LFS getstripe -I2 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Append: 0-length component still exists"
+	ost_idx=$($LFS getstripe -I3 -i $comp_file)
+	[ "$ost_idx" != "" ] && error "Append: extension component still exists"
+
+	sel_layout_sanity $comp_file 2
+}
+run_test 23e "Append with next real comp: spillover and backward extension"
 
 complete $SECONDS
 check_and_cleanup_lustre

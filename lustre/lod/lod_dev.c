@@ -1320,8 +1320,8 @@ static void lod_statfs_sum(struct obd_statfs *sfs,
  *
  * see include/dt_object.h for the details.
  */
-static int lod_statfs(const struct lu_env *env,
-		      struct dt_device *dev, struct obd_statfs *sfs)
+static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
+		      struct obd_statfs *sfs, struct obd_statfs_info *info)
 {
 	struct lod_device *lod = dt2lod_dev(dev);
 	struct lod_ost_desc *ost;
@@ -1331,7 +1331,7 @@ static int lod_statfs(const struct lu_env *env,
 	u64 ost_ffree = 0;
 	int i, rc, bs;
 
-	rc = dt_statfs(env, dt2lod_dev(dev)->lod_child, sfs);
+	rc = dt_statfs(env, dt2lod_dev(dev)->lod_child, sfs, NULL);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1346,7 +1346,7 @@ static int lod_statfs(const struct lu_env *env,
 	lod_foreach_mdt(lod, i) {
 		mdt = MDT_TGT(lod, i);
 		LASSERT(mdt && mdt->ltd_mdt);
-		rc = dt_statfs(env, mdt->ltd_mdt, &ost_sfs);
+		rc = dt_statfs(env, mdt->ltd_mdt, &ost_sfs, NULL);
 		/* ignore errors */
 		if (rc)
 			continue;
@@ -1365,7 +1365,7 @@ static int lod_statfs(const struct lu_env *env,
 	lod_foreach_ost(lod, i) {
 		ost = OST_TGT(lod, i);
 		LASSERT(ost && ost->ltd_ost);
-		rc = dt_statfs(env, ost->ltd_ost, &ost_sfs);
+		rc = dt_statfs(env, ost->ltd_ost, &ost_sfs, NULL);
 		/* ignore errors */
 		if (rc || ost_sfs.os_bsize == 0)
 			continue;

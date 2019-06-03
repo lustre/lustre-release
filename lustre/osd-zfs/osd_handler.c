@@ -552,7 +552,7 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
  * Concurrency: shouldn't matter.
  */
 int osd_statfs(const struct lu_env *env, struct dt_device *d,
-	       struct obd_statfs *osfs)
+	       struct obd_statfs *osfs, struct obd_statfs_info *info)
 {
 	struct osd_device *osd = osd_dt_dev(d);
 	int		  rc;

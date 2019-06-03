@@ -730,7 +730,7 @@ const struct lu_device_operations osp_lu_ops = {
  * \retval negative	negative errno if get statfs failed.
  */
 static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
-		      struct obd_statfs *sfs)
+		      struct obd_statfs *sfs, struct obd_statfs_info *info)
 {
 	struct osp_device *d = dt2osp_dev(dev);
 	struct obd_import *imp = d->opd_obd->u.cli.cl_import;
@@ -745,8 +745,23 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 
 	/* return recently updated data */
 	*sfs = d->opd_statfs;
+	if (info) {
+		info->os_reserved_mb_low = d->opd_reserved_mb_low;
+		info->os_reserved_mb_high = d->opd_reserved_mb_high;
+	}
 
 	if (d->opd_pre == NULL)
+		RETURN(0);
+
+	CDEBUG(D_OTHER, "%s: %llu blocks, %llu free, %llu avail, "
+	       "%u reserved mb low, %u reserved mb high,"
+	       "%llu files, %llu free files\n", d->opd_obd->obd_name,
+	       sfs->os_blocks, sfs->os_bfree, sfs->os_bavail,
+	       d->opd_reserved_mb_low, d->opd_reserved_mb_high,
+	       sfs->os_files, sfs->os_ffree);
+
+
+	if (info && !info->os_enable_pre)
 		RETURN(0);
 
 	/*
@@ -762,11 +777,6 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 		 PFID(&d->opd_pre_last_created_fid), PFID(&d->opd_pre_used_fid),
 		 d->opd_pre_reserved);
 	spin_unlock(&d->opd_pre_lock);
-
-	CDEBUG(D_OTHER, "%s: %llu blocks, %llu free, %llu avail, "
-	       "%llu files, %llu free files\n", d->opd_obd->obd_name,
-	       sfs->os_blocks, sfs->os_bfree, sfs->os_bavail,
-	       sfs->os_files, sfs->os_ffree);
 	RETURN(0);
 }
 

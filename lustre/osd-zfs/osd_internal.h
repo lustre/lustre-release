@@ -465,7 +465,8 @@ struct osd_object {
 	struct lu_object_header *oo_header;
 };
 
-int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
+int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *,
+	       struct obd_statfs_info *);
 extern const struct dt_index_operations osd_acct_index_ops;
 extern struct lu_device_operations  osd_lu_ops;
 extern struct dt_index_operations osd_dir_ops;

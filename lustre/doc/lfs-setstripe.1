@@ -488,7 +488,7 @@ writing beyond 192MiB, the first component is left as [0, 192MiB), and a new
 component is allocated between them, its layout repeats the first component
 layout but initialized on different OSTs so that the full OSTs are avoided.
 It is allocated and immediately extended to [192MiB, 256MiB), the following
-extension component is shortended again.
+extension component is shortened again.
 .RE
 .TP
 .B lfs setstripe -E 1G -z 64M -E 100G -z 256M -E -1 -z 1G /mnt/lustre/file1

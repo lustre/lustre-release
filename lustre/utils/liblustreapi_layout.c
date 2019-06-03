@@ -1795,7 +1795,7 @@ int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 	if (comp == NULL)
 		return -1;
 
-	if (start >= end) {
+	if (start > end) {
 		errno = EINVAL;
 		return -1;
 	}

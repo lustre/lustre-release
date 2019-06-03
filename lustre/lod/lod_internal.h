@@ -706,6 +706,9 @@ __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 			   __u16 stripe_count, bool overstriping);
 void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod);
+int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
+			 int index, struct obd_statfs *sfs,
+			 struct obd_statfs_info *info);
 
 /* lproc_lod.c */
 int lod_procfs_init(struct lod_device *lod);

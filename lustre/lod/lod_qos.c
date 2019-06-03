@@ -78,8 +78,9 @@
  * \retval negative	negated errno on error
 
  */
-static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
-				int index, struct obd_statfs *sfs)
+int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
+			 int index, struct obd_statfs *sfs,
+			 struct obd_statfs_info *info)
 {
 	struct lod_tgt_desc *ost;
 	int		     rc;
@@ -89,7 +90,7 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	ost = OST_TGT(d,index);
 	LASSERT(ost);
 
-	rc = dt_statfs(env, ost->ltd_ost, sfs);
+	rc = dt_statfs(env, ost->ltd_ost, sfs, info);
 
 	if (rc == 0 && ((sfs->os_state & OS_STATE_ENOSPC) ||
 	    (sfs->os_state & OS_STATE_ENOINO && sfs->os_fprecreated == 0)))
@@ -179,7 +180,7 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod)
 		idx = osts->op_array[i];
 		avail = OST_TGT(lod,idx)->ltd_statfs.os_bavail;
 		if (lod_statfs_and_check(env, lod, idx,
-					 &OST_TGT(lod, idx)->ltd_statfs))
+					 &OST_TGT(lod, idx)->ltd_statfs, NULL))
 			continue;
 		if (OST_TGT(lod,idx)->ltd_statfs.os_bavail != avail)
 			/* recalculate weigths */
@@ -837,7 +838,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	rc = lod_statfs_and_check(env, lod, ost_idx, sfs);
+	rc = lod_statfs_and_check(env, lod, ost_idx, sfs, NULL);
 	if (rc)
 		RETURN(rc);
 
@@ -1162,7 +1163,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 			break;
 		}
 
-		rc = lod_statfs_and_check(env, m, ost_idx, sfs);
+		rc = lod_statfs_and_check(env, m, ost_idx, sfs, NULL);
 		if (rc < 0) /* this OSP doesn't feel well */
 			break;
 
@@ -1306,7 +1307,7 @@ repeat_find:
 		 * start OST, then it can be skipped, otherwise skip it only
 		 * if it is inactive/recovering/out-of-space." */
 
-		rc = lod_statfs_and_check(env, m, ost_idx, sfs);
+		rc = lod_statfs_and_check(env, m, ost_idx, sfs, NULL);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -1507,7 +1508,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		ost = OST_TGT(lod, osts->op_array[i]);
 		ost->ltd_qos.ltq_usable = 0;
 
-		rc = lod_statfs_and_check(env, lod, osts->op_array[i], sfs);
+		rc = lod_statfs_and_check(env, lod, osts->op_array[i],
+					  sfs, NULL);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -2288,6 +2290,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo);
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
+	LASSERT(!(lod_comp->llc_flags & LCME_FL_EXTENSION));
 
 	/* A released component is being created */
 	if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)

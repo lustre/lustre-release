@@ -14,10 +14,10 @@ the extension size of an extension component of a Lustre file
 .fi
 .SH DESCRIPTION
 .PP
-The extension size is the unit of increasing the previous component size when
+The extension size is the unit of increase the previous component size when
 writing within the region of the current extension component. At the time of the
 change the OSTs of the previous component layout are checked if they have
-at least \fIext_size\fR free space. In case there is no enough free space,
+at least \fIext_size\fR free space. In case there is not enough free space,
 the space covered by the extension component spills over to the next component
 (see examples in \fBlfs-setstripe (1)\fR).
 .PP
