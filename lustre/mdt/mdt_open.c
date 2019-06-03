@@ -1365,11 +1365,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 			GOTO(out, result = -EFAULT);
 		}
 		CDEBUG(D_INFO, "No object(1), continue as regular open.\n");
-	} else if (open_flags & (MDS_OPEN_BY_FID | MDS_OPEN_LOCK)) {
-		/*
-		 * MDS_OPEN_LOCK is checked for backward compatibility with 2.1
-		 * client.
-		 */
+	} else if (open_flags & MDS_OPEN_BY_FID) {
 		result = mdt_open_by_fid_lock(info, ldlm_rep, lhc);
 		if (result < 0)
 			CDEBUG(D_INFO, "no object for "DFID": %d\n",
