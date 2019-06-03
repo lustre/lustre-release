@@ -2472,6 +2472,8 @@ test_27D() {
 	[ $MDS1_VERSION -lt $(version_code 2.9.55) ] ||
 		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
 			skip27D+=" -s 30,31"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip27D+="-s 32"
 	[[ ! $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ||
 	  $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
 		skip27D+=" -s 32,33"

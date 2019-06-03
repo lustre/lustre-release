@@ -63,6 +63,7 @@ struct llapi_layout_comp {
 	uint64_t		llc_timestamp;	/* snapshot timestamp */
 	struct list_head	llc_list;	/* linked to the llapi_layout
 						   components list */
+	bool		llc_ondisk;
 };
 
 /**
@@ -589,6 +590,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 			comp->llc_stripe_offset =
 				comp->llc_objects[0].l_ost_idx;
 
+		comp->llc_ondisk = true;
 		list_add_tail(&comp->llc_list, &layout->llot_comp_list);
 		layout->llot_cur_comp = comp;
 	}
@@ -1572,6 +1574,10 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 		return -1;
 	}
 
+	if (layout && llapi_layout_sanity((struct llapi_layout *)layout, false,
+					  !!(layout->llot_mirror_count > 1)))
+		return -1;
+
 	/* Object creation must be postponed until after layout attributes
 	 * have been applied. */
 	if (layout != NULL && (open_flags & O_CREAT))
@@ -1789,7 +1795,7 @@ int llapi_layout_comp_extent_get(const struct llapi_layout *layout,
 int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 				 uint64_t start, uint64_t end)
 {
-	struct llapi_layout_comp *prev, *next, *comp;
+	struct llapi_layout_comp *comp;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
@@ -1798,29 +1804,6 @@ int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 	if (start > end) {
 		errno = EINVAL;
 		return -1;
-	}
-
-	/*
-	 * We need to make sure the extent to be set is valid: the new
-	 * extent must be adjacent with the prev & next component.
-	 */
-	if (comp->llc_list.prev != &layout->llot_comp_list) {
-		prev = list_entry(comp->llc_list.prev, typeof(*prev),
-				  llc_list);
-		if (start != 0 && start != prev->llc_extent.e_end) {
-			errno = EINVAL;
-			return -1;
-		}
-	}
-
-	if (comp->llc_list.next != &layout->llot_comp_list) {
-		next = list_entry(comp->llc_list.next, typeof(*next),
-				  llc_list);
-		if (next->llc_extent.e_start != 0 &&
-		    end != next->llc_extent.e_start) {
-			errno = EINVAL;
-			return -1;
-		}
 	}
 
 	comp->llc_extent.e_start = start;
@@ -1971,6 +1954,7 @@ int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
 int llapi_layout_comp_add(struct llapi_layout *layout)
 {
 	struct llapi_layout_comp *last, *comp, *new;
+	bool composite = layout->llot_is_composite;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
@@ -1983,16 +1967,23 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 	last = list_entry(layout->llot_comp_list.prev, typeof(*last),
 			  llc_list);
 
-	if (new->llc_extent.e_end <= last->llc_extent.e_end) {
-		__llapi_comp_free(new);
-		errno = EINVAL;
+	list_add_tail(&new->llc_list, &layout->llot_comp_list);
+
+	/* We must mark the layout composite for the sanity check, but it may
+	 * not stay that way if the check fails */
+	layout->llot_is_composite = true;
+	layout->llot_cur_comp = new;
+
+	/* We need to set a temporary non-zero value for "end" when we call
+	 * comp_extent_set, so we use LUSTRE_EOF-1, which is > all allowed
+	 * for the end of the previous component.  (If we're adding this
+	 * component, the end of the previous component cannot be EOF.) */
+	if (llapi_layout_comp_extent_set(layout, last->llc_extent.e_end,
+					LUSTRE_EOF - 1)) {
+		llapi_layout_comp_del(layout);
+		layout->llot_is_composite = composite;
 		return -1;
 	}
-	new->llc_extent.e_start = last->llc_extent.e_end;
-
-	list_add_tail(&new->llc_list, &layout->llot_comp_list);
-	layout->llot_cur_comp = new;
-	layout->llot_is_composite = true;
 
 	return 0;
 }
@@ -2057,14 +2048,11 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
 		errno = EINVAL;
 		return -1;
 	}
-	/* It can't be the only one on the list */
-	if (comp->llc_list.prev == &layout->llot_comp_list) {
-		errno = EINVAL;
-		return -1;
-	}
-
 	layout->llot_cur_comp =
 		list_entry(comp->llc_list.prev, typeof(*comp), llc_list);
+	if (comp->llc_list.prev == &layout->llot_comp_list)
+		layout->llot_cur_comp = NULL;
+
 	list_del_init(&comp->llc_list);
 	__llapi_comp_free(comp);
 
@@ -2182,25 +2170,15 @@ int llapi_layout_comp_use(struct llapi_layout *layout,
 int llapi_layout_file_comp_add(const char *path,
 			       const struct llapi_layout *layout)
 {
-	int rc, fd, lum_size, tmp_errno = 0;
-	struct lov_user_md *lum;
+	int rc, fd = -1, lum_size, tmp_errno = 0;
+	struct llapi_layout *existing_layout = NULL;
+	struct lov_user_md *lum = NULL;
 
 	if (path == NULL || layout == NULL ||
 	    layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
 		errno = EINVAL;
 		return -1;
 	}
-
-	lum = llapi_layout_to_lum(layout);
-	if (lum == NULL)
-		return -1;
-
-	if (lum->lmm_magic != LOV_USER_MAGIC_COMP_V1) {
-		free(lum);
-		errno = EINVAL;
-		return -1;
-	}
-	lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
 
 	fd = open(path, O_RDWR);
 	if (fd < 0) {
@@ -2209,16 +2187,51 @@ int llapi_layout_file_comp_add(const char *path,
 		goto out;
 	}
 
-	rc = fsetxattr(fd, XATTR_LUSTRE_LOV".add", lum, lum_size, 0);
-	if (rc < 0) {
+	existing_layout = llapi_layout_get_by_fd(fd, 0);
+	if (existing_layout == NULL) {
 		tmp_errno = errno;
-		close(fd);
 		rc = -1;
 		goto out;
 	}
-	close(fd);
+
+	rc = llapi_layout_merge(&existing_layout, layout);
+	if (rc) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	if (llapi_layout_sanity(existing_layout, false, false)) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	lum = llapi_layout_to_lum(layout);
+	if (lum == NULL) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	if (lum->lmm_magic != LOV_USER_MAGIC_COMP_V1) {
+		tmp_errno = EINVAL;
+		rc = -1;
+		goto out;
+	}
+	lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
+
+	rc = fsetxattr(fd, XATTR_LUSTRE_LOV".add", lum, lum_size, 0);
+	if (rc < 0) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
 out:
+	if (fd >= 0)
+		close(fd);
 	free(lum);
+	llapi_layout_free(existing_layout);
 	errno = tmp_errno;
 	return rc;
 }
@@ -2234,18 +2247,20 @@ out:
  */
 int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 {
-	int rc, fd, lum_size;
+	int rc = 0, fd = -1, lum_size, tmp_errno = 0;
 	struct llapi_layout *layout;
-	struct llapi_layout_comp *comp;
-	struct lov_user_md *lum;
+	struct llapi_layout_comp *comp, *next;
+	struct llapi_layout *existing_layout = NULL;
+	struct lov_user_md *lum = NULL;
 
 	if (path == NULL || id > LCME_ID_MAX || (flags & ~LCME_KNOWN_FLAGS)) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	/* Can only specify ID or flags, not both. */
-	if (id != 0 && flags != 0) {
+	/* Can only specify ID or flags, not both, not none. */
+	if ((id != LCME_ID_INVAL && flags != 0) ||
+	    (id == LCME_ID_INVAL && flags == 0)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -2257,8 +2272,9 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 	llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL) {
-		llapi_layout_free(layout);
-		return -1;
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
 	}
 
 	comp->llc_id = id;
@@ -2266,38 +2282,153 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 
 	lum = llapi_layout_to_lum(layout);
 	if (lum == NULL) {
-		llapi_layout_free(layout);
-		return -1;
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
 	}
 	lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
 
 	fd = open(path, O_RDWR);
 	if (fd < 0) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	existing_layout = llapi_layout_get_by_fd(fd, 0);
+	if (existing_layout == NULL) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	comp = NULL;
+	next = NULL;
+	while (rc == 0 && existing_layout->llot_cur_comp != NULL) {
+		rc = llapi_layout_comp_use(existing_layout, comp ?
+					   LLAPI_LAYOUT_COMP_USE_PREV :
+					   LLAPI_LAYOUT_COMP_USE_LAST);
+		if (rc != 0)
+			break;
+
+		next = comp;
+		comp = __llapi_layout_cur_comp(existing_layout);
+		if (comp == NULL) {
+			rc = -1;
+			break;
+		}
+
+		if (id != LCME_ID_INVAL && id != comp->llc_id)
+			continue;
+		else if ((flags & LCME_FL_NEG) && (flags & comp->llc_flags))
+			continue;
+		else if (flags && !(flags & comp->llc_flags))
+			continue;
+
+		rc = llapi_layout_comp_del(existing_layout);
+		/* the layout position is moved to previous one, adjust */
+		comp = next;
+	}
+	if (rc < 0) {
+		tmp_errno = errno;
+		goto out;
+	}
+
+	if (llapi_layout_sanity(existing_layout, false, false)) {
+		tmp_errno = errno;
 		rc = -1;
 		goto out;
 	}
 
 	rc = fsetxattr(fd, XATTR_LUSTRE_LOV".del", lum, lum_size, 0);
 	if (rc < 0) {
-		int tmp_errno = errno;
-		close(fd);
-		errno = tmp_errno;
+		tmp_errno = errno;
 		rc = -1;
 		goto out;
 	}
-	close(fd);
+
 out:
+	if (fd >= 0)
+		close(fd);
 	free(lum);
 	llapi_layout_free(layout);
+	llapi_layout_free(existing_layout);
+	errno = tmp_errno;
+
 	return rc;
 }
 
+/* Internal utility function to apply flags for sanity checking */
+static void llapi_layout_comp_apply_flags(struct llapi_layout_comp *comp,
+					  uint32_t flags)
+{
+	if (flags & LCME_FL_NEG)
+		comp->llc_flags &= ~flags;
+	else
+		comp->llc_flags |= flags;
+}
+
+struct llapi_layout_apply_flags_args {
+	uint32_t *lfa_ids;
+	uint32_t *lfa_flags;
+	int lfa_count;
+	int lfa_rc;
+};
+
+
+static int llapi_layout_apply_flags_cb(struct llapi_layout *layout,
+				       void *arg)
+{
+	struct llapi_layout_apply_flags_args *args = arg;
+	struct llapi_layout_comp *comp;
+	int i = 0;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (comp == NULL) {
+		args->lfa_rc = -1;
+		return LLAPI_LAYOUT_ITER_STOP;
+	}
+
+	for (i = 0; i < args->lfa_count; i++) {
+		if (comp->llc_id == args->lfa_ids[i])
+			llapi_layout_comp_apply_flags(comp, args->lfa_flags[i]);
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+
+/* Apply flags to the layout for sanity checking */
+static int llapi_layout_apply_flags(struct llapi_layout *layout, uint32_t *ids,
+				    uint32_t *flags, int count)
+{
+	struct llapi_layout_apply_flags_args args;
+	int rc = 0;
+
+	if (!ids || !flags || count == 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	args.lfa_ids = ids;
+	args.lfa_flags = flags;
+	args.lfa_count = count;
+	args.lfa_rc = 0;
+
+	rc = llapi_layout_comp_iterate(layout,
+				       llapi_layout_apply_flags_cb,
+				       &args);
+	if (errno == ENOENT)
+		errno = 0;
+
+	if (rc != LLAPI_LAYOUT_ITER_CONT)
+		rc = args.lfa_rc;
+
+	return rc;
+}
 /**
- * Change flags or other parameters of the component(s) by component ID of an
- * existing file. The component to be modified is specified by the
- * comp->lcme_id value, which must be an unique component ID. The new
- * attributes are passed in by @comp and @valid is used to specify which
- * attributes in the component are going to be changed.
+ * Change flags by component ID of components of an existing file.
+ * The component to be modified is specified by the comp->lcme_id value,
+ * which must be a unique component ID.
  *
  * \param[in] path	path name of the file
  * \param[in] ids	An array of component IDs
@@ -2308,9 +2439,10 @@ out:
 int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 			       size_t count)
 {
-	int rc = -1, fd = -1, i;
+	int rc = -1, fd = -1, i, tmp_errno = 0;
 	size_t lum_size;
-	struct llapi_layout *layout;
+	struct llapi_layout *existing_layout = NULL;
+	struct llapi_layout *layout = NULL;
 	struct llapi_layout_comp *comp;
 	struct lov_user_md *lum = NULL;
 
@@ -2340,15 +2472,47 @@ int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 		}
 	}
 
+	fd = open(path, O_RDWR);
+	if (fd < 0) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	existing_layout = llapi_layout_get_by_fd(fd, 0);
+	if (existing_layout == NULL) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	if (llapi_layout_apply_flags(existing_layout, ids, flags, count)) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
+	if (llapi_layout_sanity(existing_layout, false, false)) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
+
 	layout = __llapi_layout_alloc();
-	if (layout == NULL)
-		return -1;
+	if (layout == NULL) {
+		tmp_errno = errno;
+		rc = -1;
+		goto out;
+	}
 
 	layout->llot_is_composite = true;
 	for (i = 0; i < count; i++) {
 		comp = __llapi_comp_alloc(0);
-		if (comp == NULL)
+		if (comp == NULL) {
+			tmp_errno = errno;
+			rc = -1;
 			goto out;
+		}
 
 		comp->llc_id = ids[i];
 		comp->llc_flags = flags[i];
@@ -2358,39 +2522,38 @@ int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 	}
 
 	lum = llapi_layout_to_lum(layout);
-	if (lum == NULL)
+	if (lum == NULL) {
+		tmp_errno = errno;
+		rc = -1;
 		goto out;
+	}
 
 	lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
-
-	fd = open(path, O_RDWR);
-	if (fd < 0)
-		goto out;
 
 	/* flush cached pages from clients */
 	rc = llapi_file_flush(fd);
 	if (rc) {
-		errno = -rc;
+		tmp_errno = -rc;
 		rc = -1;
-		goto out_close;
+		goto out;
 	}
 
 	rc = fsetxattr(fd, XATTR_LUSTRE_LOV".set.flags", lum, lum_size, 0);
-	if (rc < 0)
-		goto out_close;
+	if (rc < 0) {
+		tmp_errno = errno;
+		goto out;
+	}
 
 	rc = 0;
 
-out_close:
-	if (fd >= 0) {
-		int tmp_errno = errno;
-		close(fd);
-		errno = tmp_errno;
-	}
 out:
-	if (lum)
-		free(lum);
+	if (fd >= 0)
+		close(fd);
+
+	free(lum);
+	llapi_layout_free(existing_layout);
 	llapi_layout_free(layout);
+	errno = tmp_errno;
 	return rc;
 }
 
@@ -2788,4 +2951,320 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 
 	/* partially successful is successful */
 	return 0;
+}
+
+enum llapi_layout_comp_sanity_error {
+	LSE_OK,
+	LSE_INCOMPLETE_MIRROR,
+	LSE_ADJACENT_EXTENSION,
+	LSE_INIT_EXTENSION,
+	LSE_FLAGS,
+	LSE_DOM_EXTENSION,
+	LSE_DOM_EXTENSION_FOLLOWING,
+	LSE_DOM_FLR,
+	LSE_SET_COMP_START,
+	LSE_NOT_ZERO_LENGTH_EXTENDABLE,
+	LSE_END_NOT_GREATER,
+	LSE_ZERO_LENGTH_NORMAL,
+	LSE_NOT_ADJACENT_PREV,
+	LSE_START_GT_END,
+	LSE_ALIGN_END,
+	LSE_ALIGN_EXT,
+};
+
+struct llapi_layout_sanity_args {
+	bool lsa_incomplete;
+	bool lsa_flr;
+	bool lsa_ondisk;
+	int lsa_rc;
+};
+
+static int llapi_layout_sanity_cb(struct llapi_layout *layout,
+				  void *arg)
+{
+	struct llapi_layout_comp *comp, *next, *prev;
+	struct llapi_layout_sanity_args *args = arg;
+	bool first_comp = false;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (comp == NULL) {
+		args->lsa_rc = -1;
+		goto out_err;
+	}
+
+	if (comp->llc_list.prev != &layout->llot_comp_list)
+		prev = list_entry(comp->llc_list.prev, typeof(*prev),
+				  llc_list);
+	else
+		prev = NULL;
+
+	if (comp->llc_list.next != &layout->llot_comp_list)
+		next = list_entry(comp->llc_list.next, typeof(*next),
+				  llc_list);
+	else
+		next = NULL;
+
+	/* Start of zero implies a new mirror */
+	if (comp->llc_extent.e_start == 0) {
+		first_comp = true;
+		/* Most checks apply only within one mirror, this is an
+		 * exception. */
+		if (prev && prev->llc_extent.e_end != LUSTRE_EOF) {
+			args->lsa_rc = LSE_INCOMPLETE_MIRROR;
+			goto out_err;
+		}
+
+		prev = NULL;
+	}
+
+	if (next && next->llc_extent.e_start == 0)
+		next = NULL;
+
+	/* Flag sanity checks */
+	/* No adjacent extension components */
+	if ((comp->llc_flags & LCME_FL_EXTENSION) && next &&
+	    (next->llc_flags & LCME_FL_EXTENSION)) {
+		args->lsa_rc = LSE_ADJACENT_EXTENSION;
+		goto out_err;
+	}
+
+	/* Extension flag cannot be applied to init components and the first
+	 * component of each mirror is automatically init */
+	if ((comp->llc_flags & LCME_FL_EXTENSION) &&
+	    (comp->llc_flags & LCME_FL_INIT || first_comp)) {
+		args->lsa_rc = LSE_INIT_EXTENSION;
+		goto out_err;
+	}
+
+	if (comp->llc_ondisk) {
+		if (comp->llc_flags & LCME_FL_NEG)
+			args->lsa_rc = LSE_FLAGS;
+	} else if (!args->lsa_incomplete) {
+		if (args->lsa_flr) {
+			if (comp->llc_flags & ~LCME_USER_COMP_FLAGS)
+				args->lsa_rc = LSE_FLAGS;
+		} else {
+			if (comp->llc_flags & ~LCME_FL_EXTENSION)
+				args->lsa_rc = LSE_FLAGS;
+		}
+	}
+	if (args->lsa_rc)
+		goto out_err;
+
+	/* DoM sanity checks */
+	if (comp->llc_pattern == LLAPI_LAYOUT_MDT ||
+	    comp->llc_pattern == LOV_PATTERN_MDT) {
+		/* DoM components can't be extension components */
+		if (comp->llc_flags & LCME_FL_EXTENSION) {
+			args->lsa_rc = LSE_DOM_EXTENSION;
+			goto out_err;
+		}
+		/* DoM components cannot be followed by an extension comp */
+		if (next && (next->llc_flags & LCME_FL_EXTENSION)) {
+			args->lsa_rc = LSE_DOM_EXTENSION_FOLLOWING;
+			goto out_err;
+		}
+
+		/* DoM and FLR are not supported together */
+		if (args->lsa_flr && first_comp) {
+			args->lsa_rc = LSE_DOM_FLR;
+			errno = ENOTSUP;
+			goto out_err;
+		}
+	}
+
+	/* Extent sanity checks */
+	/* Must set previous component extent before adding another */
+	if (prev && prev->llc_extent.e_start == 0 &&
+	    prev->llc_extent.e_end == 0) {
+		args->lsa_rc = LSE_SET_COMP_START;
+		goto out_err;
+	}
+
+	if (!args->lsa_incomplete) {
+		/* Components followed by extension space (extendable
+		 * components) must be zero length before initialization.
+		 * (Except for first comp, which will be initialized on
+		 * creation). */
+		if (next && (next->llc_flags & LCME_FL_EXTENSION) &&
+		    !first_comp && !(comp->llc_flags & LCME_FL_INIT) &&
+		    comp->llc_extent.e_start != comp->llc_extent.e_end) {
+			args->lsa_rc = LSE_NOT_ZERO_LENGTH_EXTENDABLE;
+			goto out_err;
+		}
+
+		/* End must come after end of previous comp */
+		if (prev && comp->llc_extent.e_end < prev->llc_extent.e_end) {
+			args->lsa_rc = LSE_END_NOT_GREATER;
+			goto out_err;
+		}
+
+		/* Components not followed by ext space must have length > 0. */
+		if (comp->llc_extent.e_start == comp->llc_extent.e_end &&
+		    next && !(next->llc_flags & LCME_FL_EXTENSION)) {
+			args->lsa_rc = LSE_ZERO_LENGTH_NORMAL;
+			goto out_err;
+		}
+
+		/* The component end must be aligned by the stripe size */
+		if ((comp->llc_flags & LCME_FL_EXTENSION) &&
+		    (prev->llc_stripe_size != LLAPI_LAYOUT_DEFAULT)) {
+			if (comp->llc_extent.e_end != LUSTRE_EOF &&
+			    comp->llc_extent.e_end % prev->llc_stripe_size) {
+				args->lsa_rc = LSE_ALIGN_END;
+				goto out_err;
+			}
+			if ((comp->llc_stripe_size * SEL_UNIT_SIZE) %
+			    prev->llc_stripe_size) {
+				args->lsa_rc = LSE_ALIGN_EXT;
+				goto out_err;
+			}
+		} else if (!(comp->llc_flags & LCME_FL_EXTENSION) &&
+			   (comp->llc_stripe_size != LLAPI_LAYOUT_DEFAULT)) {
+			if (comp->llc_extent.e_end != LUSTRE_EOF &&
+			    comp->llc_extent.e_end % comp->llc_stripe_size) {
+				args->lsa_rc = LSE_ALIGN_END;
+				goto out_err;
+			}
+		}
+	}
+
+	/* Components must have start == prev->end */
+	if (prev && comp->llc_extent.e_start != 0 &&
+	    comp->llc_extent.e_start != prev->llc_extent.e_end) {
+		args->lsa_rc = LSE_NOT_ADJACENT_PREV;
+		goto out_err;
+	}
+
+	/* Components must have start <= end */
+	if (comp->llc_extent.e_start > comp->llc_extent.e_end) {
+		args->lsa_rc = LSE_START_GT_END;
+		goto out_err;
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
+
+out_err:
+	errno = errno ? errno : EINVAL;
+	return LLAPI_LAYOUT_ITER_STOP;
+}
+
+/* Print explanation of layout error */
+void llapi_layout_sanity_perror(int error)
+{
+	char *msg = NULL;
+
+	switch (error) {
+	case LSE_OK:
+		break;
+	case LSE_INCOMPLETE_MIRROR:
+		msg = "Incomplete mirror - must go to EOF";
+		break;
+	case LSE_ADJACENT_EXTENSION:
+		msg = "No adjacent extension space components";
+		break;
+	case LSE_INIT_EXTENSION:
+		msg = "Cannot apply extension flag to init components";
+		break;
+	case LSE_FLAGS:
+		msg = "Wrong flags";
+		break;
+	case LSE_DOM_EXTENSION:
+		msg = "DoM components can't be extension space";
+		break;
+	case LSE_DOM_EXTENSION_FOLLOWING:
+		msg = "DoM components cannot be followed by extension space";
+		break;
+	case LSE_DOM_FLR:
+		msg = "FLR and DoM are not supported together";
+		break;
+	case LSE_SET_COMP_START:
+		msg = "Must set previous component extent before adding next";
+		break;
+	case LSE_NOT_ZERO_LENGTH_EXTENDABLE:
+		msg = "Extendable component must start out zero-length";
+		break;
+	case LSE_END_NOT_GREATER:
+		msg = "Component end is before end of previous component";
+		break;
+	case LSE_ZERO_LENGTH_NORMAL:
+		msg = "Zero length components must be followed by extension";
+		break;
+	case LSE_NOT_ADJACENT_PREV:
+		msg = "Components not adjacent (end != next->start";
+		break;
+	case LSE_START_GT_END:
+		msg = "Component start is > end";
+	case LSE_ALIGN_END:
+		msg = "The component end must be aligned by the stripe size";
+		break;
+	case LSE_ALIGN_EXT:
+		msg = "The extension size must be aligned by the stripe size";
+		break;
+	default:
+		fprintf(stdout, "Invalid layout, unrecognized error: %d\n",
+			error);
+	}
+
+	if (msg)
+		fprintf(stdout, "Invalid layout: %s\n", msg);
+}
+
+/* Walk a layout and enforce sanity checks that apply to > 1 component
+ *
+ * The core idea here is that of sanity checking individual tokens vs semantic
+ * checking.
+ * We cannot check everything at the individual component level ('token'),
+ * instead we must check whether or not the full layout has a valid meaning.
+ *
+ * An example of a component level check is "is stripe size valid?".  That is
+ * handled when setting stripe size.
+ *
+ * An example of a layout level check is "are the extents of these components
+ * valid when adjacent to one another", or "can we set these flags on adjacent
+ * components"?
+ *
+ * \param[in] layout            component layout list.
+ * \param[in] incomplete        if layout is complete or not - some checks can
+ *                              only be done on complete layouts.
+ * \param[in] flr		set when this is called from FLR mirror create
+ *
+ * \retval                      0, success, positive: various errors, see
+ *                              llapi_layout_sanity_perror, -1, failure
+ */
+int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr)
+{
+	struct llapi_layout_sanity_args args;
+	struct llapi_layout_comp *curr;
+	int rc = 0;
+
+	if (!layout)
+		return 0;
+
+	curr = layout->llot_cur_comp;
+	if (!curr)
+		return 0;
+
+	/* Set up args */
+	args.lsa_rc = 0;
+	args.lsa_flr = flr;
+	args.lsa_incomplete = incomplete;
+
+	/* When we modify an existing layout, this tells us if it's FLR */
+	if (mirror_id_of(curr->llc_id) > 0)
+		args.lsa_flr = true;
+
+	errno = 0;
+	rc = llapi_layout_comp_iterate(layout,
+				       llapi_layout_sanity_cb,
+				       &args);
+	if (errno == ENOENT)
+		errno = 0;
+
+	if (rc != LLAPI_LAYOUT_ITER_CONT)
+		rc = args.lsa_rc;
+
+	layout->llot_cur_comp = curr;
+
+	return rc;
 }

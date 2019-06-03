@@ -1083,6 +1083,13 @@ static int lfs_component_set(char *fname, int comp_id,
 	}
 
 	if (neg_flags) {
+		if (neg_flags & LCME_FL_STALE) {
+			fprintf(stderr, "%s: cannot clear 'stale' flags from "
+				"component. Please use lfs-mirror-resync(1) "
+				"instead\n", progname);
+			return -EINVAL;
+		}
+
 		ids[count] = comp_id;
 		flags_array[count] = neg_flags | LCME_FL_NEG;
 		++count;
@@ -1315,69 +1322,6 @@ struct mirror_args {
 	struct mirror_args	*m_next;
 };
 
-static int mirror_sanity_check_flags(struct llapi_layout *layout, void *unused)
-{
-	uint32_t flags;
-	int rc;
-
-	rc = llapi_layout_comp_flags_get(layout, &flags);
-	if (rc)
-		return -errno;
-
-	if (flags & LCME_FL_NEG) {
-		fprintf(stderr, "error: %s: negative flags are not supported\n",
-			progname);
-		return -EINVAL;
-	}
-
-	if (flags & LCME_FL_STALE) {
-		fprintf(stderr, "error: %s: setting '%s' is not supported\n",
-			progname, comp_flags_table[LCME_FL_STALE].cfn_name);
-		return -EINVAL;
-	}
-
-	return LLAPI_LAYOUT_ITER_CONT;
-}
-
-static inline int mirror_sanity_check_one(struct llapi_layout *layout)
-{
-	uint64_t start, end;
-	uint64_t pattern;
-	int rc;
-
-	/* LU-10112: do not support dom+flr in phase 1 */
-	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
-	if (rc)
-		return -errno;
-
-	rc = llapi_layout_pattern_get(layout, &pattern);
-	if (rc)
-		return -errno;
-
-	if (pattern == LOV_PATTERN_MDT || pattern == LLAPI_LAYOUT_MDT) {
-		fprintf(stderr, "error: %s: doesn't support dom+flr for now\n",
-			progname);
-		return -ENOTSUP;
-	}
-
-	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_LAST);
-	if (rc)
-		return -errno;
-
-	rc = llapi_layout_comp_extent_get(layout, &start, &end);
-	if (rc)
-		return -errno;
-
-	if (end != LUSTRE_EOF) {
-		fprintf(stderr, "error: %s: mirror layout doesn't reach eof\n",
-			progname);
-		return -EINVAL;
-	}
-
-	rc = llapi_layout_comp_iterate(layout, mirror_sanity_check_flags, NULL);
-	return rc;
-}
-
 /**
  * enum mirror_flags - Flags for extending a mirrored file.
  * @MF_NO_VERIFY: Indicates not to verify the mirror(s) from victim file(s)
@@ -1424,11 +1368,14 @@ static int mirror_create_sanity_check(const char *fname,
 			return -ENODATA;
 		}
 
-		rc = mirror_sanity_check_one(layout);
+		rc = llapi_layout_sanity(layout, false, true);
+
 		llapi_layout_free(layout);
 
-		if (rc)
+		if (rc) {
+			llapi_layout_sanity_perror(rc);
 			return rc;
+		}
 	}
 
 	while (list != NULL) {
@@ -1453,9 +1400,11 @@ static int mirror_create_sanity_check(const char *fname,
 			}
 		}
 
-		rc = mirror_sanity_check_one(list->m_layout);
-		if (rc)
+		rc = llapi_layout_sanity(list->m_layout, false, true);
+		if (rc) {
+			llapi_layout_sanity_perror(rc);
 			return rc;
+		}
 
 		list = list->m_next;
 	}
@@ -1864,9 +1813,11 @@ static int mirror_split(const char *fname, __u32 id,
 		return -EINVAL;
 	}
 
-	rc = mirror_sanity_check_one(layout);
-	if (rc)
+	rc = llapi_layout_sanity(layout, false, true);
+	if (rc) {
+		llapi_layout_sanity_perror(rc);
 		goto free_layout;
+	}
 
 	rc = llapi_layout_mirror_count_get(layout, &mirror_count);
 	if (rc) {
@@ -2190,7 +2141,8 @@ new_comp:
 		if (layout == NULL) {
 			fprintf(stderr, "Alloc llapi_layout failed. %s\n",
 				strerror(errno));
-			return -ENOMEM;
+			errno = ENOMEM;
+			return -1;
 		}
 		*composite = layout;
 		lsa->lsa_first_comp = true;
@@ -2259,31 +2211,36 @@ new_comp:
 			fprintf(stderr, "Option 'stripe-count' can't be "
 				"specified with Data-on-MDT component: %lld\n",
 				lsa->lsa_stripe_count);
-			return -EINVAL;
+			errno = EINVAL;
+			return -1;
 		}
 		if (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-size' can't be "
 				"specified with Data-on-MDT component: %llu\n",
 				lsa->lsa_stripe_size);
-			return -EINVAL;
+			errno = EINVAL;
+			return -1;
 		}
 		if (lsa->lsa_nr_tgts != 0) {
 			fprintf(stderr, "Option 'ost-list' can't be specified "
 				"with Data-on-MDT component: '%i'\n",
 				lsa->lsa_nr_tgts);
-			return -EINVAL;
+			errno = EINVAL;
+			return -1;
 		}
 		if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-offset' can't be "
 				"specified with Data-on-MDT component: %lld\n",
 				lsa->lsa_stripe_off);
-			return -EINVAL;
+			errno = EINVAL;
+			return -1;
 		}
 		if (lsa->lsa_pool_name != 0) {
 			fprintf(stderr, "Option 'pool' can't be specified "
 				"with Data-on-MDT component: '%s'\n",
 				lsa->lsa_pool_name);
-			return -EINVAL;
+			errno = EINVAL;
+			return -1;
 		}
 
 		rc = llapi_layout_pattern_set(layout, lsa->lsa_pattern);
@@ -2347,7 +2304,8 @@ new_comp:
 		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
 			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
 				lsa->lsa_stripe_count, lsa->lsa_nr_tgts);
-			return -EINVAL;
+			errno = EINVAL;
+			return -1;
 		}
 		for (i = 0; i < lsa->lsa_nr_tgts; i++) {
 			rc = llapi_layout_ost_index_set(layout, i,
@@ -2372,7 +2330,7 @@ new_comp:
 		goto new_comp;
 	}
 
-	return 0;
+	return rc;
 }
 
 static int build_component(struct llapi_layout **layout,
@@ -2871,14 +2829,6 @@ static int lfs_setstripe_internal(int argc, char **argv,
 					progname);
 				goto usage_error;
 			}
-			if (lsa.lsa_comp_neg_flags & LCME_FL_STALE) {
-				fprintf(stderr,
-					"%s: cannot clear 'stale' flags from component. Please use lfs-mirror-resync(1) instead\n",
-					progname);
-				result = -EINVAL;
-				goto error;
-			}
-
 			break;
 		case LFS_COMP_SET_OPT:
 			comp_set = 1;

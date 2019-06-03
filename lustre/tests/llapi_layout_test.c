@@ -1362,8 +1362,10 @@ void test30(void)
 	ASSERTF(rc == 0, "errno %d", errno);
 
 	/* set non-contiguous extent will fail */
-	rc = llapi_layout_comp_extent_set(layout, end[0] * 2, end[1]);
-	ASSERTF(rc == -1 && errno == EINVAL, "rc %d, errno %d", rc, errno);
+	rc = llapi_layout_comp_extent_set(layout, start[1] * 2, end[1]);
+	ASSERTF(rc == 0, "errno %d", errno);
+	rc = llapi_layout_sanity(layout, false, false);
+	ASSERTF(rc == 12 /*LSE_NOT_ADJACENT_PREV*/, "rc %d", rc);
 
 	rc = llapi_layout_comp_extent_set(layout, start[1], end[1]);
 	ASSERTF(rc == 0, "errno %d", errno);
@@ -1622,6 +1624,118 @@ void test33(void)
 	free(lmdbuf);
 }
 
+#define T34FILE		"f34"
+#define T34_DESC	"create simple valid & invalid self extending layouts"
+void test34(void)
+{
+	int rc, fd;
+	uint64_t start[4], end[4];
+	struct llapi_layout *layout;
+	char path[PATH_MAX];
+
+	start[0] = 0;
+	end[0] = 10 * 1024 * 1024; /* 10m */
+	start[1] = end[0];
+	end[1] = 1024 * 1024 * 1024; /* 1G */
+	start[2] = end[1];
+	end[2] = 10ull * 1024 * 1024 * 1024; /* 10G */
+	start[3] = end[2];
+	end[3] = LUSTRE_EOF;
+
+	if (num_osts < 2)
+		return;
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T34FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno %d", errno);
+
+	rc = llapi_layout_stripe_count_set(layout, 1);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* add component without adjusting previous component's extent
+	 * end will fail.
+	 */
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == -1 && errno == EINVAL, "rc %d, errno %d", rc, errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[0], end[0]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[1], end[1]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_flags_set(layout, LCME_FL_EXTENSION);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* Invalid size, too small - < 64 MiB */
+	rc = llapi_layout_extension_size_set(layout, 32 << 20);
+	ASSERTF(rc == -1, "errno %d", errno);
+
+	/* too large - > 4 TiB */
+	rc = llapi_layout_extension_size_set(layout, 5ull << 40);
+	ASSERTF(rc == -1, "errno %d", errno);
+
+	/* Valid size, 64 MiB */
+	rc = llapi_layout_extension_size_set(layout, 64 << 20);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[2], end[2]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* Set extension space flag on adjacent components:
+	 * This is invalid, but can't be checked until we try to create the
+	 * file. */
+	rc = llapi_layout_comp_flags_set(layout, LCME_FL_EXTENSION);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	fd = llapi_layout_file_create(path, 0, 0660, layout);
+	ASSERTF(fd = -1, "path = %s, fd = %d, errno = %d", path, fd, errno);
+
+	/* Delete incorrect component */
+	rc = llapi_layout_comp_del(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* Convert this comp to zero-length so it can be followed by extension
+	 * space */
+	rc = llapi_layout_comp_extent_set(layout, start[2], start[2]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_add(layout);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_extent_set(layout, start[2], end[3]);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	rc = llapi_layout_comp_flags_set(layout, LCME_FL_EXTENSION);
+	ASSERTF(rc == 0, "errno %d", errno);
+
+	/* create composite file */
+	fd = llapi_layout_file_create(path, 0, 0660, layout);
+	ASSERTF(fd >= 0, "path = %s, fd = %d, errno = %d", path, fd, errno);
+
+	llapi_layout_free(layout);
+
+	/* traverse & verify all components */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	rc = llapi_layout_sanity(layout, false, false);
+	ASSERTF(rc == 0, "errno %d", errno);
+}
+
 #define TEST_DESC_LEN	80
 struct test_tbl_entry {
 	void (*tte_fn)(void);
@@ -1664,6 +1778,7 @@ static struct test_tbl_entry test_tbl[] = {
 	{ .tte_fn = &test31, .tte_desc = T31_DESC, .tte_skip = false },
 	{ .tte_fn = &test32, .tte_desc = T32_DESC, .tte_skip = false },
 	{ .tte_fn = &test33, .tte_desc = T33_DESC, .tte_skip = false },
+	{ .tte_fn = &test34, .tte_desc = T34_DESC, .tte_skip = false },
 };
 
 #define NUM_TESTS	(sizeof(test_tbl) / sizeof(struct test_tbl_entry))

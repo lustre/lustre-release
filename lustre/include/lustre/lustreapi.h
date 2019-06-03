@@ -1064,6 +1064,8 @@ int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
 
 int llapi_heat_get(int fd, struct lu_heat *heat);
 int llapi_heat_set(int fd, __u64 flags);
+int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr);
+void llapi_layout_sanity_perror(int error);
 
 /** @} llapi */
 

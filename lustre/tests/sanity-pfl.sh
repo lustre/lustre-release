@@ -1192,6 +1192,24 @@ test_19e() {
 }
 run_test 19e "Replay of layout instantiation & extension"
 
+test_19f() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local flg_opts=""
+	local found=""
+
+	test_mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 256M --comp-flags extension -E -1 $comp_file
+
+	[ $? != 0 ] || error "should not be able to manually set extension flag"
+
+}
+run_test 19f "Rejection of invalid layouts"
+
 # Test out of space behavior
 test_20a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
