@@ -4531,7 +4531,7 @@ int ll_have_md_lock(struct inode *inode, __u64 *bits, enum ldlm_mode l_req_mode)
                ldlm_lockname[mode]);
 
 	flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
-	for (i = 0; i <= MDS_INODELOCK_MAXSHIFT && *bits != 0; i++) {
+	for (i = 0; i < MDS_INODELOCK_NUMBITS && *bits != 0; i++) {
 		policy.l_inodebits.bits = *bits & (1 << i);
 		if (policy.l_inodebits.bits == 0)
 			continue;
