@@ -44,6 +44,8 @@ int main(int argc, char *const argv[])
 	struct mount_opts mop = {
 		.mo_max_sectors_kb = -1
 	};
+	struct lustre_disk_data *ldd = &mop.mo_ldd;
+
 	char real_path[PATH_MAX] = {'\0'};
 	unsigned int mount_type;
 	int ret;
@@ -72,6 +74,15 @@ int main(int argc, char *const argv[])
 	ret = osd_is_lustre(mop.mo_source, &mount_type);
 	if (ret == 0)
 		goto out;
+
+	ldd->ldd_mount_type = mount_type;
+
+	ret = osd_read_ldd(mop.mo_source, ldd);
+	if (ret != 0) {
+		fprintf(stderr, "Failed to read previous Lustre data from %s "
+			"(%d)\n", mop.mo_source, ret);
+		goto out;
+	}
 
 	ret = osd_tune_lustre(mop.mo_source, &mop);
 
