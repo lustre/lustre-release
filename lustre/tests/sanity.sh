@@ -21335,6 +21335,13 @@ test_814()
 }
 run_test 814 "sparse cp works as expected (LU-12361)"
 
+test_815()
+{
+	writeme -b 100 $DIR/$tfile || error "write 100 bytes failed"
+	writeme -b 0 $DIR/$tfile || error "write 0 byte failed"
+}
+run_test 815 "zero byte tiny write doesn't hang (LU-12382)"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
