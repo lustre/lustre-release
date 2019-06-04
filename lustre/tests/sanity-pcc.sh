@@ -449,7 +449,7 @@ test_1g() {
 	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 &&
 		error "non-root user can dd write to $file"
-	chmod 777 $file || error "chmod 777 $file failed"
+	chmod 777 $DIR2/$tfile || error "chmod 777 $DIR2/$tfile failed"
 	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
 		error "non-root user cannot write $file with permission (777)"
 

@@ -790,7 +790,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	struct md_attr *ma = &info->mti_attr;
 	__u64 open_flags = info->mti_spec.sp_cr_flags;
 	__u64 trybits = 0;
-	enum ldlm_mode lm = LCK_CR;
+	enum ldlm_mode lm = LCK_PR;
 	bool acq_lease = !!(open_flags & MDS_OPEN_LEASE);
 	bool try_layout = false;
 	bool create_layout = false;
@@ -894,13 +894,26 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	/* Return lookup lock to validate inode at the client side.
 	 * This is pretty important otherwise MDT will return layout
 	 * lock for each open.
-	 * However this is a double-edged sword because changing
-	 * permission will revoke a huge number of LOOKUP locks.
+	 * Since trylocks are opportunistic now and we also have
+	 * ability to selectively cancel lock bits from clients on conflict,
+	 * we would also return other useful bits: PERM and UPDATE - both
+	 * necessary to ensure subsequent stats from the client would not
+	 * need to talk to us again. Historically speaking both permissions
+	 * and other inode data rarely changes after creation anyway, so
+	 * there should not be any downsides from doing it for normal
+	 * operations now.
 	 */
 	if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_OPEN) && try_layout) {
 		if (!(*ibits & MDS_INODELOCK_LOOKUP))
 			trybits |= MDS_INODELOCK_LOOKUP;
 		trybits |= MDS_INODELOCK_LAYOUT;
+		/* PERM|UPDATE ibits in CR mode don't make sense, since
+		 * all modifications lock these ibits in PW mode.
+		 * Don't lock UPDATE|PERM ibits upon PCC attach, otherwise
+		 * PCC will be detached when these ibits are revoked.
+		 */
+		if (lm != LCK_CR && !(open_flags & MDS_OPEN_PCC))
+			trybits |= MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM;
 	}
 
 	if (*ibits | trybits)

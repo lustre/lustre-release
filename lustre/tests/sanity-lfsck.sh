@@ -5078,6 +5078,8 @@ test_31d() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x0
 
 	umount_client $MOUNT || error "(2) umount failed"
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
 	mount_client $MOUNT || error "(3) mount failed"
 
 	touch $DIR/$tdir/striped_dir/dummy ||
@@ -5103,8 +5105,21 @@ test_31d() {
 	chattr -i $DIR/$tdir/striped_dir ||
 		error "(10) Fail to chattr on the broken striped directory"
 
+	rm -f $DIR/$tdir/striped_dir/dummy || error "(11) Fail to remove dummy"
+
+	# LFSCK again to regenerate master LMV
+	echo "Trigger namespace LFSCK to find out the inconsistency"
+	$START_NAMESPACE -r -A ||
+		error "(12) Fail to start LFSCK for namespace"
+
+	wait_all_targets_blocked namespace completed 6
+
+	# reload striped_dir to parse newly generated LMV
+	stop mds1
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+
 	rmdir $DIR/$tdir/striped_dir ||
-		error "(11) Fail to remove the striped directory after LFSCK"
+		error "(13) Fail to remove the striped directory after LFSCK"
 }
 run_test 31d "Set broken striped directory (modified after broken) as read-only"
 
