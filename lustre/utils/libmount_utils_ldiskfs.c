@@ -1259,7 +1259,7 @@ static int tune_block_dev_slaves(const char *sys_path, struct mount_opts *mop)
 		if (d->d_type != DT_LNK)
 			continue;
 
-		snprintf(path, sizeof(path), "%s/%s", slaves_path, d->d_name);
+		snprintf(path, sizeof(path), "/dev/%s", d->d_name);
 		rc2 = tune_block_dev(path, mop);
 		if (rc2 != 0)
 			rc = rc2;
