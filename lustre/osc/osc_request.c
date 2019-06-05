@@ -1068,8 +1068,11 @@ static int check_write_rcs(struct ptlrpc_request *req,
 
         /* return error if any niobuf was in error */
         for (i = 0; i < niocount; i++) {
-                if ((int)remote_rcs[i] < 0)
-                        return(remote_rcs[i]);
+		if ((int)remote_rcs[i] < 0) {
+			CDEBUG(D_INFO, "rc[%d]: %d req %p\n",
+			       i, remote_rcs[i], req);
+			return remote_rcs[i];
+		}
 
                 if (remote_rcs[i] != 0) {
                         CDEBUG(D_INFO, "rc[%d] invalid (%d) req %p\n",
