@@ -1351,7 +1351,6 @@ enum {
 
 static struct lu_context_key *lu_keys[LU_CONTEXT_KEY_NR] = { NULL, };
 
-DEFINE_RWLOCK(lu_keys_guard);
 static DECLARE_RWSEM(lu_key_initing);
 
 /**
@@ -1405,7 +1404,7 @@ static void key_fini(struct lu_context *ctx, int index)
                 key = lu_keys[index];
                 LASSERT(key != NULL);
                 LASSERT(key->lct_fini != NULL);
-		LASSERT(atomic_read(&key->lct_used) > 1);
+		LASSERT(atomic_read(&key->lct_used) > 0);
 
                 key->lct_fini(ctx, key, ctx->lc_value[index]);
                 lu_ref_del(&key->lct_reference, "ctx", ctx);
@@ -1545,6 +1544,7 @@ EXPORT_SYMBOL(lu_context_key_get);
  * List of remembered contexts. XXX document me.
  */
 static LIST_HEAD(lu_context_remembered);
+static DEFINE_SPINLOCK(lu_context_remembered_guard);
 
 /**
  * Destroy \a key in all remembered contexts. This is used to destroy key
@@ -1565,13 +1565,13 @@ void lu_context_key_quiesce(struct lu_context_key *key)
 		key->lct_tags |= LCT_QUIESCENT;
 		up_write(&lu_key_initing);
 
-		write_lock(&lu_keys_guard);
+		spin_lock(&lu_context_remembered_guard);
 		list_for_each_entry(ctx, &lu_context_remembered, lc_remember) {
 			spin_until_cond(READ_ONCE(ctx->lc_state) != LCS_LEAVING);
 			key_fini(ctx, key->lct_index);
 		}
 
-		write_unlock(&lu_keys_guard);
+		spin_unlock(&lu_context_remembered_guard);
 	}
 }
 
@@ -1677,9 +1677,9 @@ int lu_context_init(struct lu_context *ctx, __u32 tags)
 	ctx->lc_state = LCS_INITIALIZED;
 	ctx->lc_tags = tags;
 	if (tags & LCT_REMEMBER) {
-		write_lock(&lu_keys_guard);
+		spin_lock(&lu_context_remembered_guard);
 		list_add(&ctx->lc_remember, &lu_context_remembered);
-		write_unlock(&lu_keys_guard);
+		spin_unlock(&lu_context_remembered_guard);
 	} else {
 		INIT_LIST_HEAD(&ctx->lc_remember);
 	}
@@ -1702,14 +1702,13 @@ void lu_context_fini(struct lu_context *ctx)
 
 	if ((ctx->lc_tags & LCT_REMEMBER) == 0) {
 		LASSERT(list_empty(&ctx->lc_remember));
-		keys_fini(ctx);
-
-	} else { /* could race with key degister */
-		write_lock(&lu_keys_guard);
-		keys_fini(ctx);
+	} else {
+		/* could race with key degister */
+		spin_lock(&lu_context_remembered_guard);
 		list_del_init(&ctx->lc_remember);
-		write_unlock(&lu_keys_guard);
+		spin_unlock(&lu_context_remembered_guard);
 	}
+	keys_fini(ctx);
 }
 EXPORT_SYMBOL(lu_context_fini);
 
@@ -1788,37 +1787,37 @@ u32 lu_session_tags_default;
 #ifdef HAVE_SERVER_SUPPORT
 void lu_context_tags_update(__u32 tags)
 {
-	write_lock(&lu_keys_guard);
+	spin_lock(&lu_context_remembered_guard);
 	lu_context_tags_default |= tags;
 	atomic_inc(&key_set_version);
-	write_unlock(&lu_keys_guard);
+	spin_unlock(&lu_context_remembered_guard);
 }
 EXPORT_SYMBOL(lu_context_tags_update);
 
 void lu_context_tags_clear(__u32 tags)
 {
-	write_lock(&lu_keys_guard);
+	spin_lock(&lu_context_remembered_guard);
 	lu_context_tags_default &= ~tags;
 	atomic_inc(&key_set_version);
-	write_unlock(&lu_keys_guard);
+	spin_unlock(&lu_context_remembered_guard);
 }
 EXPORT_SYMBOL(lu_context_tags_clear);
 
 void lu_session_tags_update(__u32 tags)
 {
-	write_lock(&lu_keys_guard);
+	spin_lock(&lu_context_remembered_guard);
 	lu_session_tags_default |= tags;
 	atomic_inc(&key_set_version);
-	write_unlock(&lu_keys_guard);
+	spin_unlock(&lu_context_remembered_guard);
 }
 EXPORT_SYMBOL(lu_session_tags_update);
 
 void lu_session_tags_clear(__u32 tags)
 {
-	write_lock(&lu_keys_guard);
+	spin_lock(&lu_context_remembered_guard);
 	lu_session_tags_default &= ~tags;
 	atomic_inc(&key_set_version);
-	write_unlock(&lu_keys_guard);
+	spin_unlock(&lu_context_remembered_guard);
 }
 EXPORT_SYMBOL(lu_session_tags_clear);
 #endif /* HAVE_SERVER_SUPPORT */
