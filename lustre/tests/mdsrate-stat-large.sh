@@ -41,8 +41,8 @@ check_and_setup_lustre
 
 mkdir -p $BASEDIR
 chmod 0777 $BASEDIR
-$LFS setstripe $BASEDIR -c -1
-get_stripe $BASEDIR
+mdsrate_STRIPEPARAMS=${mdsrate_STRIPEPARAMS:-${fs_STRIPEPARAMS:-"-c -1"}}
+setstripe_getstripe $BASEDIR $mdsrate_STRIPEPARAMS
 
 IFree=$(mdsrate_inodes_available)
 if [ $IFree -lt $NUM_FILES ]; then
