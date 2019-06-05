@@ -564,6 +564,10 @@ static void mdd_sysfs_release(struct kobject *kobj)
 {
 	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
 					      mdd_kobj);
+	struct obd_device *obd = mdd2obd_dev(mdd);
+
+	debugfs_remove_recursive(obd->obd_debugfs_entry);
+	obd->obd_debugfs_entry = NULL;
 
 	complete(&mdd->mdd_kobj_unregister);
 }
@@ -614,11 +618,6 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 
 void mdd_procfs_fini(struct mdd_device *mdd)
 {
-	struct obd_device *obd = mdd2obd_dev(mdd);
-
 	kobject_put(&mdd->mdd_kobj);
 	wait_for_completion(&mdd->mdd_kobj_unregister);
-
-	if (!IS_ERR_OR_NULL(obd->obd_debugfs_entry))
-		ldebugfs_remove(&obd->obd_debugfs_entry);
 }

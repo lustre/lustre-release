@@ -1933,10 +1933,9 @@ static int __init osp_init(void)
  */
 static void __exit osp_exit(void)
 {
-	if (!IS_ERR_OR_NULL(sym)) {
-		ldebugfs_remove(&sym->typ_debugfs_entry);
+	if (!IS_ERR_OR_NULL(sym))
 		kobject_put(&sym->typ_kobj);
-	}
+
 	class_unregister_type(LUSTRE_LWP_NAME);
 	class_unregister_type(LUSTRE_OSP_NAME);
 	lu_kmem_fini(osp_caches);

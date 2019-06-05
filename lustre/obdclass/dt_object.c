@@ -1235,6 +1235,9 @@ static void dt_sysfs_release(struct kobject *kobj)
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 
+	debugfs_remove_recursive(dt->dd_debugfs_entry);
+	dt->dd_debugfs_entry = NULL;
+
 	complete(&dt->dd_kobj_unregister);
 }
 
@@ -1242,9 +1245,6 @@ int dt_tunables_fini(struct dt_device *dt)
 {
 	if (!dt)
 		return -EINVAL;
-
-	if (!IS_ERR_OR_NULL(dt->dd_debugfs_entry))
-		ldebugfs_remove(&dt->dd_debugfs_entry);
 
 	if (dt->dd_def_attrs)
 		sysfs_remove_files(&dt->dd_kobj, dt->dd_def_attrs);

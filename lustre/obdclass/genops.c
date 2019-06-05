@@ -162,6 +162,32 @@ static void class_sysfs_release(struct kobject *kobj)
 {
 	struct obd_type *type = container_of(kobj, struct obd_type, typ_kobj);
 
+#ifdef HAVE_SERVER_SUPPORT
+	if (type->typ_sym_filter)
+		type->typ_debugfs_entry = NULL;
+#endif
+	debugfs_remove_recursive(type->typ_debugfs_entry);
+	type->typ_debugfs_entry = NULL;
+
+	if (type->typ_lu)
+		lu_device_type_fini(type->typ_lu);
+
+	spin_lock(&obd_types_lock);
+	list_del(&type->typ_chain);
+	spin_unlock(&obd_types_lock);
+
+	if (type->typ_name) {
+#ifdef CONFIG_PROC_FS
+		if (type->typ_procroot)
+			remove_proc_subtree(type->typ_name, proc_lustre_root);
+#endif
+		OBD_FREE(type->typ_name, strlen(type->typ_name) + 1);
+	}
+	if (type->typ_md_ops)
+		OBD_FREE_PTR(type->typ_md_ops);
+	if (type->typ_dt_ops)
+		OBD_FREE_PTR(type->typ_dt_ops);
+
 	OBD_FREE(type, sizeof(*type));
 }
 
@@ -187,6 +213,8 @@ struct obd_type *class_add_symlinks(const char *name, bool enable_proc)
 	OBD_ALLOC(type, sizeof(*type));
 	if (!type)
 		return ERR_PTR(-ENOMEM);
+
+	INIT_LIST_HEAD(&type->typ_chain);
 
 	type->typ_kobj.kset = lustre_kset;
 	rc = kobject_init_and_add(&type->typ_kobj, &class_ktype,
@@ -225,9 +253,6 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 			const char *name, struct lu_device_type *ldt)
 {
 	struct obd_type *type;
-#ifdef HAVE_SERVER_SUPPORT
-	struct kobject *kobj;
-#endif /* HAVE_SERVER_SUPPORT */
 	int rc;
 
 	ENTRY;
@@ -235,23 +260,28 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 	LASSERT(strnlen(name, CLASS_MAX_NAME) < CLASS_MAX_NAME);
 
         if (class_search_type(name)) {
+#ifdef HAVE_SERVER_SUPPORT
+		if (strcmp(name, LUSTRE_LOV_NAME) == 0 ||
+		    strcmp(name, LUSTRE_OSC_NAME) == 0) {
+			struct kobject *kobj;
+
+			kobj = kset_find_obj(lustre_kset, name);
+			if (kobj) {
+				type = container_of(kobj, struct obd_type,
+						    typ_kobj);
+				goto dir_exist;
+			}
+		}
+#endif /* HAVE_SERVER_SUPPORT */
                 CDEBUG(D_IOCTL, "Type %s already registered\n", name);
                 RETURN(-EEXIST);
         }
-
-#ifdef HAVE_SERVER_SUPPORT
-	kobj = kset_find_obj(lustre_kset, name);
-	if (kobj) {
-		type = container_of(kobj, struct obd_type, typ_kobj);
-
-		goto dir_exist;
-	}
-#endif /* HAVE_SERVER_SUPPORT */
 
         OBD_ALLOC(type, sizeof(*type));
         if (type == NULL)
 		RETURN(-ENOMEM);
 
+	INIT_LIST_HEAD(&type->typ_chain);
 	type->typ_kobj.kset = lustre_kset;
 	kobject_init(&type->typ_kobj, &class_ktype);
 #ifdef HAVE_SERVER_SUPPORT
@@ -318,23 +348,6 @@ setup_ldt:
 	RETURN(0);
 
 failed:
-#ifdef HAVE_SERVER_SUPPORT
-	if (type->typ_sym_filter)
-		type->typ_debugfs_entry = NULL;
-#endif
-	if (!IS_ERR_OR_NULL(type->typ_debugfs_entry))
-		ldebugfs_remove(&type->typ_debugfs_entry);
-	if (type->typ_name != NULL) {
-#ifdef CONFIG_PROC_FS
-		if (type->typ_procroot != NULL)
-			remove_proc_subtree(type->typ_name, proc_lustre_root);
-#endif
-                OBD_FREE(type->typ_name, strlen(name) + 1);
-	}
-        if (type->typ_md_ops != NULL)
-                OBD_FREE_PTR(type->typ_md_ops);
-        if (type->typ_dt_ops != NULL)
-                OBD_FREE_PTR(type->typ_dt_ops);
 	kobject_put(&type->typ_kobj);
 
 	RETURN(rc);
@@ -360,32 +373,6 @@ int class_unregister_type(const char *name)
                 RETURN(-EBUSY);
         }
 
-	/* we do not use type->typ_procroot as for compatibility purposes
-	 * other modules can share names (i.e. lod can use lov entry). so
-	 * we can't reference pointer as it can get invalided when another
-	 * module removes the entry */
-#ifdef CONFIG_PROC_FS
-	if (type->typ_procroot != NULL)
-		remove_proc_subtree(type->typ_name, proc_lustre_root);
-#endif
-#ifdef HAVE_SERVER_SUPPORT
-	if (type->typ_sym_filter)
-		type->typ_debugfs_entry = NULL;
-#endif
-	if (!IS_ERR_OR_NULL(type->typ_debugfs_entry))
-		ldebugfs_remove(&type->typ_debugfs_entry);
-
-        if (type->typ_lu)
-                lu_device_type_fini(type->typ_lu);
-
-	spin_lock(&obd_types_lock);
-	list_del(&type->typ_chain);
-	spin_unlock(&obd_types_lock);
-        OBD_FREE(type->typ_name, strlen(name) + 1);
-        if (type->typ_dt_ops != NULL)
-                OBD_FREE_PTR(type->typ_dt_ops);
-        if (type->typ_md_ops != NULL)
-                OBD_FREE_PTR(type->typ_md_ops);
 	kobject_put(&type->typ_kobj);
 
 	RETURN(0);

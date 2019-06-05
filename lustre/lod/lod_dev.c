@@ -2254,10 +2254,9 @@ static int __init lod_init(void)
 
 static void __exit lod_exit(void)
 {
-	if (!IS_ERR_OR_NULL(sym)) {
-		ldebugfs_remove(&sym->typ_debugfs_entry);
+	if (!IS_ERR_OR_NULL(sym))
 		kobject_put(&sym->typ_kobj);
-	}
+
 	class_unregister_type(LUSTRE_LOD_NAME);
 	lu_kmem_fini(lod_caches);
 }
