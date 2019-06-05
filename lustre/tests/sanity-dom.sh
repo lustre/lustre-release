@@ -106,6 +106,20 @@ test_4() {
 }
 run_test 4 "DoM: glimpse doesn't produce duplicated locks"
 
+test_6() {
+	$MULTIOP $DIR1/$tfile Oz40960w100_z200w100c &
+	MULTIPID=$!
+
+	# let MULTIPID to create the file
+	sleep 1
+	$MULTIOP $DIR2/$tfile oO_RDWR:Tw100c
+	kill -USR1 $MULTIPID
+	wait
+	$MULTIOP $DIR2/$tfile oO_RDWR:z400w100c
+	$CHECKSTAT -s 500 $DIR2/$tfile || error "wrong size"
+}
+run_test 6 "Race two writes, check file size"
+
 test_fsx() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile

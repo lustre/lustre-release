@@ -422,6 +422,24 @@ loff_t cl_object_maxbytes(struct cl_object *obj)
 }
 EXPORT_SYMBOL(cl_object_maxbytes);
 
+int cl_object_flush(const struct lu_env *env, struct cl_object *obj,
+			 struct ldlm_lock *lock)
+{
+	struct lu_object_header *top = obj->co_lu.lo_header;
+	int rc = 0;
+	ENTRY;
+
+	list_for_each_entry(obj, &top->loh_layers, co_lu.lo_linkage) {
+		if (obj->co_ops->coo_object_flush) {
+			rc = obj->co_ops->coo_object_flush(env, obj, lock);
+			if (rc)
+				break;
+		}
+	}
+	RETURN(rc);
+}
+EXPORT_SYMBOL(cl_object_flush);
+
 /**
  * Helper function removing all object locks, and marking object for
  * deletion. All object pages must have been deleted at this point.

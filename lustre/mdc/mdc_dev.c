@@ -294,7 +294,7 @@ void mdc_lock_lockless_cancel(const struct lu_env *env,
  */
 static int mdc_dlm_blocking_ast0(const struct lu_env *env,
 				 struct ldlm_lock *dlmlock,
-				 void *data, int flag)
+				 int flag)
 {
 	struct cl_object *obj = NULL;
 	int result = 0;
@@ -386,7 +386,7 @@ int mdc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
 			break;
 		}
 
-		rc = mdc_dlm_blocking_ast0(env, dlmlock, data, flag);
+		rc = mdc_dlm_blocking_ast0(env, dlmlock, flag);
 		cl_env_put(env, &refcheck);
 		break;
 	}
@@ -1414,6 +1414,12 @@ int mdc_object_prune(const struct lu_env *env, struct cl_object *obj)
 	return 0;
 }
 
+static int mdc_object_flush(const struct lu_env *env, struct cl_object *obj,
+			    struct ldlm_lock *lock)
+{
+	RETURN(mdc_dlm_blocking_ast0(env, lock, LDLM_CB_CANCELING));
+}
+
 static const struct cl_object_operations mdc_ops = {
 	.coo_page_init = osc_page_init,
 	.coo_lock_init = mdc_lock_init,
@@ -1423,6 +1429,7 @@ static const struct cl_object_operations mdc_ops = {
 	.coo_glimpse = osc_object_glimpse,
 	.coo_req_attr_set = mdc_req_attr_set,
 	.coo_prune = mdc_object_prune,
+	.coo_object_flush = mdc_object_flush
 };
 
 static const struct osc_object_operations mdc_object_ops = {
