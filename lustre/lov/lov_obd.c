@@ -1347,8 +1347,6 @@ struct kmem_cache *lov_oinfo_slab;
 
 static int __init lov_init(void)
 {
-	bool enable_proc = true;
-	struct obd_type *type;
 	int rc;
 	ENTRY;
 
@@ -1369,13 +1367,8 @@ static int __init lov_init(void)
                 return -ENOMEM;
         }
 
-	type = class_search_type(LUSTRE_LOD_NAME);
-	if (type != NULL && type->typ_procsym != NULL)
-		enable_proc = false;
-
-	rc = class_register_type(&lov_obd_ops, NULL, enable_proc, NULL,
+	rc = class_register_type(&lov_obd_ops, NULL, true, NULL,
 				 LUSTRE_LOV_NAME, &lov_device_type);
-
         if (rc) {
 		kmem_cache_destroy(lov_oinfo_slab);
                 lu_kmem_fini(lov_caches);

@@ -3395,8 +3395,6 @@ static int osc_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 
 static int __init osc_init(void)
 {
-	bool enable_proc = true;
-	struct obd_type *type;
 	unsigned int reqpool_size;
 	unsigned int reqsize;
 	int rc;
@@ -3413,11 +3411,7 @@ static int __init osc_init(void)
 	if (rc)
 		RETURN(rc);
 
-	type = class_search_type(LUSTRE_OSP_NAME);
-	if (type != NULL && type->typ_procsym != NULL)
-		enable_proc = false;
-
-	rc = class_register_type(&osc_obd_ops, NULL, enable_proc, NULL,
+	rc = class_register_type(&osc_obd_ops, NULL, true, NULL,
 				 LUSTRE_OSC_NAME, &osc_device_type);
 	if (rc)
 		GOTO(out_kmem, rc);

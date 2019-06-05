@@ -171,8 +171,9 @@ static struct kobj_type class_ktype = {
 };
 
 #ifdef HAVE_SERVER_SUPPORT
-struct obd_type *class_setup_tunables(const char *name)
+struct obd_type *class_add_symlinks(const char *name, bool enable_proc)
 {
+	struct dentry *symlink;
 	struct obd_type *type;
 	struct kobject *kobj;
 	int rc;
@@ -188,15 +189,33 @@ struct obd_type *class_setup_tunables(const char *name)
 		return ERR_PTR(-ENOMEM);
 
 	type->typ_kobj.kset = lustre_kset;
-	kobject_init(&type->typ_kobj, &class_ktype);
-	rc = kobject_add(&type->typ_kobj, &lustre_kset->kobj, "%s", name);
-	if (rc) {
+	rc = kobject_init_and_add(&type->typ_kobj, &class_ktype,
+				  &lustre_kset->kobj, "%s", name);
+	if (rc)
+		return ERR_PTR(rc);
+
+	symlink = debugfs_create_dir(name, debugfs_lustre_root);
+	if (IS_ERR_OR_NULL(symlink)) {
+		rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
 		kobject_put(&type->typ_kobj);
 		return ERR_PTR(rc);
 	}
+	type->typ_debugfs_entry = symlink;
+	type->typ_sym_filter = true;
+
+	if (enable_proc) {
+		type->typ_procroot = lprocfs_register(name, proc_lustre_root,
+						      NULL, NULL);
+		if (IS_ERR(type->typ_procroot)) {
+			CERROR("%s: can't create compat proc entry: %d\n",
+			       name, (int)PTR_ERR(type->typ_procroot));
+			type->typ_procroot = NULL;
+		}
+	}
+
 	return type;
 }
-EXPORT_SYMBOL(class_setup_tunables);
+EXPORT_SYMBOL(class_add_symlinks);
 #endif /* HAVE_SERVER_SUPPORT */
 
 #define CLASS_MAX_NAME 1024
@@ -234,19 +253,7 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 		RETURN(-ENOMEM);
 
 	type->typ_kobj.kset = lustre_kset;
-	rc = kobject_init_and_add(&type->typ_kobj, &class_ktype,
-				  &lustre_kset->kobj, "%s", name);
-	if (rc)
-		GOTO(failed, rc);
-
-	type->typ_debugfs_entry = ldebugfs_register(name, debugfs_lustre_root,
-						    vars, type);
-	if (IS_ERR_OR_NULL(type->typ_debugfs_entry)) {
-		rc = type->typ_debugfs_entry ? PTR_ERR(type->typ_debugfs_entry)
-					     : -ENOMEM;
-		type->typ_debugfs_entry = NULL;
-		GOTO(failed, rc);
-	}
+	kobject_init(&type->typ_kobj, &class_ktype);
 #ifdef HAVE_SERVER_SUPPORT
 dir_exist:
 #endif /* HAVE_SERVER_SUPPORT */
@@ -257,7 +264,7 @@ dir_exist:
         if (type->typ_dt_ops == NULL ||
             type->typ_md_ops == NULL ||
             type->typ_name == NULL)
-                GOTO (failed, rc);
+		GOTO (failed, rc = -ENOMEM);
 
         *(type->typ_dt_ops) = *dt_ops;
         /* md_ops is optional */
@@ -266,6 +273,10 @@ dir_exist:
         strcpy(type->typ_name, name);
 	spin_lock_init(&type->obd_type_lock);
 
+#ifdef HAVE_SERVER_SUPPORT
+	if (type->typ_sym_filter)
+		goto setup_ldt;
+#endif
 #ifdef CONFIG_PROC_FS
 	if (enable_proc && !type->typ_procroot) {
 		type->typ_procroot = lprocfs_register(type->typ_name,
@@ -277,6 +288,21 @@ dir_exist:
 			GOTO(failed, rc);
 		}
 	}
+#endif
+	type->typ_debugfs_entry = ldebugfs_register(name, debugfs_lustre_root,
+						    vars, type);
+	if (IS_ERR_OR_NULL(type->typ_debugfs_entry)) {
+		rc = type->typ_debugfs_entry ? PTR_ERR(type->typ_debugfs_entry)
+					     : -ENOMEM;
+		type->typ_debugfs_entry = NULL;
+		GOTO(failed, rc);
+	}
+
+	rc = kobject_add(&type->typ_kobj, &lustre_kset->kobj, "%s", name);
+	if (rc)
+		GOTO(failed, rc);
+#ifdef HAVE_SERVER_SUPPORT
+setup_ldt:
 #endif
 	if (ldt) {
 		type->typ_lu = ldt;
@@ -341,8 +367,6 @@ int class_unregister_type(const char *name)
 #ifdef CONFIG_PROC_FS
 	if (type->typ_procroot != NULL)
 		remove_proc_subtree(type->typ_name, proc_lustre_root);
-	if (type->typ_procsym != NULL)
-		lprocfs_remove(&type->typ_procsym);
 #endif
 #ifdef HAVE_SERVER_SUPPORT
 	if (type->typ_sym_filter)

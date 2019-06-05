@@ -808,15 +808,15 @@ static struct attribute *lod_attrs[] = {
  */
 int lod_procfs_init(struct lod_device *lod)
 {
+	struct lprocfs_vars ldebugfs_obd_vars[] = { { NULL } };
 	struct obd_device *obd = lod2obd(lod);
-	struct proc_dir_entry *lov_proc_dir;
 	struct obd_type *type;
 	struct kobject *lov;
 	int rc;
 
 	lod->lod_dt_dev.dd_ktype.default_attrs = lod_attrs;
 	rc = dt_tunables_init(&lod->lod_dt_dev, obd->obd_type, obd->obd_name,
-			      NULL);
+			      ldebugfs_obd_vars);
 	if (rc) {
 		CERROR("%s: failed to setup DT tunables: %d\n",
 		       obd->obd_name, rc);
@@ -854,11 +854,17 @@ int lod_procfs_init(struct lod_device *lod)
 	}
 
 	lov = kset_find_obj(lustre_kset, "lov");
-	if (lov) {
-		rc = sysfs_create_link(lov, &lod->lod_dt_dev.dd_kobj,
-				       obd->obd_name);
-		kobject_put(lov);
+	if (!lov) {
+		CERROR("%s: lov subsystem not found\n", obd->obd_name);
+		GOTO(out, rc = -ENODEV);
 	}
+
+	rc = sysfs_create_link(lov, &lod->lod_dt_dev.dd_kobj,
+			       obd->obd_name);
+	if (rc)
+		CERROR("%s: failed to create LOV sysfs symlink\n",
+		       obd->obd_name);
+	kobject_put(lov);
 
 	lod->lod_debugfs = ldebugfs_add_symlink(obd->obd_name, "lov",
 						"../lod/%s", obd->obd_name);
@@ -866,20 +872,13 @@ int lod_procfs_init(struct lod_device *lod)
 		CERROR("%s: failed to create LOV debugfs symlink\n",
 		       obd->obd_name);
 
-	/* If the real LOV is present which is the case for setups
-	 * with both server and clients on the same node then use
-	 * the LOV's proc root */
-	type = class_search_type(LUSTRE_LOV_NAME);
-	if (type != NULL && type->typ_procroot != NULL)
-		lov_proc_dir = type->typ_procroot;
-	else
-		lov_proc_dir = obd->obd_type->typ_procsym;
-
-	if (lov_proc_dir == NULL)
+	type = container_of(lov, struct obd_type, typ_kobj);
+	if (!type->typ_procroot)
 		RETURN(0);
 
 	/* for compatibility we link old procfs's LOV entries to lod ones */
-	lod->lod_symlink = lprocfs_add_symlink(obd->obd_name, lov_proc_dir,
+	lod->lod_symlink = lprocfs_add_symlink(obd->obd_name,
+					       type->typ_procroot,
 					       "../lod/%s", obd->obd_name);
 	if (lod->lod_symlink == NULL)
 		CERROR("cannot create LOV symlink for /proc/fs/lustre/lod/%s\n",

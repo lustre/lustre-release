@@ -2227,9 +2227,6 @@ static struct obd_type *sym;
 
 static int __init lod_init(void)
 {
-	struct dentry *symlink;
-	struct obd_type *type;
-	struct qstr dname;
 	int rc;
 
 	rc = lu_kmem_init(lod_caches);
@@ -2243,46 +2240,15 @@ static int __init lod_init(void)
 		return rc;
 	}
 
-	sym = class_setup_tunables(LUSTRE_LOV_NAME);
+	/* create "lov" entry for compatibility purposes */
+	sym = class_add_symlinks(LUSTRE_LOV_NAME, true);
 	if (IS_ERR(sym)) {
 		rc = PTR_ERR(sym);
 		/* does real "lov" already exist ? */
 		if (rc == -EEXIST)
-			GOTO(try_proc, rc = 0);
-		GOTO(no_lov, rc);
+			rc = 0;
 	}
 
-	/* create "lov" entry for compatibility purposes */
-	dname.name = "lov";
-	dname.len = strlen(dname.name);
-	dname.hash = ll_full_name_hash(debugfs_lustre_root, dname.name,
-				       dname.len);
-	symlink = d_lookup(debugfs_lustre_root, &dname);
-	if (!symlink) {
-		symlink = debugfs_create_dir(dname.name, debugfs_lustre_root);
-		if (IS_ERR_OR_NULL(symlink)) {
-			rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
-			GOTO(no_lov, rc);
-		}
-		sym->typ_debugfs_entry = symlink;
-	} else {
-		dput(symlink);
-	}
-
-try_proc:
-	type = class_search_type(LUSTRE_LOV_NAME);
-	if (type && type->typ_procroot)
-		GOTO(no_lov, rc);
-
-	type = class_search_type(LUSTRE_LOD_NAME);
-	type->typ_procsym = lprocfs_register("lov", proc_lustre_root,
-					     NULL, NULL);
-	if (IS_ERR(type->typ_procsym)) {
-		CERROR("lod: can't create compat entry \"lov\": %d\n",
-		       (int)PTR_ERR(type->typ_procsym));
-		type->typ_procsym = NULL;
-	}
-no_lov:
 	return rc;
 }
 

@@ -1892,16 +1892,13 @@ static struct obd_type *sym;
  */
 static int __init osp_init(void)
 {
-	struct dentry *symlink;
-	struct obd_type *type;
-	struct qstr dname;
 	int rc;
 
 	rc = lu_kmem_init(osp_caches);
 	if (rc)
 		return rc;
 
-	rc = class_register_type(&osp_obd_device_ops, NULL, true, NULL,
+	rc = class_register_type(&osp_obd_device_ops, NULL, false, NULL,
 				 LUSTRE_OSP_NAME, &osp_device_type);
 	if (rc != 0) {
 		lu_kmem_fini(osp_caches);
@@ -1916,46 +1913,15 @@ static int __init osp_init(void)
 		return rc;
 	}
 
-	sym = class_setup_tunables(LUSTRE_OSC_NAME);
+	/* create "osc" entry for compatibility purposes */
+	sym = class_add_symlinks(LUSTRE_OSC_NAME, false);
 	if (IS_ERR(sym)) {
 		rc = PTR_ERR(sym);
 		/* does real "osc" already exist ? */
 		if (rc == -EEXIST)
-			GOTO(try_proc, rc = 0);
-		GOTO(no_osc, rc);
+			rc = 0;
 	}
 
-	/* create "osc" entry for compatibility purposes */
-	dname.name = "osc";
-	dname.len = strlen(dname.name);
-	dname.hash = ll_full_name_hash(debugfs_lustre_root, dname.name,
-				       dname.len);
-	symlink = d_lookup(debugfs_lustre_root, &dname);
-	if (!symlink) {
-		symlink = debugfs_create_dir(dname.name, debugfs_lustre_root);
-		if (IS_ERR_OR_NULL(symlink)) {
-			rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
-			GOTO(no_osc, rc);
-		}
-		sym->typ_debugfs_entry = symlink;
-	} else {
-		dput(symlink);
-	}
-
-try_proc:
-	type = class_search_type(LUSTRE_OSC_NAME);
-	if (type != NULL && type->typ_procroot != NULL)
-		GOTO(no_osc, rc);
-
-	type = class_search_type(LUSTRE_OSP_NAME);
-	type->typ_procsym = lprocfs_register("osc", proc_lustre_root,
-					     NULL, NULL);
-	if (IS_ERR(type->typ_procsym)) {
-		CERROR("osp: can't create compat entry \"osc\": %d\n",
-		       (int) PTR_ERR(type->typ_procsym));
-		type->typ_procsym = NULL;
-	}
-no_osc:
 	return rc;
 }
 

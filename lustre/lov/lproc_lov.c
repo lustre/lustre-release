@@ -291,32 +291,9 @@ static struct attribute *lov_attrs[] = {
 int lov_tunables_init(struct obd_device *obd)
 {
 	struct lov_obd *lov = &obd->u.lov;
-#if defined(CONFIG_PROC_FS) && defined(HAVE_SERVER_SUPPORT)
-	struct obd_type *type;
-#endif
 	int rc;
 
 	obd->obd_vars = lprocfs_lov_obd_vars;
-#if defined(CONFIG_PROC_FS) && defined(HAVE_SERVER_SUPPORT)
-	/* If this is true then both client (lov) and server
-	 * (lod) are on the same node. The lod layer if loaded
-	 * first will register the lov proc directory. In that
-	 * case obd->obd_type->typ_procroot will be not set.
-	 * Instead we use type->typ_procsym as the parent.
-	 */
-	type = class_search_type(LUSTRE_LOD_NAME);
-	if (type && type->typ_procsym) {
-		obd->obd_proc_entry = lprocfs_register(obd->obd_name,
-						       type->typ_procsym,
-						       obd->obd_vars, obd);
-		if (IS_ERR(obd->obd_proc_entry)) {
-			rc = PTR_ERR(obd->obd_proc_entry);
-			CERROR("error %d setting up lprocfs for %s\n", rc,
-			       obd->obd_name);
-			obd->obd_proc_entry = NULL;
-		}
-	}
-#endif
 	obd->obd_ktype.default_attrs = lov_attrs;
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc)

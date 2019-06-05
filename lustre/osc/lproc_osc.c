@@ -968,31 +968,9 @@ static struct attribute *osc_attrs[] = {
 
 int osc_tunables_init(struct obd_device *obd)
 {
-#if defined(CONFIG_PROC_FS) && defined(HAVE_SERVER_SUPPORT)
-	struct obd_type *type;
-#endif
 	int rc;
 
 	obd->obd_vars = lprocfs_osc_obd_vars;
-#if defined(CONFIG_PROC_FS) && defined(HAVE_SERVER_SUPPORT)
-	/* If this is true then both client (osc) and server (osp) are on the
-	 * same node. The osp layer if loaded first will register the osc proc
-	 * directory. In that case this obd_device will be attached its proc
-	 * tree to type->typ_procsym instead of obd->obd_type->typ_procroot.
-	 */
-	type = class_search_type(LUSTRE_OSP_NAME);
-	if (type && type->typ_procsym) {
-		obd->obd_proc_entry = lprocfs_register(obd->obd_name,
-						       type->typ_procsym,
-						       obd->obd_vars, obd);
-		if (IS_ERR(obd->obd_proc_entry)) {
-			rc = PTR_ERR(obd->obd_proc_entry);
-			CERROR("error %d setting up lprocfs for %s\n", rc,
-			       obd->obd_name);
-			obd->obd_proc_entry = NULL;
-		}
-	}
-#endif
 	obd->obd_ktype.default_attrs = osc_attrs;
 	rc = lprocfs_obd_setup(obd, false);
 	if (rc)
