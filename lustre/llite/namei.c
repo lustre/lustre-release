@@ -184,15 +184,12 @@ int ll_test_inode_by_fid(struct inode *inode, void *opaque)
 	return lu_fid_eq(&ll_i2info(inode)->lli_fid, opaque);
 }
 
-int ll_dom_lock_cancel(struct inode *inode, struct ldlm_lock *lock)
+static int ll_dom_lock_cancel(struct inode *inode, struct ldlm_lock *lock)
 {
 	struct lu_env *env;
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct cl_layout clt = { .cl_layout_gen = 0, };
-	int rc;
 	__u16 refcheck;
-
-
+	int rc;
 	ENTRY;
 
 	if (!lli->lli_clob) {
@@ -206,28 +203,20 @@ int ll_dom_lock_cancel(struct inode *inode, struct ldlm_lock *lock)
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	rc = cl_object_layout_get(env, lli->lli_clob, &clt);
-	if (rc) {
-		CDEBUG(D_INODE, "Cannot get layout for "DFID"\n",
+	/* reach MDC layer to flush data under  the DoM ldlm lock */
+	rc = cl_object_flush(env, lli->lli_clob, lock);
+	if (rc == -ENODATA) {
+		CDEBUG(D_INODE, "inode "DFID" layout has no DoM stripe\n",
 		       PFID(ll_inode2fid(inode)));
-		rc = -ENODATA;
-	} else if (clt.cl_size == 0 || clt.cl_dom_comp_size == 0) {
-		CDEBUG(D_INODE, "DOM lock without DOM layout for "DFID"\n",
-		       PFID(ll_inode2fid(inode)));
-	} else {
-		enum cl_fsync_mode mode;
-		loff_t end = clt.cl_dom_comp_size - 1;
-
-		mode = ldlm_is_discard_data(lock) ?
-					CL_FSYNC_DISCARD : CL_FSYNC_LOCAL;
-		rc = cl_sync_file_range(inode, 0, end, mode, 1);
-		truncate_inode_pages_range(inode->i_mapping, 0, end);
+		/* most likely result of layout change, do nothing */
+		rc = 0;
 	}
+
 	cl_env_put(env, &refcheck);
 	RETURN(rc);
 }
 
-void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
+static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 {
 	struct inode *inode = ll_inode_from_resource_lock(lock);
 	__u64 bits = to_cancel;

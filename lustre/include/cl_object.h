@@ -290,8 +290,6 @@ struct cl_layout {
 	struct lu_buf	cl_buf;
 	/** size of layout in lov_mds_md format. */
 	size_t		cl_size;
-	/** size of DoM component if exists or zero otherwise */
-	u64		cl_dom_comp_size;
 	/** Layout generation. */
 	u32		cl_layout_gen;
 	/** whether layout is a composite one */
@@ -418,6 +416,13 @@ struct cl_object_operations {
 	void (*coo_req_attr_set)(const struct lu_env *env,
 				 struct cl_object *obj,
 				 struct cl_req_attr *attr);
+	/**
+	 * Flush \a obj data corresponding to \a lock. Used for DoM
+	 * locks in llite's cancelling blocking ast callback.
+	 */
+	int (*coo_object_flush)(const struct lu_env *env,
+				struct cl_object *obj,
+				struct ldlm_lock *lock);
 };
 
 /**
@@ -2108,6 +2113,9 @@ int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 int cl_object_layout_get(const struct lu_env *env, struct cl_object *obj,
 			 struct cl_layout *cl);
 loff_t cl_object_maxbytes(struct cl_object *obj);
+int cl_object_flush(const struct lu_env *env, struct cl_object *obj,
+		    struct ldlm_lock *lock);
+
 
 /**
  * Returns true, iff \a o0 and \a o1 are slices of the same object.

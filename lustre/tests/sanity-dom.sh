@@ -155,6 +155,33 @@ test_5() {
 }
 run_test 5 "DoM truncate deadlock"
 
+test_6() {
+	$MULTIOP $DIR1/$tfile Oz40960w100_z200w100c &
+	MULTIPID=$!
+
+	# let MULTIPID to create the file
+	sleep 1
+	$MULTIOP $DIR2/$tfile oO_RDWR:Tw100c
+	kill -USR1 $MULTIPID
+	wait
+	$MULTIOP $DIR2/$tfile oO_RDWR:z400w100c
+	$CHECKSTAT -s 500 $DIR2/$tfile || error "wrong size"
+}
+run_test 6 "Race two writes, check file size"
+
+test_7() {
+	dd if=/dev/zero of=$DIR1/$tfile bs=1k count=1 || error "write 10k"
+	$TRUNCATE $DIR1/$tfile 123456 || error "truncate up to 123456"
+	$TRUNCATE $DIR2/$tfile 55555 || error "truncate down to 55555"
+	$CHECKSTAT -t file -s 55555 $DIR1/$tfile || error "stat"
+	$CHECKSTAT -t file -s 55555 $DIR2/$tfile || error "stat"
+	dd if=/dev/zero of=$DIR1/$tfile bs=10k count=1 seek=10 conv=notrunc || error "write 10k@1M"
+	$CHECKSTAT -t file -s 112640 $DIR1/$tfile || error "stat"
+	$CHECKSTAT -t file -s 112640 $DIR2/$tfile || error "stat"
+	rm $DIR1/$tfile
+}
+run_test 7 "truncate up, truncate down on another mount, write in between"
+
 test_fsx() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile

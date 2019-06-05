@@ -76,6 +76,8 @@ struct lov_layout_operations {
                             struct cl_object *obj, struct cl_io *io);
         int  (*llo_getattr)(const struct lu_env *env, struct cl_object *obj,
                             struct cl_attr *attr);
+	int  (*llo_flush)(const struct lu_env *env, struct cl_object *obj,
+			  struct ldlm_lock *lock);
 };
 
 static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov);
@@ -1003,6 +1005,32 @@ static int lov_attr_get_composite(const struct lu_env *env,
 	RETURN(0);
 }
 
+static int lov_flush_composite(const struct lu_env *env,
+			       struct cl_object *obj,
+			       struct ldlm_lock *lock)
+{
+	struct lov_object *lov = cl2lov(obj);
+	struct lov_layout_entry *lle;
+	int rc = -ENODATA;
+
+	ENTRY;
+
+	lov_foreach_layout_entry(lov, lle) {
+		if (!lsme_is_dom(lle->lle_lsme))
+			continue;
+		rc = cl_object_flush(env, lovsub2cl(lle->lle_dom.lo_dom), lock);
+		break;
+	}
+
+	RETURN(rc);
+}
+
+static int lov_flush_empty(const struct lu_env *env, struct cl_object *obj,
+			   struct ldlm_lock *lock)
+{
+	return 0;
+}
+
 const static struct lov_layout_operations lov_dispatch[] = {
 	[LLT_EMPTY] = {
 		.llo_init      = lov_init_empty,
@@ -1013,6 +1041,7 @@ const static struct lov_layout_operations lov_dispatch[] = {
 		.llo_lock_init = lov_lock_init_empty,
 		.llo_io_init   = lov_io_init_empty,
 		.llo_getattr   = lov_attr_get_empty,
+		.llo_flush     = lov_flush_empty,
 	},
 	[LLT_RELEASED] = {
 		.llo_init      = lov_init_released,
@@ -1023,6 +1052,7 @@ const static struct lov_layout_operations lov_dispatch[] = {
 		.llo_lock_init = lov_lock_init_empty,
 		.llo_io_init   = lov_io_init_released,
 		.llo_getattr   = lov_attr_get_empty,
+		.llo_flush     = lov_flush_empty,
 	},
 	[LLT_COMP] = {
 		.llo_init      = lov_init_composite,
@@ -1033,6 +1063,7 @@ const static struct lov_layout_operations lov_dispatch[] = {
 		.llo_lock_init = lov_lock_init_composite,
 		.llo_io_init   = lov_io_init_composite,
 		.llo_getattr   = lov_attr_get_composite,
+		.llo_flush     = lov_flush_composite,
 	},
 };
 
@@ -1998,17 +2029,7 @@ static int lov_object_layout_get(const struct lu_env *env,
 
 	cl->cl_size = lov_comp_md_size(lsm);
 	cl->cl_layout_gen = lsm->lsm_layout_gen;
-	cl->cl_dom_comp_size = 0;
-	if (lsm_is_composite(lsm->lsm_magic)) {
-		struct lov_stripe_md_entry *lsme = lsm->lsm_entries[0];
-
-		cl->cl_is_composite = true;
-
-		if (lsme_is_dom(lsme))
-			cl->cl_dom_comp_size = lsme->lsme_extent.e_end;
-	} else {
-		cl->cl_is_composite = false;
-	}
+	cl->cl_is_composite = lsm_is_composite(lsm->lsm_magic);
 
 	rc = lov_lsm_pack(lsm, buf->lb_buf, buf->lb_len);
 	lov_lsm_put(lsm);
@@ -2032,6 +2053,13 @@ static loff_t lov_object_maxbytes(struct cl_object *obj)
 	return maxbytes;
 }
 
+static int lov_object_flush(const struct lu_env *env, struct cl_object *obj,
+			    struct ldlm_lock *lock)
+{
+	return LOV_2DISPATCH_MAYLOCK(cl2lov(obj), llo_flush, true, env, obj,
+				     lock);
+}
+
 static const struct cl_object_operations lov_ops = {
 	.coo_page_init    = lov_page_init,
 	.coo_lock_init    = lov_lock_init,
@@ -2043,6 +2071,7 @@ static const struct cl_object_operations lov_ops = {
 	.coo_layout_get   = lov_object_layout_get,
 	.coo_maxbytes     = lov_object_maxbytes,
 	.coo_fiemap       = lov_object_fiemap,
+	.coo_object_flush = lov_object_flush
 };
 
 static const struct lu_object_operations lov_lu_obj_ops = {
