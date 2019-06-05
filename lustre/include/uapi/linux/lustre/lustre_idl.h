@@ -1118,6 +1118,7 @@ enum obdo_flags {
 #define LOV_MAGIC		LOV_MAGIC_V1
 #define LOV_MAGIC_COMP_V1	(0x0BD60000 | LOV_MAGIC_MAGIC)
 #define LOV_MAGIC_FOREIGN	(0x0BD70000 | LOV_MAGIC_MAGIC)
+#define LOV_MAGIC_SEL		(0x0BD80000 | LOV_MAGIC_MAGIC)
 
 /*
  * magic for fully defined striping

@@ -1419,7 +1419,7 @@ static int lod_attr_set(const struct lu_env *env,
 		buf->lb_len = info->lti_ea_store_size;
 		lmm = info->lti_ea_store;
 		magic = le32_to_cpu(lmm->lmm_magic);
-		if (magic == LOV_MAGIC_COMP_V1) {
+		if (magic == LOV_MAGIC_COMP_V1 || magic == LOV_MAGIC_SEL) {
 			struct lov_comp_md_v1 *lcm = buf->lb_buf;
 			struct lov_comp_md_entry_v1 *lcme =
 						&lcm->lcm_entries[0];
@@ -1453,7 +1453,8 @@ static int lod_attr_set(const struct lu_env *env,
 		buf->lb_buf = info->lti_ea_store;
 		buf->lb_len = info->lti_ea_store_size;
 		lcm = buf->lb_buf;
-		if (le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
+		if (le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_COMP_V1 &&
+		    le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_SEL)
 			RETURN(-EINVAL);
 
 		le32_add_cpu(&lcm->lcm_layout_gen, 1);
@@ -1541,6 +1542,13 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		}
 
 		RETURN(rc = rc1 != 0 ? rc1 : rc);
+	}
+
+	if ((rc > 0) && buf->lb_buf && strcmp(name, XATTR_NAME_LOV) == 0) {
+		struct lov_comp_md_v1 *lcm = buf->lb_buf;
+
+		if (lcm->lcm_magic == cpu_to_le32(LOV_MAGIC_SEL))
+			lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	}
 
 	if (rc != -ENODATA || !S_ISDIR(dt->do_lu.lo_header->loh_attr & S_IFMT))
@@ -3264,6 +3272,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 		rc = lod_layout_convert(info);
 		break;
 	case LOV_MAGIC_COMP_V1:
+	case LOV_MAGIC_SEL:
 		rc = 0;
 		break;
 	default:
@@ -3630,8 +3639,23 @@ static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
 					     pool_name);
 		break;
 	case LOV_USER_MAGIC_COMP_V1:
+	{
+		struct lov_comp_md_v1 *lcm = (struct lov_comp_md_v1 *)lum;
+		struct lov_comp_md_entry_v1 *lcme;
+		int i, comp_cnt;
+
+		comp_cnt = le16_to_cpu(lcm->lcm_entry_count);
+		for (i = 0; i < comp_cnt; i++) {
+			lcme = &lcm->lcm_entries[i];
+			if (lcme->lcme_flags & cpu_to_le32(LCME_FL_EXTENSION)) {
+				lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_SEL);
+				break;
+			}
+		}
+
 		is_del = false;
 		break;
+	}
 	default:
 		CERROR("Invalid magic %x\n", lum->lmm_magic);
 		RETURN(-EINVAL);
@@ -4783,17 +4807,20 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		lustre_swab_lov_user_md_v3(v3);
 		lustre_swab_lov_user_md_objects(v3->lmm_objects,
 						v3->lmm_stripe_count);
-	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_COMP_V1)) {
+	} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_COMP_V1) ||
+		   v1->lmm_magic == __swab32(LOV_USER_MAGIC_SEL)) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
 		lustre_swab_lov_comp_md_v1(comp_v1);
 	}
 
 	if (v1->lmm_magic != LOV_MAGIC_V3 && v1->lmm_magic != LOV_MAGIC_V1 &&
 	    v1->lmm_magic != LOV_MAGIC_COMP_V1 &&
+	    v1->lmm_magic != LOV_MAGIC_SEL &&
 	    v1->lmm_magic != LOV_USER_MAGIC_SPECIFIC)
 		RETURN(-ENOTSUPP);
 
-	if (v1->lmm_magic == LOV_MAGIC_COMP_V1) {
+	if (v1->lmm_magic == LOV_MAGIC_COMP_V1 ||
+	    v1->lmm_magic == LOV_MAGIC_SEL) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
 		comp_cnt = comp_v1->lcm_entry_count;
 		if (comp_cnt == 0)

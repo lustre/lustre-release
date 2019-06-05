@@ -555,6 +555,7 @@ struct fsxattr {
 #define LOV_USER_MAGIC_SPECIFIC 0x0BD50BD0	/* for specific OSTs */
 #define LOV_USER_MAGIC_COMP_V1	0x0BD60BD0
 #define LOV_USER_MAGIC_FOREIGN	0x0BD70BD0
+#define LOV_USER_MAGIC_SEL	0x0BD80BD0
 
 #define LMV_USER_MAGIC		0x0CD30CD0    /* default lmv magic */
 #define LMV_USER_MAGIC_V0	0x0CD20CD0    /* old default lmv magic*/
