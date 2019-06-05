@@ -2530,8 +2530,12 @@ test_27E() {
 
 	$LFS setstripe -c $OSTCOUNT $DIR/$tfile ||
 		error "setstripe failed"
-	cat $DIR/$tfile
-	rm $DIR/$tfile
+	# In order to ensure stat() call actually talks to MDS we need to
+	# do something drastic to this file to shake off all lock, e.g.
+	# rename it (kills lookup lock forcing cache cleaning)
+	mv $DIR/$tfile $DIR/${tfile}-1
+	ls -l $DIR/${tfile}-1
+	rm $DIR/${tfile}-1
 
 	easize=$($LCTL get_param -n llite.*.default_easize)
 
