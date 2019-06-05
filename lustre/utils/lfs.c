@@ -5565,7 +5565,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 			lsb->sb_count = 0;
 
 			/* use mntdir for dirname() temporarily */
-			strncpy(mntdir, dname, sizeof(mntdir));
+			strncpy(mntdir, dname, sizeof(mntdir) - 1);
 			if (!realpath(dirname(mntdir), path)) {
 				result = -errno;
 				fprintf(stderr,
