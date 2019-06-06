@@ -8395,6 +8395,149 @@ test_124()
 }
 run_test 124 "check failover after replace_nids"
 
+get_max_sectors_kb() {
+	local facet="$1"
+	local device="$2"
+	local dev_base=$(basename $(do_facet ${facet} "readlink -f ${device}"))
+	local max_sectors_path="/sys/block/${dev_base}/queue/max_sectors_kb"
+
+	do_facet ${facet} "[[ -e ${max_sectors_path} ]] &&
+			   cat ${max_sectors_path}"
+}
+
+get_max_hw_sectors_kb() {
+	local facet="$1"
+	local device="$2"
+	local dev_base=$(basename $(do_facet ${facet} "readlink -f ${device}"))
+	local max_hw_path="/sys/block/${dev_base}/queue/max_hw_sectors_kb"
+
+	do_facet ${facet} "[[ -e ${max_hw_path} ]] && cat ${max_hw_path}"
+}
+
+set_max_sectors_kb() {
+	local facet="$1"
+	local device="$2"
+	local value="$3"
+	local dev_base=$(basename $(do_facet ${facet} "readlink -f ${device}"))
+	local max_sectors_path="/sys/block/${dev_base}/queue/max_sectors_kb"
+
+	do_facet ${facet} "[[ -e ${max_sectors_path} ]] &&
+			   echo ${value} > ${max_sectors_path}"
+	rc=$?
+
+	[[ $rc -ne 0 ]] && echo "Failed to set ${max_sectors_path} to ${value}"
+
+	return $rc
+}
+
+# Return 0 if all slave devices have max_sectors_kb == max_hw_sectors_kb
+# Otherwise return > 0
+check_slaves_max_sectors_kb()
+{
+	local facet="$1"
+	local device="$2"
+	local dev_base=$(basename $(do_facet ${facet} "readlink -f ${device}"))
+	local slaves_dir=/sys/block/${dev_base}/slaves
+	local slave_devices=$(do_facet ${facet} "ls ${slaves_dir} 2>/dev/null")
+	[[ -z ${slave_devices} ]] && return 0
+
+	local slave max_sectors new_max_sectors max_hw_sectors path
+	local rc=0
+	for slave in ${slave_devices}; do
+		path="/dev/${slave}"
+		! is_blkdev ${facet} ${path} && continue
+		max_sectors=$(get_max_sectors_kb ${facet} ${path})
+		max_hw_sectors=$(get_max_hw_sectors_kb ${facet} ${path})
+		new_max_sectors=${max_hw_sectors}
+		[[ ${new_max_sectors} -gt ${RQ_SIZE_LIMIT} ]] &&
+			new_max_sectors=${RQ_SIZE_LIMIT}
+
+		if [[ ${max_sectors} -ne ${new_max_sectors} ]]; then
+			echo "${path} ${max_sectors} ${new_max_sectors}"
+			((rc++))
+		fi
+		check_slaves_max_sectors_kb ${facet} ${path}
+		((rc + $?))
+	done
+
+	return $rc
+}
+
+test_125()
+{
+	local facet_list="mgs mds1 ost1"
+	combined_mgs_mds && facet_list="mgs ost1"
+
+	local facet
+	for facet in ${facet_list}; do
+		[[ $(facet_fstype ${facet}) != ldiskfs ]] &&
+			skip "ldiskfs only test" &&
+			return 0
+		! is_blkdev ${facet} $(facet_device ${facet}) &&
+			skip "requires all real devices" &&
+			return 0
+	done
+
+	local rc=0
+	# We don't increase IO request size limit past 16MB. See comments in
+	# lustre/utils/libmount_utils_ldiskfs.c:tune_max_sectors_kb()
+	RQ_SIZE_LIMIT=$((16 * 1024))
+	local device old_max_sectors new_max_sectors max_hw_sectors
+	for facet in ${facet_list}; do
+		device=$(facet_device ${facet})
+		old_max_sectors=$(get_max_sectors_kb ${facet} ${device})
+		max_hw_sectors=$(get_max_hw_sectors_kb ${facet} ${device})
+
+		# The expected value after l_tunedisk is executed
+		new_max_sectors=$old_max_sectors
+		[[ ${new_max_sectors_kb} -gt ${RQ_SIZE_LIMIT} ]] &&
+			new_max_sectors_kb=${RQ_SIZE_LIMIT}
+
+		# Ensure the current value of max_sectors_kb does not equal
+		# max_hw_sectors_kb, so we can tell whether l_tunedisk did
+		# anything
+		set_max_sectors_kb ${facet} ${device} $((new_max_sectors - 1))
+
+		# Value before l_tunedisk
+		local pre_max_sectors=$(get_max_sectors_kb ${facet} ${device})
+		if [[ ${pre_max_sectors} -ne $((new_max_sectors - 1)) ]]; then
+			echo "unable to satsify test pre-condition:"
+			echo "${pre_max_sectors} != $((new_max_sectors - 1))"
+			((rc++))
+			continue
+		fi
+
+		echo "Before: ${facet} ${device} ${pre_max_sectors} ${max_hw_sectors}"
+
+		do_facet ${facet} "libtool execute l_tunedisk ${device}"
+
+		# Value after l_tunedisk
+		local post_max_sectors=$(get_max_sectors_kb ${facet} ${device})
+
+		echo "After: ${facet} ${device} ${post_max_sectors} ${max_hw_sectors}"
+
+		if [[ ${facet} != ost1 ]]; then
+			if [[ ${post_max_sectors} -ne ${pre_max_sectors} ]]; then
+				echo "l_tunedisk modified max_sectors_kb of ${facet}"
+				((rc++))
+			fi
+
+			set_max_sectors_kb ${facet} ${device} ${old_max_sectors}
+		else
+			if [[ ${post_max_sectors} -eq ${pre_max_sectors} ]]; then
+				echo "l_tunedisk failed to modify max_sectors_kb of ${facet}"
+				((rc++))
+			fi
+
+			check_slaves_max_sectors_kb ${facet} ${device} ||
+				((rc++))
+		fi
+	done
+
+	return $rc
+}
+run_test 125 "check l_tunedisk only tunes OSTs and their slave devices"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
