@@ -95,13 +95,14 @@ usage() {
 }
 
 print_summary () {
-    trap 0
-	[ -z "$DEFAULT_SUITES"] && return 0
-    [ -n "$ONLY" ] && echo "WARNING: ONLY is set to $(echo $ONLY)"
-    local details
-    local form="%-13s %-17s %-9s %s %s\n"
-    printf "$form" "status" "script" "Total(sec)" "E(xcluded) S(low)"
-    echo "------------------------------------------------------------------------------------"
+	trap 0
+	[ -z "$DEFAULT_SUITES" ] && return 0
+	[ -n "$ONLY" ] && echo "WARNING: ONLY is set to $(echo $ONLY)"
+	local details
+	local form="%-13s %-17s %-9s %s %s\n"
+
+	printf "$form" "status" "script" "Total(sec)" "E(xcluded) S(low)"
+	echo "---------------------------------------------------------------"
     for O in $DEFAULT_SUITES; do
         O=$(echo $O  | tr "-" "_" | tr "[:lower:]" "[:upper:]")
         [ "${!O}" = "no" ] && continue || true
