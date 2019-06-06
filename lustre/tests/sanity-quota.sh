@@ -2910,8 +2910,8 @@ test_54() {
 	#clear project but with kept projid
 	change_project -rCk $DIR/$tdir
 	proj_count1=$(lfs project -rcp $TSTPRJID $DIR/$tdir | wc -l)
-	[ $proj_count1 -eq $proj_count ] ||
-			error "c3: expected $proj_count got $proj_count1"
+	[ $proj_count1 -eq 1 ] ||
+			error "c3: expected 1 got $proj_count1"
 
 	#verify projid untouched.
 	proj_count1=$(lfs project -r $DIR/$tdir | grep -c $TSTPRJID)
