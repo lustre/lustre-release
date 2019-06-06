@@ -2466,6 +2466,225 @@ test_204c() {
 }
 run_test 204c "FLR write/stale/resync test with component removal"
 
+# Successful repeated component in primary mirror
+test_204d() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VERSION"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local found=""
+
+	wait_delete_completed
+	wait_mds_ost_sync
+	test_mkdir $DIR/$tdir
+
+	# first mirror is 64M followed by extension space to -1, second mirror
+	# is 0-10M, then 10M-(-1)
+	$LFS setstripe -N -E-1 -z64M -N -E 10M -E-1 $comp_file ||
+		error "Create $comp_file failed"
+
+	local ost_idx1=$($LFS getstripe -I65537 -i $comp_file)
+	local ost_name=$(ostname_from_index $ost_idx1)
+	# degrade OST for first comp so we won't extend there
+	do_facet ost$((ost_idx1+1)) $LCTL set_param -n \
+		obdfilter.$ost_name.degraded=1
+	sleep_maxage
+
+	# Write beyond first component, causing repeat & stale second mirror
+	dd if=/dev/zero bs=1M count=1 seek=66 of=$comp_file conv=notrunc
+	RC=$?
+
+	do_facet ost$((ost_idx1+1)) $LCTL set_param -n \
+		obdfilter.$ost_name.degraded=0
+	sleep_maxage
+
+	[ $RC -eq 0 ] || error "dd to repeat & stale failed"
+
+	$LFS getstripe $comp_file
+
+	found=$($LFS find --component-start 64m --component-end 128m \
+		--component-flags init $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: Repeat comp incorrect"
+
+	local ost_idx2=$($LFS getstripe --component-start=64m		\
+			 --component-end=128m --component-flags=init	\
+			 -i $comp_file)
+	[[ $ost_idx1 -eq $ost_idx2 ]] && error "$ost_idx1 == $ost_idx2"
+	local mirror_id=$($LFS getstripe --component-start=64m		\
+			 --component-end=128m --component-flags=init	\
+			 $comp_file | grep lcme_mirror_id | awk '{ print $2 }')
+	[[ $mirror_id -eq 1 ]] ||
+		error "component not in correct mirror: $mirror_id, not 1"
+
+	$LFS mirror resync $comp_file
+
+	$LFS getstripe $comp_file
+
+	# component dimensions should not change from resync
+	found=$($LFS find --component-start 0m --component-end 64m \
+		--component-flags init $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: first comp incorrect"
+	found=$($LFS find --component-start 64m --component-end 128m \
+		--component-flags init $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: repeat comp incorrect"
+
+	sel_layout_sanity $comp_file 5
+
+	rm -f $comp_file
+}
+run_test 204d "FLR write/stale/resync sel test with repeated comp"
+
+# Successful repeated component, SEL in non-primary mirror
+test_204e() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VERSION"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local found=""
+
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	test_mkdir $DIR/$tdir
+
+	# first mirror is is 0-100M, then 100M-(-1), second mirror is extension
+	# space to -1 (-z 64M, so first comp is 0-64M)
+	# Note: we have to place both 1st components on OST0, otherwise 2 OSTs
+	# will be not enough - one will be degraded, the other is used on
+	# an overlapping mirror.
+	$LFS setstripe -N -E 100M -i 0 -E-1 -N -E-1 -i 0 -z 64M $comp_file ||
+		error "Create $comp_file failed"
+
+	local ost_idx1=$($LFS getstripe --component-start=0 \
+			 --component-end=64m -i $comp_file)
+	local ost_name=$(ostname_from_index $ost_idx1)
+	# degrade OST for first comp of 2nd mirror so we won't extend there
+	do_facet ost$((ost_idx1+1)) $LCTL set_param -n \
+		obdfilter.$ost_name.degraded=1
+	sleep_maxage
+
+	$LFS getstripe $comp_file
+
+	# Write to first component, stale & instantiate second mirror components
+	# overlapping with the written component (0-100M);
+	dd if=/dev/zero bs=2M count=1 of=$comp_file conv=notrunc
+	RC=$?
+
+	do_facet ost$((ost_idx1+1)) $LCTL set_param -n \
+		obdfilter.$ost_name.degraded=0
+	sleep_maxage
+	$LFS getstripe $comp_file
+
+	[ $RC -eq 0 ] || error "dd to repeat & stale failed"
+
+	found=$($LFS find --component-start 0m --component-end 64m \
+		--component-flags init,stale $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: first comp incorrect"
+
+	# was repeated due to degraded ost
+	found=$($LFS find --component-start 64m --component-end 128m \
+		--component-flags init,stale $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: repeated comp incorrect"
+
+	local ost_idx2=$($LFS getstripe --component-start=64m		\
+			 --component-end=128m --component-flags=init	\
+			 -i $comp_file)
+	[[ $ost_idx1 -eq $ost_idx2 ]] && error "$ost_idx1 == $ost_idx2"
+	local mirror_id=$($LFS getstripe --component-start=0m		\
+			 --component-end=64m --component-flags=init	\
+			 $comp_file | grep lcme_mirror_id | awk '{ print $2 }')
+	[[ $mirror_id -eq 2 ]] ||
+		error "component not in correct mirror? $mirror_id"
+
+	$LFS mirror resync $comp_file
+
+	$LFS getstripe $comp_file
+
+	# component dimensions should not change from resync
+	found=$($LFS find --component-start 0m --component-end 64m \
+		--component-flags init,^stale $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: first comp incorrect"
+	found=$($LFS find --component-start 64m --component-end 128m \
+		--component-flags init,^stale $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: repeated comp incorrect"
+
+	sel_layout_sanity $comp_file 5
+
+	rm -f $comp_file
+}
+run_test 204e "FLR write/stale/resync sel test with repeated comp"
+
+# FLR + SEL: failed repeated component, SEL in non-primary mirror
+test_204f() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VERSION"
+
+	local comp_file=$DIR/$tdir/$tfile
+	local found=""
+
+	wait_delete_completed
+	wait_mds_ost_sync
+	test_mkdir $DIR/$tdir
+
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 1 || error "Pool add targets failed"
+
+	# first mirror is is 0-100M, then 100M-(-1), second mirror is extension
+	# space to -1 (-z 64M, so first comp is 0-64M)
+	$LFS setstripe -N -E 100M -E-1 -N --pool="$TESTNAME" \
+		-E-1 -c 1 -z 64M $comp_file || error "Create $comp_file failed"
+
+	local ost_name0=$(ostname_from_index 0)
+	local ost_name1=$(ostname_from_index 1)
+
+	# degrade both OSTs in pool, so we'll try to repeat, then fail and
+	# extend original comp
+	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name0.degraded=1
+	do_facet ost2 $LCTL set_param -n obdfilter.$ost_name1.degraded=1
+	sleep_maxage
+
+	# a write to the 1st component, 100M length, which will try to stale
+	# the first 100M of mirror 2, attempting to extend its 0-64M component
+	dd if=/dev/zero bs=2M count=1 of=$comp_file conv=notrunc
+	RC=$?
+
+	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name0.degraded=0
+	do_facet ost2 $LCTL set_param -n obdfilter.$ost_name1.degraded=0
+	sleep_maxage
+
+	[ $RC -eq 0 ] || error "dd to extend mirror comp failed"
+
+	$LFS getstripe $comp_file
+
+	found=$($LFS find --component-start 0m --component-end 128m \
+		--component-flags init,stale $comp_file | wc -l)
+	[ $found -eq 1 ] || error "write: First mirror comp incorrect"
+
+	local mirror_id=$($LFS getstripe --component-start=0m		\
+			 --component-end=128m --component-flags=init	\
+			 $comp_file | grep lcme_mirror_id | awk '{ print $2 }')
+
+	[[ $mirror_id -eq 2 ]] ||
+		error "component not in correct mirror? $mirror_id, not 2"
+
+	$LFS mirror resync $comp_file
+
+	$LFS getstripe $comp_file
+
+	# component dimensions should not change from resync
+	found=$($LFS find --component-start 0m --component-end 128m \
+		--component-flags init,^stale $comp_file | wc -l)
+	[ $found -eq 1 ] || error "resync: First mirror comp incorrect"
+
+	sel_layout_sanity $comp_file 4
+
+	rm -f $comp_file
+}
+run_test 204f "FLR write/stale/resync sel w/forced extension"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

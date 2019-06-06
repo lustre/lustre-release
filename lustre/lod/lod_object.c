@@ -4119,6 +4119,112 @@ static int lod_generate_and_set_lovea(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static __u32 lod_gen_component_id(struct lod_object *lo,
+				  int mirror_id, int comp_idx);
+
+/**
+ * Repeat an existing component
+ *
+ * Creates a new layout by replicating an existing component.  Uses striping
+ * policy from previous component as a template for the striping for the new
+ * new component.
+ *
+ * New component starts with zero length, will be extended (or removed) before
+ * returning layout to client.
+ *
+ * NB: Reallocates layout components array (lo->ldo_comp_entries), invalidating
+ * any pre-existing pointers to components.  Handle with care.
+ *
+ * \param[in] env	execution environment for this thread
+ * \param[in,out] lo	object to update the layout of
+ * \param[in] index	index of component to copy
+ *
+ * \retval	0 on success
+ * \retval	negative errno on error
+ */
+static int lod_layout_repeat_comp(const struct lu_env *env,
+				  struct lod_object *lo, int index)
+{
+	struct lod_layout_component *lod_comp;
+	struct lod_layout_component *new_comp = NULL;
+	struct lod_layout_component *comp_array;
+	int rc = 0, i, new_cnt = lo->ldo_comp_cnt + 1;
+	__u16 mirror_id;
+	int offset = 0;
+	ENTRY;
+
+	lod_comp = &lo->ldo_comp_entries[index];
+	LASSERT(lod_comp_inited(lod_comp) && lod_comp->llc_id != LCME_ID_INVAL);
+
+	CDEBUG(D_LAYOUT, "repeating component %d\n", index);
+
+	OBD_ALLOC(comp_array, sizeof(*comp_array) * new_cnt);
+	if (comp_array == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
+		memcpy(&comp_array[i + offset], &lo->ldo_comp_entries[i],
+		       sizeof(*comp_array));
+
+		/* Duplicate this component in to the next slot */
+		if (i == index) {
+			new_comp = &comp_array[i + 1];
+			memcpy(&comp_array[i + 1], &lo->ldo_comp_entries[i],
+			       sizeof(*comp_array));
+			/* We must now skip this new component when copying */
+			offset = 1;
+		}
+	}
+
+	/* Set up copied component */
+	new_comp->llc_flags &= ~LCME_FL_INIT;
+	new_comp->llc_stripe = NULL;
+	new_comp->llc_stripes_allocated = 0;
+	new_comp->llc_stripe_offset = LOV_OFFSET_DEFAULT;
+	/* for uninstantiated components, layout gen stores default stripe
+	 * offset */
+	new_comp->llc_layout_gen = lod_comp->llc_stripe_offset;
+	/* This makes the repeated component zero-length, placed at the end of
+	 * the preceding component */
+	new_comp->llc_extent.e_start = new_comp->llc_extent.e_end;
+	new_comp->llc_timestamp = lod_comp->llc_timestamp;
+	new_comp->llc_pool = NULL;
+
+	rc = lod_set_pool(&new_comp->llc_pool, lod_comp->llc_pool);
+	if (rc)
+		GOTO(out, rc);
+
+	if (new_comp->llc_ostlist.op_array) {
+		__u32 *op_array = NULL;
+
+		OBD_ALLOC(op_array, new_comp->llc_ostlist.op_size);
+		if (!op_array)
+			GOTO(out, rc = -ENOMEM);
+		memcpy(op_array, &new_comp->llc_ostlist.op_array,
+		       new_comp->llc_ostlist.op_size);
+		new_comp->llc_ostlist.op_array = op_array;
+	}
+
+	OBD_FREE(lo->ldo_comp_entries,
+		 sizeof(*comp_array) * lo->ldo_comp_cnt);
+	lo->ldo_comp_entries = comp_array;
+	lo->ldo_comp_cnt = new_cnt;
+
+	/* Generate an id for the new component */
+	mirror_id = mirror_id_of(new_comp->llc_id);
+	new_comp->llc_id = LCME_ID_INVAL;
+	new_comp->llc_id = lod_gen_component_id(lo, mirror_id, index + 1);
+	if (new_comp->llc_id == LCME_ID_INVAL)
+		GOTO(out, rc = -ERANGE);
+
+	EXIT;
+out:
+	if (rc)
+		OBD_FREE(comp_array, sizeof(*comp_array) * new_cnt);
+
+	return rc;
+}
+
 static int lod_layout_data_init(struct lod_thread_info *info, __u32 comp_cnt)
 {
 	ENTRY;
@@ -6359,6 +6465,16 @@ static __u64 lod_extension_new_end(__u64 extension_size, __u64 extent_end,
 	return new_end;
 }
 
+/* As lod_sel_handler() could be re-entered for the same component several
+ * times, this is the data for the next call. Fields could be changed to
+ * component indexes when needed, (e.g. if there is no need to instantiate
+ * all the previous components up to the current position) to tell the caller
+ * where to start over from. */
+struct sel_data {
+	int sd_force;
+	int sd_repeat;
+};
+
 /**
  * Process extent updates for a particular layout component
  *
@@ -6381,8 +6497,15 @@ static __u64 lod_extension_new_end(__u64 extension_size, __u64 extent_end,
  *       extension space component, move the start of the next component down
  *       accordingly, then notify the caller to restart processing w/the new
  *       layout.
- *    b. If there is no following component, we extend the current component
- *       regardless.
+ *    b. If there is no following component, we try repeating the current
+ *       component, creating a new component using the current one as a
+ *       template (keeping its stripe properties but not specific striping),
+ *       and try assigning striping for this component.  If there is sufficient
+ *       free space on the OSTs chosen for this component, it is instantiated
+ *       and i/o continues there.
+ *
+ *       If there is not sufficient space on the new OSTs, we remove this new
+ *       component & extend the current component.
  *
  * Note further that uninited components followed by extension space can be zero
  * length meaning that we will try to extend them before initializing them, and
@@ -6415,7 +6538,8 @@ static int lod_sel_handler(const struct lu_env *env,
 			  struct lod_object *lo,
 			  struct lu_extent *extent,
 			  struct thandle *th, int *max_comp,
-			  int index, int write, int *force)
+			  int index, int write,
+			  struct sel_data *sd)
 {
 	struct lod_device *d = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_thread_info *info = lod_env_info(env);
@@ -6424,6 +6548,7 @@ static int lod_sel_handler(const struct lu_env *env,
 	struct lod_layout_component *next = NULL;
 	__u64 extension_size;
 	__u64 new_end = 0;
+	bool repeated;
 	int change = 0;
 	int rc = 0;
 	ENTRY;
@@ -6463,21 +6588,24 @@ static int lod_sel_handler(const struct lu_env *env,
 		info->lti_count = 1;
 		info->lti_comp_idx[0] = index - 1;
 		rc = lod_declare_instantiate_components(env, lo, th);
-		/* ENOSPC tells us we can't use this component, so it's the
-		 * same as if check_extension failed.  But if there is no next,
-		 * we have no fall back if we failed to stripe this, and we
-		 * should return the error. */
-		if (rc == -ENOSPC && next)
+		/* ENOSPC tells us we can't use this component.  If there is
+		 * a next or we are repeating, we either spill over (next) or
+		 * extend the original comp (repeat).  Otherwise, return the
+		 * error to the user. */
+		if (rc == -ENOSPC && (next || sd->sd_repeat))
 			rc = 1;
 		if (rc < 0)
 			RETURN(rc);
 	}
 
-	if (*force == 0 && rc == 0)
+	if (sd->sd_force == 0 && rc == 0)
 		rc = !lod_sel_osts_allowed(env, lo, index - 1,
 					   extension_size, extent,
 					   &lod_comp->llc_extent, write);
-	*force = 0;
+
+	repeated = !!(sd->sd_repeat);
+	sd->sd_repeat = 0;
+	sd->sd_force = 0;
 
 	/* Extend previous component */
 	if (rc == 0) {
@@ -6509,8 +6637,29 @@ static int lod_sel_handler(const struct lu_env *env,
 				change--;
 			}
 			lod_sel_adjust_extents(env, lo, *max_comp, index);
+		} else if (lod_comp_inited(prev)) {
+			/* If there is no next, and the previous component is
+			 * INIT'ed, try repeating the previous component. */
+			LASSERT(repeated == 0);
+			rc = lod_layout_repeat_comp(env, lo, index - 1);
+			if (rc < 0)
+				RETURN(rc);
+			change++;
+			/* The previous component is a repeated component.
+			 * Record this so we don't keep trying to repeat it. */
+			sd->sd_repeat = 1;
 		} else {
-			*force = 1;
+			/* If the previous component is not INIT'ed, this may
+			 * be a component we have just instantiated but failed
+			 * to extend. Or even a repeated component we failed
+			 * to prepare a striping for. Do not repeat but instead
+			 * remove the repeated component & force the extention
+			 * of the original one */
+			sd->sd_force = 1;
+			if (repeated) {
+				prev->llc_id = LCME_ID_INVAL;
+				change--;
+			}
 		}
 	}
 
@@ -6564,12 +6713,12 @@ static int lod_declare_update_extents(const struct lu_env *env,
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lod_layout_component *lod_comp;
 	bool layout_changed = false;
+	struct sel_data sd = { 0 };
 	int start_index;
 	int i = 0;
 	int max_comp = 0;
 	int rc = 0, rc2;
 	int change = 0;
-	int force = 0;
 	ENTRY;
 
 	/* This makes us work on the components of the chosen mirror */
@@ -6590,7 +6739,7 @@ static int lod_declare_update_extents(const struct lu_env *env,
 		if (lod_comp->llc_flags & LCME_FL_EXTENSION) {
 			layout_changed = true;
 			rc = lod_sel_handler(env, lo, extent, th, &max_comp,
-					     i, write, &force);
+					     i, write, &sd);
 			if (rc < 0)
 				GOTO(out, rc);
 
@@ -6600,10 +6749,9 @@ static int lod_declare_update_extents(const struct lu_env *env,
 		}
 	}
 
-	/* We may have removed components.  If so, we must update the start &
-	 * ends of all the mirrors after the current one, and the end of the
-	 * current mirror.
-	 */
+	/* We may have added or removed components.  If so, we must update the
+	 * start & ends of all the mirrors after the current one, and the end
+	 * of the current mirror. */
 	change = max_comp - 1 - lo->ldo_mirrors[pick].lme_end;
 	if (change) {
 		lo->ldo_mirrors[pick].lme_end += change;
