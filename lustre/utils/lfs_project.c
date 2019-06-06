@@ -90,12 +90,12 @@ static const char *mode_to_type(mode_t mode)
 	return "unknown";
 }
 
-static int project_get_xattr(const char *pathname, struct fsxattr *fsx)
+static int project_get_xattr(const char *pathname, struct fsxattr *fsx,
+			     struct stat *st)
 {
 	int ret, fd;
-	struct stat st;
 
-	ret = lstat(pathname, &st);
+	ret = lstat(pathname, st);
 	if (ret) {
 		fprintf(stderr, "%s: failed to stat '%s': %s\n",
 			progname, pathname, strerror(errno));
@@ -103,10 +103,10 @@ static int project_get_xattr(const char *pathname, struct fsxattr *fsx)
 	}
 
 	/* currently, only file and dir supported */
-	if (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode)) {
+	if (!S_ISREG(st->st_mode) && !S_ISDIR(st->st_mode)) {
 		errno = ENOTSUP;
 		fprintf(stderr, "%s: unable to get xattr for %s '%s': %s\n",
-				progname, mode_to_type(st.st_mode), pathname,
+				progname, mode_to_type(st->st_mode), pathname,
 				strerror(errno));
 		return -errno;
 	}
@@ -132,8 +132,9 @@ project_check_one(const char *pathname, struct project_handle_control *phc)
 {
 	struct fsxattr fsx;
 	int ret;
+	struct stat st;
 
-	ret = project_get_xattr(pathname, &fsx);
+	ret = project_get_xattr(pathname, &fsx, &st);
 	if (ret < 0)
 		return ret;
 
@@ -143,7 +144,8 @@ project_check_one(const char *pathname, struct project_handle_control *phc)
 		phc->projid = fsx.fsx_projid;
 	}
 
-	if (!(fsx.fsx_xflags & FS_XFLAG_PROJINHERIT)) {
+	if (!(fsx.fsx_xflags & FS_XFLAG_PROJINHERIT) &&
+	    S_ISDIR(st.st_mode)) {
 		if (!phc->newline) {
 			printf("%s%c", pathname, '\0');
 			goto out;
@@ -169,9 +171,10 @@ static int
 project_list_one(const char *pathname, struct project_handle_control *phc)
 {
 	struct fsxattr fsx;
+	struct stat st;
 	int ret;
 
-	ret = project_get_xattr(pathname, &fsx);
+	ret = project_get_xattr(pathname, &fsx, &st);
 	if (ret < 0)
 		return ret;
 
@@ -187,9 +190,10 @@ static int
 project_set_one(const char *pathname, struct project_handle_control *phc)
 {
 	struct fsxattr fsx;
+	struct stat st;
 	int fd, ret = 0;
 
-	fd = project_get_xattr(pathname, &fsx);
+	fd = project_get_xattr(pathname, &fsx, &st);
 	if (fd < 0)
 		return fd;
 
@@ -215,9 +219,10 @@ static int
 project_clear_one(const char *pathname, struct project_handle_control *phc)
 {
 	struct fsxattr fsx;
+	struct stat st;
 	int ret = 0, fd;
 
-	fd = project_get_xattr(pathname, &fsx);
+	fd = project_get_xattr(pathname, &fsx, &st);
 	if (fd < 0)
 		return fd;
 
