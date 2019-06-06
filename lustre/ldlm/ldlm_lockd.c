@@ -1141,7 +1141,7 @@ int ldlm_glimpse_locks(struct ldlm_resource *res,
 	rc = ldlm_run_ast_work(ldlm_res_to_ns(res), gl_work_list,
 			       LDLM_WORK_GL_AST);
 	if (rc == -ERESTART)
-		ldlm_reprocess_all(res);
+		ldlm_reprocess_all(res, NULL);
 
 	RETURN(rc);
 }
@@ -1470,7 +1470,7 @@ retry:
 
 		if (!err && !ldlm_is_cbpending(lock) &&
 		    dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
-			ldlm_reprocess_all(lock->l_resource);
+			ldlm_reprocess_all(lock->l_resource, lock);
 
 		LDLM_LOCK_RELEASE(lock);
 	}
@@ -1563,7 +1563,7 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 			ldlm_clear_blocking_data(lock);
 			unlock_res_and_lock(lock);
 
-			ldlm_reprocess_all(lock->l_resource);
+			ldlm_reprocess_all(lock->l_resource, NULL);
 			rc = ELDLM_OK;
 		}
 
@@ -1632,13 +1632,14 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 
 		/* This code is an optimization to only attempt lock
 		 * granting on the resource (that could be CPU-expensive)
-		 * after we are done cancelling lock in that resource. */
-                if (res != pres) {
-                        if (pres != NULL) {
-                                ldlm_reprocess_all(pres);
-                                LDLM_RESOURCE_DELREF(pres);
-                                ldlm_resource_putref(pres);
-                        }
+		 * after we are done cancelling lock in that resource.
+		 */
+		if (res != pres) {
+			if (pres != NULL) {
+				ldlm_reprocess_all(pres, NULL);
+				LDLM_RESOURCE_DELREF(pres);
+				ldlm_resource_putref(pres);
+			}
 			if (res != NULL) {
 				ldlm_resource_getref(res);
 				LDLM_RESOURCE_ADDREF(res);
@@ -1658,16 +1659,16 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 				   (s64)delay);
 			at_measured(&lock->l_export->exp_bl_lock_at, delay);
 		}
-                ldlm_lock_cancel(lock);
-                LDLM_LOCK_PUT(lock);
-        }
-        if (pres != NULL) {
-                ldlm_reprocess_all(pres);
-                LDLM_RESOURCE_DELREF(pres);
-                ldlm_resource_putref(pres);
-        }
-        LDLM_DEBUG_NOLOCK("server-side cancel handler END");
-        RETURN(done);
+		ldlm_lock_cancel(lock);
+		LDLM_LOCK_PUT(lock);
+	}
+	if (pres != NULL) {
+		ldlm_reprocess_all(pres, NULL);
+		LDLM_RESOURCE_DELREF(pres);
+		ldlm_resource_putref(pres);
+	}
+	LDLM_DEBUG_NOLOCK("server-side cancel handler END");
+	RETURN(done);
 }
 EXPORT_SYMBOL(ldlm_request_cancel);
 
@@ -3216,11 +3217,17 @@ int ldlm_init(void)
 		goto out_interval;
 
 #ifdef HAVE_SERVER_SUPPORT
+	ldlm_inodebits_slab = kmem_cache_create("ldlm_ibits_node",
+						sizeof(struct ldlm_ibits_node),
+						0, SLAB_HWCACHE_ALIGN, NULL);
+	if (ldlm_inodebits_slab == NULL)
+		goto out_interval_tree;
+
 	ldlm_glimpse_work_kmem = kmem_cache_create("ldlm_glimpse_work_kmem",
 					sizeof(struct ldlm_glimpse_work),
 					0, 0, NULL);
 	if (ldlm_glimpse_work_kmem == NULL)
-		goto out_interval_tree;
+		goto out_inodebits;
 #endif
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
@@ -3228,6 +3235,8 @@ int ldlm_init(void)
 #endif
 	return 0;
 #ifdef HAVE_SERVER_SUPPORT
+out_inodebits:
+	kmem_cache_destroy(ldlm_inodebits_slab);
 out_interval_tree:
 	kmem_cache_destroy(ldlm_interval_tree_slab);
 #endif
@@ -3256,6 +3265,7 @@ void ldlm_exit(void)
 	kmem_cache_destroy(ldlm_interval_slab);
 	kmem_cache_destroy(ldlm_interval_tree_slab);
 #ifdef HAVE_SERVER_SUPPORT
+	kmem_cache_destroy(ldlm_inodebits_slab);
 	kmem_cache_destroy(ldlm_glimpse_work_kmem);
 #endif
 }

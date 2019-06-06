@@ -648,6 +648,19 @@ struct ldlm_interval_tree {
 	struct interval_node	*lit_root; /* actual ldlm_interval */
 };
 
+/**
+ * Lists of waiting locks for each inodebit type.
+ * A lock can be in several liq_waiting lists and it remains in lr_waiting.
+ */
+struct ldlm_ibits_queues {
+	struct list_head	liq_waiting[MDS_INODELOCK_NUMBITS];
+};
+
+struct ldlm_ibits_node {
+	struct list_head	lin_link[MDS_INODELOCK_NUMBITS];
+	struct ldlm_lock	*lock;
+};
+
 /** Whether to track references to exports by LDLM locks. */
 #define LUSTRE_TRACKS_LOCK_EXP_REFS (0)
 
@@ -744,9 +757,12 @@ struct ldlm_lock {
 	 */
 	struct list_head	l_res_link;
 	/**
-	 * Tree node for ldlm_extent.
+	 * Internal structures per lock type..
 	 */
-	struct ldlm_interval	*l_tree_node;
+	union {
+		struct ldlm_interval	*l_tree_node;
+		struct ldlm_ibits_node  *l_ibits_node;
+	};
 	/**
 	 * Per export hash of locks.
 	 * Protected by per-bucket exp->exp_lock_hash locks.
@@ -1002,10 +1018,14 @@ struct ldlm_resource {
 	/** Resource name */
 	struct ldlm_res_id	lr_name;
 
-	/**
-	 * Interval trees (only for extent locks) for all modes of this resource
-	 */
-	struct ldlm_interval_tree *lr_itree;
+	union {
+		/**
+		 * Interval trees (only for extent locks) for all modes of
+		 * this resource
+		 */
+		struct ldlm_interval_tree *lr_itree;
+		struct ldlm_ibits_queues *lr_ibits_queues;
+	};
 
 	union {
 		/**
@@ -1270,6 +1290,12 @@ typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, __u64 *flags,
 				      enum ldlm_error *err,
 				      struct list_head *work_list);
 
+typedef int (*ldlm_reprocessing_policy)(struct ldlm_resource *res,
+					struct list_head *queue,
+					struct list_head *work_list,
+					enum ldlm_process_intention intention,
+					struct ldlm_lock *hint);
+
 /**
  * Return values for lock iterators.
  * Also used during deciding of lock grants and cancellations.
@@ -1365,6 +1391,8 @@ struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req);
 /* ldlm_lock.c */
 #ifdef HAVE_SERVER_SUPPORT
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
+ldlm_reprocessing_policy
+ldlm_get_reprocessing_policy(struct ldlm_resource *res);
 #endif
 void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg);
 void ldlm_lock2handle(const struct ldlm_lock *lock,
@@ -1516,7 +1544,7 @@ enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 					   __u64 *bits);
 void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
-void ldlm_reprocess_all(struct ldlm_resource *res);
+void ldlm_reprocess_all(struct ldlm_resource *res, struct ldlm_lock *hint);
 void ldlm_reprocess_recovery_done(struct ldlm_namespace *ns);
 void ldlm_lock_dump_handle(int level, const struct lustre_handle *lockh);
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);

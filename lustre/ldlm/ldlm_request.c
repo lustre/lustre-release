@@ -233,9 +233,9 @@ int ldlm_completion_ast_async(struct ldlm_lock *lock, __u64 flags, void *data)
 		RETURN(ldlm_completion_tail(lock, data));
 	}
 
-	LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
-		   "going forward");
-	ldlm_reprocess_all(lock->l_resource);
+	LDLM_DEBUG(lock,
+		   "client-side enqueue returned a blocked lock, going forward");
+	ldlm_reprocess_all(lock->l_resource, NULL);
 	RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_completion_ast_async);
@@ -1276,23 +1276,23 @@ static __u64 ldlm_cli_cancel_local(struct ldlm_lock *lock)
 			LDLM_FL_BL_AST : LDLM_FL_CANCELING;
 		unlock_res_and_lock(lock);
 
-                if (local_only) {
-                        CDEBUG(D_DLMTRACE, "not sending request (at caller's "
-                               "instruction)\n");
-                        rc = LDLM_FL_LOCAL_ONLY;
-                }
-                ldlm_lock_cancel(lock);
-        } else {
-                if (ns_is_client(ldlm_lock_to_ns(lock))) {
-                        LDLM_ERROR(lock, "Trying to cancel local lock");
-                        LBUG();
-                }
-                LDLM_DEBUG(lock, "server-side local cancel");
-                ldlm_lock_cancel(lock);
-                ldlm_reprocess_all(lock->l_resource);
-        }
+		if (local_only) {
+			CDEBUG(D_DLMTRACE,
+			       "not sending request (at caller's instruction)\n");
+			rc = LDLM_FL_LOCAL_ONLY;
+		}
+		ldlm_lock_cancel(lock);
+	} else {
+		if (ns_is_client(ldlm_lock_to_ns(lock))) {
+			LDLM_ERROR(lock, "Trying to cancel local lock");
+			LBUG();
+		}
+		LDLM_DEBUG(lock, "server-side local cancel");
+		ldlm_lock_cancel(lock);
+		ldlm_reprocess_all(lock->l_resource, lock);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /**

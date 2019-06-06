@@ -122,6 +122,7 @@ extern unsigned int ldlm_enqueue_min;
 /* ldlm_resource.c */
 extern struct kmem_cache *ldlm_resource_slab;
 extern struct kmem_cache *ldlm_lock_slab;
+extern struct kmem_cache *ldlm_inodebits_slab;
 extern struct kmem_cache *ldlm_interval_tree_slab;
 
 void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
@@ -158,7 +159,8 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 #ifdef HAVE_SERVER_SUPPORT
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 			 struct list_head *work_list,
-			 enum ldlm_process_intention intention);
+			 enum ldlm_process_intention intention,
+			 struct ldlm_lock *hint);
 int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 			      struct list_head *rpc_list);
 void ldlm_discard_bl_list(struct list_head *bl_list);
@@ -204,13 +206,24 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 				enum ldlm_process_intention intention,
 				enum ldlm_error *err,
 				struct list_head *work_list);
+int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
+				   struct list_head *queue,
+				   struct list_head *work_list,
+				   enum ldlm_process_intention intention,
+				   struct ldlm_lock *hint);
 /* ldlm_extent.c */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 			     enum ldlm_process_intention intention,
 			     enum ldlm_error *err, struct list_head *work_list);
 #endif
+int ldlm_extent_alloc_lock(struct ldlm_lock *lock);
 void ldlm_extent_add_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
 void ldlm_extent_unlink_lock(struct ldlm_lock *lock);
+
+int ldlm_inodebits_alloc_lock(struct ldlm_lock *lock);
+void ldlm_inodebits_add_lock(struct ldlm_resource *res, struct list_head *head,
+			     struct ldlm_lock *lock);
+void ldlm_inodebits_unlink_lock(struct ldlm_lock *lock);
 
 /* ldlm_flock.c */
 int ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
@@ -237,7 +250,6 @@ struct ldlm_state {
 extern struct kmem_cache *ldlm_interval_slab; /* slab cache for ldlm_interval */
 extern void ldlm_interval_attach(struct ldlm_interval *n, struct ldlm_lock *l);
 extern struct ldlm_interval *ldlm_interval_detach(struct ldlm_lock *l);
-extern struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock);
 extern void ldlm_interval_free(struct ldlm_interval *node);
 /* this function must be called with res lock held */
 static inline struct ldlm_extent *

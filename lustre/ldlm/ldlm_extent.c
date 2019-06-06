@@ -965,7 +965,7 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
 EXPORT_SYMBOL(ldlm_extent_shift_kms);
 
 struct kmem_cache *ldlm_interval_slab;
-struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock)
+static struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock)
 {
 	struct ldlm_interval *node;
 	ENTRY;
@@ -1024,6 +1024,14 @@ static inline int ldlm_mode_to_index(enum ldlm_mode mode)
 		/* do nothing */;
 	LASSERT(index < LCK_MODE_NUM);
 	return index;
+}
+
+int ldlm_extent_alloc_lock(struct ldlm_lock *lock)
+{
+	lock->l_tree_node = NULL;
+	if (ldlm_interval_alloc(lock) == NULL)
+		return -ENOMEM;
+	return 0;
 }
 
 /** Add newly granted lock into interval tree for the resource. */

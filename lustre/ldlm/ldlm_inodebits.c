@@ -59,6 +59,88 @@
 #ifdef HAVE_SERVER_SUPPORT
 
 /**
+ * It should iterate through all waiting locks on a given resource queue and
+ * attempt to grant them. An optimization is to check only heads waitintg
+ * locks for each inodebit type.
+ *
+ * Must be called with resource lock held.
+ */
+int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
+				   struct list_head *queue,
+				   struct list_head *work_list,
+				   enum ldlm_process_intention intention,
+				   struct ldlm_lock *hint)
+{
+	__u64 flags;
+	int rc = LDLM_ITER_CONTINUE;
+	enum ldlm_error err;
+	struct list_head bl_ast_list = LIST_HEAD_INIT(bl_ast_list);
+	struct ldlm_ibits_queues *queues = res->lr_ibits_queues;
+	int i;
+
+	ENTRY;
+
+	check_res_locked(res);
+
+	LASSERT(res->lr_type == LDLM_IBITS);
+	LASSERT(intention == LDLM_PROCESS_RESCAN ||
+		intention == LDLM_PROCESS_RECOVERY);
+
+	if (intention == LDLM_PROCESS_RECOVERY)
+		return ldlm_reprocess_queue(res, queue, work_list, intention,
+					    NULL);
+
+restart:
+	CDEBUG(D_DLMTRACE, "--- Reprocess resource "DLDLMRES" (%p)\n",
+	       PLDLMRES(res), res);
+
+	for (i = 0; i < MDS_INODELOCK_NUMBITS; i++) {
+		struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+		struct list_head *head = &queues->liq_waiting[i];
+		struct ldlm_lock *pending;
+		struct ldlm_ibits_node *node;
+
+		if (list_empty(head))
+			continue;
+		if (hint && !(hint->l_policy_data.l_inodebits.bits & (1 << i)))
+			continue;
+
+		node = list_entry(head->next, struct ldlm_ibits_node,
+				  lin_link[i]);
+
+		pending = node->lock;
+		LDLM_DEBUG(pending, "Reprocessing lock from queue %d", i);
+
+		flags = 0;
+		rc = ldlm_process_inodebits_lock(pending, &flags, intention,
+						 &err, &rpc_list);
+		if (ldlm_is_granted(pending)) {
+			list_splice(&rpc_list, work_list);
+			/* Try to grant more locks from current queue */
+			i--;
+		} else {
+			list_splice(&rpc_list, &bl_ast_list);
+		}
+	}
+
+	if (!list_empty(&bl_ast_list)) {
+		unlock_res(res);
+
+		rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &bl_ast_list,
+				       LDLM_WORK_BL_AST);
+
+		lock_res(res);
+		if (rc == -ERESTART)
+			GOTO(restart, rc);
+	}
+
+	if (!list_empty(&bl_ast_list))
+		ldlm_discard_bl_list(&bl_ast_list);
+
+	RETURN(rc);
+}
+
+/**
  * Determine if the lock is compatible with all locks on the queue.
  *
  * If \a work_list is provided, conflicting locks are linked there.
@@ -427,4 +509,56 @@ int ldlm_cli_dropbits(struct ldlm_lock *lock, __u64 drop_bits)
 exit:
 	LDLM_DEBUG(lock, "client lock convert END");
 	return rc;
+}
+
+
+int ldlm_inodebits_alloc_lock(struct ldlm_lock *lock)
+{
+	if (ldlm_is_ns_srv(lock)) {
+		int i;
+
+		OBD_SLAB_ALLOC_PTR(lock->l_ibits_node, ldlm_inodebits_slab);
+		if (lock->l_ibits_node == NULL)
+			return -ENOMEM;
+		for (i = 0; i < MDS_INODELOCK_NUMBITS; i++)
+			INIT_LIST_HEAD(&lock->l_ibits_node->lin_link[i]);
+		lock->l_ibits_node->lock = lock;
+	} else {
+		lock->l_ibits_node = NULL;
+	}
+	return 0;
+}
+
+void ldlm_inodebits_add_lock(struct ldlm_resource *res, struct list_head *head,
+			     struct ldlm_lock *lock)
+{
+	int i;
+
+	if (!ldlm_is_ns_srv(lock))
+		return;
+
+	if (head == &res->lr_waiting) {
+		for (i = 0; i < MDS_INODELOCK_NUMBITS; i++) {
+			if (lock->l_policy_data.l_inodebits.bits & (1 << i))
+				list_add_tail(&lock->l_ibits_node->lin_link[i],
+					&res->lr_ibits_queues->liq_waiting[i]);
+		}
+	} else if (head == &res->lr_granted && lock->l_ibits_node != NULL) {
+		for (i = 0; i < MDS_INODELOCK_NUMBITS; i++)
+			LASSERT(list_empty(&lock->l_ibits_node->lin_link[i]));
+		OBD_SLAB_FREE_PTR(lock->l_ibits_node, ldlm_inodebits_slab);
+		lock->l_ibits_node = NULL;
+	}
+}
+
+void ldlm_inodebits_unlink_lock(struct ldlm_lock *lock)
+{
+	int i;
+
+	ldlm_unlink_lock_skiplist(lock);
+	if (!ldlm_is_ns_srv(lock))
+		return;
+
+	for (i = 0; i < MDS_INODELOCK_NUMBITS; i++)
+		list_del_init(&lock->l_ibits_node->lin_link[i]);
 }
