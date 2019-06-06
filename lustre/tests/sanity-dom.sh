@@ -106,6 +106,41 @@ test_4() {
 }
 run_test 4 "DoM: glimpse doesn't produce duplicated locks"
 
+test_5() {
+	local before=$(date +%s)
+	local evict
+
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 || return 1
+
+	multiop_bg_pause $DIR/$tfile O_Ac || return 1
+	setxattr=$!
+
+	multiop_bg_pause $DIR/$tfile O_Tc || return 1
+	truncate=$!
+
+	multiop $DIR2/$tfile Ow10 || return 1
+
+	getfattr -d $DIR2/$tfile
+
+#define OBD_FAIL_LLITE_TRUNCATE_INODE_PAUSE        0x1415
+	$LCTL set_param fail_loc=0x80001415 fail_val=5
+	kill -USR1 $truncate
+	sleep 1
+	multiop $DIR2/$tfile Ow10 &
+	sleep 1
+	kill -USR1 $setxattr
+
+	wait
+
+	evict=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
+	  awk -F"[ [,]" '/EVICTED ]$/ { if (mx<$5) {mx=$5;} } END { print mx }')
+
+	[ -z "$evict" ] || [[ $evict -le $before ]] ||
+		(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state;
+			error "eviction happened: $evict before:$before")
+}
+run_test 5 "DoM truncate deadlock"
+
 test_6() {
 	$MULTIOP $DIR1/$tfile Oz40960w100_z200w100c &
 	MULTIPID=$!

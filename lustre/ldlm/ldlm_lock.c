@@ -149,6 +149,19 @@ ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res)
         return ldlm_processing_policy_table[res->lr_type];
 }
 EXPORT_SYMBOL(ldlm_get_processing_policy);
+
+static ldlm_reprocessing_policy ldlm_reprocessing_policy_table[] = {
+	[LDLM_PLAIN]	= ldlm_reprocess_queue,
+	[LDLM_EXTENT]	= ldlm_reprocess_queue,
+	[LDLM_FLOCK]	= ldlm_reprocess_queue,
+	[LDLM_IBITS]	= ldlm_reprocess_inodebits_queue,
+};
+
+ldlm_reprocessing_policy ldlm_get_reprocessing_policy(struct ldlm_resource *res)
+{
+	return ldlm_reprocessing_policy_table[res->lr_type];
+}
+
 #endif /* HAVE_SERVER_SUPPORT */
 
 void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg)
@@ -203,8 +216,6 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 lprocfs_counter_decr(ldlm_res_to_ns(res)->ns_stats,
                                      LDLM_NSS_LOCKS);
                 lu_ref_del(&res->lr_reference, "lock", lock);
-                ldlm_resource_putref(res);
-                lock->l_resource = NULL;
                 if (lock->l_export) {
                         class_export_lock_put(lock->l_export, lock);
                         lock->l_export = NULL;
@@ -213,7 +224,15 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 if (lock->l_lvb_data != NULL)
                         OBD_FREE_LARGE(lock->l_lvb_data, lock->l_lvb_len);
 
-                ldlm_interval_free(ldlm_interval_detach(lock));
+		if (res->lr_type == LDLM_EXTENT) {
+			ldlm_interval_free(ldlm_interval_detach(lock));
+		} else if (res->lr_type == LDLM_IBITS) {
+			if (lock->l_ibits_node != NULL)
+				OBD_SLAB_FREE_PTR(lock->l_ibits_node,
+						  ldlm_inodebits_slab);
+		}
+		ldlm_resource_putref(res);
+		lock->l_resource = NULL;
                 lu_ref_fini(&lock->l_reference);
 		OBD_FREE_RCU(lock, sizeof(*lock), &lock->l_handle);
         }
@@ -1666,11 +1685,18 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
 		lock->l_glimpse_ast = cbs->lcs_glimpse;
 	}
 
-	lock->l_tree_node = NULL;
-	/* if this is the extent lock, allocate the interval tree node */
-	if (type == LDLM_EXTENT)
-		if (ldlm_interval_alloc(lock) == NULL)
-			GOTO(out, rc = -ENOMEM);
+	switch (type) {
+	case LDLM_EXTENT:
+		rc = ldlm_extent_alloc_lock(lock);
+		break;
+	case LDLM_IBITS:
+		rc = ldlm_inodebits_alloc_lock(lock);
+		break;
+	default:
+		rc = 0;
+	}
+	if (rc)
+		GOTO(out, rc);
 
 	if (lvb_len) {
 		lock->l_lvb_len = lvb_len;
@@ -1699,9 +1725,10 @@ static enum ldlm_error ldlm_lock_enqueue_helper(struct ldlm_lock *lock,
 	enum ldlm_error rc = ELDLM_OK;
 	struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
 	ldlm_processing_policy policy;
+
 	ENTRY;
 
-	policy = ldlm_processing_policy_table[res->lr_type];
+	policy = ldlm_get_processing_policy(res);
 restart:
 	policy(lock, flags, LDLM_PROCESS_ENQUEUE, &rc, &rpc_list);
 	if (rc == ELDLM_OK && lock->l_granted_mode != lock->l_req_mode &&
@@ -1880,7 +1907,8 @@ out:
  */
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 			 struct list_head *work_list,
-			 enum ldlm_process_intention intention)
+			 enum ldlm_process_intention intention,
+			 struct ldlm_lock *hint)
 {
 	struct list_head *tmp, *pos;
 	ldlm_processing_policy policy;
@@ -1888,11 +1916,12 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 	int rc = LDLM_ITER_CONTINUE;
 	enum ldlm_error err;
 	struct list_head bl_ast_list = LIST_HEAD_INIT(bl_ast_list);
+
 	ENTRY;
 
 	check_res_locked(res);
 
-	policy = ldlm_processing_policy_table[res->lr_type];
+	policy = ldlm_get_processing_policy(res);
 	LASSERT(policy);
 	LASSERT(intention == LDLM_PROCESS_RESCAN ||
 		intention == LDLM_PROCESS_RECOVERY);
@@ -2287,20 +2316,23 @@ out:
  * if anything could be granted as a result of the cancellation.
  */
 static void __ldlm_reprocess_all(struct ldlm_resource *res,
-				 enum ldlm_process_intention intention)
+				 enum ldlm_process_intention intention,
+				 struct ldlm_lock *hint)
 {
 	struct list_head rpc_list;
 #ifdef HAVE_SERVER_SUPPORT
+	ldlm_reprocessing_policy reprocess;
 	struct obd_device *obd;
-        int rc;
-        ENTRY;
+	int rc;
+
+	ENTRY;
 
 	INIT_LIST_HEAD(&rpc_list);
-        /* Local lock trees don't get reprocessed. */
-        if (ns_is_client(ldlm_res_to_ns(res))) {
-                EXIT;
-                return;
-        }
+	/* Local lock trees don't get reprocessed. */
+	if (ns_is_client(ldlm_res_to_ns(res))) {
+		EXIT;
+		return;
+	}
 
 	/* Disable reprocess during lock replay stage but allow during
 	 * request replay stage.
@@ -2311,7 +2343,8 @@ static void __ldlm_reprocess_all(struct ldlm_resource *res,
 		RETURN_EXIT;
 restart:
 	lock_res(res);
-	ldlm_reprocess_queue(res, &res->lr_waiting, &rpc_list, intention);
+	reprocess = ldlm_get_reprocessing_policy(res);
+	reprocess(res, &res->lr_waiting, &rpc_list, intention, hint);
 	unlock_res(res);
 
 	rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,
@@ -2321,21 +2354,21 @@ restart:
 		goto restart;
 	}
 #else
-        ENTRY;
+	ENTRY;
 
 	INIT_LIST_HEAD(&rpc_list);
-        if (!ns_is_client(ldlm_res_to_ns(res))) {
-                CERROR("This is client-side-only module, cannot handle "
-                       "LDLM_NAMESPACE_SERVER resource type lock.\n");
-                LBUG();
-        }
+	if (!ns_is_client(ldlm_res_to_ns(res))) {
+		CERROR("This is client-side-only module, cannot handle "
+		       "LDLM_NAMESPACE_SERVER resource type lock.\n");
+		LBUG();
+	}
 #endif
-        EXIT;
+	EXIT;
 }
 
-void ldlm_reprocess_all(struct ldlm_resource *res)
+void ldlm_reprocess_all(struct ldlm_resource *res, struct ldlm_lock *hint)
 {
-	__ldlm_reprocess_all(res, LDLM_PROCESS_RESCAN);
+	__ldlm_reprocess_all(res, LDLM_PROCESS_RESCAN, hint);
 }
 EXPORT_SYMBOL(ldlm_reprocess_all);
 
@@ -2345,7 +2378,7 @@ static int ldlm_reprocess_res(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct ldlm_resource *res = cfs_hash_object(hs, hnode);
 
 	/* This is only called once after recovery done. LU-8306. */
-	__ldlm_reprocess_all(res, LDLM_PROCESS_RECOVERY);
+	__ldlm_reprocess_all(res, LDLM_PROCESS_RECOVERY, NULL);
 	return 0;
 }
 
@@ -2494,7 +2527,7 @@ static void ldlm_cancel_lock_for_export(struct obd_export *exp,
 	ldlm_lvbo_update(res, lock, NULL, 1);
 	ldlm_lock_cancel(lock);
 	if (!exp->exp_obd->obd_stopping)
-		ldlm_reprocess_all(res);
+		ldlm_reprocess_all(res, lock);
 	ldlm_resource_putref(res);
 
 	ecl->ecl_loop++;
@@ -2657,7 +2690,7 @@ void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode)
 	ldlm_grant_lock(lock, NULL);
 	unlock_res_and_lock(lock);
 
-	ldlm_reprocess_all(lock->l_resource);
+	ldlm_reprocess_all(lock->l_resource, lock);
 
 	EXIT;
 #endif

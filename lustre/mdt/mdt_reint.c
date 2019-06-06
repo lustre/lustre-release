@@ -1953,7 +1953,7 @@ static int mdd_migrate_close(struct mdt_thread_info *info,
 	 * cancelled, it's okay to cancel it now as we've held mot_open_sem.
 	 */
 	ldlm_lock_cancel(lease);
-	ldlm_reprocess_all(lease->l_resource);
+	ldlm_reprocess_all(lease->l_resource, lease);
 	LDLM_LOCK_PUT(lease);
 
 close:
