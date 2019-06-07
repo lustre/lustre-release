@@ -386,45 +386,52 @@ int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 				int stripe_count, int stripe_pattern)
 {
-	int page_size, rc;
+	static int page_size;
+	int rc = 0;
 
-	/* 64 KB is the largest common page size I'm aware of (on ia64), but
-	 * check the local page size just in case. */
-	page_size = LOV_MIN_STRIPE_SIZE;
-	if (getpagesize() > page_size) {
-		page_size = getpagesize();
-		llapi_err_noerrno(LLAPI_MSG_WARN,
-				"warning: your page size (%u) is "
-				"larger than expected (%u)", page_size,
-				LOV_MIN_STRIPE_SIZE);
+	if (page_size == 0) {
+		/* 64 KB is the largest common page size (on ia64/PPC/ARM),
+		 * but check the local page size just in case. The page_size
+		 * will not change for the lifetime of this process at least.
+		 */
+		page_size = LOV_MIN_STRIPE_SIZE;
+		if (getpagesize() > page_size) {
+			page_size = getpagesize();
+			llapi_err_noerrno(LLAPI_MSG_WARN,
+					  "warning: page size (%u) larger than expected (%u)",
+					  page_size, LOV_MIN_STRIPE_SIZE);
+		}
 	}
 	if (!llapi_stripe_size_is_aligned(stripe_size)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %llu, "
 				"must be an even multiple of %d bytes",
 				stripe_size, page_size);
-		return rc;
+		goto out;
 	}
 	if (!llapi_stripe_index_is_valid(stripe_offset)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe offset %d",
 				stripe_offset);
-		return rc;
+		goto out;
 	}
 	if (!llapi_stripe_count_is_valid(stripe_count)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe count %d",
 				stripe_count);
-		return rc;
+		goto out;
 	}
 	if (llapi_stripe_size_is_too_big(stripe_size)) {
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-				"warning: stripe size 4G or larger "
-				"is not currently supported and would wrap");
-		return rc;
+			    "error: stripe size '%llu' over 4GB limit",
+			    stripe_size);
+		goto out;
 	}
-	return 0;
+
+out:
+	errno = -rc;
+	return rc;
 }
 
 int llapi_dir_stripe_limit_check(int stripe_offset, int stripe_count,
