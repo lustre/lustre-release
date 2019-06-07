@@ -180,3 +180,109 @@ int llapi_get_version(char *buffer, int buffer_size, char **version)
 	return rc;
 }
 #endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0) */
+
+/*
+ * fsname must be specified
+ * if poolname is NULL, search tgtname in fsname
+ * if poolname is not NULL:
+ *  if poolname not found returns errno < 0
+ *  if tgtname is NULL, returns 1 if pool is not empty and 0 if pool empty
+ *  if tgtname is not NULL, returns 1 if target is in pool and 0 if not
+ */
+int llapi_search_tgt(const char *fsname, const char *poolname,
+		     const char *tgtname, bool is_mdt)
+{
+	char buffer[PATH_MAX];
+	size_t len = 0;
+	glob_t param;
+	FILE *fd;
+	int rc;
+
+	if (fsname && fsname[0] == '\0')
+		fsname = NULL;
+	if (!fsname) {
+		rc = -EINVAL;
+		goto out;
+	}
+
+	if (poolname && poolname[0] == '\0')
+		poolname = NULL;
+	if (tgtname) {
+		if (tgtname[0] == '\0')
+			tgtname = NULL;
+		else
+			len = strlen(tgtname);
+	}
+
+	/* You need one or the other to have something in it */
+	if (!poolname && !tgtname) {
+		rc = -EINVAL;
+		goto out;
+	}
+
+	if (poolname) {
+		rc = poolpath(&param, fsname, NULL);
+		if (!rc) {
+			snprintf(buffer, sizeof(buffer) - 1, "%s/%s",
+				 param.gl_pathv[0], poolname);
+			buffer[sizeof(buffer) - 1] = '\0';
+		}
+	} else {
+		rc = get_lustre_param_path(is_mdt ? "lmv" : "lov", fsname,
+					   FILTER_BY_FS_NAME,
+					   "target_obd", &param);
+		if (!rc) {
+			strncpy(buffer, param.gl_pathv[0],
+				sizeof(buffer) - 1);
+			buffer[sizeof(buffer) - 1] = '\0';
+		}
+	}
+	cfs_free_param_data(&param);
+	if (rc)
+		goto out;
+
+	fd = fopen(buffer, "r");
+	if (!fd) {
+		rc = -errno;
+		goto out;
+	}
+
+	while (fgets(buffer, sizeof(buffer), fd)) {
+		if (!poolname) {
+			char *ptr;
+			/* Search for an tgtname in the list of all targets
+			 * Line format is IDX: fsname-OST/MDTxxxx_UUID STATUS */
+			ptr = strchr(buffer, ' ');
+			if (ptr && strncmp(ptr + 1, tgtname, len) == 0) {
+				rc = 1;
+				goto out_close;
+			}
+		} else {
+			/* Search for an tgtname in a pool,
+			 * (or an existing non-empty pool if no tgtname) */
+			if (!tgtname || strncmp(buffer, tgtname, len) == 0) {
+				rc = 1;
+				goto out_close;
+			}
+		}
+	}
+out_close:
+	fclose(fd);
+out:
+	if (rc < 0)
+		errno = -rc;
+	return rc;
+}
+
+int llapi_search_mdt(const char *fsname, const char *poolname,
+		     const char *mdtname)
+{
+	return llapi_search_tgt(fsname, poolname, mdtname, true);
+}
+
+int llapi_search_ost(const char *fsname, const char *poolname,
+		     const char *ostname)
+{
+	return llapi_search_tgt(fsname, poolname, ostname, false);
+}
+

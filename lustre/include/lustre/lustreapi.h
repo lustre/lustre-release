@@ -362,8 +362,12 @@ int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count);
 int llapi_is_lustre_mnttype(const char *type);
-int llapi_search_tgt(char *fsname, char *poolname, char *tgtname, bool is_mdt);
-int llapi_search_ost(char *fsname, char *poolname, char *ostname);
+int llapi_search_tgt(const char *fsname, const char *poolname,
+		     const char *tgtname, bool is_mdt);
+int llapi_search_mdt(const char *fsname, const char *poolname,
+		     const char *mdtname);
+int llapi_search_ost(const char *fsname, const char *poolname,
+		     const char *ostname);
 int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
 int llapi_parse_size(const char *optarg, unsigned long long *size,
 		     unsigned long long *size_units, int bytes_spec);
