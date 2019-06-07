@@ -5324,7 +5324,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 					"%s %s: warning: '--index' deprecated, use '--mdt-index' instead\n",
 					progname, argv[0]);
 #endif
-			lsa.lsa_pattern = LLAPI_LAYOUT_OVERSTRIPING;
 			lsa.lsa_nr_tgts = parse_targets(mdts,
 						sizeof(mdts) / sizeof(__u32),
 						lsa.lsa_nr_tgts, optarg, NULL);
@@ -5334,7 +5333,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 					progname, argv[0], optarg);
 				return CMD_HELP;
 			}
-			lsa.lsa_pattern = 0;
 
 			lsa.lsa_tgts = mdts;
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
