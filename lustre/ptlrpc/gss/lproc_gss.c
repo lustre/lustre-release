@@ -132,12 +132,36 @@ static const struct file_operations gss_proc_secinit = {
 	.write = gss_proc_write_secinit,
 };
 
+int sptlrpc_krb5_allow_old_client_csum_seq_show(struct seq_file *m, void *data)
+{
+	seq_printf(m, "%u\n", krb5_allow_old_client_csum);
+	return 0;
+}
+
+ssize_t sptlrpc_krb5_allow_old_client_csum_seq_write(struct file *file,
+						     const char __user *buffer,
+						     size_t count, loff_t *off)
+{
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	krb5_allow_old_client_csum = val;
+	return count;
+}
+LPROC_SEQ_FOPS(sptlrpc_krb5_allow_old_client_csum);
+
 static struct lprocfs_vars gss_lprocfs_vars[] = {
 	{ .name	=	"replays",
 	  .fops	=	&gss_proc_oos_fops	},
 	{ .name	=	"init_channel",
 	  .fops	=	&gss_proc_secinit,
 	  .proc_mode =	0222			},
+	{ .name	=	"krb5_allow_old_client_csum",
+	  .fops	=	&sptlrpc_krb5_allow_old_client_csum_fops },
 	{ NULL }
 };
 

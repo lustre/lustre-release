@@ -254,7 +254,8 @@ int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, const void *iv,
 	if (iv)
 		memcpy(local_iv, iv, crypto_blkcipher_ivsize(tfm));
 
-	memcpy(out, in, length);
+	if (in != out)
+		memmove(out, in, length);
 
 	ret = gss_setup_sgtable(&sg_out, &sg, out, length);
 	if (ret != 0)
@@ -272,8 +273,7 @@ out:
 
 int gss_digest_hash(struct ahash_request *req,
 		    rawobj_t *hdr, int msgcnt, rawobj_t *msgs,
-		    int iovcnt, lnet_kiov_t *iovs,
-		    rawobj_t *cksum)
+		    int iovcnt, lnet_kiov_t *iovs)
 {
 	struct scatterlist sg[1];
 	struct sg_table sgt;
@@ -310,11 +310,64 @@ int gss_digest_hash(struct ahash_request *req,
 	}
 
 	if (hdr) {
-		rc = gss_setup_sgtable(&sgt, sg, hdr, sizeof(*hdr));
+		rc = gss_setup_sgtable(&sgt, sg, hdr->data, hdr->len);
 		if (rc)
 			return rc;
 
 		ahash_request_set_crypt(req, sg, NULL, hdr->len);
+		rc = crypto_ahash_update(req);
+		gss_teardown_sgtable(&sgt);
+		if (rc)
+			return rc;
+	}
+
+	return rc;
+}
+
+int gss_digest_hash_compat(struct ahash_request *req,
+			   rawobj_t *hdr, int msgcnt, rawobj_t *msgs,
+			   int iovcnt, lnet_kiov_t *iovs)
+{
+	struct scatterlist sg[1];
+	struct sg_table sgt;
+	int rc = 0;
+	int i;
+
+	for (i = 0; i < msgcnt; i++) {
+		if (msgs[i].len == 0)
+			continue;
+
+		rc = gss_setup_sgtable(&sgt, sg, msgs[i].data, msgs[i].len);
+		if (rc)
+			return rc;
+
+		ahash_request_set_crypt(req, sg, NULL, msgs[i].len);
+		rc = crypto_ahash_update(req);
+		gss_teardown_sgtable(&sgt);
+		if (rc)
+			return rc;
+	}
+
+	for (i = 0; i < iovcnt; i++) {
+		if (iovs[i].kiov_len == 0)
+			continue;
+
+		sg_init_table(sg, 1);
+		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
+			    iovs[i].kiov_offset);
+
+		ahash_request_set_crypt(req, sg, NULL, iovs[i].kiov_len);
+		rc = crypto_ahash_update(req);
+		if (rc)
+			return rc;
+	}
+
+	if (hdr) {
+		rc = gss_setup_sgtable(&sgt, sg, &(hdr->len), sizeof(hdr->len));
+		if (rc)
+			return rc;
+
+		ahash_request_set_crypt(req, sg, NULL, sizeof(hdr->len));
 		rc = crypto_ahash_update(req);
 		gss_teardown_sgtable(&sgt);
 		if (rc)

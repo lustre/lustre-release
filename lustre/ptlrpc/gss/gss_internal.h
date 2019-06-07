@@ -117,8 +117,9 @@ enum ptlrpc_gss_tgt {
 };
 
 enum ptlrpc_gss_header_flags {
-        LUSTRE_GSS_PACK_BULK            = 1,
-        LUSTRE_GSS_PACK_USER            = 2,
+	LUSTRE_GSS_PACK_BULK            = 1,
+	LUSTRE_GSS_PACK_USER            = 2,
+	LUSTRE_GSS_PACK_KCSUM           = 4,
 };
 
 static inline
@@ -509,6 +510,7 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx);
 
 int  __init gss_init_svc_upcall(void);
 void gss_exit_svc_upcall(void);
+extern unsigned int krb5_allow_old_client_csum;
 
 /* lproc_gss.c */
 void gss_stat_oos_record_cli(int behind);
