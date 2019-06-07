@@ -59,82 +59,85 @@
 
 static
 int ctx_init_pack_request(struct obd_import *imp,
-                          struct ptlrpc_request *req,
-                          int lustre_srv,
-                          uid_t uid, gid_t gid,
-                          long token_size,
-                          char __user *token)
+			  struct ptlrpc_request *req,
+			  int lustre_srv,
+			  uid_t uid, gid_t gid,
+			  long token_size,
+			  char __user *token)
 {
-        struct lustre_msg       *msg = req->rq_reqbuf;
-        struct gss_sec          *gsec;
-        struct gss_header       *ghdr;
-        struct ptlrpc_user_desc *pud;
-        __u32                   *p, size, offset = 2;
-        rawobj_t                 obj;
+	struct lustre_msg       *msg = req->rq_reqbuf;
+	struct gss_sec          *gsec;
+	struct gss_header       *ghdr;
+	struct ptlrpc_user_desc *pud;
+	__u32                   *p, size, offset = 2;
+	rawobj_t                 obj;
 
-        LASSERT(msg->lm_bufcount <= 4);
-        LASSERT(req->rq_cli_ctx);
-        LASSERT(req->rq_cli_ctx->cc_sec);
+	LASSERT(msg->lm_bufcount <= 4);
+	LASSERT(req->rq_cli_ctx);
+	LASSERT(req->rq_cli_ctx->cc_sec);
 
-        /* gss hdr */
-        ghdr = lustre_msg_buf(msg, 0, sizeof(*ghdr));
-        ghdr->gh_version = PTLRPC_GSS_VERSION;
-        ghdr->gh_sp = (__u8) imp->imp_sec->ps_part;
-        ghdr->gh_flags = 0;
-        ghdr->gh_proc = PTLRPC_GSS_PROC_INIT;
-        ghdr->gh_seq = 0;
-        ghdr->gh_svc = SPTLRPC_SVC_NULL;
-        ghdr->gh_handle.len = 0;
+	/* gss hdr */
+	ghdr = lustre_msg_buf(msg, 0, sizeof(*ghdr));
+	ghdr->gh_version = PTLRPC_GSS_VERSION;
+	ghdr->gh_sp = (__u8) imp->imp_sec->ps_part;
+	ghdr->gh_flags = 0;
+	ghdr->gh_proc = PTLRPC_GSS_PROC_INIT;
+	ghdr->gh_seq = 0;
+	ghdr->gh_svc = SPTLRPC_SVC_NULL;
+	ghdr->gh_handle.len = 0;
 
-        /* fix the user desc */
-        if (req->rq_pack_udesc) {
-                ghdr->gh_flags |= LUSTRE_GSS_PACK_USER;
+	/* fix the user desc */
+	if (req->rq_pack_udesc) {
+		ghdr->gh_flags |= LUSTRE_GSS_PACK_USER;
 
-                pud = lustre_msg_buf(msg, offset, sizeof(*pud));
-                LASSERT(pud);
-                pud->pud_uid = pud->pud_fsuid = uid;
-                pud->pud_gid = pud->pud_fsgid = gid;
-                pud->pud_cap = 0;
-                pud->pud_ngroups = 0;
-                offset++;
-        }
+		pud = lustre_msg_buf(msg, offset, sizeof(*pud));
+		LASSERT(pud);
+		pud->pud_uid = pud->pud_fsuid = uid;
+		pud->pud_gid = pud->pud_fsgid = gid;
+		pud->pud_cap = 0;
+		pud->pud_ngroups = 0;
+		offset++;
+	}
 
-        /* security payload */
-        p = lustre_msg_buf(msg, offset, 0);
-        size = msg->lm_buflens[offset];
-        LASSERT(p);
+	/* new clients are expected to set KCSUM flag */
+	ghdr->gh_flags |= LUSTRE_GSS_PACK_KCSUM;
 
-        /* 1. lustre svc type */
-        LASSERT(size > 4);
-        *p++ = cpu_to_le32(lustre_srv);
-        size -= 4;
+	/* security payload */
+	p = lustre_msg_buf(msg, offset, 0);
+	size = msg->lm_buflens[offset];
+	LASSERT(p);
 
-        /* 2. target uuid */
-        obj.len = strlen(imp->imp_obd->u.cli.cl_target_uuid.uuid) + 1;
-        obj.data = imp->imp_obd->u.cli.cl_target_uuid.uuid;
-        if (rawobj_serialize(&obj, &p, &size))
-                LBUG();
+	/* 1. lustre svc type */
+	LASSERT(size > 4);
+	*p++ = cpu_to_le32(lustre_srv);
+	size -= 4;
 
-        /* 3. reverse context handle. actually only needed by root user,
-         *    but we send it anyway. */
-        gsec = sec2gsec(req->rq_cli_ctx->cc_sec);
-        obj.len = sizeof(gsec->gs_rvs_hdl);
-        obj.data = (__u8 *) &gsec->gs_rvs_hdl;
-        if (rawobj_serialize(&obj, &p, &size))
-                LBUG();
+	/* 2. target uuid */
+	obj.len = strlen(imp->imp_obd->u.cli.cl_target_uuid.uuid) + 1;
+	obj.data = imp->imp_obd->u.cli.cl_target_uuid.uuid;
+	if (rawobj_serialize(&obj, &p, &size))
+		LBUG();
 
-        /* 4. now the token */
-        LASSERT(size >= (sizeof(__u32) + token_size));
-        *p++ = cpu_to_le32(((__u32) token_size));
+	/* 3. reverse context handle. actually only needed by root user,
+	 *    but we send it anyway. */
+	gsec = sec2gsec(req->rq_cli_ctx->cc_sec);
+	obj.len = sizeof(gsec->gs_rvs_hdl);
+	obj.data = (__u8 *) &gsec->gs_rvs_hdl;
+	if (rawobj_serialize(&obj, &p, &size))
+		LBUG();
+
+	/* 4. now the token */
+	LASSERT(size >= (sizeof(__u32) + token_size));
+	*p++ = cpu_to_le32(((__u32) token_size));
 	if (copy_from_user(p, token, token_size)) {
-                CERROR("can't copy token\n");
-                return -EFAULT;
-        }
-        size -= sizeof(__u32) + cfs_size_round4(token_size);
+		CERROR("can't copy token\n");
+		return -EFAULT;
+	}
+	size -= sizeof(__u32) + cfs_size_round4(token_size);
 
-        req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, offset,
-                                                msg->lm_buflens[offset] - size, 0);
-        return 0;
+	req->rq_reqdata_len = lustre_shrink_msg(req->rq_reqbuf, offset,
+					     msg->lm_buflens[offset] - size, 0);
+	return 0;
 }
 
 static

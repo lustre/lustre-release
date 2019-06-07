@@ -316,7 +316,7 @@ __u32 gss_inquire_context_sk(struct gss_ctx *gss_context,
 static
 u32 sk_make_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key, int msg_count,
 		 rawobj_t *msgs, int iov_count, lnet_kiov_t *iovs,
-		 rawobj_t *token)
+		 rawobj_t *token, digest_hash hash_func)
 {
 	struct ahash_request *req;
 	int rc2, rc;
@@ -327,9 +327,15 @@ u32 sk_make_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key, int msg_count,
 		goto out_init_failed;
 	}
 
-	rc2 = gss_digest_hash(req, NULL, msg_count, msgs, iov_count, iovs,
-			      token);
-	rc = cfs_crypto_hash_final(req, key->data, &key->len);
+
+	if (hash_func)
+		rc2 = hash_func(req, NULL, msg_count, msgs, iov_count,
+				iovs);
+	else
+		rc2 = gss_digest_hash(req, NULL, msg_count, msgs, iov_count,
+				      iovs);
+
+	rc = cfs_crypto_hash_final(req, token->data, &token->len);
 	if (!rc && rc2)
 		rc = rc2;
 out_init_failed:
@@ -348,14 +354,14 @@ __u32 gss_get_mic_sk(struct gss_ctx *gss_context,
 
 	return sk_make_hmac(skc->sc_hmac,
 			    &skc->sc_hmac_key, message_count, messages,
-			    iov_count, iovs, token);
+			    iov_count, iovs, token, gss_context->hash_func);
 }
 
 static
 u32 sk_verify_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key,
 		   int message_count, rawobj_t *messages,
 		   int iov_count, lnet_kiov_t *iovs,
-		   rawobj_t *token)
+		   rawobj_t *token, digest_hash hash_func)
 {
 	rawobj_t checksum = RAWOBJ_EMPTY;
 	__u32 rc = GSS_S_FAILURE;
@@ -372,7 +378,8 @@ u32 sk_verify_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key,
 		return rc;
 
 	if (sk_make_hmac(algo, key, message_count,
-			 messages, iov_count, iovs, &checksum)) {
+			 messages, iov_count, iovs, &checksum,
+			 hash_func)) {
 		CDEBUG(D_SEC, "Failed to create checksum to validate\n");
 		goto cleanup;
 	}
@@ -483,7 +490,8 @@ __u32 gss_verify_mic_sk(struct gss_ctx *gss_context,
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
 
 	return sk_verify_hmac(skc->sc_hmac, &skc->sc_hmac_key,
-			      message_count, messages, iov_count, iovs, token);
+			      message_count, messages, iov_count, iovs, token,
+			      gss_context->hash_func);
 }
 
 static
@@ -529,7 +537,8 @@ __u32 gss_wrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
 	skw.skw_hmac.len = sht_bytes;
 	if (sk_make_hmac(skc->sc_hmac, &skc->sc_hmac_key,
-			 3, msgbufs, 0, NULL, &skw.skw_hmac))
+			 3, msgbufs, 0, NULL, &skw.skw_hmac,
+			 gss_context->hash_func))
 		return GSS_S_FAILURE;
 
 	token->len = skw.skw_header.len + skw.skw_cipher.len + skw.skw_hmac.len;
@@ -576,7 +585,7 @@ __u32 gss_unwrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 	msgbufs[1] = *gss_header;
 	msgbufs[2] = skw.skw_cipher;
 	rc = sk_verify_hmac(skc->sc_hmac, &skc->sc_hmac_key, 3, msgbufs,
-			    0, NULL, &skw.skw_hmac);
+			    0, NULL, &skw.skw_hmac, gss_context->hash_func);
 	if (rc)
 		return rc;
 
@@ -810,7 +819,8 @@ __u32 gss_wrap_bulk_sk(struct gss_ctx *gss_context,
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
 	skw.skw_hmac.len = sht_bytes;
 	if (sk_make_hmac(skc->sc_hmac, &skc->sc_hmac_key, 1, &skw.skw_cipher,
-			 desc->bd_iov_count, GET_ENC_KIOV(desc), &skw.skw_hmac))
+			 desc->bd_iov_count, GET_ENC_KIOV(desc), &skw.skw_hmac,
+			 gss_context->hash_func))
 		return GSS_S_FAILURE;
 
 	return GSS_S_COMPLETE;

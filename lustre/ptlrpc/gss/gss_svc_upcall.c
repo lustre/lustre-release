@@ -69,11 +69,14 @@
 #include "gss_err.h"
 #include "gss_internal.h"
 #include "gss_api.h"
+#include "gss_crypto.h"
 
 #define GSS_SVC_UPCALL_TIMEOUT  (20)
 
 static DEFINE_SPINLOCK(__ctx_index_lock);
 static __u64 __ctx_index;
+
+unsigned int krb5_allow_old_client_csum;
 
 __u64 gss_get_next_ctx_index(void)
 {
@@ -976,6 +979,20 @@ cache_check:
                 cache_get(&rsci->h);
                 grctx->src_ctx = &rsci->ctx;
         }
+
+	if (gw->gw_flags & LUSTRE_GSS_PACK_KCSUM) {
+		grctx->src_ctx->gsc_mechctx->hash_func = gss_digest_hash;
+	} else if (!strcmp(grctx->src_ctx->gsc_mechctx->mech_type->gm_name,
+			   "krb5") &&
+		   !krb5_allow_old_client_csum) {
+		CWARN("%s: deny connection from '%s' due to missing 'krb_csum' feature, set 'sptlrpc.gss.krb5_allow_old_client_csum=1' to allow, but recommend client upgrade: rc = %d\n",
+		      target->obd_name, libcfs_nid2str(req->rq_peer.nid),
+		      -EPROTO);
+		GOTO(out, rc = SECSVC_DROP);
+	} else {
+		grctx->src_ctx->gsc_mechctx->hash_func =
+			gss_digest_hash_compat;
+	}
 
         if (rawobj_dup(&rsci->ctx.gsc_rvs_hdl, rvs_hdl)) {
                 CERROR("failed duplicate reverse handle\n");

@@ -258,6 +258,9 @@ static struct lprocfs_vars sptlrpc_lprocfs_vars[] = {
 struct dentry *sptlrpc_debugfs_dir;
 EXPORT_SYMBOL(sptlrpc_debugfs_dir);
 
+struct proc_dir_entry *sptlrpc_lprocfs_dir;
+EXPORT_SYMBOL(sptlrpc_lprocfs_dir);
+
 int sptlrpc_lproc_init(void)
 {
 	int rc;
@@ -272,6 +275,15 @@ int sptlrpc_lproc_init(void)
 		sptlrpc_debugfs_dir = NULL;
 		return rc;
 	}
+
+	sptlrpc_lprocfs_dir = lprocfs_register("sptlrpc", proc_lustre_root,
+					       NULL, NULL);
+	if (IS_ERR_OR_NULL(sptlrpc_lprocfs_dir)) {
+		rc = PTR_ERR(sptlrpc_lprocfs_dir);
+		rc = sptlrpc_lprocfs_dir ? PTR_ERR(sptlrpc_lprocfs_dir)
+			: -ENOMEM;
+		sptlrpc_lprocfs_dir = NULL;
+	}
 	return 0;
 }
 
@@ -279,4 +291,7 @@ void sptlrpc_lproc_fini(void)
 {
 	if (!IS_ERR_OR_NULL(sptlrpc_debugfs_dir))
 		ldebugfs_remove(&sptlrpc_debugfs_dir);
+
+	if (!IS_ERR_OR_NULL(sptlrpc_lprocfs_dir))
+		lprocfs_remove(&sptlrpc_lprocfs_dir);
 }

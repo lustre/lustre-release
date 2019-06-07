@@ -21,10 +21,16 @@
 
 struct gss_api_mech;
 
+typedef int (*digest_hash)(
+	struct ahash_request *req, rawobj_t *hdr,
+	int msgcnt, rawobj_t *msgs,
+	int iovcnt, lnet_kiov_t *iovs);
+
 /* The mechanism-independent gss-api context: */
 struct gss_ctx {
-        struct gss_api_mech    *mech_type;
-        void                   *internal_ctx_id;
+	struct gss_api_mech *mech_type;
+	void *internal_ctx_id;
+	digest_hash hash_func;
 };
 
 #define GSS_C_NO_BUFFER         ((rawobj_t) 0)

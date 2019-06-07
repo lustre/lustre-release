@@ -52,6 +52,7 @@
 
 static struct dentry *gss_debugfs_dir_lk;
 static struct dentry *gss_debugfs_dir;
+static struct proc_dir_entry *gss_lprocfs_dir;
 
 /*
  * statistic of "out-of-sequence-window"
@@ -132,12 +133,40 @@ static const struct file_operations gss_proc_secinit = {
 	.write = gss_proc_write_secinit,
 };
 
+int sptlrpc_krb5_allow_old_client_csum_seq_show(struct seq_file *m, void *data)
+{
+	seq_printf(m, "%u\n", krb5_allow_old_client_csum);
+	return 0;
+}
+
+ssize_t sptlrpc_krb5_allow_old_client_csum_seq_write(struct file *file,
+						     const char __user *buffer,
+						     size_t count, loff_t *off)
+{
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	krb5_allow_old_client_csum = val;
+	return count;
+}
+LPROC_SEQ_FOPS(sptlrpc_krb5_allow_old_client_csum);
+
 static struct lprocfs_vars gss_debugfs_vars[] = {
 	{ .name	=	"replays",
 	  .fops	=	&gss_proc_oos_fops	},
 	{ .name	=	"init_channel",
 	  .fops	=	&gss_proc_secinit,
 	  .proc_mode =	0222			},
+	{ NULL }
+};
+
+static struct lprocfs_vars gss_lprocfs_vars[] = {
+	{ .name	=	"krb5_allow_old_client_csum",
+	  .fops	=	&sptlrpc_krb5_allow_old_client_csum_fops },
 	{ NULL }
 };
 
@@ -187,6 +216,9 @@ void gss_exit_tunables(void)
 
 	if (!IS_ERR_OR_NULL(gss_debugfs_dir))
 		ldebugfs_remove(&gss_debugfs_dir);
+
+	if (!IS_ERR_OR_NULL(gss_lprocfs_dir))
+		lprocfs_remove(&gss_lprocfs_dir);
 }
 
 int gss_init_tunables(void)
@@ -209,6 +241,14 @@ int gss_init_tunables(void)
 		rc = gss_debugfs_dir_lk ? PTR_ERR(gss_debugfs_dir_lk)
 					  : -ENOMEM;
 		gss_debugfs_dir_lk = NULL;
+		GOTO(out, rc);
+	}
+
+	gss_lprocfs_dir = lprocfs_register("gss", sptlrpc_lprocfs_dir,
+					   gss_lprocfs_vars, NULL);
+	if (IS_ERR_OR_NULL(gss_lprocfs_dir)) {
+		rc = gss_lprocfs_dir ? PTR_ERR(gss_lprocfs_dir) : -ENOMEM;
+		gss_lprocfs_dir = NULL;
 		GOTO(out, rc);
 	}
 
