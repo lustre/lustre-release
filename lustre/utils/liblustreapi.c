@@ -741,32 +741,35 @@ int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 	int fd, rc;
 
 	if (foreign_lov == NULL) {
-		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "foreign LOV EA content must be provided");
-		return -EINVAL;
+		goto out_err;
 	}
 
 	len = strlen(foreign_lov);
 	if (len > XATTR_SIZE_MAX - offsetof(struct lov_foreign_md, lfm_value) ||
 	    len <= 0) {
-		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "foreign LOV EA size %zu (must be 0 < len < %zu)",
 			    len, XATTR_SIZE_MAX -
 			    offsetof(struct lov_foreign_md, lfm_value));
-		return -EINVAL;
+		goto out_err;
 	}
 
 	lfm = malloc(len + offsetof(struct lov_foreign_md, lfm_value));
 	if (lfm == NULL) {
-		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
+		rc = -ENOMEM;
+		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "failed to allocate lov_foreign_md");
-		return -ENOMEM;
+		goto out_err;
 	}
 
 	fd = open(name, O_WRONLY|O_CREAT|O_LOV_DELAY_CREATE, mode);
 	if (fd == -1) {
-		perror("open()");
-		rc = -errno;
+		fd = -errno;
+		llapi_error(LLAPI_MSG_ERROR, fd, "open '%s' failed", name);
 		goto out_free;
 	}
 
@@ -778,20 +781,17 @@ int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 
 	if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, lfm) != 0) {
 		char *errmsg = "stripe already set";
-		char fsname[MAX_OBD_NAME + 1] = { 0 };
 
 		rc = -errno;
-		if (errno != EEXIST && errno != EALREADY)
+		if (errno == ENOTTY)
+			errmsg = "not on a Lustre filesystem";
+		else if (errno == EEXIST || errno == EALREADY)
+			errmsg = "stripe already set";
+		else
 			errmsg = strerror(errno);
 
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
 				  "setstripe error for '%s': %s", name, errmsg);
-
-		/* Make sure we are on a Lustre file system */
-		if (rc == -ENOTTY && llapi_search_fsname(name, fsname))
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "'%s' is not on a Lustre filesystem",
-				    name);
 
 		close(fd);
 		fd = rc;
@@ -801,6 +801,10 @@ out_free:
 	free(lfm);
 
 	return fd;
+
+out_err:
+	errno = -rc;
+	return rc;
 }
 
 int llapi_file_create(const char *name, unsigned long long stripe_size,
