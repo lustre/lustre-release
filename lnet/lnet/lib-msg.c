@@ -440,25 +440,21 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 }
 
 static void
-lnet_dec_healthv_locked(atomic_t *healthv)
+lnet_dec_healthv_locked(atomic_t *healthv, int sensitivity)
 {
 	int h = atomic_read(healthv);
 
-	if (h < lnet_health_sensitivity) {
+	if (h < sensitivity) {
 		atomic_set(healthv, 0);
 	} else {
-		h -= lnet_health_sensitivity;
+		h -= sensitivity;
 		atomic_set(healthv, h);
 	}
 }
 
 static void
-lnet_handle_local_failure(struct lnet_msg *msg)
+lnet_handle_local_failure(struct lnet_ni *local_ni)
 {
-	struct lnet_ni *local_ni;
-
-	local_ni = msg->msg_txni;
-
 	/*
 	 * the lnet_net_lock(0) is used to protect the addref on the ni
 	 * and the recovery queue.
@@ -470,7 +466,7 @@ lnet_handle_local_failure(struct lnet_msg *msg)
 		return;
 	}
 
-	lnet_dec_healthv_locked(&local_ni->ni_healthv);
+	lnet_dec_healthv_locked(&local_ni->ni_healthv, lnet_health_sensitivity);
 	/*
 	 * add the NI to the recovery queue if it's not already there
 	 * and it's health value is actually below the maximum. It's
@@ -493,11 +489,22 @@ lnet_handle_local_failure(struct lnet_msg *msg)
 void
 lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 {
+	__u32 sensitivity = lnet_health_sensitivity;
+	__u32 lp_sensitivity;
+
 	/* lpni could be NULL if we're in the LOLND case */
 	if (!lpni)
 		return;
 
-	lnet_dec_healthv_locked(&lpni->lpni_healthv);
+	/*
+	 * If there is a health sensitivity in the peer then use that
+	 * instead of the globally set one.
+	 */
+	lp_sensitivity = lpni->lpni_peer_net->lpn_peer->lp_health_sensitivity;
+	if (lp_sensitivity)
+		sensitivity = lp_sensitivity;
+
+	lnet_dec_healthv_locked(&lpni->lpni_healthv, sensitivity);
 	/*
 	 * add the peer NI to the recovery queue if it's not already there
 	 * and it's health value is actually below the maximum. It's
@@ -516,6 +523,11 @@ lnet_handle_remote_failure(struct lnet_peer_ni *lpni)
 		return;
 
 	lnet_net_lock(0);
+	/* the mt could've shutdown and cleaned up the queues */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
+		lnet_net_unlock(0);
+		return;
+	}
 	lnet_handle_remote_failure_locked(lpni);
 	lnet_net_unlock(0);
 }
@@ -593,20 +605,24 @@ lnet_health_check(struct lnet_msg *msg)
 {
 	enum lnet_msg_hstatus hstatus = msg->msg_health_status;
 	bool lo = false;
+	struct lnet_ni *ni;
+	struct lnet_peer_ni *lpni;
 
 	/* if we're shutting down no point in handling health. */
-	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING)
 		return -1;
 
-	LASSERT(msg->msg_txni);
+	LASSERT(msg->msg_tx_committed || msg->msg_rx_committed);
 
 	/*
 	 * if we're sending to the LOLND then the msg_txpeer will not be
 	 * set. So no need to sanity check it.
 	 */
-	if (LNET_NETTYP(LNET_NIDNET(msg->msg_txni->ni_nid)) != LOLND)
+	if (msg->msg_tx_committed &&
+	    LNET_NETTYP(LNET_NIDNET(msg->msg_txni->ni_nid)) != LOLND)
 		LASSERT(msg->msg_txpeer);
-	else
+	else if (msg->msg_tx_committed &&
+		 LNET_NETTYP(LNET_NIDNET(msg->msg_txni->ni_nid)) == LOLND)
 		lo = true;
 
 	if (hstatus != LNET_MSG_STATUS_OK &&
@@ -623,21 +639,56 @@ lnet_health_check(struct lnet_msg *msg)
 		lnet_net_unlock(0);
 	}
 
+	/*
+	 * always prefer txni/txpeer if they message is committed for both
+	 * directions.
+	 */
+	if (msg->msg_tx_committed) {
+		ni = msg->msg_txni;
+		lpni = msg->msg_txpeer;
+	} else {
+		ni = msg->msg_rxni;
+		lpni = msg->msg_rxpeer;
+	}
+
+	if (!lo)
+		LASSERT(ni && lpni);
+	else
+		LASSERT(ni);
+
 	CDEBUG(D_NET, "health check: %s->%s: %s: %s\n",
-	       libcfs_nid2str(msg->msg_txni->ni_nid),
-	       (lo) ? "self" : libcfs_nid2str(msg->msg_txpeer->lpni_nid),
+	       libcfs_nid2str(ni->ni_nid),
+	       (lo) ? "self" : libcfs_nid2str(lpni->lpni_nid),
 	       lnet_msgtyp2str(msg->msg_type),
 	       lnet_health_error2str(hstatus));
 
 	switch (hstatus) {
 	case LNET_MSG_STATUS_OK:
-		lnet_inc_healthv(&msg->msg_txni->ni_healthv);
+		/*
+		 * increment the local ni health weather we successfully
+		 * received or sent a message on it.
+		 */
+		lnet_inc_healthv(&ni->ni_healthv);
 		/*
 		 * It's possible msg_txpeer is NULL in the LOLND
-		 * case.
+		 * case. Only increment the peer's health if we're
+		 * receiving a message from it. It's the only sure way to
+		 * know that a remote interface is up.
+		 * If this interface is part of a router, then take that
+		 * as indication that the router is fully healthy.
 		 */
-		if (msg->msg_txpeer)
-			lnet_inc_healthv(&msg->msg_txpeer->lpni_healthv);
+		if (lpni && msg->msg_rx_committed) {
+			/*
+			 * If we're receiving a message from the router or
+			 * I'm a router, then set that lpni's health to
+			 * maximum so we can commence communication
+			 */
+			if (lnet_isrouter(lpni) || the_lnet.ln_routing)
+				lnet_set_healthv(&lpni->lpni_healthv,
+						 LNET_MAX_HEALTH_VALUE);
+			else
+				lnet_inc_healthv(&lpni->lpni_healthv);
+		}
 
 		/* we can finalize this message */
 		return -1;
@@ -646,16 +697,18 @@ lnet_health_check(struct lnet_msg *msg)
 	case LNET_MSG_STATUS_LOCAL_ABORTED:
 	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
 	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
-		lnet_handle_local_failure(msg);
-		/* add to the re-send queue */
-		goto resend;
+		lnet_handle_local_failure(ni);
+		if (msg->msg_tx_committed)
+			/* add to the re-send queue */
+			goto resend;
+		break;
 
 	/*
 	 * These errors will not trigger a resend so simply
 	 * finalize the message
 	 */
 	case LNET_MSG_STATUS_LOCAL_ERROR:
-		lnet_handle_local_failure(msg);
+		lnet_handle_local_failure(ni);
 		return -1;
 
 	/*
@@ -663,19 +716,24 @@ lnet_health_check(struct lnet_msg *msg)
 	 * attempt a resend safely.
 	 */
 	case LNET_MSG_STATUS_REMOTE_DROPPED:
-		lnet_handle_remote_failure(msg->msg_txpeer);
-		goto resend;
+		lnet_handle_remote_failure(lpni);
+		if (msg->msg_tx_committed)
+			goto resend;
+		break;
 
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
-		lnet_handle_remote_failure(msg->msg_txpeer);
+		lnet_handle_remote_failure(lpni);
 		return -1;
 	default:
 		LBUG();
 	}
 
 resend:
+	/* we can only resend tx_committed messages */
+	LASSERT(msg->msg_tx_committed);
+
 	/* don't resend recovery messages */
 	if (msg->msg_recovery) {
 		CDEBUG(D_NET, "msg %s->%s is a recovery ping. retry# %d\n",
@@ -708,6 +766,12 @@ resend:
 	msg->msg_retry_count++;
 
 	lnet_net_lock(msg->msg_tx_cpt);
+
+	/* check again under lock */
+	if (the_lnet.ln_mt_state != LNET_MT_STATE_RUNNING) {
+		lnet_net_unlock(msg->msg_tx_cpt);
+		return -1;
+	}
 
 	/*
 	 * remove message from the active list and reset it in preparation
@@ -769,46 +833,39 @@ lnet_msg_detach_md(struct lnet_msg *msg, int cpt, int status)
 	}
 
 	if (unlink) {
-		/*
-		 * if this is an ACK or a REPLY then make sure to remove the
-		 * response tracker.
-		 */
-		if (msg->msg_ev.type == LNET_EVENT_REPLY ||
-		    msg->msg_ev.type == LNET_EVENT_ACK)
-			lnet_detach_rsp_tracker(msg->msg_md, cpt);
+		lnet_detach_rsp_tracker(md, cpt);
 		lnet_md_unlink(md);
 	}
 
 	msg->msg_md = NULL;
 }
 
-static void
-lnet_detach_md(struct lnet_msg *msg, int status)
-{
-	int cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
-
-	lnet_res_lock(cpt);
-	lnet_msg_detach_md(msg, cpt, status);
-	lnet_res_unlock(cpt);
-}
-
 static bool
 lnet_is_health_check(struct lnet_msg *msg)
 {
-	bool hc;
+	bool hc = true;
 	int status = msg->msg_ev.status;
 
-	/*
-	 * perform a health check for any message committed for transmit
-	 */
-	hc = msg->msg_tx_committed;
+	if ((!msg->msg_tx_committed && !msg->msg_rx_committed) ||
+	    !msg->msg_onactivelist) {
+		CDEBUG(D_NET, "msg %p not committed for send or receive\n",
+		       msg);
+		return false;
+	}
+
+	if ((msg->msg_tx_committed && !msg->msg_txpeer) ||
+	    (msg->msg_rx_committed && !msg->msg_rxpeer)) {
+		CDEBUG(D_NET, "msg %p failed too early to retry and send\n",
+		       msg);
+		return false;
+	}
 
 	/* Check for status inconsistencies */
-	if (hc &&
-	    ((!status && msg->msg_health_status != LNET_MSG_STATUS_OK) ||
-	     (status && msg->msg_health_status == LNET_MSG_STATUS_OK))) {
-		CERROR("Msg is in inconsistent state, don't perform health "
-		       "checking (%d, %d)\n", status, msg->msg_health_status);
+	if ((!status && msg->msg_health_status != LNET_MSG_STATUS_OK) ||
+	     (status && msg->msg_health_status == LNET_MSG_STATUS_OK)) {
+		CDEBUG(D_NET, "Msg %p is in inconsistent state, don't perform health "
+		       "checking (%d, %d)\n", msg, status,
+		       msg->msg_health_status);
 		hc = false;
 	}
 
@@ -860,11 +917,13 @@ lnet_send_error_simulation(struct lnet_msg *msg,
 	    return false;
 
 	/* match only health rules */
-	if (!lnet_drop_rule_match(&msg->msg_hdr, hstatus))
+	if (!lnet_drop_rule_match(&msg->msg_hdr, LNET_NID_ANY,
+				  hstatus))
 		return false;
 
-	CDEBUG(D_NET, "src %s, dst %s: %s simulate health error: %s\n",
+	CDEBUG(D_NET, "src %s(%s)->dst %s: %s simulate health error: %s\n",
 		libcfs_nid2str(msg->msg_hdr.src_nid),
+		libcfs_nid2str(msg->msg_txni->ni_nid),
 		libcfs_nid2str(msg->msg_hdr.dest_nid),
 		lnet_msgtyp2str(msg->msg_type),
 		lnet_health_error2str(*hstatus));
@@ -881,7 +940,6 @@ lnet_finalize(struct lnet_msg *msg, int status)
 	int cpt;
 	int rc;
 	int i;
-	bool hc;
 
 	LASSERT(!in_interrupt());
 
@@ -890,37 +948,7 @@ lnet_finalize(struct lnet_msg *msg, int status)
 
 	msg->msg_ev.status = status;
 
-	/* if the message is successfully sent, no need to keep the MD around */
-	if (msg->msg_md != NULL && !status)
-		lnet_detach_md(msg, status);
-
-again:
-	hc = lnet_is_health_check(msg);
-
-	/*
-	 * the MD would've been detached from the message if it was
-	 * successfully sent. However, if it wasn't successfully sent the
-	 * MD would be around. And since we recalculate whether to
-	 * health check or not, it's possible that we change our minds and
-	 * we don't want to health check this message. In this case also
-	 * free the MD.
-	 *
-	 * If the message is successful we're going to
-	 * go through the lnet_health_check() function, but that'll just
-	 * increment the appropriate health value and return.
-	 */
-	if (msg->msg_md != NULL && !hc)
-		lnet_detach_md(msg, status);
-
-	rc = 0;
-	if (!msg->msg_tx_committed && !msg->msg_rx_committed) {
-		/* not committed to network yet */
-		LASSERT(!msg->msg_onactivelist);
-		lnet_msg_free(msg);
-		return;
-	}
-
-	if (hc) {
+	if (lnet_is_health_check(msg)) {
 		/*
 		 * Check the health status of the message. If it has one
 		 * of the errors that we're supposed to handle, and it has
@@ -934,14 +962,27 @@ again:
 		 * put on the resend queue.
 		 */
 		if (!lnet_health_check(msg))
+			/* Message is queued for resend */
 			return;
+	}
 
-		/*
-		 * if we get here then we need to clean up the md because we're
-		 * finalizing the message.
-		*/
-		if (msg->msg_md != NULL)
-			lnet_detach_md(msg, status);
+	/*
+	 * We're not going to resend this message so detach its MD and invoke
+	 * the appropriate callbacks
+	 */
+	if (msg->msg_md != NULL) {
+		cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
+		lnet_res_lock(cpt);
+		lnet_msg_detach_md(msg, cpt, status);
+		lnet_res_unlock(cpt);
+	}
+
+again:
+	if (!msg->msg_tx_committed && !msg->msg_rx_committed) {
+		/* not committed to network yet */
+		LASSERT(!msg->msg_onactivelist);
+		lnet_msg_free(msg);
+		return;
 	}
 
 	/*
@@ -974,6 +1015,7 @@ again:
 
 	container->msc_finalizers[my_slot] = current;
 
+	rc = 0;
 	while (!list_empty(&container->msc_finalizing)) {
 		msg = list_entry(container->msc_finalizing.next,
 				 struct lnet_msg, msg_list);

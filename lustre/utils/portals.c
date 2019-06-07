@@ -1383,6 +1383,8 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 	{ .name = "portal",   .has_arg = required_argument, .val = 'p' },
 	{ .name = "message",  .has_arg = required_argument, .val = 'm' },
 	{ .name = "health_error",  .has_arg = required_argument, .val = 'e' },
+	{ .name = "local_nid",  .has_arg = required_argument, .val = 'o' },
+	{ .name = "drop_all",  .has_arg = no_argument, .val = 'x' },
 	{ .name = NULL } };
 
 	if (argc == 1) {
@@ -1391,7 +1393,7 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 		return -1;
 	}
 
-	optstr = opc == LNET_CTL_DROP_ADD ? "s:d:r:i:p:m:e:n" : "s:d:r:l:p:m:";
+	optstr = opc == LNET_CTL_DROP_ADD ? "s:d:o:r:i:p:m:e:nx" : "s:d:o:r:l:p:m:";
 	memset(&attr, 0, sizeof(attr));
 	while (1) {
 		char c = getopt_long(argc, argv, optstr, opts, NULL);
@@ -1400,6 +1402,11 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 			break;
 
 		switch (c) {
+		case 'o':
+			rc = fault_attr_nid_parse(optarg, &attr.fa_local_nid);
+			if (rc != 0)
+				goto getopt_failed;
+			break;
 		case 's': /* source NID/NET */
 			rc = fault_attr_nid_parse(optarg, &attr.fa_src);
 			if (rc != 0)
@@ -1426,6 +1433,11 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 				if (rc)
 					goto getopt_failed;
 			}
+			break;
+
+		case 'x':
+			if (opc == LNET_CTL_DROP_ADD)
+				attr.u.drop.da_drop_all = true;
 			break;
 
 		case 'n':
@@ -1501,6 +1513,9 @@ fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 				"of %s rule\n", name);
 		return -1;
 	}
+
+	if (attr.fa_local_nid == 0)
+		attr.fa_local_nid = LNET_NID_ANY;
 
 	data.ioc_flags = opc;
 	data.ioc_inllen1 = sizeof(attr);

@@ -57,6 +57,7 @@ static int jt_set_numa(int argc, char **argv);
 static int jt_set_retry_count(int argc, char **argv);
 static int jt_set_transaction_to(int argc, char **argv);
 static int jt_set_recov_intrv(int argc, char **argv);
+static int jt_set_rtr_sensitivity(int argc, char **argv);
 static int jt_set_hsensitivity(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
@@ -117,7 +118,8 @@ command_t route_cmds[] = {
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--gateway: gateway nid (e.g. 10.1.1.2@tcp)\n"
 	 "\t--hop: number to final destination (1 < hops < 255)\n"
-	 "\t--priority: priority of route (0 - highest prio\n"},
+	 "\t--priority: priority of route (0 - highest prio\n"
+	 "\t--health_sensitivity: gateway health sensitivity (>= 1)\n"},
 	{"del", jt_del_route, 0, "delete a route\n"
 	 "\t--net: net name (e.g. tcp0)\n"
 	 "\t--gateway: gateway nid (e.g. 10.1.1.2@tcp)\n"},
@@ -126,6 +128,7 @@ command_t route_cmds[] = {
 	 "\t--gateway: gateway nid (e.g. 10.1.1.2@tcp) to filter on\n"
 	 "\t--hop: number to final destination (1 < hops < 255) to filter on\n"
 	 "\t--priority: priority of route (0 - highest prio to filter on\n"
+	 "\t--health_sensitivity: gateway health sensitivity (>= 1)\n"
 	 "\t--verbose: display detailed output per route\n"},
 	{ 0, 0, 0, NULL }
 };
@@ -208,6 +211,9 @@ command_t set_cmds[] = {
 	 "\t>0 - sensitivity value not more than 1000\n"},
 	{"recovery_interval", jt_set_recov_intrv, 0, "interval to ping in seconds (at least 1)\n"
 	 "\t>0 - time in seconds between pings\n"},
+	{"router_sensitivity", jt_set_rtr_sensitivity, 0, "router sensitivity %\n"
+	 "\t100 - router interfaces need to be fully healthy to be used\n"
+	 "\t<100 - router interfaces can be used even if not healthy\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -386,6 +392,34 @@ static int jt_set_recov_intrv(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_recov_intrv(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_rtr_sensitivity(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "router_sensitivity", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse router sensitivity value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_rtr_sensitivity(value, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -709,7 +743,7 @@ static int jt_unconfig_lnet(int argc, char **argv)
 static int jt_add_route(int argc, char **argv)
 {
 	char *network = NULL, *gateway = NULL;
-	long int hop = -1, prio = -1;
+	long int hop = -1, prio = -1, sen = -1;
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
 
@@ -719,6 +753,7 @@ static int jt_add_route(int argc, char **argv)
 	{ .name = "gateway",   .has_arg = required_argument, .val = 'g' },
 	{ .name = "hop-count", .has_arg = required_argument, .val = 'c' },
 	{ .name = "priority",  .has_arg = required_argument, .val = 'p' },
+	{ .name = "health_sensitivity",  .has_arg = required_argument, .val = 's' },
 	{ .name = NULL } };
 
 	rc = check_cmd(route_cmds, "route", "add", 0, argc, argv);
@@ -750,6 +785,15 @@ static int jt_add_route(int argc, char **argv)
 				continue;
 			}
 			break;
+		case 's':
+			rc = parse_long(optarg, &sen);
+			if (rc != 0) {
+				/* ingore option */
+				sen = -1;
+				continue;
+			}
+			break;
+
 		case '?':
 			print_help(route_cmds, "route", "add");
 		default:
@@ -757,7 +801,8 @@ static int jt_add_route(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_config_route(network, gateway, hop, prio, -1, &err_rc);
+	rc = lustre_lnet_config_route(network, gateway, hop, prio, sen, -1,
+				      &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -1294,6 +1339,12 @@ static int jt_show_global(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_recov_intrv(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
+	rc = lustre_lnet_show_rtr_sensitivity(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		goto out;

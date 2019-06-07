@@ -15038,8 +15038,8 @@ test_215() { # for bugs 18102, 21079, 21517
 	# where ref > 0, rtr_ref > 0, alive_cnt >= 0, state is up/down,
 	# last_ping >= 0, ping_sent is boolean (0/1), deadline and down_ni are
 	# numeric (0 or >0 or <0), router is a string like 192.168.1.1@tcp2
-	L1="^ref +rtr_ref +alive_cnt +state +last_ping +ping_sent +deadline +down_ni +router$"
-	BR="^$P +$P +$N +(up|down) +$N +(0|1) +$I +$I +$NID$"
+	L1="^ref +rtr_ref +alive +router$"
+	BR="^$P +$P +(up|down) +$NID$"
 	create_lnet_proc_files "routers"
 	check_lnet_proc_entry "routers.sys" "lnet.routers" "$BR" "$L1"
 	remove_lnet_proc_files "routers"

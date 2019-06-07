@@ -297,8 +297,8 @@ struct lnet_lnd {
 	int (*lnd_eager_recv)(struct lnet_ni *ni, void *private,
 			      struct lnet_msg *msg, void **new_privatep);
 
-	/* notification of peer health */
-	void (*lnd_notify)(struct lnet_ni *ni, lnet_nid_t peer, int alive);
+	/* notification of peer down */
+	void (*lnd_notify_peer_down)(lnet_nid_t peer);
 
 	/* query of peer aliveness */
 	void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, time64_t *when);
@@ -415,6 +415,12 @@ struct lnet_net {
 
 	/* network state */
 	enum lnet_net_state	net_state;
+
+	/* when I was last alive */
+	time64_t		net_last_alive;
+
+	/* protects access to net_last_alive */
+	spinlock_t		net_lock;
 };
 
 struct lnet_ni {
@@ -449,9 +455,6 @@ struct lnet_ni {
 
 	/* percpt reference count */
 	int			**ni_refs;
-
-	/* when I was last alive */
-	time64_t		ni_last_alive;
 
 	/* pointer to parent network */
 	struct lnet_net		*ni_net;
@@ -527,16 +530,6 @@ struct lnet_ping_buffer {
 #define LNET_PING_INFO_TO_BUFFER(PINFO)	\
 	container_of((PINFO), struct lnet_ping_buffer, pb_info)
 
-/* router checker data, per router */
-struct lnet_rc_data {
-	/* chain on the_lnet.ln_zombie_rcd or ln_deathrow_rcd */
-	struct list_head	rcd_list;
-	struct lnet_handle_md	rcd_mdh;	/* ping buffer MD */
-	struct lnet_peer_ni	*rcd_gateway;	/* reference to gateway */
-	struct lnet_ping_buffer	*rcd_pingbuffer;/* ping buffer */
-	int			rcd_nnis;	/* desired size of buffer */
-};
-
 struct lnet_peer_ni {
 	/* chain on lpn_peer_nis */
 	struct list_head	lpni_peer_nis;
@@ -548,49 +541,27 @@ struct lnet_peer_ni {
 	struct list_head	lpni_hashlist;
 	/* messages blocking for tx credits */
 	struct list_head	lpni_txq;
-	/* messages blocking for router credits */
-	struct list_head	lpni_rtrq;
-	/* chain on router list */
-	struct list_head	lpni_rtr_list;
 	/* pointer to peer net I'm part of */
 	struct lnet_peer_net	*lpni_peer_net;
 	/* statistics kept on each peer NI */
 	struct lnet_element_stats lpni_stats;
 	struct lnet_health_remote_stats lpni_hstats;
-	/* spin lock protecting credits and lpni_txq / lpni_rtrq */
+	/* spin lock protecting credits and lpni_txq */
 	spinlock_t		lpni_lock;
 	/* # tx credits available */
 	int			lpni_txcredits;
 	/* low water mark */
 	int			lpni_mintxcredits;
+	/*
+	 * Each peer_ni in a gateway maintains its own credits. This
+	 * allows more traffic to gateways that have multiple interfaces.
+	 */
 	/* # router credits */
 	int			lpni_rtrcredits;
 	/* low water mark */
 	int			lpni_minrtrcredits;
 	/* bytes queued for sending */
 	long			lpni_txqnob;
-	/* alive/dead? */
-	bool			lpni_alive;
-	/* notification outstanding? */
-	bool			lpni_notify;
-	/* outstanding notification for LND? */
-	bool			lpni_notifylnd;
-	/* some thread is handling notification */
-	bool			lpni_notifying;
-	/* SEND event outstanding from ping */
-	bool			lpni_ping_notsent;
-	/* # times router went dead<->alive. Protected with lpni_lock */
-	int			lpni_alive_count;
-	/* time of last aliveness news */
-	time64_t		lpni_timestamp;
-	/* time of last ping attempt */
-	time64_t		lpni_ping_timestamp;
-	/* != 0 if ping reply expected */
-	time64_t		lpni_ping_deadline;
-	/* when I was last alive */
-	time64_t		lpni_last_alive;
-	/* when lpni_ni was queried last time */
-	time64_t		lpni_last_query;
 	/* network peer is on */
 	struct lnet_net		*lpni_net;
 	/* peer's NID */
@@ -605,18 +576,16 @@ struct lnet_peer_ni {
 	int			lpni_cpt;
 	/* state flags -- protected by lpni_lock */
 	unsigned		lpni_state;
-	/* # refs from lnet_route_t::lr_gateway */
-	int			lpni_rtr_refcount;
+	/* status of the peer NI as reported by the peer */
+	__u32			lpni_ns_status;
 	/* sequence number used to round robin over peer nis within a net */
 	__u32			lpni_seq;
 	/* sequence number used to round robin over gateways */
 	__u32			lpni_gw_seq;
-	/* health flag */
-	bool			lpni_healthy;
 	/* returned RC ping features. Protected with lpni_lock */
 	unsigned int		lpni_ping_feats;
-	/* routes on this peer */
-	struct list_head	lpni_routes;
+	/* time last message was received from the peer */
+	time64_t		lpni_last_alive;
 	/* preferred local nids: if only one, use lpni_pref.nid */
 	union lpni_pref {
 		lnet_nid_t	nid;
@@ -624,8 +593,6 @@ struct lnet_peer_ni {
 	} lpni_pref;
 	/* number of preferred NIDs in lnpi_pref_nids */
 	__u32			lpni_pref_nnids;
-	/* router checker state */
-	struct lnet_rc_data	*lpni_rcd;
 };
 
 /* Preferred path added due to traffic on non-MR peer_ni */
@@ -647,8 +614,14 @@ struct lnet_peer {
 	/* list of messages pending discovery*/
 	struct list_head	lp_dc_pendq;
 
+	/* chain on router list */
+	struct list_head	lp_rtr_list;
+
 	/* primary NID of the peer */
 	lnet_nid_t		lp_primary_nid;
+
+	/* net to perform discovery on */
+	__u32			lp_disc_net_id;
 
 	/* CPT of peer_table */
 	int			lp_cpt;
@@ -656,10 +629,25 @@ struct lnet_peer {
 	/* number of NIDs on this peer */
 	int			lp_nnis;
 
+	/* # refs from lnet_route_t::lr_gateway */
+	int			lp_rtr_refcount;
+
+	/*
+	 * peer specific health sensitivity value to decrement peer nis in
+	 * this peer with if set to something other than 0
+	 */
+	__u32			lp_health_sensitivity;
+
+	/* messages blocking for router credits */
+	struct list_head	lp_rtrq;
+
+	/* routes on this peer */
+	struct list_head	lp_routes;
+
 	/* reference count */
 	atomic_t		lp_refcount;
 
-	/* lock protecting peer state flags */
+	/* lock protecting peer state flags and lpni_rtrq */
 	spinlock_t		lp_lock;
 
 	/* peer state flags */
@@ -714,9 +702,13 @@ struct lnet_peer {
  *
  * A peer is marked NO_DISCOVERY if the LNET_PING_FEAT_DISCOVERY bit was
  * NOT set when the peer was pinged by discovery.
+ *
+ * A peer is marked ROUTER if it indicates so in the feature bit.
  */
 #define LNET_PEER_MULTI_RAIL	(1 << 0)	/* Multi-rail aware */
 #define LNET_PEER_NO_DISCOVERY	(1 << 1)	/* Peer disabled discovery */
+#define LNET_PEER_ROUTER_ENABLED (1 << 2)	/* router feature enabled */
+
 /*
  * A peer is marked CONFIGURED if it was configured by DLC.
  *
@@ -730,28 +722,34 @@ struct lnet_peer {
  * A peer that was created as the result of inbound traffic will not
  * be marked at all.
  */
-#define LNET_PEER_CONFIGURED	(1 << 2)	/* Configured via DLC */
-#define LNET_PEER_DISCOVERED	(1 << 3)	/* Peer was discovered */
-#define LNET_PEER_REDISCOVER	(1 << 4)	/* Discovery was disabled */
+#define LNET_PEER_CONFIGURED	(1 << 3)	/* Configured via DLC */
+#define LNET_PEER_DISCOVERED	(1 << 4)	/* Peer was discovered */
+#define LNET_PEER_REDISCOVER	(1 << 5)	/* Discovery was disabled */
 /*
  * A peer is marked DISCOVERING when discovery is in progress.
  * The other flags below correspond to stages of discovery.
  */
-#define LNET_PEER_DISCOVERING	(1 << 5)	/* Discovering */
-#define LNET_PEER_DATA_PRESENT	(1 << 6)	/* Remote peer data present */
-#define LNET_PEER_NIDS_UPTODATE	(1 << 7)	/* Remote peer info uptodate */
-#define LNET_PEER_PING_SENT	(1 << 8)	/* Waiting for REPLY to Ping */
-#define LNET_PEER_PUSH_SENT	(1 << 9)	/* Waiting for ACK of Push */
-#define LNET_PEER_PING_FAILED	(1 << 10)	/* Ping send failure */
-#define LNET_PEER_PUSH_FAILED	(1 << 11)	/* Push send failure */
+#define LNET_PEER_DISCOVERING	(1 << 6)	/* Discovering */
+#define LNET_PEER_DATA_PRESENT	(1 << 7)	/* Remote peer data present */
+#define LNET_PEER_NIDS_UPTODATE	(1 << 8)	/* Remote peer info uptodate */
+#define LNET_PEER_PING_SENT	(1 << 9)	/* Waiting for REPLY to Ping */
+#define LNET_PEER_PUSH_SENT	(1 << 10)	/* Waiting for ACK of Push */
+#define LNET_PEER_PING_FAILED	(1 << 11)	/* Ping send failure */
+#define LNET_PEER_PUSH_FAILED	(1 << 12)	/* Push send failure */
 /*
  * A ping can be forced as a way to fix up state, or as a manual
  * intervention by an admin.
  * A push can be forced in circumstances that would normally not
  * allow for one to happen.
  */
-#define LNET_PEER_FORCE_PING	(1 << 12)	/* Forced Ping */
-#define LNET_PEER_FORCE_PUSH	(1 << 13)	/* Forced Push */
+#define LNET_PEER_FORCE_PING	(1 << 13)	/* Forced Ping */
+#define LNET_PEER_FORCE_PUSH	(1 << 14)	/* Forced Push */
+
+/* force delete even if router */
+#define LNET_PEER_RTR_NI_FORCE_DEL (1 << 15)
+
+/* gw undergoing alive discovery */
+#define LNET_PEER_RTR_DISCOVERY (1 << 16)
 
 struct lnet_peer_net {
 	/* chain on lp_peer_nets */
@@ -765,6 +763,12 @@ struct lnet_peer_net {
 
 	/* Net ID */
 	__u32			lpn_net_id;
+
+	/* time of last router net check attempt */
+	time64_t		lpn_rtrcheck_timestamp;
+
+	/* selection sequence number */
+	__u32			lpn_seq;
 
 	/* reference count */
 	atomic_t		lpn_refcount;
@@ -810,10 +814,11 @@ struct lnet_peer_table {
 struct lnet_route {
 	struct list_head	lr_list;	/* chain on net */
 	struct list_head	lr_gwlist;	/* chain on gateway */
-	struct lnet_peer_ni	*lr_gateway;	/* router node */
+	struct lnet_peer	*lr_gateway;	/* router node */
+	lnet_nid_t		lr_nid;		/* NID used to add route */
 	__u32			lr_net;		/* remote network number */
+	__u32			lr_lnet;	/* local network number */
 	int			lr_seq;		/* sequence for round-robin */
-	unsigned int		lr_downis;	/* number of down NIs */
 	__u32			lr_hops;	/* how far I am */
 	unsigned int		lr_priority;	/* route priority */
 };
@@ -1086,12 +1091,6 @@ struct lnet {
 
 	/* monitor thread startup/shutdown state */
 	int				ln_mt_state;
-	/* router checker's event queue */
-	struct lnet_handle_eq		ln_rc_eqh;
-	/* rcd still pending on net */
-	struct list_head		ln_rcd_deathrow;
-	/* rcd ready for free */
-	struct list_head		ln_rcd_zombie;
 	/* serialise startup/shutdown */
 	struct semaphore		ln_mt_signal;
 

@@ -77,6 +77,10 @@ struct lnet_fault_attr {
 	lnet_nid_t			fa_src;
 	/** destination NID of drop rule, see \a dr_src for details */
 	lnet_nid_t			fa_dst;
+	/** local NID. In case of router this is the NID we're ceiving
+	 * messages on
+	 */
+	lnet_nid_t			fa_local_nid;
 	/**
 	 * Portal mask to drop, -1 means all portals, for example:
 	 * fa_ptl_mask = (1 << _LDLM_CB_REQUEST_PORTAL ) |
@@ -108,6 +112,8 @@ struct lnet_fault_attr {
 			__u32			da_health_error_mask;
 			/** randomize error generation */
 			bool			da_random;
+			/** drop all messages if flag is set */
+			bool			da_drop_all;
 		} drop;
 		/** message latency simulation */
 		struct {

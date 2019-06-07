@@ -80,10 +80,10 @@ MODULE_PARM_DESC(lnet_numa_range,
 
 /*
  * lnet_health_sensitivity determines by how much we decrement the health
- * value on sending error. The value defaults to 0, which means health
- * checking is turned off by default.
+ * value on sending error. The value defaults to 100, which means health
+ * interface health is decremented by 100 points every failure.
  */
-unsigned int lnet_health_sensitivity = 0;
+unsigned int lnet_health_sensitivity = 100;
 static int sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp);
 #ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_health_sensitivity = {
@@ -179,7 +179,10 @@ module_param_call(lnet_drop_asym_route, drop_asym_route_set, param_get_int,
 MODULE_PARM_DESC(lnet_drop_asym_route,
 		 "Set to 1 to drop asymmetrical route messages.");
 
-unsigned lnet_transaction_timeout = 50;
+#define LNET_TRANSACTION_TIMEOUT_NO_HEALTH_DEFAULT 50
+#define LNET_TRANSACTION_TIMEOUT_HEALTH_DEFAULT 10
+
+unsigned lnet_transaction_timeout = LNET_TRANSACTION_TIMEOUT_HEALTH_DEFAULT;
 static int transaction_to_set(const char *val, cfs_kernel_param_arg_t *kp);
 #ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_transaction_timeout = {
@@ -197,7 +200,8 @@ module_param_call(lnet_transaction_timeout, transaction_to_set, param_get_int,
 MODULE_PARM_DESC(lnet_transaction_timeout,
 		"Maximum number of seconds to wait for a peer response.");
 
-unsigned lnet_retry_count = 0;
+#define LNET_RETRY_COUNT_HEALTH_DEFAULT 3
+unsigned lnet_retry_count = LNET_RETRY_COUNT_HEALTH_DEFAULT;
 static int retry_count_set(const char *val, cfs_kernel_param_arg_t *kp);
 #ifdef HAVE_KERNEL_PARAM_OPS
 static struct kernel_param_ops param_ops_retry_count = {
@@ -217,6 +221,7 @@ MODULE_PARM_DESC(lnet_retry_count,
 
 
 unsigned lnet_lnd_timeout = LNET_LND_DEFAULT_TIMEOUT;
+unsigned int lnet_current_net_count;
 
 /*
  * This sequence number keeps track of how many times DLC was used to
@@ -252,16 +257,28 @@ sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 	 */
 	mutex_lock(&the_lnet.ln_api_mutex);
 
-	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		mutex_unlock(&the_lnet.ln_api_mutex);
-		return 0;
-	}
-
 	if (value > LNET_MAX_HEALTH_VALUE) {
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		CERROR("Invalid health value. Maximum: %d value = %lu\n",
 		       LNET_MAX_HEALTH_VALUE, value);
 		return -EINVAL;
+	}
+
+	/*
+	 * if we're turning on health then use the health timeout
+	 * defaults.
+	 */
+	if (*sensitivity == 0 && value != 0) {
+		lnet_transaction_timeout = LNET_TRANSACTION_TIMEOUT_HEALTH_DEFAULT;
+		lnet_retry_count = LNET_RETRY_COUNT_HEALTH_DEFAULT;
+	/*
+	 * if we're turning off health then use the no health timeout
+	 * default.
+	 */
+	} else if (*sensitivity != 0 && value == 0) {
+		lnet_transaction_timeout =
+			LNET_TRANSACTION_TIMEOUT_NO_HEALTH_DEFAULT;
+		lnet_retry_count = 0;
 	}
 
 	*sensitivity = value;
@@ -294,11 +311,6 @@ recovery_interval_set(const char *val, cfs_kernel_param_arg_t *kp)
 	 * the correct value ends up stored properly.
 	 */
 	mutex_lock(&the_lnet.ln_api_mutex);
-
-	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		mutex_unlock(&the_lnet.ln_api_mutex);
-		return 0;
-	}
 
 	*interval = value;
 
@@ -408,11 +420,6 @@ transaction_to_set(const char *val, cfs_kernel_param_arg_t *kp)
 	 */
 	mutex_lock(&the_lnet.ln_api_mutex);
 
-	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		mutex_unlock(&the_lnet.ln_api_mutex);
-		return 0;
-	}
-
 	if (value < lnet_retry_count || value == 0) {
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		CERROR("Invalid value for lnet_transaction_timeout (%lu). "
@@ -456,9 +463,10 @@ retry_count_set(const char *val, cfs_kernel_param_arg_t *kp)
 	 */
 	mutex_lock(&the_lnet.ln_api_mutex);
 
-	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+	if (lnet_health_sensitivity == 0) {
 		mutex_unlock(&the_lnet.ln_api_mutex);
-		return 0;
+		CERROR("Can not set retry_count when health feature is turned off\n");
+		return -EINVAL;
 	}
 
 	if (value > lnet_transaction_timeout) {
@@ -467,11 +475,6 @@ retry_count_set(const char *val, cfs_kernel_param_arg_t *kp)
 		       "Has to be smaller than lnet_transaction_timeout (%u)\n",
 		       value, lnet_transaction_timeout);
 		return -EINVAL;
-	}
-
-	if (value == *retry_count) {
-		mutex_unlock(&the_lnet.ln_api_mutex);
-		return 0;
 	}
 
 	*retry_count = value;
@@ -1130,6 +1133,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 	INIT_LIST_HEAD(&the_lnet.ln_mt_localNIRecovq);
 	INIT_LIST_HEAD(&the_lnet.ln_mt_peerNIRecovq);
 	init_waitqueue_head(&the_lnet.ln_dc_waitq);
+	LNetInvalidateEQHandle(&the_lnet.ln_mt_eqh);
 
 	rc = lnet_descriptor_setup();
 	if (rc != 0)
@@ -1198,6 +1202,8 @@ lnet_prepare(lnet_pid_t requested_pid)
 static int
 lnet_unprepare (void)
 {
+	int rc;
+
 	/* NB no LNET_LOCK since this is the last reference.  All LND instances
 	 * have shut down already, so it is safe to unlink and free all
 	 * descriptors, even those that appear committed to a network op (eg MD
@@ -1208,6 +1214,12 @@ lnet_unprepare (void)
 	LASSERT(the_lnet.ln_refcount == 0);
 	LASSERT(list_empty(&the_lnet.ln_test_peers));
 	LASSERT(list_empty(&the_lnet.ln_nets));
+
+	if (!LNetEQHandleIsInvalid(the_lnet.ln_mt_eqh)) {
+		rc = LNetEQFree(the_lnet.ln_mt_eqh);
+		LNetInvalidateEQHandle(&the_lnet.ln_mt_eqh);
+		LASSERT(rc == 0);
+	}
 
 	lnet_portals_destroy();
 
@@ -1357,17 +1369,27 @@ lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni)
 EXPORT_SYMBOL(lnet_cpt_of_nid);
 
 int
-lnet_islocalnet(__u32 net_id)
+lnet_islocalnet_locked(__u32 net_id)
 {
 	struct lnet_net *net;
-	int		cpt;
-	bool		local;
-
-	cpt = lnet_net_lock_current();
+	bool local;
 
 	net = lnet_get_net_locked(net_id);
 
 	local = net != NULL;
+
+	return local;
+}
+
+int
+lnet_islocalnet(__u32 net_id)
+{
+	int cpt;
+	bool local;
+
+	cpt = lnet_net_lock_current();
+
+	local = lnet_islocalnet_locked(net_id);
 
 	lnet_net_unlock(cpt);
 
@@ -1523,6 +1545,45 @@ lnet_get_ni_count(void)
 	lnet_net_unlock(0);
 
 	return count;
+}
+
+int
+lnet_get_net_count(void)
+{
+	struct lnet_net *net;
+	int count = 0;
+
+	lnet_net_lock(0);
+
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		count++;
+	}
+
+	lnet_net_unlock(0);
+
+	return count;
+}
+
+void
+lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf)
+{
+	struct lnet_ni_status *stat;
+	int nnis;
+	int i;
+
+	__swab32s(&pbuf->pb_info.pi_magic);
+	__swab32s(&pbuf->pb_info.pi_features);
+	__swab32s(&pbuf->pb_info.pi_pid);
+	__swab32s(&pbuf->pb_info.pi_nnis);
+	nnis = pbuf->pb_info.pi_nnis;
+	if (nnis > pbuf->pb_nnis)
+		nnis = pbuf->pb_nnis;
+	for (i = 0; i < nnis; i++) {
+		stat = &pbuf->pb_info.pi_ni[i];
+		__swab64s(&stat->ns_nid);
+		__swab32s(&stat->ns_status);
+	}
+	return;
 }
 
 int
@@ -2349,6 +2410,9 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		lnet_net_unlock(LNET_LOCK_EX);
 	}
 
+	/* update net count */
+	lnet_current_net_count = lnet_get_net_count();
+
 	return ni_count;
 
 failed1:
@@ -2443,12 +2507,9 @@ int lnet_lib_init(void)
 	}
 
 	the_lnet.ln_refcount = 0;
-	LNetInvalidateEQHandle(&the_lnet.ln_rc_eqh);
 	INIT_LIST_HEAD(&the_lnet.ln_lnds);
 	INIT_LIST_HEAD(&the_lnet.ln_net_zombie);
-	INIT_LIST_HEAD(&the_lnet.ln_rcd_zombie);
 	INIT_LIST_HEAD(&the_lnet.ln_msg_resend);
-	INIT_LIST_HEAD(&the_lnet.ln_rcd_deathrow);
 
 	/* The hash table size is the number of bits it takes to express the set
 	 * ln_num_routes, minus 1 (better to under estimate than over so we
@@ -2564,10 +2625,6 @@ LNetNIInit(lnet_pid_t requested_pid)
 		if (rc != 0)
 			goto err_shutdown_lndnis;
 
-		rc = lnet_check_routes();
-		if (rc != 0)
-			goto err_destroy_routes;
-
 		rc = lnet_rtrpools_alloc(im_a_router);
 		if (rc != 0)
 			goto err_destroy_routes;
@@ -2586,29 +2643,38 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 	lnet_ping_target_update(pbuf, ping_mdh);
 
-	rc = lnet_monitor_thr_start();
-	if (rc != 0)
+	rc = LNetEQAlloc(0, lnet_mt_event_handler, &the_lnet.ln_mt_eqh);
+	if (rc != 0) {
+		CERROR("Can't allocate monitor thread EQ: %d\n", rc);
 		goto err_stop_ping;
+	}
 
 	rc = lnet_push_target_init();
 	if (rc != 0)
-		goto err_stop_monitor_thr;
+		goto err_stop_ping;
 
 	rc = lnet_peer_discovery_start();
 	if (rc != 0)
 		goto err_destroy_push_target;
+
+	rc = lnet_monitor_thr_start();
+	if (rc != 0)
+		goto err_stop_discovery_thr;
 
 	lnet_fault_init();
 	lnet_router_debugfs_init();
 
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
+	/* wait for all routers to start */
+	lnet_wait_router_start();
+
 	return 0;
 
+err_stop_discovery_thr:
+	lnet_peer_discovery_stop();
 err_destroy_push_target:
 	lnet_push_target_fini();
-err_stop_monitor_thr:
-	lnet_monitor_thr_stop();
 err_stop_ping:
 	lnet_ping_target_fini();
 err_acceptor_stop:
@@ -2658,9 +2724,9 @@ LNetNIFini()
 		lnet_fault_fini();
 
 		lnet_router_debugfs_fini();
+		lnet_monitor_thr_stop();
 		lnet_peer_discovery_stop();
 		lnet_push_target_fini();
-		lnet_monitor_thr_stop();
 		lnet_ping_target_fini();
 
 		/* Teardown fns that use my own API functions BEFORE here */
@@ -3498,26 +3564,28 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_FAIL_NID:
 		return lnet_fail_nid(data->ioc_nid, data->ioc_count);
 
-	case IOC_LIBCFS_ADD_ROUTE:
+	case IOC_LIBCFS_ADD_ROUTE: {
+		/* default router sensitivity to 1 */
+		unsigned int sensitivity = 1;
 		config = arg;
 
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
+
+		if (config->cfg_config_u.cfg_route.rtr_sensitivity) {
+			sensitivity =
+			  config->cfg_config_u.cfg_route.rtr_sensitivity;
+		}
 
 		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_add_route(config->cfg_net,
 				    config->cfg_config_u.cfg_route.rtr_hop,
 				    config->cfg_nid,
 				    config->cfg_config_u.cfg_route.
-					rtr_priority);
-		if (rc == 0) {
-			rc = lnet_check_routes();
-			if (rc != 0)
-				lnet_del_route(config->cfg_net,
-					       config->cfg_nid);
-		}
+					rtr_priority, sensitivity);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
+	}
 
 	case IOC_LIBCFS_DEL_ROUTE:
 		config = arg;
@@ -3543,7 +3611,9 @@ LNetCtl(unsigned int cmd, void *arg)
 				    &config->cfg_nid,
 				    &config->cfg_config_u.cfg_route.rtr_flags,
 				    &config->cfg_config_u.cfg_route.
-					rtr_priority);
+					rtr_priority,
+				    &config->cfg_config_u.cfg_route.
+					rtr_sensitivity);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 
@@ -3817,7 +3887,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		 * that deadline to the wall clock.
 		 */
 		deadline += ktime_get_seconds();
-		return lnet_notify(NULL, data->ioc_nid, data->ioc_flags,
+		return lnet_notify(NULL, data->ioc_nid, data->ioc_flags, false,
 				   deadline);
 	}
 

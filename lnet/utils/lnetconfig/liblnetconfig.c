@@ -979,7 +979,7 @@ out:
 }
 
 int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
-			     int seq_no, struct cYAML **err_rc)
+			     int sen, int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_config_data data;
 	lnet_nid_t gateway_nid;
@@ -1040,6 +1040,17 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 		goto out;
 	}
 
+	if (sen == -1) {
+		sen = 1;
+	} else if (sen < 1) {
+		snprintf(err_str,
+			 sizeof(err_str),
+			"\"invalid health sensitivity %d, must be 1 or greater\"",
+			sen );
+		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
+		goto out;
+	}
+
 	rc = lnet_expr2ips(gw, ip_list,
 			   &ip2nets, &net, err_str);
 	if (rc == LUSTRE_CFG_RC_LAST_ELEM)
@@ -1053,6 +1064,7 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 	data.cfg_net = rnet;
 	data.cfg_config_u.cfg_route.rtr_hop = hops;
 	data.cfg_config_u.cfg_route.rtr_priority = prio;
+	data.cfg_config_u.cfg_route.rtr_sensitivity = sen;
 
 	for (i = MAX_NUM_IPS - 1; i > ip_idx; i--) {
 		gateway_nid = LNET_MKNID(net, ip_list[i]);
@@ -1281,6 +1293,11 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 			if (cYAML_create_number(item, "priority",
 						data.cfg_config_u.
 						cfg_route.rtr_priority) == NULL)
+				goto out;
+
+			if (cYAML_create_number(item, "health_sensitivity",
+						data.cfg_config_u.
+						cfg_route.rtr_sensitivity) == NULL)
 				goto out;
 
 			if (!backup &&
@@ -2570,6 +2587,28 @@ int lustre_lnet_config_recov_intrv(int intrv, int seq_no, struct cYAML **err_rc)
 	return rc;
 }
 
+int lustre_lnet_config_rtr_sensitivity(int sen, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", sen);
+
+	rc = write_sysfs_file(modparam_path, "router_sensitivity_percentage", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure router health sensitivity: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "router_sensitivity", err_str, err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_hsensitivity(int sen, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -3498,6 +3537,31 @@ int lustre_lnet_show_hsensitivity(int seq_no, struct cYAML **show_rc,
 				       err_rc, l_errno);
 }
 
+int lustre_lnet_show_rtr_sensitivity(int seq_no, struct cYAML **show_rc,
+				     struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int sen = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "router_sensitivity_percentage", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get router sensitivity percentage: %d\"", rc);
+	} else {
+		sen = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "router_sensitivity", sen, show_rc,
+				       err_rc, l_errno);
+}
+
 int lustre_lnet_show_transaction_to(int seq_no, struct cYAML **show_rc,
 				    struct cYAML **err_rc)
 {
@@ -3883,18 +3947,20 @@ typedef int (*cmd_handler_t)(struct cYAML *tree,
 static int handle_yaml_config_route(struct cYAML *tree, struct cYAML **show_rc,
 				    struct cYAML **err_rc)
 {
-	struct cYAML *net, *gw, *hop, *prio, *seq_no;
+	struct cYAML *net, *gw, *hop, *prio, *sen, *seq_no;
 
 	net = cYAML_get_object_item(tree, "net");
 	gw = cYAML_get_object_item(tree, "gateway");
 	hop = cYAML_get_object_item(tree, "hop");
 	prio = cYAML_get_object_item(tree, "priority");
+	sen = cYAML_get_object_item(tree, "health_sensitivity");
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
 	return lustre_lnet_config_route((net) ? net->cy_valuestring : NULL,
 					(gw) ? gw->cy_valuestring : NULL,
 					(hop) ? hop->cy_valueint : -1,
 					(prio) ? prio->cy_valueint : -1,
+					(sen) ? sen->cy_valueint : -1,
 					(seq_no) ? seq_no->cy_valueint : -1,
 					err_rc);
 }
@@ -4626,7 +4692,7 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **err_rc)
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
-		     *sen, *recov, *drop_asym_route;
+		     *sen, *recov, *rsen, *drop_asym_route;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4686,6 +4752,13 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 							: -1,
 						    err_rc);
 
+	rsen = cYAML_get_object_item(tree, "router_sensitivity");
+	if (rsen)
+		rc = lustre_lnet_config_rtr_sensitivity(rsen->cy_valueint,
+						     seq_no ? seq_no->cy_valueint
+							: -1,
+						     err_rc);
+
 	return rc;
 }
 
@@ -4733,7 +4806,7 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 					    struct cYAML **err_rc)
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
-		     *sen, *recov, *drop_asym_route;
+		     *sen, *recov, *rsen, *drop_asym_route;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -4784,6 +4857,12 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 		rc = lustre_lnet_show_recov_intrv(seq_no ? seq_no->cy_valueint
 							: -1,
 						  show_rc, err_rc);
+
+	rsen = cYAML_get_object_item(tree, "router_sensitivity");
+	if (rsen)
+		rc = lustre_lnet_show_hsensitivity(seq_no ? seq_no->cy_valueint
+							: -1,
+						     show_rc, err_rc);
 
 	return rc;
 }

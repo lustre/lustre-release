@@ -224,18 +224,17 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 		}
 
 		if (route != NULL) {
-			__u32	     net	= rnet->lrn_net;
-			__u32 hops		= route->lr_hops;
-			unsigned int priority	= route->lr_priority;
-			lnet_nid_t   nid	= route->lr_gateway->lpni_nid;
-			int          alive	= lnet_is_route_alive(route);
+			__u32 net = rnet->lrn_net;
+			__u32 hops = route->lr_hops;
+			unsigned int priority = route->lr_priority;
+			int alive = lnet_is_route_alive(route);
 
 			s += snprintf(s, tmpstr + tmpsiz - s,
 				      "%-8s %4d %8u %7s %s\n",
 				      libcfs_net2str(net), hops,
 				      priority,
 				      alive ? "up" : "down",
-				      libcfs_nid2str(nid));
+				      libcfs_nid2str(route->lr_nid));
 			LASSERT(tmpstr + tmpsiz - s > 0);
 		}
 
@@ -291,10 +290,8 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 
 	if (*ppos == 0) {
 		s += snprintf(s, tmpstr + tmpsiz - s,
-			      "%-4s %7s %9s %6s %12s %9s %8s %7s %s\n",
-			      "ref", "rtr_ref", "alive_cnt", "state",
-			      "last_ping", "ping_sent", "deadline",
-			      "down_ni", "router");
+			      "%-4s %7s %5s %s\n",
+			      "ref", "rtr_ref", "alive", "router");
 		LASSERT(tmpstr + tmpsiz - s > 0);
 
 		lnet_net_lock(0);
@@ -303,7 +300,7 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		*ppos = LNET_PROC_POS_MAKE(0, ver, 0, off);
 	} else {
 		struct list_head *r;
-		struct lnet_peer_ni *peer = NULL;
+		struct lnet_peer *peer = NULL;
 		int		  skip = off - 1;
 
 		lnet_net_lock(0);
@@ -318,9 +315,9 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		r = the_lnet.ln_routers.next;
 
 		while (r != &the_lnet.ln_routers) {
-			struct lnet_peer_ni *lp =
-			  list_entry(r, struct lnet_peer_ni,
-				     lpni_rtr_list);
+			struct lnet_peer *lp =
+			  list_entry(r, struct lnet_peer,
+				     lp_rtr_list);
 
 			if (skip == 0) {
 				peer = lp;
@@ -332,47 +329,16 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		}
 
 		if (peer != NULL) {
-			lnet_nid_t nid = peer->lpni_nid;
-			time64_t now = ktime_get_seconds();
-			time64_t deadline = peer->lpni_ping_deadline;
-			int nrefs     = atomic_read(&peer->lpni_refcount);
-			int nrtrrefs  = peer->lpni_rtr_refcount;
-			int alive_cnt = peer->lpni_alive_count;
-			int alive     = peer->lpni_alive;
-			int pingsent  = !peer->lpni_ping_notsent;
-			time64_t last_ping = now - peer->lpni_ping_timestamp;
-			int down_ni   = 0;
-			struct lnet_route *rtr;
+			lnet_nid_t nid = peer->lp_primary_nid;
+			int nrefs     = atomic_read(&peer->lp_refcount);
+			int nrtrrefs  = peer->lp_rtr_refcount;
+			int alive     = lnet_is_gateway_alive(peer);
 
-			if ((peer->lpni_ping_feats &
-			     LNET_PING_FEAT_NI_STATUS) != 0) {
-				list_for_each_entry(rtr, &peer->lpni_routes,
-						    lr_gwlist) {
-					/* downis on any route should be the
-					 * number of downis on the gateway */
-					if (rtr->lr_downis != 0) {
-						down_ni = rtr->lr_downis;
-						break;
-					}
-				}
-			}
-
-			if (deadline == 0)
-				s += snprintf(s, tmpstr + tmpsiz - s,
-					      "%-4d %7d %9d %6s %12llu %9d %8s %7d %s\n",
-					      nrefs, nrtrrefs, alive_cnt,
-					      alive ? "up" : "down", last_ping,
-					      pingsent, "NA", down_ni,
-					      libcfs_nid2str(nid));
-			else
-				s += snprintf(s, tmpstr + tmpsiz - s,
-					      "%-4d %7d %9d %6s %12llu %9d %8llu %7d %s\n",
-					      nrefs, nrtrrefs, alive_cnt,
-					      alive ? "up" : "down", last_ping,
-					      pingsent,
-					      deadline - now,
-					      down_ni, libcfs_nid2str(nid));
-			LASSERT(tmpstr + tmpsiz - s > 0);
+			s += snprintf(s, tmpstr + tmpsiz - s,
+				      "%-4d %7d %5s %s\n",
+				      nrefs, nrtrrefs,
+				      alive ? "up" : "down",
+				      libcfs_nid2str(nid));
 		}
 
 		lnet_net_unlock(0);
@@ -535,20 +501,8 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 
 			if (lnet_isrouter(peer) ||
 			    lnet_peer_aliveness_enabled(peer))
-				aliveness = peer->lpni_alive ? "up" : "down";
-
-			if (lnet_peer_aliveness_enabled(peer)) {
-				time64_t now = ktime_get_seconds();
-
-				lastalive = now - peer->lpni_last_alive;
-
-				/* No need to mess up peers contents with
-				 * arbitrarily long integers - it suffices to
-				 * know that lastalive is more than 10000s old
-				 */
-				if (lastalive >= 10000)
-					lastalive = 9999;
-			}
+				aliveness = lnet_is_peer_ni_alive(peer) ?
+					"up" : "down";
 
 			lnet_net_unlock(cpt);
 
@@ -735,7 +689,7 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 			int j;
 
 			if (the_lnet.ln_routing)
-				last_alive = now - ni->ni_last_alive;
+				last_alive = now - ni->ni_net->net_last_alive;
 
 			lnet_ni_lock(ni);
 			LASSERT(ni->ni_status != NULL);

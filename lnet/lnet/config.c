@@ -377,8 +377,10 @@ lnet_net_alloc(__u32 net_id, struct list_head *net_list)
 	INIT_LIST_HEAD(&net->net_ni_list);
 	INIT_LIST_HEAD(&net->net_ni_added);
 	INIT_LIST_HEAD(&net->net_ni_zombie);
+	spin_lock_init(&net->net_lock);
 
 	net->net_id = net_id;
+	net->net_last_alive = ktime_get_real_seconds();
 	net->net_state = LNET_NET_STATE_INIT;
 
 	/* initialize global paramters to undefiend */
@@ -459,6 +461,7 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 	spin_lock_init(&ni->ni_lock);
 	INIT_LIST_HEAD(&ni->ni_netlist);
 	INIT_LIST_HEAD(&ni->ni_recovery);
+	LNetInvalidateMDHandle(&ni->ni_ping_mdh);
 	ni->ni_refs = cfs_percpt_alloc(lnet_cpt_table(),
 				       sizeof(*ni->ni_refs[0]));
 	if (ni->ni_refs == NULL)
@@ -482,7 +485,6 @@ lnet_ni_alloc_common(struct lnet_net *net, char *iface)
 	else
 		ni->ni_net_ns = NULL;
 
-	ni->ni_last_alive = ktime_get_real_seconds();
 	ni->ni_state = LNET_NI_STATE_INIT;
 	list_add_tail(&ni->ni_netlist, &net->net_ni_added);
 
@@ -1245,7 +1247,7 @@ lnet_parse_route (char *str, int *im_a_router)
 				continue;
 			}
 
-			rc = lnet_add_route(net, hops, nid, priority);
+			rc = lnet_add_route(net, hops, nid, priority, 1);
 			if (rc != 0 && rc != -EEXIST && rc != -EHOSTUNREACH) {
 				CERROR("Can't create route "
 				       "to %s via %s\n",
