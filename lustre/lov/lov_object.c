@@ -783,6 +783,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	}
 
 	LASSERT(comp->lo_preferred_mirror >= 0);
+	comp->lo_last_read_mirror = comp->lo_preferred_mirror;
 
 	EXIT;
 out:

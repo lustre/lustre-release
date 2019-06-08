@@ -312,8 +312,15 @@ struct lov_object {
 			 */
 			int             lo_preferred_mirror;
 			/**
+			 * The last mirror that has been read successfully.
+			 * This field is maintained so that subsequent read
+			 * can take the advantage of last retries and avoid
+			 * reading some unavailable OSTs.
+			 */
+			int		lo_last_read_mirror;
+			/**
 			 * For FLR: the lock to protect access to
-			 * lo_preferred_mirror.
+			 * lo_last_read_mirror.
 			 */
 			spinlock_t      lo_write_lock;
 			/**

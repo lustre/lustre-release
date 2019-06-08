@@ -390,15 +390,31 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 	    /* reset the mirror index if layout has changed */
 	    lio->lis_mirror_layout_gen != obj->lo_lsm->lsm_layout_gen) {
 		lio->lis_mirror_layout_gen = obj->lo_lsm->lsm_layout_gen;
-		index = lio->lis_mirror_index = comp->lo_preferred_mirror;
+		index = lio->lis_mirror_index = comp->lo_last_read_mirror;
 	} else {
 		index = lio->lis_mirror_index;
 		LASSERT(index >= 0);
 
 		/* move mirror index to the next one */
-		index = (index + 1) % comp->lo_mirror_count;
+		spin_lock(&comp->lo_write_lock);
+		if (index == comp->lo_last_read_mirror) {
+			do {
+				index = (index + 1) % comp->lo_mirror_count;
+				if (comp->lo_mirrors[index].lre_valid)
+					break;
+			} while (index != comp->lo_last_read_mirror);
+
+			/* reset last read replica so that other threads can
+			 * take advantage of our retries. */
+			comp->lo_last_read_mirror = index;
+		} else {
+			/* last read index was moved by other thread */
+			index = comp->lo_last_read_mirror;
+		}
+		spin_unlock(&comp->lo_write_lock);
 	}
 
+	/* make sure the mirror chosen covers the extent we'll read */
 	for (i = 0; i < comp->lo_mirror_count; i++) {
 		struct lu_extent ext = { .e_start = lio->lis_pos,
 					 .e_end   = lio->lis_pos + 1 };
