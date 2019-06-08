@@ -649,6 +649,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
+	OBD_RACE(OBD_FAIL_PTLRPC_RESEND_RACE);
+
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 	mo = mdt_object_find(info->mti_env, mdt, rr->rr_fid1);
 	if (IS_ERR(mo))
@@ -1128,6 +1130,11 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
 		RETURN(err_serious(-ENOENT));
+
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE)) {
+		req->rq_no_reply = 1;
+		RETURN(err_serious(-ENOENT));
+	}
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);

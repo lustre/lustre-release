@@ -3924,7 +3924,7 @@ void mdt_intent_fixup_resent(struct mdt_thread_info *info,
 	 * If the xid matches, then we know this is a resent request, and allow
 	 * it. (It's probably an OPEN, for which we don't send a lock.
 	 */
-	if (req_can_reconstruct(req, NULL))
+	if (req_can_reconstruct(req, NULL) == 1)
 		return;
 
         /*
@@ -6314,6 +6314,11 @@ static int mdt_init_export(struct obd_export *exp)
 	exp->exp_connecting = 1;
 	spin_unlock(&exp->exp_lock);
 
+	OBD_ALLOC(exp->exp_used_slots,
+		  BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
+	if (exp->exp_used_slots == NULL)
+		RETURN(-ENOMEM);
+
         /* self-export doesn't need client data and ldlm initialization */
         if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
                                      &exp->exp_client_uuid)))
@@ -6332,6 +6337,10 @@ static int mdt_init_export(struct obd_export *exp)
 err_free:
 	tgt_client_free(exp);
 err:
+	OBD_FREE(exp->exp_used_slots,
+		 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
+	exp->exp_used_slots = NULL;
+
 	CERROR("%s: Failed to initialize export: rc = %d\n",
 	       exp->exp_obd->obd_name, rc);
 	return rc;
@@ -6342,6 +6351,10 @@ static int mdt_destroy_export(struct obd_export *exp)
         ENTRY;
 
         target_destroy_export(exp);
+	if (exp->exp_used_slots)
+		OBD_FREE(exp->exp_used_slots,
+			 BITS_TO_LONGS(OBD_MAX_RIF_MAX) * sizeof(long));
+
         /* destroy can be called from failed obd_setup, so
          * checking uuid is safer than obd_self_export */
         if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,

@@ -455,7 +455,7 @@ void tgt_register_lfsck_query(int (*query)(const struct lu_env *,
 					   struct lfsck_request *,
 					   struct lfsck_reply *,
 					   struct lfsck_query *));
-bool req_can_reconstruct(struct ptlrpc_request *req, struct tg_reply_data *trd);
+int req_can_reconstruct(struct ptlrpc_request *req, struct tg_reply_data *trd);
 
 extern struct tgt_handler tgt_sec_ctx_handlers[];
 extern struct tgt_handler tgt_lfsck_handlers[];
@@ -493,9 +493,10 @@ int tgt_client_new(const struct lu_env *env, struct obd_export *exp);
 int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
 			   int sync);
 int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt);
-bool tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd);
+int tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd);
 int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 		       struct tg_export_data *ted, struct tg_reply_data *trd,
+		       struct ptlrpc_request *req,
 		       struct thandle *th, bool update_lrd_file);
 struct tg_reply_data *tgt_lookup_reply_by_xid(struct tg_export_data *ted,
 					       __u64 xid);

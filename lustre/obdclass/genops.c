@@ -2356,6 +2356,12 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc,
 			LASSERT(!test_and_set_bit(i, cli->cl_mod_tag_bitmap));
 			spin_unlock(&cli->cl_mod_rpcs_lock);
 			/* tag 0 is reserved for non-modify RPCs */
+
+			CDEBUG(D_RPCTRACE, "%s: modify RPC slot %u is allocated"
+			       "opc %u, max %hu\n",
+			       cli->cl_import->imp_obd->obd_name,
+			       i + 1, opc, max);
+
 			return i + 1;
 		}
 		spin_unlock(&cli->cl_mod_rpcs_lock);

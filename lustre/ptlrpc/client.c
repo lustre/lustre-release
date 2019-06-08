@@ -737,6 +737,16 @@ static inline void ptlrpc_assign_next_xid(struct ptlrpc_request *req)
 
 static atomic64_t ptlrpc_last_xid;
 
+void ptlrpc_reassign_next_xid(struct ptlrpc_request *req)
+{
+	spin_lock(&req->rq_import->imp_lock);
+	list_del_init(&req->rq_unreplied_list);
+	ptlrpc_assign_next_xid_nolock(req);
+	spin_unlock(&req->rq_import->imp_lock);
+	DEBUG_REQ(D_RPCTRACE, req, "reassign xid");
+}
+EXPORT_SYMBOL(ptlrpc_reassign_next_xid);
+
 int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 			     __u32 version, int opcode, char **bufs,
 			     struct ptlrpc_cli_ctx *ctx)

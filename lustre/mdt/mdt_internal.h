@@ -1157,13 +1157,13 @@ static inline int mdt_check_resent(struct mdt_thread_info *info,
 		if (info->mti_reply_data == NULL)
 			RETURN(-ENOMEM);
 
-		if (req_can_reconstruct(req, info->mti_reply_data)) {
+		rc = req_can_reconstruct(req, info->mti_reply_data);
+		if (rc == 1) {
 			reconstruct(info, lhc);
-			rc = 1;
 		} else {
 			DEBUG_REQ(D_HA, req,
-				  "no reply data found for RESENT req");
-			rc = 0;
+				  "no reply data found for RESENT req, rc = %d",
+				  rc);
 		}
 		OBD_FREE_PTR(info->mti_reply_data);
 		info->mti_reply_data = NULL;

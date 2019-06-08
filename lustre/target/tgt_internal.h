@@ -241,7 +241,7 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 		    void *cookie);
 int tgt_handle_received_xid(struct obd_export *exp, __u64 rcvd_xid);
-int tgt_handle_tag(struct obd_export *exp, __u16 tag);
+int tgt_handle_tag(struct ptlrpc_request *req);
 
 void update_records_dump(const struct update_records *records,
 			 unsigned int mask, bool dump_updates);

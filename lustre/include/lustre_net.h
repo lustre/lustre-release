@@ -999,7 +999,8 @@ struct ptlrpc_request {
 	unsigned int
 		rq_hp:1,		/**< high priority RPC */
 		rq_at_linked:1,		/**< link into service's srv_at_array */
-		rq_packed_final:1;	/**< packed final reply */
+		rq_packed_final:1,	/**< packed final reply */
+		rq_obsolete:1;		/* aborted by a signal on a client */
 	/** @} */
 
 	/** one of RQ_PHASE_* */
@@ -2169,6 +2170,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 __u64 ptlrpc_next_xid(void);
 __u64 ptlrpc_sample_next_xid(void);
 __u64 ptlrpc_req_xid(struct ptlrpc_request *request);
+void ptlrpc_reassign_next_xid(struct ptlrpc_request *req);
 
 /* Set of routines to run a function in ptlrpcd context */
 void *ptlrpcd_alloc_work(struct obd_import *imp,

@@ -21351,6 +21351,46 @@ test_421g() {
 }
 run_test 421g "rmfid to return errors properly"
 
+test_422() {
+	test_mkdir -i 0 -c 1 -p $DIR/$tdir/d1
+	test_mkdir -i 0 -c 1 -p $DIR/$tdir/d2
+	test_mkdir -i 0 -c 1 -p $DIR/$tdir/d3
+	dd if=/dev/zero of=$DIR/$tdir/d1/file1 bs=1k count=1
+	dd if=/dev/zero of=$DIR/$tdir/d2/file1 bs=1k count=1
+
+	local amc=$(at_max_get client)
+	local amo=$(at_max_get mds1)
+	local timeout=`lctl get_param -n timeout`
+
+	at_max_set 0 client
+	at_max_set 0 mds1
+
+#define OBD_FAIL_PTLRPC_PAUSE_REQ        0x50a
+	do_facet mds1 $LCTL set_param fail_loc=0x8000050a \
+			fail_val=$(((2*timeout + 10)*1000))
+	touch $DIR/$tdir/d3/file &
+	sleep 2
+#define OBD_FAIL_TGT_REPLY_DATA_RACE	 0x722
+	do_facet mds1 $LCTL set_param fail_loc=0x80000722 \
+			fail_val=$((2*timeout + 5))
+	mv $DIR/$tdir/d1/file1 $DIR/$tdir/d1/file2 &
+	local pid=$!
+	sleep 1
+	kill -9 $pid
+	sleep $((2 * timeout))
+	echo kill $pid
+	kill -9 $pid
+	lctl mark touch
+	touch $DIR/$tdir/d2/file3
+	touch $DIR/$tdir/d2/file4
+	touch $DIR/$tdir/d2/file5
+
+	wait
+	at_max_set $amc client
+	at_max_set $amo mds1
+}
+run_test 422 "kill a process with RPC in progress"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

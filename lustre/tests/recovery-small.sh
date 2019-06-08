@@ -2847,6 +2847,34 @@ test_136() {
 }
 run_test 136 "changelog_deregister leaving pending records"
 
+test_137() {
+	df $DIR
+	mkdir -p $DIR/d1
+	mkdir -p $DIR/d2
+	dd if=/dev/zero of=$DIR/d1/$tfile bs=4096 count=1
+	dd if=/dev/zero of=$DIR/d2/$tfile bs=4096 count=1
+	cancel_lru_locks osc
+
+	#define OBD_FAIL_PTLRPC_RESEND_RACE	 0x525
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000525"
+
+	# RPC1: any reply is to be delayed to disable last_xid logic
+	ln $DIR/d1/$tfile $DIR/d1/f2 &
+	sleep 1
+
+	# RPC2: setattr1 reply is delayed & resent
+	# original reply comes to client; the resend get asleep
+	chmod 666 $DIR/d2/$tfile
+
+	# RPC3: setattr2 on the same file; run ahead of RPC2 resend
+	chmod 777 $DIR/d2/$tfile
+
+	# RPC2 resend wakes up
+	sleep 5
+	[ $(stat -c "%a" $DIR/d2/$tfile) == 777 ] || error "resend got applied"
+}
+run_test 137 "late resend must be skipped if already applied"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

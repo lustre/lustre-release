@@ -73,6 +73,7 @@ static inline void mdc_get_mod_rpc_slot(struct ptlrpc_request *req,
 	opc = lustre_msg_get_opc(req->rq_reqmsg);
 	tag = obd_get_mod_rpc_slot(cli, opc, it);
 	lustre_msg_set_tag(req->rq_reqmsg, tag);
+	ptlrpc_reassign_next_xid(req);
 }
 
 static inline void mdc_put_mod_rpc_slot(struct ptlrpc_request *req,
