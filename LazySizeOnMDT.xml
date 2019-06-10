@@ -24,9 +24,9 @@
     the MDTs. We expect this feature to be initially used by Lustre policy
     engines that scan the backend MDT storage, make decisions based on broad
     size categories, and do not depend on a totally accurate file size.
-    Examples include Lester, Robinhood, Zester, and DDN’s Lustre Integrated
-    Policy Engine (LiPE). Future improvements will allow the LSoM data to be
-    accessed by tools such as <literal>lfs find</literal>.</para>
+    Examples include Lester, Robinhood, Zester, and various vendor offerings.
+    Future improvements will allow the LSoM data to be accessed by tools such
+    as <literal>lfs find</literal>.</para>
   </section>
   <section xml:id="dbdoclet.enablelsom">
     <title><indexterm><primary>lsom</primary>
