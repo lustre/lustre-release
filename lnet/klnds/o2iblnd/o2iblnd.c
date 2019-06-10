@@ -2888,16 +2888,16 @@ kiblnd_create_dev(char *ifname)
 
 		flags = dev_get_flags(netdev);
 		if (!(flags & IFF_UP)) {
-			CERROR("Can't query IPoIB interface %s: it's down\n",
-			       netdev->name);
-			goto unlock;
+			CWARN("Can't query IPoIB interface %s: it's down\n",
+			      netdev->name);
+			continue;
 		}
 
 		in_dev = __in_dev_get_rtnl(netdev);
 		if (!in_dev) {
 			CWARN("Interface %s has no IPv4 status.\n",
 			      netdev->name);
-			goto unlock;
+			continue;
 		}
 
 		for_ifa(in_dev)
