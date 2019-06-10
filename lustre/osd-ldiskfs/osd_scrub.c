@@ -2594,7 +2594,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	OBD_SET_CTXT_MAGIC(ctxt);
 	ctxt->pwdmnt = dev->od_mnt;
 	ctxt->pwd = dev->od_mnt->mnt_root;
-	ctxt->fs = get_ds();
+	ctxt->fs = KERNEL_DS;
 
 	init_waitqueue_head(&scrub->os_thread.t_ctl_waitq);
 	init_rwsem(&scrub->os_rwsem);

@@ -37,9 +37,9 @@
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
 # define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
-# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERTF(!segment_eq(get_fs(), get_ds()),\
+# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERTF(!segment_eq(get_fs(), KERNEL_DS),\
 					      msg)
-# define ASSERT_KERNEL_CTXT(msg) LASSERTF(segment_eq(get_fs(), get_ds()), msg)
+# define ASSERT_KERNEL_CTXT(msg) LASSERTF(segment_eq(get_fs(), KERNEL_DS), msg)
 #else
 # define ASSERT_CTXT_MAGIC(magic) do {} while(0)
 # define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)

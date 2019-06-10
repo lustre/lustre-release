@@ -111,7 +111,7 @@ int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 	mm_segment_t __old_fs = get_fs();
 	int rc;
 
-	set_fs(get_ds());
+	set_fs(KERNEL_DS);
 	rc = vfs_write(filp, (__force const char __user *)buf, count, pos);
 	set_fs(__old_fs);
 
