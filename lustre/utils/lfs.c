@@ -4942,9 +4942,6 @@ static char obd_statfs_state_names[] = {
 
 static char obd_statfs_state2char(int s)
 {
-	/* Not an error state, do not print here  */
-	if (s == OS_STATE_NONROT)
-		return '\0';
 	/* Unknown name */
 	if (s > ARRAY_SIZE(obd_statfs_state_names)/sizeof(char) ||
 	    obd_statfs_state_names[s] == 0)
@@ -5032,7 +5029,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			printf(" ");
 			for (i = 0, state = stat->os_state; state != 0; i++) {
 				uint32_t mask = 1 << i;
-				if (!(state & mask))
+				if (!(state & mask) || mask == OS_STATE_NONROT)
 					continue;
 				printf("%c", obd_statfs_state2char(mask));
 				state &= ~mask;
