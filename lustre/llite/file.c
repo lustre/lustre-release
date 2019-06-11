@@ -5360,7 +5360,8 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 		/* mostly layout lock is caching on the local side, so try to
 		 * match it before grabbing layout lock mutex. */
 		mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0,
-				       LCK_CR | LCK_CW | LCK_PR | LCK_PW);
+				       LCK_CR | LCK_CW | LCK_PR |
+				       LCK_PW | LCK_EX);
 		if (mode != 0) { /* hit cached lock */
 			rc = ll_layout_lock_set(&lockh, mode, inode);
 			if (rc == -EAGAIN)

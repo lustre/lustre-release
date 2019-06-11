@@ -588,10 +588,11 @@ static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
 						     struct md_op_data *op_data)
 {
 	struct obd_device     *obd = class_exp2obd(exp);
+	struct list_head cancels = LIST_HEAD_INIT(cancels);
 	struct ptlrpc_request *req;
 	struct ldlm_intent    *lit;
 	struct layout_intent  *layout;
-	int rc;
+	int count = 0, rc;
 	ENTRY;
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
@@ -599,8 +600,15 @@ static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
 	if (req == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
+	if (fid_is_sane(&op_data->op_fid2) && (it->it_op & IT_LAYOUT) &&
+	    (it->it_flags & FMODE_WRITE)) {
+		count = mdc_resource_get_unused(exp, &op_data->op_fid2,
+						&cancels, LCK_EX,
+						MDS_INODELOCK_LAYOUT);
+	}
+
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, 0);
-	rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
+	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
 	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(ERR_PTR(rc));
