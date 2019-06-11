@@ -1148,6 +1148,35 @@ lnet_peer_primary_nid_locked(lnet_nid_t nid)
 	return primary_nid;
 }
 
+bool
+lnet_is_discovery_disabled_locked(struct lnet_peer *lp)
+{
+	if (lnet_peer_discovery_disabled)
+		return true;
+
+	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL) ||
+	    (lp->lp_state & LNET_PEER_NO_DISCOVERY)) {
+		return true;
+	}
+
+	return false;
+}
+
+/*
+ * Peer Discovery
+ */
+bool
+lnet_is_discovery_disabled(struct lnet_peer *lp)
+{
+	bool rc = false;
+
+	spin_lock(&lp->lp_lock);
+	rc = lnet_is_discovery_disabled_locked(lp);
+	spin_unlock(&lp->lp_lock);
+
+	return rc;
+}
+
 lnet_nid_t
 LNetPrimaryNID(lnet_nid_t nid)
 {
@@ -1164,11 +1193,16 @@ LNetPrimaryNID(lnet_nid_t nid)
 		goto out_unlock;
 	}
 	lp = lpni->lpni_peer_net->lpn_peer;
+
 	while (!lnet_peer_is_uptodate(lp)) {
 		rc = lnet_discover_peer_locked(lpni, cpt, true);
 		if (rc)
 			goto out_decref;
 		lp = lpni->lpni_peer_net->lpn_peer;
+
+		/* Only try once if discovery is disabled */
+		if (lnet_is_discovery_disabled(lp))
+			break;
 	}
 	primary_nid = lp->lp_primary_nid;
 out_decref:
@@ -1796,35 +1830,6 @@ out_mutex_unlock:
 }
 
 bool
-lnet_is_discovery_disabled_locked(struct lnet_peer *lp)
-{
-	if (lnet_peer_discovery_disabled)
-		return true;
-
-	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL) ||
-	    (lp->lp_state & LNET_PEER_NO_DISCOVERY)) {
-		return true;
-	}
-
-	return false;
-}
-
-/*
- * Peer Discovery
- */
-bool
-lnet_is_discovery_disabled(struct lnet_peer *lp)
-{
-	bool rc = false;
-
-	spin_lock(&lp->lp_lock);
-	rc = lnet_is_discovery_disabled_locked(lp);
-	spin_unlock(&lp->lp_lock);
-
-	return rc;
-}
-
-bool
 lnet_peer_gw_discovery(struct lnet_peer *lp)
 {
 	bool rc = false;
@@ -2168,8 +2173,6 @@ again:
 			break;
 		lnet_peer_queue_for_discovery(lp);
 
-		if (lnet_is_discovery_disabled(lp))
-			break;
 		/*
 		 * if caller requested a non-blocking operation then
 		 * return immediately. Once discovery is complete then the
@@ -2187,6 +2190,16 @@ again:
 		lnet_peer_decref_locked(lp);
 		/* Peer may have changed */
 		lp = lpni->lpni_peer_net->lpn_peer;
+
+		/*
+		 * Wait for discovery to complete, but don't repeat if
+		 * discovery is disabled. This is done to ensure we can
+		 * use discovery as a standard ping as well for backwards
+		 * compatibility with routers which do not have discovery
+		 * or have discovery disabled
+		 */
+		if (lnet_is_discovery_disabled(lp))
+			break;
 	}
 	finish_wait(&lp->lp_dc_waitq, &wait);
 
