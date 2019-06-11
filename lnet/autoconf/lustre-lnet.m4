@@ -764,6 +764,31 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_SOCK_GETNAME
 
 #
+# LN_IB_DEVICE_OPS_EXISTS
+#
+# kernel 5.0 commit 521ed0d92ab0db3edd17a5f4716b7f698f4fce61
+# RDMA/core: Introduce ib_device_ops
+# ... introduces the ib_device_ops structure that defines all the
+# InfiniBand device operations in one place ...
+#
+AC_DEFUN([LN_IB_DEVICE_OPS_EXISTS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if struct ib_device_ops is defined],
+ib_device_ops_test, [
+	#include <rdma/ib_verbs.h>
+],[
+	int x = offsetof(struct ib_device_ops, unmap_fmr);
+	x = x;
+	(void)x;
+],[
+	AC_DEFINE(HAVE_IB_DEVICE_OPS, 1,
+		[if struct ib_device_ops is defined])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_IB_DEVICE_OPS_EXISTS
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -790,6 +815,8 @@ LN_CONFIG_SOCK_CREATE_KERN
 LN_CONFIG_SOCK_ACCEPT
 # 4.17
 LN_CONFIG_SOCK_GETNAME
+# 5.0
+LN_IB_DEVICE_OPS_EXISTS
 ]) # LN_PROG_LINUX
 
 #

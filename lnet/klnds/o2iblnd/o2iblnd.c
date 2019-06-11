@@ -2568,10 +2568,17 @@ kiblnd_hdev_get_attr(struct kib_hca_dev *hdev)
 	hdev->ibh_max_qp_wr = dev_attr->max_qp_wr;
 
 	/* Setup device Memory Registration capabilities */
+#ifdef HAVE_IB_DEVICE_OPS
+	if (hdev->ibh_ibdev->ops.alloc_fmr &&
+	    hdev->ibh_ibdev->ops.dealloc_fmr &&
+	    hdev->ibh_ibdev->ops.map_phys_fmr &&
+	    hdev->ibh_ibdev->ops.unmap_fmr) {
+#else
 	if (hdev->ibh_ibdev->alloc_fmr &&
 	    hdev->ibh_ibdev->dealloc_fmr &&
 	    hdev->ibh_ibdev->map_phys_fmr &&
 	    hdev->ibh_ibdev->unmap_fmr) {
+#endif
 		LCONSOLE_INFO("Using FMR for registration\n");
 		hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_FMR_ENABLED;
 	} else if (dev_attr->device_cap_flags & IB_DEVICE_MEM_MGT_EXTENSIONS) {
