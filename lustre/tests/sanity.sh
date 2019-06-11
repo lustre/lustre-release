@@ -21342,6 +21342,27 @@ test_815()
 }
 run_test 815 "zero byte tiny write doesn't hang (LU-12382)"
 
+test_816() {
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile
+	# ensure ost1 is connected
+	stat $DIR/$tfile >/dev/null || error "can't stat"
+	wait_osc_import_state client ost1 FULL
+	# no locks, no reqs to let the connection idle
+	cancel_lru_locks osc
+	lru_resize_disable osc
+	local before
+	local now
+	before=$($LCTL get_param -n \
+		 ldlm.namespaces.$FSNAME-OST0000-osc-[^M]*.lru_size)
+
+	wait_osc_import_state client ost1 IDLE
+	dd if=/dev/null of=$DIR/$tfile bs=1k count=1 conv=sync
+	now=$($LCTL get_param -n \
+	      ldlm.namespaces.$FSNAME-OST0000-osc-[^M]*.lru_size)
+	[ $before == $now ] || error "lru_size changed $before != $now"
+}
+run_test 816 "do not reset lru_resize on idle reconnect"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
