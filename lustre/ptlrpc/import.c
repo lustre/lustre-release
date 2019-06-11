@@ -902,13 +902,17 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 	 * this leads to losing user settings done before such as
 	 * disable lru_resize, etc. */
 	if (old_connect_flags != exp_connect_flags(exp) || init_connect) {
+		struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+		__u64 changed_flags;
+
+		changed_flags =
+			ns->ns_connect_flags ^ ns->ns_orig_connect_flags;
 		CDEBUG(D_HA, "%s: Resetting ns_connect_flags to server "
 			     "flags: %#llx\n", imp->imp_obd->obd_name,
 			     ocd->ocd_connect_flags);
-		imp->imp_obd->obd_namespace->ns_connect_flags =
-			ocd->ocd_connect_flags;
-		imp->imp_obd->obd_namespace->ns_orig_connect_flags =
-			ocd->ocd_connect_flags;
+		ns->ns_connect_flags = (ns->ns_connect_flags & changed_flags) |
+				      (ocd->ocd_connect_flags & ~changed_flags);
+		ns->ns_orig_connect_flags = ocd->ocd_connect_flags;
 	}
 
 	if (ocd->ocd_connect_flags & OBD_CONNECT_AT)
