@@ -7015,7 +7015,7 @@ _wait_osc_import_state() {
 	local ost_facet=$2
 	local expected=$3
 	local target=$(get_osc_import_name $facet $ost_facet)
-	local param="osc.${target}.ost_server_uuid"
+	local param="os[cp].${target}.ost_server_uuid"
 	local params=$param
 	local i=0
 
@@ -7707,12 +7707,12 @@ flvr_cnt_mdt2ost()
         mdtosc=$(get_mdtosc_proc_path mds$num)
         mdtosc=${mdtosc/-MDT*/-MDT\*}
 	local output=$(do_facet mds$num lctl get_param -n \
-		 osc.$mdtosc.$PROC_CLI 2>/dev/null)
+		       os[cp].$mdtosc.$PROC_CLI 2>/dev/null)
 	local tmpcnt=$(count_flvr "$output" $flavor)
 	if $GSS_SK && [ $flavor != "null" ]; then
 		# tmpcnt=min(contexts,flavors) to ensure SK context is on
 		output=$(do_facet mds$num lctl get_param -n \
-			 osc.$mdtosc.$PROC_CON 2>/dev/null)
+			 os[cp].$mdtosc.$PROC_CON 2>/dev/null)
 		local outcon=$(count_contexts "$output")
 		if [ "$outcon" -lt "$tmpcnt" ]; then
 			tmpcnt=$outcon

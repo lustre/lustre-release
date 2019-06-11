@@ -1964,13 +1964,13 @@ test_67b() #bug 3055
     at_start || return 0
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 
-    # exhaust precreations on ost1
-    local OST=$(ostname_from_index 0)
-    local mdtosc=$(get_mdtosc_proc_path mds $OST)
-    local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
-        osc.$mdtosc.prealloc_last_id)
-    local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
-        osc.$mdtosc.prealloc_next_id)
+	# exhaust precreations on ost1
+	local OST=$(ostname_from_index 0)
+	local mdtosc=$(get_mdtosc_proc_path mds $OST)
+	local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
+			osp.$mdtosc.prealloc_last_id)
+	local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
+			osp.$mdtosc.prealloc_next_id)
 
 	mkdir -p $DIR/$tdir/${OST} || error "mkdir $DIR/$tdir/${OST} failed"
 	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/${OST} || error "$SETSTRIPE failed"
@@ -3224,11 +3224,11 @@ test_88() { #bug 17485
 	replay_barrier ost1
 	replay_barrier $SINGLEMDS
 
-    # exhaust precreations on ost1
-    local OST=$(ostname_from_index 0)
-    local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $OST)
-    local last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
-    local next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
+	# exhaust precreations on ost1
+	local OST=$(ostname_from_index 0)
+	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $OST)
+	local last_id=$(do_facet $SINGLEMDS lctl get_param -n osp.$mdtosc.prealloc_last_id)
+	local next_id=$(do_facet $SINGLEMDS lctl get_param -n osp.$mdtosc.prealloc_next_id)
 	echo "before test: last_id = $last_id, next_id = $next_id"
 
 	echo "Creating to objid $last_id on ost $OST..."
@@ -3240,8 +3240,8 @@ test_88() { #bug 17485
 	createmany -o $DIR/$tdir/f-%d $last_id 8 ||
 		error "createmany create files with uncommitted objids failed"
 
-    last_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
-    next_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
+    last_id2=$(do_facet $SINGLEMDS lctl get_param -n osp.$mdtosc.prealloc_last_id)
+    next_id2=$(do_facet $SINGLEMDS lctl get_param -n osp.$mdtosc.prealloc_next_id)
     echo "before recovery: last_id = $last_id2, next_id = $next_id2" 
 
     # if test uses shutdown_facet && reboot_facet instead of facet_failover ()
@@ -3264,8 +3264,8 @@ test_88() { #bug 17485
 
     clients_up
 
-    last_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
-    next_id2=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
+    last_id2=$(do_facet $SINGLEMDS lctl get_param -n osp.$mdtosc.prealloc_last_id)
+    next_id2=$(do_facet $SINGLEMDS lctl get_param -n osp.$mdtosc.prealloc_next_id)
 	echo "after recovery: last_id = $last_id2, next_id = $next_id2"
 
 	# create new files, which should use new objids, and ensure the orphan
