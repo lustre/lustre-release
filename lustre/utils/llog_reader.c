@@ -196,8 +196,10 @@ int main(int argc, char **argv)
 		goto out_fd;
 	}
 
-	print_llog_header(llog_buf);
-	print_records(recs_buf, rec_number, is_ext);
+	if (llog_buf != NULL)
+		print_llog_header(llog_buf);
+	if (recs_buf != NULL)
+		print_records(recs_buf, rec_number, is_ext);
 	llog_unpack_buffer(fd, llog_buf, recs_buf);
 
 out_fd:
@@ -218,6 +220,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	char *file_buf = NULL, *recs_buf = NULL;
 	struct llog_rec_hdr **recs_pr = NULL;
 	char *ptr = NULL;
+	int count;
 	int i;
 
 	rc = fstat(fd, &st);
@@ -259,8 +262,21 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 		goto clear_file_buf;
 	}
 
+	count = __le32_to_cpu((*llog)->llh_count);
+	if (count < 0) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "corrupted llog: negative record number %d",
+			    count);
+		goto clear_file_buf;
+	} else if (count == 0) {
+		llapi_printf(LLAPI_MSG_NORMAL,
+			     "uninitialized llog: zero record number\n");
+		*recs_number = 0;
+		goto clear_file_buf;
+	}
 	/* the llog header not countable here.*/
-	recs_num = __le32_to_cpu((*llog)->llh_count) - 1;
+	recs_num = count - 1;
 
 	recs_buf = malloc(recs_num * sizeof(**recs_pr));
 	if (recs_buf == NULL) {
@@ -334,11 +350,13 @@ clear_file_buf:
 }
 
 void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
-                        struct llog_rec_hdr **recs_buf)
+			struct llog_rec_hdr **recs_buf)
 {
-        free(llog_buf);
-        free(recs_buf);
-        return;
+	if (llog_buf != NULL)
+		free(llog_buf);
+	if (recs_buf != NULL)
+		free(recs_buf);
+	return;
 }
 
 void print_llog_header(struct llog_log_hdr *llog_buf)
