@@ -882,6 +882,8 @@ lnet_push_update_to_peers(int force)
 	int cpt;
 
 	lnet_net_lock(LNET_LOCK_EX);
+	if (lnet_peer_discovery_disabled)
+		force = 0;
 	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
 	for (cpt = 0; cpt < lncpt; cpt++) {
 		ptable = the_lnet.ln_peer_tables[cpt];
