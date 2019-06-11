@@ -43,7 +43,6 @@
 
 #endif
 
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/kthread.h>
@@ -65,9 +64,6 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 #include <linux/pci.h>
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
-#include <linux/pci-dma.h>
-#endif
 
 #include <net/sock.h>
 #include <linux/in.h>
@@ -564,7 +560,7 @@ struct kib_rx {					/* receive message */
 	/* message buffer (I/O addr) */
 	__u64			rx_msgaddr;
 	/* for dma_unmap_single() */
-	DECLARE_PCI_UNMAP_ADDR(rx_msgunmap);
+	DEFINE_DMA_UNMAP_ADDR(rx_msgunmap);
 	/* receive work item... */
 	struct ib_recv_wr	rx_wrq;
 	/* ...and its memory */
@@ -604,7 +600,7 @@ struct kib_tx {					/* transmit message */
 	/* message buffer (I/O addr) */
 	__u64			tx_msgaddr;
 	/* for dma_unmap_single() */
-	DECLARE_PCI_UNMAP_ADDR(tx_msgunmap);
+	DEFINE_DMA_UNMAP_ADDR(tx_msgunmap);
 	/** sge for tx_msgaddr */
 	struct ib_sge		tx_msgsge;
 	/* # send work items */
