@@ -1180,8 +1180,8 @@ test_29() {
 	# on the MDS servers which is tested with wait_osp_* below.
 	# For ost_server_uuid that only exist on client so filtering
 	# is safe.
-	local PROC_ACT="osc.$FSNAME-OST0001-osc-[^M]*.active"
-	local PROC_UUID="osc.$FSNAME-OST0001-osc-[^M]*.ost_server_uuid"
+	local PROC_ACT="os[cp].$FSNAME-OST0001-osc-[^M]*.active"
+	local PROC_UUID="os[cp].$FSNAME-OST0001-osc-[^M]*.ost_server_uuid"
 
 	ACTV=$($LCTL get_param -n $PROC_ACT)
 	DEAC=$((1 - $ACTV))
@@ -4954,7 +4954,7 @@ test_69() {
 	local OSTNAME=$(ostname_from_index 0)
 	local mdtosc_proc1=$(get_mdtosc_proc_path mds1 $OSTNAME)
 	local last_id=$(do_facet mds1 $LCTL get_param -n \
-			osc.$mdtosc_proc1.prealloc_last_id)
+			osp.$mdtosc_proc1.prealloc_last_id)
 
 	# Want to have OST LAST_ID over 5 * OST_MAX_PRECREATE to
 	# verify that the LAST_ID recovery is working properly. If
@@ -5957,7 +5957,7 @@ test_82a() { # LU-4665
 
 	# Collect debug information - start of test
 	do_nodes $(comma_list $(mdts_nodes)) \
-		   $LCTL get_param osc.*.prealloc_*_id
+		   $LCTL get_param osp.*.prealloc_*_id
 
 	mount_client $MOUNT || error "mount client $MOUNT failed"
 	wait_osts_up
@@ -5966,7 +5966,7 @@ test_82a() { # LU-4665
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 
 	stack_trap "do_nodes $(comma_list $(mdts_nodes)) \
-		   $LCTL get_param osc.*.prealloc_*_id" EXIT
+		   $LCTL get_param osp.*.prealloc_*_id" EXIT
 
 	# 1. If the file does not exist, new file will be created
 	#    with specified OSTs.

@@ -1743,7 +1743,7 @@ test_27m() {
 run_test 27m "create file while OST0 was full"
 
 sleep_maxage() {
-	local delay=$(do_facet $SINGLEMDS lctl get_param -n lov.*.qos_maxage |
+	local delay=$(do_facet $SINGLEMDS lctl get_param -n lo[vd].*.qos_maxage |
 		      awk '{ print $1 * 2; exit; }')
 	sleep $delay
 }
@@ -1777,12 +1777,12 @@ exhaust_precreations() {
 	# on the mdt's osc
 	local mdtosc_proc1=$(get_mdtosc_proc_path $mfacet $OST)
 	local last_id=$(do_facet $mfacet lctl get_param -n \
-			osc.$mdtosc_proc1.prealloc_last_id)
+			osp.$mdtosc_proc1.prealloc_last_id)
 	local next_id=$(do_facet $mfacet lctl get_param -n \
-			osc.$mdtosc_proc1.prealloc_next_id)
+			osp.$mdtosc_proc1.prealloc_next_id)
 
 	local mdtosc_proc2=$(get_mdtosc_proc_path $mfacet)
-	do_facet $mfacet lctl get_param osc.$mdtosc_proc2.prealloc*
+	do_facet $mfacet lctl get_param osp.$mdtosc_proc2.prealloc*
 
 	test_mkdir -p $DIR/$tdir/${OST}
 	$LFS setstripe -i $OSTIDX -c 1 $DIR/$tdir/${OST}
@@ -1790,7 +1790,7 @@ exhaust_precreations() {
 	do_facet $ofacet lctl set_param fail_val=$FAILIDX fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/$tdir/${OST}/f $next_id $((last_id - next_id + 2))
-	do_facet $mfacet lctl get_param osc.$mdtosc_proc2.prealloc*
+	do_facet $mfacet lctl get_param osp.$mdtosc_proc2.prealloc*
 	do_facet $ofacet lctl set_param fail_loc=$FAILLOC
 	sleep_maxage
 }
@@ -2033,9 +2033,9 @@ test_27y() {
 
 	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0000)
 	local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
-		osc.$mdtosc.prealloc_last_id)
+		osp.$mdtosc.prealloc_last_id)
 	local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
-		osc.$mdtosc.prealloc_next_id)
+		osp.$mdtosc.prealloc_next_id)
 	local fcount=$((last_id - next_id))
 	[[ $fcount -eq 0 ]] && skip "not enough space on OST0"
 	[[ $fcount -gt $OSTCOUNT ]] && fcount=$OSTCOUNT
@@ -5099,7 +5099,7 @@ test_53() {
 	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS)
 	local value
 	for value in $(do_facet $SINGLEMDS \
-		       $LCTL get_param osc.$mdtosc.prealloc_last_id) ; do
+		       $LCTL get_param osp.$mdtosc.prealloc_last_id) ; do
 		param=$(echo ${value[0]} | cut -d "=" -f1)
 		ostname=$(echo $param | cut -d "." -f2 | cut -d - -f 1-2)
 
@@ -9589,7 +9589,7 @@ test_116a() { # was previously test_116()
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	echo -n "Free space priority "
-	do_facet $SINGLEMDS lctl get_param -n lo*.*-mdtlov.qos_prio_free |
+	do_facet $SINGLEMDS lctl get_param -n lo[vd].*-mdtlov.qos_prio_free |
 		head -n1
 	declare -a AVAIL
 	free_min_max
@@ -9710,17 +9710,17 @@ test_116b() { # LU-2093
 
 #define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
 	local old_rr=$(do_facet $SINGLEMDS lctl get_param -n \
-		       lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr | head -1)
+		       lo[vd].$FSNAME-MDT0000-mdtlov.qos_threshold_rr | head -1)
 	[ -z "$old_rr" ] && skip "no QOS"
 	do_facet $SINGLEMDS lctl set_param \
-		lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr=0
+		lo[vd].$FSNAME-MDT0000-mdtlov.qos_threshold_rr=0
 	mkdir -p $DIR/$tdir
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x147
 	createmany -o $DIR/$tdir/f- 20 || error "can't create"
 	do_facet $SINGLEMDS lctl set_param fail_loc=0
 	rm -rf $DIR/$tdir
 	do_facet $SINGLEMDS lctl set_param \
-		lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr=$old_rr
+		lo[vd].$FSNAME-MDT0000-mdtlov.qos_threshold_rr=$old_rr
 }
 run_test 116b "QoS shouldn't LBUG if not enough OSTs found on the 2nd pass"
 
@@ -15183,9 +15183,9 @@ test_220() { #LU-325
 	# on the mdt's osc
 	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $OST)
 	local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
-			osc.$mdtosc_proc1.prealloc_last_id)
+			osp.$mdtosc_proc1.prealloc_last_id)
 	local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
-			osc.$mdtosc_proc1.prealloc_next_id)
+			osp.$mdtosc_proc1.prealloc_next_id)
 
 	$LFS df -i
 
@@ -15211,9 +15211,9 @@ test_220() { #LU-325
 	createmany -o $DIR/$tdir/f $MDSOBJS || return 3
 
 	local last_id2=$(do_facet mds${MDSIDX} lctl get_param -n \
-			osc.$mdtosc_proc1.prealloc_last_id)
+			osp.$mdtosc_proc1.prealloc_last_id)
 	local next_id2=$(do_facet mds${MDSIDX} lctl get_param -n \
-			osc.$mdtosc_proc1.prealloc_next_id)
+			osp.$mdtosc_proc1.prealloc_next_id)
 
 	echo "after creation, last_id=$last_id2, next_id=$next_id2"
 	$LFS df -i
