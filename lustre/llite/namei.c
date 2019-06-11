@@ -1148,16 +1148,17 @@ void ll_update_times(struct ptlrpc_request *request, struct inode *inode)
 
 	LASSERT(body);
 	if (body->mbo_valid & OBD_MD_FLMTIME &&
-	    body->mbo_mtime > LTIME_S(inode->i_mtime)) {
-		CDEBUG(D_INODE, "setting fid "DFID" mtime from %lu to %llu"
-		       "\n", PFID(ll_inode2fid(inode)),
-		       LTIME_S(inode->i_mtime), body->mbo_mtime);
-		LTIME_S(inode->i_mtime) = body->mbo_mtime;
+	    body->mbo_mtime > inode->i_mtime.tv_sec) {
+		CDEBUG(D_INODE,
+		       "setting fid " DFID " mtime from %lld to %llu\n",
+		       PFID(ll_inode2fid(inode)),
+		       (s64)inode->i_mtime.tv_sec, body->mbo_mtime);
+		inode->i_mtime.tv_sec = body->mbo_mtime;
 	}
 
 	if (body->mbo_valid & OBD_MD_FLCTIME &&
-	    body->mbo_ctime > LTIME_S(inode->i_ctime))
-		LTIME_S(inode->i_ctime) = body->mbo_ctime;
+	    body->mbo_ctime > inode->i_ctime.tv_sec)
+		inode->i_ctime.tv_sec = body->mbo_ctime;
 }
 
 static int ll_new_node(struct inode *dir, struct dentry *dchild,
