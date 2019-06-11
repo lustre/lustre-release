@@ -341,6 +341,13 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	if (lnet_islocalnet(net))	/* it's a local network */
 		return -EEXIST;
 
+	if (!lnet_islocalnet(LNET_NIDNET(gateway))) {
+		CERROR("Cannot add route with gateway %s. There is no local interface configured on LNet %s\n",
+		       libcfs_nid2str(gateway),
+		       libcfs_net2str(LNET_NIDNET(gateway)));
+		return -EINVAL;
+	}
+
 	/* Assume net, route, all new */
 	LIBCFS_ALLOC(route, sizeof(*route));
 	LIBCFS_ALLOC(rnet, sizeof(*rnet));
