@@ -846,8 +846,6 @@ out:
 		if (result < cnt)
 			io->ci_continue = 0;
 		io->ci_nob += result;
-		ll_rw_stats_tally(ll_i2sbi(inode), current->pid, vio->vui_fd,
-				  pos, result, READ);
 		result = 0;
 	}
 
@@ -1144,8 +1142,6 @@ static int vvp_io_write_start(const struct lu_env *env,
 
 		if (result < cnt)
 			io->ci_continue = 0;
-		ll_rw_stats_tally(ll_i2sbi(inode), current->pid,
-				  vio->vui_fd, pos, result, WRITE);
 		result = 0;
 	}
 

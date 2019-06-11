@@ -11019,6 +11019,75 @@ test_127b() { # bug LU-333
 }
 run_test 127b "verify the llite client stats are sane"
 
+test_127c() { # LU-12394
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs"
+	local size
+	local bsize
+	local reads
+	local writes
+	local count
+
+	$LCTL set_param llite.*.extents_stats=1
+	stack_trap "$LCTL set_param llite.*.extents_stats=0" EXIT
+
+	# Use two stripes so there is enough space in default config
+	$LFS setstripe -c 2 $DIR/$tfile
+
+	# Extent stats start at 0-4K and go in power of two buckets
+	# LL_HIST_START = 12 --> 2^12 = 4K
+	# We do 3K*2^i, so 3K, 6K, 12K, 24K... hitting each bucket.
+	# We do not do buckets larger than 64 MiB to avoid ENOSPC issues on
+	# small configs
+	for size in 3K 6K 12K 24K 48K 96K 192K 384K 768K 1536K 3M 6M 12M 24M 48M;
+		do
+		# Write and read, 2x each, second time at a non-zero offset
+		dd if=/dev/zero of=$DIR/$tfile bs=$size count=1
+		dd if=/dev/zero of=$DIR/$tfile bs=$size count=1 seek=10
+		dd if=$DIR/$tfile of=/dev/null bs=$size count=1
+		dd if=$DIR/$tfile of=/dev/null bs=$size count=1 seek=10
+		rm -f $DIR/$tfile
+	done
+
+	$LCTL get_param llite.*.extents_stats
+
+	count=2
+	for bsize in 4K 8K 16K 32K 64K 128K 256K 512K 1M 2M 4M 8M 16M 32M 64M;
+		do
+		local bucket=$($LCTL get_param -n llite.*.extents_stats |
+				grep -m 1 $bsize)
+		reads=$(echo $bucket | awk '{print $5}')
+		writes=$(echo $bucket | awk '{print $9}')
+		[ "$reads" -eq $count ] ||
+			error "$reads reads in < $bsize bucket, expect $count"
+		[ "$writes" -eq $count ] ||
+			error "$writes writes in < $bsize bucket, expect $count"
+	done
+
+	# Test mmap write and read
+	$LCTL set_param llite.*.extents_stats=c
+	size=512
+	dd if=/dev/zero of=$DIR/$tfile bs=${size}K count=1
+	$MULTIOP $DIR/$tfile OSMRUc || error "$MULTIOP $DIR/$tfile failed"
+	$MULTIOP $DIR/$tfile OSMWUc || error "$MULTIOP $DIR/$tfile failed"
+
+	$LCTL get_param llite.*.extents_stats
+
+	count=$(((size*1024) / PAGE_SIZE))
+
+	bsize=$((2 * PAGE_SIZE / 1024))K
+
+	bucket=$($LCTL get_param -n llite.*.extents_stats |
+			grep -m 1 $bsize)
+	reads=$(echo $bucket | awk '{print $5}')
+	writes=$(echo $bucket | awk '{print $9}')
+	# mmap writes fault in the page first, creating an additonal read
+	[ "$reads" -eq $((2 * count)) ] ||
+		error "$reads reads in < $bsize bucket, expect $count"
+	[ "$writes" -eq $count ] ||
+		error "$writes writes in < $bsize bucket, expect $count"
+}
+run_test 127c "test llite extent stats with regular & mmap i/o"
+
 test_128() { # bug 15212
 	touch $DIR/$tfile
 	$LFS 2>&1 <<-EOF | tee $TMP/$tfile.log

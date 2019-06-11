@@ -394,6 +394,12 @@ restart:
                 result |= VM_FAULT_LOCKED;
         }
 	cfs_restore_sigs(set);
+
+	if (vmf->page && result == VM_FAULT_LOCKED)
+		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
+				  current->pid, LUSTRE_FPRIVATE(vma->vm_file),
+				  cl_offset(NULL, vmf->page->index), PAGE_SIZE,
+				  READ);
         return result;
 }
 
@@ -455,6 +461,11 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
                 break;
         }
 
+	if (result == VM_FAULT_LOCKED)
+		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
+				  current->pid, LUSTRE_FPRIVATE(vma->vm_file),
+				  cl_offset(NULL, vmf->page->index), PAGE_SIZE,
+				  WRITE);
         return result;
 }
 

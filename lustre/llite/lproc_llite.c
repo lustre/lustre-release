@@ -1949,15 +1949,15 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
                 lprocfs_oh_clear(&io_extents->pp_extents[cur].pp_w_hist);
         }
 
-	for(i = 0; (count >= BIT(LL_HIST_START << i)) &&
-             (i < (LL_HIST_MAX - 1)); i++);
-        if (rw == 0) {
-                io_extents->pp_extents[cur].pp_r_hist.oh_buckets[i]++;
-                io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_r_hist.oh_buckets[i]++;
-        } else {
-                io_extents->pp_extents[cur].pp_w_hist.oh_buckets[i]++;
-                io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_w_hist.oh_buckets[i]++;
-        }
+	for (i = 0; (count >= BIT(LL_HIST_START + i)) &&
+	     (i < (LL_HIST_MAX - 1)); i++);
+	if (rw == 0) {
+		io_extents->pp_extents[cur].pp_r_hist.oh_buckets[i]++;
+		io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_r_hist.oh_buckets[i]++;
+	} else {
+		io_extents->pp_extents[cur].pp_w_hist.oh_buckets[i]++;
+		io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_w_hist.oh_buckets[i]++;
+	}
 	spin_unlock(&sbi->ll_pp_extent_lock);
 
 	spin_lock(&sbi->ll_process_lock);
@@ -2043,7 +2043,7 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 	for (i = 0; i < LL_OFFSET_HIST_MAX; i++) {
 		if (offset[i].rw_pid != 0)
 			seq_printf(seq,
-				  "%3c %10d %14llu %14llu %17lu %17lu %14llu\n",
+				  "%3c %10d %14llu %14llu %17lu %17lu %14lld\n",
 				   offset[i].rw_op == READ ? 'R' : 'W',
 				   offset[i].rw_pid,
 				   offset[i].rw_range_start,
@@ -2057,7 +2057,7 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 	for (i = 0; i < LL_PROCESS_HIST_MAX; i++) {
 		if (process[i].rw_pid != 0)
 			seq_printf(seq,
-				  "%3c %10d %14llu %14llu %17lu %17lu %14llu\n",
+				  "%3c %10d %14llu %14llu %17lu %17lu %14lld\n",
 				   process[i].rw_op == READ ? 'R' : 'W',
 				   process[i].rw_pid,
 				   process[i].rw_range_start,
