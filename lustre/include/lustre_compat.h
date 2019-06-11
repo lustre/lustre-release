@@ -779,4 +779,12 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 #define ll_pagevec_init(pvec, n) pagevec_init(pvec, n)
 #endif
 
+#ifdef HAVE_I_PAGES
+#define page_tree i_pages
+#else
+#define i_pages tree_lock
+#define xa_lock_irq(lockp) spin_lock_irq(lockp)
+#define xa_unlock_irq(lockp) spin_unlock_irq(lockp)
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */
