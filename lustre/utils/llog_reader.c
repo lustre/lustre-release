@@ -278,7 +278,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	/* the llog header not countable here.*/
 	recs_num = count - 1;
 
-	recs_buf = malloc(recs_num * sizeof(**recs_pr));
+	recs_buf = calloc(recs_num, sizeof(**recs_pr));
 	if (recs_buf == NULL) {
 		rc = -ENOMEM;
 		llapi_error(LLAPI_MSG_ERROR, rc,
@@ -779,6 +779,12 @@ static void print_records(struct llog_rec_hdr **recs,
 	int i, skip = 0;
 
 	for (i = 0; i < rec_number; i++) {
+		if (recs[i] == NULL) {
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "uninitialized llog record at index %d\n",
+				     i);
+			break;
+		}
 		printf("#%.2d (%.3d)", __le32_to_cpu(recs[i]->lrh_index),
 		       __le32_to_cpu(recs[i]->lrh_len));
 
