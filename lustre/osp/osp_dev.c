@@ -828,8 +828,8 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	if (rc != 0)
 		GOTO(out, rc);
 
-	CDEBUG(D_CACHE, "%s: processed %lu\n", d->opd_obd->obd_name,
-	       atomic64_read(&d->opd_sync_processed_recs));
+	CDEBUG(D_CACHE, "%s: processed %llu\n", d->opd_obd->obd_name,
+	       (unsigned long long)atomic64_read(&d->opd_sync_processed_recs));
 
 	while (atomic64_read(&d->opd_sync_processed_recs) < old + recs) {
 		__u64 last = atomic64_read(&d->opd_sync_processed_recs);
