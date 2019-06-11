@@ -1,0 +1,17 @@
+lbuild does not install the kernel source in the standard RHEL7 location.
+RHEL's kmodtool (starting in RHEL7) expects the source to be in the standard
+location, and when it fails to find it it adds an extra $arch onto the end
+of verrel.  With lbuild, verrel already contains the arch, so we change the
+kmodtool script so that it does not add another.
+
+--- old/kmodtool	2016-06-07 14:36:20.810907740 -0700
++++ new/kmodtool	2016-06-07 14:37:55.335652424 -0700
+@@ -62,7 +62,7 @@ get_kernel_release ()
+   local versuffix=${verrel#$verprefix}
+   verrel=$(ls -Ud /usr/src/kernels/$verprefix*$versuffix.$arch | sort -V | tail -n 1)
+   verrel=${verrel##*/}
+-  [[ -z $verrel ]] && verrel=$1.$arch
++  [[ -z $verrel ]] && verrel=$1
+   echo "$verrel"
+ }
+ 

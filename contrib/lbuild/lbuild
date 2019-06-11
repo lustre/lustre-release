@@ -313,6 +313,9 @@ check_options() {
         3.12-sles12 | 4.4-sles12)
             CANONICAL_TARGET="sles12"
             ;;
+        4.18-rhel8*)
+            CANONICAL_TARGET="rhel8"
+            ;;
         3.10-rhel7*)
             CANONICAL_TARGET="rhel7"
             ;;

@@ -26,7 +26,7 @@
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global kmod_name kmod-%{lustre_name}
-	%define mkconf_options
+	%define mkconf_options %{nil}
 %else	#for Suse / Ubuntu
 	%global kmod_name %{lustre_name}-kmp
 	%define mkconf_options "-k updates"
