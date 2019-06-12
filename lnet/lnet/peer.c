@@ -2414,6 +2414,15 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 out:
 	lp->lp_state &= ~LNET_PEER_PING_SENT;
 	spin_unlock(&lp->lp_lock);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	/*
+	 * If this peer is a gateway, call the routing callback to
+	 * handle the ping reply
+	 */
+	if (lp->lp_rtr_refcount > 0)
+		lnet_router_discovery_ping_reply(lp);
+	lnet_net_unlock(LNET_LOCK_EX);
 }
 
 /*

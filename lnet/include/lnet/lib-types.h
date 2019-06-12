@@ -629,7 +629,7 @@ struct lnet_peer {
 	/* number of NIDs on this peer */
 	int			lp_nnis;
 
-	/* # refs from lnet_route_t::lr_gateway */
+	/* # refs from lnet_route::lr_gateway */
 	int			lp_rtr_refcount;
 
 	/*
@@ -821,6 +821,7 @@ struct lnet_route {
 	int			lr_seq;		/* sequence for round-robin */
 	__u32			lr_hops;	/* how far I am */
 	unsigned int		lr_priority;	/* route priority */
+	bool			lr_alive;	/* cached route aliveness */
 };
 
 #define LNET_REMOTE_NETS_HASH_DEFAULT	(1U << 7)
