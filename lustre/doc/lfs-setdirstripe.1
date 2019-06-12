@@ -44,6 +44,13 @@ Fowler-Noll-Vo (FNV-1a) hash algorithm.  This provides
 reasonably uniform, but not cryptographically strong,
 hashing of the filename. (default)
 .TP
+.B space
+This can only be set on plain directory default striping.
+Newly created sub-directories will be distributed on all
+MDTs by MDT space usage. Note that this is suggested to
+be set on lustre ROOT, so that all sub-directories under
+lustre ROOT are distributed among all MDTs.
+.TP
 .B all_char
 Sum of ASCII characters modulo number of MDTs. This
 provides weak hashing of the filename, and is suitable
