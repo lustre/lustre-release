@@ -275,8 +275,6 @@ LB_CHECK_FILE([$LINUX_CONFIG], [],
 	[AC_MSG_ERROR([
 
 Kernel config could not be found.
-
-If you are building from a kernel-source rpm consult build/README.kernel-source
 ])
 ])
 AC_SUBST(LINUX_CONFIG)
@@ -288,7 +286,7 @@ LB_CHECK_FILE([/boot/kernel.h],
 
 AC_ARG_WITH([kernel-source-header],
 	AC_HELP_STRING([--with-kernel-source-header=path],
-			[Use a different kernel version header.  Consult build/README.kernel-source for details.]),
+			[Use a different kernel version header.]),
 	[LB_ARG_CANON_PATH([kernel-source-header], [KERNEL_SOURCE_HEADER])])
 
 # ----------- make dep run? ------------------
