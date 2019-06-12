@@ -3680,14 +3680,16 @@ static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
 	LASSERT(buf != NULL && buf->lb_buf != NULL);
 	lum = buf->lb_buf;
 
-	CDEBUG(D_OTHER, "set default stripe_count # %u stripe_offset %d\n",
+	CDEBUG(D_INFO,
+	       "set default stripe_count # %u stripe_offset %d hash %u\n",
 	      le32_to_cpu(lum->lum_stripe_count),
-	      (int)le32_to_cpu(lum->lum_stripe_offset));
+	      (int)le32_to_cpu(lum->lum_stripe_offset),
+	      le32_to_cpu(lum->lum_hash_type));
 
 	if (LMVEA_DELETE_VALUES((le32_to_cpu(lum->lum_stripe_count)),
 				 le32_to_cpu(lum->lum_stripe_offset)) &&
 	    le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC &&
-	    le32_to_cpu(lum->lum_hash_type) == LMV_HASH_TYPE_UNKNOWN) {
+	    le32_to_cpu(lum->lum_hash_type) != LMV_HASH_TYPE_SPACE) {
 		rc = lod_xattr_del_internal(env, dt, name, th);
 		if (rc == -ENODATA)
 			rc = 0;

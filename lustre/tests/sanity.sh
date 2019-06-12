@@ -20094,6 +20094,12 @@ test_413b() {
 	done
 	[ $((max - min)) -gt $MDSCOUNT ] ||
 		error "subdirs shouldn't be evenly distributed"
+
+	which getfattr > /dev/null 2>&1 || skip_env "no getfattr command"
+
+	$LFS setdirstripe -D -d $DIR/$tdir || error "setdirstripe -d failed"
+	getfattr -n trusted.dmv $DIR/$tdir && error "default dir layout exists"
+	true
 }
 run_test 413b "mkdir with balanced space usage"
 
