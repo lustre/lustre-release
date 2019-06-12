@@ -544,6 +544,9 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	if (add_route) {
 		gw->lp_health_sensitivity = sensitivity;
 		lnet_add_route_to_rnet(rnet2, route);
+		if (lnet_peer_discovery_disabled)
+			CWARN("Consider turning discovery on to enable full "
+			      "Multi-Rail routing functionality\n");
 	}
 
 	/*
@@ -1406,6 +1409,10 @@ lnet_rtrpools_enable(void)
 	the_lnet.ln_ping_target->pb_info.pi_features &=
 		~LNET_PING_FEAT_RTE_DISABLED;
 	lnet_net_unlock(LNET_LOCK_EX);
+
+	if (lnet_peer_discovery_disabled)
+		CWARN("Consider turning discovery on to enable full "
+		      "Multi-Rail routing functionality\n");
 
 	return rc;
 }
