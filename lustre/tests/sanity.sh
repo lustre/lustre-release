@@ -9099,7 +9099,7 @@ test_101d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local file=$DIR/$tfile
-	local sz_MB=${FILESIZE_101d:-500}
+	local sz_MB=${FILESIZE_101d:-80}
 	local ra_MB=${READAHEAD_MB:-40}
 
 	local free_MB=$(($(df -P $DIR | tail -n 1 | awk '{ print $4 }') / 1024))
@@ -9120,7 +9120,8 @@ test_101d() {
 	$LCTL get_param -n llite.*.max_read_ahead_mb
 
 	echo Reading the test file $file with read-ahead disabled
-	local raOFF=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$sz_MB")
+	local sz_KB=$((sz_MB * 1024 / 4))
+	local raOFF=$(do_and_time "dd if=$file of=/dev/null bs=4k count=$sz_KB")
 
 	echo Cancel LRU locks on lustre client to flush the client cache
 	cancel_lru_locks osc
@@ -9128,10 +9129,10 @@ test_101d() {
 	$LCTL set_param -n llite.*.max_read_ahead_mb=$ra_MB
 
 	echo Reading the test file $file with read-ahead enabled
-	local raON=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$sz_MB")
+	local raON=$(do_and_time "dd if=$file of=/dev/null bs=4k count=$sz_KB")
 
 	echo "read-ahead disabled time read $raOFF"
-	echo "read-ahead enabled  time read $raON"
+	echo "read-ahead enabled time read $raON"
 
 	rm -f $file
 	wait_delete_completed
@@ -9339,6 +9340,34 @@ test_101i() {
 	rm -f $DIR/$tfile
 }
 run_test 101i "allow current readahead to exceed reservation"
+
+test_101j() {
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile ||
+		error "setstripe $DIR/$tfile failed"
+	local file_size=$((1048576 * 16))
+	local old_ra=$($LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1)
+	stack_trap "$LCTL set_param -n llite.*.max_read_ahead_mb $old_ra" EXIT
+
+	echo Disable read-ahead
+	$LCTL set_param -n llite.*.max_read_ahead_mb=0
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$(($file_size / 1048576))
+	for blk in $PAGE_SIZE 1048576 $file_size; do
+		cancel_lru_locks osc
+		echo "Reset readahead stats"
+		$LCTL set_param -n llite.*.read_ahead_stats=0
+		local count=$(($file_size / $blk))
+		dd if=$DIR/$tfile bs=$blk count=$count of=/dev/null
+		local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
+			     get_named_value 'failed to fast read' |
+			     cut -d" " -f1 | calc_total)
+		$LCTL get_param -n llite.*.read_ahead_stats
+		[ $miss -eq $count ] || error "expected $count got $miss"
+	done
+
+	rm -f $p $DIR/$tfile
+}
+run_test 101j "A complete read block should be submitted when no RA"
 
 setup_test102() {
 	test_mkdir $DIR/$tdir
