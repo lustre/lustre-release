@@ -677,16 +677,8 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 
 	/* at least to extend the readahead window to cover current read */
 	if (!hit && vio->vui_ra_valid &&
-	    vio->vui_ra_start + vio->vui_ra_count > ria->ria_start) {
-		unsigned long remainder;
-
-		/* to the end of current read window. */
-		mlen = vio->vui_ra_start + vio->vui_ra_count - ria->ria_start;
-		/* trim to RPC boundary */
-		ras_align(ras, ria->ria_start, &remainder);
-		mlen = min(mlen, ras->ras_rpc_size - remainder);
-		ria->ria_end_min = ria->ria_start + mlen;
-	}
+	    vio->vui_ra_start + vio->vui_ra_count > ria->ria_start)
+		ria->ria_end_min = vio->vui_ra_start + vio->vui_ra_count - 1;
 
 	ria->ria_reserved = ll_ra_count_get(ll_i2sbi(inode), ria, len, mlen);
 	if (ria->ria_reserved < len)

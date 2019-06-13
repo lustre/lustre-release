@@ -8617,6 +8617,26 @@ test_101g() {
 }
 run_test 101g "Big bulk(4/16 MiB) readahead"
 
+test_101h() {
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=70 ||
+		error "dd 70M file failed"
+	echo Cancel LRU locks on lustre client to flush the client cache
+	cancel_lru_locks osc
+
+	echo "Reset readahead stats"
+	$LCTL set_param -n llite.*.read_ahead_stats 0
+
+	echo "Read 10M of data but cross 64M bundary"
+	dd if=$DIR/$tfile of=/dev/null bs=10M skip=6 count=1
+	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
+			get_named_value 'misses' | cut -d" " -f1 | calc_total)
+	[ $miss -eq 1 ] || error "expected miss 1 but got $miss"
+	rm -f $p $DIR/$tfile
+}
+run_test 101h "Readahead should cover current read window"
+
 setup_test102() {
 	test_mkdir $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
