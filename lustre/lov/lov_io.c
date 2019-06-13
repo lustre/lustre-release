@@ -122,8 +122,10 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
 
 	/* obtain new environment */
 	sub->sub_env = cl_env_get(&sub->sub_refcheck);
-	if (IS_ERR(sub->sub_env))
+	if (IS_ERR(sub->sub_env)) {
 		result = PTR_ERR(sub->sub_env);
+		RETURN(result);
+	}
 
 	sub_obj = lovsub2cl(lov_r0(lov, index)->lo_sub[stripe]);
 	sub_io  = &sub->sub_io;
