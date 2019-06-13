@@ -1796,8 +1796,7 @@ kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status)
 	fps = fpo->fpo_owner;
 	if (fpo->fpo_is_fmr) {
 		if (fmr->fmr_pfmr) {
-			rc = ib_fmr_pool_unmap(fmr->fmr_pfmr);
-			LASSERT(!rc);
+			ib_fmr_pool_unmap(fmr->fmr_pfmr);
 			fmr->fmr_pfmr = NULL;
 		}
 
