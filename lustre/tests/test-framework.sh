@@ -3005,6 +3005,142 @@ wait_zfs_commit() {
 	fi
 }
 
+fill_ost() {
+	local filename=$1
+	local ost_idx=$2
+	local lwm=$3  #low watermark
+	local size_mb #how many MB should we write to pass watermark
+	local ost_name=$(ostname_from_index $ost_idx)
+
+	free_kb=$($LFS df $MOUNT | awk "/$ost_name/ { print \$4 }")
+	size_mb=0
+	if (( $free_kb / 1024 > lwm )); then
+		size_mb=$((free_kb / 1024 - lwm))
+	fi
+	#If 10% of free space cross low watermark use it
+	if (( $free_kb / 10240 > size_mb )); then
+		size_mb=$((free_kb / 10240))
+	else
+		#At least we need to store 1.1 of difference between
+		#free space and low watermark
+		size_mb=$((size_mb + size_mb / 10))
+	fi
+	if (( lwm <= $free_kb / 1024 )) ||
+	   [ ! -f $DIR/${filename}.fill_ost$ost_idx ]; then
+		$LFS setstripe -i $ost_idx -c1 $DIR/${filename}.fill_ost$ost_idx
+		dd if=/dev/zero of=$DIR/${filename}.fill_ost$ost_idx bs=1M \
+			count=$size_mb oflag=append conv=notrunc
+	fi
+
+	sleep_maxage
+
+	free_kb=$($LFS df $MOUNT | awk "/$ost_name/ { print \$4 }")
+	echo "OST still has $((free_kb / 1024)) MB free"
+}
+
+# This checks only the primary MDS
+ost_watermarks_get() {
+	local ost_idx=$1
+	local ost_name=$(ostname_from_index $ost_idx)
+	local mdtosc_proc=$(get_mdtosc_proc_path $SINGLEMDS $ost_name)
+
+	local hwm=$(do_facet $SINGLEMDS $LCTL get_param -n \
+			osp.$mdtosc_proc.reserved_mb_high)
+	local lwm=$(do_facet $SINGLEMDS $LCTL get_param -n \
+			osp.$mdtosc_proc.reserved_mb_low)
+
+	echo "$lwm $hwm"
+}
+
+# Note that we set watermarks on all MDSes (necessary for striped dirs)
+ost_watermarks_set() {
+	local ost_idx=$1
+	local lwm=$2
+	local hwm=$3
+	local ost_name=$(ostname_from_index $ost_idx)
+	local facets=$(get_facets MDS)
+
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
+		osp.*$ost_name*.reserved_mb_low=$lwm \
+		osp.*$ost_name*.reserved_mb_high=$hwm > /dev/null
+
+	# sleep to ensure we see the change
+	sleep_maxage
+}
+
+ost_watermarks_set_low_space() {
+	local ost_idx=$1
+	local wms=$(ost_watermarks_get $ost_idx)
+	local ost_name=$(ostname_from_index $ost_idx)
+
+	local old_lwm=$(echo $wms | awk '{ print $1 }')
+	local old_hwm=$(echo $wms | awk '{ print $2 }')
+
+	local blocks=$($LFS df $MOUNT | awk "/$ost_name/ { print \$4 }")
+	# minimal extension size is 64M
+	local new_lwm=50
+	if (( $blocks / 1024 > 50 )); then
+		new_lwm=$((blocks / 1024 - 50))
+	fi
+	local new_hwm=$((new_lwm + 5))
+
+	ost_watermarks_set $ost_idx $new_lwm $new_hwm
+	echo "watermarks: $old_lwm $old_hwm $new_lwm $new_hwm"
+}
+
+# Set watermarks to ~current available space & then write data to fill it
+# Note OST is not *actually* full after this, it just reports ENOSPC in the
+# internal statfs used by the stripe allocator
+#
+# first parameter is the filename-prefix, which must get under t-f cleanup
+# requirements (rm -rf $DIR/[Rdfs][0-9]*), i.e. $tfile work fine
+ost_watermarks_set_enospc() {
+	local filename=$1
+	local ost_idx=$2
+	# on the mdt's osc
+	local ost_name=$(ostname_from_index $ost_idx)
+	local facets=$(get_facets MDS)
+	local wms
+	local MDS
+
+	for MDS in ${facets//,/ }; do
+		local mdtosc_proc=$(get_mdtosc_proc_path $MDS $ost_name)
+
+		do_facet $MDS $LCTL get_param -n \
+			osp.$mdtosc_proc.reserved_mb_high ||
+			skip  "remote MDS does not support reserved_mb_high"
+	done
+
+	wms=$(ost_watermarks_set_low_space $ost_idx)
+	local new_lwm=$(echo $wms | awk '{ print $4 }')
+	fill_ost $filename $ost_idx $new_lwm
+	#First enospc could execute orphan deletion so repeat
+	fill_ost $filename $ost_idx $new_lwm
+	echo $wms
+}
+
+ost_watermarks_enospc_delete_files() {
+	local filename=$1
+	local ost_idx=$2
+
+	rm -f $DIR/${filename}.fill_ost$ost_idx
+
+	wait_delete_completed
+	wait_mds_ost_sync
+}
+
+# clean up from "ost_watermarks_set_enospc"
+ost_watermarks_clear_enospc() {
+	local filename=$1
+	local ost_idx=$2
+	local old_lwm=$4
+	local old_hwm=$5
+
+	ost_watermarks_enospc_delete_files $filename $ost_idx
+	ost_watermarks_set $ost_idx $old_lwm $old_hwm
+	echo "set OST$ost_idx lwm back to $old_lwm, hwm back to $old_hwm"
+}
+
 wait_delete_completed_mds() {
 	local max_wait=${1:-20}
 	local mds2sync=""
@@ -10016,4 +10152,10 @@ rmultiop_stop() {
 	do_node $client kill -USR1 ${!multiop_pid}
 
 	wait ${!do_node_pid}
+}
+
+sleep_maxage() {
+	local delay=$(do_facet $SINGLEMDS lctl get_param -n lo[vd].*.qos_maxage |
+		      awk '{ print $1 * 2; exit; }')
+	sleep $delay
 }

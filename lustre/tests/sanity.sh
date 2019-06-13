@@ -41,8 +41,8 @@ init_logging
 ALWAYS_EXCEPT="$SANITY_EXCEPT "
 # bug number for skipped test: LU-9693 LU-6493 LU-9693
 ALWAYS_EXCEPT+="               42a     42b     42c "
-# bug number:    LU-8411 LU-9096 LU-9054
-ALWAYS_EXCEPT+=" 407     253     312 "
+# bug number:    LU-8411 LU-9054
+ALWAYS_EXCEPT+=" 407     312 "
 
 if $SHARED_KEY; then
 	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795
@@ -1741,12 +1741,6 @@ test_27m() {
 	simple_cleanup_common
 }
 run_test 27m "create file while OST0 was full"
-
-sleep_maxage() {
-	local delay=$(do_facet $SINGLEMDS lctl get_param -n lo[vd].*.qos_maxage |
-		      awk '{ print $1 * 2; exit; }')
-	sleep $delay
-}
 
 # OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
 # if the OST isn't full anymore.
@@ -16874,33 +16868,6 @@ test_252() {
 }
 run_test 252 "check lr_reader tool"
 
-test_253_fill_ost() {
-	local size_mb #how many MB should we write to pass watermark
-	local lwm=$3  #low watermark
-	local free_10mb #10% of free space
-
-	free_kb=$($LFS df $MOUNT | grep $1 | awk '{ print $4 }')
-	size_mb=$((free_kb / 1024 - lwm))
-	free_10mb=$((free_kb / 10240))
-	#If 10% of free space cross low watermark use it
-	if (( free_10mb > size_mb )); then
-		size_mb=$free_10mb
-	else
-		#At least we need to store 1.1 of difference between
-		#free space and low watermark
-		size_mb=$((size_mb + size_mb / 10))
-	fi
-	if (( lwm <= $((free_kb / 1024)) )) || [ ! -f $DIR/$tdir/1 ]; then
-		dd if=/dev/zero of=$DIR/$tdir/1 bs=1M count=$size_mb \
-			 oflag=append conv=notrunc
-	fi
-
-	sleep_maxage
-
-	free_kb=$($LFS df $MOUNT | grep $1 | awk '{ print $4 }')
-	echo "OST still has $((free_kb / 1024)) mbytes free"
-}
-
 test_253() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -16908,9 +16875,8 @@ test_253() {
 
 	local ostidx=0
 	local rc=0
+	local ost_name=$(ostname_from_index $ostidx)
 
-	local ost_name=$($LFS osts |
-		sed -n 's/^'$ostidx': \(.*\)_UUID .*/\1/p')
 	# on the mdt's osc
 	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $ost_name)
 	do_facet $SINGLEMDS $LCTL get_param -n \
@@ -16922,60 +16888,45 @@ test_253() {
 	wait_delete_completed
 	mkdir $DIR/$tdir
 
-	local last_wm_h=$(do_facet $SINGLEMDS $LCTL get_param -n \
-			osp.$mdtosc_proc1.reserved_mb_high)
-	local last_wm_l=$(do_facet $SINGLEMDS $LCTL get_param -n \
-			osp.$mdtosc_proc1.reserved_mb_low)
-	echo "prev high watermark $last_wm_h, prev low watermark $last_wm_l"
-
 	if ! combined_mgs_mds ; then
 		mount_mgs_client
 	fi
-	create_pool $FSNAME.$TESTNAME || error "Pool creation failed"
-	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $ost_name ||
-		error "Adding $ost_name to pool failed"
+	pool_add $TESTNAME || error "Pool creation failed"
+	pool_add_targets $TESTNAME 0 || error "Pool add targets failed"
 
-	# Wait for client to see a OST at pool
-	wait_update $HOSTNAME "$LCTL get_param -n
-		lov.$FSNAME-*.pools.$TESTNAME | sort -u |
-		grep $ost_name" "$ost_name""_UUID" $((TIMEOUT/2)) ||
-		error "Client can not see the pool"
 	$LFS setstripe $DIR/$tdir -i $ostidx -c 1 -p $FSNAME.$TESTNAME ||
 		error "Setstripe failed"
 
-	dd if=/dev/zero of=$DIR/$tdir/0 bs=1M count=10
-	local blocks=$($LFS df $MOUNT | grep $ost_name | awk '{ print $4 }')
-	echo "OST still has $((blocks/1024)) mbytes free"
+	dd if=/dev/zero of=$DIR/$tdir/$tfile.0 bs=1M count=10
 
-	local new_lwm=$((blocks/1024-10))
-	do_facet $SINGLEMDS $LCTL set_param \
-			osp.$mdtosc_proc1.reserved_mb_high=$((new_lwm+5))
-	do_facet $SINGLEMDS $LCTL set_param \
-			osp.$mdtosc_proc1.reserved_mb_low=$new_lwm
-
-	test_253_fill_ost $ost_name $mdtosc_proc1 $new_lwm
-
-	#First enospc could execute orphan deletion so repeat.
-	test_253_fill_ost $ost_name $mdtosc_proc1 $new_lwm
+	local wms=$(ost_watermarks_set_enospc $tfile $ostidx |
+		    grep "watermarks")
+	stack_trap "ost_watermarks_clear_enospc $tfile $ostidx $wms" EXIT
 
 	local oa_status=$(do_facet $SINGLEMDS $LCTL get_param -n \
 			osp.$mdtosc_proc1.prealloc_status)
 	echo "prealloc_status $oa_status"
 
-	dd if=/dev/zero of=$DIR/$tdir/2 bs=1M count=1 &&
+	dd if=/dev/zero of=$DIR/$tdir/$tfile.1 bs=1M count=1 &&
 		error "File creation should fail"
+
 	#object allocation was stopped, but we still able to append files
-	dd if=/dev/zero of=$DIR/$tdir/1 bs=1M seek=6 count=5 oflag=append ||
-		error "Append failed"
-	rm -f $DIR/$tdir/1 $DIR/$tdir/0 $DIR/$tdir/r*
+	dd if=/dev/zero of=$DIR/$tdir/$tfile.0 bs=1M seek=6 count=5 \
+		oflag=append || error "Append failed"
+
+	rm -f $DIR/$tdir/$tfile.0
+
+	# For this test, we want to delete the files we created to go out of
+	# space but leave the watermark, so we remain nearly out of space
+	ost_watermarks_enospc_delete_files $tfile $ostidx
 
 	wait_delete_completed
 
 	sleep_maxage
 
 	for i in $(seq 10 12); do
-		dd if=/dev/zero of=$DIR/$tdir/$i bs=1M count=1 2>/dev/null ||
-			error "File creation failed after rm";
+		dd if=/dev/zero of=$DIR/$tdir/$tfile.$i bs=1M count=1 \
+			2>/dev/null || error "File creation failed after rm"
 	done
 
 	oa_status=$(do_facet $SINGLEMDS $LCTL get_param -n \
@@ -16985,16 +16936,6 @@ test_253() {
 	if (( oa_status != 0 )); then
 		error "Object allocation still disable after rm"
 	fi
-	do_facet $SINGLEMDS $LCTL set_param \
-			osp.$mdtosc_proc1.reserved_mb_high=$last_wm_h
-	do_facet $SINGLEMDS $LCTL set_param \
-			osp.$mdtosc_proc1.reserved_mb_low=$last_wm_l
-
-
-	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $ost_name ||
-		error "Remove $ost_name from pool failed"
-	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME ||
-		error "Pool destroy fialed"
 
 	if ! combined_mgs_mds ; then
 		umount_mgs_client
