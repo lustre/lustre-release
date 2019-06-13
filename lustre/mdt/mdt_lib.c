@@ -1131,7 +1131,8 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	ma->ma_valid = MA_INODE;
 
 	ma->ma_attr_flags |= rec->sa_bias & (MDS_CLOSE_INTENT |
-				MDS_DATA_MODIFIED | MDS_TRUNC_KEEP_LEASE);
+				MDS_DATA_MODIFIED | MDS_TRUNC_KEEP_LEASE |
+				MDS_PCC_ATTACH);
 	RETURN(0);
 }
 
@@ -1619,6 +1620,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                                                                &RMF_EADATA);
                         sp->u.sp_ea.eadatalen = rr->rr_eadatalen;
                         sp->u.sp_ea.eadata = rr->rr_eadata;
+			sp->sp_archive_id = rec->cr_archive_id;
                         sp->no_create = !!req_is_replay(req);
 			mdt_fix_lov_magic(info, rr->rr_eadata);
                 }

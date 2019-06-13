@@ -725,14 +725,21 @@ out:
 	return rc;
 }
 
+struct pcc_create_attach {
+	struct pcc_dataset *pca_dataset;
+	struct dentry *pca_dentry;
+};
+
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 				   struct lookup_intent *it,
-				   void **secctx, __u32 *secctxlen)
+				   void **secctx, __u32 *secctxlen,
+				   struct pcc_create_attach *pca)
 {
 	struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
 	struct dentry *save = dentry, *retval;
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data = NULL;
+	struct lov_user_md *lum = NULL;
 	__u32 opc;
 	int rc;
 	char secctx_name[XATTR_NAME_MAX + 1];
@@ -813,6 +820,32 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 		}
 	}
 
+	if (pca && pca->pca_dataset) {
+		struct pcc_dataset *dataset = pca->pca_dataset;
+
+		OBD_ALLOC_PTR(lum);
+		if (lum == NULL)
+			GOTO(out, retval = ERR_PTR(-ENOMEM));
+
+		lum->lmm_magic = LOV_USER_MAGIC_V1;
+		lum->lmm_pattern = LOV_PATTERN_F_RELEASED | LOV_PATTERN_RAID0;
+		op_data->op_data = lum;
+		op_data->op_data_size = sizeof(*lum);
+		op_data->op_archive_id = dataset->pccd_rwid;
+
+		rc = obd_fid_alloc(NULL, ll_i2mdexp(parent), &op_data->op_fid2,
+				   op_data);
+		if (rc)
+			GOTO(out, retval = ERR_PTR(rc));
+
+		rc = pcc_inode_create(parent->i_sb, dataset, &op_data->op_fid2,
+				      &pca->pca_dentry);
+		if (rc)
+			GOTO(out, retval = ERR_PTR(rc));
+
+		it->it_flags |= MDS_OPEN_PCC;
+	}
+
 	rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
 			    &ll_md_blocking_ast, 0);
 	/* If the MDS allows the client to chgrp (CFS_SETGRP_PERM), but the
@@ -874,6 +907,9 @@ out:
 		ll_finish_md_op_data(op_data);
 	}
 
+	if (lum != NULL)
+		OBD_FREE_PTR(lum);
+
 	ptlrpc_req_finished(req);
 	return retval;
 }
@@ -902,7 +938,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 		itp = NULL;
 	else
 		itp = &it;
-	de = ll_lookup_it(parent, dentry, itp, NULL, NULL);
+	de = ll_lookup_it(parent, dentry, itp, NULL, NULL, NULL);
 
 	if (itp != NULL)
 		ll_intent_release(itp);
@@ -923,6 +959,9 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	long long lookup_flags = LOOKUP_OPEN;
 	void *secctx = NULL;
 	__u32 secctxlen = 0;
+	struct ll_sb_info *sbi;
+	struct pcc_create_attach pca = {NULL, NULL};
+	struct pcc_dataset *dataset = NULL;
 	int rc = 0;
 	ENTRY;
 
@@ -957,13 +996,27 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (open_flags & O_CREAT) {
 		it->it_op |= IT_CREAT;
 		lookup_flags |= LOOKUP_CREATE;
+		sbi = ll_i2sbi(dir);
+		/* Volatile file is used for HSM restore, so do not use PCC */
+		if (!filename_is_volatile(dentry->d_name.name,
+					  dentry->d_name.len, NULL)) {
+			struct pcc_matcher item;
+
+			item.pm_uid = from_kuid(&init_user_ns, current_uid());
+			item.pm_gid = from_kgid(&init_user_ns, current_gid());
+			item.pm_projid = ll_i2info(dir)->lli_projid;
+			item.pm_name = &dentry->d_name;
+			dataset = pcc_dataset_match_get(&sbi->ll_pcc_super,
+							&item);
+			pca.pca_dataset = dataset;
+		}
 	}
 	it->it_create_mode = (mode & S_IALLUGO) | S_IFREG;
 	it->it_flags = (open_flags & ~O_ACCMODE) | OPEN_FMODE(open_flags);
 	it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
 
 	/* Dentry added to dcache tree in ll_lookup_it */
-	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen);
+	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen, &pca);
 	if (IS_ERR(de))
 		rc = PTR_ERR(de);
 	else if (de != NULL)
@@ -982,9 +1035,20 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 					dput(de);
 				goto out_release;
 			}
+			if (dataset != NULL && dentry->d_inode) {
+				rc = pcc_inode_create_fini(dataset,
+							   dentry->d_inode,
+							   pca.pca_dentry);
+				if (rc) {
+					if (de != NULL)
+						dput(de);
+					GOTO(out_release, rc);
+				}
+			}
 
 			*opened |= FILE_CREATED;
 		}
+
 		if (dentry->d_inode && it_disposition(it, DISP_OPEN_OPEN)) {
 			/* Open dentry. */
 			if (S_ISFIFO(dentry->d_inode->i_mode)) {
@@ -1007,6 +1071,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	}
 
 out_release:
+	if (dataset != NULL)
+		pcc_dataset_put(dataset);
 	ll_intent_release(it);
 	OBD_FREE(it, sizeof(*it));
 
@@ -1071,7 +1137,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 				RETURN((struct dentry *)it);
 		}
 
-		de = ll_lookup_it(parent, dentry, it, NULL, NULL);
+		de = ll_lookup_it(parent, dentry, it, NULL, NULL, NULL);
 		if (de)
 			dentry = de;
 		if ((nd->flags & LOOKUP_OPEN) && !IS_ERR(dentry)) { /* Open */
@@ -1111,7 +1177,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 			OBD_FREE(it, sizeof(*it));
 		}
 	} else {
-		de = ll_lookup_it(parent, dentry, NULL, NULL, NULL);
+		de = ll_lookup_it(parent, dentry, NULL, NULL, NULL, NULL);
 	}
 
 	RETURN(de);

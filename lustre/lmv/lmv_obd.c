@@ -3550,6 +3550,7 @@ struct obd_ops lmv_obd_ops = {
         .o_set_info_async       = lmv_set_info_async,
         .o_notify               = lmv_notify,
         .o_get_uuid             = lmv_get_uuid,
+	.o_fid_alloc		= lmv_fid_alloc,
         .o_iocontrol            = lmv_iocontrol,
         .o_quotactl             = lmv_quotactl
 };

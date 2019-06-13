@@ -378,6 +378,37 @@ static inline struct inode *file_inode(const struct file *file)
 #define ll_vfs_unlink(a, b) vfs_unlink(a, b)
 #endif
 
+#ifndef HAVE_INODE_OWNER_OR_CAPABLE
+#define inode_owner_or_capable(inode) is_owner_or_cap(inode)
+#endif
+
+static inline int ll_vfs_getattr(struct path *path, struct kstat *st)
+{
+	int rc;
+
+#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+	rc = vfs_getattr(path, st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
+#elif defined HAVE_VFS_GETATTR_2ARGS
+	rc = vfs_getattr(path, st);
+#else
+	rc = vfs_getattr(path->mnt, path->dentry, st);
+#endif
+	return rc;
+}
+
+#ifndef HAVE_D_IS_POSITIVE
+static inline bool d_is_positive(const struct dentry *dentry)
+{
+	return dentry->d_inode != NULL;
+}
+#endif
+
+#ifdef HAVE_VFS_CREATE_USE_NAMEIDATA
+# define LL_VFS_CREATE_FALSE NULL
+#else
+# define LL_VFS_CREATE_FALSE false
+#endif
+
 #ifndef HAVE_INODE_LOCK
 # define inode_lock(inode) mutex_lock(&(inode)->i_mutex)
 # define inode_unlock(inode) mutex_unlock(&(inode)->i_mutex)

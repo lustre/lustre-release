@@ -124,11 +124,7 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 
 	if ((handler->flags == XATTR_ACL_ACCESS_T ||
 	     handler->flags == XATTR_ACL_DEFAULT_T) &&
-#ifdef HAVE_INODE_OWNER_OR_CAPABLE
 	    !inode_owner_or_capable(inode))
-#else
-	    !is_owner_or_cap(inode))
-#endif
 		RETURN(-EPERM);
 
 	/* b10667: ignore lustre special xattr for now */

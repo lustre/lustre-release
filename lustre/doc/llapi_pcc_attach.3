@@ -1,0 +1,74 @@
+.TH llapi_pcc_attach 3 "2019 April 20" "Lustre User API"
+.SH NAME
+llapi_pcc_attach, llapi_pcc_attach_fid, llapi_pcc_attach_fid_str \- attach a file into PCC
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pcc_attach(const char *" path ", __u32 " id ,
+.BI "                     enum lu_pcc_type " type ");"
+.PP
+.BI "int llapi_pcc_attach_fid(const char *" mntpath ", const struct lu_fid *" fid ,
+.BI "                         __u32 " id ", enum lu_pcc_type " type ");"
+.PP
+.BI "int llapi_pcc_attach_fid_str(const char *" mntpath ", const char *" fidstr ,
+.BI "                             __u32 " id ", enum lu_pcc_type " type ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.BR llapi_pcc_attach() ,
+.BR llapi_pcc_attach_fid() ,
+and
+.BR llapi_pcc_attach_fid_str()
+tries to attach the file referenced by
+.IR path ,
+.IR fid ,
+or
+.IR fidstr
+into PCC backend. PCC provides a group of local caches and works in two modes:
+RW-PCC enables a read-write cache on the local SSDs of a single client; RO-PCC
+provides a read-only cache on the local SSDs of multiple clients. For RW-PCC,
+the argument
+.I id
+is the archive ID of the copytool agent running on this client. By default,
+RO-PCC attach ID is setting same with RW-PCC attach ID for a PCC backend if it
+is also used as read-only caching. The attach mode is specified by
+.I type
+argument, which is a
+.B enum lu_pcc_type
+data structure, which contains the following values:
+.nf
+.LP
+	LU_PCC_NONE
+	LU_PCC_READWRITE
+	LU_PCC_READONLY
+.fi
+.TP
+LU_PCC_NONE
+menas that the file is not cached on PCC.
+.TP
+LU_PCC_READWRITE
+means RW-PCC mode.
+.TP
+LU_PCC_READONLY
+means RO-PCC mode.
+.SH RETURN VALUES
+.PP
+.B llapi_pcc_attach()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EOPNOTSUPP
+PCC attach operation is not supported.
+.SH "SEE ALSO"
+.BR lustreapi (7)

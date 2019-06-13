@@ -2044,6 +2044,7 @@ static int lov_object_layout_get(const struct lu_env *env,
 	cl->cl_size = lov_comp_md_size(lsm);
 	cl->cl_layout_gen = lsm->lsm_layout_gen;
 	cl->cl_dom_comp_size = 0;
+	cl->cl_is_released = lsm->lsm_is_released;
 	if (lsm_is_composite(lsm->lsm_magic)) {
 		struct lov_stripe_md_entry *lsme = lsm->lsm_entries[0];
 

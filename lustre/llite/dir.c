@@ -1982,6 +1982,43 @@ migrate_free:
 		RETURN(ll_ioctl_fsgetxattr(inode, cmd, arg));
 	case LL_IOC_FSSETXATTR:
 		RETURN(ll_ioctl_fssetxattr(inode, cmd, arg));
+	case LL_IOC_PCC_DETACH_BY_FID: {
+		struct lu_pcc_detach_fid *detach;
+		struct lu_fid *fid;
+		struct inode *inode2;
+		unsigned long ino;
+
+		OBD_ALLOC_PTR(detach);
+		if (detach == NULL)
+			RETURN(-ENOMEM);
+
+		if (copy_from_user(detach,
+				   (const struct lu_pcc_detach_fid __user *)arg,
+				   sizeof(*detach)))
+			GOTO(out_detach, rc = -EFAULT);
+
+		fid = &detach->pccd_fid;
+		ino = cl_fid_build_ino(fid, ll_need_32bit_api(sbi));
+		inode2 = ilookup5(inode->i_sb, ino, ll_test_inode_by_fid, fid);
+		if (inode2 == NULL)
+			/* Target inode is not in inode cache, and PCC file
+			 * has aleady released, return immdiately.
+			 */
+			GOTO(out_detach, rc = 0);
+
+		if (!S_ISREG(inode2->i_mode))
+			GOTO(out_iput, rc = -EINVAL);
+
+		if (!inode_owner_or_capable(inode2))
+			GOTO(out_iput, rc = -EPERM);
+
+		rc = pcc_ioctl_detach(inode2, detach->pccd_opt);
+out_iput:
+		iput(inode2);
+out_detach:
+		OBD_FREE_PTR(detach);
+		RETURN(rc);
+	}
 	default:
 		RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp, 0, NULL,
 				     (void __user *)arg));

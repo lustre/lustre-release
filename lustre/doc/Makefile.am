@@ -53,6 +53,7 @@ MANFILES =					\
 	lfs-mirror-split.1			\
 	lfs-mirror-verify.1			\
 	lfs-mkdir.1				\
+	lfs-pcc.1				\
 	lfs-setdirstripe.1			\
 	lfs-setstripe.1				\
 	lfs-setquota.1				\

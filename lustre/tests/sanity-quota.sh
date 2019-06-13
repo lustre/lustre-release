@@ -73,24 +73,6 @@ export QUOTA_AUTO=0
 check_and_setup_lustre
 
 ENABLE_PROJECT_QUOTAS=${ENABLE_PROJECT_QUOTAS:-true}
-is_project_quota_supported() {
-	$ENABLE_PROJECT_QUOTAS || return 1
-	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
-		[ $(lustre_version_code $SINGLEMDS) -gt \
-		$(version_code 2.9.55) ] &&
-		lfs --help | grep project >&/dev/null &&
-		egrep -q "7." /etc/redhat-release && return 0
-
-	if [ "$(facet_fstype $SINGLEMDS)" == "zfs" ]; then
-		[ $(lustre_version_code $SINGLEMDS) -le \
-			$(version_code 2.10.53) ] && return 1
-
-		do_facet mds1 $ZPOOL upgrade -v |
-			grep project_quota && return 0
-	fi
-
-	return 1
-}
 
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
 SHOW_QUOTA_USERID="$LFS quota -v -u $TSTID $DIR"
@@ -351,25 +333,6 @@ wait_ost_reint() {
 	return 0
 }
 
-disable_project_quota() {
-	is_project_quota_supported || return 0
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
-	stopall || error "failed to stopall (1)"
-
-	for num in $(seq $MDSCOUNT); do
-		do_facet mds$num $TUNE2FS -Q ^prj $(mdsdevname $num) ||
-			error "tune2fs $(mdsdevname $num) failed"
-	done
-
-	for num in $(seq $OSTCOUNT); do
-		do_facet ost$num $TUNE2FS -Q ^prj $(ostdevname $num) ||
-			error "tune2fs $(ostdevname $num) failed"
-	done
-
-	mount
-	setupall
-}
-
 setup_quota_test() {
 	wait_delete_completed
 	echo "Creating test directory"
@@ -419,25 +382,6 @@ quota_show_check() {
 				"File quota isn't 0 ($ugp:$qid:$usage)."
 		fi
 	fi
-}
-
-enable_project_quota() {
-	is_project_quota_supported || return 0
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
-	stopall || error "failed to stopall (1)"
-
-	for num in $(seq $MDSCOUNT); do
-		do_facet mds$num $TUNE2FS -O project $(mdsdevname $num) ||
-			error "tune2fs $(mdsdevname $num) failed"
-	done
-
-	for num in $(seq $OSTCOUNT); do
-		do_facet ost$num $TUNE2FS -O project $(ostdevname $num) ||
-			error "tune2fs $(ostdevname $num) failed"
-	done
-
-	mount
-	setupall
 }
 
 project_quota_enabled () {

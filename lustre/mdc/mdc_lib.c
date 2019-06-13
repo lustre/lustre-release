@@ -304,6 +304,10 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		cr_flags |= MDS_OPEN_HAS_EA;
 		tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
 		memcpy(tmp, lmm, lmmlen);
+		if (cr_flags & MDS_OPEN_PCC) {
+			LASSERT(op_data != NULL);
+			rec->cr_archive_id = op_data->op_archive_id;
+		}
 	}
 	set_mrc_cr_flags(rec, cr_flags);
 }
@@ -514,6 +518,8 @@ static void mdc_close_intent_pack(struct ptlrpc_request *req,
 			memcpy(req_capsule_client_get(&req->rq_pill, &RMF_U32),
 				op_data->op_data, count * sizeof(__u32));
 		}
+	} else if (bias & MDS_PCC_ATTACH) {
+		data->cd_archive_id = op_data->op_archive_id;
 	}
 }
 

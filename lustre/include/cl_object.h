@@ -296,6 +296,8 @@ struct cl_layout {
 	u32		cl_layout_gen;
 	/** whether layout is a composite one */
 	bool		cl_is_composite;
+	/** Whether layout is a HSM released one */
+	bool		cl_is_released;
 };
 
 /**

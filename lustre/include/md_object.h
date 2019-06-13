@@ -158,6 +158,9 @@ struct md_op_spec {
 	void		*sp_cr_file_secctx; /* xattr value */
 	size_t		 sp_cr_file_secctx_size; /* xattr value size */
 
+	/* Archive ID used for auto PCC attach when create newly files. */
+	__u32		 sp_archive_id;
+
 	/** don't create lov objects or llog cookie - this replay */
 	unsigned int no_create:1,
 		     sp_cr_lookup:1, /* do lookup sanity check or not. */

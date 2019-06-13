@@ -4861,3 +4861,119 @@ int jt_changelog_deregister(int argc, char **argv)
 
 	return 0;
 }
+
+int jt_pcc_add(int argc, char **argv)
+{
+	struct option long_opts[] = {
+		{ .val = 'p', .name = "param", .has_arg = required_argument },
+		{ .name = NULL } };
+	const char *mntpath;
+	const char *pccpath;
+	char *param = NULL;
+	char cmd[PATH_MAX];
+	int rc;
+
+	optind = 1;
+	while ((rc = getopt_long(argc, argv, "p:",
+		long_opts, NULL)) != -1) {
+		switch (rc) {
+		case 'p':
+			param = optarg;
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (!param) {
+		fprintf(stderr, "%s: must specify the config param for PCC\n",
+			jt_cmdname(argv[0]));
+		return CMD_HELP;
+	}
+
+	if (optind + 2 != argc) {
+		fprintf(stderr,
+			"%s: must speficy mount path and PCC path %d:%d\n",
+			jt_cmdname(argv[0]), optind, argc);
+		return CMD_HELP;
+	}
+
+	mntpath = argv[optind++];
+	pccpath = argv[optind];
+
+	snprintf(cmd, PATH_MAX, "add %s %s", pccpath, param);
+	rc = llapi_pccdev_set(mntpath, cmd);
+	if (rc < 0)
+		fprintf(stderr, "%s: failed to run '%s' on %s\n",
+			jt_cmdname(argv[0]), cmd, mntpath);
+
+	return rc;
+}
+
+int jt_pcc_del(int argc, char **argv)
+{
+	const char *mntpath;
+	const char *pccpath;
+	char cmd[PATH_MAX];
+	int rc;
+
+	optind = 1;
+	if (argc != 3) {
+		fprintf(stderr, "%s: require 3 arguments\n",
+			jt_cmdname(argv[0]));
+		return CMD_HELP;
+	}
+
+	mntpath = argv[optind++];
+	pccpath = argv[optind++];
+
+	snprintf(cmd, PATH_MAX, "del %s", pccpath);
+	rc = llapi_pccdev_set(mntpath, cmd);
+	if (rc < 0)
+		fprintf(stderr, "%s: failed to run '%s' on %s\n",
+			jt_cmdname(argv[0]), cmd, mntpath);
+
+	return rc;
+}
+
+int jt_pcc_clear(int argc, char **argv)
+{
+	const char *mntpath;
+	int rc;
+
+	optind = 1;
+	if (argc != 2) {
+		fprintf(stderr, "%s: require 2 arguments\n",
+			jt_cmdname(argv[0]));
+		return CMD_HELP;
+	}
+
+	mntpath = argv[optind];
+	rc = llapi_pccdev_set(mntpath, "clear");
+	if (rc < 0)
+		fprintf(stderr, "%s: failed to run 'clear' on %s\n",
+			jt_cmdname(argv[0]), mntpath);
+
+	return rc;
+}
+
+int jt_pcc_list(int argc, char **argv)
+{
+	const char *mntpath;
+	int rc;
+
+	optind = 1;
+	if (argc != 2) {
+		fprintf(stderr, "%s: require 2 arguments\n",
+			jt_cmdname(argv[0]));
+		return CMD_HELP;
+	}
+
+	mntpath = argv[optind];
+	rc = llapi_pccdev_get(mntpath);
+	if (rc < 0)
+		fprintf(stderr, "%s: failed to run 'pcc list' on %s\n",
+			jt_cmdname(argv[0]), mntpath);
+
+	return rc;
+}

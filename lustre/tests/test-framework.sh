@@ -9476,3 +9476,522 @@ verify_yaml_layout() {
 	[ "$layout1" == "$layout2" ] ||
 		error "$msg_prefix $src/$dst layouts are not equal"
 }
+
+is_project_quota_supported() {
+	$ENABLE_PROJECT_QUOTAS || return 1
+	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
+		[ $(lustre_version_code $SINGLEMDS) -gt \
+		$(version_code 2.9.55) ] &&
+		lfs --help | grep project >&/dev/null &&
+		egrep -q "7." /etc/redhat-release && return 0
+
+	if [ "$(facet_fstype $SINGLEMDS)" == "zfs" ]; then
+		[ $(lustre_version_code $SINGLEMDS) -le \
+			$(version_code 2.10.53) ] && return 1
+
+		do_fact mds1 $ZPOOL upgrade -v |
+			grep project_quota && return 0
+	fi
+
+	return 1
+}
+
+enable_project_quota() {
+	is_project_quota_supported || return 0
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
+	stopall || error "failed to stopall (1)"
+
+	for num in $(seq $MDSCOUNT); do
+		do_facet mds$num $TUNE2FS -O project $(mdsdevname $num) ||
+			error "tune2fs $(mdsdevname $num) failed"
+	done
+
+	for num in $(seq $OSTCOUNT); do
+		do_facet ost$num $TUNE2FS -O project $(ostdevname $num) ||
+			error "tune2fs $(ostdevname $num) failed"
+	done
+
+	mount
+	setupall
+}
+
+disable_project_quota() {
+	is_project_quota_supported || return 0
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
+	stopall || error "failed to stopall (1)"
+
+	for num in $(seq $MDSCOUNT); do
+		do_facet mds$num $TUNE2FS -Q ^prj $(mdsdevname $num) ||
+			error "tune2fs $(mdsdevname $num) failed"
+	done
+
+	for num in $(seq $OSTCOUNT); do
+		do_facet ost$num $TUNE2FS -Q ^prj $(ostdevname $num) ||
+			error "tune2fs $(ostdevname $num) failed"
+	done
+
+	mount
+	setupall
+}
+
+#
+# In order to test multiple remote HSM agents, a new facet type named "AGT" and
+# the following associated variables are added:
+#
+# AGTCOUNT: number of agents
+# AGTDEV{N}: target HSM mount point (root path of the backend)
+# agt{N}_HOST: hostname of the agent agt{N}
+# SINGLEAGT: facet of the single agent
+#
+# The number of agents is initialized as the number of remote client nodes.
+# By default, only single copytool is started on a remote client/agent. If there
+# was no remote client, then the copytool will be started on the local client.
+#
+init_agt_vars() {
+	local n
+	local agent
+
+	export AGTCOUNT=${AGTCOUNT:-$((CLIENTCOUNT - 1))}
+	[[ $AGTCOUNT -gt 0 ]] || AGTCOUNT=1
+
+	export SHARED_DIRECTORY=${SHARED_DIRECTORY:-$TMP}
+	if [[ $CLIENTCOUNT -gt 1 ]] &&
+		! check_shared_dir $SHARED_DIRECTORY $CLIENTS; then
+		skip_env "SHARED_DIRECTORY should be accessible"\
+			 "on all client nodes"
+		exit 0
+	fi
+
+	# We used to put the HSM archive in $SHARED_DIRECTORY but that
+	# meant NFS issues could hose sanity-hsm sessions. So now we
+	# use $TMP instead.
+	for n in $(seq $AGTCOUNT); do
+		eval export AGTDEV$n=\$\{AGTDEV$n:-"$TMP/arc$n"\}
+		agent=CLIENT$((n + 1))
+		if [[ -z "${!agent}" ]]; then
+			[[ $CLIENTCOUNT -eq 1 ]] && agent=CLIENT1 ||
+				agent=CLIENT2
+		fi
+		eval export agt${n}_HOST=\$\{agt${n}_HOST:-${!agent}\}
+		local var=agt${n}_HOST
+		[[ ! -z "${!var}" ]] || error "agt${n}_HOST is empty!"
+	done
+
+	export SINGLEAGT=${SINGLEAGT:-agt1}
+
+	export HSMTOOL=${HSMTOOL:-"lhsmtool_posix"}
+	export HSMTOOL_VERBOSE=${HSMTOOL_VERBOSE:-""}
+	export HSMTOOL_UPDATE_INTERVAL=${HSMTOOL_UPDATE_INTERVAL:=""}
+	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
+	export HSMTOOL_TESTDIR
+	export HSMTOOL_BASE=$(basename "$HSMTOOL" | cut -f1 -d" ")
+
+	HSM_ARCHIVE_NUMBER=2
+
+	# The test only support up to 10 MDTs
+	MDT_PREFIX="mdt.$FSNAME-MDT000"
+	HSM_PARAM="${MDT_PREFIX}0.hsm"
+
+	# archive is purged at copytool setup
+	HSM_ARCHIVE_PURGE=true
+
+	# Don't allow copytool error upon start/setup
+	HSMTOOL_NOERROR=false
+}
+
+# Get the backend root path for the given agent facet.
+copytool_device() {
+	local facet=$1
+	local dev=AGTDEV$(facet_number $facet)
+
+	echo -n ${!dev}
+}
+
+get_mdt_devices() {
+	local mdtno
+	# get MDT device for each mdc
+	for mdtno in $(seq 1 $MDSCOUNT); do
+		local idx=$(($mdtno - 1))
+		MDT[$idx]=$($LCTL get_param -n \
+			mdc.$FSNAME-MDT000${idx}-mdc-*.mds_server_uuid |
+			awk '{gsub(/_UUID/,""); print $1}' | head -n1)
+	done
+}
+
+search_copytools() {
+	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
+	do_nodesv $hosts "pgrep -x $HSMTOOL_BASE"
+}
+
+kill_copytools() {
+	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
+
+	echo "Killing existing copytools on $hosts"
+	do_nodesv $hosts "killall -q $HSMTOOL_BASE" || true
+}
+
+wait_copytools() {
+	local hosts=${1:-$(facet_active_host $SINGLEAGT)}
+	local wait_timeout=200
+	local wait_start=$SECONDS
+	local wait_end=$((wait_start + wait_timeout))
+	local sleep_time=100000 # 0.1 second
+
+	while ((SECONDS < wait_end)); do
+		if ! search_copytools $hosts; then
+			echo "copytools stopped in $((SECONDS - wait_start))s"
+			return 0
+		fi
+
+		echo "copytools still running on $hosts"
+		usleep $sleep_time
+		[ $sleep_time -lt 32000000 ] && # 3.2 seconds
+			sleep_time=$(bc <<< "$sleep_time * 2")
+	done
+
+	# try to dump Copytool's stack
+	do_nodesv $hosts "echo 1 >/proc/sys/kernel/sysrq ; " \
+			 "echo t >/proc/sysrq-trigger"
+
+	echo "copytools failed to stop in ${wait_timeout}s"
+
+	return 1
+}
+
+copytool_monitor_cleanup() {
+	local facet=${1:-$SINGLEAGT}
+	local agent=$(facet_active_host $facet)
+
+	if [ -n "$HSMTOOL_MONITOR_DIR" ]; then
+		# Should die when the copytool dies, but just in case.
+		local cmd="kill \\\$(cat $HSMTOOL_MONITOR_DIR/monitor_pid)"
+		cmd+=" 2>/dev/null || true"
+		do_node $agent "$cmd"
+		do_node $agent "rm -fr $HSMTOOL_MONITOR_DIR"
+		export HSMTOOL_MONITOR_DIR=
+	fi
+
+	# The pdsh should die on its own when the monitor dies. Just
+	# in case, though, try to clean up to avoid any cruft.
+	if [ -n "$HSMTOOL_MONITOR_PDSH" ]; then
+		kill $HSMTOOL_MONITOR_PDSH 2>/dev/null || true
+		export HSMTOOL_MONITOR_PDSH=
+	fi
+}
+
+copytool_logfile()
+{
+	local host="$(facet_host "$1")"
+	local prefix=$TESTLOG_PREFIX
+	[ -n "$TESTNAME" ] && prefix+=.$TESTNAME
+
+	printf "${prefix}.copytool${archive_id}_log.${host}.log"
+}
+
+__lhsmtool_rebind()
+{
+	do_facet $facet $HSMTOOL -p "$hsm_root" --rebind "$@" "$mountpoint"
+}
+
+__lhsmtool_import()
+{
+	mkdir -p "$(dirname "$2")" ||
+		error "cannot create directory '$(dirname "$2")'"
+	do_facet $facet $HSMTOOL -p "$hsm_root" --import "$@" "$mountpoint"
+}
+
+__lhsmtool_setup()
+{
+	local cmd="$HSMTOOL $HSMTOOL_VERBOSE --daemon --hsm-root \"$hsm_root\""
+	[ -n "$bandwidth" ] && cmd+=" --bandwidth $bandwidth"
+	[ -n "$archive_id" ] && cmd+=" --archive $archive_id"
+	[ ${#misc_options[@]} -gt 0 ] &&
+		cmd+=" $(IFS=" " echo "$@")"
+	cmd+=" \"$mountpoint\""
+
+	echo "Starting copytool $facet on $(facet_host $facet)"
+	stack_trap "do_facet $facet libtool execute pkill -x '$HSMTOOL' || true" EXIT
+	do_facet $facet "$cmd < /dev/null > \"$(copytool_logfile $facet)\" 2>&1"
+}
+
+hsm_root() {
+	local facet="${1:-$SINGLEAGT}"
+
+	printf "$(copytool_device "$facet")/${TESTSUITE}.${TESTNAME}/"
+}
+
+# Main entry point to perform copytool related operations
+#
+# Sub-commands:
+#
+#	setup	setup a copytool to run in the background, that copytool will be
+#		killed on EXIT
+#	import	import a file from an HSM backend
+#	rebind	rebind an archived file to a new fid
+#
+# Although the semantics might suggest otherwise, one does not need to 'setup'
+# a copytool before a call to 'copytool import' or 'copytool rebind'.
+#
+copytool()
+{
+	local action=$1
+	shift
+
+	# Parse arguments
+	local fail_on_error=true
+	local -a misc_options
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-f|--facet)
+			shift
+			local facet="$1"
+			;;
+		-m|--mountpoint)
+			shift
+			local mountpoint="$1"
+			;;
+		-a|--archive-id)
+			shift
+			local archive_id="$1"
+			;;
+		-h|--hsm-root)
+			shift
+			local hsm_root="$1"
+			;;
+		-b|--bwlimit)
+			shift
+			local bandwidth="$1" # in MB/s
+			;;
+		-n|--no-fail)
+			local fail_on_error=false
+			;;
+		*)
+			# Uncommon(/copytool dependent) option
+			misc_options+=("$1")
+			;;
+		esac
+		shift
+	done
+
+	# Use default values if needed
+	local facet=${facet:-$SINGLEAGT}
+	local mountpoint="${mountpoint:-${MOUNT2:-$MOUNT}}"
+	local hsm_root="${hsm_root:-$(hsm_root "$facet")}"
+
+	stack_trap "do_facet $facet rm -rf '$hsm_root'" EXIT
+	do_facet $facet mkdir -p "$hsm_root" ||
+		error "mkdir '$hsm_root' failed"
+
+	case "$HSMTOOL" in
+	lhsmtool_posix)
+		local copytool=lhsmtool
+		;;
+	esac
+
+	__${copytool}_${action} "${misc_options[@]}"
+	if [ $? -ne 0 ]; then
+		local error_msg
+
+		case $action in
+		setup)
+			local host="$(facet_host $facet)"
+			error_msg="Failed to start copytool $facet on '$host'"
+			;;
+		import)
+			local src="${misc_options[0]}"
+			local dest="${misc_options[1]}"
+			error_msg="Failed to import '$src' to '$dest'"
+			;;
+		rebind)
+			error_msg="could not rebind file"
+			;;
+		esac
+
+		$fail_on_error && error "$error_msg" || echo "$error_msg"
+	fi
+}
+
+needclients() {
+	local client_count=$1
+	if [[ $CLIENTCOUNT -lt $client_count ]]; then
+		skip "Need $client_count or more clients, have $CLIENTCOUNT"
+		return 1
+	fi
+	return 0
+}
+
+path2fid() {
+	$LFS path2fid $1 | tr -d '[]'
+	return ${PIPESTATUS[0]}
+}
+
+get_hsm_flags() {
+	local f=$1
+	local u=$2
+	local st
+
+	if [[ $u == "user" ]]; then
+		st=$($RUNAS $LFS hsm_state $f)
+	else
+		u=root
+		st=$($LFS hsm_state $f)
+	fi
+
+	[[ $? == 0 ]] || error "$LFS hsm_state $f failed (run as $u)"
+
+	st=$(echo $st | cut -f 2 -d" " | tr -d "()," )
+	echo $st
+}
+
+check_hsm_flags() {
+	local f=$1
+	local fl=$2
+
+	local st=$(get_hsm_flags $f)
+	[[ $st == $fl ]] || error "hsm flags on $f are $st != $fl"
+}
+
+mdts_set_param() {
+	local arg=$1
+	local key=$2
+	local value=$3
+	local mdtno
+	local rc=0
+	if [[ "$value" != "" ]]; then
+		value="=$value"
+	fi
+	for mdtno in $(seq 1 $MDSCOUNT); do
+		local idx=$(($mdtno - 1))
+		local facet=mds${mdtno}
+		# if $arg include -P option, run 1 set_param per MDT on the MGS
+		# else, run set_param on each MDT
+		[[ $arg = *"-P"* ]] && facet=mgs
+		do_facet $facet $LCTL set_param $arg mdt.${MDT[$idx]}.$key$value
+		[[ $? != 0 ]] && rc=1
+	done
+	return $rc
+}
+
+wait_result() {
+	local facet=$1
+	shift
+	wait_update --verbose $(facet_active_host $facet) "$@"
+}
+
+mdts_check_param() {
+	local key="$1"
+	local target="$2"
+	local timeout="$3"
+	local mdtno
+	for mdtno in $(seq 1 $MDSCOUNT); do
+		local idx=$(($mdtno - 1))
+		wait_result mds${mdtno} \
+			"$LCTL get_param -n $MDT_PREFIX${idx}.$key" "$target" \
+			$timeout ||
+			error "$key state is not '$target' on mds${mdtno}"
+	done
+}
+
+cdt_set_mount_state() {
+	mdts_set_param "-P" hsm_control "$1"
+	# set_param -P is asynchronous operation and could race with set_param.
+	# In such case configs could be retrieved and applied at mgc after
+	# set_param -P completion. Sleep here to avoid race with set_param.
+	# We need at least 20 seconds. 10 for mgc_requeue_thread to wake up
+	# MGC_TIMEOUT_MIN_SECONDS + MGC_TIMEOUT_RAND_CENTISEC(5 + 5)
+	# and 10 seconds to retrieve config from server.
+	sleep 20
+}
+
+cdt_check_state() {
+	mdts_check_param hsm_control "$1" 20
+}
+
+cdt_set_sanity_policy() {
+	if [[ "$CDT_POLICY_HAD_CHANGED" ]]
+	then
+		# clear all
+		mdts_set_param "" hsm.policy "+NRA"
+		mdts_set_param "" hsm.policy "-NBR"
+		CDT_POLICY_HAD_CHANGED=
+	fi
+}
+
+set_hsm_param() {
+	local param=$1
+	local value=$2
+	local opt=$3
+	mdts_set_param "$opt -n" "hsm.$param" "$value"
+	return $?
+}
+
+wait_request_state() {
+	local fid=$1
+	local request=$2
+	local state=$3
+	# 4th arg (mdt index) is optional
+	local mdtidx=${4:-0}
+	local mds=mds$(($mdtidx + 1))
+
+	local cmd="$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.actions"
+	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$13}' | cut -f2 -d="
+
+	wait_result $mds "$cmd" "$state" 200 ||
+		error "request on $fid is not $state on $mds"
+}
+
+
+rmultiop_start() {
+	local client=$1
+	local file=$2
+	local cmds=$3
+	local WAIT_MAX=${4:-60}
+	local wait_time=0
+
+	# We need to run do_node in bg, because pdsh does not exit
+	# if child process of run script exists.
+	# I.e. pdsh does not exit when runmultiop_bg_pause exited,
+	# because of multiop_bg_pause -> $MULTIOP_PROG &
+	# By the same reason we need sleep a bit after do_nodes starts
+	# to let runmultiop_bg_pause start muliop and
+	# update /tmp/multiop_bg.pid ;
+	# The rm /tmp/multiop_bg.pid guarantees here that
+	# we have the updated by runmultiop_bg_pause
+	# /tmp/multiop_bg.pid file
+
+	local pid_file=$TMP/multiop_bg.pid.$$
+
+	do_node $client "MULTIOP_PID_FILE=$pid_file LUSTRE= \
+			runmultiop_bg_pause $file $cmds" &
+	local pid=$!
+	local multiop_pid
+
+	while [[ $wait_time -lt $WAIT_MAX ]]; do
+		sleep 3
+		wait_time=$((wait_time + 3))
+		multiop_pid=$(do_node $client cat $pid_file)
+		if [ -n "$multiop_pid" ]; then
+			break
+		fi
+	done
+
+	[ -n "$multiop_pid" ] ||
+		error "$client : Can not get multiop_pid from $pid_file "
+
+	eval export $(node_var_name $client)_multiop_pid=$multiop_pid
+	eval export $(node_var_name $client)_do_node_pid=$pid
+	local var=$(node_var_name $client)_multiop_pid
+	echo client $client multiop_bg started multiop_pid=${!var}
+	return $?
+}
+
+rmultiop_stop() {
+	local client=$1
+	local multiop_pid=$(node_var_name $client)_multiop_pid
+	local do_node_pid=$(node_var_name $client)_do_node_pid
+
+	echo "Stopping multiop_pid=${!multiop_pid} (kill ${!multiop_pid} on $client)"
+	do_node $client kill -USR1 ${!multiop_pid}
+
+	wait ${!do_node_pid}
+}

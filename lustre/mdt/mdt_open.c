@@ -1746,6 +1746,22 @@ static inline int mdt_hsm_set_released(struct lov_mds_md *lmm)
 	return 0;
 }
 
+static inline int mdt_get_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
+{
+	struct lov_comp_md_v1 *comp_v1;
+
+	if (le32_to_cpu(lmm->lmm_magic == LOV_MAGIC_COMP_V1)) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		*gen = le32_to_cpu(comp_v1->lcm_layout_gen);
+	} else if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
+		   le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3) {
+		*gen = le16_to_cpu(lmm->lmm_layout_gen);
+	} else {
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 			   struct md_attr *ma)
 {
@@ -1805,19 +1821,66 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 
-	if (!mdt_hsm_release_allow(ma))
-		GOTO(out_unlock, rc = -EPERM);
+	if (ma->ma_attr_flags & MDS_PCC_ATTACH) {
+		if (ma->ma_valid & MA_HSM) {
+			if (ma->ma_hsm.mh_flags & HS_RELEASED)
+				GOTO(out_unlock, rc = -EALREADY);
 
-	/* already released? */
-	if (ma->ma_hsm.mh_flags & HS_RELEASED)
-		GOTO(out_unlock, rc = 0);
+			if (ma->ma_hsm.mh_arch_id != data->cd_archive_id)
+				CDEBUG(D_CACHE,
+				       DFID" archive id diff: %llu:%u\n",
+				       PFID(mdt_object_fid(o)),
+				       ma->ma_hsm.mh_arch_id,
+				       data->cd_archive_id);
 
-	/* Compare on-disk and packed data_version */
-	if (data->cd_data_version != ma->ma_hsm.mh_arch_ver) {
-		CDEBUG(D_HSM, DFID" data_version mismatches: packed=%llu"
-		       " and on-disk=%llu\n", PFID(mdt_object_fid(o)),
-		       data->cd_data_version, ma->ma_hsm.mh_arch_ver);
-		GOTO(out_unlock, rc = -EPERM);
+			if (!(ma->ma_hsm.mh_flags & HS_DIRTY) &&
+			    ma->ma_hsm.mh_arch_ver == data->cd_data_version) {
+				CDEBUG(D_CACHE,
+				       DFID" data version matches: packed=%llu "
+				       "and on-disk=%llu\n",
+				       PFID(mdt_object_fid(o)),
+				       data->cd_data_version,
+				       ma->ma_hsm.mh_arch_ver);
+				ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
+			}
+
+			if (ma->ma_hsm.mh_flags & HS_DIRTY)
+				ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
+		} else {
+			/* Set up HSM attribte for PCC archived object */
+			CLASSERT(sizeof(struct hsm_attrs) <=
+				 sizeof(info->mti_xattr_buf));
+			buf = &info->mti_buf;
+			buf->lb_buf = info->mti_xattr_buf;
+			buf->lb_len = sizeof(struct hsm_attrs);
+			memset(&ma->ma_hsm, 0, sizeof(ma->ma_hsm));
+			ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
+			ma->ma_hsm.mh_arch_id = data->cd_archive_id;
+			ma->ma_hsm.mh_arch_ver = data->cd_data_version;
+			lustre_hsm2buf(buf->lb_buf, &ma->ma_hsm);
+
+			rc = mo_xattr_set(info->mti_env, mdt_object_child(o),
+					  buf, XATTR_NAME_HSM, 0);
+			if (rc)
+				GOTO(out_unlock, rc);
+		}
+	} else {
+		if (!mdt_hsm_release_allow(ma))
+			GOTO(out_unlock, rc = -EPERM);
+
+		/* already released? */
+		if (ma->ma_hsm.mh_flags & HS_RELEASED)
+			GOTO(out_unlock, rc = 0);
+
+		/* Compare on-disk and packed data_version */
+		if (data->cd_data_version != ma->ma_hsm.mh_arch_ver) {
+			CDEBUG(D_HSM, DFID" data_version mismatches: "
+			       "packed=%llu and on-disk=%llu\n",
+			       PFID(mdt_object_fid(o)),
+			       data->cd_data_version,
+			       ma->ma_hsm.mh_arch_ver);
+			GOTO(out_unlock, rc = -EPERM);
+		}
 	}
 
 	ma->ma_valid = MA_INODE;
@@ -1913,6 +1976,12 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o),
 			     mdt_object_child(orphan),
 			     SWAP_LAYOUTS_MDS_HSM);
+
+	if (!rc && ma->ma_attr_flags & MDS_PCC_ATTACH) {
+		ma->ma_need = MA_LOV;
+		rc = mdt_attr_get_complex(info, o, ma);
+	}
+
 	EXIT;
 
 out_layout_lock:
@@ -1939,6 +2008,13 @@ out_unlock:
 		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 		LASSERT(repbody != NULL);
 		repbody->mbo_valid |= OBD_MD_CLOSE_INTENT_EXECED;
+		if (ma->ma_attr_flags & MDS_PCC_ATTACH) {
+			LASSERT(ma->ma_valid & MA_LOV);
+			rc = mdt_get_lmm_gen(ma->ma_lmm,
+					     &repbody->mbo_layout_gen);
+			if (!rc)
+				repbody->mbo_valid |= OBD_MD_LAYOUT_VERSION;
+		}
 	}
 
 out_reprocess:

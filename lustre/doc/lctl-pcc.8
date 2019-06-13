@@ -1,0 +1,52 @@
+.TH lctl-pcc 8 2019-04-15 "Lustre" "configuration Utilities"
+.SH NAME
+lctl pcc commands used to interact with PCC features.
+.SH SYNOPSIS
+.B lctl pcc add \fR<\fImntpath\fR> <\fIpccpath\fR> [\fB--param\fR|\fB-p\fR <\fIparam\fR>]
+.br
+.B lctl pcc del <\fImntpath\fR> <\fIpccpath\fR>
+.br
+.B lctl pcc clear <\fImntpath\fR>
+.br
+.B lctl pcc list <\fImntpath\fR>
+.SH DESCRIPTION
+.TP
+.B lctl pcc add \fR<\fImntpath\fR> <\fIpccpath\fR> [\fB--param\fR|\fB-p\fR <\fIparam\fR>]
+Add a PCC backend specified by HSM root path
+.IR pccpath
+on a Lustre filesystem client instances with the mount point referenced by
+.IR mntpath .
+The parameter
+.IR param
+is a string in the form of name-value pairs to config the PCC backend such as
+read-write attach id (archive ID) or read-only attach id and auto caching rule.
+i.e. for the string "projid={500}&fname={*.h5} rwid=2", the first substring of
+the config parameter is the auto caching rule. Where "&" represents the logical
+conjunction operator while "," represents the logical disjunction operator. The
+example rule means that new files are only auto cached if the project ID is 500
+and the suffix of the file name is "h5". "rwid" represents the read-write
+attach id (2) which value is same as the archive ID of the copytool agent
+running on this PCC node.
+.TP
+.B lctl pcc del <\fImntpath\fR> <\fIpccpath\fR>
+Delete a PCC backend specified by path
+.IR pccpath
+on a Lustre client referenced by the mount point of
+.IR mntpath .
+.TP
+.B lctl pcc clear <\fImntpath\fR>
+Remove all PCC backend on a Lustre client referenced by the mount point of
+.IR mntpath .
+.TP
+.B lctl pcc list <\fImntpath\fR>
+List all PCC backends on a Lustre client referenced by the mount point of
+.IR mntpath .
+.SH OPTIONS
+.TP
+.B --param | -p
+Specifies the configuration parameters for a PCC backend.
+.TP
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-hsm (1),
+.BR lfs-pcc (1)

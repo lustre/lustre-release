@@ -1,0 +1,36 @@
+.TH llapi_pccdev_get 3 "2019 April 20" "Lustre User API"
+.SH NAME
+llapi_pccdev_get \- List all PCC backends on a client
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pccdev_get(const char *" path ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.BR llapi_pccdev_get()
+lists all PCC backends on the client with the mount point referenced by
+.IR path ,
+and output the results to stdout in YAML format.
+.SH RETURN VALUES
+.PP
+.B llapi_pccdev_get()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EOPNOTSUPP
+PCC backend operation is not supported.
+.SH "SEE ALSO"
+.BR llapi_pccdev_set (3)
+.BR lustreapi (7)

@@ -1,0 +1,65 @@
+.TH llapi_pcc_detach_fid_fd 3 "2019 April 20" "Lustre User API"
+.SH NAME
+llapi_pcc_detach_fid_fd, llapi_pcc_detach_fid, llapi_pcc_detach_fid_str,
+llapi_pcc_detach_file \- detach the given file from PCC
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pcc_detach_fid_fd(int " dirfd ", const struct lu_fid *" fid ");"
+.PP
+.BI "int llapi_pcc_detach_fid(const char *" mntpath ", const struct lu_fid *" fid ");"
+.PP
+.BI "int llapi_pcc_detach_fid_str(const char *" mntpath ", const char *" fidstr ");"
+.PP
+.BI "int llapi_pcc_detach_file(const char *" path ");"
+.fi
+.SH DESCRIPTION
+.PP
+.BR llapi_pcc_detach_fid_fd() ,
+.BR llapi_pcc_detach_fid() ,
+.BR llapi_pcc_detach_fid_str() ,
+and
+.BR llapi_pcc_detach_file()
+detaches a cached file from PCC by an ioctl on the dir. The file is referenced
+by
+.IR fid ,
+.IR fidstr ,
+or
+.IR path .
+The dir, which usually a mount point dir that the copytool already has opened,
+is referenced by
+.IR dirfd ,
+.IR mntpath ,
+.IR path .
+.SH RETURN VALUES
+.LP
+.BR llapi_pcc_detach_fid_fd() ,
+.BR llapi_pcc_detach_fid() ,
+.BR llapi_pcc_detach_fid_str() ,
+and
+.B llapi_pcc_detach_file()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EOPNOTSUPP
+PCC state operation is not supported.
+.TP
+.SM -ENOTTY
+File does not reside on a Lustre filesystem.
+.TP
+.SM -ENOENT
+.I path
+does not exist.
+.SH "SEE ALSO"
+.BR llapi_pcc_attach (3),
+.BR lustreapi (7)

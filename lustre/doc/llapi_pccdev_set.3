@@ -1,0 +1,48 @@
+.TH llapi_pccdev_set 3 "2019 April 20" "Lustre User API"
+.SH NAME
+llapi_pccdev_set \- Add/delete a PCC backend on a client
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pccdev_set(const char *" path ", const char *" cmd ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.BR llapi_pccdev_set()
+adds or deletes a PCC backend on the client with the mount point referenced by
+.IR path .
+The input argument
+.IR cmd
+could be in the following forms:
+.TP
+.B \ "add\ $PCCPATH\ $PARAM"
+Add a PCC backend referenced by the HSM root path
+.IR $PCCPATH .
+.TP
+.B \ "del\ $PCCPATH"
+Delete a PCC backend referenced by the HSM root path
+.IR $PCCPATH .
+.TP
+.B \ "clear"
+Clear and remove all PCC backends on a client.
+.SH RETURN VALUES
+.PP
+.B llapi_pccdev_set()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EOPNOTSUPP
+PCC backend operation is not supported.
+.SH "SEE ALSO"
+.BR lustreapi (7)

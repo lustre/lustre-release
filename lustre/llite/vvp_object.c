@@ -150,7 +150,8 @@ static int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 		 * This operation is expensive but mmap processes have to pay
 		 * a price themselves. */
 		unmap_mapping_range(conf->coc_inode->i_mapping,
-				    0, OBD_OBJECT_EOF, 0);
+				    0, OBD_OBJECT_EOF, 1);
+		pcc_layout_invalidate(conf->coc_inode);
 	}
 	return 0;
 }

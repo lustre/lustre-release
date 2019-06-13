@@ -213,7 +213,7 @@ int main(int argc, char **argv)
 	struct stat		 st;
 	struct statfs		 stfs;
 	size_t			 mmap_len = 0, i;
-	unsigned char		*mmap_ptr = NULL, junk = 0;
+	unsigned char		*mmap_ptr = NULL, junk = 1;
 	int			 len, fd = -1;
 	int			 flags;
 	int			 save_errno;

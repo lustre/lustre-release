@@ -1321,7 +1321,12 @@ static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 		rc = -errno;
 		CT_ERROR(rc, "cannot unlink '%s'", attr);
 		err_minor++;
-		goto fini;
+
+		/* ignore the error when lov file does not exist. */
+		if (rc == -ENOENT)
+			rc = 0;
+		else
+			goto fini;
 	}
 
 fini:

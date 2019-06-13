@@ -48,6 +48,7 @@
 
 #include "vvp_internal.h"
 #include "range_lock.h"
+#include "pcc.h"
 
 #ifndef FMODE_EXEC
 #define FMODE_EXEC 0
@@ -209,6 +210,10 @@ struct ll_inode_info {
 			 * accurate if the file is shared by different jobs.
 			 */
 			char                    lli_jobid[LUSTRE_JOBID_SIZE];
+
+			struct mutex		 lli_pcc_lock;
+			enum lu_pcc_state_flags	 lli_pcc_state;
+			struct pcc_inode	*lli_pcc_inode;
 		};
 	};
 
@@ -337,6 +342,11 @@ void ll_inode_size_unlock(struct inode *inode);
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
 	return container_of(inode, struct ll_inode_info, lli_vfs_inode);
+}
+
+static inline struct pcc_inode *ll_i2pcci(struct inode *inode)
+{
+	return ll_i2info(inode)->lli_pcc_inode;
 }
 
 /* default to about 64M of readahead on a given system. */
@@ -579,6 +589,9 @@ struct ll_sb_info {
 
 	/* filesystem fsname */
 	char			  ll_fsname[LUSTRE_MAXFSNAME + 1];
+
+	/* Persistent Client Cache */
+	struct pcc_super	  ll_pcc_super;
 };
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
@@ -694,6 +707,7 @@ struct ll_file_data {
 	/* The layout version when resync starts. Resync I/O should carry this
 	 * layout version for verification to OST objects */
 	__u32 fd_layout_version;
+	struct pcc_file fd_pcc_file;
 };
 
 void llite_tunables_unregister(void);
@@ -878,6 +892,7 @@ int ll_getattr(const struct path *path, struct kstat *stat,
 #else
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
+int ll_getattr_dentry(struct dentry *de, struct kstat *stat);
 struct posix_acl *ll_get_acl(struct inode *inode, int type);
 #ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1471,6 +1486,18 @@ static inline void d_lustre_revalidate(struct dentry *dentry)
 	LASSERT(ll_d2d(dentry) != NULL);
 	ll_d2d(dentry)->lld_invalid = 0;
 	spin_unlock(&dentry->d_lock);
+}
+
+static inline dev_t ll_compat_encode_dev(dev_t dev)
+{
+	/* The compat_sys_*stat*() syscalls will fail unless the
+	 * device majors and minors are both less than 256. Note that
+	 * the value returned here will be passed through
+	 * old_encode_dev() in cp_compat_stat(). And so we are not
+	 * trying to return a valid compat (u16) device number, just
+	 * one that will pass the old_valid_dev() check. */
+
+	return MKDEV(MAJOR(dev) & 0xff, MINOR(dev) & 0xff);
 }
 
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf);

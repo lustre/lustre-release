@@ -73,12 +73,18 @@ static struct ll_sb_info *ll_init_sbi(void)
 	unsigned long pages;
 	unsigned long lru_page_max;
 	struct sysinfo si;
+	int rc;
 	int i;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(sbi);
 	if (sbi == NULL)
-		RETURN(NULL);
+		RETURN(ERR_PTR(-ENOMEM));
+
+	rc = pcc_super_init(&sbi->ll_pcc_super);
+	if (rc < 0)
+		GOTO(out_sbi, rc);
 
 	spin_lock_init(&sbi->ll_lock);
 	mutex_init(&sbi->ll_lco.lco_lock);
@@ -92,10 +98,8 @@ static struct ll_sb_info *ll_init_sbi(void)
 
 	/* initialize ll_cache data */
 	sbi->ll_cache = cl_cache_init(lru_page_max);
-	if (sbi->ll_cache == NULL) {
-		OBD_FREE(sbi, sizeof(*sbi));
-		RETURN(NULL);
-	}
+	if (sbi->ll_cache == NULL)
+		GOTO(out_pcc, rc = -ENOMEM);
 
 	sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
 					   SBI_DEFAULT_READAHEAD_MAX);
@@ -143,6 +147,11 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_heat_decay_weight = SBI_DEFAULT_HEAT_DECAY_WEIGHT;
 	sbi->ll_heat_period_second = SBI_DEFAULT_HEAT_PERIOD_SECOND;
 	RETURN(sbi);
+out_pcc:
+	pcc_super_fini(&sbi->ll_pcc_super);
+out_sbi:
+	OBD_FREE_PTR(sbi);
+	RETURN(ERR_PTR(rc));
 }
 
 static void ll_free_sbi(struct super_block *sb)
@@ -157,6 +166,7 @@ static void ll_free_sbi(struct super_block *sb)
 			cl_cache_decref(sbi->ll_cache);
 			sbi->ll_cache = NULL;
 		}
+		pcc_super_fini(&sbi->ll_pcc_super);
 		OBD_FREE(sbi, sizeof(*sbi));
 	}
 	EXIT;
@@ -228,7 +238,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				   OBD_CONNECT2_LOCK_CONVERT |
 				   OBD_CONNECT2_ARCHIVE_ID_ARRAY |
 				   OBD_CONNECT2_LSOM |
-				   OBD_CONNECT2_ASYNC_DISCARD;
+				   OBD_CONNECT2_ASYNC_DISCARD |
+				   OBD_CONNECT2_PCC;
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
         if (sbi->ll_flags & LL_SBI_LRU_RESIZE)
@@ -979,6 +990,9 @@ void ll_lli_init(struct ll_inode_info *lli)
 		spin_lock_init(&lli->lli_heat_lock);
 		obd_heat_clear(lli->lli_heat_instances, OBD_HEAT_COUNT);
 		lli->lli_heat_flags = 0;
+		mutex_init(&lli->lli_pcc_lock);
+		lli->lli_pcc_state = PCC_STATE_FL_NONE;
+		lli->lli_pcc_inode = NULL;
 	}
 	mutex_init(&lli->lli_layout_mutex);
 	memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));
@@ -1052,8 +1066,8 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 
 	/* client additional sb info */
 	lsi->lsi_llsbi = sbi = ll_init_sbi();
-	if (!sbi)
-		GOTO(out_free_cfg, err = -ENOMEM);
+	if (IS_ERR(sbi))
+		GOTO(out_free_cfg, err = PTR_ERR(sbi));
 
 	err = ll_options(lsi->lsi_lmd->lmd_opts, sbi);
 	if (err)
@@ -1183,7 +1197,7 @@ void ll_put_super(struct super_block *sb)
 	int next, force = 1, rc = 0;
 	ENTRY;
 
-	if (!sbi)
+	if (IS_ERR(sbi))
 		GOTO(out_no_sbi, 0);
 
 	/* Should replace instance_id with something better for ASLR */
@@ -1556,17 +1570,20 @@ void ll_clear_inode(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+
         ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
 	       PFID(ll_inode2fid(inode)), inode);
 
-        if (S_ISDIR(inode->i_mode)) {
-                /* these should have been cleared in ll_file_release */
-                LASSERT(lli->lli_opendir_key == NULL);
-                LASSERT(lli->lli_sai == NULL);
-                LASSERT(lli->lli_opendir_pid == 0);
-        }
+	if (S_ISDIR(inode->i_mode)) {
+		/* these should have been cleared in ll_file_release */
+		LASSERT(lli->lli_opendir_key == NULL);
+		LASSERT(lli->lli_sai == NULL);
+		LASSERT(lli->lli_opendir_pid == 0);
+	} else {
+		pcc_inode_free(inode);
+	}
 
 	md_null_inode(sbi->ll_md_exp, ll_inode2fid(inode));
 
@@ -1692,6 +1709,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct md_op_data *op_data = NULL;
 	int rc = 0;
+
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "%s: setattr inode "DFID"(%p) from %llu to %llu, "
@@ -1790,14 +1808,28 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	if (attr->ia_valid & (ATTR_SIZE | ATTR_ATIME | ATTR_ATIME_SET |
 			      ATTR_MTIME | ATTR_MTIME_SET | ATTR_CTIME) ||
 	    xvalid & OP_XVALID_CTIME_SET) {
-		/* For truncate and utimes sending attributes to OSTs, setting
-		 * mtime/atime to the past will be performed under PW [0:EOF]
-		 * extent lock (new_size:EOF for truncate).  It may seem
-		 * excessive to send mtime/atime updates to OSTs when not
-		 * setting times to past, but it is necessary due to possible
-		 * time de-synchronization between MDT inode and OST objects
-		 */
-		rc = cl_setattr_ost(lli->lli_clob, attr, xvalid, 0);
+		bool cached = false;
+
+		rc = pcc_inode_setattr(inode, attr, &cached);
+		if (cached) {
+			if (rc) {
+				CERROR("%s: PCC inode "DFID" setattr failed: "
+				       "rc = %d\n",
+				       ll_i2sbi(inode)->ll_fsname,
+				       PFID(&lli->lli_fid), rc);
+				GOTO(out, rc);
+			}
+		} else {
+			/* For truncate and utimes sending attributes to OSTs,
+			 * setting mtime/atime to the past will be performed
+			 * under PW [0:EOF] extent lock (new_size:EOF for
+			 * truncate). It may seem excessive to send mtime/atime
+			 * updates to OSTs when not setting times to past, but
+			 * it is necessary due to possible time
+			 * de-synchronization between MDT inode and OST objects
+			 */
+			rc = cl_setattr_ost(lli->lli_clob, attr, xvalid, 0);
+		}
 	}
 
 	/* If the file was restored, it needs to set dirty flag.
