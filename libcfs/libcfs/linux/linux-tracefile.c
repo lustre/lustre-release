@@ -34,6 +34,8 @@
 #define LUSTRE_TRACEFILE_PRIVATE
 
 #include <linux/slab.h>
+#include <linux/tty.h>
+#include <linux/poll.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
@@ -235,6 +237,39 @@ dbghdr_to_info_string(struct ptldebug_header *hdr)
         }
 }
 
+/**
+ * tty_write_msg - write a message to a certain tty, not just the console.
+ * @tty: the destination tty_struct
+ * @msg: the message to write
+ *
+ * tty_write_message is not exported, so write a same function for it
+ *
+ */
+static void tty_write_msg(struct tty_struct *tty, const char *msg)
+{
+	mutex_lock(&tty->atomic_write_lock);
+	tty_lock(tty);
+	if (tty->ops->write && tty->count > 0)
+		tty->ops->write(tty, msg, strlen(msg));
+	tty_unlock(tty);
+	mutex_unlock(&tty->atomic_write_lock);
+	wake_up_interruptible_poll(&tty->write_wait, POLLOUT);
+}
+
+static void cfs_tty_write_message(const char *prefix, const char *msg)
+{
+	struct tty_struct *tty;
+
+	tty = get_current_tty();
+	if (!tty)
+		return;
+
+	tty_write_msg(tty, prefix);
+	tty_write_msg(tty, ": ");
+	tty_write_msg(tty, msg);
+	tty_kref_put(tty);
+}
+
 void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
                           const char *buf, int len, const char *file,
                           const char *fn)
@@ -254,6 +289,9 @@ void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
 		prefix = dbghdr_to_info_string(hdr);
 		ptype = KERN_INFO;
 	}
+
+	if ((mask & D_TTY) != 0)
+		cfs_tty_write_message(prefix, buf);
 
 	if ((mask & D_CONSOLE) != 0) {
 		printk("%s%s: %.*s", ptype, prefix, len, buf);

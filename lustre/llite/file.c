@@ -4503,9 +4503,20 @@ out_iput:
 static int
 ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
 {
-        ENTRY;
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	ENTRY;
 
-        RETURN(-ENOSYS);
+	/*
+	 * In order to avoid flood of warning messages, only print one message
+	 * for one file. And the entire message rate on the client is limited
+	 * by CDEBUG_LIMIT too.
+	 */
+	if (!(fd->fd_flags & LL_FILE_FLOCK_WARNING)) {
+		fd->fd_flags |= LL_FILE_FLOCK_WARNING;
+		CDEBUG_LIMIT(D_TTY | D_CONSOLE,
+			     "flock disabled, mount with '-o [local]flock' to enable\r\n");
+	}
+	RETURN(-ENOSYS);
 }
 
 /**

@@ -1732,7 +1732,8 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 		loff_t diff = i_size_read(inode) - *offs;
 		spin_unlock(&inode->i_lock);
 		if (diff < 0) {
-			CDEBUG(D_EXT2, "size %llu is too short to read @%llu\n",
+			CDEBUG(D_OTHER,
+			       "size %llu is too short to read @%llu\n",
 			       i_size_read(inode), *offs);
 			return -EBADR;
 		} else if (diff == 0) {

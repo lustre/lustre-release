@@ -358,9 +358,16 @@ int libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                         break;
         }
 
-	if (*(string_buf+needed-1) != '\n')
+	if (*(string_buf + needed - 1) != '\n') {
 		printk(KERN_INFO "format at %s:%d:%s doesn't end in "
 		       "newline\n", file, msgdata->msg_line, msgdata->msg_fn);
+	} else if (mask & D_TTY) {
+		/* TTY needs '\r\n' to move carriage to leftmost position */
+		if (needed < 2 || *(string_buf + needed - 2) != '\r')
+			printk(KERN_INFO "format at %s:%d:%s doesn't end in "
+			       "'\\r\\n'\n", file, msgdata->msg_line,
+			       msgdata->msg_fn);
+	}
 
         header.ph_len = known_size + needed;
 	debug_buf = (char *)page_address(tage->page) + tage->used;
@@ -461,8 +468,9 @@ console:
                                   cdls->cdls_count,
                                   (cdls->cdls_count > 1) ? "s" : "");
 
-                cfs_print_to_console(&header, mask,
-                                     string_buf, needed, file, msgdata->msg_fn);
+		/* Do not allow print this to TTY */
+		cfs_print_to_console(&header, mask & ~D_TTY, string_buf,
+				     needed, file, msgdata->msg_fn);
 
 		put_cpu();
                 cdls->cdls_count = 0;

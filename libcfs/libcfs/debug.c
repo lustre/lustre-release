@@ -49,8 +49,8 @@ module_param(libcfs_subsystem_debug, int, 0644);
 MODULE_PARM_DESC(libcfs_subsystem_debug, "Lustre kernel debug subsystem mask");
 EXPORT_SYMBOL(libcfs_subsystem_debug);
 
-unsigned int libcfs_debug = (D_CANTMASK |
-			     D_NETERROR | D_HA | D_CONFIG | D_IOCTL | D_LFSCK);
+unsigned int libcfs_debug = (D_CANTMASK | D_NETERROR | D_HA | D_CONFIG |
+			     D_IOCTL | D_LFSCK | D_TTY);
 module_param(libcfs_debug, int, 0644);
 MODULE_PARM_DESC(libcfs_debug, "Lustre kernel debug mask");
 EXPORT_SYMBOL(libcfs_debug);
