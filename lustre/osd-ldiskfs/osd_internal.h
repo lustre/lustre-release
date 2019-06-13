@@ -877,6 +877,13 @@ static inline void i_projid_write(struct inode *inode, __u32 projid)
 }
 #endif
 
+#ifdef HAVE_LDISKFS_IGET_WITH_FLAGS
+# define osd_ldiskfs_iget(sb, ino) \
+		ldiskfs_iget((sb), (ino), LDISKFS_IGET_HANDLE)
+#else
+# define osd_ldiskfs_iget(sb, ino) ldiskfs_iget((sb), (ino))
+#endif
+
 #ifdef HAVE_LDISKFS_INFO_JINODE
 # define osd_attach_jinode(inode) ldiskfs_inode_attach_jinode(inode)
 #else  /* HAVE_LDISKFS_INFO_JINODE */

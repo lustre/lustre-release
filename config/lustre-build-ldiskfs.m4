@@ -241,6 +241,29 @@ ext4_i_crypt_info, [
 ]) # LB_EXT4_HAVE_I_CRYPT_INFO
 
 #
+# LB_LDISKFS_IGET_HAS_FLAGS_ARG
+#
+# kernel 4.19 commit 8a363970d1dc38c4ec4ad575c862f776f468d057
+# ext4_iget changed to a macro with 3 args was function with 2 args
+#
+AC_DEFUN([LB_LDISKFS_IGET_HAS_FLAGS_ARG], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if ldiskfs_iget takes a flags argument],
+ext4_iget_3args, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+],[
+	int f = EXT4_IGET_SPECIAL;
+	(void)f;
+],[
+	AC_DEFINE(HAVE_LDISKFS_IGET_WITH_FLAGS, 1,
+		[if ldiskfs_iget takes a flags argument])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_LDISKFS_IGET_HAS_FLAGS_ARG
+
+#
 # LDISKFS_AC_PATCH_PROGRAM
 #
 # Determine which program should be used to apply the patches to
@@ -323,6 +346,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT4_BREAD_4ARGS
 	LB_EXT4_HAVE_INFO_DQUOT
 	LB_EXT4_HAVE_I_CRYPT_INFO
+	LB_LDISKFS_IGET_HAS_FLAGS_ARG
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])

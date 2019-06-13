@@ -423,7 +423,7 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 	 */
 	 /* LASSERT(current->journal_info == NULL); */
 
-	inode = ldiskfs_iget(osd_sb(dev), id->oii_ino);
+	inode = osd_ldiskfs_iget(osd_sb(dev), id->oii_ino);
 	if (IS_ERR(inode)) {
 		CDEBUG(D_INODE, "no inode: ino = %u, rc = %ld\n",
 		       id->oii_ino, PTR_ERR(inode));
@@ -559,7 +559,7 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 	 */
 
 again:
-	inode = ldiskfs_iget(osd_sb(dev), id->oii_ino);
+	inode = osd_ldiskfs_iget(osd_sb(dev), id->oii_ino);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
 		if (!trusted && (rc == -ENOENT || rc == -ESTALE))
