@@ -348,6 +348,43 @@ lprocfs_osd_force_sync_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS_WR_ONLY(ldiskfs, osd_force_sync);
 
+static int ldiskfs_osd_nonrotational_seq_show(struct seq_file *m, void *data)
+{
+	struct dt_device *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	seq_printf(m, "%u\n", osd->od_nonrotational);
+	return 0;
+}
+
+static ssize_t
+ldiskfs_osd_nonrotational_seq_write(struct file *file,
+				    const char __user *buffer,
+				    size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct dt_device *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
+	bool val;
+	int rc;
+
+	LASSERT(osd);
+	if (unlikely(!osd->od_mnt))
+		return -EINPROGRESS;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	osd->od_nonrotational = val;
+	return count;
+}
+LPROC_SEQ_FOPS(ldiskfs_osd_nonrotational);
+
 static int ldiskfs_osd_pdo_seq_show(struct seq_file *m, void *data)
 {
 	seq_printf(m, "%s\n", ldiskfs_pdo ? "ON" : "OFF");
@@ -713,6 +750,8 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&ldiskfs_osd_cache_fops		},
 	{ .name	=	"writethrough_cache_enable",
 	  .fops	=	&ldiskfs_osd_wcache_fops	},
+	{ .name	=	"nonrotational",
+	  .fops	=	&ldiskfs_osd_nonrotational_fops	},
 	{ .name	=	"readcache_max_filesize",
 	  .fops	=	&ldiskfs_osd_readcache_fops	},
 	{ .name	=	"index_backup",

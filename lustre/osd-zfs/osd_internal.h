@@ -347,7 +347,8 @@ struct osd_device {
 				 od_xattr_in_sa:1,
 				 od_is_ost:1,
 				 od_in_init:1,
-				 od_posix_acl:1;
+				 od_posix_acl:1,
+				 od_nonrotational:1;
 	unsigned int		 od_dnsize;
 	int			 od_index_backup_stop;
 

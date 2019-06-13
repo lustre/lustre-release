@@ -291,6 +291,42 @@ lprocfs_osd_force_sync_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS_WR_ONLY(zfs, osd_force_sync);
 
+static int zfs_osd_nonrotational_seq_show(struct seq_file *m, void *data)
+{
+	struct dt_device *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+	if (!osd->od_os)
+		return -EINPROGRESS;
+
+	seq_printf(m, "%u\n", osd->od_nonrotational);
+	return 0;
+}
+
+static ssize_t
+zfs_osd_nonrotational_seq_write(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct dt_device *dt = m->private;
+	struct osd_device *osd = osd_dt_dev(dt);
+	int rc;
+	bool val;
+
+	LASSERT(osd);
+	if (!osd->od_os)
+		return -EINPROGRESS;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	osd->od_nonrotational = val;
+	return count;
+}
+LPROC_SEQ_FOPS(zfs_osd_nonrotational);
+
 static int zfs_osd_index_backup_seq_show(struct seq_file *m, void *data)
 {
 	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
@@ -394,6 +430,8 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&zfs_osd_mntdev_fops		},
 	{ .name	=	"force_sync",
 	  .fops	=	&zfs_osd_force_sync_fops	},
+	{ .name	=	"nonrotational",
+	  .fops	=	&zfs_osd_nonrotational_fops	},
 	{ .name	=	"index_backup",
 	  .fops	=	&zfs_osd_index_backup_fops	},
 	{ .name	=	"readcache_max_filesize",

@@ -554,16 +554,23 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	       struct obd_statfs *osfs)
 {
-	int		   rc;
+	struct osd_device *osd = osd_dt_dev(d);
+	int		  rc;
 	ENTRY;
 
-	rc = osd_objset_statfs(osd_dt_dev(d), osfs);
+	rc = osd_objset_statfs(osd, osfs);
 	if (unlikely(rc != 0))
 		RETURN(rc);
 
 	osfs->os_bavail -= min_t(u64,
 				 OSD_GRANT_FOR_LOCAL_OIDS / osfs->os_bsize,
 				 osfs->os_bavail);
+
+	/* ZFS does not support reporting nonrotional status yet, so return
+	 * flag only if user has set nonrotational.
+	 */
+	osfs->os_state |= osd->od_nonrotational ? OS_STATE_NONROT : 0;
+
 	RETURN(0);
 }
 
@@ -1273,6 +1280,11 @@ static int osd_device_init0(const struct lu_env *env,
 	sema_init(&o->od_otable_sem, 1);
 	INIT_LIST_HEAD(&o->od_ios_list);
 	o->od_auto_scrub_interval = AS_DEFAULT;
+
+	/* ZFS does not support reporting nonrotional status yet, so this flag
+	 * is only set if explicitly set by the user.
+	 */
+	o->od_nonrotational = 0;
 
 out:
 	RETURN(rc);

@@ -4628,6 +4628,27 @@ static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 	return (ratio - (int)ratio) > 0 ? (int)(ratio + 1) : (int)ratio;
 }
 
+/* This is only used to reflect various problem states for lfs df, so we only
+ * translate the flags reflecting those states.
+ */
+static char obd_statfs_state_names[] = {
+	[OS_STATE_DEGRADED]	= 'D',
+	[OS_STATE_READONLY]	= 'R',
+	[OS_STATE_NOPRECREATE]	= 'N',
+	[OS_STATE_ENOSPC]	= 'S',
+	[OS_STATE_ENOINO]	= 'I',
+};
+
+static char obd_statfs_state2char(int s)
+{
+	/* Unknown name */
+	if (s > ARRAY_SIZE(obd_statfs_state_names)/sizeof(char) ||
+	    obd_statfs_state_names[s] == 0)
+		return '?';
+
+	return obd_statfs_state_names[s];
+}
+
 static int showdf(char *mntdir, struct obd_statfs *stat,
 		  char *uuid, enum mntdf_flags flags,
 		  char *type, int index, int rc)
@@ -4701,21 +4722,16 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			printf("[%s:%d]", type, index);
 
 		if (stat->os_state) {
-			/*
-			 * Each character represents the matching
-			 * OS_STATE_* bit.
-			 */
-			const char state_names[] = "DRSI";
-			__u32	   state;
-			__u32	   i;
+			uint32_t state;
+			uint32_t i;
 
 			printf(" ");
-			for (i = 0, state = stat->os_state;
-			     state && i < sizeof(state_names); i++) {
-				if (!(state & (1 << i)))
+			for (i = 0, state = stat->os_state; state != 0; i++) {
+				uint32_t mask = 1 << i;
+				if (!(state & mask) || mask == OS_STATE_NONROT)
 					continue;
-				printf("%c", state_names[i]);
-				state ^= 1 << i;
+				printf("%c", obd_statfs_state2char(mask));
+				state &= ~mask;
 			}
 		}
 

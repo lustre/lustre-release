@@ -2197,6 +2197,9 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	statfs_pack(sfs, ksfs);
 	if (unlikely(sb->s_flags & MS_RDONLY))
 		sfs->os_state |= OS_STATE_READONLY;
+
+	sfs->os_state |= osd->od_nonrotational ? OS_STATE_NONROT : 0;
+
 	if (ldiskfs_has_feature_extents(sb))
 		sfs->os_maxbytes = sb->s_maxbytes;
 	else
@@ -7765,6 +7768,7 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
+
 	o->od_auto_scrub_interval = AS_DEFAULT;
 
 	cplen = strlcpy(o->od_svname, lustre_cfg_string(cfg, 4),
@@ -7785,6 +7789,10 @@ static int osd_device_init0(const struct lu_env *env,
 	rc = osd_mount(env, o, cfg);
 	if (rc != 0)
 		GOTO(out, rc);
+
+	/* Can only check block device after mount */
+	o->od_nonrotational =
+		blk_queue_nonrot(bdev_get_queue(osd_sb(o)->s_bdev));
 
 	rc = osd_obj_map_init(env, o);
 	if (rc != 0)
