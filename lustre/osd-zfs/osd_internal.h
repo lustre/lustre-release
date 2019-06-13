@@ -232,10 +232,6 @@ struct osd_thread_info {
 	const struct lu_env	*oti_env;
 
 	struct lu_fid		 oti_fid;
-	/*
-	 * XXX temporary: for ->i_op calls.
-	 */
-	struct timespec		 oti_time;
 
 	struct ost_id		 oti_ostid;
 

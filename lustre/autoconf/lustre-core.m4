@@ -3148,10 +3148,21 @@ i_pages, [
 #
 # LC_INODE_TIMESPEC64
 #
+# kernel 4.17-rc7 commit 8efd6894ff089adeeac7cb9f32125b85d963d1bc
+# fs: add timespec64_truncate()
 # kernel 4.18 commit 95582b00838837fc07e042979320caf917ce3fe6
 # inode timestamps switched to timespec64
+# kernel 4.19-rc2 commit 976516404ff3fab2a8caa8bd6f5efc1437fed0b8
+# y2038: remove unused time interfaces
+# ...
+#  timespec_trunc
+# ...
+# When inode times are timespec64 stop using the deprecated
+# time interfaces.
 #
 AC_DEFUN([LC_INODE_TIMESPEC64], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
 LB_CHECK_COMPILE([if inode timestamps are struct timespec64],
 inode_timespec64, [
 	#include <linux/fs.h>
@@ -3159,11 +3170,13 @@ inode_timespec64, [
 	struct inode inode = {};
 	struct timespec64 ts = {};
 
-	inode.i_atime = ts;
+	inode.i_atime = timespec64_trunc(ts, 1);
+	(void)inode;
 ],[
 	AC_DEFINE(HAVE_INODE_TIMESPEC64, 1,
 		[inode times are using timespec64])
 ])
+EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_INODE_TIMESPEC64
 
 #

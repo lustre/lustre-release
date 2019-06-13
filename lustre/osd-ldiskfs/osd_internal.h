@@ -558,6 +558,22 @@ struct osd_iobuf {
 	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 };
 
+#ifdef HAVE_INODE_TIMESPEC64
+# define osd_timespec			timespec64
+# define osd_timespec_trunc(ts, gran)	timespec64_trunc((ts), (gran))
+#else
+# define osd_timespec			timespec
+# define osd_timespec_trunc(ts, gran)	timespec_trunc((ts), (gran))
+#endif
+
+static inline struct osd_timespec osd_inode_time(struct inode *inode,
+						 s64 seconds)
+{
+	struct osd_timespec ts = { .tv_sec = seconds };
+
+	return osd_timespec_trunc(ts, inode->i_sb->s_time_gran);
+}
+
 #define OSD_INS_CACHE_SIZE	8
 
 struct osd_thread_info {
@@ -587,11 +603,6 @@ struct osd_thread_info {
 	struct osd_inode_id    oti_id2;
 	struct osd_inode_id    oti_id3;
         struct ost_id          oti_ostid;
-
-        /*
-         * XXX temporary: for ->i_op calls.
-         */
-        struct timespec        oti_time;
 
         /**
          * following ipd and it structures are used for osd_index_iam_lookup()
