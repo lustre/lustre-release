@@ -114,7 +114,7 @@ union cfs_trace_data_union {
 		 * Even though this structure is meant to be per-CPU, locking
 		 * is needed because in some places the data may be accessed
 		 * from other CPUs. This lock is directly used in trace_get_tcd
-		 * and trace_put_tcd, which are called in libcfs_debug_vmsg2 and
+		 * and trace_put_tcd, which are called in libcfs_debug_msg and
 		 * tcd_for_each_type_lock
 		 */
 		spinlock_t		tcd_lock;
