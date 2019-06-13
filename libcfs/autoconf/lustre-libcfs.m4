@@ -1004,6 +1004,29 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_NEW_KERNEL_WRITE
 
 #
+# LIBCFS_NEW_KERNEL_WRITE
+#
+# 4.14 commit bdd1d2d3d251c65b74ac4493e08db18971c09240 changed
+# the signature of kernel_read to match other read/write helpers
+# and place offset last.
+#
+AC_DEFUN([LIBCFS_NEW_KERNEL_READ], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'kernel_read()' has loff_t *pos as last parameter],
+kernel_read, [
+	#include <linux/fs.h>
+	],[
+	loff_t pos = 0;
+	kernel_read(NULL, NULL, 0, &pos);
+],[
+	AC_DEFINE(HAVE_KERNEL_READ_LAST_POSP, 1,
+		[kernel_read() signature ends with loff_t *pos])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_NEW_KERNEL_READ
+
+#
 # LIBCFS_DEFINE_TIMER
 #
 # Kernel version 4.14 commit 1d27e3e2252ba9d949ca82fbdb73cde102cb2067
@@ -1196,6 +1219,7 @@ LIBCFS_WAIT_QUEUE_ENTRY
 # 4.14
 LIBCFS_DEFINE_TIMER
 LIBCFS_NEW_KERNEL_WRITE
+LIBCFS_NEW_KERNEL_READ
 LIBCFS_EXPORT_SAVE_STACK_TRACE_TSK
 # 4.15
 LIBCFS_TIMER_SETUP

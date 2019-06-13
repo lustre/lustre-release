@@ -120,6 +120,20 @@ int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 }
 EXPORT_SYMBOL(cfs_kernel_write);
 
+ssize_t cfs_kernel_read(struct file *file, void *buf, size_t count, loff_t *pos)
+{
+#ifdef HAVE_KERNEL_READ_LAST_POSP
+	return kernel_read(file, buf, count, pos);
+#else
+	ssize_t size = kernel_read(file, *pos, buf, count);
+
+	if (size > 0)
+		*pos += size;
+	return size;
+#endif
+}
+EXPORT_SYMBOL(cfs_kernel_read);
+
 #ifndef HAVE_KSET_FIND_OBJ
 struct kobject *kset_find_obj(struct kset *kset, const char *name)
 {

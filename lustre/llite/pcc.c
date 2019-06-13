@@ -2168,7 +2168,7 @@ static int pcc_filp_write(struct file *filp, const void *buf, ssize_t count,
 	while (count > 0) {
 		ssize_t size;
 
-		size = vfs_write(filp, (const void __user *)buf, count, offset);
+		size = cfs_kernel_write(filp, buf, count, offset);
 		if (size < 0)
 			return size;
 		count -= size;
@@ -2181,7 +2181,6 @@ static int pcc_copy_data(struct file *src, struct file *dst)
 {
 	int rc = 0;
 	ssize_t rc2;
-	mm_segment_t oldfs;
 	loff_t pos, offset = 0;
 	size_t buf_len = 1048576;
 	void *buf;
@@ -2192,25 +2191,22 @@ static int pcc_copy_data(struct file *src, struct file *dst)
 	if (buf == NULL)
 		RETURN(-ENOMEM);
 
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
 	while (1) {
 		pos = offset;
-		rc2 = vfs_read(src, (void __user *)buf, buf_len, &pos);
+		rc2 = cfs_kernel_read(src, buf, buf_len, &pos);
 		if (rc2 < 0)
-			GOTO(out_fs, rc = rc2);
+			GOTO(out_free, rc = rc2);
 		else if (rc2 == 0)
 			break;
 
 		pos = offset;
 		rc = pcc_filp_write(dst, buf, rc2, &pos);
 		if (rc < 0)
-			GOTO(out_fs, rc);
+			GOTO(out_free, rc);
 		offset += rc2;
 	}
 
-out_fs:
-	set_fs(oldfs);
+out_free:
 	OBD_FREE_LARGE(buf, buf_len);
 	RETURN(rc);
 }
