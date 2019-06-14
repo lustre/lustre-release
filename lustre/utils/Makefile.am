@@ -107,7 +107,8 @@ liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			  liblustreapi_ladvise.c liblustreapi_chlg.c \
 			  liblustreapi_heat.c liblustreapi_pcc.c \
 			  liblustreapi_ioctl.c liblustreapi_root.c \
-			  liblustreapi_lseek.c liblustreapi_swap.c
+			  liblustreapi_lseek.c liblustreapi_swap.c \
+			  libhsm_scanner.h libhsm_scanner.c
 liblustreapi_la_CFLAGS = -fPIC -D_GNU_SOURCE $(LIBNL3_CFLAGS) \
 			 -I $(top_builddir)/lnet/utils \
 			 -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 \

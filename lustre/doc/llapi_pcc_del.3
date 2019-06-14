@@ -1,0 +1,47 @@
+.TH llapi_pcc_del 3 "2019 June 20" "Lustre User API"
+.SH NAME
+llapi_pcc_del \- Delete a PCC backend from a client
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pcc_del(const char *" mntpath ", const char *" pccpath ,
+.BI "                  enum lu_pcc_cleanup_flags " flags );
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.BR llapi_pcc_del()
+deletes a PCC backend referenced by
+.IR pccpath
+on the client with the mount point of
+.IR mntpath .
+By default, when remove a PCC backend from a client, the action is to scan the
+PCC backend fs, uncache (detach and remove) all scanned PCC copies from PCC by
+FIDs. The input parameter
+.IR flags
+currently only has one value
+.B PCC_CLEANUP_FL_KEEP_DATA
+that means it removes the PCC backend from the Lustre client, but retains
+the data on the cache. In this case, the PCC-RW backend falls back as a
+traditional HSM storage solution and the file data is still accessible as long
+as the copytool is still running at this client.
+.SH RETURN VALUES
+.PP
+.B llapi_pcc_del()
+returns 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EOPNOTSUPP
+PCC backend operation is not supported.
+.SH "SEE ALSO"
+.BR lustreapi (7)

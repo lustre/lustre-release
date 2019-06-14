@@ -5855,55 +5855,121 @@ int jt_pcc_add(int argc, char **argv)
 	snprintf(cmd, PATH_MAX, "add %s %s", pccpath, param);
 	rc = llapi_pccdev_set(mntpath, cmd);
 	if (rc < 0)
-		fprintf(stderr, "%s: failed to run '%s' on %s\n",
-			jt_cmdname(argv[0]), cmd, mntpath);
+		fprintf(stderr, "%s: failed to run '%s' on '%s': %s\n",
+			jt_cmdname(argv[0]), cmd, mntpath, strerror(errno));
 
 	return rc;
 }
 
 int jt_pcc_del(int argc, char **argv)
 {
+	static struct option long_opts[] = {
+	{ .val = 'k',	.name = "keep-data",	.has_arg = no_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .name = NULL } };
+	char fsname[MAX_OBD_NAME + 1];
 	const char *mntpath;
 	const char *pccpath;
-	char cmd[PATH_MAX];
+	__u32 flags = PCC_CLEANUP_FL_NONE;
+	int verbose = LLAPI_MSG_INFO;
 	int rc;
+	int c;
 
-	optind = 1;
-	if (argc != 3) {
-		fprintf(stderr, "%s: require 2 arguments\n",
+	while ((c = getopt_long(argc, argv, "kv", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'k':
+			flags = PCC_CLEANUP_FL_KEEP_DATA;
+			break;
+		case 'v':
+			verbose++;
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+	if (optind + 2 != argc) {
+		fprintf(stderr, "%s: must specify mount path and PCC path\n",
 			jt_cmdname(argv[0]));
 		return CMD_HELP;
 	}
 
 	mntpath = argv[optind++];
-	pccpath = argv[optind++];
+	pccpath = argv[optind];
 
-	snprintf(cmd, PATH_MAX, "del %s", pccpath);
-	rc = llapi_pccdev_set(mntpath, cmd);
+	rc = llapi_search_fsname(mntpath, fsname);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s: cannot find a Lustre filesystem mounted at '%s'\n",
+			jt_cmdname(argv[0]), mntpath);
+		return rc;
+	}
+
+	/* Set llapi message level */
+	llapi_msg_set_level(verbose);
+	rc = llapi_pcc_del(mntpath, pccpath, flags);
 	if (rc < 0)
-		fprintf(stderr, "%s: failed to run '%s' on %s\n",
-			jt_cmdname(argv[0]), cmd, mntpath);
+		fprintf(stderr, "%s: failed to delete '%s' on '%s': %s\n",
+			jt_cmdname(argv[0]), pccpath, mntpath, strerror(errno));
 
 	return rc;
 }
 
 int jt_pcc_clear(int argc, char **argv)
 {
+	static struct option long_opts[] = {
+	{ .val = 'k',	.name = "keep-data",	.has_arg = no_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .name = NULL } };
+	char fsname[MAX_OBD_NAME + 1];
 	const char *mntpath;
+	__u32 flags = PCC_CLEANUP_FL_NONE;
+	int verbose = LLAPI_MSG_INFO;
 	int rc;
+	int c;
 
-	optind = 1;
-	if (argc != 2) {
-		fprintf(stderr, "%s: require 1 arguments\n",
+	while ((c = getopt_long(argc, argv, "kv", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'k':
+			flags = PCC_CLEANUP_FL_KEEP_DATA;
+			break;
+		case 'v':
+			verbose++;
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+	if (optind + 1 != argc) {
+		fprintf(stderr, "%s: must speficy mount path\n",
 			jt_cmdname(argv[0]));
 		return CMD_HELP;
 	}
 
 	mntpath = argv[optind];
-	rc = llapi_pccdev_set(mntpath, "clear");
-	if (rc < 0)
-		fprintf(stderr, "%s: failed to run 'clear' on %s\n",
+
+	rc = llapi_search_fsname(mntpath, fsname);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s: cannot find a Lustre filesystem mounted at '%s'\n",
 			jt_cmdname(argv[0]), mntpath);
+		return rc;
+	}
+
+	/* Set llapi message level */
+	llapi_msg_set_level(verbose);
+	rc = llapi_pcc_clear(mntpath, flags);
+	if (rc < 0)
+		fprintf(stderr,
+			"%s: failed to remove all PCC backends on '%s': %s\n",
+			jt_cmdname(argv[0]), mntpath, strerror(errno));
 
 	return rc;
 }
@@ -5923,8 +5989,8 @@ int jt_pcc_list(int argc, char **argv)
 	mntpath = argv[optind];
 	rc = llapi_pccdev_get(mntpath);
 	if (rc < 0)
-		fprintf(stderr, "%s: failed to run 'pcc list' on %s\n",
-			jt_cmdname(argv[0]), mntpath);
+		fprintf(stderr, "%s: failed to run 'pcc list' on '%s': %s\n",
+			jt_cmdname(argv[0]), mntpath, strerror(errno));
 
 	return rc;
 }

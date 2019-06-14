@@ -7058,10 +7058,10 @@ void lustre_assert_wire_constants(void)
 	/* Checks for struct lu_pcc_detach */
 	LASSERTF((int)sizeof(struct lu_pcc_detach) == 4, "found %lld\n",
 		 (long long)(int)sizeof(struct lu_pcc_detach));
-	LASSERTF((int)offsetof(struct lu_pcc_detach, pccd_opt) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct lu_pcc_detach, pccd_opt));
-	LASSERTF((int)sizeof(((struct lu_pcc_detach *)0)->pccd_opt) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lu_pcc_detach *)0)->pccd_opt));
+	LASSERTF((int)offsetof(struct lu_pcc_detach, pccd_flags) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_detach, pccd_flags));
+	LASSERTF((int)sizeof(((struct lu_pcc_detach *)0)->pccd_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_detach *)0)->pccd_flags));
 
 	/* Checks for struct lu_pcc_detach_fid */
 	LASSERTF((int)sizeof(struct lu_pcc_detach_fid) == 20, "found %lld\n",
@@ -7070,10 +7070,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lu_pcc_detach_fid, pccd_fid));
 	LASSERTF((int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_fid) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_fid));
-	LASSERTF((int)offsetof(struct lu_pcc_detach_fid, pccd_opt) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct lu_pcc_detach_fid, pccd_opt));
-	LASSERTF((int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_opt) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_opt));
+	LASSERTF((int)offsetof(struct lu_pcc_detach_fid, pccd_flags) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lu_pcc_detach_fid, pccd_flags));
+	LASSERTF((int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_flags) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lu_pcc_detach_fid *)0)->pccd_flags));
 
 	/* Checks for struct lu_pcc_state */
 	LASSERTF((int)sizeof(struct lu_pcc_state) == 4112, "found %lld\n",

@@ -4907,7 +4907,12 @@ out_pcc:
 		if (!inode_owner_or_capable(&nop_mnt_idmap, inode))
 			GOTO(out_detach_free, rc = -EPERM);
 
-		rc = pcc_ioctl_detach(inode, detach->pccd_opt);
+		rc = pcc_ioctl_detach(inode, &detach->pccd_flags);
+		if (rc)
+			GOTO(out_detach_free, rc);
+
+		if (copy_to_user((char __user *)arg, detach, sizeof(*detach)))
+			GOTO(out_detach_free, rc = -EFAULT);
 out_detach_free:
 		OBD_FREE_PTR(detach);
 		RETURN(rc);

@@ -470,6 +470,11 @@ pcc_parse_value_pair(struct pcc_cmd *cmd, char *buffer)
 			return rc;
 		if (id > 0)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCCRO;
+	} else if (strcmp(key, "hsmtool") == 0) {
+		cmd->u.pccc_add.pccc_hsmtool_type = hsmtool_string2type(val);
+		if (cmd->u.pccc_add.pccc_hsmtool_type != HSMTOOL_POSIX_V1 &&
+		    cmd->u.pccc_add.pccc_hsmtool_type != HSMTOOL_POSIX_V2)
+			return -EINVAL;
 	} else {
 		return -EINVAL;
 	}
@@ -486,6 +491,7 @@ pcc_parse_value_pairs(struct pcc_cmd *cmd, char *buffer)
 
 	switch (cmd->pccc_cmd) {
 	case PCC_ADD_DATASET:
+		cmd->u.pccc_add.pccc_hsmtool_type = HSMTOOL_UNKNOWN;
 		/* Enable auto attach by default */
 		cmd->u.pccc_add.pccc_flags |= PCC_DATASET_AUTO_ATTACH;
 		break;
@@ -712,6 +718,9 @@ pcc_dataset_flags_check(struct pcc_super *super, struct pcc_cmd *cmd)
 	    cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCCRO)
 		cmd->u.pccc_add.pccc_roid = cmd->u.pccc_add.pccc_rwid;
 
+	if (cmd->u.pccc_add.pccc_hsmtool_type == HSMTOOL_UNKNOWN)
+		cmd->u.pccc_add.pccc_hsmtool_type = HSMTOOL_DEFAULT;
+
 	return 0;
 }
 
@@ -748,6 +757,7 @@ pcc_dataset_add(struct pcc_super *super, struct pcc_cmd *cmd)
 	dataset->pccd_rwid = cmd->u.pccc_add.pccc_rwid;
 	dataset->pccd_roid = cmd->u.pccc_add.pccc_roid;
 	dataset->pccd_flags = cmd->u.pccc_add.pccc_flags;
+	dataset->pccd_hsmtool_type = cmd->u.pccc_add.pccc_hsmtool_type;
 	atomic_set(&dataset->pccd_refcount, 1);
 
 	rc = pcc_dataset_rule_init(&dataset->pccd_rule, cmd);
@@ -846,10 +856,16 @@ pcc_dataset_del(struct pcc_super *super, char *pathname)
 static void
 pcc_dataset_dump(struct pcc_dataset *dataset, struct seq_file *m)
 {
-	seq_printf(m, "%s:\n", dataset->pccd_pathname);
-	seq_printf(m, "  rwid: %u\n", dataset->pccd_rwid);
-	seq_printf(m, "  flags: %x\n", dataset->pccd_flags);
-	seq_printf(m, "  autocache: %s\n", dataset->pccd_rule.pmr_conds_str);
+	seq_puts(m, "  -\n");
+	seq_printf(m, "    " PCC_YAML_PCCPATH ": %s\n",
+		   dataset->pccd_pathname);
+	seq_printf(m, "    " PCC_YAML_HSMTOOL ": %s\n",
+		   hsmtool_type2string(dataset->pccd_hsmtool_type));
+	seq_printf(m, "    " PCC_YAML_RWID ": %u\n", dataset->pccd_rwid);
+	seq_printf(m, "    " PCC_YAML_ROID ": %u\n", dataset->pccd_roid);
+	seq_printf(m, "    " PCC_YAML_FLAGS ": %x\n", dataset->pccd_flags);
+	seq_printf(m, "    " PCC_YAML_AUTOCACHE ": %s\n",
+		   dataset->pccd_rule.pmr_conds_str);
 }
 
 int
@@ -858,6 +874,8 @@ pcc_super_dump(struct pcc_super *super, struct seq_file *m)
 	struct pcc_dataset *dataset;
 
 	down_read(&super->pccs_rw_sem);
+	if (!list_empty(&super->pccs_datasets))
+		seq_puts(m, "pcc:\n");
 	list_for_each_entry(dataset, &super->pccs_datasets, pccd_linkage) {
 		pcc_dataset_dump(dataset, m);
 	}
@@ -1053,23 +1071,33 @@ void pcc_inode_free(struct inode *inode)
 }
 
 /*
- * TODO:
+ * Add HSMTOOL_POSIX_V2 support.
  * As Andreas suggested, we'd better use new layout to
  * reduce overhead:
  * (fid->f_oid >> 16 & oxFFFF)/FID
  */
 #define PCC_DATASET_MAX_PATH (6 * 5 + FID_NOBRACE_LEN + 1)
-static int pcc_fid2dataset_path(char *buf, int sz, struct lu_fid *fid)
+static int pcc_fid2dataset_path(struct pcc_dataset *dataset, char *buf,
+				int sz, struct lu_fid *fid)
 {
-	return scnprintf(buf, sz, "%04x/%04x/%04x/%04x/%04x/%04x/"
-			 DFID_NOBRACE,
-			 (fid)->f_oid       & 0xFFFF,
-			 (fid)->f_oid >> 16 & 0xFFFF,
-			 (unsigned int)((fid)->f_seq       & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
-			 (unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
-			 PFID(fid));
+	switch (dataset->pccd_hsmtool_type) {
+	case HSMTOOL_POSIX_V1:
+		return snprintf(buf, sz, "%04x/%04x/%04x/%04x/%04x/%04x/"
+				DFID_NOBRACE,
+				(fid)->f_oid       & 0xFFFF,
+				(fid)->f_oid >> 16 & 0xFFFF,
+				(unsigned int)((fid)->f_seq       & 0xFFFF),
+				(unsigned int)((fid)->f_seq >> 16 & 0xFFFF),
+				(unsigned int)((fid)->f_seq >> 32 & 0xFFFF),
+				(unsigned int)((fid)->f_seq >> 48 & 0xFFFF),
+				PFID(fid));
+	case HSMTOOL_POSIX_V2:
+		return snprintf(buf, sz, "%04x/"DFID_NOBRACE,
+				(__u32)((fid)->f_oid ^ (fid)->f_seq) & 0XFFFF,
+				PFID(fid));
+	default:
+		return -EINVAL;
+	}
 }
 
 static inline const struct cred *pcc_super_cred(struct super_block *sb)
@@ -1278,7 +1306,7 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 	    !(dataset->pccd_flags & PCC_DATASET_PCCRO))
 		RETURN(0);
 
-	rc = pcc_fid2dataset_path(pathname, PCC_DATASET_MAX_PATH,
+	rc = pcc_fid2dataset_path(dataset, pathname, PCC_DATASET_MAX_PATH,
 				  &lli->lli_fid);
 
 	old_cred = override_creds(pcc_super_cred(inode->i_sb));
@@ -1710,9 +1738,8 @@ static void pcc_io_fini(struct inode *inode, enum pcc_io_type iot,
 
 	*cached = pcc_io_tolerate(pcci, iot, rc);
 	if (atomic_dec_and_test(&pcci->pcci_active_ios))
-		wake_up(&pcci->pcci_waitq);
+		wake_up_all(&pcci->pcci_waitq);
 }
-
 
 static ssize_t
 __pcc_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
@@ -2138,10 +2165,12 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 
 	if (!pcc_vm_ops->page_mkwrite &&
 	    page->mapping == pcc_file->f_mapping) {
+		__u32 flags = PCC_DETACH_FL_UNCACHE;
+
 		CDEBUG(D_MMAP,
 		       "%s: PCC backend fs not support ->page_mkwrite()\n",
 		       ll_i2sbi(inode)->ll_fsname);
-		pcc_ioctl_detach(inode, PCC_DETACH_OPT_UNCACHE);
+		(void) pcc_ioctl_detach(inode, &flags);
 		mmap_read_unlock(mm);
 		*cached = true;
 		RETURN(VM_FAULT_RETRY | VM_FAULT_NOPAGE);
@@ -2168,7 +2197,9 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 		 * __do_page_fault and retry the memory fault handling.
 		 */
 		if (page->mapping == pcc_file->f_mapping) {
-			pcc_ioctl_detach(inode, PCC_DETACH_OPT_UNCACHE);
+			__u32 flags = PCC_DETACH_FL_UNCACHE;
+
+			pcc_ioctl_detach(inode, &flags);
 			*cached = true;
 			mmap_read_unlock(mm);
 			RETURN(VM_FAULT_RETRY | VM_FAULT_NOPAGE);
@@ -2200,7 +2231,9 @@ out:
 	 * Lustre I/O path.
 	 */
 	if (rc & VM_FAULT_SIGBUS) {
-		pcc_ioctl_detach(inode, PCC_DETACH_OPT_UNCACHE);
+		__u32 flags = PCC_DETACH_FL_UNCACHE;
+
+		(void) pcc_ioctl_detach(inode, &flags);
 		mmap_read_unlock(mm);
 		RETURN(VM_FAULT_RETRY | VM_FAULT_NOPAGE);
 	}
@@ -2394,7 +2427,7 @@ static int __pcc_inode_create(struct pcc_dataset *dataset,
 	if (path == NULL)
 		return -ENOMEM;
 
-	pcc_fid2dataset_path(path, PCC_DATASET_MAX_PATH, fid);
+	pcc_fid2dataset_path(dataset, path, PCC_DATASET_MAX_PATH, fid);
 
 	base = pcc_mkdir_p(dataset->pccd_path.dentry, path, 0);
 	if (IS_ERR(base)) {
@@ -3001,10 +3034,12 @@ static int pcc_hsm_remove(struct inode *inode)
 	if (rc) {
 		CDEBUG(D_CACHE, DFID" RESTORE failure: %d\n",
 		       PFID(&ll_i2info(inode)->lli_fid), rc);
-		RETURN(rc);
+		/* ignore the RESTORE failure.
+		 * i.e. the file is in exists dirty archived state.
+		 */
+	} else {
+		ll_layout_refresh(inode, &gen);
 	}
-
-	ll_layout_refresh(inode, &gen);
 
 	len = sizeof(struct hsm_user_request) +
 	      sizeof(struct hsm_user_item);
@@ -3030,7 +3065,7 @@ static int pcc_hsm_remove(struct inode *inode)
 	RETURN(rc);
 }
 
-int pcc_ioctl_detach(struct inode *inode, __u32 opt)
+int pcc_ioctl_detach(struct inode *inode, __u32 *flags)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct pcc_inode *pcci;
@@ -3049,7 +3084,7 @@ int pcc_ioctl_detach(struct inode *inode, __u32 opt)
 	LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
 
 	if (pcci->pcci_type == LU_PCC_READWRITE) {
-		if (opt == PCC_DETACH_OPT_UNCACHE) {
+		if (*flags & PCC_DETACH_FL_UNCACHE) {
 			hsm_remove = true;
 			/*
 			 * The file will be removed from PCC, set the flags
@@ -3064,12 +3099,14 @@ int pcc_ioctl_detach(struct inode *inode, __u32 opt)
 	} else if (pcci->pcci_type == LU_PCC_READONLY) {
 		__pcc_layout_invalidate(pcci);
 
-		if (opt == PCC_DETACH_OPT_UNCACHE && !pcci->pcci_unlinked) {
+		if (*flags & PCC_DETACH_FL_UNCACHE && !pcci->pcci_unlinked) {
 			old_cred =  override_creds(pcc_super_cred(inode->i_sb));
 			rc = pcc_inode_remove(inode, pcci->pcci_path.dentry);
 			revert_creds(old_cred);
-			if (!rc)
+			if (!rc) {
 				pcci->pcci_unlinked = true;
+				*flags |= PCC_DETACH_FL_CACHE_REMOVED;
+			}
 		}
 
 		pcc_inode_put(pcci);
@@ -3079,10 +3116,14 @@ int pcc_ioctl_detach(struct inode *inode, __u32 opt)
 
 out_unlock:
 	pcc_inode_unlock(inode);
-	if (hsm_remove) {
+
+	if (hsm_remove || (*flags & PCC_DETACH_FL_UNCACHE &&
+			   *flags & PCC_DETACH_FL_KNOWN_READWRITE)) {
 		old_cred = override_creds(pcc_super_cred(inode->i_sb));
 		rc = pcc_hsm_remove(inode);
 		revert_creds(old_cred);
+		if (!rc)
+			*flags |= PCC_DETACH_FL_CACHE_REMOVED;
 	}
 
 	RETURN(rc);

@@ -650,8 +650,9 @@ struct ll_ioc_lease_id {
 #define LL_IOC_HEAT_GET			_IOWR('f', 251, struct lu_heat)
 #define LL_IOC_HEAT_SET			_IOW('f', 251, __u64)
 #define LL_IOC_PCC_ATTACH		_IOW('f', 252, struct lu_pcc_attach)
-#define LL_IOC_PCC_DETACH		_IOW('f', 252, struct lu_pcc_detach)
-#define LL_IOC_PCC_DETACH_BY_FID	_IOW('f', 252, struct lu_pcc_detach_fid)
+#define LL_IOC_PCC_DETACH		_IOWR('f', 252, struct lu_pcc_detach)
+#define LL_IOC_PCC_DETACH_BY_FID	_IOWR('f', 252, \
+						struct lu_pcc_detach_fid)
 #define LL_IOC_PCC_STATE		_IOR('f', 252, struct lu_pcc_state)
 #define LL_IOC_PROJECT			_IOW('f', 253, struct lu_project)
 
@@ -2944,24 +2945,75 @@ static inline const char *pcc_type2string(enum lu_pcc_type type)
 	}
 }
 
+#define PCC_YAML_PCCPATH	"pccpath"
+#define PCC_YAML_HSMTOOL	"hsmtool"
+#define PCC_YAML_RWID		"rwid"
+#define PCC_YAML_ROID		"roid"
+#define PCC_YAML_FLAGS		"flags"
+#define PCC_YAML_AUTOCACHE	"autocache"
+
+enum hsmtool_type {
+	HSMTOOL_UNKNOWN		= 0,
+	/*
+	 * v1 (original) using 6 directories (oid & 0xffff)/-/-/-/-/-/FID.
+	 * Places only one FID per directory. See ct_path_archive() below.
+	 */
+	HSMTOOL_POSIX_V1	= 1,
+	/* v2 using (OID & 0xffff)^(SEQ & 0xffff)/FID. */
+	HSMTOOL_POSIX_V2	= 2,
+	HSMTOOL_DEFAULT		= HSMTOOL_POSIX_V2,
+};
+
+static inline const char *hsmtool_type2string(enum hsmtool_type type)
+{
+	switch (type) {
+	case HSMTOOL_POSIX_V1:
+		return "posix_v1";
+	case HSMTOOL_POSIX_V2:
+		return "posix_v2";
+	default:
+		return "unknown";
+	}
+}
+
+static inline enum hsmtool_type hsmtool_string2type(const char *str)
+{
+	if (strcmp(str, "posix") == 0)
+		return HSMTOOL_DEFAULT;
+	if (strcmp(str, "posix_v1") == 0)
+		return HSMTOOL_POSIX_V1;
+	if (strcmp(str, "posix_v2") == 0)
+		return HSMTOOL_POSIX_V2;
+
+	return HSMTOOL_UNKNOWN;
+}
+
 struct lu_pcc_attach {
 	__u32 pcca_type; /* PCC type */
 	__u32 pcca_id; /* Attach ID */
 };
 
-enum lu_pcc_detach_opts {
-	PCC_DETACH_OPT_NONE = 0, /* Detach only, keep the PCC copy */
-	PCC_DETACH_OPT_UNCACHE, /* Remove the cached file after detach */
+enum lu_pcc_detach_flags {
+	/* Detach only, keep the PCC copy */
+	PCC_DETACH_FL_NONE		= 0x0,
+	/* Remove the cached file after detach */
+	PCC_DETACH_FL_UNCACHE		= 0x01,
+	/* Known the file was once used as PCC-RW */
+	PCC_DETACH_FL_KNOWN_READWRITE	= 0x02,
+	/* Known the file was once used as PCC-RO */
+	PCC_DETACH_FL_KNOWN_READONLY	= 0x04,
+	/* Indicate PCC cached copy is removed */
+	PCC_DETACH_FL_CACHE_REMOVED	= 0x08,
 };
 
 struct lu_pcc_detach_fid {
 	/* fid of the file to detach */
 	struct lu_fid	pccd_fid;
-	__u32		pccd_opt;
+	__u32		pccd_flags;
 };
 
 struct lu_pcc_detach {
-	__u32		pccd_opt;
+	__u32		pccd_flags;
 };
 
 enum lu_pcc_state_flags {
@@ -2980,6 +3032,12 @@ struct lu_pcc_state {
 	__u32	pccs_flags; /* enum lu_pcc_state_flags */
 	__u32	pccs_padding;
 	char	pccs_path[PATH_MAX];
+};
+
+enum lu_pcc_cleanup_flags {
+	PCC_CLEANUP_FL_NONE		= 0x0,
+	/* Remove the PCC backend but retain the data on the cache */
+	PCC_CLEANUP_FL_KEEP_DATA	= 0x1,
 };
 
 enum lu_project_type {

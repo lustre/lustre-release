@@ -3301,7 +3301,7 @@ static void check_lu_pcc_detach(void)
 {
 	BLANK_LINE();
 	CHECK_STRUCT(lu_pcc_detach);
-	CHECK_MEMBER(lu_pcc_detach, pccd_opt);
+	CHECK_MEMBER(lu_pcc_detach, pccd_flags);
 }
 
 static void check_lu_pcc_detach_fid(void)
@@ -3309,7 +3309,7 @@ static void check_lu_pcc_detach_fid(void)
 	BLANK_LINE();
 	CHECK_STRUCT(lu_pcc_detach_fid);
 	CHECK_MEMBER(lu_pcc_detach_fid, pccd_fid);
-	CHECK_MEMBER(lu_pcc_detach_fid, pccd_opt);
+	CHECK_MEMBER(lu_pcc_detach_fid, pccd_flags);
 }
 
 static void check_lu_pcc_state(void)

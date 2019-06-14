@@ -122,6 +122,7 @@ struct pcc_dataset {
 	struct path		pccd_path;	 /* Root path */
 	struct list_head	pccd_linkage;  /* Linked to pccs_datasets */
 	atomic_t		pccd_refcount; /* Reference count */
+	enum hsmtool_type	pccd_hsmtool_type; /*HSM copytool type */
 };
 
 struct pcc_super {
@@ -209,6 +210,7 @@ struct pcc_cmd {
 			struct list_head	 pccc_conds;
 			char			*pccc_conds_str;
 			enum pcc_dataset_flags	 pccc_flags;
+			enum hsmtool_type	 pccc_hsmtool_type;
 		} pccc_add;
 		struct pcc_cmd_del {
 			__u32			 pccc_pad;
@@ -233,7 +235,7 @@ int pcc_readwrite_attach_fini(struct file *file, struct inode *inode,
 			      bool attached);
 int pcc_ioctl_attach(struct file *file, struct inode *inode,
 		     struct lu_pcc_attach *attach);
-int pcc_ioctl_detach(struct inode *inode, __u32 opt);
+int pcc_ioctl_detach(struct inode *inode, __u32 *flags);
 int pcc_ioctl_state(struct file *file, struct inode *inode,
 		    struct lu_pcc_state *state);
 void pcc_file_init(struct pcc_file *pccf);

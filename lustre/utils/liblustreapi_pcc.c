@@ -39,7 +39,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
+#include <lnetconfig/cyaml.h>
 #include "lustreapi_internal.h"
+#include "libhsm_scanner.h"
 
 /**
  * Fetch and attach a file to readwrite PCC.
@@ -254,16 +256,16 @@ int llapi_pcc_attach_fid_str(const char *mntpath, const char *fidstr,
  * detach PCC cache of a file by using fd.
  *
  * \param fd		File handle.
- * \param option	Detach option
+ * \param flags		Detach flags.
  *
  * \return 0 on success, an error code otherwise.
  */
-int llapi_pcc_detach_fd(int fd, __u32 option)
+int llapi_pcc_detach_fd(int fd, __u32 flags)
 {
 	struct lu_pcc_detach detach;
 	int rc;
 
-	detach.pccd_opt = option;
+	detach.pccd_flags = flags;
 	rc = ioctl(fd, LL_IOC_PCC_DETACH, &detach);
 	/* If error, save errno value */
 	rc = rc ? -errno : 0;
@@ -276,12 +278,12 @@ int llapi_pcc_detach_fd(int fd, __u32 option)
  *
  * \param mntpath	Fullpath to the client mount point.
  * \param fid		FID of the file.
- * \param option	Detach option.
+ * \param flags		Detach flags.
  *
  * \return 0 on success, an error code otherwise.
  */
 int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
-			 __u32 option)
+			 __u32 flags)
 {
 	int rc;
 	int fd;
@@ -302,8 +304,7 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
 	 * files.
 	 */
 	detach.pccd_fid = *fid;
-	detach.pccd_opt = option;
-
+	detach.pccd_flags = flags;
 	rc = ioctl(fd, LL_IOC_PCC_DETACH_BY_FID, &detach);
 	rc = rc ? -errno : 0;
 
@@ -316,12 +317,12 @@ int llapi_pcc_detach_fid(const char *mntpath, const struct lu_fid *fid,
  *
  * \param mntpath	Fullpath to the client mount point.
  * \param fidstr	FID string of the file.
- * \param option	Detach option.
+ * \param flags		Detach flags.
  *
  * \return 0 on success, an error code otherwise.
  */
 int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
-			     __u32 option)
+			     __u32 flags)
 {
 	int rc;
 	struct lu_fid fid;
@@ -338,7 +339,7 @@ int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
 		return -EINVAL;
 	}
 
-	rc = llapi_pcc_detach_fid(mntpath, &fid, option);
+	rc = llapi_pcc_detach_fid(mntpath, &fid, flags);
 
 	return rc;
 }
@@ -347,11 +348,11 @@ int llapi_pcc_detach_fid_str(const char *mntpath, const char *fidstr,
  * detach PCC cache of a file.
  *
  * \param path		Fullpath to the file to operate on.
- * \param option	Detach option.
+ * \param flags		Detach flags.
  *
  * \return 0 on success, an error code otherwise.
  */
-int llapi_pcc_detach_file(const char *path, __u32 option)
+int llapi_pcc_detach_file(const char *path, __u32 flags)
 {
 	int rc;
 	int fd;
@@ -364,7 +365,7 @@ int llapi_pcc_detach_file(const char *path, __u32 option)
 		return rc;
 	}
 
-	rc = llapi_pcc_detach_fd(fd, option);
+	rc = llapi_pcc_detach_fd(fd, flags);
 	close(fd);
 	return rc;
 }
@@ -526,4 +527,276 @@ out_close:
 out_free_param:
 	cfs_free_param_data(&path);
 	return rc;
+}
+
+static int llapi_pcc_scan_detach(const char *pname, const char *fname,
+				 struct hsm_scan_control *hsc)
+{
+	struct lu_pcc_detach_fid detach;
+	char fullname[PATH_MAX];
+	char fidstr[FID_LEN];
+	const char *fidname;
+	bool lov_file;
+	int fd;
+	int rc;
+
+	/* It is the saved lov file when archive on HSM backend. */
+	detach.pccd_flags = PCC_DETACH_FL_UNCACHE;
+	lov_file = endswith(fname, ".lov");
+	if (lov_file) {
+		size_t len;
+
+		len = strlen(fname) - strlen(".lov");
+		if (len > sizeof(fidstr)) {
+			rc = -ENAMETOOLONG;
+			errno = ENAMETOOLONG;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "Too long PCC-RO fname %s/%s",
+				    pname, fname);
+			return rc;
+		}
+		strncpy(fidstr, fname, FID_LEN);
+		fidstr[len] = '\0';
+		detach.pccd_flags |= PCC_DETACH_FL_KNOWN_READWRITE;
+		fidname = fidstr;
+	} else {
+		fidname = fname;
+	}
+
+	rc = sscanf(fidname, SFID, RFID(&detach.pccd_fid));
+	if (rc != 3 || !fid_is_sane(&detach.pccd_fid)) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "bad FID format '%s', should be [seq:oid:ver] (e.g. "DFID")\n",
+				  fidname, (unsigned long long)FID_SEQ_NORMAL,
+				  2, 0);
+		return -EINVAL;
+	}
+
+	llapi_printf(LLAPI_MSG_DEBUG, "Handle the file: %s\n", fidname);
+
+	rc = llapi_root_path_open(hsc->hsc_mntpath, &fd);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get root path: %s",
+			    hsc->hsc_mntpath);
+		return rc;
+	}
+
+	rc = ioctl(fd, LL_IOC_PCC_DETACH_BY_FID, &detach);
+	close(fd);
+
+	if (rc) {
+		rc = -errno;
+		llapi_printf(LLAPI_MSG_DEBUG,
+			     "failed to detach file '%s': rc = %d\n",
+			     fidname, rc);
+		return rc;
+	}
+
+	if (detach.pccd_flags & PCC_DETACH_FL_CACHE_REMOVED) {
+		llapi_printf(LLAPI_MSG_DEBUG,
+			     "Detach and remove the PCC cached file: %s\n",
+			     fidname);
+	} else {
+		snprintf(fullname, sizeof(fullname), "%s/%s", pname, fidname);
+		llapi_printf(LLAPI_MSG_DEBUG,
+			     "Remove non-cached file: %s flags: %X\n",
+			     fullname, detach.pccd_flags);
+		if (unlink(fullname) && errno != ENOENT) {
+			rc = -errno;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "Unlink %s failed", fullname);
+		}
+
+		if (detach.pccd_flags & PCC_DETACH_FL_KNOWN_READWRITE) {
+			snprintf(fullname, sizeof(fullname), "%s/%s",
+				 pname, fname);
+			/* Remove *.lov file */
+			unlink(fullname);
+		}
+	}
+
+	return rc;
+}
+
+static int llapi_pcc_del_internal(const char *mntpath, const char *pccpath,
+				  enum hsmtool_type type,
+				  enum lu_pcc_cleanup_flags flags)
+{
+	struct hsm_scan_control hsc;
+	char cmd[PATH_MAX];
+	int rc;
+
+	snprintf(cmd, sizeof(cmd), "del %s", pccpath);
+	rc = llapi_pccdev_set(mntpath, cmd);
+	if (rc < 0) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "failed to run '%s' on %s", cmd, mntpath);
+		return rc;
+	}
+
+	if (flags & PCC_CLEANUP_FL_KEEP_DATA)
+		return 0;
+
+	hsc.hsc_type = type;
+	hsc.hsc_mntpath = mntpath;
+	hsc.hsc_hsmpath = pccpath;
+	hsc.hsc_func = llapi_pcc_scan_detach;
+	hsc.hsc_errnum = 0;
+	rc = hsm_scan_process(&hsc);
+
+	return rc;
+}
+
+struct pcc_cmd_handler;
+
+typedef int (*pcc_handler_t)(struct cYAML *node, struct pcc_cmd_handler *pch);
+
+enum pcc_cmd_t {
+	PCC_CMD_DEL,
+	PCC_CMD_CLEAR,
+};
+
+struct pcc_cmd_handler {
+	enum pcc_cmd_t			 pch_cmd;
+	enum lu_pcc_type		 pch_type;
+	bool				 pch_iter_cont;
+	enum lu_pcc_cleanup_flags	 pch_flags;
+	const char			*pch_mntpath;
+	const char			*pch_pccpath;
+	pcc_handler_t			 pch_cb;
+	__u32				 pch_id;
+};
+
+static int llapi_pcc_yaml_cb_helper(struct pcc_cmd_handler *pch)
+{
+	struct cYAML *tree = NULL, *err_rc = NULL, *pcc_node = NULL,
+		     *node = NULL;
+	char pathbuf[sizeof(struct obd_uuid)];
+	glob_t path;
+	int rc;
+
+	rc = llapi_getname(pch->pch_mntpath, pathbuf, sizeof(pathbuf));
+	if (rc < 0) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot get name for '%s'\n", pch->pch_mntpath);
+		return rc;
+	}
+
+	rc = cfs_get_param_paths(&path, "llite/%s/pcc", pathbuf);
+	if (rc != 0)
+		return -errno;
+
+	tree = cYAML_build_tree(path.gl_pathv[0], NULL, 0, &err_rc, false);
+	if (!tree) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "cannot parse YAML file %s\n", path.gl_pathv[0]);
+		cYAML_build_error(rc, -1, "yaml", "from PCC yaml",
+				  "can't parse", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		goto out_free;
+	}
+
+	pcc_node = cYAML_get_object_item(tree, "pcc");
+	if (!pcc_node)
+		goto out_free;
+
+	if (!cYAML_is_sequence(pcc_node)) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "bad PCC backend Array!");
+		goto out_free;
+	}
+
+	while (cYAML_get_next_seq_item(pcc_node, &node) != NULL &&
+	       pch->pch_iter_cont) {
+		int ret;
+
+		ret = pch->pch_cb(node, pch);
+		if (ret && !rc)
+			rc = ret;
+	}
+
+	/* Not found the given PCC backend on the client. */
+	if (pch->pch_iter_cont && pch->pch_cmd == PCC_CMD_DEL)
+		rc = -ENOENT;
+
+out_free:
+	if (tree)
+		cYAML_free_tree(tree);
+	cfs_free_param_data(&path);
+	return rc;
+
+}
+
+static int llapi_handle_yaml_pcc_del(struct cYAML *node,
+				     struct pcc_cmd_handler *pch)
+{
+	struct cYAML *pccpath, *hsmtool;
+	enum hsmtool_type type;
+
+	pccpath = cYAML_get_object_item(node, PCC_YAML_PCCPATH);
+	hsmtool = cYAML_get_object_item(node, PCC_YAML_HSMTOOL);
+
+	if (!pccpath || !pccpath->cy_valuestring ||
+	    !hsmtool || !hsmtool->cy_valuestring)
+		return 0;
+
+	if (strcmp(pccpath->cy_valuestring, pch->pch_pccpath))
+		return 0;
+
+	pch->pch_iter_cont = false;
+	type = hsmtool_string2type(hsmtool->cy_valuestring);
+	return llapi_pcc_del_internal(pch->pch_mntpath, pch->pch_pccpath,
+				      type, pch->pch_flags);
+}
+
+int llapi_pcc_del(const char *mntpath, const char *pccpath,
+		  enum lu_pcc_cleanup_flags flags)
+{
+	struct pcc_cmd_handler pch;
+
+	pch.pch_cmd = PCC_CMD_DEL;
+	pch.pch_iter_cont = true;
+	pch.pch_mntpath = mntpath;
+	pch.pch_pccpath = pccpath;
+	pch.pch_flags = flags;
+	pch.pch_cb = llapi_handle_yaml_pcc_del;
+
+	return llapi_pcc_yaml_cb_helper(&pch);
+}
+
+
+static int llapi_handle_yaml_pcc_clear(struct cYAML *node,
+				       struct pcc_cmd_handler *pch)
+{
+	struct cYAML *pccpath, *hsmtool;
+	enum hsmtool_type type;
+
+	pccpath = cYAML_get_object_item(node, PCC_YAML_PCCPATH);
+	hsmtool = cYAML_get_object_item(node, PCC_YAML_HSMTOOL);
+
+	if (!pccpath || !pccpath->cy_valuestring ||
+	    !hsmtool || !hsmtool->cy_valuestring)
+		return 0;
+
+	type = hsmtool_string2type(hsmtool->cy_valuestring);
+	return llapi_pcc_del_internal(pch->pch_mntpath,
+				      pccpath->cy_valuestring,
+				      type, pch->pch_flags);
+}
+
+int llapi_pcc_clear(const char *mntpath, enum lu_pcc_cleanup_flags flags)
+{
+	struct pcc_cmd_handler pch;
+
+	pch.pch_cmd = PCC_CMD_CLEAR;
+	pch.pch_iter_cont = true;
+	pch.pch_mntpath = mntpath;
+	pch.pch_pccpath = NULL;
+	pch.pch_flags = flags;
+	pch.pch_cb = llapi_handle_yaml_pcc_clear;
+
+	return llapi_pcc_yaml_cb_helper(&pch);
 }

@@ -17,7 +17,7 @@ ALWAYS_EXCEPT+=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 ENABLE_PROJECT_QUOTAS=${ENABLE_PROJECT_QUOTAS:-true}
-HSMTOOL_ARCHIVE_FORMAT=v1
+HSMTOOL_ARCHIVE_FORMAT=v2
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
@@ -182,6 +182,7 @@ set_hsm_param grace_delay 10
 cleanup_pcc_mapping() {
 	local facet=${1:-$SINGLEAGT}
 
+	echo "Cleanup PCC backend on $MOUNT"
 	do_facet $facet $LCTL pcc clear $MOUNT
 }
 
@@ -1802,7 +1803,6 @@ test_21c() {
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
-	local file2=$DIR2/$tfile
 	local fid
 
 	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
@@ -1833,6 +1833,7 @@ test_21c() {
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach $file"
 	check_lpcc_state $file "none"
+
 	unlink $file || error "unlink $file failed"
 }
 run_test 21c "Verify HSM release works storing PCC-RO as HSM mirror component"
@@ -2640,6 +2641,195 @@ test_29b() {
 	do_facet $SINGLEAGT $LFS pcc detach $file || error "detach $file failed"
 }
 run_test 29b "Auto PCC-RO attach in atomic_open"
+
+test_30() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1\ pccro=1"
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	file=$DIR/$tdir/rwattach
+	echo -n backend_del_attach > $file
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RW-PCC attach $file failed"
+
+	file=$DIR/$tdir/rwattachrm
+	echo -n backend_del_attach_rm > $file
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RW-PCC attach $file failed"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/roattach
+	echo -n backend_del_roattach_rm > $file
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RO-PCC attach $file failed"
+
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $LCTL pcc del -v -v -v -v $MOUNT $hsm_root ||
+		error "lctl pcc del $MOUNT $hsm_root failed"
+}
+run_test 30 "Test lctl pcc del command"
+
+test_31() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local -a lpcc_path1
+	local -a lpcc_path2
+	local -a lpcc_path3
+	local file
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0\ pccrw=1\ pccro=1"
+
+	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	file=$DIR/$tdir/rwattach
+	echo -n backend_del_attach > $file
+	lpcc_path1=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RW-PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "RW-PCC detach $file failed"
+	check_lpcc_state $file "none"
+
+	file=$DIR/$tdir/rwattachrm
+	echo -n backend_del_attach_rm > $file
+	lpcc_path2=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RW-PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "RW-PCC detach $file failed"
+	check_lpcc_state $file "none"
+	rm $file || error "rm $file failed"
+
+	file=$DIR/$tdir/roattach
+	echo -n backend_del_roattach_rm > $file
+	lpcc_path3=$(lpcc_fid2path $hsm_root $file "readonly")
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RO-PCC attach $file failed"
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "RO-PCC detach $file failed"
+	check_lpcc_state $file "none"
+
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT $LCTL pcc del -v -v -v -v -k $MOUNT $hsm_root ||
+		error "lctl pcc del -k $MOUNT $hsm_root failed"
+
+	do_facet $SINGLEAGT "[ -f $lpcc_path1 ]" ||
+		error "PCC copy $lpcc_path1 should retain"
+	do_facet $SINGLEAGT "[ -f $lpcc_path2 ]" ||
+		error "PCC copy $lpcc_path1 should retain"
+	do_facet $SINGLEAGT "[ -f $lpcc_path3 ]" ||
+		error "PCC copy $lpcc_path1 should retain"
+}
+run_test 31 "Test lctl pcc del command with --keep option"
+
+test_32() {
+	local agt_host=$(facet_active_host $SINGLEAGT)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local -a lpcc_path
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+
+	do_facet $SINGLEAGT echo -n roattach_removed > $file
+	lpcc_path=$(lpcc_fid2path $hsm_root $file "readonly")
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RO-PCC attach $file failed"
+	rmultiop_start $agt_host $file o_rc || error "multiop $file failed"
+	sleep 3
+	do_facet $SINGLEAGT rm $lpcc_path || error "rm $lpcc_path failed"
+	rmultiop_stop $agt_host || error "multiop $file read failed"
+	check_lpcc_state $file "readonly"
+
+	local content=$(do_facet $SINGLEAGT cat $file)
+	[[ $content == "roattach_removed" ]] || error "data mismatch: $content"
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "RO-PCC detach $file failed"
+	check_lpcc_state $file "none"
+
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "RO-PCC attach $file failed"
+	do_facet $SINGLEAGT rm $lpcc_path || error "rm $lpcc_path failed"
+	check_lpcc_state $file "readonly"
+	content=$(do_facet $SINGLEAGT cat $file)
+	[[ $content == "roattach_removed" ]] || error "data mismatch: $content"
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "RO-PCC detach $file failed"
+	check_lpcc_state $file "none"
+}
+run_test 32 "Test for RO-PCC when PCC copy is deleted"
+
+test_36_base() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local -a lpcc_path
+	local state="readonly"
+	local rw="$1"
+
+	[[ -z $rw ]] || state="readwrite"
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT "projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1\ pccro=1"
+
+	echo -n backend_clear_verify > $file
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $LFS pcc attach $rw -i $HSM_ARCHIVE_NUMBER $file ||
+		error "PCC attach $ro $file failed"
+	check_lpcc_state $file "$state"
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "PCC detach -k $file failed"
+	do_facet $SINGLEAGT "[ -f $lpcc_path1 ]" ||
+		error "PCC copy $lpcc_path should retain"
+	do_facet $SINGLEAGT $LCTL pcc clear -v $MOUNT ||
+		error "lctl pcc clear -v $MOUNT failed"
+	do_facet $SINGLEAGT "[ -f $lpcc_path ]" &&
+		error "PCC copy $lpcc_path should be removed"
+	rm $file || error "rm $file failed"
+}
+
+test_36a() {
+	test_36_base "-w"
+}
+run_test 36a "Stale RW-PCC copy should be deleted after remove the PCC backend"
+
+test_36b() {
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	test_36_base
+}
+run_test 36b "Stale RO-PCC copy should be deleted after remove the PCC backend"
 
 #test 101: containers and PCC
 #LU-15170: Test mount namespaces with PCC

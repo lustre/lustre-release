@@ -13725,18 +13725,19 @@ static int lfs_pcc_detach(int argc, char **argv)
 	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'k',	.name = "keep",	.has_arg = no_argument },
 	{ .name = NULL } };
+	char short_opts[] = "hk";
 	int c;
 	int rc = 0;
 	const char *path;
 	char fullpath[PATH_MAX];
-	__u32 detach_opt = PCC_DETACH_OPT_UNCACHE;
+	__u32 detach_flags = PCC_DETACH_FL_UNCACHE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "hk",
+	while ((c = getopt_long(argc, argv, short_opts,
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'k':
-			detach_opt = PCC_DETACH_OPT_NONE;
+			detach_flags = PCC_DETACH_FL_NONE;
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
@@ -13759,7 +13760,7 @@ static int lfs_pcc_detach(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = llapi_pcc_detach_file(fullpath, detach_opt);
+		rc2 = llapi_pcc_detach_file(fullpath, detach_flags);
 		if (rc2 < 0) {
 			rc2 = -errno;
 			fprintf(stderr,
@@ -13778,18 +13779,19 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 	{ .val = 'h',	.name = "help",	.has_arg = no_argument },
 	{ .val = 'k',	.name = "keep",	.has_arg = no_argument },
 	{ .name = NULL } };
+	char short_opts[] = "hk";
 	int c;
 	int rc = 0;
 	const char *fid;
 	const char *mntpath;
-	__u32 detach_opt = PCC_DETACH_OPT_UNCACHE;
+	__u32 detach_flags = PCC_DETACH_FL_UNCACHE;
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "hk",
+	while ((c = getopt_long(argc, argv, short_opts,
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'k':
-			detach_opt = PCC_DETACH_OPT_NONE;
+			detach_flags = PCC_DETACH_FL_NONE;
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
@@ -13807,7 +13809,7 @@ static int lfs_pcc_detach_fid(int argc, char **argv)
 
 		fid = argv[optind++];
 
-		rc2 = llapi_pcc_detach_fid_str(mntpath, fid, detach_opt);
+		rc2 = llapi_pcc_detach_fid_str(mntpath, fid, detach_flags);
 		if (rc2 < 0) {
 			fprintf(stderr,
 				"%s: cannot detach '%s' on '%s' from PCC: %s\n",

@@ -2796,7 +2796,12 @@ out_ladvise:
 		if (!inode_owner_or_capable(&nop_mnt_idmap, inode2))
 			GOTO(out_iput, rc = -EPERM);
 
-		rc = pcc_ioctl_detach(inode2, detach->pccd_opt);
+		rc = pcc_ioctl_detach(inode2, &detach->pccd_flags);
+		if (rc)
+			GOTO(out_iput, rc);
+
+		if (copy_to_user((char __user *)arg, detach, sizeof(*detach)))
+			GOTO(out_iput, rc = -EFAULT);
 out_iput:
 		iput(inode2);
 out_detach:

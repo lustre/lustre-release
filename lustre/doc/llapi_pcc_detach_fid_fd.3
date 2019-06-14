@@ -6,13 +6,16 @@ llapi_pcc_detach_file \- detach the given file from PCC
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
-.BI "int llapi_pcc_detach_fid_fd(int " dirfd ", const struct lu_fid *" fid ");"
+.BI "int llapi_pcc_detach_fid_fd(int " dirfd ", const struct lu_fid *" fid ",
+.BI "                            __u32 " flags );
 .PP
-.BI "int llapi_pcc_detach_fid(const char *" mntpath ", const struct lu_fid *" fid ");"
+.BI "int llapi_pcc_detach_fid(const char *" mntpath ",
+.BI "                         const struct lu_fid *" fid ", __u32 " flags );
 .PP
-.BI "int llapi_pcc_detach_fid_str(const char *" mntpath ", const char *" fidstr ");"
+.BI "int llapi_pcc_detach_fid_str(const char *" mntpath ",
+.BI "                             const char *" fidstr ", __u32 " flags );
 .PP
-.BI "int llapi_pcc_detach_file(const char *" path ");"
+.BI "int llapi_pcc_detach_file(const char *" path ", __u32 " flags );
 .fi
 .SH DESCRIPTION
 .PP
@@ -21,7 +24,8 @@ llapi_pcc_detach_file \- detach the given file from PCC
 .BR llapi_pcc_detach_fid_str() ,
 and
 .BR llapi_pcc_detach_file()
-detaches a cached file from PCC by an ioctl on the dir. The file is referenced
+detach a cached file from PCC by an ioctl on the dir or the file itself. The
+file is referenced
 by
 .IR fid ,
 .IR fidstr ,
@@ -32,6 +36,35 @@ is referenced by
 .IR dirfd ,
 .IR mntpath ,
 .IR path .
+The detach flags is specified by
+.IR flags
+argument, which is a
+.B enum lu_pcc_detach_flags
+data structure, which contains the following values:
+.nf
+.LP
+	PCC_DETACH_FL_NONE			= 0x0,
+	PCC_DETACH_FL_UNCACHE		= 0x01,
+	PCC_DETACH_FL_KNOWN_READWRITE	= 0x02,
+	PCC_DETACH_FL_KNOWN_READONLY	= 0x04,
+	PCC_DETACH_FL_CACHE_REMOVED	= 0x08,
+.fi
+.TP
+PCC_DETACH_FL_NONE
+means that detach the file from PCC yet retain the data copy on PCC backend.
+.TP
+PCC_DETACH_FL_UNCACHE
+means that remove the PCC copy after detach.
+.TP
+PCC_DETACH_KNOWN_READWRITE
+means that it is known that the file was once cached as PCC-RW.
+.TP
+PCC_DETACH_KNOWN_READONLY
+means that it is known that the file was once cached as PCC-RO.
+.TP
+PCC_DETACH_FL_CACHE_REMOVED
+indicates that PCC cached copy is removed. It is used to tell the user space
+caller that the file is detached and the corresponding PCC copy is removed.
 .SH RETURN VALUES
 .LP
 .BR llapi_pcc_detach_fid_fd() ,
