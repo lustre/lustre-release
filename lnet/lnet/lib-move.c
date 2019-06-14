@@ -2884,8 +2884,9 @@ lnet_finalize_expired_responses(bool force)
 
 				nid = rspt->rspt_next_hop_nid;
 
-				CNETERR("Response timed out: md = %p: nid = %s\n",
-					md, libcfs_nid2str(nid));
+				CDEBUG(D_NET,
+				       "Response timeout: md = %p: nid = %s\n",
+				       md, libcfs_nid2str(nid));
 				LNetMDUnlink(rspt->rspt_mdh);
 				lnet_rspt_free(rspt, i);
 
