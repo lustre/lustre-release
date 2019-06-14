@@ -80,8 +80,8 @@ struct lquota_entry_operations {
 
 	/* Print debug information about a given lquota entry */
 	void (*lqe_debug)(struct lquota_entry *, void *,
-			  struct libcfs_debug_msg_data *, const char *,
-			  va_list);
+			  struct libcfs_debug_msg_data *,
+			  struct va_format *vaf);
 };
 
 /* Per-ID information specific to the quota master target */

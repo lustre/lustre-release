@@ -2566,6 +2566,7 @@ void _debug_req(struct ptlrpc_request *req,
 	bool req_ok = req->rq_reqmsg != NULL;
 	bool rep_ok = false;
 	lnet_nid_t nid = LNET_NID_ANY;
+	struct va_format vaf;
 	va_list args;
 	int rep_flags = -1;
 	int rep_status = -1;
@@ -2591,25 +2592,28 @@ void _debug_req(struct ptlrpc_request *req,
 		nid = req->rq_export->exp_connection->c_peer.nid;
 
 	va_start(args, fmt);
-	libcfs_debug_vmsg2(msgdata, fmt, args,
-			   " req@%p x%llu/t%lld(%lld) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d\n",
-			   req, req->rq_xid, req->rq_transno,
-			   req_ok ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
-			   req_ok ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
-			   req->rq_import ?
-				req->rq_import->imp_obd->obd_name :
-				req->rq_export ?
-					req->rq_export->exp_client_uuid.uuid :
-					"<?>",
-			   libcfs_nid2str(nid),
-			   req->rq_request_portal, req->rq_reply_portal,
-			   req->rq_reqlen, req->rq_replen,
-			   req->rq_early_count, (s64)req->rq_timedout,
-			   (s64)req->rq_deadline,
-			   atomic_read(&req->rq_refcount),
-			   DEBUG_REQ_FLAGS(req),
-			   req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
-			   rep_flags, req->rq_status, rep_status);
+	vaf.fmt = fmt;
+	vaf.va = &args;
+	libcfs_debug_msg(msgdata,
+			 "%pV req@%p x%llu/t%lld(%lld) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d\n",
+			 &vaf,
+			 req, req->rq_xid, req->rq_transno,
+			 req_ok ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
+			 req_ok ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
+			 req->rq_import ?
+			 req->rq_import->imp_obd->obd_name :
+			 req->rq_export ?
+			 req->rq_export->exp_client_uuid.uuid :
+			 "<?>",
+			 libcfs_nid2str(nid),
+			 req->rq_request_portal, req->rq_reply_portal,
+			 req->rq_reqlen, req->rq_replen,
+			 req->rq_early_count, (s64)req->rq_timedout,
+			 (s64)req->rq_deadline,
+			 atomic_read(&req->rq_refcount),
+			 DEBUG_REQ_FLAGS(req),
+			 req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
+			 rep_flags, req->rq_status, rep_status);
 	va_end(args);
 }
 EXPORT_SYMBOL(_debug_req);

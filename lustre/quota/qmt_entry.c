@@ -160,23 +160,21 @@ static int qmt_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
  */
 static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 			  struct libcfs_debug_msg_data *msgdata,
-			  const char *fmt, va_list args)
+			  struct va_format *vaf)
 {
 	struct qmt_pool_info	*pool = (struct qmt_pool_info *)arg;
 
-	libcfs_debug_vmsg2(msgdata, fmt, args,
-			   "qmt:%s pool:%d-%s id:%llu enforced:%d hard:%llu"
-			   " soft:%llu granted:%llu time:%llu qunit: %llu"
-			   " edquot:%d may_rel:%llu revoke:%lld default:%s\n",
-			   pool->qpi_qmt->qmt_svname,
-			   pool->qpi_key & 0x0000ffff,
-			   RES_NAME(pool->qpi_key >> 16),
-			   lqe->lqe_id.qid_uid, lqe->lqe_enforced,
-			   lqe->lqe_hardlimit, lqe->lqe_softlimit,
-			   lqe->lqe_granted, lqe->lqe_gracetime,
-			   lqe->lqe_qunit, lqe->lqe_edquot, lqe->lqe_may_rel,
-			   lqe->lqe_revoke_time,
-			   lqe->lqe_is_default ? "yes" : "no");
+	libcfs_debug_msg(msgdata,
+			 "%pV qmt:%s pool:%d-%s id:%llu enforced:%d hard:%llu soft:%llu granted:%llu time:%llu qunit: %llu edquot:%d may_rel:%llu revoke:%lld default:%s\n",
+			 vaf, pool->qpi_qmt->qmt_svname,
+			 pool->qpi_key & 0x0000ffff,
+			 RES_NAME(pool->qpi_key >> 16),
+			 lqe->lqe_id.qid_uid, lqe->lqe_enforced,
+			 lqe->lqe_hardlimit, lqe->lqe_softlimit,
+			 lqe->lqe_granted, lqe->lqe_gracetime,
+			 lqe->lqe_qunit, lqe->lqe_edquot, lqe->lqe_may_rel,
+			 lqe->lqe_revoke_time,
+			 lqe->lqe_is_default ? "yes" : "no");
 }
 
 /*

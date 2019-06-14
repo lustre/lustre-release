@@ -100,12 +100,15 @@ void lquota_lqe_debug0(struct lquota_entry *lqe,
 		       const char *fmt, ...)
 {
 	struct lquota_site *site = lqe->lqe_site;
+	struct va_format vaf;
 	va_list args;
 
 	LASSERT(site->lqs_ops->lqe_debug != NULL);
 
 	va_start(args, fmt);
-	site->lqs_ops->lqe_debug(lqe, site->lqs_parent, msgdata, fmt, args);
+	vaf.fmt = fmt;
+	vaf.va = &args;
+	site->lqs_ops->lqe_debug(lqe, site->lqs_parent, msgdata, &vaf);
 	va_end(args);
 }
 

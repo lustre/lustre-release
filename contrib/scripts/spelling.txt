@@ -1,6 +1,7 @@
 # The format of each line is:
 # mistake||correction
 #
+libcfs_debug_vmsg2|libcfs_debug_msg
 alloca||malloc
 cfs_atomic_add||atomic_add
 cfs_atomic_add_return||atomic_add_return
