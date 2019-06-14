@@ -4144,15 +4144,13 @@ run_test 43A "execution of file opened for write should return -ETXTBSY"
 
 test_43a() {
 	test_mkdir $DIR/$tdir
-	cp -p $(which $MULTIOP) $DIR/$tdir/multiop ||
-		cp -p multiop $DIR/$tdir/multiop
-	MULTIOP_PROG=$DIR/$tdir/multiop multiop_bg_pause $TMP/$tfile.junk O_c ||
-		error "multiop open $TMP/$tfile.junk failed"
-	rm $TMP/$tfile.junk	# delete junk file on close (not part of test)
-	MULTIOP_PID=$!
-	$MULTIOP $DIR/$tdir/multiop Oc && error "expected error, got success"
-	kill -USR1 $MULTIOP_PID || error "kill -USR1 PID $MULTIOP_PID failed"
-	wait $MULTIOP_PID || error "wait PID $MULTIOP_PID failed"
+	cp -p $(which sleep) $DIR/$tdir/sleep || error "can't copy"
+	$DIR/$tdir/sleep 60 &
+	SLEEP_PID=$!
+	# Make sure exec of $tdir/sleep wins race with truncate
+	sleep 1
+	$MULTIOP $DIR/$tdir/sleep Oc && error "expected error, got success"
+	kill $SLEEP_PID
 }
 run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
@@ -4160,15 +4158,13 @@ test_43b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	test_mkdir $DIR/$tdir
-	cp -p $(which $MULTIOP) $DIR/$tdir/multiop ||
-		cp -p multiop $DIR/$tdir/multiop
-	MULTIOP_PROG=$DIR/$tdir/multiop multiop_bg_pause $TMP/$tfile.junk O_c ||
-		error "multiop open $TMP/$tfile.junk failed"
-	rm $TMP/$tfile.junk	# delete junk file on close (not part of test)
-	MULTIOP_PID=$!
-	$TRUNCATE $DIR/$tdir/multiop 0 && error "expected error, got success"
-	kill -USR1 $MULTIOP_PID || error "kill -USR1 PID $MULTIOP_PID failed"
-	wait $MULTIOP_PID || error "wait PID $MULTIOP_PID failed"
+	cp -p $(which sleep) $DIR/$tdir/sleep || error "can't copy"
+	$DIR/$tdir/sleep 60 &
+	SLEEP_PID=$!
+	# Make sure exec of $tdir/sleep wins race with truncate
+	sleep 1
+	$TRUNCATE $DIR/$tdir/sleep 0 && error "expected error, got success"
+	kill $SLEEP_PID
 }
 run_test 43b "truncate of file being executed should return -ETXTBSY"
 

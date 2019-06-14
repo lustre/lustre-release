@@ -317,65 +317,52 @@ test_14aa() {
 	MULTIPID=$!
 
 	$DIR2/$tdir/$tfile && error || true
-	kill -USR1 $MULTIPID
-	wait $MULTIPID || return 2
+	kill $MULTIPID
 }
 run_test 14aa "execution of file open for write returns -ETXTBSY"
 
 test_14ab() {
 	test_mkdir $DIR1/$tdir
-	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
-	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
-		return 1
-	MULTIOP_PID=$!
-	$MULTIOP $DIR2/$tdir/multiop Oc && error "expected error, got success"
-	kill -USR1 $MULTIOP_PID || return 2
-	wait $MULTIOP_PID || return 3
-	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
+	cp -p $(which sleep) $DIR1/$tdir/sleep || error "cp failed"
+	$DIR1/$tdir/sleep 60 &
+	SLEEP_PID=$!
+	$MULTIOP $DIR2/$tdir/sleep Oc && error "expected error, got success"
+	kill $SLEEP_PID
 }
 run_test 14ab "open(RDWR) of executing file returns -ETXTBSY"
 
 test_14b() { # bug 3192, 7040
 	test_mkdir $DIR1/$tdir
-	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
-	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
-		return 1
-	MULTIOP_PID=$!
-	$TRUNCATE $DIR2/$tdir/multiop 0 && kill -9 $MULTIOP_PID && \
+	cp -p $(which sleep) $DIR1/$tdir/sleep || error "cp failed"
+	$DIR1/$tdir/sleep 60 &
+	SLEEP_PID=$!
+	$TRUNCATE $DIR2/$tdir/sleep 60 && kill -9 $SLEEP_PID && \
 		error "expected truncate error, got success"
-	kill -USR1 $MULTIOP_PID || return 2
-	wait $MULTIOP_PID || return 3
-	cmp $(which multiop) $DIR1/$tdir/multiop || error "binary changed"
-	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
+	kill $SLEEP_PID
+	cmp $(which sleep) $DIR1/$tdir/sleep || error "binary changed"
 }
 run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
 test_14c() { # bug 3430, 7040
 	test_mkdir $DIR1/$tdir
-	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
-	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
-		return 1
-	MULTIOP_PID=$!
-	cp /etc/hosts $DIR2/$tdir/multiop && error "expected error, got success"
-	kill -USR1 $MULTIOP_PID || return 2
-	wait $MULTIOP_PID || return 3
-	cmp $(which multiop) $DIR1/$tdir/multiop || error "binary changed"
-	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
+	cp -p $(which sleep) $DIR1/$tdir/sleep || error "cp failed"
+	$DIR1/$tdir/sleep 60 &
+	SLEEP_PID=$!
+	cp /etc/hosts $DIR2/$tdir/sleep && error "expected error, got success"
+	kill $SLEEP_PID
+	cmp $(which sleep) $DIR1/$tdir/sleep || error "binary changed"
 }
 run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
 test_14d() { # bug 10921
 	test_mkdir $DIR1/$tdir
-	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
-	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
-		return 1
-	MULTIOP_PID=$!
+	cp -p $(which sleep) $DIR1/$tdir/sleep || error "cp failed"
+	$DIR1/$tdir/sleep 60 &
+	SLEEP_PID=$!
 	log chmod
-	chmod 600 $DIR1/$tdir/multiop || error "chmod failed"
-	kill -USR1 $MULTIOP_PID || return 2
-	wait $MULTIOP_PID || return 3
-	cmp $(which multiop) $DIR1/$tdir/multiop || error "binary changed"
-	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
+	chmod 600 $DIR1/$tdir/sleep || error "chmod failed"
+	kill $SLEEP_PID
+	cmp $(which sleep) $DIR1/$tdir/sleep || error "binary changed"
 }
 run_test 14d "chmod of executing file is still possible ========"
 
