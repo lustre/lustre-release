@@ -1,7 +1,6 @@
 # Lustre test Makefile
 AM_CFLAGS := -fPIC -D_GNU_SOURCE \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
-AM_LDFLAGS := -no-install
 
 DIST_SUBDIRS = mpi
 

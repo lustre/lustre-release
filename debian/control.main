@@ -84,7 +84,7 @@ Package: lustre-tests
 Section: utils
 Architecture: i386 armhf powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: lustre-iokit (= ${binary:Version}), attr, rsync, perl, lsof, mpi-default-bin
+Depends: lustre-iokit (= ${binary:Version}), attr, rsync, perl, lsof, libtool, mpi-default-bin
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Whamcloud and available from
