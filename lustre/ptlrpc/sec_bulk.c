@@ -147,7 +147,7 @@ int sptlrpc_proc_enc_pool_seq_show(struct seq_file *m, void *v)
 		   "max waitqueue depth:     %u\n"
 		   "max wait time ms:        %lld\n"
 		   "out of mem:              %lu\n",
-		   totalram_pages, PAGES_PER_POOL,
+		   cfs_totalram_pages(), PAGES_PER_POOL,
 		   page_pools.epp_max_pages,
 		   page_pools.epp_max_pools,
 		   page_pools.epp_total_pages,
@@ -772,9 +772,9 @@ int sptlrpc_enc_pool_init(void)
 	DEF_SHRINKER_VAR(shvar, enc_pools_shrink,
 			 enc_pools_shrink_count, enc_pools_shrink_scan);
 
-	page_pools.epp_max_pages = totalram_pages / 8;
+	page_pools.epp_max_pages = cfs_totalram_pages() / 8;
 	if (enc_pool_max_memory_mb > 0 &&
-	    enc_pool_max_memory_mb <= (totalram_pages >> mult))
+	    enc_pool_max_memory_mb <= (cfs_totalram_pages() >> mult))
 		page_pools.epp_max_pages = enc_pool_max_memory_mb << mult;
 
 	page_pools.epp_max_pools = npages_to_npools(page_pools.epp_max_pages);

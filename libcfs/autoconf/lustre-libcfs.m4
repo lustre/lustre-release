@@ -1072,6 +1072,27 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_NEW_KERNEL_WRITE
 
 #
+# LIBCFS_MM_TOTALRAM_PAGES_FUNC
+#
+# kernel 5.0 commit ca79b0c211af63fa3276f0e3fd7dd9ada2439839
+# mm: convert totalram_pages and totalhigh_pages variables to atomic
+#
+AC_DEFUN([LIBCFS_MM_TOTALRAM_PAGES_FUNC], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if totalram_pages is a function],
+totalram_pages, [
+	#include <linux/mm.h>
+],[
+	totalram_pages_inc();
+],[
+	AC_DEFINE(HAVE_TOTALRAM_PAGES_AS_FUNC, 1,
+		[if totalram_pages is a function])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_MM_TOTALRAM_PAGES_FUNC
+
+#
 # LIBCFS_NEW_KERNEL_WRITE
 #
 # 4.14 commit bdd1d2d3d251c65b74ac4493e08db18971c09240 changed
@@ -1299,6 +1320,8 @@ LIBCFS_TIMER_SETUP
 LIBCFS_WAIT_VAR_EVENT
 # 4.17
 LIBCFS_CLEAR_AND_WAKE_UP_BIT
+# 5.0
+LIBCFS_MM_TOTALRAM_PAGES_FUNC
 ]) # LIBCFS_PROG_LINUX
 
 #

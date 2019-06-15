@@ -656,10 +656,10 @@ static int __init obdclass_init(void)
 	/* Default the dirty page cache cap to 1/2 of system memory.
 	 * For clients with less memory, a larger fraction is needed
 	 * for other purposes (mostly for BGL). */
-	if (totalram_pages <= 512 << (20 - PAGE_SHIFT))
-		obd_max_dirty_pages = totalram_pages / 4;
+	if (cfs_totalram_pages() <= 512 << (20 - PAGE_SHIFT))
+		obd_max_dirty_pages = cfs_totalram_pages() / 4;
 	else
-		obd_max_dirty_pages = totalram_pages / 2;
+		obd_max_dirty_pages = cfs_totalram_pages() / 2;
 
 	err = obd_init_caches();
 	if (err)

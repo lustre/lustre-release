@@ -1268,8 +1268,8 @@ static inline void client_adjust_max_dirty(struct client_obd *cli)
 			cli->cl_dirty_max_pages = dirty_max;
 	}
 
-	if (cli->cl_dirty_max_pages > totalram_pages / 8)
-		cli->cl_dirty_max_pages = totalram_pages / 8;
+	if (cli->cl_dirty_max_pages > cfs_totalram_pages() / 8)
+		cli->cl_dirty_max_pages = cfs_totalram_pages() / 8;
 
 	/* This value is exported to userspace through the max_dirty_mb
 	 * parameter.  So we round up the number of pages to make it a round

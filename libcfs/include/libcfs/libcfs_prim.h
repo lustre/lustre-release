@@ -45,9 +45,9 @@
 #if BITS_PER_LONG == 32
 /* limit to lowmem on 32-bit systems */
 # define NUM_CACHEPAGES \
-	min(totalram_pages, 1UL << (30 - PAGE_SHIFT) * 3 / 4)
+	min(cfs_totalram_pages(), 1UL << (30 - PAGE_SHIFT) * 3 / 4)
 #else
-# define NUM_CACHEPAGES totalram_pages
+# define NUM_CACHEPAGES cfs_totalram_pages()
 #endif
 
 static inline unsigned int memory_pressure_get(void)

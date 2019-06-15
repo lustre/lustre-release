@@ -309,6 +309,7 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct ptlrpc_service *svc = m->private;
 	unsigned long long val;
+	unsigned long long limit;
 	int bufpages;
 	int rc;
 
@@ -326,8 +327,9 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 	 * will be upgraded */
 	bufpages = (roundup_pow_of_two(svc->srv_buf_size) + PAGE_SIZE - 1) >>
 							PAGE_SHIFT;
+	limit = cfs_totalram_pages() / (2 * bufpages);
 	/* do not allow history to consume more than half max number of rqbds */
-	if ((svc->srv_nrqbds_max == 0 && val > totalram_pages / (2 * bufpages)) ||
+	if ((svc->srv_nrqbds_max == 0 && val > limit) ||
 	    (svc->srv_nrqbds_max != 0 && val > svc->srv_nrqbds_max / 2))
 		return -ERANGE;
 
