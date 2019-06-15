@@ -855,8 +855,13 @@ lnet_is_health_check(struct lnet_msg *msg)
 
 	if ((msg->msg_tx_committed && !msg->msg_txpeer) ||
 	    (msg->msg_rx_committed && !msg->msg_rxpeer)) {
-		CDEBUG(D_NET, "msg %p failed too early to retry and send\n",
-		       msg);
+		/* The optimized GET case does not set msg_rxpeer, but status
+		 * could be zero. Only print the error message if we have a
+		 * non-zero status.
+		 */
+		if (status)
+			CDEBUG(D_NET, "msg %p status %d cannot retry\n", msg,
+			       status);
 		return false;
 	}
 
