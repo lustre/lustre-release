@@ -6555,7 +6555,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	if (lo->ldo_layout_gen > (LCME_ID_MAX >> 1)) {
 		__u32 layout_version;
 
-		cfs_get_random_bytes(&layout_version, sizeof(layout_version));
+		get_random_bytes(&layout_version, sizeof(layout_version));
 		lo->ldo_layout_gen = layout_version & 0xffff;
 	}
 

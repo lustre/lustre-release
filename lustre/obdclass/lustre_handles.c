@@ -36,6 +36,8 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/random.h>
+
 #include <obd_support.h>
 #include <lustre_handles.h>
 #include <lustre_lib.h>
@@ -215,7 +217,7 @@ int class_handle_init(void)
 		spin_lock_init(&bucket->lock);
 	}
 
-	cfs_get_random_bytes(&handle_base, sizeof(handle_base));
+	get_random_bytes(&handle_base, sizeof(handle_base));
 	LASSERT(handle_base != 0ULL);
 
 	return 0;

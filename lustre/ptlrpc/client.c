@@ -35,6 +35,8 @@
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/delay.h>
+#include <linux/random.h>
+
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_lib.h>
@@ -3334,7 +3336,7 @@ void ptlrpc_init_xid(void)
 
 	spin_lock_init(&ptlrpc_last_xid_lock);
 	if (now < YEAR_2004) {
-		cfs_get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
+		get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
 		ptlrpc_last_xid >>= 2;
 		ptlrpc_last_xid |= (1ULL << 61);
 	} else {

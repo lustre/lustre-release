@@ -51,6 +51,7 @@
 #include <linux/types.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/hash.h>
 #include <linux/mutex.h>
@@ -1088,7 +1089,7 @@ int __init gss_init_svc_upcall(void)
 	 * sequence number checking, thus no chance to sent error notification
 	 * back to clients.
 	 */
-	cfs_get_random_bytes(&__ctx_index, sizeof(__ctx_index));
+	get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
 	rc = _cache_register_net(&rsi_cache, &init_net);
 	if (rc != 0)

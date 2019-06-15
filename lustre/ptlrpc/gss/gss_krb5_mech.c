@@ -51,6 +51,7 @@
 #define DEBUG_SUBSYSTEM S_SEC
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/crypto.h>
 #include <linux/mutex.h>
@@ -987,7 +988,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         fill_krb5_header(kctx, khdr, 1);
 
         /* generate confounder */
-        cfs_get_random_bytes(conf, ke->ke_conf_size);
+	get_random_bytes(conf, ke->ke_conf_size);
 
         /* get encryption blocksize. note kc_keye might not associated with
          * a tfm, currently only for arcfour-hmac */
@@ -1160,7 +1161,7 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
         fill_krb5_header(kctx, khdr, 1);
 
         /* generate confounder */
-        cfs_get_random_bytes(conf, ke->ke_conf_size);
+	get_random_bytes(conf, ke->ke_conf_size);
 
         /* get encryption blocksize. note kc_keye might not associated with
          * a tfm, currently only for arcfour-hmac */

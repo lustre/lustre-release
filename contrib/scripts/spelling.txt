@@ -22,6 +22,7 @@ cfs_atomic_sub||atomic_sub
 cfs_atomic_sub_and_test||atomic_sub_and_test
 cfs_atomic_sub_return||atomic_sub_return
 cfs_atomic_t||atomic_t
+cfs_get_random_bytes/get_random_bytes
 cfs_hash_bd_t||struct cfs_hash_bd
 cfs_hash_bucket_t||struct cfs_hash_bucket
 cfs_hash_cond_arg_t||struct cfs_hash_cond_arg
