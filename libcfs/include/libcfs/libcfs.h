@@ -88,6 +88,16 @@ void lc_watchdog_disable(struct lc_watchdog *lcw);
 /* Clean up the watchdog */
 void lc_watchdog_delete(struct lc_watchdog *lcw);
 
+#ifdef HAVE_TOTALRAM_PAGES_AS_FUNC
+ #ifndef cfs_totalram_pages
+  #define cfs_totalram_pages() totalram_pages()
+ #endif
+#else
+ #ifndef cfs_totalram_pages
+  #define cfs_totalram_pages() totalram_pages
+ #endif
+#endif
+
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
