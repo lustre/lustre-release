@@ -2236,7 +2236,7 @@ struct lmv_foreign_md {
 
 #define LMV_HASH_FLAG_MIGRATION	0x80000000
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 12, 55, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 12, 57, 0)
 /* Since lustre 2.8, this flag will not be needed, instead this DEAD
  * and orphan flags will be stored in LMA (see LMAI_ORPHAN)
  * Keep this flag just for LFSCK, because it still might meet such
