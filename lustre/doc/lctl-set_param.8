@@ -1,0 +1,96 @@
+.TH lctl 8 "2019 Jun 17" Lustre "configuration utilities"
+.SH NAME
+lctl set_param \- Low level Lustre filesystem configuration utility
+.SH SYNOPSIS
+.IR "\fBlctl set_param " [ -n "] [" -P "] [" -d "] <" parameter \B= value ...>
+.br
+.IR "\fBlctl set_param -F " < filename >
+.SH DESCRIPTION
+Set the value of the named Lustre or LNet
+.I parameter
+to
+.I value
+on the local node.  Parameter names consist of one or more components,
+separated by a '.' (period).  Each component may be specified by plain text
+or by a wildcard in the
+.BR glob (7)
+format.  When wildcards are used, more than one parameter may match and
+be changed.  Parameters are often, but not always, of the form
+.IR obd_name.obd_instance.parameter_name ,
+where
+.I obd_name
+is one of the OBD object types, like
+.BR ldlm ", " llite ", " lmv ", " lov ", " mdc ", " osc ,
+etc., and
+.I obd_instance
+is the name of a Lustre device, like
+.BR testfs-OST0000 ,
+but may be a specific component, or contain wildcards to match some or all
+devices on the node.  Parameters can only be modified by the root user for
+security reasons.
+.TP
+.B -d
+Remove the permanent setting (only for parameters set with the
+.B -P
+option).
+.TP
+.B -F
+Set parameters from
+.I filename
+instead of from the command-line.  The contents of
+.I filename
+is YAML format, created as an output from
+.BR "lctl --device MGS llog_print " < \fIfsname >- client
+fR or any other valid llog configuration log as listed by
+.B lctl --device MGS llog_catlist
+.TP
+.B -n
+Disable printing of the parameter name after setting it.
+.TP
+.B -P
+Set
+.I parameter
+permanently on
+.B all
+nodes connected to the MGS on which the command is run.  To limit wildcard
+.I parameter
+matching to specific filesystems or parameters, ensure that
+.I parameter
+contains a suitably-specific expression for the
+.I obd_name
+and
+.IR obd_instance ,
+such as the filesystem and/or target name.  This option is only available
+in Lustre 2.5.0 and later clients, older clients cannot set persistent
+parameters, nor will they see them.
+.SH EXAMPLES
+.B # lctl set_param fail_loc=0 timeout=20
+.br
+fail_loc=0
+.br
+timeout=20
+.br
+.B # lctl set_param -n fail_loc=0 timeout=20
+.br
+0
+.br
+20
+.br
+.B # lctl set_param -P osc.testfs-OST*.max_dirty_mb=512
+.br
+osc.testfs-OST0000-osc-ffff8803c9c0f000.max_dirty_mb=512
+.br
+osc.testfs-OST0001-osc-ffff8803c9c0f000.max_dirty_mb=512
+.br
+osc.testfs-OST0002-osc-ffff8803c9c0f000.max_dirty_mb=512
+.br
+osc.testfs-OST0003-osc-ffff8803c9c0f000.max_dirty_mb=512
+.br
+osc.testfs-OST0004-osc-ffff8803c9c0f000.max_dirty_mb=512
+.br
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl (8),
+.BR lctl-get_param (8),
+.BR lctl-llog_catlist (8),
+.BR lctl-llog_print (8)

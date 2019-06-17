@@ -1,0 +1,79 @@
+.TH lctl 8 "2019 Jun 17" Lustre "configuration utilities"
+.SH NAME
+lctl get_param \- retrieve tunable parameters
+.SH SYNOPSIS
+.br
+.IR "\fBlctl get_param " [ -F "] [" -n | -N "] [" -R "] <" parameter ...>
+.br
+.SH DESCRIPTION
+Get the value of the named Lustre or LNet
+.I parameter
+on the local node.  Parameter names consist of one or more components,
+separated by a '.' (period).  Each component may be specified by plain text
+or by a wildcard in the
+.BR glob (7)
+format.  When wildcards are used, more than one parameter may match and
+be returned.  Parameters are often, but not always, of the form
+.IR obd_name.obd_instance.parameter_name ,
+where
+.I obd_name
+is one of the OBD object types, like
+.BR ldlm ", " llite ", " lmv ", " lov ", " mdc ", " osc ,
+etc., and
+.I obd_instance
+is the name of a Lustre device, like
+.BR testfs-OST0000 ,
+but may be a specific component, or contain wildcards to match some or all
+devices on the node.  Many parameters are readable as a regular user, though
+some of them are accessible only by the root user for security or
+implementation reasons.
+.SH OPTIONS
+.TP
+.B -F
+Append a '/', '@', or '=' suffix for directories, symlinks, and writeable
+parameters, respectively.
+.B "lctl get_param -NF"
+is equivalent to
+.BR "lctl list_param -F" .
+.TP
+.B -n
+Print only the parameter value and not parameter name.  This may be confusing
+if multiple parameter names are specified, as the parameters are not
+identified, and may not be returned in the order that they are specified.
+.TP
+.B -N
+Print only matched parameter names and not the values. This is especially
+useful when using patterns.
+.TP
+.B -R
+Recursively show all of the parameter names below the specified name.
+.SH EXAMPLES
+.B $ lctl get_param osc.*.max_pages_per_rpc
+.br
+osc.myth-OST0000-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
+.br
+osc.myth-OST0001-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
+.br
+osc.testfs-OST0000-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
+.br
+osc.testfs-OST0001-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
+.br
+osc.testfs-OST0002-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
+.br
+.B $ lctl get_param -n debug
+.br
+super warning dlmtrace error emerg rpctrace vfstrace config console
+.br
+.B $ lctl get_param {mdc,osc}.testfs-*.max_rpcs_in_flight
+.br
+mdc.testfs-MDT0000-mdc-ffff8803c9c0f000.max_rpcs_in_flight=16
+.br
+osc.testfs-OST0000-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
+.br
+osc.testfs-OST0001-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
+.br
+osc.testfs-OST0002-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl (8),
+.BR lctl-set_param (8)
