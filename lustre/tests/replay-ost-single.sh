@@ -2,13 +2,26 @@
 
 set -e
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-SETUP=${SETUP:-""}
-CLEANUP=${CLEANUP:-""}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+# bug number for skipped test:
+ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+# bug number for SLOW test:
+# time in minutes:                 40 min"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="5"
+
+if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+# bug number for slow tests:                 LU-2887
+# time in minutes:                           32  12.5 min"
+	[ "$SLOW" = "no" ] && EXCEPT_SLOW+=" 8a  8b"
+fi
+
+build_test_filter
 
 # While we do not use OSTCOUNT=1 setup anymore,
 # ost1failover_HOST is used
@@ -16,26 +29,6 @@ init_logging
 #failover= must be defined in OST_MKFS_OPTIONS if ostfailover_HOST != ost_HOST
 
 require_dsh_ost || exit 0
-
-# bug number for skipped test:
-ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-# bug number for SLOW test:
-# time in minutes:                 40"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="5"
-
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for slow tests:                 LU-2887
-# time in minutes:                           32  12.5"
-	[ "$SLOW" = "no" ] && EXCEPT_SLOW+=" 8a  8b"
-	if [ $MDSCOUNT -gt 1 ]; then
-# bug number for skipped test:
-		ALWAYS_EXCEPT+=""
-	fi
-fi
-
-build_test_filter
 
 check_and_setup_lustre
 assert_DIR

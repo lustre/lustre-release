@@ -4,33 +4,24 @@
 # Skip specific tests by setting EXCEPT.
 set -e
 
-SRCDIR=$(dirname $0)
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
-
 ONLY=${ONLY:-"$*"}
-# Bug number for skipped test:
+
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+init_logging
+
+# bug number for skipped test:
 ALWAYS_EXCEPT="$SANITY_PFL_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-TMP=${TMP:-/tmp}
-CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
-
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-init_logging
+build_test_filter
 
 check_and_setup_lustre
 
 if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.51) ]]; then
 	skip_env "Need MDS version at least 2.9.51"
 fi
-
-[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
-	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
-
-build_test_filter
 
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"

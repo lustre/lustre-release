@@ -7,33 +7,21 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT="$SANITY_DOM_EXCEPT"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-CLEANUP=${CLEANUP:-:}
-SETUP=${SETUP:-:}
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 # bug number for skipped test:
-	ALWAYS_EXCEPT+=""
-	if [ $MDSCOUNT -gt 1 ]; then
-# bug number for skipped test:
-		ALWAYS_EXCEPT+=""
-	fi
-fi
+ALWAYS_EXCEPT="$SANITY_DOM_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+build_test_filter
 
 [[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
 	{ skip "Need MDS version at least 2.10.56"; exit 0; }
 
-MULTIOP=${MULTIOP:-multiop}
 OPENFILE=${OPENFILE:-openfile}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
@@ -45,8 +33,6 @@ if [[ $UID -eq 0 && $RUNAS_ID -eq 0 ]]; then
 	skip_env "\$RUNAS_ID set to 0, but \$UID is also 0!" && exit
 fi
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
-
-build_test_filter
 
 DOM="yes"
 DOM_SIZE=${DOM_SIZE:-"$((1024*1024))"}

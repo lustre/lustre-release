@@ -4,29 +4,21 @@
 
 set -e
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
 # bug number for skipped test:
 ALWAYS_EXCEPT="$INSANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+build_test_filter
+
 if [ "$FAILURE_MODE" = "HARD" ]; then
 	skip_env "$TESTSUITE: is not functional with FAILURE_MODE = HARD, " \
 		"please use recovery-double-scale, bz20407"
 fi
-
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-
-SETUP=${SETUP:-""}
-CLEANUP=${CLEANUP:-""}
-
-build_test_filter
 
 SINGLECLIENT=${SINGLECLIENT:-$HOSTNAME}
 LIVE_CLIENT=${LIVE_CLIENT:-$SINGLECLIENT}

@@ -10,18 +10,16 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test:
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$MMP_EXCEPT"}
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-SRCDIR=$(cd $(dirname $0); echo $PWD)
-export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
-
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+# bug number for skipped test:
+ALWAYS_EXCEPT=$MMP_EXCEPT
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+build_test_filter
 
 remote_mds_nodsh && skip "remote MDS with nodsh"
 remote_ost_nodsh && skip "remote OST with nodsh"
@@ -35,8 +33,6 @@ fi
 
 SAVED_FAIL_ON_ERROR=$FAIL_ON_ERROR
 FAIL_ON_ERROR=false
-
-build_test_filter
 
 # Get the failover facet.
 get_failover_facet() {

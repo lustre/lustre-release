@@ -1,47 +1,36 @@
 #!/bin/bash
 
 set -e
-#set -v
 
-#
-# This test needs to be run on the client
-#
-SAVE_PWD=$PWD
-export MULTIOP=${MULTIOP:-multiop}
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-SETUP=${SETUP:-}
-CLEANUP=${CLEANUP:-}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
-CHECK_GRANT=${CHECK_GRANT:-"yes"}
-GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
-require_dsh_mds || exit 0
-
-# Skip these tests
-# bug number for skipped tests:
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-# time in minutes:                 7.5"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="44b"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test: LU-11388
-	ALWAYS_EXCEPT+="131b"
+	# bug number for skipped test: LU-11388
+	ALWAYS_EXCEPT+="               131b"
+	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 fi
 if $SHARED_KEY; then
-# bug number for skipped tests: LU-9795 (all below)
+	# bug number for skipped tests: LU-9795 (all below)
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	0b	0c	0d	34	45"
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	47	58b	58c	71a	85a"
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	85b	86	88	89	90"
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	93a	100a	100b	120"
 fi
 
+# time in minutes:                 7.5 (min)"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="44b"
+
 build_test_filter
 
+CHECK_GRANT=${CHECK_GRANT:-"yes"}
+GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
+
+require_dsh_mds || exit 0
 check_and_setup_lustre
 
 mkdir -p $DIR

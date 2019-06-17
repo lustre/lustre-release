@@ -5,20 +5,20 @@
 set -e
 set +o posix
 
-SRCDIR=$(dirname $0)
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-# Bug number for skipped test:    LU-11381
-ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT 201"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-get_lustre_env
 init_logging
+
+ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT "
+# Bug number for skipped test:    LU-11381
+ALWAYS_EXCEPT+="                  201"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+build_test_filter
 
 [[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
 	{ skip "Need MDS version at least 2.10.56"; exit 0; }
@@ -30,8 +30,6 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
-
-build_test_filter
 
 assert_DIR
 rm -rf $DIR/[Rdfs][0-9]*

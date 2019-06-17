@@ -3,22 +3,32 @@
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
 #
-# Run test by setting NOSETUP=true when ltest has setup env for us
 set -e
 
-SRCDIR=$(dirname $0)
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
-
 ONLY=${ONLY:-"$*"}
-# Bug number for skipped test:      LU-5152
-ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT 55"
+
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+init_logging
+
+ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT "
+# Bug number for skipped test:  LU-5152
+ALWAYS_EXCEPT+="                55"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
-	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+# Test duration:                   30 min
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="61"
 
-TMP=${TMP:-/tmp}
+if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+	# bug number:                        LU-2887
+	# Test duration:                     21      9 min"
+	[ "$SLOW" = "no" ] && EXCEPT_SLOW+=" 12a     9"
+fi
 
+build_test_filter
+
+DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 ORIG_PWD=${PWD}
 TSTID=${TSTID:-60000}
 TSTID2=${TSTID2:-60001}
@@ -30,14 +40,6 @@ MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
 QTYPE="ugp"
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-
-init_logging
-DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
-
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
@@ -46,18 +48,6 @@ if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
 	do_facet $SINGLEMDS "! $DEBUGFS -c -R supported_features |
 		grep -q 'quota'"; then
 	skip_env "e2fsprogs doesn't support quota" && exit 0
-fi
-
-# Test duration:                   30 min
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="61"
-
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-	# bug number for skipped test:
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT"
-
-	# bug number:                        LU-2887
-	# Test duration:                     21      9 min"
-	[ "$SLOW" = "no" ] && EXCEPT_SLOW+=" 12a     9"
 fi
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
@@ -82,8 +72,6 @@ SHOW_QUOTA_PROJID="eval is_project_quota_supported && $LFS quota -v -p $TSTPRJID
 SHOW_QUOTA_INFO_USER="$LFS quota -t -u $DIR"
 SHOW_QUOTA_INFO_GROUP="$LFS quota -t -g $DIR"
 SHOW_QUOTA_INFO_PROJID="eval is_project_quota_supported && $LFS quota -t -p $DIR"
-
-build_test_filter
 
 lustre_fail() {
 	local fail_node=$1
