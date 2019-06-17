@@ -417,18 +417,21 @@ run_test 16a "$FSXNUM iterations of dual-mount fsx"
 test_16b() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
+	local stripe_size=($($LFS getstripe -S $DIR))
 
 	# to allocate grant because it may run out due to test_15.
 	lfs setstripe -c -1 $file1
-	dd if=/dev/zero of=$file1 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
-	dd if=/dev/zero of=$file2 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
+	dd if=/dev/zero of=$file1 bs=$stripe_size count=$OSTCOUNT oflag=sync ||
+		error "dd failed writing to file=$file1"
+	dd if=/dev/zero of=$file2 bs=$stripe_size count=$OSTCOUNT oflag=sync ||
+		error "dd failed writing to file=$file2"
 	rm -f $file1
 
 	lfs setstripe -c -1 $file1 # b=10919
 	# -o is set to 8192 because writes < 1 page and between 1 and 2 pages
 	# create a mix of tiny writes & normal writes
 	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -o 8192 -S 0 $file1 \
-	$file2
+	$file2 || error "fsx with tiny write failed."
 }
 run_test 16b "$FSXNUM iterations of dual-mount fsx at small size"
 
