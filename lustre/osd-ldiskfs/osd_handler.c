@@ -2598,8 +2598,13 @@ static int osd_write_locked(const struct lu_env *env, struct dt_object *dt)
 	return obj->oo_owner == env;
 }
 
-static struct timespec *osd_inode_time(const struct lu_env *env,
+#ifdef HAVE_INODE_TIMESPEC64
+static struct timespec64 osd_inode_time(const struct lu_env *env,
 				       struct inode *inode, __u64 seconds)
+#else
+static struct timespec osd_inode_time(const struct lu_env *env,
+				       struct inode *inode, __u64 seconds)
+#endif
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct timespec *t = &oti->oti_time;
@@ -2607,7 +2612,11 @@ static struct timespec *osd_inode_time(const struct lu_env *env,
 	t->tv_sec = seconds;
 	t->tv_nsec = 0;
 	*t = timespec_trunc(*t, inode->i_sb->s_time_gran);
-	return t;
+#ifdef HAVE_INODE_TIMESPEC64
+	return timespec_to_timespec64(*t);
+#else
+	return *t;
+#endif
 }
 
 static void osd_inode_getattr(const struct lu_env *env,
@@ -2825,11 +2834,11 @@ static int osd_inode_setattr(const struct lu_env *env,
 		return 0;
 
 	if (bits & LA_ATIME)
-		inode->i_atime  = *osd_inode_time(env, inode, attr->la_atime);
+		inode->i_atime  = osd_inode_time(env, inode, attr->la_atime);
 	if (bits & LA_CTIME)
-		inode->i_ctime  = *osd_inode_time(env, inode, attr->la_ctime);
+		inode->i_ctime  = osd_inode_time(env, inode, attr->la_ctime);
 	if (bits & LA_MTIME)
-		inode->i_mtime  = *osd_inode_time(env, inode, attr->la_mtime);
+		inode->i_mtime  = osd_inode_time(env, inode, attr->la_mtime);
 	if (bits & LA_SIZE) {
 		spin_lock(&inode->i_lock);
 		LDISKFS_I(inode)->i_disksize = attr->la_size;
