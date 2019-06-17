@@ -19562,7 +19562,7 @@ test_420()
 	[ $dirperms == "drwxrwsrwt" ] ||
 		error "incorrect perms on $dir/testdir"
 
-	$PDSH ${uname}@localhost "PATH=$LUSTRE/tests:\$PATH; \
+	su - $uname -c "PATH=$LUSTRE/tests:\$PATH; \
 		openfile -f O_RDONLY:O_CREAT -m 02755 $dir/testdir/testfile"
 	ls -n $dir/testdir/testfile
 	local fileperms=$(ls -n $dir/testdir/testfile | awk '{print $1}')
