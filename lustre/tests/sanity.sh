@@ -22409,7 +22409,7 @@ test_811() {
 }
 run_test 811 "orphan name stub can be cleaned up in startup"
 
-test_812() {
+test_812a() {
 	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
 		skip "OST < 2.12.51 doesn't support this fail_loc"
 	[ "$SHARED_KEY" = true ] &&
@@ -22430,7 +22430,31 @@ test_812() {
 
 	stat $DIR/$tfile >/dev/null || error "can't stat file"
 }
-run_test 812 "do not drop reqs generated when imp is going to idle (LU-11951)"
+run_test 812a "do not drop reqs generated when imp is going to idle (LU-11951)"
+
+test_812b() { # LU-12378
+	[ $OST1_VERSION -lt $(version_code 2.12.51) ] &&
+		skip "OST < 2.12.51 doesn't support this fail_loc"
+	[ "$SHARED_KEY" = true ] &&
+		skip "OSC connections never go IDLE with Shared-Keys enabled"
+
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "setstripe failed"
+	# ensure ost1 is connected
+	stat $DIR/$tfile >/dev/null || error "can't stat"
+	wait_osc_import_state client ost1 FULL
+	# no locks, no reqs to let the connection idle
+	cancel_lru_locks osc
+
+	# delay OST_DISCONNECT on OST1 to put OSC into intermediate state
+#define OBD_FAIL_OST_DISCONNECT_DELAY	 0x245
+	do_facet ost1 "$LCTL set_param fail_loc=0x245 fail_val=8"
+	wait_osc_import_state client ost1 CONNECTING
+	do_facet ost1 "$LCTL set_param fail_loc=0 fail_val=0"
+
+	$LFS quota -u 0 $DIR/ || error "lfs quota should succeed"
+	wait_osc_import_state client ost1 IDLE
+}
+run_test 812b "do not drop no resend request for idle connect"
 
 test_813() {
 	local file_heat_sav=$($LCTL get_param -n llite.*.file_heat 2>/dev/null)

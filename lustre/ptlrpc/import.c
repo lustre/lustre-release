@@ -1748,7 +1748,8 @@ static void ptlrpc_reset_reqs_generation(struct obd_import *imp)
 			rq_list) {
 		spin_lock(&old->rq_lock);
 		if (old->rq_import_generation == imp->imp_generation - 1 &&
-		    !old->rq_no_resend)
+		    ((imp->imp_initiated_at == imp->imp_generation) ||
+		     !old->rq_no_resend))
 			old->rq_import_generation = imp->imp_generation;
 		spin_unlock(&old->rq_lock);
 	}

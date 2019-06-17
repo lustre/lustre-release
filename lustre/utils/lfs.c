@@ -7000,8 +7000,16 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 		       "Some devices may be not working or deactivated. "
 		       "The data in \"[]\" is inaccurate.\n");
 out:
-	return rc1;
+	if (rc1)
+		return rc1;
+	if (rc2)
+		return rc2;
+	if (rc3)
+		return rc3;
+	if (inacc)
+		return -EIO;
 
+	return 0;
 }
 
 static int lfs_project(int argc, char **argv)
