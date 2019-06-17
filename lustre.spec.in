@@ -267,7 +267,7 @@ to be used by the Lustre testing framework.
 %package -n lustre-iokit
 Summary: The Lustre IO-Kit is a collection of benchmark tools for a cluster with the Lustre file system.
 Group: Applications/System
-Requires: python > 2.2, sg3_utils
+Requires: python2 > 2.2, sg3_utils
 
 %description -n lustre-iokit
 This package includes five tools:
