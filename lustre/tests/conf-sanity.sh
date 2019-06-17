@@ -4,32 +4,38 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test:
-ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT"
+SRCDIR=$(dirname $0)
+PTLDEBUG=${PTLDEBUG:--1}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+init_logging
+
+#                                  tool to create lustre filesystem images
+ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 32newtarball"
+
+# bug number for skipped test: LU-11915
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT  110"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# bug number for skipped test:
-# a tool to create lustre filesystem images
-ALWAYS_EXCEPT="32newtarball $ALWAYS_EXCEPT"
 if $SHARED_KEY; then
-# bug number for skipped tests:		LU-9795	(all below)
+	# bug number for skipped tests: LU-9795	(all below)
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	0	31	32a	32d	35a"
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	53a	53b	54b	76a	76b"
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	76c	76d	78	103"
 fi
 
-SRCDIR=$(dirname $0)
-PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+if ! combined_mgs_mds; then
+	# bug number for skipped test: LU-11991		LU-11990
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  32a 32b 32c 32d 32e	66"
+	# bug number for skipped test: LU-9897	LU-12032
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  84	123F"
+fi
 
-PTLDEBUG=${PTLDEBUG:--1}
-SAVE_PWD=$PWD
-LUSTRE=${LUSTRE:-$(dirname $0)/..}
-RLUSTRE=${RLUSTRE:-$LUSTRE}
-export MULTIOP=${MULTIOP:-multiop}
+#                                  8  22  40  165  (min)
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="45 69 106 111"
 
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+build_test_filter
 
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
@@ -49,29 +55,14 @@ MDSDEV1_2=$fs2mds_DEV
 OSTDEV1_2=$fs2ost_DEV
 OSTDEV2_2=$fs3ost_DEV
 
-# bug number for skipped test: LU-11915
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT   110"
-
-if ! combined_mgs_mds; then
-	# bug number for skipped test: LU-11991			LU-11990
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  32a 32b 32c 32d 32e	66"
-	# bug number for skipped test: LU-9897	LU-12032
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  84	123F"
-fi
-
 # pass "-E lazy_itable_init" to mke2fs to speed up the formatting time
 if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 	LDISKFS_MKFS_OPTS=$(csa_add "$LDISKFS_MKFS_OPTS" -E lazy_itable_init)
 fi
 
-init_logging
-
 #
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
-
-#                                  8  22  40  165  (min)
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="45 69 106 111"
 
 assert_DIR
 
@@ -274,8 +265,6 @@ check_mount2() {
 generate_name() {
 	cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w $1 | head -n 1
 }
-
-build_test_filter
 
 if [ "$ONLY" == "setup" ]; then
 	setup

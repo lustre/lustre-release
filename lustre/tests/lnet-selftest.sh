@@ -1,11 +1,8 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
 ALWAYS_EXCEPT="$LNET_SELFTEST_EXCEPT"
@@ -21,6 +18,8 @@ if [ -r /etc/os-release ]; then
 		ALWAYS_EXCEPT+="               smoke"
 	fi
 fi
+
+build_test_filter
 
 [ x$LST = x ] && skip_env "lst not found LST=$LST"
 
@@ -89,8 +88,6 @@ if is_mounted $MOUNT2; then
 	cleanup_mount $MOUNT2 || error "Fail to unmount client $MOUNT2"
 	interim_umount1=true
 fi
-
-build_test_filter
 
 lst_prepare () {
     # Workaround for bug 15619
