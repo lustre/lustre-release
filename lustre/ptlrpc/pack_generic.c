@@ -502,6 +502,57 @@ int lustre_shrink_msg(struct lustre_msg *msg, int segment,
 }
 EXPORT_SYMBOL(lustre_shrink_msg);
 
+static int lustre_grow_msg_v2(struct lustre_msg_v2 *msg, __u32 segment,
+			      unsigned int newlen)
+{
+	char *tail = NULL, *newpos;
+	int tail_len = 0, n;
+
+	LASSERT(msg);
+	LASSERT(msg->lm_bufcount > segment);
+	LASSERT(msg->lm_buflens[segment] <= newlen);
+
+	if (msg->lm_buflens[segment] == newlen)
+		goto out;
+
+	if (msg->lm_bufcount > segment + 1) {
+		tail = lustre_msg_buf_v2(msg, segment + 1, 0);
+		for (n = segment + 1; n < msg->lm_bufcount; n++)
+			tail_len += cfs_size_round(msg->lm_buflens[n]);
+	}
+
+	msg->lm_buflens[segment] = newlen;
+
+	if (tail && tail_len) {
+		newpos = lustre_msg_buf_v2(msg, segment + 1, 0);
+		memmove(newpos, tail, tail_len);
+	}
+out:
+	return lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
+}
+
+/*
+ * for @msg, grow @segment to size @newlen.
+ * Always move higher buffer forward.
+ *
+ * return new msg size after growing.
+ *
+ * CAUTION:
+ * - caller must make sure there is enough space in allocated message buffer
+ * - caller should NOT keep pointers to msg buffers which higher than @segment
+ *   after call shrink.
+ */
+int lustre_grow_msg(struct lustre_msg *msg, int segment, unsigned int newlen)
+{
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		return lustre_grow_msg_v2(msg, segment, newlen);
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
+}
+EXPORT_SYMBOL(lustre_grow_msg);
+
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
 {
 	PTLRPC_RS_DEBUG_LRU_DEL(rs);

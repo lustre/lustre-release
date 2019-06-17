@@ -2344,6 +2344,7 @@ int lustre_pack_reply_flags(struct ptlrpc_request *, int count, __u32 *lens,
                             char **bufs, int flags);
 int lustre_shrink_msg(struct lustre_msg *msg, int segment,
                       unsigned int newlen, int move_data);
+int lustre_grow_msg(struct lustre_msg *msg, int segment, unsigned int newlen);
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
 int __lustre_unpack_msg(struct lustre_msg *m, int len);
 __u32 lustre_msg_hdr_size(__u32 magic, __u32 count);

@@ -18277,8 +18277,8 @@ test_271f() {
 	local mdtidx=$($LFS getstripe --mdt-index $DIR/$tdir)
 
 	cancel_lru_locks mdc
-	dd if=/dev/urandom of=$tmp bs=200000 count=1
-	dd if=$tmp of=$dom bs=200000 count=1
+	dd if=/dev/urandom of=$tmp bs=265000 count=1
+	dd if=$tmp of=$dom bs=265000 count=1
 	cancel_lru_locks mdc
 	cat /etc/hosts >> $tmp
 	lctl set_param -n mdc.*.stats=clear
@@ -18305,6 +18305,7 @@ test_271f() {
 	local ra=$(get_mdc_stats $mdtidx req_active)
 	local rw=$(get_mdc_stats $mdtidx req_waittime)
 
+	[ -z $num ] && num=0
 	[ $num -eq 1 ] || error "expect 1 READ RPC, $num occured"
 	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
 	echo "... DONE"
