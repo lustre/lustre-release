@@ -35,6 +35,7 @@
 MANFILES =					\
 	lctl.8					\
 	lctl-get_param.8			\
+	lctl-list_param.8			\
 	lctl-network.8				\
 	lctl-set_param.8			\
 	ldev.8					\

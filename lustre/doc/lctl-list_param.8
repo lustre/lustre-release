@@ -1,0 +1,62 @@
+.TH lctl-list_param 8 "2019 Sep 30" Lustre "configuration utilities"
+.SH NAME
+lctl list_param \- list configuration parameter names
+.SH SYNOPSIS
+.BR list_param " [" -F | -R ]
+.RI < param_search " ...>"
+.SH DESCRIPTION
+List the Lustre or LNet parameter name(s) matching
+.IR param_search .
+The parameter name(s) may contain wildcards using
+.BR glob (3)
+pathname patterns.
+.TP
+.B -F
+Append '/', '@' or '=' for dirs, symlinks and writeable files, respectively.
+.TP
+.B -R
+Recursively list all parameters under the specified parameter search string. If
+.I param_search
+is unspecified, all the parameters will be shown.
+.SH EXAMPLES
+.B
+# lctl list_param ost.*
+.br
+  ost.OSS
+.br
+  ost.num_refs
+.br
+.B
+# lctl list_param -F ost.* debug
+.br
+  ost.OSS/
+.br
+  ost.num_refs
+.br
+  debug=
+.br
+.B
+# lctl list_param -R mdt
+.br
+  mdt
+.br
+  mdt.lustre-MDT0000
+.br
+  mdt.lustre-MDT0000.capa
+.br
+  mdt.lustre-MDT0000.capa_count
+.br
+  mdt.lustre-MDT0000.capa_key_timeout
+.br
+  mdt.lustre-MDT0000.capa_timeout
+.br
+  mdt.lustre-MDT0000.commit_on_sharing
+.br
+  mdt.lustre-MDT0000.evict_client
+.br
+  ...
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-get_param (8),
+.BR lctl-set_parm (8),
+.BR lfs (1)
