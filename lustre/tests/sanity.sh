@@ -13854,6 +13854,41 @@ test_185() { # LU-2441
 }
 run_test 185 "Volatile file support"
 
+function create_check_volatile() {
+	local idx=$1
+	local tgt
+
+	$MULTIOP $MOUNT/.lustre/fid V${idx}Fw4096_c >&/tmp/${tfile}.fid &
+	local PID=$!
+	sleep 1
+	local FID=$(cat /tmp/${tfile}.fid)
+	[ "$FID" == "" ] && error "can't get FID for volatile"
+	$CHECKSTAT -t file $MOUNT/.lustre/fid/$FID || error "can't stat $FID"
+	tgt=$($LFS getstripe -m $MOUNT/.lustre/fid/$FID)
+	[ "$tgt" != "$idx" ] && error "wrong MDS $tgt, expected $idx"
+	kill -USR1 $PID
+	wait
+	sleep 1
+	cancel_lru_locks mdc # flush opencache
+	$CHECKSTAT -t file $MOUNT/.lustre/fid/$FID && error "can stat $FID"
+	return 0
+}
+
+test_185a(){
+	# LU-12516 - volatile creation via .lustre
+	[[ $MDS1_VERSION -ge $(version_code 2.12.2) ]] ||
+		skip "Need MDS version at least 2.12.2"
+
+	create_check_volatile 0
+	[ $MDSCOUNT -lt 2 ] && return 0
+
+	# DNE case
+	create_check_volatile 1
+
+	return 0
+}
+run_test 185a "Volatile file creation in .lustre/fid/"
+
 test_187a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $MDS1_VERSION -lt $(version_code 2.3.0) ] &&

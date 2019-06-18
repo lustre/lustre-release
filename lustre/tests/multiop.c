@@ -407,6 +407,7 @@ int main(int argc, char **argv)
 					fd, rc);
 			else
 				printf(DFID"\n", PFID(&fid));
+			fflush(stdout);
 			break;
                 case 'G':
                         gid = atoi(commands+1);
@@ -631,7 +632,10 @@ int main(int argc, char **argv)
 		case 'V':
 			len = get_flags(commands + 1, &flags);
 			commands += len;
-			fd = llapi_create_volatile(fname, flags);
+			len = -1; /* mdt index */
+			if (commands[1] >= '0' && commands[1] <= '9')
+				len = atoi(commands+1);
+			fd = llapi_create_volatile_idx(fname, len, flags);
 			if (fd < 0) {
 				perror("llapi_create_volatile");
 				exit(fd);

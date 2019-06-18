@@ -839,9 +839,21 @@ static int mdd_dummy_unlink(const struct lu_env *env,
 	return -EPERM;
 }
 
+int mdd_create(const struct lu_env *env, struct md_object *pobj,
+		      const struct lu_name *lname, struct md_object *child,
+		      struct md_op_spec *spec, struct md_attr *ma);
+static int mdd_obf_create(const struct lu_env *env, struct md_object *pobj,
+		      const struct lu_name *lname, struct md_object *child,
+		      struct md_op_spec *spec, struct md_attr *ma)
+{
+	if (spec->sp_cr_flags & MDS_OPEN_VOLATILE)
+		return mdd_create(env, pobj, lname, child, spec, ma);
+	RETURN(-EPERM);
+}
+
 static struct md_dir_operations mdd_obf_dir_ops = {
 	.mdo_lookup = obf_lookup,
-	.mdo_create = mdd_dummy_create,
+	.mdo_create = mdd_obf_create,
 	.mdo_rename = mdd_dummy_rename,
 	.mdo_link   = mdd_dummy_link,
 	.mdo_unlink = mdd_dummy_unlink
