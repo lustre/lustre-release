@@ -2511,7 +2511,7 @@ stop:
  * \retval		0 on success
  * \retval		negative errno on failure
  */
-static int mdd_create(const struct lu_env *env, struct md_object *pobj,
+int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		      const struct lu_name *lname, struct md_object *child,
 		      struct md_op_spec *spec, struct md_attr *ma)
 {

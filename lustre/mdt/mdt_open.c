@@ -1408,8 +1408,10 @@ again:
 
 	fid_zero(child_fid);
 
-	result = mdo_lookup(info->mti_env, mdt_object_child(parent),
-			    &rr->rr_name, child_fid, &info->mti_spec);
+	result = -ENOENT;
+	if ((open_flags & MDS_OPEN_VOLATILE) == 0)
+		result = mdo_lookup(info->mti_env, mdt_object_child(parent),
+				    &rr->rr_name, child_fid, &info->mti_spec);
 
 	LASSERTF(ergo(result == 0, fid_is_sane(child_fid)),
 		 "looking for "DFID"/"DNAME", found FID = "DFID"\n",
@@ -1487,7 +1489,8 @@ again:
 
 	if (result == -ENOENT) {
 		/* Create under OBF and .lustre is not permitted */
-		if (!fid_is_md_operative(rr->rr_fid1))
+		if (!fid_is_md_operative(rr->rr_fid1) &&
+		    (open_flags & MDS_OPEN_VOLATILE) == 0)
 			GOTO(out_child, result = -EPERM);
 
 		/* save versions in reply */
