@@ -36,8 +36,10 @@
 #include <poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/ioctl.h>
 
 #include <lustre/lustreapi.h>
+#include <linux/lustre/lustre_ioctl.h>
 
 
 static int chlg_dev_path(char *path, size_t path_len, const char *device)
@@ -93,7 +95,6 @@ int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 	struct changelog_private *cp;
 	static bool warned_extra_flags;
 	static bool warned_jobid;
-	static bool warned_follow;
 	char cdev_path[PATH_MAX];
 	int rc;
 
@@ -150,12 +151,12 @@ int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 		warned_jobid = true;
 	}
 
-	/* Behavior expected by CHANGELOG_FLAG_FOLLOW is not implemented, warn
-	 * the user and ignore it. */
-	if (flags & CHANGELOG_FLAG_FOLLOW && !warned_follow) {
-		llapi_err_noerrno(LLAPI_MSG_WARN, "warning: %s() called with "
-				  "CHANGELOG_FLAG_FOLLOW (ignored)", __func__);
-		warned_follow = true;
+	if (flags & CHANGELOG_FLAG_FOLLOW) {
+		int rc;
+		rc = ioctl(cp->clp_fd, OBD_IOC_CHLG_POLL, 1);
+		if (rc < 0)
+			llapi_err_noerrno(LLAPI_MSG_ERROR, "can't enable "
+					  "CHANGELOG_FLAG_FOLLOW");
 	}
 
 	return 0;
@@ -291,6 +292,14 @@ int llapi_changelog_free(struct changelog_rec **rech)
 {
 	free(*rech);
 	*rech = NULL;
+	return 0;
+}
+
+int llapi_changelog_in_buf(void *priv)
+{
+	struct changelog_private *cp = priv;
+	if (cp->clp_buf + cp->clp_buf_len > cp->clp_buf_pos)
+		return 1;
 	return 0;
 }
 

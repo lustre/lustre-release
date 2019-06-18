@@ -36,6 +36,7 @@
 #include <linux/miscdevice.h>
 
 #include <lustre_log.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 
 #include "mdc_internal.h"
 
@@ -89,6 +90,9 @@ struct chlg_reader_state {
 	__u64			 crs_rec_count;
 	/* List of prefetched enqueued_record::enq_linkage_items */
 	struct list_head	 crs_rec_queue;
+	unsigned int		 crs_last_catidx;
+	unsigned int		 crs_last_idx;
+	bool			 crs_poll;
 };
 
 struct chlg_rec_entry {
@@ -132,6 +136,9 @@ static int chlg_read_cat_process_cb(const struct lu_env *env,
 	LASSERT(hdr != NULL);
 
 	rec = container_of(hdr, struct llog_changelog_rec, cr_hdr);
+
+	crs->crs_last_catidx = llh->lgh_hdr->llh_cat_idx;
+	crs->crs_last_idx = hdr->lrh_index;
 
 	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
 		rc = -EINVAL;
@@ -208,6 +215,10 @@ static int chlg_load(void *args)
 	if (ctx == NULL)
 		GOTO(err_out, rc = -ENOENT);
 
+	crs->crs_last_catidx = -1;
+	crs->crs_last_idx = 0;
+
+again:
 	rc = llog_open(NULL, ctx, &llh, NULL, CHANGELOG_CATALOG,
 		       LLOG_OPEN_EXISTS);
 	if (rc) {
@@ -215,6 +226,7 @@ static int chlg_load(void *args)
 		       obd->obd_name, rc);
 		GOTO(err_out, rc);
 	}
+
 
 	rc = llog_init_handle(NULL, llh,
 			      LLOG_F_IS_CAT |
@@ -231,10 +243,16 @@ static int chlg_load(void *args)
 		GOTO(err_out, rc);
 	}
 
-	rc = llog_cat_process(NULL, llh, chlg_read_cat_process_cb, crs, 0, 0);
+	rc = llog_cat_process(NULL, llh, chlg_read_cat_process_cb, crs,
+				crs->crs_last_catidx, crs->crs_last_idx);
 	if (rc < 0) {
 		CERROR("%s: fail to process llog: rc = %d\n", obd->obd_name, rc);
 		GOTO(err_out, rc);
+	}
+	if (!kthread_should_stop() && crs->crs_poll) {
+		llog_cat_close(NULL, llh);
+		schedule_timeout_interruptible(HZ);
+		goto again;
 	}
 
 	crs->crs_eof = true;
@@ -590,6 +608,23 @@ static unsigned int chlg_poll(struct file *file, poll_table *wait)
 	return mask;
 }
 
+static long chlg_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	int rc;
+
+	struct chlg_reader_state *crs = file->private_data;
+	switch (cmd) {
+	case OBD_IOC_CHLG_POLL:
+		crs->crs_poll = !!arg;
+		rc = 0;
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+	return rc;
+}
+
 static const struct file_operations chlg_fops = {
 	.owner		= THIS_MODULE,
 	.llseek		= chlg_llseek,
@@ -598,6 +633,7 @@ static const struct file_operations chlg_fops = {
 	.open		= chlg_open,
 	.release	= chlg_release,
 	.poll		= chlg_poll,
+	.unlocked_ioctl	= chlg_ioctl,
 };
 
 /**
