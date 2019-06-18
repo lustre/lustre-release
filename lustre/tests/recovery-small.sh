@@ -2,12 +2,10 @@
 
 set -e
 
-export MULTIOP=${MULTIOP:-multiop}
 PTLDEBUG=${PTLDEBUG:--1}
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
 ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT "
@@ -23,13 +21,9 @@ if [ "$selinux_status" != "Disabled" ]; then
 	$SHARED_KEY && ALWAYS_EXCEPT+=" 136"
 fi
 
-require_dsh_mds || exit 0
-
-# also long tests: 19, 21a, 21e, 21f, 23, 27
-
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-
 build_test_filter
+
+require_dsh_mds || exit 0
 
 # Allow us to override the setup if we already have a mounted system by
 # setting SETUP=" " and CLEANUP=" "

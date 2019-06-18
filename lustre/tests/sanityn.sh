@@ -3,45 +3,34 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 9977/LU-7105
-#		LU-7105
-ALWAYS_EXCEPT=" 28	$SANITYN_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-SRCDIR=$(dirname $0)
-PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 SIZE=${SIZE:-40960}
-CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
-export MULTIOP=${MULTIOP:-multiop}
 export TMP=${TMP:-/tmp}
 MOUNT_2=${MOUNT_2:-"yes"}
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 
-SAVE_PWD=$PWD
-
-export NAME=${NAME:-local}
-
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-CLEANUP=${CLEANUP:-:}
-SETUP=${SETUP:-:}
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-get_lustre_env
 init_logging
 
+ALWAYS_EXCEPT="$SANITYN_EXCEPT "
+# bug number for skipped test:  LU-7105
+ALWAYS_EXCEPT+="                28"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT "
-# LU-2829 / LU-2887 - make allowances for ZFS slowness
+	# LU-2829 / LU-2887 - make allowances for ZFS slowness
 	TEST33_NFILES=${TEST33_NFILES:-1000}
 fi
+
 #                                  23   (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="33a"
+
+build_test_filter
 
 FAIL_ON_ERROR=false
 
@@ -62,8 +51,6 @@ dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=1
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
-
-build_test_filter
 
 test_1() {
 	touch $DIR1/$tfile

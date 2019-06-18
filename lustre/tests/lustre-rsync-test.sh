@@ -1,37 +1,27 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
 #
-# Run test by setting NOSETUP=true when ltest has setup env for us
 set -e
 
-SRCDIR=`dirname $0`
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
-
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: LU-4256
-ALWAYS_EXCEPT="$LRSYNC_EXCEPT  2b"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-
-[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
-	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
 
 KILL=/bin/kill
-
-TMP=${TMP:-/tmp}
 LREPL_LOG=$TMP/lustre_rsync.log
 ORIG_PWD=${PWD}
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$LRSYNC_EXCEPT "
+# bug number for skipped test: LU-4256
+ALWAYS_EXCEPT+="               2b"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+build_test_filter
 
 [ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
@@ -47,8 +37,6 @@ elif getent group nogroup; then
 else
 	error "No generic nobody group"
 fi
-
-build_test_filter
 
 export LRSYNC=${LRSYNC:-"$LUSTRE/utils/lustre_rsync"}
 [ ! -f "$LRSYNC" ] && export LRSYNC=$(which lustre_rsync)
