@@ -4119,35 +4119,72 @@ static int lod_generate_and_set_lovea(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/**
- * Delete layout component(s)
- *
- * \param[in] env	execution environment for this thread
- * \param[in] dt	object
- * \param[in] th	transaction handle
- *
- * \retval	0 on success
- * \retval	negative error number on failure
- */
-static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
-			  struct thandle *th)
+static int lod_layout_data_init(struct lod_thread_info *info, __u32 comp_cnt)
 {
-	struct lod_layout_component	*lod_comp;
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct dt_object	*next = dt_object_child(dt);
-	struct lu_attr	*attr = &lod_env_info(env)->lti_attr;
-	int	rc, i, j, left;
+	ENTRY;
 
-	LASSERT(lo->ldo_is_composite);
-	LASSERT(lo->ldo_comp_cnt > 0 && lo->ldo_comp_entries != NULL);
+	/* clear memory region that will be used for layout change */
+	memset(&info->lti_layout_attr, 0, sizeof(struct lu_attr));
+	info->lti_count = 0;
 
-	left = lo->ldo_comp_cnt;
-	for (i = (lo->ldo_comp_cnt - 1); i >= 0; i--) {
+	if (info->lti_comp_size >= comp_cnt)
+		RETURN(0);
+
+	if (info->lti_comp_size > 0) {
+		OBD_FREE(info->lti_comp_idx,
+			 info->lti_comp_size * sizeof(__u32));
+		info->lti_comp_size = 0;
+	}
+
+	OBD_ALLOC(info->lti_comp_idx, comp_cnt * sizeof(__u32));
+	if (!info->lti_comp_idx)
+		RETURN(-ENOMEM);
+
+	info->lti_comp_size = comp_cnt;
+	RETURN(0);
+}
+
+/**
+ * Prepare new layout minus deleted components
+ *
+ * Removes components marked for deletion (LCME_ID_INVAL) by copying to a new
+ * layout and skipping those components.  Removes stripe objects if any exist.
+ *
+ * NB:
+ * Reallocates layout components array (lo->ldo_comp_entries), invalidating
+ * any pre-existing pointers to components.
+ *
+ * Caller is responsible for updating mirror end (ldo_mirror[].lme_end).
+ *
+ * \param[in] env       execution environment for this thread
+ * \param[in,out] lo    object to update the layout of
+ * \param[in] th        transaction handle for this operation
+ *
+ * \retval      # of components deleted
+ * \retval      negative errno on error
+ */
+static int lod_layout_del_prep_layout(const struct lu_env *env,
+				      struct lod_object *lo,
+				      struct thandle *th)
+{
+	struct lod_layout_component     *lod_comp;
+	struct lod_thread_info  *info = lod_env_info(env);
+	int rc = 0, i, j, deleted = 0;
+
+	ENTRY;
+
+	rc = lod_layout_data_init(info, lo->ldo_comp_cnt);
+	if (rc)
+		RETURN(rc);
+
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
 
-		if (lod_comp->llc_id != LCME_ID_INVAL)
-			break;
-		left--;
+		if (lod_comp->llc_id != LCME_ID_INVAL) {
+			/* Build array of things to keep */
+			info->lti_comp_idx[info->lti_count++] = i;
+			continue;
+		}
 
 		lod_obj_set_pool(lo, i, NULL);
 		if (lod_comp->llc_ostlist.op_array) {
@@ -4157,7 +4194,11 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 			lod_comp->llc_ostlist.op_size = 0;
 		}
 
-		/* Not instantiated component */
+		deleted++;
+		CDEBUG(D_LAYOUT, "deleting comp %d, left %d\n", i,
+		       lo->ldo_comp_cnt - deleted);
+
+		/* No striping info for this component */
 		if (lod_comp->llc_stripe == NULL)
 			continue;
 
@@ -4167,9 +4208,14 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 
 			if (obj == NULL)
 				continue;
-			rc = lod_sub_destroy(env, obj, th);
-			if (rc)
-				GOTO(out, rc);
+
+			/* components which are not init have no sub objects
+			 * to destroy */
+			if (lod_comp_inited(lod_comp)) {
+				rc = lod_sub_destroy(env, obj, th);
+				if (rc)
+					GOTO(out, rc);
+			}
 
 			lu_object_put(env, &obj->do_lu);
 			lod_comp->llc_stripe[j] = NULL;
@@ -4183,27 +4229,71 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 		lod_comp->llc_stripes_allocated = 0;
 	}
 
-	LASSERTF(left >= 0 && left < lo->ldo_comp_cnt, "left = %d\n", left);
-	if (left > 0) {
-		struct lod_layout_component	*comp_array;
+	/* info->lti_count has the amount of left components */
+	LASSERTF(info->lti_count >= 0 && info->lti_count < lo->ldo_comp_cnt,
+		 "left = %d, lo->ldo_comp_cnt %d\n", (int)info->lti_count,
+		 (int)lo->ldo_comp_cnt);
 
-		OBD_ALLOC(comp_array, sizeof(*comp_array) * left);
+	if (info->lti_count > 0) {
+		struct lod_layout_component *comp_array;
+
+		OBD_ALLOC(comp_array, sizeof(*comp_array) * info->lti_count);
 		if (comp_array == NULL)
 			GOTO(out, rc = -ENOMEM);
 
-		memcpy(&comp_array[0], &lo->ldo_comp_entries[0],
-		       sizeof(*comp_array) * left);
+		for (i = 0; i < info->lti_count; i++) {
+			memcpy(&comp_array[i],
+			       &lo->ldo_comp_entries[info->lti_comp_idx[i]],
+			       sizeof(*comp_array));
+		}
 
 		OBD_FREE(lo->ldo_comp_entries,
 			 sizeof(*comp_array) * lo->ldo_comp_cnt);
 		lo->ldo_comp_entries = comp_array;
-		lo->ldo_comp_cnt = left;
-
-		LASSERT(lo->ldo_mirror_count == 1);
-		lo->ldo_mirrors[0].lme_end = left - 1;
-		lod_obj_inc_layout_gen(lo);
+		lo->ldo_comp_cnt = info->lti_count;
 	} else {
 		lod_free_comp_entries(lo);
+	}
+
+	EXIT;
+out:
+	return rc ? rc : deleted;
+}
+
+/**
+ * Delete layout component(s)
+ *
+ * This function sets up the layout data in the env and does the setattrs
+ * required to write out the new layout.  The layout itself is modified in
+ * lod_layout_del_prep_layout.
+ *
+ * \param[in] env	execution environment for this thread
+ * \param[in] dt	object
+ * \param[in] th	transaction handle
+ *
+ * \retval	0 on success
+ * \retval	negative error number on failure
+ */
+static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
+			  struct thandle *th)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct dt_object *next = dt_object_child(dt);
+	struct lu_attr *attr = &lod_env_info(env)->lti_attr;
+	int rc;
+
+	LASSERT(lo->ldo_is_composite);
+	LASSERT(lo->ldo_mirror_count == 1);
+	LASSERT(lo->ldo_comp_cnt > 0 && lo->ldo_comp_entries != NULL);
+
+	rc = lod_layout_del_prep_layout(env, lo, th);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	/* Only do this if we didn't delete all components */
+	if (lo->ldo_comp_cnt > 0) {
+		lo->ldo_mirrors[0].lme_end = lo->ldo_comp_cnt - 1;
+		lod_obj_inc_layout_gen(lo);
 	}
 
 	LASSERT(dt_object_exists(dt));
@@ -6018,31 +6108,6 @@ static int lod_object_lock(const struct lu_env *env,
 static int lod_invalidate(const struct lu_env *env, struct dt_object *dt)
 {
 	return dt_invalidate(env, dt_object_child(dt));
-}
-
-static int lod_layout_data_init(struct lod_thread_info *info, __u32 comp_cnt)
-{
-	ENTRY;
-
-	/* clear memory region that will be used for layout change */
-	memset(&info->lti_layout_attr, 0, sizeof(struct lu_attr));
-	info->lti_count = 0;
-
-	if (info->lti_comp_size >= comp_cnt)
-		RETURN(0);
-
-	if (info->lti_comp_size > 0) {
-		OBD_FREE(info->lti_comp_idx,
-			 info->lti_comp_size * sizeof(__u32));
-		info->lti_comp_size = 0;
-	}
-
-	OBD_ALLOC(info->lti_comp_idx, comp_cnt * sizeof(__u32));
-	if (!info->lti_comp_idx)
-		RETURN(-ENOMEM);
-
-	info->lti_comp_size = comp_cnt;
-	RETURN(0);
 }
 
 static int lod_declare_instantiate_components(const struct lu_env *env,
