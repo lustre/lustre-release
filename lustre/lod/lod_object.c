@@ -4149,6 +4149,14 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 			break;
 		left--;
 
+		lod_obj_set_pool(lo, i, NULL);
+		if (lod_comp->llc_ostlist.op_array) {
+			OBD_FREE(lod_comp->llc_ostlist.op_array,
+				 lod_comp->llc_ostlist.op_size);
+			lod_comp->llc_ostlist.op_array = NULL;
+			lod_comp->llc_ostlist.op_size = 0;
+		}
+
 		/* Not instantiated component */
 		if (lod_comp->llc_stripe == NULL)
 			continue;
@@ -4173,13 +4181,6 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 			 sizeof(__u32) * lod_comp->llc_stripes_allocated);
 		lod_comp->llc_ost_indices = NULL;
 		lod_comp->llc_stripes_allocated = 0;
-		lod_obj_set_pool(lo, i, NULL);
-		if (lod_comp->llc_ostlist.op_array) {
-			OBD_FREE(lod_comp->llc_ostlist.op_array,
-				 lod_comp->llc_ostlist.op_size);
-			lod_comp->llc_ostlist.op_array = NULL;
-			lod_comp->llc_ostlist.op_size = 0;
-		}
 	}
 
 	LASSERTF(left >= 0 && left < lo->ldo_comp_cnt, "left = %d\n", left);
