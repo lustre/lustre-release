@@ -186,7 +186,7 @@ enum auto_scrub {
 
 struct scrub_file {
 	/* 128-bit uuid for volume. */
-	__u8    sf_uuid[16];
+	uuid_t	sf_uuid;
 
 	/* See 'enum scrub_flags'. */
 	__u64   sf_flags;
@@ -335,8 +335,8 @@ struct lustre_index_restore_unit {
 	char			liru_name[0];
 };
 
-void scrub_file_init(struct lustre_scrub *scrub, __u8 *uuid);
-void scrub_file_reset(struct lustre_scrub *scrub, __u8 *uuid, __u64 flags);
+void scrub_file_init(struct lustre_scrub *scrub, uuid_t uuid);
+void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags);
 int scrub_file_load(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_file_store(const struct lu_env *env, struct lustre_scrub *scrub);
 int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub);

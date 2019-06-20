@@ -432,8 +432,7 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 			sf->sf_oi_count = osd_oi_count;
 		}
 
-		scrub_file_reset(scrub, LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
-				 SF_RECREATED);
+		scrub_file_reset(scrub, osd->od_uuid, SF_RECREATED);
 		count = sf->sf_oi_count;
 		goto create;
 	}
@@ -454,9 +453,7 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 			 *	and restored after former upgrading from 1.8
 			 *	to 2.x. Fortunately, the osd_fid_lookup()can
 			 *	verify the inode to decrease the risk. */
-			scrub_file_reset(scrub,
-					 LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
-					 SF_UPGRADE);
+			scrub_file_reset(scrub, osd->od_uuid, SF_UPGRADE);
 		GOTO(out, rc = 1);
 	} else if (rc != -ENOENT) {
 		CERROR("%s: can't open %s: rc = %d\n",
@@ -471,8 +468,7 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 		memset(sf->sf_oi_bitmap, 0, SCRUB_OI_BITMAP_SIZE);
 		for (i = 0; i < count; i++)
 			ldiskfs_set_bit(i, sf->sf_oi_bitmap);
-		scrub_file_reset(scrub, LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
-				 SF_RECREATED);
+		scrub_file_reset(scrub, osd->od_uuid, SF_RECREATED);
 	} else {
 		count = sf->sf_oi_count = osd_oi_count;
 	}

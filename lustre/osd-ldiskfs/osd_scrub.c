@@ -472,8 +472,7 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 	}
 
 	if (flags & SS_RESET)
-		scrub_file_reset(scrub,
-			LDISKFS_SB(osd_sb(dev))->s_es->s_uuid, 0);
+		scrub_file_reset(scrub, dev->od_uuid, 0);
 
 	if (flags & SS_AUTO_FULL) {
 		scrub->os_full_speed = 1;
@@ -989,8 +988,8 @@ static void osd_scrub_join(const struct lu_env *env, struct osd_device *dev,
 		sf->sf_param &= ~SP_DRYRUN;
 
 	if (flags & SS_RESET) {
-		scrub_file_reset(scrub, LDISKFS_SB(osd_sb(dev))->s_es->s_uuid,
-			inconsistent ? SF_INCONSISTENT : 0);
+		scrub_file_reset(scrub, dev->od_uuid,
+				 inconsistent ? SF_INCONSISTENT : 0);
 		sf->sf_status = SS_SCANNING;
 	}
 
@@ -1997,8 +1996,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 		RETURN(0);
 
 	if (!(sf->sf_flags & SF_INCONSISTENT)) {
-		scrub_file_reset(scrub, LDISKFS_SB(osd_sb(dev))->s_es->s_uuid,
-				 SF_INCONSISTENT);
+		scrub_file_reset(scrub, dev->od_uuid, SF_INCONSISTENT);
 		rc = scrub_file_store(info->oti_env, scrub);
 		if (rc != 0)
 			RETURN(rc);
@@ -2338,9 +2336,8 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 		if (rc == -ENOENT) {
 			/* It is 1.8 MDT device. */
 			if (!(sf->sf_flags & SF_UPGRADE)) {
-				scrub_file_reset(scrub,
-					LDISKFS_SB(osd_sb(dev))->s_es->s_uuid,
-					SF_UPGRADE);
+				scrub_file_reset(scrub, dev->od_uuid,
+						 SF_UPGRADE);
 				sf->sf_internal_flags &= ~SIF_NO_HANDLE_OLD_FID;
 				rc = scrub_file_store(info->oti_env, scrub);
 			} else {
@@ -2582,7 +2579,6 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	struct lvfs_run_ctxt *ctxt = &dev->od_scrub.os_ctxt;
 	struct scrub_file *sf = &scrub->os_file;
 	struct super_block *sb = osd_sb(dev);
-	struct ldiskfs_super_block *es = LDISKFS_SB(sb)->s_es;
 	struct lvfs_run_ctxt saved;
 	struct file *filp;
 	struct inode *inode;
@@ -2636,10 +2632,15 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	if (IS_ERR_OR_NULL(obj))
 		RETURN(obj ? PTR_ERR(obj) : -ENOENT);
 
+#ifndef HAVE_S_UUID_AS_UUID_T
+	memcpy(dev->od_uuid.b, sb->s_uuid, UUID_SIZE);
+#else
+	uuid_copy(&dev->od_uuid, &sb->s_uuid);
+#endif
 	scrub->os_obj = obj;
 	rc = scrub_file_load(env, scrub);
 	if (rc == -ENOENT || rc == -EFAULT) {
-		scrub_file_init(scrub, es->s_uuid);
+		scrub_file_init(scrub, dev->od_uuid);
 		/* If the "/O" dir does not exist when mount (indicated by
 		 * osd_device::od_maybe_new), neither for the "/OI_scrub",
 		 * then it is quite probably that the device is a new one,
@@ -2658,32 +2659,13 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	} else if (rc < 0) {
 		GOTO(cleanup_obj, rc);
 	} else {
-		if (memcmp(sf->sf_uuid, es->s_uuid, 16) != 0) {
-			struct obd_uuid *old_uuid;
-			struct obd_uuid *new_uuid;
-
-			OBD_ALLOC_PTR(old_uuid);
-			OBD_ALLOC_PTR(new_uuid);
-			if (old_uuid == NULL || new_uuid == NULL) {
-				CERROR("%s: UUID has been changed, but"
-				       "failed to allocate RAM for report\n",
-				       osd_dev2name(dev));
-			} else {
-				snprintf(old_uuid->uuid, UUID_SIZE, "%pU",
-					 sf->sf_uuid);
-				snprintf(new_uuid->uuid, UUID_SIZE, "%pU",
-					 es->s_uuid);
-				CDEBUG(D_LFSCK, "%s: UUID has been changed "
-				       "from %s to %s\n", osd_dev2name(dev),
-				       old_uuid->uuid, new_uuid->uuid);
-			}
-			scrub_file_reset(scrub, es->s_uuid, SF_INCONSISTENT);
+		if (!uuid_equal(&sf->sf_uuid, &dev->od_uuid)) {
+			CDEBUG(D_LFSCK,
+			       "%s: UUID has been changed from %pU to %pU\n",
+			       osd_dev2name(dev), &sf->sf_uuid, &dev->od_uuid);
+			scrub_file_reset(scrub, dev->od_uuid, SF_INCONSISTENT);
 			dirty = true;
 			restored = true;
-			if (old_uuid != NULL)
-				OBD_FREE_PTR(old_uuid);
-			if (new_uuid != NULL)
-				OBD_FREE_PTR(new_uuid);
 		} else if (sf->sf_status == SS_SCANNING) {
 			sf->sf_status = SS_CRASHED;
 			dirty = true;

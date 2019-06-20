@@ -1417,7 +1417,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	bool dirty = false;
 	ENTRY;
 
-	memcpy(dev->od_uuid,
+	memcpy(dev->od_uuid.b,
 	       &dsl_dataset_phys(dev->od_os->os_dsl_dataset)->ds_guid,
 	       sizeof(dsl_dataset_phys(dev->od_os->os_dsl_dataset)->ds_guid));
 	memset(&dev->od_scrub, 0, sizeof(struct lustre_scrub));
@@ -1457,30 +1457,12 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	} else if (rc < 0) {
 		GOTO(cleanup_obj, rc);
 	} else {
-		if (memcmp(sf->sf_uuid, dev->od_uuid, 16) != 0) {
-			struct obd_uuid *old_uuid;
-			struct obd_uuid *new_uuid;
-
-			OBD_ALLOC_PTR(old_uuid);
-			OBD_ALLOC_PTR(new_uuid);
-			if (!old_uuid || !new_uuid) {
-				CERROR("%s: UUID has been changed, but"
-				       "failed to allocate RAM for report\n",
-				       osd_name(dev));
-			} else {
-				snprintf(old_uuid->uuid, UUID_SIZE, "%pU", sf->sf_uuid);
-				snprintf(new_uuid->uuid, UUID_SIZE, "%pU", dev->od_uuid);
-				CDEBUG(D_LFSCK,
-				       "%s: UUID has been changed from %s to %s\n",
-				       osd_name(dev),
-				       old_uuid->uuid, new_uuid->uuid);
-			}
+		if (!uuid_equal(&sf->sf_uuid, &dev->od_uuid)) {
+			CDEBUG(D_LFSCK,
+			       "%s: UUID has been changed from %pU to %pU\n",
+			       osd_name(dev), &sf->sf_uuid, &dev->od_uuid);
 			scrub_file_reset(scrub, dev->od_uuid, SF_INCONSISTENT);
 			dirty = true;
-			if (old_uuid)
-				OBD_FREE_PTR(old_uuid);
-			if (new_uuid)
-				OBD_FREE_PTR(new_uuid);
 		} else if (sf->sf_status == SS_SCANNING) {
 			sf->sf_status = SS_CRASHED;
 			dirty = true;

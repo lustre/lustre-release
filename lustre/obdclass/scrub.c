@@ -46,7 +46,7 @@ static inline struct dt_device *scrub_obj2dev(struct dt_object *obj)
 
 static void scrub_file_to_cpu(struct scrub_file *des, struct scrub_file *src)
 {
-	memcpy(des->sf_uuid, src->sf_uuid, 16);
+	uuid_copy(&des->sf_uuid, &src->sf_uuid);
 	des->sf_flags	= le64_to_cpu(src->sf_flags);
 	des->sf_magic	= le32_to_cpu(src->sf_magic);
 	des->sf_status	= le16_to_cpu(src->sf_status);
@@ -80,7 +80,7 @@ static void scrub_file_to_cpu(struct scrub_file *des, struct scrub_file *src)
 
 static void scrub_file_to_le(struct scrub_file *des, struct scrub_file *src)
 {
-	memcpy(des->sf_uuid, src->sf_uuid, 16);
+	uuid_copy(&des->sf_uuid, &src->sf_uuid);
 	des->sf_flags	= cpu_to_le64(src->sf_flags);
 	des->sf_magic	= cpu_to_le32(src->sf_magic);
 	des->sf_status	= cpu_to_le16(src->sf_status);
@@ -112,18 +112,18 @@ static void scrub_file_to_le(struct scrub_file *des, struct scrub_file *src)
 	memcpy(des->sf_oi_bitmap, src->sf_oi_bitmap, SCRUB_OI_BITMAP_SIZE);
 }
 
-void scrub_file_init(struct lustre_scrub *scrub, __u8 *uuid)
+void scrub_file_init(struct lustre_scrub *scrub, uuid_t uuid)
 {
 	struct scrub_file *sf = &scrub->os_file;
 
 	memset(sf, 0, sizeof(*sf));
-	memcpy(sf->sf_uuid, uuid, 16);
+	uuid_copy(&sf->sf_uuid, &uuid);
 	sf->sf_magic = SCRUB_MAGIC_V1;
 	sf->sf_status = SS_INIT;
 }
 EXPORT_SYMBOL(scrub_file_init);
 
-void scrub_file_reset(struct lustre_scrub *scrub, __u8 *uuid, __u64 flags)
+void scrub_file_reset(struct lustre_scrub *scrub, uuid_t uuid, u64 flags)
 {
 	struct scrub_file *sf = &scrub->os_file;
 
@@ -131,7 +131,7 @@ void scrub_file_reset(struct lustre_scrub *scrub, __u8 *uuid, __u64 flags)
 	       "%#llx, add flags = %#llx\n",
 	       scrub->os_name, sf->sf_flags, flags);
 
-	memcpy(sf->sf_uuid, uuid, 16);
+	uuid_copy(&sf->sf_uuid, &uuid);
 	sf->sf_status = SS_INIT;
 	sf->sf_flags |= flags;
 	sf->sf_flags &= ~SF_AUTO;

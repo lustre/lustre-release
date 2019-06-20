@@ -301,6 +301,7 @@ struct osd_device {
 	/* service name associated with the osd device */
 	char                      od_svname[MAX_OBD_NAME];
 	char                      od_mntdev[MAX_OBD_NAME];
+	uuid_t			od_uuid;
 
 	/* quota slave instance for inode */
 	struct qsd_instance      *od_quota_slave_md;
