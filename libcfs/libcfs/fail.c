@@ -29,6 +29,7 @@
  * Lustre is a trademark of Oracle Corporation, Inc.
  */
 
+#include <linux/random.h>
 #include <libcfs/libcfs.h>
 
 unsigned long cfs_fail_loc = 0;
@@ -57,7 +58,7 @@ int __cfs_fail_check_set(__u32 id, __u32 value, int set)
 
 	/* Fail 1/cfs_fail_val times */
 	if (cfs_fail_loc & CFS_FAIL_RAND) {
-		if (cfs_fail_val < 2 || cfs_rand() % cfs_fail_val > 0)
+		if (cfs_fail_val < 2 || prandom_u32_max(cfs_fail_val) > 0)
 			return 0;
 	}
 

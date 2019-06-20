@@ -38,6 +38,8 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include <asm/div64.h>
+#include <linux/random.h>
+
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_swab.h>
@@ -979,7 +981,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	down_read(&m->lod_qos.lq_rw_sem);
 	spin_lock(&lqr->lqr_alloc);
 	if (--lqr->lqr_start_count <= 0) {
-		lqr->lqr_start_idx = cfs_rand() % osts->op_count;
+		lqr->lqr_start_idx = prandom_u32_max(osts->op_count);
 		lqr->lqr_start_count =
 			(LOV_CREATE_RESEED_MIN / max(osts->op_count, 1U) +
 			 LOV_CREATE_RESEED_MULT) * max(osts->op_count, 1U);
@@ -1541,31 +1543,30 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	/* Find enough OSTs with weighted random allocation. */
 	nfound = 0;
 	while (nfound < stripe_count) {
-		__u64 rand, cur_weight;
+		u64 rand, cur_weight;
 
 		cur_weight = 0;
 		rc = -ENOSPC;
 
 		if (total_weight) {
 #if BITS_PER_LONG == 32
-			rand = cfs_rand() % (unsigned)total_weight;
+			rand = prandom_u32_max((u32)total_weight);
 			/* If total_weight > 32-bit, first generate the high
 			 * 32 bits of the random number, then add in the low
-			 * 32 bits (truncated to the upper limit, if needed) */
+			 * 32 bits (truncated to the upper limit, if needed)
+			 */
 			if (total_weight > 0xffffffffULL)
-				rand = (__u64)(cfs_rand() %
-					(unsigned)(total_weight >> 32)) << 32;
+				rand = prandom_u32_max((u32)(total_weight >> 32)) << 32;
 			else
 				rand = 0;
 
 			if (rand == (total_weight & 0xffffffff00000000ULL))
-				rand |= cfs_rand() % (unsigned)total_weight;
+				rand |= prandom_u32_max((u32)total_weight);
 			else
-				rand |= cfs_rand();
+				rand |= prandom_u32();
 
 #else
-			rand = ((__u64)cfs_rand() << 32 | cfs_rand()) %
-				total_weight;
+			rand = prandom_u32() | prandom_u32_max((u32)total_weight);
 #endif
 		} else {
 			rand = 0;

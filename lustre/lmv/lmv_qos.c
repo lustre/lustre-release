@@ -33,6 +33,8 @@
 #define DEBUG_SUBSYSTEM S_LMV
 
 #include <asm/div64.h>
+#include <linux/random.h>
+
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_swab.h>
@@ -372,25 +374,24 @@ struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv, __u32 *mdt)
 
 	if (total_weight) {
 #if BITS_PER_LONG == 32
-		rand = cfs_rand() % (unsigned int)total_weight;
+		rand = prandom_u32_max((u32)total_weight);
 		/*
 		 * If total_weight > 32-bit, first generate the high
 		 * 32 bits of the random number, then add in the low
 		 * 32 bits (truncated to the upper limit, if needed)
 		 */
 		if (total_weight > 0xffffffffULL)
-			rand = (__u64)(cfs_rand() %
-				(unsigned int)(total_weight >> 32)) << 32;
+			rand = prandom_u32_max((u32)(total_weight >> 32)) << 32;
 		else
 			rand = 0;
 
 		if (rand == (total_weight & 0xffffffff00000000ULL))
-			rand |= cfs_rand() % (unsigned int)total_weight;
+			rand |= prandom_u32_max((u32)total_weight);
 		else
-			rand |= cfs_rand();
+			rand |= prandom_u32();
 
 #else
-		rand = ((__u64)cfs_rand() << 32 | cfs_rand()) % total_weight;
+		rand = prandom_u32() | prandom_u32_max((u32)total_weight);
 #endif
 	} else {
 		rand = 0;
