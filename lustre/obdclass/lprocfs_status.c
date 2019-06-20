@@ -425,9 +425,7 @@ static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
 		u32 blk_size = osfs.os_bsize >> 10;
 		u64 result = osfs.os_blocks;
 
-		while (blk_size >>= 1)
-			result <<= 1;
-
+		result *= rounddown_pow_of_two(blk_size ?: 1);
 		return sprintf(buf, "%llu\n", result);
 	}
 
