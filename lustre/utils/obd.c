@@ -116,34 +116,28 @@ const int nthreads = 1;
 
 static int cur_device = -1;
 
-static int l2_ioctl(int dev_id, int opc, void *buf)
+int lcfg_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 {
-        return l_ioctl(dev_id, opc, buf);
-}
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
 
-int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
-{
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
-
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_type = LUSTRE_CFG_TYPE;
-        data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
-                                        lcfg->lcfg_buflens);
-        data.ioc_pbuf1 = (void *)lcfg;
-        memset(buf, 0, sizeof(rawbuf));
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	data.ioc_type = LUSTRE_CFG_TYPE;
+	data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+					lcfg->lcfg_buflens);
+	data.ioc_pbuf1 = (void *)lcfg;
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(func));
-                return rc;
-        }
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(func));
+		return rc;
+	}
 
-        rc =  l_ioctl(dev_id, OBD_IOC_PROCESS_CFG, buf);
+	rc =  l_ioctl(dev_id, OBD_IOC_PROCESS_CFG, buf);
 
-        return rc;
+	return rc;
 }
 
 static int do_device(char *func, char *devname);
@@ -171,33 +165,31 @@ static int get_mgs_device()
 /* Returns -1 on error with errno set */
 int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        rc = data.ioc_dev = get_mgs_device();
-        if (rc < 0)
-                goto out;
-        data.ioc_type = LUSTRE_CFG_TYPE;
-        data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
-                                        lcfg->lcfg_buflens);
-        data.ioc_pbuf1 = (void *)lcfg;
-        memset(buf, 0, sizeof(rawbuf));
+	memset(&data, 0, sizeof(data));
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		goto out;
+	data.ioc_type = LUSTRE_CFG_TYPE;
+	data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+					lcfg->lcfg_buflens);
+	data.ioc_pbuf1 = (void *)lcfg;
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(func));
-                return rc;
-        }
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(func));
+		return rc;
+	}
 
-        rc = l_ioctl(dev_id, OBD_IOC_PARAM, buf);
+	rc = l_ioctl(dev_id, OBD_IOC_PARAM, buf);
 out:
-        if (rc) {
-                if (errno == ENOSYS)
-                        fprintf(stderr, "Make sure cfg_device is set first.\n");
-        }
-        return rc;
+	if (rc && errno == ENOSYS)
+		fprintf(stderr, "Make sure cfg_device is set first.\n");
+
+	return rc;
 }
 
 char *obdo_print(struct obdo *obd)
@@ -225,33 +217,31 @@ char *obdo_print(struct obdo *obd)
 
 static int do_name2dev(char *func, char *name)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        data.ioc_inllen1 = strlen(name) + 1;
-        data.ioc_inlbuf1 = name;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	data.ioc_inllen1 = strlen(name) + 1;
+	data.ioc_inlbuf1 = name;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc < 0) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(func));
+		fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(func));
 		return -rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
-        if (rc < 0)
-                return errno;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
+	if (rc < 0)
+		return errno;
 	rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid reply\n",
-                        jt_cmdname(func));
-                return rc;
-        }
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid reply\n", jt_cmdname(func));
+		return rc;
+	}
 
-        return data.ioc_dev + N2D_OFF;
+	return data.ioc_dev + N2D_OFF;
 }
 
 /*
@@ -853,83 +843,83 @@ int jt_opt_net(int argc, char **argv)
 
 int jt_obd_no_transno(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
 
-        if (argc != 1)
-                return CMD_HELP;
+	if (argc != 1)
+		return CMD_HELP;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_NO_TRANSNO, buf);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NO_TRANSNO, buf);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
 
-        return rc;
+	return rc;
 }
 
 int jt_obd_set_readonly(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
 
-        if (argc != 1)
-                return CMD_HELP;
+	if (argc != 1)
+		return CMD_HELP;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_SET_READONLY, buf);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_SET_READONLY, buf);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
 
-        return rc;
+	return rc;
 }
 
 int jt_obd_abort_recovery(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
 
-        if (argc != 1)
-                return CMD_HELP;
+	if (argc != 1)
+		return CMD_HELP;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_ABORT_RECOVERY, buf);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_ABORT_RECOVERY, buf);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
 
-        return rc;
+	return rc;
 }
 
 int jt_get_version(int argc, char **argv)
@@ -1018,23 +1008,24 @@ int jt_obd_list_ioctl(int argc, char **argv)
                 data->ioc_inllen1 =
 			sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(*data), 8);
 		data->ioc_inlbuf1 = buf + __ALIGN_KERNEL(sizeof(*data), 8);
-                data->ioc_len = obd_ioctl_packlen(data);
-                data->ioc_count = index;
+		data->ioc_len = obd_ioctl_packlen(data);
+		data->ioc_count = index;
 
-                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETDEVICE, buf);
-                if (rc != 0)
-                        break;
-                printf("%s\n", (char *)data->ioc_bulk);
-        }
-        if (rc != 0) {
-                if (errno == ENOENT)
-                        /* no device or the last device */
-                        rc = 0;
-                else
-                        fprintf(stderr, "Error getting device list: %s: "
-                                "check dmesg.\n", strerror(errno));
-        }
-        return rc;
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GETDEVICE, buf);
+		if (rc != 0)
+			break;
+		printf("%s\n", (char *)data->ioc_bulk);
+	}
+	if (rc != 0) {
+		if (errno == ENOENT)
+			/* no device or the last device */
+			rc = 0;
+		else
+			fprintf(stderr,
+				"Error getting device list: %s: check dmesg\n",
+				strerror(errno));
+	}
+	return rc;
 }
 
 int jt_obd_list(int argc, char **argv)
@@ -1044,35 +1035,32 @@ int jt_obd_list(int argc, char **argv)
 	glob_t path;
 	FILE *fp;
 
-        if (argc > 2)
-                return CMD_HELP;
-        else if (argc == 2) {
-                if (strcmp(argv[1], "-t") == 0)
-                        print_obd = 1;
-                else
-                        return CMD_HELP;
-        }
+	if (argc > 2)
+		return CMD_HELP;
 
-	if (cfs_get_param_paths(&path, "devices") != 0)
-		return -errno;
+	if (argc == 2) {
+		if (strcmp(argv[1], "-t") == 0)
+			print_obd = 1;
+		else
+			return CMD_HELP;
+	}
 
-	fp = fopen(path.gl_pathv[0], "r");
-        if (fp == NULL) {
-		fprintf(stderr, "error: %s: %s opening %s\n",
-			jt_cmdname(argv[0]), strerror(errno), path.gl_pathv[0]);
+	if (cfs_get_param_paths(&path, "devices") ||
+	    !(fp = fopen(path.gl_pathv[0], "r"))) {
 		cfs_free_param_data(&path);
-                return jt_obd_list_ioctl(argc, argv);
-        }
 
-        while (fgets(buf, sizeof(buf), fp) != NULL)
-                if (print_obd)
-                        print_obd_line(buf);
-                else
-                        printf("%s", buf);
+		return jt_obd_list_ioctl(argc, argv);
+	}
+
+	while (fgets(buf, sizeof(buf), fp) != NULL)
+		if (print_obd)
+			print_obd_line(buf);
+		else
+			printf("%s", buf);
 
 	cfs_free_param_data(&path);
-        fclose(fp);
-        return 0;
+	fclose(fp);
+	return 0;
 }
 
 struct jt_fid_space {
@@ -1082,46 +1070,46 @@ struct jt_fid_space {
 };
 
 int jt_obd_alloc_fids(struct jt_fid_space *space, struct lu_fid *fid,
-                      __u64 *count)
+		      __u64 *count)
 {
-        int rc;
+	int rc;
 
-        if (space->jt_seq == 0 || space->jt_id == space->jt_width) {
-                struct obd_ioctl_data  data;
-                char rawbuf[MAX_IOC_BUFLEN];
-                char *buf = rawbuf;
-                __u64 seqnr;
-                int max_count;
+	if (space->jt_seq == 0 || space->jt_id == space->jt_width) {
+		struct obd_ioctl_data  data;
+		char rawbuf[MAX_IOC_BUFLEN];
+		char *buf = rawbuf;
+		__u64 seqnr;
+		int max_count;
 
-                memset(&data, 0, sizeof(data));
-                data.ioc_dev = cur_device;
+		memset(&data, 0, sizeof(data));
+		data.ioc_dev = cur_device;
 
-                data.ioc_pbuf1 = (char *)&seqnr;
-                data.ioc_plen1 = sizeof(seqnr);
+		data.ioc_pbuf1 = (char *)&seqnr;
+		data.ioc_plen1 = sizeof(seqnr);
 
-                data.ioc_pbuf2 = (char *)&max_count;
-                data.ioc_plen2 = sizeof(max_count);
+		data.ioc_pbuf2 = (char *)&max_count;
+		data.ioc_plen2 = sizeof(max_count);
 
-                memset(buf, 0, sizeof(rawbuf));
+		memset(buf, 0, sizeof(rawbuf));
 		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-                if (rc) {
-                        fprintf(stderr, "error: invalid ioctl rc = %d\n", rc);
-                        return rc;
-                }
+		if (rc) {
+			fprintf(stderr, "error: invalid ioctl rc = %d\n", rc);
+			return rc;
+		}
 
-                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_ECHO_ALLOC_SEQ, buf);
-                if (rc) {
-                        fprintf(stderr, "ioctl error: rc = %d\n", rc);
-                        return rc;
-                }
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_ECHO_ALLOC_SEQ, buf);
+		if (rc) {
+			fprintf(stderr, "ioctl error: rc = %d\n", rc);
+			return rc;
+		}
 
-                space->jt_seq = *(__u64 *)data.ioc_pbuf1;
-                space->jt_width = *(int *)data.ioc_pbuf2;
-                space->jt_id = 1;
-        }
-        fid->f_seq = space->jt_seq;
-        fid->f_oid = space->jt_id;
-        fid->f_ver = 0;
+		space->jt_seq = *(__u64 *)data.ioc_pbuf1;
+		space->jt_width = *(int *)data.ioc_pbuf2;
+		space->jt_id = 1;
+	}
+	fid->f_seq = space->jt_seq;
+	fid->f_oid = space->jt_id;
+	fid->f_ver = 0;
 
 	space->jt_id = space->jt_id + *count;
 	if (space->jt_id > space->jt_width)
@@ -1378,26 +1366,26 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                                 return rc;
                         }
 			data.ioc_obdo1.o_oi.oi_fid = fid;
-                }
+		}
 
-                child_base_id += data.ioc_count;
-                count += data.ioc_count;
+		child_base_id += data.ioc_count;
+		count += data.ioc_count;
 
-                memset(buf, 0, sizeof(rawbuf));
+		memset(buf, 0, sizeof(rawbuf));
 		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-                if (rc) {
-                        fprintf(stderr, "error: %s: invalid ioctl %d\n",
-                                jt_cmdname(argv[0]), rc);
-                        return rc;
-                }
+		if (rc) {
+			fprintf(stderr, "error: %s: invalid ioctl %d\n",
+				jt_cmdname(argv[0]), rc);
+			return rc;
+		}
 
-                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_ECHO_MD, buf);
-                if (rc) {
-                        fprintf(stderr, "error: %s: %s\n",
-                                jt_cmdname(argv[0]), strerror(rc = errno));
-                        return rc;
-                }
-                shmem_bump(data.ioc_count);
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_ECHO_MD, buf);
+		if (rc) {
+			fprintf(stderr, "error: %s: %s\n",
+				jt_cmdname(argv[0]), strerror(rc = errno));
+			return rc;
+		}
+		shmem_bump(data.ioc_count);
 
                 gettimeofday(&end_time, NULL);
                 diff = difftime(&end_time, &start);
@@ -1519,35 +1507,36 @@ int jt_obd_create(int argc, char **argv)
 					 OBD_MD_FLGID | OBD_MD_FLGROUP |
 					 OBD_MD_FLPROJID;
 
-                memset(buf, 0, sizeof(rawbuf));
+		memset(buf, 0, sizeof(rawbuf));
 		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-                if (rc) {
-                        fprintf(stderr, "error: %s: invalid ioctl\n",
-                                jt_cmdname(argv[0]));
-                        return rc;
-                }
-                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CREATE, buf);
+		if (rc) {
+			fprintf(stderr, "error: %s: invalid ioctl\n",
+				jt_cmdname(argv[0]));
+			return rc;
+		}
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CREATE, buf);
 		llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-                shmem_bump(1);
-                if (rc < 0) {
-                        fprintf(stderr, "error: %s: #%d - %s\n",
-                                jt_cmdname(argv[0]), i, strerror(rc = errno));
-                        break;
-                }
-                if (!(data.ioc_obdo1.o_valid & OBD_MD_FLID)) {
+		shmem_bump(1);
+		if (rc < 0) {
+			fprintf(stderr, "error: %s: #%d - %s\n",
+				jt_cmdname(argv[0]), i, strerror(rc = errno));
+			break;
+		}
+		if (!(data.ioc_obdo1.o_valid & OBD_MD_FLID)) {
 			fprintf(stderr, "error: %s: oid not valid #%d:%#jx\n",
 				jt_cmdname(argv[0]), i,
 				(uintmax_t)data.ioc_obdo1.o_valid);
-                        rc = EINVAL;
-                        break;
-                }
+			rc = EINVAL;
+			break;
+		}
 
 		if (be_verbose(verbose, &next_time, i, &next_count, count))
 			printf("%s: #%d is object id %#jx\n",
 			       jt_cmdname(argv[0]), i,
 			       (uintmax_t) ostid_id(&data.ioc_obdo1.o_oi));
-        }
-        return rc;
+	}
+
+	return rc;
 }
 
 int jt_obd_setattr(int argc, char **argv)
@@ -1559,10 +1548,10 @@ int jt_obd_setattr(int argc, char **argv)
 	int mode;
 	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        if (argc != 2)
-                return CMD_HELP;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	if (argc != 2)
+		return CMD_HELP;
 
 	objid = strtoull(argv[1], &end, 0);
 	if (*end) {
@@ -1572,60 +1561,60 @@ int jt_obd_setattr(int argc, char **argv)
 	}
 
 	if (objid >= OBIF_MAX_OID) {
-                fprintf(stderr, "error: %s: invalid objid '%s'\n",
-                        jt_cmdname(argv[0]), argv[1]);
-                return CMD_HELP;
-        }
+		fprintf(stderr, "error: %s: invalid objid '%s'\n",
+			jt_cmdname(argv[0]), argv[1]);
+		return CMD_HELP;
+	}
 
 	mode = strtoul(argv[2], &end, 0);
-        if (*end) {
-                fprintf(stderr, "error: %s: invalid mode '%s'\n",
-                        jt_cmdname(argv[0]), argv[2]);
-                return CMD_HELP;
-        }
+	if (*end) {
+		fprintf(stderr, "error: %s: invalid mode '%s'\n",
+			jt_cmdname(argv[0]), argv[2]);
+		return CMD_HELP;
+	}
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 	data.ioc_obdo1.o_mode = S_IFREG | mode;
 	data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
 	data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_SETATTR, buf);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_SETATTR, buf);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
 
-        return rc;
+	return rc;
 }
 
 int jt_obd_test_setattr(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        struct timeval start, next_time;
+	struct obd_ioctl_data data;
+	struct timeval start, next_time;
 	__u64 i, count, next_count;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int verbose = 1;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int verbose = 1;
 	__u64 objid = 3;
-        char *end;
-        int rc = 0;
+	char *end;
+	int rc = 0;
 
-        if (argc < 2 || argc > 4)
-                return CMD_HELP;
+	if (argc < 2 || argc > 4)
+		return CMD_HELP;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        count = strtoull(argv[1], &end, 0);
-        if (*end) {
-                fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
-                        jt_cmdname(argv[0]), argv[1]);
-                return CMD_HELP;
-        }
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	count = strtoull(argv[1], &end, 0);
+	if (*end) {
+		fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
+			jt_cmdname(argv[0]), argv[1]);
+		return CMD_HELP;
+	}
 
         if (argc >= 3) {
                 verbose = get_verbose(argv[0], argv[2]);
@@ -1656,7 +1645,7 @@ int jt_obd_test_setattr(int argc, char **argv)
 		       (uintmax_t)objid, ctime(&start.tv_sec));
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-        for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
+	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		if (objid >= OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
 				jt_cmdname(argv[0]), objid);
@@ -1664,29 +1653,28 @@ int jt_obd_test_setattr(int argc, char **argv)
 		}
 
 		data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
-                data.ioc_obdo1.o_mode = S_IFREG;
-                data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
-                memset(buf, 0, sizeof(rawbuf));
+		data.ioc_obdo1.o_mode = S_IFREG;
+		data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
+					 OBD_MD_FLMODE;
+		memset(buf, 0, sizeof(rawbuf));
 		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-                if (rc) {
-                        fprintf(stderr, "error: %s: invalid ioctl\n",
-                                jt_cmdname(argv[0]));
-                        return rc;
-                }
-                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_SETATTR, &data);
-                shmem_bump(1);
-                if (rc < 0) {
+		if (rc) {
+			fprintf(stderr, "error: %s: invalid ioctl\n",
+				jt_cmdname(argv[0]));
+			return rc;
+		}
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_SETATTR, &data);
+		shmem_bump(1);
+		if (rc < 0) {
 			fprintf(stderr, "error: %s: #%jd - %d:%s\n",
 				jt_cmdname(argv[0]), (uintmax_t)i,
 				errno, strerror(rc = errno));
-                        break;
-                } else {
-                        if (be_verbose
-                            (verbose, &next_time, i, &next_count, count))
-				printf("%s: set attr #%jd\n",
-				       jt_cmdname(argv[0]), (uintmax_t)i);
-                }
-        }
+			break;
+		}
+		if (be_verbose(verbose, &next_time, i, &next_count, count))
+			printf("%s: set attr #%jd\n",
+			       jt_cmdname(argv[0]), (uintmax_t)i);
+	}
 
         if (!rc) {
                 struct timeval end;
@@ -1745,11 +1733,12 @@ int jt_obd_destroy(int argc, char **argv)
         }
 
 	printf("%s: %jd objects\n", jt_cmdname(argv[0]), (uintmax_t)count);
-        gettimeofday(&next_time, NULL);
-        next_time.tv_sec -= verbose;
+	gettimeofday(&next_time, NULL);
+	next_time.tv_sec -= verbose;
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-        for (i = 1, next_count = verbose; i <= count && shmem_running(); i++, id++) {
+	for (i = 1, next_count = verbose; i <= count && shmem_running();
+	     i++, id++) {
 		if (id >= OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
 				jt_cmdname(argv[0]), id);
@@ -1760,41 +1749,41 @@ int jt_obd_destroy(int argc, char **argv)
 		data.ioc_obdo1.o_mode = S_IFREG | 0644;
 		data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
 
-                memset(buf, 0, sizeof(rawbuf));
+		memset(buf, 0, sizeof(rawbuf));
 		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-                if (rc) {
-                        fprintf(stderr, "error: %s: invalid ioctl\n",
-                                jt_cmdname(argv[0]));
-                        return rc;
-                }
-                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_DESTROY, buf);
+		if (rc) {
+			fprintf(stderr, "error: %s: invalid ioctl\n",
+				jt_cmdname(argv[0]));
+			return rc;
+		}
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_DESTROY, buf);
 		llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-                shmem_bump(1);
-                if (rc < 0) {
+		shmem_bump(1);
+		if (rc < 0) {
 			fprintf(stderr, "error: %s: objid %#jx: %s\n",
 				jt_cmdname(argv[0]), (uintmax_t)id,
 				strerror(rc = errno));
-                        break;
-                }
+			break;
+		}
 
-                if (be_verbose(verbose, &next_time, i, &next_count, count))
+		if (be_verbose(verbose, &next_time, i, &next_count, count))
 			printf("%s: #%d is object id %#jx\n",
 			       jt_cmdname(argv[0]), i, (uintmax_t)id);
-        }
+	}
 
-        return rc;
+	return rc;
 }
 
 int jt_obd_getattr(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	__u64 objid;
-        char *end;
-        int rc;
+	char *end;
+	int rc;
 
-        if (argc != 2)
-                return CMD_HELP;
+	if (argc != 2)
+		return CMD_HELP;
 
 	objid = strtoull(argv[1], &end, 0);
 	if (*end) {
@@ -1819,79 +1808,79 @@ int jt_obd_getattr(int argc, char **argv)
 	printf("%s: object id %#jx\n", jt_cmdname(argv[0]),
 	       (uintmax_t)ostid_id(&data.ioc_obdo1.o_oi));
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, buf);
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, buf);
 	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        } else {
+	if (rc) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
+	} else {
 		printf("%s: object id %ju, mode %o\n", jt_cmdname(argv[0]),
 		       (uintmax_t)ostid_id(&data.ioc_obdo1.o_oi),
 		       data.ioc_obdo1.o_mode);
-        }
-        return rc;
+	}
+	return rc;
 }
 
 int jt_obd_test_getattr(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        struct timeval start, next_time;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data data;
+	struct timeval start, next_time;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	__u64 i, count, next_count;
-        int verbose = 1;
+	int verbose = 1;
 	__u64 objid = 3;
-        char *end;
-        int rc = 0;
+	char *end;
+	int rc = 0;
 
-        if (argc < 2 || argc > 4)
-                return CMD_HELP;
+	if (argc < 2 || argc > 4)
+		return CMD_HELP;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        count = strtoull(argv[1], &end, 0);
-        if (*end) {
-                fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
-                        jt_cmdname(argv[0]), argv[1]);
-                return CMD_HELP;
-        }
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	count = strtoull(argv[1], &end, 0);
+	if (*end) {
+		fprintf(stderr, "error: %s: invalid iteration count '%s'\n",
+			jt_cmdname(argv[0]), argv[1]);
+		return CMD_HELP;
+	}
 
-        if (argc >= 3) {
-                verbose = get_verbose(argv[0], argv[2]);
-                if (verbose == BAD_VERBOSE)
-                        return CMD_HELP;
-        }
+	if (argc >= 3) {
+		verbose = get_verbose(argv[0], argv[2]);
+		if (verbose == BAD_VERBOSE)
+			return CMD_HELP;
+	}
 
-        if (argc >= 4) {
-                if (argv[3][0] == 't') {
-                        objid = strtoull(argv[3] + 1, &end, 0);
-                        if (thread)
-                                objid += thread - 1;
-                } else
-                        objid = strtoull(argv[3], &end, 0);
-                if (*end) {
-                        fprintf(stderr, "error: %s: invalid objid '%s'\n",
-                                jt_cmdname(argv[0]), argv[3]);
-                        return CMD_HELP;
-                }
-        }
+	if (argc >= 4) {
+		if (argv[3][0] == 't') {
+			objid = strtoull(argv[3] + 1, &end, 0);
+			if (thread)
+				objid += thread - 1;
+		} else
+			objid = strtoull(argv[3], &end, 0);
+		if (*end) {
+			fprintf(stderr, "error: %s: invalid objid '%s'\n",
+				jt_cmdname(argv[0]), argv[3]);
+			return CMD_HELP;
+		}
+	}
 
-        gettimeofday(&start, NULL);
-        next_time.tv_sec = start.tv_sec - verbose;
-        next_time.tv_usec = start.tv_usec;
-        if (verbose != 0)
+	gettimeofday(&start, NULL);
+	next_time.tv_sec = start.tv_sec - verbose;
+	next_time.tv_usec = start.tv_usec;
+	if (verbose != 0)
 		printf("%s: getting %jd attrs (objid %#jx): %s",
-		       jt_cmdname(argv[0]), (uintmax_t) count,
+		       jt_cmdname(argv[0]), (uintmax_t)count,
 		       (uintmax_t)objid, ctime(&start.tv_sec));
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-        for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
+	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		if (objid >= OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
 				jt_cmdname(argv[0]), objid);
@@ -1908,36 +1897,35 @@ int jt_obd_test_getattr(int argc, char **argv)
 				jt_cmdname(argv[0]));
 			return rc;
 		}
-                rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, &data);
-                shmem_bump(1);
-                if (rc < 0) {
+		rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, &data);
+		shmem_bump(1);
+		if (rc < 0) {
 			fprintf(stderr, "error: %s: #%jd - %d:%s\n",
 				jt_cmdname(argv[0]), (uintmax_t)i,
 				errno, strerror(rc = errno));
-                        break;
-                } else {
-                        if (be_verbose
-                            (verbose, &next_time, i, &next_count, count))
-				printf("%s: got attr #%jd\n",
-				       jt_cmdname(argv[0]), (uintmax_t)i);
-                }
-        }
+			break;
+		}
+		if (be_verbose(verbose, &next_time, i, &next_count, count))
+			printf("%s: got attr #%jd\n",
+			       jt_cmdname(argv[0]), (uintmax_t)i);
+	}
 
-        if (!rc) {
-                struct timeval end;
-                double diff;
+	if (!rc) {
+		struct timeval end;
+		double diff;
 
-                gettimeofday(&end, NULL);
+		gettimeofday(&end, NULL);
 
-                diff = difftime(&end, &start);
+		diff = difftime(&end, &start);
 
-                --i;
-                if (verbose != 0)
+		--i;
+		if (verbose != 0)
 			printf("%s: %jd attrs in %.3fs (%.3f attr/s): %s",
-			       jt_cmdname(argv[0]), (uintmax_t) i, diff,
+			       jt_cmdname(argv[0]), (uintmax_t)i, diff,
 			       i / diff, ctime(&end.tv_sec));
-        }
-        return rc;
+	}
+
+	return rc;
 }
 
 /* test_brw <cnt>                                               count
@@ -2129,24 +2117,25 @@ int jt_obd_test_brw(int argc, char **argv)
 		       (uintmax_t)count, pages, (uintmax_t) objid,
 		       (uintmax_t)data.ioc_offset, ctime(&start.tv_sec));
 
-        cmd = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
-        for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-                data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLGRANT);
-                memset(buf, 0, sizeof(rawbuf));
+	cmd = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
+	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
+		data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLGRANT);
+		memset(buf, 0, sizeof(rawbuf));
 		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-                if (rc) {
-                        fprintf(stderr, "error: %s: invalid ioctl\n",
-                                jt_cmdname(argv[0]));
-                        return rc;
-                }
-                rc = l2_ioctl(OBD_DEV_ID, cmd, buf);
-                shmem_bump(1);
-                if (rc) {
-                        fprintf(stderr, "error: %s: #%d - %s on %s\n",
-                                jt_cmdname(argv[0]), i, strerror(rc = errno),
-                                write ? "write" : "read");
-                        break;
-                } else if (be_verbose(verbose, &next_time,i, &next_count,count)) {
+		if (rc) {
+			fprintf(stderr, "error: %s: invalid ioctl\n",
+				jt_cmdname(argv[0]));
+			return rc;
+		}
+		rc = l_ioctl(OBD_DEV_ID, cmd, buf);
+		shmem_bump(1);
+		if (rc) {
+			fprintf(stderr, "error: %s: #%d - %s on %s\n",
+				jt_cmdname(argv[0]), i, strerror(rc = errno),
+				write ? "write" : "read");
+			break;
+		} else if (be_verbose(verbose, &next_time, i,
+				      &next_count, count)) {
 			shmem_lock ();
 			printf("%s: %s number %d @ %jd:%ju for %d\n",
 			       jt_cmdname(argv[0]), write ? "write" : "read", i,
@@ -2154,7 +2143,7 @@ int jt_obd_test_brw(int argc, char **argv)
 			       (uintmax_t)data.ioc_offset,
 			       (int)(pages * getpagesize()));
 			shmem_unlock ();
-                }
+		}
 
                 if (!repeat_offset) {
 #ifdef MAX_THREADS
@@ -2256,23 +2245,23 @@ repeat:
         data.ioc_inlbuf3 = (char *)obdgens;
 
 	if (llapi_ioctl_pack(&data, &buf, sizeof(rawbuf))) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                rc = -EINVAL;
-                goto out_obdgens;
-        }
-        rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
-        if (rc == -ENOSPC) {
-                free(uuidarray);
-                free(obdgens);
-                goto repeat;
-        } else if (rc) {
-                fprintf(stderr, "error: %s: ioctl error: %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
-        } else {
-                struct obd_uuid *uuidp;
-                __u32 *genp;
-                int i;
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		rc = -EINVAL;
+		goto out_obdgens;
+	}
+	rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
+	if (rc == -ENOSPC) {
+		free(uuidarray);
+		free(obdgens);
+		goto repeat;
+	} else if (rc) {
+		fprintf(stderr, "error: %s: ioctl error: %s\n",
+			jt_cmdname(argv[0]), strerror(rc = errno));
+	} else {
+		struct obd_uuid *uuidp;
+		__u32 *genp;
+		int i;
 
 		if (llapi_ioctl_unpack(&data, buf, sizeof(rawbuf))) {
                         fprintf(stderr, "error: %s: invalid reply\n",
@@ -2308,31 +2297,31 @@ out:
 
 static int do_activate(int argc, char **argv, int flag)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        if (argc != 1)
-                return CMD_HELP;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	if (argc != 1)
+		return CMD_HELP;
 
-        /* reuse offset for 'active' */
-        data.ioc_offset = flag;
+	/* reuse offset for 'active' */
+	data.ioc_offset = flag;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, IOC_OSC_SET_ACTIVE, buf);
-        if (rc)
-                fprintf(stderr, "error: %s: failed: %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, IOC_OSC_SET_ACTIVE, buf);
+	if (rc)
+		fprintf(stderr, "error: %s: failed: %s\n",
+			jt_cmdname(argv[0]), strerror(rc = errno));
 
-        return rc;
+	return rc;
 }
 
 /**
@@ -2376,7 +2365,7 @@ int jt_replace_nids(int argc, char **argv)
 		return rc;
 	}
 
-	rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_REPLACE_NIDS, buf);
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_REPLACE_NIDS, buf);
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
 			strerror(rc = errno));
@@ -2422,7 +2411,7 @@ int jt_lcfg_clear(int argc, char **argv)
 		return rc;
 	}
 
-	rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CLEAR_CONFIGS, buf);
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CLEAR_CONFIGS, buf);
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
 			strerror(rc = errno));
@@ -2433,90 +2422,90 @@ int jt_lcfg_clear(int argc, char **argv)
 
 int jt_obd_deactivate(int argc, char **argv)
 {
-        return do_activate(argc, argv, 0);
+	return do_activate(argc, argv, 0);
 }
 
 int jt_obd_activate(int argc, char **argv)
 {
-        return do_activate(argc, argv, 1);
+	return do_activate(argc, argv, 1);
 }
 
 int jt_obd_recover(int argc, char **argv)
 {
-        int rc;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data data;
+	int rc;
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
-        if (argc > 2)
-                return CMD_HELP;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	if (argc > 2)
+		return CMD_HELP;
 
-        if (argc == 2) {
-                data.ioc_inllen1 = strlen(argv[1]) + 1;
-                data.ioc_inlbuf1 = argv[1];
-        }
+	if (argc == 2) {
+		data.ioc_inllen1 = strlen(argv[1]) + 1;
+		data.ioc_inlbuf1 = argv[1];
+	}
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CLIENT_RECOVER, buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-                        strerror(rc = errno));
-        }
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CLIENT_RECOVER, buf);
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
+	}
 
-        return rc;
+	return rc;
 }
 
 int jt_obd_mdc_lookup(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        char *parent, *child;
-        int rc, fd, verbose = 1;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	char *parent, *child;
+	int rc, fd, verbose = 1;
 
-        if (argc < 3 || argc > 4)
-                return CMD_HELP;
+	if (argc < 3 || argc > 4)
+		return CMD_HELP;
 
-        parent = argv[1];
-        child = argv[2];
-        if (argc == 4)
-                verbose = get_verbose(argv[0], argv[3]);
+	parent = argv[1];
+	child = argv[2];
+	if (argc == 4)
+		verbose = get_verbose(argv[0], argv[3]);
 
-        memset(&data, 0, sizeof(data));
-        data.ioc_dev = cur_device;
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
 
-        data.ioc_inllen1 = strlen(child) + 1;
-        data.ioc_inlbuf1 = child;
+	data.ioc_inllen1 = strlen(child) + 1;
+	data.ioc_inlbuf1 = child;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
 
-        fd = open(parent, O_RDONLY);
-        if (fd < 0) {
-                fprintf(stderr, "open \"%s\" failed: %s\n", parent,
-                        strerror(errno));
-                return -1;
-        }
+	fd = open(parent, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "open \"%s\" failed: %s\n", parent,
+			strerror(errno));
+		return -1;
+	}
 
-        rc = ioctl(fd, IOC_MDC_LOOKUP, buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: ioctl error: %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
-        }
-        close(fd);
+	rc = ioctl(fd, IOC_MDC_LOOKUP, buf);
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: ioctl error: %s\n",
+			jt_cmdname(argv[0]), strerror(rc = errno));
+	}
+	close(fd);
 
-        if (verbose) {
+	if (verbose) {
 		rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: %s: invalid reply\n",
@@ -2610,21 +2599,21 @@ int jt_llog_catlist(int argc, char **argv)
         memset(&data, 0, sizeof(data));
         data.ioc_dev = cur_device;
 	data.ioc_inllen1 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8);
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(argv[0]));
-                return rc;
-        }
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
-        if (rc == 0)
-                fprintf(stdout, "%s", ((struct obd_ioctl_data*)buf)->ioc_bulk);
-        else
-                fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n",
-                        strerror(errno));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
+	if (rc == 0)
+		fprintf(stdout, "%s", ((struct obd_ioctl_data *)buf)->ioc_bulk);
+	else
+		fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n",
+			strerror(errno));
 
-        return rc;
+	return rc;
 }
 
 int jt_llog_info(int argc, char **argv)
@@ -3115,11 +3104,13 @@ int jt_llog_remove(int argc, char **argv)
 
 static void signal_server(int sig)
 {
-        if (sig == SIGINT) {
-                do_disconnect("sigint", 1);
-                exit(1);
-        } else
-                fprintf(stderr, "%s: got signal %d\n", jt_cmdname("sigint"), sig);
+	if (sig == SIGINT) {
+		do_disconnect("sigint", 1);
+		exit(1);
+	} else {
+		fprintf(stderr, "%s: got signal %d\n", jt_cmdname("sigint"),
+			sig);
+	}
 }
 
 int obd_initialize(int argc, char **argv)
@@ -3389,28 +3380,28 @@ static int pool_cmd(enum lcfg_command_type cmd,
 		return -ENOMEM;
 	lustre_cfg_init(lcfg, cmd, &bufs);
 
-        memset(&data, 0, sizeof(data));
-        rc = data.ioc_dev = get_mgs_device();
-        if (rc < 0)
-                goto out;
+	memset(&data, 0, sizeof(data));
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		goto out;
 
-        data.ioc_type = LUSTRE_CFG_TYPE;
-        data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
-                                        lcfg->lcfg_buflens);
-        data.ioc_pbuf1 = (void *)lcfg;
+	data.ioc_type = LUSTRE_CFG_TYPE;
+	data.ioc_plen1 = lustre_cfg_len(lcfg->lcfg_bufcount,
+					lcfg->lcfg_buflens);
+	data.ioc_pbuf1 = (void *)lcfg;
 
-        memset(buf, 0, sizeof(rawbuf));
+	memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fprintf(stderr, "error: %s: invalid ioctl\n",
-                        jt_cmdname(cmdname));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(cmdname));
 		free(lcfg);
-                return rc;
-        }
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_POOL, buf);
+		return rc;
+	}
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_POOL, buf);
 out:
-        if (rc)
-                rc = -errno;
+	if (rc)
+		rc = -errno;
 	switch (rc) {
 	case -ENAMETOOLONG:
 		fprintf(stderr, "error: %s: either the pool or file "
@@ -4739,24 +4730,25 @@ int jt_get_obj_version(int argc, char **argv)
 	data.ioc_inlbuf2 = (char *) &version;
 	data.ioc_inllen2 = sizeof version;
 
-        memset(buf, 0, sizeof *buf);
-	rc = llapi_ioctl_pack(&data, &buf, sizeof rawbuf);
-        if (rc) {
-                fprintf(stderr, "error: %s: packing ioctl arguments: %s\n",
-                        jt_cmdname(argv[0]), strerror(-rc));
-                return rc;
-        }
+	memset(buf, 0, sizeof *buf);
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: %s: packing ioctl arguments: %s\n",
+			jt_cmdname(argv[0]), strerror(-rc));
+		return rc;
+	}
 
-        rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GET_OBJ_VERSION, buf);
-        if (rc == -1) {
-                fprintf(stderr, "error: %s: ioctl: %s\n",
-                        jt_cmdname(argv[0]), strerror(errno));
-                return -errno;
-        }
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_GET_OBJ_VERSION, buf);
+	if (rc == -1) {
+		fprintf(stderr, "error: %s: ioctl: %s\n",
+			jt_cmdname(argv[0]), strerror(errno));
+		return -errno;
+	}
 
 	llapi_ioctl_unpack(&data, buf, sizeof rawbuf);
 	printf("%#jx\n", (uintmax_t)version);
-        return 0;
+
+	return 0;
 }
 
 int jt_changelog_register(int argc, char **argv)
@@ -4795,7 +4787,7 @@ int jt_changelog_register(int argc, char **argv)
 	       return rc;
 	}
 
-	rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_REG, buf);
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_REG, buf);
 	if (rc < 0) {
 		rc = -errno;
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
@@ -4849,7 +4841,7 @@ int jt_changelog_deregister(int argc, char **argv)
 		return rc;
 	}
 
-	rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_DEREG, buf);
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_DEREG, buf);
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
 			strerror(rc = errno));
