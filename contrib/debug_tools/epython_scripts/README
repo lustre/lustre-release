@@ -1,0 +1,37 @@
+These epython scripts extract the content of various Lustre data
+structures from crash dumps and formats the output for readability.
+They are written for use with PyKdump, a framework for using Python
+as an extension language for the crash tool.
+
+Documentation and source for PyKdump are available at:
+   https://sourceforge.net/p/pykdump/wiki/Home/
+
+These scripts are written in Python2. The above wiki page has instructions
+for converting to Python3. The language extensions are documented in:
+   https://sourceforge.net/p/pykdump/code/ci/master/tree/docs/pykdump.lyx
+
+The scripts were tested with Lustre 2.11, primarily with dumps of client
+nodes. The scripts will work with server dumps as long as the data
+structures match the ones used on clients.
+
+Summary of scripts:
+ * cfs_hashes.py         Displays summary of cfs_hash tables.
+ * cfs_hnodes.py         Displays the specified Lustre hash table.
+ * debug_flags.py        Prints Lustre libcfs_debug flags as strings.
+ * dk.py                 Dumps and sorts the Lustre dk logs.
+ * jiffies2date.py       Prints the date and time of a given jiffies timestamp.
+ * ldlm_dumplocks.py     Lists granted and waiting locks by namespace/resource.
+ * ldlm_lockflags.py     Prints string identifiers for specified LDLM flags.
+ * lu_object.py          Prints contents of an lu_object.
+ * lustre_opcode.py      Maps Lustre rpc opcodes to string identifiers.
+ * obd_devs.py           Displays the contents of global 'obd_devs'.
+ * ptlrpc.py             Displays the RPC queues of the Lustre ptlrpcd daemons.
+ * rpc_stats.py          Dumps the client_obd structure given by client argument.
+ * sbi_ptrs.py           Prints Lustre structs associated with inode.
+ * uniqueStacktrace.py   Prints stack traces for each task.
+
+The scripts require symbols from the Lustre and LNet modules to be loaded
+(mod command in crash). A script is invoked with the command
+"epython <script name>" followed by any parameters. To get usage information
+for a particular script, enter the following at the crash prompt:
+   epython <script_name> -h
