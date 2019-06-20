@@ -789,20 +789,15 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 	struct ldlm_namespace *ns = ldlm_pl2ns(pl);
 	struct dentry *debugfs_ns_parent;
 	struct lprocfs_vars pool_vars[2];
-	char *var_name = NULL;
 	int rc = 0;
 
 	ENTRY;
-
-	OBD_ALLOC(var_name, MAX_STRING_SIZE + 1);
-	if (!var_name)
-		RETURN(-ENOMEM);
 
 	debugfs_ns_parent = ns->ns_debugfs_entry;
 	if (IS_ERR_OR_NULL(debugfs_ns_parent)) {
 		CERROR("%s: debugfs entry is not initialized\n",
 		       ldlm_ns_name(ns));
-		GOTO(out_free_name, rc = -EINVAL);
+		GOTO(out, rc = -EINVAL);
 	}
 	pl->pl_debugfs_entry = ldebugfs_register("pool", debugfs_ns_parent,
 						 NULL, NULL);
@@ -811,12 +806,10 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 		pl->pl_debugfs_entry = NULL;
 		CERROR("%s: cannot create 'pool' debugfs entry: rc = %d\n",
 		       ldlm_ns_name(ns), rc);
-		GOTO(out_free_name, rc);
+		GOTO(out, rc);
 	}
 
-	var_name[MAX_STRING_SIZE] = '\0';
 	memset(pool_vars, 0, sizeof(pool_vars));
-	pool_vars[0].name = var_name;
 
 	ldlm_add_var(&pool_vars[0], pl->pl_debugfs_entry, "state", pl,
 		     &lprocfs_pool_state_fops);
@@ -824,7 +817,7 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 	pl->pl_stats = lprocfs_alloc_stats(LDLM_POOL_LAST_STAT -
 					   LDLM_POOL_FIRST_STAT, 0);
 	if (!pl->pl_stats)
-		GOTO(out_free_name, rc = -ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	lprocfs_counter_init(pl->pl_stats, LDLM_POOL_GRANTED_STAT,
 			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
@@ -863,8 +856,7 @@ static int ldlm_pool_debugfs_init(struct ldlm_pool *pl)
 				     pl->pl_stats);
 
 	EXIT;
-out_free_name:
-	OBD_FREE(var_name, MAX_STRING_SIZE + 1);
+out:
 	return rc;
 }
 

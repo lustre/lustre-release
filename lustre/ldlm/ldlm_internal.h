@@ -30,8 +30,6 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#define MAX_STRING_SIZE 128
-
 extern int ldlm_srv_namespace_nr;
 extern int ldlm_cli_namespace_nr;
 extern struct mutex ldlm_srv_namespace_lock;
@@ -346,7 +344,7 @@ static inline void
 ldlm_add_var(struct lprocfs_vars *vars, struct dentry *debugfs_entry,
 	     const char *name, void *data, const struct file_operations *ops)
 {
-	snprintf((char *)vars->name, MAX_STRING_SIZE, "%s", name);
+	vars->name = name;
 	vars->data = data;
 	vars->fops = ops;
 	ldebugfs_add_vars(debugfs_entry, vars, NULL);
