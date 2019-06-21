@@ -561,18 +561,16 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
-	s64 val;
+	u64 val;
 	int rc;
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
+	rc = lprocfs_str_with_units_to_u64(buffer, count, &val, '1');
 	if (rc)
 		return rc;
-	if (val < 0)
-		return -ERANGE;
 
 	osd->od_readcache_max_filesize = val > OSD_MAX_CACHE_SIZE ?
 					 OSD_MAX_CACHE_SIZE : val;

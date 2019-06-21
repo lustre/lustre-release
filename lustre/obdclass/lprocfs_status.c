@@ -2024,6 +2024,29 @@ static int str_to_s64_internal(const char __user *buffer, unsigned long count,
 	return 0;
 }
 
+/* identical to s64 version, but does not handle overflow */
+static int str_to_u64_internal(const char __user *buffer, unsigned long count,
+			       __u64 *val, __u64 def_mult, bool allow_units)
+{
+	char kernbuf[22];
+	unsigned int offset = 0;
+	int rc = 0;
+
+	if (count > (sizeof(kernbuf) - 1))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+
+	kernbuf[count] = '\0';
+
+	rc = str_to_u64_parse(kernbuf + offset, count - offset,
+			      val, def_mult, allow_units);
+	if (rc)
+		return rc;
+
+	return 0;
+}
 /**
  * Convert a user string into a signed 64 bit number. This function produces
  * an error when the value parsed from the string times multiplier underflows or
@@ -2056,6 +2079,23 @@ int lprocfs_str_with_units_to_s64(const char __user *buffer,
 	return str_to_s64_internal(buffer, count, val, mult, true);
 }
 EXPORT_SYMBOL(lprocfs_str_with_units_to_s64);
+
+/* identical to s64 version above, but does not handle overflow */
+int lprocfs_str_with_units_to_u64(const char __user *buffer,
+				  unsigned long count, __u64 *val, char defunit)
+{
+	__u64 mult = 1;
+	int rc;
+
+	if (defunit != '1') {
+		rc = get_mult(defunit, &mult);
+		if (rc)
+			return rc;
+	}
+
+	return str_to_u64_internal(buffer, count, val, mult, true);
+}
+EXPORT_SYMBOL(lprocfs_str_with_units_to_u64);
 
 char *lprocfs_strnstr(const char *s1, const char *s2, size_t len)
 {
