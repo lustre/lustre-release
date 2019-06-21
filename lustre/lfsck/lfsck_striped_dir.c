@@ -900,8 +900,7 @@ int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 	lfsck_lmv_header_le_to_cpu(lmv, lmv);
 	if ((lmv->lmv_magic == LMV_MAGIC &&
 	     !(lmv->lmv_hash_type & LMV_HASH_FLAG_MIGRATION)) ||
-	    (lmv->lmv_magic == LMV_MAGIC_STRIPE &&
-	     !(lmv->lmv_hash_type & LMV_HASH_FLAG_DEAD)))
+	    lmv->lmv_magic == LMV_MAGIC_STRIPE)
 		return 0;
 
 	return -ENODATA;

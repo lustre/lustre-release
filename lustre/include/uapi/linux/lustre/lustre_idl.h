@@ -2231,28 +2231,6 @@ struct lmv_foreign_md {
 #define LMV_MAGIC_STRIPE 0x0CD40CD0 /* magic for dir sub_stripe */
 #define LMV_MAGIC_FOREIGN 0x0CD50CD0 /* magic for lmv foreign */
 
-/* Right now only the lower part(0-16bits) of lmv_hash_type is being used,
- * and the higher part will be the flag to indicate the status of object,
- * for example the object is being migrated. And the hash function
- * might be interpreted differently with different flags. */
-#define LMV_HASH_TYPE_MASK 0x0000ffff
-
-#define LMV_HASH_FLAG_MIGRATION	0x80000000
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 12, 57, 0)
-/* Since lustre 2.8, this flag will not be needed, instead this DEAD
- * and orphan flags will be stored in LMA (see LMAI_ORPHAN)
- * Keep this flag just for LFSCK, because it still might meet such
- * flag when it checks the old FS */
-#define LMV_HASH_FLAG_DEAD	0x40000000
-#endif
-#define LMV_HASH_FLAG_BAD_TYPE	0x20000000
-
-/* The striped directory has ever lost its master LMV EA, then LFSCK
- * re-generated it. This flag is used to indicate such case. It is an
- * on-disk flag. */
-#define LMV_HASH_FLAG_LOST_LMV	0x10000000
-
 /**
  * The FNV-1a hash algorithm is as follows:
  *	hash = FNV_offset_basis

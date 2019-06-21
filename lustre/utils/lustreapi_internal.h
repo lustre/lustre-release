@@ -144,7 +144,9 @@ static inline bool llapi_dir_stripe_index_is_valid(int64_t index)
 
 static inline bool llapi_dir_hash_type_is_valid(int64_t hash)
 {
-	return hash > LMV_HASH_TYPE_UNKNOWN && hash <  LMV_HASH_TYPE_MAX;
+	int64_t _hash = hash & LMV_HASH_TYPE_MASK;
+
+	return _hash > LMV_HASH_TYPE_UNKNOWN && _hash <  LMV_HASH_TYPE_MAX;
 }
 
 /*

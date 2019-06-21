@@ -767,10 +767,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			buf->lb_buf = lmu;
 			buf->lb_len = ma->ma_lmv_size;
 
-			if (le32_to_cpu(lmu->lum_hash_type) ==
-			    LMV_HASH_TYPE_SPACE) {
+			if (le32_to_cpu(lmu->lum_hash_type) &
+			    LMV_HASH_FLAG_SPACE) {
 				/*
-				 * only allow setting "space" hash type for
+				 * only allow setting "space" hash flag on
 				 * plain directory.
 				 */
 				rc = mdt_object_striped(info, mo);

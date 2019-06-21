@@ -85,7 +85,6 @@ const char *liblustreapi_cmd;
 char *mdt_hash_name[] = { "none",
 			  LMV_HASH_NAME_ALL_CHARS,
 			  LMV_HASH_NAME_FNV_1A_64,
-			  LMV_HASH_NAME_SPACE,
 };
 
 struct lustre_foreign_type lu_foreign_types[] = {
@@ -2990,10 +2989,10 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%#x", type);
 
+		if (flags & LMV_HASH_FLAG_SPACE)
+			llapi_printf(LLAPI_MSG_NORMAL, ",space");
 		if (flags & LMV_HASH_FLAG_MIGRATION)
 			llapi_printf(LLAPI_MSG_NORMAL, ",migrating");
-		if (flags & LMV_HASH_FLAG_DEAD)
-			llapi_printf(LLAPI_MSG_NORMAL, ",dead");
 		if (flags & LMV_HASH_FLAG_BAD_TYPE)
 			llapi_printf(LLAPI_MSG_NORMAL, ",bad_type");
 		if (flags & LMV_HASH_FLAG_LOST_LMV)

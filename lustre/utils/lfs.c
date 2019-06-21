@@ -694,6 +694,9 @@ static int check_hashtype(const char *hashtype)
 		if (strcmp(hashtype, mdt_hash_name[i]) == 0)
 			return i;
 
+	if (!strcmp(hashtype, LMV_HASH_NAME_SPACE))
+		return LMV_HASH_TYPE_DEFAULT | LMV_HASH_FLAG_SPACE;
+
 	return 0;
 }
 
@@ -3431,7 +3434,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
 			lmu->lum_hash_type = lsa.lsa_pattern;
 		else
-			lmu->lum_hash_type = LMV_HASH_TYPE_FNV_1A_64;
+			lmu->lum_hash_type = LMV_HASH_TYPE_DEFAULT;
 		if (lsa.lsa_pool_name)
 			strncpy(lmu->lum_pool_name, lsa.lsa_pool_name,
 				sizeof(lmu->lum_pool_name) - 1);
@@ -5496,7 +5499,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
 		param->lsp_stripe_pattern = lsa.lsa_pattern;
 	else
-		param->lsp_stripe_pattern = LMV_HASH_TYPE_FNV_1A_64;
+		param->lsp_stripe_pattern = LMV_HASH_TYPE_DEFAULT;
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
 	if (lsa.lsa_nr_tgts > 1) {
@@ -5515,8 +5518,16 @@ static int lfs_setdirstripe(int argc, char **argv)
 		memcpy(param->lsp_tgts, mdts, sizeof(*mdts) * lsa.lsa_nr_tgts);
 	}
 
-	if (!default_stripe && lsa.lsa_pattern == LMV_HASH_TYPE_SPACE) {
+	if (!default_stripe && (lsa.lsa_pattern & LMV_HASH_FLAG_SPACE)) {
 		fprintf(stderr, "%s %s: can only specify -H space with -D\n",
+			progname, argv[0]);
+		free(param);
+		return CMD_HELP;
+	}
+
+	if (param->lsp_stripe_offset != -1 &&
+	    lsa.lsa_pattern & LMV_HASH_FLAG_SPACE) {
+		fprintf(stderr, "%s %s: can only specify -H space with -i -1\n",
 			progname, argv[0]);
 		free(param);
 		return CMD_HELP;
