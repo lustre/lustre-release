@@ -1255,6 +1255,74 @@ test_19f() {
 }
 run_test 19f "Rejection of invalid layouts"
 
+test_19g() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	local file1=$DIR/${tfile}-1
+	local file2=$DIR/${tfile}-2
+
+	test_mkdir -p $DIR/$tdir
+	multiop $file1 oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:c ||
+		error "create failed $file1"
+	multiop $file2 oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:c ||
+		error "create failed $file2"
+
+	$LFS setstripe --component-add -E 1G -c 1 $file1 ||
+		error "comp-add [0,1G] failed $file1"
+	$LFS setstripe --component-add -E 10G -z 128M $file1 ||
+		error "comp-add [1G,1G],SEL[1G,10G] failed $file1"
+	$LFS setstripe --component-add -E -1 $file1 ||
+		error "comp-add [10G,-1] failed $file1"
+
+	$LFS setstripe --component-add -E 1G -z 128M -c 1 $file2 ||
+		error "comp-add [0,128M],SEL[128M,1G] failed $file1"
+	$LFS setstripe --component-add -E 10G $file2 ||
+		error "comp-add [1G,10G] failed $file1"
+	$LFS setstripe --component-add -E -1 -z 128M -c 1 $file2 ||
+		error "comp-add [10G,10G],SEL[10G,-1] failed $file1"
+
+	$LFS getstripe $file1
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 0 -E 1G $flg_opts $file1 | wc -l)
+	[ $found -eq 1 ] || error "First component not found $file1"
+
+	flg_opts="--comp-flags ^init"
+	found=$($LFS find --comp-start 1G -E 1G $flg_opts $file1 | wc -l)
+	[ $found -eq 1 ] || error "Second component not found $file1"
+
+	flg_opts="--comp-flags ^init,extension"
+	found=$($LFS find --comp-start 1G -E 10G $flg_opts $file1 | wc -l)
+	[ $found -eq 1 ] || error "Third component not found $file1"
+
+	flg_opts="--comp-flags ^init"
+	found=$($LFS find --comp-start 10G -E EOF $flg_opts $file1 | wc -l)
+	[ $found -eq 1 ] || error "Fourth component not found $file1"
+
+	$LFS getstripe $file2
+	flg_opts="--comp-flags init"
+	found=$($LFS find --comp-start 0 -E 128M $flg_opts $file2 | wc -l)
+	[ $found -eq 1 ] || error "First component not found $file2"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 128M -E 1G $flg_opts $file2 | wc -l)
+	[ $found -eq 1 ] || error "Second component not found $file2"
+
+	flg_opts="--comp-flags ^init"
+	found=$($LFS find --comp-start 1G -E 10G $flg_opts $file2 | wc -l)
+	[ $found -eq 1 ] || error "Third component not found $file2"
+
+	flg_opts="--comp-flags ^init"
+	found=$($LFS find --comp-start 10G -E 10G $flg_opts $file2 | wc -l)
+	[ $found -eq 1 ] || error "Fourth component not found $file2"
+
+	flg_opts="--comp-flags ^init,extension"
+	found=$($LFS find --comp-start 10G -E EOF $flg_opts $file2 | wc -l)
+	[ $found -eq 1 ] || error "Fifth component not found $file2"
+}
+run_test 19g "component-add behaviour"
+
 # Test out of space behavior
 test_20a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return

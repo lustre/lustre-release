@@ -2183,14 +2183,9 @@ new_comp:
 	if (set_extent) {
 		uint64_t comp_end = lsa->lsa_comp_end;
 
-		/* Extension space handling:
-		 * If this is the first component, length is extension_size.
-		 * If not, it is zero length, so it can be removed if there is
-		 * insufficient space to extend it.
-		 */
-		if (lsa->lsa_extension_comp && lsa->lsa_first_comp)
-			comp_end = prev_end + lsa->lsa_extension_size;
-		else if (lsa->lsa_extension_comp)
+		/* The extendable component is 0-length, so it can be removed
+		 * if there is insufficient space to extend it. */
+		if (lsa->lsa_extension_comp)
 			comp_end = prev_end;
 
 		rc = llapi_layout_comp_extent_set(layout, prev_end,
@@ -2487,50 +2482,133 @@ err:
 	return rc;
 }
 
-/* In 'lfs setstripe --component-add' mode, we need to fetch the extent
- * end of the last component in the existing file, and adjust the
- * first extent start of the components to be added accordingly. */
-static int adjust_first_extent(char *fname, struct llapi_layout *layout)
+/**
+ * Get the extension size from the next (SEL) component and extend the
+ * current component on it. The start of the next component is to be
+ * adjusted as well.
+ *
+ * \param[in] layout	the current layout
+ * \param[in] start	the start of the current component
+ * \param[in,out] end	the end of the current component
+ * \param[in] offset	the offset to adjust the end position to instead of
+ *			extension size
+ *
+ * \retval 0		- extended successfully
+ * \retval < 0		- error
+ */
+static int layout_extend_comp(struct llapi_layout *layout,
+			      uint64_t start, uint64_t *end,
+			      uint64_t offset)
 {
-	struct llapi_layout *head;
-	uint64_t start, end, stripe_size, prev_end = 0;
+	uint64_t size, next_start, next_end;
 	int rc;
 
-	if (layout == NULL) {
-		fprintf(stderr,
-			"%s setstripe: layout must be specified\n",
-			progname);
-		return -EINVAL;
-	}
-
-	errno = 0;
-	head = llapi_layout_get_by_path(fname, 0);
-	if (head == NULL) {
-		fprintf(stderr,
-			"%s setstripe: cannot read layout from '%s': %s\n",
-			progname, fname, strerror(errno));
-		return -EINVAL;
-	} else if (errno == ENODATA) {
-		/* file without LOVEA, this component-add will be turned
-		 * into a component-create. */
-		llapi_layout_free(head);
-		return -ENODATA;
-	} else if (!llapi_layout_is_composite(head)) {
-		fprintf(stderr, "%s setstripe: '%s' not a composite file\n",
-			progname, fname);
-		llapi_layout_free(head);
-		return -EINVAL;
-	}
-
-	rc = llapi_layout_comp_extent_get(head, &start, &prev_end);
-	if (rc) {
-		fprintf(stderr, "%s setstripe: cannot get prev extent: %s\n",
-			progname, strerror(errno));
-		llapi_layout_free(head);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	if (rc < 0) {
+		fprintf(stderr, "%s setstripe: cannot move component cursor: "
+			"%s\n", progname, strerror(errno));
 		return rc;
 	}
 
-	llapi_layout_free(head);
+	/* Even if the @size will not be used below, this will fail if
+	 * this is not a SEL component - a good confirmation we are
+	 * working on right components. */
+	rc = llapi_layout_extension_size_get(layout, &size);
+	if (rc < 0) {
+		fprintf(stderr, "%s setstripe: cannot get component ext size: "
+			"%s\n", progname, strerror(errno));
+		return rc;
+	}
+
+	rc = llapi_layout_comp_extent_get(layout, &next_start, &next_end);
+	if (rc) {
+		fprintf(stderr, "%s setstripe: cannot get extent: %s\n",
+			progname, strerror(errno));
+		return rc;
+	}
+
+	next_start += offset ?: size;
+	rc = llapi_layout_comp_extent_set(layout, next_start, next_end);
+	if (rc) {
+		fprintf(stderr, "%s setstripe: cannot set extent: %s\n",
+			progname, strerror(errno));
+		return rc;
+	}
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_PREV);
+	if (rc < 0) {
+		fprintf(stderr, "%s setstripe: cannot move component cursor: "
+			"%s\n", progname, strerror(errno));
+		return rc;
+	}
+
+	*end += offset ?: size;
+	rc = llapi_layout_comp_extent_set(layout, start, *end);
+	if (rc) {
+		fprintf(stderr, "%s setstripe: cannot set extent: %s\n",
+			progname, strerror(errno));
+		return rc;
+	}
+
+	return 0;
+}
+
+/**
+ * In 'lfs setstripe --component-add' mode, we need to fetch the extent
+ * end of the last component in the existing file, and adjust the
+ * first extent start of the components to be added accordingly.
+ *
+ * In the create mode, we need to check if the first component is an extendable
+ * SEL component and extend its length to the extension size (first component
+ * of the PFL file is initialised at the create time, cannot be 0-lenght.
+ */
+static int layout_adjust_first_extent(char *fname, struct llapi_layout *layout,
+				      bool comp_add)
+{
+	struct llapi_layout *head;
+	uint64_t start = 0, prev_end = 0;
+	uint64_t end;
+	int rc, ret = 0;
+
+	if (layout == NULL)
+		return 0;
+
+	errno = 0;
+	while (comp_add) {
+		head = llapi_layout_get_by_path(fname, 0);
+		if (head == NULL) {
+			fprintf(stderr,
+				"%s setstripe: cannot read layout from '%s': "
+				"%s\n", progname, fname, strerror(errno));
+			return -EINVAL;
+		} else if (errno == ENODATA) {
+			/* file without LOVEA, this component-add will be turned
+			 * into a component-create. */
+			llapi_layout_free(head);
+			ret = -ENODATA;
+
+			/* the new layout will be added to an empty one, it
+			 * still needs to be adjusted below */
+			comp_add = 0;
+			break;
+		} else if (!llapi_layout_is_composite(head)) {
+			fprintf(stderr, "%s setstripe: '%s' not a composite "
+				"file\n", progname, fname);
+			llapi_layout_free(head);
+			return -EINVAL;
+		}
+
+		rc = llapi_layout_comp_extent_get(head, &start, &prev_end);
+		if (rc) {
+			fprintf(stderr, "%s setstripe: cannot get prev "
+				"extent: %s\n", progname, strerror(errno));
+			llapi_layout_free(head);
+			return rc;
+		}
+
+		llapi_layout_free(head);
+		break;
+	}
 
 	/* Make sure we use the first component of the layout to be added. */
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
@@ -2548,37 +2626,46 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 		return rc;
 	}
 
-	if (start > prev_end || end <= prev_end) {
-		fprintf(stderr,
-			"%s setstripe: first extent [%lu, %lu) not adjacent with extent end %lu\n",
+	if (start == 0 && end == 0) {
+		rc = layout_extend_comp(layout, start, &end,
+					comp_add ? prev_end : 0);
+		if (rc)
+			return rc;
+	}
+
+	if (start > prev_end || end < prev_end) {
+		fprintf(stderr,	"%s setstripe: first extent [%lu, %lu) not "
+			"adjacent with extent end %lu\n",
 			progname, start, end, prev_end);
-		return -EINVAL;
-	}
-
-	rc = llapi_layout_stripe_size_get(layout, &stripe_size);
-	if (rc) {
-		fprintf(stderr, "%s setstripe: cannot get stripe size: %s\n",
-			progname, strerror(errno));
-		return rc;
-	}
-
-	if (stripe_size != LLAPI_LAYOUT_DEFAULT &&
-	    (prev_end & (stripe_size - 1))) {
-		fprintf(stderr,
-			"%s setstripe: stripe size %lu not aligned with %lu\n",
-			progname, stripe_size, prev_end);
 		return -EINVAL;
 	}
 
 	rc = llapi_layout_comp_extent_set(layout, prev_end, end);
 	if (rc) {
-		fprintf(stderr,
-			"%s setstripe: cannot set component extent [%lu, %lu): %s\n",
+		fprintf(stderr, "%s setstripe: cannot set component extent "
+			"[%lu, %lu): %s\n",
 			progname, prev_end, end, strerror(errno));
 		return rc;
 	}
 
-	return 0;
+	return ret;
+}
+
+static int mirror_adjust_first_extents(struct mirror_args *list)
+{
+	int rc = 0;
+
+	if (list == NULL)
+		return 0;
+
+	while (list != NULL) {
+		rc = layout_adjust_first_extent(NULL, list->m_layout, false);
+		if (rc)
+			break;
+		list = list->m_next;
+	}
+
+	return rc;
 }
 
 static inline bool arg_is_eof(char *arg)
@@ -3367,8 +3454,14 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				progname, argv[0]);
 			goto usage_error;
 		}
+	}
 
-		result = adjust_first_extent(fname, layout);
+	if (layout != NULL || mirror_list != NULL) {
+		if (mirror_list)
+			result = mirror_adjust_first_extents(mirror_list);
+		else
+			result = layout_adjust_first_extent(fname, layout,
+							    comp_add);
 		if (result == -ENODATA)
 			comp_add = 0;
 		else if (result != 0) {
