@@ -69,7 +69,7 @@ lfs_project_item_alloc(struct list_head *head, const char *pathname)
 		return -ENOMEM;
 	}
 
-	strncpy(lpi->lpi_pathname, pathname, sizeof(lpi->lpi_pathname));
+	strncpy(lpi->lpi_pathname, pathname, sizeof(lpi->lpi_pathname) - 1);
 	list_add_tail(&lpi->lpi_list, head);
 
 	return 0;
