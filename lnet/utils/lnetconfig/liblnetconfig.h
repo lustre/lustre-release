@@ -653,6 +653,37 @@ int lustre_lnet_parse_interfaces(char *intf_str,
 				 struct lnet_dlc_network_descr *nw_descr);
 
 /*
+ * lustre_lnet_parse_nidstr
+ *     This is a small wrapper around cfs_parse_nidlist.
+ *         nidstr - A string parseable by cfs_parse_nidlist
+ *         lnet_nidlist - An array of lnet_nid_t to hold the nids specified
+ *                        by the nidstring.
+ *         max_nids - Size of the lnet_nidlist array, and the maximum number of
+ *                    nids that can be expressed by the nidstring. If the
+ *                    nidstring expands to a larger number of nids than max_nids
+ *                    then an error is returned.
+ *         err_str - char pointer where we store an informative error
+ *                   message when an error is encountered
+ *     Returns:
+ *         The number (> 0) of lnet_nid_t stored in the supplied array, or
+ *         LUSTRE_CFG_RC_BAD_PARAM if:
+ *           - nidstr is NULL
+ *           - nidstr contains an asterisk. This character is not allowed
+ *             because it would cause the size of the expanded nidlist to exceed
+ *             the maximum number of nids that is supported by expected callers
+ *             of this function.
+ *           - cfs_parse_nidlist fails to parse the nidstring
+ *           - The nidlist populated by cfs_parse_nidlist is empty
+ *           - The nidstring expands to a larger number of nids than max_nids
+ *           - The nidstring expands to zero nids
+ *         LUSTRE_CFG_RC_OUT_OF_MEM if:
+ *           - cfs_expand_nidlist can return ENOMEM. We return out of mem in
+ *             this case.
+ */
+int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
+			     int max_nids, char *err_str);
+
+/*
  * lustre_lnet_parse_nids
  *	Parse a set of nids into a locally allocated array and return the
  *	pointer of the array to the caller. The caller is responsible for

@@ -262,6 +262,61 @@ static char *get_next_delimiter_in_nid(char *str, char sep)
 	return comma;
 }
 
+int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
+			     int max_nids, char *err_str)
+{
+	int rc, num_nids = 0;
+	struct list_head nidlist;
+
+	if (!nidstr) {
+		snprintf(err_str, LNET_MAX_STR_LEN, "supplied nidstr is NULL");
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	if (strchr(nidstr, '*')) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "asterisk not allowed in nidstring \"%s\"", nidstr);
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	INIT_LIST_HEAD(&nidlist);
+	rc = cfs_parse_nidlist(nidstr, strlen(nidstr), &nidlist);
+	if (rc == 0) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "Unable to parse nidlist from: %s\n", nidstr);
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	if (list_empty(&nidlist)) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "\"%s\" does not specify any valid nid lists", nidstr);
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	num_nids = cfs_expand_nidlist(&nidlist, lnet_nidlist, max_nids);
+
+	if (num_nids == -1) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "\"%s\" specifies more than the %d NIDs allowed by this operation.",
+			 nidstr, max_nids);
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	if (num_nids < 0) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "Failed to expand nidstr: %s", strerror(num_nids));
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+	}
+
+	if (num_nids == 0) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "\"%s\" did not expand to any nids", nidstr);
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	return num_nids;
+}
+
 int lustre_lnet_parse_nids(char *nids, char **array, int size,
 			   char ***out_array)
 {
