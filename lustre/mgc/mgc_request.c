@@ -447,8 +447,6 @@ out_sptlrpc:
 	return ERR_PTR(rc);
 }
 
-DEFINE_MUTEX(llog_process_lock);
-
 static inline void config_mark_cld_stop(struct config_llog_data *cld)
 {
 	if (cld) {
@@ -1972,9 +1970,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 					     &cld->cld_cfg);
 
 	/*
-	 * update settings on existing OBDs. doing it inside
-	 * of llog_process_lock so no device is attaching/detaching
-	 * in parallel.
+	 * update settings on existing OBDs.
 	 * the logname must be <fsname>-sptlrpc
 	 */
 	if (rc == 0 && cld_is_sptlrpc(cld))
