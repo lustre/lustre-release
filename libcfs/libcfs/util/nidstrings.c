@@ -190,6 +190,46 @@ out:
 }
 
 static int
+libcfs_num_addr_range_expand(struct list_head *addrranges, __u32 *addrs,
+			     int max_addrs)
+{
+	struct cfs_expr_list *expr_list;
+	struct cfs_range_expr *range;
+	int i;
+	int max_idx = max_addrs - 1;
+	int addrs_idx = max_idx;
+
+	list_for_each_entry(expr_list, addrranges, el_link) {
+		list_for_each_entry(range, &expr_list->el_exprs, re_link) {
+			for (i = range->re_lo; i <= range->re_hi;
+			     i += range->re_stride) {
+				if (addrs_idx < 0)
+					return -1;
+
+				addrs[addrs_idx] = i;
+				addrs_idx--;
+			}
+		}
+	}
+
+	return max_idx - addrs_idx;
+}
+
+static int
+libcfs_ip_addr_range_expand(struct list_head *addrranges, __u32 *addrs,
+			    int max_addrs)
+{
+	int rc = 0;
+
+	rc = cfs_ip_addr_range_gen(addrs, max_addrs, addrranges);
+
+	if (rc == -1)
+		return rc;
+	else
+		return max_addrs - rc - 1;
+}
+
+static int
 libcfs_ip_addr_range_print(char *buffer, int count, struct list_head *list)
 {
 	int i = 0, j = 0;
@@ -390,7 +430,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_parse_addrlist	= libcfs_num_parse,
 		.nf_print_addrlist	= libcfs_num_addr_range_print,
 		.nf_match_addr		= libcfs_num_match,
-		.nf_min_max		= cfs_num_min_max
+		.nf_min_max		= cfs_num_min_max,
+		.nf_expand_addrrange	= libcfs_num_addr_range_expand
 	},
 	{
 		.nf_type		= SOCKLND,
@@ -401,7 +442,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_parse_addrlist	= cfs_ip_addr_parse,
 		.nf_print_addrlist	= libcfs_ip_addr_range_print,
 		.nf_match_addr		= cfs_ip_addr_match,
-		.nf_min_max		= cfs_ip_min_max
+		.nf_min_max		= cfs_ip_min_max,
+		.nf_expand_addrrange	= libcfs_ip_addr_range_expand
 	},
 	{
 		.nf_type		= O2IBLND,
@@ -412,7 +454,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_parse_addrlist	= cfs_ip_addr_parse,
 		.nf_print_addrlist	= libcfs_ip_addr_range_print,
 		.nf_match_addr		= cfs_ip_addr_match,
-		.nf_min_max		= cfs_ip_min_max
+		.nf_min_max		= cfs_ip_min_max,
+		.nf_expand_addrrange	= libcfs_ip_addr_range_expand
 	},
 	{
 		.nf_type		= GNILND,
@@ -423,7 +466,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_parse_addrlist	= libcfs_num_parse,
 		.nf_print_addrlist	= libcfs_num_addr_range_print,
 		.nf_match_addr		= libcfs_num_match,
-		.nf_min_max		= cfs_num_min_max
+		.nf_min_max		= cfs_num_min_max,
+		.nf_expand_addrrange	= libcfs_num_addr_range_expand
 	},
 	{
 		.nf_type		= GNIIPLND,
@@ -434,7 +478,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_parse_addrlist	= cfs_ip_addr_parse,
 		.nf_print_addrlist	= libcfs_ip_addr_range_print,
 		.nf_match_addr		= cfs_ip_addr_match,
-		.nf_min_max		= cfs_ip_min_max
+		.nf_min_max		= cfs_ip_min_max,
+		.nf_expand_addrrange	= libcfs_ip_addr_range_expand
 	},
 	{
 		.nf_type		= PTL4LND,
@@ -445,7 +490,8 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_parse_addrlist	= libcfs_num_parse,
 		.nf_print_addrlist	= libcfs_num_addr_range_print,
 		.nf_match_addr		= libcfs_num_match,
-		.nf_min_max		= cfs_num_min_max
+		.nf_min_max		= cfs_num_min_max,
+		.nf_expand_addrrange	= libcfs_num_addr_range_expand
 	}
 };
 
@@ -1302,4 +1348,58 @@ static int cfs_ip_min_max(struct list_head *nidlist, __u32 *min_nid,
 		*min_nid = min_ip_addr;
 
 	return 0;
+}
+
+static int
+libcfs_expand_nidrange(struct nidrange *nr, __u32 *addrs, int max_nids)
+{
+	struct addrrange *ar;
+	int rc = 0, count = max_nids;
+	struct netstrfns *nf = nr->nr_netstrfns;
+
+	list_for_each_entry(ar, &nr->nr_addrranges, ar_link) {
+		rc = nf->nf_expand_addrrange(&ar->ar_numaddr_ranges, addrs,
+					     count);
+		if (rc < 0)
+			return rc;
+
+		count -= rc;
+	}
+
+	return max_nids - count;
+}
+
+int cfs_expand_nidlist(struct list_head *nidlist, lnet_nid_t *lnet_nidlist,
+		       int max_nids)
+{
+	struct nidrange *nr;
+	int rc = 0, count = max_nids;
+	int i, j = 0;
+	__u32 *addrs;
+	struct netstrfns *nf;
+	__u32 net;
+
+	addrs = calloc(max_nids, sizeof(__u32));
+	if (!addrs)
+		return -ENOMEM;
+
+	list_for_each_entry(nr, nidlist, nr_link) {
+		rc = libcfs_expand_nidrange(nr, addrs, count);
+
+		if (rc < 0) {
+			free(addrs);
+			return rc;
+		}
+
+		nf = nr->nr_netstrfns;
+		net = LNET_MKNET(nf->nf_type, nr->nr_netnum);
+
+		for (i = count - 1; i >= count - rc; i--)
+			lnet_nidlist[j++] = LNET_MKNID(net, addrs[i]);
+
+		count -= rc;
+	}
+
+	free(addrs);
+	return max_nids - count;
 }

@@ -98,7 +98,8 @@ void cfs_free_nidlist(struct list_head *list);
 int cfs_parse_nidlist(char *str, int len, struct list_head *list);
 int cfs_print_nidlist(char *buffer, int count, struct list_head *list);
 int cfs_match_nid(lnet_nid_t nid, struct list_head *list);
-
+int cfs_expand_nidlist(struct list_head *nidlist, lnet_nid_t *lnet_nidlist,
+		       int max_nids);
 int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
 int cfs_ip_addr_match(__u32 addr, struct list_head *list);
 int cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
@@ -117,6 +118,8 @@ struct netstrfns {
 	int	(*nf_match_addr)(__u32 addr, struct list_head *list);
 	int	(*nf_min_max)(struct list_head *nidlist, __u32 *min_nid,
 			      __u32 *max_nid);
+	int	(*nf_expand_addrrange)(struct list_head *addrranges,
+				       __u32 *addrs, int max_addrs);
 };
 
 #endif /* _LNET_NIDSTRINGS_H */
