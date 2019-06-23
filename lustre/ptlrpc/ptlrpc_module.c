@@ -40,11 +40,6 @@
 
 #include "ptlrpc_internal.h"
 
-extern spinlock_t ptlrpc_last_xid_lock;
-#if RS_DEBUG
-extern spinlock_t ptlrpc_rs_debug_lock;
-#endif
-
 static __init int ptlrpc_init(void)
 {
 	int rc;

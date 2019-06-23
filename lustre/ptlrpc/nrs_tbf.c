@@ -3583,7 +3583,6 @@ nrs_tbf_type_flag(struct ptlrpc_service *svc, enum ptlrpc_nrs_queue_type queue)
 	return type;
 }
 
-extern struct nrs_core nrs_core;
 #define LPROCFS_WR_NRS_TBF_MAX_CMD (4096)
 static ssize_t
 ptlrpc_lprocfs_nrs_tbf_rule_seq_write(struct file *file,

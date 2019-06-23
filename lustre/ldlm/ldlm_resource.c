@@ -1035,8 +1035,6 @@ out_ref:
 }
 EXPORT_SYMBOL(ldlm_namespace_new);
 
-extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
-
 /**
  * Cancel and destroy all locks on a resource.
  *

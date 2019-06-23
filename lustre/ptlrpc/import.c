@@ -1794,7 +1794,6 @@ void ptlrpc_cleanup_imp(struct obd_import *imp)
 }
 
 /* Adaptive Timeout utils */
-extern unsigned int at_min, at_max, at_history;
 
 /* Update at_current with the specified value (bounded by at_min and at_max),
  * as well as the AT history "bins".

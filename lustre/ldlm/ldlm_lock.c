@@ -136,8 +136,6 @@ const char *ldlm_it2str(enum ldlm_intent_flags it)
 }
 EXPORT_SYMBOL(ldlm_it2str);
 
-extern struct kmem_cache *ldlm_lock_slab;
-
 #ifdef HAVE_SERVER_SUPPORT
 static ldlm_processing_policy ldlm_processing_policy_table[] = {
 	[LDLM_PLAIN]	= ldlm_process_plain_lock,
