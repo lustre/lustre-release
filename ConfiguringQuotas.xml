@@ -510,7 +510,7 @@ lctl get_param osd-*.*.quota_slave.limit*
     (aka QSD) which connects to the QMT to allocate/release quota space. The
     QSD is setup directly from the OSD layer.</para>
     <para>To reduce quota requests, quota space is initially allocated to QSDs
-    in very large chunks. How much unused quota space can be hold by a target
+    in very large chunks. How much unused quota space can be held by a target
     is controlled by the qunit size. When quota space for a given ID is close
     to exhaustion on the QMT, the qunit size is reduced and QSDs are notified
     of the new qunit size value via a glimpse callback. Slaves are then
