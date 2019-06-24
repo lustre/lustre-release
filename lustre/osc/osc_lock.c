@@ -732,9 +732,10 @@ unsigned long osc_ldlm_weigh_ast(struct ldlm_lock *dlmlock)
 
 	spin_lock(&obj->oo_ol_spin);
 	list_for_each_entry(oscl, &obj->oo_ol_list, ols_nextlock_oscobj) {
-		if (oscl->ols_dlmlock != NULL && oscl->ols_dlmlock != dlmlock)
-			continue;
-		found = true;
+		if (oscl->ols_dlmlock == dlmlock) {
+			found = true;
+			break;
+		}
 	}
 	spin_unlock(&obj->oo_ol_spin);
 	if (found) {
