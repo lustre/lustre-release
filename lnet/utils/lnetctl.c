@@ -1654,22 +1654,21 @@ static int jt_export(int argc, char **argv)
 	return 0;
 }
 
-static int jt_add_peer_nid(int argc, char **argv)
+static int jt_peer_nid_common(int argc, char **argv, int cmd)
 {
-	char *prim_nid = NULL;
-	char **nids = NULL, **nids2 = NULL;
-	int size = 0;
+	int rc = LUSTRE_CFG_RC_NO_ERR, opt, num_nids, num_nidstrs, i;
+	bool is_mr = true;
+	char *prim_nid = NULL, *nidstr = NULL;
+	char err_str[LNET_MAX_STR_LEN] = "Error";
+	char *nidstrarray[LNET_MAX_STR_LEN];
 	struct cYAML *err_rc = NULL;
-	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i;
-	bool non_mr = false;
-	bool ip2nets = false, nid_list = false, prim_nid_present = false;
+	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER];
 
 	const char *const short_opts = "k:mn:";
 	const struct option long_opts[] = {
 	{ .name = "prim_nid",	.has_arg = required_argument,	.val = 'k' },
 	{ .name = "non_mr",	.has_arg = no_argument,		.val = 'm' },
 	{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
-	{ .name = "ip2nets",	.has_arg = required_argument,	.val = 'i' },
 	{ .name = NULL } };
 
 	rc = check_cmd(peer_cmds, "peer", "add", 2, argc, argv);
@@ -1680,161 +1679,99 @@ static int jt_add_peer_nid(int argc, char **argv)
 				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'k':
-			prim_nid_present = true;
-			if (ip2nets) {
-				cYAML_build_error(-1, -1, "peer", "add",
-						"ip2nets can not be specified"
-						" along side prim_nid parameter.",
-						&err_rc);
-				goto failed;
-			}
 			prim_nid = optarg;
 			break;
-		case 'i':
 		case 'n':
-			if (opt == 'i')
-				ip2nets = true;
-
-			if (opt == 'n')
-				nid_list = true;
-
-			if (ip2nets && (nid_list || prim_nid_present)) {
-				cYAML_build_error(-1, -1, "peer", "add",
-						"ip2nets can not be specified"
-						" along side nid or prim_nid"
-						" parameters", &err_rc);
-				goto failed;
-			}
-
-			size = lustre_lnet_parse_nids(optarg, nids, size,
-						      &nids2);
-			if (nids2 == NULL)
-				goto failed;
-			nids = nids2;
-			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+			nidstr = optarg;
 			break;
 		case 'm':
-			non_mr = true;
+			if (cmd == LNETCTL_DEL_CMD) {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				snprintf(err_str, LNET_MAX_STR_LEN,
+					 "Unrecognized option '-%c'", opt);
+				goto out;
+			}
+			is_mr = false;
 			break;
 		case '?':
-			print_help(peer_cmds, "peer", "add");
+			print_help(peer_cmds, "peer",
+				   cmd == LNETCTL_ADD_CMD ? "add" : "del");
 		default:
 			return 0;
 		}
 	}
 
-	for (; optind < argc; optind++) {
-		size = lustre_lnet_parse_nids(argv[optind], nids, size,
-						&nids2);
-		if (nids2 == NULL)
-			goto failed;
-		nids = nids2;
+	if (!(nidstr || prim_nid)) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "--prim_nid or --nid (or both) must be specified");
+		goto out;
 	}
 
-	rc = lustre_lnet_config_peer_nid(prim_nid, nids, size,
-					 !non_mr, ip2nets, -1, &err_rc);
+	if (!nidstr) {
+		/* We were only provided a primary nid */
+		num_nids = 0;
+		if (cmd == LNETCTL_ADD_CMD)
+			rc = lustre_lnet_config_peer_nidlist(prim_nid,
+							     lnet_nidlist,
+							     num_nids, is_mr,
+							     -1, &err_rc);
+		else
+			rc = lustre_lnet_del_peer_nidlist(prim_nid,
+							  lnet_nidlist,
+							  num_nids, -1,
+							  &err_rc);
 
-failed:
-	if (nids) {
-		/* free the array of nids */
-		for (i = 0; i < size; i++)
-			free(nids[i]);
-		free(nids);
+		goto out;
 	}
 
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
+	rc = tokenize_nidstr(nidstr, &nidstrarray[0], err_str);
+	if (rc <= 0)
+		goto out;
+
+	num_nidstrs = rc;
+
+	for (i = 0; i < num_nidstrs; i++) {
+		rc = lustre_lnet_parse_nidstr(nidstrarray[i], lnet_nidlist,
+					      LNET_MAX_NIDS_PER_PEER, err_str);
+		if (rc < 0)
+			goto out;
+
+		num_nids = rc;
+
+		if (cmd == LNETCTL_ADD_CMD)
+			rc = lustre_lnet_config_peer_nidlist(prim_nid,
+							     lnet_nidlist,
+							     num_nids, is_mr,
+							     -1, &err_rc);
+		else
+			rc = lustre_lnet_del_peer_nidlist(prim_nid,
+							  lnet_nidlist,
+							  num_nids, -1,
+							  &err_rc);
+	}
+
+out:
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_build_error(rc, -1, "peer",
+				  cmd == LNETCTL_ADD_CMD ? "add" : "del",
+				  err_str, &err_rc);
 		cYAML_print_tree2file(stderr, err_rc);
+	}
 
 	cYAML_free_tree(err_rc);
 
 	return rc;
 }
 
+static int jt_add_peer_nid(int argc, char **argv)
+{
+	return jt_peer_nid_common(argc, argv, LNETCTL_ADD_CMD);
+}
+
 static int jt_del_peer_nid(int argc, char **argv)
 {
-	char *prim_nid = NULL;
-	char **nids = NULL, **nids2 = NULL;
-	struct cYAML *err_rc = NULL;
-	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i, size = 0;
-	bool ip2nets = false, nid_list = false, prim_nid_present = false;
-
-	const char *const short_opts = "k:n:";
-	const struct option long_opts[] = {
-	{ .name = "prim_nid",	.has_arg = required_argument,	.val = 'k' },
-	{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
-	{ .name = "ip2nets",	.has_arg = required_argument,	.val = 'i' },
-	{ .name = NULL } };
-
-	rc = check_cmd(peer_cmds, "peer", "del", 2, argc, argv);
-	if (rc)
-		return rc;
-
-	while ((opt = getopt_long(argc, argv, short_opts,
-				  long_opts, NULL)) != -1) {
-		switch (opt) {
-		case 'k':
-			prim_nid_present = true;
-			if (ip2nets) {
-				cYAML_build_error(-1, -1, "peer", "add",
-						"ip2nets can not be specified"
-						" along side prim_nid parameter.",
-						&err_rc);
-				goto failed;
-			}
-			prim_nid = optarg;
-			break;
-		case 'i':
-		case 'n':
-			if (opt == 'i')
-				ip2nets = true;
-
-			if (opt == 'n')
-				nid_list = true;
-
-			if (ip2nets && (nid_list || prim_nid_present)) {
-				cYAML_build_error(-1, -1, "peer", "add",
-						"ip2nets can not be specified"
-						" along side nid or prim_nid"
-						" parameters", &err_rc);
-				goto failed;
-			}
-			size = lustre_lnet_parse_nids(optarg, nids, size,
-						      &nids2);
-			if (nids2 == NULL)
-				goto failed;
-			nids = nids2;
-			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
-			break;
-		case '?':
-			print_help(peer_cmds, "peer", "del");
-		default:
-			return 0;
-		}
-	}
-
-	for (; optind < argc; optind++) {
-		size = lustre_lnet_parse_nids(argv[optind], nids, size,
-						&nids2);
-		if (nids2 == NULL)
-			goto failed;
-		nids = nids2;
-	}
-
-	rc = lustre_lnet_del_peer_nid(prim_nid, nids, size, ip2nets, -1, &err_rc);
-
-failed:
-	if (nids) {
-		for (i = 0; i < size; i++)
-			free(nids[i]);
-		free(nids);
-	}
-
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
-		cYAML_print_tree2file(stderr, err_rc);
-
-	cYAML_free_tree(err_rc);
-
-	return rc;
+	return jt_peer_nid_common(argc, argv, LNETCTL_DEL_CMD);
 }
 
 static int jt_show_peer(int argc, char **argv)

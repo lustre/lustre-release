@@ -560,23 +560,17 @@ int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
 	return rc;
 }
 
-static int dispatch_peer_ni_cmd(lnet_nid_t pnid, lnet_nid_t nid, __u32 cmd,
-				struct lnet_ioctl_peer_cfg *data,
+static int dispatch_peer_ni_cmd(__u32 cmd, struct lnet_ioctl_peer_cfg *data,
 				char *err_str, char *cmd_str)
 {
 	int rc;
 
-	data->prcfg_prim_nid = pnid;
-	data->prcfg_cfg_nid = nid;
-
 	rc = l_ioctl(LNET_DEV_ID, cmd, data);
-	if (rc != 0) {
+	if (rc) {
 		rc = -errno;
-		snprintf(err_str,
-			LNET_MAX_STR_LEN,
-			"\"cannot %s peer ni: %s\"",
-			(cmd_str) ? cmd_str : "add", strerror(errno));
-		err_str[LNET_MAX_STR_LEN - 1] = '\0';
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "\"%s peer ni operation failed: %s\"",
+			 cmd_str, strerror(errno));
 	}
 
 	return rc;
@@ -884,6 +878,59 @@ out:
 	return rc;
 }
 
+static int lustre_lnet_handle_peer_nidlist(lnet_nid_t *nidlist, int num_nids,
+					   bool is_mr, __u32 cmd,
+					   char *cmd_type, char *err_str)
+{
+	struct lnet_ioctl_peer_cfg data;
+	int rc, nid_idx;
+
+	if (cmd == IOC_LIBCFS_ADD_PEER_NI) {
+		/* When adding a peer we first need to create the peer using the
+		 * specified (or implied) primary nid. Then we can add
+		 * additional nids to this peer using the primary nid as a key
+		 */
+		LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+		data.prcfg_mr = is_mr;
+		data.prcfg_prim_nid = nidlist[0];
+		data.prcfg_cfg_nid = LNET_NID_ANY;
+
+		rc = dispatch_peer_ni_cmd(cmd, &data, err_str, cmd_type);
+
+		if (rc)
+			return rc;
+	}
+
+	/* Add or delete any specified NIs associated with the specified
+	 * (or implied) primary nid
+	 */
+	for (nid_idx = 1; nid_idx < num_nids; nid_idx++) {
+		LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+		data.prcfg_mr = is_mr;
+		data.prcfg_prim_nid = nidlist[0];
+		data.prcfg_cfg_nid = nidlist[nid_idx];
+
+		rc = dispatch_peer_ni_cmd(cmd, &data, err_str, cmd_type);
+
+		if (rc)
+			return rc;
+	}
+
+	if (cmd == IOC_LIBCFS_DEL_PEER_NI && num_nids == 1) {
+		/* In the delete case we may have been given just the
+		 * primary nid of the peer. This tells us to delete the peer
+		 * completely (rather than just delete some of its NIs)
+		 */
+		LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+		data.prcfg_prim_nid = nidlist[0];
+		data.prcfg_cfg_nid = LNET_NID_ANY;
+
+		rc = dispatch_peer_ni_cmd(cmd, &data, err_str, cmd_type);
+	}
+
+	return rc;
+}
+
 static int lustre_lnet_handle_peer_ip2nets(char **nid, int num_nids, bool mr,
 					   bool range, __u32 cmd,
 					   char *cmd_type, char *err_str)
@@ -944,14 +991,19 @@ static int lustre_lnet_handle_peer_ip2nets(char **nid, int num_nids, bool mr,
 			else if (!range && i == 0)
 				peer_nid = LNET_NID_ANY;
 
+			LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+			data.prcfg_mr = mr;
+			data.prcfg_prim_nid = prim_nid;
+			data.prcfg_cfg_nid = peer_nid;
+
 			/*
 			* If prim_nid is not provided then the first nid in the
 			* list becomes the prim_nid. First time round the loop
 			* use LNET_NID_ANY for the first parameter, then use
 			* nid[0] as the key nid after wards
 			*/
-			rc = dispatch_peer_ni_cmd(prim_nid, peer_nid, cmd,
-						  &data, err_str, cmd_type);
+			rc = dispatch_peer_ni_cmd(cmd, &data, err_str,
+						  cmd_type);
 			if (rc != 0)
 				goto out;
 
@@ -971,6 +1023,50 @@ next_nid:
 
 out:
 	lustre_lnet_clean_ip2nets(&ip2nets);
+	return rc;
+}
+
+int lustre_lnet_config_peer_nidlist(char *pnidstr, lnet_nid_t *lnet_nidlist,
+				    int num_nids, bool is_mr, int seq_no,
+				    struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	lnet_nid_t *lnet_nidlist2 = NULL;
+	lnet_nid_t pnid;
+
+	if (pnidstr) {
+		pnid = libcfs_str2nid(pnidstr);
+		if (pnid == LNET_NID_ANY) {
+			snprintf(err_str, LNET_MAX_STR_LEN,
+				 "bad primary NID: '%s'", pnidstr);
+			rc = LUSTRE_CFG_RC_MISSING_PARAM;
+			goto out;
+		}
+
+		num_nids++;
+
+		lnet_nidlist2 = calloc(sizeof(*lnet_nidlist2), num_nids);
+		if (!lnet_nidlist2) {
+			snprintf(err_str, LNET_MAX_STR_LEN, "out of memory");
+			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+			goto out;
+		}
+		lnet_nidlist2[0] = pnid;
+		memcpy(&lnet_nidlist2[1], lnet_nidlist, sizeof(*lnet_nidlist) *
+						    (num_nids - 1));
+	}
+
+	rc = lustre_lnet_handle_peer_nidlist((pnidstr) ? lnet_nidlist2 :
+							 lnet_nidlist,
+					     num_nids, is_mr,
+					     IOC_LIBCFS_ADD_PEER_NI, ADD_CMD,
+					     err_str);
+out:
+	if (lnet_nidlist2)
+		free(lnet_nidlist2);
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "peer_ni", err_str, err_rc);
 	return rc;
 }
 
@@ -1025,6 +1121,54 @@ out:
 		free(nid_array);
 
 	cYAML_build_error(rc, seq_no, ADD_CMD, "peer_ni", err_str, err_rc);
+	return rc;
+}
+
+int lustre_lnet_del_peer_nidlist(char *pnidstr, lnet_nid_t *lnet_nidlist,
+				 int num_nids, int seq_no,
+				 struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	lnet_nid_t *lnet_nidlist2 = NULL;
+	lnet_nid_t pnid;
+
+	if (!pnidstr) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"Primary nid is not provided\"");
+		rc = LUSTRE_CFG_RC_MISSING_PARAM;
+		goto out;
+	}
+
+	pnid = libcfs_str2nid(pnidstr);
+	if (pnid == LNET_NID_ANY) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, sizeof(err_str),
+			 "bad key NID: '%s'",
+			 pnidstr);
+		goto out;
+	}
+
+	num_nids++;
+	lnet_nidlist2 = calloc(sizeof(*lnet_nidlist2), num_nids);
+	if (!lnet_nidlist2) {
+		snprintf(err_str, sizeof(err_str),
+				"out of memory");
+		rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+		goto out;
+	}
+	lnet_nidlist2[0] = pnid;
+	memcpy(&lnet_nidlist2[1], lnet_nidlist, sizeof(*lnet_nidlist) *
+						(num_nids - 1));
+
+	rc = lustre_lnet_handle_peer_nidlist(lnet_nidlist2, num_nids, false,
+					     IOC_LIBCFS_DEL_PEER_NI, DEL_CMD,
+					     err_str);
+out:
+	if (lnet_nidlist2)
+		free(lnet_nidlist2);
+
+	cYAML_build_error(rc, seq_no, DEL_CMD, "peer_ni", err_str, err_rc);
 	return rc;
 }
 
