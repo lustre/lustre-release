@@ -4215,20 +4215,6 @@ static int handle_yaml_config_route(struct cYAML *tree, struct cYAML **show_rc,
 					err_rc);
 }
 
-static void yaml_free_string_array(char **array, int num)
-{
-	int i;
-	char **sub_array = array;
-
-	for (i = 0; i < num; i++) {
-		if (*sub_array != NULL)
-			free(*sub_array);
-		sub_array++;
-	}
-	if (array)
-		free(array);
-}
-
 /*
  *    interfaces:
  *        0: <intf_name>['['<expr>']']
@@ -4584,12 +4570,17 @@ static int handle_yaml_del_ni(struct cYAML *tree, struct cYAML **show_rc,
 	return rc;
 }
 
-static int yaml_copy_peer_nids(struct cYAML *nids_entry, char ***nidsppp,
-			       char *prim_nid, bool del)
+/* Create a nidstring parseable by the nidstrings library from the nid
+ * information encoded in the CYAML structure.
+ * NOTE: Caller must free memory allocated to nidstr
+ */
+static int yaml_nids2nidstr(struct cYAML *nids_entry, char **nidstr,
+			    char *prim_nid, int cmd)
 {
+	int num_strs = 0, rc;
+	size_t buf_size, buf_pos, nidstr_len = 0;
+	char *buffer;
 	struct cYAML *child = NULL, *entry = NULL;
-	char **nids = NULL;
-	int num = 0, rc = LUSTRE_CFG_RC_NO_ERR;
 
 	if (cYAML_is_sequence(nids_entry)) {
 		while (cYAML_get_next_seq_item(nids_entry, &child)) {
@@ -4599,159 +4590,162 @@ static int yaml_copy_peer_nids(struct cYAML *nids_entry, char ***nidsppp,
 				continue;
 
 			if (prim_nid &&
-			    (strcmp(entry->cy_valuestring, prim_nid)
-					== 0) && del) {
-				/*
-				 * primary nid is present in the list of
-				 * nids so that means we want to delete
-				 * the entire peer, so no need to go
-				 * further. Just delete the entire peer.
-				 */
-				return 0;
+			    (strcmp(entry->cy_valuestring, prim_nid) == 0)) {
+				if (cmd == LNETCTL_DEL_CMD) {
+					/*
+					 * primary nid is present in the list of
+					 * nids so that means we want to delete
+					 * the entire peer, so no need to go
+					 * further. Just delete the entire peer.
+					 */
+					return LUSTRE_CFG_RC_NO_ERR;
+				} else {
+					continue;
+				}
 			}
 
-			num++;
+			/*
+			 * + 1 for the space separating each string, and
+			 * accounts for the terminating null char
+			 */
+			nidstr_len += strlen(entry->cy_valuestring) + 1;
+			num_strs++;
 		}
 	}
 
-	if (num == 0)
+	if (num_strs == 0 && !prim_nid)
 		return LUSTRE_CFG_RC_MISSING_PARAM;
+	else if (num_strs == 0) /* Only the primary nid was given to add/del */
+		return LUSTRE_CFG_RC_NO_ERR;
 
-	nids = calloc(sizeof(*nids), num);
-	if (!nids)
+	buffer = malloc(nidstr_len);
+	if (!buffer)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	/* now grab all the nids */
-	num = 0;
+	rc = 0;
+	buf_pos = 0;
+	buf_size = nidstr_len;
 	child = NULL;
 	while (cYAML_get_next_seq_item(nids_entry, &child)) {
 		entry = cYAML_get_object_item(child, "nid");
 		if (!entry || !entry->cy_valuestring)
 			continue;
 
-		nids[num] = strdup(entry->cy_valuestring);
-		if (!nids[num]) {
-			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+		if (prim_nid &&
+		    (strcmp(entry->cy_valuestring, prim_nid) == 0))
+			continue;
+
+		if (buf_pos) {
+			rc = snprintf(buffer + buf_pos, buf_size, " ");
+			buf_pos += (rc < buf_size) ? rc : buf_size;
+			buf_size = nidstr_len - buf_pos;
+		}
+
+		rc = snprintf(buffer + buf_pos, buf_size, "%s",
+			      entry->cy_valuestring);
+		buf_pos += (rc < buf_size) ? rc : buf_size;
+		buf_size = nidstr_len - buf_pos;
+	}
+
+	*nidstr = buffer;
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
+static int handle_yaml_peer_common(struct cYAML *tree, struct cYAML **show_rc,
+				   struct cYAML **err_rc, int cmd)
+{
+	int rc, num_nids = 0, seqn;
+	bool mr_value;
+	char *nidstr = NULL, *prim_nidstr;
+	char err_str[LNET_MAX_STR_LEN];
+	struct cYAML *seq_no, *prim_nid, *mr, *peer_nis;
+	lnet_nid_t lnet_nidlist[LNET_MAX_NIDS_PER_PEER];
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	seqn = seq_no ? seq_no->cy_valueint : -1;
+
+	prim_nid = cYAML_get_object_item(tree, "primary nid");
+	prim_nidstr = prim_nid ? prim_nid->cy_valuestring : NULL;
+
+	peer_nis = cYAML_get_object_item(tree, "peer ni");
+	if (!(prim_nid || peer_nis)) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "Neither \"primary nid\" nor \"peer ni\" are defined");
+		goto failed;
+	}
+
+	rc = yaml_nids2nidstr(peer_nis, &nidstr, prim_nidstr, cmd);
+	if (rc == LUSTRE_CFG_RC_MISSING_PARAM) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "No nids defined in YAML block");
+		goto failed;
+	} else if (rc == LUSTRE_CFG_RC_OUT_OF_MEM) {
+		snprintf(err_str, LNET_MAX_STR_LEN, "out of memory");
+		goto failed;
+	} else if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "Unrecognized error %d", rc);
+		goto failed;
+	}
+
+	num_nids = 0;
+	if (nidstr) {
+		num_nids = lustre_lnet_parse_nidstr(nidstr, lnet_nidlist,
+						    LNET_MAX_NIDS_PER_PEER,
+						    err_str);
+		if (num_nids < 0) {
+			rc = num_nids;
 			goto failed;
 		}
-		num++;
 	}
-	rc = num;
 
-	*nidsppp = nids;
-	return rc;
+	if (cmd == LNETCTL_ADD_CMD) {
+		mr = cYAML_get_object_item(tree, "Multi-Rail");
+		mr_value = true;
+		if (mr && mr->cy_valuestring) {
+			if (strcmp(mr->cy_valuestring, "False") == 0)
+				mr_value = false;
+			else if (strcmp(mr->cy_valuestring, "True") != 0) {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				snprintf(err_str, LNET_MAX_STR_LEN,
+					 "Multi-Rail must be set to \"True\" or \"False\" found \"%s\"",
+					 mr->cy_valuestring);
+				goto failed;
+			}
+		}
+
+		rc = lustre_lnet_config_peer_nidlist(prim_nidstr, lnet_nidlist,
+						     num_nids, mr_value, seqn,
+						     err_rc);
+	} else
+		rc = lustre_lnet_del_peer_nidlist(prim_nidstr, lnet_nidlist,
+						  num_nids, seqn, err_rc);
 
 failed:
-	if (nids != NULL)
-		yaml_free_string_array(nids, num);
-	*nidsppp = NULL;
+	if (nidstr)
+		free(nidstr);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_build_error(rc, seqn, "peer",
+				  cmd == LNETCTL_ADD_CMD ? ADD_CMD : DEL_CMD,
+				  err_str, err_rc);
+
 	return rc;
 }
 
 static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
 				   struct cYAML **err_rc)
 {
-	char **nids = NULL;
-	int num, rc;
-	struct cYAML *seq_no, *prim_nid, *mr, *ip2nets, *peer_nis;
-	char err_str[LNET_MAX_STR_LEN];
-	bool mr_value;
-
-	seq_no = cYAML_get_object_item(tree, "seq_no");
-	prim_nid = cYAML_get_object_item(tree, "primary nid");
-	mr = cYAML_get_object_item(tree, "Multi-Rail");
-	ip2nets = cYAML_get_object_item(tree, "ip2nets");
-	peer_nis = cYAML_get_object_item(tree, "peer ni");
-
-	if (ip2nets && (prim_nid || peer_nis)) {
-		rc = LUSTRE_CFG_RC_BAD_PARAM;
-		snprintf(err_str, sizeof(err_str),
-			 "ip2nets can not be specified along side prim_nid"
-			 " or peer ni fields");
-		cYAML_build_error(rc, (seq_no) ? seq_no->cy_valueint : -1,
-				  ADD_CMD, "peer", err_str, err_rc);
-		return rc;
-	}
-
-	if (!mr)
-		mr_value = true;
-	else {
-		if (!mr->cy_valuestring || !strcmp(mr->cy_valuestring, "True"))
-			mr_value = true;
-		else if (!strcmp(mr->cy_valuestring, "False"))
-			mr_value = false;
-		else {
-			rc = LUSTRE_CFG_RC_BAD_PARAM;
-			snprintf(err_str, sizeof(err_str), "Bad MR value");
-			cYAML_build_error(rc, (seq_no) ? seq_no->cy_valueint : -1,
-					  ADD_CMD, "peer", err_str, err_rc);
-			return rc;
-		}
-	}
-
-	num = yaml_copy_peer_nids((ip2nets) ? ip2nets : peer_nis, &nids,
-				  (prim_nid) ? prim_nid->cy_valuestring : NULL,
-				   false);
-
-	if (num < 0) {
-		snprintf(err_str, sizeof(err_str),
-			 "error copying nids from YAML block");
-		cYAML_build_error(num, (seq_no) ? seq_no->cy_valueint : -1,
-				  ADD_CMD, "peer", err_str, err_rc);
-		return num;
-	}
-
-	rc = lustre_lnet_config_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
-					 nids, num, mr_value,
-					 (ip2nets) ? true : false,
-					 (seq_no) ? seq_no->cy_valueint : -1,
-					 err_rc);
-
-	yaml_free_string_array(nids, num);
-	return rc;
+	return handle_yaml_peer_common(tree, show_rc, err_rc, LNETCTL_ADD_CMD);
 }
 
 static int handle_yaml_del_peer(struct cYAML *tree, struct cYAML **show_rc,
 				struct cYAML **err_rc)
 {
-	char **nids = NULL;
-	int num, rc;
-	struct cYAML *seq_no, *prim_nid, *ip2nets, *peer_nis;
-	char err_str[LNET_MAX_STR_LEN];
-
-	seq_no = cYAML_get_object_item(tree, "seq_no");
-	prim_nid = cYAML_get_object_item(tree, "primary nid");
-	ip2nets = cYAML_get_object_item(tree, "ip2nets");
-	peer_nis = cYAML_get_object_item(tree, "peer ni");
-
-	if (ip2nets && (prim_nid || peer_nis)) {
-		rc = LUSTRE_CFG_RC_BAD_PARAM;
-		snprintf(err_str, sizeof(err_str),
-			 "ip2nets can not be specified along side prim_nid"
-			 " or peer ni fields");
-		cYAML_build_error(rc, (seq_no) ? seq_no->cy_valueint : -1,
-				  DEL_CMD, "peer", err_str, err_rc);
-		return rc;
-	}
-
-	num = yaml_copy_peer_nids((ip2nets) ? ip2nets : peer_nis , &nids,
-				  (prim_nid) ? prim_nid->cy_valuestring : NULL,
-				  true);
-	if (num < 0) {
-		snprintf(err_str, sizeof(err_str),
-			 "error copying nids from YAML block");
-		cYAML_build_error(num, (seq_no) ? seq_no->cy_valueint : -1,
-				  ADD_CMD, "peer", err_str, err_rc);
-		return num;
-	}
-
-	rc = lustre_lnet_del_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
-				      nids, num, (ip2nets) ? true : false,
-				      (seq_no) ? seq_no->cy_valueint : -1,
-				      err_rc);
-
-	yaml_free_string_array(nids, num);
-	return rc;
+	return handle_yaml_peer_common(tree, show_rc, err_rc, LNETCTL_DEL_CMD);
 }
 
 static int handle_yaml_config_buffers(struct cYAML *tree,
