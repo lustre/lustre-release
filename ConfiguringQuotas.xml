@@ -43,9 +43,9 @@ xml:id="configuringquotas">
           resolution.</para>
           </listitem>
           <listitem>
-          <para>Accuracy: quota information is distributed throughout
-the file system and can only be accurately calculated with a completely
-quite file system.</para>
+          <para>Accuracy: quota information is distributed throughout the file
+          system and can only be accurately calculated with a quiescent file
+          system.</para>
         </listitem>
         </itemizedlist>
       </listitem>
