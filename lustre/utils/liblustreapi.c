@@ -1578,47 +1578,45 @@ int llapi_get_poolmembers(const char *poolname, char **members,
 int llapi_get_poollist(const char *name, char **poollist, int list_size,
                        char *buffer, int buffer_size)
 {
-	char rname[PATH_MAX];
 	glob_t pathname;
 	char *fsname;
-        char *ptr;
-        DIR *dir;
+	char *ptr;
+	DIR *dir;
 	struct dirent *pool;
-        int rc = 0;
-        unsigned int nb_entries = 0;
-        unsigned int used = 0;
-        unsigned int i;
+	int rc = 0;
+	unsigned int nb_entries = 0;
+	unsigned int used = 0;
+	unsigned int i;
 
 	/* initialize output array */
-        for (i = 0; i < list_size; i++)
-                poollist[i] = NULL;
+	for (i = 0; i < list_size; i++)
+		poollist[i] = NULL;
 
-        /* is name a pathname ? */
-        ptr = strchr(name, '/');
-        if (ptr != NULL) {
-                /* only absolute pathname is supported */
-                if (*name != '/')
-                        return -EINVAL;
+	/* is name a pathname ? */
+	ptr = strchr(name, '/');
+	if (ptr != NULL) {
+		char fsname_buf[MAXNAMLEN];
 
-                if (!realpath(name, rname)) {
-                        rc = -errno;
-                        llapi_error(LLAPI_MSG_ERROR, rc, "invalid path '%s'",
-                                    name);
-                        return rc;
-                }
+		/* We will need fsname for printing later */
+		rc = llapi_getname(name, fsname_buf, sizeof(fsname_buf));
+		if (rc)
+			return rc;
 
-		fsname = strdup(rname);
+		ptr = strrchr(fsname_buf, '-');
+		if (ptr)
+			*ptr = '\0';
+
+		fsname = strdup(fsname_buf);
 		if (!fsname)
 			return -ENOMEM;
-
-		rc = poolpath(&pathname, NULL, rname);
 	} else {
 		/* name is FSNAME */
 		fsname = strdup(name);
 		if (!fsname)
 			return -ENOMEM;
-		rc = poolpath(&pathname, fsname, NULL);
 	}
+
+	rc = poolpath(&pathname, fsname, NULL);
 	if (rc != 0) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "Lustre filesystem '%s' not found", name);
