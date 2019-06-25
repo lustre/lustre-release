@@ -2,10 +2,6 @@
 
 set -e
 
-# bug number for skipped test:
-ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
 export MULTIOP=${MULTIOP:-multiop}
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -13,6 +9,13 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT"
+if [ "$MDSCOUNT" -gt "1" ]; then
+	# bug number for skipped test: LU-10931
+	ALWAYS_EXCEPT+="               136"
+	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+fi
 
 require_dsh_mds || exit 0
 
