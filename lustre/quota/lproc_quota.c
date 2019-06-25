@@ -212,13 +212,13 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 		if (fid_is_acct(fid)) {
 			seq_printf(p, "%s:\n", oid2name(fid_oid(fid)));
 		} else if (fid_seq(fid) == FID_SEQ_QUOTA_GLB) {
-			int	poolid, rtype, qtype;
+			int	rtype, qtype;
 
-			rc = lquota_extract_fid(fid, &poolid, &rtype, &qtype);
+			rc = lquota_extract_fid(fid, &rtype, &qtype);
 			if (rc)
 				return rc;
 
-			seq_printf(p, "global_pool%d_%s_%s\n", poolid,
+			seq_printf(p, "global_pool%d_%s_%s\n", 0,
 				   RES_NAME(rtype), qtype_name(qtype));
 		} else if (fid_seq(fid) == FID_SEQ_LOCAL_NAME) {
 			/* global index copy object */

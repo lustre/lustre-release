@@ -69,6 +69,8 @@ struct qmt_device {
 
 	/* List of pools managed by this master target */
 	struct list_head	 qmt_pool_list;
+	/* rw spinlock to protect pool list */
+	rwlock_t                 qmt_pool_lock;
 
 	/* procfs root directory for this qmt */
 	struct proc_dir_entry	*qmt_proc;
@@ -86,26 +88,21 @@ struct qmt_device {
 
 };
 
+#define QPI_MAXNAME	(LOV_MAXPOOLNAME + 1)
+
 /*
  * Per-pool quota information.
  * The qmt creates one such structure for each pool
- * with quota enforced. All the structures are kept in a hash which is used to
- * determine whether or not quota is enforced for a given pool.
- * We currently only support the default data pool and default metadata pool
- * with the pool_id 0.
+ * with quota enforced. All the structures are kept in a list.
+ * We currently only support the default data pool and default metadata pool.
  */
 struct qmt_pool_info {
-	/* link to qmt's pool hash */
-	struct hlist_node	 qpi_hash;
-
 	/* chained list of all pools managed by the same qmt */
 	struct list_head	 qpi_linkage;
 
-	/* Pool key composed of pool_id | (pool_type << 16)
-	 * Only pool ID 0 is supported for now and the pool type is either
-	 * QUOTA_RES_MD or QUOTA_RES_DT.
-	 * immutable after creation. */
-	__u32			 qpi_key;
+	/* Could be  LQUOTA_RES_MD or LQUOTA_RES_DT */
+	int			 qpi_rtype;
+	char			 qpi_name[QPI_MAXNAME];
 
 	/* track users of this pool instance */
 	atomic_t		 qpi_ref;
@@ -311,7 +308,7 @@ int qmt_pool_new_conn(const struct lu_env *, struct qmt_device *,
 		      struct lu_fid *, struct lu_fid *, __u64 *,
 		      struct obd_uuid *);
 struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *,
-					 struct qmt_device *, int, int, int,
+					 struct qmt_device *, int, int,
 					 union lquota_id *);
 /* qmt_entry.c */
 extern struct lquota_entry_operations qmt_lqe_ops;

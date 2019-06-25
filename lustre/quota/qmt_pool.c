@@ -29,7 +29,7 @@
  */
 
 /*
- * A Quota Master Target has a hash table where it stores qmt_pool_info
+ * A Quota Master Target has a list(qmt_pool_list) where it stores qmt_pool_info
  * structures. There is one such structure for each pool managed by the QMT.
  *
  * Each pool can have different quota types enforced (typically user & group
@@ -82,65 +82,6 @@ static inline void qpi_putref_locked(struct qmt_pool_info *pool)
 	atomic_dec(&pool->qpi_ref);
 }
 
-/*
- * Hash functions for qmt_pool_info management
- */
-
-static unsigned
-qpi_hash_hash(struct cfs_hash *hs, const void *key, unsigned mask)
-{
-	return cfs_hash_u32_hash(*((__u32 *)key), mask);
-}
-
-static void *qpi_hash_key(struct hlist_node *hnode)
-{
-	struct qmt_pool_info *pool;
-	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
-	return &pool->qpi_key;
-}
-
-static int qpi_hash_keycmp(const void *key, struct hlist_node *hnode)
-{
-	struct qmt_pool_info *pool;
-	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
-	return pool->qpi_key == *((__u32 *)key);
-}
-
-static void *qpi_hash_object(struct hlist_node *hnode)
-{
-	return hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
-}
-
-static void qpi_hash_get(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct qmt_pool_info *pool;
-	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
-	qpi_getref(pool);
-}
-
-static void qpi_hash_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	struct qmt_pool_info *pool;
-	pool = hlist_entry(hnode, struct qmt_pool_info, qpi_hash);
-	qpi_putref_locked(pool);
-}
-
-static void qpi_hash_exit(struct cfs_hash *hs, struct hlist_node *hnode)
-{
-	CERROR("Should not have any item left!\n");
-}
-
-/* vector of hash operations */
-static struct cfs_hash_ops qpi_hash_ops = {
-	.hs_hash	= qpi_hash_hash,
-	.hs_key		= qpi_hash_key,
-	.hs_keycmp	= qpi_hash_keycmp,
-	.hs_object	= qpi_hash_object,
-	.hs_get		= qpi_hash_get,
-	.hs_put_locked	= qpi_hash_put_locked,
-	.hs_exit	= qpi_hash_exit
-};
-
 /* some procfs helpers */
 static int qpi_state_seq_show(struct seq_file *m, void *data)
 {
@@ -154,8 +95,8 @@ static int qpi_state_seq_show(struct seq_file *m, void *data)
 		   "    type: %s\n"
 		   "    ref: %d\n"
 		   "    least qunit: %lu\n",
-		   pool->qpi_key & 0x0000ffff,
-		   RES_NAME(pool->qpi_key >> 16),
+		   0,
+		   RES_NAME(pool->qpi_rtype),
 		   atomic_read(&pool->qpi_ref),
 		   pool->qpi_least_qunit);
 
@@ -192,7 +133,7 @@ qpi_soft_least_qunit_seq_write(struct file *file, const char __user *buffer,
 	LASSERT(pool != NULL);
 
 	/* Not tuneable for inode limit */
-	if (pool->qpi_key >> 16 != LQUOTA_RES_DT)
+	if (pool->qpi_rtype != LQUOTA_RES_DT)
 		return -EINVAL;
 
 	rc = kstrtoll_from_user(buffer, count, 0, &least_qunit);
@@ -222,19 +163,17 @@ static struct lprocfs_vars lprocfs_quota_qpi_vars[] = {
 };
 
 /*
- * Allocate a new qmt_pool_info structure and add it to the pool hash table
- * of the qmt.
+ * Allocate a new qmt_pool_info structure and add it to qmt_pool_list.
  *
  * \param env       - is the environment passed by the caller
  * \param qmt       - is the quota master target
- * \param pool_id   - is the 16-bit pool identifier of the new pool to add
  * \param pool_type - is the resource type of this pool instance, either
  *                    LQUOTA_RES_MD or LQUOTA_RES_DT.
  *
  * \retval - 0 on success, appropriate error on failure
  */
 static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
-			  int pool_id, int pool_type)
+			  char *pool_name, int pool_type)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct qmt_pool_info	*pool;
@@ -246,8 +185,7 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 		RETURN(-ENOMEM);
 	INIT_LIST_HEAD(&pool->qpi_linkage);
 
-	/* assign key used by hash functions */
-	pool->qpi_key = pool_id + (pool_type << 16);
+	pool->qpi_rtype = pool_type;
 
 	/* initialize refcount to 1, hash table will then grab an additional
 	 * reference */
@@ -260,8 +198,15 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 	else
 		pool->qpi_soft_least_qunit = pool->qpi_least_qunit;
 
+	/* grab reference on master target that this pool belongs to */
+	lu_device_get(qmt2lu_dev(qmt));
+	lu_ref_add(&qmt2lu_dev(qmt)->ld_reference, "pool", pool);
+	pool->qpi_qmt = qmt;
+
 	/* create pool proc directory */
-	sprintf(qti->qti_buf, "%s-0x%x", RES_NAME(pool_type), pool_id);
+	snprintf(qti->qti_buf, LQUOTA_NAME_MAX, "%s-%s",
+		 RES_NAME(pool_type), pool_name);
+	strncpy(pool->qpi_name, pool_name, QPI_MAXNAME);
 	pool->qpi_proc = lprocfs_register(qti->qti_buf, qmt->qmt_proc,
 					  lprocfs_quota_qpi_vars, pool);
 	if (IS_ERR(pool->qpi_proc)) {
@@ -272,22 +217,10 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 		GOTO(out, rc);
 	}
 
-	/* grab reference on master target that this pool belongs to */
-	lu_device_get(qmt2lu_dev(qmt));
-	lu_ref_add(&qmt2lu_dev(qmt)->ld_reference, "pool", pool);
-	pool->qpi_qmt = qmt;
-
-	/* add to qmt hash table */
-	rc = cfs_hash_add_unique(qmt->qmt_pool_hash, &pool->qpi_key,
-				 &pool->qpi_hash);
-	if (rc) {
-		CERROR("%s: failed to add pool %s to qmt hash (%d)\n",
-		       qmt->qmt_svname, qti->qti_buf, rc);
-		GOTO(out, rc);
-	}
-
 	/* add to qmt pool list */
+	write_lock(&qmt->qmt_pool_lock);
 	list_add_tail(&pool->qpi_linkage, &qmt->qmt_pool_list);
+	write_unlock(&qmt->qmt_pool_lock);
 	EXIT;
 out:
 	if (rc)
@@ -304,8 +237,17 @@ out:
  */
 static void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 {
+	struct	qmt_device *qmt = pool->qpi_qmt;
 	int	qtype;
 	ENTRY;
+
+	/* remove from list */
+	write_lock(&qmt->qmt_pool_lock);
+	list_del_init(&pool->qpi_linkage);
+	write_unlock(&qmt->qmt_pool_lock);
+
+	if (atomic_read(&pool->qpi_ref) > 0)
+		RETURN_EXIT;
 
 	/* release proc entry */
 	if (pool->qpi_proc) {
@@ -348,34 +290,40 @@ static void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 }
 
 /*
- * Look-up a pool in the hash table based on the pool ID and type.
+ * Look-up a pool in a list based on the type.
  *
  * \param env     - is the environment passed by the caller
  * \param qmt     - is the quota master target
- * \param pool_id   - is the 16-bit identifier of the pool to look up
  * \param pool_type - is the type of this pool, either LQUOTA_RES_MD or
  *                    LQUOTA_RES_DT.
  */
 static struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 					     struct qmt_device *qmt,
-					     int pool_id, int pool_type)
+					     int pool_type)
 {
-	struct qmt_pool_info	*pool;
-	__u32			 key;
+	struct qmt_pool_info	*pos, *pool;
 	ENTRY;
 
-	LASSERT(qmt->qmt_pool_hash != NULL);
-
-	/* look-up pool in hash table */
-	key = pool_id + (pool_type << 16);
-	pool = cfs_hash_lookup(qmt->qmt_pool_hash, (void *)&key);
-	if (pool == NULL) {
-		/* this qmt isn't managing this pool! */
-		CERROR("%s: looking up quota entry for a pool (0x%x/%d) which "
-		       "isn't managed by this quota master target\n",
-		       qmt->qmt_svname, pool_id, pool_type);
+	read_lock(&qmt->qmt_pool_lock);
+	if (list_empty(&qmt->qmt_pool_list)) {
+		read_unlock(&qmt->qmt_pool_lock);
 		RETURN(ERR_PTR(-ENOENT));
 	}
+
+	/* Now just find a pool with correct type in a list. Further we need
+	 * to go through the list and find a pool that includes requested OST
+	 * or MDT. Possibly this would return a list of pools that includes
+	 * needed target(OST/MDT). */
+	pool = NULL;
+	list_for_each_entry(pos, &qmt->qmt_pool_list, qpi_linkage) {
+		if (pos->qpi_rtype == pool_type) {
+			pool = pos;
+			qpi_getref(pool);
+			break;
+		}
+	}
+	read_unlock(&qmt->qmt_pool_lock);
+
 	RETURN(pool);
 }
 
@@ -384,8 +332,7 @@ static struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
  */
 
 /*
- * Destroy all pools which are still in the hash table and free the pool
- * hash table.
+ * Destroy all pools which are still in the pool list.
  *
  * \param env - is the environment passed by the caller
  * \param qmt - is the quota master target
@@ -393,31 +340,16 @@ static struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
  */
 void qmt_pool_fini(const struct lu_env *env, struct qmt_device *qmt)
 {
-	struct qmt_pool_info	*pool;
-	struct list_head	*pos, *n;
+	struct qmt_pool_info *pool, *tmp;
 	ENTRY;
 
-	if (qmt->qmt_pool_hash == NULL)
-		RETURN_EXIT;
-
 	/* parse list of pool and destroy each element */
-	list_for_each_safe(pos, n, &qmt->qmt_pool_list) {
-		pool = list_entry(pos, struct qmt_pool_info,
-				  qpi_linkage);
-		/* remove from hash */
-		cfs_hash_del(qmt->qmt_pool_hash, &pool->qpi_key,
-			     &pool->qpi_hash);
-
-		/* remove from list */
-		list_del_init(&pool->qpi_linkage);
-
+	list_for_each_entry_safe(pool, tmp, &qmt->qmt_pool_list, qpi_linkage) {
 		/* release extra reference taken in qmt_pool_alloc */
 		qpi_putref(env, pool);
 	}
 	LASSERT(list_empty(&qmt->qmt_pool_list));
 
-	cfs_hash_putref(qmt->qmt_pool_hash);
-	qmt->qmt_pool_hash = NULL;
 	EXIT;
 }
 
@@ -437,30 +369,14 @@ int qmt_pool_init(const struct lu_env *env, struct qmt_device *qmt)
 	int	res, rc = 0;
 	ENTRY;
 
-	/* initialize pool hash table */
-	qmt->qmt_pool_hash = cfs_hash_create("POOL_HASH",
-					     HASH_POOLS_CUR_BITS,
-					     HASH_POOLS_MAX_BITS,
-					     HASH_POOLS_BKT_BITS, 0,
-					     CFS_HASH_MIN_THETA,
-					     CFS_HASH_MAX_THETA,
-					     &qpi_hash_ops,
-					     CFS_HASH_DEFAULT);
-	if (qmt->qmt_pool_hash == NULL) {
-		CERROR("%s: failed to create pool hash table\n",
-		       qmt->qmt_svname);
-		RETURN(-ENOMEM);
-	}
-
-	/* initialize pool list */
 	INIT_LIST_HEAD(&qmt->qmt_pool_list);
+	rwlock_init(&qmt->qmt_pool_lock);
 
-	/* Instantiate pool master for the default data and metadata pool (both
-	 * have pool ID equals to 0).
+	/* Instantiate pool master for the default data and metadata pool.
 	 * This code will have to be revisited once we support quota on
 	 * non-default pools */
 	for (res = LQUOTA_FIRST_RES; res < LQUOTA_LAST_RES; res++) {
-		rc = qmt_pool_alloc(env, qmt, 0, res);
+		rc = qmt_pool_alloc(env, qmt, "0x0", res);
 		if (rc)
 			break;
 	}
@@ -504,25 +420,25 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 	int			 rc = 0, qtype;
 	ENTRY;
 
-	LASSERT(qmt->qmt_pool_hash != NULL);
-
-	/* iterate over each pool in the hash and allocate a quota site for each
+	/* iterate over each pool in the list and allocate a quota site for each
 	 * one. This involves creating a global index file on disk */
 	list_for_each(pos, &qmt->qmt_pool_list) {
 		struct dt_object	*obj;
-		int			 pool_type, pool_id;
 		struct lquota_entry	*lqe;
+		char			*pool_name;
+		int			 pool_type;
 
 		pool = list_entry(pos, struct qmt_pool_info,
 				  qpi_linkage);
 
-		pool_id   = pool->qpi_key & 0x0000ffff;
-		pool_type = pool->qpi_key >> 16;
+		pool_name = pool->qpi_name;
+		pool_type = pool->qpi_rtype;
 		if (dev == NULL)
 			dev = pool->qpi_qmt->qmt_child;
 
 		/* allocate directory for this pool */
-		sprintf(qti->qti_buf, "%s-0x%x", RES_NAME(pool_type), pool_id);
+		snprintf(qti->qti_buf, LQUOTA_NAME_MAX, "%s-%s",
+			 RES_NAME(pool_type), pool_name);
 		obj = lquota_disk_dir_find_create(env, qmt->qmt_child, qmt_root,
 						  qti->qti_buf);
 		if (IS_ERR(obj))
@@ -532,8 +448,7 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 		for (qtype = 0; qtype < LL_MAXQUOTAS; qtype++) {
 			/* Generating FID of global index in charge of storing
 			 * settings for this quota type */
-			lquota_generate_fid(&qti->qti_fid, pool_id, pool_type,
-					    qtype);
+			lquota_generate_fid(&qti->qti_fid, pool_type, qtype);
 
 			/* open/create the global index file for this quota
 			 * type */
@@ -646,17 +561,17 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 {
 	struct qmt_pool_info	*pool;
 	struct dt_object	*slv_obj;
-	int			 pool_id, pool_type, qtype;
+	int			 pool_type, qtype;
 	bool			 created = false;
 	int			 rc = 0;
 
 	/* extract pool info from global index FID */
-	rc = lquota_extract_fid(glb_fid, &pool_id, &pool_type, &qtype);
+	rc = lquota_extract_fid(glb_fid, &pool_type, &qtype);
 	if (rc)
 		RETURN(rc);
 
 	/* look-up pool in charge of this global index FID */
-	pool = qmt_pool_lookup(env, qmt, pool_id, pool_type);
+	pool = qmt_pool_lookup(env, qmt, pool_type);
 	if (IS_ERR(pool))
 		RETURN(PTR_ERR(pool));
 
@@ -694,7 +609,6 @@ out:
  * \param env - is the environment passed by the caller
  * \param qmt - is the quota master target for which we have to initialize the
  *              pool configuration
- * \param pool_id   - is the 16-bit identifier of the pool
  * \param pool_type - is the pool type, either LQUOTA_RES_MD or LQUOTA_RES_DT.
  * \param qtype     - is the quota type, either user or group.
  * \param qid       - is the quota ID to look-up
@@ -704,15 +618,15 @@ out:
  */
 struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *env,
 					 struct qmt_device *qmt,
-					 int pool_id, int pool_type,
-					 int qtype, union lquota_id *qid)
+					 int pool_type, int qtype,
+					 union lquota_id *qid)
 {
 	struct qmt_pool_info	*pool;
 	struct lquota_entry	*lqe;
 	ENTRY;
 
 	/* look-up pool responsible for this global index FID */
-	pool = qmt_pool_lookup(env, qmt, pool_id, pool_type);
+	pool = qmt_pool_lookup(env, qmt, pool_type);
 	if (IS_ERR(pool))
 		RETURN((void *)pool);
 

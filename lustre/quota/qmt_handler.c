@@ -38,7 +38,6 @@
  *
  * \param env     - is the environment passed by the caller
  * \param qmt     - is the quota master target
- * \param pool_id - is the 16-bit pool identifier
  * \param restype - is the pool type, either block (i.e. LQUOTA_RES_DT) or inode
  *                  (i.e. LQUOTA_RES_MD)
  * \param qtype   - is the quota type
@@ -49,7 +48,7 @@
  * \param time    - is the output variable where to copy the grace time
  */
 static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
-		   __u16 pool_id, __u8 restype, __u8 qtype, union lquota_id *id,
+		   __u8 restype, __u8 qtype, union lquota_id *id,
 		   __u64 *hard, __u64 *soft, __u64 *time, bool is_default)
 {
 	struct lquota_entry	*lqe;
@@ -58,7 +57,7 @@ static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
 	LASSERT(!is_default || id->qid_uid == 0);
 
 	/* look-up lqe structure containing quota settings */
-	lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, restype, qtype, id);
+	lqe = qmt_pool_lqe_lookup(env, qmt, restype, qtype, id);
 	if (IS_ERR(lqe))
 		RETURN(PTR_ERR(lqe));
 
@@ -249,7 +248,6 @@ out_nolock:
  *
  * \param env        - is the environment passed by the caller
  * \param qmt        - is the quota master target
- * \param pool_id    - is the 16-bit pool identifier
  * \param restype    - is the pool type, either block (i.e. LQUOTA_RES_DT) or
  *                     inode (i.e. LQUOTA_RES_MD)
  * \param qtype      - is the quota type
@@ -263,16 +261,16 @@ out_nolock:
  * \param is_updated - true if the lqe is updated and no need to write back
  */
 static int qmt_set(const struct lu_env *env, struct qmt_device *qmt,
-		   __u16 pool_id, __u8 restype, __u8 qtype,
-		   union lquota_id *id, __u64 hard, __u64 soft, __u64 time,
-		   __u32 valid, bool is_default, bool is_updated)
+		   __u8 restype, __u8 qtype, union lquota_id *id,
+		   __u64 hard, __u64 soft, __u64 time, __u32 valid,
+		   bool is_default, bool is_updated)
 {
 	struct lquota_entry *lqe;
 	int rc;
 	ENTRY;
 
 	/* look-up quota entry associated with this ID */
-	lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, restype, qtype, id);
+	lqe = qmt_pool_lqe_lookup(env, qmt, restype, qtype, id);
 	if (IS_ERR(lqe))
 			RETURN(PTR_ERR(lqe));
 
@@ -314,13 +312,13 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		id->qid_uid = 0;
 
 		/* read inode grace time */
-		rc = qmt_get(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type, id,
+		rc = qmt_get(env, qmt, LQUOTA_RES_MD, oqctl->qc_type, id,
 			     NULL, NULL, &oqctl->qc_dqinfo.dqi_igrace, false);
 		if (rc)
 			break;
 
 		/* read block grace time */
-		rc = qmt_get(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type, id,
+		rc = qmt_get(env, qmt, LQUOTA_RES_DT, oqctl->qc_type, id,
 			     NULL, NULL, &oqctl->qc_dqinfo.dqi_bgrace, false);
 		break;
 
@@ -334,7 +332,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 		if ((dqb->dqb_valid & QIF_ITIME) != 0) {
 			/* set inode grace time */
-			rc = qmt_set(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type,
+			rc = qmt_set(env, qmt, LQUOTA_RES_MD, oqctl->qc_type,
 				     id, 0, 0, oqctl->qc_dqinfo.dqi_igrace,
 				     QIF_TIMES, false, false);
 			if (rc)
@@ -343,7 +341,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 		if ((dqb->dqb_valid & QIF_BTIME) != 0)
 			/* set block grace time */
-			rc = qmt_set(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type,
+			rc = qmt_set(env, qmt, LQUOTA_RES_DT, oqctl->qc_type,
 				     id, 0, 0, oqctl->qc_dqinfo.dqi_bgrace,
 				     QIF_TIMES, false, false);
 		break;
@@ -356,7 +354,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		id->qid_uid = oqctl->qc_id;
 
 		/* look-up inode quota settings */
-		rc = qmt_get(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type, id,
+		rc = qmt_get(env, qmt, LQUOTA_RES_MD, oqctl->qc_type, id,
 			     &dqb->dqb_ihardlimit, &dqb->dqb_isoftlimit,
 			     &dqb->dqb_itime, is_default);
 		if (rc)
@@ -367,7 +365,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		dqb->dqb_curinodes = 0;
 
 		/* look-up block quota settings */
-		rc = qmt_get(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type, id,
+		rc = qmt_get(env, qmt, LQUOTA_RES_DT, oqctl->qc_type, id,
 			     &dqb->dqb_bhardlimit, &dqb->dqb_bsoftlimit,
 			     &dqb->dqb_btime, is_default);
 		if (rc)
@@ -387,7 +385,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 		if ((dqb->dqb_valid & QIF_IFLAGS) != 0) {
 			/* update inode quota settings */
-			rc = qmt_set(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type,
+			rc = qmt_set(env, qmt, LQUOTA_RES_MD, oqctl->qc_type,
 				     id, dqb->dqb_ihardlimit,
 				     dqb->dqb_isoftlimit, dqb->dqb_itime,
 				     dqb->dqb_valid & QIF_IFLAGS, is_default,
@@ -398,7 +396,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 		if ((dqb->dqb_valid & QIF_BFLAGS) != 0)
 			/* update block quota settings */
-			rc = qmt_set(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type,
+			rc = qmt_set(env, qmt, LQUOTA_RES_DT, oqctl->qc_type,
 				     id, dqb->dqb_bhardlimit,
 				     dqb->dqb_bsoftlimit, dqb->dqb_btime,
 				     dqb->dqb_valid & QIF_BFLAGS, is_default,
@@ -678,7 +676,7 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 	struct obd_uuid		*uuid;
 	struct ldlm_lock	*lock;
 	struct lquota_entry	*lqe;
-	int			 pool_id, pool_type, qtype;
+	int			 pool_type, qtype;
 	int			 rc;
 	ENTRY;
 
@@ -743,14 +741,14 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 		LDLM_LOCK_PUT(lock);
 	}
 
-	/* extract pool & quota information from global index FID packed in the
+	/* extract quota information from global index FID packed in the
 	 * request */
-	rc = lquota_extract_fid(&qbody->qb_fid, &pool_id, &pool_type, &qtype);
+	rc = lquota_extract_fid(&qbody->qb_fid, &pool_type, &qtype);
 	if (rc)
 		RETURN(-EINVAL);
 
 	/* Find the quota entry associated with the quota id */
-	lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, pool_type, qtype,
+	lqe = qmt_pool_lqe_lookup(env, qmt, pool_type, qtype,
 				  &qbody->qb_id);
 	if (IS_ERR(lqe))
 		RETURN(PTR_ERR(lqe));

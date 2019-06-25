@@ -394,8 +394,8 @@ void lquota_lqe_debug0(struct lquota_entry *lqe,
 /* lquota_lib.c */
 struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 				  int);
-void lquota_generate_fid(struct lu_fid *, int, int, int);
-int lquota_extract_fid(const struct lu_fid *, int *, int *, int *);
+void lquota_generate_fid(struct lu_fid *, int, int);
+int lquota_extract_fid(const struct lu_fid *, int *, int *);
 const struct dt_index_features *glb_idx_feature(struct lu_fid *);
 
 /* lquota_entry.c */

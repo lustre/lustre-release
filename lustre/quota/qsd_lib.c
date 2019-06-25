@@ -90,12 +90,14 @@ static int qsd_state_seq_show(struct seq_file *m, void *data)
 	if (strlen(enabled) == 0)
 		strcat(enabled, "none");
 
+	/* TODO: further pool ID should be removed or
+	 * replaced with pool Name */
 	seq_printf(m, "target name:    %s\n"
 		   "pool ID:        %d\n"
 		   "type:           %s\n"
 		   "quota enabled:  %s\n"
 		   "conn to master: %s\n",
-		   qsd->qsd_svname, qsd->qsd_pool_id,
+		   qsd->qsd_svname, 0,
 		   qsd->qsd_is_md ? "md" : "dt", enabled,
 		   qsd->qsd_exp_valid ? "setup" : "not setup yet");
 
@@ -472,8 +474,7 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	thread_set_flags(&qqi->qqi_reint_thread, SVC_STOPPED);
 	INIT_LIST_HEAD(&qqi->qqi_deferred_glb);
 	INIT_LIST_HEAD(&qqi->qqi_deferred_slv);
-	lquota_generate_fid(&qqi->qqi_fid, qsd->qsd_pool_id,
-			    QSD_RES_TYPE(qsd), qtype);
+	lquota_generate_fid(&qqi->qqi_fid, QSD_RES_TYPE(qsd), qtype);
 
 	/* open accounting object */
 	LASSERT(qqi->qqi_acct_obj == NULL);
@@ -679,11 +680,6 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	lu_device_get(&dev->dd_lu_dev);
 	lu_ref_add(&dev->dd_lu_dev.ld_reference, "qsd", qsd);
 	qsd->qsd_dev = dev;
-
-	/* we only support pool ID 0 (default data or metadata pool) for the
-	 * time being. A different pool ID could be assigned to this target via
-	 * the configuration log in the future */
-	qsd->qsd_pool_id  = 0;
 
 	/* get fsname from svname */
 	rc = server_name2fsname(svname, qti->qti_buf, NULL);

@@ -307,24 +307,23 @@ static inline int lqtype2qtype(int lqtype)
 
 /**
  * Helper routine returning the FID associated with the global index storing
- * quota settings for the storage pool \pool_id, resource type \pool_type and
+ * quota settings for default storage pool, resource type \pool_type and
  * the quota type \quota_type.
  */
-void lquota_generate_fid(struct lu_fid *fid, int pool_id, int pool_type,
-			int quota_type)
+void lquota_generate_fid(struct lu_fid *fid, int pool_type, int quota_type)
 {
 	__u8	 lqtype = qtype2lqtype(quota_type);
 
 	fid->f_seq = FID_SEQ_QUOTA_GLB;
-	fid->f_oid = (lqtype << 24) | (pool_type << 16) | (__u16)pool_id;
+	fid->f_oid = (lqtype << 24) | (pool_type << 16);
 	fid->f_ver = 0;
 }
 
 /**
- * Helper routine used to extract pool ID, pool type and quota type from a
+ * Helper routine used to extract pool type and quota type from a
  * given FID.
  */
-int lquota_extract_fid(const struct lu_fid *fid, int *pool_id, int *pool_type,
+int lquota_extract_fid(const struct lu_fid *fid, int *pool_type,
 		       int *quota_type)
 {
 	unsigned int lqtype;
@@ -332,14 +331,6 @@ int lquota_extract_fid(const struct lu_fid *fid, int *pool_id, int *pool_type,
 
 	if (fid->f_seq != FID_SEQ_QUOTA_GLB)
 		RETURN(-EINVAL);
-
-	if (pool_id != NULL) {
-		lqtype = fid->f_oid & 0xffffU;
-		if (lqtype != 0)
-			/* we only support pool ID 0 for the time being */
-			RETURN(-ENOTSUPP);
-		*pool_id = lqtype;
-	}
 
 	if (pool_type != NULL) {
 		lqtype = (fid->f_oid >> 16) & 0xffU;

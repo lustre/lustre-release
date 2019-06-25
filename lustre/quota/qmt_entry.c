@@ -165,10 +165,10 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 	struct qmt_pool_info	*pool = (struct qmt_pool_info *)arg;
 
 	libcfs_debug_msg(msgdata,
-			 "%pV qmt:%s pool:%d-%s id:%llu enforced:%d hard:%llu soft:%llu granted:%llu time:%llu qunit: %llu edquot:%d may_rel:%llu revoke:%lld default:%s\n",
+			 "%pV qmt:%s pool:%s-%s id:%llu enforced:%d hard:%llu soft:%llu granted:%llu time:%llu qunit: %llu edquot:%d may_rel:%llu revoke:%lld default:%s\n",
 			 vaf, pool->qpi_qmt->qmt_svname,
-			 pool->qpi_key & 0x0000ffff,
-			 RES_NAME(pool->qpi_key >> 16),
+			 RES_NAME(pool->qpi_rtype),
+			 pool->qpi_name,
 			 lqe->lqe_id.qid_uid, lqe->lqe_enforced,
 			 lqe->lqe_hardlimit, lqe->lqe_softlimit,
 			 lqe->lqe_granted, lqe->lqe_gracetime,
@@ -483,7 +483,7 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 
 		/* See comment in qmt_adjust_qunit(). LU-4139 */
 		if (qmt_hard_exhausted(lqe) ||
-		    pool->qpi_key >> 16 != LQUOTA_RES_DT) {
+		    pool->qpi_rtype != LQUOTA_RES_DT) {
 			time64_t lapse;
 
 			/* we haven't reached the minimal qunit yet so there is
@@ -543,7 +543,7 @@ static __u64 qmt_calc_softlimit(struct lquota_entry *lqe, bool *oversoft)
 	LASSERT(lqe->lqe_softlimit != 0);
 	*oversoft = false;
 	/* No need to do special tweaking for inode limit */
-	if (pool->qpi_key >> 16 != LQUOTA_RES_DT)
+	if (pool->qpi_rtype != LQUOTA_RES_DT)
 		return lqe->lqe_softlimit;
 
 	if (lqe->lqe_granted <= lqe->lqe_softlimit +

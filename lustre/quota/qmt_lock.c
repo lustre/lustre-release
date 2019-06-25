@@ -160,7 +160,7 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 	struct lu_env		*env;
 	struct qmt_thread_info	*qti;
 	struct qmt_device	*qmt = lu2qmt_dev(ld);
-	int			 pool_id, pool_type, qtype;
+	int			 pool_type, qtype;
 	int			 rc;
 	ENTRY;
 
@@ -181,9 +181,9 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 	fid_extract_from_quota_res(&qti->qti_fid, &qti->qti_id, &res->lr_name);
 
 	/* sanity check the global index FID */
-	rc = lquota_extract_fid(&qti->qti_fid, &pool_id, &pool_type, &qtype);
+	rc = lquota_extract_fid(&qti->qti_fid, &pool_type, &qtype);
 	if (rc) {
-		CERROR("can't extract pool information from FID "DFID"\n",
+		CERROR("can't extract glb index information from FID "DFID"\n",
 		       PFID(&qti->qti_fid));
 		GOTO(out, rc);
 	}
@@ -194,7 +194,7 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 		struct lquota_entry	*lqe;
 
 		/* Find the quota entry associated with the quota id */
-		lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, pool_type, qtype,
+		lqe = qmt_pool_lqe_lookup(env, qmt, pool_type, qtype,
 					  &qti->qti_id);
 		if (IS_ERR(lqe))
 			GOTO(out, rc = PTR_ERR(lqe));
@@ -574,8 +574,8 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 	struct ldlm_resource	*res = NULL;
 	ENTRY;
 
-	lquota_generate_fid(&qti->qti_fid, pool->qpi_key & 0x0000ffff,
-			    pool->qpi_key >> 16, lqe->lqe_site->lqs_qtype);
+	lquota_generate_fid(&qti->qti_fid, pool->qpi_rtype,
+			    lqe->lqe_site->lqs_qtype);
 
 	/* send glimpse callback to notify slaves of new quota settings */
 	qti->qti_gl_desc.lquota_desc.gl_id        = lqe->lqe_id;
@@ -643,8 +643,8 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 	if (!lqe->lqe_enforced)
 		RETURN_EXIT;
 
-	lquota_generate_fid(&qti->qti_fid, pool->qpi_key & 0x0000ffff,
-			    pool->qpi_key >> 16, lqe->lqe_site->lqs_qtype);
+	lquota_generate_fid(&qti->qti_fid, pool->qpi_rtype,
+			    lqe->lqe_site->lqs_qtype);
 	fid_build_quota_res_name(&qti->qti_fid, &lqe->lqe_id, &qti->qti_resid);
 	res = ldlm_resource_get(qmt->qmt_ns, NULL, &qti->qti_resid, LDLM_PLAIN,
 				0);

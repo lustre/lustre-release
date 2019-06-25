@@ -45,9 +45,6 @@ struct qsd_instance {
 	/* name of service which created this qsd instance */
 	char			 qsd_svname[MAX_OBD_NAME];
 
-	/* pool ID is always 0 for now */
-	int			 qsd_pool_id;
-
 	/* dt_device associated with this qsd instance */
 	struct dt_device	*qsd_dev;
 

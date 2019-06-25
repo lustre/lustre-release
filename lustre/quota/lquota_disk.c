@@ -129,7 +129,7 @@ static inline int lquota_disk_slv_filename(const struct lu_fid *glb_fid,
 	name++;
 
 	/* the filename is composed of the most signicant bits of the global
-	 * FID, that's to say the oid which encodes the pool id, pool type and
+	 * FID, that's to say the oid which encodes the pool type and
 	 * quota type, followed by the export UUID */
 	sprintf(filename, "0x%x-%s", glb_fid->f_oid, name);
 
@@ -248,8 +248,7 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 	idx_feat = &dt_quota_glb_features;
 
 	/* the filename is composed of the most signicant bits of the FID,
-	 * that's to say the oid which encodes the pool id, pool type and quota
-	 * type */
+	 * that's to say the oid which encodes the pool type and quota type */
 	sprintf(qti->qti_buf, "0x%x", fid->f_oid);
 
 	if (local) {
@@ -407,7 +406,7 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 	if (local) {
 		int pool_type, qtype;
 
-		rc = lquota_extract_fid(glb_fid, NULL, &pool_type, &qtype);
+		rc = lquota_extract_fid(glb_fid, &pool_type, &qtype);
 		if (rc)
 			RETURN(ERR_PTR(rc));
 
