@@ -797,19 +797,20 @@ static void __exit obdclass_exit(void)
 	cl_global_fini();
 	lu_global_fini();
 
-        obd_cleanup_caches();
+	obd_cleanup_caches();
 
-        class_procfs_clean();
+	class_procfs_clean();
 
-        class_handle_cleanup();
+	class_handle_cleanup();
 	class_del_uuid(NULL); /* Delete all UUIDs. */
-        obd_zombie_impexp_stop();
+	obd_zombie_impexp_stop();
 
 #ifdef CONFIG_PROC_FS
 	memory_leaked = obd_memory_sum();
 	memory_max = obd_memory_max();
 
 	lprocfs_free_stats(&obd_memory);
+	/* the below message is checked in test-framework.sh check_mem_leak() */
 	CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
 	       "obd_memory max: %llu, leaked: %llu\n",
 	       memory_max, memory_leaked);

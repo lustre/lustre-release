@@ -2479,14 +2479,14 @@ static int ofd_rw_hpreq_check(struct ptlrpc_request *req)
 	rnb += ioo->ioo_bufcnt - 1;
 	pa.lpa_extent.end = rnb->rnb_offset + rnb->rnb_len - 1;
 
-	DEBUG_REQ(D_RPCTRACE, req, "%s %s: refresh rw locks: "DFID
-		  " (%llu->%llu)\n", tgt_name(tsi->tsi_tgt),
-		  current->comm, PFID(&tsi->tsi_fid), pa.lpa_extent.start,
-		  pa.lpa_extent.end);
+	DEBUG_REQ(D_RPCTRACE, req,
+		  "%s %s: refresh rw locks for "DFID" (%llu->%llu)",
+		  tgt_name(tsi->tsi_tgt), current->comm, PFID(&tsi->tsi_fid),
+		  pa.lpa_extent.start, pa.lpa_extent.end);
 
 	ofd_prolong_extent_locks(tsi, &pa);
 
-	CDEBUG(D_DLMTRACE, "%s: refreshed %u locks timeout for req %p.\n",
+	CDEBUG(D_DLMTRACE, "%s: refreshed %u locks timeout for req %p\n",
 	       tgt_name(tsi->tsi_tgt), pa.lpa_blocks_cnt, req);
 
 	if (pa.lpa_blocks_cnt > 0)

@@ -125,15 +125,15 @@ void reply_in_callback(struct lnet_event *ev)
                 goto out_wake;
         }
 
-        if ((ev->offset == 0) &&
-            ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT))) {
-                /* Early reply */
-                DEBUG_REQ(D_ADAPTTO, req,
-                          "Early reply received: mlen=%u offset=%d replen=%d "
-                          "replied=%d unlinked=%d", ev->mlength, ev->offset,
-                          req->rq_replen, req->rq_replied, ev->unlinked);
+	if ((ev->offset == 0) &&
+	    ((lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT))) {
+		/* Early reply */
+		DEBUG_REQ(D_ADAPTTO, req,
+			  "Early reply received, mlen=%u offset=%d replen=%d replied=%d unlinked=%d",
+			  ev->mlength, ev->offset,
+			  req->rq_replen, req->rq_replied, ev->unlinked);
 
-                req->rq_early_count++; /* number received, client side */
+		req->rq_early_count++; /* number received, client side */
 
 		/* already got the real reply or buffers are already unlinked */
 		if (req->rq_replied ||

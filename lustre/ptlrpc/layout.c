@@ -1934,23 +1934,23 @@ EXPORT_SYMBOL(req_capsule_filled_sizes);
  */
 int req_capsule_server_pack(struct req_capsule *pill)
 {
-        const struct req_format *fmt;
-        int                      count;
-        int                      rc;
+	const struct req_format *fmt;
+	int count;
+	int rc;
 
-        LASSERT(pill->rc_loc == RCL_SERVER);
-        fmt = pill->rc_fmt;
-        LASSERT(fmt != NULL);
+	LASSERT(pill->rc_loc == RCL_SERVER);
+	fmt = pill->rc_fmt;
+	LASSERT(fmt != NULL);
 
-        count = req_capsule_filled_sizes(pill, RCL_SERVER);
-        rc = lustre_pack_reply(pill->rc_req, count,
-                               pill->rc_area[RCL_SERVER], NULL);
-        if (rc != 0) {
-                DEBUG_REQ(D_ERROR, pill->rc_req,
-                       "Cannot pack %d fields in format `%s': ",
-                       count, fmt->rf_name);
-        }
-        return rc;
+	count = req_capsule_filled_sizes(pill, RCL_SERVER);
+	rc = lustre_pack_reply(pill->rc_req, count,
+			       pill->rc_area[RCL_SERVER], NULL);
+	if (rc != 0) {
+		DEBUG_REQ(D_ERROR, pill->rc_req,
+			  "Cannot pack %d fields in format '%s'",
+			  count, fmt->rf_name);
+	}
+	return rc;
 }
 EXPORT_SYMBOL(req_capsule_server_pack);
 
@@ -2115,8 +2115,7 @@ static void *__req_capsule_get(struct req_capsule *pill,
 
         if (value == NULL) {
                 DEBUG_REQ(D_ERROR, pill->rc_req,
-			  "Wrong buffer for field `%s' (%u of %u) "
-			  "in format `%s': %u vs. %u (%s)\n",
+			  "Wrong buffer for field '%s' (%u of %u) in format '%s', %u vs. %u (%s)",
 			  field->rmf_name, offset, lustre_msg_bufcount(msg),
 			  fmt->rf_name, lustre_msg_buflen(msg, offset), len,
 			  rcl_names[loc]);
@@ -2133,30 +2132,30 @@ static void *__req_capsule_get(struct req_capsule *pill,
  */
 void __req_capsule_dump(struct req_capsule *pill, enum req_location loc)
 {
-	const struct    req_format *fmt;
-	const struct    req_msg_field *field;
-	__u32		len;
-	size_t		i;
+	const struct req_format *fmt;
+	const struct req_msg_field *field;
+	__u32 len;
+	size_t i;
 
-        fmt = pill->rc_fmt;
+	fmt = pill->rc_fmt;
 
-        DEBUG_REQ(D_RPCTRACE, pill->rc_req, "BEGIN REQ CAPSULE DUMP\n");
-        for (i = 0; i < fmt->rf_fields[loc].nr; ++i) {
-                field = FMT_FIELD(fmt, loc, i);
-                if (field->rmf_dumper == NULL) {
-                        /*
-                         * FIXME Add a default hex dumper for fields that don't
-                         * have a specific dumper
-                         */
-                        len = req_capsule_get_size(pill, field, loc);
+	DEBUG_REQ(D_RPCTRACE, pill->rc_req, "BEGIN REQ CAPSULE DUMP");
+	for (i = 0; i < fmt->rf_fields[loc].nr; ++i) {
+		field = FMT_FIELD(fmt, loc, i);
+		if (field->rmf_dumper == NULL) {
+			/*
+			 * FIXME Add a default hex dumper for fields that don't
+			 * have a specific dumper
+			 */
+			len = req_capsule_get_size(pill, field, loc);
 			CDEBUG(D_RPCTRACE, "Field %s has no dumper function;"
 				"field size is %u\n", field->rmf_name, len);
-                } else {
-                        /* It's the dumping side-effect that we're interested in */
-                        (void) __req_capsule_get(pill, field, loc, NULL, 1);
-                }
-        }
-        CDEBUG(D_RPCTRACE, "END REQ CAPSULE DUMP\n");
+		} else {
+			/* It's dumping side-effect that we're interested in */
+			(void) __req_capsule_get(pill, field, loc, NULL, 1);
+		}
+	}
+	CDEBUG(D_RPCTRACE, "END REQ CAPSULE DUMP\n");
 }
 
 /**

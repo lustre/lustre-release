@@ -1298,15 +1298,16 @@ test_53() {
 run_test 53 "touch: drop rep"
 
 test_54() {
-	zconf_mount `hostname` $MOUNT2
-        touch $DIR/$tfile
-        touch $DIR2/$tfile.1
-        sleep 10
-        cat $DIR2/$tfile.missing # save transno = 0, rc != 0 into last_rcvd
-        fail $SINGLEMDS
-        umount $MOUNT2
-        ERROR=`dmesg | egrep "(test 54|went back in time)" | tail -n1 | grep "went back in time"`
-        [ x"$ERROR" == x ] || error "back in time occured"
+	zconf_mount $(hostname) $MOUNT2
+	touch $DIR/$tfile
+	touch $DIR2/$tfile.1
+	sleep 10
+	cat $DIR2/$tfile.missing # save transno = 0, rc != 0 into last_rcvd
+	fail $SINGLEMDS
+	umount $MOUNT2
+	ERROR=$(dmesg | egrep "(test 54|went back in time)" | tail -n1 |
+		grep "went back in time")
+	[ x"$ERROR" == x ] || error "back in time occured"
 }
 run_test 54 "back in time"
 
@@ -1995,9 +1996,8 @@ test_106() { # LU-1789
 	# lightweight goes through LUSTRE_IMP_RECOVER during failover
 	touch -c $DIR2/$tfile || true
 	$LCTL dk $TMP/lustre-log-$TESTNAME.log
-	recovered=`awk '/MDT0000-mdc-[0-9a-f]*: lwp recover/ {
-				      print;
-		      }' $TMP/lustre-log-$TESTNAME.log`
+	recovered=$(awk '/MDT0000-mdc-[0-9a-f]*. lwp recover/ { print }' \
+		    $TMP/lustre-log-$TESTNAME.log)
 	[ -z "$recovered" ] && error "lightweight client was not recovered"
 
 	# and all operations performed by lightweight client should be

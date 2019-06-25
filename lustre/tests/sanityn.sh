@@ -370,7 +370,7 @@ test_15() {	# bug 974 - ENOSPC
 	echo "PATH=$PATH"
 	sh oos2.sh $MOUNT1 $MOUNT2
 	wait_delete_completed
-	grant_error=`dmesg | grep "> available"`
+	grant_error=$(dmesg | grep "< tot_grant")
 	[ -z "$grant_error" ] || error "$grant_error"
 }
 run_test 15 "test out-of-space with multiple writers ==========="

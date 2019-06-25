@@ -2474,7 +2474,7 @@ ptlrpc_rqphase_move(struct ptlrpc_request *req, enum rq_phase new_phase)
 			atomic_dec(&req->rq_import->imp_unregistering);
 	}
 
-	DEBUG_REQ(D_INFO, req, "move req \"%s\" -> \"%s\"",
+	DEBUG_REQ(D_INFO, req, "move request phase from %s to %s",
 		  ptlrpc_rqphase2str(req), ptlrpc_phase2str(new_phase));
 
 	req->rq_phase = new_phase;

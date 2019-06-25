@@ -825,7 +825,7 @@ test_36() {
 	checkstat $DIR/$tfile
 	facet_failover $SINGLEMDS
 	cancel_lru_locks mdc
-	if dmesg | grep "unknown lock cookie"; then
+	if $LCTL dk | grep "stale lock .*cookie"; then
 		error "cancel after replay failed"
 	fi
 }
@@ -845,7 +845,7 @@ test_37() {
 	do_facet $SINGLEMDS dmesg -c >/dev/null
 	fail_abort $SINGLEMDS
 	kill -USR1 $pid || error "multiop $pid not running"
-	do_facet $SINGLEMDS dmesg | grep "error .* unlinking .* from PENDING" &&
+	do_facet $SINGLEMDS dmesg | grep "error unlinking orphan" &&
 		error "error unlinking files"
 	wait $pid || error "multiop $pid failed"
 	sync
@@ -1103,12 +1103,12 @@ test_45() {
 run_test 45 "Handle failed close"
 
 test_46() {
-	dmesg -c >/dev/null
 	drop_reply "touch $DIR/$tfile"
 	fail $SINGLEMDS
 	# ironically, the previous test, 45, will cause a real forced close,
 	# so just look for one for this test
-	dmesg | grep -i "force closing client file handle for $tfile" &&
+	local FID=$($LFS path2fid $tfile)
+	$LCTL dk | grep -i "force closing file handle $FID" &&
 		error "found force closing in dmesg"
 	return 0
 }
@@ -1821,7 +1821,7 @@ test_65a() #bug 3055
     createmany -o $DIR/$tfile 10 > /dev/null
     unlinkmany $DIR/$tfile 10 > /dev/null
     # check for log message
-    $LCTL dk | grep "Early reply #" || error "No early reply"
+    $LCTL dk | grep -i "Early reply #" || error "No early reply"
     debugrestore
     # client should show REQ_DELAY estimates
     lctl get_param -n mdc.${FSNAME}-MDT0000-mdc-*.timeouts | grep portal
@@ -1861,7 +1861,7 @@ test_65b() #bug 3055
 
 	do_facet ost1 $LCTL set_param fail_loc=0
 	# check for log message
-	$LCTL dk | grep "Early reply #" || error "No early reply"
+	$LCTL dk | grep -i "Early reply #" || error "No early reply"
 	debugrestore
 	# client should show REQ_DELAY estimates
 	lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts | grep portal

@@ -495,13 +495,13 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 		}
 
 		if (fid != NULL)
-			CWARN("%s: directory (inode: %lu, FID: "DFID") %s "
-			      "maximum entry limit\n",
+			/* below message is checked in sanity.sh test_129 */
+			CWARN("%s: directory (inode: %lu, FID: "DFID") %s maximum entry limit\n",
 			      osd_name(osd), parent->i_ino, PFID(fid),
 			      rc == -ENOSPC ? "has reached" : "is approaching");
 		else
-			CWARN("%s: directory (inode: %lu, FID: unknown) %s "
-			      "maximum entry limit\n",
+			/* below message is checked in sanity.sh test_129 */
+			CWARN("%s: directory (inode: %lu, FID: unknown) %s maximum entry limit\n",
 			      osd_name(osd), parent->i_ino,
 			      rc == -ENOSPC ? "has reached" : "is approaching");
 

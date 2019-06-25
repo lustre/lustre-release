@@ -451,6 +451,7 @@ static int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
 	LASSERT(obd_md_valid == OBD_MD_FLXATTR ||
 		obd_md_valid == OBD_MD_FLXATTRLS);
 
+	/* The below message is checked in sanity-selinux.sh test_20d */
 	CDEBUG(D_INFO, "%s: get xattr '%s' for "DFID"\n",
 	       exp->exp_obd->obd_name, name, PFID(fid));
 	rc = mdc_xattr_common(exp, &RQF_MDS_GETXATTR, fid, MDS_GETXATTR,
@@ -683,7 +684,7 @@ void mdc_replay_open(struct ptlrpc_request *req)
 
 	if (mod == NULL) {
 		DEBUG_REQ(D_ERROR, req,
-			  "Can't properly replay without open data.");
+			  "cannot properly replay without open data");
 		EXIT;
 		return;
 	}
@@ -780,14 +781,14 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         /* Outgoing messages always in my byte order. */
         LASSERT(body != NULL);
 
-        /* Only if the import is replayable, we set replay_open data */
-        if (och && imp->imp_replayable) {
-                mod = obd_mod_alloc();
-                if (mod == NULL) {
-                        DEBUG_REQ(D_ERROR, open_req,
-                                  "Can't allocate md_open_data");
-                        RETURN(0);
-                }
+	/* Only if the import is replayable, we set replay_open data */
+	if (och && imp->imp_replayable) {
+		mod = obd_mod_alloc();
+		if (mod == NULL) {
+			DEBUG_REQ(D_ERROR, open_req,
+				  "cannot allocate md_open_data");
+			RETURN(0);
+		}
 
                 /**
                  * Take a reference on \var mod, to be freed on mdc_close().
@@ -839,8 +840,9 @@ static void mdc_free_open(struct md_open_data *mod)
 	 * The worst thing is eviction if the client gets open lock
 	 **/
 
-	DEBUG_REQ(D_RPCTRACE, mod->mod_open_req, "free open request rq_replay"
-		  "= %d\n", mod->mod_open_req->rq_replay);
+	DEBUG_REQ(D_RPCTRACE, mod->mod_open_req,
+		  "free open request, rq_replay=%d",
+		  mod->mod_open_req->rq_replay);
 
 	ptlrpc_request_committed(mod->mod_open_req, committed);
 	if (mod->mod_close_req)
@@ -981,37 +983,37 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 	rc = ptlrpc_queue_wait(req);
 	mdc_put_mod_rpc_slot(req, NULL);
 
-        if (req->rq_repmsg == NULL) {
-                CDEBUG(D_RPCTRACE, "request failed to send: %p, %d\n", req,
-                       req->rq_status);
-                if (rc == 0)
-                        rc = req->rq_status ?: -EIO;
-        } else if (rc == 0 || rc == -EAGAIN) {
-                struct mdt_body *body;
+	if (req->rq_repmsg == NULL) {
+		CDEBUG(D_RPCTRACE, "request %p failed to send: rc = %d\n", req,
+		       req->rq_status);
+		if (rc == 0)
+			rc = req->rq_status ?: -EIO;
+	} else if (rc == 0 || rc == -EAGAIN) {
+		struct mdt_body *body;
 
-                rc = lustre_msg_get_status(req->rq_repmsg);
-                if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
-                        DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err "
-                                  "= %d", rc);
-                        if (rc > 0)
-                                rc = -rc;
-                }
-                body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
-                if (body == NULL)
-                        rc = -EPROTO;
-        } else if (rc == -ESTALE) {
-                /**
-                 * it can be allowed error after 3633 if open was committed and
-                 * server failed before close was sent. Let's check if mod
-                 * exists and return no error in that case
-                 */
-                if (mod) {
-                        DEBUG_REQ(D_HA, req, "Reset ESTALE = %d", rc);
-                        LASSERT(mod->mod_open_req != NULL);
-                        if (mod->mod_open_req->rq_committed)
-                                rc = 0;
-                }
-        }
+		rc = lustre_msg_get_status(req->rq_repmsg);
+		if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
+			DEBUG_REQ(D_ERROR, req,
+				  "type = PTL_RPC_MSG_ERR: rc = %d", rc);
+			if (rc > 0)
+				rc = -rc;
+		}
+		body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+		if (body == NULL)
+			rc = -EPROTO;
+	} else if (rc == -ESTALE) {
+		/**
+		 * it can be allowed error after 3633 if open was committed and
+		 * server failed before close was sent. Let's check if mod
+		 * exists and return no error in that case
+		 */
+		if (mod) {
+			DEBUG_REQ(D_HA, req, "Reset ESTALE = %d", rc);
+			LASSERT(mod->mod_open_req != NULL);
+			if (mod->mod_open_req->rq_committed)
+				rc = 0;
+		}
+	}
 
 out:
         if (mod) {

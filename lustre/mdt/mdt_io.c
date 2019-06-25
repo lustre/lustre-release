@@ -204,14 +204,14 @@ static int mdt_rw_hpreq_check(struct ptlrpc_request *req)
 	if (opc == OST_READ)
 		pa.lpa_mode |= LCK_PR;
 
-	DEBUG_REQ(D_RPCTRACE, req, "%s %s: refresh rw locks: "DFID"\n",
+	DEBUG_REQ(D_RPCTRACE, req, "%s %s: refresh rw locks for " DFID,
 		  tgt_name(tsi->tsi_tgt), current->comm, PFID(&tsi->tsi_fid));
 
 	mdt_prolong_dom_lock(tsi, &pa);
 
 	if (pa.lpa_blocks_cnt > 0) {
 		CDEBUG(D_DLMTRACE,
-		       "%s: refreshed %u locks timeout for req %p.\n",
+		       "%s: refreshed %u locks timeout for req %p",
 		       tgt_name(tsi->tsi_tgt), pa.lpa_blocks_cnt, req);
 		RETURN(1);
 	}

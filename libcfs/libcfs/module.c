@@ -671,6 +671,7 @@ static void __exit libcfs_exit(void)
 
 	cfs_cpu_fini();
 
+	/* the below message is checked in test-framework.sh check_mem_leak() */
 	if (atomic_read(&libcfs_kmemory) != 0)
 		CERROR("Portals memory leaked: %d bytes\n",
 		       atomic_read(&libcfs_kmemory));

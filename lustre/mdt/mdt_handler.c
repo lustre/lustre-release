@@ -2445,7 +2445,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 	if (rc < 0) {
 		GOTO(out_ucred, rc);
 	} else if (rc == 1) {
-		DEBUG_REQ(D_INODE, mdt_info_req(info), "resent opt.");
+		DEBUG_REQ(D_INODE, mdt_info_req(info), "resent opt");
 		rc = lustre_msg_get_status(mdt_info_req(info)->rq_repmsg);
 		GOTO(out_ucred, rc);
 	}
@@ -6127,13 +6127,14 @@ static int mdt_export_cleanup(struct obd_export *exp)
 				ma->ma_valid = MA_FLAGS;
 				ma->ma_attr_flags |= MDS_KEEP_ORPHAN;
 			}
-                        mdt_mfd_close(info, mfd);
-                }
-        }
-        info->mti_mdt = NULL;
-        /* cleanup client slot early */
-        /* Do not erase record for recoverable client. */
-        if (!(exp->exp_flags & OBD_OPT_FAILOVER) || exp->exp_failed)
+			ma->ma_valid |= MA_FORCE_LOG;
+			mdt_mfd_close(info, mfd);
+		}
+	}
+	info->mti_mdt = NULL;
+	/* cleanup client slot early */
+	/* Do not erase record for recoverable client. */
+	if (!(exp->exp_flags & OBD_OPT_FAILOVER) || exp->exp_failed)
 		tgt_client_del(&env, exp);
         lu_env_fini(&env);
 

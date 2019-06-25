@@ -150,6 +150,7 @@ static int __init kinode_init(void)
 		pr_err(PREFIX " inode numbers are different: %llu %llu\n",
 		       run_id, stbuf1.ino, stbuf2.ino);
 	else
+		/* below message is checked in sanity.sh test_129 */
 		pr_err(PREFIX " inode numbers are identical: %llu\n",
 		       run_id, stbuf1.ino);
 

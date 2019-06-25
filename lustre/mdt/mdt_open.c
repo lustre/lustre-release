@@ -1362,7 +1362,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		 * via a regular replay. */
 		if (!(open_flags & MDS_OPEN_CREAT)) {
 			DEBUG_REQ(D_ERROR, req,
-				  "OPEN & CREAT not in open replay/by_fid.");
+				  "OPEN & CREAT not in open replay/by_fid");
 			GOTO(out, result = -EFAULT);
 		}
 		CDEBUG(D_INFO, "No object(1), continue as regular open.\n");
@@ -2330,8 +2330,10 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 	intent = ma->ma_attr_flags & MDS_CLOSE_INTENT;
 	*ofid = *mdt_object_fid(o);
 
-	CDEBUG(D_INODE, "%s: close file "DFID" with intent: %llx\n",
-	       mdt_obd_name(info->mti_mdt), PFID(ofid), intent);
+	/* the below message is checked in replay-single.sh test_46 */
+	CDEBUG(D_INODE, "%s: %sclosing file handle "DFID" with intent: %llx\n",
+	       mdt_obd_name(info->mti_mdt),
+	       ma->ma_valid & MA_FORCE_LOG ? "force " : "", PFID(ofid), intent);
 
 	switch (intent) {
 	case MDS_HSM_RELEASE: {

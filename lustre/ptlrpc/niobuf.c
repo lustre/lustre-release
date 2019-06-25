@@ -475,21 +475,23 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 		wait_queue_head_t *wq = (req->rq_set != NULL) ?
 					&req->rq_set->set_waitq :
 					&req->rq_reply_waitq;
-                /* Network access will complete in finite time but the HUGE
-                 * timeout lets us CWARN for visibility of sluggish NALs */
-                lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
-                                           cfs_time_seconds(1), NULL, NULL);
-                rc = l_wait_event(*wq, !ptlrpc_client_bulk_active(req), &lwi);
-                if (rc == 0) {
-                        ptlrpc_rqphase_move(req, req->rq_next_phase);
-                        RETURN(1);
-                }
+		/*
+		 * Network access will complete in finite time but the HUGE
+		 * timeout lets us CWARN for visibility of sluggish NALs.
+		 */
+		lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(LONG_UNLINK),
+					   cfs_time_seconds(1), NULL, NULL);
+		rc = l_wait_event(*wq, !ptlrpc_client_bulk_active(req), &lwi);
+		if (rc == 0) {
+			ptlrpc_rqphase_move(req, req->rq_next_phase);
+			RETURN(1);
+		}
 
-                LASSERT(rc == -ETIMEDOUT);
-                DEBUG_REQ(D_WARNING, req, "Unexpectedly long timeout: desc %p",
-                          desc);
-        }
-        RETURN(0);
+		LASSERT(rc == -ETIMEDOUT);
+		DEBUG_REQ(D_WARNING, req, "Unexpectedly long timeout: desc %p",
+			  desc);
+	}
+	RETURN(0);
 }
 
 static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
@@ -744,8 +746,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		spin_unlock(&imp->imp_lock);
 
 		lustre_msg_set_last_xid(request->rq_reqmsg, min_xid);
-		DEBUG_REQ(D_RPCTRACE, request, "Allocating new xid for "
-			  "resend on EINPROGRESS");
+		DEBUG_REQ(D_RPCTRACE, request,
+			  "Allocating new XID for resend on EINPROGRESS");
 	}
 
 	if (request->rq_bulk != NULL) {
@@ -755,9 +757,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	if (list_empty(&request->rq_unreplied_list) ||
 	    request->rq_xid <= imp->imp_known_replied_xid) {
-		DEBUG_REQ(D_ERROR, request, "xid: %llu, replied: %llu, "
-			  "list_empty:%d\n", request->rq_xid,
-			  imp->imp_known_replied_xid,
+		DEBUG_REQ(D_ERROR, request,
+			  "xid=%llu, replied=%llu, list_empty=%d",
+			  request->rq_xid, imp->imp_known_replied_xid,
 			  list_empty(&request->rq_unreplied_list));
 		LBUG();
 	}
@@ -889,7 +891,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	ptlrpc_pinger_sending_on_import(imp);
 
-	DEBUG_REQ(D_INFO, request, "send flg=%x",
+	DEBUG_REQ(D_INFO, request, "send flags=%x",
 		  lustre_msg_get_flags(request->rq_reqmsg));
 	rc = ptl_send_buf(&request->rq_req_md_h,
 			  request->rq_reqbuf, request->rq_reqdata_len,

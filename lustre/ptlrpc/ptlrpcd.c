@@ -299,7 +299,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
 
 	pc = ptlrpcd_select_pc(req);
 
-	DEBUG_REQ(D_INFO, req, "add req [%p] to pc [%s:%d]",
+	DEBUG_REQ(D_INFO, req, "add req [%p] to pc [%s+%d]",
 		  req, pc->pc_name, pc->pc_index);
 
 	ptlrpc_set_add_new_req(pc, req);

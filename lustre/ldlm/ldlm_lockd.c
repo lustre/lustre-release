@@ -1282,7 +1282,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 	} else {
 		if (ldlm_reclaim_full()) {
 			DEBUG_REQ(D_DLMTRACE, req,
-				  "Too many granted locks, reject current enqueue request and let the client retry later.\n");
+				  "Too many granted locks, reject current enqueue request and let the client retry later");
 			GOTO(out, rc = -EINPROGRESS);
 		}
 	}
@@ -1703,6 +1703,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 	for (i = first; i < count; i++) {
 		lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
 		if (!lock) {
+			/* below message checked in replay-single.sh test_36 */
 			LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock (cookie %llu)",
 					  dlm_req->lock_handle[i].cookie);
 			continue;
@@ -2184,7 +2185,7 @@ static int ldlm_handle_setinfo(struct ptlrpc_request *req)
 
 	ENTRY;
 
-	DEBUG_REQ(D_HSM, req, "%s: handle setinfo\n", obd->obd_name);
+	DEBUG_REQ(D_HSM, req, "%s: handle setinfo", obd->obd_name);
 
 	req_capsule_set(&req->rq_pill, &RQF_OBD_SET_INFO);
 
@@ -2213,7 +2214,7 @@ static int ldlm_handle_setinfo(struct ptlrpc_request *req)
 					KEY_HSM_COPYTOOL_SEND,
 					vallen, val, NULL);
 	else
-		DEBUG_REQ(D_WARNING, req, "ignoring unknown key %s", key);
+		DEBUG_REQ(D_WARNING, req, "ignoring unknown key '%s'", key);
 
 	return rc;
 }
@@ -2223,9 +2224,9 @@ static inline void ldlm_callback_errmsg(struct ptlrpc_request *req,
 					const struct lustre_handle *handle)
 {
 	DEBUG_REQ((req->rq_no_reply || rc) ? D_WARNING : D_DLMTRACE, req,
-		  "%s: [nid %s] [rc %d] [lock %#llx]",
-		  msg, libcfs_id2str(req->rq_peer), rc,
-		  handle ? handle->cookie : 0);
+		  "%s, NID=%s lock=%#llx: rc = %d",
+		  msg, libcfs_id2str(req->rq_peer),
+		  handle ? handle->cookie : 0, rc);
 	if (req->rq_no_reply)
 		CWARN("No reply was sent, maybe cause b=21636.\n");
 	else if (rc)
@@ -2504,7 +2505,7 @@ static int ldlm_cancel_hpreq_lock_match(struct ptlrpc_request *req,
 		if (lustre_handle_equal(&dlm_req->lock_handle[i],
 					&lockh)) {
 			DEBUG_REQ(D_RPCTRACE, req,
-				  "Prio raised by lock %#llx.", lockh.cookie);
+				  "Prio raised by lock %#llx", lockh.cookie);
 			rc = 1;
 			break;
 		}

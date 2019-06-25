@@ -454,9 +454,9 @@ static u64 tgt_grant_space_left(struct obd_export *exp)
 			    tot_granted - tgd->tgd_tot_pending) ?
 			    D_ERROR : D_CACHE;
 
-		CDEBUG_LIMIT(mask, "%s: cli %s/%p left %llu < tot_grant "
-			     "%llu unstable %llu pending %llu "
-			     "dirty %llu\n",
+		/* the below message is checked in sanityn.sh test_15 */
+		CDEBUG_LIMIT(mask,
+			     "%s: cli %s/%p left=%llu < tot_grant=%llu unstable=%llu pending=%llu dirty=%llu\n",
 			     obd->obd_name, exp->exp_client_uuid.uuid, exp,
 			     left, tot_granted, unstable,
 			     tgd->tgd_tot_pending,
@@ -471,10 +471,10 @@ static u64 tgt_grant_space_left(struct obd_export *exp)
 	/* Align left on block size */
 	left &= ~((1ULL << tgd->tgd_blockbits) - 1);
 
-	CDEBUG(D_CACHE, "%s: cli %s/%p avail %llu left %llu unstable "
-	       "%llu tot_grant %llu pending %llu\n", obd->obd_name,
-	       exp->exp_client_uuid.uuid, exp, avail, left, unstable,
-	       tot_granted, tgd->tgd_tot_pending);
+	CDEBUG(D_CACHE,
+	       "%s: cli %s/%p avail=%llu left=%llu unstable=%llu tot_grant=%llu pending=%llu\n",
+	       obd->obd_name, exp->exp_client_uuid.uuid, exp, avail, left,
+	       unstable, tot_granted, tgd->tgd_tot_pending);
 
 	RETURN(left);
 }

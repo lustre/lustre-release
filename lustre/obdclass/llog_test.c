@@ -1356,6 +1356,7 @@ static int llog_test_9_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 		CERROR("9_sub: write recs failed at #1: %d\n", rc);
 		GOTO(out_close, rc);
 	}
+	/* The below message is checked in sanity.sh test_60a (run-llog.sh) */
 	CWARN("9_sub: record type %x in log "DFID_NOBRACE"\n",
 	      llog_records.lrh.lrh_type, PFID(&fid));
 out_close:

@@ -6807,9 +6807,9 @@ test_60a() {
 	local pass=true
 
 	#get fid and record list
-	fid_list=($(awk '/9_sub.*record/ { print $NF }' /$TMP/$tfile |
+	fid_list=($(awk '/9_sub.*record/ { print $NF }' $TMP/$tfile |
 		tail -n 4))
-	rec_list=($(awk '/9_sub.*record/ { print $((NF-3)) }' /$TMP/$tfile |
+	rec_list=($(awk '/9_sub.*record/ { print $((NF-3)) }' $TMP/$tfile |
 		tail -n 4))
 	#remount mgs as ldiskfs or zfs type
 	stop mgs || error "stop mgs failed"

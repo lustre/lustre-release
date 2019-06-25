@@ -375,7 +375,7 @@ static int mdd_orphan_key_test_and_delete(const struct lu_env *env,
 	if (mdo->mod_count == 0) {
 		CDEBUG(D_HA, "Found orphan "DFID", delete it\n", PFID(lf));
 		rc = mdd_orphan_destroy(env, mdo, key);
-		if (rc) /* so replay-single.sh test_37 works */
+		if (rc) /* below message checked in replay-single.sh test_37 */
 			CERROR("%s: error unlinking orphan "DFID": rc = %d\n",
 			       mdd2obd_dev(mdd)->obd_name, PFID(lf), rc);
         } else {

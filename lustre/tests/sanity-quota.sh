@@ -1174,7 +1174,7 @@ test_6() {
 
 	# no watchdog is triggered
 	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
-	watchdog=$(awk '/Service thread pid/ && /was inactive/ \
+	watchdog=$(awk '/[Ss]ervice thread pid/ && /was inactive/ \
 			{ print; }' $TMP/lustre-log-${TESTNAME}.log)
 	[ -z "$watchdog" ] || error "$watchdog"
 
@@ -1967,7 +1967,7 @@ test_18() {
 
 	# check if watchdog is triggered
 	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
-	local watchdog=$(awk '/Service thread pid/ && /was inactive/ \
+	local watchdog=$(awk '/[Ss]ervice thread pid/ && /was inactive/ \
 			{ print; }' $TMP/lustre-log-${TESTNAME}.log)
 	[ -z "$watchdog" ] || error "$watchdog"
 	rm -f $TMP/lustre-log-${TESTNAME}.log

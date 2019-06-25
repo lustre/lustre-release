@@ -1035,7 +1035,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	}
 
 	if (*flags & LDLM_FL_NDELAY) {
-		DEBUG_REQ(D_DLMTRACE, req, "enque lock with no delay\n");
+		DEBUG_REQ(D_DLMTRACE, req, "enqueue lock with no delay");
 		req->rq_no_resend = req->rq_no_delay = 1;
 		/*
 		 * probably set a shorter timeout value and handle ETIMEDOUT
@@ -1533,7 +1533,7 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
 	if (lustre_msg_get_slv(req->rq_repmsg) == 0 ||
 	    lustre_msg_get_limit(req->rq_repmsg) == 0) {
 		DEBUG_REQ(D_HA, req,
-			  "Zero SLV or Limit found (SLV: %llu, Limit: %u)",
+			  "Zero SLV or limit found (SLV=%llu, limit=%u)",
 			  lustre_msg_get_slv(req->rq_repmsg),
 			  lustre_msg_get_limit(req->rq_repmsg));
 		RETURN(0);

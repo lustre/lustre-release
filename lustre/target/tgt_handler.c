@@ -460,8 +460,8 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 		rc = h->th_act(tsi);
 		if (!is_serious(rc) &&
 		    !req->rq_no_reply && req->rq_reply_state == NULL) {
-			DEBUG_REQ(D_ERROR, req, "%s \"handler\" %s did not "
-				  "pack reply and returned 0 error\n",
+			DEBUG_REQ(D_ERROR, req,
+				  "%s: %s handler did not pack reply but returned no error",
 				  tgt_name(tsi->tsi_tgt), h->th_name);
 			LBUG();
 		}
@@ -555,9 +555,9 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 	if (req_can_reconstruct(req, NULL)) {
 		if (!(lustre_msg_get_flags(req->rq_reqmsg) &
 		      (MSG_RESENT | MSG_REPLAY))) {
-			DEBUG_REQ(D_WARNING, req, "rq_xid %llu matches "
-				  "saved xid, expected REPLAY or RESENT flag "
-				  "(%x)", req->rq_xid,
+			DEBUG_REQ(D_WARNING, req,
+				  "rq_xid=%llu matches saved XID, expected REPLAY or RESENT flag (%x)",
+				  req->rq_xid,
 				  lustre_msg_get_flags(req->rq_reqmsg));
 			req->rq_status = -ENOTCONN;
 			RETURN(-ENOTCONN);
@@ -600,7 +600,7 @@ static struct tgt_handler *tgt_handler_find_check(struct ptlrpc_request *req)
 
 	tgt = class_exp2tgt(req->rq_export);
 	if (unlikely(tgt == NULL)) {
-		DEBUG_REQ(D_ERROR, req, "%s: No target for connected export\n",
+		DEBUG_REQ(D_ERROR, req, "%s: no target for connected export",
 			  class_exp2obd(req->rq_export)->obd_name);
 		RETURN(ERR_PTR(-EINVAL));
 	}
@@ -638,9 +638,9 @@ static int process_req_last_xid(struct ptlrpc_request *req)
 
 	if (req->rq_xid == 0 ||
 	    (req->rq_xid <= req->rq_export->exp_last_xid)) {
-		DEBUG_REQ(D_ERROR, req, "Unexpected xid %llx vs. "
-			  "last_xid %llx\n", req->rq_xid,
-			  req->rq_export->exp_last_xid);
+		DEBUG_REQ(D_WARNING, req,
+			  "unexpected rq_xid=%llx != exp_last_xid=%llx",
+			  req->rq_xid, req->rq_export->exp_last_xid);
 		/* Some request is allowed to be sent during replay,
 		 * such as OUT update requests, FLD requests, so it
 		 * is possible that replay requests has smaller XID
@@ -760,7 +760,7 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		tsi->tsi_jobid = NULL;
 
 	if (tgt == NULL) {
-		DEBUG_REQ(D_ERROR, req, "%s: No target for connected export\n",
+		DEBUG_REQ(D_ERROR, req, "%s: No target for connected export",
 			  class_exp2obd(req->rq_export)->obd_name);
 		req->rq_status = -EINVAL;
 		rc = ptlrpc_error(req);
@@ -804,9 +804,10 @@ int tgt_request_handle(struct ptlrpc_request *req)
 
 	rc = lustre_msg_check_version(msg, h->th_version);
 	if (unlikely(rc)) {
-		DEBUG_REQ(D_ERROR, req, "%s: drop mal-formed request, version"
-			  " %08x, expecting %08x\n", tgt_name(tgt),
-			  lustre_msg_get_version(msg), h->th_version);
+		DEBUG_REQ(D_ERROR, req,
+			  "%s: drop malformed request version=%08x expect=%08x",
+			  tgt_name(tgt), lustre_msg_get_version(msg),
+			  h->th_version);
 		req->rq_status = -EINVAL;
 		rc = ptlrpc_error(req);
 		GOTO(out, rc);

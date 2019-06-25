@@ -145,7 +145,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 	 * exception is that resend replay could have been removed from the
 	 * unreplied list. */
 	if (req != NULL && list_empty(&req->rq_unreplied_list)) {
-		DEBUG_REQ(D_HA, req, "resend_replay: %d, last_transno: %llu\n",
+		DEBUG_REQ(D_HA, req, "resend_replay=%d, last_transno=%llu",
 			  imp->imp_resend_replay, last_transno);
 		ptlrpc_add_unreplied(req);
 		imp->imp_known_replied_xid = ptlrpc_known_replied_xid(imp);

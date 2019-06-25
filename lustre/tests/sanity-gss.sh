@@ -265,7 +265,7 @@ test_8()
     do_facet $SINGLEMDS $LCTL set_param fail_loc=0
     wait $TOUCHPID || error "touch should have succeeded"
 
-    $LCTL dk | grep "Early reply #" || error "No early reply"
+    $LCTL dk | grep -i "Early reply #" || error "No early reply"
 
     debugrestore
     do_facet $SINGLEMDS "echo $ATOLDBASE >> $ATHISTORY" || true

@@ -1217,7 +1217,7 @@ int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
 	rc = do_cli_unwrap_reply(early_req);
 	if (rc) {
 		DEBUG_REQ(D_ADAPTTO, early_req,
-			  "error %d unwrap early reply", rc);
+			  "unwrap early reply: rc = %d", rc);
 		GOTO(err_ctx, rc);
 	}
 
@@ -2158,18 +2158,21 @@ static int sptlrpc_svc_check_from(struct ptlrpc_request *req, int svc_rc)
 	switch (req->rq_sp_from) {
 	case LUSTRE_SP_CLI:
 		if (req->rq_auth_usr_mdt || req->rq_auth_usr_ost) {
+			/* The below message is checked in sanity-sec test_33 */
 			DEBUG_REQ(D_ERROR, req, "faked source CLI");
 			svc_rc = SECSVC_DROP;
 		}
 		break;
 	case LUSTRE_SP_MDT:
 		if (!req->rq_auth_usr_mdt) {
+			/* The below message is checked in sanity-sec test_33 */
 			DEBUG_REQ(D_ERROR, req, "faked source MDT");
 			svc_rc = SECSVC_DROP;
 		}
 		break;
 	case LUSTRE_SP_OST:
 		if (!req->rq_auth_usr_ost) {
+			/* The below message is checked in sanity-sec test_33 */
 			DEBUG_REQ(D_ERROR, req, "faked source OST");
 			svc_rc = SECSVC_DROP;
 		}
@@ -2178,6 +2181,7 @@ static int sptlrpc_svc_check_from(struct ptlrpc_request *req, int svc_rc)
 	case LUSTRE_SP_MGC:
 		if (!req->rq_auth_usr_root && !req->rq_auth_usr_mdt &&
 		    !req->rq_auth_usr_ost) {
+			/* The below message is checked in sanity-sec test_33 */
 			DEBUG_REQ(D_ERROR, req, "faked source MGC/MGS");
 			svc_rc = SECSVC_DROP;
 		}

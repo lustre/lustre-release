@@ -2399,7 +2399,7 @@ static void drop_duplicate_replay_req(struct lu_env *env,
 				      struct ptlrpc_request *req)
 {
 	DEBUG_REQ(D_HA, req,
-		  "remove t%lld from %s because of duplicate update records are found.\n",
+		  "remove t%lld from %s because duplicate update records found",
 		  lustre_msg_get_transno(req->rq_reqmsg),
 		  libcfs_nid2str(req->rq_peer.nid));
 
@@ -2415,7 +2415,7 @@ static void drop_duplicate_replay_req(struct lu_env *env,
 		lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
 		target_send_reply(req, req->rq_status, 0);
 	} else {
-		DEBUG_REQ(D_ERROR, req, "wrong opc from %s\n",
+		DEBUG_REQ(D_ERROR, req, "wrong opc from %s",
 		libcfs_nid2str(req->rq_peer.nid));
 	}
 	target_exp_dequeue_req_replay(req);
@@ -2626,7 +2626,7 @@ static int target_recovery_thread(void *arg)
 	       atomic_read(&obd->obd_lock_replay_clients));
 	while ((req = target_next_replay_lock(lut))) {
 		LASSERT(trd->trd_processing_task == current_pid());
-		DEBUG_REQ(D_HA, req, "processing lock from %s: ",
+		DEBUG_REQ(D_HA, req, "processing lock from %s:",
 			  libcfs_nid2str(req->rq_peer.nid));
 		handle_recovery_req(thread, req,
 				    trd->trd_recovery_handler);
@@ -2654,7 +2654,7 @@ static int target_recovery_thread(void *arg)
 	spin_unlock(&obd->obd_recovery_task_lock);
 	while ((req = target_next_final_ping(obd))) {
 		LASSERT(trd->trd_processing_task == current_pid());
-		DEBUG_REQ(D_HA, req, "processing final ping from %s: ",
+		DEBUG_REQ(D_HA, req, "processing final ping from %s:",
 			  libcfs_nid2str(req->rq_peer.nid));
 		handle_recovery_req(thread, req,
 				    trd->trd_recovery_handler);
@@ -2894,7 +2894,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
 			if (duplicate != NULL) {
 				DEBUG_REQ(D_HA, duplicate,
-					  "put prev final req\n");
+					  "put prev final req");
 				target_request_copy_put(duplicate);
 			}
 			RETURN(0);
@@ -3344,7 +3344,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 	}
 
 	if (rc < 0) {
-		DEBUG_REQ(D_ERROR, req, "bulk %s failed: rc %d",
+		DEBUG_REQ(D_ERROR, req, "bulk %s failed: rc = %d",
 			  bulk2type(req), rc);
 		RETURN(rc);
 	}

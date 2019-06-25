@@ -403,7 +403,7 @@ test_9() {
 	fail ost1
 	do_facet ost1 $LCTL set_param fail_loc=0
 	do_facet ost1 "dmesg | tail -n 100" |
-		sed -n '/no req deadline/,$ p' | grep -q 'Already past' &&
+		sed -n '/no req deadline/,$ p' | grep -qi 'Already past' &&
 		return 1
 	return 0
 }

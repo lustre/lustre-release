@@ -873,7 +873,7 @@ static int osp_md_xattr_list(const struct lu_env *env, struct dt_object *dt,
 					     OUT_UPDATE_REPLY_SIZE);
 	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
 		DEBUG_REQ(D_ERROR, req,
-			  "%s: Wrong version %x expected %x "DFID": rc = %d\n",
+			  "%s: Wrong version %x expected %x "DFID": rc = %d",
 			  dname, reply->ourp_magic, UPDATE_REPLY_MAGIC,
 			  PFID(lu_object_fid(&dt->do_lu)), -EPROTO);
 

@@ -562,7 +562,7 @@ static int osp_sync_interpret(const struct lu_env *env,
 	struct osp_device *d = req->rq_cb_data;
 
 	if (jra->jra_magic != OSP_JOB_MAGIC) {
-		DEBUG_REQ(D_ERROR, req, "bad magic %u\n", jra->jra_magic);
+		DEBUG_REQ(D_ERROR, req, "bad magic %u", jra->jra_magic);
 		LBUG();
 	}
 	LASSERT(d);

@@ -614,6 +614,7 @@ static int import_select_connection(struct obd_import *imp)
                 imp->imp_conn_current = imp_conn;
         }
 
+	/* The below message is checked in conf-sanity.sh test_35[ab] */
         CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
                imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid,
                libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
@@ -638,7 +639,8 @@ static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
 		req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
 		*transno = req->rq_transno;
 		if (req->rq_transno == 0) {
-			DEBUG_REQ(D_ERROR, req, "zero transno in committed_list");
+			DEBUG_REQ(D_ERROR, req,
+				  "zero transno in committed_list");
 			LBUG();
 		}
 		return 1;
@@ -1266,34 +1268,38 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 		   !imp->imp_invalid) {
 
 		obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
+		/* The below message is checked in recovery-small.sh test_106 */
 		DEBUG_REQ(D_HA, request, "%s: lwp recover",
 			  imp->imp_obd->obd_name);
 		imp->imp_remote_handle =
 			*lustre_msg_get_handle(request->rq_repmsg);
 		import_set_state(imp, LUSTRE_IMP_RECOVER);
 	} else {
-                DEBUG_REQ(D_HA, request, "%s: evicting (reconnect/recover flags"
-                          " not set: %x)", imp->imp_obd->obd_name, msg_flags);
-                imp->imp_remote_handle =
-                                *lustre_msg_get_handle(request->rq_repmsg);
+		DEBUG_REQ(D_HA, request,
+			  "%s: evicting (reconnect/recover flags not set: %x)",
+			  imp->imp_obd->obd_name, msg_flags);
+		imp->imp_remote_handle =
+			*lustre_msg_get_handle(request->rq_repmsg);
 		import_set_state(imp, LUSTRE_IMP_EVICTED);
-        }
+	}
 
-        /* Sanity checks for a reconnected import. */
-        if (!(imp->imp_replayable) != !(msg_flags & MSG_CONNECT_REPLAYABLE)) {
-                CERROR("imp_replayable flag does not match server "
-                       "after reconnect. We should LBUG right here.\n");
-        }
+	/* Sanity checks for a reconnected import. */
+	if (!(imp->imp_replayable) != !(msg_flags & MSG_CONNECT_REPLAYABLE))
+		CERROR("imp_replayable flag does not match server after reconnect. We should LBUG right here.\n");
 
-        if (lustre_msg_get_last_committed(request->rq_repmsg) > 0 &&
-            lustre_msg_get_last_committed(request->rq_repmsg) <
-            aa->pcaa_peer_committed) {
-		CERROR("%s went back in time (transno %lld"
-		       " was previously committed, server now claims %lld"
-                       ")!  See https://bugzilla.lustre.org/show_bug.cgi?"
-                       "id=9646\n",
+	if (lustre_msg_get_last_committed(request->rq_repmsg) > 0 &&
+	    lustre_msg_get_last_committed(request->rq_repmsg) <
+	    aa->pcaa_peer_committed) {
+		static bool printed;
+
+		/* The below message is checked in recovery-small.sh test_54 */
+		CERROR("%s: went back in time (transno %lld was previously committed, server now claims %lld)!\n",
                        obd2cli_tgt(imp->imp_obd), aa->pcaa_peer_committed,
                        lustre_msg_get_last_committed(request->rq_repmsg));
+		if (!printed) {
+			CERROR("For further information, see http://doc.lustre.org/lustre_manual.xhtml#went_back_in_time\n");
+			printed = true;
+		}
         }
 
 finish:
@@ -1741,7 +1747,7 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 	struct obd_import *imp = req->rq_import;
 	int connect = 0;
 
-	DEBUG_REQ(D_HA, req, "inflight=%d, refcount=%d: rc = %d ",
+	DEBUG_REQ(D_HA, req, "inflight=%d, refcount=%d: rc = %d",
 		  atomic_read(&imp->imp_inflight),
 		  atomic_read(&imp->imp_refcount), rc);
 

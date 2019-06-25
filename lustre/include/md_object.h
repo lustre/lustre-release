@@ -75,6 +75,7 @@ enum ma_valid {
 	MA_PFID      = 1 << 7,
 	MA_LMV_DEF   = 1 << 8,
 	MA_SOM	     = 1 << 9,
+	MA_FORCE_LOG	= 1 << 10, /* forced close logged in mdt_mfd_close */
 };
 
 typedef enum {

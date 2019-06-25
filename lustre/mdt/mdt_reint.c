@@ -363,8 +363,8 @@ static int mdt_create(struct mdt_thread_info *info)
 	int rc;
 	ENTRY;
 
-	DEBUG_REQ(D_INODE, mdt_info_req(info), "Create  ("DNAME"->"DFID") "
-		  "in "DFID,
+	DEBUG_REQ(D_INODE, mdt_info_req(info),
+		  "Create ("DNAME"->"DFID") in "DFID,
 		  PNAME(&rr->rr_name), PFID(rr->rr_fid2), PFID(rr->rr_fid1));
 
 	if (!fid_is_md_operative(rr->rr_fid1))
@@ -2706,7 +2706,7 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 	int			 rc, rc2;
 	ENTRY;
 
-	DEBUG_REQ(D_INODE, req, DFID": FLR file resync\n", PFID(rr->rr_fid1));
+	DEBUG_REQ(D_INODE, req, DFID", FLR file resync", PFID(rr->rr_fid1));
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
