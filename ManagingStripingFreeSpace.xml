@@ -89,8 +89,7 @@
         <para>In cases like these, a file can be striped over as many OSSs as it takes to achieve
           the required peak aggregate bandwidth for that file. Striping across a larger number of
           OSSs should only be used when the file size is very large and/or is accessed by many nodes
-          at a time. Currently, Lustre files can be striped across up to 2000 OSTs, the maximum
-          stripe count for an <literal>ldiskfs</literal> file system.</para>
+          at a time. Currently, Lustre files can be striped across up to 2000 OSTs</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Improving performance when OSS bandwidth is exceeded.</emphasis>
@@ -98,6 +97,18 @@
           exceeds the server bandwidth and the application reads and writes data fast enough to take
           advantage of the additional OSS bandwidth. The largest useful stripe count is bounded by
           the I/O rate of the clients/jobs divided by the performance per OSS.</para>
+      </listitem>
+      <listitem>
+        <para condition="l2D"><emphasis role="bold">Matching stripes to I/O
+        pattern.</emphasis>When writing to a single file from multiple nodes,
+        having more than one client writing to a stripe can lead to issues
+        with lock exchange, where clients contend over writing to that stripe,
+        even if their I/Os do not overlap.  This can be avoided if I/O can be
+        stripe aligned so that each stripe is accessed by only one client.
+        Since Lustre 2.13, the 'overstriping' feature is available, allowing more
+        than stripe per OST.  This is particularly helpful for the case where
+        thread count exceeds OST count, making it possible to match stripe count
+        to thread count even in this case.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Providing space for very large files.</emphasis> Striping is
@@ -174,7 +185,7 @@
       </indexterm>Setting the File Layout/Striping Configuration (<literal>lfs
       setstripe</literal>)</title>
     <para>Use the <literal>lfs setstripe</literal> command to create new files with a specific file layout (stripe pattern) configuration.</para>
-    <screen>lfs setstripe [--size|-s stripe_size] [--count|-c stripe_count] \
+    <screen>lfs setstripe [--size|-s stripe_size] [--count|-c stripe_count] [--overstripe-count|-C stripe_count] \
 [--index|-i start_ost] [--pool|-p pool_name] <replaceable>filename|dirname</replaceable> </screen>
     <para><emphasis role="bold">
         <literal>stripe_size</literal>
@@ -185,10 +196,15 @@
         <literal>stripe_size</literal> of 0 causes the default stripe size to be used. Otherwise,
       the <literal>stripe_size</literal> value must be a multiple of 64 KB.</para>
     <para><emphasis role="bold">
-        <literal>stripe_count</literal>
+        <literal>stripe_count (--stripe-count, --overstripe-count)</literal>
       </emphasis>
-      </para>
-    <para>The <literal>stripe_count</literal> indicates how many OSTs to use. The default <literal>stripe_count</literal> value is 1. Setting <literal>stripe_count</literal> to 0 causes the default stripe count to be used. Setting <literal>stripe_count</literal> to -1 means stripe over all available OSTs (full OSTs are skipped).</para>
+    </para>
+    <para>The <literal>stripe_count</literal> indicates how many stripes to use.
+    The default <literal>stripe_count</literal> value is 1. Setting
+    <literal>stripe_count</literal> to 0 causes the default stripe count to be
+    used. Setting <literal>stripe_count</literal> to -1 means stripe over all
+    available OSTs (full OSTs are skipped).  When --overstripe-count is used,
+    per OST if necessary.</para>
     <para><emphasis role="bold">
         <literal>start_ost</literal>
       </emphasis>

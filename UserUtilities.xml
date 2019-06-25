@@ -38,7 +38,8 @@ lfs getstripe [--obd|-O <replaceable>ost_name</replaceable>] [--quiet|-q] [--ver
               [--mdt-index|-M] [--recursive|-r] [--raw|-R]
               [--layout|-L]
               <replaceable>dirname|filename</replaceable> ...
-lfs setstripe [--size|-s stripe_size] [--count|-c <replaceable>stripe_count</replaceable>]
+lfs setstripe [--size|-s stripe_size] [--stripe-count|-c <replaceable>stripe_count</replaceable>]
+              [--overstripe-count|-C <replaceable>stripe_count</replaceable>]
               [--stripe-index|-i <replaceable>start_ost_index</replaceable>]
               [--ost-list|-o <replaceable>ost_indicies</replaceable>]
               [--pool|-p <replaceable>pool</replaceable>]
@@ -536,7 +537,7 @@ lfs help
               </entry>
               <entry>
                 <para>
-                  <literal>--count</literal>
+                  <literal>--stripe-count</literal>
                 </para>
               </entry>
               <entry>
@@ -647,7 +648,7 @@ lfs help
               </entry>
               <entry>
                 <para>
-                  <literal>--count stripe_cnt</literal>
+                  <literal>--stripe-count stripe_cnt</literal>
                 </para>
               </entry>
               <entry>
@@ -656,6 +657,24 @@ lfs help
                 default stripe count (default is 1). A 
                 <literal>stripe_cnt</literal> of -1 stripes over all available
                 OSTs.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>&#160;</para>
+              </entry>
+              <entry>
+                <para>
+                  <literal>--overstripe-count stripe_cnt</literal>
+                </para>
+              </entry>
+              <entry>
+                <para>The same as --stripe-count, but allows overstriping,
+                which will place more than one stripe per OST if
+                <literal>stripe_cnt</literal> is greater than the number of
+                OSTs. Overstriping is useful for matching the number of stripes
+                to the number of processes, or with very fast OSTs, where one
+                stripe per OST is not enough to get full performance.</para>
               </entry>
             </row>
             <row>

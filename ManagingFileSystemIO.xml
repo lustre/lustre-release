@@ -382,7 +382,8 @@ client# lfs setstripe --pool|-p pool_name
         <para>To set striping patterns, run:</para>
         <screen>
 client# lfs setstripe [--size|-s stripe_size] [--offset|-o start_ost]
-           [--count|-c stripe_count] [--pool|-p pool_name]
+           [--stripe-count|-c stripe_count] [--overstripe-count|-C stripe_count]
+           [--pool|-p pool_name]
            
 <replaceable>dir|filename</replaceable>
 </screen>
