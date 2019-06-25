@@ -47,61 +47,60 @@ static struct ioc_dev ioc_dev_list[10];
 static int
 open_ioc_dev(int dev_id)
 {
-        const char * dev_name;
+	const char *dev_name;
 
 	if (dev_id < 0 ||
-            dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
-                return -EINVAL;
+	    dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
+		return -EINVAL;
 
-        dev_name = ioc_dev_list[dev_id].dev_name;
-        if (dev_name == NULL) {
-                fprintf(stderr, "unknown device id: %d\n", dev_id);
-                return -EINVAL;
-        }
+	dev_name = ioc_dev_list[dev_id].dev_name;
+	if (!dev_name) {
+		fprintf(stderr, "unknown device id: %d\n", dev_id);
+		return -EINVAL;
+	}
 
-        if (ioc_dev_list[dev_id].dev_fd < 0) {
+	if (ioc_dev_list[dev_id].dev_fd < 0) {
 		int fd = open(dev_name, O_RDWR);
 
-                if (fd < 0) {
-                        fprintf(stderr, "opening %s failed: %s\n"
-                                "hint: the kernel modules may not be loaded\n",
-                                dev_name, strerror(errno));
-                        return fd;
-                }
-                ioc_dev_list[dev_id].dev_fd = fd;
-        }
+		if (fd < 0) {
+			fprintf(stderr, "opening %s failed: %s\n"
+				"hint: the kernel modules may not be loaded\n",
+				dev_name, strerror(errno));
+			return fd;
+		}
+		ioc_dev_list[dev_id].dev_fd = fd;
+	}
 
-        return ioc_dev_list[dev_id].dev_fd;
+	return ioc_dev_list[dev_id].dev_fd;
 }
-
 
 int l_ioctl(int dev_id, unsigned int opc, void *buf)
 {
-        int fd, rc;
+	int fd, rc;
 
-        fd = open_ioc_dev(dev_id);
+	fd = open_ioc_dev(dev_id);
 	if (fd < 0)
-                return fd;
+		return fd;
 
 	rc = ioctl(fd, opc, buf);
 
 	return rc;
 }
 
-/* register a device to send ioctls to.  */
+/* register a device to send ioctls to. */
 int
 register_ioc_dev(int dev_id, const char *dev_name)
 {
 	if (dev_id < 0 ||
-            dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
-                return -EINVAL;
+	    dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
+		return -EINVAL;
 
-        unregister_ioc_dev(dev_id);
+	unregister_ioc_dev(dev_id);
 
-        ioc_dev_list[dev_id].dev_name = dev_name;
-        ioc_dev_list[dev_id].dev_fd = -1;
+	ioc_dev_list[dev_id].dev_name = dev_name;
+	ioc_dev_list[dev_id].dev_fd = -1;
 
-        return dev_id;
+	return dev_id;
 }
 
 void
@@ -111,7 +110,7 @@ unregister_ioc_dev(int dev_id)
 	    dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
 		return;
 
-	if (ioc_dev_list[dev_id].dev_name != NULL &&
+	if (ioc_dev_list[dev_id].dev_name &&
 	    ioc_dev_list[dev_id].dev_fd >= 0)
 		close(ioc_dev_list[dev_id].dev_fd);
 
@@ -128,30 +127,30 @@ static inline size_t libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
 	return len;
 }
 
-int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf,
-                                    int max)
+int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf, int max)
 {
 	char *ptr;
 	struct libcfs_ioctl_data *overlay;
+
 	data->ioc_hdr.ioc_len = libcfs_ioctl_packlen(data);
 	data->ioc_hdr.ioc_version = LIBCFS_IOCTL_VERSION;
 
-	if (*pbuf != NULL && libcfs_ioctl_packlen(data) > max)
+	if (*pbuf && libcfs_ioctl_packlen(data) > max)
 		return 1;
-	if (*pbuf == NULL)
+	if (!*pbuf)
 		*pbuf = malloc(data->ioc_hdr.ioc_len);
-	if (*pbuf == NULL)
+	if (!*pbuf)
 		return 1;
 	overlay = (struct libcfs_ioctl_data *)*pbuf;
 	memcpy(*pbuf, data, sizeof(*data));
 
 	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1 != NULL) {
+	if (data->ioc_inlbuf1) {
 		memcpy((char *)ptr, (const char *)data->ioc_inlbuf1,
 		       data->ioc_inllen1);
 		ptr += ((data->ioc_inllen1 + 7) & ~7);
 	}
-	if (data->ioc_inlbuf2 != NULL) {
+	if (data->ioc_inlbuf2) {
 		memcpy((char *)ptr, (const char *)data->ioc_inlbuf2,
 		       data->ioc_inllen2);
 		ptr += ((data->ioc_inllen2 + 7) & ~7);
@@ -173,12 +172,12 @@ libcfs_ioctl_unpack(struct libcfs_ioctl_data *data, char *pbuf)
 	memcpy(data, pbuf, sizeof(*data));
 	ptr = &overlay->ioc_bulk[0];
 
-	if (data->ioc_inlbuf1 != NULL) {
+	if (data->ioc_inlbuf1) {
 		memcpy((char *)data->ioc_inlbuf1, (const char *)ptr,
 		       data->ioc_inllen1);
 		ptr += ((data->ioc_inllen1 + 7) & ~7);
 	}
-	if (data->ioc_inlbuf2 != NULL) {
+	if (data->ioc_inlbuf2) {
 		memcpy((char *)data->ioc_inlbuf2, (const char *)ptr,
 		       data->ioc_inllen2);
 		ptr += ((data->ioc_inllen2 + 7) & ~7);
