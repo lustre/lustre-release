@@ -541,7 +541,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
         </section>
       </section>
     </section>
-    <section>
+    <section condition="l29">
       <title>Check the LFSCK global status</title>
       <section>
         <title>Description</title>
