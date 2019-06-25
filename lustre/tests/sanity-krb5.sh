@@ -118,6 +118,7 @@ stop_dbench()
 }
 
 restore_krb5_cred() {
+	keyctl reap
 	cp $KRB5_CRED_SAVE $KRB5_CRED
 	chown $RUNAS_ID:$RUNAS_ID $KRB5_CRED
 	chmod 0600 $KRB5_CRED
@@ -129,7 +130,7 @@ check_multiple_gss_daemons() {
 	local gssd_name=$(basename $gssd)
 
 	for ((i = 0; i < 10; i++)); do
-		do_facet $facet "$gssd -v &"
+		do_facet $facet "$gssd -v"
 	done
 
 	# wait daemons entering "stable" status
@@ -310,25 +311,18 @@ test_5() {
 
 	# flush context, and touch
 	$RUNAS $LFS flushctx $MOUNT || error "can't flush context on $MOUNT"
-	$RUNAS touch $file2 &
-	TOUCHPID=$!
-
-	# wait certain time
-	echo "waiting $wait_time seconds for touch pid $TOUCHPID"
-	sleep $wait_time
-	num=$(ps --no-headers -p $TOUCHPID | wc -l)
-	[ $num -eq 1 ] || error "touch already ended ($num)"
-	echo "process $TOUCHPID still hanging there... OK"
+	$RUNAS touch $file2 && error 'should fail without lsvcgssd'
 
 	# restart lsvcgssd, expect touch suceed
 	echo "restart lsvcgssd and recovering"
 	start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -v"
 	sleep 5
 	check_gss_daemon_nodes $(comma_list $(mdts_nodes)) lsvcgssd
-	wait $TOUCHPID || error "touch fail"
+	$RUNAS keyctl reap
+	$RUNAS touch $file2 || error 'should not fail now'
 	[ -f $file2 ] || error "$file2 not found"
 }
-run_test 5 "lsvcgssd dead, operations lead to recovery"
+run_test 5 "lsvcgssd dead, operations fail"
 
 test_6() {
 	local nfile=10
