@@ -59,9 +59,6 @@ RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-true}
 RACER_ENABLE_FLR=${RACER_ENABLE_FLR:-true}
 
-check_progs_installed $CLIENTS $racer ||
-	{ skip_env "$racer not found" && exit 0; }
-
 # run racer
 test_1() {
 	local rrc=0
