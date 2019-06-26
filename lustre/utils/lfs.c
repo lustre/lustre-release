@@ -293,12 +293,13 @@ command_t mirror_cmdlist[] = {
 	  MIRROR_EXTEND_HELP },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
-	"usage: lfs mirror split <--mirror-id <mirror_id> | \n"
-	"\t		<--component-id|-I <comp_id>> [--destroy|-d] \n"
+	"usage: lfs mirror split <--mirror-id <mirror_id> |\n"
+	"\t		<--component-id|-I <comp_id>|-p <pool>> [--destroy|-d]\n"
 	"\t		[-f <new_file>] <mirrored file>\n"
 	"\tmirror_id:   The numerical unique identifier for a mirror. It\n"
 	"\t             can be fetched by lfs getstripe command.\n"
 	"\tcomp_id:     Unique component ID within a mirror.\n"
+	"\tpool:        Components on specified pool.\n"
 	"\tnew_file:    This option indicates the layout of the split\n"
 	"\t             mirror will be stored into. If not specified,\n"
 	"\t             a new file named <mirrored_file>.mirror~<mirror_id>\n"
@@ -1337,6 +1338,7 @@ enum mirror_flags {
 	MF_NO_VERIFY	= 0x1,
 	MF_DESTROY	= 0x2,
 	MF_COMP_ID	= 0x4,
+	MF_COMP_POOL	= 0x8,
 };
 
 /**
@@ -1791,7 +1793,33 @@ static int find_comp_id(struct llapi_layout *layout, void *cbdata)
 
 	return LLAPI_LAYOUT_ITER_CONT;
 }
-static int mirror_split(const char *fname, __u32 id,
+
+struct pool_to_id_cbdata {
+	const char *pool;
+	__u32 id;
+};
+static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata)
+{
+	char buf[LOV_MAXPOOLNAME + 1];
+	struct pool_to_id_cbdata *d = (void *)cbdata;
+	uint32_t id;
+	int rc;
+
+	rc = llapi_layout_pool_name_get(layout, buf, sizeof(buf));
+	if (rc < 0)
+		return rc;
+	if (strcmp(d->pool, buf))
+		return LLAPI_LAYOUT_ITER_CONT;
+
+	rc = llapi_layout_mirror_id_get(layout, &id);
+	if (rc < 0)
+		return rc;
+	d->id = id;
+
+	return LLAPI_LAYOUT_ITER_STOP;
+}
+
+static int mirror_split(const char *fname, __u32 id, const char *pool,
 			enum mirror_flags mflags, const char *victim_file)
 {
 	struct llapi_layout *layout;
@@ -1834,7 +1862,13 @@ static int mirror_split(const char *fname, __u32 id,
 		goto free_layout;
 	}
 
-	if (mflags & MF_COMP_ID) {
+	if (mflags & MF_COMP_POOL) {
+		struct pool_to_id_cbdata data = { .pool = pool };
+
+		rc = llapi_layout_comp_iterate(layout, find_comp_id_by_pool,
+					       &data);
+		id = data.id;
+	} else if (mflags & MF_COMP_ID) {
 		rc = llapi_layout_comp_iterate(layout, find_comp_id, &id);
 		id = mirror_id_of(id);
 	} else {
@@ -2113,7 +2147,6 @@ static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
 		lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT ||
 		lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT ||
 		lsa->lsa_pattern != LLAPI_LAYOUT_RAID0 ||
-		lsa->lsa_pool_name != NULL ||
 		lsa->lsa_comp_end != 0);
 }
 
@@ -3651,17 +3684,20 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			result = mirror_extend(fname, mirror_list,
 					       mirror_flags);
 		} else if (opc == SO_MIRROR_SPLIT) {
-			if (mirror_id == 0 && comp_id == 0) {
+			if (!mirror_id && !comp_id && !lsa.lsa_pool_name) {
 				fprintf(stderr,
-			"%s %s: no mirror id or component id is specified\n",
-					progname, argv[0]);
+			"%s %s: no mirror id or component id or pool name"
+			" is specified\n", progname, argv[0]);
 				goto usage_error;
 			}
-			if (mirror_id != 0)
+			if (lsa.lsa_pool_name)
+				mirror_flags |= MF_COMP_POOL;
+			else if (mirror_id != 0)
 				comp_id = mirror_id;
 			else
 				mirror_flags |= MF_COMP_ID;
-			result = mirror_split(fname, comp_id, mirror_flags,
+			result = mirror_split(fname, comp_id, lsa.lsa_pool_name,
+					      mirror_flags,
 					      has_m_file ? mirror_list->m_file :
 					      NULL);
 		} else if (layout != NULL) {
