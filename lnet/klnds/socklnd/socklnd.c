@@ -1936,7 +1936,7 @@ ksocknal_push(struct lnet_ni *ni, struct lnet_process_id id)
 			}
 			read_unlock(&ksocknal_data.ksnd_global_lock);
 
-			if (i == 0) /* no match */
+			if (i <= peer_off) /* no match */
 				break;
 
 			rc = 0;
