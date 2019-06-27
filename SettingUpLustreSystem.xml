@@ -210,7 +210,7 @@
       The size is determined by the total number of servers in the Lustre
       file system cluster(s) that are managed by the MGS.</para>
     </section>
-    <section xml:id="dbdoclet.50438256_87676">
+    <section xml:id="dbdoclet.mdt_space_requirements">
         <title><indexterm>
           <primary>setup</primary>
           <secondary>MDT</secondary>
@@ -391,11 +391,13 @@
       such as file layout for files with a large number of stripes, Access
       Control Lists (ACLs), and user extended attributes.</para>
       <para condition="l2B"> Starting in Lustre 2.11, the <xref linkend=
-      "dataonmdt.title"/> feature allows storing small files on the MDT
+      "dataonmdt.title"/> (DoM) feature allows storing small files on the MDT
       to take advantage of high-performance flash storage, as well as reduce
       space and network overhead.  If you are planning to use the DoM feature
       with an ldiskfs MDT, it is recommended to <emphasis>increase</emphasis>
-      the inode ratio to have enough space on the MDT for small files.</para>
+      the bytes-per-inode ratio to have enough space on the MDT for small files,
+      as described below.
+      </para>
       <para>It is possible to change the recommended 2048 bytes
       per inode for an ldiskfs MDT when it is first formatted by adding the
       <literal>--mkfsoptions="-i bytes-per-inode"</literal> option to
@@ -406,9 +408,9 @@
       the MDT inode size, which is 1024 bytes by default.  It is recommended
       to use an inode ratio at least 1024 bytes larger than the inode size to
       ensure the MDT does not run out of space.  Increasing the inode ratio
-      to at least hold the most common file size (e.g. 5120 or 66560 bytes if
-      4KB or 64KB files are widely used) is recommended for DoM.</para>
-      <para>The size of the inode may be changed by adding the
+      to include enough space for the most common file data (e.g. 5120 or 65560
+      bytes if 4KB or 64KB files are widely used) is recommended for DoM.</para>
+      <para>The size of the inode may be changed at format time by adding the
       <literal>--stripe-count-hint=N</literal> to have
       <literal>mkfs.lustre</literal> automatically calculate a reasonable
       inode size based on the default stripe count that will be used by the
@@ -416,9 +418,9 @@
       <literal>--mkfsoptions="-I inode-size"</literal> option.  Increasing
       the inode size will provide more space in the inode for a larger Lustre
       file layout, ACLs, user and system extended attributes, SELinux and
-      other security labels, and other internal metadata.  However, if these
-      features or other in-inode xattrs are not needed, the larger inode size
-      will hurt metadata performance as 2x, 4x, or 8x as much data would be
+      other security labels, and other internal metadata and DoM data.  However,
+      if these features or other in-inode xattrs are not needed, a larger inode
+      size may hurt metadata performance as 2x, 4x, or 8x as much data would be
       read or written for each MDT inode access.
       </para>
     </section>
@@ -428,10 +430,14 @@
           <secondary>OST</secondary>
         </indexterm>Setting Formatting Options for an ldiskfs OST</title>
       <para>When formatting an OST file system, it can be beneficial
-      to take local file system usage into account. When doing so, try to
-      reduce the number of inodes on each OST, while keeping enough margin
-      for potential variations in future usage. This helps reduce the format
-      and file system check time and makes more space available for data.</para>
+      to take local file system usage into account, for example by running
+      <literal>df</literal> and <literal>df -i</literal> on a current filesystem
+      to get the used bytes and used inodes respectively, then computing the
+      average bytes-per-inode value. When deciding on the ratio for a new
+      filesystem, try to avoid having too many inodes on each OST, while keeping
+      enough margin to allow for future usage of smaller files. This helps
+      reduce the format and e2fsck time and makes more space available for data.
+      </para>
       <para>The table below shows the default
       <emphasis role="italic">bytes-per-inode</emphasis> ratio ("inode ratio")
       used for OSTs of various sizes when they are formatted.</para>
@@ -515,10 +521,10 @@
       <screen>[oss#] mkfs.lustre --ost --mkfsoptions=&quot;-i $((8192 * 1024))&quot; ...</screen>
       </para>
       <note>
-        <para>OSTs formatted with ldiskfs are limited to a maximum of
-        320 million to 1 billion objects.  Specifying a very small
-        bytes-per-inode ratio for a large OST that causes this limit to be
-        exceeded can cause either premature out-of-space errors and prevent
+        <para>OSTs formatted with ldiskfs can use a maximum of approximately
+        320 million objects per MDT, up to a maximum of 4 billion inodes.
+	Specifying a very small bytes-per-inode ratio for a large OST that
+	exceeds this limit can cause either premature out-of-space errors and prevent
         the full OST space from being used, or will waste space and slow down
         e2fsck more than necessary.  The default inode ratios are chosen to
         ensure that the total number of inodes remain below this limit.
@@ -533,7 +539,7 @@
         filesystems are 5-30 minutes per TiB, but may increase significantly
         if substantial errors are detected and need to be repaired.</para>
       </note>
-      <para>For more details about formatting MDT and OST file systems,
+      <para>For further details about optimizing MDT and OST file systems,
       see <xref linkend="dbdoclet.ldiskfs_raid_opts"/>.</para>
     </section>
   </section>
@@ -596,7 +602,7 @@
               maximum of 1 MDT per file system, but a single MDS can host
               multiple MDTs, each one for a separate file system.</para>
               <para condition="l24">The Lustre software release 2.4 and later
-              requires one MDT for the filesystem root. At least 255 more
+              requires one MDT for the filesystem root. Up to 255 more
               MDTs can be added to the filesystem and attached into
               the namespace with DNE remote or striped directories.</para>
             </entry>
@@ -620,7 +626,7 @@
               <para>Maximum OST size</para>
             </entry>
             <entry>
-              <para>256TiB (ldiskfs), 256TiB (ZFS)</para>
+              <para>512TiB (ldiskfs), 512TiB (ZFS)</para>
             </entry>
             <entry>
               <para>This is not a <emphasis>hard</emphasis> limit. Larger
@@ -708,7 +714,7 @@
           </row>
           <row>
             <entry>
-              <para>Maximum object size</para>
+              <para>Maximum single object size</para>
             </entry>
             <entry>
               <para>16TiB (ldiskfs), 256TiB (ZFS)</para>
@@ -736,9 +742,9 @@
               32-bit systems imposed by the kernel memory subsystem. On
               64-bit systems this limit does not exist.  Hence, files can
               be 2^63 bits (8EiB) in size if the backing filesystem can
-              support large enough objects.</para>
+              support large enough objects and/or the files are sparse.</para>
               <para>A single file can have a maximum of 2000 stripes, which
-              gives an upper single file limit of 31.25 PiB for 64-bit
+              gives an upper single file data capacity of 31.25 PiB for 64-bit
               ldiskfs systems. The actual amount of data that can be stored
               in a file depends upon the amount of free space in each OST
               on which the file is striped.</para>
@@ -771,7 +777,7 @@
             </entry>
             <entry>
               <para>4 billion (ldiskfs), 256 trillion (ZFS)</para>
-              <para condition='l24'>up to 256 times the per-MDT limit</para>
+              <para condition='l24'>this is a per-MDT limit</para>
             </entry>
             <entry>
               <para>The ldiskfs filesystem imposes an upper limit of
@@ -826,8 +832,8 @@
               of open files, but the practical limit depends on the amount of
               RAM on the MDS. No &quot;tables&quot; for open files exist on the
               MDS, as they are only linked in a list to a given client&apos;s
-              export. Each client process probably has a limit of several
-              thousands of open files which depends on the ulimit.</para>
+              export. Each client process has a limit of several
+              thousands of open files which depends on its ulimit.</para>
             </entry>
           </row>
         </tbody>
@@ -865,75 +871,122 @@
           <para>Load placed on server</para>
         </listitem>
       </itemizedlist>
-      <para>The amount of memory used by the MDS is a function of how many clients are on the system, and how many files they are using in their working set. This is driven, primarily, by the number of locks a client can hold at one time. The number of locks held by clients varies by load and memory availability on the server. Interactive clients can hold in excess of 10,000 locks at times. On the MDS, memory usage is approximately 2 KB per file, including the Lustre distributed lock manager (DLM) lock and kernel data structures for the files currently in use. Having file data in cache can improve metadata performance by a factor of 10x or more compared to reading it from disk.</para>
+      <para>The amount of memory used by the MDS is a function of how many clients are on
+      the system, and how many files they are using in their working set. This is driven,
+      primarily, by the number of locks a client can hold at one time. The number of locks
+      held by clients varies by load and memory availability on the server. Interactive
+      clients can hold in excess of 10,000 locks at times. On the MDS, memory usage is
+      approximately 2 KB per file, including the Lustre distributed lock manager (LDLM)
+      lock and kernel data structures for the files currently in use. Having file data
+      in cache can improve metadata performance by a factor of 10x or more compared to
+      reading it from storage.</para>
       <para>MDS memory requirements include:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">File system metadata</emphasis> : A reasonable amount of RAM needs to be available for file system metadata. While no hard limit can be placed on the amount of file system metadata, if more RAM is available, then the disk I/O is needed less often to retrieve the metadata.</para>
+          <para><emphasis role="bold">File system metadata</emphasis>:
+	  A reasonable amount of RAM needs to be available for file system metadata.
+	  While no hard limit can be placed on the amount of file system metadata,
+	  if more RAM is available, then the disk I/O is needed less often to retrieve
+	  the metadata.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Network transport</emphasis> : If you are using TCP or other network transport that uses system memory for send/receive buffers, this memory requirement must also be taken into consideration.</para>
+          <para><emphasis role="bold">Network transport</emphasis>:
+	  If you are using TCP or other network transport that uses system memory for
+	  send/receive buffers, this memory requirement must also be taken into
+	  consideration.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Journal size</emphasis> : By default, the journal size is 400 MB for each Lustre ldiskfs file system. This can pin up to an equal amount of RAM on the MDS node per file system.</para>
+          <para><emphasis role="bold">Journal size</emphasis>:
+	  By default, the journal size is 4096 MB for each MDT ldiskfs file system.
+	  This can pin up to an equal amount of RAM on the MDS node per file system.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Failover configuration</emphasis> : If the MDS node will be used for failover from another node, then the RAM for each journal should be doubled, so the backup server can handle the additional load if the primary server fails.</para>
+          <para><emphasis role="bold">Failover configuration</emphasis>:
+	  If the MDS node will be used for failover from another node, then the RAM
+	  for each journal should be doubled, so the backup server can handle the
+	  additional load if the primary server fails.</para>
         </listitem>
       </itemizedlist>
       <section remap="h4">
         <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>MDS</tertiary></indexterm>Calculating MDS Memory Requirements</title>
-        <para>By default, 400 MB are used for the file system journal. Additional RAM is used for caching file data for the larger working set, which is not actively in use by clients but should be kept &quot;hot&quot; for improved access times. Approximately 1.5 KB per file is needed to keep a file in cache without a lock.</para>
-        <para>For example, for a single MDT on an MDS with 1,000 clients, 16 interactive nodes, and a 2 million file working set (of which 400,000 files are cached on the clients):</para>
+        <para>By default, 4096 MB are used for the ldiskfs filesystem journal. Additional
+	RAM is used for caching file data for the larger working set, which is not
+	actively in use by clients but should be kept &quot;hot&quot; for improved
+	access times. Approximately 1.5 KB per file is needed to keep a file in cache
+	without a lock.</para>
+        <para>For example, for a single MDT on an MDS with 1,024 clients, 12 interactive
+	login nodes, and a 6 million file working set (of which 4M files are cached
+	on the clients):</para>
         <informalexample>
-          <para>Operating system overhead = 512 MB</para>
-          <para>File system journal = 400 MB</para>
-          <para>1000 * 4-core clients * 100 files/core * 2kB = 800 MB</para>
-          <para>16 interactive clients * 10,000 files * 2kB = 320 MB</para>
-          <para>1,600,000 file extra working set * 1.5kB/file = 2400 MB</para>
+          <para>Operating system overhead = 1024 MB</para>
+          <para>File system journal = 4096 MB</para>
+          <para>1024 * 4-core clients * 1024 files/core * 2kB = 4096 MB</para>
+          <para>12 interactive clients * 100,000 files * 2kB = 2400 MB</para>
+          <para>2M file extra working set * 1.5kB/file = 3096 MB</para>
         </informalexample>
-        <para>Thus, the minimum requirement for a system with this configuration is at least 4 GB of RAM. However, additional memory may significantly improve performance.</para>
-        <para>For directories containing 1 million or more files, more memory may provide a significant benefit. For example, in an environment where clients randomly access one of 10 million files, having extra memory for the cache significantly improves performance.</para>
+        <para>Thus, the minimum requirement for an MDT with this configuration is at least
+	16 GB of RAM. Additional memory may significantly improve performance.</para>
+        <para>For directories containing 1 million or more files, more memory can provide
+	a significant benefit. For example, in an environment where clients randomly
+	access one of 10 million files, having extra memory for the cache significantly
+	improves performance.</para>
       </section>
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>OSS</tertiary></indexterm>OSS Memory Requirements</title>
-      <para>When planning the hardware for an OSS node, consider the memory usage of several
-        components in the Lustre file system (i.e., journal, service threads, file system metadata,
-        etc.). Also, consider the effect of the OSS read cache feature, which consumes memory as it
-        caches data on the OSS node.</para>
-      <para>In addition to the MDS memory requirements mentioned in <xref linkend="dbdoclet.50438256_87676"/>, the OSS requirements include:</para>
+      <para>When planning the hardware for an OSS node, consider the memory usage of
+      several components in the Lustre file system (i.e., journal, service threads,
+      file system metadata, etc.). Also, consider the effect of the OSS read cache
+      feature, which consumes memory as it caches data on the OSS node.</para>
+      <para>In addition to the MDS memory requirements mentioned above,
+      the OSS requirements also include:</para>
       <itemizedlist>
         <listitem>
-          <para><emphasis role="bold">Service threads</emphasis> : The service threads on the OSS node pre-allocate a 4 MB I/O buffer for each ost_io service thread, so these buffers do not need to be allocated and freed for each I/O request.</para>
+          <para><emphasis role="bold">Service threads</emphasis>:
+	  The service threads on the OSS node pre-allocate an RPC-sized MB I/O buffer
+	  for each ost_io service thread, so these buffers do not need to be allocated
+	  and freed for each I/O request.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">OSS read cache</emphasis> : OSS read cache provides read-only
-            caching of data on an OSS, using the regular Linux page cache to store the data. Just
-            like caching from a regular file system in the Linux operating system, OSS read cache
-            uses as much physical memory as is available.</para>
+          <para><emphasis role="bold">OSS read cache</emphasis>:
+	  OSS read cache provides read-only caching of data on an OSS, using the regular
+	  Linux page cache to store the data. Just like caching from a regular file
+	  system in the Linux operating system, OSS read cache uses as much physical
+	  memory as is available.</para>
         </listitem>
       </itemizedlist>
-      <para>The same calculation applies to files accessed from the OSS as for the MDS, but the load is distributed over many more OSSs nodes, so the amount of memory required for locks, inode cache, etc. listed under MDS is spread out over the OSS nodes.</para>
-      <para>Because of these memory requirements, the following calculations should be taken as determining the absolute minimum RAM required in an OSS node.</para>
+      <para>The same calculation applies to files accessed from the OSS as for the MDS,
+      but the load is distributed over many more OSSs nodes, so the amount of memory
+      required for locks, inode cache, etc. listed under MDS is spread out over the
+      OSS nodes.</para>
+      <para>Because of these memory requirements, the following calculations should be
+      taken as determining the absolute minimum RAM required in an OSS node.</para>
       <section remap="h4">
         <title><indexterm><primary>setup</primary><secondary>memory</secondary><tertiary>OSS</tertiary></indexterm>Calculating OSS Memory Requirements</title>
-        <para>The minimum recommended RAM size for an OSS with two OSTs is computed below:</para>
+        <para>The minimum recommended RAM size for an OSS with eight OSTs is:</para>
         <informalexample>
-          <para>Ethernet/TCP send/receive buffers (4 MB * 512 threads) = 2048 MB</para>
-          <para>400 MB journal size * 2 OST devices = 800 MB</para>
-          <para>1.5 MB read/write per OST IO thread * 512 threads = 768 MB</para>
-          <para>600 MB file system read cache * 2 OSTs = 1200 MB</para>
-          <para>1000 * 4-core clients * 100 files/core * 2kB = 800MB</para>
-          <para>16 interactive clients * 10,000 files * 2kB = 320MB</para>
-          <para>1,600,000 file extra working set * 1.5kB/file = 2400MB</para>
-          <para> DLM locks + file system metadata TOTAL = 3520MB</para>
-          <para>Per OSS DLM locks + file system metadata = 3520MB/6 OSS = 600MB (approx.)</para>
-          <para>Per OSS RAM minimum requirement = 4096MB (approx.)</para>
+          <para>Linux kernel and userspace daemon memory = 1024 MB</para>
+          <para>Network send/receive buffers (16 MB * 512 threads) = 8192 MB</para>
+          <para>1024 MB ldiskfs journal size * 8 OST devices = 8192 MB</para>
+          <para>16 MB read/write buffer per OST IO thread * 512 threads = 8192 MB</para>
+          <para>2048 MB file system read cache * 8 OSTs = 16384 MB</para>
+          <para>1024 * 4-core clients * 1024 files/core * 2kB/file = 8192 MB</para>
+          <para>12 interactive clients * 100,000 files * 2kB/file = 2400 MB</para>
+          <para>2M file extra working set * 2kB/file = 4096 MB</para>
+          <para>DLM locks + file cache TOTAL = 31072 MB</para>
+          <para>Per OSS DLM locks + file system metadata = 31072 MB/4 OSS = 7768 MB (approx.)</para>
+          <para>Per OSS RAM minimum requirement = 32 GB (approx.)</para>
         </informalexample>
-        <para>This consumes about 1,400 MB just for the pre-allocated buffers, and an additional 2 GB for minimal file system and kernel usage. Therefore, for a non-failover configuration, the minimum RAM would be 4 GB for an OSS node with two OSTs. Adding additional memory on the OSS will improve the performance of reading smaller, frequently-accessed files.</para>
-        <para>For a failover configuration, the minimum RAM would be at least 6 GB. For 4 OSTs on each OSS in a failover configuration 10GB of RAM is reasonable. When the OSS is not handling any failed-over OSTs the extra RAM will be used as a read cache.</para>
-        <para>As a reasonable rule of thumb, about 2 GB of base memory plus 1 GB per OST can be used. In failover configurations, about 2 GB per OST is needed.</para>
+        <para>This consumes about 16 GB just for pre-allocated buffers, and an
+	additional 1 GB for minimal file system and kernel usage. Therefore, for a
+	non-failover configuration, the minimum RAM would be about 32 GB for an OSS node
+	with eight OSTs. Adding additional memory on the OSS will improve the performance
+	of reading smaller, frequently-accessed files.</para>
+        <para>For a failover configuration, the minimum RAM would be at least 48 GB,
+	as some of the memory is per-node. When the OSS is not handling any failed-over
+	OSTs the extra RAM will be used as a read cache.</para>
+        <para>As a reasonable rule of thumb, about 8 GB of base memory plus 3 GB per OST
+	can be used. In failover configurations, about 6 GB per OST is needed.</para>
       </section>
     </section>
   </section>
