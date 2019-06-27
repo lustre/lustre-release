@@ -19938,6 +19938,7 @@ run_test 801c "rescan barrier bitmap"
 saved_MGS_MOUNT_OPTS=$MGS_MOUNT_OPTS
 saved_MDS_MOUNT_OPTS=$MDS_MOUNT_OPTS
 saved_OST_MOUNT_OPTS=$OST_MOUNT_OPTS
+saved_MOUNT_OPTS=$MOUNT_OPTS
 
 cleanup_802() {
 	trap 0
@@ -19946,6 +19947,7 @@ cleanup_802() {
 	MGS_MOUNT_OPTS=$saved_MGS_MOUNT_OPTS
 	MDS_MOUNT_OPTS=$saved_MDS_MOUNT_OPTS
 	OST_MOUNT_OPTS=$saved_OST_MOUNT_OPTS
+	MOUNT_OPTS=$saved_MOUNT_OPTS
 	setupall
 }
 
@@ -19981,7 +19983,8 @@ test_802() {
 		error "(4) Mount client without 'ro' should fail"
 
 	echo "Mount client with ro should succeed"
-	mount_client $MOUNT ro ||
+	MOUNT_OPTS=$(csa_add "$MOUNT_OPTS" -o ro)
+	mount_client $MOUNT ||
 		error "(5) Mount client with 'ro' should succeed"
 
 	echo "Modify should be refused"
