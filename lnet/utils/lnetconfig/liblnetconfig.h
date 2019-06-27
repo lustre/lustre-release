@@ -43,6 +43,17 @@
 #define LUSTRE_CFG_RC_SKIP			-8
 #define LUSTRE_CFG_RC_LAST_ELEM			-9
 
+enum lnetctl_cmd {
+	LNETCTL_CONFIG_CMD	= 1,
+	LNETCTL_UNCONFIG_CMD	= 2,
+	LNETCTL_ADD_CMD		= 3,
+	LNETCTL_DEL_CMD		= 4,
+	LNETCTL_SHOW_CMD	= 5,
+	LNETCTL_DBG_CMD		= 6,
+	LNETCTL_MANAGE_CMD	= 7,
+	LNETCTL_LAST_CMD
+};
+
 struct lnet_dlc_network_descr {
 	struct list_head network_on_rule;
 	__u32 nw_id;
