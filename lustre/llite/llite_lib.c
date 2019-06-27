@@ -3400,7 +3400,7 @@ void ll_delete_inode(struct inode *inode)
 		 * local inode gets i_nlink 0 from server only for the last
 		 * unlink, so that file is not opened somewhere else
 		 */
-		rc = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
+		rc = cl_sync_file_range(inode, 0, LLONG_MAX,
 					inode->i_nlink ? CL_FSYNC_LOCAL :
 					CL_FSYNC_DISCARD, 1, IO_PRIO_NORMAL);
 		/* A failed local flush (client evicted, OST error) leaves the
@@ -3409,7 +3409,7 @@ void ll_delete_inode(struct inode *inode)
 		 * osc_page_delete() tearing down a still-cached page.
 		 */
 		if (rc < 0 && inode->i_nlink)
-			cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
+			cl_sync_file_range(inode, 0, LLONG_MAX,
 					   CL_FSYNC_DISCARD, 1, IO_PRIO_NORMAL);
 	}
 

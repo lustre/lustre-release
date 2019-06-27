@@ -1130,9 +1130,6 @@ static int osc_io_fsync_start(const struct lu_env *env,
 		}
 	}
 
-	if (fio->fi_end == OBD_OBJECT_EOF)
-		end = CL_PAGE_EOF;
-
 	result = osc_cache_writeback_range(env, osc, start, end, 0,
 					   fio->fi_mode == CL_FSYNC_DISCARD,
 					   fio->fi_prio);

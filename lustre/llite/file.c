@@ -5354,7 +5354,7 @@ static loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 			return -ENXIO;
 
 		/* flush local cache first if any */
-		cl_sync_file_range(inode, offset, OBD_OBJECT_EOF,
+		cl_sync_file_range(inode, offset, LLONG_MAX,
 				   CL_FSYNC_LOCAL, 0, IO_PRIO_NORMAL);
 
 		retval = ll_lseek(file, offset, origin);
@@ -5406,7 +5406,9 @@ static int ll_flush(struct file *file, fl_owner_t id)
 
 /*
  * Called to make sure a portion of file has been written out.
- * if @mode is not CL_FSYNC_LOCAL, it will send OST_SYNC RPCs to OST.
+ * @mode of CL_FSYNC_ALL or CL_FSYNC_RECLAIM sends OST_SYNC RPCs to OST.
+ * @start and @end are non-negative byte offsets; LLONG_MAX as @end
+ * means the whole file.
  *
  * Return how many pages have been written.
  */
@@ -5422,10 +5424,20 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	__u16 refcheck;
 
 	ENTRY;
+	CDEBUG(D_INODE, DFID": start %lld, end %lld, mode %d\n",
+	       PFID(ll_inode2fid(inode)), start, end, mode);
+
 	if (mode != CL_FSYNC_NONE && mode != CL_FSYNC_LOCAL &&
 	    mode != CL_FSYNC_DISCARD && mode != CL_FSYNC_ALL &&
 	    mode != CL_FSYNC_RECLAIM)
 		RETURN(-EINVAL);
+
+	if (start < 0 || end < 0) {
+		CERROR("%s: "DFID" invalid fsync range [%lld, %lld]: rc = %d\n",
+		       ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)),
+		       start, end, -EINVAL);
+		RETURN(-EINVAL);
+	}
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))

@@ -1480,14 +1480,12 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 
 	if (wbc->range_cyclic) {
 		start = (loff_t)mapping->writeback_index << PAGE_SHIFT;
-		end = OBD_OBJECT_EOF;
+		end = LLONG_MAX;
 	} else {
 		start = wbc->range_start;
 		end = wbc->range_end;
-		if (end == LLONG_MAX) {
-			end = OBD_OBJECT_EOF;
+		if (end == LLONG_MAX)
 			range_whole = start == 0;
-		}
 	}
 
 	mode = CL_FSYNC_NONE;
@@ -1532,12 +1530,8 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 		result = 0;
 	}
 
-	if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0)) {
-		if (end == OBD_OBJECT_EOF)
-			mapping->writeback_index = 0;
-		else
-			mapping->writeback_index = (end >> PAGE_SHIFT) + 1;
-	}
+	if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0))
+		mapping->writeback_index = 0;
 	RETURN(result);
 }
 
