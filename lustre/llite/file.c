@@ -4092,22 +4092,9 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
  * file_dentry() as is done otherwise.
  */
 
-#ifdef HAVE_FILE_FSYNC_4ARGS
 int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct dentry *dentry = file_dentry(file);
-#elif defined(HAVE_FILE_FSYNC_2ARGS)
-int ll_fsync(struct file *file, int datasync)
-{
-	struct dentry *dentry = file_dentry(file);
-	loff_t start = 0;
-	loff_t end = LLONG_MAX;
-#else
-int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
-{
-	loff_t start = 0;
-	loff_t end = LLONG_MAX;
-#endif
 	struct inode *inode = dentry->d_inode;
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ptlrpc_request *req;
@@ -4115,18 +4102,16 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
-	       PFID(ll_inode2fid(inode)), inode);
+	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), start %lld, end %lld,"
+	       "datasync %d\n",
+	       PFID(ll_inode2fid(inode)), inode, start, end, datasync);
+
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC, 1);
 
-#ifdef HAVE_FILE_FSYNC_4ARGS
-	rc = filemap_write_and_wait_range(inode->i_mapping, start, end);
-	inode_lock(inode);
-#else
 	/* fsync's caller has already called _fdata{sync,write}, we want
 	 * that IO to finish before calling the osc and mdc sync methods */
-	rc = filemap_fdatawait(inode->i_mapping);
-#endif
+	rc = filemap_write_and_wait_range(inode->i_mapping, start, end);
+	inode_lock(inode);
 
 	/* catch async errors that were recorded back when async writeback
 	 * failed for pages in this mapping. */
@@ -4167,9 +4152,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 			fd->fd_write_failed = false;
 	}
 
-#ifdef HAVE_FILE_FSYNC_4ARGS
 	inode_unlock(inode);
-#endif
 	RETURN(rc);
 }
 

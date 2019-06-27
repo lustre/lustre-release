@@ -4776,7 +4776,7 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	file->f_op = inode->i_fop;
 	set_file_inode(file, inode);
 
-	rc = ll_vfs_fsync_range(file, start, end, 0);
+	rc = vfs_fsync_range(file, start, end, 0);
 
 	RETURN(rc);
 }

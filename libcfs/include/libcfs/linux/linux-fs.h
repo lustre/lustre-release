@@ -50,14 +50,6 @@ static inline struct dentry *file_dentry(const struct file *file)
 }
 #endif
 
-#if defined(HAVE_FILE_FSYNC_4ARGS) || defined(HAVE_FILE_FSYNC_2ARGS)
-#define ll_vfs_fsync_range(fp, start, end, datasync) \
-	vfs_fsync_range(fp, start, end, datasync)
-#else
-#define ll_vfs_fsync_range(fp, start, end, datasync) \
-	vfs_fsync_range(fp, file_dentry(fp), start, end, datasync)
-#endif
-
 #ifndef IFSHIFT
 #define IFSHIFT			12
 #endif

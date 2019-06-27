@@ -683,7 +683,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
                 cfs_tage_free(tage);
         }
 
-	rc = ll_vfs_fsync_range(filp, 0, LLONG_MAX, 1);
+	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
 	if (rc)
 		printk(KERN_ERR "sync returns %d\n", rc);
 close:

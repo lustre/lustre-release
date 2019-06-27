@@ -1699,15 +1699,8 @@ int pcc_fsync(struct file *file, loff_t start, loff_t end,
 	if (!*cached)
 		RETURN(0);
 
-#ifdef HAVE_FILE_FSYNC_4ARGS
 	rc = file_inode(pcc_file)->i_fop->fsync(pcc_file,
 						start, end, datasync);
-#elif defined(HAVE_FILE_FSYNC_2ARGS)
-	rc = file_inode(pcc_file)->i_fop->fsync(pcc_file, datasync);
-#else
-	rc = file_inode(pcc_file)->i_fop->fsync(pcc_file,
-				file_dentry(dentry), datasync);
-#endif
 
 	pcc_io_fini(inode);
 	RETURN(rc);

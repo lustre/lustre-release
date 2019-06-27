@@ -1627,7 +1627,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 		kunmap(pga[i]->pg);
 	}
 
-	rc = ll_vfs_fsync_range(filp, 0, LLONG_MAX, 1);
+	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
 	if (rc)
 		CERROR("%s: sync returns %d\n", dbgcksum_file_name, rc);
 	filp_close(filp, NULL);

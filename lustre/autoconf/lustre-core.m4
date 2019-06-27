@@ -579,34 +579,6 @@ super_ops_evict_inode, [
 ]) # LC_SBOPS_EVICT_INODE
 
 #
-# LC_FILE_FSYNC
-#
-# 2.6.35 file_operations.fsync taken 2 arguments.
-# 3.0.0 file_operations.fsync takes 4 arguments.
-#
-AC_DEFUN([LC_FILE_FSYNC], [
-LB_CHECK_COMPILE([if 'file_operations.fsync' takes 4 arguments],
-file_ops_fsync_4args, [
-	#include <linux/fs.h>
-],[
-	((struct file_operations *)0)->fsync(NULL, 0, 0, 0);
-],[
-	AC_DEFINE(HAVE_FILE_FSYNC_4ARGS, 1,
-		[file_operations.fsync takes 4 arguments])
-],[
-	LB_CHECK_COMPILE([if 'file_operations.fsync' takes 2 arguments],
-	file_ops_fsync_2args, [
-		#include <linux/fs.h>
-	],[
-		((struct file_operations *)0)->fsync(NULL, 0);
-	],[
-		AC_DEFINE(HAVE_FILE_FSYNC_2ARGS, 1,
-			[file_operations.fsync takes 2 arguments])
-	])
-])
-]) # LC_FILE_FSYNC
-
-#
 # LC_KERNEL_LOCKED
 #
 # 2.6.37 remove kernel_locked
@@ -3228,7 +3200,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_ADD_WAIT_QUEUE_EXCLUSIVE
 
 	# 2.6.35, 3.0.0
-	LC_FILE_FSYNC
 	LC_EXPORT_SIMPLE_SETATTR
 	LC_EXPORT_TRUNCATE_COMPLETE_PAGE
 
