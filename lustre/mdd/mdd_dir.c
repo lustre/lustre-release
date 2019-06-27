@@ -3507,6 +3507,7 @@ static int mdd_iterate_xattrs(const struct lu_env *env,
 	struct mdd_thread_info *info = mdd_env_info(env);
 	char *xname;
 	struct lu_buf list_xbuf;
+	struct lu_buf cbxbuf;
 	struct lu_buf xbuf = { NULL };
 	int list_xsize;
 	int xlen;
@@ -3563,14 +3564,15 @@ static int mdd_iterate_xattrs(const struct lu_env *env,
 		if (rc < 0)
 			GOTO(out, rc);
 
+		cbxbuf = xbuf;
 repeat:
-		rc = cb(env, tobj, &xbuf, xname, 0, handle);
+		rc = cb(env, tobj, &cbxbuf, xname, 0, handle);
 		if (unlikely(rc == -ENOSPC &&
 			     strcmp(xname, XATTR_NAME_LINK) == 0)) {
 			rc = linkea_overflow_shrink(
-					(struct linkea_data *)(xbuf.lb_buf));
+					(struct linkea_data *)(cbxbuf.lb_buf));
 			if (likely(rc > 0)) {
-				xbuf.lb_len = rc;
+				cbxbuf.lb_len = rc;
 				goto repeat;
 			}
 		}
