@@ -70,7 +70,7 @@ static int ptlrpc_unregister_reply(struct ptlrpc_request *request, int async);
 /**
  * Initialize passed in client structure \a cl.
  */
-void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
+void ptlrpc_init_client(int req_portal, int rep_portal, const char *name,
 			struct ptlrpc_client *cl)
 {
 	cl->cli_request_portal = req_portal;

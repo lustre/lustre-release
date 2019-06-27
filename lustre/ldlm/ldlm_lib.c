@@ -278,7 +278,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	struct obd_import *imp;
 	struct obd_uuid server_uuid;
 	int rq_portal, rp_portal, connect_op;
-	char *name = obddev->obd_type->typ_name;
+	const char *name = obddev->obd_type->typ_name;
 	enum ldlm_ns_type ns_type = LDLM_NS_TYPE_UNKNOWN;
 	char *cli_name = lustre_cfg_buf(lcfg, 0);
 	struct ptlrpc_connection fake_conn = { .c_self = 0,

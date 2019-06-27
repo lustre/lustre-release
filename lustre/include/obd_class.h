@@ -86,7 +86,7 @@ int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 void class_obd_list(void);
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-                                          const char * typ_name,
+					  const char *type_name,
                                           struct obd_uuid *grp_uuid);
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);

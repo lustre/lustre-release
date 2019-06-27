@@ -543,7 +543,7 @@ struct ptlrpc_client {
         /** What portal do we expect replies on */
         __u32                   cli_reply_portal;
         /** Name of the client */
-        char                   *cli_name;
+	const char		*cli_name;
 };
 
 /** state flags of requests */
@@ -2118,7 +2118,7 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd);
  */
 void ptlrpc_request_committed(struct ptlrpc_request *req, int force);
 
-void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
+void ptlrpc_init_client(int req_portal, int rep_portal, const char *name,
                         struct ptlrpc_client *);
 void ptlrpc_cleanup_client(struct obd_import *imp);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,

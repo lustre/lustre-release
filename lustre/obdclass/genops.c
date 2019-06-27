@@ -176,13 +176,10 @@ static void class_sysfs_release(struct kobject *kobj)
 	list_del(&type->typ_chain);
 	spin_unlock(&obd_types_lock);
 
-	if (type->typ_name) {
 #ifdef CONFIG_PROC_FS
-		if (type->typ_procroot)
-			remove_proc_subtree(type->typ_name, proc_lustre_root);
+	if (type->typ_name && type->typ_procroot)
+		remove_proc_subtree(type->typ_name, proc_lustre_root);
 #endif
-		OBD_FREE(type->typ_name, strlen(type->typ_name) + 1);
-	}
 	if (type->typ_md_ops)
 		OBD_FREE_PTR(type->typ_md_ops);
 	if (type->typ_dt_ops)
@@ -289,18 +286,15 @@ dir_exist:
 #endif /* HAVE_SERVER_SUPPORT */
         OBD_ALLOC_PTR(type->typ_dt_ops);
         OBD_ALLOC_PTR(type->typ_md_ops);
-        OBD_ALLOC(type->typ_name, strlen(name) + 1);
 
         if (type->typ_dt_ops == NULL ||
-            type->typ_md_ops == NULL ||
-            type->typ_name == NULL)
+	    type->typ_md_ops == NULL)
 		GOTO (failed, rc = -ENOMEM);
 
         *(type->typ_dt_ops) = *dt_ops;
         /* md_ops is optional */
         if (md_ops)
                 *(type->typ_md_ops) = *md_ops;
-        strcpy(type->typ_name, name);
 	spin_lock_init(&type->obd_type_lock);
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -309,7 +303,7 @@ dir_exist:
 #endif
 #ifdef CONFIG_PROC_FS
 	if (enable_proc && !type->typ_procroot) {
-		type->typ_procroot = lprocfs_register(type->typ_name,
+		type->typ_procroot = lprocfs_register(name,
 						      proc_lustre_root,
 						      NULL, type);
 		if (IS_ERR(type->typ_procroot)) {
@@ -795,7 +789,7 @@ void class_obd_list(void)
    specified, then only the client with that uuid is returned,
    otherwise any client connected to the tgt is returned. */
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-                                          const char * typ_name,
+					  const char *type_name,
                                           struct obd_uuid *grp_uuid)
 {
         int i;
@@ -806,8 +800,8 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 
                 if (obd == NULL)
                         continue;
-                if ((strncmp(obd->obd_type->typ_name, typ_name,
-                             strlen(typ_name)) == 0)) {
+		if ((strncmp(obd->obd_type->typ_name, type_name,
+			     strlen(type_name)) == 0)) {
                         if (obd_uuid_equals(tgt_uuid,
                                             &obd->u.cli.cl_target_uuid) &&
                             ((grp_uuid)? obd_uuid_equals(grp_uuid,
@@ -2134,14 +2128,14 @@ int obd_set_max_rpcs_in_flight(struct client_obd *cli, __u32 max)
 	__u32				old;
 	int				diff;
 	int				i;
-	char				*typ_name;
+	const char *type_name;
 	int				rc;
 
 	if (max > OBD_MAX_RIF_MAX || max < 1)
 		return -ERANGE;
 
-	typ_name = cli->cl_import->imp_obd->obd_type->typ_name;
-	if (strcmp(typ_name, LUSTRE_MDC_NAME) == 0) {
+	type_name = cli->cl_import->imp_obd->obd_type->typ_name;
+	if (strcmp(type_name, LUSTRE_MDC_NAME) == 0) {
 		/* adjust max_mod_rpcs_in_flight to ensure it is always
 		 * strictly lower that max_rpcs_in_flight */
 		if (max < 2) {

@@ -1796,7 +1796,7 @@ static int sepol_helper(struct obd_import *imp)
 	    imp->imp_obd->obd_type == NULL) {
 		rc = -EINVAL;
 	} else {
-		argv[2] = imp->imp_obd->obd_type->typ_name;
+		argv[2] = (char *)imp->imp_obd->obd_type->typ_name;
 		argv[4] = imp->imp_obd->obd_name;
 		spin_lock(&imp->imp_sec->ps_lock);
 		if (imp->imp_sec->ps_sepol_mtime == 0 &&
