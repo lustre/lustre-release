@@ -15,12 +15,6 @@ ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 # time in minutes:                 40 min"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="5"
 
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for slow tests:                 LU-2887
-# time in minutes:                           32  12.5 min"
-	[ "$SLOW" = "no" ] && EXCEPT_SLOW+=" 8a  8b"
-fi
-
 build_test_filter
 
 # While we do not use OSTCOUNT=1 setup anymore,

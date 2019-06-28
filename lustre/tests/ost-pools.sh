@@ -32,9 +32,6 @@ if ! combined_mgs_mds; then
 		error "unable to mount $MOUNT on the MGS"
 fi
 
-#                                  9  12.5 (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="18 23b"
-
 DIR=${DIR:-$MOUNT}
 assert_DIR
 

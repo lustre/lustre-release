@@ -22,9 +22,6 @@ if $SHARED_KEY; then
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	93a	100a	100b	120"
 fi
 
-# time in minutes:                 7.5 (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="44b"
-
 build_test_filter
 
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
