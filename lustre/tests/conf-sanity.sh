@@ -4572,7 +4572,7 @@ test_61() { # LU-80
 	local small_value="bar"
 
 	local name="trusted.big"
-	log "save large xattr $name on $file"
+	log "save large xattr of $(max_xattr_size) bytes on $name on $file"
 	setfattr -n $name -v $large_value $file ||
 		error "saving $name on $file failed"
 

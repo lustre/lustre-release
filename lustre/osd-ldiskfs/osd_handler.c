@@ -2319,8 +2319,8 @@ static void osd_conf_get(const struct lu_env *env,
 #endif
 		param->ddp_max_ea_size = sb->s_blocksize - ea_overhead;
 
-	if (param->ddp_max_ea_size > OBD_MAX_EA_SIZE - ea_overhead)
-		param->ddp_max_ea_size = OBD_MAX_EA_SIZE - ea_overhead;
+	if (param->ddp_max_ea_size > OBD_MAX_EA_SIZE)
+		param->ddp_max_ea_size = OBD_MAX_EA_SIZE;
 
 	/*
 	 * Preferred RPC size for efficient disk IO.  4MB shows good
