@@ -4836,8 +4836,8 @@ test_131b() {
 run_test 131b "DoM file write replay"
 
 test_132a() {
-	[ "$MDS1_VERSION" -lt $(version_code 2.9.90) ] &&
-		skip "Do not support PFL files before 2.10"
+	[ "$MDS1_VERSION" -lt $(version_code 2.12.0) ] &&
+		skip "Need MDS version 2.12.0 or later"
 
 	$LFS setstripe -E 1M -c 1 -E EOF -c 2 $DIR/$tfile
 	replay_barrier $SINGLEMDS
