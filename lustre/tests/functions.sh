@@ -169,7 +169,7 @@ signaled() {
 }
 
 mpi_run () {
-    local mpirun="$MPIRUN $MPIRUN_OPTIONS"
+    local mpirun="$MPIRUN $MPIRUN_OPTIONS --oversubscribe"
     local command="$mpirun $@"
     local mpilog=$TMP/mpi.log
     local rc
@@ -526,7 +526,7 @@ run_connectathon() {
 	fi
 	echo "tests: $tests"
 	for test in $tests; do
-		local cmd="./runtests -N $cnt_NRUN $test -f $testdir"
+		local cmd="sh ./runtests -N $cnt_NRUN $test -f $testdir"
 		local rc=0
 
 		log "$cmd"

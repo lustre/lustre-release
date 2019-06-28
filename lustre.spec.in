@@ -478,6 +478,11 @@ echo '%{_bindir}/mcreate' >>lustre-tests.files
 echo '%{_bindir}/munlink' >>lustre-tests.files
 echo '%{_sbindir}/wirecheck' >>lustre-tests.files
 echo '%{_sbindir}/wiretest' >>lustre-tests.files
+%if %{_vendor}=="redhat"
+if [ -n "@MPI_BIN@" ]; then
+	echo '@MPI_BIN@/*' >>lustre-tests.files
+fi
+%endif
 %endif
 
 %files -f lustre.files
