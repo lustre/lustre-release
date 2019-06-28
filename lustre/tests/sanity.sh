@@ -20000,10 +20000,12 @@ test_413b() {
 	qos_prio_free=${qos_prio_free%%%}
 	qos_threshold_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -n1)
 	qos_threshold_rr=${qos_threshold_rr%%%}
+	qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
 
 	stack_trap "$LCTL set_param lmv.*.qos_prio_free=$qos_prio_free" EXIT
 	stack_trap "$LCTL set_param lmv.*.qos_threshold_rr=$qos_threshold_rr" \
 		EXIT
+	stack_trap "$LCTL set_param lmv.*.qos_maxage=$qos_maxage" EXIT
 
 	echo "mkdir with roundrobin"
 
@@ -20021,6 +20023,9 @@ test_413b() {
 	rm -rf $DIR/$tdir/*
 
 	$LCTL set_param lmv.*.qos_threshold_rr=$qos_threshold_rr
+	# Shorten statfs result age, so that it can be updated in time
+	$LCTL set_param lmv.*.qos_maxage=1
+	sleep_maxage
 
 	local ffree
 	local max
