@@ -1470,6 +1470,7 @@ struct lu_qos {
 
 int lqos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 int lqos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
+u64 lu_prandom_u64_max(u64 ep_ro);
 
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

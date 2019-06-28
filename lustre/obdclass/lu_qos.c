@@ -34,6 +34,7 @@
 
 #include <linux/module.h>
 #include <linux/list.h>
+#include <linux/random.h>
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_hash.h> /* hash_long() */
 #include <libcfs/linux/linux-mem.h>
@@ -166,3 +167,38 @@ out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lqos_del_tgt);
+
+/**
+ * lu_prandom_u64_max - returns a pseudo-random u64 number in interval
+ * [0, ep_ro)
+ *
+ * \param[in] ep_ro	right open interval endpoint
+ *
+ * \retval a pseudo-random 64-bit number that is in interval [0, ep_ro).
+ */
+u64 lu_prandom_u64_max(u64 ep_ro)
+{
+	u64 rand = 0;
+
+	if (ep_ro) {
+#if BITS_PER_LONG == 32
+		/*
+		 * If ep_ro > 32-bit, first generate the high
+		 * 32 bits of the random number, then add in the low
+		 * 32 bits (truncated to the upper limit, if needed)
+		 */
+		if (ep_ro > 0xffffffffULL)
+			rand = prandom_u32_max((u32)(ep_ro >> 32)) << 32;
+
+		if (rand == (ep_ro & 0xffffffff00000000ULL))
+			rand |= prandom_u32_max((u32)ep_ro);
+		else
+			rand |= prandom_u32();
+#else
+		rand = ((u64)prandom_u32() << 32 | prandom_u32()) % ep_ro;
+#endif
+	}
+
+	return rand;
+}
+EXPORT_SYMBOL(lu_prandom_u64_max);

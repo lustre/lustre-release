@@ -1548,29 +1548,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		cur_weight = 0;
 		rc = -ENOSPC;
 
-		if (total_weight) {
-#if BITS_PER_LONG == 32
-			rand = prandom_u32_max((u32)total_weight);
-			/* If total_weight > 32-bit, first generate the high
-			 * 32 bits of the random number, then add in the low
-			 * 32 bits (truncated to the upper limit, if needed)
-			 */
-			if (total_weight > 0xffffffffULL)
-				rand = prandom_u32_max((u32)(total_weight >> 32)) << 32;
-			else
-				rand = 0;
-
-			if (rand == (total_weight & 0xffffffff00000000ULL))
-				rand |= prandom_u32_max((u32)total_weight);
-			else
-				rand |= prandom_u32();
-
-#else
-			rand = prandom_u32() | prandom_u32_max((u32)total_weight);
-#endif
-		} else {
-			rand = 0;
-		}
+		rand = lu_prandom_u64_max(total_weight);
 
 		/* On average, this will hit larger-weighted OSTs more often.
 		 * 0-weight OSTs will always get used last (only when rand=0) */
