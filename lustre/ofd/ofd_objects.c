@@ -160,6 +160,68 @@ int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo)
 	return 0;
 }
 
+struct ofd_precreate_cb {
+	struct dt_txn_commit_cb	 opc_cb;
+	struct ofd_seq		*opc_oseq;
+	int			 opc_objects;
+};
+
+static void ofd_cb_precreate(struct lu_env *env, struct thandle *th,
+			     struct dt_txn_commit_cb *cb, int err)
+{
+	struct ofd_precreate_cb *opc;
+	struct ofd_seq *oseq;
+
+	opc = container_of(cb, struct ofd_precreate_cb, opc_cb);
+	oseq = opc->opc_oseq;
+
+	CDEBUG(D_OTHER, "Sub %d from %d for "DFID", th_sync %d\n",
+	       opc->opc_objects, atomic_read(&oseq->os_precreate_in_progress),
+	       PFID(&oseq->os_oi.oi_fid), th->th_sync);
+	atomic_sub(opc->opc_objects, &oseq->os_precreate_in_progress);
+	ofd_seq_put(env, opc->opc_oseq);
+	OBD_FREE_PTR(opc);
+}
+
+static int ofd_precreate_cb_add(const struct lu_env *env, struct thandle *th,
+				struct ofd_seq *oseq, int objects)
+{
+	struct ofd_precreate_cb *opc;
+	struct dt_txn_commit_cb *dcb;
+	int precreate, rc;
+
+	OBD_ALLOC_PTR(opc);
+	if (!opc)
+		return -ENOMEM;
+
+	precreate = atomic_read(&oseq->os_precreate_in_progress);
+	atomic_inc(&oseq->os_refc);
+	opc->opc_oseq = oseq;
+	opc->opc_objects = objects;
+	CDEBUG(D_OTHER, "Add %d to %d for "DFID", th_sync %d\n",
+	       opc->opc_objects, precreate,
+	       PFID(&oseq->os_oi.oi_fid), th->th_sync);
+
+	if ((precreate + objects) >= (5 * OST_MAX_PRECREATE))
+		th->th_sync = 1;
+
+	dcb = &opc->opc_cb;
+	dcb->dcb_func = ofd_cb_precreate;
+	INIT_LIST_HEAD(&dcb->dcb_linkage);
+	strlcpy(dcb->dcb_name, "ofd_cb_precreate", sizeof(dcb->dcb_name));
+
+	rc = dt_trans_cb_add(th, dcb);
+	if (rc) {
+		ofd_seq_put(env, oseq);
+		OBD_FREE_PTR(opc);
+		return rc;
+	}
+
+	atomic_add(objects, &oseq->os_precreate_in_progress);
+
+	return 0;
+}
+
 /**
  * Precreate the given number \a nr of objects in the given sequence \a oseq.
  *
@@ -379,6 +441,8 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 			       ofd_seq_last_oid(oseq));
 	}
 
+	if (objects)
+		ofd_precreate_cb_add(env, th, oseq, objects);
 trans_stop:
 	rc2 = ofd_trans_stop(env, ofd, th, rc);
 	if (rc2)
