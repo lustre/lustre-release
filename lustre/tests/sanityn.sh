@@ -4368,6 +4368,31 @@ test_83() {
 }
 run_test 83 "access striped directory while it is being created/unlinked"
 
+test_84() {
+	[ $MDS1_VERSION -lt $(version_code 2.12.55) ] &&
+		skip "lustre < 2.12.55 does not contain LU-12485 fix"
+
+	local mtime
+
+	$MULTIOP $DIR/$tfile oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:c ||
+		error "create $tfile failed"
+	mtime=$(stat -c%Y $DIR/$tfile)
+	mtime=$((mtime + 200))
+
+	#define OBD_FAIL_OBD_0NLINK_RACE  0x60b
+	do_facet mds1 $LCTL set_param fail_loc=0x8000060b
+
+	touch -c -m $mtime $DIR/$tfile &
+	setattr_pid=$!
+	# sleep a while to let 'touch' run first
+	sleep 5
+	rm -f $DIR2/$tfile || error "unlink $tfile failed"
+
+	# touch may fail
+	wait $setattr_pid || true
+}
+run_test 84 "0-nlink race in lu_object_find()"
+
 test_90() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local pid1
