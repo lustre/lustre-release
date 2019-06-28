@@ -100,16 +100,6 @@ sigset_t cfs_block_sigsinv(unsigned long sigs);
 void cfs_restore_sigs(sigset_t);
 void cfs_clear_sigpending(void);
 
-/*
- * Random number handling
- */
-
-/* returns a random 32-bit integer */
-unsigned int cfs_rand(void);
-/* seed the generator */
-void cfs_srand(unsigned int, unsigned int);
-void cfs_get_random_bytes(void *buf, int size);
-
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 int libcfs_ioctl(unsigned long cmd, void __user *uparam);
 
