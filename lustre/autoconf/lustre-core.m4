@@ -3488,17 +3488,21 @@ AC_ARG_ENABLE([mpitests],
 		case $enableval in
 		yes)
 			MPICC_WRAPPER="mpicc"
+			MPI_BIN=$(eval which $MPICC_WRAPPER | xargs dirname)
 			;;
 		no)
 			enable_mpitests="no"
+			MPI_BIN=""
 			;;
 		*)
 			MPICC_WRAPPER=$enableval
+			MPI_BIN=$(eval echo $MPICC_WRAPPER | xargs dirname)
 			;;
 		esac
 	], [
 		enable_mpitests="yes"
 		MPICC_WRAPPER="mpicc"
+		MPI_BIN=$(eval which $MPICC_WRAPPER | xargs dirname)
 	])
 
 	if test "x$enable_mpitests" != "xno"; then
@@ -3517,6 +3521,7 @@ AC_ARG_ENABLE([mpitests],
 		enable_mpitests=$lb_cv_mpi_tests
 		CC=$oldcc
 	fi
+	AC_SUBST(MPI_BIN)
 	AC_SUBST(MPICC_WRAPPER)
 ]) # LB_CONFIG_MPITESTS
 

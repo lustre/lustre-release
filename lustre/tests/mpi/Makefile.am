@@ -8,7 +8,11 @@ THETESTS = parallel_grouplock write_append_truncate createmany_mpi \
 
 if TESTS
 if MPITESTS
+if RHEL
+testdir = @MPI_BIN@
+else
 testdir = $(libdir)/lustre/tests
+endif
 test_PROGRAMS = $(THETESTS)
 else
 noinst_PROGRAMS = $(THETESTS)
