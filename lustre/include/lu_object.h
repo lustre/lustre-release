@@ -466,7 +466,12 @@ enum lu_object_header_flags {
 	/**
 	 * Mark this object has already been taken out of cache.
 	 */
-	LU_OBJECT_UNHASHED = 1,
+	LU_OBJECT_UNHASHED	= 1,
+	/**
+	 * Object is initialized, when object is found in cache, it may not be
+	 * intialized yet, the object allocator will initialize it.
+	 */
+	LU_OBJECT_INITED	= 2
 };
 
 enum lu_object_header_attr {
@@ -665,6 +670,14 @@ static inline void lu_object_get(struct lu_object *o)
 static inline int lu_object_is_dying(const struct lu_object_header *h)
 {
 	return test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
+}
+
+/**
+ * Return true if object is initialized.
+ */
+static inline int lu_object_is_inited(const struct lu_object_header *h)
+{
+	return test_bit(LU_OBJECT_INITED, &h->loh_flags);
 }
 
 void lu_object_put(const struct lu_env *env, struct lu_object *o);

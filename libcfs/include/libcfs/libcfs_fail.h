@@ -165,7 +165,7 @@ static inline void cfs_race(__u32 id)
 			CERROR("cfs_race id %x sleeping\n", id);
 			rc = wait_event_interruptible(cfs_race_waitq,
 						      cfs_race_state != 0);
-			CERROR("cfs_fail_race id %x awake, rc=%d\n", id, rc);
+			CERROR("cfs_fail_race id %x awake: rc=%d\n", id, rc);
 		} else {
 			CERROR("cfs_fail_race id %x waking\n", id);
 			cfs_race_state = 1;
@@ -174,5 +174,43 @@ static inline void cfs_race(__u32 id)
 	}
 }
 #define CFS_RACE(id) cfs_race(id)
+
+/**
+ * Wait on race.
+ *
+ * The first thread that calls this with a matching fail_loc is put to sleep,
+ * but subseqent callers of this won't sleep. Until another thread that calls
+ * cfs_race_wakeup(), the first thread will be woken up and continue.
+ */
+static inline void cfs_race_wait(__u32 id)
+{
+	if (CFS_FAIL_PRECHECK(id)) {
+		if (unlikely(__cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET))) {
+			int rc;
+
+			cfs_race_state = 0;
+			CERROR("cfs_race id %x sleeping\n", id);
+			rc = wait_event_interruptible(cfs_race_waitq,
+						      cfs_race_state != 0);
+			CERROR("cfs_fail_race id %x awake: rc=%d\n", id, rc);
+		}
+	}
+}
+#define CFS_RACE_WAIT(id) cfs_race_wait(id)
+
+/**
+ * Wake up the thread that is waiting on the matching fail_loc.
+ */
+static inline void cfs_race_wakeup(__u32 id)
+{
+	if (CFS_FAIL_PRECHECK(id)) {
+		if (likely(!__cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET))) {
+			CERROR("cfs_fail_race id %x waking\n", id);
+			cfs_race_state = 1;
+			wake_up(&cfs_race_waitq);
+		}
+	}
+}
+#define CFS_RACE_WAKEUP(id) cfs_race_wakeup(id)
 
 #endif /* _LIBCFS_FAIL_H */
