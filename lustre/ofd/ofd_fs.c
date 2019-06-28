@@ -410,6 +410,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 	oseq->os_last_id_synced = 0;
 
 	atomic_set(&oseq->os_refc, 1);
+	atomic_set(&oseq->os_precreate_in_progress, 0);
 
 	rc = dt_attr_get(env, dob, &info->fti_attr);
 	if (rc)
