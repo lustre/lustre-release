@@ -6936,9 +6936,9 @@ test_60g() {
 run_test 60g "transaction abort won't cause MDT hung"
 
 test_60h() {
-	[ $MDS1_VERSION -le $(version_code 2.12.52) ] ||
+	[ $MDS1_VERSION -le $(version_code 2.12.52) ] &&
 		skip "Need MDS version at least 2.12.52"
-	[ $MDSCOUNT -le 2 ] || skip "Need >= 2 MDTs"
+	[ $MDSCOUNT -lt 2 ] && skip "Need at least 2 MDTs"
 
 	local f
 
