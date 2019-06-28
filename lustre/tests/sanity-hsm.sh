@@ -753,7 +753,7 @@ test_1c() {
 run_test 1c "Check setting archive-id in lfs hsm_set"
 
 test_1d() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.59) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.59) ] &&
 		skip "need MDS version at least 2.10.59"
 
 	mkdir -p $DIR/$tdir
@@ -1347,7 +1347,7 @@ test_12p() {
 run_test 12p "implicit restore of a file on copytool mount point"
 
 test_12q() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.7.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.58) ] &&
 		skip "need MDS version at least 2.7.58"
 
 	stack_trap "zconf_umount \"$(facet_host $SINGLEAGT)\" \"$MOUNT3\"" EXIT
@@ -1988,7 +1988,7 @@ test_24f() {
 run_test 24f "root can archive, release, and restore tar files"
 
 test_24g() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.11.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
 		skip "need MDS version 2.11.56 or later"
 
 	local file=$DIR/$tdir/$tfile
@@ -3022,7 +3022,7 @@ run_test 58 "Truncate a released file will trigger restore"
 
 test_59() {
 	local fid
-	[[ $MDS_VERSION_CODE -lt $(version_code 2.7.63) ]] &&
+	[[ $MDS1_VERSION -lt $(version_code 2.7.63) ]] &&
 		skip "Need MDS version at least 2.7.63"
 
 	copytool setup
@@ -4343,7 +4343,7 @@ run_test 253 "Check for wrong file size after release"
 
 test_254a()
 {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.56) ] &&
 		skip "need MDS version at least 2.10.56"
 
 	# Check that the counters are initialized to 0
@@ -4361,7 +4361,7 @@ run_test 254a "Request counters are initialized to zero"
 
 test_254b()
 {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.56) ] &&
 		skip "need MDS version at least 2.10.56"
 
 	# The number of request to launch (at least 32)
@@ -4487,7 +4487,7 @@ run_test 255 "Copytool registration wakes the coordinator up"
 # break in the future because of that.
 test_260a()
 {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.11.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
 		skip "need MDS version 2.11.56 or later"
 
 	local -a files=("$DIR/$tdir/$tfile".{0..15})
@@ -4553,7 +4553,7 @@ run_test 260a "Restore request have priority over other requests"
 # mechanism in the coordinator. It might not make sense to keep it in the future
 test_260b()
 {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.11.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
 		skip "need MDS version 2.11.56 or later"
 
 	local -a files=("$DIR/$tdir/$tfile".{0..15})
@@ -4993,7 +4993,7 @@ run_test 405 "archive and release under striped directory"
 test_406() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 
-	[ $MDS_VERSION_CODE -lt $(version_code 2.7.64) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.64) ] &&
 		skip "need MDS version at least 2.7.64"
 
 	local fid
@@ -5086,7 +5086,7 @@ run_test 407 "Check for double RESTORE records in llog"
 
 test_500()
 {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.6.92) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.6.92) ] &&
 		skip "HSM migrate is not supported"
 
 	test_mkdir -p $DIR/$tdir
@@ -5104,7 +5104,7 @@ test_500()
 run_test 500 "various LLAPI HSM tests"
 
 test_600() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -5137,7 +5137,7 @@ test_600() {
 run_test 600 "Changelog fields 'u=' and 'nid='"
 
 test_601() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -5160,7 +5160,7 @@ test_601() {
 run_test 601 "OPEN Changelog entry"
 
 test_602() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -5207,7 +5207,7 @@ test_602() {
 run_test 602 "Changelog record CLOSE only if open+write or OPEN recorded"
 
 test_603() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -5232,7 +5232,7 @@ test_603() {
 run_test 603 "GETXATTR Changelog entry"
 
 test_604() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -5308,7 +5308,7 @@ test_604() {
 run_test 604 "NOPEN Changelog entry"
 
 test_605() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -5390,7 +5390,7 @@ test_605() {
 run_test 605 "Test OPEN and CLOSE rate limit in Changelogs"
 
 test_606() {
-	[ $MDS_VERSION_CODE -lt $(version_code 2.10.58) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	local llog_reader=$(do_facet mgs "which llog_reader 2> /dev/null")
