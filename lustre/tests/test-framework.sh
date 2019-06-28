@@ -4516,7 +4516,7 @@ mkfs_opts() {
 		opts+=${L_GETIDENTITY:+" --param=mdt.identity_upcall=$L_GETIDENTITY"}
 
 		if [ $fstype == ldiskfs ]; then
-			fs_mkfs_opts+="-O ea_inode"
+			fs_mkfs_opts+="-O ea_inode,large_dir"
 
 			var=${facet}_JRN
 			if [ -n "${!var}" ]; then

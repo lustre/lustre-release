@@ -8149,11 +8149,13 @@ test_110()
 	combined_mgs_mds || replace=" --replace "
 	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
 		    $replace --reformat $(mdsdevname 1) $(mdsvdevname 1)"
-	if [[ $opts != *mkfsoptions* ]]; then
-		opts+=" --mkfsoptions=\\\"-O large_dir -b 1024 -i 65536\\\""
-	else
-		opts="${opts//--mkfsoptions=\\\"/ \
-			--mkfsoptions=\\\"-O large_dir -b 1024 -i 65536 }"
+	if [[ $opts != *large_dir* ]]; then
+		if [[ $opts != *mkfsoptions* ]]; then
+			opts+=" --mkfsoptions=\\\"-O large_dir -b 1024 -i 65536\\\""
+		else
+			opts="${opts//--mkfsoptions=\\\"/ \
+				--mkfsoptions=\\\"-O large_dir -b 1024 -i 65536 }"
+		fi
 	fi
 	echo "MDT params: $opts"
 	load_modules
@@ -8164,11 +8166,13 @@ test_110()
 	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
 		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
 
-	if [[ $opts != *mkfsoptions* ]]; then
-		opts+=" --mkfsoptions=\\\"-O large_dir\\\" "
-	else
-		opts="${opts//--mkfsoptions=\\\"/ \
-			--mkfsoptions=\\\"-O large_dir }"
+	if [[ $opts != *large_dir* ]]; then
+		if [[ $opts != *mkfsoptions* ]]; then
+			opts+=" --mkfsoptions=\\\"-O large_dir\\\" "
+		else
+			opts="${opts//--mkfsoptions=\\\"/ \
+				--mkfsoptions=\\\"-O large_dir }"
+		fi
 	fi
 	echo "OST params: $opts"
 	add ost1 $opts || error "add ost1 failed with new params"
@@ -8236,11 +8240,13 @@ test_111() {
 	combined_mgs_mds || replace=" --replace "
 	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
 		    $replace --reformat $(mdsdevname 1) $(mdsvdevname 1)"
-	if [[ $opts != *mkfsoptions* ]]; then
-		opts+=" --mkfsoptions=\\\"-O large_dir -i 1048576 \\\" "
-	else
-		opts="${opts//--mkfsoptions=\\\"/ \
-			--mkfsoptions=\\\"-O large_dir -i 1048576 }"
+	if [[ $opts != *large_dir* ]]; then
+		if [[ $opts != *mkfsoptions* ]]; then
+			opts+=" --mkfsoptions=\\\"-O large_dir -i 1048576 \\\" "
+		else
+			opts="${opts//--mkfsoptions=\\\"/ \
+				--mkfsoptions=\\\"-O large_dir -i 1048576 }"
+		fi
 	fi
 	echo "MDT params: $opts"
 	load_modules
@@ -8251,10 +8257,12 @@ test_111() {
 
 	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
 		$replace --reformat $(ostdevname 1) $(ostvdevname 1)"
-	if [[ $opts != *mkfsoptions* ]]; then
-		opts+=" --mkfsoptions=\\\"-O large_dir \\\""
-	else
-		opts="${opts//--mkfsoptions=\\\"/ --mkfsoptions=\\\"-O large_dir }"
+	if [[ $opts != *large_dir* ]]; then
+		if [[ $opts != *mkfsoptions* ]]; then
+			opts+=" --mkfsoptions=\\\"-O large_dir \\\""
+		else
+			opts="${opts//--mkfsoptions=\\\"/ --mkfsoptions=\\\"-O large_dir }"
+		fi
 	fi
 	echo "OST params: $opts"
 	__touch_device ost 1
