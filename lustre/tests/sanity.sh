@@ -19691,7 +19691,8 @@ test_801a() {
 	echo "Start barrier_freeze at: $(date)"
 	#define OBD_FAIL_BARRIER_DELAY		0x2202
 	do_facet mgs $LCTL set_param fail_val=5 fail_loc=0x2202
-	do_facet mgs $LCTL barrier_freeze $FSNAME 10 &
+	# Do not reduce barrier time - See LU-11873
+	do_facet mgs $LCTL barrier_freeze $FSNAME 20 &
 
 	sleep 2
 	local b_status=$(barrier_stat)
@@ -19713,7 +19714,8 @@ test_801a() {
 	[ "$b_status" = "'expired'" ] ||
 		error "(3) unexpected barrier status $b_status"
 
-	do_facet mgs $LCTL barrier_freeze $FSNAME 10 ||
+	# Do not reduce barrier time - See LU-11873
+	do_facet mgs $LCTL barrier_freeze $FSNAME 20 ||
 		error "(4) fail to freeze barrier"
 
 	b_status=$(barrier_stat)
@@ -19838,7 +19840,8 @@ test_801c() {
 	do_facet mgs $LCTL barrier_rescan $FSNAME ||
 		error "(3) Fail to rescan barrier bitmap"
 
-	do_facet mgs $LCTL barrier_freeze $FSNAME 10
+	# Do not reduce barrier time - See LU-11873
+	do_facet mgs $LCTL barrier_freeze $FSNAME 20
 
 	b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
