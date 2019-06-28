@@ -541,13 +541,18 @@ static int lov_init_dom(const struct lu_env *env, struct lov_device *dev,
 	struct cl_device *mdcdev;
 	struct lov_oinfo *loi = NULL;
 	struct cl_object_conf *sconf = &lti->lti_stripe_conf;
-
 	int rc;
 	__u32 idx = 0;
 
 	ENTRY;
 
-	LASSERT(index == 0);
+	/* DOM entry may be not zero index due to FLR but must start from 0 */
+	if (unlikely(lle->lle_extent->e_start != 0)) {
+		CERROR("%s: DOM entry must be the first stripe in a mirror\n",
+		       lov2obd(dev->ld_lov)->obd_name);
+		dump_lsm(D_ERROR, lov->lo_lsm);
+		RETURN(-EINVAL);
+	}
 
 	/* find proper MDS device */
 	rc = lov_fld_lookup(dev, fid, &idx);
@@ -640,6 +645,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	int result = 0;
 	unsigned int seq;
 	int i, j;
+	bool dom_size = 0;
 
 	ENTRY;
 
@@ -683,6 +689,18 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 			lle->lle_comp_ops = &raid0_ops;
 			break;
 		case LOV_PATTERN_MDT:
+			/* Allowed to have several DOM stripes in different
+			 * mirrors with the same DoM size.
+			 */
+			if (!dom_size) {
+				dom_size = lle->lle_lsme->lsme_extent.e_end;
+			} else if (dom_size !=
+				   lle->lle_lsme->lsme_extent.e_end) {
+				CERROR("%s: DOM entries with different sizes\n",
+				       lov2obd(dev->ld_lov)->obd_name);
+				dump_lsm(D_ERROR, lsm);
+				RETURN(-EINVAL);
+			}
 			lle->lle_comp_ops = &dom_ops;
 			break;
 		default:
@@ -873,7 +891,8 @@ static void lov_fini_composite(const struct lu_env *env,
 		struct lov_layout_entry *entry;
 
 		lov_foreach_layout_entry(lov, entry)
-			entry->lle_comp_ops->lco_fini(env, entry);
+			if (entry->lle_comp_ops)
+				entry->lle_comp_ops->lco_fini(env, entry);
 
 		OBD_FREE(comp->lo_entries,
 			 comp->lo_entry_count * sizeof(*comp->lo_entries));

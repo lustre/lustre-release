@@ -676,6 +676,7 @@ static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
 	struct lov_comp_md_v1 *comp_v1;
 	struct lov_mds_md *v1;
 	__u32 off;
+	bool has_dom = true;
 	int i;
 
 	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
@@ -686,14 +687,19 @@ static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
 	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
 
 	/* DoM entry is the first entry always */
-	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) != LOV_PATTERN_MDT)
+	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) != LOV_PATTERN_MDT &&
+	    le16_to_cpu(comp_v1->lcm_mirror_count) == 0)
 		return LMM_NO_DOM;
 
-	for (i = 1; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+	for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
 		int j;
 
 		off = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
 		v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+
+		if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) ==
+		    LOV_PATTERN_MDT)
+			has_dom = true;
 
 		for (j = 0; j < le16_to_cpu(v1->lmm_stripe_count); j++) {
 			/* if there is any object on OST */
@@ -702,7 +708,7 @@ static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
 				return LMM_DOM_OST;
 		}
 	}
-	return LMM_DOM_ONLY;
+	return has_dom ? LMM_DOM_ONLY : LMM_NO_DOM;
 }
 
 static inline bool mdt_lmm_is_flr(struct lov_mds_md *lmm)

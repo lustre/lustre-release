@@ -18385,12 +18385,12 @@ test_272b() {
 
 	$LFS migrate -c2 $dom ||
 		error "failed to migrate to the new composite layout"
-	[ $($LFS getstripe -L $dom) == 'mdt' ] &&
+	[ $($LFS getstripe -L $dom) != 'mdt' ] ||
 		error "MDT stripe was not removed"
 
 	cancel_lru_locks mdc
 	local new_md5=$(md5sum $dom)
-	[ "$old_md5" != "$new_md5" ] &&
+	[ "$old_md5" == "$new_md5" ] ||
 		error "$old_md5 != $new_md5"
 
 	# Skip free space checks with ZFS
@@ -18430,7 +18430,7 @@ test_272c() {
 
 	cancel_lru_locks mdc
 	local new_md5=$(md5sum $dom)
-	[ "$old_md5" != "$new_md5" ] &&
+	[ "$old_md5" == "$new_md5" ] ||
 		error "$old_md5 != $new_md5"
 
 	# Skip free space checks with ZFS
@@ -18443,6 +18443,108 @@ test_272c() {
 	return 0
 }
 run_test 272c "DoM migration: DOM file to the OST-striped file (composite)"
+
+test_272d() {
+	[ $MDS1_VERSION -lt $(version_code 2.12.55) ] &&
+		skip "Need MDS version at least 2.12.55"
+
+	local dom=$DIR/$tdir/$tfile
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E -1 -c1 $dom
+
+	local mdtidx=$($LFS getstripe -m $dom)
+	local mdtname=MDT$(printf %04x $mdtidx)
+	local facet=mds$((mdtidx + 1))
+
+	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
+		error "failed to write data into $dom"
+	local old_md5=$(md5sum $dom)
+	cancel_lru_locks mdc
+	local mdtfree1=$(do_facet $facet \
+		lctl get_param -n osd*.*$mdtname.kbytesfree)
+
+	$LFS mirror extend -N -E 2M -c1 -E -1 -c2 $dom ||
+		error "failed mirroring to the new composite layout"
+	$LFS mirror resync $dom ||
+		error "failed mirror resync"
+	$LFS mirror split --mirror-id 1 -d $dom ||
+		error "failed mirror split"
+
+	[ $($LFS getstripe -L $dom) != 'mdt' ] ||
+		error "MDT stripe was not removed"
+
+	cancel_lru_locks mdc
+	local new_md5=$(md5sum $dom)
+	[ "$old_md5" == "$new_md5" ] ||
+		error "$old_md5 != $new_md5"
+
+	# Skip free space checks with ZFS
+	if [ "$(facet_fstype $facet)" != "zfs" ]; then
+		local mdtfree2=$(do_facet $facet \
+				lctl get_param -n osd*.*$mdtname.kbytesfree)
+		[ $mdtfree2 -gt $mdtfree1 ] ||
+			error "MDS space is not freed after DOM mirror deletion"
+	fi
+	return 0
+}
+run_test 272d "DoM mirroring: OST-striped mirror to DOM file"
+
+test_272e() {
+	[ $MDS1_VERSION -lt $(version_code 2.12.55) ] &&
+		skip "Need MDS version at least 2.12.55"
+
+	local dom=$DIR/$tdir/$tfile
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c 2 $dom
+
+	dd if=/dev/urandom of=$dom bs=512K count=1 oflag=direct ||
+		error "failed to write data into $dom"
+	local old_md5=$(md5sum $dom)
+	cancel_lru_locks mdc
+
+	$LFS mirror extend -N -E 1M -L mdt -E eof -c2 $dom ||
+		error "failed mirroring to the DOM layout"
+	$LFS mirror resync $dom ||
+		error "failed mirror resync"
+	$LFS mirror split --mirror-id 1 -d $dom ||
+		error "failed mirror split"
+
+	[ $($LFS getstripe -L $dom) != 'mdt' ] ||
+		error "MDT stripe was not removed"
+
+	cancel_lru_locks mdc
+	local new_md5=$(md5sum $dom)
+	[ "$old_md5" == "$new_md5" ] ||
+		error "$old_md5 != $new_md5"
+
+	return 0
+}
+run_test 272e "DoM mirroring: DOM mirror to the OST-striped file"
+
+test_272f() {
+	[ $MDS1_VERSION -lt $(version_code 2.12.55) ] &&
+		skip "Need MDS version at least 2.12.55"
+
+	local dom=$DIR/$tdir/$tfile
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c 2 $dom
+
+	dd if=/dev/urandom of=$dom bs=512K count=1 oflag=direct ||
+		error "failed to write data into $dom"
+	local old_md5=$(md5sum $dom)
+	cancel_lru_locks mdc
+
+	$LFS migrate -E 1M -L mdt -E eof -c2 -v $dom ||
+		error "failed migrating to the DOM file"
+
+	cancel_lru_locks mdc
+	local new_md5=$(md5sum $dom)
+	[ "$old_md5" != "$new_md5" ] &&
+		error "$old_md5 != $new_md5"
+
+	return 0
+}
+run_test 272f "DoM migration: OST-striped file to DOM file"
 
 test_273a() {
 	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&

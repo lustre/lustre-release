@@ -2987,7 +2987,7 @@ enum llapi_layout_comp_sanity_error {
 	LSE_FLAGS,
 	LSE_DOM_EXTENSION,
 	LSE_DOM_EXTENSION_FOLLOWING,
-	LSE_DOM_FLR,
+	LSE_DOM_FIRST,
 	LSE_SET_COMP_START,
 	LSE_NOT_ZERO_LENGTH_EXTENDABLE,
 	LSE_END_NOT_GREATER,
@@ -3014,8 +3014,8 @@ const char *llapi_layout_strerror[] =
 		"DoM components can't be extension space",
 	[LSE_DOM_EXTENSION_FOLLOWING] =
 		"DoM components cannot be followed by extension space",
-	[LSE_DOM_FLR] =
-		"FLR and DoM are not supported together",
+	[LSE_DOM_FIRST] =
+		"DoM component should be the first one in a file/mirror",
 	[LSE_SET_COMP_START] =
 		"Must set previous component extent before adding next",
 	[LSE_NOT_ZERO_LENGTH_EXTENDABLE] =
@@ -3127,10 +3127,10 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 			goto out_err;
 		}
 
-		/* DoM and FLR are not supported together */
-		if (args->lsa_flr && first_comp) {
-			args->lsa_rc = LSE_DOM_FLR;
-			errno = ENOTSUP;
+		/* DoM should be the first component in a mirror */
+		if (!first_comp) {
+			args->lsa_rc = LSE_DOM_FIRST;
+			errno = EINVAL;
 			goto out_err;
 		}
 	}
@@ -3281,3 +3281,35 @@ int llapi_layout_sanity(struct llapi_layout *layout, bool incomplete, bool flr)
 
 	return rc;
 }
+
+int llapi_layout_dom_size(struct llapi_layout *layout, uint64_t *size)
+{
+	uint64_t pattern, start;
+	int rc;
+
+	if (!layout || !llapi_layout_is_composite(layout)) {
+		*size = 0;
+		return 0;
+	}
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc)
+		return -errno;
+
+	rc = llapi_layout_pattern_get(layout, &pattern);
+	if (rc)
+		return -errno;
+
+	if (pattern != LOV_PATTERN_MDT && pattern != LLAPI_LAYOUT_MDT) {
+		*size = 0;
+		return 0;
+	}
+
+	rc = llapi_layout_comp_extent_get(layout, &start, size);
+	if (rc)
+		return -errno;
+	if (start)
+		return -ERANGE;
+	return 0;
+}
+

@@ -1712,6 +1712,9 @@ static int mdd_split_ea(struct lov_comp_md_v1 *comp_v1, __u16 mirror_id,
 	return 0;
 }
 
+static int mdd_dom_data_truncate(const struct lu_env *env,
+				 struct mdd_device *mdd, struct mdd_object *mo);
+
 static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 			   struct md_rejig_data *mrd)
 {
@@ -1724,6 +1727,8 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	struct lov_comp_md_v1 *lcm;
 	struct thandle *handle;
 	int rc;
+	bool dom_stripe = false;
+
 	ENTRY;
 
 	rc = lu_fid_cmp(mdo2fid(obj), mdo2fid(vic));
@@ -1761,6 +1766,8 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 	rc = mdd_split_ea(lcm, mrd->mrd_mirror_id, buf, buf_vic);
 	if (rc < 0)
 		GOTO(out, rc);
+
+	dom_stripe = mdd_lmm_dom_size(buf_vic->lb_buf) > 0;
 
 	rc = mdd_declare_xattr_set(env, mdd, obj, buf, XATTR_NAME_LOV,
 				   LU_XATTR_SPLIT, handle);
@@ -1805,7 +1812,12 @@ out_restore:
 			       mdd_obj_dev_name(obj), PFID(mdo2fid(obj)), rc2);
 	}
 out:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+
+	/* Truncate local DOM data if all went well */
+	if (!rc && dom_stripe)
+		mdd_dom_data_truncate(env, mdd, obj);
+
 	mdd_write_unlock(env, obj);
 	mdd_write_unlock(env, vic);
 	lu_buf_free(buf_save);

@@ -3236,6 +3236,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	struct lov_comp_md_v1	*cur_lcm;
 	struct lov_comp_md_v1	*merge_lcm;
 	struct lov_comp_md_entry_v1	*lcme;
+	struct lov_mds_md_v1 *lmm;
 	size_t size = 0;
 	size_t offset;
 	__u16 cur_entry_count;
@@ -3244,6 +3245,8 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	__u16 mirror_id = 0;
 	__u32 mirror_count;
 	int	rc, i;
+	bool merge_has_dom;
+
 	ENTRY;
 
 	merge_lcm = mbuf->lb_buf;
@@ -3331,6 +3334,13 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	}
 
 	mirror_id = mirror_id_of(id) + 1;
+
+	/* check if first entry in new layout is DOM */
+	lmm = (struct lov_mds_md_v1 *)((char *)merge_lcm +
+					merge_lcm->lcm_entries[0].lcme_offset);
+	merge_has_dom = lov_pattern(le32_to_cpu(lmm->lmm_pattern)) ==
+			LOV_PATTERN_MDT;
+
 	for (i = 0; i < merge_entry_count; i++) {
 		struct lov_comp_md_entry_v1 *merge_lcme;
 
@@ -3339,6 +3349,8 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 
 		*lcme = *merge_lcme;
 		lcme->lcme_offset = cpu_to_le32(offset);
+		if (merge_has_dom && i == 0)
+			lcme->lcme_flags |= cpu_to_le32(LCME_FL_STALE);
 
 		id = pflr_id(mirror_id, i + 1);
 		lcme->lcme_id = cpu_to_le32(id);

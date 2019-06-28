@@ -135,6 +135,10 @@ static int lfs_pcc_detach_fid(int argc, char **argv);
 static int lfs_pcc_state(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
 static int lfs_pcc_list_commands(int argc, char **argv);
+static int lfs_migrate_to_dom(int fd, int fdv, char *name,
+			      __u64 migration_flags,
+			      struct llapi_stripe_param *param,
+			      struct llapi_layout *layout);
 
 enum setstripe_origin {
 	SO_SETSTRIPE,
@@ -1185,6 +1189,8 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		       struct llapi_stripe_param *param,
 		       struct llapi_layout *layout)
 {
+	struct llapi_layout *existing;
+	uint64_t dom_new, dom_cur;
 	int fd = -1;
 	int fdv = -1;
 	int rc;
@@ -1193,6 +1199,36 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 				&fd, &fdv);
 	if (rc < 0)
 		goto out;
+
+	rc = llapi_layout_dom_size(layout, &dom_new);
+	if (rc) {
+		error_loc = "cannot get new layout DoM size";
+		goto out;
+	}
+	/* special case for migration to DOM layout*/
+	existing = llapi_layout_get_by_fd(fd, 0);
+	if (!existing) {
+		error_loc = "cannot get existing layout";
+		goto out;
+	}
+
+	rc = llapi_layout_dom_size(existing, &dom_cur);
+	if (rc) {
+		error_loc = "cannot get current layout DoM size";
+		goto out;
+	}
+
+	/* if file has DoM layout already then migration is possible to
+	 * the new layout with the same DoM component via swap layout,
+	 * if new layout used bigger DOM size, then mirroring is used
+	 */
+	if (dom_new > dom_cur) {
+		rc = lfs_migrate_to_dom(fd, fdv, name, migration_flags, param,
+					layout);
+		if (rc)
+			error_loc = "cannot migrate to DOM layout";
+		goto out_closed;
+	}
 
 	if (!(migration_flags & MIGRATION_NONBLOCK)) {
 		/* Blocking mode (forced if servers do not support file lease).
@@ -1230,7 +1266,7 @@ out:
 
 	if (fdv >= 0)
 		close(fdv);
-
+out_closed:
 	if (rc < 0)
 		fprintf(stderr, "error: %s: %s: %s: %s\n",
 			progname, name, error_loc, strerror(-rc));
@@ -1986,6 +2022,72 @@ close_fd:
 	close(fd);
 free_layout:
 	llapi_layout_free(layout);
+	return rc;
+}
+
+static inline
+int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
+			   __u16 *mirror_ids, int ids_nr);
+
+static int lfs_migrate_to_dom(int fd, int fdv, char *name,
+			      __u64 migration_flags,
+			      struct llapi_stripe_param *param,
+			      struct llapi_layout *layout)
+{
+	struct ll_ioc_lease *data = NULL;
+	int rc;
+
+	rc = llapi_lease_acquire(fd, LL_LEASE_RDLCK);
+	if (rc < 0) {
+		error_loc = "cannot get lease";
+		goto out_close;
+	}
+
+	/* Atomically put lease, merge layouts, resync and close. */
+	data = calloc(1, offsetof(typeof(*data), lil_ids[1024]));
+	if (!data) {
+		error_loc = "memory allocation";
+		goto out_close;
+	}
+	data->lil_mode = LL_LEASE_UNLCK;
+	data->lil_flags = LL_LEASE_LAYOUT_MERGE;
+	data->lil_count = 1;
+	data->lil_ids[0] = fdv;
+	rc = llapi_lease_set(fd, data);
+	if (rc < 0) {
+		error_loc = "cannot merge layout";
+		goto out_close;
+	} else if (rc == 0) {
+		rc = -EBUSY;
+		error_loc = "lost lease lock";
+		goto out_close;
+	}
+	close(fd);
+	close(fdv);
+
+	rc = lfs_mirror_resync_file(name, data, NULL, 0);
+	if (rc) {
+		error_loc = "cannot resync file";
+		goto out;
+	}
+
+	/* delete first mirror now */
+	rc = mirror_split(name, 1, NULL, MF_DESTROY, NULL);
+	if (rc < 0)
+		error_loc = "cannot delete old layout";
+	goto out;
+
+out_close:
+	close(fd);
+	close(fdv);
+out:
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s: %s: %s\n",
+			progname, name, error_loc, strerror(-rc));
+	else if (migration_flags & MIGRATION_VERBOSE)
+		printf("%s\n", name);
+	if (data)
+		free(data);
 	return rc;
 }
 

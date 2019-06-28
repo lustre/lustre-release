@@ -1752,9 +1752,10 @@ struct lov_comp_md_entry_v1 *comp_entry_v1(struct lov_comp_md_v1 *comp, int i)
 				   le16_to_cpu(comp->lcm_entry_count) - 1); \
 	     entry++)
 
-int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1)
+int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1,
+			 struct lov_comp_md_entry_v1 *dom_ent)
 {
-	struct lov_comp_md_entry_v1 *ent, *dom_ent;
+	struct lov_comp_md_entry_v1 *ent;
 	__u16 entries;
 	__u32 dom_off, dom_size, comp_size;
 	void *blob_src, *blob_dst;
@@ -1766,7 +1767,6 @@ int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1)
 		return -EFBIG;
 
 	comp_size = le32_to_cpu(comp_v1->lcm_size);
-	dom_ent = &comp_v1->lcm_entries[0];
 	dom_off = le32_to_cpu(dom_ent->lcme_offset);
 	dom_size = le32_to_cpu(dom_ent->lcme_size);
 
@@ -1796,16 +1796,16 @@ int lod_erase_dom_stripe(struct lov_comp_md_v1 *comp_v1)
 	return -ERESTART;
 }
 
-int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1)
+int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1,
+		       struct lov_comp_md_entry_v1 *dom_ent)
 {
-	struct lov_comp_md_entry_v1 *ent, *dom_ent;
+	struct lov_comp_md_entry_v1 *ent;
 	struct lu_extent *dom_ext, *ext;
 	struct lov_user_md_v1 *lum;
 	__u32 stripe_size;
 	__u16 mid, dom_mid;
 	int rc = 0;
 
-	dom_ent = &comp_v1->lcm_entries[0];
 	dom_ext = &dom_ent->lcme_extent;
 	dom_mid = mirror_id_of(le32_to_cpu(dom_ent->lcme_id));
 	stripe_size = d->lod_dom_max_stripesize;
@@ -1842,7 +1842,7 @@ int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1)
 	if (stripe_size == 0) {
 		/* DoM component size is zero due to server setting,
 		 * remove it from the layout */
-		rc = lod_erase_dom_stripe(comp_v1);
+		rc = lod_erase_dom_stripe(comp_v1, dom_ent);
 	} else {
 		/* Update DoM extent end finally */
 		dom_ext->e_end = cpu_to_le64(stripe_size);
@@ -2015,7 +2015,7 @@ recheck:
 		lum = tmp.lb_buf;
 		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
 		    LOV_PATTERN_MDT) {
-			/* DoM component can be only the first stripe */
+			/* DoM component must be the first in a mirror */
 			if (le64_to_cpu(ext->e_start) > 0) {
 				CDEBUG(D_LAYOUT, "invalid DoM component "
 				       "with %llu extent start\n",
@@ -2038,7 +2038,7 @@ recheck:
 				       "%u is bigger than MDT limit %u, check "
 				       "dom_max_stripesize parameter\n",
 				       stripe_size, d->lod_dom_max_stripesize);
-				rc = lod_fix_dom_stripe(d, comp_v1);
+				rc = lod_fix_dom_stripe(d, comp_v1, ent);
 				if (rc == -ERESTART) {
 					/* DoM entry was removed, re-check
 					 * new layout from start */
