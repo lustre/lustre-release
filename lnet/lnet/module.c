@@ -241,6 +241,10 @@ static int __init lnet_init(void)
 		RETURN(rc);
 	}
 
+	if (live_router_check_interval != INT_MIN ||
+	    dead_router_check_interval != INT_MIN)
+		LCONSOLE_WARN("live_router_check_interval and dead_router_check_interval have been deprecated. Use alive_router_check_interval instead. Ignoring these deprecated parameters.\n");
+
 	rc = blocking_notifier_chain_register(&libcfs_ioctl_list,
 					      &lnet_ioctl_handler);
 	LASSERT(rc == 0);

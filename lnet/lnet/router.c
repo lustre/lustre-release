@@ -80,6 +80,14 @@ int avoid_asym_router_failure = 1;
 module_param(avoid_asym_router_failure, int, 0644);
 MODULE_PARM_DESC(avoid_asym_router_failure, "Avoid asymmetrical router failures (0 to disable)");
 
+int dead_router_check_interval = INT_MIN;
+module_param(dead_router_check_interval, int, 0444);
+MODULE_PARM_DESC(dead_router_check_interval, "(DEPRECATED - Use alive_router_check_interval)");
+
+int live_router_check_interval = INT_MIN;
+module_param(live_router_check_interval, int, 0444);
+MODULE_PARM_DESC(live_router_check_interval, "(DEPRECATED - Use alive_router_check_interval)");
+
 int alive_router_check_interval = 60;
 module_param(alive_router_check_interval, int, 0644);
 MODULE_PARM_DESC(alive_router_check_interval, "Seconds between live router health checks (<= 0 to disable)");

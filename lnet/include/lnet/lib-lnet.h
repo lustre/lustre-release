@@ -566,6 +566,8 @@ extern unsigned int lnet_peer_discovery_disabled;
 extern unsigned int lnet_drop_asym_route;
 extern unsigned int router_sensitivity_percentage;
 extern int alive_router_check_interval;
+extern int live_router_check_interval;
+extern int dead_router_check_interval;
 extern int portal_rotor;
 
 void lnet_mt_event_handler(struct lnet_event *event);
