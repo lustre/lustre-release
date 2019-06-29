@@ -595,6 +595,9 @@ struct ll_sb_info {
 	/* st_blksize returned by stat(2), when non-zero */
 	unsigned int		  ll_stat_blksize;
 
+	/* maximum relative age of cached statfs results */
+	unsigned int		  ll_statfs_max_age;
+
 	struct kset		  ll_kset;	/* sysfs object */
 	struct completion	  ll_kobj_unregister;
 
