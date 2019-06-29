@@ -380,6 +380,8 @@ struct ost_pool {
 
 /* allow statfs data caching for 1 second */
 #define OBD_STATFS_CACHE_SECONDS 1
+/* arbitrary maximum. larger would be useless, allows catching bogus input */
+#define OBD_STATFS_CACHE_MAX_AGE 3600 /* seconds */
 
 struct lov_tgt_desc {
 	struct list_head    ltd_kill;

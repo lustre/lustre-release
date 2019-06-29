@@ -869,6 +869,36 @@ static ssize_t lazystatfs_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(lazystatfs);
 
+static ssize_t statfs_max_age_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_statfs_max_age);
+}
+
+static ssize_t statfs_max_age_store(struct kobject *kobj,
+				    struct attribute *attr, const char *buffer,
+				    size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+	if (val > OBD_STATFS_CACHE_MAX_AGE)
+		return -EINVAL;
+
+	sbi->ll_statfs_max_age = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(statfs_max_age);
+
 static ssize_t max_easize_show(struct kobject *kobj,
 			       struct attribute *attr,
 			       char *buf)
@@ -1250,6 +1280,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_statahead_max.attr,
 	&lustre_attr_statahead_agl.attr,
 	&lustre_attr_lazystatfs.attr,
+	&lustre_attr_statfs_max_age.attr,
 	&lustre_attr_max_easize.attr,
 	&lustre_attr_default_easize.attr,
 	&lustre_attr_xattr_cache.attr,
