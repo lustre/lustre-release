@@ -34,6 +34,7 @@ Run Lustre regression tests suites.
       -l        Send logs to the Maloo database after run
                   (can be done later by running maloo_upload.sh)
       -L        Script language of test suite. Default: bash
+      -N        No setup. Do not setup Lustre prior to executing test suite.
       -h        This help.
 
 Suite options
@@ -70,9 +71,10 @@ reformat=false
 script_lang=bash
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
 export HONOR_EXCEPT=
+do_setup=true
 export ${SLOW:=no}
 export ${NAME:=local}
-while getopts "c:d:D:nkf:S:g:Hi:rRslL:hv" opt
+while getopts "c:d:D:nkf:S:g:Hi:rRslL:Nhv" opt
 do
 	case "$opt" in
 		c) export CONFIG=$OPTARG;;
@@ -91,6 +93,7 @@ do
 		s) export SLOW=yes;;
 		l) upload_logs=true;;
 		L) script_lang=$OPTARG;;
+		N) do_setup=false;;
 		h|\?) usage;;
 	esac
 done
@@ -126,6 +129,7 @@ print_summary () {
 
 
 setup_if_needed() {
+	! ${do_setup} && return
 	nfs_client_mode && return
 	AUSTER_CLEANUP=false
 
