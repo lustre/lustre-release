@@ -2643,7 +2643,7 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
 }
 
 /**
- * Downgrade an PW/EX lock to COS mode.
+ * Downgrade an PW/EX lock to COS | CR mode.
  *
  * A lock mode convertion from PW/EX mode to less conflict mode. The
  * convertion may fail if lock was canceled before downgrade, but it doesn't
@@ -2655,6 +2655,8 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
  * things are cleared, so any pending or new blocked lock on that lock will
  * cause new call to blocking_ast and force resource object commit.
  *
+ * Also used by layout_change to replace EX lock to CR lock.
+ *
  * \param lock A lock to convert
  * \param new_mode new lock mode
  */
@@ -2663,7 +2665,7 @@ void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode)
 #ifdef HAVE_SERVER_SUPPORT
 	ENTRY;
 
-	LASSERT(new_mode == LCK_COS);
+	LASSERT(new_mode == LCK_COS || new_mode == LCK_CR);
 
 	lock_res_and_lock(lock);
 

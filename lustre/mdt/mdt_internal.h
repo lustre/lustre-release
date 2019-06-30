@@ -901,6 +901,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
 			   struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
+		      struct mdt_lock_handle *lhc,
 		      struct md_layout_change *spec);
 int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt);
 

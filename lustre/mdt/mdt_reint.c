@@ -2703,14 +2703,15 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 			    struct mdt_lock_handle *lhc)
 {
 	struct mdt_reint_record	*rr = &info->mti_rr;
-	struct ptlrpc_request	*req = mdt_info_req(info);
-	struct md_attr		*ma = &info->mti_attr;
-	struct mdt_object       *mo;
-	struct ldlm_lock	*lease;
-	struct mdt_body         *repbody;
-	struct md_layout_change	 layout = { .mlc_mirror_id = rr->rr_mirror_id };
-	bool			 lease_broken;
-	int			 rc, rc2;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct md_attr *ma = &info->mti_attr;
+	struct mdt_object *mo;
+	struct ldlm_lock *lease;
+	struct mdt_body *repbody;
+	struct md_layout_change layout = { .mlc_mirror_id = rr->rr_mirror_id };
+	bool lease_broken;
+	int rc, rc2;
+
 	ENTRY;
 
 	DEBUG_REQ(D_INODE, req, DFID", FLR file resync", PFID(rr->rr_fid1));
@@ -2750,9 +2751,12 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 
 	/* the file has yet opened by anyone else after we took the lease. */
 	layout.mlc_opc = MD_LAYOUT_RESYNC;
-	rc = mdt_layout_change(info, mo, &layout);
+	lhc = &info->mti_lh[MDT_LH_LOCAL];
+	rc = mdt_layout_change(info, mo, lhc, &layout);
 	if (rc)
 		GOTO(out_unlock, rc);
+
+	mdt_object_unlock(info, mo, lhc, 0);
 
 	ma->ma_need = MA_INODE;
 	ma->ma_valid = 0;

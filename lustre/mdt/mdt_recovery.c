@@ -340,7 +340,8 @@ static mdt_reconstructor reconstructors[REINT_MAX] = {
         [REINT_OPEN]     = mdt_reconstruct_open,
 	[REINT_SETXATTR] = mdt_reconstruct_generic,
 	[REINT_RMENTRY]  = mdt_reconstruct_generic,
-	[REINT_MIGRATE] = mdt_reconstruct_generic
+	[REINT_MIGRATE]	 = mdt_reconstruct_generic,
+	[REINT_RESYNC]	 = mdt_reconstruct_generic
 };
 
 void mdt_reconstruct(struct mdt_thread_info *mti,

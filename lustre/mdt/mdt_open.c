@@ -2197,13 +2197,15 @@ out_lease:
 static int mdt_close_resync_done(struct mdt_thread_info *info,
 				 struct mdt_object *o, struct md_attr *ma)
 {
-	struct close_data	*data;
-	struct ldlm_lock	*lease;
-	struct md_layout_change	 layout = { 0 };
-	__u32			*resync_ids = NULL;
-	size_t			 resync_count = 0;
-	bool			 lease_broken;
-	int			 rc;
+	struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_LOCAL];
+	struct close_data *data;
+	struct ldlm_lock *lease;
+	struct md_layout_change layout = { 0 };
+	__u32 *resync_ids = NULL;
+	size_t resync_count = 0;
+	bool lease_broken;
+	int rc;
+
 	ENTRY;
 
 	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_RDONLY)
@@ -2276,9 +2278,11 @@ static int mdt_close_resync_done(struct mdt_thread_info *info,
 		layout.mlc_som.lsa_size = ma->ma_attr.la_size;
 		layout.mlc_som.lsa_blocks = ma->ma_attr.la_blocks;
 	}
-	rc = mdt_layout_change(info, o, &layout);
+	rc = mdt_layout_change(info, o, lhc, &layout);
 	if (rc)
 		GOTO(out_unlock, rc);
+
+	mdt_object_unlock(info, o, lhc, 0);
 
 	EXIT;
 
