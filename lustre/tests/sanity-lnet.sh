@@ -113,53 +113,879 @@ cleanup_netns() {
 	fi
 }
 
-cleanupall -f
-
-setup_netns
-load_lnet
-
-test_1() {
+configure_dlc() {
+	echo "Loading LNet and configuring DLC"
+	load_lnet
 	do_lnetctl lnet configure
 }
-run_test 1 "configure lnet with lnetctl"
 
+GLOBAL_YAML_FILE=$TMP/sanity-lnet-global.yaml
+define_global_yaml() {
+	$LNETCTL export --backup >${GLOBAL_YAML_FILE} ||
+		error "Failed to export global yaml $?"
+}
+
+reinit_dlc() {
+	if lsmod | grep -q lnet; then
+		do_lnetctl lnet unconfigure ||
+			error "lnetctl lnet unconfigure failed $?"
+		do_lnetctl lnet configure ||
+			error "lnetctl lnet configure failed $?"
+	else
+		configure_dlc || error "configure_dlc failed $?"
+	fi
+	define_global_yaml
+}
+
+append_global_yaml() {
+	[[ ! -e ${GLOBAL_YAML_FILE} ]] &&
+		error "Missing global yaml at ${GLOBAL_YAML_FILE}"
+
+	cat ${GLOBAL_YAML_FILE} >> $TMP/sanity-lnet-$testnum-expected.yaml
+}
+
+create_base_yaml_file() {
+	append_global_yaml
+}
+
+compare_yaml_files() {
+	local expected="$TMP/sanity-lnet-$testnum-expected.yaml"
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+	local rc=0
+	! [[ -e $expected ]] && echo "$expected not found" && return 1
+	! [[ -e $actual ]] && echo "$actual not found" && return 1
+	diff -upN ${actual} ${expected} || rc=$?
+	echo "Expected:"
+	cat $expected
+	echo "Actual:"
+	cat $actual
+	return $rc
+}
+
+validate_nid() {
+	local nid="$1"
+	local net="${nid//*@/}"
+	local addr="${nid//@*/}"
+
+	local num_re='[0-9]\+'
+	local ip_re="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+
+	if [[ $net =~ gni[0-9]* ]]; then
+		[[ $addr =~ ${num_re} ]] && return 0
+	else
+		[[ $addr =~ ${ip_re} ]] && return 0
+	fi
+}
+
+validate_nids() {
+	local yfile=$TMP/sanity-lnet-$testnum-actual.yaml
+	local primary_nids=$(awk '/- primary nid:/{print $NF}' $yfile | xargs echo)
+	local secondary_nids=$(awk '/- nid:/{print $NF}' $yfile | xargs echo)
+	local gateway_nids=$(awk '/gateway:/{print $NF}' $yfile | xargs echo)
+
+	local nid
+	for nid in $primary_nids $secondary_nids; do
+		validate_nid "$nid" || error "Bad NID \"${nid}\""
+	done
+	return 0
+}
+
+validate_peer_nids() {
+	local num_peers="$1"
+	local nids_per_peer="$2"
+
+	local expect_p="$num_peers"
+	# The primary nid also shows up in the list of secondary nids
+	local expect_s="$(($num_peers + $(($nids_per_peer*$num_peers))))"
+
+	local actual_p=$(grep -c -- '- primary nid:' $TMP/sanity-lnet-$testnum-actual.yaml)
+	local actual_s=$(grep -c -- '- nid:' $TMP/sanity-lnet-$testnum-actual.yaml)
+	if [[ $expect_p -ne $actual_p ]]; then
+		compare_yaml_files
+		error "Expected $expect_p but found $actual_p primary nids"
+	elif [[ $expect_s -ne $actual_s ]]; then
+		compare_yaml_files
+		error "Expected $expect_s but found $actual_s secondary nids"
+	fi
+	validate_nids
+}
+
+validate_gateway_nids() {
+	local expect_gw=$(grep -c -- 'gateway:' $TMP/sanity-lnet-$testnum-expected.yaml)
+	local actual_gw=$(grep -c -- 'gateway:' $TMP/sanity-lnet-$testnum-actual.yaml)
+	if [[ $expect_gw -ne $actual_gw ]]; then
+		compare_yaml_files
+		error "Expected $expect_gw gateways but found $actual_gw gateways"
+	fi
+	validate_nids
+}
+
+cleanupall -f
+setup_netns || error "setup_netns failed with $?"
+
+test_0() {
+	load_module ../lnet/lnet/lnet || error "Failed to load module rc = $?"
+	do_lnetctl lnet configure || error "lnet configure failed rc = $?"
+	define_global_yaml
+	reinit_dlc || return $?
+	do_lnetctl import <  ${GLOBAL_YAML_FILE} || error "Import failed $?"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	create_base_yaml_file
+	compare_yaml_files || error "Configuration changed after import"
+}
+run_test 0 "Export empty config, import the config, compare"
+
+compare_peer_add() {
+	local prim_nid="${1:+--prim_nid $1}"
+	local nid="${2:+--nid $2}"
+
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	do_lnetctl peer add ${prim_nid} ${nid} || error "peer add failed $?"
+	$LNETCTL export --backup > $actual || error "export failed $?"
+	compare_yaml_files
+	return $?
+}
+
+test_1() {
+	reinit_dlc || return $?
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 1.1.1.1@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 1.1.1.1@tcp
+EOF
+	append_global_yaml
+	compare_peer_add "1.1.1.1@tcp"
+}
+run_test 1 "Add peer with single nid (tcp)"
+
+test_2() {
+	reinit_dlc || return $?
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 2.2.2.2@o2ib
+      Multi-Rail: True
+      peer ni:
+        - nid: 2.2.2.2@o2ib
+EOF
+	append_global_yaml
+	compare_peer_add "2.2.2.2@o2ib"
+}
+run_test 2 "Add peer with single nid (o2ib)"
+
+test_3() {
+	reinit_dlc || return $?
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 3.3.3.3@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 3.3.3.3@tcp
+        - nid: 3.3.3.3@o2ib
+EOF
+	append_global_yaml
+	compare_peer_add "3.3.3.3@tcp" "3.3.3.3@o2ib"
+}
+run_test 3 "Add peer with tcp primary o2ib secondary"
+
+test_4() {
+	reinit_dlc || return $?
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 4.4.4.4@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 4.4.4.4@tcp
+        - nid: 4.4.4.1@tcp
+        - nid: 4.4.4.2@tcp
+        - nid: 4.4.4.3@tcp
+EOF
+	append_global_yaml
+	echo "Add peer with nidrange (tcp)"
+	compare_peer_add "4.4.4.4@tcp" "4.4.4.[1-3]@tcp"
+
+	echo "Add peer with nidrange that overlaps primary nid (tcp)"
+	compare_peer_add "4.4.4.4@tcp" "4.4.4.[1-4]@tcp"
+}
+run_test 4 "Add peer with nidrange (tcp)"
+
+test_5() {
+	reinit_dlc || return $?
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 5.5.5.5@o2ib
+      Multi-Rail: True
+      peer ni:
+        - nid: 5.5.5.5@o2ib
+        - nid: 5.5.5.1@o2ib
+        - nid: 5.5.5.2@o2ib
+        - nid: 5.5.5.3@o2ib
+        - nid: 5.5.5.4@o2ib
+EOF
+	append_global_yaml
+	echo "Add peer with nidrange (o2ib)"
+	compare_peer_add "5.5.5.5@o2ib" "5.5.5.[1-4]@o2ib"
+
+	echo "Add peer with nidranage that overlaps primary nid (o2ib)"
+	compare_peer_add "5.5.5.5@o2ib" "5.5.5.[1-4]@o2ib"
+}
+run_test 5 "Add peer with nidrange (o2ib)"
+
+test_6() {
+	reinit_dlc || return $?
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 6.6.6.6@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 6.6.6.6@tcp
+        - nid: 6.6.6.0@tcp
+        - nid: 6.6.6.2@tcp
+        - nid: 6.6.6.4@tcp
+        - nid: 6.6.7.0@tcp
+        - nid: 6.6.7.2@tcp
+        - nid: 6.6.7.4@tcp
+        - nid: 6.6.1.0@o2ib
+        - nid: 6.6.1.3@o2ib
+        - nid: 6.6.1.6@o2ib
+        - nid: 6.6.3.0@o2ib
+        - nid: 6.6.3.3@o2ib
+        - nid: 6.6.3.6@o2ib
+EOF
+	append_global_yaml
+	compare_peer_add "6.6.6.6@tcp" \
+			 "6.6.[6-7].[0-4/2]@tcp,6.6.[1-4/2].[0-6/3]@o2ib"
+}
+run_test 6 "Add peer with multiple nidranges"
+
+compare_peer_del() {
+	local prim_nid="${1:+--prim_nid $1}"
+	local nid="${2:+--nid $2}"
+
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	do_lnetctl peer del ${prim_nid} ${nid} || error "peer del failed $?"
+	$LNETCTL export --backup > $actual || error "export failed $?"
+	compare_yaml_files
+	return $?
+}
+
+test_7() {
+	reinit_dlc || return $?
+	create_base_yaml_file
+
+	echo "Delete peer with single nid (tcp)"
+	do_lnetctl peer add --prim_nid 7.7.7.7@tcp || error "Peer add failed $?"
+	compare_peer_del "7.7.7.7@tcp"
+
+	echo "Delete peer with single nid (o2ib)"
+	do_lnetctl peer add --prim_nid 7.7.7.7@o2ib || error "Peer add failed $?"
+	compare_peer_del "7.7.7.7@o2ib"
+
+	echo "Delete peer that has multiple nids (tcp)"
+	do_lnetctl peer add --prim_nid 7.7.7.7@tcp --nid 7.7.7.[8-12]@tcp ||
+		error "Peer add failed $?"
+	compare_peer_del "7.7.7.7@tcp"
+
+	echo "Delete peer that has multiple nids (o2ib)"
+	do_lnetctl peer add --prim_nid 7.7.7.7@o2ib --nid 7.7.7.[8-12]@o2ib ||
+		error "Peer add failed $?"
+	compare_peer_del "7.7.7.7@o2ib"
+
+	echo "Delete peer that has both tcp and o2ib nids"
+	do_lnetctl peer add --prim_nid 7.7.7.7@tcp \
+		--nid 7.7.7.[9-12]@tcp,7.7.7.[13-15]@o2ib ||
+		error "Peer add failed $?"
+	compare_peer_del "7.7.7.7@tcp"
+}
+run_test 7 "Various peer delete tests"
+
+test_8() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 8.8.8.8@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 8.8.8.8@tcp
+        - nid: 8.8.8.10@tcp
+        - nid: 8.8.8.11@tcp
+        - nid: 8.8.8.12@tcp
+        - nid: 8.8.8.14@tcp
+        - nid: 8.8.8.15@tcp
+EOF
+	append_global_yaml
+
+	do_lnetctl peer add --prim_nid 8.8.8.8@tcp --nid 8.8.8.[10-15]@tcp ||
+		error "Peer add failed $?"
+	compare_peer_del "8.8.8.8@tcp" "8.8.8.13@tcp"
+}
+run_test 8 "Delete single secondary nid from peer (tcp)"
+
+test_9() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 9.9.9.9@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 9.9.9.9@tcp
+EOF
+	append_global_yaml
+
+	do_lnetctl peer add --prim_nid 9.9.9.9@tcp \
+		--nid 9.9.9.[11-16]@tcp || error "Peer add failed $?"
+	compare_peer_del "9.9.9.9@tcp" "9.9.9.[11-16]@tcp"
+}
+run_test 9 "Delete all secondary nids from peer (tcp)"
+
+test_10() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 10.10.10.10@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 10.10.10.10@tcp
+        - nid: 10.10.10.12@tcp
+        - nid: 10.10.10.13@tcp
+        - nid: 10.10.10.15@tcp
+        - nid: 10.10.10.16@tcp
+EOF
+	append_global_yaml
+	do_lnetctl peer add --prim_nid 10.10.10.10@tcp \
+		--nid 10.10.10.[12-16]@tcp || error "Peer add failed $?"
+	compare_peer_del "10.10.10.10@tcp" "10.10.10.14@tcp"
+}
+run_test 10 "Delete single secondary nid from peer (o2ib)"
+
+test_11() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 11.11.11.11@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 11.11.11.11@tcp
+EOF
+	append_global_yaml
+	do_lnetctl peer add --prim_nid 11.11.11.11@tcp \
+		--nid 11.11.11.[13-17]@tcp || error "Peer add failed $?"
+	compare_peer_del "11.11.11.11@tcp" "11.11.11.[13-17]@tcp"
+}
+run_test 11 "Delete all secondary nids from peer (o2ib)"
+
+test_12() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 12.12.12.12@o2ib
+      Multi-Rail: True
+      peer ni:
+        - nid: 12.12.12.12@o2ib
+        - nid: 13.13.13.13@o2ib
+        - nid: 14.13.13.13@o2ib
+        - nid: 14.15.13.13@o2ib
+        - nid: 15.17.1.5@tcp
+        - nid: 15.17.1.10@tcp
+        - nid: 15.17.1.20@tcp
+EOF
+	append_global_yaml
+	do_lnetctl peer add --prim_nid 12.12.12.12@o2ib \
+		--nid [13-14/1].[13-15/2].13.13@o2ib,[15-16/3].[17-19/4].[1].[5-20/5]@tcp ||
+		error "Peer add failed $?"
+	compare_peer_del "12.12.12.12@o2ib" "13.15.13.13@o2ib,15.17.1.15@tcp"
+}
+run_test 12 "Delete a secondary nid from peer (tcp and o2ib)"
+
+test_13() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 13.13.13.13@o2ib
+      Multi-Rail: True
+      peer ni:
+        - nid: 13.13.13.13@o2ib
+EOF
+	append_global_yaml
+	do_lnetctl peer add --prim_nid 13.13.13.13@o2ib \
+		--nid [14-15].[1-2/1].[1].[100-254/10]@tcp,14.14.[254].14@o2ib ||
+		error "Peer add failed $?"
+	compare_peer_del "13.13.13.13@o2ib" \
+		"[14-15].[1-2/1].[1].[100-254/10]@tcp,14.14.[254].14@o2ib"
+}
+run_test 13 "Delete all secondary nids from peer (tcp and o2ib)"
+
+create_nid() {
+	local num="$1"
+	local net="$2"
+
+	if [[ $net =~ gni* ]]; then
+		echo "${num}@${net}"
+	else
+		echo "${num}.${num}.${num}.${num}@${net}"
+	fi
+}
+
+create_mr_peer_yaml() {
+	local num_peers="$1"
+	local secondary_nids="$2"
+	local net="$3"
+
+	echo "Generating peer yaml for $num_peers peers with $secondary_nids secondary nids"
+	echo "peer:" >> $TMP/sanity-lnet-$testnum-expected.yaml
+	local i
+	local total_nids=$((num_peers + $((num_peers * secondary_nids))))
+	local created=0
+	local nidnum=1
+	while [[ $created -lt $num_peers ]]; do
+		local primary=$(create_nid ${nidnum} ${net})
+	cat <<EOF >> $TMP/sanity-lnet-$testnum-expected.yaml
+    - primary nid: $primary
+      Multi-Rail: True
+      peer ni:
+        - nid: $primary
+EOF
+		local j
+		local start=$((nidnum + 1))
+		local end=$((nidnum + $secondary_nids))
+		for j in $(seq ${start} ${end}); do
+			local nid=$(create_nid $j ${net})
+			echo "        - nid: $nid" >> $TMP/sanity-lnet-$testnum-expected.yaml
+		done
+		nidnum=$((end + 1))
+		((created++))
+	done
+}
+
+test_14() {
+	reinit_dlc || return $?
+
+	echo "Create single peer, single nid, using import"
+	create_mr_peer_yaml 1 0 tcp
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	append_global_yaml
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files
+
+	echo "Delete single peer using import --del"
+	do_lnetctl import --del < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	rm -f $TMP/sanity-lnet-$testnum-expected.yaml
+	create_base_yaml_file
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files
+}
+run_test 14 "import peer create/delete with single nid"
+
+test_15() {
+	reinit_dlc || return $?
+
+	echo "Create multiple peers, single nid per peer, using import"
+	create_mr_peer_yaml 5 0 o2ib
+	# The ordering of nids for this use-case is non-deterministic, so we
+	# we can't just diff the expected/actual output.
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	validate_peer_nids 5 0
+
+	echo "Delete multiple peers, single nid per peer, using import --del"
+	do_lnetctl import --del < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	rm -f $TMP/sanity-lnet-$testnum-expected.yaml
+	create_base_yaml_file
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files
+}
+run_test 15 "import multi peer create/delete with single nid per peer"
+
+test_16() {
+	reinit_dlc || return $?
+
+	echo "Create single peer, multiple nids, using import"
+	create_mr_peer_yaml 1 5 tcp
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	validate_peer_nids 1 5
+
+	echo "Delete single peer, multiple nids, using import --del"
+	do_lnetctl import --del < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	rm -f $TMP/sanity-lnet-$testnum-expected.yaml
+	create_base_yaml_file
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files
+}
+run_test 16 "import peer create/delete with multiple nids"
+
+test_17() {
+	reinit_dlc || return $?
+
+	echo "Create multiple peers, multiple nids per peer, using import"
+	create_mr_peer_yaml 5 7 o2ib
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	validate_peer_nids 5 7
+
+	echo "Delete multiple peers, multiple nids per peer, using import --del"
+	do_lnetctl import --del < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	rm -f $TMP/sanity-lnet-$testnum-expected.yaml
+	create_base_yaml_file
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files
+}
+run_test 17 "import multi peer create/delete with multiple nids"
+
+test_18a() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 1.1.1.1@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 1.1.1.1@tcp
+        - nid: 2.2.2.2@tcp
+        - nid: 4.4.4.4@tcp
+        - nid: 3.3.3.3@o2ib
+EOF
+	echo "Import peer with 4 nids"
+	cat $TMP/sanity-lnet-$testnum-expected.yaml
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 1.1.1.1@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 2.2.2.2@tcp
+        - nid: 3.3.3.3@o2ib
+EOF
+	echo "Delete two of the nids"
+	cat $TMP/sanity-lnet-$testnum-expected.yaml
+	do_lnetctl import --del < $TMP/sanity-lnet-$testnum-expected.yaml
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 1.1.1.1@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 1.1.1.1@tcp
+        - nid: 4.4.4.4@tcp
+EOF
+	echo "Check peer has expected nids remaining"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	append_global_yaml
+	compare_yaml_files
+}
+run_test 18a "Delete a subset of nids from a single peer using import --del"
+
+test_18b() {
+	reinit_dlc || return $?
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 1.1.1.1@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 1.1.1.1@tcp
+        - nid: 2.2.2.2@tcp
+        - nid: 4.4.4.4@tcp
+        - nid: 3.3.3.3@o2ib
+    - primary nid: 5.5.5.5@o2ib
+      Multi-Rail: True
+      peer ni:
+        - nid: 5.5.5.5@o2ib
+        - nid: 6.6.6.6@tcp
+        - nid: 7.7.7.7@tcp
+        - nid: 8.8.8.8@tcp
+EOF
+	echo "Import two peers with 4 nids each"
+	cat $TMP/sanity-lnet-$testnum-expected.yaml
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-expected.yaml ||
+		error "Import failed $?"
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 1.1.1.1@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 2.2.2.2@tcp
+        - nid: 3.3.3.3@o2ib
+    - primary nid: 5.5.5.5@o2ib
+      Multi-Rail: True
+      peer ni:
+        - nid: 7.7.7.7@tcp
+        - nid: 8.8.8.8@tcp
+EOF
+	echo "Delete two of the nids from each peer"
+	cat $TMP/sanity-lnet-$testnum-expected.yaml
+	do_lnetctl import --del < $TMP/sanity-lnet-$testnum-expected.yaml
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+peer:
+    - primary nid: 5.5.5.5@o2ib
+      Multi-Rail: True
+      peer ni:
+        - nid: 5.5.5.5@o2ib
+        - nid: 6.6.6.6@tcp
+    - primary nid: 1.1.1.1@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 1.1.1.1@tcp
+        - nid: 4.4.4.4@tcp
+EOF
+	append_global_yaml
+	echo "Check peers have expected nids remaining"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files
+	validate_peer_nids 2 1
+}
+run_test 18b "Delete multiple nids from multiple peers using import --del"
+
+test_99a() {
+	reinit_dlc || return $?
+	echo "Invalid prim_nid: should fail"
+	do_lnetctl peer add --prim_nid foobar &&
+		error "Command should have failed"
+
+	do_lnetctl peer del --prim_nid foobar &&
+		error "Command should have failed"
+
+	echo "Delete non-existing peer: should fail"
+	do_lnetctl peer del --prim_nid 1.1.1.1@o2ib &&
+		error "Command should have failed"
+
+	echo "Don't provide mandatory arguments: should fail"
+	do_lnetctl peer del --nid 1.1.1.1@tcp &&
+		error "Command should have failed"
+	do_lnetctl peer add &&
+		error "Command should have failed"
+	# This currently causes a segfault. Uncomment when fixed.
+	#echo "Invalid secondary nids: should fail"
+	#do_lnetctl peer add --prim_nid 1.1.1.1@tcp --nid foobar && error "Command should have failed"
+
+	# This shouldn't work, but currently does. Uncomment when fixed.
+	#echo "Exceed max nids per peer"
+	#do_lnetctl peer add --prim_nid 1.1.1.1@tcp --nid 1.1.1.[2-255]@tcp && error "Command should have failed"
+	return 0
+}
+run_test 99a "Check various invalid inputs to lnetctl peer add"
+
+test_99b() {
+	reinit_dlc || return $?
+
+	create_base_yaml_file
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum-invalid.yaml
+peer:
+    - primary nid: 99.99.99.99@tcp
+      Multi-Rail: Foobar
+      peer ni:
+        - nid: 99.99.99.99@tcp
+EOF
+	do_lnetctl import < $TMP/sanity-lnet-$testnum-invalid.yaml &&
+		error "import should have failed"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-actual.yaml
+	compare_yaml_files
+}
+run_test 99b "Invalid value for Multi-Rail in yaml import"
+
+have_interface() {
+	local if="$1"
+	local ip=$(ip addr show dev $if | awk '/ inet /{print $2}')
+	[[ -n $ip ]]
+}
+
+add_net() {
+	local net="$1"
+	local if="$2"
+
+	reinit_dlc || return $?
+	load_module ../lnet/klnds/socklnd/ksocklnd ||
+		error "Can't load ksocklnd.ko"
+	do_lnetctl net add --net ${net} --if ${if} ||
+		error "Failed to add net ${net} on if ${if}"
+}
+
+compare_route_add() {
+	local rnet="$1"
+	local gw="$2"
+
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	do_lnetctl route add --net ${rnet} --gateway ${gw} ||
+		error "route add failed $?"
+	# CPT configuration is pruned from the exported yaml, since the default
+	# can vary across test systems (unlike default values for things like
+	# peer_credits, peer_timeout, etc.)
+	$LNETCTL export --backup | grep -v CPT > $actual ||
+		error "export failed $?"
+	validate_gateway_nids
+	return $?
+}
+
+test_100() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	add_net "tcp" "eth0"
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: tcp
+      local NI(s):
+        - interfaces:
+              0: eth0
+          tunables:
+              peer_timeout: 180
+              peer_credits: 8
+              peer_buffer_credits: 0
+              credits: 256
+route:
+    - net: tcp7
+      gateway: 7.7.7.7@tcp
+      hop: -1
+      priority: 0
+      health_sensitivity: 1
+peer:
+    - primary nid: 7.7.7.7@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 7.7.7.7@tcp
+EOF
+	append_global_yaml
+	compare_route_add "tcp7" "7.7.7.7@tcp" || return $?
+	compare_yaml_files
+}
+run_test 100 "Add route with single gw (tcp)"
+
+test_101() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	add_net "tcp" "eth0"
+	cat <<EOF > $TMP/sanity-lnet-$testnum-expected.yaml
+net:
+    - net type: tcp
+      local NI(s):
+        - interfaces:
+              0: eth0
+          tunables:
+              peer_timeout: 180
+              peer_credits: 8
+              peer_buffer_credits: 0
+              credits: 256
+route:
+    - net: tcp8
+      gateway: 8.8.8.10@tcp
+      hop: -1
+      priority: 0
+      health_sensitivity: 1
+    - net: tcp8
+      gateway: 8.8.8.9@tcp
+      hop: -1
+      priority: 0
+      health_sensitivity: 1
+    - net: tcp8
+      gateway: 8.8.8.8@tcp
+      hop: -1
+      priority: 0
+      health_sensitivity: 1
+peer:
+    - primary nid: 8.8.8.9@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 8.8.8.9@tcp
+    - primary nid: 8.8.8.10@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 8.8.8.10@tcp
+    - primary nid: 8.8.8.8@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 8.8.8.8@tcp
+EOF
+	append_global_yaml
+	compare_route_add "tcp8" "8.8.8.[8-10]@tcp"
+}
+run_test 101 "Add route with multiple gw (tcp)"
+
+compare_route_del() {
+	local rnet="$1"
+	local gw="$2"
+
+	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"
+
+	do_lnetctl route del --net ${rnet} --gateway ${gw} ||
+		error "route del failed $?"
+	$LNETCTL export --backup > $actual ||
+		error "export failed $?"
+	validate_gateway_nids
+}
+
+test_102() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	add_net "tcp" "eth0"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+	do_lnetctl route add --net tcp102 --gateway 102.102.102.102@tcp ||
+		error "route add failed $?"
+	compare_route_del "tcp102" "102.102.102.102@tcp"
+}
+run_test 102 "Delete route with single gw (tcp)"
+
+test_103() {
+	have_interface "eth0" || skip "Need eth0 interface with ipv4 configured"
+	add_net "tcp" "eth0"
+	$LNETCTL export --backup > $TMP/sanity-lnet-$testnum-expected.yaml
+	do_lnetctl route add --net tcp103 \
+		--gateway 103.103.103.[103-120/4]@tcp ||
+		error "route add failed $?"
+	compare_route_del "tcp103" "103.103.103.[103-120/4]@tcp"
+}
+run_test 103 "Delete route with multiple gw (tcp)"
 
 ### load lnet in default namespace, configure in target namespace
 
-test_2() {
+test_200() {
 	cleanup_lnet || exit 1
 	load_lnet "networks=\"\""
 	do_ns $LNETCTL lnet configure --all || exit 1
 	$LNETCTL net show --net tcp | grep -q "nid: ${FAKE_IP}@tcp$"
 }
-run_test 2 "load lnet w/o module option, configure in a non-default namespace"
+run_test 200 "load lnet w/o module option, configure in a non-default namespace"
 
-test_3() {
+test_201() {
 	cleanup_lnet || exit 1
 	load_lnet "networks=tcp($FAKE_IF)"
 	do_ns $LNETCTL lnet configure --all || exit 1
 	$LNETCTL net show --net tcp | grep -q "nid: ${FAKE_IP}@tcp$"
 }
-run_test 3 "load lnet using networks module options in a non-default namespace"
+run_test 201 "load lnet using networks module options in a non-default namespace"
 
-test_4() {
+test_202() {
 	cleanup_lnet || exit 1
 	load_lnet "networks=\"\" ip2nets=\"tcp0($FAKE_IF) ${FAKE_IP}\""
 	do_ns $LNETCTL lnet configure --all || exit 1
 	$LNETCTL net show | grep -q "nid: ${FAKE_IP}@tcp$"
 }
-run_test 4 "load lnet using ip2nets in a non-default namespace"
+run_test 202 "load lnet using ip2nets in a non-default namespace"
 
 
 ### Add the interfaces in the target namespace
 
-test_5() {
+test_203() {
 	cleanup_lnet || exit 1
 	load_lnet
 	do_lnetctl lnet configure || exit 1
 	do_ns $LNETCTL net add --net tcp0 --if $FAKE_IF
 }
-run_test 5 "add a network using an interface in the non-default namespace"
+run_test 203 "add a network using an interface in the non-default namespace"
 
 complete $SECONDS
 
