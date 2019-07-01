@@ -2177,29 +2177,8 @@ int ptlrpc_prep_bulk_frag(struct ptlrpc_bulk_desc *desc,
 void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 			     struct page *page, int pageoffset, int len,
 			     int pin);
-static inline void ptlrpc_prep_bulk_page_pin(struct ptlrpc_bulk_desc *desc,
-					     struct page *page, int pageoffset,
-					     int len)
-{
-	__ptlrpc_prep_bulk_page(desc, page, pageoffset, len, 1);
-}
-
-static inline void ptlrpc_prep_bulk_page_nopin(struct ptlrpc_bulk_desc *desc,
-					       struct page *page, int pageoffset,
-					       int len)
-{
-	__ptlrpc_prep_bulk_page(desc, page, pageoffset, len, 0);
-}
 
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
-
-static inline void ptlrpc_release_bulk_page_pin(struct ptlrpc_bulk_desc *desc)
-{
-	int i;
-
-	for (i = 0; i < desc->bd_iov_count ; i++)
-		put_page(BD_GET_KIOV(desc, i).kiov_page);
-}
 
 static inline void ptlrpc_release_bulk_noop(struct ptlrpc_bulk_desc *desc)
 {

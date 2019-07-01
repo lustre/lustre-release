@@ -1460,6 +1460,7 @@ EXPORT_SYMBOL(nodemap_index_read);
 int nodemap_get_config_req(struct obd_device *mgs_obd,
 			   struct ptlrpc_request *req)
 {
+	const struct ptlrpc_bulk_frag_ops *frag_ops = &ptlrpc_bulk_kiov_pin_ops;
 	struct mgs_config_body *body;
 	struct mgs_config_res *res;
 	struct lu_rdpg rdpg;
@@ -1523,14 +1524,13 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	desc = ptlrpc_prep_bulk_exp(req, page_count, 1,
 				    PTLRPC_BULK_PUT_SOURCE |
 					PTLRPC_BULK_BUF_KIOV,
-				    MGS_BULK_PORTAL,
-				    &ptlrpc_bulk_kiov_pin_ops);
+				    MGS_BULK_PORTAL, frag_ops);
 	if (desc == NULL)
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < page_count && bytes > 0; i++) {
-		ptlrpc_prep_bulk_page_pin(desc, rdpg.rp_pages[i], 0,
-					  min_t(int, bytes, PAGE_SIZE));
+		frag_ops->add_kiov_frag(desc, rdpg.rp_pages[i], 0,
+					min_t(int, bytes, PAGE_SIZE));
 		bytes -= PAGE_SIZE;
 	}
 

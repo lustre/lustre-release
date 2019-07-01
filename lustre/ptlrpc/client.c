@@ -46,6 +46,28 @@
 
 #include "ptlrpc_internal.h"
 
+static void ptlrpc_prep_bulk_page_pin(struct ptlrpc_bulk_desc *desc,
+				      struct page *page, int pageoffset,
+				      int len)
+{
+	__ptlrpc_prep_bulk_page(desc, page, pageoffset, len, 1);
+}
+
+static void ptlrpc_prep_bulk_page_nopin(struct ptlrpc_bulk_desc *desc,
+					struct page *page, int pageoffset,
+					int len)
+{
+	__ptlrpc_prep_bulk_page(desc, page, pageoffset, len, 0);
+}
+
+static void ptlrpc_release_bulk_page_pin(struct ptlrpc_bulk_desc *desc)
+{
+	int i;
+
+	for (i = 0; i < desc->bd_iov_count ; i++)
+		put_page(BD_GET_KIOV(desc, i).kiov_page);
+}
+
 const struct ptlrpc_bulk_frag_ops ptlrpc_bulk_kiov_pin_ops = {
 	.add_kiov_frag	= ptlrpc_prep_bulk_page_pin,
 	.release_frags	= ptlrpc_release_bulk_page_pin,
