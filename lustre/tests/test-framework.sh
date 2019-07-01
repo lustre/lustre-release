@@ -810,7 +810,7 @@ unload_modules() {
 			echo "unloading modules on: '$list'"
 			do_rpc_nodes "$list" $LUSTRE_RMMOD ldiskfs
 			do_rpc_nodes "$list" check_mem_leak
-			do_rpc_nodes "$list" "rm /etc/udev/rules.d/99-lustre-test.rules"
+			do_rpc_nodes "$list" "rm -f /etc/udev/rules.d/99-lustre-test.rules"
 			do_rpc_nodes "$list" "udevadm control --reload-rules"
 			do_rpc_nodes "$list" "udevadm trigger"
 		fi
