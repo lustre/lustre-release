@@ -40,9 +40,7 @@
 /* LNET has 0xeXXX */
 #define CFS_FAIL_PTLRPC_OST_BULK_CB2	0xe000
 
-#ifndef __KERNEL__
-# error This include is only for kernel use.
-#endif
+#include <linux/netdevice.h>
 
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
@@ -840,6 +838,15 @@ int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
+struct lnet_inetdev {
+	u32	li_cpt;
+	u32	li_flags;
+	u32	li_ipaddr;
+	u32	li_netmask;
+	char	li_name[IFNAMSIZ];
+};
+
+int lnet_inet_enumerate(struct lnet_inetdev **dev_list);
 int lnet_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
 int lnet_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
 int lnet_sock_getaddr(struct socket *socket, bool remote, __u32 *ip, int *port);

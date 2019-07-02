@@ -1605,103 +1605,121 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 	return count;
 }
 
-static void
-lnet_ipaddr_free_enumeration(__u32 *ipaddrs, int nip)
+int lnet_inet_enumerate(struct lnet_inetdev **dev_list)
 {
-	LIBCFS_FREE(ipaddrs, nip * sizeof(*ipaddrs));
-}
-
-static int
-lnet_ipaddr_enumerate(u32 **ipaddrsp)
-{
+	struct lnet_inetdev *ifaces = NULL;
 	struct net_device *dev;
-	u32 *ipaddrs;
-	int nalloc = 64;
+	int nalloc = 0;
 	int nip = 0;
-
-	LIBCFS_ALLOC(ipaddrs, nalloc * sizeof(*ipaddrs));
-	if (!ipaddrs) {
-		CERROR("Can't allocate ipaddrs[%d]\n", nalloc);
-		return -ENOMEM;
-	}
 
 	rtnl_lock();
 	for_each_netdev(&init_net, dev) {
+		int flags = dev_get_flags(dev);
 		struct in_device *in_dev;
+		int node_id;
+		int cpt;
 
-		if (strcmp(dev->name, "lo") == 0)
+		if (flags & IFF_LOOPBACK) /* skip the loopback IF */
 			continue;
 
-		if (!(dev_get_flags(dev) & IFF_UP)) {
-			CWARN("Ignoring interface %s: it's down\n", dev->name);
+		if (!(flags & IFF_UP)) {
+			CWARN("lnet: Ignoring interface %s: it's down\n",
+			      dev->name);
 			continue;
 		}
 
 		in_dev = __in_dev_get_rtnl(dev);
 		if (!in_dev) {
-			CWARN("Interface %s has no IPv4 status.\n", dev->name);
+			CWARN("lnet: Interface %s has no IPv4 status.\n",
+			      dev->name);
 			continue;
 		}
 
-		if (nip >= nalloc) {
-			u32 *ipaddrs2;
+		node_id = dev_to_node(&dev->dev);
+		cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
 
-			nalloc += nalloc;
-			ipaddrs2 = krealloc(ipaddrs, nalloc * sizeof(*ipaddrs2),
-					    GFP_KERNEL);
-			if (!ipaddrs2) {
-				kfree(ipaddrs);
-				CERROR("Can't allocate ipaddrs[%d]\n", nip);
-				return -ENOMEM;
+		for_ifa(in_dev) {
+			if (nip >= nalloc) {
+				struct lnet_inetdev *tmp;
+
+				nalloc += LNET_INTERFACES_NUM;
+				tmp = krealloc(ifaces, nalloc * sizeof(*tmp),
+					       GFP_KERNEL);
+				if (!tmp) {
+					kfree(ifaces);
+					ifaces = NULL;
+					nip = -ENOMEM;
+					goto unlock_rtnl;
+				}
+				ifaces = tmp;
 			}
-			ipaddrs = ipaddrs2;
+
+			ifaces[nip].li_cpt = cpt;
+			ifaces[nip].li_flags = flags;
+			ifaces[nip].li_ipaddr = ntohl(ifa->ifa_local);
+			ifaces[nip].li_netmask = ntohl(ifa->ifa_mask);
+			strlcpy(ifaces[nip].li_name, ifa->ifa_label,
+				sizeof(ifaces[nip].li_name));
+			nip++;
 		}
-
-		for_primary_ifa(in_dev)
-			if (strcmp(ifa->ifa_label, dev->name) == 0) {
-				ipaddrs[nip++] = ifa->ifa_local;
-				break;
-			}
 		endfor_ifa(in_dev);
 	}
+unlock_rtnl:
 	rtnl_unlock();
 
-	*ipaddrsp = ipaddrs;
+	if (nip == 0) {
+		CERROR("lnet: Can't find any usable interfaces, rc = -ENOENT\n");
+		nip = -ENOENT;
+	}
+
+	*dev_list = ifaces;
 	return nip;
 }
+EXPORT_SYMBOL(lnet_inet_enumerate);
 
 int
 lnet_parse_ip2nets (char **networksp, char *ip2nets)
 {
+	struct lnet_inetdev *ifaces = NULL;
 	__u32	  *ipaddrs = NULL;
-	int	   nip = lnet_ipaddr_enumerate(&ipaddrs);
+	int nip;
 	int	   rc;
+	int i;
 
+	nip = lnet_inet_enumerate(&ifaces);
 	if (nip < 0) {
-		LCONSOLE_ERROR_MSG(0x117, "Error %d enumerating local IP "
-				   "interfaces for ip2nets to match\n", nip);
+		if (nip != -ENOENT) {
+			LCONSOLE_ERROR_MSG(0x117,
+					   "Error %d enumerating local IP interfaces for ip2nets to match\n",
+					   nip);
+		} else {
+			LCONSOLE_ERROR_MSG(0x118,
+					   "No local IP interfaces for ip2nets to match\n");
+		}
 		return nip;
 	}
 
-	if (nip == 0) {
-		LCONSOLE_ERROR_MSG(0x118, "No local IP interfaces "
-				   "for ip2nets to match\n");
-		return -ENOENT;
+	LIBCFS_ALLOC(ipaddrs, nip * sizeof(*ipaddrs));
+	if (!ipaddrs) {
+		rc = -ENOMEM;
+		CERROR("lnet: Can't allocate ipaddrs[%d], rc = %d\n",
+		       nip, rc);
+		goto out_free_addrs;
 	}
+
+	for (i = 0; i < nip; i++)
+		ipaddrs[i] = ifaces[i].li_ipaddr;
 
 	rc = lnet_match_networks(networksp, ip2nets, ipaddrs, nip);
-	lnet_ipaddr_free_enumeration(ipaddrs, nip);
-
 	if (rc < 0) {
 		LCONSOLE_ERROR_MSG(0x119, "Error %d parsing ip2nets\n", rc);
-		return rc;
-	}
-
-	if (rc == 0) {
+	} else if (rc == 0) {
 		LCONSOLE_ERROR_MSG(0x11a, "ip2nets does not match "
 				   "any local IP interfaces\n");
-		return -ENOENT;
+		rc = -ENOENT;
 	}
-
-	return 0;
+	LIBCFS_FREE(ipaddrs, nip * sizeof(*ipaddrs));
+out_free_addrs:
+	kfree(ifaces);
+	return rc > 0 ? 0 : rc;
 }
