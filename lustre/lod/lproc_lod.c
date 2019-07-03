@@ -680,7 +680,7 @@ static int lod_osts_seq_show(struct seq_file *p, void *v)
 
 	/* XXX: should be non-NULL env, but it's very expensive */
 	active = 1;
-	rc = dt_statfs(NULL, next, &sfs, NULL);
+	rc = dt_statfs(NULL, next, &sfs);
 	if (rc == -ENOTCONN) {
 		active = 0;
 		rc = 0;

@@ -662,11 +662,8 @@ test_1a() {
 }
 run_test 1a "mmap & cat a HSM released file"
 
-test_1b() {
-	mkdir -p $DIR/$tdir
-	$LFS setstripe -E 1M -S 1M -E 64M -c 2 -E -1 -c 4 $DIR/$tdir ||
-		error "failed to set default stripe"
-	local f=$DIR/$tdir/$tfile
+test_1bde_base() {
+	local f=$1
 	rm -f $f
 
 	dd if=/dev/urandom of=$f bs=1M count=1 conv=sync ||
@@ -689,6 +686,15 @@ test_1b() {
 	wait_request_state $fid RESTORE SUCCEED
 	echo "verify restored state: "
 	check_hsm_flags $f "0x00000009" && echo "pass"
+}
+
+test_1b() {
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -S 1M -E 64M -c 2 -E -1 -c 4 $DIR/$tdir ||
+		error "failed to set default stripe"
+	local f=$DIR/$tdir/$tfile
+
+	test_1bde_base $f
 }
 run_test 1b "Archive, Release and Restore composite file"
 
@@ -760,30 +766,49 @@ test_1d() {
 	$LFS setstripe -E 1M -L mdt -E -1 -c 2 $DIR/$tdir ||
 		error "failed to set default stripe"
 	local f=$DIR/$tdir/$tfile
-	rm -f $f
 
-	dd if=/dev/urandom of=$f bs=1M count=1 conv=sync ||
-		error "failed to create file"
-	local fid=$(path2fid $f)
-
-	copytool setup
-
-	echo "archive $f"
-	$LFS hsm_archive $f || error "could not archive file"
-	wait_request_state $fid ARCHIVE SUCCEED
-
-	echo "release $f"
-	$LFS hsm_release $f || error "could not release file"
-	echo "verify released state: "
-	check_hsm_flags $f "0x0000000d" && echo "pass"
-
-	echo "restore $f"
-	$LFS hsm_restore $f || error "could not restore file"
-	wait_request_state $fid RESTORE SUCCEED
-	echo "verify restored state: "
-	check_hsm_flags $f "0x00000009" && echo "pass"
+	test_1bde_base $f
 }
 run_test 1d "Archive, Release and Restore DoM file"
+
+test_1e() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+		skip "skipped for lustre < $SEL_VER"
+
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1G -z 64M -E 10G -z 512M -E -1 -z 1G $DIR/$tdir ||
+		error "failed to set default stripe"
+	local comp_file=$DIR/$tdir/$tfile
+
+	test_1bde_base $comp_file
+
+	local flg_opts="--comp-start 0 -E 64M --comp-flags init"
+	local found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "1st component not found"
+
+	flg_opts="--comp-start 64M -E 1G --comp-flags extension"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "2nd component not found"
+
+	flg_opts="--comp-start 1G -E 1G --comp-flags ^init"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "3rd component not found"
+
+	flg_opts="--comp-start 1G -E 10G --comp-flags extension"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "4th component not found"
+
+	flg_opts="--comp-start 10G -E 10G --comp-flags ^init"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "5th component not found"
+
+	flg_opts="--comp-start 10G -E EOF --comp-flags extension"
+	found=$($LFS find $flg_opts $comp_file | wc -l)
+	[ $found -eq 1 ] || error "6th component not found"
+
+	sel_layout_sanity $comp_file 6
+}
+run_test 1e "Archive, Release and Restore SEL file"
 
 test_2() {
 	local f=$DIR/$tdir/$tfile

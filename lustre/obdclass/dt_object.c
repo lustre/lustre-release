@@ -995,7 +995,7 @@ int lprocfs_dt_blksize_seq_show(struct seq_file *m, void *v)
 	struct dt_device *dt = m->private;
 	struct obd_statfs osfs;
 
-	int rc = dt_statfs(NULL, dt, &osfs, NULL);
+	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0)
 		seq_printf(m, "%u\n", (unsigned) osfs.os_bsize);
 	return rc;
@@ -1007,7 +1007,7 @@ int lprocfs_dt_kbytestotal_seq_show(struct seq_file *m, void *v)
 	struct dt_device *dt = m->private;
 	struct obd_statfs osfs;
 
-	int rc = dt_statfs(NULL, dt, &osfs, NULL);
+	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_blocks;
@@ -1026,7 +1026,7 @@ int lprocfs_dt_kbytesfree_seq_show(struct seq_file *m, void *v)
 	struct dt_device *dt = m->private;
 	struct obd_statfs osfs;
 
-	int rc = dt_statfs(NULL, dt, &osfs, NULL);
+	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_bfree;
@@ -1045,7 +1045,7 @@ int lprocfs_dt_kbytesavail_seq_show(struct seq_file *m, void *v)
 	struct dt_device *dt = m->private;
 	struct obd_statfs osfs;
 
-	int rc = dt_statfs(NULL, dt, &osfs, NULL);
+	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_bavail;
@@ -1064,7 +1064,7 @@ int lprocfs_dt_filestotal_seq_show(struct seq_file *m, void *v)
 	struct dt_device *dt = m->private;
 	struct obd_statfs osfs;
 
-	int rc = dt_statfs(NULL, dt, &osfs, NULL);
+	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0)
 		seq_printf(m, "%llu\n", osfs.os_files);
 	return rc;
@@ -1076,7 +1076,7 @@ int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v)
 	struct dt_device *dt = m->private;
 	struct obd_statfs osfs;
 
-	int rc = dt_statfs(NULL, dt, &osfs, NULL);
+	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0)
 		seq_printf(m, "%llu\n", osfs.os_ffree);
 	return rc;
@@ -1107,7 +1107,7 @@ static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_statfs osfs;
 	int rc;
 
-	rc = dt_statfs(NULL, dt, &osfs, NULL);
+	rc = dt_statfs(NULL, dt, &osfs);
 	if (rc)
 		return rc;
 
@@ -1125,7 +1125,7 @@ static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
 	u64 result;
 	int rc;
 
-	rc = dt_statfs(NULL, dt, &osfs, NULL);
+	rc = dt_statfs(NULL, dt, &osfs);
 	if (rc)
 		return rc;
 
@@ -1149,7 +1149,7 @@ static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
 	u64 result;
 	int rc;
 
-	rc = dt_statfs(NULL, dt, &osfs, NULL);
+	rc = dt_statfs(NULL, dt, &osfs);
 	if (rc)
 		return rc;
 
@@ -1173,7 +1173,7 @@ static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
 	u64 result;
 	int rc;
 
-	rc = dt_statfs(NULL, dt, &osfs, NULL);
+	rc = dt_statfs(NULL, dt, &osfs);
 	if (rc)
 		return rc;
 
@@ -1195,7 +1195,7 @@ static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_statfs osfs;
 	int rc;
 
-	rc = dt_statfs(NULL, dt, &osfs, NULL);
+	rc = dt_statfs(NULL, dt, &osfs);
 	if (rc)
 		return rc;
 
@@ -1211,7 +1211,7 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_statfs osfs;
 	int rc;
 
-	rc = dt_statfs(NULL, dt, &osfs, NULL);
+	rc = dt_statfs(NULL, dt, &osfs);
 	if (rc)
 		return rc;
 

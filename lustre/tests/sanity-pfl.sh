@@ -1271,17 +1271,25 @@ test_19g() {
 
 	$LFS setstripe --component-add -E 1G -c 1 $file1 ||
 		error "comp-add [0,1G] failed $file1"
+	$LFS setstripe --component-add -E 512M -z 128M $file1 &&
+		error "comp-add [1G,1G],SEL[1G,512M] succeded $file1"
 	$LFS setstripe --component-add -E 10G -z 128M $file1 ||
 		error "comp-add [1G,1G],SEL[1G,10G] failed $file1"
 	$LFS setstripe --component-add -E -1 $file1 ||
 		error "comp-add [10G,-1] failed $file1"
 
+	$LFS setstripe --component-add -E 1G -z 32M -c 1 $file2 &&
+		error "comp-add with smal ext size succeeded $file1"
+	$LFS setstripe --component-add -E 1G -z 100M -c 1 $file2 &&
+		error "comp-add with not aligned ext size succeeded $file1"
 	$LFS setstripe --component-add -E 1G -z 128M -c 1 $file2 ||
 		error "comp-add [0,128M],SEL[128M,1G] failed $file1"
 	$LFS setstripe --component-add -E 10G $file2 ||
 		error "comp-add [1G,10G] failed $file1"
 	$LFS setstripe --component-add -E -1 -z 128M -c 1 $file2 ||
 		error "comp-add [10G,10G],SEL[10G,-1] failed $file1"
+	$LFS setstripe --component-add -E -1 -z 128M -c 1 $file2 &&
+		error "repeated comp-add [10G,10G],SEL[10G,-1] succeeded $file1"
 
 	$LFS getstripe $file1
 	flg_opts="--comp-flags init"

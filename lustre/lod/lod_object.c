@@ -2040,7 +2040,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 				continue;
 
 			tgt_dt = tgt->ltd_tgt;
-			rc = dt_statfs(env, tgt_dt, &info->lti_osfs, NULL);
+			rc = dt_statfs(env, tgt_dt, &info->lti_osfs);
 			if (rc) {
 				/* this OSP doesn't feel well */
 				rc = 0;
@@ -4303,6 +4303,9 @@ static int lod_layout_del_prep_layout(const struct lu_env *env,
 
 	ENTRY;
 
+	LASSERT(lo->ldo_is_composite);
+	LASSERT(lo->ldo_comp_cnt > 0 && lo->ldo_comp_entries != NULL);
+
 	rc = lod_layout_data_init(info, lo->ldo_comp_cnt);
 	if (rc)
 		RETURN(rc);
@@ -4412,9 +4415,7 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 	struct lu_attr *attr = &lod_env_info(env)->lti_attr;
 	int rc;
 
-	LASSERT(lo->ldo_is_composite);
 	LASSERT(lo->ldo_mirror_count == 1);
-	LASSERT(lo->ldo_comp_cnt > 0 && lo->ldo_comp_entries != NULL);
 
 	rc = lod_layout_del_prep_layout(env, lo, th);
 	if (rc < 0)
@@ -6354,7 +6355,7 @@ static bool lod_sel_osts_allowed(const struct lu_env *env,
 			break;
 		}
 
-		rc = dt_statfs(env, ost->ltd_ost, sfs, &info);
+		rc = dt_statfs_info(env, ost->ltd_ost, sfs, &info);
 		if (rc) {
 			CDEBUG(D_LAYOUT, "statfs failed for ost %d, error %d\n",
 			       index, rc);

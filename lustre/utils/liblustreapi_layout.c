@@ -1574,9 +1574,14 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
 		return -1;
 	}
 
-	if (layout && llapi_layout_sanity((struct llapi_layout *)layout, false,
-					  !!(layout->llot_mirror_count > 1)))
-		return -1;
+	if (layout) {
+		rc = llapi_layout_sanity((struct llapi_layout *)layout, false,
+					 !!(layout->llot_mirror_count > 1));
+		if (rc) {
+			llapi_layout_sanity_perror(rc);
+			return -1;
+		}
+	}
 
 	/* Object creation must be postponed until after layout attributes
 	 * have been applied. */
@@ -2201,8 +2206,10 @@ int llapi_layout_file_comp_add(const char *path,
 		goto out;
 	}
 
-	if (llapi_layout_sanity(existing_layout, false, false)) {
+	rc = llapi_layout_sanity(existing_layout, false, false);
+	if (rc) {
 		tmp_errno = errno;
+		llapi_layout_sanity_perror(rc);
 		rc = -1;
 		goto out;
 	}
@@ -2334,8 +2341,10 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 		goto out;
 	}
 
-	if (llapi_layout_sanity(existing_layout, false, false)) {
+	rc = llapi_layout_sanity(existing_layout, false, false);
+	if (rc) {
 		tmp_errno = errno;
+		llapi_layout_sanity_perror(rc);
 		rc = -1;
 		goto out;
 	}
@@ -2492,8 +2501,10 @@ int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 		goto out;
 	}
 
-	if (llapi_layout_sanity(existing_layout, false, false)) {
+	rc = llapi_layout_sanity(existing_layout, false, false);
+	if (rc) {
 		tmp_errno = errno;
+		llapi_layout_sanity_perror(rc);
 		rc = -1;
 		goto out;
 	}
@@ -2970,6 +2981,42 @@ enum llapi_layout_comp_sanity_error {
 	LSE_START_GT_END,
 	LSE_ALIGN_END,
 	LSE_ALIGN_EXT,
+	LSE_LAST,
+};
+
+const char *llapi_layout_strerror[] =
+{
+	[LSE_OK] = "",
+	[LSE_INCOMPLETE_MIRROR] =
+		"Incomplete mirror - must go to EOF",
+	[LSE_ADJACENT_EXTENSION] =
+		"No adjacent extension space components",
+	[LSE_INIT_EXTENSION] =
+		"Cannot apply extension flag to init components",
+	[LSE_FLAGS] =
+		"Wrong flags",
+	[LSE_DOM_EXTENSION] =
+		"DoM components can't be extension space",
+	[LSE_DOM_EXTENSION_FOLLOWING] =
+		"DoM components cannot be followed by extension space",
+	[LSE_DOM_FLR] =
+		"FLR and DoM are not supported together",
+	[LSE_SET_COMP_START] =
+		"Must set previous component extent before adding next",
+	[LSE_NOT_ZERO_LENGTH_EXTENDABLE] =
+		"Extendable component must start out zero-length",
+	[LSE_END_NOT_GREATER] =
+		"Component end is before end of previous component",
+	[LSE_ZERO_LENGTH_NORMAL] =
+		"Zero length components must be followed by extension",
+	[LSE_NOT_ADJACENT_PREV] =
+		"Components not adjacent (end != next->start",
+	[LSE_START_GT_END] =
+		"Component start is > end",
+	[LSE_ALIGN_END] =
+		"The component end must be aligned by the stripe size",
+	[LSE_ALIGN_EXT] =
+		"The extension size must be aligned by the stripe size",
 };
 
 struct llapi_layout_sanity_args {
@@ -3101,7 +3148,7 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 
 		/* Components not followed by ext space must have length > 0. */
 		if (comp->llc_extent.e_start == comp->llc_extent.e_end &&
-		    next && !(next->llc_flags & LCME_FL_EXTENSION)) {
+		    (next == NULL || !(next->llc_flags & LCME_FL_EXTENSION))) {
 			args->lsa_rc = LSE_ZERO_LENGTH_NORMAL;
 			goto out_err;
 		}
@@ -3152,62 +3199,13 @@ out_err:
 /* Print explanation of layout error */
 void llapi_layout_sanity_perror(int error)
 {
-	char *msg = NULL;
-
-	switch (error) {
-	case LSE_OK:
-		break;
-	case LSE_INCOMPLETE_MIRROR:
-		msg = "Incomplete mirror - must go to EOF";
-		break;
-	case LSE_ADJACENT_EXTENSION:
-		msg = "No adjacent extension space components";
-		break;
-	case LSE_INIT_EXTENSION:
-		msg = "Cannot apply extension flag to init components";
-		break;
-	case LSE_FLAGS:
-		msg = "Wrong flags";
-		break;
-	case LSE_DOM_EXTENSION:
-		msg = "DoM components can't be extension space";
-		break;
-	case LSE_DOM_EXTENSION_FOLLOWING:
-		msg = "DoM components cannot be followed by extension space";
-		break;
-	case LSE_DOM_FLR:
-		msg = "FLR and DoM are not supported together";
-		break;
-	case LSE_SET_COMP_START:
-		msg = "Must set previous component extent before adding next";
-		break;
-	case LSE_NOT_ZERO_LENGTH_EXTENDABLE:
-		msg = "Extendable component must start out zero-length";
-		break;
-	case LSE_END_NOT_GREATER:
-		msg = "Component end is before end of previous component";
-		break;
-	case LSE_ZERO_LENGTH_NORMAL:
-		msg = "Zero length components must be followed by extension";
-		break;
-	case LSE_NOT_ADJACENT_PREV:
-		msg = "Components not adjacent (end != next->start";
-		break;
-	case LSE_START_GT_END:
-		msg = "Component start is > end";
-	case LSE_ALIGN_END:
-		msg = "The component end must be aligned by the stripe size";
-		break;
-	case LSE_ALIGN_EXT:
-		msg = "The extension size must be aligned by the stripe size";
-		break;
-	default:
+	if (error >= LSE_LAST || error < 0) {
 		fprintf(stdout, "Invalid layout, unrecognized error: %d\n",
 			error);
+	} else {
+		fprintf(stdout, "Invalid layout: %s\n",
+			llapi_layout_strerror[error]);
 	}
-
-	if (msg)
-		fprintf(stdout, "Invalid layout: %s\n", msg);
 }
 
 /* Walk a layout and enforce sanity checks that apply to > 1 component
