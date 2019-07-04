@@ -1387,7 +1387,7 @@ static int ll_nosquash_nids_seq_show(struct seq_file *m, void *v)
 	struct root_squash_info *squash = &sbi->ll_squash;
 	int len;
 
-	down_read(&squash->rsi_sem);
+	spin_lock(&squash->rsi_lock);
 	if (!list_empty(&squash->rsi_nosquash_nids)) {
 		len = cfs_print_nidlist(m->buf + m->count, m->size - m->count,
 					&squash->rsi_nosquash_nids);
@@ -1396,7 +1396,7 @@ static int ll_nosquash_nids_seq_show(struct seq_file *m, void *v)
 	} else {
 		seq_puts(m, "NONE\n");
 	}
-	up_read(&squash->rsi_sem);
+	spin_unlock(&squash->rsi_lock);
 
 	return 0;
 }

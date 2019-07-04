@@ -151,7 +151,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_squash.rsi_uid = 0;
 	sbi->ll_squash.rsi_gid = 0;
 	INIT_LIST_HEAD(&sbi->ll_squash.rsi_nosquash_nids);
-	init_rwsem(&sbi->ll_squash.rsi_sem);
+	spin_lock_init(&sbi->ll_squash.rsi_lock);
 
 	/* Per-filesystem file heat */
 	sbi->ll_heat_decay_weight = SBI_DEFAULT_HEAT_DECAY_WEIGHT;
@@ -2900,7 +2900,7 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 	struct lnet_process_id id;
 
 	/* Update norootsquash flag */
-	down_write(&squash->rsi_sem);
+	spin_lock(&squash->rsi_lock);
 	if (list_empty(&squash->rsi_nosquash_nids))
 		sbi->ll_flags &= ~LL_SBI_NOROOTSQUASH;
 	else {
@@ -2921,7 +2921,7 @@ void ll_compute_rootsquash_state(struct ll_sb_info *sbi)
 		else
 			sbi->ll_flags &= ~LL_SBI_NOROOTSQUASH;
 	}
-	up_write(&squash->rsi_sem);
+	spin_unlock(&squash->rsi_lock);
 }
 
 /**

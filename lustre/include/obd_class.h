@@ -1833,12 +1833,11 @@ void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs);
 void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs);
 
 /* root squash info */
-struct rw_semaphore;
 struct root_squash_info {
 	uid_t			rsi_uid;
 	gid_t			rsi_gid;
 	struct list_head	rsi_nosquash_nids;
-	struct rw_semaphore	rsi_sem;
+	spinlock_t		rsi_lock;
 };
 
 int server_name2index(const char *svname, __u32 *idx, const char **endptr);

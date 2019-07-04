@@ -2415,10 +2415,10 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 	if ((len == 4 && strncmp(kernbuf, "NONE", len) == 0) ||
 	    (len == 5 && strncmp(kernbuf, "clear", len) == 0)) {
 		/* empty string is special case */
-		down_write(&squash->rsi_sem);
+		spin_lock(&squash->rsi_lock);
 		if (!list_empty(&squash->rsi_nosquash_nids))
 			cfs_free_nidlist(&squash->rsi_nosquash_nids);
-		up_write(&squash->rsi_sem);
+		spin_unlock(&squash->rsi_lock);
 		LCONSOLE_INFO("%s: nosquash_nids is cleared\n", name);
 		OBD_FREE(kernbuf, count + 1);
 		RETURN(count);
@@ -2434,11 +2434,11 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 	OBD_FREE(kernbuf, count + 1);
 	kernbuf = NULL;
 
-	down_write(&squash->rsi_sem);
+	spin_lock(&squash->rsi_lock);
 	if (!list_empty(&squash->rsi_nosquash_nids))
 		cfs_free_nidlist(&squash->rsi_nosquash_nids);
 	list_splice(&tmp, &squash->rsi_nosquash_nids);
-	up_write(&squash->rsi_sem);
+	spin_unlock(&squash->rsi_lock);
 
 	RETURN(count);
 

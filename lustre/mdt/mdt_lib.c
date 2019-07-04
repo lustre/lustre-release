@@ -84,15 +84,15 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
 	}
 }
 
-static int match_nosquash_list(struct rw_semaphore *sem,
+static int match_nosquash_list(struct spinlock *rsi_lock,
 			       struct list_head *nidlist,
 			       lnet_nid_t peernid)
 {
 	int rc;
 	ENTRY;
-	down_read(sem);
+	spin_lock(rsi_lock);
 	rc = cfs_match_nid(peernid, nidlist);
-	up_read(sem);
+	spin_unlock(rsi_lock);
 	RETURN(rc);
 }
 
@@ -107,7 +107,7 @@ static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
 	if (!squash->rsi_uid || ucred->uc_fsuid)
 		RETURN(0);
 
-	if (match_nosquash_list(&squash->rsi_sem,
+	if (match_nosquash_list(&squash->rsi_lock,
 				&squash->rsi_nosquash_nids,
 				peernid)) {
 		CDEBUG(D_OTHER, "%s is in nosquash_nids list\n",
