@@ -269,15 +269,16 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 	if (min_stripe_maxbytes == 0)
 		min_stripe_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES;
 
-	lov_bytes = min_stripe_maxbytes * stripe_count;
+	if (stripe_count == 0)
+		lov_bytes = min_stripe_maxbytes;
+	else if (min_stripe_maxbytes <= LLONG_MAX / stripe_count)
+		lov_bytes = min_stripe_maxbytes * stripe_count;
+	else
+		lov_bytes = MAX_LFS_FILESIZE;
 
 out_dom:
-	if (maxbytes) {
-		if (lov_bytes < min_stripe_maxbytes) /* handle overflow */
-			*maxbytes = MAX_LFS_FILESIZE;
-		else
-			*maxbytes = lov_bytes;
-	}
+	if (maxbytes)
+		*maxbytes = min_t(loff_t, lov_bytes, MAX_LFS_FILESIZE);
 
 	return lsme;
 
