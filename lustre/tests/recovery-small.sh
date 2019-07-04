@@ -2260,6 +2260,28 @@ test_110j () {
 }
 run_test 110j "drop update reply during cross-MDT ln"
 
+test_110k() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTS"
+	[[ $MDS1_VERSION -ge $(version_code 2.12.55) ]] ||
+		{ skip "Need MDS version at least 2.12.55"; }
+
+	stop mds2 || error "stop mds2 failed"
+	umount $MOUNT
+
+#define OBD_FAIL_FLD_QUERY_REQ 0x1103
+	do_facet mds2 lctl set_param fail_loc=0x1103
+	start mds2 $(mdsdevname 2) -o abort_recovery ||
+		error "start MDS with abort_recovery should succeed"
+	do_facet mds2 lctl set_param fail_loc=0
+
+	# cleanup
+	stop mds2 || error "cleanup: stop mds2 failed"
+	start mds2 $(mdsdevname 2) || error "cleanup: start mds2 failed"
+	zconf_mount $(hostname) $MOUNT || error "cleanup: mount failed"
+	client_up || error "post-failover df failed"
+}
+run_test 110k "FID_QUERY failed during recovery"
+
 # LU-2844 mdt prepare fail should not cause umount oops
 test_111 ()
 {

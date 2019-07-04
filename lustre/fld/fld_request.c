@@ -346,7 +346,6 @@ int fld_client_rpc(struct obd_export *exp,
 
 	LASSERT(exp != NULL);
 
-again:
 	imp = class_exp2cliimp(exp);
 	switch (fld_op) {
 	case FLD_QUERY:
@@ -397,9 +396,15 @@ again:
 	req->rq_reply_portal = MDC_REPLY_PORTAL;
 	ptlrpc_at_set_req_timeout(req);
 
-	obd_get_request_slot(&exp->exp_obd->u.cli);
-	rc = ptlrpc_queue_wait(req);
-	obd_put_request_slot(&exp->exp_obd->u.cli);
+	if (OBD_FAIL_CHECK(OBD_FAIL_FLD_QUERY_REQ && req->rq_no_delay)) {
+		/* the same error returned by ptlrpc_import_delay_req */
+		rc = -EWOULDBLOCK;
+		req->rq_status = rc;
+	} else {
+		obd_get_request_slot(&exp->exp_obd->u.cli);
+		rc = ptlrpc_queue_wait(req);
+		obd_put_request_slot(&exp->exp_obd->u.cli);
+	}
 
 	if (rc == -ENOENT) {
 		/* Don't loop forever on non-existing FID sequences. */
@@ -413,15 +418,10 @@ again:
 		    OCD_HAS_FLAG(&imp->imp_connect_data, LIGHTWEIGHT) &&
 		    rc != -ENOTSUPP) {
 			/*
-			 * Since LWP is not replayable, so it will keep
-			 * trying unless umount happens or the remote
-			 * target does not support the operation, otherwise
-			 * it would cause unecessary failure of the
-			 * application.
+			 * Since LWP is not replayable, so notify the caller
+			 * to retry if needed after a while.
 			 */
-			ptlrpc_req_finished(req);
-			rc = 0;
-			goto again;
+			rc = -EAGAIN;
 		}
 		GOTO(out_req, rc);
 	}
