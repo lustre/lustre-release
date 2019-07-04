@@ -40,6 +40,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/jiffies.h>
+#include <linux/kernel.h>
 #include <linux/kthread.h>
 #include <libcfs/libcfs.h>
 #include <obd.h>
@@ -1738,15 +1739,16 @@ static void target_start_recovery_timer(struct obd_device *obd)
 /**
  * extend recovery window.
  *
- * if @extend is true, extend recovery window to have @drt remaining at least;
- * otherwise, make sure the recovery timeout value is not less than @drt.
+ * if @extend is true, extend recovery window to have @dr_timeout remaining
+ * at least; otherwise, make sure the recovery timeout value is not less
+ * than @dr_timeout.
  */
-static void extend_recovery_timer(struct obd_device *obd, time_t drt,
+static void extend_recovery_timer(struct obd_device *obd, time_t dr_timeout,
 				  bool extend)
 {
 	ktime_t left_ns;
+	time_t timeout;
 	time_t left;
-	time_t to;
 
 	spin_lock(&obd->obd_dev_lock);
 	if (!obd->obd_recovering || obd->obd_abort_recovery) {
@@ -1755,26 +1757,35 @@ static void extend_recovery_timer(struct obd_device *obd, time_t drt,
 	}
 	LASSERT(obd->obd_recovery_start != 0);
 
-	to = obd->obd_recovery_timeout;
 	left_ns = hrtimer_expires_remaining(&obd->obd_recovery_timer);
 	left = ktime_divns(left_ns, NSEC_PER_SEC);
-	if (extend && (drt > left))
-		to += drt - left;
-	else if (!extend && (drt > to))
-		to = drt;
 
-	if (to > obd->obd_recovery_time_hard) {
-		to = obd->obd_recovery_time_hard;
-		CWARN("%s: extended recovery timer reaching hard limit: %ld, extend: %d\n",
-		      obd->obd_name, to, extend);
+	if (extend) {
+		timeout = obd->obd_recovery_timeout;
+		/* dr_timeout will happen after the hrtimer has expired.
+		 * Add the excess time to the soft recovery timeout without
+		 * exceeding the hard recovery timeout.
+		 */
+		if (dr_timeout > left) {
+			timeout += dr_timeout - left;
+			timeout = min_t(time_t, obd->obd_recovery_time_hard,
+					timeout);
+		}
+	} else {
+		timeout = clamp_t(time_t, dr_timeout, obd->obd_recovery_timeout,
+				  obd->obd_recovery_time_hard);
 	}
 
-	if (obd->obd_recovery_timeout < to) {
+	if (timeout == obd->obd_recovery_time_hard)
+		CWARN("%s: extended recovery timer reached hard limit: %ld, extend: %d\n",
+		      obd->obd_name, timeout, extend);
+
+	if (obd->obd_recovery_timeout < timeout) {
 		ktime_t now = ktime_get_real();
 		ktime_t end;
 
-		obd->obd_recovery_timeout = to;
-		end = ktime_set(obd->obd_recovery_start + to, 0);
+		obd->obd_recovery_timeout = timeout;
+		end = ktime_set(obd->obd_recovery_start + timeout, 0);
 		left_ns = ktime_sub(end, now);
 		hrtimer_forward_now(&obd->obd_recovery_timer, left_ns);
 		left = ktime_divns(left_ns, NSEC_PER_MSEC);
