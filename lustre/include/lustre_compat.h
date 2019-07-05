@@ -134,10 +134,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 # define inode_dio_write_done(i)	up_write(&(i)->i_alloc_sem)
 #endif
 
-#ifndef FS_HAS_FIEMAP
-#define FS_HAS_FIEMAP			(0)
-#endif
-
 #ifndef HAVE_SIMPLE_SETATTR
 #define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
 #endif
