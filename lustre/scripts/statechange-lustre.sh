@@ -46,21 +46,20 @@ zed_check_cmd "$ZFS" || exit 3
 #
 sync_degrade_state()
 {
-    local dataset="$1"
-    local state="$2"
-    local service=$($ZFS list -H -o lustre:svname ${dataset})
+	local dataset="$1"
+	local state="$2"
+	local service=$($ZFS list -H -o lustre:svname ${dataset})
 
-    zed_log_msg "Lustre:sync_degrade_state pool:${dataset} degraded:${state}"
+	zed_log_msg "Lustre:sync_degrade_state pool:${dataset} degraded:${state}"
 
-    if [ -n "${service}" ] && [ "${service}"  != "-" ] ; then
-	local current=$($LCTL get_param -n obdfilter.${service}.degraded)
+	if [ -n "${service}" ] && [ "${service}" != "-" ] ; then
+		local current=$($LCTL get_param -n obdfilter.${service}.degraded)
 
-	if [ "${current}" != "${state}" ] ; then
-	    $LCTL set_param obdfilter.${service}.degraded=${state}
+		if [ "${current}" != "${state}" ] ; then
+			$LCTL set_param obdfilter.${service}.degraded=${state}
+		fi
 	fi
-    fi
 }
-
 
 #
 # use pool state as deciding factor
@@ -68,21 +67,21 @@ sync_degrade_state()
 POOL_STATE=$($ZPOOL list -H -o health ${ZEVENT_POOL})
 
 if [ "${POOL_STATE}" == "ONLINE" ] ; then
-    MODE="0"
+	MODE="0"
 elif [ "${POOL_STATE}" == "DEGRADED" ] ; then
-    MODE="1"
+	MODE="1"
 else
-    exit 4
+	exit 4
 fi
 
 #
 # visit target pool's datasets and adjust lustre service degrade mode
 #
 read -r -a DATASETS <<< \
-    $($ZFS get -rH -s local -t filesystem -o name lustre:svname ${ZEVENT_POOL})
+	$($ZFS get -rH -s local -t filesystem -o name lustre:svname ${ZEVENT_POOL})
 
 for dataset in "${DATASETS[@]}" ; do
-    sync_degrade_state "${dataset}" "${MODE}"
+	sync_degrade_state "${dataset}" "${MODE}"
 done
 
 exit 0
