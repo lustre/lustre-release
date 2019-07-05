@@ -230,17 +230,27 @@ create_nodemaps() {
 	local rc
 
 	squash_id default 99 0
+	wait_nm_sync default squash_uid '' inactive
 	squash_id default 99 1
+	wait_nm_sync default squash_gid '' inactive
 	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
 		local csum=${HOSTNAME_CHECKSUM}_${i}
 
-		if ! do_facet mgs $LCTL nodemap_add $csum; then
-		       	return 1
+		do_facet mgs $LCTL nodemap_add $csum
+		rc=$?
+		if [ $rc -ne 0 ]; then
+			echo "nodemap_add $csum failed with $rc"
+			return $rc
 		fi
 
 		out=$(do_facet mgs $LCTL get_param nodemap.$csum.id)
 		## This needs to return zero if the following statement is 1
 		[[ $(echo $out | grep -c $csum) == 0 ]] && return 1
+	done
+	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		wait_nm_sync $csum id '' inactive
 	done
 	return 0
 }
@@ -259,6 +269,11 @@ delete_nodemaps() {
 
 		out=$(do_facet mgs $LCTL get_param nodemap.$csum.id 2>/dev/null)
 		[[ $(echo $out | grep -c $csum) != 0 ]] && return 1
+	done
+	for (( i = 0; i < NODEMAP_COUNT; i++ )); do
+		local csum=${HOSTNAME_CHECKSUM}_${i}
+
+		wait_nm_sync $csum id '' inactive
 	done
 	return 0
 }
@@ -459,9 +474,76 @@ squash_id() {
 	fi
 }
 
+wait_nm_sync() {
+	local nodemap_name=$1
+	local key=$2
+	local value=$3
+	local opt=$4
+	local proc_param
+	local is_active=$(do_facet mgs $LCTL get_param -n nodemap.active)
+	local max_retries=20
+	local is_sync
+	local out1=""
+	local out2
+	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
+	local i
+
+	if [ "$nodemap_name" == "active" ]; then
+		proc_param="active"
+	elif [ -z "$key" ]; then
+		proc_param=${nodemap_name}
+	else
+		proc_param="${nodemap_name}.${key}"
+	fi
+	if [ "$opt" == "inactive" ]; then
+		# check nm sync even if nodemap is not activated
+		is_active=1
+		opt=""
+	fi
+	(( is_active == 0 )) && [ "$proc_param" != "active" ] && return
+
+	if [ -z "$value" ]; then
+		out1=$(do_facet mgs $LCTL get_param $opt \
+			nodemap.${proc_param} 2>/dev/null)
+		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
+	else
+		out1=$value;
+	fi
+
+	# wait up to 10 seconds for other servers to sync with mgs
+	for i in $(seq 1 10); do
+		for node in $(all_server_nodes); do
+		    local node_ip=$(host_nids_address $node $NETTYPE |
+				    cut -d' ' -f1)
+
+		    is_sync=true
+		    if [ -z "$value" ]; then
+			[ $node_ip == $mgs_ip ] && continue
+		    fi
+
+		    out2=$(do_node $node_ip $LCTL get_param $opt \
+				   nodemap.$proc_param 2>/dev/null)
+		    echo "On $node ${node_ip}, ${proc_param} = $out2"
+		    [ "$out1" != "$out2" ] && is_sync=false && break
+		done
+		$is_sync && break
+		sleep 1
+	done
+	if ! $is_sync; then
+		echo MGS
+		echo $out1
+		echo OTHER - IP: $node_ip
+		echo $out2
+		error "mgs and $nodemap_name ${key} mismatch, $i attempts"
+	fi
+	echo "waited $((i - 1)) seconds for sync"
+}
+
 # ensure that the squash defaults are the expected defaults
 squash_id default 99 0
+wait_nm_sync default squash_uid '' inactive
 squash_id default 99 1
+wait_nm_sync default squash_gid '' inactive
 
 test_nid() {
 	local cmd
@@ -1018,65 +1100,6 @@ test_15() {
 	return 0
 }
 run_test 15 "test id mapping"
-
-wait_nm_sync() {
-	local nodemap_name=$1
-	local key=$2
-	local value=$3
-	local opt=$4
-	local proc_param
-	local is_active=$(do_facet mgs $LCTL get_param -n nodemap.active)
-	local max_retries=20
-	local is_sync
-	local out1=""
-	local out2
-	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
-	local i
-
-	if [ "$nodemap_name" == "active" ]; then
-		proc_param="active"
-	elif [ -z "$key" ]; then
-		proc_param=${nodemap_name}
-	else
-		proc_param="${nodemap_name}.${key}"
-	fi
-	(( is_active == 0 )) && [ "$proc_param" != "active" ] && return
-
-	if [ -z "$value" ]; then
-		out1=$(do_facet mgs $LCTL get_param $opt nodemap.${proc_param})
-		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
-	else
-		out1=$value;
-	fi
-
-	# wait up to 10 seconds for other servers to sync with mgs
-	for i in $(seq 1 10); do
-		for node in $(all_server_nodes); do
-		    local node_ip=$(host_nids_address $node $NETTYPE |
-				    cut -d' ' -f1)
-
-		    is_sync=true
-		    if [ -z "$value" ]; then
-			[ $node_ip == $mgs_ip ] && continue
-		    fi
-
-		    out2=$(do_node $node_ip $LCTL get_param $opt \
-				   nodemap.$proc_param 2>/dev/null)
-		    echo "On $node ${node_ip}, ${proc_param} = $out2"
-		    [ "$out1" != "$out2" ] && is_sync=false && break
-		done
-		$is_sync && break
-		sleep 1
-	done
-	if ! $is_sync; then
-		echo MGS
-		echo $out1
-		echo OTHER - IP: $node_ip
-		echo $out2
-		error "mgs and $nodemap_name ${key} mismatch, $i attempts"
-	fi
-	echo "waited $((i - 1)) seconds for sync"
-}
 
 create_fops_nodemaps() {
 	local i=0
