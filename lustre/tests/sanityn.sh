@@ -1461,6 +1461,17 @@ test_39d() { # LU-7310
 }
 run_test 39d "sync write should update mtime"
 
+# for pdo testing, we must cancel MDT-MDT locks as well as client locks to
+# avoid unexpected delays due to previous tests
+pdo_lru_clear() {
+	cancel_lru_locks mdc
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL set_param -n ldlm.namespaces.*mdt*.lru_size=clear
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL get_param ldlm.namespaces.*mdt*.lock_unused_count \
+			ldlm.namespaces.*mdt*.lock_count | grep -v '=0'
+}
+
 # check that pid exists hence second operation wasn't blocked by first one
 # if it is so then there is no conflict, return 0
 # else second operation is conflicting with first one, return 1
@@ -1481,6 +1492,7 @@ check_pdo_conflict() {
 # test 40: check non-blocking operations
 test_40a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	touch $DIR2
@@ -1511,6 +1523,7 @@ run_test 40a "pdirops: create vs others =============="
 
 test_40b() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	touch $DIR1/$tfile &
@@ -1541,6 +1554,7 @@ run_test 40b "pdirops: open|create and others =============="
 
 test_40c() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1572,6 +1586,7 @@ run_test 40c "pdirops: link and others =============="
 
 test_40d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1602,6 +1617,7 @@ run_test 40d "pdirops: unlink and others =============="
 
 test_40e() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1631,6 +1647,7 @@ run_test 40e "pdirops: rename and others =============="
 
 # test 41: create blocking operations
 test_41a() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
@@ -1644,6 +1661,7 @@ test_41a() {
 run_test 41a "pdirops: create vs mkdir =============="
 
 test_41b() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
@@ -1657,6 +1675,7 @@ test_41b() {
 run_test 41b "pdirops: create vs create =============="
 
 test_41c() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1671,6 +1690,7 @@ test_41c() {
 run_test 41c "pdirops: create vs link =============="
 
 test_41d() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
@@ -1684,6 +1704,7 @@ test_41d() {
 run_test 41d "pdirops: create vs unlink =============="
 
 test_41e() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1698,6 +1719,7 @@ test_41e() {
 run_test 41e "pdirops: create and rename (tgt) =============="
 
 test_41f() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
@@ -1711,6 +1733,7 @@ test_41f() {
 run_test 41f "pdirops: create and rename (src) =============="
 
 test_41g() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
@@ -1724,6 +1747,7 @@ test_41g() {
 run_test 41g "pdirops: create vs getattr =============="
 
 test_41h() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$MULTIOP $DIR1/$tfile oO_CREAT:O_RDWR:c &
@@ -1738,6 +1762,7 @@ run_test 41h "pdirops: create vs readdir =============="
 
 # test 42: unlink and blocking operations
 test_42a() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	mkdir $DIR1/$tfile &
@@ -1751,6 +1776,7 @@ test_42a() {
 run_test 42a "pdirops: mkdir vs mkdir =============="
 
 test_42b() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	mkdir $DIR1/$tfile &
@@ -1764,6 +1790,7 @@ test_42b() {
 run_test 42b "pdirops: mkdir vs create =============="
 
 test_42c() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1778,6 +1805,7 @@ test_42c() {
 run_test 42c "pdirops: mkdir vs link =============="
 
 test_42d() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	mkdir $DIR1/$tfile &
@@ -1791,6 +1819,7 @@ test_42d() {
 run_test 42d "pdirops: mkdir vs unlink =============="
 
 test_42e() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1805,6 +1834,7 @@ test_42e() {
 run_test 42e "pdirops: mkdir and rename (tgt) =============="
 
 test_42f() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	mkdir $DIR1/$tfile &
@@ -1818,6 +1848,7 @@ test_42f() {
 run_test 42f "pdirops: mkdir and rename (src) =============="
 
 test_42g() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	mkdir $DIR1/$tfile &
@@ -1831,6 +1862,7 @@ test_42g() {
 run_test 42g "pdirops: mkdir vs getattr =============="
 
 test_42h() {
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	mkdir $DIR1/$tfile &
@@ -1845,6 +1877,7 @@ run_test 42h "pdirops: mkdir vs readdir =============="
 
 # test 43: unlink and blocking operations
 test_43a() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1859,6 +1892,7 @@ test_43a() {
 run_test 43a "pdirops: unlink vs mkdir =============="
 
 test_43b() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1873,6 +1907,7 @@ test_43b() {
 run_test 43b "pdirops: unlink vs create =============="
 
 test_43c() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -1888,6 +1923,7 @@ test_43c() {
 run_test 43c "pdirops: unlink vs link =============="
 
 test_43d() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1902,6 +1938,7 @@ test_43d() {
 run_test 43d "pdirops: unlink vs unlink =============="
 
 test_43e() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -1917,6 +1954,7 @@ test_43e() {
 run_test 43e "pdirops: unlink and rename (tgt) =============="
 
 test_43f() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1931,6 +1969,7 @@ test_43f() {
 run_test 43f "pdirops: unlink and rename (src) =============="
 
 test_43g() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1945,6 +1984,7 @@ test_43g() {
 run_test 43g "pdirops: unlink vs getattr =============="
 
 test_43h() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1960,6 +2000,7 @@ run_test 43h "pdirops: unlink vs readdir =============="
 
 test_43i() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -1976,6 +2017,7 @@ run_test 43i "pdirops: unlink vs remote mkdir"
 
 # test 44: rename tgt and blocking operations
 test_44a() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
@@ -1990,6 +2032,7 @@ test_44a() {
 run_test 44a "pdirops: rename tgt vs mkdir =============="
 
 test_44b() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
@@ -2004,6 +2047,7 @@ test_44b() {
 run_test 44b "pdirops: rename tgt vs create =============="
 
 test_44c() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
@@ -2019,6 +2063,7 @@ test_44c() {
 run_test 44c "pdirops: rename tgt vs link =============="
 
 test_44d() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
@@ -2033,6 +2078,7 @@ test_44d() {
 run_test 44d "pdirops: rename tgt vs unlink =============="
 
 test_44e() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
@@ -2049,6 +2095,7 @@ test_44e() {
 run_test 44e "pdirops: rename tgt and rename (tgt) =============="
 
 test_44f() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
@@ -2064,6 +2111,7 @@ test_44f() {
 run_test 44f "pdirops: rename tgt and rename (src) =============="
 
 test_44g() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
@@ -2078,6 +2126,7 @@ test_44g() {
 run_test 44g "pdirops: rename tgt vs getattr =============="
 
 test_44h() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2    0x146
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
@@ -2094,6 +2143,7 @@ run_test 44h "pdirops: rename tgt vs readdir =============="
 # test 44: rename tgt and blocking operations
 test_44i() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
@@ -2110,6 +2160,7 @@ run_test 44i "pdirops: rename tgt vs remote mkdir"
 
 # test 45: rename src and blocking operations
 test_45a() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2124,6 +2175,7 @@ test_45a() {
 run_test 45a "pdirops: rename src vs mkdir =============="
 
 test_45b() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2138,6 +2190,7 @@ test_45b() {
 run_test 45b "pdirops: rename src vs create =============="
 
 test_45c() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -2153,6 +2206,7 @@ test_45c() {
 run_test 45c "pdirops: rename src vs link =============="
 
 test_45d() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2167,6 +2221,7 @@ test_45d() {
 run_test 45d "pdirops: rename src vs unlink =============="
 
 test_45e() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -2182,6 +2237,7 @@ test_45e() {
 run_test 45e "pdirops: rename src and rename (tgt) =============="
 
 test_45f() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2196,6 +2252,7 @@ test_45f() {
 run_test 45f "pdirops: rename src and rename (src) =============="
 
 test_45g() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2210,6 +2267,7 @@ test_45g() {
 run_test 45g "pdirops: rename src vs getattr =============="
 
 test_45h() {
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2225,6 +2283,7 @@ run_test 45h "pdirops: unlink vs readdir =============="
 
 test_45i() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2241,6 +2300,7 @@ run_test 45i "pdirops: rename src vs remote mkdir"
 
 # test 46: link and blocking operations
 test_46a() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2255,6 +2315,7 @@ test_46a() {
 run_test 46a "pdirops: link vs mkdir =============="
 
 test_46b() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2269,6 +2330,7 @@ test_46b() {
 run_test 46b "pdirops: link vs create =============="
 
 test_46c() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2283,6 +2345,7 @@ test_46c() {
 run_test 46c "pdirops: link vs link =============="
 
 test_46d() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2297,6 +2360,7 @@ test_46d() {
 run_test 46d "pdirops: link vs unlink =============="
 
 test_46e() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -2312,6 +2376,7 @@ test_46e() {
 run_test 46e "pdirops: link and rename (tgt) =============="
 
 test_46f() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 	touch $DIR1/$tfile-3
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
@@ -2327,6 +2392,7 @@ test_46f() {
 run_test 46f "pdirops: link and rename (src) =============="
 
 test_46g() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2341,6 +2407,7 @@ test_46g() {
 run_test 46g "pdirops: link vs getattr =============="
 
 test_46h() {
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2357,6 +2424,7 @@ run_test 46h "pdirops: link vs readdir =============="
 
 test_46i() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2375,6 +2443,7 @@ run_test 46i "pdirops: link vs remote mkdir"
 test_47a() {
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$!
@@ -2389,6 +2458,7 @@ run_test 47a "pdirops: remote mkdir vs mkdir"
 test_47b() {
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$LFS mkdir -i 1 $DIR1/$tfile &
 	PID1=$!
@@ -2403,6 +2473,7 @@ run_test 47b "pdirops: remote mkdir vs create"
 
 test_47c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2418,6 +2489,7 @@ run_test 47c "pdirops: remote mkdir vs link"
 
 test_47d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$LFS mkdir -i 1 $DIR1/$tfile &
@@ -2433,6 +2505,7 @@ run_test 47d "pdirops: remote mkdir vs unlink"
 
 test_47e() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 	touch $DIR1/$tfile-2
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
@@ -2449,6 +2522,7 @@ run_test 47e "pdirops: remote mkdir and rename (tgt)"
 
 test_47f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$LFS mkdir -i 1 $DIR1/$tfile &
@@ -2466,6 +2540,7 @@ test_47g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	sync
 	sync_all_data
+	pdo_lru_clear
 #define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
 	$LFS mkdir -i 1 $DIR1/$tfile &
