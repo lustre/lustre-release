@@ -801,7 +801,7 @@ static inline void print_simple(FILE *f, struct cYAML *node,
 	if (cpi->array_first_elem)
 		fprintf(f, "%*s- ", INDENT * level, "");
 
-	fprintf(f, "%*s""%s: %d\n", (cpi->array_first_elem) ? 0 :
+	fprintf(f, "%*s""%s: %" PRId64 "\n", (cpi->array_first_elem) ? 0 :
 		INDENT * level + ind, "", node->cy_string,
 		node->cy_valueint);
 }
@@ -852,7 +852,7 @@ static void print_number(FILE *f, struct cYAML *node,
 
 	if ((fabs(((double)node->cy_valueint) - d) <= DBL_EPSILON) &&
 	    (d <= INT_MAX) && (d >= INT_MIN))
-		fprintf(f, "%*s""%s: %d\n", (cpi->array_first_elem) ? 0 :
+		fprintf(f, "%*s""%s: %" PRId64 "\n", (cpi->array_first_elem) ? 0 :
 			INDENT * level + ind, "",
 			node->cy_string, node->cy_valueint);
 	else {

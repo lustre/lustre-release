@@ -27,6 +27,7 @@
 #ifndef CYAML_H
 #define CYAML_H
 
+#include <inttypes.h>
 #include <stdbool.h>
 
 enum cYAML_object_type {
@@ -51,7 +52,7 @@ struct cYAML {
 	/* The item's string, if type==CYAML_TYPE_STRING */
 	char *cy_valuestring;
 	/* The item's number, if type==CYAML_TYPE_NUMBER */
-	int cy_valueint;
+	int64_t cy_valueint;
 	/* The item's number, if type==CYAML_TYPE_NUMBER */
 	double cy_valuedouble;
 	/* The item's name string, if this item is the child of,
