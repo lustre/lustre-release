@@ -586,7 +586,8 @@ extern int lprocfs_import_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_state_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data);
 #ifdef HAVE_SERVER_SUPPORT
-extern int lprocfs_num_exports_seq_show(struct seq_file *m, void *data);
+ssize_t num_exports_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf);
 #endif
 struct adaptive_timeout;
 extern int lprocfs_at_hist_helper(struct seq_file *m,
@@ -636,10 +637,10 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data);
 int lprocfs_hash_seq_show(struct seq_file *m, void *data);
 
 /* lprocfs_status.c: IR factor */
-int lprocfs_ir_factor_seq_show(struct seq_file *m, void *data);
-ssize_t
-lprocfs_ir_factor_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off);
+ssize_t ir_factor_show(struct kobject *kobj, struct attribute *attr,
+		       char *buf);
+ssize_t ir_factor_store(struct kobject *kobj, struct attribute *attr,
+			const char *buffer, size_t count);
 #endif
 
 /* lprocfs_status.c: dump pages on cksum error */
@@ -839,22 +840,26 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 void lprocfs_job_stats_fini(struct obd_device *obd);
 int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 			   cntr_init_callback fn);
-int lprocfs_job_interval_seq_show(struct seq_file *m, void *data);
-ssize_t
-lprocfs_job_interval_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off);
-/* lproc_status.c */
-int lprocfs_recovery_time_soft_seq_show(struct seq_file *m, void *data);
-ssize_t lprocfs_recovery_time_soft_seq_write(struct file *file,
-						const char __user *buffer,
-						size_t count, loff_t *off);
-int lprocfs_recovery_time_hard_seq_show(struct seq_file *m, void *data);
-ssize_t
-lprocfs_recovery_time_hard_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off);
-int lprocfs_target_instance_seq_show(struct seq_file *m, void *data);
+ssize_t job_cleanup_interval_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf);
+ssize_t job_cleanup_interval_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer, size_t count);
+/* lproc_status_server.c */
+ssize_t recovery_time_soft_show(struct kobject *kobj, struct attribute *attr,
+				char *buf);
+ssize_t recovery_time_soft_store(struct kobject *kobj,
+				 struct attribute *attr,
+				 const char *buffer, size_t count);
+ssize_t recovery_time_hard_show(struct kobject *kobj, struct attribute *attr,
+				char *buf);
+ssize_t recovery_time_hard_store(struct kobject *kobj,
+				 struct attribute *attr,
+				 const char *buffer, size_t count);
+ssize_t instance_show(struct kobject *kobj, struct attribute *attr,
+		      char *buf);
 #endif
+/* lproc_status.c */
 int lprocfs_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *data);
 ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
 						const char __user *buffer,

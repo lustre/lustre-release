@@ -149,15 +149,15 @@ EXPORT_SYMBOL(lprocfs_evict_client_seq_write);
 
 #undef BUFLEN
 
-int lprocfs_num_exports_seq_show(struct seq_file *m, void *data)
+ssize_t num_exports_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
 {
-	struct obd_device *obd = data;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 
-	LASSERT(obd != NULL);
-	seq_printf(m, "%u\n", obd->obd_num_exports);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", obd->obd_num_exports);
 }
-EXPORT_SYMBOL(lprocfs_num_exports_seq_show);
+EXPORT_SYMBOL(num_exports_show);
 
 static int obd_export_flags2str(struct obd_export *exp, struct seq_file *m)
 {
@@ -765,27 +765,25 @@ out:
 }
 EXPORT_SYMBOL(lprocfs_recovery_status_seq_show);
 
-int lprocfs_ir_factor_seq_show(struct seq_file *m, void *data)
+ssize_t ir_factor_show(struct kobject *kobj, struct attribute *attr,
+		       char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 
-	LASSERT(obd != NULL);
-	seq_printf(m, "%d\n", obd->obd_recovery_ir_factor);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", obd->obd_recovery_ir_factor);
 }
-EXPORT_SYMBOL(lprocfs_ir_factor_seq_show);
+EXPORT_SYMBOL(ir_factor_show);
 
-ssize_t
-lprocfs_ir_factor_seq_write(struct file *file, const char __user *buffer,
-			    size_t count, loff_t *off)
+ssize_t ir_factor_store(struct kobject *kobj, struct attribute *attr,
+			const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	int val;
 	int rc;
 
-	LASSERT(obd != NULL);
-	rc = kstrtoint_from_user(buffer, count, 10, &val);
+	rc = kstrtoint(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -795,7 +793,7 @@ lprocfs_ir_factor_seq_write(struct file *file, const char __user *buffer,
 	obd->obd_recovery_ir_factor = val;
 	return count;
 }
-EXPORT_SYMBOL(lprocfs_ir_factor_seq_write);
+EXPORT_SYMBOL(ir_factor_store);
 
 int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data)
 {
@@ -826,76 +824,72 @@ lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
 }
 EXPORT_SYMBOL(lprocfs_checksum_dump_seq_write);
 
-int lprocfs_recovery_time_soft_seq_show(struct seq_file *m, void *data)
+ssize_t recovery_time_soft_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 
-	LASSERT(obd != NULL);
-	seq_printf(m, "%llu\n", obd->obd_recovery_timeout);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%ld\n", obd->obd_recovery_timeout);
 }
-EXPORT_SYMBOL(lprocfs_recovery_time_soft_seq_show);
+EXPORT_SYMBOL(recovery_time_soft_show);
 
-ssize_t
-lprocfs_recovery_time_soft_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+ssize_t recovery_time_soft_store(struct kobject *kobj,
+				 struct attribute *attr,
+				 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	unsigned int val;
 	int rc;
 
-	LASSERT(obd != NULL);
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
 	obd->obd_recovery_timeout = val;
 	return count;
 }
-EXPORT_SYMBOL(lprocfs_recovery_time_soft_seq_write);
+EXPORT_SYMBOL(recovery_time_soft_store);
 
-int lprocfs_recovery_time_hard_seq_show(struct seq_file *m, void *data)
+ssize_t recovery_time_hard_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 
-	LASSERT(obd != NULL);
-	seq_printf(m, "%lld\n", obd->obd_recovery_time_hard);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%ld\n", obd->obd_recovery_time_hard);
 }
-EXPORT_SYMBOL(lprocfs_recovery_time_hard_seq_show);
+EXPORT_SYMBOL(recovery_time_hard_show);
 
-ssize_t
-lprocfs_recovery_time_hard_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+ssize_t recovery_time_hard_store(struct kobject *kobj,
+				 struct attribute *attr,
+				 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	unsigned int val;
 	int rc;
 
-	LASSERT(obd != NULL);
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
 	obd->obd_recovery_time_hard = val;
 	return count;
 }
-EXPORT_SYMBOL(lprocfs_recovery_time_hard_seq_write);
+EXPORT_SYMBOL(recovery_time_hard_store);
 
-int lprocfs_target_instance_seq_show(struct seq_file *m, void *data)
+ssize_t instance_show(struct kobject *kobj, struct attribute *attr,
+		      char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct obd_device_target *target = &obd->u.obt;
 
-	LASSERT(obd != NULL);
 	LASSERT(target->obt_magic == OBT_MAGIC);
-	seq_printf(m, "%u\n", obd->u.obt.obt_instance);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", obd->u.obt.obt_instance);
 }
-EXPORT_SYMBOL(lprocfs_target_instance_seq_show);
+EXPORT_SYMBOL(instance_show);
 
 #endif /* CONFIG_PROC_FS*/

@@ -1545,65 +1545,68 @@ EXPORT_SYMBOL(tgt_grant_commit_cb_add);
 /**
  * Show estimate of total amount of dirty data on clients.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
+ * @kobj		kobject embedded in obd_device
+ * @attr		unused
+ * @buf			buf used by sysfs to print out data
  *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:		0 on success
+ *			negative value on error
  */
-int tgt_tot_dirty_seq_show(struct seq_file *m, void *data)
+ssize_t tot_dirty_show(struct kobject *kobj, struct attribute *attr,
+		       char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct tg_grants_data *tgd;
 
-	LASSERT(obd != NULL);
 	tgd = &obd->u.obt.obt_lut->lut_tgd;
-	seq_printf(m, "%llu\n", tgd->tgd_tot_dirty);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", tgd->tgd_tot_dirty);
 }
-EXPORT_SYMBOL(tgt_tot_dirty_seq_show);
+EXPORT_SYMBOL(tot_dirty_show);
 
 /**
  * Show total amount of space granted to clients.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
+ * @kobj		kobject embedded in obd_device
+ * @attr		unused
+ * @buf			buf used by sysfs to print out data
  *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:		0 on success
+ *			negative value on error
  */
-int tgt_tot_granted_seq_show(struct seq_file *m, void *data)
+ssize_t tot_granted_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct tg_grants_data *tgd;
 
-	LASSERT(obd != NULL);
 	tgd = &obd->u.obt.obt_lut->lut_tgd;
-	seq_printf(m, "%llu\n", tgd->tgd_tot_granted);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", tgd->tgd_tot_granted);
 }
-EXPORT_SYMBOL(tgt_tot_granted_seq_show);
+EXPORT_SYMBOL(tot_granted_show);
 
 /**
  * Show total amount of space used by IO in progress.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
+ * @kobj		kobject embedded in obd_device
+ * @attr		unused
+ * @buf			buf used by sysfs to print out data
  *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:		0 on success
+ *			negative value on error
  */
-int tgt_tot_pending_seq_show(struct seq_file *m, void *data)
+ssize_t tot_pending_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct tg_grants_data *tgd;
 
-	LASSERT(obd != NULL);
 	tgd = &obd->u.obt.obt_lut->lut_tgd;
-	seq_printf(m, "%llu\n", tgd->tgd_tot_pending);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", tgd->tgd_tot_pending);
 }
-EXPORT_SYMBOL(tgt_tot_pending_seq_show);
+EXPORT_SYMBOL(tot_pending_show);
 
 /**
  * Show if grants compatibility mode is disabled.
@@ -1614,21 +1617,22 @@ EXPORT_SYMBOL(tgt_tot_pending_seq_show);
  * block, (i.e. typically 4kB units), but underlaying file system might have
  * block size bigger than page size, e.g. ZFS. See LU-2049 for details.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
+ * @kobj		kobject embedded in obd_device
+ * @attr		unused
+ * @buf			buf used by sysfs to print out data
  *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:		string length of @buf output on success
  */
-int tgt_grant_compat_disable_seq_show(struct seq_file *m, void *data)
+ssize_t grant_compat_disable_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
 
-	seq_printf(m, "%u\n", tgd->tgd_grant_compat_disable);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", tgd->tgd_grant_compat_disable);
 }
-EXPORT_SYMBOL(tgt_grant_compat_disable_seq_show);
+EXPORT_SYMBOL(grant_compat_disable_show);
 
 /**
  * Change grant compatibility mode.
@@ -1636,27 +1640,27 @@ EXPORT_SYMBOL(tgt_grant_compat_disable_seq_show);
  * Setting tgd_grant_compat_disable prohibit any space granting to clients
  * not supporting OBD_CONNECT_GRANT_PARAM. See details above.
  *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents mode
- *			1: disable compatibility mode
- *			0: enable compatibility mode
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
+ * @kobj	kobject embedded in obd_device
+ * @attr	unused
+ * @buffer	string which represents mode
+ *		1: disable compatibility mode
+ *		0: enable compatibility mode
+ * @count	@buffer length
  *
- * \retval		\a count on success
- * \retval		negative number on error
+ * Return:	@count on success
+ *		negative number on error
  */
-ssize_t tgt_grant_compat_disable_seq_write(struct file *file,
-					   const char __user *buffer,
-					   size_t count, loff_t *off)
+ssize_t grant_compat_disable_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
@@ -1664,4 +1668,4 @@ ssize_t tgt_grant_compat_disable_seq_write(struct file *file,
 
 	return count;
 }
-EXPORT_SYMBOL(tgt_grant_compat_disable_seq_write);
+EXPORT_SYMBOL(grant_compat_disable_store);

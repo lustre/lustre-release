@@ -202,14 +202,11 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 	return 0;
 }
 
-LPROC_SEQ_FOPS_RO_TYPE(mgs, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mgs, evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
 
 static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
-	{ .name	=	"num_exports",
-	  .fops	=	&mgs_num_exports_fops	},
 	{ .name	=	"hash_stats",
 	  .fops	=	&mgs_hash_fops		},
 	{ .name	=	"evict_client",
@@ -218,6 +215,8 @@ static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
 	  .fops	=	&mgs_ir_timeout_fops	},
 	{ NULL }
 };
+
+LUSTRE_RO_ATTR(num_exports);
 
 static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf)
@@ -254,6 +253,7 @@ LUSTRE_RO_ATTR(mntdev);
 static struct attribute *mgs_attrs[] = {
 	&lustre_attr_fstype.attr,
 	&lustre_attr_mntdev.attr,
+	&lustre_attr_num_exports.attr,
 	NULL,
 };
 

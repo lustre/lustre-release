@@ -5255,8 +5255,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	ping_evictor_stop();
 
 	/* Remove the HSM /proc entry so the coordinator cannot be
-	 * restarted by a user while it's shutting down. */
-	hsm_cdt_procfs_fini(m);
+	 * restarted by a user while it's shutting down.
+	 */
 	mdt_hsm_cdt_stop(m);
 
 	mdt_llog_ctxt_unclone(env, m, LLOG_AGENT_ORIG_CTXT);
@@ -5276,7 +5276,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	/* Calling the cleanup functions in the same order as in the mdt_init0
 	 * error path
 	 */
-	mdt_procfs_fini(m);
+	mdt_tunables_fini(m);
 
 	target_recovery_fini(obd);
 	upcall_cache_cleanup(m->mdt_identity_cache);
@@ -5526,7 +5526,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		GOTO(err_free_hsm, rc);
 	}
 
-	rc = mdt_procfs_init(m, dev);
+	rc = mdt_tunables_init(m, dev);
 	if (rc) {
 		CERROR("Can't init MDT lprocfs, rc %d\n", rc);
 		GOTO(err_recovery, rc);
@@ -5554,7 +5554,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
 	RETURN(0);
 err_procfs:
-	mdt_procfs_fini(m);
+	mdt_tunables_fini(m);
 err_recovery:
 	upcall_cache_cleanup(m->mdt_identity_cache);
 	m->mdt_identity_cache = NULL;
@@ -5612,12 +5612,12 @@ static int mdt_process_config(const struct lu_env *env,
 
 	switch (cfg->lcfg_command) {
 	case LCFG_PARAM: {
-		struct obd_device	   *obd = d->ld_obd;
-
+		struct obd_device *obd = d->ld_obd;
 		/* For interoperability */
-		struct cfg_interop_param   *ptr = NULL;
-		struct lustre_cfg	   *old_cfg = NULL;
-		char			   *param = NULL;
+		struct cfg_interop_param *ptr = NULL;
+		struct lustre_cfg *old_cfg = NULL;
+		char *param = NULL;
+		ssize_t count;
 
 		param = lustre_cfg_string(cfg, 1);
 		if (param == NULL) {
@@ -5646,17 +5646,22 @@ static int mdt_process_config(const struct lu_env *env,
 			}
 		}
 
-		rc = class_process_proc_param(PARAM_MDT, obd->obd_vars,
-					      cfg, obd);
-		if (rc > 0 || rc == -ENOSYS) {
+		count = class_modify_config(cfg, PARAM_MDT,
+					    &obd->obd_kset.kobj);
+		if (count < 0) {
+			struct coordinator *cdt = &m->mdt_coordinator;
+
 			/* is it an HSM var ? */
-			rc = class_process_proc_param(PARAM_HSM,
-						      hsm_cdt_get_proc_vars(),
-						      cfg, obd);
-			if (rc > 0 || rc == -ENOSYS)
+			count = class_modify_config(cfg, PARAM_HSM,
+						    &cdt->cdt_hsm_kobj);
+			if (count < 0)
 				/* we don't understand; pass it on */
 				rc = next->ld_ops->ldo_process_config(env, next,
 								      cfg);
+			else
+				rc = count > 0 ? 0 : count;
+		} else {
+			rc = count > 0 ? 0 : count;
 		}
 
 		if (old_cfg)

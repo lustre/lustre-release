@@ -1797,7 +1797,7 @@ static void target_start_recovery_timer(struct obd_device *obd)
 	obd->obd_recovery_start = ktime_get_real_seconds();
 	spin_unlock(&obd->obd_dev_lock);
 
-	LCONSOLE_WARN("%s: Will be in recovery for at least %llu:%02llu, or until %d client%s reconnect%s\n",
+	LCONSOLE_WARN("%s: Will be in recovery for at least %lu:%02lu, or until %d client%s reconnect%s\n",
 		      obd->obd_name,
 		      obd->obd_recovery_timeout / 60,
 		      obd->obd_recovery_timeout % 60,
@@ -2323,7 +2323,7 @@ static int check_for_recovery_ready(struct lu_target *lut)
 			extend_recovery_timer(obd, obd->obd_recovery_timeout,
 					      true);
 			CDEBUG(D_HA,
-			       "%s update recovery is not ready, extend recovery %llu\n",
+			       "%s update recovery is not ready, extend recovery %lu\n",
 			       obd->obd_name, obd->obd_recovery_timeout);
 			return 0;
 		}

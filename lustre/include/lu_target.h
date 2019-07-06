@@ -530,13 +530,17 @@ long tgt_grant_create(const struct lu_env *env, struct obd_export *exp,
 int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 			struct obd_statfs *osfs, time64_t max_age,
 			int *from_cache);
-int tgt_tot_dirty_seq_show(struct seq_file *m, void *data);
-int tgt_tot_granted_seq_show(struct seq_file *m, void *data);
-int tgt_tot_pending_seq_show(struct seq_file *m, void *data);
-int tgt_grant_compat_disable_seq_show(struct seq_file *m, void *data);
-ssize_t tgt_grant_compat_disable_seq_write(struct file *file,
-					   const char __user *buffer,
-					   size_t count, loff_t *off);
+ssize_t tot_dirty_show(struct kobject *kobj, struct attribute *attr,
+		       char *buf);
+ssize_t tot_granted_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf);
+ssize_t tot_pending_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf);
+ssize_t grant_compat_disable_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf);
+ssize_t grant_compat_disable_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer, size_t count);
 
 /* FMD */
 void tgt_fmd_update(struct obd_export *exp, const struct lu_fid *fid,

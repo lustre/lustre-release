@@ -759,51 +759,33 @@ LUSTRE_RW_ATTR(writethrough_cache_enable);
 #endif
 
 LPROC_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
-LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_soft);
-LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_hard);
-LPROC_SEQ_FOPS_WR_ONLY(ofd, evict_client);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, num_exports);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, target_instance);
-LPROC_SEQ_FOPS_RW_TYPE(ofd, ir_factor);
-LPROC_SEQ_FOPS_RW_TYPE(ofd, checksum_dump);
-LPROC_SEQ_FOPS_RW_TYPE(ofd, job_interval);
+LUSTRE_RW_ATTR(recovery_time_hard);
+LUSTRE_RW_ATTR(recovery_time_soft);
+LUSTRE_RW_ATTR(ir_factor);
 
-LPROC_SEQ_FOPS_RO(tgt_tot_dirty);
-LPROC_SEQ_FOPS_RO(tgt_tot_granted);
-LPROC_SEQ_FOPS_RO(tgt_tot_pending);
-LPROC_SEQ_FOPS(tgt_grant_compat_disable);
+LPROC_SEQ_FOPS_WR_ONLY(ofd, evict_client);
+LPROC_SEQ_FOPS_RW_TYPE(ofd, checksum_dump);
+LUSTRE_RW_ATTR(job_cleanup_interval);
+
+LUSTRE_RO_ATTR(tot_dirty);
+LUSTRE_RO_ATTR(tot_granted);
+LUSTRE_RO_ATTR(tot_pending);
+LUSTRE_RW_ATTR(grant_compat_disable);
+LUSTRE_RO_ATTR(instance);
+
+LUSTRE_RO_ATTR(num_exports);
 
 struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ .name =	"last_id",
 	  .fops =	&ofd_last_id_fops		},
-	{ .name =	"tot_dirty",
-	  .fops =	&tgt_tot_dirty_fops		},
-	{ .name =	"tot_pending",
-	  .fops =	&tgt_tot_pending_fops		},
-	{ .name =	"tot_granted",
-	  .fops =	&tgt_tot_granted_fops		},
 	{ .name =	"recovery_status",
 	  .fops =	&ofd_recovery_status_fops	},
-	{ .name =	"recovery_time_soft",
-	  .fops =	&ofd_recovery_time_soft_fops	},
-	{ .name =	"recovery_time_hard",
-	  .fops =	&ofd_recovery_time_hard_fops	},
 	{ .name =	"evict_client",
 	  .fops =	&ofd_evict_client_fops		},
-	{ .name =	"num_exports",
-	  .fops =	&ofd_num_exports_fops		},
 	{ .name =	"brw_size",
 	  .fops =	&ofd_brw_size_fops		},
-	{ .name =	"instance",
-	  .fops =	&ofd_target_instance_fops	},
-	{ .name =	"ir_factor",
-	  .fops =	&ofd_ir_factor_fops		},
 	{ .name =	"checksum_dump",
 	  .fops =	&ofd_checksum_dump_fops		},
-	{ .name =	"grant_compat_disable",
-	  .fops =	&tgt_grant_compat_disable_fops	},
-	{ .name =	"job_cleanup_interval",
-	  .fops =	&ofd_job_interval_fops		},
 	{ .name =	"lfsck_layout",
 	  .fops =	&ofd_lfsck_layout_fops		},
 	{ .name	=	"lfsck_verify_pfid",
@@ -851,6 +833,15 @@ void ofd_stats_counter_init(struct lprocfs_stats *stats)
 LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);
 
 static struct attribute *ofd_attrs[] = {
+	&lustre_attr_tot_dirty.attr,
+	&lustre_attr_tot_granted.attr,
+	&lustre_attr_tot_pending.attr,
+	&lustre_attr_grant_compat_disable.attr,
+	&lustre_attr_instance.attr,
+	&lustre_attr_recovery_time_hard.attr,
+	&lustre_attr_recovery_time_soft.attr,
+	&lustre_attr_ir_factor.attr,
+	&lustre_attr_num_exports.attr,
 	&lustre_attr_seqs_allocated.attr,
 	&lustre_attr_grant_precreate.attr,
 	&lustre_attr_precreate_batch.attr,
@@ -859,6 +850,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_sync_journal.attr,
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
+	&lustre_attr_job_cleanup_interval.attr,
 	&lustre_attr_checksum_t10pi_enforce.attr,
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
 	&lustre_attr_read_cache_enable.attr,

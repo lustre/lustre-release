@@ -132,7 +132,9 @@ struct coordinator {
 	struct lu_env		 cdt_env;	     /**< coordinator lustre
 						      * env */
 	struct lu_context	 cdt_session;	     /** session for lu_ucred */
-	struct proc_dir_entry	*cdt_proc_dir;	     /**< cdt /proc directory */
+	struct dentry		*cdt_debugfs_dir;	/**< cdt debugfs directory */
+	struct completion	 cdt_kobj_unregister;
+	struct kobject		 cdt_hsm_kobj;		/* hsm sysfs object */
 	__u64			 cdt_policy;	     /**< policy flags */
 	enum cdt_states		 cdt_state;	      /**< state */
 	struct mutex		 cdt_state_lock;      /**< cdt_state lock */
@@ -145,14 +147,14 @@ struct coordinator {
 						       * list */
 	struct mutex		 cdt_restore_lock;    /**< protect restore
 						       * list */
-	time64_t		 cdt_loop_period;     /**< llog scan period */
-	time64_t		 cdt_grace_delay;     /**< request grace
+	time_t			 cdt_loop_period;     /**< llog scan period */
+	time_t			 cdt_grace_delay;     /**< request grace
 						       * delay */
-	time64_t		 cdt_active_req_timeout; /**< request timeout */
+	time_t			 cdt_active_req_timeout; /**< request timeout */
 	__u32			 cdt_default_archive_id; /**< archive id used
 						       * when none are
 						       * specified */
-	__u64			 cdt_max_requests;    /**< max count of started
+	u64			 cdt_max_requests;    /**< max count of started
 						       * requests */
 	/** Current count of active requests */
 	atomic_t		 cdt_request_count;   /** total */
@@ -1079,14 +1081,13 @@ static inline void mdt_hsm_cdt_event(struct coordinator *cdt)
 	cdt->cdt_event = true;
 }
 
-/* coordinator control /proc interface */
-ssize_t mdt_hsm_cdt_control_seq_write(struct file *file,
-				      const char __user *buffer,
-				      size_t count, loff_t *off);
-int mdt_hsm_cdt_control_seq_show(struct seq_file *m, void *data);
-int hsm_cdt_procfs_init(struct mdt_device *mdt);
-void hsm_cdt_procfs_fini(struct mdt_device *mdt);
-struct lprocfs_vars *hsm_cdt_get_proc_vars(void);
+/* coordinator control sysfs interface */
+ssize_t hsm_control_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf);
+ssize_t hsm_control_store(struct kobject *kobj, struct attribute *attr,
+			  const char *buffer, size_t count);
+int hsm_cdt_tunables_init(struct mdt_device *mdt);
+void hsm_cdt_tunables_fini(struct mdt_device *mdt);
 /* md_hsm helpers */
 struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 				      const struct lu_fid *fid,
@@ -1273,8 +1274,8 @@ enum mdt_stat_idx {
 
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode);
 void mdt_stats_counter_init(struct lprocfs_stats *stats);
-int mdt_procfs_init(struct mdt_device *mdt, const char *name);
-void mdt_procfs_fini(struct mdt_device *mdt);
+int mdt_tunables_init(struct mdt_device *mdt, const char *name);
+void mdt_tunables_fini(struct mdt_device *mdt);
 
 /* lustre/mdt_mdt_lproc.c */
 int lprocfs_mdt_open_files_seq_open(struct inode *inode,

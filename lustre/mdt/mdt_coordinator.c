@@ -441,55 +441,6 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 	}
 }
 
-/**
- * create /proc entries for coordinator
- * \param mdt [IN]
- * \retval 0 success
- * \retval -ve failure
- */
-int hsm_cdt_procfs_init(struct mdt_device *mdt)
-{
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	int			 rc = 0;
-	ENTRY;
-
-	/* init /proc entries, failure is not critical */
-	cdt->cdt_proc_dir = lprocfs_register("hsm",
-					     mdt2obd_dev(mdt)->obd_proc_entry,
-					     lprocfs_mdt_hsm_vars, mdt);
-	if (IS_ERR(cdt->cdt_proc_dir)) {
-		rc = PTR_ERR(cdt->cdt_proc_dir);
-		CERROR("%s: Cannot create 'hsm' directory in mdt proc dir,"
-		       " rc=%d\n", mdt_obd_name(mdt), rc);
-		cdt->cdt_proc_dir = NULL;
-		RETURN(rc);
-	}
-
-	RETURN(0);
-}
-
-/**
- * remove /proc entries for coordinator
- * \param mdt [IN]
- */
-void hsm_cdt_procfs_fini(struct mdt_device *mdt)
-{
-	struct coordinator *cdt = &mdt->mdt_coordinator;
-
-	if (cdt->cdt_proc_dir != NULL)
-		lprocfs_remove(&cdt->cdt_proc_dir);
-}
-
-/**
- * get vector of hsm cdt /proc vars
- * \param none
- * \retval var vector
- */
-struct lprocfs_vars *hsm_cdt_get_proc_vars(void)
-{
-	return lprocfs_mdt_hsm_vars;
-}
-
 /* Release the ressource used by the coordinator. Called when the
  * coordinator is stopping. */
 static void mdt_hsm_cdt_cleanup(struct mdt_device *mdt)
@@ -1064,7 +1015,7 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 
 	hsm_init_ucred(mdt_ucred(cdt_mti));
 
-	/* default values for /proc tunnables
+	/* default values for sysfs tunnables
 	 * can be override by MGS conf */
 	cdt->cdt_default_archive_id = 1;
 	cdt->cdt_grace_delay = 60;
@@ -1154,9 +1105,9 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	cdt->cdt_group_request_mask = (1UL << HSMA_RESTORE);
 	cdt->cdt_other_request_mask = (1UL << HSMA_RESTORE);
 
-	/* to avoid deadlock when start is made through /proc
-	 * /proc entries are created by the coordinator thread */
-
+	/* to avoid deadlock when start is made through sysfs
+	 * sysfs entries are created by the coordinator thread
+	 */
 	/* set up list of started restore requests */
 	cdt_mti = lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
 	rc = mdt_hsm_pending_restore(cdt_mti);
@@ -1949,7 +1900,7 @@ bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 }
 
 /*
- * /proc interface used to get/set HSM behaviour (cdt->cdt_policy)
+ * sysfs interface used to get/set HSM behaviour (cdt->cdt_policy)
  */
 static const struct {
 	__u64		 bit;
@@ -2108,46 +2059,149 @@ out:
 	OBD_FREE(buf, count + 1);
 	RETURN(rc);
 }
-LPROC_SEQ_FOPS(mdt_hsm_policy);
+LDEBUGFS_SEQ_FOPS(mdt_hsm_policy);
 
-#define GENERATE_PROC_METHOD(VAR)					\
-static int mdt_hsm_##VAR##_seq_show(struct seq_file *m, void *data)	\
-{									\
-	struct mdt_device	*mdt = m->private;			\
-	struct coordinator	*cdt = &mdt->mdt_coordinator;		\
-	ENTRY;								\
-									\
-	seq_printf(m, "%llu\n", (__u64)cdt->VAR);			\
-	RETURN(0);							\
-}									\
-static ssize_t								\
-mdt_hsm_##VAR##_seq_write(struct file *file, const char __user *buffer,	\
-			  size_t count, loff_t *off)			\
-									\
-{									\
-	struct seq_file		*m = file->private_data;		\
-	struct mdt_device	*mdt = m->private;			\
-	struct coordinator	*cdt = &mdt->mdt_coordinator;		\
-	unsigned int val;						\
-	int rc;								\
-									\
-	ENTRY;								\
-	rc = kstrtouint_from_user(buffer, count, 0, &val);		\
-	if (rc)								\
-		RETURN(rc);						\
-									\
-	if (val !=  0) {						\
-		cdt->VAR = val;						\
-		RETURN(count);						\
-	}								\
-	RETURN(-EINVAL);						\
-}									\
+ssize_t loop_period_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
 
-GENERATE_PROC_METHOD(cdt_loop_period)
-GENERATE_PROC_METHOD(cdt_grace_delay)
-GENERATE_PROC_METHOD(cdt_active_req_timeout)
-GENERATE_PROC_METHOD(cdt_max_requests)
-GENERATE_PROC_METHOD(cdt_default_archive_id)
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cdt->cdt_loop_period);
+}
+
+ssize_t loop_period_store(struct kobject *kobj, struct attribute *attr,
+			  const char *buffer, size_t count)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val != 0)
+		cdt->cdt_loop_period = val;
+
+	return val ? count : -EINVAL;
+}
+LUSTRE_RW_ATTR(loop_period);
+
+ssize_t grace_delay_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cdt->cdt_grace_delay);
+}
+
+ssize_t grace_delay_store(struct kobject *kobj, struct attribute *attr,
+			  const char *buffer, size_t count)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val != 0)
+		cdt->cdt_grace_delay = val;
+
+	return val ? count : -EINVAL;
+}
+LUSTRE_RW_ATTR(grace_delay);
+
+ssize_t active_request_timeout_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", cdt->cdt_active_req_timeout);
+}
+
+ssize_t active_request_timeout_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val != 0)
+		cdt->cdt_active_req_timeout = val;
+
+	return val ? count : -EINVAL;
+}
+LUSTRE_RW_ATTR(active_request_timeout);
+
+ssize_t max_requests_show(struct kobject *kobj, struct attribute *attr,
+			  char *buf)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", cdt->cdt_max_requests);
+}
+
+ssize_t max_requests_store(struct kobject *kobj, struct attribute *attr,
+			   const char *buffer, size_t count)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+	unsigned long long val;
+	int rc;
+
+	rc = kstrtoull(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val != 0)
+		cdt->cdt_max_requests = val;
+
+	return val ? count : -EINVAL;
+}
+LUSTRE_RW_ATTR(max_requests);
+
+ssize_t default_archive_id_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", cdt->cdt_default_archive_id);
+}
+
+ssize_t default_archive_id_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val != 0)
+		cdt->cdt_default_archive_id = val;
+
+	return val ? count : -EINVAL;
+}
+LUSTRE_RW_ATTR(default_archive_id);
 
 /*
  * procfs write method for MDT/hsm_control
@@ -2160,30 +2214,20 @@ GENERATE_PROC_METHOD(cdt_default_archive_id)
 #define CDT_HELP_CMD     "help"
 #define CDT_MAX_CMD_LEN  10
 
-ssize_t
-mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+ssize_t hsm_control_store(struct kobject *kobj, struct attribute *attr,
+			  const char *buffer, size_t count)
 {
-	struct seq_file		*m = file->private_data;
-	struct obd_device	*obd = m->private;
-	struct mdt_device	*mdt = mdt_dev(obd->obd_lu_dev);
-	struct coordinator	*cdt = &(mdt->mdt_coordinator);
-	int			 rc, usage = 0;
-	char			 kernbuf[CDT_MAX_CMD_LEN];
-	ENTRY;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct coordinator *cdt = &(mdt->mdt_coordinator);
+	int usage = 0;
+	int rc = 0;
 
-	if (count == 0 || count >= sizeof(kernbuf))
-		RETURN(-EINVAL);
+	if (count == 0 || count >= CDT_MAX_CMD_LEN)
+		return -EINVAL;
 
-	if (copy_from_user(kernbuf, buffer, count))
-		RETURN(-EFAULT);
-	kernbuf[count] = 0;
-
-	if (kernbuf[count - 1] == '\n')
-		kernbuf[count - 1] = 0;
-
-	rc = 0;
-	if (strcmp(kernbuf, CDT_ENABLE_CMD) == 0) {
+	if (strncmp(buffer, CDT_ENABLE_CMD, strlen(CDT_ENABLE_CMD)) == 0) {
 		if (cdt->cdt_state == CDT_DISABLE) {
 			rc = set_cdt_state(cdt, CDT_RUNNING);
 			mdt_hsm_cdt_event(cdt);
@@ -2191,7 +2235,7 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 		} else {
 			rc = mdt_hsm_cdt_start(mdt);
 		}
-	} else if (strcmp(kernbuf, CDT_STOP_CMD) == 0) {
+	} else if (strncmp(buffer, CDT_STOP_CMD, strlen(CDT_STOP_CMD)) == 0) {
 		if ((cdt->cdt_state == CDT_STOPPING) ||
 		    (cdt->cdt_state == CDT_STOPPED)) {
 			CERROR("%s: Coordinator already stopped\n",
@@ -2200,7 +2244,8 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 		} else {
 			rc = mdt_hsm_cdt_stop(mdt);
 		}
-	} else if (strcmp(kernbuf, CDT_DISABLE_CMD) == 0) {
+	} else if (strncmp(buffer, CDT_DISABLE_CMD,
+			   strlen(CDT_DISABLE_CMD)) == 0) {
 		if ((cdt->cdt_state == CDT_STOPPING) ||
 		    (cdt->cdt_state == CDT_STOPPED)) {
 			CERROR("%s: Coordinator is stopped\n",
@@ -2209,9 +2254,11 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 		} else {
 			rc = set_cdt_state(cdt, CDT_DISABLE);
 		}
-	} else if (strcmp(kernbuf, CDT_PURGE_CMD) == 0) {
+	} else if (strncmp(buffer, CDT_PURGE_CMD,
+			   strlen(CDT_PURGE_CMD)) == 0) {
 		rc = hsm_cancel_all_actions(mdt);
-	} else if (strcmp(kernbuf, CDT_HELP_CMD) == 0) {
+	} else if (strncmp(buffer, CDT_HELP_CMD,
+			   strlen(CDT_HELP_CMD)) == 0) {
 		usage = 1;
 	} else {
 		usage = 1;
@@ -2230,17 +2277,17 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 	RETURN(count);
 }
 
-int mdt_hsm_cdt_control_seq_show(struct seq_file *m, void *data)
+ssize_t hsm_control_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
 {
-	struct obd_device	*obd = m->private;
-	struct coordinator	*cdt;
-	ENTRY;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct coordinator *cdt;
 
 	cdt = &(mdt_dev(obd->obd_lu_dev)->mdt_coordinator);
 
-	seq_printf(m, "%s\n", cdt_mdt_state2str(cdt->cdt_state));
-
-	RETURN(0);
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
+			 cdt_mdt_state2str(cdt->cdt_state));
 }
 
 static int
@@ -2388,80 +2435,73 @@ mdt_hsm_other_request_mask_seq_write(struct file *file, const char __user *buf,
 					   &cdt->cdt_other_request_mask);
 }
 
-static int mdt_hsm_cdt_raolu_seq_show(struct seq_file *m, void *data)
+static ssize_t remove_archive_on_last_unlink_show(struct kobject *kobj,
+						  struct attribute *attr,
+						  char *buf)
 {
-	struct mdt_device *mdt = m->private;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
-	ENTRY;
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
 
-	seq_printf(m, "%d\n", (int)cdt->cdt_remove_archive_on_last_unlink);
-	RETURN(0);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 cdt->cdt_remove_archive_on_last_unlink);
 }
 
-static ssize_t
-mdt_hsm_cdt_raolu_seq_write(struct file *file, const char __user *buffer,
-			    size_t count, loff_t *off)
-
+static ssize_t remove_archive_on_last_unlink_store(struct kobject *kobj,
+						   struct attribute *attr,
+						   const char *buffer,
+						   size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct mdt_device *mdt = m->private;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
 	bool val;
 	int rc;
 
-	ENTRY;
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc < 0)
-		RETURN(rc);
+		return rc;
 
 	cdt->cdt_remove_archive_on_last_unlink = val;
-	RETURN(count);
+	return count;
 }
+LUSTRE_RW_ATTR(remove_archive_on_last_unlink);
 
-LPROC_SEQ_FOPS(mdt_hsm_cdt_loop_period);
-LPROC_SEQ_FOPS(mdt_hsm_cdt_grace_delay);
-LPROC_SEQ_FOPS(mdt_hsm_cdt_active_req_timeout);
-LPROC_SEQ_FOPS(mdt_hsm_cdt_max_requests);
-LPROC_SEQ_FOPS(mdt_hsm_cdt_default_archive_id);
-LPROC_SEQ_FOPS(mdt_hsm_user_request_mask);
-LPROC_SEQ_FOPS(mdt_hsm_group_request_mask);
-LPROC_SEQ_FOPS(mdt_hsm_other_request_mask);
-LPROC_SEQ_FOPS(mdt_hsm_cdt_raolu);
+LDEBUGFS_SEQ_FOPS(mdt_hsm_user_request_mask);
+LDEBUGFS_SEQ_FOPS(mdt_hsm_group_request_mask);
+LDEBUGFS_SEQ_FOPS(mdt_hsm_other_request_mask);
 
-/* Read-only proc files for request counters */
-static int mdt_hsm_cdt_archive_count_seq_show(struct seq_file *m, void *data)
+/* Read-only sysfs files for request counters */
+static ssize_t archive_count_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
 {
-	struct mdt_device *mdt = m->private;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
-	ENTRY;
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
 
-	seq_printf(m, "%d\n", atomic_read(&cdt->cdt_archive_count));
-	RETURN(0);
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 atomic_read(&cdt->cdt_archive_count));
 }
+LUSTRE_RO_ATTR(archive_count);
 
-static int mdt_hsm_cdt_restore_count_seq_show(struct seq_file *m, void *data)
+static ssize_t restore_count_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
 {
-	struct mdt_device *mdt = m->private;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
-	ENTRY;
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
 
-	seq_printf(m, "%d\n", atomic_read(&cdt->cdt_restore_count));
-	RETURN(0);
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 atomic_read(&cdt->cdt_restore_count));
 }
+LUSTRE_RO_ATTR(restore_count);
 
-static int mdt_hsm_cdt_remove_count_seq_show(struct seq_file *m, void *data)
+static ssize_t remove_count_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf)
 {
-	struct mdt_device *mdt = m->private;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
-	ENTRY;
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
 
-	seq_printf(m, "%d\n", atomic_read(&cdt->cdt_remove_count));
-	RETURN(0);
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 atomic_read(&cdt->cdt_remove_count));
 }
-
-LPROC_SEQ_FOPS_RO(mdt_hsm_cdt_archive_count);
-LPROC_SEQ_FOPS_RO(mdt_hsm_cdt_restore_count);
-LPROC_SEQ_FOPS_RO(mdt_hsm_cdt_remove_count);
+LUSTRE_RO_ATTR(remove_count);
 
 static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ .name	=	"agents",
@@ -2469,18 +2509,8 @@ static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ .name	=	"actions",
 	  .fops	=	&mdt_hsm_actions_fops,
 	  .proc_mode =	0444					},
-	{ .name	=	"default_archive_id",
-	  .fops	=	&mdt_hsm_cdt_default_archive_id_fops	},
-	{ .name	=	"grace_delay",
-	  .fops	=	&mdt_hsm_cdt_grace_delay_fops		},
-	{ .name	=	"loop_period",
-	  .fops	=	&mdt_hsm_cdt_loop_period_fops		},
-	{ .name	=	"max_requests",
-	  .fops	=	&mdt_hsm_cdt_max_requests_fops		},
 	{ .name	=	"policy",
 	  .fops	=	&mdt_hsm_policy_fops			},
-	{ .name	=	"active_request_timeout",
-	  .fops	=	&mdt_hsm_cdt_active_req_timeout_fops	},
 	{ .name	=	"active_requests",
 	  .fops	=	&mdt_hsm_active_requests_fops		},
 	{ .name	=	"user_request_mask",
@@ -2489,13 +2519,85 @@ static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	  .fops	=	&mdt_hsm_group_request_mask_fops,	},
 	{ .name	=	"other_request_mask",
 	  .fops	=	&mdt_hsm_other_request_mask_fops,	},
-	{ .name	=	"remove_archive_on_last_unlink",
-	  .fops	=	&mdt_hsm_cdt_raolu_fops,		},
-	{ .name	=	"archive_count",
-	  .fops	=	&mdt_hsm_cdt_archive_count_fops,	},
-	{ .name	=	"restore_count",
-	  .fops	=	&mdt_hsm_cdt_restore_count_fops,	},
-	{ .name	=	"remove_count",
-	  .fops	=	&mdt_hsm_cdt_remove_count_fops,		},
 	{ 0 }
 };
+
+static struct attribute *hsm_attrs[] = {
+	&lustre_attr_loop_period.attr,
+	&lustre_attr_grace_delay.attr,
+	&lustre_attr_active_request_timeout.attr,
+	&lustre_attr_max_requests.attr,
+	&lustre_attr_default_archive_id.attr,
+	&lustre_attr_remove_archive_on_last_unlink.attr,
+	&lustre_attr_archive_count.attr,
+	&lustre_attr_restore_count.attr,
+	&lustre_attr_remove_count.attr,
+	NULL,
+};
+
+static void hsm_kobj_release(struct kobject *kobj)
+{
+	struct coordinator *cdt = container_of(kobj, struct coordinator,
+					       cdt_hsm_kobj);
+
+	debugfs_remove_recursive(cdt->cdt_debugfs_dir);
+	cdt->cdt_debugfs_dir = NULL;
+
+	complete(&cdt->cdt_kobj_unregister);
+}
+
+static struct kobj_type hsm_ktype = {
+	.default_attrs	= hsm_attrs,
+	.sysfs_ops	= &lustre_sysfs_ops,
+	.release	= hsm_kobj_release,
+};
+
+/**
+ * create sysfs entries for coordinator
+ * \param mdt [IN]
+ * \retval 0 success
+ * \retval -ve failure
+ */
+int hsm_cdt_tunables_init(struct mdt_device *mdt)
+{
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct obd_device *obd = mdt2obd_dev(mdt);
+	int rc;
+
+	init_completion(&cdt->cdt_kobj_unregister);
+	rc = kobject_init_and_add(&cdt->cdt_hsm_kobj, &hsm_ktype,
+				  &obd->obd_kset.kobj, "%s", "hsm");
+	if (rc) {
+		kobject_put(&cdt->cdt_hsm_kobj);
+		return rc;
+	}
+
+	/* init debugfs entries, failure is not critical */
+	cdt->cdt_debugfs_dir = ldebugfs_register("hsm",
+						 obd->obd_debugfs_entry,
+						 lprocfs_mdt_hsm_vars, mdt);
+	if (IS_ERR_OR_NULL(cdt->cdt_debugfs_dir)) {
+		rc = cdt->cdt_debugfs_dir ? PTR_ERR(cdt->cdt_debugfs_dir) :
+					    -ENOMEM;
+		CERROR("%s: Cannot create 'hsm' directory in mdt proc dir, rc = %d\n",
+		       mdt_obd_name(mdt), rc);
+		cdt->cdt_debugfs_dir = NULL;
+		kobject_put(&cdt->cdt_hsm_kobj);
+		return rc;
+	}
+
+	return 0;
+}
+
+/**
+ * remove sysfs entries for coordinator
+ *
+ * @mdt
+ */
+void hsm_cdt_tunables_fini(struct mdt_device *mdt)
+{
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+
+	kobject_put(&cdt->cdt_hsm_kobj);
+	wait_for_completion(&cdt->cdt_kobj_unregister);
+}

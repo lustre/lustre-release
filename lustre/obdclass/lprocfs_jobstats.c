@@ -624,37 +624,33 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 	RETURN(0);
 }
 EXPORT_SYMBOL(lprocfs_job_stats_init);
+#endif /* CONFIG_PROC_FS*/
 
-int lprocfs_job_interval_seq_show(struct seq_file *m, void *data)
+ssize_t job_cleanup_interval_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct obd_job_stats *stats;
 
-	if (obd == NULL)
-		return -ENODEV;
-
 	stats = &obd->u.obt.obt_jobstats;
-	seq_printf(m, "%d\n", stats->ojs_cleanup_interval);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", stats->ojs_cleanup_interval);
 }
-EXPORT_SYMBOL(lprocfs_job_interval_seq_show);
+EXPORT_SYMBOL(job_cleanup_interval_show);
 
-ssize_t
-lprocfs_job_interval_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+ssize_t job_cleanup_interval_store(struct kobject *kobj,
+				   struct attribute *attr,
+				   const char *buffer, size_t count)
 {
-	struct obd_device *obd;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct obd_job_stats *stats;
 	unsigned int val;
 	int rc;
 
-	obd = ((struct seq_file *)file->private_data)->private;
-	if (obd == NULL)
-		return -ENODEV;
-
 	stats = &obd->u.obt.obt_jobstats;
 
-	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -662,5 +658,4 @@ lprocfs_job_interval_seq_write(struct file *file, const char __user *buffer,
 	lprocfs_job_cleanup(stats, stats->ojs_cleanup_interval);
 	return count;
 }
-EXPORT_SYMBOL(lprocfs_job_interval_seq_write);
-#endif /* CONFIG_PROC_FS*/
+EXPORT_SYMBOL(job_cleanup_interval_store);

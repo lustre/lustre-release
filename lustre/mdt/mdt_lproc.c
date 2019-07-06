@@ -204,26 +204,28 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
                               (unsigned int)ma->ma_attr.la_size);
 }
 
-static int mdt_identity_expire_seq_show(struct seq_file *m, void *data)
+static ssize_t identity_expire_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%lld\n", mdt->mdt_identity_cache->uc_entry_expire);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lld\n",
+			 mdt->mdt_identity_cache->uc_entry_expire);
 }
 
-static ssize_t
-mdt_identity_expire_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+static ssize_t identity_expire_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
 {
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	time64_t val;
 	int rc;
 
-	rc = kstrtoll_from_user(buffer, count, 0, &val);
+	rc = kstrtoll(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -234,29 +236,30 @@ mdt_identity_expire_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_identity_expire);
+LUSTRE_RW_ATTR(identity_expire);
 
-static int mdt_identity_acquire_expire_seq_show(struct seq_file *m, void *data)
+static ssize_t identity_acquire_expire_show(struct kobject *kobj,
+					    struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%lld\n", mdt->mdt_identity_cache->uc_acquire_expire);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%lld\n",
+			 mdt->mdt_identity_cache->uc_acquire_expire);
 }
 
-static ssize_t
-mdt_identity_acquire_expire_seq_write(struct file *file,
-				      const char __user *buffer,
-				      size_t count, loff_t *off)
+static ssize_t identity_acquire_expire_store(struct kobject *kobj,
+					     struct attribute *attr,
+					     const char *buffer, size_t count)
 {
-	struct seq_file	  *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	time64_t val;
 	int rc;
 
-	rc = kstrtoll_from_user(buffer, count, 0, &val);
+	rc = kstrtoll(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -267,44 +270,40 @@ mdt_identity_acquire_expire_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_identity_acquire_expire);
+LUSTRE_RW_ATTR(identity_acquire_expire);
 
-static int mdt_identity_upcall_seq_show(struct seq_file *m, void *data)
+static ssize_t identity_upcall_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	struct upcall_cache *hash = mdt->mdt_identity_cache;
+	int rc;
 
 	down_read(&hash->uc_upcall_rwsem);
-	seq_printf(m, "%s\n", hash->uc_upcall);
+	rc = scnprintf(buf, PAGE_SIZE, "%s\n", hash->uc_upcall);
 	up_read(&hash->uc_upcall_rwsem);
-	return 0;
+	return rc;
 }
 
-static ssize_t
-mdt_identity_upcall_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+static ssize_t identity_upcall_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
 {
-	struct seq_file		*m = file->private_data;
-	struct obd_device	*obd = m->private;
-	struct mdt_device	*mdt = mdt_dev(obd->obd_lu_dev);
-	struct upcall_cache	*hash = mdt->mdt_identity_cache;
-	int			 rc;
-	char			*kernbuf;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct upcall_cache *hash = mdt->mdt_identity_cache;
 
 	if (count >= UC_CACHE_UPCALL_MAXPATH) {
 		CERROR("%s: identity upcall too long\n", mdt_obd_name(mdt));
 		return -EINVAL;
 	}
-	OBD_ALLOC(kernbuf, count + 1);
-	if (kernbuf == NULL)
-		GOTO(failed, rc = -ENOMEM);
-	if (copy_from_user(kernbuf, buffer, count))
-		GOTO(failed, rc = -EFAULT);
 
 	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
 	down_write(&hash->uc_upcall_rwsem);
-	sscanf(kernbuf, "%s", hash->uc_upcall);
+	count = sscanf(buffer, "%s", hash->uc_upcall);
 	up_write(&hash->uc_upcall_rwsem);
 
 	if (strcmp(hash->uc_name, mdt_obd_name(mdt)) != 0)
@@ -317,34 +316,28 @@ mdt_identity_upcall_seq_write(struct file *file, const char __user *buffer,
 
 	CDEBUG(D_CONFIG, "%s: identity upcall set to %s\n", mdt_obd_name(mdt),
 	       hash->uc_upcall);
-	OBD_FREE(kernbuf, count + 1);
 	RETURN(count);
-
- failed:
-	if (kernbuf)
-		OBD_FREE(kernbuf, count + 1);
-	RETURN(rc);
 }
-LPROC_SEQ_FOPS(mdt_identity_upcall);
+LUSTRE_RW_ATTR(identity_upcall);
 
-static ssize_t
-lprocfs_identity_flush_seq_write(struct file *file, const char __user *buffer,
-				 size_t count, void *data)
+static ssize_t identity_flush_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	int uid;
 	int rc;
 
-	rc = kstrtoint_from_user(buffer, count, 0, &uid);
+	rc = kstrtoint(buffer, 0, &uid);
 	if (rc)
 		return rc;
 
 	mdt_flush_identity(mdt->mdt_identity_cache, uid);
 	return count;
 }
-LPROC_SEQ_FOPS_WR_ONLY(mdt, identity_flush);
+LUSTRE_WO_ATTR(identity_flush);
 
 static ssize_t
 lprocfs_identity_info_seq_write(struct file *file, const char __user *buffer,
@@ -479,61 +472,64 @@ out:
 
 #undef BUFLEN
 
-static int mdt_evict_tgt_nids_seq_show(struct seq_file *m, void *data)
+static ssize_t evict_tgt_nids_show(struct kobject *kobj,
+				   struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt->mdt_opts.mo_evict_tgt_nids);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_opts.mo_evict_tgt_nids);
 }
 
-static ssize_t
-mdt_evict_tgt_nids_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off)
+static ssize_t evict_tgt_nids_store(struct kobject *kobj,
+				    struct attribute *attr, const char *buffer,
+				    size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_opts.mo_evict_tgt_nids = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_evict_tgt_nids);
+LUSTRE_RW_ATTR(evict_tgt_nids);
 
-static int mdt_cos_seq_show(struct seq_file *m, void *data)
+static ssize_t commit_on_sharing_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt_cos_is_enabled(mdt));
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt_cos_is_enabled(mdt));
 }
 
-static ssize_t
-mdt_cos_seq_write(struct file *file, const char __user *buffer,
-		  size_t count, loff_t *off)
+static ssize_t commit_on_sharing_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt_enable_cos(mdt, val);
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_cos);
+LUSTRE_RW_ATTR(commit_on_sharing);
 
 static int mdt_root_squash_seq_show(struct seq_file *m, void *data)
 {
@@ -594,149 +590,154 @@ mdt_nosquash_nids_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_nosquash_nids);
 
-static int mdt_enable_remote_dir_seq_show(struct seq_file *m, void *data)
+static ssize_t enable_remote_dir_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt->mdt_enable_remote_dir);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_remote_dir);
 }
 
-static ssize_t
-mdt_enable_remote_dir_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+static ssize_t enable_remote_dir_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_enable_remote_dir = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_enable_remote_dir);
+LUSTRE_RW_ATTR(enable_remote_dir);
 
-static int mdt_enable_remote_dir_gid_seq_show(struct seq_file *m, void *data)
+static ssize_t enable_remote_dir_gid_show(struct kobject *kobj,
+					  struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%d\n",
-		  (int)mdt->mdt_enable_remote_dir_gid);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 (int)mdt->mdt_enable_remote_dir_gid);
 }
 
-static ssize_t
-mdt_enable_remote_dir_gid_seq_write(struct file *file,
-				    const char __user *buffer,
-				    size_t count, loff_t *off)
+static ssize_t enable_remote_dir_gid_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	int val;
 	int rc;
 
-	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	rc = kstrtoint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_enable_remote_dir_gid = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_enable_remote_dir_gid);
+LUSTRE_RW_ATTR(enable_remote_dir_gid);
 
-static int mdt_enable_striped_dir_seq_show(struct seq_file *m, void *data)
+static ssize_t enable_striped_dir_show(struct kobject *kobj,
+				       struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt->mdt_enable_striped_dir);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_striped_dir);
 }
 
-static ssize_t
-mdt_enable_striped_dir_seq_write(struct file *file, const char __user *buffer,
-				 size_t count, loff_t *off)
+static ssize_t enable_striped_dir_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_enable_striped_dir = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_enable_striped_dir);
+LUSTRE_RW_ATTR(enable_striped_dir);
 
-static int mdt_enable_dir_migration_seq_show(struct seq_file *m, void *data)
+static ssize_t enable_dir_migration_show(struct kobject *kobj,
+					 struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt->mdt_enable_dir_migration);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_dir_migration);
 }
 
-static ssize_t
-mdt_enable_dir_migration_seq_write(struct file *file, const char __user *buffer,
-				   size_t count, loff_t *off)
+static ssize_t enable_dir_migration_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_enable_dir_migration = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_enable_dir_migration);
+LUSTRE_RW_ATTR(enable_dir_migration);
 
 /**
  * Show MDT async commit count.
  *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
+ * @m		seq_file handle
+ * @data	unused for single entry
  *
- * \retval		0 on success
- * \retval		negative value on error
+ * Return:	0 on success
+ *		negative value on error
  */
-static int mdt_async_commit_count_seq_show(struct seq_file *m, void *data)
+static ssize_t async_commit_count_show(struct kobject *kobj,
+				       struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%d\n", atomic_read(&mdt->mdt_async_commit_count));
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 atomic_read(&mdt->mdt_async_commit_count));
 }
 
-static ssize_t
-mdt_async_commit_count_seq_write(struct file *file, const char __user *buffer,
-				 size_t count, loff_t *off)
+static ssize_t async_commit_count_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	int val;
 	int rc;
 
-	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	rc = kstrtoint(buffer, 10, &val);
 	if (rc)
 		return rc;
 
@@ -744,7 +745,7 @@ mdt_async_commit_count_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_async_commit_count);
+LUSTRE_RW_ATTR(async_commit_count);
 
 /**
  * Show MDT sync count.
@@ -755,26 +756,27 @@ LPROC_SEQ_FOPS(mdt_async_commit_count);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int mdt_sync_count_seq_show(struct seq_file *m, void *data)
+static ssize_t sync_count_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct lu_target *tgt = obd->u.obt.obt_lut;
 
-	seq_printf(m, "%d\n", atomic_read(&tgt->lut_sync_count));
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 atomic_read(&tgt->lut_sync_count));
 }
 
-static ssize_t
-mdt_sync_count_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
+static ssize_t sync_count_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct lu_target *tgt = obd->u.obt.obt_lut;
 	int val;
 	int rc;
 
-	rc = kstrtoint_from_user(buffer, count, 0, &val);
+	rc = kstrtoint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
@@ -782,7 +784,7 @@ mdt_sync_count_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_sync_count);
+LUSTRE_RW_ATTR(sync_count);
 
 static char *dom_open_lock_modes[NUM_DOM_LOCK_ON_OPEN_MODES] = {
 	[NO_DOM_LOCK_ON_OPEN] = "never",
@@ -802,13 +804,15 @@ static char *dom_open_lock_modes[NUM_DOM_LOCK_ON_OPEN_MODES] = {
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int mdt_dom_lock_seq_show(struct seq_file *m, void *data)
+static ssize_t dom_lock_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%s\n", dom_open_lock_modes[mdt->mdt_opts.mo_dom_lock]);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%s\n",
+			 dom_open_lock_modes[mdt->mdt_opts.mo_dom_lock]);
 }
 
 /**
@@ -832,29 +836,22 @@ static int mdt_dom_lock_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-mdt_dom_lock_seq_write(struct file *file, const char __user *buffer,
-		       size_t count, loff_t *off)
+static ssize_t dom_lock_store(struct kobject *kobj, struct attribute *attr,
+			      const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	char kernbuf[DOM_LOCK_MODES_MAXLEN];
 	int val = -1;
 	int i, rc;
 
-	if (count == 0 || count >= sizeof(kernbuf))
+	if (count == 0 || count >= DOM_LOCK_MODES_MAXLEN)
 		return -EINVAL;
 
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-
-	kernbuf[count] = 0;
-	if (kernbuf[count - 1] == '\n')
-		kernbuf[count - 1] = 0;
-
 	for (i = 0 ; i < NUM_DOM_LOCK_ON_OPEN_MODES; i++) {
-		if (strcmp(kernbuf, dom_open_lock_modes[i]) == 0) {
+		/* buffer might have '\n' but using strlen() avoids it */
+		if (strncmp(buffer, dom_open_lock_modes[i],
+			    strlen(dom_open_lock_modes[i])) == 0) {
 			val = i;
 			break;
 		}
@@ -862,7 +859,7 @@ mdt_dom_lock_seq_write(struct file *file, const char __user *buffer,
 
 	/* Legacy numeric codes */
 	if (val == -1) {
-		rc = kstrtoint_from_user(buffer, count, 0, &val);
+		rc = kstrtoint(buffer, 0, &val);
 		if (rc)
 			return rc;
 	}
@@ -873,7 +870,7 @@ mdt_dom_lock_seq_write(struct file *file, const char __user *buffer,
 	mdt->mdt_opts.mo_dom_lock = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_dom_lock);
+LUSTRE_RW_ATTR(dom_lock);
 
 /**
  * Show MDT policy for data prefetch on open for DoM files..
@@ -884,13 +881,15 @@ LPROC_SEQ_FOPS(mdt_dom_lock);
  * \retval		0 on success
  * \retval		negative value on error
  */
-static int mdt_dom_read_open_seq_show(struct seq_file *m, void *data)
+static ssize_t dom_read_open_show(struct kobject *kobj,
+				  struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", !!mdt->mdt_opts.mo_dom_read_open);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 !!mdt->mdt_opts.mo_dom_read_open);
 }
 
 /**
@@ -907,198 +906,180 @@ static int mdt_dom_read_open_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t
-mdt_dom_read_open_seq_write(struct file *file, const char __user *buffer,
-			    size_t count, loff_t *off)
+static ssize_t dom_read_open_store(struct kobject *kobj,
+				   struct attribute *attr, const char *buffer,
+				   size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_opts.mo_dom_read_open = !!val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_dom_read_open);
+LUSTRE_RW_ATTR(dom_read_open);
 
-static int mdt_migrate_hsm_allowed_seq_show(struct seq_file *m, void *data)
+static ssize_t migrate_hsm_allowed_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n",  (mdt->mdt_opts.mo_migrate_hsm_allowed != 0));
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_opts.mo_migrate_hsm_allowed);
 }
 
-static ssize_t
-mdt_migrate_hsm_allowed_seq_write(struct file *file, const char __user *buffer,
-				  size_t count, loff_t *off)
+static ssize_t migrate_hsm_allowed_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_opts.mo_migrate_hsm_allowed = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_migrate_hsm_allowed);
+LUSTRE_RW_ATTR(migrate_hsm_allowed);
 
-static int mdt_readonly_seq_show(struct seq_file *m, void *data)
+static ssize_t readonly_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt->mdt_readonly);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_readonly);
 }
 
-static ssize_t
-mdt_readonly_seq_write(struct file *file, const char __user *buffer,
-		               size_t count, loff_t *off)
+static ssize_t readonly_store(struct kobject *kobj, struct attribute *attr,
+			      const char *buffer, size_t count)
 {
-	struct seq_file   *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_readonly = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_readonly);
+LUSTRE_RW_ATTR(readonly);
 
-static int mdt_enable_remote_rename_seq_show(struct seq_file *m, void *data)
+static ssize_t enable_remote_rename_show(struct kobject *kobj,
+					 struct attribute *attr,
+					 char *buf)
 {
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n",  mdt->mdt_enable_remote_rename);
-	return 0;
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 mdt->mdt_enable_remote_rename);
 }
 
-static ssize_t
-mdt_enable_remote_rename_seq_write(struct file *file, const char __user *buffer,
-				   size_t count, loff_t *off)
+static ssize_t enable_remote_rename_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	bool val;
 	int rc;
 
-	rc = kstrtobool_from_user(buffer, count, &val);
+	rc = kstrtobool(buffer, &val);
 	if (rc)
 		return rc;
 
 	mdt->mdt_enable_remote_rename = val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_enable_remote_rename);
+LUSTRE_RW_ATTR(enable_remote_rename);
 
-LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
-LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
-LPROC_SEQ_FOPS_RO_TYPE(mdt, target_instance);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
 LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
-LPROC_SEQ_FOPS_RW_TYPE(mdt, job_interval);
-LPROC_SEQ_FOPS_RW_TYPE(mdt, ir_factor);
+LUSTRE_RW_ATTR(job_cleanup_interval);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);
-LPROC_SEQ_FOPS(mdt_hsm_cdt_control);
+LUSTRE_RW_ATTR(hsm_control);
 
-LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_hard);
-LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_soft);
+LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
+LUSTRE_RW_ATTR(recovery_time_hard);
+LUSTRE_RW_ATTR(recovery_time_soft);
+LUSTRE_RW_ATTR(ir_factor);
 
-LPROC_SEQ_FOPS_RO(tgt_tot_dirty);
-LPROC_SEQ_FOPS_RO(tgt_tot_granted);
-LPROC_SEQ_FOPS_RO(tgt_tot_pending);
-LPROC_SEQ_FOPS(tgt_grant_compat_disable);
+LUSTRE_RO_ATTR(tot_dirty);
+LUSTRE_RO_ATTR(tot_granted);
+LUSTRE_RO_ATTR(tot_pending);
+LUSTRE_RW_ATTR(grant_compat_disable);
+LUSTRE_RO_ATTR(instance);
+
+LUSTRE_RO_ATTR(num_exports);
+
+static struct attribute *mdt_attrs[] = {
+	&lustre_attr_tot_dirty.attr,
+	&lustre_attr_tot_granted.attr,
+	&lustre_attr_tot_pending.attr,
+	&lustre_attr_grant_compat_disable.attr,
+	&lustre_attr_instance.attr,
+	&lustre_attr_recovery_time_hard.attr,
+	&lustre_attr_recovery_time_soft.attr,
+	&lustre_attr_ir_factor.attr,
+	&lustre_attr_num_exports.attr,
+	&lustre_attr_identity_expire.attr,
+	&lustre_attr_identity_acquire_expire.attr,
+	&lustre_attr_identity_upcall.attr,
+	&lustre_attr_identity_flush.attr,
+	&lustre_attr_evict_tgt_nids.attr,
+	&lustre_attr_enable_remote_dir.attr,
+	&lustre_attr_enable_remote_dir_gid.attr,
+	&lustre_attr_enable_striped_dir.attr,
+	&lustre_attr_enable_dir_migration.attr,
+	&lustre_attr_enable_remote_rename.attr,
+	&lustre_attr_commit_on_sharing.attr,
+	&lustre_attr_async_commit_count.attr,
+	&lustre_attr_sync_count.attr,
+	&lustre_attr_dom_lock.attr,
+	&lustre_attr_dom_read_open.attr,
+	&lustre_attr_migrate_hsm_allowed.attr,
+	&lustre_attr_hsm_control.attr,
+	&lustre_attr_job_cleanup_interval.attr,
+	&lustre_attr_readonly.attr,
+	NULL,
+};
 
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
-	{ .name =	"tot_dirty",
-	  .fops =	&tgt_tot_dirty_fops		},
-	{ .name =	"tot_pending",
-	  .fops =	&tgt_tot_pending_fops		},
-	{ .name =	"tot_granted",
-	  .fops =	&tgt_tot_granted_fops		},
-	{ .name =	"grant_compat_disable",
-	  .fops =	&tgt_grant_compat_disable_fops	},
 	{ .name =	"recovery_status",
 	  .fops =	&mdt_recovery_status_fops		},
-	{ .name =	"num_exports",
-	  .fops =	&mdt_num_exports_fops			},
-	{ .name =	"identity_expire",
-	  .fops =	&mdt_identity_expire_fops		},
-	{ .name =	"identity_acquire_expire",
-	  .fops =	&mdt_identity_acquire_expire_fops	},
-	{ .name =	"identity_upcall",
-	  .fops =	&mdt_identity_upcall_fops		},
-	{ .name =	"identity_flush",
-	  .fops =	&mdt_identity_flush_fops		},
 	{ .name =	"identity_info",
 	  .fops =	&mdt_identity_info_fops			},
 	{ .name =	"site_stats",
 	  .fops =	&mdt_site_stats_fops			},
 	{ .name =	"evict_client",
 	  .fops =	&mdt_mds_evict_client_fops		},
-	{ .name =	"evict_tgt_nids",
-	  .fops =	&mdt_evict_tgt_nids_fops		},
 	{ .name =	"hash_stats",
 	  .fops =	&mdt_hash_fops				},
-	{ .name =	"commit_on_sharing",
-	  .fops =	&mdt_cos_fops				},
 	{ .name =	"root_squash",
 	  .fops =	&mdt_root_squash_fops			},
 	{ .name =	"nosquash_nids",
 	  .fops =	&mdt_nosquash_nids_fops			},
-	{ .name =	"instance",
-	  .fops =	&mdt_target_instance_fops		},
-	{ .name =	"ir_factor",
-	  .fops =	&mdt_ir_factor_fops			},
-	{ .name =	"job_cleanup_interval",
-	  .fops =	&mdt_job_interval_fops			},
-	{ .name =	"enable_remote_dir",
-	  .fops =	&mdt_enable_remote_dir_fops		},
-	{ .name =	"enable_remote_dir_gid",
-	  .fops =	&mdt_enable_remote_dir_gid_fops		},
-	{ .name =	"enable_striped_dir",
-	  .fops =	&mdt_enable_striped_dir_fops		},
-	{ .name =	"enable_dir_migration",
-	  .fops =	&mdt_enable_dir_migration_fops		},
-	{ .name =	"enable_remote_rename",
-	  .fops =	&mdt_enable_remote_rename_fops		},
-	{ .name =	"hsm_control",
-	  .fops =	&mdt_hsm_cdt_control_fops		},
-	{ .name =	"recovery_time_hard",
-	  .fops =	&mdt_recovery_time_hard_fops	},
-	{ .name =	"recovery_time_soft",
-	  .fops =	&mdt_recovery_time_soft_fops	},
-	{ .name =	"async_commit_count",
-	  .fops =	&mdt_async_commit_count_fops		},
-	{ .name =	"sync_count",
-	  .fops =	&mdt_sync_count_fops			},
-	{ .name =	"dom_lock",
-	  .fops =	&mdt_dom_lock_fops			},
-	{ .name =	"dom_read_open",
-	  .fops =	&mdt_dom_read_open_fops			},
-	{ .name =	"migrate_hsm_allowed",
-	  .fops =	&mdt_migrate_hsm_allowed_fops		},
-	{ .name =	"readonly",
-	  .fops =	&mdt_readonly_fops                      },
 	{ NULL }
 };
 
@@ -1204,7 +1185,7 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats)
 	}
 }
 
-int mdt_procfs_init(struct mdt_device *mdt, const char *name)
+int mdt_tunables_init(struct mdt_device *mdt, const char *name)
 {
 	struct obd_device *obd = mdt2obd_dev(mdt);
 	int rc;
@@ -1213,6 +1194,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 	ENTRY;
 	LASSERT(name != NULL);
 
+	obd->obd_ktype.default_attrs = mdt_attrs;
 	obd->obd_vars = lprocfs_mdt_obd_vars;
 	rc = lprocfs_obd_setup(obd, true);
 	if (rc) {
@@ -1228,7 +1210,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 		return rc;
 	}
 
-	rc = hsm_cdt_procfs_init(mdt);
+	rc = hsm_cdt_tunables_init(mdt);
 	if (rc) {
 		CERROR("%s: cannot create hsm proc entries: rc = %d\n",
 		       mdt_obd_name(mdt), rc);
@@ -1268,7 +1250,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 	RETURN(rc);
 }
 
-void mdt_procfs_fini(struct mdt_device *mdt)
+void mdt_tunables_fini(struct mdt_device *mdt)
 {
 	struct obd_device *obd = mdt2obd_dev(mdt);
 
@@ -1278,7 +1260,10 @@ void mdt_procfs_fini(struct mdt_device *mdt)
 	}
 
 	lprocfs_free_per_client_stats(obd);
-	hsm_cdt_procfs_fini(mdt);
+	/* hsm_cdt_tunables is disabled earlier than this to avoid
+	 * coordinator restart.
+	 */
+	hsm_cdt_tunables_fini(mdt);
 	tgt_tunables_fini(&mdt->mdt_lut);
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);

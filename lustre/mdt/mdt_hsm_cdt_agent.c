@@ -610,9 +610,9 @@ out_buf:
 }
 
 /**
- * seq_file method called to start access to /proc file
+ * seq_file method called to start access to debugfs file
  */
-static void *mdt_hsm_agent_proc_start(struct seq_file *s, loff_t *off)
+static void *mdt_hsm_agent_debugfs_start(struct seq_file *s, loff_t *off)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
@@ -642,7 +642,7 @@ static void *mdt_hsm_agent_proc_start(struct seq_file *s, loff_t *off)
  * seq_file method called to get next item
  * just returns NULL at eof
  */
-static void *mdt_hsm_agent_proc_next(struct seq_file *s, void *v, loff_t *p)
+static void *mdt_hsm_agent_debugfs_next(struct seq_file *s, void *v, loff_t *p)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
@@ -663,7 +663,7 @@ static void *mdt_hsm_agent_proc_next(struct seq_file *s, void *v, loff_t *p)
 
 /**
  */
-static int mdt_hsm_agent_proc_show(struct seq_file *s, void *v)
+static int mdt_hsm_agent_debugfs_show(struct seq_file *s, void *v)
 {
 	struct list_head	*pos = v;
 	struct hsm_agent	*ha;
@@ -691,9 +691,9 @@ static int mdt_hsm_agent_proc_show(struct seq_file *s, void *v)
 }
 
 /**
- * seq_file method called to stop access to /proc file
+ * seq_file method called to stop access to debugfs file
  */
-static void mdt_hsm_agent_proc_stop(struct seq_file *s, void *v)
+static void mdt_hsm_agent_debugfs_stop(struct seq_file *s, void *v)
 {
 	struct mdt_device	*mdt = s->private;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
@@ -701,30 +701,30 @@ static void mdt_hsm_agent_proc_stop(struct seq_file *s, void *v)
 	up_read(&cdt->cdt_agent_lock);
 }
 
-/* hsm agent list proc functions */
-static const struct seq_operations mdt_hsm_agent_proc_ops = {
-	.start	= mdt_hsm_agent_proc_start,
-	.next	= mdt_hsm_agent_proc_next,
-	.show	= mdt_hsm_agent_proc_show,
-	.stop	= mdt_hsm_agent_proc_stop,
+/* hsm agent list debugfs functions */
+static const struct seq_operations mdt_hsm_agent_debugfs_ops = {
+	.start	= mdt_hsm_agent_debugfs_start,
+	.next	= mdt_hsm_agent_debugfs_next,
+	.show	= mdt_hsm_agent_debugfs_show,
+	.stop	= mdt_hsm_agent_debugfs_stop,
 };
 
 /**
- * public function called at open of /proc file to get
+ * public function called at open of debugfs file to get
  * list of agents
  */
-static int lprocfs_open_hsm_agent(struct inode *inode, struct file *file)
+static int ldebugfs_open_hsm_agent(struct inode *inode, struct file *file)
 {
 	struct seq_file	*s;
 	int		 rc;
 	ENTRY;
 
-	rc = seq_open(file, &mdt_hsm_agent_proc_ops);
+	rc = seq_open(file, &mdt_hsm_agent_debugfs_ops);
 	if (rc)
 		RETURN(rc);
 
 	s = file->private_data;
-	s->private = PDE_DATA(inode);
+	s->private = inode->i_private;
 
 	RETURN(rc);
 }
@@ -732,8 +732,8 @@ static int lprocfs_open_hsm_agent(struct inode *inode, struct file *file)
 /* methods to access hsm agent list */
 const struct file_operations mdt_hsm_agent_fops = {
 	.owner		= THIS_MODULE,
-	.open		= lprocfs_open_hsm_agent,
+	.open		= ldebugfs_open_hsm_agent,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
-	.release	= lprocfs_seq_release,
+	.release	= seq_release,
 };

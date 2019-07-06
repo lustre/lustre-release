@@ -680,8 +680,11 @@ struct obd_device {
 	time64_t		obd_recovery_start;
 	/* seconds, for lprocfs_status */
 	time64_t		obd_recovery_end;
-	time64_t		obd_recovery_time_hard;
-	time64_t		obd_recovery_timeout;
+	/* To tell timeouts from time stamps Lustre uses time_t
+	 * instead of time64_t.
+	 */
+	time_t			obd_recovery_time_hard;
+	time_t			obd_recovery_timeout;
 	int			obd_recovery_ir_factor;
 
 	/* new recovery stuff from CMD2 */

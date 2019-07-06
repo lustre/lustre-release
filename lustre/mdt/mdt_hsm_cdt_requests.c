@@ -617,8 +617,8 @@ static const struct seq_operations mdt_hsm_active_requests_proc_ops = {
  * public function called at open of /proc file to get
  * list of agents
  */
-static int lprocfs_open_hsm_active_requests(struct inode *inode,
-					    struct file *file)
+static int ldebugfs_open_hsm_active_requests(struct inode *inode,
+					     struct file *file)
 {
 	struct seq_file	*s;
 	int		 rc;
@@ -629,7 +629,7 @@ static int lprocfs_open_hsm_active_requests(struct inode *inode,
 		RETURN(rc);
 	}
 	s = file->private_data;
-	s->private = PDE_DATA(inode);
+	s->private = inode->i_private;
 
 	RETURN(rc);
 }
@@ -637,9 +637,9 @@ static int lprocfs_open_hsm_active_requests(struct inode *inode,
 /* methods to access hsm request list */
 const struct file_operations mdt_hsm_active_requests_fops = {
 	.owner		= THIS_MODULE,
-	.open		= lprocfs_open_hsm_active_requests,
+	.open		= ldebugfs_open_hsm_active_requests,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
-	.release	= lprocfs_seq_release,
+	.release	= seq_release,
 };
 

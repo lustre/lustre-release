@@ -482,7 +482,7 @@ struct agent_action_iterator {
  * seq_file method called to start access to /proc file
  * get llog context + llog handle
  */
-static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
+static void *mdt_hsm_actions_debugfs_start(struct seq_file *s, loff_t *pos)
 {
 	struct agent_action_iterator	*aai = s->private;
 	ENTRY;
@@ -513,7 +513,7 @@ static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 	RETURN(aai);
 }
 
-static void *mdt_hsm_actions_proc_next(struct seq_file *s, void *v,
+static void *mdt_hsm_actions_debugfs_next(struct seq_file *s, void *v,
 					 loff_t *pos)
 {
 	RETURN(NULL);
@@ -573,11 +573,11 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 }
 
 /**
- * mdt_hsm_actions_proc_show() is called at for each seq record
+ * mdt_hsm_actions_debugfs_show() is called at for each seq record
  * process the llog, with a cb which fill the file_seq buffer
  * to be faster, one show will fill multiple records
  */
-static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
+static int mdt_hsm_actions_debugfs_show(struct seq_file *s, void *v)
 {
 	struct agent_action_iterator	*aai = s->private;
 	struct coordinator		*cdt = &aai->aai_mdt->mdt_coordinator;
@@ -608,7 +608,7 @@ static int mdt_hsm_actions_proc_show(struct seq_file *s, void *v)
  * seq_file method called to stop access to /proc file
  * clean + put llog context
  */
-static void mdt_hsm_actions_proc_stop(struct seq_file *s, void *v)
+static void mdt_hsm_actions_debugfs_stop(struct seq_file *s, void *v)
 {
 	struct agent_action_iterator *aai = s->private;
 	ENTRY;
@@ -623,14 +623,14 @@ static void mdt_hsm_actions_proc_stop(struct seq_file *s, void *v)
 	return;
 }
 
-static const struct seq_operations mdt_hsm_actions_proc_ops = {
-	.start	= mdt_hsm_actions_proc_start,
-	.next	= mdt_hsm_actions_proc_next,
-	.show	= mdt_hsm_actions_proc_show,
-	.stop	= mdt_hsm_actions_proc_stop,
+static const struct seq_operations mdt_hsm_actions_debugfs_ops = {
+	.start	= mdt_hsm_actions_debugfs_start,
+	.next	= mdt_hsm_actions_debugfs_next,
+	.show	= mdt_hsm_actions_debugfs_show,
+	.stop	= mdt_hsm_actions_debugfs_stop,
 };
 
-static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
+static int ldebugfs_open_hsm_actions(struct inode *inode, struct file *file)
 {
 	struct agent_action_iterator	*aai;
 	struct seq_file			*s;
@@ -638,7 +638,7 @@ static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
 	struct mdt_device		*mdt;
 	ENTRY;
 
-	rc = seq_open(file, &mdt_hsm_actions_proc_ops);
+	rc = seq_open(file, &mdt_hsm_actions_debugfs_ops);
 	if (rc)
 		RETURN(rc);
 
@@ -651,10 +651,11 @@ static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
 	if (rc)
 		GOTO(err, rc);
 
-	/* mdt is saved in proc_dir_entry->data by
-	 * mdt_coordinator_procfs_init() calling lprocfs_register()
+	/* mdt is saved in seq_file->data by
+	 * mdt_coordinator_tunables_init() calling
+	 * debugfs_register()
 	 */
-	mdt = (struct mdt_device *)PDE_DATA(inode);
+	mdt = inode->i_private;
 	aai->aai_mdt = mdt;
 	s = file->private_data;
 	s->private = aai;
@@ -662,7 +663,7 @@ static int lprocfs_open_hsm_actions(struct inode *inode, struct file *file)
 	GOTO(out, rc = 0);
 
 err:
-	lprocfs_seq_release(inode, file);
+	seq_release(inode, file);
 	if (aai && aai->aai_env.le_ses)
 		OBD_FREE_PTR(aai->aai_env.le_ses);
 	if (aai)
@@ -672,10 +673,10 @@ out:
 }
 
 /**
- * lprocfs_release_hsm_actions() is called at end of /proc access.
+ * ldebugfs_release_hsm_actions() is called at end of /proc access.
  * It frees allocated resources and calls cleanup lprocfs methods.
  */
-static int lprocfs_release_hsm_actions(struct inode *inode, struct file *file)
+static int ldebugfs_release_hsm_actions(struct inode *inode, struct file *file)
 {
 	struct seq_file			*seq = file->private_data;
 	struct agent_action_iterator	*aai = seq->private;
@@ -685,14 +686,14 @@ static int lprocfs_release_hsm_actions(struct inode *inode, struct file *file)
 		OBD_FREE_PTR(aai);
 	}
 
-	return lprocfs_seq_release(inode, file);
+	return seq_release(inode, file);
 }
 
 /* Methods to access HSM action list LLOG through /proc */
 const struct file_operations mdt_hsm_actions_fops = {
 	.owner		= THIS_MODULE,
-	.open		= lprocfs_open_hsm_actions,
+	.open		= ldebugfs_open_hsm_actions,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
-	.release	= lprocfs_release_hsm_actions,
+	.release	= ldebugfs_release_hsm_actions,
 };
