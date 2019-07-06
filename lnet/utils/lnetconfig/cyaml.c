@@ -107,7 +107,7 @@ struct cYAML_tree_node {
 typedef enum cYAML_handler_error (*yaml_token_handler)(yaml_token_t *token,
 						struct cYAML_tree_node *);
 
-static enum cYAML_handler_error yaml_parse_error(yaml_token_t *token,
+static enum cYAML_handler_error yaml_no_token(yaml_token_t *token,
 					struct cYAML_tree_node *tree);
 static enum cYAML_handler_error yaml_stream_start(yaml_token_t *token,
 					struct cYAML_tree_node *tree);
@@ -136,7 +136,7 @@ static enum cYAML_handler_error yaml_entry_token(yaml_token_t *token,
 
 /* dispatch table */
 static yaml_token_handler dispatch_tbl[] = {
-	[YAML_NO_TOKEN] = yaml_parse_error,
+	[YAML_NO_TOKEN] = yaml_no_token,
 	[YAML_STREAM_START_TOKEN] = yaml_stream_start,
 	[YAML_STREAM_END_TOKEN] = yaml_stream_end,
 	[YAML_VERSION_DIRECTIVE_TOKEN] = yaml_not_supported,
@@ -460,10 +460,11 @@ static int assign_type_value(struct cYAML *obj, const char *value)
  * else state = VALUE
  *
  */
-static enum cYAML_handler_error yaml_parse_error(yaml_token_t *token,
-						 struct cYAML_tree_node *tree)
+
+static enum cYAML_handler_error yaml_no_token(yaml_token_t *token,
+					      struct cYAML_tree_node *tree)
 {
-	return CYAML_ERROR_PARSE;
+	return CYAML_ERROR_NONE;
 }
 
 static enum cYAML_handler_error yaml_stream_start(yaml_token_t *token,
@@ -545,7 +546,8 @@ static enum cYAML_handler_error yaml_scalar(yaml_token_t *token,
 		  strdup((const char *)token->data.scalar.value);
 
 		tree->state = TREE_STATE_KEY_FILLED;
-	} else if (tree->state == TREE_STATE_VALUE) {
+	} else if (tree->state == TREE_STATE_VALUE ||
+		   tree->state == TREE_STATE_SEQ_START) {
 		if (assign_type_value(tree->cur,
 				      (char *)token->data.scalar.value))
 			/* failed to assign a value */
@@ -1205,17 +1207,17 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 		rc = dispatch_tbl[token.type](&token, &tree);
 		if (rc != CYAML_ERROR_NONE) {
 			snprintf(err_str, sizeof(err_str),
-				"Failed to handle token:%d "
+				"Failed to handle token:%d %s"
 				"[state=%d, rc=%d]",
-				token.type, tree.state, rc);
+				 token.type, token_type_string[token.type],
+				 tree.state, rc);
 			cYAML_build_error(-1, -1, "yaml", "builder",
 					  err_str,
 					  err_rc);
 		}
 		/* Are we finished? */
 		done = (rc != CYAML_ERROR_NONE ||
-			token.type == YAML_STREAM_END_TOKEN ||
-			token.type == YAML_NO_TOKEN);
+			token.type == YAML_STREAM_END_TOKEN);
 
 		token_type = token.type;
 
