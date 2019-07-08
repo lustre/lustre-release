@@ -1698,11 +1698,12 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 	}
 
 	CDEBUG(D_RPCTRACE,
-	       "Sending RPC pname:cluuid:pid:xid:nid:opc %s:%s:%d:%llu:%s:%d\n",
-	       current_comm(),
+	       "Sending RPC req@%p pname:cluuid:pid:xid:nid:opc:job %s:%s:%d:%llu:%s:%d:%s\n",
+	       req, current_comm(),
 	       imp->imp_obd->obd_uuid.uuid,
 	       lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
-	       obd_import_nid2str(imp), lustre_msg_get_opc(req->rq_reqmsg));
+	       obd_import_nid2str(imp), lustre_msg_get_opc(req->rq_reqmsg),
+	       lustre_msg_get_jobid(req->rq_reqmsg));
 
 	rc = ptl_send_rpc(req, 0);
 	if (rc == -ENOMEM) {
@@ -2149,13 +2150,14 @@ interpret:
 
 		if (req->rq_reqmsg)
 			CDEBUG(D_RPCTRACE,
-			       "Completed RPC pname:cluuid:pid:xid:nid:opc %s:%s:%d:%llu:%s:%d\n",
-			       current_comm(),
+			       "Completed RPC req@%p pname:cluuid:pid:xid:nid:opc:job %s:%s:%d:%llu:%s:%d:%s\n",
+			       req, current_comm(),
 			       imp->imp_obd->obd_uuid.uuid,
 			       lustre_msg_get_status(req->rq_reqmsg),
 			       req->rq_xid,
 			       obd_import_nid2str(imp),
-			       lustre_msg_get_opc(req->rq_reqmsg));
+			       lustre_msg_get_opc(req->rq_reqmsg),
+			       lustre_msg_get_jobid(req->rq_reqmsg));
 
 		spin_lock(&imp->imp_lock);
 		/*

@@ -2218,15 +2218,16 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	}
 
 	CDEBUG(D_RPCTRACE,
-	       "Handling RPC pname:cluuid+ref:pid:xid:nid:opc %s:%s+%d:%d:x%llu:%s:%d\n",
-	       current_comm(),
+	       "Handling RPC req@%p pname:cluuid+ref:pid:xid:nid:opc:job %s:%s+%d:%d:x%llu:%s:%d:%s\n",
+	       request, current_comm(),
 	       (request->rq_export ?
 		(char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
 		atomic_read(&request->rq_export->exp_refcount) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
 	       libcfs_id2str(request->rq_peer),
-	       lustre_msg_get_opc(request->rq_reqmsg));
+	       lustre_msg_get_opc(request->rq_reqmsg),
+	       lustre_msg_get_jobid(request->rq_reqmsg));
 
 	if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
 		CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
@@ -2258,8 +2259,8 @@ put_conn:
 	timediff_usecs = ktime_us_delta(work_end, work_start);
 	arrived_usecs = ktime_us_delta(work_end, arrived);
 	CDEBUG(D_RPCTRACE,
-	       "Handled RPC pname:cluuid+ref:pid:xid:nid:opc %s:%s+%d:%d:x%llu:%s:%d Request processed in %lldus (%lldus total) trans %llu rc %d/%d\n",
-	       current_comm(),
+	       "Handled RPC req@%p pname:cluuid+ref:pid:xid:nid:opc:job %s:%s+%d:%d:x%llu:%s:%d:%s Request processed in %lldus (%lldus total) trans %llu rc %d/%d\n",
+	       request, current_comm(),
 	       (request->rq_export ?
 	       (char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
@@ -2268,6 +2269,7 @@ put_conn:
 	       request->rq_xid,
 	       libcfs_id2str(request->rq_peer),
 	       lustre_msg_get_opc(request->rq_reqmsg),
+	       lustre_msg_get_jobid(request->rq_reqmsg),
 	       timediff_usecs,
 	       arrived_usecs,
 	       (request->rq_repmsg ?

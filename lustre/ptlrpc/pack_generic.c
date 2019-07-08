@@ -2595,7 +2595,7 @@ void _debug_req(struct ptlrpc_request *req,
 	vaf.fmt = fmt;
 	vaf.va = &args;
 	libcfs_debug_msg(msgdata,
-			 "%pV req@%p x%llu/t%lld(%lld) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d\n",
+			 "%pV req@%p x%llu/t%lld(%lld) o%d->%s@%s:%d/%d lens %d/%d e %d to %lld dl %lld ref %d fl " REQ_FLAGS_FMT "/%x/%x rc %d/%d job:'%s'\n",
 			 &vaf,
 			 req, req->rq_xid, req->rq_transno,
 			 req_ok ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
@@ -2613,7 +2613,8 @@ void _debug_req(struct ptlrpc_request *req,
 			 atomic_read(&req->rq_refcount),
 			 DEBUG_REQ_FLAGS(req),
 			 req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
-			 rep_flags, req->rq_status, rep_status);
+			 rep_flags, req->rq_status, rep_status,
+			 req_ok ? lustre_msg_get_jobid(req->rq_reqmsg) : "");
 	va_end(args);
 }
 EXPORT_SYMBOL(_debug_req);
