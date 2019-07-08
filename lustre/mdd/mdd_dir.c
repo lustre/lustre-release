@@ -356,8 +356,7 @@ int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
  *           -ve        other error
  *
  */
-static int mdd_dir_is_empty(const struct lu_env *env,
-                            struct mdd_object *dir)
+int mdd_dir_is_empty(const struct lu_env *env, struct mdd_object *dir)
 {
 	struct dt_it     *it;
 	struct dt_object *obj;

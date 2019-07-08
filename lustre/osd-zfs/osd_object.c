@@ -186,9 +186,11 @@ osd_object_sa_bulk_update(struct osd_object *obj, sa_bulk_attr_t *attrs,
 static int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 				 struct osd_object *obj, struct lu_attr *la)
 {
-	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
-	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
-	int		 cnt = 0;
+	struct osa_attr *osa = &osd_oti_get(env)->oti_osa;
+	sa_bulk_attr_t *bulk = osd_oti_get(env)->oti_attr_bulk;
+	struct lustre_mdt_attrs *lma;
+	struct lu_buf buf;
+	int cnt = 0;
 	int		 rc;
 	ENTRY;
 
@@ -244,27 +246,22 @@ static int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 	la->la_flags = attrs_zfs2fs(osa->flags);
 	la->la_size = osa->size;
 
-	/* Try to get extra flag from LMA. Right now, only LMAI_ORPHAN
-	 * flags is stored in LMA, and it is only for orphan directory */
-	if (S_ISDIR(la->la_mode) && dt_object_exists(&obj->oo_dt)) {
-		struct osd_thread_info *info = osd_oti_get(env);
-		struct lustre_mdt_attrs *lma;
-		struct lu_buf buf;
-
-		lma = (struct lustre_mdt_attrs *)info->oti_buf;
-		buf.lb_buf = lma;
-		buf.lb_len = sizeof(info->oti_buf);
-		rc = osd_xattr_get(env, &obj->oo_dt, &buf, XATTR_NAME_LMA);
-		if (rc > 0) {
-			rc = 0;
-			lma->lma_incompat = le32_to_cpu(lma->lma_incompat);
-			obj->oo_lma_flags =
-				lma_to_lustre_flags(lma->lma_incompat);
-
-		} else if (rc == -ENODATA) {
-			rc = 0;
-		}
+	/* Try to get extra flags from LMA */
+	lma = (struct lustre_mdt_attrs *)osd_oti_get(env)->oti_buf;
+	buf.lb_buf = lma;
+	buf.lb_len = sizeof(osd_oti_get(env)->oti_buf);
+	down_read(&obj->oo_guard);
+	rc = osd_xattr_get_lma(env, obj, &buf);
+	if (!rc) {
+		lma->lma_incompat = le32_to_cpu(lma->lma_incompat);
+		obj->oo_lma_flags =
+			lma_to_lustre_flags(lma->lma_incompat);
+	} else if (rc == -ENODATA ||
+		   !(S_ISDIR(la->la_mode) &&
+		     dt_object_exists(&obj->oo_dt))) {
+		rc = 0;
 	}
+	up_read(&obj->oo_guard);
 
 	if (S_ISCHR(la->la_mode) || S_ISBLK(la->la_mode)) {
 		rc = -sa_lookup(obj->oo_sa_hdl, SA_ZPL_RDEV(o), &osa->rdev, 8);
@@ -1013,6 +1010,10 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 		attr->la_valid |= LA_FLAGS;
 		attr->la_flags |= LUSTRE_ORPHAN_FL;
 	}
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL) {
+		attr->la_valid |= LA_FLAGS;
+		attr->la_flags |= LUSTRE_ENCRYPT_FL;
+	}
 	read_unlock(&obj->oo_attr_lock);
 	if (attr->la_valid & LA_FLAGS && attr->la_flags & LUSTRE_ORPHAN_FL)
 		CDEBUG(D_INFO, "%s: set orphan flag on "DFID" (%llx/%x)\n",
@@ -1339,6 +1340,9 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 				CWARN("%s: failed to set LMA flags: rc = %d\n",
 				       osd->od_svname, rc);
 				GOTO(out, rc);
+			} else {
+				obj->oo_lma_flags =
+					la->la_flags & LUSTRE_LMA_FL_MASKS;
 			}
 		}
 	}

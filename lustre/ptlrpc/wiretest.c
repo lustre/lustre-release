@@ -451,6 +451,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LMAI_STRIPED);
 	LASSERTF(LMAI_ORPHAN == 0x00000010UL, "found 0x%.8xUL\n",
 		(unsigned)LMAI_ORPHAN);
+	LASSERTF(LMAI_ENCRYPT == 0x00000020UL, "found 0x%.8xUL\n",
+		 (unsigned)LMAI_ENCRYPT);
 
 	/* Checks for struct lustre_ost_attrs */
 	LASSERTF((int)sizeof(struct lustre_ost_attrs) == 64, "found %lld\n",
@@ -2575,6 +2577,8 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LUSTRE_INLINE_DATA_FL);
 	LASSERTF(LUSTRE_SET_SYNC_FL == 0x00040000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_SET_SYNC_FL);
+	LASSERTF(LUSTRE_ENCRYPT_FL == 0x00800000UL, "found 0x%.8xUL\n",
+		 (unsigned)LUSTRE_ENCRYPT_FL);
 	LASSERTF(MDS_INODELOCK_LOOKUP == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)MDS_INODELOCK_LOOKUP);
 	LASSERTF(MDS_INODELOCK_UPDATE == 0x00000002UL, "found 0x%.8xUL\n",

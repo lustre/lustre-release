@@ -47,6 +47,7 @@ EXTRA_DIST = \
 	lustre_acl.h \
 	lustre_barrier.h \
 	lustre_compat.h \
+	lustre_crypto.h \
 	lustre_debug.h \
 	lustre_disk.h \
 	lustre_dlm_flags.h \

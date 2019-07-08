@@ -965,12 +965,14 @@ do {                                                                          \
 
 static inline int lma_to_lustre_flags(__u32 lma_flags)
 {
-	return (lma_flags & LMAI_ORPHAN) ? LUSTRE_ORPHAN_FL : 0;
+	return (((lma_flags & LMAI_ORPHAN) ? LUSTRE_ORPHAN_FL : 0) |
+		((lma_flags & LMAI_ENCRYPT) ? LUSTRE_ENCRYPT_FL : 0));
 }
 
 static inline int lustre_to_lma_flags(__u32 la_flags)
 {
-	return (la_flags & LUSTRE_ORPHAN_FL) ? LMAI_ORPHAN : 0;
+	return (((la_flags & LUSTRE_ORPHAN_FL) ? LMAI_ORPHAN : 0) |
+		((la_flags & LUSTRE_ENCRYPT_FL) ? LMAI_ENCRYPT : 0));
 }
 
 /* Convert wire LUSTRE_*_FL to corresponding client local VFS S_* values
@@ -986,6 +988,9 @@ static inline int ll_ext_to_inode_flags(int flags)
 		((flags & LUSTRE_NOATIME_FL)   ? S_NOATIME   : 0) |
 		((flags & LUSTRE_APPEND_FL)    ? S_APPEND    : 0) |
 		((flags & LUSTRE_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
+#if defined(S_ENCRYPTED)
+		((flags & LUSTRE_ENCRYPT_FL)   ? S_ENCRYPTED : 0) |
+#endif
 		((flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0));
 }
 
@@ -995,6 +1000,9 @@ static inline int ll_inode_to_ext_flags(int iflags)
 		((iflags & S_NOATIME)   ? LUSTRE_NOATIME_FL   : 0) |
 		((iflags & S_APPEND)    ? LUSTRE_APPEND_FL    : 0) |
 		((iflags & S_DIRSYNC)   ? LUSTRE_DIRSYNC_FL   : 0) |
+#if defined(S_ENCRYPTED)
+		((iflags & S_ENCRYPTED) ? LUSTRE_ENCRYPT_FL   : 0) |
+#endif
 		((iflags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0));
 }
 

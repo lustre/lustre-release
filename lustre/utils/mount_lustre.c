@@ -52,6 +52,9 @@
 #include <linux/lustre/lustre_ver.h>
 #include <ctype.h>
 #include <limits.h>
+#if defined(HAVE_LUSTRE_CRYPTO) && defined(HAVE_LIBKEYUTILS)
+#include <keyutils.h>
+#endif
 #include <linux/lnet/nidstr.h>
 #include <libcfs/util/string.h>
 
@@ -116,6 +119,12 @@ void usage(FILE *out)
 		"\t\t(no)lazystatfs: disable or enable* statfs to work if OST is unavailable\n"
 		"\t\t32bitapi: return only 32-bit inode numbers to userspace\n"
 		"\t\t(no)verbose: disable or enable* messages at filesystem (un,re)mount\n"
+#ifdef HAVE_LUSTRE_CRYPTO
+#ifdef HAVE_LIBKEYUTILS
+		"\t\ttest_dummy_encryption: enable test dummy encryption mode\n"
+#endif
+		"\t\tnoencrypt: disable client side encryption\n"
+#endif
 		);
 	exit((out != stdout) ? EINVAL : 0);
 }
@@ -344,6 +353,52 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 			}
 			strncpy(mop->mo_skpath, val + 1,
 				sizeof(mop->mo_skpath) - 1);
+#endif
+#ifdef HAVE_LUSTRE_CRYPTO
+		} else if (strncmp(arg, "test_dummy_encryption", 21) == 0) {
+#ifdef HAVE_LIBKEYUTILS
+			/* Using dummy encryption mode requires inserting a
+			 * special dummy key into the session keyring.
+			 * Key type is "logon", key description is
+			 * "fscrypt:4242424242424242", and key payload has to be
+			 * in the form <mode><raw><size>, where:
+			 * <mode> is "\x00\x00\x00\x00"
+			 * <raw> is "$(printf ""\\\\x%02x"" {0..63})"
+			 * <size> is "\x40\x00\x00\x00" for little endian,
+			 * "\x00\x00\x00\x40" for big endian.
+			 */
+			char payload[72];
+			int *p = (int *)payload;
+			char *q = (char *)(p + 1);
+			int i = 0;
+			key_serial_t key;
+
+			*p = 0;
+			while (i < 0x40)
+				*(q++) = i++;
+			p = (int *)q;
+			*p = 0x40;
+
+			key = add_key("logon", "fscrypt:4242424242424242",
+				      (const void *)payload, sizeof(payload),
+				      KEY_SPEC_SESSION_KEYRING);
+
+			if (key == -1) {
+				fprintf(stderr,
+					"%s: test dummy encryption option ignored: could not insert dummy encryption key into session keyring\n",
+					progname);
+			} else {
+				/* pass this on as an option */
+				rc = append_option(options, options_len, opt,
+						   NULL);
+				if (rc != 0)
+					goto out_options;
+			}
+#else /* HAVE_LIBKEYUTILS */
+			fprintf(stderr,
+				"%s: test dummy encryption option ignored: Lustre not built with libkeyutils support\n",
+				progname);
+#endif
 #endif
 		} else if (parse_one_option(opt, flagp) == 0) {
 			/* pass this on as an option */

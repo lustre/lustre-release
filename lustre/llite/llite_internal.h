@@ -45,6 +45,7 @@
 #include <linux/compat.h>
 #include <linux/aio.h>
 #include <lustre_compat.h>
+#include <lustre_crypto.h>
 
 #include "vvp_internal.h"
 #include "range_lock.h"
@@ -585,6 +586,8 @@ enum stats_track_type {
 					 2.10, abandoned */
 #define LL_SBI_TINY_WRITE   0x2000000 /* tiny write support */
 #define LL_SBI_FILE_HEAT    0x4000000 /* file heat support */
+#define LL_SBI_TEST_DUMMY_ENCRYPTION    0x8000000 /* test dummy encryption */
+#define LL_SBI_ENCRYPT	   0x10000000 /* client side encryption */
 #define LL_SBI_FLAGS { 	\
 	"nolck",	\
 	"checksum",	\
@@ -613,6 +616,8 @@ enum stats_track_type {
 	"pio",		\
 	"tiny_write",	\
 	"file_heat",	\
+	"test_dummy_encryption", \
+	"noencrypt",	\
 }
 
 /* This is embedded into llite super-blocks to keep track of connect
@@ -1638,5 +1643,10 @@ static inline struct pcc_super *ll_info2pccs(struct ll_inode_info *lli)
 {
 	return ll_i2pccs(ll_info2i(lli));
 }
+
+#ifdef HAVE_LUSTRE_CRYPTO
+/* crypto.c */
+extern const struct llcrypt_operations lustre_cryptops;
+#endif
 
 #endif /* LLITE_INTERNAL_H */

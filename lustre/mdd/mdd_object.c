@@ -735,8 +735,17 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		    !md_capable(uc, CFS_CAP_LINUX_IMMUTABLE))
 			RETURN(-EPERM);
 
-		if (!S_ISDIR(oattr->la_mode))
+		if (!S_ISDIR(oattr->la_mode)) {
 			la->la_flags &= ~(LUSTRE_DIRSYNC_FL | LUSTRE_TOPDIR_FL);
+		} else if (la->la_flags & LUSTRE_ENCRYPT_FL) {
+			/* when trying to add encryption flag on dir,
+			 * make sure it is empty
+			 */
+			rc = mdd_dir_is_empty(env, obj);
+			if (rc)
+				RETURN(rc);
+			rc = 0;
+		}
 	}
 
 	if (oattr->la_flags & (LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL) &&

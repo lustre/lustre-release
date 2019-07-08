@@ -221,6 +221,16 @@ Warning! 'network' option is incompatible with LNet Dynamic Peer Discovery.
 If you want to restrict client NID, please make sure LNet Dynamic Peer Discovery
 is disabled.
 .RE
+.TP
+.BI test_dummy_encryption
+Enable test dummy encryption mode.
+.RE
+.TP
+.BI noencrypt
+Disable Lustre client-side encryption. By default, Lustre client-side encryption
+is enabled, letting users define encryption policies on a per-directory basis.
+fscrypt userspace tool can be used for that purpose, see
+https://github.com/google/fscrypt
 .SH SERVER OPTIONS
 In addition to the standard mount options and backing disk type
 (e.g. ldiskfs) options listed in

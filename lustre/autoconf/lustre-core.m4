@@ -2655,6 +2655,8 @@ No selinux package found, unable to build selinux enabled tools
 ])
 AC_SUBST(SELINUX)
 
+AC_CHECK_LIB([keyutils], [add_key])
+
 # Super safe df
 AC_MSG_CHECKING([whether to report minimum OST free space])
 AC_ARG_ENABLE([mindf],

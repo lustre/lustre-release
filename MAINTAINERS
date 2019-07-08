@@ -133,9 +133,14 @@ Lustre client side encryption
 M:	Sebastien Buisson <sbuisson@whamcloud.com>
 S:	Maintained
 F:	Documentation/client_side_encryption/*.txt
+F:	lustre/llite/crypto*.[ch]
 F:	libcfs/libcfs/crypto/*.[ch]
 F:	libcfs/include/libcfs/crypto/*.h
 F:	libcfs/include/uapi/linux/llcrypt.h
+F:	lustre/include/lustre_crypto.h
+K:	fscrypt
+K:	llcrypt
+K:	HAVE_LUSTRE_CRYPTO
 
 Lustre Client VFS Interface
 R:	Oleg Drokin <green@whamcloud.com>

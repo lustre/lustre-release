@@ -223,6 +223,46 @@ int osd_xattr_get_internal(const struct lu_env *env, struct osd_object *obj,
 				     buf, name, sizep);
 }
 
+/**
+ * Copy LMA extended attribute into provided buffer
+ *
+ * Note that no locking is done here.
+ *
+ * \param[in] env      execution environment
+ * \param[in] obj      object for which to retrieve xattr
+ * \param[out] buf     buffer to store xattr value in
+ *
+ * \retval 0           on success
+ * \retval negative    negated errno on failure
+ */
+int osd_xattr_get_lma(const struct lu_env *env, struct osd_object *obj,
+		      struct lu_buf *buf)
+{
+	int size = 0;
+	int rc = -ENOENT;
+
+	if (!buf)
+		return 0;
+
+	if (unlikely(obj->oo_destroyed))
+		goto out_lma;
+
+	/* check SA_ZPL_DXATTR first then fallback to directory xattr */
+	rc = __osd_sa_xattr_get(env, obj, buf, XATTR_NAME_LMA, &size);
+	if (!rc && unlikely(size < sizeof(struct lustre_mdt_attrs)))
+		rc = -EINVAL;
+	if (rc != -ENOENT)
+		goto out_lma;
+
+	rc = __osd_xattr_get_large(env, osd_obj2dev(obj), obj->oo_xattr,
+				     buf, XATTR_NAME_LMA, &size);
+	if (!rc && unlikely(size < sizeof(struct lustre_mdt_attrs)))
+		rc = -EINVAL;
+
+out_lma:
+	return rc;
+}
+
 static int osd_get_pfid_from_lma(const struct lu_env *env,
 				 struct osd_object *obj,
 				 struct lu_buf *buf, int *sizep)

@@ -312,6 +312,7 @@ int mdd_orphan_declare_insert(const struct lu_env *env, struct mdd_object *obj,
 			      umode_t mode, struct thandle *thandle);
 int mdd_orphan_declare_delete(const struct lu_env *env, struct mdd_object *obj,
 			      struct thandle *thandle);
+int mdd_dir_is_empty(const struct lu_env *env, struct mdd_object *dir);
 
 /* mdd_lproc.c */
 int mdd_procfs_init(struct mdd_device *mdd, const char *name);

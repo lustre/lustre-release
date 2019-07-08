@@ -2704,6 +2704,10 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 		attr->la_valid |= LA_FLAGS;
 		attr->la_flags |= LUSTRE_ORPHAN_FL;
 	}
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL) {
+		attr->la_valid |= LA_FLAGS;
+		attr->la_flags |= LUSTRE_ENCRYPT_FL;
+	}
 	spin_unlock(&obj->oo_guard);
 
 	if (S_ISDIR(obj->oo_inode->i_mode) &&

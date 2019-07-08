@@ -1199,6 +1199,8 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_LFSCK_BITMAP "trusted.lfsck_bitmap"
 #define XATTR_NAME_DUMMY	"trusted.dummy"
 
+#define LL_XATTR_NAME_ENCRYPTION_CONTEXT XATTR_SECURITY_PREFIX"c"
+
 #define XATTR_NAME_LFSCK_NAMESPACE "trusted.lfsck_ns"
 #define XATTR_NAME_MAX_LEN	32 /* increase this, if there is longer name. */
 
@@ -1775,8 +1777,9 @@ enum {
 	 * stored in LMA. see LMAI_XXXX */
 	LUSTRE_ORPHAN_FL	= 0x00002000,
 	LUSTRE_SET_SYNC_FL	= 0x00040000, /* Synchronous setattr on OSTs */
+	LUSTRE_ENCRYPT_FL	= 0x00800000, /* encrypted file */
 
-	LUSTRE_LMA_FL_MASKS	= LUSTRE_ORPHAN_FL,
+	LUSTRE_LMA_FL_MASKS	= LUSTRE_ENCRYPT_FL | LUSTRE_ORPHAN_FL,
 };
 
 #ifndef FS_XFLAG_SYNC
