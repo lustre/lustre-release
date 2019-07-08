@@ -24,7 +24,6 @@
 #ifndef _GNILND_ARIES_H
 #define _GNILND_ARIES_H
 
-/* for lnet_ipif_query */
 #include <lnet/lib-lnet.h>
 
 #ifndef _GNILND_HSS_OPS_H
