@@ -1948,6 +1948,11 @@ void lu_env_remove(struct lu_env *env)
 		}
 	}
 
+	/* The rcu_lock is not taking in this case since the key
+	 * used is the actual task_struct. This implies that each
+	 * object is only removed by the owning thread, so there
+	 * can never be a race on a particular object.
+	 */
 	lei = rhashtable_lookup_fast(&lu_env_rhash, &task,
 				     lu_env_rhash_params);
 	if (lei && rhashtable_remove_fast(&lu_env_rhash, &lei->lei_linkage,
