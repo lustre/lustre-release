@@ -930,7 +930,7 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 
 		mod->mod_close_req = req;
 
-		DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
+		DEBUG_REQ(D_RPCTRACE, mod->mod_open_req, "matched open");
 		/* We no longer want to preserve this open for replay even
 		 * though the open was committed. b=3632, b=3633 */
 		spin_lock(&mod->mod_open_req->rq_lock);
