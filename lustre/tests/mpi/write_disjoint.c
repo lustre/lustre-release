@@ -57,210 +57,208 @@
 #include "mpi.h"
 
 /* Chosen arbitrarily.  Actually running this large will take a long time.*/
-#define CHUNK_MAX_SIZE (1024*1024*16)
+#define CHUNK_MAX_SIZE (1024 * 1024 * 16)
 
 void rprintf(int rank, int loop, const char *fmt, ...)
 {
-        va_list       ap;
+	va_list ap;
 
-        printf("rank %d, loop %d: ", rank, loop);
+	printf("rank %d, loop %d: ", rank, loop);
 
-        va_start(ap, fmt);
+	va_start(ap, fmt);
 
-        vprintf(fmt, ap);
+	vprintf(fmt, ap);
 
-        MPI_Abort(MPI_COMM_WORLD, -1); /* This will exit() according to man */
+	MPI_Abort(MPI_COMM_WORLD, -1); /* This will exit() according to man */
 }
 
 #define CHUNK_SIZE(n) chunk_size[(n) % 2]
 
-int main (int argc, char *argv[]) {
-        int i, n, fd, c;
-        unsigned long chunk_size[2];
-        int rank, noProcessors, done;
-        int error;
-        off_t offset;
-        char **chunk_buf;
-        char *read_buf;
-        struct stat stat_buf;
-        ssize_t ret;
-        char *filename = "/mnt/lustre/write_disjoint";
-        int numloops = 1000;
+int main(int argc, char *argv[])
+{
+	int i, n, fd, c;
+	unsigned long chunk_size[2];
+	int rank, noProcessors, done;
+	int error;
+	off_t offset;
+	char **chunk_buf;
+	char *read_buf;
+	struct stat stat_buf;
+	ssize_t ret;
+	char *filename = "/mnt/lustre/write_disjoint";
+	int numloops = 1000;
 	int max_size = CHUNK_MAX_SIZE;
-        int random = 0;
+	int random = 0;
 	unsigned int seed = 0;
 	int seed_provided = 0;
 
-        error = MPI_Init(&argc, &argv);
-        if (error != MPI_SUCCESS)
-                rprintf(-1, -1, "MPI_Init failed: %d\n", error);
-        /* Parse command line options */
+	error = MPI_Init(&argc, &argv);
+	if (error != MPI_SUCCESS)
+		rprintf(-1, -1, "MPI_Init failed: %d\n", error);
+	/* Parse command line options */
 	while ((c = getopt(argc, argv, "f:n:m:s:")) != EOF) {
 		errno = 0;
-                switch (c) {
-                case 'f':
-                        filename = optarg;
-                        break;
-                case 'n':
-                        numloops = strtoul(optarg, NULL, 0);
+		switch (c) {
+		case 'f':
+			filename = optarg;
+			break;
+		case 'n':
+			numloops = strtoul(optarg, NULL, 0);
 			break;
 		case 'm':
 			max_size = strtoul(optarg, NULL, 0);
 			if (max_size > CHUNK_MAX_SIZE)
 				rprintf(-1, -1, "Chunk size larger than %d.\n",
 					CHUNK_MAX_SIZE);
-                        break;
+			break;
 		case 's':
 			seed = strtoul(optarg, NULL, 0);
 			seed_provided = 1;
 			break;
-                }
-        }
+		}
+	}
 
-        MPI_Comm_size(MPI_COMM_WORLD, &noProcessors);
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &noProcessors);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-        chunk_buf = malloc(noProcessors * sizeof(chunk_buf[0]));
-        for (i=0; i < noProcessors; i++) {
+	chunk_buf = malloc(noProcessors * sizeof(chunk_buf[0]));
+	for (i = 0; i < noProcessors; i++) {
 		chunk_buf[i] = malloc(max_size);
 		memset(chunk_buf[i], 'A' + i, max_size);
-        }
+	}
 	read_buf = malloc(noProcessors * max_size);
 
-        if (rank == 0) {
-                fd = open(filename, O_WRONLY|O_CREAT|O_TRUNC, 0666);
-                if (fd < 0)
-                        rprintf(rank, -1, "open() returned %s\n",
-                                strerror(errno));
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0) {
+		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+		if (fd < 0)
+			rprintf(rank, -1, "open() returned %s\n",
+				strerror(errno));
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
-        fd = open(filename, O_RDWR);
-        if (fd < 0)
-                rprintf(rank, -1, "open() returned %s\n", strerror(errno));
+	fd = open(filename, O_RDWR);
+	if (fd < 0)
+		rprintf(rank, -1, "open() returned %s\n", strerror(errno));
 
 	if (rank == 0) {
 		if (!seed_provided)
-			seed = (unsigned int) time(NULL);
+			seed = (unsigned int)time(NULL);
 		printf("random seed: %d\n", seed);
 		srand(seed);
 	}
 
+	for (n = 0; n < numloops; n++) {
+		/* reset the environment */
+		if (rank == 0) {
+			ret = truncate(filename, 0);
+			if (ret != 0)
+				rprintf(rank, n, "truncate() returned %s\n",
+					strerror(errno));
 
-        for (n = 0; n < numloops; n++) {
-                /* reset the environment */
-                if (rank == 0) {
-                        ret = truncate(filename, 0);
-                        if (ret != 0)
-                                rprintf(rank, n, "truncate() returned %s\n",
-                                        strerror(errno) );
-
-                        random = rand();
-                }
-                MPI_Bcast(&random, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			random = rand();
+		}
+		MPI_Bcast(&random, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		CHUNK_SIZE(n) = random % max_size;
 
-                if (n % 1000 == 0 && rank == 0)
-                        printf("loop %d: chunk_size %lu\n", n, CHUNK_SIZE(n));
+		if (n % 1000 == 0 && rank == 0)
+			printf("loop %d: chunk_size %lu\n", n, CHUNK_SIZE(n));
 
-                if (stat(filename, &stat_buf) < 0)
-                        rprintf(rank, n, "error stating %s: %s\n",
-                                filename, strerror(errno));
+		if (stat(filename, &stat_buf) < 0)
+			rprintf(rank, n, "error stating %s: %s\n",
+				filename, strerror(errno));
 
-                if (stat_buf.st_size != 0)
-                        rprintf(rank, n, "filesize = %lu. "
-                                "Should be zero after truncate\n",
-                                stat_buf.st_size);
+		if (stat_buf.st_size != 0)
+			rprintf(rank, n,
+				"filesize = %lu. Should be zero after truncate\n",
+				stat_buf.st_size);
 
-                MPI_Barrier(MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
 
-                /* Do the race */
-                offset = rank * CHUNK_SIZE(n);
-                lseek(fd, offset, SEEK_SET);
+		/* Do the race */
+		offset = rank * CHUNK_SIZE(n);
+		lseek(fd, offset, SEEK_SET);
 
-                done = 0;
-                do {
-                        ret = write(fd, chunk_buf[rank] + done,
-                                    CHUNK_SIZE(n) - done);
-                        if (ret < 0 && errno != EINTR)
-                                rprintf(rank, n, "write() returned %s\n",
-                                        strerror(errno));
-                        if (ret > 0)
-                                done += ret;
-                } while (done != CHUNK_SIZE(n));
+		done = 0;
+		do {
+			ret = write(fd, chunk_buf[rank] + done,
+				    CHUNK_SIZE(n) - done);
+			if (ret < 0 && errno != EINTR)
+				rprintf(rank, n, "write() returned %s\n",
+					strerror(errno));
+			if (ret > 0)
+				done += ret;
+		} while (done != CHUNK_SIZE(n));
 
-                MPI_Barrier(MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
 
-                /* Check the result */
-                if (stat(filename, &stat_buf) < 0)
-                        rprintf(rank, n, "error stating %s: %s\n",
-                                filename, strerror(errno));
+		/* Check the result */
+		if (stat(filename, &stat_buf) < 0)
+			rprintf(rank, n, "error stating %s: %s\n",
+				filename, strerror(errno));
 
-                if (stat_buf.st_size != CHUNK_SIZE(n) * noProcessors) {
-                        if (n > 0)
-                                printf("loop %d: chunk_size %lu, "
-                                       "file size was %lu\n",
-                                       n - 1, CHUNK_SIZE(n - 1),
-                                       CHUNK_SIZE(n - 1) *noProcessors);
-                        rprintf(rank, n, "invalid file size %lu"
-                                " instead of %lu = %lu * %u\n",
-                                (unsigned long)stat_buf.st_size,
-                                CHUNK_SIZE(n) * noProcessors,
-                                CHUNK_SIZE(n), noProcessors);
-                }
+		if (stat_buf.st_size != CHUNK_SIZE(n) * noProcessors) {
+			if (n > 0)
+				printf("loop %d: chunk_size %lu, file size was %lu\n",
+				       n - 1, CHUNK_SIZE(n - 1),
+				       CHUNK_SIZE(n - 1) * noProcessors);
+			rprintf(rank, n,
+				"invalid file size %lu instead of %lu = %lu * %u\n",
+				(unsigned long)stat_buf.st_size,
+				CHUNK_SIZE(n) * noProcessors,
+				CHUNK_SIZE(n), noProcessors);
+		}
 
-                if (rank == 0) {
-                        if (lseek(fd, 0, SEEK_SET) < 0)
-                                rprintf(rank, n, "error seeking to 0: %s\n",
-                                        strerror(errno));
+		if (rank == 0) {
+			if (lseek(fd, 0, SEEK_SET) < 0)
+				rprintf(rank, n, "error seeking to 0: %s\n",
+					strerror(errno));
 
-                        done = 0;
-                        do {
-                                ret = read(fd, read_buf + done,
-                                           CHUNK_SIZE(n) * noProcessors - done);
-                                if (ret < 0)
-                                        rprintf(rank, n, "read returned %s\n",
-                                                strerror(errno));
+			done = 0;
+			do {
+				ret = read(fd, read_buf + done,
+					   CHUNK_SIZE(n) * noProcessors - done);
+				if (ret < 0)
+					rprintf(rank, n, "read returned %s\n",
+						strerror(errno));
 
-                                done += ret;
-                        } while (done != CHUNK_SIZE(n) * noProcessors);
+				done += ret;
+			} while (done != CHUNK_SIZE(n) * noProcessors);
 
-                        for (i = 0; i < noProcessors; i++) {
-                                char command[4096];
-                                int j;
-				
-                                if (!memcmp(read_buf + (i * CHUNK_SIZE(n)),
-                                            chunk_buf[i], CHUNK_SIZE(n)))
-                                        continue;
+			for (i = 0; i < noProcessors; i++) {
+				char command[4096];
+				int j;
 
-                                /* print out previous chunk sizes */
-                                if (n > 0)
-                                        printf("loop %d: chunk_size %lu\n",
-                                               n - 1, CHUNK_SIZE(n - 1));
+				if (!memcmp(read_buf + (i * CHUNK_SIZE(n)),
+					    chunk_buf[i], CHUNK_SIZE(n)))
+					continue;
 
-                                printf("loop %d: chunk %d corrupted "
-                                       "with chunk_size %lu, page_size %d\n",
-                                       n, i, CHUNK_SIZE(n), getpagesize());
-                                printf("ranks:\tpage boundry\tchunk boundry\t"
-                                       "page boundry\n");
-                                for (j = 1 ; j < noProcessors; j++) {
-                                        int b = j * CHUNK_SIZE(n);
-                                        printf("%c -> %c:\t%d\t%d\t%d\n",
-                                               'A' + j - 1, 'A' + j,
-                                               b & ~(getpagesize()-1), b,
-                                               (b + getpagesize()) &
-                                               ~(getpagesize()-1));
-                                }
+				/* print out previous chunk sizes */
+				if (n > 0)
+					printf("loop %d: chunk_size %lu\n",
+					       n - 1, CHUNK_SIZE(n - 1));
 
-                                sprintf(command, "od -Ad -a %s", filename);
-                                ret = system(command);
-                                rprintf(0, n, "data check error - exiting\n");
-                        }
-                }
-                MPI_Barrier(MPI_COMM_WORLD);
-        }
+				printf("loop %d: chunk %d corrupted with chunk_size %lu, page_size %d\n",
+				       n, i, CHUNK_SIZE(n), getpagesize());
+				printf("ranks:\tpage boundry\tchunk boundry\tpage boundry\n");
+				for (j = 1 ; j < noProcessors; j++) {
+					int b = j * CHUNK_SIZE(n);
 
-        printf("Finished after %d loops\n", n);
-        MPI_Finalize();
-        return 0;
+					printf("%c -> %c:\t%d\t%d\t%d\n",
+					       'A' + j - 1, 'A' + j,
+					       b & ~(getpagesize() - 1), b,
+					       (b + getpagesize()) &
+					       ~(getpagesize() - 1));
+				}
+
+				sprintf(command, "od -Ad -a %s", filename);
+				ret = system(command);
+				rprintf(0, n, "data check error - exiting\n");
+			}
+		}
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+
+	printf("Finished after %d loops\n", n);
+	MPI_Finalize();
+	return 0;
 }
