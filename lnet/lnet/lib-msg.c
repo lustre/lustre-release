@@ -827,7 +827,12 @@ lnet_msg_detach_md(struct lnet_msg *msg, int cpt, int status)
 
 	unlink = lnet_md_unlinkable(md);
 	if (md->md_eq != NULL) {
-		msg->msg_ev.status   = status;
+		if ((md->md_flags & LNET_MD_FLAG_ABORTED) && !status) {
+			msg->msg_ev.status   = -ETIMEDOUT;
+			CDEBUG(D_NET, "md 0x%p already unlinked\n", md);
+		} else {
+			msg->msg_ev.status   = status;
+		}
 		msg->msg_ev.unlinked = unlink;
 		lnet_eq_enqueue_event(md->md_eq, &msg->msg_ev);
 	}
