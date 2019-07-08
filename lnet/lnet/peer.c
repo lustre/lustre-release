@@ -2150,6 +2150,7 @@ lnet_discover_peer_locked(struct lnet_peer_ni *lpni, int cpt, bool block)
 	DEFINE_WAIT(wait);
 	struct lnet_peer *lp;
 	int rc = 0;
+	int count = 0;
 
 again:
 	lnet_net_unlock(cpt);
@@ -2169,11 +2170,21 @@ again:
 			break;
 		if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING)
 			break;
+		/*
+		 * Don't repeat discovery if discovery is disabled. This is
+		 * done to ensure we can use discovery as a standard ping as
+		 * well for backwards compatibility with routers which do not
+		 * have discovery or have discovery disabled
+		 */
+		if (lnet_is_discovery_disabled(lp) && count > 0)
+			break;
 		if (lp->lp_dc_error)
 			break;
 		if (lnet_peer_is_uptodate(lp))
 			break;
 		lnet_peer_queue_for_discovery(lp);
+		count++;
+		CDEBUG(D_NET, "Discovery attempt # %d\n", count);
 
 		/*
 		 * If caller requested a non-blocking operation then
@@ -2191,16 +2202,6 @@ again:
 		lnet_peer_decref_locked(lp);
 		/* Peer may have changed */
 		lp = lpni->lpni_peer_net->lpn_peer;
-
-		/*
-		 * Wait for discovery to complete, but don't repeat if
-		 * discovery is disabled. This is done to ensure we can
-		 * use discovery as a standard ping as well for backwards
-		 * compatibility with routers which do not have discovery
-		 * or have discovery disabled
-		 */
-		if (lnet_is_discovery_disabled(lp))
-			break;
 	}
 	finish_wait(&lp->lp_dc_waitq, &wait);
 
