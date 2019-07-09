@@ -1146,6 +1146,7 @@ static inline char *obd_uuid2str(const struct obd_uuid *uuid)
 }
 
 #define LUSTRE_MAXFSNAME 8
+#define LUSTRE_MAXINSTANCE 16
 
 /* Extract fsname from uuid (or target name) of a target
    e.g. (myfs-OST0007_UUID -> myfs)

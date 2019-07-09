@@ -85,10 +85,14 @@ MANFILES =					\
 	llapi_file_create_foreign.3		\
 	llapi_file_get_stripe.3			\
 	llapi_file_open.3			\
+	llapi_get_fsname.3			\
+	llapi_get_fsname_instance.3		\
+	llapi_get_instance.3			\
 	llapi_get_lum_dir.3			\
 	llapi_get_lum_dir_fd.3			\
 	llapi_get_lum_file.3			\
-	llapi_get_lum_file_fd.3		\
+	llapi_get_lum_file_fd.3			\
+	llapi_getname.3				\
 	llapi_group_lock.3			\
 	llapi_group_unlock.3			\
 	llapi_heat_get.3			\

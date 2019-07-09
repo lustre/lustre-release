@@ -1475,40 +1475,6 @@ int llapi_search_rootpath(char *pathname, const char *fsname)
 	return get_root_path(WANT_PATH, (char *)fsname, NULL, pathname, -1);
 }
 
-int llapi_getname(const char *path, char *buf, size_t size)
-{
-	struct obd_uuid uuid_buf;
-	char *uuid = uuid_buf.uuid;
-	char *cfg_instance;
-	int rc, len, fsname_len;
-
-	memset(&uuid_buf, 0, sizeof(uuid_buf));
-	rc = llapi_file_get_lov_uuid(path, &uuid_buf);
-	if (rc)
-		return rc;
-
-	/*
-	 * We want to turn testfs-clilov-ffff88002738bc00 into
-	 * testfs-ffff88002738bc00 in a portable way that doesn't depend
-	 * on what is after "-clilov-" as it may change in the future.
-	 * Unfortunately, the "fsname" part may contain a dash, so we
-	 * can't just skip to the first dash, and the "instance" may be a
-	 * UUID in the future, so we can't necessarily go to the last dash.
-	 */
-	cfg_instance = strstr(uuid, "-clilov-");
-	if (!cfg_instance)
-		return -EINVAL;
-
-	fsname_len = cfg_instance - uuid;
-	cfg_instance += strlen("-clilov-");
-	len = snprintf(buf, size, "%.*s-%s", fsname_len, uuid, cfg_instance);
-
-	if (len >= size)
-		rc = -ENAMETOOLONG;
-
-	return rc;
-}
-
 /**
  * Get the list of pool members.
  * \param poolname    string of format \<fsname\>.\<poolname\>

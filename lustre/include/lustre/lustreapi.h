@@ -404,7 +404,11 @@ int llapi_parse_size(const char *optarg, unsigned long long *size,
 int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 			char *fsname);
 int llapi_search_fsname(const char *pathname, char *fsname);
-int llapi_getname(const char *path, char *buf, size_t size);
+int llapi_get_fsname_instance(const char *path, char *fsname, size_t fsname_len,
+			      char *instance, size_t instance_len);
+int llapi_get_instance(const char *path, char *instance, size_t instance_len);
+int llapi_get_fsname(const char *path, char *fsname, size_t fsname_len);
+int llapi_getname(const char *path, char *name, size_t namelen);
 int llapi_search_fileset(const char *pathname, char *fileset);
 
 int llapi_search_rootpath(char *pathname, const char *fsname);

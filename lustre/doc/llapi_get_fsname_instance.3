@@ -1,0 +1,97 @@
+.TH lustreapi 3 "2019 Jul 10" "Lustre User API"
+.SH NAME
+llapi_get_fsname_instance - get the client filesystem name and instance
+.br
+llapi_get_fsname - get the filesystem fsname from path
+.br
+llapi_get_instance - get the client filesystem instance from path
+.br
+llapi_getname - get the client filesystem identifier from path
+.SH SYNOPSIS
+.nf
+.B #include <sys/types.h>
+.B #include <sys/stat.h>
+.B #include <fcntl.h>
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_getname(const char *" path ", char *" name ", size_t " namelen );
+.sp
+.BI "int llapi_get_fsname_instance(const char *" path ", char *" fsname ,
+.BI					size_t " fsname_len" ", char *" instance ,
+.BI					size_t " instance_len" );
+.sp
+.BI "int llapi_get_fsname(const char *" path ", char *" fsname ,
+.BI					size_t " fsname_len" );
+.sp
+.BI "int llapi_get_instance(const char *" path ", char *" instance ,
+.BI					size_t " instance_len" );
+.SH DESCRIPTION
+.LP
+.B llapi_get_fsname_instance()
+retrieves the filesystem fsname and instance for the specified
+.I path
+and stores them in the
+.I fsname
+and
+.I instance
+buffers respectively, each of which can respectively hold at least
+.I fsname_len
+(at least
+.B LUSTRE_MAXFSNAME
+bytes), and
+.I instance_len
+(at least
+.B LUSTRE_MAXINSTANCE
+bytes).
+If only the fsname or instance identifier is needed, then the respective
+.BR llapi_get_fsname (3)
+or
+.BR llapi_get_instance (3)
+function can be used.  The
+.BR llapi_getname (3)
+function returns the combined
+.IR fsname - instance
+string.
+.P
+The filesystem
+.I fsname
+is a short name like
+.RB ' testfs '
+or
+.RB ' lfs2g '
+used to identify the filesystem on the clients and servers for mounting
+and configuration.  The
+.I instance
+is a client-unique temporary identifier like
+.RB ' ffff8803c9c0f000 '
+that differentiates multiple mounts of the same filesystem on the same
+client.  The instance is not guaranteed to be unique between different clients,
+nor is it expected to be the same for repeated mounts on the same client.
+.P
+The filesystem identifier is used in client-side parameters, like
+.BI mdc. fsname -MDT0000-mdc- instance .max_rpcs_in_flight
+for MDC and OSC devices, or
+.BI llite. fsname - instance .max_cached_mb
+and similar for llite tunable values and statistics.
+.SH RETURN VALUES
+.TP
+.B 0
+on success, or
+.TP
+-ve
+error code on failure and sets errno appropriately.
+.SH ERRORS
+.TP 15
+.SM EINVAL
+Invalid filesystem information found.
+.TP
+.SM ENAMETOOLONG
+The
+.IR fsname_len ,
+.IR instance_len ,
+or
+.I namelen
+buffer length was not large enough to hold the string.
+.SH SEE ALSO
+.BR lfs-getname (1),
+.BR lustreapi (7)

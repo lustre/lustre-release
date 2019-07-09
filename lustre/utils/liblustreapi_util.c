@@ -311,3 +311,79 @@ retry_open:
 
 	return rc ? -errno : 0;
 }
+
+int llapi_get_fsname_instance(const char *path, char *fsname, size_t fsname_len,
+			      char *instance, size_t instance_len)
+{
+	struct obd_uuid uuid_buf;
+	char *uuid = uuid_buf.uuid;
+	char *ptr;
+	int rc;
+
+	memset(&uuid_buf, 0, sizeof(uuid_buf));
+	rc = llapi_file_get_lov_uuid(path, &uuid_buf);
+	if (rc)
+		return rc;
+
+	/*
+	 * We want to turn fs-foo-clilov-ffff88002738bc00 into 'fs-foo' and
+	 * 'ffff88002738bc00' in a portable way that doesn't depend on what is
+	 * after "-clilov-" as it may change to a UUID string in the future.
+	 * Unfortunately, the "fsname" part may contain a dash, so we can't
+	 * just skip to the first dash, and if the "instance" is a UUID in the
+	 * future we can't necessarily go to the last dash either.
+	 */
+	ptr = strstr(uuid, "-clilov-");
+	if (!ptr || (!fsname && !instance)) {
+		rc = -EINVAL;
+		goto out;
+	}
+
+	*ptr = '\0';
+	ptr += strlen("-clilov-");
+	if (instance) {
+		snprintf(instance, instance_len, "%s", ptr);
+		if (strlen(ptr) >= instance_len)
+			rc = -ENAMETOOLONG;
+	}
+
+	if (fsname) {
+		snprintf(fsname, fsname_len, "%s", uuid);
+		if (strlen(uuid) >= fsname_len)
+			rc = -ENAMETOOLONG;
+	}
+
+out:
+	errno = -rc;
+	return rc;
+}
+
+int llapi_getname(const char *path, char *name, size_t namelen)
+{
+	char fsname[16];
+	char instance[40];
+	int rc;
+
+	rc = llapi_get_fsname_instance(path, fsname, sizeof(fsname),
+				       instance, sizeof(instance));
+	if (rc)
+		return rc;
+
+	snprintf(name, namelen, "%s-%s", fsname, instance);
+	if (strlen(fsname) + 1 + strlen(instance) >= namelen) {
+		rc = -ENAMETOOLONG;
+		errno = -rc;
+	}
+
+	return rc;
+}
+
+int llapi_get_instance(const char *path, char *instance, size_t instance_len)
+{
+	return llapi_get_fsname_instance(path, NULL, 0, instance, instance_len);
+}
+
+int llapi_get_fsname(const char *path, char *fsname, size_t fsname_len)
+{
+	return llapi_get_fsname_instance(path, fsname, fsname_len, NULL, 0);
+}

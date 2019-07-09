@@ -6203,43 +6203,33 @@ static int lfs_df(int argc, char **argv)
 	return rc;
 }
 
-static int print_instance(const char *mntdir, char *fsname, size_t fsnamelen,
+static int print_instance(const char *mntdir, char *buf, size_t buflen,
 			  bool opt_instance, bool opt_fsname, bool opt_mntdir)
 {
-	char *buf = fsname;
+	int rc = 0;
 
-	/* llapi_search_mounts() fills "fsname", but that is not called if
-	 * explicit paths are specified on the command-line
-	 */
-	if (opt_instance || (opt_fsname && fsname[0] == '\0')) {
-		int rc = llapi_getname(mntdir, fsname, fsnamelen);
-
-		if (rc < 0) {
-			fprintf(stderr, "cannot get instance for '%s': %s\n",
-				mntdir, strerror(-rc));
-			return rc;
-		}
-		buf = fsname;
-		if (!opt_instance) {
-			/* print only the fsname name */
-			buf = strchr(fsname, '-');
-			if (buf)
-				*buf = '\0';
-			buf = fsname;
-		} else if (!opt_fsname) {
-			/* print only the instance name */
-			buf = strchr(fsname, '-');
-			if (buf)
-				buf++;
-			else
-				buf = fsname;
-		}
+	if (opt_fsname == opt_instance) { /* both true or both false */
+		rc = llapi_getname(mntdir, buf, buflen);
 	} else if (opt_fsname) {
-		/* print only the fsname */
-		buf = fsname;
+		/* llapi_search_mounts() fills @buf with fsname, but that is not
+		 * called if explicit paths are specified on the command-line
+		 */
+		if (buf[0] == '\0')
+			rc = llapi_get_fsname(mntdir, buf, buflen);
+	} else /* if (opt_instance) */ {
+		rc = llapi_get_instance(mntdir, buf, buflen);
 	}
 
-	printf("%s %s\n", buf, opt_mntdir ? mntdir : "");
+	if (rc < 0) {
+		fprintf(stderr, "cannot get instance for '%s': %s\n",
+			mntdir, strerror(-rc));
+		return rc;
+	}
+
+	if (opt_mntdir)
+		printf("%s %s\n", buf, mntdir);
+	else
+		printf("%s\n", buf);
 
 	return 0;
 }
@@ -6268,10 +6258,6 @@ static int lfs_getname(int argc, char **argv)
 			return CMD_HELP;
 		}
 	}
-
-	/* If neither option is given, print both instance and fsname */
-	if (!opt_instance && !opt_fsname)
-		opt_instance = opt_fsname = true;
 
 	if (optind == argc) { /* no paths specified, get all paths. */
 		char mntdir[PATH_MAX] = "", path[PATH_MAX] = "";

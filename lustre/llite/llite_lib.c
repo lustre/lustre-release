@@ -1060,7 +1060,7 @@ int ll_fill_super(struct super_block *sb)
 	char	*profilenm = get_profile_name(sb);
 	struct config_llog_instance *cfg;
 	/* %p for void* in printf needs 16+2 characters: 0xffffffffffffffff */
-	const int instlen = 16 + 2;
+	const int instlen = LUSTRE_MAXINSTANCE + 2;
 	unsigned long cfg_instance = ll_get_cfg_instance(sb);
 	char name[MAX_STRING_SIZE];
 	int md_len = 0;

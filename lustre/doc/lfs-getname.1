@@ -30,14 +30,20 @@ is used with a single
 .I pathname
 then the instance ID is printed without the mountpoint.
 .SH EXAMPLES
-.TP
 .B $ lfs getname
+.br
 myth-ffff880428703400 /myth
 .br
 testfs-ffff937009271000 /mnt/testfs
-.TP
+.P
 .B $ lfs getname -n /mnt/testfs
+.br
 testfs
+.P
+.B $ lfs getname -i /mnt/testfs
+.br
+ffff937009271000
 .SH SEE ALSO
 .BR lfs (1),
+.BR llapi_getname (3),
 .BR lustre (7)
