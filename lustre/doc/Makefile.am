@@ -41,6 +41,7 @@ MANFILES =					\
 	ldev.conf.5				\
 	lfs.1					\
 	lfs-df.1				\
+	lfs-fid2path.1				\
 	lfs-find.1				\
 	lfs-getstripe.1				\
 	lfs-getdirstripe.1			\
@@ -55,11 +56,12 @@ MANFILES =					\
 	lfs-mirror-split.1			\
 	lfs-mirror-verify.1			\
 	lfs-mkdir.1				\
+	lfs-path2fid.1				\
 	lfs-pcc.1				\
+	lfs-project.1				\
 	lfs-setdirstripe.1			\
 	lfs-setstripe.1				\
 	lfs-setquota.1				\
-	lfs-project.1				\
 	l_getidentity.8				\
 	lgss_sk.8				\
 	lhbadm.8				\

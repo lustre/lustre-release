@@ -192,21 +192,6 @@ List all the OSTs for all mounted filesystems. If a \fBpath\fR is provided
 that is located on a lustre mounted file system then only the OSTs belonging
 to that filesystem are displayed.
 .TP
-.B fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
-Print out the pathname(s) for the specified \fIfid\fR(s) from the filesystem
-mounted at \fBrootpath\fR or named \fBfsname\fR.  If a file has multiple
-hard links, then all of the pathnames for that file are printed, unless
-\fB--link\fR limits the printing to only the specified link number (starting
-at 0, in no particular order).  If multiple fids are specified, but only a
-single pathname is needed for each file, use \fB--link 0\fR.
-.TP
-.B path2fid [--parents] <path> ...
-Print out the FIDs for the specified \fBpath(s)\fR.  If multiple pathnames
-are given, then they will be printed one per line with the path as prefix.
-The \fB--parents\fR switch makes it output the parent FID and name(s) of the
-given entries. If an entry has multiple links, these are displayed on a single
-line, tab-separated.
-.TP
 .B pool_list
 .RI { filesystem }[ .poolname "] | {" pathname }
 List the pools in
@@ -307,6 +292,7 @@ The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO
 .BR lctl (8),
 .BR lfs-df (1),
+.BR lfs-fid2path (1),
 .BR lfs-find (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-getname (1),
@@ -316,6 +302,7 @@ The lfs command is part of the Lustre filesystem.
 .BR lfs-migrate (1),
 .BR lfs_migrate (1),
 .BR lfs-project (1),
+.BR lfs-path2fid (1),
 .BR lfs-setdirstripe (1),
 .BR lfs-setquota (1),
 .BR lfs-setstripe (1),

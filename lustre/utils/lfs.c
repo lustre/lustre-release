@@ -557,9 +557,7 @@ command_t cmdlist[] = {
 	{"fid2path", lfs_fid2path, 0,
 	 "Resolve the full path(s) for given FID(s). For a specific hardlink "
 	 "specify link number <linkno>.\n"
-	/* "For a historical link name, specify changelog record <recno>.\n" */
-	 "usage: fid2path [--link <linkno>] <fsname|rootpath> <fid> ..."
-		/* [ --rec <recno> ] */ },
+	 "usage: fid2path [-c] [--link|-l <linkno>] <fsname|root> <fid> ..."},
 	{"path2fid", lfs_path2fid, 0, "Display the fid(s) for a given path(s).\n"
 	 "usage: path2fid [--parents] <path> ..."},
 	{"rmfid", lfs_rmfid, 0, "Remove file(s) by FID(s)\n"

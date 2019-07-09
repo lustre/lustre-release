@@ -1,0 +1,36 @@
+.TH lfs-path2fid 1 "2018-11-24" Lustre "user utilities"
+.SH NAME
+lfs path2fid \- print the file identifier for a given pathname
+.SH SYNOPSIS
+.BR "lfs path2fid " [ --parents ]
+.RI < directory | file > ...
+.SH DESCRIPTION
+.B lfs path2fid
+prints the File Identifier for the specified
+.I file
+or
+.IR directory .
+The FID is unique for each file in the filesystem, and is never reused
+for other files if the file is deleted.
+.br
+The FID is also available for regular files via
+.BR "lfs getstripe -F".
+.SH OPTIONS
+.TP
+.B --parents
+Print out the parent FID and name(s) of the given entries. If an entry has
+multiple links, these are displayed on a single line, tab-separated.
+.SH EXAMPLES
+.TP
+.B $ lfs path2fid /mnt/lustre/etc/hosts
+[0x200000403:0x11f:0x0]
+.TP
+.B $ lfs path2fid --parents /mnt/lustre/etc/hosts
+[0x200000403:0x101:0x0]/hosts
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-fid2path (1),
+.BR lfs-getstripe (1),
+.BR llapi_path2fid (3),
+.BR llapi_path2parent (3),
+.BR lustre (7)

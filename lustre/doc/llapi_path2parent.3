@@ -22,29 +22,31 @@ for link number
 .I linkno
 stores the FID of the parent directory into
 .I parent_fid
-and the zero-terminated name of the entry into the buffer
+and the NUL-terminated name of the entry into the buffer
 .I name
 which is expected to be of size
 .IR name_size .
-
-The function
+If
+.I linkno
+should be initialized to
+.B -1
+when starting to iterate over all links of a file.  The function
 .B llapi_fd2parent()
 behaves similarly except that it operates on an open file descriptor
 instead of a path.
 .sp
 .SH RETURN VALUES
 .LP
-.B llapi_path2fid()
-and
-.B llapi_fd2fid()
-return 0 on success or a negative errno value on failure.
+0 is returned on success or a negative errno value on failure.
 .SH ERRORS
 .TP 15
 .SM -ENODATA
-linkno has reached the link count.
+linkno has reached the total link count of the file.
 .TP
 .SM -ENOTTY
 .I path
+or
+.I fd
 does not reside on a Lustre filesystem.
 .TP
 .SM -ENOENT
@@ -55,9 +57,12 @@ does not exist.
 An invalid argument was specified.
 .TP
 .SM -EOVERFLOW
-The given buffer was too small.
+The given buffer was too small to hold the pathname.
 .TP
 .SM -EPERM
 The file cannot be open by user or CAP_DAC_READ_SEARCH is not granted.
 .SH "SEE ALSO"
+.BR lfs-path2fid (1),
+.BR llapi_fid2path (3),
+.BR llapi_path2fid (3),
 .BR lustreapi (7)
