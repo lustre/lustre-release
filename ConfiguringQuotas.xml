@@ -492,6 +492,62 @@ lctl get_param osd-*.*.quota_slave.limit*
       limits previously set by the administrator.</para>
     </note>
   </section>
+  <section condition='l2C' xml:id="default_quota">
+    <title>
+    <indexterm>
+      <primary>Quotas</primary>
+      <secondary>default</secondary>
+    </indexterm>Default Quota</title>
+    <para>The default quota is used to enforce the quota limits for any user,
+    group, or project that do not have quotas set by administrator.</para>
+    <para>The default quota can be disabled by setting limits to
+    <literal>0</literal>.</para>
+      <section xml:id="defalut_quota_usage">
+      <title>
+      <indexterm>
+        <primary>Quotas</primary>
+        <secondary>usage</secondary>
+      </indexterm>Usage</title>
+      <screen>
+lfs quota [-U|--default-usr|-G|--default-grp|-P|--default-prj] <replaceable>/mount_point</replaceable>
+lfs setquota {-U|--default-usr|-G|--default-grp|-P|--default-prj} [-b <replaceable>block-softlimit</replaceable>] \
+             [-B <replaceable>block_hardlimit</replaceable>] [-i <replaceable>inode_softlimit</replaceable>] [-I <replaceable>inode_hardlimit</replaceable>] <replaceable>/mount_point</replaceable>
+lfs setquota {-u|-g|-p} <replaceable>username|groupname</replaceable> -d <replaceable>/mount_point</replaceable>
+      </screen>
+      <para>To set the default user quota:</para>
+      <screen>
+# lfs setquota -U -b 10G -B 11G -i 100K -I 105K /mnt/testfs
+      </screen>
+      <para>To set the default group quota:</para>
+      <screen>
+# lfs setquota -G -b 10G -B 11G -i 100K -I 105K /mnt/testfs
+      </screen>
+      <para>To set the default project quota:</para>
+      <screen>
+# lfs setquota -P -b 10G -B 11G -i 100K -I 105K /mnt/testfs
+      </screen>
+      <para>To disable the default user quota:</para>
+      <screen>
+# lfs setquota -U -b 0 -B 0 -i 0 -I 0 /mnt/testfs
+      </screen>
+      <para>To disable the default group quota:</para>
+      <screen>
+# lfs setquota -G -b 0 -B 0 -i 0 -I 0 /mnt/testfs
+      </screen>
+      <para>To disable the default project quota:</para>
+      <screen>
+# lfs setquota -P -b 0 -B 0 -i 0 -I 0 /mnt/testfs
+      </screen>
+      <note>
+      <para>
+      If quota limits are set for some user, group or project, it will use
+      those specific quota limits instead of the default quota. Quota limits for
+      any user, group or project will use the default quota by setting its quota
+      limits to <literal>0</literal>.
+      </para>
+      </note>
+    </section>
+  </section>
   <section xml:id="quota_allocation">
     <title>
     <indexterm>
