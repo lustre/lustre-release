@@ -845,9 +845,9 @@ static int osc_should_shrink_grant(struct client_obd *client)
 	if (client->cl_import == NULL)
 		return 0;
 
-        if ((client->cl_import->imp_connect_data.ocd_connect_flags &
-             OBD_CONNECT_GRANT_SHRINK) == 0)
-                return 0;
+	if (!OCD_HAS_FLAG(&client->cl_import->imp_connect_data, GRANT_SHRINK) ||
+	    client->cl_import->imp_grant_shrink_disabled)
+		return 0;
 
 	if (ktime_get_seconds() >= next_shrink - 5) {
 		/* Get the current RPC size directly, instead of going via:
