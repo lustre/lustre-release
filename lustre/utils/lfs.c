@@ -4628,26 +4628,26 @@ static inline int obd_statfs_ratio(const struct obd_statfs *st, bool inodes)
 	return (ratio - (int)ratio) > 0 ? (int)(ratio + 1) : (int)ratio;
 }
 
-/* This is only used to reflect various problem states for lfs df, so we only
- * translate the flags reflecting those states.
+/* This is to identify various problem states for "lfs df" if .osn_err = true,
+ * so only show flags reflecting those states by default. Informational states
+ * are only shown with "-v" and use lower-case names to distinguish them.
+ * UNUSED[12] were for "EROFS = 30" until 1.6 but are now available for use.
  */
-static char obd_statfs_state_names[] = {
-	[OS_STATE_DEGRADED]	= 'D',
-	[OS_STATE_READONLY]	= 'R',
-	[OS_STATE_NOPRECREATE]	= 'N',
-	[OS_STATE_ENOSPC]	= 'S',
-	[OS_STATE_ENOINO]	= 'I',
+static struct obd_statfs_state_names {
+	enum obd_statfs_state	osn_state;
+	const char		osn_name;
+	bool			osn_err;
+} oss_names[] = {
+	{ .osn_state = OS_STATE_DEGRADED,    .osn_name = 'D', .osn_err = true },
+	{ .osn_state = OS_STATE_READONLY,    .osn_name = 'R', .osn_err = true },
+	{ .osn_state = OS_STATE_NOPRECREATE, .osn_name = 'N', .osn_err = true },
+	{ .osn_state = OS_STATE_UNUSED1,     .osn_name = '?', .osn_err = true },
+	{ .osn_state = OS_STATE_UNUSED2,     .osn_name = '?', .osn_err = true },
+	{ .osn_state = OS_STATE_ENOSPC,	     .osn_name = 'S', .osn_err = true },
+	{ .osn_state = OS_STATE_ENOINO,	     .osn_name = 'I', .osn_err = true },
+	{ .osn_state = OS_STATE_SUM,	     .osn_name = 'a', /* aggregate */ },
+	{ .osn_state = OS_STATE_NONROT,      .osn_name = 'f', /* flash */     },
 };
-
-static char obd_statfs_state2char(int s)
-{
-	/* Unknown name */
-	if (s > ARRAY_SIZE(obd_statfs_state_names)/sizeof(char) ||
-	    obd_statfs_state_names[s] == 0)
-		return '?';
-
-	return obd_statfs_state_names[s];
-}
 
 static int showdf(char *mntdir, struct obd_statfs *stat,
 		  char *uuid, enum mntdf_flags flags,
@@ -4722,16 +4722,14 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			printf("[%s:%d]", type, index);
 
 		if (stat->os_state) {
-			uint32_t state;
 			uint32_t i;
 
 			printf(" ");
-			for (i = 0, state = stat->os_state; state != 0; i++) {
-				uint32_t mask = 1 << i;
-				if (!(state & mask) || mask == OS_STATE_NONROT)
-					continue;
-				printf("%c", obd_statfs_state2char(mask));
-				state &= ~mask;
+			for (i = 0; i < ARRAY_SIZE(oss_names); i++) {
+				if (oss_names[i].osn_state & stat->os_state &&
+				    (oss_names[i].osn_err ||
+				     flags & MNTDF_VERBOSE))
+					printf("%c", oss_names[i].osn_name);
 			}
 		}
 
