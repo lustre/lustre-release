@@ -164,7 +164,7 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
 	dentry = osd_lookup_one_len_unlocked(name, osd_sb(osd)->s_root,
 					     strlen(name));
         if (IS_ERR(dentry))
-                return (void *) dentry;
+		return ERR_CAST(dentry);
 
         if (dentry->d_inode) {
                 LASSERT(!is_bad_inode(dentry->d_inode));
@@ -187,7 +187,7 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
 	dentry = osd_lookup_one_len_unlocked(name, osd_sb(osd)->s_root,
 					     strlen(name));
         if (IS_ERR(dentry))
-                return (void *) dentry;
+		return ERR_CAST(dentry);
 
         if (dentry->d_inode) {
                 LASSERT(!is_bad_inode(dentry->d_inode));
