@@ -308,7 +308,9 @@ struct obd_import {
 				  /* import has tried to connect with server */
 				  imp_connect_tried:1,
 				  /* connected but not FULL yet */
-				  imp_connected:1;
+				  imp_connected:1,
+				  /* grant shrink disabled */
+				  imp_grant_shrink_disabled:1;
 	u32			  imp_connect_op;
 	u32			  imp_idle_timeout;
 	u32			  imp_idle_debug;

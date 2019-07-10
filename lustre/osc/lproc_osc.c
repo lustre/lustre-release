@@ -689,15 +689,14 @@ static ssize_t grant_shrink_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct client_obd *cli = &obd->u.cli;
-	struct obd_connect_data *ocd;
+	struct obd_import *imp;
 	ssize_t len;
 
 	LPROCFS_CLIMP_CHECK(obd);
-	ocd = &cli->cl_import->imp_connect_data;
-
+	imp = obd->u.cli.cl_import;
 	len = snprintf(buf, PAGE_SIZE, "%d\n",
-		       !!OCD_HAS_FLAG(ocd, GRANT_SHRINK));
+		       !imp->imp_grant_shrink_disabled &&
+		       OCD_HAS_FLAG(&imp->imp_connect_data, GRANT_SHRINK));
 	LPROCFS_CLIMP_EXIT(obd);
 
 	return len;
@@ -708,8 +707,7 @@ static ssize_t grant_shrink_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct client_obd *cli = &dev->u.cli;
-	struct obd_connect_data *ocd;
+	struct obd_import *imp;
 	bool val;
 	int rc;
 
@@ -721,22 +719,11 @@ static ssize_t grant_shrink_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	LPROCFS_CLIMP_CHECK(dev);
-	ocd = &cli->cl_import->imp_connect_data;
 
-	if (!val) {
-		if (OCD_HAS_FLAG(ocd, GRANT_SHRINK))
-			ocd->ocd_connect_flags &= ~OBD_CONNECT_GRANT_SHRINK;
-	} else {
-		/**
-		 * server replied obd_connect_data is always bigger, so
-		 * client's imp_connect_flags_orig are always supported
-		 * by the server
-		 */
-		if (!OCD_HAS_FLAG(ocd, GRANT_SHRINK) &&
-		    cli->cl_import->imp_connect_flags_orig &
-		    OBD_CONNECT_GRANT_SHRINK)
-			ocd->ocd_connect_flags |= OBD_CONNECT_GRANT_SHRINK;
-	}
+	imp = dev->u.cli.cl_import;
+	spin_lock(&imp->imp_lock);
+	imp->imp_grant_shrink_disabled = !val;
+	spin_unlock(&imp->imp_lock);
 
 	LPROCFS_CLIMP_EXIT(dev);
 
