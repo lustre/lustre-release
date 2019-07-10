@@ -126,9 +126,11 @@ typedef struct stat     lstat_t;
 #define LUSTRE_FIEMAP_FLAGS_COMPAT (FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER)
 
 enum obd_statfs_state {
-	OS_STATE_DEGRADED       = 0x00000001, /**< RAID degraded/rebuilding */
-	OS_STATE_READONLY       = 0x00000002, /**< filesystem is read-only */
-	OS_STATE_NOPRECREATE    = 0x00000004, /**< no object precreation */
+	OS_STATE_DEGRADED	= 0x00000001, /**< RAID degraded/rebuilding */
+	OS_STATE_READONLY	= 0x00000002, /**< filesystem is read-only */
+	OS_STATE_NOPRECREATE	= 0x00000004, /**< no object precreation */
+	OS_STATE_UNUSED1	= 0x00000008, /**< obsolete 1.6, was EROFS=30 */
+	OS_STATE_UNUSED2	= 0x00000010, /**< obsolete 1.6, was EROFS=30 */
 	OS_STATE_ENOSPC		= 0x00000020, /**< not enough free space */
 	OS_STATE_ENOINO		= 0x00000040, /**< not enough inodes */
 	OS_STATE_SUM		= 0x00000100, /**< aggregated for all tagrets */
