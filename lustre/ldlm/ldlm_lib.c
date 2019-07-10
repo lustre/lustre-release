@@ -2173,7 +2173,8 @@ repeat:
 		/** evict exports which didn't finish recovery yet */
 		class_disconnect_stale_exports(obd, exp_finished);
 		return 1;
-	} else if (obd->obd_recovery_expired) {
+	} else if (obd->obd_recovery_expired &&
+		   obd->obd_recovery_timeout < obd->obd_recovery_time_hard) {
 		obd->obd_recovery_expired = 0;
 
 		/** If some clients died being recovered, evict them */
