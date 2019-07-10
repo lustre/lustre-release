@@ -161,7 +161,8 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
         struct inode  *inode;
         int            rc;
 
-        dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
+	dentry = osd_lookup_one_len_unlocked(name, osd_sb(osd)->s_root,
+					     strlen(name));
         if (IS_ERR(dentry))
                 return (void *) dentry;
 
@@ -183,7 +184,8 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
         if (rc)
 		return ERR_PTR(rc);
 
-        dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
+	dentry = osd_lookup_one_len_unlocked(name, osd_sb(osd)->s_root,
+					     strlen(name));
         if (IS_ERR(dentry))
                 return (void *) dentry;
 
@@ -341,7 +343,7 @@ static int osd_remove_oi_one(struct dentry *parent, const char *name,
 	struct dentry *child;
 	int rc;
 
-	child = ll_lookup_one_len(name, parent, namelen);
+	child = osd_lookup_one_len_unlocked(name, parent, namelen);
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
 	} else {

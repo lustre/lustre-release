@@ -67,6 +67,40 @@ static void osd_push_ctxt(const struct osd_device *dev,
 }
 
 /**
+ * osd_lookup_one_len_unlocked
+ *
+ * @name:	pathname component to lookup
+ * @base:	base directory to lookup from
+ * @len:	maximum length @len should be interpreted to
+ *
+ * This should be called without the parent
+ * i_mutex held, and will take the i_mutex itself.
+ *
+ * Unlike osd_lookup_one_len dentry with NULL d_inode is valid
+ */
+struct dentry *osd_lookup_one_len_unlocked(const char *name,
+					   struct dentry *base, int len)
+{
+	struct dentry *dchild;
+
+	inode_lock(base->d_inode);
+	dchild = lookup_one_len(name, base, len);
+	inode_unlock(base->d_inode);
+
+	if (IS_ERR(dchild) || dchild->d_inode == NULL)
+		return dchild;
+
+	if (is_bad_inode(dchild->d_inode)) {
+		CERROR("bad inode returned %lu/%u\n",
+		       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
+		dput(dchild);
+		dchild = ERR_PTR(-ENOENT);
+	}
+
+	return dchild;
+}
+
+/**
  * osd_ios_lookup_one_len - lookup single pathname component
  *
  * @name:	pathname component to lookup
@@ -81,7 +115,7 @@ struct dentry *osd_ios_lookup_one_len(const char *name, struct dentry *base,
 {
 	struct dentry *dentry;
 
-	dentry = ll_lookup_one_len(name, base, len);
+	dentry = osd_lookup_one_len_unlocked(name, base, len);
 	if (IS_ERR(dentry)) {
 		int rc = PTR_ERR(dentry);
 
@@ -118,7 +152,7 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 
 	// ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
 	CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
-	dchild = ll_lookup_one_len(name, dir, strlen(name));
+	dchild = osd_lookup_one_len_unlocked(name, dir, strlen(name));
 	if (IS_ERR(dchild))
 		RETURN(dchild);
 
@@ -198,8 +232,8 @@ static int osd_last_rcvd_subdir_count(struct osd_device *osd)
 
 	ENTRY;
 
-	dlast = ll_lookup_one_len(LAST_RCVD, osd_sb(osd)->s_root,
-				  strlen(LAST_RCVD));
+	dlast = osd_lookup_one_len_unlocked(LAST_RCVD, osd_sb(osd)->s_root,
+					    strlen(LAST_RCVD));
 	if (IS_ERR(dlast))
 		return PTR_ERR(dlast);
 	else if (dlast->d_inode == NULL)
@@ -1418,7 +1452,7 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			RETURN(-ENOENT);
 	}
 
-	dentry = ll_lookup_one_len(name, root, strlen(name));
+	dentry = osd_lookup_one_len_unlocked(name, root, strlen(name));
 	if (!IS_ERR(dentry)) {
 		inode = dentry->d_inode;
 		if (inode) {

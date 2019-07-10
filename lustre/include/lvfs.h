@@ -71,32 +71,4 @@ static inline void OBD_SET_CTXT_MAGIC(struct lvfs_run_ctxt *ctxt)
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx);
 void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx);
 
-/* We need to hold the inode semaphore over the dcache lookup itself, or we
- * run the risk of entering the filesystem lookup path concurrently on SMP
- * systems, and instantiating two inodes for the same entry.  We still
- * protect against concurrent addition/removal races with the DLM locking.
- */
-static inline struct dentry *
-ll_lookup_one_len(const char *fid_name, struct dentry *dparent,
-		  int fid_namelen)
-{
-	struct dentry *dchild;
-
-	inode_lock(dparent->d_inode);
-	dchild = lookup_one_len(fid_name, dparent, fid_namelen);
-	inode_unlock(dparent->d_inode);
-
-	if (IS_ERR(dchild) || dchild->d_inode == NULL)
-		return dchild;
-
-	if (is_bad_inode(dchild->d_inode)) {
-		CERROR("bad inode returned %lu/%u\n",
-		       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
-		dput(dchild);
-		dchild = ERR_PTR(-ENOENT);
-	}
-
-	return dchild;
-}
-
 #endif
