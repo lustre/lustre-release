@@ -66,6 +66,42 @@ static void osd_push_ctxt(const struct osd_device *dev,
 	push_ctxt(save, newctxt);
 }
 
+/**
+ * osd_ios_lookup_one_len - lookup single pathname component
+ *
+ * @name:	pathname component to lookup
+ * @base:	base directory to lookup from
+ * @len:	maximum length @len should be interpreted to
+ *
+ * Treat found dentry with NULL d_inode as an -ENOENT error so LFSCK
+ * can repair the file.
+ */
+struct dentry *osd_ios_lookup_one_len(const char *name, struct dentry *base,
+				      int len)
+{
+	struct dentry *dentry;
+
+	dentry = ll_lookup_one_len(name, base, len);
+	if (IS_ERR(dentry)) {
+		int rc = PTR_ERR(dentry);
+
+		if (rc != -ENOENT)
+			CERROR("Fail to find %.*s in %.*s (%lu/%u): rc = %d\n",
+			       len, name, base->d_name.len,
+			       base->d_name.name, base->d_inode->i_ino,
+			       base->d_inode->i_generation, rc);
+
+		return dentry;
+	}
+
+	if (dentry->d_inode == NULL) {
+		dput(dentry);
+		return ERR_PTR(-ENOENT);
+	}
+
+	return dentry;
+}
+
 /* utility to make a directory */
 static struct dentry *
 simple_mkdir(const struct lu_env *env, struct osd_device *osd,

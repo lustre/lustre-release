@@ -1741,32 +1741,6 @@ struct osd_ios_filldir_buf {
 	int			 oifb_items;
 };
 
-static inline struct dentry *
-osd_ios_lookup_one_len(const char *name, struct dentry *parent, int namelen)
-{
-	struct dentry *dentry;
-
-	dentry = ll_lookup_one_len(name, parent, namelen);
-	if (IS_ERR(dentry)) {
-		int rc = PTR_ERR(dentry);
-
-		if (rc != -ENOENT)
-			CERROR("Fail to find %.*s in %.*s (%lu/%u): rc = %d\n",
-			       namelen, name, parent->d_name.len,
-			       parent->d_name.name, parent->d_inode->i_ino,
-			       parent->d_inode->i_generation, rc);
-
-		return dentry;
-	}
-
-	if (dentry->d_inode == NULL) {
-		dput(dentry);
-		return ERR_PTR(-ENOENT);
-	}
-
-	return dentry;
-}
-
 static int
 osd_ios_new_item(struct osd_device *dev, struct dentry *dentry,
 		 scandir_t scandir, filldir_t filldir)

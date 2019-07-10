@@ -793,6 +793,9 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   struct osd_inode_id *id);
 void osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
 
+struct dentry *osd_ios_lookup_one_len(const char *name, struct dentry *base,
+				      int len);
+
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		   u64 seq, struct lu_seq_range *range);
 
