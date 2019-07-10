@@ -1006,7 +1006,7 @@ static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
 #define FID_NOBRACE_LEN 40
 #define FID_LEN (FID_NOBRACE_LEN + 2)
 #define DFID_NOBRACE "%#llx:0x%x:0x%x"
-#define DFID "["DFID_NOBRACE"]"
+#define DFID "[" DFID_NOBRACE "]"
 #define PFID(fid) (unsigned long long)(fid)->f_seq, (fid)->f_oid, (fid)->f_ver
 
 /* scanf input parse format for fids in DFID_NOBRACE format
@@ -1065,7 +1065,7 @@ static inline __u64 lustre_stoqb(size_t space)
 #define LQUOTA_FLAG_DEFAULT	0x0001
 
 #define ALLQUOTA 255       /* set all quota */
-static inline char *qtype_name(int qtype)
+static inline const char *qtype_name(int qtype)
 {
 	switch (qtype) {
 	case USRQUOTA:
@@ -1397,7 +1397,8 @@ static inline enum hsm_event hsm_get_cl_event(__u16 flags)
 static inline void hsm_set_cl_event(enum changelog_rec_flags *clf_flags,
 				    enum hsm_event he)
 {
-	*clf_flags |= (he << CLF_HSM_EVENT_L);
+	*clf_flags = (enum changelog_rec_flags)
+		(*clf_flags | (he << CLF_HSM_EVENT_L));
 }
 
 static inline __u16 hsm_get_cl_flags(enum changelog_rec_flags clf_flags)
@@ -1408,7 +1409,8 @@ static inline __u16 hsm_get_cl_flags(enum changelog_rec_flags clf_flags)
 static inline void hsm_set_cl_flags(enum changelog_rec_flags *clf_flags,
 				    unsigned int bits)
 {
-	*clf_flags |= (bits << CLF_HSM_FLAG_L);
+	*clf_flags = (enum changelog_rec_flags)
+		(*clf_flags | (bits << CLF_HSM_FLAG_L));
 }
 
 static inline int hsm_get_cl_error(enum changelog_rec_flags clf_flags)
@@ -1419,7 +1421,8 @@ static inline int hsm_get_cl_error(enum changelog_rec_flags clf_flags)
 static inline void hsm_set_cl_error(enum changelog_rec_flags *clf_flags,
 				    unsigned int error)
 {
-	*clf_flags |= (error << CLF_HSM_ERR_L);
+	*clf_flags = (enum changelog_rec_flags)
+		(*clf_flags | (error << CLF_HSM_ERR_L));
 }
 
 enum changelog_rec_extra_flags {
@@ -1558,9 +1561,11 @@ static inline size_t changelog_rec_size(const struct changelog_rec *rec)
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
 	if (rec->cr_flags & CLF_EXTRA_FLAGS)
-		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
+		cref = (enum changelog_rec_extra_flags)
+			 changelog_rec_extra_flags(rec)->cr_extra_flags;
 
-	return changelog_rec_offset(rec->cr_flags, cref);
+	return changelog_rec_offset(
+		(enum changelog_rec_flags)rec->cr_flags, cref);
 }
 
 static inline size_t changelog_rec_varsize(const struct changelog_rec *rec)
@@ -1571,7 +1576,8 @@ static inline size_t changelog_rec_varsize(const struct changelog_rec *rec)
 static inline
 struct changelog_ext_rename *changelog_rec_rename(const struct changelog_rec *rec)
 {
-	enum changelog_rec_flags crf = rec->cr_flags & CLF_VERSION;
+	enum changelog_rec_flags crf = (enum changelog_rec_flags)
+		(rec->cr_flags & CLF_VERSION);
 
 	return (struct changelog_ext_rename *)((char *)rec +
 					       changelog_rec_offset(crf,
@@ -1582,8 +1588,8 @@ struct changelog_ext_rename *changelog_rec_rename(const struct changelog_rec *re
 static inline
 struct changelog_ext_jobid *changelog_rec_jobid(const struct changelog_rec *rec)
 {
-	enum changelog_rec_flags crf = rec->cr_flags &
-					(CLF_VERSION | CLF_RENAME);
+	enum changelog_rec_flags crf = (enum changelog_rec_flags)
+				(rec->cr_flags & (CLF_VERSION | CLF_RENAME));
 
 	return (struct changelog_ext_jobid *)((char *)rec +
 					      changelog_rec_offset(crf,
@@ -1595,8 +1601,8 @@ static inline
 struct changelog_ext_extra_flags *changelog_rec_extra_flags(
 	const struct changelog_rec *rec)
 {
-	enum changelog_rec_flags crf = rec->cr_flags &
-		(CLF_VERSION | CLF_RENAME | CLF_JOBID);
+	enum changelog_rec_flags crf = (enum changelog_rec_flags)
+	    (rec->cr_flags & (CLF_VERSION | CLF_RENAME | CLF_JOBID));
 
 	return (struct changelog_ext_extra_flags *)((char *)rec +
 						 changelog_rec_offset(crf,
@@ -1608,8 +1614,9 @@ static inline
 struct changelog_ext_uidgid *changelog_rec_uidgid(
 	const struct changelog_rec *rec)
 {
-	enum changelog_rec_flags crf = rec->cr_flags &
-		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS);
+	enum changelog_rec_flags crf = (enum changelog_rec_flags)
+	    (rec->cr_flags &
+		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS));
 
 	return (struct changelog_ext_uidgid *)((char *)rec +
 					       changelog_rec_offset(crf,
@@ -1620,13 +1627,15 @@ struct changelog_ext_uidgid *changelog_rec_uidgid(
 static inline
 struct changelog_ext_nid *changelog_rec_nid(const struct changelog_rec *rec)
 {
-	enum changelog_rec_flags crf = rec->cr_flags &
-		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS);
+	enum changelog_rec_flags crf = (enum changelog_rec_flags)
+	    (rec->cr_flags &
+	     (CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS));
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
 	if (rec->cr_flags & CLF_EXTRA_FLAGS)
-		cref = changelog_rec_extra_flags(rec)->cr_extra_flags &
-		       CLFE_UIDGID;
+		cref = (enum changelog_rec_extra_flags)
+			(changelog_rec_extra_flags(rec)->cr_extra_flags &
+			 CLFE_UIDGID);
 
 	return (struct changelog_ext_nid *)((char *)rec +
 					    changelog_rec_offset(crf, cref));
@@ -1637,13 +1646,16 @@ static inline
 struct changelog_ext_openmode *changelog_rec_openmode(
 	const struct changelog_rec *rec)
 {
-	enum changelog_rec_flags crf = rec->cr_flags &
-		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS);
+	enum changelog_rec_flags crf = (enum changelog_rec_flags)
+		(rec->cr_flags &
+		 (CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS));
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
-	if (rec->cr_flags & CLF_EXTRA_FLAGS)
-		cref = changelog_rec_extra_flags(rec)->cr_extra_flags &
-		       (CLFE_UIDGID | CLFE_NID);
+	if (rec->cr_flags & CLF_EXTRA_FLAGS) {
+		cref = (enum changelog_rec_extra_flags)
+			(changelog_rec_extra_flags(rec)->cr_extra_flags &
+			 (CLFE_UIDGID | CLFE_NID));
+	}
 
 	return (struct changelog_ext_openmode *)((char *)rec +
 					       changelog_rec_offset(crf, cref));
@@ -1654,13 +1666,15 @@ static inline
 struct changelog_ext_xattr *changelog_rec_xattr(
 	const struct changelog_rec *rec)
 {
-	enum changelog_rec_flags crf = rec->cr_flags &
-		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS);
+	enum changelog_rec_flags crf = (enum changelog_rec_flags)
+	    (rec->cr_flags &
+	     (CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS));
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
 	if (rec->cr_flags & CLF_EXTRA_FLAGS)
-		cref = changelog_rec_extra_flags(rec)->cr_extra_flags &
-			(CLFE_UIDGID | CLFE_NID | CLFE_OPEN);
+		cref = (enum changelog_rec_extra_flags)
+		    (changelog_rec_extra_flags(rec)->cr_extra_flags &
+			(CLFE_UIDGID | CLFE_NID | CLFE_OPEN));
 
 	return (struct changelog_ext_xattr *)((char *)rec +
 					      changelog_rec_offset(crf, cref));
@@ -1672,10 +1686,12 @@ static inline char *changelog_rec_name(const struct changelog_rec *rec)
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
 	if (rec->cr_flags & CLF_EXTRA_FLAGS)
-		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
+		cref = (enum changelog_rec_extra_flags)
+		    changelog_rec_extra_flags(rec)->cr_extra_flags;
 
-	return (char *)rec + changelog_rec_offset(rec->cr_flags & CLF_SUPPORTED,
-						  cref & CLFE_SUPPORTED);
+	return (char *)rec + changelog_rec_offset(
+		(enum changelog_rec_flags)(rec->cr_flags & CLF_SUPPORTED),
+		(enum changelog_rec_extra_flags)(cref & CLFE_SUPPORTED));
 }
 
 static inline size_t changelog_rec_snamelen(const struct changelog_rec *rec)
@@ -1724,8 +1740,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 	char *rnm_mov;
 	enum changelog_rec_extra_flags cref = CLFE_INVALID;
 
-	crf_wanted &= CLF_SUPPORTED;
-	cref_want &= CLFE_SUPPORTED;
+	crf_wanted = (enum changelog_rec_flags)
+	    (crf_wanted & CLF_SUPPORTED);
+	cref_want = (enum changelog_rec_extra_flags)
+	    (cref_want & CLFE_SUPPORTED);
 
 	if ((rec->cr_flags & CLF_SUPPORTED) == crf_wanted) {
 		if (!(rec->cr_flags & CLF_EXTRA_FLAGS) ||
@@ -1743,38 +1761,50 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 	/* Locations of extensions in the remapped record */
 	if (rec->cr_flags & CLF_EXTRA_FLAGS) {
 		xattr_mov = (char *)rec +
-			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
-					     cref_want & ~CLFE_XATTR);
+			changelog_rec_offset(
+			    (enum changelog_rec_flags)
+				    (crf_wanted & CLF_SUPPORTED),
+			    (enum changelog_rec_extra_flags)
+				    (cref_want & ~CLFE_XATTR));
 		omd_mov = (char *)rec +
-			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
-					     cref_want & ~(CLFE_OPEN |
-							   CLFE_XATTR));
+			changelog_rec_offset(
+			    (enum changelog_rec_flags)
+				    (crf_wanted & CLF_SUPPORTED),
+			    (enum changelog_rec_extra_flags)
+				    (cref_want & ~(CLFE_OPEN | CLFE_XATTR)));
 		nid_mov = (char *)rec +
-			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
-					     cref_want & ~(CLFE_NID |
-							   CLFE_OPEN |
-							   CLFE_XATTR));
+			changelog_rec_offset(
+			    (enum changelog_rec_flags)
+				(crf_wanted & CLF_SUPPORTED),
+			    (enum changelog_rec_extra_flags)
+				(cref_want &
+				 ~(CLFE_NID | CLFE_OPEN | CLFE_XATTR)));
 		uidgid_mov = (char *)rec +
-			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
-					     cref_want & ~(CLFE_UIDGID |
+			changelog_rec_offset(
+				(enum changelog_rec_flags)
+				    (crf_wanted & CLF_SUPPORTED),
+				(enum changelog_rec_extra_flags)
+				    (cref_want & ~(CLFE_UIDGID |
 							   CLFE_NID |
 							   CLFE_OPEN |
-							   CLFE_XATTR));
-		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
+							   CLFE_XATTR)));
+		cref = (enum changelog_rec_extra_flags)
+			changelog_rec_extra_flags(rec)->cr_extra_flags;
 	}
 
 	ef_mov  = (char *)rec +
-		  changelog_rec_offset(crf_wanted & ~CLF_EXTRA_FLAGS,
-				       CLFE_INVALID);
+		  changelog_rec_offset(
+				(enum changelog_rec_flags)
+				 (crf_wanted & ~CLF_EXTRA_FLAGS), CLFE_INVALID);
 	jid_mov = (char *)rec +
-		  changelog_rec_offset(crf_wanted &
-				       ~(CLF_EXTRA_FLAGS | CLF_JOBID),
+		  changelog_rec_offset((enum changelog_rec_flags)(crf_wanted &
+				       ~(CLF_EXTRA_FLAGS | CLF_JOBID)),
 				       CLFE_INVALID);
 	rnm_mov = (char *)rec +
-		  changelog_rec_offset(crf_wanted &
+		  changelog_rec_offset((enum changelog_rec_flags)(crf_wanted &
 				       ~(CLF_EXTRA_FLAGS |
 					 CLF_JOBID |
-					 CLF_RENAME),
+					 CLF_RENAME)),
 				       CLFE_INVALID);
 
 	/* Move the extension fields to the desired positions */
@@ -2034,7 +2064,7 @@ static inline ssize_t hur_len(struct hsm_user_request *hur)
 		(__u64)hur->hur_request.hr_itemcount *
 		sizeof(hur->hur_user_item[0]) + hur->hur_request.hr_data_len;
 
-	if (size != (ssize_t)size)
+	if ((ssize_t)size < 0)
 		return -1;
 
 	return size;
