@@ -914,7 +914,6 @@ int ll_md_real_close(struct inode *inode, fmode_t fmode);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
                               struct ll_file_data *file, loff_t pos,
                               size_t count, int rw);
-void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot);
 #ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 int ll_getattr(const struct path *path, struct kstat *stat,
 	       u32 request_mask, unsigned int flags);
@@ -1128,6 +1127,9 @@ static inline struct vvp_io_args *ll_env_args(const struct lu_env *env,
 
 	return via;
 }
+
+void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
+		struct vvp_io_args *args);
 
 /* llite/llite_mmap.c */
 

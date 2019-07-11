@@ -494,7 +494,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 		GOTO(out_free_work, rc = PTR_ERR(env));
 
 	io = vvp_env_thread_io(env);
-	ll_io_init(io, file, CIT_READ);
+	ll_io_init(io, file, CIT_READ, NULL);
 
 	rc = ll_readahead_file_kms(env, io, &kms);
 	if (rc != 0)

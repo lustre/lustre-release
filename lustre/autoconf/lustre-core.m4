@@ -2660,8 +2660,8 @@ direct_io_2args, [
 #
 # LC_GENERIC_WRITE_SYNC_2ARGS
 #
-# Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
-# direct-io: eliminate the offset argument to ->direct_IO
+# Kernel version 4.7 commit dde0c2e79848298cc25621ad080d47f94dbd7cce
+# fs: add IOCB_SYNC and IOCB_DSYNC
 #
 AC_DEFUN([LC_GENERIC_WRITE_SYNC_2ARGS], [
 LB_CHECK_COMPILE([if 'generic_write_sync()' taken 2 arguments],
