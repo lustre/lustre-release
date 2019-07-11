@@ -10853,6 +10853,47 @@ test_124c() {
 }
 run_test 124c "LRUR cancel very aged locks"
 
+test_124d() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
+		skip_env "no lru resize on server"
+
+	# cache ununsed locks on client
+	local nr=100
+
+	lru_resize_disable mdc
+	stack_trap "lru_resize_enable mdc" EXIT
+
+	cancel_lru_locks mdc
+
+	# asynchronous object destroy at MDT could cause bl ast to client
+	test_mkdir $DIR/$tdir
+	createmany -o $DIR/$tdir/f $nr ||
+		error "failed to create $nr files in $DIR/$tdir"
+	stack_trap "unlinkmany $DIR/$tdir/f $nr" EXIT
+
+	ls -l $DIR/$tdir > /dev/null
+
+	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
+	local unused=$($LCTL get_param -n $nsdir.lock_unused_count)
+	local max_age=$($LCTL get_param -n $nsdir.lru_max_age)
+	local recalc_p=$($LCTL get_param -n $nsdir.pool.recalc_period)
+
+	echo "unused=$unused, max_age=$max_age, recalc_p=$recalc_p"
+
+	# set lru_max_age to 1 sec
+	$LCTL set_param $nsdir.lru_max_age=1000 # milliseconds
+	stack_trap "$LCTL set_param -n $nsdir.lru_max_age $max_age" EXIT
+
+	echo "sleep $((recalc_p * 2)) seconds..."
+	sleep $((recalc_p * 2))
+
+	local remaining=$($LCTL get_param -n $nsdir.lock_unused_count)
+
+	[ $remaining -eq 0 ] || error "$remaining locks are not canceled"
+}
+run_test 124d "cancel very aged locks if lru-resize diasbaled"
+
 test_125() { # 13358
 	$LCTL get_param -n llite.*.client_type | grep -q local ||
 		skip "must run as local client"
