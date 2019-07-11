@@ -1339,13 +1339,14 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 	}
 
 	LASSERT(osp->opd_obd);
-	osp_tunables_fini(osp);
 
 	rc = client_obd_cleanup(osp->opd_obd);
 	if (rc != 0) {
 		ptlrpcd_decref();
 		RETURN(ERR_PTR(rc));
 	}
+
+	osp_tunables_fini(osp);
 
 	ptlrpcd_decref();
 

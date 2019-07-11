@@ -260,18 +260,19 @@ static int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 		RETURN(rc);
 	}
 
-	rc = lwp_setup(env, lwp, lustre_cfg_string(cfg, 1));
+	rc = lprocfs_obd_setup(lwp->lpd_obd, true);
 	if (rc) {
-		CERROR("%s: setup lwp failed. %d\n",
+		CERROR("%s: lprocfs_obd_setup failed. %d\n",
 		       lwp->lpd_obd->obd_name, rc);
 		ptlrpcd_decref();
 		RETURN(rc);
 	}
 
-	rc = lprocfs_obd_setup(lwp->lpd_obd, true);
+	rc = lwp_setup(env, lwp, lustre_cfg_string(cfg, 1));
 	if (rc) {
-		CERROR("%s: lprocfs_obd_setup failed. %d\n",
+		CERROR("%s: setup lwp failed. %d\n",
 		       lwp->lpd_obd->obd_name, rc);
+		lprocfs_obd_cleanup(lwp->lpd_obd);
 		ptlrpcd_decref();
 		RETURN(rc);
 	}
@@ -380,10 +381,10 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 		class_disconnect(m->lpd_exp);
 
 	LASSERT(m->lpd_obd);
-	ptlrpc_lprocfs_unregister_obd(m->lpd_obd);
-
 	rc = client_obd_cleanup(m->lpd_obd);
 	LASSERTF(rc == 0, "error %d\n", rc);
+
+	ptlrpc_lprocfs_unregister_obd(m->lpd_obd);
 
 	ptlrpcd_decref();
 
