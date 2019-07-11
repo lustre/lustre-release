@@ -56,10 +56,10 @@ struct ptlrpc_connect_async_args {
 
 /**
  * Updates import \a imp current state to provided \a state value
- * Helper function. Must be called under imp_lock.
+ * Helper function.
  */
-static void __import_set_state(struct obd_import *imp,
-                               enum lustre_imp_state state)
+static void import_set_state_nolock(struct obd_import *imp,
+				    enum lustre_imp_state state)
 {
 	switch (state) {
 	case LUSTRE_IMP_CLOSED:
@@ -72,7 +72,20 @@ static void __import_set_state(struct obd_import *imp,
 		break;
 	default:
 		imp->imp_replay_state = LUSTRE_IMP_REPLAY;
+		break;
 	}
+
+	/* A CLOSED import should remain so. */
+	if (state == LUSTRE_IMP_CLOSED)
+		return;
+
+	if (imp->imp_state != LUSTRE_IMP_NEW) {
+		CDEBUG(D_HA, "%p %s: changing import state from %s to %s\n",
+		       imp, obd2cli_tgt(imp->imp_obd),
+		       ptlrpc_import_state_name(imp->imp_state),
+		       ptlrpc_import_state_name(state));
+	}
+
         imp->imp_state = state;
         imp->imp_state_hist[imp->imp_state_hist_idx].ish_state = state;
         imp->imp_state_hist[imp->imp_state_hist_idx].ish_time =
@@ -81,28 +94,17 @@ static void __import_set_state(struct obd_import *imp,
                 IMP_STATE_HIST_LEN;
 }
 
-/* A CLOSED import should remain so. */
-#define IMPORT_SET_STATE_NOLOCK(imp, state)                                    \
-do {                                                                           \
-        if (imp->imp_state != LUSTRE_IMP_CLOSED) {                             \
-               CDEBUG(D_HA, "%p %s: changing import state from %s to %s\n",    \
-                      imp, obd2cli_tgt(imp->imp_obd),                          \
-                      ptlrpc_import_state_name(imp->imp_state),                \
-                      ptlrpc_import_state_name(state));                        \
-               __import_set_state(imp, state);                                 \
-        }                                                                      \
-} while(0)
-
-#define IMPORT_SET_STATE(imp, state)					\
-do {									\
-	spin_lock(&imp->imp_lock);					\
-	IMPORT_SET_STATE_NOLOCK(imp, state);				\
-	spin_unlock(&imp->imp_lock);					\
-} while(0)
+static void import_set_state(struct obd_import *imp,
+			     enum lustre_imp_state new_state)
+{
+	spin_lock(&imp->imp_lock);
+	import_set_state_nolock(imp, new_state);
+	spin_unlock(&imp->imp_lock);
+}
 
 void ptlrpc_import_enter_resend(struct obd_import *imp)
 {
-	IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+	import_set_state(imp, LUSTRE_IMP_RECOVER);
 }
 EXPORT_SYMBOL(ptlrpc_import_enter_resend);
 
@@ -184,7 +186,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
 			       imp->imp_obd->obd_name, target_len, target_start,
 			       obd_import_nid2str(imp));
 		}
-		IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
+		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
 		spin_unlock(&imp->imp_lock);
 
 		if (obd_dump_on_timeout)
@@ -682,7 +684,7 @@ int ptlrpc_connect_import(struct obd_import *imp)
 		RETURN(-EALREADY);
 	}
 
-	IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CONNECTING);
+	import_set_state_nolock(imp, LUSTRE_IMP_CONNECTING);
 
 	imp->imp_conn_cnt++;
 	imp->imp_resend_replay = 0;
@@ -789,7 +791,7 @@ int ptlrpc_connect_import(struct obd_import *imp)
 	rc = 0;
 out:
 	if (rc != 0)
-		IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
+		import_set_state(imp, LUSTRE_IMP_DISCON);
 
 	RETURN(rc);
 }
@@ -1153,9 +1155,9 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 if (msg_flags & MSG_CONNECT_RECOVERING) {
                         CDEBUG(D_HA, "connect to %s during recovery\n",
                                obd2cli_tgt(imp->imp_obd));
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
+			import_set_state(imp, LUSTRE_IMP_REPLAY_LOCKS);
                 } else {
-			IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+			import_set_state(imp, LUSTRE_IMP_FULL);
 			ptlrpc_activate_import(imp);
                 }
 
@@ -1214,7 +1216,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                                      *lustre_msg_get_handle(request->rq_repmsg);
 
                         if (!(MSG_CONNECT_RECOVERING & msg_flags)) {
-                                IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
+				import_set_state(imp, LUSTRE_IMP_EVICTED);
                                 GOTO(finish, rc = 0);
                         }
 
@@ -1227,7 +1229,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 if (imp->imp_invalid) {
                         CDEBUG(D_HA, "%s: reconnected but import is invalid; "
                                "marking evicted\n", imp->imp_obd->obd_name);
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
+			import_set_state(imp, LUSTRE_IMP_EVICTED);
                 } else if (MSG_CONNECT_RECOVERING & msg_flags) {
                         CDEBUG(D_HA, "%s: reconnected to %s during replay\n",
                                imp->imp_obd->obd_name,
@@ -1237,9 +1239,9 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 			imp->imp_resend_replay = 1;
 			spin_unlock(&imp->imp_lock);
 
-			IMPORT_SET_STATE(imp, imp->imp_replay_state);
+			import_set_state(imp, imp->imp_replay_state);
                 } else {
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+			import_set_state(imp, LUSTRE_IMP_RECOVER);
                 }
         } else if ((MSG_CONNECT_RECOVERING & msg_flags) && !imp->imp_invalid) {
                 LASSERT(imp->imp_replayable);
@@ -1247,13 +1249,13 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                                 *lustre_msg_get_handle(request->rq_repmsg);
                 imp->imp_last_replay_transno = 0;
 		imp->imp_replay_cursor = &imp->imp_committed_list;
-                IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
-        } else {
+		import_set_state(imp, LUSTRE_IMP_REPLAY);
+	} else {
                 DEBUG_REQ(D_HA, request, "%s: evicting (reconnect/recover flags"
                           " not set: %x)", imp->imp_obd->obd_name, msg_flags);
                 imp->imp_remote_handle =
                                 *lustre_msg_get_handle(request->rq_repmsg);
-                IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
+		import_set_state(imp, LUSTRE_IMP_EVICTED);
         }
 
         /* Sanity checks for a reconnected import. */
@@ -1299,7 +1301,7 @@ out:
 		class_export_put(exp);
 
         if (rc != 0) {
-                IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
+		import_set_state(imp, LUSTRE_IMP_DISCON);
                 if (rc == -EACCES) {
                         /*
                          * Give up trying to reconnect
@@ -1337,7 +1339,7 @@ out:
                                         OBD_OCD_VERSION_FIX(ocd->ocd_version),
                                         LUSTRE_VERSION_STRING);
                                 ptlrpc_deactivate_import(imp);
-                                IMPORT_SET_STATE(imp, LUSTRE_IMP_CLOSED);
+				import_set_state(imp, LUSTRE_IMP_CLOSED);
                         }
                         RETURN(-EPROTO);
                 }
@@ -1441,7 +1443,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
                 libcfs_debug_dumplog();
         }
 
-        IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+	import_set_state(imp, LUSTRE_IMP_RECOVER);
         ptlrpc_import_recovery_state_machine(imp);
 
         class_import_put(imp);
@@ -1523,7 +1525,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 		rc = ptlrpc_replay_next(imp, &inflight);
 		if (inflight == 0 &&
 		    atomic_read(&imp->imp_replay_inflight) == 0) {
-			IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_LOCKS);
+			import_set_state(imp, LUSTRE_IMP_REPLAY_LOCKS);
 			rc = ldlm_replay_locks(imp);
 			if (rc)
 				GOTO(out, rc);
@@ -1533,7 +1535,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
 	if (imp->imp_state == LUSTRE_IMP_REPLAY_LOCKS) {
 		if (atomic_read(&imp->imp_replay_inflight) == 0) {
-			IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY_WAIT);
+			import_set_state(imp, LUSTRE_IMP_REPLAY_WAIT);
 			rc = signal_completed_replay(imp);
 			if (rc)
 				GOTO(out, rc);
@@ -1542,7 +1544,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
 	if (imp->imp_state == LUSTRE_IMP_REPLAY_WAIT) {
 		if (atomic_read(&imp->imp_replay_inflight) == 0) {
-			IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+			import_set_state(imp, LUSTRE_IMP_RECOVER);
 		}
 	}
 
@@ -1552,7 +1554,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 rc = ptlrpc_resend(imp);
                 if (rc)
                         GOTO(out, rc);
-                IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+		import_set_state(imp, LUSTRE_IMP_FULL);
                 ptlrpc_activate_import(imp);
 
 		LCONSOLE_INFO("%s: Connection restored to %s (at %s)\n",
@@ -1610,7 +1612,7 @@ static struct ptlrpc_request *ptlrpc_disconnect_prep_req(struct obd_import *imp)
 	req->rq_timeout = min_t(int, req->rq_timeout,
 				INITIAL_CONNECT_TIMEOUT);
 
-	IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
+	import_set_state(imp, LUSTRE_IMP_CONNECTING);
 	req->rq_send_state =  LUSTRE_IMP_CONNECTING;
 	ptlrpc_request_set_replen(req);
 
@@ -1674,9 +1676,9 @@ set_state:
 	spin_lock(&imp->imp_lock);
 out:
 	if (noclose)
-		IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
+		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
 	else
-		IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
+		import_set_state_nolock(imp, LUSTRE_IMP_CLOSED);
 	memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
 	spin_unlock(&imp->imp_lock);
 
@@ -1727,7 +1729,7 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 		if (atomic_read(&imp->imp_inflight) > 1) {
 			imp->imp_generation++;
 			imp->imp_initiated_at = imp->imp_generation;
-			IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_NEW);
+			import_set_state_nolock(imp, LUSTRE_IMP_NEW);
 			ptlrpc_reset_reqs_generation(imp);
 			connect = 1;
 		}
@@ -1780,7 +1782,7 @@ void ptlrpc_cleanup_imp(struct obd_import *imp)
 	ENTRY;
 
 	spin_lock(&imp->imp_lock);
-	IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
+	import_set_state_nolock(imp, LUSTRE_IMP_CLOSED);
 	imp->imp_generation++;
 	spin_unlock(&imp->imp_lock);
 	ptlrpc_abort_inflight(imp);
