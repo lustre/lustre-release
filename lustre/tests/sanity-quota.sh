@@ -1141,6 +1141,11 @@ test_6() {
 	#define OBD_FAIL_PTLRPC_DROP_REQ_OPC 0x513
 	lustre_fail mds 0x513 601
 
+	if at_is_enabled; then
+		at_max_saved=$(at_max_get ost1)
+		at_max_set $TIMEOUT ost1
+	fi
+
 	do_facet ost1 $LCTL set_param \
 			osd-*.$FSNAME-OST*.quota_slave.timeout=$((TIMEOUT / 2))
 
@@ -1156,6 +1161,8 @@ test_6() {
 	# watchdog timer uses a factor of 2
 	echo "Sleep for $((TIMEOUT * 2 + 1)) seconds ..."
 	sleep $((TIMEOUT * 2 + 1))
+
+	[ $at_max_saved -ne 0 ] && at_max_set $at_max_saved ost1
 
 	# write should be blocked and never finished
 	if ! ps -p $DDPID  > /dev/null 2>&1; then
