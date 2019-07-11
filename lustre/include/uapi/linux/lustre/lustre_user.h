@@ -2571,6 +2571,14 @@ enum lu_pcc_state_flags {
 	PCC_STATE_FL_ATTACHING		= 0x02,
 	/* Allow to auto attach at open */
 	PCC_STATE_FL_OPEN_ATTACH	= 0x04,
+	/* Allow to auto attach during I/O after layout lock revocation */
+	PCC_STATE_FL_IO_ATTACH		= 0x08,
+	/* Allow to auto attach at stat */
+	PCC_STATE_FL_STAT_ATTACH	= 0x10,
+	/* Allow to auto attach at the next open or layout refresh */
+	PCC_STATE_FL_AUTO_ATTACH	= PCC_STATE_FL_OPEN_ATTACH |
+					  PCC_STATE_FL_IO_ATTACH |
+					  PCC_STATE_FL_STAT_ATTACH,
 };
 
 struct lu_pcc_state {

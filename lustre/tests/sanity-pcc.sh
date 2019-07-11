@@ -181,12 +181,32 @@ setup_pcc_mapping() {
 	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p $param
 }
 
+setup_loopdev() {
+	local facet=$1
+	local file=$2
+	local mntpt=$3
+	local size=${4:-50}
+
+	do_facet $facet mkdir -p $mntpt || error "mkdir -p $hsm_root failed"
+	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
+	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
+	stack_trap "do_facet $facet rm -f $file" EXIT
+	do_facet $facet mkfs.ext4 $file ||
+		error "mkfs.ext4 $file failed"
+	do_facet $facet file $file
+	do_facet $facet mount -t ext4 -o loop,usrquota,grpquota $file $mntpt ||
+		error "mount -o loop,usrquota,grpquota $file $mntpt failed"
+	stack_trap "do_facet $facet $UMOUNT $mntpt" EXIT
+}
+
 lpcc_rw_test() {
 	local restore="$1"
 	local project="$2"
 	local project_id=100
 	local agt_facet=$SINGLEAGT
-	local hsm_root=$(hsm_root)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 	local -a state
 	local -a lpcc_path
@@ -195,6 +215,7 @@ lpcc_rw_test() {
 	$project && enable_project_quota
 
 	do_facet $SINGLEAGT rm -rf $hsm_root
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 
 	is_project_quota_supported || project=false
@@ -302,7 +323,8 @@ test_1e() {
 	local -a lpcc_path
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 	$LCTL pcc list $MOUNT
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
@@ -353,15 +375,20 @@ run_test 1e "Test RW-PCC with non-root user"
 test_1f() {
 	local project_id=100
 	local agt_facet=$SINGLEAGT
-	local hsm_root=$(hsm_root)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 
 	! is_project_quota_supported &&
 		skip "project quota is not supported"
 
 	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=0\ stat_attach=0"
+
 	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
 	chmod 777 $DIR/$tdir || error "chmod 0777 $DIR/$tdir failed"
 	$LFS project -sp $project_id $DIR/$tdir ||
@@ -377,7 +404,7 @@ test_1f() {
 		error "failed to truncate $file"
 	do_facet $SINGLEAGT $RUNAS $TRUNCATE $file 2048 ||
 		error "failed to truncate $file"
-	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=1024 count=1 ||
+	do_facet $SINGLEAGT $RUNAS dd if=/dev/zero of=$file bs=256 count=1 ||
 		error "failed to dd write from $file"
 	check_lpcc_state $file "readwrite"
 
@@ -392,14 +419,18 @@ test_1f() {
 
 	do_facet $SINGLEAGT $RUNAS $LFS pcc detach $file ||
 		error "failed to detach file $file"
-	check_lpcc_state $file "none"
 	wait_request_state $(path2fid $file) REMOVE SUCCEED
+	check_lpcc_state $file "none"
 }
 run_test 1f "Test auto RW-PCC cache with non-root user"
 
 test_1g() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
@@ -435,13 +466,16 @@ run_test 1g "General permission test for RW-PCC"
 test_2a() {
 	local project_id=100
 	local agt_facet=$SINGLEAGT
-	local hsm_root=$(hsm_root)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 	local agt_host=$(facet_active_host $SINGLEAGT)
 
 	! is_project_quota_supported &&
 		skip "project quota is not supported" && return
 
 	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 	file=$DIR/$tdir/multiop
@@ -463,6 +497,8 @@ test_2a() {
 	# HSM released exists archived status
 	check_hsm_flags $file "0x0000000d"
 
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
 	rmultiop_stop $agt_host || error "close $file failed"
 }
 run_test 2a "Test multi open when creating"
@@ -486,14 +522,17 @@ get_remote_client() {
 #
 test_2b() {
 	local agt_facet=$SINGLEAGT
-	local hsm_root=$(hsm_root)
 	local agt_host=$(facet_active_host $SINGLEAGT)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 
 	needclients 2 || return 0
 
 	remote_client=$(get_remote_client)
 
 	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 	file=$DIR/$tdir/multiop
@@ -525,10 +564,14 @@ run_test 2b "Test multi remote open when creating"
 
 test_2c() {
 	local agt_host=$(facet_active_host $SINGLEAGT)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tdir/$tfile
 	local file2=$DIR2/$tdir/$tfile
 
 	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 	mkdir -p $DIR/$tdir
@@ -560,7 +603,8 @@ test_3a() {
 	local file=$DIR/$tdir/$tfile
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	dd if=/dev/zero of=$file bs=1024 count=1 ||
@@ -593,7 +637,7 @@ test_3b() {
 	# Start all of the copytools and setup PCC
 	for n in $(seq $AGTCOUNT); do
 		copytool setup -f agt$n -a $n -m $MOUNT
-		setup_pcc_mapping agt$n "projid={100}\ rwid=$n"
+		setup_pcc_mapping agt$n "projid={100}\ rwid=$n\ auto_attach=0"
 	done
 
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
@@ -634,11 +678,15 @@ run_test 3b "Repeat attach/detach operations on multiple clients"
 
 test_4() {
 	local project_id=100
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 
 	! is_project_quota_supported &&
 		skip "project quota is not supported" && return
 
 	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
@@ -652,12 +700,18 @@ test_4() {
 	$LUSTRE/tests/mmap_sanity -d $DIR/$tdir -m $DIR2/$tdir -e 7 ||
 		error "mmap_sanity test failed"
 	sync; sleep 1; sync
+
+	rm -rf $DIR/$tdir || error "failed to remove $DIR/$tdir"
 }
 run_test 4 "Auto cache test for mmap"
 
 test_5() {
 	local file=$DIR/$tfile
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
@@ -682,24 +736,6 @@ test_5() {
 		error "mmap cat data mismatch: $content"
 }
 run_test 5 "Mmap & cat a RW-PCC cached file"
-
-setup_loopdev() {
-	local facet=$1
-	local file=$2
-	local mntpt=$3
-	local size=${4:-50}
-
-	do_facet $facet mkdir -p $mntpt || error "mkdir -p $hsm_root failed"
-	stack_trap "do_facet $facet rm -rf $mntpt" EXIT
-	do_facet $facet dd if=/dev/zero of=$file bs=1M count=$size
-	stack_trap "do_facet $facet rm -f $file" EXIT
-	do_facet $facet mkfs.ext4 $file ||
-		error "mkfs.ext4 $file failed"
-	do_facet $facet file $file
-	do_facet $facet mount -t ext4 -o loop,usrquota,grpquota $file $mntpt ||
-		error "mount -o loop,usrquota,grpquota $file $mntpt failed"
-	stack_trap "do_facet $facet $UMOUNT $mntpt" EXIT
-}
 
 test_6() {
 	local loopfile="$TMP/$tfile"
@@ -727,8 +763,9 @@ test_6() {
 		error "mmap write data mismatch: $content"
 	check_lpcc_state $file "readwrite"
 
-	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "failed to detach file $file"
+	wait_request_state $(path2fid $file) REMOVE SUCCEED
 
 	content=$(do_facet $SINGLEAGT $MMAP_CAT $file)
 	[[ $content == "nmap_write_data" ]] ||
@@ -776,7 +813,8 @@ test_7b() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 
 	echo "QQQQQ" > $file
 	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
@@ -792,6 +830,7 @@ test_7b() {
 	do_facet $SINGLEAGT $MULTIOP $file OSMWUc &
 	pid=$!
 
+	sleep 3
 	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
 		error "failed to detach file $file"
 
@@ -803,8 +842,12 @@ test_7b() {
 run_test 7b "Test the race with concurrent mkwrite and detach"
 
 test_8() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
 
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping
 
@@ -968,7 +1011,8 @@ test_12() {
 	local pid
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 
 	echo  -n race_rw_attach_hsmremove > $file
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
@@ -1000,7 +1044,8 @@ test_rule_id() {
 	local myRUNAS="$3"
 	local file=$DIR/$tdir/$tfile
 
-	setup_pcc_mapping $SINGLEAGT "$rule\ rwid=$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"$rule\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 	$LCTL pcc list $MOUNT
 
 	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
@@ -1020,9 +1065,12 @@ test_rule_id() {
 		error "failed to dd write from $file"
 	check_lpcc_state $file "readwrite"
 
-	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach -k $file ||
+	do_facet $SINGLEAGT $myRUNAS $LFS pcc detach $file ||
 		error "failed to detach file $file"
+	wait_request_state $(path2fid $file) REMOVE SUCCEED
 	check_lpcc_state $file "none"
+
+	cleanup_pcc_mapping
 }
 
 test_13a() {
@@ -1037,7 +1085,7 @@ test_13b() {
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
-		"fname={*.h5\ suffix.*\ Mid*dle}\ rwid=$HSM_ARCHIVE_NUMBER"
+		"fname={*.h5\ suffix.*\ Mid*dle}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 	$LCTL pcc list $MOUNT
 
 	do_facet $SINGLEAGT mkdir -p $DIR/$tdir
@@ -1081,11 +1129,15 @@ run_test 13b "Test auto RW-PCC create caching for file name with wildcard"
 test_13c() {
 	local file
 	local myRUNAS
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
 
 	! is_project_quota_supported &&
 		echo "Skip project quota is not supported" && return 0
 
 	enable_project_quota
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
 	setup_pcc_mapping $SINGLEAGT \
 		"projid={100\ 200}\&fname={*.h5},uid={500}\&gid={1000}\ rwid=$HSM_ARCHIVE_NUMBER"
@@ -1143,7 +1195,8 @@ test_14() {
 	local file=$DIR/$tdir/$tfile
 
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
 
 	mkdir -p $DIR/$tdir || error "mkdir -p $DIR/$tdir failed"
 	do_facet $SINGLEAGT "echo -n autodetach_data > $file"
@@ -1168,8 +1221,7 @@ test_15() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=1"
+	setup_pcc_mapping
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
@@ -1239,8 +1291,7 @@ test_16() {
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
-	setup_pcc_mapping $SINGLEAGT \
-		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=1"
+	setup_pcc_mapping
 
 	do_facet $SINGLEAGT "echo -n detach_data > $file"
 	lpcc_path=$(lpcc_fid2path $hsm_root $file)
@@ -1272,6 +1323,55 @@ test_16() {
 	return 0
 }
 run_test 16 "Test detach with different options"
+
+test_17() {
+	local agt_host=$(facet_active_host $SINGLEAGT)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ open_attach=0\ stat_attach=0"
+
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+
+	do_facet $SINGLEAGT "echo -n layout_refresh_data > $file"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "PCC attach $file failed"
+	check_lpcc_state $file "readwrite"
+
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "PCC detach $file failed"
+	check_lpcc_state $file "none"
+
+	# Truncate should attach the file into PCC automatically
+	# as the PCC copy is still valid.
+	echo "Verify auto attach during IO for truncate"
+	do_facet $SINGLEAGT $TRUNCATE $file 4 || error "truncate $file failed"
+	check_lpcc_state $file "readwrite"
+
+	echo "Verify auto attach during IO for read/write"
+	rmultiop_start $agt_host $file O_r || error "open $file failed"
+	sleep 3
+
+	# Revoke the layout lock, the PCC-cached file will be
+	# detached automatically.
+	do_facet $SINGLEAGT $LCTL \
+		set_param ldlm.namespaces.*mdc*.lru_size=clear
+
+	check_lpcc_state $file "none"
+	rmultiop_stop $agt_host || error "close $file failed"
+	sleep 3
+	check_lpcc_state $file "readwrite"
+
+	do_facet $SINGLEAGT $LFS pcc detach -k $file ||
+		error "PCC detach $file failed"
+	check_lpcc_state $file "none"
+}
+run_test 17 "Test auto attach for layout refresh"
 
 complete $SECONDS
 check_and_cleanup_lustre

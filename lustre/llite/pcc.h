@@ -92,12 +92,19 @@ struct pcc_matcher {
 
 enum pcc_dataset_flags {
 	PCC_DATASET_NONE	= 0x0,
-	/* Try auto attach at open, disabled by default */
-	PCC_DATASET_OPEN_ATTACH	= 0x1,
+	/* Try auto attach at open, enabled by default */
+	PCC_DATASET_OPEN_ATTACH	= 0x01,
+	/* Try auto attach during IO when layout refresh, enabled by default */
+	PCC_DATASET_IO_ATTACH	= 0x02,
+	/* Try auto attach at stat */
+	PCC_DATASET_STAT_ATTACH	= 0x04,
+	PCC_DATASET_AUTO_ATTACH	= PCC_DATASET_OPEN_ATTACH |
+				  PCC_DATASET_IO_ATTACH |
+				  PCC_DATASET_STAT_ATTACH,
 	/* PCC backend is only used for RW-PCC */
-	PCC_DATASET_RWPCC	= 0x2,
+	PCC_DATASET_RWPCC	= 0x08,
 	/* PCC backend is only used for RO-PCC */
-	PCC_DATASET_ROPCC	= 0x4,
+	PCC_DATASET_ROPCC	= 0x10,
 	/* PCC backend provides caching services for both RW-PCC and RO-PCC */
 	PCC_DATASET_PCC_ALL	= PCC_DATASET_RWPCC | PCC_DATASET_ROPCC,
 };
@@ -153,6 +160,25 @@ struct pcc_file {
 	enum lu_pcc_type	 pccf_type;
 };
 
+enum pcc_io_type {
+	/* read system call */
+	PIT_READ = 1,
+	/* write system call */
+	PIT_WRITE,
+	/* truncate, utime system calls */
+	PIT_SETATTR,
+	/* stat system call */
+	PIT_GETATTR,
+	/* mmap write handling */
+	PIT_PAGE_MKWRITE,
+	/* page fault handling */
+	PIT_FAULT,
+	/* fsync system call handling */
+	PIT_FSYNC,
+	/* splice_read system call */
+	PIT_SPLICE_READ
+};
+
 enum pcc_cmd_type {
 	PCC_ADD_DATASET = 0,
 	PCC_DEL_DATASET,
@@ -174,6 +200,11 @@ struct pcc_cmd {
 			__u32			 pccc_pad;
 		} pccc_del;
 	} u;
+};
+
+struct pcc_create_attach {
+	struct pcc_dataset *pca_dataset;
+	struct dentry *pca_dentry;
 };
 
 int pcc_super_init(struct pcc_super *super);
@@ -211,12 +242,12 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 		     bool *cached);
 int pcc_inode_create(struct super_block *sb, struct pcc_dataset *dataset,
 		     struct lu_fid *fid, struct dentry **pcc_dentry);
-int pcc_inode_create_fini(struct pcc_dataset *dataset, struct inode *inode,
-			   struct dentry *pcc_dentry);
+int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca);
+void pcc_create_attach_cleanup(struct super_block *sb,
+			       struct pcc_create_attach *pca);
 struct pcc_dataset *pcc_dataset_match_get(struct pcc_super *super,
 					  struct pcc_matcher *matcher);
 void pcc_dataset_put(struct pcc_dataset *dataset);
 void pcc_inode_free(struct inode *inode);
 void pcc_layout_invalidate(struct inode *inode);
-
 #endif /* LLITE_PCC_H */
