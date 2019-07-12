@@ -685,7 +685,7 @@ static void parent_sighandler (int sig)
 
 int jt_opt_threads(int argc, char **argv)
 {
-        static char      cmdstr[128];
+	static char      cmdstr[129];
         sigset_t         saveset;
         sigset_t         sigset;
         struct sigaction sigact;
@@ -720,8 +720,9 @@ int jt_opt_threads(int argc, char **argv)
         if (verbose != 0) {
                 snprintf(cmdstr, sizeof(cmdstr), "%s", argv[4]);
                 for (i = 5; i < argc; i++)
-                        snprintf(cmdstr + strlen(cmdstr), sizeof(cmdstr),
-                                 " %s", argv[i]);
+			snprintf(cmdstr + strlen(cmdstr),
+				 sizeof(cmdstr) - strlen(cmdstr),
+				 " %s", argv[i]);
 
                 printf("%s: starting %ld threads on device %s running %s\n",
                        argv[0], threads, argv[3], cmdstr);
