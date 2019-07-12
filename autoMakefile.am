@@ -254,6 +254,10 @@ debs: undef.h
 		echo "SPL: $${SPL_SRC}"; \
 		echo "ZFS: $${ZFS_SRC}"; \
 	fi; \
+	if test "x@ENABLEO2IB@" != "xno"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} o2ib"; \
+		export O2IB_SRC="@O2IBPATH@"; \
+	fi; \
 	if test "x@ENABLE_GSS@" = "xyes"; then \
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} gss"; \
 	elif test "x@ENABLE_GSS@" = "xno"; then \
