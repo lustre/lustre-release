@@ -786,8 +786,11 @@ out_flags:
 			lqe_read_lock(lqe);
 			usage = lqe->lqe_pending_write;
 			usage += lqe->lqe_waiting_write;
-			if (lqe->lqe_qunit != 0 && (usage % lqe->lqe_qunit >
-			    qqi->qqi_qsd->qsd_sync_threshold))
+			/* There is a chance to successfully grant more quota
+			 * but get edquot flag through glimpse. */
+			if (lqe->lqe_edquot || (lqe->lqe_qunit != 0 &&
+			   (usage % lqe->lqe_qunit >
+			    qqi->qqi_qsd->qsd_sync_threshold)))
 				usage += qqi->qqi_qsd->qsd_sync_threshold;
 
 			usage += lqe->lqe_usage;

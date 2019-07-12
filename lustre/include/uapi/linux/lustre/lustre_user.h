@@ -1199,7 +1199,10 @@ static inline __u64 lustre_stoqb(__kernel_size_t space)
 #define LUSTRE_Q_FINVALIDATE 0x80000c     /* deprecated as of 2.4 */
 #define LUSTRE_Q_GETDEFAULT  0x80000d     /* get default quota */
 #define LUSTRE_Q_SETDEFAULT  0x80000e     /* set default quota */
-
+#define LUSTRE_Q_GETQUOTAPOOL	0x80000f  /* get user pool quota */
+#define LUSTRE_Q_SETQUOTAPOOL	0x800010  /* set user pool quota */
+#define LUSTRE_Q_GETINFOPOOL	0x800011  /* get pool quota info */
+#define LUSTRE_Q_SETINFOPOOL	0x800012  /* set pool quota info */
 /* In the current Lustre implementation, the grace time is either the time
  * or the timestamp to be used after some quota ID exceeds the soft limt,
  * 48 bits should be enough, its high 16 bits can be used as quota flags.
@@ -1224,6 +1227,12 @@ static inline __u64 lustre_stoqb(__kernel_size_t space)
  * and high 16 bits will contain this flag (see above comment).
  * */
 #define LQUOTA_FLAG_DEFAULT	0x0001
+
+#define LUSTRE_Q_CMD_IS_POOL(cmd)		\
+	(cmd == LUSTRE_Q_GETQUOTAPOOL ||	\
+	 cmd == LUSTRE_Q_SETQUOTAPOOL ||	\
+	 cmd == LUSTRE_Q_SETINFOPOOL ||		\
+	 cmd == LUSTRE_Q_GETINFOPOOL)
 
 #define ALLQUOTA 255       /* set all quota */
 static inline const char *qtype_name(int qtype)
@@ -1335,6 +1344,7 @@ struct if_quotactl {
 	struct obd_dqblk        qc_dqblk;
 	char                    obd_type[16];
 	struct obd_uuid         obd_uuid;
+	char			qc_poolname[0];
 };
 
 /* swap layout flags */

@@ -696,6 +696,7 @@ int lustre_put_lsi(struct super_block *sb)
 	}
 	RETURN(0);
 }
+EXPORT_SYMBOL(lustre_put_lsi);
 
 /*
  * The goal of this function is to extract the file system name

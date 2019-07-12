@@ -1131,29 +1131,34 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 	case Q_SETQUOTA:
 	case Q_SETINFO:
 	case LUSTRE_Q_SETDEFAULT:
+	case LUSTRE_Q_SETQUOTAPOOL:
+	case LUSTRE_Q_SETINFOPOOL:
 		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 			RETURN(-EPERM);
 		break;
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
+	case LUSTRE_Q_GETQUOTAPOOL:
 		if (check_owner(type, id) &&
 		    (!cfs_capable(CFS_CAP_SYS_ADMIN)))
 			RETURN(-EPERM);
 		break;
 	case Q_GETINFO:
+	case LUSTRE_Q_GETINFOPOOL:
 		break;
 	default:
 		CERROR("unsupported quotactl op: %#x\n", cmd);
 		RETURN(-ENOTSUPP);
 	}
 
-        if (valid != QC_GENERAL) {
-                if (cmd == Q_GETINFO)
-                        qctl->qc_cmd = Q_GETOINFO;
-                else if (cmd == Q_GETQUOTA)
-                        qctl->qc_cmd = Q_GETOQUOTA;
-                else
-                        RETURN(-EINVAL);
+	if (valid != QC_GENERAL) {
+		if (cmd == Q_GETINFO)
+			qctl->qc_cmd = Q_GETOINFO;
+		else if (cmd == Q_GETQUOTA ||
+			 cmd == LUSTRE_Q_GETQUOTAPOOL)
+			qctl->qc_cmd = Q_GETOQUOTA;
+		else
+			RETURN(-EINVAL);
 
                 switch (valid) {
                 case QC_MDTIDX:
@@ -1183,22 +1188,26 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
                 qctl->qc_cmd = cmd;
         } else {
                 struct obd_quotactl *oqctl;
+		int oqctl_len = sizeof(*oqctl);
 
-                OBD_ALLOC_PTR(oqctl);
-                if (oqctl == NULL)
-                        RETURN(-ENOMEM);
+		if (LUSTRE_Q_CMD_IS_POOL(cmd))
+			oqctl_len += LOV_MAXPOOLNAME + 1;
 
-                QCTL_COPY(oqctl, qctl);
-                rc = obd_quotactl(sbi->ll_md_exp, oqctl);
-                if (rc) {
-                        OBD_FREE_PTR(oqctl);
-                        RETURN(rc);
-                }
+		OBD_ALLOC(oqctl, oqctl_len);
+		if (oqctl == NULL)
+			RETURN(-ENOMEM);
+
+		QCTL_COPY(oqctl, qctl);
+		rc = obd_quotactl(sbi->ll_md_exp, oqctl);
+		if (rc) {
+			OBD_FREE(oqctl, oqctl_len);
+			RETURN(rc);
+		}
                 /* If QIF_SPACE is not set, client should collect the
                  * space usage from OSSs by itself */
-                if (cmd == Q_GETQUOTA &&
-                    !(oqctl->qc_dqblk.dqb_valid & QIF_SPACE) &&
-                    !oqctl->qc_dqblk.dqb_curspace) {
+		if ((cmd == Q_GETQUOTA || cmd == LUSTRE_Q_GETQUOTAPOOL) &&
+		    !(oqctl->qc_dqblk.dqb_valid & QIF_SPACE) &&
+		    !oqctl->qc_dqblk.dqb_curspace) {
                         struct obd_quotactl *oqctl_tmp;
 
                         OBD_ALLOC_PTR(oqctl_tmp);
@@ -1235,11 +1244,11 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
                         OBD_FREE_PTR(oqctl_tmp);
                 }
 out:
-                QCTL_COPY(qctl, oqctl);
-                OBD_FREE_PTR(oqctl);
-        }
+		QCTL_COPY(qctl, oqctl);
+		OBD_FREE(oqctl, oqctl_len);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int ll_rmfid(struct file *file, void __user *arg)
@@ -1845,24 +1854,32 @@ out_req:
 		return rc;
 	}
 	case OBD_IOC_QUOTACTL: {
-                struct if_quotactl *qctl;
+		struct if_quotactl *qctl;
+		int qctl_len = sizeof(*qctl) + LOV_MAXPOOLNAME + 1;
 
-                OBD_ALLOC_PTR(qctl);
-                if (!qctl)
-                        RETURN(-ENOMEM);
+		OBD_ALLOC(qctl, qctl_len);
+		if (!qctl)
+			RETURN(-ENOMEM);
 
 		if (copy_from_user(qctl, (void __user *)arg, sizeof(*qctl)))
-                        GOTO(out_quotactl, rc = -EFAULT);
+			GOTO(out_quotactl, rc = -EFAULT);
 
-                rc = quotactl_ioctl(sbi, qctl);
+		if (LUSTRE_Q_CMD_IS_POOL(qctl->qc_cmd)) {
+			char __user *from = (char __user *)arg +
+					offsetof(typeof(*qctl), qc_poolname);
+			if (copy_from_user(qctl->qc_poolname, from,
+					   LOV_MAXPOOLNAME + 1))
+				GOTO(out_quotactl, rc = -EFAULT);
+		}
 
+		rc = quotactl_ioctl(sbi, qctl);
 		if (rc == 0 &&
 		    copy_to_user((void __user *)arg, qctl, sizeof(*qctl)))
                         rc = -EFAULT;
 
-        out_quotactl:
-                OBD_FREE_PTR(qctl);
-                RETURN(rc);
+out_quotactl:
+		OBD_FREE(qctl, qctl_len);
+		RETURN(rc);
         }
         case OBD_IOC_GETDTNAME:
         case OBD_IOC_GETMDNAME:

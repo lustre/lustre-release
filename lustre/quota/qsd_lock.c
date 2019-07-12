@@ -466,8 +466,8 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 		/* valid race */
 		GOTO(out, rc = -ELDLM_NO_LOCK_DATA);
 
-	LQUOTA_DEBUG(lqe, "glimpse on quota locks, new qunit:%llu",
-		     desc->gl_qunit);
+	LQUOTA_DEBUG(lqe, "glimpse on quota locks, new qunit:%llu, edquot:%d",
+		     desc->gl_qunit, !!(desc->gl_flags & LQUOTA_FL_EDQUOT));
 
 	lqe_write_lock(lqe);
 	lvb->lvb_id_rel = 0;

@@ -2044,34 +2044,51 @@ static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
 static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
                         struct obd_quotactl *oqctl)
 {
-	struct ptlrpc_request	*req;
-	struct obd_quotactl	*oqc;
-	int			 rc;
+	struct ptlrpc_request *req;
+	struct obd_quotactl *oqc;
+	int rc;
 	ENTRY;
 
-	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-					&RQF_MDS_QUOTACTL, LUSTRE_MDS_VERSION,
-					MDS_QUOTACTL);
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_QUOTACTL);
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
+
+	if (LUSTRE_Q_CMD_IS_POOL(oqctl->qc_cmd))
+		req_capsule_set_size(&req->rq_pill,
+				     &RMF_OBD_QUOTACTL,
+				     RCL_CLIENT,
+				     sizeof(*oqc) + LOV_MAXPOOLNAME + 1);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION,
+				 MDS_QUOTACTL);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
 	oqc = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-	*oqc = *oqctl;
+	QCTL_COPY(oqc, oqctl);
 
 	ptlrpc_request_set_replen(req);
 	ptlrpc_at_set_req_timeout(req);
 
 	rc = ptlrpc_queue_wait(req);
-	if (rc)
-		CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
+	if (rc) {
+		CERROR("%s: ptlrpc_queue_wait failed: rc = %d\n",
+		       exp->exp_obd->obd_name, rc);
+		GOTO(out, rc);
+	}
 
 	if (req->rq_repmsg &&
 	    (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
-		*oqctl = *oqc;
+		QCTL_COPY(oqctl, oqc);
 	} else if (!rc) {
-		CERROR ("Can't unpack obd_quotactl\n");
 		rc = -EPROTO;
+		CERROR("%s: cannot unpack obd_quotactl: rc = %d\n",
+			exp->exp_obd->obd_name, rc);
 	}
+out:
 	ptlrpc_req_finished(req);
 
 	RETURN(rc);

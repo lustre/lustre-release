@@ -87,8 +87,8 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 				continue;
 
 			list_add(&tgt_desc->ltd_kill, &kill);
-			lod_tgt_pool_remove(&ltd->ltd_tgt_pool,
-					    tgt_desc->ltd_index);
+			tgt_pool_remove(&ltd->ltd_tgt_pool,
+					tgt_desc->ltd_index);
 			ltd_del_tgt(ltd, tgt_desc);
 			ltd->ltd_death_row--;
 		}
@@ -252,8 +252,8 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	if (rc)
 		GOTO(out_del_tgt, rc);
 
-	rc = lod_tgt_pool_add(&ltd->ltd_tgt_pool, index,
-			      ltd->ltd_lov_desc.ld_tgt_count);
+	rc = tgt_pool_add(&ltd->ltd_tgt_pool, index,
+			  ltd->ltd_lov_desc.ld_tgt_count);
 	if (rc) {
 		CERROR("%s: can't set up pool, failed with %d\n",
 		       obd->obd_name, rc);
@@ -288,7 +288,7 @@ out_fini_llog:
 out_ltd:
 	down_write(&ltd->ltd_rw_sem);
 	mutex_lock(&ltd->ltd_mutex);
-	lod_tgt_pool_remove(&ltd->ltd_tgt_pool, index);
+	tgt_pool_remove(&ltd->ltd_tgt_pool, index);
 out_del_tgt:
 	ltd_del_tgt(ltd, tgt_desc);
 out_mutex:
@@ -2174,30 +2174,30 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 
 	INIT_LIST_HEAD(&lod->lod_pool_list);
 	lod->lod_pool_count = 0;
-	rc = lod_tgt_pool_init(&lod->lod_mdt_descs.ltd_tgt_pool, 0);
+	rc = tgt_pool_init(&lod->lod_mdt_descs.ltd_tgt_pool, 0);
 	if (rc)
 		GOTO(out_hash, rc);
 
-	rc = lod_tgt_pool_init(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool, 0);
+	rc = tgt_pool_init(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_mdt_pool, rc);
 
-	rc = lod_tgt_pool_init(&lod->lod_ost_descs.ltd_tgt_pool, 0);
+	rc = tgt_pool_init(&lod->lod_ost_descs.ltd_tgt_pool, 0);
 	if (rc)
 		GOTO(out_mdt_rr_pool, rc);
 
-	rc = lod_tgt_pool_init(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool, 0);
+	rc = tgt_pool_init(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_ost_pool, rc);
 
 	RETURN(0);
 
 out_ost_pool:
-	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
+	tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
 out_mdt_rr_pool:
-	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
+	tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
 out_mdt_pool:
-	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
+	tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
 out_hash:
 	lod_pool_hash_destroy(&lod->lod_pools_hash_body);
 
@@ -2227,10 +2227,10 @@ int lod_pools_fini(struct lod_device *lod)
 	}
 
 	lod_pool_hash_destroy(&lod->lod_pools_hash_body);
-	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool);
-	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
-	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
-	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
+	tgt_pool_free(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool);
+	tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
+	tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
+	tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
 
 	RETURN(0);
 }

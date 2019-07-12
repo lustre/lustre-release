@@ -1467,18 +1467,23 @@ struct obd_quotactl {
 	__u32			qc_stat;
 	struct obd_dqinfo	qc_dqinfo;
 	struct obd_dqblk	qc_dqblk;
+	char			qc_poolname[0];
 };
 
 #define Q_COPY(out, in, member) (out)->member = (in)->member
 
-#define QCTL_COPY(out, in)		\
-do {					\
-	Q_COPY(out, in, qc_cmd);	\
-	Q_COPY(out, in, qc_type);	\
-	Q_COPY(out, in, qc_id);		\
-	Q_COPY(out, in, qc_stat);	\
-	Q_COPY(out, in, qc_dqinfo);	\
-	Q_COPY(out, in, qc_dqblk);	\
+#define QCTL_COPY(out, in)				\
+do {							\
+	Q_COPY(out, in, qc_cmd);			\
+	Q_COPY(out, in, qc_type);			\
+	Q_COPY(out, in, qc_id);				\
+	Q_COPY(out, in, qc_stat);			\
+	Q_COPY(out, in, qc_dqinfo);			\
+	Q_COPY(out, in, qc_dqblk);			\
+	if (LUSTRE_Q_CMD_IS_POOL(in->qc_cmd))		\
+		memcpy(out->qc_poolname,		\
+		       in->qc_poolname,			\
+		       LOV_MAXPOOLNAME + 1);		\
 } while (0)
 
 /* Body of quota request used for quota acquire/release RPCs between quota

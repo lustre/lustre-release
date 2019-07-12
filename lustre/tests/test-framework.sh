@@ -9043,10 +9043,21 @@ pool_file_rel_path() {
 
 pool_remove_first_target() {
 	echo "Removing first target from a pool"
+	pool_remove_target $1 -1
+}
+
+pool_remove_target() {
 	local pool=$1
+	local index=$2
 
 	local pname="lov.$FSNAME-*.pools.$pool"
-	local t=$($LCTL get_param -n $pname | head -1)
+	if [ $index -eq -1 ]; then
+		local t=$($LCTL get_param -n $pname | head -1)
+	else
+		local t=$(printf "$FSNAME-OST%04x_UUID" $index)
+	fi
+
+	echo "Removing $t from $pool"
 	do_facet mgs $LCTL pool_remove $FSNAME.$pool $t
 	for mds_id in $(seq $MDSCOUNT); do
 		local mdt_id=$((mds_id-1))

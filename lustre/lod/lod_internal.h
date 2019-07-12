@@ -620,11 +620,6 @@ int lod_alloc_comp_entries(struct lod_object *lo, int mirror_cnt, int comp_cnt);
 int lod_fill_mirrors(struct lod_object *lo);
 
 /* lod_pool.c */
-int lod_tgt_pool_init(struct lu_tgt_pool *op, unsigned int count);
-int lod_tgt_pool_free(struct lu_tgt_pool *op);
-int lod_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
-int lod_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx);
-int lod_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
 struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
 void lod_pool_putref(struct pool_desc *pool);
 int lod_pool_del(struct obd_device *obd, char *poolname);

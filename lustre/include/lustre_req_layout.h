@@ -283,6 +283,7 @@ extern struct req_msg_field RMF_CAPA1;
 extern struct req_msg_field RMF_CAPA2;
 extern struct req_msg_field RMF_OBD_QUOTACHECK;
 extern struct req_msg_field RMF_OBD_QUOTACTL;
+extern struct req_msg_field RMF_OBD_QUOTACTL_POOL;
 extern struct req_msg_field RMF_QUOTA_BODY;
 extern struct req_msg_field RMF_STRING;
 extern struct req_msg_field RMF_SWAP_LAYOUTS;

@@ -100,8 +100,8 @@ static const struct req_msg_field *mdt_body_capa[] = {
 };
 
 static const struct req_msg_field *quotactl_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OBD_QUOTACTL
+	&RMF_PTLRPC_BODY,
+	&RMF_OBD_QUOTACTL
 };
 
 static const struct req_msg_field *quota_body_only[] = {
@@ -995,9 +995,10 @@ struct req_msg_field RMF_MDT_BODY =
 EXPORT_SYMBOL(RMF_MDT_BODY);
 
 struct req_msg_field RMF_OBD_QUOTACTL =
-        DEFINE_MSGF("obd_quotactl", 0,
-                    sizeof(struct obd_quotactl),
-                    lustre_swab_obd_quotactl, NULL);
+	DEFINE_MSGFL("obd_quotactl",
+		     0,
+		     sizeof(struct obd_quotactl),
+		     lustre_swab_obd_quotactl, NULL);
 EXPORT_SYMBOL(RMF_OBD_QUOTACTL);
 
 struct req_msg_field RMF_QUOTA_BODY =

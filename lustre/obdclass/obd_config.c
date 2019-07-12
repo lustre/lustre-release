@@ -1240,6 +1240,20 @@ void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg))
 EXPORT_SYMBOL(lustre_register_quota_process_config);
 #endif /* HAVE_SERVER_SUPPORT */
 
+#define QMT0_DEV_NAME_LEN (LUSTRE_MAXFSNAME + sizeof("-QMT0000"))
+static struct obd_device *obd_find_qmt0(char *obd_name)
+{
+	char qmt_name[QMT0_DEV_NAME_LEN];
+	struct obd_device *qmt = NULL;
+
+	if (!server_name2fsname(obd_name, qmt_name, NULL)) {
+		strlcat(qmt_name, "-QMT0000", QMT0_DEV_NAME_LEN);
+		qmt = class_name2obd(qmt_name);
+	}
+
+	return qmt;
+}
+
 /**
  * Process configuration commands given in lustre_cfg form.
  * These may come from direct calls (e.g. class_manual_cleanup)
@@ -1421,20 +1435,42 @@ int class_process_config(struct lustre_cfg *lcfg)
 	}
 	case LCFG_POOL_NEW: {
 		err = obd_pool_new(obd, lustre_cfg_string(lcfg, 2));
+		if (!err && !strcmp(obd->obd_type->typ_name, LUSTRE_LOD_NAME)) {
+			obd = obd_find_qmt0(obd->obd_name);
+			if (obd)
+				obd_pool_new(obd, lustre_cfg_string(lcfg, 2));
+		}
 		GOTO(out, err = 0);
 	}
 	case LCFG_POOL_ADD: {
 		err = obd_pool_add(obd, lustre_cfg_string(lcfg, 2),
                                    lustre_cfg_string(lcfg, 3));
+		if (!err && !strcmp(obd->obd_type->typ_name, LUSTRE_LOD_NAME)) {
+			obd = obd_find_qmt0(obd->obd_name);
+			if (obd)
+				obd_pool_add(obd, lustre_cfg_string(lcfg, 2),
+					     lustre_cfg_string(lcfg, 3));
+		}
 		GOTO(out, err = 0);
 	}
 	case LCFG_POOL_REM: {
 		err = obd_pool_rem(obd, lustre_cfg_string(lcfg, 2),
                                    lustre_cfg_string(lcfg, 3));
+		if (!err && !strcmp(obd->obd_type->typ_name, LUSTRE_LOD_NAME)) {
+			obd = obd_find_qmt0(obd->obd_name);
+			if (obd)
+				obd_pool_rem(obd, lustre_cfg_string(lcfg, 2),
+					     lustre_cfg_string(lcfg, 3));
+		}
 		GOTO(out, err = 0);
 	}
 	case LCFG_POOL_DEL: {
 		err = obd_pool_del(obd, lustre_cfg_string(lcfg, 2));
+		if (!err && !strcmp(obd->obd_type->typ_name, LUSTRE_LOD_NAME)) {
+			obd = obd_find_qmt0(obd->obd_name);
+			if (obd)
+				obd_pool_del(obd, lustre_cfg_string(lcfg, 2));
+		}
 		GOTO(out, err = 0);
 	}
 	/*

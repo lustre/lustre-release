@@ -110,6 +110,11 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 	if (!qmt->qmt_child->dd_rdonly)
 		qmt_stop_reba_thread(qmt);
 
+	if (qmt->qmt_root) {
+		dt_object_put(env, qmt->qmt_root);
+		qmt->qmt_root = NULL;
+	}
+
 	/* disconnect from OSD */
 	if (qmt->qmt_child_exp != NULL) {
 		obd_disconnect(qmt->qmt_child_exp);
@@ -274,6 +279,7 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	rc = qmt_pool_init(env, qmt);
 	if (rc)
 		GOTO(out, rc);
+
 	EXIT;
 out:
 	if (rc)
@@ -421,6 +427,10 @@ static const struct obd_ops qmt_obd_ops = {
 	.o_owner	= THIS_MODULE,
 	.o_connect	= qmt_device_obd_connect,
 	.o_disconnect	= qmt_device_obd_disconnect,
+	.o_pool_new	= qmt_pool_new,
+	.o_pool_rem	= qmt_pool_rem,
+	.o_pool_add	= qmt_pool_add,
+	.o_pool_del	= qmt_pool_del,
 };
 
 /*
@@ -453,10 +463,9 @@ static int qmt_device_prepare(const struct lu_env *env,
 		RETURN(rc);
 	}
 
+	qmt->qmt_root = qmt_root;
 	/* initialize on-disk indexes associated with each pool */
-	rc = qmt_pool_prepare(env, qmt, qmt_root);
-
-	dt_object_put(env, qmt_root);
+	rc = qmt_pool_prepare(env, qmt, qmt_root, NULL);
 	RETURN(rc);
 }
 

@@ -99,8 +99,8 @@ void lod_pool_putref(struct pool_desc *pool)
 	if (atomic_dec_and_test(&pool->pool_refcount)) {
 		LASSERT(list_empty(&pool->pool_list));
 		LASSERT(pool->pool_proc_entry == NULL);
-		lod_tgt_pool_free(&(pool->pool_rr.lqr_pool));
-		lod_tgt_pool_free(&(pool->pool_obds));
+		tgt_pool_free(&(pool->pool_rr.lqr_pool));
+		tgt_pool_free(&(pool->pool_obds));
 		kfree_rcu(pool, pool_rcu);
 		EXIT;
 	}
@@ -358,183 +358,6 @@ void lod_dump_pool(int level, struct pool_desc *pool)
 	lod_pool_putref(pool);
 }
 
-/**
- * Initialize the pool data structures at startup.
- *
- * Allocate and initialize the pool data structures with the specified
- * array size.  If pool count is not specified (\a count == 0), then
- * POOL_INIT_COUNT will be used.  Allocating a non-zero initial array
- * size avoids the need to reallocate as new pools are added.
- *
- * \param[in] op	pool structure
- * \param[in] count	initial size of the target op_array[] array
- *
- * \retval		0 indicates successful pool initialization
- * \retval		negative error number on failure
- */
-#define POOL_INIT_COUNT 2
-int lod_tgt_pool_init(struct lu_tgt_pool *op, unsigned int count)
-{
-	ENTRY;
-
-	if (count == 0)
-		count = POOL_INIT_COUNT;
-	op->op_array = NULL;
-	op->op_count = 0;
-	init_rwsem(&op->op_rw_sem);
-	op->op_size = count * sizeof(op->op_array[0]);
-	OBD_ALLOC(op->op_array, op->op_size);
-	if (op->op_array == NULL) {
-		op->op_size = 0;
-		RETURN(-ENOMEM);
-	}
-	EXIT;
-	return 0;
-}
-
-/**
- * Increase the op_array size to hold more targets in this pool.
- *
- * The size is increased to at least \a min_count, but may be larger
- * for an existing pool since ->op_array[] is growing exponentially.
- * Caller must hold write op_rwlock.
- *
- * \param[in] op	pool structure
- * \param[in] min_count	minimum number of entries to handle
- *
- * \retval		0 on success
- * \retval		negative error number on failure.
- */
-int lod_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
-{
-	__u32 *new;
-	__u32 new_size;
-
-	LASSERT(min_count != 0);
-
-	if (op->op_count * sizeof(op->op_array[0]) < op->op_size)
-		return 0;
-
-	new_size = max_t(__u32, min_count * sizeof(op->op_array[0]),
-			 2 * op->op_size);
-	OBD_ALLOC(new, new_size);
-	if (new == NULL)
-		return -ENOMEM;
-
-	/* copy old array to new one */
-	memcpy(new, op->op_array, op->op_size);
-	OBD_FREE(op->op_array, op->op_size);
-	op->op_array = new;
-	op->op_size = new_size;
-
-	return 0;
-}
-
-/**
- * Add a new target to an existing pool.
- *
- * Add a new target device to the pool previously created and returned by
- * lod_pool_new().  Each target can only be in each pool at most one time.
- *
- * \param[in] op	target pool to add new entry
- * \param[in] idx	pool index number to add to the \a op array
- * \param[in] min_count	minimum number of entries to expect in the pool
- *
- * \retval		0 if target could be added to the pool
- * \retval		negative error if target \a idx was not added
- */
-int lod_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
-{
-	unsigned int i;
-	int rc = 0;
-	ENTRY;
-
-	down_write(&op->op_rw_sem);
-
-	rc = lod_tgt_pool_extend(op, min_count);
-	if (rc)
-		GOTO(out, rc);
-
-	/* search ost in pool array */
-	for (i = 0; i < op->op_count; i++) {
-		if (op->op_array[i] == idx)
-			GOTO(out, rc = -EEXIST);
-	}
-	/* ost not found we add it */
-	op->op_array[op->op_count] = idx;
-	op->op_count++;
-	EXIT;
-out:
-	up_write(&op->op_rw_sem);
-	return rc;
-}
-
-/**
- * Remove an existing pool from the system.
- *
- * The specified pool must have previously been allocated by
- * lod_pool_new() and not have any target members in the pool.
- * If the removed target is not the last, compact the array
- * to remove empty spaces.
- *
- * \param[in] op	pointer to the original data structure
- * \param[in] idx	target index to be removed
- *
- * \retval		0 on success
- * \retval		negative error number on failure
- */
-int lod_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx)
-{
-	unsigned int i;
-	ENTRY;
-
-	down_write(&op->op_rw_sem);
-
-	for (i = 0; i < op->op_count; i++) {
-		if (op->op_array[i] == idx) {
-			memmove(&op->op_array[i], &op->op_array[i + 1],
-				(op->op_count - i - 1) *
-				sizeof(op->op_array[0]));
-			op->op_count--;
-			up_write(&op->op_rw_sem);
-			EXIT;
-			return 0;
-		}
-	}
-
-	up_write(&op->op_rw_sem);
-	RETURN(-EINVAL);
-}
-
-/**
- * Free the pool after it was emptied and removed from /proc.
- *
- * Note that all of the child/target entries referenced by this pool
- * must have been removed by lod_ost_pool_remove() before it can be
- * deleted from memory.
- *
- * \param[in] op	pool to be freed.
- *
- * \retval		0 on success or if pool was already freed
- */
-int lod_tgt_pool_free(struct lu_tgt_pool *op)
-{
-	ENTRY;
-
-	if (op->op_size == 0)
-		RETURN(0);
-
-	down_write(&op->op_rw_sem);
-
-	OBD_FREE(op->op_array, op->op_size);
-	op->op_array = NULL;
-	op->op_count = 0;
-	op->op_size = 0;
-
-	up_write(&op->op_rw_sem);
-	RETURN(0);
-}
-
 static void pools_hash_exit(void *vpool, void *data)
 {
 	struct pool_desc *pool = vpool;
@@ -584,13 +407,13 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	strlcpy(new_pool->pool_name, poolname, sizeof(new_pool->pool_name));
 	new_pool->pool_lobd = obd;
 	atomic_set(&new_pool->pool_refcount, 1);
-	rc = lod_tgt_pool_init(&new_pool->pool_obds, 0);
+	rc = tgt_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
 		GOTO(out_err, rc);
 
 	lu_qos_rr_init(&new_pool->pool_rr);
 
-	rc = lod_tgt_pool_init(&new_pool->pool_rr.lqr_pool, 0);
+	rc = tgt_pool_init(&new_pool->pool_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_free_pool_obds, rc);
 
@@ -641,9 +464,9 @@ out_err:
 
 	lprocfs_remove(&new_pool->pool_proc_entry);
 
-	lod_tgt_pool_free(&new_pool->pool_rr.lqr_pool);
+	tgt_pool_free(&new_pool->pool_rr.lqr_pool);
 out_free_pool_obds:
-	lod_tgt_pool_free(&new_pool->pool_obds);
+	tgt_pool_free(&new_pool->pool_obds);
 	OBD_FREE_PTR(new_pool);
 	return rc;
 }
@@ -736,7 +559,7 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_tgt_pool_add(&pool->pool_obds, tgt->ltd_index,
+	rc = tgt_pool_add(&pool->pool_obds, tgt->ltd_index,
 			      lod->lod_ost_count);
 	if (rc)
 		GOTO(out, rc);
@@ -800,7 +623,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	lod_tgt_pool_remove(&pool->pool_obds, ost->ltd_index);
+	tgt_pool_remove(&pool->pool_obds, ost->ltd_index);
 	pool->pool_rr.lqr_dirty = 1;
 
 	CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
@@ -827,23 +650,10 @@ out:
  */
 int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool)
 {
-	unsigned int i;
 	int rc;
-	ENTRY;
 
 	pool_getref(pool);
-
-	down_read(&pool_tgt_rw_sem(pool));
-
-	for (i = 0; i < pool_tgt_count(pool); i++) {
-		if (pool_tgt_array(pool)[i] == idx)
-			GOTO(out, rc = 0);
-	}
-	rc = -ENOENT;
-	EXIT;
-out:
-	up_read(&pool_tgt_rw_sem(pool));
-
+	rc = tgt_check_index(idx, &pool->pool_obds);
 	lod_pool_putref(pool);
 	return rc;
 }

@@ -60,9 +60,10 @@ static void qsd_lqe_init(struct lquota_entry *lqe, void *arg)
  * \param env - the environment passed by the caller
  * \param lqe - is the quota entry to refresh
  * \param arg - is the pointer to the qsd_qtype_info structure
+ * \param need_crt - needed to be compat with qmt_lqe_read
  */
 static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
-			void *arg)
+			void *arg, bool need_crt)
 {
 	struct qsd_thread_info *qti = qsd_info(env);
 	struct qsd_qtype_info  *qqi = (struct qsd_qtype_info *)arg;

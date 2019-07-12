@@ -76,7 +76,7 @@ struct lquota_entry_operations {
 
 	/* Read quota settings from disk and update lquota entry */
 	int (*lqe_read)(const struct lu_env *, struct lquota_entry *,
-			void *arg);
+			void *arg, bool find);
 
 	/* Print debug information about a given lquota entry */
 	void (*lqe_debug)(struct lquota_entry *, void *,
@@ -171,6 +171,8 @@ struct lquota_entry {
 
 	/* current quota settings/usage of this ID */
 	__u64		lqe_granted; /* granted limit, inodes or kbytes */
+	/* used in quota pool recalc process (only on QMT) */
+	__u64		lqe_recalc_granted;
 	__u64		lqe_qunit; /* [ib]unit size, inodes or kbytes */
 	union {
 		struct	lquota_mst_entry me; /* params specific to QMT */
@@ -183,7 +185,32 @@ struct lquota_entry {
 			lqe_edquot:1,	  /* id out of quota space on QMT */
 			lqe_gl:1,	  /* glimpse is in progress */
 			lqe_nopreacq:1,	  /* pre-acquire disabled */
-			lqe_is_default:1; /* the default quota is used */
+			lqe_is_default:1, /* the default quota is used */
+			lqe_is_global:1;  /* lqe belongs to global pool "0x0"*/
+
+	struct lqe_glbl_data	*lqe_glbl_data;
+};
+
+#define lqe_qtype(lqe)		(lqe->lqe_site->lqs_qtype)
+#define lqe_rtype(lqe)		(lqe2qpi(lqe)->qpi_rtype)
+
+struct lqe_glbl_entry {
+	__u64			 lge_qunit;
+	unsigned long		 lge_edquot:1,
+				 /* true when minimum qunit is set */
+				 lge_qunit_set:1,
+				 /* qunit or edquot is changed - need
+				 * to send glimpse to appropriate slave */
+				 lge_qunit_nu:1,
+				 lge_edquot_nu:1;
+};
+
+struct lqe_glbl_data {
+	struct lqe_glbl_entry	*lqeg_arr;
+	/* number of initialised entries */
+	int			 lqeg_num_used;
+	/* number of allocated entries */
+	int			 lqeg_num_alloc;
 };
 
 /* Compartment within which lquota_entry are unique.
@@ -370,11 +397,37 @@ void lquota_lqe_debug0(struct lquota_entry *lqe,
 #define LQUOTA_CONSOLE(lqe, fmt, a...) \
 	LQUOTA_DEBUG_LIMIT(D_CONSOLE, lqe, fmt, ## a)
 
-#define LQUOTA_DEBUG(lock, fmt, a...) do {                                 \
+#define LQUOTA_ELEVEL_LQES(level, env, fmt, a...) do {		\
+	int i;							\
+	for (i = 0; i < qti_lqes_cnt(env); i++) {		\
+		LQUOTA_##level(qti_lqes(env)[i], fmt, ##a);	\
+	}							\
+} while (0)
+#define LQUOTA_WARN_LQES(lqe, fmt, a...) \
+		LQUOTA_ELEVEL_LQES(WARN, env, fmt, ##a)
+#define LQUOTA_CONSOLE_LQES(lqe, fmt, a...) \
+		LQUOTA_ELEVEL_LQES(CONSOLE, env, fmt, ##a)
+#define LQUOTA_ERROR_LQES(lqe, fmt, a...) \
+		LQUOTA_ELEVEL_LQES(ERROR, env, fmt, ##a)
+
+#define LQUOTA_DEBUG(lqe, fmt, a...) do {                                 \
 	LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_QUOTA, NULL);                \
 	lquota_lqe_debug(&msgdata, D_QUOTA, NULL, lqe, "$$$ "fmt" ", ##a); \
 } while (0)
+
+#define LQUOTA_DEBUG_LQES(env, fmt, a...) do {			\
+	int i;							\
+	for (i = 0; i < qti_lqes_cnt(env); i++) {		\
+		LQUOTA_DEBUG(qti_lqes(env)[i], fmt, ##a);	\
+	}							\
+} while (0)
+
+
 #else /* !LIBCFS_DEBUG */
+# define LQUOTA_DEBUG_LQES(lqe, fmt, a...) ((void)0)
+# define LQUOTA_ERROR_LQES(lqe, fmt, a...) ((void)0)
+# define LQUOTA_WARN_LQES(lqe, fmt, a...) ((void)0)
+# define LQUOTA_CONSOLE_LQES(lqe, fmt, a...) ((void)0)
 # define LQUOTA_DEBUG(lqe, fmt, a...) ((void)0)
 # define LQUOTA_ERROR(lqe, fmt, a...) ((void)0)
 # define LQUOTA_WARN(lqe, fmt, a...) ((void)0)
@@ -396,8 +449,11 @@ struct lquota_site *lquota_site_alloc(const struct lu_env *, void *, bool,
 				      short, struct lquota_entry_operations *);
 void lquota_site_free(const struct lu_env *, struct lquota_site *);
 /* quota entry operations */
-struct lquota_entry *lqe_locate(const struct lu_env *, struct lquota_site *,
-				union lquota_id *);
+#define lqe_locate(env, site, id) lqe_locate_find(env, site, id, false)
+#define lqe_find(env, site, id) lqe_locate_find(env, site, id, true)
+struct lquota_entry *lqe_locate_find(const struct lu_env *,
+				     struct lquota_site *,
+				     union lquota_id *, bool);
 
 /* lquota_disk.c */
 struct dt_object *lquota_disk_dir_find_create(const struct lu_env *,

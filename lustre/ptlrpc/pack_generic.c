@@ -2073,14 +2073,19 @@ static void lustre_swab_obd_dqblk(struct obd_dqblk *b)
 	BUILD_BUG_ON(offsetof(typeof(*b), dqb_padding) == 0);
 }
 
-void lustre_swab_obd_quotactl(struct obd_quotactl *q)
+int lustre_swab_obd_quotactl(struct obd_quotactl *q, __u32 len)
 {
+	if (unlikely(len <= sizeof(struct obd_quotactl)))
+		return -EOVERFLOW;
+
 	__swab32s(&q->qc_cmd);
 	__swab32s(&q->qc_type);
 	__swab32s(&q->qc_id);
 	__swab32s(&q->qc_stat);
 	lustre_swab_obd_dqinfo(&q->qc_dqinfo);
 	lustre_swab_obd_dqblk(&q->qc_dqblk);
+
+	return len;
 }
 
 void lustre_swab_fid2path(struct getinfo_fid2path *gf)

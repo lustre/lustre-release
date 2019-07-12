@@ -39,6 +39,12 @@ BLK_SZ=1024
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
 QTYPE="ugp"
+# QP exists since this version. Should be finally set before landing.
+VERSION_WITH_QP="2.13.53"
+mds_supports_qp() {
+	[ $MDS1_VERSION -lt $(version_code $VERSION_WITH_QP) ] &&
+		skip "Needs MDS version $VERSION_WITH_QP or later."
+}
 
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
@@ -161,14 +167,17 @@ quota_log() {
 
 # get quota for a user or a group
 # usage: getquota -u|-g|-p <username>|<groupname>|<projid> global|<obd_uuid> \
-#		  bhardlimit|bsoftlimit|bgrace|ihardlimit|isoftlimit|igrace
+#		  bhardlimit|bsoftlimit|bgrace|ihardlimit|isoftlimit|igrace \
+#		  <pool_name>
 getquota() {
 	local spec
 	local uuid
+	local pool_arg
 
 	sync_all_data > /dev/null 2>&1 || true
 
-	[ "$#" != 4 ] && error "getquota: wrong number of arguments: $#"
+	[ "$#" != 4 -a "$#" != 5 ] &&
+		error "getquota: wrong number of arguments: $#"
 	[ "$1" != "-u" -a "$1" != "-g" -a "$1" != "-p" ] &&
 		error "getquota: wrong u/g/p specifier $1 passed"
 
@@ -186,9 +195,10 @@ getquota() {
 		*)          error "unknown quota parameter $4";;
 	esac
 
+	[ ! -z "$5" ] && pool_arg="--pool $5 "
 	[ "$uuid" = "global" ] && uuid=$DIR
 
-	$LFS quota -v "$1" "$2" $DIR |
+	$LFS quota -v "$1" "$2" $pool_arg $DIR |
 		awk 'BEGIN { num='$spec' } { if ($1 == "'$uuid'") \
 		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
 		| tr -d "*"
@@ -325,8 +335,10 @@ wait_ost_reint() {
 wait_grace_time() {
 	local qtype=$1
 	local flavour=$2
-	local extrasleep=${3:-5}
+	local pool=${3:-}
+	local extrasleep=${4:-5}
 	local qarg
+	local parg
 
 	case $qtype in
 		u|g) qarg=$TSTUSR ;;
@@ -334,9 +346,15 @@ wait_grace_time() {
 		*) error "get_grace_time: Invalid quota type: $qtype"
 	esac
 
+	if [ $pool ]; then
+		parg="--pool "$pool
+		echo "Quota info for $pool:"
+		$LFS quota -$qtype $qarg $parg $DIR
+	fi
+
 	case $flavour in
 		block)
-			time=$(lfs quota -$qtype $qarg $DIR|
+			time=$(lfs quota -$qtype $qarg $parg $DIR|
 				   awk 'NR == 3{ print $5 }'| sed 's/s$//')
 			;;
 		file)
@@ -371,7 +389,6 @@ setup_quota_test() {
 }
 
 cleanup_quota_test() {
-	trap 0
 	echo "Delete files..."
 	rm -rf $DIR/$tdir
 	echo "Wait for unlink objects finished..."
@@ -451,7 +468,7 @@ reset_quota_settings() {
 
 # enable quota debug
 quota_init() {
-	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
+	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota+trace"
 }
 quota_init
 reset_quota_settings
@@ -507,10 +524,36 @@ test_0() {
 }
 run_test 0 "Test basic quota performance"
 
+# usage: test_1_check_write tfile user|group|project
+test_1_check_write() {
+	local testfile="$1"
+	local qtype="$2"
+	local limit=$3
+	local short_qtype=${qtype:0:1}
+
+	log "Write..."
+	$RUNAS $DD of=$testfile count=$((limit/2)) ||
+		quota_error $short_qtype $TSTUSR \
+			"$qtype write failure, but expect success"
+	log "Write out of block quota ..."
+	# this time maybe cache write,  ignore it's failure
+	$RUNAS $DD of=$testfile count=$((limit/2)) seek=$((limit/2)) || true
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+	# sync means client wrote all it's cache, but id doesn't
+	# garantee that slave got new edquot trough glimpse.
+	# so wait a little to be sure slave got it.
+	sleep 5
+	$RUNAS $DD of=$testfile count=1 seek=$limit &&
+		quota_error $short_qtype $TSTUSR \
+			"user write success, but expect EDQUOT"
+}
+
 # test block hardlimit
-test_1() {
-	local LIMIT=10  # 10M
-	local TESTFILE="$DIR/$tdir/$tfile-0"
+test_1a() {
+	local limit=10  # 10M
+	local testfile="$DIR/$tdir/$tfile-0"
 
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
@@ -519,66 +562,47 @@ test_1() {
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# test for user
-	log "User quota (block hardlimit:$LIMIT MB)"
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+	log "User quota (block hardlimit:$limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set user quota failed"
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
 
-	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
-	log "Write..."
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) ||
-		quota_error u $TSTUSR "user write failure, but expect success"
-	log "Write out of block quota ..."
-	# this time maybe cache write,  ignore it's failure
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
-	# flush cache, ensure noquota flag is set on client
-	cancel_lru_locks osc
-	sync; sync_all_data || true
-	$RUNAS $DD of=$TESTFILE count=1 seek=$LIMIT &&
-		quota_error u $TSTUSR "user write success, but expect EDQUOT"
+	test_1_check_write $testfile "user" $limit
 
-	rm -f $TESTFILE
+	rm -f $testfile
 	wait_delete_completed || error "wait_delete_completed failed"
 	sync_all_data || true
-	USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && quota_error u $TSTUSR \
+	used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
 		"user quota isn't released after deletion"
 	resetquota -u $TSTUSR
 
 	# test for group
 	log "--------------------------------------"
-	log "Group quota (block hardlimit:$LIMIT MB)"
-	$LFS setquota -g $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+	log "Group quota (block hardlimit:$limit MB)"
+	$LFS setquota -g $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set group quota failed"
 
-	TESTFILE="$DIR/$tdir/$tfile-1"
+	testfile="$DIR/$tdir/$tfile-1"
 	# make sure the system is clean
-	USED=$(getquota -g $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space ($USED) for group $TSTUSR isn't 0"
+	used=$(getquota -g $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space ($used) for group $TSTUSR isn't 0"
 
-	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
-	log "Write ..."
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) ||
-		quota_error g $TSTUSR "Group write failure, but expect success"
-	log "Write out of block quota ..."
-	# this time maybe cache write, ignore it's failure
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
-	cancel_lru_locks osc
-	sync; sync_all_data || true
-	$RUNAS $DD of=$TESTFILE count=10 seek=$LIMIT &&
-		quota_error g $TSTUSR "Group write success, but expect EDQUOT"
-	rm -f $TESTFILE
+	test_1_check_write $testfile "group" $limit
+	rm -f $testfile
 	wait_delete_completed || error "wait_delete_completed failed"
 	sync_all_data || true
-	USED=$(getquota -g $TSTUSR global curspace)
-	[ $USED -ne 0 ] && quota_error g $TSTUSR \
+	used=$(getquota -g $TSTUSR global curspace)
+	[ $used -ne 0 ] && quota_error g $TSTUSR \
 				"Group quota isn't released after deletion"
 	resetquota -g $TSTUSR
 
@@ -588,41 +612,384 @@ test_1() {
 		return 0
 	fi
 
-	TESTFILE="$DIR/$tdir/$tfile-2"
+	testfile="$DIR/$tdir/$tfile-2"
 	# make sure the system is clean
-	USED=$(getquota -p $TSTPRJID global curspace)
-	[ $USED -ne 0 ] &&
-		error "used space($USED) for project $TSTPRJID isn't 0"
+	used=$(getquota -p $TSTPRJID global curspace)
+	[ $used -ne 0 ] &&
+		error "used space($used) for project $TSTPRJID isn't 0"
 
 	# test for Project
 	log "--------------------------------------"
-	log "Project quota (block hardlimit:$LIMIT mb)"
-	$LFS setquota -p $TSTPRJID -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+	log "Project quota (block hardlimit:$limit mb)"
+	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set project quota failed"
 
-	$LFS setstripe $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR:$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
-	change_project -p $TSTPRJID $TESTFILE
+	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR:$TSTUSR $testfile || error "chown $testfile failed"
+	change_project -p $TSTPRJID $testfile
 
-	log "write ..."
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) || quota_error p $TSTPRJID \
-		"project write failure, but expect success"
-	log "write out of block quota ..."
-	# this time maybe cache write, ignore it's failure
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
-	cancel_lru_locks osc
-	sync; sync_all_data || true
-	$RUNAS $DD of=$TESTFILE count=10 seek=$LIMIT && quota_error p \
-		$TSTPRJID "project write success, but expect EDQUOT"
+	test_1_check_write $testfile "project" $limit
 
 	# cleanup
 	cleanup_quota_test
 
-	USED=$(getquota -p $TSTPRJID global curspace)
-	[ $USED -eq 0 ] || quota_error p $TSTPRJID \
+	used=$(getquota -p $TSTPRJID global curspace)
+	[ $used -ne 0 ] && quota_error p $TSTPRJID \
+		"project quota isn't released after deletion"
+
+	resetquota -p $TSTPRJID
+}
+run_test 1a "Block hard limit (normal use and out of quota)"
+
+test_1b() {
+	local limit=10  # 10M
+	local global_limit=20  # 100M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 $(($OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	echo "used $used"
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
+
+	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	test_1_check_write $testfile "user" $limit
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	used=$(getquota -u $TSTUSR global curspace $qpool)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+	resetquota -u $TSTUSR
+
+	# test for group
+	log "--------------------------------------"
+	log "Group quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -g $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set group quota failed"
+
+	$LFS setquota -g $TSTUSR -b 0 -B ${limit}M -o $qpool $DIR ||
+		error "set group quota failed"
+
+	testfile="$DIR/$tdir/$tfile-1"
+	# make sure the system is clean
+	used=$(getquota -g $TSTUSR global curspace $qpool)
+	[ $used -ne 0 ] && error "Used space ($used) for group $TSTUSR isn't 0"
+
+	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	test_1_check_write $testfile "group" $limit
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	used=$(getquota -g $TSTUSR global curspace $qpool)
+	[ $used -ne 0 ] && quota_error g $TSTUSR \
+				"Group quota isn't released after deletion"
+	resetquota -g $TSTUSR
+
+	if ! is_project_quota_supported; then
+		echo "Project quota is not supported"
+		cleanup_quota_test
+		return 0
+	fi
+
+	testfile="$DIR/$tdir/$tfile-2"
+	# make sure the system is clean
+	used=$(getquota -p $TSTPRJID global curspace $qpool)
+	[ $used -ne 0 ] &&
+		error "used space($used) for project $TSTPRJID isn't 0"
+
+	# test for Project
+	log "--------------------------------------"
+	log "Project quota (block hardlimit:$global_limit mb)"
+	$LFS setquota -p $TSTPRJID -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set project quota failed"
+
+	$LFS setquota -p $TSTPRJID -b 0 -B ${limit}M -o $qpool $DIR ||
+		error "set project quota failed"
+
+
+	$LFS setstripe $testfile -c 1 || error "setstripe $testfile failed"
+	chown $TSTUSR:$TSTUSR $testfile || error "chown $testfile failed"
+	change_project -p $TSTPRJID $testfile
+
+	test_1_check_write $testfile "project" $limit
+
+	# cleanup
+	cleanup_quota_test
+
+	used=$(getquota -p $TSTPRJID global curspace)
+	[ $used -eq 0 ] || quota_error p $TSTPRJID \
 		"project quota isn't released after deletion"
 }
-run_test 1 "Block hard limit (normal use and out of quota)"
+run_test 1b "Quota pools: Block hard limit (normal use and out of quota)"
+
+test_1c() {
+	local global_limit=20  # 100M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool1="qpool1"
+	local qpool2="qpool2"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool1 || error "pool_add failed"
+	pool_add_targets $qpool1 0 $(($OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	pool_add $qpool2 || error "pool_add failed"
+	pool_add_targets $qpool2 0 $(($OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	# create pools without hard limit
+	# initially such case raised several bugs
+	$LFS setquota -u $TSTUSR -B 0M -o $qpool1 $DIR ||
+		error "set user quota failed"
+
+	$LFS setquota -u $TSTUSR -B 0M -o $qpool2 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	echo "used $used"
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
+
+	test_1_check_write $testfile "user" $global_limit
+
+	used=$(getquota -u $TSTUSR global curspace $qpool1)
+	echo "qpool1 used $used"
+	used=$(getquota -u $TSTUSR global curspace $qpool2)
+	echo "qpool2 used $used"
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	used=$(getquota -u $TSTUSR global curspace $qpool1)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+	resetquota -u $TSTUSR
+
+	# cleanup
+	cleanup_quota_test
+}
+run_test 1c "Quota pools: check 3 pools with hardlimit only for global"
+
+test_1d() {
+	local limit1=10  # 10M
+	local limit2=12  # 12M
+	local global_limit=20  # 100M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local qpool1="qpool1"
+	local qpool2="qpool2"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool1 || error "pool_add failed"
+	pool_add_targets $qpool1 0 $(($OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	pool_add $qpool2 || error "pool_add failed"
+	pool_add_targets $qpool2 0 $(($OSTCOUNT - 1)) ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool1 $DIR ||
+		error "set user quota failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit2}M -o $qpool2 $DIR ||
+	error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	echo "used $used"
+	[ $used -ne 0 ] && error "used space($used) for user $TSTUSR isn't 0."
+
+	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
+
+	test_1_check_write $testfile "user" $limit1
+
+	used=$(getquota -u $TSTUSR global curspace $qpool1)
+	echo "qpool1 used $used"
+	used=$(getquota -u $TSTUSR global curspace $qpool2)
+	echo "qpool2 used $used"
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	used=$(getquota -u $TSTUSR global curspace $qpool1)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+	resetquota -u $TSTUSR
+
+	# cleanup
+	cleanup_quota_test
+}
+run_test 1d "Quota pools: check block hardlimit on different pools"
+
+test_1e() {
+	local limit1=10  # 10M
+	local global_limit=200  # 200M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local testfile2="$DIR/$tdir/$tfile-1"
+	local qpool1="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# global_limit is much greater than limit1 to get
+	# different qunit's on osts. Since 1st qunit shrinking
+	# on OST1(that belongs to qpool1), this qunit should
+	# be sent to OST1.
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool1 || error "pool_add failed"
+	pool_add_targets $qpool1 1 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool1 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	$LFS setstripe $testfile -c 1 -i 1 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	test_1_check_write $testfile "user" $limit1
+
+	$LFS setstripe $testfile2 -c 1 -i 0 ||
+		error "setstripe $testfile2 failed"
+	chown $TSTUSR.$TSTUSR $testfile2 || error "chown $testfile2 failed"
+	# Now write to file with a stripe on OST0, that doesn't belong to qpool1
+	log "Write..."
+	$RUNAS $DD of=$testfile2 count=20 ||
+		quota_error $short_qtype $TSTUSR \
+			"$qtype write failure, but expect success"
+
+	rm -f $testfile
+	rm -f $testfile2
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	used=$(getquota -u $TSTUSR global curspace $qpool1)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+	resetquota -u $TSTUSR
+
+	# cleanup
+	cleanup_quota_test
+}
+run_test 1e "Quota pools: global pool high block limit vs quota pool with small"
+
+test_1f() {
+	local global_limit=200  # 200M
+	local limit1=10  # 10M
+	local TESTDIR="$DIR/$tdir/"
+	local testfile="$TESTDIR/$tfile-0"
+	local qpool1="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	pool_add $qpool1 || error "pool_add failed"
+	pool_add_targets $qpool1 0 0 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit1}M -o $qpool1 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	$LFS setstripe $TESTDIR -c 1 -i 0 || error "setstripe $TESTDIR failed"
+
+	test_1_check_write $testfile "user" $limit1
+
+	pool_remove_target $qpool1 0
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+
+	pool_add_targets $qpool1 0 0 || error "pool_add_targets failed"
+	# qunit for appropriate element in lgd array should be set
+	# correctly(4096). Earlier it was not changed continuing to be 1024.
+	# This caused write to hung when it hit limit1 - qunit shrinking to 1024
+	# for qpool1 lqe didn't cause changing qunit for OST0 in gld array
+	# as it already was 1024. As flag "need_update" for this qunit was
+	# not set, new qunit wasn't sent to OST0. Thus revoke was not set
+	# for "qpool1" lqe and it couldn't set EDQUOT despite granted
+	# became > 10M. QMT returned EINPROGRESS in a loop.
+	# Check that it doesn't hung anymore.
+	test_1_check_write $testfile "user" $limit1
+
+	# cleanup
+	cleanup_quota_test
+}
+run_test 1f "Quota pools: correct qunit after removing/adding OST"
 
 # test inode hardlimit
 test_2() {
@@ -729,34 +1096,35 @@ test_2() {
 run_test 2 "File hard limit (normal use and out of quota)"
 
 test_block_soft() {
-	local TESTFILE=$1
-	local GRACE=$2
-	local LIMIT=$3
+	local testfile=$1
+	local grace=$2
+	local limit=$3
 	local OFFSET=0
 	local qtype=$4
+	local pool=$5
 
 	setup_quota_test
-	trap cleanup_quota_test EXIT
+	stack_trap cleanup_quota_test EXIT
 
-	$LFS setstripe $TESTFILE -c 1 -i 0
-	chown $TSTUSR.$TSTUSR $TESTFILE
+	$LFS setstripe $testfile -c 1 -i 0
+	chown $TSTUSR.$TSTUSR $testfile
 	[ "$qtype" == "p" ] && is_project_quota_supported &&
-		change_project -p $TSTPRJID $TESTFILE
+		change_project -p $TSTPRJID $testfile
 
 	echo "Write up to soft limit"
-	$RUNAS $DD of=$TESTFILE count=$LIMIT ||
+	$RUNAS $DD of=$testfile count=$limit ||
 		quota_error a $TSTUSR "write failure, but expect success"
-	OFFSET=$((LIMIT * 1024))
+	OFFSET=$((limit * 1024))
 	cancel_lru_locks osc
 
 	echo "Write to exceed soft limit"
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=1K count=10 seek=$OFFSET ||
+	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET ||
 		quota_error a $TSTUSR "write failure, but expect success"
 	OFFSET=$((OFFSET + 1024)) # make sure we don't write to same block
 	cancel_lru_locks osc
 
 	echo "mmap write when over soft limit"
-	$RUNAS $MULTIOP $TESTFILE.mmap OT40960SMW ||
+	$RUNAS $MULTIOP $testfile.mmap OT40960SMW ||
 		quota_error a $TSTUSR "mmap write failure, but expect success"
 	cancel_lru_locks osc
 
@@ -768,12 +1136,12 @@ test_block_soft() {
 	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Write before timer goes off"
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=1K count=10 seek=$OFFSET ||
+	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET ||
 		quota_error a $TSTUSR "write failure, but expect success"
 	OFFSET=$((OFFSET + 1024))
 	cancel_lru_locks osc
 
-	wait_grace_time $qtype "block"
+	wait_grace_time $qtype "block" $pool
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -782,12 +1150,13 @@ test_block_soft() {
 	$SHOW_QUOTA_INFO_GROUP
 	$SHOW_QUOTA_INFO_PROJID
 
-	echo "Write after timer goes off"
+	log "Write after timer goes off"
 	# maybe cache write, ignore.
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=1K count=10 seek=$OFFSET || true
+	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET || true
 	OFFSET=$((OFFSET + 1024))
 	cancel_lru_locks osc
-	$RUNAS dd if=/dev/zero of=$TESTFILE bs=1K count=10 seek=$OFFSET &&
+	log "Write after cancel lru locks"
+	$RUNAS dd if=/dev/zero of=$testfile bs=1K count=10 seek=$OFFSET &&
 		quota_error a $TSTUSR "write success, but expect EDQUOT"
 
 	$SHOW_QUOTA_USER
@@ -798,7 +1167,7 @@ test_block_soft() {
 	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Unlink file to stop timer"
-	rm -f $TESTFILE
+	rm -f $testfile
 	wait_delete_completed
 	sync_all_data || true
 
@@ -809,71 +1178,71 @@ test_block_soft() {
 	$SHOW_QUOTA_INFO_GROUP
 	$SHOW_QUOTA_INFO_PROJID
 
-	$LFS setstripe $TESTFILE -c 1 -i 0
-	chown $TSTUSR.$TSTUSR $TESTFILE
-	[ "$qtype" == "p" ] && change_project -p $TSTPRJID $TESTFILE
+	$LFS setstripe $testfile -c 1 -i 0
+	chown $TSTUSR.$TSTUSR $testfile
+	[ "$qtype" == "p" ] && change_project -p $TSTPRJID $testfile
 
 	echo "Write ..."
-	$RUNAS $DD of=$TESTFILE count=$LIMIT ||
+	$RUNAS $DD of=$testfile count=$limit ||
 		quota_error a $TSTUSR "write failure, but expect success"
 	# cleanup
 	cleanup_quota_test
 }
 
 # block soft limit
-test_3() {
-	local GRACE=20 # 20s
+test_3a() {
+	local grace=20 # 20s
 	if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-	    GRACE=60
+	    grace=60
 	fi
-	local TESTFILE=$DIR/$tdir/$tfile-0
+	local testfile=$DIR/$tdir/$tfile-0
 
 	# get minimum soft qunit size
-	local LIMIT=$(( $(do_facet $SINGLEMDS $LCTL get_param -n \
+	local limit=$(( $(do_facet $SINGLEMDS $LCTL get_param -n \
 		qmt.$FSNAME-QMT0000.dt-0x0.soft_least_qunit) / 1024 ))
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
-	echo "User quota (soft limit:$LIMIT MB  grace:$GRACE seconds)"
+	echo "User quota (soft limit:$limit MB  grace:$grace seconds)"
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
 
-	$LFS setquota -t -u --block-grace $GRACE --inode-grace \
+	$LFS setquota -t -u --block-grace $grace --inode-grace \
 		$MAX_IQ_TIME $DIR || error "set user grace time failed"
-	$LFS setquota -u $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR ||
+	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 -i 0 -I 0 $DIR ||
 		error "set user quota failed"
 
-	test_block_soft $TESTFILE $GRACE $LIMIT "u"
+	test_block_soft $testfile $grace $limit "u"
 
-	echo "Group quota (soft limit:$LIMIT MB  grace:$GRACE seconds)"
-	TESTFILE=$DIR/$tdir/$tfile-1
+	echo "Group quota (soft limit:$limit MB  grace:$grace seconds)"
+	testfile=$DIR/$tdir/$tfile-1
 	# make sure the system is clean
-	USED=$(getquota -g $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for group $TSTUSR isn't 0."
+	used=$(getquota -g $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for group $TSTUSR isn't 0."
 
-	$LFS setquota -t -g --block-grace $GRACE --inode-grace \
+	$LFS setquota -t -g --block-grace $grace --inode-grace \
 		$MAX_IQ_TIME $DIR || error "set group grace time failed"
-	$LFS setquota -g $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR ||
+	$LFS setquota -g $TSTUSR -b ${limit}M -B 0 -i 0 -I 0 $DIR ||
 		error "set group quota failed"
 
-	test_block_soft $TESTFILE $GRACE $LIMIT "g"
+	test_block_soft $testfile $grace $limit "g"
 
 	if is_project_quota_supported; then
-		echo "Project quota (soft limit:$LIMIT MB  grace:$GRACE sec)"
-		TESTFILE=$DIR/$tdir/$tfile-2
+		echo "Project quota (soft limit:$limit MB  grace:$grace sec)"
+		testfile=$DIR/$tdir/$tfile-2
 		# make sure the system is clean
-		USED=$(getquota -p $TSTPRJID global curspace)
-		[ $USED -ne 0 ] && error \
-			"Used space($USED) for project $TSTPRJID isn't 0."
+		used=$(getquota -p $TSTPRJID global curspace)
+		[ $used -ne 0 ] && error \
+			"Used space($used) for project $TSTPRJID isn't 0."
 
-		$LFS setquota -t -p --block-grace $GRACE --inode-grace \
+		$LFS setquota -t -p --block-grace $grace --inode-grace \
 			$MAX_IQ_TIME $DIR ||
 				error "set project grace time failed"
-		$LFS setquota -p $TSTPRJID -b ${LIMIT}M -B 0 -i 0 -I 0 \
+		$LFS setquota -p $TSTPRJID -b ${limit}M -B 0 -i 0 -I 0 \
 			$DIR || error "set project quota failed"
 
-		test_block_soft $TESTFILE $GRACE $LIMIT "p"
+		test_block_soft $testfile $grace $limit "p"
 		resetquota -p $TSTPRJID
 		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --inode-grace \
 			$MAX_IQ_TIME $DIR ||
@@ -886,7 +1255,172 @@ test_3() {
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace \
 		$MAX_IQ_TIME $DIR || error "restore group grace time failed"
 }
-run_test 3 "Block soft limit (start timer, timer goes off, stop timer)"
+run_test 3a "Block soft limit (start timer, timer goes off, stop timer)"
+
+test_3b() {
+	local grace=20 # 20s
+	local qpool="qpool1"
+	if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+		grace=60
+	fi
+	local testfile=$DIR/$tdir/$tfile-0
+
+	mds_supports_qp
+	# get minimum soft qunit size
+	local limit=$(( $(do_facet $SINGLEMDS $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.dt-0x0.soft_least_qunit) / 1024 ))
+	local glbl_limit=$((2*limit))
+	local glbl_grace=$((2*grace))
+	echo "limit $limit glbl_limit $glbl_limit"
+	echo "grace $grace glbl_grace $glbl_grace"
+
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	echo "User quota in $qpool(soft limit:$limit MB  grace:$grace seconds)"
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+
+	$LFS setquota -t -u --block-grace $glbl_grace --inode-grace \
+		$MAX_IQ_TIME $DIR || error "set user grace time failed"
+	$LFS setquota -t -u --block-grace $grace \
+		-o $qpool $DIR || error "set user grace time failed"
+
+	$LFS setquota -u $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 -o $qpool $DIR ||
+		error "set user quota failed"
+
+	test_block_soft $testfile $grace $limit "u" $qpool
+
+	echo "Group quota in $qpool(soft limit:$limit MB  grace:$grace seconds)"
+	testfile=$DIR/$tdir/$tfile-1
+	# make sure the system is clean
+	used=$(getquota -g $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for group $TSTUSR isn't 0."
+
+	$LFS setquota -t -g --block-grace $glbl_grace --inode-grace \
+		$MAX_IQ_TIME $DIR || error "set group grace time failed"
+	$LFS setquota -t -g --block-grace $grace \
+		-o $qpool $DIR || error "set group grace time failed"
+
+	$LFS setquota -g $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 $DIR ||
+		error "set group quota failed"
+	$LFS setquota -g $TSTUSR -b ${limit}M -B 0 -o $qpool $DIR ||
+		error "set group quota failed"
+
+	test_block_soft $testfile $grace $limit "g" $qpool
+
+	if is_project_quota_supported; then
+		echo "Project quota in $qpool(soft:$limit MB  grace:$grace sec)"
+		testfile=$DIR/$tdir/$tfile-2
+		# make sure the system is clean
+		used=$(getquota -p $TSTPRJID global curspace)
+		[ $used -ne 0 ] && error \
+			"Used space($used) for project $TSTPRJID isn't 0."
+
+		$LFS setquota -t -p --block-grace $glbl_grace --inode-grace \
+			$MAX_IQ_TIME $DIR ||
+				error "set project grace time failed"
+		$LFS setquota -t -p --block-grace $grace \
+			-o $qpool $DIR || error "set project grace time failed"
+
+		$LFS setquota -p $TSTPRJID -b ${glbl_limit}M -B 0 -i 0 -I 0 \
+			$DIR || error "set project quota failed"
+		$LFS setquota -p $TSTPRJID -b ${limit}M -B 0 -o $qpool $DIR ||
+			error "set project quota failed"
+
+		test_block_soft $testfile $grace $limit "p" $qpool
+		resetquota -p $TSTPRJID
+		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --inode-grace \
+			$MAX_IQ_TIME $DIR ||
+				error "restore project grace time failed"
+		$LFS setquota -t -p --block-grace $MAX_DQ_TIME -o $qpool $DIR ||
+			error "set project grace time failed"
+	fi
+
+	# cleanup
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
+		$MAX_IQ_TIME $DIR || error "restore user grace time failed"
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		-o $qpool $DIR || error "restore user grace time failed"
+	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace \
+		$MAX_IQ_TIME $DIR || error "restore group grace time failed"
+	$LFS setquota -t -g --block-grace $MAX_DQ_TIME \
+		-o $qpool $DIR || error "restore group grace time failed"
+}
+run_test 3b "Quota pools: Block soft limit (start timer, expires, stop timer)"
+
+test_3c() {
+	local grace=20 # 20s
+	local qpool="qpool1"
+	local qpool2="qpool2"
+	if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+		grace=60
+	fi
+	local testfile=$DIR/$tdir/$tfile-0
+
+	mds_supports_qp
+	# get minimum soft qunit size
+	local limit=$(( $(do_facet $SINGLEMDS $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.dt-0x0.soft_least_qunit) / 1024 ))
+	local limit2=$((limit+4))
+	local glbl_limit=$((limit+8))
+	local grace1=$((grace+10))
+	local grace2=$grace
+	local glbl_grace=$((grace+20))
+	echo "limit $limit limit2 $limit2 glbl_limit $glbl_limit"
+	echo "grace1 $grace1 grace2 $grace2 glbl_grace $glbl_grace"
+
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	echo "User quota in qpool2(soft:$limit2 MB grace:$grace2 seconds)"
+	# make sure the system is clean
+	local used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+
+	pool_add $qpool2 || error "pool_add failed"
+	pool_add_targets $qpool2 0 1 ||
+		error "pool_add_targets failed"
+
+
+	$LFS setquota -t -u --block-grace $glbl_grace --inode-grace \
+		$MAX_IQ_TIME $DIR || error "set user grace time failed"
+	$LFS setquota -t -u --block-grace $grace1 \
+		-o $qpool $DIR || error "set user grace time failed"
+	$LFS setquota -t -u --block-grace $grace2 \
+		-o $qpool2 $DIR || error "set user grace time failed"
+
+	$LFS setquota -u $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+	$LFS setquota -u $TSTUSR -b ${limit}M -B 0 -o $qpool $DIR ||
+		error "set user quota failed"
+	# qpool has minimum soft limit, but it's grace is grater than
+	# grace period of qpool2. Thus write shouldn't fail when
+	# hit qpool soft limit - only when reaches up qpool2 limit
+	# after grace2 seconds.
+	$LFS setquota -u $TSTUSR -b ${limit2}M -B 0 -o $qpool2 $DIR ||
+		error "set user quota failed"
+
+	test_block_soft $testfile $grace2 $limit2 "u" $qpool2
+
+	# cleanup
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
+		$MAX_IQ_TIME $DIR || error "restore user grace time failed"
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		-o $qpool $DIR || error "restore user grace time failed"
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		-o $qpool2 $DIR || error "restore user grace time failed"
+}
+run_test 3c "Quota pools: check block soft limit on different pools"
 
 test_file_soft() {
 	local TESTFILE=$1
@@ -3536,6 +4070,330 @@ test_66() {
 	cleanup_quota_test
 }
 run_test 66 "nonroot user can not change project state in default"
+
+test_67_write() {
+	local file="$1"
+	local qtype="$2"
+	local size=$3
+	local _runas=""
+	local short_qtype=${qtype:0:1}
+
+	echo "file "$file
+	echo "0 $0 1 $1 2 $2 3 $3 4 $4"
+	case "$4" in
+		quota_usr)  _runas=$RUNAS;;
+		quota_2usr) _runas=$RUNAS2;;
+		*)          error "unknown quota parameter $4";;
+	esac
+
+	log "Write..."
+	date
+	$_runas $DD of=$file count=$size ||
+		quota_error $short_qtype $TSTUSR \
+			"$qtype write failure, but expect success"
+	date
+	cancel_lru_locks osc
+	date
+	sync; sync_all_data || true
+	date
+}
+
+getgranted() {
+	local pool=$1
+	local ptype=$2
+	local userid=$3
+	local qtype=$4
+	local param=qmt.$FSNAME-QMT0000.$ptype-$pool.glb-$qtype
+
+	do_facet mds1 $LCTL get_param $param |
+		grep -A2 $userid | awk -F'[, ]*' 'NR==2{print $9}'
+}
+
+test_67() {
+	local limit=20  # 20M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local testfile2="$DIR/$tdir/$tfile-1"
+	local testfile3="$DIR/$tdir/$tfile-2"
+	local qpool="qpool1"
+	local used
+	local granted
+	local granted_mb
+
+	mds_supports_qp
+	[ "$ost1_FSTYPE" == zfs ] &&
+		skip "ZFS grants some block space together with inode"
+
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# test for user
+	log "User quota (block hardlimit:$limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	# make sure the system is clean
+	used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && error "Used space($used) for user $TSTUSR isn't 0."
+
+	granted=$(getgranted "0x0" "dt" $TSTID "usr")
+	echo "granted 0x0 before write $granted"
+
+	# trigger reintegration
+	local procf="osd-$(facet_fstype ost1).$FSNAME-OST*."
+	procf=${procf}quota_slave.force_reint
+	do_facet ost1 $LCTL set_param $procf=1 ||
+		error "force reintegration failed"
+	wait_ost_reint "u" || error "reintegration failed"
+	granted=$(getgranted "0x0" "dt" $TSTID "usr")
+	[ $granted -ne 0 ] &&
+		error "Granted($granted) for $TSTUSR in $qpool isn't 0."
+
+	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+
+	# write 10 MB to testfile
+	test_67_write "$testfile" "user" 10 "quota_usr"
+
+	# create qpool and add OST1
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 1 1 || error "pool_add_targets failed"
+	# as quota_usr hasn't limits, lqe may absent. But it should be
+	# created after the 1st direct qmt_get.
+	used=$(getquota -u $TSTUSR global bhardlimit $qpool)
+
+	# check granted - should be 0, as testfile is located only on OST0
+	granted=$(getgranted "0x0" "dt" $TSTID "usr")
+	echo "global granted $granted"
+	granted=$(getgranted $qpool "dt" $TSTID "usr")
+	echo "$qpool granted $granted"
+	[ $granted -ne 0 ] &&
+		error "Granted($granted) for $TSTUSR in $qpool isn't 0."
+
+	# add OST0 to qpool and check granted space
+	pool_add_targets $qpool 0 1 ||
+		error "pool_add_targets failed"
+	granted_mb=$(($(getgranted $qpool "dt" $TSTID "usr")/1024))
+	echo "Granted $granted_mb MB"
+	#should be 10M + qunit for each OST
+	[ $granted_mb -ge 10 -a $granted_mb -lt $limit ] ||
+		error "Granted($granted_mb) for $TSTUSR in $qpool is wrong."
+
+	$LFS setstripe $testfile2 -c 1 -i 1 ||
+		error "setstripe $testfile2 failed"
+	chown $TSTUSR2.$TSTUSR2 $testfile2 || error "chown $testfile2 failed"
+	# Write from another user and check that qpool1
+	# shows correct granted, despite quota_2usr hasn't limits in qpool1.
+	test_67_write "$testfile2" "user" 10 "quota_2usr"
+	used=$(getquota -u $TSTUSR2 global curspace $qpool)
+	granted=$(getgranted $qpool "dt" $TSTID2 "usr")
+	[ $granted -ne 0 ] &&
+		error "Granted($granted) for $TSTUSR2 in $qpool isn't 0."
+
+	# Granted space for quota_2usr in qpool1 should appear only
+	# when global lqe for this user becomes enforced.
+	$LFS setquota -u $TSTUSR2 -B ${limit}M $DIR ||
+		error "set user quota failed"
+	granted_mb=$(($(getgranted $qpool "dt" $TSTID2 "usr")/1024))
+	echo "granted_mb $granted_mb"
+	[ $granted_mb -ge 10 -a $granted_mb -lt $limit ] ||
+		error "Granted($granted) for $TSTUSR in $qpool is wrong."
+
+	$LFS setstripe $testfile3 -c 1 -i 0 ||
+		error "setstripe $testfile3 failed"
+	chown $TSTUSR2.$TSTUSR2 $testfile3 || error "chown $testfile3 failed"
+	test_67_write "$testfile3" "user" 10 "quota_2usr"
+	granted_mb=$(($(getgranted $qpool "dt" $TSTID2 "usr")/1024))
+	echo "$testfile3 granted_mb $granted_mb"
+	[ $granted_mb -eq $limit ] ||
+		error "Granted($granted_mb) for $TSTUSR2 is not equal to 20M"
+
+	# remove OST1 from the qpool1 and check granted space
+	# should be 0 for TSTUSR and 10M for TSTUSR2
+	pool_remove_target $qpool 0
+	granted_mb=$(($(getgranted $qpool "dt" $TSTID "usr")/1024))
+	[ $granted_mb -eq 0 ] ||
+		error "Granted($granted_mb) for $TSTUSR in $qpool != 0."
+	granted_mb=$(($(getgranted $qpool "dt" $TSTID2 "usr")/1024))
+	[ $granted_mb -eq 10 ] ||
+		error "Granted($granted_mb) for $TSTUSR2 is not equal to 10M"
+
+	rm -f $testfile
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	used=$(getquota -u $TSTUSR global curspace)
+	[ $used -ne 0 ] && quota_error u $TSTUSR \
+		"user quota isn't released after deletion"
+	resetquota -u $TSTUSR
+
+	cleanup_quota_test
+}
+run_test 67 "quota pools recalculation"
+
+get_slave_nr() {
+	local pool=$1
+	local qtype=$2
+	local nr
+
+	do_facet mds1 $LCTL get_param -n qmt.$FSNAME-QMT0000.dt-$pool.info |
+		awk '/usr/ {getline; print $2}'
+}
+
+test_68()
+{
+	local qpool="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	# check slave number for glbal pool
+	local nr=$(get_slave_nr "0x0" "usr")
+	echo "nr result $nr"
+	[[ $nr != $((OSTCOUNT + MDSCOUNT)) ]] &&
+		error "Slave_nr $nr for global pool != ($OSTCOUNT + $MDSCOUNT)"
+
+	# create qpool and add OST1
+	pool_add $qpool || error "pool_add failed"
+	nr=$(get_slave_nr $qpool "usr")
+	[[ $nr != 0 ]] && error "Slave number $nr for $qpool != 0"
+
+	# add OST1 to qpool
+	pool_add_targets $qpool 1 1 || error "pool_add_targets failed"
+	nr=$(get_slave_nr $qpool "usr")
+	[[ $nr != 1 ]] && error "Slave number $nr for $qpool != 1"
+
+	# add OST0 to qpool
+	pool_add_targets $qpool 0 1 || error "pool_add_targets failed"
+	nr=$(get_slave_nr $qpool "usr")
+	[[ $nr != 2 ]] && error "Slave number $nr for $qpool != 2"
+
+	# remove OST0
+	pool_remove_target $qpool 0
+	nr=$(get_slave_nr $qpool "usr")
+	[[ $nr != 1 ]] && error "Slave number $nr for $qpool != 1"
+
+	# remove OST1
+	pool_remove_target $qpool 1
+	nr=$(get_slave_nr $qpool "usr")
+	[[ $nr != 0 ]] && error "Slave number $nr for $qpool != 0"
+
+	# Check again that all is fine with global pool
+	nr=$(get_slave_nr "0x0" "usr")
+	[[ $nr != $((OSTCOUNT + MDSCOUNT)) ]] &&
+		error "Slave_nr $nr for global pool != ($OSTCOUNT + $MDSCOUNT)"
+
+	cleanup_quota_test
+}
+run_test 68 "slave number in quota pool changed after each add/remove OST"
+
+test_69()
+{
+	local global_limit=200  # 200M
+	local limit=10  # 10M
+	local testfile="$DIR/$tdir/$tfile-0"
+	local dom0="$DIR/$tdir/dom0"
+	local qpool="qpool1"
+
+	mds_supports_qp
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# enable ost quota
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
+
+	# Save DOM only at MDT0
+	$LFS setdirstripe -c 1 -i 0 $dom0 || error "cannot create $dom0"
+	$LFS setstripe -E 1M $dom0 -L mdt || error "setstripe to $dom0 failed"
+	chmod 0777 $dom0
+	$LFS setstripe -c 1 -i 0 "$DIR/$tdir/"
+
+	# create qpool and add OST0
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 0 || error "pool_add_targets failed"
+
+	log "User quota (block hardlimit:$global_limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B ${global_limit}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
+
+	log "User quota (block hardlimit:$limit MB)"
+	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR ||
+		error "set user quota failed"
+
+	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 oflag=sync ||
+		quota_error u $TSTUSR "write failed"
+
+	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 seek=512 \
+		oflag=sync || quota_error u $TSTUSR "write failed"
+
+	$RUNAS $DD of=$testfile count=$limit || true
+
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+
+	# MDT0 shouldn't get EDQUOT with glimpse.
+	$RUNAS $DD of=$testfile count=$limit seek=$limit &&
+		quota_error u $TSTUSR \
+			"user write success, but expect EDQUOT"
+
+	# Now all members of qpool1 should get EDQUOT. Expect success
+	# when write to DOM on MDT0, as it belongs to global pool.
+	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 \
+		oflag=sync || quota_error u $TSTUSR "write failed"
+
+	$RUNAS dd if=/dev/zero of="$dom0/f1" bs=1K count=512 seek=512 \
+		oflag=sync || quota_error u $TSTUSR "write failed"
+
+	cleanup_quota_test
+}
+run_test 69 "EDQUOT at one of pools shouldn't affect DOM"
+
+test_70()
+{
+	local qpool="qpool1"
+	local limit=20
+	local err=0
+	local bhard
+
+	[[ CLIENT_VERSION -lt $(version_code $VERSION_WITH_QP) ]] &&
+		skip "Needs a client >= $VERSION_WITH_QP"
+
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+
+	# MDS returns EFAULT for unsupported quotactl command
+	[[ $MDS1_VERSION -lt $(version_code $VERSION_WITH_QP) ]] && err=14
+
+	# create qpool and add OST0
+	pool_add $qpool || error "pool_add failed"
+	pool_add_targets $qpool 0 0 || error "pool_add_targets failed"
+
+	$LFS setquota -u $TSTUSR -B ${limit}M -o $qpool $DIR
+	rc=$?
+	[ $rc -eq $err ] || error "setquota res $rc != $err"
+
+	# If MDS supports QP, check that limit was set properly.
+	if [[ $MDS1_VERSION -ge $(version_code $VERSION_WITH_QP) ]]; then
+		bhard=$(getquota -u $TSTUSR global bhardlimit $qpool)
+		echo "hard limit $bhard limit $limit"
+		[ $bhard -ne $((limit*1024)) ] &&
+			error "bhard:$bhard for $qpool!=$((limit*1024))"
+	fi
+
+	$LFS quota -u $TSTUSR --pool $qpool $DIR
+	rc=$?
+	[ $rc -eq $err ] || error "quota res $rc != $err"
+
+	cleanup_quota_test
+}
+run_test 70 "check lfs setquota/quota with a pool option"
 
 quota_fini()
 {

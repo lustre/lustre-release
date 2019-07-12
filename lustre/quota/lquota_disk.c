@@ -541,7 +541,7 @@ int lquota_disk_for_each_slv(const struct lu_env *env, struct dt_object *parent,
 		if (qti->qti_fid.f_seq != FID_SEQ_QUOTA)
 			goto next;
 
-		rc = func(env, glb_fid, (char *)key, &qti->qti_fid, arg);
+		rc = func(env, glb_fid, qti->qti_buf, &qti->qti_fid, arg);
 		if (rc)
 			break;
 next:

@@ -2707,17 +2707,17 @@ put:
  */
 static int mdt_quotactl(struct tgt_session_info *tsi)
 {
-	struct obd_export	*exp  = tsi->tsi_exp;
-	struct req_capsule	*pill = tsi->tsi_pill;
-	struct obd_quotactl	*oqctl, *repoqc;
-	int			 id, rc;
-	struct mdt_device	*mdt = mdt_exp2dev(exp);
-	struct lu_device	*qmt = mdt->mdt_qmt_dev;
-	struct lu_nodemap	*nodemap;
+	struct obd_export *exp  = tsi->tsi_exp;
+	struct req_capsule *pill = tsi->tsi_pill;
+	struct obd_quotactl *oqctl, *repoqc;
+	int id, rc;
+	struct mdt_device *mdt = mdt_exp2dev(exp);
+	struct lu_device *qmt = mdt->mdt_qmt_dev;
+	struct lu_nodemap *nodemap;
 	ENTRY;
 
 	oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
-	if (oqctl == NULL)
+	if (!oqctl)
 		RETURN(err_serious(-EPROTO));
 
 	rc = req_capsule_server_pack(pill);
@@ -2733,12 +2733,16 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case Q_SETINFO:
 	case Q_SETQUOTA:
 	case LUSTRE_Q_SETDEFAULT:
+	case LUSTRE_Q_SETQUOTAPOOL:
+	case LUSTRE_Q_SETINFOPOOL:
 		if (!nodemap_can_setquota(nodemap))
 			GOTO(out_nodemap, rc = -EPERM);
 		/* fallthrough */
 	case Q_GETINFO:
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
+	case LUSTRE_Q_GETQUOTAPOOL:
+	case LUSTRE_Q_GETINFOPOOL:
 		if (qmt == NULL)
 			GOTO(out_nodemap, rc = -EOPNOTSUPP);
 		/* slave quotactl */
@@ -2747,8 +2751,10 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case Q_GETOQUOTA:
 		break;
 	default:
-		CERROR("Unsupported quotactl command: %d\n", oqctl->qc_cmd);
-		GOTO(out_nodemap, rc = -EFAULT);
+		rc = -EFAULT;
+		CERROR("%s: unsupported quotactl command %d: rc = %d\n",
+		       mdt_obd_name(mdt), oqctl->qc_cmd, rc);
+		GOTO(out_nodemap, rc);
 	}
 
 	id = oqctl->qc_id;
@@ -2791,6 +2797,10 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case Q_GETQUOTA:
 	case LUSTRE_Q_SETDEFAULT:
 	case LUSTRE_Q_GETDEFAULT:
+	case LUSTRE_Q_SETQUOTAPOOL:
+	case LUSTRE_Q_GETQUOTAPOOL:
+	case LUSTRE_Q_SETINFOPOOL:
+	case LUSTRE_Q_GETINFOPOOL:
 		/* forward quotactl request to QMT */
 		rc = qmt_hdls.qmth_quotactl(tsi->tsi_env, qmt, oqctl);
 		break;
@@ -2810,8 +2820,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	if (oqctl->qc_id != id)
 		swap(oqctl->qc_id, id);
 
-	*repoqc = *oqctl;
-
+	QCTL_COPY(repoqc, oqctl);
 	EXIT;
 
 out_nodemap:

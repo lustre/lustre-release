@@ -665,6 +665,7 @@ struct obd_device *class_num2obd(int num)
 
         return obd;
 }
+EXPORT_SYMBOL(class_num2obd);
 
 /**
  * Find obd in obd_dev[] by name or uuid.

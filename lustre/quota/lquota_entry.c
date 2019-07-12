@@ -285,8 +285,10 @@ static void lqe_init(struct lquota_entry *lqe)
  *
  * \param env - the environment passed by the caller
  * \param lqe - is the quota entry to refresh
+ * \param find - don't create entry on disk if true
  */
-static int lqe_read(const struct lu_env *env, struct lquota_entry *lqe)
+static int lqe_read(const struct lu_env *env,
+		    struct lquota_entry *lqe, bool find)
 {
 	struct lquota_site	*site;
 	int			 rc;
@@ -299,7 +301,7 @@ static int lqe_read(const struct lu_env *env, struct lquota_entry *lqe)
 
 	LQUOTA_DEBUG(lqe, "read");
 
-	rc = site->lqs_ops->lqe_read(env, lqe, site->lqs_parent);
+	rc = site->lqs_ops->lqe_read(env, lqe, site->lqs_parent, find);
 	if (rc == 0)
 		/* mark the entry as up-to-date */
 		lqe->lqe_uptodate = true;
@@ -313,12 +315,15 @@ static int lqe_read(const struct lu_env *env, struct lquota_entry *lqe)
  * \param env  - the environment passed by the caller
  * \param site - lquota site which stores quota entries in a hash table
  * \param qid  - is the quota ID to be found/created
+ * \param find - don't create lqe on disk in case of ENOENT if true
  *
  * \retval 0     - success
  * \retval -ve   - failure
  */
-struct lquota_entry *lqe_locate(const struct lu_env *env,
-				struct lquota_site *site, union lquota_id *qid)
+struct lquota_entry *lqe_locate_find(const struct lu_env *env,
+				     struct lquota_site *site,
+				     union lquota_id *qid,
+				     bool find)
 {
 	struct lquota_entry	*lqe, *new = NULL;
 	int			 rc = 0;
@@ -350,7 +355,7 @@ struct lquota_entry *lqe_locate(const struct lu_env *env,
 	lqe_init(new);
 
 	/* read quota settings from disk and mark lqe as up-to-date */
-	rc = lqe_read(env, new);
+	rc = lqe_read(env, new, find);
 	if (rc)
 		GOTO(out, lqe = ERR_PTR(rc));
 
