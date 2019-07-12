@@ -1020,8 +1020,7 @@ static inline int ldlm_mode_to_index(enum ldlm_mode mode)
 
 	LASSERT(mode != 0);
 	LASSERT(is_power_of_2(mode));
-	for (index = -1; mode != 0; index++, mode >>= 1)
-		/* do nothing */;
+	index = ilog2(mode);
 	LASSERT(index < LCK_MODE_NUM);
 	return index;
 }
