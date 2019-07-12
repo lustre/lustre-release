@@ -1468,6 +1468,7 @@ struct lu_qos {
 				 lq_reset:1;     /* zero current penalties */
 };
 
+void lu_qos_rr_init(struct lu_qos_rr *lqr);
 int lqos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 int lqos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
 u64 lu_prandom_u64_max(u64 ep_ro);

@@ -692,7 +692,6 @@ struct lod_obj_stripe_cb_data {
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		       struct lu_attr *attr, const struct lu_buf *buf,
 		       struct thandle *th);
-void lod_qos_rr_init(struct lu_qos_rr *lqr);
 int lod_use_defined_striping(const struct lu_env *, struct lod_object *,
 			     const struct lu_buf *);
 int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,

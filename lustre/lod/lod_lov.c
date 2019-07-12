@@ -2199,12 +2199,13 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	INIT_LIST_HEAD(&lod->lod_qos.lq_svr_list);
 	init_rwsem(&lod->lod_qos.lq_rw_sem);
 	lod->lod_qos.lq_dirty = 1;
-	lod->lod_qos.lq_rr.lqr_dirty = 1;
 	lod->lod_qos.lq_reset = 1;
 	/* Default priority is toward free space balance */
 	lod->lod_qos.lq_prio_free = 232;
 	/* Default threshold for rr (roughly 17%) */
 	lod->lod_qos.lq_threshold_rr = 43;
+
+	lu_qos_rr_init(&lod->lod_qos.lq_rr);
 
 	/* Set up OST pool environment */
 	lod->lod_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
@@ -2222,7 +2223,6 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	rc = lod_ost_pool_init(&lod->lod_pool_info, 0);
 	if (rc)
 		GOTO(out_hash, rc);
-	lod_qos_rr_init(&lod->lod_qos.lq_rr);
 	rc = lod_ost_pool_init(&lod->lod_qos.lq_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_pool_info, rc);

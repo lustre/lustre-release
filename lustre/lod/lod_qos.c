@@ -435,12 +435,6 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 	RETURN(0);
 }
 
-void lod_qos_rr_init(struct lu_qos_rr *lqr)
-{
-	spin_lock_init(&lqr->lqr_alloc);
-	lqr->lqr_dirty = 1;
-}
-
 #define LOV_QOS_EMPTY ((__u32)-1)
 
 /**

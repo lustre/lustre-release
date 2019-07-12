@@ -44,6 +44,13 @@
 #include <lustre_fid.h>
 #include <lu_object.h>
 
+void lu_qos_rr_init(struct lu_qos_rr *lqr)
+{
+	spin_lock_init(&lqr->lqr_alloc);
+	lqr->lqr_dirty = 1;
+}
+EXPORT_SYMBOL(lu_qos_rr_init);
+
 /**
  * Add a new target to Quality of Service (QoS) target table.
  *

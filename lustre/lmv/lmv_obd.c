@@ -1311,12 +1311,13 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	INIT_LIST_HEAD(&lmv->lmv_qos.lq_svr_list);
 	init_rwsem(&lmv->lmv_qos.lq_rw_sem);
 	lmv->lmv_qos.lq_dirty = 1;
-	lmv->lmv_qos.lq_rr.lqr_dirty = 1;
 	lmv->lmv_qos.lq_reset = 1;
 	/* Default priority is toward free space balance */
 	lmv->lmv_qos.lq_prio_free = 232;
 	/* Default threshold for rr (roughly 17%) */
 	lmv->lmv_qos.lq_threshold_rr = 43;
+
+	lu_qos_rr_init(&lmv->lmv_qos.lq_rr);
 
 	/*
 	 * initialize rr_index to lower 32bit of netid, so that client

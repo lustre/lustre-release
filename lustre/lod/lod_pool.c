@@ -661,7 +661,8 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	if (rc)
 		GOTO(out_err, rc);
 
-	lod_qos_rr_init(&new_pool->pool_rr);
+	lu_qos_rr_init(&new_pool->pool_rr);
+
 	rc = lod_ost_pool_init(&new_pool->pool_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_free_pool_obds, rc);
