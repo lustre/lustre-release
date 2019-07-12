@@ -4433,6 +4433,48 @@ upper() {
 	echo -n "$1" | tr '[:lower:]' '[:upper:]'
 }
 
+squash_opt() {
+	local var="$*"
+	local other=""
+	local opt_o=""
+	local opt_e=""
+	local first_e=0
+	local first_o=0
+	local take=""
+
+	var=$(echo "$var" | sed -e 's/,\( \)*/,/g')
+	for i in $(echo "$var"); do
+		if [ "$i" == "-O" ]; then
+			take="o";
+			first_o=$(($first_o + 1))
+			continue;
+		fi
+		if [ "$i" == "-E" ]; then
+			take="e";
+			first_e=$(($first_e + 1 ))
+			continue;
+		fi
+		case $take in
+			"o")
+				[ $first_o -gt 1 ] && opt_o+=",";
+				opt_o+="$i";
+				;;
+			"e")
+				[ $first_e -gt 1 ] && opt_e+=",";
+				opt_e+="$i";
+				;;
+			*)
+				other+=" $i";
+				;;
+		esac
+		take=""
+	done
+
+	echo -n "$other"
+	[ -n "$opt_o" ] && echo " -O $opt_o"
+	[ -n "$opt_e" ] && echo " -E $opt_e"
+}
+
 mkfs_opts() {
 	local facet=$1
 	local dev=$2
@@ -4510,6 +4552,8 @@ mkfs_opts() {
 
 	var=${type}_FS_MKFS_OPTS
 	fs_mkfs_opts+=${!var:+" ${!var}"}
+
+	[ $fstype == ldiskfs ] && fs_mkfs_opts=$(squash_opt $fs_mkfs_opts)
 
 	if [ -n "${fs_mkfs_opts## }" ]; then
 		opts+=" --mkfsoptions=\\\"${fs_mkfs_opts## }\\\""
