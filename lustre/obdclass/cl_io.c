@@ -654,7 +654,7 @@ int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 		pg->cp_sync_io = anchor;
 	}
 
-	cl_sync_io_init(anchor, queue->c2_qin.pl_nr, &cl_sync_io_end);
+	cl_sync_io_init(anchor, queue->c2_qin.pl_nr);
 	rc = cl_io_submit_rw(env, io, iot, queue);
 	if (rc == 0) {
 		/*
@@ -1111,23 +1111,18 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_req_attr_set);
 
-/*
- * cl_sync_io_end callback is issued as cl_sync_io completes and before
- * control of anchor reverts to model used by the caller of cl_sync_io_init()
- *
- * NOTE: called with spinlock on anchor->csi_waitq.lock
- */
-void cl_sync_io_end(const struct lu_env *env, struct cl_sync_io *anchor)
-{
-	/* deprecated pending future removal */
-}
-EXPORT_SYMBOL(cl_sync_io_end);
-
 /**
- * Initialize synchronous io wait anchor
+ * Initialize synchronous io wait \a anchor for \a nr pages with optional
+ * \a end handler.
+ * \param anchor owned by caller, initialzied here.
+ * \param nr number of pages initally pending in sync.
+ * \param end optional callback sync_io completion, can be used to
+ *  trigger erasure coding, integrity, dedupe, or similar operation.
+ * \q end is called with a spinlock on anchor->csi_waitq.lock
  */
-void cl_sync_io_init(struct cl_sync_io *anchor, int nr,
-		     void (*end)(const struct lu_env *, struct cl_sync_io *))
+
+void cl_sync_io_init_notify(struct cl_sync_io *anchor, int nr,
+			    cl_sync_io_end_t *end)
 {
 	ENTRY;
 	memset(anchor, 0, sizeof(*anchor));
@@ -1135,10 +1130,9 @@ void cl_sync_io_init(struct cl_sync_io *anchor, int nr,
 	atomic_set(&anchor->csi_sync_nr, nr);
 	anchor->csi_sync_rc = 0;
 	anchor->csi_end_io = end;
-	LASSERT(end != NULL);
 	EXIT;
 }
-EXPORT_SYMBOL(cl_sync_io_init);
+EXPORT_SYMBOL(cl_sync_io_init_notify);
 
 /**
  * Wait until all IO completes. Transfer completion routine has to call
@@ -1194,6 +1188,8 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 	LASSERT(atomic_read(&anchor->csi_sync_nr) > 0);
 	if (atomic_dec_and_lock(&anchor->csi_sync_nr,
 				&anchor->csi_waitq.lock)) {
+		cl_sync_io_end_t *end_io = anchor->csi_end_io;
+
 		/*
 		 * Holding the lock across both the decrement and
 		 * the wakeup ensures cl_sync_io_wait() doesn't complete
@@ -1203,7 +1199,8 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		 * completes.
 		 */
 		wake_up_all_locked(&anchor->csi_waitq);
-		anchor->csi_end_io(env, anchor);
+		if (end_io)
+			end_io(env, anchor);
 		spin_unlock(&anchor->csi_waitq.lock);
 
 		/* Can't access anchor any more */

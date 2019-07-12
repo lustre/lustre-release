@@ -205,7 +205,7 @@ int cl_lock_request(const struct lu_env *env, struct cl_io *io,
 
 	if ((enq_flags & CEF_GLIMPSE) && !(enq_flags & CEF_SPECULATIVE)) {
 		anchor = &cl_env_info(env)->clt_anchor;
-		cl_sync_io_init(anchor, 1, cl_sync_io_end);
+		cl_sync_io_init(anchor, 1);
 	}
 
 	rc = cl_lock_enqueue(env, io, lock, anchor);

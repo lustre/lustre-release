@@ -2471,6 +2471,22 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 /** \defgroup cl_sync_io cl_sync_io
  * @{ */
 
+struct cl_sync_io;
+
+typedef void (cl_sync_io_end_t)(const struct lu_env *, struct cl_sync_io *);
+
+void cl_sync_io_init_notify(struct cl_sync_io *anchor, int nr,
+			    cl_sync_io_end_t *end);
+
+int  cl_sync_io_wait(const struct lu_env *env, struct cl_sync_io *anchor,
+		     long timeout);
+void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
+		     int ioret);
+static inline void cl_sync_io_init(struct cl_sync_io *anchor, int nr)
+{
+	cl_sync_io_init_notify(anchor, nr, NULL);
+}
+
 /**
  * Anchor for synchronous transfer. This is allocated on a stack by thread
  * doing synchronous transfer, and a pointer to this structure is set up in
@@ -2485,17 +2501,8 @@ struct cl_sync_io {
 	/** completion to be signaled when transfer is complete. */
 	wait_queue_head_t	csi_waitq;
 	/** callback to invoke when this IO is finished */
-	void			(*csi_end_io)(const struct lu_env *,
-					      struct cl_sync_io *);
+	cl_sync_io_end_t       *csi_end_io;
 };
-
-void cl_sync_io_init(struct cl_sync_io *anchor, int nr,
-		     void (*end)(const struct lu_env *, struct cl_sync_io *));
-int  cl_sync_io_wait(const struct lu_env *env, struct cl_sync_io *anchor,
-		     long timeout);
-void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
-		     int ioret);
-void cl_sync_io_end(const struct lu_env *env, struct cl_sync_io *anchor);
 
 /** @} cl_sync_io */
 

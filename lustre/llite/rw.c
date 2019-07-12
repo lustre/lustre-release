@@ -1263,7 +1263,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		cl_page_disown(env, io, page);
 	} else {
 		anchor = &vvp_env_info(env)->vti_anchor;
-		cl_sync_io_init(anchor, 1, &cl_sync_io_end);
+		cl_sync_io_init(anchor, 1);
 		page->cp_sync_io = anchor;
 
 		cl_2queue_add(queue, page);

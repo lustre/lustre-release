@@ -872,7 +872,7 @@ restart:
 			continue;
 
 		/* wait for conflicting lock to be canceled */
-		cl_sync_io_init(waiter, 1, cl_sync_io_end);
+		cl_sync_io_init(waiter, 1);
 		oscl->ols_owner = waiter;
 
 		spin_lock(&tmp_oscl->ols_lock);
