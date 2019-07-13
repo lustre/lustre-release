@@ -571,12 +571,14 @@ static void ptlrpc_server_nthreads_check(struct ptlrpc_service *svc,
 		 * have too many threads no matter how many cores/HTs
 		 * there are.
 		 */
+		preempt_disable();
 		if (cpumask_weight
 		    (topology_sibling_cpumask(smp_processor_id())) > 1) {
 			/* weight is # of HTs */
 			/* depress thread factor for hyper-thread */
 			factor = factor - (factor >> 1) + (factor >> 3);
 		}
+		preempt_enable();
 
 		weight = cfs_cpt_weight(svc->srv_cptable, 0);
 
@@ -3230,7 +3232,9 @@ int ptlrpc_hr_init(void)
 
 	init_waitqueue_head(&ptlrpc_hr.hr_waitq);
 
+	preempt_disable();
 	weight = cpumask_weight(topology_sibling_cpumask(smp_processor_id()));
+	preempt_enable();
 
 	cfs_percpt_for_each(hrp, cpt, ptlrpc_hr.hr_partitions) {
 		hrp->hrp_cpt = cpt;
