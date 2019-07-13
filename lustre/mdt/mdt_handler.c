@@ -1380,9 +1380,11 @@ static int mdt_getattr(struct tgt_session_info *tsi)
         int rc, rc2;
         ENTRY;
 
-        reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
-        LASSERT(reqbody);
-        LASSERT(obj != NULL);
+	if (unlikely(info->mti_object == NULL))
+		RETURN(-EPROTO);
+
+	reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
+	LASSERT(reqbody);
 	LASSERT(lu_object_assert_exists(&obj->mot_obj));
 
 	/* Special case for Data-on-MDT files to get data version */
@@ -1540,6 +1542,8 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 		RETURN(-EOPNOTSUPP);
 
 	info = tsi2mdt_info(tsi);
+	if (unlikely(info->mti_object == NULL))
+		RETURN(-EPROTO);
 
 	if (info->mti_dlm_req != NULL)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
@@ -2588,6 +2592,9 @@ static int mdt_sync(struct tgt_session_info *tsi)
 		rc = mdt_device_sync(tsi->tsi_env, mdt_exp2dev(tsi->tsi_exp));
 	} else {
 		struct mdt_thread_info *info = tsi2mdt_info(tsi);
+
+		if (unlikely(info->mti_object == NULL))
+			RETURN(-EPROTO);
 
 		/* sync an object */
 		rc = mdt_object_sync(tsi->tsi_env, tsi->tsi_exp,
@@ -4284,6 +4291,7 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 			  u64);
 	enum tgt_handler_flags it_handler_flags = 0;
 	struct ldlm_reply *rep;
+	bool check_mdt_object = false;
 	int rc;
 	ENTRY;
 
@@ -4300,12 +4308,14 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 		it_handler = &mdt_intent_open;
 		break;
 	case IT_GETATTR:
+		check_mdt_object = true;
 	case IT_LOOKUP:
 		it_format = &RQF_LDLM_INTENT_GETATTR;
 		it_handler = &mdt_intent_getattr;
 		it_handler_flags = HAS_REPLY;
 		break;
 	case IT_GETXATTR:
+		check_mdt_object = true;
 		it_format = &RQF_LDLM_INTENT_GETXATTR;
 		it_handler = &mdt_intent_getxattr;
 		it_handler_flags = HAS_BODY;
@@ -4350,6 +4360,9 @@ static int mdt_intent_opc(enum ldlm_intent_flags it_opc,
 	rc = mdt_unpack_req_pack_rep(info, it_handler_flags);
 	if (rc < 0)
 		RETURN(rc);
+
+	if (unlikely(info->mti_object == NULL && check_mdt_object))
+		RETURN(-EPROTO);
 
 	if (it_handler_flags & IS_MUTABLE && mdt_rdonly(req->rq_export))
 		RETURN(-EROFS);
@@ -5113,6 +5126,9 @@ static int mdt_tgt_getxattr(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info	*info = tsi2mdt_info(tsi);
 	int			 rc;
+
+	if (unlikely(info->mti_object == NULL))
+		return -EPROTO;
 
 	rc = mdt_getxattr(info);
 
