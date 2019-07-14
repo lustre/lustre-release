@@ -164,7 +164,6 @@ static void dio_complete_routine(struct bio *bio, int error)
 {
 #endif
 	struct osd_iobuf *iobuf = bio->bi_private;
-	int iter;
 	struct bio_vec *bvl;
 
         /* CAVEAT EMPTOR: possibly in IRQ context
@@ -191,7 +190,9 @@ static void dio_complete_routine(struct bio *bio, int error)
 
 	/* the check is outside of the cycle for performance reason -bzzz */
 	if (!bio_data_dir(bio)) {
-		bio_for_each_segment_all(bvl, bio, iter) {
+		DECLARE_BVEC_ITER_ALL(iter_all);
+
+		bio_for_each_segment_all(bvl, bio, iter_all) {
 			if (likely(error == 0))
 				SetPageUptodate(bvl_to_page(bvl));
 			LASSERT(PageLocked(bvl_to_page(bvl)));
@@ -279,11 +280,11 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 static void bio_integrity_fault_inject(struct bio *bio)
 {
 	struct bio_vec *bvec;
-	int i;
+	DECLARE_BVEC_ITER_ALL(iter_all);
 	void *kaddr;
 	char *addr;
 
-	bio_for_each_segment_all(bvec, bio, i) {
+	bio_for_each_segment_all(bvec, bio, iter_all) {
 		struct page *page = bvec->bv_page;
 
 		kaddr = kmap(page);
@@ -329,12 +330,13 @@ static int osd_bio_integrity_compare(struct bio *bio, struct block_device *bdev,
 		bip->bip_vec->bv_offset;
 	struct bio_vec *bv;
 	sector_t sector = bio_start_sector(bio);
-	unsigned int i, sectors, total;
+	unsigned int sectors, total;
+	DECLARE_BVEC_ITER_ALL(iter_all);
 	__u16 *expected_guard;
 	int rc;
 
 	total = 0;
-	bio_for_each_segment_all(bv, bio, i) {
+	bio_for_each_segment_all(bv, bio, iter_all) {
 		lnb = iobuf->dr_lnbs[index];
 		expected_guard = lnb->lnb_guards;
 		sectors = bv->bv_len / sector_size;

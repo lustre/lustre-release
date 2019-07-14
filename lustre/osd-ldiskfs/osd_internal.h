@@ -689,6 +689,12 @@ struct osd_thread_info {
 
 extern int ldiskfs_pdo;
 
+#ifdef HAVE_BVEC_ITER_ALL
+#define DECLARE_BVEC_ITER_ALL(iter) struct bvec_iter_all iter
+#else
+#define DECLARE_BVEC_ITER_ALL(iter) int iter
+#endif
+
 #ifndef HAVE_VFS_SETXATTR
 #define osd_setxattr(dentry, inode, name, buf, len, flag) \
 		((inode)->i_op->setxattr(dentry, name, buf, len, flag))
@@ -915,7 +921,7 @@ static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
 		ldiskfs_journal_start(inode, type, nblocks)
 # define osd_transaction_size(dev) \
 		(osd_journal(dev)->j_max_transaction_buffers / 2)
-#else
+#else /* ! defined LDISKFS_HT_MISC */
 # define LDISKFS_HT_MISC	0
 # define osd_journal_start_sb(sb, type, nblock) \
 		ldiskfs_journal_start_sb(sb, nblock)

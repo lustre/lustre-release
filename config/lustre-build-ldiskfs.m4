@@ -261,6 +261,28 @@ AC_DEFUN([LDISKFS_AC_PATCH_PROGRAM], [
 ]) # LDISKFS_AC_PATCH_PROGRAM
 
 #
+# LB_HAVE_BVEC_ITER_ALL
+#
+# kernel 5.1 commit 6dc4f100c175dd0511ae8674786e7c9006cdfbfa
+# block: allow bio_for_each_segment_all() to iterate over multi-page bvec
+#
+AC_DEFUN([LB_HAVE_BVEC_ITER_ALL], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if bvec_iter_all exists for multi-page bvec iternation],
+ext4fs_dirhash, [
+	#include <linux/bvec.h>
+],[
+	struct bvec_iter_all iter;
+	(void)iter;
+],[
+	AC_DEFINE(HAVE_BVEC_ITER_ALL, 1,
+		[if bvec_iter_all exists for multi-page bvec iternation])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LB_HAVE_BVEC_ITER_ALL
+
+#
 # LB_CONFIG_LDISKFS
 #
 AC_DEFUN([LB_CONFIG_LDISKFS], [
@@ -309,6 +331,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT4_HAVE_INFO_DQUOT
 	LB_EXT4_HAVE_I_CRYPT_INFO
 	LB_LDISKFS_IGET_HAS_FLAGS_ARG
+	LB_HAVE_BVEC_ITER_ALL
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
