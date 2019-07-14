@@ -734,8 +734,7 @@ static inline void ptlrpc_assign_next_xid(struct ptlrpc_request *req)
 	spin_unlock(&req->rq_import->imp_lock);
 }
 
-static __u64 ptlrpc_last_xid;
-static spinlock_t ptlrpc_last_xid_lock;
+static atomic64_t ptlrpc_last_xid;
 
 int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 			     __u32 version, int opcode, char **bufs,
@@ -804,9 +803,9 @@ int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 			fail2_t = &request->rq_bulk_deadline;
 		} else if (CFS_FAIL_CHECK(OBD_FAIL_PTLRPC_ROUND_XID)) {
 			time64_t now = ktime_get_real_seconds();
-			spin_lock(&ptlrpc_last_xid_lock);
-			ptlrpc_last_xid = ((__u64)now >> 4) << 24;
-			spin_unlock(&ptlrpc_last_xid_lock);
+			u64 xid = ((u64)now >> 4) << 24;
+
+			atomic64_set(&ptlrpc_last_xid, xid);
 		}
 
 		if (fail_t) {
@@ -3357,19 +3356,20 @@ void ptlrpc_abort_set(struct ptlrpc_request_set *set)
 void ptlrpc_init_xid(void)
 {
 	time64_t now = ktime_get_real_seconds();
+	u64 xid;
 
-	spin_lock_init(&ptlrpc_last_xid_lock);
 	if (now < YEAR_2004) {
-		get_random_bytes(&ptlrpc_last_xid, sizeof(ptlrpc_last_xid));
-		ptlrpc_last_xid >>= 2;
-		ptlrpc_last_xid |= (1ULL << 61);
+		get_random_bytes(&xid, sizeof(xid));
+		xid >>= 2;
+		xid |= (1ULL << 61);
 	} else {
-		ptlrpc_last_xid = (__u64)now << 20;
+		xid = (u64)now << 20;
 	}
 
 	/* Need to always be aligned to a power-of-two for mutli-bulk BRW */
 	CLASSERT((PTLRPC_BULK_OPS_COUNT & (PTLRPC_BULK_OPS_COUNT - 1)) == 0);
-	ptlrpc_last_xid &= PTLRPC_BULK_OPS_MASK;
+	xid &= PTLRPC_BULK_OPS_MASK;
+	atomic64_set(&ptlrpc_last_xid, xid);
 }
 
 /**
@@ -3386,14 +3386,7 @@ void ptlrpc_init_xid(void)
  */
 __u64 ptlrpc_next_xid(void)
 {
-	__u64 next;
-
-	spin_lock(&ptlrpc_last_xid_lock);
-	next = ptlrpc_last_xid + PTLRPC_BULK_OPS_COUNT;
-	ptlrpc_last_xid = next;
-	spin_unlock(&ptlrpc_last_xid_lock);
-
-	return next;
+	return atomic64_add_return(PTLRPC_BULK_OPS_COUNT, &ptlrpc_last_xid);
 }
 
 /**
@@ -3482,19 +3475,7 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
  */
 __u64 ptlrpc_sample_next_xid(void)
 {
-#if BITS_PER_LONG == 32
-	/* need to avoid possible word tearing on 32-bit systems */
-	__u64 next;
-
-	spin_lock(&ptlrpc_last_xid_lock);
-	next = ptlrpc_last_xid + PTLRPC_BULK_OPS_COUNT;
-	spin_unlock(&ptlrpc_last_xid_lock);
-
-	return next;
-#else
-	/* No need to lock, since returned value is racy anyways */
-	return ptlrpc_last_xid + PTLRPC_BULK_OPS_COUNT;
-#endif
+	return atomic64_read(&ptlrpc_last_xid) + PTLRPC_BULK_OPS_COUNT;
 }
 EXPORT_SYMBOL(ptlrpc_sample_next_xid);
 
