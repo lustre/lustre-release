@@ -601,7 +601,9 @@ Lustre Jobstats</title>
     job. Job schedulers known to be able to work with jobstats include:
       SLURM, SGE, LSF, Loadleveler, PBS and Maui/MOAB.</para>
     <para>Since jobstats is implemented in a scheduler-agnostic manner, it is
-    likely that it will be able to work with other schedulers also.</para>
+    likely that it will be able to work with other schedulers also, and also
+    in environments that do not use a job scheduler, by storing custom format
+    strings in the <literal>jobid_name</literal>.</para>
     <section remap="h3">
       <title><indexterm><primary>monitoring</primary><secondary>jobstats</secondary></indexterm>
       How Jobstats Works</title>
@@ -612,18 +614,65 @@ Lustre Jobstats</title>
       ID.</para>
       
       <para>A Lustre setting on the client, <literal>jobid_var</literal>,
-      specifies which variable to use.  Any environment variable can be
-      specified.  For example, SLURM sets the
+      specifies which environment variable to holds the JobID for that process
+      Any environment variable can be specified.  For example, SLURM sets the
       <literal>SLURM_JOB_ID</literal> environment variable with the unique
       job ID on each client when the job is first launched on a node, and
       the <literal>SLURM_JOB_ID</literal> will be inherited by all child
       processes started below that process.</para>
       
-      <para>Lustre can also be configured to generate a synthetic JobID from
-      the user's process name and User ID, by setting
-      <literal>jobid_var</literal> to a special value,
-      <literal>procname_uid</literal>.</para>
+      <para>Lustre can be configured to generate a synthetic JobID from
+      the client's process name and numeric UID, by setting
+      <literal>jobid_var=procname_uid</literal>.  This will generate a
+      uniform JobID when running the same binary across multiple client
+      nodes, but cannot distinguish whether the binary is part of a single
+      distributed process or multiple independent processes.
+      </para>
       
+      <para condition="l28">In Lustre 2.8 and later it is possible to set
+      <literal>jobid_var=nodelocal</literal> and then also set
+      <literal>jobid_name=</literal><replaceable>name</replaceable>, which
+      <emphasis>all</emphasis> processes on that client node will use.  This
+      is useful if only a single job is run on a client at one time, but if
+      multiple jobs are run on a client concurrently, the per-session JobID
+      should be used.
+      </para>
+
+      <para condition="l2C">In Lustre 2.12 and later, it is possible to
+      specify more complex JobID values for <literal>jobid_name</literal>
+      by using a string that contains format codes that are evaluated for
+      each process, in order to generate a site- or node-specific JobID string.
+      </para>
+      <itemizedlist>
+        <listitem>
+	  <para><emphasis>%e</emphasis> print executable name</para>
+        </listitem>
+        <listitem>
+	  <para><emphasis>%g</emphasis> print group ID number</para>
+        </listitem>
+        <listitem>
+	  <para><emphasis>%h</emphasis> print hostname</para>
+        </listitem>
+        <listitem>
+	  <para><emphasis>%j</emphasis> print JobID from process environment
+	  variable named by the <emphasis>jobid_var</emphasis> parameter
+	  </para>
+        </listitem>
+        <listitem>
+	  <para><emphasis>%p</emphasis> print numeric process ID</para>
+        </listitem>
+        <listitem>
+	  <para><emphasis>%u</emphasis> print user ID number</para>
+        </listitem>
+      </itemizedlist>
+
+      <para condition="l2D">In Lustre 2.13 and later, it is possible to
+      set a per-session JobID by setting the
+      <literal>jobid_this_session</literal> parameter.  This will be
+      inherited by all processes that are started in this login session,
+      but there can be a different JobID for each login session.
+      </para>
+
       <para>The setting of <literal>jobid_var</literal> need not be the same
       on all clients.  For example, one could use
       <literal>SLURM_JOB_ID</literal> on all clients managed by SLURM, and
