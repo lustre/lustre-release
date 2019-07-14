@@ -262,6 +262,57 @@ static char *get_next_delimiter_in_nid(char *str, char sep)
 	return comma;
 }
 
+int tokenize_nidstr(char *nidstr, char *out[LNET_MAX_STR_LEN], char *err_str)
+{
+	int bracket = 0, num_str = 0;
+	char *strstart, *chptr;
+
+	if (!nidstr) {
+		snprintf(err_str, LNET_MAX_STR_LEN, "supplied nidstr is NULL");
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	/* comma-separated nidranges -> space-separated nidranges */
+	chptr = &nidstr[0];
+	strstart = chptr;
+	while (true) {
+		if (*chptr == '\0') {
+			out[num_str] = strstart;
+			num_str++;
+			break;
+		}
+
+		if (*chptr == '[')
+			bracket++;
+		else if (*chptr == ']')
+			bracket--;
+
+		if (bracket < 0) {
+			snprintf(err_str, LNET_MAX_STR_LEN,
+				 "Mismatched brackets in nidstring \"%s\"",
+				 nidstr);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
+
+		if (bracket == 0 && *chptr == ',') {
+			out[num_str] = strstart;
+			*chptr = '\0';
+			num_str++;
+			strstart = chptr + 1;
+		}
+
+		chptr++;
+	}
+
+	if (bracket != 0) {
+		snprintf(err_str, LNET_MAX_STR_LEN,
+			 "Mismatched brackets in nidstring \"%s\"", nidstr);
+		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	return num_str;
+}
+
 int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 			     int max_nids, char *err_str)
 {

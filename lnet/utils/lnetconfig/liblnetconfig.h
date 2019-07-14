@@ -69,6 +69,8 @@ struct lnet_dlc_intf_descr {
 /* forward declaration of the cYAML structure. */
 struct cYAML;
 
+int tokenize_nidstr(char *nidstr, char *out[LNET_MAX_STR_LEN], char *err_str);
+
 /*
  * lustre_lnet_config_lib_init()
  *   Initialize the Library to enable communication with the LNET kernel
