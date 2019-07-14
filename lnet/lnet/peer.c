@@ -3276,6 +3276,8 @@ static int lnet_peer_discovery(void *arg)
 	struct lnet_peer *lp;
 	int rc;
 
+	wait_for_completion(&the_lnet.ln_started);
+
 	CDEBUG(D_NET, "started\n");
 	cfs_block_allsigs();
 
@@ -3448,7 +3450,14 @@ void lnet_peer_discovery_stop(void)
 
 	LASSERT(the_lnet.ln_dc_state == LNET_DC_STATE_RUNNING);
 	the_lnet.ln_dc_state = LNET_DC_STATE_STOPPING;
-	wake_up(&the_lnet.ln_dc_waitq);
+
+	/* In the LNetNIInit() path we may be stopping discovery before it
+	 * entered its work loop
+	 */
+	if (!completion_done(&the_lnet.ln_started))
+		complete(&the_lnet.ln_started);
+	else
+		wake_up(&the_lnet.ln_dc_waitq);
 
 	wait_event(the_lnet.ln_dc_waitq,
 		   the_lnet.ln_dc_state == LNET_DC_STATE_SHUTDOWN);
