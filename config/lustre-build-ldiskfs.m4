@@ -114,23 +114,6 @@ ext4_free_blocks_with_buffer_head, [
 ]) # LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
 
 #
-# LB_EXT_PBLOCK
-#
-# 2.6.35 renamed ext_pblock to ext4_ext_pblock(ex)
-#
-AC_DEFUN([LB_EXT_PBLOCK], [
-LB_CHECK_COMPILE([if Linux kernel has 'ext_pblock'],
-ext_pblock, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4_extents.h"
-],[
-	ext_pblock(NULL);
-],[
-	AC_DEFINE(HAVE_EXT_PBLOCK, 1, [Linux kernel has ext_pblock])
-])
-]) # LB_EXT_PBLOCK
-
-#
 # LB_EXT4_JOURNAL_START_3ARGS
 #
 # 3.9 added a type argument to ext4_journal_start and friends
@@ -146,25 +129,6 @@ ext4_journal_start, [
 	AC_DEFINE(JOURNAL_START_HAS_3ARGS, 1, [ext4_journal_start takes 3 arguments])
 ])
 ]) # LB_EXT4_JOURNAL_START_3ARGS
-
-#
-# LB_LDISKFS_MAP_BLOCKS
-#
-# Since 2.6.35 brought ext4_map_blocks() for IO.
-# We just check this function whether existed.
-# it must be exported by ldiskfs patches.
-#
-AC_DEFUN([LB_LDISKFS_MAP_BLOCKS], [
-LB_CHECK_COMPILE([if kernel has ext4_map_blocks],
-ext4_map_blocks, [
-	#include <linux/fs.h>
-	#include "$EXT4_SRC_DIR/ext4.h"
-],[
-	ext4_map_blocks(NULL, NULL, NULL, 0);
-],[
-	AC_DEFINE(HAVE_LDISKFS_MAP_BLOCKS, 1, [kernel has ext4_map_blocks])
-])
-])
 
 #
 # LB_EXT4_BREAD_4ARGS
@@ -340,9 +304,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LDISKFS_LINUX_SERIES
 	LDISKFS_AC_PATCH_PROGRAM
 	LB_EXT_FREE_BLOCKS_WITH_BUFFER_HEAD
-	LB_EXT_PBLOCK
 	LB_EXT4_JOURNAL_START_3ARGS
-	LB_LDISKFS_MAP_BLOCKS
 	LB_EXT4_BREAD_4ARGS
 	LB_EXT4_HAVE_INFO_DQUOT
 	LB_EXT4_HAVE_I_CRYPT_INFO
