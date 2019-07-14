@@ -583,13 +583,11 @@ int ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
 		 "Trying to change pool size with nonempty pool from %d to %d bytes\n",
 		 pool->prp_rq_size, size);
 
-	spin_lock(&pool->prp_lock);
 	pool->prp_rq_size = size;
 	for (i = 0; i < num_rq; i++) {
 		struct ptlrpc_request *req;
 		struct lustre_msg *msg;
 
-		spin_unlock(&pool->prp_lock);
 		req = ptlrpc_request_cache_alloc(GFP_NOFS);
 		if (!req)
 			return i;
@@ -603,8 +601,8 @@ int ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
 		req->rq_pool = pool;
 		spin_lock(&pool->prp_lock);
 		list_add_tail(&req->rq_list, &pool->prp_req_list);
+		spin_unlock(&pool->prp_lock);
 	}
-	spin_unlock(&pool->prp_lock);
 	return num_rq;
 }
 EXPORT_SYMBOL(ptlrpc_add_rqs_to_pool);
