@@ -823,9 +823,8 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 	struct client_obd *cli = &imp->imp_obd->u.cli;
 
 	spin_lock(&imp->imp_lock);
-	list_del(&imp->imp_conn_current->oic_item);
-	list_add(&imp->imp_conn_current->oic_item,
-		 &imp->imp_conn_list);
+	list_move(&imp->imp_conn_current->oic_item,
+		  &imp->imp_conn_list);
 	imp->imp_last_success_conn =
 		imp->imp_conn_current->oic_last_attempt;
 

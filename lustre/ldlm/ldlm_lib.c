@@ -90,9 +90,8 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
 	list_for_each_entry(item, &imp->imp_conn_list, oic_item) {
 		if (obd_uuid_equals(uuid, &item->oic_uuid)) {
 			if (priority) {
-				list_del(&item->oic_item);
-				list_add(&item->oic_item,
-					 &imp->imp_conn_list);
+				list_move(&item->oic_item,
+					  &imp->imp_conn_list);
 				item->oic_last_attempt = 0;
 			}
 			CDEBUG(D_HA, "imp %p@%s: found existing conn %s%s\n",

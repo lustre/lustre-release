@@ -1952,9 +1952,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 					 * put on delay list - only if we wait
 					 * recovery finished - before send
 					 */
-					list_del_init(&req->rq_list);
-					list_add_tail(&req->rq_list,
-						      &imp->imp_delayed_list);
+					list_move_tail(&req->rq_list,
+						       &imp->imp_delayed_list);
 					spin_unlock(&imp->imp_lock);
 					continue;
 				}
@@ -1978,9 +1977,8 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 					GOTO(interpret, req->rq_status);
 				}
 
-				list_del_init(&req->rq_list);
-				list_add_tail(&req->rq_list,
-					      &imp->imp_sending_list);
+				list_move_tail(&req->rq_list,
+					       &imp->imp_sending_list);
 
 				spin_unlock(&imp->imp_lock);
 
