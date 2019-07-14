@@ -531,7 +531,7 @@
         allocated blocks on the disk, disk speed, CPU speed, and the amount
         of RAM on the server. Reasonable file system check times for valid
         filesystems are 5-30 minutes per TiB, but may increase significantly
-        if substantial errors are detected and need to be required.</para>
+        if substantial errors are detected and need to be repaired.</para>
       </note>
       <para>For more details about formatting MDT and OST file systems,
       see <xref linkend="dbdoclet.ldiskfs_raid_opts"/>.</para>
