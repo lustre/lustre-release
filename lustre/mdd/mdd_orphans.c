@@ -164,7 +164,7 @@ int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
 	LASSERT(mdd_write_locked(env, obj) != 0);
 	LASSERT(!(obj->mod_flags & ORPHAN_OBJ));
 
-	dt_write_lock(env, mdd->mdd_orphans, MOR_TGT_ORPHAN);
+	dt_write_lock(env, mdd->mdd_orphans, DT_TGT_ORPHAN);
 
 	rc = mdd_orphan_insert_obj(env, mdd, obj, th);
 	if (rc)
@@ -255,7 +255,7 @@ int mdd_orphan_delete(const struct lu_env *env, struct mdd_object *obj,
 	LASSERT(dor);
 
 	key = mdd_orphan_key_fill(env, mdo2fid(obj));
-	dt_write_lock(env, mdd->mdd_orphans, MOR_TGT_ORPHAN);
+	dt_write_lock(env, mdd->mdd_orphans, DT_TGT_ORPHAN);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_ORPHAN_DELETE))
 		goto ref_del;
@@ -303,7 +303,7 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(rc);
 	}
 
-	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	rc = mdd_orphan_declare_delete(env, obj, th);
 	if (rc == -ENOENT)
 		orphan_exists = false;
@@ -321,7 +321,7 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 		GOTO(unlock, rc);
 
 	if (likely(obj->mod_count == 0)) {
-		dt_write_lock(env, mdd->mdd_orphans, MOR_TGT_ORPHAN);
+		dt_write_lock(env, mdd->mdd_orphans, DT_TGT_ORPHAN);
 		rc = dt_delete(env, mdd->mdd_orphans, key, th);
 		if (rc) {
 			CERROR("%s: could not delete orphan "DFID": rc = %d\n",
@@ -379,7 +379,7 @@ static int mdd_orphan_key_test_and_delete(const struct lu_env *env,
 			CERROR("%s: error unlinking orphan "DFID": rc = %d\n",
 			       mdd2obd_dev(mdd)->obd_name, PFID(lf), rc);
         } else {
-                mdd_write_lock(env, mdo, MOR_TGT_CHILD);
+		mdd_write_lock(env, mdo, DT_TGT_CHILD);
                 if (likely(mdo->mod_count > 0)) {
                         CDEBUG(D_HA, "Found orphan "DFID" count %d, skip it\n",
                                PFID(lf), mdo->mod_count);

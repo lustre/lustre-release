@@ -42,7 +42,7 @@
 #include "mdd_internal.h"
 
 void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,
-		    enum mdd_object_role role)
+		    enum dt_object_role role)
 {
 	struct dt_object *next = mdd_object_child(obj);
 
@@ -50,7 +50,7 @@ void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,
 }
 
 void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj,
-		   enum mdd_object_role role)
+		   enum dt_object_role role)
 {
 	struct dt_object *next = mdd_object_child(obj);
 

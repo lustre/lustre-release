@@ -3817,7 +3817,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		/* if it's source stripe of migrating directory, don't create */
 		if (!((lo->ldo_dir_hash_type & LMV_HASH_FLAG_MIGRATION) &&
 		      i >= lo->ldo_dir_migrate_offset)) {
-			dt_write_lock(env, dto, MOR_TGT_CHILD);
+			dt_write_lock(env, dto, DT_TGT_CHILD);
 			rc = lod_sub_create(env, dto, attr, NULL, dof, th);
 			if (rc != 0) {
 				dt_write_unlock(env, dto);
@@ -6010,7 +6010,7 @@ static int lod_destroy(const struct lu_env *env, struct dt_object *dt,
 
 			if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_SPEOBJ) ||
 			    i == cfs_fail_val) {
-				dt_write_lock(env, stripe, MOR_TGT_CHILD);
+				dt_write_lock(env, stripe, DT_TGT_CHILD);
 				rc = lod_sub_ref_del(env, stripe, th);
 				dt_write_unlock(env, stripe);
 				if (rc != 0)

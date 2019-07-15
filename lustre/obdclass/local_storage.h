@@ -91,12 +91,4 @@ struct los_ondisk {
 
 #define LOS_MAGIC	0xdecafbee
 
-/**
- * Used in __local_file_create() for object lock role
- **/
-enum los_object_role {
-	LOS_PARENT,
-	LOS_CHILD,
-};
-
 #endif

@@ -477,4 +477,5 @@ static inline int ofd_validate_seq(struct obd_export *exp, __u64 seq)
 
 	return 0;
 }
+
 #endif /* _OFD_INTERNAL_H */

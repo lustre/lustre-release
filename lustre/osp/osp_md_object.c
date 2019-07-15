@@ -363,7 +363,7 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
  *
  * \param[in] env	execution environment
  * \param[in] dt	object to be locked
- * \param[in] role	lock role from MDD layer, see mdd_object_role().
+ * \param[in] role	lock role from MDD layer, see dt_object_role().
  */
 static void osp_md_read_lock(const struct lu_env *env, struct dt_object *dt,
 			     unsigned role)
@@ -383,7 +383,7 @@ static void osp_md_read_lock(const struct lu_env *env, struct dt_object *dt,
  *
  * \param[in] env	execution environment
  * \param[in] dt	object to be locked
- * \param[in] role	lock role from MDD layer, see mdd_object_role().
+ * \param[in] role	lock role from MDD layer, see dt_object_role().
  */
 static void osp_md_write_lock(const struct lu_env *env, struct dt_object *dt,
 			      unsigned role)

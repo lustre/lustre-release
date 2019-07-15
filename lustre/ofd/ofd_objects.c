@@ -320,7 +320,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 	  * may cannot get latest last_id although new OST-object created. */
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_SKIP_LASTID)) {
 		tmp = cpu_to_le64(id + nr - 1);
-		dt_write_lock(env, oseq->os_lastid_obj, 0);
+		dt_write_lock(env, oseq->os_lastid_obj, DT_LASTID);
 		rc = dt_record_write(env, oseq->os_lastid_obj,
 				     &info->fti_buf, &info->fti_off, th);
 		dt_write_unlock(env, oseq->os_lastid_obj);
@@ -368,7 +368,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 		info->fti_off = 0;
 		tmp = cpu_to_le64(ofd_seq_last_oid(oseq));
-		dt_write_lock(env, oseq->os_lastid_obj, 0);
+		dt_write_lock(env, oseq->os_lastid_obj, DT_LASTID);
 		rc1 = dt_record_write(env, oseq->os_lastid_obj,
 				      &info->fti_buf, &info->fti_off, th);
 		dt_write_unlock(env, oseq->os_lastid_obj);

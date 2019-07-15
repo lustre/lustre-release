@@ -509,7 +509,7 @@ static int out_obj_destroy(const struct lu_env *env, struct dt_object *dt_obj,
 	CDEBUG(D_INFO, "%s: destroy "DFID"\n", dt_obd_name(th->th_dev),
 	       PFID(lu_object_fid(&dt_obj->do_lu)));
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_destroy(env, dt_obj, th);
 	dt_write_unlock(env, dt_obj);
 
@@ -547,7 +547,7 @@ int out_tx_create_exec(const struct lu_env *env, struct thandle *th,
 	       arg->u.create.dof.dof_type,
 	       arg->u.create.attr.la_mode & S_IFMT);
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_create(env, dt_obj, &arg->u.create.attr,
 		       &arg->u.create.hint, &arg->u.create.dof, th);
 
@@ -640,7 +640,7 @@ static int out_tx_attr_set_exec(const struct lu_env *env, struct thandle *th,
 	CDEBUG(D_OTHER, "%s: attr set "DFID"\n", dt_obd_name(th->th_dev),
 	       PFID(lu_object_fid(&dt_obj->do_lu)));
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_attr_set(env, dt_obj, &arg->u.attr_set.attr, th);
 	dt_write_unlock(env, dt_obj);
 
@@ -697,7 +697,7 @@ static int out_tx_write_exec(const struct lu_env *env, struct thandle *th,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OUT_ENOSPC)) {
 		rc = -ENOSPC;
 	} else {
-		dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+		dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 		rc = dt_record_write(env, dt_obj, &arg->u.write.buf,
 				     &arg->u.write.pos, th);
 		dt_write_unlock(env, dt_obj);
@@ -820,7 +820,7 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 			linkea = false;
 		}
 
-		dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+		dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 
 again:
 		rc = dt_xattr_set(env, dt_obj, ldata.ld_buf,
@@ -893,7 +893,7 @@ static int out_tx_xattr_del_exec(const struct lu_env *env, struct thandle *th,
 	if (!lu_object_exists(&dt_obj->do_lu))
 		GOTO(out, rc = -ENOENT);
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_xattr_del(env, dt_obj, arg->u.xattr_set.name,
 			  th);
 	dt_write_unlock(env, dt_obj);
@@ -939,7 +939,7 @@ static int out_obj_ref_add(const struct lu_env *env,
 {
 	int rc;
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_ref_add(env, dt_obj, th);
 	dt_write_unlock(env, dt_obj);
 
@@ -952,7 +952,7 @@ static int out_obj_ref_del(const struct lu_env *env,
 {
 	int rc;
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_ref_del(env, dt_obj, th);
 	dt_write_unlock(env, dt_obj);
 
@@ -1072,7 +1072,7 @@ static int out_obj_index_insert(const struct lu_env *env,
 	if (dt_try_as_dir(env, dt_obj) == 0)
 		return -ENOTDIR;
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_insert(env, dt_obj, rec, key, th);
 	dt_write_unlock(env, dt_obj);
 
@@ -1093,7 +1093,7 @@ static int out_obj_index_delete(const struct lu_env *env,
 	if (dt_try_as_dir(env, dt_obj) == 0)
 		return -ENOTDIR;
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+	dt_write_lock(env, dt_obj, DT_TGT_CHILD);
 	rc = dt_delete(env, dt_obj, key, th);
 	dt_write_unlock(env, dt_obj);
 

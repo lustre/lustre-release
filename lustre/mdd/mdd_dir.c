@@ -92,7 +92,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 	}
 
 	rc = mdd_permission_internal_locked(env, mdd_obj, pattr, mask,
-					    MOR_TGT_PARENT);
+					    DT_TGT_PARENT);
 	if (rc)
 		RETURN(rc);
 
@@ -454,7 +454,7 @@ int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
 	if (check_perm)
 		rc = mdd_permission_internal_locked(env, pobj, pattr,
 						    MAY_WRITE | MAY_EXEC,
-						    MOR_TGT_PARENT);
+						    DT_TGT_PARENT);
 	RETURN(rc);
 }
 
@@ -475,7 +475,7 @@ int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
 
 	rc = mdd_permission_internal_locked(env, pobj, pattr,
 					    MAY_WRITE | MAY_EXEC,
-					    MOR_TGT_PARENT);
+					    DT_TGT_PARENT);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -529,7 +529,7 @@ static int mdd_may_delete_entry(const struct lu_env *env,
 		int rc;
 		rc = mdd_permission_internal_locked(env, pobj, pattr,
 					    MAY_WRITE | MAY_EXEC,
-					    MOR_TGT_PARENT);
+					    DT_TGT_PARENT);
 		if (rc)
 			RETURN(rc);
 	}
@@ -695,7 +695,7 @@ static int __mdd_index_insert(const struct lu_env *env, struct mdd_object *pobj,
 
 	rc = __mdd_index_insert_only(env, pobj, lf, type, name, handle);
 	if (rc == 0 && S_ISDIR(type)) {
-		mdd_write_lock(env, pobj, MOR_TGT_PARENT);
+		mdd_write_lock(env, pobj, DT_TGT_PARENT);
 		mdo_ref_add(env, pobj, handle);
 		mdd_write_unlock(env, pobj);
 	}
@@ -708,17 +708,17 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
 			      const char *name, int is_dir,
 			      struct thandle *handle)
 {
-        int               rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
 	rc = __mdd_index_delete_only(env, pobj, name, handle);
-        if (rc == 0 && is_dir) {
-                mdd_write_lock(env, pobj, MOR_TGT_PARENT);
-                mdo_ref_del(env, pobj, handle);
-                mdd_write_unlock(env, pobj);
-        }
+	if (rc == 0 && is_dir) {
+		mdd_write_lock(env, pobj, DT_TGT_PARENT);
+		mdo_ref_del(env, pobj, handle);
+		mdd_write_unlock(env, pobj);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdd_llog_record_calc_size(const struct lu_env *env,
@@ -1397,7 +1397,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         if (rc)
                 GOTO(stop, rc);
 
-	mdd_write_lock(env, mdd_sobj, MOR_TGT_CHILD);
+	mdd_write_lock(env, mdd_sobj, DT_TGT_CHILD);
 	rc = mdd_link_sanity_check(env, mdd_tobj, tattr, lname, mdd_sobj,
 				   cattr);
 	if (rc)
@@ -1716,7 +1716,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 		GOTO(stop, rc);
 
 	if (likely(mdd_cobj != NULL))
-		mdd_write_lock(env, mdd_cobj, MOR_TGT_CHILD);
+		mdd_write_lock(env, mdd_cobj, DT_TGT_CHILD);
 
 	if (likely(no_name == 0) && !OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DANGLING2)) {
 		rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle);
@@ -2265,7 +2265,7 @@ static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 		RETURN(0);
 	}
 
-	mdd_read_lock(env, pobj, MOR_TGT_PARENT);
+	mdd_read_lock(env, pobj, DT_TGT_PARENT);
 	rc = mdo_xattr_get(env, pobj, def_acl_buf,
 			   XATTR_NAME_ACL_DEFAULT);
 	mdd_read_unlock(env, pobj);
@@ -2308,7 +2308,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 	const struct lu_buf *buf;
 	int rc;
 
-	mdd_write_lock(env, son, MOR_TGT_CHILD);
+	mdd_write_lock(env, son, DT_TGT_CHILD);
 	rc = mdd_create_object_internal(env, NULL, son, attr, handle, spec,
 					hint);
 	if (rc)
@@ -2612,7 +2612,7 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		GOTO(out_stop, rc);
 
 	if (unlikely(spec->sp_cr_flags & MDS_OPEN_VOLATILE)) {
-		mdd_write_lock(env, son, MOR_TGT_CHILD);
+		mdd_write_lock(env, son, DT_TGT_CHILD);
 		son->mod_flags |= VOLATILE_OBJ;
 		rc = mdd_orphan_insert(env, son, handle);
 		GOTO(out_volatile, rc);
@@ -2646,7 +2646,7 @@ err_insert:
 			goto out_stop;
 
 err_created:
-		mdd_write_lock(env, son, MOR_TGT_CHILD);
+		mdd_write_lock(env, son, DT_TGT_CHILD);
 		if (S_ISDIR(attr->la_mode)) {
 			/* Drop the reference, no need to delete "."/"..",
 			 * because the object is to be destroyed directly. */
@@ -3063,7 +3063,7 @@ static int mdd_rename(const struct lu_env *env,
 		GOTO(fixup_tpobj, rc);
 
 	/* Update the linkEA for the source object */
-	mdd_write_lock(env, mdd_sobj, MOR_SRC_CHILD);
+	mdd_write_lock(env, mdd_sobj, DT_SRC_CHILD);
 	rc = mdd_links_rename(env, mdd_sobj, mdo2fid(mdd_spobj), lsname,
 			      mdo2fid(mdd_tpobj), ltname, handle, ldata,
 			      0, 0);
@@ -3082,7 +3082,7 @@ static int mdd_rename(const struct lu_env *env,
          * it must be local one.
          */
         if (tobj && mdd_object_exists(mdd_tobj)) {
-                mdd_write_lock(env, mdd_tobj, MOR_TGT_CHILD);
+		mdd_write_lock(env, mdd_tobj, DT_TGT_CHILD);
 		tobj_locked = 1;
                 if (mdd_is_dead_obj(mdd_tobj)) {
                         /* shld not be dead, something is wrong */
@@ -3253,7 +3253,7 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 	ENTRY;
 
 	if (!mdd_object_remote(sobj)) {
-		mdd_read_lock(env, sobj, MOR_SRC_CHILD);
+		mdd_read_lock(env, sobj, DT_SRC_CHILD);
 		if (sobj->mod_count > 0) {
 			CDEBUG(D_INFO, "%s: "DFID" is opened, count %d\n",
 			       mdd2obd_dev(mdd)->obd_name, PFID(mdo2fid(sobj)),
@@ -3337,7 +3337,7 @@ static int mdd_dir_delete_stripe(const struct lu_env *env,
 	if (index < del_offset)
 		RETURN(0);
 
-	mdd_write_lock(env, stripe, MOR_SRC_CHILD);
+	mdd_write_lock(env, stripe, DT_SRC_CHILD);
 	rc = __mdd_index_delete_only(env, stripe, dotdot, handle);
 	if (rc)
 		GOTO(out, rc);
@@ -3428,7 +3428,7 @@ static int mdd_dir_destroy_stripe(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	mdd_write_lock(env, stripe, MOR_SRC_CHILD);
+	mdd_write_lock(env, stripe, DT_SRC_CHILD);
 	rc = mdo_ref_del(env, stripe, handle);
 	if (!rc)
 		rc = mdo_destroy(env, stripe, handle);
@@ -3685,7 +3685,7 @@ static int mdd_update_link(const struct lu_env *env,
 		RETURN(-ENOENT);
 	}
 
-	mdd_write_lock(env, pobj, MOR_TGT_PARENT);
+	mdd_write_lock(env, pobj, DT_TGT_PARENT);
 	rc = __mdd_index_delete_only(env, pobj, lname->ln_name, handle);
 	if (!rc)
 		rc = __mdd_index_insert_only(env, pobj, mdo2fid(tobj),
@@ -3696,13 +3696,13 @@ static int mdd_update_link(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	mdd_write_lock(env, tobj, MOR_TGT_CHILD);
+	mdd_write_lock(env, tobj, DT_TGT_CHILD);
 	rc = mdo_ref_add(env, tobj, handle);
 	mdd_write_unlock(env, tobj);
 	if (rc)
 		RETURN(rc);
 
-	mdd_write_lock(env, sobj, MOR_SRC_CHILD);
+	mdd_write_lock(env, sobj, DT_SRC_CHILD);
 	rc = mdo_ref_del(env, sobj, handle);
 	mdd_write_unlock(env, sobj);
 
@@ -3884,7 +3884,7 @@ static int mdd_dir_layout_delete(const struct lu_env *env,
 
 	ENTRY;
 
-	mdd_write_lock(env, obj, MOR_SRC_PARENT);
+	mdd_write_lock(env, obj, DT_SRC_PARENT);
 	if (!lmv_buf->lb_buf)
 		/* normal dir */
 		rc = __mdd_index_delete_only(env, obj, dotdot, handle);
@@ -4090,7 +4090,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 		 * stripes again.
 		 */
 		if (sbuf->lb_buf) {
-			mdd_write_lock(env, sobj, MOR_SRC_CHILD);
+			mdd_write_lock(env, sobj, DT_SRC_CHILD);
 			rc = mdo_xattr_del(env, sobj, XATTR_NAME_LMV, handle);
 			mdd_write_unlock(env, sobj);
 			if (rc)
@@ -4106,7 +4106,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	mdd_write_lock(env, tobj, MOR_TGT_CHILD);
+	mdd_write_lock(env, tobj, DT_TGT_CHILD);
 	rc = mdd_iterate_xattrs(env, sobj, tobj, true, handle, mdo_xattr_set);
 	mdd_write_unlock(env, tobj);
 	if (rc)
@@ -4125,7 +4125,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 			RETURN(rc);
 
 		/* delete LOV to avoid deleting OST objs when destroying sobj */
-		mdd_write_lock(env, sobj, MOR_SRC_CHILD);
+		mdd_write_lock(env, sobj, DT_SRC_CHILD);
 		rc = mdo_xattr_del(env, sobj, XATTR_NAME_LOV, handle);
 		mdd_write_unlock(env, sobj);
 		if (rc)
@@ -4254,7 +4254,7 @@ static int mdd_migrate_update(const struct lu_env *env,
 
 	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 	la->la_valid = LA_CTIME | LA_MTIME;
-	mdd_write_lock(env, spobj, MOR_SRC_PARENT);
+	mdd_write_lock(env, spobj, DT_SRC_PARENT);
 	rc = mdd_update_time(env, spobj, spattr, la, handle);
 	mdd_write_unlock(env, spobj);
 	if (rc)
@@ -4262,7 +4262,7 @@ static int mdd_migrate_update(const struct lu_env *env,
 
 	if (tpobj != spobj) {
 		la->la_valid = LA_CTIME | LA_MTIME;
-		mdd_write_lock(env, tpobj, MOR_TGT_PARENT);
+		mdd_write_lock(env, tpobj, DT_TGT_PARENT);
 		rc = mdd_update_time(env, tpobj, tpattr, la, handle);
 		mdd_write_unlock(env, tpobj);
 		if (rc)
@@ -4287,7 +4287,7 @@ static int mdd_migrate_update(const struct lu_env *env,
 	 *  message, this won't cause any inconsistency or trouble.
 	 */
 	if (do_create && do_destroy) {
-		mdd_write_lock(env, sobj, MOR_SRC_CHILD);
+		mdd_write_lock(env, sobj, DT_SRC_CHILD);
 		mdo_ref_del(env, sobj, handle);
 		rc = mdo_destroy(env, sobj, handle);
 		mdd_write_unlock(env, sobj);
@@ -4732,7 +4732,7 @@ static int __mdd_dir_layout_shrink(const struct lu_env *env,
 		lmu->lum_stripe_count = cpu_to_le32(1);
 
 		/* delete LMV to avoid deleting stripes again upon destroy */
-		mdd_write_lock(env, obj, MOR_SRC_CHILD);
+		mdd_write_lock(env, obj, DT_SRC_CHILD);
 		rc = mdo_xattr_del(env, obj, XATTR_NAME_LMV, handle);
 		mdd_write_unlock(env, obj);
 		if (rc)
@@ -4740,7 +4740,7 @@ static int __mdd_dir_layout_shrink(const struct lu_env *env,
 	}
 
 	/* destroy stripes after lmu_stripe_count */
-	mdd_write_lock(env, obj, MOR_SRC_PARENT);
+	mdd_write_lock(env, obj, DT_SRC_PARENT);
 	rc = mdd_dir_iterate_stripes(env, obj, lmv_buf, &shrink_buf, handle,
 				     mdd_dir_destroy_stripe);
 	mdd_write_unlock(env, obj);
@@ -4764,8 +4764,8 @@ static int __mdd_dir_layout_shrink(const struct lu_env *env,
 	LASSERT(pobj);
 	LASSERT(stripe);
 
-	mdd_write_lock(env, pobj, MOR_SRC_PARENT);
-	mdd_write_lock(env, obj, MOR_SRC_CHILD);
+	mdd_write_lock(env, pobj, DT_SRC_PARENT);
+	mdd_write_lock(env, obj, DT_SRC_CHILD);
 
 	/* insert dotdot to stripe which points to parent */
 	rc = __mdd_index_insert_only(env, stripe, mdo2fid(pobj), S_IFDIR,

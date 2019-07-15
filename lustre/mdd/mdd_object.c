@@ -421,7 +421,7 @@ static int mdd_xattr_get(const struct lu_env *env,
 		      strcmp(name, XATTR_NAME_LINK) == 0))
 		RETURN(-ENOENT);
 
-	mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_read_lock(env, mdd_obj, DT_TGT_CHILD);
 	rc = mdo_xattr_get(env, mdd_obj, buf, name);
 	mdd_read_unlock(env, mdd_obj);
 
@@ -487,7 +487,7 @@ int mdd_readlink(const struct lu_env *env, struct md_object *obj,
 	LASSERT(next != NULL);
 	LASSERT(next->do_body_ops != NULL);
 	LASSERT(next->do_body_ops->dbo_read != NULL);
-	mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_read_lock(env, mdd_obj, DT_TGT_CHILD);
 	rc = dt_read(env, next, buf, &pos);
         mdd_read_unlock(env, mdd_obj);
         RETURN(rc);
@@ -504,7 +504,7 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
 
         ENTRY;
 
-        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_read_lock(env, mdd_obj, DT_TGT_CHILD);
 	rc = mdo_xattr_list(env, mdd_obj, buf);
         mdd_read_unlock(env, mdd_obj);
 
@@ -1071,7 +1071,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 
 #ifdef CONFIG_FS_POSIX_ACL
 	if (attr->la_valid & LA_MODE) {
-                mdd_read_lock(env, obj, MOR_TGT_CHILD);
+		mdd_read_lock(env, obj, DT_TGT_CHILD);
 		rc = mdo_xattr_get(env, obj, &LU_BUF_NULL,
 				   XATTR_NAME_ACL_ACCESS);
                 mdd_read_unlock(env, obj);
@@ -1245,7 +1245,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		CDEBUG(D_INODE, "setting mtime %llu, ctime %llu\n",
 		       la->la_mtime, la->la_ctime);
 
-	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, mdd_obj, DT_TGT_CHILD);
 
 	/* LU-10509: setattr of LA_SIZE should be skipped case of DOM,
 	 * otherwise following truncate will do nothing and truncated
@@ -1509,11 +1509,11 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 		RETURN(PTR_ERR(handle));
 
 	if (rc > 0) {
-		mdd_write_lock(env, obj, MOR_TGT_CHILD);
-		mdd_write_lock(env, vic, MOR_TGT_CHILD);
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
+		mdd_write_lock(env, vic, DT_TGT_CHILD);
 	} else {
-		mdd_write_lock(env, vic, MOR_TGT_CHILD);
-		mdd_write_lock(env, obj, MOR_TGT_CHILD);
+		mdd_write_lock(env, vic, DT_TGT_CHILD);
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
 	}
 
 	/* get EA of victim file */
@@ -1735,11 +1735,11 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 		RETURN(PTR_ERR(handle));
 
 	if (rc > 0) {
-		mdd_write_lock(env, obj, MOR_TGT_CHILD);
-		mdd_write_lock(env, vic, MOR_TGT_CHILD);
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
+		mdd_write_lock(env, vic, DT_TGT_CHILD);
 	} else {
-		mdd_write_lock(env, vic, MOR_TGT_CHILD);
-		mdd_write_lock(env, obj, MOR_TGT_CHILD);
+		mdd_write_lock(env, vic, DT_TGT_CHILD);
+		mdd_write_lock(env, obj, DT_TGT_CHILD);
 	}
 
 	/* get EA of mirrored file */
@@ -1918,7 +1918,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		GOTO(stop, rc);
 
-	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, mdd_obj, DT_TGT_CHILD);
 
 	if (strcmp(XATTR_NAME_HSM, name) == 0) {
 		rc = mdd_hsm_update_locked(env, obj, buf, handle, &clf_flags);
@@ -1999,7 +1999,7 @@ static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		GOTO(stop, rc);
 
-	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, mdd_obj, DT_TGT_CHILD);
 	rc = mdo_xattr_del(env, mdd_obj, name, handle);
 	mdd_write_unlock(env, mdd_obj);
 	if (rc)
@@ -2312,8 +2312,8 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		RETURN(PTR_ERR(handle));
 
 	/* objects are already sorted */
-	mdd_write_lock(env, fst_o, MOR_TGT_CHILD);
-	mdd_write_lock(env, snd_o, MOR_TGT_CHILD);
+	mdd_write_lock(env, fst_o, DT_TGT_CHILD);
+	mdd_write_lock(env, snd_o, DT_TGT_CHILD);
 
 	rc = mdd_stripe_get(env, fst_o, fst_buf, XATTR_NAME_LOV);
 	if (rc < 0 && rc != -ENODATA)
@@ -2631,7 +2631,7 @@ mdd_layout_instantiate_component(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	rc = mdo_layout_change(env, obj, mlc, handle);
 	mdd_write_unlock(env, obj);
 	if (rc)
@@ -2708,7 +2708,7 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 	/* it needs a sync tx to make FLR to work properly */
 	handle->th_sync = 1;
 
-	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	rc = mdo_layout_change(env, obj, mlc, handle);
 	if (!rc && fl) {
 		/* SOM state transition from STRICT to STALE */
@@ -2775,7 +2775,7 @@ mdd_layout_update_write_pending(const struct lu_env *env,
 	/* it needs a sync tx to make FLR to work properly */
 	handle->th_sync = 1;
 
-	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	rc = mdo_layout_change(env, obj, mlc, handle);
 	mdd_write_unlock(env, obj);
 	if (rc)
@@ -3053,7 +3053,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	enum changelog_rec_type type = CL_OPEN;
 	int rc = 0;
 
-	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, mdd_obj, DT_TGT_CHILD);
 
 	rc = mdd_la_get(env, mdd_obj, attr);
 	if (rc != 0)
@@ -3152,7 +3152,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 	ENTRY;
 
 	if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
-		mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+		mdd_write_lock(env, mdd_obj, DT_TGT_CHILD);
 		mdd_obj->mod_count--;
 		mdd_write_unlock(env, mdd_obj);
 
@@ -3207,7 +3207,7 @@ again:
 	}
 
 cont:
-	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, mdd_obj, DT_TGT_CHILD);
 	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr);
 	if (rc != 0) {
 		CERROR("%s: failed to get lu_attr of "DFID": rc = %d\n",
@@ -3447,7 +3447,7 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 return -ENOENT;
         }
 
-        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_read_lock(env, mdd_obj, DT_TGT_CHILD);
         rc = mdd_readpage_sanity_check(env, mdd_obj);
         if (rc)
                 GOTO(out_unlock, rc);

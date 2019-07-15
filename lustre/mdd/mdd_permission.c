@@ -147,7 +147,7 @@ int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 	if (rc)
 		GOTO(stop, rc);
 
-	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	mdd_write_lock(env, obj, DT_TGT_CHILD);
 	/* whether ACL can be represented by i_mode only */
 	if (not_equiv)
 		rc = mdo_xattr_set(env, obj, buf, XATTR_NAME_ACL_ACCESS, fl,
@@ -342,7 +342,7 @@ int mdd_permission(const struct lu_env *env, struct md_object *pobj,
 
 	rc = mdd_permission_internal_locked(env, mdd_cobj, cattr,
 					    mask & ~MAY_RGETFACL,
-					    MOR_TGT_CHILD);
+					    DT_TGT_CHILD);
 
 	if (unlikely(rc == 0 && (mask & MAY_RGETFACL))) {
 		if (likely(!uc))

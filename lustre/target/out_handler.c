@@ -217,7 +217,7 @@ static int out_attr_get(struct tgt_session_info *tsi)
 		RETURN(-ENOENT);
 	}
 
-	dt_read_lock(env, obj, MOR_TGT_CHILD);
+	dt_read_lock(env, obj, DT_TGT_CHILD);
 	rc = dt_attr_get(env, obj, la);
 	if (rc)
 		GOTO(out_unlock, rc);
@@ -279,7 +279,7 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 	else
 		lbuf->lb_buf = update_result->our_data;
 
-	dt_read_lock(env, obj, MOR_TGT_CHILD);
+	dt_read_lock(env, obj, DT_TGT_CHILD);
 	rc = dt_xattr_get(env, obj, lbuf, name);
 	dt_read_unlock(env, obj);
 	if (rc <= 0) {
@@ -332,7 +332,7 @@ static int out_xattr_list(struct tgt_session_info *tsi)
 	if (lbuf->lb_len == 0)
 		lbuf->lb_buf = 0;
 
-	dt_read_lock(env, obj, MOR_TGT_CHILD);
+	dt_read_lock(env, obj, DT_TGT_CHILD);
 	rc = dt_xattr_list(env, obj, lbuf);
 	dt_read_unlock(env, obj);
 	if (rc <= 0) {
@@ -377,7 +377,7 @@ static int out_index_lookup(struct tgt_session_info *tsi)
 		RETURN(PTR_ERR(name));
 	}
 
-	dt_read_lock(env, obj, MOR_TGT_CHILD);
+	dt_read_lock(env, obj, DT_TGT_CHILD);
 	if (!dt_try_as_dir(env, obj))
 		GOTO(out_unlock, rc = -ENOTDIR);
 
@@ -733,7 +733,7 @@ static int out_read(struct tgt_session_info *tsi)
 			GOTO(out_free, rc = -ENOMEM);
 
 		rdbuf->rb_bufs[i].lb_len = read_size;
-		dt_read_lock(env, obj, MOR_TGT_CHILD);
+		dt_read_lock(env, obj, DT_TGT_CHILD);
 		rc = dt_read(env, obj, &rdbuf->rb_bufs[i], &pos);
 		dt_read_unlock(env, obj);
 

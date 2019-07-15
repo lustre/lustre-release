@@ -187,7 +187,7 @@ static int lfsck_needs_scan_dir(const struct lu_env *env,
 				GOTO(out, rc = 0);
 		}
 
-		dt_read_lock(env, obj, MOR_TGT_CHILD);
+		dt_read_lock(env, obj, DT_TGT_CHILD);
 		if (unlikely(lfsck_is_dead_obj(obj))) {
 			dt_read_unlock(env, obj);
 

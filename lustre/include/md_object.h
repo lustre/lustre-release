@@ -661,17 +661,6 @@ static inline int mdo_statfs(const struct lu_env *env,
 	return m->md_ops->mdo_statfs(env, m, sfs);
 }
 
-/**
- * Used in MDD/OUT layer for object lock rule
- **/
-enum mdd_object_role {
-	MOR_SRC_PARENT,
-	MOR_SRC_CHILD,
-	MOR_TGT_PARENT,
-	MOR_TGT_CHILD,
-	MOR_TGT_ORPHAN
-};
-
 struct dt_device;
 
 void lustre_som_swab(struct lustre_som_attrs *attrs);

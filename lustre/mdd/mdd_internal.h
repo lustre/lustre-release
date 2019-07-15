@@ -231,9 +231,9 @@ int mdd_create_object_internal(const struct lu_env *env, struct mdd_object *p,
 
 /* mdd_lock.c */
 void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,
-                    enum mdd_object_role role);
+		    enum dt_object_role role);
 void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj,
-                   enum mdd_object_role role);
+		   enum dt_object_role role);
 void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
 void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
 int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj);
@@ -539,7 +539,7 @@ static inline int mdd_permission_internal_locked(const struct lu_env *env,
 						struct mdd_object *obj,
 						const struct lu_attr *la,
 						int mask,
-						enum mdd_object_role role)
+						enum dt_object_role role)
 {
 	return __mdd_permission_internal(env, obj, la, mask, role);
 }

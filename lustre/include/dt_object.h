@@ -347,6 +347,16 @@ enum dt_index_flags {
         DT_IND_RANGE = 1 << 4,
 };
 
+/* for dt_read_lock() and dt_write_lock() object lock rule */
+enum dt_object_role {
+	DT_SRC_PARENT,
+	DT_SRC_CHILD,
+	DT_TGT_PARENT,
+	DT_TGT_CHILD,
+	DT_TGT_ORPHAN,
+	DT_LASTID,
+};
+
 /**
  * Features, required from index to support file system directories (mapping
  * names to fids).
