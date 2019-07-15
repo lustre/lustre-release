@@ -3542,7 +3542,7 @@ static int mdt_tgt_connect(struct tgt_session_info *tsi)
 	    cfs_fail_val ==
 	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id) {
 		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(3 * MSEC_PER_SEC));
+		schedule_timeout(cfs_time_seconds(3));
 	}
 
 	return tgt_connect(tsi);

@@ -2144,7 +2144,7 @@ repeat:
 
 	while (wait_event_timeout(obd->obd_next_transno_waitq,
 				  check_routine(lut),
-				  msecs_to_jiffies(60 * MSEC_PER_SEC)) == 0)
+				  cfs_time_seconds(60)) == 0)
 		; /* wait indefinitely for event, but don't trigger watchdog */
 
 	if (obd->obd_abort_recovery) {

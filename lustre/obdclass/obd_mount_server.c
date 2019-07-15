@@ -1233,8 +1233,7 @@ again:
 				/* The connection with MGS is not established.
 				 * Try again after 2 seconds. Interruptable. */
 				set_current_state(TASK_INTERRUPTIBLE);
-				schedule_timeout(
-					msecs_to_jiffies(MSEC_PER_SEC) * 2);
+				schedule_timeout(cfs_time_seconds(2));
 				set_current_state(TASK_RUNNING);
 				if (!signal_pending(current))
 					goto again;

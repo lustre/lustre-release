@@ -1883,7 +1883,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		 */
 		if (last_credits != oh->ot_credits &&
 		    time_after(jiffies, last_printed +
-			       msecs_to_jiffies(60 * MSEC_PER_SEC)) &&
+			       cfs_time_seconds(60)) &&
 		    osd_transaction_size(dev) > 512) {
 			CWARN("%s: credits %u > trans_max %u\n", osd_name(dev),
 			      oh->ot_credits, osd_transaction_size(dev));

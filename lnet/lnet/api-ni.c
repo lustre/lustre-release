@@ -3917,9 +3917,9 @@ LNetCtl(unsigned int cmd, void *arg)
 		/* If timeout is negative then set default of 3 minutes */
 		if (((s32)data->ioc_u32[1] <= 0) ||
 		    data->ioc_u32[1] > (DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC))
-			timeout = msecs_to_jiffies(DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC);
+			timeout = cfs_time_seconds(DEFAULT_PEER_TIMEOUT);
 		else
-			timeout = msecs_to_jiffies(data->ioc_u32[1]);
+			timeout = nsecs_to_jiffies(data->ioc_u32[1] * NSEC_PER_MSEC);
 
 		rc = lnet_ping(id, timeout, data->ioc_pbuf1,
 			       data->ioc_plen1 / sizeof(struct lnet_process_id));
@@ -3939,9 +3939,9 @@ LNetCtl(unsigned int cmd, void *arg)
 		/* If timeout is negative then set default of 3 minutes */
 		if (((s32)ping->op_param) <= 0 ||
 		    ping->op_param > (DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC))
-			timeout = msecs_to_jiffies(DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC);
+			timeout = cfs_time_seconds(DEFAULT_PEER_TIMEOUT);
 		else
-			timeout = msecs_to_jiffies(ping->op_param);
+			timeout = nsecs_to_jiffies(ping->op_param * NSEC_PER_MSEC);
 
 		rc = lnet_ping(ping->ping_id, timeout,
 			       ping->ping_buf,
@@ -4087,7 +4087,7 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	int which;
 	int unlinked = 0;
 	int replied = 0;
-	const signed long a_long_time = msecs_to_jiffies(60 * MSEC_PER_SEC);
+	const signed long a_long_time = cfs_time_seconds(60);
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_process_id tmpid;
 	int i;

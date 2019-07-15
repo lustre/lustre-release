@@ -68,7 +68,7 @@ int
 lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout)
 {
 	int		rc;
-	long		jiffies_left = timeout * msecs_to_jiffies(MSEC_PER_SEC);
+	long		jiffies_left = cfs_time_seconds(timeout);
 	unsigned long	then;
 	struct timeval	tv;
 
@@ -87,15 +87,7 @@ lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout)
 
 		if (timeout != 0) {
 			/* Set send timeout to remaining time */
-			tv = (struct timeval) {
-				.tv_sec = jiffies_left /
-					  msecs_to_jiffies(MSEC_PER_SEC),
-				.tv_usec = ((jiffies_left %
-					     msecs_to_jiffies(MSEC_PER_SEC)) *
-					     USEC_PER_SEC) /
-					     msecs_to_jiffies(MSEC_PER_SEC)
-			};
-
+			jiffies_to_timeval(jiffies_left, &tv);
 			rc = kernel_setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO,
 					       (char *)&tv, sizeof(tv));
 			if (rc != 0) {
@@ -135,7 +127,7 @@ int
 lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout)
 {
 	int		rc;
-	long		jiffies_left = timeout * msecs_to_jiffies(MSEC_PER_SEC);
+	long		jiffies_left = cfs_time_seconds(timeout);
 	unsigned long	then;
 	struct timeval	tv;
 
@@ -152,13 +144,7 @@ lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout)
 		};
 
 		/* Set receive timeout to remaining time */
-		tv = (struct timeval) {
-			.tv_sec = jiffies_left / msecs_to_jiffies(MSEC_PER_SEC),
-			.tv_usec = ((jiffies_left %
-					msecs_to_jiffies(MSEC_PER_SEC)) *
-					USEC_PER_SEC) /
-					msecs_to_jiffies(MSEC_PER_SEC)
-		};
+		jiffies_to_timeval(jiffies_left, &tv);
 		rc = kernel_setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,
 				       (char *)&tv, sizeof(tv));
 		if (rc != 0) {

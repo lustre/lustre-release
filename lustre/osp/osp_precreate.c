@@ -1252,8 +1252,7 @@ static int osp_precreate_thread(void *_arg)
 			 */
 			rc = osp_precreate_cleanup_orphans(&env, d);
 			if (rc != 0) {
-				schedule_timeout_interruptible(
-					msecs_to_jiffies(MSEC_PER_SEC));
+				schedule_timeout_interruptible(cfs_time_seconds(1));
 				continue;
 			}
 		}

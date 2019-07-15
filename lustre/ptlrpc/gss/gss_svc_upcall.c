@@ -934,10 +934,10 @@ cache_check:
 			read_unlock(&rsi_cache.hash_lock);
 
 			if (valid == 0) {
-				unsigned long jiffies;
-				jiffies = msecs_to_jiffies(MSEC_PER_SEC *
-					  GSS_SVC_UPCALL_TIMEOUT);
-				schedule_timeout(jiffies);
+				unsigned long timeout;
+
+				timeout = cfs_time_seconds(GSS_SVC_UPCALL_TIMEOUT);
+				schedule_timeout(timeout);
 			}
 			cache_get(&rsip->h);
 			goto cache_check;
@@ -1128,8 +1128,7 @@ int __init gss_init_svc_upcall(void)
 		if (atomic_read(&rsi_cache.readers) > 0)
 			break;
 		set_current_state(TASK_UNINTERRUPTIBLE);
-		LASSERT(msecs_to_jiffies(MSEC_PER_SEC / 4) > 0);
-		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC / 4));
+		schedule_timeout(cfs_time_seconds(1) / 4);
 	}
 
 	if (atomic_read(&rsi_cache.readers) == 0)

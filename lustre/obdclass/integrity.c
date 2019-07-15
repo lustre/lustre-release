@@ -227,7 +227,7 @@ static void obd_t10_performance_test(const char *obd_name,
 	memset(buf, 0xAD, PAGE_SIZE);
 	kunmap(page);
 
-	for (start = jiffies, end = start + msecs_to_jiffies(MSEC_PER_SEC / 4),
+	for (start = jiffies, end = start + cfs_time_seconds(1) / 4,
 	     bcount = 0; time_before(jiffies, end) && rc == 0; bcount++) {
 		rc = __obd_t10_performance_test(obd_name, cksum_type, page,
 						buf_len / PAGE_SIZE);

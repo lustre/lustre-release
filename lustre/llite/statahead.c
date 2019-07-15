@@ -1191,8 +1191,7 @@ out:
 	 * safely because statahead RPC will access sai data */
 	while (sai->sai_sent != sai->sai_replied) {
 		/* in case we're not woken up, timeout wait */
-		lwi = LWI_TIMEOUT(msecs_to_jiffies(MSEC_PER_SEC >> 3),
-				  NULL, NULL);
+		lwi = LWI_TIMEOUT(cfs_time_seconds(1) >> 3, NULL, NULL);
 		l_wait_event(sa_thread->t_ctl_waitq,
 			sai->sai_sent == sai->sai_replied, &lwi);
 	}

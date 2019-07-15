@@ -902,12 +902,13 @@ static void osc_grant_work_handler(struct work_struct *data)
 	if (client_gtd.gtd_stopped == 1)
 		return;
 
-	if (next_shrink > ktime_get_seconds())
-		schedule_delayed_work(&work, msecs_to_jiffies(
-					(next_shrink - ktime_get_seconds()) *
-					MSEC_PER_SEC));
-	else
+	if (next_shrink > ktime_get_seconds()) {
+		time64_t delay = next_shrink - ktime_get_seconds();
+
+		schedule_delayed_work(&work, cfs_time_seconds(delay));
+	} else {
 		schedule_work(&work.work);
+	}
 }
 
 void osc_schedule_grant_work(void)

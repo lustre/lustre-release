@@ -97,6 +97,7 @@ cfs_time_before_64||ktime_before
 cfs_time_current||jiffies
 cfs_time_current_64||ktime_get
 cfs_time_current_sec||ktime_get_real_seconds
+msecs_to_jiffies|cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
 DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
@@ -123,6 +124,7 @@ lnet_magicversion_t||struct lnet_magicversion
 lnet_ni_status_t||struct lnet_ni_status
 lnet_ping_info_t||struct lnet_ping_info
 lnet_process_id_packed_t||struct lnet_process_id_packed
+HZ||cfs_time_seconds
 LPD64||%lld
 LPLD||%ld
 LPLU||%lu

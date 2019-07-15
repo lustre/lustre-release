@@ -1841,14 +1841,12 @@ bool __lfsck_set_speed(struct lfsck_instance *lfsck, __u32 limit)
 	bool dirty = false;
 
 	if (limit != LFSCK_SPEED_NO_LIMIT) {
-		if (limit > msecs_to_jiffies(MSEC_PER_SEC)) {
-			lfsck->li_sleep_rate = limit /
-					       msecs_to_jiffies(MSEC_PER_SEC);
+		if (limit > cfs_time_seconds(1)) {
+			lfsck->li_sleep_rate = limit / cfs_time_seconds(1);
 			lfsck->li_sleep_jif = 1;
 		} else {
 			lfsck->li_sleep_rate = 1;
-			lfsck->li_sleep_jif = msecs_to_jiffies(MSEC_PER_SEC) /
-					      limit;
+			lfsck->li_sleep_jif = cfs_time_seconds(1) / limit;
 		}
 	} else {
 		lfsck->li_sleep_jif = 0;
@@ -3045,7 +3043,7 @@ again:
 	if (unlikely(rc == -EINPROGRESS)) {
 		retry = true;
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC));
+		schedule_timeout(cfs_time_seconds(1));
 		set_current_state(TASK_RUNNING);
 		if (!signal_pending(current) &&
 		    thread_is_running(&lfsck->li_thread))

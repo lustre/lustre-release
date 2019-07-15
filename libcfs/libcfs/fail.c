@@ -130,7 +130,7 @@ int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set)
 		CERROR("cfs_fail_timeout id %x sleeping for %dms\n", id, ms);
 		while (ktime_before(ktime_get(), till)) {
 			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(msecs_to_jiffies(1000) / 10);
+			schedule_timeout(cfs_time_seconds(1) / 10);
 			set_current_state(TASK_RUNNING);
 			if (!cfs_fail_loc) {
 				CERROR("cfs_fail_timeout interrupted\n");

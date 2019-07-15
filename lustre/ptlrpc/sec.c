@@ -592,7 +592,7 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
 		       newctx, newctx->cc_flags);
 
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC));
+		schedule_timeout(cfs_time_seconds(1));
 	} else if (unlikely(test_bit(PTLRPC_CTX_UPTODATE_BIT, &newctx->cc_flags)
 			    == 0)) {
 		/*
@@ -823,7 +823,7 @@ again:
 	req->rq_restart = 0;
 	spin_unlock(&req->rq_lock);
 
-	lwi = LWI_TIMEOUT_INTR(msecs_to_jiffies(timeout * MSEC_PER_SEC),
+	lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout),
 			       ctx_refresh_timeout,
 			       ctx_refresh_interrupt, req);
 	rc = l_wait_event(req->rq_reply_waitq, ctx_check_refresh(ctx), &lwi);
