@@ -806,12 +806,8 @@ void ll_debugfs_unregister_super(struct super_block *sb);
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
 
 enum {
-	LPROC_LL_DIRTY_HITS,
-	LPROC_LL_DIRTY_MISSES,
 	LPROC_LL_READ_BYTES,
 	LPROC_LL_WRITE_BYTES,
-	LPROC_LL_BRW_READ,
-	LPROC_LL_BRW_WRITE,
 	LPROC_LL_IOCTL,
 	LPROC_LL_OPEN,
 	LPROC_LL_RELEASE,
@@ -833,7 +829,7 @@ enum {
 	LPROC_LL_RMDIR,
 	LPROC_LL_MKNOD,
 	LPROC_LL_RENAME,
-	LPROC_LL_STAFS,
+	LPROC_LL_STATFS,
 	LPROC_LL_ALLOC_INODE,
 	LPROC_LL_SETXATTR,
 	LPROC_LL_GETXATTR,

@@ -1991,7 +1991,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	int rc;
 
 	CDEBUG(D_VFSTRACE, "VFS Op: at %llu jiffies\n", get_jiffies_64());
-        ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STAFS, 1);
+	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STATFS, 1);
 
 	/* Some amount of caching on the client is allowed */
 	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_SUM);

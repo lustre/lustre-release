@@ -1540,16 +1540,10 @@ static const struct llite_file_opcode {
         const char *opname;
 } llite_opcode_table[LPROC_LL_FILE_OPCODES] = {
         /* file operation */
-        { LPROC_LL_DIRTY_HITS,     LPROCFS_TYPE_REGS, "dirty_pages_hits" },
-        { LPROC_LL_DIRTY_MISSES,   LPROCFS_TYPE_REGS, "dirty_pages_misses" },
         { LPROC_LL_READ_BYTES,     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
                                    "read_bytes" },
         { LPROC_LL_WRITE_BYTES,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
                                    "write_bytes" },
-        { LPROC_LL_BRW_READ,       LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "brw_read" },
-        { LPROC_LL_BRW_WRITE,      LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "brw_write" },
         { LPROC_LL_IOCTL,          LPROCFS_TYPE_REGS, "ioctl" },
         { LPROC_LL_OPEN,           LPROCFS_TYPE_REGS, "open" },
         { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "close" },
@@ -1573,15 +1567,15 @@ static const struct llite_file_opcode {
         { LPROC_LL_RMDIR,          LPROCFS_TYPE_REGS, "rmdir" },
         { LPROC_LL_MKNOD,          LPROCFS_TYPE_REGS, "mknod" },
         { LPROC_LL_RENAME,         LPROCFS_TYPE_REGS, "rename" },
-        /* special inode operation */
-        { LPROC_LL_STAFS,          LPROCFS_TYPE_REGS, "statfs" },
-        { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
-        { LPROC_LL_SETXATTR,       LPROCFS_TYPE_REGS, "setxattr" },
-        { LPROC_LL_GETXATTR,       LPROCFS_TYPE_REGS, "getxattr" },
+	/* special inode operation */
+	{ LPROC_LL_STATFS,          LPROCFS_TYPE_REGS, "statfs" },
+	{ LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
+	{ LPROC_LL_SETXATTR,       LPROCFS_TYPE_REGS, "setxattr" },
+	{ LPROC_LL_GETXATTR,       LPROCFS_TYPE_REGS, "getxattr" },
 	{ LPROC_LL_GETXATTR_HITS,  LPROCFS_TYPE_REGS, "getxattr_hits" },
-        { LPROC_LL_LISTXATTR,      LPROCFS_TYPE_REGS, "listxattr" },
-        { LPROC_LL_REMOVEXATTR,    LPROCFS_TYPE_REGS, "removexattr" },
-        { LPROC_LL_INODE_PERM,     LPROCFS_TYPE_REGS, "inode_permission" },
+	{ LPROC_LL_LISTXATTR,      LPROCFS_TYPE_REGS, "listxattr" },
+	{ LPROC_LL_REMOVEXATTR,    LPROCFS_TYPE_REGS, "removexattr" },
+	{ LPROC_LL_INODE_PERM,     LPROCFS_TYPE_REGS, "inode_permission" },
 };
 
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)
