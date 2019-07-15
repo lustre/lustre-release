@@ -952,7 +952,6 @@ static inline void osd_dnode_rele(dnode_t *dn)
 	LASSERT(dn->dn_bonus);
 	db = dn->dn_bonus;
 
-	DB_DNODE_EXIT(db);
 	dmu_buf_rele(&db->db, osd_obj_tag);
 }
 
