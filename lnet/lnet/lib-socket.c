@@ -43,6 +43,27 @@
 #include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
+/*
+ * kernel 5.1: commit 7f1bc6e95d7840d4305595b3e4025cddda88cee5
+ * Y2038 64-bit time.
+ *  SO_TIMESTAMP, SO_TIMESTAMPNS and SO_TIMESTAMPING options, the
+ *  way they are currently defined, are not y2038 safe.
+ *  Subsequent patches in the series add new y2038 safe versions
+ *  of these options which provide 64 bit timestamps on all
+ *  architectures uniformly.
+ *  Hence, rename existing options with OLD tag suffixes.
+ *
+ * NOTE: When updating to timespec64 change change these to '_NEW'.
+ *
+ */
+#ifndef SO_SNDTIMEO
+#define SO_SNDTIMEO SO_SNDTIMEO_OLD
+#endif
+
+#ifndef SO_RCVTIMEO
+#define SO_RCVTIMEO SO_RCVTIMEO_OLD
+#endif
+
 int
 lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout)
 {
