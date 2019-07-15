@@ -70,12 +70,14 @@ do {									\
 
 static char *lustre_dir;
 static char *poolname;
+static bool run_list_provided;
 static int num_osts = -1;
 
 void usage(char *prog)
 {
 	printf("Usage: %s [-d lustre_dir] [-p pool_name] [-o num_osts] "
-	       "[-s $n,$m,..]\n", prog);
+	       "[-s $n,$m,... (skip tests)] [-t $n,$m,... (run tests)]\n",
+	       prog);
 	exit(0);
 }
 
@@ -1802,7 +1804,8 @@ int test(void (*test_fn)(), const char *test_desc, bool test_skip, int test_num)
 	char status_buf[128];
 
 	if (test_skip) {
-		print_test_desc(test_num, test_desc, "skip");
+		if (!run_list_provided)
+			print_test_desc(test_num, test_desc, "skip");
 		return 0;
 	}
 
@@ -1857,11 +1860,34 @@ static void set_tests_skipped(char *str_tests)
 	}
 }
 
+static void set_tests_to_run(char *str_tests)
+{
+	char *ptr = str_tests;
+	int tstno;
+	int i = 0;
+
+	if (ptr == NULL || strlen(ptr) == 0)
+		return;
+
+	for (i = 0; i < NUM_TESTS ; i++)
+		test_tbl[i].tte_skip = true;
+
+	while (*ptr != '\0') {
+		tstno = strtoul(ptr, &ptr, 0);
+		if (tstno >= 0 && tstno < NUM_TESTS)
+			test_tbl[tstno].tte_skip = false;
+		if (*ptr == ',')
+			ptr++;
+		else
+			break;
+	}
+}
+
 static void process_args(int argc, char *argv[])
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "d:p:o:s:")) != -1) {
+	while ((c = getopt(argc, argv, "d:p:o:s:t:")) != -1) {
 		switch (c) {
 		case 'd':
 			lustre_dir = optarg;
@@ -1874,6 +1900,10 @@ static void process_args(int argc, char *argv[])
 			break;
 		case 's':
 			set_tests_skipped(optarg);
+			break;
+		case 't':
+			run_list_provided = true;
+			set_tests_to_run(optarg);
 			break;
 		case '?':
 			fprintf(stderr, "Unknown option '%c'\n", optopt);
