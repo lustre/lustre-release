@@ -658,13 +658,22 @@ static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
 	return 0;
 }
 
+int ptlrpc_connect_import(struct obd_import *imp)
+{
+	spin_lock(&imp->imp_lock);
+	return ptlrpc_connect_import_locked(imp);
+}
+
 /**
  * Attempt to (re)connect import \a imp. This includes all preparations,
  * initializing CONNECT RPC request and passing it to ptlrpcd for
  * actual sending.
+ *
+ * Assumes imp->imp_lock is held, and releases it.
+ *
  * Returns 0 on success or error code.
  */
-int ptlrpc_connect_import(struct obd_import *imp)
+int ptlrpc_connect_import_locked(struct obd_import *imp)
 {
 	struct obd_device *obd = imp->imp_obd;
 	int initial_connect = 0;
@@ -682,7 +691,8 @@ int ptlrpc_connect_import(struct obd_import *imp)
 	int rc;
 	ENTRY;
 
-	spin_lock(&imp->imp_lock);
+	assert_spin_locked(&imp->imp_lock);
+
 	if (imp->imp_state == LUSTRE_IMP_CLOSED) {
 		spin_unlock(&imp->imp_lock);
 		CERROR("can't connect to a closed import\n");
@@ -1770,12 +1780,13 @@ static int ptlrpc_disconnect_idle_interpret(const struct lu_env *env,
 			connect = 1;
 		}
 	}
-	spin_unlock(&imp->imp_lock);
 
 	if (connect) {
-		rc = ptlrpc_connect_import(imp);
+		rc = ptlrpc_connect_import_locked(imp);
 		if (rc >= 0)
 			ptlrpc_pinger_add_import(imp);
+	} else {
+		spin_unlock(&imp->imp_lock);
 	}
 
 	return 0;
