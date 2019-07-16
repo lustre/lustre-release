@@ -864,8 +864,7 @@ ptlrpc_request_alloc_internal(struct obd_import *imp,
                               struct ptlrpc_request_pool * pool,
                               const struct req_format *format)
 {
-        struct ptlrpc_request *request;
-	int connect = 0;
+	struct ptlrpc_request *request;
 
 	request = __ptlrpc_request_alloc(imp, pool);
 	if (request == NULL)
@@ -883,17 +882,17 @@ ptlrpc_request_alloc_internal(struct obd_import *imp,
 		if (imp->imp_state == LUSTRE_IMP_IDLE) {
 			imp->imp_generation++;
 			imp->imp_initiated_at = imp->imp_generation;
-			imp->imp_state =  LUSTRE_IMP_NEW;
-			connect = 1;
-		}
-		spin_unlock(&imp->imp_lock);
-		if (connect) {
-			rc = ptlrpc_connect_import(imp);
+			imp->imp_state = LUSTRE_IMP_NEW;
+
+			/* connect_import_locked releases imp_lock */
+			rc = ptlrpc_connect_import_locked(imp);
 			if (rc < 0) {
 				ptlrpc_request_free(request);
 				return NULL;
 			}
 			ptlrpc_pinger_add_import(imp);
+		} else {
+			spin_unlock(&imp->imp_lock);
 		}
 	}
 

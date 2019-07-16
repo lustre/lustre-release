@@ -2320,6 +2320,7 @@ void ptlrpc_hr_fini(void);
  * @{
  */
 int ptlrpc_connect_import(struct obd_import *imp);
+int ptlrpc_connect_import_locked(struct obd_import *imp);
 int ptlrpc_init_import(struct obd_import *imp);
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose);
 int ptlrpc_disconnect_and_idle_import(struct obd_import *imp);
