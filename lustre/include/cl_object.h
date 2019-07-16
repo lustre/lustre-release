@@ -2472,8 +2472,6 @@ struct cl_sync_io {
 	atomic_t		csi_sync_nr;
 	/** error code. */
 	int			csi_sync_rc;
-	/** barrier of destroy this structure */
-	atomic_t		csi_barrier;
 	/** completion to be signaled when transfer is complete. */
 	wait_queue_head_t	csi_waitq;
 	/** callback to invoke when this IO is finished */

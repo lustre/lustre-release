@@ -1145,14 +1145,15 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 }
 EXPORT_SYMBOL(cl_req_attr_set);
 
-/* cl_sync_io_callback assumes the caller must call cl_sync_io_wait() to
- * wait for the IO to finish. */
+/*
+ * cl_sync_io_end callback is issued as cl_sync_io completes and before
+ * control of anchor reverts to model used by the caller of cl_sync_io_init()
+ *
+ * NOTE: called with spinlock on anchor->csi_waitq.lock
+ */
 void cl_sync_io_end(const struct lu_env *env, struct cl_sync_io *anchor)
 {
-	wake_up_all(&anchor->csi_waitq);
-
-	/* it's safe to nuke or reuse anchor now */
-	atomic_set(&anchor->csi_barrier, 0);
+	/* deprecated pending future removal */
 }
 EXPORT_SYMBOL(cl_sync_io_end);
 
@@ -1166,7 +1167,6 @@ void cl_sync_io_init(struct cl_sync_io *anchor, int nr,
 	memset(anchor, 0, sizeof(*anchor));
 	init_waitqueue_head(&anchor->csi_waitq);
 	atomic_set(&anchor->csi_sync_nr, nr);
-	atomic_set(&anchor->csi_barrier, nr > 0);
 	anchor->csi_sync_rc = 0;
 	anchor->csi_end_io = end;
 	LASSERT(end != NULL);
@@ -1202,12 +1202,11 @@ int cl_sync_io_wait(const struct lu_env *env, struct cl_sync_io *anchor,
 	} else {
 		rc = anchor->csi_sync_rc;
 	}
+	/* We take the lock to ensure that cl_sync_io_note() has finished */
+	spin_lock(&anchor->csi_waitq.lock);
 	LASSERT(atomic_read(&anchor->csi_sync_nr) == 0);
+	spin_unlock(&anchor->csi_waitq.lock);
 
-	/* wait until cl_sync_io_note() has done wakeup */
-	while (unlikely(atomic_read(&anchor->csi_barrier) != 0)) {
-		cpu_relax();
-	}
 	RETURN(rc);
 }
 EXPORT_SYMBOL(cl_sync_io_wait);
@@ -1227,9 +1226,20 @@ void cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 	 * IO.
 	 */
 	LASSERT(atomic_read(&anchor->csi_sync_nr) > 0);
-	if (atomic_dec_and_test(&anchor->csi_sync_nr)) {
-		LASSERT(anchor->csi_end_io != NULL);
+	if (atomic_dec_and_lock(&anchor->csi_sync_nr,
+				&anchor->csi_waitq.lock)) {
+		/*
+		 * Holding the lock across both the decrement and
+		 * the wakeup ensures cl_sync_io_wait() doesn't complete
+		 * before the wakeup completes and the contents of
+		 * of anchor become unsafe to access as the owner is free
+		 * to immediately reclaim anchor when cl_sync_io_wait()
+		 * completes.
+		 */
+		wake_up_all_locked(&anchor->csi_waitq);
 		anchor->csi_end_io(env, anchor);
+		spin_unlock(&anchor->csi_waitq.lock);
+
 		/* Can't access anchor any more */
 	}
 	EXIT;
