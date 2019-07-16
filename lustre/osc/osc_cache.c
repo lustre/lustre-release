@@ -3057,9 +3057,16 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 				unplug = true;
 			} else {
 				/* the only discarder is lock cancelling, so
-				 * [start, end] must contain this extent */
-				EASSERT(ext->oe_start >= start &&
-					ext->oe_end <= end, ext);
+				 * [start, end] must contain this extent.
+				 * However, with DOM, osc extent alignment may
+				 * cause the first extent to start before the
+				 * OST portion of the layout.  This is never
+				 * accessed for i/o, but the unused portion
+				 * will not be covered by the sync request,
+				 * so we cannot assert in that case. */
+				EASSERT(ergo(!(ext == first_extent(obj)),
+					ext->oe_start >= start &&
+					ext->oe_end <= end), ext);
 				osc_extent_state_set(ext, OES_LOCKING);
 				ext->oe_owner = current;
 				list_move_tail(&ext->oe_link,
