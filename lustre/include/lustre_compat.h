@@ -42,6 +42,7 @@
 #include <linux/xattr.h>
 #include <linux/workqueue.h>
 #include <linux/blkdev.h>
+#include <linux/slab.h>
 
 #include <libcfs/linux/linux-fs.h>
 #include <lustre_patchless_compat.h>
@@ -785,6 +786,12 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 #define i_pages tree_lock
 #define xa_lock_irq(lockp) spin_lock_irq(lockp)
 #define xa_unlock_irq(lockp) spin_unlock_irq(lockp)
+#endif
+
+#ifndef KMEM_CACHE_USERCOPY
+#define kmem_cache_create_usercopy(name, size, align, flags, useroffset, \
+				   usersize, ctor)			 \
+	kmem_cache_create(name, size, align, flags, ctor)
 #endif
 
 #endif /* _LUSTRE_COMPAT_H */
