@@ -3261,7 +3261,9 @@ AC_CHECK_HEADERS([netdb.h endian.h])
 AC_CHECK_FUNCS([gethostbyname])
 
 # lustre/utils/llverdev.c
-AC_CHECK_HEADERS([blkid/blkid.h])
+AS_IF([test "x$enable_dist" = xno], [
+	PKG_CHECK_MODULES(blkid, [blkid])
+])
 
 # lustre/utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
@@ -3278,6 +3280,10 @@ AS_IF([test "$enable_dist" = "no"], [
 ])
 
 SELINUX=""
+AS_IF([test "x$enable_dist" = xno], [
+	PKG_CHECK_MODULES(blkid, [blkid])
+])
+
 AC_CHECK_LIB([selinux], [is_selinux_enabled],
 	[AC_CHECK_HEADERS([selinux/selinux.h],
 			[SELINUX="-lselinux"
@@ -3373,7 +3379,6 @@ AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
-AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(GSS_KEYRING, test x$enable_gss_keyring = xyes)

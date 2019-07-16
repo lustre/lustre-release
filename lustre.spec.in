@@ -146,13 +146,18 @@ BuildRoot: %{_tmppath}/lustre-%{version}-root
 Requires: %{requires_kmod_name} = %{requires_kmod_version} zlib
 Requires: %{requires_yaml_name}
 BuildRequires: libtool libyaml-devel zlib-devel
+%if %{_vendor}=="redhat"
+BuildRequires: pkgconfig
+%else
+BuildRequires: pkg-config
+%endif
 %if %{with servers}
 Requires: lustre-osd
 Requires: lustre-osd-mount
 Obsoletes: lustre-client < %{version}
 Provides: lustre-client = %{version}-%{release}
 %endif
-# GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
+# GSS requires this: BuildRequires: libgssapi-devel >= 0.10
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 #suse don't support selinux
 BuildRequires: libselinux-devel
