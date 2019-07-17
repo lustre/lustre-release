@@ -3766,7 +3766,6 @@ lustre/kernel_patches/targets/3.10-rhel7.6.target
 lustre/kernel_patches/targets/3.10-rhel7.5.target
 lustre/kernel_patches/targets/4.14-rhel7.5.target
 lustre/kernel_patches/targets/4.14-rhel7.6.target
-lustre/kernel_patches/targets/2.6-sles11.target
 lustre/kernel_patches/targets/3.0-sles11.target
 lustre/kernel_patches/targets/3.0-sles11sp3.target
 lustre/kernel_patches/targets/3.0-sles11sp4.target
