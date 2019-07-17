@@ -1009,4 +1009,9 @@ struct obd_heat_instance {
 	__u64 ohi_count;
 };
 
+/* Define a fixed 4096-byte encryption unit size */
+#define LUSTRE_ENCRYPTION_BLOCKBITS   12
+#define LUSTRE_ENCRYPTION_UNIT_SIZE   ((size_t)1 << LUSTRE_ENCRYPTION_BLOCKBITS)
+#define LUSTRE_ENCRYPTION_MASK        (~(LUSTRE_ENCRYPTION_UNIT_SIZE - 1))
+
 #endif

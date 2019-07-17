@@ -119,6 +119,11 @@ struct brw_page {
 	struct page	*pg;
 	u32		 count;
 	u32		 flag;
+	/* used for encryption: difference with offset in clear text page */
+	u16		 bp_off_diff;
+	/* used for encryption: difference with count in clear text page */
+	u16		 bp_count_diff;
+	u32		 bp_padding;
 };
 
 struct timeout_item {
@@ -1300,6 +1305,18 @@ static inline void client_adjust_max_dirty(struct client_obd *cli)
 	 * number of MBs. */
 	cli->cl_dirty_max_pages = round_up(cli->cl_dirty_max_pages,
 					   1 << (20 - PAGE_SHIFT));
+}
+
+static inline struct inode *page2inode(struct page *page)
+{
+	if (page->mapping) {
+		if (PageAnon(page))
+			return NULL;
+		else
+			return page->mapping->host;
+	} else {
+		return NULL;
+	}
 }
 
 #endif /* __OBD_H */

@@ -50,4 +50,7 @@ int echo_persistent_pages_init(void);
 void echo_persistent_pages_fini(void);
 #endif /* HAVE_SERVER_SUPPORT */
 
+/* mapping value to tell page is not encrypted */
+#define ECHO_MAPPING_UNENCRYPTED ((void *)1)
+
 #endif

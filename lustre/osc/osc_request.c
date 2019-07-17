@@ -1347,28 +1347,50 @@ static int osc_checksum_bulk_rw(const char *obd_name,
 	RETURN(rc);
 }
 
+static inline void osc_release_bounce_pages(struct brw_page **pga,
+					    u32 page_count)
+{
+#ifdef HAVE_LUSTRE_CRYPTO
+	int i;
+
+	for (i = 0; i < page_count; i++) {
+		if (pga[i]->pg->mapping)
+			/* bounce pages are unmapped */
+			continue;
+		if (pga[i]->flag & OBD_BRW_SYNC)
+			/* sync transfer cannot have encrypted pages */
+			continue;
+		llcrypt_finalize_bounce_page(&pga[i]->pg);
+		pga[i]->count -= pga[i]->bp_count_diff;
+		pga[i]->off += pga[i]->bp_off_diff;
+	}
+#endif
+}
+
 static int
 osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 		     u32 page_count, struct brw_page **pga,
 		     struct ptlrpc_request **reqp, int resend)
 {
-        struct ptlrpc_request   *req;
-        struct ptlrpc_bulk_desc *desc;
-        struct ost_body         *body;
-        struct obd_ioobj        *ioobj;
-        struct niobuf_remote    *niobuf;
+	struct ptlrpc_request *req;
+	struct ptlrpc_bulk_desc *desc;
+	struct ost_body *body;
+	struct obd_ioobj *ioobj;
+	struct niobuf_remote *niobuf;
 	int niocount, i, requested_nob, opc, rc, short_io_size = 0;
-        struct osc_brw_async_args *aa;
-        struct req_capsule      *pill;
-        struct brw_page *pg_prev;
+	struct osc_brw_async_args *aa;
+	struct req_capsule *pill;
+	struct brw_page *pg_prev;
 	void *short_io_buf;
 	const char *obd_name = cli->cl_import->imp_obd->obd_name;
+	struct inode *inode;
 
-        ENTRY;
-        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
-                RETURN(-ENOMEM); /* Recoverable */
-        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ2))
-                RETURN(-EINVAL); /* Fatal */
+	ENTRY;
+	inode = page2inode(pga[0]->pg);
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
+		RETURN(-ENOMEM); /* Recoverable */
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ2))
+		RETURN(-EINVAL); /* Fatal */
 
 	if ((cmd & OBD_BRW_WRITE) != 0) {
 		opc = OST_WRITE;
@@ -1381,6 +1403,51 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	}
         if (req == NULL)
                 RETURN(-ENOMEM);
+
+	if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode)) {
+		for (i = 0; i < page_count; i++) {
+			struct brw_page *pg = pga[i];
+			struct page *data_page = NULL;
+			bool retried = false;
+			bool lockedbymyself;
+
+retry_encrypt:
+			/* The page can already be locked when we arrive here.
+			 * This is possible when cl_page_assume/vvp_page_assume
+			 * is stuck on wait_on_page_writeback with page lock
+			 * held. In this case there is no risk for the lock to
+			 * be released while we are doing our encryption
+			 * processing, because writeback against that page will
+			 * end in vvp_page_completion_write/cl_page_completion,
+			 * which means only once the page is fully processed.
+			 */
+			lockedbymyself = trylock_page(pg->pg);
+			data_page =
+				llcrypt_encrypt_pagecache_blocks(pg->pg,
+								 PAGE_SIZE, 0,
+								 GFP_NOFS);
+			if (lockedbymyself)
+				unlock_page(pg->pg);
+			if (IS_ERR(data_page)) {
+				rc = PTR_ERR(data_page);
+				if (rc == -ENOMEM && !retried) {
+					retried = true;
+					rc = 0;
+					goto retry_encrypt;
+				}
+				ptlrpc_request_free(req);
+				RETURN(rc);
+			}
+			/* len is forced to PAGE_SIZE, and poff to 0
+			 * so store the old, clear text info
+			 */
+			pg->pg = data_page;
+			pg->bp_count_diff = PAGE_SIZE - pg->count;
+			pg->count = PAGE_SIZE;
+			pg->bp_off_diff = pg->off & ~PAGE_MASK;
+			pg->off = pg->off & PAGE_MASK;
+		}
+	}
 
         for (niocount = i = 1; i < page_count; i++) {
                 if (!can_merge_pages(pga[i - 1], pga[i]))
@@ -2096,6 +2163,10 @@ static int brw_interpret(const struct lu_env *env,
 
 	rc = osc_brw_fini_request(req, rc);
 	CDEBUG(D_INODE, "request %p aa %p rc %d\n", req, aa, rc);
+
+	/* restore clear text pages */
+	osc_release_bounce_pages(aa->aa_ppga, aa->aa_page_count);
+
 	/*
 	 * When server returns -EINPROGRESS, client should always retry
 	 * regardless of the number of times the bulk was resent already.
@@ -2404,8 +2475,10 @@ out:
 
 		if (oa)
 			OBD_SLAB_FREE_PTR(oa, osc_obdo_kmem);
-		if (pga)
-			OBD_FREE_PTR_ARRAY(pga, page_count);
+		if (pga) {
+			osc_release_bounce_pages(pga, page_count);
+			osc_release_ppga(pga, page_count);
+		}
 		/* this should happen rarely and is pretty bad, it makes the
 		 * pending list not follow the dirty order */
 		while (!list_empty(ext_list)) {

@@ -85,6 +85,9 @@ static int ll_set_context(struct inode *inode, const void *ctx, size_t len,
 	if (rc)
 		return rc;
 
+	/* used as encryption unit size */
+	if (S_ISREG(inode->i_mode))
+		inode->i_blkbits = LUSTRE_ENCRYPTION_BLOCKBITS;
 	ll_update_inode_flags(inode, ext_flags);
 	return 0;
 }

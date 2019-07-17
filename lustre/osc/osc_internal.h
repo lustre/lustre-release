@@ -219,4 +219,5 @@ static inline void osc_set_io_portal(struct ptlrpc_request *req)
 	else
 		req->rq_request_portal = OST_IO_PORTAL;
 }
+
 #endif /* OSC_INTERNAL_H */

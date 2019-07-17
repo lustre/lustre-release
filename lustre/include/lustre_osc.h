@@ -49,6 +49,7 @@
 #include <libcfs/libcfs.h>
 #include <obd.h>
 #include <cl_object.h>
+#include <lustre_crypto.h>
 
 /** \defgroup osc osc
  *  @{

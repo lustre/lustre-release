@@ -2594,6 +2594,8 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 		if (!pgp->pg)
 			goto out;
 
+		/* set mapping so page is not considered encrypted */
+		pgp->pg->mapping = ECHO_MAPPING_UNENCRYPTED;
 		pages[i] = pgp->pg;
 		pgp->count = PAGE_SIZE;
 		pgp->off = off;

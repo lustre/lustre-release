@@ -417,6 +417,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 						  strlen(dirname)),
 		},
 	};
+	bool encrypt = false;
 	int err;
 	ENTRY;
 
@@ -476,6 +477,16 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
+	if (IS_ENCRYPTED(parent) ||
+	    unlikely(llcrypt_dummy_context_enabled(parent))) {
+		err = llcrypt_get_encryption_info(parent);
+		if (err)
+			GOTO(out_op_data, err);
+		if (!llcrypt_has_encryption_key(parent))
+			GOTO(out_op_data, err = -ENOKEY);
+		encrypt = true;
+	}
+
 	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
 		/* selinux_dentry_init_security() uses dentry->d_parent and name
 		 * to determine the security context for the file. So our fake
@@ -515,6 +526,12 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	}
 	if (err)
 		GOTO(out_inode, err);
+
+	if (encrypt) {
+		err = llcrypt_inherit_context(parent, inode, NULL, false);
+		if (err)
+			GOTO(out_inode, err);
+	}
 
 out_inode:
 	if (inode != NULL)

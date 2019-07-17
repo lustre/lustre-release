@@ -232,6 +232,8 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 				       POSTID(&obj->ioo_oid));
 				return -ENOMEM;
 			}
+			/* set mapping so page is not considered encrypted */
+			res->lnb_page->mapping = ECHO_MAPPING_UNENCRYPTED;
 		}
 
 		CDEBUG(D_PAGE, "$$$$ get page %p @ %llu for %d\n",
@@ -964,6 +966,8 @@ int echo_persistent_pages_init(void)
 
 		memset(kmap(pg), 0, PAGE_SIZE);
 		kunmap(pg);
+		/* set mapping so page is not considered encrypted */
+		pg->mapping = ECHO_MAPPING_UNENCRYPTED;
 
 		echo_persistent_pages[i] = pg;
 	}
