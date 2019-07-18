@@ -571,11 +571,24 @@ static inline bool is_sxid(umode_t mode)
 #define IS_NOSEC(inode)	(!is_sxid(inode->i_mode))
 #endif
 
-#ifndef MS_NOSEC
-static inline void inode_has_no_xattr(struct inode *inode)
-{
-	return;
-}
+/*
+ * mount MS_* flags split from superblock SB_* flags
+ * if the SB_* flags are not available use the MS_* flags
+ */
+#if !defined(SB_RDONLY) && defined(MS_RDONLY)
+# define SB_RDONLY MS_RDONLY
+#endif
+#if !defined(SB_ACTIVE) && defined(MS_ACTIVE)
+# define SB_ACTIVE MS_ACTIVE
+#endif
+#if !defined(SB_NOSEC) && defined(MS_NOSEC)
+# define SB_NOSEC MS_NOSEC
+#endif
+#if !defined(SB_POSIXACL) && defined(MS_POSIXACL)
+# define SB_POSIXACL MS_POSIXACL
+#endif
+#if !defined(SB_NODIRATIME) && defined(MS_NODIRATIME)
+# define SB_NODIRATIME MS_NODIRATIME
 #endif
 
 #ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER

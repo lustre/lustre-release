@@ -766,7 +766,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	}
 
 	if (it->it_op & IT_OPEN && it->it_flags & FMODE_WRITE &&
-	    dentry->d_sb->s_flags & MS_RDONLY)
+	    dentry->d_sb->s_flags & SB_RDONLY)
 		RETURN(ERR_PTR(-EROFS));
 
 	if (it->it_op & IT_CREAT)
@@ -1152,7 +1152,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 
 			it = ll_convert_intent(&nd->intent.open, nd->flags,
 				(nd->path.mnt->mnt_flags & MNT_READONLY) ||
-				(nd->path.mnt->mnt_sb->s_flags & MS_RDONLY));
+				(nd->path.mnt->mnt_sb->s_flags & SB_RDONLY));
 			if (IS_ERR(it))
 				RETURN((struct dentry *)it);
 		}

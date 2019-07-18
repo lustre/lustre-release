@@ -3064,6 +3064,28 @@ bi_status, [
 ]) # LC_BI_STATUS
 
 #
+# LC_UAPI_LINUX_MOUNT_H
+#
+# kernel 4.20 commit e262e32d6bde0f77fb0c95d977482fc872c51996
+# vfs: Suppress MS_* flag defs within the kernel ...
+#
+AC_DEFUN([LC_UAPI_LINUX_MOUNT_H], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if MS_RDONLY was moved to uapi/linux/mount.h],
+uapi_linux_mount, [
+	#include <uapi/linux/mount.h>
+],[
+	int x = MS_RDONLY;
+	(void)x;
+],[
+	AC_DEFINE(HAVE_UAPI_LINUX_MOUNT_H, 1,
+		[if MS_RDONLY was moved to uapi/linux/mount.h])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_UAPI_LINUX_MOUNT_H
+
+#
 # LC_BIO_INTEGRITY_ENABLED
 #
 # 4.13 removed bio_integrity_enabled
@@ -3422,6 +3444,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.18
 	LC_INODE_TIMESPEC64
+
+	# 5.0
+	LC_UAPI_LINUX_MOUNT_H
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
