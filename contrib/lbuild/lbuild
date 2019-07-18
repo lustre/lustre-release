@@ -323,38 +323,9 @@ check_options() {
         3.10-rhel7*)
             CANONICAL_TARGET="rhel7"
             ;;
-        2.6-rhel6*)
-            CANONICAL_TARGET="rhel6"
-            ;;
-        2.6-rhel5)
-            CANONICAL_TARGET="rhel5"
-            ;;
-        2.6-rhel4)
-            CANONICAL_TARGET="rhel-2.6"
-            ;;
-        2.6-suse)
-            CANONICAL_TARGET="sles-2.6"
-            ;;
-        2.6-sles10)
-            CANONICAL_TARGET="sles10-2.6"
-            ;;
-        2.6-sles11 | 3.0-sles11)
+        3.0-sles11)
             CANONICAL_TARGET="sles11"
             ;;
-        2.6-oel5)
-            CANONICAL_TARGET="oel5"
-            ;;
-        hp_pnnl-2.4)
-            CANONICAL_TARGET="hp-pnnl-2.4"
-            ;;
-        2.6-vanilla \
-            | suse-2.4.21-2 \
-            | rh-2.4 \
-            | rhel-2.4 \
-            | sles-2.4 \
-            | 2.6-patchless)
-                CANONICAL_TARGET="$TARGET"
-                ;;
     esac
 
     local timestampnodig=$(echo $TIMESTAMP | sed -e s/[0-9]*//g)

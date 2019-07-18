@@ -190,23 +190,14 @@ autodetect_target() {
 
     local target=""
     case ${distro} in
-          oel5*)  target="2.6-oel5";;
-         rhel5*)  target="2.6-rhel5";;
-         rhel6.9) target="2.6-rhel6.9";;
-         rhel6.8) target="2.6-rhel6.8";;
-         rhel6.7) target="2.6-rhel6.7";;
-         rhel6.6) target="2.6-rhel6.6";;
-         rhel6*)  target="2.6-rhel6";;
          rhel7*)  target="3.10-rhel7";;
          rhel8*)  target="4.18-rhel8";;
-        sles10*)  target="2.6-sles10";;
         sles11.4) target="$(uname -r | cut -d . -f 1,2)-sles11sp4";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
         sles12.4) target="$(uname -r | cut -d . -f 1,2)-sles12sp4";;
         sles12.3) target="$(uname -r | cut -d . -f 1,2)-sles12sp3";;
         sles12*)  target="$(uname -r | cut -d . -f 1,2)-sles12";;
-          fc15)   target="2.6-fc15";;
           fc18)   target="3.x-fc18";;
              *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
