@@ -3082,10 +3082,10 @@ test_31n() {
 run_test 31n "check link count of unlinked file"
 
 link_one() {
-	local TEMPNAME=$(mktemp $1_XXXXXX)
-	mlink $TEMPNAME $1 2> /dev/null &&
-		echo "$BASHPID: link $TEMPNAME to $1 succeeded"
-	munlink $TEMPNAME
+	local tempfile=$(mktemp $1_XXXXXX)
+	mlink $tempfile $1 2> /dev/null &&
+		echo "$BASHPID: link $tempfile to $1 succeeded"
+	munlink $tempfile
 }
 
 test_31o() { # LU-2901
@@ -13830,7 +13830,8 @@ test_161d() {
 	ps -p $pid
 	[[ $? -eq 0 ]] || error "create should be blocked"
 
-	local tempfile=$(mktemp)
+	local tempfile="$(mktemp --tmpdir $tfile.XXXXXX)"
+	stack_trap "rm -f $tempfile"
 	fid=$(changelog_extract_field "CREAT" "$tfile" "t=")
 	cat $MOUNT/.lustre/fid/$fid 2>/dev/null >$tempfile || error "cat failed"
 	# some delay may occur during ChangeLog publishing and file read just
@@ -17483,7 +17484,8 @@ test_256() {
 
 	#after mount new plainllog is used
 	touch $DIR/$tdir/{11..19}
-	local tmpfile=$(mktemp -u $tfile.XXXXXX)
+	local tmpfile="$(mktemp --tmpdir -u $tfile.XXXXXX)"
+	stack_trap "rm -f $tmpfile"
 	cat_sl=$(do_facet $SINGLEMDS "sync; \
 		 $DEBUGFS -c -R 'dump changelog_catalog $tmpfile' $mdt_dev; \
 		 llog_reader $tmpfile | grep -c type=1064553b")
@@ -17495,7 +17497,7 @@ test_256() {
 
 	cat_sl=$(do_facet $SINGLEMDS "sync; \
 		 $DEBUGFS -c -R 'dump changelog_catalog $tmpfile' $mdt_dev; \
-		 llog_reader $tmpfile | grep -c type=1064553b; rm -f $tmpfile")
+		 llog_reader $tmpfile | grep -c type=1064553b")
 
 	if (( cat_sl == 2 )); then
 		error "Empty plain llog was not deleted from changelog catalog"
