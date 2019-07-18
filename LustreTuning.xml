@@ -1596,8 +1596,8 @@ ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
         <title>The internal structure of TBF policy</title>
         <mediaobject>
           <imageobject>
-            <imagedata scalefit="1" width="100%"
-            fileref="figures/TBF_policy.svg" />
+            <imagedata scalefit="1" width="50%"
+            fileref="figures/TBF_policy.png" />
           </imageobject>
           <textobject>
             <phrase>The internal structure of TBF policy</phrase>

@@ -36,7 +36,7 @@ facet on the MDT called the Coordinator.
 		<title>Overview of the Lustre file system HSM</title>
 		<mediaobject>
 			<imageobject>
-				<imagedata fileref='figures/HSM_copytool.svg' format='svg'/>
+				<imagedata fileref='figures/HSM_copytool.png' width="75%"/>
 			</imageobject>
 		</mediaobject>
 	</figure>
