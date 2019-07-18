@@ -1249,9 +1249,23 @@ void lu_env_fini  (struct lu_env *env);
 int  lu_env_refill(struct lu_env *env);
 int  lu_env_refill_by_tags(struct lu_env *env, __u32 ctags, __u32 stags);
 
+#ifdef HAVE_SERVER_SUPPORT
 struct lu_env *lu_env_find(void);
 int lu_env_add(struct lu_env *env);
 void lu_env_remove(struct lu_env *env);
+#else
+static inline struct lu_env *lu_env_find(void)
+{
+	return NULL;
+}
+static inline int lu_env_add(struct lu_env *env)
+{
+	return 0;
+}
+static inline void lu_env_remove(struct lu_env *env)
+{
+}
+#endif /* HAVE_SERVER_SUPPORT */
 
 /** @} lu_context */
 

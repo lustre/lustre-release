@@ -1901,7 +1901,7 @@ int lu_env_refill_by_tags(struct lu_env *env, __u32 ctags,
 }
 EXPORT_SYMBOL(lu_env_refill_by_tags);
 
-
+#ifdef HAVE_SERVER_SUPPORT
 struct lu_env_item {
 	struct task_struct *lei_task;	/* rhashtable key */
 	struct rhash_head lei_linkage;
@@ -1913,7 +1913,7 @@ static const struct rhashtable_params lu_env_rhash_params = {
 	.key_len     = sizeof(struct task_struct *),
 	.key_offset  = offsetof(struct lu_env_item, lei_task),
 	.head_offset = offsetof(struct lu_env_item, lei_linkage),
-    };
+};
 
 struct rhashtable lu_env_rhash;
 
@@ -2007,6 +2007,12 @@ struct lu_env *lu_env_find(void)
 	return env;
 }
 EXPORT_SYMBOL(lu_env_find);
+#define lu_env_rhash_init(rhash, params) rhashtable_init(rhash, params)
+#define lu_env_rhash_destroy(rhash)	 rhashtable_destroy(rhash)
+#else
+#define lu_env_rhash_init(rhash, params) 0
+#define lu_env_rhash_destroy(rhash)	 do {} while (0)
+#endif /* HAVE_SERVER_SUPPORT */
 
 static struct shrinker *lu_site_shrinker;
 
@@ -2258,7 +2264,7 @@ int lu_global_init(void)
         if (lu_site_shrinker == NULL)
                 return -ENOMEM;
 
-	result = rhashtable_init(&lu_env_rhash, &lu_env_rhash_params);
+	result = lu_env_rhash_init(&lu_env_rhash, &lu_env_rhash_params);
 
         return result;
 }
@@ -2283,7 +2289,7 @@ void lu_global_fini(void)
         lu_env_fini(&lu_shrink_env);
 	up_write(&lu_sites_guard);
 
-	rhashtable_destroy(&lu_env_rhash);
+	lu_env_rhash_destroy(&lu_env_rhash);
 
         lu_ref_global_fini();
 }
