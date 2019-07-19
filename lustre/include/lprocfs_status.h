@@ -690,6 +690,8 @@ static const struct file_operations name##_fops = {			\
 #define LDEBUGFS_SEQ_FOPS_RO_TYPE(name, type)				\
 	static int name##_##type##_seq_show(struct seq_file *m, void *v)\
 	{								\
+		if (!m->private)					\
+			return -ENODEV;					\
 		return lprocfs_##type##_seq_show(m, m->private);	\
 	}								\
 	LDEBUGFS_SEQ_FOPS_RO(name##_##type)
@@ -697,6 +699,8 @@ static const struct file_operations name##_fops = {			\
 #define LDEBUGFS_SEQ_FOPS_RW_TYPE(name, type)				\
 	static int name##_##type##_seq_show(struct seq_file *m, void *v)\
 	{								\
+		if (!m->private)					\
+			return -ENODEV;					\
 		return lprocfs_##type##_seq_show(m, m->private);	\
 	}								\
 	static ssize_t name##_##type##_seq_write(struct file *file,	\
@@ -704,6 +708,9 @@ static const struct file_operations name##_fops = {			\
 			loff_t *off)					\
 	{								\
 		struct seq_file *seq = file->private_data;		\
+									\
+		if (!seq->private)					\
+			return -ENODEV;					\
 		return ldebugfs_##type##_seq_write(file, buffer, count,	\
 						   seq->private);	\
 	}								\
