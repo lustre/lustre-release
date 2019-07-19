@@ -1863,8 +1863,8 @@ again:
 				tx_pages_mapped = 1;
 			}
 
-			pfmr = ib_fmr_pool_map_phys(fpo->fmr.fpo_fmr_pool,
-						    pages, npages, iov);
+			pfmr = kib_fmr_pool_map(fpo->fmr.fpo_fmr_pool,
+						pages, npages, iov);
 			if (likely(!IS_ERR(pfmr))) {
 				fmr->fmr_key  = is_rx ? pfmr->fmr->rkey
 						      : pfmr->fmr->lkey;

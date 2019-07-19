@@ -743,6 +743,26 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_SOCK_ACCEPT
 
 #
+# LN_HAVE_ORACLE_OFED_EXTENSIONS
+#
+# Oracle UEK 5
+#
+AC_DEFUN([LN_HAVE_ORACLE_OFED_EXTENSIONS], [
+LB_CHECK_COMPILE([if Oracle OFED Extensions are enabled],
+oracle_ofed_ext, [
+	#include <rdma/ib_fmr_pool.h>
+],[
+	struct ib_fmr_pool_param param = {
+		.relaxed           = 0
+	};
+	(void)param;
+],[
+	AC_DEFINE(HAVE_ORACLE_OFED_EXTENSIONS, 1,
+		[if Oracle OFED Extensions are enabled])
+])
+]) # LN_HAVE_ORACLE_OFED_EXTENSIONS
+
+#
 # LN_CONFIG_SOCK_GETNAME
 #
 # 4.17 commit 9b2c45d479d0fb8647c9e83359df69162b5fbe5f getname()
@@ -837,6 +857,8 @@ LN_CONFIG_SK_DATA_READY
 LN_CONFIG_SOCK_CREATE_KERN
 # 4.11
 LN_CONFIG_SOCK_ACCEPT
+# 4.14
+LN_HAVE_ORACLE_OFED_EXTENSIONS
 # 4.17
 LN_CONFIG_SOCK_GETNAME
 # 5.0

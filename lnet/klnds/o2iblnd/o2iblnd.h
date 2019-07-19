@@ -354,6 +354,14 @@ struct kib_fmr {
 	u32				 fmr_key;
 };
 
+#ifdef HAVE_ORACLE_OFED_EXTENSIONS
+#define kib_fmr_pool_map(pool, pgs, n, iov) \
+	ib_fmr_pool_map_phys((pool), (pgs), (n), (iov), NULL)
+#else
+#define kib_fmr_pool_map(pool, pgs, n, iov) \
+	ib_fmr_pool_map_phys((pool), (pgs), (n), (iov))
+#endif
+
 struct kib_net {
 	/* chain on struct kib_dev::ibd_nets */
 	struct list_head	ibn_list;
