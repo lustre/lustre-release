@@ -592,6 +592,9 @@ static int __init libcfs_init(void)
 {
 	int rc;
 
+#ifndef HAVE_WAIT_VAR_EVENT
+	wait_bit_init();
+#endif
 	rc = libcfs_debug_init(5 * 1024 * 1024);
 	if (rc < 0) {
 		printk(KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);

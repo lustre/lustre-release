@@ -51,6 +51,7 @@ static inline void clear_and_wake_up_bit(int bit, void *word)
 #endif /* ! HAVE_CLEAR_AND_WAKE_UP_BIT */
 
 #ifndef HAVE_WAIT_VAR_EVENT
+extern void __init wait_bit_init(void);
 extern void init_wait_var_entry(struct wait_bit_queue_entry *wbq_entry,
 				void *var, int flags);
 extern void wake_up_var(void *var);

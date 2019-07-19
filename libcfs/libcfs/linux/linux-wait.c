@@ -104,4 +104,12 @@ void wake_up_var(void *var)
 	__wake_up_bit(__var_waitqueue(var), var, -1);
 }
 EXPORT_SYMBOL(wake_up_var);
+
+void __init wait_bit_init(void)
+{
+	int i;
+
+	for (i = 0; i < WAIT_TABLE_SIZE; i++)
+		init_waitqueue_head(bit_wait_table + i);
+}
 #endif /* ! HAVE_WAIT_VAR_EVENT */
