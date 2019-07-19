@@ -109,7 +109,7 @@ int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 			 struct libcfs_ioctl_hdr __user *uhdr)
 {
 	struct libcfs_ioctl_hdr   hdr;
-	int err = 0;
+	int err;
 	ENTRY;
 
 	if (copy_from_user(&hdr, uhdr, sizeof(hdr)))
@@ -138,10 +138,16 @@ int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 		RETURN(-ENOMEM);
 
 	if (copy_from_user(*hdr_pp, uhdr, hdr.ioc_len))
-		GOTO(failed, err = -EFAULT);
+		GOTO(free, err = -EFAULT);
+
+	if ((*hdr_pp)->ioc_version != hdr.ioc_version ||
+		(*hdr_pp)->ioc_len != hdr.ioc_len) {
+		GOTO(free, err = -EINVAL);
+	}
 
 	RETURN(0);
-failed:
+
+free:
 	LIBCFS_FREE(*hdr_pp, hdr.ioc_len);
 	RETURN(err);
 }
