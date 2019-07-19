@@ -225,10 +225,9 @@ void client_bulk_callback(struct lnet_event *ev)
 		spin_lock(&req->rq_lock);
 		req->rq_net_err = 1;
 		spin_unlock(&req->rq_lock);
+		desc->bd_failure = 1;
 	}
 
-	if (ev->status != 0)
-		desc->bd_failure = 1;
 
 	/* NB don't unlock till after wakeup; desc can disappear under us
 	 * otherwise */

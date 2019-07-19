@@ -2481,9 +2481,22 @@ out_lock:
 	 * to reorder. */
 	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2)) &&
 	    desc) {
-		CDEBUG(D_INFO, "reorder BULK\n");
+		/* Calculate checksum before request transfer, original
+		 * it is done by target_bulk_io() */
+		rc = sptlrpc_svc_wrap_bulk(req, desc);
+		if (OCD_HAS_FLAG(&exp->exp_connect_data, BULK_MBITS))
+			req->rq_mbits = lustre_msg_get_mbits(req->rq_reqmsg);
+		else /* old version, bulk matchbits is rq_xid */
+			req->rq_mbits = req->rq_xid;
 
-		ssleep(3);
+		req->rq_status = rc;
+		target_committed_to_req(req);
+		target_send_reply(req, 0, 0);
+
+		CDEBUG(D_INFO, "reorder BULK\n");
+		OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2,
+				 cfs_fail_val ? : 3);
+
 		target_bulk_io(exp, desc);
 		ptlrpc_free_bulk(desc);
 	}
