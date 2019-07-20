@@ -2880,12 +2880,12 @@ ssize_t ll_copy_user_md(const struct lov_user_md __user *md,
 	if (lum_size < 0)
 		RETURN(lum_size);
 
-	OBD_ALLOC(*kbuf, lum_size);
+	OBD_ALLOC_LARGE(*kbuf, lum_size);
 	if (*kbuf == NULL)
 		RETURN(-ENOMEM);
 
 	if (copy_from_user(*kbuf, md, lum_size) != 0) {
-		OBD_FREE(*kbuf, lum_size);
+		OBD_FREE_LARGE(*kbuf, lum_size);
 		RETURN(-EFAULT);
 	}
 

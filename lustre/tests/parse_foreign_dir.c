@@ -85,6 +85,13 @@ int main(int argc, char **argv)
 				lfm->lfm_length, len2);
 	}
 
+	if (lfm->lfm_magic == bswap_32(LMV_MAGIC_FOREIGN)) {
+		lfm->lfm_magic = bswap_32(lfm->lfm_magic);
+		lfm->lfm_length = bswap_32(lfm->lfm_length);
+		lfm->lfm_type = bswap_32(lfm->lfm_type);
+		lfm->lfm_flags = bswap_32(lfm->lfm_flags);
+	}
+
 	fprintf(stdout, "lmv_xattr_size: %zu\n", len2);
 	fprintf(stdout, "lmv_foreign_magic: 0x%x\n", lfm->lfm_magic);
 	fprintf(stdout, "lmv_foreign_size: %u\n", lfm->lfm_length);
