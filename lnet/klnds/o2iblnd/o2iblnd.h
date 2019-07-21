@@ -112,9 +112,9 @@ extern struct kib_tunables  kiblnd_tunables;
 #define IBLND_CREDITS_MAX          ((typeof(((struct kib_msg *) 0)->ibm_credits)) - 1)  /* Max # of peer_ni credits */
 
 /* when eagerly to return credits */
-#define IBLND_CREDITS_HIGHWATER(t, v) ((v) == IBLND_MSG_VERSION_1 ? \
+#define IBLND_CREDITS_HIGHWATER(t, conn) ((conn->ibc_version) == IBLND_MSG_VERSION_1 ? \
 					IBLND_CREDIT_HIGHWATER_V1 : \
-					t->lnd_peercredits_hiw)
+			min(t->lnd_peercredits_hiw, (__u32)conn->ibc_queue_depth - 1))
 
 #ifdef HAVE_RDMA_CREATE_ID_5ARG
 # define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) rdma_create_id(ns, cb, \
@@ -936,7 +936,7 @@ kiblnd_need_noop(struct kib_conn *conn)
 	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 
         if (conn->ibc_outstanding_credits <
-	    IBLND_CREDITS_HIGHWATER(tunables, conn->ibc_version) &&
+	    IBLND_CREDITS_HIGHWATER(tunables, conn) &&
             !kiblnd_send_keepalive(conn))
                 return 0; /* No need to send NOOP */
 
