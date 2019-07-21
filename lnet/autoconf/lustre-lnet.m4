@@ -789,6 +789,30 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_IB_DEVICE_OPS_EXISTS
 
 #
+# LN_IB_SG_DMA_ADDRESS_EXISTS
+#
+# kernel 5.1 commit a163afc88556e099271a7b423295bc5176fcecce
+# IB/core: Remove ib_sg_dma_address() and ib_sg_dma_len()
+# ... when dma_ops existed (3.6) ib_sg_dma_address() was not trivial ...
+#
+AC_DEFUN([LN_IB_SG_DMA_ADDRESS_EXISTS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if ib_sg_dma_address wrapper exists],
+ib_sg_dma_address_test, [
+	#include <rdma/ib_verbs.h>
+],[
+	u64 x = ib_sg_dma_address(NULL, NULL);
+	x = x;
+	(void)x;
+],[
+	AC_DEFINE(HAVE_IB_SG_DMA_ADDRESS, 1,
+		[if ib_sg_dma_address wrapper exists])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_IB_SG_DMA_ADDRESS_EXISTS
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -817,6 +841,8 @@ LN_CONFIG_SOCK_ACCEPT
 LN_CONFIG_SOCK_GETNAME
 # 5.0
 LN_IB_DEVICE_OPS_EXISTS
+# 5.1
+LN_IB_SG_DMA_ADDRESS_EXISTS
 ]) # LN_PROG_LINUX
 
 #
