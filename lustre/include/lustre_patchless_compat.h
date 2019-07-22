@@ -102,14 +102,11 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
 }
 #endif /* !HAVE_TRUNCATE_COMPLETE_PAGE */
 
-#ifdef HAVE_DCACHE_LOCK
-#  define dget_dlock(d)			dget_locked(d)
-#  define ll_d_count(d)			atomic_read(&(d)->d_count)
-#elif defined(HAVE_D_COUNT)
+#ifdef HAVE_D_COUNT
 #  define ll_d_count(d)			d_count(d)
 #else
 #  define ll_d_count(d)			((d)->d_count)
-#endif /* HAVE_DCACHE_LOCK */
+#endif /* HAVE_D_COUNT */
 
 #ifndef HAVE_IN_COMPAT_SYSCALL
 #define in_compat_syscall	is_compat_task

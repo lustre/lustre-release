@@ -217,18 +217,6 @@ struct l_wait_info {
 	(sigmask(SIGKILL) | sigmask(SIGINT) | sigmask(SIGTERM) | \
 	 sigmask(SIGQUIT) | sigmask(SIGALRM))
 
-/*
- * Wait Queue
- */
-#if !defined(HAVE___ADD_WAIT_QUEUE_EXCLUSIVE) && !defined(HAVE_WAIT_QUEUE_ENTRY)
-static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
-					      wait_queue_t *wait)
-{
-	wait->flags |= WQ_FLAG_EXCLUSIVE;
-	__add_wait_queue(q, wait);
-}
-#endif /* HAVE___ADD_WAIT_QUEUE_EXCLUSIVE */
-
 /**
  * wait_queue_t of Linux (version < 2.6.34) is a FIFO list for exclusively
  * waiting threads, which is not always desirable because all threads will

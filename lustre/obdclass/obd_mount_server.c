@@ -46,9 +46,6 @@
 #include <linux/selinux.h>
 #include <linux/statfs.h>
 #include <linux/version.h>
-#ifdef HAVE_KERNEL_LOCKED
-#include <linux/smp_lock.h>
-#endif
 
 #include <llog_swab.h>
 #include <lustre_disk.h>

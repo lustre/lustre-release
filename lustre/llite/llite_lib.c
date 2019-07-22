@@ -554,9 +554,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
 	sb->s_op = &lustre_super_operations;
-#ifdef HAVE_XATTR_HANDLER_FLAGS
 	sb->s_xattr = ll_xattr_handlers;
-#endif
 #if THREAD_SIZE >= 8192 /*b=17630*/
 	sb->s_export_op = &lustre_export_operations;
 #endif
@@ -632,9 +630,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		       sbi->ll_fsname, err);
 		GOTO(out_root, err);
 	}
-#ifdef HAVE_DCACHE_LOCK
-	sb->s_root->d_op = &ll_d_ops;
-#endif
 
 	sbi->ll_sdev_orig = sb->s_dev;
 
@@ -1091,10 +1086,9 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	if (err)
 		GOTO(out_free_cfg, err);
 
-#ifndef HAVE_DCACHE_LOCK
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
 	sb->s_d_op = &ll_d_ops;
-#endif
+
 	/* UUID handling */
 	generate_random_uuid(uuid.b);
 	snprintf(sbi->ll_sb_uuid.uuid, UUID_SIZE, "%pU", uuid.b);
@@ -2270,9 +2264,7 @@ void ll_delete_inode(struct inode *inode)
 		 ll_i2sbi(inode)->ll_fsname,
 		 PFID(ll_inode2fid(inode)), inode, nrpages);
 
-#ifdef HAVE_SBOPS_EVICT_INODE
 	ll_clear_inode(inode);
-#endif
 	clear_inode(inode);
 
         EXIT;
@@ -3017,13 +3009,8 @@ int ll_getparent(struct file *file, struct getparent __user *arg)
 	if (rc < 0)
 		GOTO(ldata_free, rc);
 
-#ifdef HAVE_XATTR_HANDLER_FLAGS
 	rc = ll_xattr_list(inode, XATTR_NAME_LINK, XATTR_TRUSTED_T, buf.lb_buf,
 			   buf.lb_len, OBD_MD_FLXATTR);
-#else
-	rc = ll_getxattr(file_dentry(file), XATTR_NAME_LINK, buf.lb_buf,
-			 buf.lb_len);
-#endif /* HAVE_XATTR_HANDLER_FLAGS */
 	if (rc < 0)
 		GOTO(lb_free, rc);
 

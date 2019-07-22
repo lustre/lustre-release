@@ -48,68 +48,8 @@
 #include <lustre_patchless_compat.h>
 #include <obd_support.h>
 
-#ifdef HAVE_FS_STRUCT_RWLOCK
-# define LOCK_FS_STRUCT(fs)	write_lock(&(fs)->lock)
-# define UNLOCK_FS_STRUCT(fs)	write_unlock(&(fs)->lock)
-#else
-# define LOCK_FS_STRUCT(fs)	spin_lock(&(fs)->lock)
-# define UNLOCK_FS_STRUCT(fs)	spin_unlock(&(fs)->lock)
-#endif
-
-#ifdef HAVE_FS_STRUCT_SEQCOUNT
-# define WRITE_FS_SEQ_BEGIN(fs)	write_seqcount_begin(&(fs)->seq)
-# define WRITE_FS_SEQ_END(fs)	write_seqcount_end(&(fs)->seq)
-#else
-# define WRITE_FS_SEQ_BEGIN(fs)
-# define WRITE_FS_SEQ_END(fs)
-#endif
-static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
-                                 struct dentry *dentry)
-{
-	struct path path;
-	struct path old_pwd;
-
-	path.mnt = mnt;
-	path.dentry = dentry;
-	path_get(&path);
-	LOCK_FS_STRUCT(fs);
-	WRITE_FS_SEQ_BEGIN(fs);
-	old_pwd = fs->pwd;
-	fs->pwd = path;
-	WRITE_FS_SEQ_END(fs);
-	UNLOCK_FS_STRUCT(fs);
-
-	if (old_pwd.dentry)
-		path_put(&old_pwd);
-}
-
 #define current_ngroups current_cred()->group_info->ngroups
 #define current_groups current_cred()->group_info->small_block
-
-/*
- * OBD need working random driver, thus all our
- * initialization routines must be called after device
- * driver initialization
- */
-#ifndef MODULE
-#undef module_init
-#define module_init(a)     late_initcall(a)
-#endif
-
-#ifndef MODULE_ALIAS_FS
-#define MODULE_ALIAS_FS(name)
-#endif
-
-#ifdef HAVE_GENERIC_PERMISSION_2ARGS
-# define ll_generic_permission(inode, mask, flags, check_acl) \
-	 generic_permission(inode, mask)
-#elif defined HAVE_GENERIC_PERMISSION_4ARGS
-# define ll_generic_permission(inode, mask, flags, check_acl) \
-	 generic_permission(inode, mask, flags, check_acl)
-#else
-# define ll_generic_permission(inode, mask, flags, check_acl) \
-	 generic_permission(inode, mask, check_acl)
-#endif
 
 #ifdef HAVE_4ARGS_VFS_SYMLINK
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
@@ -135,32 +75,12 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 # define inode_dio_write_done(i)	up_write(&(i)->i_alloc_sem)
 #endif
 
-#ifndef HAVE_SIMPLE_SETATTR
-#define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
-#endif
-
 #ifndef HAVE_INIT_LIST_HEAD_RCU
 static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
 {
 	WRITE_ONCE(list->next, list);
 	WRITE_ONCE(list->prev, list);
 }
-#endif
-
-#ifndef HAVE_DQUOT_SUSPEND
-# define ll_vfs_dq_init             vfs_dq_init
-# define ll_vfs_dq_drop             vfs_dq_drop
-# define ll_vfs_dq_transfer         vfs_dq_transfer
-# define ll_vfs_dq_off(sb, remount) vfs_dq_off(sb, remount)
-#else
-# define ll_vfs_dq_init             dquot_initialize
-# define ll_vfs_dq_drop             dquot_drop
-# define ll_vfs_dq_transfer         dquot_transfer
-# define ll_vfs_dq_off(sb, remount) dquot_suspend(sb, -1)
-#endif
-
-#ifndef HAVE_BLKDEV_GET_BY_DEV
-# define blkdev_get_by_dev(dev, mode, holder) open_by_devnum(dev, mode)
 #endif
 
 #ifdef HAVE_BVEC_ITER
@@ -181,23 +101,6 @@ static inline void INIT_LIST_HEAD_RCU(struct list_head *list)
 #define bio_start_sector(bio) (bio->bi_iter.bi_sector)
 #else
 #define bio_start_sector(bio) (bio->bi_sector)
-#endif
-
-#ifndef HAVE_BLK_QUEUE_MAX_SEGMENTS
-#define blk_queue_max_segments(rq, seg)                      \
-        do { blk_queue_max_phys_segments(rq, seg);           \
-             blk_queue_max_hw_segments(rq, seg); } while (0)
-#else
-#define queue_max_phys_segments(rq)       queue_max_segments(rq)
-#define queue_max_hw_segments(rq)         queue_max_segments(rq)
-#endif
-
-#ifdef HAVE_BLK_PLUG
-#define DECLARE_PLUG(plug)	struct blk_plug plug
-#else /* !HAVE_BLK_PLUG */
-#define DECLARE_PLUG(name)
-#define blk_start_plug(plug)	do {} while (0)
-#define blk_finish_plug(plug)	do {} while (0)
 #endif
 
 #ifdef HAVE_KMAP_ATOMIC_HAS_1ARG
@@ -490,17 +393,9 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 #endif
 
 #ifdef HAVE_IOP_XATTR
-#ifdef HAVE_XATTR_HANDLER_FLAGS
 #define ll_setxattr     generic_setxattr
 #define ll_getxattr     generic_getxattr
 #define ll_removexattr  generic_removexattr
-#else
-int ll_setxattr(struct dentry *dentry, const char *name,
-		const void *value, size_t size, int flags);
-ssize_t ll_getxattr(struct dentry *dentry, const char *name,
-		    void *buf, size_t buf_size);
-int ll_removexattr(struct dentry *dentry, const char *name);
-#endif /* ! HAVE_XATTR_HANDLER_FLAGS */
 #endif /* HAVE_IOP_XATTR */
 
 #ifndef HAVE_VFS_SETXATTR
@@ -510,7 +405,6 @@ static inline int
 __vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
 	       const void *value, size_t size, int flags)
 {
-# ifdef HAVE_XATTR_HANDLER_FLAGS
 	const struct xattr_handler *handler;
 	int rc;
 
@@ -526,9 +420,6 @@ __vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
 	rc = handler->set(dentry, name, value, size, flags, handler->flags);
 #  endif /* !HAVE_XATTR_HANDLER_INODE_PARAM */
 	return rc;
-# else /* !HAVE_XATTR_HANDLER_FLAGS */
-	return ll_setxattr(dentry, name, value, size, flags);
-# endif /* HAVE_XATTR_HANDLER_FLAGS */
 }
 #endif /* HAVE_VFS_SETXATTR */
 

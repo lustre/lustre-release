@@ -663,10 +663,8 @@ struct osd_thread_info {
 	union {
 #if defined(HAVE_DQUOT_QC_DQBLK)
 		struct qc_dqblk		oti_qdq;
-#elif defined(HAVE_DQUOT_FS_DISK_QUOTA)
-		struct fs_disk_quota    oti_fdq;
 #else
-		struct if_dqblk		oti_dqblk;
+		struct fs_disk_quota    oti_fdq;
 #endif
 		struct if_dqinfo	oti_dqinfo;
 	};
@@ -724,7 +722,7 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
 {
 	struct dentry *dentry = &info->oti_child_dentry;
 
-	ll_vfs_dq_init(inode);
+	dquot_initialize(inode);
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
 	return osd_setxattr(dentry, inode, name, buf, buflen, fl);

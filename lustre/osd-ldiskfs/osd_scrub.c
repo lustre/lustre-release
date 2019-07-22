@@ -207,7 +207,7 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_FID, ff, sizeof(*ff));
 	if (rc == sizeof(*ff)) {
 		/* 2) delete the old XATTR_NAME_FID */
-		ll_vfs_dq_init(inode);
+		dquot_initialize(inode);
 		rc = osd_removexattr(dentry, inode, XATTR_NAME_FID);
 		if (rc)
 			GOTO(stop, rc);

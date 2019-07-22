@@ -40,9 +40,6 @@
 #include <linux/kmod.h>
 #include <linux/module.h>
 #include <linux/notifier.h>
-#ifdef HAVE_KERNEL_LOCKED
-#include <linux/smp_lock.h>
-#endif
 #include <linux/string.h>
 #include <linux/unistd.h>
 #include <linux/stacktrace.h>
@@ -292,10 +289,6 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
         if (in_interrupt()) {
                 cfs_trace_debug_print();
         } else {
-#ifdef HAVE_KERNEL_LOCKED
-		while (kernel_locked())
-			unlock_kernel();
-#endif
 		libcfs_debug_dumplog_internal((void *)(long)current_pid());
         }
 #endif

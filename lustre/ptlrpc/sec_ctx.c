@@ -46,6 +46,26 @@
 # define ASSERT_KERNEL_CTXT(msg) do {} while(0)
 #endif
 
+static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
+				 struct dentry *dentry)
+{
+	struct path path;
+	struct path old_pwd;
+
+	path.mnt = mnt;
+	path.dentry = dentry;
+	path_get(&path);
+	spin_lock(&fs->lock);
+	write_seqcount_begin(&fs->seq);
+	old_pwd = fs->pwd;
+	fs->pwd = path;
+	write_seqcount_end(&fs->seq);
+	spin_unlock(&fs->lock);
+
+	if (old_pwd.dentry)
+		path_put(&old_pwd);
+}
+
 /* push / pop to root of obd store */
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx)
 {

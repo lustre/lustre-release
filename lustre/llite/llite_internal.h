@@ -934,15 +934,7 @@ int ll_migrate(struct inode *parent, struct file *file,
 	       struct lmv_user_md *lum, const char *name);
 int ll_get_fid_by_name(struct inode *parent, const char *name,
 		       int namelen, struct lu_fid *fid, struct inode **inode);
-#ifdef HAVE_GENERIC_PERMISSION_4ARGS
-int ll_inode_permission(struct inode *inode, int mask, unsigned int flags);
-#else
-# ifndef HAVE_INODE_PERMISION_2ARGS
-int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
-# else
 int ll_inode_permission(struct inode *inode, int mask);
-# endif
-#endif
 int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa);
 int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg);
@@ -1426,24 +1418,6 @@ static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,
 
 	if (bits != NULL)
 		*bits = it->it_lock_bits;
-}
-
-static inline void ll_lock_dcache(struct inode *inode)
-{
-#ifdef HAVE_DCACHE_LOCK
-	spin_lock(&dcache_lock);
-#else
-	spin_lock(&inode->i_lock);
-#endif
-}
-
-static inline void ll_unlock_dcache(struct inode *inode)
-{
-#ifdef HAVE_DCACHE_LOCK
-	spin_unlock(&dcache_lock);
-#else
-	spin_unlock(&inode->i_lock);
-#endif
 }
 
 static inline int d_lustre_invalid(const struct dentry *dentry)

@@ -85,29 +85,15 @@ static void ll_release(struct dentry *de)
  * while d_in_lookup().  We will be called again when the lookup
  * completes, and can give a different answer then.
  */
-#ifdef HAVE_D_COMPARE_7ARGS
-static int ll_dcompare(const struct dentry *parent, const struct inode *pinode,
-		       const struct dentry *dentry, const struct inode *inode,
-		       unsigned int len, const char *str,
-		       const struct qstr *name)
-#elif defined(HAVE_D_COMPARE_5ARGS)
+#if defined(HAVE_D_COMPARE_5ARGS)
 static int ll_dcompare(const struct dentry *parent, const struct dentry *dentry,
 		       unsigned int len, const char *str,
 		       const struct qstr *name)
 #elif defined(HAVE_D_COMPARE_4ARGS)
 static int ll_dcompare(const struct dentry *dentry, unsigned int len,
 		       const char *str, const struct qstr *name)
-#else
-static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
-		       struct qstr *name)
 #endif
 {
-#if !defined(HAVE_D_COMPARE_7ARGS) && !defined(HAVE_D_COMPARE_5ARGS) && !defined(HAVE_D_COMPARE_4ARGS)
-	/* XXX: (ugh !) d_name must be in-dentry structure */
-	struct dentry *dentry = container_of(d_name, struct dentry, d_name);
-	unsigned int len = d_name->len;
-	const char *str = d_name->name;
-#endif
 	ENTRY;
 
 	if (len != name->len)
@@ -141,7 +127,7 @@ static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
  * - return 0 to cache the dentry
  * Should NOT be called with the dcache lock, see fs/dcache.c
  */
-static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
+static int ll_ddelete(const struct dentry *de)
 {
 	ENTRY;
 	LASSERT(de);
@@ -152,12 +138,8 @@ static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
 	       d_unhashed((struct dentry *)de) ? "" : "hashed,",
 	       list_empty(&de->d_subdirs) ? "" : "subdirs");
 
-#ifdef HAVE_DCACHE_LOCK
-	LASSERT(ll_d_count(de) == 0);
-#else
 	/* kernel >= 2.6.38 last refcount is decreased after this function. */
 	LASSERT(ll_d_count(de) == 1);
-#endif
 
 	if (d_lustre_invalid((struct dentry *)de))
 		RETURN(1);
@@ -180,11 +162,6 @@ int ll_d_init(struct dentry *de)
 		if (likely(lld != NULL)) {
 			spin_lock(&de->d_lock);
 			if (likely(de->d_fsdata == NULL)) {
-#ifdef HAVE_DCACHE_LOCK
-				/* kernel >= 2.6.38 d_op is set in d_alloc() */
-				de->d_op = &ll_d_ops;
-				smp_mb();
-#endif
 				de->d_fsdata = lld;
 				__d_lustre_invalidate(de);
 			} else {
@@ -255,7 +232,7 @@ void ll_invalidate_aliases(struct inode *inode)
 	CDEBUG(D_INODE, "marking dentries for inode "DFID"(%p) invalid\n",
 	       PFID(ll_inode2fid(inode)), inode);
 
-	ll_lock_dcache(inode);
+	spin_lock(&inode->i_lock);
 	ll_d_hlist_for_each_entry(dentry, p, &inode->i_dentry) {
 		CDEBUG(D_DENTRY, "dentry in drop %.*s (%p) parent %p "
 		       "inode %p flags %d\n", dentry->d_name.len,
@@ -264,7 +241,7 @@ void ll_invalidate_aliases(struct inode *inode)
 
 		d_lustre_invalidate(dentry, 0);
 	}
-	ll_unlock_dcache(inode);
+	spin_unlock(&inode->i_lock);
 
         EXIT;
 }
@@ -338,10 +315,8 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 	if (lookup_flags & LOOKUP_REVAL)
 		return 0;
 
-#ifndef HAVE_DCACHE_LOCK
 	if (lookup_flags & LOOKUP_RCU)
 		return -ECHILD;
-#endif
 
 	if (dentry_may_statahead(dir, dentry))
 		ll_statahead(dir, &dentry, dentry->d_inode == NULL);

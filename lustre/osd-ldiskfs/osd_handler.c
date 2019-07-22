@@ -2943,7 +2943,7 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 	    (attr->la_valid & LA_GID && attr->la_gid != i_gid_read(inode))) {
 		struct iattr iattr;
 
-		ll_vfs_dq_init(inode);
+		dquot_initialize(inode);
 		iattr.ia_valid = 0;
 		if (attr->la_valid & LA_UID)
 			iattr.ia_valid |= ATTR_UID;
@@ -2952,7 +2952,7 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 		iattr.ia_uid = make_kuid(&init_user_ns, attr->la_uid);
 		iattr.ia_gid = make_kgid(&init_user_ns, attr->la_gid);
 
-		rc = ll_vfs_dq_transfer(inode, &iattr);
+		rc = dquot_transfer(inode, &iattr);
 		if (rc) {
 			CERROR("%s: quota transfer failed: rc = %d. Is quota "
 			       "enforcement enabled on the ldiskfs "
@@ -4437,7 +4437,7 @@ static int osd_xattr_set_pfid(const struct lu_env *env, struct osd_object *obj,
 			RETURN(fl);
 
 		/* Remove old PFID EA entry firstly. */
-		ll_vfs_dq_init(inode);
+		dquot_initialize(inode);
 		rc = osd_removexattr(dentry, inode, XATTR_NAME_FID);
 		if (rc == -ENODATA) {
 			if ((fl & LU_XATTR_REPLACE) && !(fl & LU_XATTR_CREATE))
@@ -4741,7 +4741,7 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 				obj->oo_pfid_in_lma = 0;
 		}
 	} else {
-		ll_vfs_dq_init(inode);
+		dquot_initialize(inode);
 		dentry->d_inode = inode;
 		dentry->d_sb = inode->i_sb;
 		rc = osd_removexattr(dentry, inode, name);
@@ -5192,7 +5192,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(oh->ot_handle != NULL);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
-	ll_vfs_dq_init(dir);
+	dquot_initialize(dir);
 	dentry = osd_child_dentry_get(env, obj,
 				      (char *)key, strlen((char *)key));
 
@@ -5427,7 +5427,7 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 		osd_get_ldiskfs_dirent_param(ldp, fid);
 	child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
 	child->d_fsdata = (void *)ldp;
-	ll_vfs_dq_init(pobj->oo_inode);
+	dquot_initialize(pobj->oo_inode);
 	rc = osd_ldiskfs_add_entry(info, osd_obj2dev(pobj), oth->ot_handle,
 				   child, cinode, hlock);
 	if (rc == 0 && OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_TYPE)) {
@@ -6794,7 +6794,7 @@ osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
 	ldp = (struct ldiskfs_dentry_param *)osd_oti_get(env)->oti_ldp;
 	osd_get_ldiskfs_dirent_param(ldp, fid);
 	dentry->d_fsdata = (void *)ldp;
-	ll_vfs_dq_init(dir);
+	dquot_initialize(dir);
 	rc = osd_ldiskfs_add_entry(info, dev, jh, dentry, inode, hlock);
 	/*
 	 * It is too bad, we cannot reinsert the name entry back.

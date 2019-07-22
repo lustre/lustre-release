@@ -126,41 +126,30 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	struct osd_thread_info *info = osd_oti_get(env);
 #if defined(HAVE_DQUOT_QC_DQBLK)
 	struct qc_dqblk *dqblk = &info->oti_qdq;
-#elif defined(HAVE_DQUOT_FS_DISK_QUOTA)
-	struct fs_disk_quota *dqblk = &info->oti_fdq;
 #else
-	struct if_dqblk *dqblk = &info->oti_dqblk;
+	struct fs_disk_quota *dqblk = &info->oti_fdq;
 #endif
 	struct super_block *sb = osd_sb(osd_obj2dev(osd_dt_obj(dtobj)));
 	struct lquota_acct_rec *rec = (struct lquota_acct_rec *)dtrec;
 	__u64 id = *((__u64 *)dtkey);
 	int rc;
-#ifdef HAVE_DQUOT_KQID
 	struct kqid qid;
-#endif
 	int type;
 
 	ENTRY;
 
 	type = fid2type(lu_object_fid(&dtobj->do_lu));
 	memset(dqblk, 0, sizeof(*dqblk));
-#ifdef HAVE_DQUOT_KQID
 	qid = make_kqid(&init_user_ns, type, id);
 	rc = sb->s_qcop->get_dqblk(sb, qid, dqblk);
-#else
-	rc = sb->s_qcop->get_dqblk(sb, type, (qid_t) id, dqblk);
-#endif
 	if (rc)
 		RETURN(rc);
 #if defined(HAVE_DQUOT_QC_DQBLK)
 	rec->bspace = dqblk->d_space;
 	rec->ispace = dqblk->d_ino_count;
-#elif defined(HAVE_DQUOT_FS_DISK_QUOTA)
+#else
 	rec->bspace = dqblk->d_bcount;
 	rec->ispace = dqblk->d_icount;
-#else
-	rec->bspace = dqblk->dqb_curspace;
-	rec->ispace = dqblk->dqb_curinodes;
 #endif
 	RETURN(+1);
 }

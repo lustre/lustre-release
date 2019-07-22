@@ -708,7 +708,7 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	child->d_name.name = name;
 	child->d_name.len = strlen(name);
 
-	ll_vfs_dq_init(parent);
+	dquot_initialize(parent);
 	inode_lock(parent);
 	bh = osd_ldiskfs_find_entry(parent, &child->d_name, &de, NULL, NULL);
 	if (IS_ERR(bh))
@@ -849,7 +849,7 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 	child->d_parent = dird;
 	child->d_inode = NULL;
 
-	ll_vfs_dq_init(dir);
+	dquot_initialize(dir);
 	inode_lock(dir);
 	bh = osd_ldiskfs_find_entry(dir, &child->d_name, &de, NULL, NULL);
 	if (IS_ERR(bh)) {
@@ -905,7 +905,7 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
 		inode->i_ino++;
 
-	ll_vfs_dq_init(dir->d_inode);
+	dquot_initialize(dir->d_inode);
 	inode_lock(dir->d_inode);
 	rc = osd_ldiskfs_add_entry(info, osd, th, child, inode, NULL);
 	inode_unlock(dir->d_inode);
@@ -1291,8 +1291,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 	if (IS_ERR(jh))
 		RETURN(PTR_ERR(jh));
 
-	ll_vfs_dq_init(src_parent);
-	ll_vfs_dq_init(dir);
+	dquot_initialize(src_parent);
+	dquot_initialize(dir);
 
 	inode_lock(src_parent);
 	inode_lock(dir);

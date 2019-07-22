@@ -1,9 +1,7 @@
 MODULES := lustre
 lustre-objs := dcache.o dir.o file.o llite_lib.o llite_nfs.o
 lustre-objs += rw.o lproc_llite.o namei.o symlink.o llite_mmap.o
-@XATTR_HANDLER_TRUE@lustre-objs += xattr.o
-@XATTR_HANDLER_FALSE@lustre-objs += xattr26.o
-lustre-objs += xattr_cache.o
+lustre-objs += xattr.o xattr_cache.o
 lustre-objs += rw26.o super25.o statahead.o xattr_security.o
 lustre-objs += glimpse.o
 lustre-objs += lcommon_cl.o
@@ -11,10 +9,7 @@ lustre-objs += lcommon_misc.o
 lustre-objs += vvp_dev.o vvp_page.o vvp_io.o vvp_object.o
 lustre-objs += range_lock.o pcc.o
 
-EXTRA_DIST := $(lustre-objs:.o=.c) llite_internal.h rw26.c super25.c
-EXTRA_DIST += vvp_internal.h range_lock.h pcc.h
-
-@XATTR_HANDLER_TRUE@EXTRA_DIST += xattr26.c
-@XATTR_HANDLER_FALSE@EXTRA_DIST += xattr.c
+EXTRA_DIST := $(lustre-objs:.o=.c) xattr.c rw26.c super25.c
+EXTRA_DIST += llite_internal.h vvp_internal.h range_lock.h pcc.h
 
 @INCLUDE_RULES@

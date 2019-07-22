@@ -4633,9 +4633,9 @@ static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 	 * here to preserve get_cwd functionality on 2.6.
 	 * Bug 10503 */
 	if (!dentry->d_inode->i_nlink) {
-		ll_lock_dcache(inode);
+		spin_lock(&inode->i_lock);
 		d_lustre_invalidate(dentry, 0);
-		ll_unlock_dcache(inode);
+		spin_unlock(&inode->i_lock);
 	}
 
 	ll_lookup_finish_locks(&oit, dentry);
@@ -4870,47 +4870,7 @@ out:
 #endif /* CONFIG_FS_POSIX_ACL */
 #endif /* HAVE_IOP_SET_ACL */
 
-#ifndef HAVE_GENERIC_PERMISSION_2ARGS
-static int
-# ifdef HAVE_GENERIC_PERMISSION_4ARGS
-ll_check_acl(struct inode *inode, int mask, unsigned int flags)
-# else
-ll_check_acl(struct inode *inode, int mask)
-# endif
-{
-# ifdef CONFIG_FS_POSIX_ACL
-	struct posix_acl *acl;
-	int rc;
-	ENTRY;
-
-#  ifdef HAVE_GENERIC_PERMISSION_4ARGS
-	if (flags & IPERM_FLAG_RCU)
-		return -ECHILD;
-#  endif
-	acl = ll_get_acl(inode, ACL_TYPE_ACCESS);
-
-	if (!acl)
-		RETURN(-EAGAIN);
-
-	rc = posix_acl_permission(inode, acl, mask);
-	posix_acl_release(acl);
-
-	RETURN(rc);
-# else /* !CONFIG_FS_POSIX_ACL */
-	return -EAGAIN;
-# endif /* CONFIG_FS_POSIX_ACL */
-}
-#endif /* HAVE_GENERIC_PERMISSION_2ARGS */
-
-#ifdef HAVE_GENERIC_PERMISSION_4ARGS
-int ll_inode_permission(struct inode *inode, int mask, unsigned int flags)
-#else
-# ifdef HAVE_INODE_PERMISION_2ARGS
 int ll_inode_permission(struct inode *inode, int mask)
-# else
-int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
-# endif
-#endif
 {
 	int rc = 0;
 	struct ll_sb_info *sbi;
@@ -4921,13 +4881,8 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 	bool squash_id = false;
 	ENTRY;
 
-#ifdef MAY_NOT_BLOCK
 	if (mask & MAY_NOT_BLOCK)
 		return -ECHILD;
-#elif defined(HAVE_GENERIC_PERMISSION_4ARGS)
-	if (flags & IPERM_FLAG_RCU)
-		return -ECHILD;
-#endif
 
        /* as root inode are NOT getting validated in lookup operation,
         * need to do it before permission check. */
@@ -4970,7 +4925,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 	}
 
 	ll_stats_ops_tally(sbi, LPROC_LL_INODE_PERM, 1);
-	rc = ll_generic_permission(inode, mask, flags, ll_check_acl);
+	rc = generic_permission(inode, mask);
 	/* restore current process's credentials and FS capability */
 	if (squash_id) {
 		revert_creds(old_cred);

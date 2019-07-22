@@ -58,7 +58,6 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 	return &lli->lli_vfs_inode;
 }
 
-#ifdef HAVE_INODE_I_RCU
 static void ll_inode_destroy_callback(struct rcu_head *head)
 {
 	struct inode *inode = container_of(head, struct inode, i_rcu);
@@ -70,25 +69,13 @@ static void ll_destroy_inode(struct inode *inode)
 {
 	call_rcu(&inode->i_rcu, ll_inode_destroy_callback);
 }
-#else
-static void ll_destroy_inode(struct inode *inode)
-{
-	struct ll_inode_info *ptr = ll_i2info(inode);
-	OBD_SLAB_FREE_PTR(ptr, ll_inode_cachep);
-}
-#endif
 
 /* exported operations */
 struct super_operations lustre_super_operations =
 {
         .alloc_inode   = ll_alloc_inode,
         .destroy_inode = ll_destroy_inode,
-#ifdef HAVE_SBOPS_EVICT_INODE
         .evict_inode   = ll_delete_inode,
-#else
-        .clear_inode   = ll_clear_inode,
-        .delete_inode  = ll_delete_inode,
-#endif
         .put_super     = ll_put_super,
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
@@ -184,13 +171,12 @@ static void __exit lustre_exit(void)
 	cl_env_put(cl_inode_fini_env, &cl_inode_fini_refcheck);
 	vvp_global_fini();
 
-#ifdef HAVE_INODE_I_RCU
 	/*
 	 * Make sure all delayed rcu free inodes are flushed before we
 	 * destroy cache.
 	 */
 	rcu_barrier();
-#endif
+
 	kmem_cache_destroy(ll_inode_cachep);
 	kmem_cache_destroy(ll_file_data_slab);
 	kmem_cache_destroy(pcc_inode_slab);

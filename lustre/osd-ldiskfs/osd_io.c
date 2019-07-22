@@ -468,7 +468,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	int rc = 0;
 	bool fault_inject;
 	bool integrity_enabled;
-	DECLARE_PLUG(plug);
+	struct blk_plug plug;
 	ENTRY;
 
 	fault_inject = OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT);
@@ -522,14 +522,13 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 				unsigned int bi_size = bio_sectors(bio) << 9;
 
 				/* Dang! I have to fragment this I/O */
-				CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
-				       "sectors %d(%d) psg %d(%d) hsg %d(%d)\n",
+				CDEBUG(D_INODE,
+				       "bio++ sz %d vcnt %d(%d) sectors %d(%d) psg %d(%d)\n",
 				       bi_size, bio->bi_vcnt, bio->bi_max_vecs,
 				       bio_sectors(bio),
 				       queue_max_sectors(q),
 				       bio->bi_phys_segments,
-				       queue_max_phys_segments(q),
-				       0, queue_max_hw_segments(q));
+				       queue_max_segments(q));
 				rc = osd_bio_integrity_handle(osd, bio,
 					iobuf, bio_start_page_idx,
 					fault_inject, integrity_enabled);
@@ -1534,7 +1533,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 
 	isize = i_size_read(inode);
-	ll_vfs_dq_init(inode);
+	dquot_initialize(inode);
 
         for (i = 0; i < npages; i++) {
 		if (lnb[i].lnb_rc == -ENOSPC &&
@@ -2065,7 +2064,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(handle != NULL);
 	LASSERT(inode != NULL);
-	ll_vfs_dq_init(inode);
+	dquot_initialize(inode);
 
         /* XXX: don't check: one declared chunk can be used many times */
 	/* osd_trans_exec_op(env, handle, OSD_OT_WRITE); */
@@ -2145,7 +2144,7 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(inode != NULL);
-	ll_vfs_dq_init(inode);
+	dquot_initialize(inode);
 
 	LASSERT(th);
 	oh = container_of(th, struct osd_thandle, ot_super);

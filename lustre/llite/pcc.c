@@ -2485,13 +2485,9 @@ int pcc_ioctl_state(struct file *file, struct inode *inode,
 	state->pccs_type = pcci->pcci_type;
 	state->pccs_open_count = count;
 	state->pccs_flags = ll_i2info(inode)->lli_pcc_state;
-#ifdef HAVE_DENTRY_PATH_RAW
 	path = dentry_path_raw(pcci->pcci_path.dentry, buf, buf_len);
 	if (IS_ERR(path))
 		GOTO(out_unlock, rc = PTR_ERR(path));
-#else
-	path = "UNKNOWN";
-#endif
 
 	if (strlcpy(state->pccs_path, path, buf_len) >= buf_len)
 		GOTO(out_unlock, rc = -ENAMETOOLONG);
