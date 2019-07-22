@@ -1190,7 +1190,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
                 /* If the path isn't set return the first one we find */
 		if (path == NULL || strlen(path) == 0) {
 			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir) - 1);
-			mntdir[strlen(mnt.mnt_dir)] = '\0';
+			mntdir[sizeof(mntdir) - 1] = '\0';
 			if ((want & WANT_FSNAME) && fsname != NULL) {
 				strncpy(fsname, ptr, ptr_end - ptr);
 				fsname[ptr_end - ptr] = '\0';
@@ -1200,8 +1200,8 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 		/* Otherwise find the longest matching path */
 		} else if ((strlen(path) >= mntlen) && (mntlen >= len) &&
 			   (strncmp(mnt.mnt_dir, path, mntlen) == 0)) {
-			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir));
-			mntdir[strlen(mnt.mnt_dir)] = '\0';
+			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir) - 1);
+			mntdir[sizeof(mntdir) - 1] = '\0';
 			len = mntlen;
 			if ((want & WANT_FSNAME) && fsname != NULL) {
 				strncpy(fsname, ptr, ptr_end - ptr);

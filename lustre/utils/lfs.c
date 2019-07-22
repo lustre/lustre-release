@@ -3211,9 +3211,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			lmu->lum_hash_type = lsa.lsa_pattern;
 		else
 			lmu->lum_hash_type = LMV_HASH_TYPE_FNV_1A_64;
-		if (lsa.lsa_pool_name)
+		if (lsa.lsa_pool_name) {
 			strncpy(lmu->lum_pool_name, lsa.lsa_pool_name,
 				sizeof(lmu->lum_pool_name) - 1);
+			lmu->lum_pool_name[sizeof(lmu->lum_pool_name) - 1] = 0;
+		}
 		if (lsa.lsa_nr_tgts > 1) {
 			int i;
 
