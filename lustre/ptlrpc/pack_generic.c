@@ -1253,8 +1253,14 @@ char *lustre_msg_get_jobid(struct lustre_msg *msg)
 {
 	switch (msg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2: {
-		struct ptlrpc_body *pb =
-			lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
+		struct ptlrpc_body *pb;
+
+		/* the old pltrpc_body_v2 is smaller; doesn't include jobid */
+		if (msg->lm_buflens[MSG_PTLRPC_BODY_OFF] <
+		    sizeof(struct ptlrpc_body))
+			return NULL;
+
+		pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
 					  sizeof(struct ptlrpc_body));
 		if (!pb)
 			return NULL;
@@ -2663,7 +2669,8 @@ void _debug_req(struct ptlrpc_request *req,
 			 DEBUG_REQ_FLAGS(req),
 			 req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
 			 rep_flags, req->rq_status, rep_status,
-			 req_ok ? lustre_msg_get_jobid(req->rq_reqmsg) : "");
+			 req_ok ? lustre_msg_get_jobid(req->rq_reqmsg) ?: ""
+				: "");
 	va_end(args);
 }
 EXPORT_SYMBOL(_debug_req);

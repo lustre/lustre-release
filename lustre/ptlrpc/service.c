@@ -2225,7 +2225,7 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	       lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
 	       libcfs_id2str(request->rq_peer),
 	       lustre_msg_get_opc(request->rq_reqmsg),
-	       lustre_msg_get_jobid(request->rq_reqmsg));
+	       lustre_msg_get_jobid(request->rq_reqmsg) ?: "");
 
 	if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
 		CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
@@ -2267,7 +2267,7 @@ put_conn:
 	       request->rq_xid,
 	       libcfs_id2str(request->rq_peer),
 	       lustre_msg_get_opc(request->rq_reqmsg),
-	       lustre_msg_get_jobid(request->rq_reqmsg),
+	       lustre_msg_get_jobid(request->rq_reqmsg) ?: "",
 	       timediff_usecs,
 	       arrived_usecs,
 	       (request->rq_repmsg ?
