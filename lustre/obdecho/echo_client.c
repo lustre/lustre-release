@@ -94,7 +94,7 @@ struct echo_object_conf {
 
 struct echo_page {
 	struct cl_page_slice	ep_cl;
-	struct mutex		ep_lock;
+	unsigned long		ep_lock;
 };
 
 struct echo_lock {
@@ -288,10 +288,13 @@ static int echo_page_own(const struct lu_env *env,
 {
 	struct echo_page *ep = cl2echo_page(slice);
 
-	if (!nonblock)
-		mutex_lock(&ep->ep_lock);
-	else if (!mutex_trylock(&ep->ep_lock))
-		return -EAGAIN;
+	if (!nonblock) {
+		if (test_and_set_bit(0, &ep->ep_lock))
+			return -EAGAIN;
+	} else {
+		while (test_and_set_bit(0, &ep->ep_lock))
+			wait_on_bit(&ep->ep_lock, 0, TASK_UNINTERRUPTIBLE);
+	}
 	return 0;
 }
 
@@ -301,8 +304,8 @@ static void echo_page_disown(const struct lu_env *env,
 {
 	struct echo_page *ep = cl2echo_page(slice);
 
-	LASSERT(mutex_is_locked(&ep->ep_lock));
-	mutex_unlock(&ep->ep_lock);
+	LASSERT(test_bit(0, &ep->ep_lock));
+	clear_and_wake_up_bit(0, &ep->ep_lock);
 }
 
 static void echo_page_discard(const struct lu_env *env,
@@ -315,7 +318,7 @@ static void echo_page_discard(const struct lu_env *env,
 static int echo_page_is_vmlocked(const struct lu_env *env,
 				 const struct cl_page_slice *slice)
 {
-	if (mutex_is_locked(&cl2echo_page(slice)->ep_lock))
+	if (test_bit(0, &cl2echo_page(slice)->ep_lock))
 		return -EBUSY;
 	return -ENODATA;
 }
@@ -353,7 +356,7 @@ static int echo_page_print(const struct lu_env *env,
 	struct echo_page *ep = cl2echo_page(slice);
 
 	(*printer)(env, cookie, LUSTRE_ECHO_CLIENT_NAME"-page@%p %d vm@%p\n",
-		   ep, mutex_is_locked(&ep->ep_lock),
+		   ep, test_bit(0, &ep->ep_lock),
 		   slice->cpl_page->cp_vmpage);
 	return 0;
 }
@@ -414,7 +417,13 @@ static int echo_page_init(const struct lu_env *env, struct cl_object *obj,
 
 	ENTRY;
 	get_page(page->cp_vmpage);
-	mutex_init(&ep->ep_lock);
+	/*
+	 * ep_lock is similar to the lock_page() lock, and
+	 * cannot usefully be monitored by lockdep.
+	 * So just use a bit in an "unsigned long" and use the
+	 * wait_on_bit() interface to wait for the bit to be clear.
+	 */
+	ep->ep_lock = 0;
 	cl_page_slice_add(page, &ep->ep_cl, obj, index, &echo_page_ops);
 	atomic_inc(&eco->eo_npages);
 	RETURN(0);
