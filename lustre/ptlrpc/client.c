@@ -841,32 +841,7 @@ EXPORT_SYMBOL(ptlrpc_request_bufs_pack);
 int ptlrpc_request_pack(struct ptlrpc_request *request,
 			__u32 version, int opcode)
 {
-	int rc;
-
-	rc = ptlrpc_request_bufs_pack(request, version, opcode, NULL, NULL);
-	if (rc)
-		return rc;
-
-	/*
-	 * For some old 1.8 clients (< 1.8.7), they will LASSERT the size of
-	 * ptlrpc_body sent from server equal to local ptlrpc_body size, so we
-	 * have to send old ptlrpc_body to keep interoprability with these
-	 * clients.
-	 *
-	 * Only three kinds of server->client RPCs so far:
-	 *  - LDLM_BL_CALLBACK
-	 *  - LDLM_CP_CALLBACK
-	 *  - LDLM_GL_CALLBACK
-	 *
-	 * XXX This should be removed whenever we drop the interoprability with
-	 *     the these old clients.
-	 */
-	if (opcode == LDLM_BL_CALLBACK || opcode == LDLM_CP_CALLBACK ||
-	    opcode == LDLM_GL_CALLBACK)
-		req_capsule_shrink(&request->rq_pill, &RMF_PTLRPC_BODY,
-				   sizeof(struct ptlrpc_body_v2), RCL_CLIENT);
-
-	return rc;
+	return ptlrpc_request_bufs_pack(request, version, opcode, NULL, NULL);
 }
 EXPORT_SYMBOL(ptlrpc_request_pack);
 

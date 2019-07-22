@@ -116,19 +116,9 @@ int lustre_msg_check_version(struct lustre_msg *msg,
 /* early reply size */
 __u32 lustre_msg_early_size()
 {
-	static __u32 size;
-	if (!size) {
-		/* Always reply old ptlrpc_body_v2 to keep interoprability
-		 * with the old client (< 2.3) which doesn't have pb_jobid
-		 * in the ptlrpc_body.
-		 *
-		 * XXX Remove this whenever we dorp interoprability with such
-		 *     client.
-		 */
-		__u32 pblen = sizeof(struct ptlrpc_body_v2);
-		size = lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, &pblen);
-	}
-	return size;
+	__u32 pblen = sizeof(struct ptlrpc_body);
+
+	return lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, &pblen);
 }
 EXPORT_SYMBOL(lustre_msg_early_size);
 

@@ -593,16 +593,6 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
                        req->rq_export->exp_obd->obd_minor);
         }
 
-	/* In order to keep interoprability with the client (< 2.3) which
-	 * doesn't have pb_jobid in ptlrpc_body, We have to shrink the
-	 * ptlrpc_body in reply buffer to ptlrpc_body_v2, otherwise, the
-	 * reply buffer on client will be overflow.
-	 *
-	 * XXX Remove this whenver we drop the interoprability with such client.
-	 */
-	req->rq_replen = lustre_shrink_msg(req->rq_repmsg, 0,
-					   sizeof(struct ptlrpc_body_v2), 1);
-
         if (req->rq_type != PTL_RPC_MSG_ERR)
                 req->rq_type = PTL_RPC_MSG_REPLY;
 
