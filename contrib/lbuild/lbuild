@@ -1259,7 +1259,7 @@ build_kernel_ib() {
         rpm --define "_topdir ${TOPDIR}" -ivh $SOURCE
         SOURCE="${TOPDIR}/SPECS/${kib_prefix}.spec"
         local file ed_fragment1 ed_fragment2 n=1
-        for file in $(ls ${TOPDIR}/lustre/contrib/patches/ofed/*.patch); do
+        for file in $(ls ${TOPDIR}/lustre/contrib/patches/ofed/*.patch 2>/dev/null); do
             ed_fragment1="$ed_fragment1
 Patch$n: ${file%%*/}"
             ed_fragment2="$ed_fragment2
@@ -1267,7 +1267,7 @@ Patch$n: ${file%%*/}"
             cp $file ${TOPDIR}/SOURCES
             let n=$n+1
         done
-        for file in $(ls ${TOPDIR}/lustre/contrib/patches/ofed/*.ed); do
+        for file in $(ls ${TOPDIR}/lustre/contrib/patches/ofed/*.ed 2>/dev/null); do
             # Only apply the ed-scripts that should be used for the canonical target
             # ed-files in ${TOPDIR}/lustre/contrib/patches/ofed/ have to follow the naming
             # convention
@@ -1327,7 +1327,7 @@ EOF
 		fi
 		# now that we have the kernel rpms, we need to lib rpms too
 		# we don't have to rebuild since MOFED include the binaries
-		cp -f OFED_RPMS/{libibmad-*,libibverbs-*,libibumad-*,librdmacm*,ibutils-*,opensm-*}.${TARGET_ARCH}.rpm \
+		cp -f OFED_RPMS/{libibmad-*,libibverbs-*,libibumad-*,librdmacm*,ibutils*,opensm-*}.${TARGET_ARCH}.rpm \
 			${TOPDIR}/RPMS/${TARGET_ARCH} || \
 			fatal 1 "Failed to copy MOFED rpms"
 		;;
