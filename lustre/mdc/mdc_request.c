@@ -2499,6 +2499,81 @@ static int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
+struct mdc_rmfid_args {
+	int *mra_rcs;
+	int mra_nr;
+};
+
+int mdc_rmfid_interpret(const struct lu_env *env, struct ptlrpc_request *req,
+			  void *args, int rc)
+{
+	struct mdc_rmfid_args *aa;
+	int *rcs, size;
+	ENTRY;
+
+	if (!rc) {
+		aa = ptlrpc_req_async_args(req);
+
+		size = req_capsule_get_size(&req->rq_pill, &RMF_RCS,
+					    RCL_SERVER);
+		LASSERT(size == sizeof(int) * aa->mra_nr);
+		rcs = req_capsule_server_get(&req->rq_pill, &RMF_RCS);
+		LASSERT(rcs);
+		LASSERT(aa->mra_rcs);
+		LASSERT(aa->mra_nr);
+		memcpy(aa->mra_rcs, rcs, size);
+	}
+
+	RETURN(rc);
+}
+
+static int mdc_rmfid(struct obd_export *exp, struct fid_array *fa,
+		     int *rcs, struct ptlrpc_request_set *set)
+{
+	struct ptlrpc_request *req;
+	struct mdc_rmfid_args *aa;
+	struct mdt_body *b;
+	struct lu_fid *tmp;
+	int rc, flen;
+	ENTRY;
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_RMFID);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	flen = fa->fa_nr * sizeof(struct lu_fid);
+	req_capsule_set_size(&req->rq_pill, &RMF_FID_ARRAY,
+			     RCL_CLIENT, flen);
+	req_capsule_set_size(&req->rq_pill, &RMF_FID_ARRAY,
+			     RCL_SERVER, flen);
+	req_capsule_set_size(&req->rq_pill, &RMF_RCS,
+			     RCL_SERVER, fa->fa_nr * sizeof(__u32));
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_RMFID);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_FID_ARRAY);
+	memcpy(tmp, fa->fa_fids, flen);
+
+	mdc_pack_body(req, NULL, 0, 0, -1, 0);
+	b = req_capsule_client_get(&req->rq_pill, &RMF_MDT_BODY);
+	b->mbo_ctime = ktime_get_real_seconds();
+
+	ptlrpc_request_set_replen(req);
+
+	LASSERT(rcs);
+	aa = ptlrpc_req_async_args(req);
+	aa->mra_rcs = rcs;
+	aa->mra_nr = fa->fa_nr;
+	req->rq_interpret_reply = mdc_rmfid_interpret;
+
+	ptlrpc_set_add_req(set, req);
+	ptlrpc_check_set(NULL, set);
+
+	RETURN(rc);
+}
+
 static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 			    enum obd_import_event event)
 {
@@ -2790,32 +2865,33 @@ static struct obd_ops mdc_obd_ops = {
 
 static struct md_ops mdc_md_ops = {
 	.m_get_root	    = mdc_get_root,
-        .m_null_inode	    = mdc_null_inode,
-        .m_close            = mdc_close,
-        .m_create           = mdc_create,
-        .m_enqueue          = mdc_enqueue,
-        .m_getattr          = mdc_getattr,
-        .m_getattr_name     = mdc_getattr_name,
-        .m_intent_lock      = mdc_intent_lock,
-        .m_link             = mdc_link,
-        .m_rename           = mdc_rename,
-        .m_setattr          = mdc_setattr,
-        .m_setxattr         = mdc_setxattr,
-        .m_getxattr         = mdc_getxattr,
+	.m_null_inode	    = mdc_null_inode,
+	.m_close            = mdc_close,
+	.m_create           = mdc_create,
+	.m_enqueue          = mdc_enqueue,
+	.m_getattr          = mdc_getattr,
+	.m_getattr_name     = mdc_getattr_name,
+	.m_intent_lock      = mdc_intent_lock,
+	.m_link             = mdc_link,
+	.m_rename           = mdc_rename,
+	.m_setattr          = mdc_setattr,
+	.m_setxattr         = mdc_setxattr,
+	.m_getxattr         = mdc_getxattr,
 	.m_fsync		= mdc_fsync,
 	.m_file_resync		= mdc_file_resync,
 	.m_read_page		= mdc_read_page,
-        .m_unlink           = mdc_unlink,
-        .m_cancel_unused    = mdc_cancel_unused,
-        .m_init_ea_size     = mdc_init_ea_size,
-        .m_set_lock_data    = mdc_set_lock_data,
-        .m_lock_match       = mdc_lock_match,
-        .m_get_lustre_md    = mdc_get_lustre_md,
-        .m_free_lustre_md   = mdc_free_lustre_md,
-        .m_set_open_replay_data = mdc_set_open_replay_data,
-        .m_clear_open_replay_data = mdc_clear_open_replay_data,
-        .m_intent_getattr_async = mdc_intent_getattr_async,
-        .m_revalidate_lock      = mdc_revalidate_lock
+	.m_unlink           = mdc_unlink,
+	.m_cancel_unused    = mdc_cancel_unused,
+	.m_init_ea_size     = mdc_init_ea_size,
+	.m_set_lock_data    = mdc_set_lock_data,
+	.m_lock_match       = mdc_lock_match,
+	.m_get_lustre_md    = mdc_get_lustre_md,
+	.m_free_lustre_md   = mdc_free_lustre_md,
+	.m_set_open_replay_data = mdc_set_open_replay_data,
+	.m_clear_open_replay_data = mdc_clear_open_replay_data,
+	.m_intent_getattr_async = mdc_intent_getattr_async,
+	.m_revalidate_lock      = mdc_revalidate_lock,
+	.m_rmfid		= mdc_rmfid,
 };
 
 static int __init mdc_init(void)

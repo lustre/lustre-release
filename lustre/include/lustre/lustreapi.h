@@ -389,6 +389,7 @@ int llapi_path2parent(const char *path, unsigned int linkno,
 		      struct lu_fid *parent_fid, char *name, size_t name_size);
 int llapi_fd2parent(int fd, unsigned int linkno, struct lu_fid *parent_fid,
 		    char *name, size_t name_size);
+int llapi_rmfid(const char *path, struct fid_array *fa);
 int llapi_chomp_string(char *buf);
 int llapi_open_by_fid(const char *dir, const struct lu_fid *fid,
 		      int open_flags);

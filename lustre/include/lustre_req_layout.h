@@ -179,6 +179,7 @@ extern struct req_format RQF_QUOTA_DQACQ;
 extern struct req_format RQF_MDS_SWAP_LAYOUTS;
 extern struct req_format RQF_MDS_REINT_MIGRATE;
 extern struct req_format RQF_MDS_REINT_RESYNC;
+extern struct req_format RQF_MDS_RMFID;
 /* MDS hsm formats */
 extern struct req_format RQF_MDS_HSM_STATE_GET;
 extern struct req_format RQF_MDS_HSM_STATE_SET;
@@ -256,6 +257,7 @@ extern struct req_msg_field RMF_IDX_INFO;
 extern struct req_msg_field RMF_CLOSE_DATA;
 extern struct req_msg_field RMF_FILE_SECCTX_NAME;
 extern struct req_msg_field RMF_FILE_SECCTX;
+extern struct req_msg_field RMF_FID_ARRAY;
 
 /*
  * connection handle received in MDS_CONNECT request.

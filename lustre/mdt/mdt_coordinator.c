@@ -971,7 +971,7 @@ static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 	RETURN(rc);
 }
 
-static int hsm_init_ucred(struct lu_ucred *uc)
+int hsm_init_ucred(struct lu_ucred *uc)
 {
 	ENTRY;
 

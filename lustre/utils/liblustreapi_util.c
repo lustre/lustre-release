@@ -34,6 +34,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -180,3 +181,27 @@ int llapi_get_version(char *buffer, int buffer_size, char **version)
 	return rc;
 }
 #endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0) */
+int llapi_rmfid(const char *path, struct fid_array *fa)
+{
+	char rootpath[PATH_MAX];
+	int fd, rc;
+
+retry_open:
+	fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+	if (fd < 0) {
+		if (errno == ENOENT && path != rootpath) {
+			rc = llapi_search_rootpath(rootpath, path);
+			if (!rc) {
+				path = rootpath;
+				goto retry_open;
+			}
+		} else {
+			return -errno;
+		}
+	}
+
+	rc = ioctl(fd, LL_IOC_RMFID, fa);
+	close(fd);
+
+	return rc ? -errno : 0;
+}

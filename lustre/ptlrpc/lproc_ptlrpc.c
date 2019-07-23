@@ -95,6 +95,7 @@ static struct ll_rpc_opcode {
 	{ MDS_HSM_CT_REGISTER, "mds_hsm_ct_register" },
 	{ MDS_HSM_CT_UNREGISTER, "mds_hsm_ct_unregister" },
 	{ MDS_SWAP_LAYOUTS,	"mds_swap_layouts" },
+	{ MDS_RMFID,		"mds_rmfid" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },

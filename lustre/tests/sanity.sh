@@ -19721,6 +19721,234 @@ test_420()
 }
 run_test 420 "clear SGID bit on non-directories for non-members"
 
+test_421a() {
+	local cnt
+	local fid1
+	local fid2
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.2) ] &&
+		skip "Need MDS version at least 2.12.2"
+
+	test_mkdir $DIR/$tdir
+	createmany -o $DIR/$tdir/f 3
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 3 ] && error "unexpected #files: $cnt"
+
+	fid1=$(lfs path2fid $DIR/$tdir/f1)
+	fid2=$(lfs path2fid $DIR/$tdir/f2)
+	$LFS rmfid $DIR $fid1 $fid2 || error "rmfid failed"
+
+	stat $DIR/$tdir/f1 && error "f1 still visible on the client"
+	stat $DIR/$tdir/f2 && error "f2 still visible on the client"
+
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt == 1 ] || error "unexpected #files after: $cnt"
+
+	rm -f $DIR/$tdir/f3 || error "can't remove f3"
+	createmany -o $DIR/$tdir/f 3
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 3 ] && error "unexpected #files: $cnt"
+
+	fid1=$(lfs path2fid $DIR/$tdir/f1)
+	fid2=$(lfs path2fid $DIR/$tdir/f2)
+	echo "remove using fsname $FSNAME"
+	$LFS rmfid $FSNAME $fid1 $fid2 || error "rmfid with fsname failed"
+
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt == 1 ] || error "unexpected #files after: $cnt"
+}
+run_test 421a "simple rm by fid"
+
+test_421b() {
+	local cnt
+	local FID1
+	local FID2
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.2) ] &&
+		skip "Need MDS version at least 2.12.2"
+
+	test_mkdir $DIR/$tdir
+	createmany -o $DIR/$tdir/f 3
+	multiop_bg_pause $DIR/$tdir/f1 o_c || error "multiop failed to start"
+	MULTIPID=$!
+
+	FID1=$(lfs path2fid $DIR/$tdir/f1)
+	FID2=$(lfs path2fid $DIR/$tdir/f2)
+	$LFS rmfid $DIR $FID1 $FID2 && error "rmfid didn't fail"
+
+	kill -USR1 $MULTIPID
+	wait
+
+	cnt=$(ls $DIR/$tdir | wc -l)
+	[ $cnt == 2 ] || error "unexpected #files after: $cnt"
+}
+run_test 421b "rm by fid on open file"
+
+test_421c() {
+	local cnt
+	local FIDS
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.2) ] &&
+		skip "Need MDS version at least 2.12.2"
+
+	test_mkdir $DIR/$tdir
+	createmany -o $DIR/$tdir/f 3
+	touch $DIR/$tdir/$tfile
+	createmany -l$DIR/$tdir/$tfile $DIR/$tdir/h 180
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 184 ] && error "unexpected #files: $cnt"
+
+	FID1=$(lfs path2fid $DIR/$tdir/$tfile)
+	$LFS rmfid $DIR $FID1 || error "rmfid failed"
+
+	cnt=$(ls $DIR/$tdir | wc -l)
+	[ $cnt == 3 ] || error "unexpected #files after: $cnt"
+}
+run_test 421c "rm by fid against hardlinked files"
+
+test_421d() {
+	local cnt
+	local FIDS
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.2) ] &&
+		skip "Need MDS version at least 2.12.2"
+
+	test_mkdir $DIR/$tdir
+	createmany -o $DIR/$tdir/f 4097
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 4097 ] && error "unexpected #files: $cnt"
+
+	FIDS=$(lfs path2fid $DIR/$tdir/f* | sed "s/[/][^:]*://g")
+	$LFS rmfid $DIR $FIDS || error "rmfid failed"
+
+	cnt=$(ls $DIR/$tdir | wc -l)
+	rm -rf $DIR/$tdir
+	[ $cnt == 0 ] || error "unexpected #files after: $cnt"
+}
+run_test 421d "rmfid en masse"
+
+test_421e() {
+	local cnt
+	local FID
+
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ $MDS1_VERSION -lt $(version_code 2.12.2) ] &&
+		skip "Need MDS version at least 2.12.2"
+
+	mkdir -p $DIR/$tdir
+	$LFS setdirstripe -c$MDSCOUNT $DIR/$tdir/striped_dir
+	createmany -o $DIR/$tdir/striped_dir/f 512
+	cnt=$(ls -1 $DIR/$tdir/striped_dir | wc -l)
+	[ $cnt != 512 ] && error "unexpected #files: $cnt"
+
+	FIDS=$(lfs path2fid $DIR/$tdir/striped_dir/f* |
+		sed "s/[/][^:]*://g")
+	$LFS rmfid $DIR $FIDS || error "rmfid failed"
+
+	cnt=$(ls $DIR/$tdir/striped_dir | wc -l)
+	rm -rf $DIR/$tdir
+	[ $cnt == 0 ] || error "unexpected #files after: $cnt"
+}
+run_test 421e "rmfid in DNE"
+
+test_421f() {
+	local cnt
+	local FID
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.2) ] &&
+		skip "Need MDS version at least 2.12.2"
+
+	test_mkdir $DIR/$tdir
+	touch $DIR/$tdir/f
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 1 ] && error "unexpected #files: $cnt"
+
+	FID=$(lfs path2fid $DIR/$tdir/f)
+	$RUNAS $LFS rmfid $DIR $FID && error "rmfid didn't fail (1)"
+	# rmfid should fail
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 1 ] && error "unexpected #files after (2): $cnt"
+
+	chmod a+rw $DIR/$tdir
+	ls -la $DIR/$tdir
+	$RUNAS $LFS rmfid $DIR $FID && error "rmfid didn't fail (2)"
+	# rmfid should fail
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 1 ] && error "unexpected #files after (3): $cnt"
+
+	rm -f $DIR/$tdir/f
+	$RUNAS touch $DIR/$tdir/f
+	FID=$(lfs path2fid $DIR/$tdir/f)
+	echo "rmfid as root"
+	$LFS rmfid $DIR $FID || error "rmfid as root failed"
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt == 0 ] || error "unexpected #files after (4): $cnt"
+
+	rm -f $DIR/$tdir/f
+	$RUNAS touch $DIR/$tdir/f
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt != 1 ] && error "unexpected #files (4): $cnt"
+	FID=$(lfs path2fid $DIR/$tdir/f)
+	# rmfid w/o user_fid2path mount option should fail
+	$RUNAS $LFS rmfid $DIR $FID && error "rmfid didn't fail(3)"
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt == 1 ] || error "unexpected #files after (5): $cnt"
+
+	umount_client $MOUNT || "failed to umount client"
+	mount_client $MOUNT "$MOUNT_OPTS,user_fid2path" ||
+		"failed to mount client'"
+
+	$RUNAS $LFS rmfid $DIR $FID || error "rmfid failed"
+	# rmfid should succeed
+	cnt=$(ls -1 $DIR/$tdir | wc -l)
+	[ $cnt == 0 ] || error "unexpected #files after (6): $cnt"
+
+	# rmfid shouldn't allow to remove files due to dir's permission
+	chmod a+rwx $DIR/$tdir
+	touch $DIR/$tdir/f
+	ls -la $DIR/$tdir
+	FID=$(lfs path2fid $DIR/$tdir/f)
+	$RUNAS $LFS rmfid $DIR $FID && error "rmfid didn't fail"
+
+	umount_client $MOUNT || "failed to umount client"
+	mount_client $MOUNT "$MOUNT_OPTS" ||
+		"failed to mount client'"
+
+}
+run_test 421f "rmfid checks permissions"
+
+test_421g() {
+	local cnt
+	local FIDS
+
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ $MDS1_VERSION -lt $(version_code 2.12.2) ] &&
+		skip "Need MDS version at least 2.12.2"
+
+	mkdir -p $DIR/$tdir
+	$LFS setdirstripe -c$MDSCOUNT $DIR/$tdir/striped_dir
+	createmany -o $DIR/$tdir/striped_dir/f 512
+	cnt=$(ls -1 $DIR/$tdir/striped_dir | wc -l)
+	[ $cnt != 512 ] && error "unexpected #files: $cnt"
+
+	FIDS=$(lfs path2fid $DIR/$tdir/striped_dir/f* |
+		sed "s/[/][^:]*://g")
+
+	rm -f $DIR/$tdir/striped_dir/f1*
+	cnt=$(ls -1 $DIR/$tdir/striped_dir | wc -l)
+	removed=$((512 - cnt))
+
+	# few files have been just removed, so we expect
+	# rmfid to fail on their fids
+	errors=$($LFS rmfid $DIR $FIDS 2>&1 | wc -l)
+	[ $removed != $errors ] && error "$errors != $removed"
+
+	cnt=$(ls $DIR/$tdir/striped_dir | wc -l)
+	rm -rf $DIR/$tdir
+	[ $cnt == 0 ] || error "unexpected #files after: $cnt"
+}
+run_test 421g "rmfid to return errors properly"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&

@@ -1202,6 +1202,54 @@ out:
         RETURN(rc);
 }
 
+int ll_rmfid(struct file *file, void __user *arg)
+{
+	const struct fid_array __user *ufa = arg;
+	struct fid_array *lfa = NULL;
+	size_t size;
+	unsigned nr;
+	int i, rc, *rcs = NULL;
+	ENTRY;
+
+	if (!cfs_capable(CFS_CAP_DAC_READ_SEARCH) &&
+	    !(ll_i2sbi(file_inode(file))->ll_flags & LL_SBI_USER_FID2PATH))
+		RETURN(-EPERM);
+	/* Only need to get the buflen */
+	if (get_user(nr, &ufa->fa_nr))
+		RETURN(-EFAULT);
+	/* DoS protection */
+	if (nr > OBD_MAX_FIDS_IN_ARRAY)
+		RETURN(-E2BIG);
+
+	size = offsetof(struct fid_array, fa_fids[nr]);
+	OBD_ALLOC(lfa, size);
+	if (!lfa)
+		RETURN(-ENOMEM);
+	OBD_ALLOC(rcs, sizeof(int) * nr);
+	if (!rcs)
+		GOTO(free_lfa, rc = -ENOMEM);
+
+	if (copy_from_user(lfa, arg, size))
+		GOTO(free_rcs, rc = -EFAULT);
+
+	/* Call mdc_iocontrol */
+	rc = md_rmfid(ll_i2mdexp(file_inode(file)), lfa, rcs, NULL);
+	if (!rc) {
+		for (i = 0; i < nr; i++)
+			if (rcs[i])
+				lfa->fa_fids[i].f_ver = rcs[i];
+		if (copy_to_user(arg, lfa, size))
+			rc = -EFAULT;
+	}
+
+free_rcs:
+	OBD_FREE(rcs, sizeof(int) * nr);
+free_lfa:
+	OBD_FREE(lfa, size);
+
+	RETURN(rc);
+}
+
 /* This function tries to get a single name component,
  * to send to the server. No actual path traversal involved,
  * so we limit to NAME_MAX */
@@ -1530,6 +1578,8 @@ out_rmdir:
                         ll_putname(filename);
 		RETURN(rc);
 	}
+	case LL_IOC_RMFID:
+		RETURN(ll_rmfid(file, (void __user *)arg));
 	case LL_IOC_LOV_SWAP_LAYOUTS:
 		RETURN(-EPERM);
 	case IOC_OBD_STATFS:
