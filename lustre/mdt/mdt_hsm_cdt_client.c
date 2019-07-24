@@ -420,7 +420,7 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 	ENTRY;
 
 	/* no coordinator started, so we cannot serve requests */
-	if (cdt->cdt_state == CDT_STOPPED)
+	if (cdt->cdt_state == CDT_STOPPED || cdt->cdt_state == CDT_INIT)
 		RETURN(-EAGAIN);
 
 	if (!hal_is_sane(hal))

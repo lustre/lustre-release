@@ -876,9 +876,10 @@ static int hsm_restore_cb(const struct lu_env *env,
 
 	larr = (struct llog_agent_req_rec *)hdr;
 	hai = &larr->arr_hai;
-	if (hai->hai_cookie > cdt->cdt_last_cookie)
+	if (hai->hai_cookie >= cdt->cdt_last_cookie) {
 		/* update the cookie to avoid collision */
 		cdt->cdt_last_cookie = hai->hai_cookie + 1;
+	}
 
 	if (hai->hai_action != HSMA_RESTORE ||
 	    agent_req_in_final_state(larr->arr_status))
