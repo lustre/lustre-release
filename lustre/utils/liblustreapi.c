@@ -5342,7 +5342,7 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
 /* Is this a lustre fs? */
 int llapi_is_lustre_mnttype(const char *type)
 {
-        return (strcmp(type, "lustre") == 0 || strcmp(type,"lustre_lite") == 0);
+	return strcmp(type, "lustre") == 0 || strcmp(type, "lustre_tgt") == 0;
 }
 
 /* Is this a lustre client fs? */

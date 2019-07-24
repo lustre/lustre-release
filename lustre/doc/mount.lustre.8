@@ -5,21 +5,26 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License v2.
 .\"
-.TH mount.lustre 8 "2008 Mar 15" Lustre "configuration utilities"
+.TH mount.lustre 8 "2019 Jul 30" Lustre "configuration utilities"
 .SH NAME
-mount.lustre \- start a Lustre client or target service
+mount.lustre \- mount helper for Lustre client
+mount.lustre_tgt \- mount helper for Lustre target service
 .SH SYNOPSIS
 .br
-.BI "mount \-t lustre [\-o " options "] " "<block_device> <server_mountpoint>"
+.BI "mount -t lustre [-o " options "] " "<mgsname>:/<fsname> <client_mountpoint>"
 .br
-.BI "mount \-t lustre [\-o " options "] " "<mgsname>:/<fsname> <client_mountpoint>"
+.BI "mount -t lustre_tgt [-o " options "] " "<block_device> <server_mountpoint>"
 .SH DESCRIPTION
 .B mount.lustre
-is used to start a Lustre client or target service.  This program should not
-be called directly; rather it is a helper program invoked through
+and
+.B mount.lustre_tgt
+are used to start a Lustre client or target service, respectively.  They
+should not be called directly; rather they are helper programs invoked through
 .BR mount (8)
 as above when the
 .B lustre
+or
+.B lustre_tgt
 filesystem type is used.  Lustre clients and targets are stopped by using the
 .BR umount (8)
 command.
@@ -30,7 +35,7 @@ There are two forms for the device option passed to the
 command, depending on whether a client or a target service is started:
 .TP
 .IR <mgsname> :/ <fsname>[/<subdir>]
-mounts the Lustre filesystem named
+mounts the Lustre client filesystem named
 .I fsname
 (optionally starting at subdirectory
 .I subdir
@@ -46,11 +51,10 @@ for automatic mount at boot time, is usable like any local filesystem, and
 provides a full POSIX-compilant interface.
 .TP
 .I block_device
-starts the target service defined by the
+specifies the phyisical disk or ZFS dataset uses to start the target service
+formatted by the
 .IR mkfs.lustre (8)
-command on the physical disk or ZFS dataset given by
-.IR block_device .
-The
+command.  The
 .I block_device
 may be specified using
 .BI -L label
@@ -66,7 +70,7 @@ or similar.  The mounted target service filesystem at
 .I mountpoint
 is only useful for
 .BR df (1)
-operations and appears in
+operations to show the current space usage, and appears in
 .BR /proc/mounts
 to show the device is in use.
 .SH OPTIONS
@@ -297,17 +301,17 @@ tries the second one. On each service node, the comma-separated NIDs refer to
 different interfaces on the same host, and the Lustre client chooses the best
 one for communication based on which network interfaces are available locally.
 .TP
-.B mount -t lustre /dev/sda1 /mnt/test/mdt
+.B mount -t lustre_tgt /dev/sda1 /mnt/test/mdt
 Start the Lustre metadata target service from
 .B /dev/sda1
 on mountpoint
 .BR /mnt/test/mdt .
 .TP
-.B mount -t lustre -L testfs-MDT0000 -o abort_recov /mnt/test/mdt
+.B mount -t lustre_tgt -L testfs-MDT0000 -o abort_recov /mnt/test/mdt
 Start the
 .B testfs-MDT0000
-service (by using the disk label), but aborts the recovery process if
-all of the clients are known to be unavailable.
+service (by using the disk label), but aborts the Lustre client recovery
+process for the case that clients are known to be unavailable.
 .SH BUGS
 Not very many mount options can be changed with
 .BR "-o remount" .

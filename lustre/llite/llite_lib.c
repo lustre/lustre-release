@@ -606,7 +606,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 #endif
 		err = IS_ERR(root) ? PTR_ERR(root) : -EBADF;
 		root = NULL;
-		CERROR("lustre_lite: bad iget4 for root\n");
+		CERROR("%s: bad ll_iget() for root: rc = %d\n",
+		       sbi->ll_fsname, err);
 		GOTO(out_root, err);
 	}
 

@@ -1,6 +1,7 @@
 /Makefile.in
 /mkfs.lustre
 /mount.lustre
+/mount.lustre_tgt
 /tunefs.lustre
 /lctl
 /lfs

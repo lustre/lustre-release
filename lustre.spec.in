@@ -521,6 +521,7 @@ fi
 %{_bindir}/lfs
 %{_bindir}/lfs_migrate
 /sbin/mount.lustre
+/sbin/mount.lustre_tgt
 %if %{with static}
 %{_libdir}/liblustreapi.a
 %endif

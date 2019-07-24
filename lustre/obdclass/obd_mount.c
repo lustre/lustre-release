@@ -1295,7 +1295,7 @@ static int lmd_parse_nidlist(char *buf, char **endh)
 /**
  * Parse mount line options
  * e.g. mount -v -t lustre -o abort_recov uml1:uml2:/lustre-client /mnt/lustre
- * dev is passed as device=uml1:/lustre by mount.lustre
+ * dev is passed as device=uml1:/lustre by mount.lustre_tgt
  */
 static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 {
@@ -1308,14 +1308,14 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 	LASSERT(lmd);
 	if (!options) {
 		LCONSOLE_ERROR_MSG(0x162,
-				   "Missing mount data: check /sbin/mount.lustre is installed.\n");
+				   "Missing mount data: check /sbin/mount.lustre_tgt is installed.\n");
 		RETURN(-EINVAL);
 	}
 
 	/* Options should be a string - try to detect old lmd data */
 	if ((raw->lmd_magic & 0xffffff00) == (LMD_MAGIC & 0xffffff00)) {
 		LCONSOLE_ERROR_MSG(0x163,
-				   "Using an old version of /sbin/mount lustre. Please install version %s\n",
+				   "Using an old version of /sbin/mount.lustre. Please install version %s\n",
 				   LUSTRE_VERSION_STRING);
 		RETURN(-EINVAL);
 	}
@@ -1727,26 +1727,72 @@ static void lustre_kill_super(struct super_block *sb)
 	kill_anon_super(sb);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
+/* Register the "lustre_tgt" fs type.
+ *
+ * Right now this isn't any different than the normal "lustre" filesystem
+ * type, but it is added so that there is some compatibility to allow
+ * changing documentation and scripts to start using the "lustre_tgt" type
+ * at mount time. That will simplify test interop, and in case of upgrades
+ * that change to the new type and then need to roll back for some reason.
+ *
+ * The long-term goal is to disentangle the client and server mount code.
+ */
+static struct file_system_type lustre_fs_type_tgt = {
+	.owner		= THIS_MODULE,
+	.name		= "lustre_tgt",
+#ifdef HAVE_FSTYPE_MOUNT
+	.mount		= lustre_mount,
+#else
+	.get_sb		= lustre_get_sb,
+#endif
+	.kill_sb	= lustre_kill_super,
+	.fs_flags	= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
+};
+MODULE_ALIAS_FS("lustre_tgt");
+
+#define register_filesystem_tgt(fstype)					    \
+do {									    \
+	int _rc;							    \
+									    \
+	_rc = register_filesystem(fstype);				    \
+	if (_rc && _rc != -EBUSY) {					    \
+		/* Don't fail if server code also registers "lustre_tgt" */ \
+		CERROR("obdclass: register fstype '%s' failed: rc = %d\n",  \
+		       (fstype)->name, _rc);				    \
+		return _rc;						    \
+	}								    \
+} while (0)
+#define unregister_filesystem_tgt(fstype) unregister_filesystem(fstype)
+#else
+#define register_filesystem_tgt(fstype)   do {} while (0)
+#define unregister_filesystem_tgt(fstype) do {} while (0)
+#endif
+
 /* Register the "lustre" fs type */
 static struct file_system_type lustre_fs_type = {
-	.owner        = THIS_MODULE,
-	.name         = "lustre",
+	.owner		= THIS_MODULE,
+	.name		= "lustre",
 #ifdef HAVE_FSTYPE_MOUNT
-	.mount        = lustre_mount,
+	.mount		= lustre_mount,
 #else
-	.get_sb       = lustre_get_sb,
+	.get_sb		= lustre_get_sb,
 #endif
-	.kill_sb      = lustre_kill_super,
-	.fs_flags     = FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
+	.kill_sb	= lustre_kill_super,
+	.fs_flags	= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
 };
 MODULE_ALIAS_FS("lustre");
 
 int lustre_register_fs(void)
 {
+	register_filesystem_tgt(&lustre_fs_type_tgt);
+
 	return register_filesystem(&lustre_fs_type);
 }
 
 int lustre_unregister_fs(void)
 {
+	unregister_filesystem_tgt(&lustre_fs_type_tgt);
+
 	return unregister_filesystem(&lustre_fs_type);
 }

@@ -132,6 +132,7 @@ MANFILES =					\
 	lustre_routes_conversion.8		\
 	lustre_rsync.8				\
 	mount.lustre.8				\
+	mount.lustre_tgt.8			\
 	nids.5					\
 	plot-llstat.8				\
 	routerstat.8

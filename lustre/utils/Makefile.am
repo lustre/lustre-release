@@ -23,7 +23,7 @@ GSSLIB =
 endif
 
 # mount only finds helpers in /sbin
-rootsbin_PROGRAMS = mount.lustre
+rootsbin_PROGRAMS = mount.lustre mount.lustre_tgt
 bin_SCRIPTS   = llstat llobdstat plot-llstat
 bin_PROGRAMS  = lfs
 sbin_SCRIPTS  = ldlm_debug_upcall
@@ -185,6 +185,10 @@ mount_lustre_CPPFLAGS := ${MNTMODCFLAGS}
 mount_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
 mount_lustre_LDADD    := $(SELINUX) $(LDLIBMOUNT) $(PLUGIN_LIB) $(GSSLIB) \
 			 $(top_builddir)/libcfs/libcfs/libcfs.la $(MNTMODLIBS)
+mount_lustre_tgt_SOURCES = ${mount_lustre_SOURCES}
+mount_lustre_tgt_CPPFLAGS = ${mount_lustre_CPPFLAGS}
+mount_lustre_tgt_LDFLAGS = ${mount_lustre_LDFLAGS}
+mount_lustre_tgt_LDADD = ${mount_lustre_LDADD}
 
 mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mkfs_lustre_CPPFLAGS := -UTUNEFS ${MNTMODCFLAGS}
