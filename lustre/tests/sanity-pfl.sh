@@ -440,7 +440,8 @@ test_11() {
 	[[ -n $f4 ]] && error "1: 4th component instantiated"
 
 	# the first 2 components instantiated
-	$TRUNCATE $comp_file $((1024*1024*1+1))
+	# Truncate to exact start of new component - LU-12586
+	$TRUNCATE $comp_file $((1024*1024*1))
 
 	f2=$($LFS getstripe -I2 $comp_file | grep "l_fid")
 	[[ -z $f2 ]] && error "2: 2nd component uninstantiated"
@@ -450,7 +451,7 @@ test_11() {
 	[[ -n $f4 ]] && error "2: 4th component instantiated"
 
 	# the first 3 components instantiated
-	$TRUNCATE $comp_file $((1024*1024*3))
+	$TRUNCATE $comp_file $((1024*1024*3 - 1))
 	$TRUNCATE $comp_file $((1024*1024*1+1))
 
 	f2=$($LFS getstripe -I2 $comp_file | grep "l_fid")
