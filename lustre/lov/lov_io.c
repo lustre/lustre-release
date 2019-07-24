@@ -566,7 +566,15 @@ static int lov_io_slice_init(struct lov_io *lio,
 	 */
 	if (cl_io_is_trunc(io)) {
 		io->ci_write_intent.e_start = 0;
-		io->ci_write_intent.e_end = io->u.ci_setattr.sa_attr.lvb_size;
+		/* for writes, e_end is endpos, the location of the file
+		 * pointer after the write is completed, so it is not accessed.
+		 * For truncate, 'end' is the size, and *is* acccessed.
+		 * In other words, writes are [start, end), but truncate is
+		 * [start, size], where both are included.  So add 1 to the
+		 * size when creating the write intent to account for this.
+		 */
+		io->ci_write_intent.e_end =
+			io->u.ci_setattr.sa_attr.lvb_size + 1;
 	} else {
 		io->ci_write_intent.e_start = lio->lis_pos;
 		io->ci_write_intent.e_end = lio->lis_endpos;
