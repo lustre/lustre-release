@@ -18356,6 +18356,20 @@ test_276() {
 }
 run_test 276 "Race between mount and obd_statfs"
 
+test_277() {
+	$LCTL set_param ldlm.namespaces.*.lru_size=0
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
+	local cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			grep ^used_mb | awk '{print $2}')
+	[ $cached_mb -eq 1 ] || error "expected mb 1 got $cached_mb"
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 \
+		oflag=direct conv=notrunc
+	cached_mb=$($LCTL get_param llite.*.max_cached_mb |
+			grep ^used_mb | awk '{print $2}')
+	[ $cached_mb -eq 0 ] || error "expected mb 0 got $cached_mb"
+}
+run_test 277 "Direct IO shall drop page cache"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK
