@@ -587,7 +587,7 @@ test_15() {
 	$LFS setstripe -E 1M -S 1M -E 10M -E eof $parent/f1 || error "create f1"
 	$LFS setstripe -E 4M -E 20M -E eof $parent/f2 || error "create f2"
 	test_mkdir $parent/subdir
-	$LFS setstripe -E 6M -S 1M -E 30M -E eof $parent/subdir ||
+	$LFS setstripe -E 6M -S 1M -c1 -E 30M -c4 -E eof -c -1 $parent/subdir ||
 		error "setstripe to subdir"
 	$LFS setstripe -E 8M -E eof $parent/subdir/f3 || error "create f3"
 	$LFS setstripe -c 1 $parent/subdir/f4 || error "create f4"
@@ -637,6 +637,15 @@ test_15() {
 	found=$($LFS find $ext_opts ! $cnt_opts $flg_opts $parent | wc -l)
 	[ $found -eq 2 ] ||
 		error "start-1M, end+5M, !count+2, flag=init, $found != 2"
+
+	# check last component stripe count
+	if [ $OSTCOUNT -gt 1 ]; then
+		touch $parent/subdir/f5
+		$TRUNCATE $parent/subdir/f5 $((32*1024*1024))
+		found=$($LFS find $parent/subdir -c $OSTCOUNT)
+		[[ "$found" == "$parent/subdir/f5" ]] ||
+			error "got '$found' with stripe_count=$OSTCOUNT, not f5"
+	fi
 }
 run_test 15 "Verify component options for lfs find"
 

@@ -3892,6 +3892,7 @@ static int find_check_stripe_size(struct find_param *param)
 {
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	__u32 stripe_size = 0;
 	int ret, i, count = 1;
 
 	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
@@ -3903,15 +3904,13 @@ static int find_check_stripe_size(struct find_param *param)
 	for (i = 0; i < count; i++) {
 		if (comp_v1)
 			v1 = lov_comp_entry(comp_v1, i);
-
-		ret = find_value_cmp(v1->lmm_stripe_size, param->fp_stripe_size,
-				     param->fp_stripe_size_sign,
-				     param->fp_exclude_stripe_size,
-				     param->fp_stripe_size_units, 0);
-		/* If any stripe_size matches */
-		if (ret != -1)
-			break;
+		stripe_size = v1->lmm_stripe_size;
 	}
+
+	ret = find_value_cmp(stripe_size, param->fp_stripe_size,
+			     param->fp_stripe_size_sign,
+			     param->fp_exclude_stripe_size,
+			     param->fp_stripe_size_units, 0);
 
 	return ret;
 }
@@ -3931,7 +3930,7 @@ static __u32 find_get_stripe_count(struct find_param *param)
 	for (i = 0; i < count; i++) {
 		if (comp_v1)
 			v1 = lov_comp_entry(comp_v1, i);
-		stripe_count += v1->lmm_stripe_count;
+		stripe_count = v1->lmm_stripe_count;
 	}
 
 	return stripe_count;
