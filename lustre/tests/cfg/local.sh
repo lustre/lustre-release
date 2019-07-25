@@ -96,7 +96,6 @@ LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
 
 DEF_STRIPE_SIZE=${DEF_STRIPE_SIZE:-}   # filesystem default stripe size in bytes
 DEF_STRIPE_COUNT=${DEF_STRIPE_COUNT:-} # filesystem default stripe count
-SINGLEMDS=${SINGLEMDS:-"mds1"}
 TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-"vfstrace rpctrace dlmtrace neterror ha config \
 		      ioctl super lfsck"}

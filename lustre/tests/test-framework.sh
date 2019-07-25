@@ -164,6 +164,10 @@ get_lustre_env() {
 	export MDS1_VERSION=$(lustre_version_code mds1)
 	export OST1_VERSION=$(lustre_version_code ost1)
 	export CLIENT_VERSION=$(lustre_version_code client)
+
+	# Prefer using "mds1" directly instead of SINGLEMDS.
+	# Keep this for compat until it is removed from scripts.
+	export SINGLEMDS=${SINGLEMDS:-mds1}
 }
 
 init_test_env() {
