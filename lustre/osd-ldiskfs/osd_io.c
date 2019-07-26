@@ -1654,6 +1654,8 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
         int                 size;
         int                 boffs;
         int                 dirty_inode = 0;
+	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+	bool create, sparse;
 
 	if (write_NUL) {
 		/*
@@ -1665,8 +1667,15 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 		++bufsize;
 	}
 
+	/* sparse checking is racy, but sparse is very rare case, leave as is */
+	sparse = (new_size > 0 && (inode->i_blocks >> (inode->i_blkbits - 9)) <
+		  ((new_size - 1) >> inode->i_blkbits) + 1);
+
 	while (bufsize > 0) {
 		int credits = handle->h_buffer_credits;
+		bool sync;
+		unsigned long last_block = (new_size == 0) ? 0 :
+					   (new_size - 1) >> inode->i_blkbits;
 
 		if (bh)
 			brelse(bh);
@@ -1674,7 +1683,26 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 		block = offset >> inode->i_blkbits;
 		boffs = offset & (blocksize - 1);
 		size = min(blocksize - boffs, bufsize);
-		bh = __ldiskfs_bread(handle, inode, block, 1);
+		sync = (block > last_block || new_size == 0 || sparse);
+
+		if (sync)
+			down(&ei->i_append_sem);
+
+		bh = __ldiskfs_bread(handle, inode, block, 0);
+
+		if (unlikely(IS_ERR_OR_NULL(bh) && !sync))
+			CWARN("%s: adding bh without locking off %llu (block %lu, "
+			      "size %d, offs %llu)\n", inode->i_sb->s_id,
+			      offset, block, bufsize, *offs);
+
+		if (IS_ERR_OR_NULL(bh)) {
+			bh = __ldiskfs_bread(handle, inode, block, 1);
+			create = true;
+		} else {
+			if (sync)
+				up(&ei->i_append_sem);
+			create = false;
+		}
 		if (IS_ERR_OR_NULL(bh)) {
 			if (bh == NULL) {
 				err = -EIO;
@@ -1699,7 +1727,12 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 		LASSERTF(boffs + size <= bh->b_size,
 			 "boffs %d size %d bh->b_size %lu\n",
 			 boffs, size, (unsigned long)bh->b_size);
-                memcpy(bh->b_data + boffs, buf, size);
+		if (create) {
+			memset(bh->b_data, 0, bh->b_size);
+			if (sync)
+				up(&ei->i_append_sem);
+		}
+		memcpy(bh->b_data + boffs, buf, size);
 		err = ldiskfs_handle_dirty_metadata(handle, NULL, bh);
                 if (err)
                         break;
