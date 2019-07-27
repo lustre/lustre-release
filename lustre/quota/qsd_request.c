@@ -119,8 +119,7 @@ int qsd_send_dqacq(const struct lu_env *env, struct obd_export *exp,
 
 	ptlrpc_request_set_replen(req);
 
-	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-	aa = ptlrpc_req_async_args(req);
+	aa = ptlrpc_req_async_args(aa, req);
 	aa->aa_exp = exp;
 	aa->aa_qqi = qqi;
 	aa->aa_arg = (void *)lqe;
@@ -322,8 +321,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 		break;
 	}
 
-	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-	aa = ptlrpc_req_async_args(req);
+	aa = ptlrpc_req_async_args(aa, req);
 	aa->aa_exp = exp;
 	aa->aa_qqi = qqi;
 	aa->aa_arg = arg;

@@ -124,7 +124,7 @@ static int osp_statfs_interpret(const struct lu_env *env,
 
 	ENTRY;
 
-	aa = ptlrpc_req_async_args(req);
+	aa = ptlrpc_req_async_args(aa, req);
 	d = aa->pointer_arg[0];
 	LASSERT(d);
 
@@ -206,7 +206,7 @@ static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 	ptlrpc_at_set_req_timeout(req);
 
 	req->rq_interpret_reply = osp_statfs_interpret;
-	aa = ptlrpc_req_async_args(req);
+	aa = ptlrpc_req_async_args(aa, req);
 	aa->pointer_arg[0] = d;
 
 	/*

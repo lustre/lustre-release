@@ -779,8 +779,7 @@ no_match:
 		if (!rc) {
 			struct osc_enqueue_args *aa;
 
-			CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-			aa = ptlrpc_req_async_args(req);
+			aa = ptlrpc_req_async_args(aa, req);
 			aa->oa_exp = exp;
 			aa->oa_mode = einfo->ei_mode;
 			aa->oa_type = einfo->ei_type;
@@ -1249,8 +1248,7 @@ static int mdc_io_data_version_start(const struct lu_env *env,
 	ptlrpc_request_set_replen(req);
 
 	req->rq_interpret_reply = mdc_data_version_interpret;
-	CLASSERT(sizeof(*dva) <= sizeof(req->rq_async_args));
-	dva = ptlrpc_req_async_args(req);
+	dva = ptlrpc_req_async_args(dva, req);
 	dva->dva_oio = oio;
 
 	ptlrpcd_add_req(req);

@@ -735,7 +735,7 @@ int osp_unplug_async_request(const struct lu_env *env,
 		}
 		osp_update_request_destroy(env, our);
 	} else {
-		args = ptlrpc_req_async_args(req);
+		args = ptlrpc_req_async_args(args, req);
 		args->oaua_update = our;
 		args->oaua_count = NULL;
 		args->oaua_waitq = NULL;
@@ -1118,7 +1118,7 @@ static int osp_send_update_req(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	args = ptlrpc_req_async_args(req);
+	args = ptlrpc_req_async_args(args, req);
 	args->oaua_update = our;
 	/* set env to NULL, in case the interrupt cb and current function
 	 * are in different thread */

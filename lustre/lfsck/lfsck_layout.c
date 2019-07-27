@@ -4682,7 +4682,7 @@ static int lfsck_layout_async_query(const struct lu_env *env,
 	*tmp = *lr;
 	ptlrpc_request_set_replen(req);
 
-	llsaa = ptlrpc_req_async_args(req);
+	llsaa = ptlrpc_req_async_args(llsaa, req);
 	llsaa->llsaa_exp = exp;
 	llsaa->llsaa_com = lfsck_component_get(com);
 	llsaa->llsaa_llst = llst;

@@ -516,7 +516,7 @@ static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 	 * it's done in osp_sync_interpret sooner or later */
 	LASSERT(d);
 
-	jra = ptlrpc_req_async_args(req);
+	jra = ptlrpc_req_async_args(jra, req);
 	LASSERT(jra->jra_magic == OSP_JOB_MAGIC);
 	LASSERT(list_empty(&jra->jra_committed_link));
 
@@ -644,7 +644,7 @@ static void osp_sync_send_new_rpc(struct osp_device *d,
 	LASSERT(atomic_read(&d->opd_sync_rpcs_in_flight) <=
 		d->opd_sync_max_rpcs_in_flight);
 
-	jra = ptlrpc_req_async_args(req);
+	jra = ptlrpc_req_async_args(jra, req);
 	jra->jra_magic = OSP_JOB_MAGIC;
 	jra->jra_lcookie.lgc_lgl = llh->lgh_id;
 	jra->jra_lcookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;

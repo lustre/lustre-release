@@ -899,8 +899,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
-	CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
-	ca = ptlrpc_req_async_args(req);
+	ca = ptlrpc_req_async_args(ca, req);
 	ca->ca_set_arg = arg;
 	ca->ca_lock = lock;
 
@@ -1020,8 +1019,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 		RETURN(rc);
 	}
 
-	CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
-	ca = ptlrpc_req_async_args(req);
+	ca = ptlrpc_req_async_args(ca, req);
 	ca->ca_set_arg = arg;
 	ca->ca_lock = lock;
 
@@ -1149,8 +1147,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 	body->lock_handle[0] = lock->l_remote_handle;
 	ldlm_lock2desc(lock, &body->lock_desc);
 
-	CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
-	ca = ptlrpc_req_async_args(req);
+	ca = ptlrpc_req_async_args(ca, req);
 	ca->ca_set_arg = arg;
 	ca->ca_lock = lock;
 
@@ -1203,7 +1200,7 @@ struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req)
 
 	ENTRY;
 
-	ca = ptlrpc_req_async_args(req);
+	ca = ptlrpc_req_async_args(ca, req);
 	lock = ca->ca_lock;
 	if (lock == NULL)
 		RETURN(ERR_PTR(-EFAULT));

@@ -1301,7 +1301,7 @@ int ldlm_cli_convert(struct ldlm_lock *lock, __u32 *flags)
 		lprocfs_counter_incr(exp->exp_obd->obd_svc_stats,
 				     LDLM_CONVERT - LDLM_FIRST_OPC);
 
-	aa = ptlrpc_req_async_args(req);
+	aa = ptlrpc_req_async_args(aa, req);
 	ldlm_lock2handle(lock, &aa->lock_handle);
 	req->rq_interpret_reply = lock_convert_interpret;
 
@@ -2617,8 +2617,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 	LDLM_DEBUG(lock, "replaying lock:");
 
 	atomic_inc(&req->rq_import->imp_replay_inflight);
-	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-	aa = ptlrpc_req_async_args(req);
+	aa = ptlrpc_req_async_args(aa, req);
 	aa->lock_handle = body->lock_handle[0];
 	req->rq_interpret_reply = replay_lock_interpret;
 	ptlrpcd_add_req(req);
