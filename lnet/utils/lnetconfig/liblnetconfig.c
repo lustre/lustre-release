@@ -1080,7 +1080,7 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 		data.cfg_nid = gateway_nid;
 
 		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_ROUTE, &data);
-		if (rc != 0) {
+		if (rc != 0 && errno != EEXIST && errno != EHOSTUNREACH) {
 			rc = -errno;
 			snprintf(err_str,
 				sizeof(err_str),
