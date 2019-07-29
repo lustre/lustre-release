@@ -2347,20 +2347,6 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 }
 EXPORT_SYMBOL(lustre_swab_lov_comp_md_v1);
 
-void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
-{
-	ENTRY;
-	CDEBUG(D_IOCTL, "swabbing lov_mds_md\n");
-	__swab32s(&lmm->lmm_magic);
-	__swab32s(&lmm->lmm_pattern);
-	lustre_swab_lmm_oi(&lmm->lmm_oi);
-	__swab32s(&lmm->lmm_stripe_size);
-	__swab16s(&lmm->lmm_stripe_count);
-	__swab16s(&lmm->lmm_layout_gen);
-	EXIT;
-}
-EXPORT_SYMBOL(lustre_swab_lov_mds_md);
-
 void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
                                      int stripe_count)
 {
@@ -2374,6 +2360,57 @@ void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
         EXIT;
 }
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
+
+void lustre_swab_lov_user_md(struct lov_user_md *lum)
+{
+	ENTRY;
+
+	CDEBUG(D_IOCTL, "swabbing lov_user_md\n");
+	switch (lum->lmm_magic) {
+	case __swab32(LOV_MAGIC_V1):
+	case LOV_USER_MAGIC_V1:
+		lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lum);
+		break;
+	case __swab32(LOV_MAGIC_V3):
+	case LOV_USER_MAGIC_V3:
+		lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lum);
+		break;
+	case __swab32(LOV_USER_MAGIC_SPECIFIC):
+	case LOV_USER_MAGIC_SPECIFIC:
+	{
+		struct lov_user_md_v3 *v3 = (struct lov_user_md_v3 *)lum;
+		__u16 stripe_count = v3->lmm_stripe_count;
+
+		if (lum->lmm_magic != LOV_USER_MAGIC_SPECIFIC)
+			__swab16s(&stripe_count);
+
+		lustre_swab_lov_user_md_v3(v3);
+		lustre_swab_lov_user_md_objects(v3->lmm_objects, stripe_count);
+		break;
+	}
+	case __swab32(LOV_MAGIC_COMP_V1):
+	case LOV_USER_MAGIC_COMP_V1:
+		lustre_swab_lov_comp_md_v1((struct lov_comp_md_v1 *)lum);
+		break;
+	default:
+		CDEBUG(D_IOCTL, "Invalid LOV magic %08x\n", lum->lmm_magic);
+	}
+}
+EXPORT_SYMBOL(lustre_swab_lov_user_md);
+
+void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
+{
+	ENTRY;
+	CDEBUG(D_IOCTL, "swabbing lov_mds_md\n");
+	__swab32s(&lmm->lmm_magic);
+	__swab32s(&lmm->lmm_pattern);
+	lustre_swab_lmm_oi(&lmm->lmm_oi);
+	__swab32s(&lmm->lmm_stripe_size);
+	__swab16s(&lmm->lmm_stripe_count);
+	__swab16s(&lmm->lmm_layout_gen);
+	EXIT;
+}
+EXPORT_SYMBOL(lustre_swab_lov_mds_md);
 
 void lustre_swab_ldlm_res_id (struct ldlm_res_id *id)
 {

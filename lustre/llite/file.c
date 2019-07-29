@@ -1897,6 +1897,12 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
 	int rc;
 	ENTRY;
 
+	if ((__swab32(lum->lmm_magic) & le32_to_cpu(LOV_MAGIC_MASK)) ==
+	    le32_to_cpu(LOV_MAGIC_MAGIC)) {
+		/* this code will only exist for big-endian systems */
+		lustre_swab_lov_user_md(lum);
+	}
+
 	ll_inode_size_lock(inode);
 	rc = ll_intent_file_open(dentry, lum, lum_size, &oit);
 	if (rc < 0)
@@ -1959,13 +1965,14 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 	    lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_COMP_V1))
 		GOTO(out, rc = -EPROTO);
 
-        /*
-         * This is coming from the MDS, so is probably in
-         * little endian.  We convert it to host endian before
-         * passing it to userspace.
-         */
-        if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
-		int stripe_count;
+	/*
+	 * This is coming from the MDS, so is probably in
+	 * little endian.  We convert it to host endian before
+	 * passing it to userspace.
+	 */
+	if ((lmm->lmm_magic & __swab32(LOV_MAGIC_MAGIC)) ==
+	    __swab32(LOV_MAGIC_MAGIC)) {
+		int stripe_count = 0;
 
 		if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1) ||
 		    lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
@@ -1975,27 +1982,19 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 				stripe_count = 0;
 		}
 
-                /* if function called for directory - we should
-                 * avoid swab not existent lsm objects */
-                if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) {
-			lustre_swab_lov_user_md_v1(
-					(struct lov_user_md_v1 *)lmm);
-			if (S_ISREG(body->mbo_mode))
-				lustre_swab_lov_user_md_objects(
-				    ((struct lov_user_md_v1 *)lmm)->lmm_objects,
-				    stripe_count);
-		} else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
-			lustre_swab_lov_user_md_v3(
-					(struct lov_user_md_v3 *)lmm);
-			if (S_ISREG(body->mbo_mode))
-				lustre_swab_lov_user_md_objects(
-				    ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-				    stripe_count);
-		} else if (lmm->lmm_magic ==
-			   cpu_to_le32(LOV_MAGIC_COMP_V1)) {
-			lustre_swab_lov_comp_md_v1(
-					(struct lov_comp_md_v1 *)lmm);
-		}
+		lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+
+		/* if function called for directory - we should
+		 * avoid swab not existent lsm objects */
+		if (lmm->lmm_magic == LOV_MAGIC_V1 && S_ISREG(body->mbo_mode))
+			lustre_swab_lov_user_md_objects(
+				((struct lov_user_md_v1 *)lmm)->lmm_objects,
+				stripe_count);
+		else if (lmm->lmm_magic == LOV_MAGIC_V3 &&
+			 S_ISREG(body->mbo_mode))
+			lustre_swab_lov_user_md_objects(
+				((struct lov_user_md_v3 *)lmm)->lmm_objects,
+				stripe_count);
 	}
 
 out:
@@ -2082,7 +2081,7 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 	cl_lov_delay_create_clear(&file->f_flags);
 
 out:
-	OBD_FREE(klum, lum_size);
+	OBD_FREE_LARGE(klum, lum_size);
 	RETURN(rc);
 }
 

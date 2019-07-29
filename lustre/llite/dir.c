@@ -538,84 +538,67 @@ out_op_data:
 int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                      int set_default)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct md_op_data *op_data;
-        struct ptlrpc_request *req = NULL;
-        int rc = 0;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct md_op_data *op_data;
+	struct ptlrpc_request *req = NULL;
+	int rc = 0;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
-        struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
-        struct obd_device *mgc = lsi->lsi_mgc;
+	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
+	struct obd_device *mgc = lsi->lsi_mgc;
 #endif
-        int lum_size;
+	int lum_size;
 	ENTRY;
 
-        if (lump != NULL) {
-                /*
-                 * This is coming from userspace, so should be in
-                 * local endian.  But the MDS would like it in little
-                 * endian, so we swab it before we send it.
-                 */
-                switch (lump->lmm_magic) {
-                case LOV_USER_MAGIC_V1: {
-                        if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V1))
-                                lustre_swab_lov_user_md_v1(lump);
-                        lum_size = sizeof(struct lov_user_md_v1);
-                        break;
-                }
-                case LOV_USER_MAGIC_V3: {
-                        if (lump->lmm_magic != cpu_to_le32(LOV_USER_MAGIC_V3))
-                                lustre_swab_lov_user_md_v3(
-                                        (struct lov_user_md_v3 *)lump);
-                        lum_size = sizeof(struct lov_user_md_v3);
-                        break;
-                }
-		case LOV_USER_MAGIC_COMP_V1: {
-			if (lump->lmm_magic !=
-			    cpu_to_le32(LOV_USER_MAGIC_COMP_V1))
-				lustre_swab_lov_comp_md_v1(
-					(struct lov_comp_md_v1 *)lump);
-			lum_size = le32_to_cpu(
-				((struct lov_comp_md_v1 *)lump)->lcm_size);
+	if (lump != NULL) {
+		switch (lump->lmm_magic) {
+		case LOV_USER_MAGIC_V1:
+			lum_size = sizeof(struct lov_user_md_v1);
 			break;
-		}
-		case LMV_USER_MAGIC: {
+		case LOV_USER_MAGIC_V3:
+			lum_size = sizeof(struct lov_user_md_v3);
+			break;
+		case LOV_USER_MAGIC_COMP_V1:
+			lum_size = ((struct lov_comp_md_v1 *)lump)->lcm_size;
+			break;
+		case LMV_USER_MAGIC:
 			if (lump->lmm_magic != cpu_to_le32(LMV_USER_MAGIC))
 				lustre_swab_lmv_user_md(
 					(struct lmv_user_md *)lump);
 			lum_size = sizeof(struct lmv_user_md);
 			break;
-		}
 		case LOV_USER_MAGIC_SPECIFIC: {
 			struct lov_user_md_v3 *v3 =
-					(struct lov_user_md_v3 *)lump;
+				(struct lov_user_md_v3 *)lump;
 			if (v3->lmm_stripe_count > LOV_MAX_STRIPE_COUNT)
 				RETURN(-EINVAL);
-			if (lump->lmm_magic !=
-			    cpu_to_le32(LOV_USER_MAGIC_SPECIFIC)) {
-				lustre_swab_lov_user_md_v3(v3);
-				lustre_swab_lov_user_md_objects(v3->lmm_objects,
-						v3->lmm_stripe_count);
-			}
 			lum_size = lov_user_md_size(v3->lmm_stripe_count,
 						    LOV_USER_MAGIC_SPECIFIC);
 			break;
 		}
-		default: {
+		default:
 			CDEBUG(D_IOCTL, "bad userland LOV MAGIC:"
 					" %#08x != %#08x nor %#08x\n",
 					lump->lmm_magic, LOV_USER_MAGIC_V1,
 					LOV_USER_MAGIC_V3);
 			RETURN(-EINVAL);
 		}
-                }
-        } else {
-                lum_size = sizeof(struct lov_user_md_v1);
-        }
 
-        op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
-                                     LUSTRE_OPC_ANY, NULL);
-        if (IS_ERR(op_data))
-                RETURN(PTR_ERR(op_data));
+		/*
+		 * This is coming from userspace, so should be in
+		 * local endian.  But the MDS would like it in little
+		 * endian, so we swab it before we send it.
+		 */
+		if ((__swab32(lump->lmm_magic) & le32_to_cpu(LOV_MAGIC_MASK)) ==
+		    le32_to_cpu(LOV_MAGIC_MAGIC))
+			lustre_swab_lov_user_md(lump);
+	} else {
+		lum_size = sizeof(struct lov_user_md_v1);
+	}
+
+	op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
 
 	/* swabbing is done in lov_setstripe() on server side */
 	rc = md_setattr(sbi->ll_md_exp, op_data, lump, lum_size, &req);
@@ -738,17 +721,11 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	/* We don't swab objects for directories */
 	switch (le32_to_cpu(lmm->lmm_magic)) {
 	case LOV_MAGIC_V1:
-		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
-			lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
-		break;
 	case LOV_MAGIC_V3:
-		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
-			lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lmm);
-		break;
 	case LOV_MAGIC_COMP_V1:
+	case LOV_USER_MAGIC_SPECIFIC:
 		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
-			lustre_swab_lov_comp_md_v1(
-					(struct lov_comp_md_v1 *)lmm);
+			lustre_swab_lov_user_md((struct lov_user_md *)lmm);
 		break;
 	case LMV_MAGIC_V1:
 		if (LMV_MAGIC != cpu_to_le32(LMV_MAGIC))
@@ -757,16 +734,6 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	case LMV_USER_MAGIC:
 		if (LMV_USER_MAGIC != cpu_to_le32(LMV_USER_MAGIC))
 			lustre_swab_lmv_user_md((struct lmv_user_md *)lmm);
-		break;
-	case LOV_USER_MAGIC_SPECIFIC: {
-		struct lov_user_md_v3 *v3 = (struct lov_user_md_v3 *)lmm;
-
-		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
-			lustre_swab_lov_user_md_v3(v3);
-			lustre_swab_lov_user_md_objects(v3->lmm_objects,
-							v3->lmm_stripe_count);
-			}
-		}
 		break;
 	default:
 		CERROR("unknown magic: %lX\n", (unsigned long)lmm->lmm_magic);
