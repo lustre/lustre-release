@@ -1308,14 +1308,6 @@ struct readpage_param {
 	struct md_callback	*rp_cb;
 };
 
-#ifndef HAVE_DELETE_FROM_PAGE_CACHE
-static inline void delete_from_page_cache(struct page *page)
-{
-	remove_from_page_cache(page);
-	put_page(page);
-}
-#endif
-
 /**
  * Read pages from server.
  *

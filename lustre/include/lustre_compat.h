@@ -45,7 +45,6 @@
 #include <linux/slab.h>
 
 #include <libcfs/linux/linux-fs.h>
-#include <lustre_patchless_compat.h>
 #include <obd_support.h>
 
 #define current_ngroups current_cred()->group_info->ngroups
@@ -725,6 +724,16 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 #define ll_pagevec_init(pvec, n) pagevec_init(pvec)
 #else
 #define ll_pagevec_init(pvec, n) pagevec_init(pvec, n)
+#endif
+
+#ifdef HAVE_D_COUNT
+#  define ll_d_count(d)		d_count(d)
+#else
+#  define ll_d_count(d)		((d)->d_count)
+#endif /* HAVE_D_COUNT */
+
+#ifndef HAVE_IN_COMPAT_SYSCALL
+#define in_compat_syscall	is_compat_task
 #endif
 
 #ifdef HAVE_I_PAGES

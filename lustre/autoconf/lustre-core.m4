@@ -182,25 +182,6 @@ Lustre quota requires that CONFIG_QUOTA is enabled in your kernel.
 ]) # LC_QUOTA_CONFIG
 
 #
-# LC_EXPORT_TRUNCATE_COMPLETE_PAGE
-#
-# truncate_complete_page() has never been exported from an upstream kernel
-# remove_from_page_cache() was exported between 2.6.35 and 2.6.38
-# delete_from_page_cache() is exported from 2.6.39
-#
-AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE_PAGE], [
-LB_CHECK_EXPORT([truncate_complete_page], [mm/truncate.c],
-	[AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
-		[kernel export truncate_complete_page])])
-LB_CHECK_EXPORT([remove_from_page_cache], [mm/filemap.c],
-	[AC_DEFINE(HAVE_REMOVE_FROM_PAGE_CACHE, 1,
-		[kernel export remove_from_page_cache])])
-LB_CHECK_EXPORT([delete_from_page_cache], [mm/filemap.c],
-	[AC_DEFINE(HAVE_DELETE_FROM_PAGE_CACHE, 1,
-		[kernel export delete_from_page_cache])])
-]) # LC_EXPORT_TRUNCATE_COMPLETE_PAGE
-
-#
 # LC_CONFIG_GSS_KEYRING
 #
 # default 'auto', tests for dependencies, if found, enables;
@@ -1786,23 +1767,6 @@ bdi_cap_map_copy, [
 ]) # LC_HAVE_BDI_CAP_MAP_COPY
 
 #
-# LC_CANCEL_DIRTY_PAGE
-#
-# 4.0.0 kernel removed cancel_dirty_page
-#
-AC_DEFUN([LC_CANCEL_DIRTY_PAGE], [
-LB_CHECK_COMPILE([if cancel_dirty_page still exist],
-cancel_dirty_page, [
-	#include <linux/mm.h>
-],[
-	cancel_dirty_page(NULL, PAGE_SIZE);
-],[
-	AC_DEFINE(HAVE_CANCEL_DIRTY_PAGE, 1,
-		[cancel_dirty_page is still available])
-])
-]) # LC_CANCEL_DIRTY_PAGE
-
-#
 # LC_IOV_ITER_RW
 #
 # 4.1 kernel has iov_iter_rw
@@ -1853,23 +1817,6 @@ have___bi_cnt, [
 		[struct bio has __bi_cnt])
 ])
 ]) # LC_HAVE___BI_CNT
-
-#
-# LC_NEW_CANCEL_DIRTY_PAGE
-#
-# 4.2 kernel has new cancel_dirty_page
-#
-AC_DEFUN([LC_NEW_CANCEL_DIRTY_PAGE], [
-LB_CHECK_COMPILE([if cancel_dirty_page with one argument exist],
-new_cancel_dirty_page, [
-	#include <linux/mm.h>
-],[
-	cancel_dirty_page(NULL);
-],[
-	AC_DEFINE(HAVE_NEW_CANCEL_DIRTY_PAGE, 1,
-		[cancel_dirty_page with one arguement is available])
-])
-]) # LC_NEW_CANCEL_DIRTY_PAGE
 
 #
 # LC_SYMLINK_OPS_USE_NAMEIDATA
@@ -2878,9 +2825,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_OPENSSL_SSK
 	LC_OPENSSL_GETSEPOL
 
-	# 2.6.35, 3.0.0
-	LC_EXPORT_TRUNCATE_COMPLETE_PAGE
-
 	# 2.6.39
 	LC_HAVE_FHANDLE_SYSCALLS
 	LC_HAVE_FSTYPE_MOUNT
@@ -2998,16 +2942,12 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_BACKING_DEV_INFO_REMOVAL
 	LC_HAVE_BDI_CAP_MAP_COPY
 
-	# 4.0.0
-	LC_CANCEL_DIRTY_PAGE
-
 	# 4.1.0
 	LC_IOV_ITER_RW
 	LC_HAVE_SYNC_READ_WRITE
 	LC_HAVE___BI_CNT
 
 	# 4.2
-	LC_NEW_CANCEL_DIRTY_PAGE
 	LC_BIO_ENDIO_USES_ONE_ARG
 	LC_SYMLINK_OPS_USE_NAMEIDATA
 
@@ -3096,7 +3036,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	#
 	AS_IF([test "x$enable_server" != xno], [
 		LC_STACK_SIZE
-		LC_QUOTA64
 		LC_QUOTA_CONFIG
 	])
 ]) # LC_PROG_LINUX
