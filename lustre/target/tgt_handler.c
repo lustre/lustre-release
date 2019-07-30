@@ -2388,7 +2388,7 @@ out_lock:
 EXPORT_SYMBOL(tgt_brw_read);
 
 static int tgt_shortio2pages(struct niobuf_local *local, int npages,
-			     unsigned char *buf, int size)
+			     unsigned char *buf, unsigned int size)
 {
 	int	i, off, len;
 	char	*ptr;
@@ -2586,7 +2586,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	if (rc < 0)
 		GOTO(out_lock, rc);
 	if (body->oa.o_flags & OBD_FL_SHORT_IO) {
-		int short_io_size;
+		unsigned int short_io_size;
 		unsigned char *short_io_buf;
 
 		short_io_size = req_capsule_get_size(&req->rq_pill,
