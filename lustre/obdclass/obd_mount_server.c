@@ -48,6 +48,7 @@
 #endif
 #include <linux/statfs.h>
 #include <linux/version.h>
+#include <linux/delay.h>
 
 #include <llog_swab.h>
 #include <lustre_disk.h>
@@ -1068,6 +1069,7 @@ static int server_stop_servers(int lsiflags)
 	struct obd_device *obd = NULL;
 	struct obd_type *type = NULL;
 	int rc = 0;
+	bool type_last;
 	ENTRY;
 
 	mutex_lock(&server_start_lock);
@@ -1076,18 +1078,24 @@ static int server_stop_servers(int lsiflags)
 	/* if this was an MDT, and there are no more MDT's, clean up the MDS */
 	if (lsiflags & LDD_F_SV_TYPE_MDT) {
 		obd = class_name2obd(LUSTRE_MDS_OBDNAME);
-		if (obd != NULL)
-			type = class_search_type(LUSTRE_MDT_NAME);
-	}
-
+		type = class_search_type(LUSTRE_MDT_NAME);
+	} else if (lsiflags & LDD_F_SV_TYPE_OST) {
 	/* if this was an OST, and there are no more OST's, clean up the OSS */
-	if (lsiflags & LDD_F_SV_TYPE_OST) {
 		obd = class_name2obd(LUSTRE_OSS_OBDNAME);
-		if (obd != NULL)
-			type = class_search_type(LUSTRE_OST_NAME);
+		type = class_search_type(LUSTRE_OST_NAME);
 	}
 
-	if (obd != NULL && (type == NULL || type->typ_refcnt == 0)) {
+	/* server_stop_servers is a pair of server_start_targets
+	 * Here we put type which was taken at server_start_targets.
+	 * If type is NULL then there is a wrong logic around type or
+	 * type reference. */
+	LASSERTF(type, "Server flags %d, obd %s\n", lsiflags,
+		 obd ? obd->obd_name : "NULL");
+
+	type_last = (type->typ_refcnt == 1);
+
+	class_put_type(type);
+	if (obd != NULL && type_last) {
 		obd->obd_force = 1;
 		/* obd_fail doesn't mean much on a server obd */
 		rc = class_manual_cleanup(obd);
@@ -1311,46 +1319,48 @@ static int server_start_targets(struct super_block *sb)
 	struct config_llog_instance cfg;
 	struct lu_env mgc_env;
 	struct lu_device *dev;
+	char *name_service, *obd_name_service = NULL;
+	struct obd_type *type = NULL;
 	int rc;
 	ENTRY;
 
 	CDEBUG(D_MOUNT, "starting target %s\n", lsi->lsi_svname);
 
+	LASSERTF(IS_MDT(lsi) || IS_OST(lsi), "designed for MDT or OST only\n");
+
 	if (IS_MDT(lsi)) {
-		/* make sure the MDS is started */
-		mutex_lock(&server_start_lock);
-		obd = class_name2obd(LUSTRE_MDS_OBDNAME);
-		if (!obd) {
-			rc = lustre_start_simple(LUSTRE_MDS_OBDNAME,
-						 LUSTRE_MDS_NAME,
-						 LUSTRE_MDS_OBDNAME"_uuid",
-						 NULL, NULL, NULL, NULL);
-			if (rc) {
-				mutex_unlock(&server_start_lock);
-				CERROR("failed to start MDS: %d\n", rc);
-				RETURN(rc);
-			}
-		}
-		mutex_unlock(&server_start_lock);
+		obd_name_service = LUSTRE_MDS_OBDNAME;
+		name_service = LUSTRE_MDS_NAME;
+	} else {
+		obd_name_service = LUSTRE_OSS_OBDNAME;
+		name_service = LUSTRE_OSS_NAME;
 	}
 
-	/* If we're an OST, make sure the global OSS is running */
-	if (IS_OST(lsi)) {
-		/* make sure OSS is started */
-		mutex_lock(&server_start_lock);
-		obd = class_name2obd(LUSTRE_OSS_OBDNAME);
-		if (!obd) {
-			rc = lustre_start_simple(LUSTRE_OSS_OBDNAME,
-						 LUSTRE_OSS_NAME,
-						 LUSTRE_OSS_OBDNAME"_uuid",
-						 NULL, NULL, NULL, NULL);
-			if (rc) {
-				mutex_unlock(&server_start_lock);
-				CERROR("failed to start OSS: %d\n", rc);
-				RETURN(rc);
-			}
+	/* make sure MDS/OSS is started */
+	mutex_lock(&server_start_lock);
+	obd = class_name2obd(obd_name_service);
+	if (!obd) {
+		rc = lustre_start_simple(obd_name_service, name_service,
+					 (IS_MDT(lsi) ?
+					  LUSTRE_MDS_OBDNAME"_uuid" :
+					  LUSTRE_OSS_OBDNAME"_uuid"),
+					 NULL, NULL, NULL, NULL);
+		if (rc) {
+			mutex_unlock(&server_start_lock);
+			CERROR("failed to start %s: %d\n",
+			       obd_name_service, rc);
+			RETURN(rc);
 		}
-		mutex_unlock(&server_start_lock);
+	}
+	/* hold a type reference and put it at server_stop_servers */
+	type = class_get_type(IS_MDT(lsi) ?
+			      LUSTRE_MDT_NAME : LUSTRE_OST_NAME);
+	lsi->lsi_server_started = 1;
+	mutex_unlock(&server_start_lock);
+	if (OBD_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE) &&
+	    IS_MDT(lsi)) {
+		OBD_RACE(OBD_FAIL_OBD_STOP_MDS_RACE);
+		msleep(2 * MSEC_PER_SEC);
 	}
 
 	rc = lu_env_init(&mgc_env, LCT_MG_THREAD);
@@ -1444,8 +1454,9 @@ out_mgc:
 out_env:
 	lu_env_fini(&mgc_env);
 out_stop_service:
-	if (rc != 0)
-		server_stop_servers(lsi->lsi_flags);
+	/* in case of error upper function call
+	 * server_put_super->server_stop_servers()
+	 */
 
 	RETURN(rc);
 }
@@ -1531,6 +1542,7 @@ static void server_put_super(struct super_block *sb)
 	char *tmpname, *extraname = NULL;
 	int tmpname_sz;
 	int lsiflags = lsi->lsi_flags;
+	bool stop_servers = lsi->lsi_server_started;
 	ENTRY;
 
 	LASSERT(IS_SERVER(lsi));
@@ -1583,6 +1595,13 @@ static void server_put_super(struct super_block *sb)
 			 * to .put_super, so we better make sure we clean up! */
 			obd->obd_force = 1;
 			class_manual_cleanup(obd);
+			if (OBD_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE)) {
+				int idx;
+				server_name2index(lsi->lsi_svname, &idx, NULL);
+				/* sleeping for MDT0001 */
+				if (idx == 1)
+					OBD_RACE(OBD_FAIL_OBD_STOP_MDS_RACE);
+			}
 		} else {
 			CERROR("no obd %s\n", lsi->lsi_svname);
 			server_deregister_mount(lsi->lsi_svname);
@@ -1613,7 +1632,8 @@ static void server_put_super(struct super_block *sb)
 	/* Stop the servers (MDS, OSS) if no longer needed.  We must wait
 	   until the target is really gone so that our type refcount check
 	   is right. */
-	server_stop_servers(lsiflags);
+	if (stop_servers)
+		server_stop_servers(lsiflags);
 
 	/* In case of startup or cleanup err, stop related obds */
 	if (extraname) {

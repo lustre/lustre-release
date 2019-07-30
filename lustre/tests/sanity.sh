@@ -18493,6 +18493,33 @@ test_277() {
 }
 run_test 277 "Direct IO shall drop page cache"
 
+test_278() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[[ "$(facet_host mds1)" != "$(facet_host mds2)" ]] &&
+		skip "needs the same host for mdt1 mdt2" && return
+
+	local pid1
+	local pid2
+
+#define OBD_FAIL_OBD_STOP_MDS_RACE     0x60b
+	do_facet mds2 $LCTL set_param fail_loc=0x8000060c
+	stop mds2 &
+	pid2=$!
+
+	stop mds1
+
+	echo "Starting MDTs"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+	wait $pid2
+#For the error assertion will happen. lu_env_get_key(..., &mdt_thread_key)
+#will return NULL
+	do_facet mds2 $LCTL set_param fail_loc=0
+
+	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS
+}
+run_test 278 "Race starting MDS between MDTs stop/start"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK

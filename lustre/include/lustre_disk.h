@@ -133,7 +133,8 @@ struct lustre_sb_info {
 						  own backing_dev_info */
 	struct list_head	  lsi_lwp_list;
 	spinlock_t		  lsi_lwp_lock;
-	unsigned long		  lsi_lwp_started:1;
+	unsigned long		  lsi_lwp_started:1,
+				  lsi_server_started:1;
 };
 
 #define LSI_UMOUNT_FAILOVER              0x00200000
