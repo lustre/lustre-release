@@ -2060,7 +2060,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen > 0) {
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
 
-		if (!lmv_magic_supported(le32_to_cpu(lum->lum_magic)) &&
+		if (!lmv_user_magic_supported(le32_to_cpu(lum->lum_magic)) &&
 		    le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC_V0) {
 			rc = -EINVAL;
 			CERROR("%s: invalid lmv_user_md: magic = %x, "
@@ -3999,6 +3999,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 			memset(lmv, 0, sizeof(*lmv));
 			lmv->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
 			lmv->lmv_stripe_count = cpu_to_le32(1);
+			lmv->lmv_hash_type = cpu_to_le32(LMV_HASH_TYPE_DEFAULT);
 			fid_le_to_cpu(&lmv->lmv_stripe_fids[0],
 				      mdd_object_fid(sobj));
 			sbuf->lb_buf = lmv;
@@ -4521,7 +4522,7 @@ static int mdd_migrate(const struct lu_env *env, struct md_object *md_pobj,
 				    lum_stripe_count ||
 				    lmv->lmv_master_mdt_index !=
 				    lmu->lum_stripe_offset ||
-				    (lmv_hash_type != 0 &&
+				    (lmu->lum_hash_type &&
 				     lmv_hash_type != lmu->lum_hash_type)) {
 					CERROR("%s: \'"DNAME"\' migration was "
 						"interrupted, run \'lfs migrate "

@@ -5212,6 +5212,9 @@ init_param_vars () {
 			# $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
 		fi
 	fi
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param lod.*.mdt_hash=crush"
 	return 0
 }
 
@@ -8711,16 +8714,19 @@ generate_logname() {
 test_mkdir() {
 	local path
 	local p_option
+	local hash_type
+	local hash_name=("all_char" "fnv_1a_64" "crush")
 	local dirstripe_count=${DIRSTRIPE_COUNT:-"2"}
 	local dirstripe_index=${DIRSTRIPE_INDEX:-$((base % $MDSCOUNT))}
 	local OPTIND=1
 
-	while getopts "c:i:p" opt; do
+	while getopts "c:H:i:p" opt; do
 		case $opt in
 			c) dirstripe_count=$OPTARG;;
+			H) hash_type=$OPTARG;;
 			i) dirstripe_index=$OPTARG;;
 			p) p_option="-p";;
-			\?) error "only support -i -c -p";;
+			\?) error "only support -c -H -i -p";;
 		esac
 	done
 
@@ -8749,6 +8755,10 @@ test_mkdir() {
 			mdt_index=$dirstripe_index
 		fi
 
+		# randomly choose hash type
+		[ -z "$hash_type" ] &&
+			hash_type=${hash_name[$((RANDOM % ${#hash_name[@]}))]}
+
 		if (($MDS1_VERSION >= $(version_code 2.8.0))); then
 			if [ $dirstripe_count -eq -1 ]; then
 				dirstripe_count=$((RANDOM % MDSCOUNT + 1))
@@ -8757,9 +8767,9 @@ test_mkdir() {
 			dirstripe_count=1
 		fi
 
-		echo "striped dir -i$mdt_index -c$dirstripe_count $path"
-		$LFS mkdir -i$mdt_index -c$dirstripe_count $path ||
-			error "mkdir -i $mdt_index -c$dirstripe_count $path failed"
+		echo "striped dir -i$mdt_index -c$dirstripe_count -H $hash_type $path"
+		$LFS mkdir -i$mdt_index -c$dirstripe_count -H $hash_type $path ||
+			error "mkdir -i $mdt_index -c$dirstripe_count -H $hash_type $path failed"
 	fi
 }
 

@@ -282,6 +282,8 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 	/* Default threshold for rr (roughly 17%) */
 	ltd->ltd_qos.lq_threshold_rr = 43;
 	ltd->ltd_is_mdt = is_mdt;
+	if (is_mdt)
+		ltd->ltd_lmv_desc.ld_pattern = LMV_HASH_TYPE_DEFAULT;
 
 	lu_qos_rr_init(&ltd->ltd_qos.lq_rr);
 

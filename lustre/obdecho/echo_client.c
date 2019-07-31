@@ -1684,7 +1684,7 @@ echo_md_dir_stripe_choose(const struct lu_env *env, struct echo_device *ed,
 	}
 
 	lmv = (struct lmv_mds_md_v1 *)ma->ma_lmm;
-	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1) {
+	if (!lmv_is_sane(lmv)) {
 		rc = -EINVAL;
 		CERROR("Invalid mds md magic %x "DFID": rc = %d\n",
 		       le32_to_cpu(lmv->lmv_magic), PFID(lu_object_fid(obj)),

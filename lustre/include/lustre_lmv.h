@@ -79,6 +79,9 @@ static inline bool lmv_dir_bad_hash(const struct lmv_stripe_md *lsm)
 	    lsm->lsm_md_stripe_count - lsm->lsm_md_migrate_offset <= 1)
 		return false;
 
+	if (lsm->lsm_md_hash_type & LMV_HASH_FLAG_BAD_TYPE)
+		return true;
+
 	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type);
 }
 
@@ -193,40 +196,140 @@ lmv_hash_fnv1a(unsigned int count, const char *name, int namelen)
 	return do_div(hash, count);
 }
 
-static inline int lmv_name_to_stripe_index(__u32 lmv_hash_type,
+/*
+ * Robert Jenkins' function for mixing 32-bit values
+ * http://burtleburtle.net/bob/hash/evahash.html
+ * a, b = random bits, c = input and output
+ *
+ * Mixing inputs to generate an evenly distributed hash.
+ */
+#define crush_hashmix(a, b, c)				\
+do {							\
+	a = a - b;  a = a - c;  a = a ^ (c >> 13);	\
+	b = b - c;  b = b - a;  b = b ^ (a << 8);	\
+	c = c - a;  c = c - b;  c = c ^ (b >> 13);	\
+	a = a - b;  a = a - c;  a = a ^ (c >> 12);	\
+	b = b - c;  b = b - a;  b = b ^ (a << 16);	\
+	c = c - a;  c = c - b;  c = c ^ (b >> 5);	\
+	a = a - b;  a = a - c;  a = a ^ (c >> 3);	\
+	b = b - c;  b = b - a;  b = b ^ (a << 10);	\
+	c = c - a;  c = c - b;  c = c ^ (b >> 15);	\
+} while (0)
+
+#define crush_hash_seed 1315423911
+
+static inline __u32 crush_hash(__u32 a, __u32 b)
+{
+	__u32 hash = crush_hash_seed ^ a ^ b;
+	__u32 x = 231232;
+	__u32 y = 1232;
+
+	crush_hashmix(a, b, hash);
+	crush_hashmix(x, a, hash);
+	crush_hashmix(b, y, hash);
+
+	return hash;
+}
+
+/* refer to https://github.com/ceph/ceph/blob/master/src/crush/hash.c and
+ * https://www.ssrc.ucsc.edu/Papers/weil-sc06.pdf for details of CRUSH
+ * algorithm.
+ */
+static inline unsigned int
+lmv_hash_crush(unsigned int count, const char *name, int namelen)
+{
+	unsigned long long straw;
+	unsigned long long highest_straw = 0;
+	unsigned int pg_id;
+	unsigned int idx = 0;
+	int i;
+
+	/* put temp and backup file on the same MDT where target is located.
+	 * temporary file naming rule:
+	 * 1. rsync: .<target>.XXXXXX
+	 * 2. dstripe: <target>.XXXXXXXX
+	 */
+	if (lu_name_is_temp_file(name, namelen, true, 6)) {
+		name++;
+		namelen -= 8;
+	} else if (lu_name_is_temp_file(name, namelen, false, 8)) {
+		namelen -= 9;
+	} else if (lu_name_is_backup_file(name, namelen, &i)) {
+		LASSERT(i < namelen);
+		namelen -= i;
+	}
+
+	pg_id = lmv_hash_fnv1a(LMV_CRUSH_PG_COUNT, name, namelen);
+
+	/* distribute PG among all stripes pseudo-randomly, so they are almost
+	 * evenly distributed, and when stripe count changes, only (delta /
+	 * total) sub files need to be moved, herein 'delta' is added or removed
+	 * stripe count, 'total' is total stripe count before change for
+	 * removal, or count after change for addition.
+	 */
+	for (i = 0; i < count; i++) {
+		straw = crush_hash(pg_id, i);
+		if (straw > highest_straw) {
+			highest_straw = straw;
+			idx = i;
+		}
+	}
+	LASSERT(idx < count);
+
+	return idx;
+}
+
+static inline int lmv_name_to_stripe_index(__u32 hash_type,
 					   unsigned int stripe_count,
 					   const char *name, int namelen)
 {
-	int idx;
+	unsigned int idx;
 
 	LASSERT(namelen > 0);
+	LASSERT(stripe_count > 0);
 
-	if (stripe_count <= 1)
+	if (stripe_count == 1)
 		return 0;
 
-	switch (lmv_hash_type & LMV_HASH_TYPE_MASK) {
+	switch (hash_type & LMV_HASH_TYPE_MASK) {
 	case LMV_HASH_TYPE_ALL_CHARS:
 		idx = lmv_hash_all_chars(stripe_count, name, namelen);
 		break;
 	case LMV_HASH_TYPE_FNV_1A_64:
 		idx = lmv_hash_fnv1a(stripe_count, name, namelen);
 		break;
-	default:
-		idx = -EBADFD;
+	case LMV_HASH_TYPE_CRUSH:
+		idx = lmv_hash_crush(stripe_count, name, namelen);
 		break;
+	default:
+		return -EBADFD;
 	}
 
 	CDEBUG(D_INFO, "name %.*s hash_type %#x idx %d/%u\n", namelen, name,
-	       lmv_hash_type, idx, stripe_count);
+	       hash_type, idx, stripe_count);
 
 	return idx;
 }
 
-static inline bool lmv_magic_supported(__u32 lum_magic)
+static inline bool lmv_user_magic_supported(__u32 lum_magic)
 {
 	return lum_magic == LMV_USER_MAGIC ||
 	       lum_magic == LMV_USER_MAGIC_SPECIFIC ||
 	       lum_magic == LMV_MAGIC_FOREIGN;
+}
+
+static inline bool lmv_is_sane(const struct lmv_mds_md_v1 *lmv)
+{
+	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
+		return false;
+
+	if (le32_to_cpu(lmv->lmv_stripe_count) == 0)
+		return false;
+
+	if (!lmv_is_known_hash_type(lmv->lmv_hash_type))
+		return false;
+
+	return true;
 }
 
 #endif

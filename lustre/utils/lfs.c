@@ -276,9 +276,9 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"\tstripe_count: stripe count of the striped directory\n"	\
 	"\tmdt_index: MDT index of first stripe\n"			\
 	"\tmdt_hash:  hash type of the striped directory. mdt types:\n"	\
-	"	fnv_1a_64 FNV-1a hash algorithm (default)\n"		\
+	"	crush     CRUSH hash algorithm (default)\n" \
+	"	fnv_1a_64 FNV-1a hash algorithm\n"		\
 	"	all_char  sum of characters % MDT_COUNT (not recommended)\n" \
-	"	space     create subdirectories with balanced space usage\n" \
 	"\tdefault_stripe: set default dirstripe of the directory\n"	\
 	"\tmode: the file access permission of the directory (octal)\n" \
 	"To create dir with a foreign (free format) layout :\n" \
@@ -628,7 +628,8 @@ command_t cmdlist[] = {
 	 "			it's the MDT index of first stripe\n"
 	 "\tmdt_count:	number of MDTs to stripe a directory over\n"
 	 "\tmdt_hash:	hash type of the striped directory. mdt types:\n"
-	 "			fnv_1a_64 FNV-1a hash algorithm (default)\n"
+	 "			crush     CRUSH hash algorithm (default)\n"
+	 "			fnv_1a_64 FNV-1a hash algorithm\n"
 	 "			all_char  sum of characters % MDT_COUNT\n"
 	 "\n"
 	 "migrate file objects from one OST "
@@ -3784,7 +3785,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
 			lmu->lum_hash_type = lsa.lsa_pattern;
 		else
-			lmu->lum_hash_type = LMV_HASH_TYPE_DEFAULT;
+			lmu->lum_hash_type = LMV_HASH_TYPE_UNKNOWN;
 		if (lsa.lsa_pool_name) {
 			strncpy(lmu->lum_pool_name, lsa.lsa_pool_name,
 				sizeof(lmu->lum_pool_name) - 1);
@@ -6022,7 +6023,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
 		param->lsp_stripe_pattern = lsa.lsa_pattern;
 	else
-		param->lsp_stripe_pattern = LMV_HASH_TYPE_DEFAULT;
+		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
 	param->lsp_pool = lsa.lsa_pool_name;
 	param->lsp_is_specific = false;
 	if (lsa.lsa_nr_tgts > 1) {
@@ -6146,6 +6147,7 @@ static int lfs_mv(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+	lmu.lum_hash_type = LMV_HASH_TYPE_UNKNOWN;
 
 	/* initialize migrate mdt parameters */
 	param.fp_lmv_md = &lmu;
@@ -6153,7 +6155,7 @@ static int lfs_mv(int argc, char **argv)
 	rc = llapi_migrate_mdt(argv[optind], &param);
 	if (rc != 0)
 		fprintf(stderr, "%s mv: cannot migrate '%s' to MDT%04x: %s\n",
-			progname, argv[optind], param.fp_mdt_index,
+			progname, argv[optind], lmu.lum_stripe_offset,
 			strerror(-rc));
 	return rc;
 }

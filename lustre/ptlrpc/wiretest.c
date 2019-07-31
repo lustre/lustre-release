@@ -1901,6 +1901,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LMV_HASH_FLAG_LOST_LMV != 0x10000000);
 	BUILD_BUG_ON(LMV_HASH_FLAG_BAD_TYPE != 0x20000000);
 	BUILD_BUG_ON(LMV_HASH_FLAG_MIGRATION != 0x80000000);
+	BUILD_BUG_ON(LMV_CRUSH_PG_COUNT != 4096);
 
 	/* Checks for struct obd_statfs */
 	LASSERTF((int)sizeof(struct obd_statfs) == 144, "found %lld\n",

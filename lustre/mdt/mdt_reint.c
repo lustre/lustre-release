@@ -391,6 +391,11 @@ static int mdt_create(struct mdt_thread_info *info)
 			RETURN(-EPERM);
 		}
 
+		if ((!(exp_connect_flags2(exp) & OBD_CONNECT2_CRUSH)) &&
+		    (le32_to_cpu(lum->lum_hash_type) & LMV_HASH_TYPE_MASK) ==
+		    LMV_HASH_TYPE_CRUSH)
+			RETURN(-EPROTO);
+
 		if (!md_capable(uc, CFS_CAP_SYS_ADMIN) &&
 		    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
 		    mdt->mdt_enable_remote_dir_gid != -1)
@@ -1662,11 +1667,8 @@ static int mdt_lock_remote_slaves(struct mdt_thread_info *info,
 	LASSERT(ma->ma_valid & MA_LMV);
 	LASSERT(lmv);
 
-	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
+	if (!lmv_is_sane(lmv))
 		RETURN(-EINVAL);
-
-	if (le32_to_cpu(lmv->lmv_stripe_count) < 1)
-		RETURN(0);
 
 	for (i = 0; i < le32_to_cpu(lmv->lmv_stripe_count); i++) {
 		fid_le_to_cpu(fid, &lmv->lmv_stripe_fids[i]);

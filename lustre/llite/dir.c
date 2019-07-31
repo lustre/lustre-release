@@ -464,7 +464,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	int err;
 	ENTRY;
 
-	if (unlikely(!lmv_magic_supported(lump->lum_magic)))
+	if (unlikely(!lmv_user_magic_supported(lump->lum_magic)))
 		RETURN(-EINVAL);
 
 	if (lump->lum_magic != LMV_MAGIC_FOREIGN) {
@@ -489,7 +489,26 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	    !OBD_FAIL_CHECK(OBD_FAIL_LLITE_NO_CHECK_DEAD))
 		RETURN(-ENOENT);
 
-	if (unlikely(!lmv_magic_supported(cpu_to_le32(lump->lum_magic))))
+	if (!(exp_connect_flags2(sbi->ll_md_exp) & OBD_CONNECT2_CRUSH)) {
+		if ((lump->lum_hash_type & LMV_HASH_TYPE_MASK) ==
+		     LMV_HASH_TYPE_CRUSH) {
+			/* if server doesn't support 'crush' hash type,
+			 * switch to fnv_1a_64.
+			 */
+			lump->lum_hash_type &= ~LMV_HASH_TYPE_MASK;
+			lump->lum_hash_type |= LMV_HASH_TYPE_FNV_1A_64;
+		} else if ((lump->lum_hash_type & LMV_HASH_TYPE_MASK) ==
+		     LMV_HASH_TYPE_UNKNOWN) {
+			/* from 2.14 MDT will choose default hash type if client
+			 * doesn't set a valid one, while old server doesn't
+			 * handle it.
+			 */
+			lump->lum_hash_type &= ~LMV_HASH_TYPE_MASK;
+			lump->lum_hash_type |= LMV_HASH_TYPE_DEFAULT;
+		}
+	}
+
+	if (unlikely(!lmv_user_magic_supported(cpu_to_le32(lump->lum_magic))))
 		lustre_swab_lmv_user_md(lump);
 
 	if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
@@ -1473,7 +1492,7 @@ out_free:
 		lum = (struct lmv_user_md *)data->ioc_inlbuf2;
 		lumlen = data->ioc_inllen2;
 
-		if (!lmv_magic_supported(lum->lum_magic)) {
+		if (!lmv_user_magic_supported(lum->lum_magic)) {
 			CERROR("%s: wrong lum magic %x : rc = %d\n", filename,
 			       lum->lum_magic, -EINVAL);
 			GOTO(lmv_out_free, rc = -EINVAL);

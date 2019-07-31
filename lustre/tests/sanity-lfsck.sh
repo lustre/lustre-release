@@ -4772,7 +4772,7 @@ test_31b() {
 
 	#define OBD_FAIL_LFSCK_BAD_NAME_HASH	0x1628
 	$LCTL set_param fail_loc=0x1628 fail_val=1
-	createmany -d $DIR/$tdir/striped_dir/d $MDSCOUNT ||
+	createmany -d $DIR/$tdir/striped_dir/d $((MDSCOUNT * 5)) ||
 		error "(2) Fail to create file under striped directory"
 	$LCTL set_param fail_loc=0 fail_val=0
 
@@ -4785,13 +4785,14 @@ test_31b() {
 	local repaired=$(do_facet mds2 $LCTL get_param -n \
 			 mdd.$(facet_svc mds2).lfsck_namespace |
 			 awk '/^name_hash_repaired/ { print $2 }')
+	echo "repaired $repaired name entries with bad hash"
 	[ $repaired -ge 1 ] ||
 		error "(5) Fail to repair bad name hash: $repaired"
 
 	umount_client $MOUNT || error "(6) umount failed"
 	mount_client $MOUNT || error "(7) mount failed"
 
-	for ((i = 0; i < $MDSCOUNT; i++)); do
+	for ((i = 0; i < $((MDSCOUNT * 5)); i++)); do
 		stat $DIR/$tdir/striped_dir/d$i ||
 			error "(8) Fail to stat d$i after LFSCK"
 		rmdir $DIR/$tdir/striped_dir/d$i ||

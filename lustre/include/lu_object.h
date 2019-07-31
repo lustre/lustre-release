@@ -38,6 +38,7 @@
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lu_ref.h>
 #include <linux/percpu_counter.h>
+#include <linux/ctype.h>
 
 struct seq_file;
 struct proc_dir_entry;
@@ -1313,6 +1314,66 @@ static inline bool name_is_dot_or_dotdot(const char *name, int namelen)
 static inline bool lu_name_is_dot_or_dotdot(const struct lu_name *lname)
 {
 	return name_is_dot_or_dotdot(lname->ln_name, lname->ln_namelen);
+}
+
+static inline bool lu_name_is_temp_file(const char *name, int namelen,
+					bool dot_prefix, int suffixlen)
+{
+	int lower = 0;
+	int upper = 0;
+	int digit = 0;
+	int len = suffixlen;
+
+	if (dot_prefix && name[0] != '.')
+		return false;
+
+	if (namelen < dot_prefix + suffixlen + 2 ||
+	    name[namelen - suffixlen - 1] != '.')
+		return false;
+
+	while (len) {
+		lower += islower(name[namelen - len]);
+		upper += isupper(name[namelen - len]);
+		digit += isdigit(name[namelen - len]);
+		len--;
+	}
+	/* mktemp() filename suffixes will have a mix of upper- and lower-case
+	 * letters and/or numbers, not all numbers, or all upper or lower-case.
+	 * About 0.07% of randomly-generated names will slip through,
+	 * but this avoids 99.93% of cross-MDT renames for those files.
+	 */
+	if (digit >= suffixlen - 2 || upper == suffixlen || lower == suffixlen)
+		return false;
+
+	return true;
+}
+
+static inline bool lu_name_is_backup_file(const char *name, int namelen,
+					  int *suffixlen)
+{
+	if (namelen > 1 &&
+	    name[namelen - 2] != '.' && name[namelen - 1] == '~') {
+		if (suffixlen)
+			*suffixlen = 1;
+		return true;
+	}
+
+	if (namelen > 4 && name[namelen - 4] == '.' &&
+	    (!strncasecmp(name + namelen - 3, "bak", 3) ||
+	     !strncasecmp(name + namelen - 3, "sav", 3))) {
+		if (suffixlen)
+			*suffixlen = 4;
+		return true;
+	}
+
+	if (namelen > 5 && name[namelen - 5] == '.' &&
+	    !strncasecmp(name + namelen - 4, "orig", 4)) {
+		if (suffixlen)
+			*suffixlen = 5;
+		return true;
+	}
+
+	return false;
 }
 
 static inline bool lu_name_is_valid_len(const char *name, size_t name_len)

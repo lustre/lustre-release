@@ -99,6 +99,11 @@ Use
 for the new layout.
 .RS 1.2i
 .TP
+.B crush
+CRUSH hash algorithm.  This is a consistent hash
+algorithm, so minimum sub files need to relocate
+during directory restripe.
+.TP
 .B fnv_1a_64
 Fowler-Noll-Vo (FNV-1a) hash algorithm.  This provides
 reasonably uniform, but not cryptographically strong,

@@ -479,8 +479,11 @@ static int osd_check_lmv(const struct lu_env *env, struct osd_device *osd,
 	if (rc == -ENOENT || rc == -EEXIST || rc == -ENODATA)
 		GOTO(out_nvbuf, rc = 0);
 
-	if (rc || le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
+	if (rc)
 		GOTO(out_nvbuf, rc);
+
+	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
+		GOTO(out_nvbuf, rc = -EINVAL);
 
 	zap_cursor_init_serialized(zc, osd->od_os, oid, 0);
 	rc = -zap_cursor_retrieve(zc, za);

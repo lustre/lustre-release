@@ -431,7 +431,7 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 		GOTO(unlock_obj, rc = -EINVAL);
 	}
 
-	if (lum_stripe_count > 1 &&
+	if (lum_stripe_count > 1 && lmu->lum_hash_type &&
 	    (lmv->lmv_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK)) !=
 	    lmu->lum_hash_type) {
 		CERROR("%s: "DFID" migrate mdt hash mismatch %u != %u\n",

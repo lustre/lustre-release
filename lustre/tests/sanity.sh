@@ -3749,6 +3749,46 @@ test_33g() {
 }
 run_test 33g "nonroot user create already existing root created file"
 
+test_33h() {
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $MDS1_VERSION -lt $(version_code 2.13.50) ] &&
+		skip "Need MDS version at least 2.13.50"
+
+	test_mkdir -c $MDSCOUNT -H crush $DIR/$tdir ||
+		error "mkdir $tdir failed"
+	touch $DIR/$tdir/$tfile || error "touch $tfile failed"
+
+	local index=$($LFS getstripe -m $DIR/$tdir/$tfile)
+	local index2
+
+	for fname in $DIR/$tdir/$tfile.bak \
+		     $DIR/$tdir/$tfile.SAV \
+		     $DIR/$tdir/$tfile.orig \
+		     $DIR/$tdir/$tfile~; do
+		touch $fname  || error "touch $fname failed"
+		index2=$($LFS getstripe -m $fname)
+		[ $index -eq $index2 ] ||
+			error "$fname MDT index mismatch $index != $index2"
+	done
+
+	local failed=0
+	for i in {1..50}; do
+		for fname in $(mktemp -u $DIR/$tdir/.$tfile.XXXXXX) \
+			     $(mktemp $DIR/$tdir/$tfile.XXXXXXXX); do
+			touch $fname  || error "touch $fname failed"
+			index2=$($LFS getstripe -m $fname)
+			if [[ $index != $index2 ]]; then
+				failed=$((failed + 1))
+				echo "$fname MDT index mismatch $index != $index2"
+			fi
+		done
+	done
+	echo "$failed MDT index mismatches"
+	(( failed < 4 )) || error "MDT index mismatch $failed times"
+
+}
+run_test 33h "temp file is located on the same MDT as target"
+
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
@@ -14078,7 +14118,8 @@ test_160g() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
-	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+		error "mkdir $tdir failed"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
 		error "create $DIR/$tdir/$tfile failed"
 
@@ -14192,7 +14233,8 @@ test_160h() {
 	local i
 
 	# generate some changelog records to accumulate on each MDT
-	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "test_mkdir $tdir failed"
+	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+		error "test_mkdir $tdir failed"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
 		error "create $DIR/$tdir/$tfile failed"
 
@@ -14341,7 +14383,8 @@ test_160i() {
 	changelog_register || error "first changelog_register failed"
 
 	# generate some changelog records to accumulate on each MDT
-	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	test_mkdir -c $MDSCOUNT -H fnv_1a_64 $DIR/$tdir ||
+		error "mkdir $tdir failed"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
 		error "create $DIR/$tdir/$tfile failed"
 
@@ -20473,7 +20516,7 @@ test_316() {
 	chown nobody $DIR/$tdir/d
 	touch $DIR/$tdir/d/file
 
-	$LFS mv -M1 $DIR/$tdir/d || error "lfs mv failed"
+	$LFS mv -m1 $DIR/$tdir/d || error "lfs mv failed"
 }
 run_test 316 "lfs mv"
 

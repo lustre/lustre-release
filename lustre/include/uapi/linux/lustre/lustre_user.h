@@ -990,6 +990,7 @@ enum lmv_hash_type {
 	LMV_HASH_TYPE_UNKNOWN	= 0,	/* 0 is reserved for testing purpose */
 	LMV_HASH_TYPE_ALL_CHARS = 1,
 	LMV_HASH_TYPE_FNV_1A_64 = 2,
+	LMV_HASH_TYPE_CRUSH	= 3,
 	LMV_HASH_TYPE_MAX,
 };
 
@@ -997,9 +998,7 @@ enum lmv_hash_type {
 
 #define LMV_HASH_NAME_ALL_CHARS	"all_char"
 #define LMV_HASH_NAME_FNV_1A_64	"fnv_1a_64"
-
-/* not real hash type, but exposed to user as "space" hash type */
-#define LMV_HASH_NAME_SPACE	"space"
+#define LMV_HASH_NAME_CRUSH	"crush"
 
 /* Right now only the lower part(0-16bits) of lmv_hash_type is being used,
  * and the higher part will be the flag to indicate the status of object,
@@ -1010,16 +1009,17 @@ enum lmv_hash_type {
 static inline bool lmv_is_known_hash_type(__u32 type)
 {
 	return (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_FNV_1A_64 ||
-	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_ALL_CHARS;
+	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_ALL_CHARS ||
+	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_CRUSH;
 }
 
 /* The striped directory has ever lost its master LMV EA, then LFSCK
  * re-generated it. This flag is used to indicate such case. It is an
  * on-disk flag. */
-#define LMV_HASH_FLAG_LOST_LMV	0x10000000
+#define LMV_HASH_FLAG_LOST_LMV		0x10000000
 
-#define LMV_HASH_FLAG_BAD_TYPE	0x20000000
-#define LMV_HASH_FLAG_MIGRATION	0x80000000
+#define LMV_HASH_FLAG_BAD_TYPE		0x20000000
+#define LMV_HASH_FLAG_MIGRATION		0x80000000
 
 extern char *mdt_hash_name[LMV_HASH_TYPE_MAX];
 

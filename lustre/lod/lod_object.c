@@ -1529,10 +1529,10 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			/* The on-disk LMV EA only contains header, but the
 			 * returned LMV EA size should contain the space for
 			 * the FIDs of all shards of the striped directory. */
-			if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_V1)
+			if (lmv_is_sane(lmv1))
 				rc = lmv_mds_md_size(
 					le32_to_cpu(lmv1->lmv_stripe_count),
-					LMV_MAGIC_V1);
+					le32_to_cpu(lmv1->lmv_magic));
 		} else {
 			lfm = buf->lb_buf;
 			if (le32_to_cpu(lfm->lfm_magic) == LMV_MAGIC_FOREIGN)
@@ -1738,11 +1738,8 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 		RETURN(0);
 	}
 
-	if (le32_to_cpu(lmv1->lmv_magic) != LMV_MAGIC_V1)
+	if (!lmv_is_sane(lmv1))
 		RETURN(-EINVAL);
-
-	if (le32_to_cpu(lmv1->lmv_stripe_count) < 1)
-		RETURN(0);
 
 	LASSERT(lo->ldo_stripe == NULL);
 	OBD_ALLOC(stripe, sizeof(stripe[0]) *
@@ -2327,10 +2324,7 @@ static int lod_dir_declare_layout_add(const struct lu_env *env,
 
 	ENTRY;
 
-	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
-		RETURN(-EINVAL);
-
-	if (stripe_count == 0)
+	if (!lmv_is_sane(lmv))
 		RETURN(-EINVAL);
 
 	dof->dof_type = DFT_DIR;
@@ -5366,6 +5360,10 @@ static void lod_ah_init(const struct lu_env *env,
 			if (lc->ldo_dir_stripe_count == 1)
 				lc->ldo_dir_stripe_count = 0;
 		}
+
+		if (lc->ldo_dir_hash_type == LMV_HASH_TYPE_UNKNOWN)
+			lc->ldo_dir_hash_type =
+				d->lod_mdt_descs.ltd_lmv_desc.ld_pattern;
 
 		CDEBUG(D_INFO, "final dir stripe [%hu %d %u]\n",
 		       lc->ldo_dir_stripe_count,

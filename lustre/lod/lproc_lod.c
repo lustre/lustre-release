@@ -869,6 +869,50 @@ static ssize_t lmv_failout_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(lmv_failout);
 
+char *mdt_hash_name[] = { "none",
+			  LMV_HASH_NAME_ALL_CHARS,
+			  LMV_HASH_NAME_FNV_1A_64,
+			  LMV_HASH_NAME_CRUSH,
+};
+
+static ssize_t mdt_hash_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+
+	return snprintf(buf, PAGE_SIZE, "%s\n",
+		mdt_hash_name[lod->lod_mdt_descs.ltd_lmv_desc.ld_pattern]);
+}
+
+static ssize_t mdt_hash_store(struct kobject *kobj, struct attribute *attr,
+			      const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device, dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	char *hash;
+	int len;
+	int i;
+
+	hash = kstrndup(buffer, count, GFP_KERNEL);
+	if (!hash)
+		return -ENOMEM;
+
+	len = strcspn(hash, "\n ");
+	hash[len] = '\0';
+	for (i = LMV_HASH_TYPE_ALL_CHARS; i < LMV_HASH_TYPE_MAX; i++) {
+		if (!strcmp(hash, mdt_hash_name[i])) {
+			lod->lod_mdt_descs.ltd_lmv_desc.ld_pattern = i;
+			kfree(hash);
+			return count;
+		}
+	}
+	kfree(hash);
+
+	return -EINVAL;
+}
+LUSTRE_RW_ATTR(mdt_hash);
+
 static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 	{ NULL }
 };
@@ -909,6 +953,7 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_mdt_qos_maxage.attr,
 	&lustre_attr_mdt_qos_prio_free.attr,
 	&lustre_attr_mdt_qos_threshold_rr.attr,
+	&lustre_attr_mdt_hash.attr,
 	NULL,
 };
 

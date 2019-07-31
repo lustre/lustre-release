@@ -29,15 +29,20 @@ Use the MDT whose index is
 as the master/starting MDT for the directory. If multiple
 .I MDT_INDEX
 values are given, then the stripes will be allocated on the specified
-MDT indices.  If index -1 (default) is used, it will randomly pick
-.I COUNT
-less full MDTs.
+MDT indices.  If index -1 (default) is used, it will prefer to select
+.B COUNT
+MDTs proportional to the free space and inodes on each.
 .TP
 .BR \-H ", " \-\-mdt-hash =\fIHASH_TYPE\fR
 Use
 .I hash_type
 for the striped directory.
 .RS 1.2i
+.TP
+.B crush
+CRUSH hash algorithm.  This is a consistent hash
+algorithm, so minimum sub files need to relocate
+during directory restripe.
 .TP
 .B fnv_1a_64
 Fowler-Noll-Vo (FNV-1a) hash algorithm.  This provides
