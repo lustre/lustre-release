@@ -1068,6 +1068,9 @@ static int mdt_file_secctx_unpack(struct req_capsule *pill,
 	if (name_size == 0)
 		return 0;
 
+	if (name_size > XATTR_NAME_MAX + 1)
+		return -EPROTO;
+
 	name = req_capsule_client_get(pill, &RMF_FILE_SECCTX_NAME);
 	if (strnlen(name, name_size) != name_size - 1)
 		return -EPROTO;
