@@ -25,3 +25,4 @@ sanity-lfsck
 sanity-hsm
 sanity-lsnapshot
 sanity-pfl
+sanity-lnet
