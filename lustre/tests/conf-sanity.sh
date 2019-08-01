@@ -5728,13 +5728,13 @@ test_79() { # LU-4227
 	mgsnode_opt=$(echo $opts_mds2 |
 		awk '{ for ( i = 1; i < NF; i++ )
 			if ( $i ~ "--mgsnode" ) { print $i; break } }')
-	[ -n $mgsnode_opt ] &&
+	[ -n "$mgsnode_opt" ] &&
 		opts_mds2=$(echo $opts_mds2 | sed -e "s/$mgsnode_opt//")
 
 	mgsnode_opt=$(echo $opts_ost1 |
 		awk '{ for ( i = 1; i < NF; i++ )
 			if ( $i ~ "--mgsnode" ) { print $i; break } }')
-	[ -n $mgsnode_opt ] &&
+	[ -n "$mgsnode_opt" ] &&
 		opts_ost1=$(echo $opts_ost1 | sed -e "s/$mgsnode_opt//")
 	load_modules
 	# -MGS, format a mdt without --mgs option
