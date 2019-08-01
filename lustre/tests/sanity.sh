@@ -20775,6 +20775,9 @@ test_815()
 run_test 815 "zero byte tiny write doesn't hang (LU-12382)"
 
 test_816() {
+	[ "$SHARED_KEY" = true ] &&
+		skip "OSC connections never go IDLE with Shared-Keys enabled"
+
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	# ensure ost1 is connected
 	stat $DIR/$tfile >/dev/null || error "can't stat"
