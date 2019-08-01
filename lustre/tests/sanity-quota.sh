@@ -321,6 +321,44 @@ wait_ost_reint() {
 	return 0
 }
 
+wait_grace_time() {
+	local qtype=$1
+	local flavour=$2
+	local extrasleep=${3:-5}
+	local qarg
+
+	case $qtype in
+		u|g) qarg=$TSTUSR ;;
+		p) qarg=$TSTPRJID ;;
+		*) error "get_grace_time: Invalid quota type: $qtype"
+	esac
+
+	case $flavour in
+		block)
+			time=$(lfs quota -$qtype $qarg $DIR|
+				   awk 'NR == 3{ print $5 }'| sed 's/s$//')
+			;;
+		file)
+			time=$(lfs quota -$qtype $qarg $DIR|
+				   awk 'NR == 3{ print $9 }'| sed 's/s$//')
+			;;
+		*)
+			error "Unknown quota type: $flavour"
+			;;
+	esac
+
+	echo "Sleep through grace ..."
+	[ "$time" == "-" ] &&
+	    error "Grace timeout was not set or quota not exceeded"
+	if [ "$time" == "none" ]; then
+	    echo "...Grace timeout already expired"
+	else
+		let time+=$extrasleep
+		echo "...sleep $time seconds"
+		sleep $time
+	fi
+}
+
 setup_quota_test() {
 	wait_delete_completed
 	echo "Creating test directory"
@@ -677,7 +715,7 @@ run_test 2 "File hard limit (normal use and out of quota)"
 
 test_block_soft() {
 	local TESTFILE=$1
-	local TIMER=$(($2 * 3 / 2))
+	local GRACE=$2
 	local LIMIT=$3
 	local OFFSET=0
 	local qtype=$4
@@ -715,8 +753,7 @@ test_block_soft() {
 	OFFSET=$((OFFSET + 1024))
 	cancel_lru_locks osc
 
-	echo "Sleep $TIMER seconds ..."
-	sleep $TIMER
+	wait_grace_time $qtype "block"
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -765,9 +802,15 @@ test_block_soft() {
 
 # block soft limit
 test_3() {
-	local LIMIT=1  # 1MB
 	local GRACE=20 # 20s
+	if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+	    GRACE=60
+	fi
 	local TESTFILE=$DIR/$tdir/$tfile-0
+
+	# get minimum soft qunit size
+	local LIMIT=$(( $(do_facet $SINGLEMDS $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.dt-0x0.soft_least_qunit) / 1024 ))
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
@@ -829,7 +872,7 @@ test_file_soft() {
 	local TESTFILE=$1
 	local LIMIT=$2
 	local grace=$3
-	local TIMER=$(($grace * 3 / 2))
+	local qtype=$4
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT
@@ -852,8 +895,7 @@ test_file_soft() {
 			"but expect success. $trigger_time, $cur_time"
 	sync_all_data || true
 
-	echo "Sleep $TIMER seconds ..."
-	sleep $TIMER
+	wait_grace_time $qtype "file"
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -896,7 +938,8 @@ test_file_soft() {
 
 # file soft limit
 test_4a() {
-	local LIMIT=10 # inodes
+	local LIMIT=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.md-0x0.soft_least_qunit)
 	local TESTFILE=$DIR/$tdir/$tfile-0
 	local GRACE=12
 
@@ -914,7 +957,7 @@ test_4a() {
 
 	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && GRACE=20
 
-	test_file_soft $TESTFILE $LIMIT $GRACE
+	test_file_soft $TESTFILE $LIMIT $GRACE "u"
 
 	echo "Group quota (soft limit:$LIMIT files  grace:$GRACE seconds)"
 	# make sure the system is clean
@@ -927,7 +970,7 @@ test_4a() {
 		error "set group quota failed"
 	TESTFILE=$DIR/$tdir/$tfile-1
 
-	test_file_soft $TESTFILE $LIMIT $GRACE
+	test_file_soft $TESTFILE $LIMIT $GRACE "g"
 
 	if is_project_quota_supported; then
 		echo "Project quota (soft limit:$LIMIT files grace:$GRACE sec)"
@@ -943,7 +986,7 @@ test_4a() {
 
 		TESTFILE=$DIR/$tdir/$tfile-1
 		# one less than limit, because of parent directory included.
-		test_file_soft $TESTFILE $((LIMIT-1)) $GRACE
+		test_file_soft $TESTFILE $((LIMIT-1)) $GRACE "p"
 		resetquota -p $TSTPRJID
 		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --inode-grace \
 			$MAX_IQ_TIME $DIR ||
