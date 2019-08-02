@@ -2388,7 +2388,7 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		 * up is actually unique. if it's not fail. */
 		if (!lnet_ni_unique_net(&net_l->net_ni_list,
 					ni->ni_interfaces[0])) {
-			rc = -EINVAL;
+			rc = -EEXIST;
 			goto failed1;
 		}
 
