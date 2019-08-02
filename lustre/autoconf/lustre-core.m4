@@ -2846,10 +2846,10 @@ LB_CHECK_COMPILE([if inode timestamps are struct timespec64],
 inode_timespec64, [
 	#include <linux/fs.h>
 ],[
-	struct inode inode = {};
+	struct inode *inode = NULL;
 	struct timespec64 ts = {};
 
-	inode.i_atime = timespec64_trunc(ts, 1);
+	inode->i_atime = timespec64_trunc(ts, 1);
 	(void)inode;
 ],[
 	AC_DEFINE(HAVE_INODE_TIMESPEC64, 1,
