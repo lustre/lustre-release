@@ -2277,30 +2277,31 @@ zconf_mount() {
 }
 
 zconf_umount() {
-    local client=$1
-    local mnt=$2
-    local force
-    local busy
-    local need_kill
+	local client=$1
+	local mnt=$2
+	local force
+	local busy
+	local need_kill
+	local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
 
-    [ "$3" ] && force=-f
-    local running=$(do_node $client "grep -c $mnt' ' /proc/mounts") || true
-    if [ $running -ne 0 ]; then
-        echo "Stopping client $client $mnt (opts:$force)"
-        do_node $client lsof -t $mnt || need_kill=no
-        if [ "x$force" != "x" -a "x$need_kill" != "xno" ]; then
-            pids=$(do_node $client lsof -t $mnt | sort -u);
-            if [ -n $pids ]; then
-                do_node $client kill -9 $pids || true
-            fi
-        fi
+	[ "$3" ] && force=-f
+	[ $running -eq 0 ] && return 0
 
-        busy=$(do_node $client "umount $force $mnt 2>&1" | grep -c "busy") || true
-        if [ $busy -ne 0 ] ; then
-            echo "$mnt is still busy, wait one second" && sleep 1
-            do_node $client umount $force $mnt
-        fi
-    fi
+	echo "Stopping client $client $mnt (opts:$force)"
+	do_node $client lsof -t $mnt || need_kill=no
+	if [ "x$force" != "x" ] && [ "x$need_kill" != "xno" ]; then
+		pids=$(do_node $client lsof -t $mnt | sort -u);
+		if [ -n "$pids" ]; then
+			do_node $client kill -9 $pids || true
+		fi
+	fi
+
+	busy=$(do_node $client "umount $force $mnt 2>&1" | grep -c "busy") ||
+		true
+	if [ $busy -ne 0 ] ; then
+		echo "$mnt is still busy, wait one second" && sleep 1
+		do_node $client umount $force $mnt
+	fi
 }
 
 # nodes is comma list
@@ -4936,7 +4937,7 @@ init_param_vars () {
 	TIMEOUT=$(lctl get_param -n timeout)
 	TIMEOUT=${TIMEOUT:-20}
 
-	if [ -n $arg1 ]; then
+	if [ -n "$arg1" ]; then
 		[ "$arg1" = "server_only" ] && return
 	fi
 
@@ -6940,19 +6941,21 @@ delayed_recovery_enabled () {
 ########################
 
 convert_facet2label() {
-    local facet=$1
+	local facet=$1
 
-    if [ x$facet = xost ]; then
-       facet=ost1
-    fi
+	if [ x$facet = xost ]; then
+		facet=ost1
+	elif [ x$facet = xmgs ] && combined_mgs_mds ; then
+		facet=mds1
+	fi
 
-    local varsvc=${facet}_svc
+	local varsvc=${facet}_svc
 
-    if [ -n ${!varsvc} ]; then
-        echo ${!varsvc}
-    else
-        error "No lablel for $facet!"
-    fi
+	if [ -n ${!varsvc} ]; then
+		echo ${!varsvc}
+	else
+		error "No label for $facet!"
+	fi
 }
 
 get_clientosc_proc_path() {

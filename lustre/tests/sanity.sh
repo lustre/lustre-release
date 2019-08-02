@@ -6916,7 +6916,7 @@ cleanup_65k() {
 	do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC activate
 	echo $INACTIVE_OSC "is Activate"
 
-	wait_osc_import_state mds ost$ostnum FULL
+	wait_osc_import_state mds ost$(( ostnum + 1 )) FULL
 }
 
 test_65k() { # bug11679
@@ -6976,7 +6976,7 @@ test_65k() { # bug11679
 		do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC activate
 		echo $INACTIVE_OSC "is Activate"
 
-		wait_osc_import_state mds ost$ostnum FULL
+		wait_osc_import_state mds ost$(( ostnum + 1 )) FULL
 	done
 }
 run_test 65k "validate manual striping works properly with deactivated OSCs"
