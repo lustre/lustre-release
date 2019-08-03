@@ -122,7 +122,7 @@ lmv_fid2tgt_index(struct lmv_obd *lmv, const struct lu_fid *fid)
 	u32 mdt_idx;
 	int rc;
 
-	if (lmv->desc.ld_tgt_count < 2)
+	if (lmv->lmv_mdt_count < 2)
 		return 0;
 
 	rc = lmv_fld_lookup(lmv, fid, &mdt_idx);

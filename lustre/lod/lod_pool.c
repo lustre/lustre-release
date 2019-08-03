@@ -464,7 +464,7 @@ void lod_dump_pool(int level, struct pool_desc *pool)
  * \retval		negative error number on failure
  */
 #define POOL_INIT_COUNT 2
-int lod_ost_pool_init(struct ost_pool *op, unsigned int count)
+int lod_ost_pool_init(struct lu_tgt_pool *op, unsigned int count)
 {
 	ENTRY;
 
@@ -496,7 +496,7 @@ int lod_ost_pool_init(struct ost_pool *op, unsigned int count)
  * \retval		0 on success
  * \retval		negative error number on failure.
  */
-int lod_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
+int lod_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
 {
 	__u32 *new;
 	__u32 new_size;
@@ -534,7 +534,7 @@ int lod_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
  * \retval		0 if target could be added to the pool
  * \retval		negative error if target \a idx was not added
  */
-int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
+int lod_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
 {
 	unsigned int i;
 	int rc = 0;
@@ -574,7 +574,7 @@ out:
  * \retval		0 on success
  * \retval		negative error number on failure
  */
-int lod_ost_pool_remove(struct ost_pool *op, __u32 idx)
+int lod_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx)
 {
 	unsigned int i;
 	ENTRY;
@@ -608,7 +608,7 @@ int lod_ost_pool_remove(struct ost_pool *op, __u32 idx)
  *
  * \retval		0 on success or if pool was already freed
  */
-int lod_ost_pool_free(struct ost_pool *op)
+int lod_ost_pool_free(struct lu_tgt_pool *op)
 {
 	ENTRY;
 
@@ -766,11 +766,11 @@ int lod_pool_del(struct obd_device *obd, char *poolname)
  */
 int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 {
-	struct lod_device	*lod = lu2lod_dev(obd->obd_lu_dev);
-	struct obd_uuid		 ost_uuid;
-	struct pool_desc	*pool;
-	unsigned int		 idx;
-	int			 rc = -EINVAL;
+	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
+	struct obd_uuid ost_uuid;
+	struct pool_desc *pool;
+	struct lu_tgt_desc *tgt;
+	int rc = -EINVAL;
 	ENTRY;
 
 	pool = cfs_hash_lookup(lod->lod_pools_hash_body, poolname);
@@ -781,8 +781,8 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 
 	/* search ost in lod array */
 	lod_getref(&lod->lod_ost_descs);
-	lod_foreach_ost(lod, idx) {
-		if (obd_uuid_equals(&ost_uuid, &OST_TGT(lod, idx)->ltd_uuid)) {
+	lod_foreach_ost(lod, tgt) {
+		if (obd_uuid_equals(&ost_uuid, &tgt->ltd_uuid)) {
 			rc = 0;
 			break;
 		}
@@ -791,7 +791,8 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_ost_pool_add(&pool->pool_obds, idx, lod->lod_osts_size);
+	rc = lod_ost_pool_add(&pool->pool_obds, tgt->ltd_index,
+			      lod->lod_ost_descs.ltd_tgts_size);
 	if (rc)
 		GOTO(out, rc);
 
@@ -823,11 +824,11 @@ out:
  */
 int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 {
-	struct lod_device	*lod = lu2lod_dev(obd->obd_lu_dev);
-	struct obd_uuid		 ost_uuid;
-	struct pool_desc	*pool;
-	unsigned int		 idx;
-	int			 rc = -EINVAL;
+	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
+	struct lu_tgt_desc *ost;
+	struct obd_uuid	ost_uuid;
+	struct pool_desc *pool;
+	int rc = -EINVAL;
 	ENTRY;
 
 	pool = cfs_hash_lookup(lod->lod_pools_hash_body, poolname);
@@ -837,8 +838,8 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	obd_str2uuid(&ost_uuid, ostname);
 
 	lod_getref(&lod->lod_ost_descs);
-	cfs_foreach_bit(lod->lod_ost_bitmap, idx) {
-		if (obd_uuid_equals(&ost_uuid, &OST_TGT(lod, idx)->ltd_uuid)) {
+	lod_foreach_ost(lod, ost) {
+		if (obd_uuid_equals(&ost_uuid, &ost->ltd_uuid)) {
 			rc = 0;
 			break;
 		}
@@ -848,7 +849,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	lod_ost_pool_remove(&pool->pool_obds, idx);
+	lod_ost_pool_remove(&pool->pool_obds, ost->ltd_index);
 
 	pool->pool_rr.lqr_dirty = 1;
 

@@ -77,28 +77,23 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 	if (ltd->ltd_refcount == 0 && ltd->ltd_death_row) {
 		struct lod_tgt_desc *tgt_desc, *tmp;
 		struct list_head kill;
-		unsigned int idx;
 
 		CDEBUG(D_CONFIG, "destroying %d ltd desc\n",
 		       ltd->ltd_death_row);
 
 		INIT_LIST_HEAD(&kill);
 
-		cfs_foreach_bit(ltd->ltd_tgt_bitmap, idx) {
-			tgt_desc = LTD_TGT(ltd, idx);
+		ltd_foreach_tgt_safe(ltd, tgt_desc, tmp) {
 			LASSERT(tgt_desc);
-
 			if (!tgt_desc->ltd_reap)
 				continue;
 
 			list_add(&tgt_desc->ltd_kill, &kill);
 			/*FIXME: only support ost pool for now */
-			if (ltd == &lod->lod_ost_descs) {
-				lod_ost_pool_remove(&lod->lod_pool_info, idx);
-				if (tgt_desc->ltd_active)
-					lod->lod_desc.ld_active_tgt_count--;
-			}
-			lu_tgt_descs_del(ltd, tgt_desc);
+			if (ltd == &lod->lod_ost_descs)
+				lod_ost_pool_remove(&ltd->ltd_tgt_pool,
+						    tgt_desc->ltd_index);
+			ltd_del_tgt(ltd, tgt_desc);
 			ltd->ltd_death_row--;
 		}
 		mutex_unlock(&ltd->ltd_mutex);
@@ -106,17 +101,8 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 
 		list_for_each_entry_safe(tgt_desc, tmp, &kill, ltd_kill) {
 			int rc;
+
 			list_del(&tgt_desc->ltd_kill);
-			if (ltd == &lod->lod_ost_descs) {
-				/* remove from QoS structures */
-				rc = lqos_del_tgt(&lod->lod_qos, tgt_desc);
-				if (rc)
-					CERROR("%s: qos_del_tgt(%s) failed:"
-					       "rc = %d\n",
-					       lod2obd(lod)->obd_name,
-					      obd_uuid2str(&tgt_desc->ltd_uuid),
-					       rc);
-			}
 			rc = obd_disconnect(tgt_desc->ltd_exp);
 			if (rc)
 				CERROR("%s: failed to disconnect %s: rc = %d\n",
@@ -262,30 +248,25 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 
 	down_write(&ltd->ltd_rw_sem);
 	mutex_lock(&ltd->ltd_mutex);
-	lu_tgt_descs_add(ltd, tgt_desc);
+	rc = ltd_add_tgt(ltd, tgt_desc);
+	if (rc)
+		GOTO(out_mutex, rc);
+
+	rc = lu_qos_add_tgt(&ltd->ltd_qos, tgt_desc);
+	if (rc)
+		GOTO(out_del_tgt, rc);
+
 	if (for_ost) {
-		/* pool and qos are not supported for MDS stack yet */
-		rc = lod_ost_pool_add(&lod->lod_pool_info, index,
-				      lod->lod_osts_size);
+		/* pool is not supported for MDS stack yet */
+		rc = lod_ost_pool_add(&ltd->ltd_tgt_pool, index,
+				      ltd->ltd_tgts_size);
 		if (rc) {
 			CERROR("%s: can't set up pool, failed with %d\n",
 			       obd->obd_name, rc);
-			GOTO(out_mutex, rc);
+			GOTO(out_del_tgt, rc);
 		}
-
-		rc = lqos_add_tgt(&lod->lod_qos, tgt_desc);
-		if (rc) {
-			CERROR("%s: qos_add_tgt failed with %d\n",
-				obd->obd_name, rc);
-			GOTO(out_pool, rc);
-		}
-
-		/* The new OST is now a full citizen */
-		if (index >= lod->lod_desc.ld_tgt_count)
-			lod->lod_desc.ld_tgt_count = index + 1;
-		if (active)
-			lod->lod_desc.ld_active_tgt_count++;
 	}
+
 	mutex_unlock(&ltd->ltd_mutex);
 	up_write(&ltd->ltd_rw_sem);
 
@@ -320,10 +301,10 @@ out_ltd:
 		thread = LTD_TGT(ltd, index)->ltd_recovery_thread;
 		OBD_FREE_PTR(thread);
 	}
-out_pool:
-	lod_ost_pool_remove(&lod->lod_pool_info, index);
+	lod_ost_pool_remove(&ltd->ltd_tgt_pool, index);
+out_del_tgt:
+	ltd_del_tgt(ltd, tgt_desc);
 out_mutex:
-	lu_tgt_descs_del(ltd, tgt_desc);
 	mutex_unlock(&ltd->ltd_mutex);
 	up_write(&ltd->ltd_rw_sem);
 	OBD_FREE_PTR(tgt_desc);
@@ -352,27 +333,19 @@ out_cleanup:
  * \param[in] env		execution environment for this thread
  * \param[in] lod		LOD device the target table belongs to
  * \param[in] ltd		target table
- * \param[in] idx		index of the target
- * \param[in] for_ost		type of the target: 0 - MDT, 1 - OST
+ * \param[in] tgt		target
  */
 static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
-			     struct lod_tgt_descs *ltd, unsigned idx,
-			     bool for_ost)
+			     struct lod_tgt_descs *ltd, struct lu_tgt_desc *tgt)
 {
-	LASSERT(LTD_TGT(ltd, idx));
+	lfsck_del_target(env, lod->lod_child, tgt->ltd_tgt, tgt->ltd_index,
+			 !ltd->ltd_is_mdt);
 
-	lfsck_del_target(env, lod->lod_child, LTD_TGT(ltd, idx)->ltd_tgt,
-			 idx, for_ost);
+	if (ltd->ltd_is_mdt && tgt->ltd_recovery_thread)
+		OBD_FREE_PTR(tgt->ltd_recovery_thread);
 
-	if (!for_ost && LTD_TGT(ltd, idx)->ltd_recovery_thread != NULL) {
-		struct ptlrpc_thread *thread;
-
-		thread = LTD_TGT(ltd, idx)->ltd_recovery_thread;
-		OBD_FREE_PTR(thread);
-	}
-
-	if (LTD_TGT(ltd, idx)->ltd_reap == 0) {
-		LTD_TGT(ltd, idx)->ltd_reap = 1;
+	if (!tgt->ltd_reap) {
+		tgt->ltd_reap = 1;
 		ltd->ltd_death_row++;
 	}
 }
@@ -385,22 +358,21 @@ static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
  * \param[in] env		execution environment for this thread
  * \param[in] lod		LOD device the target table belongs to
  * \param[in] ltd		target table
- * \param[in] for_ost		type of the target: MDT or OST
  *
  * \retval			0 always
  */
 int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
-		 struct lod_tgt_descs *ltd, bool for_ost)
+		 struct lod_tgt_descs *ltd)
 {
-	unsigned int idx;
+	struct lu_tgt_desc *tgt;
 
 	if (ltd->ltd_tgts_size <= 0)
 		return 0;
 
 	lod_getref(ltd);
 	mutex_lock(&ltd->ltd_mutex);
-	cfs_foreach_bit(ltd->ltd_tgt_bitmap, idx)
-		__lod_del_device(env, lod, ltd, idx, for_ost);
+	ltd_foreach_tgt(ltd, tgt)
+		__lod_del_device(env, lod, ltd, tgt);
 	mutex_unlock(&ltd->ltd_mutex);
 	lod_putref(lod, ltd);
 
@@ -421,18 +393,19 @@ int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
  * \param[in] osp		name of OSP device to be removed
  * \param[in] idx		index of the target
  * \param[in] gen		generation number, not used currently
- * \param[in] for_ost		type of the target: 0 - MDT, 1 - OST
  *
  * \retval			0 if the device was scheduled for removal
  * \retval			-EINVAL if no device was found
  */
 int lod_del_device(const struct lu_env *env, struct lod_device *lod,
-		   struct lod_tgt_descs *ltd, char *osp, unsigned idx,
-		   unsigned gen, bool for_ost)
+		   struct lod_tgt_descs *ltd, char *osp, unsigned int idx,
+		   unsigned int gen)
 {
 	struct obd_device *obd;
-	int                rc = 0;
-	struct obd_uuid    uuid;
+	struct lu_tgt_desc *tgt;
+	struct obd_uuid uuid;
+	int rc = 0;
+
 	ENTRY;
 
 	CDEBUG(D_CONFIG, "osp:%s idx:%d gen:%d\n", osp, idx, gen);
@@ -456,22 +429,21 @@ int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 
 	lod_getref(ltd);
 	mutex_lock(&ltd->ltd_mutex);
+	tgt = LTD_TGT(ltd, idx);
 	/* check that the index is allocated in the bitmap */
-	if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx) ||
-	    !LTD_TGT(ltd, idx)) {
+	if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx) || !tgt) {
 		CERROR("%s: device %d is not set up\n", obd->obd_name, idx);
 		GOTO(out, rc = -EINVAL);
 	}
 
 	/* check that the UUID matches */
-	if (!obd_uuid_equals(&uuid, &LTD_TGT(ltd, idx)->ltd_uuid)) {
+	if (!obd_uuid_equals(&uuid, &tgt->ltd_uuid)) {
 		CERROR("%s: LOD target UUID %s at index %d does not match %s\n",
-		       obd->obd_name, obd_uuid2str(&LTD_TGT(ltd,idx)->ltd_uuid),
-		       idx, osp);
+		       obd->obd_name, obd_uuid2str(&tgt->ltd_uuid), idx, osp);
 		GOTO(out, rc = -EINVAL);
 	}
 
-	__lod_del_device(env, lod, ltd, idx, for_ost);
+	__lod_del_device(env, lod, ltd, tgt);
 	EXIT;
 out:
 	mutex_unlock(&ltd->ltd_mutex);
@@ -1020,7 +992,7 @@ static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
 		return -EINVAL;
 	}
 
-	if (unlikely(OST_TGT(md, idx)->ltd_ost == NULL)) {
+	if (unlikely(OST_TGT(md, idx)->ltd_tgt == NULL)) {
 		CERROR("%s: invalid lod device, for idx: %d\n",
 		       lod2obd(md)->obd_name , idx);
 		return -EINVAL;
@@ -1098,7 +1070,7 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 			GOTO(out, rc);
 		}
 
-		nd = &OST_TGT(md,idx)->ltd_ost->dd_lu_dev;
+		nd = &OST_TGT(md, idx)->ltd_tgt->dd_lu_dev;
 		lod_putref(md, &md->lod_ost_descs);
 
 		/* In the function below, .hs_keycmp resolves to
@@ -1571,9 +1543,9 @@ static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 	if (!is_from_disk && stripe_offset != LOV_OFFSET_DEFAULT &&
 	    lov_pattern(le32_to_cpu(lum->lmm_pattern)) != LOV_PATTERN_MDT) {
 		/* if offset is not within valid range [0, osts_size) */
-		if (stripe_offset >= d->lod_osts_size) {
+		if (stripe_offset >= d->lod_ost_descs.ltd_tgts_size) {
 			CDEBUG(D_LAYOUT, "stripe offset %u >= bitmap size %u\n",
-			       stripe_offset, d->lod_osts_size);
+			       stripe_offset, d->lod_ost_descs.ltd_tgts_size);
 			GOTO(out, rc = -EINVAL);
 		}
 
@@ -1765,7 +1737,7 @@ int lod_fix_dom_stripe(struct lod_device *d, struct lov_comp_md_v1 *comp_v1,
 int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
 			const struct lu_buf *buf, bool is_from_disk)
 {
-	struct lov_desc *desc = &d->lod_desc;
+	struct lov_desc *desc = &d->lod_ost_descs.ltd_lov_desc;
 	struct lov_user_md_v1   *lum;
 	struct lov_comp_md_v1   *comp_v1;
 	struct lov_comp_md_entry_v1     *ent;
@@ -2102,21 +2074,9 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	lod_fix_desc(desc);
 
 	desc->ld_active_tgt_count = 0;
-	lod->lod_desc = *desc;
+	lod->lod_ost_descs.ltd_lov_desc = *desc;
 
 	lod->lod_sp_me = LUSTRE_SP_CLI;
-
-	/* Set up allocation policy (QoS and RR) */
-	INIT_LIST_HEAD(&lod->lod_qos.lq_svr_list);
-	init_rwsem(&lod->lod_qos.lq_rw_sem);
-	lod->lod_qos.lq_dirty = 1;
-	lod->lod_qos.lq_reset = 1;
-	/* Default priority is toward free space balance */
-	lod->lod_qos.lq_prio_free = 232;
-	/* Default threshold for rr (roughly 17%) */
-	lod->lod_qos.lq_threshold_rr = 43;
-
-	lu_qos_rr_init(&lod->lod_qos.lq_rr);
 
 	/* Set up OST pool environment */
 	lod->lod_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
@@ -2131,17 +2091,17 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 
 	INIT_LIST_HEAD(&lod->lod_pool_list);
 	lod->lod_pool_count = 0;
-	rc = lod_ost_pool_init(&lod->lod_pool_info, 0);
+	rc = lod_ost_pool_init(&lod->lod_ost_descs.ltd_tgt_pool, 0);
 	if (rc)
 		GOTO(out_hash, rc);
-	rc = lod_ost_pool_init(&lod->lod_qos.lq_rr.lqr_pool, 0);
+	rc = lod_ost_pool_init(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_pool_info, rc);
 
 	RETURN(0);
 
 out_pool_info:
-	lod_ost_pool_free(&lod->lod_pool_info);
+	lod_ost_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
 out_hash:
 	cfs_hash_putref(lod->lod_pools_hash_body);
 
@@ -2171,8 +2131,8 @@ int lod_pools_fini(struct lod_device *lod)
 	}
 
 	cfs_hash_putref(lod->lod_pools_hash_body);
-	lod_ost_pool_free(&(lod->lod_qos.lq_rr.lqr_pool));
-	lod_ost_pool_free(&lod->lod_pool_info);
+	lod_ost_pool_free(&(lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool));
+	lod_ost_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
 
 	RETURN(0);
 }

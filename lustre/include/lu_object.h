@@ -1397,13 +1397,13 @@ static inline bool lu_object_is_cl(const struct lu_object *o)
 	return lu_device_is_cl(o->lo_dev);
 }
 
-/* Generic subset of OSTs */
-struct ost_pool {
+/* Generic subset of tgts */
+struct lu_tgt_pool {
 	__u32		   *op_array;	/* array of index of
 					 * lov_obd->lov_tgts */
-	unsigned int	    op_count;	/* number of OSTs in the array */
-	unsigned int	    op_size;	/* allocated size of lp_array */
-	struct rw_semaphore op_rw_sem;	/* to protect ost_pool use */
+	unsigned int	    op_count;	/* number of tgts in the array */
+	unsigned int	    op_size;	/* allocated size of op_array */
+	struct rw_semaphore op_rw_sem;	/* to protect lu_tgt_pool use */
 };
 
 /* round-robin QoS data for LOD/LMV */
@@ -1412,7 +1412,7 @@ struct lu_qos_rr {
 	__u32			 lqr_start_idx;	/* start index of new inode */
 	__u32			 lqr_offset_idx;/* aliasing for start_idx */
 	int			 lqr_start_count;/* reseed counter */
-	struct ost_pool		 lqr_pool;	/* round-robin optimized list */
+	struct lu_tgt_pool	 lqr_pool;	/* round-robin optimized list */
 	unsigned long		 lqr_dirty:1;	/* recalc round-robin list */
 };
 
@@ -1473,29 +1473,6 @@ struct lu_tgt_desc_idx {
 	struct lu_tgt_desc *ldi_tgt[TGT_PTRS_PER_BLOCK];
 };
 
-struct lu_tgt_descs {
-	/* list of known TGTs */
-	struct lu_tgt_desc_idx	*ltd_tgt_idx[TGT_PTRS];
-	/* Size of the lu_tgts array, granted to be a power of 2 */
-	__u32			ltd_tgts_size;
-	/* number of registered TGTs */
-	__u32			ltd_tgtnr;
-	/* bitmap of TGTs available */
-	struct cfs_bitmap	*ltd_tgt_bitmap;
-	/* TGTs scheduled to be deleted */
-	__u32			ltd_death_row;
-	/* Table refcount used for delayed deletion */
-	int			ltd_refcount;
-	/* mutex to serialize concurrent updates to the tgt table */
-	struct mutex		ltd_mutex;
-	/* read/write semaphore used for array relocation */
-	struct rw_semaphore	ltd_rw_sem;
-};
-
-#define LTD_TGT(ltd, index)						\
-	 (ltd)->ltd_tgt_idx[(index) /					\
-	 TGT_PTRS_PER_BLOCK]->ldi_tgt[(index) % TGT_PTRS_PER_BLOCK]
-
 /* QoS data for LOD/LMV */
 struct lu_qos {
 	struct list_head	 lq_svr_list;	/* lu_svr_qos list */
@@ -1510,22 +1487,50 @@ struct lu_qos {
 				 lq_reset:1;     /* zero current penalties */
 };
 
-void lu_qos_rr_init(struct lu_qos_rr *lqr);
-int lqos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
-int lqos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
-bool lqos_is_usable(struct lu_qos *qos, __u32 active_tgt_nr);
-int lqos_calc_penalties(struct lu_qos *qos, struct lu_tgt_descs *ltd,
-			__u32 active_tgt_nr, __u32 maxage, bool is_mdt);
-void lqos_calc_weight(struct lu_tgt_desc *tgt);
-int lqos_recalc_weight(struct lu_qos *qos, struct lu_tgt_descs *ltd,
-		       struct lu_tgt_desc *tgt, __u32 active_tgt_nr,
-		       __u64 *total_wt);
-u64 lu_prandom_u64_max(u64 ep_ro);
+struct lu_tgt_descs {
+	union {
+		struct lov_desc	      ltd_lov_desc;
+		struct lmv_desc	      ltd_lmv_desc;
+	};
+	/* list of known TGTs */
+	struct lu_tgt_desc_idx	*ltd_tgt_idx[TGT_PTRS];
+	/* Size of the lu_tgts array, granted to be a power of 2 */
+	__u32			ltd_tgts_size;
+	/* bitmap of TGTs available */
+	struct cfs_bitmap	*ltd_tgt_bitmap;
+	/* TGTs scheduled to be deleted */
+	__u32			ltd_death_row;
+	/* Table refcount used for delayed deletion */
+	int			ltd_refcount;
+	/* mutex to serialize concurrent updates to the tgt table */
+	struct mutex		ltd_mutex;
+	/* read/write semaphore used for array relocation */
+	struct rw_semaphore	ltd_rw_sem;
+	/* QoS */
+	struct lu_qos		ltd_qos;
+	/* all tgts in a packed array */
+	struct lu_tgt_pool	ltd_tgt_pool;
+	/* true if tgt is MDT */
+	bool			ltd_is_mdt;
+};
 
-int lu_tgt_descs_init(struct lu_tgt_descs *ltd);
+#define LTD_TGT(ltd, index)						\
+	 (ltd)->ltd_tgt_idx[(index) /					\
+	 TGT_PTRS_PER_BLOCK]->ldi_tgt[(index) % TGT_PTRS_PER_BLOCK]
+
+u64 lu_prandom_u64_max(u64 ep_ro);
+void lu_qos_rr_init(struct lu_qos_rr *lqr);
+int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd);
+void lu_tgt_qos_weight_calc(struct lu_tgt_desc *tgt);
+
+int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt);
 void lu_tgt_descs_fini(struct lu_tgt_descs *ltd);
-int lu_tgt_descs_add(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
-void lu_tgt_descs_del(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
+int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
+void ltd_del_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
+bool ltd_qos_is_usable(struct lu_tgt_descs *ltd);
+int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd);
+int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
+		   __u64 *total_wt);
 
 static inline struct lu_tgt_desc *ltd_first_tgt(struct lu_tgt_descs *ltd)
 {

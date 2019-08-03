@@ -313,7 +313,7 @@ void lov_dump_pool(int level, struct pool_desc *pool)
 }
 
 #define LOV_POOL_INIT_COUNT 2
-int lov_ost_pool_init(struct ost_pool *op, unsigned int count)
+int lov_ost_pool_init(struct lu_tgt_pool *op, unsigned int count)
 {
 	ENTRY;
 
@@ -333,7 +333,7 @@ int lov_ost_pool_init(struct ost_pool *op, unsigned int count)
 }
 
 /* Caller must hold write op_rwlock */
-int lov_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
+int lov_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
 {
 	__u32 *new;
 	__u32 new_size;
@@ -357,7 +357,7 @@ int lov_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
 	return 0;
 }
 
-int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
+int lov_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
 {
         int rc = 0, i;
         ENTRY;
@@ -382,7 +382,7 @@ out:
         return rc;
 }
 
-int lov_ost_pool_remove(struct ost_pool *op, __u32 idx)
+int lov_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx)
 {
         int i;
         ENTRY;
@@ -404,7 +404,7 @@ int lov_ost_pool_remove(struct ost_pool *op, __u32 idx)
         RETURN(-EINVAL);
 }
 
-int lov_ost_pool_free(struct ost_pool *op)
+int lov_ost_pool_free(struct lu_tgt_pool *op)
 {
 	ENTRY;
 

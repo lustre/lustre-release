@@ -56,7 +56,7 @@
 
 struct pool_desc {
 	char			 pool_name[LOV_MAXPOOLNAME + 1];
-	struct ost_pool		 pool_obds;	/* pool members */
+	struct lu_tgt_pool	 pool_obds;	/* pool members */
 	atomic_t		 pool_refcount;
 	struct lu_qos_rr	 pool_rr;
 	struct hlist_node	 pool_hash;	/* access by poolname */
@@ -100,9 +100,6 @@ struct lod_device {
 			      lod_lmv_failout:1,
 			      lod_child_got_update_log:1;
 
-	/* lov settings descriptor storing static information */
-	struct lov_desc	      lod_desc;
-
 	/* protect ld_active_tgt_count, ltd_active and lod_md_root */
 	spinlock_t	     lod_lock;
 
@@ -119,14 +116,7 @@ struct lod_device {
 	/* maximum size of MDT stripe for Data-on-MDT files. */
 	unsigned int          lod_dom_max_stripesize;
 
-	/*FIXME: When QOS and pool is implemented for MDT, probably these
-	 * structure should be moved to lod_tgt_descs as well.
-	 */
-	/* QoS info per LOD */
-	struct lu_qos	      lod_qos; /* qos info per lod */
-
 	/* OST pool data */
-	struct ost_pool		lod_pool_info; /* all OSTs in a packed array */
 	int			lod_pool_count;
 	struct cfs_hash	       *lod_pools_hash_body; /* used for key access */
 	struct list_head	lod_pool_list; /* used for sequential access */
@@ -141,19 +131,9 @@ struct lod_device {
 	struct lod_object      *lod_md_root;
 };
 
-#define lod_osts	lod_ost_descs.ltd_tgts
-#define lod_ost_bitmap	lod_ost_descs.ltd_tgt_bitmap
-#define lod_ostnr	lod_ost_descs.ltd_tgtnr
-#define lod_osts_size	lod_ost_descs.ltd_tgts_size
-#define ltd_ost		ltd_tgt
-#define lod_ost_desc	lu_tgt_desc
-
-#define lod_mdts		lod_mdt_descs.ltd_tgts
-#define lod_mdt_bitmap		lod_mdt_descs.ltd_tgt_bitmap
-#define lod_remote_mdt_count	lod_mdt_descs.ltd_tgtnr
-#define lod_mdts_size		lod_mdt_descs.ltd_tgts_size
-#define ltd_mdt			ltd_tgt
-#define lod_mdt_desc		lu_tgt_desc
+#define lod_ost_bitmap		lod_ost_descs.ltd_tgt_bitmap
+#define lod_ost_count		lod_ost_descs.ltd_lov_desc.ld_tgt_count
+#define lod_remote_mdt_count	lod_mdt_descs.ltd_lmv_desc.ld_tgt_count
 
 struct lod_layout_component {
 	struct lu_extent	  llc_extent;
@@ -168,7 +148,7 @@ struct lod_layout_component {
 	__u64			  llc_timestamp; /* snapshot time */
 	char			 *llc_pool;
 	/* ost list specified with LOV_USER_MAGIC_SPECIFIC lum */
-	struct ost_pool		  llc_ostlist;
+	struct lu_tgt_pool	  llc_ostlist;
 	struct dt_object	**llc_stripe;
 	__u32			 *llc_ost_indices;
 };
@@ -506,12 +486,8 @@ static inline void lod_layout_get_pool(struct lod_layout_component *entries,
 	}
 }
 
-#define lod_foreach_ost(__dev, index)	\
-	if ((__dev)->lod_osts_size > 0)	\
-		cfs_foreach_bit((__dev)->lod_ost_bitmap, (index))
-
-#define lod_foreach_mdt(mdt_dev, index)	\
-	cfs_foreach_bit((mdt_dev)->lod_mdt_bitmap, (index))
+#define lod_foreach_mdt(lod, mdt) ltd_foreach_tgt(&(lod)->lod_mdt_descs, mdt)
+#define lod_foreach_ost(lod, ost) ltd_foreach_tgt(&(lod)->lod_ost_descs, ost)
 
 /* lod_dev.c */
 extern struct kmem_cache *lod_object_kmem;
@@ -531,10 +507,10 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		   char *osp, unsigned index, unsigned gen, int mdt_index,
 		   char *type, int active);
 int lod_del_device(const struct lu_env *env, struct lod_device *lod,
-		   struct lod_tgt_descs *ltd, char *osp, unsigned idx,
-		   unsigned gen, bool for_ost);
+		   struct lod_tgt_descs *ltd, char *osp, unsigned int idx,
+		   unsigned int gen);
 int lod_fini_tgt(const struct lu_env *env, struct lod_device *lod,
-		 struct lod_tgt_descs *ltd, bool for_ost);
+		 struct lod_tgt_descs *ltd);
 int lod_striping_load(const struct lu_env *env, struct lod_object *lo);
 int lod_striping_reload(const struct lu_env *env, struct lod_object *lo,
 			const struct lu_buf *buf);
@@ -622,14 +598,14 @@ int lod_alloc_comp_entries(struct lod_object *lo, int mirror_cnt, int comp_cnt);
 int lod_fill_mirrors(struct lod_object *lo);
 
 /* lod_pool.c */
-int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
-int lod_ost_pool_remove(struct ost_pool *op, __u32 idx);
-int lod_ost_pool_extend(struct ost_pool *op, unsigned int min_count);
+int lod_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
+int lod_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx);
+int lod_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
 struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
 void lod_pool_putref(struct pool_desc *pool);
-int lod_ost_pool_free(struct ost_pool *op);
+int lod_ost_pool_free(struct lu_tgt_pool *op);
 int lod_pool_del(struct obd_device *obd, char *poolname);
-int lod_ost_pool_init(struct ost_pool *op, unsigned int count);
+int lod_ost_pool_init(struct lu_tgt_pool *op, unsigned int count);
 extern struct cfs_hash_ops pool_hash_operations;
 int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool);
 int lod_pool_new(struct obd_device *obd, char *poolname);

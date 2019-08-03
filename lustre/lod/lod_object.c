@@ -1571,7 +1571,7 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	if (is_root && strcmp(XATTR_NAME_LOV, name) == 0) {
 		struct lov_user_md *lum = buf->lb_buf;
-		struct lov_desc    *desc = &dev->lod_desc;
+		struct lov_desc *desc = &dev->lod_ost_descs.ltd_lov_desc;
 
 		if (buf->lb_buf == NULL) {
 			rc = sizeof(*lum);
@@ -2685,7 +2685,7 @@ inline __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 	else if (lod_comp_inited(entry))
 		return entry->llc_stripe_count;
 	else if ((__u16)-1 == entry->llc_stripe_count)
-		return lod->lod_desc.ld_tgt_count;
+		return lod->lod_ost_count;
 	else
 		return lod_get_stripe_count(lod, lo,
 					    entry->llc_stripe_count, false);
@@ -2756,14 +2756,14 @@ static int lod_declare_layout_add(const struct lu_env *env,
 {
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct lod_layout_component *comp_array, *lod_comp, *old_array;
-	struct lod_device	*d = lu2lod_dev(dt->do_lu.lo_dev);
+	struct lod_device *d = lu2lod_dev(dt->do_lu.lo_dev);
 	struct dt_object *next = dt_object_child(dt);
-	struct lov_desc		*desc = &d->lod_desc;
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lov_user_md_v3	*v3;
-	struct lov_comp_md_v1	*comp_v1 = buf->lb_buf;
-	__u32	magic;
-	int	i, rc, array_cnt, old_array_cnt;
+	struct lov_desc	*desc = &d->lod_ost_descs.ltd_lov_desc;
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lov_user_md_v3 *v3;
+	struct lov_comp_md_v1 *comp_v1 = buf->lb_buf;
+	__u32 magic;
+	int i, rc, array_cnt, old_array_cnt;
 	ENTRY;
 
 	LASSERT(lo->ldo_is_composite);
@@ -5065,10 +5065,11 @@ static void lod_striping_from_default(struct lod_object *lo,
 				      umode_t mode)
 {
 	struct lod_device *d = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct lov_desc *desc = &d->lod_desc;
 	int i, rc;
 
 	if (lds->lds_def_striping_set && S_ISREG(mode)) {
+		struct lov_desc *desc = &d->lod_ost_descs.ltd_lov_desc;
+
 		rc = lod_alloc_comp_entries(lo, lds->lds_def_mirror_cnt,
 					    lds->lds_def_comp_cnt);
 		if (rc != 0)
@@ -5204,7 +5205,8 @@ static void lod_ah_init(const struct lu_env *env,
 	LASSERT(child);
 
 	if (ah->dah_append_stripes == -1)
-		ah->dah_append_stripes = d->lod_desc.ld_tgt_count;
+		ah->dah_append_stripes =
+			d->lod_ost_descs.ltd_lov_desc.ld_tgt_count;
 
 	if (likely(parent)) {
 		nextp = dt_object_child(parent);
@@ -5385,7 +5387,7 @@ out:
 		}
 		LASSERT(!lc->ldo_is_composite);
 		lod_comp = &lc->ldo_comp_entries[0];
-		desc = &d->lod_desc;
+		desc = &d->lod_ost_descs.ltd_lov_desc;
 		lod_adjust_stripe_info(lod_comp, desc, ah->dah_append_stripes);
 		if (ah->dah_append_pool && ah->dah_append_pool[0])
 			lod_obj_set_pool(lc, 0, ah->dah_append_pool);
@@ -5673,14 +5675,12 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 			} else if (lo->ldo_dir_stripe_offset !=
 				   ss->ss_node_id) {
 				struct lod_device *lod;
-				struct lod_tgt_descs *ltd;
-				struct lod_tgt_desc *tgt = NULL;
+				struct lu_tgt_desc *mdt = NULL;
 				bool found_mdt = false;
 
 				lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-				ltd = &lod->lod_mdt_descs;
-				ltd_foreach_tgt(ltd, tgt) {
-					if (tgt->ltd_index ==
+				lod_foreach_mdt(lod, mdt) {
+					if (mdt->ltd_index ==
 						lo->ldo_dir_stripe_offset) {
 						found_mdt = true;
 						break;
@@ -6443,7 +6443,7 @@ static bool lod_sel_osts_allowed(const struct lu_env *env,
 			break;
 		}
 
-		rc = dt_statfs_info(env, ost->ltd_ost, sfs, &info);
+		rc = dt_statfs_info(env, ost->ltd_tgt, sfs, &info);
 		if (rc) {
 			CDEBUG(D_LAYOUT, "statfs failed for ost %d, error %d\n",
 			       index, rc);

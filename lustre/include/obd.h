@@ -394,7 +394,7 @@ struct lov_md_tgt_desc {
 struct lov_obd {
 	struct lov_desc		desc;
 	struct lov_tgt_desc   **lov_tgts;		/* sparse array */
-	struct ost_pool		lov_packed;		/* all OSTs in a packed
+	struct lu_tgt_pool	lov_packed;		/* all OSTs in a packed
 							   array */
 	struct mutex		lov_lock;
 	struct obd_connect_data	lov_ocd;
@@ -424,7 +424,6 @@ struct lov_obd {
 struct lmv_obd {
 	struct lu_client_fld	lmv_fld;
 	spinlock_t		lmv_lock;
-	struct lmv_desc		desc;
 
 	int			connected;
 	int			max_easize;
@@ -437,9 +436,11 @@ struct lmv_obd {
 	struct kobject		*lmv_tgts_kobj;
 	void			*lmv_cache;
 
-	struct lu_qos		lmv_qos;
 	__u32			lmv_qos_rr_index;
 };
+
+#define lmv_mdt_count	lmv_mdt_descs.ltd_lmv_desc.ld_tgt_count
+#define lmv_qos		lmv_mdt_descs.ltd_qos
 
 /* Minimum sector size is 512 */
 #define MAX_GUARD_NUMBER (PAGE_SIZE / 512)

@@ -71,7 +71,8 @@
  *
  * \param[in] env	execution environment for this thread
  * \param[in] d		LOD device
- * \param[in] index	index of OST target to check
+ * \param[in] ltd	target table
+ * \param[in] index	target index
  * \param[out] sfs	buffer for statfs data
  *
  * \retval 0		if the target is good
@@ -79,17 +80,19 @@
 
  */
 static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
-				int index, struct obd_statfs *sfs)
+				struct lu_tgt_descs *ltd, int index,
+				struct obd_statfs *sfs)
 {
-	struct lod_tgt_desc *ost;
-	int		     rc;
+	struct lov_desc *desc = &ltd->ltd_lov_desc;
+	struct lu_tgt_desc *tgt = LTD_TGT(ltd, index);
+	int rc;
+
 	ENTRY;
 
 	LASSERT(d);
-	ost = OST_TGT(d,index);
-	LASSERT(ost);
+	LASSERT(tgt);
 
-	rc = dt_statfs(env, ost->ltd_ost, sfs);
+	rc = dt_statfs(env, tgt->ltd_tgt, sfs);
 
 	if (rc == 0 && ((sfs->os_state & OS_STATE_ENOSPC) ||
 	    (sfs->os_state & OS_STATE_ENOINO && sfs->os_fprecreated == 0)))
@@ -107,36 +110,36 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 		rc = -ENOBUFS;
 
 	/* check whether device has changed state (active, inactive) */
-	if (rc != 0 && ost->ltd_active) {
+	if (rc != 0 && tgt->ltd_active) {
 		/* turned inactive? */
 		spin_lock(&d->lod_lock);
-		if (ost->ltd_active) {
-			ost->ltd_active = 0;
+		if (tgt->ltd_active) {
+			tgt->ltd_active = 0;
 			if (rc == -ENOTCONN)
-				ost->ltd_connecting = 1;
+				tgt->ltd_connecting = 1;
 
-			LASSERT(d->lod_desc.ld_active_tgt_count > 0);
-			d->lod_desc.ld_active_tgt_count--;
-			d->lod_qos.lq_dirty = 1;
-			d->lod_qos.lq_rr.lqr_dirty = 1;
+			LASSERT(desc->ld_active_tgt_count > 0);
+			desc->ld_active_tgt_count--;
+			ltd->ltd_qos.lq_dirty = 1;
+			ltd->ltd_qos.lq_rr.lqr_dirty = 1;
 			CDEBUG(D_CONFIG, "%s: turns inactive\n",
-			       ost->ltd_exp->exp_obd->obd_name);
+			       tgt->ltd_exp->exp_obd->obd_name);
 		}
 		spin_unlock(&d->lod_lock);
-	} else if (rc == 0 && ost->ltd_active == 0) {
+	} else if (rc == 0 && tgt->ltd_active == 0) {
 		/* turned active? */
-		LASSERTF(d->lod_desc.ld_active_tgt_count < d->lod_ostnr,
-			 "active tgt count %d, ost nr %d\n",
-			 d->lod_desc.ld_active_tgt_count, d->lod_ostnr);
+		LASSERTF(desc->ld_active_tgt_count < desc->ld_tgt_count,
+			 "active tgt count %d, tgt nr %d\n",
+			 desc->ld_active_tgt_count, desc->ld_tgt_count);
 		spin_lock(&d->lod_lock);
-		if (ost->ltd_active == 0) {
-			ost->ltd_active = 1;
-			ost->ltd_connecting = 0;
-			d->lod_desc.ld_active_tgt_count++;
-			d->lod_qos.lq_dirty = 1;
-			d->lod_qos.lq_rr.lqr_dirty = 1;
+		if (tgt->ltd_active == 0) {
+			tgt->ltd_active = 1;
+			tgt->ltd_connecting = 0;
+			desc->ld_active_tgt_count++;
+			ltd->ltd_qos.lq_dirty = 1;
+			ltd->ltd_qos.lq_rr.lqr_dirty = 1;
 			CDEBUG(D_CONFIG, "%s: turns active\n",
-			       ost->ltd_exp->exp_obd->obd_name);
+			       tgt->ltd_exp->exp_obd->obd_name);
 		}
 		spin_unlock(&d->lod_lock);
 	}
@@ -157,20 +160,21 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod)
 {
 	struct obd_device *obd = lod2obd(lod);
-	struct ost_pool *osts = &(lod->lod_pool_info);
+	struct lu_tgt_pool *osts = &lod->lod_ost_descs.ltd_tgt_pool;
 	time64_t max_age;
 	unsigned int i;
 	u64 avail;
 	int idx;
 	ENTRY;
 
-	max_age = ktime_get_seconds() - 2 * lod->lod_desc.ld_qos_maxage;
+	max_age = ktime_get_seconds() -
+		  2 * lod->lod_ost_descs.ltd_lov_desc.ld_qos_maxage;
 
 	if (obd->obd_osfs_age > max_age)
 		/* statfs data are quite recent, don't need to refresh it */
 		RETURN_EXIT;
 
-	down_write(&lod->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 	if (obd->obd_osfs_age > max_age)
 		goto out;
@@ -178,17 +182,17 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod)
 	for (i = 0; i < osts->op_count; i++) {
 		idx = osts->op_array[i];
 		avail = OST_TGT(lod,idx)->ltd_statfs.os_bavail;
-		if (lod_statfs_and_check(env, lod, idx,
+		if (lod_statfs_and_check(env, lod, &lod->lod_ost_descs, idx,
 					 &OST_TGT(lod, idx)->ltd_statfs))
 			continue;
 		if (OST_TGT(lod,idx)->ltd_statfs.os_bavail != avail)
 			/* recalculate weigths */
-			lod->lod_qos.lq_dirty = 1;
+			lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
 	}
 	obd->obd_osfs_age = ktime_get_seconds();
 
 out:
-	up_write(&lod->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 	EXIT;
 }
 
@@ -210,7 +214,7 @@ out:
  * \retval 0		on success
  * \retval -ENOMEM	fails to allocate the array
  */
-static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
+static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_pool *src_pool,
 			   struct lu_qos_rr *lqr)
 {
 	struct lu_svr_qos  *oss;
@@ -226,7 +230,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	}
 
 	/* Do actual allocation. */
-	down_write(&lod->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 	/*
 	 * Check again. While we were sleeping on @lq_rw_sem something could
@@ -234,7 +238,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	 */
 	if (!lqr->lqr_dirty) {
 		LASSERT(lqr->lqr_pool.op_size);
-		up_write(&lod->lod_qos.lq_rw_sem);
+		up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 		RETURN(0);
 	}
 
@@ -247,7 +251,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	lqr->lqr_pool.op_count = real_count;
 	rc = lod_ost_pool_extend(&lqr->lqr_pool, real_count);
 	if (rc) {
-		up_write(&lod->lod_qos.lq_rw_sem);
+		up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 		RETURN(rc);
 	}
 	for (i = 0; i < lqr->lqr_pool.op_count; i++)
@@ -255,7 +259,8 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 
 	/* Place all the OSTs from 1 OSS at the same time. */
 	placed = 0;
-	list_for_each_entry(oss, &lod->lod_qos.lq_svr_list, lsq_svr_list) {
+	list_for_each_entry(oss, &lod->lod_ost_descs.ltd_qos.lq_svr_list,
+			    lsq_svr_list) {
 		int j = 0;
 
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
@@ -266,7 +271,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 				continue;
 
 			ost = OST_TGT(lod,src_pool->op_array[i]);
-			LASSERT(ost && ost->ltd_ost);
+			LASSERT(ost && ost->ltd_tgt);
 			if (ost->ltd_qos.ltq_svr != oss)
 				continue;
 
@@ -282,7 +287,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	}
 
 	lqr->lqr_dirty = 0;
-	up_write(&lod->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 	if (placed != real_count) {
 		/* This should never happen */
@@ -338,12 +343,12 @@ static struct dt_object *lod_qos_declare_object_on(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(d);
-	LASSERT(ost_idx < d->lod_osts_size);
+	LASSERT(ost_idx < d->lod_ost_descs.ltd_tgts_size);
 	ost = OST_TGT(d,ost_idx);
 	LASSERT(ost);
-	LASSERT(ost->ltd_ost);
+	LASSERT(ost->ltd_tgt);
 
-	nd = &ost->ltd_ost->dd_lu_dev;
+	nd = &ost->ltd_tgt->dd_lu_dev;
 
 	/*
 	 * allocate anonymous object with zero fid, real fid
@@ -589,7 +594,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	rc = lod_statfs_and_check(env, lod, ost_idx, sfs);
+	rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost_idx, sfs);
 	if (rc)
 		RETURN(rc);
 
@@ -694,9 +699,9 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct pool_desc  *pool = NULL;
-	struct ost_pool   *osts;
+	struct lu_tgt_pool *osts;
 	struct lu_qos_rr *lqr;
-	unsigned int	i, array_idx;
+	unsigned int i, array_idx;
 	__u32 ost_start_idx_temp;
 	__u32 stripe_idx = 0;
 	__u32 stripe_count, stripe_count_min, ost_idx;
@@ -718,8 +723,8 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		osts = &(pool->pool_obds);
 		lqr = &(pool->pool_rr);
 	} else {
-		osts = &(m->lod_pool_info);
-		lqr = &(m->lod_qos.lq_rr);
+		osts = &m->lod_ost_descs.ltd_tgt_pool;
+		lqr = &(m->lod_ost_descs.ltd_qos.lq_rr);
 	}
 
 	rc = lod_qos_calc_rr(m, osts, lqr);
@@ -730,7 +735,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
-	down_read(&m->lod_qos.lq_rw_sem);
+	down_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
 	spin_lock(&lqr->lqr_alloc);
 	if (--lqr->lqr_start_count <= 0) {
 		lqr->lqr_start_idx = prandom_u32_max(osts->op_count);
@@ -799,7 +804,7 @@ repeat_find:
 	}
 
 	spin_unlock(&lqr->lqr_alloc);
-	up_read(&m->lod_qos.lq_rw_sem);
+	up_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 	/* If there are enough OSTs, a component with overstriping requested
 	 * will not actually end up overstriped.  The comp should reflect this.
@@ -914,7 +919,8 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 			break;
 		}
 
-		rc = lod_statfs_and_check(env, m, ost_idx, sfs);
+		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs, ost_idx,
+					  sfs);
 		if (rc < 0) /* this OSP doesn't feel well */
 			break;
 
@@ -977,8 +983,8 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 	unsigned int i, array_idx, ost_count;
 	int rc, stripe_num = 0;
 	int speed = 0;
-	struct pool_desc  *pool = NULL;
-	struct ost_pool   *osts;
+	struct pool_desc *pool = NULL;
+	struct lu_tgt_pool *osts;
 	int stripes_per_ost = 1;
 	bool overstriped = false;
 	ENTRY;
@@ -997,7 +1003,7 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 		down_read(&pool_tgt_rw_sem(pool));
 		osts = &(pool->pool_obds);
 	} else {
-		osts = &(m->lod_pool_info);
+		osts = &m->lod_ost_descs.ltd_tgt_pool;
 	}
 
 	ost_count = osts->op_count;
@@ -1058,7 +1064,8 @@ repeat_find:
 		 * start OST, then it can be skipped, otherwise skip it only
 		 * if it is inactive/recovering/out-of-space." */
 
-		rc = lod_statfs_and_check(env, m, ost_idx, sfs);
+		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs, ost_idx,
+					  sfs);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -1169,7 +1176,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	struct dt_object *o;
 	__u64 total_weight = 0;
 	struct pool_desc *pool = NULL;
-	struct ost_pool *osts;
+	struct lu_tgt_pool *osts;
 	unsigned int i;
 	__u32 nfound, good_osts, stripe_count, stripe_count_min;
 	bool overstriped = false;
@@ -1191,11 +1198,11 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		down_read(&pool_tgt_rw_sem(pool));
 		osts = &(pool->pool_obds);
 	} else {
-		osts = &(lod->lod_pool_info);
+		osts = &lod->lod_ost_descs.ltd_tgt_pool;
 	}
 
 	/* Detect -EAGAIN early, before expensive lock is taken. */
-	if (!lqos_is_usable(&lod->lod_qos, lod->lod_desc.ld_active_tgt_count))
+	if (!ltd_qos_is_usable(&lod->lod_ost_descs))
 		GOTO(out_nolock, rc = -EAGAIN);
 
 	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
@@ -1203,18 +1210,16 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			(lod_comp->llc_stripe_count - 1)/osts->op_count + 1;
 
 	/* Do actual allocation, use write lock here. */
-	down_write(&lod->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 	/*
 	 * Check again, while we were sleeping on @lq_rw_sem things could
 	 * change.
 	 */
-	if (!lqos_is_usable(&lod->lod_qos, lod->lod_desc.ld_active_tgt_count))
+	if (!ltd_qos_is_usable(&lod->lod_ost_descs))
 		GOTO(out, rc = -EAGAIN);
 
-	rc = lqos_calc_penalties(&lod->lod_qos, &lod->lod_ost_descs,
-				 lod->lod_desc.ld_active_tgt_count,
-				 lod->lod_desc.ld_qos_maxage, false);
+	rc = ltd_qos_penalties_calc(&lod->lod_ost_descs);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1231,7 +1236,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		ost = OST_TGT(lod, osts->op_array[i]);
 		ost->ltd_qos.ltq_usable = 0;
 
-		rc = lod_statfs_and_check(env, lod, osts->op_array[i], sfs);
+		rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs,
+					  osts->op_array[i], sfs);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -1247,7 +1253,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			continue;
 
 		ost->ltd_qos.ltq_usable = 1;
-		lqos_calc_weight(ost);
+		lu_tgt_qos_weight_calc(ost);
 		total_weight += ost->ltd_qos.ltq_weight;
 
 		good_osts++;
@@ -1324,10 +1330,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			lod_qos_ost_in_use(env, nfound, idx);
 			stripe[nfound] = o;
 			ost_indices[nfound] = idx;
-			lqos_recalc_weight(&lod->lod_qos, &lod->lod_ost_descs,
-					   ost,
-					   lod->lod_desc.ld_active_tgt_count,
-					   &total_weight);
+			ltd_qos_update(&lod->lod_ost_descs, ost, &total_weight);
 			nfound++;
 			rc = 0;
 			break;
@@ -1356,8 +1359,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		/* makes sense to rebalance next time */
-		lod->lod_qos.lq_dirty = 1;
-		lod->lod_qos.lq_same_space = 0;
+		lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
+		lod->lod_ost_descs.ltd_qos.lq_same_space = 0;
 
 		rc = -EAGAIN;
 	}
@@ -1369,7 +1372,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		lod_comp->llc_pattern &= ~LOV_PATTERN_OVERSTRIPING;
 
 out:
-	up_write(&lod->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 out_nolock:
 	if (pool != NULL) {
@@ -1408,12 +1411,16 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 
 
 	if (!stripe_count)
-		stripe_count = lod->lod_desc.ld_default_stripe_count;
+		stripe_count =
+			lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_count;
 	if (!stripe_count)
 		stripe_count = 1;
 	/* Overstriping allows more stripes than targets */
-	if (stripe_count > lod->lod_desc.ld_active_tgt_count && !overstriping)
-		stripe_count = lod->lod_desc.ld_active_tgt_count;
+	if (stripe_count >
+		lod->lod_ost_descs.ltd_lov_desc.ld_active_tgt_count &&
+	    !overstriping)
+		stripe_count =
+			lod->lod_ost_descs.ltd_lov_desc.ld_active_tgt_count;
 
 	if (lo->ldo_is_composite) {
 		struct lod_layout_component *lod_comp;
@@ -1629,7 +1636,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	struct lov_desc *desc = &d->lod_desc;
+	struct lov_desc *desc = &d->lod_ost_descs.ltd_lov_desc;
 	struct lov_user_md_v1 *v1 = NULL;
 	struct lov_user_md_v3 *v3 = NULL;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
@@ -1845,16 +1852,16 @@ free_comp:
 int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct lod_tgt_descs *ltds = &lod->lod_ost_descs;
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
 	struct cfs_bitmap *bitmap = NULL;
 	__u32 *new_oss = NULL;
 
-	lag->lag_ost_avail = ltds->ltd_tgtnr;
+	lag->lag_ost_avail = lod->lod_ost_count;
 
 	/* reset OSS avoid guide array */
 	lag->lag_oaa_count = 0;
-	if (lag->lag_oss_avoid_array && lag->lag_oaa_size < ltds->ltd_tgtnr) {
+	if (lag->lag_oss_avoid_array &&
+	    lag->lag_oaa_size < lod->lod_ost_count) {
 		OBD_FREE(lag->lag_oss_avoid_array,
 			 sizeof(__u32) * lag->lag_oaa_size);
 		lag->lag_oss_avoid_array = NULL;
@@ -1863,7 +1870,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 
 	/* init OST avoid guide bitmap */
 	if (lag->lag_ost_avoid_bitmap) {
-		if (ltds->ltd_tgtnr <= lag->lag_ost_avoid_bitmap->size) {
+		if (lod->lod_ost_count <= lag->lag_ost_avoid_bitmap->size) {
 			CFS_RESET_BITMAP(lag->lag_ost_avoid_bitmap);
 		} else {
 			CFS_FREE_BITMAP(lag->lag_ost_avoid_bitmap);
@@ -1872,7 +1879,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 	}
 
 	if (!lag->lag_ost_avoid_bitmap) {
-		bitmap = CFS_ALLOCATE_BITMAP(ltds->ltd_tgtnr);
+		bitmap = CFS_ALLOCATE_BITMAP(lod->lod_ost_count);
 		if (!bitmap)
 			return -ENOMEM;
 	}
@@ -1884,7 +1891,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 		 * using OST count to allocate the array to store the OSS
 		 * id.
 		 */
-		OBD_ALLOC(new_oss, sizeof(*new_oss) * ltds->ltd_tgtnr);
+		OBD_ALLOC(new_oss, sizeof(*new_oss) * lod->lod_ost_count);
 		if (!new_oss) {
 			CFS_FREE_BITMAP(bitmap);
 			return -ENOMEM;
@@ -1893,7 +1900,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 
 	if (new_oss) {
 		lag->lag_oss_avoid_array = new_oss;
-		lag->lag_oaa_size = ltds->ltd_tgtnr;
+		lag->lag_oaa_size = lod->lod_ost_count;
 	}
 	if (bitmap)
 		lag->lag_ost_avoid_bitmap = bitmap;
@@ -2053,7 +2060,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		lod_getref(&d->lod_ost_descs);
 		/* XXX: support for non-0 files w/o objects */
 		CDEBUG(D_OTHER, "tgt_count %d stripe_count %d\n",
-				d->lod_desc.ld_tgt_count, stripe_len);
+		       d->lod_ost_count, stripe_len);
 
 		if (lod_comp->llc_ostlist.op_array &&
 		    lod_comp->llc_ostlist.op_count) {
@@ -2147,7 +2154,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 	/* no OST available */
 	/* XXX: should we be waiting a bit to prevent failures during
 	 * cluster initialization? */
-	if (d->lod_ostnr == 0)
+	if (!d->lod_ost_count)
 		RETURN(-EIO);
 
 	/*

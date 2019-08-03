@@ -136,7 +136,7 @@ static int lod_stripesize_seq_show(struct seq_file *m, void *v)
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
 	seq_printf(m, "%llu\n",
-		   lod->lod_desc.ld_default_stripe_size);
+		   lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_size);
 	return 0;
 }
 
@@ -172,7 +172,7 @@ lod_stripesize_seq_write(struct file *file, const char __user *buffer,
 		return -ERANGE;
 
 	lod_fix_desc_stripe_size(&val);
-	lod->lod_desc.ld_default_stripe_size = val;
+	lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_size = val;
 
 	return count;
 }
@@ -194,7 +194,8 @@ static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%lld\n", lod->lod_desc.ld_default_stripe_offset);
+	return sprintf(buf, "%lld\n",
+		lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_offset);
 }
 
 /**
@@ -227,7 +228,7 @@ static ssize_t stripeoffset_store(struct kobject *kobj, struct attribute *attr,
 	if (val < -1 || val > LOV_MAX_STRIPE_COUNT)
 		return -ERANGE;
 
-	lod->lod_desc.ld_default_stripe_offset = val;
+	lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_offset = val;
 
 	return count;
 }
@@ -249,7 +250,7 @@ static ssize_t stripetype_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%u\n", lod->lod_desc.ld_pattern);
+	return sprintf(buf, "%u\n", lod->lod_ost_descs.ltd_lov_desc.ld_pattern);
 }
 
 /**
@@ -278,7 +279,7 @@ static ssize_t stripetype_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	lod_fix_desc_pattern(&pattern);
-	lod->lod_desc.ld_pattern = pattern;
+	lod->lod_ost_descs.ltd_lov_desc.ld_pattern = pattern;
 
 	return count;
 }
@@ -299,9 +300,10 @@ static ssize_t stripecount_show(struct kobject *kobj, struct attribute *attr,
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lov_desc *desc = &lod->lod_ost_descs.ltd_lov_desc;
 
 	return sprintf(buf, "%d\n",
-		       (s16)(lod->lod_desc.ld_default_stripe_count + 1) - 1);
+		      (s16)(desc->ld_default_stripe_count + 1) - 1);
 }
 
 /**
@@ -333,7 +335,7 @@ static ssize_t stripecount_store(struct kobject *kobj, struct attribute *attr,
 		return -ERANGE;
 
 	lod_fix_desc_stripe_count(&stripe_count);
-	lod->lod_desc.ld_default_stripe_count = stripe_count;
+	lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_count = stripe_count;
 
 	return count;
 }
@@ -355,7 +357,7 @@ static ssize_t numobd_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%u\n", lod->lod_desc.ld_tgt_count);
+	return sprintf(buf, "%u\n", lod->lod_ost_count);
 }
 LUSTRE_RO_ATTR(numobd);
 
@@ -375,7 +377,8 @@ static ssize_t activeobd_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%u\n", lod->lod_desc.ld_active_tgt_count);
+	return sprintf(buf, "%u\n",
+		       lod->lod_ost_descs.ltd_lov_desc.ld_active_tgt_count);
 }
 LUSTRE_RO_ATTR(activeobd);
 
@@ -395,7 +398,8 @@ static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%s\n", lod->lod_desc.ld_uuid.uuid);
+	return sprintf(buf, "%s\n",
+		       lod->lod_ost_descs.ltd_lov_desc.ld_uuid.uuid);
 }
 LUSTRE_RO_ATTR(desc_uuid);
 
@@ -421,7 +425,8 @@ static ssize_t qos_prio_free_show(struct kobject *kobj, struct attribute *attr,
 	struct lod_device *lod = dt2lod_dev(dt);
 
 	return sprintf(buf, "%d%%\n",
-		       (lod->lod_qos.lq_prio_free * 100 + 255) >> 8);
+		       (lod->lod_ost_descs.ltd_qos.lq_prio_free * 100 + 255) >>
+				8);
 }
 
 /**
@@ -455,9 +460,9 @@ static ssize_t qos_prio_free_store(struct kobject *kobj, struct attribute *attr,
 
 	if (val > 100)
 		return -EINVAL;
-	lod->lod_qos.lq_prio_free = (val << 8) / 100;
-	lod->lod_qos.lq_dirty = 1;
-	lod->lod_qos.lq_reset = 1;
+	lod->lod_ost_descs.ltd_qos.lq_prio_free = (val << 8) / 100;
+	lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
+	lod->lod_ost_descs.ltd_qos.lq_reset = 1;
 
 	return count;
 }
@@ -480,7 +485,8 @@ static int lod_qos_thresholdrr_seq_show(struct seq_file *m, void *v)
 	LASSERT(dev != NULL);
 	lod = lu2lod_dev(dev->obd_lu_dev);
 	seq_printf(m, "%d%%\n",
-		   (lod->lod_qos.lq_threshold_rr * 100 + 255) >> 8);
+		   (lod->lod_ost_descs.ltd_qos.lq_threshold_rr * 100 + 255) >>
+			8);
 	return 0;
 }
 
@@ -521,8 +527,8 @@ lod_qos_thresholdrr_seq_write(struct file *file, const char __user *buffer,
 	if (val > 100 || val < 0)
 		return -EINVAL;
 
-	lod->lod_qos.lq_threshold_rr = (val << 8) / 100;
-	lod->lod_qos.lq_dirty = 1;
+	lod->lod_ost_descs.ltd_qos.lq_threshold_rr = (val << 8) / 100;
+	lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
 
 	return count;
 }
@@ -545,7 +551,8 @@ static ssize_t qos_maxage_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%u Sec\n", lod->lod_desc.ld_qos_maxage);
+	return sprintf(buf, "%u Sec\n",
+		       lod->lod_ost_descs.ltd_lov_desc.ld_qos_maxage);
 }
 
 /**
@@ -569,7 +576,7 @@ static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
 	struct lu_device *next;
 	struct lustre_cfg *lcfg;
 	char str[32];
-	unsigned int i;
+	struct lu_tgt_desc *tgt;
 	int rc;
 	u32 val;
 
@@ -579,7 +586,7 @@ static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
 
 	if (val <= 0)
 		return -EINVAL;
-	lod->lod_desc.ld_qos_maxage = val;
+	lod->lod_ost_descs.ltd_lov_desc.ld_qos_maxage = val;
 
 	/*
 	 * propogate the value down to OSPs
@@ -593,11 +600,12 @@ static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
 	lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
 
 	lod_getref(&lod->lod_ost_descs);
-	lod_foreach_ost(lod, i) {
-		next = &OST_TGT(lod,i)->ltd_ost->dd_lu_dev;
+	lod_foreach_ost(lod, tgt) {
+		next = &tgt->ltd_tgt->dd_lu_dev;
 		rc = next->ld_ops->ldo_process_config(NULL, next, lcfg);
 		if (rc)
-			CERROR("can't set maxage on #%d: %d\n", i, rc);
+			CERROR("can't set maxage on #%d: %d\n",
+			       tgt->ltd_index, rc);
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
@@ -664,7 +672,7 @@ static void *lod_osts_seq_next(struct seq_file *p, void *v, loff_t *pos)
 static int lod_osts_seq_show(struct seq_file *p, void *v)
 {
 	struct obd_device   *obd = p->private;
-	struct lod_ost_desc *ost_desc = v;
+	struct lu_tgt_desc *ost_desc = v;
 	struct lod_device   *lod;
 	int                  idx, rc, active;
 	struct dt_device    *next;
@@ -674,7 +682,7 @@ static int lod_osts_seq_show(struct seq_file *p, void *v)
 	lod = lu2lod_dev(obd->obd_lu_dev);
 
 	idx = ost_desc->ltd_index;
-	next = OST_TGT(lod,idx)->ltd_ost;
+	next = OST_TGT(lod, idx)->ltd_tgt;
 	if (next == NULL)
 		return -EINVAL;
 

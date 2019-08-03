@@ -358,8 +358,7 @@ static int lod_sub_recovery_thread(void *arg)
 	struct llog_ctxt *ctxt = NULL;
 	struct lu_env env;
 	struct lu_target *lut;
-	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	struct lod_tgt_desc *tgt = NULL;
+	struct lu_tgt_desc *mdt = NULL;
 	time64_t start;
 	int retries = 0;
 	int rc;
@@ -452,8 +451,8 @@ again:
 		GOTO(out, rc = 0);
 	}
 
-	ltd_foreach_tgt(ltd, tgt) {
-		if (!tgt->ltd_got_update_log) {
+	lod_foreach_mdt(lod, mdt) {
+		if (!mdt->ltd_got_update_log) {
 			spin_unlock(&lod->lod_lock);
 			GOTO(out, rc = 0);
 		}
@@ -616,12 +615,12 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		thread = &lod->lod_child_recovery_thread;
 		index = master_index;
 	} else {
-		struct lu_tgt_desc *tgt;
+		struct lu_tgt_desc *mdt;
 
-		ltd_foreach_tgt(&lod->lod_mdt_descs, tgt) {
-			if (tgt->ltd_tgt == dt) {
-				index = tgt->ltd_index;
-				subtgt = tgt;
+		lod_foreach_mdt(lod, mdt) {
+			if (mdt->ltd_tgt == dt) {
+				index = mdt->ltd_index;
+				subtgt = mdt;
 				break;
 			}
 		}
@@ -688,9 +687,8 @@ free_lrd:
 static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 					  struct lod_device *lod)
 {
-	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
 	struct ptlrpc_thread *thread;
-	struct lu_tgt_desc *tgt;
+	struct lu_tgt_desc *mdt;
 
 	/*
 	 * Stop the update log commit cancel threads and finish master
@@ -704,20 +702,19 @@ static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 		wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 	}
 
-	lod_getref(ltd);
-	ltd_foreach_tgt(ltd, tgt) {
-		thread = tgt->ltd_recovery_thread;
+	lod_getref(&lod->lod_mdt_descs);
+	lod_foreach_mdt(lod, mdt) {
+		thread = mdt->ltd_recovery_thread;
 		if (thread && thread->t_flags & SVC_RUNNING) {
 			thread->t_flags = SVC_STOPPING;
 			wake_up(&thread->t_ctl_waitq);
 			wait_event(thread->t_ctl_waitq,
 				   thread->t_flags & SVC_STOPPED);
-			OBD_FREE_PTR(tgt->ltd_recovery_thread);
-			tgt->ltd_recovery_thread = NULL;
+			OBD_FREE_PTR(mdt->ltd_recovery_thread);
+			mdt->ltd_recovery_thread = NULL;
 		}
 	}
-
-	lod_putref(lod, ltd);
+	lod_putref(lod, &lod->lod_mdt_descs);
 }
 
 /**
@@ -731,8 +728,7 @@ static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 static void lod_sub_fini_all_llogs(const struct lu_env *env,
 				   struct lod_device *lod)
 {
-	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	struct lu_tgt_desc *tgt;
+	struct lu_tgt_desc *mdt;
 
 	/*
 	 * Stop the update log commit cancel threads and finish master
@@ -740,19 +736,18 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 	 */
 	lod_sub_fini_llog(env, lod->lod_child,
 			  &lod->lod_child_recovery_thread);
-	lod_getref(ltd);
-	ltd_foreach_tgt(ltd, tgt)
-		lod_sub_fini_llog(env, tgt->ltd_tgt,
-				  tgt->ltd_recovery_thread);
-	lod_putref(lod, ltd);
+	lod_getref(&lod->lod_mdt_descs);
+	lod_foreach_mdt(lod, mdt)
+		lod_sub_fini_llog(env, mdt->ltd_tgt,
+				  mdt->ltd_recovery_thread);
+	lod_putref(lod, &lod->lod_mdt_descs);
 }
 
 static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
 {
 	struct lod_device *lod = (struct lod_device *)data;
 	struct lu_target *lut = lod2lu_dev(lod)->ld_site->ls_tgt;
-	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	struct lod_tgt_desc *tgt = NULL;
+	struct lu_tgt_desc *mdt = NULL;
 	char *buf;
 	int len = 0;
 	int rc;
@@ -783,10 +778,10 @@ static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
 		(*count)++;
 	}
 
-	ltd_foreach_tgt(ltd, tgt) {
-		if (!tgt->ltd_got_update_log) {
+	lod_foreach_mdt(lod, mdt) {
+		if (!mdt->ltd_got_update_log) {
 			rc = snprintf(buf + len, *size - len, " %04x",
-				      tgt->ltd_index);
+				      mdt->ltd_index);
 			if (unlikely(rc <= 0))
 				break;
 
@@ -954,9 +949,8 @@ static int lod_process_config(const struct lu_env *env,
 			rc = lod_add_device(env, lod, arg1, index, gen,
 					    mdt_index, LUSTRE_OSC_NAME, 0);
 		} else {
-			rc = lod_del_device(env, lod,
-					    &lod->lod_ost_descs,
-					    arg1, index, gen, true);
+			rc = lod_del_device(env, lod, &lod->lod_ost_descs,
+					    arg1, index, gen);
 		}
 
 		break;
@@ -973,9 +967,8 @@ static int lod_process_config(const struct lu_env *env,
 		 */
 		param = lustre_cfg_buf(lcfg, 1);
 		if (strstr(param, "osp") && strstr(param, ".active=")) {
-			struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
 			struct lod_tgt_desc *sub_tgt = NULL;
-			struct lu_tgt_desc *tgt;
+			struct lu_tgt_desc *mdt;
 			char *ptr;
 			char *tmp;
 
@@ -989,9 +982,9 @@ static int lod_process_config(const struct lu_env *env,
 				GOTO(out, rc);
 			}
 
-			ltd_foreach_tgt(ltd, tgt) {
-				if (tgt->ltd_tgt->dd_lu_dev.ld_obd == obd) {
-					sub_tgt = tgt;
+			lod_foreach_mdt(lod, mdt) {
+				if (mdt->ltd_tgt->dd_lu_dev.ld_obd == obd) {
+					sub_tgt = mdt;
 					break;
 				}
 			}
@@ -1107,7 +1100,7 @@ static int lod_recovery_complete(const struct lu_env *env,
 {
 	struct lod_device *lod = lu2lod_dev(dev);
 	struct lu_device *next = &lod->lod_child->dd_lu_dev;
-	unsigned int i;
+	struct lod_tgt_desc *tgt;
 	int rc;
 
 	ENTRY;
@@ -1118,17 +1111,15 @@ static int lod_recovery_complete(const struct lu_env *env,
 	rc = next->ld_ops->ldo_recovery_complete(env, next);
 
 	lod_getref(&lod->lod_ost_descs);
-	if (lod->lod_osts_size > 0) {
-		cfs_foreach_bit(lod->lod_ost_bitmap, i) {
-			struct lod_tgt_desc *tgt;
-
-			tgt = OST_TGT(lod, i);
+	if (lod->lod_ost_descs.ltd_tgts_size > 0) {
+		lod_foreach_ost(lod, tgt) {
 			LASSERT(tgt && tgt->ltd_tgt);
-			next = &tgt->ltd_ost->dd_lu_dev;
+			next = &tgt->ltd_tgt->dd_lu_dev;
 			rc = next->ld_ops->ldo_recovery_complete(env, next);
 			if (rc)
 				CERROR("%s: can't complete recovery on #%d: rc = %d\n",
-				       lod2obd(lod)->obd_name, i, rc);
+				       lod2obd(lod)->obd_name, tgt->ltd_index,
+				       rc);
 		}
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
@@ -1149,8 +1140,7 @@ static int lod_recovery_complete(const struct lu_env *env,
  */
 static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 {
-	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
-	struct lu_tgt_desc *tgt;
+	struct lu_tgt_desc *mdt;
 	int rc;
 
 	ENTRY;
@@ -1166,8 +1156,8 @@ static int lod_sub_init_llogs(const struct lu_env *env, struct lod_device *lod)
 	if (rc < 0)
 		RETURN(rc);
 
-	ltd_foreach_tgt(ltd, tgt) {
-		rc = lod_sub_init_llog(env, lod, tgt->ltd_tgt);
+	lod_foreach_mdt(lod, mdt) {
+		rc = lod_sub_init_llog(env, lod, mdt->ltd_tgt);
 		if (rc != 0)
 			break;
 	}
@@ -1299,12 +1289,11 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 		      struct obd_statfs *sfs, struct obd_statfs_info *info)
 {
 	struct lod_device *lod = dt2lod_dev(dev);
-	struct lod_ost_desc *ost;
-	struct lod_mdt_desc *mdt;
+	struct lu_tgt_desc *tgt;
 	struct obd_statfs ost_sfs;
 	u64 ost_files = 0;
 	u64 ost_ffree = 0;
-	int i, rc, bs;
+	int rc, bs;
 
 	rc = dt_statfs(env, dt2lod_dev(dev)->lod_child, sfs);
 	if (rc)
@@ -1318,10 +1307,8 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 	sfs->os_granted = 0;
 
 	lod_getref(&lod->lod_mdt_descs);
-	lod_foreach_mdt(lod, i) {
-		mdt = MDT_TGT(lod, i);
-		LASSERT(mdt && mdt->ltd_mdt);
-		rc = dt_statfs(env, mdt->ltd_mdt, &ost_sfs);
+	lod_foreach_mdt(lod, tgt) {
+		rc = dt_statfs(env, tgt->ltd_tgt, &ost_sfs);
 		/* ignore errors */
 		if (rc)
 			continue;
@@ -1337,10 +1324,8 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 	 * just fallback to pre-DoM policy if any OST is alive
 	 */
 	lod_getref(&lod->lod_ost_descs);
-	lod_foreach_ost(lod, i) {
-		ost = OST_TGT(lod, i);
-		LASSERT(ost && ost->ltd_ost);
-		rc = dt_statfs(env, ost->ltd_ost, &ost_sfs);
+	lod_foreach_ost(lod, tgt) {
+		rc = dt_statfs(env, tgt->ltd_tgt, &ost_sfs);
 		/* ignore errors */
 		if (rc || ost_sfs.os_bsize == 0)
 			continue;
@@ -1506,24 +1491,21 @@ static void lod_conf_get(const struct lu_env *env,
 static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 {
 	struct lod_device *lod = dt2lod_dev(dev);
-	struct lod_ost_desc *ost;
-	struct lod_mdt_desc *mdt;
-	unsigned int i;
+	struct lu_tgt_desc *tgt;
 	int rc = 0;
 
 	ENTRY;
 
 	lod_getref(&lod->lod_ost_descs);
-	lod_foreach_ost(lod, i) {
-		ost = OST_TGT(lod, i);
-		LASSERT(ost && ost->ltd_ost);
-		if (!ost->ltd_active)
+	lod_foreach_ost(lod, tgt) {
+		if (!tgt->ltd_active)
 			continue;
-		rc = dt_sync(env, ost->ltd_ost);
+		rc = dt_sync(env, tgt->ltd_tgt);
 		if (rc) {
 			if (rc != -ENOTCONN) {
 				CERROR("%s: can't sync ost %u: rc = %d\n",
-				       lod2obd(lod)->obd_name, i, rc);
+				       lod2obd(lod)->obd_name, tgt->ltd_index,
+				       rc);
 				break;
 			}
 			rc = 0;
@@ -1535,16 +1517,15 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 		RETURN(rc);
 
 	lod_getref(&lod->lod_mdt_descs);
-	lod_foreach_mdt(lod, i) {
-		mdt = MDT_TGT(lod, i);
-		LASSERT(mdt && mdt->ltd_mdt);
-		if (!mdt->ltd_active)
+	lod_foreach_mdt(lod, tgt) {
+		if (!tgt->ltd_active)
 			continue;
-		rc = dt_sync(env, mdt->ltd_mdt);
+		rc = dt_sync(env, tgt->ltd_tgt);
 		if (rc) {
 			if (rc != -ENOTCONN) {
 				CERROR("%s: can't sync mdt %u: rc = %d\n",
-				       lod2obd(lod)->obd_name, i, rc);
+				       lod2obd(lod)->obd_name, tgt->ltd_index,
+				       rc);
 				break;
 			}
 			rc = 0;
@@ -1754,8 +1735,8 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 
 	spin_lock_init(&lod->lod_lock);
 	spin_lock_init(&lod->lod_connects_lock);
-	lu_tgt_descs_init(&lod->lod_mdt_descs);
-	lu_tgt_descs_init(&lod->lod_ost_descs);
+	lu_tgt_descs_init(&lod->lod_mdt_descs, true);
+	lu_tgt_descs_init(&lod->lod_ost_descs, false);
 
 	RETURN(0);
 
@@ -1852,12 +1833,12 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
 
 	lod_procfs_fini(lod);
 
-	rc = lod_fini_tgt(env, lod, &lod->lod_ost_descs, true);
+	rc = lod_fini_tgt(env, lod, &lod->lod_ost_descs);
 	if (rc)
 		CERROR("%s: can not fini ost descriptors: rc =  %d\n",
 			lod2obd(lod)->obd_name, rc);
 
-	rc = lod_fini_tgt(env, lod, &lod->lod_mdt_descs, false);
+	rc = lod_fini_tgt(env, lod, &lod->lod_mdt_descs);
 	if (rc)
 		CERROR("%s: can not fini mdt descriptors: rc =  %d\n",
 			lod2obd(lod)->obd_name, rc);
@@ -2039,7 +2020,6 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		struct obd_device *obd = exp->exp_obd;
 		struct lod_device *d;
 		struct lod_tgt_desc *tgt;
-		unsigned int i;
 		int rc = 1;
 
 		if (!obd->obd_set_up || obd->obd_stopping)
@@ -2047,9 +2027,7 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 
 		d = lu2lod_dev(obd->obd_lu_dev);
 		lod_getref(&d->lod_ost_descs);
-		lod_foreach_ost(d, i) {
-			tgt = OST_TGT(d, i);
-			LASSERT(tgt && tgt->ltd_tgt);
+		lod_foreach_ost(d, tgt) {
 			rc = obd_get_info(env, tgt->ltd_exp, keylen, key,
 					  vallen, val);
 			/* one healthy device is enough */
@@ -2059,12 +2037,9 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 		lod_putref(d, &d->lod_ost_descs);
 
 		lod_getref(&d->lod_mdt_descs);
-		lod_foreach_mdt(d, i) {
+		lod_foreach_mdt(d, tgt) {
 			struct llog_ctxt *ctxt;
 
-			tgt = MDT_TGT(d, i);
-			LASSERT(tgt != NULL);
-			LASSERT(tgt->ltd_tgt != NULL);
 			if (!tgt->ltd_active)
 				continue;
 
@@ -2105,7 +2080,7 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 	struct lod_device *d;
 	struct lod_tgt_desc *tgt;
 	int no_set = 0;
-	int i, rc = 0, rc2;
+	int rc = 0, rc2;
 
 	ENTRY;
 
@@ -2118,9 +2093,7 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 
 	d = lu2lod_dev(obd->obd_lu_dev);
 	lod_getref(&d->lod_ost_descs);
-	lod_foreach_ost(d, i) {
-		tgt = OST_TGT(d, i);
-		LASSERT(tgt && tgt->ltd_tgt);
+	lod_foreach_ost(d, tgt) {
 		if (!tgt->ltd_active)
 			continue;
 
@@ -2132,9 +2105,7 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 	lod_putref(d, &d->lod_ost_descs);
 
 	lod_getref(&d->lod_mdt_descs);
-	lod_foreach_mdt(d, i) {
-		tgt = MDT_TGT(d, i);
-		LASSERT(tgt && tgt->ltd_tgt);
+	lod_foreach_mdt(d, tgt) {
 		if (!tgt->ltd_active)
 			continue;
 		rc2 = obd_set_info_async(env, tgt->ltd_exp, keylen, key,

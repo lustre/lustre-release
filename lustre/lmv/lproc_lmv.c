@@ -44,10 +44,8 @@ static ssize_t numobd_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lmv_desc *desc;
 
-        desc = &dev->u.lmv.desc;
-	return sprintf(buf, "%u\n", desc->ld_tgt_count);
+	return sprintf(buf, "%u\n", dev->u.lmv.lmv_mdt_count);
 }
 LUSTRE_RO_ATTR(numobd);
 
@@ -56,10 +54,9 @@ static ssize_t activeobd_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lmv_desc *desc;
 
-        desc = &dev->u.lmv.desc;
-	return sprintf(buf, "%u\n", desc->ld_active_tgt_count);
+	return sprintf(buf, "%u\n",
+		dev->u.lmv.lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count);
 }
 LUSTRE_RO_ATTR(activeobd);
 
@@ -68,10 +65,9 @@ static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct lmv_desc *desc;
 
-	desc = &dev->u.lmv.desc;
-	return sprintf(buf, "%s\n", desc->ld_uuid.uuid);
+	return sprintf(buf, "%s\n",
+		       dev->u.lmv.lmv_mdt_descs.ltd_lmv_desc.ld_uuid.uuid);
 }
 LUSTRE_RO_ATTR(desc_uuid);
 
@@ -82,7 +78,8 @@ static ssize_t qos_maxage_show(struct kobject *kobj,
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 
-	return sprintf(buf, "%u\n", dev->u.lmv.desc.ld_qos_maxage);
+	return sprintf(buf, "%u\n",
+		       dev->u.lmv.lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage);
 }
 
 static ssize_t qos_maxage_store(struct kobject *kobj,
@@ -99,7 +96,7 @@ static ssize_t qos_maxage_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	dev->u.lmv.desc.ld_qos_maxage = val;
+	dev->u.lmv.lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage = val;
 
 	return count;
 }
