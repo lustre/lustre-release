@@ -2388,32 +2388,28 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	child = osd_ios_lookup_one_len(ADMIN_USR, dentry, strlen(ADMIN_USR));
-	if (!IS_ERR(child)) {
+	if (IS_ERR(child)) {
+		rc = PTR_ERR(child);
+	} else {
 		rc = osd_ios_scan_one(info, dev, dentry->d_inode,
 				      child->d_inode, NULL, ADMIN_USR,
 				      strlen(ADMIN_USR), 0);
 		dput(child);
-	} else {
-		rc = PTR_ERR(child);
 	}
 
 	if (rc != 0 && rc != -ENOENT)
-		RETURN(rc);
+		GOTO(out, rc);
 
 	child = osd_ios_lookup_one_len(ADMIN_GRP, dentry, strlen(ADMIN_GRP));
-	if (!IS_ERR(child)) {
-		rc = osd_ios_scan_one(info, dev, dentry->d_inode,
-				      child->d_inode, NULL, ADMIN_GRP,
-				      strlen(ADMIN_GRP), 0);
-		dput(child);
-	} else {
-		rc = PTR_ERR(child);
-	}
+	if (IS_ERR(child))
+		GOTO(out, rc = PTR_ERR(child));
 
-	if (rc == -ENOENT)
-		rc = 0;
-
-	RETURN(rc);
+	rc = osd_ios_scan_one(info, dev, dentry->d_inode,
+			      child->d_inode, NULL, ADMIN_GRP,
+			      strlen(ADMIN_GRP), 0);
+	dput(child);
+out:
+	RETURN(rc == -ENOENT ? 0 : rc);
 }
 
 static void osd_initial_OI_scrub(struct osd_thread_info *info,
