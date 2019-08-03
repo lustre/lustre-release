@@ -606,7 +606,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 		 */
 		if ((__swab32(lump->lmm_magic) & le32_to_cpu(LOV_MAGIC_MASK)) ==
 		    le32_to_cpu(LOV_MAGIC_MAGIC))
-			lustre_swab_lov_user_md(lump);
+			lustre_swab_lov_user_md(lump, 0);
 	} else {
 		lum_size = sizeof(struct lov_user_md_v1);
 	}
@@ -741,7 +741,7 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	case LOV_MAGIC_COMP_V1:
 	case LOV_USER_MAGIC_SPECIFIC:
 		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
-			lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+			lustre_swab_lov_user_md((struct lov_user_md *)lmm, 0);
 		break;
 	case LMV_MAGIC_V1:
 		if (LMV_MAGIC != cpu_to_le32(LMV_MAGIC))
