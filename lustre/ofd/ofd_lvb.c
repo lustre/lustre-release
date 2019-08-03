@@ -318,6 +318,7 @@ disk_update:
 	}
 	unlock_res(res);
 
+	info->fti_attr.la_valid = 0;
 out_obj:
 	ofd_object_put(env, fo);
 out:
