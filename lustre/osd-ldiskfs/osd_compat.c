@@ -85,10 +85,10 @@ struct dentry *osd_lookup_one_len_unlocked(const char *name,
 	dchild = lookup_one_len(name, base, len);
 	inode_unlock(base->d_inode);
 
-	if (IS_ERR(dchild) || dchild->d_inode == NULL)
+	if (IS_ERR(dchild))
 		return dchild;
 
-	if (is_bad_inode(dchild->d_inode)) {
+	if (dchild->d_inode && unlikely(is_bad_inode(dchild->d_inode))) {
 		CERROR("bad inode returned %lu/%u\n",
 		       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
 		dput(dchild);
@@ -108,22 +108,7 @@ struct dentry *osd_lookup_one_len_unlocked(const char *name,
 struct dentry *osd_ios_lookup_one_len(const char *name, struct dentry *base,
 				      int len)
 {
-	struct dentry *dentry;
-
-	dentry = osd_lookup_one_len_unlocked(name, base, len);
-	if (IS_ERR(dentry)) {
-		int rc = PTR_ERR(dentry);
-
-		if (rc != -ENOENT)
-			CERROR("Fail to find %.*s in %.*s (%lu/%u): rc = %d\n",
-			       len, name, base->d_name.len,
-			       base->d_name.name, base->d_inode->i_ino,
-			       base->d_inode->i_generation, rc);
-
-		return dentry;
-	}
-
-	return dentry;
+	return osd_lookup_one_len_unlocked(name, base, len);
 }
 
 /* utility to make a directory */
