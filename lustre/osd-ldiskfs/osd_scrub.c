@@ -1896,6 +1896,12 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	int			 rc;
 	ENTRY;
 
+	if (!inode) {
+		CDEBUG(D_INODE, "%s: child '%.*s' lacks inode: rc = -2\n",
+		       osd_name(dev), namelen, name);
+		RETURN(-ENOENT);
+	}
+
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
 			 &info->oti_ost_attrs);
 	if (rc != 0 && rc != -ENODATA) {
@@ -2020,6 +2026,11 @@ static int osd_ios_lf_fill(void *buf,
 	if (IS_ERR(child)) {
 		CDEBUG(D_LFSCK, "%s: cannot lookup child '%.*s': rc = %d\n",
 		      osd_name(dev), namelen, name, (int)PTR_ERR(child));
+		RETURN(0);
+	} else if (!child->d_inode) {
+		dput(child);
+		CDEBUG(D_INODE, "%s: child '%.*s' lacks inode\n",
+		       osd_name(dev), namelen, name);
 		RETURN(0);
 	}
 
@@ -2219,6 +2230,8 @@ static int osd_ios_root_fill(void *buf,
 	child = osd_ios_lookup_one_len(name, fill_buf->oifb_dentry, namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
+	else if (!child->d_inode)
+		GOTO(out_put, rc = -ENOENT);
 
 	if (!(map->olm_flags & OLF_NO_OI))
 		rc = osd_ios_scan_one(fill_buf->oifb_info, dev,
@@ -2227,6 +2240,7 @@ static int osd_ios_root_fill(void *buf,
 	if (rc == 0 && map->olm_flags & OLF_SCAN_SUBITEMS)
 		rc = osd_ios_new_item(dev, child, map->olm_scandir,
 				      map->olm_filldir);
+out_put:
 	dput(child);
 
 	RETURN(rc);
@@ -2305,19 +2319,20 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 	scrub->os_convert_igif = 1;
 	child = osd_ios_lookup_one_len(dot_lustre_name, dentry,
 				       strlen(dot_lustre_name));
-	if (IS_ERR(child)) {
+	if (IS_ERR(child) && PTR_ERR(child) != -ENOENT) {
 		rc = PTR_ERR(child);
-		if (rc == -ENOENT) {
-			/* It is 1.8 MDT device. */
-			if (!(sf->sf_flags & SF_UPGRADE)) {
-				scrub_file_reset(scrub, dev->od_uuid,
-						 SF_UPGRADE);
-				sf->sf_internal_flags &= ~SIF_NO_HANDLE_OLD_FID;
-				rc = scrub_file_store(info->oti_env, scrub);
-			} else {
-				rc = 0;
-			}
+	} else if (IS_ERR(child) || !child->d_inode) {
+		/* It is 1.8 MDT device. */
+		if (!(sf->sf_flags & SF_UPGRADE)) {
+			scrub_file_reset(scrub, dev->od_uuid,
+					 SF_UPGRADE);
+			sf->sf_internal_flags &= ~SIF_NO_HANDLE_OLD_FID;
+			rc = scrub_file_store(info->oti_env, scrub);
+		} else {
+			rc = 0;
 		}
+		if (!IS_ERR(child))
+			dput(child);
 	} else {
 		/* For lustre-2.x (x <= 3), the ".lustre" has NO FID-in-LMA,
 		 * so the client will get IGIF for the ".lustre" object when
@@ -2448,12 +2463,13 @@ static void osd_initial_OI_scrub(struct osd_thread_info *info,
 		child = osd_ios_lookup_one_len(map->olm_name,
 					       osd_sb(dev)->s_root,
 					       map->olm_namelen);
-		if (!IS_ERR(child))
-			dput(child);
-		else if (PTR_ERR(child) == -ENOENT)
+		if (PTR_ERR(child) == -ENOENT ||
+		    (!IS_ERR(child) && !child->d_inode))
 			osd_scrub_refresh_mapping(info, dev, &map->olm_fid,
 						  NULL, DTO_INDEX_DELETE,
 						  true, 0, NULL);
+		if (!IS_ERR(child))
+			dput(child);
 		map++;
 	}
 

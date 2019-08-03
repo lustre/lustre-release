@@ -75,8 +75,6 @@ static void osd_push_ctxt(const struct osd_device *dev,
  *
  * This should be called without the parent
  * i_mutex held, and will take the i_mutex itself.
- *
- * Unlike osd_lookup_one_len dentry with NULL d_inode is valid
  */
 struct dentry *osd_lookup_one_len_unlocked(const char *name,
 					   struct dentry *base, int len)
@@ -106,9 +104,6 @@ struct dentry *osd_lookup_one_len_unlocked(const char *name,
  * @name:	pathname component to lookup
  * @base:	base directory to lookup from
  * @len:	maximum length @len should be interpreted to
- *
- * Treat found dentry with NULL d_inode as an -ENOENT error so LFSCK
- * can repair the file.
  */
 struct dentry *osd_ios_lookup_one_len(const char *name, struct dentry *base,
 				      int len)
@@ -126,11 +121,6 @@ struct dentry *osd_ios_lookup_one_len(const char *name, struct dentry *base,
 			       base->d_inode->i_generation, rc);
 
 		return dentry;
-	}
-
-	if (dentry->d_inode == NULL) {
-		dput(dentry);
-		return ERR_PTR(-ENOENT);
 	}
 
 	return dentry;
