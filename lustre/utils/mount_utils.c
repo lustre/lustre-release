@@ -62,9 +62,6 @@
 
 #include "mount_utils.h"
 
-extern char *progname;
-extern int verbose;
-
 #define vprint(fmt, arg...) if (verbose > 0) printf(fmt, ##arg)
 #define verrprint(fmt, arg...) if (verbose >= 0) fprintf(stderr, fmt, ##arg)
 
