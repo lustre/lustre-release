@@ -60,11 +60,32 @@
 #define TGT_BAVAIL(i) (OST_TGT(lod,i)->ltd_statfs.os_bavail * \
 		       OST_TGT(lod,i)->ltd_statfs.os_bsize)
 
+static inline int lod_statfs_check(struct lu_tgt_descs *ltd,
+				   struct lu_tgt_desc *tgt)
+{
+	struct obd_statfs *sfs = &tgt->ltd_statfs;
+
+	if (((sfs->os_state & OS_STATE_ENOSPC) ||
+	    (!ltd->ltd_is_mdt && sfs->os_state & OS_STATE_ENOINO &&
+	     sfs->os_fprecreated == 0)))
+		return -ENOSPC;
+
+	/* If the OST is readonly then we can't allocate objects there */
+	if (sfs->os_state & OS_STATE_READONLY)
+		return -EROFS;
+
+	/* object precreation is skipped on the OST with max_create_count=0 */
+	if (!ltd->ltd_is_mdt && sfs->os_state & OS_STATE_NOPRECREATE)
+		return -ENOBUFS;
+
+	return 0;
+}
+
 /**
- * Check whether the target is available for new OST objects.
+ * Check whether the target is available for new objects.
  *
  * Request statfs data from the given target and verify it's active and not
- * read-only. If so, then it can be used to place new OST objects. This
+ * read-only. If so, then it can be used to place new objects. This
  * function also maintains the number of active/inactive targets and sets
  * dirty flags if those numbers change so others can run re-balance procedures.
  * No external locking is required.
@@ -72,42 +93,30 @@
  * \param[in] env	execution environment for this thread
  * \param[in] d		LOD device
  * \param[in] ltd	target table
- * \param[in] index	target index
- * \param[out] sfs	buffer for statfs data
+ * \param[in] tgt	target
  *
  * \retval 0		if the target is good
  * \retval negative	negated errno on error
-
  */
 static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
-				struct lu_tgt_descs *ltd, int index,
-				struct obd_statfs *sfs)
+				struct lu_tgt_descs *ltd,
+				struct lu_tgt_desc *tgt)
 {
 	struct lov_desc *desc = &ltd->ltd_lov_desc;
-	struct lu_tgt_desc *tgt = LTD_TGT(ltd, index);
 	int rc;
-
-	ENTRY;
 
 	LASSERT(d);
 	LASSERT(tgt);
 
-	rc = dt_statfs(env, tgt->ltd_tgt, sfs);
-
-	if (rc == 0 && ((sfs->os_state & OS_STATE_ENOSPC) ||
-	    (sfs->os_state & OS_STATE_ENOINO && sfs->os_fprecreated == 0)))
-		RETURN(-ENOSPC);
-
+	rc = dt_statfs(env, tgt->ltd_tgt, &tgt->ltd_statfs);
 	if (rc && rc != -ENOTCONN)
 		CERROR("%s: statfs: rc = %d\n", lod2obd(d)->obd_name, rc);
 
-	/* If the OST is readonly then we can't allocate objects there */
-	if (sfs->os_state & OS_STATE_READONLY)
-		rc = -EROFS;
-
-	/* object precreation is skipped on the OST with max_create_count=0 */
-	if (sfs->os_state & OS_STATE_NOPRECREATE)
-		rc = -ENOBUFS;
+	if (!rc) {
+		rc = lod_statfs_check(ltd, tgt);
+		if (rc == -ENOSPC)
+			return rc;
+	}
 
 	/* check whether device has changed state (active, inactive) */
 	if (rc != 0 && tgt->ltd_active) {
@@ -144,7 +153,21 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 		spin_unlock(&d->lod_lock);
 	}
 
-	RETURN(rc);
+	return rc;
+}
+
+static int lod_is_tgt_usable(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt)
+{
+	int rc;
+
+	rc = lod_statfs_check(ltd, tgt);
+	if (rc)
+		return rc;
+
+	if (!tgt->ltd_active)
+		return -ENOTCONN;
+
+	return 0;
 }
 
 /**
@@ -156,43 +179,41 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
  *
  * \param[in] env	execution environment for this thread
  * \param[in] lod	LOD device
+ * \param[in] ltd	tgt table
  */
-void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod)
+void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
+			   struct lu_tgt_descs *ltd)
 {
 	struct obd_device *obd = lod2obd(lod);
-	struct lu_tgt_pool *osts = &lod->lod_ost_descs.ltd_tgt_pool;
+	struct lu_tgt_desc *tgt;
 	time64_t max_age;
-	unsigned int i;
 	u64 avail;
-	int idx;
 	ENTRY;
 
-	max_age = ktime_get_seconds() -
-		  2 * lod->lod_ost_descs.ltd_lov_desc.ld_qos_maxage;
+	max_age = ktime_get_seconds() - 2 * ltd->ltd_lov_desc.ld_qos_maxage;
 
 	if (obd->obd_osfs_age > max_age)
 		/* statfs data are quite recent, don't need to refresh it */
 		RETURN_EXIT;
 
-	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+	down_write(&ltd->ltd_qos.lq_rw_sem);
 
 	if (obd->obd_osfs_age > max_age)
 		goto out;
 
-	for (i = 0; i < osts->op_count; i++) {
-		idx = osts->op_array[i];
-		avail = OST_TGT(lod,idx)->ltd_statfs.os_bavail;
-		if (lod_statfs_and_check(env, lod, &lod->lod_ost_descs, idx,
-					 &OST_TGT(lod, idx)->ltd_statfs))
+	ltd_foreach_tgt(ltd, tgt) {
+		avail = tgt->ltd_statfs.os_bavail;
+		if (lod_statfs_and_check(env, lod, ltd, tgt))
 			continue;
-		if (OST_TGT(lod,idx)->ltd_statfs.os_bavail != avail)
+
+		if (tgt->ltd_statfs.os_bavail != avail)
 			/* recalculate weigths */
-			lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
+			ltd->ltd_qos.lq_dirty = 1;
 	}
 	obd->obd_osfs_age = ktime_get_seconds();
 
 out:
-	up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+	up_write(&ltd->ltd_qos.lq_rw_sem);
 	EXIT;
 }
 
@@ -208,17 +229,19 @@ out:
  * a new target or activation/deactivation).
  *
  * \param[in] lod	LOD device
- * \param[in] src_pool	OST pool
+ * \param[in] ltd	tgt table
+ * \param[in] src_pool	tgt pool
  * \param[in] lqr	round-robin list
  *
  * \retval 0		on success
  * \retval -ENOMEM	fails to allocate the array
  */
-static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_pool *src_pool,
+static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
+			   const struct lu_tgt_pool *src_pool,
 			   struct lu_qos_rr *lqr)
 {
-	struct lu_svr_qos  *oss;
-	struct lod_tgt_desc *ost;
+	struct lu_svr_qos  *svr;
+	struct lu_tgt_desc *tgt;
 	unsigned placed, real_count;
 	unsigned int i;
 	int rc;
@@ -230,7 +253,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_pool *src_pool,
 	}
 
 	/* Do actual allocation. */
-	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+	down_write(&ltd->ltd_qos.lq_rw_sem);
 
 	/*
 	 * Check again. While we were sleeping on @lq_rw_sem something could
@@ -238,7 +261,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_pool *src_pool,
 	 */
 	if (!lqr->lqr_dirty) {
 		LASSERT(lqr->lqr_pool.op_size);
-		up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+		up_write(&ltd->ltd_qos.lq_rw_sem);
 		RETURN(0);
 	}
 
@@ -249,34 +272,33 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_pool *src_pool,
 	   deleting from the pool. The lq_rw_sem insures that nobody else
 	   is reading. */
 	lqr->lqr_pool.op_count = real_count;
-	rc = lod_ost_pool_extend(&lqr->lqr_pool, real_count);
+	rc = lod_tgt_pool_extend(&lqr->lqr_pool, real_count);
 	if (rc) {
-		up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+		up_write(&ltd->ltd_qos.lq_rw_sem);
 		RETURN(rc);
 	}
 	for (i = 0; i < lqr->lqr_pool.op_count; i++)
 		lqr->lqr_pool.op_array[i] = LOV_QOS_EMPTY;
 
-	/* Place all the OSTs from 1 OSS at the same time. */
+	/* Place all the tgts from 1 svr at the same time. */
 	placed = 0;
-	list_for_each_entry(oss, &lod->lod_ost_descs.ltd_qos.lq_svr_list,
-			    lsq_svr_list) {
+	list_for_each_entry(svr, &ltd->ltd_qos.lq_svr_list, lsq_svr_list) {
 		int j = 0;
 
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
 			int next;
 
-			if (!cfs_bitmap_check(lod->lod_ost_bitmap,
-						src_pool->op_array[i]))
+			if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap,
+					      src_pool->op_array[i]))
 				continue;
 
-			ost = OST_TGT(lod,src_pool->op_array[i]);
-			LASSERT(ost && ost->ltd_tgt);
-			if (ost->ltd_qos.ltq_svr != oss)
+			tgt = LTD_TGT(ltd, src_pool->op_array[i]);
+			LASSERT(tgt && tgt->ltd_tgt);
+			if (tgt->ltd_qos.ltq_svr != svr)
 				continue;
 
-			/* Evenly space these OSTs across arrayspace */
-			next = j * lqr->lqr_pool.op_count / oss->lsq_tgt_count;
+			/* Evenly space these tgts across arrayspace */
+			next = j * lqr->lqr_pool.op_count / svr->lsq_tgt_count;
 			while (lqr->lqr_pool.op_array[next] != LOV_QOS_EMPTY)
 				next = (next + 1) % lqr->lqr_pool.op_count;
 
@@ -287,15 +309,15 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_pool *src_pool,
 	}
 
 	lqr->lqr_dirty = 0;
-	up_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
+	up_write(&ltd->ltd_qos.lq_rw_sem);
 
 	if (placed != real_count) {
 		/* This should never happen */
-		LCONSOLE_ERROR_MSG(0x14e, "Failed to place all OSTs in the "
+		LCONSOLE_ERROR_MSG(0x14e, "Failed to place all tgts in the "
 				   "round-robin list (%d of %d).\n",
 				   placed, real_count);
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
-			LCONSOLE(D_WARNING, "rr #%d ost idx=%d\n", i,
+			LCONSOLE(D_WARNING, "rr #%d tgt idx=%d\n", i,
 				 lqr->lqr_pool.op_array[i]);
 		}
 		lqr->lqr_dirty = 1;
@@ -401,7 +423,7 @@ static int min_stripe_count(__u32 stripe_count, int flags)
 #define LOV_CREATE_RESEED_MIN  2000
 
 /**
- * Initialize temporary OST-in-use array.
+ * Initialize temporary tgt-in-use array.
  *
  * Allocate or extend the array used to mark targets already assigned to a new
  * striping so they are not used more than once.
@@ -412,7 +434,7 @@ static int min_stripe_count(__u32 stripe_count, int flags)
  * \retval 0		on success
  * \retval -ENOMEM	on error
  */
-static inline int lod_qos_ost_in_use_clear(const struct lu_env *env,
+static inline int lod_qos_tgt_in_use_clear(const struct lu_env *env,
 					   __u32 stripes)
 {
 	struct lod_thread_info *info = lod_env_info(env);
@@ -431,43 +453,44 @@ static inline int lod_qos_ost_in_use_clear(const struct lu_env *env,
  * Remember a target in the array of used targets.
  *
  * Mark the given target as used for a new striping being created. The status
- * of an OST in a striping can be checked with lod_qos_is_ost_used().
+ * of an tgt in a striping can be checked with lod_qos_is_tgt_used().
  *
  * \param[in] env	execution environment for this thread
  * \param[in] idx	index in the array
- * \param[in] ost	OST target index to mark as used
+ * \param[in] tgt_idx	target index to mark as used
  */
-static inline void lod_qos_ost_in_use(const struct lu_env *env,
-				      int idx, int ost)
+static inline void lod_qos_tgt_in_use(const struct lu_env *env,
+				      int idx, int tgt_idx)
 {
 	struct lod_thread_info *info = lod_env_info(env);
-	int *osts = info->lti_ea_store;
+	int *tgts = info->lti_ea_store;
 
 	LASSERT(info->lti_ea_store_size >= idx * sizeof(int));
-	osts[idx] = ost;
+	tgts[idx] = tgt_idx;
 }
 
 /**
- * Check is OST used in a striping.
+ * Check is tgt used in a striping.
  *
- * Checks whether OST with the given index is marked as used in the temporary
- * array (see lod_qos_ost_in_use()).
+ * Checks whether tgt with the given index is marked as used in the temporary
+ * array (see lod_qos_tgt_in_use()).
  *
  * \param[in] env	execution environment for this thread
- * \param[in] ost	OST target index to check
+ * \param[in] tgt_idx	target index to check
  * \param[in] stripes	the number of items used in the array already
  *
  * \retval 0		not used
  * \retval 1		used
  */
-static int lod_qos_is_ost_used(const struct lu_env *env, int ost, __u32 stripes)
+static int lod_qos_is_tgt_used(const struct lu_env *env, int tgt_idx,
+			       __u32 stripes)
 {
 	struct lod_thread_info *info = lod_env_info(env);
-	int *osts = info->lti_ea_store;
+	int *tgts = info->lti_ea_store;
 	__u32 j;
 
 	for (j = 0; j < stripes; j++) {
-		if (osts[j] == ost)
+		if (tgts[j] == tgt_idx)
 			return 1;
 	}
 	return 0;
@@ -580,8 +603,7 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 static int lod_check_and_reserve_ost(const struct lu_env *env,
 				     struct lod_object *lo,
 				     struct lod_layout_component *lod_comp,
-				     struct obd_statfs *sfs, __u32 ost_idx,
-				     __u32 speed, __u32 *s_idx,
+				     __u32 ost_idx, __u32 speed, __u32 *s_idx,
 				     struct dt_object **stripe,
 				     __u32 *ost_indices,
 				     struct thandle *th,
@@ -589,12 +611,14 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
+	struct lu_tgt_desc *ost = OST_TGT(lod, ost_idx);
 	struct dt_object   *o;
 	__u32 stripe_idx = *s_idx;
 	int rc;
+
 	ENTRY;
 
-	rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost_idx, sfs);
+	rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost);
 	if (rc)
 		RETURN(rc);
 
@@ -602,7 +626,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * We expect number of precreated objects in f_ffree at
 	 * the first iteration, skip OSPs with no objects ready
 	 */
-	if (sfs->os_fprecreated == 0 && speed == 0) {
+	if (ost->ltd_statfs.os_fprecreated == 0 && speed == 0) {
 		QOS_DEBUG("#%d: precreation is empty\n", ost_idx);
 		RETURN(rc);
 	}
@@ -610,7 +634,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	/*
 	 * try to use another OSP if this one is degraded
 	 */
-	if (sfs->os_state & OS_STATE_DEGRADED && speed < 2) {
+	if (ost->ltd_statfs.os_state & OS_STATE_DEGRADED && speed < 2) {
 		QOS_DEBUG("#%d: degraded\n", ost_idx);
 		RETURN(rc);
 	}
@@ -630,13 +654,13 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * for the first and second time.
 	 */
 	if (speed < 2 && lod_should_avoid_ost(lo, lag, ost_idx)) {
-		QOS_DEBUG("iter %d: OST%d used by conflicting mirror "
-			  "component\n", speed, ost_idx);
+		QOS_DEBUG("iter %d: OST%d used by conflicting mirror component\n",
+			  speed, ost_idx);
 		RETURN(rc);
 	}
 
 	/* do not put >1 objects on a single OST, except for overstriping */
-	if (lod_qos_is_ost_used(env, ost_idx, stripe_idx)) {
+	if (lod_qos_is_tgt_used(env, ost_idx, stripe_idx)) {
 		if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
 			*overstriped = true;
 		else
@@ -655,7 +679,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * We've successfully declared (reserved) an object
 	 */
 	lod_avoid_update(lo, lag);
-	lod_qos_ost_in_use(env, stripe_idx, ost_idx);
+	lod_qos_tgt_in_use(env, stripe_idx, ost_idx);
 	stripe[stripe_idx] = o;
 	ost_indices[stripe_idx] = ost_idx;
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LOV_CREATE_RACE, 2);
@@ -691,13 +715,12 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
  * \retval -ENOSPC	if not enough OSTs are found
  * \retval negative	negated errno for other failures
  */
-static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
-			struct dt_object **stripe, __u32 *ost_indices,
-			int flags, struct thandle *th, int comp_idx)
+static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
+			    struct dt_object **stripe, __u32 *ost_indices,
+			    int flags, struct thandle *th, int comp_idx)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct pool_desc  *pool = NULL;
 	struct lu_tgt_pool *osts;
 	struct lu_qos_rr *lqr;
@@ -727,11 +750,11 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		lqr = &(m->lod_ost_descs.ltd_qos.lq_rr);
 	}
 
-	rc = lod_qos_calc_rr(m, osts, lqr);
+	rc = lod_qos_calc_rr(m, &m->lod_ost_descs, osts, lqr);
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_qos_ost_in_use_clear(env, stripe_count);
+	rc = lod_qos_tgt_in_use_clear(env, stripe_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -786,7 +809,7 @@ repeat_find:
 			continue;
 
 		spin_unlock(&lqr->lqr_alloc);
-		rc = lod_check_and_reserve_ost(env, lo, lod_comp, sfs, ost_idx,
+		rc = lod_check_and_reserve_ost(env, lo, lod_comp, ost_idx,
 					       speed, &stripe_idx, stripe,
 					       ost_indices, th, &overstriped);
 		spin_lock(&lqr->lqr_alloc);
@@ -835,6 +858,165 @@ out:
 }
 
 /**
+ * Allocate a striping using round-robin algorithm.
+ *
+ * Allocates a new striping using round-robin algorithm. The function refreshes
+ * all the internal structures (statfs cache, array of available remote MDTs
+ * sorted with regard to MDS, etc). The number of stripes required is taken from
+ * the object (must be prepared by the caller). The caller should ensure nobody
+ * else is trying to create a striping on the object in parallel. All the
+ * internal structures (like pools, etc) are protected and no additional locking
+ * is required. The function succeeds even if a single stripe is allocated.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[out] stripe		striping created
+ *
+ * \retval positive	stripe objects allocated, including the first stripe
+ *			allocated outside
+ * \retval -ENOSPC	if not enough MDTs are found
+ * \retval negative	negated errno for other failures
+ */
+int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
+		     struct dt_object **stripe)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lu_tgt_pool *pool;
+	struct lu_qos_rr *lqr;
+	struct lu_tgt_desc *mdt;
+	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
+	struct lu_fid fid = { 0 };
+	struct dt_object *dto;
+	unsigned int pool_idx;
+	unsigned int i;
+	u32 start_idx_temp;
+	u32 stripe_count = lo->ldo_dir_stripe_count;
+	u32 stripe_idx = 1;
+	u32 mdt_idx;
+	bool use_degraded = false;
+	int tgt_connecting = 0;
+	int rc;
+
+	ENTRY;
+
+	pool = &ltd->ltd_tgt_pool;
+	lqr = &ltd->ltd_qos.lq_rr;
+	rc = lod_qos_calc_rr(lod, ltd, pool, lqr);
+	if (rc)
+		RETURN(rc);
+
+	rc = lod_qos_tgt_in_use_clear(env, stripe_count);
+	if (rc)
+		RETURN(rc);
+
+	down_read(&ltd->ltd_qos.lq_rw_sem);
+	spin_lock(&lqr->lqr_alloc);
+	if (--lqr->lqr_start_count <= 0) {
+		lqr->lqr_start_idx = prandom_u32_max(pool->op_count);
+		lqr->lqr_start_count =
+			(LOV_CREATE_RESEED_MIN / max(pool->op_count, 1U) +
+			 LOV_CREATE_RESEED_MULT) * max(pool->op_count, 1U);
+	} else if (stripe_count - 1 >= pool->op_count ||
+		   lqr->lqr_start_idx > pool->op_count) {
+		/* If we have allocated from all of the tgts, slowly
+		 * precess the next start if the tgt/stripe count isn't
+		 * already doing this for us. */
+		lqr->lqr_start_idx %= pool->op_count;
+		if (stripe_count - 1 > 1 &&
+		    (pool->op_count % (stripe_count - 1)) != 1)
+			++lqr->lqr_offset_idx;
+	}
+	start_idx_temp = lqr->lqr_start_idx;
+
+repeat_find:
+	QOS_DEBUG("want %d start_idx %d start_count %d offset %d active %d count %d\n",
+		  stripe_count - 1, lqr->lqr_start_idx, lqr->lqr_start_count,
+		  lqr->lqr_offset_idx, pool->op_count, pool->op_count);
+
+	for (i = 0; i < pool->op_count && stripe_idx < stripe_count; i++) {
+		pool_idx = (lqr->lqr_start_idx + lqr->lqr_offset_idx) %
+			    pool->op_count;
+		++lqr->lqr_start_idx;
+		mdt_idx = lqr->lqr_pool.op_array[pool_idx];
+		mdt = LTD_TGT(ltd, mdt_idx);
+
+		QOS_DEBUG("#%d strt %d act %d strp %d ary %d idx %d\n",
+			  i, lqr->lqr_start_idx, /* XXX: active*/ 0,
+			  stripe_idx, pool_idx, mdt_idx);
+
+		if (mdt_idx == LOV_QOS_EMPTY ||
+		    !cfs_bitmap_check(ltd->ltd_tgt_bitmap, mdt_idx))
+			continue;
+
+		/* do not put >1 objects on one MDT */
+		if (lod_qos_is_tgt_used(env, mdt_idx, stripe_idx))
+			continue;
+
+		rc = lod_is_tgt_usable(ltd, mdt);
+		if (rc) {
+			if (mdt->ltd_connecting)
+				tgt_connecting = 1;
+			continue;
+		}
+
+		/* try to use another OSP if this one is degraded */
+		if (mdt->ltd_statfs.os_state & OS_STATE_DEGRADED &&
+		    !use_degraded) {
+			QOS_DEBUG("#%d: degraded\n", mdt_idx);
+			continue;
+		}
+		spin_unlock(&lqr->lqr_alloc);
+
+		rc = obd_fid_alloc(env, mdt->ltd_exp, &fid, NULL);
+		if (rc) {
+			QOS_DEBUG("#%d: alloc FID failed: %dl\n", mdt_idx, rc);
+			spin_lock(&lqr->lqr_alloc);
+			continue;
+		}
+
+		dto = dt_locate_at(env, mdt->ltd_tgt, &fid,
+				lo->ldo_obj.do_lu.lo_dev->ld_site->ls_top_dev,
+				&conf);
+
+		spin_lock(&lqr->lqr_alloc);
+		if (IS_ERR(dto)) {
+			QOS_DEBUG("can't alloc stripe on #%u: %d\n",
+				  mdt->ltd_index, (int) PTR_ERR(dto));
+
+			if (mdt->ltd_connecting)
+				tgt_connecting = 1;
+			continue;
+		}
+
+		lod_qos_tgt_in_use(env, stripe_idx, mdt_idx);
+		stripe[stripe_idx] = dto;
+		stripe_idx++;
+	}
+
+	if (!use_degraded && stripe_idx < stripe_count) {
+		/* Try again, allowing slower OSCs */
+		use_degraded = true;
+		lqr->lqr_start_idx = start_idx_temp;
+
+		tgt_connecting = 0;
+		goto repeat_find;
+	}
+	spin_unlock(&lqr->lqr_alloc);
+	up_read(&ltd->ltd_qos.lq_rw_sem);
+
+	if (stripe_idx > 1)
+		/* at least one stripe is allocated */
+		RETURN(stripe_idx);
+
+	/* nobody provided us with a single object */
+	if (tgt_connecting)
+		RETURN(-EINPROGRESS);
+
+	RETURN(-ENOSPC);
+}
+
+/**
  * Allocate a specific striping layout on a user defined set of OSTs.
  *
  * Allocates new striping using the OST index range provided by the data from
@@ -865,7 +1047,6 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device	*m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct obd_statfs	*sfs = &lod_env_info(env)->lti_osfs;
 	struct dt_object	*o;
 	unsigned int		array_idx = 0;
 	int			stripe_count = 0;
@@ -879,7 +1060,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lod_comp->llc_ostlist.op_array);
 	LASSERT(lod_comp->llc_ostlist.op_count);
 
-	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripe_count);
+	rc = lod_qos_tgt_in_use_clear(env, lod_comp->llc_stripe_count);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -913,14 +1094,14 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 		/* do not put >1 objects on a single OST, except for
 		 * overstriping
 		 */
-		if (lod_qos_is_ost_used(env, ost_idx, stripe_count) &&
+		if (lod_qos_is_tgt_used(env, ost_idx, stripe_count) &&
 		    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)) {
 			rc = -EINVAL;
 			break;
 		}
 
-		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs, ost_idx,
-					  sfs);
+		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs,
+					  LTD_TGT(&m->lod_ost_descs, ost_idx));
 		if (rc < 0) /* this OSP doesn't feel well */
 			break;
 
@@ -936,7 +1117,7 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 		/*
 		 * We've successfully declared (reserved) an object
 		 */
-		lod_qos_ost_in_use(env, stripe_count, ost_idx);
+		lod_qos_tgt_in_use(env, stripe_count, ost_idx);
 		stripe[stripe_count] = o;
 		ost_indices[stripe_count] = ost_idx;
 		stripe_count++;
@@ -971,14 +1152,15 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
  * \retval -EINVAL	requested offset is invalid
  * \retval negative	errno on failure
  */
-static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
-			      struct dt_object **stripe, __u32 *ost_indices,
-			      int flags, struct thandle *th, int comp_idx)
+static int lod_ost_alloc_specific(const struct lu_env *env,
+				  struct lod_object *lo,
+				  struct dt_object **stripe, __u32 *ost_indices,
+				  int flags, struct thandle *th, int comp_idx)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct dt_object *o;
+	struct lu_tgt_desc *tgt;
 	__u32 ost_idx;
 	unsigned int i, array_idx, ost_count;
 	int rc, stripe_num = 0;
@@ -992,7 +1174,7 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 
-	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripe_count);
+	rc = lod_qos_tgt_in_use_clear(env, lod_comp->llc_stripe_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1044,7 +1226,7 @@ repeat_find:
 		 * do not put >1 objects on a single OST, except for
 		 * overstriping, where it is intended
 		 */
-		if (lod_qos_is_ost_used(env, ost_idx, stripe_num)) {
+		if (lod_qos_is_tgt_used(env, ost_idx, stripe_num)) {
 			if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
 				overstriped = true;
 			else
@@ -1058,14 +1240,15 @@ repeat_find:
 		    lod_comp_is_ost_used(env, lo, ost_idx))
 			continue;
 
+		tgt = LTD_TGT(&m->lod_ost_descs, ost_idx);
+
 		/* Drop slow OSCs if we can, but not for requested start idx.
 		 *
 		 * This means "if OSC is slow and it is not the requested
 		 * start OST, then it can be skipped, otherwise skip it only
 		 * if it is inactive/recovering/out-of-space." */
 
-		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs, ost_idx,
-					  sfs);
+		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs, tgt);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -1076,7 +1259,7 @@ repeat_find:
 		 * iteration.  Skip OSPs with no objects ready.  Don't apply
 		 * this logic to OST specified with stripe_offset.
 		 */
-		if (i != 0 && sfs->os_fprecreated == 0 && speed == 0)
+		if (i && !tgt->ltd_statfs.os_fprecreated && !speed)
 			continue;
 
 		o = lod_qos_declare_object_on(env, m, ost_idx, th);
@@ -1089,7 +1272,7 @@ repeat_find:
 		/*
 		 * We've successfully declared (reserved) an object
 		 */
-		lod_qos_ost_in_use(env, stripe_num, ost_idx);
+		lod_qos_tgt_in_use(env, stripe_num, ost_idx);
 		stripe[stripe_num] = o;
 		ost_indices[stripe_num] = ost_idx;
 		stripe_num++;
@@ -1164,13 +1347,12 @@ out:
  * \retval -EINVAL	requested OST index is invalid
  * \retval negative	errno on failure
  */
-static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
-			 struct dt_object **stripe, __u32 *ost_indices,
-			 int flags, struct thandle *th, int comp_idx)
+static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
+			     struct dt_object **stripe, __u32 *ost_indices,
+			     int flags, struct thandle *th, int comp_idx)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
 	struct lod_tgt_desc *ost;
 	struct dt_object *o;
@@ -1223,7 +1405,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripe_count);
+	rc = lod_qos_tgt_in_use_clear(env, lod_comp->llc_stripe_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1236,18 +1418,18 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		ost = OST_TGT(lod, osts->op_array[i]);
 		ost->ltd_qos.ltq_usable = 0;
 
-		rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs,
-					  osts->op_array[i], sfs);
+		rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost);
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
 		}
 
-		if (sfs->os_state & OS_STATE_DEGRADED)
+		if (ost->ltd_statfs.os_state & OS_STATE_DEGRADED)
 			continue;
 
 		/* Fail Check before osc_precreate() is called
-		   so we can only 'fail' single OSC. */
+		 * so we can only 'fail' single OSC.
+		 */
 		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) &&
 				   osts->op_array[i] == 0)
 			continue;
@@ -1281,7 +1463,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		rand = lu_prandom_u64_max(total_weight);
 
 		/* On average, this will hit larger-weighted OSTs more often.
-		 * 0-weight OSTs will always get used last (only when rand=0) */
+		 * 0-weight OSTs will always get used last (only when rand=0)
+		 */
 		for (i = 0; i < osts->op_count; i++) {
 			__u32 idx = osts->op_array[i];
 
@@ -1311,7 +1494,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
 				continue;
 
-			if (lod_qos_is_ost_used(env, idx, nfound)) {
+			if (lod_qos_is_tgt_used(env, idx, nfound)) {
 				if (lod_comp->llc_pattern &
 				    LOV_PATTERN_OVERSTRIPING)
 					overstriped = true;
@@ -1327,7 +1510,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			}
 
 			lod_avoid_update(lo, lag);
-			lod_qos_ost_in_use(env, nfound, idx);
+			lod_qos_tgt_in_use(env, nfound, idx);
 			stripe[nfound] = o;
 			ost_indices[nfound] = idx;
 			ltd_qos_update(&lod->lod_ost_descs, ost, &total_weight);
@@ -1380,6 +1563,207 @@ out_nolock:
 		/* put back ref got by lod_find_pool() */
 		lod_pool_putref(pool);
 	}
+
+	RETURN(rc);
+}
+
+/**
+ * Allocate a striping using an algorithm with weights.
+ *
+ * The function allocates remote MDT objects to create a striping, the first
+ * object was already allocated on current MDT to ensure master object and
+ * the first object are on the same MDT. The algorithm used is based on weights
+ * (both free space and inodes), and it's trying to ensure the space/inodes are
+ * used evenly by MDTs and MDSs. The striping configuration (# of stripes,
+ * offset, pool) is taken from the object and is prepared by the caller.
+ *
+ * If prepared configuration can't be met due to too few MDTs, then allocation
+ * fails.
+ *
+ * No concurrent allocation is allowed on the object and this must be ensured
+ * by the caller. All the internal structures are protected by the function.
+ *
+ * The algorithm has two steps: find available MDTs and calculate their
+ * weights, then select the MDTs with their weights used as the probability.
+ * An MDT with a higher weight is proportionately more likely to be selected
+ * than one with a lower weight.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[out] stripes		striping created
+ *
+ * \retval positive	stripes allocated, and it should be equal to
+ *			lo->ldo_dir_stripe_count
+ * \retval -EAGAIN	not enough tgts are found for specified stripe count
+ * \retval -EINVAL	requested MDT index is invalid
+ * \retval negative	errno on failure
+ */
+int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
+		      struct dt_object **stripes)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
+	struct lu_fid fid = { 0 };
+	const struct lu_tgt_pool *pool;
+	struct lu_tgt_desc *mdt;
+	struct dt_object *dto;
+	u64 total_weight = 0;
+	u32 stripe_count = lo->ldo_dir_stripe_count;
+	unsigned int nfound;
+	unsigned int good_mdts;
+	unsigned int i;
+	int rc = 0;
+
+	ENTRY;
+
+	if (stripe_count == 1)
+		RETURN(1);
+
+	pool = &ltd->ltd_tgt_pool;
+
+	/* Detect -EAGAIN early, before expensive lock is taken. */
+	if (!ltd_qos_is_usable(ltd))
+		RETURN(-EAGAIN);
+
+	/* Do actual allocation, use write lock here. */
+	down_write(&ltd->ltd_qos.lq_rw_sem);
+
+	/*
+	 * Check again, while we were sleeping on @lq_rw_sem things could
+	 * change.
+	 */
+	if (!ltd_qos_is_usable(ltd))
+		GOTO(unlock, rc = -EAGAIN);
+
+	rc = ltd_qos_penalties_calc(ltd);
+	if (rc)
+		GOTO(unlock, rc);
+
+	rc = lod_qos_tgt_in_use_clear(env, stripe_count);
+	if (rc)
+		GOTO(unlock, rc);
+
+	good_mdts = 0;
+	/* Find all the tgts that are valid stripe candidates */
+	for (i = 0; i < pool->op_count; i++) {
+		if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, pool->op_array[i]))
+			continue;
+
+		mdt = LTD_TGT(ltd, pool->op_array[i]);
+		mdt->ltd_qos.ltq_usable = 0;
+
+		rc = lod_is_tgt_usable(ltd, mdt);
+		if (rc)
+			continue;
+
+		if (mdt->ltd_statfs.os_state & OS_STATE_DEGRADED)
+			continue;
+
+		mdt->ltd_qos.ltq_usable = 1;
+		lu_tgt_qos_weight_calc(mdt);
+		total_weight += mdt->ltd_qos.ltq_weight;
+
+		good_mdts++;
+	}
+
+	QOS_DEBUG("found %d good tgts\n", good_mdts);
+
+	if (good_mdts < stripe_count - 1)
+		GOTO(unlock, rc = -EAGAIN);
+
+	/* Find enough tgts with weighted random allocation. */
+	nfound = 1;
+	while (nfound < stripe_count) {
+		u64 rand, cur_weight;
+
+		cur_weight = 0;
+		rc = -ENOSPC;
+
+		rand = lu_prandom_u64_max(total_weight);
+
+		/* On average, this will hit larger-weighted tgts more often.
+		 * 0-weight tgts will always get used last (only when rand=0) */
+		for (i = 0; i < pool->op_count; i++) {
+			__u32 idx = pool->op_array[i];
+			int rc2;
+
+			mdt = LTD_TGT(ltd, idx);
+
+			if (!mdt->ltd_qos.ltq_usable)
+				continue;
+
+			cur_weight += mdt->ltd_qos.ltq_weight;
+
+			QOS_DEBUG("idx=%d nfound=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
+				  idx, nfound, cur_weight, rand,
+				  total_weight);
+
+			if (cur_weight < rand)
+				continue;
+
+			QOS_DEBUG("stripe=%d to idx=%d\n", nfound, idx);
+
+			if (lod_qos_is_tgt_used(env, idx, nfound))
+				continue;
+
+			rc2 = obd_fid_alloc(env, mdt->ltd_exp, &fid, NULL);
+			if (rc2) {
+				QOS_DEBUG("can't alloc FID on #%u: %d\n",
+					  idx, rc2);
+				continue;
+			}
+
+			conf.loc_flags = LOC_F_NEW;
+			dto = dt_locate_at(env, mdt->ltd_tgt, &fid,
+				lo->ldo_obj.do_lu.lo_dev->ld_site->ls_top_dev,
+				&conf);
+			if (IS_ERR(dto)) {
+				QOS_DEBUG("can't alloc stripe on #%u: %d\n",
+					  idx, (int) PTR_ERR(dto));
+				continue;
+			}
+
+			lod_qos_tgt_in_use(env, nfound, idx);
+			stripes[nfound] = dto;
+			ltd_qos_update(ltd, mdt, &total_weight);
+			nfound++;
+			rc = 0;
+			break;
+		}
+
+		/* no MDT found on this iteration, give up */
+		if (rc)
+			break;
+	}
+
+	if (unlikely(nfound != stripe_count)) {
+		/*
+		 * when the decision to use weighted algorithm was made
+		 * we had enough appropriate OSPs, but this state can
+		 * change anytime (no space on MDT, broken connection, etc)
+		 * so it's possible OSP won't be able to provide us with
+		 * an object due to just changed state
+		 */
+		QOS_DEBUG("%s: wanted %d objects, found only %d\n",
+			  lod2obd(lod)->obd_name, stripe_count, nfound);
+		for (i = 1; i < nfound; i++) {
+			LASSERT(stripes[i] != NULL);
+			dt_object_put(env, stripes[i]);
+			stripes[i] = NULL;
+		}
+
+		/* makes sense to rebalance next time */
+		ltd->ltd_qos.lq_dirty = 1;
+		ltd->ltd_qos.lq_same_space = 0;
+
+		rc = -EAGAIN;
+	} else {
+		rc = nfound;
+	}
+
+unlock:
+	up_write(&ltd->ltd_qos.lq_rw_sem);
 
 	RETURN(rc);
 }
@@ -2041,7 +2425,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		 * statfs and check OST targets now, since ld_active_tgt_count
 		 * could be changed if some OSTs are [de]activated manually.
 		 */
-		lod_qos_statfs_update(env, d);
+		lod_qos_statfs_update(env, d, &d->lod_ost_descs);
 		stripe_len = lod_get_stripe_count(d, lo,
 						  lod_comp->llc_stripe_count,
 						  lod_comp->llc_pattern &
@@ -2079,14 +2463,16 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 				  comp_idx);
 			lod_collect_avoidance(lo, lag, comp_idx);
 
-			rc = lod_alloc_qos(env, lo, stripe, ost_indices, flag,
-					   th, comp_idx);
+			rc = lod_ost_alloc_qos(env, lo, stripe, ost_indices,
+					       flag, th, comp_idx);
 			if (rc == -EAGAIN)
-				rc = lod_alloc_rr(env, lo, stripe, ost_indices,
-						  flag, th, comp_idx);
+				rc = lod_ost_alloc_rr(env, lo, stripe,
+						      ost_indices, flag, th,
+						      comp_idx);
 		} else {
-			rc = lod_alloc_specific(env, lo, stripe, ost_indices,
-						flag, th, comp_idx);
+			rc = lod_ost_alloc_specific(env, lo, stripe,
+						    ost_indices, flag, th,
+						    comp_idx);
 		}
 put_ldts:
 		lod_putref(d, &d->lod_ost_descs);

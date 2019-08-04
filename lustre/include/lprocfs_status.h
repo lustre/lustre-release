@@ -614,6 +614,7 @@ extern ssize_t
 lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off);
 
+int lu_str_to_s64(char *buffer, unsigned long count, __s64 *val, char defunit);
 extern int lprocfs_str_with_units_to_s64(const char __user *buffer,
 					 unsigned long count, __s64 *val,
 					 char defunit);

@@ -49,7 +49,6 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 		     void *, int);
 int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid, u32 *mds);
-int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid, u32 mds);
 int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		  struct lu_fid *fid, struct md_op_data *op_data);
 
@@ -218,8 +217,9 @@ static inline bool lmv_dir_retry_check_update(struct md_op_data *op_data)
 
 struct lmv_tgt_desc *lmv_locate_tgt(struct lmv_obd *lmv,
 				    struct md_op_data *op_data);
+int lmv_migrate_existence_check(struct lmv_obd *lmv,
+				struct md_op_data *op_data);
 
 /* lproc_lmv.c */
 int lmv_tunables_init(struct obd_device *obd);
-
 #endif

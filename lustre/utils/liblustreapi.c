@@ -3109,8 +3109,6 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%#x", type);
 
-		if (flags & LMV_HASH_FLAG_SPACE)
-			llapi_printf(LLAPI_MSG_NORMAL, ",space");
 		if (flags & LMV_HASH_FLAG_MIGRATION)
 			llapi_printf(LLAPI_MSG_NORMAL, ",migrating");
 		if (flags & LMV_HASH_FLAG_BAD_TYPE)
@@ -5209,7 +5207,7 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
 
 				lum->lum_magic = LMV_USER_MAGIC;
 				lum->lum_stripe_count = 0;
-				lum->lum_stripe_offset = -1;
+				lum->lum_stripe_offset = LMV_OFFSET_DEFAULT;
 				goto dump;
 			} else if (param->fp_get_lmv) {
 				struct lmv_user_md *lum = param->fp_lmv_md;

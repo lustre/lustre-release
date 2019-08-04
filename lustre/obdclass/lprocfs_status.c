@@ -1989,34 +1989,31 @@ static int str_to_u64_parse(char *buffer, unsigned long count,
  * have a unit as the last character. The function handles overflow/underflow
  * of the signed integer.
  */
-static int str_to_s64_internal(const char __user *buffer, unsigned long count,
-			       __s64 *val, __u64 def_mult, bool allow_units)
+int lu_str_to_s64(char *buffer, unsigned long count, __s64 *val, char defunit)
 {
-	char kernbuf[22];
+	__u64 mult = 1;
 	__u64 tmp;
 	unsigned int offset = 0;
 	int signed sign = 1;
 	__u64 max = LLONG_MAX;
 	int rc = 0;
 
-	if (count > (sizeof(kernbuf) - 1))
-		return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-		return -EFAULT;
-
-	kernbuf[count] = '\0';
+	if (defunit != '1') {
+		rc = get_mult(defunit, &mult);
+		if (rc)
+			return rc;
+	}
 
 	/* keep track of our sign */
-	if (*kernbuf == '-') {
+	if (*buffer == '-') {
 		sign = -1;
 		offset++;
 		/* equivalent to max = -LLONG_MIN, avoids overflow */
 		max++;
 	}
 
-	rc = str_to_u64_parse(kernbuf + offset, count - offset,
-			      &tmp, def_mult, allow_units);
+	rc = str_to_u64_parse(buffer + offset, count - offset,
+			      &tmp, mult, true);
 	if (rc)
 		return rc;
 
@@ -2028,6 +2025,7 @@ static int str_to_s64_internal(const char __user *buffer, unsigned long count,
 
 	return 0;
 }
+EXPORT_SYMBOL(lu_str_to_s64);
 
 /* identical to s64 version, but does not handle overflow */
 static int str_to_u64_internal(const char __user *buffer, unsigned long count,
@@ -2072,16 +2070,17 @@ static int str_to_u64_internal(const char __user *buffer, unsigned long count,
 int lprocfs_str_with_units_to_s64(const char __user *buffer,
 				  unsigned long count, __s64 *val, char defunit)
 {
-	__u64 mult = 1;
-	int rc;
+	char kernbuf[22];
 
-	if (defunit != '1') {
-		rc = get_mult(defunit, &mult);
-		if (rc)
-			return rc;
-	}
+	if (count > (sizeof(kernbuf) - 1))
+		return -EINVAL;
 
-	return str_to_s64_internal(buffer, count, val, mult, true);
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+
+	kernbuf[count] = '\0';
+
+	return lu_str_to_s64(kernbuf, count, val, defunit);
 }
 EXPORT_SYMBOL(lprocfs_str_with_units_to_s64);
 

@@ -578,6 +578,7 @@ void lod_fix_desc_qos_maxage(__u32 *val);
 void lod_fix_desc_pattern(__u32 *val);
 void lod_fix_desc_stripe_count(__u32 *val);
 void lod_fix_desc_stripe_size(__u64 *val);
+void lod_fix_lmv_desc_pattern(__u32 *val);
 int lod_pools_init(struct lod_device *m, struct lustre_cfg *cfg);
 int lod_pools_fini(struct lod_device *m);
 int lod_parse_striping(const struct lu_env *env, struct lod_object *mo,
@@ -598,14 +599,14 @@ int lod_alloc_comp_entries(struct lod_object *lo, int mirror_cnt, int comp_cnt);
 int lod_fill_mirrors(struct lod_object *lo);
 
 /* lod_pool.c */
-int lod_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
-int lod_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx);
-int lod_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
+int lod_tgt_pool_init(struct lu_tgt_pool *op, unsigned int count);
+int lod_tgt_pool_free(struct lu_tgt_pool *op);
+int lod_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count);
+int lod_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx);
+int lod_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count);
 struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
 void lod_pool_putref(struct pool_desc *pool);
-int lod_ost_pool_free(struct lu_tgt_pool *op);
 int lod_pool_del(struct obd_device *obd, char *poolname);
-int lod_ost_pool_init(struct lu_tgt_pool *op, unsigned int count);
 extern struct cfs_hash_ops pool_hash_operations;
 int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool);
 int lod_pool_new(struct obd_device *obd, char *poolname);
@@ -637,6 +638,10 @@ struct lod_obj_stripe_cb_data {
 };
 
 /* lod_qos.c */
+int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
+		      struct dt_object **stripes);
+int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
+		     struct dt_object **stripe);
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		       struct lu_attr *attr, const struct lu_buf *buf,
 		       struct thandle *th);
@@ -652,7 +657,8 @@ __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 				  bool is_dir);
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 			   __u16 stripe_count, bool overstriping);
-void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod);
+void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
+			   struct lu_tgt_descs *ltd);
 
 /* lproc_lod.c */
 int lod_procfs_init(struct lod_device *lod);

@@ -768,19 +768,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
 			buf->lb_buf = lmu;
 			buf->lb_len = ma->ma_lmv_size;
-
-			if (le32_to_cpu(lmu->lum_hash_type) &
-			    LMV_HASH_FLAG_SPACE) {
-				/*
-				 * only allow setting "space" hash flag on
-				 * plain directory.
-				 */
-				rc = mdt_object_striped(info, mo);
-				if (rc)
-					GOTO(out_put,
-					     rc = (rc == 1) ? -EPERM : rc);
-			}
-
 			name = XATTR_NAME_DEFAULT_LMV;
 			/* force client to update dir default layout */
 			lockpart |= MDS_INODELOCK_LOOKUP;

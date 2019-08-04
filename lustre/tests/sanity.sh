@@ -20750,87 +20750,86 @@ test_412() {
 }
 run_test 412 "mkdir on specific MDTs"
 
-test_413a() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDTs for this test"
+test_qos_mkdir() {
+	local mkdir_cmd=$1
+	local stripe_count=$2
+	local mdts=$(comma_list $(mdts_nodes))
 
-	if [ $(lustre_version_code mds1) -lt $(version_code 2.10.55) ]; then
-		skip "Need server version at least 2.10.55"
-	fi
-
-	mkdir $DIR/$tdir || error "mkdir failed"
-
-	# find MDT that is the most full
-	local max=$($LFS df | grep MDT |
-		awk 'BEGIN { a=0 }
-			{ sub("%", "", $5)
-			  if (0+$5 >= a)
-			  {
-				a = $5
-				b = $6
-			  }
-			}
-		     END { split(b, c, ":")
-			   sub("]", "", c[2])
-			   print c[2]
-			 }')
-
-	for i in $(seq $((MDSCOUNT - 1))); do
-		$LFS mkdir -c $i $DIR/$tdir/d$i ||
-			error "mkdir d$i failed"
-		$LFS getdirstripe $DIR/$tdir/d$i
-		local stripe_index=$($LFS getdirstripe -i $DIR/$tdir/d$i)
-		[ $stripe_index -ne $max ] ||
-			error "don't expect $max"
-	done
-}
-run_test 413a "mkdir on less full MDTs"
-
-test_413b() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDTs for this test"
-
-	[ $MDS1_VERSION -lt $(version_code 2.12.52) ] &&
-		skip "Need server version at least 2.12.52"
-
-	mkdir $DIR/$tdir || error "mkdir failed"
-	$LFS setdirstripe -D -i -1 -H space $DIR/$tdir ||
-		error "setdirstripe failed"
-
-	local qos_prio_free
-	local qos_threshold_rr
+	local testdir
+	local lmv_qos_prio_free
+	local lmv_qos_threshold_rr
+	local lmv_qos_maxage
+	local lod_qos_prio_free
+	local lod_qos_threshold_rr
+	local lod_qos_maxage
 	local count
+	local i
 
-	qos_prio_free=$($LCTL get_param -n lmv.*.qos_prio_free | head -n1)
-	qos_prio_free=${qos_prio_free%%%}
-	qos_threshold_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -n1)
-	qos_threshold_rr=${qos_threshold_rr%%%}
-	qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
+	lmv_qos_prio_free=$($LCTL get_param -n lmv.*.qos_prio_free | head -n1)
+	lmv_qos_prio_free=${lmv_qos_prio_free%%%}
+	lmv_qos_threshold_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr |
+		head -n1)
+	lmv_qos_threshold_rr=${lmv_qos_threshold_rr%%%}
+	lmv_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
+	stack_trap "$LCTL set_param \
+		lmv.*.qos_prio_free=$lmv_qos_prio_free > /dev/null" EXIT
+	stack_trap "$LCTL set_param \
+		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null" EXIT
+	stack_trap "$LCTL set_param \
+		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null" EXIT
 
-	stack_trap "$LCTL set_param lmv.*.qos_prio_free=$qos_prio_free" EXIT
-	stack_trap "$LCTL set_param lmv.*.qos_threshold_rr=$qos_threshold_rr" \
+	lod_qos_prio_free=$(do_facet mds1 $LCTL get_param -n \
+		lod.lustre-MDT0000-mdtlov.mdt_qos_prio_free | head -n1)
+	lod_qos_prio_free=${lod_qos_prio_free%%%}
+	lod_qos_threshold_rr=$(do_facet mds1 $LCTL get_param -n \
+		lod.lustre-MDT0000-mdtlov.mdt_qos_thresholdrr | head -n1)
+	lod_qos_threshold_rr=${lod_qos_threshold_rr%%%}
+	lod_qos_maxage=$(do_facet mds1 $LCTL get_param -n \
+		lod.lustre-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null" EXIT
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		lod.*.mdt_qos_thresholdrr=$lod_qos_threshold_rr > /dev/null" \
 		EXIT
-	stack_trap "$LCTL set_param lmv.*.qos_maxage=$qos_maxage" EXIT
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null" EXIT
 
-	echo "mkdir with roundrobin"
+	echo
+	echo "Mkdir (stripe_count $stripe_count) roundrobin:"
 
-	$LCTL set_param lmv.*.qos_threshold_rr=100
+	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_thresholdrr=100 > /dev/null
+
+	testdir=$DIR/$tdir-s$stripe_count/rr
+
 	for i in $(seq $((100 * MDSCOUNT))); do
-		mkdir $DIR/$tdir/subdir$i || error "mkdir subdir$i failed"
+		eval $mkdir_cmd $testdir/subdir$i ||
+			error "$mkdir_cmd subdir$i failed"
 	done
+
 	for i in $(seq $MDSCOUNT); do
-		count=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$((i - 1))$ |
-			wc -w)
+		count=$($LFS getdirstripe -i $testdir/* |
+				grep ^$((i - 1))$ | wc -l)
 		echo "$count directories created on MDT$((i - 1))"
 		[ $count -eq 100 ] || error "subdirs are not evenly distributed"
+
+		if [ $stripe_count -gt 1 ]; then
+			count=$($LFS getdirstripe $testdir/* |
+				grep -P "^\s+$((i - 1))\t" | wc -l)
+			echo "$count stripes created on MDT$((i - 1))"
+			# deviation should < 5% of average
+			[ $count -lt $((95 * stripe_count)) ] ||
+			[ $count -gt $((105 * stripe_count)) ] &&
+				error "stripes are not evenly distributed"
+		fi
 	done
 
-	rm -rf $DIR/$tdir/*
+	$LCTL set_param lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null
+	do_nodes $mdts $LCTL set_param \
+		lod.*.mdt_qos_thresholdrr=$lod_qos_threshold_rr > /dev/null
 
-	$LCTL set_param lmv.*.qos_threshold_rr=$qos_threshold_rr
-	# Shorten statfs result age, so that it can be updated in time
-	$LCTL set_param lmv.*.qos_maxage=1
-	sleep_maxage
+	echo
+	echo "Check for uneven MDTs: "
 
 	local ffree
 	local bavail
@@ -20867,9 +20866,8 @@ test_413b() {
 
 	# Check if we need to generate uneven MDTs
 	local threshold=50
-	local diff=$(((max - min ) * 100 / min))
+	local diff=$(((max - min) * 100 / min))
 	local value="$(generate_string 1024)"
-	local i
 
 	while [ $diff -lt $threshold ]; do
 		# generate uneven MDTs, create till $threshold% diff
@@ -20884,11 +20882,11 @@ test_413b() {
 			error "mkdir $tdir-MDT$min_index failed"
 		for i in $(seq $count); do
 			$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE \
-				$DIR/$tdir-MDT$min_index/f$i > /dev/null ||
-				error "create f$i failed"
+				$DIR/$tdir-MDT$min_index/f$j_$i > /dev/null ||
+				error "create f$j_$i failed"
 			setfattr -n user.413b -v $value \
-				$DIR/$tdir-MDT$min_index/f$i ||
-				error "setfattr f$i failed"
+				$DIR/$tdir-MDT$min_index/f$j_$i ||
+				error "setfattr f$j_$i failed"
 		done
 
 		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
@@ -20904,31 +20902,95 @@ test_413b() {
 	echo "MDT blocks available: ${bavail[@]}"
 	echo "weight diff=$diff%"
 
-	echo "mkdir with balanced space usage"
-	$LCTL set_param lmv.*.qos_prio_free=100
+	echo
+	echo "Mkdir (stripe_count $stripe_count) with balanced space usage:"
+
+	$LCTL set_param lmv.*.qos_prio_free=100 > /dev/null
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_prio_free=100 > /dev/null
+	# decrease statfs age, so that it can be updated in time
+	$LCTL set_param lmv.*.qos_maxage=1 > /dev/null
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=1 > /dev/null
+
+	sleep 1
+
+	testdir=$DIR/$tdir-s$stripe_count/qos
+
 	for i in $(seq $((100 * MDSCOUNT))); do
-		mkdir $DIR/$tdir/subdir$i || error "mkdir subdir$i failed"
+		eval $mkdir_cmd $testdir/subdir$i ||
+			error "$mkdir_cmd subdir$i failed"
 	done
 
 	for i in $(seq $MDSCOUNT); do
-		count=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$((i - 1))$ |
-			wc -w)
+		count=$($LFS getdirstripe -i $testdir/* | grep ^$((i - 1))$ |
+			wc -l)
 		echo "$count directories created on MDT$((i - 1))"
+
+		if [ $stripe_count -gt 1 ]; then
+			count=$($LFS getdirstripe $testdir/* |
+				grep -P "^\s+$((i - 1))\t" | wc -l)
+			echo "$count stripes created on MDT$((i - 1))"
+		fi
 	done
 
-	max=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$max_index$ | wc -l)
-	min=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$min_index$ | wc -l)
+	max=$($LFS getdirstripe -i $testdir/* | grep ^$max_index$ | wc -l)
+	min=$($LFS getdirstripe -i $testdir/* | grep ^$min_index$ | wc -l)
 
+	# D-value should > 10% of averge
 	[ $((max - min)) -lt 10 ] &&
 		error "subdirs shouldn't be evenly distributed"
 
-	which getfattr > /dev/null 2>&1 || skip_env "no getfattr command"
-
-	$LFS setdirstripe -D -d $DIR/$tdir || error "setdirstripe -d failed"
-	getfattr -n trusted.dmv $DIR/$tdir &&
-		error "default dir layout exists" || true
+	# ditto
+	if [ $stripe_count -gt 1 ]; then
+		max=$($LFS getdirstripe $testdir/* |
+			grep -P "^\s+$max_index\t" | wc -l)
+		min=$($LFS getdirstripe $testdir/* |
+			grep -P "^\s+$min_index\t" | wc -l)
+		[ $((max - min)) -le $((10 * stripe_count)) ] &&
+			error "stripes shouldn't be evenly distributed"|| true
+	fi
 }
-run_test 413b "mkdir with balanced space usage"
+
+test_413a() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDTs for this test"
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.52) ] &&
+		skip "Need server version at least 2.12.52"
+
+	local stripe_count
+
+	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
+		mkdir $DIR/$tdir-s$stripe_count || error "mkdir failed"
+		mkdir $DIR/$tdir-s$stripe_count/rr || error "mkdir failed"
+		mkdir $DIR/$tdir-s$stripe_count/qos || error "mkdir failed"
+		test_qos_mkdir "$LFS mkdir -c $stripe_count" $stripe_count
+	done
+}
+run_test 413a "QoS mkdir with 'lfs mkdir -i -1'"
+
+test_413b() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDTs for this test"
+
+	[ $MDS1_VERSION -lt $(version_code 2.12.52) ] &&
+		skip "Need server version at least 2.12.52"
+
+	local stripe_count
+
+	for stripe_count in $(seq 1 $((MDSCOUNT - 1))); do
+		mkdir $DIR/$tdir-s$stripe_count || error "mkdir failed"
+		mkdir $DIR/$tdir-s$stripe_count/rr || error "mkdir failed"
+		mkdir $DIR/$tdir-s$stripe_count/qos || error "mkdir failed"
+		$LFS setdirstripe -D -c $stripe_count \
+			$DIR/$tdir-s$stripe_count/rr ||
+			error "setdirstripe failed"
+		$LFS setdirstripe -D -c $stripe_count \
+			$DIR/$tdir-s$stripe_count/qos ||
+			error "setdirstripe failed"
+		test_qos_mkdir "mkdir" $stripe_count
+	done
+}
+run_test 413b "QoS mkdir under dir whose default LMV starting MDT offset is -1"
 
 test_414() {
 #define OBD_FAIL_PTLRPC_BULK_ATTACH      0x521

@@ -89,10 +89,8 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 				continue;
 
 			list_add(&tgt_desc->ltd_kill, &kill);
-			/*FIXME: only support ost pool for now */
-			if (ltd == &lod->lod_ost_descs)
-				lod_ost_pool_remove(&ltd->ltd_tgt_pool,
-						    tgt_desc->ltd_index);
+			lod_tgt_pool_remove(&ltd->ltd_tgt_pool,
+					    tgt_desc->ltd_index);
 			ltd_del_tgt(ltd, tgt_desc);
 			ltd->ltd_death_row--;
 		}
@@ -256,15 +254,12 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	if (rc)
 		GOTO(out_del_tgt, rc);
 
-	if (for_ost) {
-		/* pool is not supported for MDS stack yet */
-		rc = lod_ost_pool_add(&ltd->ltd_tgt_pool, index,
-				      ltd->ltd_tgts_size);
-		if (rc) {
-			CERROR("%s: can't set up pool, failed with %d\n",
-			       obd->obd_name, rc);
-			GOTO(out_del_tgt, rc);
-		}
+	rc = lod_tgt_pool_add(&ltd->ltd_tgt_pool, index,
+			      ltd->ltd_lov_desc.ld_tgt_count);
+	if (rc) {
+		CERROR("%s: can't set up pool, failed with %d\n",
+		       obd->obd_name, rc);
+		GOTO(out_del_tgt, rc);
 	}
 
 	mutex_unlock(&ltd->ltd_mutex);
@@ -301,7 +296,7 @@ out_ltd:
 		thread = LTD_TGT(ltd, index)->ltd_recovery_thread;
 		OBD_FREE_PTR(thread);
 	}
-	lod_ost_pool_remove(&ltd->ltd_tgt_pool, index);
+	lod_tgt_pool_remove(&ltd->ltd_tgt_pool, index);
 out_del_tgt:
 	ltd_del_tgt(ltd, tgt_desc);
 out_mutex:
@@ -2006,6 +2001,14 @@ void lod_fix_desc_pattern(__u32 *val)
 	}
 }
 
+void lod_fix_lmv_desc_pattern(__u32 *val)
+{
+	if ((*val) && !lmv_is_known_hash_type(*val)) {
+		LCONSOLE_WARN("lod: Unknown md stripe pattern: %#x\n", *val);
+		*val = 0;
+	}
+}
+
 void lod_fix_desc_qos_maxage(__u32 *val)
 {
 	/* fix qos_maxage */
@@ -2023,6 +2026,14 @@ void lod_fix_desc(struct lov_desc *desc)
 	lod_fix_desc_stripe_size(&desc->ld_default_stripe_size);
 	lod_fix_desc_stripe_count(&desc->ld_default_stripe_count);
 	lod_fix_desc_pattern(&desc->ld_pattern);
+	lod_fix_desc_qos_maxage(&desc->ld_qos_maxage);
+}
+
+static void lod_fix_lmv_desc(struct lmv_desc *desc)
+{
+	desc->ld_active_tgt_count = 0;
+	lod_fix_desc_stripe_count(&desc->ld_default_stripe_count);
+	lod_fix_lmv_desc_pattern(&desc->ld_pattern);
 	lod_fix_desc_qos_maxage(&desc->ld_qos_maxage);
 }
 
@@ -2076,6 +2087,9 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	desc->ld_active_tgt_count = 0;
 	lod->lod_ost_descs.ltd_lov_desc = *desc;
 
+	/* NB: config doesn't contain lmv_desc, alter it via sysfs. */
+	lod_fix_lmv_desc(&lod->lod_mdt_descs.ltd_lmv_desc);
+
 	lod->lod_sp_me = LUSTRE_SP_CLI;
 
 	/* Set up OST pool environment */
@@ -2091,17 +2105,30 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 
 	INIT_LIST_HEAD(&lod->lod_pool_list);
 	lod->lod_pool_count = 0;
-	rc = lod_ost_pool_init(&lod->lod_ost_descs.ltd_tgt_pool, 0);
+	rc = lod_tgt_pool_init(&lod->lod_mdt_descs.ltd_tgt_pool, 0);
 	if (rc)
 		GOTO(out_hash, rc);
-	rc = lod_ost_pool_init(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool, 0);
+
+	rc = lod_tgt_pool_init(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool, 0);
 	if (rc)
-		GOTO(out_pool_info, rc);
+		GOTO(out_mdt_pool, rc);
+
+	rc = lod_tgt_pool_init(&lod->lod_ost_descs.ltd_tgt_pool, 0);
+	if (rc)
+		GOTO(out_mdt_rr_pool, rc);
+
+	rc = lod_tgt_pool_init(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool, 0);
+	if (rc)
+		GOTO(out_ost_pool, rc);
 
 	RETURN(0);
 
-out_pool_info:
-	lod_ost_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
+out_ost_pool:
+	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
+out_mdt_rr_pool:
+	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
+out_mdt_pool:
+	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
 out_hash:
 	cfs_hash_putref(lod->lod_pools_hash_body);
 
@@ -2131,8 +2158,10 @@ int lod_pools_fini(struct lod_device *lod)
 	}
 
 	cfs_hash_putref(lod->lod_pools_hash_body);
-	lod_ost_pool_free(&(lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool));
-	lod_ost_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
+	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool);
+	lod_tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
+	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
+	lod_tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
 
 	RETURN(0);
 }

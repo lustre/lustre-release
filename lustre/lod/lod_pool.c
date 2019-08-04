@@ -99,8 +99,8 @@ void lod_pool_putref(struct pool_desc *pool)
 		LASSERT(hlist_unhashed(&pool->pool_hash));
 		LASSERT(list_empty(&pool->pool_list));
 		LASSERT(pool->pool_proc_entry == NULL);
-		lod_ost_pool_free(&(pool->pool_rr.lqr_pool));
-		lod_ost_pool_free(&(pool->pool_obds));
+		lod_tgt_pool_free(&(pool->pool_rr.lqr_pool));
+		lod_tgt_pool_free(&(pool->pool_obds));
 		OBD_FREE_PTR(pool);
 		EXIT;
 	}
@@ -464,7 +464,7 @@ void lod_dump_pool(int level, struct pool_desc *pool)
  * \retval		negative error number on failure
  */
 #define POOL_INIT_COUNT 2
-int lod_ost_pool_init(struct lu_tgt_pool *op, unsigned int count)
+int lod_tgt_pool_init(struct lu_tgt_pool *op, unsigned int count)
 {
 	ENTRY;
 
@@ -496,7 +496,7 @@ int lod_ost_pool_init(struct lu_tgt_pool *op, unsigned int count)
  * \retval		0 on success
  * \retval		negative error number on failure.
  */
-int lod_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
+int lod_tgt_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
 {
 	__u32 *new;
 	__u32 new_size;
@@ -534,7 +534,7 @@ int lod_ost_pool_extend(struct lu_tgt_pool *op, unsigned int min_count)
  * \retval		0 if target could be added to the pool
  * \retval		negative error if target \a idx was not added
  */
-int lod_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
+int lod_tgt_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
 {
 	unsigned int i;
 	int rc = 0;
@@ -542,7 +542,7 @@ int lod_ost_pool_add(struct lu_tgt_pool *op, __u32 idx, unsigned int min_count)
 
 	down_write(&op->op_rw_sem);
 
-	rc = lod_ost_pool_extend(op, min_count);
+	rc = lod_tgt_pool_extend(op, min_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -574,7 +574,7 @@ out:
  * \retval		0 on success
  * \retval		negative error number on failure
  */
-int lod_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx)
+int lod_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx)
 {
 	unsigned int i;
 	ENTRY;
@@ -608,7 +608,7 @@ int lod_ost_pool_remove(struct lu_tgt_pool *op, __u32 idx)
  *
  * \retval		0 on success or if pool was already freed
  */
-int lod_ost_pool_free(struct lu_tgt_pool *op)
+int lod_tgt_pool_free(struct lu_tgt_pool *op)
 {
 	ENTRY;
 
@@ -657,13 +657,13 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	strlcpy(new_pool->pool_name, poolname, sizeof(new_pool->pool_name));
 	new_pool->pool_lobd = obd;
 	atomic_set(&new_pool->pool_refcount, 1);
-	rc = lod_ost_pool_init(&new_pool->pool_obds, 0);
+	rc = lod_tgt_pool_init(&new_pool->pool_obds, 0);
 	if (rc)
 		GOTO(out_err, rc);
 
 	lu_qos_rr_init(&new_pool->pool_rr);
 
-	rc = lod_ost_pool_init(&new_pool->pool_rr.lqr_pool, 0);
+	rc = lod_tgt_pool_init(&new_pool->pool_rr.lqr_pool, 0);
 	if (rc)
 		GOTO(out_free_pool_obds, rc);
 
@@ -708,9 +708,9 @@ out_err:
 
 	lprocfs_remove(&new_pool->pool_proc_entry);
 
-	lod_ost_pool_free(&new_pool->pool_rr.lqr_pool);
+	lod_tgt_pool_free(&new_pool->pool_rr.lqr_pool);
 out_free_pool_obds:
-	lod_ost_pool_free(&new_pool->pool_obds);
+	lod_tgt_pool_free(&new_pool->pool_obds);
 	OBD_FREE_PTR(new_pool);
 	return rc;
 }
@@ -791,8 +791,8 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_ost_pool_add(&pool->pool_obds, tgt->ltd_index,
-			      lod->lod_ost_descs.ltd_tgts_size);
+	rc = lod_tgt_pool_add(&pool->pool_obds, tgt->ltd_index,
+			      lod->lod_ost_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -849,8 +849,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	lod_ost_pool_remove(&pool->pool_obds, ost->ltd_index);
-
+	lod_tgt_pool_remove(&pool->pool_obds, ost->ltd_index);
 	pool->pool_rr.lqr_dirty = 1;
 
 	CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,

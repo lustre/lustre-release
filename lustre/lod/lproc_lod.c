@@ -46,60 +46,49 @@
 #ifdef CONFIG_PROC_FS
 
 /**
- * Show default stripe size.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
+ * Show DoM default stripe size.
  */
-static int lod_dom_stripesize_seq_show(struct seq_file *m, void *v)
+static ssize_t dom_stripesize_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%u\n", lod->lod_dom_max_stripesize);
-	return 0;
+	return snprintf(buf, PAGE_SIZE, "%u\n", lod->lod_dom_max_stripesize);
 }
 
 /**
- * Set default stripe size.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string containing the maximum number of bytes stored in
- *			each object before moving to the next object in the
- *			layout (if any)
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
+ * Set DoM default stripe size.
  */
-static ssize_t
-lod_dom_stripesize_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+static ssize_t dom_stripesize_store(struct kobject *kobj,
+				    struct attribute *attr, const char *buffer,
+				    size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	char tbuf[22] = "";
 	s64 val;
 	int rc;
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
+	if (count > (sizeof(tbuf) - 1))
+		return -EINVAL;
+
+	memcpy(tbuf, buffer, count);
+
+	rc = lu_str_to_s64(tbuf, count, &val, '1');
 	if (rc)
 		return rc;
+
 	if (val < 0)
 		return -ERANGE;
 
 	/* 1GB is the limit */
 	if (val > (1ULL << 30))
 		return -ERANGE;
-	else if (val > 0) {
+
+	if (val > 0) {
 		if (val < LOV_MIN_STRIPE_SIZE) {
 			LCONSOLE_INFO("Increasing provided stripe size to "
 				      "a minimum value %u\n",
@@ -117,57 +106,39 @@ lod_dom_stripesize_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_dom_stripesize);
 
-/**
- * Show default stripe size.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
- */
-static int lod_stripesize_seq_show(struct seq_file *m, void *v)
+LUSTRE_RW_ATTR(dom_stripesize);
+
+static ssize_t stripesize_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%llu\n",
-		   lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_size);
-	return 0;
+	return snprintf(buf, PAGE_SIZE, "%llu\n",
+			lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_size);
 }
 
-/**
- * Set default stripe size.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string containing the maximum number of bytes stored in
- *			each object before moving to the next object in the
- *			layout (if any)
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
- */
-static ssize_t
-lod_stripesize_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
+static ssize_t stripesize_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	char tbuf[22] = "";
 	s64 val;
 	int rc;
 
-	LASSERT(dev != NULL);
-	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
+	if (count > (sizeof(tbuf) - 1))
+		return -EINVAL;
+
+	memcpy(tbuf, buffer, count);
+
+	rc = lu_str_to_s64(tbuf, count, &val, '1');
 	if (rc)
 		return rc;
+
 	if (val < 0)
 		return -ERANGE;
 
@@ -176,16 +147,11 @@ lod_stripesize_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_stripesize);
+
+LUSTRE_RW_ATTR(stripesize);
 
 /**
  * Show default stripe offset.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
 static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
@@ -194,7 +160,7 @@ static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%lld\n",
+	return snprintf(buf, PAGE_SIZE, "%lld\n",
 		lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_offset);
 }
 
@@ -203,17 +169,10 @@ static ssize_t stripeoffset_show(struct kobject *kobj, struct attribute *attr,
  *
  * Usually contains -1 allowing Lustre to balance objects among OST
  * otherwise may cause severe OST imbalance.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string describing starting OST index for new files
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
  */
-static ssize_t stripeoffset_store(struct kobject *kobj, struct attribute *attr,
-				  const char *buffer, size_t count)
+static ssize_t stripeoffset_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
@@ -232,45 +191,47 @@ static ssize_t stripeoffset_store(struct kobject *kobj, struct attribute *attr,
 
 	return count;
 }
+
 LUSTRE_RW_ATTR(stripeoffset);
 
 /**
  * Show default striping pattern (LOV_PATTERN_*).
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
-static ssize_t stripetype_show(struct kobject *kobj, struct attribute *attr,
-			       char *buf)
+static ssize_t __stripetype_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf, bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 
-	return sprintf(buf, "%u\n", lod->lod_ost_descs.ltd_lov_desc.ld_pattern);
+	return snprintf(buf, PAGE_SIZE, "%u\n", ltd->ltd_lov_desc.ld_pattern);
+}
+
+static ssize_t mdt_stripetype_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
+{
+	return __stripetype_show(kobj, attr, buf, true);
+}
+
+static ssize_t stripetype_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	return __stripetype_show(kobj, attr, buf, false);
 }
 
 /**
  * Set default striping pattern (a number, not a human-readable string).
- *
- * \param[in] file	proc file
- * \param[in] buffer	string containing the default striping pattern for new
- *			files. This is an integer LOV_PATTERN_* value
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
  */
-static ssize_t stripetype_store(struct kobject *kobj, struct attribute *attr,
-				const char *buffer, size_t count)
+static ssize_t __stripetype_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count, bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 	u32 pattern;
 	int rc;
 
@@ -278,52 +239,73 @@ static ssize_t stripetype_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	lod_fix_desc_pattern(&pattern);
-	lod->lod_ost_descs.ltd_lov_desc.ld_pattern = pattern;
+	if (is_mdt)
+		lod_fix_lmv_desc_pattern(&pattern);
+	else
+		lod_fix_desc_pattern(&pattern);
+
+	ltd->ltd_lov_desc.ld_pattern = pattern;
 
 	return count;
 }
+
+static ssize_t mdt_stripetype_store(struct kobject *kobj,
+				    struct attribute *attr, const char *buffer,
+				    size_t count)
+{
+	return __stripetype_store(kobj, attr, buffer, count, true);
+}
+
+static ssize_t stripetype_store(struct kobject *kobj,
+				    struct attribute *attr, const char *buffer,
+				    size_t count)
+{
+	return __stripetype_store(kobj, attr, buffer, count, false);
+}
+
+LUSTRE_RW_ATTR(mdt_stripetype);
 LUSTRE_RW_ATTR(stripetype);
 
 /**
  * Show default number of stripes.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success,
- * \retval negative	error code if failed
  */
-static ssize_t stripecount_show(struct kobject *kobj, struct attribute *attr,
-				char *buf)
+static ssize_t __stripecount_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf, bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
-	struct lov_desc *desc = &lod->lod_ost_descs.ltd_lov_desc;
+	struct lov_desc *desc = is_mdt ? &lod->lod_mdt_descs.ltd_lov_desc :
+					 &lod->lod_ost_descs.ltd_lov_desc;
 
-	return sprintf(buf, "%d\n",
+	return snprintf(buf, PAGE_SIZE, "%d\n",
 		      (s16)(desc->ld_default_stripe_count + 1) - 1);
+}
+
+static ssize_t mdt_stripecount_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	return __stripecount_show(kobj, attr, buf, true);
+}
+
+static ssize_t stripecount_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	return __stripecount_show(kobj, attr, buf, false);
 }
 
 /**
  * Set default number of stripes.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string containing the default number of stripes
- *			for new files
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code otherwise
  */
-static ssize_t stripecount_store(struct kobject *kobj, struct attribute *attr,
-				  const char *buffer, size_t count)
+static ssize_t __stripecount_store(struct kobject *kobj, struct attribute *attr,
+				   const char *buffer, size_t count,
+				   bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 	int stripe_count;
 	int rc;
 
@@ -335,61 +317,91 @@ static ssize_t stripecount_store(struct kobject *kobj, struct attribute *attr,
 		return -ERANGE;
 
 	lod_fix_desc_stripe_count(&stripe_count);
-	lod->lod_ost_descs.ltd_lov_desc.ld_default_stripe_count = stripe_count;
+	ltd->ltd_lov_desc.ld_default_stripe_count = stripe_count;
 
 	return count;
 }
+
+static ssize_t mdt_stripecount_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	return __stripecount_store(kobj, attr, buffer, count, true);
+}
+
+static ssize_t stripecount_store(struct kobject *kobj,
+				 struct attribute *attr,
+				 const char *buffer, size_t count)
+{
+	return __stripecount_store(kobj, attr, buffer, count, false);
+}
+
+LUSTRE_RW_ATTR(mdt_stripecount);
 LUSTRE_RW_ATTR(stripecount);
 
 /**
  * Show number of targets.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
-static ssize_t numobd_show(struct kobject *kobj, struct attribute *attr,
-			   char *buf)
+static ssize_t __numobd_show(struct kobject *kobj, struct attribute *attr,
+			     char *buf, bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 
-	return sprintf(buf, "%u\n", lod->lod_ost_count);
+	return snprintf(buf, PAGE_SIZE, "%u\n", ltd->ltd_lov_desc.ld_tgt_count);
 }
+
+static ssize_t mdt_numobd_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	return __numobd_show(kobj, attr, buf, true);
+}
+
+static ssize_t numobd_show(struct kobject *kobj, struct attribute *attr,
+			   char *buf)
+{
+	return __numobd_show(kobj, attr, buf, false);
+}
+
+LUSTRE_RO_ATTR(mdt_numobd);
 LUSTRE_RO_ATTR(numobd);
 
 /**
  * Show number of active targets.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
-static ssize_t activeobd_show(struct kobject *kobj, struct attribute *attr,
-			      char *buf)
+static ssize_t __activeobd_show(struct kobject *kobj, struct attribute *attr,
+				char *buf, bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 
-	return sprintf(buf, "%u\n",
-		       lod->lod_ost_descs.ltd_lov_desc.ld_active_tgt_count);
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			ltd->ltd_lov_desc.ld_active_tgt_count);
 }
+
+static ssize_t mdt_activeobd_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
+{
+	return __activeobd_show(kobj, attr, buf, true);
+}
+
+static ssize_t activeobd_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
+{
+	return __activeobd_show(kobj, attr, buf, false);
+}
+
+LUSTRE_RO_ATTR(mdt_activeobd);
 LUSTRE_RO_ATTR(activeobd);
 
 /**
  * Show UUID of LOD device.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
 static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
@@ -398,7 +410,7 @@ static ssize_t desc_uuid_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%s\n",
+	return snprintf(buf, PAGE_SIZE, "%s\n",
 		       lod->lod_ost_descs.ltd_lov_desc.ld_uuid.uuid);
 }
 LUSTRE_RO_ATTR(desc_uuid);
@@ -410,23 +422,31 @@ LUSTRE_RO_ATTR(desc_uuid);
  * of free space compared to performance. 0% means select OSTs equally
  * regardless of their free space, 100% means select OSTs only by their free
  * space even if it results in very imbalanced load on the OSTs.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
-static ssize_t qos_prio_free_show(struct kobject *kobj, struct attribute *attr,
-				  char *buf)
+static ssize_t __qos_prio_free_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf,
+				    bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 
-	return sprintf(buf, "%d%%\n",
-		       (lod->lod_ost_descs.ltd_qos.lq_prio_free * 100 + 255) >>
-				8);
+	return snprintf(buf, PAGE_SIZE, "%d%%\n",
+		       (ltd->ltd_qos.lq_prio_free * 100 + 255) >> 8);
+}
+
+static ssize_t mdt_qos_prio_free_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
+{
+	return __qos_prio_free_show(kobj, attr, buf, true);
+}
+
+static ssize_t qos_prio_free_show(struct kobject *kobj,
+				  struct attribute *attr, char *buf)
+{
+	return __qos_prio_free_show(kobj, attr, buf, false);
 }
 
 /**
@@ -436,21 +456,17 @@ static ssize_t qos_prio_free_show(struct kobject *kobj, struct attribute *attr,
  * are space imbalanced.  See lod_qos_priofree_seq_show() for description of
  * this parameter.  See lod_qos_thresholdrr_seq_write() and lq_threshold_rr to
  * determine what constitutes "space imbalanced" OSTs.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which contains the free space priority (0-100)
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
  */
-static ssize_t qos_prio_free_store(struct kobject *kobj, struct attribute *attr,
-				   const char *buffer, size_t count)
+static ssize_t __qos_prio_free_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count,
+				     bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 	unsigned int val;
 	int rc;
 
@@ -460,34 +476,56 @@ static ssize_t qos_prio_free_store(struct kobject *kobj, struct attribute *attr,
 
 	if (val > 100)
 		return -EINVAL;
-	lod->lod_ost_descs.ltd_qos.lq_prio_free = (val << 8) / 100;
-	lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
-	lod->lod_ost_descs.ltd_qos.lq_reset = 1;
+	ltd->ltd_qos.lq_prio_free = (val << 8) / 100;
+	ltd->ltd_qos.lq_dirty = 1;
+	ltd->ltd_qos.lq_reset = 1;
 
 	return count;
 }
+
+static ssize_t mdt_qos_prio_free_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
+{
+	return __qos_prio_free_store(kobj, attr, buffer, count, true);
+}
+
+static ssize_t qos_prio_free_store(struct kobject *kobj, struct attribute *attr,
+				   const char *buffer, size_t count)
+{
+	return __qos_prio_free_store(kobj, attr, buffer, count, false);
+}
+
+LUSTRE_RW_ATTR(mdt_qos_prio_free);
 LUSTRE_RW_ATTR(qos_prio_free);
 
 /**
  * Show threshold for "same space on all OSTs" rule.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
-static int lod_qos_thresholdrr_seq_show(struct seq_file *m, void *v)
+static ssize_t __qos_thresholdrr_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf,
+				    bool is_mdt)
 {
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%d%%\n",
-		   (lod->lod_ost_descs.ltd_qos.lq_threshold_rr * 100 + 255) >>
-			8);
-	return 0;
+	return snprintf(buf, PAGE_SIZE, "%d%%\n",
+		       (ltd->ltd_qos.lq_threshold_rr * 100 + 255) >> 8);
+}
+
+static ssize_t mdt_qos_thresholdrr_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	return __qos_thresholdrr_show(kobj, attr, buf, true);
+}
+
+static ssize_t lod_qos_thresholdrr_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	return __qos_thresholdrr_show(kobj, attr, buf, false);
 }
 
 /**
@@ -498,80 +536,89 @@ static int lod_qos_thresholdrr_seq_show(struct seq_file *m, void *v)
  * is exceeded, use the QoS allocator to select OSTs based on their available
  * space so that more full OSTs are chosen less often, otherwise use the
  * round-robin allocator for efficiency and performance.
-
- * \param[in] file	proc file
- * \param[in] buffer	string containing percentage difference of free space
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
  */
-static ssize_t
-lod_qos_thresholdrr_seq_write(struct file *file, const char __user *buffer,
-			      size_t count, loff_t *off)
+static ssize_t __qos_thresholdrr_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count,
+				       bool is_mdt)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *dev = m->private;
-	struct lod_device *lod;
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
+	unsigned int val;
 	int rc;
-	__s64 val;
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '%');
+	rc = kstrtouint(buffer, 0, &val);
 	if (rc)
 		return rc;
 
-	if (val > 100 || val < 0)
+	if (val > 100)
 		return -EINVAL;
-
-	lod->lod_ost_descs.ltd_qos.lq_threshold_rr = (val << 8) / 100;
-	lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
+	ltd->ltd_qos.lq_threshold_rr = (val << 8) / 100;
+	ltd->ltd_qos.lq_dirty = 1;
 
 	return count;
 }
-LPROC_SEQ_FOPS(lod_qos_thresholdrr);
+
+static ssize_t mdt_qos_thresholdrr_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	return __qos_thresholdrr_store(kobj, attr, buffer, count, true);
+}
+
+static ssize_t lod_qos_thresholdrr_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	return __qos_thresholdrr_store(kobj, attr, buffer, count, false);
+}
+
+LUSTRE_RW_ATTR(mdt_qos_thresholdrr);
+LUSTRE_RW_ATTR(lod_qos_thresholdrr);
 
 /**
  * Show expiration period used to refresh cached statfs data, which
  * is used to implement QoS/RR striping allocation algorithm.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
-static ssize_t qos_maxage_show(struct kobject *kobj, struct attribute *attr,
-			       char *buf)
+static ssize_t __qos_maxage_show(struct kobject *kobj, struct attribute *attr,
+				 char *buf, bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 
-	return sprintf(buf, "%u Sec\n",
-		       lod->lod_ost_descs.ltd_lov_desc.ld_qos_maxage);
+	return snprintf(buf, PAGE_SIZE, "%u Sec\n",
+		       ltd->ltd_lov_desc.ld_qos_maxage);
+}
+
+static ssize_t mdt_qos_maxage_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
+{
+	return __qos_maxage_show(kobj, attr, buf, true);
+}
+
+static ssize_t qos_maxage_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
+{
+	return __qos_maxage_show(kobj, attr, buf, true);
 }
 
 /**
  * Set expiration period used to refresh cached statfs data.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string contains maximum age of statfs data in seconds
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
  */
-static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
-				const char *buffer, size_t count)
+static ssize_t __qos_maxage_store(struct kobject *kobj, struct attribute *attr,
+				  const char *buffer, size_t count, bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 	struct lustre_cfg_bufs bufs;
 	struct lu_device *next;
 	struct lustre_cfg *lcfg;
@@ -586,7 +633,8 @@ static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
 
 	if (val <= 0)
 		return -EINVAL;
-	lod->lod_ost_descs.ltd_lov_desc.ld_qos_maxage = val;
+
+	ltd->ltd_lov_desc.ld_qos_maxage = val;
 
 	/*
 	 * propogate the value down to OSPs
@@ -599,65 +647,115 @@ static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
 		return -ENOMEM;
 	lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
 
-	lod_getref(&lod->lod_ost_descs);
-	lod_foreach_ost(lod, tgt) {
+	lod_getref(ltd);
+	ltd_foreach_tgt(ltd, tgt) {
 		next = &tgt->ltd_tgt->dd_lu_dev;
 		rc = next->ld_ops->ldo_process_config(NULL, next, lcfg);
 		if (rc)
 			CERROR("can't set maxage on #%d: %d\n",
 			       tgt->ltd_index, rc);
 	}
-	lod_putref(lod, &lod->lod_ost_descs);
+	lod_putref(lod, ltd);
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 
 	return count;
 }
+
+static ssize_t mdt_qos_maxage_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	return __qos_maxage_store(kobj, attr, buffer, count, true);
+}
+
+static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
+				const char *buffer, size_t count)
+{
+	return __qos_maxage_store(kobj, attr, buffer, count, false);
+}
+
+LUSTRE_RW_ATTR(mdt_qos_maxage);
 LUSTRE_RW_ATTR(qos_maxage);
+
+static void *lod_tgts_seq_start(struct seq_file *p, loff_t *pos, bool is_mdt)
+{
+	struct obd_device *dev = p->private;
+	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
+
+	LASSERT(dev != NULL);
+
+	lod_getref(ltd); /* released in lod_tgts_seq_stop */
+	if (*pos >= ltd->ltd_tgt_bitmap->size)
+		return NULL;
+
+	*pos = find_next_bit(ltd->ltd_tgt_bitmap->data,
+			     ltd->ltd_tgt_bitmap->size, *pos);
+	if (*pos < ltd->ltd_tgt_bitmap->size)
+		return LTD_TGT(ltd, *pos);
+	else
+		return NULL;
+}
+
+static void *lod_mdts_seq_start(struct seq_file *p, loff_t *pos)
+{
+	return lod_tgts_seq_start(p, pos, true);
+}
 
 static void *lod_osts_seq_start(struct seq_file *p, loff_t *pos)
 {
+	return lod_tgts_seq_start(p, pos, false);
+}
+
+static void lod_tgts_seq_stop(struct seq_file *p, void *v, bool is_mdt)
+{
 	struct obd_device *dev = p->private;
-	struct lod_device *lod;
+	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
 
 	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
+	lod_putref(lod, ltd);
+}
 
-	lod_getref(&lod->lod_ost_descs); /* released in lod_osts_seq_stop */
-	if (*pos >= lod->lod_ost_bitmap->size)
-		return NULL;
-
-	*pos = find_next_bit(lod->lod_ost_bitmap->data,
-				 lod->lod_ost_bitmap->size, *pos);
-	if (*pos < lod->lod_ost_bitmap->size)
-		return OST_TGT(lod,*pos);
-	else
-		return NULL;
+static void lod_mdts_seq_stop(struct seq_file *p, void *v)
+{
+	lod_tgts_seq_stop(p, v, true);
 }
 
 static void lod_osts_seq_stop(struct seq_file *p, void *v)
 {
-	struct obd_device *dev = p->private;
-	struct lod_device *lod;
+	lod_tgts_seq_stop(p, v, false);
+}
 
-	LASSERT(dev != NULL);
-	lod = lu2lod_dev(dev->obd_lu_dev);
-	lod_putref(lod, &lod->lod_ost_descs);
+static void *lod_tgts_seq_next(struct seq_file *p, void *v, loff_t *pos,
+			       bool is_mdt)
+{
+	struct obd_device *dev = p->private;
+	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
+	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
+					    &lod->lod_ost_descs;
+
+	if (*pos >= ltd->ltd_tgt_bitmap->size - 1)
+		return NULL;
+
+	*pos = find_next_bit(ltd->ltd_tgt_bitmap->data,
+			     ltd->ltd_tgt_bitmap->size, *pos + 1);
+	if (*pos < ltd->ltd_tgt_bitmap->size)
+		return LTD_TGT(ltd, *pos);
+	else
+		return NULL;
+}
+
+static void *lod_mdts_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+	return lod_tgts_seq_next(p, v, pos, true);
 }
 
 static void *lod_osts_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
-	struct obd_device *dev = p->private;
-	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
-
-	if (*pos >= lod->lod_ost_bitmap->size - 1)
-		return NULL;
-
-	*pos = find_next_bit(lod->lod_ost_bitmap->data,
-				 lod->lod_ost_bitmap->size, *pos + 1);
-	if (*pos < lod->lod_ost_bitmap->size)
-		return OST_TGT(lod,*pos);
-	else
-		return NULL;
+	return lod_tgts_seq_next(p, v, pos, false);
 }
 
 /**
@@ -669,44 +767,61 @@ static void *lod_osts_seq_next(struct seq_file *p, void *v, loff_t *pos)
  * \retval 0		on success
  * \retval negative	error code if failed
  */
-static int lod_osts_seq_show(struct seq_file *p, void *v)
+static int lod_tgts_seq_show(struct seq_file *p, void *v)
 {
-	struct obd_device   *obd = p->private;
-	struct lu_tgt_desc *ost_desc = v;
-	struct lod_device   *lod;
-	int                  idx, rc, active;
-	struct dt_device    *next;
-	struct obd_statfs    sfs;
+	struct obd_device *obd = p->private;
+	struct lu_tgt_desc *tgt = v;
+	struct dt_device *next;
+	int rc, active;
 
 	LASSERT(obd->obd_lu_dev);
-	lod = lu2lod_dev(obd->obd_lu_dev);
 
-	idx = ost_desc->ltd_index;
-	next = OST_TGT(lod, idx)->ltd_tgt;
-	if (next == NULL)
+	next = tgt->ltd_tgt;
+	if (!next)
 		return -EINVAL;
 
 	/* XXX: should be non-NULL env, but it's very expensive */
 	active = 1;
-	rc = dt_statfs(NULL, next, &sfs);
+	rc = dt_statfs(NULL, next, &tgt->ltd_statfs);
 	if (rc == -ENOTCONN) {
 		active = 0;
 		rc = 0;
 	} else if (rc)
 		return rc;
 
-	seq_printf(p, "%d: %s %sACTIVE\n", idx,
-		   obd_uuid2str(&ost_desc->ltd_uuid),
+	seq_printf(p, "%d: %s %sACTIVE\n", tgt->ltd_index,
+		   obd_uuid2str(&tgt->ltd_uuid),
 		   active ? "" : "IN");
 	return 0;
 }
+
+static const struct seq_operations lod_mdts_sops = {
+	.start	= lod_mdts_seq_start,
+	.stop	= lod_mdts_seq_stop,
+	.next	= lod_mdts_seq_next,
+	.show	= lod_tgts_seq_show,
+};
 
 static const struct seq_operations lod_osts_sops = {
 	.start	= lod_osts_seq_start,
 	.stop	= lod_osts_seq_stop,
 	.next	= lod_osts_seq_next,
-	.show	= lod_osts_seq_show,
+	.show	= lod_tgts_seq_show,
 };
+
+static int lod_mdts_seq_open(struct inode *inode, struct file *file)
+{
+	struct seq_file *seq;
+	int rc;
+
+	rc = seq_open(file, &lod_mdts_sops);
+	if (rc)
+		return rc;
+
+	seq = file->private_data;
+	seq->private = PDE_DATA(inode);
+	return 0;
+}
 
 static int lod_osts_seq_open(struct inode *inode, struct file *file)
 {
@@ -724,12 +839,6 @@ static int lod_osts_seq_open(struct inode *inode, struct file *file)
 
 /**
  * Show whether special failout mode for testing is enabled or not.
- *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success
- * \retval negative	error code if failed
  */
 static ssize_t lmv_failout_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -738,7 +847,7 @@ static ssize_t lmv_failout_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 
-	return sprintf(buf, "%d\n", lod->lod_lmv_failout ? 1 : 0);
+	return snprintf(buf, PAGE_SIZE, "%d\n", lod->lod_lmv_failout ? 1 : 0);
 }
 
 /**
@@ -747,14 +856,6 @@ static ssize_t lmv_failout_show(struct kobject *kobj, struct attribute *attr,
  * This determines whether the LMV will try to continue processing a striped
  * directory even if it has a (partly) corrupted entry in the master directory,
  * or if it will abort upon finding a corrupted slave directory entry.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string: 0 or non-zero to disable or enable LMV failout
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code if failed
  */
 static ssize_t lmv_failout_store(struct kobject *kobj, struct attribute *attr,
 				 const char *buffer, size_t count)
@@ -776,13 +877,15 @@ static ssize_t lmv_failout_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(lmv_failout);
 
 static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
-	{ .name	=	"stripesize",
-	  .fops	=	&lod_stripesize_fops	},
-	{ .name	=	"qos_threshold_rr",
-	  .fops	=	&lod_qos_thresholdrr_fops },
-	{ .name =	"dom_stripesize",
-	  .fops =	&lod_dom_stripesize_fops	},
 	{ NULL }
+};
+
+static const struct file_operations lod_proc_mdt_fops = {
+	.owner   = THIS_MODULE,
+	.open    = lod_mdts_seq_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = lprocfs_seq_release,
 };
 
 static const struct file_operations lod_proc_target_fops = {
@@ -794,6 +897,8 @@ static const struct file_operations lod_proc_target_fops = {
 };
 
 static struct attribute *lod_attrs[] = {
+	&lustre_attr_dom_stripesize.attr,
+	&lustre_attr_stripesize.attr,
 	&lustre_attr_stripeoffset.attr,
 	&lustre_attr_stripecount.attr,
 	&lustre_attr_stripetype.attr,
@@ -803,6 +908,14 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_numobd.attr,
 	&lustre_attr_qos_maxage.attr,
 	&lustre_attr_qos_prio_free.attr,
+	&lustre_attr_lod_qos_thresholdrr.attr,
+	&lustre_attr_mdt_stripecount.attr,
+	&lustre_attr_mdt_stripetype.attr,
+	&lustre_attr_mdt_activeobd.attr,
+	&lustre_attr_mdt_numobd.attr,
+	&lustre_attr_mdt_qos_maxage.attr,
+	&lustre_attr_mdt_qos_prio_free.attr,
+	&lustre_attr_mdt_qos_thresholdrr.attr,
 	NULL,
 };
 
@@ -839,6 +952,14 @@ int lod_procfs_init(struct lod_device *lod)
 		rc = PTR_ERR(obd->obd_proc_entry);
 		CERROR("%s: error %d setting up lprocfs\n",
 		       obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
+	rc = lprocfs_seq_create(obd->obd_proc_entry, "mdt_obd",
+				0444, &lod_proc_mdt_fops, obd);
+	if (rc) {
+		CWARN("%s: Error adding the target_obd file %d\n",
+		      obd->obd_name, rc);
 		GOTO(out, rc);
 	}
 
@@ -932,4 +1053,3 @@ void lod_procfs_fini(struct lod_device *lod)
 }
 
 #endif /* CONFIG_PROC_FS */
-

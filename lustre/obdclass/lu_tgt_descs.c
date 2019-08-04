@@ -110,10 +110,6 @@ int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 
 	ENTRY;
 
-	/* tgt not connected, this function will be called again later */
-	if (!exp)
-		RETURN(0);
-
 	down_write(&qos->lq_rw_sem);
 	/*
 	 * a bit hacky approach to learn NID of corresponding connection
@@ -531,7 +527,7 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 		 * per-tgt penalty is
 		 * prio * bavail * iavail / (num_tgt - 1) / 2
 		 */
-		tgt->ltd_qos.ltq_penalty_per_obj = prio_wide * ba * ia;
+		tgt->ltd_qos.ltq_penalty_per_obj = prio_wide * ba * ia >> 8;
 		do_div(tgt->ltd_qos.ltq_penalty_per_obj, num_active);
 		tgt->ltd_qos.ltq_penalty_per_obj >>= 1;
 
@@ -565,8 +561,9 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
 		ba = svr->lsq_bavail;
 		ia = svr->lsq_iavail;
-		svr->lsq_penalty_per_obj = prio_wide * ba  * ia;
-		do_div(ba, svr->lsq_tgt_count * num_active);
+		svr->lsq_penalty_per_obj = prio_wide * ba  * ia >> 8;
+		do_div(svr->lsq_penalty_per_obj,
+		       svr->lsq_tgt_count * num_active);
 		svr->lsq_penalty_per_obj >>= 1;
 
 		age = (now - svr->lsq_used) >> 3;
@@ -661,6 +658,7 @@ int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 		if (!tgt->ltd_active)
 			continue;
 
+		ltq = &tgt->ltd_qos;
 		if (ltq->ltq_penalty < ltq->ltq_penalty_per_obj)
 			ltq->ltq_penalty = 0;
 		else
@@ -672,9 +670,10 @@ int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 		if (ltq->ltq_usable)
 			*total_wt += ltq->ltq_weight;
 
-		CDEBUG(D_OTHER, "recalc tgt %d usable=%d avail=%llu tgtppo=%llu tgtp=%llu svrppo=%llu svrp=%llu wt=%llu\n",
+		CDEBUG(D_OTHER, "recalc tgt %d usable=%d bavail=%llu ffree=%llu tgtppo=%llu tgtp=%llu svrppo=%llu svrp=%llu wt=%llu\n",
 			  tgt->ltd_index, ltq->ltq_usable,
-			  tgt_statfs_bavail(tgt) >> 10,
+			  tgt_statfs_bavail(tgt) >> 16,
+			  tgt_statfs_iavail(tgt) >> 8,
 			  ltq->ltq_penalty_per_obj >> 10,
 			  ltq->ltq_penalty >> 10,
 			  ltq->ltq_svr->lsq_penalty_per_obj >> 10,

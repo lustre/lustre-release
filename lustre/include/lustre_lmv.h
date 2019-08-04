@@ -54,12 +54,6 @@ struct lmv_stripe_md {
 	struct lmv_oinfo lsm_md_oinfo[0];
 };
 
-static inline bool lmv_is_known_hash_type(__u32 type)
-{
-	return (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_FNV_1A_64 ||
-	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_ALL_CHARS;
-}
-
 static inline bool lmv_dir_striped(const struct lmv_stripe_md *lsm)
 {
 	return lsm && lsm->lsm_md_magic == LMV_MAGIC;
@@ -86,12 +80,6 @@ static inline bool lmv_dir_bad_hash(const struct lmv_stripe_md *lsm)
 		return false;
 
 	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type);
-}
-
-/* NB, this is checking directory default LMV */
-static inline bool lmv_dir_qos_mkdir(const struct lmv_stripe_md *lsm)
-{
-	return lsm && (lsm->lsm_md_hash_type & LMV_HASH_FLAG_SPACE);
 }
 
 static inline bool

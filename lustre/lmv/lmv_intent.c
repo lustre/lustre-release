@@ -305,22 +305,10 @@ static int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 				/*
 				 * open(O_CREAT | O_EXCL) needs to check
 				 * existing name, which should be done on both
-				 * old and new layout, to avoid creating new
-				 * file under old layout, check old layout on
+				 * old and new layout, check old layout on
 				 * client side.
 				 */
-				tgt = lmv_locate_tgt(lmv, op_data);
-				if (IS_ERR(tgt))
-					RETURN(PTR_ERR(tgt));
-
-				rc = md_getattr_name(tgt->ltd_exp, op_data,
-						     reqp);
-				if (!rc) {
-					ptlrpc_req_finished(*reqp);
-					*reqp = NULL;
-					RETURN(-EEXIST);
-				}
-
+				rc = lmv_migrate_existence_check(lmv, op_data);
 				if (rc != -ENOENT)
 					RETURN(rc);
 

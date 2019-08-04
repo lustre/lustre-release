@@ -1945,74 +1945,73 @@ out:
 	RETURN(rc);
 }
 
-static int lod_prep_md_striped_create(const struct lu_env *env,
-				      struct dt_object *dt,
-				      struct lu_attr *attr,
-				      const struct lmv_user_md_v1 *lum,
-				      struct dt_object_format *dof,
-				      struct thandle *th)
+/**
+ * Allocate a striping on a predefined set of MDTs.
+ *
+ * Allocates new striping using the MDT index range provided by the data from
+ * the lum_obejcts contained in the lmv_user_md passed to this method if
+ * \a is_specific is true; or allocates new layout starting from MDT index in
+ * lo->ldo_dir_stripe_offset. The exact order of MDTs is not important and
+ * varies depending on MDT status. The number of stripes needed and stripe
+ * offset are taken from the object. If that number cannot be met, then the
+ * function returns an error and then it's the caller's responsibility to
+ * release the stripes allocated. All the internal structures are protected,
+ * but no concurrent allocation is allowed on the same objects.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[out] stripes		striping created
+ * \param[out] mdt_indices	MDT indices of striping created
+ * \param[in] is_specific	true if the MDTs are provided by lum; false if
+ *				only the starting MDT index is provided
+ *
+ * \retval positive	stripes allocated, including the first stripe allocated
+ *			outside
+ * \retval negative	errno on failure
+ */
+static int lod_mdt_alloc_specific(const struct lu_env *env,
+				  struct lod_object *lo,
+				  struct dt_object **stripes,
+				  __u32 *mdt_indices, bool is_specific)
 {
 	struct lod_thread_info  *info = lod_env_info(env);
-	struct lod_device	*lod = lu2lod_dev(dt->do_lu.lo_dev);
-	struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct dt_object	**stripe;
-	__u32			stripe_count;
-	int			*idx_array;
-	__u32			master_index;
-	int			rc = 0;
-	__u32			i;
-	__u32			j;
-	bool			is_specific = false;
-	ENTRY;
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lu_tgt_desc *tgt = NULL;
+	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
+	struct dt_device *tgt_dt = NULL;
+	struct lu_fid fid = { 0 };
+	struct dt_object *dto;
+	u32 master_index;
+	u32 stripe_count = lo->ldo_dir_stripe_count;
+	int stripe_idx = 1;
+	int j;
+	int idx;
+	int rc;
 
-	/* The lum has been verifed in lod_verify_md_striping */
-	LASSERT(le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC ||
-		le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC);
-
-	stripe_count = lo->ldo_dir_stripe_count;
-
-	OBD_ALLOC(idx_array, sizeof(idx_array[0]) * stripe_count);
-	if (idx_array == NULL)
-		RETURN(-ENOMEM);
-
-	OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_count);
-	if (stripe == NULL)
-		GOTO(out_free, rc = -ENOMEM);
-
-	/* Start index must be the master MDT */
 	master_index = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
-	idx_array[0] = master_index;
-	if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) {
-		is_specific = true;
-		for (i = 1; i < stripe_count; i++)
-			idx_array[i] = le32_to_cpu(lum->lum_objects[i].lum_mds);
-	}
+	if (stripe_count > 1)
+		/* Set the start index for the 2nd stripe allocation */
+		mdt_indices[1] = (mdt_indices[0] + 1) %
+					(lod->lod_remote_mdt_count + 1);
 
-	for (i = 0; i < stripe_count; i++) {
-		struct lod_tgt_desc	*tgt = NULL;
-		struct dt_object	*dto;
-		struct lu_fid		fid = { 0 };
-		int			idx;
-		struct lu_object_conf	conf = { 0 };
-		struct dt_device	*tgt_dt = NULL;
-
+	for (; stripe_idx < stripe_count; stripe_idx++) {
 		/* Try to find next avaible target */
-		idx = idx_array[i];
+		idx = mdt_indices[stripe_idx];
 		for (j = 0; j < lod->lod_remote_mdt_count;
 		     j++, idx = (idx + 1) % (lod->lod_remote_mdt_count + 1)) {
 			bool already_allocated = false;
 			__u32 k;
 
 			CDEBUG(D_INFO, "try idx %d, mdt cnt %u, allocated %u\n",
-			       idx, lod->lod_remote_mdt_count + 1, i);
+			       idx, lod->lod_remote_mdt_count + 1, stripe_idx);
 
 			if (likely(!is_specific &&
 				   !OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))) {
 				/* check whether the idx already exists
 				 * in current allocated array */
-				for (k = 0; k < i; k++) {
-					if (idx_array[k] == idx) {
+				for (k = 0; k < stripe_idx; k++) {
+					if (mdt_indices[k] == idx) {
 						already_allocated = true;
 						break;
 					}
@@ -2033,29 +2032,25 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 				rc = obd_fid_alloc(env, lod->lod_child_exp,
 						   &fid, NULL);
 				if (rc < 0)
-					GOTO(out_put, rc);
+					continue;
 				tgt_dt = lod->lod_child;
 				break;
 			}
 
 			/* check the status of the OSP */
 			tgt = LTD_TGT(ltd, idx);
-			if (tgt == NULL)
+			if (!tgt)
 				continue;
 
 			tgt_dt = tgt->ltd_tgt;
 			rc = dt_statfs(env, tgt_dt, &info->lti_osfs);
-			if (rc) {
+			if (rc)
 				/* this OSP doesn't feel well */
-				rc = 0;
 				continue;
-			}
 
 			rc = obd_fid_alloc(env, tgt->ltd_exp, &fid, NULL);
-			if (rc < 0) {
-				rc = 0;
+			if (rc < 0)
 				continue;
-			}
 
 			break;
 		}
@@ -2063,15 +2058,16 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		/* Can not allocate more stripes */
 		if (j == lod->lod_remote_mdt_count) {
 			CDEBUG(D_INFO, "%s: require stripes %u only get %d\n",
-			       lod2obd(lod)->obd_name, stripe_count, i);
+			       lod2obd(lod)->obd_name, stripe_count,
+			       stripe_idx);
 			break;
 		}
 
 		CDEBUG(D_INFO, "Get idx %d, for stripe %d "DFID"\n",
-		       idx, i, PFID(&fid));
-		idx_array[i] = idx;
+		       idx, stripe_idx, PFID(&fid));
+		mdt_indices[stripe_idx] = idx;
 		/* Set the start index for next stripe allocation */
-		if (!is_specific && i < stripe_count - 1) {
+		if (!is_specific && stripe_idx < stripe_count - 1) {
 			/*
 			 * for large dir test, put all other slaves on one
 			 * remote MDT, otherwise we may save too many local
@@ -2079,7 +2075,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 			 */
 			if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE)))
 				idx = master_index;
-			idx_array[i + 1] = (idx + 1) %
+			mdt_indices[stripe_idx + 1] = (idx + 1) %
 					   (lod->lod_remote_mdt_count + 1);
 		}
 		/* tgt_dt and fid must be ready after search avaible OSP
@@ -2088,47 +2084,124 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		LASSERT(fid_is_sane(&fid));
 
 		/* fail a remote stripe FID allocation */
-		if (i && OBD_FAIL_CHECK(OBD_FAIL_MDS_STRIPE_FID))
+		if (stripe_idx && OBD_FAIL_CHECK(OBD_FAIL_MDS_STRIPE_FID))
 			continue;
 
-		conf.loc_flags = LOC_F_NEW;
 		dto = dt_locate_at(env, tgt_dt, &fid,
-				   dt->do_lu.lo_dev->ld_site->ls_top_dev,
-				   &conf);
-		if (IS_ERR(dto))
-			GOTO(out_put, rc = PTR_ERR(dto));
-		stripe[i] = dto;
+				  lo->ldo_obj.do_lu.lo_dev->ld_site->ls_top_dev,
+				  &conf);
+		if (IS_ERR(dto)) {
+			rc = PTR_ERR(dto);
+			goto error;
+		}
+
+		stripes[stripe_idx] = dto;
 	}
 
+	return stripe_idx;
+
+error:
+	for (j = 1; j < stripe_idx; j++) {
+		LASSERT(stripes[j] != NULL);
+		dt_object_put(env, stripes[j]);
+		stripes[j] = NULL;
+	}
+	return rc;
+}
+
+static int lod_prep_md_striped_create(const struct lu_env *env,
+				      struct dt_object *dt,
+				      struct lu_attr *attr,
+				      const struct lmv_user_md_v1 *lum,
+				      struct dt_object_format *dof,
+				      struct thandle *th)
+{
+	struct lod_device *lod = lu2lod_dev(dt->do_lu.lo_dev);
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct dt_object **stripes;
+	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
+	struct lu_fid fid = { 0 };
+	__u32 stripe_count;
+	int i;
+	int rc = 0;
+
+	ENTRY;
+
+	/* The lum has been verifed in lod_verify_md_striping */
+	LASSERT(le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC ||
+		le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC);
+
+	stripe_count = lo->ldo_dir_stripe_count;
+
+	OBD_ALLOC(stripes, sizeof(stripes[0]) * stripe_count);
+	if (!stripes)
+		RETURN(-ENOMEM);
+
+	/* Allocate the first stripe locally */
+	rc = obd_fid_alloc(env, lod->lod_child_exp, &fid, NULL);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	stripes[0] = dt_locate_at(env, lod->lod_child, &fid,
+				  dt->do_lu.lo_dev->ld_site->ls_top_dev, &conf);
+	if (IS_ERR(stripes[0]))
+		GOTO(out, rc = PTR_ERR(stripes[0]));
+
+	if (lo->ldo_dir_stripe_offset == LMV_OFFSET_DEFAULT) {
+		lod_qos_statfs_update(env, lod, &lod->lod_mdt_descs);
+		rc = lod_mdt_alloc_qos(env, lo, stripes);
+		if (rc == -EAGAIN)
+			rc = lod_mdt_alloc_rr(env, lo, stripes);
+	} else {
+		int *idx_array;
+		bool is_specific = false;
+
+		OBD_ALLOC(idx_array, sizeof(idx_array[0]) * stripe_count);
+		if (!idx_array)
+			GOTO(out, rc = -ENOMEM);
+
+		if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) {
+			is_specific = true;
+			for (i = 0; i < stripe_count; i++)
+				idx_array[i] =
+				       le32_to_cpu(lum->lum_objects[i].lum_mds);
+		}
+
+		/* stripe 0 is local */
+		idx_array[0] =
+			lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
+		rc = lod_mdt_alloc_specific(env, lo, stripes, idx_array,
+					    is_specific);
+		OBD_FREE(idx_array, sizeof(idx_array[0]) * stripe_count);
+	}
+
+	if (rc < 0)
+		GOTO(out, rc);
+
+	LASSERT(rc > 0);
+
 	lo->ldo_dir_striped = 1;
-	lo->ldo_stripe = stripe;
-	lo->ldo_dir_stripe_count = i;
+	lo->ldo_stripe = stripes;
+	lo->ldo_dir_stripe_count = rc;
 	lo->ldo_dir_stripes_allocated = stripe_count;
 	smp_mb();
 	lo->ldo_dir_stripe_loaded = 1;
 
-	if (lo->ldo_dir_stripe_count == 0)
-		GOTO(out_put, rc = -ENOSPC);
-
 	rc = lod_dir_declare_create_stripes(env, dt, attr, dof, th);
-	if (rc != 0)
-		GOTO(out_put, rc);
-
-out_put:
-	if (rc < 0) {
-		for (i = 0; i < stripe_count; i++)
-			if (stripe[i] != NULL)
-				dt_object_put(env, stripe[i]);
-		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_count);
-		lo->ldo_dir_stripe_count = 0;
-		lo->ldo_dir_stripes_allocated = 0;
-		lo->ldo_stripe = NULL;
-	}
-
-out_free:
-	OBD_FREE(idx_array, sizeof(idx_array[0]) * stripe_count);
+	if (rc < 0)
+		lod_striping_free(env, lo);
 
 	RETURN(rc);
+
+out:
+	LASSERT(rc < 0);
+	if (!IS_ERR_OR_NULL(stripes[0]))
+		dt_object_put(env, stripes[0]);
+	for (i = 1; i < stripe_count; i++)
+		LASSERT(!stripes[i]);
+	OBD_FREE(stripes, sizeof(stripes[0]) * stripe_count);
+
+	return rc;
 }
 
 /**
@@ -3770,8 +3843,7 @@ static int lod_xattr_set_default_lmv_on_dir(const struct lu_env *env,
 
 	if (LMVEA_DELETE_VALUES((le32_to_cpu(lum->lum_stripe_count)),
 				 le32_to_cpu(lum->lum_stripe_offset)) &&
-	    le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC &&
-	    !(le32_to_cpu(lum->lum_hash_type) & LMV_HASH_FLAG_SPACE)) {
+	    le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC) {
 		rc = lod_xattr_del_internal(env, dt, name, th);
 		if (rc == -ENODATA)
 			rc = 0;
@@ -5136,8 +5208,7 @@ static void lod_striping_from_default(struct lod_object *lo,
 			lo->ldo_dir_stripe_offset =
 				lds->lds_dir_def_stripe_offset;
 		if (lo->ldo_dir_hash_type == 0)
-			lo->ldo_dir_hash_type = lds->lds_dir_def_hash_type &
-						~LMV_HASH_FLAG_SPACE;
+			lo->ldo_dir_hash_type = lds->lds_dir_def_hash_type;
 
 		CDEBUG(D_LAYOUT, "striping from default dir: count:%hu, "
 		       "offset:%u, hash_type:%u\n",
@@ -5593,7 +5664,7 @@ static inline int dt_object_qos_mkdir(const struct lu_env *env,
 		return -EINVAL;
 
 	lmu = info->lti_ea_store;
-	return !!(le32_to_cpu(lmu->lum_hash_type) & LMV_HASH_FLAG_SPACE);
+	return le32_to_cpu(lmu->lum_stripe_offset) == LMV_OFFSET_DEFAULT;
 }
 
 /**
@@ -5659,19 +5730,22 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_STALE_DIR_LAYOUT))
 				GOTO(out, rc = -EREMOTE);
 
-			if (lo->ldo_dir_stripe_offset == -1) {
+			if (lo->ldo_dir_stripe_offset == LMV_OFFSET_DEFAULT) {
+				struct lod_default_striping *lds;
+
+				lds = lo->ldo_def_striping;
 				/*
-				 * child and parent should be in the same MDT,
-				 * but if parent has plain layout, it's allowed.
+				 * child and parent should be on the same MDT,
+				 * but if parent has default LMV, and the start
+				 * MDT offset is -1, it's allowed. This check
+				 * is not necessary after 2.12.22 because client
+				 * follows this already, but old client may not.
 				 */
 				if (hint->dah_parent &&
-				    dt_object_remote(hint->dah_parent)) {
-					rc = dt_object_qos_mkdir(env,
-						       lo->ldo_obj.do_lu.lo_dev,
-						       hint->dah_parent);
-					if (rc <= 0)
-						GOTO(out, rc ? rc : -EREMOTE);
-				}
+				    dt_object_remote(hint->dah_parent) && lds &&
+				    lds->lds_dir_def_stripe_offset !=
+				    LMV_OFFSET_DEFAULT)
+					GOTO(out, rc = -EREMOTE);
 			} else if (lo->ldo_dir_stripe_offset !=
 				   ss->ss_node_id) {
 				struct lod_device *lod;
@@ -7178,7 +7252,7 @@ static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
 	 * This algo can be revised later after knowing the topology of
 	 * cluster.
 	 */
-	lod_qos_statfs_update(env, lod);
+	lod_qos_statfs_update(env, lod, &lod->lod_ost_descs);
 	for (i = 0; i < lo->ldo_mirror_count; i++) {
 		bool ost_avail = true;
 		int index = (i + seq) % lo->ldo_mirror_count;

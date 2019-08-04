@@ -1055,66 +1055,24 @@ hsm_req_err:
 	RETURN(rc);
 }
 
-/**
- * This is _inode_ placement policy function (not name).
- */
-static u32 lmv_placement_policy(struct obd_device *obd,
-				struct md_op_data *op_data)
+int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
+		  struct lu_fid *fid, struct md_op_data *op_data)
 {
+	struct obd_device *obd = class_exp2obd(exp);
 	struct lmv_obd *lmv = &obd->u.lmv;
-	struct lmv_user_md *lum;
-	u32 mdt;
-
-	ENTRY;
-
-	if (lmv->lmv_mdt_count == 1)
-		RETURN(0);
-
-	lum = op_data->op_data;
-	/*
-	 * Choose MDT by
-	 * 1. See if the stripe offset is specified by lum.
-	 * 2. If parent has default LMV, and its hash type is "space", choose
-	 *    MDT with QoS. (see lmv_locate_tgt_qos()).
-	 * 3. Then check if default LMV stripe offset is not -1.
-	 * 4. Finally choose MDS by name hash if the parent
-	 *    is striped directory. (see lmv_locate_tgt()).
-	 *
-	 * presently explicit MDT location is not supported
-	 * for foreign dirs (as it can't be embedded into free
-	 * format LMV, like with lum_stripe_offset), so we only
-	 * rely on default stripe offset or then name hashing.
-	 */
-	if (op_data->op_cli_flags & CLI_SET_MEA && lum != NULL &&
-	    le32_to_cpu(lum->lum_magic != LMV_MAGIC_FOREIGN) &&
-	    le32_to_cpu(lum->lum_stripe_offset) != (__u32)-1) {
-		mdt = le32_to_cpu(lum->lum_stripe_offset);
-	} else if (op_data->op_code == LUSTRE_OPC_MKDIR &&
-		   !lmv_dir_striped(op_data->op_mea1) &&
-		   lmv_dir_qos_mkdir(op_data->op_default_mea1)) {
-		mdt = op_data->op_mds;
-	} else if (op_data->op_code == LUSTRE_OPC_MKDIR &&
-		   op_data->op_default_mea1 &&
-		   op_data->op_default_mea1->lsm_md_master_mdt_index !=
-			(__u32)-1) {
-		mdt = op_data->op_default_mea1->lsm_md_master_mdt_index;
-		op_data->op_mds = mdt;
-	} else {
-		mdt = op_data->op_mds;
-	}
-
-	RETURN(mdt);
-}
-
-int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid, u32 mds)
-{
 	struct lmv_tgt_desc *tgt;
 	int rc;
 
 	ENTRY;
 
-	tgt = lmv_tgt(lmv, mds);
+	LASSERT(op_data);
+	LASSERT(fid);
+
+	tgt = lmv_tgt(lmv, op_data->op_mds);
 	if (!tgt)
+		RETURN(-ENODEV);
+
+	if (!tgt->ltd_active || !tgt->ltd_exp)
 		RETURN(-ENODEV);
 
 	/*
@@ -1122,43 +1080,12 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid, u32 mds)
 	 * on server that seq in new allocated fid is not yet known.
 	 */
 	mutex_lock(&tgt->ltd_fid_mutex);
-
-	if (tgt->ltd_active == 0 || tgt->ltd_exp == NULL)
-		GOTO(out, rc = -ENODEV);
-
-	/*
-	 * Asking underlying tgt layer to allocate new fid.
-	 */
 	rc = obd_fid_alloc(NULL, tgt->ltd_exp, fid, NULL);
+	mutex_unlock(&tgt->ltd_fid_mutex);
 	if (rc > 0) {
 		LASSERT(fid_is_sane(fid));
 		rc = 0;
 	}
-
-	EXIT;
-out:
-	mutex_unlock(&tgt->ltd_fid_mutex);
-	return rc;
-}
-
-int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
-		  struct lu_fid *fid, struct md_op_data *op_data)
-{
-	struct obd_device *obd = class_exp2obd(exp);
-	struct lmv_obd *lmv = &obd->u.lmv;
-	u32 mds;
-	int rc;
-
-	ENTRY;
-
-	LASSERT(op_data != NULL);
-	LASSERT(fid != NULL);
-
-	mds = lmv_placement_policy(obd, op_data);
-
-	rc = __lmv_fid_alloc(lmv, fid, mds);
-	if (rc)
-		CERROR("Can't alloc new fid, rc %d\n", rc);
 
 	RETURN(rc);
 }
@@ -1659,8 +1586,7 @@ lmv_locate_tgt_by_name(struct lmv_obd *lmv, struct lmv_stripe_md *lsm,
  * which is set outside, and if dir is migrating, 'op_data->op_post_migrate'
  * indicates whether old or new layout is used to locate.
  *
- * For plain direcotry, normally it will locate MDT by FID, but if this
- * directory has default LMV, and its hash type is "space", locate MDT with QoS.
+ * For plain direcotry, it just locate the MDT of op_data->op_fid1.
  *
  * \param[in] lmv	LMV device
  * \param[in] op_data	client MD stack parameters, name, namelen
@@ -1683,7 +1609,7 @@ lmv_locate_tgt(struct lmv_obd *lmv, struct md_op_data *op_data)
 	 * index if the file under striped dir is being restored, see
 	 * ct_restore(). */
 	if (op_data->op_bias & MDS_CREATE_VOLATILE &&
-	    (int)op_data->op_mds != -1) {
+	    op_data->op_mds != LMV_OFFSET_DEFAULT) {
 		tgt = lmv_tgt(lmv, op_data->op_mds);
 		if (!tgt)
 			return ERR_PTR(-ENODEV);
@@ -1711,30 +1637,7 @@ lmv_locate_tgt(struct lmv_obd *lmv, struct md_op_data *op_data)
 		op_data->op_mds = oinfo->lmo_mds;
 		tgt = lmv_tgt(lmv, oinfo->lmo_mds);
 		if (!tgt)
-			tgt = ERR_PTR(-ENODEV);
-	} else if (op_data->op_code == LUSTRE_OPC_MKDIR &&
-		   lmv_dir_qos_mkdir(op_data->op_default_mea1) &&
-		   !lmv_dir_striped(lsm)) {
-		tgt = lmv_locate_tgt_qos(lmv, &op_data->op_mds);
-		if (tgt == ERR_PTR(-EAGAIN))
-			tgt = lmv_locate_tgt_rr(lmv, &op_data->op_mds);
-		/*
-		 * only update statfs when mkdir under dir with "space" hash,
-		 * this means the cached statfs may be stale, and current mkdir
-		 * may not follow QoS accurately, but it's not serious, and it
-		 * avoids periodic statfs when client doesn't mkdir under
-		 * "space" hashed directories.
-		 *
-		 * TODO: after MDT support QoS object allocation, also update
-		 * statfs for 'lfs mkdir -i -1 ...", currently it's done in user
-		 * space.
-		 */
-		if (!IS_ERR(tgt)) {
-			struct obd_device *obd;
-
-			obd = container_of(lmv, struct obd_device, u.lmv);
-			lmv_statfs_check_update(obd, tgt);
-		}
+			return ERR_PTR(-ENODEV);
 	} else {
 		tgt = lmv_locate_tgt_by_name(lmv, op_data->op_mea1,
 				op_data->op_name, op_data->op_namelen,
@@ -1787,6 +1690,78 @@ lmv_locate_tgt2(struct lmv_obd *lmv, struct md_op_data *op_data)
 				&op_data->op_mds, true);
 }
 
+int lmv_migrate_existence_check(struct lmv_obd *lmv, struct md_op_data *op_data)
+{
+	struct lu_tgt_desc *tgt;
+	struct ptlrpc_request *request;
+	int rc;
+
+	LASSERT(lmv_dir_migrating(op_data->op_mea1));
+
+	tgt = lmv_locate_tgt(lmv, op_data);
+	if (IS_ERR(tgt))
+		return PTR_ERR(tgt);
+
+	rc = md_getattr_name(tgt->ltd_exp, op_data, &request);
+	if (!rc) {
+		ptlrpc_req_finished(request);
+		return -EEXIST;
+	}
+
+	return rc;
+}
+
+/* mkdir by QoS in two cases:
+ * 1. 'lfs mkdir -i -1'
+ * 2. parent default LMV master_mdt_index is -1
+ *
+ * NB, mkdir by QoS only if parent is not striped, this is to avoid remote
+ * directories under striped directory.
+ */
+static inline bool lmv_op_qos_mkdir(const struct md_op_data *op_data)
+{
+	const struct lmv_stripe_md *lsm = op_data->op_default_mea1;
+	const struct lmv_user_md *lum = op_data->op_data;
+
+	if (op_data->op_code != LUSTRE_OPC_MKDIR)
+		return false;
+
+	if (lmv_dir_striped(op_data->op_mea1))
+		return false;
+
+	if (op_data->op_cli_flags & CLI_SET_MEA && lum &&
+	    (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC ||
+	     le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) &&
+	    le32_to_cpu(lum->lum_stripe_offset) == LMV_OFFSET_DEFAULT)
+		return true;
+
+	if (lsm && lsm->lsm_md_master_mdt_index == LMV_OFFSET_DEFAULT)
+		return true;
+
+	return false;
+}
+
+/* 'lfs mkdir -i <specific_MDT>' */
+static inline bool lmv_op_user_specific_mkdir(const struct md_op_data *op_data)
+{
+	const struct lmv_user_md *lum = op_data->op_data;
+
+	return op_data->op_code == LUSTRE_OPC_MKDIR &&
+	       op_data->op_cli_flags & CLI_SET_MEA && lum &&
+	       (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC ||
+		le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) &&
+	       le32_to_cpu(lum->lum_stripe_offset) != LMV_OFFSET_DEFAULT;
+}
+
+/* parent default LMV master_mdt_index is not -1. */
+static inline bool
+lmv_op_default_specific_mkdir(const struct md_op_data *op_data)
+{
+	return op_data->op_code == LUSTRE_OPC_MKDIR &&
+	       op_data->op_default_mea1 &&
+	       op_data->op_default_mea1->lsm_md_master_mdt_index !=
+			LMV_OFFSET_DEFAULT;
+}
 int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		const void *data, size_t datalen, umode_t mode, uid_t uid,
 		gid_t gid, cfs_cap_t cap_effective, __u64 rdev,
@@ -1808,20 +1783,9 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 	if (lmv_dir_migrating(op_data->op_mea1)) {
 		/*
 		 * if parent is migrating, create() needs to lookup existing
-		 * name, to avoid creating new file under old layout of
-		 * migrating directory, check old layout here.
+		 * name in both old and new layout, check old layout on client.
 		 */
-		tgt = lmv_locate_tgt(lmv, op_data);
-		if (IS_ERR(tgt))
-			RETURN(PTR_ERR(tgt));
-
-		rc = md_getattr_name(tgt->ltd_exp, op_data, request);
-		if (!rc) {
-			ptlrpc_req_finished(*request);
-			*request = NULL;
-			RETURN(-EEXIST);
-		}
-
+		rc = lmv_migrate_existence_check(lmv, op_data);
 		if (rc != -ENOENT)
 			RETURN(rc);
 
@@ -1832,26 +1796,44 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	CDEBUG(D_INODE, "CREATE name '%.*s' on "DFID" -> mds #%x\n",
-		(int)op_data->op_namelen, op_data->op_name,
-		PFID(&op_data->op_fid1), op_data->op_mds);
+	if (lmv_op_qos_mkdir(op_data)) {
+		tgt = lmv_locate_tgt_qos(lmv, &op_data->op_mds);
+		if (tgt == ERR_PTR(-EAGAIN))
+			tgt = lmv_locate_tgt_rr(lmv, &op_data->op_mds);
+		/*
+		 * only update statfs after QoS mkdir, this means the cached
+		 * statfs may be stale, and current mkdir may not follow QoS
+		 * accurately, but it's not serious, and avoids periodic statfs
+		 * when client doesn't mkdir by QoS.
+		 */
+		if (!IS_ERR(tgt))
+			lmv_statfs_check_update(obd, tgt);
+	} else if (lmv_op_user_specific_mkdir(op_data)) {
+		struct lmv_user_md *lum = op_data->op_data;
+
+		op_data->op_mds = le32_to_cpu(lum->lum_stripe_offset);
+		tgt = lmv_tgt(lmv, op_data->op_mds);
+		if (!tgt)
+			RETURN(-ENODEV);
+	} else if (lmv_op_default_specific_mkdir(op_data)) {
+		op_data->op_mds =
+			op_data->op_default_mea1->lsm_md_master_mdt_index;
+		tgt = lmv_tgt(lmv, op_data->op_mds);
+		if (!tgt)
+			RETURN(-ENODEV);
+	}
+
+	if (IS_ERR(tgt))
+		RETURN(PTR_ERR(tgt));
 
 	rc = lmv_fid_alloc(NULL, exp, &op_data->op_fid2, op_data);
 	if (rc)
 		RETURN(rc);
 
-	if (exp_connect_flags(exp) & OBD_CONNECT_DIR_STRIPE) {
-		/* Send the create request to the MDT where the object
-		 * will be located */
-		tgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
-		if (IS_ERR(tgt))
-			RETURN(PTR_ERR(tgt));
-
-		op_data->op_mds = tgt->ltd_index;
-	}
-
-	CDEBUG(D_INODE, "CREATE obj "DFID" -> mds #%x\n",
-	       PFID(&op_data->op_fid2), op_data->op_mds);
+	CDEBUG(D_INODE, "CREATE name '%.*s' "DFID" on "DFID" -> mds #%x\n",
+		(int)op_data->op_namelen, op_data->op_name,
+		PFID(&op_data->op_fid2), PFID(&op_data->op_fid1),
+		op_data->op_mds);
 
 	op_data->op_flags |= MF_MDC_CANCEL_FID1;
 	rc = md_create(tgt->ltd_exp, op_data, data, datalen, mode, uid, gid,
@@ -2107,10 +2089,20 @@ static int lmv_migrate(struct obd_export *exp, struct md_op_data *op_data,
 	if (IS_ERR(child_tgt))
 		RETURN(PTR_ERR(child_tgt));
 
-	if (!S_ISDIR(op_data->op_mode) && tp_tgt)
-		rc = __lmv_fid_alloc(lmv, &target_fid, tp_tgt->ltd_index);
-	else
-		rc = lmv_fid_alloc(NULL, exp, &target_fid, op_data);
+	/* for directory, migrate to MDT specified by lum_stripe_offset;
+	 * otherwise migrate to the target stripe of parent, but parent
+	 * directory may have finished migration (normally current file too),
+	 * allocate FID on MDT lum_stripe_offset, and server will check
+	 * whether file was migrated already.
+	 */
+	if (S_ISDIR(op_data->op_mode) || !tp_tgt) {
+		struct lmv_user_md *lum = op_data->op_data;
+
+		op_data->op_mds = le32_to_cpu(lum->lum_stripe_offset);
+	} else  {
+		op_data->op_mds = tp_tgt->ltd_index;
+	}
+	rc = lmv_fid_alloc(NULL, exp, &target_fid, op_data);
 	if (rc)
 		RETURN(rc);
 
@@ -3127,7 +3119,7 @@ static int lmv_unpack_md_v1(struct obd_export *exp, struct lmv_stripe_md *lsm,
 		 * set default value -1, so lmv_locate_tgt() knows this stripe
 		 * target is not initialized.
 		 */
-		lsm->lsm_md_oinfo[i].lmo_mds = (u32)-1;
+		lsm->lsm_md_oinfo[i].lmo_mds = LMV_OFFSET_DEFAULT;
 		if (!fid_is_sane(&lsm->lsm_md_oinfo[i].lmo_fid))
 			continue;
 
