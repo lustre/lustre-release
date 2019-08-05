@@ -1288,13 +1288,13 @@ static void mdc_io_data_version_end(const struct lu_env *env,
 static struct cl_io_operations mdc_io_ops = {
 	.op = {
 		[CIT_READ] = {
-			.cio_iter_init = osc_io_iter_init,
-			.cio_iter_fini = osc_io_iter_fini,
+			.cio_iter_init = osc_io_rw_iter_init,
+			.cio_iter_fini = osc_io_rw_iter_fini,
 			.cio_start     = osc_io_read_start,
 		},
 		[CIT_WRITE] = {
-			.cio_iter_init = osc_io_write_iter_init,
-			.cio_iter_fini = osc_io_write_iter_fini,
+			.cio_iter_init = osc_io_rw_iter_init,
+			.cio_iter_fini = osc_io_rw_iter_fini,
 			.cio_start     = osc_io_write_start,
 			.cio_end       = osc_io_end,
 		},

@@ -693,9 +693,9 @@ int osc_io_commit_async(const struct lu_env *env,
 int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios);
 void osc_io_iter_fini(const struct lu_env *env,
 		      const struct cl_io_slice *ios);
-int osc_io_write_iter_init(const struct lu_env *env,
-			   const struct cl_io_slice *ios);
-void osc_io_write_iter_fini(const struct lu_env *env,
+int osc_io_rw_iter_init(const struct lu_env *env,
+			const struct cl_io_slice *ios);
+void osc_io_rw_iter_fini(const struct lu_env *env,
 			    const struct cl_io_slice *ios);
 int osc_io_fault_start(const struct lu_env *env, const struct cl_io_slice *ios);
 void osc_io_setattr_end(const struct lu_env *env,
