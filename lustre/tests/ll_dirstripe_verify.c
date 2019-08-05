@@ -54,7 +54,8 @@
 
 #define MAX_LOV_UUID_COUNT      1000
 
-/* Returns bytes read on success and a negative value on failure.
+/*
+ * Returns bytes read on success and a negative value on failure.
  * If zero bytes are read it will be treated as failure as such
  * zero cannot be returned from this function.
  */
@@ -104,7 +105,7 @@ int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
 		return 2;
 	if (read_proc_entry(path.gl_pathv[0], buf, sizeof(buf)) < 0) {
 		cfs_free_param_data(&path);
-                return 5;
+		return 5;
 	}
 	cfs_free_param_data(&path);
 	def_stripe_count = (short)atoi(buf);
@@ -113,50 +114,49 @@ int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
 		return 2;
 	if (read_proc_entry(path.gl_pathv[0], buf, sizeof(buf)) < 0) {
 		cfs_free_param_data(&path);
-                return 6;
+		return 6;
 	}
 	cfs_free_param_data(&path);
-        ost_count = atoi(buf);
+	ost_count = atoi(buf);
 
-        if (lum_dir == NULL) {
-                stripe_count = def_stripe_count;
-                min_stripe_count = -1;
-        } else {
-                stripe_count = (signed short)lum_dir->lmm_stripe_count;
-                printf("dir stripe %d, ", stripe_count);
-                min_stripe_count = 1;
-        }
+	if (!lum_dir) {
+		stripe_count = def_stripe_count;
+		min_stripe_count = -1;
+	} else {
+		stripe_count = (signed short)lum_dir->lmm_stripe_count;
+		printf("dir stripe %d, ", stripe_count);
+		min_stripe_count = 1;
+	}
 
-        printf("default stripe %d, ost count %d\n",
-               def_stripe_count, ost_count);
+	printf("default stripe %d, ost count %d\n",
+	       def_stripe_count, ost_count);
 
-        if (stripe_count == 0) {
-                min_stripe_count = -1;
-                stripe_count = 1;
-        }
+	if (stripe_count == 0) {
+		min_stripe_count = -1;
+		stripe_count = 1;
+	}
 
-        stripe_count = (stripe_count > 0 && stripe_count <= ost_count) ?
-                                                stripe_count : ost_count;
-        min_stripe_count = min_stripe_count > 0 ? stripe_count :
-                                                ((stripe_count + 1) / 2);
+	stripe_count = (stripe_count > 0 && stripe_count <= ost_count) ?
+						stripe_count : ost_count;
+	min_stripe_count = min_stripe_count > 0 ? stripe_count :
+						((stripe_count + 1) / 2);
 
-        if (lum_file1->lmm_stripe_count != stripe_count ||
-            lum_file1->lmm_stripe_count < min_stripe_count) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "file1 stripe count %d != dir %d\n",
-                                  lum_file1->lmm_stripe_count, stripe_count);
-                return 7;
-        }
+	if (lum_file1->lmm_stripe_count != stripe_count ||
+	    lum_file1->lmm_stripe_count < min_stripe_count) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "file1 stripe count %d != dir %d\n",
+				  lum_file1->lmm_stripe_count, stripe_count);
+		return 7;
+	}
 
-        if (lum_file1->lmm_stripe_count < stripe_count)
-                llapi_err_noerrno(LLAPI_MSG_WARN,
-                                  "warning: file1 used fewer stripes"
-                                  " %d < dir %d (likely due to bug 4900)\n",
-                                  lum_file1->lmm_stripe_count, stripe_count);
+	if (lum_file1->lmm_stripe_count < stripe_count)
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+				  "warning: file1 used fewer stripes %d < dir %d (likely due to bug 4900)\n",
+				  lum_file1->lmm_stripe_count, stripe_count);
 
-        if (lum_dir != NULL)
-                stripe_size = (int)lum_dir->lmm_stripe_size;
-        if (stripe_size == 0) {
+	if (lum_dir)
+		stripe_size = (int)lum_dir->lmm_stripe_size;
+	if (stripe_size == 0) {
 		if (cfs_get_param_paths(&path, "lov/%s/stripesize",
 					puuid->uuid) != 0)
 			return 2;
@@ -166,43 +166,44 @@ int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
 		}
 		cfs_free_param_data(&path);
 
-                stripe_size = atoi(buf);
-        }
+		stripe_size = atoi(buf);
+	}
 
-        if (lum_file1->lmm_stripe_size != stripe_size) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "file1 stripe size %d != dir %d\n",
-                                  lum_file1->lmm_stripe_size, stripe_size);
-                return 8;
-        }
+	if (lum_file1->lmm_stripe_size != stripe_size) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "file1 stripe size %d != dir %d\n",
+				  lum_file1->lmm_stripe_size, stripe_size);
+		return 8;
+	}
 
-        if (lum_dir != NULL)
-                stripe_offset = (short int)lum_dir->lmm_stripe_offset;
-        if (stripe_offset != -1) {
-                for (i = 0; i < stripe_count; i++)
-                        if (lum_file1->lmm_objects[i].l_ost_idx !=
-                            (stripe_offset + i) % ost_count) {
-                                llapi_err_noerrno(LLAPI_MSG_WARN,
-                                          "warning: file1 non-sequential "
-                                          "stripe[%d] %d != %d\n", i,
-                                          lum_file1->lmm_objects[i].l_ost_idx,
-                                          (stripe_offset + i) % ost_count);
-                        }
-        } else if (lum_file2 != NULL) {
-                int next, idx, stripe = stripe_count - 1;
-                next = (lum_file1->lmm_objects[stripe].l_ost_idx + 1) %
-                       ost_count;
-                idx = lum_file2->lmm_objects[0].l_ost_idx;
-                if (idx != next) {
-                        llapi_err_noerrno(LLAPI_MSG_WARN,
-                                  "warning: non-sequential "
-                                  "file1 stripe[%d] %d != file2 stripe[0] %d\n",
-                                  stripe, lum_file1->lmm_objects[stripe].l_ost_idx,
-                                  idx);
-                }
-        }
+	if (lum_dir)
+		stripe_offset = (short int)lum_dir->lmm_stripe_offset;
+	if (stripe_offset != -1) {
+		for (i = 0; i < stripe_count; i++)
+			if (lum_file1->lmm_objects[i].l_ost_idx !=
+			    (stripe_offset + i) % ost_count) {
+				llapi_err_noerrno(LLAPI_MSG_WARN,
+						  "warning: file1 non-sequential stripe[%d] %d != %d\n",
+						  i, lum_file1->lmm_objects[i].l_ost_idx,
+						  (stripe_offset + i) %
+						  ost_count);
+			}
+	} else if (lum_file2) {
+		int next, idx, stripe = stripe_count - 1;
 
-        return 0;
+		next = (lum_file1->lmm_objects[stripe].l_ost_idx + 1) %
+			ost_count;
+		idx = lum_file2->lmm_objects[0].l_ost_idx;
+		if (idx != next) {
+			llapi_err_noerrno(LLAPI_MSG_WARN,
+					  "warning: non-sequential file1 stripe[%d] %d != file2 stripe[0] %d\n",
+					  stripe,
+					  lum_file1->lmm_objects[stripe].l_ost_idx,
+					  idx);
+		}
+	}
+
+	return 0;
 }
 
 int compare_lum(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
@@ -212,7 +213,7 @@ int compare_lum(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
 	struct lov_user_md *sub_dir, *sub_file1;
 	int i, rc = 0;
 
-	if (lum_dir == NULL || lum_dir->lmm_magic != LOV_MAGIC_COMP_V1)
+	if (!lum_dir || lum_dir->lmm_magic != LOV_MAGIC_COMP_V1)
 		return compare(puuid, lum_dir, lum_file1, lum_file2);
 
 	comp_dir = (struct lov_comp_md_v1 *)lum_dir;
@@ -260,7 +261,7 @@ int main(int argc, char **argv)
 	}
 
 	dir = opendir(argv[1]);
-	if (dir == NULL) {
+	if (!dir) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "error: %s opendir failed", argv[1]);
@@ -269,11 +270,11 @@ int main(int argc, char **argv)
 
 	lum_size = lov_user_md_size(MAX_LOV_UUID_COUNT, LOV_USER_MAGIC);
 	lum_dir = (struct lov_user_md *)malloc(lum_size);
-	if (lum_dir == NULL) {
+	if (!lum_dir) {
 		rc = -ENOMEM;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "error: can't allocate %d bytes "
-			    "for dir EA", lum_size);
+			    "error: can't allocate %d bytes for dir EA",
+			    lum_size);
 		goto cleanup;
 	}
 
@@ -283,8 +284,9 @@ int main(int argc, char **argv)
 
 		rc = llapi_search_mounts(argv[1], 0, root, NULL);
 		if (rc) {
-			llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get "
-				    "root path for %s\n", argv[1]);
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "error: can't get root path for %s\n",
+				    argv[1]);
 			goto cleanup;
 		}
 
@@ -294,13 +296,14 @@ int main(int argc, char **argv)
 			free(lum_dir);
 			lum_dir = NULL;
 		} else if (rc) {
-			llapi_error(LLAPI_MSG_ERROR, rc, "error: cant't get "
-				    "root's LOVEA for %s\n", path);
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "error: cant't get root's LOVEA for %s\n",
+				    path);
 			goto cleanup;
 		}
 	} else if (rc) {
-		llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get LOVEA for "
-			    "%s", argv[1]);
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "error: can't get LOVEA for %s", argv[1]);
 		goto cleanup;
 	}
 
@@ -314,7 +317,7 @@ int main(int argc, char **argv)
 	}
 
 	lum_file1 = malloc(lum_size);
-	if (lum_file1 == NULL) {
+	if (!lum_file1) {
 		rc = -ENOMEM;
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "error: can't allocate %d bytes for EA",
@@ -331,11 +334,11 @@ int main(int argc, char **argv)
 
 	if (argc == 4) {
 		lum_file2 = (struct lov_user_md *)malloc(lum_size);
-		if (lum_file2 == NULL) {
+		if (!lum_file2) {
 			rc = -ENOMEM;
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "error: can't allocate %d "
-				    "bytes for file2 EA", lum_size);
+				    "error: can't allocate %d bytes for file2 EA",
+				    lum_size);
 			goto cleanup;
 		}
 
@@ -351,11 +354,11 @@ int main(int argc, char **argv)
 
 cleanup:
 	closedir(dir);
-	if (lum_dir != NULL)
+	if (lum_dir)
 		free(lum_dir);
-	if (lum_file1 != NULL)
+	if (lum_file1)
 		free(lum_file1);
-	if (lum_file2 != NULL)
+	if (lum_file2)
 		free(lum_file2);
 
 	return rc;
