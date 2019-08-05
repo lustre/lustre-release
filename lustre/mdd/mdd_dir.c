@@ -234,6 +234,9 @@ static inline int mdd_parent_fid(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(lookup, rc);
 
+	/* the obj is not locked, don't cache attributes */
+	mdd_invalidate(env, &obj->mod_obj);
+
 	LASSERT(ldata.ld_leh != NULL);
 	/* Directory should only have 1 parent */
 	if (ldata.ld_leh->leh_reccount > 1)
