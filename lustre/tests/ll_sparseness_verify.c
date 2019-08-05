@@ -45,86 +45,88 @@
 #include <fcntl.h>
 #include <stdarg.h>
 
-#define BUFSIZE (1024*1024)    
+#define BUFSIZE (1024 * 1024)
 
 void error(char *fmt, ...)
 {
-        va_list ap;
-        va_start(ap, fmt);
-        vfprintf(stderr, fmt, ap);
-        va_end(ap);
-        exit(1);
+	va_list ap;
+
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	exit(1);
 }
 
 int compare_offsets(const void *a, const void *b)
 {
-        off_t *A = (off_t *)a;
-        off_t *B = (off_t *)b;
-        return *A - *B;
+	off_t *A = (off_t *)a;
+	off_t *B = (off_t *)b;
+
+	return *A - *B;
 }
 
 int main(int argc, char **argv)
 {
-        unsigned int num_offsets, cur_off = 0, i;
-        off_t *offsets, pos = 0, end_of_buf = 0;
-        char *end, *buf;
-        struct stat st;
-        ssize_t ret;
-        int fd;
+	unsigned int num_offsets, cur_off = 0, i;
+	off_t *offsets, pos = 0, end_of_buf = 0;
+	char *end, *buf;
+	struct stat st;
+	ssize_t ret;
+	int fd;
 
-        if (argc < 3)
-                error("Usage: %s <filename> <offset> [ offset ... ]\n", 
-                       argv[0]);
+	if (argc < 3)
+		error("Usage: %s <filename> <offset> [ offset ... ]\n",
+		      argv[0]);
 
-        fd = open(argv[1], O_RDONLY);
-        if (fd < 0)
-                error("couldn't open %s: %s\n", argv[1], strerror(errno));
+	fd = open(argv[1], O_RDONLY);
+	if (fd < 0)
+		error("couldn't open %s: %s\n", argv[1], strerror(errno));
 
-        buf = malloc(BUFSIZE);
-        if (buf == NULL)
-                error("can't allocate buffer\n");
+	buf = malloc(BUFSIZE);
+	if (!buf)
+		error("can't allocate buffer\n");
 
-        num_offsets = argc - 2;
-        offsets = calloc(sizeof(offsets[0]), num_offsets);
-        for (i = 0; i < num_offsets; i++) {
-                offsets[i] = strtoul(argv[i + 2], &end, 10);
-                if (*end) 
-                        error("couldn't parse offset '%s'\n", argv[i + 2]);
-        }
-        qsort(offsets, num_offsets, sizeof(offsets[0]), compare_offsets);
+	num_offsets = argc - 2;
+	offsets = calloc(sizeof(offsets[0]), num_offsets);
+	for (i = 0; i < num_offsets; i++) {
+		offsets[i] = strtoul(argv[i + 2], &end, 10);
+		if (*end)
+			error("couldn't parse offset '%s'\n", argv[i + 2]);
+	}
+	qsort(offsets, num_offsets, sizeof(offsets[0]), compare_offsets);
 
-        if (fstat(fd, &st) < 0)
-                error("stat: %s\n", strerror(errno));
+	if (fstat(fd, &st) < 0)
+		error("stat: %s\n", strerror(errno));
 
-        for (i = 0; pos < st.st_size; i++, pos++) {
-                if (pos == end_of_buf) {
-                        ret = read(fd, buf, BUFSIZE);
-                        if (ret < 0)
-                                error("read(): %s\n", strerror(errno));
-                        end_of_buf = pos + ret;
-                        if (end_of_buf > st.st_size)
-                                error("read %d bytes past file size?\n",
-                                      end_of_buf - st.st_size);
-                        i = 0;
-                }
+	for (i = 0; pos < st.st_size; i++, pos++) {
+		if (pos == end_of_buf) {
+			ret = read(fd, buf, BUFSIZE);
+			if (ret < 0)
+				error("read(): %s\n", strerror(errno));
+			end_of_buf = pos + ret;
+			if (end_of_buf > st.st_size)
+				error("read %d bytes past file size?\n",
+				      end_of_buf - st.st_size);
+			i = 0;
+		}
 
-                /* check for 0 when we aren't at a given offset */
-                if (cur_off >= num_offsets || pos != offsets[cur_off]) {
-                        if (buf[i] != 0) 
-                                error("found char 0x%x at pos %lu instead of "
-                                       "0x0\n", buf[i], (long)pos);
-                        continue;
-                }
+		/* check for 0 when we aren't at a given offset */
+		if (cur_off >= num_offsets || pos != offsets[cur_off]) {
+			if (buf[i] != 0)
+				error("found char 0x%x at pos %lu instead of 0x0\n",
+				      buf[i], (long)pos);
+			continue;
+		}
 
-                /* the command line asks us to check for + at this offset */
-                if (buf[i] != '+') 
-                        error("found char 0x%x at pos %lu instead of "
-                               "'.'\n", buf[i], (long)pos);
+		/* the command line asks us to check for + at this offset */
+		if (buf[i] != '+')
+			error("found char 0x%x at pos %lu instead of '.'\n",
+			      buf[i], (long)pos);
 
-                /* skip over duplicate offset arguments */
-                while (cur_off < num_offsets && offsets[cur_off] == pos)
-                        cur_off++;
-        }
-        /* don't bother freeing or closing.. */
-        return 0;
+		/* skip over duplicate offset arguments */
+		while (cur_off < num_offsets && offsets[cur_off] == pos)
+			cur_off++;
+	}
+	/* don't bother freeing or closing.. */
+	return 0;
 }
