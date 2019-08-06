@@ -45,63 +45,62 @@
 
 char fname[1024];
 
-
 int main(int argc, char **argv)
 {
-        char *dname1;
-        int fddir1, rc;
-        int fd;
+	char *dname1;
+	int fddir1, rc;
+	int fd;
 
-        if (argc != 2) {
-                fprintf(stderr, "usage: %s dirname1\n", argv[0]);
-                exit(1);
-        }
+	if (argc != 2) {
+		fprintf(stderr, "usage: %s dirname1\n", argv[0]);
+		exit(1);
+	}
 
-        dname1 = argv[1];
+	dname1 = argv[1];
 
-        //create the directory
-        fprintf(stderr, "creating directory %s\n", dname1);
-        rc = mkdir(dname1, 0744);
-        if (rc == -1) {
-                fprintf(stderr, "creating %s fails: %s\n",
-                        dname1, strerror(errno));
-                exit(1);
-        }
+	/* create the directory */
+	fprintf(stderr, "creating directory %s\n", dname1);
+	rc = mkdir(dname1, 0744);
+	if (rc == -1) {
+		fprintf(stderr, "creating %s fails: %s\n",
+			dname1, strerror(errno));
+		exit(1);
+	}
 
 	snprintf(fname, sizeof(fname), "%s/0", dname1);
-        fprintf(stderr, "creating file %s\n", fname);
-        fd = creat(fname, 0666);
-        if (fd < 0) {
-                fprintf(stderr, "creation %s fails: %s\n",
-                        fname, strerror(errno));
-                exit(1);
-        }
-        close(fd);
+	fprintf(stderr, "creating file %s\n", fname);
+	fd = creat(fname, 0666);
+	if (fd < 0) {
+		fprintf(stderr, "creation %s fails: %s\n",
+			fname, strerror(errno));
+		exit(1);
+	}
+	close(fd);
 
-        // open the dir again
-        fprintf(stderr, "opening directory\n");
-        fddir1 = open(dname1, O_RDONLY | O_DIRECTORY);
-        if (fddir1 == -1) {
-                fprintf(stderr, "open %s fails: %s\n",
-                        dname1, strerror(errno));
-                exit(1);
-        }
+	/* open the dir again */
+	fprintf(stderr, "opening directory\n");
+	fddir1 = open(dname1, O_RDONLY | O_DIRECTORY);
+	if (fddir1 == -1) {
+		fprintf(stderr, "open %s fails: %s\n",
+			dname1, strerror(errno));
+		exit(1);
+	}
 
-        // delete the dir
-        fprintf(stderr, "unlinking %s\n", dname1);
-        rc = rmdir(dname1);
-        if (rc == 0) {
-                fprintf(stderr, "unlinked non-empty %s successfully\n",
-                        dname1);
-                exit(1);
-        }
+	/* delete the dir */
+	fprintf(stderr, "unlinking %s\n", dname1);
+	rc = rmdir(dname1);
+	if (rc == 0) {
+		fprintf(stderr, "unlinked non-empty %s successfully\n",
+			dname1);
+		exit(1);
+	}
 
-        if (access(dname1, F_OK) != 0){
-                fprintf(stderr, "can't access %s: %s\n",
-                        dname1, strerror(errno));
-                exit(1);
-        }
+	if (access(dname1, F_OK) != 0) {
+		fprintf(stderr, "can't access %s: %s\n",
+			dname1, strerror(errno));
+		exit(1);
+	}
 
-        fprintf(stderr, "Ok, everything goes well.\n");
-        return 0;
+	fprintf(stderr, "Ok, everything goes well.\n");
+	return 0;
 }
