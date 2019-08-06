@@ -62,6 +62,11 @@
  * @{
  */
 
+/* echo thread key have a CL_THREAD flag, which set cl_env function directly */
+#define ECHO_MD_CTX_TAG (LCT_REMEMBER | LCT_MD_THREAD)
+#define ECHO_DT_CTX_TAG (LCT_REMEMBER | LCT_DT_THREAD)
+#define ECHO_SES_TAG    (LCT_REMEMBER | LCT_SESSION | LCT_SERVER_SESSION)
+
 struct echo_device {
 	struct cl_device	  ed_cl;
 	struct echo_client_obd	 *ed_ec;
@@ -2242,8 +2247,6 @@ static void echo_ucred_fini(struct lu_env *env)
 	ucred->uc_valid = UCRED_INIT;
 }
 
-#define ECHO_MD_CTX_TAG (LCT_REMEMBER | LCT_MD_THREAD)
-#define ECHO_MD_SES_TAG (LCT_REMEMBER | LCT_SESSION | LCT_SERVER_SESSION)
 static int echo_md_handler(struct echo_device *ed, int command,
 			   char *path, int path_len, __u64 id, int count,
 			   struct obd_ioctl_data *data)
@@ -2272,7 +2275,7 @@ static int echo_md_handler(struct echo_device *ed, int command,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	rc = lu_env_refill_by_tags(env, ECHO_MD_CTX_TAG, ECHO_MD_SES_TAG);
+	rc = lu_env_refill_by_tags(env, ECHO_MD_CTX_TAG, ECHO_SES_TAG);
 	if (rc != 0)
 		GOTO(out_env, rc);
 
@@ -2763,13 +2766,12 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	struct echo_object     *eco;
 	struct obd_ioctl_data  *data = karg;
 	struct lu_env          *env;
+	unsigned long		env_tags = 0;
+	__u16			refcheck;
 	struct obdo            *oa;
 	struct lu_fid           fid;
 	int                     rw = OBD_BRW_READ;
 	int                     rc = 0;
-#ifdef HAVE_SERVER_SUPPORT
-	struct lu_context	 echo_session;
-#endif
 
 	ENTRY;
 	oa = &data->ioc_obdo1;
@@ -2783,28 +2785,30 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (rc < 0)
 		RETURN(rc);
 
-	OBD_ALLOC_PTR(env);
-	if (!env)
-		RETURN(-ENOMEM);
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
 
-	rc = lu_env_init(env, LCT_DT_THREAD);
-	if (rc)
-		GOTO(out_alloc, rc = -ENOMEM);
 	lu_env_add(env);
-	if (rc)
-		GOTO(out_env_fini, rc = -ENOMEM);
 
 #ifdef HAVE_SERVER_SUPPORT
-	env->le_ses = &echo_session;
-	rc = lu_context_init(env->le_ses, LCT_SERVER_SESSION | LCT_NOREF);
-	if (unlikely(rc < 0))
-		GOTO(out_env, rc);
-	lu_context_enter(env->le_ses);
+	if (cmd == OBD_IOC_ECHO_MD || cmd == OBD_IOC_ECHO_ALLOC_SEQ)
+		env_tags = ECHO_MD_CTX_TAG;
+	else
+#endif
+		env_tags = ECHO_DT_CTX_TAG;
 
+	rc = lu_env_refill_by_tags(env, env_tags, ECHO_SES_TAG);
+	if (rc != 0)
+		GOTO(out, rc);
+
+#ifdef HAVE_SERVER_SUPPORT
 	tsi = tgt_ses_info(env);
-	tsi->tsi_exp = ec->ec_exp;
+	/* treat as local operation */
+	tsi->tsi_exp = NULL;
 	tsi->tsi_jobid = NULL;
 #endif
+
 	switch (cmd) {
 	case OBD_IOC_CREATE:                    /* may create echo object */
 		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
@@ -2843,27 +2847,13 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		GOTO(out, rc);
 	}
 	case OBD_IOC_ECHO_ALLOC_SEQ: {
-		struct lu_env   *cl_env;
-		__u16            refcheck;
 		__u64            seq;
 		int              max_count;
 
 		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
 			GOTO(out, rc = -EPERM);
 
-		cl_env = cl_env_get(&refcheck);
-		if (IS_ERR(cl_env))
-			GOTO(out, rc = PTR_ERR(cl_env));
-
-		rc = lu_env_refill_by_tags(cl_env, ECHO_MD_CTX_TAG,
-					   ECHO_MD_SES_TAG);
-		if (rc != 0) {
-			cl_env_put(cl_env, &refcheck);
-			GOTO(out, rc);
-		}
-
-		rc = seq_client_get_seq(cl_env, ed->ed_cl_seq, &seq);
-		cl_env_put(cl_env, &refcheck);
+		rc = seq_client_get_seq(env, ed->ed_cl_seq, &seq);
 		if (rc < 0) {
 			CERROR("%s: Can not alloc seq: rc = %d\n",
 			       obd->obd_name, rc);
@@ -2929,16 +2919,8 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 	EXIT;
 out:
-#ifdef HAVE_SERVER_SUPPORT
-	lu_context_exit(env->le_ses);
-	lu_context_fini(env->le_ses);
-out_env:
-#endif
 	lu_env_remove(env);
-out_env_fini:
-	lu_env_fini(env);
-out_alloc:
-	OBD_FREE_PTR(env);
+	cl_env_put(env, &refcheck);
 
 	return rc;
 }
@@ -2970,10 +2952,12 @@ static int echo_client_setup(const struct lu_env *env,
 	INIT_LIST_HEAD(&ec->ec_locks);
 	ec->ec_unique = 0;
 
+	lu_context_tags_update(ECHO_DT_CTX_TAG);
+	lu_session_tags_update(ECHO_SES_TAG);
+
 	if (!strcmp(tgt->obd_type->typ_name, LUSTRE_MDT_NAME)) {
 #ifdef HAVE_SERVER_SUPPORT
 		lu_context_tags_update(ECHO_MD_CTX_TAG);
-		lu_session_tags_update(ECHO_MD_SES_TAG);
 #else
 		CERROR(
 		       "Local operations are NOT supported on client side. Only remote operations are supported. Metadata client must be run on server side.\n");
@@ -3027,10 +3011,11 @@ static int echo_client_cleanup(struct obd_device *obddev)
 	if (!ed)
 		RETURN(0);
 
+	lu_session_tags_clear(ECHO_SES_TAG & ~LCT_SESSION);
+	lu_context_tags_clear(ECHO_DT_CTX_TAG);
 	if (ed->ed_next_ismd) {
 #ifdef HAVE_SERVER_SUPPORT
 		lu_context_tags_clear(ECHO_MD_CTX_TAG);
-		lu_session_tags_clear(ECHO_MD_SES_TAG);
 #else
 		CERROR(
 		       "This is client-side only module, does not support metadata echo client.\n");

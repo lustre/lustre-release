@@ -1850,10 +1850,9 @@ int lu_context_refill(struct lu_context *ctx)
  * predefined when the lu_device type are registered, during the module probe
  * phase.
  */
-u32 lu_context_tags_default;
-u32 lu_session_tags_default;
+u32 lu_context_tags_default = LCT_CL_THREAD;
+u32 lu_session_tags_default = LCT_SESSION;
 
-#ifdef HAVE_SERVER_SUPPORT
 void lu_context_tags_update(__u32 tags)
 {
 	spin_lock(&lu_context_remembered_guard);
@@ -1889,7 +1888,6 @@ void lu_session_tags_clear(__u32 tags)
 	spin_unlock(&lu_context_remembered_guard);
 }
 EXPORT_SYMBOL(lu_session_tags_clear);
-#endif /* HAVE_SERVER_SUPPORT */
 
 int lu_env_init(struct lu_env *env, __u32 tags)
 {

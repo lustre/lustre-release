@@ -842,8 +842,8 @@ void cl_env_put(struct lu_env *env, __u16 *refcheck)
 		 * with the standard tags.
 		 */
 		if (cl_envs[cpu].cec_count < cl_envs_cached_max &&
-		    (env->le_ctx.lc_tags & ~LCT_HAS_EXIT) == LCT_CL_THREAD &&
-		    (env->le_ses->lc_tags & ~LCT_HAS_EXIT) == LCT_SESSION) {
+		    (env->le_ctx.lc_tags & ~LCT_HAS_EXIT) == lu_context_tags_default &&
+		    (env->le_ses->lc_tags & ~LCT_HAS_EXIT) == lu_session_tags_default) {
 			read_lock(&cl_envs[cpu].cec_guard);
 			list_add(&cle->ce_linkage, &cl_envs[cpu].cec_envs);
 			cl_envs[cpu].cec_count++;
