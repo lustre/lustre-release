@@ -40,19 +40,19 @@
 
 void usage(const char *prog, int status)
 {
-        fprintf(status == 0 ? stdout : stderr,
-                "Usage: %s [OPTION]... FILE\n"
-                "  -d, --device=DEV  use device number DEV\n"
-                "  -h, --help        dispaly help\n"
-                "  -m, --mode=MODE   use mode MODE\n"
-                "  -M, --major=MAJOR use device major MAJOR\n"
-                "  -N, --minor=MINOR use device minor MINOR\n",
-                prog);
+	fprintf(status == 0 ? stdout : stderr,
+		"Usage: %s [OPTION]... FILE\n"
+		"  -d, --device=DEV  use device number DEV\n"
+		"  -h, --help        dispaly help\n"
+		"  -m, --mode=MODE   use mode MODE\n"
+		"  -M, --major=MAJOR use device major MAJOR\n"
+		"  -N, --minor=MINOR use device minor MINOR\n",
+		prog);
 
-        exit(status);
+	exit(status);
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
 	struct option opts[] = {
 		{ .name = "device", .has_arg = required_argument, .val = 'd' },
@@ -62,48 +62,48 @@ int main(int argc, char ** argv)
 		{ .name = "minor", .has_arg = required_argument, .val = 'N' },
 		{ .name = NULL }
 	};
-        const char *path;
-        mode_t mode = S_IFREG | 0644;
-        dev_t dev = 0;
-        int rc;
+	const char *path;
+	mode_t mode = S_IFREG | 0644;
+	dev_t dev = 0;
+	int rc;
+	int c;
 
-        int c;
-        while ((c = getopt_long(argc, argv, "d:hm:M:N:", opts, NULL)) != -1) {
-                switch (c) {
-                case 'd':
-                        dev = strtoul(optarg, NULL, 0);
-                        break;
-                case 'h':
-                        usage(argv[0], 0);
-                case 'm':
-                        mode = strtoul(optarg, NULL, 0);
-                        break;
-                case 'M':
-                        dev = makedev(strtoul(optarg, NULL, 0), minor(dev));
-                        break;
-                case 'N':
-                        dev = makedev(major(dev), strtoul(optarg, NULL, 0));
-                        break;
-                case '?':
-                        usage(argv[0], 1);
-                }
-        }
+	while ((c = getopt_long(argc, argv, "d:hm:M:N:", opts, NULL)) != -1) {
+		switch (c) {
+		case 'd':
+			dev = strtoul(optarg, NULL, 0);
+			break;
+		case 'h':
+			usage(argv[0], 0);
+		case 'm':
+			mode = strtoul(optarg, NULL, 0);
+			break;
+		case 'M':
+			dev = makedev(strtoul(optarg, NULL, 0), minor(dev));
+			break;
+		case 'N':
+			dev = makedev(major(dev), strtoul(optarg, NULL, 0));
+			break;
+		case '?':
+			usage(argv[0], 1);
+		}
+	}
 
-        if (argc - optind != 1)
-                usage(argv[0], 1);
+	if (argc - optind != 1)
+		usage(argv[0], 1);
 
-        path = argv[optind];
+	path = argv[optind];
 
-        if ((mode & S_IFMT) == S_IFDIR)
-                rc = mkdir(path, mode & ~S_IFMT);
-        else if ((mode & S_IFMT) == S_IFLNK)
-                rc = symlink("oldpath", path);
-        else
-                rc = mknod(path, mode, dev);
+	if ((mode & S_IFMT) == S_IFDIR)
+		rc = mkdir(path, mode & ~S_IFMT);
+	else if ((mode & S_IFMT) == S_IFLNK)
+		rc = symlink("oldpath", path);
+	else
+		rc = mknod(path, mode, dev);
 
-        if (rc)
-                fprintf(stderr, "%s: cannot create `%s' with mode %#o: %s\n",
-                        argv[0], path, mode, strerror(errno));
+	if (rc)
+		fprintf(stderr, "%s: cannot create `%s' with mode %#o: %s\n",
+			argv[0], path, mode, strerror(errno));
 
-        return rc;
+	return rc;
 }
