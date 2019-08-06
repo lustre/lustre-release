@@ -333,13 +333,10 @@ enum ldlm_appetite {
 	LDLM_NAMESPACE_MODEST = BIT(1),
 };
 
-/**
- * Default values for the "max_nolock_size", "contention_time" and
- * "contended_locks" namespace tunables.
- */
-#define NS_DEFAULT_MAX_NOLOCK_BYTES 0
-#define NS_DEFAULT_CONTENTION_SECONDS 2
-#define NS_DEFAULT_CONTENDED_LOCKS 32
+/* Default lock contention detection window */
+#define NS_DEFAULT_CONTENTION_SECONDS 4
+#define NS_DEFAULT_CONTENTION_HOLD_SECONDS 30
+#define NS_DEFAULT_CONTENDED_LOCKS    16
 
 struct ldlm_ns_bucket {
 	/** back pointer to namespace */
@@ -620,26 +617,38 @@ struct ldlm_namespace {
 	/** Definition of how eagerly unused locks will be released from LRU */
 	enum ldlm_appetite	ns_appetite;
 
-	/**
-	 * If more than \a ns_contended_locks are found, the resource is
-	 * considered to be contended. Lock enqueues might specify that no
-	 * contended locks should be granted
+	/*
+	 * If more than \a ns_contended_locks contention events occur in the
+	 * ns_contention_seconds interval, a resource is considered to be
+	 * contended. We inform the client of this so it can potentially change
+	 * its behavior.
 	 */
 	unsigned int		ns_contended_locks;
 
-	/**
-	 * The resources in this namespace remember contended state during
-	 * \a ns_contention_time, in seconds.
+	/*
+	 * Time window (in seconds) for detecting lock contention.
+	 * Power-of-2 values use the optimized rolling counter path.
+	 * If more than \a ns_contended_locks contention events occur within
+	 * this time window, the resource is flagged as contended.
 	 */
-	timeout_t		ns_contention_time;
+	unsigned int		ns_contention_seconds;
 
-	/**
-	 * Limit size of contended extent locks, in bytes.
-	 * If extended lock is requested for more then this many bytes and
-	 * caller instructs us not to grant contended locks, we would disregard
-	 * such a request.
+	/*
+	 * Count of conflicting lock requests observed while a resource in this
+	 * namespace is in the contended state (see ldlm_update_contention()).
 	 */
-	unsigned int		ns_max_nolock_size;
+	atomic_t		ns_contention_events;
+
+	/*
+	 * Contention state hold duration (in seconds).
+	 * Once a resource is flagged as contended, it remains in the contended
+	 * state for this duration, even if contention events drop below the
+	 * threshold. This prevents rapid state oscillation and provides stable
+	 * feedback to clients about resource contention patterns.
+	 */
+	u8			ns_contention_hold_seconds;
+
+	/* u8			ns_contention_unused_padding[3]; */
 
 	/** Limit of parallel AST RPC count. */
 	unsigned int		ns_max_parallel_ast;
@@ -1224,8 +1233,12 @@ struct ldlm_resource {
 	};
 
 	union {
-		 /* resource considered as contended, used only on server side*/
-		time64_t	lr_contention_time;
+		/**
+		 * Store infomation about lock contention of this resource
+		 * by using fixed time-based sliding windows to account the
+		 * rating of lock contention events.
+		 */
+		struct obd_counter_instance	lr_contention_hist;
 		/**
 		 * Associated inode, used only on client side.
 		 */

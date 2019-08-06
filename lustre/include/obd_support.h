@@ -1097,6 +1097,25 @@ struct obd_statfs_info {
 	bool		os_enable_pre;		/* enable pre create logic */
 };
 
+/* Counter event rating based on Sliding Window Counter algorithm */
+/* Two fixed time-based sliding windows: previous and current one. */
+#define OBD_COUNTER_NUM	2
+
+struct obd_counter_instance {
+	/*
+	 * Truncated 32-bit monotonic seconds (ktime_get_seconds()) of the
+	 * last processed event. Zero means unset.
+	 */
+	u32		oci_last_event_time;
+	/*
+	 * Truncated 32-bit monotonic seconds (ktime_get_seconds()) when the
+	 * threshold was last exceeded. Zero means no recent trigger.
+	 */
+	u32		oci_last_trigger_time;
+	/* 32-bit counters for each time window */
+	u32		oci_hist[OBD_COUNTER_NUM];
+};
+
 /* Define a fixed 4096-byte encryption unit size */
 #define LUSTRE_ENCRYPTION_BLOCKBITS   12
 #define LUSTRE_ENCRYPTION_UNIT_SIZE   ((size_t)1 << LUSTRE_ENCRYPTION_BLOCKBITS)

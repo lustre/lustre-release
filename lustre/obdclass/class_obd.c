@@ -1090,6 +1090,111 @@ void obd_heat_add(struct obd_heat_instance *instance,
 }
 EXPORT_SYMBOL(obd_heat_add);
 
+/*
+ * obd_counter_add() - Add event count to sliding window counter
+ * @instance: counter instance to update
+ * @time: current timestamp in seconds
+ * @count: number of events to add
+ * @winsz: time window size in seconds
+ */
+void obd_counter_add(struct obd_counter_instance *instance,
+		     time64_t time, u32 count, u32 winsz)
+{
+	u32 time_u32 = (u32)time;
+
+	LASSERT(winsz > 0);
+	if (unlikely(instance->oci_last_event_time == 0)) {
+		instance->oci_hist[0] = count;
+	} else {
+		u32 start;
+
+		/* Start of the window containing oci_last_event_time. */
+		start = rounddown(instance->oci_last_event_time, winsz);
+		if (time_before32(time_u32, start + winsz)) {
+			/* In current time window. */
+			instance->oci_hist[0] += count;
+		} else {
+			int i, shift;
+
+			/* Move the sliding windows. */
+			shift = (time_u32 - start) / winsz;
+			LASSERT(shift > 0);
+			for (i = OBD_COUNTER_NUM - 1; i > 0; i--) {
+				if (i >= shift)
+					instance->oci_hist[i] =
+						instance->oci_hist[i - shift];
+				else
+					instance->oci_hist[i] = 0;
+			}
+
+			instance->oci_hist[0] = count;
+		}
+	}
+
+	instance->oci_last_event_time = time_u32;
+}
+EXPORT_SYMBOL(obd_counter_add);
+
+/*
+ * obd_counter_add_test() - Add event and test against threshold
+ * @instance: counter instance to update
+ * @time: current timestamp in seconds
+ * @count: number of events to add
+ * @winsz: time window size in seconds
+ * @max: threshold for event detection
+ * @hold_time_sec: hold detection state for this many seconds
+ *
+ * Return: true if event count exceeds @max or if within hold time,
+ *         false otherwise
+ */
+bool obd_counter_add_test(struct obd_counter_instance *instance,
+			  time64_t time, u32 count, u32 winsz, u32 max,
+			  u32 hold_time_sec)
+{
+	u64 val;
+	u64 overlap;
+	bool threshold_exceeded = false;
+	u32 time_u32 = (u32)time;
+
+	LASSERT(winsz > 0);
+
+	obd_counter_add(instance, time, count, winsz);
+	/*
+	 * The counter number in rolling window is calculated using the
+	 * following formula:
+	 * Counter in current window + (counter in the previous window *
+	 * overlap percentage of the rolling window and previous window)
+	 * This algorithm assumes a constant event rate in the (any)
+	 * previous window. Hence the result is only a approximated value.
+	 */
+	if (is_power_of_2(winsz)) {
+		u32 winshift = ilog2(winsz);
+
+		overlap = winsz - (time & (winsz - 1));
+		val = instance->oci_hist[0] +
+		      (instance->oci_hist[1] * overlap >> winshift);
+	} else {
+		overlap = winsz - (time % winsz);
+		val = instance->oci_hist[0] +
+		      instance->oci_hist[1] * overlap / winsz;
+	}
+
+	threshold_exceeded = val > max;
+	/*
+	 * Once threshold is exceeded, maintain that state for hold_time_sec
+	 * seconds to prevent rapid state changes.
+	 */
+	if (threshold_exceeded) {
+		instance->oci_last_trigger_time = time_u32;
+	} else if (instance->oci_last_trigger_time != 0 &&
+		   time_before32(time_u32,
+				 instance->oci_last_trigger_time + hold_time_sec)) {
+		threshold_exceeded = true;
+	}
+	return threshold_exceeded;
+}
+EXPORT_SYMBOL(obd_counter_add_test);
+
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Class Driver");
 MODULE_VERSION(LUSTRE_VERSION_STRING);

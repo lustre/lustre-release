@@ -547,6 +547,11 @@ static inline int exp_connect_open_readdir(struct obd_export *exp)
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_READDIR_OPEN);
 }
 
+static inline int exp_connect_lock_contention(struct obd_export *exp)
+{
+	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_LOCK_CONTENTION);
+}
+
 enum {
 	/* archive_ids in array format */
 	KKUC_CT_DATA_ARRAY_MAGIC	= 0x092013cea,

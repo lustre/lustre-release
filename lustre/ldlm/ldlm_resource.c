@@ -614,33 +614,27 @@ static ssize_t lock_timeouts_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(lock_timeouts);
 
-static ssize_t max_nolock_bytes_show(struct kobject *kobj,
-				     struct attribute *attr, char *buf)
+static ssize_t contention_events_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
 {
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
 
-	return sprintf(buf, "%u\n", ns->ns_max_nolock_size);
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 atomic_read(&ns->ns_contention_events));
 }
 
-static ssize_t max_nolock_bytes_store(struct kobject *kobj,
-				      struct attribute *attr,
-				      const char *buffer, size_t count)
+static ssize_t contention_events_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
 {
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
-	unsigned long tmp;
-	int err;
-
-	err = kstrtoul(buffer, 10, &tmp);
-	if (err != 0)
-		return -EINVAL;
-
-	ns->ns_max_nolock_size = tmp;
+	atomic_set(&ns->ns_contention_events, 0);
 
 	return count;
 }
-LUSTRE_RW_ATTR(max_nolock_bytes);
+LUSTRE_RW_ATTR(contention_events);
 
 static ssize_t contention_seconds_show(struct kobject *kobj,
 				       struct attribute *attr, char *buf)
@@ -648,7 +642,7 @@ static ssize_t contention_seconds_show(struct kobject *kobj,
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%d\n", ns->ns_contention_time);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ns->ns_contention_seconds);
 }
 
 static ssize_t contention_seconds_store(struct kobject *kobj,
@@ -662,7 +656,10 @@ static ssize_t contention_seconds_store(struct kobject *kobj,
 	if (kstrtouint(buffer, 10, &tmp))
 		return -EINVAL;
 
-	ns->ns_contention_time = tmp;
+	if (tmp == 0 || tmp > 16)
+		return -EINVAL;
+
+	ns->ns_contention_seconds = tmp;
 
 	return count;
 }
@@ -695,6 +692,36 @@ static ssize_t contended_locks_store(struct kobject *kobj,
 	return count;
 }
 LUSTRE_RW_ATTR(contended_locks);
+
+static ssize_t contention_hold_seconds_show(struct kobject *kobj,
+					    struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", ns->ns_contention_hold_seconds);
+}
+
+static ssize_t contention_hold_seconds_store(struct kobject *kobj,
+					     struct attribute *attr,
+					     const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	u8 tmp;
+
+	if (kstrtou8(buffer, 10, &tmp))
+		return -EINVAL;
+
+	/* limit to a reasonable duration in seconds */
+	if (tmp < 10 || tmp > 60)
+		return -EINVAL;
+
+	ns->ns_contention_hold_seconds = tmp;
+
+	return count;
+}
+LUSTRE_RW_ATTR(contention_hold_seconds);
 
 static ssize_t max_parallel_ast_show(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
@@ -747,9 +774,10 @@ static struct attribute *ldlm_ns_attrs[] = {
 #ifdef CONFIG_LUSTRE_FS_SERVER
 	&lustre_attr_ctime_age_limit.attr,
 	&lustre_attr_lock_timeouts.attr,
-	&lustre_attr_max_nolock_bytes.attr,
+	&lustre_attr_contention_events.attr,
 	&lustre_attr_contention_seconds.attr,
 	&lustre_attr_contended_locks.attr,
+	&lustre_attr_contention_hold_seconds.attr,
 	&lustre_attr_max_parallel_ast.attr,
 #endif
 	NULL,
@@ -1004,7 +1032,6 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	init_waitqueue_head(&ns->ns_waitq);
 
 	ns->ns_connect_flags = 0;
-	ns->ns_orig_connect_flags = 0;
 	ns->ns_nr_unused = 0;
 	ns->ns_nr_priv = 0;
 	ns->ns_last_pos = &ns->ns_unused_normal_list;
@@ -1015,9 +1042,10 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	ns->ns_timeouts = 0;
 	ns->ns_ctime_age_limit = LDLM_CTIME_AGE_LIMIT;
 	ns->ns_dirty_age_limit = ktime_set(LDLM_DIRTY_AGE_LIMIT, 0);
+	ns->ns_contention_seconds = NS_DEFAULT_CONTENTION_SECONDS;
+	ns->ns_contention_hold_seconds = NS_DEFAULT_CONTENTION_HOLD_SECONDS;
 	ns->ns_contended_locks = NS_DEFAULT_CONTENDED_LOCKS;
-	ns->ns_contention_time = NS_DEFAULT_CONTENTION_SECONDS;
-	ns->ns_max_nolock_size = NS_DEFAULT_MAX_NOLOCK_BYTES;
+	atomic_set(&ns->ns_contention_events, 0);
 	ns->ns_max_parallel_ast = LDLM_DEFAULT_PARALLEL_AST_LIMIT;
 	ns->ns_reclaim_start = 0;
 
@@ -1514,6 +1542,7 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 	 */
 	mutex_init(&res->lr_lvb_mutex);
 	res->lr_lvb_initialized = false;
+	memset(&res->lr_contention_hist, 0, sizeof(res->lr_contention_hist));
 
 	return res;
 }

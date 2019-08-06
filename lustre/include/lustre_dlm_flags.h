@@ -67,6 +67,12 @@
 #define ldlm_set_ast_sent(_l)           LDLM_SET_FLAG((_l), 1ULL <<  5)
 #define ldlm_clear_ast_sent(_l)         LDLM_CLEAR_FLAG((_l), 1ULL <<  5)
 
+/** report contention to client **/
+#define LDLM_FL_CONTENTION		0x0000000000000040ULL // bit   6
+#define ldlm_is_contention(_l)		LDLM_TEST_FLAG((_l), 1ULL <<  6)
+#define ldlm_set_contention(_l)		LDLM_SET_FLAG((_l), 1ULL <<  6)
+#define ldlm_clear_contention(_l)	LDLM_CLEAR_FLAG((_l), 1ULL <<  6)
+
 /**
  * Lock is being replayed.  This could probably be implied by the fact that
  * one of BLOCK_{GRANTED,CONV,WAIT} is set, but that is pretty dangerous.

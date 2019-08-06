@@ -2110,6 +2110,11 @@ extern __u64 obd_heat_get(struct obd_heat_instance *instance,
 			  unsigned int period_second);
 extern void obd_heat_clear(struct obd_heat_instance *instance, int count);
 
+void obd_counter_add(struct obd_counter_instance *instance, time64_t time,
+		     u32 count, u32 winsz);
+bool obd_counter_add_test(struct obd_counter_instance *instance, time64_t time,
+			  u32 count, u32 winsz, u32 max, u32 hold_time_sec);
+
 /* struct kobj_type */
 static inline
 struct attribute *_get_attr_matches(const struct kobj_type *typ,

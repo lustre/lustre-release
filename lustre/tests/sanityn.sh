@@ -1251,6 +1251,8 @@ run_test 31t "getattr should not revalidate invalid dentry"
 
 test_32b() { # bug 11270
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	(( $OST1_VERSION < $(version_code 2.17.53) )) ||
+		skip "max_nolock_bytes is removed >= 2.17.53"
 
 	local node
 	local facets=$(get_facets OST)
@@ -1298,8 +1300,117 @@ test_32b() { # bug 11270
 	restore_lustre_params <$p
 	rm -f $p
 }
-# Disable test 32b prior to full removal
-#run_test 32b "lockless i/o"
+run_test 32b "lockless i/o"
+
+test_32c() {
+	# need only one client & no parallel, to keep 'contentions' correct
+	(( ${CLIENTCOUNT:-1} == 1 )) || skip "need only one client"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	(( $OST1_VERSION >= $(version_code 2.17.53) )) ||
+		skip "contention detection is broken < 2.17.53"
+	local dd1
+	local dd2
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	# bs=1M: count is file size in MB
+	local count=${TEST32c_COUNT:-50}
+
+	save_lustre_params ost1 \
+		"ldlm.namespaces.filter-lustre-OST*.contended_locks" > $p
+	stack_trap "restore_lustre_params < $p; rm -f $p" EXIT
+	stack_trap "rm -f $DIR/$tfile"
+	$LFS setstripe -i 0 $DIR/$tfile
+
+	do_facet ost1 "$LCTL set_param \
+		ldlm.namespaces.filter-lustre-OST*.contended_locks=2"
+	do_facet ost1 "$LCTL set_param \
+		ldlm.namespaces.filter-lustre-OST*.contention_events=0"
+
+	# Write to file from both clients at different times and verify it
+	# does not register as contention
+	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=$count conv=fsync
+	dd if=/dev/zero of=$DIR2/$tfile bs=1M count=$count
+
+	conevents=$(do_facet ost1 "$LCTL get_param -n \
+		ldlm.namespaces.filter-lustre-OST0000*.contention_events")
+	(( conevents == 0 )) || error "(1) $conevents detected, expected 0"
+
+	# Write to file from both clients at the same time and verify it
+	# generates some contention events
+	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=$count &
+	dd1=$!
+	dd if=/dev/zero of=$DIR2/$tfile bs=1M count=$count &
+	dd2=$!
+	wait $dd1 $dd2
+
+	conevents=$(do_facet ost1 "$LCTL get_param -n \
+		ldlm.namespaces.filter-lustre-OST0000*.contention_events")
+
+	seconds=$(do_facet ost1 "$LCTL get_param -n \
+		ldlm.namespaces.filter-lustre-OST0000*.contention_seconds")
+	echo "contention_seconds $seconds, contention_events $conevents"
+
+	# It's impossible to predict how many events we'll get, because of the
+	# nature of racing processes like this, but we should definitely see
+	# more than one
+	(( conevents > 1 )) ||
+		error "(2) $conevents contention events detected, expected > 1"
+
+	# Let's continue doing i/o - We should see more contention events
+	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=$count &
+	dd1=$!
+	dd if=/dev/zero of=$DIR2/$tfile bs=1M count=$count &
+	dd2=$!
+	wait $dd1 $dd2
+
+	conevents2=$(do_facet ost1 "$LCTL get_param -n \
+		ldlm.namespaces.filter-lustre-OST0000*.contention_events")
+	(( conevents2 > conevents )) ||
+		error "(3) no added contention events, $conevents2 <= $conevents"
+
+	# When the last server-side lock is released, the OST ldlm_resource is
+	# freed and lr_contention_hist (contention hold state) is destroyed with
+	# it. Which means the following read operations would not be affected by
+	# the previous writes.
+	cancel_lru_locks osc
+
+	do_facet ost1 "$LCTL set_param \
+		ldlm.namespaces.filter-lustre-OST*.contention_events=0"
+
+	# Read from the file from both clients at the same time & verify it
+	# doesn't generate contention events
+	dd of=/dev/null if=$DIR1/$tfile bs=1M count=$count &
+	dd1=$!
+	dd of=/dev/null if=$DIR2/$tfile bs=1M count=$count &
+	dd2=$!
+	wait $dd1 $dd2
+
+	conevents=$(do_facet ost1 "$LCTL get_param -n \
+		ldlm.namespaces.filter-lustre-OST0000*.contention_events")
+	(( conevents == 0 )) || error "(4) $conevents detected, expected 0"
+
+	# Now test read lockahead - This should NOT cause contention because
+	# they will be granted.
+	for i in {1..50}; do
+		$LFS ladvise -a lockahead -b -s 0M -l ${i}M -m READ $DIR/$tfile
+	done
+
+	conevents=$(do_facet ost1 "$LCTL get_param -n \
+		ldlm.namespaces.filter-lustre-OST0000*.contention_events")
+	(( conevents == 0 )) || error "(5) $conevents detected, expected == 0"
+
+	# Finally, test detection of contention events with lockahead, using
+	# incompatible async write lock requests, which are non-blocking.
+	# These *should* generate contention events because they are explicit
+	# requests which are being blocked, which counts as contention.
+	for i in {1..50}; do
+		$LFS ladvise -a lockahead -b -s 0M -l ${i}M -m WRITE $DIR/$tfile
+	done
+
+	conevents=$(do_facet ost1 "$LCTL get_param -n \
+		ldlm.namespaces.filter-lustre-OST0000*.contention_events")
+	(( conevents > 0 )) || error "(6) $conevents detected, expected > 0"
+}
+run_test 32c "contention detection"
 
 print_jbd_stat () {
 	local mds_facets=$(get_facets MDS)

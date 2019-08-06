@@ -1,0 +1,87 @@
+.TH LDLM.NAMESPACES.CONTENTION_SECONDS 4 2026-04-29 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+ldlm.namespaces.contention_seconds \- LDLM lock contention detection window
+.SH SYNOPSIS
+.SY "lctl get_param"
+.BI ldlm.namespaces.filter- FSNAME-* .contention_seconds
+.SY "lctl set_param"
+.BI ldlm.namespaces.filter- FSNAME-* .contention_seconds= SECONDS
+.YS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--
+.br
+Writing a value outside the supported range fails with EINVAL
+.TP
+.B Scope
+Per OST filter (OSS) namespace only
+.TP
+.B Config
+present on OSS nodes
+.TP
+.B Default
+.RB ldlm.namespaces.filter-*.contention_seconds= 4
+.TP
+.B Valid Range
+.RB ldlm.namespaces.filter-*.contention_seconds= 1
+.RB ldlm.namespaces.filter-*.contention_seconds= 16
+.SH DESCRIPTION
+.B ldlm.namespaces.filter-*.contention_seconds
+sets the rolling time window used by the LDLM extent lock contention detector.
+.PP
+The detector tracks conflicting lock activity for each resource over this
+window.  When the amount of conflicting activity is more than the
+.B ldlm.namespaces.filter-*.contended_locks
+threshold, the resource is treated as contended.  Conflicting lock requests
+during that contended state increment
+.BR ldlm.namespaces.contention_events (4).
+.PP
+Values from 1 to 16 seconds are accepted.
+.B Power-of-two
+windows (4, 8 or 16 seconds) are
+.B recommended
+for performance, because they use an optimized rolling-counter calculation path.
+Other values are accepted and stored exactly as written.
+.PP
+Larger windows accumulate background activity and may dilute bursts; pair a
+larger
+.B ldlm.namespaces.filter-*.contention_seconds
+with proportionally larger
+.B ldlm.namespaces.filter-*.contended_locks
+to keep the effective event-rate threshold meaningful.
+.PP
+Writing a value outside the supported range fails with
+.BR EINVAL .
+.PP
+Run the command on the node that owns the namespace to be inspected or
+changed.  Only namespaces that exist on the local node are shown.
+.SH MODULES
+This parameter applies to OST filter namespaces:
+.EX
+.BI ldlm.namespaces.filter- FSNAME-* .contention_seconds
+.EE
+.SH EXAMPLES
+Show the contention detection window for OST filter namespaces:
+.EX
+.RB "oss# " lctl " get_param " ldlm.namespaces.filter-*.contention_seconds
+ldlm.namespaces.filter-lustre-OST0000_UUID.contention_seconds=4
+.EE
+.PP
+Set the contention detection window for OST filter namespaces to 8 seconds:
+.EX
+.RB "oss# " lctl " set_param " ldlm.namespaces.filter-*.contention_seconds=8
+ldlm.namespaces.filter-lustre-OST0000_UUID.contention_seconds=8
+.EE
+.SH AVAILABILITY
+.B ldlm.namespaces.filter-*.contention_seconds
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit #
+.SH SEE ALSO
+.BR ldlm.namespaces.contention_events (4),
+.BR ldlm.namespaces.contention_hold_seconds (4),
+.BR lustre (7),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

@@ -1,0 +1,72 @@
+.TH LDLM.NAMESPACES.CONTENTION_EVENTS 4 2026-04-28 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+ldlm.namespaces.contention_events \- LDLM lock contention detection counter
+.SH SYNOPSIS
+.SY "lctl get_param"
+.BI ldlm.namespaces.filter- FSNAME-* .contention_events
+.SY "lctl set_param"
+.BI ldlm.namespaces.filter- FSNAME-* .contention_events= 0
+.YS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--
+.br
+Writing to this parameter resets the counter
+.TP
+.B Scope
+Per OST filter (OSS) namespace only
+.TP
+.B Config
+present on OSS nodes
+.TP
+.B Default
+.RB ldlm.namespaces.filter-*.contention_events= 0
+.SH DESCRIPTION
+.B ldlm.namespaces.filter-*.contention_events
+counts conflicting lock requests observed in the specified namespace while
+a resource is in the contended state.
+.PP
+The detector tracks conflicting lock activity for each resource over the
+.B ldlm.namespaces.filter-*.contention_seconds
+time window.  When the amount of conflicting activity is more than the
+.B ldlm.namespaces.filter-*.contended_locks
+threshold, the resource is treated as contended for
+.B ldlm.namespaces.filter-*.contention_hold_seconds
+seconds.  During that contended state, each new conflicting lock request
+increments this counter.
+.PP
+The value is a diagnostic counter for observing lock contention behavior.
+It is not a count of all conflicting lock requests, and it does not count
+compatible requests.  Writing any value to the parameter clears the counter
+back to zero.
+.PP
+Run the command on the server that owns the namespace to be inspected.  Only
+namespaces that exist on the local node are shown.
+.SH MODULES
+This parameter applies to OST filter namespaces:
+.EX
+.BI ldlm.namespaces.filter- FSNAME-* .contention_events
+.EE
+.SH EXAMPLES
+Show the contention event counters for OST filter namespaces on an OSS:
+.EX
+.RB "oss# " lctl " get_param " ldlm.namespaces.filter-*.contention_events
+ldlm.namespaces.filter-lustre-OST0000_UUID.contention_events=0
+.EE
+.PP
+Clear the contention event counters for OST filter namespaces on an OSS:
+.EX
+.RB "oss# " lctl " set_param " ldlm.namespaces.filter-*.contention_events=0
+ldlm.namespaces.filter-lustre-OST0000_UUID.contention_events=0
+.EE
+.SH AVAILABILITY
+.B ldlm.namespaces.filter-*.contention_events
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit #
+.SH SEE ALSO
+.BR lustre (7),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

@@ -1,0 +1,81 @@
+.TH LDLM.NAMESPACES.CONTENTION_HOLD_SECONDS 4 2026-04-28 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+ldlm.namespaces.contention_hold_seconds \- LDLM lock contention state hold time
+.SH SYNOPSIS
+.SY "lctl get_param"
+.BI ldlm.namespaces.filter- FSNAME-* .contention_hold_seconds
+.SY "lctl set_param"
+.BI ldlm.namespaces.filter- FSNAME-* .contention_hold_seconds= SECONDS
+.YS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--
+.br
+Writing a value outside the supported range fails with EINVAL
+.TP
+.B Scope
+Per OST filter (OSS) namespace only
+.TP
+.B Config
+present on OSS nodes
+.TP
+.B Default
+.RB ldlm.namespaces.filter-*.contention_hold_seconds= 30
+.TP
+.B Valid Range
+.RB ldlm.namespaces.filter-*.contention_hold_seconds= 10
+.RB ldlm.namespaces.filter-*.contention_hold_seconds= 60
+.SH DESCRIPTION
+.B ldlm.namespaces.filter-*.contention_hold_seconds
+controls how long an LDLM resource remains in the contended state after the
+extent lock contention detector reports it as contended.
+.PP
+The detector tracks conflicting lock activity for each resource over the
+.B ldlm.namespaces.filter-*.contention_seconds
+time window.  When the amount of conflicting activity is more than the
+.B ldlm.namespaces.filter-*.contended_locks
+threshold, the resource is treated as contended.
+.PP
+After a resource becomes contended, this parameter keeps the contention state
+active for the configured number of seconds, even if the measured contention
+falls below the threshold.  Holding the state avoids rapid transitions between
+contended and non-contended states and gives clients more stable feedback about
+contention behavior.  Conflicting lock requests during that contended state
+increment
+.BR ldlm.namespaces.contention_events (4).
+.PP
+Writing a value outside the supported range fails with
+.BR EINVAL .
+.PP
+Run the command on the node that owns the namespace to be inspected or
+changed.  Only namespaces that exist on the local node are shown.
+.SH MODULES
+This parameter applies to OST filter namespaces:
+.EX
+.BI ldlm.namespaces.filter- FSNAME-* .contention_hold_seconds
+.EE
+.SH EXAMPLES
+Show the contention hold time for OST filter namespaces:
+.EX
+.RB "oss# " lctl " get_param " ldlm.namespaces.filter-*.contention_hold_seconds
+ldlm.namespaces.filter-lustre-OST0000_UUID.contention_hold_seconds=30
+.EE
+.PP
+Set the contention hold time for OST filter namespaces to 20 seconds:
+.EX
+.RB "oss# " lctl " set_param " ldlm.namespaces.filter-*.contention_hold_seconds=20
+ldlm.namespaces.filter-lustre-OST0000_UUID.contention_hold_seconds=20
+.EE
+.SH AVAILABILITY
+.B ldlm.namespaces.filter-*.contention_hold_seconds
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit #
+.SH SEE ALSO
+.BR ldlm.namespaces.contention_events (4),
+.BR ldlm.namespaces.contention_seconds (4),
+.BR lustre (7),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)
