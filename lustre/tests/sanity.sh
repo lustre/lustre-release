@@ -19390,14 +19390,13 @@ run_test 316 "lfs mv"
 test_317() {
 	[ $MDS1_VERSION -lt $(version_code 2.11.53) ] &&
 		skip "Need MDS version at least 2.11.53"
+	if [ "$ost1_FSTYPE" == "zfs" ]; then
+		skip "LU-10370: no implementation for ZFS"
+	fi
+
 	local trunc_sz
 	local grant_blk_size
 
-	if [ "$(facet_fstype $facet)" == "zfs" ]; then
-		skip "LU-10370: no implementation for ZFS" && return
-	fi
-
-	stack_trap "rm -f $DIR/$tfile" EXIT
 	grant_blk_size=$($LCTL get_param osc.$FSNAME*.import |
 			awk '/grant_block_size:/ { print $2; exit; }')
 	#
@@ -19405,7 +19404,8 @@ test_317() {
 	# blocks count.
 	#
 	dd if=/dev/zero of=$DIR/$tfile bs=5M count=1 conv=fsync ||
-		error "Create file : $DIR/$tfile"
+		error "Create file $DIR/$tfile failed"
+	stack_trap "rm -f $DIR/$tfile" EXIT
 
 	for trunc_sz in 2097152 4097 4000 509 0; do
 		$TRUNCATE $DIR/$tfile $trunc_sz ||
