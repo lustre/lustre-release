@@ -2642,7 +2642,7 @@ test_27I() {
 run_test 27I "check that root dir striping does not break parent dir one"
 
 test_27J() {
-	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.12.51) ]] &&
+	[[ $MDS1_VERSION -le $(version_code 2.12.51) ]] &&
 		skip "Need MDS version newer than 2.12.51"
 
 	test_mkdir $DIR/$tdir
@@ -2737,7 +2737,7 @@ test_27J() {
 run_test 27J "basic ops on file with foreign LOV"
 
 test_27K() {
-	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.12.49) ]] &&
+	[[ $MDS1_VERSION -le $(version_code 2.12.49) ]] &&
 		skip "Need MDS version newer than 2.12.49"
 
 	test_mkdir $DIR/$tdir
@@ -7839,7 +7839,7 @@ run_test 65m "normal user can't set filesystem default stripe"
 
 test_65n() {
 	[ -n "$FILESET" ] && skip "Not functional for FILESET set"
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.12.50) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.12.50) ]] ||
 		skip "Need MDS version at least 2.12.50"
 	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
@@ -20086,7 +20086,7 @@ test_300q() {
 run_test 300q "create remote directory under orphan directory"
 
 test_300r() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
 		skip "Need MDS version at least 2.7.55" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
@@ -21057,7 +21057,7 @@ run_test 411 "Slab allocation error with cgroup does not LBUG"
 
 test_412() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	if [ $(lustre_version_code mds1) -lt $(version_code 2.10.55) ]; then
+	if [ $MDS1_VERSION -lt $(version_code 2.10.55) ]; then
 		skip "Need server version at least 2.10.55"
 	fi
 
@@ -21325,7 +21325,7 @@ run_test 414 "simulate ENOMEM in ptlrpc_register_bulk()"
 
 test_415() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $(lustre_version_code mds1) -lt $(version_code 2.11.52) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.52) ] &&
 		skip "Need server version at least 2.11.52"
 
 	# LU-11102
@@ -21367,7 +21367,7 @@ test_415() {
 run_test 415 "lock revoke is not missing"
 
 test_416() {
-	[ $(lustre_version_code mds1) -lt $(version_code 2.11.55) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.55) ] &&
 		skip "Need server version at least 2.11.55"
 
 	# define OBD_FAIL_OSD_TXN_START    0x19a
@@ -21822,7 +21822,7 @@ test_422() {
 run_test 422 "kill a process with RPC in progress"
 
 prep_801() {
-	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
+	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
 		skip "Need server version at least 2.9.55"
 
@@ -22053,7 +22053,7 @@ cleanup_802a() {
 
 test_802a() {
 	[[ $mds1_FSTYPE = zfs ]] || skip "ZFS specific test"
-	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
+	[[ $MDS1_VERSION -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
 		skip "Need server version at least 2.9.55"
 
@@ -22572,7 +22572,7 @@ test_810() {
 run_test 810 "partial page writes on ZFS (LU-11663)"
 
 test_811() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
 		skip "Need MDS version at least 2.11.56"
 
 	#define OBD_FAIL_MDS_ORPHAN_DELETE	0x165

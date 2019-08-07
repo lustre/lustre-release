@@ -22,7 +22,7 @@ ALWAYS_EXCEPT="$SANITYN_EXCEPT "
 ALWAYS_EXCEPT+="                28"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+if [ $mds1_FSTYPE = "zfs" ]; then
 	# LU-2829 / LU-2887 - make allowances for ZFS slowness
 	TEST33_NFILES=${TEST33_NFILES:-1000}
 fi
@@ -366,7 +366,7 @@ COUNT=${COUNT:-2500}
 # The FSXNUM reduction for ZFS is needed until ORI-487 is fixed.
 # We don't want to skip it entirely, but ZFS is VERY slow and cannot
 # pass a 2500 operation dual-mount run within the time limit.
-if [ "$(facet_fstype ost1)" = "zfs" ]; then
+if [ "$ost1_FSTYPE" = "zfs" ]; then
 	FSXNUM=$((COUNT / 5))
 	FSXP=1
 elif [ "$SLOW" = "yes" ]; then
@@ -428,7 +428,7 @@ test_16c() {
 	local stripe_size=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
 
-	[ $(facet_fstype ost1) != ldiskfs ] && skip "dio on ldiskfs only"
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "dio on ldiskfs only"
 
 	# to allocate grant because it may run out due to test_15.
 	$LFS setstripe -c -1 $file1
@@ -904,52 +904,52 @@ print_jbd_stat () {
 
 # commit on sharing tests
 test_33a() {
-    remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-    [ -z "$CLIENTS" ] && skip "Need two or more clients, have $CLIENTS" && return 0
-    [ $CLIENTCOUNT -lt 2 ] &&
-	skip "Need two or more clients, have $CLIENTCOUNT" && return 0
+	[ -z "$CLIENTS" ] && skip "Need two or more clients, have $CLIENTS"
+	[ $CLIENTCOUNT -lt 2 ] &&
+		skip "Need two or more clients, have $CLIENTCOUNT"
 
-    local nfiles=${TEST33_NFILES:-10000}
-    local param_file=$TMP/$tfile-params
-    local fstype=$(facet_fstype $SINGLEMDS)
+	local nfiles=${TEST33_NFILES:-10000}
+	local param_file=$TMP/$tfile-params
+	local COS
+	local jbdold="N/A"
+	local jbdnew="N/A"
+	local jbd
 
 	save_lustre_params $(get_facets MDS) \
 		"mdt.*.commit_on_sharing" > $param_file
 
-    local COS
-    local jbdold="N/A"
-    local jbdnew="N/A"
-    local jbd
+	for COS in 0 1; do
+		do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=$COS
+		avgjbd=0
+		avgtime=0
+		for i in 1 2 3; do
+			do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
 
-    for COS in 0 1; do
-        do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=$COS
-        avgjbd=0
-        avgtime=0
-        for i in 1 2 3; do
-            do_nodes $CLIENT1,$CLIENT2 "mkdir -p $DIR1/$tdir-\\\$(hostname)-$i"
+		[ "$mds1_FSTYPE" = ldiskfs ] && jbdold=$(print_jbd_stat)
+		echo "=== START createmany old: $jbdold transaction"
+		local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r$DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
+		[ "$mds1_FSTYPE" = ldiskfs ] && jbdnew=$(print_jbd_stat)
+		[ "$mds1_FSTYPE" = ldiskfs ] && jbd=$(( jbdnew - jbdold ))
+		echo "=== END   createmany new: $jbdnew transaction :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
+		[ "$mds1_FSTYPE" = ldiskfs ] && avgjbd=$(( avgjbd + jbd ))
+		avgtime=$(( avgtime + elapsed ))
+		done
+	eval cos${COS}_jbd=$((avgjbd / 3))
+	eval cos${COS}_time=$((avgtime / 3))
+	done
 
-            [ $fstype = ldiskfs ] && jbdold=$(print_jbd_stat)
-            echo "=== START createmany old: $jbdold transaction"
-            local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2 createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- -r$DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > /dev/null 2>&1")
-            [ $fstype = ldiskfs ] && jbdnew=$(print_jbd_stat)
-            [ $fstype = ldiskfs ] && jbd=$(( jbdnew - jbdold ))
-            echo "=== END   createmany new: $jbdnew transaction :  $jbd transactions  nfiles $nfiles time $elapsed COS=$COS"
-            [ $fstype = ldiskfs ] && avgjbd=$(( avgjbd + jbd ))
-            avgtime=$(( avgtime + elapsed ))
-        done
-        eval cos${COS}_jbd=$((avgjbd / 3))
-        eval cos${COS}_time=$((avgtime / 3))
-    done
+	echo "COS=0 transactions (avg): $cos0_jbd  time (avg): $cos0_time"
+	echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time"
+	[ "$cos0_jbd" != 0 ] &&
+		echo "COS=1 vs COS=0 jbd:  $((((cos1_jbd/cos0_jbd - 1)) * 100 )) %"
+	[ "$cos0_time" != 0 ] &&
+		echo "COS=1 vs COS=0 time: $((((cos1_time/cos0_time - 1)) * 100 )) %"
 
-    echo "COS=0 transactions (avg): $cos0_jbd  time (avg): $cos0_time"
-    echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time"
-    [ "$cos0_jbd" != 0 ] && echo "COS=1 vs COS=0 jbd:  $((((cos1_jbd/cos0_jbd - 1)) * 100 )) %"
-    [ "$cos0_time" != 0 ] && echo "COS=1 vs COS=0 time: $((((cos1_time/cos0_time - 1)) * 100 )) %"
-
-    restore_lustre_params < $param_file
-    rm -f $param_file
-    return 0
+	restore_lustre_params < $param_file
+	rm -f $param_file
+	return 0
 }
 run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 
@@ -1014,9 +1014,9 @@ test_33b() {
 run_test 33b "COS: cross create/delete, 2 clients, benchmark under remote dir"
 
 test_33c() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
-		skip "DNE CoS not supported" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
+		skip "DNE CoS not supported"
 
 	local sync_count
 
@@ -1072,9 +1072,9 @@ op_trigger_cos() {
 }
 
 test_33d() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
-		skip "DNE CoS not supported" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
+		skip "DNE CoS not supported"
 
 	# remote directory create
 	op_trigger_cos "mkdir $DIR/$tdir" "$LFS mkdir -i 1 $DIR/$tdir/subdir"
@@ -1109,13 +1109,12 @@ test_33d() {
 run_test 33d "DNE distributed operation should trigger COS"
 
 test_33e() {
-	[ -n "$CLIENTS" ] || { skip "Need two or more clients" && return 0; }
+	[ -n "$CLIENTS" ] || skip "Need two or more clients"
 	[ $CLIENTCOUNT -ge 2 ] ||
-		{ skip "Need two or more clients, have $CLIENTCOUNT" &&
-								return 0; }
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.63) ] &&
-		skip "DNE CoS not supported" && return
+		skip "Need two or more clients, have $CLIENTCOUNT"
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.63) ] &&
+		skip "DNE CoS not supported"
 
 	local client2=${CLIENT2:-$(hostname)}
 
@@ -2716,8 +2715,8 @@ test_51a() {
 run_test 51a "layout lock: refresh layout should work"
 
 test_51b() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.59) ]] ||
-		{ skip "Need MDS version at least 2.3.59"; return 0; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.59) ]] ||
+		skip "Need MDS version at least 2.3.59"
 
 	local tmpfile=`mktemp`
 
@@ -2958,9 +2957,8 @@ test_55d()
 run_test 55d "rename file vs link"
 
 test_60() {
-	local MDSVER=$(lustre_build_version $SINGLEMDS)
-	[ $(version_code $MDSVER) -lt $(version_code 2.3.0) ] &&
-		skip "MDS version $MDSVER must be >= 2.3.0" && return 0
+	[ $MDS1_VERSION -lt $(version_code 2.3.0) ] &&
+		skip "MDS version must be >= 2.3.0"
 
 	# Create a file
 	test_mkdir $DIR1/$tdir
@@ -3046,19 +3044,16 @@ test_70b() { # LU-2781
 run_test 70b "remove files after calling rm_entry"
 
 test_71a() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-
-	[[ $server_version -lt $(version_code 2.1.6) ]] &&
-		skip "Need MDS version at least 2.1.6" && return
+	[[ "$MDS1_VERSION" -lt $(version_code 2.1.6) ]] &&
+		skip "Need MDS version at least 2.1.6"
 
 	# Patch not applied to 2.2 and 2.3 branches
-	[[ $server_version -ge $(version_code 2.2.0) ]] &&
-	[[ $server_version -lt $(version_code 2.4.0) ]] &&
-		skip "Need MDS version earlier than 2.2.0 or at least 2.4.0" &&
-			return
+	[[ "$MDS1_VERSION" -ge $(version_code 2.2.0) ]] &&
+	[[ "$MDS1_VERSION" -lt $(version_code 2.4.0) ]] &&
+		skip "Need MDS version earlier than 2.2.0 or at least 2.4.0"
 
 	checkfiemap --test ||
-		{ skip "checkfiemap not runnable: $?" && return; }
+		skip "checkfiemap not runnable: $?"
 	# write data this way: hole - data - hole - data
 	dd if=/dev/urandom of=$DIR1/$tfile bs=40K seek=1 count=1
 	[ "$(facet_fstype ost$(($($LFS getstripe -i $DIR1/$tfile) + 1)))" = \
@@ -3090,20 +3085,17 @@ test_71a() {
 run_test 71a "correct file map just after write operation is finished"
 
 test_71b() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-
-	[[ $server_version -lt $(version_code 2.1.6) ]] &&
-		skip "Need MDS version at least 2.1.6" && return
+	[[ "$MDS1_VERSION" -lt $(version_code 2.1.6) ]] &&
+		skip "Need MDS version at least 2.1.6"
 
 	# Patch not applied to 2.2 and 2.3 branches
-	[[ $server_version -ge $(version_code 2.2.0) ]] &&
-	[[ $server_version -lt $(version_code 2.4.0) ]] &&
-		skip "Need MDS version earlier than 2.2.0 or at least 2.4.0" &&
-			return
-	[[ $OSTCOUNT -ge 2 ]] || { skip "needs >= 2 OSTs"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.2.0) ]] &&
+	[[ "$MDS1_VERSION" -lt $(version_code 2.4.0) ]] &&
+		skip "Need MDS version earlier than 2.2.0 or at least 2.4.0"
+	[[ $OSTCOUNT -ge 2 ]] || skip "needs >= 2 OSTs"
 
 	checkfiemap --test ||
-		{ skip "error $?: checkfiemap failed" && return; }
+		skip "error $?: checkfiemap failed"
 
 	mkdir -p $DIR1/$tdir
 
@@ -3177,8 +3169,8 @@ test_73() {
 run_test 73 "getxattr should not cause xattr lock cancellation"
 
 test_74() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.93) ] &&
-		skip "Need MDS version at least 2.4.93" && return
+	[ "$MDS1_VERSION" -lt $(version_code 2.4.93) ] &&
+		skip "Need MDS version at least 2.4.93"
 
 	dd if=/dev/zero of=$DIR1/$tfile-1 bs=1K count=1
 	dd if=/dev/zero of=$DIR1/$tfile-2 bs=1K count=1
@@ -3209,10 +3201,10 @@ test_75() {
 run_test 75 "osc: upcall after unuse lock==================="
 
 test_76() { #LU-946
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.53) ]] &&
-		skip "Need MDS version at least 2.5.53" && return
+	[[ "$MDS1_VERSION" -lt $(version_code 2.5.53) ]] &&
+		skip "Need MDS version at least 2.5.53"
 
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	local fcount=$((MDSCOUNT * 256))
 	declare -a fd_list
 	declare -a fid_list
@@ -3519,7 +3511,7 @@ test_77e() {
 
 	local idis
 	local rateis
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.54) ]; then
+	if [ "$OST1_VERSION" -ge $(version_code 2.8.54) ]; then
 		idis="nid="
 		rateis="rate="
 	fi
@@ -3575,7 +3567,7 @@ test_77f() {
 
 	local idis
 	local rateis
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.54) ]; then
+	if [ "$OST1_VERSION" -ge $(version_code 2.8.54) ]; then
 		idis="jobid="
 		rateis="rate="
 	fi
@@ -3630,7 +3622,7 @@ test_77g() {
 
 	local idis
 	local rateis
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.54) ]; then
+	if [ "$OST1_VERSION" -ge $(version_code 2.8.54) ]; then
 		idis="jobid="
 		rateis="rate="
 	fi
@@ -3647,8 +3639,8 @@ test_77g() {
 run_test 77g "Change TBF type directly"
 
 test_77h() {
-	[ $(lustre_version_code ost1) -ge $(version_code 2.8.55) ] ||
-		{ skip "Need OST version at least 2.8.55"; return 0; }
+	[ "$OST1_VERSION" -ge $(version_code 2.8.55) ] ||
+		skip "Need OST version at least 2.8.55"
 
 	local old_policy=$(do_facet ost1 \
 		lctl get_param ost.OSS.ost_io.nrs_policies)
@@ -3702,8 +3694,8 @@ tbf_rule_check()
 }
 
 test_77i() {
-	[ $(lustre_version_code ost1) -ge $(version_code 2.8.55) ] ||
-		{ skip "Need OST version at least 2.8.55"; return 0; }
+	[ "$OST1_VERSION" -ge $(version_code 2.8.55) ] ||
+		skip "Need OST version at least 2.8.55"
 
 	for i in $(seq 1 $OSTCOUNT)
 	do
@@ -3757,11 +3749,10 @@ run_test 77i "Change rank of TBF rule"
 test_77j() {
 	local idis
 	local rateis
-	local ost_version=$(lustre_version_code ost1)
 
-	[ $ost_version -ge $(version_code 2.9.53) ] ||
-		{ skip "Need OST version at least 2.9.53"; return 0; }
-	if [ $ost_version -ge $(version_code 2.8.60) ]; then
+	[ "$OST1_VERSION" -ge $(version_code 2.9.53) ] ||
+		skip "Need OST version at least 2.9.53"
+	if [ "$OST1_VERSION" -ge $(version_code 2.8.60) ]; then
 		idis="opcode="
 		rateis="rate="
 	fi
@@ -3813,10 +3804,10 @@ test_id() {
 }
 
 test_77ja(){
-	if [ $(lustre_version_code ost1) -lt $(version_code 2.11.50) ]; then
+	if [ "$OST1_VERSION" -lt $(version_code 2.11.50) ]; then
 		skip "Need OST version at least 2.11.50"
-		return 0
 	fi
+
 	test_id "u" "500" "5" "-u 500"
 	test_id "g" "500" "5" "-u 500 -g 500"
 }
@@ -3840,8 +3831,8 @@ cleanup_77k()
 }
 
 test_77k() {
-	[[ $(lustre_version_code ost1) -ge $(version_code 2.9.53) ]] ||
-		{ skip "Need OST version at least 2.9.53"; return 0; }
+	[[ "$OST1_VERSION" -ge $(version_code 2.9.53) ]] ||
+		skip "Need OST version at least 2.9.53"
 
 	do_nodes $(comma_list $(osts_nodes)) \
 		lctl set_param ost.OSS.ost_io.nrs_policies="tbf" \
@@ -3883,8 +3874,8 @@ test_77k() {
 
 	trap "cleanup_77k \"ext_a ext_b\" \"fifo\"" EXIT
 
-	[[ $(lustre_version_code ost1) -ge $(version_code 2.10.58) ]] ||
-		{ skip "Need OST version at least 2.10.58"; return 0; }
+	[[ "$OST1_VERSION" -ge $(version_code 2.10.58) ]] ||
+		skip "Need OST version at least 2.10.58"
 
 	do_nodes $(comma_list $(osts_nodes)) \
 		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ ext_a" \
@@ -3914,8 +3905,8 @@ test_77k() {
 run_test 77k "check TBF policy with NID/JobID/OPCode expression"
 
 test_77l() {
-	[[ $(lustre_version_code ost1) -ge $(version_code 2.10.56) ]] ||
-		{ skip "Need OST version at least 2.10.56"; return 0; }
+	[[ "$OST1_VERSION" -ge $(version_code 2.10.56) ]] ||
+		skip "Need OST version at least 2.10.56"
 
 	do_facet ost1 lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid"
 	do_facet ost1 lctl set_param ost.OSS.ost_io.nrs_policies="tbf"
@@ -3934,9 +3925,8 @@ test_77l() {
 run_test 77l "check the output of NRS policies for generic TBF"
 
 test_77m() {
-	if [ $(lustre_version_code ost1) -lt $(version_code 2.9.54) ]; then
+	if [ "$OST1_VERSION" -lt $(version_code 2.9.54) ]; then
 		skip "Need OST version at least 2.9.54"
-		return 0
 	fi
 
 	local dir=$DIR/$tdir
@@ -3986,9 +3976,8 @@ test_77m() {
 run_test 77m "check NRS Delay slows write RPC processing"
 
 test_77n() { #LU-10802
-	if [ $(lustre_version_code ost1) -lt $(version_code 2.10.58) ]; then
+	if [ "$OST1_VERSION" -lt $(version_code 2.10.58) ]; then
 		skip "Need OST version at least 2.10.58"
-		return 0
 	fi
 
 	# Configure jobid_var
@@ -4299,8 +4288,8 @@ test_81b() {
 run_test 81b "rename under striped directory doesn't deadlock"
 
 test_82() {
-	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.6.91) ]] ||
-		{ skip "Need MDS version at least 2.6.92"; return 0; }
+	[[ "$MDS1_VERSION" -gt $(version_code 2.6.91) ]] ||
+		skip "Need MDS version at least 2.6.92"
 
 	# Client 1 creates a file.
 	multiop_bg_pause $DIR1/$tfile O_ac || error "multiop_bg_pause 1"
@@ -4553,7 +4542,7 @@ run_test 94 "signal vs CP callback race"
 # Data-on-MDT tests
 test_100a() {
 	skip "Reserved for glimpse-ahead" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
@@ -4577,7 +4566,7 @@ test_100a() {
 run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
 
 test_100b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
@@ -4600,7 +4589,7 @@ test_100b() {
 run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
 
 test_100c() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
@@ -4623,7 +4612,7 @@ test_100c() {
 run_test 100c "DoM: write vs stat without IO lock (combined file)"
 
 test_100d() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
@@ -4648,7 +4637,7 @@ test_100d() {
 run_test 100d "DoM: write+truncate vs stat without IO lock (combined file)"
 
 test_100e() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
 		skip "Need MDS version at least 2.11.50"
 
 	local dom=$DIR/$tdir/dom
@@ -4670,8 +4659,8 @@ test_100e() {
 run_test 100e "DoM: read on open and file size"
 
 test_101a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55"
 
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
 	# to get layout
@@ -4695,8 +4684,8 @@ test_101a() {
 run_test 101a "Discard DoM data on unlink"
 
 test_101b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55"
 
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
 	touch $DIR1/${tfile}_2
@@ -4720,8 +4709,8 @@ test_101b() {
 run_test 101b "Discard DoM data on rename"
 
 test_101c() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55"
 
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
 	# to get layout
@@ -4754,7 +4743,7 @@ run_test 101c "Discard DoM data on close-unlink"
 # This test opens the file normally on $DIR1, which is on one mount, and then
 # opens it by handle on $DIR2, which is on a different mount.
 test_102() {
-	[ $MDS1_VERSION -lt $(version_code 2.11.57) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.57) ] &&
 		skip "Needs MDS version 2.11.57 or later"
 
 	echo "Test file_handle syscalls" > $DIR/$tfile ||
@@ -4768,7 +4757,7 @@ run_test 102 "Test open by handle of unlinked file"
 # Compare file size between first & second mount, ensuring the client correctly
 # glimpses even with unused speculative locks - LU-11670
 test_103() {
-	[ $(lustre_version_code $ost1) -lt $(version_code 2.10.50) ] &&
+	[ $OST1_VERSION -lt $(version_code 2.10.50) ] &&
 		skip "Lockahead needs OST version at least 2.10.50"
 
 	local testnum=23
