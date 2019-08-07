@@ -9,7 +9,7 @@ init_logging
 
 ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
 
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+if [ "$mds1_FSTYPE" = zfs ]; then
 	# bug number for skipped test: LU-11388
 	ALWAYS_EXCEPT+="               131b"
 	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
@@ -123,8 +123,8 @@ test_2c() {
 run_test 2c "setstripe replay"
 
 test_2d() {
-	[[ $mds1_FSTYPE = "zfs" ]] &&
-		[[ $MDS1_VERSION -lt $(version_code 2.12.51) ]] &&
+	[[ "$mds1_FSTYPE" = zfs ]] &&
+		[[ "$MDS1_VERSION" -lt $(version_code 2.12.51) ]] &&
 		skip "requires LU-10143 fix on MDS"
 	replay_barrier $SINGLEMDS
 	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir
@@ -1179,9 +1179,8 @@ run_test 50 "Double OSC recovery, don't LASSERT (3812)"
 
 # b3764 timed out lock replay
 test_52() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.90) ] &&
-		skip "MDS prior to 2.6.90 handle LDLM_REPLY_NET incorrectly" &&
-		return 0
+	[ "$MDS1_VERSION" -lt $(version_code 2.6.90) ] &&
+		skip "MDS prior to 2.6.90 handle LDLM_REPLY_NET incorrectly"
 
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 	cancel_lru_locks mdc
@@ -2394,8 +2393,8 @@ test_70f() {
 #	[ $CLIENTCOUNT -lt 2 ] &&
 #		{ skip "Need 2 or more clients, have $CLIENTCOUNT" && return; }
 
-	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.53) ]] &&
-		skip "Need server version at least 2.9.53" && return
+	[[ "$OST1_VERSION" -lt $(version_code 2.9.53) ]] &&
+		skip "Need server version at least 2.9.53"
 
 	echo "mount clients $CLIENTS ..."
 	zconf_mount_clients $CLIENTS $MOUNT
@@ -2640,14 +2639,13 @@ test_80b() {
 run_test 80b "DNE: create remote dir, drop update rep from MDT0, fail MDT1"
 
 test_80c() {
-	[[ $mds1_FSTYPE = "zfs" ]] &&
+	[[ "$mds1_FSTYPE" = zfs ]] &&
 		[[ $MDS1_VERSION -lt $(version_code 2.12.51) ]] &&
 		skip "requires LU-10143 fix on MDS"
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	([ $FAILURE_MODE == "HARD" ] &&
 		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
-		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
-		return 0
+		skip "MDTs needs to be on diff hosts for HARD fail mode"
 
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
@@ -2673,10 +2671,10 @@ test_80c() {
 run_test 80c "DNE: create remote dir, drop update rep from MDT1, fail MDT[0,1]"
 
 test_80d() {
-	[[ $mds1_FSTYPE = "zfs" ]] &&
+	[[ "$mds1_FSTYPE" = zfs ]] &&
 		[[ $MDS1_VERSION -lt $(version_code 2.12.51) ]] &&
 		skip "requires LU-10143 fix on MDS"
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
@@ -3427,11 +3425,10 @@ test_90() { # bug 19494
 run_test 90 "lfs find identifies the missing striped file segments"
 
 test_93a() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-		[[ $server_version -ge $(version_code 2.6.90) ]] ||
-		[[ $server_version -ge $(version_code 2.5.4) &&
-		   $server_version -lt $(version_code 2.5.50) ]] ||
-		{ skip "Need MDS version 2.5.4+ or 2.6.90+"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.6.90) ]] ||
+		[[ "$MDS1_VERSION" -ge $(version_code 2.5.4) &&
+		   "$MDS1_VERSION" -lt $(version_code 2.5.50) ]] ||
+		skip "Need MDS version 2.5.4+ or 2.6.90+"
 
 	cancel_lru_locks osc
 
@@ -3451,9 +3448,8 @@ test_93a() {
 run_test 93a "replay + reconnect"
 
 test_93b() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-		[[ $server_version -ge $(version_code 2.7.90) ]] ||
-		{ skip "Need MDS version 2.7.90+"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.90) ]] ||
+		skip "Need MDS version 2.7.90+"
 
 	cancel_lru_locks mdc
 
@@ -3783,10 +3779,9 @@ test_102d() {
 run_test 102d "check replay & reconstruction with multiple mod RPCs in flight"
 
 test_103() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	local mds_version=$(lustre_version_code $SINGLEMDS)
-	[[ $mds_version -gt $(version_code 2.8.54) ]] ||
-		{ skip "Need MDS version 2.8.54+"; return; }
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ "$MDS1_VERSION" -gt $(version_code 2.8.54) ]] ||
+		skip "Need MDS version 2.8.54+"
 
 #define OBD_FAIL_MDS_TRACK_OVERFLOW 0x162
 	do_facet mds1 $LCTL set_param fail_loc=0x80000162
@@ -3814,7 +3809,7 @@ check_striped_dir_110()
 
 test_110a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -3836,7 +3831,7 @@ run_test 110a "DNE: create striped dir, fail MDT1"
 
 test_110b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -3862,7 +3857,7 @@ run_test 110b "DNE: create striped dir, fail MDT1 and client"
 
 test_110c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -3885,7 +3880,7 @@ run_test 110c "DNE: create striped dir, fail MDT2"
 
 test_110d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -3911,7 +3906,7 @@ run_test 110d "DNE: create striped dir, fail MDT2 and client"
 
 test_110e() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -3938,7 +3933,7 @@ run_test 110e "DNE: create striped dir, uncommit on MDT2, fail client/MDT1/MDT2"
 
 test_110f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -3962,7 +3957,7 @@ run_test 110f "DNE: create striped dir, fail MDT1/MDT2"
 
 test_110g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -3989,7 +3984,7 @@ run_test 110g "DNE: create striped dir, uncommit on MDT1, fail client/MDT1/MDT2"
 
 test_111a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4011,7 +4006,7 @@ run_test 111a "DNE: unlink striped dir, fail MDT1"
 
 test_111b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4036,7 +4031,7 @@ run_test 111b "DNE: unlink striped dir, fail MDT2"
 
 test_111c() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4061,7 +4056,7 @@ run_test 111c "DNE: unlink striped dir, uncommit on MDT1, fail client/MDT1/MDT2"
 
 test_111d() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4087,7 +4082,7 @@ run_test 111d "DNE: unlink striped dir, uncommit on MDT2, fail client/MDT1/MDT2"
 
 test_111e() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4109,7 +4104,7 @@ run_test 111e "DNE: unlink striped dir, uncommit on MDT2, fail MDT1/MDT2"
 
 test_111f() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4131,7 +4126,7 @@ run_test 111f "DNE: unlink striped dir, uncommit on MDT1, fail MDT1/MDT2"
 
 test_111g() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4176,7 +4171,7 @@ test_112_check() {
 
 test_112a() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4198,7 +4193,7 @@ run_test 112a "DNE: cross MDT rename, fail MDT1"
 
 test_112b() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4221,7 +4216,7 @@ run_test 112b "DNE: cross MDT rename, fail MDT2"
 
 test_112c() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4244,7 +4239,7 @@ run_test 112c "DNE: cross MDT rename, fail MDT3"
 
 test_112d() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4267,7 +4262,7 @@ run_test 112d "DNE: cross MDT rename, fail MDT4"
 
 test_112e() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4291,7 +4286,7 @@ run_test 112e "DNE: cross MDT rename, fail MDT1 and MDT2"
 
 test_112f() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4315,7 +4310,7 @@ run_test 112f "DNE: cross MDT rename, fail MDT1 and MDT3"
 
 test_112g() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4339,7 +4334,7 @@ run_test 112g "DNE: cross MDT rename, fail MDT1 and MDT4"
 
 test_112h() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4363,7 +4358,7 @@ run_test 112h "DNE: cross MDT rename, fail MDT2 and MDT3"
 
 test_112i() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4387,7 +4382,7 @@ run_test 112i "DNE: cross MDT rename, fail MDT2 and MDT4"
 
 test_112j() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4411,7 +4406,7 @@ run_test 112j "DNE: cross MDT rename, fail MDT3 and MDT4"
 
 test_112k() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4436,7 +4431,7 @@ run_test 112k "DNE: cross MDT rename, fail MDT1,MDT2,MDT3"
 
 test_112l() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4461,7 +4456,7 @@ run_test 112l "DNE: cross MDT rename, fail MDT1,MDT2,MDT4"
 
 test_112m() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4486,7 +4481,7 @@ run_test 112m "DNE: cross MDT rename, fail MDT1,MDT3,MDT4"
 
 test_112n() {
 	[ $MDSCOUNT -lt 4 ] && skip "needs >= 4 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4511,7 +4506,7 @@ run_test 112n "DNE: cross MDT rename, fail MDT2,MDT3,MDT4"
 
 test_115() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
 		skip "Need MDS version at least 2.7.56"
 
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4546,7 +4541,7 @@ run_test 115 "failover for create/unlink striped directory"
 
 test_116a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.55) ] &&
 		skip "Do not support large update log before 2.7.55" &&
 		return 0
 	([ $FAILURE_MODE == "HARD" ] &&
@@ -4570,7 +4565,7 @@ run_test 116a "large update log master MDT recovery"
 
 test_116b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.55) ] &&
 		skip "Do not support large update log before 2.7.55" &&
 		return 0
 
@@ -4631,7 +4626,7 @@ run_test 117 "DNE: cross MDT unlink, fail MDT1 and MDT2"
 
 test_118() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.64) ] &&
 		skip "Do not support large update log before 2.7.64" &&
 		return 0
 
@@ -4660,7 +4655,7 @@ run_test 118 "invalidate osp update will not cause update log corruption"
 
 test_119() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.64) ] &&
 		skip "Do not support large update log before 2.7.64" &&
 		return 0
 	local stripe_count
@@ -4712,7 +4707,7 @@ run_test 119 "timeout of normal replay does not cause DNE replay fails  "
 
 test_120() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.7.64) ] &&
 		skip "Do not support large update log before 2.7.64" &&
 		return 0
 
@@ -4745,7 +4740,7 @@ test_120() {
 run_test 120 "DNE fail abort should stop both normal and DNE replay"
 
 test_121() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.90) ] &&
 		skip "Don't support it before 2.11" &&
 		return 0
 
@@ -4782,7 +4777,7 @@ test_121() {
 run_test 121 "lock replay timed out and race"
 
 test_130a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.90) ] &&
 		skip "Do not support Data-on-MDT before 2.11"
 
 	replay_barrier $SINGLEMDS
@@ -4795,7 +4790,7 @@ test_130a() {
 run_test 130a "DoM file create (setstripe) replay"
 
 test_130b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.90) ] &&
 		skip "Do not support Data-on-MDT before 2.11"
 
 	mkdir $DIR/$tdir
@@ -4810,7 +4805,7 @@ test_130b() {
 run_test 130b "DoM file create (inherited) replay"
 
 test_131a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.90) ] &&
 		skip "Do not support Data-on-MDT before 2.11"
 
 	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
@@ -4825,7 +4820,7 @@ test_131a() {
 run_test 131a "DoM file write lock replay"
 
 test_131b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.90) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.90) ] &&
 		skip "Do not support Data-on-MDT before 2.11"
 
 	$LFS setstripe -E 1M -L mdt -E EOF -c 2 $DIR/$tfile
@@ -4841,7 +4836,7 @@ test_131b() {
 run_test 131b "DoM file write replay"
 
 test_132a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.90) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.9.90) ] &&
 		skip "Do not support PFL files before 2.10"
 
 	$LFS setstripe -E 1M -c 1 -E EOF -c 2 $DIR/$tfile
