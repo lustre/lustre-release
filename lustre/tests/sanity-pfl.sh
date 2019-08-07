@@ -1053,6 +1053,7 @@ test_19b() {
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
+	local comp_dir=$DIR/$tdir/$tdir
 	local flg_opts=""
 	local found=""
 
@@ -1060,15 +1061,24 @@ test_19b() {
 	$LFS setstripe --ext-size 64M -c 1 -E -1 $DIR/$tdir ||
 		error "Setstripe on $DIR/$tdir failed"
 
+	# check inheritance for a sub-dir and a file
+	test_mkdir $comp_dir
+	found=$($LFS find --comp-start 0 -E 64M $comp_dir | wc -l)
+	[ $found -eq 1 ] || error "Dir Inheritance: wrong first component size"
+
+	flg_opts="--comp-flags extension"
+	found=$($LFS find --comp-start 64M -E EOF $flg_opts $comp_dir | wc -l)
+	[ $found -eq 1 ] || error "Dir Inheritance: Second component not found"
+
 	touch $comp_file
 
 	flg_opts="--comp-flags init"
 	found=$($LFS find --comp-start 0 -E 64M $flg_opts $comp_file | wc -l)
-	[ $found -eq 1 ] || error "Inheritance: wrong first component size"
+	[ $found -eq 1 ] || error "File Inheritance: wrong first component size"
 
 	flg_opts="--comp-flags extension"
 	found=$($LFS find --comp-start 64M -E EOF $flg_opts $comp_file | wc -l)
-	[ $found -eq 1 ] || error "Inheritance: Second component not found"
+	[ $found -eq 1 ] || error "File Inheritance: Second component not found"
 
 	test19_io_base $comp_file 1
 }

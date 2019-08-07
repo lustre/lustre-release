@@ -1013,7 +1013,7 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		if (lod_comp->llc_flags & LCME_FL_NOSYNC)
 			lcme->lcme_timestamp =
 				cpu_to_le64(lod_comp->llc_timestamp);
-		if (lod_comp->llc_flags & LCME_FL_EXTENSION)
+		if (lod_comp->llc_flags & LCME_FL_EXTENSION && !is_dir)
 			lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_SEL);
 
 		lcme->lcme_extent.e_start =
@@ -1345,6 +1345,18 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				le32_to_cpu(comp_v1->lcm_entries[i].lcme_id);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -EINVAL);
+
+			if (comp_v1->lcm_entries[i].lcme_flags &
+			    cpu_to_le32(LCME_FL_EXTENSION) &&
+			    magic != LOV_MAGIC_SEL) {
+				struct lod_device *d =
+					lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+
+				CDEBUG(D_WARNING, "%s: not SEL magic on SEL "
+				       "file "DFID": %x\n",
+				       lod2obd(d)->obd_name,
+				       PFID(lod_object_fid(lo)), magic);
+			}
 		} else {
 			lod_comp_set_init(lod_comp);
 		}
