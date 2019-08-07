@@ -173,8 +173,8 @@ test_10b() {
 	local before=$(date +%s)
 	local evict
 
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.53) ]] &&
-		skip "Need MDS version at least 2.6.53" && return
+	[[ "$MDS1_VERSION" -lt $(version_code 2.6.53) ]] &&
+		skip "Need MDS version at least 2.6.53"
 	do_facet client "stat $DIR > /dev/null"  ||
 		error "failed to stat $DIR: $?"
 	drop_bl_callback_once "chmod 0777 $DIR" ||
@@ -245,8 +245,8 @@ test_10d() {
 	local before=$(date +%s)
 	local evict
 
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.90) ]] &&
-		skip "Need MDS version at least 2.6.90" && return
+	[[ "$MDS1_VERSION" -lt $(version_code 2.6.90) ]] &&
+		skip "Need MDS version at least 2.6.90"
 
 	# sleep 1 is to make sure that BEFORE is not equal to EVICTED below
 	sleep 1
@@ -286,11 +286,11 @@ run_test 10d "test failed blocking ast"
 
 test_10e()
 {
-	[[ $(lustre_version_code ost1) -le $(version_code 2.8.58) ]] &&
-		skip "Need OST version at least 2.8.59" && return 0
-	[ $CLIENTCOUNT -lt 2 ] && skip "need two clients" && return 0
+	[[ "$OST1_VERSION" -le $(version_code 2.8.58) ]] &&
+		skip "Need OST version at least 2.8.59"
+	[ $CLIENTCOUNT -lt 2 ] && skip "need two clients"
 	[ $(facet_host client) == $(facet_host ost1) ] &&
-		skip "need ost1 and client on different nodes" && return 0
+		skip "need ost1 and client on different nodes"
 	local -a clients=(${CLIENTS//,/ })
 	local client1=${clients[0]}
 	local client2=${clients[1]}
@@ -1325,7 +1325,7 @@ test_55() {
 	# Minimum pass speed is 2MBps
 	local ddtimeout=64
 	# LU-2887/LU-3089 - set min pass speed to 500KBps
-	[ "$(facet_fstype ost1)" = "zfs" ] && ddtimeout=256
+	[ "$ost1_FSTYPE" = zfs ] && ddtimeout=256
 
 	# first dd should be finished quickly
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile-1
@@ -1565,8 +1565,8 @@ run_test 65 "lock enqueue for destroyed export"
 
 test_66()
 {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.51) ]] ||
-		{ skip "Need MDS version at least 2.7.51"; return 0; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.51) ]] ||
+		skip "Need MDS version at least 2.7.51"
 
 	local list=$(comma_list $(osts_nodes))
 
@@ -1967,8 +1967,8 @@ cleanup_106() {
 }
 
 test_106() { # LU-1789
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.50) ]] ||
-		{ skip "Need MDS version at least 2.3.50"; return 0; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.50) ]] ||
+		skip "Need MDS version at least 2.3.50"
 
 #define OBD_FAIL_MDC_LIGHTWEIGHT         0x805
 	$LCTL set_param fail_loc=0x805
@@ -2149,10 +2149,10 @@ test_110f () {
 run_test 110f "remove remote directory: drop slave rep"
 
 test_110g () {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.11.0) ]] ||
-		{ skip "Need MDS version at least 2.11.0"; return 0; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.11.0) ]] ||
+		skip "Need MDS version at least 2.11.0"
 
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
 
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/$tfile
@@ -2176,10 +2176,9 @@ test_110g () {
 run_test 110g "drop reply during migration"
 
 test_110h () {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	local server_version=$(lustre_version_code mds1)
-	[[ $server_version -ge $(version_code 2.7.56) ]] ||
-		{ skip "Need MDS version at least 2.7.56"; return 0; }
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
 
 	local src_dir=$DIR/$tdir/source_dir
 	local tgt_dir=$DIR/$tdir/target_dir
@@ -2204,10 +2203,9 @@ test_110h () {
 run_test 110h "drop update reply during cross-MDT file rename"
 
 test_110i () {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	local server_version=$(lustre_version_code mds1)
-	[[ $server_version -ge $(version_code 2.7.56) ]] ||
-		{ skip "Need MDS version at least 2.7.56"; return 0; }
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
 
 	local src_dir=$DIR/$tdir/source_dir
 	local tgt_dir=$DIR/$tdir/target_dir
@@ -2235,10 +2233,9 @@ test_110i () {
 run_test 110i "drop update reply during cross-MDT dir rename"
 
 test_110j () {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	local server_version=$(lustre_version_code mds1)
-	[[ $server_version -ge $(version_code 2.7.56) ]] ||
-		{ skip "Need MDS version at least 2.7.56"; return 0; }
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.56) ]] ||
+		skip "Need MDS version at least 2.7.56"
 
 	local remote_dir=$DIR/$tdir/remote_dir
 	local local_dir=$DIR/$tdir/local_dir
@@ -2260,8 +2257,8 @@ run_test 110j "drop update reply during cross-MDT ln"
 
 test_110k() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTS"
-	[[ $MDS1_VERSION -ge $(version_code 2.12.55) ]] ||
-		{ skip "Need MDS version at least 2.12.55"; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.12.55) ]] ||
+		skip "Need MDS version at least 2.12.55"
 
 	stop mds2 || error "stop mds2 failed"
 	umount $MOUNT
@@ -2283,8 +2280,8 @@ run_test 110k "FID_QUERY failed during recovery"
 # LU-2844 mdt prepare fail should not cause umount oops
 test_111 ()
 {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.62) ]] ||
-		{ skip "Need MDS version at least 2.3.62"; return 0; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.62) ]] ||
+		skip "Need MDS version at least 2.3.62"
 
 #define OBD_FAIL_MDS_CHANGELOG_INIT 0x151
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x151
@@ -2363,8 +2360,8 @@ test_115_write() {
 }
 
 test_115a() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
-		skip "need at least 2.8.50 on OST" && return 0
+	[ "$OST1_VERSION" -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST"
 
 	#define OBD_FAIL_PTLRPC_LONG_REQ_UNLINK  0x51b
 	#define OBD_FAIL_PTLRPC_DROP_BULK	 0x51a
@@ -2373,8 +2370,8 @@ test_115a() {
 run_test 115a "read: late REQ MDunlink and no bulk"
 
 test_115b() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
-		skip "need at least 2.8.50 on OST" && return 0
+	[ "$OST1_VERSION" -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST"
 
 	#define OBD_FAIL_PTLRPC_LONG_REQ_UNLINK  0x51b
 	#define OBD_FAIL_OST_ENOSPC              0x215
@@ -2386,8 +2383,8 @@ test_115b() {
 run_test 115b "write: late REQ MDunlink and no bulk"
 
 test_115c() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
-		skip "need at least 2.8.50 on OST" && return 0
+	[ "$OST1_VERSION" -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST"
 
 	#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
 	#define OBD_FAIL_PTLRPC_DROP_BULK	 0x51a
@@ -2396,8 +2393,8 @@ test_115c() {
 run_test 115c "read: late Reply MDunlink and no bulk"
 
 test_115d() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
-		skip "need at least 2.8.50 on OST" && return 0
+	[ "$OST1_VERSION" -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST"
 
 	#define OBD_FAIL_PTLRPC_LONG_REPL_UNLINK 0x50f
 	#define OBD_FAIL_OST_ENOSPC              0x215
@@ -2406,8 +2403,8 @@ test_115d() {
 run_test 115d "write: late Reply MDunlink and no bulk"
 
 test_115e() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
-		skip "need at least 2.8.50 on OST" && return 0
+	[ "$OST1_VERSION" -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST"
 
 	#define OBD_FAIL_PTLRPC_LONG_BULK_UNLINK 0x510
 	#define OBD_FAIL_OST_ALL_REPLY_NET       0x211
@@ -2416,8 +2413,8 @@ test_115e() {
 run_test 115e "read: late Bulk MDunlink and no reply"
 
 test_115f() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
-		skip "need at least 2.8.50 on OST" && return 0
+	[ "$OST1_VERSION" -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST"
 
 	#define OBD_FAIL_PTLRPC_LONG_REQ_UNLINK  0x51b
 	#define OBD_FAIL_OST_ALL_REPLY_NET       0x211
@@ -2426,8 +2423,8 @@ test_115f() {
 run_test 115f "read: late REQ MDunlink and no reply"
 
 test_115g() {
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.50) ] &&
-		skip "need at least 2.8.50 on OST" && return 0
+	[ "$OST1_VERSION" -lt $(version_code 2.8.50) ] &&
+		skip "need at least 2.8.50 on OST"
 
 	#define OBD_FAIL_PTLRPC_LONG_BOTH_UNLINK 0x51c
 	test_115_read 0x8000051c 0
@@ -2600,10 +2597,9 @@ test_130_base() {
 }
 
 test_130a() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	local server_version=$(lustre_version_code $SINGLEMDS)
-	[[ $server_version -ge $(version_code 2.7.2) ]] ||
-		{ skip "Need server version newer than 2.7.1"; return 0; }
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.2) ]] ||
+		skip "Need server version newer than 2.7.1"
 
 	test_130_base
 
@@ -2613,10 +2609,9 @@ test_130a() {
 run_test 130a "enqueue resend on not existing file"
 
 test_130b() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	local server_version=$(lustre_version_code $SINGLEMDS)
-	[[ $server_version -ge $(version_code 2.7.2) ]] ||
-		{ skip "Need server version newer than 2.7.1"; return 0; }
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ "$MDS1_VERSION" -ge $(version_code 2.7.2) ]] ||
+		skip "Need server version newer than 2.7.1"
 
 	test_130_base
 	# let the reply to be dropped
@@ -2783,7 +2778,7 @@ test_134() {
 run_test 134 "race between failover and search for reply data free slot"
 
 test_135() {
-	[ $MDS1_VERSION -lt $(version_code 2.12.51) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.12.51) ] &&
 		skip "Need MDS version at least 2.12.51"
 
 	mkdir -p $DIR/$tdir
@@ -2798,8 +2793,8 @@ test_135() {
 run_test 135 "DOM: open/create resend to return size"
 
 test_136() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[[ $MDS1_VERSION -ge $(version_code 2.12.52) ]] ||
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ "$MDS1_VERSION" -ge $(version_code 2.12.52) ]] ||
 		skip "Need MDS version at least 2.12.52"
 
 	local mdts=$(comma_list $(mdts_nodes))
