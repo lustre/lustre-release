@@ -359,7 +359,8 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 		    struct ra_io_arg *ria, pgoff_t *ra_end)
 {
 	struct cl_read_ahead ra = { 0 };
-	int rc = 0, count = 0;
+	/* busy page count is per stride */
+	int rc = 0, count = 0, busy_page_count = 0;
 	pgoff_t page_idx;
 
 	LASSERT(ria != NULL);
@@ -412,8 +413,20 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 
 			/* If the page is inside the read-ahead window */
 			rc = ll_read_ahead_page(env, io, queue, page_idx);
-			if (rc < 0)
+			if (rc < 0 && rc != -EBUSY)
 				break;
+			if (rc == -EBUSY) {
+				busy_page_count++;
+				CDEBUG(D_READA,
+				       "skip busy page: %lu\n", page_idx);
+				/* For page unaligned readahead the first
+				 * last pages of each region can be read by
+				 * another reader on the same node, and so
+				 * may be busy. So only stop for > 2 busy
+				 * pages. */
+				if (busy_page_count > 2)
+					break;
+			}
 
 			*ra_end = page_idx;
 			/* Only subtract from reserve & count the page if we
@@ -436,6 +449,7 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 				pos += (ria->ria_length - offset);
 				if ((pos >> PAGE_SHIFT) >= page_idx + 1)
 					page_idx = (pos >> PAGE_SHIFT) - 1;
+				busy_page_count = 0;
 				CDEBUG(D_READA,
 				       "Stride: jump %llu pages to %lu\n",
 				       ria->ria_length - offset, page_idx);
