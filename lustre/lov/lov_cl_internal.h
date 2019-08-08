@@ -437,8 +437,6 @@ struct lov_lock {
 
 struct lov_page {
 	struct cl_page_slice	lps_cl;
-	/** layout_entry + stripe index, composed using lov_comp_index() */
-	unsigned int		lps_index;
 	/* the layout gen when this page was created */
 	__u32			lps_layout_gen;
 };

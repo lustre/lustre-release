@@ -191,19 +191,6 @@ out:
  * Lov io operations.
  *
  */
-
-int lov_page_index(const struct cl_page *page)
-{
-	const struct cl_page_slice *slice;
-	ENTRY;
-
-	slice = cl_page_at(page, &lov_device_type);
-	LASSERT(slice != NULL);
-	LASSERT(slice->cpl_obj != NULL);
-
-	RETURN(cl2lov_page(slice)->lps_index);
-}
-
 static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
                              struct cl_io *io)
 {
@@ -1137,10 +1124,10 @@ static int lov_io_submit(const struct lu_env *env,
 		cl_2queue_init(cl2q);
 		cl_page_list_move(&cl2q->c2_qin, qin, page);
 
-		index = lov_page_index(page);
+		index = page->cp_lov_index;
 		cl_page_list_for_each_safe(page, tmp, qin) {
 			/* this page is not on this stripe */
-			if (index != lov_page_index(page))
+			if (index != page->cp_lov_index)
 				continue;
 
 			cl_page_list_move(&cl2q->c2_qin, qin, page);
@@ -1204,10 +1191,10 @@ static int lov_io_commit_async(const struct lu_env *env,
 
 		cl_page_list_move(plist, queue, page);
 
-		index = lov_page_index(page);
+		index = page->cp_lov_index;
 		while (queue->pl_nr > 0) {
 			page = cl_page_list_first(queue);
-			if (index != lov_page_index(page))
+			if (index != page->cp_lov_index)
 				break;
 
 			cl_page_list_move(plist, queue, page);
@@ -1253,7 +1240,7 @@ static int lov_io_fault_start(const struct lu_env *env,
 
 	fio = &ios->cis_io->u.ci_fault;
 	lio = cl2lov_io(env, ios);
-	sub = lov_sub_get(env, lio, lov_page_index(fio->ft_page));
+	sub = lov_sub_get(env, lio, fio->ft_page->cp_lov_index);
 	sub->sub_io.u.ci_fault.ft_nob = fio->ft_nob;
 
 	RETURN(lov_io_start(env, ios));

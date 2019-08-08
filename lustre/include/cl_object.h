@@ -763,6 +763,8 @@ struct cl_page {
 	struct lu_ref_link       cp_queue_ref;
 	/** Assigned if doing a sync_io */
 	struct cl_sync_io       *cp_sync_io;
+	/** layout_entry + stripe index, composed using lov_comp_index() */
+	unsigned int		cp_lov_index;
 };
 
 /**
