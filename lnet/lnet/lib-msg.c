@@ -391,8 +391,6 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 		msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
 		msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
-		/* NB: we probably want to use NID of msg::msg_from as 3rd
-		 * parameter (router NID) if it's routed message */
 		rc = lnet_send(msg->msg_ev.target.nid, msg, msg->msg_from);
 
 		lnet_net_lock(cpt);
