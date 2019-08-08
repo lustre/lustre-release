@@ -91,6 +91,8 @@ static int osc_io_read_ahead(const struct lu_env *env,
 				       dlmlock->l_policy_data.l_extent.end);
 		ra->cra_release = osc_read_ahead_release;
 		ra->cra_cbdata = dlmlock;
+		if (ra->cra_end != CL_PAGE_EOF)
+			ra->cra_contention = true;
 		result = 0;
 	}
 

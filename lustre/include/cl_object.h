@@ -1484,6 +1484,8 @@ struct cl_read_ahead {
 	void    (*cra_release)(const struct lu_env *env, void *cbdata);
 	/* Callback data for cra_release routine */
 	void	*cra_cbdata;
+	/* whether lock is in contention */
+	bool	cra_contention;
 };
 
 static inline void cl_read_ahead_release(const struct lu_env *env,
