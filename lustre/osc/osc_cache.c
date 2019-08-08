@@ -3056,17 +3056,25 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 					list_move_tail(&ext->oe_link, list);
 				unplug = true;
 			} else {
+				struct client_obd *cli = osc_cli(obj);
+				int pcc_bits = cli->cl_chunkbits - PAGE_SHIFT;
+				pgoff_t align_by = (1 << pcc_bits);
+				pgoff_t a_start = round_down(start, align_by);
+				pgoff_t a_end = round_up(end, align_by);
+
+				/* overflow case */
+				if (end && !a_end)
+					a_end = CL_PAGE_EOF;
 				/* the only discarder is lock cancelling, so
-				 * [start, end] must contain this extent.
-				 * However, with DOM, osc extent alignment may
-				 * cause the first extent to start before the
-				 * OST portion of the layout.  This is never
-				 * accessed for i/o, but the unused portion
-				 * will not be covered by the sync request,
-				 * so we cannot assert in that case. */
-				EASSERT(ergo(!(ext == first_extent(obj)),
-					ext->oe_start >= start &&
-					ext->oe_end <= end), ext);
+				 * [start, end], aligned by chunk size, must
+				 * contain this extent */
+				LASSERTF(ext->oe_start >= a_start &&
+					 ext->oe_end <= a_end,
+					 "ext [%lu, %lu] reg [%lu, %lu] "
+					 "orig [%lu %lu] align %lu bits "
+					 "%d\n", ext->oe_start, ext->oe_end,
+					 a_start, a_end, start, end,
+					 align_by, pcc_bits);
 				osc_extent_state_set(ext, OES_LOCKING);
 				ext->oe_owner = current;
 				list_move_tail(&ext->oe_link,
