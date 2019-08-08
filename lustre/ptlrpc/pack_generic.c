@@ -2361,25 +2361,51 @@ void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
 }
 EXPORT_SYMBOL(lustre_swab_lov_user_md_objects);
 
-void lustre_swab_lov_user_md(struct lov_user_md *lum)
+void lustre_swab_lov_user_md(struct lov_user_md *lum, size_t size)
 {
+	struct lov_user_md_v1 *v1;
+	struct lov_user_md_v3 *v3;
+	__u16 stripe_count;
 	ENTRY;
 
 	CDEBUG(D_IOCTL, "swabbing lov_user_md\n");
 	switch (lum->lmm_magic) {
 	case __swab32(LOV_MAGIC_V1):
 	case LOV_USER_MAGIC_V1:
-		lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lum);
+	{
+		v1 = (struct lov_user_md_v1 *)lum;
+		stripe_count = v1->lmm_stripe_count;
+
+		if (lum->lmm_magic != LOV_USER_MAGIC_V1)
+			__swab16s(&stripe_count);
+
+		lustre_swab_lov_user_md_v1(v1);
+		if (size > sizeof(*v1))
+			lustre_swab_lov_user_md_objects(v1->lmm_objects,
+							stripe_count);
+
 		break;
+	}
 	case __swab32(LOV_MAGIC_V3):
 	case LOV_USER_MAGIC_V3:
-		lustre_swab_lov_user_md_v3((struct lov_user_md_v3 *)lum);
+	{
+		v3 = (struct lov_user_md_v3 *)lum;
+		stripe_count = v3->lmm_stripe_count;
+
+		if (lum->lmm_magic != LOV_USER_MAGIC_V3)
+			__swab16s(&stripe_count);
+
+		lustre_swab_lov_user_md_v3(v3);
+		if (size > sizeof(*v3))
+			lustre_swab_lov_user_md_objects(v3->lmm_objects,
+							stripe_count);
 		break;
+	}
 	case __swab32(LOV_USER_MAGIC_SPECIFIC):
 	case LOV_USER_MAGIC_SPECIFIC:
 	{
-		struct lov_user_md_v3 *v3 = (struct lov_user_md_v3 *)lum;
-		__u16 stripe_count = v3->lmm_stripe_count;
+		v3 = (struct lov_user_md_v3 *)lum;
+		stripe_count = v3->lmm_stripe_count;
 
 		if (lum->lmm_magic != LOV_USER_MAGIC_SPECIFIC)
 			__swab16s(&stripe_count);

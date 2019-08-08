@@ -337,7 +337,7 @@ static int ll_xattr_set(const struct xattr_handler *handler,
 	if (strncmp(name, "lov.", 4) == 0 &&
 	    (__swab32(((struct lov_user_md *)value)->lmm_magic) &
 	    le32_to_cpu(LOV_MAGIC_MASK)) == le32_to_cpu(LOV_MAGIC_MAGIC))
-		lustre_swab_lov_user_md((struct lov_user_md *)value);
+		lustre_swab_lov_user_md((struct lov_user_md *)value, 0);
 
 	return ll_xattr_set_common(handler, dentry, inode, name, value, size,
 				   flags);
@@ -478,7 +478,6 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 		};
 		struct lu_env *env;
 		u16 refcheck;
-		u32 magic;
 
 		if (!obj)
 			RETURN(-ENODATA);
@@ -507,12 +506,12 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 		 * recognizing layout gen as stripe offset when the
 		 * file is restored. See LU-2809.
 		 */
-		magic = ((struct lov_mds_md *)buf)->lmm_magic;
-		if ((magic & __swab32(LOV_MAGIC_MAGIC)) ==
-		    __swab32(LOV_MAGIC_MAGIC))
-			magic = __swab32(magic);
+		if ((((struct lov_mds_md *)buf)->lmm_magic &
+		    __swab32(LOV_MAGIC_MAGIC)) == __swab32(LOV_MAGIC_MAGIC))
+			lustre_swab_lov_user_md((struct lov_user_md *)buf,
+						cl.cl_size);
 
-		switch (magic) {
+		switch (((struct lov_mds_md *)buf)->lmm_magic) {
 		case LOV_MAGIC_V1:
 		case LOV_MAGIC_V3:
 		case LOV_MAGIC_SPECIFIC:
@@ -521,7 +520,8 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 		case LOV_MAGIC_COMP_V1:
 			goto out_env;
 		default:
-			CERROR("Invalid LOV magic %08x\n", magic);
+			CERROR("Invalid LOV magic %08x\n",
+			       ((struct lov_mds_md *)buf)->lmm_magic);
 			GOTO(out_env, rc = -EINVAL);
 		}
 

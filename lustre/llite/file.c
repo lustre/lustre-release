@@ -1900,7 +1900,7 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
 	if ((__swab32(lum->lmm_magic) & le32_to_cpu(LOV_MAGIC_MASK)) ==
 	    le32_to_cpu(LOV_MAGIC_MAGIC)) {
 		/* this code will only exist for big-endian systems */
-		lustre_swab_lov_user_md(lum);
+		lustre_swab_lov_user_md(lum, 0);
 	}
 
 	ll_inode_size_lock(inode);
@@ -1982,7 +1982,7 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 				stripe_count = 0;
 		}
 
-		lustre_swab_lov_user_md((struct lov_user_md *)lmm);
+		lustre_swab_lov_user_md((struct lov_user_md *)lmm, 0);
 
 		/* if function called for directory - we should
 		 * avoid swab not existent lsm objects */
