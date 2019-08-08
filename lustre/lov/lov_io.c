@@ -1116,6 +1116,7 @@ static int lov_io_submit(const struct lu_env *env,
 	struct lov_io_sub	*sub;
 	struct cl_page_list	*plist = &lov_env_info(env)->lti_plist;
 	struct cl_page		*page;
+	struct cl_page		*tmp;
 	int index;
 	int rc = 0;
 	ENTRY;
@@ -1142,10 +1143,10 @@ static int lov_io_submit(const struct lu_env *env,
 		cl_page_list_move(&cl2q->c2_qin, qin, page);
 
 		index = lov_page_index(page);
-		while (qin->pl_nr > 0) {
-			page = cl_page_list_first(qin);
+		cl_page_list_for_each_safe(page, tmp, qin) {
+			/* this page is not on this stripe */
 			if (index != lov_page_index(page))
-				break;
+				continue;
 
 			cl_page_list_move(&cl2q->c2_qin, qin, page);
 		}
