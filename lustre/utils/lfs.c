@@ -3979,15 +3979,16 @@ static int lfs_find(int argc, char **argv)
 /* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
 /* getstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .name = NULL } };
-        int pathstart = -1;
-        int pathend = -1;
-        int neg_opt = 0;
-        time_t *xtime;
-        int *xsign;
-        int isoption;
-        char *endptr;
+	int pathstart = -1;
+	int pathend = -1;
+	int pathbad = -1;
+	int neg_opt = 0;
+	time_t *xtime;
+	int *xsign;
+	int isoption;
+	char *endptr;
 
-        time(&t);
+	time(&t);
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
@@ -4535,13 +4536,16 @@ err_free:
 
 	do {
 		rc = llapi_find(argv[pathstart], &param);
-		if (rc != 0 && ret == 0)
+		if (rc && !ret) {
 			ret = rc;
+			pathbad = pathstart;
+		}
 	} while (++pathstart < pathend);
 
-        if (ret)
-                fprintf(stderr, "error: %s failed for %s.\n",
-                        argv[0], argv[optind - 1]);
+	if (ret)
+		fprintf(stderr, "%s: failed for '%s': %s\n",
+			progname, argv[pathbad], strerror(-rc));
+
 err:
 	if (param.fp_obd_uuid && param.fp_num_alloc_obds)
 		free(param.fp_obd_uuid);
