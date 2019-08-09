@@ -1,0 +1,15 @@
+Index: linux-4.18.0-32.el8.x86_64/fs/ext4/xattr.c
+===================================================================
+--- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/xattr.c
++++ linux-4.18.0-32.el8.x86_64/fs/ext4/xattr.c
+@@ -655,10 +655,6 @@ enum {
+						   flags & XATTR_CREATE);
+		brelse(bh);
+
+-		if (!ext4_handle_has_enough_credits(handle, credits)) {
+-			error = -ENOSPC;
+-			goto cleanup;
+-		}
+	}
+
+	error = ext4_reserve_inode_write(handle, inode, &is.iloc);
