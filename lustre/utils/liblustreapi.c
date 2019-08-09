@@ -1261,6 +1261,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 	FILE *fp;
 	int idx = 0, len = 0, mntlen, fd;
 	int rc = -ENODEV;
+	int fsnamelen, mountlen;
 
         /* get the mount point */
 	fp = setmntent(PROC_MOUNTS, "r");
@@ -1294,18 +1295,20 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 			ptr_end++;
 
 		/* Check the fsname for a match, if given */
+		mountlen = ptr_end - ptr;
                 if (!(want & WANT_FSNAME) && fsname != NULL &&
-		    (strlen(fsname) > 0) &&
-		    (strncmp(ptr, fsname, ptr_end - ptr) != 0))
-                        continue;
+		    (fsnamelen = strlen(fsname)) > 0 &&
+		    (fsnamelen != mountlen ||
+		    (strncmp(ptr, fsname, mountlen) != 0)))
+		                        continue;
 
                 /* If the path isn't set return the first one we find */
 		if (path == NULL || strlen(path) == 0) {
 			strncpy(mntdir, mnt.mnt_dir, sizeof(mntdir) - 1);
 			mntdir[sizeof(mntdir) - 1] = '\0';
 			if ((want & WANT_FSNAME) && fsname != NULL) {
-				strncpy(fsname, ptr, ptr_end - ptr);
-				fsname[ptr_end - ptr] = '\0';
+				strncpy(fsname, ptr, mountlen);
+				fsname[mountlen] = '\0';
 			}
 			rc = 0;
 			break;
@@ -1316,8 +1319,8 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 			mntdir[sizeof(mntdir) - 1] = '\0';
 			len = mntlen;
 			if ((want & WANT_FSNAME) && fsname != NULL) {
-				strncpy(fsname, ptr, ptr_end - ptr);
-				fsname[ptr_end - ptr] = '\0';
+				strncpy(fsname, ptr, mountlen);
+				fsname[mountlen] = '\0';
 			}
 			rc = 0;
 		}
