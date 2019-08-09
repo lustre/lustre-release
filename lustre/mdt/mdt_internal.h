@@ -66,6 +66,8 @@ struct mdt_object;
 struct mdt_file_data {
 	/**  portals handle must be first */
 	struct portals_handle	mfd_open_handle;
+	/* export data of portals_handle */
+	const struct mdt_export_data	*mfd_owner;
 	/** open mode provided by client */
 	u64			mfd_open_flags;
 	/** protected by med_open_lock */

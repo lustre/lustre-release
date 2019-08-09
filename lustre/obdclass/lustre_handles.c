@@ -60,7 +60,7 @@ static struct handle_bucket {
  * global (per-node) hash-table.
  */
 void class_handle_hash(struct portals_handle *h,
-		       struct portals_handle_ops *ops)
+		       const struct portals_handle_ops *ops)
 {
 	struct handle_bucket *bucket;
 
@@ -135,7 +135,7 @@ void class_handle_unhash(struct portals_handle *h)
 }
 EXPORT_SYMBOL(class_handle_unhash);
 
-void *class_handle2object(__u64 cookie, const void *owner)
+void *class_handle2object(u64 cookie, const struct portals_handle_ops *ops)
 {
 	struct handle_bucket *bucket;
 	struct portals_handle *h;
@@ -153,7 +153,7 @@ void *class_handle2object(__u64 cookie, const void *owner)
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(h, &bucket->head, h_link) {
-		if (h->h_cookie != cookie || h->h_owner != owner)
+		if (h->h_cookie != cookie || h->h_ops != ops)
 			continue;
 
 		spin_lock(&h->h_lock);

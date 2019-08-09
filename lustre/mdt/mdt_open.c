@@ -49,7 +49,7 @@ static void mdt_mfd_get(void *mfdp)
 {
 }
 
-static struct portals_handle_ops mfd_open_handle_ops = {
+static const struct portals_handle_ops mfd_open_handle_ops = {
 	.hop_addref = mdt_mfd_get,
 	.hop_free   = NULL,
 };
@@ -64,7 +64,7 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 	OBD_ALLOC_PTR(mfd);
 	if (mfd != NULL) {
 		INIT_LIST_HEAD_RCU(&mfd->mfd_open_handle.h_link);
-		mfd->mfd_open_handle.h_owner = med;
+		mfd->mfd_owner = med;
 		INIT_LIST_HEAD(&mfd->mfd_list);
 		class_handle_hash(&mfd->mfd_open_handle, &mfd_open_handle_ops);
 	}
@@ -86,9 +86,9 @@ struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 	ENTRY;
 
 	LASSERT(open_handle != NULL);
-	mfd = class_handle2object(open_handle->cookie, med);
+	mfd = class_handle2object(open_handle->cookie, &mfd_open_handle_ops);
 	/* during dw/setattr replay the mfd can be found by old handle */
-	if (mfd == NULL && is_replay_or_resent) {
+	if ((!mfd || mfd->mfd_owner != med) && is_replay_or_resent) {
 		list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
 			if (mfd->mfd_open_handle_old.cookie ==
 			    open_handle->cookie)
