@@ -19,7 +19,7 @@ build_test_filter
 
 check_and_setup_lustre
 
-if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.51) ]]; then
+if [[ "$MDS1_VERSION" -lt $(version_code 2.9.51) ]]; then
 	skip_env "Need MDS version at least 2.9.51"
 fi
 
@@ -1038,8 +1038,8 @@ test19_io_base() {
 
 # Self-extending PFL tests
 test_19a() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	test19_io_base $DIR/$tdir/$tfile
@@ -1048,8 +1048,8 @@ run_test 19a "Simple test of extension behavior"
 
 # Same as 19a, but with default layout set on directory rather than on file
 test_19b() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1086,8 +1086,8 @@ run_test 19b "Simple test of SEL as default layout"
 
 # Test behavior when seeking deep in a file
 test_19c() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1149,8 +1149,8 @@ test_19c() {
 run_test 19c "Test self-extending layout seeking behavior"
 
 test_19d() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1203,8 +1203,8 @@ test_19e_check() {
 }
 
 test_19e() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1258,8 +1258,8 @@ test_19e() {
 run_test 19e "Replay of layout instantiation & extension"
 
 test_19f() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1276,8 +1276,8 @@ test_19f() {
 run_test 19f "Rejection of invalid layouts"
 
 test_19g() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local file1=$DIR/${tfile}-1
@@ -1353,8 +1353,8 @@ run_test 19g "component-add behaviour"
 
 # Test out of space behavior
 test_20a() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1405,8 +1405,8 @@ test_20a() {
 run_test 20a "Test out of space, spillover to defined component"
 
 test_20b() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1471,8 +1471,8 @@ test_20b() {
 run_test 20b "Remove component without instantiation when there is no space"
 
 test_20c() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1522,8 +1522,8 @@ test_20c() {
 run_test 20c "Test inability to stripe new extension component"
 
 test_20d() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1567,8 +1567,8 @@ test_20d() {
 run_test 20d "Low on space + 0-length comp: force extension"
 
 test_20e() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1607,7 +1607,7 @@ run_test 20e "ENOSPC with next real comp: spillover and backward extension"
 
 # Simple DoM interaction test
 test_21a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1638,8 +1638,8 @@ run_test 21a "Simple DoM interaction tests"
 
 # DoM + extension + removal
 test_21b() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1687,8 +1687,8 @@ run_test 21b "DoM followed by extendable component with removal"
 
 # Test of repeat component behavior with OOS/degraded OST
 test_22a() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1759,8 +1759,8 @@ run_test 22a "Test repeat component behavior with degraded OST"
 
 # Test repeat behavior with low space
 test_22b() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1815,8 +1815,8 @@ run_test 22b "Test simple 'out of space' condition with repeat"
 # This tests both "repeat" and "extend in place when repeat fails" aspects
 # of repeating components
 test_22c() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1941,8 +1941,8 @@ test_22d_pre() {
 }
 
 test_22d() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -1992,8 +1992,8 @@ test_22d() {
 run_test 22d "out of/low on space + failed to repeat + forced extension"
 
 test_23a() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2017,8 +2017,8 @@ test_23a() {
 run_test 23a "Append: remove EXT comp"
 
 test_23b() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2042,8 +2042,8 @@ test_23b() {
 run_test 23b "Append with 0-length comp: remove EXT comp"
 
 test_23c() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2076,8 +2076,8 @@ test_23c() {
 run_test 23c "Append with low on space + 0-length comp: force extension"
 
 test_23d() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2101,8 +2101,8 @@ test_23d() {
 run_test 23d "Append with 0-length comp + next real comp: remove EXT comp"
 
 test_23e() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2139,8 +2139,8 @@ test_23e() {
 run_test 23e "Append with next real comp: spillover and backward extension"
 
 test_23f() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile

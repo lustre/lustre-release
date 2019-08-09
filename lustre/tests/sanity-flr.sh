@@ -20,8 +20,8 @@ ALWAYS_EXCEPT+="                  201"
 
 build_test_filter
 
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-	{ skip "Need MDS version at least 2.10.56"; exit 0; }
+[[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
+	skip "Need MDS version at least 2.10.56"
 
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
@@ -2297,7 +2297,7 @@ run_test 203 "mirror file preserve mirror ID"
 
 # Simple test of FLR + self-extending layout, SEL in non-primary mirror
 test_204a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2344,7 +2344,7 @@ run_test 204a "FLR write/stale/resync tests with self-extending mirror"
 
 # Simple test of FLR + self-extending layout, SEL in primary mirror
 test_204b() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2414,8 +2414,8 @@ run_test 204b "FLR write/stale/resync tests with self-extending primary"
 # FLR + SEL failed extension & component removal
 # extension space in second mirror
 test_204c() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2477,8 +2477,8 @@ run_test 204c "FLR write/stale/resync test with component removal"
 
 # Successful repeated component in primary mirror
 test_204d() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VERSION"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2546,8 +2546,8 @@ run_test 204d "FLR write/stale/resync sel test with repeated comp"
 
 # Successful repeated component, SEL in non-primary mirror
 test_204e() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VERSION"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -2627,8 +2627,8 @@ run_test 204e "FLR write/stale/resync sel test with repeated comp"
 
 # FLR + SEL: failed repeated component, SEL in non-primary mirror
 test_204f() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VERSION"
 
 	local comp_file=$DIR/$tdir/$tfile
