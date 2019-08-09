@@ -1087,6 +1087,8 @@ int target_handle_connect(struct ptlrpc_request *req)
 
 	size = req_capsule_get_size(&req->rq_pill, &RMF_CONNECT_DATA,
 				    RCL_CLIENT);
+	if (size < 0 || size > 8 * sizeof(struct obd_connect_data))
+		GOTO(out, rc = -EPROTO);
 	data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
 	if (!data)
 		GOTO(out, rc = -EPROTO);
