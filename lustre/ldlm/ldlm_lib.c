@@ -1030,11 +1030,13 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         conn = *tmp;
 
-        size = req_capsule_get_size(&req->rq_pill, &RMF_CONNECT_DATA,
-                                    RCL_CLIENT);
-        data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
-        if (!data)
-                GOTO(out, rc = -EPROTO);
+	size = req_capsule_get_size(&req->rq_pill, &RMF_CONNECT_DATA,
+				    RCL_CLIENT);
+	if (size < 0 || size > 8 * sizeof(struct obd_connect_data))
+		GOTO(out, rc = -EPROTO);
+	data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
+	if (!data)
+		GOTO(out, rc = -EPROTO);
 
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
