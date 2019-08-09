@@ -1024,3 +1024,29 @@ void ldlm_extent_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 	wpolicy->l_extent.end = lpolicy->l_extent.end;
 	wpolicy->l_extent.gid = lpolicy->l_extent.gid;
 }
+struct cb {
+	void *arg;
+	bool (*found)(struct ldlm_lock *lock, void *arg);
+};
+
+static enum interval_iter itree_overlap_cb(struct interval_node *in, void *arg)
+{
+	struct cb *cb = arg;
+	struct ldlm_lock *lock = container_of(in, struct ldlm_lock,
+					      l_tree_node);
+
+	return cb->found(lock, cb->arg) ?
+		INTERVAL_ITER_STOP : INTERVAL_ITER_CONT;
+}
+
+void ldlm_extent_search(struct interval_node *root,
+			struct interval_node_extent *ext,
+			bool (*matches)(struct ldlm_lock *lock, void *data),
+			void *data)
+{
+	struct cb cb = {
+		.arg = data,
+		.found = matches,
+	};
+	interval_search(root, ext, itree_overlap_cb, &cb);
+}

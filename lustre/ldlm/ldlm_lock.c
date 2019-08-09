@@ -1187,8 +1187,9 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
  *
  * RETURN	returns true if @lock matches @data, false otherwise
  */
-static bool lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
+static bool lock_matches(struct ldlm_lock *lock, void *vdata)
 {
+	struct ldlm_match_data *data = vdata;
 	union ldlm_policy_data *lpol = &lock->l_policy_data;
 	enum ldlm_mode match = LCK_MINMODE;
 
@@ -1293,16 +1294,6 @@ matched:
 	return true;
 }
 
-static unsigned int itree_overlap_cb(struct interval_node *in, void *args)
-{
-	struct ldlm_lock *lock = container_of(in, struct ldlm_lock,
-					      l_tree_node);
-	struct ldlm_match_data *data = args;
-
-	return lock_matches(lock, data) ?
-		INTERVAL_ITER_STOP : INTERVAL_ITER_CONT;
-}
-
 /**
  * Search for a lock with given parameters in interval trees.
  *
@@ -1334,8 +1325,8 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 		if (!(tree->lit_mode & *data->lmd_mode))
 			continue;
 
-		interval_search(tree->lit_root, &ext,
-				itree_overlap_cb, data);
+		ldlm_extent_search(tree->lit_root, &ext,
+				   lock_matches, data);
 		if (data->lmd_lock)
 			return data->lmd_lock;
 	}
