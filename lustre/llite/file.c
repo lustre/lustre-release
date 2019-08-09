@@ -4229,6 +4229,7 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         }
         flock.l_flock.pid = file_lock->fl_pid;
 
+#if defined(HAVE_LM_COMPARE_OWNER) || defined(lm_compare_owner)
 	/* Somewhat ugly workaround for svc lockd.
 	 * lockd installs custom fl_lmops->lm_compare_owner that checks
 	 * for the fl_owner to be the same (which it always is on local node
@@ -4238,6 +4239,7 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	 * pointer space for current->files are not intersecting */
 	if (file_lock->fl_lmops && file_lock->fl_lmops->lm_compare_owner)
 		flock.l_flock.owner = (unsigned long)file_lock->fl_pid;
+#endif
 
 	switch (fl_type) {
         case F_RDLCK:

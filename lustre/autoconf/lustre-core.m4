@@ -478,7 +478,7 @@ lock_manager_ops_lm_xxx, [
 	#include <linux/fs.h>
 ],[
 	struct lock_manager_operations lm_ops;
-	lm_ops.lm_compare_owner = NULL;
+	lm_ops.lm_notify = NULL;
 ],[
 	AC_DEFINE(HAVE_LM_XXX_LOCK_MANAGER_OPS, 1,
 		[lock-manager ops renamed to lm_xxx])
@@ -2853,6 +2853,29 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_BIO_BI_PHYS_SEGMENTS
 
 #
+# LC_LM_COMPARE_OWNER_EXISTS
+#
+# kernel 5.3-rc3 commit f85d93385e9fe6886a751f647f6812a89bf6bee3
+# locks: Cleanup lm_compare_owner and lm_owner_key
+# removed lm_compare_owner
+#
+AC_DEFUN([LC_LM_COMPARE_OWNER_EXISTS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if lock_manager_operations has lm_compare_owner],
+lock_manager_ops_lm_compare_owner, [
+	#include <linux/fs.h>
+],[
+	struct lock_manager_operations lm_ops;
+	lm_ops.lm_compare_owner = NULL;
+],[
+	AC_DEFINE(HAVE_LM_COMPARE_OWNER, 1,
+		[lock_manager_operations has lm_compare_owner])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_LM_COMPARE_OWNER_EXISTS
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3082,6 +3105,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 5.3
 	LC_BIO_BI_PHYS_SEGMENTS
+	LC_LM_COMPARE_OWNER_EXISTS
 
 	# kernel patch to extend integrity interface
 	LC_BIO_INTEGRITY_PREP_FN
