@@ -1604,6 +1604,19 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 	*networksp = networks;
 	return count;
 }
+/*
+ * kernel 5.3: commit ef11db3310e272d3d8dbe8739e0770820dd20e52
+ * added in_dev_for_each_ifa_rtnl and in_dev_for_each_ifa_rcu
+ * and removed for_ifa and endfor_ifa.
+ * Use the _rntl variant as the current locking is rtnl.
+ */
+#ifdef in_dev_for_each_ifa_rtnl
+#define DECLARE_CONST_IN_IFADDR(ifa)		const struct in_ifaddr *ifa
+#define endfor_ifa(in_dev)
+#else
+#define DECLARE_CONST_IN_IFADDR(ifa)
+#define in_dev_for_each_ifa_rtnl(ifa, in_dev)	for_ifa((in_dev))
+#endif
 
 int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 {
@@ -1611,6 +1624,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 	struct net_device *dev;
 	int nalloc = 0;
 	int nip = 0;
+	DECLARE_CONST_IN_IFADDR(ifa);
 
 	rtnl_lock();
 	for_each_netdev(ns, dev) {
@@ -1638,7 +1652,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns)
 		node_id = dev_to_node(&dev->dev);
 		cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
 
-		for_ifa(in_dev) {
+		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
 			if (nip >= nalloc) {
 				struct lnet_inetdev *tmp;
 
