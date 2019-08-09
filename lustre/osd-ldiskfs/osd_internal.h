@@ -1534,4 +1534,10 @@ static inline bool bio_integrity_prep_fn(struct bio *bio,
 }
 #endif
 
+#ifdef HAVE_BIO_BI_PHYS_SEGMENTS
+#define osd_bio_nr_segs(bio)		((bio)->bi_phys_segments)
+#else
+#define osd_bio_nr_segs(bio)		bio_segments((bio))
+#endif /* HAVE_BIO_BI_PHYS_SEGMENTS */
+
 #endif /* _OSD_INTERNAL_H */
