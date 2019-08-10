@@ -2171,11 +2171,18 @@ struct lmv_mds_md_v1 {
 };
 
 #define LMV_DEBUG(mask, lmv, msg)					\
-	CDEBUG(mask, "%s LMV: magic %#x count %u index %u hash %#x version %u migrate offset %u migrate hash %u.\n",	\
+	CDEBUG(mask, "%s LMV: magic=%#x count=%u index=%u hash=%#x version=%u migrate offset=%u migrate hash=%u.\n",	\
 	       msg, (lmv)->lmv_magic, (lmv)->lmv_stripe_count,		\
 	       (lmv)->lmv_master_mdt_index, (lmv)->lmv_hash_type,	\
 	       (lmv)->lmv_layout_version, (lmv)->lmv_migrate_offset,	\
 	       (lmv)->lmv_migrate_hash)
+
+/* stripe count before directory split */
+#define lmv_split_offset	lmv_migrate_offset
+/* stripe count after directory merge */
+#define lmv_merge_offset	lmv_migrate_offset
+/* directory hash type after merge */
+#define lmv_merge_hash		lmv_migrate_hash
 
 /* foreign LMV EA */
 struct lmv_foreign_md {

@@ -765,6 +765,35 @@ static ssize_t enable_dir_migration_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(enable_dir_migration);
 
+static ssize_t enable_dir_restripe_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_dir_restripe);
+}
+
+static ssize_t enable_dir_restripe_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_dir_restripe = val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_dir_restripe);
+
 /**
  * Show MDT async commit count.
  *
@@ -1111,6 +1140,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_chprojid_gid.attr,
 	&lustre_attr_enable_striped_dir.attr,
 	&lustre_attr_enable_dir_migration.attr,
+	&lustre_attr_enable_dir_restripe.attr,
 	&lustre_attr_enable_remote_rename.attr,
 	&lustre_attr_commit_on_sharing.attr,
 	&lustre_attr_local_recovery.attr,

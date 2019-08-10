@@ -255,6 +255,7 @@ struct mdt_device {
 				   mdt_enable_remote_dir:1,
 				   mdt_enable_striped_dir:1,
 				   mdt_enable_dir_migration:1,
+				   mdt_enable_dir_restripe:1,
 				   mdt_enable_remote_rename:1,
 				   mdt_skip_lfsck:1,
 				   mdt_readonly:1;

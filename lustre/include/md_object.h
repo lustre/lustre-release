@@ -168,7 +168,8 @@ struct md_op_spec {
 		     sp_cr_lookup:1, /* do lookup sanity check or not. */
 		     sp_rm_entry:1,  /* only remove name entry */
 		     sp_permitted:1, /* do not check permission */
-		     sp_migrate_close:1; /* close the file during migrate */
+		     sp_migrate_close:1, /* close the file during migrate */
+		     sp_migrate_nsonly:1; /* migrate dirent only */
 	/** Current lock mode for parent dir where create is performing. */
 	mdl_mode_t sp_cr_mode;
 
@@ -181,9 +182,10 @@ enum md_layout_opc {
 	MD_LAYOUT_WRITE,	/* FLR: write the file */
 	MD_LAYOUT_RESYNC,	/* FLR: resync starts */
 	MD_LAYOUT_RESYNC_DONE,	/* FLR: resync done */
-	MD_LAYOUT_ATTACH,	/* attach stripes to target dir */
-	MD_LAYOUT_DETACH,	/* detach stripes from dir */
-	MD_LAYOUT_SHRINK,	/* shrink stripes (check empty and destroy) */
+	MD_LAYOUT_ATTACH,	/* attach stripes */
+	MD_LAYOUT_DETACH,	/* detach stripes */
+	MD_LAYOUT_SHRINK,	/* shrink striped directory (destroy stripes) */
+	MD_LAYOUT_SPLIT,	/* split directory (allocate new stripes) */
 	MD_LAYOUT_MAX,
 };
 
@@ -191,13 +193,24 @@ enum md_layout_opc {
  * Parameters for layout change API.
  */
 struct md_layout_change {
-	enum md_layout_opc	 mlc_opc;
-	__u16			 mlc_mirror_id;
-	struct layout_intent	*mlc_intent;
-	struct lu_buf		 mlc_buf;
-	struct lustre_som_attrs	 mlc_som;
-	size_t			 mlc_resync_count;
-	__u32			*mlc_resync_ids;
+	enum md_layout_opc			 mlc_opc;
+	struct lu_buf				 mlc_buf;
+	union {
+		struct {
+			__u16			 mlc_mirror_id;
+			struct layout_intent	*mlc_intent;
+			struct lustre_som_attrs	 mlc_som;
+			size_t			 mlc_resync_count;
+			__u32			*mlc_resync_ids;
+		}; /* file */
+		struct {
+			struct md_object	*mlc_parent;	/* parent obj in plain dir split */
+			struct md_object	*mlc_target;	/* target obj in plain dir split */
+			struct lu_attr		*mlc_attr;	/* target attr in plain dir split */
+			const struct lu_name	*mlc_name;	/* target name in plain dir split */
+			struct md_op_spec	*mlc_spec;	/* dir split spec */
+		}; /* dir */
+	};
 };
 
 union ldlm_policy_data;

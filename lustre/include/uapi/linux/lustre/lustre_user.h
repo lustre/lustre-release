@@ -1014,6 +1014,9 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 	       (type & LMV_HASH_TYPE_MASK) == LMV_HASH_TYPE_CRUSH;
 }
 
+#define LMV_HASH_FLAG_MERGE		0x04000000
+#define LMV_HASH_FLAG_SPLIT		0x08000000
+
 /* The striped directory has ever lost its master LMV EA, then LFSCK
  * re-generated it. This flag is used to indicate such case. It is an
  * on-disk flag. */
@@ -1022,7 +1025,39 @@ static inline bool lmv_is_known_hash_type(__u32 type)
 #define LMV_HASH_FLAG_BAD_TYPE		0x20000000
 #define LMV_HASH_FLAG_MIGRATION		0x80000000
 
-#define LMV_HASH_FLAG_LAYOUT_CHANGE	LMV_HASH_FLAG_MIGRATION
+#define LMV_HASH_FLAG_LAYOUT_CHANGE	\
+	(LMV_HASH_FLAG_MIGRATION | LMV_HASH_FLAG_SPLIT | LMV_HASH_FLAG_MERGE)
+
+/* both SPLIT and MIGRATION are set for directory split */
+static inline bool lmv_hash_is_splitting(__u32 hash)
+{
+	return (hash & LMV_HASH_FLAG_LAYOUT_CHANGE) ==
+	       (LMV_HASH_FLAG_SPLIT | LMV_HASH_FLAG_MIGRATION);
+}
+
+/* both MERGE and MIGRATION are set for directory merge */
+static inline bool lmv_hash_is_merging(__u32 hash)
+{
+	return (hash & LMV_HASH_FLAG_LAYOUT_CHANGE) ==
+	       (LMV_HASH_FLAG_MERGE | LMV_HASH_FLAG_MIGRATION);
+}
+
+/* only MIGRATION is set for directory migration */
+static inline bool lmv_hash_is_migrating(__u32 hash)
+{
+	return (hash & LMV_HASH_FLAG_LAYOUT_CHANGE) == LMV_HASH_FLAG_MIGRATION;
+}
+
+static inline bool lmv_hash_is_restriping(__u32 hash)
+{
+	return lmv_hash_is_splitting(hash) || lmv_hash_is_merging(hash);
+}
+
+static inline bool lmv_hash_is_layout_changing(__u32 hash)
+{
+	return lmv_hash_is_splitting(hash) || lmv_hash_is_merging(hash) ||
+	       lmv_hash_is_migrating(hash);
+}
 
 extern char *mdt_hash_name[LMV_HASH_TYPE_MAX];
 

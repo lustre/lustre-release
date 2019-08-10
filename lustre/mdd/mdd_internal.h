@@ -267,6 +267,9 @@ int mdd_lookup(const struct lu_env *env,
                struct lu_fid* fid, struct md_op_spec *spec);
 int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 		    struct linkea_data *ldata, struct thandle *handle);
+int mdd_links_read(const struct lu_env *env,
+		   struct mdd_object *mdd_obj,
+		   struct linkea_data *ldata);
 struct lu_buf *mdd_links_get(const struct lu_env *env,
                              struct mdd_object *mdd_obj);
 int mdd_links_rename(const struct lu_env *env,
@@ -281,6 +284,8 @@ int mdd_links_rename(const struct lu_env *env,
 int mdd_dir_layout_shrink(const struct lu_env *env,
 			  struct md_object *md_obj,
 			  struct md_layout_change *mlc);
+int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
+			 struct md_layout_change *mlc);
 
 int mdd_changelog_write_rec(const struct lu_env *env,
 			    struct llog_handle *loghandle,

@@ -979,7 +979,7 @@ static inline bool lfsck_name_hash_match(struct lmv_mds_md_v1 *lmv,
 	if (idx == lmv->lmv_master_mdt_index)
 		return true;
 
-	if (!(lmv->lmv_hash_type & LMV_HASH_FLAG_LAYOUT_CHANGE))
+	if (!lmv_hash_is_layout_changing(lmv->lmv_hash_type))
 		return false;
 
 	idx = lmv_name_to_stripe_index(lmv, name, namelen);

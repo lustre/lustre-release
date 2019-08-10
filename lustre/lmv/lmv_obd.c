@@ -1768,6 +1768,7 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 	struct obd_device *obd = exp->exp_obd;
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc *tgt;
+	struct mdt_body *repbody;
 	int rc;
 
 	ENTRY;
@@ -1794,19 +1795,7 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	if (lmv_op_qos_mkdir(op_data)) {
-		tgt = lmv_locate_tgt_qos(lmv, &op_data->op_mds);
-		if (tgt == ERR_PTR(-EAGAIN))
-			tgt = lmv_locate_tgt_rr(lmv, &op_data->op_mds);
-		/*
-		 * only update statfs after QoS mkdir, this means the cached
-		 * statfs may be stale, and current mkdir may not follow QoS
-		 * accurately, but it's not serious, and avoids periodic statfs
-		 * when client doesn't mkdir by QoS.
-		 */
-		if (!IS_ERR(tgt))
-			lmv_statfs_check_update(obd, tgt);
-	} else if (lmv_op_user_specific_mkdir(op_data)) {
+	if (lmv_op_user_specific_mkdir(op_data)) {
 		struct lmv_user_md *lum = op_data->op_data;
 
 		op_data->op_mds = le32_to_cpu(lum->lum_stripe_offset);
@@ -1819,11 +1808,22 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 		tgt = lmv_tgt(lmv, op_data->op_mds);
 		if (!tgt)
 			RETURN(-ENODEV);
+	} else if (lmv_op_qos_mkdir(op_data)) {
+		tgt = lmv_locate_tgt_qos(lmv, &op_data->op_mds);
+		if (tgt == ERR_PTR(-EAGAIN))
+			tgt = lmv_locate_tgt_rr(lmv, &op_data->op_mds);
+		if (IS_ERR(tgt))
+			RETURN(PTR_ERR(tgt));
+		/*
+		 * only update statfs after QoS mkdir, this means the cached
+		 * statfs may be stale, and current mkdir may not follow QoS
+		 * accurately, but it's not serious, and avoids periodic statfs
+		 * when client doesn't mkdir by QoS.
+		 */
+		lmv_statfs_check_update(obd, tgt);
 	}
 
-	if (IS_ERR(tgt))
-		RETURN(PTR_ERR(tgt));
-
+retry:
 	rc = lmv_fid_alloc(NULL, exp, &op_data->op_fid2, op_data);
 	if (rc)
 		RETURN(rc);
@@ -1841,7 +1841,30 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 			RETURN(rc);
 		CDEBUG(D_INODE, "Created - "DFID"\n", PFID(&op_data->op_fid2));
 	}
-	RETURN(rc);
+
+	/* dir restripe needs to send to MDT where dir is located */
+	if (rc != -EREMOTE ||
+	    !(exp_connect_flags2(exp) & OBD_CONNECT2_CRUSH))
+		RETURN(rc);
+
+	repbody = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_BODY);
+	if (repbody == NULL)
+		RETURN(-EPROTO);
+
+	/* Not cross-ref case, just get out of here. */
+	if (likely(!(repbody->mbo_valid & OBD_MD_MDS)))
+		RETURN(rc);
+
+	op_data->op_fid2 = repbody->mbo_fid1;
+	ptlrpc_req_finished(*request);
+	*request = NULL;
+
+	tgt = lmv_fid2tgt(lmv, &op_data->op_fid2);
+	if (IS_ERR(tgt))
+		RETURN(PTR_ERR(tgt));
+
+	op_data->op_mds = tgt->ltd_index;
+	goto retry;
 }
 
 static int

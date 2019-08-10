@@ -2949,6 +2949,9 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 		case MD_LAYOUT_SHRINK:
 			rc = mdd_dir_layout_shrink(env, o, mlc);
 			break;
+		case MD_LAYOUT_SPLIT:
+			rc = mdd_dir_layout_split(env, o, mlc);
+			break;
 		default:
 			LBUG();
 		}

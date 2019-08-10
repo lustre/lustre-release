@@ -45,6 +45,7 @@
 #include <obd_class.h>
 #include <lustre_nodemap.h>
 #include <lustre_acl.h>
+#include <lustre_lmv.h>
 #include "mdt_internal.h"
 
 
@@ -316,7 +317,7 @@ out:
 	return rc;
 }
 
-/* update dir layout after migration */
+/* update dir layout after migration/restripe */
 static int mdt_dir_layout_update(struct mdt_thread_info *info)
 {
 	const struct lu_env *env = info->mti_env;
@@ -333,6 +334,7 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 	struct mdt_object *obj;
 	struct mdt_lock_handle *lhp = NULL;
 	struct mdt_lock_handle *lhc;
+	bool shrink = false;
 	int rc;
 
 	ENTRY;
@@ -408,16 +410,18 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 		GOTO(unlock_obj, rc = -EALREADY);
 
 	lmv = &ma->ma_lmv->lmv_md_v1;
+	if (!lmv_is_sane(lmv))
+		GOTO(unlock_obj, rc = -EBADF);
 
 	/* ditto */
-	if (!(le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_FLAG_LAYOUT_CHANGE))
+	if (!lmv_is_layout_changing(lmv))
 		GOTO(unlock_obj, rc = -EALREADY);
 
 	lum_stripe_count = lmu->lum_stripe_count;
 	if (!lum_stripe_count)
 		lum_stripe_count = cpu_to_le32(1);
 
-	if ((le32_to_cpu(lmv->lmv_hash_type) & LMV_HASH_FLAG_MIGRATION)) {
+	if (lmv_is_migrating(lmv)) {
 		if (lmv->lmv_migrate_offset != lum_stripe_count) {
 			CERROR("%s: "DFID" migrate mdt count mismatch %u != %u\n",
 				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
@@ -434,19 +438,82 @@ static int mdt_dir_layout_update(struct mdt_thread_info *info)
 		}
 
 		if (lum_stripe_count > 1 && lmu->lum_hash_type &&
-		    (lmv->lmv_hash_type & ~cpu_to_le32(LMV_HASH_FLAG_MIGRATION))
-		    != lmu->lum_hash_type) {
+		    lmu->lum_hash_type !=
+		    (lmv->lmv_merge_hash & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
 			CERROR("%s: "DFID" migrate mdt hash mismatch %u != %u\n",
 				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
 				lmv->lmv_hash_type, lmu->lum_hash_type);
 			GOTO(unlock_obj, rc = -EINVAL);
 		}
+
+		shrink = true;
+	} else if (lmv_is_splitting(lmv)) {
+		if (lmv->lmv_stripe_count != lum_stripe_count) {
+			CERROR("%s: "DFID" stripe count mismatch %u != %u\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmv->lmv_stripe_count, lmu->lum_stripe_count);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
+
+		if (lmu->lum_stripe_offset != LMV_OFFSET_DEFAULT) {
+			CERROR("%s: "DFID" dir split offset %u != -1\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmu->lum_stripe_offset);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
+
+		if (lmu->lum_hash_type &&
+		    lmu->lum_hash_type !=
+		    (lmv->lmv_hash_type & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
+			CERROR("%s: "DFID" split hash mismatch %u != %u\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmv->lmv_hash_type, lmu->lum_hash_type);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
+	} else if (lmv_is_merging(lmv)) {
+		if (lmv->lmv_merge_offset != lum_stripe_count) {
+			CERROR("%s: "DFID" stripe count mismatch %u != %u\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmv->lmv_merge_offset, lmu->lum_stripe_count);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
+
+		if (lmu->lum_stripe_offset != LMV_OFFSET_DEFAULT) {
+			CERROR("%s: "DFID" dir split offset %u != -1\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmu->lum_stripe_offset);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
+
+		if (lmu->lum_hash_type &&
+		    lmu->lum_hash_type !=
+		    (lmv->lmv_merge_hash & cpu_to_le32(LMV_HASH_TYPE_MASK))) {
+			CERROR("%s: "DFID" split hash mismatch %u != %u\n",
+				mdt_obd_name(info->mti_mdt), PFID(rr->rr_fid1),
+				lmv->lmv_merge_hash, lmu->lum_hash_type);
+			GOTO(unlock_obj, rc = -EINVAL);
+		}
+
+		if (lum_stripe_count < lmv->lmv_stripe_count)
+			shrink = true;
 	}
 
-	mlc->mlc_opc = MD_LAYOUT_SHRINK;
-	mlc->mlc_buf.lb_buf = rr->rr_eadata;
-	mlc->mlc_buf.lb_len = rr->rr_eadatalen;
-	rc = mo_layout_change(env, mdt_object_child(obj), mlc);
+	if (shrink) {
+		mlc->mlc_opc = MD_LAYOUT_SHRINK;
+		mlc->mlc_buf.lb_buf = rr->rr_eadata;
+		mlc->mlc_buf.lb_len = rr->rr_eadatalen;
+		rc = mo_layout_change(env, mdt_object_child(obj), mlc);
+	} else {
+		struct lu_buf *buf = &info->mti_buf;
+		u32 version = le32_to_cpu(lmv->lmv_layout_version);
+
+		lmv->lmv_hash_type &= ~LMV_HASH_FLAG_LAYOUT_CHANGE;
+		lmv->lmv_layout_version = cpu_to_le32(++version);
+		buf->lb_buf = lmv;
+		buf->lb_len = sizeof(*lmv);
+		rc = mo_xattr_set(env, mdt_object_child(obj), buf,
+				  XATTR_NAME_LMV, LU_XATTR_REPLACE);
+	}
 	GOTO(unlock_obj, rc);
 
 unlock_obj:

@@ -266,6 +266,9 @@ struct lod_object {
 	};
 };
 
+#define ldo_dir_split_offset	ldo_dir_migrate_offset
+#define ldo_dir_split_hash	ldo_dir_migrate_hash
+
 #define lod_foreach_mirror_comp(comp, lo, mirror_idx)                      \
 for (comp = &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_start];  \
      comp <= &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_end];   \
@@ -277,6 +280,21 @@ static inline bool lod_is_flr(const struct lod_object *lo)
 		return false;
 
 	return (lo->ldo_flr_state & LCM_FL_FLR_MASK) != LCM_FL_NONE;
+}
+
+static inline bool lod_is_splitting(const struct lod_object *lo)
+{
+	return lmv_hash_is_splitting(lo->ldo_dir_hash_type);
+}
+
+static inline bool lod_is_migrating(const struct lod_object *lo)
+{
+	return lmv_hash_is_migrating(lo->ldo_dir_hash_type);
+}
+
+static inline bool lod_is_layout_changing(const struct lod_object *lo)
+{
+	return lmv_hash_is_layout_changing(lo->ldo_dir_hash_type);
 }
 
 static inline int lod_set_pool(char **pool, const char *new_pool)

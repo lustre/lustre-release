@@ -67,7 +67,7 @@ static inline bool lmv_dir_foreign(const struct lmv_stripe_md *lsm)
 static inline bool lmv_dir_layout_changing(const struct lmv_stripe_md *lsm)
 {
 	return lmv_dir_striped(lsm) &&
-	       (lsm->lsm_md_hash_type & LMV_HASH_FLAG_LAYOUT_CHANGE);
+	       lmv_hash_is_layout_changing(lsm->lsm_md_hash_type);
 }
 
 static inline bool lmv_dir_bad_hash(const struct lmv_stripe_md *lsm)
@@ -275,6 +275,15 @@ lmv_hash_crush(unsigned int count, const char *name, int namelen)
 	return idx;
 }
 
+/* directory layout may change in three ways:
+ * 1. directory migration, in its LMV source stripes are appended after
+ *    target stripes, \a migrate_hash is source hash type, \a migrate_offset is
+ *    target stripe count,
+ * 2. directory split, \a migrate_hash is hash type before split,
+ *    \a migrate_offset is stripe count before split.
+ * 3. directory merge, \a migrate_hash is hash type after merge,
+ *    \a migrate_offset is stripe count after merge.
+ */
 static inline int
 __lmv_name_to_stripe_index(__u32 hash_type, __u32 stripe_count,
 			   __u32 migrate_hash, __u32 migrate_offset,
@@ -287,7 +296,17 @@ __lmv_name_to_stripe_index(__u32 hash_type, __u32 stripe_count,
 	LASSERT(namelen > 0);
 	LASSERT(stripe_count > 0);
 
-	if (hash_type & LMV_HASH_FLAG_MIGRATION) {
+	if (lmv_hash_is_splitting(hash_type)) {
+		if (!new_layout) {
+			hash_type = migrate_hash;
+			stripe_count = migrate_offset;
+		}
+	} else if (lmv_hash_is_merging(hash_type)) {
+		if (new_layout) {
+			hash_type = migrate_hash;
+			stripe_count = migrate_offset;
+		}
+	} else if (lmv_hash_is_migrating(hash_type)) {
 		if (new_layout) {
 			stripe_count = migrate_offset;
 		} else {
@@ -317,12 +336,12 @@ __lmv_name_to_stripe_index(__u32 hash_type, __u32 stripe_count,
 
 	LASSERT(stripe_index < stripe_count);
 
-	if ((saved_hash & LMV_HASH_FLAG_MIGRATION) && !new_layout)
+	if (!new_layout && lmv_hash_is_migrating(saved_hash))
 		stripe_index += migrate_offset;
 
 	LASSERT(stripe_index < saved_count);
 
-	CDEBUG(D_INFO, "name %.*s hash %#x/%#x idx %d/%u/%u under %s layout\n",
+	CDEBUG(D_INFO, "name %.*s hash=%#x/%#x idx=%d/%u/%u under %s layout\n",
 	       namelen, name, saved_hash, migrate_hash, stripe_index,
 	       saved_count, migrate_offset, new_layout ? "new" : "old");
 
@@ -380,21 +399,80 @@ static inline bool lmv_user_magic_supported(__u32 lum_magic)
 	       lum_magic == LMV_MAGIC_FOREIGN;
 }
 
+/* master LMV is sane */
 static inline bool lmv_is_sane(const struct lmv_mds_md_v1 *lmv)
 {
+	if (!lmv)
+		return false;
+
 	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1)
 		goto insane;
 
 	if (le32_to_cpu(lmv->lmv_stripe_count) == 0)
 		goto insane;
 
-	if (!lmv_is_known_hash_type(lmv->lmv_hash_type))
+	if (!lmv_is_known_hash_type(le32_to_cpu(lmv->lmv_hash_type)))
 		goto insane;
 
 	return true;
 insane:
 	LMV_DEBUG(D_ERROR, lmv, "insane");
 	return false;
+}
+
+/* LMV can be either master or stripe LMV */
+static inline bool lmv_is_sane2(const struct lmv_mds_md_v1 *lmv)
+{
+	if (!lmv)
+		return false;
+
+	if (le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_V1 &&
+	    le32_to_cpu(lmv->lmv_magic) != LMV_MAGIC_STRIPE)
+		goto insane;
+
+	if (le32_to_cpu(lmv->lmv_stripe_count) == 0)
+		goto insane;
+
+	if (!lmv_is_known_hash_type(le32_to_cpu(lmv->lmv_hash_type)))
+		goto insane;
+
+	return true;
+insane:
+	LMV_DEBUG(D_ERROR, lmv, "insane");
+	return false;
+}
+
+static inline bool lmv_is_splitting(const struct lmv_mds_md_v1 *lmv)
+{
+	LASSERT(lmv_is_sane2(lmv));
+	return lmv_hash_is_splitting(cpu_to_le32(lmv->lmv_hash_type));
+}
+
+static inline bool lmv_is_merging(const struct lmv_mds_md_v1 *lmv)
+{
+	LASSERT(lmv_is_sane2(lmv));
+	return lmv_hash_is_merging(cpu_to_le32(lmv->lmv_hash_type));
+}
+
+static inline bool lmv_is_migrating(const struct lmv_mds_md_v1 *lmv)
+{
+	LASSERT(lmv_is_sane(lmv));
+	return lmv_hash_is_migrating(cpu_to_le32(lmv->lmv_hash_type));
+}
+
+static inline bool lmv_is_restriping(const struct lmv_mds_md_v1 *lmv)
+{
+	LASSERT(lmv_is_sane2(lmv));
+	return lmv_hash_is_splitting(cpu_to_le32(lmv->lmv_hash_type)) ||
+	       lmv_hash_is_merging(cpu_to_le32(lmv->lmv_hash_type));
+}
+
+static inline bool lmv_is_layout_changing(const struct lmv_mds_md_v1 *lmv)
+{
+	LASSERT(lmv_is_sane2(lmv));
+	return lmv_hash_is_splitting(cpu_to_le32(lmv->lmv_hash_type)) ||
+	       lmv_hash_is_merging(cpu_to_le32(lmv->lmv_hash_type)) ||
+	       lmv_hash_is_migrating(cpu_to_le32(lmv->lmv_hash_type));
 }
 
 #endif
