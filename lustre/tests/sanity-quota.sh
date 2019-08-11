@@ -20,7 +20,7 @@ ALWAYS_EXCEPT+="                55"
 # Test duration:                   30 min
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="61"
 
-if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+if [ "$mds1_FSTYPE" = zfs ]; then
 	# bug number:                        LU-2887
 	# Test duration:                     21      9 min"
 	[ "$SLOW" = "no" ] && EXCEPT_SLOW+=" 12a     9"
@@ -44,10 +44,10 @@ require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
 # Does e2fsprogs support quota feature?
-if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] &&
+if [ "$mds1_FSTYPE" == ldiskfs ] &&
 	do_facet $SINGLEMDS "! $DEBUGFS -c -R supported_features |
 		grep -q 'quota'"; then
-	skip_env "e2fsprogs doesn't support quota" && exit 0
+	skip_env "e2fsprogs doesn't support quota"
 fi
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}
@@ -455,15 +455,15 @@ test_quota_performance() {
 	local etime=$(date +%s)
 	delta=$((etime - stime))
 	if [ $delta -gt 0 ]; then
-	    rate=$((size * 1024 / delta))
-	    if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-		# LU-2872 - see LU-2887 for fix
-		[ $rate -gt 64 ] ||
-			error "SLOW IO for $TSTUSR (user): $rate KB/sec"
-	    else
-		[ $rate -gt 1024 ] ||
-			error "SLOW IO for $TSTUSR (user): $rate KB/sec"
-	    fi
+		rate=$((size * 1024 / delta))
+		if [ "$mds1_FSTYPE" = zfs ]; then
+			# LU-2872 - see LU-2887 for fix
+			[ $rate -gt 64 ] ||
+				error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+		else
+			[ $rate -gt 1024 ] ||
+				error "SLOW IO for $TSTUSR (user): $rate KB/sec"
+		fi
 	fi
 	rm -f $TESTFILE
 }
@@ -955,7 +955,7 @@ test_4a() {
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR ||
 		error "set user quota failed"
 
-	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && GRACE=20
+	[ "$mds1_FSTYPE" = zfs ] && GRACE=20
 
 	test_file_soft $TESTFILE $LIMIT $GRACE "u"
 
@@ -1357,7 +1357,7 @@ test_7c() {
 	# enable ost quota
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	# trigger reintegration
-	local procf="osd-$(facet_fstype ost1).$FSNAME-OST*."
+	local procf="osd-$ost1_FSTYPE.$FSNAME-OST*."
 	procf=${procf}quota_slave.force_reint
 	do_facet ost1 $LCTL set_param $procf=1 ||
 		error "force reintegration failed"
@@ -1426,7 +1426,7 @@ test_7e() {
 
 	# LU-2435: skip this quota test if underlying zfs version has not
 	# supported native dnode accounting
-	[ "$(facet_fstype mds1)" == "zfs" ] && {
+	[ "$mds1_FSTYPE" == zfs ] && {
 		local F="feature@userobj_accounting"
 		local pool=$(zpool_name mds1)
 		local feature=$(do_facet mds1 $ZPOOL get -H $F $pool)
@@ -2210,7 +2210,7 @@ test_23_sub() {
 }
 
 test_23() {
-	[ $(facet_fstype ost1) == "zfs" ] &&
+	[ "$ost1_FSTYPE" == zfs ] &&
 		skip "Overwrite in place is not guaranteed to be " \
 		"space neutral on ZFS"
 
@@ -2651,7 +2651,7 @@ run_test 35 "Usage is still accessible across reboot"
 # chown/chgrp to the file created with MDS_OPEN_DELAY_CREATE
 # LU-5006
 test_37() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.93) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.6.93) ] &&
 		skip "Old server doesn't have LU-5006 fix."
 
 	setup_quota_test || error "setup quota failed with $?"
@@ -2683,7 +2683,7 @@ run_test 37 "Quota accounted properly for file created by 'lfs setstripe'"
 
 # LU-8801
 test_38() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.60) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.8.60) ] &&
 		skip "Old server doesn't have LU-8801 fix."
 
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
@@ -2712,7 +2712,7 @@ test_38() {
 	cancel_lru_locks osc
 	sync; sync_all_data || true
 
-	local procf="osd-$(facet_fstype $SINGLEMDS).$FSNAME-MDT0000"
+	local procf="osd-$mds1_FSTYPE.$FSNAME-MDT0000"
 	procf=${procf}.quota_slave.acct_user
 	local accnt_cnt
 
@@ -2976,7 +2976,7 @@ test_54() {
 run_test 54 "basic lfs project interface test"
 
 test_55() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.58) ] &&
 		skip "Not supported before 2.10.58."
 	setup_quota_test || error "setup quota failed with $?"
 
@@ -3061,7 +3061,7 @@ test_57() {
 run_test 57 "lfs project could tolerate errors"
 
 test_59() {
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+	[ "$mds1_FSTYPE" != ldiskfs ] &&
 		skip "ldiskfs only test"
 	disable_project_quota
 	setup_quota_test || error "setup quota failed with $?"
@@ -3108,7 +3108,7 @@ run_test 60 "Test quota for root with setgid"
 
 # test default quota
 test_default_quota() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.51) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.51) ] &&
 		skip "Not supported before 2.11.51."
 
 	local qtype=$1
@@ -3303,8 +3303,8 @@ test_62() {
 run_test 62 "Project inherit should be only changed by root"
 
 test_dom() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ] &&
-		skip "Not supported before 2.11.55" && return
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ] &&
+		skip "Not supported before 2.11.55"
 
 	local qtype=$1
 	local qid=$TSTUSR

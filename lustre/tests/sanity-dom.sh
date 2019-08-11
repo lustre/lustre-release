@@ -19,8 +19,8 @@ ALWAYS_EXCEPT="$SANITY_DOM_EXCEPT"
 
 build_test_filter
 
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-	{ skip "Need MDS version at least 2.10.56"; exit 0; }
+[[ "$MDS1_VERSION" -ge $(version_code 2.10.56) ]] ||
+	skip "Need MDS version at least 2.10.56"
 
 OPENFILE=${OPENFILE:-openfile}
 MOUNT_2=${MOUNT_2:-"yes"}
