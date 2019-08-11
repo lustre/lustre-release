@@ -506,7 +506,7 @@ struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx)
 	}
 
 	snprintf(lwp_name, sizeof(lwp_name), "%s-MDT%04x", fsname, idx);
-	spin_lock(&lsi->lsi_lwp_lock);
+	mutex_lock(&lsi->lsi_lwp_mutex);
 	list_for_each_entry(lwp, &lsi->lsi_lwp_list, obd_lwp_list) {
 		char *ptr = strstr(lwp->obd_name, lwp_name);
 
@@ -515,7 +515,7 @@ struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx)
 			break;
 		}
 	}
-	spin_unlock(&lsi->lsi_lwp_lock);
+	mutex_unlock(&lsi->lsi_lwp_mutex);
 
 err_lmi:
 	server_put_mount(dev, false);
@@ -676,9 +676,9 @@ static int lustre_lwp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi,
 	rc = lustre_lwp_connect(obd, strstr(lsi->lsi_svname, "-MDT") != NULL);
 	if (rc == 0) {
 		obd->u.cli.cl_max_mds_easize = MAX_MD_SIZE;
-		spin_lock(&lsi->lsi_lwp_lock);
+		mutex_lock(&lsi->lsi_lwp_mutex);
 		list_add_tail(&obd->obd_lwp_list, &lsi->lsi_lwp_list);
-		spin_unlock(&lsi->lsi_lwp_lock);
+		mutex_unlock(&lsi->lsi_lwp_mutex);
 	} else {
 		CERROR("%s: connect failed: rc = %d\n", lwpname, rc);
 	}
@@ -946,6 +946,7 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 	if (bufs == NULL)
 		GOTO(out, rc = -ENOMEM);
 
+	mutex_lock(&lsi->lsi_lwp_mutex);
 	list_for_each_entry(lwp, &lsi->lsi_lwp_list, obd_lwp_list) {
 		struct lustre_cfg *lcfg;
 
@@ -958,8 +959,10 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 		lustre_cfg_bufs_set_string(bufs, 1, NULL);
 		OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
 					       bufs->lcfg_buflen));
-		if (!lcfg)
-			GOTO(out, rc = -ENOMEM);
+		if (!lcfg) {
+			rc = -ENOMEM;
+			break;
+		}
 		lustre_cfg_init(lcfg, LCFG_CLEANUP, bufs);
 
 		/* Disconnect import first. NULL is passed for the '@env',
@@ -974,6 +977,7 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 			rc1 = rc;
 		}
 	}
+	mutex_unlock(&lsi->lsi_lwp_mutex);
 
 	GOTO(out, rc);
 
@@ -999,18 +1003,23 @@ static int lustre_stop_lwp(struct super_block *sb)
 	int			 rc1 = 0;
 	ENTRY;
 
+	mutex_lock(&lsi->lsi_lwp_mutex);
 	while (!list_empty(&lsi->lsi_lwp_list)) {
 		lwp = list_entry(lsi->lsi_lwp_list.next, struct obd_device,
 				 obd_lwp_list);
 		list_del_init(&lwp->obd_lwp_list);
 		lwp->obd_force = 1;
+		mutex_unlock(&lsi->lsi_lwp_mutex);
+
 		rc = class_manual_cleanup(lwp);
 		if (rc != 0) {
 			CERROR("%s: fail to stop LWP: rc = %d\n",
 			       lwp->obd_name, rc);
 			rc1 = rc;
 		}
+		mutex_lock(&lsi->lsi_lwp_mutex);
 	}
+	mutex_unlock(&lsi->lsi_lwp_mutex);
 
 	RETURN(rc1 != 0 ? rc1 : rc);
 }
