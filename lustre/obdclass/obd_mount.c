@@ -611,7 +611,7 @@ static struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 	/* Default umount style */
 	lsi->lsi_flags = LSI_UMOUNT_FAILOVER;
 	INIT_LIST_HEAD(&lsi->lsi_lwp_list);
-	spin_lock_init(&lsi->lsi_lwp_lock);
+	mutex_init(&lsi->lsi_lwp_mutex);
 
 	RETURN(lsi);
 }
