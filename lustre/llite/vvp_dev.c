@@ -558,7 +558,7 @@ static void *vvp_pgcache_next(struct seq_file *f, void *v, loff_t *pos)
 	struct vvp_seq_private *priv = f->private;
 
 	WARN_ON(*pos != priv->vvp_prev_pos);
-
+	*pos += 1;
 	priv->vvp_prev_pos = *pos;
 	return vvp_pgcache_next_page(priv);
 }
