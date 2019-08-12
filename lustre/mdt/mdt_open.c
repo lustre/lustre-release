@@ -394,7 +394,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		RETURN(rc);
 
 	rc = mo_open(info->mti_env, mdt_object_child(o),
-		     created ? open_flags | MDS_OPEN_CREATED : open_flags);
+		     created ? open_flags | MDS_OPEN_CREATED : open_flags,
+		     &info->mti_spec);
 	if (rc != 0) {
 		/* If we allow the client to chgrp (CFS_SETGRP_PERM), but the
 		 * client does not know which suppgid should be sent to the MDS,
@@ -1702,7 +1703,7 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 		GOTO(out, rc);
 	}
 
-	rc = mo_open(env, mdt_object_child(obj), MDS_OPEN_CREATED);
+	rc = mo_open(env, mdt_object_child(obj), MDS_OPEN_CREATED, spec);
 	if (rc < 0)
 		CERROR("%s: cannot open volatile file "DFID", orphan "
 		       "file will be left in PENDING directory until "

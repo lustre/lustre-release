@@ -2999,7 +2999,8 @@ static int accmode(const struct lu_env *env, const struct lu_attr *la,
 
 static int mdd_open_sanity_check(const struct lu_env *env,
 				 struct mdd_object *obj,
-				 const struct lu_attr *attr, u64 open_flags)
+				 const struct lu_attr *attr, u64 open_flags,
+				 int is_replay)
 {
 	int mode, rc;
 	ENTRY;
@@ -3007,7 +3008,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 	/* EEXIST check, also opening of *open* orphans is allowed so we can
 	 * open-by-handle unlinked files
 	 */
-	if (mdd_is_dead_obj(obj) &&
+	if (mdd_is_dead_obj(obj) && !is_replay &&
 	    likely(!(mdd_is_orphan_obj(obj) && obj->mod_count > 0)))
 		RETURN(-ENOENT);
 
@@ -3042,7 +3043,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_open(const struct lu_env *env, struct md_object *obj,
-		    u64 open_flags)
+		    u64 open_flags, struct md_op_spec *spec)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct md_device *md_dev = lu2md_dev(mdd2lu_dev(mdo2mdd(obj)));
@@ -3052,6 +3053,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	struct mdd_device *mdd = mdo2mdd(obj);
 	enum changelog_rec_type type = CL_OPEN;
 	int rc = 0;
+	ENTRY;
 
 	mdd_write_lock(env, mdd_obj, DT_TGT_CHILD);
 
@@ -3059,7 +3061,8 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = mdd_open_sanity_check(env, mdd_obj, attr, open_flags);
+	rc = mdd_open_sanity_check(env, mdd_obj, attr, open_flags,
+				   spec->no_create);
 	if ((rc == -EACCES) && (mdd->mdd_cl.mc_mask & (1 << CL_DN_OPEN)))
 		type = CL_DN_OPEN;
 	else if (rc != 0)

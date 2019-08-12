@@ -1456,9 +1456,6 @@ static int mdd_mark_orphan_object(const struct lu_env *env,
 	struct lu_attr *attr = MDD_ENV_VAR(env, la_for_start);
 	int rc;
 
-	if (!S_ISDIR(mdd_object_type(obj)))
-		return 0;
-
 	attr->la_valid = LA_FLAGS;
 	attr->la_flags = LUSTRE_ORPHAN_FL;
 
