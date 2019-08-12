@@ -2634,13 +2634,20 @@ lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 again:
 
 	/*
-	 * If we're being asked to send to the loopback interface, there
-	 * is no need to go through any selection. We can just shortcut
-	 * the entire process and send over lolnd
+	 * If we're sending to ourselves then there is no need to go through
+	 * any selection. We can shortcut the entire process and send over
+	 * lolnd.
+	 *
+	 * However, we make two exceptions to this rule:
+	 * 1. If the src_nid is specified then our API defines that we must send
+	 *    via that interface.
+	 * 2. Recovery messages must be sent to the lnet_ni that is being
+	 *    recovered.
 	 */
 	send_data.sd_msg = msg;
 	send_data.sd_cpt = cpt;
-	if (LNET_NETTYP(LNET_NIDNET(dst_nid)) == LOLND) {
+	if (src_nid == LNET_NID_ANY && !msg->msg_recovery &&
+	    lnet_nid2ni_locked(dst_nid, cpt)) {
 		rc = lnet_handle_lo_send(&send_data);
 		lnet_net_unlock(cpt);
 		return rc;
