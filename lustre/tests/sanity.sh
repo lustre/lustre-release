@@ -53,8 +53,8 @@ fi
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596
 	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
-	# bug number:	 LU-11671 LU-11594 LU-11667 LU-11729 LU-4398
-	ALWAYS_EXCEPT+=" 45	  103a	    317      810       817"
+	# bug number:	 LU-11671 LU-11667 LU-11729 LU-4398
+	ALWAYS_EXCEPT+=" 45	  317      810       817"
 fi
 
 #                                  5          12          (min)"
