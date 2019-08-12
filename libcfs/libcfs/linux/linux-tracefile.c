@@ -36,7 +36,7 @@
 #include <linux/slab.h>
 #include <linux/tty.h>
 #include <linux/poll.h>
-#include <libcfs/libcfs.h>
+#include <linux/mm.h>
 #include "tracefile.h"
 
 /* percents to share the total debug memory for each type */
@@ -50,21 +50,21 @@ char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 
 static DECLARE_RWSEM(cfs_tracefile_sem);
 
-int cfs_tracefile_init_arch()
+int cfs_tracefile_init_arch(void)
 {
-	int    i;
-	int    j;
+	int i;
+	int j;
 	struct cfs_trace_cpu_data *tcd;
 
 	/* initialize trace_data */
 	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
 	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
 		cfs_trace_data[i] =
-			kmalloc(sizeof(union cfs_trace_data_union) *
-				num_possible_cpus(), GFP_KERNEL);
-		if (cfs_trace_data[i] == NULL)
+			kmalloc_array(num_possible_cpus(),
+				      sizeof(union cfs_trace_data_union),
+				      GFP_KERNEL);
+		if (!cfs_trace_data[i])
 			goto out;
-
 	}
 
 	/* arch related info initialized */
@@ -81,7 +81,7 @@ int cfs_tracefile_init_arch()
 				kmalloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
 					GFP_KERNEL);
 
-			if (cfs_trace_console_buffers[i][j] == NULL)
+			if (!cfs_trace_console_buffers[i][j])
 				goto out;
 		}
 
@@ -89,56 +89,54 @@ int cfs_tracefile_init_arch()
 
 out:
 	cfs_tracefile_fini_arch();
-	printk(KERN_ERR "lnet: Not enough memory\n");
+	pr_err("lnet: Not enough memory\n");
 	return -ENOMEM;
 }
 
-void cfs_tracefile_fini_arch()
+void cfs_tracefile_fini_arch(void)
 {
-	int    i;
-	int    j;
+	int i;
+	int j;
 
 	for (i = 0; i < num_possible_cpus(); i++)
-		for (j = 0; j < 3; j++)
-			if (cfs_trace_console_buffers[i][j] != NULL) {
-				kfree(cfs_trace_console_buffers[i][j]);
-				cfs_trace_console_buffers[i][j] = NULL;
-			}
+		for (j = 0; j < 3; j++) {
+			kfree(cfs_trace_console_buffers[i][j]);
+			cfs_trace_console_buffers[i][j] = NULL;
+		}
 
-	for (i = 0; cfs_trace_data[i] != NULL; i++) {
+	for (i = 0; cfs_trace_data[i]; i++) {
 		kfree(cfs_trace_data[i]);
 		cfs_trace_data[i] = NULL;
 	}
 }
 
-void cfs_tracefile_read_lock()
+void cfs_tracefile_read_lock(void)
 {
 	down_read(&cfs_tracefile_sem);
 }
 
-void cfs_tracefile_read_unlock()
+void cfs_tracefile_read_unlock(void)
 {
 	up_read(&cfs_tracefile_sem);
 }
 
-void cfs_tracefile_write_lock()
+void cfs_tracefile_write_lock(void)
 {
 	down_write(&cfs_tracefile_sem);
 }
 
-void cfs_tracefile_write_unlock()
+void cfs_tracefile_write_unlock(void)
 {
 	up_write(&cfs_tracefile_sem);
 }
 
-enum cfs_trace_buf_type cfs_trace_buf_idx_get()
+enum cfs_trace_buf_type cfs_trace_buf_idx_get(void)
 {
 	if (in_irq())
 		return CFS_TCD_TYPE_IRQ;
-	else if (in_softirq())
+	if (in_softirq())
 		return CFS_TCD_TYPE_SOFTIRQ;
-	else
-		return CFS_TCD_TYPE_PROC;
+	return CFS_TCD_TYPE_PROC;
 }
 
 /*
@@ -148,7 +146,7 @@ enum cfs_trace_buf_type cfs_trace_buf_idx_get()
  * for details.
  */
 int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
-__acquires(&tcd->tcd_lock)
+	__acquires(&tcd->tcd_lock)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
 	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
@@ -163,7 +161,7 @@ __acquires(&tcd->tcd_lock)
 }
 
 void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
-__releases(&tcd->tcd_lock)
+	__releases(&tcd->tcd_lock)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
 	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
@@ -177,7 +175,7 @@ __releases(&tcd->tcd_lock)
 }
 
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,
-                      struct cfs_trace_page *tage)
+		      struct cfs_trace_page *tage)
 {
 	/*
 	 * XXX nikita: do NOT call portals_debug_msg() (CDEBUG/ENTRY/EXIT)
@@ -188,8 +186,8 @@ int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,
 
 void
 cfs_set_ptldebug_header(struct ptldebug_header *header,
-                        struct libcfs_debug_msg_data *msgdata,
-                        unsigned long stack)
+			struct libcfs_debug_msg_data *msgdata,
+			unsigned long stack)
 {
 	struct timespec64 ts;
 
@@ -208,33 +206,30 @@ cfs_set_ptldebug_header(struct ptldebug_header *header,
 	header->ph_pid = current->pid;
 	header->ph_line_num = msgdata->msg_line;
 	header->ph_extern_pid = 0;
-	return;
 }
 
 static char *
 dbghdr_to_err_string(struct ptldebug_header *hdr)
 {
-        switch (hdr->ph_subsys) {
-
-                case S_LND:
-                case S_LNET:
-                        return "LNetError";
-                default:
-                        return "LustreError";
-        }
+	switch (hdr->ph_subsys) {
+	case S_LND:
+	case S_LNET:
+		return "LNetError";
+	default:
+		return "LustreError";
+	}
 }
 
 static char *
 dbghdr_to_info_string(struct ptldebug_header *hdr)
 {
-        switch (hdr->ph_subsys) {
-
-                case S_LND:
-                case S_LNET:
-                        return "LNet";
-                default:
-                        return "Lustre";
-        }
+	switch (hdr->ph_subsys) {
+	case S_LND:
+	case S_LNET:
+		return "LNet";
+	default:
+		return "Lustre";
+	}
 }
 
 /**
@@ -271,41 +266,40 @@ static void cfs_tty_write_message(const char *prefix, const char *msg)
 }
 
 void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
-                          const char *buf, int len, const char *file,
-                          const char *fn)
+			  const char *buf, int len, const char *file,
+			  const char *fn)
 {
 	char *prefix = "Lustre", *ptype = NULL;
 
-	if ((mask & D_EMERG) != 0) {
+	if (mask & D_EMERG) {
 		prefix = dbghdr_to_err_string(hdr);
 		ptype = KERN_EMERG;
-	} else if ((mask & D_ERROR) != 0) {
+	} else if (mask & D_ERROR) {
 		prefix = dbghdr_to_err_string(hdr);
 		ptype = KERN_ERR;
-	} else if ((mask & D_WARNING) != 0) {
+	} else if (mask & D_WARNING) {
 		prefix = dbghdr_to_info_string(hdr);
 		ptype = KERN_WARNING;
-	} else if ((mask & (D_CONSOLE | libcfs_printk)) != 0) {
+	} else if (mask & (D_CONSOLE | libcfs_printk)) {
 		prefix = dbghdr_to_info_string(hdr);
 		ptype = KERN_INFO;
 	}
 
-	if ((mask & D_TTY) != 0)
+	if (mask & D_TTY)
 		cfs_tty_write_message(prefix, buf);
 
-	if ((mask & D_CONSOLE) != 0) {
-		printk("%s%s: %.*s", ptype, prefix, len, buf);
+	if (mask & D_CONSOLE) {
+		pr_info("%s%s: %.*s", ptype, prefix, len, buf);
 	} else {
-		printk("%s%s: %d:%d:(%s:%d:%s()) %.*s", ptype, prefix,
-                       hdr->ph_pid, hdr->ph_extern_pid, file, hdr->ph_line_num,
-                       fn, len, buf);
+		pr_info("%s%s: %d:%d:(%s:%d:%s()) %.*s", ptype, prefix,
+			hdr->ph_pid, hdr->ph_extern_pid, file,
+			hdr->ph_line_num, fn, len, buf);
 	}
-	return;
 }
 
 int cfs_trace_max_debug_mb(void)
 {
-	int  total_mb = (cfs_totalram_pages() >> (20 - PAGE_SHIFT));
+	int total_mb = (cfs_totalram_pages() >> (20 - PAGE_SHIFT));
 
-	return MAX(512, (total_mb * 80)/100);
+	return max(512, (total_mb * 80) / 100);
 }
