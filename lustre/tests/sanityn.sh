@@ -5643,6 +5643,40 @@ test_110() {
 }
 run_test 110 "do not grant another lock on resend"
 
+test_111() {
+	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
+	[[ $(facet_active_host mds1) = $(facet_active_host mds2) ]] ||
+		skip "MDT0 and MDT1 should be on the same node"
+
+	mkdir $DIR1/$tdir
+	$LFS mkdir -i 0 $DIR1/$tdir/mdt0dir
+	$LFS mkdir -i 1 $DIR1/$tdir/mdt1dir
+
+	mkdir $DIR1/$tdir/mdt0dir/foodir
+	touch $DIR1/$tdir/mdt0dir/foodir/{file1,file2}
+
+	$MULTIOP $DIR2/$tdir/mdt0dir/foodir/file2 Ow4096_c &
+	MULTIOP_PID=$!
+	ln $DIR1/$tdir/mdt0dir/foodir/file2 $DIR1/$tdir/mdt1dir/file2
+
+	#define OBD_FAIL_MDS_LINK_RENAME_RACE   0x18a
+	do_facet mds1 $LCTL set_param fail_loc=0x8000018a
+
+	ln $DIR1/$tdir/mdt0dir/foodir/file2 $DIR1/$tdir/mdt1dir/file2x &
+	sleep 1
+
+	rm $DIR2/$tdir/mdt1dir/file2
+	sleep 1
+
+	mv $DIR2/$tdir/mdt0dir/foodir/file1 $DIR2/$tdir/mdt0dir/foodir/file2
+	sleep 1
+
+	kill $MULTIOP_PID
+	wait
+	rm -r $DIR1/$tdir || error "Removing test dir failed"
+}
+run_test 111 "A racy rename/link an open file should not cause fs corruption"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script
