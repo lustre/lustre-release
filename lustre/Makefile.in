@@ -1,14 +1,14 @@
-subdir-m += fid
-subdir-m += obdclass
-subdir-m += ptlrpc
-subdir-m += obdecho
-subdir-m += mgc
-subdir-m += tests/kernel
+obj-m += fid/
+obj-m += obdclass/
+obj-m += ptlrpc/
+obj-m += obdecho/
+obj-m += mgc/
+obj-m += tests/kernel/
 
-@SERVER_TRUE@subdir-m += ost mgs mdt mdd ofd quota osp lod lfsck
-@CLIENT_TRUE@subdir-m += lov osc mdc lmv llite fld
-@LDISKFS_ENABLED_TRUE@subdir-m += osd-ldiskfs
-@ZFS_ENABLED_TRUE@subdir-m += osd-zfs
+@SERVER_TRUE@obj-m += ost/ mgs/ mdt/ mdd/ ofd/ quota/ osp/ lod/ lfsck/
+@CLIENT_TRUE@obj-m += lov/ osc/ mdc/ lmv/ llite/ fld/
+@LDISKFS_ENABLED_TRUE@obj-m += osd-ldiskfs/
+@ZFS_ENABLED_TRUE@obj-m += osd-zfs/
 @OSDADDON@
 
 @INCLUDE_RULES@

@@ -1,4 +1,4 @@
-subdir-m += @LDISKFS_SUBDIR@ @LIBCFS_SUBDIR@ lnet
-subdir-m += lustre
+obj-m += @LDISKFS_SUBDIR@/ @LIBCFS_SUBDIR@/ lnet/
+obj-m += lustre/
 
 @INCLUDE_RULES@

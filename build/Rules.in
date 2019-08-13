@@ -36,6 +36,6 @@ EXTRA_CFLAGS += $(EXTRA_POST_CFLAGS)
 
 KBUILD_EXTRA_SYMBOLS += @EXTRA_SYMBOLS@
 
-obj-m := $(patsubst %,%.o,$(MODULES))
+obj-m += $(patsubst %,%.o,$(MODULES))
 
 endif # PATCHLEVEL

@@ -31,7 +31,7 @@ nodemap_objs += nodemap_storage.o
 ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs) $(TARGET)barrier.o
 @SERVER_TRUE@ptlrpc-objs += $(target_objs) $(nodemap_objs)
 
-@GSS_TRUE@subdir-m += gss
+@GSS_TRUE@obj-m += gss/
 
 default: all
 

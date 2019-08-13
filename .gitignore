@@ -106,3 +106,4 @@ cscope.*
 
 # doxygen files
 doxygen.*
+*.mod

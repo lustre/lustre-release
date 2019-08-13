@@ -3166,7 +3166,7 @@ AS_IF([test $ENABLEOSDADDON -eq 0], [
 		OSDADDON=""
 	], [ln -s $OSDADDON $LUSTRE/$OSDMODNAME], [
 		AC_MSG_RESULT([$OSDMODNAME])
-		OSDADDON="subdir-m += $OSDMODNAME"
+		OSDADDON="obj-m += $OSDMODNAME/"
 	], [
 		AC_MSG_RESULT([can't link])
 		OSDADDON=""
