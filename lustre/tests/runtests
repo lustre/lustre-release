@@ -1,18 +1,10 @@
 #!/bin/bash
 #
 # Script which does some basic tests to ensure we haven't regressed.
-# Probably a good idea to run this before doing any checkins.
-# In the future this can become more fancy, but it's OK for now.
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
-SRCDIR="$(dirname $0)"
-export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
-
-export NAME=${NAME:-local}
-
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
 RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
@@ -23,6 +15,7 @@ RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 [ "$RMDIRMANY" ] || RMDIRMANY="unlinkmany -d"
 
 check_and_setup_lustre
+
 test_1() {
 sleep 5 # let MDS refresh aggregated statfs
 # Include some extra space for the status file

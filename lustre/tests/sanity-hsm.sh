@@ -7,29 +7,24 @@
 set -e
 set +o monitor
 
-SRCDIR=$(dirname $0)
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/utils:$PATH:/sbin:/usr/sbin
-
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-if $SHARED_KEY; then
-# bug number for skipped tests:	LU-9795 LU-9795
-	ALWAYS_EXCEPT="		13	402b	$ALWAYS_EXCEPT"
-fi
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-get_lustre_env
 init_logging
+
+ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT "
+if $SHARED_KEY; then
+# bug number for skipped tests: LU-9795 LU-9795
+	ALWAYS_EXCEPT+="	13      402b"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+fi
+
+build_test_filter
 
 [ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
-MULTIOP=${MULTIOP:-multiop}
 OPENFILE=${OPENFILE:-openfile}
 MMAP_CAT=${MMAP_CAT:-mmap_cat}
 MOUNT_2=${MOUNT_2:-"yes"}
@@ -37,7 +32,7 @@ FAIL_ON_ERROR=false
 
 # script only handles up to 10 MDTs (because of MDT_PREFIX)
 [ $MDSCOUNT -gt 9 ] &&
-	error "script cannot handle more than 9 MDTs, please fix" && exit
+	error "script cannot handle more than 9 MDTs, please fix"
 
 check_and_setup_lustre
 
@@ -47,7 +42,7 @@ fi
 
 # $RUNAS_ID may get set incorrectly somewhere else
 if [[ $UID -eq 0 && $RUNAS_ID -eq 0 ]]; then
-	skip_env "\$RUNAS_ID set to 0, but \$UID is also 0!" && exit
+	skip_env "\$RUNAS_ID set to 0, but \$UID is also 0!"
 fi
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 if getent group nobody; then
@@ -57,8 +52,6 @@ elif getent group nogroup; then
 else
 	error "No generic nobody group"
 fi
-
-build_test_filter
 
 # if there is no CLIENT1 defined, some tests can be ran on localhost
 CLIENT1=${CLIENT1:-$HOSTNAME}

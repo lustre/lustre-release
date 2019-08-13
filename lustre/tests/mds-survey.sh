@@ -1,22 +1,14 @@
 #!/bin/bash
-#set -x
 set -e
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-file_count=${file_count:-150000}
-dir_count=${dir_count:-4}
-thrhi=${thrhi:-8}
-thrlo=${thrlo:-1}
+ALWAYS_EXCEPT="$MDS_SURVEY_EXCEPT "
 
-[ "$SLOW" = no ] && { file_count=50000; dir_count=2; thrhi=4; }
-
-# Skip these tests
-ALWAYS_EXCEPT="$MDS_SURVEY_EXCEPT"
+build_test_filter
 
 MDSSURVEY=${MDSSURVEY:-$(which mds-survey 2>/dev/null || true)}
 [ -z ${MDSSURVEY} ] && skip_env "mds-survey not found"
@@ -25,7 +17,13 @@ if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
 	skip_env "Need MDS version at least 2.3.51"
 fi
 
-build_test_filter
+file_count=${file_count:-150000}
+dir_count=${dir_count:-4}
+thrhi=${thrhi:-8}
+thrlo=${thrlo:-1}
+
+[ "$SLOW" = no ] && { file_count=50000; dir_count=2; thrhi=4; }
+
 check_and_setup_lustre
 
 adjust_inode() {

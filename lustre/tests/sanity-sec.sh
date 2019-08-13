@@ -7,20 +7,19 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT="              $SANITY_SEC_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-SRCDIR=$(dirname $0)
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
-export NAME=${NAME:-local}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-get_lustre_env
+
 init_logging
+
+ALWAYS_EXCEPT="$SANITY_SEC_EXCEPT "
+# bug number for skipped test:
+ALWAYS_EXCEPT+=" "
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="26"
 
 NODEMAP_TESTS=$(seq 7 26)
 
@@ -29,10 +28,7 @@ if ! check_versions; then
 	EXCEPT="$EXCEPT $NODEMAP_TESTS"
 fi
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="26"
-
-[ "$ALWAYS_EXCEPT$EXCEPT$EXCEPT_SLOW" ] &&
-	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT $EXCEPT_SLOW"
+build_test_filter
 
 RUNAS_CMD=${RUNAS_CMD:-runas}
 
@@ -98,8 +94,6 @@ IDENTITY_FLUSH=mdt.$MDT.identity_flush
 IDENTITY_UPCALL=mdt.$MDT.identity_upcall
 
 SAVE_PWD=$PWD
-
-build_test_filter
 
 sec_login() {
 	local user=$1

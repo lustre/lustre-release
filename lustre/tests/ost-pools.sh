@@ -4,25 +4,19 @@
 # Skip specific tests by setting EXCEPT.
 #
 
-SRCDIR=$(dirname $0)
-export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
-
 ONLY=${ONLY:-"$*"}
+ORIG_PWD=${PWD}
+
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+init_logging
+
 ALWAYS_EXCEPT="$OST_POOLS_EXCEPT"
 # bug number for skipped test: -
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
-    echo "Skipping tests: $(echo $ALWAYS_EXCEPT $EXCEPT)"
-
-TMP=${TMP:-/tmp}
-ORIG_PWD=${PWD}
-
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-init_logging
+build_test_filter
 
 check_and_setup_lustre
 
@@ -34,8 +28,6 @@ fi
 
 DIR=${DIR:-$MOUNT}
 assert_DIR
-
-build_test_filter
 
 MAXFREE=${MAXFREE:-$((2000000 * OSTCOUNT))}
 

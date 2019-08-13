@@ -1,23 +1,19 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
 
-# bug number:
-ALWAYS_EXCEPT="$LARGE_SCALE_EXCEPT"
-
-SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
-LUSTRE=${LUSTRE:-`dirname $0`/..}
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
+
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$LARGE_SCALE_EXCEPT "
+
+build_test_filter
 
 remote_mds_nodsh && skip "remote MDS with nodsh"
 
@@ -25,10 +21,7 @@ remote_mds_nodsh && skip "remote MDS with nodsh"
 [ $CLIENTCOUNT -lt 2 ] &&
 	skip_env "$TESTSUITE: Need 2+ clients, have only $CLIENTCOUNT"
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-
 MOUNT_2=""
-build_test_filter
 
 check_and_setup_lustre
 rm -rf $DIR/[df][0-9]*
@@ -40,49 +33,42 @@ $GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 test_3a() {
-    assert_env CLIENTS MDSRATE MPIRUN
+	assert_env CLIENTS MDSRATE MPIRUN
 
-    local -a nodes=(${CLIENTS//,/ })
+	local -a nodes=(${CLIENTS//,/ })
+	# INCREMENT is a number of clients a half of clients by default
+	local increment=${INCREMENT:-$(( CLIENTCOUNT / 2 ))}
+	local num=$increment
+	local LOG=$TMP/${TESTSUITE}_$tfile
+	local var=${SINGLEMDS}_svc
+	local procfile="*.${!var}.recovery_status"
+	local iters=${ITERS:-3}
+	local nfiles=${NFILES:-50000}
+	local nthreads=${THREADS_PER_CLIENT:-3}
+	local IFree=$(inodes_available)
+	local pid
+	local list
+	local -a res
+	local dir=$DIR/d0.$TESTNAME
 
-    # INCREMENT is a number of clients 
-    # a half of clients by default
-    increment=${INCREMENT:-$(( CLIENTCOUNT / 2 ))}
+	[ $IFree -gt $nfiles ] || nfiles=$IFree
 
-    machinefile=${MACHINEFILE:-$TMP/$TESTSUITE.machines}
-    local LOG=$TMP/${TESTSUITE}_$tfile
-
-    local var=${SINGLEMDS}_svc
-    local procfile="*.${!var}.recovery_status"
-    local iters=${ITERS:-3}
-    local nfiles=${NFILES:-50000}
-    local nthreads=${THREADS_PER_CLIENT:-3}
-
-    local IFree=$(inodes_available)
-    [ $IFree -gt $nfiles ] || nfiles=$IFree
-
-    local dir=$DIR/d0.$TESTNAME
-    mkdir -p $dir
-    chmod 0777 $dir
-
-    local pid
-    local list
-    local -a res
-
-    local num=$increment
+	mkdir -p $dir
+	chmod 0777 $dir
 
 	while [ $num -le $CLIENTCOUNT ]; do
 		list=$(comma_list ${nodes[@]:0:$num})
 
-		generate_machine_file $list $machinefile ||
-			{ error "can not generate machinefile"; exit 1; }
+		generate_machine_file $list $MACHINEFILE ||
+			error "can not generate machinefile"
 
 		for i in $(seq $iters); do
-			mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' \
+			mdsrate_cleanup $num $MACHINEFILE $nfiles $dir 'f%%d' \
 				--ignore
 
 			COMMAND="${MDSRATE} --create --nfiles $nfiles --dir
 				 $dir --filefmt 'f%%d'"
-			mpi_run ${MACHINEFILE_OPTION} $machinefile \
+			mpi_run ${MACHINEFILE_OPTION} $MACHINEFILE \
 				-np $((num * nthreads)) ${COMMAND} | tee ${LOG}&
 
 			pid=$!
@@ -111,13 +97,13 @@ test_3a() {
 		num=$((num + increment))
 	done
 
-    mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' --ignore
+	mdsrate_cleanup $num $MACHINEFILE $nfiles $dir 'f%%d' --ignore
 
-    i=0
-    while [ $i -lt ${#res[@]} ]; do
-        echo "RECOVERY TIME: NFILES=$nfiles number of clients: ${res[i]}  ${res[i+1]}"
-        i=$((i+2))
-    done
+	i=0
+	while [ $i -lt ${#res[@]} ]; do
+		echo "RECOVERY TIME: NFILES=$nfiles number of clients: ${res[i]}  ${res[i+1]}"
+		i=$((i+2))
+	done
 }
 
 run_test 3a "recovery time, $CLIENTCOUNT clients"

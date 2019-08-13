@@ -7,16 +7,18 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
+
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+init_logging
+
 ALWAYS_EXCEPT="$SANITY_SCRUB_EXCEPT"
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-init_logging
+build_test_filter
 
 require_dsh_mds || exit 0
 
@@ -44,8 +46,6 @@ OSTSIZE=200000
 
 # build up a clean test environment.
 REFORMAT="yes" check_and_setup_lustre
-
-build_test_filter
 
 MDT_DEV="${FSNAME}-MDT0000"
 OST_DEV="${FSNAME}-OST0000"

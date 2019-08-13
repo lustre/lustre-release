@@ -8,17 +8,30 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-#Bug number for excepting test
-ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT"
-
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT "
+
+# DNE does not support striped directory on zfs-based backend yet.
+[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
+#Bug number for excepting test
+	ALWAYS_EXCEPT+=" 31"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
+
+[[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
+
+[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27 28 29 30 31"
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
+build_test_filter
 
 require_dsh_mds || exit 0
 
@@ -50,21 +63,6 @@ cleanupall
 
 # build up a clean test environment.
 REFORMAT="yes" check_and_setup_lustre
-
-[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.90) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2c"
-
-[[ $(lustre_version_code ost1) -lt $(version_code 2.5.55) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14 15 16 17 18 19 20 21"
-
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 2d 2e 3 22 23 24 25 26 27 28 29 30 31"
-
-# DNE does not support striped directory on zfs-based backend yet.
-[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 31"
-
-build_test_filter
 
 MDT_DEV="${FSNAME}-MDT0000"
 OST_DEV="${FSNAME}-OST0000"
