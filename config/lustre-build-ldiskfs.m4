@@ -14,6 +14,7 @@ AS_IF([test -z "$LDISKFS_SERIES"], [
 AS_IF([test x$RHEL_KERNEL = xyes], [
 	case $RHEL_RELEASE_NO in
 	80)     LDISKFS_SERIES="4.18-rhel8.series"      ;;
+	77)	LDISKFS_SERIES="3.10-rhel7.7.series"	;;
 	76)	LDISKFS_SERIES="3.10-rhel7.6.series"	;;
 	75)	LDISKFS_SERIES="3.10-rhel7.5.series"	;;
 	74)	LDISKFS_SERIES="3.10-rhel7.4.series"	;;
