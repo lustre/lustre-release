@@ -37,6 +37,8 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/uio.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -420,6 +422,63 @@ static void test30(void)
 	close(fd2);
 }
 
+/* Test locking between several fds. */
+static void test40(void)
+{
+	int rc;
+	int fd;
+	int gid;
+	char buf[10000];
+	int i, j, threads = 40;
+
+	/* Create the test file. */
+	fd = open(mainpath, O_RDWR | O_CREAT | O_TRUNC,
+		  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+	ASSERTF(fd >= 0, "creat failed for '%s': %s",
+		mainpath, strerror(errno));
+	/* Lock */
+	gid = 1234;
+	rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid);
+	ASSERTF(rc == 0, "cannot lock '%s' gid %d: %s", mainpath, gid,
+		strerror(errno));
+
+	for (i = 0; i < threads; i++) {
+		rc = fork();
+		ASSERTF(rc >= 0, "fork failed %s", strerror(errno));
+
+		if (rc == 0) {
+			struct iovec io = { .iov_base = buf,
+					    .iov_len = sizeof(buf)};
+
+			/* writing to a fixed offset */
+			memset(buf, i, sizeof(buf));
+			rc = pwritev(fd, &io, 1, sizeof(buf) * i);
+			ASSERTF(rc == sizeof(buf), "write failed for '%s' block %d: %s",
+				mainpath, i, strerror(errno));
+
+			close(fd);
+			exit(0);
+		}
+	}
+
+	while ((i = wait(&rc)) > 0);
+
+	/* Check data */
+	for (i = 0; i < threads; i++) {
+		rc = read(fd, buf, sizeof(buf));
+		ASSERTF(rc == sizeof(buf), "read failed for '%s': %s",
+			mainpath, strerror(errno));
+		for (j = 0; j < rc; j++)
+			ASSERTF(i == buf[j], "wrong data at off %d %d != %d",
+				j, i, buf[j]);
+	}
+
+	/* close unlock group lock */
+	rc = close(fd);
+	ASSERTF(rc == 0, "close failed '%s': %s",
+		mainpath, strerror(errno));
+}
+
 static void usage(char *prog)
 {
 	fprintf(stderr, "Usage: %s [-d lustre_dir]\n", prog);
@@ -476,6 +535,7 @@ int main(int argc, char *argv[])
 	PERFORM(test12);
 	PERFORM(test20);
 	PERFORM(test30);
+	PERFORM(test40);
 
 	return EXIT_SUCCESS;
 }

@@ -16841,7 +16841,7 @@ test_243()
 }
 run_test 243 "various group lock tests"
 
-test_244()
+test_244a()
 {
 	test_mkdir $DIR/$tdir
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=35
@@ -16849,7 +16849,26 @@ test_244()
 		error "sendfile+grouplock failed"
 	rm -rf $DIR/$tdir
 }
-run_test 244 "sendfile with group lock tests"
+run_test 244a "sendfile with group lock tests"
+
+test_244b()
+{
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+
+	local threads=50
+	local size=$((1024*1024))
+
+	test_mkdir $DIR/$tdir
+	for i in $(seq 1 $threads); do
+		local file=$DIR/$tdir/file_$((i / 10))
+		$MULTIOP $file OG1234w$size_$((i % 3))w$size_$((i % 4))g1234c &
+		local pids[$i]=$!
+	done
+	for i in $(seq 1 $threads); do
+		wait ${pids[$i]}
+	done
+}
+run_test 244b "multi-threaded write with group lock"
 
 test_245() {
 	local flagname="multi_mod_rpcs"

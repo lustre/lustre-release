@@ -1200,6 +1200,8 @@ int osc_lock_init(const struct lu_env *env,
 
 	oscl->ols_flags = osc_enq2ldlm_flags(enqflags);
 	oscl->ols_speculative = !!(enqflags & CEF_SPECULATIVE);
+	if (lock->cll_descr.cld_mode == CLM_GROUP)
+		oscl->ols_flags |= LDLM_FL_ATOMIC_CB;
 
 	if (oscl->ols_flags & LDLM_FL_HAS_INTENT) {
 		oscl->ols_flags |= LDLM_FL_BLOCK_GRANTED;

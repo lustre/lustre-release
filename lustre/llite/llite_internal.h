@@ -214,6 +214,9 @@ struct ll_inode_info {
 			struct mutex		 lli_pcc_lock;
 			enum lu_pcc_state_flags	 lli_pcc_state;
 			struct pcc_inode	*lli_pcc_inode;
+			struct mutex			lli_group_mutex;
+			__u64				lli_group_users;
+			unsigned long			lli_group_gid;
 		};
 	};
 
