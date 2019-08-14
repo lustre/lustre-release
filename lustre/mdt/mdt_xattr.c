@@ -97,6 +97,11 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		/* We could calculate accurate sizes, but this would
 		 * introduce a lot of overhead, let's do it later... */
 		size = info->mti_body->mbo_eadatasize;
+		if (size <= 0 || size > info->mti_mdt->mdt_max_ea_size) {
+			CERROR("%s: invalid EA size(%d) for FLXATTRALL\n",
+			       mdt_obd_name(info->mti_mdt), size);
+			RETURN(-EINVAL);
+		}
 		req_capsule_set_size(pill, &RMF_EAVALS, RCL_SERVER, size);
 		req_capsule_set_size(pill, &RMF_EAVALS_LENS, RCL_SERVER, size);
 	} else {
