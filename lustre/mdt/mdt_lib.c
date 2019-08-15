@@ -1509,6 +1509,7 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 	/* rename_tgt contains the mode already */
 	attr->la_mode = rec->rn_mode;
 	attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME | LA_MODE;
+	spec->sp_cr_flags = 0;
 
 	rc = mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, 0);
 	if (rc < 0)
