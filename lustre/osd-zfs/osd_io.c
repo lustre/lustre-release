@@ -330,7 +330,8 @@ static inline struct page *kmem_to_page(void *addr)
  * \retval		negative error number of failure
  */
 static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
-			     loff_t off, ssize_t len, struct niobuf_local *lnb)
+			     loff_t off, ssize_t len, struct niobuf_local *lnb,
+			     int maxlnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	int rc, i, numbufs, npages = 0, drop_cache = 0;
@@ -358,6 +359,10 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 		    off + len > obj->oo_dn->dn_datablksz)
 			len = obj->oo_dn->dn_datablksz - off;
 
+		dbp = NULL;
+		if (unlikely(npages >= maxlnb))
+			GOTO(err, rc = -EOVERFLOW);
+
 		rc = -dmu_buf_hold_array_by_bonus(&obj->oo_dn->dn_bonus->db,
 						  off, len, TRUE, osd_0copy_tag,
 						  &numbufs, &dbp);
@@ -380,6 +385,9 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 			dbf = (void *) ((unsigned long)dbp[i] | 1);
 
 			while (tocpy > 0) {
+				if (unlikely(npages >= maxlnb))
+					GOTO(err, rc = -EOVERFLOW);
+
 				thispage = PAGE_SIZE;
 				thispage -= bufoff & (PAGE_SIZE - 1);
 				thispage = min(tocpy, thispage);
@@ -422,6 +430,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 
 err:
 	LASSERT(rc < 0);
+	if (dbp)
+		dmu_buf_rele_array(dbp, numbufs, osd_0copy_tag);
 	osd_bufs_put(env, &obj->oo_dt, lnb - npages, npages);
 	RETURN(rc);
 }
@@ -450,7 +460,8 @@ static inline arc_buf_t *osd_request_arcbuf(dnode_t *dn, size_t bs)
 }
 
 static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
-			      loff_t off, ssize_t len, struct niobuf_local *lnb)
+			      loff_t off, ssize_t len, struct niobuf_local *lnb,
+			      int maxlnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	int                poff, plen, off_in_block, sz_in_block;
@@ -465,7 +476,8 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 	 * so that we're sure nobody is trying to update the same block
 	 */
 	while (len > 0) {
-		LASSERT(npages < PTLRPC_MAX_BRW_PAGES);
+		if (unlikely(npages >= maxlnb))
+			GOTO(out_err, rc = -EOVERFLOW);
 
 		off_in_block = off & (bs - 1);
 		sz_in_block = min_t(int, bs - off_in_block, len);
@@ -485,6 +497,9 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			 * local niobufs for ptlrpc's bulks */
 			while (sz_in_block > 0) {
 				plen = min_t(int, sz_in_block, PAGE_SIZE);
+
+				if (unlikely(npages >= maxlnb))
+					GOTO(out_err, rc = -EOVERFLOW);
 
 				lnb[i].lnb_file_offset = off;
 				lnb[i].lnb_page_offset = 0;
@@ -523,6 +538,9 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 					     PAGE_SIZE);
 				plen -= poff;
 
+				if (unlikely(npages >= maxlnb))
+					GOTO(out_err, rc = -EOVERFLOW);
+
 				lnb[i].lnb_file_offset = off;
 				lnb[i].lnb_page_offset = poff;
 				poff = 0;
@@ -560,7 +578,7 @@ out_err:
 
 static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, ssize_t len, struct niobuf_local *lnb,
-			enum dt_bufs_type rw)
+			int maxlnb, enum dt_bufs_type rw)
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
 	int                rc;
@@ -569,9 +587,9 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_dn);
 
 	if (rw & DT_BUFS_TYPE_WRITE)
-		rc = osd_bufs_get_write(env, obj, offset, len, lnb);
+		rc = osd_bufs_get_write(env, obj, offset, len, lnb, maxlnb);
 	else
-		rc = osd_bufs_get_read(env, obj, offset, len, lnb);
+		rc = osd_bufs_get_read(env, obj, offset, len, lnb, maxlnb);
 
 	return rc;
 }

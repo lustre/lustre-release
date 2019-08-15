@@ -383,6 +383,7 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 {
 	struct dt_object *dob;
 	int i, j, rc, tot_bytes = 0;
+	int maxlnb = *nr_local;
 	int level;
 
 	ENTRY;
@@ -420,11 +421,12 @@ static int mdt_preprw_read(const struct lu_env *env, struct obd_export *exp,
 	dob = mdt_obj2dt(mo);
 	/* parse remote buffers to local buffers and prepare the latter */
 	for (i = 0, j = 0; i < niocount; i++) {
-		rc = dt_bufs_get(env, dob, rnb + i, lnb + j, 0);
+		rc = dt_bufs_get(env, dob, rnb + i, lnb + j, maxlnb, 0);
 		if (unlikely(rc < 0))
 			GOTO(buf_put, rc);
 		/* correct index for local buffers to continue with */
 		j += rc;
+		maxlnb -= rc;
 		*nr_local += rc;
 		tot_bytes += rnb[i].rnb_len;
 	}
@@ -454,6 +456,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 {
 	struct dt_object *dob;
 	int i, j, k, rc = 0, tot_bytes = 0;
+	int maxlnb = *nr_local;
 
 	ENTRY;
 
@@ -491,7 +494,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	dob = mdt_obj2dt(mo);
 	/* parse remote buffers to local buffers and prepare the latter */
 	for (i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
-		rc = dt_bufs_get(env, dob, rnb + i, lnb + j, 1);
+		rc = dt_bufs_get(env, dob, rnb + i, lnb + j, maxlnb, 1);
 		if (unlikely(rc < 0))
 			GOTO(err, rc);
 		/* correct index for local buffers to continue with */
@@ -501,6 +504,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 				lnb[j + k].lnb_rc = -ENOSPC;
 		}
 		j += rc;
+		maxlnb -= rc;
 		*nr_local += rc;
 		tot_bytes += rnb[i].rnb_len;
 	}
@@ -1544,7 +1548,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 	if (lnb == NULL)
 		GOTO(unlock, rc = -ENOMEM);
 
-	rc = dt_bufs_get(env, mo, rnb, lnb, 0);
+	rc = dt_bufs_get(env, mo, rnb, lnb, lnbs, 0);
 	if (unlikely(rc < 0))
 		GOTO(free, rc);
 	LASSERT(rc <= lnbs);
