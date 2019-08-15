@@ -332,13 +332,6 @@ lnet_sock_listen(struct socket **sockp,
 	return rc;
 }
 
-#ifndef HAVE_SK_SLEEP
-static inline wait_queue_head_t *sk_sleep(struct sock *sk)
-{
-	return sk->sk_sleep;
-}
-#endif
-
 int
 lnet_sock_accept(struct socket **newsockp, struct socket *sock)
 {

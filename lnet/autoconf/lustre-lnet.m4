@@ -1,53 +1,3 @@
-#
-# LN_CHECK_GCC_VERSION
-#
-# Check compiler version
-#
-AC_DEFUN([LN_CHECK_GCC_VERSION], [
-AC_MSG_CHECKING([compiler version])
-PTL_CC_VERSION=`$CC --version | awk '/^gcc/{print $ 3}'`
-PTL_MIN_CC_VERSION="3.2.2"
-v2n() {
-	awk -F. '{printf "%d\n", (($ 1)*100+($ 2))*100+($ 3)}'
-}
-if test -z "$PTL_CC_VERSION" -o \
-	$(echo $PTL_CC_VERSION | v2n) -ge $(echo $PTL_MIN_CC_VERSION | v2n); then
-	AC_MSG_RESULT([ok])
-else
-	AC_MSG_RESULT([Buggy compiler found])
-	AC_MSG_ERROR([Need gcc version >= $PTL_MIN_CC_VERSION])
-fi
-]) # LN_CHECK_GCC_VERSION
-
-#
-# LN_CONFIG_AFFINITY
-#
-# check if cpu affinity is available/wanted
-#
-AC_DEFUN([LN_CONFIG_AFFINITY], [
-AC_MSG_CHECKING([whether to enable CPU affinity support])
-AC_ARG_ENABLE([affinity],
-	AC_HELP_STRING([--disable-affinity],
-		[disable process/irq affinity]),
-	[], [enable_affinity="yes"])
-AC_MSG_RESULT([$enable_affinity])
-AS_IF([test "x$enable_affinity" = xyes], [
-	LB_CHECK_COMPILE([if Linux kernel has cpu affinity support],
-	set_cpus_allowed_ptr, [
-		#include <linux/sched.h>
-	],[
-		struct task_struct *t = NULL;
-		cpumask_t m = { };
-
-		set_cpus_allowed_ptr(t, &m);
-	],[
-		AC_DEFINE(CPU_AFFINITY, 1,
-			[kernel has cpu affinity support])
-	])
-])
-]) # LN_CONFIG_AFFINITY
-
-#
 # LN_CONFIG_BACKOFF
 #
 # check if tunable tcp backoff is available/wanted
@@ -634,45 +584,6 @@ AC_SUBST(GNICPPFLAGS)
 AC_SUBST(GNILND)
 ]) # LN_CONFIG_GNILND
 
-#
-# LN_CONFIG_SK_SLEEP
-#
-# 2.6.35 kernel has sk_sleep function
-#
-AC_DEFUN([LN_CONFIG_SK_SLEEP], [
-LB_CHECK_COMPILE([if Linux kernel has 'sk_sleep'],
-sk_sleep, [
-	#include <net/sock.h>
-],[
-	sk_sleep(NULL);
-],[
-	AC_DEFINE(HAVE_SK_SLEEP, 1,
-		  [kernel has sk_sleep])
-])
-]) # LN_CONFIG_SK_SLEEP
-
-#
-# LN_CONFIG_TCP_SENDPAGE
-#
-# 2.6.36 tcp_sendpage() first parameter is 'struct sock'
-# instead of 'struct socket'.
-#
-AC_DEFUN([LN_CONFIG_TCP_SENDPAGE], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if 'tcp_sendpage' first parameter is socket],
-tcp_sendpage_socket, [
-	#include <linux/net.h>
-	#include <net/tcp.h>
-],[
-	tcp_sendpage((struct socket*)0, NULL, 0, 0, 0);
-],[
-	AC_DEFINE(HAVE_TCP_SENDPAGE_USE_SOCKET, 1,
-		[tcp_sendpage use socket as first parameter])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-]) # LN_CONFIG_TCP_SENDPAGE
-
 # LN_CONFIG_SOCK_CREATE_KERN
 #
 # 4.x sock_create_kern() added a first parameter as 'struct net *'
@@ -846,14 +757,9 @@ AC_DEFUN([LN_PROG_LINUX], [
 AC_MSG_NOTICE([LNet kernel checks
 ==============================================================================])
 
-LN_CONFIG_AFFINITY
 LN_CONFIG_BACKOFF
 LN_CONFIG_O2IB
 LN_CONFIG_GNILND
-# 2.6.35
-LN_CONFIG_SK_SLEEP
-# 2.6.36
-LN_CONFIG_TCP_SENDPAGE
 # 3.10
 LN_EXPORT_KMAP_TO_PAGE
 # 3.15

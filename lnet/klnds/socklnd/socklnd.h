@@ -54,14 +54,6 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>
 
-#ifdef HAVE_TCP_SENDPAGE_USE_SOCKET
-# define cfs_tcp_sendpage(sk, page, offset, size, flags) \
-	tcp_sendpage((sk)->sk_socket, page, offset, size, flags)
-#else /* !HAVE_TCP_SENDPAGE_USE_SOCKET */
-# define cfs_tcp_sendpage(sk, page, offset, size, flags) \
-	tcp_sendpage(sk, page, offset, size, flags)
-#endif /* HAVE_TCP_SENDPAGE_USE_SOCKET */
-
 #ifndef NETIF_F_CSUM_MASK
 # define NETIF_F_CSUM_MASK NETIF_F_ALL_CSUM
 #endif
@@ -152,9 +144,7 @@ struct ksock_tunables {
         unsigned int     *ksnd_zc_min_payload;  /* minimum zero copy payload size */
         int              *ksnd_zc_recv;         /* enable ZC receive (for Chelsio TOE) */
         int              *ksnd_zc_recv_min_nfrags; /* minimum # of fragments to enable ZC receive */
-#ifdef CPU_AFFINITY
         int              *ksnd_irq_affinity;    /* enable IRQ affinity? */
-#endif
 #ifdef SOCKNAL_BACKOFF
         int              *ksnd_backoff_init;    /* initial TCP backoff */
         int              *ksnd_backoff_max;     /* maximum TCP backoff */

@@ -145,8 +145,7 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 			rc = sk->sk_prot->sendpage(sk, page,
 						   offset, fragsize, msgflg);
 		} else {
-			rc = cfs_tcp_sendpage(sk, page, offset, fragsize,
-					      msgflg);
+			rc = tcp_sendpage(sk, page, offset, fragsize, msgflg);
 		}
 	} else {
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK

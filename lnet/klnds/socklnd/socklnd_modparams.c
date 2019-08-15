@@ -117,11 +117,9 @@ static int inject_csum_error = 0;
 module_param(inject_csum_error, int, 0644);
 MODULE_PARM_DESC(inject_csum_error, "set non-zero to inject a checksum error");
 
-#ifdef CPU_AFFINITY
 static int enable_irq_affinity = 0;
 module_param(enable_irq_affinity, int, 0644);
 MODULE_PARM_DESC(enable_irq_affinity, "enable IRQ affinity");
-#endif
 
 static int nonblk_zcack = 1;
 module_param(nonblk_zcack, int, 0644);
@@ -189,7 +187,6 @@ int ksocknal_tunables_init(void)
         ksocknal_tunables.ksnd_zc_recv            = &zc_recv;
         ksocknal_tunables.ksnd_zc_recv_min_nfrags = &zc_recv_min_nfrags;
 
-#ifdef CPU_AFFINITY
 	if (enable_irq_affinity) {
 		CWARN("irq_affinity is removed from socklnd because modern "
 		      "computer always has fast CPUs and more cores than "
@@ -197,7 +194,6 @@ int ksocknal_tunables_init(void)
 		      "another way, please check manual for details.\n");
 	}
         ksocknal_tunables.ksnd_irq_affinity       = &enable_irq_affinity;
-#endif
 
 #ifdef SOCKNAL_BACKOFF
         ksocknal_tunables.ksnd_backoff_init       = &backoff_init;
