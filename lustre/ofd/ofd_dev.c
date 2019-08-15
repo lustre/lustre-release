@@ -2068,7 +2068,8 @@ static int ofd_ladvise_prefetch(const struct lu_env *env,
 			PTLRPC_MAX_BRW_PAGES;
 		rnb.rnb_offset = start_index << PAGE_SHIFT;
 		rnb.rnb_len = nr_local << PAGE_SHIFT;
-		rc = dt_bufs_get(env, ofd_object_child(fo), &rnb, lnb, dbt);
+		rc = dt_bufs_get(env, ofd_object_child(fo), &rnb, lnb,
+				 PTLRPC_MAX_BRW_PAGES, dbt);
 		if (unlikely(rc < 0))
 			break;
 		nr_local = rc;

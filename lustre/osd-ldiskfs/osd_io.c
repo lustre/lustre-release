@@ -650,8 +650,9 @@ out:
 }
 
 static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
-                                   struct niobuf_local *lnb)
+				   struct niobuf_local *lnb, int maxlnb)
 {
+	int rc = 0;
         ENTRY;
 
         *nrpages = 0;
@@ -659,6 +660,11 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
         while (len > 0) {
 		int poff = offset & (PAGE_SIZE - 1);
 		int plen = PAGE_SIZE - poff;
+
+		if (*nrpages >= maxlnb) {
+			rc = -EOVERFLOW;
+			break;
+		}
 
                 if (plen > len)
                         plen = len;
@@ -680,7 +686,7 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
                 (*nrpages)++;
         }
 
-        RETURN(0);
+	RETURN(rc);
 }
 
 static struct page *osd_get_page(const struct lu_env *env, struct dt_object *dt,
@@ -831,7 +837,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
  */
 static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			loff_t pos, ssize_t len, struct niobuf_local *lnb,
-			enum dt_bufs_type rw)
+			int maxlnb, enum dt_bufs_type rw)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_object *obj = osd_dt_obj(dt);
@@ -849,7 +855,9 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 		}
 	}
 
-	osd_map_remote_to_local(pos, len, &npages, lnb);
+	rc = osd_map_remote_to_local(pos, len, &npages, lnb, maxlnb);
+	if (rc)
+		RETURN(rc);
 
 	/* this could also try less hard for DT_BUFS_TYPE_READAHEAD pages */
 	gfp_mask = rw & DT_BUFS_TYPE_LOCAL ? (GFP_NOFS | __GFP_HIGHMEM) :

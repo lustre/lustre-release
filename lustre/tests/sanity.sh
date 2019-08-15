@@ -20742,6 +20742,26 @@ test_816() {
 }
 run_test 816 "do not reset lru_resize on idle reconnect"
 
+test_819a() {
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
+	cancel_lru_locks osc
+	#define OBD_FAIL_OST_2BIG_NIOBUF		0x248
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000248
+	dd if=$DIR/$tfile of=/dev/null bs=1M count=1
+	rm -f $TDIR/$tfile
+}
+run_test 819a "too big niobuf in read"
+
+test_819b() {
+	#define OBD_FAIL_OST_2BIG_NIOBUF		0x248
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000248
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
+	cancel_lru_locks osc
+	sleep 1
+	rm -f $TDIR/$tfile
+}
+run_test 819b "too big niobuf in write"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

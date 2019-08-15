@@ -1183,6 +1183,7 @@ struct dt_body_operations {
 	 * \param[in] pos	position in the object to start
 	 * \param[in] len	size of region in bytes
 	 * \param[out] lb	array of descriptors to fill
+	 * \param[in] maxlnb	max slots in @lnb array
 	 * \param[in] rw	0 if used to read, 1 if used for write
 	 *
 	 * \retval positive	number of descriptors on success
@@ -1193,6 +1194,7 @@ struct dt_body_operations {
 			    loff_t pos,
 			    ssize_t len,
 			    struct niobuf_local *lb,
+			    int maxlnb,
 			    enum dt_bufs_type rw);
 
 	/**
@@ -2396,13 +2398,14 @@ static inline int dt_ref_del(const struct lu_env *env,
 
 static inline int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
 			      struct niobuf_remote *rnb,
-			      struct niobuf_local *lnb, enum dt_bufs_type rw)
+			      struct niobuf_local *lnb, int maxlnb,
+			      enum dt_bufs_type rw)
 {
 	LASSERT(d);
 	LASSERT(d->do_body_ops);
 	LASSERT(d->do_body_ops->dbo_bufs_get);
 	return d->do_body_ops->dbo_bufs_get(env, d, rnb->rnb_offset,
-					    rnb->rnb_len, lnb, rw);
+					    rnb->rnb_len, lnb, maxlnb, rw);
 }
 
 static inline int dt_bufs_put(const struct lu_env *env, struct dt_object *d,
