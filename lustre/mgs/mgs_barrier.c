@@ -358,6 +358,7 @@ static int mgs_barrier_freeze(const struct lu_env *env,
 			rc = -EALREADY;
 			break;
 		}
+		/* fallthrough */
 	case BS_INIT:
 	case BS_THAWED:
 	case BS_EXPIRED:
@@ -683,6 +684,7 @@ static int mgs_barrier_rescan(const struct lu_env *env,
 			rc = -EBUSY;
 			break;
 		}
+		/* fallthrough */
 	case BS_INIT:
 	case BS_THAWED:
 	case BS_EXPIRED:

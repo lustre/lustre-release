@@ -3699,6 +3699,7 @@ lnet_mt_event_handler(struct lnet_event *event)
 	case LNET_EVENT_UNLINK:
 		CDEBUG(D_NET, "%s recovery ping unlinked\n",
 		       libcfs_nid2str(ev_info->mt_nid));
+		/* fallthrough */
 	case LNET_EVENT_REPLY:
 		lnet_handle_recovery_reply(ev_info, event->status,
 					   event->type == LNET_EVENT_UNLINK);

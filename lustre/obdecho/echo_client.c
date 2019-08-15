@@ -986,13 +986,17 @@ out:
 			CERROR("Cleanup obd device %s error(%d)\n",
 			       obd->obd_name, rc2);
 	}
+	/* fallthrough */
 
 	case 3:
 		echo_site_fini(env, ed);
+		/* fallthrough */
 	case 2:
 		cl_device_fini(&ed->ed_cl);
+		/* fallthrough */
 	case 1:
 		OBD_FREE_PTR(ed);
+		/* fallthrough */
 	case 0:
 	default:
 		break;

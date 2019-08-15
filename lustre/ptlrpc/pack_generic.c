@@ -826,7 +826,7 @@ __u32 lustre_msg_get_flags(struct lustre_msg *msg)
 
 		CERROR("invalid msg %p: no ptlrpc body!\n", msg);
 	}
-	/* no break */
+	/* fallthrough */
 	default:
 		/* flags might be printed in debug code while message
 		 * uninitialized */
@@ -890,7 +890,7 @@ __u32 lustre_msg_get_op_flags(struct lustre_msg *msg)
 
 		CERROR("invalid msg %p: no ptlrpc body!\n", msg);
 	}
-	/* no break */
+	/* fallthrough */
 	default:
 		return 0;
 	}
@@ -1095,7 +1095,7 @@ int lustre_msg_get_status(struct lustre_msg *msg)
 			return pb->pb_status;
 		CERROR("invalid msg %p: no ptlrpc body!\n", msg);
 	}
-	/* no break */
+	/* fallthrough */
 	default:
 		/* status might be printed in debug code while message
 		* uninitialized */
@@ -2152,6 +2152,7 @@ void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 	switch (lum->lum_magic) {
 	case LMV_USER_MAGIC_SPECIFIC:
 		count = lum->lum_stripe_count;
+		/* fallthrough */
 	case __swab32(LMV_USER_MAGIC_SPECIFIC):
 		lustre_swab_lmv_user_md_objects(lum->lum_objects, count);
 		break;

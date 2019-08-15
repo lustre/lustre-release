@@ -4701,6 +4701,7 @@ static int mgs_lcfg_fork_handler(const struct lu_env *env,
 			} /* else case fall through */
 		} /* else case fall through */
 	}
+	/* fallthrough */
 	default: {
 		for (i = 1; i < cnt; i++) {
 			o_buflen = o_lcfg->lcfg_buflens[i];

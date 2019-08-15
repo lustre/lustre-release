@@ -681,10 +681,12 @@ static void request_key_unlink(struct key *key)
 		ring = key_get(key_cred(tsk)->thread_keyring);
 		if (ring)
 			break;
+		/* fallthrough */
 	case KEY_REQKEY_DEFL_PROCESS_KEYRING:
 		ring = key_get(key_tgcred(tsk)->process_keyring);
 		if (ring)
 			break;
+		/* fallthrough */
 	case KEY_REQKEY_DEFL_SESSION_KEYRING:
 		rcu_read_lock();
 		ring = key_get(rcu_dereference(key_tgcred(tsk)
@@ -692,6 +694,7 @@ static void request_key_unlink(struct key *key)
 		rcu_read_unlock();
 		if (ring)
 			break;
+		/* fallthrough */
 	case KEY_REQKEY_DEFL_USER_SESSION_KEYRING:
 		ring = key_get(key_cred(tsk)->user->session_keyring);
 		break;

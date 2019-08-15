@@ -2266,16 +2266,16 @@ ksocknal_base_shutdown(void)
 	       atomic_read (&libcfs_kmemory));
 	LASSERT (ksocknal_data.ksnd_nnets == 0);
 
-        switch (ksocknal_data.ksnd_init) {
-        default:
-                LASSERT (0);
+	switch (ksocknal_data.ksnd_init) {
+	default:
+		LASSERT(0);
+		/* fallthrough */
 
-        case SOCKNAL_INIT_ALL:
-        case SOCKNAL_INIT_DATA:
-                LASSERT (ksocknal_data.ksnd_peers != NULL);
-                for (i = 0; i < ksocknal_data.ksnd_peer_hash_size; i++) {
+	case SOCKNAL_INIT_ALL:
+	case SOCKNAL_INIT_DATA:
+		LASSERT(ksocknal_data.ksnd_peers != NULL);
+		for (i = 0; i < ksocknal_data.ksnd_peer_hash_size; i++)
 			LASSERT(list_empty(&ksocknal_data.ksnd_peers[i]));
-                }
 
 		LASSERT(list_empty(&ksocknal_data.ksnd_nets));
 		LASSERT(list_empty(&ksocknal_data.ksnd_enomem_conns));

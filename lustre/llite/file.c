@@ -163,6 +163,7 @@ static int ll_close_inode_openhandle(struct inode *inode,
 		op_data->op_attr_blocks += ((struct inode *)data)->i_blocks;
 		op_data->op_attr.ia_valid |= ATTR_SIZE;
 		op_data->op_xvalid |= OP_XVALID_BLOCKS;
+		/* fallthrough */
 	case MDS_CLOSE_LAYOUT_SPLIT:
 	case MDS_CLOSE_LAYOUT_SWAP: {
 		struct split_param *sp = data;
@@ -3020,6 +3021,7 @@ static int ll_ladvise_sanity(struct inode *inode,
 			       ladvise_names[advice], rc);
 			GOTO(out, rc);
 		}
+		/* fallthrough */
 	case LU_LADVISE_WILLREAD:
 	case LU_LADVISE_DONTNEED:
 	default:

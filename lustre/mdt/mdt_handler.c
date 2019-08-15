@@ -2704,12 +2704,14 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	case LUSTRE_Q_SETDEFAULT:
 		if (!nodemap_can_setquota(nodemap))
 			GOTO(out_nodemap, rc = -EPERM);
+		/* fallthrough */
 	case Q_GETINFO:
 	case Q_GETQUOTA:
 	case LUSTRE_Q_GETDEFAULT:
 		if (qmt == NULL)
 			GOTO(out_nodemap, rc = -EOPNOTSUPP);
 		/* slave quotactl */
+		/* fallthrough */
 	case Q_GETOINFO:
 	case Q_GETOQUOTA:
 		break;

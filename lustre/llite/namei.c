@@ -398,11 +398,13 @@ int ll_md_need_convert(struct ldlm_lock *lock)
 	switch (lock->l_req_mode) {
 	case LCK_PR:
 		mode = LCK_PR;
+		/* fallthrough */
 	case LCK_PW:
 		mode |= LCK_CR;
 		break;
 	case LCK_CW:
 		mode = LCK_CW;
+		/* fallthrough */
 	case LCK_CR:
 		mode |= LCK_CR;
 		break;
@@ -1449,37 +1451,38 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, ll_umode_t mode,
 {
 	struct qstr *name = &dchild->d_name;
 	int err;
-        ENTRY;
+	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s, dir="DFID"(%p) mode %o dev %x\n",
 	       name->len, name->name, PFID(ll_inode2fid(dir)), dir,
-               mode, rdev);
+	       mode, rdev);
 
 	if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
 		mode &= ~current_umask();
 
-        switch (mode & S_IFMT) {
-        case 0:
-                mode |= S_IFREG; /* for mode = 0 case, fallthrough */
-        case S_IFREG:
-        case S_IFCHR:
-        case S_IFBLK:
-        case S_IFIFO:
-        case S_IFSOCK:
+	switch (mode & S_IFMT) {
+	case 0:
+		mode |= S_IFREG;
+		/* fallthrough */
+	case S_IFREG:
+	case S_IFCHR:
+	case S_IFBLK:
+	case S_IFIFO:
+	case S_IFSOCK:
 		err = ll_new_node(dir, dchild, NULL, mode, old_encode_dev(rdev),
 				  LUSTRE_OPC_MKNOD);
-                break;
-        case S_IFDIR:
-                err = -EPERM;
-                break;
-        default:
-                err = -EINVAL;
-        }
+		break;
+	case S_IFDIR:
+		err = -EPERM;
+		break;
+	default:
+		err = -EINVAL;
+	}
 
-        if (!err)
-                ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_MKNOD, 1);
+	if (!err)
+		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_MKNOD, 1);
 
-        RETURN(err);
+	RETURN(err);
 }
 
 #ifdef HAVE_IOP_ATOMIC_OPEN
