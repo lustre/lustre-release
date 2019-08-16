@@ -400,20 +400,20 @@ struct ll_ra_info {
  * counted by page index.
  */
 struct ra_io_arg {
-	unsigned long ria_start;  /* start offset of read-ahead*/
-	unsigned long ria_end;    /* end offset of read-ahead*/
+	pgoff_t	ria_start; /* start offset of read-ahead*/
+	pgoff_t ria_end; /* end offset of read-ahead*/
 	unsigned long ria_reserved; /* reserved pages for read-ahead */
-	unsigned long ria_end_min;  /* minimum end to cover current read */
-	bool          ria_eof;    /* reach end of file */
+	pgoff_t ria_end_min; /* minimum end to cover current read */
+	bool ria_eof; /* reach end of file */
 	/* If stride read pattern is detected, ria_stoff means where
 	 * stride read is started. Note: for normal read-ahead, the
 	 * value here is meaningless, and also it will not be accessed*/
-	pgoff_t ria_stoff;
-	/* ria_length and ria_pages are the length and pages length in the
+	unsigned long ria_stoff;
+	/* ria_length and ria_bytes are the length and pages length in the
 	 * stride I/O mode. And they will also be used to check whether
 	 * it is stride I/O read-ahead in the read-ahead pages*/
 	unsigned long ria_length;
-	unsigned long ria_pages;
+	unsigned long ria_bytes;
 };
 
 /* LL_HIST_MAX=32 causes an overflow */
@@ -618,16 +618,10 @@ struct ll_sb_info {
  */
 struct ll_readahead_state {
 	spinlock_t  ras_lock;
+	/* End byte that read(2) try to read.  */
+	unsigned long ras_last_read_end;
         /*
-         * index of the last page that read(2) needed and that wasn't in the
-         * cache. Used by ras_update() to detect seeks.
-         *
-         * XXX nikita: if access seeks into cached region, Lustre doesn't see
-         * this.
-         */
-        unsigned long   ras_last_readpage;
-        /*
-         * number of pages read after last read-ahead window reset. As window
+	 * number of bytes read after last read-ahead window reset. As window
          * is reset on each seek, this is effectively a number of consecutive
          * accesses. Maybe ->ras_accessed_in_window is better name.
          *
@@ -636,13 +630,13 @@ struct ll_readahead_state {
          * case, it probably doesn't make sense to expand window to
          * PTLRPC_MAX_BRW_PAGES on the third access.
          */
-        unsigned long   ras_consecutive_pages;
+	unsigned long ras_consecutive_bytes;
         /*
          * number of read requests after the last read-ahead window reset
          * As window is reset on each seek, this is effectively the number
          * on consecutive read request and is used to trigger read-ahead.
          */
-        unsigned long   ras_consecutive_requests;
+	unsigned long ras_consecutive_requests;
         /*
          * Parameters of current read-ahead window. Handled by
          * ras_update(). On the initial access to the file or after a seek,
@@ -650,12 +644,12 @@ struct ll_readahead_state {
          * expanded to PTLRPC_MAX_BRW_PAGES. Afterwards, window is enlarged by
          * PTLRPC_MAX_BRW_PAGES chunks up to ->ra_max_pages.
          */
-        unsigned long   ras_window_start, ras_window_len;
+	pgoff_t ras_window_start, ras_window_len;
 	/*
 	 * Optimal RPC size. It decides how many pages will be sent
 	 * for each read-ahead.
 	 */
-	unsigned long	ras_rpc_size;
+	unsigned long ras_rpc_size;
         /*
          * Where next read-ahead should start at. This lies within read-ahead
          * window. Read-ahead window is read in pieces rather than at once
@@ -663,41 +657,41 @@ struct ll_readahead_state {
          * ->ra_max_pages (see ll_ra_count_get()), 2. client cannot read pages
          * not covered by DLM lock.
          */
-        unsigned long   ras_next_readahead;
+	pgoff_t ras_next_readahead;
         /*
          * Total number of ll_file_read requests issued, reads originating
          * due to mmap are not counted in this total.  This value is used to
          * trigger full file read-ahead after multiple reads to a small file.
          */
-        unsigned long   ras_requests;
+	unsigned long ras_requests;
         /*
          * Page index with respect to the current request, these value
          * will not be accurate when dealing with reads issued via mmap.
          */
-        unsigned long   ras_request_index;
+	unsigned long ras_request_index;
         /*
          * The following 3 items are used for detecting the stride I/O
          * mode.
          * In stride I/O mode,
          * ...............|-----data-----|****gap*****|--------|******|....
-         *    offset      |-stride_pages-|-stride_gap-|
+	 *    offset      |-stride_bytes-|-stride_gap-|
          * ras_stride_offset = offset;
-         * ras_stride_length = stride_pages + stride_gap;
-         * ras_stride_pages = stride_pages;
-         * Note: all these three items are counted by pages.
-         */
-        unsigned long   ras_stride_length;
-        unsigned long   ras_stride_pages;
-        pgoff_t         ras_stride_offset;
+	 * ras_stride_length = stride_bytes + stride_gap;
+	 * ras_stride_bytes = stride_bytes;
+	 * Note: all these three items are counted by bytes.
+	 */
+	unsigned long ras_stride_length;
+	unsigned long ras_stride_bytes;
+	unsigned long ras_stride_offset;
         /*
          * number of consecutive stride request count, and it is similar as
          * ras_consecutive_requests, but used for stride I/O mode.
          * Note: only more than 2 consecutive stride request are detected,
          * stride read-ahead will be enable
          */
-        unsigned long   ras_consecutive_stride_requests;
+	unsigned long ras_consecutive_stride_requests;
 	/* index of the last page that async readahead starts */
-	unsigned long	ras_async_last_readpage;
+	pgoff_t ras_async_last_readpage;
 };
 
 struct ll_readahead_work {
