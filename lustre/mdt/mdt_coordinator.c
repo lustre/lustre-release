@@ -1091,7 +1091,7 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 		RETURN(-EALREADY);
 	}
 
-	CLASSERT(1 << (CDT_POLICY_SHIFT_COUNT - 1) == CDT_POLICY_LAST);
+	BUILD_BUG_ON(BIT(CDT_POLICY_SHIFT_COUNT - 1) != CDT_POLICY_LAST);
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
 
 	/* just need to be larger than previous one */

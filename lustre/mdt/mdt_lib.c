@@ -1098,7 +1098,7 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1259,7 +1259,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1338,7 +1338,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1382,7 +1382,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1435,7 +1435,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1488,7 +1488,7 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1579,7 +1579,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	int rc;
 	ENTRY;
 
-	CLASSERT(sizeof(struct mdt_rec_create) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(struct mdt_rec_create) !=
+		     sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1662,9 +1663,8 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 	ENTRY;
 
 
-	CLASSERT(sizeof(struct mdt_rec_setxattr) ==
-		 sizeof(struct mdt_rec_reint));
-
+	BUILD_BUG_ON(sizeof(struct mdt_rec_setxattr) !=
+		     sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);
@@ -1725,7 +1725,7 @@ static int mdt_resync_unpack(struct mdt_thread_info *info)
 	struct mdt_rec_resync	*rec;
 	ENTRY;
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
 	if (rec == NULL)
 		RETURN(-EFAULT);

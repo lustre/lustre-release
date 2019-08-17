@@ -1847,8 +1847,8 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 				ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
 		} else {
 			/* Set up HSM attribte for PCC archived object */
-			CLASSERT(sizeof(struct hsm_attrs) <=
-				 sizeof(info->mti_xattr_buf));
+			BUILD_BUG_ON(sizeof(struct hsm_attrs) >
+				     sizeof(info->mti_xattr_buf));
 			buf = &info->mti_buf;
 			buf->lb_buf = info->mti_xattr_buf;
 			buf->lb_len = sizeof(struct hsm_attrs);
@@ -1947,7 +1947,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	}
 
 	/* Set up HSM attribute for orphan object */
-	CLASSERT(sizeof(struct hsm_attrs) <= sizeof(info->mti_xattr_buf));
+	BUILD_BUG_ON(sizeof(struct hsm_attrs) > sizeof(info->mti_xattr_buf));
 	buf = &info->mti_buf;
 	buf->lb_buf = info->mti_xattr_buf;
 	buf->lb_len = sizeof(struct hsm_attrs);

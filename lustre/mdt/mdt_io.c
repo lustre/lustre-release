@@ -879,7 +879,7 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 	ENTRY;
 
 	/* check that we do support OBD_CONNECT_TRUNCLOCK. */
-	CLASSERT(OST_CONNECT_SUPPORTED & OBD_CONNECT_TRUNCLOCK);
+	BUILD_BUG_ON(!(OST_CONNECT_SUPPORTED & OBD_CONNECT_TRUNCLOCK));
 
 	if ((oa->o_valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) !=
 	    (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))

@@ -1107,8 +1107,8 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 	if (need & MA_HSM && S_ISREG(mode)) {
 		buf->lb_buf = info->mti_xattr_buf;
 		buf->lb_len = sizeof(info->mti_xattr_buf);
-		CLASSERT(sizeof(struct hsm_attrs) <=
-			 sizeof(info->mti_xattr_buf));
+		BUILD_BUG_ON(sizeof(struct hsm_attrs) >
+			     sizeof(info->mti_xattr_buf));
 		rc2 = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_HSM);
 		rc2 = lustre_buf2hsm(info->mti_xattr_buf, rc2, &ma->ma_hsm);
 		if (rc2 == 0)
@@ -7061,10 +7061,10 @@ static int __init mdt_init(void)
 {
 	int rc;
 
-	CLASSERT(sizeof("0x0123456789ABCDEF:0x01234567:0x01234567") ==
-		 FID_NOBRACE_LEN + 1);
-	CLASSERT(sizeof("[0x0123456789ABCDEF:0x01234567:0x01234567]") ==
-		 FID_LEN + 1);
+	BUILD_BUG_ON(sizeof("0x0123456789ABCDEF:0x01234567:0x01234567") !=
+		     FID_NOBRACE_LEN + 1);
+	BUILD_BUG_ON(sizeof("[0x0123456789ABCDEF:0x01234567:0x01234567]") !=
+		     FID_LEN + 1);
 	rc = lu_kmem_init(mdt_caches);
 	if (rc)
 		return rc;

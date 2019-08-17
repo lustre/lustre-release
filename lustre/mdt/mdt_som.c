@@ -75,8 +75,8 @@ int mdt_get_som(struct mdt_thread_info *info, struct mdt_object *obj,
 
 	buf->lb_buf = info->mti_xattr_buf;
 	buf->lb_len = sizeof(info->mti_xattr_buf);
-	CLASSERT(sizeof(struct lustre_som_attrs) <=
-		 sizeof(info->mti_xattr_buf));
+	BUILD_BUG_ON(sizeof(struct lustre_som_attrs) >
+		     sizeof(info->mti_xattr_buf));
 	rc = mo_xattr_get(info->mti_env, mdt_object_child(obj), buf,
 			  XATTR_NAME_SOM);
 	rc = lustre_buf2som(info->mti_xattr_buf, rc, &ma->ma_som);
@@ -126,7 +126,7 @@ int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
 	       PFID(mdt_object_fid(obj)), size, blocks, flag);
 
 	som = (struct lustre_som_attrs *)info->mti_xattr_buf;
-	CLASSERT(sizeof(info->mti_xattr_buf) >= sizeof(*som));
+	BUILD_BUG_ON(sizeof(info->mti_xattr_buf) < sizeof(*som));
 
 	som->lsa_valid = flag;
 	som->lsa_size = size;

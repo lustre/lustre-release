@@ -66,7 +66,7 @@ int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 	ENTRY;
 
 	attrs = (struct hsm_attrs *)info->mti_xattr_buf;
-	CLASSERT(sizeof(info->mti_xattr_buf) >= sizeof(*attrs));
+	BUILD_BUG_ON(sizeof(info->mti_xattr_buf) < sizeof(*attrs));
 
 	/* pack HSM attributes */
 	lustre_hsm2buf(info->mti_xattr_buf, mh);
