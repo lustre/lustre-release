@@ -1600,12 +1600,19 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 	struct ldlm_resource *res, *pres = NULL;
 	struct ldlm_lock *lock;
 	int i, count, done = 0;
+	unsigned int size;
 
 	ENTRY;
 
-        count = dlm_req->lock_count ? dlm_req->lock_count : 1;
-        if (first >= count)
-                RETURN(0);
+	size = req_capsule_get_size(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT);
+	if (size <= offsetof(struct ldlm_request, lock_handle) ||
+	    (size - offsetof(struct ldlm_request, lock_handle)) /
+	     sizeof(struct lustre_handle) < dlm_req->lock_count)
+		RETURN(0);
+
+	count = dlm_req->lock_count ? dlm_req->lock_count : 1;
+	if (first >= count)
+		RETURN(0);
 
 	if (count == 1 && dlm_req->lock_handle[0].cookie == 0)
 		RETURN(0);
@@ -1689,14 +1696,18 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 RETURN(-EFAULT);
         }
 
-        if (req->rq_export && req->rq_export->exp_nid_stats &&
-            req->rq_export->exp_nid_stats->nid_ldlm_stats)
-                lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
-                                     LDLM_CANCEL - LDLM_FIRST_OPC);
+	if (req_capsule_get_size(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT) <
+	    offsetof(struct ldlm_request, lock_handle[1]))
+		RETURN(-EPROTO);
 
-        rc = req_capsule_server_pack(&req->rq_pill);
-        if (rc)
-                RETURN(rc);
+	if (req->rq_export && req->rq_export->exp_nid_stats &&
+	    req->rq_export->exp_nid_stats->nid_ldlm_stats)
+		lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
+				     LDLM_CANCEL - LDLM_FIRST_OPC);
+
+	rc = req_capsule_server_pack(&req->rq_pill);
+	if (rc)
+		RETURN(rc);
 
 	if (!ldlm_request_cancel(req, dlm_req, 0, LATF_STATS))
 		req->rq_status = LUSTRE_ESTALE;
