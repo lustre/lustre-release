@@ -323,7 +323,7 @@ int lqos_calc_penalties(struct lu_qos *qos, struct lu_tgt_descs *ltd,
 		 * per-tgt penalty is
 		 * prio * bavail * iavail / (num_tgt - 1) / 2
 		 */
-		tgt->ltd_qos.ltq_penalty_per_obj = prio_wide * ba * ia;
+		tgt->ltd_qos.ltq_penalty_per_obj = prio_wide * ba * ia >> 8;
 		do_div(tgt->ltd_qos.ltq_penalty_per_obj, num_active);
 		tgt->ltd_qos.ltq_penalty_per_obj >>= 1;
 
@@ -357,7 +357,7 @@ int lqos_calc_penalties(struct lu_qos *qos, struct lu_tgt_descs *ltd,
 	list_for_each_entry(svr, &qos->lq_svr_list, lsq_svr_list) {
 		ba = svr->lsq_bavail;
 		ia = svr->lsq_iavail;
-		svr->lsq_penalty_per_obj = prio_wide * ba  * ia;
+		svr->lsq_penalty_per_obj = prio_wide * ba  * ia >> 8;
 		do_div(ba, svr->lsq_tgt_count * num_active);
 		svr->lsq_penalty_per_obj >>= 1;
 

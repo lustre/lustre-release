@@ -20792,57 +20792,56 @@ test_413b() {
 	sleep_maxage
 
 	local ffree
+	local bavail
 	local max
 	local min
 	local max_index
 	local min_index
+	local tmp
 
-	ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.filesfree | uniq))
-	echo "MDT filesfree available: ${ffree[@]}"
-	max=${ffree[0]}
-	min=${ffree[0]}
+	ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.filesfree))
+	bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-[^M]*.kbytesavail))
+	bsize=$(lctl get_param -n mdc.*MDT0000*.blocksize)
+
+	max=$(((${ffree[0]} >> 8) * (${bavail[0]} * bsize >> 16)))
+	min=$(((${ffree[0]} >> 8) * (${bavail[0]} * bsize >> 16)))
 	max_index=0
 	min_index=0
-	for ((i = 0; i < ${#ffree[@]}; i++)); do
-		if [[ ${ffree[i]} -gt $max ]]; then
-			max=${ffree[i]}
+	for ((i = 1; i < ${#ffree[@]}; i++)); do
+		tmp=$(((${ffree[i]} >> 8) * (${bavail[i]} * bsize >> 16)))
+		if [ $tmp -gt $max ]; then
+			max=$tmp
 			max_index=$i
 		fi
-		if [[ ${ffree[i]} -lt $min ]]; then
-			min=${ffree[i]}
+		if [ $tmp -lt $min ]; then
+			min=$tmp
 			min_index=$i
 		fi
 	done
-	echo "Min free files: MDT$min_index: $min"
-	echo "Max free files: MDT$max_index: $max"
 
-	[ $min -eq 0 ] && skip "no free files in MDT$min_index"
-	[ $min -gt 10000000 ] && skip "too much free files in MDT$min_index"
+	[ ${ffree[min_index]} -eq 0 ] &&
+		skip "no free files in MDT$min_index"
+	[ ${ffree[min_index]} -gt 100000000 ] &&
+		skip "too much free files in MDT$min_index"
 
 	# Check if we need to generate uneven MDTs
-	test_mkdir -i $min_index -c 1 -p $DIR/$tdir-MDT$min_index
-	local threshold=10
-	local diff=$((max - min))
-	local diff2=$((diff * 100 / min))
+	local threshold=50
+	local diff=$(((max - min ) * 100 / min))
+	local value="$(generate_string 1024)"
+	local i
 
-	echo -n "Check for uneven MDTs: "
-	echo -n "diff=$diff files ($diff2%) must be > $threshold% ..."
-
-	if [ $diff2 -gt $threshold ]; then
-		echo "ok"
-		echo "Don't need to fill MDT$min_index"
-	else
-		# generate uneven MDTs, create till 25% diff
-		echo "no"
-		diff2=$((threshold - diff2))
-		diff=$((min * diff2 / 100))
+	while [ $diff -lt $threshold ]; do
+		# generate uneven MDTs, create till $threshold% diff
+		echo -n "weight diff=$diff% must be > $threshold% ..."
+		count=$((${ffree[min_index]} / 10))
 		# 50 sec per 10000 files in vm
-		[ $diff -gt 40000 ] && [ "$SLOW" = "no" ] &&
-			skip "$diff files to create"
-		echo "Fill $diff2% diff in MDT$min_index with $diff files"
-		local i
-		local value="$(generate_string 1024)"
-		for i in $(seq $diff); do
+		[ $count -gt 40000 ] && [ "$SLOW" = "no" ] &&
+			skip "$count files to create"
+		echo "Fill MDT$min_index with $count files"
+		[ -d $DIR/$tdir-MDT$min_index ] ||
+			$LFS mkdir -i $min_index $DIR/$tdir-MDT$min_index ||
+			error "mkdir $tdir-MDT$min_index failed"
+		for i in $(seq $count); do
 			$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE \
 				$DIR/$tdir-MDT$min_index/f$i > /dev/null ||
 				error "create f$i failed"
@@ -20850,31 +20849,43 @@ test_413b() {
 				$DIR/$tdir-MDT$min_index/f$i ||
 				error "setfattr f$i failed"
 		done
-	fi
 
-	min=$((100 *MDSCOUNT))
-	max=0
+		ffree=($(lctl get_param -n mdc.*[mM][dD][cC]-*.filesfree))
+		bavail=($(lctl get_param -n mdc.*[mM][dD][cC]-*.kbytesavail))
+		max=$(((${ffree[max_index]} >> 8) * \
+			(${bavail[max_index]} * bsize >> 16)))
+		min=$(((${ffree[min_index]} >> 8) * \
+			(${bavail[min_index]} * bsize >> 16)))
+		diff=$(((max - min) * 100 / min))
+	done
+
+	echo "MDT filesfree available: ${ffree[@]}"
+	echo "MDT blocks available: ${bavail[@]}"
+	echo "weight diff=$diff%"
 
 	echo "mkdir with balanced space usage"
 	$LCTL set_param lmv.*.qos_prio_free=100
 	for i in $(seq $((100 * MDSCOUNT))); do
 		mkdir $DIR/$tdir/subdir$i || error "mkdir subdir$i failed"
 	done
+
 	for i in $(seq $MDSCOUNT); do
 		count=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$((i - 1))$ |
 			wc -w)
 		echo "$count directories created on MDT$((i - 1))"
-		[ $min -gt $count ] && min=$count
-		[ $max -lt $count ] && max=$count
 	done
-	[ $((max - min)) -gt $MDSCOUNT ] ||
+
+	max=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$max_index$ | wc -l)
+	min=$($LFS getdirstripe -i $DIR/$tdir/* | grep ^$min_index$ | wc -l)
+
+	[ $((max - min)) -lt 10 ] &&
 		error "subdirs shouldn't be evenly distributed"
 
 	which getfattr > /dev/null 2>&1 || skip_env "no getfattr command"
 
 	$LFS setdirstripe -D -d $DIR/$tdir || error "setdirstripe -d failed"
-	getfattr -n trusted.dmv $DIR/$tdir && error "default dir layout exists"
-	true
+	getfattr -n trusted.dmv $DIR/$tdir &&
+		error "default dir layout exists" || true
 }
 run_test 413b "mkdir with balanced space usage"
 
