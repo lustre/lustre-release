@@ -2406,6 +2406,7 @@ static int ldlm_cancel_hpreq_check(struct ptlrpc_request *req)
 	struct ldlm_request *dlm_req;
 	int rc = 0;
 	int i;
+	unsigned int size;
 
 	ENTRY;
 
@@ -2416,6 +2417,12 @@ static int ldlm_cancel_hpreq_check(struct ptlrpc_request *req)
 	dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
 	if (dlm_req == NULL)
 		RETURN(-EFAULT);
+
+	size = req_capsule_get_size(&req->rq_pill, &RMF_DLM_REQ, RCL_CLIENT);
+	if (size <= offsetof(struct ldlm_request, lock_handle) ||
+	    (size - offsetof(struct ldlm_request, lock_handle)) /
+	     sizeof(struct lustre_handle) < dlm_req->lock_count)
+		RETURN(-EPROTO);
 
 	for (i = 0; i < dlm_req->lock_count; i++) {
 		struct ldlm_lock *lock;
