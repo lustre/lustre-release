@@ -1583,7 +1583,8 @@ test_66()
 	do_nodes $list $LCTL set_param fail_loc=0x80000136
 
 	#initiate the re-connect & re-send
-	local mdccli=$($LCTL dl | awk '/-MDT0000-mdc-/ {print $4;}')
+	local mdtname="MDT0000"
+	local mdccli=$($LCTL dl | grep "${mdtname}-mdc" | awk '{print $4;}')
 	local conn_uuid=$($LCTL get_param -n mdc.${mdccli}.conn_uuid)
 	$LCTL set_param "mdc.${mdccli}.import=connection=${conn_uuid}"
 	sleep 2
