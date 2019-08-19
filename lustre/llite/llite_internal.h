@@ -681,11 +681,6 @@ struct ll_readahead_state {
          */
 	unsigned long ras_requests;
         /*
-         * Page index with respect to the current request, these value
-         * will not be accurate when dealing with reads issued via mmap.
-         */
-	unsigned long ras_request_index;
-        /*
          * The following 3 items are used for detecting the stride I/O
          * mode.
          * In stride I/O mode,
@@ -708,6 +703,10 @@ struct ll_readahead_state {
 	unsigned long ras_consecutive_stride_requests;
 	/* index of the last page that async readahead starts */
 	pgoff_t ras_async_last_readpage;
+	/* whether we should increase readahead window */
+	bool ras_need_increase_window;
+	/* whether ra miss check should be skipped */
+	bool ras_no_miss_check;
 };
 
 struct ll_readahead_work {
@@ -800,7 +799,7 @@ static inline bool ll_sbi_has_file_heat(struct ll_sb_info *sbi)
 	return !!(sbi->ll_flags & LL_SBI_FILE_HEAT);
 }
 
-void ll_ras_enter(struct file *f);
+void ll_ras_enter(struct file *f, unsigned long pos, unsigned long count);
 
 /* llite/lcommon_misc.c */
 int cl_ocd_update(struct obd_device *host, struct obd_device *watched,

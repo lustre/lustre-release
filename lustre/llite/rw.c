@@ -131,12 +131,11 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which)
 #define RAS_CDEBUG(ras) \
 	CDEBUG(D_READA,                                                      \
 	       "lre %lu cr %lu cb %lu ws %lu wl %lu nra %lu rpc %lu "        \
-	       "r %lu ri %lu csr %lu sf %lu sb %lu sl %lu lr %lu\n", \
+	       "r %lu csr %lu sf %lu sb %lu sl %lu lr %lu\n",		     \
 	       ras->ras_last_read_end, ras->ras_consecutive_requests,        \
 	       ras->ras_consecutive_bytes, ras->ras_window_start,            \
 	       ras->ras_window_len, ras->ras_next_readahead,                 \
-	       ras->ras_rpc_size,                                            \
-	       ras->ras_requests, ras->ras_request_index,                    \
+	       ras->ras_rpc_size, ras->ras_requests,			     \
 	       ras->ras_consecutive_stride_requests, ras->ras_stride_offset, \
 	       ras->ras_stride_bytes, ras->ras_stride_length,		     \
 	       ras->ras_async_last_readpage)
@@ -152,18 +151,6 @@ static int pos_in_window(unsigned long pos, unsigned long point,
                end = ~0;
 
 	return start <= pos && pos <= end;
-}
-
-void ll_ras_enter(struct file *f)
-{
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(f);
-	struct ll_readahead_state *ras = &fd->fd_ras;
-
-	spin_lock(&ras->ras_lock);
-	ras->ras_requests++;
-	ras->ras_request_index = 0;
-	ras->ras_consecutive_requests++;
-	spin_unlock(&ras->ras_lock);
 }
 
 /**
@@ -311,15 +298,24 @@ stride_byte_count(unsigned long st_off, unsigned long st_len,
 
 static int ria_page_count(struct ra_io_arg *ria)
 {
-        __u64 length = ria->ria_end >= ria->ria_start ?
-                       ria->ria_end - ria->ria_start + 1 : 0;
-	unsigned int bytes_count;
+	u64 length_bytes = ria->ria_end >= ria->ria_start ?
+		(ria->ria_end - ria->ria_start + 1) << PAGE_SHIFT : 0;
+	unsigned int bytes_count, pg_count;
 
+	if (ria->ria_length > ria->ria_bytes && ria->ria_bytes &&
+	    (ria->ria_length % PAGE_SIZE || ria->ria_bytes % PAGE_SIZE ||
+             ria->ria_stoff % PAGE_SIZE)) {
+		/* Over-estimate un-aligned page stride read */
+		pg_count = ((ria->ria_bytes + PAGE_SIZE - 1) >>
+			    PAGE_SHIFT) + 1;
+		pg_count *= length_bytes / ria->ria_length + 1;
+
+		return pg_count;
+	}
 	bytes_count = stride_byte_count(ria->ria_stoff, ria->ria_length,
 					 ria->ria_bytes, ria->ria_start,
-					 length << PAGE_SHIFT);
+					 length_bytes);
 	return (bytes_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
-
 }
 
 static unsigned long ras_align(struct ll_readahead_state *ras,
@@ -332,15 +328,28 @@ static unsigned long ras_align(struct ll_readahead_state *ras,
 }
 
 /*Check whether the index is in the defined ra-window */
-static int ras_inside_ra_window(unsigned long idx, struct ra_io_arg *ria)
+static bool ras_inside_ra_window(unsigned long idx, struct ra_io_arg *ria)
 {
-        /* If ria_length == ria_pages, it means non-stride I/O mode,
+	unsigned long offset;
+	unsigned long pos = idx << PAGE_SHIFT;
+
+	/* If ria_length == ria_bytes, it means non-stride I/O mode,
          * idx should always inside read-ahead window in this case
          * For stride I/O mode, just check whether the idx is inside
-         * the ria_pages. */
-	return ria->ria_length == 0 || ria->ria_length == ria->ria_bytes ||
-               (idx >= ria->ria_stoff && (idx - ria->ria_stoff) %
-		ria->ria_length < ria->ria_bytes);
+	 * the ria_bytes.
+	 */
+	if (ria->ria_length == 0 || ria->ria_length == ria->ria_bytes)
+		return true;
+
+	if (pos >= ria->ria_stoff) {
+		offset = (pos - ria->ria_stoff) % ria->ria_length;
+		if (offset < ria->ria_bytes ||
+		    (ria->ria_length - offset) < PAGE_SIZE)
+			return true;
+	} else if (pos + PAGE_SIZE > ria->ria_stoff)
+		return true;
+
+	return false;
 }
 
 static unsigned long
@@ -350,13 +359,11 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 {
 	struct cl_read_ahead ra = { 0 };
 	int rc = 0, count = 0;
-	bool stride_ria;
 	pgoff_t page_idx;
 
 	LASSERT(ria != NULL);
 	RIA_DEBUG(ria);
 
-	stride_ria = ria->ria_length > ria->ria_bytes && ria->ria_bytes > 0;
 	for (page_idx = ria->ria_start;
 	     page_idx <= ria->ria_end && ria->ria_reserved > 0; page_idx++) {
 		if (ras_inside_ra_window(page_idx, ria)) {
@@ -412,7 +419,7 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 				ria->ria_reserved--;
 				count++;
 			}
-		} else if (stride_ria) {
+		} else if (stride_io_mode(ras)) {
 			/* If it is not in the read-ahead window, and it is
 			 * read-ahead mode, then check whether it should skip
 			 * the stride gap.
@@ -423,7 +430,8 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 			offset = (pos - ria->ria_stoff) % ria->ria_length;
 			if (offset >= ria->ria_bytes) {
 				pos += (ria->ria_length - offset);
-				page_idx = (pos >> PAGE_SHIFT) - 1;
+				if ((pos >> PAGE_SHIFT) >= page_idx + 1)
+					page_idx = (pos >> PAGE_SHIFT) - 1;
 				CDEBUG(D_READA,
 				       "Stride: jump %lu pages to %lu\n",
 				       ria->ria_length - offset, page_idx);
@@ -764,11 +772,10 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
  * Check whether the read request is in the stride window.
  * If it is in the stride window, return true, otherwise return false.
  */
-static bool index_in_stride_window(struct ll_readahead_state *ras,
-				   pgoff_t index)
+static bool read_in_stride_window(struct ll_readahead_state *ras,
+				  unsigned long pos, unsigned long count)
 {
 	unsigned long stride_gap;
-	unsigned long pos = index << PAGE_SHIFT;
 
 	if (ras->ras_stride_length == 0 || ras->ras_stride_bytes == 0 ||
 	    ras->ras_stride_bytes == ras->ras_stride_length)
@@ -778,12 +785,13 @@ static bool index_in_stride_window(struct ll_readahead_state *ras,
 
 	/* If it is contiguous read */
 	if (stride_gap == 0)
-		return ras->ras_consecutive_bytes + PAGE_SIZE <=
+		return ras->ras_consecutive_bytes + count <=
 			ras->ras_stride_bytes;
 
 	/* Otherwise check the stride by itself */
 	return (ras->ras_stride_length - ras->ras_stride_bytes) == stride_gap &&
-		ras->ras_consecutive_bytes == ras->ras_stride_bytes;
+		ras->ras_consecutive_bytes == ras->ras_stride_bytes &&
+		count <= ras->ras_stride_bytes;
 }
 
 static void ras_init_stride_detector(struct ll_readahead_state *ras,
@@ -791,12 +799,6 @@ static void ras_init_stride_detector(struct ll_readahead_state *ras,
 {
 	unsigned long stride_gap = pos - ras->ras_last_read_end - 1;
 
-        if (!stride_io_mode(ras) && (stride_gap != 0 ||
-             ras->ras_consecutive_stride_requests == 0)) {
-		ras->ras_stride_bytes = ras->ras_consecutive_bytes;
-		ras->ras_stride_length = stride_gap + ras->ras_consecutive_bytes;
-        }
-        LASSERT(ras->ras_request_index == 0);
         LASSERT(ras->ras_consecutive_stride_requests == 0);
 
 	if (pos <= ras->ras_last_read_end) {
@@ -807,6 +809,8 @@ static void ras_init_stride_detector(struct ll_readahead_state *ras,
 
 	ras->ras_stride_bytes = ras->ras_consecutive_bytes;
 	ras->ras_stride_length = stride_gap + ras->ras_consecutive_bytes;
+	ras->ras_consecutive_stride_requests++;
+	ras->ras_stride_offset = pos;
 
         RAS_CDEBUG(ras);
 }
@@ -888,48 +892,98 @@ static void ras_increase_window(struct inode *inode,
 	}
 }
 
-static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
-		       struct ll_readahead_state *ras, unsigned long index,
-		       enum ras_update_flags flags)
+/**
+ * Seek within 8 pages are considered as sequential read for now.
+ */
+static inline bool is_loose_seq_read(struct ll_readahead_state *ras,
+				     unsigned long pos)
 {
-	struct ll_ra_info *ra = &sbi->ll_ra_info;
-	bool hit = flags & LL_RAS_HIT;
-	int zero = 0, stride_detect = 0, ra_miss = 0;
-	unsigned long pos = index << PAGE_SHIFT;
-	ENTRY;
+	return pos_in_window(pos, ras->ras_last_read_end,
+			     8 << PAGE_SHIFT, 8 << PAGE_SHIFT);
+}
+
+static void ras_detect_read_pattern(struct ll_readahead_state *ras,
+				    struct ll_sb_info *sbi,
+				    unsigned long pos, unsigned long count,
+				    bool mmap)
+{
+	bool stride_detect = false;
+	unsigned long index = pos >> PAGE_SHIFT;
+
+	/*
+	 * Reset the read-ahead window in two cases. First when the app seeks
+	 * or reads to some other part of the file. Secondly if we get a
+	 * read-ahead miss that we think we've previously issued. This can
+	 * be a symptom of there being so many read-ahead pages that the VM
+	 * is reclaiming it before we get to it.
+	 */
+	if (!is_loose_seq_read(ras, pos)) {
+		/* Check whether it is in stride I/O mode */
+		if (!read_in_stride_window(ras, pos, count)) {
+			if (ras->ras_consecutive_stride_requests == 0)
+				ras_init_stride_detector(ras, pos, count);
+			else
+				ras_stride_reset(ras);
+			ras->ras_consecutive_bytes = 0;
+			ras_reset(ras, index);
+		} else {
+			ras->ras_consecutive_bytes = 0;
+			ras->ras_consecutive_requests = 0;
+			if (++ras->ras_consecutive_stride_requests > 1)
+				stride_detect = true;
+			RAS_CDEBUG(ras);
+		}
+		ll_ra_stats_inc_sbi(sbi, RA_STAT_DISTANT_READPAGE);
+	} else if (stride_io_mode(ras)) {
+		/*
+		 * If this is contiguous read but in stride I/O mode
+		 * currently, check whether stride step still is valid,
+		 * if invalid, it will reset the stride ra window to
+		 * be zero.
+		 */
+		if (!read_in_stride_window(ras, pos, count)) {
+			ras_stride_reset(ras);
+			ras->ras_window_len = 0;
+			ras->ras_next_readahead = index;
+		}
+	}
+
+	ras->ras_consecutive_bytes += count;
+	if (mmap) {
+		unsigned int idx = (ras->ras_consecutive_bytes >> PAGE_SHIFT);
+
+		if ((idx >= 4 && idx % 4 == 0) || stride_detect)
+			ras->ras_need_increase_window = true;
+	} else if ((ras->ras_consecutive_requests > 1 || stride_detect)) {
+		ras->ras_need_increase_window = true;
+	}
+
+	ras->ras_last_read_end = pos + count - 1;
+}
+
+void ll_ras_enter(struct file *f, unsigned long pos, unsigned long count)
+{
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(f);
+	struct ll_readahead_state *ras = &fd->fd_ras;
+	struct inode *inode = file_inode(f);
+	unsigned long index = pos >> PAGE_SHIFT;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
 
 	spin_lock(&ras->ras_lock);
-
-	if (!hit)
-		CDEBUG(D_READA, DFID " pages at %lu miss.\n",
-		       PFID(ll_inode2fid(inode)), index);
-        ll_ra_stats_inc_sbi(sbi, hit ? RA_STAT_HIT : RA_STAT_MISS);
-
-        /* reset the read-ahead window in two cases.  First when the app seeks
-         * or reads to some other part of the file.  Secondly if we get a
-         * read-ahead miss that we think we've previously issued.  This can
-         * be a symptom of there being so many read-ahead pages that the VM is
-         * reclaiming it before we get to it. */
-	if (!pos_in_window(pos, ras->ras_last_read_end,
-			   8 << PAGE_SHIFT, 8 << PAGE_SHIFT)) {
-                zero = 1;
-                ll_ra_stats_inc_sbi(sbi, RA_STAT_DISTANT_READPAGE);
-        } else if (!hit && ras->ras_window_len &&
-                   index < ras->ras_next_readahead &&
-		   pos_in_window(index, ras->ras_window_start, 0,
-				 ras->ras_window_len)) {
-                ra_miss = 1;
-                ll_ra_stats_inc_sbi(sbi, RA_STAT_MISS_IN_WINDOW);
-        }
-
-        /* On the second access to a file smaller than the tunable
+	ras->ras_requests++;
+	ras->ras_consecutive_requests++;
+	ras->ras_need_increase_window = false;
+	ras->ras_no_miss_check = false;
+	/*
+	 * On the second access to a file smaller than the tunable
          * ra_max_read_ahead_whole_pages trigger RA on all pages in the
          * file up to ra_max_pages_per_file.  This is simply a best effort
-         * and only occurs once per open file.  Normal RA behavior is reverted
-         * to for subsequent IO.  The mmap case does not increment
-         * ras_requests and thus can never trigger this behavior. */
-	if (ras->ras_requests >= 2 && !ras->ras_request_index) {
+	 * and only occurs once per open file. Normal RA behavior is reverted
+	 * to for subsequent IO.
+	 */
+	if (ras->ras_requests >= 2) {
 		__u64 kms_pages;
+		struct ll_ra_info *ra = &sbi->ll_ra_info;
 
 		kms_pages = (i_size_read(inode) + PAGE_SIZE - 1) >>
 			    PAGE_SHIFT;
@@ -943,69 +997,112 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 			ras->ras_next_readahead = index + 1;
                         ras->ras_window_len = min(ra->ra_max_pages_per_file,
                                 ra->ra_max_read_ahead_whole_pages);
+			ras->ras_no_miss_check = true;
                         GOTO(out_unlock, 0);
                 }
         }
-	if (zero) {
-		/* check whether it is in stride I/O mode*/
-		if (!index_in_stride_window(ras, index)) {
-			if (ras->ras_consecutive_stride_requests == 0 &&
-			    ras->ras_request_index == 0) {
-				ras_init_stride_detector(ras, pos, PAGE_SIZE);
-				ras->ras_consecutive_stride_requests++;
-			} else {
-				ras_stride_reset(ras);
-			}
-			ras_reset(ras, index);
-			ras->ras_consecutive_bytes += PAGE_SIZE;
-			GOTO(out_unlock, 0);
-		} else {
-			ras->ras_consecutive_bytes = 0;
-			ras->ras_consecutive_requests = 0;
-			if (++ras->ras_consecutive_stride_requests > 1)
-				stride_detect = 1;
-			RAS_CDEBUG(ras);
-		}
-	} else {
-		if (ra_miss) {
-			if (index_in_stride_window(ras, index) &&
-			    stride_io_mode(ras)) {
-				if (index != (ras->ras_last_read_end >>
-					      PAGE_SHIFT) + 1)
-					ras->ras_consecutive_bytes = 0;
-				ras_reset(ras, index);
+	ras_detect_read_pattern(ras, sbi, pos, count, false);
+out_unlock:
+	spin_unlock(&ras->ras_lock);
+}
 
-				/* If stride-RA hit cache miss, the stride
-				 * detector will not be reset to avoid the
-				 * overhead of redetecting read-ahead mode,
-				 * but on the condition that the stride window
-				 * is still intersect with normal sequential
-				 * read-ahead window. */
-				if (ras->ras_window_start <
-				    (ras->ras_stride_offset >> PAGE_SHIFT))
-					ras_stride_reset(ras);
-				RAS_CDEBUG(ras);
-			} else {
-				/* Reset both stride window and normal RA
-				 * window */
-				ras_reset(ras, index);
-				ras->ras_consecutive_bytes += PAGE_SIZE;
+static bool index_in_stride_window(struct ll_readahead_state *ras,
+				   unsigned int index)
+{
+	unsigned long pos = index << PAGE_SHIFT;
+	unsigned long offset;
+
+	if (ras->ras_stride_length == 0 || ras->ras_stride_bytes == 0 ||
+	    ras->ras_stride_bytes == ras->ras_stride_length)
+		return false;
+
+	if (pos >= ras->ras_stride_offset) {
+		offset = (pos - ras->ras_stride_offset) %
+					ras->ras_stride_length;
+		if (offset < ras->ras_stride_bytes ||
+		    ras->ras_stride_length - offset < PAGE_SIZE)
+			return true;
+	} else if (ras->ras_stride_offset - pos < PAGE_SIZE) {
+		return true;
+	}
+
+	return false;
+}
+
+/*
+ * ll_ras_enter() is used to detect read pattern according to
+ * pos and count.
+ *
+ * ras_update() is used to detect cache miss and
+ * reset window or increase window accordingly
+ */
+static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
+		       struct ll_readahead_state *ras, unsigned long index,
+		       enum ras_update_flags flags)
+{
+	struct ll_ra_info *ra = &sbi->ll_ra_info;
+	bool hit = flags & LL_RAS_HIT;
+
+	ENTRY;
+	spin_lock(&ras->ras_lock);
+
+	if (!hit)
+		CDEBUG(D_READA, DFID " pages at %lu miss.\n",
+		       PFID(ll_inode2fid(inode)), index);
+	ll_ra_stats_inc_sbi(sbi, hit ? RA_STAT_HIT : RA_STAT_MISS);
+
+	/*
+	 * The readahead window has been expanded to cover whole
+	 * file size, we don't care whether ra miss happen or not.
+	 * Because we will read whole file to page cache even if
+	 * some pages missed.
+	 */
+	if (ras->ras_no_miss_check)
+		GOTO(out_unlock, 0);
+
+	if (flags & LL_RAS_MMAP)
+		ras_detect_read_pattern(ras, sbi, index << PAGE_SHIFT,
+					PAGE_SIZE, true);
+
+	if (!hit && ras->ras_window_len &&
+	    index < ras->ras_next_readahead &&
+	    pos_in_window(index, ras->ras_window_start, 0,
+			  ras->ras_window_len)) {
+		ll_ra_stats_inc_sbi(sbi, RA_STAT_MISS_IN_WINDOW);
+		ras->ras_need_increase_window = false;
+
+		if (index_in_stride_window(ras, index) &&
+		    stride_io_mode(ras)) {
+			/*
+			 * if (index != ras->ras_last_readpage + 1)
+			 *	ras->ras_consecutive_pages = 0;
+			 */
+			ras_reset(ras, index);
+
+			/*
+			 * If stride-RA hit cache miss, the stride
+			 * detector will not be reset to avoid the
+			 * overhead of redetecting read-ahead mode,
+			 * but on the condition that the stride window
+			 * is still intersect with normal sequential
+			 * read-ahead window.
+			 */
+			if (ras->ras_window_start <
+			    ras->ras_stride_offset)
 				ras_stride_reset(ras);
-				GOTO(out_unlock, 0);
-			}
-		} else if (stride_io_mode(ras)) {
-			/* If this is contiguous read but in stride I/O mode
-			 * currently, check whether stride step still is valid,
-			 * if invalid, it will reset the stride ra window*/
-			if (!index_in_stride_window(ras, index)) {
-				/* Shrink stride read-ahead window to be zero */
-				ras_stride_reset(ras);
-				ras->ras_window_len = 0;
-				ras->ras_next_readahead = index;
-			}
+			RAS_CDEBUG(ras);
+		} else {
+			/*
+			 * Reset both stride window and normal RA
+			 * window.
+			 */
+			ras_reset(ras, index);
+			/* ras->ras_consecutive_pages++; */
+			ras->ras_consecutive_bytes = 0;
+			ras_stride_reset(ras);
+			GOTO(out_unlock, 0);
 		}
 	}
-	ras->ras_consecutive_bytes += PAGE_SIZE;
 	ras_set_start(ras, index);
 
 	if (stride_io_mode(ras)) {
@@ -1023,41 +1120,14 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 		if (!hit)
 			ras->ras_next_readahead = index + 1;
 	}
-	RAS_CDEBUG(ras);
 
-	/* Trigger RA in the mmap case where ras_consecutive_requests
-	 * is not incremented and thus can't be used to trigger RA */
-	if (ras->ras_consecutive_bytes >= (4 << PAGE_SHIFT) &&
-	    flags & LL_RAS_MMAP) {
+	if (ras->ras_need_increase_window) {
 		ras_increase_window(inode, ras, ra);
-		/* reset consecutive pages so that the readahead window can
-		 * grow gradually. */
-		ras->ras_consecutive_bytes = 0;
-		GOTO(out_unlock, 0);
+		ras->ras_need_increase_window = false;
 	}
 
-	/* Initially reset the stride window offset to next_readahead*/
-	if (ras->ras_consecutive_stride_requests == 2 && stride_detect) {
-		/**
-		 * Once stride IO mode is detected, next_readahead should be
-		 * reset to make sure next_readahead > stride offset
-		 */
-		ras->ras_next_readahead = max(index, ras->ras_next_readahead);
-		ras->ras_stride_offset = index << PAGE_SHIFT;
-		ras->ras_window_start = max(index, ras->ras_window_start);
-	}
-
-	/* The initial ras_window_len is set to the request size.  To avoid
-	 * uselessly reading and discarding pages for random IO the window is
-	 * only increased once per consecutive request received. */
-	if ((ras->ras_consecutive_requests > 1 || stride_detect) &&
-	    !ras->ras_request_index)
-		ras_increase_window(inode, ras, ra);
 	EXIT;
 out_unlock:
-	RAS_CDEBUG(ras);
-	ras->ras_request_index++;
-	ras->ras_last_read_end = pos + PAGE_SIZE - 1;
 	spin_unlock(&ras->ras_lock);
 }
 
