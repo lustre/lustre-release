@@ -66,27 +66,32 @@ static void osd_push_ctxt(const struct osd_device *dev,
 	push_ctxt(save, newctxt);
 }
 
-/**
- * osd_lookup_one_len_unlocked
- *
- * @dev:	obd device we are searching
- * @name:	pathname component to lookup
- * @base:	base directory to lookup from
- * @len:	maximum length @len should be interpreted to
- *
- * This should be called without the parent
- * i_mutex held, and will take the i_mutex itself.
- */
-struct dentry *osd_lookup_one_len_unlocked(struct osd_device *dev,
-					   const char *name,
-					   struct dentry *base, int len)
+struct dentry *osd_lookup_one_len_common(struct osd_device *dev,
+					 const char *name,
+					 struct dentry *base, int len,
+					 enum oi_check_flags flags)
 {
 	struct dentry *dchild;
 
-	inode_lock(base->d_inode);
-	dchild = lookup_one_len(name, base, len);
-	inode_unlock(base->d_inode);
-
+	/*
+	 * We can't use inode_is_locked() directly since we can't know
+	 * if the current thread context took the lock earlier or if
+	 * another thread context took the lock. OI_LOCKED tells us
+	 * if the current thread context has already taken the lock.
+	 */
+	if (!(flags & OI_LOCKED)) {
+		/* If another thread took this lock already we will
+		 * just have to wait until the other thread is done.
+		 */
+		inode_lock(base->d_inode);
+		dchild = lookup_one_len(name, base, len);
+		inode_unlock(base->d_inode);
+	} else {
+		/* This thread context already has taken the lock.
+		 * Other threads will have to wait until we are done.
+		 */
+		dchild = lookup_one_len(name, base, len);
+	}
 	if (IS_ERR(dchild))
 		return dchild;
 
@@ -102,17 +107,37 @@ struct dentry *osd_lookup_one_len_unlocked(struct osd_device *dev,
 }
 
 /**
- * osd_ios_lookup_one_len - lookup single pathname component
+ * osd_lookup_one_len_unlocked
  *
  * @dev:	obd device we are searching
  * @name:	pathname component to lookup
  * @base:	base directory to lookup from
  * @len:	maximum length @len should be interpreted to
+ *
+ * Unlike osd_lookup_one_len, this should be called without the parent
+ * i_mutex held, and will take the i_mutex itself.
  */
-struct dentry *osd_ios_lookup_one_len(struct osd_device *dev, const char *name,
-				      struct dentry *base, int len)
+struct dentry *osd_lookup_one_len_unlocked(struct osd_device *dev,
+					   const char *name,
+					   struct dentry *base, int len)
 {
-	return osd_lookup_one_len_unlocked(dev, name, base, len);
+	return osd_lookup_one_len_common(dev, name, base, len, ~OI_LOCKED);
+}
+
+/**
+ * osd_lookup_one_len - lookup single pathname component
+ *
+ * @dev:	obd device we are searching
+ * @name:	pathname component to lookup
+ * @base:	base directory to lookup from
+ * @len:	maximum length @len should be interpreted to
+ *
+ * The caller must hold inode lock
+ */
+struct dentry *osd_lookup_one_len(struct osd_device *dev, const char *name,
+				  struct dentry *base, int len)
+{
+	return osd_lookup_one_len_common(dev, name, base, len, OI_LOCKED);
 }
 
 /* utility to make a directory */

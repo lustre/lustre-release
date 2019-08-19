@@ -131,6 +131,7 @@ static inline int osd_id_eq_strict(const struct osd_inode_id *id0,
 enum oi_check_flags {
 	OI_CHECK_FLD	= 0x00000001,
 	OI_KNOWN_ON_OST	= 0x00000002,
+	OI_LOCKED	= 0x00000004,
 };
 
 extern unsigned int osd_oi_count;
