@@ -85,7 +85,7 @@
 /** virtual processing unit */
 struct cfs_cpu_partition {
 	/* CPUs mask for this partition */
-	cpumask_t			*cpt_cpumask;
+	cpumask_var_t			 cpt_cpumask;
 	/* nodes mask for this partition */
 	nodemask_t			*cpt_nodemask;
 	/* NUMA distance between CPTs */
@@ -118,7 +118,7 @@ struct cfs_cpt_table {
 	nodemask_t			 ctb_nodemask;
 #endif /* CONFIG_SMP */
 	/* all cpus in this partition table */
-	cpumask_t			*ctb_cpumask;
+	cpumask_var_t			 ctb_cpumask;
 };
 
 /* any CPU partition */
@@ -157,7 +157,7 @@ int cfs_cpt_online(struct cfs_cpt_table *cptab, int cpt);
 /**
  * return cpumask of CPU partition \a cpt
  */
-cpumask_t *cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt);
+cpumask_var_t *cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt);
 /**
  * return nodemask of CPU partition \a cpt
  */

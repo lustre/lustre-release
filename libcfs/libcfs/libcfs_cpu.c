@@ -79,8 +79,7 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 
 	cptab->ctb_nparts = ncpt;
 
-	LIBCFS_ALLOC(cptab->ctb_cpumask, cpumask_size());
-	if (!cptab->ctb_cpumask)
+	if (!zalloc_cpumask_var(&cptab->ctb_cpumask, GFP_NOFS))
 		goto failed_alloc_cpumask;
 
 	LIBCFS_ALLOC(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
@@ -112,8 +111,7 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 	for (i = 0; i < ncpt; i++) {
 		struct cfs_cpu_partition *part = &cptab->ctb_parts[i];
 
-		LIBCFS_ALLOC(part->cpt_cpumask, cpumask_size());
-		if (!part->cpt_cpumask)
+		if (!zalloc_cpumask_var(&part->cpt_cpumask, GFP_NOFS))
 			goto failed_setting_ctb_parts;
 
 		LIBCFS_ALLOC(part->cpt_nodemask, sizeof(*part->cpt_nodemask));
@@ -140,8 +138,7 @@ failed_setting_ctb_parts:
 				    sizeof(*part->cpt_nodemask));
 		}
 
-		if (part->cpt_cpumask)
-			LIBCFS_FREE(part->cpt_cpumask, cpumask_size());
+		free_cpumask_var(part->cpt_cpumask);
 
 		if (part->cpt_distance) {
 			LIBCFS_FREE(part->cpt_distance,
@@ -168,8 +165,7 @@ failed_alloc_cpu2cpt:
 	if (cptab->ctb_nodemask)
 		LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
 failed_alloc_nodemask:
-	if (cptab->ctb_cpumask)
-		LIBCFS_FREE(cptab->ctb_cpumask, cpumask_size());
+	free_cpumask_var(cptab->ctb_cpumask);
 failed_alloc_cpumask:
 	LIBCFS_FREE(cptab, sizeof(*cptab));
 	return NULL;
@@ -198,8 +194,7 @@ void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 				    sizeof(*part->cpt_nodemask));
 		}
 
-		if (part->cpt_cpumask)
-			LIBCFS_FREE(part->cpt_cpumask, cpumask_size());
+		free_cpumask_var(part->cpt_cpumask);
 
 		if (part->cpt_distance) {
 			LIBCFS_FREE(part->cpt_distance,
@@ -215,8 +210,7 @@ void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 
 	if (cptab->ctb_nodemask)
 		LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
-	if (cptab->ctb_cpumask)
-		LIBCFS_FREE(cptab->ctb_cpumask, cpumask_size());
+	free_cpumask_var(cptab->ctb_cpumask);
 
 	LIBCFS_FREE(cptab, sizeof(*cptab));
 }
@@ -325,12 +319,12 @@ int cfs_cpt_online(struct cfs_cpt_table *cptab, int cpt)
 }
 EXPORT_SYMBOL(cfs_cpt_online);
 
-cpumask_t *cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt)
+cpumask_var_t *cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt)
 {
 	LASSERT(cpt == CFS_CPT_ANY || (cpt >= 0 && cpt < cptab->ctb_nparts));
 
 	return cpt == CFS_CPT_ANY ?
-	       cptab->ctb_cpumask : cptab->ctb_parts[cpt].cpt_cpumask;
+	       &cptab->ctb_cpumask : &cptab->ctb_parts[cpt].cpt_cpumask;
 }
 EXPORT_SYMBOL(cfs_cpt_cpumask);
 
@@ -761,8 +755,8 @@ EXPORT_SYMBOL(cfs_cpt_bind);
 static int cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 				cpumask_t *node_mask, int number)
 {
-	cpumask_t *socket_mask = NULL;
-	cpumask_t *core_mask = NULL;
+	cpumask_var_t socket_mask;
+	cpumask_var_t core_mask;
 	int rc = 0;
 	int cpu;
 	int i;
@@ -784,13 +778,17 @@ static int cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 		return 0;
 	}
 
-	/* allocate scratch buffer */
-	LIBCFS_ALLOC(socket_mask, cpumask_size());
-	LIBCFS_ALLOC(core_mask, cpumask_size());
-	if (!socket_mask || !core_mask) {
+	/*
+	 * Allocate scratch buffers
+	 * As we cannot initialize a cpumask_var_t, we need
+	 * to alloc both before we can risk trying to free either
+	 */
+	if (!zalloc_cpumask_var(&socket_mask, GFP_NOFS))
 		rc = -ENOMEM;
+	if (!zalloc_cpumask_var(&core_mask, GFP_NOFS))
+		rc = -ENOMEM;
+	if (rc)
 		goto out;
-	}
 
 	while (!cpumask_empty(node_mask)) {
 		cpu = cpumask_first(node_mask);
@@ -823,10 +821,8 @@ static int cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 	}
 
 out:
-	if (core_mask)
-		LIBCFS_FREE(core_mask, cpumask_size());
-	if (socket_mask)
-		LIBCFS_FREE(socket_mask, cpumask_size());
+	free_cpumask_var(socket_mask);
+	free_cpumask_var(core_mask);
 	return rc;
 }
 
@@ -857,7 +853,7 @@ static int cfs_cpt_num_estimate(void)
 static struct cfs_cpt_table *cfs_cpt_table_create(int ncpt)
 {
 	struct cfs_cpt_table *cptab = NULL;
-	cpumask_t *node_mask = NULL;
+	cpumask_var_t node_mask;
 	int cpt = 0;
 	int node;
 	int num;
@@ -887,8 +883,7 @@ static struct cfs_cpt_table *cfs_cpt_table_create(int ncpt)
 		goto failed;
 	}
 
-	LIBCFS_ALLOC(node_mask, cpumask_size());
-	if (!node_mask) {
+	if (!zalloc_cpumask_var(&node_mask, GFP_NOFS)) {
 		CERROR("Failed to allocate scratch cpumask\n");
 		rc = -ENOMEM;
 		goto failed;
@@ -918,13 +913,12 @@ static struct cfs_cpt_table *cfs_cpt_table_create(int ncpt)
 		}
 	}
 
-	LIBCFS_FREE(node_mask, cpumask_size());
+	free_cpumask_var(node_mask);
 
 	return cptab;
 
 failed_mask:
-	if (node_mask)
-		LIBCFS_FREE(node_mask, cpumask_size());
+	free_cpumask_var(node_mask);
 failed:
 	CERROR("Failed (rc = %d) to setup CPU partition table with %d partitions, online HW NUMA nodes: %d, HW CPU cores: %d.\n",
 	       rc, ncpt, num_online_nodes(), num_online_cpus());
