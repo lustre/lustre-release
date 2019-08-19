@@ -69,6 +69,7 @@ static void osd_push_ctxt(const struct osd_device *dev,
 /**
  * osd_lookup_one_len_unlocked
  *
+ * @dev:	obd device we are searching
  * @name:	pathname component to lookup
  * @base:	base directory to lookup from
  * @len:	maximum length @len should be interpreted to
@@ -76,7 +77,8 @@ static void osd_push_ctxt(const struct osd_device *dev,
  * This should be called without the parent
  * i_mutex held, and will take the i_mutex itself.
  */
-struct dentry *osd_lookup_one_len_unlocked(const char *name,
+struct dentry *osd_lookup_one_len_unlocked(struct osd_device *dev,
+					   const char *name,
 					   struct dentry *base, int len)
 {
 	struct dentry *dchild;
@@ -89,8 +91,9 @@ struct dentry *osd_lookup_one_len_unlocked(const char *name,
 		return dchild;
 
 	if (dchild->d_inode && unlikely(is_bad_inode(dchild->d_inode))) {
-		CERROR("bad inode returned %lu/%u\n",
-		       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
+		CERROR("%s: bad inode returned %lu/%u: rc = -ENOENT\n",
+		       osd_name(dev), dchild->d_inode->i_ino,
+		       dchild->d_inode->i_generation);
 		dput(dchild);
 		dchild = ERR_PTR(-ENOENT);
 	}
@@ -101,14 +104,15 @@ struct dentry *osd_lookup_one_len_unlocked(const char *name,
 /**
  * osd_ios_lookup_one_len - lookup single pathname component
  *
+ * @dev:	obd device we are searching
  * @name:	pathname component to lookup
  * @base:	base directory to lookup from
  * @len:	maximum length @len should be interpreted to
  */
-struct dentry *osd_ios_lookup_one_len(const char *name, struct dentry *base,
-				      int len)
+struct dentry *osd_ios_lookup_one_len(struct osd_device *dev, const char *name,
+				      struct dentry *base, int len)
 {
-	return osd_lookup_one_len_unlocked(name, base, len);
+	return osd_lookup_one_len_unlocked(dev, name, base, len);
 }
 
 /* utility to make a directory */
@@ -127,7 +131,7 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 
 	// ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
 	CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
-	dchild = osd_lookup_one_len_unlocked(name, dir, strlen(name));
+	dchild = osd_lookup_one_len_unlocked(osd, name, dir, strlen(name));
 	if (IS_ERR(dchild))
 		RETURN(dchild);
 
@@ -207,7 +211,7 @@ static int osd_last_rcvd_subdir_count(struct osd_device *osd)
 
 	ENTRY;
 
-	dlast = osd_lookup_one_len_unlocked(LAST_RCVD, osd_sb(osd)->s_root,
+	dlast = osd_lookup_one_len_unlocked(osd, LAST_RCVD, osd_sb(osd)->s_root,
 					    strlen(LAST_RCVD));
 	if (IS_ERR(dlast))
 		return PTR_ERR(dlast);
@@ -1427,7 +1431,7 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			RETURN(-ENOENT);
 	}
 
-	dentry = osd_lookup_one_len_unlocked(name, root, strlen(name));
+	dentry = osd_lookup_one_len_unlocked(osd, name, root, strlen(name));
 	if (!IS_ERR(dentry)) {
 		inode = dentry->d_inode;
 		if (inode) {

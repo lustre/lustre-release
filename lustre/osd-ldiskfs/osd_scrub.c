@@ -2022,7 +2022,7 @@ static int osd_ios_lf_fill(void *buf,
 		RETURN(0);
 
 	scrub->os_lf_scanned++;
-	child = osd_ios_lookup_one_len(name, parent, namelen);
+	child = osd_ios_lookup_one_len(dev, name, parent, namelen);
 	if (IS_ERR(child)) {
 		CDEBUG(D_LFSCK, "%s: cannot lookup child '%.*s': rc = %d\n",
 		      osd_name(dev), namelen, name, (int)PTR_ERR(child));
@@ -2096,7 +2096,8 @@ static int osd_ios_varfid_fill(void *buf,
 	if (name[0] == '.')
 		RETURN(0);
 
-	child = osd_ios_lookup_one_len(name, fill_buf->oifb_dentry, namelen);
+	child = osd_ios_lookup_one_len(dev, name, fill_buf->oifb_dentry,
+				       namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
@@ -2144,7 +2145,8 @@ static int osd_ios_dl_fill(void *buf,
 	if (map->olm_name == NULL)
 		RETURN(0);
 
-	child = osd_ios_lookup_one_len(name, fill_buf->oifb_dentry, namelen);
+	child = osd_ios_lookup_one_len(dev, name, fill_buf->oifb_dentry,
+				       namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
@@ -2166,6 +2168,7 @@ static int osd_ios_uld_fill(void *buf,
 {
 	struct osd_ios_filldir_buf *fill_buf =
 		(struct osd_ios_filldir_buf *)buf;
+	struct osd_device *dev = fill_buf->oifb_dev;
 	struct dentry		   *child;
 	struct lu_fid		    tfid;
 	int			    rc       = 0;
@@ -2177,7 +2180,8 @@ static int osd_ios_uld_fill(void *buf,
 	if (name[0] != '[')
 		RETURN(0);
 
-	child = osd_ios_lookup_one_len(name, fill_buf->oifb_dentry, namelen);
+	child = osd_ios_lookup_one_len(dev, name, fill_buf->oifb_dentry,
+				       namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
@@ -2227,7 +2231,8 @@ static int osd_ios_root_fill(void *buf,
 	if (map->olm_name == NULL)
 		RETURN(0);
 
-	child = osd_ios_lookup_one_len(name, fill_buf->oifb_dentry, namelen);
+	child = osd_ios_lookup_one_len(dev, name, fill_buf->oifb_dentry,
+				       namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 	else if (!child->d_inode)
@@ -2317,7 +2322,7 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 	 *	OI mapping crashed or lost also, then we have to give up under
 	 *	double failure cases. */
 	scrub->os_convert_igif = 1;
-	child = osd_ios_lookup_one_len(dot_lustre_name, dentry,
+	child = osd_ios_lookup_one_len(dev, dot_lustre_name, dentry,
 				       strlen(dot_lustre_name));
 	if (IS_ERR(child)) {
 		if (PTR_ERR(child) != -ENOENT)
@@ -2390,7 +2395,8 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 			RETURN(rc);
 	}
 
-	child = osd_ios_lookup_one_len(ADMIN_USR, dentry, strlen(ADMIN_USR));
+	child = osd_ios_lookup_one_len(dev, ADMIN_USR, dentry,
+				       strlen(ADMIN_USR));
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
 	} else {
@@ -2403,7 +2409,8 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 	if (rc != 0 && rc != -ENOENT)
 		GOTO(out, rc);
 
-	child = osd_ios_lookup_one_len(ADMIN_GRP, dentry, strlen(ADMIN_GRP));
+	child = osd_ios_lookup_one_len(dev, ADMIN_GRP, dentry,
+				       strlen(ADMIN_GRP));
 	if (IS_ERR(child))
 		GOTO(out, rc = PTR_ERR(child));
 
@@ -2459,7 +2466,7 @@ static void osd_initial_OI_scrub(struct osd_thread_info *info,
 			continue;
 		}
 
-		child = osd_ios_lookup_one_len(map->olm_name,
+		child = osd_ios_lookup_one_len(dev, map->olm_name,
 					       osd_sb(dev)->s_root,
 					       map->olm_namelen);
 		if (PTR_ERR(child) == -ENOENT ||

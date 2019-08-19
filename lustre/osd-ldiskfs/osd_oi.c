@@ -161,7 +161,7 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
         struct inode  *inode;
         int            rc;
 
-	dentry = osd_lookup_one_len_unlocked(name, osd_sb(osd)->s_root,
+	dentry = osd_lookup_one_len_unlocked(osd, name, osd_sb(osd)->s_root,
 					     strlen(name));
         if (IS_ERR(dentry))
 		return ERR_CAST(dentry);
@@ -184,7 +184,7 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
         if (rc)
 		return ERR_PTR(rc);
 
-	dentry = osd_lookup_one_len_unlocked(name, osd_sb(osd)->s_root,
+	dentry = osd_lookup_one_len_unlocked(osd, name, osd_sb(osd)->s_root,
 					     strlen(name));
         if (IS_ERR(dentry))
 		return ERR_CAST(dentry);
@@ -337,13 +337,13 @@ osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 	RETURN(count);
 }
 
-static int osd_remove_oi_one(struct dentry *parent, const char *name,
-			     int namelen)
+static int osd_remove_oi_one(struct osd_device *osd, struct dentry *parent,
+			     const char *name, int namelen)
 {
 	struct dentry *child;
 	int rc;
 
-	child = osd_lookup_one_len_unlocked(name, parent, namelen);
+	child = osd_lookup_one_len_unlocked(osd, name, parent, namelen);
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
 	} else {
@@ -367,7 +367,7 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 	for (i = 0; i < OSD_OI_FID_NR_MAX; i++) {
 		namelen = snprintf(name, sizeof(name), "%s.%d",
 				   OSD_OI_NAME_BASE, i);
-		rc = osd_remove_oi_one(osd_sb(osd)->s_root, name, namelen);
+		rc = osd_remove_oi_one(osd, osd_sb(osd)->s_root, name, namelen);
 		if (rc != 0) {
 			CERROR("%s: fail to remove the stale OI file %s: "
 			       "rc = %d\n", osd_dev2name(osd), name, rc);
@@ -376,7 +376,7 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 	}
 
 	namelen = snprintf(name, sizeof(name), "%s", OSD_OI_NAME_BASE);
-	rc = osd_remove_oi_one(osd_sb(osd)->s_root, name, namelen);
+	rc = osd_remove_oi_one(osd, osd_sb(osd)->s_root, name, namelen);
 	if (rc != 0)
 		CERROR("%s: fail to remove the stale OI file %s: rc = %d\n",
 		       osd_dev2name(osd), name, rc);
