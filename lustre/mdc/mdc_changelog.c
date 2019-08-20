@@ -71,28 +71,30 @@ struct chlg_registered_dev {
 
 struct chlg_reader_state {
 	/* Shortcut to the corresponding OBD device */
-	struct obd_device	*crs_obd;
+	struct obd_device	   *crs_obd;
+	/* the corresponding chlg_registered_dev */
+	struct chlg_registered_dev *crs_ced;
 	/* Producer thread (if any) */
-	struct task_struct	*crs_prod_task;
+	struct task_struct	   *crs_prod_task;
 	/* An error occurred that prevents from reading further */
-	int			 crs_err;
+	int			    crs_err;
 	/* EOF, no more records available */
-	bool			 crs_eof;
+	bool			    crs_eof;
 	/* Desired start position */
-	__u64			 crs_start_offset;
+	__u64			    crs_start_offset;
 	/* Wait queue for the catalog processing thread */
-	wait_queue_head_t	 crs_waitq_prod;
+	wait_queue_head_t	    crs_waitq_prod;
 	/* Wait queue for the record copy threads */
-	wait_queue_head_t	 crs_waitq_cons;
+	wait_queue_head_t	    crs_waitq_cons;
 	/* Mutex protecting crs_rec_count and crs_rec_queue */
-	struct mutex		 crs_lock;
+	struct mutex		    crs_lock;
 	/* Number of item in the list */
-	__u64			 crs_rec_count;
+	__u64			    crs_rec_count;
 	/* List of prefetched enqueued_record::enq_linkage_items */
-	struct list_head	 crs_rec_queue;
-	unsigned int		 crs_last_catidx;
-	unsigned int		 crs_last_idx;
-	bool			 crs_poll;
+	struct list_head	    crs_rec_queue;
+	unsigned int		    crs_last_catidx;
+	unsigned int		    crs_last_idx;
+	bool			    crs_poll;
 };
 
 struct chlg_rec_entry {
@@ -108,6 +110,43 @@ enum {
 	/* Number of records to prefetch locally. */
 	CDEV_CHLG_MAX_PREFETCH = 1024,
 };
+
+/**
+ * Deregister a changelog character device whose refcount has reached zero.
+ */
+static void chlg_dev_clear(struct kref *kref)
+{
+	struct chlg_registered_dev *entry = container_of(kref,
+						struct chlg_registered_dev,
+						ced_refs);
+	ENTRY;
+
+	list_del(&entry->ced_link);
+	misc_deregister(&entry->ced_misc);
+	OBD_FREE_PTR(entry);
+	EXIT;
+}
+
+static inline struct obd_device* chlg_obd_get(struct chlg_registered_dev *dev)
+{
+	struct obd_device *obd;
+
+	mutex_lock(&chlg_registered_dev_lock);
+	if (list_empty(&dev->ced_obds))
+		return NULL;
+
+	obd = list_first_entry(&dev->ced_obds, struct obd_device,
+			       u.cli.cl_chg_dev_linkage);
+	class_incref(obd, "changelog", dev);
+	mutex_unlock(&chlg_registered_dev_lock);
+	return obd;
+}
+
+static inline void chlg_obd_put(struct chlg_registered_dev *dev,
+			 struct obd_device *obd)
+{
+	class_decref(obd, "changelog", dev);
+}
 
 /**
  * ChangeLog catalog processing callback invoked on each record.
@@ -205,20 +244,27 @@ static void enq_record_delete(struct chlg_rec_entry *rec)
 static int chlg_load(void *args)
 {
 	struct chlg_reader_state *crs = args;
-	struct obd_device *obd = crs->crs_obd;
+	struct chlg_registered_dev *ced = crs->crs_ced;
+	struct obd_device *obd = NULL;
 	struct llog_ctxt *ctx = NULL;
 	struct llog_handle *llh = NULL;
 	int rc;
 	ENTRY;
 
-	ctx = llog_get_context(obd, LLOG_CHANGELOG_REPL_CTXT);
-	if (ctx == NULL)
-		GOTO(err_out, rc = -ENOENT);
-
 	crs->crs_last_catidx = -1;
 	crs->crs_last_idx = 0;
 
 again:
+	obd = chlg_obd_get(ced);
+	if (obd == NULL)
+		RETURN(-ENODEV);
+
+	crs->crs_obd = obd;
+
+	ctx = llog_get_context(obd, LLOG_CHANGELOG_REPL_CTXT);
+	if (ctx == NULL)
+		GOTO(err_out, rc = -ENOENT);
+
 	rc = llog_open(NULL, ctx, &llh, NULL, CHANGELOG_CATALOG,
 		       LLOG_OPEN_EXISTS);
 	if (rc) {
@@ -251,6 +297,8 @@ again:
 	}
 	if (!kthread_should_stop() && crs->crs_poll) {
 		llog_cat_close(NULL, llh);
+		llog_ctxt_put(ctx);
+		class_decref(obd, "changelog", crs);
 		schedule_timeout_interruptible(HZ);
 		goto again;
 	}
@@ -269,6 +317,8 @@ err_out:
 	if (ctx != NULL)
 		llog_ctxt_put(ctx);
 
+	crs->crs_obd = NULL;
+	chlg_obd_put(ced, obd);
 	wait_event_interruptible(crs->crs_waitq_prod, kthread_should_stop());
 
 	RETURN(rc);
@@ -426,15 +476,23 @@ static loff_t chlg_llseek(struct file *file, loff_t off, int whence)
  */
 static int chlg_clear(struct chlg_reader_state *crs, __u32 reader, __u64 record)
 {
-	struct obd_device *obd = crs->crs_obd;
+	struct obd_device *obd = NULL;
 	struct changelog_setinfo cs  = {
 		.cs_recno = record,
 		.cs_id    = reader
 	};
+	int rc;
 
-	return obd_set_info_async(NULL, obd->obd_self_export,
-				  strlen(KEY_CHANGELOG_CLEAR),
-				  KEY_CHANGELOG_CLEAR, sizeof(cs), &cs, NULL);
+	obd = chlg_obd_get(crs->crs_ced);
+	if (obd == NULL)
+		return -ENODEV;
+
+	rc = obd_set_info_async(NULL, obd->obd_self_export,
+				strlen(KEY_CHANGELOG_CLEAR),
+				KEY_CHANGELOG_CLEAR, sizeof(cs), &cs, NULL);
+
+	chlg_obd_put(crs->crs_ced, obd);
+	return rc;
 }
 
 /** Maximum changelog control command size */
@@ -495,21 +553,18 @@ static int chlg_open(struct inode *inode, struct file *file)
 	struct chlg_reader_state *crs;
 	struct miscdevice *misc = file->private_data;
 	struct chlg_registered_dev *dev;
-	struct obd_device *obd;
 	struct task_struct *task;
 	int rc;
 	ENTRY;
 
 	dev = container_of(misc, struct chlg_registered_dev, ced_misc);
-	obd = list_first_entry(&dev->ced_obds,
-			       struct obd_device,
-			       u.cli.cl_chg_dev_linkage);
 
 	OBD_ALLOC_PTR(crs);
 	if (!crs)
 		RETURN(-ENOMEM);
 
-	crs->crs_obd = obd;
+	kref_get(&dev->ced_refs);
+	crs->crs_ced = dev;
 	crs->crs_err = false;
 	crs->crs_eof = false;
 
@@ -523,7 +578,7 @@ static int chlg_open(struct inode *inode, struct file *file)
 		if (IS_ERR(task)) {
 			rc = PTR_ERR(task);
 			CERROR("%s: cannot start changelog thread: rc = %d\n",
-			       obd->obd_name, rc);
+			       dev->ced_name, rc);
 			GOTO(err_crs, rc);
 		}
 		crs->crs_prod_task = task;
@@ -533,6 +588,7 @@ static int chlg_open(struct inode *inode, struct file *file)
 	RETURN(0);
 
 err_crs:
+	kref_put(&dev->ced_refs, chlg_dev_clear);
 	OBD_FREE_PTR(crs);
 	return rc;
 }
@@ -557,6 +613,7 @@ static int chlg_release(struct inode *inode, struct file *file)
 	list_for_each_entry_safe(rec, tmp, &crs->crs_rec_queue, enq_linkage)
 		enq_record_delete(rec);
 
+	kref_put(&crs->crs_ced->ced_refs, chlg_dev_clear);
 	OBD_FREE_PTR(crs);
 
 	return rc;
@@ -728,23 +785,6 @@ out_unlock:
 	if (entry)
 		OBD_FREE_PTR(entry);
 	RETURN(rc);
-}
-
-/**
- * Deregister a changelog character device whose refcount has reached zero.
- */
-static void chlg_dev_clear(struct kref *kref)
-{
-	struct chlg_registered_dev *entry = container_of(kref,
-						      struct chlg_registered_dev,
-						      ced_refs);
-	ENTRY;
-
-	LASSERT(mutex_is_locked(&chlg_registered_dev_lock));
-	list_del(&entry->ced_link);
-	misc_deregister(&entry->ced_misc);
-	OBD_FREE_PTR(entry);
-	EXIT;
 }
 
 /**
