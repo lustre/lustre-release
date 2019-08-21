@@ -53,8 +53,8 @@ fi
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596
 	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
-	# bug number:	 LU-11671 LU-11667 LU-11729 LU-4398
-	ALWAYS_EXCEPT+=" 45	  317      810       817"
+	# bug number:	 LU-11671 LU-11667 LU-4398
+	ALWAYS_EXCEPT+=" 45	  317      817"
 fi
 
 #                                  5          12          (min)"
@@ -21746,20 +21746,29 @@ test_809() {
 run_test 809 "Verify no SOM xattr store for DoM-only files"
 
 test_810() {
-	local ORIG
-	local CSUM
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
 
-	# t10 seem to dislike partial pages
-	lctl set_param osc.*.checksum_type=adler
-	lctl set_param fail_loc=0x411
-	dd if=/dev/urandom of=$DIR/$tfile bs=10240 count=2
-	ORIG=$(md5sum $DIR/$tfile)
-	lctl set_param ldlm.namespaces.*osc*.lru_size=clear
-	CSUM=$(md5sum $DIR/$tfile)
-	set_checksum_type adler
-	if [ "$ORIG" != "$CSUM" ]; then
-		error "$ORIG != $CSUM"
-	fi
+	set_checksums 1
+	stack_trap "set_checksums $ORIG_CSUM" EXIT
+	stack_trap "set_checksum_type $ORIG_CSUM_TYPE" EXIT
+
+	local csum
+	local before
+	local after
+	for csum in $CKSUM_TYPES; do
+		#define OBD_FAIL_OSC_NO_GRANT	0x411
+		$LCTL set_param osc.*.checksum_type=$csum fail_loc=0x411
+		for i in "10240 0" "10000 0" "4000 1" "500 1"; do
+			eval set -- $i
+			dd if=/dev/urandom of=$DIR/$tfile bs=$1 count=2 seek=$2
+			before=$(md5sum $DIR/$tfile)
+			$LCTL set_param ldlm.namespaces.*osc*.lru_size=clear
+			after=$(md5sum $DIR/$tfile)
+			[ "$before" == "$after" ] ||
+				error "$csum: $before != $after bs=$1 seek=$2"
+		done
+	done
 }
 run_test 810 "partial page writes on ZFS (LU-11663)"
 
