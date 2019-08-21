@@ -50,14 +50,15 @@ int obd_page_dif_generate_buffer(const char *obd_name, struct page *page,
 				 int *used_number, int sector_size,
 				 obd_dif_csum_fn *fn)
 {
-	unsigned int i;
+	unsigned int i = offset;
+	unsigned int end = offset + length;
 	char *data_buf;
 	__u16 *guard_buf = guard_start;
 	unsigned int data_size;
 	int used = 0;
 
 	data_buf = kmap(page) + offset;
-	for (i = 0; i < length; i += sector_size) {
+	while (i < end) {
 		if (used >= guard_number) {
 			CERROR("%s: unexpected used guard number of DIF %u/%u, "
 			       "data length %u, sector size %u: rc = %d\n",
@@ -65,12 +66,11 @@ int obd_page_dif_generate_buffer(const char *obd_name, struct page *page,
 			       sector_size, -E2BIG);
 			return -E2BIG;
 		}
-		data_size = length - i;
-		if (data_size > sector_size)
-			data_size = sector_size;
+		data_size = min(round_up(i + 1, sector_size), end) - i;
 		*guard_buf = fn(data_buf, data_size);
 		guard_buf++;
 		data_buf += data_size;
+		i += data_size;
 		used++;
 	}
 	kunmap(page);
