@@ -343,7 +343,13 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 	}
 
 	ctxt = llog_get_context(d->opd_obd, LLOG_MDS_OST_ORIG_CTXT);
-	LASSERT(ctxt);
+	if (!ctxt) {
+		/* for a reason OSP wasn't able to open llog,
+		 * just skip logging this operation and hope
+		 * LFSCK will fix it eventually */
+		CERROR("logging isn't available, run LFSCK\n");
+		RETURN(0);
+	}
 
 	rc = llog_declare_add(env, ctxt->loc_handle, &osi->osi_hdr,
 			      storage_th);
@@ -436,8 +442,10 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 	spin_unlock(&d->opd_sync_lock);
 
 	ctxt = llog_get_context(d->opd_obd, LLOG_MDS_OST_ORIG_CTXT);
-	if (ctxt == NULL)
-		RETURN(-ENOMEM);
+	if (ctxt == NULL) {
+		/* see comment in osp_sync_declare_add() */
+		RETURN(0);
+	}
 
 	rc = llog_add(env, ctxt->loc_handle, &osi->osi_hdr, &osi->osi_cookie,
 		      storage_th);
@@ -1231,6 +1239,7 @@ static int osp_sync_thread(void *_arg)
 	spin_unlock(&d->opd_sync_lock);
 	wake_up(&thread->t_ctl_waitq);
 
+again:
 	ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
 	if (ctxt == NULL) {
 		CERROR("can't get appropriate context\n");
@@ -1257,9 +1266,14 @@ static int osp_sync_thread(void *_arg)
 		wrapped = (llh->lgh_hdr->llh_cat_idx >= llh->lgh_last_idx &&
 			   llh->lgh_hdr->llh_count > 1);
 
+		if (OBD_FAIL_CHECK(OBD_FAIL_OSP_CANT_PROCESS_LLOG)) {
+			rc = -EINPROGRESS;
+			goto next;
+		}
 		rc = llog_cat_process(&env, llh, osp_sync_process_queues, d,
 				      d->opd_sync_last_catalog_idx, 0);
 
+next:
 		size = OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) ?
 		       cfs_fail_val : (LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1);
 		/* processing reaches catalog bottom */
@@ -1275,6 +1289,17 @@ static int osp_sync_thread(void *_arg)
 			     d->opd_sync_last_catalog_idx == LLOG_CAT_FIRST));
 
 	if (rc < 0) {
+		if (rc == -EINPROGRESS) {
+			/* can't access the llog now - OI scrub is trying to fix
+			 * underlying issue. let's wait and try again */
+			llog_cat_close(&env, llh);
+			rc = llog_cleanup(&env, ctxt);
+			if (rc)
+				GOTO(out, rc);
+			schedule_timeout_interruptible(HZ * 5);
+			goto again;
+		}
+
 		CERROR("%s: llog process with osp_sync_process_queues "
 		       "failed: %d\n", d->opd_obd->obd_name, rc);
 		GOTO(close, rc);

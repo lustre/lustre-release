@@ -687,6 +687,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSP_CHECK_ENOMEM		0x2101
 #define OBD_FAIL_OSP_FAKE_PRECREATE		0x2102
 #define OBD_FAIL_OSP_RPCS_SEM			0x2104
+#define OBD_FAIL_OSP_CANT_PROCESS_LLOG		0x2105
 
  /* barrier */
 #define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200
