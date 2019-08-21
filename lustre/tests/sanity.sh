@@ -20815,6 +20815,19 @@ test_819b() {
 }
 run_test 819b "too big niobuf in write"
 
+test_818() {
+	mkdir $DIR/$tdir
+	$LFS setstripe -c1 -i0 $DIR/$tfile
+	$LFS setstripe -c1 -i1 $DIR/$tfile
+	stop $SINGLEMDS
+	#define OBD_FAIL_OSP_CANT_PROCESS_LLOG		0x2105
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80002105
+	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) $MDS_MOUNT_OPTS ||
+		error "start $SINGLEMDS failed"
+	rm -rf $DIR/$tdir
+}
+run_test 818 "unlink with failed llog"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
