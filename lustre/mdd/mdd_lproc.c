@@ -430,8 +430,8 @@ static ssize_t changelog_deniednext_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(changelog_deniednext);
 
-static ssize_t sync_perm_show(struct kobject *kobj, struct attribute *attr,
-			      char *buf)
+static ssize_t sync_permission_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
 {
 	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
 					      mdd_kobj);
@@ -439,8 +439,9 @@ static ssize_t sync_perm_show(struct kobject *kobj, struct attribute *attr,
 	return sprintf(buf, "%d\n", mdd->mdd_sync_permission);
 }
 
-static ssize_t sync_perm_store(struct kobject *kobj, struct attribute *attr,
-			       const char *buffer, size_t count)
+static ssize_t sync_permission_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
 {
 	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
 					      mdd_kobj);
@@ -455,7 +456,7 @@ static ssize_t sync_perm_store(struct kobject *kobj, struct attribute *attr,
 
 	return count;
 }
-LUSTRE_RW_ATTR(sync_perm);
+LUSTRE_RW_ATTR(sync_permission);
 
 static ssize_t lfsck_speed_limit_show(struct kobject *kobj,
 				      struct attribute *attr, char *buf)
@@ -556,7 +557,7 @@ static struct attribute *mdd_attrs[] = {
 	&lustre_attr_changelog_deniednext.attr,
 	&lustre_attr_lfsck_async_windows.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
-	&lustre_attr_sync_perm.attr,
+	&lustre_attr_sync_permission.attr,
 	NULL,
 };
 
