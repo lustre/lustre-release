@@ -208,30 +208,6 @@ cfs_set_ptldebug_header(struct ptldebug_header *header,
 	header->ph_extern_pid = 0;
 }
 
-static char *
-dbghdr_to_err_string(struct ptldebug_header *hdr)
-{
-	switch (hdr->ph_subsys) {
-	case S_LND:
-	case S_LNET:
-		return "LNetError";
-	default:
-		return "LustreError";
-	}
-}
-
-static char *
-dbghdr_to_info_string(struct ptldebug_header *hdr)
-{
-	switch (hdr->ph_subsys) {
-	case S_LND:
-	case S_LNET:
-		return "LNet";
-	default:
-		return "Lustre";
-	}
-}
-
 /**
  * tty_write_msg - write a message to a certain tty, not just the console.
  * @tty: the destination tty_struct
@@ -251,7 +227,7 @@ static void tty_write_msg(struct tty_struct *tty, const char *msg)
 	wake_up_interruptible_poll(&tty->write_wait, POLLOUT);
 }
 
-static void cfs_tty_write_message(const char *prefix, const char *msg)
+static void cfs_tty_write_message(const char *prefix, int mask, const char *msg)
 {
 	struct tty_struct *tty;
 
@@ -260,6 +236,8 @@ static void cfs_tty_write_message(const char *prefix, const char *msg)
 		return;
 
 	tty_write_msg(tty, prefix);
+	if ((mask & D_EMERG) || (mask & D_ERROR))
+		tty_write_msg(tty, "Error");
 	tty_write_msg(tty, ": ");
 	tty_write_msg(tty, msg);
 	tty_kref_put(tty);
@@ -269,32 +247,39 @@ void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
 			  const char *buf, int len, const char *file,
 			  const char *fn)
 {
-	char *prefix = "Lustre", *ptype = NULL;
+	char *prefix = "Lustre";
 
-	if (mask & D_EMERG) {
-		prefix = dbghdr_to_err_string(hdr);
-		ptype = KERN_EMERG;
-	} else if (mask & D_ERROR) {
-		prefix = dbghdr_to_err_string(hdr);
-		ptype = KERN_ERR;
-	} else if (mask & D_WARNING) {
-		prefix = dbghdr_to_info_string(hdr);
-		ptype = KERN_WARNING;
-	} else if (mask & (D_CONSOLE | libcfs_printk)) {
-		prefix = dbghdr_to_info_string(hdr);
-		ptype = KERN_INFO;
+	if (hdr->ph_subsys == S_LND || hdr->ph_subsys == S_LNET)
+		prefix = "LNet";
+
+	if (mask & D_CONSOLE) {
+		if (mask & D_EMERG)
+			pr_emerg("%sError: %.*s", prefix, len, buf);
+		else if (mask & D_ERROR)
+			pr_err("%sError: %.*s", prefix, len, buf);
+		else if (mask & D_WARNING)
+			pr_warn("%s: %.*s", prefix, len, buf);
+		else if (mask & libcfs_printk)
+			pr_info("%s: %.*s", prefix, len, buf);
+	} else {
+		if (mask & D_EMERG)
+			pr_emerg("%sError: %d:%d:(%s:%d:%s()) %.*s", prefix,
+				 hdr->ph_pid, hdr->ph_extern_pid, file,
+				 hdr->ph_line_num, fn, len, buf);
+		else if (mask & D_ERROR)
+			pr_err("%sError: %d:%d:(%s:%d:%s()) %.*s", prefix,
+			       hdr->ph_pid, hdr->ph_extern_pid, file,
+			       hdr->ph_line_num, fn, len, buf);
+		else if (mask & D_WARNING)
+			pr_warn("%s: %d:%d:(%s:%d:%s()) %.*s", prefix,
+				hdr->ph_pid, hdr->ph_extern_pid, file,
+				hdr->ph_line_num, fn, len, buf);
+			else if (mask & (D_CONSOLE | libcfs_printk))
+				pr_info("%s: %.*s", prefix, len, buf);
 	}
 
 	if (mask & D_TTY)
-		cfs_tty_write_message(prefix, buf);
-
-	if (mask & D_CONSOLE) {
-		pr_info("%s%s: %.*s", ptype, prefix, len, buf);
-	} else {
-		pr_info("%s%s: %d:%d:(%s:%d:%s()) %.*s", ptype, prefix,
-			hdr->ph_pid, hdr->ph_extern_pid, file,
-			hdr->ph_line_num, fn, len, buf);
-	}
+		cfs_tty_write_message(prefix, mask, buf);
 }
 
 int cfs_trace_max_debug_mb(void)
