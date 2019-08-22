@@ -143,9 +143,6 @@ struct ll_inode_info {
 	union {
 		/* for directory */
 		struct {
-			/* serialize normal readdir and statahead-readdir. */
-			struct mutex			lli_readdir_mutex;
-
 			/* metadata statahead */
 			/* since parent-child threads can share the same @file
 			 * struct, "opendir_key" is the token when dir close for

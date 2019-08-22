@@ -983,7 +983,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 
 	LASSERT(lli->lli_vfs_inode.i_mode != 0);
 	if (S_ISDIR(lli->lli_vfs_inode.i_mode)) {
-		mutex_init(&lli->lli_readdir_mutex);
 		lli->lli_opendir_key = NULL;
 		lli->lli_sai = NULL;
 		spin_lock_init(&lli->lli_sa_lock);
