@@ -506,7 +506,6 @@ struct lov_io_sub {
 	 * \see cl_env_get()
 	 */
 	__u16			sub_refcheck;
-	__u16			sub_reenter;
 };
 
 /**
