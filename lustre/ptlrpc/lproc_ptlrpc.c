@@ -1378,6 +1378,8 @@ lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 	if (strncmp(prefix, kbuf, prefix_len) != 0)
 		GOTO(out, count = -EINVAL);
 
+	LPROCFS_CLIMP_CHECK(obd);
+
 	uuid = kbuf + prefix_len;
 	ptr = strstr(uuid, "::");
 	if (ptr) {
@@ -1403,6 +1405,7 @@ lprocfs_import_seq_write(struct file *file, const char __user *buffer,
 		}
 	}
 
+	LPROCFS_CLIMP_EXIT(obd);
 	if (do_reconn)
 		ptlrpc_recover_import(imp, uuid, 1);
 
