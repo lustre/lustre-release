@@ -1324,22 +1324,6 @@ do {                                                                          \
 } while (0)
 /** @} */
 
-/**
- * Structure that defines a single page of a bulk transfer
- */
-struct ptlrpc_bulk_page {
-	/** Linkage to list of pages in a bulk */
-	struct list_head bp_link;
-	/**
-	 * Number of bytes in a page to transfer starting from \a bp_pageoffset
-	 */
-	int		 bp_buflen;
-	/** offset within a page */
-	int		 bp_pageoffset;
-	/** The page itself */
-	struct page	*bp_page;
-};
-
 enum ptlrpc_bulk_op_type {
 	PTLRPC_BULK_OP_ACTIVE =	 0x00000001,
 	PTLRPC_BULK_OP_PASSIVE = 0x00000002,
