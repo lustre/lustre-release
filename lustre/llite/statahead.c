@@ -1005,8 +1005,8 @@ static int ll_statahead_thread(void *arg)
 	       sai, parent->d_name.len, parent->d_name.name);
 
 	OBD_ALLOC_PTR(op_data);
-	if (IS_ERR(op_data))
-		GOTO(out, rc = PTR_ERR(op_data));
+	if (!op_data)
+		GOTO(out, rc = -ENOMEM);
 
 	if (sbi->ll_flags & LL_SBI_AGL_ENABLED)
 		ll_start_agl(parent, sai);
