@@ -45,6 +45,9 @@ static int ll_get_context(struct inode *inode, void *ctx, size_t len)
 	rc = ll_vfs_getxattr(dentry, inode, LL_XATTR_NAME_ENCRYPTION_CONTEXT,
 			     ctx, len);
 
+	/* used as encryption unit size */
+	if (S_ISREG(inode->i_mode))
+		inode->i_blkbits = LUSTRE_ENCRYPTION_BLOCKBITS;
 	return rc;
 }
 

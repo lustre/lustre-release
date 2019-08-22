@@ -1850,6 +1850,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		&req->rq_import->imp_connection->c_peer;
 	struct ost_body *body;
 	u32 client_cksum = 0;
+	struct inode *inode;
 
 	ENTRY;
 
@@ -2037,6 +2038,36 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 	} else {
 		rc = 0;
 	}
+
+	inode = page2inode(aa->aa_ppga[0]->pg);
+	if (inode && IS_ENCRYPTED(inode)) {
+		int idx;
+
+		if (!llcrypt_has_encryption_key(inode)) {
+			CDEBUG(D_SEC, "no enc key for ino %lu\n", inode->i_ino);
+			GOTO(out, rc);
+		}
+		for (idx = 0; idx < aa->aa_page_count; idx++) {
+			struct brw_page *pg = aa->aa_ppga[idx];
+			__u64 *p, *q;
+
+			/* do not decrypt if page is all 0s */
+			p = q = page_address(pg->pg);
+			while (p - q < PAGE_SIZE / sizeof(*p)) {
+				if (*p != 0)
+					break;
+				p++;
+			}
+			if (p - q == PAGE_SIZE / sizeof(*p))
+				continue;
+
+			rc = llcrypt_decrypt_pagecache_blocks(pg->pg,
+							      PAGE_SIZE, 0);
+			if (rc)
+				GOTO(out, rc);
+		}
+	}
+
 out:
 	if (rc >= 0)
 		lustre_get_wire_obdo(&req->rq_import->imp_connect_data,
