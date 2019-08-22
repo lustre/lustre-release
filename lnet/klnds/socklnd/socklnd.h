@@ -396,7 +396,6 @@ struct ksock_peer_ni {
 	time64_t		ksnp_last_alive;/* when (in seconds) I was last alive */
 	struct lnet_process_id	ksnp_id;	/* who's on the other end(s) */
 	atomic_t              ksnp_refcount; /* # users */
-	int                   ksnp_sharecount;  /* lconf usage counter */
 	int                   ksnp_closing;  /* being closed */
 	int                   ksnp_accepting;/* # passive connections pending */
 	int                   ksnp_error;    /* errno on closing last conn */

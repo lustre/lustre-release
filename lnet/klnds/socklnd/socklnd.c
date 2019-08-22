@@ -2484,11 +2484,11 @@ ksocknal_debug_peerhash(struct lnet_ni *ni)
 		struct ksock_route *route;
 		struct ksock_conn  *conn;
 
-		CWARN("Active peer_ni on shutdown: %s, ref %d, scnt %d, "
+		CWARN("Active peer_ni on shutdown: %s, ref %d, "
 		      "closing %d, accepting %d, err %d, zcookie %llu, "
 		      "txq %d, zc_req %d\n", libcfs_id2str(peer_ni->ksnp_id),
 		      atomic_read(&peer_ni->ksnp_refcount),
-		      peer_ni->ksnp_sharecount, peer_ni->ksnp_closing,
+		      peer_ni->ksnp_closing,
 		      peer_ni->ksnp_accepting, peer_ni->ksnp_error,
 		      peer_ni->ksnp_zc_next_cookie,
 		      !list_empty(&peer_ni->ksnp_tx_queue),
