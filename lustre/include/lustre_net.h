@@ -1432,8 +1432,6 @@ struct ptlrpc_bulk_desc {
 	unsigned long bd_registered:1;
 	/** For serialization with callback */
 	spinlock_t bd_lock;
-	/** Import generation when request for this bulk was sent */
-	int bd_import_generation;
 	/** {put,get}{source,sink}{kvec,kiov} */
 	enum ptlrpc_bulk_op_type bd_type;
 	/** LNet portal for this bulk */
