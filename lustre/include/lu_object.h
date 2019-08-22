@@ -43,6 +43,7 @@ struct seq_file;
 struct proc_dir_entry;
 struct lustre_cfg;
 struct lprocfs_stats;
+struct obd_type;
 
 /** \defgroup lu lu
  * lu_* data-types represent server-side entities shared by data and meta-data
@@ -319,10 +320,6 @@ struct lu_device_type {
          * Operations for this type.
          */
         const struct lu_device_type_operations *ldt_ops;
-        /**
-         * \todo XXX: temporary pointer to associated obd_type.
-         */
-        struct obd_type                        *ldt_obd_type;
         /**
          * \todo XXX: temporary: context tags used by obd_*() calls.
          */

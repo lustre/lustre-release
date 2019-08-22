@@ -1400,14 +1400,8 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 
         for (scan = top; scan != NULL; scan = next) {
                 const struct lu_device_type *ldt = scan->ld_type;
-                struct obd_type             *type;
 
                 next = ldt->ldt_ops->ldto_device_free(env, scan);
-                type = ldt->ldt_obd_type;
-                if (type != NULL) {
-                        type->typ_refcnt--;
-                        class_put_type(type);
-                }
         }
 }
 
