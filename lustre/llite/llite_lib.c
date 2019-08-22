@@ -804,7 +804,6 @@ void ll_kill_super(struct super_block *sb)
 	 * put_super not affected real removing devices */
 	if (sbi) {
 		sb->s_dev = sbi->ll_sdev_orig;
-		sbi->ll_umounting = 1;
 
 		/* wait running statahead threads to quit */
 		while (atomic_read(&sbi->ll_sa_running) > 0) {
