@@ -240,7 +240,6 @@ struct ldlm_state {
         struct ptlrpc_service *ldlm_cb_service;
         struct ptlrpc_service *ldlm_cancel_service;
         struct ptlrpc_client *ldlm_client;
-        struct ptlrpc_connection *ldlm_server_conn;
         struct ldlm_bl_pool *ldlm_bl_pool;
 };
 
