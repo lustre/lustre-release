@@ -117,7 +117,6 @@ struct fld_cache {
         /**
          * Cache name used for debug and messages. */
         char                     fci_name[80];
-	unsigned int		 fci_no_shrink:1;
 };
 
 enum {

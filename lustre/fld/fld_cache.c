@@ -386,8 +386,7 @@ int fld_cache_insert_nolock(struct fld_cache *cache,
 	 * insertion loop.
 	 */
 
-	if (!cache->fci_no_shrink)
-		fld_cache_shrink(cache);
+	fld_cache_shrink(cache);
 
 	head = &cache->fci_entries_head;
 
