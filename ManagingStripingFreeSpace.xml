@@ -185,7 +185,7 @@
       </indexterm>Setting the File Layout/Striping Configuration (<literal>lfs
       setstripe</literal>)</title>
     <para>Use the <literal>lfs setstripe</literal> command to create new files with a specific file layout (stripe pattern) configuration.</para>
-    <screen>lfs setstripe [--size|-s stripe_size] [--count|-c stripe_count] [--overstripe-count|-C stripe_count] \
+    <screen>lfs setstripe [--size|-s stripe_size] [--stripe-count|-c stripe_count] [--overstripe-count|-C stripe_count] \
 [--index|-i start_ost] [--pool|-p pool_name] <replaceable>filename|dirname</replaceable> </screen>
     <para><emphasis role="bold">
         <literal>stripe_size</literal>
@@ -313,7 +313,7 @@ obdidx     objid        objid           group
       <para>You can use <literal>lfs setstripe</literal> to create a file on a specific OST. In the
         following example, the file <literal>file1</literal> is created on the first OST (OST index
         is 0).</para>
-      <screen>$ lfs setstripe --count 1 --index 0 file1
+      <screen>$ lfs setstripe --stripe-count 1 --index 0 file1
 $ dd if=/dev/zero of=file1 count=1 bs=100M
 1+0 records in
 1+0 records out
@@ -324,8 +324,8 @@ lmm_stripe_count:   1
 lmm_stripe_size:    1048576
 lmm_pattern:        1
 lmm_layout_gen:     0
-lmm_stripe_offset:  0               
-     obdidx    objid   objid    group                    
+lmm_stripe_offset:  0
+     obdidx    objid   objid    group
      0         37364   0x91f4   0</screen>
     </section>
   </section>
