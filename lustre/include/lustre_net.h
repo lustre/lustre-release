@@ -1752,8 +1752,6 @@ struct ptlrpc_service_part {
 	int				scp_thr_nextid;
 	/** # of starting threads */
 	int				scp_nthrs_starting;
-	/** # of stopping threads, reserved for shrinking threads */
-	int				scp_nthrs_stopping;
 	/** # running threads */
 	int				scp_nthrs_running;
 	/** service threads list */
