@@ -168,10 +168,7 @@ struct osc_session {
 struct osc_thread_info {
 	struct ldlm_res_id	oti_resname;
 	union ldlm_policy_data	oti_policy;
-	struct cl_lock_descr	oti_descr;
 	struct cl_attr		oti_attr;
-	struct lustre_handle	oti_handle;
-	struct cl_page_list	oti_plist;
 	struct cl_io		oti_io;
 	struct pagevec		oti_pagevec;
 	void			*oti_pvec[OTI_PVEC_SIZE];
