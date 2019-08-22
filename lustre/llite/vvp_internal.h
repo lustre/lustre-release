@@ -71,11 +71,6 @@ struct vvp_io {
 
 	union {
 		struct vvp_fault_io {
-			/**
-			 * Inode modification time that is checked across DLM
-			 * lock request.
-			 */
-			time64_t		 ft_mtime;
 			struct vm_area_struct	*ft_vma;
 			/**
 			 *  locked page returned from vvp_io
