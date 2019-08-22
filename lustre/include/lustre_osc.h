@@ -947,11 +947,6 @@ struct osc_extent {
 	unsigned int		oe_nr_pages;
 	/** list of pending oap pages. Pages in this list are NOT sorted. */
 	struct list_head	oe_pages;
-	/** Since an extent has to be written out in atomic, this is used to
-	 * remember the next page need to be locked to write this extent out.
-	 * Not used right now.
-	 */
-	struct osc_page		*oe_next_page;
 	/** start and end index of this extent, include start and end
 	 * themselves. Page offset here is the page index of osc_pages.
 	 * oe_start is used as keyword for red-black tree. */
