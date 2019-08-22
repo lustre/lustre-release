@@ -592,7 +592,6 @@ struct obd_llog_group {
 	struct llog_ctxt   *olg_ctxts[LLOG_MAX_CTXTS];
 	wait_queue_head_t  olg_waitq;
 	spinlock_t	   olg_lock;
-	struct mutex	   olg_cat_processing;
 };
 
 /* corresponds to one of the obd's */
