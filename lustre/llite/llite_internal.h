@@ -50,6 +50,7 @@
 
 #include "vvp_internal.h"
 #include "pcc.h"
+#include "foreign_symlink.h"
 
 #ifndef FMODE_EXEC
 #define FMODE_EXEC 0
@@ -403,6 +404,8 @@ enum ll_file_flags {
 	LLIF_PROJECT_INHERIT	= 3,
 	/* update atime from MDS even if it's older than local inode atime. */
 	LLIF_UPDATE_ATIME	= 4,
+	/* foreign file/dir can be unlinked unconditionnaly */
+	LLIF_FOREIGN_REMOVABLE	= 5,
 
 };
 
@@ -651,6 +654,9 @@ enum stats_track_type {
 #define LL_SBI_FILE_HEAT    0x4000000 /* file heat support */
 #define LL_SBI_TEST_DUMMY_ENCRYPTION    0x8000000 /* test dummy encryption */
 #define LL_SBI_ENCRYPT	   0x10000000 /* client side encryption */
+#define LL_SBI_FOREIGN_SYMLINK	    0x20000000 /* foreign fake-symlink support */
+/* foreign fake-symlink upcall registered */
+#define LL_SBI_FOREIGN_SYMLINK_UPCALL	    0x40000000
 #define LL_SBI_FLAGS { 	\
 	"nolck",	\
 	"checksum",	\
@@ -681,6 +687,8 @@ enum stats_track_type {
 	"file_heat",	\
 	"test_dummy_encryption", \
 	"noencrypt",	\
+	"foreign_symlink",	\
+	"foreign_symlink_upcall",	\
 }
 
 /* This is embedded into llite super-blocks to keep track of connect
@@ -781,6 +789,19 @@ struct ll_sb_info {
 
 	/* Persistent Client Cache */
 	struct pcc_super	  ll_pcc_super;
+
+	/* to protect vs updates in all following foreign symlink fields */
+	struct rw_semaphore	  ll_foreign_symlink_sem;
+	/* foreign symlink path prefix */
+	char			 *ll_foreign_symlink_prefix;
+	/* full prefix size including leading '\0' */
+	size_t			  ll_foreign_symlink_prefix_size;
+	/* foreign symlink path upcall */
+	char			 *ll_foreign_symlink_upcall;
+	/* foreign symlink path upcall infos */
+	struct ll_foreign_symlink_upcall_item *ll_foreign_symlink_upcall_items;
+	/* foreign symlink path upcall nb infos */
+	unsigned int		  ll_foreign_symlink_upcall_nb_items;
 };
 
 #define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
@@ -965,6 +986,11 @@ static inline bool ll_sbi_has_file_heat(struct ll_sb_info *sbi)
 	return !!(sbi->ll_flags & LL_SBI_FILE_HEAT);
 }
 
+static inline bool ll_sbi_has_foreign_symlink(struct ll_sb_info *sbi)
+{
+	return !!(sbi->ll_flags & LL_SBI_FOREIGN_SYMLINK);
+}
+
 void ll_ras_enter(struct file *f, loff_t pos, size_t count);
 
 /* llite/lcommon_misc.c */
@@ -1102,7 +1128,7 @@ int ll_getattr(const struct path *path, struct kstat *stat,
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
 int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
-		      unsigned int flags);
+		      unsigned int flags, bool foreign);
 struct posix_acl *ll_get_acl(struct inode *inode, int type);
 #ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
@@ -1699,5 +1725,9 @@ static inline struct pcc_super *ll_info2pccs(struct ll_inode_info *lli)
 /* crypto.c */
 extern const struct llcrypt_operations lustre_cryptops;
 #endif
+/* llite/llite_foreign.c */
+int ll_manage_foreign(struct inode *inode, struct lustre_md *lmd);
+bool ll_foreign_is_openable(struct dentry *dentry, unsigned int flags);
+bool ll_foreign_is_removable(struct dentry *dentry, bool unset);
 
 #endif /* LLITE_INTERNAL_H */

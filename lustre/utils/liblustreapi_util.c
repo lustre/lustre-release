@@ -41,6 +41,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <libgen.h> /* for dirname() */
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_ver.h>	/* only until LUSTRE_VERSION_CODE is gone */
 #include "lustreapi_internal.h"
@@ -310,6 +311,92 @@ retry_open:
 	close(fd);
 
 	return rc ? -errno : 0;
+}
+
+int llapi_direntry_remove(char *dname)
+{
+	char *dirpath = NULL;
+	char *namepath = NULL;
+	char *dir;
+	char *filename;
+	int fd = -1;
+	int rc = 0;
+
+	dirpath = strdup(dname);
+	namepath = strdup(dname);
+	if (!dirpath || !namepath)
+		return -ENOMEM;
+
+	filename = basename(namepath);
+
+	dir = dirname(dirpath);
+
+	fd = open(dir, O_DIRECTORY | O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'",
+			    filename);
+		goto out;
+	}
+
+	if (ioctl(fd, LL_IOC_REMOVE_ENTRY, filename))
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "error on ioctl %#lx for '%s' (%d)",
+			    (long)LL_IOC_LMV_SETSTRIPE, filename, fd);
+out:
+	free(dirpath);
+	free(namepath);
+	if (fd != -1)
+		close(fd);
+	return rc;
+}
+
+int llapi_unlink_foreign(char *name)
+{
+	int fd = -1;
+	int rc = 0;
+
+	fd = open(name, O_DIRECTORY | O_RDONLY | O_NOFOLLOW);
+	if (fd < 0 && errno != ENOTDIR) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'", name);
+		goto out;
+	} else if (errno == ENOTDIR) {
+		fd = open(name, O_RDONLY | O_NOFOLLOW);
+		if (fd < 0) {
+			rc = -errno;
+			llapi_error(LLAPI_MSG_ERROR, rc, "unable to open '%s'",
+				    name);
+			goto out;
+		}
+	}
+
+	/* allow foreign symlink file/dir to be unlinked */
+	if (ioctl(fd, LL_IOC_UNLOCK_FOREIGN)) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "error on ioctl %#lx for '%s' (%d)",
+			    (long)LL_IOC_UNLOCK_FOREIGN, name, fd);
+		rc = -errno;
+	}
+
+	/* XXX do not set AT_REMOVEDIR in flags even for a dir, as due to the
+	 * hack for foreign symlink it will fail the directory check in
+	 * Kernel's syscall code and return ENOTDIR, so treat all as files
+	 */
+	rc = unlinkat(AT_FDCWD, name, 0);
+	if (rc == -1 && errno == EISDIR)
+		rc = unlinkat(AT_FDCWD, name, AT_REMOVEDIR);
+
+	if (rc == -1) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "error on unlinkat for '%s' (%d)", name, fd);
+		rc = -errno;
+	}
+
+out:
+	if (fd != -1)
+		close(fd);
+	return rc;
 }
 
 int llapi_get_fsname_instance(const char *path, char *fsname, size_t fsname_len,

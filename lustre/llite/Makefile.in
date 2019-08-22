@@ -8,8 +8,10 @@ lustre-objs += lcommon_cl.o
 lustre-objs += lcommon_misc.o
 lustre-objs += vvp_dev.o vvp_page.o vvp_io.o vvp_object.o
 lustre-objs += pcc.o crypto.o
+lustre-objs += llite_foreign.o llite_foreign_symlink.o
 
 EXTRA_DIST := $(lustre-objs:.o=.c) xattr.c rw26.c super25.c
 EXTRA_DIST += llite_internal.h vvp_internal.h pcc.h
+EXTRA_DIST += foreign_symlink.h
 
 @INCLUDE_RULES@

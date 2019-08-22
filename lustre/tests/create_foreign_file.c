@@ -17,7 +17,7 @@ int main(int argc, char **argv)
 	size_t len;
 	struct lov_foreign_md *lfm;
 	char *end;
-	__u32 type = LU_FOREIGN_TYPE_DAOS, flags = 0xda08;
+	__u32 type = LU_FOREIGN_TYPE_SYMLINK, flags = 0xda05;
 
 	while ((c = getopt(argc, argv, "f:x:t:F:")) != -1) {
 		switch (c) {

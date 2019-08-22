@@ -2381,12 +2381,12 @@ retry:
 			GOTO(out, rc = PTR_ERR(env));
 
 		rc = cl_object_layout_get(env, obj, &cl);
-		if (!rc && cl.cl_is_composite)
+		if (rc >= 0 && cl.cl_is_composite)
 			rc = ll_layout_write_intent(inode, LAYOUT_INTENT_WRITE,
 						    &ext);
 
 		cl_env_put(env, &refcheck);
-		if (rc)
+		if (rc < 0)
 			GOTO(out, rc);
 	}
 
@@ -4073,6 +4073,20 @@ out_state:
 			return -EOPNOTSUPP;
 		return llcrypt_ioctl_get_key_status(file, (void __user *)arg);
 #endif
+
+	case LL_IOC_UNLOCK_FOREIGN: {
+		struct dentry *dentry = file_dentry(file);
+
+		/* if not a foreign symlink do nothing */
+		if (ll_foreign_is_removable(dentry, true)) {
+			CDEBUG(D_INFO,
+			       "prevent unlink of non-foreign file ("DFID")\n",
+			       PFID(ll_inode2fid(inode)));
+			RETURN(-EOPNOTSUPP);
+		}
+		RETURN(0);
+	}
+
 	default:
 		RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
 				     (void __user *)arg));
@@ -4841,7 +4855,7 @@ static int ll_merge_md_attr(struct inode *inode)
 }
 
 int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
-		      unsigned int flags)
+		      unsigned int flags, bool foreign)
 {
 	struct inode *inode = de->d_inode;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -4867,7 +4881,10 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 	if (rc < 0)
 		RETURN(rc);
 
-	if (S_ISREG(inode->i_mode)) {
+	/* foreign file/dir are always of zero length, so don't
+	 * need to validate size.
+	 */
+	if (S_ISREG(inode->i_mode) && !foreign) {
 		bool cached;
 
 		if (!need_glimpse)
@@ -4914,7 +4931,8 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		}
 	} else {
 		/* If object isn't regular a file then don't validate size. */
-		if (ll_dir_striped(inode)) {
+		/* foreign dir is not striped dir */
+		if (ll_dir_striped(inode) && !foreign) {
 			rc = ll_merge_md_attr(inode);
 			if (rc < 0)
 				RETURN(rc);
@@ -4941,7 +4959,12 @@ fill_attr:
 		stat->rdev = inode->i_rdev;
 	}
 
-	stat->mode = inode->i_mode;
+	/* foreign symlink to be exposed as a real symlink */
+	if (!foreign)
+		stat->mode = inode->i_mode;
+	else
+		stat->mode = (inode->i_mode & ~S_IFMT) | S_IFLNK;
+
 	stat->uid = inode->i_uid;
 	stat->gid = inode->i_gid;
 	stat->atime = inode->i_atime;
@@ -4990,13 +5013,14 @@ fill_attr:
 int ll_getattr(const struct path *path, struct kstat *stat,
 	       u32 request_mask, unsigned int flags)
 {
-	return ll_getattr_dentry(path->dentry, stat, request_mask, flags);
+	return ll_getattr_dentry(path->dentry, stat, request_mask, flags,
+				 false);
 }
 #else
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 {
 	return ll_getattr_dentry(de, stat, STATX_BASIC_STATS,
-				 AT_STATX_SYNC_AS_STAT);
+				 AT_STATX_SYNC_AS_STAT, false);
 }
 #endif
 
@@ -5449,7 +5473,7 @@ int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf)
 out:
 	cl_env_put(env, &refcheck);
 
-	RETURN(rc);
+	RETURN(rc < 0 ? rc : 0);
 }
 
 /* Fetch layout from MDT with getxattr request, if it's not ready yet */

@@ -15,7 +15,7 @@ int main(int argc, char **argv)
 	char *dir = "foreign_dir", *end;
 	char *xval = "UUID@UUID";
 	mode_t mode = 0700;
-	__u32 type = LU_FOREIGN_TYPE_DAOS, flags = 0;
+	__u32 type = LU_FOREIGN_TYPE_SYMLINK, flags = 0xda05;
 	int c, rc;
 
 	while ((c = getopt(argc, argv, "hd:f:m:t:x:")) != -1) {

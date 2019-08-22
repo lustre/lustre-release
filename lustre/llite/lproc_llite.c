@@ -289,6 +289,14 @@ static ssize_t client_type_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(client_type);
 
+LUSTRE_RW_ATTR(foreign_symlink_enable);
+
+LUSTRE_RW_ATTR(foreign_symlink_prefix);
+
+LUSTRE_RW_ATTR(foreign_symlink_upcall);
+
+LUSTRE_WO_ATTR(foreign_symlink_upcall_info);
+
 static ssize_t fstype_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf)
 {
@@ -1529,6 +1537,10 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_filestotal.attr,
 	&lustre_attr_filesfree.attr,
 	&lustre_attr_client_type.attr,
+	&lustre_attr_foreign_symlink_enable.attr,
+	&lustre_attr_foreign_symlink_prefix.attr,
+	&lustre_attr_foreign_symlink_upcall.attr,
+	&lustre_attr_foreign_symlink_upcall_info.attr,
 	&lustre_attr_fstype.attr,
 	&lustre_attr_uuid.attr,
 	&lustre_attr_checksums.attr,

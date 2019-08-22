@@ -1,0 +1,80 @@
+.TH lustreapi 3 "2009 Jul 10" The Lustre user application interface library
+.SH NAME
+llapi_unlink_foreign \- unlink file/dir with foreign layout on a Lustre filesystem
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_unlink_foreign(char *" name ");"
+.sp
+.fi
+.SH DESCRIPTION
+.LP
+.B llapi_unlink_foreign(\|)
+will allow to unlink a file/dir of
+.I name
+with foreign LOV/LMV, that would be prevented to be using regular unlink/rmdir
+command/syscall.
+It also works for regular file/dir.
+.SH RETURN VALUES
+.LP
+.B llapi_unlink_foreign(\|)
+return:
+.TP
+=0
+on success.
+.TP
+<0
+on failure, the absolute value is an error code.
+.SH ERRORS
+.TP 15
+.SM ENOENT
+.I name
+does not exist.
+.TP
+.SM ENOTTY
+.I name
+may not point to a Lustre filesystem.
+.SH "EXAMPLE"
+.nf
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
+
+#include <lustre/lustreapi.h>
+
+int main(int argc, char **argv)
+{
+	char *foreign = NULL;
+	int c, rc;
+
+	while ((c = getopt(argc, argv, "hf:")) != -1) {
+		switch (c) {
+		case 'f':
+			foreign = optarg;
+			break;
+		case 'h':
+		default:
+			fprintf(stderr,
+				"Usage: %s [-f <foreign file/dir pathname>]\n",
+				argv[0]);
+			exit(0);
+			break;
+		}
+	}
+
+	if (foreign == NULL) {
+		fprintf(stderr, "a foreign file/dir pathname must be provided\n");
+		exit(0);
+	}
+
+	rc = llapi_unlink_foreign(foreign);
+	if (rc < 0)
+		fprintf(stderr, "llapi_unlink_foreign() error: %d\n", rc);
+
+	return rc;
+}
+.fi
+.SH "SEE ALSO"
+.BR lustre (7),
+.BR lustreapi (7)

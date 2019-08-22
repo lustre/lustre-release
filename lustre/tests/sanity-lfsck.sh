@@ -5712,7 +5712,7 @@ test_38()
 	local uuid2=$(cat /proc/sys/kernel/random/uuid)
 
 	# create foreign file
-	$LFS setstripe --foreign=daos --flags 0xda05 \
+	$LFS setstripe --foreign=none --flags 0xda05 \
 		-x "${uuid1}@${uuid2}" $DIR/$tdir/$tfile ||
 		error "$DIR/$tdir/$tfile: create failed"
 
@@ -5722,7 +5722,7 @@ test_38()
 	# lfm_length is LOV EA size - sizeof(lfm_magic) - sizeof(lfm_length)
 	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_length:.*73" ||
 		error "$DIR/$tdir/$tfile: invalid LOV EA foreign size"
-	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_type:.*daos" ||
+	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_type:.*none" ||
 		error "$DIR/$tdir/$tfile: invalid LOV EA foreign type"
 	$LFS getstripe -v $DIR/$tdir/$tfile |
 		grep "lfm_flags:.*0x0000DA05" ||
@@ -5765,7 +5765,7 @@ test_38()
 	# lfm_length is LOV EA size - sizeof(lfm_magic) - sizeof(lfm_length)
 	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_length:.*73" ||
 		error "$DIR/$tdir/$tfile: invalid LOV EA foreign size"
-	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_type:.*daos" ||
+	$LFS getstripe -v $DIR/$tdir/$tfile | grep "lfm_type:.*none" ||
 		error "$DIR/$tdir/$tfile: invalid LOV EA foreign type"
 	$LFS getstripe -v $DIR/$tdir/$tfile |
 		grep "lfm_flags:.*0x0000DA05" ||
@@ -5799,7 +5799,7 @@ test_39()
 	local uuid2=$(cat /proc/sys/kernel/random/uuid)
 
 	# create foreign dir
-	$LFS mkdir --foreign=daos --xattr="${uuid1}@${uuid2}" --flags=0xda05 \
+	$LFS mkdir --foreign=none --xattr="${uuid1}@${uuid2}" --flags=0xda05 \
 		$DIR/$tdir/${tdir}2 ||
 		error "$DIR/$tdir/${tdir}2: create failed"
 
@@ -5810,7 +5810,7 @@ test_39()
 	# - sizeof(lfm_type) - sizeof(lfm_flags)
 	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_length:.*73" ||
 		error "$DIR/$tdir/${tdir}2: invalid LMV EA size"
-	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_type:.*daos" ||
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_type:.*none" ||
 		error "$DIR/$tdir/${tdir}2: invalid LMV EA type"
 	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 |
 		grep "lfm_flags:.*0x0000DA05" ||
@@ -5862,7 +5862,7 @@ test_39()
 	# - sizeof(lfm_type) - sizeof(lfm_flags)
 	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_length:.*73" ||
 		error "$DIR/$tdir/${tdir}2: invalid LMV EA size"
-	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_type:.*daos" ||
+	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 | grep "lfm_type:.*none" ||
 		error "$DIR/$tdir/${tdir}2: invalid LMV EA type"
 	$LFS getdirstripe -v $DIR/$tdir/${tdir}2 |
 		grep "lfm_flags:.*0x0000DA05" ||

@@ -1129,12 +1129,12 @@ static int pcc_get_layout_info(struct inode *inode, struct cl_layout *clt)
 		RETURN(PTR_ERR(env));
 
 	rc = cl_object_layout_get(env, lli->lli_clob, clt);
-	if (rc)
+	if (rc < 0)
 		CDEBUG(D_INODE, "Cannot get layout for "DFID"\n",
 		       PFID(ll_inode2fid(inode)));
 
 	cl_env_put(env, &refcheck);
-	RETURN(rc);
+	RETURN(rc < 0 ? rc : 0);
 }
 
 static int pcc_fid2dataset_fullpath(char *buf, int sz, struct lu_fid *fid,

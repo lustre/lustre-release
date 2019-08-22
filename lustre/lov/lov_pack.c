@@ -166,8 +166,14 @@ static ssize_t lov_lsm_pack_foreign(const struct lov_stripe_md *lsm, void *buf,
 	if (buf_size == 0)
 		RETURN(lfm_size);
 
-	if (buf_size < lfm_size)
+	/* if buffer too small return ERANGE but copy the size the
+	 * caller has requested anyway. This may be useful to get
+	 * only the header without the need to alloc the full size
+	 */
+	if (buf_size < lfm_size) {
+		memcpy(lfm, lsm_foreign(lsm), buf_size);
 		RETURN(-ERANGE);
+	}
 
 	/* full foreign LOV is already avail in its cache
 	 * no need to translate format fields to little-endian

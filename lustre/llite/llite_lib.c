@@ -129,6 +129,25 @@ static struct ll_sb_info *ll_init_sbi(void)
 	if (sbi->ll_cache == NULL)
 		GOTO(out_destroy_ra, rc = -ENOMEM);
 
+	/* initialize foreign symlink prefix path */
+	OBD_ALLOC(sbi->ll_foreign_symlink_prefix, sizeof("/mnt/"));
+	if (sbi->ll_foreign_symlink_prefix == NULL)
+		GOTO(out_destroy_ra, rc = -ENOMEM);
+	memcpy(sbi->ll_foreign_symlink_prefix, "/mnt/", sizeof("/mnt/"));
+	sbi->ll_foreign_symlink_prefix_size = sizeof("/mnt/");
+
+	/* initialize foreign symlink upcall path, none by default */
+	OBD_ALLOC(sbi->ll_foreign_symlink_upcall, sizeof("none"));
+	if (sbi->ll_foreign_symlink_upcall == NULL)
+		GOTO(out_destroy_ra, rc = -ENOMEM);
+	memcpy(sbi->ll_foreign_symlink_upcall, "none", sizeof("none"));
+	sbi->ll_foreign_symlink_upcall_items = NULL;
+	sbi->ll_foreign_symlink_upcall_nb_items = 0;
+	init_rwsem(&sbi->ll_foreign_symlink_sem);
+	/* foreign symlink support (LL_SBI_FOREIGN_SYMLINK in ll_flags)
+	 * not enabled by default
+	 */
+
 	sbi->ll_ra_info.ra_max_pages =
 		min(pages / 32, SBI_DEFAULT_READ_AHEAD_MAX);
 	sbi->ll_ra_info.ra_max_pages_per_file =
@@ -183,6 +202,12 @@ static struct ll_sb_info *ll_init_sbi(void)
 	sbi->ll_heat_period_second = SBI_DEFAULT_HEAT_PERIOD_SECOND;
 	RETURN(sbi);
 out_destroy_ra:
+	if (sbi->ll_foreign_symlink_prefix)
+		OBD_FREE(sbi->ll_foreign_symlink_prefix, sizeof("/mnt/"));
+	if (sbi->ll_cache) {
+		cl_cache_decref(sbi->ll_cache);
+		sbi->ll_cache = NULL;
+	}
 	destroy_workqueue(sbi->ll_ra_info.ll_readahead_wq);
 out_pcc:
 	pcc_super_fini(&sbi->ll_pcc_super);
@@ -204,6 +229,32 @@ static void ll_free_sbi(struct super_block *sb)
 		if (sbi->ll_cache != NULL) {
 			cl_cache_decref(sbi->ll_cache);
 			sbi->ll_cache = NULL;
+		}
+		if (sbi->ll_foreign_symlink_prefix) {
+			OBD_FREE(sbi->ll_foreign_symlink_prefix,
+				 sbi->ll_foreign_symlink_prefix_size);
+			sbi->ll_foreign_symlink_prefix = NULL;
+		}
+		if (sbi->ll_foreign_symlink_upcall) {
+			OBD_FREE(sbi->ll_foreign_symlink_upcall,
+				 strlen(sbi->ll_foreign_symlink_upcall) +
+				       1);
+			sbi->ll_foreign_symlink_upcall = NULL;
+		}
+		if (sbi->ll_foreign_symlink_upcall_items) {
+			int i;
+			int nb_items = sbi->ll_foreign_symlink_upcall_nb_items;
+			struct ll_foreign_symlink_upcall_item *items =
+				sbi->ll_foreign_symlink_upcall_items;
+
+			for (i = 0 ; i < nb_items; i++)
+				if (items[i].type == STRING_TYPE)
+					OBD_FREE(items[i].string,
+						       items[i].size);
+
+			OBD_FREE_LARGE(items, nb_items *
+				sizeof(struct ll_foreign_symlink_upcall_item));
+			sbi->ll_foreign_symlink_upcall_items = NULL;
 		}
 		pcc_super_fini(&sbi->ll_pcc_super);
 		OBD_FREE(sbi, sizeof(*sbi));
@@ -986,6 +1037,58 @@ static int ll_options(char *options, struct ll_sb_info *sbi)
 #else
 			LCONSOLE_WARN("noencrypt mount option ignored: encryption not supported\n");
 #endif
+			goto next;
+		}
+		tmp = ll_set_opt("foreign_symlink", s1, LL_SBI_FOREIGN_SYMLINK);
+		if (tmp) {
+			int prefix_pos = sizeof("foreign_symlink=") - 1;
+			int equal_pos = sizeof("foreign_symlink=") - 2;
+
+			/* non-default prefix provided ? */
+			if (strlen(s1) >= sizeof("foreign_symlink=") &&
+			    *(s1 + equal_pos) == '=') {
+				char *old = sbi->ll_foreign_symlink_prefix;
+				size_t old_len =
+					sbi->ll_foreign_symlink_prefix_size;
+
+				/* path must be absolute */
+				if (*(s1 + sizeof("foreign_symlink=")
+				      - 1) != '/') {
+					LCONSOLE_ERROR_MSG(0x152,
+						"foreign prefix '%s' must be an absolute path\n",
+						s1 + prefix_pos);
+					RETURN(-EINVAL);
+				}
+				/* last option ? */
+				s2 = strchrnul(s1 + prefix_pos, ',');
+
+				if (sbi->ll_foreign_symlink_prefix) {
+					sbi->ll_foreign_symlink_prefix = NULL;
+					sbi->ll_foreign_symlink_prefix_size = 0;
+				}
+				/* alloc for path length and '\0' */
+				OBD_ALLOC(sbi->ll_foreign_symlink_prefix,
+						s2 - (s1 + prefix_pos) + 1);
+				if (!sbi->ll_foreign_symlink_prefix) {
+					/* restore previous */
+					sbi->ll_foreign_symlink_prefix = old;
+					sbi->ll_foreign_symlink_prefix_size =
+						old_len;
+					RETURN(-ENOMEM);
+				}
+				if (old)
+					OBD_FREE(old, old_len);
+				strncpy(sbi->ll_foreign_symlink_prefix,
+					s1 + prefix_pos,
+					s2 - (s1 + prefix_pos));
+				sbi->ll_foreign_symlink_prefix_size =
+					s2 - (s1 + prefix_pos) + 1;
+			} else {
+				LCONSOLE_ERROR_MSG(0x152,
+						   "invalid %s option\n", s1);
+			}
+			/* enable foreign symlink support */
+			*flags |= tmp;
 			goto next;
 		}
                 LCONSOLE_ERROR_MSG(0x152, "Unknown option '%s', won't mount.\n",
@@ -2870,6 +2973,13 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 	if (default_lmv_deleted)
 		ll_update_default_lsm_md(*inode, &md);
 
+	/* we may want to apply some policy for foreign file/dir */
+	if (ll_sbi_has_foreign_symlink(sbi)) {
+		rc = ll_manage_foreign(*inode, &md);
+		if (rc < 0)
+			GOTO(out, rc);
+	}
+
 	GOTO(out, rc = 0);
 
 out:
@@ -3073,6 +3183,11 @@ int ll_show_options(struct seq_file *seq, struct dentry *dentry)
 		seq_puts(seq, ",encrypt");
 	else
 		seq_puts(seq, ",noencrypt");
+
+	if (sbi->ll_flags & LL_SBI_FOREIGN_SYMLINK) {
+		seq_puts(seq, ",foreign_symlink=");
+		seq_puts(seq, sbi->ll_foreign_symlink_prefix);
+	}
 
 	RETURN(0);
 }

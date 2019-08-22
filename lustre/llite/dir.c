@@ -1662,6 +1662,16 @@ finish_req:
 		return rc;
 	}
 
+	case LL_IOC_UNLOCK_FOREIGN:
+		/* if not a foreign symlink do nothing */
+		if (ll_foreign_is_removable(dentry, true)) {
+			CDEBUG(D_INFO,
+			       "prevent rmdir of non-foreign dir ("DFID")\n",
+			       PFID(ll_inode2fid(inode)));
+			RETURN(-EOPNOTSUPP);
+		}
+		RETURN(0);
+
 	case LL_IOC_REMOVE_ENTRY: {
 		char		*filename = NULL;
 		int		 namelen = 0;

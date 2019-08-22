@@ -127,6 +127,9 @@ lfs \- client utility for Lustre-specific file layout and other attributes
 .br
 .B lfs setstripe --yaml=\fR<\fIyaml_template_file\fR> <\fIfilename\fR>
 .br
+.B lfs unlink_foreign
+.IR path \fR[\fIpath\fR ...]
+.br
 .B lfs --version
 .br
 .B lfs --list-commands
@@ -219,6 +222,9 @@ See lfs-migrate(1).
 .TP
 .B setstripe
 See lfs-setstripe(1).
+.TP
+.B unlink_foreign
+Remove the foreign files/dirs that are prevented to be using regular unlink/rmdir commands/syscalls. Works also for regular files/dirs.
 .TP
 .B --version
 Output the build version of the lfs utility. Use "lctl lustre_build_version" to get the version of the Lustre kernel modules

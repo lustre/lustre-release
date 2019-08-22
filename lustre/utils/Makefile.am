@@ -28,7 +28,7 @@ bin_SCRIPTS   = llstat llobdstat plot-llstat
 bin_PROGRAMS  = lfs
 sbin_SCRIPTS  = ldlm_debug_upcall
 sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ll_decode_linkea \
-		llsom_sync
+		llsom_sync l_foreign_symlink
 
 if TESTS
 sbin_PROGRAMS += wiretest
@@ -219,6 +219,10 @@ l_tunedisk_SOURCES = l_tunedisk.c mount_utils.c mount_utils.h $(GSSSRC)
 l_tunedisk_CPPFLAGS := ${MNTMODCFLAGS}
 l_tunedisk_LDFLAGS  := ${MNTMODLDFLAGS}
 l_tunedisk_LDADD    := $(mount_lustre_LDADD)
+
+l_foreign_symlink_SOURCES = l_foreign_symlink.c
+l_foreign_symlink_LDADD := $(top_builddir)/libcfs/libcfs/libcfs.la
+l_foreign_symlink_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la
 
 l_getidentity_SOURCES = l_getidentity.c
 l_getidentity_LDADD := $(top_builddir)/libcfs/libcfs/libcfs.la

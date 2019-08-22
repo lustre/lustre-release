@@ -178,7 +178,8 @@ LIBMAN = 					\
 	llapi_rmfid.3				\
 	llapi_search_mdt.3			\
 	llapi_search_ost.3			\
-	llapi_search_tgt.3
+	llapi_search_tgt.3			\
+	llapi_unlink_foreign.3
 
 SERVER_MANFILES =				\
 	lctl-barrier.8				\

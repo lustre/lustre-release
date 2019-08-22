@@ -85,6 +85,7 @@ static int lfs_getstripe(int argc, char **argv);
 static int lfs_getdirstripe(int argc, char **argv);
 static int lfs_setdirstripe(int argc, char **argv);
 static int lfs_rmentry(int argc, char **argv);
+static int lfs_unlink_foreign(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
 static int lfs_mdts(int argc, char **argv);
 static int lfs_df(int argc, char **argv);
@@ -293,7 +294,7 @@ static inline int lfs_mirror_delete(int argc, char **argv)
 	"setdirstripe|mkdir --foreign[=<foreign_type>] -x|-xattr <string> " \
 		"[--mode|-o mode] [--flags <hex>] <dir>\n" \
 	"\tmode: the mode of the directory\n" \
-	"\tforeign_type: none or daos\n"
+	"\tforeign_type: none or symlink\n"
 
 /**
  * command_t mirror_cmdlist - lfs mirror commands.
@@ -460,6 +461,11 @@ command_t cmdlist[] = {
 	 "will become inaccessable after this command. This can only be done\n"
 	 "by the administrator\n"
 	 "usage: rm_entry <dir>\n"},
+	{"unlink_foreign", lfs_unlink_foreign, 0,
+	 "To remove the foreign file/dir.\n"
+	 "Note: This is for files/dirs prevented to be removed using\n"
+	 "unlink/rmdir, but works also for regular ones\n"
+	 "usage: unlink_foreign <foreign_dir/file> [<foreign_dir/file> ...]\n"},
 	{"pool_list", lfs_poollist, 0,
 	 "List pools or pool OSTs\n"
 	 "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
@@ -6038,7 +6044,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	mode_t previous_mode = 0;
 	char *xattr = NULL;
-	__u32 type = LU_FOREIGN_TYPE_DAOS, flags = 0;
+	__u32 type = LU_FOREIGN_TYPE_SYMLINK, flags = 0;
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument },
@@ -6351,6 +6357,33 @@ static int lfs_rmentry(int argc, char **argv)
 			break;
 		}
 		dname = argv[++index];
+	}
+	return result;
+}
+
+static int lfs_unlink_foreign(int argc, char **argv)
+{
+	char *name;
+	int   index;
+	int   result = 0;
+
+	if (argc <= 1) {
+		fprintf(stderr, "error: %s: missing pathname\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+
+	index = 1;
+	name = argv[index];
+	while (name != NULL) {
+		result = llapi_unlink_foreign(name);
+		if (result) {
+			fprintf(stderr,
+				"error: %s: unlink foreign entry '%s' failed\n",
+				argv[0], name);
+			break;
+		}
+		name = argv[++index];
 	}
 	return result;
 }

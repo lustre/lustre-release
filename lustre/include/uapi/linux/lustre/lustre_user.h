@@ -618,6 +618,7 @@ struct ll_ioc_lease_id {
 #define LL_IOC_LMV_GETSTRIPE		_IOWR('f', 241, struct lmv_user_md)
 #define LL_IOC_REMOVE_ENTRY		_IOWR('f', 242, __u64)
 #define LL_IOC_RMFID			_IOR('f', 242, struct fid_array)
+#define LL_IOC_UNLOCK_FOREIGN		_IO('f', 242)
 #define LL_IOC_SET_LEASE		_IOWR('f', 243, struct ll_ioc_lease)
 #define LL_IOC_SET_LEASE_OLD		_IOWR('f', 243, long)
 #define LL_IOC_GET_LEASE		_IO('f', 244)
@@ -1072,7 +1073,7 @@ struct lustre_foreign_type {
  **/
 enum lustre_foreign_types {
 	LU_FOREIGN_TYPE_NONE = 0,
-	LU_FOREIGN_TYPE_DAOS = 0xda05,
+	LU_FOREIGN_TYPE_SYMLINK = 0xda05,
 	/* must be the max/last one */
 	LU_FOREIGN_TYPE_UNKNOWN = 0xffffffff,
 };
@@ -2638,6 +2639,52 @@ struct fid_array {
 	struct lu_fid fa_fids[0];
 };
 #define OBD_MAX_FIDS_IN_ARRAY	4096
+
+/* more types could be defined upon need for more complex
+ * format to be used in foreign symlink LOV/LMV EAs, like
+ * one to describe a delimiter string and occurence number
+ * of delimited sub-string, ...
+ */
+enum ll_foreign_symlink_upcall_item_type {
+	EOB_TYPE = 1,
+	STRING_TYPE = 2,
+	POSLEN_TYPE = 3,
+};
+
+/* may need to be modified to allow for more format items to be defined, and
+ * like for ll_foreign_symlink_upcall_item_type enum
+ */
+struct ll_foreign_symlink_upcall_item {
+	__u32 type;
+	union {
+		struct {
+			__u32 pos;
+			__u32 len;
+		};
+		struct {
+			size_t size;
+			union {
+				/* internal storage of constant string */
+				char *string;
+				/* upcall stores constant string in a raw */
+				char bytestring[0];
+			};
+		};
+	};
+};
+
+#define POSLEN_ITEM_SZ (offsetof(struct ll_foreign_symlink_upcall_item, len) + \
+		sizeof(((struct ll_foreign_symlink_upcall_item *)0)->len))
+#define STRING_ITEM_SZ(sz) ( \
+	offsetof(struct ll_foreign_symlink_upcall_item, bytestring) + \
+	(sz + sizeof(__u32) - 1) / sizeof(__u32) * sizeof(__u32))
+
+/* presently limited to not cause max stack frame size to be reached
+ * because of temporary automatic array of
+ * "struct ll_foreign_symlink_upcall_item" presently used in
+ * foreign_symlink_upcall_info_store()
+ */
+#define MAX_NB_UPCALL_ITEMS 32
 
 #if defined(__cplusplus)
 }

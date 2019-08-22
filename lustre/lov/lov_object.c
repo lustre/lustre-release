@@ -2165,7 +2165,8 @@ static int lov_object_layout_get(const struct lu_env *env,
 	rc = lov_lsm_pack(lsm, buf->lb_buf, buf->lb_len);
 	lov_lsm_put(lsm);
 
-	RETURN(rc < 0 ? rc : 0);
+	/* return error or number of bytes */
+	RETURN(rc);
 }
 
 static loff_t lov_object_maxbytes(struct cl_object *obj)

@@ -119,7 +119,7 @@ File has a foreign (non-Lustre/free format) layout and is of the given
 if specified.  Presently only
 .B none
 or
-.B daos
+.B symlink
 are defined types, though 32-bit numeric types can also be used.
 .TP
 .BR --gid | -g
@@ -365,9 +365,9 @@ Recursively list all mirrored files that have more than 2 mirrors.
 .B $ lfs find ! --mirror-state=ro /mnt/lustre
 Recursively list all out-of-sync mirrored files.
 .TP
-.B $ lfs find ! --foreign=daos /mnt/lustre
+.B $ lfs find ! --foreign=symlink /mnt/lustre
 Recursively list all but foreign files/dirs of
-.B daos
+.B symlink
 type.
 .SH BUGS
 The

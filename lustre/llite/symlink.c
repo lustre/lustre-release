@@ -38,6 +38,7 @@
 
 #include "llite_internal.h"
 
+/* Must be called with lli_size_mutex locked */
 static int ll_readlink_internal(struct inode *inode,
 				struct ptlrpc_request **request, char **symname)
 {

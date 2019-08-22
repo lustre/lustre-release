@@ -133,7 +133,7 @@ file.
 Create a new
 .I file
 with a foreign/non-lustre layout of type
-.I foreign_type \fR(\fBnone\fR, \fBdaos\fR, ...)
+.I foreign_type \fR(\fBnone\fR, \fBsymlink\fR, ...)
 with flags
 .I hex
 and a free-format layout value of
@@ -264,7 +264,7 @@ options).
 Current known types are
 .BR none
 and
-.BR daos
+.BR symlink
 , default is
 .BR none
 .
@@ -533,12 +533,12 @@ which can be created with the
 .B lfs getstripe --yaml
 command.
 .TP
-.B lfs setstripe --foreign=daos --flags=0xda08 \
+.B lfs setstripe --foreign=symlink --flags=0xda08 \
 	--xattr=PUUID:CUUID /mnt/lustre/file1
 This creates foreign
 .BR file1
 of type
-.BR daos
+.BR symlink
 with non-lustre/free-format
 .BR PUUID:CUUID
 layout/LOV EA and flags

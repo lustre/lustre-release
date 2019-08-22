@@ -94,9 +94,10 @@ Create a directory with a foreign (non-Lustre/free format, see
 option) striping. Where
 .BR type
 specifies a known foreign type (like
-.BR none ,
-.BR daos )
-or a 32-bit numeric type.
+.BR none
+,
+.BR symlink
+, ...) or a 32-bit numeric type.
 .TP
 .BR \-\-flags =\fI<hex>\fR
 Specify a numeric bitmask of type-specific layout flags for the foreign layout.
@@ -149,12 +150,12 @@ This creates a directory striped on two MDTs, whose first stripe is on
 (MDT index 1), and whose hash type is
 .BR all_char .
 .TP
-.B $ lfs mkdir --foreign=daos --xattr PUUID:CUUID /mnt/lustre/dir1
+.B $ lfs mkdir --foreign=symlink --xattr PUUID/CUUID /mnt/lustre/dir1
 This creates
 .B dir1
 with foreign (non-lustre/free format)
-.B PUUID:CUUID
-striping/LMV EA.
+.B PUUID/CUUID
+striping/LMV EA value (symlink type).
 .SH AVAILABILITY
 The
 .B lfs setdirstripe

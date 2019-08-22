@@ -614,6 +614,27 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 	if (rc < 0)
 		return ERR_PTR(rc);
 	d_add(de, inode);
+
+	/* this needs only to be done for foreign symlink dirs as
+	 * DCACHE_SYMLINK_TYPE is already set by d_flags_for_inode()
+	 * kernel routine for files with symlink ops (ie, real symlink)
+	 */
+	if (inode && S_ISDIR(inode->i_mode) &&
+	    ll_sbi_has_foreign_symlink(ll_i2sbi(inode)) &&
+#ifdef HAVE_IOP_GET_LINK
+	    inode->i_op->get_link) {
+#else
+	    inode->i_op->follow_link) {
+#endif
+		CDEBUG(D_INFO, "%s: inode "DFID": faking foreign dir as a symlink\n",
+		       ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)));
+		spin_lock(&de->d_lock);
+		/* like d_flags_for_inode() already does for files */
+		de->d_flags = (de->d_flags & ~DCACHE_ENTRY_TYPE) |
+			      DCACHE_SYMLINK_TYPE;
+		spin_unlock(&de->d_lock);
+	}
+
 	CDEBUG(D_DENTRY, "Add dentry %p inode %p refc %d flags %#x\n",
 	       de, de->d_inode, ll_d_count(de), de->d_flags);
         return de;
@@ -1195,7 +1216,9 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 			}
 		}
 
-		if (dentry->d_inode && it_disposition(it, DISP_OPEN_OPEN)) {
+		/* check also if a foreign file is openable */
+		if (dentry->d_inode && it_disposition(it, DISP_OPEN_OPEN) &&
+		    ll_foreign_is_openable(dentry, open_flags)) {
 			/* Open dentry. */
 			if (S_ISFIFO(dentry->d_inode->i_mode)) {
 				/* We cannot call open here as it might
@@ -1681,6 +1704,10 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 	if (unlikely(d_mountpoint(dchild)))
                 RETURN(-EBUSY);
 
+	/* some foreign dir may not be allowed to be removed */
+	if (!ll_foreign_is_removable(dchild, false))
+		RETURN(-EPERM);
+
 	op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name, name->len,
 				     S_IFDIR, LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
@@ -1765,6 +1792,10 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 	 */
 	if (unlikely(d_mountpoint(dchild)))
 		RETURN(-EBUSY);
+
+	/* some foreign file/dir may not be allowed to be unlinked */
+	if (!ll_foreign_is_removable(dchild, false))
+		RETURN(-EPERM);
 
 	op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name, name->len, 0,
 				     LUSTRE_OPC_ANY, NULL);
