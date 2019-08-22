@@ -570,9 +570,9 @@ kiblnd_get_conn_by_idx(struct lnet_ni *ni, int index)
 static void
 kiblnd_debug_rx(struct kib_rx *rx)
 {
-        CDEBUG(D_CONSOLE, "      %p status %d msg_type %x cred %d\n",
-               rx, rx->rx_status, rx->rx_msg->ibm_type,
-               rx->rx_msg->ibm_credits);
+	CDEBUG(D_CONSOLE, "      %p msg_type %x cred %d\n",
+	       rx, rx->rx_msg->ibm_type,
+	       rx->rx_msg->ibm_credits);
 }
 
 static void
@@ -2590,9 +2590,7 @@ kiblnd_hdev_get_attr(struct kib_hca_dev *hdev)
 		rc = -ENOSYS;
 	}
 
-	if (rc == 0 && hdev->ibh_mr_size == ~0ULL)
-		hdev->ibh_mr_shift = 64;
-	else if (rc != 0)
+	if (rc != 0)
 		rc = -EINVAL;
 
 #ifndef HAVE_IB_DEVICE_ATTRS
