@@ -1126,10 +1126,10 @@ struct lnet {
 	bool				ln_nis_from_mod_params;
 
 	/*
-	 * waitq for the monitor thread. The monitor thread takes care of
+	 * completion for the monitor thread. The monitor thread takes care of
 	 * checking routes, timedout messages and resending messages.
 	 */
-	wait_queue_head_t		ln_mt_waitq;
+	struct completion		ln_mt_wait_complete;
 
 	/* per-cpt resend queues */
 	struct list_head		**ln_mt_resendqs;

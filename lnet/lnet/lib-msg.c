@@ -637,7 +637,7 @@ lnet_resend_msg_locked(struct lnet_msg *msg)
 
 	list_add_tail(&msg->msg_list, the_lnet.ln_mt_resendqs[msg->msg_tx_cpt]);
 
-	wake_up(&the_lnet.ln_mt_waitq);
+	complete(&the_lnet.ln_mt_wait_complete);
 }
 
 int

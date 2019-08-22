@@ -3542,9 +3542,13 @@ lnet_monitor_thread(void *arg)
 			       min((unsigned int) alive_router_check_interval /
 					lnet_current_net_count,
 				   lnet_transaction_timeout / 2));
-		wait_event_interruptible_timeout(the_lnet.ln_mt_waitq,
-						false,
-						cfs_time_seconds(interval));
+		wait_for_completion_interruptible_timeout(
+			&the_lnet.ln_mt_wait_complete,
+			cfs_time_seconds(interval));
+		/* Must re-init the completion before testing anything,
+		 * including ln_mt_state.
+		 */
+		reinit_completion(&the_lnet.ln_mt_wait_complete);
 	}
 
 	/* Shutting down */
@@ -3809,7 +3813,7 @@ void lnet_monitor_thr_stop(void)
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* tell the monitor thread that we're shutting down */
-	wake_up(&the_lnet.ln_mt_waitq);
+	complete(&the_lnet.ln_mt_wait_complete);
 
 	/* block until monitor thread signals that it's done */
 	down(&the_lnet.ln_mt_signal);

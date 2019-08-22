@@ -706,7 +706,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 		LIBCFS_FREE(rnet, sizeof(*rnet));
 
 	/* kick start the monitor thread to handle the added route */
-	wake_up(&the_lnet.ln_mt_waitq);
+	complete(&the_lnet.ln_mt_wait_complete);
 
 	return rc;
 }
@@ -1458,7 +1458,7 @@ lnet_rtrpools_alloc(int im_a_router)
 	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_routing = 1;
 	lnet_net_unlock(LNET_LOCK_EX);
-	wake_up(&the_lnet.ln_mt_waitq);
+	complete(&the_lnet.ln_mt_wait_complete);
 	return 0;
 
  failed:
