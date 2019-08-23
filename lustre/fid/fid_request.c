@@ -178,13 +178,13 @@ int seq_client_alloc_super(struct lu_client_seq *seq,
 static int seq_client_alloc_meta(const struct lu_env *env,
                                  struct lu_client_seq *seq)
 {
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        if (seq->lcs_srv) {
+	if (seq->lcs_srv) {
 #ifdef HAVE_SEQ_SERVER
-                LASSERT(env != NULL);
-                rc = seq_server_alloc_meta(seq->lcs_srv, &seq->lcs_space, env);
+		LASSERT(env);
+		rc = seq_server_alloc_meta(seq->lcs_srv, &seq->lcs_space, env);
 #else
 		rc = 0;
 #endif
@@ -208,9 +208,9 @@ static int seq_client_alloc_meta(const struct lu_env *env,
 				l_wait_event(waitq, 0, &lwi);
 			}
 		} while (rc == -EINPROGRESS || rc == -EAGAIN);
-        }
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* Allocate new sequence for client. */
