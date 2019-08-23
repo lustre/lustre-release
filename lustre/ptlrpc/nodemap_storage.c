@@ -1466,7 +1466,6 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	struct lu_rdpg rdpg;
 	struct idx_info nodemap_ii;
 	struct ptlrpc_bulk_desc *desc;
-	struct l_wait_info lwi;
 	struct tg_export_data *rqexp_ted = &req->rq_export->exp_target_data;
 	int i;
 	int page_count;
@@ -1534,7 +1533,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 		bytes -= PAGE_SIZE;
 	}
 
-	rc = target_bulk_io(req->rq_export, desc, &lwi);
+	rc = target_bulk_io(req->rq_export, desc);
 	ptlrpc_free_bulk(desc);
 
 out:

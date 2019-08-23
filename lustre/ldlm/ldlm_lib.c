@@ -3308,22 +3308,22 @@ static inline const char *bulk2type(struct ptlrpc_request *req)
 	return "UNKNOWN";
 }
 
-int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
-		   struct l_wait_info *lwi)
+int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc)
 {
 	struct ptlrpc_request *req = desc->bd_req;
 	time64_t start = ktime_get_real_seconds();
 	time64_t deadline;
+	struct l_wait_info lwi;
 	int rc = 0;
 
 	ENTRY;
 
 	/* If there is eviction in progress, wait for it to finish. */
 	if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
-		*lwi = LWI_INTR(NULL, NULL);
+		lwi = LWI_INTR(NULL, NULL);
 		rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
 				  !atomic_read(&exp->exp_obd->obd_evict_inprogress),
-				  lwi);
+				  &lwi);
 	}
 
 	/* Check if client was evicted or reconnected already. */
@@ -3365,15 +3365,15 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 				       1 : cfs_time_seconds(timeoutl);
 		time64_t rq_deadline;
 
-		*lwi = LWI_TIMEOUT_INTERVAL(timeout_jiffies,
-					    cfs_time_seconds(1),
-					    target_bulk_timeout, desc);
+		lwi = LWI_TIMEOUT_INTERVAL(timeout_jiffies,
+					   cfs_time_seconds(1),
+					   target_bulk_timeout, desc);
 		rc = l_wait_event(desc->bd_waitq,
 				  !ptlrpc_server_bulk_active(desc) ||
 				  exp->exp_failed ||
 				  exp->exp_conn_cnt >
 				  lustre_msg_get_conn_cnt(req->rq_reqmsg),
-				  lwi);
+				  &lwi);
 		LASSERT(rc == 0 || rc == -ETIMEDOUT);
 		/* Wait again if we changed rq_deadline. */
 		rq_deadline = READ_ONCE(req->rq_deadline);

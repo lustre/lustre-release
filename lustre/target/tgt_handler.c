@@ -1061,11 +1061,9 @@ int tgt_obd_log_cancel(struct tgt_session_info *tsi)
 
 int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf)
 {
-	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 	struct obd_export	*exp = req->rq_export;
 	struct ptlrpc_bulk_desc	*desc;
-	struct l_wait_info	*lwi = &tti->tti_u.update.tti_wait_info;
 	int			 i;
 	int			 rc;
 
@@ -1082,7 +1080,7 @@ int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf)
 					rdbuf->rb_bufs[i].lb_buf,
 					rdbuf->rb_bufs[i].lb_len);
 
-	rc = target_bulk_io(exp, desc, lwi);
+	rc = target_bulk_io(exp, desc);
 	ptlrpc_free_bulk(desc);
 	RETURN(rc);
 }
@@ -1090,11 +1088,9 @@ EXPORT_SYMBOL(tgt_send_buffer);
 
 int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 {
-	struct tgt_thread_info	*tti = tgt_th_info(tsi->tsi_env);
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 	struct obd_export	*exp = req->rq_export;
 	struct ptlrpc_bulk_desc	*desc;
-	struct l_wait_info	*lwi = &tti->tti_u.rdpg.tti_wait_info;
 	int			 tmpcount;
 	int			 tmpsize;
 	int			 i;
@@ -1123,7 +1119,7 @@ int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 	}
 
 	LASSERT(desc->bd_nob == nob);
-	rc = target_bulk_io(exp, desc, lwi);
+	rc = target_bulk_io(exp, desc);
 	ptlrpc_free_bulk(desc);
 	RETURN(rc);
 }
@@ -2334,7 +2330,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 						   RCL_SERVER);
 			rc = rc > 0 ? 0 : rc;
 		} else if (!CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2)) {
-			rc = target_bulk_io(exp, desc, &lwi);
+			rc = target_bulk_io(exp, desc);
 		}
 		no_reply = rc != 0;
 	} else {
@@ -2380,7 +2376,7 @@ out_lock:
 
 		lwi1 = LWI_TIMEOUT_INTR(cfs_time_seconds(3), NULL, NULL, NULL);
 		l_wait_event(waitq, 0, &lwi1);
-		target_bulk_io(exp, desc, &lwi);
+		target_bulk_io(exp, desc);
 		ptlrpc_free_bulk(desc);
 	}
 
@@ -2470,7 +2466,6 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	struct niobuf_local	*local_nb;
 	struct obd_ioobj	*ioo;
 	struct ost_body		*body, *repbody;
-	struct l_wait_info	 lwi;
 	struct lustre_handle	 lockh = {0};
 	__u32			*rcs;
 	int			 objcount, niocount, npages;
@@ -2625,7 +2620,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 		if (rc != 0)
 			GOTO(skip_transfer, rc);
 
-		rc = target_bulk_io(exp, desc, &lwi);
+		rc = target_bulk_io(exp, desc);
 	}
 
 	no_reply = rc != 0;

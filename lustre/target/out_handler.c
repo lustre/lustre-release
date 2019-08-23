@@ -966,7 +966,6 @@ int out_handle(struct tgt_session_info *tsi)
 	struct object_update		*update;
 	struct object_update_reply	*reply;
 	struct ptlrpc_bulk_desc		*desc = NULL;
-	struct l_wait_info		lwi;
 	void				**update_bufs;
 	int				current_batchid = -1;
 	__u32				update_buf_count;
@@ -1039,7 +1038,7 @@ int out_handle(struct tgt_session_info *tsi)
 		if (rc != 0)
 			GOTO(out_free, rc = err_serious(rc));
 
-		rc = target_bulk_io(pill->rc_req->rq_export, desc, &lwi);
+		rc = target_bulk_io(pill->rc_req->rq_export, desc);
 		if (rc < 0)
 			GOTO(out_free, rc = err_serious(rc));
 	}

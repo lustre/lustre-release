@@ -602,7 +602,6 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	struct mgs_config_body *body;
 	struct mgs_config_res *res;
 	struct ptlrpc_bulk_desc *desc;
-	struct l_wait_info lwi;
 	char fsname[16];
 	long bufsize;
 	int unit_size;
@@ -672,7 +671,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 		bytes -= PAGE_SIZE;
 	}
 
-	rc = target_bulk_io(req->rq_export, desc, &lwi);
+	rc = target_bulk_io(req->rq_export, desc);
 	ptlrpc_free_bulk(desc);
 
 	GOTO(out, rc);

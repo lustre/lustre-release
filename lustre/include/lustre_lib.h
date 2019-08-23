@@ -79,8 +79,7 @@ void target_stop_recovery_thread(struct obd_device *obd);
 void target_cleanup_recovery(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
-int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
-                   struct l_wait_info *lwi);
+int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc);
 #endif
 
 int target_pack_pool_reply(struct ptlrpc_request *req);

@@ -72,8 +72,6 @@ struct tgt_thread_info {
 		struct {
 			/* for tgt_readpage()      */
 			struct lu_rdpg     tti_rdpg;
-			/* for tgt_sendpage()      */
-			struct l_wait_info tti_wait_info;
 		} rdpg;
 		struct {
 			struct dt_object_format	   tti_update_dof;
@@ -82,7 +80,6 @@ struct tgt_thread_info {
 			int			   tti_update_reply_index;
 			struct obdo		   tti_obdo;
 			struct dt_object	   *tti_dt_object;
-			struct l_wait_info tti_wait_info;
 		} update;
 		struct obd_statfs osfs; /* for obd_statfs() in OFD/MDT */
 	} tti_u;
