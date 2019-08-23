@@ -843,7 +843,7 @@ stride_page_count(struct ll_readahead_state *ras, loff_t len)
 	loff_t bytes_count =
 		stride_byte_count(ras->ras_stride_offset,
 				  ras->ras_stride_length, ras->ras_stride_bytes,
-				  ras->ras_stride_offset, len);
+				  ras->ras_window_start_idx << PAGE_SHIFT, len);
 
 	return (bytes_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
 }
@@ -874,22 +874,32 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
 		stride_bytes = end - ras->ras_stride_offset;
 
 	div64_u64_rem(stride_bytes, ras->ras_stride_length, &left_bytes);
-	window_bytes = ((loff_t)ras->ras_window_pages << PAGE_SHIFT) -
-		left_bytes;
-
-	if (left_bytes < ras->ras_stride_bytes)
-		left_bytes += inc_bytes;
-	else
-		left_bytes = ras->ras_stride_bytes + inc_bytes;
+	window_bytes = (ras->ras_window_pages << PAGE_SHIFT);
+	if (left_bytes < ras->ras_stride_bytes) {
+		if (ras->ras_stride_bytes - left_bytes >= inc_bytes) {
+			window_bytes += inc_bytes;
+			goto out;
+		} else {
+			window_bytes += (ras->ras_stride_bytes - left_bytes);
+			inc_bytes -= (ras->ras_stride_bytes - left_bytes);
+		}
+	} else {
+		window_bytes += (ras->ras_stride_length - left_bytes);
+	}
 
 	LASSERT(ras->ras_stride_bytes != 0);
 
-	step = div64_u64_rem(left_bytes, ras->ras_stride_bytes, &left_bytes);
+	step = div64_u64_rem(inc_bytes, ras->ras_stride_bytes, &left_bytes);
 
 	window_bytes += step * ras->ras_stride_length + left_bytes;
+	LASSERT(window_bytes > 0);
 
-	if (stride_page_count(ras, window_bytes) <= ra->ra_max_pages_per_file)
+out:
+	if (stride_page_count(ras, window_bytes) <=
+	    ra->ra_max_pages_per_file || ras->ras_window_pages == 0)
 		ras->ras_window_pages = (window_bytes >> PAGE_SHIFT);
+
+	LASSERT(ras->ras_window_pages > 0);
 
 	RAS_CDEBUG(ras);
 }
