@@ -2469,44 +2469,45 @@ ksocknal_debug_peerhash(struct lnet_ni *ni)
 
 	read_lock(&ksocknal_data.ksnd_global_lock);
 
-        for (i = 0; i < ksocknal_data.ksnd_peer_hash_size; i++) {
+	for (i = 0; i < ksocknal_data.ksnd_peer_hash_size; i++) {
 		list_for_each(tmp, &ksocknal_data.ksnd_peers[i]) {
 			peer_ni = list_entry(tmp, struct ksock_peer_ni, ksnp_list);
 
-                        if (peer_ni->ksnp_ni == ni) break;
+			if (peer_ni->ksnp_ni == ni)
+				break;
 
-                        peer_ni = NULL;
-                }
-        }
+			peer_ni = NULL;
+		}
+	}
 
         if (peer_ni != NULL) {
 		struct ksock_route *route;
 		struct ksock_conn  *conn;
 
-		CWARN ("Active peer_ni on shutdown: %s, ref %d, scnt %d, "
-		       "closing %d, accepting %d, err %d, zcookie %llu, "
-		       "txq %d, zc_req %d\n", libcfs_id2str(peer_ni->ksnp_id),
-		       atomic_read(&peer_ni->ksnp_refcount),
-		       peer_ni->ksnp_sharecount, peer_ni->ksnp_closing,
-		       peer_ni->ksnp_accepting, peer_ni->ksnp_error,
-		       peer_ni->ksnp_zc_next_cookie,
-		       !list_empty(&peer_ni->ksnp_tx_queue),
-		       !list_empty(&peer_ni->ksnp_zc_req_list));
+		CWARN("Active peer_ni on shutdown: %s, ref %d, scnt %d, "
+		      "closing %d, accepting %d, err %d, zcookie %llu, "
+		      "txq %d, zc_req %d\n", libcfs_id2str(peer_ni->ksnp_id),
+		      atomic_read(&peer_ni->ksnp_refcount),
+		      peer_ni->ksnp_sharecount, peer_ni->ksnp_closing,
+		      peer_ni->ksnp_accepting, peer_ni->ksnp_error,
+		      peer_ni->ksnp_zc_next_cookie,
+		      !list_empty(&peer_ni->ksnp_tx_queue),
+		      !list_empty(&peer_ni->ksnp_zc_req_list));
 
 		list_for_each(tmp, &peer_ni->ksnp_routes) {
 			route = list_entry(tmp, struct ksock_route, ksnr_list);
-			CWARN ("Route: ref %d, schd %d, conn %d, cnted %d, "
-			       "del %d\n", atomic_read(&route->ksnr_refcount),
-			       route->ksnr_scheduled, route->ksnr_connecting,
-			       route->ksnr_connected, route->ksnr_deleted);
+			CWARN("Route: ref %d, schd %d, conn %d, cnted %d, "
+			      "del %d\n", atomic_read(&route->ksnr_refcount),
+			      route->ksnr_scheduled, route->ksnr_connecting,
+			      route->ksnr_connected, route->ksnr_deleted);
 		}
 
 		list_for_each(tmp, &peer_ni->ksnp_conns) {
 			conn = list_entry(tmp, struct ksock_conn, ksnc_list);
-			CWARN ("Conn: ref %d, sref %d, t %d, c %d\n",
-			       atomic_read(&conn->ksnc_conn_refcount),
-			       atomic_read(&conn->ksnc_sock_refcount),
-			       conn->ksnc_type, conn->ksnc_closing);
+			CWARN("Conn: ref %d, sref %d, t %d, c %d\n",
+			      atomic_read(&conn->ksnc_conn_refcount),
+			      atomic_read(&conn->ksnc_sock_refcount),
+			      conn->ksnc_type, conn->ksnc_closing);
 		}
 	}
 
