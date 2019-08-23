@@ -213,10 +213,6 @@ struct l_wait_info {
 
 #define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)
 
-#define LUSTRE_FATAL_SIGS					 \
-	(sigmask(SIGKILL) | sigmask(SIGINT) | sigmask(SIGTERM) | \
-	 sigmask(SIGQUIT) | sigmask(SIGALRM))
-
 /**
  * wait_queue_t of Linux (version < 2.6.34) is a FIFO list for exclusively
  * waiting threads, which is not always desirable because all threads will
