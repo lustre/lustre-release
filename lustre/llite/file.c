@@ -1066,7 +1066,9 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 		GOTO(out_release_it, rc);
 
 	LASSERT(it_disposition(&it, DISP_ENQ_OPEN_REF));
-	ll_och_fill(sbi->ll_md_exp, &it, och);
+	rc = ll_och_fill(sbi->ll_md_exp, &it, och);
+	if (rc)
+		GOTO(out_release_it, rc);
 
 	if (!it_disposition(&it, DISP_OPEN_LEASE)) /* old server? */
 		GOTO(out_close, rc = -EOPNOTSUPP);
@@ -2392,7 +2394,9 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
         if (!och)
                 GOTO(out, rc = -ENOMEM);
 
-	ll_och_fill(ll_i2sbi(inode)->ll_md_exp, it, och);
+	rc = ll_och_fill(ll_i2sbi(inode)->ll_md_exp, it, och);
+	if (rc)
+		GOTO(out, rc);
 
 	rc = ll_close_inode_openhandle(inode, och, 0, NULL);
 out:
