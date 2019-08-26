@@ -7174,17 +7174,19 @@ quota_type:
 	    optind == argc - 1 && !show_default) {
 
 		qctl.qc_cmd = LUSTRE_Q_GETQUOTA;
-		qctl.qc_valid = valid;
 		qctl.qc_idx = idx;
 
 		for (qtype = USRQUOTA; qtype <= GRPQUOTA; qtype++) {
 			qctl.qc_type = qtype;
+			qctl.qc_valid = valid;
 			if (qtype == USRQUOTA) {
 				qctl.qc_id = geteuid();
 				rc = uid2name(&name, qctl.qc_id);
 			} else {
 				qctl.qc_id = getegid();
 				rc = gid2name(&name, qctl.qc_id);
+				memset(&qctl.qc_dqblk, 0,
+				       sizeof(qctl.qc_dqblk));
 			}
 			if (rc)
 				name = "<unknown>";

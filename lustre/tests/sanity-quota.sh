@@ -3433,6 +3433,36 @@ test_64() {
 }
 run_test 64 "lfs project on symlink files should fail"
 
+test_65() {
+	local SIZE=10 #10M
+	local TESTFILE="$DIR/$tdir/$tfile-0"
+
+	setup_quota_test || error "setup quota failed with $?"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	quota_init
+
+	echo "Write..."
+	$RUNAS $DD of=$TESTFILE count=$SIZE ||
+		error "failed to write"
+	# flush cache, ensure noquota flag is set on client
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+
+	local quota_u=$($LFS quota -u $TSTUSR $DIR)
+	local quota_g=$($LFS quota -g $TSTUSR $DIR)
+	local quota_all=$($RUNAS $LFS quota $DIR)
+
+	[ "$(echo "$quota_all" | head -n3)" != "$quota_u" ] &&
+		error "usr quota not match"
+	[ "$(echo "$quota_all" | tail -n3)" != "$quota_g" ] &&
+		error "grp quota not match"
+
+	rm -f $TESTFILE
+	# cleanup
+	cleanup_quota_test
+}
+run_test 65 "Check lfs quota result"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
