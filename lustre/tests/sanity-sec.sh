@@ -195,12 +195,10 @@ run_test 1 "setuid/gid ============================="
 # as for remote client, the groups of the specified uid on MDT
 # will be obtained by upcall /sbin/l_getidentity and used.
 test_4() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-
-	[[ $server_version -ge $(version_code 2.6.93) ]] ||
-	[[ $server_version -ge $(version_code 2.5.35) &&
-	   $server_version -lt $(version_code 2.5.50) ]] ||
-		{ skip "Need MDS version at least 2.6.93 or 2.5.35"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.6.93) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.5.35) &&
+	   "$MDS1_VERSION" -lt $(version_code 2.5.50) ]] ||
+		skip "Need MDS version at least 2.6.93 or 2.5.35"
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
@@ -333,9 +331,9 @@ add_idmaps() {
 }
 
 update_idmaps() { #LU-10040
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.55) ] &&
-		skip "Need MGS >= 2.10.55" &&
-		return
+	[ "$MGS_VERSION" -lt $(version_code 2.10.55) ] &&
+		skip "Need MGS >= 2.10.55"
+
 	local csum=${HOSTNAME_CHECKSUM}_0
 	local old_id_client=$ID0
 	local old_id_fs=$((ID0 + 1))
@@ -456,9 +454,9 @@ modify_flags() {
 }
 
 squash_id() {
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
+
 	local cmd
 
 	cmd[0]="$LCTL nodemap_modify --property squash_uid"
@@ -685,18 +683,17 @@ test_idmap() {
 test_7() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	create_nodemaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 1
+	[[ $rc != 0 ]] && error "nodemap_add failed with $rc"
 
 	delete_nodemaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 2
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc"
 
 	return 0
 }
@@ -705,10 +702,9 @@ run_test 7 "nodemap create and delete"
 test_8() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	# Set up nodemaps
 
@@ -736,10 +732,9 @@ test_9() {
 	local i
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	rc=0
 	create_nodemaps
@@ -774,10 +769,9 @@ run_test 9 "nodemap range add"
 test_10a() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	rc=0
 	create_nodemaps
@@ -819,8 +813,8 @@ test_10a() {
 run_test 10a "nodemap reject duplicate ranges"
 
 test_10b() {
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.53) ] &&
-		skip "Need MGS >= 2.10.53" && return
+	[ "$MGS_VERSION" -lt $(version_code 2.10.53) ] &&
+		skip "Need MGS >= 2.10.53"
 
 	local nm1="nodemap1"
 	local nm2="nodemap2"
@@ -847,8 +841,8 @@ test_10b() {
 run_test 10b "delete range from the correct nodemap"
 
 test_10c() { #LU-8912
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.57) ] &&
-		skip "Need MGS >= 2.10.57" && return
+	[ "$MGS_VERSION" -lt $(version_code 2.10.57) ] &&
+		skip "Need MGS >= 2.10.57"
 
 	local nm="nodemap_lu8912"
 	local nid_range="10.210.[32-47].[0-255]@o2ib3"
@@ -877,8 +871,8 @@ test_10c() { #LU-8912
 run_test 10c "verfify contiguous range support"
 
 test_10d() { #LU-8913
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.59) ] &&
-		skip "Need MGS >= 2.10.59" && return
+	[ "$MGS_VERSION" -lt $(version_code 2.10.59) ] &&
+		skip "Need MGS >= 2.10.59"
 
 	local nm="nodemap_lu8913"
 	local nid_range="*@o2ib3"
@@ -909,10 +903,9 @@ run_test 10d "verfify nodemap range format '*@<net>' support"
 test_11() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	rc=0
 	create_nodemaps
@@ -939,10 +932,9 @@ run_test 11 "nodemap modify"
 test_12() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	rc=0
 	create_nodemaps
@@ -977,10 +969,9 @@ run_test 12 "nodemap set squash ids"
 test_13() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	rc=0
 	create_nodemaps
@@ -1020,10 +1011,9 @@ run_test 13 "test nids"
 test_14() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	rc=0
 	create_nodemaps
@@ -1055,10 +1045,9 @@ run_test 14 "test default nodemap nid lookup"
 test_15() {
 	local rc
 
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
-		return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
 
 	rc=0
 	create_nodemaps
@@ -1503,8 +1492,8 @@ test_fops() {
 
 nodemap_version_check () {
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return 1
-	[ $(lustre_version_code mgs) -lt $(version_code 2.5.53) ] &&
-		skip "No nodemap on $(lustre_build_version mgs) MGS < 2.5.53" &&
+	[ "$MGS_VERSION" -lt $(version_code 2.5.53) ] &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53" &&
 		return 1
 	return 0
 }
@@ -1581,7 +1570,7 @@ run_test 16 "test nodemap all_off fileops"
 
 test_17() {
 	if $SHARED_KEY &&
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ]; then
 		skip "Need MDS >= 2.11.55"
 	fi
 
@@ -1597,7 +1586,7 @@ run_test 17 "test nodemap trusted_noadmin fileops"
 
 test_18() {
 	if $SHARED_KEY &&
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ]; then
 		skip "Need MDS >= 2.11.55"
 	fi
 
@@ -1613,7 +1602,7 @@ run_test 18 "test nodemap mapped_noadmin fileops"
 
 test_19() {
 	if $SHARED_KEY &&
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ]; then
 		skip "Need MDS >= 2.11.55"
 	fi
 
@@ -1629,7 +1618,7 @@ run_test 19 "test nodemap trusted_admin fileops"
 
 test_20() {
 	if $SHARED_KEY &&
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ]; then
 		skip "Need MDS >= 2.11.55"
 	fi
 
@@ -1645,7 +1634,7 @@ run_test 20 "test nodemap mapped_admin fileops"
 
 test_21() {
 	if $SHARED_KEY &&
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ]; then
 		skip "Need MDS >= 2.11.55"
 	fi
 
@@ -1672,7 +1661,7 @@ run_test 21 "test nodemap mapped_trusted_noadmin fileops"
 
 test_22() {
 	if $SHARED_KEY &&
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.55) ]; then
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ]; then
 		skip "Need MDS >= 2.11.55"
 	fi
 
@@ -1816,9 +1805,9 @@ test_23a() {
 run_test 23a "test mapped regular ACLs"
 
 test_23b() { #LU-9929
-	[ $num_clients -lt 2 ] && skip "Need 2 clients at least" && return
-	[ $(lustre_version_code mgs) -lt $(version_code 2.10.53) ] &&
-		skip "Need MGS >= 2.10.53" && return
+	[ $num_clients -lt 2 ] && skip "Need 2 clients at least"
+	[ "$MGS_VERSION" -lt $(version_code 2.10.53) ] &&
+		skip "Need MGS >= 2.10.53"
 
 	export SK_UNIQUE_NM=true
 	nodemap_test_setup
@@ -2059,8 +2048,8 @@ nodemap_exercise_fileset() {
 }
 
 test_27a() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
-		skip "Need MDS >= 2.11.50" && return
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS >= 2.11.50"
 
 	for nm in "default" "c0"; do
 		local subdir="subdir_${nm}"
@@ -2078,9 +2067,9 @@ test_27a() {
 run_test 27a "test fileset in various nodemaps"
 
 test_27b() { #LU-10703
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.50) ] &&
-		skip "Need MDS >= 2.11.50" && return
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.50) ] &&
+		skip "Need MDS >= 2.11.50"
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs"
 
 	nodemap_test_setup
 	trap nodemap_test_cleanup EXIT

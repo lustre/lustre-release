@@ -270,8 +270,8 @@ test_7() {
 run_test 7 "Fail OST before obd_destroy"
 
 test_8a() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
-		{ skip "Need MDS version at least 2.3.0"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.0) ]] ||
+		skip "Need MDS version at least 2.3.0"
 	verify=$ROOT/tmp/verify-$$
 	dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
 		error "Create verify file failed"
@@ -294,8 +294,8 @@ test_8a() {
 run_test 8a "Verify redo io: redo io when get -EINPROGRESS error"
 
 test_8b() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
-		{ skip "Need MDS version at least 2.3.0"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.0) ]] ||
+		skip "Need MDS version at least 2.3.0"
 	verify=$ROOT/tmp/verify-$$
 	dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
 		error "Create verify file failed"
@@ -314,8 +314,8 @@ test_8b() {
 run_test 8b "Verify redo io: redo io should success after recovery"
 
 test_8c() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
-		{ skip "Need MDS version at least 2.3.0"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.0) ]] ||
+		skip "Need MDS version at least 2.3.0"
 	verify=$ROOT/tmp/verify-$$
 	dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
 		error "Create verify file failed"
@@ -336,8 +336,8 @@ test_8c() {
 run_test 8c "Verify redo io: redo io should fail after eviction"
 
 test_8d() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
-		{ skip "Need MDS version at least 2.3.0"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.0) ]] ||
+		skip "Need MDS version at least 2.3.0"
 	#define OBD_FAIL_MDS_DQACQ_NET 0x187
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x187"
 	# test the non-intent create path
@@ -369,8 +369,8 @@ test_8d() {
 run_test 8d "Verify redo creation on -EINPROGRESS"
 
 test_8e() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
-		{ skip "Need MDS version at least 2.3.0"; return; }
+	[[ "$MDS1_VERSION" -ge $(version_code 2.3.0) ]] ||
+		skip "Need MDS version at least 2.3.0"
 	sleep 1 # ensure we have a fresh statfs
 	#define OBD_FAIL_OST_STATFS_EINPROGRESS 0x231
 	do_facet ost1 "lctl set_param fail_loc=0x231"
@@ -385,8 +385,8 @@ test_8e() {
 run_test 8e "Verify that ptlrpc resends request on -EINPROGRESS"
 
 test_9() {
-	[ $(lustre_version_code ost1) -ge $(version_code 2.6.54) ] ||
-		{ skip "Need OST version at least 2.6.54"; return; }
+	[ "$OST1_VERSION" -ge $(version_code 2.6.54) ] ||
+		skip "Need OST version at least 2.6.54"
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
 
 	# LU-1573 - Add duplicate write to generate grants

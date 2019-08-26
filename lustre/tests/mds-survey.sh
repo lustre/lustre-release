@@ -13,8 +13,8 @@ build_test_filter
 MDSSURVEY=${MDSSURVEY:-$(which mds-survey 2>/dev/null || true)}
 [ -z ${MDSSURVEY} ] && skip_env "mds-survey not found"
 
-if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
-	skip_env "Need MDS version at least 2.3.51"
+if [ "$MDS1_VERSION" -lt $(version_code 2.3.51) ]; then
+	skip "Need MDS version at least 2.3.51"
 fi
 
 file_count=${file_count:-150000}

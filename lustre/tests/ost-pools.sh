@@ -1138,7 +1138,7 @@ test_20() {
 	check_file_not_in_pool $dir2/file4 $POOL
 	check_file_not_in_pool $dir1/file5 $POOL2
 
-	if [ $(lustre_version_code mds1) -ge $(version_code 2.10.54) ]; then
+	if [ "$MDS1_VERSION" -ge $(version_code 2.10.54) ]; then
 		check_dir_in_pool $dir3 $POOL
 		check_file_in_pool $dir3/file3 $POOL
 		check_file_in_pool $dir2/file4 $POOL2
@@ -1240,7 +1240,7 @@ test_23a() {
 
 	# XXX remove the interoperability code once we drop the old server
 	#     ( < 2.3.50) support.
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
+	if [ "$MDS1_VERSION" -lt $(version_code 2.3.50) ]; then
 		$LFS quotaoff -ug $MOUNT
 		$LFS quotacheck -ug $MOUNT
 	else
@@ -1316,7 +1316,7 @@ test_23b() {
 
 	# XXX remove the interoperability code once we drop the old server
 	#     ( < 2.3.50) support.
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
+	if [ "$MDS1_VERSION" -lt $(version_code 2.3.50) ]; then
 		$LFS quotaoff -ug $MOUNT
 	else
 		if [[ $PERM_CMD == *"set_param -P"* ]]; then
@@ -1373,13 +1373,11 @@ test_23b() {
 run_test 23b "OST pools and OOS"
 
 test_24() {
-	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	[[ $OSTCOUNT -le 1 ]] && skip_env "needs >= 2 OSTs"
-
-	local server_version=$(lustre_version_code $SINGLEMDS)
-	[[ $server_version -ge $(version_code 2.8.56) ]] ||
+	[[ "$MDS1_VERSION" -ge $(version_code 2.8.56) ]] ||
 		skip "Need server version newer than 2.8.55"
 
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	local numfiles=10
 	local i=0
 	local TGT

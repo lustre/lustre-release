@@ -36,8 +36,8 @@ FAIL_ON_ERROR=false
 
 check_and_setup_lustre
 
-if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.12.52) ]]; then
-	skip_env "Need MDS version at least 2.12.52" && exit
+if [[ "$MDS1_VERSION" -lt $(version_code 2.12.52) ]]; then
+	skip "Need MDS version at least 2.12.52"
 fi
 
 # $RUNAS_ID may get set incorrectly somewhere else
