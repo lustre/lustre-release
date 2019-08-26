@@ -671,7 +671,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	LASSERT(obd != NULL);
 
 	seq_printf(m, "status: ");
-	if (obd->obd_max_recoverable_clients == 0) {
+	if (atomic_read(&obd->obd_max_recoverable_clients) == 0) {
 		seq_printf(m, "INACTIVE\n");
 		goto out;
 	}
@@ -687,9 +687,9 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			   ktime_get_real_seconds() - obd->obd_recovery_start);
 		/* Number of clients that have completed recovery */
 		seq_printf(m, "completed_clients: %d/%d\n",
-			   obd->obd_max_recoverable_clients -
+			   atomic_read(&obd->obd_max_recoverable_clients) -
 			   obd->obd_stale_clients,
-			   obd->obd_max_recoverable_clients);
+			   atomic_read(&obd->obd_max_recoverable_clients));
 		seq_printf(m, "replayed_requests: %d\n",
 			   obd->obd_replayed_requests);
 		seq_printf(m, "last_transno: %lld\n",
@@ -745,7 +745,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			 ktime_get_real_seconds()));
 	seq_printf(m, "connected_clients: %d/%d\n",
 		   atomic_read(&obd->obd_connected_clients),
-		   obd->obd_max_recoverable_clients);
+		   atomic_read(&obd->obd_max_recoverable_clients));
 	/* Number of clients that have completed recovery */
 	seq_printf(m, "req_replay_clients: %d\n",
 		   atomic_read(&obd->obd_req_replay_clients));
