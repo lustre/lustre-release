@@ -482,8 +482,6 @@ struct mdt_thread_info {
 		struct {
 			/* for mdt_readpage()      */
 			struct lu_rdpg     mti_rdpg;
-			/* for mdt_sendpage()      */
-			struct l_wait_info mti_wait_info;
 		} rdpg;
 		struct {
 			struct md_attr attr;
