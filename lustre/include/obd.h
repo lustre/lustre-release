@@ -664,7 +664,7 @@ struct obd_device {
 	struct list_head	obd_exports_timed;
 	time64_t		obd_eviction_timer;	/* for ping evictor */
 
-	int                     obd_max_recoverable_clients;
+	atomic_t                obd_max_recoverable_clients;
 	atomic_t                obd_connected_clients;
 	int                     obd_stale_clients;
         /* this lock protects all recovery list_heads, timer and

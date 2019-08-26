@@ -844,7 +844,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	 * - there is no client to recover or the recovery was aborted
 	 */
 	if (!strncmp(tgt->lut_obd->obd_type->typ_name, LUSTRE_MDT_NAME, 3) &&
-	    (tgt->lut_obd->obd_max_recoverable_clients == 0 ||
+	    (atomic_read(&tgt->lut_obd->obd_max_recoverable_clients) == 0 ||
 	    tgt->lut_obd->obd_abort_recovery))
 		tgt->lut_lsd.lsd_feature_incompat &= ~OBD_INCOMPAT_MULTI_RPCS;
 
@@ -1565,7 +1565,7 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		exp->exp_connecting = 0;
 		exp->exp_in_recovery = 0;
 		spin_unlock(&exp->exp_lock);
-		obd->obd_max_recoverable_clients++;
+		atomic_inc(&obd->obd_max_recoverable_clients);
 
 		if (tgt->lut_lsd.lsd_feature_incompat &
 		    OBD_INCOMPAT_MULTI_RPCS &&

@@ -845,7 +845,7 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 			      target->obd_name,
 			      obd_uuid2str(&exp->exp_client_uuid),
 			      obd_export_nid2str(exp),
-			      target->obd_max_recoverable_clients,
+			      atomic_read(&target->obd_max_recoverable_clients),
 			      timeout / 60, timeout % 60);
 	} else {
 		struct target_distribute_txn_data *tdtd;
@@ -1324,7 +1324,8 @@ no_export:
 
 			connected = atomic_read(&target->obd_connected_clients);
 			in_progress = atomic_read(&target->obd_lock_replay_clients);
-			known = target->obd_max_recoverable_clients;
+			known =
+			   atomic_read(&target->obd_max_recoverable_clients);
 			stale = target->obd_stale_clients;
 			remaining = hrtimer_expires_remaining(timer);
 			left = ktime_divns(remaining, NSEC_PER_SEC);
@@ -1480,9 +1481,10 @@ dont_check_exports:
 		 * condition.
 		 */
 		if (new_mds_mds_conn)
-			target->obd_max_recoverable_clients++;
+			atomic_inc(&target->obd_max_recoverable_clients);
+
 		if (atomic_inc_return(&target->obd_connected_clients) ==
-		    target->obd_max_recoverable_clients)
+		    atomic_read(&target->obd_max_recoverable_clients))
 			wake_up(&target->obd_next_transno_waitq);
 	}
 
@@ -1643,7 +1645,7 @@ static void target_finish_recovery(struct lu_target *lut)
 		LCONSOLE_INFO("%s: Recovery over after %lld:%.02lld, of %d clients %d recovered and %d %s evicted.\n",
 			      obd->obd_name, (s64)elapsed_time / 60,
 			      (s64)elapsed_time % 60,
-			      obd->obd_max_recoverable_clients,
+			      atomic_read(&obd->obd_max_recoverable_clients),
 			      atomic_read(&obd->obd_connected_clients),
 			      obd->obd_stale_clients,
 			      obd->obd_stale_clients == 1 ? "was" : "were");
@@ -1805,9 +1807,11 @@ static void target_start_recovery_timer(struct obd_device *obd)
 		      obd->obd_name,
 		      obd->obd_recovery_timeout / 60,
 		      obd->obd_recovery_timeout % 60,
-		      obd->obd_max_recoverable_clients,
-		      (obd->obd_max_recoverable_clients == 1) ? "" : "s",
-		      (obd->obd_max_recoverable_clients == 1) ? "s" : "");
+		      atomic_read(&obd->obd_max_recoverable_clients),
+		      (atomic_read(&obd->obd_max_recoverable_clients) == 1) ?
+		      "" : "s",
+		      (atomic_read(&obd->obd_max_recoverable_clients) == 1) ?
+		      "s" : "");
 }
 
 /**
@@ -1993,7 +1997,8 @@ static int check_for_next_transno(struct lu_target *lut)
 
 	CDEBUG(D_HA,
 	       "max: %d, connected: %d, completed: %d, queue_len: %d, req_transno: %llu, next_transno: %llu\n",
-	       obd->obd_max_recoverable_clients, connected, completed,
+	       atomic_read(&obd->obd_max_recoverable_clients),
+	       connected, completed,
 	       queue_len, req_transno, next_transno);
 
 	if (obd->obd_abort_recovery) {
@@ -2307,13 +2312,15 @@ static int check_for_recovery_ready(struct lu_target *lut)
 
 	CDEBUG(D_HA,
 	       "connected %d stale %d max_recoverable_clients %d abort %d expired %d\n",
-	       clnts, obd->obd_stale_clients, obd->obd_max_recoverable_clients,
+	       clnts, obd->obd_stale_clients,
+	       atomic_read(&obd->obd_max_recoverable_clients),
 	       obd->obd_abort_recovery, obd->obd_recovery_expired);
 
 	if (!obd->obd_abort_recovery && !obd->obd_recovery_expired) {
-		LASSERT(clnts <= obd->obd_max_recoverable_clients);
+		LASSERT(clnts <=
+			atomic_read(&obd->obd_max_recoverable_clients));
 		if (clnts + obd->obd_stale_clients <
-		    obd->obd_max_recoverable_clients)
+		    atomic_read(&obd->obd_max_recoverable_clients))
 			return 0;
 	}
 
@@ -2765,7 +2772,7 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 	if (lut->lut_bottom->dd_rdonly)
 		return;
 
-	if (obd->obd_max_recoverable_clients == 0) {
+	if (atomic_read(&obd->obd_max_recoverable_clients) == 0) {
 		/** Update server last boot epoch */
 		tgt_boot_epoch_update(lut);
 		return;
@@ -2773,7 +2780,8 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 
 	CDEBUG(D_HA, "RECOVERY: service %s, %d recoverable clients, "
 	       "last_transno %llu\n", obd->obd_name,
-	       obd->obd_max_recoverable_clients, obd->obd_last_committed);
+	       atomic_read(&obd->obd_max_recoverable_clients),
+	       obd->obd_last_committed);
 	LASSERT(obd->obd_stopping == 0);
 	obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
 	obd->obd_recovery_start = 0;
