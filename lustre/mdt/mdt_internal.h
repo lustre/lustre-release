@@ -382,93 +382,92 @@ enum mdt_reint_flag {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
-        /*
-         * XXX: Part One:
-         * The following members will be filled explicitly
-         * with specific data in mdt_thread_info_init().
-         */
-        /* TODO: move this into mdt_session_key(with LCT_SESSION), because
-         * request handling may migrate from one server thread to another.
-         */
-        struct req_capsule        *mti_pill;
+	/*
+	 * XXX: Part One:
+	 * The following members will be filled explicitly
+	 * with specific data in mdt_thread_info_init().
+	 */
+	/* TODO: move this into mdt_session_key(with LCT_SESSION), because
+	 * request handling may migrate from one server thread to another.
+	 */
+	struct req_capsule        *mti_pill;
 
-        /* although we have export in req, there are cases when it is not
-         * available, e.g. closing files upon export destroy */
-        struct obd_export          *mti_exp;
-        /*
-         * A couple of lock handles.
-         */
-        struct mdt_lock_handle     mti_lh[MDT_LH_NR];
+	/* although we have export in req, there are cases when it is not
+	 * available, e.g. closing files upon export destroy */
+	struct obd_export          *mti_exp;
+	/*
+	 * A couple of lock handles.
+	 */
+	struct mdt_lock_handle     mti_lh[MDT_LH_NR];
 
-        struct mdt_device         *mti_mdt;
-        const struct lu_env       *mti_env;
+	struct mdt_device         *mti_mdt;
+	const struct lu_env       *mti_env;
 
-        /* transaction number of current request */
-        __u64                      mti_transno;
+	/* transaction number of current request */
+	__u64                      mti_transno;
 
+	/*
+	 * XXX: Part Two:
+	 * The following members will be filled expilictly
+	 * with zero in mdt_thread_info_init(). These members may be used
+	 * by all requests.
+	 */
 
-        /*
-         * XXX: Part Two:
-         * The following members will be filled expilictly
-         * with zero in mdt_thread_info_init(). These members may be used
-         * by all requests.
-         */
-
-        /*
-         * Object attributes.
-         */
+	/*
+	 * Object attributes.
+	 */
 	struct md_attr             mti_attr;
 	struct md_attr             mti_attr2; /* mdt_lvb.c */
-        /*
-         * Body for "habeo corpus" operations.
-         */
-        const struct mdt_body     *mti_body;
-        /*
-         * Host object. This is released at the end of mdt_handler().
-         */
-        struct mdt_object         *mti_object;
-        /*
-         * Lock request for "habeo clavis" operations.
-         */
-        const struct ldlm_request *mti_dlm_req;
+	/*
+	 * Body for "habeo corpus" operations.
+	 */
+	const struct mdt_body     *mti_body;
+	/*
+	 * Host object. This is released at the end of mdt_handler().
+	 */
+	struct mdt_object         *mti_object;
+	/*
+	 * Lock request for "habeo clavis" operations.
+	 */
+	const struct ldlm_request *mti_dlm_req;
 
-        __u32                      mti_has_trans:1, /* has txn already? */
+	__u32                      mti_has_trans:1, /* has txn already? */
 				   mti_cross_ref:1,
 	/* big_lmm buffer was used and must be used in reply */
 				   mti_big_lmm_used:1,
 				   mti_big_acl_used:1,
 				   mti_som_valid:1;
 
-        /* opdata for mdt_reint_open(), has the same as
-         * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
-         * value onto disk for recovery when mdt_trans_stop_cb() is called.
-         */
-        __u64                      mti_opdata;
+	/* opdata for mdt_reint_open(), has the same as
+	 * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
+	 * value onto disk for recovery when mdt_trans_stop_cb() is called.
+	 */
+	__u64                      mti_opdata;
 
-        /*
-         * XXX: Part Three:
-         * The following members will be filled explicitly
-         * with zero in mdt_reint_unpack(), because they are only used
-         * by reint requests (including mdt_reint_open()).
-         */
+	/*
+	 * XXX: Part Three:
+	 * The following members will be filled explicitly
+	 * with zero in mdt_reint_unpack(), because they are only used
+	 * by reint requests (including mdt_reint_open()).
+	 */
 
-        /*
-         * reint record. contains information for reint operations.
-         */
-        struct mdt_reint_record    mti_rr;
+	/*
+	 * reint record. contains information for reint operations.
+	 */
+	struct mdt_reint_record    mti_rr;
 
-        __u64                      mti_ver[PTLRPC_NUM_VERSIONS];
-        /*
-         * Operation specification (currently create and lookup)
-         */
-        struct md_op_spec          mti_spec;
+	__u64                      mti_ver[PTLRPC_NUM_VERSIONS];
+	/*
+	 * Operation specification (currently create and lookup)
+	 */
+	struct md_op_spec          mti_spec;
 
-        /*
-         * XXX: Part Four:
-         * The following members will _NOT_ be initialized at all.
-         * DO NOT expect them to contain any valid value.
-         * They should be initialized explicitly by the user themselves.
-         */
+	/*
+	 * XXX: Part Four:
+	 * The following members will _NOT_ be initialized at all.
+	 * DO NOT expect them to contain any valid value.
+	 * They should be initialized explicitly by the user themselves.
+	 */
 
 	/* XXX: If something is in a union, make sure they do not conflict */
 	struct lu_fid			mti_tmp_fid1;
@@ -480,12 +479,12 @@ struct mdt_thread_info {
 		char			ns_name[48];/* for mdt_init0()        */
 		struct lustre_cfg_bufs	bufs;       /* for mdt_stack_fini()   */
 		struct obd_statfs	osfs;       /* for mdt_statfs()       */
-                struct {
-                        /* for mdt_readpage()      */
-                        struct lu_rdpg     mti_rdpg;
-                        /* for mdt_sendpage()      */
-                        struct l_wait_info mti_wait_info;
-                } rdpg;
+		struct {
+			/* for mdt_readpage()      */
+			struct lu_rdpg     mti_rdpg;
+			/* for mdt_sendpage()      */
+			struct l_wait_info mti_wait_info;
+		} rdpg;
 		struct {
 			struct md_attr attr;
 		} hsm;
@@ -499,8 +498,8 @@ struct mdt_thread_info {
 	struct lu_buf		   mti_buf;
 	struct lu_buf		   mti_big_buf;
 
-        /* Ops object filename */
-        struct lu_name             mti_name;
+	/* Ops object filename */
+	struct lu_name             mti_name;
 	char			   mti_filename[NAME_MAX + 1];
 	/* per-thread values, can be re-used, may be vmalloc'd */
 	void			  *mti_big_lmm;
