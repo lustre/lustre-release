@@ -496,12 +496,11 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
 	ptlrpc_disconnect_import(imp, 1);
 	/* Wait for all invalidate calls to finish */
 	if (atomic_read(&imp->imp_inval_count) > 0) {
-		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 		int rc;
 
-		rc = l_wait_event(imp->imp_recovery_waitq,
-				  (atomic_read(&imp->imp_inval_count) == 0),
-				  &lwi);
+		rc = l_wait_event_abortable(
+			imp->imp_recovery_waitq,
+			(atomic_read(&imp->imp_inval_count) == 0));
 		if (rc)
 			CERROR("Interrupted, inval=%d\n",
 			       atomic_read(&imp->imp_inval_count));

@@ -1231,14 +1231,13 @@ void ll_put_super(struct super_block *sb)
 
 	/* Wait for unstable pages to be committed to stable storage */
 	if (force == 0) {
-		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
-		rc = l_wait_event(sbi->ll_cache->ccc_unstable_waitq,
-				  atomic_long_read(&sbi->ll_cache->ccc_unstable_nr) == 0,
-				  &lwi);
+		rc = l_wait_event_abortable(
+			sbi->ll_cache->ccc_unstable_waitq,
+			atomic_long_read(&sbi->ll_cache->ccc_unstable_nr) == 0);
 	}
 
 	ccc_count = atomic_long_read(&sbi->ll_cache->ccc_unstable_nr);
-	if (force == 0 && rc != -EINTR)
+	if (force == 0 && rc != -ERESTARTSYS)
 		LASSERTF(ccc_count == 0, "count: %li\n", ccc_count);
 
 	/* We need to set force before the lov_disconnect in
