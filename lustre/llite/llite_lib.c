@@ -2397,16 +2397,16 @@ void ll_umount_begin(struct super_block *sb)
 	}
 	obd->obd_force = 1;
 
-        obd = class_exp2obd(sbi->ll_dt_exp);
-        if (obd == NULL) {
+	obd = class_exp2obd(sbi->ll_dt_exp);
+	if (obd == NULL) {
 		CERROR("Invalid LOV connection handle %#llx\n",
-                       sbi->ll_dt_exp->exp_handle.h_cookie);
-                EXIT;
-                return;
-        }
-        obd->obd_force = 1;
+		       sbi->ll_dt_exp->exp_handle.h_cookie);
+		EXIT;
+		return;
+	}
+	obd->obd_force = 1;
 
-        OBD_ALLOC_PTR(ioc_data);
+	OBD_ALLOC_PTR(ioc_data);
 	if (ioc_data) {
 		obd_iocontrol(IOC_OSC_SET_ACTIVE, sbi->ll_md_exp,
 			      sizeof *ioc_data, ioc_data, NULL);
