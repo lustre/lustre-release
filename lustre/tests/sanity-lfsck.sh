@@ -40,9 +40,9 @@ SAVED_OSTCOUNT=${OSTCOUNT}
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
 MDSSIZE=100000
-[ $(facet_fstype $SINGLEMDS) == zfs ] && MDSSIZE=300000
+[ "$mds1_FSTYPE" == zfs ] && MDSSIZE=300000
 OSTSIZE=100000
-[ $(facet_fstype ost1) == zfs ] && OSTSIZE=300000
+[ "$ost1_FSTYPE" == zfs ] && OSTSIZE=300000
 
 # no need too many OSTs, to reduce the format/start/stop overhead
 cleanupall
@@ -241,8 +241,8 @@ run_test 1a "LFSCK can find out and repair crashed FID-in-dirent"
 
 test_1b()
 {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "OI Scrub not implemented for ZFS" && return
+	[ "$mds1_FSTYPE" != ldiskfs ] &&
+		skip "OI Scrub not implemented for ZFS"
 
 	lfsck_prep 1 1
 
@@ -560,8 +560,8 @@ run_test 3 "LFSCK can verify multiple-linked objects"
 
 test_4()
 {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "OI Scrub not implemented for ZFS" && return
+	[ "$mds1_FSTYPE" != ldiskfs ] &&
+		skip "OI Scrub not implemented for ZFS"
 
 	lfsck_prep 3 3
 	cleanup_mount $MOUNT || error "(0.1) Fail to stop client!"
@@ -620,8 +620,8 @@ run_test 4 "FID-in-dirent can be rebuilt after MDT file-level backup/restore"
 
 test_5()
 {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "OI Scrub not implemented for ZFS" && return
+	[ "$mds1_FSTYPE" != ldiskfs ] &&
+		skip "OI Scrub not implemented for ZFS"
 
 	lfsck_prep 1 1 1
 	cleanup_mount $MOUNT || error "(0.1) Fail to stop client!"
@@ -5281,9 +5281,8 @@ run_test 33 "check LFSCK paramters"
 
 test_34()
 {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[ $(facet_fstype $SINGLEMDS) != zfs ] &&
-		skip "Only valid for ZFS backend" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ "$mds1_FSTYPE" != zfs ] && skip "Only valid for ZFS backend"
 
 	lfsck_prep 1 1
 
@@ -5705,7 +5704,7 @@ run_test 37 "LFSCK must skip a ORPHAN"
 
 test_38()
 {
-	[[ $MDS1_VERSION -le $(version_code 2.12.51) ]] &&
+	[[ "$MDS1_VERSION" -le $(version_code 2.12.51) ]] &&
 		skip "Need MDS version newer than 2.12.51"
 
 	test_mkdir $DIR/$tdir
@@ -5792,7 +5791,7 @@ run_test 38 "LFSCK does not break foreign file and reverse is also true"
 
 test_39()
 {
-	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.12.51) ]] &&
+	[[ "$MDS1_VERSION" -le $(version_code 2.12.51) ]] &&
 		skip "Need MDS version newer than 2.12.51"
 
 	test_mkdir $DIR/$tdir

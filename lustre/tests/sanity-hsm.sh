@@ -635,8 +635,8 @@ test_1c() {
 		error "wrong archive number, $st != $LOCAL_HSM_ARCHIVE_NUMBER"
 
 	LOCAL_HSM_ARCHIVE_NUMBER=33
-	if [ $(lustre_version_code client) -ge $(version_code 2.11.56) ] &&
-	   [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.11.56) ]; then
+	if [ "$CLIENT_VERSION" -ge $(version_code 2.11.56) ] &&
+	   [ "$MDS1_VERSION" -ge $(version_code 2.11.56) ]; then
 		# lustre in the new version supports unlimited archiveID.
 		# Test whether setting archive number > 32 is supported
 		$LFS hsm_set --exists --archive-id $LOCAL_HSM_ARCHIVE_NUMBER $f ||
@@ -682,7 +682,7 @@ test_1d() {
 run_test 1d "Archive, Release and Restore DoM file"
 
 test_1e() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
 		skip "skipped for lustre < $SEL_VER"
 
 	mkdir -p $DIR/$tdir
@@ -1531,7 +1531,7 @@ test_21() {
 
 	# LU-4388/LU-4389 - ZFS does not report full number of blocks
 	# used until file is flushed to disk
-	if [  $(facet_fstype ost1) == "zfs" ]; then
+	if [ "$ost1_FSTYPE" == "zfs" ]; then
 	    # this causes an OST_SYNC rpc to be sent
 	    dd if=/dev/zero of=$f bs=512 count=1 oflag=sync conv=notrunc,fsync
 	    # clear locks to reread file data
@@ -5045,13 +5045,13 @@ run_test 407 "Check for double RESTORE records in llog"
 
 test_500()
 {
-	[ $MDS1_VERSION -lt $(version_code 2.6.92) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.6.92) ] &&
 		skip "HSM migrate is not supported"
 
 	test_mkdir -p $DIR/$tdir
 
-	if [ $(lustre_version_code client) -lt $(version_code 2.11.56) ] ||
-	     [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ];
+	if [ "$CLIENT_VERSION" -lt $(version_code 2.11.56) ] ||
+	     [ "$MDS1_VERSION" -lt $(version_code 2.11.56) ];
 	then
 		llapi_hsm_test -d $DIR/$tdir -b ||
 			error "One llapi HSM test failed"
@@ -5063,7 +5063,7 @@ test_500()
 run_test 500 "various LLAPI HSM tests"
 
 test_600() {
-	[ $MDS1_VERSION -lt $(version_code 2.10.58) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.10.58) ] &&
 		skip "need MDS version at least 2.10.58"
 
 	mkdir -p $DIR/$tdir
@@ -5355,8 +5355,7 @@ test_606() {
 	local llog_reader=$(do_facet mgs "which llog_reader 2> /dev/null")
 	llog_reader=${llog_reader:-$LUSTRE/utils/llog_reader}
 	[ -z $(do_facet mgs ls -d $llog_reader 2> /dev/null) ] &&
-			skip_env "missing llog_reader" && return
-	local fstype=$(facet_fstype mds1)
+			skip_env "missing llog_reader"
 
 	mkdir -p $DIR/$tdir
 

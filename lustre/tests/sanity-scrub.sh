@@ -130,7 +130,7 @@ scrub_prep() {
 	}
 
 	[ ! -z $inject ] && [ $inject -eq 1 ] &&
-		[ $(facet_fstype $SINGLEMDS) = "zfs" ] && {
+		[ "$mds1_FSTYPE" = "zfs" ] && {
 		#define OBD_FAIL_OSD_FID_MAPPING	0x193
 		do_nodes $(comma_list $(mdts_nodes)) \
 			$LCTL set_param fail_loc=0x193
@@ -161,7 +161,7 @@ scrub_prep() {
 		stop mds$n > /dev/null || error "Fail to stop MDS$n!"
 	done
 
-	[ ! -z $inject ] && [ $(facet_fstype $SINGLEMDS) = "ldiskfs" ] && {
+	[ ! -z $inject ] && [ "$mds1_FSTYPE" = "ldiskfs" ] && {
 		if [ $inject -eq 1 ]; then
 			for n in $(seq $MDSCOUNT); do
 				mds_backup_restore mds$n ||
@@ -296,7 +296,7 @@ scrub_check_data2() {
 }
 
 scrub_remove_ois() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && return
 
 	local error_id=$1
 	local index=$2
@@ -314,7 +314,7 @@ scrub_enable_auto() {
 }
 
 full_scrub_ratio() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && return
 
 	local ratio=$1
 
@@ -323,7 +323,7 @@ full_scrub_ratio() {
 }
 
 full_scrub_threshold_rate() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && return
 
 	local rate=$1
 
@@ -387,7 +387,7 @@ test_1b() {
 	scrub_prep 0 2
 	echo "start MDTs without disabling OI scrub"
 	scrub_start_mds 2 "$MOUNT_OPTS_SCRUB"
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_status 3 completed
 	mount_client $MOUNT || error "(4) Fail to start client!"
 	scrub_check_data2 runas 5
@@ -396,8 +396,8 @@ test_1b() {
 run_test 1b "Trigger OI scrub when MDT mounts for OI files remove/recreate case"
 
 test_1c() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs special test" && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
+		skip "ldiskfs special test"
 
 	local index
 
@@ -419,8 +419,8 @@ test_1c() {
 run_test 1c "Auto detect kinds of OI file(s) removed/recreated cases"
 
 test_2() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs special test" && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
+		skip "ldiskfs special test"
 
 	scrub_prep 0 1
 	echo "starting MDTs without disabling OI scrub"
@@ -440,7 +440,7 @@ test_3() {
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 3 init
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 }
 #run_test 3 "Do not trigger OI scrub when MDT mounts if 'noscrub' specified"
@@ -449,7 +449,7 @@ test_4a() {
 	scrub_prep 0 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
@@ -480,8 +480,8 @@ test_4a() {
 run_test 4a "Auto trigger OI scrub if bad OI mapping was found (1)"
 
 test_4b() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs special test" && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
+		skip "ldiskfs special test"
 
 	scrub_prep 5 1
 	echo "starting MDTs with OI scrub disabled"
@@ -567,8 +567,8 @@ test_4b() {
 run_test 4b "Auto trigger OI scrub if bad OI mapping was found (2)"
 
 test_4c() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs special test" && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
+		skip "ldiskfs special test"
 
 	scrub_prep 500 1
 	echo "starting MDTs with OI scrub disabled"
@@ -654,7 +654,7 @@ test_4c() {
 run_test 4c "Auto trigger OI scrub if bad OI mapping was found (3)"
 
 test_4d() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && skip "ldiskfs only test"
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && skip "ldiskfs only test"
 
 	check_mount_and_prep
 
@@ -683,7 +683,7 @@ test_5() {
 	echo "starting MDTs with OI scrub disabled (1)"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 3 init
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
@@ -751,7 +751,7 @@ test_6() {
 	scrub_prep 100 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
@@ -829,7 +829,7 @@ test_7() {
 	scrub_prep 500 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
@@ -848,7 +848,7 @@ test_7() {
 	done
 
 	scrub_check_status 8 scanning
-	if [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ]; then
+	if [ "$mds1_FSTYPE" != "ldiskfs" ]; then
 		scrub_check_flags 9 inconsistent,auto
 	else
 		scrub_check_flags 9 recreated,inconsistent,auto
@@ -866,7 +866,7 @@ test_8() {
 	scrub_prep 128 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
@@ -890,12 +890,11 @@ run_test 8 "Control OI scrub manually"
 
 test_9() {
 	# Skip scrub speed test for ZFS because of performance unstable
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "test scrub speed only on ldiskfs" && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
+		skip "test scrub speed only on ldiskfs"
 
 	if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
 		skip "Testing on UP system, the speed may be inaccurate."
-		return 0
 	fi
 
 	scrub_prep 6000 1
@@ -975,7 +974,7 @@ test_10a() {
 	scrub_prep 0 1
 	echo "starting mds$n with OI scrub disabled (1)"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
@@ -1010,7 +1009,7 @@ test_10b() {
 	scrub_prep 0 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
@@ -1037,8 +1036,8 @@ test_10b() {
 #run_test 10b "non-stopped OI scrub should auto restarts after MDS remount (2)"
 
 test_11() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-		skip "ldiskfs special test" && return
+	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
+		skip "ldiskfs special test"
 
 	local CREATED=100
 	local n
@@ -1162,7 +1161,7 @@ test_13() {
 run_test 13 "OI scrub can rebuild missed /O entries"
 
 test_14() {
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
 		skip "ldiskfs special test"
 
 	check_mount_and_prep
@@ -1213,13 +1212,13 @@ test_15() {
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 3 init
-	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+	[ "$mds1_FSTYPE" != "ldiskfs" ] ||
 		scrub_check_flags 4 recreated,inconsistent
 
 	# run under dryrun mode
 	scrub_start 5 --dryrun
 	scrub_check_status 6 completed
-	if [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ]; then
+	if [ "$mds1_FSTYPE" != "ldiskfs" ]; then
 		scrub_check_flags 7 inconsistent
 		repaired=2
 	else
@@ -1232,7 +1231,7 @@ test_15() {
 	# run under dryrun mode again
 	scrub_start 10 --dryrun
 	scrub_check_status 11 completed
-	if [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ]; then
+	if [ "$mds1_FSTYPE" != "ldiskfs" ]; then
 		scrub_check_flags 12 inconsistent
 	else
 		scrub_check_flags 12 recreated,inconsistent
