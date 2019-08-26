@@ -32,6 +32,7 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
+#include <linux/delay.h>
 #include <libcfs/libcfs.h>
 
 #include <obd_class.h>
@@ -105,11 +106,10 @@ static int lov_check_set(struct lov_obd *lov, int idx)
  */
 static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 {
-	wait_queue_head_t waitq;
-	struct l_wait_info lwi;
 	struct lov_tgt_desc *tgt;
 	struct obd_import *imp = NULL;
 	int rc = 0;
+	int cnt;
 
 	mutex_lock(&lov->lov_lock);
 
@@ -130,11 +130,12 @@ static int lov_check_and_wait_active(struct lov_obd *lov, int ost_idx)
 
 	mutex_unlock(&lov->lov_lock);
 
-	init_waitqueue_head(&waitq);
-	lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(obd_timeout),
-				   cfs_time_seconds(1), NULL, NULL);
-
-	rc = l_wait_event(waitq, lov_check_set(lov, ost_idx), &lwi);
+	cnt = obd_timeout;
+	while (cnt > 0 &&
+	       !lov_check_set(lov, ost_idx)) {
+		ssleep(1);
+		cnt -= 1;
+	}
 	if (tgt->ltd_active)
 		return 1;
 

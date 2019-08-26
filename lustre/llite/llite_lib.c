@@ -45,6 +45,7 @@
 #include <linux/version.h>
 #include <linux/mm.h>
 #include <linux/user_namespace.h>
+#include <linux/delay.h>
 #ifdef HAVE_UIDGID_HEADER
 # include <linux/uidgid.h>
 #endif
@@ -2397,8 +2398,7 @@ void ll_umount_begin(struct super_block *sb)
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct obd_device *obd;
 	struct obd_ioctl_data *ioc_data;
-	struct l_wait_info lwi;
-	wait_queue_head_t waitq;
+	int cnt;
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
@@ -2437,10 +2437,12 @@ void ll_umount_begin(struct super_block *sb)
 	 * and then continue.  For now, we just periodically checking for vfs
 	 * to decrement mnt_cnt and hope to finish it within 10sec.
 	 */
-	init_waitqueue_head(&waitq);
-	lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(10),
-				   cfs_time_seconds(1), NULL, NULL);
-	l_wait_event(waitq, may_umount(sbi->ll_mnt.mnt), &lwi);
+	cnt = 10;
+	while (cnt > 0 &&
+	       !may_umount(sbi->ll_mnt.mnt)) {
+		ssleep(1);
+		cnt -= 1;
+	}
 
 	EXIT;
 }
