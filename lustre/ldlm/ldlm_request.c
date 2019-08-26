@@ -1601,10 +1601,8 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 		if (cancel_flags & LCF_ASYNC) {
 			unlock_res_and_lock(lock);
 		} else {
-			struct l_wait_info lwi = { 0 };
-
 			unlock_res_and_lock(lock);
-			l_wait_event(lock->l_waitq, is_bl_done(lock), &lwi);
+			wait_event_idle(lock->l_waitq, is_bl_done(lock));
 		}
 		LDLM_LOCK_RELEASE(lock);
 		RETURN(0);

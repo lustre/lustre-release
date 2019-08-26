@@ -888,7 +888,6 @@ static int ll_agl_thread(void *arg)
 	struct ll_sb_info *sbi = ll_i2sbi(dir);
 	struct ll_statahead_info *sai;
 	struct ptlrpc_thread *thread;
-	struct l_wait_info lwi = { 0 };
 	ENTRY;
 
 	sai = ll_sai_get(dir);
@@ -909,11 +908,10 @@ static int ll_agl_thread(void *arg)
 	wake_up(&thread->t_ctl_waitq);
 
 	while (1) {
-		l_wait_event(thread->t_ctl_waitq,
-			     !agl_list_empty(sai) ||
-			     !thread_is_running(thread),
-			     &lwi);
-                if (!thread_is_running(thread))
+		wait_event_idle(thread->t_ctl_waitq,
+				!agl_list_empty(sai) ||
+				!thread_is_running(thread));
+		if (!thread_is_running(thread))
 			break;
 
 		spin_lock(&plli->lli_agl_lock);
@@ -953,7 +951,6 @@ static int ll_agl_thread(void *arg)
 static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 {
 	struct ptlrpc_thread *thread = &sai->sai_agl_thread;
-	struct l_wait_info    lwi    = { 0 };
 	struct ll_inode_info  *plli;
 	struct task_struct	      *task;
 	ENTRY;
@@ -970,9 +967,8 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 		RETURN_EXIT;
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) || thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) || thread_is_stopped(thread));
 	EXIT;
 }
 
@@ -1099,12 +1095,11 @@ static int ll_statahead_thread(void *arg)
 
 			/* wait for spare statahead window */
 			do {
-				l_wait_event(sa_thread->t_ctl_waitq,
-					     !sa_sent_full(sai) ||
-					     sa_has_callback(sai) ||
-					     !agl_list_empty(sai) ||
-					     !thread_is_running(sa_thread),
-					     &lwi);
+				wait_event_idle(sa_thread->t_ctl_waitq,
+						!sa_sent_full(sai) ||
+						sa_has_callback(sai) ||
+						!agl_list_empty(sai) ||
+						!thread_is_running(sa_thread));
 
 				sa_handle_callback(sai);
 
@@ -1159,10 +1154,9 @@ static int ll_statahead_thread(void *arg)
 	/* statahead is finished, but statahead entries need to be cached, wait
 	 * for file release to stop me. */
 	while (thread_is_running(sa_thread)) {
-		l_wait_event(sa_thread->t_ctl_waitq,
-			     sa_has_callback(sai) ||
-			     !thread_is_running(sa_thread),
-			     &lwi);
+		wait_event_idle(sa_thread->t_ctl_waitq,
+				sa_has_callback(sai) ||
+				!thread_is_running(sa_thread));
 
 		sa_handle_callback(sai);
 	}
@@ -1177,9 +1171,8 @@ out:
 
 		CDEBUG(D_READA, "stop agl thread: sai %p pid %u\n",
 		       sai, (unsigned int)agl_thread->t_pid);
-		l_wait_event(agl_thread->t_ctl_waitq,
-			     thread_is_stopped(agl_thread),
-			     &lwi);
+		wait_event_idle(agl_thread->t_ctl_waitq,
+				thread_is_stopped(agl_thread));
 	} else {
 		/* Set agl_thread flags anyway. */
 		thread_set_flags(agl_thread, SVC_STOPPED);
@@ -1561,7 +1554,6 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 	struct ll_statahead_info *sai = NULL;
 	struct dentry *parent = dentry->d_parent;
 	struct ptlrpc_thread *thread;
-	struct l_wait_info lwi = { 0 };
 	struct task_struct *task;
 	struct ll_sb_info *sbi = ll_i2sbi(parent->d_inode);
 	int first = LS_FIRST_DE;
@@ -1616,9 +1608,8 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 		GOTO(out, rc);
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) || thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) || thread_is_stopped(thread));
 	ll_sai_put(sai);
 
 	/*

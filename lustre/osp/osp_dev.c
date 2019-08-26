@@ -501,7 +501,6 @@ static int osp_disconnect(struct osp_device *d)
  */
 static int osp_update_init(struct osp_device *osp)
 {
-	struct l_wait_info	lwi = { 0 };
 	struct task_struct	*task;
 
 	ENTRY;
@@ -536,9 +535,9 @@ static int osp_update_init(struct osp_device *osp)
 		RETURN(rc);
 	}
 
-	l_wait_event(osp->opd_update_thread.t_ctl_waitq,
-		     osp_send_update_thread_running(osp) ||
-		     osp_send_update_thread_stopped(osp), &lwi);
+	wait_event_idle(osp->opd_update_thread.t_ctl_waitq,
+			osp_send_update_thread_running(osp) ||
+			osp_send_update_thread_stopped(osp));
 
 	RETURN(0);
 }

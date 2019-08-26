@@ -2311,7 +2311,6 @@ static inline bool obd_skip_mod_rpc_slot(const struct lookup_intent *it)
 __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc,
 			   struct lookup_intent *it)
 {
-	struct l_wait_info	lwi = LWI_INTR(NULL, NULL);
 	bool			close_req = false;
 	__u16			i, max;
 
@@ -2355,9 +2354,9 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc,
 		       "opc %u, max %hu\n",
 		       cli->cl_import->imp_obd->obd_name, opc, max);
 
-		l_wait_event_exclusive(cli->cl_mod_rpcs_waitq,
-				       obd_mod_rpc_slot_avail(cli, close_req),
-				       &lwi);
+		wait_event_idle_exclusive(cli->cl_mod_rpcs_waitq,
+					  obd_mod_rpc_slot_avail(cli,
+								 close_req));
 	} while (true);
 }
 EXPORT_SYMBOL(obd_get_mod_rpc_slot);

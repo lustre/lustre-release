@@ -173,7 +173,6 @@ static inline int have_expired_locks(void)
 static int expired_lock_main(void *arg)
 {
 	struct list_head *expired = &expired_lock_list;
-	struct l_wait_info lwi = { 0 };
 	int do_dump;
 
 	ENTRY;
@@ -182,10 +181,9 @@ static int expired_lock_main(void *arg)
 	wake_up(&expired_lock_wait_queue);
 
 	while (1) {
-		l_wait_event(expired_lock_wait_queue,
-			     have_expired_locks() ||
-			     expired_lock_thread_state == ELT_TERMINATE,
-			     &lwi);
+		wait_event_idle(expired_lock_wait_queue,
+				have_expired_locks() ||
+				expired_lock_thread_state == ELT_TERMINATE);
 
 		spin_lock_bh(&waiting_locks_spinlock);
 		if (expired_lock_dump) {
@@ -2855,7 +2853,6 @@ static int ldlm_bl_thread_main(void *arg)
 	/* cannot use bltd after this, it is only on caller's stack */
 
 	while (1) {
-		struct l_wait_info lwi = { 0 };
 		struct ldlm_bl_work_item *blwi = NULL;
 		struct obd_export *exp = NULL;
 		int rc;
@@ -2863,10 +2860,9 @@ static int ldlm_bl_thread_main(void *arg)
 		rc = ldlm_bl_get_work(blp, &blwi, &exp);
 
 		if (rc == 0)
-			l_wait_event_exclusive(blp->blp_waitq,
-					       ldlm_bl_get_work(blp, &blwi,
-								&exp),
-					       &lwi);
+			wait_event_idle_exclusive(blp->blp_waitq,
+						  ldlm_bl_get_work(blp, &blwi,
+								   &exp));
 		atomic_inc(&blp->blp_busy_threads);
 
 		if (ldlm_bl_thread_need_create(blp, blwi))

@@ -5366,7 +5366,6 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 	struct lfsck_tgt_descs		*ltds	 = &lfsck->li_ost_descs;
 	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	struct l_wait_info		 lwi	 = { 0 };
 	struct lu_buf			 buf;
 	int				 rc	 = 0;
 	int				 i;
@@ -5396,11 +5395,10 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 		if (unlikely(lovea_slot_is_dummy(objs)))
 			continue;
 
-		l_wait_event(mthread->t_ctl_waitq,
-			     lad->lad_prefetched < bk->lb_async_windows ||
-			     !thread_is_running(mthread) ||
-			     thread_is_stopped(athread),
-			     &lwi);
+		wait_event_idle(mthread->t_ctl_waitq,
+				lad->lad_prefetched < bk->lb_async_windows ||
+				!thread_is_running(mthread) ||
+				thread_is_stopped(athread));
 
 		if (unlikely(!thread_is_running(mthread)) ||
 			     thread_is_stopped(athread))

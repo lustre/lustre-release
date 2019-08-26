@@ -419,7 +419,6 @@ static int qsd_reint_main(void *args)
 	struct qsd_qtype_info	*qqi = (struct qsd_qtype_info *)args;
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	struct ptlrpc_thread	*thread = &qqi->qqi_reint_thread;
-	struct l_wait_info	 lwi = { 0 };
 	int			 rc;
 	ENTRY;
 
@@ -443,8 +442,8 @@ static int qsd_reint_main(void *args)
 	qti = qsd_info(env);
 
 	/* wait for the connection to master established */
-	l_wait_event(thread->t_ctl_waitq,
-		     qsd_connected(qsd) || !thread_is_running(thread), &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			qsd_connected(qsd) || !thread_is_running(thread));
 
 	/* Step 1: enqueue global index lock */
 	if (!thread_is_running(thread))
@@ -516,8 +515,8 @@ static int qsd_reint_main(void *args)
 	}
 
 	/* wait for the qsd instance started (target recovery done) */
-	l_wait_event(thread->t_ctl_waitq,
-		     qsd_started(qsd) || !thread_is_running(thread), &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			qsd_started(qsd) || !thread_is_running(thread));
 
 	if (!thread_is_running(thread))
 		GOTO(out_lock, rc = 0);
@@ -552,14 +551,13 @@ out:
 void qsd_stop_reint_thread(struct qsd_qtype_info *qqi)
 {
 	struct ptlrpc_thread	*thread = &qqi->qqi_reint_thread;
-	struct l_wait_info	 lwi = { 0 };
 
 	if (!thread_is_stopped(thread)) {
 		thread_set_flags(thread, SVC_STOPPING);
 		wake_up(&thread->t_ctl_waitq);
 
-		l_wait_event(thread->t_ctl_waitq,
-			     thread_is_stopped(thread), &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				thread_is_stopped(thread));
 	}
 }
 
@@ -633,7 +631,6 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 {
 	struct ptlrpc_thread	*thread = &qqi->qqi_reint_thread;
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
-	struct l_wait_info	 lwi = { 0 };
 	struct task_struct	*task;
 	int			 rc;
 	char			*name;
@@ -695,8 +692,7 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 		RETURN(rc);
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) || thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) || thread_is_stopped(thread));
 	RETURN(0);
 }

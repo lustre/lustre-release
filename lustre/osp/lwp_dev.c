@@ -369,13 +369,10 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 {
 	struct lwp_device	*m = lu2lwp_dev(ludev);
 	struct ptlrpc_thread	*thread = &m->lpd_notify_thread;
-	struct l_wait_info	 lwi = { 0 };
 	int			 rc;
 	ENTRY;
 
-	if (!thread_is_stopped(thread))
-		l_wait_event(thread->t_ctl_waitq, thread_is_stopped(thread),
-			     &lwi);
+	wait_event_idle(thread->t_ctl_waitq, thread_is_stopped(thread));
 
 	if (m->lpd_exp != NULL)
 		class_disconnect(m->lpd_exp);
@@ -437,7 +434,6 @@ static void lwp_notify_users(struct obd_export *exp)
 	struct lwp_device	*lwp;
 	struct ptlrpc_thread	*thread;
 	struct task_struct	*task;
-	struct l_wait_info	 lwi = { 0 };
 	char			 name[MTI_NAME_MAXLEN];
 
 	LASSERT(exp != NULL);
@@ -461,9 +457,8 @@ static void lwp_notify_users(struct obd_export *exp)
 		       name, PTR_ERR(task));
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) || thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) || thread_is_stopped(thread));
 }
 
 /**

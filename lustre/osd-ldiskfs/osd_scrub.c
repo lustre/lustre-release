@@ -882,7 +882,6 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 			  struct osd_iit_param *param,
 			  struct osd_idmap_cache *oic, bool *noslot, int rc)
 {
-	struct l_wait_info lwi = { 0 };
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct scrub_file *sf = &scrub->os_file;
 	struct ptlrpc_thread *thread = &scrub->os_thread;
@@ -937,8 +936,8 @@ wait:
 	}
 
 	if (it != NULL)
-		l_wait_event(thread->t_ctl_waitq, osd_scrub_wakeup(scrub, it),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				osd_scrub_wakeup(scrub, it));
 
 	if (!ooc || osd_scrub_has_window(scrub, ooc))
 		*noslot = false;
@@ -1042,7 +1041,6 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 	__u64 *pos;
 	__u64 *count;
 	struct osd_iit_param *param;
-	struct l_wait_info lwi = { 0 };
 	__u32 limit;
 	int rc;
 	bool noslot = true;
@@ -1105,12 +1103,12 @@ wait:
 			sf->sf_flags &= ~(SF_RECREATED | SF_INCONSISTENT |
 					  SF_UPGRADE | SF_AUTO);
 			sf->sf_status = SS_COMPLETED;
-			l_wait_event(thread->t_ctl_waitq,
-				     !thread_is_running(thread) ||
-				     !scrub->os_partial_scan ||
-				     scrub->os_in_join ||
-				     !list_empty(&scrub->os_inconsistent_items),
-				     &lwi);
+			wait_event_idle(
+				thread->t_ctl_waitq,
+				!thread_is_running(thread) ||
+				!scrub->os_partial_scan ||
+				scrub->os_in_join ||
+				!list_empty(&scrub->os_inconsistent_items));
 			sf->sf_flags = saved_flags;
 			sf->sf_status = SS_SCANNING;
 
@@ -1132,9 +1130,9 @@ wait:
 
 full:
 	if (!preload) {
-		l_wait_event(thread->t_ctl_waitq,
-			     !thread_is_running(thread) || !scrub->os_in_join,
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				!thread_is_running(thread) ||
+				!scrub->os_in_join);
 
 		if (unlikely(!thread_is_running(thread)))
 			RETURN(0);
@@ -1288,13 +1286,12 @@ static int osd_scrub_main(void *args)
 	}
 
 	if (!scrub->os_full_speed && !scrub->os_partial_scan) {
-		struct l_wait_info lwi = { 0 };
 		struct osd_otable_it *it = dev->od_otable_it;
 		struct osd_otable_cache *ooc = &it->ooi_cache;
 
-		l_wait_event(thread->t_ctl_waitq,
-			     it->ooi_user_ready || !thread_is_running(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				it->ooi_user_ready ||
+				!thread_is_running(thread));
 		if (unlikely(!thread_is_running(thread)))
 			GOTO(post, rc = 0);
 
@@ -2871,7 +2868,6 @@ static int osd_otable_it_next(const struct lu_env *env, struct dt_it *di)
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct osd_otable_cache *ooc    = &it->ooi_cache;
 	struct ptlrpc_thread    *thread = &scrub->os_thread;
-	struct l_wait_info       lwi    = { 0 };
 	int			 rc;
 	ENTRY;
 
@@ -2889,9 +2885,8 @@ again:
 	}
 
 	if (it->ooi_all_cached) {
-		l_wait_event(thread->t_ctl_waitq,
-			     !thread_is_running(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				!thread_is_running(thread));
 		RETURN(1);
 	}
 
@@ -2903,9 +2898,8 @@ again:
 	}
 
 	if (it->ooi_cache.ooc_pos_preload >= scrub->os_pos_current)
-		l_wait_event(thread->t_ctl_waitq,
-			     osd_otable_it_wakeup(scrub, it),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				osd_otable_it_wakeup(scrub, it));
 
 	if (!thread_is_running(thread) && !it->ooi_used_outside)
 		RETURN(1);

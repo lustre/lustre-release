@@ -470,12 +470,9 @@ again:
 		spin_unlock(&scrub->os_lock);
 	}
 
-	if (!scrub->os_full_speed && !osd_scrub_has_window(it)) {
-		memset(&lwi, 0, sizeof(lwi));
-		l_wait_event(thread->t_ctl_waitq,
-			     osd_scrub_wakeup(scrub, it),
-			     &lwi);
-	}
+	if (!scrub->os_full_speed && !osd_scrub_has_window(it))
+		wait_event_idle(thread->t_ctl_waitq,
+				osd_scrub_wakeup(scrub, it));
 
 	if (unlikely(!thread_is_running(thread)))
 		GOTO(out, rc = SCRUB_NEXT_EXIT);
@@ -585,12 +582,12 @@ static int osd_scrub_main(void *args)
 	}
 
 	if (!scrub->os_full_speed) {
-		struct l_wait_info lwi = { 0 };
 		struct osd_otable_it *it = dev->od_otable_it;
 
-		l_wait_event(thread->t_ctl_waitq,
-			     it->ooi_user_ready || !thread_is_running(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				it->ooi_user_ready ||
+				!thread_is_running(thread));
+
 		if (unlikely(!thread_is_running(thread)))
 			GOTO(post, rc = 0);
 
@@ -1682,7 +1679,6 @@ static int osd_otable_it_next(const struct lu_env *env, struct dt_it *di)
 	struct osd_device *dev = it->ooi_dev;
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	struct ptlrpc_thread *thread = &scrub->os_thread;
-	struct l_wait_info lwi = { 0 };
 	struct lustre_mdt_attrs *lma = NULL;
 	nvlist_t *nvbuf = NULL;
 	int size = 0;
@@ -1704,9 +1700,8 @@ again:
 	}
 
 	if (it->ooi_pos >= scrub->os_pos_current)
-		l_wait_event(thread->t_ctl_waitq,
-			     osd_otable_it_wakeup(scrub, it),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				osd_otable_it_wakeup(scrub, it));
 
 	if (!thread_is_running(thread) && !it->ooi_used_outside)
 		GOTO(out, rc = 1);

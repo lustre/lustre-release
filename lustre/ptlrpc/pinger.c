@@ -581,7 +581,6 @@ static int ping_evictor_main(void *arg)
 {
 	struct obd_device *obd;
 	struct obd_export *exp;
-	struct l_wait_info lwi = { 0 };
 	time64_t expire_time;
 
 	ENTRY;
@@ -590,8 +589,9 @@ static int ping_evictor_main(void *arg)
 	CDEBUG(D_HA, "Starting Ping Evictor\n");
 	pet_state = PET_READY;
 	while (1) {
-		l_wait_event(pet_waitq, (!list_empty(&pet_list)) ||
-			     (pet_state == PET_TERMINATE), &lwi);
+		wait_event_idle(pet_waitq,
+				(!list_empty(&pet_list)) ||
+				(pet_state == PET_TERMINATE));
 
 		/* loop until all obd's will be removed */
 		if ((pet_state == PET_TERMINATE) && list_empty(&pet_list))

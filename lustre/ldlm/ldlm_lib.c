@@ -2113,12 +2113,10 @@ repeat:
 			 * yet, let's wait those threads stopped
 			 */
 			if (next_update_transno == 0) {
-				struct l_wait_info lwi = { 0 };
-
-				l_wait_event(tdtd->tdtd_recovery_threads_waitq,
-				       atomic_read(
-				       &tdtd->tdtd_recovery_threads_count) == 0,
-				       &lwi);
+				wait_event_idle(
+					tdtd->tdtd_recovery_threads_waitq,
+					atomic_read(&tdtd->tdtd_recovery_threads_count)
+					== 0);
 
 				next_update_transno =
 					distribute_txn_get_next_transno(
@@ -2159,16 +2157,15 @@ repeat:
 	if (obd->obd_abort_recovery) {
 		CWARN("recovery is aborted, evict exports in recovery\n");
 		if (lut->lut_tdtd != NULL) {
-			struct l_wait_info lwi = { 0 };
-
 			tdtd = lut->lut_tdtd;
 			/*
 			 * Let's wait all of the update log recovery thread
 			 * finished
 			 */
-			l_wait_event(tdtd->tdtd_recovery_threads_waitq,
-			 atomic_read(&tdtd->tdtd_recovery_threads_count) == 0,
-			     &lwi);
+			wait_event_idle(
+				tdtd->tdtd_recovery_threads_waitq,
+				atomic_read(&tdtd->tdtd_recovery_threads_count)
+				== 0);
 			/* Then abort the update recovery list */
 			dtrq_list_destroy(lut->lut_tdtd);
 		}
@@ -3329,12 +3326,9 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc)
 	ENTRY;
 
 	/* If there is eviction in progress, wait for it to finish. */
-	if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
-		lwi = LWI_INTR(NULL, NULL);
-		rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
-				  !atomic_read(&exp->exp_obd->obd_evict_inprogress),
-				  &lwi);
-	}
+	wait_event_idle(
+		exp->exp_obd->obd_evict_inprogress_waitq,
+		!atomic_read(&exp->exp_obd->obd_evict_inprogress));
 
 	/* Check if client was evicted or reconnected already. */
 	if (exp->exp_failed ||

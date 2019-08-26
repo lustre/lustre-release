@@ -434,12 +434,10 @@ static int mgs_ir_notify(void *arg)
 	set_user_nice(current, -2);
 	mgc_fsname2resid(fsdb->fsdb_name, &resid, CONFIG_T_RECOVER);
 	while (1) {
-		struct l_wait_info   lwi = { 0 };
+		wait_event_idle(fsdb->fsdb_notify_waitq,
+				fsdb->fsdb_notify_stop ||
+				atomic_read(&fsdb->fsdb_notify_phase));
 
-		l_wait_event(fsdb->fsdb_notify_waitq,
-			     fsdb->fsdb_notify_stop ||
-			     atomic_read(&fsdb->fsdb_notify_phase),
-			     &lwi);
 		if (fsdb->fsdb_notify_stop)
 			break;
 

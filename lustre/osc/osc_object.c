@@ -476,13 +476,12 @@ struct lu_object *osc_object_alloc(const struct lu_env *env,
 
 int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc)
 {
-	struct l_wait_info lwi = { 0 };
 	ENTRY;
 
 	CDEBUG(D_INODE, "Invalidate osc object: %p, # of active IOs: %d\n",
 	       osc, atomic_read(&osc->oo_nr_ios));
 
-	l_wait_event(osc->oo_io_waitq, atomic_read(&osc->oo_nr_ios) == 0, &lwi);
+	wait_event_idle(osc->oo_io_waitq, atomic_read(&osc->oo_nr_ios) == 0);
 
 	/* Discard all dirty pages of this object. */
 	osc_cache_truncate_start(env, osc, 0, NULL);

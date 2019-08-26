@@ -4668,14 +4668,12 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 	struct lfsck_bookmark		*bk	 = &lfsck->li_bookmark_ram;
 	struct ptlrpc_thread		*mthread = &lfsck->li_thread;
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	struct l_wait_info		 lwi	 = { 0 };
 	bool				 wakeup	 = false;
 
-	l_wait_event(mthread->t_ctl_waitq,
-		     lad->lad_prefetched < bk->lb_async_windows ||
-		     !thread_is_running(mthread) ||
-		     !thread_is_running(athread),
-		     &lwi);
+	wait_event_idle(mthread->t_ctl_waitq,
+			lad->lad_prefetched < bk->lb_async_windows ||
+			!thread_is_running(mthread) ||
+			!thread_is_running(athread));
 
 	if (unlikely(!thread_is_running(mthread) ||
 		     !thread_is_running(athread)))

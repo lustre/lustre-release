@@ -839,7 +839,6 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	struct ptlrpc_request	*req = NULL;
 	struct obd_import	*imp;
 	struct ost_body		*body;
-	struct l_wait_info	 lwi = { 0 };
 	int			 update_status = 0;
 	int			 rc;
 	int			 diff;
@@ -864,10 +863,9 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	 * catch all osp_precreate_reserve() calls who find
 	 * "!opd_pre_recovering".
 	 */
-	l_wait_event(d->opd_pre_waitq,
-		     (!d->opd_pre_reserved && d->opd_recovery_completed) ||
-		     !osp_precreate_running(d) || d->opd_got_disconnected,
-		     &lwi);
+	wait_event_idle(d->opd_pre_waitq,
+			(!d->opd_pre_reserved && d->opd_recovery_completed) ||
+			!osp_precreate_running(d) || d->opd_got_disconnected);
 	if (!osp_precreate_running(d) || d->opd_got_disconnected)
 		GOTO(out, rc = -EAGAIN);
 
@@ -1202,7 +1200,6 @@ static int osp_precreate_thread(void *_arg)
 {
 	struct osp_device	*d = _arg;
 	struct ptlrpc_thread	*thread = &d->opd_pre_thread;
-	struct l_wait_info	 lwi = { 0 };
 	struct l_wait_info	 lwi2 = LWI_TIMEOUT(cfs_time_seconds(5),
 						    back_to_sleep, NULL);
 	struct lu_env		 env;
@@ -1237,10 +1234,9 @@ static int osp_precreate_thread(void *_arg)
 			    d->opd_imp_connected &&
 			    !d->opd_got_disconnected)
 				break;
-			l_wait_event(d->opd_pre_waitq,
-				     !osp_precreate_running(d) ||
-				     d->opd_new_connection,
-				     &lwi);
+			wait_event_idle(d->opd_pre_waitq,
+					!osp_precreate_running(d) ||
+					d->opd_new_connection);
 
 			if (!d->opd_new_connection)
 				continue;
@@ -1291,11 +1287,11 @@ static int osp_precreate_thread(void *_arg)
 		 * connected, can handle precreates now
 		 */
 		while (osp_precreate_running(d)) {
-			l_wait_event(d->opd_pre_waitq,
-				     !osp_precreate_running(d) ||
-				     osp_precreate_near_empty(&env, d) ||
-				     osp_statfs_need_update(d) ||
-				     d->opd_got_disconnected, &lwi);
+			wait_event_idle(d->opd_pre_waitq,
+					!osp_precreate_running(d) ||
+					osp_precreate_near_empty(&env, d) ||
+					osp_statfs_need_update(d) ||
+					d->opd_got_disconnected);
 
 			if (!osp_precreate_running(d))
 				break;
@@ -1771,7 +1767,6 @@ void osp_precreate_fini(struct osp_device *d)
 
 int osp_init_statfs(struct osp_device *d)
 {
-	struct l_wait_info	 lwi = { 0 };
 	struct task_struct		*task;
 
 	ENTRY;
@@ -1806,9 +1801,9 @@ int osp_init_statfs(struct osp_device *d)
 		RETURN(PTR_ERR(task));
 	}
 
-	l_wait_event(d->opd_pre_thread.t_ctl_waitq,
-		     osp_precreate_running(d) || osp_precreate_stopped(d),
-		     &lwi);
+	wait_event_idle(d->opd_pre_thread.t_ctl_waitq,
+			osp_precreate_running(d) || osp_precreate_stopped(d));
+
 
 	RETURN(0);
 }

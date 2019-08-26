@@ -1232,7 +1232,6 @@ static void lov_conf_unlock(struct lov_object *lov)
 
 static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov)
 {
-	struct l_wait_info lwi = { 0 };
 	ENTRY;
 
 	while (atomic_read(&lov->lo_active_ios) > 0) {
@@ -1240,8 +1239,8 @@ static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov)
 			PFID(lu_object_fid(lov2lu(lov))),
 			atomic_read(&lov->lo_active_ios));
 
-		l_wait_event(lov->lo_waitq,
-			     atomic_read(&lov->lo_active_ios) == 0, &lwi);
+		wait_event_idle(lov->lo_waitq,
+				atomic_read(&lov->lo_active_ios) == 0);
 	}
 	RETURN(0);
 }

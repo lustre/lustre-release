@@ -1432,7 +1432,6 @@ int osp_send_update_thread(void *arg)
 {
 	struct lu_env		env;
 	struct osp_device	*osp = arg;
-	struct l_wait_info	 lwi = { 0 };
 	struct osp_updates	*ou = osp->opd_update;
 	struct ptlrpc_thread	*thread = &osp->opd_update_thread;
 	struct osp_update_request *our = NULL;
@@ -1451,9 +1450,9 @@ int osp_send_update_thread(void *arg)
 	wake_up(&thread->t_ctl_waitq);
 	while (1) {
 		our = NULL;
-		l_wait_event(ou->ou_waitq,
-			     !osp_send_update_thread_running(osp) ||
-			     osp_get_next_request(ou, &our), &lwi);
+		wait_event_idle(ou->ou_waitq,
+				!osp_send_update_thread_running(osp) ||
+				osp_get_next_request(ou, &our));
 
 		if (!osp_send_update_thread_running(osp)) {
 			if (our != NULL) {

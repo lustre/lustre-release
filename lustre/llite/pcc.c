@@ -2075,13 +2075,12 @@ int pcc_fault(struct vm_area_struct *vma, struct vm_fault *vmf,
 
 static void pcc_layout_wait(struct pcc_inode *pcci)
 {
-	struct l_wait_info lwi = { 0 };
 
 	while (atomic_read(&pcci->pcci_active_ios) > 0) {
 		CDEBUG(D_CACHE, "Waiting for IO completion: %d\n",
 		       atomic_read(&pcci->pcci_active_ios));
-		l_wait_event(pcci->pcci_waitq,
-			     atomic_read(&pcci->pcci_active_ios) == 0, &lwi);
+		wait_event_idle(pcci->pcci_waitq,
+				atomic_read(&pcci->pcci_active_ios) == 0);
 	}
 }
 

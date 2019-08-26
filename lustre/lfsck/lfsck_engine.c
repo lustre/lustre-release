@@ -634,7 +634,6 @@ static int lfsck_double_scan(const struct lu_env *env,
 {
 	struct lfsck_component *com;
 	struct lfsck_component *next;
-	struct l_wait_info	lwi = { 0 };
 	int			rc  = 0;
 	int			rc1 = 0;
 
@@ -644,9 +643,8 @@ static int lfsck_double_scan(const struct lu_env *env,
 			rc1 = rc;
 	}
 
-	l_wait_event(lfsck->li_thread.t_ctl_waitq,
-		     atomic_read(&lfsck->li_double_scan_count) == 0,
-		     &lwi);
+	wait_event_idle(lfsck->li_thread.t_ctl_waitq,
+			atomic_read(&lfsck->li_double_scan_count) == 0);
 
 	if (lfsck->li_status != LS_PAUSED &&
 	    lfsck->li_status != LS_CO_PAUSED) {
@@ -1026,7 +1024,6 @@ int lfsck_master_engine(void *args)
 	struct dt_object	 *oit_obj  = lfsck->li_obj_oit;
 	const struct dt_it_ops	 *oit_iops = &oit_obj->do_index_ops->dio_it;
 	struct dt_it		 *oit_di;
-	struct l_wait_info	  lwi	   = { 0 };
 	int			  rc;
 	ENTRY;
 
@@ -1086,10 +1083,9 @@ int lfsck_master_engine(void *args)
 	spin_unlock(&lfsck->li_lock);
 	wake_up_all(&thread->t_ctl_waitq);
 
-	l_wait_event(thread->t_ctl_waitq,
-		     lfsck->li_start_unplug ||
-		     !thread_is_running(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			lfsck->li_start_unplug ||
+			!thread_is_running(thread));
 	if (!thread_is_running(thread))
 		GOTO(fini_oit, rc = 0);
 

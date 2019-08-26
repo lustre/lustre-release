@@ -1152,8 +1152,6 @@ static int osp_sync_process_queues(const struct lu_env *env,
 	struct osp_device	*d = data;
 
 	do {
-		struct l_wait_info lwi = { 0 };
-
 		if (!osp_sync_running(d)) {
 			CDEBUG(D_HA, "stop llog processing\n");
 			return LLOG_PROC_BREAK;
@@ -1179,11 +1177,10 @@ static int osp_sync_process_queues(const struct lu_env *env,
 			rec = NULL;
 		}
 
-		l_wait_event(d->opd_sync_waitq,
-			     !osp_sync_running(d) ||
-			     osp_sync_can_process_new(d, rec) ||
-			     !list_empty(&d->opd_sync_committed_there),
-			     &lwi);
+		wait_event_idle(d->opd_sync_waitq,
+				!osp_sync_running(d) ||
+				osp_sync_can_process_new(d, rec) ||
+				!list_empty(&d->opd_sync_committed_there));
 	} while (1);
 }
 
@@ -1511,7 +1508,6 @@ static void osp_sync_llog_fini(const struct lu_env *env, struct osp_device *d)
  */
 int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 {
-	struct l_wait_info	 lwi = { 0 };
 	struct task_struct	*task;
 	int			 rc;
 
@@ -1552,8 +1548,8 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d)
 		GOTO(err_llog, rc);
 	}
 
-	l_wait_event(d->opd_sync_thread.t_ctl_waitq,
-		     osp_sync_running(d) || osp_sync_stopped(d), &lwi);
+	wait_event_idle(d->opd_sync_thread.t_ctl_waitq,
+			osp_sync_running(d) || osp_sync_stopped(d));
 
 	RETURN(0);
 err_llog:

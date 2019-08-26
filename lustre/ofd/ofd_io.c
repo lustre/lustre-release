@@ -165,7 +165,6 @@ static int ofd_inconsistency_verification_main(void *args)
 	struct ptlrpc_thread *thread = &ofd->ofd_inconsistency_thread;
 	struct ofd_inconsistency_item *oii;
 	struct lfsck_req_local *lrl = NULL;
-	struct l_wait_info lwi = { 0 };
 	int rc;
 	ENTRY;
 
@@ -200,10 +199,9 @@ static int ofd_inconsistency_verification_main(void *args)
 		}
 
 		spin_unlock(&ofd->ofd_inconsistency_lock);
-		l_wait_event(thread->t_ctl_waitq,
-			     !list_empty(&ofd->ofd_inconsistency_list) ||
-			     !thread_is_running(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				!list_empty(&ofd->ofd_inconsistency_list) ||
+				!thread_is_running(thread));
 		spin_lock(&ofd->ofd_inconsistency_lock);
 	}
 
@@ -254,7 +252,6 @@ out:
 int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 {
 	struct ptlrpc_thread	*thread = &ofd->ofd_inconsistency_thread;
-	struct l_wait_info	 lwi	= { 0 };
 	struct task_struct	*task;
 	int			 rc;
 
@@ -275,10 +272,9 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 		       ofd_name(ofd), rc);
 	} else {
 		rc = 0;
-		l_wait_event(thread->t_ctl_waitq,
-			     thread_is_running(thread) ||
-			     thread_is_stopped(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				thread_is_running(thread) ||
+				thread_is_stopped(thread));
 	}
 
 	return rc;
@@ -295,7 +291,6 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 int ofd_stop_inconsistency_verification_thread(struct ofd_device *ofd)
 {
 	struct ptlrpc_thread	*thread = &ofd->ofd_inconsistency_thread;
-	struct l_wait_info	 lwi	= { 0 };
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
 	if (thread_is_init(thread) || thread_is_stopped(thread)) {
@@ -307,9 +302,8 @@ int ofd_stop_inconsistency_verification_thread(struct ofd_device *ofd)
 	thread_set_flags(thread, SVC_STOPPING);
 	spin_unlock(&ofd->ofd_inconsistency_lock);
 	wake_up_all(&thread->t_ctl_waitq);
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_stopped(thread));
 
 	return 0;
 }

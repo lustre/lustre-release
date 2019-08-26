@@ -714,12 +714,9 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		if (cfs_fail_val == 0 &&
 		    lustre_msg_get_opc(msg) != OBD_PING &&
 		    lustre_msg_get_flags(msg) & MSG_REQ_REPLAY_DONE) {
-			struct l_wait_info lwi =  { 0 };
-
 			cfs_fail_val = 1;
 			cfs_race_state = 0;
-			l_wait_event(cfs_race_waitq, (cfs_race_state == 1),
-				     &lwi);
+			wait_event_idle(cfs_race_waitq, (cfs_race_state == 1));
 		}
 	}
 
@@ -2164,7 +2161,6 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	struct niobuf_local	*local_nb;
 	struct obd_ioobj	*ioo;
 	struct ost_body		*body, *repbody;
-	struct l_wait_info	 lwi;
 	struct lustre_handle	 lockh = { 0 };
 	int			 npages, nob = 0, rc, i, no_reply = 0,
 				 npages_read;
@@ -2194,10 +2190,9 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	 * finish */
 	if (unlikely(atomic_read(&exp->exp_obd->obd_evict_inprogress))) {
 		/* We do not care how long it takes */
-		lwi = LWI_INTR(NULL, NULL);
-		rc = l_wait_event(exp->exp_obd->obd_evict_inprogress_waitq,
-			 !atomic_read(&exp->exp_obd->obd_evict_inprogress),
-			 &lwi);
+		wait_event_idle(
+			exp->exp_obd->obd_evict_inprogress_waitq,
+			!atomic_read(&exp->exp_obd->obd_evict_inprogress));
 	}
 
 	/* There must be big cache in current thread to process this request

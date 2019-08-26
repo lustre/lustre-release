@@ -516,7 +516,6 @@ static int qsd_upd_thread(void *arg)
 int qsd_start_upd_thread(struct qsd_instance *qsd)
 {
 	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
-	struct l_wait_info	 lwi = { 0 };
 	struct task_struct		*task;
 	ENTRY;
 
@@ -529,9 +528,8 @@ int qsd_start_upd_thread(struct qsd_instance *qsd)
 		RETURN(PTR_ERR(task));
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) || thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) || thread_is_stopped(thread));
 	RETURN(0);
 }
 
@@ -586,14 +584,12 @@ static void qsd_cleanup_adjust(struct qsd_instance *qsd)
 void qsd_stop_upd_thread(struct qsd_instance *qsd)
 {
 	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
-	struct l_wait_info	 lwi    = { 0 };
 
 	if (!thread_is_stopped(thread)) {
 		thread_set_flags(thread, SVC_STOPPING);
 		wake_up(&thread->t_ctl_waitq);
 
-		l_wait_event(thread->t_ctl_waitq, thread_is_stopped(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq, thread_is_stopped(thread));
 	}
 	qsd_cleanup_deferred(qsd);
 	qsd_cleanup_adjust(qsd);

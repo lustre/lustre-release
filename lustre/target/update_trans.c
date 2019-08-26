@@ -910,10 +910,8 @@ static bool top_trans_is_stopped(struct top_thandle *top_th)
  */
 static int top_trans_wait_result(struct top_thandle *top_th)
 {
-	struct l_wait_info	lwi = {0};
-
-	l_wait_event(top_th->tt_multiple_thandle->tmt_stop_waitq,
-		     top_trans_is_stopped(top_th), &lwi);
+	wait_event_idle(top_th->tt_multiple_thandle->tmt_stop_waitq,
+			top_trans_is_stopped(top_th));
 
 	RETURN(top_th->tt_super.th_result);
 }
@@ -1554,7 +1552,6 @@ static int distribute_txn_commit_thread(void *_arg)
 	struct target_distribute_txn_data *tdtd = _arg;
 	struct lu_target	*lut = tdtd->tdtd_lut;
 	struct ptlrpc_thread	*thread = &lut->lut_tdtd_commit_thread;
-	struct l_wait_info	 lwi = { 0 };
 	struct lu_env		 env;
 	struct list_head	 list;
 	int			 rc;
@@ -1645,14 +1642,14 @@ static int distribute_txn_commit_thread(void *_arg)
 			top_multiple_thandle_put(tmt);
 		}
 
-		l_wait_event(tdtd->tdtd_commit_thread_waitq,
-			     !distribute_txn_commit_thread_running(lut) ||
-			     committed < tdtd->tdtd_committed_batchid ||
-			     tdtd_ready_for_cancel_log(tdtd), &lwi);
+		wait_event_idle(tdtd->tdtd_commit_thread_waitq,
+				!distribute_txn_commit_thread_running(lut) ||
+				committed < tdtd->tdtd_committed_batchid ||
+				tdtd_ready_for_cancel_log(tdtd));
 	};
 
-	l_wait_event(tdtd->tdtd_commit_thread_waitq,
-		     atomic_read(&tdtd->tdtd_refcount) == 0, &lwi);
+	wait_event_idle(tdtd->tdtd_commit_thread_waitq,
+			atomic_read(&tdtd->tdtd_refcount) == 0);
 
 	spin_lock(&tdtd->tdtd_batchid_lock);
 	list_for_each_entry_safe(tmt, tmp, &tdtd->tdtd_list,
@@ -1692,7 +1689,6 @@ int distribute_txn_init(const struct lu_env *env,
 			__u32 index)
 {
 	struct task_struct	*task;
-	struct l_wait_info	 lwi = { 0 };
 	int			rc;
 	ENTRY;
 
@@ -1725,9 +1721,9 @@ int distribute_txn_init(const struct lu_env *env,
 	if (IS_ERR(task))
 		RETURN(PTR_ERR(task));
 
-	l_wait_event(lut->lut_tdtd_commit_thread.t_ctl_waitq,
-		     distribute_txn_commit_thread_running(lut) ||
-		     distribute_txn_commit_thread_stopped(lut), &lwi);
+	wait_event_idle(lut->lut_tdtd_commit_thread.t_ctl_waitq,
+			distribute_txn_commit_thread_running(lut) ||
+			distribute_txn_commit_thread_stopped(lut));
 	RETURN(0);
 }
 EXPORT_SYMBOL(distribute_txn_init);

@@ -2554,13 +2554,10 @@ int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 		       "rc = %d\n", lfsck_lfsck2name(lfsck), lad->lad_name, rc);
 		lfsck_thread_args_fini(lta);
 	} else {
-		struct l_wait_info lwi = { 0 };
-
-		l_wait_event(mthread->t_ctl_waitq,
-			     thread_is_running(athread) ||
-			     thread_is_stopped(athread) ||
-			     !thread_is_starting(mthread),
-			     &lwi);
+		wait_event_idle(mthread->t_ctl_waitq,
+				thread_is_running(athread) ||
+				thread_is_stopped(athread) ||
+				!thread_is_starting(mthread));
 		if (unlikely(!thread_is_starting(mthread)))
 			/* stopped by race */
 			rc = -ESRCH;
@@ -2579,13 +2576,11 @@ int lfsck_checkpoint_generic(const struct lu_env *env,
 	struct lfsck_assistant_data	*lad	 = com->lc_data;
 	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	struct l_wait_info		 lwi	 = { 0 };
 
-	l_wait_event(mthread->t_ctl_waitq,
-		     list_empty(&lad->lad_req_list) ||
-		     !thread_is_running(mthread) ||
-		     thread_is_stopped(athread),
-		     &lwi);
+	wait_event_idle(mthread->t_ctl_waitq,
+			list_empty(&lad->lad_req_list) ||
+			!thread_is_running(mthread) ||
+			thread_is_stopped(athread));
 
 	if (!thread_is_running(mthread) || thread_is_stopped(athread))
 		return LFSCK_CHECKPOINT_SKIP;
@@ -2599,7 +2594,6 @@ void lfsck_post_generic(const struct lu_env *env,
 	struct lfsck_assistant_data	*lad	 = com->lc_data;
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
 	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
-	struct l_wait_info		 lwi	 = { 0 };
 
 	lad->lad_post_result = *result;
 	if (*result <= 0)
@@ -2610,10 +2604,9 @@ void lfsck_post_generic(const struct lu_env *env,
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, *result);
 
 	wake_up_all(&athread->t_ctl_waitq);
-	l_wait_event(mthread->t_ctl_waitq,
-		     (*result > 0 && list_empty(&lad->lad_req_list)) ||
-		     thread_is_stopped(athread),
-		     &lwi);
+	wait_event_idle(mthread->t_ctl_waitq,
+			(*result > 0 && list_empty(&lad->lad_req_list)) ||
+			thread_is_stopped(athread));
 
 	if (lad->lad_assistant_status < 0)
 		*result = lad->lad_assistant_status;
@@ -2628,7 +2621,6 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 	struct lfsck_assistant_data	*lad	 = com->lc_data;
 	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	struct l_wait_info		 lwi	 = { 0 };
 
 	if (status != LS_SCANNING_PHASE2)
 		set_bit(LAD_EXIT, &lad->lad_flags);
@@ -2640,10 +2632,9 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, status);
 
 	wake_up_all(&athread->t_ctl_waitq);
-	l_wait_event(mthread->t_ctl_waitq,
-		     test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags) ||
-		     thread_is_stopped(athread),
-		     &lwi);
+	wait_event_idle(mthread->t_ctl_waitq,
+			test_bit(LAD_IN_DOUBLE_SCAN, &lad->lad_flags) ||
+			thread_is_stopped(athread));
 
 	CDEBUG(D_LFSCK, "%s: the assistant has done %s double_scan, "
 	       "status %d\n", lfsck_lfsck2name(com->lc_lfsck), lad->lad_name,
@@ -2661,14 +2652,12 @@ void lfsck_quit_generic(const struct lu_env *env,
 	struct lfsck_assistant_data	*lad	 = com->lc_data;
 	struct ptlrpc_thread		*mthread = &com->lc_lfsck->li_thread;
 	struct ptlrpc_thread		*athread = &lad->lad_thread;
-	struct l_wait_info		 lwi     = { 0 };
 
 	set_bit(LAD_EXIT, &lad->lad_flags);
 	wake_up_all(&athread->t_ctl_waitq);
-	l_wait_event(mthread->t_ctl_waitq,
-		     thread_is_init(athread) ||
-		     thread_is_stopped(athread),
-		     &lwi);
+	wait_event_idle(mthread->t_ctl_waitq,
+			thread_is_init(athread) ||
+			thread_is_stopped(athread));
 }
 
 int lfsck_load_one_trace_file(const struct lu_env *env,
@@ -3107,7 +3096,6 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	struct lfsck_bookmark		*bk;
 	struct ptlrpc_thread		*thread;
 	struct lfsck_component		*com;
-	struct l_wait_info		 lwi    = { 0 };
 	struct lfsck_thread_args	*lta;
 	struct task_struct		*task;
 	struct lfsck_tgt_descs		*ltds;
@@ -3342,10 +3330,9 @@ trigger:
 		GOTO(out, rc);
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) ||
-		     thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) ||
+			thread_is_stopped(thread));
 	if (start == NULL || !(start->ls_flags & LPF_BROADCAST)) {
 		lfsck->li_start_unplug = 1;
 		wake_up_all(&thread->t_ctl_waitq);
@@ -3368,9 +3355,8 @@ trigger:
 
 			lfsck->li_start_unplug = 1;
 			wake_up_all(&thread->t_ctl_waitq);
-			l_wait_event(thread->t_ctl_waitq,
-				     thread_is_stopped(thread),
-				     &lwi);
+			wait_event_idle(thread->t_ctl_waitq,
+					thread_is_stopped(thread));
 		}
 	} else {
 		lfsck->li_start_unplug = 1;
@@ -3394,7 +3380,6 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 {
 	struct lfsck_instance	*lfsck;
 	struct ptlrpc_thread	*thread;
-	struct l_wait_info	 lwi    = { 0 };
 	int			 rc	= 0;
 	int			 rc1	= 0;
 	ENTRY;
@@ -3464,9 +3449,8 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 
 	/* It was me set the status as 'stopping' just now, if it is not
 	 * 'stopping' now, then either stopped, or re-started by race. */
-	l_wait_event(thread->t_ctl_waitq,
-		     !thread_is_stopping(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			!thread_is_stopping(thread));
 
 	GOTO(put, rc = 0);
 

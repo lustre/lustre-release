@@ -595,7 +595,6 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 	struct lod_recovery_data *lrd = NULL;
 	struct ptlrpc_thread *thread;
 	struct task_struct *task;
-	struct l_wait_info lwi = { 0 };
 	struct lod_tgt_desc *subtgt = NULL;
 	u32 index;
 	u32 master_index;
@@ -660,8 +659,8 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		GOTO(out_llog, rc);
 	}
 
-	l_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING ||
-					  thread->t_flags & SVC_STOPPED, &lwi);
+	wait_event_idle(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING ||
+			thread->t_flags & SVC_STOPPED);
 
 	RETURN(0);
 out_llog:

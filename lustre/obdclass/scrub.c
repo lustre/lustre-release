@@ -275,7 +275,6 @@ int scrub_start(int (*threadfn)(void *data), struct lustre_scrub *scrub,
 		void *data, __u32 flags)
 {
 	struct ptlrpc_thread *thread = &scrub->os_thread;
-	struct l_wait_info lwi = { 0 };
 	struct task_struct *task;
 	int rc;
 	ENTRY;
@@ -290,9 +289,8 @@ again:
 
 	if (unlikely(thread_is_stopping(thread))) {
 		spin_unlock(&scrub->os_lock);
-		l_wait_event(thread->t_ctl_waitq,
-			     thread_is_stopped(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				thread_is_stopped(thread));
 		goto again;
 	}
 	spin_unlock(&scrub->os_lock);
@@ -317,9 +315,8 @@ again:
 		RETURN(rc);
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) || thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) || thread_is_stopped(thread));
 
 	RETURN(0);
 }
@@ -328,7 +325,6 @@ EXPORT_SYMBOL(scrub_start);
 void scrub_stop(struct lustre_scrub *scrub)
 {
 	struct ptlrpc_thread *thread = &scrub->os_thread;
-	struct l_wait_info lwi = { 0 };
 
 	/* os_lock: sync status between stop and scrub thread */
 	spin_lock(&scrub->os_lock);
@@ -336,9 +332,8 @@ void scrub_stop(struct lustre_scrub *scrub)
 		thread_set_flags(thread, SVC_STOPPING);
 		spin_unlock(&scrub->os_lock);
 		wake_up_all(&thread->t_ctl_waitq);
-		l_wait_event(thread->t_ctl_waitq,
-			     thread_is_stopped(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				thread_is_stopped(thread));
 		/* Do not skip the last lock/unlock, which can guarantee that
 		 * the caller cannot return until the OI scrub thread exit. */
 		spin_lock(&scrub->os_lock);

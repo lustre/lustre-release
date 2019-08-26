@@ -746,7 +746,6 @@ static int qmt_reba_thread(void *arg)
 {
 	struct qmt_device	*qmt = (struct qmt_device *)arg;
 	struct ptlrpc_thread	*thread = &qmt->qmt_reba_thread;
-	struct l_wait_info	 lwi = { 0 };
 	struct lu_env		*env;
 	struct lquota_entry	*lqe, *tmp;
 	int			 rc;
@@ -771,9 +770,9 @@ static int qmt_reba_thread(void *arg)
 	wake_up(&thread->t_ctl_waitq);
 
 	while (1) {
-		l_wait_event(thread->t_ctl_waitq,
-			     !list_empty(&qmt->qmt_reba_list) ||
-			     !thread_is_running(thread), &lwi);
+		wait_event_idle(thread->t_ctl_waitq,
+				!list_empty(&qmt->qmt_reba_list) ||
+				!thread_is_running(thread));
 
 		spin_lock(&qmt->qmt_reba_lock);
 		list_for_each_entry_safe(lqe, tmp, &qmt->qmt_reba_list,
@@ -808,7 +807,6 @@ out_env:
 int qmt_start_reba_thread(struct qmt_device *qmt)
 {
 	struct ptlrpc_thread	*thread = &qmt->qmt_reba_thread;
-	struct l_wait_info	 lwi    = { 0 };
 	struct task_struct		*task;
 	ENTRY;
 
@@ -821,9 +819,8 @@ int qmt_start_reba_thread(struct qmt_device *qmt)
 		RETURN(PTR_ERR(task));
 	}
 
-	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_running(thread) || thread_is_stopped(thread),
-		     &lwi);
+	wait_event_idle(thread->t_ctl_waitq,
+			thread_is_running(thread) || thread_is_stopped(thread));
 
 	RETURN(0);
 }
@@ -836,13 +833,11 @@ void qmt_stop_reba_thread(struct qmt_device *qmt)
 	struct ptlrpc_thread *thread = &qmt->qmt_reba_thread;
 
 	if (!thread_is_stopped(thread)) {
-		struct l_wait_info lwi = { 0 };
 
 		thread_set_flags(thread, SVC_STOPPING);
 		wake_up(&thread->t_ctl_waitq);
 
-		l_wait_event(thread->t_ctl_waitq, thread_is_stopped(thread),
-			     &lwi);
+		wait_event_idle(thread->t_ctl_waitq, thread_is_stopped(thread));
 	}
 	LASSERT(list_empty(&qmt->qmt_reba_list));
 }

@@ -728,7 +728,6 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 	struct cfs_hash *hs;
 	struct cfs_hash_bd bd;
 	struct lu_site_bkt_data *bkt;
-	struct l_wait_info lwi = { 0 };
 	__u64 version = 0;
 	int rc;
 
@@ -769,9 +768,9 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 			if (likely(lu_object_is_inited(o->lo_header)))
 				RETURN(o);
 
-			l_wait_event(bkt->lsb_waitq,
-				     lu_object_is_inited(o->lo_header) ||
-				     lu_object_is_dying(o->lo_header), &lwi);
+			wait_event_idle(bkt->lsb_waitq,
+					lu_object_is_inited(o->lo_header) ||
+					lu_object_is_dying(o->lo_header));
 
 			if (lu_object_is_dying(o->lo_header)) {
 				lu_object_put(env, o);
@@ -832,9 +831,9 @@ struct lu_object *lu_object_find_at(const struct lu_env *env,
 
 	if (!(conf && conf->loc_flags & LOC_F_NEW) &&
 	    !lu_object_is_inited(shadow->lo_header)) {
-		l_wait_event(bkt->lsb_waitq,
-			     lu_object_is_inited(shadow->lo_header) ||
-			     lu_object_is_dying(shadow->lo_header), &lwi);
+		wait_event_idle(bkt->lsb_waitq,
+				lu_object_is_inited(shadow->lo_header) ||
+				lu_object_is_dying(shadow->lo_header));
 
 		if (lu_object_is_dying(shadow->lo_header)) {
 			lu_object_put(env, shadow);
