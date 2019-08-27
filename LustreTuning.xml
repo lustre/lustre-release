@@ -726,7 +726,7 @@ cpu_partition_table=
 		</entry>
 		<entry>
 		  <para>Introduced in 2.10. Number of connections to each peer. Messages
-          are sent round-robin over the connection pool.  Provides signifiant
+          are sent round-robin over the connection pool.  Provides significant
           improvement with OmniPath.</para>
 		</entry>
 	      </row>
