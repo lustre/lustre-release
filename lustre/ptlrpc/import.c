@@ -301,7 +301,6 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 {
 	struct list_head *tmp, *n;
 	struct ptlrpc_request *req;
-	struct l_wait_info lwi;
 	time64_t timeout;
 	int rc;
 
@@ -348,18 +347,16 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 		 * have been locally cancelled by ptlrpc_abort_inflight.
 		 */
 		timeout_jiffies = max_t(long, cfs_time_seconds(timeout), 1);
-		lwi = LWI_TIMEOUT_INTERVAL(timeout_jiffies,
-					   (timeout > 1) ? cfs_time_seconds(1) :
-					   cfs_time_seconds(1) / 2,
-					   NULL, NULL);
-		rc = l_wait_event(imp->imp_recovery_waitq,
-				  (atomic_read(&imp->imp_inflight) == 0),
-				  &lwi);
-		if (rc) {
+		rc = wait_event_idle_timeout(
+				    imp->imp_recovery_waitq,
+				    (atomic_read(&imp->imp_inflight) == 0),
+				    timeout_jiffies);
+
+		if (rc == 0) {
 			const char *cli_tgt = obd2cli_tgt(imp->imp_obd);
 
-			CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
-			       cli_tgt, rc, atomic_read(&imp->imp_inflight));
+			CERROR("%s: timeout waiting for callback (%d != 0)\n",
+			       cli_tgt, atomic_read(&imp->imp_inflight));
 
 			spin_lock(&imp->imp_lock);
 			if (atomic_read(&imp->imp_inflight) == 0) {
@@ -377,7 +374,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 				/* Let's save one loop as soon as inflight have
 				 * dropped to zero. No new inflights possible at
 				 * this point. */
-				rc = 0;
+				rc = 1;
 			} else {
 				list_for_each_safe(tmp, n,
 						   &imp->imp_sending_list) {
@@ -403,7 +400,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 			}
 			spin_unlock(&imp->imp_lock);
 		}
-	} while (rc != 0);
+	} while (rc == 0);
 
 	/*
 	 * Let's additionally check that no new rpcs added to import in
@@ -414,7 +411,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 	sptlrpc_import_flush_all_ctx(imp);
 
 	atomic_dec(&imp->imp_inval_count);
-	wake_up_all(&imp->imp_recovery_waitq);
+	wake_up(&imp->imp_recovery_waitq);
 }
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 
@@ -1405,7 +1402,7 @@ out:
 		spin_unlock(&imp->imp_lock);
 	}
 
-	wake_up_all(&imp->imp_recovery_waitq);
+	wake_up(&imp->imp_recovery_waitq);
 	RETURN(rc);
 }
 
@@ -1621,7 +1618,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 	}
 
 	if (imp->imp_state == LUSTRE_IMP_FULL) {
-		wake_up_all(&imp->imp_recovery_waitq);
+		wake_up(&imp->imp_recovery_waitq);
 		ptlrpc_wake_delayed(imp);
 	}
 

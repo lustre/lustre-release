@@ -1740,7 +1740,8 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 		spin_lock(&imp->imp_lock);
 		if (!list_empty(&req->rq_list)) {
 			list_del_init(&req->rq_list);
-			atomic_dec(&req->rq_import->imp_inflight);
+			if (atomic_dec_and_test(&req->rq_import->imp_inflight))
+				wake_up(&req->rq_import->imp_recovery_waitq);
 		}
 		spin_unlock(&imp->imp_lock);
 		ptlrpc_rqphase_move(req, RQ_PHASE_NEW);
@@ -2196,13 +2197,14 @@ interpret:
 		 */
 		if (!list_empty(&req->rq_list)) {
 			list_del_init(&req->rq_list);
-			atomic_dec(&imp->imp_inflight);
+			if (atomic_dec_and_test(&imp->imp_inflight))
+				wake_up(&imp->imp_recovery_waitq);
 		}
 		list_del_init(&req->rq_unreplied_list);
 		spin_unlock(&imp->imp_lock);
 
 		atomic_dec(&set->set_remaining);
-		wake_up_all(&imp->imp_recovery_waitq);
+		wake_up(&imp->imp_recovery_waitq);
 
 		if (set->set_producer) {
 			/* produce a new request if possible */
