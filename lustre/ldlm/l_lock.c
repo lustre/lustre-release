@@ -41,19 +41,24 @@
  *
  * LDLM locking uses resource to serialize access to locks
  * but there is a case when we change resource of lock upon
- * enqueue reply. We rely on lock->l_resource = new_res
+ * enqueue reply. We rely on rcu_assign_pointer(lock->l_resource, new_res)
  * being an atomic operation.
  */
 struct ldlm_resource *lock_res_and_lock(struct ldlm_lock *lock)
 {
-	/* on server-side resource of lock doesn't change */
-	if (!ldlm_is_ns_srv(lock))
-		spin_lock(&lock->l_lock);
+	struct ldlm_resource *res;
 
-	lock_res(lock->l_resource);
-
-	ldlm_set_res_locked(lock);
-	return lock->l_resource;
+	rcu_read_lock();
+	while (1) {
+		res = rcu_dereference(lock->l_resource);
+		lock_res(res);
+		if (res == lock->l_resource) {
+			ldlm_set_res_locked(lock);
+			rcu_read_unlock();
+			return res;
+		}
+		unlock_res(res);
+	}
 }
 EXPORT_SYMBOL(lock_res_and_lock);
 
@@ -62,11 +67,8 @@ EXPORT_SYMBOL(lock_res_and_lock);
  */
 void unlock_res_and_lock(struct ldlm_lock *lock)
 {
-	/* on server-side resource of lock doesn't change */
 	ldlm_clear_res_locked(lock);
 
 	unlock_res(lock->l_resource);
-	if (!ldlm_is_ns_srv(lock))
-		spin_unlock(&lock->l_lock);
 }
 EXPORT_SYMBOL(unlock_res_and_lock);

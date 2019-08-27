@@ -1367,7 +1367,7 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 	struct ldlm_resource *res;
 	bool rc;
 
-	OBD_SLAB_ALLOC_PTR_GFP(res, ldlm_resource_slab, GFP_NOFS);
+	res = kmem_cache_alloc(ldlm_resource_slab, GFP_NOFS);
 	if (res == NULL)
 		return NULL;
 
@@ -1383,20 +1383,21 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 		break;
 	}
 	if (!rc) {
-		OBD_SLAB_FREE_PTR(res, ldlm_resource_slab);
+		kmem_cache_free(ldlm_resource_slab, res);
 		return NULL;
 	}
 
 	INIT_LIST_HEAD(&res->lr_granted);
 	INIT_LIST_HEAD(&res->lr_waiting);
+	res->lr_lvb_data = NULL;
+	res->lr_lvb_inode = NULL;
+	res->lr_lvb_len = 0;
 
 	atomic_set(&res->lr_refcount, 1);
-	spin_lock_init(&res->lr_lock);
 	lu_ref_init(&res->lr_reference);
 
 	/* Since LVB init can be delayed now, there is no longer need to
 	 * immediatelly acquire mutex here. */
-	mutex_init(&res->lr_lvb_mutex);
 	res->lr_lvb_initialized = false;
 
 	return res;
@@ -1413,7 +1414,7 @@ static void ldlm_resource_free(struct ldlm_resource *res)
 			OBD_FREE_PTR(res->lr_ibits_queues);
 	}
 
-	OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
+	kmem_cache_free(ldlm_resource_slab, res);
 }
 
 /**

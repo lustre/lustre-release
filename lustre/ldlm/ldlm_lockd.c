@@ -40,6 +40,7 @@
 #include <linux/kthread.h>
 #include <linux/list.h>
 #include <libcfs/libcfs.h>
+#include <libcfs/linux/linux-mem.h>
 #include <lustre_errno.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>
@@ -3372,11 +3373,30 @@ static int ldlm_cleanup(void)
 	RETURN(0);
 }
 
+void ldlm_resource_init_once(void *p)
+{
+	/*
+	 * It is import to initialise the spinlock only once,
+	 * as ldlm_lock_change_resource() could try to lock
+	 * the resource *after* it has been freed and possibly
+	 * reused. SLAB_TYPESAFE_BY_RCU ensures the memory won't
+	 * be freed while the lock is being taken, but we need to
+	 * ensure that it doesn't get reinitialized either.
+	 */
+	struct ldlm_resource *res = p;
+
+	memset(res, 0, sizeof(*res));
+	mutex_init(&res->lr_lvb_mutex);
+	spin_lock_init(&res->lr_lock);
+}
+
 int ldlm_init(void)
 {
 	ldlm_resource_slab = kmem_cache_create("ldlm_resources",
 					       sizeof(struct ldlm_resource), 0,
-					       SLAB_HWCACHE_ALIGN, NULL);
+					       SLAB_TYPESAFE_BY_RCU |
+					       SLAB_HWCACHE_ALIGN,
+					       ldlm_resource_init_once);
 	if (ldlm_resource_slab == NULL)
 		return -ENOMEM;
 
@@ -3436,6 +3456,13 @@ void ldlm_exit(void)
 {
 	if (ldlm_refcount)
 		CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
+	/* These two lines should not be needed, but appear to fix
+	 * a crash on RHEL7. The slab_cache sometimes gets freed before the
+	 * last slab is rcu_freed, and that can cause kmem_freepages()
+	 * to free too many pages and trip a BUG
+	 */
+	kmem_cache_shrink(ldlm_resource_slab);
+	synchronize_rcu();
 	kmem_cache_destroy(ldlm_resource_slab);
 	/*
 	 * ldlm_lock_put() use RCU to call ldlm_lock_free, so need call

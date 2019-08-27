@@ -45,6 +45,10 @@
 # include <linux/mm_inline.h>
 #endif
 
+#ifndef SLAB_TYPESAFE_BY_RCU
+#define SLAB_TYPESAFE_BY_RCU SLAB_DESTROY_BY_RCU
+#endif
+
 /*
  * Shrinker
  */

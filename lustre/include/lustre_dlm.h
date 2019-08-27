@@ -736,15 +736,12 @@ struct ldlm_lock {
 	 */
 	struct portals_handle	l_handle;
 	/**
-	 * Internal spinlock protects l_resource.  We should hold this lock
-	 * first before taking res_lock.
-	 */
-	spinlock_t		l_lock;
-	/**
 	 * Pointer to actual resource this lock is in.
-	 * ldlm_lock_change_resource() can change this.
+	 * ldlm_lock_change_resource() can change this on the client.
+	 * When this is possible, rcu must be used to stablise
+	 * the resource while we lock and check it hasn't been changed.
 	 */
-	struct ldlm_resource	*l_resource;
+	struct ldlm_resource __rcu *l_resource;
 	/**
 	 * List item for client side LRU list.
 	 * Protected by ns_lock in struct ldlm_namespace.
