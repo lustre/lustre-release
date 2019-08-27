@@ -24,7 +24,7 @@ BASELINE_FS=${BASELINE_FS:-"ext4"}
 # SLES does not support read-write access to an ext4 file system by default
 [[ -e /etc/SuSE-release ]] && BASELINE_FS=ext3
 
-if [[ $(facet_fstype $SINGLEMDS) = zfs ]]; then
+if [[ "$mds1_FSTYPE" = zfs ]]; then
 	BASELINE_FS=zfs
 	! which $ZFS $ZPOOL >/dev/null 2>&1 &&
 		skip_env "need $ZFS and $ZPOOL commands"

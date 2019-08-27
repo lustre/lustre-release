@@ -11,7 +11,7 @@ init_logging
 # bug number for skipped test:  LU-9429
      ALWAYS_EXCEPT="            parallel_grouplock  $PARALLEL_SCALE_EXCEPT "
 
-if [ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ]; then
+if [ "$mds1_FSTYPE" = zfs -o "$ost1_FSTYPE" = zfs ]; then
 	ZFSSLOW=$SLOW
 	SLOW=no
 
@@ -181,7 +181,8 @@ test_xdd () {
 }
 run_test xdd "xdd"
 
-[ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ] &&
+# If necessary, return SLOW to its original value
+[ "$mds1_FSTYPE" = zfs -o "$ost1_FSTYPE" = zfs ] &&
 	SLOW=$ZFSSLOW
 
 complete $SECONDS

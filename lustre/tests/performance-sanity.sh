@@ -36,13 +36,13 @@ run_test 3 "small file create/open/delete ======"
 
 # mdsrate-create-large
 test_4() {
-    # LU-2600/LU-4108 - Decrease load on zfs
-    [ "$SLOW" = no -a $(facet_fstype $SINGLEMDS) = zfs ] &&
-	NUM_FILES=10000
-    echo "Large file creation performance"
-    bash mdsrate-create-large.sh
+	# LU-2600/LU-4108 - Decrease load on zfs
+	[ "$SLOW" = no -a "$mds1_FSTYPE" = zfs ] &&
+		NUM_FILES=10000
+	echo "Large file creation performance"
+	bash mdsrate-create-large.sh
 }
-run_test 4 "large file create/open/delete ======"
+run_test 4 "large file create/open/delete"
 
 # mdsrate-lookup-1dir
 test_5() {
