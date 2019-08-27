@@ -1453,6 +1453,14 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 	return res;
 }
 
+static void __ldlm_resource_free(struct rcu_head *head)
+{
+	struct ldlm_resource *res = container_of(head, struct ldlm_resource,
+						 lr_rcu);
+
+	OBD_SLAB_FREE_PTR(res, ldlm_resource_slab);
+}
+
 static void ldlm_resource_free(struct ldlm_resource *res)
 {
 	if (res->lr_type == LDLM_EXTENT) {
@@ -1464,7 +1472,7 @@ static void ldlm_resource_free(struct ldlm_resource *res)
 			OBD_FREE_PTR(res->lr_ibits_queues);
 	}
 
-	OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
+	call_rcu(&res->lr_rcu, __ldlm_resource_free);
 }
 
 /**

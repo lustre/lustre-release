@@ -3463,6 +3463,7 @@ void ldlm_exit(void)
 {
 	if (ldlm_refcount)
 		CERROR("ldlm_refcount is %d in ldlm_exit!\n", ldlm_refcount);
+	synchronize_rcu();
 	kmem_cache_destroy(ldlm_resource_slab);
 	/*
 	 * ldlm_lock_put() use RCU to call ldlm_lock_free, so need call
