@@ -2373,6 +2373,142 @@ test_27H() {
 }
 run_test 27H "Set specific OSTs stripe"
 
+test_27M() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.12.57) ]] &&
+		skip "Need MDS version >= than 2.12.57"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "need > 1 OST"
+
+	test_mkdir $DIR/$tdir
+
+	# Set default striping on directory
+	$LFS setstripe -C 4 $DIR/$tdir
+
+	echo 1 > $DIR/$tdir/${tfile}.1
+	local count=$($LFS getstripe -c $DIR/$tdir/${tfile}.1)
+	local setcount=4
+	[ $count -eq $setcount ] ||
+		error "(1) stripe count $count, should be $setcount"
+
+	# Capture existing append_stripe_count setting for restore
+	local orig_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
+	local mdts=$(comma_list $(mdts_nodes))
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=$orig_count" EXIT
+
+	local appendcount=$orig_count
+	echo 1 >> $DIR/$tdir/${tfile}.2_append
+	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.2_append)
+	[ $count -eq $appendcount ] ||
+		error "(2)stripe count $count, should be $appendcount for append"
+
+	# Disable O_APPEND striping, verify it works
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=0
+
+	# Should now get the default striping, which is 4
+	setcount=4
+	echo 1 >> $DIR/$tdir/${tfile}.3_append
+	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.3_append)
+	[ $count -eq $setcount ] ||
+		error "(3) stripe count $count, should be $setcount"
+
+	# Try changing the stripe count for append files
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=2
+
+	# Append striping is now 2 (directory default is still 4)
+	appendcount=2
+	echo 1 >> $DIR/$tdir/${tfile}.4_append
+	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.4_append)
+	[ $count -eq $appendcount ] ||
+		error "(4) stripe count $count, should be $appendcount for append"
+
+	# Test append stripe count of -1
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=-1
+	appendcount=$OSTCOUNT
+	echo 1 >> $DIR/$tdir/${tfile}.5
+	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.5)
+	[ $count -eq $appendcount ] ||
+		error "(5) stripe count $count, should be $appendcount for append"
+
+	# Set append striping back to default of 1
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=1
+
+	# Try a new default striping, PFL + DOM
+	$LFS setstripe -L mdt -E 1M -E -1 -c 2 $DIR/$tdir
+
+	# Create normal DOM file, DOM returns stripe count == 0
+	setcount=0
+	touch $DIR/$tdir/${tfile}.6
+	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.6)
+	[ $count -eq $setcount ] ||
+		error "(6) stripe count $count, should be $setcount"
+
+	# Show
+	appendcount=1
+	echo 1 >> $DIR/$tdir/${tfile}.7_append
+	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.7_append)
+	[ $count -eq $appendcount ] ||
+		error "(7) stripe count $count, should be $appendcount for append"
+
+	# Clean up DOM layout
+	$LFS setstripe -d $DIR/$tdir
+
+	# Now test that append striping works when layout is from root
+	$LFS setstripe -c 2 $MOUNT
+	# Make a special directory for this
+	mkdir $DIR/${tdir}/${tdir}.2
+	stack_trap "$LFS setstripe -d $MOUNT" EXIT
+
+	# Verify for normal file
+	setcount=2
+	echo 1 > $DIR/${tdir}/${tdir}.2/${tfile}.8
+	count=$($LFS getstripe -c $DIR/$tdir/${tdir}.2/${tfile}.8)
+	[ $count -eq $setcount ] ||
+		error "(8) stripe count $count, should be $setcount"
+
+	appendcount=1
+	echo 1 >> $DIR/${tdir}/${tdir}.2/${tfile}.9_append
+	count=$($LFS getstripe -c $DIR/${tdir}/${tdir}.2/${tfile}.9_append)
+	[ $count -eq $appendcount ] ||
+		error "(9) stripe count $count, should be $appendcount for append"
+
+	# Now test O_APPEND striping with pools
+	do_nodes $mdts $LCTL set_param mdd.*.append_pool="$TESTNAME"
+	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_pool='none'" EXIT
+
+	# Create the pool
+	pool_add $TESTNAME || error "pool creation failed"
+	pool_add_targets $TESTNAME 0 1 || error "Pool add targets failed"
+
+	echo 1 >> $DIR/$tdir/${tfile}.10_append
+
+	pool=$($LFS getstripe -p $DIR/$tdir/${tfile}.10_append)
+	[ "$pool" = "$TESTNAME" ] || error "(10) incorrect pool: $pool"
+
+	# Check that count is still correct
+	appendcount=1
+	echo 1 >> $DIR/$tdir/${tfile}.11_append
+	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.11_append)
+	[ $count -eq $appendcount ] ||
+		error "(11) stripe count $count, should be $appendcount for append"
+
+	# Disable O_APPEND stripe count, verify pool works separately
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=0
+
+	echo 1 >> $DIR/$tdir/${tfile}.12_append
+
+	pool=$($LFS getstripe -p $DIR/$tdir/${tfile}.12_append)
+	[ "$pool" = "$TESTNAME" ] || error "(12) incorrect pool: $pool"
+
+	# Remove pool setting, verify it's not applied
+	do_nodes $mdts $LCTL set_param mdd.*.append_pool='none'
+
+	echo 1 >> $DIR/$tdir/${tfile}.13_append
+
+	pool=$($LFS getstripe -p $DIR/$tdir/${tfile}.13_append)
+	[ "$pool" = "" ] || error "(13) pool found: $pool"
+}
+run_test 27M "test O_APPEND striping"
+
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
 test_28() { # bug 2091

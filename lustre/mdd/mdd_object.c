@@ -2949,6 +2949,7 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 			  struct dt_allocation_hint *hint)
 {
 	struct dt_object *np = parent ?  mdd_object_child(parent) : NULL;
+	struct mdd_device *mdd = mdd_obj2mdd_dev(child);
 	struct dt_object *nc = mdd_object_child(child);
 
 	memset(hint, 0, sizeof(*hint));
@@ -2962,6 +2963,19 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 	} else {
 		hint->dah_eadata = NULL;
 		hint->dah_eadata_len = 0;
+		if (spec->sp_cr_flags & MDS_OPEN_APPEND) {
+			if (mdd->mdd_append_stripe_count != 0 ||
+			    mdd->mdd_append_pool[0])
+				CDEBUG(D_INFO,
+				       "using O_APPEND file striping\n");
+			if (mdd->mdd_append_stripe_count)
+				hint->dah_append_stripes =
+					mdd->mdd_append_stripe_count;
+			if (mdd->mdd_append_pool[0])
+				hint->dah_append_pool = mdd->mdd_append_pool;
+		} else {
+			hint->dah_append_stripes = 0;
+		}
 	}
 
 	CDEBUG(D_INFO, DFID" eadata %p len %d\n", PFID(mdd_object_fid(child)),

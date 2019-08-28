@@ -378,6 +378,8 @@ struct dt_allocation_hint {
 	const void		*dah_eadata;
 	int			dah_eadata_len;
 	__u32			dah_mode;
+	int			dah_append_stripes;
+	char			*dah_append_pool;
 };
 
 /**
