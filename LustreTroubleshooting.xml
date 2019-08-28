@@ -655,31 +655,49 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
 </screen>
     </section>
     <section remap="h3">
-      <title>Handling/Debugging &quot;LustreError: xxx went back in time&quot;</title>
-      <para>Each time the Lustre software changes the state of the disk file system, it records a
-        unique transaction number. Occasionally, when committing these transactions to the disk, the
-        last committed transaction number displays to other nodes in the cluster to assist the
-        recovery. Therefore, the promised transactions remain absolutely safe on the disappeared
-        disk.</para>
+      <title xml:id="went_back_in_time">Handling/Debugging &quot;LustreError: xxx went back in time&quot;</title>
+      <para>Each time the MDS or OSS modifies the state of the MDT or OST disk
+      filesystem for a client, it records a per-target increasing transaction
+      number for the operation and returns it to the client along with the
+      reply to that operation. Periodically, when the server commits these
+      transactions to disk, the <literal>last_committed</literal> transaction
+      number is returned to the client to allow it to discard pending operations
+      from memory, as they will no longer be needed for recovery in case of
+      server failure.</para>
+      <para>In some cases error messages similar to the following have
+      been observed after a server was restarted or failed over:</para>
+      <screen>
+LustreError: 3769:0:(import.c:517:ptlrpc_connect_interpret())
+testfs-ost12_UUID went back in time (transno 831 was previously committed,
+server now claims 791)!
+      </screen>
       <para>This situation arises when:</para>
       <itemizedlist>
         <listitem>
-          <para>You are using a disk device that claims to have data written to disk before it
-            actually does, as in case of a device with a large cache. If that disk device crashes or
-            loses power in a way that causes the loss of the cache, there can be a loss of
-            transactions that you believe are committed. This is a very serious event, and you
-            should run e2fsck against that storage before restarting the Lustre file system.</para>
+          <para>You are using a disk device that claims to have data written
+	  to disk before it actually does, as in case of a device with a large
+	  cache. If that disk device crashes or loses power in a way that
+	  causes the loss of the cache, there can be a loss of transactions
+	  that you believe are committed. This is a very serious event, and
+	  you should run e2fsck against that storage before restarting the
+	  Lustre file system.</para>
         </listitem>
         <listitem>
-          <para>As required by the Lustre software, the shared storage used for failover is
-            completely cache-coherent. This ensures that if one server takes over for another, it
-            sees the most up-to-date and accurate copy of the data. In case of the failover of the
-            server, if the shared storage does not provide cache coherency between all of its ports,
-            then the Lustre software can produce an error.</para>
+          <para>As required by the Lustre software, the shared storage used
+	  for failover is completely cache-coherent. This ensures that if one
+	  server takes over for another, it sees the most up-to-date and
+	  accurate copy of the data. In case of the failover of the server,
+	  if the shared storage does not provide cache coherency between all
+	  of its ports, then the Lustre software can produce an error.</para>
         </listitem>
       </itemizedlist>
-      <para>If you know the exact reason for the error, then it is safe to proceed with no further action. If you do not know the reason, then this is a serious issue and you should explore it with your disk vendor.</para>
-      <para>If the error occurs during failover, examine your disk cache settings. If it occurs after a restart without failover, try to determine how the disk can report that a write succeeded, then lose the Data Device corruption or Disk Errors.</para>
+      <para>If you know the exact reason for the error, then it is safe to
+      proceed with no further action. If you do not know the reason, then this
+      is a serious issue and you should explore it with your disk vendor.</para>
+      <para>If the error occurs during failover, examine your disk cache
+      settings. If it occurs after a restart without failover, try to
+      determine how the disk can report that a write succeeded, then lose the
+      Data Device corruption or Disk Errors.</para>
     </section>
     <section remap="h3">
       <title>Lustre Error: &quot;<literal>Slow Start_Page_Write</literal>&quot;</title>
