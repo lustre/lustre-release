@@ -1187,22 +1187,24 @@ static int __ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 	ldlm_namespace_cleanup(ns, force ? LDLM_FL_LOCAL_ONLY : 0);
 
 	if (atomic_read(&ns->ns_bref) > 0) {
-		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 		int rc;
 		CDEBUG(D_DLMTRACE,
 		       "dlm namespace %s free waiting on refcount %d\n",
 		       ldlm_ns_name(ns), atomic_read(&ns->ns_bref));
 force_wait:
 		if (force)
-			lwi = LWI_TIMEOUT(cfs_time_seconds(1) / 4,
-					  NULL, NULL);
-
-		rc = l_wait_event(ns->ns_waitq,
-				  atomic_read(&ns->ns_bref) == 0, &lwi);
+			rc = wait_event_idle_timeout(
+				ns->ns_waitq,
+				atomic_read(&ns->ns_bref) == 0,
+				cfs_time_seconds(1) / 4);
+		else
+			rc = l_wait_event_abortable(
+				ns->ns_waitq, atomic_read(&ns->ns_bref) == 0);
 
 		/* Forced cleanups should be able to reclaim all references,
 		 * so it's safe to wait forever... we can't leak locks... */
-		if (force && rc == -ETIMEDOUT) {
+		if (force && rc == 0) {
+			rc = -ETIMEDOUT;
 			LCONSOLE_ERROR("Forced cleanup waiting for %s "
 				       "namespace with %d resources in use, "
 				       "(rc=%d)\n", ldlm_ns_name(ns),
