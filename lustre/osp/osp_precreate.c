@@ -1394,22 +1394,6 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 	return 0;
 }
 
-static int osp_precreate_timeout_condition(void *data)
-{
-	struct osp_device *d = data;
-
-	CDEBUG(D_HA, "%s: slow creates, last="DFID", next="DFID", "
-	      "reserved=%llu, sync_changes=%u, "
-	      "sync_rpcs_in_progress=%d, status=%d\n",
-	      d->opd_obd->obd_name, PFID(&d->opd_pre_last_created_fid),
-	      PFID(&d->opd_pre_used_fid), d->opd_pre_reserved,
-	      atomic_read(&d->opd_sync_changes),
-	      atomic_read(&d->opd_sync_rpcs_in_progress),
-	      d->opd_pre_status);
-
-	return 1;
-}
-
 /**
  * Reserve object in precreate pool
  *
@@ -1437,7 +1421,6 @@ static int osp_precreate_timeout_condition(void *data)
 int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 {
 	time64_t expire = ktime_get_seconds() + obd_timeout;
-	struct l_wait_info lwi;
 	int precreated, rc, synced = 0;
 
 	ENTRY;
@@ -1517,15 +1500,26 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		/* XXX: don't wake up if precreation is in progress */
 		wake_up(&d->opd_pre_waitq);
 
-		lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
-				  osp_precreate_timeout_condition, d);
 		if (ktime_get_seconds() >= expire) {
 			rc = -ETIMEDOUT;
 			break;
 		}
 
-		l_wait_event(d->opd_pre_user_waitq,
-			     osp_precreate_ready_condition(env, d), &lwi);
+		if (wait_event_idle_timeout(
+			    d->opd_pre_user_waitq,
+			    osp_precreate_ready_condition(env, d),
+			    cfs_time_seconds(obd_timeout)) == 0) {
+			CDEBUG(D_HA,
+			       "%s: slow creates, last="DFID", next="DFID", "
+			       "reserved=%llu, sync_changes=%u, "
+			       "sync_rpcs_in_progress=%d, status=%d\n",
+			       d->opd_obd->obd_name,
+			       PFID(&d->opd_pre_last_created_fid),
+			       PFID(&d->opd_pre_used_fid), d->opd_pre_reserved,
+			       atomic_read(&d->opd_sync_changes),
+			       atomic_read(&d->opd_sync_rpcs_in_progress),
+			       d->opd_pre_status);
+		}
 	}
 
 	RETURN(rc);

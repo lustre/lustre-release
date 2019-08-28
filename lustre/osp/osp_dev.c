@@ -779,11 +779,6 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	RETURN(0);
 }
 
-static int osp_sync_timeout(void *data)
-{
-	return 1;
-}
-
 /**
  * Implementation of dt_device_operations::dt_sync
  *
@@ -799,7 +794,6 @@ static int osp_sync_timeout(void *data)
 static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 {
 	struct osp_device *d = dt2osp_dev(dev);
-	struct l_wait_info lwi = { 0 };
 	time64_t start = ktime_get_seconds();
 	int recs, rc = 0;
 	u64 old;
@@ -824,10 +818,15 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	       atomic_read(&d->opd_async_updates_count));
 
 	/* make sure the connection is fine */
-	lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout), osp_sync_timeout, d);
-	rc = l_wait_event(d->opd_sync_barrier_waitq,
-			  atomic_read(&d->opd_async_updates_count) == 0,
-			  &lwi);
+	rc = wait_event_idle_timeout(
+		d->opd_sync_barrier_waitq,
+		atomic_read(&d->opd_async_updates_count) == 0,
+		cfs_time_seconds(obd_timeout));
+	if (rc > 0)
+		rc = 0;
+	else if (rc == 0)
+		rc = -ETIMEDOUT;
+
 	up_write(&d->opd_async_updates_rwsem);
 	if (rc != 0)
 		GOTO(out, rc);
@@ -838,11 +837,11 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	while (atomic64_read(&d->opd_sync_processed_recs) < old + recs) {
 		__u64 last = atomic64_read(&d->opd_sync_processed_recs);
 		/* make sure the connection is fine */
-		lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
-				  osp_sync_timeout, d);
-		l_wait_event(d->opd_sync_barrier_waitq,
-			     atomic64_read(&d->opd_sync_processed_recs)
-			     >= old + recs, &lwi);
+		wait_event_idle_timeout(
+			d->opd_sync_barrier_waitq,
+			atomic64_read(&d->opd_sync_processed_recs)
+			     >= old + recs,
+			cfs_time_seconds(obd_timeout));
 
 		if (atomic64_read(&d->opd_sync_processed_recs) >= old + recs)
 			break;
@@ -870,11 +869,10 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	while (atomic_read(&d->opd_sync_rpcs_in_flight) > 0) {
 		old = atomic_read(&d->opd_sync_rpcs_in_flight);
 
-		lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
-				  osp_sync_timeout, d);
-		l_wait_event(d->opd_sync_barrier_waitq,
-			     atomic_read(&d->opd_sync_rpcs_in_flight) == 0,
-			     &lwi);
+		wait_event_idle_timeout(
+			d->opd_sync_barrier_waitq,
+			atomic_read(&d->opd_sync_rpcs_in_flight) == 0,
+			cfs_time_seconds(obd_timeout));
 
 		if (atomic_read(&d->opd_sync_rpcs_in_flight) == 0)
 			break;
