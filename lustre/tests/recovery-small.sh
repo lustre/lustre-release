@@ -10,12 +10,10 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT"
-if [ "$MDSCOUNT" -gt "1" ]; then
-	# bug number for skipped test: LU-10931
-	ALWAYS_EXCEPT+="               136"
-	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-fi
+ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT "
+# bug number for skipped test:
+ALWAYS_EXCEPT+="               "
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 require_dsh_mds || exit 0
 
