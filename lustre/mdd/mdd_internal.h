@@ -150,6 +150,8 @@ struct mdd_device {
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
 	unsigned int			 mdd_sync_permission;
 	int				 mdd_connects;
+	int				 mdd_append_stripe_count;
+	char				 mdd_append_pool[LOV_MAXPOOLNAME + 1];
 	struct local_oid_storage	*mdd_los;
 	struct mdd_generic_thread	 mdd_orphan_cleanup_thread;
 	struct kobject			 mdd_kobj;

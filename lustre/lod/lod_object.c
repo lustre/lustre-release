@@ -1076,12 +1076,16 @@ static int lod_attr_get(const struct lu_env *env,
 }
 
 static inline void lod_adjust_stripe_info(struct lod_layout_component *comp,
-					  struct lov_desc *desc)
+					  struct lov_desc *desc,
+					  int append_stripes)
 {
 	if (comp->llc_pattern != LOV_PATTERN_MDT) {
-		if (!comp->llc_stripe_count)
+		if (append_stripes) {
+			comp->llc_stripe_count = append_stripes;
+		} else if (!comp->llc_stripe_count) {
 			comp->llc_stripe_count =
 				desc->ld_default_stripe_count;
+		}
 	}
 	if (comp->llc_stripe_size <= 0)
 		comp->llc_stripe_size = desc->ld_default_stripe_size;
@@ -2804,7 +2808,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
-		lod_adjust_stripe_info(lod_comp, desc);
+		lod_adjust_stripe_info(lod_comp, desc, 0);
 
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
 			v3 = (struct lov_user_md_v3 *) v1;
@@ -4463,7 +4467,8 @@ out:
 
 static int lod_get_default_lov_striping(const struct lu_env *env,
 					struct lod_object *lo,
-					struct lod_default_striping *lds);
+					struct lod_default_striping *lds,
+					struct dt_allocation_hint *ah);
 /**
  * Implementation of dt_object_operations::do_xattr_set.
  *
@@ -4519,7 +4524,8 @@ static int lod_xattr_set(const struct lu_env *env,
 		bool is_del;
 
 		/* get existing striping config */
-		rc = lod_get_default_lov_striping(env, lod_dt_obj(dt), lds);
+		rc = lod_get_default_lov_striping(env, lod_dt_obj(dt), lds,
+						  NULL);
 		if (rc)
 			RETURN(rc);
 
@@ -4798,7 +4804,8 @@ skip:
  */
 static int lod_get_default_lov_striping(const struct lu_env *env,
 					struct lod_object *lo,
-					struct lod_default_striping *lds)
+					struct lod_default_striping *lds,
+					struct dt_allocation_hint *ah)
 {
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lov_user_md_v1 *v1 = NULL;
@@ -4841,8 +4848,9 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	    v1->lmm_magic != LOV_USER_MAGIC_SPECIFIC)
 		RETURN(-ENOTSUPP);
 
-	if (v1->lmm_magic == LOV_MAGIC_COMP_V1 ||
-	    v1->lmm_magic == LOV_MAGIC_SEL) {
+	if ((v1->lmm_magic == LOV_MAGIC_COMP_V1 ||
+	    v1->lmm_magic == LOV_MAGIC_SEL) &&
+	     !(ah && ah->dah_append_stripes)) {
 		comp_v1 = (struct lov_comp_md_v1 *)v1;
 		comp_cnt = comp_v1->lcm_entry_count;
 		if (comp_cnt == 0)
@@ -4893,19 +4901,24 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 			RETURN(-EINVAL);
 		}
 
-		CDEBUG(D_LAYOUT, DFID" stripe_count=%d stripe_size=%d "
-		       "stripe_offset=%d\n",
+		CDEBUG(D_LAYOUT, DFID" stripe_count=%d stripe_size=%d stripe_offset=%d append_stripes=%d\n",
 		       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
 		       (int)v1->lmm_stripe_count, (int)v1->lmm_stripe_size,
-		       (int)v1->lmm_stripe_offset);
+		       (int)v1->lmm_stripe_offset,
+		       ah ? ah->dah_append_stripes : 0);
 
-		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
+		if (ah && ah->dah_append_stripes)
+			lod_comp->llc_stripe_count = ah->dah_append_stripes;
+		else
+			lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_comp->llc_pattern = v1->lmm_pattern;
 
 		pool = NULL;
-		if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
+		if (ah && ah->dah_append_pool && ah->dah_append_pool[0]) {
+			pool = ah->dah_append_pool;
+		} else if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
 			/* XXX: sanity check here */
 			v3 = (struct lov_user_md_v3 *) v1;
 			if (v3->lmm_pool_name[0] != '\0')
@@ -4987,7 +5000,7 @@ static int lod_get_default_striping(const struct lu_env *env,
 {
 	int rc, rc1;
 
-	rc = lod_get_default_lov_striping(env, lo, lds);
+	rc = lod_get_default_lov_striping(env, lo, lds, NULL);
 	rc1 = lod_get_default_lmv_striping(env, lo, lds);
 	if (rc == 0 && rc1 < 0)
 		rc = rc1;
@@ -5070,7 +5083,7 @@ static void lod_striping_from_default(struct lod_object *lo,
 			if (!lo->ldo_is_composite)
 				continue;
 
-			lod_adjust_stripe_info(obj_comp, desc);
+			lod_adjust_stripe_info(obj_comp, desc, 0);
 		}
 	} else if (lds->lds_dir_def_striping_set && S_ISDIR(mode)) {
 		if (lo->ldo_dir_stripe_count == 0)
@@ -5090,7 +5103,8 @@ static void lod_striping_from_default(struct lod_object *lo,
 	}
 }
 
-static inline bool lod_need_inherit_more(struct lod_object *lo, bool from_root)
+static inline bool lod_need_inherit_more(struct lod_object *lo, bool from_root,
+					 char *append_pool)
 {
 	struct lod_layout_component *lod_comp;
 
@@ -5108,6 +5122,9 @@ static inline bool lod_need_inherit_more(struct lod_object *lo, bool from_root)
 
 	if (from_root && (lod_comp->llc_pool == NULL ||
 			  lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT))
+		return true;
+
+	if (append_pool && append_pool[0])
 		return true;
 
 	return false;
@@ -5143,6 +5160,9 @@ static void lod_ah_init(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(child);
+
+	if (ah->dah_append_stripes == -1)
+		ah->dah_append_stripes = d->lod_desc.ld_tgt_count;
 
 	if (likely(parent)) {
 		nextp = dt_object_child(parent);
@@ -5245,7 +5265,7 @@ static void lod_ah_init(const struct lu_env *env,
 	 * Try from the parent first.
 	 */
 	if (likely(lp != NULL)) {
-		rc = lod_get_default_lov_striping(env, lp, lds);
+		rc = lod_get_default_lov_striping(env, lp, lds, ah);
 		if (rc == 0)
 			lod_striping_from_default(lc, lds, child_mode);
 	}
@@ -5273,8 +5293,10 @@ static void lod_ah_init(const struct lu_env *env,
 	 *  - parent has plain(v1/v3) default layout, and some attributes
 	 *    are not specified in the default layout;
 	 */
-	if (d->lod_md_root != NULL && lod_need_inherit_more(lc, true)) {
-		rc = lod_get_default_lov_striping(env, d->lod_md_root, lds);
+	if (d->lod_md_root != NULL &&
+	    lod_need_inherit_more(lc, true, ah->dah_append_pool)) {
+		rc = lod_get_default_lov_striping(env, d->lod_md_root, lds,
+						  ah);
 		if (rc)
 			goto out;
 		if (lc->ldo_comp_cnt == 0) {
@@ -5305,7 +5327,7 @@ out:
 	 * fs default striping may not be explicitly set, or historically set
 	 * in config log, use them.
 	 */
-	if (lod_need_inherit_more(lc, false)) {
+	if (lod_need_inherit_more(lc, false, ah->dah_append_pool)) {
 		if (lc->ldo_comp_cnt == 0) {
 			rc = lod_alloc_comp_entries(lc, 0, 1);
 			if (rc)
@@ -5319,7 +5341,9 @@ out:
 		LASSERT(!lc->ldo_is_composite);
 		lod_comp = &lc->ldo_comp_entries[0];
 		desc = &d->lod_desc;
-		lod_adjust_stripe_info(lod_comp, desc);
+		lod_adjust_stripe_info(lod_comp, desc, ah->dah_append_stripes);
+		if (ah->dah_append_pool && ah->dah_append_pool[0])
+			lod_obj_set_pool(lc, 0, ah->dah_append_pool);
 	}
 
 	EXIT;

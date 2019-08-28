@@ -533,6 +533,117 @@ static int mdd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 }
 LDEBUGFS_SEQ_FOPS_RO(mdd_lfsck_layout);
 
+/**
+ * Show default number of stripes for O_APPEND files.
+ *
+ * \param[in] m		seq file
+ * \param[in] v		unused for single entry
+ *
+ * \retval 0		on success,
+ * \retval negative	error code if failed
+ */
+static ssize_t append_stripe_count_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", mdd->mdd_append_stripe_count);
+}
+
+/**
+ * Set default number of stripes for O_APPEND files.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string containing the default number of stripes
+ *			for new files
+ * \param[in] count	@buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval @count	on success
+ * \retval negative	error code otherwise
+ */
+static ssize_t append_stripe_count_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+	int stripe_count;
+	int rc;
+
+	rc = kstrtoint(buffer, 0, &stripe_count);
+	if (rc)
+		return rc;
+
+	if (stripe_count < -1)
+		return -ERANGE;
+
+	mdd->mdd_append_stripe_count = stripe_count;
+
+	return count;
+}
+LUSTRE_RW_ATTR(append_stripe_count);
+
+/**
+ * Show default OST pool for O_APPEND files.
+ *
+ * \param[in] kobject	proc object
+ * \param[in] attribute proc attribute
+ * \param[in] buf	output buffer
+ *
+ * \retval 0		on success,
+ * \retval negative	error code if failed
+ */
+static ssize_t append_pool_show(struct kobject *kobj,
+				struct attribute *attr, char *buf)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+
+	return snprintf(buf, LOV_MAXPOOLNAME + 1, "%s\n", mdd->mdd_append_pool);
+}
+
+/**
+ * Set default OST pool for O_APPEND files.
+ *
+ * \param[in] kobject	proc object
+ * \param[in] attribute proc attribute
+ * \param[in] buffer	user inputted pool name
+ * \param[in] count	@buffer length
+ *
+ * \retval @count	on success
+ * \retval negative	error code otherwise
+ */
+static ssize_t append_pool_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
+{
+	struct mdd_device *mdd = container_of(kobj, struct mdd_device,
+					      mdd_kobj);
+
+	if (!count || count > LOV_MAXPOOLNAME + 1)
+		return -EINVAL;
+
+	/* clear previous value */
+	memset(mdd->mdd_append_pool, 0, LOV_MAXPOOLNAME + 1);
+
+	/* entering "none" clears the pool, otherwise copy the new pool */
+	if (strncmp("none", buffer, 4)) {
+		memcpy(mdd->mdd_append_pool, buffer, count);
+
+		/* Trim the trailing '\n' if any */
+		if (mdd->mdd_append_pool[count - 1] == '\n') {
+			/* Don't echo just a newline */
+			if (count == 1)
+				return -EINVAL;
+			mdd->mdd_append_pool[count - 1] = 0;
+		}
+	}
+
+	return count;
+}
+LUSTRE_RW_ATTR(append_pool);
+
 static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
 	{ .name =	"changelog_mask",
 	  .fops =	&mdd_changelog_mask_fops	},
@@ -558,6 +669,8 @@ static struct attribute *mdd_attrs[] = {
 	&lustre_attr_lfsck_async_windows.attr,
 	&lustre_attr_lfsck_speed_limit.attr,
 	&lustre_attr_sync_permission.attr,
+	&lustre_attr_append_stripe_count.attr,
+	&lustre_attr_append_pool.attr,
 	NULL,
 };
 
