@@ -328,39 +328,39 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 			GOTO(out, rc);
 	}
 
-        /* Check if reconnect is already in progress */
+	/* Check if reconnect is already in progress */
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state != LUSTRE_IMP_DISCON) {
 		imp->imp_force_verify = 1;
 		rc = -EALREADY;
 	}
 	spin_unlock(&imp->imp_lock);
-        if (rc)
-                GOTO(out, rc);
+	if (rc)
+		GOTO(out, rc);
 
 	OBD_RACE(OBD_FAIL_PTLRPC_CONNECT_RACE);
 
-        rc = ptlrpc_connect_import(imp);
-        if (rc)
-                GOTO(out, rc);
+	rc = ptlrpc_connect_import(imp);
+	if (rc)
+		GOTO(out, rc);
 
-        if (!async) {
-                struct l_wait_info lwi;
+	if (!async) {
+		struct l_wait_info lwi;
 		long secs = cfs_time_seconds(obd_timeout);
 
 		CDEBUG(D_HA, "%s: recovery started, waiting %lu seconds\n",
-                       obd2cli_tgt(imp->imp_obd), secs);
+		       obd2cli_tgt(imp->imp_obd), secs);
 
-                lwi = LWI_TIMEOUT(secs, NULL, NULL);
-                rc = l_wait_event(imp->imp_recovery_waitq,
-                                  !ptlrpc_import_in_recovery(imp), &lwi);
-                CDEBUG(D_HA, "%s: recovery finished\n",
-                       obd2cli_tgt(imp->imp_obd));
-        }
-        EXIT;
+		lwi = LWI_TIMEOUT(secs, NULL, NULL);
+		rc = l_wait_event(imp->imp_recovery_waitq,
+				  !ptlrpc_import_in_recovery(imp), &lwi);
+		CDEBUG(D_HA, "%s: recovery finished\n",
+		       obd2cli_tgt(imp->imp_obd));
+	}
+	EXIT;
 
 out:
-        return rc;
+	return rc;
 }
 EXPORT_SYMBOL(ptlrpc_recover_import);
 
