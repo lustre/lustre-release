@@ -654,8 +654,8 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
 0xe74021a4b41b954e from nid 0x7f000001 (0:127.0.0.1)
 </screen>
     </section>
-    <section remap="h3">
-      <title xml:id="went_back_in_time">Handling/Debugging &quot;LustreError: xxx went back in time&quot;</title>
+    <section remap="h3" xml:id="went_back_in_time">
+      <title>Handling/Debugging &quot;LustreError: xxx went back in time&quot;</title>
       <para>Each time the MDS or OSS modifies the state of the MDT or OST disk
       filesystem for a client, it records a per-target increasing transaction
       number for the operation and returns it to the client along with the
