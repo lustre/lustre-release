@@ -1229,49 +1229,49 @@ void ll_put_super(struct super_block *sb)
 	params_cfg.cfg_instance = cfg_instance;
 	lustre_end_log(sb, PARAMS_FILENAME, &params_cfg);
 
-        if (sbi->ll_md_exp) {
-                obd = class_exp2obd(sbi->ll_md_exp);
-                if (obd)
-                        force = obd->obd_force;
-        }
+	if (sbi->ll_md_exp) {
+		obd = class_exp2obd(sbi->ll_md_exp);
+		if (obd)
+			force = obd->obd_force;
+	}
 
 	/* Wait for unstable pages to be committed to stable storage */
 	if (force == 0) {
 		struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 		rc = l_wait_event(sbi->ll_cache->ccc_unstable_waitq,
-			atomic_long_read(&sbi->ll_cache->ccc_unstable_nr) == 0,
-			&lwi);
+				  atomic_long_read(&sbi->ll_cache->ccc_unstable_nr) == 0,
+				  &lwi);
 	}
 
 	ccc_count = atomic_long_read(&sbi->ll_cache->ccc_unstable_nr);
 	if (force == 0 && rc != -EINTR)
 		LASSERTF(ccc_count == 0, "count: %li\n", ccc_count);
 
-        /* We need to set force before the lov_disconnect in
-           lustre_common_put_super, since l_d cleans up osc's as well. */
-        if (force) {
-                next = 0;
-                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid,
-                                                     &next)) != NULL) {
-                        obd->obd_force = force;
-                }
-        }
+	/* We need to set force before the lov_disconnect in
+	 * lustre_common_put_super, since l_d cleans up osc's as well.
+	 */
+	if (force) {
+		next = 0;
+		while ((obd = class_devices_in_group(&sbi->ll_sb_uuid,
+						     &next)) != NULL) {
+			obd->obd_force = force;
+		}
+	}
 
 	if (sbi->ll_client_common_fill_super_succeeded) {
 		/* Only if client_common_fill_super succeeded */
 		client_common_put_super(sb);
 	}
 
-        next = 0;
-        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
-                class_manual_cleanup(obd);
-        }
+	next = 0;
+	while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)))
+		class_manual_cleanup(obd);
 
-        if (sbi->ll_flags & LL_SBI_VERBOSE)
-                LCONSOLE_WARN("Unmounted %s\n", profilenm ? profilenm : "");
+	if (sbi->ll_flags & LL_SBI_VERBOSE)
+		LCONSOLE_WARN("Unmounted %s\n", profilenm ? profilenm : "");
 
-        if (profilenm)
-                class_del_profile(profilenm);
+	if (profilenm)
+		class_del_profile(profilenm);
 
 #ifndef HAVE_SUPER_SETUP_BDI_NAME
 	if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
@@ -1280,8 +1280,8 @@ void ll_put_super(struct super_block *sb)
 	}
 #endif
 
-        ll_free_sbi(sb);
-        lsi->lsi_llsbi = NULL;
+	ll_free_sbi(sb);
+	lsi->lsi_llsbi = NULL;
 out_no_sbi:
 	lustre_common_put_super(sb);
 
