@@ -2317,6 +2317,12 @@ int ptlrpc_reconnect_import(struct obd_import *imp);
  *
  * @{
  */
+#define PTLRPC_MAX_BUFCOUNT \
+	(sizeof(((struct ptlrpc_request *)0)->rq_req_swab_mask) * 8)
+#define MD_MAX_BUFLEN		(MDS_REG_MAXREQSIZE > OUT_MAXREQSIZE ? \
+				 MDS_REG_MAXREQSIZE : OUT_MAXREQSIZE)
+#define PTLRPC_MAX_BUFLEN	(OST_IO_MAXREQSIZE > MD_MAX_BUFLEN ? \
+				 OST_IO_MAXREQSIZE : MD_MAX_BUFLEN)
 bool ptlrpc_buf_need_swab(struct ptlrpc_request *req, const int inout,
 			  __u32 index);
 void ptlrpc_buf_set_swabbed(struct ptlrpc_request *req, const int inout,
