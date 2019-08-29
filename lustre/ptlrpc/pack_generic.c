@@ -772,6 +772,11 @@ char *lustre_msg_string(struct lustre_msg *m, __u32 index, __u32 max_len)
                         "msg %p buffer[%d] len %d\n", m, index, blen);
                 return NULL;
         }
+	if (blen > PTLRPC_MAX_BUFLEN) {
+		CERROR("buffer length of msg %p buffer[%d] is invalid(%d)\n",
+		       m, index, blen);
+		return NULL;
+	}
 
         if (max_len == 0) {
                 if (slen != blen - 1) {
