@@ -2408,13 +2408,13 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
 	if (!ldlm_is_cancel(lock)) {
 		ldlm_set_cancel(lock);
 		if (lock->l_blocking_ast) {
-                        unlock_res_and_lock(lock);
-                        lock->l_blocking_ast(lock, NULL, lock->l_ast_data,
-                                             LDLM_CB_CANCELING);
-                        lock_res_and_lock(lock);
-                } else {
-                        LDLM_DEBUG(lock, "no blocking ast");
-                }
+			unlock_res_and_lock(lock);
+			lock->l_blocking_ast(lock, NULL, lock->l_ast_data,
+					     LDLM_CB_CANCELING);
+			lock_res_and_lock(lock);
+		} else {
+			LDLM_DEBUG(lock, "no blocking ast");
+		}
 
 		/* only canceller can set bl_done bit */
 		ldlm_set_bl_done(lock);

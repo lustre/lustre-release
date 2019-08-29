@@ -647,15 +647,15 @@ static int mgc_requeue_thread(void *data)
 		l_wait_event(rq_waitq, rq_state & (RQ_STOP | RQ_PRECLEANUP),
 			     &lwi);
 
-                /*
-                 * iterate & processing through the list. for each cld, process
-                 * its depending sptlrpc cld firstly (if any) and then itself.
-                 *
-                 * it's guaranteed any item in the list must have
-                 * reference > 0; and if cld_lostlock is set, at
-                 * least one reference is taken by the previous enqueue.
-                 */
-                cld_prev = NULL;
+		/*
+		 * iterate & processing through the list. for each cld, process
+		 * its depending sptlrpc cld firstly (if any) and then itself.
+		 *
+		 * it's guaranteed any item in the list must have
+		 * reference > 0; and if cld_lostlock is set, at
+		 * least one reference is taken by the previous enqueue.
+		 */
+		cld_prev = NULL;
 
 		spin_lock(&config_list_lock);
 		rq_state &= ~RQ_PRECLEANUP;

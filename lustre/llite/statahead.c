@@ -891,7 +891,6 @@ static int ll_agl_thread(void *arg)
 	struct l_wait_info lwi = { 0 };
 	ENTRY;
 
-
 	sai = ll_sai_get(dir);
 	thread = &sai->sai_agl_thread;
 	thread->t_pid = current_pid();
@@ -909,14 +908,13 @@ static int ll_agl_thread(void *arg)
 	spin_unlock(&plli->lli_agl_lock);
 	wake_up(&thread->t_ctl_waitq);
 
-        while (1) {
-                l_wait_event(thread->t_ctl_waitq,
-                             !agl_list_empty(sai) ||
-                             !thread_is_running(thread),
-                             &lwi);
-
+	while (1) {
+		l_wait_event(thread->t_ctl_waitq,
+			     !agl_list_empty(sai) ||
+			     !thread_is_running(thread),
+			     &lwi);
                 if (!thread_is_running(thread))
-                        break;
+			break;
 
 		spin_lock(&plli->lli_agl_lock);
 		/* The statahead thread maybe help to process AGL entries,

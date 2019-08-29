@@ -5356,7 +5356,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 				     struct dt_object *parent,
 				     struct lov_mds_md_v1 *lmm, __u32 comp_id)
 {
-	struct lfsck_thread_info	*info 	 = lfsck_env_info(env);
+	struct lfsck_thread_info	*info	 = lfsck_env_info(env);
 	struct lfsck_instance		*lfsck	 = com->lc_lfsck;
 	struct lfsck_bookmark		*bk	 = &lfsck->li_bookmark_ram;
 	struct lfsck_layout		*lo	 = com->lc_file_ram;
