@@ -1000,8 +1000,8 @@ static void ptlrpc_prepare_replay(struct obd_import *imp)
  * full state for normal operations of disconnect it due to an error.
  */
 static int ptlrpc_connect_interpret(const struct lu_env *env,
-                                    struct ptlrpc_request *request,
-                                    void *data, int rc)
+				    struct ptlrpc_request *request,
+				    void *data, int rc)
 {
 	struct ptlrpc_connect_async_args *aa = data;
 	struct obd_import *imp = request->rq_import;
