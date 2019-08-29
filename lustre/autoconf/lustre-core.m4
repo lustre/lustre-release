@@ -3199,11 +3199,6 @@ LC_MDS_MAX_THREADS
 AC_CHECK_HEADERS([netdb.h endian.h])
 AC_CHECK_FUNCS([gethostbyname])
 
-# lustre/utils/llverdev.c
-AS_IF([test "x$enable_dist" = xno], [
-	PKG_CHECK_MODULES(blkid, [blkid])
-])
-
 # lustre/utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
 
@@ -3219,9 +3214,6 @@ AS_IF([test "$enable_dist" = "no"], [
 ])
 
 SELINUX=""
-AS_IF([test "x$enable_dist" = xno], [
-	PKG_CHECK_MODULES(blkid, [blkid])
-])
 
 AC_CHECK_LIB([selinux], [is_selinux_enabled],
 	[AC_CHECK_HEADERS([selinux/selinux.h],

@@ -84,10 +84,6 @@
 #include <sys/time.h>
 #include <gnu/stubs.h>
 
-#ifdef HAVE_EXT2FS_EXT2FS_H
-#  include <ext2fs/ext2fs.h>
-#endif
-
 #define ONE_MB (1024 * 1024)
 #define ONE_GB (1024 * 1024 * 1024)
 #define HALF_MB (ONE_MB / 2)
@@ -157,23 +153,8 @@ void usage(int status)
  */
 static int open_dev(const char *devname, int mode)
 {
-	int     fd;
-#ifdef HAVE_EXT2FS_EXT2FS_H
-	int     mount_flags;
-	char    mountpt[80] = "";
+	int fd;
 
-	if (ext2fs_check_mount_point(devname, &mount_flags, mountpt,
-				     sizeof(mountpt))) {
-		fprintf(stderr, "%s: ext2fs_check_mount_point failed:%s",
-			progname, strerror(errno));
-		exit(1);
-	}
-	if (mount_flags & EXT2_MF_MOUNTED){
-		fprintf(stderr, "%s: %s is already mounted\n", progname,
-			devname);
-		exit(1);
-	}
-#endif
 	fd = open(devname, mode | O_EXCL | O_LARGEFILE);
 	if (fd < 0) {
 		fprintf(stderr, "%s: Open failed: %s",progname,strerror(errno));
@@ -182,25 +163,13 @@ static int open_dev(const char *devname, int mode)
 	return fd;
 }
 
-#ifdef HAVE_BLKID_BLKID_H
-#include <blkid/blkid.h>
-#endif
 /*
  * sizeof_dev: Returns size of device in bytes
  */
-static loff_t sizeof_dev(int fd)
+static size_t sizeof_dev(int fd)
 {
-	loff_t numbytes;
+	size_t numbytes;
 
-#ifdef HAVE_BLKID_BLKID_H
-	numbytes = blkid_get_dev_size(fd);
-	if (numbytes <= 0) {
-		fprintf(stderr, "%s: blkid_get_dev_size(%s) failed",
-			progname, devname);
-		return 1;
-	}
-	goto out;
-#else
 # if defined BLKGETSIZE64	/* in sys/mount.h */
 	if (ioctl(fd, BLKGETSIZE64, &numbytes) >= 0)
 		goto out;
@@ -226,7 +195,6 @@ static loff_t sizeof_dev(int fd)
 	fprintf(stderr, "%s: unable to determine size of %s\n",
 		progname, devname);
 	return 0;
-#endif
 
 out:
 	if (verbose)
@@ -583,10 +551,10 @@ int main(int argc, char **argv)
 	if (!force && writeoption) {
 		printf("%s: permanently overwrite all data on %s (yes/no)? ",
 		       progname, devname);
-                if (scanf("%3s", yesno) == EOF && ferror(stdin)) {
-                        perror("reading from stdin");
-                        return -1;
-                }
+		if (scanf("%3s", yesno) == EOF && ferror(stdin)) {
+			perror("reading from stdin");
+			return -1;
+		}
 		if (!(strcasecmp("yes", yesno) || strcasecmp("y", yesno))) {
 			printf("Not continuing due to '%s' response", yesno);
 			return 0;

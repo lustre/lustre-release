@@ -90,7 +90,6 @@ EXT2FSLIB =
 endif
 
 llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
-llverdev_LDADD := $(EXT2FSLIB) $(blkid_LIBS)
 
 liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			  liblustreapi_nodemap.c lustreapi_internal.h \
