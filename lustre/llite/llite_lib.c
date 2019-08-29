@@ -809,7 +809,7 @@ void ll_kill_super(struct super_block *sb)
 		/* wait running statahead threads to quit */
 		while (atomic_read(&sbi->ll_sa_running) > 0) {
 			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(1 >> 3));
+			schedule_timeout(cfs_time_seconds(1) >> 3);
 		}
 	}
 

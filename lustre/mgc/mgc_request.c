@@ -641,10 +641,9 @@ static int mgc_requeue_thread(void *data)
 		/* Always wait a few seconds to allow the server who
 		   caused the lock revocation to finish its setup, plus some
 		   random so everyone doesn't try to reconnect at once. */
-		to = cfs_time_seconds(MGC_TIMEOUT_MIN_SECONDS);
+		to = cfs_time_seconds(MGC_TIMEOUT_MIN_SECONDS * 100 + rand);
 		/* rand is centi-seconds */
-		to += cfs_time_seconds(rand) / 100;
-		lwi = LWI_TIMEOUT(to, NULL, NULL);
+		lwi = LWI_TIMEOUT(to / 100, NULL, NULL);
 		l_wait_event(rq_waitq, rq_state & (RQ_STOP | RQ_PRECLEANUP),
 			     &lwi);
 
