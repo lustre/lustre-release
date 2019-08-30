@@ -59,6 +59,9 @@
     <listitem>
       <para><xref linkend="lustremaint.seperateCombinedMGSMDT"/></para>
     </listitem>
+    <listitem>
+      <para><xref linkend="lustremaint.setMDTReadonly"/></para>
+    </listitem>
   </itemizedlist>
   <section xml:id="lustremaint.inactiveOST">
       <title>
@@ -836,5 +839,34 @@ Changing the Address of a Failover Node</title>
 	      <screen>mgs# lctl get_param mgs.MGS.live.<replaceable>filesystem_name</replaceable></screen>
         </listitem>
       </orderedlist>
+    </section>
+    <section xml:id="lustremaint.setMDTReadonly" condition="l2D">
+      <title><indexterm><primary>maintenance</primary>
+        <secondary>set an MDT to readonly</secondary></indexterm>
+        Set an MDT to read-only</title>
+      <para>It is sometimes desirable to be able to mark the filesystem
+      read-only directly on the server, rather than remounting the clients and
+      setting the option there. This can be useful if there is a rogue client
+      that is deleting files, or when decommissioning a system to prevent
+      already-mounted clients from modifying it anymore.</para>
+      <para>Set the <literal>mdt.*.readonly</literal> parameter to
+      <literal>1</literal> to immediately set the MDT to read-only.  All future
+      MDT access will immediately return a "Read-only file system" error
+      (<literal>EROFS</literal>) until the parameter is set to
+      <literal>0</literal> again.</para>
+      <para>Example of setting the <literal>readonly</literal> parameter to
+      <literal>1</literal>, verifying the current setting, accessing from a
+      client, and setting the parameter back to <literal>0</literal>:</para>
+      <screen>mds# lctl set_param mdt.fs-MDT0000.readonly=1
+mdt.fs-MDT0000.readonly=1
+
+mds# lctl get_param mdt.fs-MDT0000.readonly
+mdt.fs-MDT0000.readonly=1
+
+client$ touch test_file
+touch: cannot touch ‘test_file’: Read-only file system
+
+mds# lctl set_param mdt.fs-MDT0000.readonly=0
+mdt.fs-MDT0000.readonly=0</screen>
     </section>
 </chapter>
