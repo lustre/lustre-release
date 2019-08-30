@@ -82,7 +82,7 @@ client_df() {
 cleanup_dirs() {
 	local target=$1
 	local mnt=${2:-$MOUNT}
-	local cmd="rm -rf $mnt/{*.filecount,dir*}"
+	local cmd="rm -rf $mnt/{llverfs,dir}*"
 	do_facet $target "$cmd"
 }
 

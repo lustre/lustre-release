@@ -92,6 +92,31 @@
 #ifdef HAVE_EXT2FS_EXT2FS_H
 #  include <e2p/e2p.h>
 #  include <ext2fs/ext2fs.h>
+#else
+#  ifndef EXT2_TOPDIR_FL
+#    define EXT2_TOPDIR_FL		0x00020000 /* Top of directory tree */
+#  endif
+static int fsetflags(const char *path, unsigned int flag)
+{
+	char cmd[PATH_MAX + 128];
+	int rc;
+
+	if (flag != EXT2_TOPDIR_FL) {
+		rc = EOPNOTSUPP;
+		goto out;
+	}
+
+	snprintf(cmd, sizeof(cmd), "chattr +T %s", path);
+
+	rc = system(cmd);
+	if (rc > 0) {
+		rc = WEXITSTATUS(rc);
+out:
+		errno = rc;
+	}
+
+	return rc;
+}
 #endif
 
 #define ONE_MB (1024 * 1024)
@@ -282,8 +307,8 @@ int write_chunks(int fd, unsigned long long offset,unsigned long long write_end,
 	     offset += stride) {
 		int ret;
 
-		if (lseek64(fd, offset, SEEK_SET) == -1) {
-			fprintf(stderr, "\n%s: lseek64(%s+%llu) failed: %s\n",
+		if (stride != chunksize && lseek64(fd, offset, SEEK_SET) < 0) {
+			fprintf(stderr, "\n%s: lseek66(%s+%llu) failed: %s\n",
 				progname, file, offset, strerror(errno));
 			return -errno;
 		}
@@ -322,7 +347,7 @@ int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
 	     offset += stride) {
 		ssize_t nread;
 
-		if (lseek64(fd, offset, SEEK_SET) == -1) {
+		if (stride != chunksize && lseek64(fd, offset, SEEK_SET) < 0) {
 			fprintf(stderr, "\n%s: lseek64(%s+%llu) failed: %s\n",
 				progname, file, offset, strerror(errno));
 			return 1;
@@ -390,7 +415,7 @@ int read_chunks(int fd, unsigned long long offset, unsigned long long read_end,
  */
 char *new_file(char *tempfile, char *cur_dir, int file_num)
 {
-	sprintf(tempfile, "%s/file%03d", cur_dir, file_num);
+	snprintf(tempfile, PATH_MAX, "%s/file%03d", cur_dir, file_num);
 	return tempfile;
 }
 
@@ -399,7 +424,7 @@ char *new_file(char *tempfile, char *cur_dir, int file_num)
  */
 char *new_dir(char *tempdir, int dir_num)
 {
-	sprintf(tempdir, "%s/dir%05d", testdir, dir_num);
+	snprintf(tempdir, PATH_MAX, "%s/llverfs_dir%05d", testdir, dir_num);
 	return tempdir;
 }
 
@@ -451,11 +476,8 @@ void show_rate(char *op, char *filename, const struct timeval *start_time,
 	static char last_op;
 	struct timeval curr_time;
 	double curr_delta, overall_delta, curr_rate, overall_rate;
-	double total_time, remain_time;
+	double remain_time;
 	int remain_hours, remain_minutes, remain_seconds;
-
-	if (last_time.tv_sec == 0)
-		last_time = *start_time;
 
 	if (last_op != op[0]) {
 		last_bytes = 0;
@@ -478,8 +500,7 @@ void show_rate(char *op, char *filename, const struct timeval *start_time,
 		last_time = curr_time;
 		return;
 	}
-	total_time = total_bytes / curr_rate;
-	remain_time = total_time - overall_delta;
+	remain_time = (total_bytes - curr_bytes) / curr_rate;
 
 	remain_hours = remain_time / 3600;
 	remain_minutes = (remain_time - remain_hours * 3600) / 60;
@@ -490,8 +511,8 @@ void show_rate(char *op, char *filename, const struct timeval *start_time,
 		if (isatty_flag)
 			printf("\r");
 
-		printf("%s filename: %s, current %5g MB/s, overall %5g MB/s, "
-		       "est %u:%u:%u left", op, filename,
+		printf("%s: %s, current: %5g MB/s, overall: %5g MB/s, "
+		       "ETA: %u:%02u:%02u", op, filename,
 		       curr_rate / ONE_MB, overall_rate / ONE_MB,
 		       remain_hours, remain_minutes, remain_seconds);
 
@@ -499,10 +520,10 @@ void show_rate(char *op, char *filename, const struct timeval *start_time,
 			fflush(stdout);
 		else
 			printf("\n");
-	}
 
-	last_time = curr_time;
-	last_bytes = curr_bytes;
+		last_time = curr_time;
+		last_bytes = curr_bytes;
+	}
 }
 
 /*
@@ -523,12 +544,11 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 	unsigned long long curr_bytes = 0;
 	int rc = 0;
 
-#ifdef HAVE_EXT2FS_EXT2FS_H
 	if (!full && fsetflags(testdir, EXT2_TOPDIR_FL))
 		fprintf(stderr,
 			"\n%s: can't set TOPDIR_FL on %s: %s (ignoring)",
 			progname, testdir, strerror(errno));
-#endif
+
 	countfile = fopen(filecount, "w");
 	if (countfile == NULL) {
 		fprintf(stderr, "\n%s: creating %s failed :%s\n",
@@ -561,9 +581,6 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 		int fd, ret;
 
 		if (file_num >= files_in_dir) {
-			if (dir_num == num_dirs - 1)
-				break;
-
 			file_num = 0;
 			if (mkdir(new_dir(tempdir, dir_num), dirmode) < 0) {
 				if (errno == ENOSPC)
@@ -619,13 +636,10 @@ static int dir_write(char *chunk_buf, size_t chunksize,
 		}
 	}
 
-	if (verbose) {
-		verbose++;
-		show_rate("write", tempfile, &start_time,
-			  total_bytes, curr_bytes);
-		printf("\nwrite complete\n");
-		verbose--;
-	}
+	verbose += 2;
+	show_rate("write_done", tempfile, &start_time, total_bytes, curr_bytes);
+	printf("\n");
+	verbose -= 2;
 
 out:
 	fclose(countfile);
@@ -666,9 +680,6 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 		int fd, ret;
 
 		if (file_num == 0) {
-			if (dir_num == num_dirs - 1)
-				break;
-
 			new_dir(tempdir, dir_num);
 			dir_num++;
 		}
@@ -704,13 +715,11 @@ static int dir_read(char *chunk_buf, size_t chunksize,
 		if (++file_num >= files_in_dir)
 			file_num = 0;
 	}
-	if (verbose > 1){
-		verbose++;
-		show_rate("read", tempfile, &start_time,
-			  total_bytes, curr_bytes);
-		printf("\nread complete\n");
-		verbose--;
-	}
+	verbose += 2;
+	show_rate("read_done", tempfile, &start_time, total_bytes, curr_bytes);
+	printf("\n");
+	verbose -= 2;
+
 	return 0;
 }
 
@@ -800,7 +809,7 @@ int main(int argc, char **argv)
 		FILE *fp = NULL;
 		ext2_filsys fs;
 
-		if ((fp = setmntent("/etc/mtab", "r")) == NULL){
+		if ((fp = setmntent("/etc/mtab", "r")) == NULL) {
 			fprintf(stderr, "%s: fail to open /etc/mtab in read"
 				"mode :%s\n", progname, strerror(errno));
 			goto guess;
@@ -843,9 +852,19 @@ int main(int argc, char **argv)
 		if (0) { /* ugh */
 			struct statfs64 statbuf;
 guess:
+			/*
+			 * Most extN filesystems are formatted with 128MB/group
+			 * (32k bitmap = 4KB blocksize * 8 bits/block) * 4KB,
+			 * so this is a relatively safe default (somewhat more
+			 * or less doesn't make a huge difference for testing).
+			 *
+			 * We want to create one directory per group, together
+			 * with the "TOPDIR" feature, so that the directories
+			 * are spread across the whole block device.
+			 */
 			if (statfs64(testdir, &statbuf) == 0) {
-				num_dirs = (long long)statbuf.f_blocks *
-					statbuf.f_bsize / (128ULL << 20);
+				num_dirs = 1 + (long long)statbuf.f_blocks *
+					statbuf.f_bsize / (128ULL * ONE_MB);
 				if (verbose)
 					printf("dirs: %u, fs blocks: %llu\n",
 					       num_dirs,
