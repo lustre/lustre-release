@@ -26,6 +26,11 @@
 /*
  * Author: Brian Behlendorf <behlendorf1@llnl.gov>
  */
+#ifndef HAVE_ZFS_MULTIHOST
+#include <sys/list.h>
+#define list_move_tail(a, b) spl_list_move_tail(a, b)
+#include <sys/spa.h>
+#endif
 #include "mount_utils.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -187,6 +192,114 @@ static int zfs_erase_allprops(zfs_handle_t *zhp)
 
 	return 0;
 }
+/*
+ * ZFS on linux 0.7.0-rc5 commit 379ca9cf2beba802f096273e89e30914a2d6bafc
+ * Multi-modifier protection (MMP)
+ *
+ * Introduced spa_get_hostid() along with a few constants like
+ * ZPOOL_CONFIG_MMP_HOSTID that can be checked to imply availablity of
+ * spa_get_hostid. Supply a fallback when spa_get_hostid is not
+ * available.
+ *
+ * This can be removed when zfs 0.6.x support is dropped.
+ */
+#if !defined(ZPOOL_CONFIG_MMP_HOSTID) && !defined(HAVE_ZFS_MULTIHOST)
+unsigned long _hostid_from_proc(void)
+{
+	FILE *f;
+	unsigned long hostid;
+	int rc;
+
+	f = fopen("/proc/sys/kernel/spl/hostid", "r");
+	if (f == NULL)
+		goto out;
+
+	rc = fscanf(f, "%lx", &hostid);
+	fclose(f);
+	if (rc == 1)
+		return hostid;
+out:
+	return 0;
+}
+
+unsigned long _hostid_from_module_param(void)
+{
+	FILE *f;
+	unsigned long hostid;
+	int rc;
+
+	f = fopen("/sys/module/spl/parameters/spl_hostid", "r");
+	if (f == NULL)
+		goto out;
+
+	rc = fscanf(f, "%li", &hostid);
+	fclose(f);
+	if (rc == 1)
+		return hostid;
+out:
+	return 0;
+}
+
+unsigned long _from_module_param_indirect(void)
+{
+	FILE *f;
+	unsigned long hostid = 0;
+	uint32_t hwid;
+	int rc;
+	char *spl_hostid_path = NULL;
+
+	/* read the module parameter for HW_HOSTID_PATH */
+	f = fopen("/sys/module/spl/parameters/spl_hostid_path", "r");
+	if (f == NULL) {
+		fatal();
+		fprintf(stderr, "Failed to open spl_hostid_path param: %s\n",
+			strerror(errno));
+		goto out;
+	}
+
+	rc = fscanf(f, "%ms%*[\n]", &spl_hostid_path);
+	fclose(f);
+	if (rc == 0 || !spl_hostid_path)
+		goto out;
+
+	/* read the hostid from the file */
+	f = fopen(spl_hostid_path, "r");
+	if (f == NULL) {
+		fatal();
+		fprintf(stderr, "Failed to open %s param: %s\n",
+			spl_hostid_path, strerror(errno));
+		goto out;
+	}
+
+	/* hostid is the first 4 bytes in native endian order */
+	rc = fread(&hwid, sizeof(uint32_t), 1, f);
+	fclose(f);
+	if (rc == 1)
+		hostid = (unsigned long)hwid;
+
+out:
+	if (spl_hostid_path)
+		free(spl_hostid_path);
+
+	return hostid;
+}
+
+unsigned long spa_get_hostid(void)
+{
+	unsigned long hostid;
+
+	hostid = _hostid_from_proc();
+	if (hostid)
+		return hostid;
+
+	/* if /proc isn't available, try /sys */
+	hostid = _hostid_from_module_param();
+	if (hostid)
+		return hostid;
+
+	return _from_module_param_indirect();
+}
+#endif
 
 /*
  * Map '<key>=<value> ...' pairs in the passed string to dataset properties
@@ -237,10 +350,6 @@ static int zfs_set_prop_params(zfs_handle_t *zhp, char *params)
 static int zfs_check_hostid(struct mkfs_opts *mop)
 {
 	unsigned long hostid;
-#ifndef HAVE_ZFS_MULTIHOST
-	FILE *f;
-	int rc;
-#endif
 
 	if (strstr(mop->mo_ldd.ldd_params, PARAM_FAILNODE) == NULL)
 		return 0;
@@ -248,44 +357,7 @@ static int zfs_check_hostid(struct mkfs_opts *mop)
 #ifdef HAVE_ZFS_MULTIHOST
 	hostid = get_system_hostid();
 #else
-	/* This reimplements libzfs2::get_system_hostid() from 0.7+ because
-	 * prior to 0.7.0 (MULTIHOST support), get_system_hostid() would return
-	 * gethostid() if spl_hostid was 0, which would generate a hostid if
-	 * /etc/hostid wasn't set, which is incompatible with the kernel
-	 * implementation.
-	 */
-	f = fopen("/sys/module/spl/parameters/spl_hostid", "r");
-	if (f == NULL) {
-		fatal();
-		fprintf(stderr, "Failed to open spl_hostid: %s\n",
-			strerror(errno));
-		return errno;
-	}
-	rc = fscanf(f, "%li", &hostid);
-	fclose(f);
-	if (rc != 1) {
-		fatal();
-		fprintf(stderr, "Failed to read spl_hostid: %d\n", rc);
-		return rc;
-	}
-
-	if (hostid != 0)
-		return 0;
-
-	f = fopen(HW_HOSTID_PATH, "r");
-	if (f == NULL)
-		goto out;
-
-	rc = fread(&hostid, sizeof(uint32_t), 1, f);
-	fclose(f);
-
-	if (rc != 1) {
-		fprintf(stderr, "Failed to read "HW_HOSTID_PATH": %d\n",
-		       rc);
-		hostid = 0;
-	}
-
-out:
+	hostid = spa_get_hostid();
 #endif
 	if (hostid == 0) {
 		if (mop->mo_flags & MO_NOHOSTID_CHECK) {

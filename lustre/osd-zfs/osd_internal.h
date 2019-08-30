@@ -812,11 +812,11 @@ static inline uint32_t attrs_zfs2fs(const uint64_t flags)
 #endif
 
 #ifndef HAVE_DSL_POOL_CONFIG
-static inline void dsl_pool_config_enter(dsl_pool_t *dp, char *name)
+static inline void dsl_pool_config_enter(dsl_pool_t *dp, void *name)
 {
 }
 
-static inline void dsl_pool_config_exit(dsl_pool_t *dp, char *name)
+static inline void dsl_pool_config_exit(dsl_pool_t *dp, void *name)
 {
 }
 #endif
