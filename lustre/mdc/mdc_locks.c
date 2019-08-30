@@ -990,7 +990,8 @@ resend:
 		req->rq_sent = ktime_get_real_seconds() + resends;
 	}
 
-	einfo->ei_enq_slot = !mdc_skip_mod_rpc_slot(it);
+	einfo->ei_req_slot = !(op_data->op_cli_flags & CLI_NO_SLOT);
+	einfo->ei_mod_slot = !mdc_skip_mod_rpc_slot(it);
 
 	/* With Data-on-MDT the glimpse callback is needed too.
 	 * It is set here in advance but not in mdc_finish_enqueue()
@@ -1382,7 +1383,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 		rc = -ETIMEDOUT;
 
 	rc = ldlm_cli_enqueue_fini(exp, req, einfo, 1, &flags, NULL, 0,
-				   lockh, rc);
+				   lockh, rc, true);
 	if (rc < 0) {
 		CERROR("%s: ldlm_cli_enqueue_fini() failed: rc = %d\n",
 		       exp->exp_obd->obd_name, rc);

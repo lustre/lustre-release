@@ -104,6 +104,7 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 	}
 
 	op_data->op_bias = MDS_CROSS_REF;
+	op_data->op_cli_flags = CLI_NO_SLOT;
 	CDEBUG(D_INODE, "REMOTE_INTENT with fid="DFID" -> mds #%u\n",
 	       PFID(&body->mbo_fid1), tgt->ltd_index);
 
@@ -205,6 +206,7 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 		 * it's remote object.
 		 */
 		op_data->op_bias = MDS_CROSS_REF;
+		op_data->op_cli_flags = CLI_NO_SLOT;
 
 		tgt = lmv_tgt(lmv, lsm->lsm_md_oinfo[i].lmo_mds);
 		if (!tgt)

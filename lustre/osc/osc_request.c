@@ -2804,7 +2804,7 @@ int osc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 
 	/* Complete obtaining the lock procedure. */
 	rc = ldlm_cli_enqueue_fini(aa->oa_exp, req, &einfo, 1, aa->oa_flags,
-				   lvb, lvb_len, lockh, rc);
+				   lvb, lvb_len, lockh, rc, false);
 	/* Complete osc stuff. */
 	rc = osc_enqueue_fini(req, aa->oa_upcall, aa->oa_cookie, lockh, mode,
 			      aa->oa_flags, aa->oa_speculative, rc);

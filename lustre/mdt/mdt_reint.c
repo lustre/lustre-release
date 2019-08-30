@@ -292,6 +292,7 @@ static int mdt_lock_slaves(struct mdt_thread_info *mti, struct mdt_object *obj,
 	einfo->ei_enq_slave = 1;
 	einfo->ei_namespace = mti->mti_mdt->mdt_namespace;
 	einfo->ei_inodebits = ibits;
+	einfo->ei_req_slot = 1;
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = ibits;
 

@@ -393,6 +393,7 @@ sa_prep_data(struct inode *dir, struct inode *child, struct sa_entry *entry)
 	einfo->ei_cb_cp  = ldlm_completion_ast;
 	einfo->ei_cb_gl  = NULL;
 	einfo->ei_cbdata = NULL;
+	einfo->ei_req_slot = 1;
 
 	return minfo;
 }

@@ -378,6 +378,7 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
 		einfo->ei_cb_bl = ldlm_blocking_ast;
 		einfo->ei_cb_cp = ldlm_completion_ast;
 		einfo->ei_res_id = resid;
+		einfo->ei_req_slot = 1;
 
 		rc = dt_object_lock(env, obj, lh, einfo, policy);
 		/* for regular checks LFSCK doesn't use LDLM locking,

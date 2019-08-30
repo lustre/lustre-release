@@ -3694,6 +3694,7 @@ int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 	einfo->ei_cb_cp = ldlm_completion_ast;
 	einfo->ei_enq_slave = 0;
 	einfo->ei_res_id = res_id;
+	einfo->ei_req_slot = 1;
 
 	if (cache) {
 		/*

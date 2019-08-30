@@ -593,9 +593,10 @@ static bool ldlm_request_slot_needed(struct ldlm_enqueue_info *einfo)
 	/* exclude EXTENT locks and DOM-only IBITS locks because they
 	 * are asynchronous and don't wait on server being blocked.
 	 */
-	return einfo->ei_type == LDLM_FLOCK ||
-	       (einfo->ei_type == LDLM_IBITS &&
-		einfo->ei_inodebits != MDS_INODELOCK_DOM);
+	return einfo->ei_req_slot &&
+	       (einfo->ei_type == LDLM_FLOCK ||
+		(einfo->ei_type == LDLM_IBITS &&
+		 einfo->ei_inodebits != MDS_INODELOCK_DOM));
 }
 
 /**
@@ -607,7 +608,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 			  struct ldlm_enqueue_info *einfo,
 			  __u8 with_policy, __u64 *ldlm_flags, void *lvb,
 			  __u32 lvb_len, const struct lustre_handle *lockh,
-			  int rc)
+			  int rc, bool request_slot)
 {
 	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
 	const struct lu_env *env = NULL;
@@ -618,7 +619,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
 	ENTRY;
 
-	if (ldlm_request_slot_needed(einfo))
+	if (request_slot)
 		obd_put_request_slot(&req->rq_import->imp_obd->u.cli);
 
 	ptlrpc_put_mod_rpc_slot(req);
@@ -977,6 +978,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	int                    is_replay = *flags & LDLM_FL_REPLAY;
 	int                    req_passed_in = 1;
 	int                    rc, err;
+	bool		       need_req_slot;
 	struct ptlrpc_request *req;
 
 	ENTRY;
@@ -1088,13 +1090,15 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	 * that threads that are waiting for a modify RPC slot are not polluting
 	 * our rpcs in flight counter. */
 
-	if (einfo->ei_enq_slot)
+	if (einfo->ei_mod_slot)
 		ptlrpc_get_mod_rpc_slot(req);
 
-	if (ldlm_request_slot_needed(einfo)) {
+	need_req_slot = ldlm_request_slot_needed(einfo);
+
+	if (need_req_slot) {
 		rc = obd_get_request_slot(&req->rq_import->imp_obd->u.cli);
 		if (rc) {
-			if (einfo->ei_enq_slot)
+			if (einfo->ei_mod_slot)
 				ptlrpc_put_mod_rpc_slot(req);
 			failed_lock_cleanup(ns, lock, einfo->ei_mode);
 			LDLM_LOCK_RELEASE(lock);
@@ -1114,7 +1118,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	rc = ptlrpc_queue_wait(req);
 
 	err = ldlm_cli_enqueue_fini(exp, req, einfo, policy ? 1 : 0, flags,
-				    lvb, lvb_len, lockh, rc);
+				    lvb, lvb_len, lockh, rc, need_req_slot);
 
 	/*
 	 * If ldlm_cli_enqueue_fini did not find the lock, we need to free

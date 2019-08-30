@@ -66,6 +66,7 @@ static void mdc_lock_build_einfo(const struct lu_env *env,
 	einfo->ei_cb_cp = ldlm_completion_ast;
 	einfo->ei_cb_gl = mdc_ldlm_glimpse_ast;
 	einfo->ei_cbdata = osc; /* value to be put into ->l_ast_data */
+	einfo->ei_req_slot = 1;
 }
 
 static void mdc_lock_lvb_update(const struct lu_env *env,
@@ -682,7 +683,7 @@ int mdc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 	/* Complete obtaining the lock procedure. */
 	rc = ldlm_cli_enqueue_fini(aa->oa_exp, req, &einfo, 1, aa->oa_flags,
 				   aa->oa_lvb, aa->oa_lvb ?
-				   sizeof(*aa->oa_lvb) : 0, lockh, rc);
+				   sizeof(*aa->oa_lvb) : 0, lockh, rc, true);
 	/* Complete mdc stuff. */
 	rc = mdc_enqueue_fini(aa->oa_exp, req, aa->oa_upcall, aa->oa_cookie,
 			      lockh, mode, aa->oa_flags, rc);
