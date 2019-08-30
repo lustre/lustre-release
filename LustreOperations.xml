@@ -499,7 +499,7 @@ client# lfs mkdir –i
     <para>The Lustre 2.8 DNE feature enables individual files in a given
     directory to store their metadata on separate MDTs (a <emphasis>striped
     directory</emphasis>) once additional MDTs have been added to the
-    filesystem, see <xref linkend="dbdoclet.adding_new_mdt"/>.
+    filesystem, see <xref linkend="lustremaint.adding_new_mdt"/>.
     The result of this is that metadata requests for
     files in a striped directory are serviced by multiple MDTs and metadata
     service load is distributed over all the MDTs that service a given
@@ -924,7 +924,7 @@ tune2fs [-m reserved_blocks_percent] /dev/
     <xref linkend='dbdoclet.backup_device' />or 
     <xref linkend='backup_fs_level' />.
     For more information on removing a MDT, see 
-    <xref linkend='dbdoclet.rmremotedir' />.</para>
+    <xref linkend='lustremaint.rmremotedir' />.</para>
   </section>
   <section xml:id="dbdoclet.50438194_30872">
     <title>

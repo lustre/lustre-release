@@ -377,7 +377,7 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
           different MDT. To identify on which MDT a given subdirectory is
           located, pass the <literal>getstripe [--mdt-index|-M]</literal>
           parameters to <literal>lfs</literal>. An example of this command is
-          provided in the section <xref linkend="dbdoclet.rmremotedir"/>.</para>
+          provided in the section <xref linkend="lustremaint.rmremotedir"/>.</para>
     </section>
   </section>
   <section xml:id="pfl" condition='l2A'>

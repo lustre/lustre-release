@@ -3,61 +3,64 @@
   <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_42877"/></para>
+      <para><xref linkend="lustremaint.inactiveOST"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_15240"/></para>
+      <para><xref linkend="lustremaint.findingNodes"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_26070"/></para>
+      <para><xref linkend="lustremaint.mountingServerWithoutLustre"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_54623"/></para>
+      <para><xref linkend="lustremaint.regenerateConfigLogs"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.changingservernid"/></para>
+      <para><xref linkend="lustremaint.changingservernid"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.adding_new_mdt"/></para>
+      <para><xref linkend="lustremaint.clear_conf"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.adding_new_ost"/></para>
+      <para><xref linkend="lustremaint.adding_new_mdt"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.deactivating_mdt_ost"/></para>
+      <para><xref linkend="lustremaint.adding_new_ost"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.rmremotedir"/></para>
+      <para><xref linkend="lustremaint.deactivating_mdt_ost"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.inactivemdt"/></para>
+      <para><xref linkend="lustremaint.rmremotedir"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_remove_ost"/></para>
+      <para><xref linkend="lustremaint.inactivemdt"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_ydg_pgt_tl"/></para>
+      <para><xref linkend="lustremaint.remove_ost"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_restore_ost"/></para>
+      <para><xref linkend="lustremaint.ydg_pgt_tl"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_ucf_qgt_tl"/></para>
+      <para><xref linkend="lustremaint.restore_ost"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_77819"/></para>
+      <para><xref linkend="lustremaint.ucf_qgt_tl"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_12607"/></para>
+      <para><xref linkend="lustremaint.abortRecovery"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_62333"/></para>
+      <para><xref linkend="lustremaint.determineOST"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_62545"/></para>
+      <para><xref linkend="lustremaint.ChangeAddrFailoverNode"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="lustremaint.seperateCombinedMGSMDT"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438199_42877">
+  <section xml:id="lustremaint.inactiveOST">
       <title>
           <indexterm><primary>maintenance</primary></indexterm>
           <indexterm><primary>maintenance</primary><secondary>inactive OSTs</secondary></indexterm>
@@ -74,7 +77,7 @@
       <literal>exclude=testfs-OST0000:testfs-OST0001</literal>.</para>
     </note>
     </section>
-    <section xml:id="dbdoclet.50438199_15240">
+    <section xml:id="lustremaint.findingNodes">
       <title><indexterm><primary>maintenance</primary><secondary>finding nodes</secondary></indexterm>
 Finding Nodes in the Lustre File System</title>
       <para>There may be situations in which you need to find all nodes in
@@ -105,7 +108,7 @@ Finding Nodes in the Lustre File System</title>
 0: testfs-OST0000_UUID ACTIVE 
 1: testfs-OST0001_UUID ACTIVE </screen>
     </section>
-    <section xml:id="dbdoclet.50438199_26070">
+    <section xml:id="lustremaint.mountingServerWithoutLustre">
       <title><indexterm><primary>maintenance</primary><secondary>mounting a server</secondary></indexterm>
 Mounting a Server Without Lustre Service</title>
       <para>If you are using a combined MGS/MDT, but you only want to start the MGS and not the MDT, run this command:</para>
@@ -114,7 +117,7 @@ Mounting a Server Without Lustre Service</title>
       <para>In this example, the combined MGS/MDT is <literal>testfs-MDT0000</literal> and the mount point is <literal>/mnt/test/mdt</literal>.</para>
       <screen>$ mount -t lustre -L testfs-MDT0000 -o nosvc /mnt/test/mdt</screen>
     </section>
-    <section xml:id="dbdoclet.50438199_54623">
+    <section xml:id="lustremaint.regenerateConfigLogs">
       <title><indexterm><primary>maintenance</primary><secondary>regenerating config logs</secondary></indexterm>
 Regenerating Lustre Configuration Logs</title>
       <para>If the Lustre file system configuration logs are in a state where
@@ -221,7 +224,7 @@ mgs# lctl --device MGS llog_print <replaceable>fsname</replaceable>-OST0000
       run, the configuration logs are re-generated as servers connect to the
       MGS.</para>
     </section>
-    <section xml:id="dbdoclet.changingservernid">
+    <section xml:id="lustremaint.changingservernid">
       <title><indexterm><primary>maintenance</primary><secondary>changing a NID</secondary></indexterm>
 Changing a Server NID</title>
       <para>In Lustre software release 2.3 or earlier, the <literal>tunefs.lustre
@@ -287,7 +290,7 @@ Changing a Server NID</title>
       <note><para>The previous configuration log is backed up on the MGS
       disk with the suffix <literal>'.bak'</literal>.</para></note>
     </section>
-    <section xml:id="dbdoclet.clear_conf" condition="l2B">
+    <section xml:id="lustremaint.clear_conf" condition="l2B">
       <title><indexterm>
 	    <primary>maintenance</primary>
 		<secondary>Clearing a config</secondary>
@@ -338,7 +341,7 @@ Changing a Server NID</title>
 	     </listitem>
 	   </orderedlist>
 	</section>
-    <section xml:id="dbdoclet.adding_new_mdt" condition='l24'>
+    <section xml:id="lustremaint.adding_new_mdt" condition='l24'>
       <title><indexterm>
         <primary>maintenance</primary>
         <secondary>adding an MDT</secondary>
@@ -391,7 +394,7 @@ client# lfs mkdir -c 4 /mnt/testfs/new_directory_striped_across_4_mdts
         </listitem>
       </orderedlist>
     </section>
-    <section xml:id="dbdoclet.adding_new_ost">
+    <section xml:id="lustremaint.adding_new_ost">
       <title><indexterm><primary>maintenance</primary><secondary>adding a OST</secondary></indexterm>
 Adding a New OST to a Lustre File System</title>
       <para>A new OST can be added to existing Lustre file system on either
@@ -435,7 +438,7 @@ oss# mount -t lustre /dev/sda /mnt/testfs/ost12</screen>
         </listitem>
       </orderedlist>
     </section>
-    <section xml:id="dbdoclet.deactivating_mdt_ost">
+    <section xml:id="lustremaint.deactivating_mdt_ost">
       <title><indexterm><primary>maintenance</primary><secondary>restoring an OST</secondary></indexterm>
       <indexterm><primary>maintenance</primary><secondary>removing an OST</secondary></indexterm>
 Removing and Restoring MDTs and OSTs</title>
@@ -477,7 +480,7 @@ Removing and Restoring MDTs and OSTs</title>
           desire to continue using the filesystem before it is repaired.</para>
         </listitem>
       </itemizedlist>
-      <section condition="l24" xml:id="dbdoclet.rmremotedir">
+      <section condition="l24" xml:id="lustremaint.rmremotedir">
       <title><indexterm><primary>maintenance</primary><secondary>removing an MDT</secondary></indexterm>Removing an MDT from the File System</title>
         <para>If the MDT is permanently inaccessible,
         <literal>lfs rm_entry {directory}</literal> can be used to delete the
@@ -499,7 +502,7 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
         <para>The <literal>lfs getstripe --mdt-index</literal> command
         returns the index of the MDT that is serving the given directory.</para>
       </section>
-      <section xml:id="dbdoclet.inactivemdt" condition='l24'>
+      <section xml:id="lustremaint.inactivemdt" condition='l24'>
       <title>
           <indexterm><primary>maintenance</primary></indexterm>
           <indexterm><primary>maintenance</primary><secondary>inactive MDTs</secondary></indexterm>Working with Inactive MDTs</title>
@@ -507,7 +510,7 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
     the MDT is activated again. Clients accessing an inactive MDT will receive
     an EIO error.</para>
       </section>
-      <section remap="h3" xml:id="section_remove_ost">
+      <section remap="h3" xml:id="lustremaint.remove_ost">
       <title><indexterm>
           <primary>maintenance</primary>
           <secondary>removing an OST</secondary>
@@ -616,14 +619,14 @@ client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
               <note><para>A deactivated OST still appears in the file system
                 configuration, though a replacement OST can be created using the
                 <literal>mkfs.lustre --replace</literal> option, see
-                <xref linkend="section_restore_ost"/>.
+                <xref linkend="lustremaint.restore_ost"/>.
               </para></note>
             </listitem>
           </orderedlist>
         </listitem>
       </orderedlist>
     </section>
-      <section remap="h3" xml:id="section_ydg_pgt_tl">
+      <section remap="h3" xml:id="lustremaint.ydg_pgt_tl">
       <title><indexterm>
           <primary>maintenance</primary>
           <secondary>backing up OST config</secondary>
@@ -659,7 +662,7 @@ oss# mount -t ldiskfs <replaceable>/dev/ost_device</replaceable> /mnt/ost</scree
         </listitem>
       </orderedlist>
     </section>
-      <section xml:id="section_restore_ost">
+      <section xml:id="lustremaint.restore_ost">
       <title><indexterm>
           <primary>maintenance</primary>
           <secondary>restoring OST config</secondary>
@@ -731,7 +734,7 @@ oss0# dd if=/tmp/mountdata of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 ski
         </listitem>
       </orderedlist>
     </section>
-      <section xml:id="section_ucf_qgt_tl">
+      <section xml:id="lustremaint.ucf_qgt_tl">
       <title><indexterm>
           <primary>maintenance</primary>
           <secondary>reintroducing an OSTs</secondary>
@@ -745,7 +748,7 @@ oss0# dd if=/tmp/mountdata of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 ski
 client# lctl set_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>-*.active=1</screen></para>
     </section>
     </section>
-    <section xml:id="dbdoclet.50438199_77819">
+    <section xml:id="lustremaint.abortRecovery">
       <title><indexterm><primary>maintenance</primary><secondary>aborting recovery</secondary></indexterm>
       <indexterm><primary>backup</primary><secondary>aborting recovery</secondary></indexterm>
 Aborting Recovery</title>
@@ -754,7 +757,7 @@ Aborting Recovery</title>
         <para>The recovery process is blocked until all OSTs are available. </para>
       </note>
     </section>
-    <section xml:id="dbdoclet.50438199_12607">
+    <section xml:id="lustremaint.determineOST">
       <title><indexterm><primary>maintenance</primary><secondary>identifying OST host</secondary></indexterm>
 Determining Which Machine is Serving an OST </title>
       <para>In the course of administering a Lustre file system, you may need to determine which
@@ -775,7 +778,7 @@ osc.testfs-OST0002-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 osc.testfs-OST0003-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 osc.testfs-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen></para>
     </section>
-    <section xml:id="dbdoclet.50438199_62333">
+    <section xml:id="lustremaint.ChangeAddrFailoverNode">
       <title><indexterm><primary>maintenance</primary><secondary>changing failover node address</secondary></indexterm>
 Changing the Address of a Failover Node</title>
       <para>To change the address of a failover node (e.g, to use node X instead of node Y), run
@@ -788,13 +791,13 @@ Changing the Address of a Failover Node</title>
         <literal>--failnode</literal> options, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
         linkend="configuringfailover"/>.</para>
     </section>
-    <section xml:id="dbdoclet.50438199_62545">
+    <section xml:id="lustremaint.seperateCombinedMGSMDT">
       <title><indexterm><primary>maintenance</primary><secondary>separate a
         combined MGS/MDT</secondary></indexterm>
         Separate a combined MGS/MDT</title>
       <para>These instructions assume the MGS node will be the same as the MDS
         node. For instructions on how to move MGS to a different node, see
-        <xref linkend="dbdoclet.changingservernid"/>.</para>
+        <xref linkend="lustremaint.changingservernid"/>.</para>
       <para>These instructions are for doing the split without shutting down
         other servers and clients.</para>
       <orderedlist>
@@ -814,7 +817,7 @@ Changing the Address of a Failover Node</title>
 	      <screen>mds# cp -r <replaceable>/mdt_mount_point</replaceable>/CONFIGS/<replaceable>filesystem_name</replaceable>-* <replaceable>/mgs_mount_point</replaceable>/CONFIGS/. </screen>
 	      <screen>mds# umount <replaceable>/mgs_mount_point</replaceable></screen>
 	      <screen>mds# umount <replaceable>/mdt_mount_point</replaceable></screen>
-          <para>See <xref linkend="dbdoclet.50438199_54623"/> for alternative method.</para>
+          <para>See <xref linkend="lustremaint.regenerateConfigLogs"/> for alternative method.</para>
         </listitem>
         <listitem>
           <para>Start the MGS.</para>

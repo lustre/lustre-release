@@ -541,7 +541,7 @@ filesystem_summary:        21.6T       17.8T        3.2T  85% /myth
       <para>To address this issue, you can expand the disk space on the OST,
           or use the <literal>lfs_migrate</literal> command to migrate (move)
           files to a less full OST.  For details on both of these options
-          see <xref linkend="dbdoclet.adding_new_ost" /></para>
+          see <xref linkend="lustremaint.adding_new_ost" /></para>
       <para condition='l26'>In some cases, there may be processes holding
         files open that are consuming a significant amount of space (e.g.
         runaway process writing lots of data to an open file that has been

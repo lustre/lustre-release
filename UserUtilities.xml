@@ -487,7 +487,7 @@ lfs help
                 <para condition="l24">The 
                 <literal>--mdt-index</literal> prints the index of the MDT for a given
                 directory. See 
-                <xref linkend="dbdoclet.rmremotedir" />.</para>
+                <xref linkend="lustremaint.rmremotedir" />.</para>
               </entry>
             </row>
             <row>

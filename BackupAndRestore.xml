@@ -769,7 +769,7 @@ trusted.fid= \
         <screen>[oss]# umount /mnt/ost</screen>
         <note><para>If the restored system has a different NID from the backup
           system, please change the NID. For detail, please refer to
-          <xref linkend="dbdoclet.changingservernid" />.  For example:</para>
+          <xref linkend="lustremaint.changingservernid" />.  For example:</para>
           <screen>[oss]# mount -t lustre -o nosvc ${fsname}-ost/ost /mnt/ost
 [oss]# lctl replace_nids ${fsname}-OSTxxxx $new_nids
 [oss]# umount /mnt/ost</screen></note>
@@ -1085,7 +1085,7 @@ fstab  passwds
         <literal>lfs find</literal>/<literal>lfs_migrate</literal> to empty out
         an OST while the filesystem is in use and then reformat it with the new
         fstype. For instructions on removing the OST, please see
-        <xref linkend="section_remove_ost"/>.</para>
+        <xref linkend="lustremaint.remove_ost"/>.</para>
       <section remap="h3" xml:id="migrate_backends.zfs2ldiskfs">
         <title>
           <indexterm>

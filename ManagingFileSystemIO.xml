@@ -106,7 +106,7 @@ mds# lctl set_param osp.<replaceable>fsname</replaceable>-OST<replaceable>nnnn</
       OST(s) to new OST(s), the data must be migrated (copied)
       to the new location.  The simplest way to do this is to use the
       <literal>lfs_migrate</literal> command, as described in
-      <xref linkend="dbdoclet.adding_new_ost" />.</para>
+      <xref linkend="lustremaint.adding_new_ost" />.</para>
     </section>
     <section remap="h3">
       <title>
