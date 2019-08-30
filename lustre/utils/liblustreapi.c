@@ -69,6 +69,7 @@
 #endif
 #include <poll.h>
 #include <time.h>
+#include <inttypes.h>
 
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
@@ -391,7 +392,7 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %llu, "
 				"must be an even multiple of %d bytes",
-				stripe_size, page_size);
+				(unsigned long long)stripe_size, page_size);
 		return rc;
 	}
 	if (!llapi_stripe_index_is_valid(stripe_offset)) {
@@ -2569,10 +2570,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		ver = (__u32)(lmm_oi_id(&lum->lmm_oi) >> 32);
 		if (yaml)
 			llapi_printf(LLAPI_MSG_NORMAL, DFID_NOBRACE"\n",
-				     seq, oid, ver);
+				     (unsigned long long)seq, oid, ver);
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, DFID"\n",
-				     seq, oid, ver);
+				     (unsigned long long)seq, oid, ver);
 	}
 
 	if (verbose & VERBOSE_STRIPE_COUNT) {
@@ -2625,8 +2626,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 					    "Cannot determine default"
 					    " stripe size.");
 		} else {
-			llapi_printf(LLAPI_MSG_NORMAL, "%u",
-				     lum->lmm_stripe_size);
+			llapi_printf(LLAPI_MSG_NORMAL, "%llu",
+				     (unsigned long long)lum->lmm_stripe_size);
 		}
 		if (!yaml && is_dir)
 			separator = " ";
@@ -3044,7 +3045,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 				     "%4slcme_timestamp:      ", " ");
 		if (yaml) {
 			llapi_printf(LLAPI_MSG_NORMAL, "%llu",
-							entry->lcme_timestamp);
+				     (unsigned long long)entry->lcme_timestamp);
 		} else {
 			time_t stamp = entry->lcme_timestamp;
 			char *date_str = asctime(localtime(&stamp));
@@ -3062,7 +3063,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%4slcme_extent.e_start: ", " ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%llu",
-			     entry->lcme_extent.e_start);
+			     (unsigned long long)entry->lcme_extent.e_start);
 		separator = "\n";
 	}
 
@@ -3075,7 +3076,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s", "EOF");
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%llu",
-					entry->lcme_extent.e_end);
+				     (unsigned long long)entry->lcme_extent.e_end);
 		separator = "\n";
 	}
 

@@ -699,7 +699,8 @@ static int ct_copy_data(struct hsm_copyaction_private *hcp, const char *src,
 					CT_TRACE("bandwith control: %lluB/s "
 						 "excess=%llu sleep for "
 						 "%lld.%09lds",
-						 opt.o_bandwidth, excess,
+						 (unsigned long long)opt.o_bandwidth,
+						 (unsigned long long)excess,
 						 (long long)delay.tv_sec,
 						 delay.tv_nsec);
 					last_bw_print = now;

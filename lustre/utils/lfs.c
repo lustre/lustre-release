@@ -2238,13 +2238,13 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		if (lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-count' can't be "
 				"specified with Data-on-MDT component: %lld\n",
-				lsa->lsa_stripe_count);
+				(long long)lsa->lsa_stripe_count);
 			return -EINVAL;
 		}
 		if (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-size' can't be "
 				"specified with Data-on-MDT component: %llu\n",
-				lsa->lsa_stripe_size);
+				(unsigned long long)lsa->lsa_stripe_size);
 			return -EINVAL;
 		}
 		if (lsa->lsa_nr_tgts != 0) {
@@ -2256,7 +2256,7 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-offset' can't be "
 				"specified with Data-on-MDT component: %lld\n",
-				lsa->lsa_stripe_off);
+				(long long)lsa->lsa_stripe_off);
 			return -EINVAL;
 		}
 		if (lsa->lsa_pool_name != 0) {
@@ -2269,7 +2269,8 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		rc = llapi_layout_pattern_set(layout, lsa->lsa_pattern);
 		if (rc) {
 			fprintf(stderr, "Set stripe pattern %#llx failed. %s\n",
-				lsa->lsa_pattern, strerror(errno));
+				(unsigned long long)lsa->lsa_pattern,
+				strerror(errno));
 			return rc;
 		}
 		/* Data-on-MDT component has always single stripe up to end */
@@ -2286,7 +2287,7 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 	rc = llapi_layout_stripe_count_set(layout, lsa->lsa_stripe_count);
 	if (rc) {
 		fprintf(stderr, "Set stripe count %lld failed: %s\n",
-			lsa->lsa_stripe_count, strerror(errno));
+			(long long)lsa->lsa_stripe_count, strerror(errno));
 		return rc;
 	}
 
@@ -2319,7 +2320,8 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
 		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
 			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
-				lsa->lsa_stripe_count, lsa->lsa_nr_tgts);
+				(long long)lsa->lsa_stripe_count,
+				lsa->lsa_nr_tgts);
 			return -EINVAL;
 		}
 		for (i = 0; i < lsa->lsa_nr_tgts; i++) {
@@ -3345,8 +3347,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			    lsa.lsa_stripe_count != lsa.lsa_nr_tgts) {
 				fprintf(stderr,
 					"error: %s: stripe count %lld doesn't match the number of MDTs: %d\n",
-					progname, lsa.lsa_stripe_count,
-						lsa.lsa_nr_tgts);
+					progname,
+					(long long)lsa.lsa_stripe_count,
+					lsa.lsa_nr_tgts);
 				free(lmu);
 				goto usage_error;
 			}
@@ -3392,9 +3395,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
 			    lsa.lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
 			    lsa.lsa_nr_tgts != lsa.lsa_stripe_count) {
-				fprintf(stderr, "error: %s: stripe count %lld "
-					"doesn't match the number of OSTs: %d\n"
-					, argv[0], lsa.lsa_stripe_count,
+				fprintf(stderr,
+					"error: %s: stripe count %lld doesn't match the number of OSTs: %d\n",
+					argv[0],
+					(long long)lsa.lsa_stripe_count,
 					lsa.lsa_nr_tgts);
 				free(param);
 				goto usage_error;
@@ -5237,9 +5241,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 		if (lsa.lsa_stripe_count > 0 &&
 		    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
 		    lsa.lsa_stripe_count != lsa.lsa_nr_tgts) {
-			fprintf(stderr, "error: %s: stripe count %lld doesn't "
-				"match the number of MDTs: %d\n",
-				argv[0], lsa.lsa_stripe_count, lsa.lsa_nr_tgts);
+			fprintf(stderr,
+				"error: %s: stripe count %lld doesn't match the number of MDTs: %d\n",
+				argv[0], (long long)lsa.lsa_stripe_count,
+				lsa.lsa_nr_tgts);
 			free(param);
 			return CMD_HELP;
 		}
@@ -5911,7 +5916,8 @@ quota_type_def:
 				fprintf(stderr,
 					"%s setquota: warning: block softlimit '%llu' smaller than minimum qunit size\n"
 					"See '%s help setquota' or Lustre manual for details\n",
-					progname, dqb->dqb_bsoftlimit,
+					progname,
+					(unsigned long long)dqb->dqb_bsoftlimit,
 					progname);
 			break;
 		case 'B':
@@ -5923,7 +5929,8 @@ quota_type_def:
 				fprintf(stderr,
 					"%s setquota: warning: block hardlimit '%llu' smaller than minimum qunit size\n"
 					"See '%s help setquota' or Lustre manual for details\n",
-					progname, dqb->dqb_bhardlimit,
+					progname,
+					(unsigned long long)dqb->dqb_bhardlimit,
 					progname);
 			break;
 		case 'i':
@@ -5934,7 +5941,8 @@ quota_type_def:
 				fprintf(stderr,
 					"%s setquota: warning: inode softlimit '%llu' smaller than minimum qunit size\n"
 					"See '%s help setquota' or Lustre manual for details\n",
-					progname, dqb->dqb_isoftlimit,
+					progname,
+					(unsigned long long)dqb->dqb_isoftlimit,
 					progname);
 			break;
 		case 'I':
@@ -5945,7 +5953,8 @@ quota_type_def:
 				fprintf(stderr,
 					"%s setquota: warning: inode hardlimit '%llu' smaller than minimum qunit size\n"
 					"See '%s help setquota' or Lustre manual for details\n",
-					progname, dqb->dqb_ihardlimit,
+					progname,
+					(unsigned long long)dqb->dqb_ihardlimit,
 					progname);
 			break;
 		default:
@@ -6195,7 +6204,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			diff2str(dqb->dqb_btime, timebuf, now);
 		else if (show_default)
 			snprintf(timebuf, sizeof(timebuf), "%llu",
-				 dqb->dqb_btime);
+				 (unsigned long long)dqb->dqb_btime);
 
 		kbytes2str(lustre_stoqb(dqb->dqb_curspace),
 			   strbuf, sizeof(strbuf), h);
@@ -6228,7 +6237,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			diff2str(dqb->dqb_itime, timebuf, now);
 		else if (show_default)
 			snprintf(timebuf, sizeof(timebuf), "%llu",
-				 dqb->dqb_itime);
+				 (unsigned long long)dqb->dqb_itime);
 
 		snprintf(numbuf[0], sizeof(numbuf),
 			 (dqb->dqb_valid & QIF_INODES) ? "%ju" : "[%ju]",
@@ -6888,14 +6897,16 @@ static int lfs_changelog(int argc, char **argv)
 			struct changelog_ext_extra_flags *ef =
 				changelog_rec_extra_flags(rec);
 
-			printf(" ef=0x%llx", ef->cr_extra_flags);
+			printf(" ef=0x%llx",
+			       (unsigned long long)ef->cr_extra_flags);
 
 			if (ef->cr_extra_flags & CLFE_UIDGID) {
 				struct changelog_ext_uidgid *uidgid =
 					changelog_rec_uidgid(rec);
 
 				printf(" u=%llu:%llu",
-				       uidgid->cr_uid, uidgid->cr_gid);
+				       (unsigned long long)uidgid->cr_uid,
+				       (unsigned long long)uidgid->cr_gid);
 			}
 			if (ef->cr_extra_flags & CLFE_NID) {
 				struct changelog_ext_nid *nid =
@@ -9835,14 +9846,15 @@ static int lfs_getsom(int argc, char **argv)
 	switch (type) {
 	case LFS_SOM_ATTR_ALL:
 		printf("file: %s size: %llu blocks: %llu flags: %x\n",
-		       path, attrs->lsa_size, attrs->lsa_blocks,
+		       path, (unsigned long long)attrs->lsa_size,
+		       (unsigned long long)attrs->lsa_blocks,
 		       attrs->lsa_valid);
 		break;
 	case LFS_SOM_SIZE:
-		printf("%llu\n", attrs->lsa_size);
+		printf("%llu\n", (unsigned long long)attrs->lsa_size);
 		break;
 	case LFS_SOM_BLOCKS:
-		printf("%llu\n", attrs->lsa_blocks);
+		printf("%llu\n", (unsigned long long)attrs->lsa_blocks);
 		break;
 	case LFS_SOM_FLAGS:
 		printf("%x\n", attrs->lsa_valid);

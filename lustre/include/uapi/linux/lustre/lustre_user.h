@@ -630,7 +630,7 @@ struct lu_extent {
 };
 
 #define DEXT "[%#llx, %#llx)"
-#define PEXT(ext) (ext)->e_start, (ext)->e_end
+#define PEXT(ext) (unsigned long long)(ext)->e_start, (unsigned long long)(ext)->e_end
 
 static inline bool lu_extent_is_overlapped(struct lu_extent *e1,
 					   struct lu_extent *e2)
@@ -887,7 +887,7 @@ static inline void obd_uuid2fsname(char *buf, char *uuid, int buflen)
  * Need to strip '[' from DFID format first or use "["SFID"]" at caller.
  * usage: sscanf(fidstr, SFID, RFID(&fid)); */
 #define SFID "0x%llx:0x%x:0x%x"
-#define RFID(fid) &((fid)->f_seq), &((fid)->f_oid), &((fid)->f_ver)
+#define RFID(fid) (unsigned long long *)&((fid)->f_seq), &((fid)->f_oid), &((fid)->f_ver)
 
 /********* Quotas **********/
 

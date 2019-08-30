@@ -121,7 +121,8 @@ int main(int argc, char *argv[])
 
 				printf("%s: parent="DFID" stripe=%u "
 				       "stripe_size=%u stripe_count=%u",
-				       argv[i], loa->loa_parent_fid.f_seq,
+				       argv[i],
+				       (unsigned long long)loa->loa_parent_fid.f_seq,
 				       loa->loa_parent_fid.f_oid, 0, /* ver */
 				       loa->loa_parent_fid.f_stripe_idx &
 							PFID_STRIPE_COUNT_MASK,

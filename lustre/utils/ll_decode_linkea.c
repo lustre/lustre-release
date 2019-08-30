@@ -86,7 +86,7 @@ int decode_linkea(const char *fname)
 	if (leh->leh_len > size) {
 		fprintf(stderr,
 			"%s: invalid length %llu, should smaller than %zd\n",
-			fname, leh->leh_len, size);
+			fname, (unsigned long long)leh->leh_len, size);
 		return -1;
 	}
 
@@ -98,8 +98,9 @@ int decode_linkea(const char *fname)
 		length += reclen;
 		if (length > leh->leh_len) {
 			fprintf(stderr,
-				"%s: length exceeded, expected %lld, got %lld\n",
-				fname, leh->leh_len, length);
+				"%s: length exceeded, expected %llu, got %llu\n",
+				fname, (unsigned long long)leh->leh_len,
+				(unsigned long long)length);
 			return -1;
 		}
 		memcpy(&pfid, &lee->lee_parent_fid, sizeof(pfid));
@@ -112,8 +113,10 @@ int decode_linkea(const char *fname)
 
 	if (length != leh->leh_len) {
 		fprintf(stderr,
-			"%s: length mismatch, expected %lld, got %lld\n",
-			fname, leh->leh_len, length);
+			"%s: length mismatch, expected %llu, got %llu\n",
+			fname,
+			(unsigned long long)leh->leh_len,
+			(unsigned long long)length);
 		return -1;
 	}
 
