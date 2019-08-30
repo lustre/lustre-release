@@ -560,65 +560,6 @@ test_nid() {
 	return 1
 }
 
-wait_nm_sync() {
-	local nodemap_name=$1
-	local key=$2
-	local value=$3
-	local opt=$4
-	local proc_param
-	local is_active=$(do_facet mgs $LCTL get_param -n nodemap.active)
-	local max_retries=20
-	local is_sync
-	local out1=""
-	local out2
-	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
-	local i
-
-	if [ "$nodemap_name" == "active" ]; then
-		proc_param="active"
-	elif [ -z "$key" ]; then
-		proc_param=${nodemap_name}
-	else
-		proc_param="${nodemap_name}.${key}"
-	fi
-	(( is_active == 0 )) && [ "$proc_param" != "active" ] && return
-
-	if [ -z "$value" ]; then
-		out1=$(do_facet mgs $LCTL get_param $opt nodemap.${proc_param})
-		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
-	else
-		out1=$value;
-	fi
-
-	# wait up to 10 seconds for other servers to sync with mgs
-	for i in $(seq 1 10); do
-		for node in $(all_server_nodes); do
-		    local node_ip=$(host_nids_address $node $NETTYPE |
-				    cut -d' ' -f1)
-
-		    is_sync=true
-		    if [ -z "$value" ]; then
-			[ $node_ip == $mgs_ip ] && continue
-		    fi
-
-		    out2=$(do_node $node_ip $LCTL get_param $opt \
-				   nodemap.$proc_param 2>/dev/null)
-		    echo "On $node ${node_ip}, ${proc_param} = $out2"
-		    [ "$out1" != "$out2" ] && is_sync=false && break
-		done
-		$is_sync && break
-		sleep 1
-	done
-	if ! $is_sync; then
-		echo MGS
-		echo $out1
-		echo OTHER - IP: $node_ip
-		echo $out2
-		error "mgs and $nodemap_name ${key} mismatch, $i attempts"
-	fi
-	echo "waited $((i - 1)) seconds for sync"
-}
-
 cleanup_active() {
 	# restore activation state
 	do_facet mgs $LCTL nodemap_activate 0
@@ -2654,7 +2595,6 @@ run_test 34 "deny_unknown on default nodemap"
 log "cleanup: ======================================================"
 
 sec_unsetup() {
-	## nodemap deactivated
 	for num in $(seq $MDSCOUNT); do
 		if [ "${identity_old[$num]}" = 1 ]; then
 			switch_identity $num false || identity_old[$num]=$?
