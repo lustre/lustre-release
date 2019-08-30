@@ -128,7 +128,7 @@ log "done"
 wait_delete_completed
 sleep 5 # let MDS refresh aggregated statfs
 NOWUSED=$(($(df -P $DIR | awk '{ print $3 }' | tail -n 1)))
-if [ $(expr $NOWUSED - $USED) -gt 1024 ]; then
+if [ $(expr $NOWUSED - $USED) -gt $(fs_log_size) ]; then
 	error "Space not all freed: now ${NOWUSED}kB, was ${USED}kB."
 else
 	log "Space was freed: now ${NOWUSED}kB, was ${USED}kB."
