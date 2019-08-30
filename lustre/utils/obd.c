@@ -58,7 +58,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <limits.h>
-
 #include "obdctl.h"
 #include "lustreapi_internal.h"
 #include <libcfs/util/list.h>
@@ -1648,7 +1647,7 @@ int jt_obd_test_setattr(int argc, char **argv)
 	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		if (objid >= OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
-				jt_cmdname(argv[0]), objid);
+				jt_cmdname(argv[0]), (unsigned long long)objid);
 			return -E2BIG;
 		}
 
@@ -1741,7 +1740,7 @@ int jt_obd_destroy(int argc, char **argv)
 	     i++, id++) {
 		if (id >= OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
-				jt_cmdname(argv[0]), id);
+				jt_cmdname(argv[0]), (unsigned long long)id);
 			return -E2BIG;
 		}
 
@@ -1883,7 +1882,7 @@ int jt_obd_test_getattr(int argc, char **argv)
 	for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
 		if (objid >= OBIF_MAX_OID) {
 			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
-				jt_cmdname(argv[0]), objid);
+				jt_cmdname(argv[0]), (unsigned long long)objid);
 			return -E2BIG;
 		}
 
@@ -2095,7 +2094,7 @@ int jt_obd_test_brw(int argc, char **argv)
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
 	if (objid >= OBIF_MAX_OID) {
 		fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
-			jt_cmdname(argv[0]), objid);
+			jt_cmdname(argv[0]), (unsigned long long)objid);
 		return -E2BIG;
 	}
 

@@ -272,7 +272,9 @@ static int lsom_update_one(struct fid_rec *f)
 
 	llapi_printf(LLAPI_MSG_DEBUG,
 		     "record %llu:%llu, updated LSOM for fid " DFID
-		     " size:%lu blocks:%lu\n", f->fr_time, f->fr_index,
+		     " size:%lu blocks:%lu\n",
+		     (unsigned long long)f->fr_time,
+		     (unsigned long long)f->fr_index,
 		     PFID(&f->fr_fid), st.st_size, st.st_blocks);
 
 clean_up:
@@ -281,7 +283,7 @@ clean_up:
 	if (rc)
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "failed to clear changelog record: %s:%llu",
-			    opt.o_chlg_user, f->fr_index);
+			    opt.o_chlg_user, (unsigned long long)f->fr_index);
 	return rc;
 }
 
@@ -404,8 +406,9 @@ static int process_record(struct changelog_rec *rec)
 		}
 	}
 
-	llapi_printf(LLAPI_MSG_DEBUG, "Processed changelog record index:%llu "
-		     "type:%s(0x%x) FID:"DFID"\n", index,
+	llapi_printf(LLAPI_MSG_DEBUG,
+		     "Processed changelog record index:%llu type:%s(0x%x) FID:"DFID"\n",
+		     (unsigned long long)index,
 		     changelog_type2str(__le32_to_cpu(rec->cr_type)),
 		     __le32_to_cpu(rec->cr_type), PFID(&rec->cr_tfid));
 
