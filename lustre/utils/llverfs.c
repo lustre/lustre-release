@@ -139,7 +139,7 @@ char filecount[PATH_MAX];	    /* file with total number of files written*/
 static unsigned long num_files;	    /* Total number of files for read/write */
 static loff_t file_size = 4*ONE_GB; /* Size of each file */
 static unsigned files_in_dir = 32;  /* number of files in each directioy */
-static unsigned num_dirs = 30000;   /* total number of directories */
+static unsigned int num_dirs;	    /* total number of directories */
 const int dirmode = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
 static int isatty_flag;
 static int perms =  S_IRWXU | S_IRGRP | S_IROTH;
@@ -149,6 +149,7 @@ static struct option const long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'l',	.name = "long",		.has_arg = no_argument },
 	{ .val = 'l',	.name = "full",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "num_dirs",	.has_arg = required_argument },
 	{ .val = 'o',	.name = "offset",	.has_arg = required_argument },
 	{ .val = 'p',	.name = "partial",	.has_arg = required_argument },
 	{ .val = 'q',	.name = "quiet",	.has_arg = required_argument },
@@ -178,6 +179,7 @@ void usage(int status)
 		       "\t-v, --verbose\n"
 		       "\t-p, --partial, for partial check (1MB files)\n"
 		       "\t-l, --long, --full check (4GB file with 4k blocks)\n"
+		       "\t-n, --num_dirs, number of directories to create\n"
 		       "\t-c, --chunksize, IO chunk size in MB (default=1)\n"
 		       "\t-s, --filesize, file size in MB (default=4096)\n"
 		       "\t-h, --help, display this help and exit\n");
@@ -733,7 +735,7 @@ int main(int argc, char **argv)
 	int c;
 
 	progname = strrchr(argv[0], '/') ? strrchr(argv[0], '/') + 1 : argv[0];
-	while ((c = getopt_long(argc, argv, "c:hlo:pqrs:t:vw",
+	while ((c = getopt_long(argc, argv, "c:hln:o:pqrs:t:vw",
 				      long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
@@ -746,6 +748,9 @@ int main(int argc, char **argv)
 			break;
 		case 'l':
 			full = 1;
+			break;
+		case 'n':
+			num_dirs = strtoul(optarg, NULL, 0);
 			break;
 		case 'o': /* offset */
 			dir_num = strtoul(optarg, NULL, 0);
@@ -802,7 +807,7 @@ int main(int argc, char **argv)
 	printf("Timestamp: %lu\n", (unsigned long )time_st);
 	isatty_flag = isatty(STDOUT_FILENO);
 
-	if (!full) {
+	if (!full && !num_dirs) {
 #ifdef HAVE_EXT2FS_EXT2FS_H
 		struct mntent *tempmnt;
 		FILE *fp = NULL;
@@ -848,32 +853,34 @@ int main(int argc, char **argv)
 #else
 		goto guess;
 #endif
-		if (0) { /* ugh */
-			struct statfs64 statbuf;
+	}
+	if (!num_dirs) {
+		struct statfs64 statbuf;
 guess:
-			/*
-			 * Most extN filesystems are formatted with 128MB/group
-			 * (32k bitmap = 4KB blocksize * 8 bits/block) * 4KB,
-			 * so this is a relatively safe default (somewhat more
-			 * or less doesn't make a huge difference for testing).
-			 *
-			 * We want to create one directory per group, together
-			 * with the "TOPDIR" feature, so that the directories
-			 * are spread across the whole block device.
-			 */
-			if (statfs64(testdir, &statbuf) == 0) {
-				num_dirs = 1 + (long long)statbuf.f_blocks *
-					statbuf.f_bsize / (128ULL * ONE_MB);
-				if (verbose)
-					printf("dirs: %u, fs blocks: %llu\n",
-					       num_dirs,
-					       (long long)statbuf.f_blocks);
-			} else {
-				fprintf(stderr, "%s: unable to stat '%s': %s\n",
-					progname, testdir, strerror(errno));
-				if (verbose)
-					printf("dirs: %u\n", num_dirs);
-			}
+		/*
+		 * Most extN filesystems are formatted with 128MB/group
+		 * (32k bitmap = 4KB blocksize * 8 bits/block) * 4KB,
+		 * so this is a relatively safe default (somewhat more
+		 * or less doesn't make a huge difference for testing).
+		 *
+		 * We want to create one directory per group, together
+		 * with the "TOPDIR" feature, so that the directories
+		 * are spread across the whole block device.
+		 */
+		if (statfs64(testdir, &statbuf) == 0) {
+			num_dirs = 1 + (long long)statbuf.f_blocks *
+						  statbuf.f_bsize /
+				(full ? files_in_dir * file_size : 128*ONE_MB);
+			if (verbose)
+				printf("dirs: %u, fs blocks: %llu\n",
+				       num_dirs, (long long)statbuf.f_blocks);
+		} else {
+			fprintf(stderr, "%s: unable to stat '%s': %s\n",
+				progname, testdir, strerror(errno));
+			if (!num_dirs)
+				num_dirs = 30000;
+			if (verbose)
+				printf("dirs: %u\n", num_dirs);
 		}
 	}
 	chunk_buf = (char *)calloc(chunksize, 1);
