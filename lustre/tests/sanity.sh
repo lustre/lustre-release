@@ -21255,7 +21255,7 @@ cleanup_802a() {
 }
 
 test_802a() {
-
+	[[ $mds1_FSTYPE = zfs ]] || skip "ZFS specific test"
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $OST1_VERSION -lt $(version_code 2.9.55) ]] &&
 		skip "Need server version at least 2.9.55"

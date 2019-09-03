@@ -39,6 +39,17 @@ sed -e "s|REPLACE_ME|$LBUILD_KMODTOOL|" -e "s/\/usr\/src\/kernels/${tmp}/g" \
     ${LBUILD_DIR}/rhel8/rpmmacros.template > ${LBUILD_DIR}/rhel8/rpmmacros
 cat ${LBUILD_DIR}/rhel8/rpmmacros >> $RMAC
 
+patch_spec_rhel8() {
+    sed -i -e '/Provides: kernel-uname-r =/a\
+Provides: kernel-lustre = %{KVRA}%{?1:.%{1}}\\' \
+           -e '/Provides: kernel-devel-uname-r =/a\
+Provides: kernel-devel-lustre = %{KVRA}%{?1:.%{1}}\\' \
+           -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
+    cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4' \
+          SPECS/$SPEC_NAME 2>&1 ||
+        fatal 1 "Error while editing SPECS/$SPEC_NAME"
+}
+
 patch_spec() {
     local buildid="$1"
 
@@ -48,7 +59,7 @@ patch_spec() {
 	$TOPDIR/SOURCES/patch-${lnxmaj}-lustre.patch
 
     # edit the SPEC with our changes
-    patch_spec_common "$buildid"
+    patch_spec_rhel8 "$buildid"
     sed -i -e '/^# empty final patch to facilitate testing of kernel patches/i\
 # adds Lustre patches\
 Patch99995: patch-%{version}-lustre.patch' \
@@ -64,7 +75,6 @@ ApplyOptionalPatch patch-%{version}-lustre.patch\
     cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-4.18-rhel8-%{_target_cpu}.config >> configs/kernel-%{version}-%{_target_cpu}.config\
   fi'\
            -e '/^# Dynamically generate kernel/a echo "CONFIG_BH_LRU_SIZE=16" >> config-generic'\
-           -e '/^%define listnewconfig_fail 1/s/1/0/'\
           SPECS/$SPEC_NAME 2>&1 || \
         fatal 1 "Error while editing SPECS/$SPEC_NAME"
 
