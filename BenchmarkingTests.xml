@@ -5,310 +5,417 @@
   benchmarking tools for a Lustre cluster.  It includes:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438212_44437"/></para>
+      <para><xref linkend="benchmark.iokit"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438212_51053"/></para>
+      <para><xref linkend="benchmark.sgpdd-survey"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438212_26516"/></para>
+      <para><xref linkend="benchmark.ost_perf"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438212_85136"/></para>
+      <para><xref linkend="benchmark.ost_io"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="mds_survey_ref"/></para>
+      <para><xref linkend="benchmark.mds_survey_ref"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438212_58201"/></para>
+      <para><xref linkend="benchmark.stats-collect"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438212_44437">
-      <title>
-          <indexterm><primary>benchmarking</primary><secondary>with Lustre I/O Kit</secondary></indexterm>
-          <indexterm><primary>profiling</primary><see>benchmarking</see></indexterm>
-          <indexterm><primary>tuning</primary><see>benchmarking</see></indexterm>
-          <indexterm><primary>performance</primary><see>benchmarking</see></indexterm>
-          
-          Using Lustre I/O Kit Tools</title>
-    <para>The tools in the Lustre I/O Kit are used to benchmark Lustre file system hardware and
-      validate that it is working as expected before you install the Lustre software. It can also be
-      used to to validate the performance of the various hardware and software layers in the cluster
-      and also to find and troubleshoot I/O issues.</para>
-    <para>Typically, performance is measured starting with single raw devices and then proceeding to groups of devices. Once raw performance has been established, other software layers are then added incrementally and tested.</para>
+  <section xml:id="benchmark.iokit">
+    <title>
+      <indexterm>
+        <primary>benchmarking</primary>
+        <secondary>with Lustre I/O Kit</secondary>
+      </indexterm>
+      <indexterm><primary>profiling</primary><see>benchmarking</see></indexterm>
+      <indexterm><primary>tuning</primary><see>benchmarking</see></indexterm>
+      <indexterm>
+        <primary>performance</primary><see>benchmarking</see>
+      </indexterm>
+    Using Lustre I/O Kit Tools</title>
+    <para>The tools in the Lustre I/O Kit are used to benchmark Lustre file
+    system hardware and validate that it is working as expected before you
+    install the Lustre software. It can also be used to to validate the
+    performance of the various hardware and software layers in the cluster and
+    also to find and troubleshoot I/O issues.</para>
+    <para>Typically, performance is measured starting with single raw devices
+    and then proceeding to groups of devices. Once raw performance has been
+    established, other software layers are then added incrementally and tested.
+    </para>
     <section remap="h3">
       <title>Contents of the Lustre I/O Kit</title>
-      <para>The I/O kit contains three tests, each of which tests a progressively higher layer in
-        the Lustre software stack:</para>
+      <para>The I/O kit contains three tests, each of which tests a
+      progressively higher layer in the Lustre software stack:</para>
       <itemizedlist>
         <listitem>
-          <para><literal>sgpdd-survey</literal> - Measure basic &apos;bare metal&apos; performance
-            of devices while bypassing the kernel block device layers, buffer cache, and file
-            system.</para>
+          <para><literal>sgpdd-survey</literal> - Measure basic
+          &apos;bare metal&apos; performance of devices while bypassing the
+          kernel block device layers, buffer cache, and file system.</para>
         </listitem>
         <listitem>
-          <para><literal>obdfilter-survey</literal> - Measure the performance of one or more OSTs
-            directly on the OSS node or alternately over the network from a Lustre client.</para>
+          <para><literal>obdfilter-survey</literal> - Measure the performance of
+          one or more OSTs directly on the OSS node or alternately over the
+          network from a Lustre client.</para>
         </listitem>
         <listitem>
-          <para><literal>ost-survey</literal> - Performs I/O against OSTs individually to allow
-            performance comparisons to detect if an OST is performing sub-optimally due to hardware
-            issues.</para>
+          <para><literal>ost-survey</literal> - Performs I/O against OSTs
+          individually to allow performance comparisons to detect if an OST is
+          performing sub-optimally due to hardware issues.</para>
         </listitem>
       </itemizedlist>
-      <para>Typically with these tests, a Lustre file system should deliver 85-90% of the raw device
-        performance.</para>
-      <para>A utility <literal>stats-collect</literal> is also provided to collect application profiling information from Lustre clients and servers. See <xref linkend="dbdoclet.50438212_58201"/> for more information.</para>
+      <para>Typically with these tests, a Lustre file system should deliver
+      85-90% of the raw device performance.</para>
+      <para>A utility <literal>stats-collect</literal> is also provided to
+      collect application profiling information from Lustre clients and servers.
+      See <xref linkend="benchmark.stats-collect"/> for more information.</para>
     </section>
     <section remap="h3">
       <title>Preparing to Use the Lustre I/O Kit</title>
-      <para>The following prerequisites must be met to use the tests in the Lustre I/O kit:</para>
+      <para>The following prerequisites must be met to use the tests in the
+      Lustre I/O kit:</para>
       <itemizedlist>
         <listitem>
-          <para>Password-free remote access to nodes in the system (provided by <literal>ssh</literal> or <literal>rsh</literal>).</para>
+          <para>Password-free remote access to nodes in the system (provided by
+          <literal>ssh</literal> or <literal>rsh</literal>).</para>
         </listitem>
         <listitem>
-          <para>LNet self-test completed to test that Lustre networking has been properly installed
-            and configured. See <xref linkend="lnetselftest"/>.</para>
+          <para>LNet self-test completed to test that Lustre networking has been
+          properly installed and configured. See <xref linkend="lnetselftest"/>.
+          </para>
         </listitem>
         <listitem>
           <para>Lustre file system software installed.</para>
         </listitem>
         <listitem>
-          <para><literal>sg3_utils</literal>  package providing the <literal>sgp_dd</literal> tool (<literal>sg3_utils</literal> is a separate RPM package available online using YUM).</para>
+          <para><literal>sg3_utils</literal>  package providing the
+          <literal>sgp_dd</literal> tool (<literal>sg3_utils</literal> is a
+          separate RPM package available online using YUM).</para>
         </listitem>
       </itemizedlist>
-      <para>Download the Lustre I/O kit (<literal>lustre-iokit</literal>)from:</para>
-      <para><link xl:href="http://downloads.whamcloud.com/">http://downloads.whamcloud.com/</link></para>
+      <para>Download the Lustre I/O kit (<literal>lustre-iokit</literal>)from:
+      </para>
+      <para>
+        <link xl:href="http://downloads.whamcloud.com/">http://downloads.whamcloud.com/</link>
+      </para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438212_51053">
+  <section xml:id="benchmark.sgpdd-survey">
     <title><indexterm>
-        <primary>benchmarking</primary>
-        <secondary>raw hardware with sgpdd-survey</secondary>
-      </indexterm>Testing I/O Performance of Raw Hardware (<literal>sgpdd-survey</literal>)</title>
-    <para>The <literal>sgpdd-survey</literal> tool is used to test bare metal I/O performance of the
-      raw hardware, while bypassing as much of the kernel as possible. This survey may be used to
-      characterize the performance of a SCSI device by simulating an OST serving multiple stripe
-      files. The data gathered by this survey can help set expectations for the performance of a
-      Lustre OST using this device.</para>
-    <para>The script uses <literal>sgp_dd</literal> to carry out raw sequential disk I/O. It runs with variable numbers of <literal>sgp_dd</literal> threads to show how performance varies with different request queue depths.</para>
-    <para>The script spawns variable numbers of <literal>sgp_dd</literal> instances, each reading or writing a separate area of the disk to demonstrate performance variance within a number of concurrent stripe files.</para>
-    <para>Several tips and insights for disk performance measurement are described below. Some of this information is specific to RAID arrays and/or the Linux RAID implementation.</para>
+      <primary>benchmarking</primary>
+      <secondary>raw hardware with sgpdd-survey</secondary></indexterm>
+      Testing I/O Performance of Raw Hardware (<literal>sgpdd-survey</literal>)
+    </title>
+    <para>The <literal>sgpdd-survey</literal> tool is used to test bare metal
+    I/O performance of the raw hardware, while bypassing as much of the kernel
+    as possible. This survey may be used to characterize the performance of a
+    SCSI device by simulating an OST serving multiple stripe files. The data
+    gathered by this survey can help set expectations for the performance of a
+    Lustre OST using this device.</para>
+    <para>The script uses <literal>sgp_dd</literal> to carry out raw sequential
+    disk I/O. It runs with variable numbers of <literal>sgp_dd</literal> threads
+    to show how performance varies with different request queue depths.</para>
+    <para>The script spawns variable numbers of <literal>sgp_dd</literal>
+    instances, each reading or writing a separate area of the disk to
+    demonstrate performance variance within a number of concurrent stripe files.
+    </para>
+    <para>Several tips and insights for disk performance measurement are
+    described below. Some of this information is specific to RAID arrays and/or
+    the Linux RAID implementation.</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis>Performance is limited by the slowest disk.</emphasis></para>
-        <para>Before creating a RAID array, benchmark all disks individually. We have frequently encountered situations where drive performance was not consistent for all devices in the array. Replace any disks that are significantly slower than the rest.</para>
+        <para><emphasis>Performance is limited by the slowest disk.</emphasis>
+        </para>
+        <para>Before creating a RAID array, benchmark all disks individually.
+        We have frequently encountered situations where drive performance was
+        not consistent for all devices in the array. Replace any disks that are
+        significantly slower than the rest.</para>
       </listitem>
       <listitem>
-        <para><emphasis>Disks and arrays are very sensitive to request size.</emphasis></para>
-        <para>To identify the optimal request size for a given disk, benchmark the disk with different record sizes ranging from 4 KB to 1 to 2 MB.</para>
+        <para>
+          <emphasis>Disks and arrays are very sensitive to request size.
+          </emphasis>
+        </para>
+        <para>To identify the optimal request size for a given disk, benchmark
+        the disk with different record sizes ranging from 4 KB to 1 to 2 MB.
+        </para>
       </listitem>
     </itemizedlist>
     <caution>
-      <para>The <literal>sgpdd-survey</literal> script overwrites the device being tested, which
-        results in the <emphasis>
-          <emphasis role="bold">LOSS OF ALL DATA</emphasis>
-        </emphasis> on that device. Exercise caution when selecting the device to be tested.</para>
+      <para>The <literal>sgpdd-survey</literal> script overwrites the device
+      being tested, which results in the <emphasis><emphasis role="bold">
+      LOSS OF ALL DATA</emphasis></emphasis> on that device. Exercise caution
+      when selecting the device to be tested.</para>
     </caution>
     <note>
-      <para>Array performance with all LUNs loaded does not always match the performance of a single LUN when tested in isolation.</para>
+      <para>Array performance with all LUNs loaded does not always match the
+      performance of a single LUN when tested in isolation.</para>
     </note>
     <para><emphasis role="bold">Prerequisites:</emphasis></para>
     <itemizedlist>
       <listitem>
-        <para><literal>sgp_dd</literal>  tool in the <literal>sg3_utils</literal> package</para>
+        <para><literal>sgp_dd</literal> tool in the <literal>sg3_utils</literal>
+        package</para>
       </listitem>
       <listitem>
         <para>Lustre software is <emphasis>NOT</emphasis> required</para>
       </listitem>
     </itemizedlist>
-    <para>The device(s) being tested must meet one of these two requirements:</para>
+    <para>The device(s) being tested must meet one of these two requirements:
+    </para>
     <itemizedlist>
       <listitem>
-        <para>If the device is a SCSI device, it must appear in the output of <literal>sg_map</literal> (make sure the kernel module <literal>sg</literal> is loaded).</para>
+        <para>If the device is a SCSI device, it must appear in the output of
+        <literal>sg_map</literal> (make sure the kernel module
+        <literal>sg</literal> is loaded).</para>
       </listitem>
       <listitem>
-        <para>If the device is a raw device, it must appear in the output of <literal>raw -qa</literal>.</para>
+        <para>If the device is a raw device, it must appear in the output of
+        <literal>raw -qa</literal>.</para>
       </listitem>
     </itemizedlist>
     <para>Raw and SCSI devices cannot be mixed in the test specification.</para>
     <note>
-      <para>If you need to create raw devices to use the <literal>sgpdd-survey</literal> tool, note
-        that raw device 0 cannot be used due to a bug in certain versions of the &quot;raw&quot;
-        utility (including the version shipped with Red Hat Enterprise Linux 4U4.)</para>
+      <para>If you need to create raw devices to use the
+      <literal>sgpdd-survey</literal> tool, note that raw device 0 cannot be
+      used due to a bug in certain versions of the &quot;raw&quot; utility
+      (including the version shipped with Red Hat Enterprise Linux 4U4.)</para>
     </note>
     <section remap="h3">
-      <title><indexterm><primary>benchmarking</primary><secondary>tuning storage</secondary></indexterm>Tuning Linux Storage Devices</title>
-      <para>To get large I/O transfers (1 MB) to disk, it may be necessary to tune several kernel parameters as specified:</para>
+      <title><indexterm><primary>benchmarking</primary>
+        <secondary>tuning storage</secondary></indexterm>
+      Tuning Linux Storage Devices</title>
+      <para>To get large I/O transfers (1 MB) to disk, it may be necessary to
+      tune several kernel parameters as specified:</para>
       <screen>/sys/block/sdN/queue/max_sectors_kb = 4096
 /sys/block/sdN/queue/max_phys_segments = 256
 /proc/scsi/sg/allow_dio = 1
 /sys/module/ib_srp/parameters/srp_sg_tablesize = 255
 /sys/block/sdN/queue/scheduler</screen>
       <note>
-        <para>Recommended schedulers are <emphasis role="bold">deadline</emphasis> and <emphasis
-            role="bold">noop</emphasis>. The  scheduler is set by default to <emphasis role="bold"
-            >deadline</emphasis>, unless it has already been set to <emphasis role="bold"
-            >noop</emphasis>.</para>
+        <para>Recommended schedulers are <emphasis role="bold">deadline
+        </emphasis> and <emphasis role="bold">noop</emphasis>. The  scheduler is
+        set by default to <emphasis role="bold">deadline</emphasis>, unless it
+        has already been set to <emphasis role="bold">noop</emphasis>.</para>
       </note>
     </section>
     <section remap="h3">
       <title>Running sgpdd-survey</title>
-      <para>The <literal>sgpdd-survey</literal> script must be customized for the particular device
-        being tested and for the location where the script saves its working and result files (by
-        specifying the <literal>${rslt}</literal> variable). Customization variables are described
-        at the beginning of the script.</para>
-      <para>When the <literal>sgpdd-survey</literal> script runs, it creates a number of working
-        files and a pair of result files. The names of all the files created start with the prefix
-        defined in the variable <literal>${rslt}</literal>. (The default value is
-          <literal>/tmp</literal>.) The files include:</para>
+      <para>The <literal>sgpdd-survey</literal> script must be customized for
+      the particular device being tested and for the location where the script
+      saves its working and result files (by specifying the
+      <literal>${rslt}</literal> variable). Customization variables are
+      described at the beginning of the script.</para>
+      <para>When the <literal>sgpdd-survey</literal> script runs, it creates a
+      number of working files and a pair of result files. The names of all the
+      files created start with the prefix defined in the variable
+      <literal>${rslt}</literal>. (The default value is <literal>/tmp</literal>.
+      ) The files include:</para>
       <itemizedlist>
         <listitem>
-          <para>File containing standard output data (same as <literal>stdout</literal>)</para>
+          <para>File containing standard output data (same as
+          <literal>stdout</literal>)</para>
           <screen><replaceable>rslt_date_time</replaceable>.summary</screen>
         </listitem>
         <listitem>
           <para>Temporary (tmp) files</para>
-          <screen><replaceable>rslt_date_time</replaceable>_*
-</screen>
+          <screen><replaceable>rslt_date_time</replaceable>_*</screen>
         </listitem>
         <listitem>
           <para>Collected tmp files for post-mortem</para>
-          <screen><replaceable>rslt_date_time</replaceable>.detail
-</screen>
+          <screen><replaceable>rslt_date_time</replaceable>.detail</screen>
         </listitem>
       </itemizedlist>
-      <para>The <literal>stdout</literal> and the <literal>.summary</literal> file will contain lines like this:</para>
+      <para>The <literal>stdout</literal> and the <literal>.summary</literal>
+      file will contain lines like this:</para>
       <screen>total_size 8388608K rsz 1024 thr 1 crg 1 180.45 MB/s 1 x 180.50 \
-        = 180.50 MB/s
-</screen>
-      <para>Each line corresponds to a run of the test. Each test run will have a different number of threads, record size, or number of regions.</para>
+        = 180.50 MB/s</screen>
+      <para>Each line corresponds to a run of the test. Each test run will have
+      a different number of threads, record size, or number of regions.</para>
       <itemizedlist>
         <listitem>
-          <para><literal>total_size</literal>  - Size of file being tested in KBs (8 GB in above example).</para>
+          <para><literal>total_size</literal>  - Size of file being tested in
+          KBs (8 GB in above example).</para>
         </listitem>
         <listitem>
-          <para><literal>rsz</literal>  - Record size in KBs (1 MB in above example).</para>
+          <para><literal>rsz</literal>  - Record size in KBs (1 MB in above
+          example).</para>
         </listitem>
         <listitem>
-          <para><literal>thr</literal>  - Number of threads generating I/O (1 thread in above example).</para>
+          <para><literal>thr</literal>  - Number of threads generating I/O (1
+          thread in above example).</para>
         </listitem>
         <listitem>
-          <para><literal>crg</literal> - Current regions, the number of disjoint areas on the disk to which I/O is being sent (1 region in above example, indicating that no seeking is done).</para>
+          <para><literal>crg</literal> - Current regions, the number of
+          disjoint areas on the disk to which I/O is being sent (1 region in
+          above example, indicating that no seeking is done).</para>
         </listitem>
         <listitem>
-          <para><literal>MB/s</literal>  - Aggregate bandwidth measured by dividing the total amount of data by the elapsed time (180.45 MB/s in the above example).</para>
+          <para><literal>MB/s</literal>  - Aggregate bandwidth measured by
+          dividing the total amount of data by the elapsed time (180.45 MB/s in
+          the above example).</para>
         </listitem>
         <listitem>
-          <para><literal>MB/s</literal>  - The remaining numbers show the number of regions X performance of the slowest disk as a sanity check on the aggregate bandwidth.</para>
+          <para><literal>MB/s</literal>  - The remaining numbers show the number
+          of regions X performance of the slowest disk as a sanity check on the
+          aggregate bandwidth.</para>
         </listitem>
       </itemizedlist>
-      <para>If there are so many threads that the <literal>sgp_dd</literal> script is unlikely to be able to allocate I/O buffers, then <literal>ENOMEM</literal> is printed in place of the aggregate bandwidth result.</para>
-      <para>If one or more <literal>sgp_dd</literal> instances do not successfully report a bandwidth number, then <literal>FAILED</literal> is printed in place of the aggregate bandwidth result.</para>
+      <para>If there are so many threads that the <literal>sgp_dd</literal>
+      script is unlikely to be able to allocate I/O buffers, then
+      <literal>ENOMEM</literal> is printed in place of the aggregate bandwidth
+      result.</para>
+      <para>If one or more <literal>sgp_dd</literal> instances do not
+      successfully report a bandwidth number, then <literal>FAILED</literal>
+      is printed in place of the aggregate bandwidth result.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438212_26516">
+  <section xml:id="benchmark.ost_perf">
     <title><indexterm>
-        <primary>benchmarking</primary>
-        <secondary>OST performance</secondary>
-      </indexterm>Testing OST Performance (<literal>obdfilter-survey</literal>)</title>
-    <para>The <literal>obdfilter-survey</literal> script generates sequential I/O from varying
-      numbers of threads and objects (files) to simulate the I/O patterns of a Lustre client.</para>
-    <para>The <literal>obdfilter-survey</literal> script can be run directly on the OSS node to
-      measure the OST storage performance without any intervening network, or it can be run remotely
-      on a Lustre client to measure the OST performance including network overhead.</para>
-    <para>The <literal>obdfilter-survey</literal> is used to characterize the performance of the
-      following:</para>
+      <primary>benchmarking</primary>
+      <secondary>OST performance</secondary>
+      </indexterm>Testing OST Performance (<literal>obdfilter-survey</literal>)
+    </title>
+    <para>The <literal>obdfilter-survey</literal> script generates sequential
+    I/O from varying numbers of threads and objects (files) to simulate the I/O
+    patterns of a Lustre client.</para>
+    <para>The <literal>obdfilter-survey</literal> script can be run directly on
+    the OSS node to measure the OST storage performance without any intervening
+    network, or it can be run remotely on a Lustre client to measure the OST
+    performance including network overhead.</para>
+    <para>The <literal>obdfilter-survey</literal> is used to characterize the
+    performance of the following:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis role="bold">Local file system</emphasis> - In this mode, the
-            <literal>obdfilter-survey</literal> script exercises one or more instances of the
-          obdfilter directly. The script may run on one or more OSS nodes, for example, when the
-          OSSs are all attached to the same multi-ported disk subsystem.</para>
-        <para>Run the script using the <literal>case=disk</literal> parameter to run the test against all the local OSTs. The script automatically detects all local OSTs and includes them in the survey.</para>
-        <para>To run the test against only specific OSTs, run the script using the <literal>targets=parameter</literal> to list the OSTs to be tested explicitly. If some OSTs are on remote nodes, specify their hostnames in addition to the OST name (for example, <literal>oss2:lustre-OST0004</literal>).</para>
-        <para>All <literal>obdfilter</literal> instances are driven directly. The script automatically loads the <literal>obdecho</literal> module (if required) and creates one instance of <literal>echo_client</literal> for each <literal>obdfilter</literal> instance in order to generate I/O requests directly to the OST.</para>
-        <para>For more details, see <xref linkend="dbdoclet.50438212_59319"/>.</para>
+        <para><emphasis role="bold">Local file system</emphasis> - In this mode,
+        the <literal>obdfilter-survey</literal> script exercises one or more
+        instances of the obdfilter directly. The script may run on one or more
+        OSS nodes, for example, when the OSSs are all attached to the same
+        multi-ported disk subsystem.</para>
+        <para>Run the script using the <literal>case=disk</literal> parameter to
+        run the test against all the local OSTs. The script automatically
+        detects all local OSTs and includes them in the survey.</para>
+        <para>To run the test against only specific OSTs, run the script using
+        the <literal>targets=parameter</literal> to list the OSTs to be tested
+        explicitly. If some OSTs are on remote nodes, specify their hostnames in
+        addition to the OST name (for example,
+        <literal>oss2:lustre-OST0004</literal>).</para>
+        <para>All <literal>obdfilter</literal> instances are driven directly.
+        The script automatically loads the <literal>obdecho</literal> module (if
+        required) and creates one instance of <literal>echo_client</literal> for
+        each <literal>obdfilter</literal> instance in order to generate I/O
+        requests directly to the OST.</para>
+        <para>For more details, see <xref linkend="dbdoclet.50438212_59319"/>.
+        </para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Network</emphasis>  - In this mode, the Lustre client generates I/O requests over the network but these requests are not sent to the OST file system. The OSS node runs the obdecho server to receive the requests but discards them before they are sent to the disk.</para>
-        <para>Pass the parameters <literal>case=network</literal> and <literal>targets=<replaceable>hostname|IP_of_server</replaceable></literal> to the script. For each network case, the script does the required setup.</para>
-        <para>For more details, see <xref linkend="dbdoclet.50438212_36037"/></para>
+        <para><emphasis role="bold">Network</emphasis>  - In this mode, the
+        Lustre client generates I/O requests over the network but these requests
+        are not sent to the OST file system. The OSS node runs the obdecho
+        server to receive the requests but discards them before they are sent to
+        the disk.</para>
+        <para>Pass the parameters <literal>case=network</literal> and
+        <literal>targets=<replaceable>hostname|IP_of_server</replaceable>
+        </literal> to the script. For each network case, the script does the
+        required setup.</para>
+        <para>For more details, see <xref linkend="benchmark.network"/>
+        </para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Remote file system over the network</emphasis> - In this mode
-          the <literal>obdfilter-survey</literal> script generates I/O from a Lustre client to a
-          remote OSS to write the data to the file system.</para>
-        <para>To run the test against all the local OSCs, pass the parameter <literal>case=netdisk</literal> to the script. Alternately you can pass the target= parameter with one or more OSC devices (e.g., <literal>lustre-OST0000-osc-ffff88007754bc00</literal>) against which the tests are to be run.</para>
-        <para>For more details, see <xref linkend="dbdoclet.50438212_62662"/>.</para>
+        <para><emphasis role="bold">Remote file system over the network
+        </emphasis> - In this mode the <literal>obdfilter-survey</literal>
+        script generates I/O from a Lustre client to a remote OSS to write the
+        data to the file system.</para>
+        <para>To run the test against all the local OSCs, pass the parameter
+        <literal>case=netdisk</literal> to the script. Alternately you can pass
+        the target= parameter with one or more OSC devices (e.g.,
+        <literal>lustre-OST0000-osc-ffff88007754bc00</literal>) against which
+        the tests are to be run.</para>
+        <para>For more details, see <xref linkend="benchmark.remote_disk"/>.
+        </para>
       </listitem>
     </itemizedlist>
     <caution>
-      <para>The <literal>obdfilter-survey</literal> script is potentially destructive and there is a
-        small risk data may be lost. To reduce this risk, <literal>obdfilter-survey</literal> should
-        not be run on devices that contain data that needs to be preserved. Thus, the best time to
-        run <literal>obdfilter-survey</literal> is before the Lustre file system is put into
-        production. The reason <literal>obdfilter-survey</literal> may be safe to run on a
-        production file system is because it creates objects with object sequence 2. Normal file
-        system objects are typically created with object sequence 0.</para>
+      <para>The <literal>obdfilter-survey</literal> script is potentially
+      destructive and there is a small risk data may be lost. To reduce this
+      risk, <literal>obdfilter-survey</literal> should not be run on devices
+      that contain data that needs to be preserved. Thus, the best time to run
+      <literal>obdfilter-survey</literal> is before the Lustre file system is
+      put into production. The reason <literal>obdfilter-survey</literal> may be
+      safe to run on a production file system is because it creates objects with
+      object sequence 2. Normal file system objects are typically created with
+      object sequence 0.</para>
     </caution>
     <note>
-      <para>If the <literal>obdfilter-survey</literal> test is terminated before it completes, some
-        small amount of space is leaked. you can either ignore it or reformat the file
-        system.</para>
+      <para>If the <literal>obdfilter-survey</literal> test is terminated before
+      it completes, some small amount of space is leaked. you can either ignore
+      it or reformat the file system.</para>
     </note>
     <note>
-      <para>The <literal>obdfilter-survey</literal> script is <emphasis>NOT</emphasis> scalable
-        beyond tens of OSTs since it is only intended to measure the I/O performance of individual
-        storage subsystems, not the scalability of the entire system.</para>
+      <para>The <literal>obdfilter-survey</literal> script is
+      <emphasis>NOT</emphasis> scalable beyond tens of OSTs since it is only
+      intended to measure the I/O performance of individual storage subsystems,
+      not the scalability of the entire system.</para>
     </note>
     <note>
-      <para>The <literal>obdfilter-survey</literal> script must be customized, depending on the
-        components under test and where the script&apos;s working files should be kept.
-        Customization variables are described at the beginning of the
-          <literal>obdfilter-survey</literal> script. In particular, pay attention to the listed
-        maximum values listed for each parameter in the script.</para>
+      <para>The <literal>obdfilter-survey</literal> script must be customized,
+      depending on the components under test and where the script&apos;s working
+      files should be kept.  Customization variables are described at the
+      beginning of the <literal>obdfilter-survey</literal> script. In
+      particular, pay attention to the listed maximum values listed for each
+      parameter in the script.</para>
     </note>
     <section xml:id="dbdoclet.50438212_59319">
-      <title><indexterm><primary>benchmarking</primary><secondary>local disk</secondary></indexterm>Testing Local Disk Performance</title>
-      <para>The <literal>obdfilter-survey</literal> script can be run automatically or manually
-        against a local disk. This script profiles the overall throughput of storage hardware,
-        including the file system and RAID layers managing the storage, by sending workloads to the
-        OSTs that vary in thread count, object count, and I/O size.</para>
-      <para>When the <literal>obdfilter-survey</literal> script is run, it provides information
-        about the performance abilities of the storage hardware and shows the saturation
-        points.</para>
-      <para>The <literal>plot-obdfilter</literal> script generates from the output of the
-          <literal>obdfilter-survey</literal> a CSV file and parameters for importing into a
-        spreadsheet or gnuplot to visualize the data.</para>
-      <para>To run the <literal>obdfilter-survey</literal> script, create a standard Lustre file
-        system configuration; no special setup is needed.</para>
+      <title><indexterm><primary>benchmarking</primary>
+        <secondary>local disk</secondary></indexterm>
+      Testing Local Disk Performance</title>
+      <para>The <literal>obdfilter-survey</literal> script can be run
+      automatically or manually against a local disk. This script profiles the
+      overall throughput of storage hardware, including the file system and RAID
+      layers managing the storage, by sending workloads to the OSTs that vary in
+      thread count, object count, and I/O size.</para>
+      <para>When the <literal>obdfilter-survey</literal> script is run, it
+      provides information about the performance abilities of the storage
+      hardware and shows the saturation points.</para>
+      <para>The <literal>plot-obdfilter</literal> script generates from the
+      output of the <literal>obdfilter-survey</literal> a CSV file and
+      parameters for importing into a spreadsheet or gnuplot to visualize the
+      data.</para>
+      <para>To run the <literal>obdfilter-survey</literal> script, create a
+      standard Lustre file system configuration; no special setup is needed.
+      </para>
       <para><emphasis role="bold">To perform an automatic run:</emphasis></para>
       <orderedlist>
         <listitem>
           <para>Start the Lustre OSTs.</para>
-          <para>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+          <para>The Lustre OSTs should be mounted on the OSS node(s) to be
+          tested. The Lustre client is not required to be mounted at this time.
+          </para>
         </listitem>
         <listitem>
           <para>Verify that the obdecho module is loaded. Run:</para>
           <screen>modprobe obdecho</screen>
         </listitem>
         <listitem>
-          <para>Run the <literal>obdfilter-survey</literal> script with the parameter
-              <literal>case=disk</literal>.</para>
-          <para>For example, to run a local test with up to two objects (nobjhi), up to two threads (thrhi), and 1024 MB transfer size (size):</para>
+          <para>Run the <literal>obdfilter-survey</literal> script with the
+          parameter <literal>case=disk</literal>.</para>
+          <para>For example, to run a local test with up to two objects
+          (nobjhi), up to two threads (thrhi), and 1024 MB transfer size (size):
+          </para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 case=disk sh obdfilter-survey</screen>
         </listitem>
         <listitem>
-		<para>Performance measurements for write, rewrite, read etc are provided below:</para>
-		<screen># example output
+		      <para>Performance measurements for write, rewrite, read etc are
+          provided below:</para>
+		      <screen># example output
 Fri Sep 25 11:14:03 EDT 2015 Obdfilter-survey for case=disk from hds1fnb6123
 ost 10 sz 167772160K rsz 1024K obj   10 thr   10 write 10982.73 [ 601.97,2912.91] rewrite 15696.54 [1160.92,3450.85] read 12358.60 [ 938.96,2634.87] 
 ...</screen>
-		<para>The file <literal>./lustre-iokit/obdfilter-survey/README.obdfilter-survey</literal>
-		provides an explaination for the output as follows:</para>
-		<screen>ost 10          is the total number of OSTs under test.
+		      <para>The file
+          <literal>./lustre-iokit/obdfilter-survey/README.obdfilter-survey
+          </literal>provides an explaination for the output as follows:</para>
+		      <screen>ost 10          is the total number of OSTs under test.
 sz 167772160K   is the total amount of data read or written (in bytes).
 rsz 1024K       is the record size (size of each echo_client I/O, in bytes).
 obj    10       is the total number of objects over all OSTs
@@ -328,15 +435,20 @@ over all OSTs.</screen>
       <orderedlist>
         <listitem>
           <para>Start the Lustre OSTs.</para>
-          <para>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+          <para>The Lustre OSTs should be mounted on the OSS node(s) to be
+          tested. The Lustre client is not required to be mounted at this time.
+          </para>
         </listitem>
         <listitem>
-          <para>Verify that the <literal>obdecho</literal> module is loaded. Run:</para>
+          <para>Verify that the <literal>obdecho</literal> module is loaded.
+          Run:</para>
           <screen>modprobe obdecho</screen>
         </listitem>
         <listitem>
           <para>Determine the OST names.</para>
-          <para>On the OSS nodes to be tested, run the <literal>lctl dl</literal> command. The OST device names are listed in the fourth column of the output. For example:</para>
+          <para>On the OSS nodes to be tested, run the
+          <literal>lctl dl</literal> command. The OST device names are listed in
+          the fourth column of the output. For example:</para>
           <screen>$ lctl dl |grep obdfilter
 0 UP obdfilter lustre-OST0001 lustre-OST0001_UUID 1159
 2 UP obdfilter lustre-OST0002 lustre-OST0002_UUID 1159
@@ -344,44 +456,56 @@ over all OSTs.</screen>
         </listitem>
         <listitem>
           <para>List all OSTs you want to test.</para>
-          <para>Use the <literal>targets=parameter</literal> to list the OSTs separated by spaces. List the individual OSTs by name using the format
-              <literal><replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable></literal>
-            (for example, <literal>lustre-OST0001</literal>). You do not have to specify an MDS or LOV.</para>
+          <para>Use the <literal>targets=parameter</literal> to list the OSTs
+          separated by spaces. List the individual OSTs by name using the format
+          <literal>
+          <replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>
+          </literal> (for example, <literal>lustre-OST0001</literal>). You do
+          not have to specify an MDS or LOV.</para>
         </listitem>
         <listitem>
           <para>Run the <literal>obdfilter-survey</literal> script with the
-              <literal>targets=parameter</literal>.</para>
-          <para>For example, to run a local test with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size:</para>
+          <literal>targets=parameter</literal>.</para>
+          <para>For example, to run a local test with up to two objects
+          (<literal>nobjhi</literal>), up to two threads (
+          <literal>thrhi</literal>), and 1024 Mb (size) transfer size:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;lustre-OST0001 \
 	   lustre-OST0002&quot; sh obdfilter-survey</screen>
         </listitem>
       </orderedlist>
     </section>
-    <section xml:id="dbdoclet.50438212_36037">
-      <title><indexterm><primary>benchmarking</primary><secondary>network</secondary></indexterm>Testing Network Performance</title>
-      <para>The <literal>obdfilter-survey</literal> script can only be run automatically against a
-        network; no manual test is provided.</para>
-      <para>To run the network test, a specific Lustre file system setup is needed. Make sure that
-        these configuration requirements have been met.</para>
+    <section xml:id="benchmark.network">
+      <title><indexterm><primary>benchmarking</primary>
+        <secondary>network</secondary></indexterm>
+      Testing Network Performance</title>
+      <para>The <literal>obdfilter-survey</literal> script can only be run
+      automatically against a network; no manual test is provided.</para>
+      <para>To run the network test, a specific Lustre file system setup is
+      needed. Make sure that these configuration requirements have been met.
+      </para>
       <para><emphasis role="bold">To perform an automatic run:</emphasis></para>
       <orderedlist>
         <listitem>
           <para>Start the Lustre OSTs.</para>
-          <para>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+          <para>The Lustre OSTs should be mounted on the OSS node(s) to be
+          tested. The Lustre client is not required to be mounted at this time.
+          </para>
         </listitem>
         <listitem>
-          <para>Verify that the <literal>obdecho</literal> module is loaded. Run:</para>
+          <para>Verify that the <literal>obdecho</literal> module is loaded.
+          Run:</para>
           <screen>modprobe obdecho</screen>
         </listitem>
         <listitem>
-          <para>Start <literal>lctl</literal> and check the device list, which must be empty. Run:</para>
+          <para>Start <literal>lctl</literal> and check the device list, which
+          must be empty. Run:</para>
           <screen>lctl dl</screen>
         </listitem>
         <listitem>
-          <para>Run the <literal>obdfilter-survey</literal> script with the parameters
-              <literal>case=network</literal> and
-                <literal>targets=<replaceable>hostname|ip_of_server</replaceable></literal>. For
-            example:</para>
+          <para>Run the <literal>obdfilter-survey</literal> script with the
+          parameters <literal>case=network</literal> and
+          <literal>targets=<replaceable>hostname|ip_of_server</replaceable>
+          </literal>. For example:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;oss0 oss1&quot; \
 	   case=network sh obdfilter-survey</screen>
         </listitem>
@@ -389,28 +513,34 @@ over all OSTs.</screen>
           <para>On the server side, view the statistics at:</para>
           <screen>lctl get_param obdecho.<replaceable>echo_srv</replaceable>.stats</screen>
           <para>where <literal><replaceable>echo_srv</replaceable></literal>
-            is the <literal>obdecho</literal> server created by the script.</para>
+          is the <literal>obdecho</literal> server created by the script.</para>
         </listitem>
       </orderedlist>
     </section>
-    <section xml:id="dbdoclet.50438212_62662">
-      <title><indexterm><primary>benchmarking</primary><secondary>remote disk</secondary></indexterm>Testing Remote Disk Performance</title>
-      <para>The <literal>obdfilter-survey</literal> script can be run automatically or manually
-        against a network disk. To run the network disk test, start with a standard Lustre
-        configuration. No special setup is needed.</para>
+    <section xml:id="benchmark.remote_disk">
+      <title><indexterm><primary>benchmarking</primary>
+      <secondary>remote disk</secondary></indexterm>
+      Testing Remote Disk Performance</title>
+      <para>The <literal>obdfilter-survey</literal> script can be run
+      automatically or manually against a network disk. To run the network disk
+      test, start with a standard Lustre configuration. No special setup is
+      needed.</para>
       <para><emphasis role="bold">To perform an automatic run:</emphasis></para>
       <orderedlist>
         <listitem>
           <para>Start the Lustre OSTs.</para>
-          <para>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+          <para>The Lustre OSTs should be mounted on the OSS node(s) to be
+          tested. The Lustre client is not required to be mounted at this time.
+          </para>
         </listitem>
         <listitem>
-          <para>Verify that the <literal>obdecho</literal> module is loaded. Run:</para>
+          <para>Verify that the <literal>obdecho</literal> module is loaded.
+          Run:</para>
           <screen>modprobe obdecho</screen>
         </listitem>
         <listitem>
-          <para>Run the <literal>obdfilter-survey</literal> script with the parameter
-              <literal>case=netdisk</literal>. For example:</para>
+          <para>Run the <literal>obdfilter-survey</literal> script with the
+          parameter <literal>case=netdisk</literal>. For example:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 case=netdisk sh obdfilter-survey
 </screen>
         </listitem>
@@ -419,15 +549,20 @@ over all OSTs.</screen>
       <orderedlist>
         <listitem>
           <para>Start the Lustre OSTs.</para>
-          <para>The Lustre OSTs should be mounted on the OSS node(s) to be tested. The Lustre client is not required to be mounted at this time.</para>
+          <para>The Lustre OSTs should be mounted on the OSS node(s) to be
+          tested. The Lustre client is not required to be mounted at this time.
+          </para>
         </listitem>
         <listitem>
-          <para>Verify that the <literal>obdecho</literal> module is loaded. Run:</para>
+          <para>Verify that the <literal>obdecho</literal> module is loaded.
+          Run:</para>
           <para>modprobe obdecho</para>
         </listitem>
         <listitem>
           <para>Determine the OSC names.</para>
-          <para>On the OSS nodes to be tested, run the <literal>lctl dl</literal> command. The OSC device names are listed in the fourth column of the output. For example:</para>
+          <para>On the OSS nodes to be tested, run the
+          <literal>lctl dl</literal> command. The OSC device names are listed in
+          the fourth column of the output. For example:</para>
           <screen>$ lctl dl |grep obdfilter
 3 UP osc lustre-OST0000-osc-ffff88007754bc00 \
            54b91eab-0ea9-1516-b571-5e6df349592e 5
@@ -438,25 +573,33 @@ over all OSTs.</screen>
         </listitem>
         <listitem>
           <para>List all OSCs you want to test.</para>
-          <para>Use the <literal>targets=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name separated by spaces using the format <literal><replaceable>fsname</replaceable>-<replaceable>OST_name</replaceable>-osc-<replaceable>instance</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <emphasis>do not have to specify an MDS or LOV.</emphasis></para>
+          <para>Use the <literal>targets=parameter</literal> to list the OSCs
+          separated by spaces. List the individual OSCs by name separated by
+          spaces using the format <literal>
+          <replaceable>fsname</replaceable>-<replaceable>OST_name</replaceable>-osc-<replaceable>instance</replaceable>
+          </literal> (for example,
+          <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You
+          <emphasis>do not have to specify an MDS or LOV.</emphasis></para>
         </listitem>
         <listitem>
           <para>Run the <literal>obdfilter-survey</literal> script with the
-                <literal>targets=<replaceable>osc</replaceable></literal> and
-              <literal>case=netdisk</literal>.</para>
-          <para>An example of a local test run with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size is shown below:</para>
+          <literal>targets=<replaceable>osc</replaceable></literal> and
+          <literal>case=netdisk</literal>.</para>
+          <para>An example of a local test run with up to two objects
+          (<literal>nobjhi</literal>), up to two threads
+          (<literal>thrhi</literal>), and 1024 Mb (size) transfer size is shown
+          below:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 \
-           targets=&quot;lustre-OST0000-osc-ffff88007754bc00 \
-           lustre-OST0001-osc-ffff88007754bc00&quot; sh obdfilter-survey
-</screen>
+targets=&quot;lustre-OST0000-osc-ffff88007754bc00 \
+lustre-OST0001-osc-ffff88007754bc00&quot; sh obdfilter-survey</screen>
         </listitem>
       </orderedlist>
     </section>
     <section remap="h3">
       <title>Output Files</title>
-      <para>When the <literal>obdfilter-survey</literal> script runs, it creates a number of working
-        files and a pair of result files. All files start with the prefix defined in the variable
-          <literal>${rslt}</literal>.</para>
+      <para>When the <literal>obdfilter-survey</literal> script runs, it creates
+      a number of working files and a pair of result files. All files start with
+      the prefix defined in the variable <literal>${rslt}</literal>.</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -507,22 +650,23 @@ over all OSTs.</screen>
           </tbody>
         </tgroup>
       </informaltable>
-      <para>The <literal>obdfilter-survey</literal> script iterates over the given number of threads
-        and objects performing the specified tests and checks that all test processes have completed
-        successfully.</para>
+      <para>The <literal>obdfilter-survey</literal> script iterates over the
+      given number of threads and objects performing the specified tests and
+      checks that all test processes have completed successfully.</para>
       <note>
-        <para>The <literal>obdfilter-survey</literal> script may not clean up properly if it is
-          aborted or if it encounters an unrecoverable error. In this case, a manual cleanup may be
-          required, possibly including killing any running instances of <literal>lctl</literal>
-          (local or remote), removing <literal>echo_client</literal> instances created by the script
-          and unloading <literal>obdecho</literal>.</para>
+        <para>The <literal>obdfilter-survey</literal> script may not clean up
+        properly if it is aborted or if it encounters an unrecoverable error. In
+        this case, a manual cleanup may be required, possibly including killing
+        any running instances of <literal>lctl</literal> (local or remote),
+        removing <literal>echo_client</literal> instances created by the script
+        and unloading <literal>obdecho</literal>.</para>
       </note>
       <section remap="h4">
         <title>Script Output</title>
-        <para>The <literal>.summary</literal> file and <literal>stdout</literal> of the
-            <literal>obdfilter-survey</literal> script contain lines like:</para>
-        <screen>ost 8 sz 67108864K rsz 1024 obj 8 thr 8 write 613.54 [ 64.00, 82.00]
-</screen>
+        <para>The <literal>.summary</literal> file and <literal>stdout</literal>
+        of the <literal>obdfilter-survey</literal> script contain lines like:
+        </para>
+        <screen>ost 8 sz 67108864K rsz 1024 obj 8 thr 8 write 613.54 [ 64.00, 82.00]</screen>
         <para>Where:</para>
         <informaltable frame="all">
           <tgroup cols="2">
@@ -531,7 +675,8 @@ over all OSTs.</screen>
             <thead>
               <row>
                 <entry>
-                  <para><emphasis role="bold">Parameter and value</emphasis></para>
+                  <para><emphasis role="bold">Parameter and value</emphasis>
+                  </para>
                 </entry>
                 <entry>
                   <para><emphasis role="bold">Description</emphasis></para>
@@ -560,7 +705,8 @@ over all OSTs.</screen>
                   <para> rsz 1024</para>
                 </entry>
                 <entry>
-                  <para> Record size (size of each echo_client I/O, in KB).</para>
+                  <para> Record size (size of each echo_client I/O, in KB).
+                  </para>
                 </entry>
               </row>
               <row>
@@ -576,7 +722,8 @@ over all OSTs.</screen>
                   <para> thr 8</para>
                 </entry>
                 <entry>
-                  <para> Total number of threads over all OSTs and objects.</para>
+                  <para> Total number of threads over all OSTs and objects.
+                  </para>
                 </entry>
               </row>
               <row>
@@ -584,7 +731,8 @@ over all OSTs.</screen>
                   <para> write</para>
                 </entry>
                 <entry>
-                  <para> Test name. If more tests have been specified, they all appear on the same line.</para>
+                  <para> Test name. If more tests have been specified, they all
+                  appear on the same line.</para>
                 </entry>
               </row>
               <row>
@@ -592,7 +740,8 @@ over all OSTs.</screen>
                   <para> 613.54</para>
                 </entry>
                 <entry>
-                  <para> Aggregate bandwidth over all OSTs (measured by dividing the total number of MB by the elapsed time).</para>
+                  <para> Aggregate bandwidth over all OSTs (measured by dividing
+                  the total number of MB by the elapsed time).</para>
                 </entry>
               </row>
               <row>
@@ -600,14 +749,17 @@ over all OSTs.</screen>
                   <para> [64, 82.00]</para>
                 </entry>
                 <entry>
-                  <para> Minimum and maximum instantaneous bandwidths on an individual OST.</para>
+                  <para> Minimum and maximum instantaneous bandwidths on an
+                  individual OST.</para>
                 </entry>
               </row>
             </tbody>
           </tgroup>
         </informaltable>
         <note>
-          <para>Although the numbers of threads and objects are specified per-OST in the customization section of the script, the reported results are aggregated over all OSTs.</para>
+          <para>Although the numbers of threads and objects are specified
+          per-OST in the customization section of the script, the reported
+          results are aggregated over all OSTs.</para>
         </note>
       </section>
       <section remap="h4">
@@ -631,25 +783,25 @@ over all OSTs.</screen>
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438212_85136">
-      <title><indexterm>
-        <primary>benchmarking</primary>
-        <secondary>OST I/O</secondary>
-      </indexterm>Testing OST I/O Performance (<literal>ost-survey</literal>)</title>
-    <para>The <literal>ost-survey</literal> tool is a shell script that uses <literal>lfs
-        setstripe</literal> to perform I/O against a single OST. The script writes a file (currently
-      using <literal>dd</literal>) to each OST in the Lustre file system, and compares read and
-      write speeds. The <literal>ost-survey</literal> tool is used to detect anomalies between
-      otherwise identical disk subsystems.</para>
+  <section xml:id="benchmark.ost_io">
+    <title><indexterm>
+      <primary>benchmarking</primary>
+      <secondary>OST I/O</secondary></indexterm>
+    Testing OST I/O Performance (<literal>ost-survey</literal>)</title>
+    <para>The <literal>ost-survey</literal> tool is a shell script that uses
+    <literal>lfs setstripe</literal> to perform I/O against a single OST. The
+    script writes a file (currently using <literal>dd</literal>) to each OST
+    in the Lustre file system, and compares read and write speeds. The
+    <literal>ost-survey</literal> tool is used to detect anomalies between
+    otherwise identical disk subsystems.</para>
     <note>
-      <para>We have frequently discovered wide performance variations across all LUNs in a cluster.
-        This may be caused by faulty disks, RAID parity reconstruction during the test, or faulty
-        network hardware.</para>
+      <para>We have frequently discovered wide performance variations across
+      all LUNs in a cluster.  This may be caused by faulty disks, RAID parity
+      reconstruction during the test, or faulty network hardware.</para>
     </note>
-    <para>To run the <literal>ost-survey</literal> script, supply a file size (in KB) and the Lustre
-      file system mount point. For example, run:</para>
-    <screen>$ ./ost-survey.sh -s 10 /mnt/lustre
-</screen>
+    <para>To run the <literal>ost-survey</literal> script, supply a file size
+    (in KB) and the Lustre file system mount point. For example, run:</para>
+    <screen>$ ./ost-survey.sh -s 10 /mnt/lustre</screen>
     <para>Typical output is:</para>
     <screen>
 Number of Active OST devices : 4
@@ -664,17 +816,17 @@ Ost#  Read(MB/s)  Write(MB/s)  Read-time  Write-time
 0     2837.440       126.918        0.035      0.788
 1     2864.433       108.954        0.035      0.918
 2     2835.273       128.173        0.035      0.780
-3     2872.890       17.706        0.035      5.648
-</screen>
+3     2872.890       17.706        0.035      5.648</screen>
   </section>
-  <section xml:id="mds_survey_ref">
-    <title><indexterm><primary>benchmarking</primary><secondary>MDS
-performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey</literal>)</title>
-	<para><literal>mds-survey</literal> is available in Lustre software release 2.2 and beyond. The
-        <literal>mds-survey</literal> script tests the local metadata performance using the
-      echo_client to drive different layers of the MDS stack: mdd, mdt, osd (the Lustre software
-      only supports mdd stack). It can be used with the following classes of operations:</para>
-
+  <section xml:id="benchmark.mds_survey_ref">
+    <title><indexterm><primary>benchmarking</primary>
+      <secondary>MDS performance</secondary></indexterm>
+    Testing MDS Performance (<literal>mds-survey</literal>)</title>
+	  <para><literal>mds-survey</literal> is available in Lustre software release
+    2.2 and beyond. The <literal>mds-survey</literal> script tests the local
+    metadata performance using the echo_client to drive different layers of the
+    MDS stack: mdd, mdt, osd (the Lustre software only supports mdd stack). It
+    can be used with the following classes of operations:</para>
     <itemizedlist>
       <listitem>
         <para><literal>Open-create/mkdir/create</literal></para>
@@ -689,73 +841,90 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
         <para><literal>Unlink/rmdir</literal></para>
       </listitem>
     </itemizedlist>
-    <para>These operations will be run by a variable number of concurrent threads and will test with the number of directories specified by the user. The run can be executed such that all threads operate in a single directory (dir_count=1) or in private/unique directory (dir_count=x thrlo=x thrhi=x).</para>
-
-    <para>The mdd instance is driven directly. The script automatically loads the obdecho module if required and creates instance of echo_client.</para>
-
-    <para>This script can also create OST objects by providing stripe_count greater than zero.</para>
-
+    <para>These operations will be run by a variable number of concurrent
+    threads and will test with the number of directories specified by the user.
+    The run can be executed such that all threads operate in a single directory
+    (dir_count=1) or in private/unique directory (dir_count=x thrlo=x thrhi=x).
+    </para>
+    <para>The mdd instance is driven directly. The script automatically loads
+    the obdecho module if required and creates instance of echo_client.</para>
+    <para>This script can also create OST objects by providing stripe_count
+    greater than zero.</para>
     <para><emphasis role="bold">To perform a run:</emphasis></para>
       <orderedlist>
         <listitem>
           <para>Start the Lustre MDT.</para>
-          <para>The Lustre MDT should be mounted on the MDS node to be tested.</para>
+          <para>The Lustre MDT should be mounted on the MDS node to be tested.
+          </para>
         </listitem>
         <listitem>
-          <para>Start the Lustre OSTs (optional, only required when test with OST objects)</para>
+          <para>Start the Lustre OSTs (optional, only required when test with
+          OST objects)</para>
           <para>The Lustre OSTs should be mounted on the OSS node(s).</para>
         </listitem>
         <listitem>
-          <para>Run the <literal>mds-survey</literal> script as explain below</para>
-          <para>The script must be customized according to the components under test and where it should keep its working files. Customization variables are described as followed:</para>
+          <para>Run the <literal>mds-survey</literal> script as explain below
+          </para>
+          <para>The script must be customized according to the components under
+          test and where it should keep its working files. Customization
+          variables are described as followed:</para>
           <itemizedlist>
             <listitem>
-              <para><literal>thrlo</literal> - threads to start testing. skipped if less than
-                <literal>dir_count</literal></para>
+              <para><literal>thrlo</literal> - threads to start testing. skipped
+              if less than <literal>dir_count</literal></para>
             </listitem>
             <listitem>
-              <para><literal>thrhi</literal> - maximum number of threads to test</para>
+              <para><literal>thrhi</literal> - maximum number of threads to test
+              </para>
             </listitem>
             <listitem>
               <para><literal>targets</literal> - MDT instance</para>
             </listitem>
             <listitem>
-              <para><literal>file_count</literal> - number of files per thread to test</para>
+              <para><literal>file_count</literal> - number of files per thread
+              to test</para>
             </listitem>
             <listitem>
-              <para><literal>dir_count</literal> - total number of directories to test. Must be less
-              than or equal to <literal>thrhi</literal></para>
+              <para><literal>dir_count</literal> - total number of directories
+              to test. Must be less than or equal to <literal>thrhi</literal>
+              </para>
             </listitem>
             <listitem>
-              <para><literal>stripe_count </literal>- number stripe on OST objects</para>
+              <para><literal>stripe_count </literal>- number stripe on OST
+              objects</para>
             </listitem>
             <listitem>
-              <para><literal>tests_str</literal> - test operations. Must have at least "create" and
-              "destroy"</para>
+              <para><literal>tests_str</literal> - test operations. Must have at
+              least "create" and "destroy"</para>
             </listitem>
             <listitem>
-              <para><literal>start_number</literal> - base number for each thread to prevent name
-              collisions</para>
+              <para><literal>start_number</literal> - base number for each
+              thread to prevent name collisions</para>
             </listitem>
             <listitem>
-              <para><literal>layer</literal> - MDS stack's layer to be tested</para>
+              <para><literal>layer</literal> - MDS stack's layer to be tested
+              </para>
             </listitem>
           </itemizedlist>
           <para>Run without OST objects creation:</para>
-          <para>Setup the Lustre MDS without OST mounted. Then invoke the <literal>mds-survey</literal> script</para>
+          <para>Setup the Lustre MDS without OST mounted. Then invoke the
+          <literal>mds-survey</literal> script</para>
           <screen>$ thrhi=64 file_count=200000 sh mds-survey</screen>
           <para>Run with OST objects creation:</para>
-          <para>Setup the Lustre MDS with at least one OST mounted. Then invoke the
-            <literal>mds-survey</literal> script with <literal>stripe_count</literal>
-          parameter</para>
+          <para>Setup the Lustre MDS with at least one OST mounted. Then invoke
+          the <literal>mds-survey</literal> script with
+          <literal>stripe_count</literal> parameter</para>
           <screen>$ thrhi=64 file_count=200000 stripe_count=2 sh mds-survey</screen>
-          <para>Note: a specific MDT instance can be specified using targets variable.</para>
+          <para>Note: a specific MDT instance can be specified using targets
+          variable.</para>
           <screen>$ targets=lustre-MDT0000 thrhi=64 file_count=200000 stripe_count=2 sh mds-survey</screen>
         </listitem>
       </orderedlist>
     <section remap="h3">
       <title>Output Files</title>
-      <para>When the <literal>mds-survey</literal> script runs, it creates a number of working files and a pair of result files. All files start with the prefix defined in the variable <literal>${rslt}</literal>.</para>
+      <para>When the <literal>mds-survey</literal> script runs, it creates a
+      number of working files and a pair of result files. All files start with
+      the prefix defined in the variable <literal>${rslt}</literal>.</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -806,107 +975,130 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
           </tbody>
         </tgroup>
       </informaltable>
-      <para>The <literal>mds-survey</literal> script iterates over the given number of threads performing the specified tests and checks that all test processes have completed successfully.</para>
+      <para>The <literal>mds-survey</literal> script iterates over the given
+      number of threads performing the specified tests and checks that all test
+      processes have completed successfully.</para>
       <note>
-      <para>The <literal>mds-survey</literal> script may not clean up properly if it is aborted or if it encounters an unrecoverable error. In this case, a manual cleanup may be required, possibly including killing any running instances of <literal>lctl</literal>, removing <literal>echo_client</literal> instances created by the script and unloading <literal>obdecho</literal>.</para>
+        <para>The <literal>mds-survey</literal> script may not clean up properly
+        if it is aborted or if it encounters an unrecoverable error. In this
+        case, a manual cleanup may be required, possibly including killing any
+        running instances of <literal>lctl</literal>, removing
+        <literal>echo_client</literal> instances created by the script and
+        unloading <literal>obdecho</literal>.</para>
       </note>
     </section>
-      <section remap="h4">
-        <title>Script Output</title>
-        <para>The <literal>.summary</literal> file and <literal>stdout</literal> of the <literal>mds-survey</literal> script contain lines like:</para>
-        <screen>mdt 1 file 100000 dir 4 thr 4 create 5652.05 [ 999.01,46940.48] destroy 5797.79 [ 0.00,52951.55] </screen>
-        <para>Where:</para>
-        <informaltable frame="all">
-          <tgroup cols="2">
-            <colspec colname="c1" colwidth="50*"/>
-            <colspec colname="c2" colwidth="50*"/>
-            <thead>
-              <row>
-                <entry>
-                  <para><emphasis role="bold">Parameter and value</emphasis></para>
-                </entry>
-                <entry>
-                  <para><emphasis role="bold">Description</emphasis></para>
-                </entry>
-              </row>
-            </thead>
-            <tbody>
-              <row>
-                <entry>
-                  <para>mdt 1</para>
-                </entry>
-                <entry>
-                  <para>Total number of MDT under test</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para>file 100000</para>
-                </entry>
-                <entry>
-                  <para>Total number of files per thread to operate</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para>dir 4</para>
-                </entry>
-                <entry>
-                  <para>Total number of directories to operate</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para>thr 4</para>
-                </entry>
-                <entry>
-                  <para>Total number of threads operate over all directories</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para>create, destroy</para>
-                </entry>
-                <entry>
-                  <para>Tests name. More tests will be displayed on the same line.</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para>565.05</para>
-                </entry>
-                <entry>
-                  <para>Aggregate operations over MDT measured by dividing the total number of operations by the elapsed time.</para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para>[999.01,46940.48]</para>
-                </entry>
-                <entry>
-                  <para>Minimum and maximum instantaneous operation seen on any individual MDT</para>
-                </entry>
-              </row>
-            </tbody>
-          </tgroup>
-        </informaltable>
-        <note>
-        <para>If script output has "ERROR", this usually means there is issue during the run such as running out of space on the MDT and/or OST. More detailed debug information is available in the ${rslt}.detail file</para>
+    <section remap="h4">
+      <title>Script Output</title>
+      <para>The <literal>.summary</literal> file and <literal>stdout</literal>
+      of the <literal>mds-survey</literal> script contain lines like:</para>
+      <screen>mdt 1 file 100000 dir 4 thr 4 create 5652.05 [ 999.01,46940.48] destroy 5797.79 [ 0.00,52951.55] </screen>
+      <para>Where:</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Parameter and value</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para>mdt 1</para>
+              </entry>
+              <entry>
+                <para>Total number of MDT under test</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>file 100000</para>
+              </entry>
+              <entry>
+                <para>Total number of files per thread to operate</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>dir 4</para>
+              </entry>
+              <entry>
+                <para>Total number of directories to operate</para>
+             </entry>
+            </row>
+            <row>
+              <entry>
+                <para>thr 4</para>
+              </entry>
+              <entry>
+                <para>Total number of threads operate over all directories
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>create, destroy</para>
+              </entry>
+              <entry>
+                <para>Tests name. More tests will be displayed on the same line.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>565.05</para>
+              </entry>
+              <entry>
+                <para>Aggregate operations over MDT measured by dividing the
+                total number of operations by the elapsed time.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para>[999.01,46940.48]</para>
+              </entry>
+              <entry>
+                <para>Minimum and maximum instantaneous operation seen on any
+                individual MDT</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <note>
+        <para>If script output has "ERROR", this usually means there is issue
+        during the run such as running out of space on the MDT and/or OST.
+        More detailed debug information is available in the ${rslt}.detail
+        file</para>
       </note>
-      </section>
+    </section>
   </section>
-  <section xml:id="dbdoclet.50438212_58201">
-    <title><indexterm><primary>benchmarking</primary><secondary>application profiling</secondary></indexterm>Collecting Application Profiling Information (<literal>stats-collect</literal>)</title>
-    <para>The <literal>stats-collect</literal> utility contains the following scripts used to collect application profiling information from Lustre clients and servers:</para>
+  <section xml:id="benchmark.stats-collect">
+    <title><indexterm><primary>benchmarking</primary>
+      <secondary>application profiling</secondary></indexterm>
+    Collecting Application Profiling Information (
+    <literal>stats-collect</literal>)</title>
+    <para>The <literal>stats-collect</literal> utility contains the following
+    scripts used to collect application profiling information from Lustre
+    clients and servers:</para>
     <itemizedlist>
       <listitem>
-        <para><literal>lstat.sh</literal>  - Script for a single node that is run on each profile node.</para>
+        <para><literal>lstat.sh</literal>  - Script for a single node that is
+        run on each profile node.</para>
       </listitem>
       <listitem>
-        <para><literal>gather_stats_everywhere.sh</literal>  - Script that collect statistics.</para>
+        <para><literal>gather_stats_everywhere.sh</literal>  - Script that
+        collect statistics.</para>
       </listitem>
       <listitem>
-        <para><literal>config.sh</literal>  - Script that contains customized configuration descriptions.</para>
+        <para><literal>config.sh</literal>  - Script that contains customized
+        configuration descriptions.</para>
       </listitem>
     </itemizedlist>
     <para>The <literal>stats-collect</literal> utility requires:</para>
@@ -920,57 +1112,73 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
     </itemizedlist>
     <section remap="h3">
       <title>Using <literal>stats-collect</literal></title>
-      <para>The stats-collect utility is configured by including profiling configuration variables in the config.sh script. Each configuration variable takes the following form, where 0 indicates statistics are to be collected only when the script starts and stops and <emphasis>n</emphasis> indicates the interval in seconds at which statistics are to be collected:</para>
+      <para>The stats-collect utility is configured by including profiling
+      configuration variables in the config.sh script. Each configuration
+      variable takes the following form, where 0 indicates statistics are to be
+      collected only when the script starts and stops and <emphasis>n</emphasis>
+      indicates the interval in seconds at which statistics are to be collected:
+      </para>
       <screen><replaceable>statistic</replaceable>_INTERVAL=<replaceable>0|n</replaceable></screen>
       <para>Statistics that can be collected include:</para>
       <itemizedlist>
         <listitem>
-          <para><literal>VMSTAT</literal>  - Memory and CPU usage and aggregate read/write operations</para>
+          <para><literal>VMSTAT</literal>  - Memory and CPU usage and aggregate
+          read/write operations</para>
         </listitem>
         <listitem>
-          <para><literal>SERVICE</literal>  - Lustre OST and MDT RPC service statistics</para>
+          <para><literal>SERVICE</literal>  - Lustre OST and MDT RPC service
+          statistics</para>
         </listitem>
         <listitem>
-          <para><literal>BRW</literal> - OST bulk read/write statistics (brw_stats)</para>
+          <para><literal>BRW</literal> - OST bulk read/write statistics
+          (brw_stats)</para>
         </listitem>
         <listitem>
-          <para><literal>SDIO</literal>  - SCSI disk IO statistics (sd_iostats)</para>
+          <para><literal>SDIO</literal>  - SCSI disk IO statistics (sd_iostats)
+          </para>
         </listitem>
         <listitem>
-          <para><literal>MBALLOC</literal>  - <literal>ldiskfs</literal> block allocation statistics</para>
+          <para><literal>MBALLOC</literal>  - <literal>ldiskfs</literal> block
+          allocation statistics</para>
         </listitem>
         <listitem>
-          <para><literal>IO</literal>  - Lustre target operations statistics</para>
+          <para><literal>IO</literal>  - Lustre target operations statistics
+          </para>
         </listitem>
         <listitem>
           <para><literal>JBD</literal>  - ldiskfs journal statistics</para>
         </listitem>
         <listitem>
-          <para><literal>CLIENT</literal>  - Lustre OSC request statistics</para>
+          <para><literal>CLIENT</literal>  - Lustre OSC request statistics
+          </para>
         </listitem>
       </itemizedlist>
       <para>To collect profile information:</para>
-      <para>Begin collecting statistics on each node specified in the config.sh script.</para>
+      <para>Begin collecting statistics on each node specified in the config.sh
+      script.</para>
       <orderedlist>
         <listitem>
-          <para>Starting the collect profile daemon on each node by entering:</para>
-          <screen>sh gather_stats_everywhere.sh config.sh start 
-</screen>
+          <para>Starting the collect profile daemon on each node by entering:
+          </para>
+          <screen>sh gather_stats_everywhere.sh config.sh start </screen>
         </listitem>
         <listitem>
           <para>Run the test.</para>
         </listitem>
         <listitem>
-          <para>Stop collecting statistics on each node, clean up the temporary file, and create a profiling tarball.</para>
+          <para>Stop collecting statistics on each node, clean up the temporary
+          file, and create a profiling tarball.</para>
           <para>Enter:</para>
           <screen>sh gather_stats_everywhere.sh config.sh stop <replaceable>log_name</replaceable>.tgz</screen>
           <para>When <literal><replaceable>log_name</replaceable>.tgz</literal>
-            is specified, a profile tarball <literal><replaceable>/tmp/log_name</replaceable>.tgz</literal> is created.</para>
+          is specified, a profile tarball
+          <literal><replaceable>/tmp/log_name</replaceable>.tgz</literal> is
+          created.</para>
         </listitem>
         <listitem>
-          <para>Analyze the collected statistics and create a csv tarball for the specified profiling data.</para>
-          <screen>sh gather_stats_everywhere.sh config.sh analyse log_tarball.tgz csv
-</screen>
+          <para>Analyze the collected statistics and create a csv tarball for
+          the specified profiling data.</para>
+          <screen>sh gather_stats_everywhere.sh config.sh analyse log_tarball.tgz csv</screen>
         </listitem>
       </orderedlist>
     </section>

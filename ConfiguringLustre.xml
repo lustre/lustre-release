@@ -245,14 +245,14 @@ mount -t lustre
             <para>
             <literal>obdfilter-survey</literal>- Characterizes the storage
             performance of a Lustre file system. For details, see 
-            <xref linkend="dbdoclet.50438212_26516" />.</para>
+            <xref linkend="benchmark.ost_perf" />.</para>
           </listitem>
           <listitem>
             <para>
             <literal>ost-survey</literal>- Performs I/O against OSTs to detect
             anomalies between otherwise identical disk subsystems. For details,
             see 
-            <xref linkend="dbdoclet.50438212_85136" />.</para>
+            <xref linkend="benchmark.ost_io" />.</para>
           </listitem>
         </itemizedlist>
       </listitem>
