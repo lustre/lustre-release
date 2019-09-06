@@ -1724,6 +1724,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct md_op_data *op_data = NULL;
+	ktime_t kstart = ktime_get();
 	int rc = 0;
 
 	ENTRY;
@@ -1896,8 +1897,10 @@ out:
 		inode_has_no_xattr(inode);
 	}
 
-	ll_stats_ops_tally(ll_i2sbi(inode), (attr->ia_valid & ATTR_SIZE) ?
-			LPROC_LL_TRUNC : LPROC_LL_SETATTR, 1);
+	if (!rc)
+		ll_stats_ops_tally(ll_i2sbi(inode), attr->ia_valid & ATTR_SIZE ?
+					LPROC_LL_TRUNC : LPROC_LL_SETATTR,
+				   ktime_us_delta(ktime_get(), kstart));
 
 	return rc;
 }
@@ -1985,15 +1988,16 @@ int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 out:
 	RETURN(rc);
 }
+
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 {
 	struct super_block *sb = de->d_sb;
 	struct obd_statfs osfs;
 	__u64 fsid = huge_encode_dev(sb->s_dev);
+	ktime_t kstart = ktime_get();
 	int rc;
 
-	CDEBUG(D_VFSTRACE, "VFS Op: at %llu jiffies\n", get_jiffies_64());
-	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STATFS, 1);
+	CDEBUG(D_VFSTRACE, "VFS Op:sb=%s (%p)\n", sb->s_id, sb);
 
 	/* Some amount of caching on the client is allowed */
 	rc = ll_statfs_internal(ll_s2sbi(sb), &osfs, OBD_STATFS_SUM);
@@ -2016,11 +2020,15 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
                 }
         }
 
-        sfs->f_blocks = osfs.os_blocks;
-        sfs->f_bfree = osfs.os_bfree;
-        sfs->f_bavail = osfs.os_bavail;
+	sfs->f_blocks = osfs.os_blocks;
+	sfs->f_bfree = osfs.os_bfree;
+	sfs->f_bavail = osfs.os_bavail;
 	sfs->f_fsid.val[0] = (__u32)fsid;
 	sfs->f_fsid.val[1] = (__u32)(fsid >> 32);
+
+	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STATFS,
+			   ktime_us_delta(ktime_get(), kstart));
+
 	return 0;
 }
 

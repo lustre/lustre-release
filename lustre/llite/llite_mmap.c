@@ -351,14 +351,12 @@ static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	bool printed = false;
 	bool cached;
 	vm_fault_t result;
+	ktime_t kstart = ktime_get();
 	sigset_t set;
-
-	ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
-			   LPROC_LL_FAULT, 1);
 
 	result = pcc_fault(vma, vmf, &cached);
 	if (cached)
-		return result;
+		goto out;
 
 	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
 	 * so that it can be killed by admin but not cause segfault by
@@ -395,12 +393,18 @@ restart:
         }
 	cfs_restore_sigs(set);
 
-	if (vmf->page && result == VM_FAULT_LOCKED)
+out:
+	if (vmf->page && result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				  current->pid, LUSTRE_FPRIVATE(vma->vm_file),
 				  cl_offset(NULL, vmf->page->index), PAGE_SIZE,
 				  READ);
-        return result;
+		ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
+				   LPROC_LL_FAULT,
+				   ktime_us_delta(ktime_get(), kstart));
+	}
+
+	return result;
 }
 
 #ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
@@ -416,21 +420,19 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 	bool printed = false;
 	bool retry;
 	bool cached;
+	ktime_t kstart = ktime_get();
 	vm_fault_t result;
-
-	ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
-			   LPROC_LL_MKWRITE, 1);
 
 	result = pcc_page_mkwrite(vma, vmf, &cached);
 	if (cached)
-		return result;
+		goto out;
 
 	file_update_time(vma->vm_file);
-        do {
-                retry = false;
-                result = ll_page_mkwrite0(vma, vmf->page, &retry);
+	do {
+		retry = false;
+		result = ll_page_mkwrite0(vma, vmf->page, &retry);
 
-                if (!printed && ++count > 16) {
+		if (!printed && ++count > 16) {
 			const struct dentry *de = file_dentry(vma->vm_file);
 
 			CWARN("app(%s): the page %lu of file "DFID" is under"
@@ -461,12 +463,18 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
                 break;
         }
 
-	if (result == VM_FAULT_LOCKED)
+out:
+	if (result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
 				  current->pid, LUSTRE_FPRIVATE(vma->vm_file),
 				  cl_offset(NULL, vmf->page->index), PAGE_SIZE,
 				  WRITE);
-        return result;
+		ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
+				   LPROC_LL_MKWRITE,
+				   ktime_us_delta(ktime_get(), kstart));
+	}
+
+	return result;
 }
 
 /**
@@ -527,27 +535,31 @@ static const struct vm_operations_struct ll_file_vm_ops = {
 int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
 {
 	struct inode *inode = file_inode(file);
+	ktime_t kstart = ktime_get();
 	bool cached;
-        int rc;
+	int rc;
 
-        ENTRY;
+	ENTRY;
 
-        if (ll_file_nolock(file))
-                RETURN(-EOPNOTSUPP);
+	if (ll_file_nolock(file))
+		RETURN(-EOPNOTSUPP);
 
 	rc = pcc_file_mmap(file, vma, &cached);
 	if (cached && rc != 0)
 		RETURN(rc);
 
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_MAP, 1);
-        rc = generic_file_mmap(file, vma);
-        if (rc == 0) {
+	rc = generic_file_mmap(file, vma);
+	if (rc == 0) {
 		vma->vm_ops = &ll_file_vm_ops;
-                vma->vm_ops->open(vma);
-                /* update the inode's size and mtime */
+		vma->vm_ops->open(vma);
+		/* update the inode's size and mtime */
 		if (!cached)
 			rc = ll_glimpse_size(inode);
-        }
+	}
 
-        RETURN(rc);
+	if (!rc)
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_MMAP,
+				   ktime_us_delta(ktime_get(), kstart));
+
+	RETURN(rc);
 }

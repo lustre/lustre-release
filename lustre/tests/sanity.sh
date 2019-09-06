@@ -11361,41 +11361,52 @@ run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127a() { # bug 15521
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	local name count samp unit min max sum sumsq
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
+	echo "stats before reset"
+	$LCTL get_param osc.*.stats
 	$LCTL set_param osc.*.stats=0
-	FSIZE=$((2048 * 1024))
-	dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
+	local fsize=$((2048 * 1024))
+
+	dd if=/dev/zero of=$DIR/$tfile bs=$fsize count=1
 	cancel_lru_locks osc
-	dd if=$DIR/$tfile of=/dev/null bs=$FSIZE
+	dd if=$DIR/$tfile of=/dev/null bs=$fsize
 
-	$LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/${tfile}.tmp
-        while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
-                echo "got $COUNT $NAME"
-                [ ! $MIN ] && error "Missing min value for $NAME proc entry"
-                eval $NAME=$COUNT || error "Wrong proc format"
+	$LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/$tfile.tmp
+	stack_trap "rm -f $TMP/$tfile.tmp"
+	while read name count samp unit min max sum sumsq; do
+		echo "got name=$name count=$count unit=$unit min=$min max=$max"
+		[ ! $min ] && error "Missing min value for $name proc entry"
+		eval $name=$count || error "Wrong proc format"
 
-                case $NAME in
-                        read_bytes|write_bytes)
-                        [ $MIN -lt 4096 ] && error "min is too small: $MIN"
-                        [ $MIN -gt $FSIZE ] && error "min is too big: $MIN"
-                        [ $MAX -lt 4096 ] && error "max is too small: $MAX"
-                        [ $MAX -gt $FSIZE ] && error "max is too big: $MAX"
-                        [ $SUM -ne $FSIZE ] && error "sum is wrong: $SUM"
-                        [ $SUMSQ -lt $(((FSIZE /4096) * (4096 * 4096))) ] &&
-                                error "sumsquare is too small: $SUMSQ"
-                        [ $SUMSQ -gt $((FSIZE * FSIZE)) ] &&
-                                error "sumsquare is too big: $SUMSQ"
-                        ;;
-                        *) ;;
-                esac
-        done < $DIR/${tfile}.tmp
+		case $name in
+		read_bytes|write_bytes)
+			[[ "$unit" =~ "bytes" ]] ||
+				error "unit is not 'bytes': $unit"
+			(( $min >= 4096 )) || error "min is too small: $min"
+			(( $min <= $fsize )) || error "min is too big: $min"
+			(( $max >= 4096 )) || error "max is too small: $max"
+			(( $max <= $fsize )) || error "max is too big: $max"
+			(( $sum == $fsize )) || error "sum is wrong: $sum"
+			(( $sumsq >= ($fsize / 4096) * (4096 * 4096) )) ||
+				error "sumsquare is too small: $sumsq"
+			(( $sumsq <= $fsize * $fsize )) ||
+				error "sumsquare is too big: $sumsq"
+			;;
+		ost_read|ost_write)
+			[[ "$unit" =~ "usec" ]] ||
+				error "unit is not 'usec': $unit"
+			;;
+		*)	;;
+		esac
+	done < $DIR/$tfile.tmp
 
-        #check that we actually got some stats
-        [ "$read_bytes" ] || error "Missing read_bytes stats"
-        [ "$write_bytes" ] || error "Missing write_bytes stats"
-        [ "$read_bytes" != 0 ] || error "no read done"
-        [ "$write_bytes" != 0 ] || error "no write done"
+	#check that we actually got some stats
+	[ "$read_bytes" ] || error "Missing read_bytes stats"
+	[ "$write_bytes" ] || error "Missing write_bytes stats"
+	[ "$read_bytes" != 0 ] || error "no read done"
+	[ "$write_bytes" != 0 ] || error "no write done"
 }
 run_test 127a "verify the client stats are sane"
 
@@ -11403,6 +11414,8 @@ test_127b() { # bug LU-333
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	local name count samp unit min max sum sumsq
 
+	echo "stats before reset"
+	$LCTL get_param llite.*.stats
 	$LCTL set_param llite.*.stats=0
 
 	# perform 2 reads and writes so MAX is different from SUM.
@@ -11413,30 +11426,28 @@ test_127b() { # bug LU-333
 	dd if=$DIR/$tfile of=/dev/null bs=$PAGE_SIZE count=1
 
 	$LCTL get_param llite.*.stats | grep samples > $TMP/$tfile.tmp
+	stack_trap "rm -f $TMP/$tfile.tmp"
 	while read name count samp unit min max sum sumsq; do
-		echo "got $count $name"
+		echo "got name=$name count=$count unit=$unit min=$min max=$max"
 		eval $name=$count || error "Wrong proc format"
 
 		case $name in
-		read_bytes)
-			[ $count -ne 2 ] && error "count is not 2: $count"
-			[ $min -ne $PAGE_SIZE ] &&
+		read_bytes|write_bytes)
+			[[ "$unit" =~ "bytes" ]] ||
+				error "unit is not 'bytes': $unit"
+			(( $count == 2 )) || error "count is not 2: $count"
+			(( $min == $PAGE_SIZE )) ||
 				error "min is not $PAGE_SIZE: $min"
-			[ $max -ne $PAGE_SIZE ] &&
-				error "max is incorrect: $max"
-			[ $sum -ne $((PAGE_SIZE * 2)) ] &&
-				error "sum is wrong: $sum"
+			(( $max == $PAGE_SIZE )) ||
+				error "max is not $PAGE_SIZE: $max"
+			(( $sum == $PAGE_SIZE * 2 )) ||
+				error "sum is not $((PAGE_SIZE * 2)): $sum"
 			;;
-		write_bytes)
-			[ $count -ne 2 ] && error "count is not 2: $count"
-			[ $min -ne $PAGE_SIZE ] &&
-				error "min is not $PAGE_SIZE: $min"
-			[ $max -ne $PAGE_SIZE ] &&
-				error "max is incorrect: $max"
-			[ $sum -ne $((PAGE_SIZE * 2)) ] &&
-				error "sum is wrong: $sum"
+		read|write)
+			[[ "$unit" =~ "usec" ]] ||
+				error "unit is not 'usec': $unit"
 			;;
-		*) ;;
+		*)	;;
 		esac
 	done < $TMP/$tfile.tmp
 
@@ -11445,8 +11456,6 @@ test_127b() { # bug LU-333
 	[ "$write_bytes" ] || error "Missing write_bytes stats"
 	[ "$read_bytes" != 0 ] || error "no read done"
 	[ "$write_bytes" != 0 ] || error "no write done"
-
-	rm -f $TMP/${tfile}.tmp
 }
 run_test 127b "verify the llite client stats are sane"
 

@@ -796,15 +796,17 @@ void cl_put_grouplock(struct ll_grouplock *lg);
 /* llite/lproc_llite.c */
 int ll_debugfs_register_super(struct super_block *sb, const char *name);
 void ll_debugfs_unregister_super(struct super_block *sb);
-void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
+void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, long count);
 
 enum {
 	LPROC_LL_READ_BYTES,
 	LPROC_LL_WRITE_BYTES,
+	LPROC_LL_READ,
+	LPROC_LL_WRITE,
 	LPROC_LL_IOCTL,
 	LPROC_LL_OPEN,
 	LPROC_LL_RELEASE,
-	LPROC_LL_MAP,
+	LPROC_LL_MMAP,
 	LPROC_LL_FAULT,
 	LPROC_LL_MKWRITE,
 	LPROC_LL_LLSEEK,
@@ -823,7 +825,6 @@ enum {
 	LPROC_LL_MKNOD,
 	LPROC_LL_RENAME,
 	LPROC_LL_STATFS,
-	LPROC_LL_ALLOC_INODE,
 	LPROC_LL_SETXATTR,
 	LPROC_LL_GETXATTR,
 	LPROC_LL_GETXATTR_HITS,

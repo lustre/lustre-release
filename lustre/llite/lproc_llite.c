@@ -1538,62 +1538,66 @@ static struct kobj_type sbi_ktype = {
 	.release        = sbi_kobj_release,
 };
 
+#define LPROCFS_TYPE_LATENCY \
+	(LPROCFS_TYPE_USEC | LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV)
 static const struct llite_file_opcode {
-        __u32       opcode;
-        __u32       type;
-        const char *opname;
+	__u32		opcode;
+	__u32		type;
+	const char	*opname;
 } llite_opcode_table[LPROC_LL_FILE_OPCODES] = {
-        /* file operation */
-        { LPROC_LL_READ_BYTES,     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
-                                   "read_bytes" },
-        { LPROC_LL_WRITE_BYTES,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
-                                   "write_bytes" },
-        { LPROC_LL_IOCTL,          LPROCFS_TYPE_REGS, "ioctl" },
-        { LPROC_LL_OPEN,           LPROCFS_TYPE_REGS, "open" },
-        { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "close" },
-        { LPROC_LL_MAP,            LPROCFS_TYPE_REGS, "mmap" },
-	{ LPROC_LL_FAULT,          LPROCFS_TYPE_REGS, "page_fault" },
-	{ LPROC_LL_MKWRITE,        LPROCFS_TYPE_REGS, "page_mkwrite" },
-        { LPROC_LL_LLSEEK,         LPROCFS_TYPE_REGS, "seek" },
-        { LPROC_LL_FSYNC,          LPROCFS_TYPE_REGS, "fsync" },
-        { LPROC_LL_READDIR,        LPROCFS_TYPE_REGS, "readdir" },
-        /* inode operation */
-        { LPROC_LL_SETATTR,        LPROCFS_TYPE_REGS, "setattr" },
-        { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "truncate" },
-        { LPROC_LL_FLOCK,          LPROCFS_TYPE_REGS, "flock" },
-        { LPROC_LL_GETATTR,        LPROCFS_TYPE_REGS, "getattr" },
-        /* dir inode operation */
-        { LPROC_LL_CREATE,         LPROCFS_TYPE_REGS, "create" },
-        { LPROC_LL_LINK,           LPROCFS_TYPE_REGS, "link" },
-        { LPROC_LL_UNLINK,         LPROCFS_TYPE_REGS, "unlink" },
-        { LPROC_LL_SYMLINK,        LPROCFS_TYPE_REGS, "symlink" },
-        { LPROC_LL_MKDIR,          LPROCFS_TYPE_REGS, "mkdir" },
-        { LPROC_LL_RMDIR,          LPROCFS_TYPE_REGS, "rmdir" },
-        { LPROC_LL_MKNOD,          LPROCFS_TYPE_REGS, "mknod" },
-        { LPROC_LL_RENAME,         LPROCFS_TYPE_REGS, "rename" },
+	/* file operation */
+	{ LPROC_LL_READ_BYTES,	LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_BYTES,
+		"read_bytes" },
+	{ LPROC_LL_WRITE_BYTES,	LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_BYTES,
+		"write_bytes" },
+	{ LPROC_LL_READ,	LPROCFS_TYPE_LATENCY,	"read" },
+	{ LPROC_LL_WRITE,	LPROCFS_TYPE_LATENCY,	"write" },
+	{ LPROC_LL_IOCTL,	LPROCFS_TYPE_REQS,	"ioctl" },
+	{ LPROC_LL_OPEN,	LPROCFS_TYPE_LATENCY,	"open" },
+	{ LPROC_LL_RELEASE,	LPROCFS_TYPE_LATENCY,	"close" },
+	{ LPROC_LL_MMAP,	LPROCFS_TYPE_LATENCY,	"mmap" },
+	{ LPROC_LL_FAULT,	LPROCFS_TYPE_LATENCY,	"page_fault" },
+	{ LPROC_LL_MKWRITE,	LPROCFS_TYPE_LATENCY,	"page_mkwrite" },
+	{ LPROC_LL_LLSEEK,	LPROCFS_TYPE_LATENCY,	"seek" },
+	{ LPROC_LL_FSYNC,	LPROCFS_TYPE_LATENCY,	"fsync" },
+	{ LPROC_LL_READDIR,	LPROCFS_TYPE_LATENCY,	"readdir" },
+	/* inode operation */
+	{ LPROC_LL_SETATTR,	LPROCFS_TYPE_LATENCY,	"setattr" },
+	{ LPROC_LL_TRUNC,	LPROCFS_TYPE_LATENCY,	"truncate" },
+	{ LPROC_LL_FLOCK,	LPROCFS_TYPE_LATENCY,	"flock" },
+	{ LPROC_LL_GETATTR,	LPROCFS_TYPE_LATENCY,	"getattr" },
+	/* dir inode operation */
+	{ LPROC_LL_CREATE,	LPROCFS_TYPE_LATENCY,	"create" },
+	{ LPROC_LL_LINK,	LPROCFS_TYPE_LATENCY,	"link" },
+	{ LPROC_LL_UNLINK,	LPROCFS_TYPE_LATENCY,	"unlink" },
+	{ LPROC_LL_SYMLINK,	LPROCFS_TYPE_LATENCY,	"symlink" },
+	{ LPROC_LL_MKDIR,	LPROCFS_TYPE_LATENCY,	"mkdir" },
+	{ LPROC_LL_RMDIR,	LPROCFS_TYPE_LATENCY,	"rmdir" },
+	{ LPROC_LL_MKNOD,	LPROCFS_TYPE_LATENCY,	"mknod" },
+	{ LPROC_LL_RENAME,	LPROCFS_TYPE_LATENCY,	"rename" },
 	/* special inode operation */
-	{ LPROC_LL_STATFS,          LPROCFS_TYPE_REGS, "statfs" },
-	{ LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
-	{ LPROC_LL_SETXATTR,       LPROCFS_TYPE_REGS, "setxattr" },
-	{ LPROC_LL_GETXATTR,       LPROCFS_TYPE_REGS, "getxattr" },
-	{ LPROC_LL_GETXATTR_HITS,  LPROCFS_TYPE_REGS, "getxattr_hits" },
-	{ LPROC_LL_LISTXATTR,      LPROCFS_TYPE_REGS, "listxattr" },
-	{ LPROC_LL_REMOVEXATTR,    LPROCFS_TYPE_REGS, "removexattr" },
-	{ LPROC_LL_INODE_PERM,     LPROCFS_TYPE_REGS, "inode_permission" },
+	{ LPROC_LL_STATFS,	LPROCFS_TYPE_LATENCY,	"statfs" },
+	{ LPROC_LL_SETXATTR,	LPROCFS_TYPE_LATENCY,	"setxattr" },
+	{ LPROC_LL_GETXATTR,	LPROCFS_TYPE_LATENCY,	"getxattr" },
+	{ LPROC_LL_GETXATTR_HITS, LPROCFS_TYPE_REQS,	"getxattr_hits" },
+	{ LPROC_LL_LISTXATTR,	LPROCFS_TYPE_LATENCY,	"listxattr" },
+	{ LPROC_LL_REMOVEXATTR,	LPROCFS_TYPE_LATENCY,	"removexattr" },
+	{ LPROC_LL_INODE_PERM,	LPROCFS_TYPE_LATENCY,	"inode_permission" },
 };
 
-void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)
+void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, long count)
 {
-        if (!sbi->ll_stats)
-                return;
-        if (sbi->ll_stats_track_type == STATS_TRACK_ALL)
-                lprocfs_counter_add(sbi->ll_stats, op, count);
-        else if (sbi->ll_stats_track_type == STATS_TRACK_PID &&
-                 sbi->ll_stats_track_id == current->pid)
-                lprocfs_counter_add(sbi->ll_stats, op, count);
-        else if (sbi->ll_stats_track_type == STATS_TRACK_PPID &&
-                 sbi->ll_stats_track_id == current->parent->pid)
-                lprocfs_counter_add(sbi->ll_stats, op, count);
+	if (!sbi->ll_stats)
+		return;
+
+	if (sbi->ll_stats_track_type == STATS_TRACK_ALL)
+		lprocfs_counter_add(sbi->ll_stats, op, count);
+	else if (sbi->ll_stats_track_type == STATS_TRACK_PID &&
+		 sbi->ll_stats_track_id == current->pid)
+		lprocfs_counter_add(sbi->ll_stats, op, count);
+	else if (sbi->ll_stats_track_type == STATS_TRACK_PPID &&
+		 sbi->ll_stats_track_id == current->parent->pid)
+		lprocfs_counter_add(sbi->ll_stats, op, count);
 	else if (sbi->ll_stats_track_type == STATS_TRACK_GID &&
 		 sbi->ll_stats_track_id ==
 			from_kgid(&init_user_ns, current_gid()))
@@ -1672,12 +1676,14 @@ int ll_debugfs_register_super(struct super_block *sb, const char *name)
 		u32 type = llite_opcode_table[id].type;
 		void *ptr = NULL;
 
-		if (type & LPROCFS_TYPE_REGS)
-			ptr = "regs";
+		if (type & LPROCFS_TYPE_REQS)
+			ptr = "reqs";
 		else if (type & LPROCFS_TYPE_BYTES)
 			ptr = "bytes";
 		else if (type & LPROCFS_TYPE_PAGES)
 			ptr = "pages";
+		else if (type & LPROCFS_TYPE_USEC)
+			ptr = "usec";
 		lprocfs_counter_init(sbi->ll_stats,
 				     llite_opcode_table[id].opcode,
 				     (type & LPROCFS_CNTR_AVGMINMAX),

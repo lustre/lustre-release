@@ -144,15 +144,15 @@ struct rename_stats {
  */
 
 enum {
-        LPROCFS_CNTR_EXTERNALLOCK = 0x0001,
-        LPROCFS_CNTR_AVGMINMAX    = 0x0002,
-        LPROCFS_CNTR_STDDEV       = 0x0004,
+	LPROCFS_CNTR_EXTERNALLOCK	= 0x0001,
+	LPROCFS_CNTR_AVGMINMAX		= 0x0002,
+	LPROCFS_CNTR_STDDEV		= 0x0004,
 
-        /* counter data type */
-        LPROCFS_TYPE_REGS         = 0x0100,
-        LPROCFS_TYPE_BYTES        = 0x0200,
-        LPROCFS_TYPE_PAGES        = 0x0400,
-        LPROCFS_TYPE_CYCLE        = 0x0800,
+	/* counter data type */
+	LPROCFS_TYPE_REQS		= 0x0100,
+	LPROCFS_TYPE_BYTES		= 0x0200,
+	LPROCFS_TYPE_PAGES		= 0x0400,
+	LPROCFS_TYPE_USEC		= 0x0800,
 };
 
 #define LC_MIN_INIT ((~(__u64)0) >> 1)
