@@ -200,6 +200,7 @@ struct kib_hca_dev {
 	int                  ibh_page_size;     /* page size of current HCA */
 	__u64                ibh_page_mask;     /* page mask of current HCA */
 	__u64                ibh_mr_size;       /* size of MR */
+	int		     ibh_max_qp_wr;     /* maximum work requests size */
 #ifdef HAVE_IB_GET_DMA_MR
 	struct ib_mr        *ibh_mrs;           /* global MR */
 #endif
