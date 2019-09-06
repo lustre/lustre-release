@@ -760,19 +760,19 @@ srpc_shutdown_service(struct srpc_service *sv)
 	       sv->sv_id, sv->sv_name);
 
 	cfs_percpt_for_each(scd, i, sv->sv_cpt_data)
-	spin_lock(&scd->scd_lock);
+		spin_lock(&scd->scd_lock);
 
 	sv->sv_shuttingdown = 1; /* i.e. no new active RPC */
 
 	cfs_percpt_for_each(scd, i, sv->sv_cpt_data)
-	spin_unlock(&scd->scd_lock);
+		spin_unlock(&scd->scd_lock);
 
 	cfs_percpt_for_each(scd, i, sv->sv_cpt_data) {
 		spin_lock(&scd->scd_lock);
 
 		/* schedule in-flight RPCs to notice the shutdown */
 		list_for_each_entry(rpc, &scd->scd_rpc_active, srpc_list)
-		swi_schedule_workitem(&rpc->srpc_wi);
+			swi_schedule_workitem(&rpc->srpc_wi);
 
 		spin_unlock(&scd->scd_lock);
 
@@ -780,7 +780,7 @@ srpc_shutdown_service(struct srpc_service *sv)
 		 * touches scd_buf_posted now
 		 */
 		list_for_each_entry(buf, &scd->scd_buf_posted, buf_list)
-		LNetMDUnlink(buf->buf_mdh);
+			LNetMDUnlink(buf->buf_mdh);
 	}
 }
 
