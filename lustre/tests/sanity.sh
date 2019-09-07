@@ -3347,6 +3347,21 @@ test_31p() {
 }
 run_test 31p "remove of open striped directory"
 
+test_31q() {
+	[ $MDSCOUNT -lt 3 ] && skip_env "needs >= 3 MDTs"
+
+	$LFS mkdir -i 3,1 $DIR/$tdir || error "mkdir failed"
+	index=$($LFS getdirstripe -i $DIR/$tdir)
+	[ $index -eq 3 ] || error "first stripe index $index != 3"
+	index=$($LFS getdirstripe $DIR/$tdir | tail -1 | awk '{print $1}')
+	[ $index -eq 1 ] || error "second stripe index $index != 1"
+
+	# when "-c <stripe_count>" is set, the number of MDTs specified after
+	# "-i" should equal to the stripe count
+	$LFS mkdir -i 3,1 -c 3 $DIR/$tdir.2 && error "mkdir should fail" || true
+}
+run_test 31q "create striped directory on specific MDTs"
+
 cleanup_test32_mount() {
 	local rc=0
 	trap 0

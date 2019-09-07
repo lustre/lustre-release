@@ -2075,7 +2075,7 @@ static int lod_mdt_alloc_specific(const struct lu_env *env,
 	int rc;
 
 	master_index = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
-	if (stripe_count > 1)
+	if (!is_specific && stripe_count > 1)
 		/* Set the start index for the 2nd stripe allocation */
 		mdt_indices[1] = (mdt_indices[0] + 1) %
 					(lod->lod_remote_mdt_count + 1);
