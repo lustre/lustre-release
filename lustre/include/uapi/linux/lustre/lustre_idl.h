@@ -838,6 +838,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_SELINUX_POLICY	0x400ULL /* has client SELinux policy */
 #define OBD_CONNECT2_LSOM		0x800ULL /* LSOM support */
 #define OBD_CONNECT2_PCC		0x1000ULL /* Persistent Client Cache */
+#define OBD_CONNECT2_CRUSH		0x2000ULL /* crush hash striped directory */
 #define OBD_CONNECT2_ASYNC_DISCARD	0x4000ULL /* support async DoM data discard */
 #define OBD_CONNECT2_ENCRYPT		0x8000ULL /* client-to-disk encrypt */
 /* XXX README XXX:
