@@ -5,3 +5,4 @@ debian/tmp/usr/lib/*.so.*		usr/lib
 debian/tmp/usr/lib/lustre/*.so* 	usr/lib/lustre
 debian/tmp/lib/systemd/system/* 	lib/systemd/system
 debian/tmp/etc/*			etc
+debian/tmp/usr/share/bash-completion/completions/*	usr/share/bash-completion/completions

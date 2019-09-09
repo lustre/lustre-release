@@ -526,6 +526,7 @@ fi
 %{_mandir}/man?/*
 %endif
 %{_datadir}/lustre
+%{_datadir}/bash-completion/completions/*
 %{_includedir}/lustre
 %{_includedir}/linux/lnet
 %{_includedir}/linux/lustre
