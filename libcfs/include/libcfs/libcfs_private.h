@@ -412,7 +412,4 @@ static inline size_t cfs_round_strlen(char *fset)
 	return cfs_size_round(strlen(fset) + 1);
 }
 
-extern struct cfs_psdev_ops libcfs_psdev_ops;
-extern struct miscdevice libcfs_dev;
-
 #endif

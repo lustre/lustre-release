@@ -101,7 +101,6 @@ void cfs_restore_sigs(sigset_t);
 void cfs_clear_sigpending(void);
 
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
-int libcfs_ioctl(unsigned long cmd, void __user *uparam);
 
 /* container_of depends on "likely" which is defined in libcfs_private.h */
 static inline void *__container_of(const void *ptr, unsigned long shift)

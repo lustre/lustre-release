@@ -61,7 +61,7 @@ static struct dentry *lnet_debugfs_root;
 BLOCKING_NOTIFIER_HEAD(libcfs_ioctl_list);
 EXPORT_SYMBOL(libcfs_ioctl_list);
 
-int libcfs_ioctl(unsigned long cmd, void __user *uparam)
+static int libcfs_ioctl(unsigned long cmd, void __user *uparam)
 {
 	struct libcfs_ioctl_data *data = NULL;
 	struct libcfs_ioctl_hdr  *hdr;
@@ -118,6 +118,34 @@ out:
 	LIBCFS_FREE(hdr, hdr->ioc_len);
 	RETURN(err);
 }
+
+static long
+libcfs_psdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	if (!capable(CAP_SYS_ADMIN))
+		return -EACCES;
+
+	if (_IOC_TYPE(cmd) != IOC_LIBCFS_TYPE ||
+	    _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR  ||
+	    _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR) {
+		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
+		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
+		return -EINVAL;
+	}
+
+	return libcfs_ioctl(cmd, (void __user *)arg);
+}
+
+static const struct file_operations libcfs_fops = {
+	.owner			= THIS_MODULE,
+	.unlocked_ioctl		= libcfs_psdev_ioctl,
+};
+
+static struct miscdevice libcfs_dev = {
+	.minor			= MISC_DYNAMIC_MINOR,
+	.name			= "lnet",
+	.fops			= &libcfs_fops,
+};
 
 int lprocfs_call_handler(void *data, int write, loff_t *ppos,
 			 void __user *buffer, size_t *lenp,
