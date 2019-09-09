@@ -1426,6 +1426,9 @@ int lfsck_verify_lpf(const struct lu_env *env, struct lfsck_instance *lfsck)
 
 	LASSERT(lfsck->li_master);
 
+	if (lfsck_is_dryrun(lfsck))
+		RETURN(0);
+
 	if (lfsck->li_lpf_root_obj != NULL)
 		RETURN(0);
 

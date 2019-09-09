@@ -752,6 +752,11 @@ struct lfsck_instance {
 	struct lfsck_rec_lmv_save li_rec_lmv_save[LFSCK_REC_LMV_MAX_DEPTH];
 };
 
+static inline bool lfsck_is_dryrun(struct lfsck_instance *lfsck)
+{
+	return lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN;
+}
+
 struct lfsck_async_interpret_args {
 	struct lfsck_component		*laia_com;
 	struct lfsck_tgt_descs		*laia_ltds;

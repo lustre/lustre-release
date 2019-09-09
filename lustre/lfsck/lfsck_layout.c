@@ -2329,6 +2329,9 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
+	if (lfsck_is_dryrun(lfsck))
+		GOTO(log, rc = 0);
+
 	if (unlikely(lpf == NULL))
 		GOTO(log, rc = -ENXIO);
 
@@ -2729,6 +2732,9 @@ static int lfsck_layout_conflict_create(const struct lu_env *env,
 	if (rc != 0 && rc != -ENOENT)
 		GOTO(unlock, rc);
 
+	if (lfsck_is_dryrun(com->lc_lfsck))
+		GOTO(unlock, rc = 0);
+
 	th = dt_trans_create(env, dev);
 	if (IS_ERR(th))
 		GOTO(unlock, rc = PTR_ERR(th));
@@ -2807,6 +2813,9 @@ static int lfsck_layout_recreate_lovea(const struct lu_env *env,
 	bool locked = false;
 	bool new_mirror = true;
 	ENTRY;
+
+	if (lfsck_is_dryrun(lfsck))
+		RETURN(0);
 
 	rc = lfsck_ibits_lock(env, lfsck, parent, &lh,
 			      MDS_INODELOCK_LAYOUT | MDS_INODELOCK_XATTR,

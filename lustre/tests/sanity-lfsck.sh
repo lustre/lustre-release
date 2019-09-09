@@ -2189,6 +2189,28 @@ test_18b() {
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
 
+	# dryrun mode only check orphans, not repaie
+	echo "Trigger layout LFSCK --dryrun to find out orphan OST-object"
+	$START_LAYOUT --dryrun -o -r ||
+		error "Fail to start layout LFSCK in dryrun mode"
+	wait_all_targets_blocked layout completed 2
+
+	local PARAMS=$($SHOW_LAYOUT | awk '/^param/ { print $2 }')
+	[ "$PARAMS" == "dryrun,all_targets,orphan" ] ||
+		error "Expect 'dryrun,all_targets,orphan', got '$PARAMS'"
+
+	local orphans=$(do_facet mds1 $LCTL get_param -n \
+			mdd.$(facet_svc mds1).lfsck_layout |
+			awk '/^inconsistent_orphan/ { print $2 }')
+	[ $orphans -eq 3 ] ||
+		error "Expect 3 found on mds1, but got: $orphans"
+
+	# orphan parents should not be created
+	local subdir
+	for subdir in $MOUNT/.lustre/lost+found/*; do
+		[ ! "$(ls -A $subdir)" ] || error "$subdir not empty"
+	done
+
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o || error "(1) Fail to start LFSCK for layout!"
 
