@@ -3392,6 +3392,23 @@ AS_IF([test "x$with_systemdsystemunitdir" = "xyes" -o "x$with_systemdsystemunitd
 AS_IF([test "x$with_systemdsystemunitdir" != "xno"],
 	[AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])])
 AC_MSG_RESULT([$with_systemdsystemunitdir])
+
+AC_MSG_CHECKING([bash-completion directory])
+AC_ARG_WITH([bash-completion-dir],
+	AS_HELP_STRING([--with-bash-completion-dir[=PATH]],
+		[Install the bash auto-completion script in this directory.]),
+	[],
+	[with_bash_completion_dir=yes])
+AS_IF([test "x$with_bash_completion_dir" = "xyes"], [
+	BASH_COMPLETION_DIR="`pkg-config --variable=completionsdir bash-completion`"
+	AS_IF([test "x$BASH_COMPLETION_DIR" = "x"], [
+		[BASH_COMPLETION_DIR="$datadir/bash-completion/completions"]
+	])
+], [
+	BASH_COMPLETION_DIR="$with_bash_completion_dir"
+])
+AC_SUBST([BASH_COMPLETION_DIR])
+AC_MSG_RESULT([$BASH_COMPLETION_DIR])
 ]) # LC_CONFIGURE
 
 #
@@ -3411,6 +3428,7 @@ AM_CONDITIONAL(GSS_PIPEFS, test x$enable_gss_pipefs = xyes)
 AM_CONDITIONAL(GSS_SSK, test x$enable_ssk = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
 AM_CONDITIONAL(HAVE_SYSTEMD, test "x$with_systemdsystemunitdir" != "xno")
+AM_CONDITIONAL(ENABLE_BASH_COMPLETION, test "x$with_bash_completion_dir" != "xno")
 AM_CONDITIONAL(XATTR_HANDLER, test "x$lb_cv_compile_xattr_handler_flags" = xyes)
 AM_CONDITIONAL(SELINUX, test "$SELINUX" = "-lselinux")
 AM_CONDITIONAL(GETSEPOL, test x$enable_getsepol = xyes)

@@ -1,0 +1,29 @@
+_lctl()
+{
+	local cur prev words cword
+
+	_init_completion || return
+	COMPREPLY=()
+
+	if [[ "$cword" == "1" ]]; then
+		COMPREPLY=( $( compgen -W '$(lctl --list-commands |
+					     grep -v '^=')' -- "$cur" ) )
+		return 0
+	fi
+
+	case "${words[1]}" in
+	set_param|list_param|get_param)
+		local filter="s/=$//"
+		[[ "${words[1]}" == "set_param" ]] && filter="/[^=/]$/d"
+		mapfile -t COMPREPLY < <(
+		    lctl list_param -F "${cur#[\"\']}*" 2>/dev/null |
+		    sed -e "$filter" -e 's#/$#.#' \
+			-e "s#^${cur//\*/[^.]*}#$cur#"
+		    )
+		compopt -o nospace
+
+		return 0
+		;;
+	esac
+} &&
+complete -F _lctl lctl
