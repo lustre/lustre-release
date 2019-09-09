@@ -4742,6 +4742,57 @@ test_102() {
 }
 run_test 102 "Test open by handle of unlinked file"
 
+# Compare file size between first & second mount, ensuring the client correctly
+# glimpses even with unused speculative locks - LU-11670
+test_103() {
+	[ $(lustre_version_code $ost1) -lt $(version_code 2.10.50) ] &&
+		skip "Lockahead needs OST version at least 2.10.50"
+
+	local testnum=23
+
+	test_mkdir -p $DIR/$tdir
+
+	# Force file on to OST0
+	$LFS setstripe -i 0 $DIR/$tdir
+
+	# Do not check multiple locks on glimpse
+	# OBD_FAIL_OSC_NO_SIZE_DATA 0x415
+	$LCTL set_param fail_loc=0x415
+
+	# Delay write commit by 2 seconds to guarantee glimpse wins race
+	# The same fail_loc is used on client & server so it can work in the
+	# single node sanity setup
+	do_facet ost1 $LCTL set_param fail_loc=0x415 fail_val=2
+
+	echo "Incorrect size expected (no glimpse fix):"
+	lockahead_test -d $DIR/$tdir -D $DIR2/$tdir -t $testnum -f $tfile
+	rc=$?
+	if [ $rc -eq 0 ]; then
+		error "Lockahead test $testnum passed with fail_loc set, ${rc}"
+	fi
+
+	# guarantee write commit timeout has expired
+	sleep 2
+
+	# Clear fail_loc on client
+	$LCTL set_param fail_loc=0
+
+	# Delay write commit by 2 seconds to guarantee glimpse wins race
+	# OBD_FAIL_OST_BRW_PAUSE_BULK 0x214
+	do_facet ost1 $LCTL set_param fail_loc=0x214 fail_val=2
+
+	# Write commit is still delayed by 2 seconds
+	lockahead_test -d $DIR/$tdir -D $DIR2/$tdir -t $testnum -f $tfile
+	rc=$?
+	[ $rc -eq 0 ] || error "Lockahead test${testnum} failed, ${rc}"
+
+	# guarantee write commit timeout has expired
+	sleep 2
+
+	rm -f $DIR/$tfile || error "unable to delete $DIR/$tfile"
+}
+run_test 103 "Test size correctness with lockahead"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

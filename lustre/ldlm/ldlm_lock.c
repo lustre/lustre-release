@@ -1155,29 +1155,16 @@ void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list)
 }
 
 /**
- * Describe the overlap between two locks.  itree_overlap_cb data.
- */
-struct lock_match_data {
-	struct ldlm_lock	*lmd_old;
-	struct ldlm_lock	*lmd_lock;
-	enum ldlm_mode		*lmd_mode;
-	union ldlm_policy_data	*lmd_policy;
-	__u64			 lmd_flags;
-	__u64			 lmd_skip_flags;
-	int			 lmd_unref;
-};
-
-/**
  * Check if the given @lock meets the criteria for a match.
  * A reference on the lock is taken if matched.
  *
  * \param lock     test-against this lock
  * \param data	   parameters
  */
-static int lock_matches(struct ldlm_lock *lock, struct lock_match_data *data)
+static int lock_matches(struct ldlm_lock *lock, struct ldlm_match_data *data)
 {
 	union ldlm_policy_data *lpol = &lock->l_policy_data;
-	enum ldlm_mode match;
+	enum ldlm_mode match = LCK_MINMODE;
 
 	if (lock == data->lmd_old)
 		return INTERVAL_ITER_STOP;
@@ -1202,6 +1189,17 @@ static int lock_matches(struct ldlm_lock *lock, struct lock_match_data *data)
 
 	if (!(lock->l_req_mode & *data->lmd_mode))
 		return INTERVAL_ITER_CONT;
+
+	/* When we search for ast_data, we are not doing a traditional match,
+	 * so we don't worry about IBITS or extent matching.
+	 */
+	if (data->lmd_has_ast_data) {
+		if (!lock->l_ast_data)
+			return INTERVAL_ITER_CONT;
+
+		goto matched;
+	}
+
 	match = lock->l_req_mode;
 
 	switch (lock->l_resource->lr_type) {
@@ -1239,6 +1237,7 @@ static int lock_matches(struct ldlm_lock *lock, struct lock_match_data *data)
 	if (data->lmd_skip_flags & lock->l_flags)
 		return INTERVAL_ITER_CONT;
 
+matched:
 	if (data->lmd_flags & LDLM_FL_TEST_LOCK) {
 		LDLM_LOCK_GET(lock);
 		ldlm_lock_touch_in_lru(lock);
@@ -1255,7 +1254,7 @@ static int lock_matches(struct ldlm_lock *lock, struct lock_match_data *data)
 static unsigned int itree_overlap_cb(struct interval_node *in, void *args)
 {
 	struct ldlm_interval *node = to_ldlm_interval(in);
-	struct lock_match_data *data = args;
+	struct ldlm_match_data *data = args;
 	struct ldlm_lock *lock;
 	int rc;
 
@@ -1275,8 +1274,8 @@ static unsigned int itree_overlap_cb(struct interval_node *in, void *args)
  *
  * \retval a referenced lock or NULL.
  */
-static struct ldlm_lock *search_itree(struct ldlm_resource *res,
-				      struct lock_match_data *data)
+struct ldlm_lock *search_itree(struct ldlm_resource *res,
+			       struct ldlm_match_data *data)
 {
 	struct interval_node_extent ext = {
 		.start     = data->lmd_policy->l_extent.start,
@@ -1303,6 +1302,7 @@ static struct ldlm_lock *search_itree(struct ldlm_resource *res,
 
 	return NULL;
 }
+EXPORT_SYMBOL(search_itree);
 
 
 /**
@@ -1314,7 +1314,7 @@ static struct ldlm_lock *search_itree(struct ldlm_resource *res,
  * \retval a referenced lock or NULL.
  */
 static struct ldlm_lock *search_queue(struct list_head *queue,
-				      struct lock_match_data *data)
+				      struct ldlm_match_data *data)
 {
 	struct ldlm_lock *lock;
 	int rc;
@@ -1410,7 +1410,7 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 					 enum ldlm_mode mode,
 					 struct lustre_handle *lockh, int unref)
 {
-	struct lock_match_data data = {
+	struct ldlm_match_data data = {
 		.lmd_old = NULL,
 		.lmd_lock = NULL,
 		.lmd_mode = &mode,
@@ -1418,6 +1418,7 @@ enum ldlm_mode ldlm_lock_match_with_skip(struct ldlm_namespace *ns,
 		.lmd_flags = flags,
 		.lmd_skip_flags = skip_flags,
 		.lmd_unref = unref,
+		.lmd_has_ast_data = false,
 	};
 	struct ldlm_resource *res;
 	struct ldlm_lock *lock;

@@ -74,10 +74,13 @@
 
 /* Name of file/directory. Will be set once and will not change. */
 static char mainpath[PATH_MAX];
+/* Path to same file/directory on second mount */
+static char mainpath2[PATH_MAX];
 static char *mainfile;
 
 static char fsmountdir[PATH_MAX];	/* Lustre mountpoint */
 static char *lustre_dir;		/* Test directory inside Lustre */
+static char *lustre_dir2;		/* Same dir but on second mountpoint */
 static int single_test;			/* Number of a single test to execute*/
 
 /* Cleanup our test file. */
@@ -1077,9 +1080,125 @@ static int test22(void)
 	return 0;
 }
 
+/* Do lockahead requests from two mount points & sanity check size
+ *
+ * The key thing here is that client2 updates the size by writing, then asks
+ * for another lock beyond that.  That next lock is never used.
+ * The bug (LU-11670) is that the glimpse for client1 will only check the
+ * highest lock and miss the size update made by the lower lock.
+ */
+static int test23(void)
+{
+	struct llapi_lu_ladvise advice;
+	size_t write_size = 1024 * 1024;
+	char buf[write_size];
+	const int count = 1;
+	struct stat sb;
+	struct stat sb2;
+	int fd;
+	/* On second mount */
+	int fd2;
+	int rc;
+	int i;
+
+	fd = open(mainpath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+	ASSERTF(fd >= 0, "open failed for '%s': %s",
+		mainpath, strerror(errno));
+
+	/* mainpath2 is a different Lustre mount */
+	fd2 = open(mainpath2, O_RDWR, S_IRUSR | S_IWUSR);
+	ASSERTF(fd2 >= 0, "open failed for '%s': %s",
+		mainpath2, strerror(errno));
+
+	/* Lock + write MiB 1 from second client */
+	setup_ladvise_lockahead(&advice, MODE_WRITE_USER, 0, 0,
+				write_size - 1, true);
+
+	/* Manually set the result so we can verify it's being modified */
+	advice.lla_lockahead_result = 345678;
+
+	rc = llapi_ladvise(fd2, 0, count, &advice);
+	ASSERTF(rc == 0,
+		"cannot lockahead '%s': %s", mainpath2, strerror(errno));
+	ASSERTF(advice.lla_lockahead_result == 0,
+		"unexpected extent result: %d",
+		advice.lla_lockahead_result);
+
+	/* Ask again until we get the lock (status 1). */
+	for (i = 1; i < 100; i++) {
+		usleep(100000); /* 0.1 second */
+		advice.lla_lockahead_result = 456789;
+		rc = llapi_ladvise(fd2, 0, count, &advice);
+		ASSERTF(rc == 0, "cannot lockahead '%s': %s",
+			mainpath2, strerror(errno));
+
+		if (advice.lla_lockahead_result > 0)
+			break;
+	}
+
+	ASSERTF(advice.lla_lockahead_result == LLA_RESULT_SAME,
+		"unexpected extent result: %d",
+		advice.lla_lockahead_result);
+
+	rc = write(fd2, buf, write_size);
+	ASSERTF(rc == sizeof(buf), "write failed for '%s': %s",
+		mainpath2, strerror(errno));
+
+	/* Lock (but don't write) MiB 2 from second client */
+	setup_ladvise_lockahead(&advice, MODE_WRITE_USER, 0, write_size,
+				2*write_size - 1, true);
+
+	/* Manually set the result so we can verify it's being modified */
+	advice.lla_lockahead_result = 345678;
+
+	rc = llapi_ladvise(fd2, 0, count, &advice);
+	ASSERTF(rc == 0,
+		"cannot lockahead '%s': %s", mainpath2, strerror(errno));
+	ASSERTF(advice.lla_lockahead_result == 0,
+		"unexpected extent result: %d",
+		advice.lla_lockahead_result);
+
+	/* Ask again until we get the lock (status 1). */
+	for (i = 1; i < 100; i++) {
+		usleep(100000); /* 0.1 second */
+		advice.lla_lockahead_result = 456789;
+		rc = llapi_ladvise(fd2, 0, count, &advice);
+		ASSERTF(rc == 0, "cannot lockahead '%s': %s",
+			mainpath2, strerror(errno));
+
+		if (advice.lla_lockahead_result > 0)
+			break;
+	}
+
+	ASSERTF(advice.lla_lockahead_result == LLA_RESULT_SAME,
+		"unexpected extent result: %d",
+		advice.lla_lockahead_result);
+
+	rc = fstat(fd, &sb);
+	ASSERTF(!rc, "stat failed for '%s': %s",
+		mainpath, strerror(errno));
+	rc = fstat(fd2, &sb2);
+	ASSERTF(!rc, "stat failed for '%s': %s",
+		mainpath2, strerror(errno));
+
+	ASSERTF(sb.st_size == sb2.st_size,
+		"size on %s and %s differs: %lu vs %lu",
+		mainpath, mainpath2, sb.st_size, sb2.st_size);
+
+	ASSERTF(sb.st_size == write_size, "size %lu != bytes written (%lu)",
+		sb.st_size, write_size);
+
+	close(fd);
+	close(fd2);
+
+	return 0;
+}
+
 static void usage(char *prog)
 {
-	fprintf(stderr, "Usage: %s [-d lustre_dir], [-t single_test]\n", prog);
+	fprintf(stderr,
+		"Usage: %s [-d lustre_dir], [-D lustre_dir2] [-t test]\n",
+		prog);
 	exit(-1);
 }
 
@@ -1087,13 +1206,16 @@ static void process_args(int argc, char *argv[])
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "d:f:t:")) != -1) {
+	while ((c = getopt(argc, argv, "d:D:f:t:")) != -1) {
 		switch (c) {
 		case 'f':
 			mainfile = optarg;
 			break;
 		case 'd':
 			lustre_dir = optarg;
+			break;
+		case 'D':
+			lustre_dir2 = optarg;
 			break;
 		case 't':
 			single_test = atoi(optarg);
@@ -1125,6 +1247,16 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	if (lustre_dir2) {
+		rc = llapi_search_mounts(lustre_dir2, 0, fsmountdir, fsname);
+		if (rc != 0) {
+			fprintf(stderr,
+				"Error: '%s': not a Lustre filesystem\n",
+				lustre_dir2);
+			return -1;
+		}
+	}
+
 	/* Play nice with Lustre test scripts. Non-line buffered output
 	 * stream under I/O redirection may appear incorrectly. */
 	setvbuf(stdout, NULL, _IOLBF, 0);
@@ -1133,6 +1265,14 @@ int main(int argc, char *argv[])
 	rc = snprintf(mainpath, sizeof(mainpath), "%s/%s", lustre_dir,
 		      mainfile);
 	ASSERTF(rc > 0 && rc < sizeof(mainpath), "invalid name for mainpath");
+
+	if (lustre_dir2) {
+		rc = snprintf(mainpath2, sizeof(mainpath2), "%s/%s",
+			      lustre_dir2, mainfile);
+		ASSERTF(rc > 0 && rc < sizeof(mainpath2),
+			"invalid name for mainpath2");
+	}
+
 	cleanup();
 
 	switch (single_test) {
@@ -1150,6 +1290,9 @@ int main(int argc, char *argv[])
 		PERFORM(test20);
 		PERFORM(test21);
 		PERFORM(test22);
+		/* Some tests require a second mount point */
+		if (lustre_dir2)
+			PERFORM(test23);
 		/* When running all the test cases, we can't use the return
 		 * from the last test case, as it might be non-zero to return
 		 * info, rather than for an error.  Test cases assert and exit
@@ -1194,6 +1337,11 @@ int main(int argc, char *argv[])
 		break;
 	case 22:
 		PERFORM(test22);
+		break;
+	case 23:
+		ASSERTF(lustre_dir2,
+			"must provide second mount point for test 23");
+		PERFORM(test23);
 		break;
 	default:
 		fprintf(stderr, "impossible value of single_test %d\n",

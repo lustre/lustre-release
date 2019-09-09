@@ -2508,6 +2508,9 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?
 			 cfs_fail_val : (obd_timeout + 1) / 4);
 
+	/* Delay write commit to show stale size information */
+	CFS_FAIL_TIMEOUT(OBD_FAIL_OSC_NO_SIZE_DATA, cfs_fail_val);
+
 	/* There must be big cache in current thread to process this request
 	 * if it is NULL then something went wrong and it wasn't allocated,
 	 * report -ENOMEM in that case */
