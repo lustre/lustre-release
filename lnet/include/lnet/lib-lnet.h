@@ -992,6 +992,7 @@ lnet_peer_ni_is_primary(struct lnet_peer_ni *lpni)
 }
 
 bool lnet_peer_is_uptodate(struct lnet_peer *lp);
+bool lnet_peer_is_uptodate_locked(struct lnet_peer *lp);
 bool lnet_is_discovery_disabled(struct lnet_peer *lp);
 bool lnet_peer_gw_discovery(struct lnet_peer *lp);
 
