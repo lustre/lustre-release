@@ -4,3 +4,4 @@ debian/tmp/usr/bin/*			usr/bin
 debian/tmp/usr/lib/*.so.*		usr/lib
 debian/tmp/lib/systemd/system/*		lib/systemd/system
 debian/tmp/etc/*			etc
+debian/tmp/usr/share/bash-completion/completions/*	usr/share/bash-completion/completions

@@ -34,7 +34,7 @@ init() {
 
 	# Identify a name followed by an email address.
 	#
-	readonly EMAILPAT=$'[ \t]*[^<> ]* [^<>]* <[^@ \t>]+@[a-zA-Z0-9.-]+\.[a-z]+>'
+	readonly EMAILPAT=$'[ \t]*[^<> ]*[^<>]* <[^@ \t>]+@[a-zA-Z0-9.-]+\.[a-z]+>'
 
 	HAS_ERROR=false
 	HAS_SUMMARY=false
