@@ -107,6 +107,7 @@ struct lustre_mount_data {
 #define LMD_FLG_HSM		0x4000	/* Start coordinator */
 #define LMD_FLG_DEV_RDONLY	0x8000	/* discard modification quitely */
 #define LMD_FLG_NO_PRECREATE	0x10000	/* do not allow OST object creation */
+#define LMD_FLG_LOCAL_RECOV	0x20000 /* force recovery for local clients */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 

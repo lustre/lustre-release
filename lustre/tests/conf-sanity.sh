@@ -6123,7 +6123,7 @@ test_83() {
 		error "format ost1 error"
 
 	if ! test -b $dev; then
-		mnt_opts=$(csa_add "$OST_MOUNT_OPTS" -o loop)
+		mnt_opts=$(csa_add "$OST_MOUNT_FS_OPTS" -o loop)
 	fi
 	echo "mnt_opts $mnt_opts"
 	do_facet ost1 mount -t "$ost1_FSTYPE" $dev \

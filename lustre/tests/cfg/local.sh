@@ -34,7 +34,8 @@ MDSSIZE=${MDSSIZE:-250000}
 #
 MDSOPT=${MDSOPT:-}
 MDS_FS_MKFS_OPTS=${MDS_FS_MKFS_OPTS:-}
-MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-}
+# use localrecov to enable recovery on local clients, LU-12722
+MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:--olocalrecov}
 # <facet_type>_MOUNT_FS_OPTS is the mount options specified when formatting
 # the underlying device by argument "--mountfsoptions"
 MDS_MOUNT_FS_OPTS=${MDS_MOUNT_FS_OPTS:-}
@@ -50,7 +51,8 @@ OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-400000}
 OSTOPT=${OSTOPT:-}
 OST_FS_MKFS_OPTS=${OST_FS_MKFS_OPTS:-}
-OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-}
+# use localrecov to enable recovery on local clients, LU-12722
+OST_MOUNT_OPTS=${OST_MOUNT_OPTS:--olocalrecov}
 OST_MOUNT_FS_OPTS=${OST_MOUNT_FS_OPTS:-}
 OST_INDEX_LIST=${OST_INDEX_LIST:-}
 # Can specify individual ost devs with

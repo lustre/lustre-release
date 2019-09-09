@@ -944,6 +944,25 @@ static int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *tgt,
 	return rc ? rc : exp->exp_need_sync;
 }
 
+static int tgt_is_local_client(const struct lu_env *env,
+				      struct obd_export *exp)
+{
+	struct lu_target	*tgt = class_exp2tgt(exp);
+	struct tgt_session_info *tsi = tgt_ses_info(env);
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+
+	if (tgt->lut_local_recovery)
+		return 0;
+	if (!req)
+		return 0;
+	if (!LNetIsPeerLocal(req->rq_peer.nid))
+		return 0;
+	if (exp_connect_flags(exp) & OBD_CONNECT_MDS)
+		return 0;
+
+	return 1;
+}
+
 /**
  * Add new client to the last_rcvd upon new connection.
  *
@@ -964,6 +983,13 @@ int tgt_client_new(const struct lu_env *env, struct obd_export *exp)
 
 	if (exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		RETURN(0);
+
+	if (tgt_is_local_client(env, exp)) {
+		LCONSOLE_WARN("%s: local client %s w/o recovery\n",
+			      exp->exp_obd->obd_name, ted->ted_lcd->lcd_uuid);
+		exp->exp_no_recovery = 1;
+		RETURN(0);
+	}
 
 	/* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
 	 * there's no need for extra complication here
@@ -1092,7 +1118,8 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 	/* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
 	if (!strcmp((char *)ted->ted_lcd->lcd_uuid,
 		    (char *)tgt->lut_obd->obd_uuid.uuid) ||
-	    exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
+	    exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT ||
+	    exp->exp_no_recovery)
 		RETURN(0);
 
 	/* Slot may be not yet assigned, use case is race between Client

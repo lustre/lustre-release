@@ -161,7 +161,8 @@ out:
  * \retval		negative value on error
  */
 static int ofd_stack_init(const struct lu_env *env,
-			  struct ofd_device *m, struct lustre_cfg *cfg)
+			  struct ofd_device *m, struct lustre_cfg *cfg,
+			  u32 *lmd_flags)
 {
 	const char		*dev = lustre_cfg_string(cfg, 0);
 	struct lu_device	*d;
@@ -180,11 +181,13 @@ static int ofd_stack_init(const struct lu_env *env,
 	}
 
 	lmd = s2lsi(lmi->lmi_sb)->lsi_lmd;
-	if (lmd && lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
-		m->ofd_skip_lfsck = 1;
-
-	if (lmd && lmd->lmd_flags & LMD_FLG_NO_PRECREATE)
-		m->ofd_no_precreate = 1;
+	if (lmd) {
+		if (lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+			m->ofd_skip_lfsck = 1;
+		if (lmd->lmd_flags & LMD_FLG_NO_PRECREATE)
+			m->ofd_no_precreate = 1;
+		*lmd_flags = lmd->lmd_flags;
+	}
 
 	/* find bottom osd */
 	OBD_ALLOC(osdname, MTI_NAME_MAXLEN);
@@ -2841,6 +2844,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	struct lu_fid fid;
 	struct nm_config_file *nodemap_config;
 	struct obd_device_target *obt;
+	u32 lmd_flags = 0;
 	int rc;
 
 	ENTRY;
@@ -2896,7 +2900,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (info == NULL)
 		RETURN(-EFAULT);
 
-	rc = ofd_stack_init(env, m, cfg);
+	rc = ofd_stack_init(env, m, cfg, &lmd_flags);
 	if (rc) {
 		CERROR("%s: can't init device stack, rc %d\n",
 		       obd->obd_name, rc);
@@ -2929,6 +2933,11 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		      OBD_FAIL_OST_ALL_REPLY_NET);
 	if (rc)
 		GOTO(err_free_ns, rc);
+
+	if (lmd_flags & LMD_FLG_SKIP_LFSCK)
+		m->ofd_skip_lfsck = 1;
+	if (lmd_flags & LMD_FLG_LOCAL_RECOV)
+		m->ofd_lut.lut_local_recovery = 1;
 
 	rc = ofd_tunables_init(m);
 	if (rc)

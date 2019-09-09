@@ -2331,6 +2331,22 @@ zconf_umount() {
 	fi
 }
 
+# Mount the file system on the MDS
+mount_mds_client() {
+	local mds_HOST=${SINGLEMDS}_HOST
+	echo $mds_HOST
+	do_facet $SINGLEMDS "mkdir -p $MOUNT2"
+	zconf_mount $mds1_HOST $MOUNT2 $MOUNT_OPTS ||
+		error "unable to mount $MOUNT2 on MDS"
+}
+
+# Unmount the file system on the MDS
+umount_mds_client() {
+	local mds_HOST=${SINGLEMDS}_HOST
+	zconf_umount $mds1_HOST $MOUNT2
+	do_facet $SINGLEMDS "rm -rf $MOUNT2"
+}
+
 # nodes is comma list
 sanity_mount_check_nodes () {
     local nodes=$1
@@ -8559,7 +8575,7 @@ mds_backup_restore() {
 	local rcmd="do_facet $facet"
 	local metaea=${TMP}/backup_restore.ea
 	local metadata=${TMP}/backup_restore.tgz
-	local opts=${MDS_MOUNT_OPTS}
+	local opts=${MDS_MOUNT_FS_OPTS}
 	local svc=${facet}_svc
 
 	if ! ${rcmd} test -b ${devname}; then
@@ -8616,7 +8632,7 @@ mds_remove_ois() {
 	local devname=$(mdsdevname $(facet_number $facet))
 	local mntpt=$(facet_mntpt brpt)
 	local rcmd="do_facet $facet"
-	local opts=${MDS_MOUNT_OPTS}
+	local opts=${MDS_MOUNT_FS_OPTS}
 
 	if ! ${rcmd} test -b ${devname}; then
 		opts=$(csa_add "$opts" -o loop)

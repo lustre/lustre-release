@@ -2262,13 +2262,15 @@ test_110k() {
 
 #define OBD_FAIL_FLD_QUERY_REQ 0x1103
 	do_facet mds2 lctl set_param fail_loc=0x1103
-	start mds2 $(mdsdevname 2) -o abort_recovery ||
+	local OPTS="$MDS_MOUNT_OPTS -o abort_recovery"
+	start mds2 $(mdsdevname 2) $OPTS ||
 		error "start MDS with abort_recovery should succeed"
 	do_facet mds2 lctl set_param fail_loc=0
 
 	# cleanup
 	stop mds2 || error "cleanup: stop mds2 failed"
-	start mds2 $(mdsdevname 2) || error "cleanup: start mds2 failed"
+	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS ||
+		error "cleanup: start mds2 failed"
 	zconf_mount $(hostname) $MOUNT || error "cleanup: mount failed"
 	client_up || error "post-failover df failed"
 }
@@ -2283,10 +2285,10 @@ test_111 ()
 #define OBD_FAIL_MDS_CHANGELOG_INIT 0x151
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x151
 	stop $SINGLEMDS || error "stop MDS failed"
-	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
+	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) $MDS_MOUNT_OPTS &&
 		error "start MDS should fail"
 	do_facet $SINGLEMDS lctl set_param fail_loc=0
-	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) ||
+	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) $MDS_MOUNT_OPTS ||
 		error "start MDS failed"
 }
 run_test 111 "mdd setup fail should not cause umount oops"
@@ -2912,6 +2914,63 @@ test_139() {
 	start $SINGLEMDS $mdt_dev $MDS_MOUNT_OPTS || error "Fail to start MDT"
 }
 run_test 139 "corrupted catid won't cause crash"
+
+test_140a() {
+	[ $MDS1_VERSION -lt $(version_code 2.12.58) ] &&
+		skip "Need MDS version at least 2.13.50"
+
+	slr=$(do_facet mds1 \
+		$LCTL get_param -n mdt.$FSNAME-MDT0000.local_recovery)
+	stack_trap "do_facet mds1 $LCTL set_param \
+		mdt.*.local_recovery=$slr" EXIT
+
+	# disable recovery for local clients
+	# so local clients should be marked with no_recovery flag
+	do_facet mds1 $LCTL set_param mdt.*.local_recovery=0
+	mount_mds_client
+
+	local cnt
+	cnt=$(do_facet mds1 $LCTL get_param "mdt.*.exports.*.export" |
+		grep export_flags.*no_recovery | wc -l)
+	echo "$cnt clients with recovery disabled"
+	umount_mds_client
+	[ $cnt -eq 0 ] && error "no clients with recovery disabled"
+
+	# enable recovery for local clients
+	# so no local clients should be marked with no_recovery flag
+	do_facet mds1 $LCTL set_param mdt.*.local_recovery=1
+	mount_mds_client
+
+	cnt=$(do_facet mds1 $LCTL get_param "mdt.*.exports.*.export" |
+		grep export_flags.*no_recovery | wc -l)
+	echo "$cnt clients with recovery disabled"
+	umount_mds_client
+	[ $cnt -eq 0 ] || error "$cnt clients with recovery disabled"
+}
+run_test 140a "local mount is flagged properly"
+
+test_140b() {
+	[ $MDS1_VERSION -lt $(version_code 2.12.58) ] &&
+		skip "Need MDS version at least 2.13.50"
+
+	slr=$(do_facet mds1 \
+		$LCTL get_param -n mdt.$FSNAME-MDT0000.local_recovery)
+	stack_trap "do_facet mds1 $LCTL set_param \
+		mdt.*.local_recovery=$slr" EXIT
+
+	# disable recovery for local clients
+	do_facet mds1 $LCTL set_param mdt.*.local_recovery=0
+
+	mount_mds_client
+	replay_barrier mds1
+	umount_mds_client
+	local before=$SECONDS
+	fail mds1
+	local after=$SECONDS
+	(( $after-$before < $TIMEOUT*2 )) ||
+		error "recovery took too long" $((after-bsfore)) $TIMEOUT
+}
+run_test 140b "local mount is excluded from recovery"
 
 complete $SECONDS
 check_and_cleanup_lustre

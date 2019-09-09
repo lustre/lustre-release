@@ -79,8 +79,8 @@ SHOW_LAYOUT="do_facet $SINGLEMDS \
 		$LCTL get_param -n mdd.${MDT_DEV}.lfsck_layout"
 SHOW_LAYOUT_ON_OST="do_facet ost1 \
 		$LCTL get_param -n obdfilter.${OST_DEV}.lfsck_layout"
-MOUNT_OPTS_SCRUB="-o user_xattr"
-MOUNT_OPTS_NOSCRUB="-o user_xattr,noscrub"
+MOUNT_OPTS_SCRUB="$MDS_MOUNT_OPTS -o user_xattr"
+MOUNT_OPTS_NOSCRUB="$MDS_MOUNT_OPTS -o user_xattr,noscrub"
 MOUNT_OPTS_SKIP_LFSCK="-o user_xattr,skip_lfsck"
 
 lfsck_prep() {

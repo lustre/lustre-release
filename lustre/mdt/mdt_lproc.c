@@ -531,6 +531,34 @@ static ssize_t commit_on_sharing_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(commit_on_sharing);
 
+static ssize_t local_recovery_show(struct kobject *kobj,
+				      struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 obd->u.obt.obt_lut->lut_local_recovery);
+}
+
+static ssize_t local_recovery_store(struct kobject *kobj,
+				       struct attribute *attr,
+				       const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	obd->u.obt.obt_lut->lut_local_recovery = !!val;
+	return count;
+}
+LUSTRE_RW_ATTR(local_recovery);
+
 static int mdt_root_squash_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
@@ -1085,6 +1113,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_dir_migration.attr,
 	&lustre_attr_enable_remote_rename.attr,
 	&lustre_attr_commit_on_sharing.attr,
+	&lustre_attr_local_recovery.attr,
 	&lustre_attr_async_commit_count.attr,
 	&lustre_attr_sync_count.attr,
 	&lustre_attr_dom_lock.attr,

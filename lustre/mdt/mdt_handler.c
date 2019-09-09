@@ -5413,12 +5413,12 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		RETURN(-EFAULT);
 	} else {
 		lsi = s2lsi(lmi->lmi_sb);
+		LASSERT(lsi->lsi_lmd);
 		/* CMD is supported only in IAM mode */
 		LASSERT(num);
 		node_id = simple_strtol(num, NULL, 10);
 		obd->u.obt.obt_magic = OBT_MAGIC;
-		if (lsi->lsi_lmd != NULL &&
-		    lsi->lsi_lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+		if (lsi->lsi_lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
 			m->mdt_skip_lfsck = 1;
 	}
 
@@ -5594,6 +5594,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	 * value appropriately. */
 	if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
 		ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
+
+	if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_LOCAL_RECOV))
+		m->mdt_lut.lut_local_recovery = 1;
 
 	RETURN(0);
 err_procfs:

@@ -167,6 +167,7 @@ static int obd_export_flags2str(struct obd_export *exp, struct seq_file *m)
 	flag2str(exp, in_recovery);
 	flag2str(exp, disconnected);
 	flag2str(exp, connecting);
+	flag2str(exp, no_recovery);
 
 	return 0;
 }
