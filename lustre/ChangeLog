@@ -29,7 +29,7 @@ TBD Whamcloud
          4.15.0-48           (Ubuntu 18.04)
          vanilla linux 4.15.0 (ZFS only)
        * Recommended e2fsprogs version: 1.45.2.wc1 or newer
-       * Recommended ZFS version: 0.8.1
+       * Recommended ZFS / SPL version: 0.7.13
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
          stack overflow. For more information, please refer to bugzilla 17630.
