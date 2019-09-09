@@ -17100,7 +17100,7 @@ run_test 255b "check 'lfs ladvise -a dontneed'"
 
 test_255c() {
 	[ $OST1_VERSION -lt $(version_code 2.10.50) ] &&
-		skip "lustre < 2.10.53 does not support lockahead"
+		skip "lustre < 2.10.50 does not support lockahead"
 
 	local count
 	local new_count

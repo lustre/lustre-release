@@ -962,6 +962,20 @@ struct ldlm_lock {
 	struct list_head	l_exp_list;
 };
 
+/**
+ * Describe the overlap between two locks.  itree_overlap_cb data.
+ */
+struct ldlm_match_data {
+	struct ldlm_lock	*lmd_old;
+	struct ldlm_lock	*lmd_lock;
+	enum ldlm_mode		*lmd_mode;
+	union ldlm_policy_data	*lmd_policy;
+	__u64			 lmd_flags;
+	__u64			 lmd_skip_flags;
+	int			 lmd_unref;
+	bool			 lmd_has_ast_data;
+};
+
 /** For uncommitted cross-MDT lock, store transno this lock belongs to */
 #define l_transno l_client_cookie
 
@@ -1539,7 +1553,8 @@ static inline enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns,
 	return ldlm_lock_match_with_skip(ns, flags, 0, res_id, type, policy,
 					 mode, lh, unref);
 }
-
+struct ldlm_lock *search_itree(struct ldlm_resource *res,
+			       struct ldlm_match_data *data);
 enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 					   __u64 *bits);
 void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
