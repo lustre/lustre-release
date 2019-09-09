@@ -563,7 +563,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 		RETURN(-ENOENT);
 	}
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if (exp_connect_flags(exp) & OBD_CONNECT_ACL) {
 		struct lu_nodemap *nodemap = nodemap_get_from_exp(exp);
 		if (IS_ERR(nodemap))

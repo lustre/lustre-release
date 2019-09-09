@@ -38,6 +38,7 @@
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
 #include <linux/pagemap.h>
+#include <linux/posix_acl_xattr.h>
 #include <linux/bio.h>
 #include <linux/xattr.h>
 #include <linux/workqueue.h>
@@ -422,8 +423,22 @@ __vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
 }
 #endif /* HAVE_VFS_SETXATTR */
 
+#ifndef HAVE_POSIXACL_USER_NS
+/*
+ * Mask out &init_user_ns so we don't jump
+ * through hoops to define it somehow only
+ * to have it ignored anyway.
+ */
+#define posix_acl_from_xattr(a, b, c)	posix_acl_from_xattr(b, c)
+#define posix_acl_to_xattr(a, b, c, d)	posix_acl_to_xattr(b, c, d)
+#endif
+
+#ifndef HAVE_POSIX_ACL_VALID_USER_NS
+#define posix_acl_valid(a,b)		posix_acl_valid(b)
+#endif
+
 #ifdef HAVE_IOP_SET_ACL
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 #ifndef HAVE_POSIX_ACL_UPDATE_MODE
 static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
 			  struct posix_acl **acl)

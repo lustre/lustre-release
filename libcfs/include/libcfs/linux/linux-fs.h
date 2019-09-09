@@ -41,7 +41,6 @@
 #include <linux/stat.h>
 #include <linux/mount.h>
 #include <linux/backing-dev.h>
-#include <linux/posix_acl_xattr.h>
 
 #ifndef HAVE_FILE_DENTRY
 static inline struct dentry *file_dentry(const struct file *file)
@@ -61,17 +60,4 @@ static inline struct dentry *file_dentry(const struct file *file)
 #define DTTOIF(dirtype)		((dirtype) << IFSHIFT)
 #endif
 
-#ifndef HAVE_POSIXACL_USER_NS
-/*
- * Mask out &init_user_ns so we don't jump
- * through hoops to define it somehow only
- * to have it ignored anyway.
- */
-#define posix_acl_from_xattr(a,b,c)	posix_acl_from_xattr(b,c)
-#define posix_acl_to_xattr(a,b,c,d)	posix_acl_to_xattr(b,c,d)
-#endif
-
-#ifndef HAVE_POSIX_ACL_VALID_USER_NS
-#define posix_acl_valid(a,b) posix_acl_valid(b)
-#endif
 #endif

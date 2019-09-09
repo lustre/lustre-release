@@ -4850,7 +4850,7 @@ struct posix_acl *ll_get_acl(struct inode *inode, int type)
 }
 
 #ifdef HAVE_IOP_SET_ACL
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -4906,7 +4906,7 @@ out:
 		set_cached_acl(inode, type, acl);
 	RETURN(rc);
 }
-#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 #endif /* HAVE_IOP_SET_ACL */
 
 int ll_inode_permission(struct inode *inode, int mask)

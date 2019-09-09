@@ -44,9 +44,9 @@
  * @{
  */
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 # include <linux/fs.h>
-# include <linux/posix_acl_xattr.h>
+# include <lustre_compat.h>
 
 typedef struct {
         __u16                   e_tag;
@@ -87,7 +87,7 @@ extern int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry,
 extern int lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry, mode_t *mode_p,
 				       int count);
 #endif /* HAVE_SERVER_SUPPORT */
-#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
 /** @} eacl */
 

@@ -2117,7 +2117,7 @@ static int mdd_declare_create_object(const struct lu_env *env,
 	if (rc)
 		GOTO(out, rc);
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if (def_acl_buf && def_acl_buf->lb_len > 0 && S_ISDIR(attr->la_mode)) {
 		/* if dir, then can inherit default ACl */
 		rc = mdo_declare_xattr_set(env, c, def_acl_buf,
@@ -2360,7 +2360,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			GOTO(err_destroy, rc);
 	}
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if (def_acl_buf != NULL && def_acl_buf->lb_len > 0 &&
 	    S_ISDIR(attr->la_mode)) {
 		/* set default acl */

@@ -555,7 +555,7 @@ int mdt_pack_size2body(struct mdt_thread_info *info,
 	RETURN(0);
 }
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 /*
  * Pack ACL data into the reply. UIDs/GIDs are mapped and filtered by nodemap.
  *
@@ -1117,7 +1117,7 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 			GOTO(out, rc = rc2);
 	}
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if (need & MA_ACL_DEF && S_ISDIR(mode)) {
 		buf->lb_buf = ma->ma_acl;
 		buf->lb_len = ma->ma_acl_size;
@@ -1351,7 +1351,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		       repbody->mbo_max_mdsize);
 	}
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if ((exp_connect_flags(req->rq_export) & OBD_CONNECT_ACL) &&
 		 (reqbody->mbo_valid & OBD_MD_FLACL)) {
 		struct lu_nodemap *nodemap = nodemap_get_from_exp(exp);

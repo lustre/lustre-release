@@ -32,10 +32,10 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 # include <linux/fs.h>
 # include <linux/posix_acl_xattr.h>
-#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
 #include <obd_support.h>
 #include <obd_class.h>

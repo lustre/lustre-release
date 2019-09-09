@@ -46,9 +46,9 @@
 
 #include <linux/fs.h>
 #include <linux/dcache.h>
-#ifdef CONFIG_FS_POSIX_ACL
-# include <linux/posix_acl_xattr.h>
-#endif /* CONFIG_FS_POSIX_ACL */
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
+# include <lustre_compat.h>
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 #include <lustre_handles.h>
 #include <lustre_intent.h>
 #include <libcfs/libcfs.h>

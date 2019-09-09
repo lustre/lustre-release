@@ -1537,7 +1537,7 @@ static int echo_attr_get_complex(const struct lu_env *env,
 		}
 	}
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if ((ma->ma_need & MA_ACL_DEF) && S_ISDIR(mode)) {
 		buf->lb_buf = ma->ma_acl;
 		buf->lb_len = ma->ma_acl_size;

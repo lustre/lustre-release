@@ -45,7 +45,7 @@
 #include <lustre_idmap.h>
 #include "mdd_internal.h"
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 
 /*
  * Hold write_lock for o.
@@ -207,7 +207,7 @@ int __mdd_fix_mode_acl(const struct lu_env *env, struct lu_buf *buf,
 static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 			const struct lu_attr *la, int mask)
 {
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	struct lu_ucred  *uc  = lu_ucred_assert(env);
 	posix_acl_xattr_header *head;
 	posix_acl_xattr_entry *entry;

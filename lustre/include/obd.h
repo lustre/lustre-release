@@ -1035,7 +1035,7 @@ struct lustre_md {
 		struct lmv_foreign_md   *lfm;
 	};
 	struct lmv_stripe_md    *default_lmv;
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	struct posix_acl        *posix_acl;
 #endif
 };

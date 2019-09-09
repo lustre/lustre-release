@@ -181,6 +181,22 @@ Lustre quota requires that CONFIG_QUOTA is enabled in your kernel.
 ])])
 ]) # LC_QUOTA_CONFIG
 
+
+#[AC_DEFINE(CONFIG_LUSTRE_FS_POSIX_ACL, 1, [Enable POSIX acl])])
+#
+# LC_POSIX_ACL_CONFIG
+#
+# POSIX ACL support.
+#
+AC_DEFUN([LC_POSIX_ACL_CONFIG], [
+LB_CHECK_CONFIG_IM([FS_POSIX_ACL],
+	[AC_DEFINE(CONFIG_LUSTRE_FS_POSIX_ACL, 1, [Enable POSIX acl])
+], [ ])
+]) # LC_POSIX_ACL_CONFIG
+
+LB_CHECK_CONFIG_IM([CRYPTO_MD5], [],
+		[AC_MSG_WARN([kernel MD5 support is recommended by using GSS.])])
+
 #
 # LC_CONFIG_GSS_KEYRING
 #
@@ -3115,6 +3131,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 		LC_STACK_SIZE
 		LC_QUOTA_CONFIG
 	])
+	LC_POSIX_ACL_CONFIG
 ]) # LC_PROG_LINUX
 
 #

@@ -32,10 +32,10 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 # include <linux/fs.h>
 # include <linux/posix_acl_xattr.h>
-#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -4628,7 +4628,7 @@ void lustre_assert_wire_constants(void)
 	CLASSERT(FIEMAP_EXTENT_NO_DIRECT == 0x40000000);
 	CLASSERT(FIEMAP_EXTENT_NET == 0x80000000);
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	/* Checks for type posix_acl_xattr_entry */
 	LASSERTF((int)sizeof(posix_acl_xattr_entry) == 8, "found %lld\n",
 		 (long long)(int)sizeof(posix_acl_xattr_entry));
@@ -4644,9 +4644,9 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(posix_acl_xattr_entry, e_id));
 	LASSERTF((int)sizeof(((posix_acl_xattr_entry *)0)->e_id) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((posix_acl_xattr_entry *)0)->e_id));
-#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	/* Checks for type posix_acl_xattr_header */
 	LASSERTF((int)sizeof(posix_acl_xattr_header) == 4, "found %lld\n",
 		 (long long)(int)sizeof(posix_acl_xattr_header));
@@ -4660,7 +4660,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((posix_acl_xattr_header *)0)->a_entries) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((posix_acl_xattr_header *)0)->a_entries));
 #endif /* HAVE_STRUCT_POSIX_ACL_XATTR */
-#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
 	/* Checks for struct link_ea_header */
 	LASSERTF((int)sizeof(struct link_ea_header) == 24, "found %lld\n",

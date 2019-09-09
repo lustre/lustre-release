@@ -605,7 +605,7 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *obj,
 	ENTRY;
 
 	rc = mdo_attr_set(env, obj, attr, handle);
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if (!rc && (attr->la_valid & LA_MODE) && needacl)
 		rc = mdd_acl_chmod(env, obj, attr->la_mode, handle);
 #endif
@@ -1069,7 +1069,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
         if (rc)
                 return rc;
 
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 	if (attr->la_valid & LA_MODE) {
 		mdd_read_lock(env, obj, DT_TGT_CHILD);
 		rc = mdo_xattr_get(env, obj, &LU_BUF_NULL,

@@ -916,11 +916,11 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 int ll_getattr_dentry(struct dentry *de, struct kstat *stat);
 struct posix_acl *ll_get_acl(struct inode *inode, int type);
 #ifdef HAVE_IOP_SET_ACL
-#ifdef CONFIG_FS_POSIX_ACL
+#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type);
-#else  /* !CONFIG_FS_POSIX_ACL */
+#else  /* !CONFIG_LUSTRE_FS_POSIX_ACL */
 #define ll_set_acl NULL
-#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
 #endif
 int ll_migrate(struct inode *parent, struct file *file,
