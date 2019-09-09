@@ -2574,9 +2574,9 @@ again:
 	msg->msg_src_nid_param = src_nid;
 
 	/*
-	 * Now that we have a peer_ni, check if we want to discover
-	 * the peer. Traffic to the LNET_RESERVED_PORTAL should not
-	 * trigger discovery.
+	 * If necessary, perform discovery on the peer that owns this peer_ni.
+	 * Note, this can result in the ownership of this peer_ni changing
+	 * to another peer object.
 	 */
 	peer = lpni->lpni_peer_net->lpn_peer;
 	if (lnet_msg_discovery(msg) && !lnet_peer_is_uptodate(peer)) {
@@ -2589,20 +2589,23 @@ again:
 		}
 		/* The peer may have changed. */
 		peer = lpni->lpni_peer_net->lpn_peer;
-		/* queue message and return */
-		msg->msg_rtr_nid_param = rtr_nid;
-		msg->msg_sending = 0;
 		spin_lock(&peer->lp_lock);
-		list_add_tail(&msg->msg_list, &peer->lp_dc_pendq);
+		if (!lnet_peer_is_uptodate_locked(peer)) {
+			/* queue message and return */
+			msg->msg_rtr_nid_param = rtr_nid;
+			msg->msg_sending = 0;
+			list_add_tail(&msg->msg_list, &peer->lp_dc_pendq);
+			lnet_peer_ni_decref_locked(lpni);
+			primary_nid = peer->lp_primary_nid;
+			spin_unlock(&peer->lp_lock);
+			lnet_net_unlock(cpt);
+
+			CDEBUG(D_NET, "%s pending discovery\n",
+			       libcfs_nid2str(primary_nid));
+
+			return LNET_DC_WAIT;
+		}
 		spin_unlock(&peer->lp_lock);
-		lnet_peer_ni_decref_locked(lpni);
-		primary_nid = peer->lp_primary_nid;
-		lnet_net_unlock(cpt);
-
-		CDEBUG(D_NET, "%s pending discovery\n",
-		       libcfs_nid2str(primary_nid));
-
-		return LNET_DC_WAIT;
 	}
 	lnet_peer_ni_decref_locked(lpni);
 
