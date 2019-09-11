@@ -8148,7 +8148,7 @@ test_77k() { # LU-10906
 		wait_update $HOSTNAME "$get_checksum" $i
 		#remount
 		echo "remount client, checksum should be $i"
-		remount_client $MOUNT || "failed to remount client"
+		remount_client $MOUNT || error "failed to remount client"
 		checksum=$(eval $get_checksum)
 		[ $checksum -eq $i ] || error "checksum($checksum) != $i"
 	done
@@ -8159,15 +8159,15 @@ test_77k() { # LU-10906
 	for opt in "checksum" "nochecksum"; do
 		#remount with mount option
 		echo "remount client with option $opt, checksum should be $i"
-		umount_client $MOUNT || "failed to umount client"
+		umount_client $MOUNT || error "failed to umount client"
 		mount_client $MOUNT "$MOUNT_OPTS,$opt" ||
-			"failed to mount client with option '$opt'"
+			error "failed to mount client with option '$opt'"
 		checksum=$(eval $get_checksum)
 		[ $checksum -eq $i ] || error "checksum($checksum) != $i"
 		i=$((i - 1))
 	done
 
-	remount_client $MOUNT || "failed to remount client"
+	remount_client $MOUNT || error "failed to remount client"
 }
 run_test 77k "enable/disable checksum correctly"
 
@@ -21106,9 +21106,9 @@ test_421f() {
 	cnt=$(ls -1 $DIR/$tdir | wc -l)
 	[ $cnt == 1 ] || error "unexpected #files after (5): $cnt"
 
-	umount_client $MOUNT || "failed to umount client"
+	umount_client $MOUNT || error "failed to umount client"
 	mount_client $MOUNT "$MOUNT_OPTS,user_fid2path" ||
-		"failed to mount client'"
+		error "failed to mount client'"
 
 	$RUNAS $LFS rmfid $DIR $FID || error "rmfid failed"
 	# rmfid should succeed
@@ -21122,9 +21122,9 @@ test_421f() {
 	FID=$(lfs path2fid $DIR/$tdir/f)
 	$RUNAS $LFS rmfid $DIR $FID && error "rmfid didn't fail"
 
-	umount_client $MOUNT || "failed to umount client"
+	umount_client $MOUNT || error "failed to umount client"
 	mount_client $MOUNT "$MOUNT_OPTS" ||
-		"failed to mount client'"
+		error "failed to mount client'"
 
 }
 run_test 421f "rmfid checks permissions"
