@@ -146,15 +146,15 @@ static void osc_lock_build_policy(const struct lu_env *env,
  *
  * Called under lock and resource spin-locks.
  */
-static void osc_lock_lvb_update(const struct lu_env *env,
-				struct osc_object *osc,
-				struct ldlm_lock *dlmlock,
-				struct ost_lvb *lvb)
+void osc_lock_lvb_update(const struct lu_env *env,
+			 struct osc_object *osc,
+			 struct ldlm_lock *dlmlock,
+			 struct ost_lvb *lvb)
 {
-	struct cl_object  *obj = osc2cl(osc);
-	struct lov_oinfo  *oinfo = osc->oo_oinfo;
-	struct cl_attr    *attr = &osc_env_info(env)->oti_attr;
-	unsigned           valid;
+	struct cl_object *obj = osc2cl(osc);
+	struct lov_oinfo *oinfo = osc->oo_oinfo;
+	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
+	unsigned valid, setkms = 0;
 
 	ENTRY;
 
@@ -179,18 +179,22 @@ static void osc_lock_lvb_update(const struct lu_env *env,
                 if (size > dlmlock->l_policy_data.l_extent.end)
                         size = dlmlock->l_policy_data.l_extent.end + 1;
                 if (size >= oinfo->loi_kms) {
-			LDLM_DEBUG(dlmlock, "lock acquired, setting rss=%llu"
-				   ", kms=%llu", lvb->lvb_size, size);
                         valid |= CAT_KMS;
                         attr->cat_kms = size;
-                } else {
-                        LDLM_DEBUG(dlmlock, "lock acquired, setting rss="
-				   "%llu; leaving kms=%llu, end=%llu",
-                                   lvb->lvb_size, oinfo->loi_kms,
-                                   dlmlock->l_policy_data.l_extent.end);
+			setkms = 1;
                 }
 		ldlm_lock_allow_match_locked(dlmlock);
 	}
+
+	/* The size should not be less than the kms */
+	if (attr->cat_size < oinfo->loi_kms)
+		attr->cat_size = oinfo->loi_kms;
+
+	LDLM_DEBUG(dlmlock, "acquired size %llu, setting rss=%llu;%s "
+		   "kms=%llu, end=%llu", lvb->lvb_size, attr->cat_size,
+		   setkms ? "" : " leaving",
+		   setkms ? attr->cat_kms : oinfo->loi_kms,
+		   dlmlock ? dlmlock->l_policy_data.l_extent.end : -1ull);
 
 	cl_object_attr_update(env, obj, attr, valid);
 	cl_object_attr_unlock(obj);
@@ -201,6 +205,7 @@ static void osc_lock_lvb_update(const struct lu_env *env,
 static void osc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 			     struct lustre_handle *lockh)
 {
+	struct osc_object *osc = cl2osc(oscl->ols_cl.cls_obj);
 	struct ldlm_lock *dlmlock;
 
 	dlmlock = ldlm_handle2lock_long(lockh, 0);
@@ -241,8 +246,8 @@ static void osc_lock_granted(const struct lu_env *env, struct osc_lock *oscl,
 		/* no lvb update for matched lock */
 		if (!ldlm_is_lvb_cached(dlmlock)) {
 			LASSERT(oscl->ols_flags & LDLM_FL_LVB_READY);
-			osc_lock_lvb_update(env, cl2osc(oscl->ols_cl.cls_obj),
-					    dlmlock, NULL);
+			LASSERT(osc == dlmlock->l_ast_data);
+			osc_lock_lvb_update(env, osc, dlmlock, NULL);
 			ldlm_set_lvb_cached(dlmlock);
 		}
 		LINVRNT(osc_lock_invariant(oscl));
@@ -1288,9 +1293,9 @@ struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
 	 * with a uniq gid and it conflicts with all other lock modes too
 	 */
 again:
-	mode = osc_match_base(osc_export(obj), resname, LDLM_EXTENT, policy,
-			       LCK_PR | LCK_PW | LCK_GROUP, &flags, obj, &lockh,
-			       dap_flags & OSC_DAP_FL_CANCELING);
+	mode = osc_match_base(env, osc_export(obj), resname, LDLM_EXTENT,
+			      policy, LCK_PR | LCK_PW | LCK_GROUP, &flags,
+			      obj, &lockh, dap_flags & OSC_DAP_FL_CANCELING);
 	if (mode != 0) {
 		lock = ldlm_handle2lock(&lockh);
 		/* RACE: the lock is cancelled so let's try again */
