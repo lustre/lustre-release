@@ -687,6 +687,9 @@ struct lnet_peer {
 
 	/* tasks waiting on discovery of this peer */
 	wait_queue_head_t	lp_dc_waitq;
+
+	/* cached peer aliveness */
+	bool			lp_alive;
 };
 
 /*

@@ -258,6 +258,10 @@ lnet_peer_alloc(lnet_nid_t nid)
 	init_waitqueue_head(&lp->lp_dc_waitq);
 	spin_lock_init(&lp->lp_lock);
 	lp->lp_primary_nid = nid;
+	if (lnet_peers_start_down())
+		lp->lp_alive = false;
+	else
+		lp->lp_alive = true;
 
 	/*
 	 * all peers created on a router should have health on
