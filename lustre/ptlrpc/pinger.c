@@ -267,6 +267,8 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 	} else if ((imp->imp_pingable && !suppress) || force_next || force) {
 		spin_unlock(&imp->imp_lock);
 		ptlrpc_ping(imp);
+	} else {
+		spin_unlock(&imp->imp_lock);
 	}
 }
 
