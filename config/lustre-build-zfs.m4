@@ -111,7 +111,7 @@ AC_DEFUN([LB_SPL], [
 	dnl #
 	AC_MSG_CHECKING([spl build directory])
 	AS_IF([test -z "$splobj"], [
-		last_spl_obj_dir=$(ls -d ${splsrc}/[[0-9]]*/ | tail -n 1 | sed 's|/$||')
+		last_spl_obj_dir=$(ls -d ${splsrc}/[[0-9]]*/  2> /dev/null | tail -n 1 | sed 's|/$||')
 		AS_IF([test "${splsrc}" = "${spldkms}/source"], [
 			AS_IF([test -e "${spldkms}/${LINUXRELEASE}/${target_cpu}/spl_config.h"], [
 				splobj=${spldkms}/${LINUXRELEASE}/${target_cpu}
@@ -229,7 +229,7 @@ AC_DEFUN([LB_ZFS], [
 	dnl #
 	AC_MSG_CHECKING([zfs build directory])
 	AS_IF([test -z "$zfsobj"], [
-		last_zfs_obj_dir=$(ls -d ${zfssrc}/[[0-9]]*/ | tail -n 1 | sed 's|/$||')
+		last_zfs_obj_dir=$(ls -d ${zfssrc}/[[0-9]]*/ 2> /dev/null | tail -n 1 | sed 's|/$||')
 		AS_IF([test "${zfssrc}" = "${zfsdkms}/source"], [
 			AS_IF([test -e "${zfsdkms}/${LINUXRELEASE}/${target_cpu}/zfs_config.h"], [
 				zfsobj=${zfsdkms}/${LINUXRELEASE}/${target_cpu}
@@ -348,21 +348,26 @@ AC_DEFUN([LB_CONFIG_ZFS], [
 		[AS_HELP_STRING([--with-zfs=PATH], [Path to zfs source])],
 		[
 			AS_IF([test x$withval = xno], [
+				enable_spl=no
 				enable_zfs=no
 				require_zfs=no
 			], [test x$withval = xyes], [
+				enable_spl=yes
 				enable_zfs=yes
 				require_zfs=yes
 			], [
+				enable_spl=yes
 				enable_zfs=yes
 				require_zfs=yes
 				zfssrc="$withval"
 			])
 		], [
 			AS_IF([test x$enable_server != xno], [
+				enable_spl=yes
 				require_zfs=no
 				enable_zfs=yes
 			], [
+				enable_spl=no
 				require_zfs=no
 				enable_zfs=no
 			])
@@ -373,11 +378,33 @@ AC_DEFUN([LB_CONFIG_ZFS], [
 
 	AS_IF([test x$enable_zfs = xyes], [
 		AS_IF([test x$enable_modules = xyes], [
-			LB_SPL
 			LB_ZFS
 		])
 		LB_ZFS_DEVEL
 		LB_ZFS_USER
+
+		dnl #
+		dnl # Define zfs source code version
+		dnl #
+		ZFS_MAJOR=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\1/'])
+		ZFS_MINOR=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\2/'])
+		ZFS_PATCH=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\3/'])
+		ZFS_FIX=$(echo $zfsver   | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\5/'])
+		AS_IF([test -z "$ZFS_FIX"], [ZFS_FIX="0"])
+
+		AC_DEFINE_UNQUOTED([ZFS_MAJOR], [$ZFS_MAJOR], [zfs major version])
+		AC_DEFINE_UNQUOTED([ZFS_MINOR], [$ZFS_MINOR], [zfs minor version])
+		AC_DEFINE_UNQUOTED([ZFS_PATCH], [$ZFS_PATCH], [zfs patch version])
+		AC_DEFINE_UNQUOTED([ZFS_FIX],   [$ZFS_FIX],   [zfs fix version])
+
+		dnl #
+		dnl # SPL is only needed if ZFS is prior to 0.8.0
+		dnl #
+		AS_IF([test x$enable_modules = xyes && test $ZFS_MAJOR -eq 0 && test $ZFS_MINOR -lt 8], [
+			LB_SPL
+		],[
+			enable_spl=no
+		])
 
 		dnl #
 		dnl # enable_zfs will be set to no in LB_SPL or LB_ZFS if
@@ -408,21 +435,6 @@ your distribution.
 		])
 	])
 
-	dnl #
-	dnl # Define zfs source code version
-	dnl #
-	AS_IF([test x$enable_zfs = xyes], [
-		ZFS_MAJOR=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\1/'])
-		ZFS_MINOR=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\2/'])
-		ZFS_PATCH=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\3/'])
-		ZFS_FIX=$(echo $zfsver   | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\5/'])
-		AS_IF([test -z "$ZFS_FIX"], [ZFS_FIX="0"])
-
-		AC_DEFINE_UNQUOTED([ZFS_MAJOR], [$ZFS_MAJOR], [zfs major version])
-		AC_DEFINE_UNQUOTED([ZFS_MINOR], [$ZFS_MINOR], [zfs minor version])
-		AC_DEFINE_UNQUOTED([ZFS_PATCH], [$ZFS_PATCH], [zfs patch version])
-		AC_DEFINE_UNQUOTED([ZFS_FIX],   [$ZFS_FIX],   [zfs fix version])
-	])
 
 	AS_IF([test "x$enable_zfs" = xyes], [
 		LB_CHECK_COMPILE([if zfs defines dsl_pool_config_enter/exit],
@@ -716,4 +728,5 @@ your distribution.
 		AC_SUBST(ENABLE_ZFS, no)
 	])
 	AM_CONDITIONAL(ZFS_ENABLED, [test "x$enable_zfs" = xyes])
+	AM_CONDITIONAL(SPL_ENABLED, [test "x$enable_spl" = xyes])
 ])
