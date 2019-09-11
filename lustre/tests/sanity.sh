@@ -18841,6 +18841,7 @@ test_278() {
 	do_facet mds2 $LCTL set_param fail_loc=0
 
 	start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS
+	wait_recovery_complete mds2
 }
 run_test 278 "Race starting MDS between MDTs stop/start"
 
