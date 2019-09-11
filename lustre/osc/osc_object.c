@@ -214,14 +214,19 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 
 		/* Updates lvb in lock by the cached oinfo */
 		oinfo = osc->oo_oinfo;
+
+		LDLM_DEBUG(lock, "update lock size %llu blocks %llu [cma]time: "
+			   "%llu %llu %llu by oinfo size %llu blocks %llu "
+			   "[cma]time %llu %llu %llu", lvb->lvb_size,
+			   lvb->lvb_blocks, lvb->lvb_ctime, lvb->lvb_mtime,
+			   lvb->lvb_atime, oinfo->loi_lvb.lvb_size,
+			   oinfo->loi_lvb.lvb_blocks, oinfo->loi_lvb.lvb_ctime,
+			   oinfo->loi_lvb.lvb_mtime, oinfo->loi_lvb.lvb_atime);
+		LASSERT(oinfo->loi_lvb.lvb_size >= oinfo->loi_kms);
+
 		cl_object_attr_lock(&osc->oo_cl);
 		memcpy(lvb, &oinfo->loi_lvb, sizeof(oinfo->loi_lvb));
 		cl_object_attr_unlock(&osc->oo_cl);
-
-		LDLM_DEBUG(lock, "update lvb size %llu blocks %llu [cma]time: "
-			   "%llu %llu %llu", lvb->lvb_size, lvb->lvb_blocks,
-			   lvb->lvb_ctime, lvb->lvb_mtime, lvb->lvb_atime);
-
 		ldlm_clear_lvb_cached(lock);
 	}
 	RETURN(LDLM_ITER_CONTINUE);

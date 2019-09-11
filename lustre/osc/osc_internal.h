@@ -53,6 +53,11 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 
 extern struct ptlrpc_request_set *PTLRPCD_SET;
 
+void osc_lock_lvb_update(const struct lu_env *env,
+			 struct osc_object *osc,
+			 struct ldlm_lock *dlmlock,
+			 struct ost_lvb *lvb);
+
 int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		     __u64 *flags, union ldlm_policy_data *policy,
 		     struct ost_lvb *lvb, osc_enqueue_upcall_f upcall,
@@ -60,9 +65,10 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		     struct ptlrpc_request_set *rqset, int async,
 		     bool speculative);
 
-int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
-		   enum ldlm_type type, union ldlm_policy_data *policy,
-		   enum ldlm_mode mode, __u64 *flags, void *data,
+int osc_match_base(const struct lu_env *env, struct obd_export *exp,
+		   struct ldlm_res_id *res_id, enum ldlm_type type,
+		   union ldlm_policy_data *policy, enum ldlm_mode mode,
+		   __u64 *flags, struct osc_object *obj,
 		   struct lustre_handle *lockh, int unref);
 
 int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
