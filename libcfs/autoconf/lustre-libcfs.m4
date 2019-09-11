@@ -946,6 +946,16 @@ cpu_hotplug_state_machine, [
 ]) # LIBCFS_HOTPLUG_STATE_MACHINE
 
 #
+# Kernel version 4.10-rc3 commit f405df5de3170c00e5c54f8b7cf4766044a032ba
+# introduced refcount_t which is atomic_t plus over flow guards.
+#
+AC_DEFUN([LIBCFS_REFCOUNT_T], [
+LB_CHECK_LINUX_HEADER([linux/refcount.h], [
+	AC_DEFINE(HAVE_REFCOUNT_T, 1,
+		[refcount_t is supported])])
+]) # LIBCFS_REFCOUNT_T
+
+#
 # LIBCFS_SCHED_HEADERS
 #
 # 4.11 has broken up sched.h into more headers.
@@ -1345,6 +1355,7 @@ LIBCFS_GET_USER_PAGES_GUP_FLAGS
 LIBCFS_RHASHTABLE_WALK_ENTER
 # 4.10
 LIBCFS_HOTPLUG_STATE_MACHINE
+LIBCFS_REFCOUNT_T
 # 4.11
 LIBCFS_RHASHTABLE_LOOKUP_GET_INSERT_FAST
 LIBCFS_SCHED_HEADERS

@@ -958,7 +958,7 @@ static void class_export_destroy(struct obd_export *exp)
         struct obd_device *obd = exp->exp_obd;
         ENTRY;
 
-        LASSERT_ATOMIC_ZERO(&exp->exp_refcount);
+	LASSERT(refcount_read(&exp->exp_handle.h_ref) == 0);
 	LASSERT(obd != NULL);
 
         CDEBUG(D_IOCTL, "destroying export %p/%s for %s\n", exp,
@@ -982,21 +982,16 @@ static void class_export_destroy(struct obd_export *exp)
         EXIT;
 }
 
-static void export_handle_addref(void *export)
-{
-        class_export_get(export);
-}
-
 static struct portals_handle_ops export_handle_ops = {
-	.hop_addref = export_handle_addref,
 	.hop_free   = NULL,
+	.hop_type	= "export",
 };
 
 struct obd_export *class_export_get(struct obd_export *exp)
 {
-	atomic_inc(&exp->exp_refcount);
-        CDEBUG(D_INFO, "GETting export %p : new refcount %d\n", exp,
-	       atomic_read(&exp->exp_refcount));
+	refcount_inc(&exp->exp_handle.h_ref);
+	CDEBUG(D_INFO, "GET export %p refcount=%d\n", exp,
+	       refcount_read(&exp->exp_handle.h_ref));
         return exp;
 }
 EXPORT_SYMBOL(class_export_get);
@@ -1004,11 +999,12 @@ EXPORT_SYMBOL(class_export_get);
 void class_export_put(struct obd_export *exp)
 {
         LASSERT(exp != NULL);
-        LASSERT_ATOMIC_GT_LT(&exp->exp_refcount, 0, LI_POISON);
+	LASSERT(refcount_read(&exp->exp_handle.h_ref) >  0);
+	LASSERT(refcount_read(&exp->exp_handle.h_ref) < LI_POISON);
         CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
-	       atomic_read(&exp->exp_refcount) - 1);
+	       refcount_read(&exp->exp_handle.h_ref) - 1);
 
-	if (atomic_dec_and_test(&exp->exp_refcount)) {
+	if (refcount_dec_and_test(&exp->exp_handle.h_ref)) {
 		struct obd_device *obd = exp->exp_obd;
 
 		CDEBUG(D_IOCTL, "final put %p/%s\n",
@@ -1063,7 +1059,7 @@ struct obd_export *__class_new_export(struct obd_device *obd,
         export->exp_lock_hash = NULL;
 	export->exp_flock_hash = NULL;
 	/* 2 = class_handle_hash + last */
-	atomic_set(&export->exp_refcount, 2);
+	refcount_set(&export->exp_handle.h_ref, 2);
 	atomic_set(&export->exp_rpc_count, 0);
 	atomic_set(&export->exp_cb_count, 0);
 	atomic_set(&export->exp_locks_count, 0);
@@ -1786,7 +1782,8 @@ static void print_export_data(struct obd_export *exp, const char *status,
 	CDEBUG(debug_level, "%s: %s %p %s %s %d (%d %d %d) %d %d %d %d: "
 	       "%p %s %llu stale:%d\n",
 	       exp->exp_obd->obd_name, status, exp, exp->exp_client_uuid.uuid,
-	       obd_export_nid2str(exp), atomic_read(&exp->exp_refcount),
+	       obd_export_nid2str(exp),
+	       refcount_read(&exp->exp_handle.h_ref),
 	       atomic_read(&exp->exp_rpc_count),
 	       atomic_read(&exp->exp_cb_count),
 	       atomic_read(&exp->exp_locks_count),

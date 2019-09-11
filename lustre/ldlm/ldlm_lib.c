@@ -1261,7 +1261,7 @@ no_export:
 		LCONSOLE_WARN("%s: Client %s (at %s) refused connection, still busy with %d references\n",
 			      target->obd_name, cluuid.uuid,
 			      libcfs_nid2str(req->rq_peer.nid),
-			      atomic_read(&export->exp_refcount));
+			      refcount_read(&export->exp_handle.h_ref));
 			GOTO(out, rc = -EBUSY);
 	} else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1 &&
 		   rc != EALREADY) {

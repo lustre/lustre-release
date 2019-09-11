@@ -733,12 +733,6 @@ struct ldlm_lock {
 	 */
 	struct portals_handle	l_handle;
 	/**
-	 * Lock reference count.
-	 * This is how many users have pointers to actual structure, so that
-	 * we do not accidentally free lock structure that is in use.
-	 */
-	atomic_t		l_refc;
-	/**
 	 * Internal spinlock protects l_resource.  We should hold this lock
 	 * first before taking res_lock.
 	 */

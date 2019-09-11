@@ -3053,7 +3053,7 @@ static int echo_client_cleanup(struct obd_device *obddev)
 		RETURN(-EBUSY);
 	}
 
-	LASSERT(atomic_read(&ec->ec_exp->exp_refcount) > 0);
+	LASSERT(refcount_read(&ec->ec_exp->exp_handle.h_ref) > 0);
 	rc = obd_disconnect(ec->ec_exp);
 	if (rc != 0)
 		CERROR("fail to disconnect device: %d\n", rc);

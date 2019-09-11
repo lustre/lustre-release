@@ -185,7 +185,7 @@ EXPORT_SYMBOL(ldlm_register_intent);
  */
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 {
-	atomic_inc(&lock->l_refc);
+	refcount_inc(&lock->l_handle.h_ref);
         return lock;
 }
 EXPORT_SYMBOL(ldlm_lock_get);
@@ -200,8 +200,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         ENTRY;
 
         LASSERT(lock->l_resource != LP_POISON);
-	LASSERT(atomic_read(&lock->l_refc) > 0);
-	if (atomic_dec_and_test(&lock->l_refc)) {
+	LASSERT(refcount_read(&lock->l_handle.h_ref) > 0);
+	if (refcount_dec_and_test(&lock->l_handle.h_ref)) {
                 struct ldlm_resource *res;
 
                 LDLM_DEBUG(lock,
@@ -438,12 +438,6 @@ void ldlm_lock_destroy_nolock(struct ldlm_lock *lock)
         EXIT;
 }
 
-/* this is called by portals_handle2object with the handle lock taken */
-static void lock_handle_addref(void *lock)
-{
-        LDLM_LOCK_GET((struct ldlm_lock *)lock);
-}
-
 static void lock_handle_free(void *lock, int size)
 {
 	LASSERT(size == sizeof(struct ldlm_lock));
@@ -451,8 +445,8 @@ static void lock_handle_free(void *lock, int size)
 }
 
 static struct portals_handle_ops lock_handle_ops = {
-	.hop_addref = lock_handle_addref,
 	.hop_free   = lock_handle_free,
+	.hop_type	= "ldlm",
 };
 
 /**
@@ -479,7 +473,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
 	lock->l_resource = resource;
 	lu_ref_add(&resource->lr_reference, "lock", lock);
 
-	atomic_set(&lock->l_refc, 2);
+	refcount_set(&lock->l_handle.h_ref, 2);
 	INIT_LIST_HEAD(&lock->l_res_link);
 	INIT_LIST_HEAD(&lock->l_lru);
 	INIT_LIST_HEAD(&lock->l_pending_chain);
@@ -2760,13 +2754,13 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 &vaf,
 				 lock,
 				 lock->l_handle.h_cookie,
-				 atomic_read(&lock->l_refc),
+				 refcount_read(&lock->l_handle.h_ref),
 				 lock->l_readers, lock->l_writers,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
-				 exp ? atomic_read(&exp->exp_refcount) : -99,
+				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timeout,
 				 lock->l_lvb_type);
                 va_end(args);
@@ -2780,7 +2774,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock), lock,
 				 lock->l_handle.h_cookie,
-				 atomic_read(&lock->l_refc),
+				 refcount_read(&lock->l_handle.h_ref),
 				 lock->l_readers, lock->l_writers,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
@@ -2792,7 +2786,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_req_extent.start, lock->l_req_extent.end,
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
-				 exp ? atomic_read(&exp->exp_refcount) : -99,
+				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timeout,
 				 lock->l_lvb_type);
 		break;
@@ -2803,7 +2797,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock), lock,
 				 lock->l_handle.h_cookie,
-				 atomic_read(&lock->l_refc),
+				 refcount_read(&lock->l_handle.h_ref),
 				 lock->l_readers, lock->l_writers,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
@@ -2815,7 +2809,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 lock->l_policy_data.l_flock.end,
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
-				 exp ? atomic_read(&exp->exp_refcount) : -99,
+				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timeout);
 		break;
 
@@ -2825,7 +2819,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
-				 atomic_read(&lock->l_refc),
+				 refcount_read(&lock->l_handle.h_ref),
 				 lock->l_readers, lock->l_writers,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
@@ -2836,7 +2830,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 ldlm_typename[resource->lr_type],
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
-				 exp ? atomic_read(&exp->exp_refcount) : -99,
+				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timeout,
 				 lock->l_lvb_type);
 		break;
@@ -2847,7 +2841,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
-				 atomic_read(&lock->l_refc),
+				 refcount_read(&lock->l_handle.h_ref),
 				 lock->l_readers, lock->l_writers,
 				 ldlm_lockname[lock->l_granted_mode],
 				 ldlm_lockname[lock->l_req_mode],
@@ -2856,7 +2850,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 ldlm_typename[resource->lr_type],
 				 lock->l_flags, nid,
 				 lock->l_remote_handle.cookie,
-				 exp ? atomic_read(&exp->exp_refcount) : -99,
+				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timeout,
 				 lock->l_lvb_type);
 		break;

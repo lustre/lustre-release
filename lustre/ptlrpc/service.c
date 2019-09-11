@@ -2294,7 +2294,7 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	       (request->rq_export ?
 		(char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
-		atomic_read(&request->rq_export->exp_refcount) : -99),
+		refcount_read(&request->rq_export->exp_handle.h_ref) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg), request->rq_xid,
 	       libcfs_id2str(request->rq_peer),
 	       lustre_msg_get_opc(request->rq_reqmsg),
@@ -2334,7 +2334,7 @@ put_conn:
 	       (request->rq_export ?
 	       (char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
-	       atomic_read(&request->rq_export->exp_refcount) : -99),
+		refcount_read(&request->rq_export->exp_handle.h_ref) : -99),
 	       lustre_msg_get_status(request->rq_reqmsg),
 	       request->rq_xid,
 	       libcfs_id2str(request->rq_peer),

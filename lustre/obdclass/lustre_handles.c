@@ -158,7 +158,10 @@ void *class_handle2object(u64 cookie, const struct portals_handle_ops *ops)
 
 		spin_lock(&h->h_lock);
 		if (likely(h->h_in != 0)) {
-			h->h_ops->hop_addref(h);
+			refcount_inc(&h->h_ref);
+			CDEBUG(D_INFO, "GET %s %p refcount=%d\n",
+			       h->h_ops->hop_type, h,
+			       refcount_read(&h->h_ref));
 			retval = h;
 		}
 		spin_unlock(&h->h_lock);

@@ -44,14 +44,9 @@
 #include "mdt_internal.h"
 #include <lustre_nodemap.h>
 
-/* we do nothing because we do not have refcount now */
-static void mdt_mfd_get(void *mfdp)
-{
-}
-
 static const struct portals_handle_ops mfd_open_handle_ops = {
-	.hop_addref = mdt_mfd_get,
 	.hop_free   = NULL,
+	.hop_type	= "mdt",
 };
 
 /* Create a new mdt_file_data struct, initialize it,
@@ -63,6 +58,7 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 
 	OBD_ALLOC_PTR(mfd);
 	if (mfd != NULL) {
+		refcount_set(&mfd->mfd_open_handle.h_ref, 1);
 		INIT_LIST_HEAD_RCU(&mfd->mfd_open_handle.h_link);
 		mfd->mfd_owner = med;
 		INIT_LIST_HEAD(&mfd->mfd_list);
@@ -87,6 +83,9 @@ struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 
 	LASSERT(open_handle != NULL);
 	mfd = class_handle2object(open_handle->cookie, &mfd_open_handle_ops);
+	if (mfd)
+		refcount_dec(&mfd->mfd_open_handle.h_ref);
+
 	/* during dw/setattr replay the mfd can be found by old handle */
 	if ((!mfd || mfd->mfd_owner != med) && is_replay_or_resent) {
 		list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
@@ -103,6 +102,7 @@ struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 /* free mfd */
 void mdt_mfd_free(struct mdt_file_data *mfd)
 {
+	LASSERT(refcount_read(&mfd->mfd_open_handle.h_ref) == 1);
 	LASSERT(list_empty(&mfd->mfd_list));
 	OBD_FREE_RCU(mfd, sizeof *mfd, &mfd->mfd_open_handle);
 }
