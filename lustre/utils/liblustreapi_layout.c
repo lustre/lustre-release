@@ -2935,7 +2935,7 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
 				 */
 				comp_array[i].lrc_synced = true;
 				llapi_error(LLAPI_MSG_ERROR, written,
-					    "component %u not synced\n",
+					    "component %u not synced",
 					    comp_array[i].lrc_id);
 				if (rc2 == 0)
 					rc2 = (int)written;

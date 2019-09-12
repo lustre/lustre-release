@@ -185,7 +185,8 @@ int main(int argc, char **argv)
 	is_ext = is_fstype_ext(fd);
 	if (is_ext < 0) {
 		rc = is_ext;
-		printf("Unable to determine type of filesystem containing %s\n",
+		llapi_error(LLAPI_MSG_ERROR, -rc,
+			    "Unable to determine filesystem type for %s",
 		       argv[1]);
 		goto out_fd;
 	}
@@ -233,8 +234,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
 	file_size = st.st_size;
 	if (file_size < sizeof(**llog)) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "File too small for llog header: "
-			    "need %zd, size %lld\n",
+			    "File too small for llog header: want=%zd got=%lld",
 			    sizeof(**llog), file_size);
 		rc = -EIO;
 		goto out;

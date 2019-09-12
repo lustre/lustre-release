@@ -344,7 +344,7 @@ int llapi_pccdev_set(const char *mntpath, const char *cmd)
 	rc = llapi_getname(mntpath, buf, sizeof(buf));
 	if (rc < 0) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "cannot get name for '%s'\n", mntpath);
+			    "cannot get name for '%s'", mntpath);
 		return rc;
 	}
 
@@ -365,12 +365,12 @@ int llapi_pccdev_set(const char *mntpath, const char *cmd)
 		rc = errno;
 		if (errno != EIO)
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "error: setting llite.%s.pcc=\"%s\"\n",
+				    "error: setting llite.%s.pcc='%s'",
 				    buf, cmd);
 	} else if (count < strlen(cmd)) { /* Truncate case */
 		rc = -EINVAL;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "setting llite.%s.pcc=\"%s\": wrote only %zd\n",
+			    "setting llite.%s.pcc='%s': wrote only %zd",
 			    buf, cmd, count);
 	}
 	close(fd);
@@ -394,7 +394,7 @@ int llapi_pccdev_get(const char *mntpath)
 	rc = llapi_getname(mntpath, pathbuf, sizeof(pathbuf));
 	if (rc < 0) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "cannot get name for '%s'\n", mntpath);
+			    "cannot get name for '%s'", mntpath);
 		return rc;
 	}
 
@@ -407,7 +407,7 @@ int llapi_pccdev_get(const char *mntpath)
 	if (fd < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "error: pccdev_get: opening '%s'\n",
+			    "error: pccdev_get: opening '%s'",
 			    path.gl_pathv[0]);
 		goto out_free_param;
 	}
@@ -416,7 +416,7 @@ int llapi_pccdev_get(const char *mntpath)
 	if (buf == NULL) {
 		rc = -ENOMEM;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-			    "error: pccdev_get: allocating '%s' buffer\n",
+			    "error: pccdev_get: allocating '%s' buffer",
 			    path.gl_pathv[0]);
 		goto out_close;
 	}
@@ -430,8 +430,7 @@ int llapi_pccdev_get(const char *mntpath)
 			rc = -errno;
 			if (errno != EIO) {
 				llapi_error(LLAPI_MSG_ERROR, rc,
-					    "error: pccdev_get: "
-					    "reading failed\n");
+					   "error: pccdev_get: reading failed");
 			}
 			break;
 		}
@@ -439,7 +438,7 @@ int llapi_pccdev_get(const char *mntpath)
 		if (fwrite(buf, 1, count, stdout) != count) {
 			rc = -errno;
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "error: get_param: write to stdout\n");
+				    "error: get_param: write to stdout");
 			break;
 		}
 	}

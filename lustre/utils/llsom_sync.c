@@ -473,7 +473,7 @@ int main(int argc, char **argv)
 		default:
 			rc = -EINVAL;
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "%s: unknown option '-%c'\n",
+				    "%s: unknown option '%c'",
 				    argv[0], optopt);
 			return rc;
 		case 'u':
@@ -582,7 +582,7 @@ int main(int argc, char **argv)
 					   opt.o_mdtname, 0);
 		if (rc) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "unable to open changelog of MDT [%s]\n",
+				    "unable to open changelog of MDT '%s'",
 				    opt.o_mdtname);
 			return rc;
 		}
@@ -628,7 +628,7 @@ int main(int argc, char **argv)
 		rc = llapi_changelog_fini(&chglog_hdlr);
 		if (rc) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "unable to close changelog of MDT [%s]",
+				    "unable to close changelog of MDT '%s'",
 				    opt.o_mdtname);
 			ret = rc;
 			return rc;

@@ -126,16 +126,35 @@ void llapi_clear_command_name(void)
 static void error_callback_default(enum llapi_message_level level, int err,
 				   const char *fmt, va_list ap)
 {
+	bool has_nl = strchr(fmt, '\n') != NULL;
+
 	if (liblustreapi_cmd != NULL)
 		fprintf(stderr, "%s %s: ", program_invocation_short_name,
 			liblustreapi_cmd);
 	else
 		fprintf(stderr, "%s: ", program_invocation_short_name);
-	vfprintf(stderr, fmt, ap);
-	if (level & LLAPI_MSG_NO_ERRNO)
-		fprintf(stderr, "\n");
-	else
+
+
+	if (level & LLAPI_MSG_NO_ERRNO) {
+		vfprintf(stderr, fmt, ap);
+		if (!has_nl)
+			fprintf(stderr, "\n");
+	} else {
+		char *newfmt;
+
+		/* Remove trailing linefeed so error string can be appended.
+		 * @fmt is a const string, so we can't modify it directly.
+		 */
+		if (has_nl && (newfmt = strdup(fmt)))
+			*strrchr(newfmt, '\n') = '\0';
+		else
+			newfmt = (char *)fmt;
+
+		vfprintf(stderr, newfmt, ap);
+		if (newfmt != fmt)
+			free(newfmt);
 		fprintf(stderr, ": %s (%d)\n", strerror(err), err);
+	}
 }
 
 static void info_callback_default(enum llapi_message_level level, int err,
@@ -302,7 +321,7 @@ int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
 
 	if (*pbuf != NULL && data->ioc_len > max_len) {
 		llapi_error(LLAPI_MSG_ERROR, -EINVAL,
-			    "pbuf = %p, ioc_len = %u, max_len = %d\n",
+			    "pbuf = %p, ioc_len = %u, max_len = %d",
 			    *pbuf, data->ioc_len, max_len);
 		return -EINVAL;
 	}
@@ -1124,10 +1143,10 @@ int llapi_dir_create_foreign(const char *name, mode_t mode, __u32 type,
 	if (len > XATTR_SIZE_MAX - offsetof(struct lmv_foreign_md, lfm_value) ||
 	    len <= 0) {
 		rc = -EINVAL;
-		llapi_error(LLAPI_MSG_ERROR, rc, "invalid LOV EA length %zu "
-			"(must be 0 < len < %zu)\n", len,
-			XATTR_SIZE_MAX -
-			offsetof(struct lmv_foreign_md, lfm_value));
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "invalid LOV EA length %zu (must be 0 < len < %zu)",
+			    len, XATTR_SIZE_MAX -
+			    offsetof(struct lmv_foreign_md, lfm_value));
 		return rc;
 	}
 	lfm_size = len + offsetof(struct lmv_foreign_md, lfm_value);
@@ -1235,13 +1254,10 @@ int llapi_direntry_remove(char *dname)
 		goto out;
 	}
 
-	if (ioctl(fd, LL_IOC_REMOVE_ENTRY, filename)) {
-		char *errmsg = strerror(errno);
-		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "error on ioctl %#jx for '%s' (%d): %s",
-				  (uintmax_t)LL_IOC_LMV_SETSTRIPE, filename,
-				  fd, errmsg);
-	}
+	if (ioctl(fd, LL_IOC_REMOVE_ENTRY, filename))
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "error on ioctl %#lx for '%s' (%d)",
+			    (long)LL_IOC_LMV_SETSTRIPE, filename, fd);
 out:
 	free(dirpath);
 	free(namepath);
@@ -1339,8 +1355,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 			if (fd < 0) {
 				rc = -errno;
 				llapi_error(LLAPI_MSG_ERROR, rc,
-					    "cannot open '%s': %s", mntdir,
-					    strerror(-rc));
+					    "cannot open '%s'", mntdir);
 
 			} else {
 				*outfd = fd;
@@ -4118,12 +4133,9 @@ static int print_failed_tgt(struct find_param *param, char *path, int type)
 	ret = llapi_obd_statfs(path, type,
 			       param->fp_obd_index, &stat_buf,
 			       &uuid_buf);
-	if (ret) {
-		llapi_printf(LLAPI_MSG_NORMAL,
-			     "obd_uuid: %s failed %s ",
-			     param->fp_obd_uuid->uuid,
-			     strerror(errno));
-	}
+	if (ret)
+		llapi_error(LLAPI_MSG_NORMAL, ret, "obd_uuid: %s failed",
+			     param->fp_obd_uuid->uuid);
 
 	return ret;
 }
@@ -4996,14 +5008,13 @@ migrate:
 		} else if (errno == EALREADY) {
 			if (param->fp_verbose & VERBOSE_DETAIL)
 				llapi_printf(LLAPI_MSG_NORMAL,
-					     "%s was migrated to MDT%d already\n",
+					     "%s migrated to MDT%d already\n",
 					     path, lmu->lum_stripe_offset);
 			ret = 0;
 		} else {
 			ret = -errno;
-			llapi_error(LLAPI_MSG_ERROR, ret,
-				    "%s migrate failed: %s (%d)\n",
-				    path, strerror(-ret), ret);
+			llapi_error(LLAPI_MSG_ERROR, ret, "%s migrate failed",
+				    path);
 			goto out;
 		}
 	} else if (param->fp_verbose & VERBOSE_DETAIL) {
@@ -5080,7 +5091,8 @@ int llapi_mv(char *path, struct find_param *param)
 
 	if (!printed) {
 		llapi_error(LLAPI_MSG_ERROR, -ESTALE,
-			    "llapi_mv() is deprecated, use llapi_migrate_mdt()\n");
+			  "%s() is deprecated, use llapi_migrate_mdt() instead",
+			  __func__);
 		printed = true;
 	}
 #endif
