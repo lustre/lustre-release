@@ -62,9 +62,24 @@
   </section>
   <section xml:id="dbdoclet.50438208_40705">
     <title><indexterm><primary>storage</primary><secondary>performance tradeoffs</secondary></indexterm>Performance Tradeoffs</title>
-    <para>A writeback cache can dramatically increase write performance on many types of RAID arrays if the writes are not done at full stripe width. Unfortunately, unless the RAID array has battery-backed cache (a feature only found in some higher-priced hardware RAID arrays), interrupting the power to the array may result in out-of-sequence writes or corruption of RAID parity and future data loss.</para>
-    <para>If writeback cache is enabled, a file system check is required after the array loses power. Data may also be lost because of this.</para>
-    <para>Therefore, we recommend against the use of writeback cache when data integrity is critical. You should carefully consider whether the benefits of using writeback cache outweigh the risks.</para>
+    <para>A writeback cache in a RAID storage controller can dramatically
+    increase write performance on many types of RAID arrays if the writes
+    are not done at full stripe width. Unfortunately, unless the RAID array
+    has battery-backed cache (a feature only found in some higher-priced
+    hardware RAID arrays), interrupting the power to the array may result in
+    out-of-sequence or lost writes, and corruption of RAID parity and/or
+    filesystem metadata, resulting in data loss.
+    </para>
+    <para>Having a read or writeback cache onboard a PCI adapter card installed
+    in an MDS or OSS is <emphasis>NOT SAFE</emphasis> in a high-availability
+    (HA) failover configuration, as this will result in inconsistencies between
+    nodes and immediate or eventual filesystem corruption.  Such devices should
+    not be used, or should have the onboard cache disabled.</para>
+    <para>If writeback cache is enabled, a file system check is required
+    after the array loses power. Data may also be lost because of this.</para>
+    <para>Therefore, we recommend against the use of writeback cache when
+    data integrity is critical. You should carefully consider whether the
+    benefits of using writeback cache outweigh the risks.</para>
   </section>
   <section xml:id="dbdoclet.ldiskfs_raid_opts">
     <title>
