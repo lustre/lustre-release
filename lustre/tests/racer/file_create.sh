@@ -28,12 +28,13 @@ while /bin/true; do
 
 	[ $stripecount -gt 0 ] && {
 		stripesize=$(((RANDOM % 16 + 1) * 64))K
+		comp_end=$((${stripesize%K} * (RANDOM % 8 + 1)))K
 		pattern=${layout[$RANDOM % ${#layout[*]}]}
 
 		case $pattern in
 		dom) opt="setstripe -E $stripesize -L mdt -E eof -c $stripecount -S 1M" ;;
-		pfl) opt="setstripe -E 1M -S $stripesize -E eof -c $stripecount -S 2M" ;;
-		flr) opt="mirror create -N2 -E 1M -S $stripesize -E eof -c $stripecount -S 2M" ;;
+		pfl) opt="setstripe -E $comp_end -S $stripesize -E eof -c $stripecount -S 2M" ;;
+		flr) opt="mirror create -N2 -E $comp_end -S $stripesize -E eof -c $stripecount -S 2M" ;;
 		raid0) opt="setstripe -S $stripesize -c $stripecount" ;;
 		esac
 
