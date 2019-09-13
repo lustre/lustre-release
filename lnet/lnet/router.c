@@ -239,7 +239,7 @@ bool lnet_is_route_alive(struct lnet_route *route)
 	 * aliveness information can only be obtained when discovery is
 	 * enabled.
 	 */
-	if (lnet_peer_discovery_disabled)
+	if (lnet_is_discovery_disabled(gw))
 		return route->lr_alive;
 
 	/*
@@ -332,11 +332,14 @@ lnet_router_discovery_ping_reply(struct lnet_peer *lp)
 
 	spin_lock(&lp->lp_lock);
 	lp_state = lp->lp_state;
-	spin_unlock(&lp->lp_lock);
 
 	/* only handle replies if discovery is disabled. */
-	if (!lnet_peer_discovery_disabled)
+	if (!lnet_is_discovery_disabled_locked(lp)) {
+		spin_unlock(&lp->lp_lock);
 		return;
+	}
+
+	spin_unlock(&lp->lp_lock);
 
 	if (lp_state & LNET_PEER_PING_FAILED) {
 		CDEBUG(D_NET,

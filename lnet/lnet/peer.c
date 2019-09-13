@@ -1152,6 +1152,7 @@ lnet_peer_primary_nid_locked(lnet_nid_t nid)
 
 bool
 lnet_is_discovery_disabled_locked(struct lnet_peer *lp)
+__must_hold(&lp->lp_lock)
 {
 	if (lnet_peer_discovery_disabled)
 		return true;
