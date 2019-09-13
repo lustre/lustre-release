@@ -212,7 +212,10 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.tc_nthrs_max		= MDS_NTHRS_MAX,
 			.tc_nthrs_user		= mds_num_threads,
 			.tc_cpu_bind		= mds_cpu_bind,
-			.tc_ctx_tags		= LCT_MD_THREAD,
+			/* LCT_DT_THREAD is required as MDT threads may scan
+			 * all LDLM namespaces (including OFD-originated) to
+			 * cancel LDLM locks */
+			.tc_ctx_tags		= LCT_MD_THREAD | LCT_DT_THREAD,
 		},
 		.psc_cpt		= {
 			.cc_pattern		= mds_num_cpts,
