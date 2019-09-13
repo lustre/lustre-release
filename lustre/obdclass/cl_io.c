@@ -586,8 +586,8 @@ EXPORT_SYMBOL(cl_io_read_ahead);
  * \see cl_io_operations::cio_commit_async()
  */
 int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
-			struct cl_page_list *queue, int from, int to,
-			cl_commit_cbt cb)
+		       struct cl_page_list *queue, int from, int to,
+		       cl_commit_cbt cb)
 {
 	const struct cl_io_slice *scan;
 	int result = 0;

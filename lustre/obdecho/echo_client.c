@@ -1310,16 +1310,23 @@ static int cl_echo_cancel0(struct lu_env *env, struct echo_device *ed,
 }
 
 static void echo_commit_callback(const struct lu_env *env, struct cl_io *io,
-				 struct cl_page *page)
+				 struct pagevec *pvec)
 {
 	struct echo_thread_info *info;
 	struct cl_2queue        *queue;
+	int i = 0;
 
 	info = echo_env_info(env);
 	LASSERT(io == &info->eti_io);
 
 	queue = &info->eti_queue;
-	cl_page_list_add(&queue->c2_qout, page);
+
+	for (i = 0; i < pagevec_count(pvec); i++) {
+		struct page *vmpage = pvec->pages[i];
+		struct cl_page *page = (struct cl_page *)vmpage->private;
+
+		cl_page_list_add(&queue->c2_qout, page);
+	}
 }
 
 static int cl_echo_object_brw(struct echo_object *eco, int rw, u64 offset,

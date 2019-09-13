@@ -39,6 +39,7 @@
 
 #include <lustre_obdo.h>
 #include <lustre_osc.h>
+#include <linux/pagevec.h>
 
 #include "osc_internal.h"
 
@@ -289,6 +290,7 @@ int osc_io_commit_async(const struct lu_env *env,
 	struct cl_page  *page;
 	struct cl_page  *last_page;
 	struct osc_page *opg;
+	struct pagevec  *pvec = &osc_env_info(env)->oti_pagevec;
 	int result = 0;
 	ENTRY;
 
@@ -307,6 +309,8 @@ int osc_io_commit_async(const struct lu_env *env,
 				cl_page_clip(env, last_page, 0, to);
 		}
 	}
+
+	ll_pagevec_init(pvec, 0);
 
 	while (qin->pl_nr > 0) {
 		struct osc_async_page *oap;
@@ -327,7 +331,7 @@ int osc_io_commit_async(const struct lu_env *env,
 
 		/* The page may be already in dirty cache. */
 		if (list_empty(&oap->oap_pending_item)) {
-			result = osc_page_cache_add(env, &opg->ops_cl, io);
+			result = osc_page_cache_add(env, opg, io, cb);
 			if (result != 0)
 				break;
 		}
@@ -337,10 +341,19 @@ int osc_io_commit_async(const struct lu_env *env,
 
 		cl_page_list_del(env, qin, page);
 
-		(*cb)(env, io, page);
-		/* Can't access page any more. Page can be in transfer and
-		 * complete at any time. */
+		/* if there are no more slots, do the callback & reinit */
+		if (pagevec_add(pvec, page->cp_vmpage) == 0) {
+			(*cb)(env, io, pvec);
+			pagevec_reinit(pvec);
+		}
 	}
+
+	/* Clean up any partially full pagevecs */
+	if (pagevec_count(pvec) != 0)
+		(*cb)(env, io, pvec);
+
+	/* Can't access these pages any more. Page can be in transfer and
+	 * complete at any time. */
 
 	/* for sync write, kernel will wait for this page to be flushed before
 	 * osc_io_end() is called, so release it earlier.

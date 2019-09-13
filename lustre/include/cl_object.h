@@ -1472,7 +1472,7 @@ struct cl_io_slice {
 };
 
 typedef void (*cl_commit_cbt)(const struct lu_env *, struct cl_io *,
-			      struct cl_page *);
+			      struct pagevec *);
 
 struct cl_read_ahead {
 	/* Maximum page index the readahead window will end.

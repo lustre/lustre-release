@@ -39,6 +39,8 @@
 
 
 #include <obd.h>
+#include <linux/pagevec.h>
+#include <linux/memcontrol.h>
 #include "llite_internal.h"
 #include "vvp_internal.h"
 #include <libcfs/linux/linux-misc.h>
@@ -916,19 +918,114 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 	RETURN(bytes > 0 ? bytes : rc);
 }
 
-static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
-				struct cl_page *page)
+/* Taken from kernel set_page_dirty, __set_page_dirty_nobuffers
+ * Last change to this area: b93b016313b3ba8003c3b8bb71f569af91f19fc7
+ *
+ * Current with Linus tip of tree (7/13/2019):
+ * v5.2-rc4-224-ge01e060fe0
+ *
+ * Backwards compat for 3.x, 4.x kernels relating to memcg handling
+ * & rename of radix tree to xarray. */
+void vvp_set_pagevec_dirty(struct pagevec *pvec)
 {
-	struct page *vmpage = page->cp_vmpage;
+	struct page *page = pvec->pages[0];
+	struct address_space *mapping = page->mapping;
+#if defined HAVE_ACCOUNT_PAGE_DIRTIED_3ARGS
+	struct mem_cgroup *memcg;
+#endif
+	unsigned long flags;
+	int count = pagevec_count(pvec);
+	int dirtied = 0;
+	int i = 0;
 
-	SetPageUptodate(vmpage);
-	set_page_dirty(vmpage);
+	ENTRY;
 
-	cl_page_disown(env, io, page);
+	/* From set_page_dirty */
+	for (i = 0; i < count; i++)
+		ClearPageReclaim(pvec->pages[i]);
 
-	/* held in ll_cl_init() */
-	lu_ref_del(&page->cp_reference, "cl_io", cl_io_top(io));
-	cl_page_put(env, page);
+	LASSERTF(page->mapping,
+		 "mapping must be set. page %p, page->private (cl_page) %p",
+		 page, (void *) page->private);
+
+	/* Rest of code derived from __set_page_dirty_nobuffers */
+	xa_lock_irqsave(&mapping->i_pages, flags);
+
+	/* Notes on differences with __set_page_dirty_nobuffers:
+	 * 1. We don't need to call page_mapping because we know this is a page
+	 * cache page.
+	 * 2. We have the pages locked, so there is no need for the careful
+	 * mapping/mapping2 dance.
+	 * 3. No mapping is impossible. (Race w/truncate mentioned in
+	 * dirty_nobuffers should be impossible because we hold the page lock.)
+	 * 4. All mappings are the same because i/o is only to one file.
+	 * 5. We invert the lock order on lock_page_memcg(page) and the mapping
+	 * xa_lock, but this is the only function that should use that pair of
+	 * locks and it can't race because Lustre locks pages throughout i/o.
+	 */
+	for (i = 0; i < count; i++) {
+		page = pvec->pages[i];
+		lock_page_memcg(page);
+		if (TestSetPageDirty(page)) {
+			unlock_page_memcg(page);
+			continue;
+		}
+		LASSERTF(page->mapping == mapping,
+			 "all pages must have the same mapping.  page %p, mapping %p, first mapping %p\n",
+			 page, page->mapping, mapping);
+		WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
+#ifdef HAVE_ACCOUNT_PAGE_DIRTIED_3ARGS
+		memcg = mem_cgroup_begin_page_stat(page);
+		account_page_dirtied(page, mapping, memcg);
+		mem_cgroup_end_page_stat(memcg);
+#else
+		account_page_dirtied(page, mapping);
+#endif
+		radix_tree_tag_set(&mapping->page_tree, page_index(page),
+				   PAGECACHE_TAG_DIRTY);
+		dirtied++;
+		unlock_page_memcg(page);
+	}
+	xa_unlock_irqrestore(&mapping->i_pages, flags);
+
+	CDEBUG(D_VFSTRACE, "mapping %p, count %d, dirtied %d\n", mapping,
+	       count, dirtied);
+
+	if (mapping->host && dirtied) {
+		/* !PageAnon && !swapper_space */
+		__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
+	}
+
+	EXIT;
+}
+
+static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
+				  struct pagevec *pvec)
+{
+	int count = 0;
+	int i = 0;
+
+	ENTRY;
+
+	count = pagevec_count(pvec);
+	LASSERT(count > 0);
+
+	for (i = 0; i < count; i++) {
+		struct page *vmpage = pvec->pages[i];
+		SetPageUptodate(vmpage);
+	}
+
+	vvp_set_pagevec_dirty(pvec);
+
+	for (i = 0; i < count; i++) {
+		struct page *vmpage = pvec->pages[i];
+		struct cl_page *page = (struct cl_page *) vmpage->private;
+		cl_page_disown(env, io, page);
+		lu_ref_del(&page->cp_reference, "cl_io", cl_io_top(io));
+		cl_page_put(env, page);
+	}
+
+	EXIT;
 }
 
 /* make sure the page list is contiguous */
@@ -1204,9 +1301,9 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 }
 
 static void mkwrite_commit_callback(const struct lu_env *env, struct cl_io *io,
-				    struct cl_page *page)
+				    struct pagevec *pvec)
 {
-	set_page_dirty(page->cp_vmpage);
+	vvp_set_pagevec_dirty(pvec);
 }
 
 static int vvp_io_fault_start(const struct lu_env *env,
