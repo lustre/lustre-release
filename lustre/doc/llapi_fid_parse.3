@@ -1,0 +1,86 @@
+.TH lustreapi 3 "2019 Sep 13" Lustre user application interface library
+.SH NAME
+llapi_fid_parse \- parse ASCII FID string into binary lu_fid
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_fid_parse(const char *" fidstr ", struct lu_fid *" fid ,
+.BI "                    char **" endptr ");"
+.sp
+.fi
+.SH DESCRIPTION
+.LP
+.B llapi_fid_parse()
+converts an ASCII FID string into a binary
+.B struct lu_fid
+for use in other interfaces such as
+.BR llapi_layout_get_by_fid() .
+.I fidstr
+should contain three numbers in the form
+.IR fid_seq : fid_oid : fid_ver
+and may optionally be enclosed in square braces
+.BR [] .
+It will skip any leading whitespace before the FID.
+.LP
+If
+.I endptr
+is not NULL,
+.B llapi_fid_parse()
+stores the address of the first invalid character in
+.IR *endptr ,
+or the character immediately following the end of the parsed FID.
+.SH RETURN VALUES
+.LP
+.B llapi_fid_parse()
+returns:
+.TP
+0
+on success,
+.TP
+<0
+a negative errno on failure and sets errno.
+.SH ERRORS
+.TP 15
+.SM EINVAL
+.I fidstr
+is NULL or does not contain a valid FID format.
+.TP
+.SM ERANGE
+.I fidstr
+contains numeric values that exceed valid values for a component.
+.SH "EXAMPLE"
+.nf
+#include <lustre/lustreapi.h>
+
+int main(int argc, char *argv[])
+{
+        char fidstr = "[0x200000004:0x2:0x0] [0x200000400:0x345:0x0]";
+        struct lu_fid fid1, fid2;
+        char *end;
+        int rc;
+
+        fidstr = argv[1];
+        rc = llapi_fid_parse(fidstr, &fid1, &end);
+        if (rc < 0) {
+                fprintf(stderr, "invalid first FID '%s': %s\\n",
+                        fidstr, strerror(-rc));
+                return -1;
+        }
+
+        fidstr = end;
+        rc = llapi_fid_parse(fidstr, &fid2, &end);
+        if (rc < 0) {
+                fprintf(stderr, "invalid second FID '%s': %s\\n",
+                        fidstr, strerror(-rc));
+                return -1;
+        }
+
+        printf("fid1=" DFID " fid2="DFID"\\n", PFID(&fid1), PFID(&fid2));
+        return 0;
+}
+.fi
+.SH "SEE ALSO"
+.BR lustre (7),
+.BR llapi_path2parent (3),
+.BR lustreapi (7)

@@ -409,6 +409,7 @@ int llapi_target_iterate(int type_num, char **obd_type, void *args,
 int llapi_get_connect_flags(const char *mnt, __u64 *flags);
 int llapi_cp(int argc, char *argv[]);
 int llapi_ls(int argc, char *argv[]);
+int llapi_fid_parse(const char *fidstr, struct lu_fid *fid, char **endptr);
 int llapi_fid2path(const char *device, const char *fidstr, char *path,
 		   int pathlen, long long *recno, int *linkno);
 int llapi_path2fid(const char *path, struct lu_fid *fid);

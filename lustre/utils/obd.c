@@ -5268,7 +5268,7 @@ int jt_get_obj_version(int argc, char **argv)
 	}
 
 	argc -= optind;
-	argv += optind;
+	fidstr = *(argv + optind);
 
 	if (!(id != ULLONG_MAX && group != ULLONG_MAX && argc == 0) &&
 	    !(id == ULLONG_MAX && group == ULLONG_MAX && argc == 1))
@@ -5277,18 +5277,20 @@ int jt_get_obj_version(int argc, char **argv)
 	memset(&data, 0, sizeof data);
 	data.ioc_dev = cur_device;
 	if (argc == 1) {
-		fidstr = *argv;
-		while (*fidstr == '[')
-			fidstr++;
-		sscanf(fidstr, SFID, RFID(&fid));
+		rc = llapi_fid_parse(fidstr, &fid, NULL);
+		if (rc) {
+			fprintf(stderr, "%s: error parsing FID '%s': %s\n",
+				jt_cmdname(argv[0]), fidstr, strerror(-rc));
+			return rc;
+		}
 
-		data.ioc_inlbuf1 = (char *) &fid;
-		data.ioc_inllen1 = sizeof fid;
+		data.ioc_inlbuf1 = (char *)&fid;
+		data.ioc_inllen1 = sizeof(fid);
 	} else {
-		data.ioc_inlbuf3 = (char *) &id;
-		data.ioc_inllen3 = sizeof id;
-		data.ioc_inlbuf4 = (char *) &group;
-		data.ioc_inllen4 = sizeof group;
+		data.ioc_inlbuf3 = (char *)&id;
+		data.ioc_inllen3 = sizeof(id);
+		data.ioc_inlbuf4 = (char *)&group;
+		data.ioc_inllen4 = sizeof(group);
 	}
 	data.ioc_inlbuf2 = (char *) &version;
 	data.ioc_inllen2 = sizeof version;

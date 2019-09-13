@@ -1542,10 +1542,9 @@ static int ct_import_recurse(const char *relpath)
 	if (relpath == NULL)
 		return -EINVAL;
 
-	/* Is relpath a FID? In which case SFID should expand to three
-	 * elements. */
-	rc = sscanf(relpath, SFID, RFID(&import_fid));
-	if (rc == 3)
+	/* Is relpath a FID? */
+	rc = llapi_fid_parse(relpath, &import_fid, NULL);
+	if (!rc)
 		return ct_import_fid(&import_fid);
 
 	srcpath = path_concat(opt.o_hsm_root, relpath);
@@ -1692,8 +1691,9 @@ static int ct_rebind_list(const char *list)
 
 	/* each line consists of 2 FID */
 	while ((r = getline(&line, &line_size, filp)) != -1) {
-		struct lu_fid	old_fid;
-		struct lu_fid	new_fid;
+		struct lu_fid old_fid;
+		struct lu_fid new_fid;
+		char *next_fid;
 
 		/* Ignore empty and commented out ('#...') lines. */
 		if (should_ignore_line(line))
@@ -1701,12 +1701,17 @@ static int ct_rebind_list(const char *list)
 
 		nl++;
 
-		rc = sscanf(line, SFID" "SFID, RFID(&old_fid), RFID(&new_fid));
-		if (rc != 6 || !fid_is_file(&old_fid) ||
-		    !fid_is_file(&new_fid)) {
-			CT_ERROR(EINVAL,
-				 "'%s' FID expected near '%s', line %u",
-				 list, line, nl);
+		rc = llapi_fid_parse(line, &old_fid, &next_fid);
+		if (rc)
+			goto error;
+		rc = llapi_fid_parse(next_fid, &new_fid, NULL);
+		if (rc)
+			goto error;
+		if (!fid_is_file(&old_fid) || !fid_is_file(&new_fid))
+			rc = -EINVAL;
+		if (rc) {
+error:			CT_ERROR(rc, "%s:%u: two FIDs expected in '%s'",
+				 list, nl, line);
 			err_major++;
 			continue;
 		}
@@ -1730,23 +1735,25 @@ static int ct_rebind_list(const char *list)
 
 static int ct_rebind(void)
 {
-	int	rc;
+	int rc;
 
 	if (opt.o_dst) {
 		struct lu_fid old_fid;
 		struct lu_fid new_fid;
 
-		if (sscanf(opt.o_src, SFID, RFID(&old_fid)) != 3 ||
-		    !fid_is_file(&old_fid)) {
+		rc = llapi_fid_parse(opt.o_src, &old_fid, NULL);
+		if (!rc && !fid_is_file(&old_fid))
 			rc = -EINVAL;
-			CT_ERROR(rc, "'%s' invalid FID format", opt.o_src);
+		if (rc) {
+			CT_ERROR(rc, "invalid source FID '%s'", opt.o_src);
 			return rc;
 		}
 
-		if (sscanf(opt.o_dst, SFID, RFID(&new_fid)) != 3 ||
-		    !fid_is_file(&new_fid)) {
+		rc = llapi_fid_parse(opt.o_dst, &new_fid, NULL);
+		if (!rc && !fid_is_file(&new_fid))
 			rc = -EINVAL;
-			CT_ERROR(rc, "'%s' invalid FID format", opt.o_dst);
+		if (rc) {
+			CT_ERROR(rc, "invalid destination FID '%s'", opt.o_dst);
 			return rc;
 		}
 

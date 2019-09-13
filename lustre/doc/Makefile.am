@@ -71,6 +71,7 @@ MANFILES =					\
 	lhbadm.8				\
 	llapi_create_volatile_param.3		\
 	llapi_fd2parent.3			\
+	llapi_fid_parse.3			\
 	llapi_file_create.3			\
 	llapi_file_create_foreign.3		\
 	llapi_file_get_stripe.3			\

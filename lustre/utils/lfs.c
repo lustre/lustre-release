@@ -8195,16 +8195,10 @@ static int fill_hur_item(struct hsm_user_request *hur, unsigned int idx,
 	hui->hui_extent.length = -1;
 
 	if (mntpath != NULL) {
-		if (*fname == '[')
-			fname++;
-		rc = sscanf(fname, SFID, RFID(&hui->hui_fid));
-		if (rc == 3) {
-			rc = 0;
-		} else {
+		rc = llapi_fid_parse(fname, &hui->hui_fid, NULL);
+		if (rc)
 			fprintf(stderr, "hsm: '%s' is not a valid FID\n",
 				fname);
-			rc = -EINVAL;
-		}
 	} else {
 		rc = lfs_hsm_prepare_file(fname, &hui->hui_fid, last_dev);
 	}

@@ -1,4 +1,5 @@
 This licence file applies to new library files:
+lustre/utils/liblustreapi_fid.c
 lustre/utils/liblustreapi_hsm.c
 lustre/utils/liblustreapi_json.c
 lustre/utils/liblustreapi_layout.c
