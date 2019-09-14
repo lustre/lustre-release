@@ -5848,7 +5848,7 @@ report_error() {
 # usage: stack_trap arg sigspec
 #
 # stack_trap() behaves like bash's built-in trap, except that it "stacks" the
-# command ``arg`` on top of previously defined commands for ``sigspec`` instead
+# command "arg" on top of previously defined commands for "sigspec" instead
 # of overwriting them.
 # stacked traps are executed in reverse order of their registration
 #
@@ -5856,7 +5856,7 @@ report_error() {
 stack_trap()
 {
 	local arg="$1"
-	local sigspec="$2"
+	local sigspec="${2:-EXIT}"
 
 	# Use "trap -p" to get the quoting right
 	local old_trap="$(trap -p "$sigspec")"
