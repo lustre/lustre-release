@@ -754,7 +754,7 @@ lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 	struct lnet_peer_ni *lpni;
 	struct lnet_route *route;
 	struct list_head zombies;
-	struct lnet_peer *lp;
+	struct lnet_peer *lp = NULL;
 	int i = 0;
 
 	INIT_LIST_HEAD(&rnet_zombies);
