@@ -55,8 +55,7 @@ extern struct ptlrpc_request_set *PTLRPCD_SET;
 
 int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		     __u64 *flags, union ldlm_policy_data *policy,
-		     struct ost_lvb *lvb, int kms_valid,
-		     osc_enqueue_upcall_f upcall,
+		     struct ost_lvb *lvb, osc_enqueue_upcall_f upcall,
 		     void *cookie, struct ldlm_enqueue_info *einfo,
 		     struct ptlrpc_request_set *rqset, int async,
 		     bool speculative);
