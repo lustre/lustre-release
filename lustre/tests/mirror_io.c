@@ -204,7 +204,7 @@ static void mirror_dump(int argc, char *argv[])
 	free(buf);
 }
 
-static size_t add_tids(unsigned int *ids, size_t count, char *arg)
+static size_t add_tids(__u16 *ids, size_t count, char *arg)
 {
 	while (*arg) {
 		char *end;
@@ -240,7 +240,7 @@ static void mirror_copy(int argc, char *argv[])
 	int c;
 	int i;
 
-	unsigned int ids[4096] = { 0 };
+	__u16 ids[4096] = { 0 };
 	size_t count = 0;
 	ssize_t result;
 

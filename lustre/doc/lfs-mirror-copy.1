@@ -1,0 +1,50 @@
+.TH LFS-MIRROR-COPY 1 2018-09-23 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs mirror copy \- copy a mirror's content to other mirror(s) of a mirrored file
+.SH SYNOPSIS
+.B lfs mirror copy
+{\fB\-\-read-mirror|\-i\fR <\fIid0\fR>}
+{\fB\-\-write-mirror|\-o\fR <\fIid1>[,<id2>,...]\fR}
+<\fImirrored_file\fR>
+.SH DESCRIPTION
+This command copies a mirror's content to other mirror(s) of a mirrored file,
+the file is specified by the path name \fImirrored_file\fR, the mirrors are
+specified by their mirror ID.
+.SH NOTE
+Be ware that the written mirror(s) will be marked as non-stale mirror(s),
+be careful that after using this command, you could get a file with non-stale
+mirrors while containing different contents.
+.br
+.SH OPTIONS
+.TP
+.BR \-\-read-mirror|\-i\fR\ <\fIid0\fR>
+This option indicates the content of which mirror specified by \fIid0\fR
+needs to be read. The \fIid0\fR is the numerical unique identifier for
+a mirror.
+.TP
+.BR \-\-write-mirror|\-o\fR\ <\fIid1\fR>[,<\fIid2\fR>,...]
+This option indicates the content of which mirror(s) specified by mirror IDs
+needs to be written. The mirror IDs are separated with comma.
+If the mirror id \fB-1\fR is used here, it means that all mirrors other than
+the read mirror are to be written.
+.SH EXAMPLES
+.TP
+.B lfs mirror copy -i1 -o2,3 /mnt/lustre/file1
+Copy the content of mirror with mirror ID 1 to the mirrors with mirror ID 2 and
+mirror ID 3 in /mnt/lustre/file1.
+.TP
+.B lfs mirror copy -i1 -o-1 /mnt/lustre/file1
+Copy the content of mirror with mirror ID 1 to all other mirrors in /mnt/lustre/file1.
+.TP
+.SH AUTHOR
+The \fBlfs mirror copy\fR command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-setstripe (1),
+.BR lfs-getstripe (1),
+.BR lfs-mirror-create (1),
+.BR lfs-mirror-extend (1),
+.BR lfs-mirror-split (1),
+.BR lfs-mirror-verify (1),
+.BR lfs-mirror-read (1)
+.BR lfs-mirror-write (1)

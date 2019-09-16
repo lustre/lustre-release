@@ -6143,10 +6143,14 @@ static int lod_prepare_resync_mirror(const struct lu_env *env,
 {
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lod_layout_component *lod_comp;
+	bool neg = !!(MIRROR_ID_NEG & mirror_id);
 	int i;
 
+	mirror_id &= ~MIRROR_ID_NEG;
+
 	for (i = 0; i < lo->ldo_mirror_count; i++) {
-		if (lo->ldo_mirrors[i].lme_id != mirror_id)
+		if ((!neg && lo->ldo_mirrors[i].lme_id != mirror_id) ||
+		    (neg && lo->ldo_mirrors[i].lme_id == mirror_id))
 			continue;
 
 		lod_foreach_mirror_comp(lod_comp, lo, i) {

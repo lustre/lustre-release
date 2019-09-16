@@ -124,6 +124,7 @@ static inline int lfs_mirror_resync(int argc, char **argv);
 static inline int lfs_mirror_verify(int argc, char **argv);
 static inline int lfs_mirror_read(int argc, char **argv);
 static inline int lfs_mirror_write(int argc, char **argv);
+static inline int lfs_mirror_copy(int argc, char **argv);
 
 enum setstripe_origin {
 	SO_SETSTRIPE,
@@ -291,6 +292,10 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Write to a specified mirror of a file.\n"
 		"usage: lfs mirror write <--mirror-id|-N <mirror_id> "
 		"[--inputfile|-i <input_file>] <mirrored_file>\n" },
+	{ .pc_name = "copy", .pc_func = lfs_mirror_copy,
+	  .pc_help = "Copy a specified mirror to other mirror(s) of a file.\n"
+		"usage: lfs mirror copy <--read-mirror|-i <id0>> "
+		"<--write-mirror|-o <id1,id2>> <mirrored_file>\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
@@ -585,6 +590,7 @@ command_t cmdlist[] = {
 	 "lfs mirror resync - resynchronize out-of-sync mirrored file(s)\n"
 	 "lfs mirror read   - read a mirror content of a mirrored file\n"
 	 "lfs mirror write  - write to a mirror of a mirrored file\n"
+	 "lfs mirror copy   - copy a mirror to other mirror(s) of a file\n"
 	 "lfs mirror verify - verify mirrored file(s)\n"},
 	{"getsom", lfs_getsom, 0, "To list the SOM info for a given file.\n"
 	 "usage: getsom [-s] [-b] [-f] <path>\n"
@@ -8738,6 +8744,279 @@ close_fd:
 	return rc;
 }
 
+struct collect_ids_data {
+	__u16	*cid_ids;
+	int	cid_count;
+	__u16	cid_exclude;
+};
+
+static int collect_mirror_id(struct llapi_layout *layout, void *cbdata)
+{
+	struct collect_ids_data *cid = cbdata;
+	uint32_t id;
+	int rc;
+
+	rc = llapi_layout_mirror_id_get(layout, &id);
+	if (rc < 0)
+		return rc;
+
+	if ((__u16)id != cid->cid_exclude) {
+		int i;
+
+		for (i = 0; i < cid->cid_count; i++) {
+			/* already collected the mirror id */
+			if (id == cid->cid_ids[i])
+				return LLAPI_LAYOUT_ITER_CONT;
+		}
+		cid->cid_ids[cid->cid_count] = id;
+		cid->cid_count++;
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+
+static inline int get_other_mirror_ids(int fd, __u16 *ids, __u16 exclude_id)
+{
+	struct llapi_layout *layout;
+	struct collect_ids_data cid = {	.cid_ids = ids,
+					.cid_count = 0,
+					.cid_exclude = exclude_id, };
+	int rc;
+
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		fprintf(stderr, "could not get layout\n");
+		return -EINVAL;
+	}
+
+	rc = llapi_layout_comp_iterate(layout, collect_mirror_id, &cid);
+	if (rc < 0) {
+		fprintf(stderr, "failed to iterate layout\n");
+		llapi_layout_free(layout);
+
+		return rc;
+	}
+	llapi_layout_free(layout);
+
+	return cid.cid_count;
+}
+
+static inline int lfs_mirror_copy(int argc, char **argv)
+{
+	int rc = CMD_HELP;
+	__u16 read_mirror_id = 0;
+	__u16 ids[128] = { 0 };
+	int count = 0;
+	struct llapi_layout *layout = NULL;
+	struct llapi_resync_comp comp_array[1024] = { { 0 } };
+	int comp_size = 0;
+	char *fname;
+	int fd = 0;
+	int c;
+	int i;
+	ssize_t copied;
+	struct ll_ioc_lease *ioc = NULL;
+	struct ll_ioc_lease_id *resync_ioc;
+
+	struct option long_opts[] = {
+	{ .val = 'i',	.name = "read-mirror",	.has_arg = required_argument },
+	{ .val = 'o',	.name = "write-mirror",	.has_arg = required_argument },
+	{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "i:o:", long_opts, NULL)) >= 0) {
+		char *end;
+
+		switch (c) {
+		case 'i':
+			read_mirror_id = strtoul(optarg, &end, 0);
+			if (*end != '\0' || read_mirror_id == 0) {
+				fprintf(stderr,
+					"%s %s: invalid read mirror ID '%s'\n",
+					progname, argv[0], optarg);
+				return rc;
+			}
+			break;
+		case 'o':
+			if (!strcmp(optarg, "-1")) {
+				/* specify all other mirrors */
+				ids[0] = (__u16)-1;
+				count = 1;
+			} else {
+				count = parse_mirror_ids((__u16 *)ids,
+							 ARRAY_SIZE(ids),
+							 optarg);
+				if (count < 0)
+					return rc;
+			}
+			break;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				progname, argv[optind - 1]);
+			return -EINVAL;
+		}
+	}
+
+	if (argc == optind) {
+		fprintf(stderr, "%s %s: no mirrored file provided\n",
+			progname, argv[0]);
+		return rc;
+	} else if (argc > optind + 1) {
+		fprintf(stderr, "%s %s: too many files\n", progname, argv[0]);
+		return rc;
+	}
+
+	if (read_mirror_id == 0) {
+		fprintf(stderr,
+			"%s %s: no valid read mirror ID %d is provided\n",
+			progname, argv[0], read_mirror_id);
+		return rc;
+	}
+
+	if (count == 0) {
+		fprintf(stderr,
+			"%s %s: no write mirror ID is provided\n",
+			progname, argv[0]);
+		return rc;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (read_mirror_id == ids[i]) {
+			fprintf(stderr,
+			"%s %s: read and write mirror ID cannot be the same\n",
+				progname, argv[0]);
+			return rc;
+		}
+	}
+
+	/* open mirror file */
+	fname = argv[optind];
+
+	fd = open(fname, O_DIRECT | O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr, "%s %s: cannot open '%s': %s\n",
+			progname, argv[0], fname, strerror(errno));
+		return rc;
+	}
+
+	/* write to all other mirrors */
+	if (ids[0] == (__u16)-1) {
+		count = get_other_mirror_ids(fd, ids, read_mirror_id);
+		if (count <= 0) {
+			rc = count;
+			fprintf(stderr,
+			"%s %s: failed to get other mirror ids in '%s': %d\n",
+				progname, argv[0], fname, rc);
+			goto close_fd;
+		}
+	}
+
+	/* verify mirror id */
+	rc = verify_mirror_id_by_fd(fd, read_mirror_id);
+	if (rc) {
+		fprintf(stderr,
+			"%s %s: cannot find mirror with ID %u in '%s'\n",
+			progname, argv[0], read_mirror_id, fname);
+		goto close_fd;
+	}
+
+	for (i = 0; i < count; i++) {
+		rc = verify_mirror_id_by_fd(fd, ids[i]);
+		if (rc) {
+			fprintf(stderr,
+			"%s %s: cannot find mirror with ID %u in '%s'\n",
+				progname, argv[0], ids[i], fname);
+			goto close_fd;
+		}
+	}
+
+	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
+	if (ioc == NULL) {
+		fprintf(stderr,
+			"%s %s: cannot alloc comp id array for ioc: %s\n",
+			progname, argv[0], strerror(errno));
+		rc = -errno;
+		goto close_fd;
+	}
+
+	/* get stale component info */
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		fprintf(stderr, "%s %s: failed to get layout of '%s': %s\n",
+			progname, argv[0], fname, strerror(errno));
+		rc = -errno;
+		goto free_ioc;
+	}
+	comp_size = llapi_mirror_find_stale(layout, comp_array,
+					    ARRAY_SIZE(comp_array),
+					    ids, count);
+	llapi_layout_free(layout);
+	if (comp_size < 0) {
+		rc = comp_size;
+		goto free_ioc;
+	}
+
+	/* prepare target mirror components instantiation */
+	resync_ioc = (struct ll_ioc_lease_id *)ioc;
+	resync_ioc->lil_mode = LL_LEASE_WRLCK;
+	resync_ioc->lil_flags = LL_LEASE_RESYNC;
+	if (count == 1)
+		resync_ioc->lil_mirror_id = ids[0];
+	else
+		resync_ioc->lil_mirror_id = read_mirror_id | MIRROR_ID_NEG;
+	rc = llapi_lease_set(fd, ioc);
+	if (rc < 0) {
+		fprintf(stderr,
+			"%s %s: '%s' llapi_lease_get_ext failed: %s\n",
+			progname, argv[0], fname, strerror(errno));
+		goto free_ioc;
+	}
+
+	copied = llapi_mirror_copy_many(fd, read_mirror_id, ids, count);
+	if (copied < 0) {
+		rc = copied;
+		fprintf(stderr, "%s %s: copy error: %d\n",
+			progname, argv[0], rc);
+		goto free_ioc;
+	}
+
+	fprintf(stdout, "mirror copied successfully: ");
+	for (i = 0; i < copied; i++)
+		fprintf(stdout, "%d ", ids[i]);
+	fprintf(stdout, "\n");
+
+	ioc->lil_mode = LL_LEASE_UNLCK;
+	ioc->lil_flags = LL_LEASE_RESYNC_DONE;
+	ioc->lil_count = 0;
+	for (i = 0; i < comp_size; i++) {
+		int j;
+
+		for (j = 0; j < copied; j++) {
+			if (comp_array[i].lrc_mirror_id != ids[j])
+				continue;
+
+			ioc->lil_ids[ioc->lil_count] = comp_array[i].lrc_id;
+			ioc->lil_count++;
+		}
+	}
+	rc = llapi_lease_set(fd, ioc);
+	if (rc <= 0) {
+		if (rc == 0)
+			rc = -EBUSY;
+		fprintf(stderr,
+			"%s %s: release lease lock of '%s' failed: %s\n",
+			progname, argv[0], fname, strerror(errno));
+		goto free_ioc;
+	}
+
+	rc = 0;
+
+free_ioc:
+	free(ioc);
+close_fd:
+	close(fd);
+
+	return rc;
+}
 /**
  * struct verify_chunk - Mirror chunk to be verified.
  * @chunk:        [start, end) of the chunk.
@@ -9074,8 +9353,6 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 		for (i = 1; i < chunk->mirror_count; i++) {
 			if (crc_array[i] != crc_array[0]) {
 				rc = -EINVAL;
-				if (!verbose)
-					goto error;
 
 				fprintf(stderr,
 					"%s: chunk "DEXT" has different checksum value on mirror %u and mirror %u.\n",

@@ -1325,21 +1325,27 @@ test_37()
 
 	local osts=$(comma_list $(osts_nodes))
 
-	# define OBD_FAIL_OST_SKIP_LV_CHECK	0x241
-	do_nodes $osts lctl set_param fail_loc=0x241
+	if [[ $MDS1_VERSION -lt $(version_code 2.12.3) ]]; then
+		# define OBD_FAIL_OST_SKIP_LV_CHECK     0x241
+		do_nodes $osts lctl set_param fail_loc=0x241
 
-	mirror_io copy -i ${mirror_array[0]} \
-		-t $(echo ${mirror_array[@]:1} | tr ' ' ',') $tf ||
+		mirror_io copy -i ${mirror_array[0]} \
+			-t $(echo ${mirror_array[@]:1} | tr ' ' ',') $tf ||
+				error "mirror copy error"
+
+		do_nodes $osts lctl set_param fail_loc=0
+	elif [[ $MDS1_VERSION -lt $(version_code 2.12.50) ||
+		$MDS1_VERSION -gt $(version_code 2.12.52) ]]; then
+		$LFS mirror copy -i ${mirror_array[0]} -o-1 $tf ||
 			error "mirror copy error"
-
-	do_nodes $osts lctl set_param fail_loc=0
+	fi
 
 	# verify copying is successful by checking checksums
 	remount_client $MOUNT
 	for i in ${mirror_array[@]}; do
 		sum=$($LFS mirror read -N $i $tf | md5sum)
 		[ "$sum" = "${checksums[1]}" ] ||
-			error "$i: mismatch checksum after copy"
+			error "$i: mismatch checksum after copy \'$sum\'"
 	done
 
 	rm -f $tf

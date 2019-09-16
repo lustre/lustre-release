@@ -216,8 +216,7 @@ int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
  * \result > 0	Number of mirrors successfully copied
  * \result < 0	The last seen error
  */
-ssize_t llapi_mirror_copy_many(int fd, unsigned int src, unsigned int *dst,
-				size_t count)
+ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 {
 	const size_t buflen = 4 * 1024 * 1024; /* 4M */
 	void *buf;

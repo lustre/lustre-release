@@ -1004,8 +1004,7 @@ int llapi_mirror_set(int fd, unsigned int id);
 int llapi_mirror_clear(int fd);
 ssize_t llapi_mirror_read(int fd, unsigned int id,
 			   void *buf, size_t count, off_t pos);
-ssize_t llapi_mirror_copy_many(int fd, unsigned int src,
-				unsigned int *dst, size_t count);
+ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count);
 int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
 		       off_t pos, size_t count);
 
