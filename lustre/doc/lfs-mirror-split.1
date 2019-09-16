@@ -4,15 +4,15 @@ lfs mirror split \- split a specified mirror from an existing mirrored file
 .SH SYNOPSIS
 .B lfs mirror split
 {\fB\-\-mirror\-id\fR <\fImirror_id\fR> | \fB\-\-component\-id\fR|\fB\-I\fR
-<\fIcomp_id\fR>}
+<\fIcomp_id\fR> |\fB\-\-pool\fR <\fIpool\fR>}
 [\fB\-\-destroy\fR|\fB\-d\fR]
 [\fB\-f\fR <\fInew_file\fR>]
 <\fImirrored_file\fR>
 .SH DESCRIPTION
 This command splits a mirror with mirror ID <\fImirror_id\fR> or containing
-a component with <\fIcomp_id\fR> out of a mirrored
-file specified by the path name \fImirrored_file\fR. By default, the layout of
-the split mirror will be stored into a new file named
+a component with <\fIcomp_id\fR> or containing a component on <\fIpool\fR>
+out of a mirrored file specified by the path name \fImirrored_file\fR.
+By default, the layout of the split mirror will be stored into a new file named
 <\fImirrored_file\fR>.mirror~<\fImirror_id\fR>. If \fB\-\-destroy\fR|\fB\-d\fR
 option is specified, then the split mirror will be destroyed.
 If \fB\-f\fR <\fInew_file\fR> option is specified, then the layout of the split
@@ -31,7 +31,10 @@ mirrored file and is automatically assigned at file creation or extension time.
 It can be fetched by \fBlfs getstripe\fR command (see \fBlfs(1)\fR).
 .TP
 .BR \-\-comp\-id\fR\ <\fIcomp_id\fR>
-The numerical unique identifier for a component contained withiin a mirror.
+The numerical unique identifier for a component contained within a mirror.
+.TP
+.BR \-\-pool\fR\ <\fIpool\fR>
+The pool storing a component contained within a mirror.
 .TP
 .BR \-\-destroy\fR|\fB\-d\fR
 This option indicates the split mirror will be destroyed.
@@ -51,6 +54,9 @@ Split a mirror with ID 2 out of /mnt/lustre/file1 and destroy it.
 .B lfs mirror split --mirror-id 3 -f /mnt/lustre/file2 /mnt/lustre/file1
 Split a mirror with ID 3 out of /mnt/lustre/file1 and store it into
 /mnt/lustre/file2.
+.TP
+.B lfs mirror split --pool lustre-nvme -d /mnt/lustre/file1
+Split a mirror on pool lustre-nvme out of /mnt/lustre/file1 and destroy it.
 .SH AUTHOR
 The \fBlfs mirror split\fR command is part of the Lustre filesystem.
 .SH SEE ALSO

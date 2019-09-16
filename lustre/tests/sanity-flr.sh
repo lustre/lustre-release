@@ -382,6 +382,17 @@ test_0b() {
 	verify_comp_attr stripe-count $tf ${ids[5]} $OSTCOUNT
 	verify_comp_attr_with_parent pool $tf ${ids[5]}
 
+	if [[ $MDS1_VERSION -ge $(version_code 2.12.56) ]] ||
+	   [[ $MDS1_VERSION -ge $(version_code 2.12.2) &&
+	      $MDS1_VERSION -lt $(version_code 2.12.50) ]]; then
+		# LU-11022 - remove mirror by pool name
+		local=cnt cnt=$($LFS getstripe $tf | grep archive | wc -l)
+		[ "$cnt" != "1" ] && error "unexpected mirror count $cnt"
+		$LFS mirror split --pool archive -d $tf || error "delete mirror"
+		cnt=$($LFS getstripe $tf | grep archive | wc -l)
+		[ "$cnt" != "0" ] && error "mirror count after removal: $cnt"
+	fi
+
 	# destroy OST pool
 	destroy_test_pools
 }
