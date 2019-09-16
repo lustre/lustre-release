@@ -48,7 +48,6 @@ build_test_filter
 [ -n "$FILESET" ] && skip "Not functional for FILESET set"
 
 OPENFILE=${OPENFILE:-openfile}
-MMAP_CAT=${MMAP_CAT:-mmap_cat}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
 

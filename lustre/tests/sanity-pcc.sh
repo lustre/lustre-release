@@ -11,8 +11,9 @@ SRCDIR=$(dirname $0)
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/utils:$PATH:/sbin:/usr/sbin
 
 ONLY=${ONLY:-"$*"}
+ALWAYS_EXCEPT="$SANITY_PCC_EXCEPT "
 # bug number for skipped test:
-ALWAYS_EXCEPT=""
+ALWAYS_EXCEPT+=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 ENABLE_PROJECT_QUOTAS=${ENABLE_PROJECT_QUOTAS:-true}
@@ -26,7 +27,6 @@ init_logging
 
 MULTIOP=${MULTIOP:-multiop}
 OPENFILE=${OPENFILE:-openfile}
-MMAP_CAT=${MMAP_CAT:-mmap_cat}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
 

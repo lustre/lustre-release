@@ -1310,6 +1310,8 @@ retry:
 		GOTO(out_unlock, rc = -ENOENT);
 
 	if (likely(!fake_write)) {
+		OBD_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_WR_ATTR_DELAY,
+				       OBD_FAIL_ONCE, cfs_fail_val);
 		rc = dt_write_commit(env, o, lnb, niocount, th, oa->o_size);
 		if (rc)
 			GOTO(out_unlock, rc);

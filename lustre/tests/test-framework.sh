@@ -277,6 +277,7 @@ init_test_env() {
 	[ ! -f "$SGPDDSURVEY" ] && export SGPDDSURVEY=$(which sgpdd-survey)
 	export MCREATE=${MCREATE:-mcreate}
 	export MULTIOP=${MULTIOP:-multiop}
+	export MMAP_CAT=${MMAP_CAT:-mmap_cat}
 	export STATX=${STATX:-statx}
 	# Ubuntu, at least, has a truncate command in /usr/bin
 	# so fully path our truncate command.

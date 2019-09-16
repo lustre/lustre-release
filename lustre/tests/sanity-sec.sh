@@ -2661,6 +2661,878 @@ test_35() {
 }
 run_test 35 "Check permissions when accessing changelogs"
 
+setup_for_enc_tests() {
+	# remount client with test_dummy_encryption option
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
+		error "mount with '-o test_dummy_encryption' failed"
+
+	# this directory will be encrypted, because of dummy mode
+	mkdir $DIR/$tdir
+}
+
+cleanup_for_enc_tests() {
+	# remount client normally
+	if is_mounted $MOUNT; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	mount_client $MOUNT ${MOUNT_OPTS} ||
+		error "remount failed"
+
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if [ "$MOUNT_2" ]; then
+		mount_client $MOUNT2 ${MOUNT_OPTS} ||
+			error "remount failed"
+	fi
+}
+
+cleanup_nodemap_after_enc_tests() {
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property forbid_encryption --value 1
+	wait_nm_sync default forbid_encryption
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active
+}
+
+test_36() {
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+
+	# first make sure it is possible to enable encryption
+	# when nodemap is not active
+	setup_for_enc_tests
+	rmdir $DIR/$tdir
+	umount_client $MOUNT || error "umount $MOUNT failed (1)"
+
+	# then activate nodemap, and retry
+	# should succeed as encryption is not forbidden on default nodemap
+	# by default
+	stack_trap cleanup_nodemap_after_enc_tests EXIT
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	forbid=$(do_facet mgs lctl get_param -n nodemap.default.forbid_encryption)
+	[ $forbid -eq 0 ] || error "wrong default value for forbid_encryption"
+	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption ||
+		error "mount '-o test_dummy_encryption' failed with default"
+	umount_client $MOUNT || error "umount $MOUNT failed (2)"
+
+	# then forbid encryption, and retry
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property forbid_encryption --value 1
+	wait_nm_sync default forbid_encryption
+	mount_client $MOUNT ${MOUNT_OPTS},test_dummy_encryption &&
+		error "mount '-o test_dummy_encryption' should have failed"
+	return 0
+}
+run_test 36 "control if clients can use encryption"
+
+test_37() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local objdump=$TMP/objdump
+	local objid
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[ "$ost1_FSTYPE" = ldiskfs ] || skip "ldiskfs only test (using debugfs)"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# write a few bytes in file
+	echo "abc" > $tmpfile
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=$tmpfile of=$testfile bs=4 count=1 conv=fsync
+	do_facet ost1 "sync; sync"
+
+	# check that content on ost is encrypted
+	objid=$($LFS getstripe $testfile | awk '/obdidx/{getline; print $2}')
+	do_facet ost1 "$DEBUGFS -c -R 'cat O/0/d$(($objid % 32))/$objid' \
+		 $(ostdevname 1)" > $objdump
+	cmp -s $objdump $tmpfile &&
+		error "file $testfile is not encrypted on ost"
+
+	# check that in-memory representation of file is correct
+	cmp -bl ${tmpfile} ${testfile} ||
+		error "file $testfile is corrupted in memory"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl ${tmpfile} ${testfile} ||
+		error "file $testfile is corrupted on server"
+
+	rm -f $tmpfile $objdump
+}
+run_test 37 "simple encrypted file"
+
+test_38() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local objid
+	local blksz
+	local srvsz=0
+	local filesz
+	local bsize
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# get block size on ost
+	blksz=$($LCTL get_param osc.$FSNAME*.import |
+		awk '/grant_block_size:/ { print $2; exit; }')
+	# write a few bytes in file at offset $blksz
+	echo "abc" > $tmpfile
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$blksz \
+		oflag=seek_bytes conv=fsync
+
+	# check that in-memory representation of file is correct
+	bsize=$(stat --format=%B $testfile)
+	filesz=$(stat --format=%b $testfile)
+	filesz=$((filesz*bsize))
+	[ $filesz -le $blksz ] ||
+		error "file $testfile is $filesz long in memory"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	bsize=$(stat --format=%B $testfile)
+	filesz=$(stat --format=%b $testfile)
+	filesz=$((filesz*bsize))
+	[ $filesz -le $blksz ] ||
+		error "file $testfile is $filesz long on server"
+
+	rm -f $tmpfile
+}
+run_test 38 "encrypted file with hole"
+
+test_39() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/abc
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# write a few bytes in file
+	echo "abc" > $tmpfile
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=$tmpfile of=$testfile bs=4 count=1 conv=fsync
+
+	# write a few more bytes in the same page
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=1024 oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	dd if=$tmpfile of=$tmpfile bs=4 count=1 seek=1024 oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted in memory"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server"
+
+	rm -f $tmpfile
+}
+run_test 39 "rewrite data in already encrypted page"
+
+test_40() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local tmpfile2=$TMP/abc2
+	local seek
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# write a few bytes in file
+	echo "abc" > $tmpfile
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=$tmpfile of=$testfile bs=4 count=1 conv=fsync
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted in memory (1)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server (1)"
+
+	# write a few other bytes in same page
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=256 oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	dd if=$tmpfile of=$tmpfile bs=4 count=1 seek=256 oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted in memory (2)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server (2)"
+
+	rm -f $testfile $tmpfile
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# write a few bytes in file, at end of first page
+	echo "abc" > $tmpfile
+	$LFS setstripe -c1 -i0 $testfile
+	seek=$(getconf PAGESIZE)
+	seek=$((seek - 4))
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# write a few other bytes at beginning of first page
+	dd if=$tmpfile of=$testfile bs=4 count=1 conv=fsync,notrunc
+
+	dd if=$tmpfile of=$tmpfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted in memory (3)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server (3)"
+
+	rm -f $testfile $tmpfile
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# write a few bytes in file, at beginning of second page
+	echo "abc" > $tmpfile
+	$LFS setstripe -c1 -i0 $testfile
+	seek=$(getconf PAGESIZE)
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+	dd if=$tmpfile of=$tmpfile2 bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# write a few other bytes at end of first page
+	seek=$((seek - 4))
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+	dd if=$tmpfile of=$tmpfile2 bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile2 $testfile ||
+		error "file $testfile is corrupted in memory (4)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile2 $testfile ||
+		error "file $testfile is corrupted on server (4)"
+
+	rm -f $testfile $tmpfile $tmpfile2
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# write a few bytes in file, at beginning of first stripe
+	echo "abc" > $tmpfile
+	$LFS setstripe -S 256k -c2 $testfile
+	dd if=$tmpfile of=$testfile bs=4 count=1 conv=fsync,notrunc
+
+	# write a few other bytes, at beginning of second stripe
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=262144 oflag=seek_bytes \
+		conv=fsync,notrunc
+	dd if=$tmpfile of=$tmpfile bs=4 count=1 seek=262144 oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted in memory (5)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server (5)"
+
+	rm -f $tmpfile
+}
+run_test 40 "exercise size of encrypted file"
+
+test_41() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local tmpfile2=$TMP/abc2
+	local seek
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	echo "abc" > $tmpfile
+	seek=$(getconf PAGESIZE)
+	seek=$((seek - 204))
+	dd if=$tmpfile of=$tmpfile2 bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync
+	seek=$(getconf PAGESIZE)
+	seek=$((seek + 1092))
+	dd if=$tmpfile of=$tmpfile2 bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# write a few bytes in file
+	$LFS setstripe -c1 -i0 -S 256k $testfile
+	seek=$(getconf PAGESIZE)
+	seek=$((seek - 204))
+	#define OBD_FAIL_OST_WR_ATTR_DELAY	 0x250
+	do_facet ost1 "$LCTL set_param fail_loc=0x250 fail_val=15"
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync &
+
+	sleep 5
+	# write a few other bytes, at a different offset
+	seek=$(getconf PAGESIZE)
+	seek=$((seek + 1092))
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc &
+	wait
+	do_facet ost1 "$LCTL set_param fail_loc=0x0"
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile2 $testfile ||
+		error "file $testfile is corrupted in memory (1)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile2 $testfile ||
+		error "file $testfile is corrupted on server (1)"
+
+	rm -f $tmpfile $tmpfile2
+}
+run_test 41 "test race on encrypted file size (1)"
+
+test_42() {
+	local testfile=$DIR/$tdir/$tfile
+	local testfile2=$DIR2/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local tmpfile2=$TMP/abc2
+	local pagesz=$(getconf PAGESIZE)
+	local seek
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	mount_client $MOUNT2 ${MOUNT_OPTS},test_dummy_encryption ||
+		error "mount2 with '-o test_dummy_encryption' failed"
+
+	# create file by writting one whole page
+	$LFS setstripe -c1 -i0 -S 256k $testfile
+	dd if=/dev/zero of=$testfile bs=$pagesz count=1 conv=fsync
+
+	# read file from 2nd mount point
+	cat $testfile2 > /dev/null
+
+	echo "abc" > $tmpfile
+	dd if=/dev/zero of=$tmpfile2 bs=$pagesz count=1 conv=fsync
+	seek=$((2*pagesz - 204))
+	dd if=$tmpfile of=$tmpfile2 bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+	seek=$((2*pagesz + 1092))
+	dd if=$tmpfile of=$tmpfile2 bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+
+	# write a few bytes in file from 1st mount point
+	seek=$((2*pagesz - 204))
+	#define OBD_FAIL_OST_WR_ATTR_DELAY	 0x250
+	do_facet ost1 "$LCTL set_param fail_loc=0x250 fail_val=15"
+	dd if=$tmpfile of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc &
+
+	sleep 5
+	# write a few other bytes, at a different offset from 2nd mount point
+	seek=$((2*pagesz + 1092))
+	dd if=$tmpfile of=$testfile2 bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc &
+	wait
+	do_facet ost1 "$LCTL set_param fail_loc=0x0"
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile2 $testfile ||
+		error "file $testfile is corrupted in memory (1)"
+
+	# check that in-memory representation of file is correct
+	cmp -bl $tmpfile2 $testfile2 ||
+		error "file $testfile is corrupted in memory (2)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile2 $testfile ||
+		error "file $testfile is corrupted on server (1)"
+
+	rm -f $tmpfile $tmpfile2
+}
+run_test 42 "test race on encrypted file size (2)"
+
+test_43() {
+	local testfile=$DIR/$tdir/$tfile
+	local testfile2=$DIR2/$tdir/$tfile
+	local tmpfile=$TMP/abc
+	local tmpfile2=$TMP/abc2
+	local resfile=$TMP/res
+	local pagesz=$(getconf PAGESIZE)
+	local seek
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	mount_client $MOUNT2 ${MOUNT_OPTS},test_dummy_encryption ||
+		error "mount2 with '-o test_dummy_encryption' failed"
+
+	# create file
+	tr '\0' '1' < /dev/zero |
+		dd of=$tmpfile bs=$pagesz count=1 conv=fsync
+	$LFS setstripe -c1 -i0 -S 256k $testfile
+	cp $tmpfile $testfile
+
+	# read file from 2nd mount point
+	cat $testfile2 > /dev/null
+
+	# write a few bytes in file from 1st mount point
+	echo "abc" > $tmpfile2
+	seek=$((2*pagesz - 204))
+	#define OBD_FAIL_OST_WR_ATTR_DELAY	 0x250
+	do_facet ost1 "$LCTL set_param fail_loc=0x250 fail_val=15"
+	dd if=$tmpfile2 of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc &
+
+	sleep 5
+	# read file from 2nd mount point
+	dd if=$testfile2 of=$resfile bs=$pagesz count=1 conv=fsync,notrunc
+	cmp -bl $tmpfile $resfile ||
+		error "file $testfile is corrupted in memory (1)"
+
+	wait
+	do_facet ost1 "$LCTL set_param fail_loc=0x0"
+
+	# check that in-memory representation of file is correct
+	dd if=$tmpfile2 of=$tmpfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+	cmp -bl $tmpfile $testfile2 ||
+		error "file $testfile is corrupted in memory (2)"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	# check that file read from server is correct
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted on server (1)"
+
+	rm -f $tmpfile $tmpfile2
+}
+run_test 43 "test race on encrypted file size (3)"
+
+test_44() {
+	local testfile=$DIR/$tdir/$tfile
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	which vmtouch || skip "This test needs vmtouch utility"
+
+	# Direct I/O is not supported on encrypted files.
+	# Attempts to use direct I/O on such files should fall back to
+	# buffered I/O.
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# write a page in file with O_DIRECT
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=/dev/urandom of=$testfile bs=4096 count=1 conv=fsync oflag=direct
+
+	respage=$(vmtouch $testfile | awk '/Resident\ Pages:/ {print $3}')
+	[ "$respage" == "1/1" ] ||
+		error "write to enc file did not fall back to buffered IO"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	dd if=$testfile of=/dev/null bs=4096 count=1 iflag=direct
+
+	respage=$(vmtouch $testfile | awk '/Resident\ Pages:/ {print $3}')
+	[ "$respage" == "1/1" ] ||
+		error "write to enc file did not fall back to buffered IO"
+}
+run_test 44 "encrypted file access semantics: direct IO"
+
+test_45() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/junk
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=/dev/zero of=$testfile bs=512K count=1
+	$MULTIOP $testfile OSMRUc || error "$MULTIOP $testfile failed (1)"
+	$MULTIOP $testfile OSMWUc || error "$MULTIOP $testfile failed (2)"
+
+	dd if=/dev/zero of=$tmpfile bs=512K count=1
+	$MULTIOP $tmpfile OSMWUc || error "$MULTIOP $tmpfile failed"
+	$MMAP_CAT $tmpfile > ${tmpfile}2
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+
+	$MMAP_CAT $testfile > ${testfile}2
+	cmp -bl ${tmpfile}2 ${testfile}2 ||
+		error "file $testfile is corrupted"
+
+	rm -f $tmpfile ${tmpfile}2
+}
+run_test 45 "encrypted file access semantics: MMAP"
+
+test_46() {
+	local testdir=$DIR/$tdir/mydir
+	local testfile=$testdir/myfile
+	local lsfile=$TMP/lsfile
+	local scrambleddir
+	local scrambledfile
+
+	local testfile2=$DIR/$tdir/${tfile}.2
+	local tmpfile=$DIR/junk
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	touch $DIR/onefile
+	touch $DIR/$tdir/$tfile
+	mkdir $testdir
+	echo test > $testfile
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+
+	# remove fscrypt key from keyring
+	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	keyctl reap
+
+	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
+	ls -1 $scrambleddir > $lsfile || error "ls $testdir failed"
+
+	scrambledfile=$scrambleddir/$(head -n 1 $lsfile)
+	stat $scrambledfile || error "stat $scrambledfile failed"
+	rm -f $lsfile
+
+	cat $scrambledfile && error "cat $scrambledfile should have failed"
+
+	touch $scrambleddir/otherfile &&
+		error "touch otherfile should have failed"
+	ls $scrambleddir/otherfile && error "otherfile should not exist"
+	mkdir $scrambleddir/otherdir &&
+		error "mkdir otherdir should have failed"
+	ls -d $scrambleddir/otherdir && error "otherdir should not exist"
+
+	rm -f $scrambledfile || error "rm $scrambledfile failed"
+	rmdir $scrambleddir || error "rmdir $scrambleddir failed"
+
+	rm -f $DIR/onefile
+}
+run_test 46 "encrypted file access semantics without key"
+
+test_47() {
+	local testfile=$DIR/$tdir/$tfile
+	local testfile2=$DIR/$tdir/${tfile}.2
+	local tmpfile=$DIR/junk
+	local scrambleddir
+	local scrambledfile
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	dd if=/dev/zero of=$tmpfile bs=512K count=1
+	mrename $tmpfile $testfile &&
+		error "rename from unencrypted to encrypted dir should fail"
+
+	ln $tmpfile $testfile &&
+		error "link from unencrypted to encrypted dir should fail"
+
+	cp $tmpfile $testfile ||
+		error "cp from unencrypted to encrypted dir should succeed"
+	rm -f $tmpfile
+
+	mrename $testfile $testfile2 ||
+		error "rename from within encrypted dir should succeed"
+
+	ln $testfile2 $testfile ||
+		error "link from within encrypted dir should succeed"
+	rm -f $testfile
+
+	ln $testfile2 $tmpfile ||
+		error "link from encrypted to unencrypted dir should succeed"
+	rm -f $tmpfile
+
+	mrename $testfile2 $tmpfile ||
+		error "rename from encrypted to unencrypted dir should succeed"
+
+	dd if=/dev/zero of=$testfile bs=512K count=1
+	mkdir $DIR/$tdir/mydir
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+
+	# remove fscrypt key from keyring
+	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	keyctl reap
+
+	scrambleddir=$(find $DIR/$tdir/ -maxdepth 1 -mindepth 1 -type d)
+	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -type f)
+	ln $scrambledfile $scrambleddir/linkfile &&
+		error "ln linkfile should have failed"
+	mrename $scrambledfile $DIR/onefile2 &&
+		error "mrename from $scrambledfile should have failed"
+	touch $DIR/onefile
+	mrename $DIR/onefile $scrambleddir/otherfile &&
+		error "mrename to $scrambleddir should have failed"
+
+	rm -f $tmpfile $DIR/onefile
+}
+run_test 47 "encrypted file access semantics: rename/link"
+
+test_48a() {
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/111
+	local tmpfile2=$TMP/abc
+	local pagesz=$(getconf PAGESIZE)
+	local sz
+	local seek
+	local scrambledfile
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# create file, 4 x PAGE_SIZE long
+	tr '\0' '1' < /dev/zero |
+		dd of=$tmpfile bs=4x$pagesz count=1 conv=fsync
+	$LFS setstripe -c1 -i0 $testfile
+	cp $tmpfile $testfile
+	echo "abc" > $tmpfile2
+
+	# decrease size: truncate to PAGE_SIZE
+	$TRUNCATE $tmpfile $pagesz
+	$TRUNCATE $testfile $pagesz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (1)"
+
+	# increase size: truncate to 2 x PAGE_SIZE
+	sz=$((pagesz*2))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (2)"
+
+	# write in 2nd page
+	seek=$((pagesz+100))
+	dd if=$tmpfile2 of=$tmpfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+	dd if=$tmpfile2 of=$testfile bs=4 count=1 seek=$seek oflag=seek_bytes \
+		conv=fsync,notrunc
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (3)"
+
+	# truncate to PAGE_SIZE / 2
+	sz=$((pagesz/2))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (4)"
+
+	# lockless truncate should be turned into regular truncate for enc file
+	save_lustre_params client "osc.*.lockless_truncate" > $save
+	# restore lockless_truncate default values on exit
+	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	lctl set_param -n osc.*.lockless_truncate 1
+	cancel_lru_locks osc
+	clear_stats osc.*.osc_stats
+	$TRUNCATE $testfile 8000000 || error "truncate failed (1)"
+	[ $(calc_stats osc.*.osc_stats lockless_truncate) -eq 0 ] ||
+		error "lockless truncate should be turned into regular truncate"
+	lctl set_param -n osc.*.lockless_truncate 0
+
+	# truncate to a smaller, non-multiple of PAGE_SIZE, non-multiple of 16
+	sz=$((sz-7))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (5)"
+
+	# truncate to a larger, non-multiple of PAGE_SIZE, non-multiple of 16
+	sz=$((sz+18))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (6)"
+
+	# truncate to a larger, non-multiple of PAGE_SIZE, in a different page
+	sz=$((sz+pagesz+30))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted (7)"
+
+	sync ; echo 3 > /proc/sys/vm/drop_caches
+
+	# remove fscrypt key from keyring
+	keyctl revoke $(keyctl show | awk '$7 ~ "^fscrypt:" {print $1}')
+	keyctl reap
+
+	scrambledfile=$(find $DIR/$tdir/ -maxdepth 1 -type f)
+	$TRUNCATE $scrambledfile 0 &&
+		error "truncate $scrambledfile should have failed without key"
+
+	rm -f $tmpfile $tmpfile2
+}
+run_test 48a "encrypted file access semantics: truncate"
+
+cleanup_for_enc_tests_othercli() {
+	local othercli=$1
+
+	# remount othercli normally
+	zconf_umount $othercli $MOUNT ||
+		error "umount $othercli $MOUNT failed"
+	zconf_mount $othercli $MOUNT ||
+		error "remount $othercli $MOUNT failed"
+}
+
+test_48b() {
+	local othercli
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	[ "$num_clients" -ge 2 ] || skip "Need at least 2 clients"
+
+	if [ "$HOSTNAME" == ${clients_arr[0]} ]; then
+		othercli=${clients_arr[1]}
+	else
+		othercli=${clients_arr[0]}
+	fi
+
+	stack_trap cleanup_for_enc_tests EXIT
+	stack_trap "cleanup_for_enc_tests_othercli $othercli" EXIT
+	setup_for_enc_tests
+	zconf_umount $othercli $MOUNT ||
+		error "umount $othercli $MOUNT failed"
+
+	cp /bin/sleep $DIR/$tdir/
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	$DIR/$tdir/sleep 30 &
+	# mount and IOs must be done in the same shell session, otherwise
+	# encryption key in session keyring is missing
+	do_node $othercli "$MOUNT_CMD -o ${MOUNT_OPTS},test_dummy_encryption \
+			   $MGSNID:/$FSNAME $MOUNT && \
+			   $TRUNCATE $DIR/$tdir/sleep 7"
+	wait || error "wait error"
+	cmp --silent /bin/sleep $DIR/$tdir/sleep ||
+		error "/bin/sleep and $DIR/$tdir/sleep differ"
+}
+run_test 48b "encrypted file: concurrent truncate"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {
