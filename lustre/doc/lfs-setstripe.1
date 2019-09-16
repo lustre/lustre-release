@@ -321,8 +321,9 @@ to find uninitialized components.
 .B * prefer\fR - component preferred for read/write in a mirrored file
 .RE
 .RS
-.B * stale\fR - component has outdated data in a mirrored file.  Once a
-component is marked
+.B * stale\fR - component has outdated data in a mirrored file. This flag is
+not allowed to be set on a component of the last non-stale mirror.
+Once a component is marked
 .BR stale ,
 it isn't permitted to clear this flag directly. \fBlfs-mirror-resync\fR(1)
 is required to clear the flag.

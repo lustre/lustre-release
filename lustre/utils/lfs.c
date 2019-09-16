@@ -994,10 +994,18 @@ static int lfs_component_set(char *fname, int comp_id,
 	}
 
 	rc = llapi_layout_file_comp_set(fname, ids, flags_array, count);
-	if (rc)
-		fprintf(stderr,
-			"%s: cannot change the flags of component '%#x' of file '%s': %x / ^(%x)\n",
-			progname, comp_id, fname, flags, neg_flags);
+	if (rc) {
+		if (errno == EUCLEAN) {
+			rc = -errno;
+			fprintf(stderr,
+				"%s: cannot set 'stale' flag on component '%#x' of the last non-stale mirror of '%s'\n",
+				progname, comp_id, fname);
+		} else {
+			fprintf(stderr,
+				"%s: cannot change the flags of component '%#x' of file '%s': %x / ^(%x)\n",
+				progname, comp_id, fname, flags, neg_flags);
+		}
+	}
 
 	return rc;
 }
@@ -1771,6 +1779,72 @@ static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata)
 	return LLAPI_LAYOUT_ITER_STOP;
 }
 
+struct collect_ids_data {
+	__u16	*cid_ids;
+	int	cid_count;
+	__u16	cid_exclude;
+};
+
+static int collect_mirror_id(struct llapi_layout *layout, void *cbdata)
+{
+	struct collect_ids_data *cid = cbdata;
+	uint32_t id;
+	int rc;
+
+	rc = llapi_layout_mirror_id_get(layout, &id);
+	if (rc < 0)
+		return rc;
+
+	if ((__u16)id != cid->cid_exclude) {
+		int i;
+
+		for (i = 0; i < cid->cid_count; i++) {
+			/* already collected the mirror id */
+			if (id == cid->cid_ids[i])
+				return LLAPI_LAYOUT_ITER_CONT;
+		}
+		cid->cid_ids[cid->cid_count] = id;
+		cid->cid_count++;
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+
+/**
+ * last_non_stale_mirror() - Check if a mirror is the last non-stale mirror.
+ * @mirror_id: Mirror id to be checked.
+ * @layout:    Mirror component list.
+ *
+ * This function checks if a mirror with specified @mirror_id is the last
+ * non-stale mirror of a layout @layout.
+ *
+ * Return: true or false.
+ */
+static inline
+bool last_non_stale_mirror(__u16 mirror_id, struct llapi_layout *layout)
+{
+	__u16 mirror_ids[128] = { 0 };
+	struct collect_ids_data cid = {	.cid_ids = mirror_ids,
+					.cid_count = 0,
+					.cid_exclude = mirror_id, };
+	int i;
+
+	llapi_layout_comp_iterate(layout, collect_mirror_id, &cid);
+
+	for (i = 0; i < cid.cid_count; i++) {
+		struct llapi_resync_comp comp_array[1024] = { { 0 } };
+		int comp_size = 0;
+
+		comp_size = llapi_mirror_find_stale(layout, comp_array,
+						    ARRAY_SIZE(comp_array),
+						    &mirror_ids[i], 1);
+		if (comp_size == 0)
+			return false;
+	}
+
+	return true;
+}
+
 static int mirror_split(const char *fname, __u32 id, const char *pool,
 			enum mirror_flags mflags, const char *victim_file)
 {
@@ -1875,6 +1949,14 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	if (victim_file == NULL) {
 		/* use a temp file to store the splitted layout */
 		if (mflags & MF_DESTROY) {
+			if (last_non_stale_mirror(id, layout)) {
+				rc = -EUCLEAN;
+				fprintf(stderr,
+					"%s: cannot destroy the last non-stale mirror of file '%s'\n",
+					progname, fname);
+				goto close_fd;
+			}
+
 			fdv = llapi_create_volatile_idx(parent, mdt_index,
 							O_LOV_DELAY_CREATE);
 		} else {
@@ -8778,37 +8860,6 @@ close_fd:
 	close(fd);
 
 	return rc;
-}
-
-struct collect_ids_data {
-	__u16	*cid_ids;
-	int	cid_count;
-	__u16	cid_exclude;
-};
-
-static int collect_mirror_id(struct llapi_layout *layout, void *cbdata)
-{
-	struct collect_ids_data *cid = cbdata;
-	uint32_t id;
-	int rc;
-
-	rc = llapi_layout_mirror_id_get(layout, &id);
-	if (rc < 0)
-		return rc;
-
-	if ((__u16)id != cid->cid_exclude) {
-		int i;
-
-		for (i = 0; i < cid->cid_count; i++) {
-			/* already collected the mirror id */
-			if (id == cid->cid_ids[i])
-				return LLAPI_LAYOUT_ITER_CONT;
-		}
-		cid->cid_ids[cid->cid_count] = id;
-		cid->cid_count++;
-	}
-
-	return LLAPI_LAYOUT_ITER_CONT;
 }
 
 static inline int get_other_mirror_ids(int fd, __u16 *ids, __u16 exclude_id)

@@ -724,6 +724,37 @@ test_0h() {
 		error "error setting flag prefer"
 
 	verify_comp_attr lcme_flags $tf 0x20003 prefer
+
+	$LFS setstripe --comp-set -I 0x20003 --comp-flags=^prefer $tf ||
+		error "error clearing prefer flag from component 0x20003"
+
+	# MDS disallows setting stale flag on the last non-stale mirror
+	[[ $MDS1_VERSION -ge $(version_code 2.12.57) ]] ||
+	[[ $MDS1_VERSION -ge $(version_code 2.12.2) &&
+	   $MDS1_VERSION -lt $(version_code 2.12.50) ]] || return 0
+
+	cp /etc/hosts $tf || error "error writing file '$tf'"
+
+	verify_comp_attr lcme_flags $tf 0x10002 prefer
+	verify_comp_attr lcme_flags $tf 0x20003 stale
+	verify_comp_attr lcme_flags $tf 0x30004 stale
+
+	! $LFS setstripe --comp-set -I 0x10002 --comp-flags=^prefer,stale $tf \
+		> /dev/null 2>&1 ||
+		error "setting stale flag on component 0x10002 should fail"
+
+	$LFS mirror resync $tf || error "error resync-ing file '$tf'"
+
+	$LFS setstripe --comp-set -I 0x10001 --comp-flags=stale $tf ||
+		error "error setting stale flag on component 0x10001"
+	$LFS setstripe --comp-set -I 0x20003 --comp-flags=stale $tf ||
+		error "error setting stale flag on component 0x20003"
+
+	! $LFS setstripe --comp-set -I 0x30004 --comp-flags=stale $tf \
+		> /dev/null 2>&1 ||
+		error "setting stale flag on component 0x30004 should fail"
+
+	$LFS mirror resync $tf || error "error resync-ing file '$tf'"
 }
 run_test 0h "set, clear and test flags for FLR files"
 
@@ -1798,6 +1829,10 @@ test_44() {
 
 	verify_flr_state $tf "wp"
 
+	# disallow destroying the last non-stale mirror
+	! $LFS mirror split --mirror-id 1 -d $tf > /dev/null 2>&1 ||
+		error "destroying mirror 1 should fail"
+
 	# synchronize all mirrors of the file
 	$LFS mirror resync $tf || error "mirror resync $tf failed"
 
@@ -1823,8 +1858,17 @@ test_44() {
 	verify_mirror_count $tf 2
 	verify_mirror_count $tf.mirror~2 1
 
+	$LFS setstripe --comp-set -I 0x30008 --comp-flags=stale $tf ||
+		error "setting stale flag on component 0x30008 failed"
+
+	# disallow destroying the last non-stale mirror
+	! $LFS mirror split --mirror-id 4 -d $tf > /dev/null 2>&1 ||
+		error "destroying mirror 4 should fail"
+
+	$LFS mirror resync $tf || error "resynchronizing $tf failed"
+
 	$LFS mirror split --mirror-id 3 -d $tf ||
-		error "split and delte mirror 3 failed"
+		error "destroying mirror 3 failed"
 	verify_mirror_count $tf 1
 
 	# verify splitted file contains the same content as the orig file does
