@@ -14,7 +14,8 @@ a component with <\fIcomp_id\fR> or containing a component on <\fIpool\fR>
 out of a mirrored file specified by the path name \fImirrored_file\fR.
 By default, the layout of the split mirror will be stored into a new file named
 <\fImirrored_file\fR>.mirror~<\fImirror_id\fR>. If \fB\-\-destroy\fR|\fB\-d\fR
-option is specified, then the split mirror will be destroyed.
+option is specified, and the split mirror is not the last non-stale mirror,
+then it will be destroyed.
 If \fB\-f\fR <\fInew_file\fR> option is specified, then the layout of the split
 mirror will be stored into the named file.
 .br

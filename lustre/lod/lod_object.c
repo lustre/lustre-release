@@ -2860,6 +2860,42 @@ error:
 }
 
 /**
+ * lod_last_non_stale_mirror() - Check if a mirror is the last non-stale mirror.
+ * @mirror_id: Mirror id to be checked.
+ * @lo:        LOD object.
+ *
+ * This function checks if a mirror with specified @mirror_id is the last
+ * non-stale mirror of a LOD object @lo.
+ *
+ * Return: true or false.
+ */
+static inline
+bool lod_last_non_stale_mirror(__u16 mirror_id, struct lod_object *lo)
+{
+	struct lod_layout_component *lod_comp;
+	bool has_stale_flag;
+	int i;
+
+	for (i = 0; i < lo->ldo_mirror_count; i++) {
+		if (lo->ldo_mirrors[i].lme_id == mirror_id ||
+		    lo->ldo_mirrors[i].lme_stale)
+			continue;
+
+		has_stale_flag = false;
+		lod_foreach_mirror_comp(lod_comp, lo, i) {
+			if (lod_comp->llc_flags & LCME_FL_STALE) {
+				has_stale_flag = true;
+				break;
+			}
+		}
+		if (!has_stale_flag)
+			return false;
+	}
+
+	return true;
+}
+
+/**
  * Declare component set. The xattr is name XATTR_LUSTRE_LOV.set.$field,
  * the '$field' can only be 'flags' now. The xattr value is binary
  * lov_comp_md_v1 which contains the component ID(s) and the value of
@@ -2914,6 +2950,7 @@ static int lod_declare_layout_set(const struct lu_env *env,
 		__u32 id = comp_v1->lcm_entries[i].lcme_id;
 		__u32 flags = comp_v1->lcm_entries[i].lcme_flags;
 		__u32 mirror_flag = flags & LCME_MIRROR_FLAGS;
+		__u16 mirror_id = mirror_id_of(id);
 		bool neg = flags & LCME_FL_NEG;
 
 		if (flags & LCME_FL_INIT) {
@@ -2928,7 +2965,7 @@ static int lod_declare_layout_set(const struct lu_env *env,
 
 			/* lfs only put one flag in each entry */
 			if ((flags && id != lod_comp->llc_id) ||
-			    (mirror_flag && mirror_id_of(id) !=
+			    (mirror_flag && mirror_id !=
 					    mirror_id_of(lod_comp->llc_id)))
 				continue;
 
@@ -2938,8 +2975,13 @@ static int lod_declare_layout_set(const struct lu_env *env,
 				if (mirror_flag)
 					lod_comp->llc_flags &= ~mirror_flag;
 			} else {
-				if (flags)
+				if (flags) {
+					if ((flags & LCME_FL_STALE) &&
+					    lod_last_non_stale_mirror(mirror_id,
+								      lo))
+						RETURN(-EUCLEAN);
 					lod_comp->llc_flags |= flags;
+				}
 				if (mirror_flag) {
 					lod_comp->llc_flags |= mirror_flag;
 					if (mirror_flag & LCME_FL_NOSYNC)
