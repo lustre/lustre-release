@@ -283,9 +283,6 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 			CDEBUG(D_INODE, "cannot flush DoM data "
 			       DFID": rc = %d\n",
 			       PFID(ll_inode2fid(inode)), rc);
-		lock_res_and_lock(lock);
-		ldlm_set_kms_ignore(lock);
-		unlock_res_and_lock(lock);
 	}
 
 	if (bits & MDS_INODELOCK_LAYOUT) {

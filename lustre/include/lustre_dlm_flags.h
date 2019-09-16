@@ -399,6 +399,14 @@
 #define ldlm_is_ndelay(_l)		 LDLM_TEST_FLAG((_l), 1ULL << 58)
 #define ldlm_set_ndelay(_l)		 LDLM_SET_FLAG((_l), 1ULL << 58)
 
+/**
+ * LVB from this lock is cached in osc object
+ */
+#define LDLM_FL_LVB_CACHED              0x0800000000000000ULL /* bit  59 */
+#define ldlm_is_lvb_cached(_l)          LDLM_TEST_FLAG((_l), 1ULL << 59)
+#define ldlm_set_lvb_cached(_l)         LDLM_SET_FLAG((_l), 1ULL << 59)
+#define ldlm_clear_lvb_cached(_l)       LDLM_CLEAR_FLAG((_l), 1ULL << 59)
+
 /** l_flags bits marked as "ast" bits */
 #define LDLM_FL_AST_MASK                (LDLM_FL_FLOCK_DEADLOCK		|\
 					 LDLM_FL_DISCARD_DATA)

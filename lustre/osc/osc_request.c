@@ -2491,9 +2491,8 @@ struct ptlrpc_request_set *PTLRPCD_SET = (void *)1;
  * release locks just after they are obtained. */
 int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		     __u64 *flags, union ldlm_policy_data *policy,
-		     struct ost_lvb *lvb, int kms_valid,
-		     osc_enqueue_upcall_f upcall, void *cookie,
-		     struct ldlm_enqueue_info *einfo,
+		     struct ost_lvb *lvb, osc_enqueue_upcall_f upcall,
+		     void *cookie, struct ldlm_enqueue_info *einfo,
 		     struct ptlrpc_request_set *rqset, int async,
 		     bool speculative)
 {
@@ -2510,15 +2509,6 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
          * dealing with the page cache is a little smoother.  */
 	policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
 	policy->l_extent.end |= ~PAGE_MASK;
-
-	/*
-	 * kms is not valid when either object is completely fresh (so that no
-	 * locks are cached), or object was evicted. In the latter case cached
-	 * lock cannot be used, because it would prime inode state with
-	 * potentially stale LVB.
-	 */
-	if (!kms_valid)
-		goto no_match;
 
         /* Next, search for already existing extent locks that will cover us */
         /* If we're trying to read, we also search for an existing PW lock.  The
@@ -2582,7 +2572,6 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		}
 	}
 
-no_match:
 	if (*flags & (LDLM_FL_TEST_LOCK | LDLM_FL_MATCH_LOCK))
 		RETURN(-ENOLCK);
 
