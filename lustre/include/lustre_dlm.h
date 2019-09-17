@@ -333,6 +333,8 @@ struct ldlm_ns_bucket {
 	 * Which res in the bucket should we start with the reclaim.
 	 */
 	int			    nsb_reclaim_start;
+	/* counter of entries in this bucket */
+	atomic_t		nsb_count;
 };
 
 enum {
