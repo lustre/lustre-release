@@ -21883,7 +21883,7 @@ cleanup_805() {
 }
 
 test_805() {
-	local zfs_version=$(do_node $SINGLEMDS cat /sys/module/zfs/version)
+	local zfs_version=$(do_facet mds1 cat /sys/module/zfs/version)
 	[ "$mds1_FSTYPE" != "zfs" ] && skip "ZFS specific test"
 	[ $(version_code $zfs_version) -lt $(version_code 0.7.2) ] &&
 		skip "netfree not implemented before 0.7"
