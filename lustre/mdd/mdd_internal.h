@@ -275,6 +275,12 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 			  struct md_object *md_obj,
 			  const struct lu_buf *lmu_buf);
 
+int mdd_changelog_write_rec(const struct lu_env *env,
+			    struct llog_handle *loghandle,
+			    struct llog_rec_hdr *rec,
+			    struct llog_cookie *cookie,
+			    int idx, struct thandle *th);
+
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 
 #define MDD_ENV_VAR(env, var) (&mdd_env_info(env)->mti_##var)

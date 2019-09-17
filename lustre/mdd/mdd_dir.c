@@ -780,6 +780,47 @@ out_put:
 	return rc;
 }
 
+int mdd_changelog_write_rec(const struct lu_env *env,
+			    struct llog_handle *loghandle,
+			    struct llog_rec_hdr *r,
+			    struct llog_cookie *cookie,
+			    int idx, struct thandle *th)
+{
+	int rc;
+
+	if (r->lrh_type == CHANGELOG_REC) {
+		struct mdd_device *mdd;
+		struct llog_changelog_rec *rec;
+
+		mdd = lu2mdd_dev(loghandle->lgh_ctxt->loc_obd->obd_lu_dev);
+		rec = container_of0(r, struct llog_changelog_rec, cr_hdr);
+
+		spin_lock(&mdd->mdd_cl.mc_lock);
+		rec->cr.cr_index = mdd->mdd_cl.mc_index + 1;
+		spin_unlock(&mdd->mdd_cl.mc_lock);
+
+		rc = llog_osd_ops.lop_write_rec(env, loghandle, r,
+						cookie, idx, th);
+
+		/*
+		 * if current llog is full, we will generate a new
+		 * llog, and since it's actually not an error, let's
+		 * avoid increasing index so that userspace apps
+		 * should not see a gap in the changelog sequence
+		 */
+		if (!(rc == -ENOSPC && llog_is_full(loghandle))) {
+			spin_lock(&mdd->mdd_cl.mc_lock);
+			++mdd->mdd_cl.mc_index;
+			spin_unlock(&mdd->mdd_cl.mc_lock);
+		}
+	} else {
+		rc = llog_osd_ops.lop_write_rec(env, loghandle, r,
+						cookie, idx, th);
+	}
+
+	return rc;
+}
+
 /** Add a changelog entry \a rec to the changelog llog
  * \param mdd
  * \param rec
@@ -802,13 +843,6 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;
 	rec->cr.cr_time = cl_time();
 
-	spin_lock(&mdd->mdd_cl.mc_lock);
-	/* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
-	 * but as long as the MDD transactions are ordered correctly for e.g.
-	 * rename conflicts, I don't think this should matter. */
-	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-	spin_unlock(&mdd->mdd_cl.mc_lock);
-
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	if (ctxt == NULL)
 		return -ENXIO;
@@ -817,6 +851,7 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	if (IS_ERR(llog_th))
 		GOTO(out_put, rc = PTR_ERR(llog_th));
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_CHANGELOG_REORDER, cfs_fail_val);
 	/* nested journal transaction */
 	rc = llog_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL, llog_th);
 
