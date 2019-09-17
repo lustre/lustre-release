@@ -191,15 +191,16 @@ quota_set:
 		dirtied = true;
 	}
 
+	if (!is_default && lqe->lqe_is_default) {
+		LQUOTA_DEBUG(lqe, "the qid %llu has been set quota"
+			     " explicitly, clear the default flag",
+			     lqe->lqe_id.qid_uid);
+
+		qmt_lqe_clear_default(lqe);
+		dirtied = true;
+	}
+
 	if (dirtied) {
-		if (!is_default && lqe->lqe_is_default) {
-			LQUOTA_DEBUG(lqe, "the qid %llu has been set quota"
-				     " explicitly, clear the default flag",
-				     lqe->lqe_id.qid_uid);
-
-			qmt_lqe_clear_default(lqe);
-		}
-
 		if (!is_updated) {
 			/* write new quota settings to disk */
 			rc = qmt_glb_write(env, th, lqe, LQUOTA_BUMP_VER, &ver);
