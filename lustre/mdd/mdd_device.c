@@ -376,6 +376,8 @@ static int llog_changelog_cancel(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static struct llog_operations changelog_orig_logops;
+
 static int
 mdd_changelog_write_header(const struct lu_env *env, struct mdd_device *mdd,
 			   int markerflags);
@@ -440,7 +442,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
 	obd->obd_lvfs_ctxt.dt = mdd->mdd_bottom;
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CHANGELOG_ORIG_CTXT,
-			obd, &llog_common_cat_ops);
+			obd, &changelog_orig_logops);
 	if (rc) {
 		CERROR("%s: changelog llog setup failed: rc = %d\n",
 		       obd->obd_name, rc);
@@ -473,7 +475,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 
 	/* setup user changelog */
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CHANGELOG_USER_ORIG_CTXT,
-			obd, &llog_common_cat_ops);
+			obd, &changelog_orig_logops);
 	if (rc) {
 		CERROR("%s: changelog users llog setup failed: rc = %d\n",
 		       obd->obd_name, rc);
@@ -735,9 +737,6 @@ int mdd_changelog_write_header(const struct lu_env *env,
 					    rec->cr.cr_namelen);
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;
 	rec->cr.cr_time = cl_time();
-	spin_lock(&mdd->mdd_cl.mc_lock);
-	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-	spin_unlock(&mdd->mdd_cl.mc_lock);
 
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	LASSERT(ctxt);
@@ -2007,6 +2006,9 @@ static int __init mdd_init(void)
 	rc = lu_kmem_init(mdd_caches);
 	if (rc)
 		return rc;
+
+	changelog_orig_logops = llog_common_cat_ops;
+	changelog_orig_logops.lop_write_rec = mdd_changelog_write_rec;
 
 	rc = class_register_type(&mdd_obd_device_ops, NULL, false, NULL,
 				 LUSTRE_MDD_NAME, &mdd_device_type);

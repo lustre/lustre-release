@@ -14133,6 +14133,34 @@ test_160j() {
 }
 run_test 160j "client can be umounted  while its chanangelog is being used"
 
+test_160k() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
+	mkdir -p $DIR/$tdir/1/1
+
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User '$cl_user' not found in changelog_users"
+#define OBD_FAIL_MDS_CHANGELOG_REORDER 0x15d
+	do_facet mds1 $LCTL set_param fail_loc=0x8000015d fail_val=3
+	rmdir $DIR/$tdir/1/1 & sleep 1
+	mkdir $DIR/$tdir/2
+	touch $DIR/$tdir/2/2
+	rm -rf $DIR/$tdir/2
+
+	wait
+	sleep 4
+
+	changelog_dump | grep rmdir || error "rmdir not recorded"
+
+	rm -rf $DIR/$tdir
+	changelog_deregister
+}
+run_test 160k "Verify that changelog records are not lost"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
