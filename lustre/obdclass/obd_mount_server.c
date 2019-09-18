@@ -1101,7 +1101,7 @@ static int server_stop_servers(int lsiflags)
 	LASSERTF(type, "Server flags %d, obd %s\n", lsiflags,
 		 obd ? obd->obd_name : "NULL");
 
-	type_last = (type->typ_refcnt == 1);
+	type_last = (atomic_read(&type->typ_refcnt) == 1);
 
 	class_put_type(type);
 	if (obd != NULL && type_last) {
@@ -1367,6 +1367,10 @@ static int server_start_targets(struct super_block *sb)
 	/* hold a type reference and put it at server_stop_servers */
 	type = class_get_type(IS_MDT(lsi) ?
 			      LUSTRE_MDT_NAME : LUSTRE_OST_NAME);
+	if (!type) {
+		mutex_unlock(&server_start_lock);
+		GOTO(out_stop_service, rc = -ENODEV);
+	}
 	lsi->lsi_server_started = 1;
 	mutex_unlock(&server_start_lock);
 	if (OBD_FAIL_PRECHECK(OBD_FAIL_OBD_STOP_MDS_RACE) &&

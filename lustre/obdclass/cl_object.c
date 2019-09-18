@@ -48,7 +48,6 @@
 
 #include <linux/list.h>
 #include <libcfs/libcfs.h>
-/* class_put_type() */
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_fid.h>

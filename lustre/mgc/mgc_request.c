@@ -928,7 +928,7 @@ static int mgc_cleanup(struct obd_device *obd)
 
         /* COMPAT_146 - old config logs may have added profiles we don't
            know about */
-        if (obd->obd_type->typ_refcnt <= 1)
+	if (atomic_read(&obd->obd_type->typ_refcnt) <= 1)
                 /* Only for the last mgc */
                 class_del_profiles();
 

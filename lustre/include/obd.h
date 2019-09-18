@@ -106,9 +106,8 @@ struct obd_type {
 #ifdef HAVE_SERVER_SUPPORT
 	bool			 typ_sym_filter;
 #endif
-	int			 typ_refcnt;
+	atomic_t		 typ_refcnt;
 	struct lu_device_type	*typ_lu;
-	spinlock_t		 obd_type_lock;
 	struct kobject		 typ_kobj;
 };
 #define typ_name typ_kobj.name
