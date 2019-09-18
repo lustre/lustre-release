@@ -729,6 +729,9 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
 
 	LCONSOLE_INFO("osd-ldiskfs create tunables for %s\n", name);
 
+	/* put reference taken by class_search_type */
+	kobject_put(&type->typ_kobj);
+
 	osd->od_dt_dev.dd_ktype.default_attrs = ldiskfs_attrs;
 	rc = dt_tunables_init(&osd->od_dt_dev, type, name,
 			      lprocfs_osd_obd_vars);

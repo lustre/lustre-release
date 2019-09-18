@@ -1887,8 +1887,6 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_fid_alloc	= osp_fid_alloc,
 };
 
-static struct obd_type *sym;
-
 /**
  * Initialize OSP module.
  *
@@ -1903,6 +1901,7 @@ static struct obd_type *sym;
  */
 static int __init osp_init(void)
 {
+	struct obd_type *sym;
 	int rc;
 
 	rc = lu_kmem_init(osp_caches);
@@ -1925,7 +1924,7 @@ static int __init osp_init(void)
 	}
 
 	/* create "osc" entry for compatibility purposes */
-	sym = class_add_symlinks(LUSTRE_OSC_NAME, false);
+	sym = class_add_symlinks(LUSTRE_OSC_NAME, true);
 	if (IS_ERR(sym)) {
 		rc = PTR_ERR(sym);
 		/* does real "osc" already exist ? */
@@ -1944,8 +1943,18 @@ static int __init osp_init(void)
  */
 static void __exit osp_exit(void)
 {
-	if (!IS_ERR_OR_NULL(sym))
+	struct obd_type *sym = class_search_type(LUSTRE_OSC_NAME);
+
+	/* if this was never fully initialized by the osc layer
+	 * then we are responsible for freeing this obd_type
+	 */
+	if (sym) {
+		/* final put if we manage this obd type */
+		if (sym->typ_sym_filter)
+			kobject_put(&sym->typ_kobj);
+		/* put reference taken by class_search_type */
 		kobject_put(&sym->typ_kobj);
+	}
 
 	class_unregister_type(LUSTRE_LWP_NAME);
 	class_unregister_type(LUSTRE_OSP_NAME);

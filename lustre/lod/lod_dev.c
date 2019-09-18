@@ -2166,10 +2166,9 @@ static struct obd_ops lod_obd_device_ops = {
 	.o_pool_del     = lod_pool_del,
 };
 
-static struct obd_type *sym;
-
 static int __init lod_init(void)
 {
+	struct obd_type *sym;
 	int rc;
 
 	rc = lu_kmem_init(lod_caches);
@@ -2197,8 +2196,18 @@ static int __init lod_init(void)
 
 static void __exit lod_exit(void)
 {
-	if (!IS_ERR_OR_NULL(sym))
+	struct obd_type *sym = class_search_type(LUSTRE_LOV_NAME);
+
+	/* if this was never fully initialized by the lov layer
+	 * then we are responsible for freeing this obd_type
+	 */
+	if (sym) {
+		/* final put if we manage this obd type */
+		if (sym->typ_sym_filter)
+			kobject_put(&sym->typ_kobj);
+		/* put reference taken by class_search_type */
 		kobject_put(&sym->typ_kobj);
+	}
 
 	class_unregister_type(LUSTRE_LOD_NAME);
 	lu_kmem_fini(lod_caches);

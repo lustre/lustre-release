@@ -702,6 +702,9 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 	LASSERT(type != NULL);
 	LASSERT(obd  != NULL);
 
+	/* put reference taken by class_search_type */
+	kobject_put(&type->typ_kobj);
+
 	mdd->mdd_ktype.default_attrs = mdd_attrs;
 	mdd->mdd_ktype.release = mdd_sysfs_release;
 	mdd->mdd_ktype.sysfs_ops = &lustre_sysfs_ops;

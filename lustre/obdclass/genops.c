@@ -46,13 +46,11 @@
 #include <lustre_disk.h>
 #include <lustre_kernelcomm.h>
 
-static DEFINE_SPINLOCK(obd_types_lock);
-static LIST_HEAD(obd_types);
 DEFINE_RWLOCK(obd_dev_lock);
 static struct obd_device *obd_devs[MAX_OBD_DEVICES];
 
 static struct kmem_cache *obd_device_cachep;
-
+static struct kobj_type class_ktype;
 static struct workqueue_struct *zombie_wq;
 
 static void obd_zombie_export_add(struct obd_export *exp);
@@ -98,30 +96,26 @@ static void obd_device_free(struct obd_device *obd)
 
 struct obd_type *class_search_type(const char *name)
 {
-	struct list_head *tmp;
-	struct obd_type *type;
+	struct kobject *kobj = kset_find_obj(lustre_kset, name);
 
-	spin_lock(&obd_types_lock);
-	list_for_each(tmp, &obd_types) {
-		type = list_entry(tmp, struct obd_type, typ_chain);
-		if (strcmp(type->typ_name, name) == 0) {
-			spin_unlock(&obd_types_lock);
-			return type;
-		}
-	}
-	spin_unlock(&obd_types_lock);
+	if (kobj && kobj->ktype == &class_ktype)
+		return container_of(kobj, struct obd_type, typ_kobj);
+
+	kobject_put(kobj);
 	return NULL;
 }
 EXPORT_SYMBOL(class_search_type);
 
 struct obd_type *class_get_type(const char *name)
 {
-        struct obd_type *type = class_search_type(name);
+	struct obd_type *type;
 
+	type = class_search_type(name);
 #ifdef HAVE_MODULE_LOADING_SUPPORT
         if (!type) {
                 const char *modname = name;
 
+#ifdef HAVE_SERVER_SUPPORT
 		if (strcmp(modname, "obdfilter") == 0)
 			modname = "ofd";
 
@@ -130,6 +124,7 @@ struct obd_type *class_get_type(const char *name)
 
 		if (!strncmp(modname, LUSTRE_MDS_NAME, strlen(LUSTRE_MDS_NAME)))
 			modname = LUSTRE_MDT_NAME;
+#endif /* HAVE_SERVER_SUPPORT */
 
 		if (!request_module("%s", modname)) {
 			CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
@@ -145,6 +140,11 @@ struct obd_type *class_get_type(const char *name)
 		type->typ_refcnt++;
 		try_module_get(type->typ_dt_ops->o_owner);
 		spin_unlock(&type->obd_type_lock);
+		/* class_search_type() returned a counted reference,
+		 * but we don't need that count any more as
+		 * we have one through typ_refcnt.
+		 */
+		kobject_put(&type->typ_kobj);
 	}
 	return type;
 }
@@ -162,19 +162,11 @@ static void class_sysfs_release(struct kobject *kobj)
 {
 	struct obd_type *type = container_of(kobj, struct obd_type, typ_kobj);
 
-#ifdef HAVE_SERVER_SUPPORT
-	if (type->typ_sym_filter)
-		type->typ_debugfs_entry = NULL;
-#endif
 	debugfs_remove_recursive(type->typ_debugfs_entry);
 	type->typ_debugfs_entry = NULL;
 
 	if (type->typ_lu)
 		lu_device_type_fini(type->typ_lu);
-
-	spin_lock(&obd_types_lock);
-	list_del(&type->typ_chain);
-	spin_unlock(&obd_types_lock);
 
 #ifdef CONFIG_PROC_FS
 	if (type->typ_name && type->typ_procroot)
@@ -198,20 +190,17 @@ struct obd_type *class_add_symlinks(const char *name, bool enable_proc)
 {
 	struct dentry *symlink;
 	struct obd_type *type;
-	struct kobject *kobj;
 	int rc;
 
-	kobj = kset_find_obj(lustre_kset, name);
-	if (kobj) {
-		kobject_put(kobj);
+	type = class_search_type(name);
+	if (type) {
+		kobject_put(&type->typ_kobj);
 		return ERR_PTR(-EEXIST);
 	}
 
 	OBD_ALLOC(type, sizeof(*type));
 	if (!type)
 		return ERR_PTR(-ENOMEM);
-
-	INIT_LIST_HEAD(&type->typ_chain);
 
 	type->typ_kobj.kset = lustre_kset;
 	rc = kobject_init_and_add(&type->typ_kobj, &class_ktype,
@@ -256,20 +245,13 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 	/* sanity check */
 	LASSERT(strnlen(name, CLASS_MAX_NAME) < CLASS_MAX_NAME);
 
-        if (class_search_type(name)) {
+	type = class_search_type(name);
+	if (type) {
 #ifdef HAVE_SERVER_SUPPORT
-		if (strcmp(name, LUSTRE_LOV_NAME) == 0 ||
-		    strcmp(name, LUSTRE_OSC_NAME) == 0) {
-			struct kobject *kobj;
-
-			kobj = kset_find_obj(lustre_kset, name);
-			if (kobj) {
-				type = container_of(kobj, struct obd_type,
-						    typ_kobj);
-				goto dir_exist;
-			}
-		}
+		if (type->typ_sym_filter)
+			goto dir_exist;
 #endif /* HAVE_SERVER_SUPPORT */
+		kobject_put(&type->typ_kobj);
                 CDEBUG(D_IOCTL, "Type %s already registered\n", name);
                 RETURN(-EEXIST);
         }
@@ -278,7 +260,6 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
         if (type == NULL)
 		RETURN(-ENOMEM);
 
-	INIT_LIST_HEAD(&type->typ_chain);
 	type->typ_kobj.kset = lustre_kset;
 	kobject_init(&type->typ_kobj, &class_ktype);
 #ifdef HAVE_SERVER_SUPPORT
@@ -298,8 +279,11 @@ dir_exist:
 	spin_lock_init(&type->obd_type_lock);
 
 #ifdef HAVE_SERVER_SUPPORT
-	if (type->typ_sym_filter)
+	if (type->typ_sym_filter) {
+		type->typ_sym_filter = false;
+		kobject_put(&type->typ_kobj);
 		goto setup_ldt;
+	}
 #endif
 #ifdef CONFIG_PROC_FS
 	if (enable_proc && !type->typ_procroot) {
@@ -335,10 +319,6 @@ setup_ldt:
 			GOTO(failed, rc);
 	}
 
-	spin_lock(&obd_types_lock);
-	list_add(&type->typ_chain, &obd_types);
-	spin_unlock(&obd_types_lock);
-
 	RETURN(0);
 
 failed:
@@ -351,6 +331,7 @@ EXPORT_SYMBOL(class_register_type);
 int class_unregister_type(const char *name)
 {
         struct obd_type *type = class_search_type(name);
+	int rc = 0;
         ENTRY;
 
         if (!type) {
@@ -364,12 +345,16 @@ int class_unregister_type(const char *name)
                 /* Remove ops, but leave the name for debugging */
                 OBD_FREE_PTR(type->typ_dt_ops);
                 OBD_FREE_PTR(type->typ_md_ops);
-                RETURN(-EBUSY);
+		GOTO(out_put, rc = -EBUSY);
         }
 
+	/* Put the final ref */
+	kobject_put(&type->typ_kobj);
+out_put:
+	/* Put the ref returned by class_search_type() */
 	kobject_put(&type->typ_kobj);
 
-	RETURN(0);
+	RETURN(rc);
 } /* class_unregister_type */
 EXPORT_SYMBOL(class_unregister_type);
 

@@ -99,7 +99,6 @@ struct obd_info {
 };
 
 struct obd_type {
-	struct list_head	 typ_chain;
 	struct obd_ops		*typ_dt_ops;
 	struct md_ops		*typ_md_ops;
 	struct proc_dir_entry	*typ_procroot;

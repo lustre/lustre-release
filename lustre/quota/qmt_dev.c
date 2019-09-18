@@ -259,6 +259,9 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	type = class_search_type(LUSTRE_QMT_NAME);
 	LASSERT(type != NULL);
 
+	/* put reference taken by class_search_type */
+	kobject_put(&type->typ_kobj);
+
 	/* register proc directory associated with this qmt */
 	qmt->qmt_proc = lprocfs_register(qmt->qmt_svname, type->typ_procroot,
 					 NULL, NULL);

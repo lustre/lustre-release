@@ -1110,6 +1110,9 @@ static int server_stop_servers(int lsiflags)
 		rc = class_manual_cleanup(obd);
 	}
 
+	/* put reference taken by class_search_type */
+	kobject_put(&type->typ_kobj);
+
 	mutex_unlock(&server_start_lock);
 
 	RETURN(rc);

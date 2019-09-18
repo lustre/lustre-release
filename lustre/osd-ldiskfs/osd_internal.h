@@ -55,7 +55,7 @@
 
 /* LUSTRE_OSD_NAME */
 #include <obd.h>
-/* class_register_type(), class_unregister_type(), class_get_type() */
+/* class_register_type(), class_unregister_type() */
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <dt_object.h>
