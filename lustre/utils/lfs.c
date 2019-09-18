@@ -2424,14 +2424,14 @@ new_comp:
 		if (lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-count' can't be "
 				"specified with Data-on-MDT component: %lld\n",
-				(long long)lsa->lsa_stripe_count);
+				lsa->lsa_stripe_count);
 			errno = EINVAL;
 			return -1;
 		}
 		if (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-size' can't be "
 				"specified with Data-on-MDT component: %llu\n",
-				(unsigned long long)lsa->lsa_stripe_size);
+				lsa->lsa_stripe_size);
 			errno = EINVAL;
 			return -1;
 		}
@@ -2445,7 +2445,7 @@ new_comp:
 		if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-offset' can't be "
 				"specified with Data-on-MDT component: %lld\n",
-				(long long)lsa->lsa_stripe_off);
+				lsa->lsa_stripe_off);
 			errno = EINVAL;
 			return -1;
 		}
@@ -2460,7 +2460,7 @@ new_comp:
 		rc = llapi_layout_pattern_set(layout, lsa->lsa_pattern);
 		if (rc) {
 			fprintf(stderr, "Set stripe pattern %#llx failed. %s\n",
-				(unsigned long long)lsa->lsa_pattern,
+				lsa->lsa_pattern,
 				strerror(errno));
 			return rc;
 		}
@@ -2470,7 +2470,7 @@ new_comp:
 		rc = llapi_layout_pattern_set(layout, lsa->lsa_pattern);
 		if (rc) {
 			fprintf(stderr, "Set stripe pattern %#llx failed. %s\n",
-				(unsigned long long)lsa->lsa_pattern,
+				lsa->lsa_pattern,
 				strerror(errno));
 			return rc;
 		}
@@ -2493,7 +2493,7 @@ new_comp:
 	rc = llapi_layout_stripe_count_set(layout, lsa->lsa_stripe_count);
 	if (rc) {
 		fprintf(stderr, "Set stripe count %lld failed: %s\n",
-			(long long)lsa->lsa_stripe_count, strerror(errno));
+			lsa->lsa_stripe_count, strerror(errno));
 		return rc;
 	}
 
@@ -2519,7 +2519,7 @@ new_comp:
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
 		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
 			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
-				(long long)lsa->lsa_stripe_count,
+				lsa->lsa_stripe_count,
 				lsa->lsa_nr_tgts);
 			errno = EINVAL;
 			return -1;
@@ -3763,8 +3763,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			    lsa.lsa_stripe_count != lsa.lsa_nr_tgts) {
 				fprintf(stderr,
 					"error: %s: stripe count %lld doesn't match the number of MDTs: %d\n",
-					progname,
-					(long long)lsa.lsa_stripe_count,
+					progname, lsa.lsa_stripe_count,
 					lsa.lsa_nr_tgts);
 				free(lmu);
 				goto usage_error;
@@ -3821,8 +3820,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			    lsa.lsa_nr_tgts != lsa.lsa_stripe_count) {
 				fprintf(stderr,
 					"error: %s: stripe count %lld doesn't match the number of OSTs: %d\n",
-					argv[0],
-					(long long)lsa.lsa_stripe_count,
+					argv[0], lsa.lsa_stripe_count,
 					lsa.lsa_nr_tgts);
 				free(param);
 				goto usage_error;
@@ -5870,7 +5868,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		    lsa.lsa_stripe_count != lsa.lsa_nr_tgts) {
 			fprintf(stderr,
 				"error: %s: stripe count %lld doesn't match the number of MDTs: %d\n",
-				argv[0], (long long)lsa.lsa_stripe_count,
+				argv[0], lsa.lsa_stripe_count,
 				lsa.lsa_nr_tgts);
 			free(param);
 			return CMD_HELP;
