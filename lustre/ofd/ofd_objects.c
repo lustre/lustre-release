@@ -664,10 +664,6 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 	if (!ofd_object_exists(fo))
 		GOTO(out, rc = -ENOENT);
 
-	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
-		tgt_fmd_update(info->fti_exp, &fo->ofo_header.loh_fid,
-			       info->fti_xid);
-
 	/* VBR: version recovery check */
 	rc = ofd_version_get_check(info, fo);
 	if (rc)
@@ -699,6 +695,11 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 	ofd_write_lock(env, fo);
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);
+
+	/* serialize vs ofd_commitrw_write() */
+	if (la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME))
+		tgt_fmd_update(info->fti_exp, &fo->ofo_header.loh_fid,
+			       info->fti_xid);
 
 	rc = dt_attr_set(env, ofd_object_child(fo), la, th);
 	if (rc)

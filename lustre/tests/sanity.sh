@@ -4266,7 +4266,7 @@ test_39j() {
 			error "mtime is lost on close: $mtime2, " \
 			      "should be $mtime1"
 
-		cancel_lru_locks $OSC
+		cancel_lru_locks
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 	lctl set_param fail_loc=0
@@ -4295,7 +4295,7 @@ test_39k() {
 		[ "$mtime2" = $TEST_39_MTIME ] || \
 			error "mtime is lost on close: $mtime2, should be $TEST_39_MTIME"
 
-		cancel_lru_locks osc
+		cancel_lru_locks
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
 }

@@ -1097,6 +1097,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 		   int niocount, struct niobuf_local *lnb,
 		   unsigned long granted, int old_rc)
 {
+	struct ofd_thread_info *info = ofd_info(env);
 	struct filter_export_data *fed = &exp->exp_filter_data;
 	struct ofd_object *fo;
 	struct dt_object *o;
@@ -1205,7 +1206,9 @@ retry:
 			GOTO(out_unlock, rc);
 	}
 
-	if (la->la_valid) {
+	/* Don't update timestamps if this write is older than a
+	 * setattr which modifies the timestamps. b=10150 */
+	if (la->la_valid && tgt_fmd_check(exp, fid, info->fti_xid)) {
 		rc = dt_attr_set(env, o, la, th);
 		if (rc)
 			GOTO(out_unlock, rc);
@@ -1297,13 +1300,8 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	if (cmd == OBD_BRW_WRITE) {
 		struct lu_nodemap *nodemap;
 
-		/* Don't update timestamps if this write is older than a
-		 * setattr which modifies the timestamps. b=10150 */
-		valid = OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID;
-		if (tgt_fmd_check(exp, fid, info->fti_xid))
-			valid |= OBD_MD_FLATIME | OBD_MD_FLMTIME |
-				 OBD_MD_FLCTIME;
-
+		valid = OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID |
+			OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 		la_from_obdo(&info->fti_attr, oa, valid);
 
 		rc = ofd_commitrw_write(env, exp, ofd, fid, &info->fti_attr,
