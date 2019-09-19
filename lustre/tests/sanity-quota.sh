@@ -138,6 +138,7 @@ quota_scan() {
 			xargs stat 2>/dev/null)
 	fi
 
+	is_project_quota_supported || return 0
 	if [ "$local_ugp" == "a" -o "$local_ugp" == "p" ]; then
 		$LFS quota -v -p $TSTPRJID $DIR
 		log "Files for project ($TSTPRJID):"
