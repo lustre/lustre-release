@@ -56,10 +56,18 @@ cleanup_lnet() {
 	unload_modules
 }
 
+do_lnetctl() {
+	echo "$LNETCTL $@"
+	$LNETCTL "$@"
+}
+
 TESTNS='test_ns'
-RUN_NS="ip netns exec $TESTNS"
 FAKE_IF="test1pg"
 FAKE_IP="10.1.2.3"
+do_ns() {
+	echo "ip netns exec $TESTNS $@"
+	ip netns exec $TESTNS "$@"
+}
 
 setup_netns() {
 	cleanup_netns
@@ -67,8 +75,8 @@ setup_netns() {
 	ip netns add $TESTNS
 	ip link add 'test1pl' type veth peer name $FAKE_IF netns $TESTNS
 	ip link set 'test1pl' up
-	$RUN_NS ip addr add "${FAKE_IP}/31" dev $FAKE_IF
-	$RUN_NS ip link set $FAKE_IF up
+	do_ns ip addr add "${FAKE_IP}/31" dev $FAKE_IF
+	do_ns ip link set $FAKE_IF up
 }
 
 cleanup_netns() {
@@ -84,7 +92,7 @@ setup_netns
 load_lnet
 
 test_1() {
-	$LNETCTL lnet configure
+	do_lnetctl lnet configure
 }
 run_test 1 "configure lnet with lnetctl"
 
@@ -94,7 +102,7 @@ run_test 1 "configure lnet with lnetctl"
 test_2() {
 	cleanup_lnet || exit 1
 	load_lnet "networks=\"\""
-	$RUN_NS $LNETCTL lnet configure --all || exit 1
+	do_ns $LNETCTL lnet configure --all || exit 1
 	$LNETCTL net show --net tcp | grep -q "nid: ${FAKE_IP}@tcp$"
 }
 run_test 2 "load lnet w/o module option, configure in a non-default namespace"
@@ -102,7 +110,7 @@ run_test 2 "load lnet w/o module option, configure in a non-default namespace"
 test_3() {
 	cleanup_lnet || exit 1
 	load_lnet "networks=tcp($FAKE_IF)"
-	$RUN_NS $LNETCTL lnet configure --all || exit 1
+	do_ns $LNETCTL lnet configure --all || exit 1
 	$LNETCTL net show --net tcp | grep -q "nid: ${FAKE_IP}@tcp$"
 }
 run_test 3 "load lnet using networks module options in a non-default namespace"
@@ -110,7 +118,7 @@ run_test 3 "load lnet using networks module options in a non-default namespace"
 test_4() {
 	cleanup_lnet || exit 1
 	load_lnet "networks=\"\" ip2nets=\"tcp0($FAKE_IF) ${FAKE_IP}\""
-	$RUN_NS $LNETCTL lnet configure --all || exit 1
+	do_ns $LNETCTL lnet configure --all || exit 1
 	$LNETCTL net show | grep -q "nid: ${FAKE_IP}@tcp$"
 }
 run_test 4 "load lnet using ip2nets in a non-default namespace"
@@ -121,8 +129,8 @@ run_test 4 "load lnet using ip2nets in a non-default namespace"
 test_5() {
 	cleanup_lnet || exit 1
 	load_lnet
-	$LNETCTL lnet configure || exit 1
-	$RUN_NS $LNETCTL net add --net tcp0 --if $FAKE_IF
+	do_lnetctl lnet configure || exit 1
+	do_ns $LNETCTL net add --net tcp0 --if $FAKE_IF
 }
 run_test 5 "add a network using an interface in the non-default namespace"
 
