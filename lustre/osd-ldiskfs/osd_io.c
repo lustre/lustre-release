@@ -1363,10 +1363,10 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			 * lnb->lnb_rc == 0, so it's easy to detect later. */
 			break;
 
-		if (isize < lnb[i].lnb_file_offset + lnb[i].lnb_len)
-			lnb[i].lnb_rc = isize - lnb[i].lnb_file_offset;
-		else
-			lnb[i].lnb_rc = lnb[i].lnb_len;
+		/* instead of looking if we go beyong isize, send complete
+		 * pages all the time
+		 */
+		lnb[i].lnb_rc = lnb[i].lnb_len;
 
 		/* Bypass disk read if fail_loc is set properly */
 		if (OBD_FAIL_CHECK(OBD_FAIL_OST_FAKE_RW))

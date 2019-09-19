@@ -2281,9 +2281,6 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 			break;
 		}
 	}
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_READ_SIZE) &&
-	    nob != cfs_fail_val)
-		rc = -E2BIG;
 
 	if (body->oa.o_valid & OBD_MD_FLCKSUM) {
 		u32 flag = body->oa.o_valid & OBD_MD_FLFLAGS ?

@@ -986,10 +986,9 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		lnb[i].lnb_rc = lnb[i].lnb_len;
 
 		if (lnb[i].lnb_file_offset + lnb[i].lnb_len >= eof) {
+			/* send complete pages all the time */
 			if (eof <= lnb[i].lnb_file_offset)
 				lnb[i].lnb_rc = 0;
-			else
-				lnb[i].lnb_rc = eof - lnb[i].lnb_file_offset;
 
 			/* all subsequent rc should be 0 */
 			while (++i < npages)

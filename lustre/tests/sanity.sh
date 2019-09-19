@@ -17330,21 +17330,6 @@ test_245() {
 }
 run_test 245 "check mdc connection flag/data: multiple modify RPCs"
 
-test_246() { # LU-7371
-	remote_ost_nodsh && skip "remote OST with nodsh"
-	[ $OST1_VERSION -lt $(version_code 2.7.62) ] &&
-		skip "Need OST version >= 2.7.62"
-
-	do_facet ost1 $LCTL set_param fail_val=4095
-#define OBD_FAIL_OST_READ_SIZE		0x234
-	do_facet ost1 $LCTL set_param fail_loc=0x234
-	$LFS setstripe $DIR/$tfile -i 0 -c 1
-	dd if=/dev/zero of=$DIR/$tfile bs=4095 count=1 > /dev/null 2>&1
-	cancel_lru_locks $FSNAME-OST0000
-	dd if=$DIR/$tfile of=/dev/null bs=1048576 || error "Read failed"
-}
-run_test 246 "Read file of size 4095 should return right length"
-
 cleanup_247() {
 	local submount=$1
 
