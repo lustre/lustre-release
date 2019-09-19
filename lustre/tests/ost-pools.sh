@@ -278,14 +278,14 @@ test_1i() {
 run_test 1i "pool_new should fail if poolname and fs-name are missing"
 
 test_1j() {
-	create_pool ${FSNAME},$POOL
+	do_facet mgs lctl pool_new ${FSNAME},$POOL
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even if poolname format was wrong"
 }
 run_test 1j "pool_new should fail if poolname format is wrong"
 
 test_1k() {
-	create_pool ${FSNAME}/$POOL
+	do_facet mgs lctl pool_new ${FSNAME}/$POOL
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even if poolname format was wrong"
 }
