@@ -384,7 +384,7 @@ test_0b() {
 		# LU-11022 - remove mirror by pool name
 		local=cnt cnt=$($LFS getstripe $tf | grep archive | wc -l)
 		[ "$cnt" != "1" ] && error "unexpected mirror count $cnt"
-		$LFS mirror split --pool archive -d $tf || error "delete mirror"
+		$LFS mirror delete --pool archive $tf || error "delete mirror"
 		cnt=$($LFS getstripe $tf | grep archive | wc -l)
 		[ "$cnt" != "0" ] && error "mirror count after removal: $cnt"
 	fi
@@ -1812,7 +1812,7 @@ test_44() {
 	verify_flr_state $tf "wp"
 
 	# disallow destroying the last non-stale mirror
-	! $LFS mirror split --mirror-id 1 -d $tf > /dev/null 2>&1 ||
+	! $LFS mirror delete --mirror-id 1 $tf > /dev/null 2>&1 ||
 		error "destroying mirror 1 should fail"
 
 	# synchronize all mirrors of the file
@@ -2312,7 +2312,7 @@ test_203() {
 	#create 2 mirrors
 	$LFS mirror create -N2 -c1 $tf || error "create FLR file $tf"
 	#delete first mirror
-	$LFS mirror split --mirror-id=1 -d $tf || error "delete first mirror"
+	$LFS mirror delete --mirror-id=1 $tf || error "delete first mirror"
 
 	$LFS getstripe $tf
 	local old_id=$($LFS getstripe --mirror-id=2 -I $tf)

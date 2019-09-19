@@ -27,9 +27,9 @@ Progressive File Layout (PFL) (see \fBlfs-setstripe\fR(1)).
 If \fIsetstripe_options\fR are not specified,
 then the stripe options inherited from the previous component will be used.
 If \fIvictim_file\fR exists, then the
-command will split the layout from that file and use it as a mirror added to the
-mirrored file. After the command is finished, the victim file will be removed.
-The \fIsetstripe_options\fR cannot be specified with
+command will merge the layout from that file as a mirror added to the
+mirrored file. After the command is finished, the victim file will be
+removed.  The \fIsetstripe_options\fR cannot be specified with
 \fB\-f\fR <\fIvictim_file\fR> option in one command line.
 .br
 If \fIvictim_file\fR is specified, the utility will verify that the file contents
@@ -56,7 +56,7 @@ from the previous component will be used. This option cannot be specified with
 \fB\-f\fR <\fIvictim_file\fR> option.
 .TP
 .BR \-f\fR\ <\fIvictim_file\fR>
-The layout of \fIvictim_file\fR will be split and used as a mirror added to the
+The layout of \fIvictim_file\fR will be merged as a mirror added to the
 mirrored file. This option cannot be specified with \fIsetstripe_options\fR
 option.
 .TP
@@ -99,7 +99,7 @@ stripe size of 16MB and use OSTs in the archive pool.
 .B lfs mirror extend --no-verify -N -f /mnt/lustre/file2 -N -f /mnt/lustre/file3
 .B /mnt/lustre/file1
 .in
-Split the layouts from /mnt/lustre/file2 and /mnt/lustre/file3, which contain
+Merge the layouts from /mnt/lustre/file2 and /mnt/lustre/file3, which contain
 the same data as /mnt/lustre/file1, use the layouts as mirrors and add them to
 /mnt/lustre/file1 without verification.
 .SH AUTHOR
@@ -108,6 +108,7 @@ The \fBlfs mirror extend\fR command is part of the Lustre filesystem.
 .BR lfs (1),
 .BR lfs-setstripe (1),
 .BR lfs-mirror-create (1),
+.BR lfs-mirror-delete (1),
 .BR lfs-mirror-split (1),
 .BR lfs-mirror-resync (1),
 .BR lfs-mirror-verify (1)

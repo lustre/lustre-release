@@ -1,0 +1,50 @@
+.TH LFS-MIRROR-DELETE 1 2019-09-15 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs mirror delete \- delete a specified mirror from an existing mirrored file
+.SH SYNOPSIS
+.B lfs mirror delete
+{\fB\-\-mirror\-id\fR <\fImirror_id\fR> | \fB\-\-component\-id\fR|\fB\-I\fR
+<\fIcomp_id\fR> |\fB\-\-pool\fR <\fIpool\fR>}
+<\fImirrored_file\fR>
+.SH DESCRIPTION
+This command deletes a mirror with mirror ID <\fImirror_id\fR> or containing
+a component with <\fIcomp_id\fR> or containing a component on <\fIpool\fR>
+out of a mirrored file specified by the path name \fImirrored_file\fR.
+.br
+If \fImirrored_file\fR has only one mirror existing after split, it will be
+converted to a regular non-mirrored file.
+.br
+If the original \fImirrored_file\fR is not a mirrored file, then the command
+will return an error.
+.br
+If the specified mirror is the last non-stale mirror, then the command will
+return an error.
+.SH OPTIONS
+.TP
+.BR \-\-mirror\-id\fR\ <\fImirror_id\fR>
+The numerical unique identifier for a mirror. The mirror ID is unique within a
+mirrored file and is automatically assigned at file creation or extension time.
+It can be fetched by \fBlfs getstripe\fR command (see \fBlfs(1)\fR).
+.TP
+.BR \-\-comp\-id\fR\ <\fIcomp_id\fR>
+The numerical unique identifier for a component contained within a mirror.
+.TP
+.BR \-\-pool\fR\ <\fIpool\fR>
+The pool storing a component contained within a mirror.
+.SH EXAMPLES
+.TP
+.B lfs mirror delete --mirror-id 2 /mnt/lustre/file1
+Delete the mirror with ID 2 of /mnt/lustre/file1.
+.TP
+.B lfs mirror delete --pool ssd /mnt/lustre/file1
+Split a mirror on pool ssd out of /mnt/lustre/file1 and destroy it.
+.SH AUTHOR
+The \fBlfs mirror split\fR command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-setstripe (1),
+.BR lfs-mirror-create (1),
+.BR lfs-mirror-extend (1),
+.BR lfs-mirror-resync (1),
+.BR lfs-mirror-split (1),
+.BR lfs-mirror-verify (1)

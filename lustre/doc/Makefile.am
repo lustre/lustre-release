@@ -52,6 +52,7 @@ MANFILES =					\
 	lfs_migrate.1				\
 	lfs-migrate.1				\
 	lfs-mirror-create.1			\
+	lfs-mirror-delete.1			\
 	lfs-mirror-extend.1			\
 	lfs-mirror-resync.1			\
 	lfs-mirror-split.1			\

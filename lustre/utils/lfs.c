@@ -147,6 +147,7 @@ enum setstripe_origin {
 	SO_MIRROR_CREATE,
 	SO_MIRROR_EXTEND,
 	SO_MIRROR_SPLIT,
+	SO_MIRROR_DELETE,
 };
 static int lfs_setstripe_internal(int argc, char **argv,
 				  enum setstripe_origin opc);
@@ -170,6 +171,10 @@ static inline int lfs_mirror_extend(int argc, char **argv)
 static inline int lfs_mirror_split(int argc, char **argv)
 {
 	return lfs_setstripe_internal(argc, argv, SO_MIRROR_SPLIT);
+}
+static inline int lfs_mirror_delete(int argc, char **argv)
+{
+	return lfs_setstripe_internal(argc, argv, SO_MIRROR_DELETE);
 }
 
 /* Setstripe and migrate share mostly the same parameters */
@@ -288,19 +293,23 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Create a mirrored file.\n"
 		"usage: lfs mirror create "
 		"<--mirror-count|-N[mirror_count]> "
-		"[setstripe options] ... <filename|directory>\n"
+		"[setstripe options] ... <filename|directory> ...\n"
 	  MIRROR_CREATE_HELP },
+	{ .pc_name = "delete", .pc_func = lfs_mirror_delete,
+	  .pc_help = "delete a mirror from a file.\n"
+		"usage: lfs mirror delete {--comp-id|-I <comp_id>|-p <pool>} <mirrored_file> ...\n"
+	},
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
 		"usage: lfs mirror extend "
 		"<--mirror-count|-N[mirror_count]> [--no-verify] "
-		"[setstripe options|-f <victim_file>] ... <filename>\n"
+		"[setstripe options|-f <victim_file>] ... <filename> ...\n"
 	  MIRROR_EXTEND_HELP },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
 	"usage: lfs mirror split <--mirror-id <mirror_id> |\n"
 	"\t		<--component-id|-I <comp_id>|-p <pool>> [--destroy|-d]\n"
-	"\t		[-f <new_file>] <mirrored file>\n"
+	"\t		[-f <new_file>] <mirrored_file> ...\n"
 	"\tmirror_id:   The numerical unique identifier for a mirror. It\n"
 	"\t             can be fetched by lfs getstripe command.\n"
 	"\tcomp_id:     Unique component ID within a mirror.\n"
@@ -3113,6 +3122,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	migrate_mode = (opc == SO_MIGRATE);
 	mirror_mode = (opc == SO_MIRROR_CREATE || opc == SO_MIRROR_EXTEND);
 	setstripe_mode = (opc == SO_SETSTRIPE);
+	if (opc == SO_MIRROR_DELETE) {
+		delete = 1;
+		mirror_flags = MF_DESTROY;
+	}
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
@@ -3715,11 +3728,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		goto usage_error;
 	}
 
-	if (!comp_del && !comp_set && (opc != SO_MIRROR_SPLIT) &&
-	    comp_id != 0) {
+	if (!comp_del && !comp_set && opc != SO_MIRROR_SPLIT &&
+	    opc != SO_MIRROR_DELETE && comp_id != 0) {
 		fprintf(stderr,
-		"%s %s: option -I can only be used with --component-del or --component-set or lfs mirror split\n",
-			progname, argv[0]);
+			"%s: option -I can only be used with --component-del or --component-set or lfs mirror split\n",
+			progname);
 		goto usage_error;
 	}
 
@@ -3874,11 +3887,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		} else if (opc == SO_MIRROR_EXTEND) {
 			result = mirror_extend(fname, mirror_list,
 					       mirror_flags);
-		} else if (opc == SO_MIRROR_SPLIT) {
+		} else if (opc == SO_MIRROR_SPLIT || opc == SO_MIRROR_DELETE) {
 			if (!mirror_id && !comp_id && !lsa.lsa_pool_name) {
 				fprintf(stderr,
-			"%s %s: no mirror id or component id or pool name"
-			" is specified\n", progname, argv[0]);
+					"%s: no mirror specified to delete from '%s'\n",
+					progname, fname);
 				goto usage_error;
 			}
 			if (lsa.lsa_pool_name)
