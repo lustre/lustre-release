@@ -1123,8 +1123,8 @@ static inline void kiblnd_dma_unmap_sg(struct ib_device *dev,
 
 #ifndef HAVE_IB_SG_DMA_ADDRESS
 #include <linux/scatterlist.h>
-#define ib_sg_dma_address(dev, sg)	sg_dma_address((dev), (sg))
-#define ib_sg_dma_len(dev, sg)		sg_dma_len((dev), (sg))
+#define ib_sg_dma_address(dev, sg)	sg_dma_address(sg)
+#define ib_sg_dma_len(dev, sg)		sg_dma_len(sg)
 #endif
 
 static inline __u64 kiblnd_sg_dma_address(struct ib_device *dev,
