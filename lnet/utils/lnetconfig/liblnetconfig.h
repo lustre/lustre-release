@@ -512,32 +512,6 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 			   struct cYAML **err_rc);
 
 /*
- * lustre_lnet_config_peer_nid
- *   Add a peer nid to a peer with primary nid pnid. If no pnid is given
- *   then the first nid in the nid list becomes the primary nid for
- *   a newly created peer.
- *   Otherwise if pnid is provided and it's unique then a new peer is
- *   created with pnid as the primary NID and the nids in the nid list as
- *   secondary nids.
- *   If any of the peers nids provided in with exception to the pnid is
- *   not unique the operation fails. Some peer nids might have already
- *   been added. It's the role of the caller of this API to remove the
- *   added NIDs if they wish.
- *
- *     pnid - Primary NID of the peer
- *     nid - list of nids to add
- *     num_nids - number of nids in the nid array
- *     mr - true if this peer is MR capable.
- *     ip2nets - true if a list of nid expressions are given to configure
- *     multiple peers
- *     seq_no - sequence number of the command
- *     err_rc - YAML strucutre of the resultant return code.
- */
-int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
-				bool mr, bool ip2nets, int seq_no,
-				struct cYAML **err_rc);
-
-/*
  * lustre_lnet_config_peer_nidlist
  *  Add a peer NID to a peer with primary NID pnid. If a pnid is not provided
  *  then the first NID in the NID list becomes the primary NID for a newly
@@ -560,23 +534,6 @@ int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
 int lustre_lnet_config_peer_nidlist(char *pnid, lnet_nid_t *lnet_nidlist,
 				    int num_nids, bool mr, int seq_no,
 				    struct cYAML **err_rc);
-
-/*
- * lustre_lnet_del_peer_nid
- *  Delete the nids given in the nid list from the peer with primary NID
- *  pnid. If pnid is NULL or it doesn't identify a peer the operation
- *  fails and no change happens to the system.
- *  The operation is aborted on the first NID that fails to be deleted.
- *
- *     pnid - Primary NID of the peer
- *     nid - list of nids to add
- *     num_nids - number of nids in the nid array
- *     ip2nets - used to specify a range of nids
- *     seq_no - sequence number of the command
- *     err_rc - YAML strucutre of the resultant return code.
- */
-int lustre_lnet_del_peer_nid(char *pnid, char **nid, int num_nids,
-			     bool ip2nets, int seq_no, struct cYAML **err_rc);
 
 /*
  * lustre_lnet_del_peer_nidlist
@@ -741,23 +698,5 @@ int lustre_lnet_parse_interfaces(char *intf_str,
  */
 int lustre_lnet_parse_nidstr(char *nidstr, lnet_nid_t *lnet_nidlist,
 			     int max_nids, char *err_str);
-
-/*
- * lustre_lnet_parse_nids
- *	Parse a set of nids into a locally allocated array and return the
- *	pointer of the array to the caller. The caller is responsible for
- *	freeing the array. If an initial array is provided then copy over
- *	the contents of that array into the new array and append to it the
- *	new content.
- *	The nids can be of the form "nid [,nid, nid, nid]"
- *		nids: nids string to be parsed
- *		array: initial array of content
- *		size: num of elements in the array
- *		out_array: [OUT] new allocated array.
- *	Returns size of array
- *		sets the out_array to NULL on failure.
- */
-int lustre_lnet_parse_nids(char *nids, char **array, int size,
-			   char ***out_array);
 
 #endif /* LIB_LNET_CONFIG_API_H */
