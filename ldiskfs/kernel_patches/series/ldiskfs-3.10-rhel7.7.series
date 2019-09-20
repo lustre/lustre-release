@@ -37,3 +37,4 @@ rhel7/ext4-export-orphan-add.patch
 rhel7/ext4-include-terminating-u32-in-size-of-xattr-entries-when-expanding-inodes.patch
 rhel7.2/ext4-export-mb-stream-allocator-variables.patch
 rhel7/ext4-optimize-ext4_find_delalloc_range-in-nodelalloc.patch
+rhel7.7/ext4-fix-project-with-unpatched-kernel.patch
