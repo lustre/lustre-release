@@ -20,8 +20,10 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2014, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -31,14 +33,13 @@
  *
  * Author: You Feng <youfeng@clusterfs.com>
  */
-#include <limits.h>
+
 #include <mpi.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <asm/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -83,12 +84,11 @@ void end(char *str)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (verbose > 0 && rank == 0) {
 		gettimeofday(&t2, NULL);
-
-		elapsed = t2.tv_sec - t1.tv_sec +
-			(float)(t2.tv_usec - t1.tv_usec) / 1000000;
+		elapsed = (t2.tv_sec + ((float)t2.tv_usec / 1000000)) -
+			(t1.tv_sec + ((float)t1.tv_usec / 1000000));
 		if (elapsed >= 60) {
-			printf("%s:\tFinished %-15s(%.2f min)\n",
-			       timestamp(), str, elapsed / 60);
+			printf("%s:\tFinished %-15s(%.2f min)\n", timestamp(),
+			       str, elapsed / 60);
 		} else {
 			printf("%s:\tFinished %-15s(%.3f sec)\n",
 			       timestamp(), str, elapsed);
@@ -150,29 +150,25 @@ void lp_gethostname(void)
 	}
 }
 
-/* This function does not FAIL if the requested "name" does not exit.
+/*
+ * This function does not FAIL if the requested "name" does not exit.
  * This is just to clean up any files or directories left over from
  * previous runs
  */
 void remove_file_or_dir(char *name)
 {
 	struct stat statbuf;
-	char errmsg[MAX_FILENAME_LEN + 20];
 
 	if (stat(name, &statbuf) != -1) {
 		if (S_ISREG(statbuf.st_mode)) {
 			printf("stale file found\n");
-			if (unlink(name) == -1) {
-				sprintf(errmsg, "unlink of %s", name);
-				FAIL(errmsg);
-			}
+			if (unlink(name) == -1)
+				FAILF("unlink of %s", name);
 		}
 		if (S_ISDIR(statbuf.st_mode)) {
 			printf("stale directory found\n");
-			if (rmdir(name) == -1) {
-				sprintf(errmsg, "rmdir of %s", name);
-				FAIL(errmsg);
-			}
+			if (rmdir(name) == -1)
+				FAILF("rmdir of %s", name);
 		}
 	}
 }
@@ -180,7 +176,6 @@ void remove_file_or_dir(char *name)
 void create_file(char *name, long filesize, int fill)
 {
 	static char filename[MAX_FILENAME_LEN];
-	char errmsg[MAX_FILENAME_LEN + 20];
 	char buf[1024 * 8];
 	char c = 'A' + size;
 	int fd, rc;
@@ -191,75 +186,60 @@ void create_file(char *name, long filesize, int fill)
 	if (rank == 0) {
 		sprintf(filename, "%s/%s", testdir, name);
 		remove_file_or_dir(filename);
-		if ((fd = creat(filename, FILEMODE)) == -1) {
-			sprintf(errmsg, "create of file %s", filename);
-			FAIL(errmsg);
-		}
+		fd = creat(filename, FILEMODE);
+		if (fd < 0)
+			FAILF("create of file %s", filename);
+
 		if (filesize > 0) {
 			if (lseek(fd, filesize - 1, SEEK_SET) == -1) {
 				close(fd);
-				sprintf(errmsg, "lseek of file %s", filename);
-				FAIL(errmsg);
+				FAILF("lseek of file %s", filename);
 			}
 			if (write(fd, &zero, 1) == -1) {
 				close(fd);
-				sprintf(errmsg, "write of file %s", filename);
-				FAIL(errmsg);
+				FAILF("write of file %s", filename);
 			}
 		}
 		if (filesize > 0 && fill) {
 			if (lseek(fd, 0, SEEK_SET) == -1) {
 				close(fd);
-				sprintf(errmsg, "lseek of file %s", filename);
-				FAIL(errmsg);
+				FAILF("lseek of file %s", filename);
 			}
 			memset(buf, c, 1024);
 			while (left > 0) {
-				if ((rc = write(fd, buf,
-						left > (1024 * 8) ? (1024 * 8) : left)) == -1) {
+				rc = write(fd, buf, MAX(left, 8192));
+				if (rc < 0) {
 					close(fd);
-					sprintf(errmsg, "write of file %s",
-						filename);
-					FAIL(errmsg);
+					FAILF("write of file %s", filename);
 				}
 				left -= rc;
 			}
 		}
-		if (close(fd) == -1) {
-			sprintf(errmsg, "close of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (close(fd) == -1)
+			FAILF("close of file %s", filename);
 	}
 }
 
 void check_stat(char *filename, struct stat *state, struct stat *old_state)
 {
-	char errmsg[MAX_FILENAME_LEN + 20];
-
-	if (stat(filename, state) == -1) {
-		sprintf(errmsg, "stat of file %s", filename);
-		FAIL(errmsg);
-	}
+	if (stat(filename, state) == -1)
+		FAILF("stat of file %s", filename);
 
 	if (memcmp(state, old_state, sizeof(struct stat)) != 0) {
 		errno = 0;
-		sprintf(errmsg, LP_STAT_FMT, LP_STAT_ARGS);
-		FAIL(errmsg);
+		FAILF(LP_STAT_FMT, LP_STAT_ARGS);
 	}
 }
 
 void remove_file(char *name)
 {
 	char filename[MAX_FILENAME_LEN];
-	char errmsg[MAX_FILENAME_LEN + 20];
 
 	/* Process 0 remove the file(s) */
 	if (rank == 0) {
 		sprintf(filename, "%s/%s", testdir, name);
-		if (unlink(filename) == -1) {
-			sprintf(errmsg, "unlink of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (unlink(filename) == -1)
+			FAILF("unlink of file %s", filename);
 	}
 }
 

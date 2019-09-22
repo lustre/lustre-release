@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2004, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  */
 /*
@@ -37,18 +37,24 @@
 
 #include <linux/lustre/lustre_user.h>
 
-#define FAIL(msg) \
- \
+#define FAILF(fmt, ...) \
 do { \
-        printf("%s: Process %d (%s)\n", timestamp(), rank, hostname); \
-        if (debug) \
-                printf("\tFAILED in %s:%d:%s()\n", __FILE__, __LINE__, __func__); \
-        else \
-                printf("\tFAILED in %s()\n", __func__); \
-        printf("%s", msg); \
-        fflush(stdout); \
-        MPI_Abort(MPI_COMM_WORLD, 1); \
-} while(0)
+	printf("%s: Process %d (%s)\n", timestamp(), rank, hostname); \
+	if (debug) \
+		printf("\tFAILED in %s:%d:%s()\n", \
+		       __FILE__, __LINE__, __func__); \
+	else \
+		printf("\tFAILED in %s()\n", __func__); \
+	printf(fmt, ##__VA_ARGS__); \
+	fflush(stdout); \
+	MPI_Abort(MPI_COMM_WORLD, 1); \
+} while (0)
+
+#define FAIL(msg)	FAILF("%s", (msg))
+
+#ifndef MAX
+#define MAX(a, b)	((a) > (b) ? (b) : (a))
+#endif
 
 #define FILEMODE S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH
 #define MAX_FILENAME_LEN 512
