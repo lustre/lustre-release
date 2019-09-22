@@ -2458,10 +2458,6 @@ test_27D() {
 	local ost_list=$(seq $first_ost $ost_step $last_ost)
 	local ost_range="$first_ost $last_ost $ost_step"
 
-	if ! combined_mgs_mds ; then
-		mount_mgs_client
-	fi
-
 	test_mkdir $DIR/$tdir
 	pool_add $POOL || error "pool_add failed"
 	pool_add_targets $POOL $ost_range || error "pool_add_targets failed"
@@ -2481,10 +2477,6 @@ test_27D() {
 		error "llapi_layout_test failed"
 
 	destroy_test_pools || error "destroy test pools failed"
-
-	if ! combined_mgs_mds ; then
-		umount_mgs_client
-	fi
 }
 run_test 27D "validate llapi_layout API"
 
@@ -2815,11 +2807,6 @@ test_27L() {
 
 	local POOL=${POOL:-$TESTNAME}
 
-	if ! combined_mgs_mds ; then
-		mount_mgs_client
-		trap umount_mgs_client EXIT
-	fi
-
 	pool_add $POOL || error "pool_add failed"
 
 	lfs pool_list $MOUNT | grep -Fx "${FSNAME}.${POOL}" ||
@@ -2963,6 +2950,16 @@ test_27M() {
 	[ "$pool" = "" ] || error "(13) pool found: $pool"
 }
 run_test 27M "test O_APPEND striping"
+
+test_27N() {
+	combined_mgs_mds && skip "needs separate MGS/MDT"
+
+	pool_add $TESTNAME || error "pool_add failed"
+	do_facet mgs "$LCTL pool_list $FSNAME" |
+		grep -Fx "${FSNAME}.${TESTNAME}" ||
+		error "lctl pool_list on MGS failed"
+}
+run_test 27N "lctl pool_list on separate MGS gives correct pool name"
 
 # createtest also checks that device nodes are created and
 # then visible correctly (#2091)
@@ -15113,10 +15110,6 @@ test_200() {
 	local subdir=$test_path/subdir
 	local rc=0
 
-	if ! combined_mgs_mds ; then
-		mount_mgs_client
-	fi
-
 	while : ; do
 		# former test_200a test_200b
 		pool_add $POOL				|| { rc=$? ; break; }
@@ -15150,9 +15143,6 @@ test_200() {
 
 	destroy_test_pools
 
-	if ! combined_mgs_mds ; then
-		umount_mgs_client
-	fi
 	return $rc
 }
 run_test 200 "OST pools"
@@ -15834,10 +15824,6 @@ test_220() { #LU-325
 
 	$LFS df -i
 
-	if ! combined_mgs_mds ; then
-		mount_mgs_client
-	fi
-
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=-1
 	#define OBD_FAIL_OST_ENOINO              0x229
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x229
@@ -15874,10 +15860,6 @@ test_220() { #LU-325
 		error "$LCTL pool_destroy $FSNAME.$TESTNAME failed"
 	echo "unlink $MDSOBJS files @$next_id..."
 	unlinkmany $DIR/$tdir/f $MDSOBJS || error "unlinkmany failed"
-
-	if ! combined_mgs_mds ; then
-		umount_mgs_client
-	fi
 }
 run_test 220 "preallocated MDS objects still used if ENOSPC from OST"
 
@@ -17558,9 +17540,6 @@ test_253() {
 	wait_delete_completed
 	mkdir $DIR/$tdir
 
-	if ! combined_mgs_mds ; then
-		mount_mgs_client
-	fi
 	pool_add $TESTNAME || error "Pool creation failed"
 	pool_add_targets $TESTNAME 0 || error "Pool add targets failed"
 
@@ -17605,10 +17584,6 @@ test_253() {
 
 	if (( oa_status != 0 )); then
 		error "Object allocation still disable after rm"
-	fi
-
-	if ! combined_mgs_mds ; then
-		umount_mgs_client
 	fi
 }
 run_test 253 "Check object allocation limit"
@@ -20532,9 +20507,6 @@ test_406() {
 	local def_stripe_size=$($LFS getstripe -S $MOUNT)
 	local test_pool=$TESTNAME
 
-	if ! combined_mgs_mds ; then
-		mount_mgs_client
-	fi
 	pool_add $test_pool || error "pool_add failed"
 	pool_add_targets $test_pool 0 $(($OSTCOUNT - 1)) 1 ||
 		error "pool_add_targets failed"
@@ -20587,10 +20559,6 @@ test_406() {
 	local f=$DIR/$tdir/$tfile
 	pool_remove_all_targets $test_pool $f
 	pool_remove $test_pool $f
-
-	if ! combined_mgs_mds ; then
-		umount_mgs_client
-	fi
 }
 run_test 406 "DNE support fs default striping"
 

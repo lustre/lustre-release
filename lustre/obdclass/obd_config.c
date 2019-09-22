@@ -1854,55 +1854,6 @@ parse_out:
 }
 EXPORT_SYMBOL(class_config_parse_llog);
 
-static struct lcfg_type_data {
-	__u32	 ltd_type;
-	char	*ltd_name;
-	char	*ltd_bufs[4];
-} lcfg_data_table[] = {
-	{ LCFG_ATTACH, "attach", { "type", "UUID", "3", "4" } },
-	{ LCFG_DETACH, "detach", { "1", "2", "3", "4" } },
-	{ LCFG_SETUP, "setup", { "UUID", "node", "options", "failout" } },
-	{ LCFG_CLEANUP, "cleanup", { "1", "2", "3", "4" } },
-	{ LCFG_ADD_UUID, "add_uuid", { "node", "2", "3", "4" }  },
-	{ LCFG_DEL_UUID, "del_uuid", { "1", "2", "3", "4" }  },
-	{ LCFG_MOUNTOPT, "new_profile", { "name", "lov", "lmv", "4" }  },
-	{ LCFG_DEL_MOUNTOPT, "del_mountopt", { "1", "2", "3", "4" } , },
-	{ LCFG_SET_TIMEOUT, "set_timeout", { "parameter", "2", "3", "4" }  },
-	{ LCFG_SET_UPCALL, "set_upcall", { "1", "2", "3", "4" }  },
-	{ LCFG_ADD_CONN, "add_conn", { "node", "2", "3", "4" }  },
-	{ LCFG_DEL_CONN, "del_conn", { "1", "2", "3", "4" }  },
-	{ LCFG_LOV_ADD_OBD, "add_osc", { "ost", "index", "gen", "UUID" } },
-	{ LCFG_LOV_DEL_OBD, "del_osc", { "1", "2", "3", "4" } },
-	{ LCFG_PARAM, "conf_param", { "parameter", "value", "3", "4" } },
-	{ LCFG_MARKER, "marker", { "1", "2", "3", "4" } },
-	{ LCFG_LOG_START, "log_start", { "1", "2", "3", "4" } },
-	{ LCFG_LOG_END, "log_end", { "1", "2", "3", "4" } },
-	{ LCFG_LOV_ADD_INA, "add_osc_inactive", { "1", "2", "3", "4" }  },
-	{ LCFG_ADD_MDC, "add_mdc", { "mdt", "index", "gen", "UUID" } },
-	{ LCFG_DEL_MDC, "del_mdc", { "1", "2", "3", "4" } },
-	{ LCFG_SPTLRPC_CONF, "security", { "parameter", "2", "3", "4" } },
-	{ LCFG_POOL_NEW, "new_pool", { "fsname", "pool", "3", "4" }  },
-	{ LCFG_POOL_ADD, "add_pool", { "fsname", "pool", "ost", "4" } },
-	{ LCFG_POOL_REM, "remove_pool", { "fsname", "pool", "ost", "4" } },
-	{ LCFG_POOL_DEL, "del_pool", { "fsname", "pool", "3", "4" } },
-	{ LCFG_SET_LDLM_TIMEOUT, "set_ldlm_timeout",
-	  { "parameter", "2", "3", "4" } },
-	{ LCFG_SET_PARAM, "set_param", { "parameter", "value", "3", "4" } },
-	{ 0, NULL, { NULL, NULL, NULL, NULL } }
-};
-
-static struct lcfg_type_data *lcfg_cmd2data(__u32 cmd)
-{
-	int i = 0;
-
-	while (lcfg_data_table[i].ltd_type != 0) {
-		if (lcfg_data_table[i].ltd_type == cmd)
-			return &lcfg_data_table[i];
-		i++;
-	}
-	return NULL;
-}
-
 /**
  * Parse config record and output dump in supplied buffer.
  *
