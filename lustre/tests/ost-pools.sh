@@ -418,10 +418,11 @@ test_2e() {
 
 	create_pool_nofail $POOL
 
-	TGT="$FSNAME-OST0000_UUID "
+	TGT="$FSNAME-OST0000_UUID"
 	do_facet mgs lctl pool_add $FSNAME.$POOL $TGT
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL |
-		sort -u | tr '\n' ' ' " "$TGT" || error "Add to pool failed"
+	wait_update_facet $SINGLEMDS \
+		"lctl pool_list $FSNAME.$POOL | sed '1d'" "$TGT" ||
+		error "Add $TGT to $FSNAME.$POOL failed"
 	RESULT=$(do_facet mgs \
 		"LOCALE=C $LCTL pool_add $FSNAME.$POOL $TGT 2>&1")
 	RC=$?

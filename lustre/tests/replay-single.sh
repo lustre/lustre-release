@@ -3124,10 +3124,6 @@ test_85b() { #bug 16774
 
 	lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
 
-	if ! combined_mgs_mds ; then
-		mount_mgs_client
-	fi
-
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	for i in $(seq 100); do
@@ -3154,10 +3150,6 @@ test_85b() { #bug 16774
 	count2=$(lctl get_param \
 		 -n ldlm.namespaces.*OST0000*$addr.lock_unused_count)
 	echo "after recovery: unused locks count = $count2"
-
-	if ! combined_mgs_mds ; then
-		umount_mgs_client
-	fi
 
 	if [ $count2 -ge $count ]; then
 		error "unused locks are not canceled"

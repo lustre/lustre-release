@@ -3189,6 +3189,37 @@ static long llog_last_index(char *logname)
 	return rc;
 }
 
+static char *get_llog_event_name(__u32 cmd)
+{
+	struct lcfg_type_data *data;
+
+	data = lcfg_cmd2data(cmd);
+	if (data)
+		return data->ltd_name;
+	return NULL;
+}
+
+static char *get_event_filter(__u32 cmd)
+{
+	char *event_name;
+	char *filter = NULL;
+	int len;
+
+	event_name = get_llog_event_name(cmd);
+	if (event_name) {
+		/* 9 bytes for "event: , " */
+		len = 9 + strlen(event_name);
+		filter = malloc(len + 1);
+		if (!filter)
+			return NULL;
+		memset(filter, 0, len + 1);
+		snprintf(filter, len, "event: %s, ", event_name);
+		return filter;
+	}
+
+	return NULL;
+}
+
 /**
  * Callback to search ostname in llog
  * - { index: 23, event: attach, device: lustre-OST0000-osc, type: osc,
@@ -3209,18 +3240,29 @@ static int llog_search_ost_cb(const char *record, void *data)
 {
 	char *ostname = data;
 	char ost_filter[MAX_STRING_SIZE] = {'\0'};
+	char *add_osc, *del_osc, *setup, *cleanup;
+
+	add_osc = get_event_filter(LCFG_LOV_ADD_OBD);
+	del_osc = get_event_filter(LCFG_LOV_DEL_OBD);
+	setup = get_event_filter(LCFG_SETUP);
+	cleanup = get_event_filter(LCFG_CLEANUP);
+	if (!add_osc || !del_osc || !setup || !cleanup)
+		return -ENOMEM;
 
 	if (ostname && ostname[0])
 		snprintf(ost_filter, sizeof(ost_filter), " %s,", ostname);
 
 	if (strstr(record, ost_filter)) {
-		if (strstr(record, "event: add_osc, ") ||
-		    strstr(record, "event: setup, "))
+		if (strstr(record, add_osc) || strstr(record, setup))
 			return 1;
-		if (strstr(record, "event: del_osc, ") ||
-		    strstr(record, "event: cleanup, "))
+		if (strstr(record, del_osc) || strstr(record, cleanup))
 			return -ENOENT;
 	}
+
+	free(add_osc);
+	free(del_osc);
+	free(setup);
+	free(cleanup);
 
 	return 0;
 }
@@ -3281,8 +3323,18 @@ static int llog_search_pool_cb(const char *record, void *data)
 {
 	struct llog_pool_data *lpd = data;
 	char pool_filter[MAX_STRING_SIZE] = "";
+	char *new_pool, *del_pool, *add_pool, *rem_pool;
 	char *found = NULL;
-	int fs_pool_len = 0;
+	int fs_pool_len = 0, rc = 0;
+
+	new_pool = get_event_filter(LCFG_POOL_NEW);
+	del_pool = get_event_filter(LCFG_POOL_DEL);
+	add_pool = get_event_filter(LCFG_POOL_ADD);
+	rem_pool = get_event_filter(LCFG_POOL_REM);
+	if (!new_pool || !del_pool || !add_pool || !rem_pool) {
+		rc = -ENOMEM;
+		goto out;
+	}
 
 	fs_pool_len = 16 + strlen(lpd->lpd_fsname) + strlen(lpd->lpd_poolname);
 	snprintf(pool_filter, fs_pool_len + 1, "fsname: %s, pool: %s",
@@ -3292,37 +3344,50 @@ static int llog_search_pool_cb(const char *record, void *data)
 	found = strstr(record, pool_filter);
 	if (found &&
 	    (found[fs_pool_len] == ' ' || found[fs_pool_len] == ',')) {
-		if (strstr(record, "event: new_pool,")) {
+		if (strstr(record, new_pool)) {
 			lpd->lpd_pool_exists = true;
-			return 1;
+			rc = 1;
+			goto out;
 		}
-		if (strstr(record, "event: del_pool,")) {
+		if (strstr(record, del_pool)) {
 			lpd->lpd_pool_exists = false;
-			return -ENOENT;
+			rc = -ENOENT;
+			goto out;
 		}
 
 		if (lpd->lpd_cmd_type == LCFG_POOL_NEW ||
 		    lpd->lpd_cmd_type == LCFG_POOL_DEL) {
-			if (strstr(record, "event: add_pool,"))
+			if (strstr(record, add_pool))
 				lpd->lpd_ost_num++;
-			if (strstr(record, "event: remove_pool,"))
+			if (strstr(record, rem_pool))
 				lpd->lpd_ost_num--;
 		} else if (lpd->lpd_ostname && lpd->lpd_ostname[0]) {
 			if (strstr(record, lpd->lpd_ostname)) {
 				lpd->lpd_pool_exists = true;
-				if (strstr(record, "event: add_pool,")) {
+				if (strstr(record, add_pool)) {
 					lpd->lpd_ost_num = 1;
-					return 1;
+					rc = 1;
+					goto out;
 				}
-				if (strstr(record, "event: remove_pool,")) {
+				if (strstr(record, rem_pool)) {
 					lpd->lpd_ost_num = 0;
-					return -ENOENT;
+					rc = -ENOENT;
+					goto out;
 				}
 			}
 		}
 	}
+out:
+	if (new_pool)
+		free(new_pool);
+	if (del_pool)
+		free(del_pool);
+	if (add_pool)
+		free(add_pool);
+	if (rem_pool)
+		free(rem_pool);
 
-	return 0;
+	return rc;
 }
 
 /* Search pool and its ost in llog
@@ -4519,15 +4584,192 @@ err:
 	return 0;
 }
 
-static int extract_fsname_poolname(const char *arg, char *fsname,
+struct llog_pool_name {
+	char lpn_name[UUID_MAX];
+	struct list_head lpn_list;
+};
+
+struct llog_pool_list_data {
+	char lpld_fsname[LUSTRE_MAXFSNAME + 1];
+	char lpld_poolname[LOV_MAXPOOLNAME + 1];
+	bool lpld_exists;
+	struct list_head lpld_list_head;
+};
+
+/**
+ * Callback to list pool information in llog
+ * - { index: 74, event: new_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
+ * - { index: 77, event: add_pool, device: tfs-clilov, fsname: tfs, pool: tmp,
+ *     ost: tfs-OST0000_UUID }
+ * - { index: 224, event: remove_pool, device: tfs-clilov, fsname: tfs,
+ *     pool: tmp, ost: tfs-OST0003_UUID }
+ * - { index: 227, event: del_pool, device: tfs-clilov, fsname: tfs, pool: tmp }
+ *
+ * \param record[in]	pointer to llog record
+ * \param data[in]	pointer to struct llog_pool_list_data
+ *
+ * \retval		0 on success
+ *			<0 on error
+ */
+static int llog_poollist_cb(const char *record, void *data)
+{
+	struct llog_pool_list_data *lpld = data;
+	char pool_filter[MAX_STRING_SIZE] = "";
+	char *new_record, *del_record, *del_pool, *found;
+	char type[10] = "";
+	int filter_len, rc = 0;
+
+	filter_len = snprintf(pool_filter, sizeof(pool_filter), " fsname: %s,",
+			      lpld->lpld_fsname);
+	if (lpld->lpld_poolname[0] == '\0') {
+		new_record = get_event_filter(LCFG_POOL_NEW);
+		del_record = get_event_filter(LCFG_POOL_DEL);
+		strncpy(type, " pool: ", sizeof(type));
+	} else {
+		filter_len += snprintf(pool_filter + filter_len,
+				       sizeof(pool_filter) - filter_len,
+				       " pool: %s", lpld->lpld_poolname);
+		new_record = get_event_filter(LCFG_POOL_ADD);
+		del_record = get_event_filter(LCFG_POOL_REM);
+		strncpy(type, " ost: ", sizeof(type));
+	}
+	del_pool = get_event_filter(LCFG_POOL_DEL);
+
+	if (!new_record || !del_record || !del_pool) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	found = strstr(record, pool_filter);
+	if (found &&
+	    (found[filter_len] == ' ' || found[filter_len] == ',')) {
+		struct llog_pool_name *tmp = NULL;
+		struct list_head *head = &lpld->lpld_list_head;
+		char *name;
+		int name_len, type_len = strlen(type);
+
+		lpld->lpld_exists = true;
+		if (strstr(record, new_record)) {
+			name = strstr(record, type);
+			/* 2 bytes for " }" */
+			name_len = strlen(name) - type_len - 2;
+			if (name_len <= 0 || name_len > sizeof(tmp->lpn_name))
+				return -EINVAL;
+			tmp = malloc(sizeof(struct llog_pool_name));
+			if (tmp == NULL) {
+				rc = -ENOMEM;
+				goto out;
+			}
+			memset(tmp, 0, sizeof(struct llog_pool_name));
+			strncpy(tmp->lpn_name, name + type_len, name_len);
+			list_add_tail(&tmp->lpn_list, &lpld->lpld_list_head);
+		} else if (strstr(record, del_record)) {
+			name = strstr(record, type);
+			name_len = strlen(name) - type_len - 2;
+			list_for_each_entry(tmp, head, lpn_list) {
+				if (strncmp(tmp->lpn_name, name + type_len,
+					    name_len) == 0 &&
+					    tmp->lpn_name[name_len] == '\0') {
+					list_del(&tmp->lpn_list);
+					free(tmp);
+					break;
+				}
+			}
+		}
+		/* verify if the specified pool still exists */
+		if (lpld->lpld_poolname[0] && strstr(record, del_pool))
+			lpld->lpld_exists = false;
+	}
+out:
+	if (new_record)
+		free(new_record);
+	if (del_record)
+		free(del_record);
+	if (del_pool)
+		free(del_pool);
+
+	return rc;
+}
+
+/**
+ * List pool information by config log
+ *
+ * \param fsname[in]	pointer to filesystem name
+ * \param poolname[in]	pointer to pool name
+ *
+ * \retval		0 on success
+ *			< 0 on error
+ */
+int llog_poollist(char *fsname, char *poolname)
+{
+	char logname[MAX_OBD_NAME] = {'\0'};
+	struct llog_pool_list_data lpld;
+	struct llog_pool_name *tmp;
+	struct list_head *head;
+	int rc = 0;
+
+	if (fsname && fsname[0] == '\0')
+		fsname = NULL;
+	if (!fsname)
+		return -EINVAL;
+
+	memset(&lpld, 0, sizeof(lpld));
+	INIT_LIST_HEAD(&lpld.lpld_list_head);
+	lpld.lpld_exists = false;
+	strncpy(lpld.lpld_fsname, fsname, sizeof(lpld.lpld_fsname) - 1);
+	if (poolname && poolname[0])
+		strncpy(lpld.lpld_poolname, poolname,
+			sizeof(lpld.lpld_poolname) - 1);
+	snprintf(logname, sizeof(logname), "%s-client", fsname);
+	rc = jt_llog_print_iter(logname, 0, -1, llog_poollist_cb, &lpld, false);
+
+	if (poolname && poolname[0])
+		printf("Pool: %s.%s\n", fsname, poolname);
+	else
+		printf("Pools from %s:\n", fsname);
+
+	head = &lpld.lpld_list_head;
+	if (poolname && poolname[0] && !lpld.lpld_exists && list_empty(head))
+		return -ENOENT;
+
+	list_for_each_entry(tmp, head, lpn_list) {
+		if (poolname && poolname[0])
+			printf("%s\n", tmp->lpn_name);
+		else
+			printf("%s.%s\n", fsname, tmp->lpn_name);
+		list_del(&tmp->lpn_list);
+		free(tmp);
+	}
+
+	return rc;
+}
+
+static bool get_pools_path(char *fsname)
+{
+	glob_t path;
+	int rc;
+
+	rc = cfs_get_param_paths(&path, "lov/%s-*/pools", fsname);
+	if (!rc)
+		cfs_free_param_data(&path);
+
+	return (rc == 0);
+}
+
+static int extract_fsname_poolname(char **argv, char *fsname,
 				   char *poolname)
 {
+	char *cmd = argv[0], *param = argv[1];
 	char *ptr;
 	int rc;
 
-	snprintf(fsname, PATH_MAX + 1, "%s", arg);
+	snprintf(fsname, PATH_MAX + 1, "%s", param);
 	ptr = strchr(fsname, '.');
 	if (ptr == NULL) {
+		if (strcmp(cmd, "pool_list") == 0) {
+			poolname = NULL;
+			goto out;
+		}
 		fprintf(stderr, ". is missing in %s\n", fsname);
 		rc = -EINVAL;
 		goto err;
@@ -4555,63 +4797,71 @@ static int extract_fsname_poolname(const char *arg, char *fsname,
 		fprintf(stderr, "poolname cannot be 'none'\n");
 		return -EINVAL;
 	}
+out:
 	return 0;
 
 err:
-	fprintf(stderr, "argument %s must be <fsname>.<poolname>\n", arg);
+	fprintf(stderr, "argument %s must be <fsname>.<poolname>\n", param);
 	return rc;
 }
 
 int jt_pool_cmd(int argc, char **argv)
 {
-        enum lcfg_command_type cmd;
-        char fsname[PATH_MAX + 1];
-        char poolname[LOV_MAXPOOLNAME + 1];
-        char *ostnames_buf = NULL;
-        int i, rc;
-        int *array = NULL, array_sz;
-        struct {
-                int     rc;
-                char   *ostname;
-        } *cmds = NULL;
+	enum lcfg_command_type cmd;
+	char fsname[PATH_MAX + 1];
+	char poolname[LOV_MAXPOOLNAME + 1];
+	char *ostnames_buf = NULL;
+	int i, rc;
+	int *array = NULL, array_sz;
+	struct {
+		int     rc;
+		char   *ostname;
+	} *cmds = NULL;
 
-        switch (argc) {
-        case 0:
-        case 1: return CMD_HELP;
-        case 2: {
-                if (strcmp("pool_new", argv[0]) == 0)
-                        cmd = LCFG_POOL_NEW;
-                else if (strcmp("pool_destroy", argv[0]) == 0)
-                        cmd = LCFG_POOL_DEL;
-                else if (strcmp("pool_list", argv[0]) == 0)
-                         return llapi_poollist(argv[1]);
-                else return CMD_HELP;
+	switch (argc) {
+	case 0:
+	case 1: return CMD_HELP;
+	case 2: {
+		rc = extract_fsname_poolname(argv, fsname, poolname);
+		if (rc)
+			break;
 
-                rc = extract_fsname_poolname(argv[1], fsname, poolname);
-                if (rc)
-                        break;
+		if (strcmp("pool_new", argv[0]) == 0) {
+			cmd = LCFG_POOL_NEW;
+		} else if (strcmp("pool_destroy", argv[0]) == 0) {
+			cmd = LCFG_POOL_DEL;
+		} else if (strcmp("pool_list", argv[0]) == 0) {
+			if (get_pools_path(fsname))
+				return llapi_poollist(argv[1]);
+			if (get_mgs_device() > 0)
+				return llog_poollist(fsname, poolname);
+			fprintf(stderr, "Cannot run pool_list command "
+				"since there is no local MGS/MDT or client\n");
+			return CMD_HELP;
+		} else {
+			return CMD_HELP;
+		}
 
-                rc = pool_cmd(cmd, argv[0], argv[1], fsname, poolname, NULL);
-                if (rc)
-                        break;
+		rc = pool_cmd(cmd, argv[0], argv[1], fsname, poolname, NULL);
+		if (rc)
+			break;
 
-                check_pool_cmd_result(cmd, fsname, poolname, NULL);
-                break;
-        }
-        default: {
-                char format[2*MAX_OBD_NAME];
+		check_pool_cmd_result(cmd, fsname, poolname, NULL);
+		break;
+	}
+	default: {
+		char format[2 * MAX_OBD_NAME];
 
-                if (strcmp("pool_remove", argv[0]) == 0) {
-                        cmd = LCFG_POOL_REM;
-                } else if (strcmp("pool_add", argv[0]) == 0) {
-                        cmd = LCFG_POOL_ADD;
-                } else {
-                        return CMD_HELP;
-                }
+		if (strcmp("pool_remove", argv[0]) == 0)
+			cmd = LCFG_POOL_REM;
+		else if (strcmp("pool_add", argv[0]) == 0)
+			cmd = LCFG_POOL_ADD;
+		else
+			return CMD_HELP;
 
-                rc = extract_fsname_poolname(argv[1], fsname, poolname);
-                if (rc)
-                        break;
+		rc = extract_fsname_poolname(argv, fsname, poolname);
+		if (rc)
+			break;
 
                 for (i = 2; i < argc; i++) {
                         int j;
