@@ -61,7 +61,6 @@ char *testdir = NULL;
 void rw_file(char *name, long stride, unsigned int seed)
 {
 	char filename[MAX_FILENAME_LEN];
-	char errmsg[MAX_FILENAME_LEN+32];
 	char *buf, *o_buf;
 	struct lov_user_md lum = {0};
 	int fd, rc, i, bad = 0, root = 0;
@@ -80,21 +79,15 @@ void rw_file(char *name, long stride, unsigned int seed)
 
 		fd = open(filename, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE,
 			FILEMODE);
-		if (fd == -1) {
-			sprintf(errmsg, "open of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (fd == -1)
+			FAILF("open of file %s", filename);
 
 		rc = ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum);
-		if (rc == -1) {
-			sprintf(errmsg, "ioctl SETSTRIPE of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (rc == -1)
+			FAILF("ioctl SETSTRIPE of file %s", filename);
 
-		if (close(fd) == -1) {
-			sprintf(errmsg, "close of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (close(fd) == -1)
+			FAILF("close of file %s", filename);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -119,69 +112,51 @@ void rw_file(char *name, long stride, unsigned int seed)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	buf = (char *)malloc(stride);
-	if (buf == NULL) {
-		sprintf(errmsg, "malloc of buf with size %ld", stride);
-		FAIL(errmsg);
-	}
+	if (!buf)
+		FAILF("malloc of buf with size %ld", stride);
 
 	if (rank == 0) {
 		fd = open(filename, O_RDWR);
-		if (fd == -1) {
-			sprintf(errmsg, "open of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (fd == -1)
+			FAILF("open of file %s", filename);
 
 		off = 0;
 		fill_stride(buf, stride, 0, off);
 		rc = write(fd, buf, stride);
-		if (rc != stride) {
-			sprintf(errmsg, "write of file %s return %d",
-				filename, rc);
-			FAIL(errmsg);
-		}
-		off += stride;
+		if (rc != stride)
+			FAILF("write of file %s return %d", filename, rc);
 
+		off += stride;
 		while (off < size * stride) {
 			fill_stride(buf, stride, 0x8080808080808080ULL, off);
 			rc = write(fd, buf, stride);
-			if (rc != stride) {
-				sprintf(errmsg, "write of file %s return %d",
-					filename, rc);
-				FAIL(errmsg);
-			}
-
+			if (rc != stride)
+				FAILF("write of file %s return %d",
+				      filename, rc);
 			off += stride;
 		}
 
-		if (close(fd) == -1) {
-			sprintf(errmsg, "close of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (close(fd) == -1)
+			FAILF("close of file %s", filename);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	o_buf = (char *)malloc(stride);
-	if (o_buf == NULL) {
-		sprintf(errmsg, "malloc of o_buf with size %ld", stride);
-		FAIL(errmsg);
-	}
+	if (!o_buf)
+		FAILF("malloc of o_buf with size %ld", stride);
 
 	fd = open(filename, O_RDWR);
-	if (fd == -1) {
-		sprintf(errmsg, "open of file %s", filename);
-		FAIL(errmsg);
-	}
+	if (fd == -1)
+		FAILF("open of file %s", filename);
 
 	off = 0;
 	for (i = 1; i < size; ++i) {
 		if (rank == i) {
 			rc = lseek(fd, off, SEEK_SET);
-			if (rc != off) {
-				sprintf(errmsg, "lseek of file %s return %d",
-					filename, rc);
-				FAIL(errmsg);
-			}
+			if (rc != off)
+				FAILF("lseek of file %s return %d",
+				      filename, rc);
 
 			rc = read(fd, buf, stride);
 			if (rc != stride) {
@@ -189,18 +164,16 @@ void rw_file(char *name, long stride, unsigned int seed)
 					fill_stride(o_buf, rc, i - 1, off);
 					dump_diff(o_buf, buf, rc, off);
 				}
-				sprintf(errmsg, "read of file %s return %d",
-					filename, rc);
-				FAIL(errmsg);
+				FAILF("read of file %s return %d",
+				      filename, rc);
 			}
 
 			fill_stride(o_buf, stride, i - 1, off);
 			if (memcmp(o_buf, buf, stride) != 0) {
 				dump_diff(o_buf, buf, stride, off);
 				errno = 0;
-				sprintf(errmsg, "Error: diff data read from %s",
-					filename);
-				FAIL(errmsg);
+				FAILF("Error: diff data read from %s",
+				      filename);
 			}
 		}
 
@@ -209,29 +182,23 @@ void rw_file(char *name, long stride, unsigned int seed)
 		if (rank == i) {
 			fill_stride(buf, stride, i, off);
 			rc = write(fd, buf, stride);
-			if (rc != stride) {
-				sprintf(errmsg, "write of file %s return %d",
-					filename, rc);
-				FAIL(errmsg);
-			}
+			if (rc != stride)
+				FAILF("write of file %s return %d",
+				      filename, rc);
 		}
 
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
-	if (close(fd) == -1) {
-		sprintf(errmsg, "close of file %s", filename);
-		FAIL(errmsg);
-	}
+	if (close(fd) == -1)
+		FAILF("close of file %s", filename);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (rank == 0) {
 		fd = open(filename, O_RDONLY);
-		if (fd == -1) {
-			sprintf(errmsg, "open of file %s", filename);
-			FAIL(errmsg);
-		}
+		if (fd == -1)
+			FAILF("open of file %s", filename);
 
 		off = 0;
 		for (i = 0; i < size; ++i) {
@@ -241,8 +208,7 @@ void rw_file(char *name, long stride, unsigned int seed)
 					fill_stride(o_buf, rc, i, off);
 					dump_diff(o_buf, buf, rc, off);
 				}
-				sprintf(errmsg, "read of file %s", filename);
-				FAIL(errmsg);
+				FAILF("read of file %s", filename);
 			}
 
 			fill_stride(o_buf, stride, i, off);
@@ -254,9 +220,7 @@ void rw_file(char *name, long stride, unsigned int seed)
 		}
 		if (bad == 1) {
 			errno = 0;
-			sprintf(errmsg, "Error: diff data read from %s",
-				filename);
-			FAIL(errmsg);
+			FAILF("Error: diff data read from %s", filename);
 		}
 	}
 
