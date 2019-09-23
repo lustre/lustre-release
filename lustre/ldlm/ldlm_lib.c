@@ -1223,7 +1223,7 @@ no_export:
 	CDEBUG(D_HA, "%s: connection from %s@%s %st%llu exp %p cur %lld last %lld\n",
 	       target->obd_name, cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
 	       target->obd_recovering ? "recovering/" : "", data->ocd_transno,
-	       export, ktime_get_real_seconds(),
+	       export, ktime_get_seconds(),
 	       export ? export->exp_last_request_time : 0);
 
 	/* If this is the first time a client connects, reset the recovery
@@ -1560,7 +1560,7 @@ static void target_finish_recovery(struct lu_target *lut)
 
 	/* Only log a recovery message when recovery has occurred. */
 	if (obd->obd_recovery_start) {
-		time64_t now = ktime_get_real_seconds();
+		time64_t now = ktime_get_seconds();
 		time64_t elapsed_time;
 
 		elapsed_time = max_t(time64_t, now - obd->obd_recovery_start, 1);
@@ -1590,7 +1590,7 @@ static void target_finish_recovery(struct lu_target *lut)
 	}
 	spin_unlock(&obd->obd_recovery_task_lock);
 
-	obd->obd_recovery_end = ktime_get_real_seconds();
+	obd->obd_recovery_end = ktime_get_seconds();
 
 	/* When recovery finished, cleanup orphans on MDS and OST. */
 	if (obd->obd_type && OBP(obd, postrecov)) {
@@ -1720,9 +1720,10 @@ static void target_start_recovery_timer(struct obd_device *obd)
 		return;
 	}
 
-	delay = ktime_set(obd->obd_recovery_timeout, 0);
-	hrtimer_start(&obd->obd_recovery_timer, delay, HRTIMER_MODE_REL);
-	obd->obd_recovery_start = ktime_get_real_seconds();
+	obd->obd_recovery_start = ktime_get_seconds();
+	delay = ktime_set(obd->obd_recovery_start +
+			  obd->obd_recovery_timeout, 0);
+	hrtimer_start(&obd->obd_recovery_timer, delay, HRTIMER_MODE_ABS);
 	spin_unlock(&obd->obd_dev_lock);
 
 	LCONSOLE_WARN("%s: Will be in recovery for at least %llu:%02llu, or until %d client%s reconnect%s\n",
@@ -1781,14 +1782,14 @@ static void extend_recovery_timer(struct obd_device *obd, time_t dr_timeout,
 		      obd->obd_name, timeout, extend);
 
 	if (obd->obd_recovery_timeout < timeout) {
-		ktime_t now = ktime_get_real();
-		ktime_t end;
+		ktime_t end, now;
 
 		obd->obd_recovery_timeout = timeout;
 		end = ktime_set(obd->obd_recovery_start + timeout, 0);
+		now = ktime_set(ktime_get_seconds(), 0);
 		left_ns = ktime_sub(end, now);
-		hrtimer_forward_now(&obd->obd_recovery_timer, left_ns);
-		left = ktime_divns(left_ns, NSEC_PER_MSEC);
+		hrtimer_start(&obd->obd_recovery_timer, end, HRTIMER_MODE_ABS);
+		left = ktime_divns(left_ns, NSEC_PER_SEC);
 	}
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -2010,7 +2011,7 @@ repeat:
 			last = now;
 		}
 	}
-	if (obd->obd_recovery_start != 0 && ktime_get_real_seconds() >=
+	if (obd->obd_recovery_start != 0 && ktime_get_seconds() >=
 	      (obd->obd_recovery_start + obd->obd_recovery_time_hard)) {
 		__u64 next_update_transno = 0;
 
@@ -2088,6 +2089,7 @@ repeat:
 		return 1;
 	} else if (obd->obd_recovery_expired) {
 		obd->obd_recovery_expired = 0;
+
 		/** If some clients died being recovered, evict them */
 		LCONSOLE_WARN("%s: recovery is timed out, "
 			      "evict stale exports\n", obd->obd_name);
@@ -2676,8 +2678,8 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 	obd->obd_recovery_start = 0;
 	obd->obd_recovery_end = 0;
 
-	hrtimer_init(&obd->obd_recovery_timer, CLOCK_REALTIME,
-		     HRTIMER_MODE_REL);
+	hrtimer_init(&obd->obd_recovery_timer, CLOCK_MONOTONIC,
+		     HRTIMER_MODE_ABS);
 	obd->obd_recovery_timer.function = &target_recovery_expired;
 	target_start_recovery_thread(lut, handler);
 }
@@ -3187,7 +3189,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
                    struct l_wait_info *lwi)
 {
 	struct ptlrpc_request *req = desc->bd_req;
-	time64_t start = ktime_get_real_seconds();
+	time64_t start = ktime_get_seconds();
 	time64_t deadline;
 	int rc = 0;
 
@@ -3236,7 +3238,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		deadline = req->rq_deadline;
 
 	do {
-		time64_t timeoutl = deadline - ktime_get_real_seconds();
+		time64_t timeoutl = deadline - ktime_get_seconds();
 		long timeout_jiffies = timeoutl <= 0 ?
 				       1 : cfs_time_seconds(timeoutl);
 		time64_t rq_deadline;
@@ -3257,7 +3259,7 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		if (deadline > rq_deadline)
 			deadline = rq_deadline;
 	} while (rc == -ETIMEDOUT &&
-		 deadline > ktime_get_real_seconds());
+		 deadline > ktime_get_seconds());
 
 	if (rc == -ETIMEDOUT) {
 		DEBUG_REQ(D_ERROR, req, "timeout on bulk %s after %lld%+llds",
