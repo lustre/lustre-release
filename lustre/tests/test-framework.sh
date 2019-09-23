@@ -441,7 +441,7 @@ version_code() {
 	# split arguments like "1.8.6-wc3" into "1", "8", "6", "wc3"
 	eval set -- $(tr "[:punct:]" " " <<< $*)
 
-	echo -n "$((($1 << 16) | ($2 << 8) | $3))"
+	echo -n "$(((${1:-0} << 16) | (${2:-0} << 8) | ${3:-0}))"
 }
 
 export LINUX_VERSION=$(uname -r | sed -e "s/\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/")
