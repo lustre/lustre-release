@@ -1,0 +1,96 @@
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 388b6bcd..111ac5e1 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1485,6 +1485,8 @@ struct ext4_sb_info {
+ 	struct ratelimit_state s_warning_ratelimit_state;
+ 	struct ratelimit_state s_msg_ratelimit_state;
+ 	struct dax_device *s_daxdev;
++
++	bool s_proj_kernel_supported;
+ };
+ 
+ static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+index e6566eb9..ac0dd4a7 100644
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -4390,6 +4390,17 @@ int ext4_get_projid(struct inode *inode, kprojid_t *projid)
+ {
+ 	struct ext4_super_block *sbi = EXT4_SB(inode->i_sb)->s_es;
+ 
++	/*
++	 * This is tricky and just used to detect whether kernel
++	 * supports project quota, return error to make sure dquot_initialize()
++	 * doesn't do anything except calling this function.
++	 */
++	if (inode->i_ino == EXT4_ROOT_INO &&
++	    !EXT4_SB(inode->i_sb)->s_proj_kernel_supported) {
++		EXT4_SB(inode->i_sb)->s_proj_kernel_supported = true;
++		return -EINVAL;
++	}
++
+ 	if (!EXT4_HAS_RO_COMPAT_FEATURE(inode->i_sb, EXT4_FEATURE_RO_COMPAT_PROJECT) &&
+ 	    !sbi->s_prj_quota_inum)
+ 		return -EOPNOTSUPP;
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 1c81d178..bb92ea94 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -819,8 +819,11 @@ static inline void ext4_quota_off_umount(struct super_block *sb)
+ 	int type;
+ 
+ 	/* Use our quota_off function to clear inode flags etc. */
+-	for (type = 0; type < EXT4_MAXQUOTAS; type++)
++	for (type = 0; type < EXT4_MAXQUOTAS; type++) {
++		if (!EXT4_SB(sb)->s_proj_kernel_supported && type == PRJQUOTA)
++			continue;
+ 		ext4_quota_off(sb, type);
++	}
+ }
+ #else
+ static inline void ext4_quota_off_umount(struct super_block *sb)
+@@ -2430,6 +2433,9 @@ static void ext4_orphan_cleanup(struct super_block *sb,
+ 	/* Turn off quotas if they were enabled for orphan cleanup */
+ 	if (quota_update) {
+ 		for (i = 0; i < EXT4_MAXQUOTAS; i++) {
++			if (!EXT4_SB(sb)->s_proj_kernel_supported &&
++			    i == PRJQUOTA)
++				continue;
+ 			if (sb_dqopt(sb)->files[i])
+ 				dquot_quota_off(sb, i);
+ 		}
+@@ -3630,6 +3636,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
+ 	int err = 0;
+ 	unsigned int journal_ioprio = DEFAULT_JOURNAL_IOPRIO;
+ 	ext4_group_t first_not_zeroed;
++	unsigned int quota_flags;
+ 
+ 	if ((data && !orig_data) || !sbi)
+ 		goto out_free_base;
+@@ -4356,6 +4363,14 @@ no_journal:
+ 		root = NULL;
+ 		goto failed_mount4;
+ 	}
++	/*
++	 * Enable project usage temporarily to give dquota_initialize() a
++	 * chance to check whether kernel supports Project quota.
++	 */
++	quota_flags = sb_dqopt(sb)->flags;
++	sb_dqopt(sb)->flags |= dquot_state_flag(DQUOT_USAGE_ENABLED, PRJQUOTA);
++	dquot_initialize(root);
++	sb_dqopt(sb)->flags = quota_flags;
+ 	if (!S_ISDIR(root->i_mode) || !root->i_blocks || !root->i_size) {
+ 		ext4_msg(sb, KERN_ERR, "corrupt root inode, run e2fsck");
+ 		iput(root);
+@@ -5671,6 +5686,10 @@ static int ext4_enable_quotas(struct super_block *sb)
+ 
+ 	sb_dqopt(sb)->flags |= DQUOT_QUOTA_SYS_FILE;
+ 	for (type = 0; type < EXT4_MAXQUOTAS; type++) {
++
++		if (!EXT4_SB(sb)->s_proj_kernel_supported && type == PRJQUOTA)
++			continue;
++
+ 		if (qf_inums[type]) {
+ 			err = ext4_quota_enable(sb, type, QFMT_VFS_V1,
+ 						DQUOT_USAGE_ENABLED);
