@@ -1632,7 +1632,7 @@ static struct ptlrpc_request *ptlrpc_disconnect_prep_req(struct obd_import *imp)
 	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_DISCONNECT,
 					LUSTRE_OBD_VERSION, rq_opc);
 	if (req == NULL)
-		RETURN(NULL);
+		RETURN(ERR_PTR(-ENOMEM));
 
 	/* We are disconnecting, do not retry a failed DISCONNECT rpc if
 	 * it fails.  We can get through the above with a down server
