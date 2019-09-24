@@ -221,14 +221,13 @@ static void jobid_prune_expedite(void)
  */
 int jobid_get_from_environ(char *jobid_var, char *jobid, int *jobid_len)
 {
-	static bool printed;
 	int rc;
 
 	rc = cfs_get_environ(jobid_var, jobid, jobid_len);
 	if (!rc)
 		goto out;
 
-	if (unlikely(rc == -EOVERFLOW && !printed)) {
+	if (rc == -EOVERFLOW) {
 		/* For the PBS_JOBID and LOADL_STEP_ID keys (which are
 		 * variable length strings instead of just numbers), it
 		 * might make sense to keep the unique parts for JobID,
@@ -236,16 +235,23 @@ int jobid_get_from_environ(char *jobid_var, char *jobid, int *jobid_len)
 		 * larger temp buffer for cfs_get_environ(), then
 		 * truncating the string at some separator to fit into
 		 * the specified jobid_len.  Fix later if needed. */
-		LCONSOLE_WARN("jobid: '%s' value too large (%d)\n",
-			      obd_jobid_var, *jobid_len);
-		printed = true;
+		static ktime_t printed;
+
+		if (unlikely(ktime_to_ns(printed) == 0 ||
+			     ktime_after(ktime_get(),
+					 ktime_add_ns(printed,
+						      3600*24*NSEC_PER_SEC)))) {
+			LCONSOLE_WARN("jobid: '%s' value too large (%d)\n",
+				      obd_jobid_var, *jobid_len);
+			printed = ktime_get();
+		}
+
 		rc = 0;
-	}
-	if (rc) {
-		CDEBUG((rc == -ENOENT || rc == -EINVAL ||
-			rc == -EDEADLK) ? D_INFO : D_ERROR,
-		       "jobid: get '%s' failed: rc = %d\n",
-		       obd_jobid_var, rc);
+	} else {
+		CDEBUG_LIMIT((rc == -ENOENT || rc == -EINVAL ||
+			      rc == -EDEADLK) ? D_INFO : D_ERROR,
+			     "jobid: get '%s' failed: rc = %d\n",
+			     obd_jobid_var, rc);
 	}
 
 out:
