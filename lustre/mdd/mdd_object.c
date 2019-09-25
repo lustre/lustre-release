@@ -680,11 +680,19 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(rc);
 	}
 
-	if (la->la_valid == LA_ATIME) {
-		/* This is an atime-only attribute update for close RPCs. */
-		if (la->la_atime < (oattr->la_atime +
+	if (flags & MDS_CLOSE_UPDATE_TIMES &&
+	    la->la_valid & (LA_ATIME | LA_MTIME | LA_CTIME)) {
+		/* This is an atime/mtime/ctime attribute update for
+		 * close RPCs.
+		 */
+		if (la->la_valid & LA_ATIME &&
+		    la->la_atime <= (oattr->la_atime +
 				mdd_obj2mdd_dev(obj)->mdd_atime_diff))
 			la->la_valid &= ~LA_ATIME;
+		if (la->la_valid & LA_CTIME && la->la_ctime <= oattr->la_ctime)
+			la->la_valid &= ~LA_CTIME;
+		if (la->la_valid & LA_MTIME && la->la_mtime <= oattr->la_mtime)
+			la->la_valid &= ~LA_MTIME;
 		RETURN(0);
 	}
 

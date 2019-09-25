@@ -4793,6 +4793,101 @@ test_103() {
 }
 run_test 103 "Test size correctness with lockahead"
 
+get_stat_xtimes()
+{
+	local xtimes
+
+	xtimes=$(stat -c "%X %Y %Z" $DIR/$tfile)
+
+	echo ${xtimes[*]}
+}
+
+get_mdt_xtimes()
+{
+	local mdtdev=$1
+	local output
+	local xtimes
+
+	output=$(do_facet mds1 "$DEBUGFS -c -R 'stat ROOT/$tfile' $mdtdev")
+	((xtimes[0]=$(awk -F ':' /atime/'{ print $2 }' <<< "$output")))
+	((xtimes[1]=$(awk -F ':' /mtime/'{ print $2 }' <<< "$output")))
+	((xtimes[2]=$(awk -F ':' /ctime/'{ print $2 }' <<< "$output")))
+
+	echo ${xtimes[*]}
+}
+
+check_mdt_xtimes()
+{
+	local mdtdev=$1
+	local xtimes=($(get_stat_xtimes))
+	local mdt_xtimes=($(get_mdt_xtimes $mdtdev))
+
+	echo "STAT a|m|ctime ${xtimes[*]}"
+	echo "MDT a|m|ctime ${xtimes[*]}"
+	[[ ${xtimes[0]} == ${mdt_xtimes[0]} ]] ||
+		error "$DIR/$tfile atime (${xtimes[0]}:${mdt_xtimes[0]}) diff"
+	[[ ${xtimes[1]} == ${mdt_xtimes[1]} ]] ||
+		error "$DIR/$tfile mtime (${xtimes[1]}:${mdt_xtimes[1]}) diff"
+	[[ ${xtimes[2]} == ${mdt_xtimes[2]} ]] ||
+		error "$DIR/$tfile ctime (${xtimes[2]}:${mdt_xtimes[2]}) diff"
+}
+
+test_104() {
+	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip_env "ldiskfs only test"
+
+	local pid
+	local mdtdev=$(mdsdevname ${SINGLEMDS//mds/})
+	local atime_diff=$(do_facet $SINGLEMDS \
+		lctl get_param -n mdd.*MDT0000*.atime_diff)
+
+	do_facet $SINGLEMDS \
+		lctl set_param -n mdd.*MDT0000*.atime_diff=0
+
+	stack_trap "do_facet $SINGLEMDS \
+		lctl set_param -n mdd.*MDT0000*.atime_diff=$atime_diff" EXIT
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1k count=1 conv=notrunc
+	check_mdt_xtimes $mdtdev
+	sleep 2
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1k count=1 conv=notrunc
+	check_mdt_xtimes $mdtdev
+	sleep 2
+	$MULTIOP $DIR2/$tfile Oz8192w8192_c &
+	pid=$!
+	sleep 2
+	dd if=/dev/zero of=$DIR/$tfile bs=1k count=1 conv=notrunc
+	sleep 2
+	kill -USR1 $pid && wait $pid || error "multiop failure"
+	check_mdt_xtimes $mdtdev
+
+	local xtimes
+	local mdt_xtimes
+
+	# Verify mtime/ctime is NOT upated on MDS when there is no modification
+	# on the client side
+	xtimes=($(get_stat_xtimes))
+	$MULTIOP $DIR/$tfile O_c &
+	pid=$!
+	sleep 2
+	kill -USR1 $pid && wait $pid || error "multiop failure"
+	mdt_xtimes=($(get_mdt_xtimes $mdtdev))
+	[[ ${xtimes[1]} == ${mdt_xtimes[1]} ]] ||
+		error "$DIR/$tfile mtime (${xtimes[1]}:${mdt_xtimes[1]}) diff"
+	[[ ${xtimes[2]} == ${mdt_xtimes[2]} ]] ||
+		error "$DIR/$tfile ctime (${xtimes[2]}:${mdt_xtimes[2]}) diff"
+	check_mdt_xtimes $mdtdev
+
+	sleep 2
+	# Change ctime via chmod
+	$MULTIOP $DIR/$tfile o_tc &
+	pid=$!
+	sleep 2
+	kill -USR1 $pid && wait $pid || error "multiop failure"
+	check_mdt_xtimes $mdtdev
+}
+run_test 104 "Verify that MDS stores atime/mtime/ctime during close"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script
