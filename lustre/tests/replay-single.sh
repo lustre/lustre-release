@@ -21,6 +21,9 @@ if $SHARED_KEY; then
 fi
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+# bug number:    LU-12805
+ALWAYS_EXCEPT+=" 36"
+
 build_test_filter
 
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
@@ -844,7 +847,7 @@ test_36() {
 	checkstat $DIR/$tfile
 	facet_failover $SINGLEMDS
 	cancel_lru_locks mdc
-	if $LCTL dk | grep "stale lock .*cookie"; then
+	if do_facet $SINGLEMDS $LCTL dk | grep "stale lock .*cookie"; then
 		error "cancel after replay failed"
 	fi
 }
