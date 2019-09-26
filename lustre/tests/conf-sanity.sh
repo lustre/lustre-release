@@ -7376,34 +7376,34 @@ test_renamefs() {
 	echo "rename $FSNAME to $newname"
 
 	if ! combined_mgs_mds ; then
-		local facet=$(mgsdevname)
+		local dev=$(mgsdevname)
 
 		do_facet mgs \
-			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $facet"||
-			error "(7) Fail to rename MGS"
-		if [ "$(facet_fstype $facet)" = "zfs" ]; then
+			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $dev" ||
+				error "(7) Fail to rename MGS"
+		if [ "$(facet_fstype mgs)" = "zfs" ]; then
 			reimport_zpool mgs $newname-mgs
 		fi
 	fi
 
 	for num in $(seq $MDSCOUNT); do
-		local facet=$(mdsdevname $num)
+		local dev=$(mdsdevname $num)
 
 		do_facet mds${num} \
-			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $facet"||
-			error "(8) Fail to rename MDT $num"
-		if [ "$(facet_fstype $facet)" = "zfs" ]; then
+			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $dev" ||
+				error "(8) Fail to rename MDT $num"
+		if [ "$(facet_fstype mds${num})" = "zfs" ]; then
 			reimport_zpool mds${num} $newname-mdt${num}
 		fi
 	done
 
 	for num in $(seq $OSTCOUNT); do
-		local facet=$(ostdevname $num)
+		local dev=$(ostdevname $num)
 
 		do_facet ost${num} \
-			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $facet"||
-			error "(9) Fail to rename OST $num"
-		if [ "$(facet_fstype $facet)" = "zfs" ]; then
+			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $dev" ||
+				error "(9) Fail to rename OST $num"
+		if [ "$(facet_fstype ost${num})" = "zfs" ]; then
 			reimport_zpool ost${num} $newname-ost${num}
 		fi
 	done
