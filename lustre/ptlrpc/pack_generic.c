@@ -2026,19 +2026,30 @@ static void lustre_swab_fiemap_extent(struct fiemap_extent *fm_extent)
         __swab32s(&fm_extent->fe_device);
 }
 
+static void lustre_swab_fiemap_hdr(struct fiemap *fiemap)
+{
+	__swab64s(&fiemap->fm_start);
+	__swab64s(&fiemap->fm_length);
+	__swab32s(&fiemap->fm_flags);
+	__swab32s(&fiemap->fm_mapped_extents);
+	__swab32s(&fiemap->fm_extent_count);
+	__swab32s(&fiemap->fm_reserved);
+}
+
 void lustre_swab_fiemap(struct fiemap *fiemap)
 {
 	__u32 i;
 
-        __swab64s(&fiemap->fm_start);
-        __swab64s(&fiemap->fm_length);
-        __swab32s(&fiemap->fm_flags);
-        __swab32s(&fiemap->fm_mapped_extents);
-        __swab32s(&fiemap->fm_extent_count);
-        __swab32s(&fiemap->fm_reserved);
+	lustre_swab_fiemap_hdr(fiemap);
 
         for (i = 0; i < fiemap->fm_mapped_extents; i++)
                 lustre_swab_fiemap_extent(&fiemap->fm_extents[i]);
+}
+
+void lustre_swab_fiemap_info_key(struct ll_fiemap_info_key *fiemap_info)
+{
+	lustre_swab_obdo(&fiemap_info->lfik_oa);
+	lustre_swab_fiemap_hdr(&fiemap_info->lfik_fiemap);
 }
 
 void lustre_swab_idx_info(struct idx_info *ii)

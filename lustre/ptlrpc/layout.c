@@ -1189,8 +1189,8 @@ struct req_msg_field RMF_OST_ID =
 EXPORT_SYMBOL(RMF_OST_ID);
 
 struct req_msg_field RMF_FIEMAP_KEY =
-        DEFINE_MSGF("fiemap", 0, sizeof(struct ll_fiemap_info_key),
-                    lustre_swab_fiemap, NULL);
+	DEFINE_MSGF("fiemap_key", 0, sizeof(struct ll_fiemap_info_key),
+		    lustre_swab_fiemap_info_key, NULL);
 EXPORT_SYMBOL(RMF_FIEMAP_KEY);
 
 struct req_msg_field RMF_FIEMAP_VAL =
