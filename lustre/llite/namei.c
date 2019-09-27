@@ -1778,7 +1778,11 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 		RETURN(PTR_ERR(op_data));
 
 	op_data->op_fid3 = *ll_inode2fid(dchild->d_inode);
-
+	/* notify lower layer if inode has dirty pages */
+	if (S_ISREG(dchild->d_inode->i_mode) &&
+	    ll_i2info(dchild->d_inode)->lli_clob &&
+	    dirty_cnt(dchild->d_inode))
+		op_data->op_cli_flags |= CLI_DIRTY_DATA;
 	op_data->op_fid2 = op_data->op_fid3;
 	rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
 	ll_finish_md_op_data(op_data);
