@@ -2189,7 +2189,7 @@ const struct file_operations ll_dir_operations = {
 	.release	= ll_dir_release,
 	.read		= generic_read_dir,
 #ifdef HAVE_DIR_CONTEXT
-	.iterate	= ll_iterate,
+	.iterate_shared	= ll_iterate,
 #else
 	.readdir	= ll_readdir,
 #endif

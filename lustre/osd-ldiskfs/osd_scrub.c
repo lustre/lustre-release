@@ -2282,11 +2282,7 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 		buf.oifb_items = 0;
 #ifdef HAVE_DIR_CONTEXT
 		buf.ctx.pos = filp->f_pos;
-#ifdef HAVE_ITERATE_SHARED
 		rc = fops->iterate_shared(filp, &buf.ctx);
-#else
-		rc = fops->iterate(filp, &buf.ctx);
-#endif
 		filp->f_pos = buf.ctx.pos;
 #else
 		rc = fops->readdir(filp, &buf, filldir);

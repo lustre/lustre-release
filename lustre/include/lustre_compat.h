@@ -243,6 +243,10 @@ static inline struct dentry *d_make_root(struct inode *root)
 }
 #endif
 
+#ifndef HAVE_FOP_ITERATE_SHARED
+#define iterate_shared iterate
+#endif
+
 #ifdef HAVE_DIRTY_INODE_HAS_FLAG
 # define ll_dirty_inode(inode, flag)	(inode)->i_sb->s_op->dirty_inode((inode), flag)
 #else

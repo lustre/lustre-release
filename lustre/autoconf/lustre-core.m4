@@ -2305,7 +2305,7 @@ generic_write_sync_2args, [
 #
 # LC_FOP_ITERATE_SHARED
 #
-# Kernel version 4.7 adds iterate_shared method to file_operations
+# Kernel v4.6-rc3-29-g6192269 adds iterate_shared method to file_operations
 #
 AC_DEFUN([LC_FOP_ITERATE_SHARED], [
 LB_CHECK_COMPILE([if 'file_operations' has 'iterate_shared'],
@@ -2319,29 +2319,6 @@ fop_iterate_shared, [
 		[file_operations has iterate_shared])
 ])
 ]) # LC_FOP_ITERATE_SHARED
-
-#
-# LC_FOPS_ITERATE_SHARED
-#
-# 4.7 commit ae05327a00fd47c34dfe25294b359a3f3fef96e8
-# ext4: switch to ->iterate_shared()
-# this replaces ext4_dir_operations iterate with iterate_shared.
-# dir_relaxed_shared() was also added in this commit, so we can
-# use that function to verify that the ext4_dir_operations is using
-# iterate_shared.
-#
-AC_DEFUN([LC_FOPS_ITERATE_SHARED], [
-LB_CHECK_COMPILE([if ext4_dir_operations uses iterate_shared],
-iterate_shared, [
-	#include <linux/fs.h>
-],[
-	((struct file_operations *)0)->iterate_shared(NULL, NULL);
-	dir_relax_shared(NULL);
-],[
-	AC_DEFINE(HAVE_ITERATE_SHARED, 1,
-		['iterate_shared' is available])
-])
-]) # LC_FOPS_ITERATE_SHARED
 
 #
 # LC_HAVE_POSIX_ACL_VALID_USER_NS
@@ -3102,7 +3079,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_D_IN_LOOKUP
 	LC_DIRECTIO_2ARGS
 	LC_GENERIC_WRITE_SYNC_2ARGS
-	LC_FOPS_ITERATE_SHARED
+	LC_FOP_ITERATE_SHARED
 
 	# 4.8
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
