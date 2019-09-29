@@ -36,13 +36,13 @@
 
 int main(int argc, char **argv)
 {
-        mode_t mode;
+	mode_t mode;
 
-        if (argc != 3) { 
-                printf("usage: %s mode name\n", argv[0]);
-                return 1;
-        }
+	if (argc != 3) {
+		printf("usage: %s mode name\n", argv[0]);
+		return 1;
+	}
 
-        mode = strtoul(argv[1], NULL, 8); 
-        return chmod(argv[2], mode) ? errno : 0;
+	mode = strtoul(argv[1], NULL, 8);
+	return chmod(argv[2], mode) ? errno : 0;
 }
