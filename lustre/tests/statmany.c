@@ -49,33 +49,36 @@ struct option longopts[] = {
 	{ .name = "stat", .has_arg = no_argument, .val = 's' },
 	{ .name = NULL }
 };
+
 char *shortopts = "hlr:s0123456789";
 
 static int usage(char *prog, FILE *out)
 {
-        fprintf(out,
+	fprintf(out,
 		"Usage: %s [-r rand_seed] {-s|-l} filenamebase total_files iterations\n"
-               "-r : random seed\n"
-               "-s : regular stat() calls\n"
-               "-l : lookup ioctl only\n", prog);
-        exit(out == stderr);
+		"-r : random seed\n"
+		"-s : regular stat() calls\n"
+		"-l : lookup ioctl only\n", prog);
+	exit(out == stderr);
 }
 
 #ifndef LONG_MAX
 #define LONG_MAX (1 << ((8 * sizeof(long)) - 1))
 #endif
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
-        long i, count, iter = LONG_MAX, mode = 0, offset;
-        long int start, length = LONG_MAX, last;
-        char parent[4096], *t;
+	long i, count, iter = LONG_MAX, mode = 0, offset;
+	long int start, length = LONG_MAX, last;
+	char parent[4096], *t;
 	char *prog = argv[0], *base;
 	int seed = 0, rc;
 	int fd = -1;
 
-	while ((rc = getopt_long(argc, argv, shortopts, longopts, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, shortopts, longopts,
+				 NULL)) != -1) {
 		char *e;
+
 		switch (rc) {
 		case 'r':
 			seed = strtoul(optarg, &e, 0);
@@ -111,15 +114,16 @@ int main(int argc, char ** argv)
 	}
 
 	if (optind + 2 + (length == LONG_MAX) != argc) {
-		fprintf(stderr, "missing filenamebase, total_files, or iterations\n");
+		fprintf(stderr,
+			"missing filenamebase, total_files, or iterations\n");
 		usage(prog, stderr);
 	}
 
-        base = argv[optind];
-        if (strlen(base) > 4080) {
-                fprintf(stderr, "filenamebase too long\n");
-                exit(1);
-        }
+	base = argv[optind];
+	if (strlen(base) > 4080) {
+		fprintf(stderr, "filenamebase too long\n");
+		exit(1);
+	}
 
 	if (seed == 0) {
 		int f = open("/dev/urandom", O_RDONLY);
@@ -133,23 +137,25 @@ int main(int argc, char ** argv)
 	printf("using seed %u\n", seed);
 	srand(seed);
 
-        count = strtoul(argv[optind + 1], NULL, 0);
+	count = strtoul(argv[optind + 1], NULL, 0);
 	if (length == LONG_MAX) {
 		iter = strtoul(argv[optind + 2], NULL, 0);
 		printf("running for %lu iterations\n", iter);
-	} else
+	} else {
 		printf("running for %lu seconds\n", length);
+	}
 
-        start = last = time(0);
+	start = time(0);
+	last = start;
 
-        t = strrchr(base, '/');
-        if (t == NULL) {
-                strcpy(parent, ".");
-                offset = -1;
-        } else {
-                strncpy(parent, base, t - base);
-                offset = t - base + 1;
-        }
+	t = strrchr(base, '/');
+	if (!t) {
+		strcpy(parent, ".");
+		offset = -1;
+	} else {
+		strncpy(parent, base, t - base);
+		offset = t - base + 1;
+	}
 
 	if (mode == 'l') {
 		fd = open(parent, O_RDONLY);
@@ -160,22 +166,22 @@ int main(int argc, char ** argv)
 		}
 	}
 
-        for (i = 0; i < iter && time(0) - start < length; i++) {
-                char filename[4096];
-                int tmp;
+	for (i = 0; i < iter && time(0) - start < length; i++) {
+		char filename[4096];
+		int tmp;
 
-                tmp = random() % count;
-                sprintf(filename, "%s%d", base, tmp);
+		tmp = random() % count;
+		sprintf(filename, "%s%d", base, tmp);
 
 		if (mode == 's') {
-                        struct stat buf;
+			struct stat buf;
 
-                        rc = stat(filename, &buf);
-                        if (rc < 0) {
-                                printf("stat(%s) error: %s\n", filename,
-                                       strerror(errno));
-                                break;
-                        }
+			rc = stat(filename, &buf);
+			if (rc < 0) {
+				printf("stat(%s) error: %s\n", filename,
+				       strerror(errno));
+				break;
+			}
 		} else if (mode == 'l') {
 			char *name = filename;
 
@@ -183,24 +189,24 @@ int main(int argc, char ** argv)
 				name += offset;
 
 			rc = llapi_file_lookup(fd, name);
-                        if (rc < 0) {
+			if (rc < 0) {
 				printf("llapi_file_lookup for (%s) error: %s\n",
 				       filename, strerror(errno));
-                                break;
-                        }
-                }
-                if ((i % 10000) == 0) {
-                        printf(" - stat %lu (time %ld ; total %ld ; last %ld)\n",
-                               i, time(0), time(0) - start, time(0) - last);
-                        last = time(0);
-                }
-        }
+				break;
+			}
+		}
+		if ((i % 10000) == 0) {
+			printf(" - stat %lu (time %ld ; total %ld ; last %ld)\n",
+			       i, time(0), time(0) - start, time(0) - last);
+			last = time(0);
+		}
+	}
 
 	if (mode == 'l')
 		close(fd);
 
-        printf("total: %lu stats in %ld seconds: %f stats/second\n", i,
-               time(0) - start, ((float)i / (time(0) - start)));
+	printf("total: %lu stats in %ld seconds: %f stats/second\n", i,
+	       time(0) - start, ((float)i / (time(0) - start)));
 
-        exit(rc);
+	exit(rc);
 }
