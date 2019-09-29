@@ -68,7 +68,6 @@ extern int at_early_margin;
 extern int at_extra;
 extern unsigned long obd_max_dirty_pages;
 extern atomic_long_t obd_dirty_pages;
-extern atomic_long_t obd_dirty_transit_pages;
 extern char obd_jobid_var[];
 
 /* Some hash init argument constants */

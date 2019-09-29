@@ -645,21 +645,18 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		oa->o_dirty = cli->cl_dirty_grant;
 	else
 		oa->o_dirty = cli->cl_dirty_pages << PAGE_SHIFT;
-	if (unlikely(cli->cl_dirty_pages - cli->cl_dirty_transit >
-		     cli->cl_dirty_max_pages)) {
-		CERROR("dirty %lu - %lu > dirty_max %lu\n",
-		       cli->cl_dirty_pages, cli->cl_dirty_transit,
+	if (unlikely(cli->cl_dirty_pages > cli->cl_dirty_max_pages)) {
+		CERROR("dirty %lu > dirty_max %lu\n",
+		       cli->cl_dirty_pages,
 		       cli->cl_dirty_max_pages);
 		oa->o_undirty = 0;
-	} else if (unlikely(atomic_long_read(&obd_dirty_pages) -
-			    atomic_long_read(&obd_dirty_transit_pages) >
+	} else if (unlikely(atomic_long_read(&obd_dirty_pages) >
 			    (long)(obd_max_dirty_pages + 1))) {
 		/* The atomic_read() allowing the atomic_inc() are
 		 * not covered by a lock thus they may safely race and trip
 		 * this CERROR() unless we add in a small fudge factor (+1). */
-		CERROR("%s: dirty %ld - %ld > system dirty_max %ld\n",
+		CERROR("%s: dirty %ld > system dirty_max %ld\n",
 		       cli_name(cli), atomic_long_read(&obd_dirty_pages),
-		       atomic_long_read(&obd_dirty_transit_pages),
 		       obd_max_dirty_pages);
 		oa->o_undirty = 0;
 	} else if (unlikely(cli->cl_dirty_max_pages - cli->cl_dirty_pages >
