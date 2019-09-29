@@ -46,99 +46,100 @@
 
 int main(int argc, char *argv[])
 {
-        char *sfile, *tfile;
-        struct stat stbuf;
-        int size;
-        unsigned long bufsize = 1024 * 1024;
-        int infd, outfd;
-        int sd[2];
-        int rc;
-        char *buf;
-        char cmd[1024];
-        loff_t pos;
+	char *sfile, *tfile;
+	struct stat stbuf;
+	int size;
+	unsigned long bufsize = 1024 * 1024;
+	int infd, outfd;
+	int sd[2];
+	int rc;
+	char *buf;
+	char cmd[1024];
+	loff_t pos;
 
-        if (argc < 3) {
-                fprintf(stderr, "%s <source file> <dest file>\n", argv[0]);
-                exit(-1);
-        }
+	if (argc < 3) {
+		fprintf(stderr, "%s <source file> <dest file>\n", argv[0]);
+		exit(-1);
+	}
 
-        sfile = argv[1];
-        tfile = argv[2];
+	sfile = argv[1];
+	tfile = argv[2];
 
-        if (stat(sfile, &stbuf) < 0) {
-                if (errno == ENOENT) {
-                        /* assume doing non-object file testing */
-                        infd = open(sfile, O_LOV_DELAY_CREATE|O_CREAT|O_RDWR,
-                                    0644);
-                        if (infd < 0)
-                                syserr("open source file:");
+	if (stat(sfile, &stbuf) < 0) {
+		if (errno == ENOENT) {
+			/* assume doing non-object file testing */
+			infd = open(sfile,
+				    O_LOV_DELAY_CREATE | O_CREAT | O_RDWR,
+				    0644);
+			if (infd < 0)
+				syserr("open source file:");
 
-                        size = random() % (1 * 1024 * 1024) + 1024;
-                        if (ftruncate(infd, (off_t)size) < 0)
-                                syserr("truncate file error:");
-                } else {
-                        syserr("stat file: ");
-                }
-        } else if (S_ISREG(stbuf.st_mode)) {
-                size = (int)stbuf.st_size;
-                infd = open(sfile, O_RDONLY, 0644);
-                if (infd < 0)
-                        syserr("Open an existing file error:");
-        } else {
-                fprintf(stderr, "%s is not a regular file\n", sfile);
-                exit(-1);
-        }
+			size = random() % (1 * 1024 * 1024) + 1024;
+			if (ftruncate(infd, (off_t)size) < 0)
+				syserr("truncate file error:");
+		} else {
+			syserr("stat file: ");
+		}
+	} else if (S_ISREG(stbuf.st_mode)) {
+		size = (int)stbuf.st_size;
+		infd = open(sfile, O_RDONLY, 0644);
+		if (infd < 0)
+			syserr("Open an existing file error:");
+	} else {
+		fprintf(stderr, "%s is not a regular file\n", sfile);
+		exit(-1);
+	}
 
-        outfd = open(tfile, O_WRONLY|O_TRUNC|O_CREAT, 0666);
-        if (outfd < 0)
-                syserr("open dest file:");
+	outfd = open(tfile, O_WRONLY | O_TRUNC | O_CREAT, 0666);
+	if (outfd < 0)
+		syserr("open dest file:");
 
-        rc = socketpair(AF_LOCAL, SOCK_STREAM, 0, sd);
-        if (rc < 0)
-                syserr("socketpair");
+	rc = socketpair(AF_LOCAL, SOCK_STREAM, 0, sd);
+	if (rc < 0)
+		syserr("socketpair");
 
-        rc = fcntl(sd[0], F_SETFL, O_NONBLOCK);
-        if (rc < 0)
-                syserr("fcntl");
+	rc = fcntl(sd[0], F_SETFL, O_NONBLOCK);
+	if (rc < 0)
+		syserr("fcntl");
 
-        rc = setsockopt(sd[0], SOL_SOCKET, SO_SNDBUF,
-                        &bufsize, sizeof(bufsize));
-        if (rc)
-                syserr("setsockopt");
+	rc = setsockopt(sd[0], SOL_SOCKET, SO_SNDBUF,
+			&bufsize, sizeof(bufsize));
+	if (rc)
+		syserr("setsockopt");
 
-        srandom(time(NULL));
+	srandom(time(NULL));
 
-        pos = 0;
-        while (size > 0) {
-                int rc2;
-                size_t seg_size;
+	pos = 0;
+	while (size > 0) {
+		int rc2;
+		size_t seg_size;
 
-                seg_size = random() % bufsize + 1;
-                if (seg_size > size)
-                        seg_size = size;
+		seg_size = random() % bufsize + 1;
+		if (seg_size > size)
+			seg_size = size;
 
-                while (seg_size) {
-                        rc = sendfile(sd[0], infd, &pos, seg_size);
-                        if (rc < 0)
-                                syserr("sendfile:");
+		while (seg_size) {
+			rc = sendfile(sd[0], infd, &pos, seg_size);
+			if (rc < 0)
+				syserr("sendfile:");
 
-                        seg_size -= rc;
-                        size -= rc;
-                        if (size == 0)
-                                close(sd[0]);
+			seg_size -= rc;
+			size -= rc;
+			if (size == 0)
+				close(sd[0]);
 
-                        buf = malloc(rc);
-                        if (read(sd[1], buf, rc) < 0)
-                                syserr("read from socket:");
+			buf = malloc(rc);
+			if (read(sd[1], buf, rc) < 0)
+				syserr("read from socket:");
 
-                        rc2 = write(outfd, buf, rc);
-                        if (rc2 != rc)
-                                syserr("write dest file error:");
-                        free(buf);
-                }
-        }
-        close(sd[1]), close(infd), close(outfd);
+			rc2 = write(outfd, buf, rc);
+			if (rc2 != rc)
+				syserr("write dest file error:");
+			free(buf);
+		}
+	}
+	close(sd[1]), close(infd), close(outfd);
 
 	snprintf(cmd, sizeof(cmd), "cmp %s %s\n", sfile, tfile);
-        return system(cmd);
+	return system(cmd);
 }
