@@ -98,9 +98,6 @@ EXPORT_SYMBOL(at_early_margin);
 int at_extra = 30;
 EXPORT_SYMBOL(at_extra);
 
-atomic_long_t obd_dirty_transit_pages;
-EXPORT_SYMBOL(obd_dirty_transit_pages);
-
 #ifdef CONFIG_PROC_FS
 struct lprocfs_stats *obd_memory = NULL;
 EXPORT_SYMBOL(obd_memory);

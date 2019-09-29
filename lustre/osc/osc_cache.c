@@ -1402,7 +1402,6 @@ static void osc_consume_write_grant(struct client_obd *cli,
 {
 	assert_spin_locked(&cli->cl_loi_list_lock);
 	LASSERT(!(pga->flag & OBD_BRW_FROM_GRANT));
-	atomic_long_inc(&obd_dirty_pages);
 	cli->cl_dirty_pages++;
 	pga->flag |= OBD_BRW_FROM_GRANT;
 	CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
@@ -1426,11 +1425,6 @@ static void osc_release_write_grant(struct client_obd *cli,
 	pga->flag &= ~OBD_BRW_FROM_GRANT;
 	atomic_long_dec(&obd_dirty_pages);
 	cli->cl_dirty_pages--;
-	if (pga->flag & OBD_BRW_NOCACHE) {
-		pga->flag &= ~OBD_BRW_NOCACHE;
-		atomic_long_dec(&obd_dirty_transit_pages);
-		cli->cl_dirty_transit--;
-	}
 	EXIT;
 }
 
@@ -1536,7 +1530,7 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap)
  */
 static int osc_enter_cache_try(struct client_obd *cli,
 			       struct osc_async_page *oap,
-			       int bytes, int transient)
+			       int bytes)
 {
 	int rc;
 
@@ -1546,20 +1540,16 @@ static int osc_enter_cache_try(struct client_obd *cli,
 	if (rc < 0)
 		return 0;
 
-	if (cli->cl_dirty_pages < cli->cl_dirty_max_pages &&
-	    1 + atomic_long_read(&obd_dirty_pages) <= obd_max_dirty_pages) {
-		osc_consume_write_grant(cli, &oap->oap_brw_page);
-		if (transient) {
-			cli->cl_dirty_transit++;
-			atomic_long_inc(&obd_dirty_transit_pages);
-			oap->oap_brw_flags |= OBD_BRW_NOCACHE;
+	if (cli->cl_dirty_pages < cli->cl_dirty_max_pages) {
+		if (atomic_long_add_return(1, &obd_dirty_pages) <=
+		    obd_max_dirty_pages) {
+			osc_consume_write_grant(cli, &oap->oap_brw_page);
+			return 1;
 		}
-		rc = 1;
-	} else {
-		__osc_unreserve_grant(cli, bytes, bytes);
-		rc = 0;
+		atomic_long_dec(&obd_dirty_pages);
 	}
-	return rc;
+	__osc_unreserve_grant(cli, bytes, bytes);
+	return 0;
 }
 
 /* Following two inlines exist to pass code fragments
@@ -1634,7 +1624,7 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	 */
 	remain = wait_event_idle_exclusive_timeout_cmd(
 		cli->cl_cache_waiters,
-		(entered = osc_enter_cache_try(cli, oap, bytes, 0)) ||
+		(entered = osc_enter_cache_try(cli, oap, bytes)) ||
 		(cli->cl_dirty_pages == 0 && cli->cl_w_in_flight == 0),
 		timeout,
 		cli_unlock_and_unplug(env, cli, oap),
@@ -2415,7 +2405,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 
 		/* it doesn't need any grant to dirty this page */
 		spin_lock(&cli->cl_loi_list_lock);
-		rc = osc_enter_cache_try(cli, oap, grants, 0);
+		rc = osc_enter_cache_try(cli, oap, grants);
 		spin_unlock(&cli->cl_loi_list_lock);
 		if (rc == 0) { /* try failed */
 			grants = 0;

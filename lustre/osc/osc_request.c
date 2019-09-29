@@ -651,21 +651,18 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		oa->o_dirty = cli->cl_dirty_grant;
 	else
 		oa->o_dirty = cli->cl_dirty_pages << PAGE_SHIFT;
-	if (unlikely(cli->cl_dirty_pages - cli->cl_dirty_transit >
-		     cli->cl_dirty_max_pages)) {
-		CERROR("dirty %lu - %lu > dirty_max %lu\n",
-		       cli->cl_dirty_pages, cli->cl_dirty_transit,
+	if (unlikely(cli->cl_dirty_pages > cli->cl_dirty_max_pages)) {
+		CERROR("dirty %lu > dirty_max %lu\n",
+		       cli->cl_dirty_pages,
 		       cli->cl_dirty_max_pages);
 		oa->o_undirty = 0;
-	} else if (unlikely(atomic_long_read(&obd_dirty_pages) -
-			    atomic_long_read(&obd_dirty_transit_pages) >
+	} else if (unlikely(atomic_long_read(&obd_dirty_pages) >
 			    (long)(obd_max_dirty_pages + 1))) {
 		/* The atomic_read() allowing the atomic_inc() are
 		 * not covered by a lock thus they may safely race and trip
 		 * this CERROR() unless we add in a small fudge factor (+1). */
-		CERROR("%s: dirty %ld - %ld > system dirty_max %ld\n",
+		CERROR("%s: dirty %ld > system dirty_max %ld\n",
 		       cli_name(cli), atomic_long_read(&obd_dirty_pages),
-		       atomic_long_read(&obd_dirty_transit_pages),
 		       obd_max_dirty_pages);
 		oa->o_undirty = 0;
 	} else if (unlikely(cli->cl_dirty_max_pages - cli->cl_dirty_pages >
@@ -1093,9 +1090,9 @@ static int check_write_rcs(struct ptlrpc_request *req,
 static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 {
         if (p1->flag != p2->flag) {
-		unsigned mask = ~(OBD_BRW_FROM_GRANT | OBD_BRW_NOCACHE |
-				  OBD_BRW_SYNC       | OBD_BRW_ASYNC   |
-				  OBD_BRW_NOQUOTA    | OBD_BRW_SOFT_SYNC);
+		unsigned mask = ~(OBD_BRW_FROM_GRANT | OBD_BRW_SYNC |
+				  OBD_BRW_ASYNC | OBD_BRW_NOQUOTA |
+				  OBD_BRW_SOFT_SYNC);
 
                 /* warn if we try to combine flags that we don't know to be
                  * safe to combine */

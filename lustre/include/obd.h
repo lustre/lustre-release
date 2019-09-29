@@ -204,7 +204,6 @@ struct client_obd {
 	/* the grant values are protected by loi_list_lock below */
 	unsigned long		 cl_dirty_pages;      /* all _dirty_ in pages */
 	unsigned long		 cl_dirty_max_pages;  /* allowed w/o rpc */
-	unsigned long		 cl_dirty_transit;    /* dirty synchronous */
 	unsigned long		 cl_avail_grant;   /* bytes of credit for ost */
 	unsigned long		 cl_lost_grant;    /* lost credits (trunc) */
 	/* grant consumed for dirty pages */
