@@ -6207,7 +6207,7 @@ basetest() {
     if [[ $1 = [a-z]* ]]; then
         echo $1
     else
-        echo ${1%%[a-z]*}
+	echo ${1%%[a-zA-Z]*}
     fi
 }
 
