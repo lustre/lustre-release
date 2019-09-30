@@ -638,7 +638,7 @@ download_ofed() {
 			# this is a work around for suse distro (sles11.3). what we need is
 			# sles11sp3. We really need to redesign how we use target and distro
 			[[ $distro_name =~ sles ]] && distro_name=${DISTRO/./sp}
-			if [[ $arch = "aarch64" ]]; then
+			if [[ $arch = "aarch64" ]] && [[ $DISTROMAJ < "rhel8" ]]; then
 				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}alternate-${arch}.tgz"
 			else
 				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}-${arch}.tgz"
@@ -807,7 +807,7 @@ unpack_ofed() {
 			# this is a work around for suse distro (sles11.3). what we need is
 			# sles11sp3. We really need to redesign how we use target and distro
 			[[ $distro_name =~ sles ]] && distro_name=${DISTRO/./sp}
-			if [[ $arch = "aarch64" ]]; then
+			if [[ $arch = "aarch64" ]] && [[ $DISTROMAJ < "rhel8" ]]; then
 				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}alternate-${arch}"
 			else
 				file="MLNX_OFED_LINUX-${ofed_version}-${distro_name}-${arch}"
@@ -827,7 +827,11 @@ unpack_ofed() {
 				return 1
 			fi
 			[ -d OFED ] || ln -sf MLNX_OFED_SRC-[0-9].[0-9]* OFED
-			[ -d OFED_RPMS ] || ln -sf ${file}/RPMS OFED_RPMS
+			if compare_version $ofed_version 4.7; then
+				[ -d OFED_RPMS ] || ln -sf ${file}/RPMS OFED_RPMS
+			else
+				[ -d OFED_RPMS ] || ln -sf ${file}/RPMS/MLNX_LIBS OFED_RPMS
+			fi
 			;;
 		ifs)
 			file="IntelIB-Basic.$(echo ${distro_name%%.*} | tr '[:lower:]' '[:upper:]')-${arch}.${ofed_version}"
