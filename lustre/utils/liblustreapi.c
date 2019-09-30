@@ -1454,6 +1454,9 @@ int llapi_search_fsname(const char *pathname, char *fsname)
 
 int llapi_search_rootpath(char *pathname, const char *fsname)
 {
+	/* pathname can be used as an argument by get_root_path(),
+	 * clear it for safety */
+	pathname[0] = 0;
 	return get_root_path(WANT_PATH, (char *)fsname, NULL, pathname, -1);
 }
 
