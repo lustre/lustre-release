@@ -3226,10 +3226,10 @@ kiblnd_dev_search(char *ifname)
 static int
 kiblnd_startup(struct lnet_ni *ni)
 {
-	char *ifname;
+	char *ifname = NULL;
 	struct lnet_inetdev *ifaces = NULL;
 	struct kib_dev *ibdev = NULL;
-	struct kib_net *net;
+	struct kib_net *net = NULL;
 	unsigned long flags;
 	int rc;
 	int i;
@@ -3245,8 +3245,10 @@ kiblnd_startup(struct lnet_ni *ni)
 
 	LIBCFS_ALLOC(net, sizeof(*net));
 	ni->ni_data = net;
-	if (net == NULL)
+	if (net == NULL) {
+		rc = -ENOMEM;
 		goto failed;
+	}
 
 	net->ibn_incarnation = ktime_get_real_ns() / NSEC_PER_USEC;
 
@@ -3261,6 +3263,7 @@ kiblnd_startup(struct lnet_ni *ni)
 		/* Use the IPoIB interface specified in 'networks=' */
 		if (ni->ni_interfaces[1] != NULL) {
 			CERROR("ko2iblnd: Multiple interfaces not supported\n");
+			rc = -EINVAL;
 			goto failed;
 		}
 
@@ -3271,6 +3274,7 @@ kiblnd_startup(struct lnet_ni *ni)
 
 	if (strlen(ifname) >= sizeof(ibdev->ibd_ifname)) {
 		CERROR("IPoIB interface name too long: %s\n", ifname);
+		rc = -E2BIG;
 		goto failed;
 	}
 
@@ -3349,7 +3353,9 @@ failed:
 	kfree(ifaces);
 	kiblnd_shutdown(ni);
 
-	CDEBUG(D_NET, "kiblnd_startup failed\n");
+	CDEBUG(D_NET, "Configuration of device %s failed: rc = %d\n",
+	       ifname ? ifname : "", rc);
+
 	return -ENETDOWN;
 }
 
