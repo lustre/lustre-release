@@ -3164,7 +3164,8 @@ kiblnd_start_schedulers(struct kib_sched_info *sched)
 	return rc;
 }
 
-static int kiblnd_dev_start_threads(struct kib_dev *dev, u32 *cpts, int ncpts)
+static int kiblnd_dev_start_threads(struct kib_dev *dev, bool newdev, u32 *cpts,
+				    int ncpts)
 {
 	int	cpt;
 	int	rc;
@@ -3176,7 +3177,7 @@ static int kiblnd_dev_start_threads(struct kib_dev *dev, u32 *cpts, int ncpts)
 		cpt = (cpts == NULL) ? i : cpts[i];
 		sched = kiblnd_data.kib_scheds[cpt];
 
-		if (sched->ibs_nthreads > 0)
+		if (!newdev && sched->ibs_nthreads > 0)
 			continue;
 
 		rc = kiblnd_start_schedulers(kiblnd_data.kib_scheds[cpt]);
@@ -3189,6 +3190,39 @@ static int kiblnd_dev_start_threads(struct kib_dev *dev, u32 *cpts, int ncpts)
 	return 0;
 }
 
+static struct kib_dev *
+kiblnd_dev_search(char *ifname)
+{
+	struct kib_dev *alias = NULL;
+	struct kib_dev *dev;
+	char            *colon;
+	char            *colon2;
+
+	colon = strchr(ifname, ':');
+	list_for_each_entry(dev, &kiblnd_data.kib_devs, ibd_list) {
+		if (strcmp(&dev->ibd_ifname[0], ifname) == 0)
+			return dev;
+
+		if (alias != NULL)
+			continue;
+
+		colon2 = strchr(dev->ibd_ifname, ':');
+		if (colon != NULL)
+			*colon = 0;
+		if (colon2 != NULL)
+			*colon2 = 0;
+
+		if (strcmp(&dev->ibd_ifname[0], ifname) == 0)
+			alias = dev;
+
+		if (colon != NULL)
+			*colon = ':';
+		if (colon2 != NULL)
+			*colon2 = ':';
+	}
+	return alias;
+}
+
 static int
 kiblnd_startup(struct lnet_ni *ni)
 {
@@ -3199,6 +3233,7 @@ kiblnd_startup(struct lnet_ni *ni)
         unsigned long             flags;
         int                       rc;
 	int i;
+	bool newdev;
 
         LASSERT (ni->ni_net->net_lnd == &the_o2iblnd);
 
@@ -3254,36 +3289,41 @@ kiblnd_startup(struct lnet_ni *ni)
 		goto failed;
 	}
 
-	LIBCFS_ALLOC(ibdev, sizeof(*ibdev));
-	if (!ibdev) {
-		rc = -ENOMEM;
-		goto failed;
+	ibdev = kiblnd_dev_search(ifname);
+	newdev = ibdev == NULL;
+	/* hmm...create kib_dev even for alias */
+	if (ibdev == NULL || strcmp(&ibdev->ibd_ifname[0], ifname) != 0) {
+		LIBCFS_ALLOC(ibdev, sizeof(*ibdev));
+		if (!ibdev) {
+			rc = -ENOMEM;
+			goto failed;
+		}
+
+		ibdev->ibd_ifip = ifaces[i].li_ipaddr;
+		strlcpy(ibdev->ibd_ifname, ifaces[i].li_name,
+			sizeof(ibdev->ibd_ifname));
+		ibdev->ibd_can_failover = !!(ifaces[i].li_flags & IFF_MASTER);
+
+		INIT_LIST_HEAD(&ibdev->ibd_nets);
+		INIT_LIST_HEAD(&ibdev->ibd_list); /* not yet in kib_devs */
+		INIT_LIST_HEAD(&ibdev->ibd_fail_list);
+
+		/* initialize the device */
+		rc = kiblnd_dev_failover(ibdev);
+		if (rc) {
+			CERROR("ko2iblnd: Can't initialize device: rc = %d\n", rc);
+			goto failed;
+		}
+
+		list_add_tail(&ibdev->ibd_list, &kiblnd_data.kib_devs);
 	}
-
-	ibdev->ibd_ifip = ifaces[i].li_ipaddr;
-	strlcpy(ibdev->ibd_ifname, ifaces[i].li_name,
-		sizeof(ibdev->ibd_ifname));
-	ibdev->ibd_can_failover = !!(ifaces[i].li_flags & IFF_MASTER);
-
-	INIT_LIST_HEAD(&ibdev->ibd_nets);
-	INIT_LIST_HEAD(&ibdev->ibd_list); /* not yet in kib_devs */
-	INIT_LIST_HEAD(&ibdev->ibd_fail_list);
-
-	/* initialize the device */
-	rc = kiblnd_dev_failover(ibdev);
-	if (rc) {
-		CERROR("ko2iblnd: Can't initialize device: rc = %d\n", rc);
-		goto failed;
-	}
-
-	list_add_tail(&ibdev->ibd_list, &kiblnd_data.kib_devs);
 
 	net->ibn_dev = ibdev;
 	ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ibdev->ibd_ifip);
 
 	ni->ni_dev_cpt = ifaces[i].li_cpt;
 
-	rc = kiblnd_dev_start_threads(ibdev, ni->ni_cpts, ni->ni_ncpts);
+	rc = kiblnd_dev_start_threads(ibdev, newdev, ni->ni_cpts, ni->ni_ncpts);
 	if (rc != 0)
 		goto failed;
 
