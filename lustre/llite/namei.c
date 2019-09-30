@@ -307,7 +307,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock, __u64 to_cancel)
 	lli = ll_i2info(inode);
 
 	if (bits & MDS_INODELOCK_UPDATE)
-		lli->lli_update_atime = 1;
+		ll_file_set_flag(lli, LLIF_UPDATE_ATIME);
 
 	if ((bits & MDS_INODELOCK_UPDATE) && S_ISDIR(inode->i_mode)) {
 		CDEBUG(D_INODE, "invalidating inode "DFID" lli = %p, "

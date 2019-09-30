@@ -1786,11 +1786,10 @@ int pcc_inode_getattr(struct inode *inode, bool *cached)
 		GOTO(out, rc);
 
 	ll_inode_size_lock(inode);
-	if (inode->i_atime.tv_sec < lli->lli_atime ||
-	    lli->lli_update_atime) {
+	if (ll_file_test_and_clear_flag(lli, LLIF_UPDATE_ATIME) ||
+	    inode->i_atime.tv_sec < lli->lli_atime)
 		inode->i_atime.tv_sec = lli->lli_atime;
-		lli->lli_update_atime = 0;
-	}
+
 	inode->i_mtime.tv_sec = lli->lli_mtime;
 	inode->i_ctime.tv_sec = lli->lli_ctime;
 

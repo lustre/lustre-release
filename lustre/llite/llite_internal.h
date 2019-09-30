@@ -134,10 +134,6 @@ struct ll_inode_info {
 	s64				lli_ctime;
 	spinlock_t			lli_agl_lock;
 
-	/* update atime from MDS no matter if it's older than
-	 * local inode atime. */
-	unsigned int	lli_update_atime:1;
-
 	/* Try to make the d::member and f::member are aligned. Before using
 	 * these members, make clear whether it is directory or not. */
 	union {
@@ -285,6 +281,9 @@ enum ll_file_flags {
 	LLIF_XATTR_CACHE	= 2,
 	/* Project inherit */
 	LLIF_PROJECT_INHERIT	= 3,
+	/* update atime from MDS even if it's older than local inode atime. */
+	LLIF_UPDATE_ATIME	= 4,
+
 };
 
 static inline void ll_file_set_flag(struct ll_inode_info *lli,
