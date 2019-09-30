@@ -3226,27 +3226,27 @@ kiblnd_dev_search(char *ifname)
 static int
 kiblnd_startup(struct lnet_ni *ni)
 {
-        char                     *ifname;
+	char *ifname;
 	struct lnet_inetdev *ifaces = NULL;
 	struct kib_dev *ibdev = NULL;
 	struct kib_net *net;
-        unsigned long             flags;
-        int                       rc;
+	unsigned long flags;
+	int rc;
 	int i;
 	bool newdev;
 
-        LASSERT (ni->ni_net->net_lnd == &the_o2iblnd);
+	LASSERT(ni->ni_net->net_lnd == &the_o2iblnd);
 
-        if (kiblnd_data.kib_init == IBLND_INIT_NOTHING) {
-                rc = kiblnd_base_startup();
-                if (rc != 0)
-                        return rc;
-        }
+	if (kiblnd_data.kib_init == IBLND_INIT_NOTHING) {
+		rc = kiblnd_base_startup();
+		if (rc != 0)
+			return rc;
+	}
 
-        LIBCFS_ALLOC(net, sizeof(*net));
-        ni->ni_data = net;
-        if (net == NULL)
-                goto failed;
+	LIBCFS_ALLOC(net, sizeof(*net));
+	ni->ni_data = net;
+	if (net == NULL)
+		goto failed;
 
 	net->ibn_incarnation = ktime_get_real_ns() / NSEC_PER_USEC;
 
@@ -3269,10 +3269,10 @@ kiblnd_startup(struct lnet_ni *ni)
 		ifname = *kiblnd_tunables.kib_default_ipif;
 	}
 
-        if (strlen(ifname) >= sizeof(ibdev->ibd_ifname)) {
-                CERROR("IPoIB interface name too long: %s\n", ifname);
-                goto failed;
-        }
+	if (strlen(ifname) >= sizeof(ibdev->ibd_ifname)) {
+		CERROR("IPoIB interface name too long: %s\n", ifname);
+		goto failed;
+	}
 
 	rc = lnet_inet_enumerate(&ifaces);
 	if (rc < 0)
@@ -3328,29 +3328,29 @@ kiblnd_startup(struct lnet_ni *ni)
 		goto failed;
 
 	rc = kiblnd_net_init_pools(net, ni, ni->ni_cpts, ni->ni_ncpts);
-        if (rc != 0) {
-                CERROR("Failed to initialize NI pools: %d\n", rc);
-                goto failed;
-        }
+	if (rc != 0) {
+		CERROR("Failed to initialize NI pools: %d\n", rc);
+		goto failed;
+	}
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 	ibdev->ibd_nnets++;
 	list_add_tail(&net->ibn_list, &ibdev->ibd_nets);
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-        net->ibn_init = IBLND_INIT_ALL;
+	net->ibn_init = IBLND_INIT_ALL;
 
-        return 0;
+	return 0;
 
 failed:
 	if (net != NULL && net->ibn_dev == NULL && ibdev != NULL)
-                kiblnd_destroy_dev(ibdev);
+		kiblnd_destroy_dev(ibdev);
 
 	kfree(ifaces);
-        kiblnd_shutdown(ni);
+	kiblnd_shutdown(ni);
 
-        CDEBUG(D_NET, "kiblnd_startup failed\n");
-        return -ENETDOWN;
+	CDEBUG(D_NET, "kiblnd_startup failed\n");
+	return -ENETDOWN;
 }
 
 static struct lnet_lnd the_o2iblnd = {
