@@ -7841,6 +7841,29 @@ test_65n() {
 	local dir5_layout=$(get_layout_param $dir5)
 	[[ "$dir4_layout" = "$dir5_layout" ]] ||
 		error "$dir5 should inherit the default layout from $dir4"
+
+	# though subdir under ROOT doesn't inherit default layout, but
+	# its sub dir/file should be created with default layout.
+	[[ $MDSCOUNT -ge 2 ]] || skip_env "needs >= 2 MDTs"
+	[[ $MDS1_VERSION -ge $(version_code 2.12.59) ]] ||
+		skip "Need MDS version at least 2.12.59"
+
+	local default_lmv_count=$($LFS getdirstripe -D -c $MOUNT)
+	local default_lmv_index=$($LFS getdirstripe -D -i $MOUNT)
+	local default_lmv_hash=$($LFS getdirstripe -D -H $MOUNT)
+
+	if [ $default_lmv_hash == "none" ]; then
+		stack_trap "$LFS setdirstripe -D -d $MOUNT" EXIT
+	else
+		stack_trap "$LFS setdirstripe -D -i $default_lmv_index \
+			-c $default_lmv_count -H $default_lmv_hash $MOUNT" EXIT
+	fi
+
+	$LFS setdirstripe -D -c 2 $MOUNT ||
+		error "setdirstripe -D -c 2 failed"
+	mkdir $MOUNT/$tdir-6 || error "mkdir $tdir-6 failed"
+	local lmv_count=$($LFS getdirstripe -c $MOUNT/$tdir-6)
+	[ $lmv_count -eq 2 ] || error "$tdir-6 stripe count $lmv_count"
 }
 run_test 65n "don't inherit default layout from root for new subdirectories"
 

@@ -5244,12 +5244,15 @@ static void lod_ah_init(const struct lu_env *env,
 		 * If parent object is not root directory,
 		 * then get default striping from parent object.
 		 */
-		if (likely(lp != NULL) && !fid_is_root(lod_object_fid(lp)))
+		if (likely(lp != NULL)) {
 			lod_get_default_striping(env, lp, lds);
 
-		/* set child default striping info, default value is NULL */
-		if (lds->lds_def_striping_set || lds->lds_dir_def_striping_set)
-			lc->ldo_def_striping = lds;
+			/* inherit default striping except ROOT */
+			if ((lds->lds_def_striping_set ||
+			     lds->lds_dir_def_striping_set) &&
+			    !fid_is_root(lod_object_fid(lp)))
+				lc->ldo_def_striping = lds;
+		}
 
 		/* It should always honour the specified stripes */
 		/* Note: old client (< 2.7)might also do lfs mkdir, whose EA
