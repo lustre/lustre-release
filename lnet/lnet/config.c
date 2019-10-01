@@ -1574,8 +1574,7 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 		list_for_each_safe(t, t2, &current_nets) {
 			tb = list_entry(t, struct lnet_text_buf, ltb_list);
 
-			list_del(&tb->ltb_list);
-			list_add_tail(&tb->ltb_list, &matched_nets);
+			list_move_tail(&tb->ltb_list, &matched_nets);
 
 			len += snprintf(networks + len, sizeof(networks) - len,
 					"%s%s", (len == 0) ? "" : ",",

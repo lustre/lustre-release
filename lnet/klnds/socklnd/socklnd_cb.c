@@ -2429,8 +2429,7 @@ ksocknal_flush_stale_txs(struct ksock_peer_ni *peer_ni)
 
 		tx->tx_hstatus = LNET_MSG_STATUS_LOCAL_TIMEOUT;
 
-		list_del(&tx->tx_list);
-		list_add_tail(&tx->tx_list, &stale_txs);
+		list_move_tail(&tx->tx_list, &stale_txs);
 	}
 
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);

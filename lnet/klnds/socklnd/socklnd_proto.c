@@ -429,8 +429,7 @@ ksocknal_handle_zcack(struct ksock_conn *conn, __u64 cookie1, __u64 cookie2)
 
                 if (c == cookie1 || c == cookie2 || (cookie1 < c && c < cookie2)) {
                         tx->tx_msg.ksm_zc_cookies[0] = 0;
-			list_del(&tx->tx_zc_list);
-			list_add(&tx->tx_zc_list, &zlist);
+			list_move(&tx->tx_zc_list, &zlist);
 
                         if (--count == 0)
                                 break;

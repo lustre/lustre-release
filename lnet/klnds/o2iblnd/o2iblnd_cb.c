@@ -1051,8 +1051,7 @@ kiblnd_check_sends_locked(struct kib_conn *conn)
 	       !list_empty(&conn->ibc_tx_queue_rsrvd)) {
 		tx = list_entry(conn->ibc_tx_queue_rsrvd.next,
 				struct kib_tx, tx_list);
-		list_del(&tx->tx_list);
-		list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
+		list_move_tail(&tx->tx_list, &conn->ibc_tx_queue);
                 conn->ibc_reserved_credits--;
         }
 
@@ -2196,8 +2195,7 @@ kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 		 */
 		if (tx->tx_sending == 0) {
 			tx->tx_queued = 0;
-			list_del(&tx->tx_list);
-			list_add(&tx->tx_list, &zombies);
+			list_move(&tx->tx_list, &zombies);
 		}
 	}
 

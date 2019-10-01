@@ -315,12 +315,10 @@ lstcon_group_ndlink_move(struct lstcon_group *old,
 	unsigned int idx = LNET_NIDADDR(ndl->ndl_node->nd_id.nid) %
 					LST_NODE_HASHSIZE;
 
-	list_del(&ndl->ndl_hlink);
-	list_del(&ndl->ndl_link);
 	old->grp_nnode--;
 
-	list_add_tail(&ndl->ndl_hlink, &new->grp_ndl_hash[idx]);
-	list_add_tail(&ndl->ndl_link, &new->grp_ndl_list);
+	list_move_tail(&ndl->ndl_hlink, &new->grp_ndl_hash[idx]);
+	list_move_tail(&ndl->ndl_link, &new->grp_ndl_list);
 	new->grp_nnode++;
 }
 
