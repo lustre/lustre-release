@@ -1151,14 +1151,14 @@ out:
 int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		       const struct lu_buf *buf)
 {
-	struct lov_mds_md_v1	*lmm;
-	struct lov_comp_md_v1	*comp_v1 = NULL;
-	struct lov_foreign_md	*foreign = NULL;
-	struct lov_ost_data_v1	*objs;
-	__u32	magic, pattern;
-	int	i, j, rc = 0;
-	__u16	comp_cnt;
-	__u16	mirror_cnt = 0;
+	struct lov_mds_md_v1 *lmm;
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	struct lov_foreign_md *foreign = NULL;
+	struct lov_ost_data_v1 *objs;
+	__u32 magic, pattern;
+	__u16 mirror_cnt = 0;
+	__u16 comp_cnt;
+	int i, rc;
 	ENTRY;
 
 	LASSERT(buf);
@@ -1219,15 +1219,14 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		GOTO(out, rc);
 
 	for (i = 0; i < comp_cnt; i++) {
-		struct lod_layout_component	*lod_comp;
-		struct lu_extent	*ext;
-		__u32	offs;
+		struct lod_layout_component *lod_comp;
+		struct lu_extent *ext;
+		__u32 offs;
 
 		lod_comp = &lo->ldo_comp_entries[i];
 		if (lo->ldo_is_composite) {
 			offs = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
 			lmm = (struct lov_mds_md_v1 *)((char *)comp_v1 + offs);
-			magic = le32_to_cpu(lmm->lmm_magic);
 
 			ext = &comp_v1->lcm_entries[i].lcme_extent;
 			lod_comp->llc_extent.e_start =
@@ -1243,16 +1242,16 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -EINVAL);
 
-			if (comp_v1->lcm_entries[i].lcme_flags &
-			    cpu_to_le32(LCME_FL_EXTENSION) &&
-			    magic != LOV_MAGIC_SEL) {
+			if ((lod_comp->llc_flags & LCME_FL_EXTENSION) &&
+			    comp_v1->lcm_magic != cpu_to_le32(LOV_MAGIC_SEL)) {
 				struct lod_device *d =
 					lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 
-				CDEBUG(D_WARNING, "%s: not SEL magic on SEL "
-				       "file "DFID": %x\n",
-				       lod2obd(d)->obd_name,
-				       PFID(lod_object_fid(lo)), magic);
+				CWARN("%s: EXTENSION flags=%x set on component[%u]=%x of non-SEL file "DFID" with magic=%#08x\n",
+				      lod2obd(d)->obd_name,
+				      lod_comp->llc_flags, lod_comp->llc_id, i,
+				      PFID(lod_object_fid(lo)),
+				      le32_to_cpu(comp_v1->lcm_magic));
 			}
 		} else {
 			lod_comp_set_init(lod_comp);
@@ -1267,8 +1266,9 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		lod_comp->llc_stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
 		lod_comp->llc_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
 
-		if (magic == LOV_MAGIC_V3) {
+		if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
 			struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *)lmm;
+
 			lod_set_pool(&lod_comp->llc_pool, v3->lmm_pool_name);
 			objs = &v3->lmm_objects[0];
 		} else {
@@ -1284,6 +1284,8 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			__u16 stripe_count;
 
 			if (objs[0].l_ost_idx != (__u32)-1UL) {
+				int j;
+
 				stripe_count = lod_comp_entry_stripe_count(
 							lo, lod_comp, false);
 				if (stripe_count == 0 &&
