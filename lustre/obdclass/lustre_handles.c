@@ -173,21 +173,6 @@ void *class_handle2object(u64 cookie, const struct portals_handle_ops *ops)
 }
 EXPORT_SYMBOL(class_handle2object);
 
-void class_handle_free_cb(struct rcu_head *rcu)
-{
-	struct portals_handle *h;
-	void *ptr;
-
-	h = container_of(rcu, struct portals_handle, h_rcu);
-	ptr = (void *)(unsigned long)h->h_cookie;
-
-	if (h->h_ops->hop_free != NULL)
-		h->h_ops->hop_free(ptr, h->h_size);
-	else
-		OBD_FREE(ptr, h->h_size);
-}
-EXPORT_SYMBOL(class_handle_free_cb);
-
 int class_handle_init(void)
 {
 	struct handle_bucket *bucket;

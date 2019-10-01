@@ -767,8 +767,7 @@ static inline void obd_memory_sub(long size)
         LASSERT(ptr);                                                   \
         obd_memory_sub(size);                                           \
         CDEBUG(D_MALLOC, name " '" #ptr "': %d at %p.\n",               \
-               (int)(size), ptr);                                       \
-        POISON(ptr, 0x5a, size)
+	       (int)(size), ptr);
 
 #else /* !OBD_DEBUG_MEMUSAGE */
 
@@ -866,6 +865,7 @@ do {									      \
 #define OBD_FREE(ptr, size)						      \
 do {									      \
 	OBD_FREE_PRE(ptr, size, "kfreed");				      \
+	POISON(ptr, 0x5a, size);					      \
 	kfree(ptr);							      \
 	POISON_PTR(ptr);						      \
 } while (0)
@@ -874,23 +874,13 @@ do {									      \
 do {									      \
 	if (is_vmalloc_addr(ptr)) {					      \
 		OBD_FREE_PRE(ptr, size, "vfreed");			      \
+		POISON(ptr, 0x5a, size);				      \
 		vfree(ptr);						      \
 		POISON_PTR(ptr);					      \
 	} else {							      \
 		OBD_FREE(ptr, size);					      \
 	}                                                                     \
 } while (0)
-
-#define OBD_FREE_RCU(ptr, size, handle)					      \
-do {									      \
-	struct portals_handle *__h = (handle);				      \
-									      \
-	LASSERT(handle != NULL);					      \
-	__h->h_cookie = (unsigned long)(ptr);				      \
-	__h->h_size = (size);						      \
-	call_rcu(&__h->h_rcu, class_handle_free_cb);			      \
-	POISON_PTR(ptr);						      \
-} while(0)
 
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
  * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd
@@ -922,6 +912,7 @@ do {									      \
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
 do {                                                                          \
         OBD_FREE_PRE(ptr, size, "slab-freed");                                \
+	POISON(ptr, 0x5a, size);					      \
 	kmem_cache_free(slab, ptr);                                        \
         POISON_PTR(ptr);                                                      \
 } while(0)

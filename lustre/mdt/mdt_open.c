@@ -45,7 +45,6 @@
 #include <lustre_nodemap.h>
 
 static const struct portals_handle_ops mfd_open_handle_ops = {
-	.hop_free   = NULL,
 	.hop_type	= "mdt",
 };
 
@@ -104,7 +103,8 @@ void mdt_mfd_free(struct mdt_file_data *mfd)
 {
 	LASSERT(refcount_read(&mfd->mfd_open_handle.h_ref) == 1);
 	LASSERT(list_empty(&mfd->mfd_list));
-	OBD_FREE_RCU(mfd, sizeof *mfd, &mfd->mfd_open_handle);
+	OBD_FREE_PRE(mfd, sizeof(*mfd), "rcu");
+	kfree_rcu(mfd, mfd_open_handle.h_rcu);
 }
 
 static int mdt_create_data(struct mdt_thread_info *info,

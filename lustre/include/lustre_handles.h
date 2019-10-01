@@ -48,7 +48,6 @@
 #include <libcfs/libcfs.h>
 
 struct portals_handle_ops {
-	void (*hop_free)(void *object, int size);
 	/* hop_type is used for some debugging messages */
 	char *hop_type;
 };
@@ -73,7 +72,6 @@ struct portals_handle {
 	/* newly added fields to handle the RCU issue. -jxiong */
 	struct rcu_head			h_rcu;
 	spinlock_t			h_lock;
-	unsigned int			h_size:31;
 	unsigned int			h_in:1;
 };
 
@@ -84,7 +82,6 @@ void class_handle_hash(struct portals_handle *,
 		       const struct portals_handle_ops *ops);
 void class_handle_unhash(struct portals_handle *);
 void *class_handle2object(u64 cookie, const struct portals_handle_ops *ops);
-void class_handle_free_cb(struct rcu_head *rcu);
 int class_handle_init(void);
 void class_handle_cleanup(void);
 
