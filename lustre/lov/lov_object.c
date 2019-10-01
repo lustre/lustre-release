@@ -284,7 +284,6 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 	struct cl_object        *sub;
 	struct lu_site          *site;
 	wait_queue_head_t *wq;
-	wait_queue_entry_t *waiter;
 
         LASSERT(r0->lo_sub[idx] == los);
 
@@ -299,27 +298,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 
 	/* ... wait until it is actually destroyed---sub-object clears its
 	 * ->lo_sub[] slot in lovsub_object_free() */
-	if (r0->lo_sub[idx] == los) {
-		waiter = &lov_env_info(env)->lti_waiter;
-		init_waitqueue_entry(waiter, current);
-		add_wait_queue(wq, waiter);
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		while (1) {
-			/* this wait-queue is signaled at the end of
-			 * lu_object_free(). */
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			spin_lock(&r0->lo_sub_lock);
-			if (r0->lo_sub[idx] == los) {
-				spin_unlock(&r0->lo_sub_lock);
-				schedule();
-			} else {
-				spin_unlock(&r0->lo_sub_lock);
-				set_current_state(TASK_RUNNING);
-				break;
-			}
-		}
-		remove_wait_queue(wq, waiter);
-	}
+	wait_event(*wq, r0->lo_sub[idx] != los);
 	LASSERT(r0->lo_sub[idx] == NULL);
 }
 
