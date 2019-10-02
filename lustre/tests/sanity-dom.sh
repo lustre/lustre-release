@@ -168,10 +168,8 @@ test_sanity()
 {
 	# XXX: to fix 45. Add 42a, c when LU-9693 fixed.
 	# Add 42b when LU-6493 fixed
-	# Enable 39k when LU-10496 fixed
 	ONLY="36 39 40 41 42d 42e 43 46 56r 101e 119a 131 150 155a 155b 155c \
-		155d 207 241 251" \
-		EXCEPT=39k OSC="mdc" DOM="yes" bash sanity.sh
+		155d 207 241 251" OSC="mdc" DOM="yes" bash sanity.sh
 }
 run_test sanity "Run sanity with Data-on-MDT files"
 
