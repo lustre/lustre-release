@@ -33,6 +33,7 @@
 #include <linux/kthread.h>
 #include <linux/sched.h>
 #include <linux/list.h>
+#include <linux/delay.h>
 #include <lu_object.h>
 #include <dt_object.h>
 #include <md_object.h>
@@ -3627,17 +3628,16 @@ again:
 			    que->lu_mdts_count[i][LS_SCANNING_PHASE2] != 0 ||
 			    que->lu_osts_count[i][LS_SCANNING_PHASE1] != 0 ||
 			    que->lu_osts_count[i][LS_SCANNING_PHASE2] != 0) {
-				struct l_wait_info lwi;
-
 				/* If it is required to wait, then sleep
-				 * 3 seconds and try to query again. */
-				lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(3),
-						       NULL,
-						       LWI_ON_SIGNAL_NOOP,
-						       NULL);
-				rc = l_wait_event(lfsck->li_thread.t_ctl_waitq,
-						  0, &lwi);
-				if (rc == -ETIMEDOUT)
+				 * 3 seconds and try to query again.
+				 */
+				unsigned long timeout =
+					msecs_to_jiffies(3000) + 1;
+				while (timeout &&
+				       !fatal_signal_pending(current))
+					timeout = schedule_timeout_killable(
+						timeout);
+				if (timeout == 0)
 					goto again;
 			}
 		}

@@ -35,6 +35,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/user_namespace.h>
+#include <linux/delay.h>
 #ifdef HAVE_UIDGID_HEADER
 # include <linux/uidgid.h>
 #endif
@@ -2381,14 +2382,9 @@ out_lock:
 	 * to reorder. */
 	if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2)) &&
 	    desc) {
-		wait_queue_head_t	 waitq;
-		struct l_wait_info	 lwi1;
-
 		CDEBUG(D_INFO, "reorder BULK\n");
-		init_waitqueue_head(&waitq);
 
-		lwi1 = LWI_TIMEOUT_INTR(cfs_time_seconds(3), NULL, NULL, NULL);
-		l_wait_event(waitq, 0, &lwi1);
+		ssleep(3);
 		target_bulk_io(exp, desc);
 		ptlrpc_free_bulk(desc);
 	}

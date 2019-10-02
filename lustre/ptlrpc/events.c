@@ -34,6 +34,7 @@
 
 #include <libcfs/libcfs.h>
 #include <linux/kernel.h>
+#include <linux/delay.h>
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
@@ -546,8 +547,6 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 
 void ptlrpc_ni_fini(void)
 {
-	wait_queue_head_t         waitq;
-	struct l_wait_info  lwi;
 	int                 rc;
 	int                 retries;
 
@@ -571,9 +570,7 @@ void ptlrpc_ni_fini(void)
 				CWARN("Event queue still busy\n");
 
 			/* Wait for a bit */
-			init_waitqueue_head(&waitq);
-			lwi = LWI_TIMEOUT(cfs_time_seconds(2), NULL, NULL);
-			l_wait_event(waitq, 0, &lwi);
+			ssleep(2);
 			break;
 		}
 	}
