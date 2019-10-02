@@ -1,15 +1,13 @@
 #!/bin/bash
-#
-#set -vx
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-# bug number for skipped test:  LU-9429
-     ALWAYS_EXCEPT="            parallel_grouplock  $PARALLEL_SCALE_EXCEPT "
+ALWAYS_EXCEPT="$PARALLEL_SCALE_EXCEPT "
+# bug number for skipped test: LU-9429
+ALWAYS_EXCEPT+="               parallel_grouplock "
 
 if [ "$mds1_FSTYPE" = zfs -o "$ost1_FSTYPE" = zfs ]; then
 	ZFSSLOW=$SLOW
@@ -22,11 +20,12 @@ if [ "$mds1_FSTYPE" = zfs -o "$ost1_FSTYPE" = zfs ]; then
 	statahead_NUMFILES=${statahead_NUMFILES:-100000}
 fi
 
+build_test_filter
+
 # common setup
-MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 clients=${CLIENTS:-$HOSTNAME}
 generate_machine_file $clients $MACHINEFILE ||
-    error "Failed to generate machine file"
+	error "Failed to generate machine file"
 num_clients=$(get_node_count ${clients//,/ })
 
 # compilbench
@@ -67,7 +66,6 @@ fi
 
 . $LUSTRE/tests/functions.sh
 
-build_test_filter
 check_and_setup_lustre
 
 get_mpiuser_id $MPI_USER
