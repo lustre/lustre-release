@@ -1,21 +1,15 @@
 #!/bin/bash
-#set -vx
 set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test:
-ALWAYS_EXCEPT="$POSIX_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
-	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
-
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$POSIX_EXCEPT"
+build_test_filter
 
 POSIX_DIR=${POSIX_DIR:-"$LUSTRE/tests/posix"}
 POSIX_SRC=${POSIX_SRC:-"/usr/src/posix"}
@@ -34,7 +28,6 @@ if [[ "$mds1_FSTYPE" = zfs ]]; then
 fi
 
 check_and_setup_lustre
-build_test_filter
 
 cleanup_loop_dev() {
     local mnt=$1

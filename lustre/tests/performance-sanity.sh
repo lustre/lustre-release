@@ -1,27 +1,20 @@
 #!/bin/bash
-#set -vx
 set -e
 
-TESTNAME=`basename $0 .sh`
-TMP=${TMP:-/tmp}
+TESTNAME=$(basename $0 .sh)
 LOG=${LOG:-"$TMP/${TESTNAME}.log"}
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$PERFORMANCE_SANITY_EXCEPT "
+build_test_filter
 
 [ -x "$MDSRATE" ] || FAIL_ON_ERROR=true error "No mdsrate program. Aborting."
 which mpirun > /dev/null 2>&1 ||
 	FAIL_ON_ERROR=true error "No mpirun program. Aborting."
-
-# Skip these tests
-# bug number:
-ALWAYS_EXCEPT="  $PERFORMANCE_SANITY_EXCEPT"
-
-build_test_filter
 
 get_mpiuser_id $MPI_USER
 MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}

@@ -8,17 +8,15 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-#Bug number for excepting test
-ALWAYS_EXCEPT="$METADATA_UPDATES_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT LIST
-
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+#Bug number for skipped test:
+ALWAYS_EXCEPT="$METADATA_UPDATES_EXCEPT "
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT LIST
+build_test_filter
 
 TRACE=${TRACE:-"+x"}
 
@@ -50,7 +48,6 @@ NUM_FILES=1000
 log "===== $0 ====== "
 
 check_and_setup_lustre
-build_test_filter
 
 cleanup_prepare () {
 
@@ -260,19 +257,18 @@ run_test 2 "directory content create, check, delete files , check"
 test_3() {
 	WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null)} || true
 	disjoint_file=$TESTDIR/$tfile
-	machine_file=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	numloops=1000
 
 	[ ! -f "$WRITE_DISJOINT" ] && skip_env "write_disjoint not found"
 
 	set $TRACE
-	generate_machine_file $NODES_TO_USE $machine_file
-	mpi_run ${MACHINEFILE_OPTION} $machine_file \
+	generate_machine_file $NODES_TO_USE $MACHINEFILE
+	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \
 		-np $(get_node_count ${NODES_TO_USE//,/ }) \
 		$WRITE_DISJOINT -f $disjoint_file -n $numloops ||
 			error "mpi_run failed"
 
-	rm -f $machine_file
+	rm -f $MACHINEFILE
 }
 run_test 3 "write_disjoint test"
 

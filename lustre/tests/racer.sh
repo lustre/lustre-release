@@ -1,25 +1,25 @@
 #!/bin/bash
-#set -vx
 set -e
 
 ONLY=${ONLY:-"$*"}
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+build_test_filter
 
 racer=$LUSTRE/tests/racer/racer.sh
 echo racer: $racer with $MDSCOUNT MDTs
 
 if [ "$SLOW" = "no" ]; then
-    DURATION=${DURATION:-300}
+	DURATION=${DURATION:-300}
 else
-    DURATION=${DURATION:-900}
+	DURATION=${DURATION:-900}
 fi
 MOUNT_2=${MOUNT_2:-"yes"}
 
-build_test_filter
 check_and_setup_lustre
 
 CLIENTS=${CLIENTS:-$HOSTNAME}

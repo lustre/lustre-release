@@ -1,29 +1,25 @@
 #!/bin/bash
-#set -x
 set -e
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
+init_logging
 
+# bug number for skipped test:
+ALWAYS_EXCEPT="$OBDFILTER_SURVEY_EXCEPT "
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+build_test_filter
+
+[ "$SLOW" = no ] && { nobjhi=1; thrhi=4; }
 nobjhi=${nobjhi:-1}
 thrhi=${thrhi:-16}
 size=${size:-1024}
-
-# the summary file a bit smaller than OSTSIZE
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-init_logging
-
-[ "$SLOW" = no ] && { nobjhi=1; thrhi=4; }
 thrlo=${thrlo:-$(( thrhi / 2))}
-
-# bug number for skipped test:
-ALWAYS_EXCEPT="$OBDFILTER_SURVEY_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 OBDSURVEY=${OBDSURVEY:-$(which obdfilter-survey)}
 
-build_test_filter
 check_and_setup_lustre
 
 # FIXME: the summary file a bit smaller than OSTSIZE, add estimation

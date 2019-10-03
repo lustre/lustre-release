@@ -8,17 +8,18 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-# bug number:
 ALWAYS_EXCEPT="$SANITY_BENCHMARK_EXCEPT"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="iozone"
+
+build_test_filter
 
 MAX_THREADS=${MAX_THREADS:-20}
-RAMKB=`awk '/MemTotal:/ { print $2 }' /proc/meminfo`
+RAMKB=$(awk '/MemTotal:/ { print $2 }' /proc/meminfo)
 if [ -z "$THREADS" ]; then
 	THREADS=$((RAMKB / 16384))
 	[ $THREADS -gt $MAX_THREADS ] && THREADS=$MAX_THREADS
@@ -31,9 +32,6 @@ DEBUG_OFF=${DEBUG_OFF:-"eval lctl set_param debug=\"$DEBUG_LVL\""}
 DEBUG_ON=${DEBUG_ON:-"eval lctl set_param debug=0x33f0484"}
 DIRECTIO=${DIRECTIO:-directio}
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="iozone"
-
-build_test_filter
 check_and_setup_lustre
 
 assert_DIR

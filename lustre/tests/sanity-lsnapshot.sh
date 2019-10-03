@@ -7,15 +7,14 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$SANITY_LSNAPSHOT_EXCEPT"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$SANITY_LSNAPSHOT_EXCEPT "
+build_test_filter
 
 [[ "$MDS1_VERSION" -lt $(version_code 2.9.55) ]] ||
 [[ "$OST1_VERSION" -lt $(version_code 2.9.55) ]] &&
@@ -33,7 +32,6 @@ do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param debug=+snapshot
 
 lss_gen_conf
 lss_cleanup
-build_test_filter
 
 test_0() {
 	echo "Create lss_0_0 with default"
