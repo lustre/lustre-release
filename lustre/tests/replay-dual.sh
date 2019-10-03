@@ -2,43 +2,40 @@
 
 set -e
 
-# bug number:  LU-2012 LU-8333 LU-7372
-ALWAYS_EXCEPT="14b     21b     26      $REPLAY_DUAL_EXCEPT"
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-SETUP=${SETUP:-""}
-CLEANUP=${CLEANUP:-""}
 MOUNT_2=${MOUNT_2:-"yes"}
-export MULTIOP=${MULTIOP:-multiop}
-. $LUSTRE/tests/test-framework.sh
 
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+. $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
-#                                   7  (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="21b"
+ALWAYS_EXCEPT="$REPLAY_DUAL_EXCEPT "
+# bug number for skipped test:  LU-2012 LU-8333 LU-7372
+ALWAYS_EXCEPT+="                14b     21b     26 "
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [[ "$mds1_FSTYPE" == zfs ]] &&
-# bug number for skipped test:	      LU-2230
+# bug number for skipped test:        LU-2230
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 21b"
+
 if $SHARED_KEY; then
-# bug number for skipped tests:	LU-9795	LU-9795
-	ALWAYS_EXCEPT="		0a	0b	$ALWAYS_EXCEPT"
+# bug number for skipped tests:  LU-9795 LU-9795
+	ALWAYS_EXCEPT+="         0a      0b "
 fi
 
-build_test_filter
+#                                   7  (min)"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="21b "
 
+build_test_filter
 check_and_setup_lustre
+
 MOUNTED=$(mounted_lustre_filesystems)
 if ! $(echo $MOUNTED' ' | grep -w -q $MOUNT2' '); then
-    zconf_mount $HOSTNAME $MOUNT2
-    MOUNTED2=yes
+	zconf_mount $HOSTNAME $MOUNT2
+	MOUNTED2=yes
 fi
 
 assert_DIR

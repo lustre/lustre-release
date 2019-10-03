@@ -1,6 +1,5 @@
 #!/bin/bash
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
-
+#
 # Was Test 11 in cmd3.
 # For duration of 24 hours repeatedly failover a random MDS at
 # 10 minute intervals and verify that no application errors occur.
@@ -10,15 +9,16 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
+. $LUSTRE/tests/test-framework.sh
+init_test_env $@
+init_logging
+
 # bug number for skipped test:
 ALWAYS_EXCEPT="$RECOVERY_MDS_SCALE_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-. $LUSTRE/tests/test-framework.sh
-init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
-init_logging
+build_test_filter
 
 remote_mds_nodsh && skip_env "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip_env "remote OST with nodsh" && exit 0
@@ -211,8 +211,6 @@ bug 20918"
 }
 
 ################################## Main Flow ###################################
-build_test_filter
-
 check_and_setup_lustre
 rm -rf $DIR/[Rdfs][0-9]*
 

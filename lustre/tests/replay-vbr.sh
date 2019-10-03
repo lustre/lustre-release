@@ -1,27 +1,20 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
 
-# bug number:
-ALWAYS_EXCEPT=" $REPLAY_VBR_EXCEPT"
-
-SAVE_PWD=$PWD
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
-SETUP=${SETUP:-}
-CLEANUP=${CLEANUP:-}
 MOUNT_2=${MOUNT_2:-"yes"}
-export MULTIOP=${MULTIOP:-multiop}
+
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
+ALWAYS_EXCEPT=" $REPLAY_VBR_EXCEPT"
+
 #                                  ~6  (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="7"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="7 "
 
 build_test_filter
 

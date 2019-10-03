@@ -1,34 +1,27 @@
 #!/bin/bash
 
 set -e
-#set -v
 
-#
-# This test needs to be run on the client
-#
-
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/lmv.sh}
 
-
-# Skip these tests
-ALWAYS_EXCEPT=""
+# bug number for skipped test:
+ALWAYS_EXCEPT="REPLAY_SINGLE_LMV_EXCEPT "
 build_test_filter
 
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"stopall"}
 
 if [ "$ONLY" == "cleanup" ]; then
-    lctl set_param debug=0 || true
-    $CLEANUP
-    exit 0
+	lctl set_param debug=0 || true
+	$CLEANUP
+	exit 0
 fi
 
 setup() {
-    formatall
-    setupall
+	formatall
+	setupall
 }
 
 $SETUP
