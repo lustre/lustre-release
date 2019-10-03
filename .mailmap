@@ -331,12 +331,14 @@ Wei Liu <wei3.liu@intel.com> <w3liu@unknown000dc5d3c256.gateway.2wire.net>
 #Yang Sheng <yang.sheng@intel.com> <ys@whamcloud.com>
 Yang Sheng <yang.sheng@intel.com>
 
-# Remap to Whamcloud2
+# Remap to Whamcloud/DDN
 Alex Zhuravlev <bzzz@whamcloud.com> <alexey.zhuravlev@intel.com>
 Alex Zhuravlev <bzzz@whamcloud.com>
+Alex Zhuravlev <bzzz@whamcloud.com> <alexey@localhost.localdomain>
 Amir Shehata <ashehata@whamcloud.com> <amir.shehata@intel.com>
 Andreas Dilger <adilger@whamcloud.com> <andreas.dilger@intel.com>
 Andreas Dilger <adilger@whamcloud.com> <adilger@dilger.ca>
+Artem Blagodarenko <ablagodarenko@whamcloud.com> <ablagodarenko@ddn.com>
 Bobi Jam <bobijam@whamcloud.com> <bobijam.xu@intel.com>
 Emoly Liu <emoly@whamcloud.com> <emoly.liu@intel.com>
 Hongchao Zhang <hongchao@whamcloud.com> <hongchao.zhang@intel.com>
@@ -387,10 +389,13 @@ Vladimir Saveliev <vlaidimir.saveliev@hpe.com> <c17830@cray.com>
 Alex Deiter <adeiter@tintri.com> <alex.deiter@gmail.com>
 Akam Kumar Bharathi <azurelustre@gmail.com>
 Amey Inamadar <amey_inamadar@intel.com> <amey_inamadar>
+Arshad Hussain <arshad.hussain@aeoncomputing.com> <arshad.super@gmail.com>
 Brian Behlendorf <behlendorf1@llnl.gov> <behlendo>
 Chas Williams <chas@cmf.nrl.navy.mil>
 Christopher J. Morrone <morrone2@llnl.gov> <morrone>
 Dom Milos <don.milos@hp.com> <donmilos>
+Dominique Martinet <asmadeus@codewreck.org> <qhufhnrynczannqp.f@noclue.notk.org>
+Etienne AUJAMES <etienne.aujames@cea.fr> <eaujames@ddn.com>
 Evan Felix <efelix@pnnl.gov> <efelix>
 Girish Chandrashekara <girishc@india.hp.com> <girish_c>
 Girish Chandrashekara <girishc@india.hp.com> <girishc>
@@ -401,7 +406,7 @@ Jacques-Charles LaFoucriere <jacques-charles.lafoucriere@cea.fr>
 James Simmons <jsimmons@infradead.org> <uja.ornl@gmail.com>
 James Simmons <jsimmons@infradead.org> <uja.ornl@yahoo.com>
 James Simmons <jsimmons@infradead.org>
-Jinshan Xiong <jinshan.xiong@uber.com> <jinshan.xiong@intel.com>
+Jean-Baptiste Skutnik <jskutnik@ddn.com> <jb.skutnik@gmail.com>
 Jinshan Xiong <jinshan.xiong@uber.com> <jinshan.xiong@gmail.com>
 John L. Hammond <jhammond@tacc.utexas.edu>
 Marcus Miller <marcusm@llnl.gov> <wmarcusm>
@@ -409,8 +414,10 @@ Mark Burton <markb@ordern.com> <[mailto:markb@ordern.com]>
 Ned Bass <bass6@llnl.gov> <bass6@llnl.gov>
 Mr NeilBrown <neilb@suse.de> <neilb@suse.com>
 Mr NeilBrown <neilb@suse.de>
+Patrick Farrell <patrick.farrell@oracle.com> <paf0187@gmail.com>
 Rumi Zahir <rumi.zahir@intel.com> <rzahir>
 S.Ravindranadh Chowdary <sravi@india.hp.com> <sravi>
+Sergey Gorenko <sergeygo@nvidia.com> <sergeygo@mellanox.com>
 Teddy Zheng <teddy@ddn.com> <jjkky@yahoo.com>
 Teddy Zheng <teddy@ddn.com>
 Thomas Stibor <t.stibor@gsi.de> <thomas@stibor.net>
