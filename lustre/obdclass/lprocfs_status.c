@@ -786,6 +786,7 @@ static const char *obd_connect_names[] = {
 	"pcc",			/* 0x1000 */
 	"plain_layout",		/* 0x2000 */
 	"async_discard",	/* 0x4000 */
+	"client_encryption",	/* 0x8000 */
 	NULL
 };
 

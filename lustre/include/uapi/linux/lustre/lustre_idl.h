@@ -839,15 +839,16 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_LSOM		0x800ULL /* LSOM support */
 #define OBD_CONNECT2_PCC		0x1000ULL /* Persistent Client Cache */
 #define OBD_CONNECT2_ASYNC_DISCARD	0x4000ULL /* support async DoM data discard */
-
+#define OBD_CONNECT2_ENCRYPT		0x8000ULL /* client-to-disk encrypt */
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
  * changes with senior engineers before starting to use a new flag.  Then,
  * submit a small patch against EVERY branch that ONLY adds the new flag,
- * updates obd_connect_names[] for lprocfs_rd_connect_flags(), adds the
- * flag to check_obd_connect_data(), and updates wiretests accordingly, so it
- * can be approved and landed easily to reserve the flag for future use. */
+ * updates obd_connect_names[], adds the flag to check_obd_connect_data(),
+ * and updates wiretests accordingly, so it can be approved and landed easily
+ * to reserve the flag for future use.
+ */
 
 /* The MNE_SWAB flag is overloading the MDS_MDS bit only for the MGS
  * connection.  It is a temporary bug fix for Imperative Recovery interop
