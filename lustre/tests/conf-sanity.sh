@@ -757,12 +757,18 @@ test_21d() {
 	start_mds || error "MDS start failed"
 	wait_osc_import_state mds ost2 FULL
 
+	local zkeeper=${KEEP_ZPOOL}
+	stack_trap "KEEP_ZPOOL=$zkeeper" EXIT
+	KEEP_ZPOOL="true"
+
 	stop_ost || error "Unable to stop OST1"
 	stop_ost2 || error "Unable to stop OST2"
 	stop_mds || error "Unable to stop MDS"
 	stop_mgs
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf_or_reformat
+	KEEP_ZPOOL="${zkeeper}"
+
 	start_mgs || error "unable to start MGS"
 }
 run_test 21d "start mgs then ost and then mds"
