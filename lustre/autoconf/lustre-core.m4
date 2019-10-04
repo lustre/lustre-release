@@ -1876,7 +1876,7 @@ bio_endio, [
 #
 # LC_ACCOUNT_PAGE_DIRTIED_3ARGS
 #
-# 4.2 kernel page dirtied takes 3 arguments
+# 4.2 [to 4.5] kernel page dirtied takes 3 arguments
 #
 AC_DEFUN([LC_ACCOUNT_PAGE_DIRTIED_3ARGS], [
 LB_CHECK_COMPILE([if 'account_page_dirtied' with 3 args exists],
@@ -2665,53 +2665,6 @@ bi_status, [
 ]) # LC_BI_STATUS
 
 #
-# LC_UAPI_LINUX_MOUNT_H
-#
-# kernel 4.20 commit e262e32d6bde0f77fb0c95d977482fc872c51996
-# vfs: Suppress MS_* flag defs within the kernel ...
-#
-AC_DEFUN([LC_UAPI_LINUX_MOUNT_H], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if MS_RDONLY was moved to uapi/linux/mount.h],
-uapi_linux_mount, [
-	#include <uapi/linux/mount.h>
-],[
-	int x = MS_RDONLY;
-	(void)x;
-],[
-	AC_DEFINE(HAVE_UAPI_LINUX_MOUNT_H, 1,
-		[if MS_RDONLY was moved to uapi/linux/mount.h])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-]) # LC_UAPI_LINUX_MOUNT_H
-
-#
-# LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
-#
-# kernel 4.20 commit 1863d77f15da0addcd293a1719fa5d3ef8cde3ca
-# SUNRPC: Replace the cache_detail->hash_lock with a regular spinlock
-#
-# Now that the reader functions are all RCU protected, use a regular
-# spinlock rather than a reader/writer lock.
-#
-AC_DEFUN([LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if cache_detail->hash_lock is a spinlock],
-hash_lock_isa_spinlock_t, [
-	#include <linux/sunrpc/cache.h>
-],[
-	spinlock_t *lock = &(((struct cache_detail *)0)->hash_lock);
-	spin_lock(lock);
-],[
-	AC_DEFINE(HAVE_CACHE_HASH_SPINLOCK, 1,
-		[if cache_detail->hash_lock is a spinlock])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-]) # LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
-
-#
 # LC_BIO_INTEGRITY_ENABLED
 #
 # 4.13 removed bio_integrity_enabled
@@ -2834,6 +2787,74 @@ inode_timespec64, [
 ])
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_INODE_TIMESPEC64
+
+#
+# LC___XA_SET_MARK
+#
+# kernel 4.20 commit v4.19-rc5-248-g9b89a0355144
+# xarray: Add XArray marks
+#
+AC_DEFUN([LC___XA_SET_MARK], [
+LB_CHECK_COMPILE([if '__xa_set_mark' exists],
+__xa_set_mark, [
+	#include <linux/xarray.h>
+	#include <linux/fs.h>
+],[
+	struct xarray *xa = NULL;
+
+	__xa_set_mark(xa, 0, PAGECACHE_TAG_DIRTY);
+],[
+	AC_DEFINE(HAVE___XA_SET_MARK, 1,
+		[__xa_set_mark exists])
+])
+]) # LC___XA_SET_MARK
+
+#
+# LC_UAPI_LINUX_MOUNT_H
+#
+# kernel 4.20 commit e262e32d6bde0f77fb0c95d977482fc872c51996
+# vfs: Suppress MS_* flag defs within the kernel ...
+#
+AC_DEFUN([LC_UAPI_LINUX_MOUNT_H], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if MS_RDONLY was moved to uapi/linux/mount.h],
+uapi_linux_mount, [
+	#include <uapi/linux/mount.h>
+],[
+	int x = MS_RDONLY;
+	(void)x;
+],[
+	AC_DEFINE(HAVE_UAPI_LINUX_MOUNT_H, 1,
+		[if MS_RDONLY was moved to uapi/linux/mount.h])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_UAPI_LINUX_MOUNT_H
+
+#
+# LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
+#
+# kernel 4.20 commit 1863d77f15da0addcd293a1719fa5d3ef8cde3ca
+# SUNRPC: Replace the cache_detail->hash_lock with a regular spinlock
+#
+# Now that the reader functions are all RCU protected, use a regular
+# spinlock rather than a reader/writer lock.
+#
+AC_DEFUN([LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if cache_detail->hash_lock is a spinlock],
+hash_lock_isa_spinlock_t, [
+	#include <linux/sunrpc/cache.h>
+],[
+	spinlock_t *lock = &(((struct cache_detail *)0)->hash_lock);
+	spin_lock(lock);
+],[
+	AC_DEFINE(HAVE_CACHE_HASH_SPINLOCK, 1,
+		[if cache_detail->hash_lock is a spinlock])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
 #
 # LC_HAS_LINUX_SELINUX_ENABLED
@@ -3124,10 +3145,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_INODE_TIMESPEC64
 
 	# 4.20
-	LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
-
-	# 5.0
+	LC___XA_SET_MARK
 	LC_UAPI_LINUX_MOUNT_H
+	LC_HAVE_SUNRPC_CACHE_HASH_LOCK_IS_A_SPINLOCK
 
 	# 5.1
 	LC_HAS_LINUX_SELINUX_ENABLED

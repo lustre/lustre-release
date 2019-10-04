@@ -918,21 +918,50 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 	RETURN(bytes > 0 ? bytes : rc);
 }
 
+/*
+ * Kernels 4.2 - 4.5 pass memcg argument to account_page_dirtied()
+ */
+static inline void ll_account_page_dirtied(struct page *page,
+					   struct address_space *mapping)
+{
+#ifdef HAVE_ACCOUNT_PAGE_DIRTIED_3ARGS
+	struct mem_cgroup *memcg = mem_cgroup_begin_page_stat(page);
+
+	account_page_dirtied(page, mapping, memcg);
+	mem_cgroup_end_page_stat(memcg);
+#else
+	account_page_dirtied(page, mapping);
+#endif
+}
+
+/*
+ * From kernel v4.19-rc5-248-g9b89a0355144 use XArrary
+ * Prior kernels use radix_tree for tags
+ */
+static inline void ll_page_tag_dirty(struct page *page,
+				     struct address_space *mapping)
+{
+#ifdef HAVE___XA_SET_MARK
+	__xa_set_mark(&mapping->i_pages, page_index(page), PAGECACHE_TAG_DIRTY);
+#else
+	radix_tree_tag_set(&mapping->page_tree, page_index(page),
+			   PAGECACHE_TAG_DIRTY);
+#endif
+}
+
 /* Taken from kernel set_page_dirty, __set_page_dirty_nobuffers
  * Last change to this area: b93b016313b3ba8003c3b8bb71f569af91f19fc7
  *
  * Current with Linus tip of tree (7/13/2019):
  * v5.2-rc4-224-ge01e060fe0
  *
- * Backwards compat for 3.x, 4.x kernels relating to memcg handling
- * & rename of radix tree to xarray. */
+ * Backwards compat for 3.x, 5.x kernels relating to memcg handling
+ * & rename of radix tree to xarray.
+ */
 void vvp_set_pagevec_dirty(struct pagevec *pvec)
 {
 	struct page *page = pvec->pages[0];
 	struct address_space *mapping = page->mapping;
-#if defined HAVE_ACCOUNT_PAGE_DIRTIED_3ARGS
-	struct mem_cgroup *memcg;
-#endif
 	unsigned long flags;
 	int count = pagevec_count(pvec);
 	int dirtied = 0;
@@ -974,15 +1003,8 @@ void vvp_set_pagevec_dirty(struct pagevec *pvec)
 			 "all pages must have the same mapping.  page %p, mapping %p, first mapping %p\n",
 			 page, page->mapping, mapping);
 		WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
-#ifdef HAVE_ACCOUNT_PAGE_DIRTIED_3ARGS
-		memcg = mem_cgroup_begin_page_stat(page);
-		account_page_dirtied(page, mapping, memcg);
-		mem_cgroup_end_page_stat(memcg);
-#else
-		account_page_dirtied(page, mapping);
-#endif
-		radix_tree_tag_set(&mapping->page_tree, page_index(page),
-				   PAGECACHE_TAG_DIRTY);
+		ll_account_page_dirtied(page, mapping);
+		ll_page_tag_dirty(page, mapping);
 		dirtied++;
 		unlock_page_memcg(page);
 	}
