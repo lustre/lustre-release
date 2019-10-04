@@ -148,9 +148,10 @@ do_fsck() {
 trap cleanupall EXIT
 
 test_1 () {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip_env "ldiskfs only test"
+	[ "$mds1_FSTYPE" != ldiskfs ] && skip_env "ldiskfs only test"
+
 	local dev
+
 	for num in $(seq $OSTCOUNT); do
 		dev=$(ostdevname $num)
 		log "run llverdev on the OST $dev"

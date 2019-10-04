@@ -179,7 +179,7 @@ test_0() {
 run_test 0 "lfsck namespace performance (routine case) without load"
 
 test_1() {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
+	[ "$mds1_FSTYPE" != ldiskfs ] &&
 		skip_env "not implemented for ZFS"
 
 	local BCOUNT=0

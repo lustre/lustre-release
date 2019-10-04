@@ -422,8 +422,8 @@ trace_cmd() {
 }
 
 test_20d() {
-	if [ $MDS1_VERSION -lt $(version_code 2.12.50) ] ||
-	   [ $CLIENT_VERSION -lt $(version_code 2.12.50) ]; then
+	if [ "$MDS1_VERSION" -lt $(version_code 2.12.50) ] ||
+	   [ "$CLIENT_VERSION" -lt $(version_code 2.12.50) ]; then
 		skip "Need version >= 2.12.50"
 	fi
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
@@ -522,10 +522,10 @@ remove_nodemap() {
 }
 
 test_21a() {
-	local sepol
-
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.56) ] &&
 		skip "Need MDS >= 2.11.56"
+
+	local sepol
 
 	# umount client
 	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
@@ -591,10 +591,10 @@ test_21a() {
 run_test 21a "Send sepol at connect"
 
 test_21b() {
-	local sepol
-
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ] &&
+	[ "$MDS1_VERSION" -lt $(version_code 2.11.56) ] &&
 		skip "Need MDS >= 2.11.56"
+
+	local sepol
 
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 	echo test > $DIR/$tdir/toopen ||
