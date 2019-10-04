@@ -9716,35 +9716,53 @@ is_project_quota_supported() {
 		[ $(lustre_version_code $SINGLEMDS) -le \
 			$(version_code 2.10.53) ] && return 1
 
-		do_facet mds1 $ZPOOL upgrade -v |
-			grep project_quota && return 0
+		do_facet mds1 $ZPOOL get all |
+			grep -q project_quota && return 0
 	fi
 
 	return 1
 }
 
+# ZFS project quota enable/disable:
+#   This  feature  will  become  active as soon as it is enabled and will never
+#   return to being disabled. Each filesystem will be upgraded automatically
+#   when remounted or when [a] new file is created under that filesystem. The
+#   upgrade can also be triggered on filesystems via `zfs set version=current
+#   <pool/fs>`. The upgrade process runs in the background and may take a
+#   while to complete for the filesystems containing a large number of files.
 enable_project_quota() {
 	is_project_quota_supported || return 0
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
+	local zkeeper=${KEEP_ZPOOL}
+	stack_trap "KEEP_ZPOOL=$zkeeper" EXIT
+	KEEP_ZPOOL="true"
 	stopall || error "failed to stopall (1)"
 
-	for num in $(seq $MDSCOUNT); do
-		do_facet mds$num $TUNE2FS -O project $(mdsdevname $num) ||
-			error "tune2fs $(mdsdevname $num) failed"
+	local zfeat_en="feature@project_quota=enabled"
+	for facet in $(seq -f mds%g $MDSCOUNT) $(seq -f ost%g $OSTCOUNT); do
+		local facet_fstype=${facet:0:3}1_FSTYPE
+		local devname
+
+		if [ "${!facet_fstype}" = "zfs" ]; then
+			devname=$(zpool_name ${facet})
+			do_facet ${facet} $ZPOOL set "$zfeat_en" $devname ||
+				error "$ZPOOL set $zfeat_en $devname"
+		else
+			[ ${facet:0:3} == "mds" ] &&
+				devname=$(mdsdevname ${facet:3}) ||
+				devname=$(ostdevname ${facet:3})
+			do_facet ${facet} $TUNE2FS -O project $devname ||
+				error "tune2fs $devname failed"
+		fi
 	done
 
-	for num in $(seq $OSTCOUNT); do
-		do_facet ost$num $TUNE2FS -O project $(ostdevname $num) ||
-			error "tune2fs $(ostdevname $num) failed"
-	done
-
+	KEEP_ZPOOL="${zkeeper}"
 	mount
 	setupall
 }
 
 disable_project_quota() {
 	is_project_quota_supported || return 0
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
+	[ "$mds1_FSTYPE" != "ldiskfs" ] && return 0
 	stopall || error "failed to stopall (1)"
 
 	for num in $(seq $MDSCOUNT); do

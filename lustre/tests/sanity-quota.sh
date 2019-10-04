@@ -412,13 +412,23 @@ quota_show_check() {
 
 project_quota_enabled () {
 	local rc=0
-	for num in $(seq $MDSCOUNT); do
-		do_facet mds$num $DEBUGFS -R features $(mdsdevname $num) |
-			grep -q project || rc=1
-	done
-	for num in $(seq $OSTCOUNT); do
-		do_facet ost$num $DEBUGFS -R features $(ostdevname $num) |
-			grep -q project || rc=1
+	local zfeat="feature@project_quota"
+
+	for facet in $(seq -f mds%g $MDSCOUNT) $(seq -f ost%g $OSTCOUNT); do
+		local facet_fstype=${facet:0:3}1_FSTYPE
+		local devname
+
+		if [ "${!facet_fstype}" = "zfs" ]; then
+			devname=$(zpool_name ${facet})
+			do_facet ${facet} $ZPOOL get -H "$zfeat" $devname |
+				grep -wq active || rc=1
+		else
+			[ ${facet:0:3} == "mds" ] &&
+				devname=$(mdsdevname ${facet:3}) ||
+				devname=$(ostdevname ${facet:3})
+			do_facet ${facet} $DEBUGFS -R features $devname |
+				grep -q project || rc=1
+		fi
 	done
 	[ $rc -eq 0 ] && PQ_CLEANUP=false || PQ_CLEANUP=true
 	return $rc
