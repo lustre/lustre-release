@@ -191,6 +191,10 @@ BuildRequires: pkgconfig
 %else
 BuildRequires: pkg-config
 %endif
+%if %{with gss}
+BuildRequires: krb5-devel openssl-devel
+Requires: krb5-libs openssl-libs
+%endif
 %if %{with servers}
 Requires: lustre-osd
 Requires: lustre-osd-mount
@@ -199,8 +203,6 @@ Provides: lustre-server = %{version}-%{release}
 %endif
 Obsoletes: lustre-client < %{version}
 Provides: lustre-client = %{version}-%{release}
-
-# GSS requires this: BuildRequires: libgssapi-devel >= 0.10
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 #suse don't support selinux
 BuildRequires: libselinux-devel
