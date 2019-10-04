@@ -862,21 +862,20 @@ test_7f() {
 run_test 7f "unlink, {lost}, rename"
 
 test_7g() {
-    first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
-    lost="mkdir $MOUNT2/$tdir/$tfile-0;rmdir $MOUNT2/$tdir/$tfile-0"
-    last="createmany -o $DIR/$tdir/$tfile- 1"
-    test_7_cycle "$first" "$lost" "$last" && error "Test 7g.1 failed"
+	first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+	lost="mkdir $MOUNT2/$tdir/$tfile-0;rmdir $MOUNT2/$tdir/$tfile-0"
+	last="createmany -o $DIR/$tdir/$tfile- 1"
+	test_7_cycle "$first" "$lost" "$last" && error "Test 7g.1 failed"
 
-    first="createmany -o $DIR/$tdir/$tfile- 2; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
-    lost="createmany -o $MOUNT2/$tdir/$tfile- 1; rm $MOUNT2/$tdir/$tfile-0"
-    last="mkdir $DIR/$tdir/$tfile-0"
-    test_7_cycle "$first" "$lost" "$last" && error "Test 7g.2 failed"
+	first="createmany -o $DIR/$tdir/$tfile- 2; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+	lost="createmany -o $MOUNT2/$tdir/$tfile- 1; rm $MOUNT2/$tdir/$tfile-0"
+	last="mkdir $DIR/$tdir/$tfile-0"
+	test_7_cycle "$first" "$lost" "$last" && error "Test 7g.2 failed"
 
-    first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
-    lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
-    last="link $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.1) ]
-	then
+	first="createmany -o $DIR/$tdir/$tfile- 1; mv $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile"
+	lost="createmany -o $MOUNT2/$tdir/$tfile- 1"
+	last="link $DIR/$tdir/$tfile-0 $DIR/$tdir/$tfile-1"
+	if [ "$MDS1_VERSION" -lt $(version_code 2.5.1) ]; then
 		test_7_cycle "$first" "$lost" "$last" ||
 			error "Test 7g.3 failed"
 	else #LU-4442 LU-3528

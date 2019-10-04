@@ -29,26 +29,24 @@ echo RACERDIRS=$RACERDIRS
 #LU-4684
 RACER_ENABLE_MIGRATION=false
 
-if ((MDSCOUNT > 1 &&
-     $(lustre_version_code $SINGLEMDS) >= $(version_code 2.8.0))); then
+if ((MDSCOUNT > 1 && "$MDS1_VERSION" >= $(version_code 2.8.0))); then
 	RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
 	RACER_ENABLE_STRIPED_DIRS=${RACER_ENABLE_STRIPED_DIRS:-true}
 	RACER_ENABLE_MIGRATION=${RACER_ENABLE_MIGRATION:-true}
-elif ((MDSCOUNT > 1 &&
-       $(lustre_version_code $SINGLEMDS) >= $(version_code 2.5.0))); then
+elif ((MDSCOUNT > 1 && "$MDS1_VERSION" >= $(version_code 2.5.0))); then
 	RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
 fi
 
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.54) ||
+[[ "$MDS1_VERSION" -lt $(version_code 2.9.54) ||
    $(facet_fstype mgs) != zfs ]] && RACER_ENABLE_SNAPSHOT=false
 
-[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.9.55) ]] &&
+[[ "$MDS1_VERSION" -le $(version_code 2.9.55) ]] &&
 	RACER_ENABLE_PFL=false
 
-[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.10.53) ]] &&
+[[ "$MDS1_VERSION" -le $(version_code 2.10.53) ]] &&
 	RACER_ENABLE_DOM=false
 
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ]] &&
+[[ "$MDS1_VERSION" -lt $(version_code 2.10.55) ]] &&
 	RACER_ENABLE_FLR=false
 
 RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-false}

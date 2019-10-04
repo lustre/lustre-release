@@ -24,7 +24,7 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 #                                   7  (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="21b"
 
-[[ $(facet_fstype $SINGLEMDS) == zfs ]] &&
+[[ "$mds1_FSTYPE" == zfs ]] &&
 # bug number for skipped test:	      LU-2230
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 21b"
 if $SHARED_KEY; then
@@ -873,8 +873,8 @@ test_23d () {
 run_test 23d "c1 rmdir d1, M0 drop update reply and fail M0/M1, c2 mkdir d1"
 
 test_24 () {
-	[[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.5.2) ]] ||
-		{ skip "Need MDS version newer than 2.5.2"; return 0; }
+	[[ "$MDS1_VERSION" -gt $(version_code 2.5.2) ]] ||
+		skip "Need MDS version newer than 2.5.2"
 
 	touch $MOUNT/$tfile
 	stat $MOUNT/$tfile >&/dev/null
@@ -908,7 +908,7 @@ test_25() {
 	sleep 1
 
 	# failover, replay and resend replayed waiting locks
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.6.90) ]; then
+	if [ "$OST1_VERSION" -ge $(version_code 2.6.90) ]; then
 		#define OBD_FAIL_LDLM_SRV_CP_AST      0x325
 		do_facet ost1 lctl set_param fail_loc=0x80000325
 	else
