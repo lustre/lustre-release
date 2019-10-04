@@ -2,14 +2,16 @@
 #
 # This script is used to test large size LUN support in Lustre.
 #
-################################################################################
+
 set -e
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$LARGE_LUN_EXCEPT"
+build_test_filter
 
 if [ "$REFORMAT" != "yes" ]; then
 	skip_env "$0 reformats all devices,\
@@ -18,14 +20,9 @@ fi
 
 # Variable to run mdsrate
 THREADS_PER_CLIENT=${THREADS_PER_CLIENT:-5}    # thread(s) per client node
-MACHINEFILE=${MACHINEFILE:-$TMP/$TESTSUITE.machines}
 NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
 NUM_CLIENTS=$(get_node_count ${NODES_TO_USE//,/ })
 
-# bug number:
-ALWAYS_EXCEPT="$LARGE_LUN_EXCEPT"
-
-build_test_filter
 LARGE_LUN_RESTORE_MOUNT=false
 if is_mounted $MOUNT || is_mounted $MOUNT2; then
 	LARGE_LUN_RESTORE_MOUNT=true

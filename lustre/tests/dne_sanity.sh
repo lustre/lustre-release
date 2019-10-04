@@ -5,23 +5,20 @@
 
 set -e
 
-SRCDIR=$(cd $(dirname $0); echo $PWD)
-PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+SRCDIR=$(dirname $0)
 
-SAVE_PWD=$PWD
-
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$DNE_SANITY_EXCEPT "
+build_test_filter
 
 PARALLEL_RUNS=${PARALLEL_RUNS:-2}
 FAIL_ON_ERROR=false
 
 check_and_setup_lustre
-
-build_test_filter
 
 DIR=${DIR:-$MOUNT}
 

@@ -7,30 +7,27 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_GSS_EXCEPT"}
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-if $SHARED_KEY; then
-# bug number for skipped tests:	LU-9795	LU-9795
-	ALWAYS_EXCEPT="		8	90	$ALWAYS_EXCEPT"
-fi
 
-SRCDIR=`dirname $0`
-
-export MULTIOP=${MULTIOP:-multiop}
-
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-require_dsh_mds || exit 0
+ALWAYS_EXCEPT="$SANITY_GSS_EXCEPT "
+if $SHARED_KEY; then
+# bug number for skipped tests: LU-9795 LU-9795
+	ALWAYS_EXCEPT+="        8       90 "
+fi
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="100 101"
 
+build_test_filter
+
+require_dsh_mds || exit 0
+
 # $RUNAS_ID may get set incorrectly somewhere else
-[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] && error "\$RUNAS_ID set to 0, but \$UID is also 0!"
+[ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
+	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 
 # remove $SEC, we'd like to control everything by ourselves
 unset SEC
@@ -50,8 +47,6 @@ check_and_setup_lustre
 rm -rf $DIR/[df][0-9]*
 
 check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
-
-build_test_filter
 
 start_dbench()
 {

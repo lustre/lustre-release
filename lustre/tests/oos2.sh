@@ -2,20 +2,16 @@
 
 set -e
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
+init_test_env $@
 
-export PATH=$LUSTRE/utils:$PATH
-LFS=${LFS:-lfs}
-LCTL=${LCTL:-lctl}
 MOUNT=${MOUNT:-$1}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-$2}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 OOS=$MOUNT/oosfile
 OOS2=$MOUNT2/oosfile2
-TMP=${TMP:-/tmp}
 LOG=$TMP/$(basename $0 .sh).log
 LOG2=${LOG}2
 
@@ -25,8 +21,8 @@ rm -f $OOS $OOS2 $LOG $LOG2
 
 sync; sleep 1; sync	# to ensure we get up-to-date statfs info
 
-STRIPECOUNT=`$LCTL get_param -n lov.*.activeobd | head -n 1`
-ORIGFREE=`$LCTL get_param -n llite.*.kbytesavail | head -n 1`
+STRIPECOUNT=$($LCTL get_param -n lov.*.activeobd | head -n 1)
+ORIGFREE=$($LCTL get_param -n llite.*.kbytesavail | head -n 1)
 MAXFREE=${MAXFREE:-$((400000 * $STRIPECOUNT))}
 echo STRIPECOUNT=$STRIPECOUNT ORIGFREE=$ORIGFREE MAXFREE=$MAXFREE
 if [ $ORIGFREE -gt $MAXFREE ]; then

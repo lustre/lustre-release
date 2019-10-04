@@ -1,12 +1,14 @@
 #!/bin/bash
-#set -x
+
 set -e
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$SGPDD_SURVEY_EXCEPT"
+build_test_filter
 
 # QE uses the following parameters:
 # size=128 crghi=16 thrhi=32
@@ -20,11 +22,6 @@ if [ "$SGPDD_YES" != "yes" -o "$REFORMAT" != "yes" ]; then
 	skip_env "$0 reformats all devices, set SGPDD_YES=yes REFORMAT=yes"
 	exit 0
 fi
-
-# Skip these tests
-ALWAYS_EXCEPT="$SGPDD_SURVEY_EXCEPT"
-
-build_test_filter
 
 init_facets_vars
 

@@ -10,14 +10,12 @@
 # will be run from a single node for #1 and from all nodes for #2
 # aggregate test to measure stat performance.
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 assert_env CLIENTS MDSRATE SINGLECLIENT MPIRUN
 
-MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 # Do not use name [df][0-9]* to avoid cleanup by rm, bug 18045
 BASEDIR=$MOUNT/mdsrate
 TESTDIR=$BASEDIR/stat

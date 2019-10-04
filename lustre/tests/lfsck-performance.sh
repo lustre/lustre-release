@@ -3,15 +3,14 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$LFSCK_PERFORMANCE_EXCEPT"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$LFSCK_PERFORMANCE_EXCEPT"
+build_test_filter
 
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
@@ -128,8 +127,6 @@ lfsck_create_nfiles() {
 		cycle=$((cycle + 1))
 	done
 }
-
-build_test_filter
 
 format_start_mgs () {
 	do_rpc_nodes $(facet_active_host mgs) load_modules_local

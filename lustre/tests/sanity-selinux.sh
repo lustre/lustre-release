@@ -15,22 +15,19 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_SELINUX_EXCEPT"}
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-SRCDIR=$(dirname $0)
-SAVE_PWD=$PWD
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-require_dsh_mds || exit 0
+ALWAYS_EXCEPT="$SANITY_SELINUX_EXCEPT"
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="xxx"
+
+build_test_filter
+
+require_dsh_mds || exit 0
 
 RUNAS_CMD=${RUNAS_CMD:-runas}
 # $RUNAS_ID may get set incorrectly somewhere else
@@ -68,8 +65,6 @@ check_and_setup_lustre
 rm -rf $DIR/[df][0-9]*
 
 check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
-
-build_test_filter
 
 umask 077
 

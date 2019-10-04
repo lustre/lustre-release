@@ -3,15 +3,14 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$SCRUB_PERFORMANCE_EXCEPT"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-. ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
+
+ALWAYS_EXCEPT="$SCRUB_PERFORMANCE_EXCEPT"
+build_test_filter
 
 [ "$SLOW" = "no" ] &&
 	skip "skip scrub performance test under non-SLOW mode" && exit 0
@@ -134,8 +133,6 @@ scrub_create_nfiles() {
 		cycle=$((cycle + 1))
 	done
 }
-
-build_test_filter
 
 test_0() {
 	local BASECOUNT=0
