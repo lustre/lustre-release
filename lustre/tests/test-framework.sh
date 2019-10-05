@@ -8475,7 +8475,7 @@ get_block_size() {
 # ldiskfs xattrs over one block in size.  Allow both the historical
 # Lustre feature name (large_xattr) and the upstream name (ea_inode).
 large_xattr_enabled() {
-	[[ $(facet_fstype $SINGLEMDS) == zfs ]] && return 0
+	[[ $(facet_fstype $SINGLEMDS) == zfs ]] && return 1
 
 	local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
 
@@ -8486,20 +8486,7 @@ large_xattr_enabled() {
 
 # Get the maximum xattr size supported by the filesystem.
 max_xattr_size() {
-    local size
-
-    if large_xattr_enabled; then
-	size=$($LCTL get_param -n llite.*.max_easize)
-    else
-        local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
-        local block_size=$(get_block_size $SINGLEMDS $mds_dev)
-
-        # maximum xattr size = size of block - size of header -
-        #                      size of 1 entry - 4 null bytes
-        size=$((block_size - 32 - 32 - 4))
-    fi
-
-    echo $size
+	$LCTL get_param -n llite.*.max_easize
 }
 
 # Dump the value of the named xattr from a file.
@@ -10262,8 +10249,8 @@ verify_comp_at_zero() {
 		error "No component starting at zero(!)"
 }
 
-#TODO: This version is a placeholder, to be replaced before final commit
-SEL_VER="2.12.52"
+# version after which Self-Extending Layouts are available
+SEL_VER="2.12.55"
 
 sel_layout_sanity() {
 	local file=$1

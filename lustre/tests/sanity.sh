@@ -2468,11 +2468,11 @@ test_27D() {
 	[ $MDS1_VERSION -lt $(version_code 2.9.55) ] ||
 		[ $CLIENT_VERSION -lt $(version_code 2.9.55) ] &&
 			skip27D+=" -s 30,31"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code $SEL_VER) ] &&
-		skip27D+="-s 32"
 	[[ ! $($LCTL get_param mdc.*.import) =~ connect_flags.*overstriping ||
 	  $OSTCOUNT -ge $(($LOV_MAX_STRIPE_COUNT / 2)) ]] &&
 		skip27D+=" -s 32,33"
+	[[ $MDS_VERSION -lt $(version_code $SEL_VER) ]] &&
+		skip27D+=" -s 34"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
 
@@ -2612,6 +2612,8 @@ run_test 27H "Set specific OSTs stripe"
 test_27I() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[[ $MDS1_VERSION -gt $(version_code 2.12.52) ]] ||
+		skip "Need MDS version newer than 2.12.52"
 	local pool=$TESTNAME
 	local ostrange="1 1 1"
 
@@ -5857,6 +5859,8 @@ test_56r() {
 run_test 56r "check lfs find -size works"
 
 test_56ra() {
+	[[ $MDS1_VERSION -gt $(version_code 2.12.58) ]] ||
+		skip "MDS < 2.12.58 doesn't return LSOM data"
 	local dir=$DIR/$tdir
 
 	[[ $OSC == "mdc" ]] && skip "DoM files" && return
@@ -22144,6 +22148,8 @@ run_test 809 "Verify no SOM xattr store for DoM-only files"
 test_810() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$GSS && skip_env "could not run with gss"
+	[[ $OST1_VERSION -gt $(version_code 2.12.58) ]] ||
+		skip "OST < 2.12.58 doesn't align checksum"
 
 	set_checksums 1
 	stack_trap "set_checksums $ORIG_CSUM" EXIT

@@ -918,7 +918,9 @@ static ssize_t max_easize_show(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%u\n", ealen);
+	/* Limit xattr size returned to userspace based on kernel maximum */
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			ealen > XATTR_SIZE_MAX ? XATTR_SIZE_MAX : ealen);
 }
 LUSTRE_RO_ATTR(max_easize);
 
@@ -946,7 +948,9 @@ static ssize_t default_easize_show(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-	return sprintf(buf, "%u\n", ealen);
+	/* Limit xattr size returned to userspace based on kernel maximum */
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			ealen > XATTR_SIZE_MAX ? XATTR_SIZE_MAX : ealen);
 }
 
 /**

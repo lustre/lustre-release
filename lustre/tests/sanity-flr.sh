@@ -2628,7 +2628,7 @@ run_test 204c "FLR write/stale/resync test with component removal"
 test_204d() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
-		skip "skipped for lustre < $SEL_VERSION"
+		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
 	local found=""
@@ -2697,7 +2697,7 @@ run_test 204d "FLR write/stale/resync sel test with repeated comp"
 test_204e() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
-		skip "skipped for lustre < $SEL_VERSION"
+		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
 	local found=""
@@ -2778,7 +2778,7 @@ run_test 204e "FLR write/stale/resync sel test with repeated comp"
 test_204f() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	[ "$MDS1_VERSION" -lt $(version_code $SEL_VER) ] &&
-		skip "skipped for lustre < $SEL_VERSION"
+		skip "skipped for lustre < $SEL_VER"
 
 	local comp_file=$DIR/$tdir/$tfile
 	local found=""

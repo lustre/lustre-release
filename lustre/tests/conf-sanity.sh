@@ -3506,16 +3506,13 @@ test_48() { # bz-17636 LU-7473
 	# LOV EA, and so on. These EA will use some EA space that is shared by
 	# ACL entries. So here we only check some reasonable ACL entries count,
 	# instead of the max number that is calculated from the max_ea_size.
-	if [ "$MDS1_VERSION" -lt $(version_code 2.8.57) ];
-	then
+	if [ "$MDS1_VERSION" -lt $(version_code 2.8.57) ]; then
 		count=28	# hard coded of RPC protocol
-	elif [ "$mds1_FSTYPE" != ldiskfs ]; then
-		count=4000	# max_num 4091 max_ea_size = ~65536
-	elif ! large_xattr_enabled; then
-		count=450	# max_num 497 max_ea_size = 4012
-	else
+	elif large_xattr_enabled; then
 		count=4500	# max_num 8187 max_ea_size = 65452
-				# not create too much (>5000) to save test time
+				# not create too many (4500) to save test time
+	else
+		count=450	# max_num 497 max_ea_size = 4012
 	fi
 
 	echo "It is expected to hold at least $count ACL entries"
@@ -5859,22 +5856,15 @@ test_81() { # LU-4665
 
 	# Check max_easize.
 	local max_easize=$($LCTL get_param -n llite.*.max_easize)
-	if [ $MDS1_VERSION -lt $(version_code 2.12.51) ]
-	then
-		[[ $max_easize -eq 128 ]] ||
-			error "max_easize is $max_easize, should be 128 bytes"
+	# 65452 is XATTR_SIZE_MAX less ldiskfs ea overhead
+	if large_xattr_enabled; then
+		[[ $max_easize -ge 65452 ]] ||
+			error "max_easize is $max_easize, should be at least 65452 bytes"
 	else
 		# LU-11868
-		# 4012 is 4096 - ldiskfs ea overhead
+		# 4012 is 4096 less ldiskfs ea overhead
 		[[ $max_easize -ge 4012 ]] ||
-		error "max_easize is $max_easize, should be at least 4012 bytes"
-
-		# 65452 is XATTR_SIZE_MAX - ldiskfs ea overhead
-		if large_xattr_enabled;
-		then
-			[[ $max_easize -ge 65452 ]] ||
-			error "max_easize is $max_easize, should be at least 65452 bytes"
-		fi
+			error "max_easize is $max_easize, should be at least 4012 bytes"
 	fi
 
 	restore_ostindex
