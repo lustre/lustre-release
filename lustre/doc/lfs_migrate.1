@@ -4,18 +4,18 @@
 \- migrate files between Lustre OSTs
 .SH SYNOPSIS
 .B lfs_migrate
-.RB [ --dry-run ]
-.RB [ --help|-h ]
+.RB [ "-A " [ -C \fI<cap> \fR] [ -M \fI<min_free> \fR] [ -X \fI<max_free> \fR]]
+.RB [ --dry-run | -n ]
+.RB [ --help | -h ]
 .RB [ --no-rsync | --rsync ]
-.RB [ --quiet|-q ]
-.RB [ --restripe|-R ]
-.RB [ --skip|-s ]
-.RB [ --verbose|-v ]
-.RB [ --yes|-y ]
+.RB [ --quiet | -q ]
+.RB [ --restripe | -R ]
+.RB [ --stripe-count | -c \fI<stripe_count> \fR]
+.RB [ --stripe-size | -S \fI<stripe_size> \fR]
+.RB [ --skip | -s ]
+.RB [ --verbose | -v ]
+.RB [ --yes | -y ]
 .RB [ -D ]
-.RB [ -A [ -C \fI<cap> \fR] [ -M \fI<min_free> \fR] [ -X \fI<max_free> \fR]]
-.RB [ --stripe-count|-c \fI<stripe_count> \fR]
-.RB [ --stripe-size|-S \fI<stripe_size> \fR]
 .RB [ -0 ]
 .RI [ FILE | DIR ] ...
 .br

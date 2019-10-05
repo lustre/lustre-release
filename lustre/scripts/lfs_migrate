@@ -286,6 +286,9 @@ function calc_stripe()
 }
 
 lfs_migrate() {
+	local last_dev
+	local mntpoint
+
 	while IFS='' read -d '' OLDNAME; do
 		local hlinks=()
 		local stripe_size="$OPT_STRIPE_SIZE"
@@ -295,16 +298,23 @@ lfs_migrate() {
 		local stripe_pool
 		local mirror_count
 		local layout
+		local fid
 
 		$ECHO -n "$OLDNAME: "
 
-		# avoid duplicate stat if possible
-		local nlink_type=($(LANG=C stat -c "%h %F %s" "$OLDNAME" \
+		# avoid duplicate stat call by fetching all attrs at once
+		local nlink_idx_link=0 # %h is the hard link count
+		local nlink_idx_type=1 # %F is "regular file", ignore others
+		local nlink_idx_file=2 #       "file" is here
+		local nlink_idx_size=3 # %s is file size in bytes
+		local nlink_idx_dev=4  # %D is the underlying device number
+		# nlink_type=(1 regular file 1234 0x810)
+		local nlink_type=($(LANG=C stat -c "%h %F %s %D" "$OLDNAME" \
 				 2> /dev/null))
 
 		# skip non-regular files, since they don't have any objects
 		# and there is no point in trying to migrate them.
-		if [ "${nlink_type[1]}" != "regular" ]; then
+		if [ "${nlink_type[$nlink_idx_type]}" != "regular" ]; then
 			echo -e "\r$OLDNAME: not a regular file, skipped" 1>&2
 			continue
 		fi
@@ -329,18 +339,14 @@ lfs_migrate() {
 		fi
 		OLDNAME=$oldname_absolute
 
-		# In the future, the path2fid and fid2path calls below
-		# should be replaced with a single call to
-		# "lfs path2links" once that command is available.  The logic
-		# for detecting unlisted hard links could then be removed.
-		local fid=$($LFS path2fid "$OLDNAME" 2> /dev/null)
-		if [ $? -ne 0 ]; then
-			echo -e "\r$OLDNAME: cannot determine FID; skipping; " \
-				"is this a Lustre file system?" 1>&2
-			continue
-		fi
+		if [[ ${nlink_type[$nlink_idx_link]} -gt 1 ]] ||
+		   $RSYNC_WITH_HLINKS; then
+			fid=$($LFS path2fid "$OLDNAME" 2> /dev/null)
+			if [ $? -ne 0 ]; then
+				echo -e "\r$OLDNAME: cannot get FID, skipping; is this a Lustre file system?" 1>&2
+				continue
+			fi
 
-		if [[ ${nlink_type[0]} -gt 1 ]] || $RSYNC_WITH_HLINKS; then
 			# don't migrate a hard link if it was already migrated
 			if path_in_set "$OLDNAME"; then
 				$ECHO "already migrated via another hard link"
@@ -355,14 +361,12 @@ lfs_migrate() {
 			local migrated=$(old_fid_in_set "$fid")
 			if [ -n "$migrated" ]; then
 				$ECHO "already migrated via another hard link"
-				if $OPT_RSYNC; then
-					# Only the rsync case has to relink.
-					# The lfs migrate case preserves the
-					# inode so the links are already
-					# correct.
-					[ "$migrated" != "$OLDNAME" ] &&
-						ln -f "$migrated" "$OLDNAME"
-				fi
+				# Only the rsync case has to relink.  The
+				# "lfs migrate" case keeps the same inode so
+				# all of the links are already correct.
+				$OPT_RSYNC && [ "$migrated" != "$OLDNAME" ] &&
+					ln -f "$migrated" "$OLDNAME"
+
 				add_to_set "$fid" "$OLDNAME"
 				continue;
 			fi
@@ -371,17 +375,17 @@ lfs_migrate() {
 		if $OPT_RESTRIPE; then
 			UNLINK=""
 		else
-			# if rsync copies Lustre xattrs properly in the future
+			# If rsync copies Lustre xattrs properly in the future
 			# (i.e. before the file data, so that it preserves
-			# striping) then we don't need to do this getstripe
-			# stuff.
+			# striping) then we don't need this getstripe stuff.
 			UNLINK="-u"
 
 			stripe_pool=$($LFS getstripe -p "$OLDNAME" 2> /dev/null)
 			mirror_count=$($LFS getstripe -N "$OLDFILE" 2> /dev/null)
 
 			if $OPT_AUTOSTRIPE; then
-				local filekb=$((${nlink_type[3]} / 1024))
+				local filekb=$((${nlink_type[$nlink_idx_size]} /
+						1024))
 
 				read stripe_count OBJ_MAX_KB < <(calc_stripe \
 					"$OLDNAME" "$filekb" "$OBJ_MAX_KB")
@@ -439,24 +443,30 @@ lfs_migrate() {
 
 		# detect other hard links and store them on a global
 		# list so we don't re-migrate them
-		local mntpoint=$(df -P "$OLDNAME" |
-				awk 'NR==2 { print $NF; exit }')
-		if [ -z "$mntpoint" ]; then
-			echo -e "\r$OLDNAME: cannot determine mount point; skipped" 1>&2
-			continue
+		if [[ ${nlink_type[$nlink_idx_link]} -gt 1 ]]; then
+			[ "${nlink_type[$nlink_idx_dev]}" == "$last_dev" ] ||
+				mntpoint=$(df -P "$OLDNAME" |
+					   awk 'NR==2 { print $NF }')
+			if [ -z "$mntpoint" ]; then
+				echo -e "\r$OLDNAME: cannot determine mount point; skipped" 1>&2
+				continue
+			fi
+			hlinks=$($LFS fid2path "$mntpoint" "$fid" 2> /dev/null)
+			if $OPT_RSYNC && [ $? -ne 0 ]; then
+				echo -e "\r$OLDNAME: cannot determine hard link paths, skipped" 1>&2
+				continue
+			fi
+			hlinks+=("$OLDNAME")
+		else
+			hlinks=
 		fi
-		hlinks=$($LFS fid2path "$mntpoint" "$fid" 2> /dev/null)
-		if [ $? -ne 0 ]; then
-			echo -e "\r$OLDNAME: cannot determine hard link paths, skipped" 1>&2
-			continue
-		fi
-		hlinks+=("$OLDNAME")
 
 		# first try to migrate via Lustre tools, then fall back to rsync
 		if ! $OPT_RSYNC; then
 			if $LFS migrate "${OPT_PASSTHROUGH[@]}" $layout \
 			   "$OLDNAME"; then
 				$ECHO "done"
+				# no-op if hlinks empty for 1-link files
 				for link in ${hlinks[*]}; do
 					add_to_set "$fid" "$link"
 				done
@@ -501,6 +511,7 @@ lfs_migrate() {
 		fi
 
 		$ECHO "done rsync"
+		# no-op if hlinks empty for 1-link files
 		for link in ${hlinks[*]}; do
 			if [ "$link" != "$OLDNAME" ]; then
 				ln -f "$OLDNAME" "$link"

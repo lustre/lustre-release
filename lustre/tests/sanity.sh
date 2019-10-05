@@ -6231,7 +6231,7 @@ test_56w() {
 	done
 
 	# $LFS_MIGRATE will fail if hard link migration is unsupported
-	if [[ $(lustre_version_code mds1) -gt $(version_code 2.5.55) ]]; then
+	if [[ $MDS1_VERSION -gt $(version_code 2.5.55) ]]; then
 		createmany -l$dir/dir1/file1 $dir/dir1/link 200 ||
 			error "creating links to $dir/dir1/file1 failed"
 	fi
@@ -6569,6 +6569,7 @@ check_migrate_links() {
 	local file1="$dir/file1"
 	local begin="$2"
 	local count="$3"
+	local runas="$4"
 	local total_count=$(($begin + $count - 1))
 	local symlink_count=10
 	local uniq_count=10
@@ -6613,7 +6614,7 @@ check_migrate_links() {
 	fi
 
 	echo -n "migrating files..."
-	local migrate_out=$($LFS_MIGRATE -y -S '1m' $dir)
+	local migrate_out=$($runas $LFS_MIGRATE -y -S '1m' $dir)
 	local rc=$?
 	[ $rc -eq 0 ] || error "migrate failed rc = $rc"
 	echo "done"
@@ -6668,6 +6669,9 @@ test_56xb() {
 	echo "testing rsync mode when all links do not fit within xattrs"
 	LFS_MIGRATE_RSYNC_MODE=true check_migrate_links "$dir" 101 100
 
+	chown -R $RUNAS_ID $dir
+	echo "testing non-root lfs migrate mode when not all links are in xattr"
+	LFS_MIGRATE_RSYNC_MODE=false check_migrate_links "$dir" 101 100 "$RUNAS"
 
 	# clean up
 	rm -rf $dir
