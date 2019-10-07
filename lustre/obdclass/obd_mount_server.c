@@ -881,6 +881,20 @@ static int client_lwp_config_process(const struct lu_env *env,
 		if (!is_mdc_device(devname))
 			break;
 
+		if (!(cfg->cfg_flags & CFG_F_MARKER)) {
+			CDEBUG(D_CONFIG, "Skipping add_conn for %s, rec %d\n",
+			       devname, rec->lrh_index);
+			break;
+		}
+
+		/* add_conn should follow by add_uuid. This
+		 * guarantee lwp device was created
+		 */
+		if (!(cfg->cfg_flags & CFG_F_SKIP)) {
+			CWARN("Error at config for %s rec %d, add_conn should follow by add_uuid\n",
+			      devname, rec->lrh_index);
+			break;
+		}
 		ptr = strrchr(devname, '-');
 		if (ptr == NULL)
 			break;
