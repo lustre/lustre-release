@@ -13111,6 +13111,49 @@ test_160k() {
 }
 run_test 160k "Verify that changelog records are not lost"
 
+test_160j() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ $MDS1_VERSION -lt $(version_code 2.12.56) ]] &&
+		skip "Need MDS version at least 2.12.56"
+
+	mount_client $MOUNT2 || error "mount_client on $MOUNT2 failed"
+
+	changelog_register || error "first changelog_register failed"
+
+	# generate some changelog
+	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/${tfile}bis failed"
+
+	# open the changelog device
+	exec 3>/dev/changelog-$FSNAME-MDT0000
+	exec 4</dev/changelog-$FSNAME-MDT0000
+
+	# umount the first lustre mount
+	umount $MOUNT
+
+	# read changelog
+	cat <&4 >/dev/null || error "read changelog failed"
+
+	# clear changelog
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+
+	printf 'clear:'$cl_user':0' >&3
+
+	# close
+	exec 3>&-
+	exec 4<&-
+
+	# cleanup
+	changelog_deregister || error "changelog_deregister failed"
+
+	umount $MOUNT2
+	mount_client $MOUNT || error "mount_client on $MOUNT failed"
+}
+run_test 160j "client can be umounted  while its chanangelog is being used"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
