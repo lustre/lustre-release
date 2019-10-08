@@ -21413,6 +21413,10 @@ test_422() {
 	wait
 	at_max_set $amc client
 	at_max_set $amo mds1
+
+	# LU-12838 - verify the ptlrpc thread watchdog is not always throttled
+	do_facet mds1 "dmesg | grep 'Dumping the stack trace for debugging'" ||
+		error "Watchdog is always throttled"
 }
 run_test 422 "kill a process with RPC in progress"
 

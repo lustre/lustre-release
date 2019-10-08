@@ -2656,7 +2656,8 @@ static void ptlrpc_watchdog_fire(struct work_struct *w)
 	u64 ms_lapse = ktime_ms_delta(ktime_get(), thread->t_touched);
 	u32 ms_frac = do_div(ms_lapse, MSEC_PER_SEC);
 
-	if (!__ratelimit(&watchdog_limit)) {
+	/* ___ratelimit() returns true if the action is NOT ratelimited */
+	if (__ratelimit(&watchdog_limit)) {
 		/* below message is checked in sanity-quota.sh test_6,18 */
 		LCONSOLE_WARN("%s: service thread pid %u was inactive for %llu.%03u seconds. The thread might be hung, or it might only be slow and will resume later. Dumping the stack trace for debugging purposes:\n",
 			      thread->t_task->comm, thread->t_task->pid,
