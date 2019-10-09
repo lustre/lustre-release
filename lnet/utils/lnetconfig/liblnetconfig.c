@@ -317,7 +317,7 @@ int lustre_lnet_parse_nids(char *nids, char **array, int size,
 			finish = i > 0 ? i - 1: 0;
 			goto failed;
 		}
-		strncpy(entry, cur, len - 1);
+		memcpy(entry, cur, len - 1);
 		entry[len] = '\0';
 		new_array[i] = entry;
 		if (comma) {
