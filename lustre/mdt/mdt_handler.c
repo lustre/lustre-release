@@ -3943,7 +3943,7 @@ void mdt_intent_fixup_resent(struct mdt_thread_info *info,
 	 * If the xid matches, then we know this is a resent request, and allow
 	 * it. (It's probably an OPEN, for which we don't send a lock.
 	 */
-	if (req_can_reconstruct(req, NULL) == 1)
+	if (req_can_reconstruct(req, NULL) != 0)
 		return;
 
         /*
