@@ -5451,7 +5451,7 @@ int jt_pcc_add(int argc, char **argv)
 
 	if (optind + 2 != argc) {
 		fprintf(stderr,
-			"%s: must speficy mount path and PCC path %d:%d\n",
+			"%s: must specify mount path and PCC path %d:%d\n",
 			jt_cmdname(argv[0]), optind, argc);
 		return CMD_HELP;
 	}

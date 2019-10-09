@@ -383,10 +383,10 @@ command_t cmdlist[] = {
 	{"=== Persistent Client Cache ===", NULL, 0, "PCC user management"},
 	{"pcc", jt_pcc, pccdev_cmdlist,
 	 "lctl commands used to interact with PCC features:\n"
-	 "lclt pcc add    - add a PCC backend to a client\n"
-	 "lclt pcc del    - delete a PCC backend on a client\n"
-	 "lclt pcc clear  - remove all PCC backends on a client\n"
-	 "lclt pcc list   - list all PCC backends on a client\n"},
+	 "lctl pcc add    - add a PCC backend to a client\n"
+	 "lctl pcc del    - delete a PCC backend on a client\n"
+	 "lctl pcc clear  - remove all PCC backends on a client\n"
+	 "lctl pcc list   - list all PCC backends on a client\n"},
 
 	/* Device configuration commands */
 	{"== device setup (these are not normally used post 1.4) ==",
