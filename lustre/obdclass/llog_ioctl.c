@@ -318,12 +318,13 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	struct llog_logid logid;
 	int rc = 0;
 	struct llog_handle *handle = NULL;
-	char *logname;
+	char *logname, start;
 
 	ENTRY;
 
 	logname = data->ioc_inlbuf1;
-	if (logname[0] == '#' || logname[0] == '[') {
+	start = logname[0];
+	if (start == '#' || start == '[') {
 		rc = str2logid(&logid, logname, data->ioc_inllen1);
 		if (rc)
 			RETURN(rc);
@@ -331,8 +332,8 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 			       LLOG_OPEN_EXISTS);
 		if (rc)
 			RETURN(rc);
-	} else if (logname[0] == '$' || isalpha(logname[0])) {
-		if (logname[0] == '$')
+	} else if (start == '$' || isalpha(start) || isdigit(start)) {
+		if (start == '$')
 			logname++;
 
 		rc = llog_open(env, ctxt, &handle, NULL, logname,
@@ -340,7 +341,10 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 		if (rc)
 			RETURN(rc);
 	} else {
-		RETURN(-EINVAL);
+		rc = -EINVAL;
+		CDEBUG(D_INFO, "%s: invalid log name '%s': rc = %d\n",
+		      ctxt->loc_obd->obd_name, logname, rc);
+		RETURN(rc);
 	}
 
 	rc = llog_init_handle(env, handle, 0, NULL);
