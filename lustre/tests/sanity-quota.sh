@@ -1208,17 +1208,25 @@ test_6() {
 		error "write $TESTFILE failure, expect success"
 	$RUNAS2 $DD of=$TESTFILE2 count=1 ||
 		error "write $TESTFILE2 failure, expect success"
+
+	if at_is_enabled; then
+		at_max_saved=$(at_max_get ost1)
+		at_max_set $TIMEOUT ost1
+
+		# write to enforced ID ($TSTUSR) to exceed limit to make sure
+		# DQACQ is sent, which makes at_max to take effect
+		$RUNAS $DD of=$TESTFILE count=$LIMIT seek=1 oflag=sync \
+								conv=notrunc
+		rm -f $TESTFILE
+		wait_delete_completed
+	fi
+
 	sync; sync
 	sync_all_data || true
 
 	#define QUOTA_DQACQ 601
 	#define OBD_FAIL_PTLRPC_DROP_REQ_OPC 0x513
 	lustre_fail mds 0x513 601
-
-	if at_is_enabled; then
-		at_max_saved=$(at_max_get ost1)
-		at_max_set $TIMEOUT ost1
-	fi
 
 	do_facet ost1 $LCTL set_param \
 			osd-*.$FSNAME-OST*.quota_slave.timeout=$((TIMEOUT / 2))
