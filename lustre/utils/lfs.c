@@ -512,8 +512,8 @@ command_t cmdlist[] = {
          "                [--inode-softlimit <inode-softlimit>]\n"
          "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
 	 "       setquota [-t] <-u|--user|-g|--group|-p|--projid>\n"
-         "                [--block-grace <block-grace>]\n"
-         "                [--inode-grace <inode-grace>] <filesystem>\n"
+	 "                [--block-grace 'notify'|<block-grace>]\n"
+	 "                [--inode-grace 'notify'|<inode-grace>] <filesystem>\n"
 	 "       setquota <-U|-G|-P>\n"
 	 "                -b <block-softlimit> -B <block-hardlimit>\n"
 	 "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
@@ -536,8 +536,11 @@ command_t cmdlist[] = {
 	 "      Quota space rebalancing process will stop when this mininum\n"
 	 "      value is reached. As a result, quota exceeded can be returned\n"
 	 "      while many targets still have 1MB or 1K inodes of spare\n"
-	 "      quota space."},
-        {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
+	 "      quota space.\n\n"
+	 "      When setting the grace time, 'notify' can be used as grace to\n"
+	 "      be notified after the quota is over soft limit but prevents\n"
+	 "      the soft limit from becoming the hard limit."},
+	{"quota", lfs_quota, 0, "Display disk usage and limits.\n"
 	 "usage: quota [-q] [-v] [-h] [-o <obd_uuid>|-i <mdt_idx>|-I "
 		       "<ost_idx>]\n"
 	 "             [<-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>] <filesystem>\n"
@@ -6493,28 +6496,41 @@ quota_type:
 			}
 			qctl.qc_type = qtype;
 			break;
-                case 'b':
-                        if ((dqi->dqi_bgrace = str2sec(optarg)) == ULONG_MAX) {
-                                fprintf(stderr, "error: bad block-grace: %s\n",
-                                        optarg);
-                                return CMD_HELP;
-                        }
-                        dqb->dqb_valid |= QIF_BTIME;
-                        break;
-                case 'i':
-                        if ((dqi->dqi_igrace = str2sec(optarg)) == ULONG_MAX) {
-                                fprintf(stderr, "error: bad inode-grace: %s\n",
-                                        optarg);
-                                return CMD_HELP;
-                        }
-                        dqb->dqb_valid |= QIF_ITIME;
-                        break;
-                case 't': /* Yes, of course! */
-                        break;
-                default: /* getopt prints error message for us when opterr != 0 */
-                        return CMD_HELP;
-                }
-        }
+		case 'b':
+			if (strncmp(optarg, NOTIFY_GRACE,
+				    strlen(NOTIFY_GRACE)) == 0) {
+				dqi->dqi_bgrace = NOTIFY_GRACE_TIME;
+			} else {
+				dqi->dqi_bgrace = str2sec(optarg);
+				if (dqi->dqi_bgrace >= NOTIFY_GRACE_TIME) {
+					fprintf(stderr, "error: bad "
+						"block-grace: %s\n", optarg);
+					return CMD_HELP;
+				}
+			}
+			dqb->dqb_valid |= QIF_BTIME;
+			break;
+		case 'i':
+			if (strncmp(optarg, NOTIFY_GRACE,
+				    strlen(NOTIFY_GRACE)) == 0) {
+				dqi->dqi_igrace = NOTIFY_GRACE_TIME;
+			} else {
+				dqi->dqi_igrace = str2sec(optarg);
+				if (dqi->dqi_igrace >= NOTIFY_GRACE_TIME) {
+					fprintf(stderr, "error: bad "
+						"inode-grace: %s\n", optarg);
+					return CMD_HELP;
+				}
+			}
+			dqb->dqb_valid |= QIF_ITIME;
+			break;
+		case 't': /* Yes, of course! */
+			break;
+		/* getopt prints error message for us when opterr != 0 */
+		default:
+			return CMD_HELP;
+		}
+	}
 
 	if (qctl.qc_type == ALLQUOTA) {
 		fprintf(stderr, "error: neither -u, -g nor -p specified\n");
@@ -6525,12 +6541,6 @@ quota_type:
                 fprintf(stderr, "error: unexpected parameters encountered\n");
                 return CMD_HELP;
         }
-
-	if ((dqb->dqb_valid | QIF_BTIME && dqi->dqi_bgrace >= UINT_MAX) ||
-	    (dqb->dqb_valid | QIF_ITIME && dqi->dqi_igrace >= UINT_MAX)) {
-		fprintf(stderr, "error: grace time is too large\n");
-		return CMD_HELP;
-	}
 
         mnt = argv[optind];
         rc = llapi_quotactl(mnt, &qctl);
@@ -7003,17 +7013,23 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 		else
 			printf(" %7s %7s %7s %7s", "-", "-", "-", "-");
 		printf("\n");
+	} else if (qctl->qc_cmd == LUSTRE_Q_GETINFO ||
+		   qctl->qc_cmd == Q_GETOINFO) {
+		char bgtimebuf[40];
+		char igtimebuf[40];
 
-        } else if (qctl->qc_cmd == LUSTRE_Q_GETINFO ||
-                   qctl->qc_cmd == Q_GETOINFO) {
-                char bgtimebuf[40];
-                char igtimebuf[40];
+		if (qctl->qc_dqinfo.dqi_bgrace == NOTIFY_GRACE_TIME)
+			strncpy(bgtimebuf, NOTIFY_GRACE, 40);
+		else
+			sec2str(qctl->qc_dqinfo.dqi_bgrace, bgtimebuf, rc);
+		if (qctl->qc_dqinfo.dqi_igrace == NOTIFY_GRACE_TIME)
+			strncpy(igtimebuf, NOTIFY_GRACE, 40);
+		else
+			sec2str(qctl->qc_dqinfo.dqi_igrace, igtimebuf, rc);
 
-                sec2str(qctl->qc_dqinfo.dqi_bgrace, bgtimebuf, rc);
-                sec2str(qctl->qc_dqinfo.dqi_igrace, igtimebuf, rc);
-                printf("Block grace time: %s; Inode grace time: %s\n",
-                       bgtimebuf, igtimebuf);
-        }
+		printf("Block grace time: %s; Inode grace time: %s\n",
+		       bgtimebuf, igtimebuf);
+	}
 }
 
 static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,

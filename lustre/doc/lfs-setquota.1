@@ -62,14 +62,18 @@ greater than inode softlimit when it's being specified.
 .BR "lfs setquota -t "
 .TP
 Command sets the filesystem quota grace time for users, groups, or projects. \
-This is a global value that indicates the amount of time, in seconds, that the \
-soft quota limit can be exceeded before users are prevented from creating \
-new files or consuming more space.  This is intended to allow users to exceed \
-the quota limit for a short time to complete their work, without having to \
-grant each user a larger hard quota limit.  The soft quota limit is reset once \
-the user, group, or project reduces their space usage below the soft quota \
-limit. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer \
-seconds value, and the maximum is 2^48 - 1 seconds.
+This is a global value that can take two forms: an amount of time or the word \
+\'\fBnotify\fR'.  Traditionally, this indicates the amount of time in seconds \
+that the soft quota limit can be exceeded before users are prevented from \
+creating new files or consuming more space.  This is intended to allow users \
+to exceed the quota limit for a short time to complete their work without \
+having to grant each user a larger hard quota limit. The alternative value of \
+\'\fBnotify\fR' informs users with an '\fB*\fR' in the quota output that they \
+are nearing their hard quota limit but does not block new writes until the hard \
+quota limit is reached.  The soft quota state is reset once the user, group, \
+or project reduces their space usage or file count below the soft quota limit. \
+Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds \
+value.  The maximum is 2^48 - 1 seconds.
 .TP
 .B -t
 Set quota grace times.
@@ -83,10 +87,10 @@ Set grace time for group.
 .B -p
 Set grace time for project.
 .TP
-.B -b|--block-grace <\fIblock-grace\fR>
+.B -b|--block-grace 'notify'|<\fIblock-grace\fR>
 Specify grace time for block quota.
 .TP
-.B -i|--inode-grace <\fIindoe-grace\fR>
+.B -i|--inode-grace 'notify'|<\fIinode-grace\fR>
 Specify grace time for inode quota.
 .PP
 .BR "lfs setquota " {\fB-U|--default-usr|-G|--default-grp|-P|--default-prj\fR}

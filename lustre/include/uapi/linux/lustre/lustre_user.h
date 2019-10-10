@@ -1216,6 +1216,11 @@ static inline __u64 lustre_stoqb(size_t space)
 #define LQUOTA_FLAG(t)		(t >> LQUOTA_GRACE_BITS)
 #define LQUOTA_GRACE_FLAG(t, f)	((__u64)t | (__u64)f << LQUOTA_GRACE_BITS)
 
+/* special grace time, only notify the user when its quota is over soft limit
+ * but doesn't block new writes until the hard limit is reached. */
+#define NOTIFY_GRACE		"notify"
+#define NOTIFY_GRACE_TIME	LQUOTA_GRACE_MASK
+
 /* different quota flags */
 
 /* the default quota flag, the corresponding quota ID will use the default
