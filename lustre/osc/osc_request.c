@@ -1438,10 +1438,17 @@ retry_encrypt:
 				ptlrpc_request_free(req);
 				RETURN(rc);
 			}
+			pg->pg = data_page;
+			/* there should be no gap in the middle of page array */
+			if (i == page_count - 1) {
+				struct osc_async_page *oap = brw_page2oap(pg);
+
+				oa->o_size = oap->oap_count +
+					oap->oap_obj_off + oap->oap_page_off;
+			}
 			/* len is forced to PAGE_SIZE, and poff to 0
 			 * so store the old, clear text info
 			 */
-			pg->pg = data_page;
 			pg->bp_count_diff = PAGE_SIZE - pg->count;
 			pg->count = PAGE_SIZE;
 			pg->bp_off_diff = pg->off & ~PAGE_MASK;

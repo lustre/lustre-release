@@ -1221,26 +1221,31 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 /* Check if a block is allocated or not */
 static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
-                            struct niobuf_local *lnb, int npages,
-                            struct thandle *thandle)
+			    struct niobuf_local *lnb, int npages,
+			    struct thandle *thandle, __u64 user_size)
 {
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct osd_iobuf *iobuf = &oti->oti_iobuf;
-        struct inode *inode = osd_dt_obj(dt)->oo_inode;
-        struct osd_device  *osd = osd_obj2dev(osd_dt_obj(dt));
-        loff_t isize;
-        int rc = 0, i;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_iobuf *iobuf = &oti->oti_iobuf;
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+	struct osd_device  *osd = osd_obj2dev(osd_dt_obj(dt));
+	loff_t disk_size;
+	int rc = 0, i;
 
-        LASSERT(inode);
+	LASSERT(inode);
 
 	rc = osd_init_iobuf(osd, iobuf, 1, npages);
 	if (unlikely(rc != 0))
 		RETURN(rc);
 
-	isize = i_size_read(inode);
+	disk_size = i_size_read(inode);
+	/* if disk_size is already bigger than specified user_size,
+	 * ignore user_size
+	 */
+	if (disk_size > user_size)
+		user_size = 0;
 	dquot_initialize(inode);
 
-        for (i = 0; i < npages; i++) {
+	for (i = 0; i < npages; i++) {
 		if (lnb[i].lnb_rc == -ENOSPC &&
 		    (lnb[i].lnb_flags & OBD_BRW_MAPPED)) {
 			/* Allow the write to proceed if overwriting an
@@ -1260,8 +1265,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(PageLocked(lnb[i].lnb_page));
 		LASSERT(!PageWriteback(lnb[i].lnb_page));
 
-		if (lnb[i].lnb_file_offset + lnb[i].lnb_len > isize)
-			isize = lnb[i].lnb_file_offset + lnb[i].lnb_len;
+		if (lnb[i].lnb_file_offset + lnb[i].lnb_len > disk_size)
+			disk_size = lnb[i].lnb_file_offset + lnb[i].lnb_len;
 
 		/*
 		 * Since write and truncate are serialized by oo_sem, even
@@ -1273,26 +1278,29 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		SetPageUptodate(lnb[i].lnb_page);
 
 		osd_iobuf_add_page(iobuf, &lnb[i]);
-        }
+	}
+	/* if file has grown, take user_size into account */
+	if (user_size && disk_size > user_size)
+		disk_size = user_size;
 
 	osd_trans_exec_op(env, thandle, OSD_OT_WRITE);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC)) {
-                rc = -ENOSPC;
-        } else if (iobuf->dr_npages > 0) {
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC)) {
+		rc = -ENOSPC;
+	} else if (iobuf->dr_npages > 0) {
 		rc = osd_ldiskfs_map_inode_pages(inode, iobuf->dr_pages,
 						 iobuf->dr_npages,
 						 iobuf->dr_blocks, 1);
-        } else {
-                /* no pages to write, no transno is needed */
-                thandle->th_local = 1;
-        }
+	} else {
+		/* no pages to write, no transno is needed */
+		thandle->th_local = 1;
+	}
 
 	if (likely(rc == 0)) {
 		spin_lock(&inode->i_lock);
-		if (isize > i_size_read(inode)) {
-			i_size_write(inode, isize);
-			LDISKFS_I(inode)->i_disksize = isize;
+		if (disk_size > i_size_read(inode)) {
+			i_size_write(inode, disk_size);
+			LDISKFS_I(inode)->i_disksize = disk_size;
 			spin_unlock(&inode->i_lock);
 			osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 		} else {

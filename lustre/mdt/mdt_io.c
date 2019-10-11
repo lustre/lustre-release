@@ -656,7 +656,7 @@ retry:
 		GOTO(out_stop, rc);
 
 	dt_write_lock(env, dob, 0);
-	rc = dt_write_commit(env, dob, lnb, niocount, th);
+	rc = dt_write_commit(env, dob, lnb, niocount, th, 0);
 	if (rc)
 		GOTO(unlock, rc);
 

@@ -818,7 +818,7 @@ static void osd_evict_dbufs_after_write(struct osd_object *obj,
 
 static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			struct niobuf_local *lnb, int npages,
-			struct thandle *th)
+			struct thandle *th, __u64 user_size)
 {
 	struct osd_object  *obj  = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
@@ -846,6 +846,12 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_MAPBLK_ENOSPC))
 		RETURN(-ENOSPC);
+
+	/* if la_size is already bigger than specified user_size,
+	 * ignore user_size
+	 */
+	if (obj->oo_attr.la_size > user_size)
+		user_size = 0;
 
 	/* LU-8791: take oo_guard to avoid the deadlock that changing block
 	 * size and assigning arcbuf take place at the same time.
@@ -948,6 +954,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 	}
 
+	/* if file has grown, take user_size into account */
+	if (user_size && new_size > user_size)
+		new_size = user_size;
 	write_lock(&obj->oo_attr_lock);
 	if (obj->oo_attr.la_size < new_size) {
 		obj->oo_attr.la_size = new_size;

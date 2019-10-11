@@ -1317,11 +1317,21 @@ struct dt_body_operations {
 	 * then the method should maintain space accounting for the given
 	 * credentials.
 	 *
+	 * user_size parameter is the apparent size of the file, ie the size
+	 * of the clear text version of the file. It can differ from the actual
+	 * amount of valuable data received when a file is encrypted,
+	 * because encrypted pages always contain PAGE_SIZE bytes of data,
+	 * even if clear text data is only a few bytes.
+	 * In case of encrypted file, apparent size will be stored as the inode
+	 * size, so that servers return to clients an object size they can use
+	 * to determine clear text size.
+	 *
 	 * \param[in] env	execution environment for this thread
 	 * \param[in] dt	object
 	 * \param[in] lb	array of descriptors for the buffers
 	 * \param[in] nr	size of the array
 	 * \param[in] th	transaction handle
+	 * \param[in] user_size	apparent size
 	 *
 	 * \retval 0		on success
 	 * \retval negative	negated errno on error
@@ -1330,7 +1340,8 @@ struct dt_body_operations {
 				struct dt_object *dt,
 				struct niobuf_local *lb,
 				int nr,
-				struct thandle *th);
+				struct thandle *th,
+				__u64 user_size);
 
 	/**
 	 * Return logical to physical block mapping for a given extent
@@ -2495,13 +2506,13 @@ static inline int dt_declare_write_commit(const struct lu_env *env,
 
 
 static inline int dt_write_commit(const struct lu_env *env,
-                                  struct dt_object *d, struct niobuf_local *lnb,
-                                  int n, struct thandle *th)
+				  struct dt_object *d, struct niobuf_local *lnb,
+				  int n, struct thandle *th, __u64 size)
 {
-        LASSERT(d);
-        LASSERT(d->do_body_ops);
-        LASSERT(d->do_body_ops->dbo_write_commit);
-        return d->do_body_ops->dbo_write_commit(env, d, lnb, n, th);
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_write_commit);
+	return d->do_body_ops->dbo_write_commit(env, d, lnb, n, th, size);
 }
 
 static inline int dt_read_prep(const struct lu_env *env, struct dt_object *d,

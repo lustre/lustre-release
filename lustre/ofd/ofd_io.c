@@ -1310,7 +1310,7 @@ retry:
 		GOTO(out_unlock, rc = -ENOENT);
 
 	if (likely(!fake_write)) {
-		rc = dt_write_commit(env, o, lnb, niocount, th);
+		rc = dt_write_commit(env, o, lnb, niocount, th, oa->o_size);
 		if (rc)
 			GOTO(out_unlock, rc);
 	}
