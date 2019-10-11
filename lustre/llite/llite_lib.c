@@ -320,6 +320,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
 
 	obd_connect_set_secctx(data);
+	if (ll_sbi_has_encrypt(sbi))
+		obd_connect_set_enc(data);
 
 #if defined(CONFIG_SECURITY)
 	data->ocd_connect_flags2 |= OBD_CONNECT2_SELINUX_POLICY;
@@ -429,6 +431,14 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	if (obd_connect_has_secctx(data))
 		sbi->ll_flags |= LL_SBI_FILE_SECCTX;
 
+	if (ll_sbi_has_encrypt(sbi) && !obd_connect_has_enc(data)) {
+		if (ll_sbi_has_test_dummy_encryption(sbi))
+			LCONSOLE_WARN("%s: server %s does not support encryption feature, encryption deactivated.\n",
+				      sbi->ll_fsname,
+				      sbi->ll_md_exp->exp_obd->obd_name);
+		ll_sbi_set_encrypt(sbi, false);
+	}
+
 	if (data->ocd_ibits_known & MDS_INODELOCK_XATTR) {
 		if (!(data->ocd_connect_flags & OBD_CONNECT_MAX_EASIZE)) {
 			LCONSOLE_INFO("%s: disabling xattr cache due to "
@@ -490,6 +500,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	if (sbi->ll_flags & LL_SBI_ALWAYS_PING)
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
 
+	if (ll_sbi_has_encrypt(sbi))
+		obd_connect_set_enc(data);
+
 	CDEBUG(D_RPCTRACE, "ocd_connect_flags: %#llx ocd_version: %d "
 	       "ocd_grant: %d\n", data->ocd_connect_flags,
 	       data->ocd_version, data->ocd_grant);
@@ -511,6 +524,16 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 		CERROR("%s: Cannot connect to %s: rc = %d\n",
 		       sbi->ll_dt_exp->exp_obd->obd_name, dt, err);
 		GOTO(out_md, err);
+	}
+
+	if (ll_sbi_has_encrypt(sbi) &&
+	    !obd_connect_has_enc(&sbi->ll_dt_obd->u.lov.lov_ocd)) {
+		if (ll_sbi_has_test_dummy_encryption(sbi))
+			LCONSOLE_WARN("%s: server %s does not support encryption feature, encryption deactivated.\n",
+				      sbi->ll_fsname, dt);
+		ll_sbi_set_encrypt(sbi, false);
+	} else if (ll_sbi_has_test_dummy_encryption(sbi)) {
+		LCONSOLE_WARN("Test dummy encryption mode enabled\n");
 	}
 
 	sbi->ll_dt_exp->exp_connect_data = *data;

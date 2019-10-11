@@ -4423,7 +4423,7 @@ int jt_nodemap_modify(int argc, char **argv)
 		fprintf(stderr,
 			"usage: nodemap_modify --name <nodemap_name> --property <property_name> --value <value>\n");
 		fprintf(stderr,
-			"valid properties: admin trusted map_mode squash_uid squash_gid deny_unknown audit_mode\n");
+			"valid properties: admin trusted map_mode squash_uid squash_gid deny_unknown audit_mode forbid_encryption\n");
 		return -1;
 	}
 
@@ -4441,6 +4441,8 @@ int jt_nodemap_modify(int argc, char **argv)
 		cmd = LCFG_NODEMAP_MAP_MODE;
 	} else if (strcmp("audit_mode", param) == 0) {
 		cmd = LCFG_NODEMAP_AUDIT_MODE;
+	} else if (strcmp("forbid_encryption", param) == 0) {
+		cmd = LCFG_NODEMAP_FORBID_ENCRYPT;
 	} else {
 		fprintf(stderr,
 			"error: %s: nodemap_modify invalid subcommand: %s\n",

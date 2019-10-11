@@ -5436,6 +5436,12 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		if (rc == 0)
 			rc = nodemap_set_audit_mode(nodemap_name, bool_switch);
 		break;
+	case LCFG_NODEMAP_FORBID_ENCRYPT:
+		rc = kstrtobool(param, &bool_switch);
+		if (rc == 0)
+			rc = nodemap_set_forbid_encryption(nodemap_name,
+							   bool_switch);
+		break;
 	case LCFG_NODEMAP_MAP_MODE:
 		if (strcmp("both", param) == 0)
 			rc = nodemap_set_mapping_mode(nodemap_name,

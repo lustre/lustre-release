@@ -1172,6 +1172,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nmf_map_uid_only = 0;
 		nodemap->nmf_map_gid_only = 0;
 		nodemap->nmf_enable_audit = 1;
+		nodemap->nmf_forbid_encryption = 0;
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1193,6 +1194,8 @@ struct lu_nodemap *nodemap_create(const char *name,
 				default_nodemap->nmf_map_gid_only;
 		nodemap->nmf_enable_audit =
 			default_nodemap->nmf_enable_audit;
+		nodemap->nmf_forbid_encryption =
+			default_nodemap->nmf_forbid_encryption;
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
@@ -1433,6 +1436,34 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_set_audit_mode);
+
+/**
+ * Set the nmf_forbid_encryption flag to true or false.
+ * \param	name			nodemap name
+ * \param	forbid_encryption	if true, forbid encryption
+ * \retval	0 on success
+ *
+ */
+int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+
+	nodemap->nmf_forbid_encryption = forbid_encryption;
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_forbid_encryption);
 
 
 /**

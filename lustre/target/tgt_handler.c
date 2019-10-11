@@ -1012,6 +1012,27 @@ int tgt_connect(struct tgt_session_info *tsi)
 		rc = req_check_sepol(tsi->tsi_pill);
 		if (rc)
 			GOTO(out, rc);
+
+		if (reply->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+		    reply->ocd_connect_flags2 & OBD_CONNECT2_ENCRYPT &&
+		    tsi->tsi_pill->rc_req->rq_export) {
+			bool forbid_encrypt = true;
+			struct lu_nodemap *nm =
+			 nodemap_get_from_exp(tsi->tsi_pill->rc_req->rq_export);
+
+			if (!nm) {
+				/* nodemap_get_from_exp returns NULL in case
+				 * nodemap is not active, so we do not forbid
+				 */
+				forbid_encrypt = false;
+			} else if (!IS_ERR(nm)) {
+				forbid_encrypt = nm->nmf_forbid_encryption;
+				nodemap_putref(nm);
+			}
+
+			if (forbid_encrypt)
+				GOTO(out, rc = -EACCES);
+		}
 	}
 
 	RETURN(0);

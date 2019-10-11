@@ -434,6 +434,23 @@ int ll_inode_init_security(struct dentry *dentry, struct inode *inode,
 int ll_listsecurity(struct inode *inode, char *secctx_name,
 		    size_t secctx_name_size);
 
+static inline bool obd_connect_has_enc(struct obd_connect_data *data)
+{
+#ifdef HAVE_LUSTRE_CRYPTO
+	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+		data->ocd_connect_flags2 & OBD_CONNECT2_ENCRYPT;
+#else
+	return false;
+#endif
+}
+
+static inline void obd_connect_set_enc(struct obd_connect_data *data)
+{
+#ifdef HAVE_LUSTRE_CRYPTO
+	data->ocd_connect_flags2 |= OBD_CONNECT2_ENCRYPT;
+#endif
+}
+
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
  * consistency between file size and KMS.

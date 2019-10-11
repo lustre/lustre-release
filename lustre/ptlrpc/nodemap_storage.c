@@ -75,6 +75,7 @@ enum nm_flag_shifts {
 	NM_FL_MAP_UID_ONLY = 0x8,
 	NM_FL_MAP_GID_ONLY = 0x10,
 	NM_FL_ENABLE_AUDIT = 0x20,
+	NM_FL_FORBID_ENCRYPT = 0x40,
 };
 
 static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id)
@@ -104,7 +105,9 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 		(nodemap->nmf_map_gid_only ?
 			NM_FL_MAP_GID_ONLY : 0) |
 		(nodemap->nmf_enable_audit ?
-			NM_FL_ENABLE_AUDIT : 0));
+			NM_FL_ENABLE_AUDIT : 0) |
+		(nodemap->nmf_forbid_encryption ?
+			NM_FL_FORBID_ENCRYPT : 0));
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -757,6 +760,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 					flags & NM_FL_MAP_GID_ONLY;
 		nodemap->nmf_enable_audit =
 					flags & NM_FL_ENABLE_AUDIT;
+		nodemap->nmf_forbid_encryption =
+					flags & NM_FL_FORBID_ENCRYPT;
 
 		/* The fileset should be saved otherwise it will be empty
 		 * every time in case of "NODEMAP_CLUSTER_IDX". */
