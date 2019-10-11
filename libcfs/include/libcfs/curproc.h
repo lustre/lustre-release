@@ -65,9 +65,6 @@ typedef __u32 cfs_cap_t;
                          (1 << CFS_CAP_SYS_BOOT) |              \
                          (1 << CFS_CAP_SYS_RESOURCE))
 
-void cfs_cap_raise(cfs_cap_t cap);
-void cfs_cap_lower(cfs_cap_t cap);
-int cfs_cap_raised(cfs_cap_t cap);
 cfs_cap_t cfs_curproc_cap_pack(void);
 void cfs_curproc_cap_unpack(cfs_cap_t cap);
 int cfs_capable(cfs_cap_t cap);
