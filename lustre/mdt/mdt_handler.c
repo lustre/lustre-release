@@ -6938,7 +6938,7 @@ static int mdt_obd_postrecov(struct obd_device *obd)
         return rc;
 }
 
-static struct obd_ops mdt_obd_device_ops = {
+static const struct obd_ops mdt_obd_device_ops = {
         .o_owner          = THIS_MODULE,
         .o_set_info_async = mdt_obd_set_info_async,
         .o_connect        = mdt_obd_connect,

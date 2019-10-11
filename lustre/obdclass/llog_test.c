@@ -2263,7 +2263,7 @@ cleanup_env:
 	RETURN(rc);
 }
 
-static struct obd_ops llog_obd_ops = {
+static const struct obd_ops llog_obd_ops = {
 	.o_owner       = THIS_MODULE,
 	.o_setup       = llog_test_setup,
 	.o_cleanup     = llog_test_cleanup,

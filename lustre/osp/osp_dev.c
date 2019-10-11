@@ -1870,7 +1870,7 @@ static struct lu_device_type osp_device_type = {
 	.ldt_ctx_tags = LCT_MD_THREAD | LCT_DT_THREAD,
 };
 
-static struct obd_ops osp_obd_device_ops = {
+static const struct obd_ops osp_obd_device_ops = {
 	.o_owner	= THIS_MODULE,
 	.o_add_conn	= client_import_add_conn,
 	.o_del_conn	= client_import_del_conn,

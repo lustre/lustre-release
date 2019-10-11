@@ -419,7 +419,7 @@ static int qmt_device_obd_disconnect(struct obd_export *exp)
 /*
  * obd device operations associated with the master target.
  */
-struct obd_ops qmt_obd_ops = {
+static const struct obd_ops qmt_obd_ops = {
 	.o_owner	= THIS_MODULE,
 	.o_connect	= qmt_device_obd_connect,
 	.o_disconnect	= qmt_device_obd_disconnect,

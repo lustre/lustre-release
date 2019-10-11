@@ -1734,7 +1734,7 @@ static int mgs_health_check(const struct lu_env *env, struct obd_device *obd)
 }
 
 /* use obd ops to offer management infrastructure */
-static struct obd_ops mgs_obd_device_ops = {
+static const struct obd_ops mgs_obd_device_ops = {
 	.o_owner		= THIS_MODULE,
 	.o_connect		= mgs_obd_connect,
 	.o_reconnect		= mgs_obd_reconnect,

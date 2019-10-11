@@ -1478,7 +1478,7 @@ out:
 	return !!rc;
 }
 
-struct obd_ops ofd_obd_ops = {
+const struct obd_ops ofd_obd_ops = {
 	.o_owner		= THIS_MODULE,
 	.o_connect		= ofd_obd_connect,
 	.o_reconnect		= ofd_obd_reconnect,

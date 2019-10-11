@@ -3091,7 +3091,7 @@ out:
 	return rc;
 }
 
-static struct obd_ops echo_client_obd_ops = {
+static const struct obd_ops echo_client_obd_ops = {
 	.o_owner       = THIS_MODULE,
 	.o_iocontrol   = echo_client_iocontrol,
 	.o_connect     = echo_client_connect,

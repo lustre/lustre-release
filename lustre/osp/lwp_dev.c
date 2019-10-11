@@ -622,7 +622,7 @@ static int lwp_set_info_async(const struct lu_env *env,
 	RETURN(-EINVAL);
 }
 
-struct obd_ops lwp_obd_device_ops = {
+const struct obd_ops lwp_obd_device_ops = {
 	.o_owner	= THIS_MODULE,
 	.o_add_conn	= client_import_add_conn,
 	.o_del_conn	= client_import_del_conn,

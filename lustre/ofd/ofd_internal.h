@@ -288,7 +288,7 @@ int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
 		   struct lu_fid *fid, struct fiemap *fiemap);
 
 /* ofd_obd.c */
-extern struct obd_ops ofd_obd_ops;
+extern const struct obd_ops ofd_obd_ops;
 int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 		       const struct lu_fid *fid, int orphan);
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,

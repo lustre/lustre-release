@@ -2896,7 +2896,7 @@ static int mdc_cleanup(struct obd_device *obd)
 	return osc_cleanup_common(obd);
 }
 
-static struct obd_ops mdc_obd_ops = {
+static const struct obd_ops mdc_obd_ops = {
 	.o_owner	    = THIS_MODULE,
 	.o_setup	    = mdc_setup,
 	.o_precleanup       = mdc_precleanup,
@@ -2919,7 +2919,7 @@ static struct obd_ops mdc_obd_ops = {
 	.o_quotactl	    = mdc_quotactl,
 };
 
-static struct md_ops mdc_md_ops = {
+static const struct md_ops mdc_md_ops = {
 	.m_get_root	    = mdc_get_root,
 	.m_null_inode	    = mdc_null_inode,
 	.m_close            = mdc_close,

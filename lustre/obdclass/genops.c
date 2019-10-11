@@ -172,11 +172,6 @@ static void class_sysfs_release(struct kobject *kobj)
 	if (type->typ_name && type->typ_procroot)
 		remove_proc_subtree(type->typ_name, proc_lustre_root);
 #endif
-	if (type->typ_md_ops)
-		OBD_FREE_PTR(type->typ_md_ops);
-	if (type->typ_dt_ops)
-		OBD_FREE_PTR(type->typ_dt_ops);
-
 	OBD_FREE(type, sizeof(*type));
 }
 
@@ -234,7 +229,8 @@ EXPORT_SYMBOL(class_add_symlinks);
 
 #define CLASS_MAX_NAME 1024
 
-int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
+int class_register_type(const struct obd_ops *dt_ops,
+			const struct md_ops *md_ops,
 			bool enable_proc, struct lprocfs_vars *vars,
 			const char *name, struct lu_device_type *ldt)
 {
@@ -265,17 +261,9 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 #ifdef HAVE_SERVER_SUPPORT
 dir_exist:
 #endif /* HAVE_SERVER_SUPPORT */
-        OBD_ALLOC_PTR(type->typ_dt_ops);
-        OBD_ALLOC_PTR(type->typ_md_ops);
 
-        if (type->typ_dt_ops == NULL ||
-	    type->typ_md_ops == NULL)
-		GOTO (failed, rc = -ENOMEM);
-
-        *(type->typ_dt_ops) = *dt_ops;
-        /* md_ops is optional */
-        if (md_ops)
-                *(type->typ_md_ops) = *md_ops;
+	type->typ_dt_ops = dt_ops;
+	type->typ_md_ops = md_ops;
 
 #ifdef HAVE_SERVER_SUPPORT
 	if (type->typ_sym_filter) {
@@ -343,8 +331,8 @@ int class_unregister_type(const char *name)
 		       atomic_read(&type->typ_refcnt));
                 /* This is a bad situation, let's make the best of it */
                 /* Remove ops, but leave the name for debugging */
-                OBD_FREE_PTR(type->typ_dt_ops);
-                OBD_FREE_PTR(type->typ_md_ops);
+		type->typ_dt_ops = NULL;
+		type->typ_md_ops = NULL;
 		GOTO(out_put, rc = -EBUSY);
         }
 

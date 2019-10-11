@@ -2132,7 +2132,7 @@ static int lod_obd_set_info_async(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static struct obd_ops lod_obd_device_ops = {
+static const struct obd_ops lod_obd_device_ops = {
 	.o_owner        = THIS_MODULE,
 	.o_connect      = lod_obd_connect,
 	.o_disconnect   = lod_obd_disconnect,

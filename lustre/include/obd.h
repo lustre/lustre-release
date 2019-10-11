@@ -99,8 +99,8 @@ struct obd_info {
 };
 
 struct obd_type {
-	struct obd_ops		*typ_dt_ops;
-	struct md_ops		*typ_md_ops;
+	const struct obd_ops	*typ_dt_ops;
+	const struct md_ops	*typ_md_ops;
 	struct proc_dir_entry	*typ_procroot;
 	struct dentry		*typ_debugfs_entry;
 #ifdef HAVE_SERVER_SUPPORT

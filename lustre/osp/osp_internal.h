@@ -891,7 +891,7 @@ int osp_sync_add_commit_cb_1s(const struct lu_env *env, struct osp_device *d,
 			      struct thandle *th);
 
 /* lwp_dev.c */
-extern struct obd_ops lwp_obd_device_ops;
+extern const struct obd_ops lwp_obd_device_ops;
 extern struct lu_device_type lwp_device_type;
 
 static inline struct lu_device *osp2top(const struct osp_device *osp)

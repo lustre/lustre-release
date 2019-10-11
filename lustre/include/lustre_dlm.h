@@ -1207,8 +1207,6 @@ struct ldlm_enqueue_info {
 
 #define ei_res_id	ei_cb_gl
 
-extern struct obd_ops ldlm_obd_ops;
-
 extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 extern const char *ldlm_it2str(enum ldlm_intent_flags it);

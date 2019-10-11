@@ -465,7 +465,7 @@ static struct lprocfs_vars lprocfs_echo_obd_vars[] = {
 	{ NULL }
 };
 
-struct obd_ops echo_obd_ops = {
+const struct obd_ops echo_obd_ops = {
 	.o_owner           = THIS_MODULE,
 	.o_connect         = echo_connect,
 	.o_disconnect      = echo_disconnect,

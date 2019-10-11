@@ -3344,7 +3344,7 @@ int osc_cleanup_common(struct obd_device *obd)
 }
 EXPORT_SYMBOL(osc_cleanup_common);
 
-static struct obd_ops osc_obd_ops = {
+static const struct obd_ops osc_obd_ops = {
         .o_owner                = THIS_MODULE,
         .o_setup                = osc_setup,
         .o_precleanup           = osc_precleanup,

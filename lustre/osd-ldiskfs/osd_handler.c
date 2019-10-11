@@ -8146,7 +8146,7 @@ static int osd_health_check(const struct lu_env *env, struct obd_device *obd)
 /*
  * lprocfs legacy support.
  */
-static struct obd_ops osd_obd_device_ops = {
+static const struct obd_ops osd_obd_device_ops = {
 	.o_owner = THIS_MODULE,
 	.o_connect	= osd_obd_connect,
 	.o_disconnect	= osd_obd_disconnect,

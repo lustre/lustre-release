@@ -677,7 +677,7 @@ static int mds_health_check(const struct lu_env *env, struct obd_device *obd)
 	return rc != 0 ? 1 : 0;
 }
 
-static struct obd_ops mds_obd_device_ops = {
+static const struct obd_ops mds_obd_device_ops = {
 	.o_owner	   = THIS_MODULE,
 	.o_health_check	   = mds_health_check,
 };

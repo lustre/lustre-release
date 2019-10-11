@@ -407,7 +407,7 @@ static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
 }
 
 /* use obd ops to offer management infrastructure */
-static struct obd_ops ost_obd_ops = {
+static const struct obd_ops ost_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_setup        = ost_setup,
         .o_cleanup      = ost_cleanup,

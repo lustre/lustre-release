@@ -1614,7 +1614,7 @@ static struct lu_device_type osd_device_type = {
 };
 
 
-static struct obd_ops osd_obd_device_ops = {
+static const struct obd_ops osd_obd_device_ops = {
 	.o_owner       = THIS_MODULE,
 	.o_connect	= osd_obd_connect,
 	.o_disconnect	= osd_obd_disconnect,

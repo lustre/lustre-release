@@ -1324,7 +1324,7 @@ static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static struct obd_ops lov_obd_ops = {
+static const struct obd_ops lov_obd_ops = {
 	.o_owner		= THIS_MODULE,
 	.o_setup		= lov_setup,
 	.o_cleanup		= lov_cleanup,
