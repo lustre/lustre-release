@@ -303,7 +303,7 @@ static ssize_t identity_upcall_store(struct kobject *kobj,
 
 	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
 	down_write(&hash->uc_upcall_rwsem);
-	count = sscanf(buffer, "%s", hash->uc_upcall);
+	sscanf(buffer, "%s", hash->uc_upcall);
 	up_write(&hash->uc_upcall_rwsem);
 
 	if (strcmp(hash->uc_name, mdt_obd_name(mdt)) != 0)
