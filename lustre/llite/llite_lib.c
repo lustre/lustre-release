@@ -817,38 +817,38 @@ static int ll_options(char *options, struct ll_sb_info *sbi)
 
 	CDEBUG(D_CONFIG, "Parsing opts %s\n", options);
 
-        while (*s1) {
-                CDEBUG(D_SUPER, "next opt=%s\n", s1);
-                tmp = ll_set_opt("nolock", s1, LL_SBI_NOLCK);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("flock", s1, LL_SBI_FLOCK);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("localflock", s1, LL_SBI_LOCALFLOCK);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("noflock", s1, LL_SBI_FLOCK|LL_SBI_LOCALFLOCK);
-                if (tmp) {
-                        *flags &= ~tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("user_xattr", s1, LL_SBI_USER_XATTR);
-                if (tmp) {
-                        *flags |= tmp;
-                        goto next;
-                }
-                tmp = ll_set_opt("nouser_xattr", s1, LL_SBI_USER_XATTR);
-                if (tmp) {
-                        *flags &= ~tmp;
-                        goto next;
-                }
+	while (*s1) {
+		CDEBUG(D_SUPER, "next opt=%s\n", s1);
+		tmp = ll_set_opt("nolock", s1, LL_SBI_NOLCK);
+		if (tmp) {
+			*flags |= tmp;
+			goto next;
+		}
+		tmp = ll_set_opt("flock", s1, LL_SBI_FLOCK);
+		if (tmp) {
+			*flags = (*flags & ~LL_SBI_LOCALFLOCK) | tmp;
+			goto next;
+		}
+		tmp = ll_set_opt("localflock", s1, LL_SBI_LOCALFLOCK);
+		if (tmp) {
+			*flags = (*flags & ~LL_SBI_FLOCK) | tmp;
+			goto next;
+		}
+		tmp = ll_set_opt("noflock", s1, LL_SBI_FLOCK|LL_SBI_LOCALFLOCK);
+		if (tmp) {
+			*flags &= ~tmp;
+			goto next;
+		}
+		tmp = ll_set_opt("user_xattr", s1, LL_SBI_USER_XATTR);
+		if (tmp) {
+			*flags |= tmp;
+			goto next;
+		}
+		tmp = ll_set_opt("nouser_xattr", s1, LL_SBI_USER_XATTR);
+		if (tmp) {
+			*flags &= ~tmp;
+			goto next;
+		}
 		tmp = ll_set_opt("context", s1, 1);
 		if (tmp)
 			goto next;
@@ -2623,7 +2623,7 @@ int ll_show_options(struct seq_file *seq, struct dentry *dentry)
 int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 #endif
 {
-        struct ll_sb_info *sbi;
+	struct ll_sb_info *sbi;
 
 #ifdef HAVE_SUPEROPS_USE_DENTRY
 	LASSERT((seq != NULL) && (dentry != NULL));
@@ -2633,20 +2633,25 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 	sbi = ll_s2sbi(vfs->mnt_sb);
 #endif
 
-        if (sbi->ll_flags & LL_SBI_NOLCK)
-                seq_puts(seq, ",nolock");
+	if (sbi->ll_flags & LL_SBI_NOLCK)
+		seq_puts(seq, ",nolock");
 
-        if (sbi->ll_flags & LL_SBI_FLOCK)
-                seq_puts(seq, ",flock");
+	/* "flock" is the default since 2.13, but it wasn't for many years,
+	 * so it is still useful to print this to show it is enabled.
+	 * Start to print "noflock" so it is now clear when flock is disabled.
+	 */
+	if (sbi->ll_flags & LL_SBI_FLOCK)
+		seq_puts(seq, ",flock");
+	else if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
+		seq_puts(seq, ",localflock");
+	else
+		seq_puts(seq, ",noflock");
 
-        if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
-                seq_puts(seq, ",localflock");
+	if (sbi->ll_flags & LL_SBI_USER_XATTR)
+		seq_puts(seq, ",user_xattr");
 
-        if (sbi->ll_flags & LL_SBI_USER_XATTR)
-                seq_puts(seq, ",user_xattr");
-
-        if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
-                seq_puts(seq, ",lazystatfs");
+	if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
+		seq_puts(seq, ",lazystatfs");
 
 	if (sbi->ll_flags & LL_SBI_USER_FID2PATH)
 		seq_puts(seq, ",user_fid2path");
@@ -2654,7 +2659,7 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 	if (sbi->ll_flags & LL_SBI_ALWAYS_PING)
 		seq_puts(seq, ",always_ping");
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /**

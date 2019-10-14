@@ -5733,8 +5733,10 @@ lru_resize_disable()
 
 flock_is_enabled()
 {
+	local mountpath=${1:-$MOUNT}
 	local RC=0
-	[ -z "$(mount | grep "$MOUNT.*flock" | grep -v noflock)" ] && RC=1
+
+	[ -z "$(mount | grep "$mountpath .*flock" | grep -v noflock)" ] && RC=1
 	return $RC
 }
 

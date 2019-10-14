@@ -185,16 +185,11 @@ stop_ost2() {
 }
 
 mount_client() {
-	local MOUNTPATH=$1
-	echo "mount $FSNAME on ${MOUNTPATH}....."
-	zconf_mount $(hostname) $MOUNTPATH || return 96
-}
+	local mountpath=$1
+	local mountopt="$2"
 
-remount_client() {
-	local mountopt="remount,$1"
-	local MOUNTPATH=$2
-	echo "remount '$1' lustre on ${MOUNTPATH}....."
-	zconf_mount $(hostname) $MOUNTPATH "$mountopt" || return 96
+	echo "mount $FSNAME ${mountopt:+with opts $mountopt} on $mountpath....."
+	zconf_mount $HOSTNAME $mountpath $mountopt || return 96
 }
 
 umount_client() {
@@ -688,10 +683,10 @@ test_20() {
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
 	check_mount || error "check_mount failed"
 	rm -f $DIR/$tfile || error "remove $DIR/$tfile failed."
-	remount_client ro $MOUNT || error "remount_client with ro failed"
+	mount_client $MOUNT remount,ro || error "remount client with ro failed"
 	touch $DIR/$tfile && error "$DIR/$tfile created incorrectly"
 	[ -e $DIR/$tfile ] && error "$DIR/$tfile exists incorrectly"
-	remount_client rw $MOUNT || error "remount_client with rw failed"
+	mount_client $MOUNT remount,rw || error "remount client with rw failed"
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 	MCNT=$(grep -c $MOUNT' ' /etc/mtab)
 	[ "$MCNT" -ne 1 ] && error "$MOUNT in /etc/mtab $MCNT times"
@@ -7241,7 +7236,7 @@ test_98()
 	for ((x = 1; x <= 400; x++)); do
 		mountopt="$mountopt,user_xattr"
 	done
-	remount_client $mountopt $MOUNT  2>&1 | grep "too long" ||
+	mount_client $MOUNT remount,$mountopt 2>&1 | grep "too long" ||
 		error "Buffer overflow check failed"
 	cleanup || error "cleanup failed"
 }
@@ -7504,7 +7499,7 @@ test_103() {
 }
 run_test 103 "rename filesystem name"
 
-test_104() { # LU-6952
+test_104a() { # LU-6952
 	local mds_mountopts=$MDS_MOUNT_OPTS
 	local ost_mountopts=$OST_MOUNT_OPTS
 	local mds_mountfsopts=$MDS_MOUNT_FS_OPTS
@@ -7554,7 +7549,22 @@ test_104() { # LU-6952
 	OST_MOUNT_OPTS=$ost_mountopts
 	MDS_MOUNT_FS_OPTS=$mds_mountfsopts
 }
-run_test 104 "Make sure user defined options are reflected in mount"
+run_test 104a "Make sure user defined options are reflected in mount"
+
+test_104b() { # LU-12859
+	mount_client $MOUNT3 flock,localflock
+	stack_trap "umount_client $MOUNT3" EXIT
+	mount | grep "$MOUNT3 .*,flock" && error "flock is still set"
+	mount | grep "$MOUNT3 .*,localflock" || error "localflock is not set"
+	umount_client $MOUNT3
+	mount_client $MOUNT3 localflock,flock
+	mount | grep "$MOUNT3 .*,localflock" && error "localflock is still set"
+	mount | grep "$MOUNT3 .*,flock" || error "flock is not set"
+	umount_client $MOUNT3
+	mount_client $MOUNT3 localflock,flock,noflock
+	flock_is_enabled $MOUNT3 && error "some flock is still enabled" || true
+}
+run_test 104b "Mount uses last flock argument"
 
 error_and_umount() {
 	umount $TMP/$tdir
