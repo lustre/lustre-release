@@ -335,9 +335,10 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	set_mrc_cr_flags(rec, cr_flags);
 }
 
-static inline u64 attr_pack(unsigned int ia_valid, enum op_xvalid ia_xvalid)
+static inline enum mds_attr_flags mdc_attr_pack(unsigned int ia_valid,
+						enum op_xvalid ia_xvalid)
 {
-	u64 sa_valid = 0;
+	enum mds_attr_flags sa_valid = 0;
 
 	if (ia_valid & ATTR_MODE)
 		sa_valid |= MDS_ATTR_MODE;
@@ -380,6 +381,7 @@ static inline u64 attr_pack(unsigned int ia_valid, enum op_xvalid ia_xvalid)
 		sa_valid |= MDS_ATTR_LSIZE;
 	if (ia_xvalid & OP_XVALID_LAZYBLOCKS)
 		sa_valid |= MDS_ATTR_LBLOCKS;
+
 	return sa_valid;
 }
 
@@ -393,8 +395,8 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
 	rec->sa_suppgid = -1;
 
 	rec->sa_fid    = op_data->op_fid1;
-	rec->sa_valid  = attr_pack(op_data->op_attr.ia_valid,
-				   op_data->op_xvalid);
+	rec->sa_valid  = mdc_attr_pack(op_data->op_attr.ia_valid,
+				       op_data->op_xvalid);
 	rec->sa_mode   = op_data->op_attr.ia_mode;
 	rec->sa_uid    = from_kuid(&init_user_ns, op_data->op_attr.ia_uid);
 	rec->sa_gid    = from_kgid(&init_user_ns, op_data->op_attr.ia_gid);

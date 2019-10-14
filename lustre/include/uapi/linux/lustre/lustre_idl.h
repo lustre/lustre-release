@@ -1903,26 +1903,28 @@ struct mdt_rec_setattr {
  * since the client and MDS may run different kernels (see bug 13828)
  * Therefore, we should only use MDS_ATTR_* attributes for sa_valid.
  */
-#define MDS_ATTR_MODE          0x1ULL /* = 1 */
-#define MDS_ATTR_UID           0x2ULL /* = 2 */
-#define MDS_ATTR_GID           0x4ULL /* = 4 */
-#define MDS_ATTR_SIZE          0x8ULL /* = 8 */
-#define MDS_ATTR_ATIME        0x10ULL /* = 16 */
-#define MDS_ATTR_MTIME        0x20ULL /* = 32 */
-#define MDS_ATTR_CTIME        0x40ULL /* = 64 */
-#define MDS_ATTR_ATIME_SET    0x80ULL /* = 128 */
-#define MDS_ATTR_MTIME_SET   0x100ULL /* = 256 */
-#define MDS_ATTR_FORCE       0x200ULL /* = 512, Not a change, but a change it */
-#define MDS_ATTR_ATTR_FLAG   0x400ULL /* = 1024 */
-#define MDS_ATTR_KILL_SUID   0x800ULL /* = 2048 */
-#define MDS_ATTR_KILL_SGID  0x1000ULL /* = 4096 */
-#define MDS_ATTR_CTIME_SET  0x2000ULL /* = 8192 */
-#define MDS_ATTR_FROM_OPEN  0x4000ULL /* = 16384, called from open path, ie O_TRUNC */
-#define MDS_ATTR_BLOCKS     0x8000ULL /* = 32768 */
-#define MDS_ATTR_PROJID	    0x10000ULL	/* = 65536 */
-#define MDS_ATTR_LSIZE      0x20000ULL	/* = 131072 */
-#define MDS_ATTR_LBLOCKS    0x40000ULL	/* = 262144 */
-#define MDS_ATTR_OVERRIDE	0x2000000ULL /* = 33554432 */
+enum mds_attr_flags {
+	MDS_ATTR_MODE =		      0x1ULL, /* = 1 */
+	MDS_ATTR_UID =		      0x2ULL, /* = 2 */
+	MDS_ATTR_GID =		      0x4ULL, /* = 4 */
+	MDS_ATTR_SIZE =		      0x8ULL, /* = 8 */
+	MDS_ATTR_ATIME =	     0x10ULL, /* = 16 */
+	MDS_ATTR_MTIME =	     0x20ULL, /* = 32 */
+	MDS_ATTR_CTIME =	     0x40ULL, /* = 64 */
+	MDS_ATTR_ATIME_SET =	     0x80ULL, /* = 128 */
+	MDS_ATTR_MTIME_SET =	    0x100ULL, /* = 256 */
+	MDS_ATTR_FORCE =	    0x200ULL, /* = 512, change it */
+	MDS_ATTR_ATTR_FLAG =	    0x400ULL, /* = 1024 */
+	MDS_ATTR_KILL_SUID =	    0x800ULL, /* = 2048 */
+	MDS_ATTR_KILL_SGID =	   0x1000ULL, /* = 4096 */
+	MDS_ATTR_CTIME_SET =	   0x2000ULL, /* = 8192 */
+	MDS_ATTR_FROM_OPEN =	   0x4000ULL, /* = 16384, from open O_TRUNC */
+	MDS_ATTR_BLOCKS =	   0x8000ULL, /* = 32768 */
+	MDS_ATTR_PROJID =	  0x10000ULL, /* = 65536 */
+	MDS_ATTR_LSIZE =	  0x20000ULL, /* = 131072 */
+	MDS_ATTR_LBLOCKS =	  0x40000ULL, /* = 262144 */
+	MDS_ATTR_OVERRIDE =	0x2000000ULL, /* = 33554432 */
+};
 
 enum mds_op_bias {
 /*	MDS_CHECK_SPLIT		= 1 << 0, obsolete before 2.3.58 */

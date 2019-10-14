@@ -950,7 +950,8 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         RETURN(0);
 }
 
-static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
+static __u64 mdt_attr_valid_xlate(enum mds_attr_flags in,
+				  struct mdt_reint_record *rr,
                                   struct md_attr *ma)
 {
 	__u64 out;
@@ -1000,7 +1001,8 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 		MDS_ATTR_FROM_OPEN | MDS_ATTR_LSIZE | MDS_ATTR_LBLOCKS |
 		MDS_ATTR_OVERRIDE);
 	if (in != 0)
-		CDEBUG(D_INFO, "Unknown attr bits: %#llx\n", in);
+		CDEBUG(D_INFO, "Unknown attr bits: %#llx\n", (u64)in);
+
 	return out;
 }
 
