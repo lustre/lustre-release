@@ -918,18 +918,20 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 GOTO(out, rc);
 
  cleanup_me:
-        /* MEUnlink is safe; the PUT didn't even get off the ground, and
-         * nobody apart from the PUT's target has the right nid+XID to
-         * access the reply buffer. */
-        rc2 = LNetMEUnlink(reply_me_h);
-        LASSERT (rc2 == 0);
-        /* UNLINKED callback called synchronously */
-        LASSERT(!request->rq_receiving_reply);
+	/* MEUnlink is safe; the PUT didn't even get off the ground, and
+	 * nobody apart from the PUT's target has the right nid+XID to
+	 * access the reply buffer. */
+	rc2 = LNetMEUnlink(reply_me_h);
+	LASSERT (rc2 == 0);
+	/* UNLINKED callback called synchronously */
+	LASSERT(!request->rq_receiving_reply);
 
  cleanup_bulk:
-        /* We do sync unlink here as there was no real transfer here so
-         * the chance to have long unlink to sluggish net is smaller here. */
+	/* We do sync unlink here as there was no real transfer here so
+	 * the chance to have long unlink to sluggish net is smaller here. */
         ptlrpc_unregister_bulk(request, 0);
+	if (request->rq_bulk != NULL)
+		request->rq_bulk->bd_registered = 0;
  out:
 	if (rc == -ENOMEM) {
 		/* set rq_sent so that this request is treated
