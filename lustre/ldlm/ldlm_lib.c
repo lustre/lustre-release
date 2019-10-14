@@ -2268,6 +2268,8 @@ static void handle_recovery_req(struct ptlrpc_thread *thread,
 	(void)handler(req);
 	lu_context_exit(&thread->t_env->le_ctx);
 
+	req->rq_svc_thread->t_env->le_ses = NULL;
+
 	/* don't reset timer for final stage */
 	if (!exp_finished(req->rq_export)) {
 		time_t to = obd_timeout;

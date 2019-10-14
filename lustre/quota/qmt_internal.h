@@ -202,15 +202,7 @@ extern struct lu_context_key qmt_thread_key;
 static inline
 struct qmt_thread_info *qmt_info(const struct lu_env *env)
 {
-	struct qmt_thread_info	*info;
-
-	info = lu_context_key_get(&env->le_ctx, &qmt_thread_key);
-	if (info == NULL) {
-		lu_env_refill((struct lu_env *)env);
-		info = lu_context_key_get(&env->le_ctx, &qmt_thread_key);
-	}
-	LASSERT(info);
-	return info;
+	return lu_env_info(env, &qmt_thread_key);
 }
 
 /* helper routine to convert a lu_device into a qmt_device */

@@ -431,15 +431,7 @@ extern struct lu_context_key osp_thread_key;
 
 static inline struct osp_thread_info *osp_env_info(const struct lu_env *env)
 {
-	struct osp_thread_info *info;
-
-	info = lu_context_key_get(&env->le_ctx, &osp_thread_key);
-	if (info == NULL) {
-		lu_env_refill((struct lu_env *)env);
-		info = lu_context_key_get(&env->le_ctx, &osp_thread_key);
-	}
-	LASSERT(info);
-	return info;
+	return lu_env_info(env, &osp_thread_key);
 }
 
 struct osp_txn_info {

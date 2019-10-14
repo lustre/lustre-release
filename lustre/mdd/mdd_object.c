@@ -243,12 +243,7 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env)
 {
-        struct mdd_thread_info *info;
-
-	lu_env_refill((struct lu_env *)env);
-        info = lu_context_key_get(&env->le_ctx, &mdd_thread_key);
-        LASSERT(info != NULL);
-        return info;
+	return lu_env_info(env, &mdd_thread_key);
 }
 
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)

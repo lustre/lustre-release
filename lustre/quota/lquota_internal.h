@@ -334,15 +334,7 @@ extern struct lu_context_key lquota_thread_key;
 static inline
 struct lquota_thread_info *lquota_info(const struct lu_env *env)
 {
-	struct lquota_thread_info	*info;
-
-	info = lu_context_key_get(&env->le_ctx, &lquota_thread_key);
-	if (info == NULL) {
-		lu_env_refill((struct lu_env *)env);
-		info = lu_context_key_get(&env->le_ctx, &lquota_thread_key);
-	}
-	LASSERT(info);
-	return info;
+	return lu_env_info(env, &lquota_thread_key);
 }
 
 #define req_is_acq(flags)    ((flags & QUOTA_DQACQ_FL_ACQ) != 0)
