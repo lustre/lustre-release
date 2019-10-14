@@ -519,12 +519,7 @@ extern struct lu_context_key mdt_thread_key;
 
 static inline struct mdt_thread_info *mdt_th_info(const struct lu_env *env)
 {
-	struct mdt_thread_info *mti;
-
-	lu_env_refill((void *)env);
-	mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-	LASSERT(mti);
-	return mti;
+	return lu_env_info(env, &mdt_thread_key);
 }
 
 struct cdt_req_progress {

@@ -265,15 +265,7 @@ extern struct lu_context_key qsd_thread_key;
 static inline
 struct qsd_thread_info *qsd_info(const struct lu_env *env)
 {
-	struct qsd_thread_info *info;
-
-	info = lu_context_key_get(&env->le_ctx, &qsd_thread_key);
-	if (info == NULL) {
-		lu_env_refill((struct lu_env *)env);
-		info = lu_context_key_get(&env->le_ctx, &qsd_thread_key);
-	}
-	LASSERT(info);
-	return info;
+	return lu_env_info(env, &qsd_thread_key);
 }
 
 /* helper function to check whether a given quota type is enabled */
