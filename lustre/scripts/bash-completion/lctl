@@ -2,8 +2,15 @@ _lctl()
 {
 	local cur prev words cword
 
-	_init_completion || return
 	COMPREPLY=()
+	# allow different versions of bash_completion to work
+	if declare -F _init_completion > /dev/null; then
+		# this provides more functionality, but is only in v2.x
+		_init_completion || return
+	else
+		# this is compatible with both v1.3 and v2.x
+		_get_comp_words_by_ref -n : cur prev words cword
+	fi
 
 	if [[ "$cword" == "1" ]]; then
 		COMPREPLY=( $( compgen -W '$(lctl --list-commands |
