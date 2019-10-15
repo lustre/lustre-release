@@ -83,7 +83,7 @@ EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     lc_servip lustre_routes_config lustre_routes_conversion \
 	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
 	     lustre lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
-	     zfsobj2fid ko2iblnd-probe
+	     zfsobj2fid ko2iblnd-probe \
 	     bash-completion/lctl
 
 CLEANFILES = $(genscripts)
