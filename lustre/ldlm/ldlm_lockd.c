@@ -1295,6 +1295,9 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 				     &lock->l_policy_data);
 	if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
 		lock->l_req_extent = lock->l_policy_data.l_extent;
+	else if (dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS)
+		lock->l_policy_data.l_inodebits.try_bits =
+			dlm_req->lock_desc.l_policy_data.l_inodebits.try_bits;
 
 existing_lock:
         if (flags & LDLM_FL_HAS_INTENT) {
@@ -1515,6 +1518,8 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 	struct obd_export *exp = req->rq_export;
 	struct ldlm_reply *dlm_rep;
 	struct ldlm_lock *lock;
+	__u64 bits;
+	__u64 new_bits;
 	int rc;
 
 	ENTRY;
@@ -1531,60 +1536,61 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 	dlm_rep->lock_flags = dlm_req->lock_flags;
 
 	lock = ldlm_handle2lock(&dlm_req->lock_handle[0]);
-	if (lock) {
-		__u64 bits;
-		__u64 new;
-
-		bits = lock->l_policy_data.l_inodebits.bits;
-		new = dlm_req->lock_desc.l_policy_data.l_inodebits.bits;
-		LDLM_DEBUG(lock, "server-side convert handler START");
-
-		if (ldlm_is_cancel(lock)) {
-			LDLM_ERROR(lock, "convert on canceled lock!");
-			rc = ELDLM_NO_LOCK_DATA;
-		} else if (dlm_req->lock_desc.l_req_mode !=
-			   lock->l_granted_mode) {
-			LDLM_ERROR(lock, "lock mode differs!");
-			rc = ELDLM_NO_LOCK_DATA;
-		} else if (bits == new) {
-			/* This can be valid situation if CONVERT RPCs are
-			 * re-ordered. Just finish silently */
-			LDLM_DEBUG(lock, "lock is converted already!");
-			rc = ELDLM_OK;
-		} else {
-			lock_res_and_lock(lock);
-			if (ldlm_is_waited(lock))
-				ldlm_del_waiting_lock(lock);
-
-			ldlm_clear_cbpending(lock);
-			lock->l_policy_data.l_inodebits.cancel_bits = 0;
-			ldlm_inodebits_drop(lock, bits & ~new);
-
-			ldlm_clear_blocking_data(lock);
-			unlock_res_and_lock(lock);
-
-			ldlm_reprocess_all(lock->l_resource, NULL);
-			rc = ELDLM_OK;
-		}
-
-		if (rc == ELDLM_OK) {
-			dlm_rep->lock_handle = lock->l_remote_handle;
-			ldlm_ibits_policy_local_to_wire(&lock->l_policy_data,
-					&dlm_rep->lock_desc.l_policy_data);
-		}
-
-		LDLM_DEBUG(lock, "server-side convert handler END, rc = %d",
-			   rc);
-		LDLM_LOCK_PUT(lock);
-	} else {
-		rc = ELDLM_NO_LOCK_DATA;
-		LDLM_DEBUG_NOLOCK("server-side convert handler END, rc = %d",
-				  rc);
+	if (!lock) {
+		LDLM_DEBUG_NOLOCK("server lock is canceled already");
+		req->rq_status = ELDLM_NO_LOCK_DATA;
+		RETURN(0);
 	}
 
-	req->rq_status = rc;
+	LDLM_DEBUG(lock, "server-side convert handler START");
 
-	RETURN(0);
+	lock_res_and_lock(lock);
+	bits = lock->l_policy_data.l_inodebits.bits;
+	new_bits = dlm_req->lock_desc.l_policy_data.l_inodebits.bits;
+
+	if (ldlm_is_cancel(lock)) {
+		LDLM_DEBUG(lock, "convert on canceled lock!");
+		unlock_res_and_lock(lock);
+		GOTO(out_put, rc = ELDLM_NO_LOCK_DATA);
+	}
+
+	if (dlm_req->lock_desc.l_req_mode != lock->l_granted_mode) {
+		LDLM_ERROR(lock, "lock mode differs!");
+		unlock_res_and_lock(lock);
+		GOTO(out_put, rc = -EPROTO);
+	}
+
+	if (bits == new_bits) {
+		/*
+		 * This can be valid situation if CONVERT RPCs are
+		 * re-ordered. Just finish silently
+		 */
+		LDLM_DEBUG(lock, "lock is converted already!");
+		unlock_res_and_lock(lock);
+	} else {
+		if (ldlm_is_waited(lock))
+			ldlm_del_waiting_lock(lock);
+
+		ldlm_clear_cbpending(lock);
+		lock->l_policy_data.l_inodebits.cancel_bits = 0;
+		ldlm_inodebits_drop(lock, bits & ~new_bits);
+
+		ldlm_clear_blocking_data(lock);
+		unlock_res_and_lock(lock);
+
+		ldlm_reprocess_all(lock->l_resource, NULL);
+	}
+
+	dlm_rep->lock_handle = lock->l_remote_handle;
+	ldlm_ibits_policy_local_to_wire(&lock->l_policy_data,
+					&dlm_rep->lock_desc.l_policy_data);
+	rc = ELDLM_OK;
+	EXIT;
+out_put:
+	LDLM_DEBUG(lock, "server-side convert handler END, rc = %d", rc);
+	LDLM_LOCK_PUT(lock);
+	req->rq_status = rc;
+	return 0;
 }
 
 /**
@@ -1717,37 +1723,61 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
- * Callback handler for receiving incoming blocking ASTs.
- *
- * This can only happen on client side.
+ * Server may pass additional information about blocking lock.
+ * For IBITS locks it is conflicting bits which can be used for
+ * lock convert instead of cancel.
  */
-void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
-                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
+void ldlm_bl_desc2lock(const struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
 {
-        int do_ast;
-        ENTRY;
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
-        LDLM_DEBUG(lock, "client blocking AST callback handler");
-
-        lock_res_and_lock(lock);
-
-	/* set bits to cancel for this lock for possible lock convert */
-	if (ns_is_client(ns) && (lock->l_resource->lr_type == LDLM_IBITS)) {
-		/* Lock description contains policy of blocking lock,
+	check_res_locked(lock->l_resource);
+	if (ns_is_client(ns) && ld &&
+	    (lock->l_resource->lr_type == LDLM_IBITS)) {
+		/*
+		 * Lock description contains policy of blocking lock,
 		 * and its cancel_bits is used to pass conflicting bits.
 		 * NOTE: ld can be NULL or can be not NULL but zeroed if
 		 * passed from ldlm_bl_thread_blwi(), check below used bits
 		 * in ld to make sure it is valid description.
 		 */
-		if (ld && ld->l_policy_data.l_inodebits.bits)
-			lock->l_policy_data.l_inodebits.cancel_bits =
+		if (ld->l_policy_data.l_inodebits.cancel_bits &&
+		    ldlm_res_eq(&ld->l_resource.lr_name,
+				&lock->l_resource->lr_name) &&
+		    !(ldlm_is_cbpending(lock) &&
+		      lock->l_policy_data.l_inodebits.cancel_bits == 0)) {
+			/* always combine conflicting ibits */
+			lock->l_policy_data.l_inodebits.cancel_bits |=
 				ld->l_policy_data.l_inodebits.cancel_bits;
-		/* if there is no valid ld and lock is cbpending already
-		 * then cancel_bits should be kept, otherwise it is zeroed.
-		 */
-		else if (!ldlm_is_cbpending(lock))
+		} else {
+			/* If cancel_bits are not obtained or
+			 * if the lock is already CBPENDING and
+			 * has no cancel_bits set
+			 * - the full lock is to be cancelled
+			 */
 			lock->l_policy_data.l_inodebits.cancel_bits = 0;
+		}
 	}
+}
+
+/**
+ * Callback handler for receiving incoming blocking ASTs.
+ *
+ * This can only happen on client side.
+ */
+void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
+			     struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
+{
+	int do_ast;
+
+	ENTRY;
+
+	LDLM_DEBUG(lock, "client blocking AST callback handler");
+
+	lock_res_and_lock(lock);
+
+	/* get extra information from desc if any */
+	ldlm_bl_desc2lock(ld, lock);
 	ldlm_set_cbpending(lock);
 
 	if (ldlm_is_cancel_on_block(lock))
@@ -1862,10 +1892,13 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
 	ldlm_resource_unlink_lock(lock);
 
-        if (dlm_req->lock_flags & LDLM_FL_AST_SENT) {
-		/* BL_AST locks are not needed in LRU.
-		 * Let ldlm_cancel_lru() be fast. */
-                ldlm_lock_remove_from_lru(lock);
+	if (dlm_req->lock_flags & LDLM_FL_AST_SENT) {
+		/*
+		 * BL_AST locks are not needed in LRU.
+		 * Let ldlm_cancel_lru() be fast.
+		 */
+		ldlm_lock_remove_from_lru(lock);
+		ldlm_bl_desc2lock(&dlm_req->lock_desc, lock);
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_BL_AST;
                 LDLM_DEBUG(lock, "completion AST includes blocking AST");
         }
@@ -1916,10 +1949,12 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
                                     struct ldlm_request *dlm_req,
                                     struct ldlm_lock *lock)
 {
-        int rc = -ENOSYS;
-        ENTRY;
+	struct ldlm_lock_desc *ld = &dlm_req->lock_desc;
+	int rc = -ENOSYS;
 
-        LDLM_DEBUG(lock, "client glimpse AST callback handler");
+	ENTRY;
+
+	LDLM_DEBUG(lock, "client glimpse AST callback handler");
 
         if (lock->l_glimpse_ast != NULL)
                 rc = lock->l_glimpse_ast(lock, req);
@@ -1937,9 +1972,16 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
 	    ktime_after(ktime_get(),
 			ktime_add(lock->l_last_used,
 				  ktime_set(ns->ns_dirty_age_limit, 0)))) {
-                unlock_res_and_lock(lock);
-                if (ldlm_bl_to_thread_lock(ns, NULL, lock))
-                        ldlm_handle_bl_callback(ns, NULL, lock);
+		unlock_res_and_lock(lock);
+
+		/* For MDS glimpse it is always DOM lock, set corresponding
+		 * cancel_bits to perform lock convert if needed
+		 */
+		if (lock->l_resource->lr_type == LDLM_IBITS)
+			ld->l_policy_data.l_inodebits.cancel_bits =
+							MDS_INODELOCK_DOM;
+		if (ldlm_bl_to_thread_lock(ns, ld, lock))
+			ldlm_handle_bl_callback(ns, ld, lock);
 
                 EXIT;
                 return;

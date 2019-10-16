@@ -448,11 +448,10 @@ int ll_md_need_convert(struct ldlm_lock *lock)
 	return !!(bits);
 }
 
-int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *ld,
 		       void *data, int flag)
 {
 	struct lustre_handle lockh;
-	__u64 bits = lock->l_policy_data.l_inodebits.bits;
 	int rc;
 
 	ENTRY;
@@ -462,17 +461,21 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	{
 		__u64 cancel_flags = LCF_ASYNC;
 
-		if (ll_md_need_convert(lock)) {
-			cancel_flags |= LCF_CONVERT;
-			/* For lock convert some cancel actions may require
-			 * this lock with non-dropped canceled bits, e.g. page
-			 * flush for DOM lock. So call ll_lock_cancel_bits()
-			 * here while canceled bits are still set.
-			 */
-			bits = lock->l_policy_data.l_inodebits.cancel_bits;
-			if (bits & MDS_INODELOCK_DOM)
-				ll_lock_cancel_bits(lock, MDS_INODELOCK_DOM);
+		/* if lock convert is not needed then still have to
+		 * pass lock via ldlm_cli_convert() to keep all states
+		 * correct, set cancel_bits to full lock bits to cause
+		 * full cancel to happen.
+		 */
+		if (!ll_md_need_convert(lock)) {
+			lock_res_and_lock(lock);
+			lock->l_policy_data.l_inodebits.cancel_bits =
+					lock->l_policy_data.l_inodebits.bits;
+			unlock_res_and_lock(lock);
 		}
+		rc = ldlm_cli_convert(lock, cancel_flags);
+		if (!rc)
+			RETURN(0);
+		/* continue with cancel otherwise */
 		ldlm_lock2handle(lock, &lockh);
 		rc = ldlm_cli_cancel(&lockh, cancel_flags);
 		if (rc < 0) {
@@ -482,24 +485,34 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		break;
 	}
 	case LDLM_CB_CANCELING:
+	{
+		__u64 to_cancel = lock->l_policy_data.l_inodebits.bits;
+
 		/* Nothing to do for non-granted locks */
 		if (!ldlm_is_granted(lock))
 			break;
 
-		if (ldlm_is_converting(lock)) {
-			/* this is called on already converted lock, so
-			 * ibits has remained bits only and cancel_bits
-			 * are bits that were dropped.
-			 * Note that DOM lock is handled prior lock convert
-			 * and is excluded here.
+		/* If 'ld' is supplied then bits to be cancelled are passed
+		 * implicitly by lock converting and cancel_bits from 'ld'
+		 * should be used. Otherwise full cancel is being performed
+		 * and lock inodebits are used.
+		 *
+		 * Note: we cannot rely on cancel_bits in lock itself at this
+		 * moment because they can be changed by concurrent thread,
+		 * so ldlm_cli_inodebits_convert() pass cancel bits implicitly
+		 * in 'ld' parameter.
+		 */
+		if (ld) {
+			/* partial bits cancel allowed only during convert */
+			LASSERT(ldlm_is_converting(lock));
+			/* mask cancel bits by lock bits so only no any unused
+			 * bits are passed to ll_lock_cancel_bits()
 			 */
-			bits = lock->l_policy_data.l_inodebits.cancel_bits &
-				~MDS_INODELOCK_DOM;
-		} else {
-			LASSERT(ldlm_is_canceling(lock));
+			to_cancel &= ld->l_policy_data.l_inodebits.cancel_bits;
 		}
-		ll_lock_cancel_bits(lock, bits);
+		ll_lock_cancel_bits(lock, to_cancel);
 		break;
+	}
 	default:
 		LBUG();
 	}
