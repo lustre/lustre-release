@@ -735,6 +735,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
 	if ((*flags) & LDLM_FL_AST_SENT) {
 		lock_res_and_lock(lock);
+		ldlm_bl_desc2lock(&reply->lock_desc, lock);
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_BL_AST;
 		unlock_res_and_lock(lock);
 		LDLM_DEBUG(lock, "enqueue reply includes blocking AST");
@@ -1134,128 +1135,6 @@ out:
 EXPORT_SYMBOL(ldlm_cli_enqueue);
 
 /**
- * Client-side lock convert reply handling.
- *
- * Finish client lock converting, checks for concurrent converts
- * and clear 'converting' flag so lock can be placed back into LRU.
- */
-static int lock_convert_interpret(const struct lu_env *env,
-				  struct ptlrpc_request *req,
-				  void *args, int rc)
-{
-	struct ldlm_async_args *aa = args;
-	struct ldlm_lock *lock;
-	struct ldlm_reply *reply;
-
-	ENTRY;
-
-	lock = ldlm_handle2lock(&aa->lock_handle);
-	if (!lock) {
-		LDLM_DEBUG_NOLOCK("convert ACK for unknown local cookie %#llx",
-			aa->lock_handle.cookie);
-		RETURN(-ESTALE);
-	}
-
-	LDLM_DEBUG(lock, "CONVERTED lock:");
-
-	if (rc != ELDLM_OK)
-		GOTO(out, rc);
-
-	reply = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
-	if (reply == NULL)
-		GOTO(out, rc = -EPROTO);
-
-	if (reply->lock_handle.cookie != aa->lock_handle.cookie) {
-		LDLM_ERROR(lock,
-			   "convert ACK with wrong lock cookie %#llx but cookie %#llx from server %s id %s\n",
-			   aa->lock_handle.cookie, reply->lock_handle.cookie,
-			   req->rq_export->exp_client_uuid.uuid,
-			   libcfs_id2str(req->rq_peer));
-		GOTO(out, rc = ELDLM_NO_LOCK_DATA);
-	}
-
-	lock_res_and_lock(lock);
-	/*
-	 * Lock convert is sent for any new bits to drop, the converting flag
-	 * is dropped when ibits on server are the same as on client. Meanwhile
-	 * that can be so that more later convert will be replied first with
-	 * and clear converting flag, so in case of such race just exit here.
-	 * if lock has no converting bits then
-	 */
-	if (!ldlm_is_converting(lock)) {
-		LDLM_DEBUG(lock,
-			   "convert ACK for lock without converting flag, reply ibits %#llx",
-			   reply->lock_desc.l_policy_data.l_inodebits.bits);
-	} else if (reply->lock_desc.l_policy_data.l_inodebits.bits !=
-		   lock->l_policy_data.l_inodebits.bits) {
-		/*
-		 * Compare server returned lock ibits and local lock ibits
-		 * if they are the same we consider convertion is done,
-		 * otherwise we have more converts inflight and keep
-		 * converting flag.
-		 */
-		LDLM_DEBUG(lock, "convert ACK with ibits %#llx\n",
-			   reply->lock_desc.l_policy_data.l_inodebits.bits);
-	} else {
-		ldlm_clear_converting(lock);
-
-		/*
-		 * Concurrent BL AST may arrive and cause another convert
-		 * or cancel so just do nothing here if bl_ast is set,
-		 * finish with convert otherwise.
-		 */
-		if (!ldlm_is_bl_ast(lock)) {
-			struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
-
-			/*
-			 * Drop cancel_bits since there are no more converts
-			 * and put lock into LRU if it is still not used and
-			 * is not there yet.
-			 */
-			lock->l_policy_data.l_inodebits.cancel_bits = 0;
-			if (!lock->l_readers && !lock->l_writers &&
-			    !ldlm_is_canceling(lock)) {
-				spin_lock(&ns->ns_lock);
-				/* there is check for list_empty() inside */
-				ldlm_lock_remove_from_lru_nolock(lock);
-				ldlm_lock_add_to_lru_nolock(lock);
-				spin_unlock(&ns->ns_lock);
-			}
-		}
-	}
-	unlock_res_and_lock(lock);
-out:
-	if (rc) {
-		int flag;
-
-		lock_res_and_lock(lock);
-		if (ldlm_is_converting(lock)) {
-			ldlm_clear_converting(lock);
-			ldlm_set_cbpending(lock);
-			ldlm_set_bl_ast(lock);
-			lock->l_policy_data.l_inodebits.cancel_bits = 0;
-		}
-		unlock_res_and_lock(lock);
-
-		/*
-		 * fallback to normal lock cancel. If rc means there is no
-		 * valid lock on server, do only local cancel
-		 */
-		if (rc == ELDLM_NO_LOCK_DATA)
-			flag = LCF_LOCAL;
-		else
-			flag = LCF_ASYNC;
-
-		rc = ldlm_cli_cancel(&aa->lock_handle, flag);
-		if (rc < 0)
-			LDLM_DEBUG(lock, "failed to cancel lock: rc = %d\n",
-				   rc);
-	}
-	LDLM_LOCK_PUT(lock);
-	RETURN(rc);
-}
-
-/**
  * Client-side IBITS lock convert.
  *
  * Inform server that lock has been converted instead of canceling.
@@ -1267,19 +1146,15 @@ out:
  * is made asynchronous.
  *
  */
-int ldlm_cli_convert(struct ldlm_lock *lock, __u32 *flags)
+int ldlm_cli_convert_req(struct ldlm_lock *lock, __u32 *flags, __u64 new_bits)
 {
 	struct ldlm_request *body;
 	struct ptlrpc_request *req;
-	struct ldlm_async_args *aa;
 	struct obd_export *exp = lock->l_conn_export;
 
 	ENTRY;
 
-	if (exp == NULL) {
-		LDLM_ERROR(lock, "convert must not be called on local locks.");
-		RETURN(-EINVAL);
-	}
+	LASSERT(exp != NULL);
 
 	/*
 	 * this is better to check earlier and it is done so already,
@@ -1310,8 +1185,7 @@ int ldlm_cli_convert(struct ldlm_lock *lock, __u32 *flags)
 	body->lock_desc.l_req_mode = lock->l_req_mode;
 	body->lock_desc.l_granted_mode = lock->l_granted_mode;
 
-	body->lock_desc.l_policy_data.l_inodebits.bits =
-					lock->l_policy_data.l_inodebits.bits;
+	body->lock_desc.l_policy_data.l_inodebits.bits = new_bits;
 	body->lock_desc.l_policy_data.l_inodebits.cancel_bits = 0;
 
 	body->lock_flags = ldlm_flags_to_wire(*flags);
@@ -1330,10 +1204,6 @@ int ldlm_cli_convert(struct ldlm_lock *lock, __u32 *flags)
 	if (exp->exp_obd->obd_svc_stats != NULL)
 		lprocfs_counter_incr(exp->exp_obd->obd_svc_stats,
 				     LDLM_CONVERT - LDLM_FIRST_OPC);
-
-	aa = ptlrpc_req_async_args(aa, req);
-	ldlm_lock2handle(lock, &aa->lock_handle);
-	req->rq_interpret_reply = lock_convert_interpret;
 
 	ptlrpcd_add_req(req);
 	RETURN(0);
@@ -1587,6 +1457,27 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
 	RETURN(0);
 }
 
+int ldlm_cli_convert(struct ldlm_lock *lock,
+		     enum ldlm_cancel_flags cancel_flags)
+{
+	int rc = -EINVAL;
+
+	LASSERT(!lock->l_readers && !lock->l_writers);
+	LDLM_DEBUG(lock, "client lock convert START");
+
+	if (lock->l_resource->lr_type == LDLM_IBITS) {
+		lock_res_and_lock(lock);
+		do {
+			rc = ldlm_cli_inodebits_convert(lock, cancel_flags);
+		} while (rc == -EAGAIN);
+		unlock_res_and_lock(lock);
+	}
+
+	LDLM_DEBUG(lock, "client lock convert END");
+	RETURN(rc);
+}
+EXPORT_SYMBOL(ldlm_cli_convert);
+
 /**
  * Client side lock cancel.
  *
@@ -1611,20 +1502,9 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 		RETURN(0);
 	}
 
-	/* Convert lock bits instead of cancel for IBITS locks */
-	if (cancel_flags & LCF_CONVERT) {
-		LASSERT(lock->l_resource->lr_type == LDLM_IBITS);
-		LASSERT(lock->l_policy_data.l_inodebits.cancel_bits != 0);
-
-		rc = ldlm_cli_dropbits(lock,
-				lock->l_policy_data.l_inodebits.cancel_bits);
-		if (rc == 0) {
-			LDLM_LOCK_RELEASE(lock);
-			RETURN(0);
-		}
-	}
-
 	lock_res_and_lock(lock);
+	LASSERT(!ldlm_is_converting(lock));
+
 	/* Lock is being canceled and the caller doesn't want to wait */
 	if (ldlm_is_canceling(lock)) {
 		if (cancel_flags & LCF_ASYNC) {
@@ -1635,16 +1515,6 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 		}
 		LDLM_LOCK_RELEASE(lock);
 		RETURN(0);
-	}
-
-	/*
-	 * Lock is being converted, cancel it immediately.
-	 * When convert will end, it releases lock and it will be gone.
-	 */
-	if (ldlm_is_converting(lock)) {
-		/* set back flags removed by convert */
-		ldlm_set_cbpending(lock);
-		ldlm_set_bl_ast(lock);
 	}
 
 	ldlm_set_canceling(lock);
@@ -2018,8 +1888,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 			/* No locks which got blocking requests. */
 			LASSERT(!ldlm_is_bl_ast(lock));
 
-			if (!ldlm_is_canceling(lock) &&
-			    !ldlm_is_converting(lock))
+			if (!ldlm_is_canceling(lock))
 				break;
 
 			/*
@@ -2077,7 +1946,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 
 		lock_res_and_lock(lock);
 		/* Check flags again under the lock. */
-		if (ldlm_is_canceling(lock) || ldlm_is_converting(lock) ||
+		if (ldlm_is_canceling(lock) ||
 		    ldlm_lock_remove_from_lru_check(lock, last_use) == 0) {
 			/*
 			 * Another thread is removing lock from LRU, or
@@ -2207,11 +2076,10 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 			continue;
 
 		/*
-		 * If somebody is already doing CANCEL, or blocking AST came,
-		 * or lock is being converted then skip this lock.
+		 * If somebody is already doing CANCEL, or blocking AST came
+		 * then skip this lock.
 		 */
-		if (ldlm_is_bl_ast(lock) || ldlm_is_canceling(lock) ||
-		    ldlm_is_converting(lock))
+		if (ldlm_is_bl_ast(lock) || ldlm_is_canceling(lock))
 			continue;
 
 		if (lockmode_compat(lock->l_granted_mode, mode))
@@ -2237,7 +2105,6 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 		/* See CBPENDING comment in ldlm_cancel_lru */
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING |
 				 lock_flags;
-
 		LASSERT(list_empty(&lock->l_bl_ast));
 		list_add(&lock->l_bl_ast, cancels);
 		LDLM_LOCK_GET(lock);

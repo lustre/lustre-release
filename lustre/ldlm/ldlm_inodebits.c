@@ -382,7 +382,10 @@ void ldlm_ibits_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
 				     union ldlm_policy_data *lpolicy)
 {
 	lpolicy->l_inodebits.bits = wpolicy->l_inodebits.bits;
-	lpolicy->l_inodebits.try_bits = wpolicy->l_inodebits.try_bits;
+	/**
+	 * try_bits are to be handled outside of generic write_to_local due
+	 * to different behavior on a server and client.
+	 */
 }
 
 void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
@@ -424,93 +427,103 @@ int ldlm_inodebits_drop(struct ldlm_lock *lock, __u64 to_drop)
 EXPORT_SYMBOL(ldlm_inodebits_drop);
 
 /* convert single lock */
-int ldlm_cli_dropbits(struct ldlm_lock *lock, __u64 drop_bits)
+int ldlm_cli_inodebits_convert(struct ldlm_lock *lock,
+			       enum ldlm_cancel_flags cancel_flags)
 {
-	struct lustre_handle lockh;
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+	struct ldlm_lock_desc ld = { { 0 } };
+	__u64 drop_bits, new_bits;
 	__u32 flags = 0;
 	int rc;
 
 	ENTRY;
 
-	LASSERT(drop_bits);
-	LASSERT(!lock->l_readers && !lock->l_writers);
+	check_res_locked(lock->l_resource);
 
-	LDLM_DEBUG(lock, "client lock convert START");
+	/* Lock is being converted already */
+	if (ldlm_is_converting(lock)) {
+		if (!(cancel_flags & LCF_ASYNC)) {
+			struct l_wait_info lwi = { 0 };
 
-	ldlm_lock2handle(lock, &lockh);
+			unlock_res_and_lock(lock);
+			l_wait_event(lock->l_waitq,
+				     is_lock_converted(lock), &lwi);
+			lock_res_and_lock(lock);
+		}
+		RETURN(0);
+	}
+
+	/* lru_cancel may happen in parallel and call ldlm_cli_cancel_list()
+	 * independently.
+	 */
+	if (ldlm_is_canceling(lock))
+		RETURN(-EINVAL);
+
+	/* no need in only local convert */
+	if (lock->l_flags & (LDLM_FL_LOCAL_ONLY | LDLM_FL_CANCEL_ON_BLOCK))
+		RETURN(-EINVAL);
+
+	drop_bits = lock->l_policy_data.l_inodebits.cancel_bits;
+	/* no cancel bits - means that caller needs full cancel */
+	if (drop_bits == 0)
+		RETURN(-EINVAL);
+
+	new_bits = lock->l_policy_data.l_inodebits.bits & ~drop_bits;
+	/* check if all lock bits are dropped, proceed with cancel */
+	if (!new_bits)
+		RETURN(-EINVAL);
+
+	/* check if no dropped bits, consider this as successful convert */
+	if (lock->l_policy_data.l_inodebits.bits == new_bits)
+		RETURN(0);
+
+	ldlm_set_converting(lock);
+	/* Finally call cancel callback for remaining bits only.
+	 * It is important to have converting flag during that
+	 * so blocking_ast callback can distinguish convert from
+	 * cancels.
+	 */
+	ld.l_policy_data.l_inodebits.cancel_bits = drop_bits;
+	unlock_res_and_lock(lock);
+	lock->l_blocking_ast(lock, &ld, lock->l_ast_data, LDLM_CB_CANCELING);
+	/* now notify server about convert */
+	rc = ldlm_cli_convert_req(lock, &flags, new_bits);
 	lock_res_and_lock(lock);
-	/* check if all bits are blocked */
-	if (!(lock->l_policy_data.l_inodebits.bits & ~drop_bits)) {
-		unlock_res_and_lock(lock);
-		/* return error to continue with cancel */
-		GOTO(exit, rc = -EINVAL);
-	}
+	if (rc)
+		GOTO(full_cancel, rc);
 
-	/* check if no common bits, consider this as successful convert */
-	if (!(lock->l_policy_data.l_inodebits.bits & drop_bits)) {
-		unlock_res_and_lock(lock);
-		GOTO(exit, rc = 0);
-	}
+	/* Finally clear these bits in lock ibits */
+	ldlm_inodebits_drop(lock, drop_bits);
 
-	/* check if there is race with cancel */
-	if (ldlm_is_canceling(lock) || ldlm_is_cancel(lock)) {
-		unlock_res_and_lock(lock);
-		GOTO(exit, rc = -EINVAL);
-	}
+	/* Being locked again check if lock was canceled, it is important
+	 * to do and don't drop cbpending below
+	 */
+	if (ldlm_is_canceling(lock))
+		GOTO(full_cancel, rc = -EINVAL);
+
+	/* also check again if more bits to be cancelled appeared */
+	if (drop_bits != lock->l_policy_data.l_inodebits.cancel_bits)
+		GOTO(clear_converting, rc = -EAGAIN);
 
 	/* clear cbpending flag early, it is safe to match lock right after
 	 * client convert because it is downgrade always.
 	 */
 	ldlm_clear_cbpending(lock);
 	ldlm_clear_bl_ast(lock);
+	spin_lock(&ns->ns_lock);
+	if (list_empty(&lock->l_lru))
+		ldlm_lock_add_to_lru_nolock(lock);
+	spin_unlock(&ns->ns_lock);
 
-	/* If lock is being converted already, check drop bits first */
-	if (ldlm_is_converting(lock)) {
-		/* raced lock convert, lock inodebits are remaining bits
-		 * so check if they are conflicting with new convert or not.
-		 */
-		if (!(lock->l_policy_data.l_inodebits.bits & drop_bits)) {
-			unlock_res_and_lock(lock);
-			GOTO(exit, rc = 0);
-		}
-		/* Otherwise drop new conflicting bits in new convert */
-	}
-	ldlm_set_converting(lock);
-	/* from all bits of blocking lock leave only conflicting */
-	drop_bits &= lock->l_policy_data.l_inodebits.bits;
-	/* save them in cancel_bits, so l_blocking_ast will know
-	 * which bits from the current lock were dropped. */
-	lock->l_policy_data.l_inodebits.cancel_bits = drop_bits;
-	/* Finally clear these bits in lock ibits */
-	ldlm_inodebits_drop(lock, drop_bits);
-	unlock_res_and_lock(lock);
-	/* Finally call cancel callback for remaining bits only.
-	 * It is important to have converting flag during that
-	 * so blocking_ast callback can distinguish convert from
-	 * cancels.
+	/* the job is done, zero the cancel_bits. If more conflicts appear,
+	 * it will result in another cycle of ldlm_cli_inodebits_convert().
 	 */
-	if (lock->l_blocking_ast)
-		lock->l_blocking_ast(lock, NULL, lock->l_ast_data,
-				     LDLM_CB_CANCELING);
-
-	/* now notify server about convert */
-	rc = ldlm_cli_convert(lock, &flags);
-	if (rc) {
-		lock_res_and_lock(lock);
-		if (ldlm_is_converting(lock)) {
-			ldlm_clear_converting(lock);
-			ldlm_set_cbpending(lock);
-			ldlm_set_bl_ast(lock);
-		}
-		unlock_res_and_lock(lock);
-		GOTO(exit, rc);
-	}
-	EXIT;
-exit:
-	LDLM_DEBUG(lock, "client lock convert END");
-	return rc;
+full_cancel:
+	lock->l_policy_data.l_inodebits.cancel_bits = 0;
+clear_converting:
+	ldlm_clear_converting(lock);
+	RETURN(rc);
 }
-
 
 int ldlm_inodebits_alloc_lock(struct ldlm_lock *lock)
 {

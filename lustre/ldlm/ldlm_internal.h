@@ -192,6 +192,7 @@ int ldlm_bl_thread_wakeup(void);
 
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
+void ldlm_bl_desc2lock(const struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
 
 #ifdef HAVE_SERVER_SUPPORT
 /* ldlm_plain.c */
@@ -383,6 +384,17 @@ static inline bool is_bl_done(struct ldlm_lock *lock)
 	}
 
 	return bl_done;
+}
+
+static inline bool is_lock_converted(struct ldlm_lock *lock)
+{
+	bool ret = 0;
+
+	lock_res_and_lock(lock);
+	ret = (lock->l_policy_data.l_inodebits.cancel_bits == 0);
+	unlock_res_and_lock(lock);
+
+	return ret;
 }
 
 typedef void (*ldlm_policy_wire_to_local_t)(const union ldlm_wire_policy_data *,
