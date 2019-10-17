@@ -13152,14 +13152,17 @@ test_160f() {
 
 	# generate some changelog records to accumulate on each MDT
 	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "test_mkdir $tdir failed"
+	log "$(date +%s): creating first files"
 	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
 		error "create $DIR/$tdir/$tfile failed"
 
 	# check changelogs have been generated
+	local start=$SECONDS
+	local idle_time=$((MDSCOUNT * 5 + 5))
 	local nbcl=$(changelog_dump | wc -l)
 	[[ $nbcl -eq 0 ]] && error "no changelogs found"
 
-	for param in "changelog_max_idle_time=10" \
+	for param in "changelog_max_idle_time=$idle_time" \
 		     "changelog_gc=1" \
 		     "changelog_min_gc_interval=2" \
 		     "changelog_min_free_cat_entries=3"; do
@@ -13171,8 +13174,11 @@ test_160f() {
 		do_nodes $mdts $LCTL set_param mdd.*.$param
 	done
 
-	# force cl_user2 to be idle (1st part)
-	sleep 9
+	# force cl_user2 to be idle (1st part), but also cancel the
+	# cl_user1 records so that it is not evicted later in the test.
+	local sleep1=$((idle_time / 2))
+	echo "$(date +%s): sleep1 $sleep1/${idle_time}s"
+	sleep $sleep1
 
 	# simulate changelog catalog almost full
 	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
@@ -13208,13 +13214,16 @@ test_160f() {
 			      "$user_rec1, but is $user_rec2"
 	done
 
-	# force cl_user2 to be idle (2nd part) and to reach
-	# changelog_max_idle_time
-	sleep 2
+	# force cl_user2 idle (2nd part) to just exceed changelog_max_idle_time
+	local sleep2=$((idle_time - (SECONDS - start) + 1))
+	echo "$(date +%s): sleep2 $sleep2/${idle_time}s"
+	sleep $sleep2
 
-	# generate one more changelog to trigger fail_loc
-	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/${tfile}bis failed"
+	# Generate one more changelog to trigger GC at fail_loc for cl_user2.
+	# cl_user1 should be OK because it recently processed records.
+	echo "$(date +%s): creating $((MDSCOUNT * 2)) files"
+	createmany -m $DIR/$tdir/${tfile}b $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/${tfile}b failed"
 
 	# ensure gc thread is done
 	for i in $(mdts_nodes); do
