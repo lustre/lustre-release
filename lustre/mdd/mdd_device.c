@@ -145,7 +145,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	/* sync permission changes */
 	mdd->mdd_sync_permission = 1;
 	/* enable changelog garbage collection */
-	mdd->mdd_changelog_gc = 0;
+	mdd->mdd_changelog_gc = 1;
 	/* with a significant amount of idle time */
 	mdd->mdd_changelog_max_idle_time = CHLOG_MAX_IDLE_TIME;
 	/* or a significant amount of late indexes */
