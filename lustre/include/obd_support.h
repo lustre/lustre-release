@@ -990,28 +990,28 @@ static inline int lustre_to_lma_flags(__u32 la_flags)
  * versions. These flags are set/cleared via FSFILT_IOC_{GET,SET}_FLAGS.
  * See b=16526 for a full history.
  */
-static inline int ll_ext_to_inode_flags(int flags)
+static inline int ll_ext_to_inode_flags(int ext_flags)
 {
-	return (((flags & LUSTRE_SYNC_FL)      ? S_SYNC      : 0) |
-		((flags & LUSTRE_NOATIME_FL)   ? S_NOATIME   : 0) |
-		((flags & LUSTRE_APPEND_FL)    ? S_APPEND    : 0) |
-		((flags & LUSTRE_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
+	return (((ext_flags & LUSTRE_SYNC_FL)      ? S_SYNC      : 0) |
+		((ext_flags & LUSTRE_NOATIME_FL)   ? S_NOATIME   : 0) |
+		((ext_flags & LUSTRE_APPEND_FL)    ? S_APPEND    : 0) |
+		((ext_flags & LUSTRE_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
 #if defined(S_ENCRYPTED)
-		((flags & LUSTRE_ENCRYPT_FL)   ? S_ENCRYPTED : 0) |
+		((ext_flags & LUSTRE_ENCRYPT_FL)   ? S_ENCRYPTED : 0) |
 #endif
-		((flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0));
+		((ext_flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0));
 }
 
-static inline int ll_inode_to_ext_flags(int iflags)
+static inline int ll_inode_to_ext_flags(int inode_flags)
 {
-	return (((iflags & S_SYNC)      ? LUSTRE_SYNC_FL      : 0) |
-		((iflags & S_NOATIME)   ? LUSTRE_NOATIME_FL   : 0) |
-		((iflags & S_APPEND)    ? LUSTRE_APPEND_FL    : 0) |
-		((iflags & S_DIRSYNC)   ? LUSTRE_DIRSYNC_FL   : 0) |
+	return (((inode_flags & S_SYNC)      ? LUSTRE_SYNC_FL      : 0) |
+		((inode_flags & S_NOATIME)   ? LUSTRE_NOATIME_FL   : 0) |
+		((inode_flags & S_APPEND)    ? LUSTRE_APPEND_FL    : 0) |
+		((inode_flags & S_DIRSYNC)   ? LUSTRE_DIRSYNC_FL   : 0) |
 #if defined(S_ENCRYPTED)
-		((iflags & S_ENCRYPTED) ? LUSTRE_ENCRYPT_FL   : 0) |
+		((inode_flags & S_ENCRYPTED) ? LUSTRE_ENCRYPT_FL   : 0) |
 #endif
-		((iflags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0));
+		((inode_flags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0));
 }
 
 struct obd_heat_instance {

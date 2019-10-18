@@ -1834,7 +1834,9 @@ struct mdt_body {
 	__u32	mbo_mode;
 	__u32	mbo_uid;
 	__u32	mbo_gid;
-	__u32	mbo_flags;   /* LUSTRE_*_FL file attributes */
+	__u32	mbo_flags; /* most replies: LUSTRE_*_FL file attributes,
+			    * data_version: OBD_FL_* flags
+			    */
 	__u32	mbo_rdev;
 	__u32	mbo_nlink; /* #bytes to read in the case of MDS_READPAGE */
 	__u32	mbo_layout_gen; /* was "generation" until 2.4.0 */

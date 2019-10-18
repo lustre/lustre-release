@@ -3266,14 +3266,12 @@ int ll_ioctl_check_project(struct inode *inode, struct fsxattr *fa)
 int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg)
 {
-
 	struct md_op_data *op_data;
 	struct ptlrpc_request *req = NULL;
-	int rc = 0;
 	struct fsxattr fsxattr;
 	struct cl_object *obj;
-	struct iattr *attr;
-	int flags;
+	unsigned int inode_flags;
+	int rc = 0;
 
 	if (copy_from_user(&fsxattr,
 			   (const struct fsxattr __user *)arg,
@@ -3289,34 +3287,31 @@ int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
-	flags = ll_xflags_to_inode_flags(fsxattr.fsx_xflags);
-	op_data->op_attr_flags = ll_inode_to_ext_flags(flags);
+	inode_flags = ll_xflags_to_inode_flags(fsxattr.fsx_xflags);
+	op_data->op_attr_flags = ll_inode_to_ext_flags(inode_flags);
 	if (fsxattr.fsx_xflags & FS_XFLAG_PROJINHERIT)
 		op_data->op_attr_flags |= LUSTRE_PROJINHERIT_FL;
 	op_data->op_projid = fsxattr.fsx_projid;
 	op_data->op_xvalid |= OP_XVALID_PROJID | OP_XVALID_FLAGS;
-	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL,
-			0, &req);
+	rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL, 0, &req);
 	ptlrpc_req_finished(req);
 	if (rc)
 		GOTO(out_fsxattr, rc);
 	ll_update_inode_flags(inode, op_data->op_attr_flags);
-	obj = ll_i2info(inode)->lli_clob;
-	if (obj == NULL)
-		GOTO(out_fsxattr, rc);
 
-	/* Avoiding OST RPC if this is only project ioctl */
+	/* Avoid OST RPC if this is only ioctl setting project inherit flag */
 	if (fsxattr.fsx_xflags == 0 ||
 	    fsxattr.fsx_xflags == FS_XFLAG_PROJINHERIT)
 		GOTO(out_fsxattr, rc);
 
-	OBD_ALLOC_PTR(attr);
-	if (attr == NULL)
-		GOTO(out_fsxattr, rc = -ENOMEM);
+	obj = ll_i2info(inode)->lli_clob;
+	if (obj) {
+		struct iattr attr = { 0 };
 
-	rc = cl_setattr_ost(obj, attr, OP_XVALID_FLAGS,
-			    fsxattr.fsx_xflags);
-	OBD_FREE_PTR(attr);
+		rc = cl_setattr_ost(obj, &attr, OP_XVALID_FLAGS,
+				    fsxattr.fsx_xflags);
+	}
+
 out_fsxattr:
 	ll_finish_md_op_data(op_data);
 	RETURN(rc);

@@ -2418,7 +2418,7 @@ void ll_inode_size_unlock(struct inode *inode)
 	mutex_unlock(&lli->lli_size_mutex);
 }
 
-void ll_update_inode_flags(struct inode *inode, int ext_flags)
+void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags)
 {
 	/* do not clear encryption flag */
 	ext_flags |= ll_inode_to_ext_flags(inode->i_flags) & LUSTRE_ENCRYPT_FL;

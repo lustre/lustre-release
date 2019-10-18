@@ -1136,12 +1136,12 @@ static inline int ll_xflags_to_inode_flags(int xflags)
 	       ((xflags & FS_XFLAG_IMMUTABLE) ? S_IMMUTABLE : 0);
 }
 
-static inline int ll_inode_flags_to_xflags(int flags)
+static inline int ll_inode_flags_to_xflags(int inode_flags)
 {
-	return ((flags & S_SYNC)      ? FS_XFLAG_SYNC      : 0) |
-	       ((flags & S_NOATIME)   ? FS_XFLAG_NOATIME   : 0) |
-	       ((flags & S_APPEND)    ? FS_XFLAG_APPEND    : 0) |
-	       ((flags & S_IMMUTABLE) ? FS_XFLAG_IMMUTABLE : 0);
+	return ((inode_flags & S_SYNC)      ? FS_XFLAG_SYNC      : 0) |
+	       ((inode_flags & S_NOATIME)   ? FS_XFLAG_NOATIME   : 0) |
+	       ((inode_flags & S_APPEND)    ? FS_XFLAG_APPEND    : 0) |
+	       ((inode_flags & S_IMMUTABLE) ? FS_XFLAG_IMMUTABLE : 0);
 }
 
 int ll_migrate(struct inode *parent, struct file *file,
@@ -1204,7 +1204,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs);
 int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 		       u32 flags);
 int ll_update_inode(struct inode *inode, struct lustre_md *md);
-void ll_update_inode_flags(struct inode *inode, int ext_flags);
+void ll_update_inode_flags(struct inode *inode, unsigned int ext_flags);
 int ll_read_inode2(struct inode *inode, void *opaque);
 void ll_delete_inode(struct inode *inode);
 int ll_iocontrol(struct inode *inode, struct file *file,
