@@ -9448,6 +9448,7 @@ test_77d() { # bug 10889
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$GSS && skip_env "could not run with gss"
 
+	stack_trap "rm -f $DIR/$tfile"
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	$LCTL set_param fail_loc=0x80000409
 	set_checksums 1
@@ -9472,6 +9473,7 @@ test_77f() { # bug 10889
 	$GSS && skip_env "could not run with gss"
 
 	set_checksums 1
+	stack_trap "rm -f $DIR/$tfile"
 	for algo in $CKSUM_TYPES; do
 		cancel_lru_locks osc
 		set_checksum_type $algo
@@ -20762,6 +20764,7 @@ test_255a() {
 		skip "lustre < 2.8.54 does not support ladvise "
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
+	stack_trap "rm -f $DIR/$tfile"
 	lfs setstripe -c -1 -i 0 $DIR/$tfile || error "$tfile failed"
 
 	ladvise_no_type willread $DIR/$tfile &&
@@ -20849,6 +20852,7 @@ test_255b() {
 		skip "lustre < 2.8.54 does not support ladvise "
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
+	stack_trap "rm -f $DIR/$tfile"
 	lfs setstripe -c 1 -i 0 $DIR/$tfile
 
 	ladvise_no_type dontneed $DIR/$tfile &&
