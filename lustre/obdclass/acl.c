@@ -70,15 +70,31 @@ static inline void lustre_posix_acl_cpu_to_le(posix_acl_xattr_entry *d,
  * Check permission based on POSIX ACL.
  */
 int lustre_posix_acl_permission(struct lu_ucred *mu, const struct lu_attr *la,
-				int want, posix_acl_xattr_entry *entry,
-				int count)
+				unsigned int may_mask,
+				posix_acl_xattr_entry *entry, int count)
 {
 	posix_acl_xattr_entry *pa, *pe, *mask_obj;
 	posix_acl_xattr_entry ae, me;
+	__u16 acl_want;
 	int found = 0;
 
 	if (count <= 0)
 		return -EACCES;
+
+	/* There is implicit conversion between MAY_* modes and ACL_* modes.
+	 * Don't bother explicitly converting them unless they actually change.
+	 */
+	if (0) {
+		acl_want = (may_mask & MAY_READ  ? ACL_READ : 0) |
+			   (may_mask & MAY_WRITE ? ACL_WRITE : 0) |
+			   (may_mask & MAY_EXEC  ? ACL_EXECUTE : 0);
+	} else {
+		BUILD_BUG_ON(MAY_READ != ACL_READ);
+		BUILD_BUG_ON(MAY_WRITE != ACL_WRITE);
+		BUILD_BUG_ON(MAY_EXEC != ACL_EXECUTE);
+
+		acl_want = may_mask;
+	}
 
 	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
 		lustre_posix_acl_le_to_cpu(&ae, pa);
@@ -95,14 +111,14 @@ int lustre_posix_acl_permission(struct lu_ucred *mu, const struct lu_attr *la,
 		case ACL_GROUP_OBJ:
 			if (lustre_in_group_p(mu, la->la_gid)) {
 				found = 1;
-				if ((ae.e_perm & want) == want)
+				if ((ae.e_perm & acl_want) == acl_want)
 					goto mask;
 			}
 			break;
 		case ACL_GROUP:
 			if (lustre_in_group_p(mu, ae.e_id)) {
 				found = 1;
-				if ((ae.e_perm & want) == want)
+				if ((ae.e_perm & acl_want) == acl_want)
 					goto mask;
 			}
 			break;
@@ -122,7 +138,7 @@ mask:
 	for (mask_obj = pa + 1; mask_obj <= pe; mask_obj++) {
 		lustre_posix_acl_le_to_cpu(&me, mask_obj);
 		if (me.e_tag == ACL_MASK) {
-			if ((ae.e_perm & me.e_perm & want) == want)
+			if ((ae.e_perm & me.e_perm & acl_want) == acl_want)
 				return 0;
 
 			return -EACCES;
@@ -130,7 +146,7 @@ mask:
 	}
 
 check_perm:
-	if ((ae.e_perm & want) == want)
+	if ((ae.e_perm & acl_want) == acl_want)
 		return 0;
 
 	return -EACCES;
@@ -144,6 +160,13 @@ int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry, u32 mode,
 				int count)
 {
 	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
+
+	/* There is implicit conversion between S_IRWX modes and ACL_* modes.
+	 * Don't bother explicitly converting them unless they actually change.
+	 */
+	BUILD_BUG_ON(S_IROTH != ACL_READ);
+	BUILD_BUG_ON(S_IWOTH != ACL_WRITE);
+	BUILD_BUG_ON(S_IXOTH != ACL_EXECUTE);
 
 	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
 		switch (le16_to_cpu(pa->e_tag)) {

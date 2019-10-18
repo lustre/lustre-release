@@ -70,7 +70,7 @@ mdd_name_check(struct mdd_device *m, const struct lu_name *ln)
 static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 	     const struct lu_attr *pattr, const struct lu_name *lname,
-	     struct lu_fid* fid, int mask)
+	     struct lu_fid *fid, unsigned int may_mask)
 {
 	const char *name = lname->ln_name;
 	const struct dt_key *key = (const struct dt_key *)name;
@@ -92,7 +92,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 		       PFID(mdd_object_fid(mdd_obj)));
 	}
 
-	rc = mdd_permission_internal_locked(env, mdd_obj, pattr, mask,
+	rc = mdd_permission_internal_locked(env, mdd_obj, pattr, may_mask,
 					    DT_TGT_PARENT);
 	if (rc)
 		RETURN(rc);

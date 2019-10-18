@@ -68,16 +68,16 @@ static inline int md_should_create(u64 open_flags)
 /* do NOT or the MAY_*'s, you'll get the weakest */
 static inline int mds_accmode(u64 open_flags)
 {
-	int res = 0;
+	unsigned int may_mask = 0;
 
 	if (open_flags & MDS_FMODE_READ)
-		res |= MAY_READ;
+		may_mask |= MAY_READ;
 	if (open_flags & (MDS_FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
-		res |= MAY_WRITE;
+		may_mask |= MAY_WRITE;
 	if (open_flags & MDS_FMODE_EXEC)
-		res = MAY_EXEC;
+		may_mask = MAY_EXEC;
 
-	return res;
+	return may_mask;
 }
 
 /** @} mds */

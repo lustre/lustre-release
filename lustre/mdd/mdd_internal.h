@@ -424,9 +424,11 @@ int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 int __mdd_fix_mode_acl(const struct lu_env *env, struct lu_buf *buf,
 		       __u32 *mode);
 int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-			      const struct lu_attr *la, int mask, int role);
+			      const struct lu_attr *la, unsigned int may_mask,
+			      int role);
 int mdd_permission(const struct lu_env *env, struct md_object *pobj,
-		   struct md_object *cobj, struct md_attr *ma, int mask);
+		   struct md_object *cobj, struct md_attr *ma,
+		   unsigned int may_mask);
 int mdd_generic_thread_start(struct mdd_generic_thread *thread,
 			     int (*func)(void *), void *data, char *name);
 void mdd_generic_thread_stop(struct mdd_generic_thread *thread);
@@ -546,18 +548,19 @@ static inline const char *mdd_obj_dev_name(const struct mdd_object *mdd_obj)
 
 static inline int mdd_permission_internal(const struct lu_env *env,
 					  struct mdd_object *obj,
-					  const struct lu_attr *la, int mask)
+					  const struct lu_attr *la,
+					  unsigned int may_mask)
 {
-	return __mdd_permission_internal(env, obj, la, mask, -1);
+	return __mdd_permission_internal(env, obj, la, may_mask, -1);
 }
 
 static inline int mdd_permission_internal_locked(const struct lu_env *env,
 						struct mdd_object *obj,
 						const struct lu_attr *la,
-						int mask,
+						unsigned int may_mask,
 						enum dt_object_role role)
 {
-	return __mdd_permission_internal(env, obj, la, mask, role);
+	return __mdd_permission_internal(env, obj, la, may_mask, role);
 }
 
 /* mdd inline func for calling osd_dt_object ops */

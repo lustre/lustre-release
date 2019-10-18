@@ -3077,8 +3077,8 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 	nc->do_ops->do_ah_init(env, hint, np, nc, attr->la_mode & S_IFMT);
 }
 
-static int accmode(const struct lu_env *env, const struct lu_attr *la,
-		   u64 open_flags)
+static int mdd_accmode(const struct lu_env *env, const struct lu_attr *la,
+		       u64 open_flags)
 {
 	/* Sadly, NFSD reopens a file repeatedly during operation, so the
 	 * "acc_mode = 0" allowance for newly-created files isn't honoured.
@@ -3100,7 +3100,8 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 				 const struct lu_attr *attr, u64 open_flags,
 				 int is_replay)
 {
-	int mode, rc;
+	unsigned int may_mask;
+	int rc;
 	ENTRY;
 
 	/* EEXIST check, also opening of *open* orphans is allowed so we can
@@ -3113,13 +3114,13 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 	if (S_ISLNK(attr->la_mode))
 		RETURN(-ELOOP);
 
-	mode = accmode(env, attr, open_flags);
+	may_mask = mdd_accmode(env, attr, open_flags);
 
-	if (S_ISDIR(attr->la_mode) && (mode & MAY_WRITE))
+	if (S_ISDIR(attr->la_mode) && (may_mask & MAY_WRITE))
 		RETURN(-EISDIR);
 
 	if (!(open_flags & MDS_OPEN_CREATED)) {
-		rc = mdd_permission_internal(env, obj, attr, mode);
+		rc = mdd_permission_internal(env, obj, attr, may_mask);
 		if (rc)
 			RETURN(rc);
 	}

@@ -77,7 +77,8 @@ struct lustre_idmap_table;
 #endif
 
 extern int lustre_posix_acl_permission(struct lu_ucred *mu,
-					const struct lu_attr *la, int want,
+					const struct lu_attr *la,
+					unsigned int may_mask,
 					posix_acl_xattr_entry *entry,
 					int count);
 extern int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,

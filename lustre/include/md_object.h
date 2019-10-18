@@ -229,7 +229,7 @@ union ldlm_policy_data;
 struct md_object_operations {
 	int (*moo_permission)(const struct lu_env *env,
 			      struct md_object *pobj, struct md_object *cobj,
-			      struct md_attr *attr, int mask);
+			      struct md_attr *attr, unsigned int may_mask);
 
 	int (*moo_attr_get)(const struct lu_env *env, struct md_object *obj,
 			    struct md_attr *attr);
@@ -424,10 +424,10 @@ static inline struct md_object *md_object_find_slice(const struct lu_env *env,
 /** md operations */
 static inline int mo_permission(const struct lu_env *env, struct md_object *p,
 				struct md_object *c, struct md_attr *at,
-				int mask)
+				unsigned int may_mask)
 {
 	LASSERT(c->mo_ops->moo_permission);
-	return c->mo_ops->moo_permission(env, p, c, at, mask);
+	return c->mo_ops->moo_permission(env, p, c, at, may_mask);
 }
 
 static inline int mo_attr_get(const struct lu_env *env, struct md_object *m,
