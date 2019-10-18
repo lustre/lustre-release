@@ -1051,8 +1051,9 @@ int mdd_changelog_data_store_xattr(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/* only the bottom CLF_FLAGSHIFT bits of @flags are stored in the record,
- * except for open flags have a dedicated record to store 32 bits of flags */
+/* Only the bottom CLF_FLAGMASK bits of @flags are stored in the record,
+ * except for open flags have a dedicated record to store 32 bits of flags.
+ */
 static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
 			 enum changelog_rec_flags clf_flags,
 			 struct md_device *m, const struct lu_fid *fid)
@@ -1081,7 +1082,9 @@ static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = mdd_changelog_data_store_by_fid(env, mdd, type, clf_flags,
+	/* note we only store the low CLF_FLAGMASK bits of la_valid */
+	rc = mdd_changelog_data_store_by_fid(env, mdd, type,
+					     clf_flags & CLF_FLAGMASK,
 					     fid, NULL, NULL, handle);
 
 stop:
@@ -1122,9 +1125,9 @@ static int mdd_attr_set_changelog(const struct lu_env *env,
 	/* The record type is the lowest non-masked set bit */
 	type = __ffs(bits);
 
-	/* XXX: we only store the low CLF_FLAGMASK bits of la_valid */
-	return mdd_changelog_data_store(env, mdd, type, valid, md2mdd_obj(obj),
-					handle, pfid);
+	/* only the low CLF_FLAGMASK bits of la_valid are stored */
+	return mdd_changelog_data_store(env, mdd, type, valid & CLF_FLAGMASK,
+					md2mdd_obj(obj), handle, pfid);
 }
 
 static int mdd_declare_attr_set(const struct lu_env *env,
@@ -3389,7 +3392,9 @@ find:
 	mdd_write_unlock(env, mdd_obj);
 
 	/* FYI, only the bottom 32 bits of open_flags are recorded */
-	mdd_changelog(env, type, open_flags, md_dev, mdd_object_fid(mdd_obj));
+	/* only the low CLF_FLAGMASK bits of la_valid are stored*/
+	mdd_changelog(env, type, open_flags & CLF_FLAGMASK, md_dev,
+		      mdd_object_fid(mdd_obj));
 
 	GOTO(unlocked, rc);
 
