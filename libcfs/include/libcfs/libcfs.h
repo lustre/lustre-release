@@ -52,7 +52,7 @@
 #include <libcfs/libcfs_fail.h>
 #include "curproc.h"
 
-#define LIBCFS_VERSION	"0.5.0"
+#define LIBCFS_VERSION	"0.7.1"
 
 #define PO2_ROUNDUP_TYPED(x, po2, type) (-(-(type)(x) & -(type)(po2)))
 #define LOWEST_BIT_SET(x) ((x) & ~((x) - 1))
