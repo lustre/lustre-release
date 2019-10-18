@@ -1049,7 +1049,7 @@ route:
       health_sensitivity: 1
 peer:
     - primary nid: 7.7.7.7@tcp
-      Multi-Rail: True
+      Multi-Rail: False
       peer ni:
         - nid: 7.7.7.7@tcp
 EOF
@@ -1091,15 +1091,15 @@ route:
       health_sensitivity: 1
 peer:
     - primary nid: 8.8.8.9@tcp
-      Multi-Rail: True
+      Multi-Rail: False
       peer ni:
         - nid: 8.8.8.9@tcp
     - primary nid: 8.8.8.10@tcp
-      Multi-Rail: True
+      Multi-Rail: False
       peer ni:
         - nid: 8.8.8.10@tcp
     - primary nid: 8.8.8.8@tcp
-      Multi-Rail: True
+      Multi-Rail: False
       peer ni:
         - nid: 8.8.8.8@tcp
 EOF

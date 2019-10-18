@@ -1530,11 +1530,7 @@ lnet_peer_ni_traffic_add(lnet_nid_t nid, lnet_nid_t pref)
 	struct lnet_peer *lp;
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
-	/*
-	 * Assume peer is Multi-Rail capable and let discovery find out
-	 * otherwise.
-	 */
-	unsigned flags = LNET_PEER_MULTI_RAIL;
+	unsigned flags = 0;
 	int rc = 0;
 
 	if (nid == LNET_NID_ANY) {
@@ -2314,20 +2310,6 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 
 
 	/*
-	 * Only enable the multi-rail feature on the peer if both sides of
-	 * the connection have discovery on
-	 */
-	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL) {
-		CDEBUG(D_NET, "Peer %s has Multi-Rail feature enabled\n",
-		       libcfs_nid2str(lp->lp_primary_nid));
-		lp->lp_state |= LNET_PEER_MULTI_RAIL;
-	} else {
-		CDEBUG(D_NET, "Peer %s has Multi-Rail feature disabled\n",
-		       libcfs_nid2str(lp->lp_primary_nid));
-		lp->lp_state &= ~LNET_PEER_MULTI_RAIL;
-	}
-
-	/*
 	 * The peer may have discovery disabled at its end. Set
 	 * NO_DISCOVERY as appropriate.
 	 */
@@ -2349,22 +2331,24 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	 */
 	if (pbuf->pb_info.pi_features & LNET_PING_FEAT_MULTI_RAIL) {
 		if (lp->lp_state & LNET_PEER_MULTI_RAIL) {
-			/* Everything's fine */
+			CDEBUG(D_NET, "peer %s(%p) is MR\n",
+			       libcfs_nid2str(lp->lp_primary_nid), lp);
 		} else if (lp->lp_state & LNET_PEER_CONFIGURED) {
 			CWARN("Reply says %s is Multi-Rail, DLC says not\n",
 			      libcfs_nid2str(lp->lp_primary_nid));
+		} else if (lnet_peer_discovery_disabled) {
+			CDEBUG(D_NET,
+			       "peer %s(%p) not MR: DD disabled locally\n",
+			       libcfs_nid2str(lp->lp_primary_nid), lp);
+		} else if (lp->lp_state & LNET_PEER_NO_DISCOVERY) {
+			CDEBUG(D_NET,
+			       "peer %s(%p) not MR: DD disabled remotely\n",
+			       libcfs_nid2str(lp->lp_primary_nid), lp);
 		} else {
-			/*
-			 * if discovery is disabled then we don't want to
-			 * update the state of the peer. All we'll do is
-			 * update the peer_nis which were reported back in
-			 * the initial ping
-			 */
-
-			if (!lnet_is_discovery_disabled_locked(lp)) {
-				lp->lp_state |= LNET_PEER_MULTI_RAIL;
-				lnet_peer_clr_non_mr_pref_nids(lp);
-			}
+			CDEBUG(D_NET, "peer %s(%p) is MR capable\n",
+			       libcfs_nid2str(lp->lp_primary_nid), lp);
+			lp->lp_state |= LNET_PEER_MULTI_RAIL;
+			lnet_peer_clr_non_mr_pref_nids(lp);
 		}
 	} else if (lp->lp_state & LNET_PEER_MULTI_RAIL) {
 		if (lp->lp_state & LNET_PEER_CONFIGURED) {
