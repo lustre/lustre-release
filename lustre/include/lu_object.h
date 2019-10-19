@@ -397,35 +397,37 @@ struct lu_attr {
 	 *
 	 * \see enum la_valid
 	 */
-	__u64          la_valid;
+	__u64		la_valid;
         /** size in bytes */
-        __u64          la_size;
+	__u64		la_size;
 	/** modification time in seconds since Epoch */
 	s64		la_mtime;
 	/** access time in seconds since Epoch */
 	s64		la_atime;
 	/** change time in seconds since Epoch */
 	s64		la_ctime;
+	/** create time in seconds since Epoch */
+	s64		la_btime;
         /** 512-byte blocks allocated to object */
-        __u64          la_blocks;
+	__u64		la_blocks;
         /** permission bits and file type */
-        __u32          la_mode;
+	__u32		la_mode;
         /** owner id */
-        __u32          la_uid;
+	__u32		la_uid;
         /** group id */
-        __u32          la_gid;
+	__u32		la_gid;
         /** object flags */
-        __u32          la_flags;
+	__u32		la_flags;
         /** number of persistent references to this object */
-        __u32          la_nlink;
+	__u32		la_nlink;
         /** blk bits of the object*/
-        __u32          la_blkbits;
+	__u32		la_blkbits;
         /** blk size of the object*/
-        __u32          la_blksize;
+	__u32		la_blksize;
         /** real device */
-        __u32          la_rdev;
+	__u32		la_rdev;
 	/** project id */
-	__u32	       la_projid;
+	__u32		la_projid;
 	/** set layout version to OST objects. */
 	__u32		la_layout_version;
 };

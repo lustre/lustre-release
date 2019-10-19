@@ -5,6 +5,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
       [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn[smhdwy]\fR]
 [[\fB!\fR] \fB--blocks\fR|\fB-b\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--btime\fR|\fB--Btime\fR|\fB-B\fR [\fB+-\fR]\fIn[smhdwy]\fR]
       [[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn[smhdwy]\fR]
       [[\fB!\fR] \fB--component-count|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
@@ -66,6 +67,11 @@ has a margin of error of one hour.
 Blocks allocated by the file is \fIn\fR Kibibytes (if no units are given),
 \fIn\fR 512-byte \fBb\fRlocks, or \fBK\fRibi-, \fBM\fRebi-, \fBG\fRibi-,
 \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-bytes if that suffix is given.
+.TP
+.BR --btime | --Btime | -B
+File was created \fIn\fR*24 hours ago, see
+--atime
+for full details and options.
 .TP
 .BR --ctime | -C
 File's status was last changed \fIn\fR*24 hours ago, see
@@ -209,6 +215,7 @@ ll
 ll
 llw(2i).
 a       The access time of the file \fIreference\fR
+b|B     The birth time of the file \fIreference\fR
 c       The inode status change time of \fIreference\fR
 m       The modification time of the file \fIreference\fR
 t       \fIreference\fR is interpreted directly as a time
@@ -231,7 +238,10 @@ with unspecified times at the start of that minute or day, unspecified dates
 being "today", and "@%s" or "%s" the seconds since the Unix epoch (see
 .BR strftime (3)
 for details of the time formats).  Otherwise, it will report an error.
-
+If you try to use the birth time of a reference file, and the birth
+time cannot be determined, a fatal error message results.  If you
+specify a test which refers to the birth time of files being examined,
+this test will fail for any files where the birth time is unknown.
 .TP
 .BR --ost | -O
 File has an object on the specified OST(s).  The OST names can be specified

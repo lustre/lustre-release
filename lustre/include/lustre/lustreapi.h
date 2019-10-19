@@ -196,6 +196,7 @@ enum {
 	NEWERXY_ATIME = 0,	/* neweraY */
 	NEWERXY_MTIME = 1,	/* newermY */
 	NEWERXY_CTIME = 2,	/* newercY */
+	NEWERXY_BTIME = 3,	/* newerbY | newerBY */
 	NEWERXY_MAX,
 };
 
@@ -208,7 +209,7 @@ struct find_param {
 	time_t			 fp_atime;
 	time_t			 fp_mtime;
 	time_t			 fp_ctime;
-	/* {a,m,c}sign cannot be bitfields due to using pointers to
+	/* {a,m,c,b}sign cannot be bitfields due to using pointers to
 	 * access them during argument parsing. */
 	int			 fp_asign;
 	int			 fp_msign;
@@ -291,12 +292,13 @@ struct find_param {
 				 fp_exclude_ext_size:1,
 				 fp_lazy:1,
 				 fp_newerxy:1,
-				 fp_unused_bit2:1, /* All of these unused bit */
-				 fp_unused_bit3:1, /* fields available to use.*/
-				 fp_unused_bit4:1, /* Once all unused fields  */
-				 fp_unused_bit5:1, /* are used we need to add */
-				 fp_unused_bit6:1, /* a separate flag field at*/
-				 fp_unused_bit7:1; /* the end of the struct.  */
+				 fp_exclude_btime:1,
+				 fp_unused_bit3:1, /* All of these unused bit */
+				 fp_unused_bit4:1, /* fields available to use.*/
+				 fp_unused_bit5:1, /* Once all unused fields  */
+				 fp_unused_bit6:1, /* are used we need to add */
+				 fp_unused_bit7:1; /* a separate flag field at*/
+						   /* the end of the struct.  */
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;
@@ -362,6 +364,9 @@ struct find_param {
 	 * fp_newery[NEWERXY_MAX][1]: ! -- newerXY reference
 	 */
 	time_t			 fp_newery[NEWERXY_MAX][2];
+
+	time_t			 fp_btime;
+	int			 fp_bsign;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

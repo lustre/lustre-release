@@ -457,8 +457,9 @@ command_t cmdlist[] = {
 	 "find files matching given attributes recursively in directory tree.\n"
 	 "usage: find <directory|filename> ...\n"
 	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --ctime|-C [+-]N[smhdwy]]\n"
-	 "     [[!] --mtime|-M [+-]N[smhdwy]] [[!] --blocks|-b N]\n"
-	 "     [[!] --newer[XY] <reference>]\n"
+	 "     [[!] --mtime|-M [+-]N[smhdwy]]\n"
+	 "     [[!] --btime|--Btime|-B [+-]N[smhdwy]]\n"
+	 "     [[!] --newer[XY] <reference>] [[!] --blocks|-b N]\n"
 	 "     [--maxdepth|-D N] [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
 	 "     [--print|-P] [--print0|-0] [[!] --size|-s [+-]N[bkMGTPE]]\n"
@@ -3069,6 +3070,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
 	/* --block is only valid in migrate mode */
 	{ .val = 'b',	.name = "block",	.has_arg = no_argument },
+/* find	{ .val = 'B',	.name = "btime",	.has_arg = required_argument }*/
 	{ .val = LFS_COMP_ADD_OPT,
 			.name = "comp-add",	.has_arg = no_argument },
 	{ .val = LFS_COMP_ADD_OPT,
@@ -4168,6 +4170,8 @@ static int lfs_find(int argc, char **argv)
         struct option long_opts[] = {
 	{ .val = 'A',	.name = "atime",	.has_arg = required_argument },
 	{ .val = 'b',	.name = "blocks",	.has_arg = required_argument },
+	{ .val = 'B',	.name = "btime",	.has_arg = required_argument },
+	{ .val = 'B',	.name = "Btime",	.has_arg = required_argument },
 	{ .val = LFS_COMP_COUNT_OPT,
 			.name = "comp-count",	.has_arg = required_argument },
 	{ .val = LFS_COMP_COUNT_OPT,
@@ -4196,11 +4200,15 @@ static int lfs_find(int argc, char **argv)
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newerac",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerab",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
 			.name = "newerma",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newermm",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newermc",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newermb",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newerca",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
@@ -4208,11 +4216,33 @@ static int lfs_find(int argc, char **argv)
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newercc",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
+			.name = "newercb",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerba",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerbm",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerbc",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerbb",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerBa",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerBm",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerBc",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerBB",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
 			.name = "newerat",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newermt",	.has_arg = required_argument},
 	{ .val = LFS_NEWERXY_OPT,
 			.name = "newerct",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerbt",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerBt",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument },
 	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument },
@@ -4278,8 +4308,8 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-			"-0A:b:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz:",
-			long_opts, &optidx)) >= 0) {
+		"-0A:b:B:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz:",
+		long_opts, &optidx)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
                 if (neg_opt)
@@ -4318,6 +4348,13 @@ static int lfs_find(int argc, char **argv)
 			xtime = &param.fp_atime;
 			xsign = &param.fp_asign;
 			param.fp_exclude_atime = !!neg_opt;
+			/* no break, this falls through to 'B' for btime */
+		case 'B':
+			if (c == 'B') {
+				xtime = &param.fp_btime;
+				xsign = &param.fp_bsign;
+				param.fp_exclude_btime = !!neg_opt;
+			}
 			/* no break, this falls through to 'C' for ctime */
 		case 'C':
 			if (c == 'C') {
@@ -4562,6 +4599,24 @@ static int lfs_find(int argc, char **argv)
 				}
 
 				ref = mktime(&tm);
+			} else if (y == 'b' || y == 'B') {
+				lstatx_t stx;
+
+				rc = llapi_get_lum_file(optarg, NULL, &stx,
+							NULL, 0);
+				if (rc || !(stx.stx_mask & STATX_BTIME)) {
+					if (!(stx.stx_mask & STATX_BTIME))
+						ret = -EOPNOTSUPP;
+					else
+						ret = -errno;
+					fprintf(stderr,
+						"%s: get btime failed '%s': %s\n",
+						progname, optarg,
+						strerror(-ret));
+					goto err;
+				}
+
+				ref = stx.stx_btime.tv_sec;
 			} else {
 				struct stat statbuf;
 
@@ -4602,6 +4657,10 @@ static int lfs_find(int argc, char **argv)
 				break;
 			case 'c':
 				xidx = NEWERXY_CTIME;
+				break;
+			case 'b':
+			case 'B':
+				xidx = NEWERXY_BTIME;
 				break;
 			default:
 				fprintf(stderr,
@@ -4974,6 +5033,8 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	struct option long_opts[] = {
 /* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
 /* find	{ .val = 'b',	.name = "blocks",	.has_arg = required_argument }*/
+/* find	{ .val = 'B',	.name = "btime",	.has_arg = required_argument }*/
+/* find	{ .val = 'B',	.name = "Btime",	.has_arg = required_argument }*/
 	{ .val = LFS_COMP_COUNT_OPT,
 			.name = "comp-count",	.has_arg = no_argument },
 	{ .val = LFS_COMP_COUNT_OPT,

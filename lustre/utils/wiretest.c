@@ -2519,10 +2519,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, mbo_dom_blocks));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_dom_blocks) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_dom_blocks));
-	LASSERTF((int)offsetof(struct mdt_body, mbo_padding_8) == 192, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, mbo_padding_8));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_padding_8) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_padding_8));
+	LASSERTF((int)offsetof(struct mdt_body, mbo_btime) == 192, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, mbo_btime));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_btime) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_btime));
 	LASSERTF((int)offsetof(struct mdt_body, mbo_padding_9) == 200, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, mbo_padding_9));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_padding_9) == 8, "found %lld\n",

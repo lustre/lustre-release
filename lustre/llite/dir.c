@@ -1804,11 +1804,12 @@ out_rmdir:
 			stx.stx_atime.tv_sec = body->mbo_atime;
 			stx.stx_ctime.tv_sec = body->mbo_ctime;
 			stx.stx_mtime.tv_sec = body->mbo_mtime;
+			stx.stx_btime.tv_sec = body->mbo_btime;
 			stx.stx_rdev_major = MAJOR(body->mbo_rdev);
 			stx.stx_rdev_minor = MINOR(body->mbo_rdev);
 			stx.stx_dev_major = MAJOR(inode->i_sb->s_dev);
 			stx.stx_dev_minor = MINOR(inode->i_sb->s_dev);
-			stx.stx_mask |= STATX_BASIC_STATS;
+			stx.stx_mask |= STATX_BASIC_STATS | STATX_BTIME;
 
 			/*
 			 * For a striped directory, the size and blocks returned

@@ -727,6 +727,10 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 		b->mbo_ctime = attr->la_ctime;
 		b->mbo_valid |= OBD_MD_FLCTIME;
 	}
+	if (attr->la_valid & LA_BTIME) {
+		b->mbo_btime = attr->la_btime;
+		b->mbo_valid |= OBD_MD_FLBTIME;
+	}
 	if (attr->la_valid & LA_FLAGS) {
 		b->mbo_flags = attr->la_flags;
 		b->mbo_valid |= OBD_MD_FLFLAGS;

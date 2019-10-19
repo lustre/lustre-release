@@ -181,6 +181,7 @@ struct osa_attr {
 	uint64_t	atime[2];
 	uint64_t	mtime[2];
 	uint64_t	ctime[2];
+	uint64_t	btime[2];
 };
 
 

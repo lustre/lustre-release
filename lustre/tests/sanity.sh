@@ -5880,18 +5880,26 @@ test_newerXY_base() {
 	local negref
 
 	if [ $y == "t" ]; then
-		ref="\"$(date +"%Y-%m-%d %H:%M:%S")\""
+		if [ $x == "b" ]; then
+			ref="\"$(do_facet mds1 date +"%Y-%m-%d\ %H:%M:%S")\""
+		else
+			ref="\"$(date +"%Y-%m-%d %H:%M:%S")\""
+		fi
 	else
-		ref=$DIR/$tfile.newer
+		ref=$DIR/$tfile.newer.$x$y
 		touch $ref || error "touch $ref failed"
 	fi
 	sleep 2
 	setup_56 $dir $NUMFILES $NUMDIRS "-i0 -c1" "-i0 -c1"
 	sleep 2
 	if [ $y == "t" ]; then
-		negref="\"$(date +"%Y-%m-%d %H:%M:%S")\""
+		if [ $x == "b" ]; then
+			negref="\"$(do_facet mds1 date +"%Y-%m-%d\ %H:%M:%S")\""
+		else
+			negref="\"$(date +"%Y-%m-%d %H:%M:%S")\""
+		fi
 	else
-		negref=$DIR/$tfile.newerneg
+		negref=$DIR/$tfile.negnewer.$x$y
 		touch $negref || error "touch $negref failed"
 	fi
 
@@ -5916,6 +5924,7 @@ test_newerXY_base() {
 }
 
 test_56oc() {
+	test_newerXY_base "b" "t"
 	test_newerXY_base "a" "a"
 	test_newerXY_base "a" "m"
 	test_newerXY_base "a" "c"
@@ -5925,11 +5934,95 @@ test_56oc() {
 	test_newerXY_base "c" "a"
 	test_newerXY_base "c" "m"
 	test_newerXY_base "c" "c"
+	test_newerXY_base "b" "b"
 	test_newerXY_base "a" "t"
 	test_newerXY_base "m" "t"
 	test_newerXY_base "c" "t"
+	test_newerXY_base "b" "t"
 }
 run_test 56oc "check lfs find -newerXY work"
+
+btime_supported() {
+	local dir=$DIR/$tdir
+	local rc
+
+	mkdir -p $dir
+	touch $dir/$tfile
+	$LFS find $dir -btime -1d -type f
+	rc=$?
+	rm -rf $dir
+	return $rc
+}
+
+test_56od() {
+	[ $MDS1_VERSION -lt $(version_code 2.13.53) ] &&
+		! btime_supported && skip "btime unsupported on MDS"
+
+	[ $CLIENT_VERSION -lt $(version_code 2.13.53) ] &&
+		! btime_supported && skip "btime unsupported on clients"
+
+	local dir=$DIR/$tdir
+	local ref=$DIR/$tfile.ref
+	local negref=$DIR/$tfile.negref
+
+	mkdir $dir || error "mkdir $dir failed"
+	touch $dir/$tfile.n1 || error "touch $dir/$tfile.n1 failed"
+	touch $dir/$tfile.n2 || error "touch $dir/$tfile.n2 failed"
+	mkdir $dir/$tdir.n1 || error "mkdir $dir/$tdir.n1 failed"
+	mkdir $dir/$tdir.n2 || error "mkdir $dir/$tdir.n2 failed"
+	touch $ref || error "touch $ref failed"
+	# sleep 3 seconds at least
+	sleep 3
+
+	local before=$(do_facet mds1 date +%s)
+	local skew=$(($(date +%s) - before + 1))
+
+	if (( skew < 0 && skew > -5 )); then
+		sleep $((0 - skew + 1))
+		skew=0
+	fi
+
+	# Set the dir stripe params to limit files all on MDT0,
+	# otherwise we need to calc the max clock skew between
+	# the client and MDTs.
+	setup_56 $dir/d.btime $NUMFILES $NUMDIRS "-i0 -c1" "-i0 -c1"
+	sleep 2
+	touch $negref || error "touch $negref failed"
+
+	local cmd="$LFS find $dir -newerbb $ref ! -newerbb $negref -type f"
+	local nums=$($cmd | wc -l)
+	local expected=$(((NUMFILES + 1) * NUMDIRS))
+
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	cmd="$LFS find $dir -newerbb $ref ! -newerbb $negref -type d"
+	nums=$($cmd | wc -l)
+	expected=$((NUMFILES + 1))
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	[ $skew -lt 0 ] && return
+
+	local after=$(do_facet mds1 date +%s)
+	local age=$((after - before + 1 + skew))
+
+	cmd="$LFS find $dir -btime -${age}s -type f"
+	nums=$($cmd | wc -l)
+	expected=$(((NUMFILES + 1) * NUMDIRS))
+
+	echo "Clock skew between client and server: $skew, age:$age"
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	expected=$(($NUMDIRS + 1))
+	cmd="$LFS find $dir -btime -${age}s -type d"
+	nums=$($cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+	rm -f $ref $negref || error "Failed to remove $ref $negref"
+}
+run_test 56od "check lfs find -btime with units"
 
 test_56p() {
 	[ $RUNAS_ID -eq $UID ] &&

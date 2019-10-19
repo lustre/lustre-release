@@ -3426,7 +3426,9 @@ int llapi_get_lum_file_fd(int dir_fd, const char *fname, __u64 *valid,
 	if (rc)
 		return rc;
 
-	*valid = lmd->lmd_flags;
+	if (valid)
+		*valid = lmd->lmd_flags;
+
 	if (statx)
 		memcpy(statx, &lmd->lmd_stx, sizeof(*statx));
 

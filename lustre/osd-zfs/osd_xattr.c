@@ -430,7 +430,7 @@ int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 	struct osa_attr *osa = &osd_oti_get(env)->oti_osa;
 	struct lu_buf *lb = &osd_oti_get(env)->oti_xattr_lbuf;
 	struct osd_device *osd = osd_obj2dev(obj);
-	uint64_t crtime[2], gen;
+	uint64_t gen;
 	inode_timespec_t now;
 	size_t size;
 	int rc, cnt;
@@ -440,8 +440,10 @@ int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 
 	gen = dmu_tx_get_txg(oh->ot_tx);
 	gethrestime(&now);
-	ZFS_TIME_ENCODE(&now, crtime);
+	ZFS_TIME_ENCODE(&now, osa->btime);
 
+	obj->oo_attr.la_valid |= LA_BTIME;
+	obj->oo_attr.la_btime = osa->btime[0];
 	osa->atime[0] = obj->oo_attr.la_atime;
 	osa->ctime[0] = obj->oo_attr.la_ctime;
 	osa->mtime[0] = obj->oo_attr.la_mtime;
@@ -475,7 +477,7 @@ int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_ATIME(osd), NULL, osa->atime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_MTIME(osd), NULL, osa->mtime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CTIME(osd), NULL, osa->ctime, 16);
-	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CRTIME(osd), NULL, crtime, 16);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CRTIME(osd), NULL, osa->btime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_LINKS(osd), NULL, &osa->nlink, 8);
 #ifdef ZFS_PROJINHERIT
 	if (osd->od_projectused_dn)

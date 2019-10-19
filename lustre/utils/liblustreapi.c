@@ -4019,7 +4019,7 @@ static int find_time_check(struct find_param *param, int mds)
 	return rc;
 }
 
-static int find_newerxy_check(struct find_param *param, int mds)
+static int find_newerxy_check(struct find_param *param, int mds, bool from_mdt)
 {
 	struct lov_user_mds_data *lmd = param->fp_lmd;
 	int i;
@@ -4065,6 +4065,27 @@ static int find_newerxy_check(struct find_param *param, int mds)
 			 */
 			if (rc == 1)
 				rc = rc2;
+		}
+
+		/*
+		 * File birth time (btime) can get from MDT directly.
+		 * if @from_mdt is true, it means the input file attributs are
+		 * obtained directly from MDT.
+		 * Thus, if @from_mdt is false, we should skip the following
+		 * btime check.
+		 */
+		if (!from_mdt)
+			continue;
+
+		if (param->fp_newery[NEWERXY_BTIME][i]) {
+			if (!(lmd->lmd_stx.stx_mask & STATX_BTIME))
+				return -EOPNOTSUPP;
+
+			rc2 = find_value_cmp(lmd->lmd_stx.stx_btime.tv_sec,
+					     param->fp_newery[NEWERXY_BTIME][i],
+					     -1, i, 0, 0);
+			if (rc2 < 0)
+				return rc2;
 		}
 	}
 
@@ -4584,7 +4605,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	/* Request MDS for the stat info if some of these parameters need
 	 * to be compared. */
 	if (param->fp_obd_uuid || param->fp_mdt_uuid ||
-	    param->fp_check_uid || param->fp_check_gid || param->fp_newerxy ||
+	    param->fp_check_uid || param->fp_check_gid ||
+	    param->fp_newerxy || param->fp_btime ||
 	    param->fp_atime || param->fp_mtime || param->fp_ctime ||
 	    param->fp_check_size || param->fp_check_blocks ||
 	    find_check_lmm_info(param) ||
@@ -4870,14 +4892,32 @@ obd_matches:
 			goto decided;
 	}
 
+	if (param->fp_btime) {
+		if (!(lmd->lmd_stx.stx_mask & STATX_BTIME)) {
+			ret = -EOPNOTSUPP;
+			goto out;
+		}
+
+		decision = find_value_cmp(lmd->lmd_stx.stx_btime.tv_sec,
+					  param->fp_btime, param->fp_bsign,
+					  param->fp_exclude_btime,
+					  param->fp_time_margin, 0);
+		if (decision == -1)
+			goto decided;
+	}
+
 	if (param->fp_newerxy) {
 		int for_mds;
 
 		for_mds = lustre_fs ?
 			  (S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) : 0;
-		decision = find_newerxy_check(param, for_mds);
+		decision = find_newerxy_check(param, for_mds, true);
 		if (decision == -1)
 			goto decided;
+		if (decision < 0) {
+			ret = decision;
+			goto out;
+		}
 	}
 
 	flags = param->fp_lmd->lmd_flags;
@@ -4940,10 +4980,13 @@ obd_matches:
 			goto decided;
 
 		if (param->fp_newerxy) {
-			decision = find_newerxy_check(param, 0);
+			decision = find_newerxy_check(param, 0, false);
 			if (decision == -1)
 				goto decided;
-
+			if (decision < 0) {
+				ret = decision;
+				goto out;
+			}
 		}
 	}
 

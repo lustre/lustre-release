@@ -2594,11 +2594,12 @@ static void osd_inode_getattr(const struct lu_env *env,
 	attr->la_valid	|= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
 			   LA_SIZE | LA_BLOCKS | LA_UID | LA_GID |
 			   LA_PROJID | LA_FLAGS | LA_NLINK | LA_RDEV |
-			   LA_BLKSIZE | LA_TYPE;
+			   LA_BLKSIZE | LA_TYPE | LA_BTIME;
 
 	attr->la_atime = inode->i_atime.tv_sec;
 	attr->la_mtime = inode->i_mtime.tv_sec;
 	attr->la_ctime = inode->i_ctime.tv_sec;
+	attr->la_btime = LDISKFS_I(inode)->i_crtime.tv_sec;
 	attr->la_mode	 = inode->i_mode;
 	attr->la_size	 = i_size_read(inode);
 	attr->la_blocks	 = inode->i_blocks;
