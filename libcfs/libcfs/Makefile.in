@@ -4,7 +4,6 @@ libcfs-linux-objs := linux-tracefile.o linux-debug.o
 libcfs-linux-objs += linux-prim.o
 libcfs-linux-objs += linux-curproc.o
 libcfs-linux-objs += linux-hash.o
-libcfs-linux-objs += linux-module.o
 libcfs-linux-objs += linux-crypto.o linux-crypto-adler.o
 libcfs-linux-objs += linux-wait.o
 @HAVE_CRC32_TRUE@libcfs-linux-objs += linux-crypto-crc32.o
