@@ -1432,8 +1432,8 @@ lnet_select_peer_ni(struct lnet_ni *best_ni, lnet_nid_t dst_nid,
  * Prerequisite: the best_ni should already be set in the sd
  */
 static inline struct lnet_peer_ni *
-lnet_find_best_lpni_on_net(struct lnet_send_data *sd, struct lnet_peer *peer,
-			   __u32 net_id)
+lnet_find_best_lpni_on_net(struct lnet_ni *lni, lnet_nid_t dst_nid,
+			   struct lnet_peer *peer, __u32 net_id)
 {
 	struct lnet_peer_net *peer_net;
 
@@ -1450,8 +1450,7 @@ lnet_find_best_lpni_on_net(struct lnet_send_data *sd, struct lnet_peer *peer,
 		return NULL;
 	}
 
-	return lnet_select_peer_ni(sd->sd_best_ni, sd->sd_dst_nid,
-				   peer, peer_net);
+	return lnet_select_peer_ni(lni, dst_nid, peer, peer_net);
 }
 
 static int
@@ -1464,13 +1463,12 @@ lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2,
 	struct lnet_peer *lp2 = r2->lr_gateway;
 	struct lnet_peer_ni *lpni1;
 	struct lnet_peer_ni *lpni2;
-	struct lnet_send_data sd;
 	int rc;
 
-	sd.sd_best_ni = NULL;
-	sd.sd_dst_nid = LNET_NID_ANY;
-	lpni1 = lnet_find_best_lpni_on_net(&sd, lp1, r1->lr_lnet);
-	lpni2 = lnet_find_best_lpni_on_net(&sd, lp2, r2->lr_lnet);
+	lpni1 = lnet_find_best_lpni_on_net(NULL, LNET_NID_ANY, lp1,
+					   r1->lr_lnet);
+	lpni2 = lnet_find_best_lpni_on_net(NULL, LNET_NID_ANY, lp2,
+					   r2->lr_lnet);
 	LASSERT(lpni1 && lpni2);
 
 	if (r1->lr_priority < r2->lr_priority) {
@@ -2078,7 +2076,10 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 			return -EHOSTUNREACH;
 		}
 
-		sd->sd_best_lpni = lnet_find_best_lpni_on_net(sd, lp, best_lpn->lpn_net_id);
+		sd->sd_best_lpni = lnet_find_best_lpni_on_net(sd->sd_best_ni,
+							      sd->sd_dst_nid,
+							      lp,
+							      best_lpn->lpn_net_id);
 		if (!sd->sd_best_lpni) {
 			CERROR("peer %s down\n",
 			       libcfs_nid2str(sd->sd_dst_nid));
@@ -2407,7 +2408,8 @@ lnet_handle_any_mr_dsta(struct lnet_send_data *sd)
 					lnet_msg_discovery(sd->sd_msg));
 	if (sd->sd_best_ni) {
 		sd->sd_best_lpni =
-		  lnet_find_best_lpni_on_net(sd, sd->sd_peer,
+		  lnet_find_best_lpni_on_net(sd->sd_best_ni, sd->sd_dst_nid,
+					     sd->sd_peer,
 					     sd->sd_best_ni->ni_net->net_id);
 
 		/*
