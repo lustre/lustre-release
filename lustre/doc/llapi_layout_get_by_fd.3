@@ -6,18 +6,19 @@ obtain the layout of a Lustre file
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
-.BI "struct llapi_layout *llapi_layout_get_by_fd(int "fd ", uint32_t " flags );
+.BI "struct llapi_layout *llapi_layout_get_by_fd(int " fd ,
+.BI "                                     enum llapi_layout_get_flags " flags );
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_fid(const char *"lustre_path ,
-.BI "                                             const struct lu_fid *"fid ,
-.BI "                                             uint32_t " flags );
+.BI "                                     const struct lu_fid *"fid ,
+.BI "                                     enum llapi_layout_get_flags " flags );
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_path(const char *"path ,
-.BI "                                              uint32_t " flags );
+.BI "                                     enum llapi_layout_get_flags " flags );
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_xattr(void *"lov_xattr ,
-.BI "                                               ssize_t " lov_xattr_size ,
-.BI "                                               uint32_t " xattr_flags );
+.BI "                                     ssize_t " lov_xattr_size ,
+.BI "                                     enum llapi_layout_get_flags " flags );
 .fi
 .SH DESCRIPTION
 .PP
@@ -61,9 +62,9 @@ filesystem.
 .PP
 For
 .BR llapi_layout_get_by_fid() ,
-the path named by
+the
 .I lustre_path
-serves to identify the Lustre filesystem containing the file
+argument serves to identify the Lustre filesystem containing the file
 represented by
 .IR fid .
 It is typically the filesystem root, but may also be any path beneath
@@ -85,15 +86,15 @@ or
 .I xattr_flags
 to control how a layout is retrieved.  Currently
 .B llapi_layout_get_by_path()
-accepts only one flag, and
+accepts only one flag, while
 .B llapi_layout_get_by_fd()
 and
 .B llapi_layout_get_by_fid()
-do not accept any flags. The list of flags that can be used in
+do not use any flags. The list of flags that can be used in
 .I flags
 is as follows:
 .TP 5
-.SM LAYOUT_GET_EXPECTED
+.SM LLAPI_LAYOUT_GET_EXPECTED
 Unspecified attribute values are replaced by the literal default values
 that will be assigned when the file is created or first written to.
 A default value is inherited from the parent directory if the attribute
@@ -106,7 +107,7 @@ files.
 By default, layouts report the abstract value
 .B LLAPI_LAYOUT_DEFAULT
 to indicate an unspecified attribute.  Use
-.B LAYOUT_GET_EXPECTED
+.B LLAPI_LAYOUT_GET_EXPECTED
 to discover the expected literal values for new files in a given
 directory.  Do not use it if you need to distinguish between specified
 and unspecified attributes.  The flag has no effect if
@@ -123,30 +124,30 @@ the filesystem default.  The layout of D returned by
 has the abstract stripe size value
 .BR LLAPI_LAYOUT_DEFAULT ,
 since stripe size is unspecified, while
-.B llapi_layout_get_by_path(D, LAYOUT_GET_EXPECTED)
+.B llapi_layout_get_by_path(D, LLAPI_LAYOUT_GET_EXPECTED)
 reports the literal value 1048576.  Both forms report a stripe count
 of 2, since that attribute is specified.
 .PP
-The list of flags that can be used in
-.I xattr_flags
-is as follows:
+The values that can be used by
+.B llapi_layout_get_by_xattr()
+.I flags
+argument is as follows:
 .TP 5
-.SM LLAPI_LXF_CHECK
+.SM LLAPI_LAYOUT_GET_CHECK
 If the
-.B LLAPI_LXF_CHECK
+.B LLAPI_LAYOUT_GET_CHECK
 flag is set, this function will check whether the objects count in lum
 is consistent with the stripe count in lum. This check only apply to
-regular file, so
-.B LLAPI_LXF_CHECK
-flag should be cleared if the xattr belongs to a directory.
+regular files, so it should not be passed if the xattr is a default
+layout from a directory.
 .TP
-.SM LLAPI_LXF_COPY
+.SM LLAPI_LAYOUT_GET_COPY
 If the
-.B LLAPI_LXF_COPY
+.B LLAPI_LAYOUT_GET_COPY
 flag is set, this function will use a temporary buffer for byte swapping
 when necessary, leaving
 .I lov_xattr
-untouched. Otherwise, the byte swapping will be done to the
+unmodified. Otherwise, the byte swapping will be done to the fields of the
 .I lov_xattr
 buffer directly.
 .SH RETURN VALUES

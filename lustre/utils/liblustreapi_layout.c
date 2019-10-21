@@ -434,14 +434,14 @@ static bool llapi_layout_lum_valid(struct lov_user_md *lum, int lum_size)
  *
  * \param[in] lov_xattr		LOV user metadata xattr to copy data from
  * \param[in] lov_xattr_size	size the lov_xattr_size passed in
- * \param[in] flags		bitwise-or'd flags to control the behavior
+ * \param[in] flags		flags to control how layout is retrieved
  *
  * \retval		valid llapi_layout pointer on success
  * \retval		NULL if memory allocation fails
  */
 struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
-					       ssize_t lov_xattr_size,
-					       uint32_t flags)
+					      ssize_t lov_xattr_size,
+					      enum llapi_layout_get_flags flags)
 {
 	struct lov_user_md *lum = lov_xattr;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
@@ -463,7 +463,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 	}
 
 #if __BYTE_ORDER == __BIG_ENDIAN
-	if (flags & LLAPI_LXF_COPY) {
+	if (flags & LLAPI_LAYOUT_GET_COPY) {
 		lum = malloc(lov_xattr_size);
 		if (lum == NULL) {
 			errno = ENOMEM;
@@ -475,7 +475,12 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 
 	llapi_layout_swab_lov_user_md(lum, lov_xattr_size);
 
-	if ((flags & LLAPI_LXF_CHECK) &&
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 16, 53, 0)
+#define LLAPI_LXF_CHECK_OLD 0x0001
+	if (flags & LLAPI_LXF_CHECK_OLD)
+		flags = (flags & ~LLAPI_LXF_CHECK_OLD) | LLAPI_LAYOUT_GET_CHECK;
+#endif
+	if ((flags & LLAPI_LAYOUT_GET_CHECK) &&
 	    !llapi_layout_lum_valid(lum, lov_xattr_size)) {
 		errno = EBADSLT;
 		goto out;
@@ -921,7 +926,8 @@ static bool is_any_specified(const struct llapi_layout *layout)
  * \retval	valid llapi_layout pointer on success
  * \retval	NULL if an error occurs
  */
-struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
+struct llapi_layout *llapi_layout_get_by_fd(int fd,
+					    enum llapi_layout_get_flags flags)
 {
 	size_t lum_len;
 	struct lov_user_md *lum;
@@ -951,7 +957,7 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags)
 		goto out;
 
 	layout = llapi_layout_get_by_xattr(lum, bytes_read,
-		S_ISDIR(st.st_mode) ? 0 : LLAPI_LXF_CHECK);
+			S_ISDIR(st.st_mode) ? 0 : LLAPI_LAYOUT_GET_CHECK);
 out:
 	free(lum);
 	return layout;
@@ -1049,7 +1055,7 @@ static struct llapi_layout *llapi_layout_expected(const char *path)
 /**
  * Get the striping layout for the file at \a path.
  *
- * If \a flags contains LAYOUT_GET_EXPECTED, substitute
+ * If \a flags contains LLAPI_LAYOUT_GET_EXPECTED, substitute
  * expected inherited attribute values for unspecified attributes. See
  * llapi_layout_expected().
  *
@@ -1059,13 +1065,14 @@ static struct llapi_layout *llapi_layout_expected(const char *path)
  * \retval	valid llapi_layout pointer on success
  * \retval	NULL if an error occurs
  */
-struct llapi_layout *llapi_layout_get_by_path(const char *path, uint32_t flags)
+struct llapi_layout *llapi_layout_get_by_path(const char *path,
+					      enum llapi_layout_get_flags flags)
 {
 	struct llapi_layout *layout = NULL;
 	int fd;
 	int tmp;
 
-	if (flags & LAYOUT_GET_EXPECTED)
+	if (flags & LLAPI_LAYOUT_GET_EXPECTED)
 		return llapi_layout_expected(path);
 
 	fd = open(path, O_RDONLY);
@@ -1091,7 +1098,7 @@ struct llapi_layout *llapi_layout_get_by_path(const char *path, uint32_t flags)
  */
 struct llapi_layout *llapi_layout_get_by_fid(const char *lustre_dir,
 					     const struct lu_fid *fid,
-					     uint32_t flags)
+					     enum llapi_layout_get_flags flags)
 {
 	int fd;
 	int tmp;

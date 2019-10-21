@@ -672,8 +672,18 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
  * Flags to control how layouts are retrieved.
  */
 
-/* Replace non-specified values with expected inherited values. */
-#define LAYOUT_GET_EXPECTED 0x1
+enum llapi_layout_get_flags {
+	/** Replace non-specified values with expected inherited values. */
+	LLAPI_LAYOUT_GET_EXPECTED	= 0x0001,
+	/** Use a temporary buffer to swab and return xattrs. */
+	LLAPI_LAYOUT_GET_COPY		= 0x0002,
+	/** Verify xattr contains sane layout values. */
+	LLAPI_LAYOUT_GET_CHECK		= 0x0004,
+};
+/* compatibility macros for old interfaces */
+#define LAYOUT_GET_EXPECTED	LLAPI_LAYOUT_GET_EXPECTED
+#define LLAPI_LXF_COPY		LLAPI_LAYOUT_GET_COPY
+#define LLAPI_LXF_CHECK		LLAPI_LAYOUT_GET_CHECK
 
 /**
  * Return a pointer to a newly-allocated opaque data structure containing
@@ -681,7 +691,8 @@ int llapi_mirror_resync_many(int fd, struct llapi_layout *layout,
  * llapi_layout_free() when it is no longer needed. Failure is indicated
  * by a NULL return value and an appropriate error code stored in errno.
  */
-struct llapi_layout *llapi_layout_get_by_path(const char *path, uint32_t flags);
+struct llapi_layout *llapi_layout_get_by_path(const char *path,
+					     enum llapi_layout_get_flags flags);
 
 /**
  * Return a pointer to a newly-allocated opaque data type containing the
@@ -690,7 +701,8 @@ struct llapi_layout *llapi_layout_get_by_path(const char *path, uint32_t flags);
  * needed. Failure is indicated by a NULL return value and an
  * appropriate error code stored in errno.
  */
-struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags);
+struct llapi_layout *llapi_layout_get_by_fd(int fd,
+					    enum llapi_layout_get_flags flags);
 
 /**
  * Return a pointer to a newly-allocated opaque data type containing the
@@ -704,12 +716,7 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags);
  */
 struct llapi_layout *llapi_layout_get_by_fid(const char *path,
 					     const struct lu_fid *fid,
-					     uint32_t flags);
-
-enum llapi_layout_xattr_flags {
-	LLAPI_LXF_CHECK = 0x0001,
-	LLAPI_LXF_COPY  = 0x0002,
-};
+					     enum llapi_layout_get_flags flags);
 
 /**
  * Return a pointer to a newly-allocated opaque data type containing the
@@ -719,18 +726,18 @@ enum llapi_layout_xattr_flags {
  * properly. Thus, \a lov_xattr will be modified during the process. If the
  * \a LLAPI_LXF_CHECK flag of \a flags is set, this function will check whether
  * the objects count in lum is consistent with the stripe count in lum. This
- * check only apply to regular file, so \a LLAPI_LXF_CHECK flag should be
- * cleared if the xattr belongs to a directory. If the \a LLAPI_LXF_COPY flag
- * of \a flags is set, this function will use a temporary buffer for byte
- * swapping when necessary, leaving \a lov_xattr untouched. Otherwise, the byte
- * swapping will be done to the \a lov_xattr buffer directly.  The returned
+ * check only apply to regular file, so \a LLAPI_LAYOUT_GET_CHECK flag should
+ * be cleared if the xattr belongs to a directory. If the flag \a
+ * LLAPI_LAYOUT_GET_COPY is set, this function will use a temporary buffer for
+ * byte swapping when necessary, leaving \a lov_xattr untouched. Otherwise, the
+ * byte swapping will be done to the \a lov_xattr buffer directly.  The returned
  * pointer should be freed with llapi_layout_free() when it is no longer
  * needed.  Failure is  * indicated with a NULL return value and an appropriate
  * error code stored in errno.
  */
 struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
-					       ssize_t lov_xattr_size,
-					       uint32_t flags);
+					     ssize_t lov_xattr_size,
+					     enum llapi_layout_get_flags flags);
 
 /**
  * Allocate a new layout. Use this when creating a new file with
