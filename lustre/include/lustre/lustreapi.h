@@ -214,7 +214,11 @@ struct find_param {
 				 fp_mirror_id_sign:2,
 				 fp_mdt_count_sign:2,
 				 fp_blocks_sign:2,
-				 fp_ext_size_sign:2;
+				 fp_ext_size_sign:2,
+				 fp_unused1_sign:2, /* Fields available to use*/
+				 fp_unused2_sign:2, /* Once used we must add  */
+				 fp_unused3_sign:2, /* a separate flag field  */
+				 fp_unused4_sign:2; /* at end of the struct.  */
 	unsigned long long	 fp_size;
 	unsigned long long	 fp_size_units;
 
@@ -274,7 +278,14 @@ struct find_param {
 				 fp_exclude_foreign:1,
 				 fp_check_ext_size:1, /* extension size */
 				 fp_exclude_ext_size:1,
-				 fp_lazy:1;
+				 fp_lazy:1,
+				 fp_unused_bit1:1,
+				 fp_unused_bit2:1, /* All of these unused bit */
+				 fp_unused_bit3:1, /* fields available to use.*/
+				 fp_unused_bit4:1, /* Once all unused fields  */
+				 fp_unused_bit5:1, /* are used we need to add */
+				 fp_unused_bit6:1, /* a separate flag field at*/
+				 fp_unused_bit7:1; /* the end of the struct.  */
 
 	enum llapi_layout_verbose fp_verbose;
 	int			 fp_quiet;
@@ -325,16 +336,15 @@ struct find_param {
 	unsigned		 fp_projid;
 	unsigned long long	 fp_blocks;
 	unsigned long long	 fp_blocks_units;
-	unsigned long long	 fp_ext_size;
-	unsigned long long	 fp_ext_size_units;
 
-	/* In-process parameters. */
 	unsigned long		 fp_got_uuids:1,
 				 fp_obds_printed:1;
 	unsigned int		 fp_depth;
 	unsigned int		 fp_hash_type;
 	unsigned int		 fp_time_margin; /* time margin in seconds */
 	__u32			 fp_foreign_type;
+	unsigned long long	 fp_ext_size;
+	unsigned long long	 fp_ext_size_units;
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
