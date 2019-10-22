@@ -1910,8 +1910,11 @@ lnet_handle_spec_local_nmr_dst(struct lnet_send_data *sd)
  * Local Destination
  * MR Peer
  *
- * Run the selection algorithm on the peer NIs unless we're sending
- * a response, in this case just send to the destination
+ * Don't run the selection algorithm on the peer NIs. By specifying the
+ * local NID, we're also saying that we should always use the destination NID
+ * provided. This handles the case where we should be using the same
+ * destination NID for the all the messages which belong to the same RPC
+ * request.
  */
 static int
 lnet_handle_spec_local_mr_dst(struct lnet_send_data *sd)
@@ -1922,17 +1925,6 @@ lnet_handle_spec_local_mr_dst(struct lnet_send_data *sd)
 		       "local nid\n", libcfs_nid2str(sd->sd_dst_nid),
 				libcfs_nid2str(sd->sd_src_nid));
 		return -EINVAL;
-	}
-
-	/*
-	 * only run the selection algorithm to pick the peer_ni if we're
-	 * sending a GET or a PUT. Responses are sent to the same
-	 * destination NID provided.
-	 */
-	if (!(sd->sd_send_case & SND_RESP)) {
-		sd->sd_best_lpni =
-		  lnet_find_best_lpni_on_net(sd, sd->sd_peer,
-					     sd->sd_best_ni->ni_net->net_id);
 	}
 
 	if (sd->sd_best_lpni &&
