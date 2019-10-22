@@ -1951,12 +1951,10 @@ lnet_find_best_ni_on_spec_net(struct lnet_ni *cur_best_ni,
 }
 
 static int
-lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni,
-			     struct lnet_msg *msg, lnet_nid_t rtr_nid,
+lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni, struct lnet_msg *msg,
 			     int cpt)
 {
 	struct lnet_peer *peer;
-	lnet_nid_t primary_nid;
 	int rc;
 
 	lnet_peer_ni_addref_locked(lpni);
@@ -1987,17 +1985,15 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni,
 		return 0;
 	}
 	/* queue message and return */
-	msg->msg_rtr_nid_param = rtr_nid;
 	msg->msg_sending = 0;
 	msg->msg_txpeer = NULL;
 	list_add_tail(&msg->msg_list, &peer->lp_dc_pendq);
-	primary_nid = peer->lp_primary_nid;
 	spin_unlock(&peer->lp_lock);
 
 	lnet_peer_ni_decref_locked(lpni);
 
 	CDEBUG(D_NET, "msg %p delayed. %s pending discovery\n",
-		msg, libcfs_nid2str(primary_nid));
+	       msg, libcfs_nid2str(peer->lp_primary_nid));
 
 	return LNET_DC_WAIT;
 }
@@ -2106,8 +2102,7 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 	 * completed
 	 */
 	sd->sd_msg->msg_src_nid_param = sd->sd_src_nid;
-	rc = lnet_initiate_peer_discovery(gwni, sd->sd_msg, sd->sd_rtr_nid,
-					  sd->sd_cpt);
+	rc = lnet_initiate_peer_discovery(gwni, sd->sd_msg, sd->sd_cpt);
 	if (rc)
 		return rc;
 
@@ -2664,20 +2659,22 @@ again:
 	}
 
 	/*
-	 * Cache the original src_nid. If we need to resend the message
-	 * then we'll need to know whether the src_nid was originally
+	 * Cache the original src_nid and rtr_nid. If we need to resend the
+	 * message then we'll need to know whether the src_nid was originally
 	 * specified for this message. If it was originally specified,
 	 * then we need to keep using the same src_nid since it's
-	 * continuing the same sequence of messages.
+	 * continuing the same sequence of messages. Similarly, rtr_nid will
+	 * affect our choice of next hop.
 	 */
 	msg->msg_src_nid_param = src_nid;
+	msg->msg_rtr_nid_param = rtr_nid;
 
 	/*
 	 * If necessary, perform discovery on the peer that owns this peer_ni.
 	 * Note, this can result in the ownership of this peer_ni changing
 	 * to another peer object.
 	 */
-	rc = lnet_initiate_peer_discovery(lpni, msg, rtr_nid, cpt);
+	rc = lnet_initiate_peer_discovery(lpni, msg, cpt);
 	if (rc) {
 		lnet_peer_ni_decref_locked(lpni);
 		lnet_net_unlock(cpt);
