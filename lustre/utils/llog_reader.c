@@ -630,25 +630,25 @@ static void print_hsm_action(struct llog_agent_req_rec *larr)
 
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
 	printf("lrh=[type=%X len=%d idx=%d] fid="DFID
-	       " compound/cookie=%#jx/%#jx"
-	       " status=%s action=%s archive#=%d flags=%#jx"
-	       " create=%ju change=%ju"
-	       " extent=%#jx-%#jx gid=%#jx datalen=%d"
+	       " compound/cookie=%#llx/%#llx"
+	       " status=%s action=%s archive#=%d flags=%#llx"
+	       " create=%llu change=%llu"
+	       " extent=%#llx-%#llx gid=%#llx datalen=%d"
 	       " data=[%s]\n",
 	       larr->arr_hdr.lrh_type,
 	       larr->arr_hdr.lrh_len, larr->arr_hdr.lrh_index,
 	       PFID(&larr->arr_hai.hai_fid),
-	       (uintmax_t)larr->arr_compound_id,
-	       (uintmax_t)larr->arr_hai.hai_cookie,
+	       (unsigned long long)larr->arr_compound_id,
+	       (unsigned long long)larr->arr_hai.hai_cookie,
 	       agent_req_status2name(larr->arr_status),
 	       hsm_copytool_action2name(larr->arr_hai.hai_action),
 	       larr->arr_archive_id,
-	       (uintmax_t)larr->arr_flags,
-	       (uintmax_t)larr->arr_req_create,
-	       (uintmax_t)larr->arr_req_change,
-	       (uintmax_t)larr->arr_hai.hai_extent.offset,
-	       (uintmax_t)larr->arr_hai.hai_extent.length,
-	       (uintmax_t)larr->arr_hai.hai_gid, sz,
+	       (unsigned long long)larr->arr_flags,
+	       (unsigned long long)larr->arr_req_create,
+	       (unsigned long long)larr->arr_req_change,
+	       (unsigned long long)larr->arr_hai.hai_extent.offset,
+	       (unsigned long long)larr->arr_hai.hai_extent.length,
+	       (unsigned long long)larr->arr_hai.hai_gid, sz,
 	       hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
 }
 
@@ -662,7 +662,7 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 	printf("changelog record id:0x%x index:%llu cr_flags:0x%x "
 	       "cr_type:%s(0x%x) date:'%02d:%02d:%02d.%09d %04d.%02d.%02d' "
 	       "target:"DFID, __le32_to_cpu(rec->cr_hdr.lrh_id),
-	       __le64_to_cpu(rec->cr.cr_index),
+	       (unsigned long long)__le64_to_cpu(rec->cr.cr_index),
 	       __le32_to_cpu(rec->cr.cr_flags),
 	       changelog_type2str(__le32_to_cpu(rec->cr.cr_type)),
 	       __le32_to_cpu(rec->cr.cr_type),
@@ -684,7 +684,7 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 			changelog_rec_extra_flags(&rec->cr);
 
 		printf(" cr_extra_flags:0x%llx",
-		       __le64_to_cpu(ef->cr_extra_flags));
+		       (unsigned long long)__le64_to_cpu(ef->cr_extra_flags));
 
 		if (ef->cr_extra_flags & CLFE_UIDGID) {
 			struct changelog_ext_uidgid *uidgid =
