@@ -649,6 +649,36 @@ static ssize_t enable_remote_dir_gid_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(enable_remote_dir_gid);
 
+static ssize_t enable_chprojid_gid_show(struct kobject *kobj,
+					struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 (int)mdt->mdt_enable_chprojid_gid);
+}
+
+static ssize_t enable_chprojid_gid_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int val;
+	int rc;
+
+	rc = kstrtoint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_enable_chprojid_gid = val;
+	return count;
+}
+LUSTRE_RW_ATTR(enable_chprojid_gid);
+
 static ssize_t enable_striped_dir_show(struct kobject *kobj,
 				       struct attribute *attr, char *buf)
 {
@@ -1050,6 +1080,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_evict_tgt_nids.attr,
 	&lustre_attr_enable_remote_dir.attr,
 	&lustre_attr_enable_remote_dir_gid.attr,
+	&lustre_attr_enable_chprojid_gid.attr,
 	&lustre_attr_enable_striped_dir.attr,
 	&lustre_attr_enable_dir_migration.attr,
 	&lustre_attr_enable_remote_rename.attr,

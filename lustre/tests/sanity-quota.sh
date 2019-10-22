@@ -3481,6 +3481,50 @@ test_65() {
 }
 run_test 65 "Check lfs quota result"
 
+test_66() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported"
+	setup_quota_test || error "setup quota failed with $?"
+	stack_trap cleanup_quota_test EXIT
+	local old=$(do_facet mds1 $LCTL get_param -n \
+		    mdt.*.enable_chprojid_gid | head -1)
+	local testdir=$DIR/$tdir/foo
+
+	do_facet mds1 $LCTL set_param mdt.*.enable_chprojid_gid=0
+	stack_trap "do_facet mds1 $LCTL set_param mdt.*.enable_chprojid_gid=0" \
+		EXIT
+
+	test_mkdir -i 0 -c 1 $testdir || error "failed to mkdir"
+	chown -R $TSTID:$TSTID $testdir
+	change_project -sp $TSTPRJID $testdir
+	$RUNAS mkdir $testdir/foo || error "failed to mkdir foo"
+
+	$RUNAS lfs project -p 0 $testdir/foo &&
+		error "nonroot user should fail to set projid"
+
+	$RUNAS lfs project -C $testdir/foo &&
+		error "nonroot user should fail to clear projid"
+
+	change_project -C $testdir/foo || error "failed to clear project"
+
+	do_facet mds1 $LCTL set_param mdt.*.enable_chprojid_gid=-1
+	$RUNAS lfs project -p $TSTPRJID $testdir/foo || error \
+	"failed to set projid with normal user when enable_chprojid_gid=-1"
+
+	$RUNAS lfs project -rC $testdir/ || error \
+"failed to clear project state with normal user when enable_chprojid_gid=-1"
+
+	touch $testdir/bar || error "failed touch $testdir/bar"
+	$RUNAS lfs project -p $TSTPRJID $testdir/bar && error \
+	"normal user should not be able to set projid on root owned file"
+
+	change_project -p $TSTPRJID $testdir/bar || error \
+		"root should be able to change its own file's projid"
+
+	cleanup_quota_test
+}
+run_test 66 "nonroot user can not change project state in default"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

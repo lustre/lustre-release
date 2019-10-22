@@ -662,6 +662,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (mdt_object_remote(mo))
 		GOTO(out_put, rc = -EREMOTE);
 
+	ma->ma_enable_chprojid_gid = mdt->mdt_enable_chprojid_gid;
 	/* revoke lease lock if size is going to be changed */
 	if (unlikely(ma->ma_attr.la_valid & LA_SIZE &&
 		     !(ma->ma_attr_flags & MDS_TRUNC_KEEP_LEASE) &&
