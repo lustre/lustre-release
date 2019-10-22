@@ -3002,40 +3002,19 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 			lnet_finalize(msg, -EFAULT);
 			lnet_net_lock(cpt);
 		} else {
-			struct lnet_peer *peer;
 			int rc;
-			lnet_nid_t src_nid = LNET_NID_ANY;
 
-			/*
-			 * if this message is not being routed and the
-			 * peer is non-MR then we must use the same
-			 * src_nid that was used in the original send.
-			 * Otherwise if we're routing the message (IE
-			 * we're a router) then we can use any of our
-			 * local interfaces. It doesn't matter to the
-			 * final destination.
-			 */
-			peer = lpni->lpni_peer_net->lpn_peer;
-			if (!msg->msg_routing &&
-			    !lnet_peer_is_multi_rail(peer))
-				src_nid = le64_to_cpu(msg->msg_hdr.src_nid);
-
-			/*
-			 * If we originally specified a src NID, then we
-			 * must attempt to reuse it in the resend as well.
-			 */
-			if (msg->msg_src_nid_param != LNET_NID_ANY)
-				src_nid = msg->msg_src_nid_param;
 			lnet_peer_ni_decref_locked(lpni);
 
 			lnet_net_unlock(cpt);
 			CDEBUG(D_NET, "resending %s->%s: %s recovery %d try# %d\n",
-			       libcfs_nid2str(src_nid),
+			       libcfs_nid2str(msg->msg_src_nid_param),
 			       libcfs_id2str(msg->msg_target),
 			       lnet_msgtyp2str(msg->msg_type),
 			       msg->msg_recovery,
 			       msg->msg_retry_count);
-			rc = lnet_send(src_nid, msg, LNET_NID_ANY);
+			rc = lnet_send(msg->msg_src_nid_param, msg,
+				       msg->msg_rtr_nid_param);
 			if (rc) {
 				CERROR("Error sending %s to %s: %d\n",
 				       lnet_msgtyp2str(msg->msg_type),
