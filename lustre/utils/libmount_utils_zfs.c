@@ -642,7 +642,7 @@ static char *zfs_mkfs_opts(struct mkfs_opts *mop, char *str, int len)
 		snprintf(str, len, " -o %s", mop->mo_mkfsopts);
 	if (mop->mo_device_kb)
 		snprintf(str, len, " -o quota=%llu",
-			 mop->mo_device_kb * 1024);
+			 (unsigned long long)mop->mo_device_kb * 1024);
 
 	return str;
 }

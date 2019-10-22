@@ -134,8 +134,8 @@ int main(int argc, char *argv[])
 					       "component_start=%llu "
 					       "component_end=%llu",
 					       loa->loa_comp_id,
-					       loa->loa_comp_start,
-					       loa->loa_comp_end);
+					       (unsigned long long)loa->loa_comp_start,
+					       (unsigned long long)loa->loa_comp_end);
 				printf("\n");
 				continue;
 			}
@@ -187,7 +187,9 @@ int main(int argc, char *argv[])
 				       "component_start=%llu "
 				       "component_end=%llu",
 				       __le32_to_cpu(ol->ol_comp_id),
+				       (unsigned long long)
 				       __le64_to_cpu(ol->ol_comp_start),
+				       (unsigned long long)
 				       __le64_to_cpu(ol->ol_comp_end));
 		}
 		if (size >= sizeof(struct filter_fid))

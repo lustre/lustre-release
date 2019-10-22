@@ -1237,7 +1237,9 @@ static int __snapshot_create(struct snapshot_instance *si,
 					"-o lustre:ctime=%llu "
 					"-o lustre:mtime=%llu ",
 					PRSH(si, st), PZFS(st), fsname,
-					SNAPSHOT_MAGIC, xtime, xtime);
+					SNAPSHOT_MAGIC,
+					(unsigned long long)xtime,
+					(unsigned long long)xtime);
 			if (len <= 0)
 				exit(-EOVERFLOW);
 
@@ -1801,7 +1803,8 @@ static int __snapshot_modify(struct snapshot_instance *si,
 					 PRSH(si, st), PIMPORT(st), PZFS(st),
 					 PSSNAME(si, st), PSS_NEW(si, st),
 					 PZFS(st), si->si_comment,
-					 PSS_NEW(si, st), PZFS(st), xtime,
+					 PSS_NEW(si, st), PZFS(st),
+					 (unsigned long long)xtime,
 					 PSS_NEW(si, st));
 			else if (si->si_new_ssname)
 				snprintf(cmd, sizeof(cmd) - 1,
@@ -1810,7 +1813,8 @@ static int __snapshot_modify(struct snapshot_instance *si,
 					 " set lustre:mtime=%llu "DSSNAME"'",
 					 PRSH(si, st), PIMPORT(st), PZFS(st),
 					 PSSNAME(si, st), PSS_NEW(si, st),
-					 PZFS(st), xtime, PSS_NEW(si, st));
+					 PZFS(st), (unsigned long long)xtime,
+					 PSS_NEW(si, st));
 			else if (si->si_comment)
 				snprintf(cmd, sizeof(cmd) - 1,
 					 DRSH" '"DIMPORT"; "DZFS
@@ -1819,7 +1823,8 @@ static int __snapshot_modify(struct snapshot_instance *si,
 					 " set lustre:mtime=%llu "DSSNAME"'",
 					 PRSH(si, st), PIMPORT(st), PZFS(st),
 					 si->si_comment, PSSNAME(si, st),
-					 PZFS(st), xtime, PSSNAME(si, st));
+					 PZFS(st), (unsigned long long)xtime,
+					 PSSNAME(si, st));
 			else
 				exit(-EINVAL);
 
@@ -1978,7 +1983,7 @@ static int snapshot_list_one(struct snapshot_instance *si,
 			    strlen("lustre:ctime")) == 0) {
 			ptr = snapshot_first_skip_blank(buf);
 			if (ptr) {
-				sscanf(ptr, "%llu", &xtime);
+				xtime = (__u64)strtoull(ptr, NULL, 10);
 				printf("create_time: %s",
 				       ctime((time_t *)&xtime));
 			}
@@ -1989,7 +1994,7 @@ static int snapshot_list_one(struct snapshot_instance *si,
 			    strlen("lustre:mtime")) == 0) {
 			ptr = snapshot_first_skip_blank(buf);
 			if (ptr) {
-				sscanf(ptr, "%llu", &xtime);
+				xtime = (__u64)strtoull(ptr, NULL, 10);
 				printf("modify_time: %s",
 				       ctime((time_t *)&xtime));
 			}

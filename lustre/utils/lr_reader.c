@@ -209,9 +209,11 @@ int main(int argc, char *const argv[])
 	printf("  feature_compat: %#x\n", lsd.lsd_feature_compat);
 	printf("  feature_incompat: %#x\n", lsd.lsd_feature_incompat);
 	printf("  feature_rocompat: %#x\n", lsd.lsd_feature_rocompat);
-	printf("  last_transaction: %llu\n", lsd.lsd_last_transno);
+	printf("  last_transaction: %llu\n",
+	       (unsigned long long)lsd.lsd_last_transno);
 	printf("  target_index: %u\n", lsd.lsd_osd_index);
-	printf("  mount_count: %llu\n", lsd.lsd_mount_count);
+	printf("  mount_count: %llu\n",
+	       (unsigned long long)lsd.lsd_mount_count);
 
 	/* read client information */
 	if (opt_client) {
@@ -259,8 +261,9 @@ int main(int argc, char *const argv[])
 			printf("\n  %.40s:\n", lcd.lcd_uuid);
 			printf("    generation: %u\n", lcd.lcd_generation);
 			printf("    last_transaction: %llu\n",
-			       lcd.lcd_last_transno);
-			printf("    last_xid: %llu\n", lcd.lcd_last_xid);
+			       (unsigned long long)lcd.lcd_last_transno);
+			printf("    last_xid: %llu\n",
+			       (unsigned long long)lcd.lcd_last_xid);
 			printf("    last_result: %u\n", lcd.lcd_last_result);
 			printf("    last_data: %u\n", lcd.lcd_last_data);
 
@@ -275,9 +278,9 @@ int main(int argc, char *const argv[])
 				lcd.lcd_last_close_data =
 					__le32_to_cpu(lcd.lcd_last_close_data);
 				printf("    last_close_transation: %llu\n",
-				       lcd.lcd_last_close_transno);
+				       (unsigned long long)lcd.lcd_last_close_transno);
 				printf("    last_close_xid: %llu\n",
-				       lcd.lcd_last_close_xid);
+				       (unsigned long long)lcd.lcd_last_close_xid);
 				printf("    last_close_result: %u\n",
 				       lcd.lcd_last_close_result);
 				printf("    last_close_data: %u\n",
@@ -375,10 +378,13 @@ int main(int argc, char *const argv[])
 			printf("  %lld:\n", slot);
 			printf("    client_generation: %u\n",
 			       lrd.lrd_client_gen);
-			printf("    last_transaction: %llu\n", lrd.lrd_transno);
-			printf("    last_xid: %llu\n", lrd.lrd_xid);
+			printf("    last_transaction: %lluu\n",
+			       (unsigned long long)lrd.lrd_transno);
+			printf("    last_xid: %llu\n",
+			       (unsigned long long)lrd.lrd_xid);
 			printf("    last_result: %u\n", lrd.lrd_result);
-			printf("    last_data: %llu\n\n", lrd.lrd_data);
+			printf("    last_data: %llu\n\n",
+			       (unsigned long long)lrd.lrd_data);
 		}
 	}
 
