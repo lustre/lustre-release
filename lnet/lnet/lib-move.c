@@ -1842,17 +1842,15 @@ lnet_handle_send(struct lnet_send_data *sd)
 }
 
 static inline void
-lnet_set_non_mr_pref_nid(struct lnet_send_data *sd)
+lnet_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, struct lnet_ni *lni,
+			 struct lnet_msg *msg)
 {
-	if (sd->sd_send_case & NMR_DST &&
-	    sd->sd_msg->msg_type != LNET_MSG_REPLY &&
-	    sd->sd_msg->msg_type != LNET_MSG_ACK &&
-	    sd->sd_best_lpni->lpni_pref_nnids == 0) {
+	if (msg->msg_type != LNET_MSG_REPLY && msg->msg_type != LNET_MSG_ACK &&
+	    lpni->lpni_pref_nnids == 0) {
 		CDEBUG(D_NET, "Setting preferred local NID %s on NMR peer %s\n",
-		       libcfs_nid2str(sd->sd_best_ni->ni_nid),
-		       libcfs_nid2str(sd->sd_best_lpni->lpni_nid));
-		lnet_peer_ni_set_non_mr_pref_nid(sd->sd_best_lpni,
-						 sd->sd_best_ni->ni_nid);
+		       libcfs_nid2str(lni->ni_nid),
+		       libcfs_nid2str(lpni->lpni_nid));
+		lnet_peer_ni_set_non_mr_pref_nid(lpni, lni->ni_nid);
 	}
 }
 
@@ -1877,10 +1875,7 @@ lnet_handle_spec_local_nmr_dst(struct lnet_send_data *sd)
 		return -EINVAL;
 	}
 
-	/*
-	 * the preferred NID will only be set for NMR peers
-	 */
-	lnet_set_non_mr_pref_nid(sd);
+	lnet_set_non_mr_pref_nid(sd->sd_best_lpni, sd->sd_best_ni, sd->sd_msg);
 
 	return lnet_handle_send(sd);
 }
@@ -2181,10 +2176,11 @@ lnet_handle_spec_router_dst(struct lnet_send_data *sd)
 
 	if (sd->sd_send_case & NMR_DST)
 		/*
-		* since the final destination is non-MR let's set its preferred
-		* NID before we send
-		*/
-		lnet_set_non_mr_pref_nid(sd);
+		 * since the final destination is non-MR let's set its preferred
+		 * NID before we send
+		 */
+		lnet_set_non_mr_pref_nid(sd->sd_best_lpni, sd->sd_best_ni,
+					 sd->sd_msg);
 
 	/*
 	 * We're going to send to the gw found so let's set its
@@ -2313,7 +2309,7 @@ lnet_select_preferred_best_ni(struct lnet_send_data *sd)
 	sd->sd_best_ni = best_ni;
 
 	/* Set preferred NI if necessary. */
-	lnet_set_non_mr_pref_nid(sd);
+	lnet_set_non_mr_pref_nid(sd->sd_best_lpni, sd->sd_best_ni, sd->sd_msg);
 
 	return 0;
 }
@@ -2563,7 +2559,7 @@ lnet_handle_any_router_nmr_dst(struct lnet_send_data *sd)
 	 * set the best_ni we've chosen as the preferred one for
 	 * this peer
 	 */
-	lnet_set_non_mr_pref_nid(sd);
+	lnet_set_non_mr_pref_nid(sd->sd_best_lpni, sd->sd_best_ni, sd->sd_msg);
 
 	/* we'll be sending to the gw */
 	sd->sd_best_lpni = gw_lpni;
