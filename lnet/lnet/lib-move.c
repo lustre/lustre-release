@@ -2234,14 +2234,11 @@ lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 }
 
 static struct lnet_ni *
-lnet_find_existing_preferred_best_ni(struct lnet_send_data *sd)
+lnet_find_existing_preferred_best_ni(struct lnet_peer_ni *lpni, int cpt)
 {
 	struct lnet_ni *best_ni = NULL;
-	struct lnet_peer_net *peer_net;
-	struct lnet_peer *peer = sd->sd_peer;
-	struct lnet_peer_ni *best_lpni = sd->sd_best_lpni;
-	struct lnet_peer_ni *lpni;
-	int cpt = sd->sd_cpt;
+	struct lnet_peer_net *peer_net = lpni->lpni_peer_net;
+	struct lnet_peer_ni *lpni_entry;
 
 	/*
 	 * We must use a consistent source address when sending to a
@@ -2253,18 +2250,13 @@ lnet_find_existing_preferred_best_ni(struct lnet_send_data *sd)
 	 * So we need to pick the NI the peer prefers for this
 	 * particular network.
 	 */
-
-	/* Get the target peer_ni */
-	peer_net = lnet_peer_get_net_locked(peer,
-			LNET_NIDNET(best_lpni->lpni_nid));
-	LASSERT(peer_net != NULL);
-	list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
-				lpni_peer_nis) {
-		if (lpni->lpni_pref_nnids == 0)
+	LASSERT(peer_net);
+	list_for_each_entry(lpni_entry, &peer_net->lpn_peer_nis,
+			    lpni_peer_nis) {
+		if (lpni_entry->lpni_pref_nnids == 0)
 			continue;
-		LASSERT(lpni->lpni_pref_nnids == 1);
-		best_ni = lnet_nid2ni_locked(
-				lpni->lpni_pref.nid, cpt);
+		LASSERT(lpni_entry->lpni_pref_nnids == 1);
+		best_ni = lnet_nid2ni_locked(lpni_entry->lpni_pref.nid, cpt);
 		break;
 	}
 
@@ -2289,7 +2281,8 @@ lnet_select_preferred_best_ni(struct lnet_send_data *sd)
 	 * particular network.
 	 */
 
-	best_ni = lnet_find_existing_preferred_best_ni(sd);
+	best_ni = lnet_find_existing_preferred_best_ni(sd->sd_best_lpni,
+						       sd->sd_cpt);
 
 	/* if best_ni is still not set just pick one */
 	if (!best_ni) {
@@ -2542,9 +2535,10 @@ lnet_handle_any_router_nmr_dst(struct lnet_send_data *sd)
 	struct lnet_peer *gw_peer = NULL;
 
 	/*
-	 * Let's set if we have a preferred NI to talk to this NMR peer
+	 * Let's see if we have a preferred NI to talk to this NMR peer
 	 */
-	sd->sd_best_ni = lnet_find_existing_preferred_best_ni(sd);
+	sd->sd_best_ni = lnet_find_existing_preferred_best_ni(sd->sd_best_lpni,
+							      sd->sd_cpt);
 
 	/*
 	 * find the router and that'll find the best NI if we didn't find
