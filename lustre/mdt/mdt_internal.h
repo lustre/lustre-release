@@ -257,6 +257,8 @@ struct mdt_device {
 				   /* user with gid can create remote/striped
 				    * dir, and set default dir stripe */
 	gid_t			   mdt_enable_remote_dir_gid;
+				   /* user with this gid can change projid */
+	gid_t			   mdt_enable_chprojid_gid;
 
 	/* lock for osfs and md_root */
 	spinlock_t		   mdt_lock;

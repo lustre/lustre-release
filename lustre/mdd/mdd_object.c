@@ -637,6 +637,22 @@ int mdd_update_time(const struct lu_env *env, struct mdd_object *obj,
 	RETURN(rc);
 }
 
+
+static bool is_project_state_change(const struct lu_attr *oattr,
+				    struct lu_attr *la)
+{
+	if (la->la_valid & LA_PROJID &&
+	    oattr->la_projid != la->la_projid)
+		return true;
+
+	if ((la->la_valid & LA_FLAGS) &&
+	    (la->la_flags & LUSTRE_PROJINHERIT_FL) !=
+	    (oattr->la_flags & LUSTRE_PROJINHERIT_FL))
+		return true;
+
+	return false;
+}
+
 /*
  * This gives the same functionality as the code between
  * sys_chmod and inode_setattr
@@ -646,10 +662,12 @@ int mdd_update_time(const struct lu_env *env, struct mdd_object *obj,
  */
 static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 			const struct lu_attr *oattr, struct lu_attr *la,
-			const unsigned long flags)
+			const struct md_attr *ma)
 {
 	struct lu_ucred  *uc;
 	int		  rc = 0;
+	const unsigned long flags = ma->ma_attr_flags;
+
 	ENTRY;
 
 	if (!la->la_valid)
@@ -668,6 +686,14 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	uc = lu_ucred_check(env);
 	if (uc == NULL)
 		RETURN(0);
+
+	if (is_project_state_change(oattr, la)) {
+		if (!md_capable(uc, CFS_CAP_SYS_RESOURCE) &&
+		    !lustre_in_group_p(uc, ma->ma_enable_chprojid_gid) &&
+		    !(ma->ma_enable_chprojid_gid == -1 &&
+		      mdd_permission_internal(env, obj, oattr, MAY_WRITE)))
+			RETURN(-EPERM);
+	}
 
 	if (la->la_valid == LA_CTIME) {
 		if (!(flags & MDS_PERM_BYPASS))
@@ -1175,7 +1201,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		RETURN(rc);
 
 	*la_copy = ma->ma_attr;
-	rc = mdd_fix_attr(env, mdd_obj, attr, la_copy, ma->ma_attr_flags);
+	rc = mdd_fix_attr(env, mdd_obj, attr, la_copy, ma);
 	if (rc)
 		RETURN(rc);
 

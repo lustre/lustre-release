@@ -5325,6 +5325,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	m->mdt_enable_striped_dir = 1;
 	m->mdt_enable_dir_migration = 1;
 	m->mdt_enable_remote_dir_gid = 0;
+	m->mdt_enable_chprojid_gid = 0;
 	m->mdt_enable_remote_rename = 1;
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);

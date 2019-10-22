@@ -134,6 +134,7 @@ struct md_attr {
 	int			 ma_lmm_size;
 	int			 ma_lmv_size;
 	int			 ma_acl_size;
+	int			 ma_enable_chprojid_gid;
 };
 
 /** Additional parameters for create */
