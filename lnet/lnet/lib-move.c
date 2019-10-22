@@ -63,6 +63,12 @@ struct lnet_send_data {
 	__u32 sd_send_case;
 };
 
+static inline bool
+lnet_msg_is_response(struct lnet_msg *msg)
+{
+	return msg->msg_type == LNET_MSG_ACK || msg->msg_type == LNET_MSG_REPLY;
+}
+
 static inline struct lnet_comm_count *
 get_stats_counts(struct lnet_element_stats *stats,
 		 enum lnet_stats_type stats_type)
@@ -827,8 +833,7 @@ lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lpni,
 		return 1;
 
 	/* always send any responses */
-	if (msg->msg_type == LNET_MSG_ACK ||
-	    msg->msg_type == LNET_MSG_REPLY)
+	if (lnet_msg_is_response(msg))
 		return 1;
 
 	if (!lnet_is_peer_deadline_passed(lpni, now))
@@ -1845,8 +1850,7 @@ static inline void
 lnet_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, struct lnet_ni *lni,
 			 struct lnet_msg *msg)
 {
-	if (msg->msg_type != LNET_MSG_REPLY && msg->msg_type != LNET_MSG_ACK &&
-	    lpni->lpni_pref_nnids == 0) {
+	if (!lnet_msg_is_response(msg) && lpni->lpni_pref_nnids == 0) {
 		CDEBUG(D_NET, "Setting preferred local NID %s on NMR peer %s\n",
 		       libcfs_nid2str(lni->ni_nid),
 		       libcfs_nid2str(lpni->lpni_nid));
@@ -2706,8 +2710,7 @@ again:
 	else
 		send_case |= MR_DST;
 
-	if (msg->msg_type == LNET_MSG_REPLY ||
-	    msg->msg_type == LNET_MSG_ACK)
+	if (lnet_msg_is_response(msg))
 		send_case |= SND_RESP;
 
 	/* assign parameters to the send_data */
