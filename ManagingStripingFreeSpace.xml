@@ -1279,6 +1279,575 @@ $ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
         flag <literal>^init</literal> here.</para></note>
     </section>
   </section>
+
+  <section xml:id="striping.sel" condition='l2D'>
+    <title>
+      <indexterm><primary>striping</primary><secondary>SEL</secondary>
+      </indexterm>Self-Extending Layout (SEL)</title>
+    <para>The Lustre Self-Extending Layout (SEL) feature is an extension of the
+    <xref linkend="pfl"/> feature, which allows the MDS to change the defined
+    PFL layout dynamically. With this feature, the MDS monitors the used space
+    on OSTs and swaps the OSTs for the current file when they are low on space.
+    This avoids <literal>ENOSPC</literal> problems for SEL files when
+    applications are writing to them.</para>
+    <para>Whereas PFL delays the instantiation of some components until an IO
+    operation occurs on this region, SEL allows splitting such non-instantiated
+    components in two parts: an “extendable” component and an “extension”
+    component.  The extendable component is a regular PFL component, covering
+    just a part of the region, which is small originally. The extension (or SEL)
+    component is a new component type which is always non-instantiated and
+    unassigned, covering the other part of the region. When a write reaches this
+    unassigned space, and the client calls the MDS to have it instantiated, the
+    MDS makes a decision as to whether to grant additional space to the extendable
+    component.  The granted region moves from the head of the extension
+    component to the tail of the extendable component, thus the extendable
+    component grows and the SEL one is shortened.  Therefore, it allows the file
+    to continue on the same OSTs, or in the case where space is low on one of
+    the current OSTs, to modify the layout to switch to a new component on new
+    OSTs. In particular, it lets IO automatically spill over to a large HDD OST
+    pool once a small SSD OST pool is getting low on space.</para>
+    <para>The default extension policy modifies the layout in the following
+    ways:</para>
+    <orderedlist numeration="arabic">
+      <listitem>
+        <para>Extension: continue on the same OSTs – used when not low on space
+        on any of the OSTs of the current component; a particular extent is
+	granted to the extendable component.</para>
+      </listitem>
+      <listitem>
+        <para>Spill over: switch to next component OSTs – it is used only for
+	not the last component when <emphasis>at least one</emphasis>
+	of the current OSTs is low on space; the whole region of the SEL
+	component moves to the next component and the SEL component is removed
+	in its turn.</para>
+      </listitem>
+      <listitem>
+      <para>Repeating: create a new component with the same layout but on
+        free OSTs – it is used only for the last component when <emphasis>
+        at least one</emphasis> of the current OSTs is low on space; a new
+        component has the same layout but instantiated on different OSTs (from
+        the same pool) which have enough space.</para>
+      </listitem>
+      <listitem>
+        <para>Forced extension: continue with the current component OSTs despite
+        the low on space condition – it is used only for the last component when
+        a repeating attempt detected low on space condition as well - spillover
+        is impossible and there is no sense in the repeating.</para>
+      </listitem>
+    </orderedlist>
+    <note><para>The SEL feature does not require clients to understand the SEL
+    format of already created files, only the MDS support is needed which is
+    introduced in Lustre 2.13.  However, old clients will have some limitations
+    as the Lustre tools will not support it.</para></note>
+    <section>
+      <title><literal>lfs setstripe</literal></title>
+      <para>The <literal>lfs setstripe</literal> command is used to create files
+      with composite layouts, as well as add or delete components to or from an
+      existing file. It is extended to support SEL components.</para>
+      <section>
+        <title>Create a SEL file</title>
+        <para><emphasis role="bold">Command</emphasis></para>
+	<screen>lfs setstripe
+[--component-end|-E end1] [STRIPE_OPTIONS] ... <replaceable>filename</replaceable>
+
+STRIPE OPTIONS:
+--extension-size, --ext-size, -z &lt;ext_size&gt;</screen>
+        <para>The <literal>-z</literal> option is added to specify the size of
+        the region which is granted to the extendable component on each
+        iteration. While declaring any component, this option turns the declared
+        component to a pair of components: extendable and extension ones.</para>
+        <para><emphasis role="bold">Example</emphasis></para>
+        <para>The following command creates 2 pairs of extendable and
+        extension components:
+        <screen># lfs setstripe -E 1G -z 64M -E -1 -z 256M /mnt/lustre/file</screen>
+        <figure  xml:id="managinglayout.fig.sel_createfile">
+          <title>Example: create a SEL file</title>
+          <mediaobject>
+            <imageobject>
+              <imagedata scalefit="1" depth="0.8in" align="center"
+              fileref="figures/SEL_Createfile.png" />
+            </imageobject>
+            <textobject>
+              <phrase>Example: create a SEL file</phrase>
+            </textobject>
+          </mediaobject>
+        </figure>
+        </para>
+	<note><para>As usual, only the first PFL component is instantiated at
+	the creation time, thus it is immediately extended to the extension
+	size (64M for the first component), whereas the third component is left
+	zero-length.</para></note>
+        <screen># lfs getstripe /mnt/lustre/file
+/mnt/lustre/file
+  lcm_layout_gen: 4
+  lcm_mirror_count: 1
+  lcm_entry_count: 4
+    lcme_id: 1
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end: 67108864
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
+
+    lcme_id: 2
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end: 1073741824
+      lmm_stripe_count: 0
+      lmm_extension_size: 67108864
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1
+ 
+    lcme_id: 3
+    lcme_mirror_id: 0
+    lcme_flags: 0
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end: 1073741824
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1
+ 
+    lcme_id: 4
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end: EOF
+      lmm_stripe_count: 0
+      lmm_extension_size: 268435456
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1</screen>
+      </section>
+      <section>
+        <title>Create a SEL layout template</title>
+        <para>Similar to PFL, it is possible to set a SEL layout template to
+        a directory. After that, all the files created under it will inherit this
+	layout by default.</para>
+	<screen># lfs setstripe -E 1G -z 64M -E -1 -z 256M /mnt/lustre/dir
+# ./lustre/utils/lfs getstripe  /mnt/lustre/dir
+/mnt/lustre/dir
+  lcm_layout_gen:    0
+  lcm_mirror_count:  1
+  lcm_entry_count:   4
+    lcme_id:             N/A
+    lcme_mirror_id:      N/A
+    lcme_flags:          0
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   67108864
+      stripe_count:  1       stripe_size:   1048576       pattern:       raid0       stripe_offset: -1
+
+    lcme_id:             N/A
+    lcme_mirror_id:      N/A
+    lcme_flags:          extension
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   1073741824
+      stripe_count:  1       extension_size: 67108864       pattern:       raid0       stripe_offset: -1
+
+    lcme_id:             N/A
+    lcme_mirror_id:      N/A
+    lcme_flags:          0
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end:   1073741824
+      stripe_count:  1       stripe_size:   1048576       pattern:       raid0       stripe_offset: -1
+
+    lcme_id:             N/A
+    lcme_mirror_id:      N/A
+    lcme_flags:          extension
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end:   EOF
+      stripe_count:  1       extension_size: 268435456       pattern:       raid0       stripe_offset: -1
+	</screen>
+      </section>
+    </section>
+    <section>
+      <title><literal>lfs getstripe</literal></title>
+      <para><literal>lfs getstripe</literal> commands can be used to list the
+      striping/component information for a given SEL file. Here, only those parameters
+      new for SEL files are shown.</para>
+      <para><emphasis role="bold">Command</emphasis></para>
+      <screen>lfs getstripe
+[--extension-size|--ext-size|-z] <replaceable>filename</replaceable></screen>
+      <para>The <literal>-z</literal> option is added to print the extension
+      size in bytes. For composite files this is the extension size of the
+      first extension component. If a particular component is identified by
+      other options (<literal>--component-id, --component-start</literal>,
+      etc...), this component extension size is printed.</para>
+      <para><emphasis role="bold">Example 1: List a SEL component information
+      </emphasis></para>
+      <para>Suppose we already have a composite file
+        <literal>/mnt/lustre/file</literal>, created by the following command:</para>
+      <screen># lfs setstripe -E 1G -z 64M -E -1 -z 256M /mnt/lustre/file</screen>
+      <para>The 2nd component could be listed with the following command:</para>
+      <screen># lfs getstripe -I2 /mnt/lustre/file
+/mnt/lustre/file
+  lcm_layout_gen: 4
+  lcm_mirror_count: 1
+  lcm_entry_count: 4
+    lcme_id: 2
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end: 1073741824
+      lmm_stripe_count: 0
+      lmm_extension_size: 67108864
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1
+      </screen>
+      <note><para>As you can see the SEL components are marked by the <literal>
+      extension</literal> flag and <literal>lmm_extension_size</literal> field
+      keeps the specified extension size.</para></note>
+      <para><emphasis role="bold">Example 2: List the extension size</emphasis></para>
+      <para>Having the same file as in the above example, the extension size of
+      the second component could be listed with:</para>
+      <screen># lfs getstripe -z -I2 /mnt/lustre/file
+67108864</screen>
+      <para><emphasis role="bold">Example 3: Extension</emphasis></para>
+      <para>Having the same file as in the above example, suppose there is a
+      write which crosses the end of the first component (64M), and then another
+      write another write which crosses the end of the first component (128M) again,
+      the layout changes as following:</para>
+      <figure  xml:id="managinglayout.fig.sel_extension">
+        <title>Example: an extension of a SEL file</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" depth="3.5in" align="center"
+            fileref="figures/SEL_extension.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Example: an extension of a SEL file</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <para>The layout can be printed out by the following command:</para>
+      <screen># lfs getstripe /mnt/lustre/file
+/mnt/lustre/file
+  lcm_layout_gen: 6
+  lcm_mirror_count: 1
+  lcm_entry_count: 4
+    lcme_id: 1
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end: 201326592
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
+ 
+    lcme_id: 2
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 201326592
+    lcme_extent.e_end: 1073741824
+      lmm_stripe_count: 0
+      lmm_extension_size: 67108864
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1
+ 
+    lcme_id: 3
+    lcme_mirror_id: 0
+    lcme_flags: 0
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end: 1073741824
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1
+ 
+    lcme_id: 4
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 1073741824
+    lcme_extent.e_end: EOF
+      lmm_stripe_count: 0
+      lmm_extension_size: 268435456
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1</screen>
+      <para><emphasis role="bold">Example 4: Spillover</emphasis></para>
+      <para>In case where <literal>OST0</literal> is low on space and an IO
+      happens to a SEL component, a spillover happens: the full region of the
+      SEL component is added to the next component, e.g. in the example above
+      the next layout modification will look like:</para>
+      <figure  xml:id="managinglayout.fig.sel_spillover">
+        <title>Example: a spillover in a SEL file</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" depth="2.25in" align="center"
+            fileref="figures/SEL_spillover.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Example: a spillover in a SEL file</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <note><para>Despite the fact the third component was [1G, 1G] originally,
+      while it is not instantiated, instead of getting extended backward, it is
+      moved backward to the start of the previous SEL component (192M) and
+      extended on its extension size (256M) from that position, thus it becomes
+      <literal>[192M, 448M]</literal>.</para></note>
+      <screen># lfs getstripe /mnt/lustre/file
+/mnt/lustre/file
+  lcm_layout_gen: 7
+  lcm_mirror_count: 1
+  lcm_entry_count: 3
+    lcme_id: 1
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end: 201326592
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
+ 
+    lcme_id: 3
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 201326592
+    lcme_extent.e_end: 469762048
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 1
+      lmm_objects:
+      - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x8:0x0] }
+ 
+    lcme_id: 4
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 469762048
+    lcme_extent.e_end: EOF
+      lmm_stripe_count: 0
+      lmm_extension_size: 268435456
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1</screen>
+      <para><emphasis role="bold">Example 5: Repeating</emphasis></para>
+      <para>Suppose in the example above, <literal>OST0</literal> got
+      enough free space back but <literal>OST1</literal> is low on space,
+      the following write to the last SEL component leads to a new component
+      allocation before the SEL component, which repeats the previous
+      component layout but instantiated on free OSTs:</para>
+      <figure  xml:id="managinglayout.fig.sel_repeat">
+        <title>Example: repeat a SEL component</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" depth="2.25in" align="center"
+            fileref="figures/SEL_repeating.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Example: repeat a SEL component
+            </phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <screen># lfs getstripe /mnt/lustre/file
+/mnt/lustre/file
+  lcm_layout_gen: 9
+  lcm_mirror_count: 1
+  lcm_entry_count: 4
+    lcme_id: 1
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end: 201326592
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
+
+    lcme_id: 3
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 201326592
+    lcme_extent.e_end: 469762048
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 1
+      lmm_objects:
+      - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x8:0x0] }
+ 
+    lcme_id: 8
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 469762048
+    lcme_extent.e_end: 738197504
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 65535
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x6:0x0] }
+ 
+    lcme_id: 4
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 738197504
+    lcme_extent.e_end: EOF
+      lmm_stripe_count: 0
+      lmm_extension_size: 268435456
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1</screen>
+      <para><emphasis role="bold">Example 6: Forced extension</emphasis></para>
+      <para>Suppose in the example above, both <literal>OST0</literal> and
+      <literal>OST1</literal> are low on space, the following write to the
+      last SEL component will behave as an extension as there is no sense to
+      repeat.</para>
+      <figure  xml:id="managinglayout.fig.pfl_forced">
+        <title>Example: forced extension in a SEL file</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" depth="2.25in" align="center"
+            fileref="figures/SEL_forced.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Example: forced extension in a SEL file.
+            </phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <screen># lfs getstripe /mnt/lustre/file
+/mnt/lustre/file
+  lcm_layout_gen: 11
+  lcm_mirror_count: 1
+  lcm_entry_count: 4
+    lcme_id: 1
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end: 201326592
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
+
+    lcme_id: 3
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 201326592
+    lcme_extent.e_end: 469762048
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: 1
+      lmm_objects:
+      - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x8:0x0] }
+
+    lcme_id: 8
+    lcme_mirror_id: 0
+    lcme_flags: init
+    lcme_extent.e_start: 469762048
+    lcme_extent.e_end: 1006632960
+      lmm_stripe_count: 1
+      lmm_stripe_size: 1048576
+      lmm_pattern: raid0
+      lmm_layout_gen: 65535
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x6:0x0] }
+ 
+    lcme_id: 4
+    lcme_mirror_id: 0
+    lcme_flags: extension
+    lcme_extent.e_start: 1006632960
+    lcme_extent.e_end: EOF
+      lmm_stripe_count: 0
+      lmm_extension_size: 268435456
+      lmm_pattern: raid0
+      lmm_layout_gen: 0
+      lmm_stripe_offset: -1</screen>
+    </section>
+    <section>
+        <title><literal>lfs find</literal></title>
+	<para><literal>lfs find</literal> commands can be used to search for
+        the files that match the given SEL component paremeters. Here, only
+	those parameters new for the SEL files are shown.</para>
+	<screen>lfs find
+[[!] --extension-size|--ext-size|-z [+-]ext-size[KMG]
+[[!] --component-flags=extension]</screen>
+        <para>The <literal>-z</literal> option is added to specify the extension
+        size to search for.  The files which have any component with the
+        extension size matched the given criteria are printed out. As always
+        “+” and “-“ signs are allowed to specify the least and the most size.
+        </para>
+        <para>A new <literal>extension</literal> component flag is added.  Only
+        files which have at least one SEL component are printed.</para>
+	<note><para>The negative search for flags searches the files which
+	<emphasis role="strong">have</emphasis> a non-SEL component (not files
+	which <emphasis role="strong">do not have</emphasis> any SEL component).
+	</para></note>
+        <para><emphasis role="bold">Example</emphasis></para>
+        <screen># lfs setstripe --extension-size 64M -c 1 -E -1 /mnt/lustre/file
+
+# lfs find --comp-flags extension /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find ! --comp-flags extension /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find -z 64M /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find -z +64M /mnt/lustre/*
+
+# lfs find -z -64M /mnt/lustre/*
+
+# lfs find -z +63M /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find -z -65M /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find -z 65M /mnt/lustre/*
+
+# lfs find ! -z 64M /mnt/lustre/*
+
+# lfs find ! -z +64M /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find ! -z -64M /mnt/lustre/*
+/mnt/lustre/file
+
+# lfs find ! -z +63M /mnt/lustre/*
+
+# lfs find ! -z -65M /mnt/lustre/*
+
+# lfs find ! -z 65M /mnt/lustre/*
+/mnt/lustre/file</screen>
+    </section>
+  </section>
   <section xml:id="dbdoclet.50438209_10424">
     <title><indexterm>
         <primary>space</primary>
