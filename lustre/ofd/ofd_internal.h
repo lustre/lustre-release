@@ -152,7 +152,7 @@ struct ofd_device {
 	/* Protect ::ofd_lastid_rebuilding */
 	struct rw_semaphore	 ofd_lastid_rwsem;
 	__u64			 ofd_lastid_gen;
-	struct ptlrpc_thread	 ofd_inconsistency_thread;
+	struct task_struct	*ofd_inconsistency_task;
 	struct list_head	 ofd_inconsistency_list;
 	spinlock_t		 ofd_inconsistency_lock;
 	/* Backwards compatibility */

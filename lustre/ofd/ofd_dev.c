@@ -2959,7 +2959,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_soft_sync_limit = OFD_SOFT_SYNC_LIMIT_DEFAULT;
 
 	m->ofd_seq_count = 0;
-	init_waitqueue_head(&m->ofd_inconsistency_thread.t_ctl_waitq);
 	INIT_LIST_HEAD(&m->ofd_inconsistency_list);
 	spin_lock_init(&m->ofd_inconsistency_lock);
 

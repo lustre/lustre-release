@@ -147,6 +147,17 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 	OBD_FREE_PTR(oii);
 }
 
+struct oivm_args {
+	struct ofd_device	*od_ofd;
+	struct lu_env		od_env;
+	struct lfsck_req_local	od_lrl;
+	struct completion	*od_started;
+};
+
+#ifndef TASK_IDLE
+#define TASK_IDLE TASK_INTERRUPTIBLE
+#endif
+
 /**
  * Verification thread to check parent FID consistency.
  *
@@ -158,52 +169,39 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
  * \retval		0 on successful thread termination
  * \retval		negative value if thread can't start
  */
-static int ofd_inconsistency_verification_main(void *args)
+static int ofd_inconsistency_verification_main(void *_args)
 {
-	struct lu_env env;
-	struct ofd_device *ofd = args;
-	struct ptlrpc_thread *thread = &ofd->ofd_inconsistency_thread;
+	struct oivm_args *args = _args;
+	struct lu_env *env = &args->od_env;
+	struct ofd_device *ofd = args->od_ofd;
 	struct ofd_inconsistency_item *oii;
-	struct lfsck_req_local *lrl = NULL;
-	int rc;
+	struct lfsck_req_local *lrl = &args->od_lrl;
 	ENTRY;
-
-	rc = lu_env_init(&env, LCT_DT_THREAD);
-	spin_lock(&ofd->ofd_inconsistency_lock);
-	thread_set_flags(thread, rc ? SVC_STOPPED : SVC_RUNNING);
-	wake_up_all(&thread->t_ctl_waitq);
-	spin_unlock(&ofd->ofd_inconsistency_lock);
-	if (rc)
-		RETURN(rc);
-
-	OBD_ALLOC_PTR(lrl);
-	if (unlikely(!lrl))
-		GOTO(out_unlocked, rc = -ENOMEM);
 
 	lrl->lrl_event = LEL_PAIRS_VERIFY_LOCAL;
 	lrl->lrl_active = LFSCK_TYPE_LAYOUT;
+	complete(args->od_started);
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
-	while (1) {
-		if (unlikely(!thread_is_running(thread)))
-			break;
+	while (({set_current_state(TASK_IDLE);
+		 !kthread_should_stop(); })) {
 
 		while (!list_empty(&ofd->ofd_inconsistency_list)) {
+			__set_current_state(TASK_RUNNING);
 			oii = list_entry(ofd->ofd_inconsistency_list.next,
 					 struct ofd_inconsistency_item,
 					 oii_list);
 			list_del_init(&oii->oii_list);
 			spin_unlock(&ofd->ofd_inconsistency_lock);
-			ofd_inconsistency_verify_one(&env, ofd, oii, lrl);
+			ofd_inconsistency_verify_one(env, ofd, oii, lrl);
 			spin_lock(&ofd->ofd_inconsistency_lock);
 		}
 
 		spin_unlock(&ofd->ofd_inconsistency_lock);
-		wait_event_idle(thread->t_ctl_waitq,
-				!list_empty(&ofd->ofd_inconsistency_list) ||
-				!thread_is_running(thread));
+		schedule();
 		spin_lock(&ofd->ofd_inconsistency_lock);
 	}
+	__set_current_state(TASK_RUNNING);
 
 	while (!list_empty(&ofd->ofd_inconsistency_list)) {
 		struct ofd_object *fo;
@@ -215,28 +213,20 @@ static int ofd_inconsistency_verification_main(void *args)
 		fo = oii->oii_obj;
 		spin_unlock(&ofd->ofd_inconsistency_lock);
 
-		ofd_write_lock(&env, fo);
+		ofd_write_lock(env, fo);
 		fo->ofo_pfid_checking = 0;
-		ofd_write_unlock(&env, fo);
+		ofd_write_unlock(env, fo);
 
-		ofd_object_put(&env, fo);
+		ofd_object_put(env, fo);
 		OBD_FREE_PTR(oii);
 		spin_lock(&ofd->ofd_inconsistency_lock);
 	}
 
-	OBD_FREE_PTR(lrl);
-
-	GOTO(out, rc = 0);
-
-out_unlocked:
-	spin_lock(&ofd->ofd_inconsistency_lock);
-out:
-	thread_set_flags(thread, SVC_STOPPED);
 	spin_unlock(&ofd->ofd_inconsistency_lock);
-	wake_up_all(&thread->t_ctl_waitq);
-	lu_env_fini(&env);
 
-	return rc;
+	lu_env_fini(&args->od_env);
+	OBD_FREE_PTR(args);
+	return 0;
 }
 
 /**
@@ -251,30 +241,50 @@ out:
  */
 int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
 {
-	struct ptlrpc_thread	*thread = &ofd->ofd_inconsistency_thread;
 	struct task_struct	*task;
+	struct oivm_args	*args;
+	DECLARE_COMPLETION_ONSTACK(started);
 	int			 rc;
 
-	spin_lock(&ofd->ofd_inconsistency_lock);
-	if (unlikely(thread_is_running(thread))) {
-		spin_unlock(&ofd->ofd_inconsistency_lock);
-
+	if (ofd->ofd_inconsistency_task)
 		return -EALREADY;
+
+	OBD_ALLOC_PTR(args);
+	if (!args)
+		return -ENOMEM;
+	rc = lu_env_init(&args->od_env, LCT_DT_THREAD);
+	if (rc) {
+		OBD_FREE_PTR(args);
+		return rc;
 	}
 
-	thread_set_flags(thread, 0);
-	spin_unlock(&ofd->ofd_inconsistency_lock);
-	task = kthread_run(ofd_inconsistency_verification_main, ofd,
-			   "inconsistency_verification");
+	args->od_ofd = ofd;
+	args->od_started = &started;
+	task = kthread_create(ofd_inconsistency_verification_main, args,
+			      "inconsistency_verification");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start self_repair thread: rc = %d\n",
 		       ofd_name(ofd), rc);
 	} else {
 		rc = 0;
-		wait_event_idle(thread->t_ctl_waitq,
-				thread_is_running(thread) ||
-				thread_is_stopped(thread));
+		spin_lock(&ofd->ofd_inconsistency_lock);
+		if (ofd->ofd_inconsistency_task)
+			rc = -EALREADY;
+		else
+			ofd->ofd_inconsistency_task = task;
+		spin_unlock(&ofd->ofd_inconsistency_lock);
+
+		if (rc)
+			kthread_stop(task);
+		else {
+			wake_up_process(task);
+			wait_for_completion(&started);
+		}
+	}
+	if (rc) {
+		lu_env_fini(&args->od_env);
+		OBD_FREE_PTR(args);
 	}
 
 	return rc;
@@ -290,20 +300,16 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd)
  */
 int ofd_stop_inconsistency_verification_thread(struct ofd_device *ofd)
 {
-	struct ptlrpc_thread	*thread = &ofd->ofd_inconsistency_thread;
+	struct task_struct *task;
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
-	if (thread_is_init(thread) || thread_is_stopped(thread)) {
-		spin_unlock(&ofd->ofd_inconsistency_lock);
-
-		return -EALREADY;
-	}
-
-	thread_set_flags(thread, SVC_STOPPING);
+	task = ofd->ofd_inconsistency_task;
+	ofd->ofd_inconsistency_task = NULL;
 	spin_unlock(&ofd->ofd_inconsistency_lock);
-	wake_up_all(&thread->t_ctl_waitq);
-	wait_event_idle(thread->t_ctl_waitq,
-			thread_is_stopped(thread));
+
+	if (!task)
+		return -EALREADY;
+	kthread_stop(task);
 
 	return 0;
 }
@@ -351,9 +357,9 @@ static void ofd_add_inconsistency_item(const struct lu_env *env,
 	if (list_empty(&ofd->ofd_inconsistency_list))
 		wakeup = true;
 	list_add_tail(&oii->oii_list, &ofd->ofd_inconsistency_list);
+	if (wakeup && ofd->ofd_inconsistency_task)
+		wake_up_process(ofd->ofd_inconsistency_task);
 	spin_unlock(&ofd->ofd_inconsistency_lock);
-	if (wakeup)
-		wake_up_all(&ofd->ofd_inconsistency_thread.t_ctl_waitq);
 
 	/* XXX: When the found inconsistency exceeds some threshold,
 	 *	we can trigger the LFSCK to scan part of the system
