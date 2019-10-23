@@ -126,7 +126,7 @@ sa_unhash(struct ll_statahead_info *sai, struct sa_entry *entry)
 }
 
 static inline int agl_should_run(struct ll_statahead_info *sai,
-                                 struct inode *inode)
+				 struct inode *inode)
 {
 	return (inode != NULL && S_ISREG(inode->i_mode) && sai->sai_agl_valid);
 }
@@ -438,13 +438,12 @@ static void ll_agl_add(struct ll_statahead_info *sai,
 		if (agl_list_empty(sai))
 			added = 1;
 		list_add_tail(&child->lli_agl_list, &sai->sai_agls);
+		if (added && sai->sai_agl_task)
+			wake_up_process(sai->sai_agl_task);
 		spin_unlock(&parent->lli_agl_lock);
 	} else {
 		spin_unlock(&child->lli_agl_lock);
 	}
-
-	if (added > 0)
-		wake_up(&sai->sai_agl_thread.t_ctl_waitq);
 }
 
 /* allocate sai */
@@ -465,7 +464,6 @@ static struct ll_statahead_info *ll_sai_alloc(struct dentry *dentry)
 	sai->sai_index = 1;
 	init_waitqueue_head(&sai->sai_waitq);
 	init_waitqueue_head(&sai->sai_thread.t_ctl_waitq);
-	init_waitqueue_head(&sai->sai_agl_thread.t_ctl_waitq);
 
 	INIT_LIST_HEAD(&sai->sai_interim_entries);
 	INIT_LIST_HEAD(&sai->sai_entries);
@@ -528,7 +526,7 @@ static void ll_sai_put(struct ll_statahead_info *sai)
 		spin_unlock(&lli->lli_sa_lock);
 
 		LASSERT(thread_is_stopped(&sai->sai_thread));
-		LASSERT(thread_is_stopped(&sai->sai_agl_thread));
+		LASSERT(!sai->sai_agl_task);
 		LASSERT(sai->sai_sent == sai->sai_replied);
 		LASSERT(!sa_has_callback(sai));
 
@@ -878,6 +876,10 @@ static void sa_statahead(struct dentry *parent, const char *name, int len,
 	EXIT;
 }
 
+#ifndef TASK_IDLE
+#define TASK_IDLE TASK_INTERRUPTIBLE
+#endif
+
 /* async glimpse (agl) thread main function */
 static int ll_agl_thread(void *arg)
 {
@@ -885,39 +887,20 @@ static int ll_agl_thread(void *arg)
 	struct inode *dir = parent->d_inode;
 	struct ll_inode_info *plli = ll_i2info(dir);
 	struct ll_inode_info *clli;
-	struct ll_sb_info *sbi = ll_i2sbi(dir);
-	struct ll_statahead_info *sai;
-	struct ptlrpc_thread *thread;
+	/* We already own this reference, so it is safe to take it
+	 * without a lock.
+	 */
+	struct ll_statahead_info *sai = plli->lli_sai;
 	ENTRY;
 
-	sai = ll_sai_get(dir);
-	thread = &sai->sai_agl_thread;
-	thread->t_pid = current_pid();
 	CDEBUG(D_READA, "agl thread started: sai %p, parent %.*s\n",
 	       sai, parent->d_name.len, parent->d_name.name);
 
-	atomic_inc(&sbi->ll_agl_total);
-	spin_lock(&plli->lli_agl_lock);
-	sai->sai_agl_valid = 1;
-	if (thread_is_init(thread))
-		/* If someone else has changed the thread state
-		 * (e.g. already changed to SVC_STOPPING), we can't just
-		 * blindly overwrite that setting. */
-		thread_set_flags(thread, SVC_RUNNING);
-	spin_unlock(&plli->lli_agl_lock);
-	wake_up(&thread->t_ctl_waitq);
-
-	while (1) {
-		wait_event_idle(thread->t_ctl_waitq,
-				!agl_list_empty(sai) ||
-				!thread_is_running(thread));
-		if (!thread_is_running(thread))
-			break;
-
+	while (({set_current_state(TASK_IDLE);
+		 !kthread_should_stop(); })) {
 		spin_lock(&plli->lli_agl_lock);
-		/* The statahead thread maybe help to process AGL entries,
-		 * so check whether list empty again. */
 		if (!agl_list_empty(sai)) {
+			__set_current_state(TASK_RUNNING);
 			clli = agl_first_entry(sai);
 			list_del_init(&clli->lli_agl_list);
 			spin_unlock(&plli->lli_agl_lock);
@@ -925,8 +908,30 @@ static int ll_agl_thread(void *arg)
 			cond_resched();
 		} else {
 			spin_unlock(&plli->lli_agl_lock);
+			schedule();
 		}
 	}
+	__set_current_state(TASK_RUNNING);
+	RETURN(0);
+}
+
+static void ll_stop_agl(struct ll_statahead_info *sai)
+{
+	struct dentry *parent = sai->sai_dentry;
+	struct ll_inode_info *plli = ll_i2info(parent->d_inode);
+	struct ll_inode_info *clli;
+	struct task_struct *agl_task;
+
+	spin_lock(&plli->lli_agl_lock);
+	agl_task = sai->sai_agl_task;
+	sai->sai_agl_task = NULL;
+	spin_unlock(&plli->lli_agl_lock);
+	if (!agl_task)
+		return;
+
+	CDEBUG(D_READA, "stop agl thread: sai %p pid %u\n",
+	       sai, (unsigned int)agl_task->pid);
+	kthread_stop(agl_task);
 
 	spin_lock(&plli->lli_agl_lock);
 	sai->sai_agl_valid = 0;
@@ -938,37 +943,37 @@ static int ll_agl_thread(void *arg)
 		iput(&clli->lli_vfs_inode);
 		spin_lock(&plli->lli_agl_lock);
 	}
-	thread_set_flags(thread, SVC_STOPPED);
 	spin_unlock(&plli->lli_agl_lock);
-	wake_up(&thread->t_ctl_waitq);
-	ll_sai_put(sai);
 	CDEBUG(D_READA, "agl thread stopped: sai %p, parent %.*s\n",
 	       sai, parent->d_name.len, parent->d_name.name);
-	RETURN(0);
+	ll_sai_put(sai);
 }
 
 /* start agl thread */
 static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 {
-	struct ptlrpc_thread *thread = &sai->sai_agl_thread;
 	struct ll_inode_info  *plli;
-	struct task_struct	      *task;
+	struct task_struct    *task;
 	ENTRY;
 
 	CDEBUG(D_READA, "start agl thread: sai %p, parent %.*s\n",
 	       sai, parent->d_name.len, parent->d_name.name);
 
 	plli = ll_i2info(parent->d_inode);
-	task = kthread_run(ll_agl_thread, parent,
-			       "ll_agl_%u", plli->lli_opendir_pid);
+	task = kthread_create(ll_agl_thread, parent,
+			      "ll_agl_%u", plli->lli_opendir_pid);
 	if (IS_ERR(task)) {
 		CERROR("can't start ll_agl thread, rc: %ld\n", PTR_ERR(task));
-		thread_set_flags(thread, SVC_STOPPED);
 		RETURN_EXIT;
 	}
+	sai->sai_agl_task = task;
+	sai->sai_agl_valid = 1;
+	atomic_inc(&ll_i2sbi(d_inode(parent))->ll_agl_total);
+	/* Get an extra reference that the thread holds */
+	ll_sai_get(d_inode(parent));
 
-	wait_event_idle(thread->t_ctl_waitq,
-			thread_is_running(thread) || thread_is_stopped(thread));
+	wake_up_process(task);
+
 	EXIT;
 }
 
@@ -981,7 +986,6 @@ static int ll_statahead_thread(void *arg)
 	struct ll_sb_info *sbi = ll_i2sbi(dir);
 	struct ll_statahead_info *sai;
 	struct ptlrpc_thread *sa_thread;
-	struct ptlrpc_thread *agl_thread;
 	int first = 0;
 	struct md_op_data *op_data;
 	struct ll_dir_chain chain;
@@ -992,7 +996,6 @@ static int ll_statahead_thread(void *arg)
 
 	sai = ll_sai_get(dir);
 	sa_thread = &sai->sai_thread;
-	agl_thread = &sai->sai_agl_thread;
 	sa_thread->t_pid = current_pid();
 	CDEBUG(D_READA, "statahead thread starting: sai %p, parent %.*s\n",
 	       sai, parent->d_name.len, parent->d_name.name);
@@ -1162,20 +1165,7 @@ static int ll_statahead_thread(void *arg)
 
 	EXIT;
 out:
-	if (sai->sai_agl_valid) {
-		spin_lock(&lli->lli_agl_lock);
-		thread_set_flags(agl_thread, SVC_STOPPING);
-		spin_unlock(&lli->lli_agl_lock);
-		wake_up(&agl_thread->t_ctl_waitq);
-
-		CDEBUG(D_READA, "stop agl thread: sai %p pid %u\n",
-		       sai, (unsigned int)agl_thread->t_pid);
-		wait_event_idle(agl_thread->t_ctl_waitq,
-				thread_is_stopped(agl_thread));
-	} else {
-		/* Set agl_thread flags anyway. */
-		thread_set_flags(agl_thread, SVC_STOPPED);
-	}
+	ll_stop_agl(sai);
 
 	/* wait for inflight statahead RPCs to finish, and then we can free sai
 	 * safely because statahead RPC will access sai data */
