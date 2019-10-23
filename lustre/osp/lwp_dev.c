@@ -50,7 +50,7 @@ struct lwp_device {
 	struct lu_device	lpd_dev;
 	struct obd_device      *lpd_obd;   /* corresponding OBD device */
 	struct obd_export      *lpd_exp;   /* export of LWP */
-	struct ptlrpc_thread	lpd_notify_thread; /* notify thread */
+	struct task_struct     *lpd_notify_task; /* notify thread */
 	int			lpd_connects; /* use count, 0 or 1 */
 };
 
@@ -87,8 +87,7 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	int			 rc;
 	ENTRY;
 
-	thread_set_flags(&lwp->lpd_notify_thread, SVC_STOPPED);
-	init_waitqueue_head(&lwp->lpd_notify_thread.t_ctl_waitq);
+	lwp->lpd_notify_task = NULL;
 
 	OBD_ALLOC_PTR(bufs);
 	if (bufs == NULL)
@@ -368,11 +367,15 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 					 struct lu_device *ludev)
 {
 	struct lwp_device	*m = lu2lwp_dev(ludev);
-	struct ptlrpc_thread	*thread = &m->lpd_notify_thread;
+	struct task_struct	*task = NULL;
 	int			 rc;
 	ENTRY;
 
-	wait_event_idle(thread->t_ctl_waitq, thread_is_stopped(thread));
+	task = xchg(&m->lpd_notify_task, NULL);
+	if (task) {
+		kthread_stop(task);
+		class_export_put(m->lpd_exp);
+	}
 
 	if (m->lpd_exp != NULL)
 		class_disconnect(m->lpd_exp);
@@ -405,22 +408,23 @@ static int lwp_notify_main(void *args)
 {
 	struct obd_export	*exp = (struct obd_export *)args;
 	struct lwp_device	*lwp;
-	struct ptlrpc_thread	*thread;
 
 	LASSERT(exp != NULL);
-	class_export_get(exp);
 
 	lwp = lu2lwp_dev(exp->exp_obd->obd_lu_dev);
-	thread = &lwp->lpd_notify_thread;
-
-	thread_set_flags(thread, SVC_RUNNING);
-	wake_up(&thread->t_ctl_waitq);
 
 	lustre_notify_lwp_list(exp);
 
-	class_export_put(exp);
-	thread_set_flags(thread, SVC_STOPPED);
-	wake_up(&thread->t_ctl_waitq);
+	if (xchg(&lwp->lpd_notify_task, NULL) == NULL)
+		/* lwp_device_fini() is waiting for me
+		 * Note that the wakeup comes direct from
+		 * kthread_stop, not from wake_up_var().
+		 * lwp_device_fini() will call class_export_put().
+		 */
+		wait_var_event(lwp, kthread_should_stop());
+	else
+		class_export_put(exp);
+
 	return 0;
 }
 
@@ -432,33 +436,31 @@ static int lwp_notify_main(void *args)
 static void lwp_notify_users(struct obd_export *exp)
 {
 	struct lwp_device	*lwp;
-	struct ptlrpc_thread	*thread;
 	struct task_struct	*task;
 	char			 name[MTI_NAME_MAXLEN];
 
 	LASSERT(exp != NULL);
 	lwp = lu2lwp_dev(exp->exp_obd->obd_lu_dev);
-	thread = &lwp->lpd_notify_thread;
 
 	snprintf(name, MTI_NAME_MAXLEN, "lwp_notify_%s",
 		 exp->exp_obd->obd_name);
 
 	/* Notify happens only on LWP setup, so there shouldn't
 	 * be notify thread running */
-	if (!thread_is_stopped(thread)) {
+	if (lwp->lpd_notify_task) {
 		CERROR("LWP notify thread: %s wasn't stopped\n", name);
 		return;
 	}
 
-	task = kthread_run(lwp_notify_main, exp, name);
+	task = kthread_create(lwp_notify_main, exp, name);
 	if (IS_ERR(task)) {
-		thread_set_flags(thread, SVC_STOPPED);
 		CERROR("Failed to start LWP notify thread:%s. %lu\n",
 		       name, PTR_ERR(task));
+	} else {
+		lwp->lpd_notify_task = task;
+		class_export_get(exp);
+		wake_up_process(task);
 	}
-
-	wait_event_idle(thread->t_ctl_waitq,
-			thread_is_running(thread) || thread_is_stopped(thread));
 }
 
 /**
