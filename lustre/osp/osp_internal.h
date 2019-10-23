@@ -142,6 +142,10 @@ struct osp_updates {
 	 * those stale RPC(with older generation) will not be sent, otherwise it
 	 * will cause update lllog corruption */
 	__u64			ou_generation;
+
+	/* dedicate update thread */
+	struct task_struct	*ou_update_task;
+	struct lu_env		ou_env;
 };
 
 struct osp_rpc_lock {
@@ -201,8 +205,6 @@ struct osp_device {
 
 	/* send update thread */
 	struct osp_updates		*opd_update;
-	/* dedicate update thread */
-	struct ptlrpc_thread		 opd_update_thread;
 
 	/*
 	 * OST synchronization thread
@@ -737,16 +739,6 @@ int osp_object_update_request_create(struct osp_update_request *our,
 	}								\
 	ret;								\
 })
-
-static inline bool osp_send_update_thread_running(struct osp_device *osp)
-{
-	return osp->opd_update_thread.t_flags & SVC_RUNNING;
-}
-
-static inline bool osp_send_update_thread_stopped(struct osp_device *osp)
-{
-	return osp->opd_update_thread.t_flags & SVC_STOPPED;
-}
 
 typedef int (*osp_update_interpreter_t)(const struct lu_env *env,
 					struct object_update_reply *rep,

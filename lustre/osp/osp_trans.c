@@ -1431,49 +1431,41 @@ void osp_invalidate_request(struct osp_device *osp)
  */
 int osp_send_update_thread(void *arg)
 {
-	struct lu_env		env;
+	struct lu_env		*env;
 	struct osp_device	*osp = arg;
 	struct osp_updates	*ou = osp->opd_update;
-	struct ptlrpc_thread	*thread = &osp->opd_update_thread;
 	struct osp_update_request *our = NULL;
 	int			rc;
 	ENTRY;
 
 	LASSERT(ou != NULL);
-	rc = lu_env_init(&env, osp->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
-	if (rc < 0) {
-		CERROR("%s: init env error: rc = %d\n", osp->opd_obd->obd_name,
-		       rc);
-		RETURN(rc);
-	}
+	env = &ou->ou_env;
 
-	thread->t_flags = SVC_RUNNING;
-	wake_up(&thread->t_ctl_waitq);
 	while (1) {
 		our = NULL;
 		wait_event_idle(ou->ou_waitq,
-				!osp_send_update_thread_running(osp) ||
+				kthread_should_stop() ||
 				osp_get_next_request(ou, &our));
 
-		if (!osp_send_update_thread_running(osp)) {
+		if (kthread_should_stop()) {
 			if (our != NULL) {
-				osp_trans_callback(&env, our->our_th, -EINTR);
-				osp_thandle_put(&env, our->our_th);
+				osp_trans_callback(env, our->our_th, -EINTR);
+				osp_thandle_put(env, our->our_th);
 			}
 			break;
 		}
 
 		LASSERT(our->our_th != NULL);
 		if (our->our_th->ot_super.th_result != 0) {
-			osp_trans_callback(&env, our->our_th,
+			osp_trans_callback(env, our->our_th,
 				our->our_th->ot_super.th_result);
 			rc = our->our_th->ot_super.th_result;
 		} else if (ou->ou_generation != our->our_generation ||
 			   OBD_FAIL_CHECK(OBD_FAIL_INVALIDATE_UPDATE)) {
 			rc = -EIO;
-			osp_trans_callback(&env, our->our_th, rc);
+			osp_trans_callback(env, our->our_th, rc);
 		} else {
-			rc = osp_send_update_req(&env, osp, our);
+			rc = osp_send_update_req(env, osp, our);
 		}
 
 		/* Update the rpc version */
@@ -1490,12 +1482,8 @@ int osp_send_update_thread(void *arg)
 			osp_invalidate_request(osp);
 
 		/* Balanced for thandle_get in osp_check_and_set_rpc_version */
-		osp_thandle_put(&env, our->our_th);
+		osp_thandle_put(env, our->our_th);
 	}
-
-	thread->t_flags = SVC_STOPPED;
-	lu_env_fini(&env);
-	wake_up(&thread->t_ctl_waitq);
 
 	RETURN(0);
 }
@@ -1576,8 +1564,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		GOTO(out, rc);
 	}
 
-	if (osp->opd_update == NULL ||
-	    !osp_send_update_thread_running(osp)) {
+	if (osp->opd_update == NULL) {
 		osp_trans_callback(env, oth, -EIO);
 		GOTO(out, rc = -EIO);
 	}

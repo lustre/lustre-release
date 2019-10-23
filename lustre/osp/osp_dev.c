@@ -501,7 +501,8 @@ static int osp_disconnect(struct osp_device *d)
  */
 static int osp_update_init(struct osp_device *osp)
 {
-	struct task_struct	*task;
+	struct task_struct *task;
+	int rc;
 
 	ENTRY;
 
@@ -514,7 +515,6 @@ static int osp_update_init(struct osp_device *osp)
 	if (osp->opd_update == NULL)
 		RETURN(-ENOMEM);
 
-	init_waitqueue_head(&osp->opd_update_thread.t_ctl_waitq);
 	init_waitqueue_head(&osp->opd_update->ou_waitq);
 	spin_lock_init(&osp->opd_update->ou_lock);
 	INIT_LIST_HEAD(&osp->opd_update->ou_list);
@@ -522,12 +522,22 @@ static int osp_update_init(struct osp_device *osp)
 	osp->opd_update->ou_version = 1;
 	osp->opd_update->ou_generation = 0;
 
+	rc = lu_env_init(&osp->opd_update->ou_env,
+			 osp->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
+	if (rc < 0) {
+		CERROR("%s: init env error: rc = %d\n", osp->opd_obd->obd_name,
+		       rc);
+		OBD_FREE_PTR(osp->opd_update);
+		osp->opd_update = NULL;
+		RETURN(rc);
+	}
 	/* start thread handling sending updates to the remote MDT */
-	task = kthread_run(osp_send_update_thread, osp,
-			   "osp_up%u-%u", osp->opd_index, osp->opd_group);
+	task = kthread_create(osp_send_update_thread, osp,
+			      "osp_up%u-%u", osp->opd_index, osp->opd_group);
 	if (IS_ERR(task)) {
 		int rc = PTR_ERR(task);
 
+		lu_env_fini(&osp->opd_update->ou_env);
 		OBD_FREE_PTR(osp->opd_update);
 		osp->opd_update = NULL;
 		CERROR("%s: can't start precreate thread: rc = %d\n",
@@ -535,9 +545,8 @@ static int osp_update_init(struct osp_device *osp)
 		RETURN(rc);
 	}
 
-	wait_event_idle(osp->opd_update_thread.t_ctl_waitq,
-			osp_send_update_thread_running(osp) ||
-			osp_send_update_thread_stopped(osp));
+	osp->opd_update->ou_update_task = task;
+	wake_up_process(task);
 
 	RETURN(0);
 }
@@ -559,11 +568,8 @@ static void osp_update_fini(const struct lu_env *env, struct osp_device *osp)
 	if (ou == NULL)
 		return;
 
-	osp->opd_update_thread.t_flags = SVC_STOPPING;
-	wake_up(&ou->ou_waitq);
-
-	wait_event(osp->opd_update_thread.t_ctl_waitq,
-		   osp->opd_update_thread.t_flags & SVC_STOPPED);
+	kthread_stop(ou->ou_update_task);
+	lu_env_fini(&ou->ou_env);
 
 	/* Remove the left osp thandle from the list */
 	spin_lock(&ou->ou_lock);
