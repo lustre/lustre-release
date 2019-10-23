@@ -1476,7 +1476,7 @@ struct lu_tgt_desc {
 	__u32              ltd_index;
 	__u32		   ltd_gen;
 	struct list_head   ltd_kill;
-	struct ptlrpc_thread	*ltd_recovery_thread;
+	struct task_struct *ltd_recovery_task;
 	struct mutex	   ltd_fid_mutex;
 	struct lu_tgt_qos  ltd_qos; /* qos info per target */
 	struct obd_statfs  ltd_statfs;

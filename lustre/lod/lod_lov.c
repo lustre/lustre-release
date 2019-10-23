@@ -284,16 +284,10 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	RETURN(rc);
 out_fini_llog:
 	lod_sub_fini_llog(env, tgt_desc->ltd_tgt,
-			  tgt_desc->ltd_recovery_thread);
+			  &tgt_desc->ltd_recovery_task);
 out_ltd:
 	down_write(&ltd->ltd_rw_sem);
 	mutex_lock(&ltd->ltd_mutex);
-	if (!for_ost && LTD_TGT(ltd, index)->ltd_recovery_thread != NULL) {
-		struct ptlrpc_thread *thread;
-
-		thread = LTD_TGT(ltd, index)->ltd_recovery_thread;
-		OBD_FREE_PTR(thread);
-	}
 	lod_tgt_pool_remove(&ltd->ltd_tgt_pool, index);
 out_del_tgt:
 	ltd_del_tgt(ltd, tgt_desc);
@@ -333,9 +327,6 @@ static void __lod_del_device(const struct lu_env *env, struct lod_device *lod,
 {
 	lfsck_del_target(env, lod->lod_child, tgt->ltd_tgt, tgt->ltd_index,
 			 !ltd->ltd_is_mdt);
-
-	if (ltd->ltd_is_mdt && tgt->ltd_recovery_thread)
-		OBD_FREE_PTR(tgt->ltd_recovery_thread);
 
 	if (!tgt->ltd_reap) {
 		tgt->ltd_reap = 1;

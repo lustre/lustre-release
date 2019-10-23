@@ -269,8 +269,10 @@ static int lod_sub_process_config(const struct lu_env *env,
 struct lod_recovery_data {
 	struct lod_device	*lrd_lod;
 	struct lod_tgt_desc	*lrd_ltd;
-	struct ptlrpc_thread	*lrd_thread;
+	struct task_struct	**lrd_task;
 	u32			lrd_idx;
+	struct lu_env		lrd_env;
+	struct completion	*lrd_started;
 };
 
 
@@ -354,9 +356,8 @@ static int lod_sub_recovery_thread(void *arg)
 	struct lod_recovery_data *lrd = arg;
 	struct lod_device *lod = lrd->lrd_lod;
 	struct dt_device *dt;
-	struct ptlrpc_thread *thread = lrd->lrd_thread;
 	struct llog_ctxt *ctxt = NULL;
-	struct lu_env env;
+	struct lu_env *env = &lrd->lrd_env;
 	struct lu_target *lut;
 	struct lu_tgt_desc *mdt = NULL;
 	time64_t start;
@@ -364,17 +365,6 @@ static int lod_sub_recovery_thread(void *arg)
 	int rc;
 
 	ENTRY;
-
-	thread->t_flags = SVC_RUNNING;
-	wake_up(&thread->t_ctl_waitq);
-
-	rc = lu_env_init(&env, LCT_LOCAL | LCT_MD_THREAD);
-	if (rc != 0) {
-		OBD_FREE_PTR(lrd);
-		CERROR("%s: can't initialize env: rc = %d\n",
-		       lod2obd(lod)->obd_name, rc);
-		RETURN(rc);
-	}
 
 	lut = lod2lu_dev(lod)->ld_site->ls_tgt;
 	atomic_inc(&lut->lut_tdtd->tdtd_recovery_threads_count);
@@ -384,6 +374,7 @@ static int lod_sub_recovery_thread(void *arg)
 		dt = lrd->lrd_ltd->ltd_tgt;
 
 	start = ktime_get_real_seconds();
+	complete(lrd->lrd_started);
 
 again:
 
@@ -392,7 +383,7 @@ again:
 		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_RECOVERY_CONNECT, cfs_fail_val);
 		rc = -EIO;
 	} else {
-		rc = lod_sub_prep_llog(&env, lod, dt, lrd->lrd_idx);
+		rc = lod_sub_prep_llog(env, lod, dt, lrd->lrd_idx);
 	}
 	if (!rc && !lod->lod_child->dd_rdonly) {
 		/* Process the recovery record */
@@ -401,7 +392,7 @@ again:
 		LASSERT(ctxt != NULL);
 		LASSERT(ctxt->loc_handle != NULL);
 
-		rc = llog_cat_process(&env, ctxt->loc_handle,
+		rc = llog_cat_process(env, ctxt->loc_handle,
 				      lod_process_recovery_updates, lrd, 0, 0);
 	}
 
@@ -419,7 +410,7 @@ again:
 		    !top_device->ld_obd->obd_stopping) {
 			if (ctxt) {
 				if (ctxt->loc_handle)
-					llog_cat_close(&env,
+					llog_cat_close(env,
 						       ctxt->loc_handle);
 				llog_ctxt_put(ctxt);
 			}
@@ -473,13 +464,16 @@ again:
 	EXIT;
 
 out:
-	OBD_FREE_PTR(lrd);
-	thread->t_flags = SVC_STOPPED;
 	atomic_dec(&lut->lut_tdtd->tdtd_recovery_threads_count);
 	wake_up(&lut->lut_tdtd->tdtd_recovery_threads_waitq);
-	wake_up(&thread->t_ctl_waitq);
-	lu_env_fini(&env);
-	return rc;
+	if (xchg(lrd->lrd_task, NULL) == NULL)
+		/* Someone is waiting for us to finish, need
+		 * to synchronize cleanly.
+		 */
+		wait_var_event(lrd, kthread_should_stop());
+	lu_env_fini(env);
+	OBD_FREE_PTR(lrd);
+	return 0;
 }
 
 /**
@@ -493,21 +487,21 @@ out:
  * \param[in] thread   recovery thread on this sub device
  */
 void lod_sub_fini_llog(const struct lu_env *env,
-		       struct dt_device *dt, struct ptlrpc_thread *thread)
+		       struct dt_device *dt, struct task_struct **thread)
 {
 	struct obd_device *obd;
 	struct llog_ctxt *ctxt;
+	struct task_struct *task = NULL;
 
 	ENTRY;
 
 	obd = dt->dd_lu_dev.ld_obd;
 	CDEBUG(D_INFO, "%s: finish sub llog\n", obd->obd_name);
-	/* Stop recovery thread first */
-	if (thread && thread->t_flags & SVC_RUNNING) {
-		thread->t_flags = SVC_STOPPING;
-		wake_up(&thread->t_ctl_waitq);
-		wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
-	}
+	/* Wait for recovery thread to complete */
+	if (thread)
+		task = xchg(thread, NULL);
+	if (task)
+		kthread_stop(task);
 
 	ctxt = llog_get_context(obd, LLOG_UPDATELOG_ORIG_CTXT);
 	if (!ctxt)
@@ -600,7 +594,8 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 {
 	struct obd_device *obd;
 	struct lod_recovery_data *lrd = NULL;
-	struct ptlrpc_thread *thread;
+	DECLARE_COMPLETION_ONSTACK(started);
+	struct task_struct **taskp;
 	struct task_struct *task;
 	struct lod_tgt_desc *subtgt = NULL;
 	u32 index;
@@ -618,7 +613,7 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		RETURN(-ENOMEM);
 
 	if (lod->lod_child == dt) {
-		thread = &lod->lod_child_recovery_thread;
+		taskp = &lod->lod_child_recovery_task;
 		index = master_index;
 	} else {
 		struct lu_tgt_desc *mdt;
@@ -631,20 +626,16 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 			}
 		}
 		LASSERT(subtgt != NULL);
-		OBD_ALLOC_PTR(subtgt->ltd_recovery_thread);
-		if (!subtgt->ltd_recovery_thread)
-			GOTO(free_lrd, rc = -ENOMEM);
-
-		thread = subtgt->ltd_recovery_thread;
+		taskp = &subtgt->ltd_recovery_task;
 	}
 
 	CDEBUG(D_INFO, "%s init sub log %s\n", lod2obd(lod)->obd_name,
 	       dt->dd_lu_dev.ld_obd->obd_name);
 	lrd->lrd_lod = lod;
 	lrd->lrd_ltd = subtgt;
-	lrd->lrd_thread = thread;
+	lrd->lrd_task = taskp;
 	lrd->lrd_idx = index;
-	init_waitqueue_head(&thread->t_ctl_waitq);
+	lrd->lrd_started = &started;
 
 	obd = dt->dd_lu_dev.ld_obd;
 	obd->obd_lvfs_ctxt.dt = dt;
@@ -653,30 +644,33 @@ int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 	if (rc < 0) {
 		CERROR("%s: cannot setup updatelog llog: rc = %d\n",
 		       obd->obd_name, rc);
-		GOTO(free_thread, rc);
+		GOTO(free_lrd, rc);
+	}
+
+	rc = lu_env_init(&lrd->lrd_env, LCT_LOCAL | LCT_MD_THREAD);
+	if (rc != 0) {
+		CERROR("%s: can't initialize env: rc = %d\n",
+		       lod2obd(lod)->obd_name, rc);
+		GOTO(free_lrd, rc);
 	}
 
 	/* Start the recovery thread */
-	task = kthread_run(lod_sub_recovery_thread, lrd, "lod%04x_rec%04x",
-			   master_index, index);
+	task = kthread_create(lod_sub_recovery_thread, lrd, "lod%04x_rec%04x",
+			      master_index, index);
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start recovery thread: rc = %d\n",
 		       obd->obd_name, rc);
+		lu_env_fini(&lrd->lrd_env);
 		GOTO(out_llog, rc);
 	}
-
-	wait_event_idle(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING ||
-			thread->t_flags & SVC_STOPPED);
+	*taskp = task;
+	wake_up_process(task);
+	wait_for_completion(&started);
 
 	RETURN(0);
 out_llog:
-	lod_sub_fini_llog(env, dt, thread);
-free_thread:
-	if (lod->lod_child != dt) {
-		OBD_FREE_PTR(subtgt->ltd_recovery_thread);
-		subtgt->ltd_recovery_thread = NULL;
-	}
+	lod_sub_fini_llog(env, dt, taskp);
 free_lrd:
 	OBD_FREE_PTR(lrd);
 	RETURN(rc);
@@ -693,32 +687,22 @@ free_lrd:
 static void lod_sub_stop_recovery_threads(const struct lu_env *env,
 					  struct lod_device *lod)
 {
-	struct ptlrpc_thread *thread;
+	struct task_struct *task;
 	struct lu_tgt_desc *mdt;
 
 	/*
 	 * Stop the update log commit cancel threads and finish master
 	 * llog ctxt
 	 */
-	thread = &lod->lod_child_recovery_thread;
-	/* Stop recovery thread first */
-	if (thread && thread->t_flags & SVC_RUNNING) {
-		thread->t_flags = SVC_STOPPING;
-		wake_up(&thread->t_ctl_waitq);
-		wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
-	}
+	task = xchg(&lod->lod_child_recovery_task, NULL);
+	if (task)
+		kthread_stop(task);
 
 	lod_getref(&lod->lod_mdt_descs);
 	lod_foreach_mdt(lod, mdt) {
-		thread = mdt->ltd_recovery_thread;
-		if (thread && thread->t_flags & SVC_RUNNING) {
-			thread->t_flags = SVC_STOPPING;
-			wake_up(&thread->t_ctl_waitq);
-			wait_event(thread->t_ctl_waitq,
-				   thread->t_flags & SVC_STOPPED);
-			OBD_FREE_PTR(mdt->ltd_recovery_thread);
-			mdt->ltd_recovery_thread = NULL;
-		}
+		task = xchg(&mdt->ltd_recovery_task, NULL);
+		if (task)
+			kthread_stop(task);
 	}
 	lod_putref(lod, &lod->lod_mdt_descs);
 }
@@ -741,11 +725,11 @@ static void lod_sub_fini_all_llogs(const struct lu_env *env,
 	 * llog ctxt
 	 */
 	lod_sub_fini_llog(env, lod->lod_child,
-			  &lod->lod_child_recovery_thread);
+			  &lod->lod_child_recovery_task);
 	lod_getref(&lod->lod_mdt_descs);
 	lod_foreach_mdt(lod, mdt)
 		lod_sub_fini_llog(env, mdt->ltd_tgt,
-				  mdt->ltd_recovery_thread);
+				  &mdt->ltd_recovery_task);
 	lod_putref(lod, &lod->lod_mdt_descs);
 }
 

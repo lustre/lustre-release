@@ -113,7 +113,7 @@ struct lod_device {
 	struct lod_tgt_descs  lod_mdt_descs;
 
 	/* Recovery thread for lod_child */
-	struct ptlrpc_thread	lod_child_recovery_thread;
+	struct task_struct   *lod_child_recovery_task;
 
 	/* maximum EA size underlied OSD may have */
 	unsigned int	      lod_osd_max_easize;
@@ -500,7 +500,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 int lod_sub_init_llog(const struct lu_env *env, struct lod_device *lod,
 		      struct dt_device *dt);
 void lod_sub_fini_llog(const struct lu_env *env,
-		       struct dt_device *dt, struct ptlrpc_thread *thread);
+		       struct dt_device *dt, struct task_struct **taskp);
 int lodname2mdt_index(char *lodname, __u32 *mdt_index);
 extern void target_recovery_fini(struct obd_device *obd);
 
