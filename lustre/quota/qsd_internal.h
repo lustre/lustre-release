@@ -84,7 +84,7 @@ struct qsd_instance {
 	spinlock_t		 qsd_adjust_lock;
 
 	/* dedicated thread for updating slave index files. */
-	struct ptlrpc_thread	 qsd_upd_thread;
+	struct task_struct	*qsd_upd_task;
 
 	/* list of update tasks */
 	struct list_head	 qsd_upd_list;

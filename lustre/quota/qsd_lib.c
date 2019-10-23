@@ -671,8 +671,6 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	/* generic initializations */
 	rwlock_init(&qsd->qsd_lock);
 	INIT_LIST_HEAD(&qsd->qsd_link);
-	thread_set_flags(&qsd->qsd_upd_thread, SVC_STOPPED);
-	init_waitqueue_head(&qsd->qsd_upd_thread.t_ctl_waitq);
 	INIT_LIST_HEAD(&qsd->qsd_upd_list);
 	spin_lock_init(&qsd->qsd_adjust_lock);
 	INIT_LIST_HEAD(&qsd->qsd_adjust_list);

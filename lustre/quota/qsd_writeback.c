@@ -85,7 +85,8 @@ static void qsd_upd_add(struct qsd_instance *qsd, struct qsd_upd_rec *upd)
 	if (!qsd->qsd_stopping) {
 		list_add_tail(&upd->qur_link, &qsd->qsd_upd_list);
 		/* wake up the upd thread */
-		wake_up(&qsd->qsd_upd_thread.t_ctl_waitq);
+		if (qsd->qsd_upd_task)
+			wake_up_process(qsd->qsd_upd_task);
 	} else {
 		CWARN("%s: discard update.\n", qsd->qsd_svname);
 		if (upd->qur_lqe)
@@ -374,10 +375,14 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 	}
 	spin_unlock(&qsd->qsd_adjust_lock);
 
-	if (added)
-		wake_up(&qsd->qsd_upd_thread.t_ctl_waitq);
-	else
+	if (!added)
 		lqe_putref(lqe);
+	else {
+		read_lock(&qsd->qsd_lock);
+		if (qsd->qsd_upd_task)
+			wake_up_process(qsd->qsd_upd_task);
+		read_unlock(&qsd->qsd_lock);
+	}
 }
 
 /* return true if there is pending writeback records or the pending
@@ -429,39 +434,42 @@ static bool qsd_job_pending(struct qsd_instance *qsd, struct list_head *upd,
 	return job_pending;
 }
 
-static int qsd_upd_thread(void *arg)
+struct qsd_upd_args {
+	struct qsd_instance	*qua_inst;
+	struct lu_env		 qua_env;
+	struct completion	*qua_started;
+};
+
+#ifndef TASK_IDLE
+/* This identity is only safe inside kernel threads, or other places where
+ * all signals are disabled.  So it is placed here rather than in an include
+ * file.
+ * TASK_IDLE was added in v4.1-rc4-43-g80ed87c8a9ca so this can be removed
+ * when we no longer support kernels older than that.
+ */
+#define TASK_IDLE TASK_INTERRUPTIBLE
+#endif
+
+static int qsd_upd_thread(void *_args)
 {
-	struct qsd_instance	*qsd = (struct qsd_instance *)arg;
-	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
+	struct qsd_upd_args	*args = _args;
+	struct qsd_instance	*qsd = args->qua_inst;
 	LIST_HEAD(queue);
 	struct qsd_upd_rec	*upd, *n;
-	struct lu_env		*env;
+	struct lu_env		*env = &args->qua_env;
 	int			 qtype, rc = 0;
 	bool			 uptodate;
 	struct lquota_entry	*lqe;
 	time64_t cur_time;
 	ENTRY;
 
-	OBD_ALLOC_PTR(env);
-	if (env == NULL)
-		RETURN(-ENOMEM);
+	complete(args->qua_started);
+	while (({set_current_state(TASK_IDLE);
+		 !kthread_should_stop(); })) {
 
-	rc = lu_env_init(env, LCT_DT_THREAD);
-	if (rc) {
-		CERROR("%s: cannot init env: rc = %d\n", qsd->qsd_svname, rc);
-		OBD_FREE_PTR(env);
-		RETURN(rc);
-	}
-
-	thread_set_flags(thread, SVC_RUNNING);
-	wake_up(&thread->t_ctl_waitq);
-
-	while (1) {
-		wait_event_idle_timeout(
-			thread->t_ctl_waitq,
-			qsd_job_pending(qsd, &queue, &uptodate) ||
-			!thread_is_running(thread),
-			cfs_time_seconds(QSD_WB_INTERVAL));
+		if (!qsd_job_pending(qsd, &queue, &uptodate))
+			schedule_timeout(cfs_time_seconds(QSD_WB_INTERVAL));
+		__set_current_state(TASK_RUNNING);
 
 		list_for_each_entry_safe(upd, n, &queue, qur_link) {
 			list_del_init(&upd->qur_link);
@@ -481,7 +489,7 @@ static int qsd_upd_thread(void *arg)
 			list_del_init(&lqe->lqe_link);
 			spin_unlock(&qsd->qsd_adjust_lock);
 
-			if (thread_is_running(thread) && uptodate) {
+			if (!kthread_should_stop() && uptodate) {
 				qsd_refresh_usage(env, lqe);
 				if (lqe->lqe_adjust_time == 0)
 					qsd_id_lock_cancel(env, lqe);
@@ -494,40 +502,58 @@ static int qsd_upd_thread(void *arg)
 		}
 		spin_unlock(&qsd->qsd_adjust_lock);
 
-		if (!thread_is_running(thread))
-			break;
-
-		if (uptodate)
+		if (uptodate || kthread_should_stop())
 			continue;
 
 		for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++)
 			qsd_start_reint_thread(qsd->qsd_type_array[qtype]);
 	}
+	__set_current_state(TASK_RUNNING);
+
 	lu_env_fini(env);
-	OBD_FREE_PTR(env);
-	thread_set_flags(thread, SVC_STOPPED);
-	wake_up(&thread->t_ctl_waitq);
+	OBD_FREE_PTR(args);
+
 	RETURN(rc);
 }
 
 int qsd_start_upd_thread(struct qsd_instance *qsd)
 {
-	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
-	struct task_struct		*task;
+	struct qsd_upd_args *args;
+	struct task_struct *task;
+	DECLARE_COMPLETION_ONSTACK(started);
+	int rc;
 	ENTRY;
 
-	task = kthread_run(qsd_upd_thread, (void *)qsd,
-			   "lquota_wb_%s", qsd->qsd_svname);
-	if (IS_ERR(task)) {
-		CERROR("fail to start quota update thread: rc = %ld\n",
-			PTR_ERR(task));
-		thread_set_flags(thread, SVC_STOPPED);
-		RETURN(PTR_ERR(task));
-	}
+	OBD_ALLOC_PTR(args);
+	if (args == NULL)
+		RETURN(-ENOMEM);
 
-	wait_event_idle(thread->t_ctl_waitq,
-			thread_is_running(thread) || thread_is_stopped(thread));
+	rc = lu_env_init(&args->qua_env, LCT_DT_THREAD);
+	if (rc) {
+		CERROR("%s: cannot init env: rc = %d\n", qsd->qsd_svname, rc);
+		goto out_free;
+	}
+	args->qua_inst = qsd;
+	args->qua_started = &started;
+
+	task = kthread_create(qsd_upd_thread, args,
+			      "lquota_wb_%s", qsd->qsd_svname);
+	if (IS_ERR(task)) {
+		rc = PTR_ERR(task);
+		CERROR("fail to start quota update thread: rc = %d\n", rc);
+		goto out_fini;
+	}
+	qsd->qsd_upd_task = task;
+	wake_up_process(task);
+	wait_for_completion(&started);
+
 	RETURN(0);
+
+out_fini:
+	lu_env_fini(&args->qua_env);
+out_free:
+	OBD_FREE_PTR(args);
+	RETURN(rc);
 }
 
 static void qsd_cleanup_deferred(struct qsd_instance *qsd)
@@ -580,14 +606,15 @@ static void qsd_cleanup_adjust(struct qsd_instance *qsd)
 
 void qsd_stop_upd_thread(struct qsd_instance *qsd)
 {
-	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
+	struct task_struct *task;
 
-	if (!thread_is_stopped(thread)) {
-		thread_set_flags(thread, SVC_STOPPING);
-		wake_up(&thread->t_ctl_waitq);
+	write_lock(&qsd->qsd_lock);
+	task = qsd->qsd_upd_task;
+	qsd->qsd_upd_task = NULL;
+	write_unlock(&qsd->qsd_lock);
+	if (task)
+		kthread_stop(task);
 
-		wait_event_idle(thread->t_ctl_waitq, thread_is_stopped(thread));
-	}
 	qsd_cleanup_deferred(qsd);
 	qsd_cleanup_adjust(qsd);
 }
