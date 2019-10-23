@@ -76,7 +76,7 @@ struct qmt_device {
 	struct proc_dir_entry	*qmt_proc;
 
 	/* dedicated thread in charge of space rebalancing */
-	struct ptlrpc_thread	 qmt_reba_thread;
+	struct task_struct	*qmt_reba_task;
 
 	/* list of lqe entry which need space rebalancing */
 	struct list_head	 qmt_reba_list;

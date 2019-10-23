@@ -2011,7 +2011,7 @@ struct lu_env_percpu {
 
 static struct lu_env_percpu lu_env_percpu[NR_CPUS];
 
-int lu_env_add(struct lu_env *env)
+int lu_env_add_task(struct lu_env *env, struct task_struct *task)
 {
 	struct lu_env_item *lei, *old;
 
@@ -2021,7 +2021,7 @@ int lu_env_add(struct lu_env *env)
 	if (!lei)
 		return -ENOMEM;
 
-	lei->lei_task = current;
+	lei->lei_task = task;
 	lei->lei_env = env;
 
 	old = rhashtable_lookup_get_insert_fast(&lu_env_rhash,
@@ -2030,6 +2030,12 @@ int lu_env_add(struct lu_env *env)
 	LASSERT(!old);
 
 	return 0;
+}
+EXPORT_SYMBOL(lu_env_add_task);
+
+int lu_env_add(struct lu_env *env)
+{
+	return lu_env_add_task(env, current);
 }
 EXPORT_SYMBOL(lu_env_add);
 

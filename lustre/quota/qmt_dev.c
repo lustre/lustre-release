@@ -241,8 +241,6 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 		GOTO(out, rc);
 
 	/* set up and start rebalance thread */
-	thread_set_flags(&qmt->qmt_reba_thread, SVC_STARTING);
-	init_waitqueue_head(&qmt->qmt_reba_thread.t_ctl_waitq);
 	INIT_LIST_HEAD(&qmt->qmt_reba_list);
 	spin_lock_init(&qmt->qmt_reba_lock);
 	if (!qmt->qmt_child->dd_rdonly) {

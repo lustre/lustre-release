@@ -1292,6 +1292,7 @@ static inline void* lu_env_info(const struct lu_env *env,
 
 struct lu_env *lu_env_find(void);
 int lu_env_add(struct lu_env *env);
+int lu_env_add_task(struct lu_env *env, struct task_struct *task);
 void lu_env_remove(struct lu_env *env);
 
 /** @} lu_context */
