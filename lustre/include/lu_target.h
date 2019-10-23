@@ -97,8 +97,9 @@ struct target_distribute_txn_data {
 	struct list_head	tdtd_list;
 
 	/* Threads to manage distribute transaction */
-	wait_queue_head_t	tdtd_commit_thread_waitq;
+	struct task_struct	*tdtd_commit_task;
 	atomic_t		tdtd_refcount;
+	struct lu_env		tdtd_env;
 
 	/* recovery update */
 	distribute_txn_replay_handler_t	tdtd_replay_handler;
@@ -157,7 +158,6 @@ struct lu_target {
 	struct dt_device_param	 lut_dt_conf;
 
 	struct target_distribute_txn_data *lut_tdtd;
-	struct ptlrpc_thread	lut_tdtd_commit_thread;
 
 	/* supported opcodes and handlers for this target */
 	struct tgt_opc_slice	*lut_slice;
