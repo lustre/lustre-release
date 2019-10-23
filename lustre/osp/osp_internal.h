@@ -217,7 +217,7 @@ struct osp_device {
 	/* processing of changes from previous mount is done? */
 	int				 opd_sync_prev_done;
 	/* found records */
-	struct ptlrpc_thread		 opd_sync_thread;
+	struct task_struct		*opd_sync_task;
 	wait_queue_head_t		 opd_sync_waitq;
 	/* list of in flight rpcs */
 	struct list_head		 opd_sync_in_flight_list;
