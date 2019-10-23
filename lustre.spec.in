@@ -160,13 +160,11 @@ Requires: libselinux
 %endif
 %if %{with lustre_modules}
 
-%if 0%{?rhel} >= 8
-%if %{undefined kernel_module_package_buildreqs}
+%if 0%{?rhel} >= 8 && %{undefined kernel_module_package_buildreqs}
 BuildRequires: redhat-rpm-config kernel-rpm-macros elfutils-libelf-devel kmod
-%endif
-%endif
-
+%else
 BuildRequires: %kernel_module_package_buildreqs
+%endif
 %if %{_vendor}=="redhat"
 BuildRequires: redhat-rpm-config
 %endif
