@@ -312,7 +312,16 @@ static int qsd_conn_callback(void *data)
 	 * step 3) will have to wait for qsd_start() to be called */
 	for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 		struct qsd_qtype_info *qqi = qsd->qsd_type_array[type];
-		wake_up(&qqi->qqi_reint_thread.t_ctl_waitq);
+		struct task_struct *t;
+
+		/* qqi_reint_task can be set to NULL at any time,
+		 * so we need to be careful.
+		 */
+		rcu_read_lock();
+		t = rcu_dereference(qqi->qqi_reint_task);
+		if (t)
+			wake_up_process(t);
+		rcu_read_unlock();
 	}
 
 	RETURN(0);
@@ -472,8 +481,6 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	qqi->qqi_glb_uptodate = false;
 	qqi->qqi_slv_uptodate = false;
 	qqi->qqi_reint        = false;
-	init_waitqueue_head(&qqi->qqi_reint_thread.t_ctl_waitq);
-	thread_set_flags(&qqi->qqi_reint_thread, SVC_STOPPED);
 	INIT_LIST_HEAD(&qqi->qqi_deferred_glb);
 	INIT_LIST_HEAD(&qqi->qqi_deferred_slv);
 	lquota_generate_fid(&qqi->qqi_fid, QSD_RES_TYPE(qsd), qtype);
@@ -889,7 +896,16 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 	 * up to usage; If usage < granted, release down to usage.  */
 	for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 		struct qsd_qtype_info	*qqi = qsd->qsd_type_array[type];
-		wake_up(&qqi->qqi_reint_thread.t_ctl_waitq);
+		struct task_struct *t;
+
+		/* qqi_reint_task can be set to NULL at any time,
+		 * so we need to be careful.
+		 */
+		rcu_read_lock();
+		t = rcu_dereference(qqi->qqi_reint_task);
+		if (t)
+			wake_up_process(t);
+		rcu_read_unlock();
 	}
 
 	RETURN(rc);

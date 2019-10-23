@@ -155,7 +155,7 @@ struct qsd_qtype_info {
 	struct lquota_site	*qqi_site;
 
 	/* Reintegration thread */
-	struct ptlrpc_thread	 qqi_reint_thread;
+	struct task_struct	*qqi_reint_task;
 
 	/* statistics on operations performed by this slave */
 	struct lprocfs_stats	*qqi_stats;
