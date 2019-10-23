@@ -77,22 +77,12 @@ static inline int osp_statfs_need_update(struct osp_device *d)
  *
  * each time OSP gets connected to OST, we should start from precreation cleanup
  */
-static inline bool osp_precreate_running(struct osp_device *d)
-{
-	return !!(d->opd_pre_thread.t_flags & SVC_RUNNING);
-}
-
-static inline bool osp_precreate_stopped(struct osp_device *d)
-{
-	return !!(d->opd_pre_thread.t_flags & SVC_STOPPED);
-}
-
 static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
 {
 	struct osp_device *d = cfs_from_timer(d, data, opd_statfs_timer);
 
 	LASSERT(d);
-	if (osp_precreate_running(d))
+	if (d->opd_pre_task)
 		wake_up(&d->opd_pre_waitq);
 }
 
@@ -184,7 +174,7 @@ out:
 	/* couldn't update statfs, try again with a small delay */
 	d->opd_statfs_fresh_till = ktime_add_ns(ktime_get(), 10 * NSEC_PER_SEC);
 	d->opd_statfs_update_in_progress = 0;
-	if (d->opd_pre != NULL && osp_precreate_running(d))
+	if (d->opd_pre && d->opd_pre_task)
 		wake_up(&d->opd_pre_waitq);
 
 	if (req->rq_import_generation == imp->imp_generation)
@@ -865,8 +855,8 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	 */
 	wait_event_idle(d->opd_pre_waitq,
 			(!d->opd_pre_reserved && d->opd_recovery_completed) ||
-			!osp_precreate_running(d) || d->opd_got_disconnected);
-	if (!osp_precreate_running(d) || d->opd_got_disconnected)
+			!d->opd_pre_task || d->opd_got_disconnected);
+	if (!d->opd_pre_task || d->opd_got_disconnected)
 		GOTO(out, rc = -EAGAIN);
 
 	CDEBUG(D_HA, "%s: going to cleanup orphans since "DFID"\n",
@@ -1178,6 +1168,11 @@ out:
 	RETURN(rc);
 }
 
+struct opt_args {
+	struct osp_device	*opta_dev;
+	struct lu_env		opta_env;
+	struct completion	*opta_started;
+};
 /**
  * The core of precreate functionality
  *
@@ -1196,44 +1191,27 @@ out:
  * \retval 0		on success
  * \retval negative	negated errno on error
  */
-static int osp_precreate_thread(void *_arg)
+static int osp_precreate_thread(void *_args)
 {
-	struct osp_device	*d = _arg;
-	struct ptlrpc_thread	*thread = &d->opd_pre_thread;
-	struct lu_env		 env;
+	struct opt_args		*args = _args;
+	struct osp_device	*d = args->opta_dev;
+	struct lu_env		*env = &args->opta_env;
 	int			 rc;
 
 	ENTRY;
 
-	rc = lu_env_init(&env, d->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
-	if (rc) {
-		CERROR("%s: init env error: rc = %d\n", d->opd_obd->obd_name,
-		       rc);
-
-		spin_lock(&d->opd_pre_lock);
-		thread->t_flags = SVC_STOPPED;
-		spin_unlock(&d->opd_pre_lock);
-		wake_up(&thread->t_ctl_waitq);
-
-		RETURN(rc);
-	}
-
-	spin_lock(&d->opd_pre_lock);
-	thread->t_flags = SVC_RUNNING;
-	spin_unlock(&d->opd_pre_lock);
-	wake_up(&thread->t_ctl_waitq);
-
-	while (osp_precreate_running(d)) {
+	complete(args->opta_started);
+	while (!kthread_should_stop()) {
 		/*
 		 * need to be connected to OST
 		 */
-		while (osp_precreate_running(d)) {
+		while (!kthread_should_stop()) {
 			if ((d->opd_pre == NULL || d->opd_pre_recovering) &&
 			    d->opd_imp_connected &&
 			    !d->opd_got_disconnected)
 				break;
 			wait_event_idle(d->opd_pre_waitq,
-					!osp_precreate_running(d) ||
+					kthread_should_stop() ||
 					d->opd_new_connection);
 
 			if (!d->opd_new_connection)
@@ -1244,7 +1222,7 @@ static int osp_precreate_thread(void *_arg)
 			break;
 		}
 
-		if (!osp_precreate_running(d))
+		if (kthread_should_stop())
 			break;
 
 		if (d->opd_pre) {
@@ -1264,13 +1242,13 @@ static int osp_precreate_thread(void *_arg)
 			}
 		}
 
-		if (osp_statfs_update(&env, d)) {
+		if (osp_statfs_update(env, d)) {
 			if (wait_event_idle_timeout(d->opd_pre_waitq,
-						    !osp_precreate_running(d),
+						    kthread_should_stop(),
 						    cfs_time_seconds(5)) == 0)
 				l_wait_event_abortable(
 					d->opd_pre_waitq,
-					!osp_precreate_running(d));
+					kthread_should_stop());
 			continue;
 		}
 
@@ -1278,7 +1256,7 @@ static int osp_precreate_thread(void *_arg)
 			/*
 			 * Clean up orphans or recreate missing objects.
 			 */
-			rc = osp_precreate_cleanup_orphans(&env, d);
+			rc = osp_precreate_cleanup_orphans(env, d);
 			if (rc != 0) {
 				schedule_timeout_interruptible(cfs_time_seconds(1));
 				continue;
@@ -1288,14 +1266,14 @@ static int osp_precreate_thread(void *_arg)
 		/*
 		 * connected, can handle precreates now
 		 */
-		while (osp_precreate_running(d)) {
+		while (!kthread_should_stop()) {
 			wait_event_idle(d->opd_pre_waitq,
-					!osp_precreate_running(d) ||
-					osp_precreate_near_empty(&env, d) ||
+					kthread_should_stop() ||
+					osp_precreate_near_empty(env, d) ||
 					osp_statfs_need_update(d) ||
 					d->opd_got_disconnected);
 
-			if (!osp_precreate_running(d))
+			if (kthread_should_stop())
 				break;
 
 			/* something happened to the connection
@@ -1304,7 +1282,7 @@ static int osp_precreate_thread(void *_arg)
 				break;
 
 			if (osp_statfs_need_update(d))
-				if (osp_statfs_update(&env, d))
+				if (osp_statfs_update(env, d))
 					break;
 
 			if (d->opd_pre == NULL)
@@ -1313,23 +1291,23 @@ static int osp_precreate_thread(void *_arg)
 			/* To avoid handling different seq in precreate/orphan
 			 * cleanup, it will hold precreate until current seq is
 			 * used up. */
-			if (unlikely(osp_precreate_end_seq(&env, d) &&
-			    !osp_create_end_seq(&env, d)))
+			if (unlikely(osp_precreate_end_seq(env, d) &&
+			    !osp_create_end_seq(env, d)))
 				continue;
 
-			if (unlikely(osp_precreate_end_seq(&env, d) &&
-				     osp_create_end_seq(&env, d))) {
+			if (unlikely(osp_precreate_end_seq(env, d) &&
+				     osp_create_end_seq(env, d))) {
 				LCONSOLE_INFO("%s:%#llx is used up."
 					      " Update to new seq\n",
 					      d->opd_obd->obd_name,
 					 fid_seq(&d->opd_pre_last_created_fid));
-				rc = osp_precreate_rollover_new_seq(&env, d);
+				rc = osp_precreate_rollover_new_seq(env, d);
 				if (rc)
 					continue;
 			}
 
-			if (osp_precreate_near_empty(&env, d)) {
-				rc = osp_precreate_send(&env, d);
+			if (osp_precreate_near_empty(env, d)) {
+				rc = osp_precreate_send(env, d);
 				/* osp_precreate_send() sets opd_pre_status
 				 * in case of error, that prevent the using of
 				 * failed device. */
@@ -1342,9 +1320,8 @@ static int osp_precreate_thread(void *_arg)
 		}
 	}
 
-	thread->t_flags = SVC_STOPPED;
-	lu_env_fini(&env);
-	wake_up(&thread->t_ctl_waitq);
+	lu_env_fini(env);
+	OBD_FREE_PTR(args);
 
 	RETURN(0);
 }
@@ -1763,14 +1740,15 @@ void osp_precreate_fini(struct osp_device *d)
 
 int osp_init_statfs(struct osp_device *d)
 {
-	struct task_struct		*task;
+	struct task_struct	*task;
+	struct opt_args		*args;
+	DECLARE_COMPLETION_ONSTACK(started);
+	int			rc;
 
 	ENTRY;
 
 	spin_lock_init(&d->opd_pre_lock);
 	init_waitqueue_head(&d->opd_pre_waitq);
-	thread_set_flags(&d->opd_pre_thread, SVC_INIT);
-	init_waitqueue_head(&d->opd_pre_thread.t_ctl_waitq);
 
 	/*
 	 * Initialize statfs-related things
@@ -1787,35 +1765,48 @@ int osp_init_statfs(struct osp_device *d)
 	if (d->opd_storage->dd_rdonly)
 		RETURN(0);
 
+	OBD_ALLOC_PTR(args);
+	if (!args)
+		RETURN(0);
+	args->opta_dev = d;
+	args->opta_started = &started;
+	rc = lu_env_init(&args->opta_env,
+			 d->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
+	if (rc) {
+		CERROR("%s: init env error: rc = %d\n", d->opd_obd->obd_name,
+		       rc);
+		OBD_FREE_PTR(args);
+		RETURN(0);
+	}
+
 	/*
 	 * start thread handling precreation and statfs updates
 	 */
-	task = kthread_run(osp_precreate_thread, d,
-			   "osp-pre-%u-%u", d->opd_index, d->opd_group);
+	task = kthread_create(osp_precreate_thread, args,
+			      "osp-pre-%u-%u", d->opd_index, d->opd_group);
 	if (IS_ERR(task)) {
 		CERROR("can't start precreate thread %ld\n", PTR_ERR(task));
+		lu_env_fini(&args->opta_env);
+		OBD_FREE_PTR(args);
 		RETURN(PTR_ERR(task));
 	}
-
-	wait_event_idle(d->opd_pre_thread.t_ctl_waitq,
-			osp_precreate_running(d) || osp_precreate_stopped(d));
-
+	d->opd_pre_task = task;
+	wake_up_process(task);
+	wait_for_completion(&started);
 
 	RETURN(0);
 }
 
 void osp_statfs_fini(struct osp_device *d)
 {
-	struct ptlrpc_thread *thread = &d->opd_pre_thread;
+	struct task_struct *task = d->opd_pre_task;
 	ENTRY;
 
 	del_timer(&d->opd_statfs_timer);
 
-	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
-		thread->t_flags = SVC_STOPPING;
-		wake_up(&d->opd_pre_waitq);
-		wait_event(thread->t_ctl_waitq, thread_is_stopped(thread));
-	}
+	d->opd_pre_task = NULL;
+	if (task)
+		kthread_stop(task);
 
 	EXIT;
 }

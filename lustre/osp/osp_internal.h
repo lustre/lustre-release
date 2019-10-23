@@ -194,7 +194,7 @@ struct osp_device {
 	/* precreate structure for OSP */
 	struct osp_precreate		*opd_pre;
 	/* dedicate precreate thread */
-	struct ptlrpc_thread		 opd_pre_thread;
+	struct task_struct		*opd_pre_task;
 	spinlock_t			 opd_pre_lock;
 	/* thread waits for signals about pool going empty */
 	wait_queue_head_t		 opd_pre_waitq;
