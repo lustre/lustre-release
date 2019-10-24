@@ -1355,6 +1355,7 @@ static struct cl_io_operations mdc_io_ops = {
 	.cio_read_ahead   = mdc_io_read_ahead,
 	.cio_submit	  = osc_io_submit,
 	.cio_commit_async = osc_io_commit_async,
+	.cio_extent_release = osc_io_extent_release,
 };
 
 int mdc_io_init(const struct lu_env *env, struct cl_object *obj,

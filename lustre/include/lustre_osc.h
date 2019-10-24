@@ -679,6 +679,8 @@ int osc_io_commit_async(const struct lu_env *env,
 			const struct cl_io_slice *ios,
 			struct cl_page_list *qin, int from, int to,
 			cl_commit_cbt cb);
+void osc_io_extent_release(const struct lu_env *env,
+			   const struct cl_io_slice *ios);
 int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios);
 void osc_io_iter_fini(const struct lu_env *env,
 		      const struct cl_io_slice *ios);

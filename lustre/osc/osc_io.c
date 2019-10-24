@@ -373,6 +373,18 @@ int osc_io_commit_async(const struct lu_env *env,
 }
 EXPORT_SYMBOL(osc_io_commit_async);
 
+void osc_io_extent_release(const struct lu_env *env,
+			   const struct cl_io_slice *ios)
+{
+	struct osc_io *oio = cl2osc_io(env, ios);
+
+	if (oio->oi_active != NULL) {
+		osc_extent_release(env, oio->oi_active);
+		oio->oi_active = NULL;
+	}
+}
+EXPORT_SYMBOL(osc_io_extent_release);
+
 static bool osc_import_not_healthy(struct obd_import *imp)
 {
 	return imp->imp_invalid || imp->imp_deactive ||
@@ -1231,7 +1243,8 @@ static const struct cl_io_operations osc_io_ops = {
 	},
 	.cio_read_ahead		    = osc_io_read_ahead,
 	.cio_submit                 = osc_io_submit,
-	.cio_commit_async           = osc_io_commit_async
+	.cio_commit_async           = osc_io_commit_async,
+	.cio_extent_release         = osc_io_extent_release
 };
 
 /*****************************************************************************

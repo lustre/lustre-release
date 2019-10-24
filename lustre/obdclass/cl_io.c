@@ -609,6 +609,20 @@ int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(cl_io_commit_async);
 
+void cl_io_extent_release(const struct lu_env *env, struct cl_io *io)
+{
+	const struct cl_io_slice *scan;
+	ENTRY;
+
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->cio_extent_release == NULL)
+			continue;
+		scan->cis_iop->cio_extent_release(env, scan);
+	}
+	EXIT;
+}
+EXPORT_SYMBOL(cl_io_extent_release);
+
 /**
  * Submits a list of pages for immediate io.
  *
