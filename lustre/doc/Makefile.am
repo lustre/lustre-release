@@ -37,6 +37,7 @@ MANFILES =					\
 	lctl-get_param.8			\
 	lctl-list_param.8			\
 	lctl-network.8				\
+	lctl-pcc.8				\
 	lctl-set_param.8			\
 	ldev.8					\
 	ldev.conf.5				\
@@ -60,6 +61,7 @@ MANFILES =					\
 	lfs-mkdir.1				\
 	lfs-path2fid.1				\
 	lfs-pcc.1				\
+	lfs-pcc-detach.1			\
 	lfs-project.1				\
 	lfs-setdirstripe.1			\
 	lfs-setstripe.1				\
@@ -123,6 +125,17 @@ MANFILES =					\
 	llapi_path2fid.3			\
 	llapi_path2parent.3			\
 	llapi_quotactl.3			\
+	llapi_pcc_attach.3			\
+	llapi_pcc_attach_fid.3			\
+	llapi_pcc_attach_fid_str.3		\
+	llapi_pcc_detach_fid.3			\
+	llapi_pcc_detach_fid_fd.3		\
+	llapi_pcc_detach_fid_str.3		\
+	llapi_pcc_detach_file.3		\
+	llapi_pccdev_get.3			\
+	llapi_pccdev_set.3			\
+	llapi_pcc_state_get.3			\
+	llapi_pcc_state_get_fd.3			\
 	ll_decode_linkea.8			\
 	llobdstat.8				\
 	llog_reader.8				\
