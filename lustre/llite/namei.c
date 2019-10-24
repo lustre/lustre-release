@@ -205,6 +205,12 @@ static int ll_dom_lock_cancel(struct inode *inode, struct ldlm_lock *lock)
 
 	/* reach MDC layer to flush data under  the DoM ldlm lock */
 	rc = cl_object_flush(env, lli->lli_clob, lock);
+	if (rc == -ENODATA) {
+		CDEBUG(D_INODE, "inode "DFID" layout has no DoM stripe\n",
+		       PFID(ll_inode2fid(inode)));
+		/* most likely result of layout change, do nothing */
+		rc = 0;
+	}
 
 	cl_env_put(env, &refcheck);
 	RETURN(rc);
