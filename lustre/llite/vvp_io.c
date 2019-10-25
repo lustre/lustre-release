@@ -920,6 +920,7 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 
 /*
  * Kernels 4.2 - 4.5 pass memcg argument to account_page_dirtied()
+ * Kernel v5.2-5678-gac1c3e4 no longer exports account_page_dirtied 
  */
 static inline void ll_account_page_dirtied(struct page *page,
 					   struct address_space *mapping)
@@ -929,8 +930,19 @@ static inline void ll_account_page_dirtied(struct page *page,
 
 	account_page_dirtied(page, mapping, memcg);
 	mem_cgroup_end_page_stat(memcg);
+#elif defined HAVE_ACCOUNT_PAGE_DIRTIED
+	account_page_dirtied(page, mapping, memcg);
 #else
-	account_page_dirtied(page, mapping);
+	typedef unsigned int (dirtied_t)(struct page *pg,
+					 struct address_space *as);
+	const char *symbol = "account_page_dirtied";
+	static dirtied_t *dirtied = NULL;
+
+	if (!dirtied)
+		dirtied = (dirtied_t *)symbol_get(symbol);
+
+	if (dirtied)
+		dirtied(page, mapping);
 #endif
 }
 

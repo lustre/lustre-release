@@ -2879,6 +2879,23 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LC_HAS_LINUX_SELINUX_ENABLED
 
 #
+# LC_ACCOUNT_PAGE_DIRTIED
+#
+# After 5.2 kernel page dirtied is not exported
+#
+AC_DEFUN([LC_ACCOUNT_PAGE_DIRTIED], [
+LB_CHECK_COMPILE([if 'account_page_dirtied' is exported],
+account_page_dirtied, [
+	#include <linux/mm.h>
+],[
+	account_page_dirtied(NULL, NULL);
+],[
+	AC_DEFINE(HAVE_ACCOUNT_PAGE_DIRTIED, 1,
+		[account_page_dirtied is available])
+])
+]) # LC_ACCOUNT_PAGE_DIRTIED
+
+#
 # LC_BIO_BI_PHYS_SEGMENTS
 #
 # kernel 5.3-rc1 commit 14ccb66b3f585b2bc21e7256c96090abed5a512c
@@ -3151,6 +3168,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 5.1
 	LC_HAS_LINUX_SELINUX_ENABLED
+
+	# 5.2
+	LC_ACCOUNT_PAGE_DIRTIED
 
 	# 5.3
 	LC_BIO_BI_PHYS_SEGMENTS
