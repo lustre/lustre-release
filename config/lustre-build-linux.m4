@@ -8,26 +8,35 @@ KMODEXT=".ko"
 AC_SUBST(KMODEXT)
 
 makerule="$PWD/build"
-AC_CACHE_CHECK([for external module build target], lb_cv_module_target, [
-lb_cv_module_target=""
-MODULE_TARGET="SUBDIRS"
-rm -f build/conftest.i
-LB_LINUX_TRY_MAKE([], [],
-	[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-	[test -s build/conftest.i],
-	[lb_cv_module_target="SUBDIRS"], [
-		MODULE_TARGET="M"
-		makerule="_module_$PWD/build"
-		LB_LINUX_TRY_MAKE([], [],
-			[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-			[test -s build/conftest.i],
-			[lb_cv_module_target="M"], [
-				AC_MSG_ERROR([unknown; check config.log for details])
-			])
-	])
+AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
+[
+	lb_cv_module_target=""
+	MODULE_TARGET="SUBDIRS"
+	rm -f build/conftest.i
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="SUBDIRS"],[
+	MODULE_TARGET="M"
+	makerule="$PWD/build/"
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="M54"], [
+	MODULE_TARGET="M"
+	makerule="_module_$PWD/build"
+	LB_LINUX_TRY_MAKE([], [],
+		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
+		[test -s build/conftest.i],
+		[lb_cv_module_target="M"], [
+			AC_MSG_ERROR([kernel module make failed; check config.log for details])
+	])])])
 ])
 AS_IF([test -z "$lb_cv_module_target"],
 	[AC_MSG_ERROR([unknown external module build target])],
+[test "x$lb_cv_module_target" = "xM54"],
+	[makerule="$PWD/build"
+	lb_cv_module_target="M"],
 [test "x$lb_cv_module_target" = "xM"],
 	[makerule="_module_$PWD/build"])
 MODULE_TARGET=$lb_cv_module_target
