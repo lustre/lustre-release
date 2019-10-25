@@ -7,6 +7,7 @@
       <para><xref linkend="dbdoclet.mroverview"/></para>
       <para><xref linkend="dbdoclet.mrconfiguring"/></para>
       <para><xref linkend="dbdoclet.mrrouting"/></para>
+      <para><xref linkend="mrrouting.health"/></para>
       <para><xref linkend="dbdoclet.mrhealth"/></para>
     </listitem>
   </itemizedlist>
@@ -234,8 +235,20 @@ peer:
     <title><indexterm><primary>MR</primary>
       <secondary>mrrouting</secondary>
       </indexterm>Notes on routing with Multi-Rail</title>
-    <para>Multi-Rail configuration can be applied on the Router to aggregate
-    the interfaces performance.</para>
+    <para>This section details how to configure Multi-Rail with the routing
+    feature before the <xref linkend="mrrouting.health" /> feature landed in
+    Lustre 2.13. Routing code has always monitored the state of the route, in
+    order to avoid using unavailable ones.</para>
+    <para>This section describes how you can configure multiple interfaces on
+    the same gateway node but as different routes. This uses the existing route
+    monitoring algorithm to guard against interfaces going down.  With the
+    <xref linkend="mrrouting.health" /> feature introduced in Lustre 2.13, the
+    new algorithm uses the <xref linkend="dbdoclet.mrhealth" /> feature to
+    monitor the different interfaces of the gateway and always ensures that the
+    healthiest interface is used. Therefore, the configuration described in this
+    section applies to releases prior to Lustre 2.13.  It will still work in
+    2.13 as well, however it is not required due to the reason mentioned above.
+    </para>
     <section xml:id="dbdoclet.mrroutingex">
       <title><indexterm><primary>MR</primary>
         <secondary>mrrouting</secondary>
@@ -346,6 +359,191 @@ lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
       For example, the same configuration shown above can be applied if the
       clients and the servers are non-MR while the routers are MR capable.
       This appears to be a common cluster upgrade scenario.</para>
+    </section>
+  </section>
+  <section xml:id="mrrouting.health" condition="l2D">
+    <title><indexterm><primary>MR</primary>
+      <secondary>mrroutinghealth</secondary>
+      </indexterm>Multi-Rail Routing with LNet Health</title>
+    <para>This section details how routing and pertinent module parameters can
+    be configured beginning with Lustre 2.13.</para>
+    <para>Multi-Rail with Dynamic Discovery allows LNet to discover and use all
+    configured interfaces of a node. It references a node via it's primary NID.
+    Multi-Rail routing carries forward this concept to the routing
+    infrastructure.  The following changes are brought in with the Lustre 2.13
+    release:</para>
+    <orderedlist>
+      <listitem><para>Configuring a different route per gateway interface is no
+      longer needed. One route per gateway should be configured. Gateway
+      interfaces are used according to the Multi-Rail selection criteria.</para>
+      </listitem>
+      <listitem><para>Routing now relies on <xref linkend="dbdoclet.mrhealth" />
+      to keep track of the route aliveness.</para></listitem>
+      <listitem><para>Router interfaces are monitored via LNet Health.
+      If an interface fails other interfaces will be used.</para></listitem>
+      <listitem><para>Routing uses LNet discovery to discover gateways on
+      regular intervals.</para></listitem>
+      <listitem><para>A gateway pushes its list of interfaces upon the discovery
+      of any changes in its interfaces' state.</para></listitem>
+    </orderedlist>
+    <section xml:id="mrrouting.health_config">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrrouting</secondary>
+        <tertiary>routinghealth_config</tertiary>
+        </indexterm>Configuration</title>
+      <section xml:id="mrrouting.health_config.routes">
+      <title>Configuring Routes</title>
+      <para>A gateway can have multiple interfaces on the same or different
+      networks. The peers using the gateway can reach it on one or
+      more of its interfaces. Multi-Rail routing takes care of managing which
+      interface to use.</para>
+      <screen>lnetctl route add --net &lt;remote network&gt; --gateway &lt;NID for the gateway&gt;
+                  --hops &lt;number of hops&gt; --priority &lt;route priority&gt;</screen>
+      </section>
+      <section xml:id="mrrouting.health_config.modparams">
+        <title>Configuring Module Parameters</title>
+        <table frame="all" xml:id="mrrouting.health_config.tab1">
+        <title>Configuring Module Parameters</title>
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="1*" />
+          <colspec colname="c2" colwidth="2*" />
+          <thead>
+            <row>
+              <entry>
+                <para>
+                  <emphasis role="bold">Module Parameter</emphasis>
+                </para>
+              </entry>
+              <entry>
+                <para>
+                  <emphasis role="bold">Usage</emphasis>
+                </para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para><literal>check_routers_before_use</literal></para>
+              </entry>
+              <entry>
+                <para>Defaults to <literal>0</literal>. If set to
+                <literal>1</literal> all routers must be up before the system
+                can proceed.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>avoid_asym_router_failure</literal></para>
+              </entry>
+              <entry>
+                <para>Defaults to <literal>1</literal>. If set to
+                <literal>1</literal> a route will be considered up if and only
+                if there exists at least one healthy interface on the local and
+                remote interfaces of the gateway.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>alive_router_check_interval</literal></para>
+              </entry>
+              <entry>
+                <para>Defaults to <literal>60</literal> seconds. The gateways
+                will be discovered ever
+                <literal>alive_router_check_interval</literal>. If the gateway
+                can be reached on multiple networks, the interval per network is
+                <literal>alive_router_check_interval</literal> / number of
+                networks.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>router_ping_timeout</literal></para>
+              </entry>
+              <entry>
+                <para>Defaults to <literal>50</literal> seconds. A gateway sets
+                its interface down if it has not received any traffic for
+                <literal>router_ping_timeout + alive_router_check_interval
+                </literal>
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>router_sensitivity_percentage</literal></para>
+              </entry>
+              <entry>
+                <para>Defaults to <literal>100</literal>. This parameter defines
+                how sensitive a gateway interface is to failure. If set to 100
+                then any gateway interface failure will contribute to all routes
+                using it going down. The lower the value the more tolerant to
+                failures the system becomes.</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+        </table>
+      </section>
+    </section>
+    <section xml:id="mrrouting.health_routerhealth">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrrouting</secondary>
+        <tertiary>routinghealth_routerhealth</tertiary>
+        </indexterm>Router Health</title>
+      <para>The routing infrastructure now relies on LNet Health to keep track
+      of interface health. Each gateway interface has a health value
+      associated with it. If a send fails to one of these interfaces, then the
+      interface's health value is decremented and placed on a recovery queue.
+      The unhealthy interface is then pinged every
+      <literal>lnet_recovery_interval</literal>. This value defaults to
+      <literal>1</literal> second.</para>
+      <para>If the peer receives a message from the gateway, then it immediately
+      assumes that the gateway's interface is up and resets its health value to
+      maximum. This is needed to ensure we start using the gateways immediately
+      instead of holding off until the interface is back to full health.</para>
+    </section>
+    <section xml:id="mrrouting.health_discovery">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrrouting</secondary>
+        <tertiary>routinghealth_discovery</tertiary>
+        </indexterm>Discovery</title>
+      <para>LNet Discovery is used in place of pinging the peers. This serves
+      two purposes:</para>
+      <orderedlist>
+        <listitem><para>The discovery communication infrastructure does not need
+        to be duplicated for the routing feature.</para></listitem>
+        <listitem><para>It allows propagation of the gateway's interface state
+        changes to the peers using the gateway.</para></listitem>
+      </orderedlist>
+      <para>For (2), if an interface changes state from <literal>UP</literal> to
+      <literal>DOWN</literal> or vice versa, then a discovery
+      <literal>PUSH</literal> is sent to all the peers which can be reached.
+      This allows peers to adapt to changes quicker.</para>
+      <para>Discovery is designed to be backwards compatible. The discovery
+      protocol is composed of a <literal>GET</literal> and a
+      <literal>PUT</literal>. The <literal>GET</literal> requests interface
+      information from the peer, this is a basic lnet ping. The peer responds
+      with its interface information and a feature bit. If the peer is
+      multi-rail capable and discovery is turned on, then the node will
+      <literal>PUSH</literal> its interface information. As a result both peers
+      will be aware of each other's interfaces.</para>
+      <para>This information is then used by the peers to decide, based on the
+      interface state provided by the gateway, whether the route is alive or
+      not.</para>
+    </section>
+    <section xml:id="mrrouting.health_aliveness">
+      <title><indexterm><primary>MR</primary>
+        <secondary>mrrouting</secondary>
+        <tertiary>routinghealth_aliveness</tertiary>
+        </indexterm>Route Aliveness Criteria</title>
+      <para>A route is considered alive if the following conditions hold:</para>
+      <orderedlist>
+        <listitem><para>The gateway can be reached on the local net via at least
+        one path.</para></listitem>
+        <listitem><para>If <literal>avoid_asym_router_failure</literal> is
+        enabled then the remote network defined in the route must have at least
+        one healthy interface on the gateway.</para></listitem>
+      </orderedlist>
     </section>
   </section>
   <section xml:id="dbdoclet.mrhealth" condition="l2C">
