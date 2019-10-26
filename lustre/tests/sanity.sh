@@ -17422,7 +17422,7 @@ test_247e() {
 }
 run_test 247e "mount .. as fileset"
 
-test_248() {
+test_248a() {
 	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
 	[ -z "$fast_read_sav" ] && skip "no fast read support"
 
@@ -17473,7 +17473,89 @@ test_248() {
 	$LCTL set_param -n llite.*.fast_read=$fast_read_sav
 	rm -f $DIR/$tfile
 }
-run_test 248 "fast read verification"
+run_test 248a "fast read verification"
+
+test_248b() {
+	# Default short_io_bytes=16384, try both smaller and larger sizes.
+	# Lustre O_DIRECT read and write needs to be a multiple of PAGE_SIZE.
+	# 6017024 = 2^12*13*113 = 47008*128 = 11752*512 = 4096*1469 = 53248*113
+	echo "bs=53248 count=113 normal buffered write"
+	dd if=/dev/urandom of=$TMP/$tfile.0 bs=53248 count=113 ||
+		error "dd of initial data file failed"
+	stack_trap "rm -f $DIR/$tfile.[0-3] $TMP/$tfile.[0-3]" EXIT
+
+	echo "bs=47008 count=128 oflag=dsync normal write $tfile.0"
+	dd if=$TMP/$tfile.0 of=$DIR/$tfile.0 bs=47008 count=128 oflag=dsync ||
+		error "dd with sync normal writes failed"
+	cmp $TMP/$tfile.0 $DIR/$tfile.0 || error "compare $DIR/$tfile.0 failed"
+
+	echo "bs=11752 count=512 oflag=dsync small write $tfile.1"
+	dd if=$TMP/$tfile.0 of=$DIR/$tfile.1 bs=11752 count=512 oflag=dsync ||
+		error "dd with sync small writes failed"
+	cmp $TMP/$tfile.0 $DIR/$tfile.1 || error "compare $DIR/$tfile.1 failed"
+
+	cancel_lru_locks osc
+
+	# calculate the small O_DIRECT size and count for the client PAGE_SIZE
+	local num=$((13 * 113 / (PAGE_SIZE / 4096)))
+	echo "bs=$PAGE_SIZE count=$num iflag=direct small read $tfile.1"
+	dd if=$DIR/$tfile.1 of=$TMP/$tfile.1 bs=$PAGE_SIZE count=$num \
+		iflag=direct || error "dd with O_DIRECT small read failed"
+	# adjust bytes checked to handle larger PAGE_SIZE for ARM/PPC
+	cmp --bytes=$((PAGE_SIZE * num)) $TMP/$tfile.0 $TMP/$tfile.1 ||
+		error "compare $TMP/$tfile.1 failed"
+
+	local save=$($LCTL get_param -n osc.*OST000*.short_io_bytes | head -n 1)
+	stack_trap "$LCTL set_param osc.$FSNAME-*.short_io_bytes=$save" EXIT
+
+	# just to see what the maximum tunable value is, and test parsing
+	echo "test invalid parameter 2MB"
+	$LCTL set_param osc.$FSNAME-OST0000*.short_io_bytes=2M &&
+		error "too-large short_io_bytes allowed"
+	echo "test maximum parameter 512KB"
+	# if we can set a larger short_io_bytes, run test regardless of version
+	if ! $LCTL set_param osc.$FSNAME-OST0000*.short_io_bytes=512K; then
+		# older clients may not allow setting it this large, that's OK
+		[ $CLIENT_VERSION -ge $(version_code 2.13.50) ] ||
+			skip "Need at least client version 2.13.50"
+		error "medium short_io_bytes failed"
+	fi
+	$LCTL get_param osc.$FSNAME-OST0000*.short_io_bytes
+	size=$($LCTL get_param -n osc.$FSNAME-OST0000*.short_io_bytes)
+
+	echo "test large parameter 64KB"
+	$LCTL set_param osc.$FSNAME-*.short_io_bytes=65536
+	$LCTL get_param osc.$FSNAME-OST0000*.short_io_bytes
+
+	echo "bs=47008 count=128 oflag=dsync large write $tfile.2"
+	dd if=$TMP/$tfile.0 of=$DIR/$tfile.2 bs=47008 count=128 oflag=dsync ||
+		error "dd with sync large writes failed"
+	cmp $TMP/$tfile.0 $DIR/$tfile.2 || error "compare $DIR/$tfile.2 failed"
+
+	# calculate the large O_DIRECT size and count for the client PAGE_SIZE
+	local size=$(((4096 * 13 + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE))
+	num=$((113 * 4096 / PAGE_SIZE))
+	echo "bs=$size count=$num oflag=direct large write $tfile.3"
+	dd if=$TMP/$tfile.0 of=$DIR/$tfile.3 bs=$size count=$num oflag=direct ||
+		error "dd with O_DIRECT large writes failed"
+	cmp --bytes=$((size * num)) $TMP/$tfile.0 $DIR/$tfile.3 ||
+		error "compare $DIR/$tfile.3 failed"
+
+	cancel_lru_locks osc
+
+	echo "bs=$size count=$num iflag=direct large read $tfile.2"
+	dd if=$DIR/$tfile.2 of=$TMP/$tfile.2 bs=$size count=$num iflag=direct ||
+		error "dd with O_DIRECT large read failed"
+	cmp --bytes=$((size * num)) $TMP/$tfile.0 $TMP/$tfile.2 ||
+		error "compare $TMP/$tfile.2 failed"
+
+	echo "bs=$size count=$num iflag=direct large read $tfile.3"
+	dd if=$DIR/$tfile.3 of=$TMP/$tfile.3 bs=$size count=$num iflag=direct ||
+		error "dd with O_DIRECT large read failed"
+	cmp --bytes=$((size * num)) $TMP/$tfile.0 $TMP/$tfile.3 ||
+		error "compare $TMP/$tfile.3 failed"
+}
+run_test 248b "test short_io read and write for both small and large sizes"
 
 test_249() { # LU-7890
 	[ $MDS1_VERSION -lt $(version_code 2.8.53) ] &&

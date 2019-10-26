@@ -2338,25 +2338,31 @@ ssize_t short_io_bytes_store(struct kobject *kobj, struct attribute *attr,
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct client_obd *cli = &dev->u.cli;
-	u32 val;
+	char kernbuf[32];
+	s64 val;
 	int rc;
+
+	if (count >= sizeof(kernbuf))
+		return -EINVAL;
 
 	LPROCFS_CLIMP_CHECK(dev);
 
-	rc = kstrtouint(buffer, 0, &val);
+	memcpy(kernbuf, buffer, count);
+	kernbuf[count] = '\0';
+	rc = lu_str_to_s64(kernbuf, count, &val, '1');
 	if (rc)
 		GOTO(out, rc);
 
-	if (val && (val < MIN_SHORT_IO_BYTES || val > OBD_MAX_SHORT_IO_BYTES))
+	if (val == -1)
+		val = OBD_DEF_SHORT_IO_BYTES;
+
+	if (val && (val < MIN_SHORT_IO_BYTES || val > LNET_MTU))
 		GOTO(out, rc = -ERANGE);
 
 	rc = count;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	if (val > (cli->cl_max_pages_per_rpc << PAGE_SHIFT))
-		rc = -ERANGE;
-	else
-		cli->cl_max_short_io_bytes = val;
+	cli->cl_max_short_io_bytes = min_t(u64, val, OST_MAX_SHORT_IO_BYTES);
 	spin_unlock(&cli->cl_loi_list_lock);
 
 out:
