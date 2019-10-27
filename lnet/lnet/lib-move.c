@@ -1517,22 +1517,16 @@ lnet_find_route_locked(struct lnet_remotenet *rnet,
 	struct lnet_peer_ni *best_gw_ni = NULL;
 	struct lnet_route *best_route;
 	struct lnet_route *last_route;
-	struct lnet_peer *lp_best;
 	struct lnet_route *route;
-	struct lnet_peer *lp;
 	int rc;
 
-	lp_best = NULL;
 	best_route = last_route = NULL;
 	list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
-		lp = route->lr_gateway;
-
 		if (!lnet_is_route_alive(route))
 			continue;
 
-		if (lp_best == NULL) {
+		if (!best_route) {
 			best_route = last_route = route;
-			lp_best = lp;
 			best_gw_ni = lnet_find_best_lpni_on_net(NULL,
 								LNET_NID_ANY,
 								route->lr_gateway,
@@ -1550,7 +1544,6 @@ lnet_find_route_locked(struct lnet_remotenet *rnet,
 			continue;
 
 		best_route = route;
-		lp_best = lp;
 	}
 
 	*prev_route = last_route;
