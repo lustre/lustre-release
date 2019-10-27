@@ -974,7 +974,7 @@ struct lnet_peer_ni *lnet_nid2peerni_locked(lnet_nid_t nid, lnet_nid_t pref,
 struct lnet_peer_ni *lnet_peerni_by_nid_locked(struct lnet_nid *nid,
 					       struct lnet_nid *pref,
 					       int cpt);
-struct lnet_peer_ni *lnet_nid2peerni_ex(struct lnet_nid *nid, int cpt);
+struct lnet_peer_ni *lnet_nid2peerni_ex(struct lnet_nid *nid);
 struct lnet_peer_ni *lnet_peer_get_ni_locked(struct lnet_peer *lp,
 					     lnet_nid_t nid);
 struct lnet_peer_ni *lnet_peer_ni_get_locked(struct lnet_peer *lp,

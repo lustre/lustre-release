@@ -1844,19 +1844,22 @@ out:
 
 /*
  * lpni creation initiated due to traffic either sending or receiving.
+ * Callers must hold ln_api_mutex
+ * Ref taken on lnet_peer_ni returned by this function
  */
-static int
+static struct lnet_peer_ni *
 lnet_peer_ni_traffic_add(struct lnet_nid *nid, struct lnet_nid *pref)
+__must_hold(&the_lnet.ln_api_mutex)
 {
-	struct lnet_peer *lp;
-	struct lnet_peer_net *lpn;
+	struct lnet_peer *lp = NULL;
+	struct lnet_peer_net *lpn = NULL;
 	struct lnet_peer_ni *lpni;
 	unsigned flags = 0;
 	int rc = 0;
 
 	if (LNET_NID_IS_ANY(nid)) {
 		rc = -EINVAL;
-		goto out;
+		goto out_err;
 	}
 
 	/* lnet_net_lock is not needed here because ln_api_lock is held */
@@ -1868,7 +1871,6 @@ lnet_peer_ni_traffic_add(struct lnet_nid *nid, struct lnet_nid *pref)
 		 * traffic, we just assume everything is ok and
 		 * return.
 		 */
-		lnet_peer_ni_decref_locked(lpni);
 		goto out;
 	}
 
@@ -1876,24 +1878,31 @@ lnet_peer_ni_traffic_add(struct lnet_nid *nid, struct lnet_nid *pref)
 	rc = -ENOMEM;
 	lp = lnet_peer_alloc(nid);
 	if (!lp)
-		goto out;
+		goto out_err;
 	lpn = lnet_peer_net_alloc(LNET_NID_NET(nid));
 	if (!lpn)
-		goto out_free_lp;
+		goto out_err;
 	lpni = lnet_peer_ni_alloc(nid);
 	if (!lpni)
-		goto out_free_lpn;
+		goto out_err;
 	lnet_peer_ni_set_non_mr_pref_nid(lpni, pref);
 
-	return lnet_peer_attach_peer_ni(lp, lpn, lpni, flags);
+	/* lnet_peer_attach_peer_ni() always returns 0 */
+	rc = lnet_peer_attach_peer_ni(lp, lpn, lpni, flags);
 
-out_free_lpn:
-	LIBCFS_FREE(lpn, sizeof(*lpn));
-out_free_lp:
-	LIBCFS_FREE(lp, sizeof(*lp));
+	lnet_peer_ni_addref_locked(lpni);
+
+out_err:
+	if (rc) {
+		if (lpn)
+			LIBCFS_FREE(lpn, sizeof(*lpn));
+		if (lp)
+			LIBCFS_FREE(lp, sizeof(*lp));
+		lpni = ERR_PTR(rc);
+	}
 out:
 	CDEBUG(D_NET, "peer %s: %d\n", libcfs_nidstr(nid), rc);
-	return rc;
+	return lpni;
 }
 
 /*
@@ -2062,10 +2071,10 @@ lnet_destroy_peer_ni_locked(struct kref *ref)
 }
 
 struct lnet_peer_ni *
-lnet_nid2peerni_ex(struct lnet_nid *nid, int cpt)
+lnet_nid2peerni_ex(struct lnet_nid *nid)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer_ni *lpni = NULL;
-	int rc;
 
 	if (the_lnet.ln_state != LNET_STATE_RUNNING)
 		return ERR_PTR(-ESHUTDOWN);
@@ -2078,19 +2087,11 @@ lnet_nid2peerni_ex(struct lnet_nid *nid, int cpt)
 	if (lpni)
 		return lpni;
 
-	lnet_net_unlock(cpt);
+	lnet_net_unlock(LNET_LOCK_EX);
 
-	rc = lnet_peer_ni_traffic_add(nid, NULL);
-	if (rc) {
-		lpni = ERR_PTR(rc);
-		goto out_net_relock;
-	}
+	lpni = lnet_peer_ni_traffic_add(nid, NULL);
 
-	lpni = lnet_peer_ni_find_locked(nid);
-	LASSERT(lpni);
-
-out_net_relock:
-	lnet_net_lock(cpt);
+	lnet_net_lock(LNET_LOCK_EX);
 
 	return lpni;
 }
@@ -2104,7 +2105,6 @@ lnet_peerni_by_nid_locked(struct lnet_nid *nid,
 			struct lnet_nid *pref, int cpt)
 {
 	struct lnet_peer_ni *lpni = NULL;
-	int rc;
 
 	if (the_lnet.ln_state != LNET_STATE_RUNNING)
 		return ERR_PTR(-ESHUTDOWN);
@@ -2132,30 +2132,18 @@ lnet_peerni_by_nid_locked(struct lnet_nid *nid,
 	lnet_net_unlock(cpt);
 	mutex_lock(&the_lnet.ln_api_mutex);
 	/*
-	 * Shutdown is only set under the ln_api_lock, so a single
+	 * the_lnet.ln_state is only modified under the ln_api_lock, so a single
 	 * check here is sufficent.
 	 */
-	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		lpni = ERR_PTR(-ESHUTDOWN);
-		goto out_mutex_unlock;
-	}
+	if (the_lnet.ln_state == LNET_STATE_RUNNING)
+		lpni = lnet_peer_ni_traffic_add(nid, pref);
 
-	rc = lnet_peer_ni_traffic_add(nid, pref);
-	if (rc) {
-		lpni = ERR_PTR(rc);
-		goto out_mutex_unlock;
-	}
-
-	lpni = lnet_peer_ni_find_locked(nid);
-	LASSERT(lpni);
-
-out_mutex_unlock:
 	mutex_unlock(&the_lnet.ln_api_mutex);
 	lnet_net_lock(cpt);
 
 	/* Lock has been dropped, check again for shutdown. */
 	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		if (!IS_ERR(lpni))
+		if (!IS_ERR_OR_NULL(lpni))
 			lnet_peer_ni_decref_locked(lpni);
 		lpni = ERR_PTR(-ESHUTDOWN);
 	}
