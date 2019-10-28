@@ -1,3 +1,9 @@
 # Ensure block devices re-added to the system allow for large writes (LU-9551)
-ACTION=="add|change", SUBSYSTEM=="block", RUN+="/usr/sbin/l_tunedisk /dev/%k"
+# Currently applies only to ldiskfs-formatted devices
+ACTION!="add|change",    GOTO="l_tunedisk_end"
+SUBSYSTEM!="block",      GOTO="l_tunedisk_end"
+ENV{ID_FS_TYPE}!="ext4", GOTO="l_tunedisk_end"
 
+ENV{ID_FS_LABEL}=="MGS|*-MDT*|*-OST*", RUN+="/usr/sbin/l_tunedisk /dev/%k"
+
+LABEL="l_tunedisk_end"
