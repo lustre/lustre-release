@@ -49,7 +49,7 @@ static void set_mrc_cr_flags(struct mdt_rec_create *mrc, __u64 flags)
 
 static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
 {
-	LASSERT (b != NULL);
+	LASSERT(b);
 
 	b->mbo_suppgid = suppgid;
 	b->mbo_uid = from_kuid(&init_user_ns, current_uid());
@@ -76,7 +76,7 @@ void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,
 {
 	struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
 						    &RMF_MDT_BODY);
-	LASSERT(b != NULL);
+	LASSERT(b);
 	b->mbo_valid = valid;
 	b->mbo_eadatasize = ea_size;
 	b->mbo_flags = flags;
@@ -166,11 +166,11 @@ void mdc_file_sepol_pack(struct ptlrpc_request *req)
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, size_t size,
 		      const struct lu_fid *fid)
 {
-        struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
-                                                    &RMF_MDT_BODY);
+	struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+						    &RMF_MDT_BODY);
 	b->mbo_fid1 = *fid;
 	b->mbo_valid |= OBD_MD_FLID;
-	b->mbo_size = pgoff;		       /* !! */
+	b->mbo_size = pgoff;			/* !! */
 	b->mbo_nlink = size;			/* !! */
 	__mdc_pack_body(b, -1);
 	b->mbo_mode = LUDA_FID | LUDA_TYPE;
@@ -185,9 +185,9 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	char *tmp;
 	__u64 flags;
 
-	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_create));
+	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
+		     sizeof(struct mdt_rec_create));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
-
 
 	rec->cr_opcode   = REINT_CREATE;
 	rec->cr_fsuid    = uid;
@@ -263,7 +263,8 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	char *tmp;
 	__u64 cr_flags;
 
-	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_create));
+	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
+		     sizeof(struct mdt_rec_create));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
 	/* XXX do something about time, uid, gid */
@@ -316,26 +317,26 @@ static inline u64 attr_pack(unsigned int ia_valid, enum op_xvalid ia_xvalid)
 {
 	u64 sa_valid = 0;
 
-        if (ia_valid & ATTR_MODE)
-                sa_valid |= MDS_ATTR_MODE;
-        if (ia_valid & ATTR_UID)
-                sa_valid |= MDS_ATTR_UID;
-        if (ia_valid & ATTR_GID)
-                sa_valid |= MDS_ATTR_GID;
-        if (ia_valid & ATTR_SIZE)
-                sa_valid |= MDS_ATTR_SIZE;
-        if (ia_valid & ATTR_ATIME)
-                sa_valid |= MDS_ATTR_ATIME;
-        if (ia_valid & ATTR_MTIME)
-                sa_valid |= MDS_ATTR_MTIME;
-        if (ia_valid & ATTR_CTIME)
-                sa_valid |= MDS_ATTR_CTIME;
-        if (ia_valid & ATTR_ATIME_SET)
-                sa_valid |= MDS_ATTR_ATIME_SET;
-        if (ia_valid & ATTR_MTIME_SET)
-                sa_valid |= MDS_ATTR_MTIME_SET;
-        if (ia_valid & ATTR_FORCE)
-                sa_valid |= MDS_ATTR_FORCE;
+	if (ia_valid & ATTR_MODE)
+		sa_valid |= MDS_ATTR_MODE;
+	if (ia_valid & ATTR_UID)
+		sa_valid |= MDS_ATTR_UID;
+	if (ia_valid & ATTR_GID)
+		sa_valid |= MDS_ATTR_GID;
+	if (ia_valid & ATTR_SIZE)
+		sa_valid |= MDS_ATTR_SIZE;
+	if (ia_valid & ATTR_ATIME)
+		sa_valid |= MDS_ATTR_ATIME;
+	if (ia_valid & ATTR_MTIME)
+		sa_valid |= MDS_ATTR_MTIME;
+	if (ia_valid & ATTR_CTIME)
+		sa_valid |= MDS_ATTR_CTIME;
+	if (ia_valid & ATTR_ATIME_SET)
+		sa_valid |= MDS_ATTR_ATIME_SET;
+	if (ia_valid & ATTR_MTIME_SET)
+		sa_valid |= MDS_ATTR_MTIME_SET;
+	if (ia_valid & ATTR_FORCE)
+		sa_valid |= MDS_ATTR_FORCE;
 	if (ia_xvalid & OP_XVALID_FLAGS)
 		sa_valid |= MDS_ATTR_ATTR_FLAG;
 	if (ia_valid & ATTR_KILL_SUID)
@@ -357,7 +358,7 @@ static inline u64 attr_pack(unsigned int ia_valid, enum op_xvalid ia_xvalid)
 		sa_valid |= MDS_ATTR_LSIZE;
 	if (ia_xvalid & OP_XVALID_LAZYBLOCKS)
 		sa_valid |= MDS_ATTR_LBLOCKS;
-        return sa_valid;
+	return sa_valid;
 }
 
 static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
@@ -383,7 +384,7 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
 	rec->sa_ctime = op_data->op_attr.ia_ctime.tv_sec;
 	rec->sa_attr_flags = op_data->op_attr_flags;
 	if ((op_data->op_attr.ia_valid & ATTR_GID) &&
-	     in_group_p(op_data->op_attr.ia_gid))
+	    in_group_p(op_data->op_attr.ia_gid))
 		rec->sa_suppgid =
 			from_kgid(&init_user_ns, op_data->op_attr.ia_gid);
 	else
@@ -407,8 +408,8 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	struct mdt_rec_setattr *rec;
 	struct lov_user_md *lum = NULL;
 
-	CLASSERT(sizeof(struct mdt_rec_reint) ==
-		 sizeof(struct mdt_rec_setattr));
+	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
+		     sizeof(struct mdt_rec_setattr));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 	mdc_setattr_pack_rec(rec, op_data);
 
@@ -431,22 +432,23 @@ void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
 	struct mdt_rec_unlink *rec;
 
-	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_unlink));
+	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
+		     sizeof(struct mdt_rec_unlink));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 	LASSERT(rec != NULL);
 
-	rec->ul_opcode  = op_data->op_cli_flags & CLI_RM_ENTRY ?
+	rec->ul_opcode = op_data->op_cli_flags & CLI_RM_ENTRY ?
 					REINT_RMENTRY : REINT_UNLINK;
-        rec->ul_fsuid   = op_data->op_fsuid;
-        rec->ul_fsgid   = op_data->op_fsgid;
-        rec->ul_cap     = op_data->op_cap;
-        rec->ul_mode    = op_data->op_mode;
-        rec->ul_suppgid1= op_data->op_suppgids[0];
-        rec->ul_suppgid2= -1;
-        rec->ul_fid1    = op_data->op_fid1;
-        rec->ul_fid2    = op_data->op_fid2;
-        rec->ul_time    = op_data->op_mod_time;
-        rec->ul_bias    = op_data->op_bias;
+	rec->ul_fsuid = op_data->op_fsuid;
+	rec->ul_fsgid = op_data->op_fsgid;
+	rec->ul_cap = op_data->op_cap;
+	rec->ul_mode = op_data->op_mode;
+	rec->ul_suppgid1 = op_data->op_suppgids[0];
+	rec->ul_suppgid2 = -1;
+	rec->ul_fid1 = op_data->op_fid1;
+	rec->ul_fid2 = op_data->op_fid2;
+	rec->ul_time = op_data->op_mod_time;
+	rec->ul_bias = op_data->op_bias;
 
 	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 
@@ -456,22 +458,23 @@ void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 
 void mdc_link_pack(struct ptlrpc_request *req, struct md_op_data *op_data)
 {
-        struct mdt_rec_link *rec;
+	struct mdt_rec_link *rec;
 
-        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_link));
-        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
-        LASSERT (rec != NULL);
+	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
+		     sizeof(struct mdt_rec_link));
+	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+	LASSERT(rec != NULL);
 
-        rec->lk_opcode   = REINT_LINK;
-        rec->lk_fsuid    = op_data->op_fsuid;//current->fsuid;
-        rec->lk_fsgid    = op_data->op_fsgid;//current->fsgid;
-        rec->lk_cap      = op_data->op_cap;//current->cap_effective;
-        rec->lk_suppgid1 = op_data->op_suppgids[0];
-        rec->lk_suppgid2 = op_data->op_suppgids[1];
-        rec->lk_fid1     = op_data->op_fid1;
-        rec->lk_fid2     = op_data->op_fid2;
-        rec->lk_time     = op_data->op_mod_time;
-        rec->lk_bias     = op_data->op_bias;
+	rec->lk_opcode   = REINT_LINK;
+	rec->lk_fsuid    = op_data->op_fsuid; /* current->fsuid; */
+	rec->lk_fsgid    = op_data->op_fsgid; /* current->fsgid; */
+	rec->lk_cap      = op_data->op_cap; /* current->cap_effective; */
+	rec->lk_suppgid1 = op_data->op_suppgids[0];
+	rec->lk_suppgid2 = op_data->op_suppgids[1];
+	rec->lk_fid1     = op_data->op_fid1;
+	rec->lk_fid2     = op_data->op_fid2;
+	rec->lk_time     = op_data->op_mod_time;
+	rec->lk_bias     = op_data->op_bias;
 
 	mdc_pack_name(req, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 
@@ -507,7 +510,8 @@ static void mdc_close_intent_pack(struct ptlrpc_request *req,
 	} else if (bias & MDS_CLOSE_RESYNC_DONE) {
 		struct close_data_resync_done *sync = &data->cd_resync;
 
-		CLASSERT(sizeof(data->cd_resync) <= sizeof(data->cd_reserved));
+		BUILD_BUG_ON(sizeof(data->cd_resync) >
+			     sizeof(data->cd_reserved));
 		sync->resync_count = op_data->op_data_size / sizeof(__u32);
 		if (sync->resync_count <= INLINE_RESYNC_ARRAY_SIZE) {
 			memcpy(sync->resync_ids_inline, op_data->op_data,
@@ -516,7 +520,7 @@ static void mdc_close_intent_pack(struct ptlrpc_request *req,
 			size_t count = sync->resync_count;
 
 			memcpy(req_capsule_client_get(&req->rq_pill, &RMF_U32),
-				op_data->op_data, count * sizeof(__u32));
+			       op_data->op_data, count * sizeof(__u32));
 		}
 	} else if (bias & MDS_PCC_ATTACH) {
 		data->cd_archive_id = op_data->op_archive_id;
@@ -529,7 +533,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 {
 	struct mdt_rec_rename *rec;
 
-	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_rename));
+	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
+		     sizeof(struct mdt_rec_rename));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
 	/* XXX do something about time, uid, gid */
@@ -560,7 +565,8 @@ void mdc_migrate_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	struct mdt_rec_rename *rec;
 	char *ea;
 
-	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_rename));
+	BUILD_BUG_ON(sizeof(struct mdt_rec_reint) !=
+		     sizeof(struct mdt_rec_rename));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
 	rec->rn_opcode	 = REINT_MIGRATE;
@@ -592,8 +598,8 @@ void mdc_migrate_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, __u32 flags,
 		      struct md_op_data *op_data, size_t ea_size)
 {
-        struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
-                                                    &RMF_MDT_BODY);
+	struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+						    &RMF_MDT_BODY);
 
 	b->mbo_valid = valid;
 	if (op_data->op_bias & MDS_CROSS_REF)
