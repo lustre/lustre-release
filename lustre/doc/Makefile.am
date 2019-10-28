@@ -38,6 +38,8 @@ MANFILES =					\
 	lctl-list_param.8			\
 	lctl-network.8				\
 	lctl-pcc.8				\
+	lctl-pool_add.8			\
+	lctl-pool_new.8			\
 	lctl-set_param.8			\
 	ldev.8					\
 	ldev.conf.5				\
@@ -45,28 +47,35 @@ MANFILES =					\
 	lfs-df.1				\
 	lfs-fid2path.1				\
 	lfs-find.1				\
-	lfs-getstripe.1				\
 	lfs-getdirstripe.1			\
+	lfs-getname.1				\
+	lfs-getsom.1				\
+	lfs-getstripe.1			\
 	lfs-heat.1				\
 	lfs-hsm.1				\
 	lfs-ladvise.1				\
 	lfs_migrate.1				\
 	lfs-migrate.1				\
+	lfs-mirror-copy.1			\
 	lfs-mirror-create.1			\
 	lfs-mirror-delete.1			\
 	lfs-mirror-extend.1			\
+	lfs-mirror-read.1			\
 	lfs-mirror-resync.1			\
 	lfs-mirror-split.1			\
 	lfs-mirror-verify.1			\
+	lfs-mirror-write.1			\
 	lfs-mkdir.1				\
 	lfs-path2fid.1				\
 	lfs-pcc.1				\
 	lfs-pcc-detach.1			\
 	lfs-project.1				\
+	lfs-rmfid.1				\
 	lfs-setdirstripe.1			\
-	lfs-setstripe.1				\
 	lfs-setquota.1				\
+	lfs-setstripe.1				\
 	l_getidentity.8				\
+	l_getsepol.8				\
 	lgss_sk.8				\
 	lhbadm.8				\
 	llapi_create_volatile_param.3		\
@@ -76,6 +85,10 @@ MANFILES =					\
 	llapi_file_create_foreign.3		\
 	llapi_file_get_stripe.3			\
 	llapi_file_open.3			\
+	llapi_get_lum_dir.3			\
+	llapi_get_lum_dir_fd.3			\
+	llapi_get_lum_file.3			\
+	llapi_get_lum_file_fd.3		\
 	llapi_group_lock.3			\
 	llapi_group_unlock.3			\
 	llapi_heat_get.3			\
@@ -104,6 +117,8 @@ MANFILES =					\
 	llapi_layout_comp_id_get.3		\
 	llapi_layout_comp_use.3			\
 	llapi_layout_comp_use_id.3		\
+	llapi_layout_extension_size_get.3	\
+	llapi_layout_extension_size_set.3	\
 	llapi_layout_file_comp_add.3		\
 	llapi_layout_file_comp_del.3		\
 	llapi_layout_file_create.3		\
@@ -125,7 +140,6 @@ MANFILES =					\
 	llapi_layout_stripe_size_set.3		\
 	llapi_path2fid.3			\
 	llapi_path2parent.3			\
-	llapi_quotactl.3			\
 	llapi_pcc_attach.3			\
 	llapi_pcc_attach_fid.3			\
 	llapi_pcc_attach_fid_str.3		\
@@ -136,7 +150,12 @@ MANFILES =					\
 	llapi_pccdev_get.3			\
 	llapi_pccdev_set.3			\
 	llapi_pcc_state_get.3			\
-	llapi_pcc_state_get_fd.3			\
+	llapi_pcc_state_get_fd.3		\
+	llapi_quotactl.3			\
+	llapi_rmfid.3				\
+	llapi_search_mdt.3			\
+	llapi_search_ost.3			\
+	llapi_search_tgt.3			\
 	ll_decode_linkea.8			\
 	llobdstat.8				\
 	llog_reader.8				\
