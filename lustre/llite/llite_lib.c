@@ -2610,8 +2610,10 @@ out:
 	/* cleanup will be done if necessary */
 	md_free_lustre_md(sbi->ll_md_exp, &md);
 
-	if (rc != 0 && it != NULL && it->it_op & IT_OPEN)
+	if (rc != 0 && it != NULL && it->it_op & IT_OPEN) {
+		ll_intent_drop_lock(it);
 		ll_open_cleanup(sb != NULL ? sb : (*inode)->i_sb, req);
+	}
 
 	return rc;
 }
