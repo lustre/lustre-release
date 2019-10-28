@@ -97,6 +97,7 @@ cfs_time_before_64||ktime_before
 cfs_time_current||jiffies
 cfs_time_current_64||ktime_get
 cfs_time_current_sec||ktime_get_real_seconds
+CLASSERT||BUILD_BUG_ON()
 msecs_to_jiffies||cfs_time_seconds
 DEFINE_TIMER||CFS_DEFINE_TIMER
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
