@@ -1048,7 +1048,7 @@ static int mdd_attr_set_changelog(const struct lu_env *env,
 	bits |= (valid & LA_ATIME) ? 1 << CL_ATIME : 0;
 	bits = bits & mdd->mdd_cl.mc_mask;
 	/* This is an implementation limit rather than a protocol limit */
-	CLASSERT(CL_LAST <= sizeof(int) * 8);
+	BUILD_BUG_ON(CL_LAST > sizeof(int) * 8);
 	if (bits == 0)
 		return 0;
 
