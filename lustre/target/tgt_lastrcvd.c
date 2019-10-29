@@ -1499,8 +1499,8 @@ static int tgt_clients_data_init(const struct lu_env *env,
 	if (tgt->lut_bottom->dd_rdonly)
 		RETURN(0);
 
-	CLASSERT(offsetof(struct lsd_client_data, lcd_padding) +
-		 sizeof(lcd->lcd_padding) == LR_CLIENT_SIZE);
+	BUILD_BUG_ON(offsetof(struct lsd_client_data, lcd_padding) +
+		     sizeof(lcd->lcd_padding) != LR_CLIENT_SIZE);
 
 	OBD_ALLOC_PTR(lcd);
 	if (lcd == NULL)
@@ -1654,8 +1654,8 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 	last_rcvd_size = (unsigned long)tti->tti_attr.la_size;
 
 	/* ensure padding in the struct is the correct size */
-	CLASSERT(offsetof(struct lr_server_data, lsd_padding) +
-		 sizeof(lsd->lsd_padding) == LR_SERVER_SIZE);
+	BUILD_BUG_ON(offsetof(struct lr_server_data, lsd_padding) +
+		     sizeof(lsd->lsd_padding) != LR_SERVER_SIZE);
 
 	rc = server_name2index(tgt_name(tgt), &index, NULL);
 	if (rc < 0) {
