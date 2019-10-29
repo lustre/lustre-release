@@ -2238,6 +2238,11 @@ zconf_mount() {
 		exit 1
 	fi
 
+	if $GSS_SK; then
+		# update mount option with skpath
+		opts=$(add_sk_mntflag $opts)
+	fi
+
 	echo "Starting client: $client: $flags $opts $device $mnt"
 	do_node $client mkdir -p $mnt
 	if [ -n "$FILESET" -a -z "$SKIP_FILESET" ];then

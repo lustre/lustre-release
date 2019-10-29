@@ -409,7 +409,7 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 	rawobj_t checksum = RAWOBJ_EMPTY;
 	struct ahash_request *req;
 	struct scatterlist sg[1];
-	int rc = GSS_S_FAILURE;
+	int rc = 0;
 	struct sg_table sgt;
 	int bytes;
 	int i;
@@ -423,11 +423,13 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 
 	OBD_ALLOC_LARGE(checksum.data, checksum.len);
 	if (!checksum.data)
-		return rc;
+		return GSS_S_FAILURE;
 
 	req = cfs_crypto_hash_init(sc_hmac, key->data, key->len);
-	if (IS_ERR(req))
+	if (IS_ERR(req)) {
+		rc = GSS_S_FAILURE;
 		goto cleanup;
+	}
 
 	for (i = 0; i < msgcnt; i++) {
 		if (!msgs[i].len)
@@ -463,15 +465,15 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 			goto hash_cleanup;
 	}
 
-	if (memcmp(token->data, checksum.data, checksum.len)) {
-		rc = GSS_S_BAD_SIG;
-		goto hash_cleanup;
-	}
-
-	rc = GSS_S_COMPLETE;
-
 hash_cleanup:
 	cfs_crypto_hash_final(req, checksum.data, &checksum.len);
+	if (rc)
+		goto cleanup;
+
+	if (memcmp(token->data, checksum.data, checksum.len))
+		rc = GSS_S_BAD_SIG;
+	else
+		rc = GSS_S_COMPLETE;
 
 cleanup:
 	OBD_FREE_LARGE(checksum.data, checksum.len);

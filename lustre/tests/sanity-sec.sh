@@ -2128,22 +2128,26 @@ test_29() {
 	touch $DIR/$tdir/$tfile || error "touch"
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to umount clients"
-	keyctl show | awk '/lustre/ { print $1 }' |
-		xargs -IX keyctl unlink X
+	do_node ${clients_arr[0]} "keyctl show |
+		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
 	OLD_SK_PATH=$SK_PATH
 	export SK_PATH=/dev/null
 	if zconf_mount_clients ${clients_arr[0]} $MOUNT; then
 		export SK_PATH=$OLD_SK_PATH
-		if [ -e $DIR/$tdir/$tfile ]; then
+		do_node ${clients_arr[0]} "ls $DIR/$tdir/$tfile"
+		if [ $? -eq 0 ]; then
 			error "able to mount and read without key"
 		else
 			error "able to mount without key"
 		fi
 	else
 		export SK_PATH=$OLD_SK_PATH
-		keyctl show | awk '/lustre/ { print $1 }' |
-			xargs -IX keyctl unlink X
+		do_node ${clients_arr[0]} "keyctl show |
+			awk '/lustre/ { print \\\$1 }' |
+			xargs -IX keyctl unlink X"
 	fi
+	zconf_mount_clients ${clients_arr[0]} $MOUNT ||
+		error "unable to mount clients"
 }
 run_test 29 "check for missing shared key"
 
@@ -2159,17 +2163,19 @@ test_30() {
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to umount clients"
 	# unload keys from ring
-	keyctl show | awk '/lustre/ { print $1 }' |
-		xargs -IX keyctl unlink X
+	do_node ${clients_arr[0]} "keyctl show |
+		awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
 	# invalidate the key with bogus filesystem name
-	lgss_sk -w $SK_PATH/$FSNAME-bogus.key -f $FSNAME.bogus \
-		-t client -d /dev/urandom || error "lgss_sk failed (1)"
+	do_node ${clients_arr[0]} "lgss_sk -w $SK_PATH/$FSNAME-bogus.key \
+		-f $FSNAME.bogus -t client -d /dev/urandom" ||
+		error "lgss_sk failed (1)"
 	do_facet $SINGLEMDS lfs flushctx || error "could not run flushctx"
 	OLD_SK_PATH=$SK_PATH
 	export SK_PATH=$SK_PATH/$FSNAME-bogus.key
 	if zconf_mount_clients ${clients_arr[0]} $MOUNT; then
 		SK_PATH=$OLD_SK_PATH
-		if [ -a $DIR/$tdir/$tdir.out ]; then
+		do_node ${clients_arr[0]} "ls $DIR/$tdir/$tdir.out"
+		if [ $? -eq 0 ]; then
 			error "mount and read file with invalid key"
 		else
 			error "mount with invalid key"
@@ -2178,8 +2184,45 @@ test_30() {
 	SK_PATH=$OLD_SK_PATH
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to umount clients"
+	zconf_mount_clients ${clients_arr[0]} $MOUNT ||
+		error "unable to mount clients"
 }
 run_test 30 "check for invalid shared key"
+
+basic_ios() {
+	local flvr=$1
+
+	mkdir -p $DIR/$tdir || error "mkdir $flvr"
+	touch $DIR/$tdir/f0 || error "touch $flvr"
+	ls $DIR/$tdir || error "ls $flvr"
+	dd if=/dev/zero of=$DIR/$tdir/f0 conv=fsync bs=1M count=10 \
+		>& /dev/null || error "dd $flvr"
+	rm -f $DIR/$tdir/f0 || error "rm $flvr"
+	rmdir $DIR/$tdir || error "rmdir $flvr"
+
+	sync ; sync
+	echo 3 > /proc/sys/vm/drop_caches
+}
+
+test_30b() {
+	local save_flvr=$SK_FLAVOR
+
+	if ! $SHARED_KEY; then
+		skip "need shared key feature for this test"
+	fi
+
+	stack_trap restore_to_default_flavor EXIT
+
+	for flvr in skn ska ski skpi; do
+		# set flavor
+		SK_FLAVOR=$flvr
+		restore_to_default_flavor || error "cannot set $flvr flavor"
+		SK_FLAVOR=$save_flvr
+
+		basic_ios $flvr
+	done
+}
+run_test 30b "basic test of all different SSK flavors"
 
 cleanup_31() {
 	# unmount client
