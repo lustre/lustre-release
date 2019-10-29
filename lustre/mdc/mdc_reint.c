@@ -503,7 +503,7 @@ int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)
 		RETURN(rc);
 	}
 
-	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	BUILD_BUG_ON(sizeof(*rec) != sizeof(struct mdt_rec_reint));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 	rec->rs_opcode	= REINT_RESYNC;
 	rec->rs_fsuid	= op_data->op_fsuid;
