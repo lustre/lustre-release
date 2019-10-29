@@ -61,8 +61,9 @@ static struct dt_key *mdd_orphan_key_fill(const struct lu_env *env,
 	char *key = mdd_env_info(env)->mti_key;
 
 	LASSERT(key);
-	snprintf(key, sizeof(mdd_env_info(env)->mti_key),
-		 DFID_NOBRACE, PFID(lf));
+	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mti_flags))
+		snprintf(key, sizeof(mdd_env_info(env)->mti_key),
+			 DFID_NOBRACE, PFID(lf));
 
 	return (struct dt_key *)key;
 }
@@ -74,9 +75,11 @@ static struct dt_key *mdd_orphan_key_fill_20(const struct lu_env *env,
 	char *key = mdd_env_info(env)->mti_key;
 
 	LASSERT(key);
-	snprintf(key, sizeof(mdd_env_info(env)->mti_key),
-		 ORPHAN_FILE_NAME_FORMAT_20,
-		 fid_seq(lf), fid_oid(lf), fid_ver(lf), ORPH_OP_UNLINK);
+	if (!(MTI_KEEP_KEY & mdd_env_info(env)->mti_flags))
+		snprintf(key, sizeof(mdd_env_info(env)->mti_key),
+			 ORPHAN_FILE_NAME_FORMAT_20,
+			 fid_seq(lf), fid_oid(lf), fid_ver(lf),
+			 ORPH_OP_UNLINK);
 
 	return (struct dt_key *)key;
 }
@@ -291,7 +294,7 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 	struct thandle *th = NULL;
 	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
 	bool orphan_exists = true;
-	int rc = 0;
+	int rc = 0, rc1 = 0;
 	ENTRY;
 
 	th = mdd_trans_create(env, mdd);
@@ -323,34 +326,22 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 	if (likely(obj->mod_count == 0)) {
 		dt_write_lock(env, mdd->mdd_orphans, DT_TGT_ORPHAN);
 		rc = dt_delete(env, mdd->mdd_orphans, key, th);
-		if (rc == -ENOENT) {
-			key = mdd_orphan_key_fill_20(env, mdd_object_fid(obj));
-			rc = dt_delete(env, mdd->mdd_orphans, key, th);
-		}
-		if (rc) {
-			CERROR("%s: could not delete orphan "DFID": rc = %d\n",
-			       mdd_obj_dev_name(obj),
-			       PFID(mdd_object_fid(obj)), rc);
-		} else if (orphan_exists) {
+		/* We should remove object even dt_delete failed */
+		if (orphan_exists) {
 			mdo_ref_del(env, obj, th);
 			if (S_ISDIR(mdd_object_type(obj))) {
 				mdo_ref_del(env, obj, th);
 				dt_ref_del(env, mdd->mdd_orphans, th);
 			}
-			rc = mdo_destroy(env, obj, th);
-		} else {
-			CWARN("%s: orphan %s "DFID" doesn't exist\n",
-			      mdd_obj_dev_name(obj), (char *)key,
-			      PFID(mdd_object_fid(obj)));
+			rc1 = mdo_destroy(env, obj, th);
 		}
 		dt_write_unlock(env, mdd->mdd_orphans);
 	}
 unlock:
 	mdd_write_unlock(env, obj);
+	mdd_trans_stop(env, mdd, 0, th);
 
-	rc = mdd_trans_stop(env, mdd, 0, th);
-
-	RETURN(rc);
+	RETURN(rc ? rc : rc1);
 }
 
 /**
@@ -419,7 +410,6 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 	struct lu_fid fid;
 	int key_sz = 0;
 	int rc;
-	__u64 cookie;
 	ENTRY;
 
 	iops = &dor->do_index_ops->dio_it;
@@ -441,6 +431,7 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 		GOTO(out_put, rc = -EIO);
 	}
 
+	mdd_env_info(env)->mti_flags |= MTI_KEEP_KEY;
 	do {
 		if (thread->mgt_abort)
 			break;
@@ -466,16 +457,12 @@ static int mdd_orphan_index_iterate(const struct lu_env *env,
 		}
 
 		/* kill orphan object */
-		cookie = iops->store(env, it);
 		iops->put(env, it);
 		rc = mdd_orphan_key_test_and_delete(env, mdd, &fid,
 						(struct dt_key *)ent->lde_name);
-
 		/* after index delete reset iterator */
 		if (rc == 0)
 			rc = iops->get(env, it, (const void *)"");
-		else
-			rc = iops->load(env, it, cookie);
 next:
 		rc = iops->next(env, it);
 	} while (rc == 0);
