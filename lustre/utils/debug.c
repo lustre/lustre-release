@@ -197,7 +197,7 @@ static int applymask(char *param, int value)
 {
 	int	rc;
 	char	buf[64];
-	int	len = snprintf(buf, 64, "%d", value);
+	int	len = scnprintf(buf, sizeof(buf), "%d", value);
 
 	int fd = dbg_open_ctlhandle(param);
 	if (fd < 0)
@@ -286,7 +286,7 @@ static void print_rec(struct dbg_line ***linevp, int used, int fdout)
 		int			 bytes;
 		ssize_t			 bytes_written;
 
-		bytes = snprintf(out, sizeof(out),
+		bytes = scnprintf(out, sizeof(out),
 				"%08x:%08x:%u.%u%s:%u.%06llu:%u:%u:%u:"
 				"(%s:%u:%s()) %s",
 				hdr->ph_subsys, hdr->ph_mask,

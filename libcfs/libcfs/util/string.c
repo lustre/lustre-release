@@ -255,17 +255,17 @@ cfs_expr_list_print(char *buffer, int count, struct cfs_expr_list *expr_list)
 		numexprs++;
 
 	if (numexprs > 1)
-		i += snprintf(buffer + i, count - i, "[");
+		i += scnprintf(buffer + i, count - i, "[");
 
 	list_for_each_entry(expr, &expr_list->el_exprs, re_link) {
 		if (j++ != 0)
-			i += snprintf(buffer + i, count - i, ",");
+			i += scnprintf(buffer + i, count - i, ",");
 		i += cfs_range_expr_print(buffer + i, count - i, expr,
 					  numexprs > 1);
 	}
 
 	if (numexprs > 1)
-		i += snprintf(buffer + i, count - i, "]");
+		i += scnprintf(buffer + i, count - i, "]");
 
 	return i;
 }

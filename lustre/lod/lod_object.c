@@ -871,8 +871,8 @@ int lod_load_lmv_shards(const struct lu_env *env, struct lod_object *lo,
 				goto next;
 		}
 
-		len = snprintf(name, sizeof(name),
-			       DFID":", PFID(&ent->lde_fid));
+		len = scnprintf(name, sizeof(name),
+				DFID":", PFID(&ent->lde_fid));
 		/* The ent->lde_name is composed of ${FID}:${index} */
 		if (ent->lde_namelen < len + 1 ||
 		    memcmp(ent->lde_name, name, len) != 0) {

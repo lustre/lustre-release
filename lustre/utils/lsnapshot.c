@@ -44,6 +44,7 @@
 
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
+#include <libcfs/util/string.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_barrier_user.h>
 
@@ -1186,8 +1187,8 @@ static int snapshot_inherit_prop(struct snapshot_instance *si,
 		if (end)
 			*end = '\0';
 
-		rc = snprintf(cmd + len, size - len - 1,
-			      "-o %s=\"%s\" ", buf, ptr);
+		rc = scnprintf(cmd + len, size - len - 1,
+			       "-o %s=\"%s\" ", buf, ptr);
 		if (rc <= 0)
 			return -EOVERFLOW;
 
@@ -1229,21 +1230,21 @@ static int __snapshot_create(struct snapshot_instance *si,
 			int len;
 
 			memset(cmd, 0, sizeof(cmd));
-			len = snprintf(cmd, sizeof(cmd) - 1,
-				       DRSH" '"DZFS" snapshot "
-				       "-o lustre:fsname=%s "
-				       "-o lustre:magic=%s "
-				       "-o lustre:ctime=%llu "
-				       "-o lustre:mtime=%llu ",
-				       PRSH(si, st), PZFS(st), fsname,
-				       SNAPSHOT_MAGIC, xtime, xtime);
+			len = scnprintf(cmd, sizeof(cmd) - 1,
+					DRSH" '"DZFS" snapshot "
+					"-o lustre:fsname=%s "
+					"-o lustre:magic=%s "
+					"-o lustre:ctime=%llu "
+					"-o lustre:mtime=%llu ",
+					PRSH(si, st), PZFS(st), fsname,
+					SNAPSHOT_MAGIC, xtime, xtime);
 			if (len <= 0)
 				exit(-EOVERFLOW);
 
 			if (si->si_comment) {
-				rc = snprintf(cmd + len, sizeof(cmd) - len - 1,
-					      "-o lustre:comment=\"%s\" ",
-					      si->si_comment);
+				rc = scnprintf(cmd + len, sizeof(cmd) - len - 1,
+					       "-o lustre:comment=\"%s\" ",
+					       si->si_comment);
 				if (rc <= 0)
 					exit(-EOVERFLOW);
 

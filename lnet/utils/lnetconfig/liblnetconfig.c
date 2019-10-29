@@ -2271,7 +2271,6 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		goto out;
 
 	for (i = 0;; i++) {
-		pos = str_buf;
 		__u32 rc_net;
 
 		memset(buf, 0, buf_size);
@@ -2502,17 +2501,18 @@ continue_without_msg_stats:
 				goto out;
 
 			/* out put the CPTs in the format: "[x,x,x,...]" */
+			pos = str_buf;
 			limit = str_buf + str_buf_len - 3;
-			pos += snprintf(pos, limit - pos, "\"[");
+			pos += scnprintf(pos, limit - pos, "\"[");
 			for (j = 0 ; ni_data->lic_ncpts >= 1 &&
 				j < ni_data->lic_ncpts &&
 				pos < limit; j++) {
-				pos += snprintf(pos, limit - pos,
-						"%d", ni_data->lic_cpts[j]);
+				pos += scnprintf(pos, limit - pos,
+						 "%d", ni_data->lic_cpts[j]);
 				if ((j + 1) < ni_data->lic_ncpts)
-					pos += snprintf(pos, limit - pos, ",");
+					pos += scnprintf(pos, limit - pos, ",");
 			}
-			pos += snprintf(pos, 3, "]\"");
+			snprintf(pos, 3, "]\"");
 
 			if (ni_data->lic_ncpts >= 1 &&
 			    cYAML_create_string(item, "CPT",

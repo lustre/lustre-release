@@ -238,7 +238,7 @@ libcfs_ip_addr_range_print(char *buffer, int count, struct list_head *list)
 	list_for_each_entry(el, list, el_link) {
 		assert(j++ < 4);
 		if (i != 0)
-			i += snprintf(buffer + i, count - i, ".");
+			i += scnprintf(buffer + i, count - i, ".");
 		i += cfs_expr_list_print(buffer + i, count - i, el);
 	}
 	return i;
@@ -1061,7 +1061,7 @@ cfs_print_addrranges(char *buffer, int count, struct list_head *addrranges,
 
 	list_for_each_entry(ar, addrranges, ar_link) {
 		if (i != 0)
-			i += snprintf(buffer + i, count - i, " ");
+			i += scnprintf(buffer + i, count - i, " ");
 		i += nf->nf_print_addrlist(buffer + i, count - i,
 					   &ar->ar_numaddr_ranges);
 		i += cfs_print_network(buffer + i, count - i, nr);
@@ -1086,11 +1086,11 @@ int cfs_print_nidlist(char *buffer, int count, struct list_head *nidlist)
 
 	list_for_each_entry(nr, nidlist, nr_link) {
 		if (i != 0)
-			i += snprintf(buffer + i, count - i, " ");
+			i += scnprintf(buffer + i, count - i, " ");
 
 		if (nr->nr_all != 0) {
 			assert(list_empty(&nr->nr_addrranges));
-			i += snprintf(buffer + i, count - i, "*");
+			i += scnprintf(buffer + i, count - i, "*");
 			i += cfs_print_network(buffer + i, count - i, nr);
 		} else {
 			i += cfs_print_addrranges(buffer + i, count - i,

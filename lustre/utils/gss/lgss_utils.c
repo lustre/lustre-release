@@ -96,15 +96,16 @@
 #ifdef HAVE_COM_ERR_H
 #include <com_err.h>
 #endif
+#include <libcfs/util/string.h>
 
 #include "lsupport.h"
 #include "lgss_utils.h"
 #include "lgss_krb5_utils.h"
 
 const char *lgss_svc_str[LGSS_SVC_MAX] = {
-        [LGSS_SVC_MGS] = LGSS_SVC_MGS_STR,
-        [LGSS_SVC_MDS] = LGSS_SVC_MDS_STR,
-        [LGSS_SVC_OSS] = LGSS_SVC_OSS_STR,
+	[LGSS_SVC_MGS] = LGSS_SVC_MGS_STR,
+	[LGSS_SVC_MDS] = LGSS_SVC_MDS_STR,
+	[LGSS_SVC_OSS] = LGSS_SVC_OSS_STR,
 };
 
 /****************************************
@@ -112,111 +113,111 @@ const char *lgss_svc_str[LGSS_SVC_MAX] = {
  ****************************************/
 
 static struct lgss_mutex_s {
-        char           *sem_name;
-        key_t           sem_key;
-        int             sem_id;
+	char *sem_name;
+	key_t sem_key;
+	int   sem_id;
 } lgss_mutexes[LGSS_MUTEX_MAX] = {
 	[LGSS_MUTEX_KRB5] = { "keyring", 0x4292d473, 0 },
 };
 
 static int lgss_mutex_get(struct lgss_mutex_s *mutex)
 {
-        mutex->sem_id = semget(mutex->sem_key, 1, IPC_CREAT | IPC_EXCL | 0700);
-        if (mutex->sem_id != -1) {
-                if (semctl(mutex->sem_id, 0, SETVAL, 1) == -1) {
-                        logmsg(LL_ERR, "initialize sem %x: %s\n",
-                               mutex->sem_key, strerror(errno));
-                        return -1;
-                }
+	mutex->sem_id = semget(mutex->sem_key, 1, IPC_CREAT | IPC_EXCL | 0700);
+	if (mutex->sem_id != -1) {
+		if (semctl(mutex->sem_id, 0, SETVAL, 1) == -1) {
+			logmsg(LL_ERR, "initialize sem %x: %s\n",
+			       mutex->sem_key, strerror(errno));
+			return -1;
+		}
 
-                logmsg(LL_DEBUG, "created & initialized sem %x id %d for %s\n",
-                       mutex->sem_key, mutex->sem_id, mutex->sem_name);
-        } else {
-                if (errno != EEXIST) {
-                        logmsg(LL_ERR, "create sem %x: %s\n",
-                               mutex->sem_key, strerror(errno));
-                        return -1;
-                }
+		logmsg(LL_DEBUG, "created & initialized sem %x id %d for %s\n",
+		       mutex->sem_key, mutex->sem_id, mutex->sem_name);
+	} else {
+		if (errno != EEXIST) {
+			logmsg(LL_ERR, "create sem %x: %s\n",
+			       mutex->sem_key, strerror(errno));
+			return -1;
+		}
 
-                /* already created by someone else, simply get it.
-                 * Note there's still a small window of racing between create
-                 * and initialize, a flaw in semaphore semantics */
-                mutex->sem_id = semget(mutex->sem_key, 0, 0700);
-                if (mutex->sem_id == -1) {
-                        if (errno == ENOENT) {
-                                logmsg(LL_WARN, "sem %x just disappeared "
-                                       "under us, try again\n", mutex->sem_key);
-                                return 1;
-                        }
+		/* already created by someone else, simply get it.
+		 * Note there's still a small window of racing between create
+		 * and initialize, a flaw in semaphore semantics */
+		mutex->sem_id = semget(mutex->sem_key, 0, 0700);
+		if (mutex->sem_id == -1) {
+			if (errno == ENOENT) {
+				logmsg(LL_WARN, "sem %x just disappeared "
+				       "under us, try again\n", mutex->sem_key);
+				return 1;
+			}
 
-                        logmsg(LL_ERR, "get sem %x: %s\n", mutex->sem_key,
-                               strerror(errno));
-                        return -1;
-                }
+			logmsg(LL_ERR, "get sem %x: %s\n", mutex->sem_key,
+			       strerror(errno));
+			return -1;
+		}
 
-                logmsg(LL_TRACE, "got sem %x id %d for %s\n",
-                       mutex->sem_key, mutex->sem_id, mutex->sem_name);
-        }
+		logmsg(LL_TRACE, "got sem %x id %d for %s\n",
+		       mutex->sem_key, mutex->sem_id, mutex->sem_name);
+	}
 
-        return 0;
+	return 0;
 }
 
 int lgss_mutex_lock(lgss_mutex_id_t mid)
 {
-        struct lgss_mutex_s     *sem = &lgss_mutexes[mid];
-        struct sembuf            sembuf;
-        int                      rc;
+	struct lgss_mutex_s *sem = &lgss_mutexes[mid];
+	struct sembuf sembuf;
+	int rc;
 
-        lassert(mid < LGSS_MUTEX_MAX);
+	lassert(mid < LGSS_MUTEX_MAX);
 
-        logmsg(LL_TRACE, "locking mutex %x for %s\n",
-               sem->sem_key, sem->sem_name);
+	logmsg(LL_TRACE, "locking mutex %x for %s\n",
+	       sem->sem_key, sem->sem_name);
 
-        do {
-                rc = lgss_mutex_get(sem);
-                if (rc < 0)
-                        return rc;
-        } while (rc);
+	do {
+		rc = lgss_mutex_get(sem);
+		if (rc < 0)
+			return rc;
+	} while (rc);
 
-        sembuf.sem_num = 0;
-        sembuf.sem_op = -1;
-        sembuf.sem_flg = SEM_UNDO;
+	sembuf.sem_num = 0;
+	sembuf.sem_op = -1;
+	sembuf.sem_flg = SEM_UNDO;
 
-        if (semop(sem->sem_id, &sembuf, 1) != 0) {
-                logmsg(LL_ERR, "lock mutex %x: %s\n", sem->sem_key,
-                       strerror(errno));
-                return -1;
-        }
+	if (semop(sem->sem_id, &sembuf, 1) != 0) {
+		logmsg(LL_ERR, "lock mutex %x: %s\n", sem->sem_key,
+		       strerror(errno));
+		return -1;
+	}
 
-        logmsg(LL_DEBUG, "locked mutex %x for %s\n",
-               sem->sem_key, sem->sem_name);
-        return 0;
+	logmsg(LL_DEBUG, "locked mutex %x for %s\n",
+	       sem->sem_key, sem->sem_name);
+	return 0;
 }
 
 int lgss_mutex_unlock(lgss_mutex_id_t mid)
 {
-        struct lgss_mutex_s     *sem = &lgss_mutexes[mid];
-        struct sembuf            sembuf;
+	struct lgss_mutex_s *sem = &lgss_mutexes[mid];
+	struct sembuf sembuf;
 
-        lassert(mid < LGSS_MUTEX_MAX);
-        lassert(sem->sem_id >= 0);
+	lassert(mid < LGSS_MUTEX_MAX);
+	lassert(sem->sem_id >= 0);
 
-        logmsg(LL_TRACE, "unlocking mutex %x for %s\n",
-               sem->sem_key, sem->sem_name);
+	logmsg(LL_TRACE, "unlocking mutex %x for %s\n",
+	       sem->sem_key, sem->sem_name);
 
-        sembuf.sem_num = 0;
-        sembuf.sem_op = 1;
-        sembuf.sem_flg = SEM_UNDO;
+	sembuf.sem_num = 0;
+	sembuf.sem_op = 1;
+	sembuf.sem_flg = SEM_UNDO;
 
-        if (semop(sem->sem_id, &sembuf, 1) != 0) {
-                logmsg(LL_ERR, "unlock mutex %x: %s\n", sem->sem_key,
-                       strerror(errno));
-                return -1;
-        }
+	if (semop(sem->sem_id, &sembuf, 1) != 0) {
+		logmsg(LL_ERR, "unlock mutex %x: %s\n", sem->sem_key,
+		       strerror(errno));
+		return -1;
+	}
 
-        logmsg(LL_DEBUG, "unlocked mutex %x for %s\n",
-               sem->sem_key, sem->sem_name);
-        return 0;
+	logmsg(LL_DEBUG, "unlocked mutex %x for %s\n",
+	       sem->sem_key, sem->sem_name);
+	return 0;
 }
 
 /****************************************
@@ -251,87 +252,87 @@ gss_OID_desc skoid = {
 loglevel_t g_log_level = LL_WARN;
 
 static const char *log_prefix[] = {
-        [LL_ERR]        = "ERROR",
-        [LL_WARN]       = "WARNING",
-        [LL_INFO]       = "INFO",
-        [LL_DEBUG]      = "DEBUG",
-        [LL_TRACE]      = "TRACE",
+	[LL_ERR]        = "ERROR",
+	[LL_WARN]       = "WARNING",
+	[LL_INFO]       = "INFO",
+	[LL_DEBUG]      = "DEBUG",
+	[LL_TRACE]      = "TRACE",
 };
 
 void lgss_set_loglevel(loglevel_t level)
 {
-        lassert(level < LL_MAX);
-        g_log_level = level;
+	lassert(level < LL_MAX);
+	g_log_level = level;
 }
 
 void __logmsg(loglevel_t level, const char *func, const char *format, ...)
 {
-        va_list         ap;
-        int             offset;
-        char            buf[1024];
+	va_list ap;
+	int offset;
+	char buf[1024];
 
-        offset = snprintf(buf, sizeof(buf), "[%d]:%s:%s(): ",
-                          getpid(), log_prefix[level], func);
+	offset = scnprintf(buf, sizeof(buf), "[%d]:%s:%s(): ",
+			   getpid(), log_prefix[level], func);
 
-        va_start(ap, format);
-        vsnprintf(buf + offset, sizeof(buf) - offset, format, ap);
-        va_end(ap);
+	va_start(ap, format);
+	vsnprintf(buf + offset, sizeof(buf) - offset, format, ap);
+	va_end(ap);
 
-        syslog(LOG_INFO, "%s", buf);
+	syslog(LOG_INFO, "%s", buf);
 }
 
 void __logmsg_gss(loglevel_t level, const char *func, const gss_OID mech,
                   uint32_t major, uint32_t minor, const char *format, ...)
 {
-        va_list         ap;
-        u_int32_t       maj_stat1, min_stat1;
-        u_int32_t       maj_stat2, min_stat2;
-        gss_buffer_desc maj_gss_buf = GSS_C_EMPTY_BUFFER;
-        gss_buffer_desc min_gss_buf = GSS_C_EMPTY_BUFFER;
-        char            buf[1024];
-        char            maj_buf[30], min_buf[30];
-        char           *maj_msg, *min_msg;
-        int             offset;
-        uint32_t        msg_ctx = 0;
+	va_list ap;
+	uint32_t maj_stat1, min_stat1;
+	uint32_t maj_stat2, min_stat2;
+	gss_buffer_desc maj_gss_buf = GSS_C_EMPTY_BUFFER;
+	gss_buffer_desc min_gss_buf = GSS_C_EMPTY_BUFFER;
+	char buf[1024];
+	char maj_buf[30], min_buf[30];
+	char *maj_msg, *min_msg;
+	int offset;
+	uint32_t msg_ctx = 0;
 
-        /* Get major status message */
-        maj_stat1 = gss_display_status(&min_stat1, major, GSS_C_GSS_CODE,
-                                       mech, &msg_ctx, &maj_gss_buf);
-        if (maj_stat1 != GSS_S_COMPLETE) {
-                snprintf(maj_buf, sizeof(maj_buf), "(0x%08x)", major);
-                maj_msg = &maj_buf[0];
-        } else {
-                maj_msg = maj_gss_buf.value;
-        }
+	/* Get major status message */
+	maj_stat1 = gss_display_status(&min_stat1, major, GSS_C_GSS_CODE,
+				       mech, &msg_ctx, &maj_gss_buf);
+	if (maj_stat1 != GSS_S_COMPLETE) {
+		snprintf(maj_buf, sizeof(maj_buf), "(0x%08x)", major);
+		maj_msg = &maj_buf[0];
+	} else {
+		maj_msg = maj_gss_buf.value;
+	}
 
-        /* Get minor status message */
-        maj_stat2 = gss_display_status(&min_stat2, minor, GSS_C_MECH_CODE,
-                                       mech, &msg_ctx, &min_gss_buf);
-        if (maj_stat2 != GSS_S_COMPLETE) {
-                snprintf(min_buf, sizeof(min_buf), "(0x%08x)", minor);
-                min_msg = &min_buf[0];
-        } else {
-                min_msg = min_gss_buf.value;
-        }
+	/* Get minor status message */
+	maj_stat2 = gss_display_status(&min_stat2, minor, GSS_C_MECH_CODE,
+				       mech, &msg_ctx, &min_gss_buf);
+	if (maj_stat2 != GSS_S_COMPLETE) {
+		snprintf(min_buf, sizeof(min_buf), "(0x%08x)", minor);
+		min_msg = &min_buf[0];
+	} else {
+		min_msg = min_gss_buf.value;
+	}
 
-        /* arrange & log message */
-        offset = snprintf(buf, sizeof(buf), "[%d]:%s:%s(): ",
-                          getpid(), log_prefix[level], func);
+	/* arrange & log message */
+	offset = scnprintf(buf, sizeof(buf), "[%d]:%s:%s(): ",
+			   getpid(), log_prefix[level], func);
 
-        va_start(ap, format);
-        offset += vsnprintf(buf + offset, sizeof(buf) - offset, format, ap);
-        va_end(ap);
+	va_start(ap, format);
+	offset += vscnprintf(buf + offset, sizeof(buf) - offset, format, ap);
+	va_end(ap);
 
-        snprintf(buf + offset, sizeof(buf) - offset, ": GSSAPI: %s - %s\n",
-                 maj_msg, min_msg);
+	snprintf(buf + offset, sizeof(buf) - offset, ": GSSAPI: %s - %s\n",
+		 maj_msg, min_msg);
 
-        syslog(LOG_INFO, "%s", buf);
+	syslog(LOG_INFO, "%s", buf);
 
-        /* release buffers */
-        if (maj_gss_buf.length != 0)
-                gss_release_buffer(&min_stat1, &maj_gss_buf);
-        if (min_gss_buf.length != 0)
-                gss_release_buffer(&min_stat2, &min_gss_buf);
+	/* release buffers */
+	if (maj_gss_buf.length != 0)
+		gss_release_buffer(&min_stat1, &maj_gss_buf);
+	if (min_gss_buf.length != 0)
+		gss_release_buffer(&min_stat2, &min_gss_buf);
 }
 
 /****************************************
@@ -353,83 +354,83 @@ struct lgss_mech_type *lgss_name2mech(const char *mech_name)
 
 int lgss_mech_initialize(struct lgss_mech_type *mech)
 {
-        logmsg(LL_TRACE, "initialize mech %s\n", mech->lmt_name);
-        if (mech->lmt_init)
-                return mech->lmt_init();
-        return 0;
+	logmsg(LL_TRACE, "initialize mech %s\n", mech->lmt_name);
+	if (mech->lmt_init)
+		return mech->lmt_init();
+	return 0;
 }
 
 void lgss_mech_finalize(struct lgss_mech_type *mech)
 {
-        logmsg(LL_TRACE, "finalize mech %s\n", mech->lmt_name);
-        if (mech->lmt_fini)
-                mech->lmt_fini();
+	logmsg(LL_TRACE, "finalize mech %s\n", mech->lmt_name);
+	if (mech->lmt_fini)
+		mech->lmt_fini();
 }
 
 struct lgss_cred * lgss_create_cred(struct lgss_mech_type *mech)
 {
-        struct lgss_cred       *cred;
+	struct lgss_cred *cred;
 
-        cred = malloc(sizeof(*cred));
-        if (cred) {
-                memset(cred, 0, sizeof(*cred));
-                cred->lc_mech = mech;
-        }
+	cred = malloc(sizeof(*cred));
+	if (cred) {
+		memset(cred, 0, sizeof(*cred));
+		cred->lc_mech = mech;
+	}
 
-        logmsg(LL_TRACE, "create a %s cred at %p\n", mech->lmt_name, cred);
-        return cred;
+	logmsg(LL_TRACE, "create a %s cred at %p\n", mech->lmt_name, cred);
+	return cred;
 }
 
 void lgss_destroy_cred(struct lgss_cred *cred)
 {
 	lassert(cred->lc_mech != NULL);
-        lassert(cred->lc_mech_cred == NULL);
+	lassert(cred->lc_mech_cred == NULL);
 
-        logmsg(LL_TRACE, "destroying a %s cred at %p\n",
-               cred->lc_mech->lmt_name, cred);
-        free(cred);
+	logmsg(LL_TRACE, "destroying a %s cred at %p\n",
+	       cred->lc_mech->lmt_name, cred);
+	free(cred);
 }
 
 int lgss_prepare_cred(struct lgss_cred *cred)
 {
-        struct lgss_mech_type   *mech = cred->lc_mech;
+	struct lgss_mech_type *mech = cred->lc_mech;
 
 	lassert(mech != NULL);
 
-        logmsg(LL_TRACE, "preparing %s cred %p\n", mech->lmt_name, cred);
+	logmsg(LL_TRACE, "preparing %s cred %p\n", mech->lmt_name, cred);
 
-        if (mech->lmt_prepare_cred)
-                return mech->lmt_prepare_cred(cred);
-        return 0;
+	if (mech->lmt_prepare_cred)
+		return mech->lmt_prepare_cred(cred);
+	return 0;
 }
 
 void lgss_release_cred(struct lgss_cred *cred)
 {
-        struct lgss_mech_type   *mech = cred->lc_mech;
+	struct lgss_mech_type *mech = cred->lc_mech;
 
 	lassert(mech != NULL);
 
-        logmsg(LL_TRACE, "releasing %s cred %p\n", mech->lmt_name, cred);
+	logmsg(LL_TRACE, "releasing %s cred %p\n", mech->lmt_name, cred);
 
-        if (cred->lc_mech_cred) {
-                lassert(cred->lc_mech != NULL);
+	if (cred->lc_mech_cred) {
+		lassert(cred->lc_mech != NULL);
 		lassert(cred->lc_mech->lmt_release_cred != NULL);
 
-                cred->lc_mech->lmt_release_cred(cred);
-        }
+		cred->lc_mech->lmt_release_cred(cred);
+	}
 }
 
 int lgss_using_cred(struct lgss_cred *cred)
 {
-        struct lgss_mech_type   *mech = cred->lc_mech;
+	struct lgss_mech_type *mech = cred->lc_mech;
 
 	lassert(mech != NULL);
 
-        logmsg(LL_TRACE, "using %s cred %p\n", mech->lmt_name, cred);
+	logmsg(LL_TRACE, "using %s cred %p\n", mech->lmt_name, cred);
 
-        if (mech->lmt_using_cred)
-                return mech->lmt_using_cred(cred);
-        return 0;
+	if (mech->lmt_using_cred)
+		return mech->lmt_using_cred(cred);
+	return 0;
 }
 
 int lgss_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
@@ -454,35 +455,34 @@ int lgss_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
 
 int lgss_get_service_str(char **string, uint32_t lsvc, uint64_t tgt_nid)
 {
-        const int       max_namelen = 512;
-        char            namebuf[max_namelen];
-        int             alloc_size;
+	const int max_namelen = 512;
+	char namebuf[max_namelen];
+	int alloc_size;
 
-        lassert(*string == NULL);
+	lassert(*string == NULL);
 
-        if (lsvc >= LGSS_SVC_MAX) {
-                logmsg(LL_ERR, "invalid lgss service %d\n", lsvc);
-                return -1;
-        }
+	if (lsvc >= LGSS_SVC_MAX) {
+		logmsg(LL_ERR, "invalid lgss service %d\n", lsvc);
+		return -1;
+	}
 
         if (lnet_nid2hostname(tgt_nid, namebuf, max_namelen)) {
 		logmsg(LL_ERR, "cannot resolve hostname from nid %"PRIx64"\n",
 		       tgt_nid);
-                return -1;
-        }
+		return -1;
+	}
 
-        alloc_size = 32 + strlen(namebuf);
+	alloc_size = 32 + strlen(namebuf);
 
-        *string = malloc(alloc_size);
-        if (*string == NULL) {
-                logmsg(LL_ERR, "can't malloc %d bytes\n", alloc_size);
-                return 1;
-        }
+	*string = malloc(alloc_size);
+	if (*string == NULL) {
+		logmsg(LL_ERR, "can't malloc %d bytes\n", alloc_size);
+		return 1;
+	}
 
-        snprintf(*string, alloc_size, "%s@%s",
-                 lgss_svc_str[lsvc], namebuf);
+	snprintf(*string, alloc_size, "%s@%s",
+		 lgss_svc_str[lsvc], namebuf);
 
-        logmsg(LL_DEBUG, "constructed service string: %s\n", *string);
-        return 0;
+	logmsg(LL_DEBUG, "constructed service string: %s\n", *string);
+	return 0;
 }
-

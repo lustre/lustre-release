@@ -777,7 +777,7 @@ static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
 		rc = lodname2mdt_index(lod2obd(lod)->obd_name, &i);
 		LASSERTF(rc == 0, "Fail to parse target index: rc = %d\n", rc);
 
-		rc = snprintf(buf + len, *size - len, " %04x", i);
+		rc = scnprintf(buf + len, *size - len, " %04x", i);
 		LASSERT(rc > 0);
 
 		len += rc;
@@ -786,8 +786,8 @@ static char *lod_show_update_logs_retrievers(void *data, int *size, int *count)
 
 	lod_foreach_mdt(lod, mdt) {
 		if (!mdt->ltd_got_update_log) {
-			rc = snprintf(buf + len, *size - len, " %04x",
-				      mdt->ltd_index);
+			rc = scnprintf(buf + len, *size - len, " %04x",
+				       mdt->ltd_index);
 			if (unlikely(rc <= 0))
 				break;
 

@@ -56,6 +56,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <libcfs/util/string.h>
 #include "err_util.h"
 
 void qword_add(char **bpp, int *lp, const char *str)
@@ -125,9 +126,7 @@ void qword_addint(char **bpp, int *lp, int n)
 {
 	int len;
 
-	len = snprintf(*bpp, *lp, "%d ", n);
-	if (len > *lp)
-		len = *lp;
+	len = scnprintf(*bpp, *lp, "%d ", n);
 	*bpp += len;
 	*lp -= len;
 }
@@ -136,9 +135,7 @@ void qword_adduint(char **bpp, int *lp, unsigned int n)
 {
 	int len;
 
-	len = snprintf(*bpp, *lp, "%u ", n);
-	if (len > *lp)
-		len = *lp;
+	len = scnprintf(*bpp, *lp, "%u ", n);
 	*bpp += len;
 	*lp -= len;
 }

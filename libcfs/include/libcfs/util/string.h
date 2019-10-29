@@ -40,9 +40,41 @@
 #define __LIBCFS_UTIL_STRING_H__
 
 #include <stddef.h>
+#include <stdarg.h>
 
 #include <linux/types.h>
 #include <libcfs/util/list.h>
+
+static inline
+int vscnprintf(char *buf, size_t bufsz, const char *format, va_list args)
+{
+	int ret;
+
+	if (!bufsz)
+		return 0;
+
+	ret = vsnprintf(buf, bufsz, format, args);
+	return (bufsz > ret) ? ret : bufsz - 1;
+}
+
+/* __printf from linux kernel */
+#ifndef __printf
+#define __printf(a, b)		__attribute__((__format__(printf, a, b)))
+#endif
+
+__printf(3, 4)
+static inline int scnprintf(char *buf, size_t bufsz, const char *format, ...)
+{
+	int ret;
+	va_list args;
+
+	va_start(args, format);
+	ret = vscnprintf(buf, bufsz, format, args);
+	va_end(args);
+
+	return ret;
+}
+
 
 /**
  * Structure to represent NULL-less strings.

@@ -39,6 +39,7 @@
 #include <openssl/hmac.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <libcfs/util/string.h>
 
 #include "sk_utils.h"
 #include "write_bytes.h"
@@ -1328,7 +1329,7 @@ int sk_encode_netstring(gss_buffer_desc *bufs, int numbufs,
 	ptr = ns->value;
 	for (i = 0; i < numbufs; i++) {
 		/* size */
-		rc = snprintf((char *) ptr, size, "%zu:", bufs[i].length);
+		rc = scnprintf((char *) ptr, size, "%zu:", bufs[i].length);
 		ptr += rc;
 
 		/* contents */

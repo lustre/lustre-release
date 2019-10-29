@@ -702,9 +702,9 @@ static ssize_t grant_shrink_show(struct kobject *kobj, struct attribute *attr,
 
 	LPROCFS_CLIMP_CHECK(obd);
 	imp = obd->u.cli.cl_import;
-	len = snprintf(buf, PAGE_SIZE, "%d\n",
-		       !imp->imp_grant_shrink_disabled &&
-		       OCD_HAS_FLAG(&imp->imp_connect_data, GRANT_SHRINK));
+	len = scnprintf(buf, PAGE_SIZE, "%d\n",
+			!imp->imp_grant_shrink_disabled &&
+			OCD_HAS_FLAG(&imp->imp_connect_data, GRANT_SHRINK));
 	LPROCFS_CLIMP_EXIT(obd);
 
 	return len;

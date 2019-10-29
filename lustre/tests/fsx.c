@@ -57,6 +57,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <libcfs/util/string.h>
 
 #define NUMPRINTCOLUMNS 32	/* # columns of data to print on each line */
 
@@ -227,10 +228,10 @@ fill_tf_buf(const struct test_file *tf)
 		return "";
 
 	if (max_tf_len == 0)
-		max_tf_len = snprintf(tf_buf, sizeof(tf_buf) - 1,
+		max_tf_len = scnprintf(tf_buf, sizeof(tf_buf) - 1,
 				      "%u", num_test_files - 1);
 
-	sprintf(tf_buf, "[%0*lu]", max_tf_len,
+	snprintf(tf_buf, sizeof(tf_buf), "[%0*lu]", max_tf_len,
 		(unsigned long)(tf - test_files));
 
 	return tf_buf;

@@ -71,6 +71,7 @@
 #include <libcfs/util/string.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
+#include <libcfs/util/string.h>
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_ver.h>
 #include <linux/lustre/lustre_param.h>
@@ -6810,22 +6811,23 @@ quota_type_def:
  */
 static char * __sec2str(time_t seconds, char *buf)
 {
-        const char spec[] = "smhdw";
-        const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
-        unsigned long c;
-        char *tail = buf;
-        int i;
+	const char spec[] = "smhdw";
+	const unsigned long mult[] = {1, 60, 60*60, 24*60*60, 7*24*60*60};
+	unsigned long c;
+	char *tail = buf;
+	int i;
 
-        for (i = sizeof(mult) / sizeof(mult[0]) - 1 ; i >= 0; i--) {
-                c = seconds / mult[i];
+	for (i = ARRAY_SIZE(mult) - 1 ; i >= 0; i--) {
+		c = seconds / mult[i];
 
-                if (c > 0 || (i == 0 && buf == tail))
-                        tail += snprintf(tail, 40-(tail-buf), "%lu%c", c, spec[i]);
+		if (c > 0 || (i == 0 && buf == tail))
+			tail += scnprintf(tail, 40-(tail-buf), "%lu%c", c,
+					  spec[i]);
 
-                seconds %= mult[i];
-        }
+		seconds %= mult[i];
+	}
 
-        return tail;
+	return tail;
 }
 
 static void sec2str(time_t seconds, char *buf, int rc)
