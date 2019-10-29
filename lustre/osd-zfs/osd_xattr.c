@@ -240,7 +240,7 @@ static int osd_get_pfid_from_lma(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	CLASSERT(sizeof(info->oti_buf) >= sizeof(*loa));
+	BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*loa));
 	rc = osd_xattr_get_internal(env, obj, &tbuf,
 				    XATTR_NAME_LMA, sizep);
 	if (rc)
@@ -777,7 +777,7 @@ static int osd_xattr_split_pfid(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
-	CLASSERT(sizeof(info->oti_buf) >= sizeof(*loa));
+	BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*loa));
 	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
 	if (rc)
 		RETURN(rc);

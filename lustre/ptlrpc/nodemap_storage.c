@@ -87,7 +87,7 @@ static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id)
 static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 				     const struct lu_nodemap *nodemap)
 {
-	CLASSERT(sizeof(nr->ncr.ncr_name) == sizeof(nodemap->nm_name));
+	BUILD_BUG_ON(sizeof(nr->ncr.ncr_name) != sizeof(nodemap->nm_name));
 
 	strncpy(nr->ncr.ncr_name, nodemap->nm_name, sizeof(nr->ncr.ncr_name));
 	nr->ncr.ncr_squash_uid = cpu_to_le32(nodemap->nm_squash_uid);
@@ -671,7 +671,7 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 
 	ENTRY;
 
-	CLASSERT(sizeof(union nodemap_rec) == 32);
+	BUILD_BUG_ON(sizeof(union nodemap_rec) != 32);
 
 	nodemap_id = le32_to_cpu(key->nk_nodemap_id);
 	type = nodemap_get_key_type(key);

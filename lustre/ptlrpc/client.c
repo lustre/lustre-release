@@ -3370,7 +3370,8 @@ void ptlrpc_init_xid(void)
 	}
 
 	/* Need to always be aligned to a power-of-two for mutli-bulk BRW */
-	CLASSERT((PTLRPC_BULK_OPS_COUNT & (PTLRPC_BULK_OPS_COUNT - 1)) == 0);
+	BUILD_BUG_ON((PTLRPC_BULK_OPS_COUNT & (PTLRPC_BULK_OPS_COUNT - 1)) !=
+		     0);
 	xid &= PTLRPC_BULK_OPS_MASK;
 	atomic64_set(&ptlrpc_last_xid, xid);
 }

@@ -1150,8 +1150,10 @@ kgnilnd_unmap_buffer(kgn_tx_t *tx, int error)
 	int               hold_timeout = 0;
 
 	/* code below relies on +1 relationship ... */
-	CLASSERT(GNILND_BUF_PHYS_MAPPED == (GNILND_BUF_PHYS_UNMAPPED + 1));
-	CLASSERT(GNILND_BUF_VIRT_MAPPED == (GNILND_BUF_VIRT_UNMAPPED + 1));
+	BUILD_BUG_ON(GNILND_BUF_PHYS_MAPPED !=
+		     (GNILND_BUF_PHYS_UNMAPPED + 1));
+	BUILD_BUG_ON(GNILND_BUF_VIRT_MAPPED !=
+		     (GNILND_BUF_VIRT_UNMAPPED + 1));
 
 	switch (tx->tx_buftype) {
 	default:

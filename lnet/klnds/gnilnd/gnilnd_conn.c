@@ -733,7 +733,7 @@ kgnilnd_pack_connreq(kgn_connreq_t *connreq, kgn_conn_t *conn,
 	int err = 0;
 
 	/* ensure we haven't violated max datagram size */
-	CLASSERT(sizeof(kgn_connreq_t) <= GNI_DATAGRAM_MAXSIZE);
+	BUILD_BUG_ON(sizeof(kgn_connreq_t) > GNI_DATAGRAM_MAXSIZE);
 
 	/* no need to zero out, we do that when allocating dgram */
 	connreq->gncr_magic     = GNILND_MSG_MAGIC;

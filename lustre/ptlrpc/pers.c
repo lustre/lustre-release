@@ -44,7 +44,7 @@
 void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 			 int mdidx)
 {
-	CLASSERT(PTLRPC_MAX_BRW_PAGES < LI_POISON);
+	BUILD_BUG_ON(PTLRPC_MAX_BRW_PAGES >= LI_POISON);
 
 	LASSERT(mdidx < desc->bd_md_max_brw);
 	LASSERT(desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);

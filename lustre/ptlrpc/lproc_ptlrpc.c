@@ -517,7 +517,7 @@ void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
 	LASSERT(info != NULL);
 	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
-	CLASSERT(sizeof(info->pi_arg) == sizeof(policy->pol_arg));
+	BUILD_BUG_ON(sizeof(info->pi_arg) != sizeof(policy->pol_arg));
 	memcpy(info->pi_name, policy->pol_desc->pd_name, NRS_POL_NAME_MAX);
 	memcpy(info->pi_arg, policy->pol_arg, sizeof(policy->pol_arg));
 

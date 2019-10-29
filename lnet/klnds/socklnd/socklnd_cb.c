@@ -1733,7 +1733,7 @@ ksocknal_parse_proto_version (struct ksock_hello_msg *hello)
         if (hello->kshm_magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC)) {
 		struct lnet_magicversion *hmv;
 
-		CLASSERT(sizeof(struct lnet_magicversion) ==
+		BUILD_BUG_ON(sizeof(struct lnet_magicversion) !=
 			 offsetof(struct ksock_hello_msg, kshm_src_nid));
 
 		hmv = (struct lnet_magicversion *)hello;

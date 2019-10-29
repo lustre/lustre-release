@@ -111,7 +111,7 @@ enum {
 
 static inline int getsize(const struct iam_leaf *leaf, int namelen, int recsize)
 {
-	CLASSERT(!(LVAR_PAD & (LVAR_PAD - 1)));
+	BUILD_BUG_ON((LVAR_PAD & (LVAR_PAD - 1)));
 
 	return (offsetof(struct lvar_leaf_entry, vle_key) +
 			namelen + recsize + LVAR_ROUND) & ~LVAR_ROUND;

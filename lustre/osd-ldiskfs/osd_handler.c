@@ -2223,7 +2223,7 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	 *
 	 * Reserve 0.78% of total space, at least 8MB for small filesystems.
 	 */
-	CLASSERT(OSD_STATFS_RESERVED > LDISKFS_MAX_BLOCK_SIZE);
+	BUILD_BUG_ON(OSD_STATFS_RESERVED <= LDISKFS_MAX_BLOCK_SIZE);
 	reserved = OSD_STATFS_RESERVED >> sb->s_blocksize_bits;
 	if (likely(sfs->os_blocks >= reserved << OSD_STATFS_RESERVED_SHIFT))
 		reserved = sfs->os_blocks >> OSD_STATFS_RESERVED_SHIFT;
@@ -3826,7 +3826,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	 * debugging if we need to determine where this symlink came from.
 	 */
 	if (S_ISLNK(type)) {
-		CLASSERT(LDISKFS_N_BLOCKS * 4 >= FID_LEN + 1);
+		BUILD_BUG_ON(LDISKFS_N_BLOCKS * 4 < FID_LEN + 1);
 		rc = snprintf((char *)LDISKFS_I(local)->i_data,
 			      LDISKFS_N_BLOCKS * 4, DFID, PFID(fid));
 
@@ -8183,10 +8183,11 @@ static int __init osd_init(void)
 	struct kobject *kobj;
 	int rc;
 
-	CLASSERT(BH_DXLock < sizeof(((struct buffer_head *)0)->b_state) * 8);
+	BUILD_BUG_ON(BH_DXLock >=
+		     sizeof(((struct buffer_head *)0)->b_state) * 8);
 #if !defined(CONFIG_DEBUG_MUTEXES) && !defined(CONFIG_DEBUG_SPINLOCK)
 	/* please, try to keep osd_thread_info smaller than a page */
-	CLASSERT(sizeof(struct osd_thread_info) <= PAGE_SIZE);
+	BUILD_BUG_ON(sizeof(struct osd_thread_info) > PAGE_SIZE);
 #endif
 
 	osd_oi_mod_init();

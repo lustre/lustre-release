@@ -47,9 +47,9 @@ void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
 
 	/* If a field is added in struct lustre_mdt_attrs, zero it explicitly
 	 * and change the test below. */
-	CLASSERT(sizeof(*lma) ==
-		 (offsetof(struct lustre_mdt_attrs, lma_self_fid) +
-		  sizeof(lma->lma_self_fid)));
+	BUILD_BUG_ON(sizeof(*lma) !=
+		     (offsetof(struct lustre_mdt_attrs, lma_self_fid) +
+		      sizeof(lma->lma_self_fid)));
 }
 EXPORT_SYMBOL(lustre_lma_init);
 
@@ -71,7 +71,7 @@ EXPORT_SYMBOL(lustre_lma_swab);
 void lustre_loa_init(struct lustre_ost_attrs *loa, const struct lu_fid *fid,
 		     __u32 compat, __u32 incompat)
 {
-	CLASSERT(sizeof(*loa) == LMA_OLD_SIZE);
+	BUILD_BUG_ON(sizeof(*loa) != LMA_OLD_SIZE);
 
 	memset(&loa->loa_parent_fid, 0,
 	       sizeof(*loa) - offsetof(typeof(*loa), loa_parent_fid));

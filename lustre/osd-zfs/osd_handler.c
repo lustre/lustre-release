@@ -411,8 +411,8 @@ uint64_t osd_objs_count_estimate(uint64_t usedbytes, uint64_t usedobjs,
 	 * gradually disappears as the number of real dnodes grows.  It also
 	 * avoids the need to check for divide-by-zero computing dn_per_block.
 	 */
-	CLASSERT(OSD_DNODE_MIN_BLKSHIFT > 0);
-	CLASSERT(OSD_DNODE_EST_BLKSHIFT > 0);
+	BUILD_BUG_ON(OSD_DNODE_MIN_BLKSHIFT <= 0);
+	BUILD_BUG_ON(OSD_DNODE_EST_BLKSHIFT <= 0);
 
 	est_usedblocks = ((OSD_DNODE_EST_COUNT << OSD_DNODE_EST_BLKSHIFT) +
 			  usedbytes) >> est_maxblockshift;
@@ -513,7 +513,7 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	 * Reserve 0.78% of total space, at least 16MB for small filesystems,
 	 * for internal files to be created/unlinked when space is tight.
 	 */
-	CLASSERT(OSD_STATFS_RESERVED_SIZE > 0);
+	BUILD_BUG_ON(OSD_STATFS_RESERVED_SIZE <= 0);
 	reserved = OSD_STATFS_RESERVED_SIZE >> bshift;
 	if (likely(osfs->os_blocks >= reserved << OSD_STATFS_RESERVED_SHIFT))
 		reserved = osfs->os_blocks >> OSD_STATFS_RESERVED_SHIFT;
@@ -585,7 +585,7 @@ static int osd_blk_insert_cost(struct osd_device *osd)
 
 	/* nr_blkptrshift is the log2 of the number of block pointers that can
 	 * be stored in an indirect block */
-	CLASSERT(DN_MAX_INDBLKSHIFT > SPA_BLKPTRSHIFT);
+	BUILD_BUG_ON(DN_MAX_INDBLKSHIFT <= SPA_BLKPTRSHIFT);
 	nr_blkptrshift = DN_MAX_INDBLKSHIFT - SPA_BLKPTRSHIFT;
 
 	/* max_blockshift / nr_blkptrshift is thus the maximum depth of the

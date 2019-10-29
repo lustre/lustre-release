@@ -457,8 +457,8 @@ ksocknal_send_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello)
 	int rc;
 	int i;
 
-	CLASSERT(sizeof(struct lnet_magicversion) ==
-		 offsetof(struct lnet_hdr, src_nid));
+	BUILD_BUG_ON(sizeof(struct lnet_magicversion) !=
+		     offsetof(struct lnet_hdr, src_nid));
 
 	LIBCFS_ALLOC(hdr, sizeof(*hdr));
 	if (hdr == NULL) {

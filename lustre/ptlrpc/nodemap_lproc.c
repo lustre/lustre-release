@@ -286,7 +286,8 @@ nodemap_sepol_seq_write(struct file *file,
 	char sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
 	int rc = 0;
 
-	CLASSERT(sizeof(sepol) == sizeof(((struct lu_nodemap *)0)->nm_sepol));
+	BUILD_BUG_ON(sizeof(sepol) !=
+		     sizeof(((struct lu_nodemap *)0)->nm_sepol));
 
 	if (count > 0) {
 		if (count >= sizeof(sepol))

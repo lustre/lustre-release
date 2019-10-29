@@ -994,7 +994,7 @@ static int nodemap_validate_sepol(const char *sepol)
 	unsigned char mode;
 	unsigned short ver;
 
-	CLASSERT(sizeof(buf) == sizeof(((struct lu_nodemap *)0)->nm_sepol));
+	BUILD_BUG_ON(sizeof(buf) != sizeof(((struct lu_nodemap *)0)->nm_sepol));
 
 	if (sepol == NULL)
 		return -EINVAL;

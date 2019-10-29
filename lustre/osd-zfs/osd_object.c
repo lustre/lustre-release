@@ -455,7 +455,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	const struct lu_fid *rfid = lu_object_fid(&obj->oo_dt.do_lu);
 	ENTRY;
 
-	CLASSERT(sizeof(info->oti_buf) >= sizeof(*lma));
+	BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*lma));
 	lma = (struct lustre_mdt_attrs *)info->oti_buf;
 	buf.lb_buf = lma;
 	buf.lb_len = sizeof(info->oti_buf);
@@ -1300,7 +1300,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 
 		if (la->la_flags & LUSTRE_LMA_FL_MASKS) {
 			LASSERT(!obj->oo_pfid_in_lma);
-			CLASSERT(sizeof(info->oti_buf) >= sizeof(*lma));
+			BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*lma));
 			lma = (struct lustre_mdt_attrs *)&info->oti_buf;
 			buf.lb_buf = lma;
 			buf.lb_len = sizeof(info->oti_buf);

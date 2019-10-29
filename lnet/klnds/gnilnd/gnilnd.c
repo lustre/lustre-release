@@ -272,7 +272,7 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 	conn->gnc_next_tx = (int) GNILND_MAX_MSG_ID - 10;
 
 	/* if this fails, we have conflicts and MAX_TX is too large */
-	CLASSERT(GNILND_MAX_MSG_ID < GNILND_MSGID_CLOSE);
+	BUILD_BUG_ON(GNILND_MAX_MSG_ID >= GNILND_MSGID_CLOSE);
 
 	/* get a new unique CQ id for this conn */
 	write_lock(&kgnilnd_data.kgn_peer_conn_lock);

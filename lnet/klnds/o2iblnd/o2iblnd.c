@@ -256,8 +256,8 @@ int kiblnd_unpack_msg(struct kib_msg *msg, int nob)
         if (flip) {
                 /* leave magic unflipped as a clue to peer_ni endianness */
                 msg->ibm_version = version;
-                CLASSERT (sizeof(msg->ibm_type) == 1);
-                CLASSERT (sizeof(msg->ibm_credits) == 1);
+		BUILD_BUG_ON(sizeof(msg->ibm_type) != 1);
+		BUILD_BUG_ON(sizeof(msg->ibm_credits) != 1);
                 msg->ibm_nob     = msg_nob;
                 __swab64s(&msg->ibm_srcnid);
                 __swab64s(&msg->ibm_srcstamp);
@@ -1429,11 +1429,11 @@ kiblnd_map_tx_pool(struct kib_tx_pool *tpo)
 
 	dev = net->ibn_dev;
 
-        /* pre-mapped messages are not bigger than 1 page */
-        CLASSERT (IBLND_MSG_SIZE <= PAGE_SIZE);
+	/* pre-mapped messages are not bigger than 1 page */
+	BUILD_BUG_ON(IBLND_MSG_SIZE > PAGE_SIZE);
 
-        /* No fancy arithmetic when we do the buffer calculations */
-        CLASSERT (PAGE_SIZE % IBLND_MSG_SIZE == 0);
+	/* No fancy arithmetic when we do the buffer calculations */
+	BUILD_BUG_ON(PAGE_SIZE % IBLND_MSG_SIZE != 0);
 
         tpo->tpo_hdev = kiblnd_current_hdev(dev);
 
@@ -3373,13 +3373,13 @@ static int __init ko2iblnd_init(void)
 {
 	int rc;
 
-	CLASSERT(sizeof(struct kib_msg) <= IBLND_MSG_SIZE);
-	CLASSERT(offsetof(struct kib_msg,
-			  ibm_u.get.ibgm_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) <=
-		 IBLND_MSG_SIZE);
-	CLASSERT(offsetof(struct kib_msg,
-			  ibm_u.putack.ibpam_rd.rd_frags[IBLND_MAX_RDMA_FRAGS])
-		 <= IBLND_MSG_SIZE);
+	BUILD_BUG_ON(sizeof(struct kib_msg) > IBLND_MSG_SIZE);
+	BUILD_BUG_ON(offsetof(struct kib_msg,
+		     ibm_u.get.ibgm_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) >
+		     IBLND_MSG_SIZE);
+	BUILD_BUG_ON(offsetof(struct kib_msg,
+		     ibm_u.putack.ibpam_rd.rd_frags[IBLND_MAX_RDMA_FRAGS]) >
+		     IBLND_MSG_SIZE);
 
 	rc = kiblnd_tunables_init();
 	if (rc != 0)

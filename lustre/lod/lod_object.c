@@ -1505,7 +1505,7 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			RETURN(rc = rc > 0 ? -EINVAL : rc);
 
 		if (buf->lb_buf == NULL || buf->lb_len == 0) {
-			CLASSERT(sizeof(*lmv1) <= sizeof(info->lti_key));
+			BUILD_BUG_ON(sizeof(*lmv1) > sizeof(info->lti_key));
 
 			/* lti_buf is large enough for *lmv1 or a short
 			 * (<= sizeof(struct lmv_mds_md_v1)) foreign LMV

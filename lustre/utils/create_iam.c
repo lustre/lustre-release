@@ -115,7 +115,7 @@ enum {
 ({							\
 	typeof(val) __val = (val);			\
 							\
-	CLASSERT(sizeof(val) == sizeof(*(dst)));	\
+	BUILD_BUG_ON(sizeof(val) != sizeof(*(dst)));	\
 	memcpy(dst, &__val, sizeof(*(dst)));		\
 })
 

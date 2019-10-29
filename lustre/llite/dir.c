@@ -1466,9 +1466,9 @@ lmv_out_free:
 
 		int set_default = 0;
 
-		CLASSERT(sizeof(struct lov_user_md_v3) >
-			 sizeof(struct lov_comp_md_v1));
-		CLASSERT(sizeof(*lumv3) == sizeof(*lumv3p));
+		BUILD_BUG_ON(sizeof(struct lov_user_md_v3) <=
+			     sizeof(struct lov_comp_md_v1));
+		BUILD_BUG_ON(sizeof(*lumv3) != sizeof(*lumv3p));
 		/* first try with v1 which is smaller than v3 */
 		if (copy_from_user(&lumv1, lumv1p, sizeof(lumv1)))
 			RETURN(-EFAULT);
