@@ -52,12 +52,10 @@
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__);ret = 1;}
 /*
- * Compile-time LASSERT, which verifies correctness at compile-time rather
- * than runtime. If "cond" is true, then there are two different cases
- * ("(non-zero)" and "0"). If "cond" is false, then there are two identical
- * cases ("0" and "0"), which is an error that causes the compiler to complain.
+ * BUILD_BUG_ON() is Compile-time check which verifies correctness at
+ * compile-time rather than runtime.
  */
-#define CLASSERT(cond) do {switch (1) {case (cond): case 0: break; } } while (0)
+#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 
 int ret;
 
@@ -65,10 +63,10 @@ void lustre_assert_wire_constants(void);
 
 int main()
 {
-        lustre_assert_wire_constants();
+	lustre_assert_wire_constants();
 
-        if (ret == 0)
-                printf("wire constants OK\n");
+	if (ret == 0)
+		printf("wire constants OK\n");
 
-        return ret;
+	return ret;
 }

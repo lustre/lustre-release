@@ -56,13 +56,13 @@ do {								\
 #define STRINGIFY(a) #a
 
 #define CHECK_CDEFINE(a)					\
-	printf("	CLASSERT("#a" == "STRINGIFY(a) ");\n")
+	printf("	BUILD_BUG_ON("#a" != "STRINGIFY(a) ");\n")
 
 #define CHECK_CVALUE(a)					 \
-	printf("	CLASSERT("#a" == %lld);\n", (long long)a)
+	printf("	BUILD_BUG_ON("#a" != %lld);\n", (long long)a)
 
 #define CHECK_CVALUE_X(a)					\
-	printf("	CLASSERT("#a" == 0x%.8x);\n", a)
+	printf("	BUILD_BUG_ON("#a" != 0x%.8x);\n", a)
 
 #define CHECK_DEFINE(a)						\
 do {								\
