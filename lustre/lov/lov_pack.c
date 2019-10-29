@@ -159,8 +159,8 @@ ssize_t lov_lsm_pack_v1v3(const struct lov_stripe_md *lsm, void *buf,
 	lmmv1->lmm_layout_gen = cpu_to_le16(lsm->lsm_layout_gen);
 
 	if (lsm->lsm_magic == LOV_MAGIC_V3) {
-		CLASSERT(sizeof(lsm->lsm_entries[0]->lsme_pool_name) ==
-			 sizeof(lmmv3->lmm_pool_name));
+		BUILD_BUG_ON(sizeof(lsm->lsm_entries[0]->lsme_pool_name) !=
+				    sizeof(lmmv3->lmm_pool_name));
 		strlcpy(lmmv3->lmm_pool_name,
 			lsm->lsm_entries[0]->lsme_pool_name,
 			sizeof(lmmv3->lmm_pool_name));
