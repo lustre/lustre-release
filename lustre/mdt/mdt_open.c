@@ -307,7 +307,15 @@ static void mdt_prep_ma_buf_from_rep(struct mdt_thread_info *info,
 				     struct mdt_object *obj,
 				     struct md_attr *ma)
 {
-	LASSERT(ma->ma_lmv == NULL && ma->ma_lmm == NULL);
+	if (ma->ma_lmv || ma->ma_lmm) {
+		CDEBUG(D_INFO, DFID " %s already set.\n",
+		       PFID(mdt_object_fid(obj)),
+		       ma->ma_lmv ? (ma->ma_lmm ? "ma_lmv and ma_lmm"
+						: "ma_lmv")
+				  : "ma_lmm");
+		return;
+	}
+
 	if (S_ISDIR(obj->mot_header.loh_attr)) {
 		ma->ma_lmv = req_capsule_server_get(info->mti_pill,
 						    &RMF_MDT_MD);
