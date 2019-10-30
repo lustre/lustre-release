@@ -518,6 +518,27 @@ client# lfs mkdir -c
     <para>The striped directory feature is most useful for distributing
     single large directories (50k entries or more) across multiple MDTs,
     since it incurs more overhead than non-striped directories.</para>
+    <section xml:id="dbdoclet.lfsmkdirbyspace" condition='l2D'>
+      <title>Directory creation by space/inode usage</title>
+      <para>If the starting MDT is not specified when creating a new directory,
+      this directory and its stripes will be distributed on MDTs by space usage.
+      For example the following will create a directory and its stripes on MDTs
+      with balanced space usage:</para>
+      <screen>lfs mkdir -c 2 &lt;dir1&gt;</screen>
+      <para>Alternatively, if a default directory stripe is set on a directory,
+      the subsequent syscall <literal>mkdir</literal> under
+      <literal>&lt;dir1&gt;</literal> will have the same effect:
+      <screen>lfs setdirstripe -D -c 2 &lt;dir1&gt;</screen></para>
+      <para>The policy is:</para>
+      <itemizedlist>
+        <listitem><para>If free inodes/blocks on all MDT are almost the same,
+        i.e. <literal>max_inodes_avail * 84% &lt; min_inodes_avail</literal> and
+        <literal>max_blocks_avail * 84% &lt; min_blocks_avail</literal>, then
+        choose MDT roundrobin.</para></listitem>
+        <listitem><para>Otherwise, create more subdirectories on MDTs with more
+        free inodes/blocks.</para></listitem>
+      </itemizedlist>
+    </section>
   </section>
   <section xml:id="dbdoclet.50438194_88980">
     <title>
