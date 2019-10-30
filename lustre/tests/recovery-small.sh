@@ -11,9 +11,17 @@ init_test_env $@
 init_logging
 
 ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT "
-# bug number for skipped test:
-ALWAYS_EXCEPT+="               "
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+if $SHARED_KEY; then
+	# bug number for skipped test: LU-12896
+	ALWAYS_EXCEPT+="               110k"
+	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+fi
+
+selinux_status=$(getenforce)
+if [ "$selinux_status" != "Disabled" ]; then
+	# bug number for skipped test:   LU-12928
+	$SHARED_KEY && ALWAYS_EXCEPT+=" 136"
+fi
 
 require_dsh_mds || exit 0
 

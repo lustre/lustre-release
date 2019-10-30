@@ -45,8 +45,14 @@ ALWAYS_EXCEPT+="               42a     42b     42c "
 ALWAYS_EXCEPT+=" 407     312 "
 
 if $SHARED_KEY; then
-	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795
-	ALWAYS_EXCEPT+=" 17n     60a     133g    300f "
+	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795 LU-12781
+	ALWAYS_EXCEPT+=" 17n     60a     133g    300f    272a"
+fi
+
+selinux_status=$(getenforce)
+if [ "$selinux_status" != "Disabled" ]; then
+	# bug number:    LU-12895 LU-12469 LU-12469
+	ALWAYS_EXCEPT+=" 185a     230b     230d"
 fi
 
 # skip the grant tests for ARM until they are fixed
