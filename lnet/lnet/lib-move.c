@@ -1476,7 +1476,7 @@ lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2)
 }
 
 static struct lnet_route *
-lnet_find_route_locked(struct lnet_remotenet *rnet,
+lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 		       struct lnet_route **prev_route,
 		       struct lnet_peer_ni **gwni)
 {
@@ -1485,19 +1485,30 @@ lnet_find_route_locked(struct lnet_remotenet *rnet,
 	struct lnet_route *last_route;
 	struct lnet_route *route;
 	int rc;
+	__u32 restrict_net;
+	__u32 any_net = LNET_NIDNET(LNET_NID_ANY);
 
 	best_route = last_route = NULL;
 	list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 		if (!lnet_is_route_alive(route))
 			continue;
 
+		/* If the src_net is specified then we need to find an lpni
+		 * on that network
+		 */
+		restrict_net = src_net == any_net ? route->lr_lnet : src_net;
 		if (!best_route) {
-			best_route = last_route = route;
-			best_gw_ni = lnet_find_best_lpni_on_net(NULL,
-								LNET_NID_ANY,
-								route->lr_gateway,
-								route->lr_lnet);
-			LASSERT(best_gw_ni);
+			lpni = lnet_find_best_lpni_on_net(NULL, LNET_NID_ANY,
+							  route->lr_gateway,
+							  restrict_net);
+			if (lpni) {
+				best_route = last_route = route;
+				best_gw_ni = lpni;
+			} else
+				CERROR("Gateway %s does not have a peer NI on net %s\n",
+				       libcfs_nid2str(route->lr_gateway->lp_primary_nid),
+				       libcfs_net2str(restrict_net));
+
 			continue;
 		}
 
@@ -1511,8 +1522,13 @@ lnet_find_route_locked(struct lnet_remotenet *rnet,
 
 		lpni = lnet_find_best_lpni_on_net(NULL, LNET_NID_ANY,
 						  route->lr_gateway,
-						  route->lr_lnet);
-		LASSERT(lpni);
+						  restrict_net);
+		if (!lpni) {
+			CERROR("Gateway %s does not have a peer NI on net %s\n",
+			       libcfs_nid2str(route->lr_gateway->lp_primary_nid),
+			       libcfs_net2str(restrict_net));
+			continue;
+		}
 
 		if (rc == 1) {
 			best_route = route;
@@ -2068,8 +2084,9 @@ lnet_handle_find_routed_path(struct lnet_send_data *sd,
 			return -EHOSTUNREACH;
 		}
 
-		best_route = lnet_find_route_locked(best_rnet, &last_route,
-						    &gwni);
+		best_route = lnet_find_route_locked(best_rnet,
+						    LNET_NIDNET(src_nid),
+						    &last_route, &gwni);
 		if (!best_route) {
 			CERROR("no route to %s from %s\n",
 			       libcfs_nid2str(dst_nid),
