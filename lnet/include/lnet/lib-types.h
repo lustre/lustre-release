@@ -1141,6 +1141,13 @@ struct lnet {
 	 * based on the mdh cookie.
 	 */
 	struct list_head		**ln_mt_rstq;
+	/*
+	 * A response tracker becomes a zombie when the associated MD is queued
+	 * for unlink before the response tracker is detached from the MD. An
+	 * entry on a zombie list can be freed when either the remaining
+	 * operations on the MD complete or when LNet has shut down.
+	 */
+	struct list_head		**ln_mt_zombie_rstqs;
 	/* recovery eq handler */
 	struct lnet_handle_eq		ln_mt_eqh;
 

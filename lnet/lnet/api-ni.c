@@ -1099,6 +1099,26 @@ lnet_res_lh_initialize(struct lnet_res_container *rec,
 	list_add(&lh->lh_hash_chain, &rec->rec_lh_hash[hash]);
 }
 
+struct list_head **
+lnet_create_array_of_queues(void)
+{
+	struct list_head **qs;
+	struct list_head *q;
+	int i;
+
+	qs = cfs_percpt_alloc(lnet_cpt_table(),
+			      sizeof(struct list_head));
+	if (!qs) {
+		CERROR("Failed to allocate queues\n");
+		return NULL;
+	}
+
+	cfs_percpt_for_each(q, i, qs)
+		INIT_LIST_HEAD(q);
+
+	return qs;
+}
+
 static int lnet_unprepare(void);
 
 static int
@@ -1191,6 +1211,12 @@ lnet_prepare(lnet_pid_t requested_pid)
 		goto failed;
 	}
 
+	the_lnet.ln_mt_zombie_rstqs = lnet_create_array_of_queues();
+	if (!the_lnet.ln_mt_zombie_rstqs) {
+		rc = -ENOMEM;
+		goto failed;
+	}
+
 	return 0;
 
  failed:
@@ -1213,6 +1239,11 @@ lnet_unprepare (void)
 	LASSERT(the_lnet.ln_refcount == 0);
 	LASSERT(list_empty(&the_lnet.ln_test_peers));
 	LASSERT(list_empty(&the_lnet.ln_nets));
+
+	if (the_lnet.ln_mt_zombie_rstqs) {
+		lnet_clean_zombie_rstqs();
+		the_lnet.ln_mt_zombie_rstqs = NULL;
+	}
 
 	if (!LNetEQHandleIsInvalid(the_lnet.ln_mt_eqh)) {
 		rc = LNetEQFree(the_lnet.ln_mt_eqh);

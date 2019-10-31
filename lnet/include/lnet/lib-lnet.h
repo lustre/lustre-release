@@ -634,6 +634,8 @@ void lnet_return_rx_credits_locked(struct lnet_msg *msg);
 void lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp);
 void lnet_drop_routed_msgs_locked(struct list_head *list, int cpt);
 
+struct list_head **lnet_create_array_of_queues(void);
+
 /* portals functions */
 /* portals attributes */
 static inline int
@@ -704,6 +706,7 @@ struct lnet_msg *lnet_create_reply_msg(struct lnet_ni *ni,
 void lnet_set_reply_msg_len(struct lnet_ni *ni, struct lnet_msg *msg,
 			    unsigned int len);
 void lnet_detach_rsp_tracker(struct lnet_libmd *md, int cpt);
+void lnet_clean_zombie_rstqs(void);
 
 void lnet_finalize(struct lnet_msg *msg, int rc);
 bool lnet_send_error_simulation(struct lnet_msg *msg,
