@@ -1884,9 +1884,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 PLDLMRES(lock->l_resource),
 			 PFID(mdt_object_fid(child)));
 
-		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
-		    mdt_object_exists(child) && !mdt_object_remote(child) &&
-		    child != parent) {
+		if (mdt_object_exists(child) &&
+		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
+		    !mdt_object_remote(child) && child != parent) {
 			LDLM_LOCK_PUT(lock);
 			mdt_object_put(info->mti_env, child);
 			/* NB: call the mdt_pack_size2body always after
