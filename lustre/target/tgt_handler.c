@@ -443,7 +443,8 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 
 			req_capsule_set_size(tsi->tsi_pill, &RMF_SHORT_IO,
 					 RCL_SERVER,
-					 (body->oa.o_flags & OBD_FL_SHORT_IO) ?
+					 (body->oa.o_valid & OBD_MD_FLFLAGS &&
+					  body->oa.o_flags & OBD_FL_SHORT_IO) ?
 					 remote_nb[0].rnb_len : 0);
 		}
 
@@ -2234,7 +2235,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	if (rc != 0)
 		GOTO(out_lock, rc);
 
-	if (body->oa.o_flags & OBD_FL_SHORT_IO) {
+	if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+	    body->oa.o_flags & OBD_FL_SHORT_IO) {
 		desc = NULL;
 	} else {
 		desc = ptlrpc_prep_bulk_exp(req, npages, ioobj_max_brw_get(ioo),
@@ -2313,7 +2315,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	/* Check if client was evicted while we were doing i/o before touching
 	 * network */
 	if (rc == 0) {
-		if (body->oa.o_flags & OBD_FL_SHORT_IO) {
+		if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+		    body->oa.o_flags & OBD_FL_SHORT_IO) {
 			unsigned char *short_io_buf;
 			int short_io_size;
 
@@ -2334,7 +2337,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		}
 		no_reply = rc != 0;
 	} else {
-		if (body->oa.o_flags & OBD_FL_SHORT_IO)
+		if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+		    body->oa.o_flags & OBD_FL_SHORT_IO)
 			req_capsule_shrink(&req->rq_pill, &RMF_SHORT_IO, 0,
 					   RCL_SERVER);
 	}
@@ -2585,7 +2589,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 			objcount, ioo, remote_nb, &npages, local_nb);
 	if (rc < 0)
 		GOTO(out_lock, rc);
-	if (body->oa.o_flags & OBD_FL_SHORT_IO) {
+	if (body->oa.o_valid & OBD_MD_FLFLAGS &&
+	    body->oa.o_flags & OBD_FL_SHORT_IO) {
 		unsigned int short_io_size;
 		unsigned char *short_io_buf;
 
