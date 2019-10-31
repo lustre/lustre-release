@@ -1315,7 +1315,7 @@ routing_off:
 }
 
 static int
-lnet_compare_peers(struct lnet_peer_ni *p1, struct lnet_peer_ni *p2)
+lnet_compare_gw_lpnis(struct lnet_peer_ni *p1, struct lnet_peer_ni *p2)
 {
 	if (p1->lpni_txqnob < p2->lpni_txqnob)
 		return 1;
@@ -1453,60 +1453,26 @@ lnet_find_best_lpni_on_net(struct lnet_ni *lni, lnet_nid_t dst_nid,
 	return lnet_select_peer_ni(lni, dst_nid, peer, peer_net);
 }
 
+/* Compare route priorities and hop counts */
 static int
-lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2,
-		    struct lnet_peer_ni **best_lpni)
+lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2)
 {
 	int r1_hops = (r1->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r1->lr_hops;
 	int r2_hops = (r2->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r2->lr_hops;
-	struct lnet_peer *lp1 = r1->lr_gateway;
-	struct lnet_peer *lp2 = r2->lr_gateway;
-	struct lnet_peer_ni *lpni1;
-	struct lnet_peer_ni *lpni2;
-	int rc;
 
-	lpni1 = lnet_find_best_lpni_on_net(NULL, LNET_NID_ANY, lp1,
-					   r1->lr_lnet);
-	lpni2 = lnet_find_best_lpni_on_net(NULL, LNET_NID_ANY, lp2,
-					   r2->lr_lnet);
-	LASSERT(lpni1 && lpni2);
-
-	if (r1->lr_priority < r2->lr_priority) {
-		*best_lpni = lpni1;
+	if (r1->lr_priority < r2->lr_priority)
 		return 1;
-	}
 
-	if (r1->lr_priority > r2->lr_priority) {
-		*best_lpni = lpni2;
+	if (r1->lr_priority > r2->lr_priority)
 		return -1;
-	}
 
-	if (r1_hops < r2_hops) {
-		*best_lpni = lpni1;
+	if (r1_hops < r2_hops)
 		return 1;
-	}
 
-	if (r1_hops > r2_hops) {
-		*best_lpni = lpni2;
+	if (r1_hops > r2_hops)
 		return -1;
-	}
 
-	rc = lnet_compare_peers(lpni1, lpni2);
-	if (rc == 1) {
-		*best_lpni = lpni1;
-		return rc;
-	} else if (rc == -1) {
-		*best_lpni = lpni2;
-		return rc;
-	}
-
-	if (r1->lr_seq - r2->lr_seq <= 0) {
-		*best_lpni = lpni1;
-		return 1;
-	}
-
-	*best_lpni = lpni2;
-	return -1;
+	return 0;
 }
 
 static struct lnet_route *
@@ -1514,7 +1480,7 @@ lnet_find_route_locked(struct lnet_remotenet *rnet,
 		       struct lnet_route **prev_route,
 		       struct lnet_peer_ni **gwni)
 {
-	struct lnet_peer_ni *best_gw_ni = NULL;
+	struct lnet_peer_ni *lpni, *best_gw_ni = NULL;
 	struct lnet_route *best_route;
 	struct lnet_route *last_route;
 	struct lnet_route *route;
@@ -1539,11 +1505,30 @@ lnet_find_route_locked(struct lnet_remotenet *rnet,
 		if (last_route->lr_seq - route->lr_seq < 0)
 			last_route = route;
 
-		rc = lnet_compare_routes(route, best_route, &best_gw_ni);
-		if (rc < 0)
+		rc = lnet_compare_routes(route, best_route);
+		if (rc == -1)
 			continue;
 
-		best_route = route;
+		lpni = lnet_find_best_lpni_on_net(NULL, LNET_NID_ANY,
+						  route->lr_gateway,
+						  route->lr_lnet);
+		LASSERT(lpni);
+
+		if (rc == 1) {
+			best_route = route;
+			best_gw_ni = lpni;
+			continue;
+		}
+
+		rc = lnet_compare_gw_lpnis(lpni, best_gw_ni);
+		if (rc == -1)
+			continue;
+
+		if (rc == 1 || route->lr_seq <= best_route->lr_seq) {
+			best_route = route;
+			best_gw_ni = lpni;
+			continue;
+		}
 	}
 
 	*prev_route = last_route;
