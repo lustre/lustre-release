@@ -1745,38 +1745,17 @@ build_with_srpm() {
 		fi
 	fi
 
-    # ~sigh~  have to make copies of and modify some of the rpm
-    # infrastructure files so that find-requires can find our unpacked
-    # kernel-devel artifacts
-    cp $RPM_HELPERS_DIR/{symset-table,find-requires{,.ksyms}} .
-    export FIND_REQUIRES="$(pwd)/find-requires"
-    chmod 755 {symset-table,find-requires{,.ksyms}}
-    local tmp="$(pwd)"
-    tmp="${tmp//\//\\/}"
-    ed find-requires <<EOF
-1a
-set -x
-.
-/|.*find-requires.ksyms/s/|/| bash -x/
-g/ [^ ]*\/\(find-requires\.ksyms\)/s// $tmp\/\1/g
-wq
-EOF
-    ed find-requires.ksyms <<EOF
-1a
-set -x
-.
-g/\/.*\/\(symset-table\)/s//$tmp\/\1/g
-g/\(\/usr\/src\/kernels\/\)/s//$tmp\/reused\1/g
-wq
-EOF
-    ed symset-table <<EOF
-1a
-set -x
-.
-g/\(\/boot\/\)/s//$tmp\/reused\1/g
-g/\(\/usr\/src\/kernels\/\)/s//$tmp\/reused\1/g
-wq
-EOF
+	# ~sigh~  have to make copies of and modify some of the rpm
+	# infrastructure files so that find-requires can find our unpacked
+	# kernel-devel artifacts
+	cp $RPM_HELPERS_DIR/{symset-table,find-requires{,.ksyms}} .
+	export FIND_REQUIRES="$(pwd)/find-requires"
+	chmod 755 {symset-table,find-requires{,.ksyms}}
+	local tmp="$(pwd)"
+	tmp="${tmp//\//\\/}"
+	sed -i "s/\/.*find-requires.ksyms/$tmp\/find-requires.ksyms/g" find-requires
+	sed -i "s/\/usr\/src\/kernels/$tmp\/reused\/usr\/src\/kernels/" find-requires.ksyms
+	sed -i "s/\/boot/$tmp\/reused\/boot/; s/\/usr\/src\/kernels/$tmp\/reused\/usr\/src\/kernels/" symset-table
 
 	build_ofed "${LINUXOBJ:-$LINUX}" "$ofed_type" "$ofed_version" ||
         fatal 1 "error building OFED"
