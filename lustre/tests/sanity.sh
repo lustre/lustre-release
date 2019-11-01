@@ -6179,6 +6179,33 @@ test_56r() {
 }
 run_test 56r "check lfs find -size works"
 
+test_56ra_sub() {
+	local expected=$1
+	local glimpses=$2
+	local cmd="$3"
+
+	cancel_lru_locks $OSC
+
+	local rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	local nums=$($cmd | wc -l)
+
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	local rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+
+	if (( rpcs_before + glimpses != rpcs_after )); then
+		echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
+		$LCTL get_param osc.*.stats | grep ldlm_glimpse_enqueue
+
+		if [[ $glimpses == 0 ]]; then
+			error "'$cmd' should not send glimpse RPCs to OST"
+		else
+			error "'$cmd' should send $glimpses glimpse RPCs to OST"
+		fi
+	fi
+}
+
 test_56ra() {
 	[[ $MDS1_VERSION -gt $(version_code 2.12.58) ]] ||
 		skip "MDS < 2.12.58 doesn't return LSOM data"
@@ -6187,146 +6214,32 @@ test_56ra() {
 	[[ $OSC == "mdc" ]] && skip "DoM files" && return
 
 	setup_56 $dir $NUMFILES $NUMDIRS "-c 1"
-
+	# open and close all files to ensure LSOM is updated
 	cancel_lru_locks $OSC
+	find $dir -type f | xargs cat > /dev/null
 
-	local rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	local expected=12
-	local cmd="$LFS find -size 0 -type f -lazy $dir"
-	local nums=$($cmd | wc -l)
-
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-
-	local rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	[ $rpcs_before -eq $rpcs_after ] ||
-		error "'$cmd' should not send glimpse RPCs to OST"
-	cmd="$LFS find -size 0 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
-	$LCTL get_param osc.*.stats
-	[ $rpcs_after -eq $((rpcs_before + 12)) ] ||
-		error "'$cmd' should send 12 glimpse RPCs to OST"
-
-	cancel_lru_locks $OSC
-	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	expected=0
-	cmd="$LFS find ! -size 0 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	$LCTL get_param mdc.*.stats
-	[ $rpcs_before -eq $rpcs_after ] ||
-		error "'$cmd' should not send glimpse RPCs to OST"
-	cmd="$LFS find ! -size 0 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
-	[ $rpcs_after -eq $((rpcs_before + 12)) ] ||
-		error "'$cmd' should send 12 glimpse RPCs to OST"
+	#   expect_found  glimpse_rpcs  command_to_run
+	test_56ra_sub 12  0 "$LFS find -size 0 -type f -lazy $dir"
+	test_56ra_sub 12 12 "$LFS find -size 0 -type f $dir"
+	test_56ra_sub  0  0 "$LFS find ! -size 0 -type f -lazy $dir"
+	test_56ra_sub  0 12 "$LFS find ! -size 0 -type f $dir"
 
 	echo "test" > $dir/$tfile
 	echo "test2" > $dir/$tfile.2 && sync
 	cancel_lru_locks $OSC
-	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	expected=1
-	cmd="$LFS find -size 5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	[ $rpcs_before -eq $rpcs_after ] ||
-		error "'$cmd' should not send glimpse RPCs to OST"
-	cmd="$LFS find -size 5 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
-	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
-		error "'$cmd' should send 14 glimpse RPCs to OST"
+	cat $dir/$tfile $dir/$tfile.2 > /dev/null
 
-	cancel_lru_locks $OSC
-	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	expected=1
-	cmd="$LFS find -size +5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	[ $rpcs_before -eq $rpcs_after ] ||
-		error "'$cmd' should not send glimpse RPCs to OST"
-	cmd="$LFS find -size +5 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
-	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
-		error "'$cmd' should send 14 glimpse RPCs to OST"
+	test_56ra_sub  1  0 "$LFS find -size 5 -type f -lazy $dir"
+	test_56ra_sub  1 14 "$LFS find -size 5 -type f $dir"
+	test_56ra_sub  1  0 "$LFS find -size +5 -type f -lazy $dir"
+	test_56ra_sub  1 14 "$LFS find -size +5 -type f $dir"
 
-	cancel_lru_locks $OSC
-	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	expected=2
-	cmd="$LFS find -size +0 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	[ $rpcs_before -eq $rpcs_after ] ||
-		error "'$cmd' should not send glimpse RPCs to OST"
-	cmd="$LFS find -size +0 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
-	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
-		error "'$cmd' should send 14 glimpse RPCs to OST"
-
-	cancel_lru_locks $OSC
-	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	expected=2
-	cmd="$LFS find ! -size -5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	[ $rpcs_before -eq $rpcs_after ] ||
-		error "'$cmd' should not send glimpse RPCs to OST"
-	cmd="$LFS find ! -size -5 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
-	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
-		error "'$cmd' should send 14 glimpse RPCs to OST"
-
-	cancel_lru_locks $OSC
-	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	expected=12
-	cmd="$LFS find -size -5 -type f -lazy $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	[ $rpcs_before -eq $rpcs_after ] ||
-		error "'$cmd' should not send glimpse RPCs to OST"
-	cmd="$LFS find -size -5 -type f $dir"
-	nums=$($cmd | wc -l)
-	[ $nums -eq $expected ] ||
-		error "'$cmd' wrong: found $nums, expected $expected"
-	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
-	echo "Before: $rpcs_before After: $rpcs_after $NUMFILES"
-	[ $rpcs_after -eq $((rpcs_before + 14)) ] ||
-		error "'$cmd' should send 14 glimpse RPCs to OST"
+	test_56ra_sub  2  0 "$LFS find -size +0 -type f -lazy $dir"
+	test_56ra_sub  2 14 "$LFS find -size +0 -type f $dir"
+	test_56ra_sub  2  0 "$LFS find ! -size -5 -type f -lazy $dir"
+	test_56ra_sub  2 14 "$LFS find ! -size -5 -type f $dir"
+	test_56ra_sub 12  0 "$LFS find -size -5 -type f -lazy $dir"
+	test_56ra_sub 12 14 "$LFS find -size -5 -type f $dir"
 }
 run_test 56ra "check lfs find -size -lazy works for data on OSTs"
 
@@ -11512,8 +11425,8 @@ test_121() { #bug #10589
 }
 run_test 121 "read cancel race ========="
 
-test_123a() { # was test 123, statahead(bug 11401)
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+test_123a_base() { # was test 123, statahead(bug 11401)
+	local lsx="$1"
 
 	SLOWOK=0
 	if ! grep -q "processor.*: 1" /proc/cpuinfo; then
@@ -11525,76 +11438,120 @@ test_123a() { # was test 123, statahead(bug 11401)
 	test_mkdir $DIR/$tdir
 	NUMFREE=$(df -i -P $DIR | tail -n 1 | awk '{ print $4 }')
 	[[ $NUMFREE -gt 100000 ]] && NUMFREE=100000 || NUMFREE=$((NUMFREE-1000))
-        MULT=10
-        for ((i=100, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
-                createmany -o $DIR/$tdir/$tfile $j $((i - j))
+	MULT=10
+	for ((i=100, j=0; i<=$NUMFREE; j=$i, i=$((i * MULT)) )); do
+		createmany -o $DIR/$tdir/$tfile $j $((i - j))
 
-                max=`lctl get_param -n llite.*.statahead_max | head -n 1`
-                lctl set_param -n llite.*.statahead_max 0
-                lctl get_param llite.*.statahead_max
-                cancel_lru_locks mdc
-                cancel_lru_locks osc
-                stime=`date +%s`
-                time ls -l $DIR/$tdir | wc -l
-                etime=`date +%s`
-                delta=$((etime - stime))
-                log "ls $i files without statahead: $delta sec"
-                lctl set_param llite.*.statahead_max=$max
+		max=$(lctl get_param -n llite.*.statahead_max | head -n 1)
+		lctl set_param -n llite.*.statahead_max 0
+		lctl get_param llite.*.statahead_max
+		cancel_lru_locks mdc
+		cancel_lru_locks osc
+		stime=$(date +%s)
+		time $lsx $DIR/$tdir | wc -l
+		etime=$(date +%s)
+		delta=$((etime - stime))
+		log "$lsx $i files without statahead: $delta sec"
+		lctl set_param llite.*.statahead_max=$max
 
-                swrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
-                lctl get_param -n llite.*.statahead_max | grep '[0-9]'
-                cancel_lru_locks mdc
-                cancel_lru_locks osc
-                stime=`date +%s`
-                time ls -l $DIR/$tdir | wc -l
-                etime=`date +%s`
-                delta_sa=$((etime - stime))
-                log "ls $i files with statahead: $delta_sa sec"
-                lctl get_param -n llite.*.statahead_stats
-                ewrong=`lctl get_param -n llite.*.statahead_stats | grep "statahead wrong:" | awk '{print $3}'`
+		swrong=$(lctl get_param -n llite.*.statahead_stats |
+			grep "statahead wrong:" | awk '{print $3}')
+		lctl get_param -n llite.*.statahead_max | grep '[0-9]'
+		cancel_lru_locks mdc
+		cancel_lru_locks osc
+		stime=$(date +%s)
+		time $lsx $DIR/$tdir | wc -l
+		etime=$(date +%s)
+		delta_sa=$((etime - stime))
+		log "$lsx $i files with statahead: $delta_sa sec"
+		lctl get_param -n llite.*.statahead_stats
+		ewrong=$(lctl get_param -n llite.*.statahead_stats |
+			grep "statahead wrong:" | awk '{print $3}')
 
 		[[ $swrong -lt $ewrong ]] &&
 			log "statahead was stopped, maybe too many locks held!"
 		[[ $delta -eq 0 || $delta_sa -eq 0 ]] && continue
 
-                if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
-                    max=`lctl get_param -n llite.*.statahead_max | head -n 1`
-                    lctl set_param -n llite.*.statahead_max 0
-                    lctl get_param llite.*.statahead_max
-                    cancel_lru_locks mdc
-                    cancel_lru_locks osc
-                    stime=`date +%s`
-                    time ls -l $DIR/$tdir | wc -l
-                    etime=`date +%s`
-                    delta=$((etime - stime))
-                    log "ls $i files again without statahead: $delta sec"
-                    lctl set_param llite.*.statahead_max=$max
-                    if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
-                        if [  $SLOWOK -eq 0 ]; then
-                                error "ls $i files is slower with statahead!"
-                        else
-                                log "ls $i files is slower with statahead!"
-                        fi
-                        break
-                    fi
-                fi
+		if [ $((delta_sa * 100)) -gt $((delta * 105)) -a $delta_sa -gt $((delta + 2)) ]; then
+			max=$(lctl get_param -n llite.*.statahead_max |
+				head -n 1)
+			lctl set_param -n llite.*.statahead_max 0
+			lctl get_param llite.*.statahead_max
+			cancel_lru_locks mdc
+			cancel_lru_locks osc
+			stime=$(date +%s)
+			time $lsx $DIR/$tdir | wc -l
+			etime=$(date +%s)
+			delta=$((etime - stime))
+			log "$lsx $i files again without statahead: $delta sec"
+			lctl set_param llite.*.statahead_max=$max
+			if [ $((delta_sa * 100 > delta * 105 && delta_sa > delta + 2)) ]; then
+				if [  $SLOWOK -eq 0 ]; then
+					error "$lsx $i files is slower with statahead!"
+				else
+					log "$lsx $i files is slower with statahead!"
+				fi
+				break
+			fi
+		fi
 
-                [ $delta -gt 20 ] && break
-                [ $delta -gt 8 ] && MULT=$((50 / delta))
-                [ "$SLOW" = "no" -a $delta -gt 5 ] && break
-        done
-        log "ls done"
+		[ $delta -gt 20 ] && break
+		[ $delta -gt 8 ] && MULT=$((50 / delta))
+		[ "$SLOW" = "no" -a $delta -gt 5 ] && break
+	done
+	log "$lsx done"
 
-        stime=`date +%s`
-        rm -r $DIR/$tdir
-        sync
-        etime=`date +%s`
-        delta=$((etime - stime))
-        log "rm -r $DIR/$tdir/: $delta seconds"
-        log "rm done"
-        lctl get_param -n llite.*.statahead_stats
+	stime=$(date +%s)
+	rm -r $DIR/$tdir
+	sync
+	etime=$(date +%s)
+	delta=$((etime - stime))
+	log "rm -r $DIR/$tdir/: $delta seconds"
+	log "rm done"
+	lctl get_param -n llite.*.statahead_stats
 }
-run_test 123a "verify statahead work"
+
+test_123aa() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	test_123a_base "ls -l"
+}
+run_test 123aa "verify statahead work"
+
+test_123ab() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	statx_supported || skip_env "Test must be statx() syscall supported"
+
+	test_123a_base "$STATX -l"
+}
+run_test 123ab "verify statahead work by using statx"
+
+test_123ac() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	statx_supported || skip_env "Test must be statx() syscall supported"
+
+	local rpcs_before
+	local rpcs_after
+	local agl_before
+	local agl_after
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	agl_before=$($LCTL get_param -n llite.*.statahead_stats |
+		awk '/agl.total:/ {print $3}')
+	test_123a_base "$STATX -c \"%n %i %A %h %u %g %W %X %Z\" -D"
+	test_123a_base "$STATX --cached=always -D"
+	agl_after=$($LCTL get_param -n llite.*.statahead_stats |
+		awk '/agl.total:/ {print $3}')
+	[ $agl_before -eq $agl_after ] ||
+		error "Should not trigger AGL thread - $agl_before:$agl_after"
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_after -eq $rpcs_before ] ||
+		error "$STATX should not send glimpse RPCs to $OSC"
+}
+run_test 123ac "verify statahead work by using statx without glimpse RPCs"
 
 test_123b () { # statahead(bug 15027)
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

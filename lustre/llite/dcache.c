@@ -317,7 +317,7 @@ static int ll_revalidate_dentry(struct dentry *dentry,
 		return -ECHILD;
 
 	if (dentry_may_statahead(dir, dentry))
-		ll_statahead(dir, &dentry, dentry->d_inode == NULL);
+		ll_revalidate_statahead(dir, &dentry, dentry->d_inode == NULL);
 
 	return 1;
 }

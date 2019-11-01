@@ -237,7 +237,8 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb, struct iov_iter *iter,
 			   bool *cached);
 ssize_t pcc_file_write_iter(struct kiocb *iocb, struct iov_iter *iter,
 			    bool *cached);
-int pcc_inode_getattr(struct inode *inode, bool *cached);
+int pcc_inode_getattr(struct inode *inode, u32 request_mask,
+		      unsigned int flags, bool *cached);
 int pcc_inode_setattr(struct inode *inode, struct iattr *attr, bool *cached);
 ssize_t pcc_file_splice_read(struct file *in_file, loff_t *ppos,
 			     struct pipe_inode_info *pipe, size_t count,

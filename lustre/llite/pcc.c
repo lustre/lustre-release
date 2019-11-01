@@ -1730,7 +1730,8 @@ int pcc_inode_setattr(struct inode *inode, struct iattr *attr,
 	RETURN(rc);
 }
 
-int pcc_inode_getattr(struct inode *inode, bool *cached)
+int pcc_inode_getattr(struct inode *inode, u32 request_mask,
+		      unsigned int flags, bool *cached)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	const struct cred *old_cred;
@@ -1752,7 +1753,8 @@ int pcc_inode_getattr(struct inode *inode, bool *cached)
 		RETURN(0);
 
 	old_cred = override_creds(pcc_super_cred(inode->i_sb));
-	rc = ll_vfs_getattr(&ll_i2pcci(inode)->pcci_path, &stat);
+	rc = ll_vfs_getattr(&ll_i2pcci(inode)->pcci_path, &stat, request_mask,
+			    flags);
 	revert_creds(old_cred);
 	if (rc)
 		GOTO(out, rc);

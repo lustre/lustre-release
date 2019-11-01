@@ -235,7 +235,12 @@ struct statx {
 
 #define STATX_ATTR_AUTOMOUNT		0x00001000 /* Dir: Automount trigger */
 
-#endif
+#define AT_STATX_SYNC_TYPE	0x6000	/* Type of synchronisation required from statx() */
+#define AT_STATX_SYNC_AS_STAT	0x0000	/* - Do whatever stat() does */
+#define AT_STATX_FORCE_SYNC	0x2000	/* - Force the attributes to be sync'd with the server */
+#define AT_STATX_DONT_SYNC	0x4000	/* - Don't sync attributes with the server */
+
+#endif /* STATX_BASIC_STATS */
 
 typedef struct statx lstatx_t;
 

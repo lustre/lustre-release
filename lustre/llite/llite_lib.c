@@ -2115,6 +2115,9 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		lli->lli_ctime = body->mbo_ctime;
 	}
 
+	if (body->mbo_valid & OBD_MD_FLBTIME)
+		lli->lli_btime = body->mbo_btime;
+
 	/* Clear i_flags to remove S_NOSEC before permissions are updated */
 	if (body->mbo_valid & OBD_MD_FLFLAGS)
 		ll_update_inode_flags(inode, body->mbo_flags);
@@ -2153,6 +2156,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 
 	LASSERT(fid_seq(&lli->lli_fid) != 0);
 
+	lli->lli_attr_valid = body->mbo_valid;
 	if (body->mbo_valid & OBD_MD_FLSIZE) {
 		i_size_write(inode, body->mbo_size);
 
@@ -2162,6 +2166,11 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 
 		if (body->mbo_valid & OBD_MD_FLBLOCKS)
 			inode->i_blocks = body->mbo_blocks;
+	} else {
+		if (body->mbo_valid & OBD_MD_FLLAZYSIZE)
+			lli->lli_lazysize = body->mbo_size;
+		if (body->mbo_valid & OBD_MD_FLLAZYBLOCKS)
+			lli->lli_lazyblocks = body->mbo_blocks;
 	}
 
 	if (body->mbo_valid & OBD_MD_TSTATE) {

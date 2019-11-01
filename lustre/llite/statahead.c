@@ -992,10 +992,11 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
 			      "ll_agl_%u", plli->lli_opendir_pid);
 	if (IS_ERR(task)) {
 		CERROR("can't start ll_agl thread, rc: %ld\n", PTR_ERR(task));
+		sai->sai_agl_valid = 0;
 		RETURN_EXIT;
 	}
 	sai->sai_agl_task = task;
-	sai->sai_agl_valid = 1;
+	LASSERT(sai->sai_agl_valid == 1);
 	atomic_inc(&ll_i2sbi(d_inode(parent))->ll_agl_total);
 	/* Get an extra reference that the thread holds */
 	ll_sai_get(d_inode(parent));
@@ -1551,13 +1552,15 @@ out:
  * \param[in] dir	parent directory
  * \param[in] dentry	dentry that triggers statahead, normally the first
  *			dirent under @dir
+ * \param[in] agl	indicate whether AGL is needed
  * \retval		-EAGAIN on success, because when this function is
  *			called, it's already in lookup call, so client should
  *			do it itself instead of waiting for statahead thread
  *			to do it asynchronously.
  * \retval		negative number upon error
  */
-static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
+static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
+				  bool agl)
 {
 	struct ll_inode_info *lli = ll_i2info(dir);
 	struct ll_statahead_info *sai = NULL;
@@ -1587,6 +1590,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 		GOTO(out, rc = -ENOMEM);
 
 	sai->sai_ls_all = (first == LS_FIRST_DOT_DE);
+	sai->sai_agl_valid = agl;
 
 	/*
 	 * if current lli_opendir_key was deauthorized, or dir re-opened by
@@ -1616,7 +1620,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 		GOTO(out, rc);
 	}
 
-	if (ll_i2sbi(parent->d_inode)->ll_flags & LL_SBI_AGL_ENABLED)
+	if (ll_i2sbi(parent->d_inode)->ll_flags & LL_SBI_AGL_ENABLED && agl)
 		ll_start_agl(parent, sai);
 
 	atomic_inc(&ll_i2sbi(parent->d_inode)->ll_sa_total);
@@ -1647,10 +1651,49 @@ out:
 	RETURN(rc);
 }
 
+/*
+ * Check whether statahead for @dir was started.
+ */
+static inline bool ll_statahead_started(struct inode *dir, bool agl)
+{
+	struct ll_inode_info *lli = ll_i2info(dir);
+	struct ll_statahead_info *sai;
+
+	spin_lock(&lli->lli_sa_lock);
+	sai = lli->lli_sai;
+	if (sai && sai->sai_agl_valid != agl)
+		CDEBUG(D_READA,
+		       "%s: Statahead AGL hint changed from %d to %d\n",
+		       ll_i2sbi(dir)->ll_fsname, sai->sai_agl_valid, agl);
+	spin_unlock(&lli->lli_sa_lock);
+
+	return !!sai;
+}
+
 /**
  * statahead entry function, this is called when client getattr on a file, it
  * will start statahead thread if this is the first dir entry, else revalidate
  * dentry from statahead cache.
+ *
+ * \param[in]  dir	parent directory
+ * \param[out] dentryp	dentry to getattr
+ * \param[in]  agl	whether start the agl thread
+ *
+ * \retval		1 on success
+ * \retval		0 revalidation from statahead cache failed, caller needs
+ *			to getattr from server directly
+ * \retval		negative number on error, caller often ignores this and
+ *			then getattr from server
+ */
+int ll_start_statahead(struct inode *dir, struct dentry *dentry, bool agl)
+{
+	if (!ll_statahead_started(dir, agl))
+		return start_statahead_thread(dir, dentry, agl);
+	return 0;
+}
+
+/**
+ * revalidate dentry from statahead cache.
  *
  * \param[in]  dir	parent directory
  * \param[out] dentryp	dentry to getattr
@@ -1662,19 +1705,18 @@ out:
  * \retval		negative number on error, caller often ignores this and
  *			then getattr from server
  */
-int ll_statahead(struct inode *dir, struct dentry **dentryp, bool unplug)
+int ll_revalidate_statahead(struct inode *dir, struct dentry **dentryp,
+			    bool unplug)
 {
 	struct ll_statahead_info *sai;
+	int rc = 0;
 
 	sai = ll_sai_get(dir);
 	if (sai) {
-		int rc;
-
 		rc = revalidate_statahead_dentry(dir, sai, dentryp, unplug);
 		CDEBUG(D_READA, "revalidate statahead %pd: rc = %d.\n",
 		       *dentryp, rc);
 		ll_sai_put(sai);
-		return rc;
 	}
-	return start_statahead_thread(dir, *dentryp);
+	return rc;
 }

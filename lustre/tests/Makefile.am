@@ -84,7 +84,7 @@ if MPITESTS
 SUBDIRS = mpi
 endif
 
-bin_PROGRAMS = mcreate munlink
+bin_PROGRAMS = mcreate munlink statx
 testdir = $(libdir)/lustre/tests
 test_SCRIPTS = $(noinst_SCRIPTS)
 test_PROGRAMS = $(THETESTS)
@@ -111,4 +111,8 @@ ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI)
 flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 check_fallocate_LDADD = $(LIBLUSTREAPI)
+if UBUNTU
+statx_CPPFLAGS := -I/usr/include/libiberty
+endif
+statx_LDADD = $(SELINUX) -liberty
 endif # TESTS

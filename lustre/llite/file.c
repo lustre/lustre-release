@@ -4688,13 +4688,28 @@ static int ll_merge_md_attr(struct inode *inode)
 	RETURN(0);
 }
 
-int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
+int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
+		      unsigned int flags)
 {
 	struct inode *inode = de->d_inode;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ll_inode_info *lli = ll_i2info(inode);
+	struct inode *dir = de->d_parent->d_inode;
+	bool need_glimpse = true;
 	ktime_t kstart = ktime_get();
 	int rc;
+
+	/* The OST object(s) determine the file size, blocks and mtime. */
+	if (!(request_mask & STATX_SIZE || request_mask & STATX_BLOCKS ||
+	      request_mask & STATX_MTIME))
+		need_glimpse = false;
+
+	if (dentry_may_statahead(dir, de))
+		ll_start_statahead(dir, de, need_glimpse &&
+				   !(flags & AT_STATX_DONT_SYNC));
+
+	if (flags & AT_STATX_DONT_SYNC)
+		GOTO(fill_attr, rc = 0);
 
 	rc = ll_inode_revalidate(de, IT_GETATTR);
 	if (rc < 0)
@@ -4703,9 +4718,35 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
 	if (S_ISREG(inode->i_mode)) {
 		bool cached;
 
-		rc = pcc_inode_getattr(inode, &cached);
+		if (!need_glimpse)
+			GOTO(fill_attr, rc);
+
+		rc = pcc_inode_getattr(inode, request_mask, flags, &cached);
 		if (cached && rc < 0)
 			RETURN(rc);
+
+		if (cached)
+			GOTO(fill_attr, rc);
+
+		/*
+		 * If the returned attr is masked with OBD_MD_FLSIZE &
+		 * OBD_MD_FLBLOCKS & OBD_MD_FLMTIME, it means that the file size
+		 * or blocks obtained from MDT is strictly correct, and the file
+		 * is usually not being modified by clients, and the [a|m|c]time
+		 * got from MDT is also strictly correct.
+		 * Under this circumstance, it does not need to send glimpse
+		 * RPCs to OSTs for file attributes such as the size and blocks.
+		 */
+		if (lli->lli_attr_valid & OBD_MD_FLSIZE &&
+		    lli->lli_attr_valid & OBD_MD_FLBLOCKS &&
+		    lli->lli_attr_valid & OBD_MD_FLMTIME) {
+			inode->i_mtime.tv_sec = lli->lli_mtime;
+			if (lli->lli_attr_valid & OBD_MD_FLATIME)
+				inode->i_atime.tv_sec = lli->lli_atime;
+			if (lli->lli_attr_valid & OBD_MD_FLCTIME)
+				inode->i_ctime.tv_sec = lli->lli_ctime;
+			GOTO(fill_attr, rc);
+		}
 
 		/* In case of restore, the MDT has the right size and has
 		 * already send it back without granting the layout lock,
@@ -4714,7 +4755,7 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
 		 * restore the MDT holds the layout lock so the glimpse will
 		 * block up to the end of restore (getattr will block)
 		 */
-		if (!cached && !ll_file_test_flag(lli, LLIF_FILE_RESTORING)) {
+		if (!ll_file_test_flag(lli, LLIF_FILE_RESTORING)) {
 			rc = ll_glimpse_size(inode);
 			if (rc < 0)
 				RETURN(rc);
@@ -4727,11 +4768,15 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
 				RETURN(rc);
 		}
 
-		inode->i_atime.tv_sec = lli->lli_atime;
-		inode->i_mtime.tv_sec = lli->lli_mtime;
-		inode->i_ctime.tv_sec = lli->lli_ctime;
+		if (lli->lli_attr_valid & OBD_MD_FLATIME)
+			inode->i_atime.tv_sec = lli->lli_atime;
+		if (lli->lli_attr_valid & OBD_MD_FLMTIME)
+			inode->i_mtime.tv_sec = lli->lli_mtime;
+		if (lli->lli_attr_valid & OBD_MD_FLCTIME)
+			inode->i_ctime.tv_sec = lli->lli_ctime;
 	}
 
+fill_attr:
 	OBD_FAIL_TIMEOUT(OBD_FAIL_GETATTR_DELAY, 30);
 
 	if (ll_need_32bit_api(sbi)) {
@@ -4763,6 +4808,26 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
 	stat->size = i_size_read(inode);
 	stat->blocks = inode->i_blocks;
 
+#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+	if (flags & AT_STATX_DONT_SYNC) {
+		if (stat->size == 0 &&
+		    lli->lli_attr_valid & OBD_MD_FLLAZYSIZE)
+			stat->size = lli->lli_lazysize;
+		if (stat->blocks == 0 &&
+		    lli->lli_attr_valid & OBD_MD_FLLAZYBLOCKS)
+			stat->blocks = lli->lli_lazyblocks;
+	}
+
+	if (lli->lli_attr_valid & OBD_MD_FLBTIME) {
+		stat->result_mask |= STATX_BTIME;
+		stat->btime.tv_sec = lli->lli_btime;
+	}
+
+	stat->attributes_mask = STATX_ATTR_IMMUTABLE | STATX_ATTR_APPEND;
+	stat->attributes |= ll_inode_to_ext_flags(inode->i_flags);
+	stat->result_mask &= request_mask;
+#endif
+
 	ll_stats_ops_tally(sbi, LPROC_LL_GETATTR,
 			   ktime_us_delta(ktime_get(), kstart));
 
@@ -4773,13 +4838,15 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat)
 int ll_getattr(const struct path *path, struct kstat *stat,
 	       u32 request_mask, unsigned int flags)
 {
-	struct dentry *de = path->dentry;
+	return ll_getattr_dentry(path->dentry, stat, request_mask, flags);
+}
 #else
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 {
-#endif
-	return ll_getattr_dentry(de, stat);
+	return ll_getattr_dentry(de, stat, STATX_BASIC_STATS,
+				 AT_STATX_SYNC_AS_STAT);
 }
+#endif
 
 int cl_falloc(struct inode *inode, int mode, loff_t offset, loff_t len)
 {

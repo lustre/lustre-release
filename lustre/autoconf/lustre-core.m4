@@ -2596,6 +2596,9 @@ ext2fs.h not found. Please install e2fsprogs development package.
 	])
 ])
 
+# lustre/tests/statx_test.c
+AC_CHECK_FUNCS([statx])
+
 # lustre/utils/lfs.c
 AS_IF([test "$enable_dist" = "no"], [
 		AC_CHECK_LIB([z], [crc32], [

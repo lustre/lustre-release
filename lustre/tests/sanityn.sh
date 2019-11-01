@@ -2922,8 +2922,11 @@ test_51b() {
 
 	local tmpfile=`mktemp`
 
-	# create an empty file
-	$MCREATE $DIR1/$tfile || error "mcreate $DIR1/$tfile failed"
+	$LFS setstripe -E 1M -c 1 -E -1 --extension-size 64M $DIR1/$tfile ||
+		error "Create $DIR1/$tfile failed"
+
+	dd if=/dev/zero of=$DIR1/$tfile bs=1k count=1 conv=notrunc ||
+		error "dd $DIR1/$tfile failed"
 
 	# delay glimpse so that layout has changed when glimpse finish
 #define OBD_FAIL_GLIMPSE_DELAY 0x1404
@@ -2932,14 +2935,14 @@ test_51b() {
 	local pid=$!
 	sleep 1
 
-	# create layout of testing file
-	dd if=/dev/zero of=$DIR1/$tfile bs=1k count=1 conv=notrunc >/dev/null ||
+	# extend layout of testing file
+	dd if=/dev/zero of=$DIR1/$tfile bs=1M count=1 seek=2 conv=notrunc ||
 		error "dd $DIR1/$tfile failed"
 
 	wait $pid
 	local fsize=$(cat $tmpfile)
 
-	[ x$fsize = x1024 ] || error "file size is $fsize, should be 1024"
+	[ x$fsize = x3145728 ] || error "file size is $fsize, should be 3145728"
 
 	rm -f $DIR1/$tfile $tmpfile
 }
@@ -5114,6 +5117,113 @@ test_105() {
 	[[ $fsize1 = 5 ]] ||  error "Glimpse returned wrong file size $fsize1"
 }
 run_test 105 "Glimpse and lock cancel race"
+
+test_106a() {
+	[ "$mds1_FSTYPE" == "ldiskfs" ] && statx_supported ||
+		skip_env "Test only for ldiskfs and statx() supported"
+
+	local btime
+	local mdt_btime
+	local output
+	local mdtdev=$(mdsdevname ${SINGLEMDS//mds/})
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1k count=1 conv=notrunc
+	btime=$($STATX -c %W $DIR/$tfile)
+	output=$(do_facet mds1 "$DEBUGFS -c -R 'stat ROOT/$tfile' $mdtdev")
+	((mdt_btime=$(awk -F ':' /btime/'{ print $2 }' <<< "$output")))
+	[[ $btime == $mdt_btime ]] ||
+		error "$DIR/$tfile btime ($btime:$mdt_btime) diff"
+
+}
+run_test 106a "Verify the btime via statx()"
+
+test_106b() {
+	statx_supported || skip_env "statx() only test"
+
+	local rpcs_before
+	local rpcs_after
+
+	$LFS setstripe -c 1 $DIR/$tfile || error "$DIR/$tfile setstripe failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=1k count=1 conv=notrunc
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	$STATX $DIR/$tfile
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_after -eq $((rpcs_before + 1)) ] ||
+		error "$STATX should send 1 glimpse RPC to $OSC"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	# %n: FILENAME; %i: STATX_INO; %A STATX_MODE; %h STATX_NLINK;
+	# %u: STATX_UID; %g: STATX_GID; %W STATX_BTIME; %X STATX_ATIME;
+	# %Z: STATX_CTIME
+	$STATX -c "%n %i %A %h %u %g %W %X %Z" $DIR/$tfile
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_after -eq $rpcs_before ] ||
+		error "$STATX should not send glimpse RPCs to $OSC"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	$STATX --cached=always $DIR/$tfile
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_after -eq $rpcs_before ] ||
+		error "$STATX should not send glimpse RPCs to $OSC"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	$STATX -c %Y $DIR/$tfile
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_after -eq $((rpcs_before + 1)) ] ||
+		error "$STATX -c %Y should send 1 glimpse RPC to $OSC"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	$STATX -c %s $DIR/$tfile
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_after -eq $((rpcs_before + 1)) ] ||
+		error "$STATX -c %s should send 1 glimpse RPC to $OSC"
+
+	cancel_lru_locks $OSC
+	rpcs_before=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	$STATX -c %b $DIR/$tfile
+	rpcs_after=$(calc_stats $OSC.*$OSC*.stats ldlm_glimpse_enqueue)
+	[ $rpcs_after -eq $((rpcs_before + 1)) ] ||
+		error "$STATX -c %b should send 1 glimpse RPC to $OSC"
+}
+run_test 106b "Glimpse RPCs test for statx"
+
+test_106c() {
+	statx_supported || skip_env "statx() only test"
+
+	local mask
+
+	touch $DIR/$tfile
+	# Mask supported in stx_attributes by Lustre is
+	# STATX_ATTR_IMMUTABLE(0x10) | STATX_ATTR_APPEND(0x20) : (0x30).
+	mask=$($STATX -c %q $DIR/$tfile)
+	[[ $mask == "30" ]] ||
+		error "supported stx_attributes: got '$mask', expected '30'"
+	chattr +i $DIR/$tfile || error "chattr +i $DIR/$tfile failed"
+	mask=$($STATX -c %r $DIR/$tfile)
+	[[ $mask == "10" ]] ||
+		error "got immutable flags '$mask', expected '10'"
+	chattr -i $DIR/$tfile || error "chattr -i $DIR/$tfile failed"
+	mask=$($STATX -c %r $DIR/$tfile)
+	[[ $mask == "0" ]] || error "got flags '$mask', expected '0'"
+	chattr +a $DIR/$tfile || error "chattr +a $DIR/$tfile failed"
+	mask=$($STATX -c %r $DIR/$tfile)
+	[[ $mask == "20" ]] || error "got flags '$mask', expected '20'"
+	chattr -a $DIR/$tfile || error "chattr -a $DIR/$tfile failed"
+	mask=$($STATX -c %r $DIR/$tfile)
+	[[ $mask == "0" ]] || error "got flags '$mask', expected '0'"
+	chattr +ia $DIR/$tfile || error "chattr +ia $DIR/$tfile failed"
+	mask=$($STATX -c %r $DIR/$tfile)
+	[[ $mask == "30" ]] || error "got flags '$mask', expected '30'"
+	chattr -ia $DIR/$tfile || error "chattr -ia $DIR/$tfile failed"
+	mask=$($STATX -c %r $DIR/$tfile)
+	[[ $mask == "0" ]] || error "got flags '$mask', expected '0'"
+}
+run_test 106c "Verify statx attributes mask"
 
 log "cleanup: ======================================================"
 

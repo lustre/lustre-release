@@ -116,12 +116,13 @@ static inline int d_in_lookup(struct dentry *dentry)
 #define ll_vfs_unlink(a, b) vfs_unlink(a, b)
 #endif
 
-static inline int ll_vfs_getattr(struct path *path, struct kstat *st)
+static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
+				 u32 request_mask, unsigned int flags)
 {
 	int rc;
 
 #ifdef HAVE_INODEOPS_ENHANCED_GETATTR
-	rc = vfs_getattr(path, st, STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
+	rc = vfs_getattr(path, st, request_mask, flags);
 #else
 	rc = vfs_getattr(path, st);
 #endif

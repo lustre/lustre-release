@@ -277,6 +277,7 @@ init_test_env() {
 	[ ! -f "$SGPDDSURVEY" ] && export SGPDDSURVEY=$(which sgpdd-survey)
 	export MCREATE=${MCREATE:-mcreate}
 	export MULTIOP=${MULTIOP:-multiop}
+	export STATX=${STATX:-statx}
 	# Ubuntu, at least, has a truncate command in /usr/bin
 	# so fully path our truncate command.
 	export TRUNCATE=${TRUNCATE:-$LUSTRE/tests/truncate}
@@ -10431,3 +10432,7 @@ sel_layout_sanity() {
 	check_component_count $file $comp_cnt
 }
 
+statx_supported() {
+	$STATX --quiet --version
+	return $?
+}
