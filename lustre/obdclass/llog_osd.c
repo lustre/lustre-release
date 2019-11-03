@@ -977,9 +977,7 @@ static int llog_osd_next_block(const struct lu_env *env,
 			lustre_swab_llog_rec(last_rec);
 
 		if (last_rec->lrh_index != tail->lrt_index) {
-			CERROR("%s: invalid llog tail at log id "DFID":%x "
-			       "offset %llu last_rec idx %u tail idx %u"
-			       "lrt len %u read_size %d\n",
+			CERROR("%s: invalid llog tail at log id "DFID":%x offset %llu last_rec idx %u tail idx %u lrt len %u read_size %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
 			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 			       loghandle->lgh_id.lgl_ogen, *cur_offset,

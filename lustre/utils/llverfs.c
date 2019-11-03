@@ -810,8 +810,8 @@ int main(int argc, char **argv)
 		ext2_filsys fs;
 
 		if ((fp = setmntent("/etc/mtab", "r")) == NULL) {
-			fprintf(stderr, "%s: fail to open /etc/mtab in read"
-				"mode :%s\n", progname, strerror(errno));
+			fprintf(stderr, "%s: fail to open /etc/mtab in read mode :%s\n",
+				progname, strerror(errno));
 			goto guess;
 		}
 

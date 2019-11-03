@@ -531,8 +531,7 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 						0444, &lprocfs_quota_seq_fops,
 						obj);
 			if (rc)
-				CWARN("%s: Error adding procfs file for global"
-				      "quota index "DFID", rc:%d\n",
+				CWARN("%s: Error adding procfs file for global quota index "DFID": rc = %d\n",
 				      qmt->qmt_svname, PFID(&qti->qti_fid), rc);
 #endif
 		}

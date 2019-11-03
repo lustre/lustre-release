@@ -1740,10 +1740,9 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 		}
 
 		if (lsd->lsd_osd_index != index) {
-			LCONSOLE_ERROR_MSG(0x157, "%s: index %d in last rcvd "
-					   "is different with the index %d in"
-					   "config log, It might be disk"
-					   "corruption!\n", tgt_name(tgt),
+			LCONSOLE_ERROR_MSG(0x157,
+					   "%s: index %d in last rcvd is different with the index %d in config log, It might be disk corruption!\n",
+					   tgt_name(tgt),
 					   lsd->lsd_osd_index, index);
 			RETURN(-EINVAL);
 		}

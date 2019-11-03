@@ -3912,16 +3912,16 @@ static int mgs_write_log_param(const struct lu_env *env,
 	if (class_match_param(ptr, PARAM_NETWORK, NULL) == 0)
 		GOTO(end, rc);
 
-        /* Processed in mgs_write_log_ost */
-        if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
-                if (mti->mti_flags & LDD_F_PARAM) {
-                        LCONSOLE_ERROR_MSG(0x169, "%s can only be "
-                                           "changed with tunefs.lustre"
-                                           "and --writeconf\n", ptr);
-                        rc = -EPERM;
-                }
-                GOTO(end, rc);
-        }
+	/* Processed in mgs_write_log_ost */
+	if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) {
+		if (mti->mti_flags & LDD_F_PARAM) {
+			LCONSOLE_ERROR_MSG(0x169,
+					   "%s can only be changed with tunefs.lustre and --writeconf\n",
+					   ptr);
+			rc = -EPERM;
+		}
+		GOTO(end, rc);
+	}
 
         if (class_match_param(ptr, PARAM_SRPC, NULL) == 0) {
 		rc = mgs_srpc_set_param(env, mgs, fsdb, mti, ptr);
@@ -4004,18 +4004,12 @@ static int mgs_write_log_param(const struct lu_env *env,
 		}
 active_err:
 		if (rc < 0) {
-			LCONSOLE_ERROR_MSG(0x145, "Couldn't find %s in"
-					   "log (%d). No permanent "
-					   "changes were made to the "
-					   "config log.\n",
+			LCONSOLE_ERROR_MSG(0x145,
+					   "Couldn't find %s in log (%d). No permanent changes were made to the config log.\n",
 					   mti->mti_svname, rc);
 			if (test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags))
-				LCONSOLE_ERROR_MSG(0x146, "This may be"
-						   " because the log"
-						   "is in the old 1.4"
-						   "style. Consider "
-						   " --writeconf to "
-						   "update the logs.\n");
+				LCONSOLE_ERROR_MSG(0x146,
+						   "This may be because the log is in the old 1.4 style. Consider --writeconf to update the logs.\n");
 			GOTO(end, rc);
 		}
 		/* Fall through to osc/mdc proc for deactivating live

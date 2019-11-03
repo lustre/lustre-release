@@ -1059,8 +1059,7 @@ static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 		GOTO(out_close, rc);
 	}
 	if (process_count != plain_counter) {
-		CERROR("7_sub: Reverse/direct processing found different"
-		       "number of records: %d/%d\n",
+		CERROR("7_sub: Reverse/direct processing found different number of records: %d/%d\n",
 		       plain_counter, process_count);
 		GOTO(out_close, rc = -EINVAL);
 	}

@@ -288,8 +288,7 @@ repeat:
 				opt.o_archive_id_cnt = 0;
 				opt.o_archive_id_used = 0;
 				all_id = true;
-				CT_WARN("archive-id = 0 is found, any backend"
-					"will be served\n");
+				CT_WARN("archive-id = 0 is found, any backend will be served\n");
 				goto repeat;
 			}
 

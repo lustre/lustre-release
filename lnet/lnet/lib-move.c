@@ -4399,8 +4399,8 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 
 	if (!list_empty(&the_lnet.ln_drop_rules) &&
 	    lnet_drop_rule_match(hdr, ni->ni_nid, NULL)) {
-		CDEBUG(D_NET, "%s, src %s, dst %s: Dropping %s to simulate"
-			      "silent message loss\n",
+		CDEBUG(D_NET,
+		       "%s, src %s, dst %s: Dropping %s to simulate silent message loss\n",
 		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
 		       libcfs_nid2str(dest_nid), lnet_msgtyp2str(type));
 		goto drop;

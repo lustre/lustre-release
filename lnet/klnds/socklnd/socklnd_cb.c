@@ -1873,11 +1873,11 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 
         *incarnation = hello->kshm_src_incarnation;
 
-        if (hello->kshm_src_nid == LNET_NID_ANY) {
-                CERROR("Expecting a HELLO hdr with a NID, but got LNET_NID_ANY"
-		       "from %pI4h\n", &conn->ksnc_ipaddr);
-                return -EPROTO;
-        }
+	if (hello->kshm_src_nid == LNET_NID_ANY) {
+		CERROR("Expecting a HELLO hdr with a NID, but got LNET_NID_ANY from %pI4h\n",
+		       &conn->ksnc_ipaddr);
+		return -EPROTO;
+	}
 
         if (!active &&
             conn->ksnc_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {

@@ -3378,8 +3378,9 @@ mdt_object_lock_internal(struct mdt_thread_info *info, struct mdt_object *o,
 		 * object anyway XXX*/
 		if (lh->mlh_type == MDT_PDO_LOCK &&
 		    lh->mlh_pdo_hash != 0) {
-			CDEBUG(D_INFO, "%s: "DFID" convert PDO lock to"
-			       "EX lock.\n", mdt_obd_name(info->mti_mdt),
+			CDEBUG(D_INFO,
+			       "%s: "DFID" convert PDO lock to EX lock.\n",
+			       mdt_obd_name(info->mti_mdt),
 			       PFID(mdt_object_fid(o)));
 			lh->mlh_pdo_hash = 0;
 			lh->mlh_rreg_mode = LCK_EX;

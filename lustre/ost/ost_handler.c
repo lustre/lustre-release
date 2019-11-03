@@ -188,8 +188,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
 			rc = cfs_cpt_set_node(ost_io_cptable, cpt++, i);
 			if (!rc) {
-				CWARN("OSS Failed to set node %d for"
-				      "IO CPT table\n", i);
+				CWARN("OSS Failed to set node %d for IO CPT table\n",
+				      i);
 				cfs_cpt_table_free(ost_io_cptable);
 				ost_io_cptable = NULL;
 				break;

@@ -1303,8 +1303,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			struct ll_inode_info *lli = ll_i2info(dir);
 
 			rc = PTR_ERR(page);
-			CERROR("%s: reading dir "DFID" at %llu"
-			       "opendir_pid = %u : rc = %d\n",
+			CERROR("%s: reading dir "DFID" at %llu opendir_pid = %u : rc = %d\n",
 			       ll_i2sbi(dir)->ll_fsname,
 			       PFID(ll_inode2fid(dir)), pos,
 			       lli->lli_opendir_pid, rc);

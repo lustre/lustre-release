@@ -595,9 +595,8 @@ gssd_process_krb5_keytab(krb5_context context, krb5_keytab kt, char *kt_name)
 			ple = gssd_get_realm_ple((void *)&kte.principal->realm);
 			if (ple) {
 				if (ple->fl_mds) {
-					printerr(2,"mds service entry: found a"
-						 "duplicated one, it's like a "
-						 "mis-configuration, skip\n");
+					printerr(2,
+						 "mds service entry: found a duplicated one, it's like a mis-configuration, skip\n");
 					goto next;
 				}
 

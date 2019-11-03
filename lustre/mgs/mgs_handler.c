@@ -328,25 +328,23 @@ static int mgs_check_target(const struct lu_env *env,
 /* Ensure this is not a failover node that is connecting first*/
 static int mgs_check_failover_reg(struct mgs_target_info *mti)
 {
-        lnet_nid_t nid;
-        char *ptr;
-        int i;
+	lnet_nid_t nid;
+	char *ptr;
+	int i;
 
-        ptr = mti->mti_params;
-        while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
+	ptr = mti->mti_params;
+	while (class_find_param(ptr, PARAM_FAILNODE, &ptr) == 0) {
 		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
-                        for (i = 0; i < mti->mti_nid_count; i++) {
-                                if (nid == mti->mti_nids[i]) {
-                                        LCONSOLE_WARN("Denying initial registra"
-                                                      "tion attempt from nid %s"
-                                                      ", specified as failover"
-                                                      "\n",libcfs_nid2str(nid));
-                                        return -EADDRNOTAVAIL;
-                                }
-                        }
-                }
-        }
-        return 0;
+			for (i = 0; i < mti->mti_nid_count; i++) {
+				if (nid == mti->mti_nids[i]) {
+					LCONSOLE_WARN("Denying initial registration attempt from nid %s, specified as failover\n",
+						      libcfs_nid2str(nid));
+					return -EADDRNOTAVAIL;
+				}
+			}
+		}
+	}
+	return 0;
 }
 
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */

@@ -1218,8 +1218,9 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 
 	/* no need to setattr anymore */
 	if (la_copy->la_valid == 0) {
-		CDEBUG(D_INODE, "%s: no valid attribute on "DFID", previous"
-		       "valid is %#llx\n", mdd2obd_dev(mdd)->obd_name,
+		CDEBUG(D_INODE,
+		       "%s: no valid attribute on "DFID", previous valid is %#llx\n",
+		       mdd2obd_dev(mdd)->obd_name,
 		       PFID(mdo2fid(mdd_obj)), la->la_valid);
 
 		RETURN(0);

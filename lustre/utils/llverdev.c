@@ -492,8 +492,8 @@ int main(int argc, char **argv)
 		case 'c':
 			chunksize = (strtoul(optarg, NULL, 0) * ONE_MB);
 			if (!chunksize) {
-				fprintf(stderr, "%s: chunk size value should be"
-					"nonzero and multiple of 1MB\n",
+				fprintf(stderr,
+					"%s: chunk size value should be nonzero and multiple of 1MB\n",
 					progname);
 				return -1;
 			}

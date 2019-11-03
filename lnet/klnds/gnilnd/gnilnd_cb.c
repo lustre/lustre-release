@@ -2884,8 +2884,9 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 
 		CDEBUG(D_NET, "starting connect to %s\n",
 			libcfs_nid2str(peer->gnp_nid));
-		LASSERTF(peer->gnp_connecting == GNILND_PEER_IDLE, "Peer was idle and we"
-			"have a write_lock, state issue %d\n", peer->gnp_connecting);
+		LASSERTF(peer->gnp_connecting == GNILND_PEER_IDLE,
+			 "Peer was idle and we have a write_lock, state issue %d\n",
+			 peer->gnp_connecting);
 
 		peer->gnp_connecting = GNILND_PEER_CONNECT;
 		kgnilnd_peer_addref(peer); /* extra ref for connd */
@@ -3533,8 +3534,7 @@ kgnilnd_check_fma_rcv_cq(kgn_device_t *dev)
 				/* set overrun too */
 				event_data |= (1UL << 63);
 				LASSERTF(GNI_CQ_OVERRUN(event_data),
-					 "(1UL << 63) is no longer the bit to"
-					 "set to indicate CQ_OVERRUN\n");
+					 "(1UL << 63) is no longer the bit to set to indicate CQ_OVERRUN\n");
 			}
 		}
 		/* sender should get error event too and take care

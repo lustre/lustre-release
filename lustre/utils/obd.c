@@ -1247,8 +1247,7 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
         }
 
         if (stripe_count == 0 && stripe_index != -1) {
-                fprintf(stderr, "If stripe_count is 0, stripe_index can not"
-                                "be specified\n");
+                fprintf(stderr, "If stripe_count is 0, stripe_index can not be specified\n");
                 return CMD_HELP;
         }
 
@@ -1282,8 +1281,8 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
         if (parent_basedir == NULL) {
                 char *last_lash;
                 if (name == NULL) {
-                        fprintf(stderr, "parent_basedir or name must be"
-                                        "indicated!\n");
+                        fprintf(stderr,
+                                "parent_basedir or name must be indicated!\n");
                         return CMD_HELP;
                 }
                 /*Get directory and name from name*/

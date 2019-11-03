@@ -63,8 +63,9 @@ int main(int argc, char *argv[])
 
 	/* LU-3403 llite: error of listxattr when buffer is small */
 	if (ret_null < 2) {
-		fprintf(stderr, "listxattr(%s, NULL, 0) returned"
-					"a sizes less than 2", path);
+		fprintf(stderr,
+			"listxattr(%s, NULL, 0) returned a sizes less than 2",
+			path);
 		ret = EINVAL;
 		goto out;
 	}

@@ -3248,11 +3248,8 @@ static int lfsck_namespace_double_scan_dir(const struct lu_env *env,
 
 	if (flags & (LNTF_CHECK_LINKEA | LNTF_CHECK_PARENT) &&
 	    !(lfsck->li_bookmark_ram.lb_param & LPF_ALL_TGT)) {
-		CDEBUG(D_LFSCK, "%s: some MDT(s) maybe NOT take part in the"
-		       "the namespace LFSCK, then the LFSCK cannot guarantee"
-		       "all the name entries have been verified in first-stage"
-		       "scanning. So have to skip orphan related handling for"
-		       "the directory object "DFID" with remote name entry\n",
+		CDEBUG(D_LFSCK,
+		       "%s: some MDT(s) maybe NOT take part in the the namespace LFSCK, then the LFSCK cannot guarantee all the name entries have been verified in first-stage scanning. So have to skip orphan related handling for the directory object "DFID" with remote name entry\n",
 		       lfsck_lfsck2name(lfsck), PFID(cfid));
 
 		RETURN(0);

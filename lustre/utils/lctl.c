@@ -114,13 +114,13 @@ command_t cmdlist[] = {
 	{"===== network config =====", NULL, 0, "network config"},
 	{"--net", jt_opt_net, 0, "run <command> after selecting network <net>\n"
 	 "usage: --net <tcp/o2ib/...> <command>"},
-	{"network", jt_ptl_network, 0, "configure LNET"
+	{"network", jt_ptl_network, 0, "configure LNET\n"
 	 "usage: network up|down"},
-	{"net", jt_ptl_network, 0, "configure LNET"
+	{"net", jt_ptl_network, 0, "configure LNET\n"
 	 "usage: net up|down"},
-	{"list_nids", jt_ptl_list_nids, 0, "list local NIDs"
+	{"list_nids", jt_ptl_list_nids, 0, "list local NIDs\n"
 	 "usage: list_nids [all]"},
-	{"which_nid", jt_ptl_which_nid, 0, "choose a NID"
+	{"which_nid", jt_ptl_which_nid, 0, "choose a NID\n"
 	 "usage: which_nid NID [NID...]"},
 	{"replace_nids", jt_replace_nids, 0,
 	 "replace primary NIDs for a device\n"
@@ -351,7 +351,7 @@ command_t cmdlist[] = {
 	 "add a range to a nodemap\n"
 	 "usage: nodemap_del_range <nid_range>"},
 	{"nodemap_modify", jt_nodemap_modify, 0,
-	 "modify a nodemap parameters"
+	 "modify a nodemap parameters\n"
 	 "usage: nodemap_modify nodemap_name param value"},
 	{"nodemap_add_idmap", jt_nodemap_add_idmap, 0,
 	 "add a UID or GID mapping to a nodemap"},

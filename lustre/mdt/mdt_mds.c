@@ -503,8 +503,8 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 
 			rc = cfs_cpt_set_node(mdt_io_cptable, cpt++, i);
 			if (!rc) {
-				CWARN("MDS Failed to set node %d for"
-				      "IO CPT table\n", i);
+				CWARN("MDS Failed to set node %d for IO CPT table\n",
+				      i);
 				cfs_cpt_table_free(mdt_io_cptable);
 				mdt_io_cptable = NULL;
 				break;

@@ -2205,7 +2205,7 @@ diff -rNup nfs-utils-1.0.10/utils/gssd/krb5_util.c nfs-utils-1.0.10.lustre/utils
 +			ple = gssd_get_realm_ple((void *)&kte.principal->realm);
 +			if (ple) {
 +				if (ple->fl_mds) {
-+					printerr(2,"mds service entry: found a"
++					printerr(2,"mds service entry: found a "
 +						 "duplicated one, it's like a "
 +						 "mis-configuration, skip\n");
 +					goto next;

@@ -356,9 +356,9 @@ static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
 		"to enable this feature.\n");
 #endif
 	if (make_backfs)
-		fprintf(stderr, "Feature will not be enabled until %s"
-			"is updated and '%s -O %s %%{device}' "
-			"is run.\n\n", E2FSPROGS, TUNE2FS, feature);
+		fprintf(stderr,
+			"Feature will not be enabled until %s is updated and '%s -O %s %%{device}' is run.\n\n",
+			E2FSPROGS, TUNE2FS, feature);
 }
 
 /* Check whether the file exists in the device */

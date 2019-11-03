@@ -1268,8 +1268,7 @@ static int osd_ios_ROOT_sd(const struct lu_env *env, struct osd_device *dev,
 				    sizeof(*zde) / 8, (void *)zde);
 		if (rc) {
 			if (rc != -ENOENT)
-				CWARN("%s: initial OI scrub failed to find"
-				      "the entry %s under .lustre: rc = %d\n",
+				CWARN("%s: initial OI scrub failed to find the entry %s under .lustre: rc = %d\n",
 				      osd_name(dev), map->olm_name, rc);
 			else if (!fid_is_zero(&map->olm_fid))
 				/* Try to remove the stale OI mapping. */

@@ -100,8 +100,8 @@ static int ll_readlink_internal(struct inode *inode,
 	*symname = req_capsule_server_get(&(*request)->rq_pill, &RMF_MDT_MD);
 	if (!*symname || strnlen(*symname, symlen) != symlen - 1) {
 		/* not full/NULL terminated */
-		CERROR("%s: inode "DFID": symlink not NULL terminated string"
-		       "of length %d\n", sbi->ll_fsname,
+		CERROR("%s: inode "DFID": symlink not NULL terminated string of length %d\n",
+		       sbi->ll_fsname,
 		       PFID(ll_inode2fid(inode)), symlen - 1);
 		GOTO(failed, rc = -EPROTO);
 	}

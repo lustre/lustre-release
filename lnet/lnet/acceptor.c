@@ -240,8 +240,7 @@ lnet_accept(struct socket *sock, __u32 magic)
 					       accept_timeout);
 
 			if (rc != 0)
-				CERROR("Error sending magic+version in response"
-				       "to LNET magic from %pI4h: %d\n",
+				CERROR("Error sending magic+version in response to LNET magic from %pI4h: %d\n",
 				       &peer_ip, rc);
 			return -EPROTO;
 		}
@@ -286,8 +285,7 @@ lnet_accept(struct socket *sock, __u32 magic)
 				       accept_timeout);
 
 		if (rc != 0)
-			CERROR("Error sending magic+version in response"
-			       "to version %d from %pI4h: %d\n",
+			CERROR("Error sending magic+version in response to version %d from %pI4h: %d\n",
 			       peer_version, &peer_ip, rc);
 		return -EPROTO;
 	}

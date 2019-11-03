@@ -836,8 +836,9 @@ int handle_channel_request(FILE *f)
 	else if (lustre_mech == LGSS_MECH_NULL)
 		rc = handle_null(&snd);
 	else
-		printerr(0, "WARNING: Received or request for"
-			 "subflavor that is not enabled: %d\n", lustre_mech);
+		printerr(0,
+			 "WARNING: Received or request for subflavor that is not enabled: %d\n",
+			 lustre_mech);
 
 out_err:
 	/* Failures send a null token */
