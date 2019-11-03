@@ -520,7 +520,7 @@ static void ll_readahead_handle_work(struct work_struct *wq)
 
 	work = container_of(wq, struct ll_readahead_work,
 			    lrw_readahead_work);
-	fd = LUSTRE_FPRIVATE(work->lrw_file);
+	fd = work->lrw_file->private_data;
 	ras = &fd->fd_ras;
 	file = work->lrw_file;
 	inode = file_inode(file);
@@ -996,7 +996,7 @@ static void ras_detect_read_pattern(struct ll_readahead_state *ras,
 
 void ll_ras_enter(struct file *f, loff_t pos, size_t count)
 {
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(f);
+	struct ll_file_data *fd = f->private_data;
 	struct ll_readahead_state *ras = &fd->fd_ras;
 	struct inode *inode = file_inode(f);
 	unsigned long index = pos >> PAGE_SHIFT;
@@ -1308,7 +1308,7 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 
 struct ll_cl_context *ll_cl_find(struct file *file)
 {
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct ll_cl_context *lcc;
 	struct ll_cl_context *found = NULL;
 
@@ -1327,7 +1327,7 @@ struct ll_cl_context *ll_cl_find(struct file *file)
 void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io,
 	       enum lcc_type type)
 {
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct ll_cl_context *lcc = &ll_env_info(env)->lti_io_ctx;
 
 	memset(lcc, 0, sizeof(*lcc));
@@ -1344,7 +1344,7 @@ void ll_cl_add(struct file *file, const struct lu_env *env, struct cl_io *io,
 
 void ll_cl_remove(struct file *file, const struct lu_env *env)
 {
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct ll_cl_context *lcc = &ll_env_info(env)->lti_io_ctx;
 
 	write_lock(&fd->fd_lock);
@@ -1357,7 +1357,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 {
 	struct inode              *inode  = vvp_object_inode(page->cp_obj);
 	struct ll_sb_info         *sbi    = ll_i2sbi(inode);
-	struct ll_file_data       *fd     = LUSTRE_FPRIVATE(file);
+	struct ll_file_data       *fd     = file->private_data;
 	struct ll_readahead_state *ras    = &fd->fd_ras;
 	struct cl_2queue          *queue  = &io->ci_queue;
 	struct cl_sync_io	  *anchor = NULL;
@@ -1453,7 +1453,7 @@ static int kickoff_async_readahead(struct file *file, unsigned long pages)
 	struct ll_readahead_work *lrw;
 	struct inode *inode = file_inode(file);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct ll_readahead_state *ras = &fd->fd_ras;
 	struct ll_ra_info *ra = &sbi->ll_ra_info;
 	unsigned long throttle;
@@ -1543,7 +1543,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 
 	if (io == NULL) { /* fast read */
 		struct inode *inode = file_inode(file);
-		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+		struct ll_file_data *fd = file->private_data;
 		struct ll_readahead_state *ras = &fd->fd_ras;
 		struct lu_env  *local_env = NULL;
 		struct vvp_page *vpg;

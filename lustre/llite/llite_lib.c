@@ -1798,7 +1798,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	}
 
 	if (attr->ia_valid & ATTR_FILE) {
-		struct ll_file_data *fd = LUSTRE_FPRIVATE(attr->ia_file);
+		struct ll_file_data *fd = attr->ia_file->private_data;
 
 		if (fd->fd_lease_och)
 			op_data->op_bias |= MDS_TRUNC_KEEP_LEASE;

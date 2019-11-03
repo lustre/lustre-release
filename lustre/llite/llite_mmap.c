@@ -119,7 +119,7 @@ restart:
 	rc = cl_io_init(env, io, CIT_FAULT, io->ci_obj);
 	if (rc == 0) {
 		struct vvp_io *vio = vvp_env_io(env);
-		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+		struct ll_file_data *fd = file->private_data;
 
 		LASSERT(vio->vui_cl.cis_io == io);
 
@@ -370,33 +370,32 @@ restart:
 	result = ll_fault0(vma, vmf);
 	if (vmf->page &&
 	    !(result & (VM_FAULT_RETRY | VM_FAULT_ERROR | VM_FAULT_LOCKED))) {
-                struct page *vmpage = vmf->page;
+		struct page *vmpage = vmf->page;
 
-                /* check if this page has been truncated */
-                lock_page(vmpage);
-                if (unlikely(vmpage->mapping == NULL)) { /* unlucky */
-                        unlock_page(vmpage);
+		/* check if this page has been truncated */
+		lock_page(vmpage);
+		if (unlikely(vmpage->mapping == NULL)) { /* unlucky */
+			unlock_page(vmpage);
 			put_page(vmpage);
-                        vmf->page = NULL;
+			vmf->page = NULL;
 
-                        if (!printed && ++count > 16) {
-                                CWARN("the page is under heavy contention,"
-                                      "maybe your app(%s) needs revising :-)\n",
-                                      current->comm);
-                                printed = true;
-                        }
+			if (!printed && ++count > 16) {
+				CWARN("the page is under heavy contention, maybe your app(%s) needs revising :-)\n",
+				      current->comm);
+				printed = true;
+			}
 
-                        goto restart;
-                }
+			goto restart;
+		}
 
-                result |= VM_FAULT_LOCKED;
-        }
+		result |= VM_FAULT_LOCKED;
+	}
 	cfs_restore_sigs(set);
 
 out:
 	if (vmf->page && result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
-				  current->pid, LUSTRE_FPRIVATE(vma->vm_file),
+				  current->pid, vma->vm_file->private_data,
 				  cl_offset(NULL, vmf->page->index), PAGE_SIZE,
 				  READ);
 		ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),
@@ -435,38 +434,37 @@ static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
 		if (!printed && ++count > 16) {
 			const struct dentry *de = file_dentry(vma->vm_file);
 
-			CWARN("app(%s): the page %lu of file "DFID" is under"
-			      " heavy contention\n",
+			CWARN("app(%s): the page %lu of file "DFID" is under heavy contention\n",
 			      current->comm, vmf->pgoff,
 			      PFID(ll_inode2fid(de->d_inode)));
-                        printed = true;
-                }
-        } while (retry);
+			printed = true;
+		}
+	} while (retry);
 
-        switch(result) {
-        case 0:
-                LASSERT(PageLocked(vmf->page));
-                result = VM_FAULT_LOCKED;
-                break;
-        case -ENODATA:
-        case -EFAULT:
-                result = VM_FAULT_NOPAGE;
-                break;
-        case -ENOMEM:
-                result = VM_FAULT_OOM;
-                break;
-        case -EAGAIN:
-                result = VM_FAULT_RETRY;
-                break;
-        default:
-                result = VM_FAULT_SIGBUS;
-                break;
-        }
+	switch (result) {
+	case 0:
+		LASSERT(PageLocked(vmf->page));
+		result = VM_FAULT_LOCKED;
+		break;
+	case -ENODATA:
+	case -EFAULT:
+		result = VM_FAULT_NOPAGE;
+		break;
+	case -ENOMEM:
+		result = VM_FAULT_OOM;
+		break;
+	case -EAGAIN:
+		result = VM_FAULT_RETRY;
+		break;
+	default:
+		result = VM_FAULT_SIGBUS;
+		break;
+	}
 
 out:
 	if (result == VM_FAULT_LOCKED) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(vma->vm_file)),
-				  current->pid, LUSTRE_FPRIVATE(vma->vm_file),
+				  current->pid, vma->vm_file->private_data,
 				  cl_offset(NULL, vmf->page->index), PAGE_SIZE,
 				  WRITE);
 		ll_stats_ops_tally(ll_i2sbi(file_inode(vma->vm_file)),

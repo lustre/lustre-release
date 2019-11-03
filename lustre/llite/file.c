@@ -305,7 +305,7 @@ static int ll_md_close(struct inode *inode, struct file *file)
 		.l_inodebits	= { MDS_INODELOCK_OPEN },
 	};
 	__u64 flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct lustre_handle lockh;
 	enum ldlm_mode lockmode;
@@ -359,7 +359,7 @@ static int ll_md_close(struct inode *inode, struct file *file)
 		rc = ll_md_real_close(inode, fd->fd_omode);
 
 out:
-	LUSTRE_FPRIVATE(file) = NULL;
+	file->private_data = NULL;
 	ll_file_data_put(fd);
 
 	RETURN(rc);
@@ -383,7 +383,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
 	       PFID(ll_inode2fid(inode)), inode);
 
-	fd = LUSTRE_FPRIVATE(file);
+	fd = file->private_data;
 	LASSERT(fd != NULL);
 
 	/* The last ref on @file, maybe not the the owner pid of statahead,
@@ -392,7 +392,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 		ll_deauthorize_statahead(inode, fd);
 
 	if (inode->i_sb->s_root == file_dentry(file)) {
-		LUSTRE_FPRIVATE(file) = NULL;
+		file->private_data = NULL;
 		ll_file_data_put(fd);
 		GOTO(out, rc = 0);
 	}
@@ -651,7 +651,7 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
 	struct inode *inode = file_inode(file);
 	ENTRY;
 
-	LASSERT(!LUSTRE_FPRIVATE(file));
+	LASSERT(!file->private_data);
 
 	LASSERT(fd != NULL);
 
@@ -663,7 +663,7 @@ static int ll_local_open(struct file *file, struct lookup_intent *it,
 			RETURN(rc);
 	}
 
-	LUSTRE_FPRIVATE(file) = fd;
+	file->private_data = fd;
 	ll_readahead_init(inode, &fd->fd_ras);
 	fd->fd_omode = it->it_flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC);
 
@@ -714,18 +714,18 @@ int ll_file_open(struct inode *inode, struct file *file)
 		ll_authorize_statahead(inode, fd);
 
 	if (inode->i_sb->s_root == file_dentry(file)) {
-                LUSTRE_FPRIVATE(file) = fd;
-                RETURN(0);
-        }
+		file->private_data = fd;
+		RETURN(0);
+	}
 
 	if (!it || !it->it_disposition) {
-                /* Convert f_flags into access mode. We cannot use file->f_mode,
-                 * because everything but O_ACCMODE mask was stripped from
-                 * there */
-                if ((oit.it_flags + 1) & O_ACCMODE)
-                        oit.it_flags++;
-                if (file->f_flags & O_TRUNC)
-                        oit.it_flags |= FMODE_WRITE;
+		/* Convert f_flags into access mode. We cannot use file->f_mode,
+		 * because everything but O_ACCMODE mask was stripped from
+		 * there */
+		if ((oit.it_flags + 1) & O_ACCMODE)
+			oit.it_flags++;
+		if (file->f_flags & O_TRUNC)
+			oit.it_flags |= FMODE_WRITE;
 
 		/* kernel only call f_op->open in dentry_open.  filp_open calls
 		 * dentry_open after call to open_namei that checks permissions.
@@ -735,64 +735,65 @@ int ll_file_open(struct inode *inode, struct file *file)
 		if (oit.it_flags & (FMODE_WRITE | FMODE_READ))
 			oit.it_flags |= MDS_OPEN_OWNEROVERRIDE;
 
-                /* We do not want O_EXCL here, presumably we opened the file
-                 * already? XXX - NFS implications? */
-                oit.it_flags &= ~O_EXCL;
+		/* We do not want O_EXCL here, presumably we opened the file
+		 * already? XXX - NFS implications? */
+		oit.it_flags &= ~O_EXCL;
 
-                /* bug20584, if "it_flags" contains O_CREAT, the file will be
-                 * created if necessary, then "IT_CREAT" should be set to keep
-                 * consistent with it */
-                if (oit.it_flags & O_CREAT)
-                        oit.it_op |= IT_CREAT;
+		/* bug20584, if "it_flags" contains O_CREAT, the file will be
+		 * created if necessary, then "IT_CREAT" should be set to keep
+		 * consistent with it */
+		if (oit.it_flags & O_CREAT)
+			oit.it_op |= IT_CREAT;
 
-                it = &oit;
-        }
+		it = &oit;
+	}
 
 restart:
-        /* Let's see if we have file open on MDS already. */
-        if (it->it_flags & FMODE_WRITE) {
-                och_p = &lli->lli_mds_write_och;
-                och_usecount = &lli->lli_open_fd_write_count;
-        } else if (it->it_flags & FMODE_EXEC) {
-                och_p = &lli->lli_mds_exec_och;
-                och_usecount = &lli->lli_open_fd_exec_count;
-         } else {
-                och_p = &lli->lli_mds_read_och;
-                och_usecount = &lli->lli_open_fd_read_count;
-        }
+	/* Let's see if we have file open on MDS already. */
+	if (it->it_flags & FMODE_WRITE) {
+		och_p = &lli->lli_mds_write_och;
+		och_usecount = &lli->lli_open_fd_write_count;
+	} else if (it->it_flags & FMODE_EXEC) {
+		och_p = &lli->lli_mds_exec_och;
+		och_usecount = &lli->lli_open_fd_exec_count;
+	} else {
+		och_p = &lli->lli_mds_read_och;
+		och_usecount = &lli->lli_open_fd_read_count;
+	}
 
 	mutex_lock(&lli->lli_och_mutex);
-        if (*och_p) { /* Open handle is present */
-                if (it_disposition(it, DISP_OPEN_OPEN)) {
-                        /* Well, there's extra open request that we do not need,
-                           let's close it somehow. This will decref request. */
-                        rc = it_open_error(DISP_OPEN_OPEN, it);
-                        if (rc) {
+	if (*och_p) { /* Open handle is present */
+		if (it_disposition(it, DISP_OPEN_OPEN)) {
+			/* Well, there's extra open request that we do not need,
+			 * let's close it somehow. This will decref request. */
+			rc = it_open_error(DISP_OPEN_OPEN, it);
+			if (rc) {
 				mutex_unlock(&lli->lli_och_mutex);
-                                GOTO(out_openerr, rc);
-                        }
+				GOTO(out_openerr, rc);
+			}
 
 			ll_release_openhandle(file_dentry(file), it);
-                }
-                (*och_usecount)++;
+		}
+		(*och_usecount)++;
 
-                rc = ll_local_open(file, it, fd, NULL);
-                if (rc) {
-                        (*och_usecount)--;
+		rc = ll_local_open(file, it, fd, NULL);
+		if (rc) {
+			(*och_usecount)--;
 			mutex_unlock(&lli->lli_och_mutex);
-                        GOTO(out_openerr, rc);
-                }
-        } else {
-                LASSERT(*och_usecount == 0);
+			GOTO(out_openerr, rc);
+		}
+	} else {
+		LASSERT(*och_usecount == 0);
 		if (!it->it_disposition) {
 			struct dentry *dentry = file_dentry(file);
 			struct ll_dentry_data *ldd;
 
-                        /* We cannot just request lock handle now, new ELC code
-                           means that one of other OPEN locks for this file
-                           could be cancelled, and since blocking ast handler
-                           would attempt to grab och_mutex as well, that would
-                           result in a deadlock */
+			/* We cannot just request lock handle now, new ELC code
+			 * means that one of other OPEN locks for this file
+			 * could be cancelled, and since blocking ast handler
+			 * would attempt to grab och_mutex as well, that would
+			 * result in a deadlock
+			 */
 			mutex_unlock(&lli->lli_och_mutex);
 			/*
 			 * Normally called under two situations:
@@ -824,22 +825,22 @@ restart:
 			 */
 			it->it_flags |= MDS_OPEN_BY_FID;
 			rc = ll_intent_file_open(dentry, NULL, 0, it);
-                        if (rc)
-                                GOTO(out_openerr, rc);
+			if (rc)
+				GOTO(out_openerr, rc);
 
-                        goto restart;
-                }
-                OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
-                if (!*och_p)
-                        GOTO(out_och_free, rc = -ENOMEM);
+			goto restart;
+		}
+		OBD_ALLOC(*och_p, sizeof(struct obd_client_handle));
+		if (!*och_p)
+			GOTO(out_och_free, rc = -ENOMEM);
 
-                (*och_usecount)++;
+		(*och_usecount)++;
 
-                /* md_intent_lock() didn't get a request ref if there was an
-                 * open error, so don't do cleanup on the request here
-                 * (bug 3430) */
-                /* XXX (green): Should not we bail out on any error here, not
-                 * just open error? */
+		/* md_intent_lock() didn't get a request ref if there was an
+		 * open error, so don't do cleanup on the request here
+		 * (bug 3430) */
+		/* XXX (green): Should not we bail out on any error here, not
+		 * just open error? */
 		rc = it_open_error(DISP_OPEN_OPEN, it);
 		if (rc != 0)
 			GOTO(out_och_free, rc);
@@ -873,12 +874,12 @@ restart:
 	GOTO(out_och_free, rc);
 
 out_och_free:
-        if (rc) {
-                if (och_p && *och_p) {
-                        OBD_FREE(*och_p, sizeof (struct obd_client_handle));
-                        *och_p = NULL; /* OBD_FREE writes some magic there */
-                        (*och_usecount)--;
-                }
+	if (rc) {
+		if (och_p && *och_p) {
+			OBD_FREE(*och_p, sizeof(struct obd_client_handle));
+			*och_p = NULL; /* OBD_FREE writes some magic there */
+			(*och_usecount)--;
+		}
 		mutex_unlock(&lli->lli_och_mutex);
 
 out_openerr:
@@ -933,7 +934,7 @@ static int ll_lease_och_acquire(struct inode *inode, struct file *file,
 				struct lustre_handle *old_open_handle)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct obd_client_handle **och_p;
 	__u64 *och_usecount;
 	int rc = 0;
@@ -977,7 +978,7 @@ out_unlock:
 static int ll_lease_och_release(struct inode *inode, struct file *file)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct obd_client_handle **och_p;
 	struct obd_client_handle *old_och = NULL;
 	__u64 *och_usecount;
@@ -1349,7 +1350,7 @@ out_size_unlock:
  */
 void ll_io_set_mirror(struct cl_io *io, const struct file *file)
 {
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 
 	/* clear layout version for generic(non-resync) I/O in case it carries
 	 * stale layout version due to I/O restart */
@@ -1398,7 +1399,7 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 		struct vvp_io_args *args)
 {
 	struct inode *inode = file_inode(file);
-	struct ll_file_data *fd  = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd  = file->private_data;
 
 	io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
 	io->ci_lock_no_expand = fd->ll_lock_no_expand;
@@ -1472,7 +1473,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	struct vvp_io		*vio = vvp_env_io(env);
 	struct inode		*inode = file_inode(file);
 	struct ll_inode_info	*lli = ll_i2info(inode);
-	struct ll_file_data	*fd  = LUSTRE_FPRIVATE(file);
+	struct ll_file_data	*fd  = file->private_data;
 	struct range_lock	range;
 	struct cl_io		*io;
 	ssize_t			result = 0;
@@ -1500,7 +1501,7 @@ restart:
 		else
 			range_lock_init(&range, *ppos, *ppos + count - 1);
 
-		vio->vui_fd  = LUSTRE_FPRIVATE(file);
+		vio->vui_fd  = file->private_data;
 		vio->vui_io_subtype = args->via_io_subtype;
 
 		switch (vio->vui_io_subtype) {
@@ -1724,7 +1725,7 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 out:
 	if (result > 0) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(file)), current->pid,
-				  LUSTRE_FPRIVATE(file), iocb->ki_pos, result,
+				  file->private_data, iocb->ki_pos, result,
 				  READ);
 		ll_stats_ops_tally(ll_i2sbi(file_inode(file)), LPROC_LL_READ,
 				   ktime_us_delta(ktime_get(), kstart));
@@ -1864,7 +1865,7 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 out:
 	if (rc_normal > 0) {
 		ll_rw_stats_tally(ll_i2sbi(file_inode(file)), current->pid,
-				  LUSTRE_FPRIVATE(file), iocb->ki_pos,
+				  file->private_data, iocb->ki_pos,
 				  rc_normal, WRITE);
 		ll_stats_ops_tally(ll_i2sbi(file_inode(file)), LPROC_LL_WRITE,
 				   ktime_us_delta(ktime_get(), kstart));
@@ -2028,7 +2029,7 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
 	__u16 refcheck;
 	bool cached;
 
-        ENTRY;
+	ENTRY;
 
 	result = pcc_file_splice_read(in_file, ppos, pipe,
 				      count, flags, &cached);
@@ -2038,21 +2039,21 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
 	ll_ras_enter(in_file, *ppos, count);
 
 	env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
 
 	args = ll_env_args(env, IO_SPLICE);
-        args->u.splice.via_pipe = pipe;
-        args->u.splice.via_flags = flags;
+	args->u.splice.via_pipe = pipe;
+	args->u.splice.via_flags = flags;
 
-        result = ll_file_io_generic(env, args, in_file, CIT_READ, ppos, count);
-        cl_env_put(env, &refcheck);
+	result = ll_file_io_generic(env, args, in_file, CIT_READ, ppos, count);
+	cl_env_put(env, &refcheck);
 
 	if (result > 0)
 		ll_rw_stats_tally(ll_i2sbi(file_inode(in_file)), current->pid,
-				  LUSTRE_FPRIVATE(in_file), *ppos, result,
+				  in_file->private_data, *ppos, result,
 				  READ);
-        RETURN(result);
+	RETURN(result);
 }
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
@@ -2260,7 +2261,7 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct ll_grouplock grouplock;
 	int rc;
 	ENTRY;
@@ -2346,7 +2347,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 			    unsigned long arg)
 {
 	struct ll_inode_info   *lli = ll_i2info(inode);
-	struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data    *fd = file->private_data;
 	struct ll_grouplock	grouplock;
 	int			rc;
 	ENTRY;
@@ -3144,7 +3145,7 @@ static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 
 static int ll_lock_noexpand(struct file *file, int flags)
 {
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 
 	fd->ll_lock_no_expand = !(flags & LF_UNSET);
 
@@ -3254,7 +3255,7 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 				 unsigned long arg)
 {
 	struct inode		*inode = file_inode(file);
-	struct ll_file_data	*fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data	*fd = file->private_data;
 	struct ll_inode_info	*lli = ll_i2info(inode);
 	struct obd_client_handle *och = NULL;
 	struct split_param sp;
@@ -3417,7 +3418,7 @@ static long ll_file_set_lease(struct file *file, struct ll_ioc_lease *ioc,
 {
 	struct inode *inode = file_inode(file);
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct obd_client_handle *och = NULL;
 	__u64 open_flags = 0;
 	bool lease_broken;
@@ -3518,7 +3519,7 @@ static long
 ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct inode		*inode = file_inode(file);
-	struct ll_file_data	*fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data	*fd = file->private_data;
 	int			 flags, rc;
 	ENTRY;
 
@@ -4079,7 +4080,7 @@ static int ll_flush(struct file *file, fl_owner_t id)
 {
 	struct inode *inode = file_inode(file);
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	int rc, err;
 
 	LASSERT(!S_ISDIR(inode->i_mode));
@@ -4196,7 +4197,7 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		ptlrpc_req_finished(req);
 
 	if (S_ISREG(inode->i_mode)) {
-		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+		struct ll_file_data *fd = file->private_data;
 		bool cached;
 
 		/* Sync metadata on MDT first, and then sync the cached data
@@ -4556,7 +4557,7 @@ out_iput:
 static int
 ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
 {
-	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	ENTRY;
 
 	/*

@@ -72,7 +72,6 @@
 #define LL_MAX_BLKSIZE_BITS 22
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
-#define LUSTRE_FPRIVATE(file) ((file)->private_data)
 
 struct ll_dentry_data {
 	struct lookup_intent		*lld_it;
@@ -1472,12 +1471,12 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 
 static inline int ll_file_nolock(const struct file *file)
 {
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_file_data *fd = file->private_data;
 	struct inode *inode = file_inode((struct file *)file);
 
-        LASSERT(fd != NULL);
-        return ((fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
-                (ll_i2sbi(inode)->ll_flags & LL_SBI_NOLCK));
+	LASSERT(fd != NULL);
+	return ((fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
+		(ll_i2sbi(inode)->ll_flags & LL_SBI_NOLCK));
 }
 
 static inline void ll_set_lock_data(struct obd_export *exp, struct inode *inode,

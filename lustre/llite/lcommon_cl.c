@@ -70,16 +70,16 @@ static DEFINE_MUTEX(cl_inode_fini_guard);
 int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 		   enum op_xvalid xvalid, unsigned int attr_flags)
 {
-        struct lu_env *env;
-        struct cl_io  *io;
-        int            result;
+	struct lu_env *env;
+	struct cl_io  *io;
+	int            result;
 	__u16          refcheck;
 
-        ENTRY;
+	ENTRY;
 
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
 
 	io = vvp_env_thread_io(env);
 	io->ci_obj = obj;
@@ -98,19 +98,19 @@ again:
 	if (attr->ia_valid & ATTR_FILE)
 		ll_io_set_mirror(io, attr->ia_file);
 
-        if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
+	if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
 		struct vvp_io *vio = vvp_env_io(env);
 
 		if (attr->ia_valid & ATTR_FILE)
 			/* populate the file descriptor for ftruncate to honor
 			 * group lock - see LU-787 */
-			vio->vui_fd = LUSTRE_FPRIVATE(attr->ia_file);
+			vio->vui_fd = attr->ia_file->private_data;
 
-                result = cl_io_loop(env, io);
-        } else {
-                result = io->ci_result;
-        }
-        cl_io_fini(env, io);
+		result = cl_io_loop(env, io);
+	} else {
+		result = io->ci_result;
+	}
+	cl_io_fini(env, io);
 	if (unlikely(io->ci_need_restart))
 		goto again;
 

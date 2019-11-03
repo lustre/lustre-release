@@ -313,7 +313,7 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 #endif
 {
 	struct inode *inode = file_inode(filp);
-	struct ll_file_data *lfd = LUSTRE_FPRIVATE(filp);
+	struct ll_file_data *lfd = filp->private_data;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	int hash64 = sbi->ll_flags & LL_SBI_64BIT_HASH;
 	int api32 = ll_need_32bit_api(sbi);
@@ -2196,53 +2196,53 @@ out_detach:
 
 static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
 {
-        struct inode *inode = file->f_mapping->host;
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int api32 = ll_need_32bit_api(sbi);
-        loff_t ret = -EINVAL;
-        ENTRY;
+	struct inode *inode = file->f_mapping->host;
+	struct ll_file_data *fd = file->private_data;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	int api32 = ll_need_32bit_api(sbi);
+	loff_t ret = -EINVAL;
+	ENTRY;
 
 	inode_lock(inode);
-        switch (origin) {
-                case SEEK_SET:
-                        break;
-                case SEEK_CUR:
-                        offset += file->f_pos;
-                        break;
-                case SEEK_END:
-                        if (offset > 0)
-                                GOTO(out, ret);
-                        if (api32)
-                                offset += LL_DIR_END_OFF_32BIT;
-                        else
-                                offset += LL_DIR_END_OFF;
-                        break;
-                default:
-                        GOTO(out, ret);
-        }
+	switch (origin) {
+	case SEEK_SET:
+		break;
+	case SEEK_CUR:
+		offset += file->f_pos;
+		break;
+	case SEEK_END:
+		if (offset > 0)
+			GOTO(out, ret);
+		if (api32)
+			offset += LL_DIR_END_OFF_32BIT;
+		else
+			offset += LL_DIR_END_OFF;
+		break;
+	default:
+		GOTO(out, ret);
+	}
 
-        if (offset >= 0 &&
-            ((api32 && offset <= LL_DIR_END_OFF_32BIT) ||
-             (!api32 && offset <= LL_DIR_END_OFF))) {
-                if (offset != file->f_pos) {
-                        if ((api32 && offset == LL_DIR_END_OFF_32BIT) ||
-                            (!api32 && offset == LL_DIR_END_OFF))
+	if (offset >= 0 &&
+	    ((api32 && offset <= LL_DIR_END_OFF_32BIT) ||
+	     (!api32 && offset <= LL_DIR_END_OFF))) {
+		if (offset != file->f_pos) {
+			if ((api32 && offset == LL_DIR_END_OFF_32BIT) ||
+			    (!api32 && offset == LL_DIR_END_OFF))
 				fd->lfd_pos = MDS_DIR_END_OFF;
-                        else if (api32 && sbi->ll_flags & LL_SBI_64BIT_HASH)
+			else if (api32 && sbi->ll_flags & LL_SBI_64BIT_HASH)
 				fd->lfd_pos = offset << 32;
-                        else
+			else
 				fd->lfd_pos = offset;
-                        file->f_pos = offset;
-                        file->f_version = 0;
-                }
-                ret = offset;
-        }
-        GOTO(out, ret);
+			file->f_pos = offset;
+			file->f_version = 0;
+		}
+		ret = offset;
+	}
+	GOTO(out, ret);
 
 out:
 	inode_unlock(inode);
-        return ret;
+	return ret;
 }
 
 static int ll_dir_open(struct inode *inode, struct file *file)
