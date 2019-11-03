@@ -82,7 +82,8 @@ static ssize_t
 fld_debugfs_hash_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
-	struct lu_client_fld *fld;
+	struct seq_file *m = file->private_data;
+	struct lu_client_fld *fld = m->private;
 	struct lu_fld_hash *hash = NULL;
 	char fh_name[8];
 	int i;
@@ -92,8 +93,6 @@ fld_debugfs_hash_seq_write(struct file *file, const char __user *buffer,
 
 	if (copy_from_user(fh_name, buffer, count) != 0)
 		return -EFAULT;
-
-	fld = ((struct seq_file *)file->private_data)->private;
 
 	for (i = 0; fld_hash[i].fh_name; i++) {
 		if (count != strlen(fld_hash[i].fh_name))

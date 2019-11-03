@@ -2442,8 +2442,8 @@ ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
 						const char __user *buffer,
 						size_t count, loff_t *off)
 {
-	struct obd_device *dev =
-		((struct seq_file *)file->private_data)->private;
+	struct seq_file *m = file->private_data;
+	struct obd_device *dev = m->private;
 	struct client_obd *cli = &dev->u.cli;
 	struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
 	int chunk_mask, rc;

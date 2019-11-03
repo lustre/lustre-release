@@ -54,7 +54,8 @@ static ssize_t lov_stripesize_seq_write(struct file *file,
 					const char __user *buffer,
 					size_t count, loff_t *off)
 {
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
+	struct seq_file *m = file->private_data;
+	struct obd_device *dev = m->private;
 	struct lov_desc *desc;
 	char kernbuf[22] = "";
 	u64 val;

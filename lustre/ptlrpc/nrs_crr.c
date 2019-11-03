@@ -665,7 +665,8 @@ ptlrpc_lprocfs_nrs_crrn_quantum_seq_write(struct file *file,
 					  size_t count,
 					  loff_t *off)
 {
-	struct ptlrpc_service	    *svc = ((struct seq_file *)file->private_data)->private;
+	struct seq_file		    *m = file->private_data;
+	struct ptlrpc_service	    *svc = m->private;
 	enum ptlrpc_nrs_queue_type   queue = 0;
 	char			     kernbuf[LPROCFS_NRS_WR_QUANTUM_MAX_CMD];
 	char			    *val;

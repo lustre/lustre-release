@@ -2883,7 +2883,7 @@ static int nrs_tbf_ctl(struct ptlrpc_nrs_policy *policy,
 	 */
 	case NRS_CTL_TBF_RD_RULE: {
 		struct nrs_tbf_head *head = policy->pol_private;
-		struct seq_file *m = (struct seq_file *) arg;
+		struct seq_file *m = arg;
 		struct ptlrpc_service_part *svcpt;
 
 		svcpt = policy->pol_nrs->nrs_svcpt;

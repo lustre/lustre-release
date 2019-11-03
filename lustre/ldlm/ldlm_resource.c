@@ -111,9 +111,10 @@ static ssize_t seq_watermark_write(struct file *file,
 				   const char __user *buffer, size_t count,
 				   loff_t *off)
 {
+	struct seq_file *m = file->private_data;
 	u64 value;
 	__u64 watermark;
-	__u64 *data = ((struct seq_file *)file->private_data)->private;
+	__u64 *data = m->private;
 	bool wm_low = (data == &ldlm_reclaim_threshold_mb) ? true : false;
 	char kernbuf[22] = "";
 	int rc;

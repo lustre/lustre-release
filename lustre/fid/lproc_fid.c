@@ -105,11 +105,11 @@ ldebugfs_server_fid_space_seq_write(struct file *file,
 				    const char __user *buffer,
 				    size_t count, loff_t *off)
 {
-	struct lu_server_seq *seq;
+	struct seq_file *m = file->private_data;
+	struct lu_server_seq *seq = m->private;
 	int rc;
 
 	ENTRY;
-	seq = ((struct seq_file *)file->private_data)->private;
 
 	mutex_lock(&seq->lss_mutex);
 	rc = ldebugfs_fid_write_common(buffer, count, &seq->lss_space);
@@ -494,11 +494,11 @@ ldebugfs_client_fid_space_seq_write(struct file *file,
 				    const char __user *buffer,
 				    size_t count, loff_t *off)
 {
-	struct lu_client_seq *seq;
+	struct seq_file *m = file->private_data;
+	struct lu_client_seq *seq = m->private;
 	int rc;
 
 	ENTRY;
-	seq = ((struct seq_file *)file->private_data)->private;
 
 	mutex_lock(&seq->lcs_mutex);
 	rc = ldebugfs_fid_write_common(buffer, count, &seq->lcs_space);

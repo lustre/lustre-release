@@ -395,7 +395,8 @@ static int lu_ref_seq_open(struct inode *inode, struct file *file)
 
 static int lu_ref_seq_release(struct inode *inode, struct file *file)
 {
-	struct lu_ref *ref = ((struct seq_file *)file->private_data)->private;
+	struct seq_file *m = file->private_data;
+	struct lu_ref *ref = m->private;
 
 	spin_lock(&lu_ref_refs_guard);
 	list_del_init(&ref->lf_linkage);

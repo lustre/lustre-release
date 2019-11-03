@@ -201,7 +201,8 @@ static ssize_t
 lprocfs_force_reint_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
-	struct qsd_instance *qsd = ((struct seq_file *)file->private_data)->private;
+	struct seq_file	    *m = file->private_data;
+	struct qsd_instance *qsd = m->private;
 	int		     rc = 0, qtype;
 
 	LASSERT(qsd != NULL);
@@ -248,7 +249,8 @@ static ssize_t
 qsd_timeout_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
-	struct qsd_instance *qsd = ((struct seq_file *)file->private_data)->private;
+	struct seq_file *m = file->private_data;
+	struct qsd_instance *qsd = m->private;
 	time64_t timeout;
 	int rc;
 
