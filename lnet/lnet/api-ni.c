@@ -1615,7 +1615,6 @@ lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf)
 		__swab64s(&stat->ns_nid);
 		__swab32s(&stat->ns_status);
 	}
-	return;
 }
 
 int

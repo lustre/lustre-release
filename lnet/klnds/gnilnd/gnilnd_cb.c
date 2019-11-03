@@ -82,7 +82,6 @@ kgnilnd_schedule_device(kgn_device_t *dev)
 	if (!already_live) {
 		wake_up_all(&dev->gnd_waitq);
 	}
-	return;
 }
 
 void kgnilnd_schedule_device_timer(unsigned long arg)
@@ -2071,8 +2070,6 @@ kgnilnd_release_msg(kgn_conn_t *conn)
 	GNIDBG_SMSG_CREDS(D_NET, conn);
 
 	kgnilnd_schedule_conn(conn);
-
-	return;
 }
 
 void
@@ -2096,8 +2093,6 @@ kgnilnd_consume_rx(kgn_rx_t *rx)
 	kmem_cache_free(kgnilnd_data.kgn_rx_cache, rx);
 	CDEBUG(D_MALLOC, "slab-freed 'rx': %lu at %p.\n",
 	       sizeof(*rx), rx);
-
-	return;
 }
 
 int
@@ -2978,8 +2973,6 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 			}
 		}
 	}
-
-	return;
 }
 
 void

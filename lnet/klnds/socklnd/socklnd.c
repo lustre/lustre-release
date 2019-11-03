@@ -1861,7 +1861,6 @@ ksocknal_query(struct lnet_ni *ni, lnet_nid_t nid, time64_t *when)
                 ksocknal_launch_all_connections_locked(peer_ni);
 
 	write_unlock_bh(glock);
-        return;
 }
 
 static void
@@ -2512,7 +2511,6 @@ ksocknal_debug_peerhash(struct lnet_ni *ni)
 	}
 
 	read_unlock(&ksocknal_data.ksnd_global_lock);
-	return;
 }
 
 void

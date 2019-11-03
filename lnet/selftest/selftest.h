@@ -511,8 +511,6 @@ srpc_destroy_client_rpc(struct srpc_client_rpc *rpc)
 	} else {
 		(*rpc->crpc_fini) (rpc);
 	}
-
-	return;
 }
 
 static inline void
@@ -551,7 +549,6 @@ srpc_init_client_rpc(struct srpc_client_rpc *rpc, struct lnet_process_id peer,
         rpc->crpc_reqstmsg.msg_magic   = SRPC_MSG_MAGIC;
         rpc->crpc_reqstmsg.msg_version = SRPC_MSG_VERSION;
         rpc->crpc_reqstmsg.msg_type    = srpc_service2request(service);
-        return;
 }
 
 static inline const char *

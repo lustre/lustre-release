@@ -787,8 +787,6 @@ static void osd_ost_seq_fini(const struct lu_env *env, struct osd_device *osd)
 		OBD_FREE(osd_seq, sizeof(*osd_seq));
 	}
 	write_unlock(&osl->osl_seq_list_lock);
-
-	return;
 }
 
 /**

@@ -1641,8 +1641,6 @@ lst_timeval_diff(struct timeval *tv1,
 
 	df->tv_sec  = tv1->tv_sec - 1 - tv2->tv_sec;
 	df->tv_usec = tv1->tv_usec + 1000000 - tv2->tv_usec;
-
-	return;
 }
 
 static void

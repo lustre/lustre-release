@@ -1887,7 +1887,6 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 	if (rc)
 		CERROR("%s: sync returns %d\n", dbgcksum_file_name, rc);
 	filp_close(filp, NULL);
-	return;
 }
 
 static int check_read_checksum(struct niobuf_local *local_nb, int npages,

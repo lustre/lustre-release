@@ -271,7 +271,6 @@ void lustrefs_ctrl(int command)
         execvp(cmd[0], cmd);
         report("failed to execvp(\'%s %s\')",cmd[0],cmd[1]);
     }
-    return;
 }
 
 /*****************************************************************************
@@ -416,7 +415,6 @@ void report(const char *fmt, ...)
 
     DEBUGMSGTL(("lsnmpd", "%s\n", buf));
     fprintf(stderr, "%s\n", buf);
-    return;
 }
 
 

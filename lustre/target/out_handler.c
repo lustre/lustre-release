@@ -56,7 +56,6 @@ static void out_reconstruct(const struct lu_env *env, struct dt_device *dt,
 	       dt_obd_name(dt), reply, index, 0);
 
 	object_update_result_insert(reply, NULL, 0, index, 0);
-	return;
 }
 
 typedef void (*out_reconstruct_t)(const struct lu_env *env,

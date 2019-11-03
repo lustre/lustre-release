@@ -147,8 +147,6 @@ mydaemon(int nochdir, int noclose)
 		dup2(tempfd, 2);
 		closeall(3);
 	}
-
-	return;
 }
 
 static void
@@ -178,7 +176,6 @@ sig_hup(int signal)
 {
 	/* don't exit on SIGHUP */
 	printerr(1, "Received SIGHUP... Ignoring.\n");
-	return;
 }
 
 static void

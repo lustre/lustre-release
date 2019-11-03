@@ -244,7 +244,6 @@ fail_keep_client:
 	/* We couldn't find some subdirectories, but we keep the client
 	 * around in case we get a notification on the directory when the
 	 * subdirectories are created. */
-	return;
 }
 
 void

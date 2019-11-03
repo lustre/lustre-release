@@ -301,8 +301,6 @@ void sk_config_cpu_to_disk(struct sk_keyfile_config *config)
 
 	for (i = 0; i < MAX_MGSNIDS; i++)
 		config->skc_mgsnids[i] = htobe64(config->skc_mgsnids[i]);
-
-	return;
 }
 
 /**
@@ -326,8 +324,6 @@ void sk_config_disk_to_cpu(struct sk_keyfile_config *config)
 
 	for (i = 0; i < MAX_MGSNIDS; i++)
 		config->skc_mgsnids[i] = be64toh(config->skc_mgsnids[i]);
-
-	return;
 }
 
 /**

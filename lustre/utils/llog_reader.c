@@ -356,7 +356,6 @@ void llog_unpack_buffer(int fd, struct llog_log_hdr *llog_buf,
 		free(llog_buf);
 	if (recs_buf != NULL)
 		free(recs_buf);
-	return;
 }
 
 void print_llog_header(struct llog_log_hdr *llog_buf)
@@ -378,7 +377,6 @@ void print_llog_header(struct llog_log_hdr *llog_buf)
 	/* Add the other info you want to view here */
 
 	printf("-----------------------\n");
-	return;
 }
 
 static void print_1_cfg(struct lustre_cfg *lcfg)
@@ -393,7 +391,6 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
         for (i = 0; i <  lcfg->lcfg_bufcount; i++)
                 printf("%d:%.*s  ", i, lcfg->lcfg_buflens[i],
                        (char*)lustre_cfg_buf(lcfg, i));
-        return;
 }
 
 static char *lustre_cfg_string(struct lustre_cfg *lcfg, __u32 index)
@@ -449,8 +446,6 @@ static void print_setup_cfg(struct lustre_cfg *lcfg)
                 printf("setup     ");
                 print_1_cfg(lcfg);
         }
-
-        return;
 }
 
 void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
@@ -638,7 +633,6 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                 printf("unsupported cmd_code = %x\n",cmd);
         }
         printf("\n");
-        return;
 }
 
 static void print_hsm_action(struct llog_agent_req_rec *larr)

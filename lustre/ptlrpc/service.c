@@ -1072,8 +1072,6 @@ void ptlrpc_request_change_export(struct ptlrpc_request *req,
 	/* request takes one export refcount */
 	req->rq_export = class_export_get(export);
 	class_export_rpc_inc(export);
-
-	return;
 }
 
 /**

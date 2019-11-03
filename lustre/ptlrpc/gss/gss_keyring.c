@@ -1062,7 +1062,6 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 
 	dispose_ctx_list_kr(&freelist);
 	EXIT;
-	return;
 }
 
 static

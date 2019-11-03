@@ -371,8 +371,6 @@ brw_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 		atomic_inc(&sn->sn_brw_errors);
 		rpc->crpc_status = -EBADMSG;
 	}
-
-	return;
 }
 
 static void

@@ -76,7 +76,6 @@ static void lgss_sk_release_cred(struct lgss_cred *cred)
 	sk_free_cred(skc);
 	cred->lc_mech_cred = NULL;
 	free(cred->lc_mech_token.value);
-	return;
 }
 
 /**

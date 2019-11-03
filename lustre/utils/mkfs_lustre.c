@@ -168,7 +168,6 @@ void usage(FILE *out)
 		"\t\t\texit\n"
 		"\t\t--quiet\n",
 		(int)sizeof(((struct lustre_disk_data *)0)->ldd_userdata));
-	return;
 }
 
 /* ==================== Lustre config functions =============*/

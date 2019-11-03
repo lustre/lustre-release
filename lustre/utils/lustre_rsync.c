@@ -545,7 +545,6 @@ void lr_get_FID_PATH(char *mntpt, char *fidstr, char *buf, int bufsize)
         /* Open-by-FID path is <mntpt>/.lustre/fid/[SEQ:OID:VER] */
         snprintf(buf, bufsize, "%s/%s/fid/%s", mntpt, dot_lustre_name,
                  fidstr);
-        return;
 }
 
 /* Read the symlink information into 'info->link' */
@@ -1260,8 +1259,6 @@ void lr_backup_log()
 	snprintf(backupfile, sizeof(backupfile), "%s.old", statuslog);
         (void) rename(statuslog, backupfile);
         logbackedup = 1;
-
-        return;
 }
 
 /* Save replication parameters to a statuslog. */

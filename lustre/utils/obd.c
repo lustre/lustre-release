@@ -484,8 +484,6 @@ static void shmem_total(int total_threads)
 
 	printf("Total: total %ju threads %d sec %f %f/second\n",
 	       (uintmax_t)total, total_threads, secs, total / secs);
-
-        return;
 }
 
 static void shmem_snap(int total_threads, int live_threads)

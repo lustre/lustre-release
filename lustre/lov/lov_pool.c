@@ -244,7 +244,6 @@ static void pool_proc_stop(struct seq_file *s, void *v)
                 lov_pool_putref(iter->pool);
                 OBD_FREE_PTR(iter);
         }
-        return;
 }
 
 static int pool_proc_show(struct seq_file *s, void *v)

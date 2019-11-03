@@ -525,7 +525,6 @@ static void lnet_shuffle_seed(void)
 		add_device_randomness(&ni->ni_nid, sizeof(ni->ni_nid));
 
 	seeded = 1;
-	return;
 }
 
 /* NB expects LNET_LOCK held */

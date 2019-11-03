@@ -161,7 +161,6 @@ ping_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 	CDEBUG(D_NET, "%d reply in %llu nsec\n", reply->pnr_seq,
 	       (u64)((ts.tv_sec - reqst->pnr_time_sec) * NSEC_PER_SEC +
 		    (ts.tv_nsec - reqst->pnr_time_nsec)));
-        return;
 }
 
 static int

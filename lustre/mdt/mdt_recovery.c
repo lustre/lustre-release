@@ -219,7 +219,6 @@ void mdt_reconstruct_generic(struct mdt_thread_info *mti,
 	struct ptlrpc_request *req = mdt_info_req(mti);
 
 	mdt_req_from_lrd(req, mti->mti_reply_data);
-	return;
 }
 
 /**

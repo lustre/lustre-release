@@ -1616,8 +1616,6 @@ static inline void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
 
 	if (op != 0)
 		lprocfs_counter_incr(srv_stats, op);
-
-	return;
 }
 
 /* resource.c - internal */

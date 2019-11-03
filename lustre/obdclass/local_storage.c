@@ -719,7 +719,6 @@ void dt_los_put(struct local_oid_storage *los)
 		/* should never happen, only local_oid_storage_fini should
 		 * drop refcount to zero */
 		LBUG();
-	return;
 }
 
 /* after Lustre 2.3 release there may be old file to store last generated FID

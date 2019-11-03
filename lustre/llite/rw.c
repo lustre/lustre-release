@@ -809,7 +809,6 @@ static void ras_init_stride_detector(struct ll_readahead_state *ras,
 	ras->ras_stride_length = stride_gap + ras->ras_consecutive_bytes;
 
         RAS_CDEBUG(ras);
-        return;
 }
 
 static unsigned long
@@ -1060,7 +1059,6 @@ out_unlock:
 	ras->ras_request_index++;
 	ras->ras_last_read_end = pos + PAGE_SIZE - 1;
 	spin_unlock(&ras->ras_lock);
-	return;
 }
 
 int ll_writepage(struct page *vmpage, struct writeback_control *wbc)

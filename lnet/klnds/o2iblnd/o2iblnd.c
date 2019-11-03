@@ -1255,7 +1255,6 @@ kiblnd_query(struct lnet_ni *ni, lnet_nid_t nid, time64_t *when)
 	CDEBUG(D_NET, "peer_ni %s %p, alive %lld secs ago\n",
 	       libcfs_nid2str(nid), peer_ni,
 	       last_alive ? now - last_alive : -1);
-	return;
 }
 
 static void
@@ -3027,7 +3026,6 @@ kiblnd_shutdown(struct lnet_ni *ni)
 out:
 	if (list_empty(&kiblnd_data.kib_devs))
                 kiblnd_base_shutdown();
-        return;
 }
 
 static int

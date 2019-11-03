@@ -1628,7 +1628,6 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 	if (rc)
 		CERROR("%s: sync returns %d\n", dbgcksum_file_name, rc);
 	filp_close(filp, NULL);
-	return;
 }
 
 static int

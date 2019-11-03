@@ -163,5 +163,4 @@ lgssd_run()
 	}
 out:
 	close(fd);
-	return;
 }

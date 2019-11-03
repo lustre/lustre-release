@@ -511,8 +511,6 @@ void osd_quota_unpack(struct osd_object *obj, const struct dt_rec *rec)
 	descr = obj->oo_dir->od_container.ic_descr;
 
 	osd_quota_swab((char *)rec, descr->id_rec_size);
-#else
-	return;
 #endif
 }
 

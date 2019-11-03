@@ -258,7 +258,6 @@ static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 		lprocfs_free_stats(&client_stat->nid_ldlm_stats);
 
 	OBD_FREE_PTR(client_stat);
-	return;
 }
 
 void lprocfs_free_per_client_stats(struct obd_device *obd)

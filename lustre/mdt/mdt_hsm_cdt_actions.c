@@ -618,7 +618,6 @@ static void mdt_hsm_actions_debugfs_stop(struct seq_file *s, void *v)
 		llog_ctxt_put(aai->aai_ctxt);
 
 	EXIT;
-	return;
 }
 
 static const struct seq_operations mdt_hsm_actions_debugfs_ops = {

@@ -3823,8 +3823,6 @@ void lnet_monitor_thr_stop(void)
 	lnet_clean_local_ni_recoveryq();
 	lnet_clean_peer_ni_recoveryq();
 	lnet_clean_resendqs();
-
-	return;
 }
 
 void

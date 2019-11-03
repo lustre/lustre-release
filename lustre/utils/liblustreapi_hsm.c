@@ -657,8 +657,6 @@ err:
 out_free:
 	if (json_items != NULL)
 		llapi_json_destroy_list(&json_items);
-
-	return;
 }
 
 /** Register a copytool

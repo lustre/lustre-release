@@ -177,7 +177,6 @@ sfw_add_session_timer (void)
         sn->sn_timer_active = 1;
 	timer->stt_expires = ktime_get_real_seconds()+ sn->sn_timeout;
         stt_add_timer(timer);
-        return;
 }
 
 static int
@@ -304,7 +303,6 @@ sfw_server_rpc_done(struct srpc_server_rpc *rpc)
 
         if (rpc->srpc_bulk != NULL)
                 sfw_free_pages(rpc);
-        return;
 }
 
 static void
@@ -616,7 +614,6 @@ sfw_unload_test(struct sfw_test_instance *tsi)
 	 * some buffers behind, but never mind... */
 	srpc_service_remove_buffers(tsc->tsc_srv_service,
 				    sfw_test_buffers(tsi));
-	return;
 }
 
 static void
@@ -650,7 +647,6 @@ sfw_destroy_test_instance(struct sfw_test_instance *tsi)
 clean:
 	sfw_unload_test(tsi);
 	LIBCFS_FREE(tsi, sizeof(*tsi));
-	return;
 }
 
 static void
@@ -669,7 +665,6 @@ sfw_destroy_batch(struct sfw_batch *tsb)
 	}
 
 	LIBCFS_FREE(tsb, sizeof(*tsb));
-	return;
 }
 
 static void
@@ -689,7 +684,6 @@ sfw_destroy_session(struct sfw_session *sn)
 
 	LIBCFS_FREE(sn, sizeof(*sn));
 	atomic_dec(&sfw_data.fw_nzombies);
-	return;
 }
 
 static void
@@ -734,7 +728,6 @@ sfw_unpack_addtest_req(struct srpc_msg *msg)
         }
 
 	LBUG();
-	return;
 }
 
 static int
@@ -872,7 +865,6 @@ sfw_test_unit_done(struct sfw_test_unit *tsu)
 	spin_unlock(&sfw_data.fw_lock);
 
 	sfw_destroy_session(sn);
-	return;
 }
 
 static void
@@ -908,7 +900,6 @@ sfw_test_rpc_done(struct srpc_client_rpc *rpc)
         }
 
         sfw_test_unit_done(tsu);
-        return;
 }
 
 int
@@ -1570,7 +1561,6 @@ sfw_unpack_message(struct srpc_msg *msg)
         }
 
         LBUG ();
-        return;
 }
 
 void
@@ -1582,7 +1572,6 @@ sfw_abort_rpc(struct srpc_client_rpc *rpc)
 	spin_lock(&rpc->crpc_lock);
 	srpc_abort_rpc(rpc, -EINTR);
 	spin_unlock(&rpc->crpc_lock);
-	return;
 }
 
 void
@@ -1599,7 +1588,6 @@ sfw_post_rpc(struct srpc_client_rpc *rpc)
 	srpc_post_rpc(rpc);
 
 	spin_unlock(&rpc->crpc_lock);
-	return;
 }
 
 static struct srpc_service sfw_services[] = {
@@ -1776,6 +1764,4 @@ sfw_shutdown (void)
 		list_del(&tsc->tsc_list);
 		LIBCFS_FREE(tsc, sizeof(*tsc));
 	}
-
-	return;
 }

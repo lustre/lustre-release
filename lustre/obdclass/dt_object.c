@@ -537,7 +537,6 @@ void dt_version_set(const struct lu_env *env, struct dt_object *o,
 	rc = dt_xattr_set(env, o, &vbuf, xname, 0, th);
 	if (rc < 0)
 		CDEBUG(D_INODE, "Can't set version, rc %d\n", rc);
-	return;
 }
 EXPORT_SYMBOL(dt_version_set);
 

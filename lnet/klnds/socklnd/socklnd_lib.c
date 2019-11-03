@@ -701,7 +701,6 @@ ksocknal_lib_set_callback(struct socket *sock,  struct ksock_conn *conn)
         sock->sk->sk_user_data = conn;
         sock->sk->sk_data_ready = ksocknal_data_ready;
         sock->sk->sk_write_space = ksocknal_write_space;
-        return;
 }
 
 void

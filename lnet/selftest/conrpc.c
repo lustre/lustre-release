@@ -457,8 +457,6 @@ lstcon_rpc_trans_stat(struct lstcon_rpc_trans *trans,
                lstcon_rpc_stat_failure(stat, 0),
                lstcon_rpc_stat_total(stat, 0),
                stat->trs_rpc_errno, stat->trs_fwk_errno);
-
-        return;
 }
 
 int
@@ -585,8 +583,6 @@ lstcon_rpc_trans_destroy(struct lstcon_rpc_trans *trans)
 	       lstcon_rpc_trans_name(trans->tas_opc), count);
 
 	LIBCFS_FREE(trans, sizeof(*trans));
-
-	return;
 }
 
 int
@@ -1079,8 +1075,6 @@ lstcon_rpc_stat_reply(struct lstcon_rpc_trans *trans, struct srpc_msg *msg,
 
         if (stat->trs_fwk_errno == 0)
                 stat->trs_fwk_errno = rc;
-
-        return;
 }
 
 int
