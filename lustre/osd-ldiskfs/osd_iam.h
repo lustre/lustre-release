@@ -1112,6 +1112,7 @@ int iam_uapi_ioctl(struct inode * inode, struct file * filp, unsigned int cmd,
 extern int ldiskfs_check_dir_entry(const char *, struct inode *,
                                 struct ldiskfs_dir_entry_2 *,
                                 struct buffer_head *, unsigned long);
+extern int dx_node_check(struct iam_path *p, struct iam_frame *f);
 #else
 static inline int ldiskfs_check_dir_entry(const char * function,
                                        struct inode * dir,

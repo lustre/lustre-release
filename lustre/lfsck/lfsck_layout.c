@@ -647,7 +647,7 @@ lfsck_rbtree_insert(struct lfsck_layout_slave_data *llsd,
 	return lrn;
 }
 
-extern const struct dt_index_operations lfsck_orphan_index_ops;
+static const struct dt_index_operations lfsck_orphan_index_ops;
 
 static int lfsck_rbtree_setup(const struct lu_env *env,
 			      struct lfsck_component *com)
@@ -7519,7 +7519,7 @@ static int lfsck_orphan_it_key_rec(const struct lu_env *env,
 	return 0;
 }
 
-const struct dt_index_operations lfsck_orphan_index_ops = {
+static const struct dt_index_operations lfsck_orphan_index_ops = {
 	.dio_lookup		= lfsck_orphan_index_lookup,
 	.dio_declare_insert	= lfsck_orphan_index_declare_insert,
 	.dio_insert		= lfsck_orphan_index_insert,

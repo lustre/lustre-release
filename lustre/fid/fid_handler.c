@@ -456,8 +456,6 @@ LU_KEY_INIT_FINI(seq, struct seq_thread_info);
 /* context key: seq_thread_key */
 LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD | LCT_DT_THREAD);
 
-extern const struct file_operations seq_fld_debugfs_seq_fops;
-
 static void seq_server_debugfs_fini(struct lu_server_seq *seq)
 {
 	if (!IS_ERR_OR_NULL(seq->lss_debugfs_entry))

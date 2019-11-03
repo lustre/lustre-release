@@ -42,8 +42,6 @@
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 
-extern unsigned int lnet_current_net_count;
-
 static int local_nid_dist_zero = 1;
 module_param(local_nid_dist_zero, int, 0444);
 MODULE_PARM_DESC(local_nid_dist_zero, "Reserved");

@@ -77,8 +77,6 @@ static const struct dt_index_features fld_index_features = {
 	.dif_ptrsize     = 4
 };
 
-extern struct lu_context_key fld_thread_key;
-
 int fld_declare_index_create(const struct lu_env *env,
 			     struct lu_server_fld *fld,
 			     const struct lu_seq_range *new_range,

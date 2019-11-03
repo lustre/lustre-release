@@ -67,11 +67,6 @@ const struct lu_buf *mdt_buf_const(const struct lu_env *env,
         return buf;
 }
 
-/*
- * last_rcvd & last_committed update callbacks
- */
-extern struct lu_context_key mdt_thread_key;
-
 /* This callback notifies MDT that transaction was done. This is needed by
  * mdt_save_lock() only. It is similar to new target code and will be removed
  * as mdt_save_lock() will be converted to use target structures */

@@ -66,10 +66,7 @@ static int osd_object_sync_delay_us = -1;
 
 static struct dt_object_operations osd_obj_ops;
 static struct lu_object_operations osd_lu_obj_ops;
-extern struct dt_body_operations osd_body_ops;
 static struct dt_object_operations osd_obj_otable_it_ops;
-
-extern struct kmem_cache *osd_object_kmem;
 
 static void
 osd_object_sa_fini(struct osd_object *obj)

@@ -104,6 +104,8 @@
 #endif
 
 extern struct dt_body_operations osd_body_scrub_ops;
+extern struct dt_body_operations osd_body_ops;
+extern struct kmem_cache *osd_object_kmem;
 
 /**
  * Iterator's in-memory data structure for quota file.

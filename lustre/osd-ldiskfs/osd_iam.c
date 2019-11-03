@@ -422,8 +422,6 @@ static int iam_leaf_keyeq(const struct iam_leaf *leaf,
 }
 
 #if LDISKFS_INVARIANT_ON
-extern int dx_node_check(struct iam_path *p, struct iam_frame *f);
-
 static int iam_path_check(struct iam_path *p)
 {
 	int i;

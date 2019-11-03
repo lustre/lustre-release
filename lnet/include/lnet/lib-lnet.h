@@ -918,6 +918,7 @@ bool lnet_ni_unique_net(struct list_head *nilist, char *iface);
 void lnet_incr_dlc_seq(void);
 __u32 lnet_get_dlc_seq_locked(void);
 int lnet_get_net_count(void);
+extern unsigned int lnet_current_net_count;
 
 struct lnet_peer_net *lnet_get_next_peer_net_locked(struct lnet_peer *lp,
 						    __u32 prev_lpn_id);

@@ -33,6 +33,8 @@
 struct qsd_type_info;
 struct qsd_fsinfo;
 
+extern struct kmem_cache *upd_kmem;
+
 /*
  * A QSD instance implements quota enforcement support for a given OSD.
  * The instance can be created via qsd_init() and then freed with qsd_fini().

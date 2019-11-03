@@ -35,8 +35,6 @@
 #define LNET_NRB_LARGE_PAGES	((LNET_MTU + PAGE_SIZE - 1) >> \
 				  PAGE_SHIFT)
 
-extern unsigned int lnet_current_net_count;
-
 static char *forwarding = "";
 module_param(forwarding, charp, 0444);
 MODULE_PARM_DESC(forwarding, "Explicitly enable/disable forwarding between networks");

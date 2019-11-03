@@ -91,4 +91,6 @@ extern struct dentry *seq_debugfs_dir;
 
 extern struct lprocfs_vars seq_client_debugfs_list[];
 
+extern const struct file_operations seq_fld_debugfs_seq_fops;
+
 #endif /* __FID_INTERNAL_H */

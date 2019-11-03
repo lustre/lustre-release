@@ -33,8 +33,6 @@
 #include <linux/kthread.h>
 #include "qsd_internal.h"
 
-extern struct kmem_cache *upd_kmem;
-
 /*
  * Allocate and fill an qsd_upd_rec structure to be processed by the writeback
  * thread.
