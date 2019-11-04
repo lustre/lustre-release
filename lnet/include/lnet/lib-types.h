@@ -413,9 +413,6 @@ struct lnet_net {
 	/* dying LND instances */
 	struct list_head	net_ni_zombie;
 
-	/* network state */
-	enum lnet_net_state	net_state;
-
 	/* when I was last alive */
 	time64_t		net_last_alive;
 

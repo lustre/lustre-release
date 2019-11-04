@@ -381,7 +381,6 @@ lnet_net_alloc(__u32 net_id, struct list_head *net_list)
 
 	net->net_id = net_id;
 	net->net_last_alive = ktime_get_real_seconds();
-	net->net_state = LNET_NET_STATE_INIT;
 
 	/* initialize global paramters to undefiend */
 	net->net_tunables.lct_peer_timeout = -1;

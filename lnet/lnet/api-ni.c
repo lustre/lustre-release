@@ -2113,8 +2113,6 @@ lnet_shutdown_lndnet(struct lnet_net *net)
 
 	lnet_net_lock(LNET_LOCK_EX);
 
-	net->net_state = LNET_NET_STATE_DELETING;
-
 	list_del_init(&net->net_list);
 
 	while (!list_empty(&net->net_ni_list)) {
@@ -2424,7 +2422,6 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		 */
 		lnet_net_free(net);
 	} else {
-		net->net_state = LNET_NET_STATE_ACTIVE;
 		/*
 		 * restore tunables after it has been overwitten by the
 		 * lnd
