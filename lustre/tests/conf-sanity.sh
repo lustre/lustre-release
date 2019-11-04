@@ -4522,7 +4522,7 @@ test_60() { # LU-471
 run_test 60 "check mkfs.lustre --mkfsoptions -E -O options setting"
 
 test_61() { # LU-80
-	local lxattr=false
+	local lxattr=$(large_xattr_enabled)
 
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.1.53) ] ||
 		skip "Need MDS version at least 2.1.53"
@@ -4581,7 +4581,7 @@ test_61() { # LU-80
 	log "remove large xattr $name from $file"
 	setfattr -x $name $file || error "removing $name from $file failed"
 
-	if $lxattr; then
+	if $lxattr && [ $(facet_fstype $SINGLEMDS) == ldiskfs ]; then
 		stopall || error "stopping for e2fsck run"
 		for num in $(seq $MDSCOUNT); do
 			run_e2fsck $(facet_active_host mds$num) \
