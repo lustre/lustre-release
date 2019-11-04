@@ -176,8 +176,7 @@ retry:
 			"freed:%lu, repeat:%u\n", hash,
 			d.lid_inuse, d.lid_freed, repeat);
 		repeat++;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_interruptible(cfs_time_seconds(1));
 		goto retry;
 	}
 	EXIT;

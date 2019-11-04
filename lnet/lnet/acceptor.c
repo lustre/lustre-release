@@ -377,8 +377,8 @@ lnet_acceptor(void *arg)
 		if (rc != 0) {
 			if (rc != -EAGAIN) {
 				CWARN("Accept error %d: pausing...\n", rc);
-				set_current_state(TASK_UNINTERRUPTIBLE);
-				schedule_timeout(cfs_time_seconds(1));
+				schedule_timeout_uninterruptible(
+					cfs_time_seconds(1));
 			}
 			continue;
 		}

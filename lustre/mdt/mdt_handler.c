@@ -3796,10 +3796,8 @@ static int mdt_tgt_connect(struct tgt_session_info *tsi)
 {
 	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_DELAY_CONDITIONAL) &&
 	    cfs_fail_val ==
-	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id) {
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(3));
-	}
+	    tsi2mdt_info(tsi)->mti_mdt->mdt_seq_site.ss_node_id)
+		schedule_timeout_uninterruptible(cfs_time_seconds(3));
 
 	return tgt_connect(tsi);
 }

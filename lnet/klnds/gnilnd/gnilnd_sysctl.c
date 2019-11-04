@@ -133,8 +133,7 @@ proc_trigger_stack_reset(struct ctl_table *table, int write,
 		i++;
 		LCONSOLE((((i) & (-i)) == i) ? D_WARNING : D_NET,
 				"Waiting for stack reset request to clear\n");
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1 * i));
+		schedule_timeout_uninterruptible(cfs_time_seconds(i));
 	}
 
 	RETURN(rc);

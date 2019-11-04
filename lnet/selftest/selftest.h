@@ -578,8 +578,8 @@ do {									\
 		       fmt, ## __VA_ARGS__);				\
 		spin_unlock(&(lock));					\
 									\
-		set_current_state(TASK_UNINTERRUPTIBLE);		\
-		schedule_timeout(cfs_time_seconds(1) / 10);		\
+		schedule_timeout_uninterruptible(			\
+			cfs_time_seconds(1) / 10);			\
 									\
 		spin_lock(&(lock));					\
 	}								\
@@ -597,8 +597,7 @@ srpc_wait_service_shutdown(struct srpc_service *sv)
 		CDEBUG(((i & -i) == i) ? D_WARNING : D_NET,
 		       "Waiting for %s service to shutdown...\n",
 		       sv->sv_name);
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1) / 10);
+		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 10);
 	}
 }
 

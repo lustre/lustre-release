@@ -2861,8 +2861,8 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 				cfs_fail_val = 0;
 				wake_up(&cfs_race_waitq);
 
-				set_current_state(TASK_INTERRUPTIBLE);
-				schedule_timeout(cfs_time_seconds(1));
+				schedule_timeout_interruptible(
+					cfs_time_seconds(1));
 			}
 		}
 

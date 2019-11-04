@@ -589,8 +589,7 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
 		       "ctx (%p, fl %lx) doesn't switch, relax a little bit\n",
 		       newctx, newctx->cc_flags);
 
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_interruptible(cfs_time_seconds(1));
 	} else if (unlikely(test_bit(PTLRPC_CTX_UPTODATE_BIT, &newctx->cc_flags)
 			    == 0)) {
 		/*

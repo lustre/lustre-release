@@ -133,8 +133,7 @@ kgnilnd_quiesce_wait(char *reason)
 				 atomic_read(&kgnilnd_data.kgn_nthreads) -
 				 atomic_read(&kgnilnd_data.kgn_nquiesce));
 			CFS_RACE(CFS_FAIL_GNI_QUIESCE_RACE);
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(1 * i));
+			schedule_timeout_uninterruptible(cfs_time_seconds(i));
 
 			LASSERTF(quiesce_deadline > jiffies,
 				 "couldn't quiesce threads in %lu seconds, falling over now\n",
@@ -159,8 +158,7 @@ kgnilnd_quiesce_wait(char *reason)
 				 "%s: Waiting for %d threads to wake up\n",
 				  reason,
 				  atomic_read(&kgnilnd_data.kgn_nquiesce));
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(1 * i));
+			schedule_timeout_uninterruptible(cfs_time_seconds(i));
 		}
 
 		CDEBUG(D_INFO, "%s: All threads awake!\n", reason);
@@ -422,8 +420,8 @@ kgnilnd_ruhroh_thread(void *arg)
 				i++;
 				CDEBUG(D_INFO, "Waiting for hardware quiesce "
 					       "flag to clear\n");
-				set_current_state(TASK_UNINTERRUPTIBLE);
-				schedule_timeout(cfs_time_seconds(1 * i));
+				schedule_timeout_uninterruptible(
+					cfs_time_seconds(i));
 
 				/* If we got a quiesce event with bump info, DO THE BUMP!. */
 				if (kgnilnd_data.kgn_bump_info_rdy) {

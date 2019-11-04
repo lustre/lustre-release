@@ -1368,8 +1368,7 @@ kiblnd_current_hdev(struct kib_dev *dev)
 		if (i++ % 50 == 0)
 			CDEBUG(D_NET, "%s: Wait for failover\n",
 			       dev->ibd_ifname);
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1) / 100);
+		schedule_timeout_interruptible(cfs_time_seconds(1) / 100);
 
 		read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 	}
@@ -2177,8 +2176,7 @@ again:
 		       "trips = %d\n",
 		       ps->ps_name, interval, trips);
 
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(interval);
+		schedule_timeout_interruptible(interval);
 		if (interval < cfs_time_seconds(1))
 			interval *= 2;
 
@@ -2989,8 +2987,7 @@ kiblnd_base_shutdown(void)
 			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
 			       "Waiting for %d threads to terminate\n",
 			       atomic_read(&kiblnd_data.kib_nthreads));
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(1));
+			schedule_timeout_uninterruptible(cfs_time_seconds(1));
 		}
 
                 /* fall through */
@@ -3052,8 +3049,7 @@ kiblnd_shutdown(struct lnet_ni *ni)
 			       "%s: waiting for %d peers to disconnect\n",
 			       libcfs_nid2str(ni->ni_nid),
 			       atomic_read(&net->ibn_npeers));
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(1));
+			schedule_timeout_uninterruptible(cfs_time_seconds(1));
 		}
 
 		kiblnd_net_fini_pools(net);

@@ -587,8 +587,7 @@ lnet_peer_ni_finalize_wait(struct lnet_peer_table *ptable)
 			       "Waiting for %d zombies on peer table\n",
 			       ptable->pt_zombies);
 		}
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1) >> 1);
+		schedule_timeout_uninterruptible(cfs_time_seconds(1) >> 1);
 		spin_lock(&ptable->pt_zombie_lock);
 	}
 	spin_unlock(&ptable->pt_zombie_lock);
@@ -3389,7 +3388,7 @@ static int lnet_peer_discovery(void *arg)
 
 	/* Queue cleanup 2: wait for the expired queue to clear. */
 	while (!list_empty(&the_lnet.ln_dc_expired))
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 
 	/* Queue cleanup 3: clear the request queue. */
 	lnet_net_lock(LNET_LOCK_EX);

@@ -476,8 +476,7 @@ void lustre_deregister_lwp_item(struct obd_export **exp)
 		CDEBUG(D_MOUNT, "lri reference count %u, repeat: %d\n",
 		       atomic_read(&lri->lri_ref), repeat);
 		repeat++;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_interruptible(cfs_time_seconds(1));
 	}
 	lustre_put_lwp_item(lri);
 }
@@ -1265,9 +1264,8 @@ again:
 			if ((rc == -ESHUTDOWN || rc == -EIO) && ++tried < 5) {
 				/* The connection with MGS is not established.
 				 * Try again after 2 seconds. Interruptable. */
-				set_current_state(TASK_INTERRUPTIBLE);
-				schedule_timeout(cfs_time_seconds(2));
-				set_current_state(TASK_RUNNING);
+				schedule_timeout_interruptible(
+					cfs_time_seconds(2));
 				if (!signal_pending(current))
 					goto again;
 			}

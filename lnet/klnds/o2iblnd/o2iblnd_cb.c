@@ -3629,7 +3629,6 @@ kiblnd_connd (void *arg)
 
 		schedule_timeout(timeout);
 
-		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&kiblnd_data.kib_connd_waitq, &wait);
 		spin_lock_irqsave(lock, flags);
 	}

@@ -560,7 +560,7 @@ static inline void osp_get_rpc_lock(struct osp_device *osp)
 	 */
 	if (unlikely(lck->rpcl_fakes)) {
 		mutex_unlock(&lck->rpcl_mutex);
-		schedule_timeout(cfs_time_seconds(1) / 4);
+		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 4);
 
 		goto again;
 	}

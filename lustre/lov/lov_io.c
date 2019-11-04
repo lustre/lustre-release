@@ -438,8 +438,7 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 	 */
 	if (io->ci_ndelay && io->ci_ndelay_tried > 0 &&
 	    (io->ci_ndelay_tried % comp->lo_mirror_count == 0)) {
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1) / 100); /* 10ms */
+		schedule_timeout_interruptible(cfs_time_seconds(1) / 100);
 		if (signal_pending(current))
 			RETURN(-EINTR);
 

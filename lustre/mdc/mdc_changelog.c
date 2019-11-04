@@ -299,7 +299,7 @@ again:
 		llog_cat_close(NULL, llh);
 		llog_ctxt_put(ctx);
 		class_decref(obd, "changelog", crs);
-		schedule_timeout_interruptible(HZ);
+		schedule_timeout_interruptible(cfs_time_seconds(1));
 		goto again;
 	}
 

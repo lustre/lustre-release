@@ -654,10 +654,8 @@ static bool qsd_acquire(const struct lu_env *env, struct lquota_entry *lqe,
 
 		/* if we have gotten some quota and stil wait more quota,
 		 * it's better to give QMT some time to reclaim from clients */
-		if (count > 0) {
-			set_current_state(TASK_INTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(1));
-		}
+		if (count > 0)
+			schedule_timeout_interruptible(cfs_time_seconds(1));
 
 		/* need to acquire more quota space from master */
 		rc = qsd_acquire_remote(env, lqe);

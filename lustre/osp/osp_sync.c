@@ -1295,7 +1295,7 @@ next:
 			rc = llog_cleanup(&env, ctxt);
 			if (rc)
 				GOTO(out, rc);
-			schedule_timeout_interruptible(HZ * 5);
+			schedule_timeout_interruptible(cfs_time_seconds(5));
 			goto again;
 		}
 

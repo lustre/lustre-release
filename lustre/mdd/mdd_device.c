@@ -616,7 +616,8 @@ again:
 			 * and to have set mc_gc_task to itself
 			 */
 			spin_unlock(&mdd->mdd_cl.mc_lock);
-			schedule_timeout(usecs_to_jiffies(10));
+			/* Add a tiny sleep */
+			schedule_timeout_uninterruptible(1);
 			/* go back to fully check if GC-thread has started or
 			 * even already exited or if a new one is starting...
 			 */

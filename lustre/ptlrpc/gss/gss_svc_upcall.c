@@ -1139,8 +1139,7 @@ int __init gss_init_svc_upcall(void)
 	for (i = 0; i < 6; i++) {
 		if (channel_users(&rsi_cache) > 0)
 			break;
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1) / 4);
+		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 4);
 	}
 
 	if (channel_users(&rsi_cache) == 0)

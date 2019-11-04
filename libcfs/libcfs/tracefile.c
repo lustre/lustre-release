@@ -1002,8 +1002,7 @@ end_loop:
 		}
 		init_waitqueue_entry(&__wait, current);
 		add_wait_queue(&tctl->tctl_waitq, &__wait);
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_interruptible(cfs_time_seconds(1));
 		remove_wait_queue(&tctl->tctl_waitq, &__wait);
         }
 	complete(&tctl->tctl_stop);

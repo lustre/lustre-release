@@ -1749,8 +1749,7 @@ lnet_ping_md_unlink(struct lnet_ping_buffer *pbuf,
 	/* NB the MD could be busy; this just starts the unlink */
 	while (atomic_read(&pbuf->pb_refcnt) > 1) {
 		CDEBUG(D_NET, "Still waiting for ping data MD to unlink\n");
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 	}
 
 	cfs_restore_sigs(blocked);
@@ -1983,8 +1982,7 @@ static void lnet_push_target_fini(void)
 	/* Wait for the unlink to complete. */
 	while (atomic_read(&the_lnet.ln_push_target->pb_refcnt) > 1) {
 		CDEBUG(D_NET, "Still waiting for ping data MD to unlink\n");
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 	}
 
 	lnet_ping_buffer_decref(the_lnet.ln_push_target);
@@ -2060,8 +2058,7 @@ lnet_clear_zombies_nis_locked(struct lnet_net *net)
 				       "Waiting for zombie LNI %s\n",
 				       libcfs_nid2str(ni->ni_nid));
 			}
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(1));
+			schedule_timeout_uninterruptible(cfs_time_seconds(1));
 			lnet_net_lock(LNET_LOCK_EX);
 			continue;
 		}

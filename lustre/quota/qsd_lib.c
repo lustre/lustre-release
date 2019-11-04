@@ -369,8 +369,7 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 		CDEBUG(D_QUOTA, "qqi reference count %u, repeat: %d\n",
 		       atomic_read(&qqi->qqi_ref), repeat);
 		repeat++;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_interruptible(cfs_time_seconds(1));
 	}
 
 	/* by now, all qqi users should have gone away */

@@ -940,8 +940,7 @@ lnet_wait_known_routerstate(void)
 		if (all_known)
 			return;
 
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 	}
 }
 

@@ -3054,8 +3054,7 @@ again:
 
 	if (unlikely(rc == -EINPROGRESS)) {
 		retry = true;
-		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(1));
+		schedule_timeout_interruptible(cfs_time_seconds(1));
 		set_current_state(TASK_RUNNING);
 		if (!signal_pending(current) &&
 		    thread_is_running(&lfsck->li_thread))

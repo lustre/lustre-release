@@ -194,10 +194,9 @@ ksocknal_transmit(struct ksock_conn *conn, struct ksock_tx *tx,
 	int	rc;
 	int	bufnob;
 
-	if (ksocknal_data.ksnd_stall_tx != 0) {
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(ksocknal_data.ksnd_stall_tx));
-	}
+	if (ksocknal_data.ksnd_stall_tx != 0)
+		schedule_timeout_uninterruptible(
+			cfs_time_seconds(ksocknal_data.ksnd_stall_tx));
 
 	LASSERT(tx->tx_resid != 0);
 
@@ -354,10 +353,9 @@ ksocknal_receive(struct ksock_conn *conn, struct page **rx_scratch_pgs,
 	int     rc;
 	ENTRY;
 
-	if (ksocknal_data.ksnd_stall_rx != 0) {
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(cfs_time_seconds(ksocknal_data.ksnd_stall_rx));
-	}
+	if (ksocknal_data.ksnd_stall_rx != 0)
+		schedule_timeout_uninterruptible(
+			cfs_time_seconds(ksocknal_data.ksnd_stall_rx));
 
 	rc = ksocknal_connsock_addref(conn);
 	if (rc != 0) {
@@ -2315,7 +2313,6 @@ ksocknal_connd(void *arg)
 		nloops = 0;
 		schedule_timeout(timeout);
 
-		set_current_state(TASK_RUNNING);
 		remove_wait_queue(&ksocknal_data.ksnd_connd_waitq, &wait);
 		spin_lock_bh(connd_lock);
 	}
