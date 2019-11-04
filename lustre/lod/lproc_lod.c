@@ -453,8 +453,8 @@ static ssize_t qos_prio_free_show(struct kobject *kobj,
  * Set QoS free space priority parameter.
  *
  * Set the relative priority of free OST space compared to OST load when OSTs
- * are space imbalanced.  See lod_qos_priofree_seq_show() for description of
- * this parameter.  See lod_qos_thresholdrr_seq_write() and lq_threshold_rr to
+ * are space imbalanced.  See qos_priofree_show() for description of
+ * this parameter.  See qos_thresholdrr_store() and lq_threshold_rr to
  * determine what constitutes "space imbalanced" OSTs.
  */
 static ssize_t __qos_prio_free_store(struct kobject *kobj,
@@ -522,7 +522,7 @@ static ssize_t mdt_qos_thresholdrr_show(struct kobject *kobj,
 	return __qos_thresholdrr_show(kobj, attr, buf, true);
 }
 
-static ssize_t lod_qos_thresholdrr_show(struct kobject *kobj,
+static ssize_t qos_thresholdrr_show(struct kobject *kobj,
 					struct attribute *attr, char *buf)
 {
 	return __qos_thresholdrr_show(kobj, attr, buf, false);
@@ -569,15 +569,15 @@ static ssize_t mdt_qos_thresholdrr_store(struct kobject *kobj,
 	return __qos_thresholdrr_store(kobj, attr, buffer, count, true);
 }
 
-static ssize_t lod_qos_thresholdrr_store(struct kobject *kobj,
-					 struct attribute *attr,
-					 const char *buffer, size_t count)
+static ssize_t qos_thresholdrr_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
 {
 	return __qos_thresholdrr_store(kobj, attr, buffer, count, false);
 }
 
 LUSTRE_RW_ATTR(mdt_qos_thresholdrr);
-LUSTRE_RW_ATTR(lod_qos_thresholdrr);
+LUSTRE_RW_ATTR(qos_thresholdrr);
 
 /**
  * Show expiration period used to refresh cached statfs data, which
@@ -908,7 +908,7 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_numobd.attr,
 	&lustre_attr_qos_maxage.attr,
 	&lustre_attr_qos_prio_free.attr,
-	&lustre_attr_lod_qos_thresholdrr.attr,
+	&lustre_attr_qos_thresholdrr.attr,
 	&lustre_attr_mdt_stripecount.attr,
 	&lustre_attr_mdt_stripetype.attr,
 	&lustre_attr_mdt_activeobd.attr,
