@@ -901,21 +901,6 @@ lnet_free_text_bufs(struct list_head *tbs)
 	}
 }
 
-void
-lnet_print_text_bufs(struct list_head *tbs)
-{
-	struct list_head *tmp;
-	struct lnet_text_buf  *ltb;
-
-	list_for_each(tmp, tbs) {
-		ltb = list_entry(tmp, struct lnet_text_buf, ltb_list);
-
-		CDEBUG(D_WARNING, "%s\n", ltb->ltb_text);
-	}
-
-	CDEBUG(D_WARNING, "%d allocated\n", lnet_tbnob);
-}
-
 static int
 lnet_str2tbs_sep(struct list_head *tbs, char *str)
 {
