@@ -2725,13 +2725,14 @@ static int mgs_write_log_mdt0(const struct lu_env *env,
 {
         char *log = mti->mti_svname;
         struct llog_handle *llh = NULL;
-        char *uuid, *lovname;
+	struct obd_uuid *uuid;
+	char *lovname;
         char mdt_index[6];
         char *ptr = mti->mti_params;
         int rc = 0, failout = 0;
         ENTRY;
 
-        OBD_ALLOC(uuid, sizeof(struct obd_uuid));
+	OBD_ALLOC_PTR(uuid);
         if (uuid == NULL)
                 RETURN(-ENOMEM);
 
@@ -2756,17 +2757,17 @@ static int mgs_write_log_mdt0(const struct lu_env *env,
 	/* add MDT itself */
 
         /* FIXME this whole fn should be a single journal transaction */
-	sprintf(uuid, "%s_UUID", log);
+	sprintf(uuid->uuid, "%s_UUID", log);
 	rc = record_marker(env, llh, fsdb, CM_START, log, "add mdt");
 	if (rc)
 		GOTO(out_lod, rc);
-	rc = record_attach(env, llh, log, LUSTRE_MDT_NAME, uuid);
+	rc = record_attach(env, llh, log, LUSTRE_MDT_NAME, uuid->uuid);
 	if (rc)
 		GOTO(out_end, rc);
 	rc = record_mount_opt(env, llh, log, lovname, NULL);
 	if (rc)
 		GOTO(out_end, rc);
-	rc = record_setup(env, llh, log, uuid, mdt_index, lovname,
+	rc = record_setup(env, llh, log, uuid->uuid, mdt_index, lovname,
                         failout ? "n" : "f");
 	if (rc)
 		GOTO(out_end, rc);
@@ -2778,7 +2779,7 @@ out_end:
 out_lod:
 	name_destroy(&lovname);
 out_free:
-        OBD_FREE(uuid, sizeof(struct obd_uuid));
+        OBD_FREE_PTR(uuid);
         RETURN(rc);
 }
 

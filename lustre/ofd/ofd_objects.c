@@ -280,7 +280,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		RETURN(rc = -ENOSPC);
 	}
 
-	OBD_ALLOC(batch, nr_saved * sizeof(struct ofd_object *));
+	OBD_ALLOC(batch, nr_saved * sizeof(*batch));
 	if (batch == NULL)
 		RETURN(-ENOMEM);
 
@@ -462,7 +462,7 @@ out:
 			continue;
 		ofd_object_put(env, fo);
 	}
-	OBD_FREE(batch, nr_saved * sizeof(struct ofd_object *));
+	OBD_FREE(batch, nr_saved * sizeof(*batch));
 
 	CDEBUG((objects == 0 && rc == 0) ? D_ERROR : D_OTHER,
 	       "created %d/%d objects: %d\n", objects, nr_saved, rc);

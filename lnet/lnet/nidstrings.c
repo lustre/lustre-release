@@ -165,7 +165,7 @@ parse_addrange(const struct cfs_lstr *src, struct nidrange *nidrange)
 		return 0;
 	}
 
-	LIBCFS_ALLOC(addrrange, sizeof(struct addrrange));
+	CFS_ALLOC_PTR(addrrange);
 	if (addrrange == NULL)
 		return -ENOMEM;
 	list_add_tail(&addrrange->ar_link, &nidrange->nr_addrranges);
@@ -222,7 +222,7 @@ add_nidrange(const struct cfs_lstr *src,
 		return nr;
 	}
 
-	LIBCFS_ALLOC(nr, sizeof(struct nidrange));
+	CFS_ALLOC_PTR(nr);
 	if (nr == NULL)
 		return NULL;
 	list_add_tail(&nr->nr_link, nidlist);
@@ -283,7 +283,7 @@ free_addrranges(struct list_head *list)
 
 		cfs_expr_list_free_list(&ar->ar_numaddr_ranges);
 		list_del(&ar->ar_link);
-		LIBCFS_FREE(ar, sizeof(struct addrrange));
+		CFS_FREE_PTR(ar);
 	}
 }
 
@@ -305,7 +305,7 @@ cfs_free_nidlist(struct list_head *list)
 		nr = list_entry(pos, struct nidrange, nr_link);
 		free_addrranges(&nr->nr_addrranges);
 		list_del(pos);
-		LIBCFS_FREE(nr, sizeof(struct nidrange));
+		CFS_FREE_PTR(nr);
 	}
 }
 EXPORT_SYMBOL(cfs_free_nidlist);

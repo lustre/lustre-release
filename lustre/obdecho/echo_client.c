@@ -2650,7 +2650,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	apc = npages = batch >> PAGE_SHIFT;
 	tot_pages = count >> PAGE_SHIFT;
 
-	OBD_ALLOC_LARGE(lnb, apc * sizeof(struct niobuf_local));
+	OBD_ALLOC_LARGE(lnb, apc * sizeof(*lnb));
 	if (!lnb)
 		RETURN(-ENOMEM);
 
@@ -2716,7 +2716,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	}
 
 out:
-	OBD_FREE_LARGE(lnb, apc * sizeof(struct niobuf_local));
+	OBD_FREE_LARGE(lnb, apc * sizeof(*lnb));
 
 	RETURN(ret);
 }

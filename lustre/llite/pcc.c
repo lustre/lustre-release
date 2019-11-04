@@ -214,13 +214,13 @@ pcc_fname_list_add(struct cfs_lstr *id, struct list_head *fname_list)
 {
 	struct pcc_match_fname *fname;
 
-	OBD_ALLOC(fname, sizeof(struct pcc_match_fname));
+	OBD_ALLOC_PTR(fname);
 	if (fname == NULL)
 		return -ENOMEM;
 
 	OBD_ALLOC(fname->pmf_name, id->ls_len + 1);
 	if (fname->pmf_name == NULL) {
-		OBD_FREE(fname, sizeof(struct pcc_match_fname));
+		OBD_FREE_PTR(fname);
 		return -ENOMEM;
 	}
 
@@ -313,7 +313,7 @@ pcc_expression_parse(struct cfs_lstr *src, struct list_head *cond_list)
 	struct cfs_lstr field;
 	int rc = 0;
 
-	OBD_ALLOC(expr, sizeof(struct pcc_expression));
+	OBD_ALLOC_PTR(expr);
 	if (expr == NULL)
 		return -ENOMEM;
 
@@ -371,7 +371,7 @@ pcc_conjunction_parse(struct cfs_lstr *src, struct list_head *cond_list)
 	struct cfs_lstr expr;
 	int rc = 0;
 
-	OBD_ALLOC(conjunction, sizeof(struct pcc_conjunction));
+	OBD_ALLOC_PTR(conjunction);
 	if (conjunction == NULL)
 		return -ENOMEM;
 

@@ -802,7 +802,7 @@ lstcon_group_info(char *name, struct lstcon_ndlist_ent __user *gents_p,
         }
 
         /* non-verbose query */
-	LIBCFS_ALLOC(gentp, sizeof(struct lstcon_ndlist_ent));
+	CFS_ALLOC_PTR(gentp);
         if (gentp == NULL) {
                 CERROR("Can't allocate ndlist_ent\n");
 		lstcon_group_decref(grp);
@@ -816,7 +816,7 @@ lstcon_group_info(char *name, struct lstcon_ndlist_ent __user *gents_p,
 	rc = copy_to_user(gents_p, gentp,
 			  sizeof(struct lstcon_ndlist_ent)) ? -EFAULT : 0;
 
-	LIBCFS_FREE(gentp, sizeof(struct lstcon_ndlist_ent));
+	CFS_FREE_PTR(gentp);
 
 	lstcon_group_decref(grp);
 
@@ -966,7 +966,7 @@ lstcon_batch_info(char *name, struct lstcon_test_batch_ent __user *ent_up,
         }
 
         /* non-verbose query */
-	LIBCFS_ALLOC(entp, sizeof(struct lstcon_test_batch_ent));
+	CFS_ALLOC_PTR(entp);
         if (entp == NULL)
                 return -ENOMEM;
 
@@ -990,7 +990,7 @@ lstcon_batch_info(char *name, struct lstcon_test_batch_ent __user *ent_up,
 	rc = copy_to_user(ent_up, entp,
 			  sizeof(struct lstcon_test_batch_ent)) ? -EFAULT : 0;
 
-	LIBCFS_FREE(entp, sizeof(struct lstcon_test_batch_ent));
+	CFS_FREE_PTR(entp)
 
 	return rc;
 }

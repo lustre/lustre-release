@@ -624,7 +624,7 @@ ptlrpc_init_rq_pool(int num_rq, int msgsize,
 {
 	struct ptlrpc_request_pool *pool;
 
-	OBD_ALLOC(pool, sizeof(struct ptlrpc_request_pool));
+	OBD_ALLOC_PTR(pool);
 	if (!pool)
 		return NULL;
 

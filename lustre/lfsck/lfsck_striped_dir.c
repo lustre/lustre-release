@@ -1358,7 +1358,7 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
 	else
 		count = lmv4->lmv_stripe_count;
 
-	OBD_ALLOC_LARGE(lslr, sizeof(struct lfsck_slave_lmv_rec) * count);
+	OBD_ALLOC_LARGE(lslr, sizeof(*lslr) * count);
 	if (lslr == NULL) {
 		OBD_FREE_PTR(llu);
 

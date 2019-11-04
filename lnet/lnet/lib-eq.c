@@ -94,7 +94,7 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 		return -ENOMEM;
 
 	if (count != 0) {
-		LIBCFS_ALLOC(eq->eq_events, count * sizeof(struct lnet_event));
+		LIBCFS_ALLOC(eq->eq_events, count * sizeof(*eq->eq_events));
 		if (eq->eq_events == NULL)
 			goto failed;
 		/* NB allocator has set all event sequence numbers to 0,
@@ -128,7 +128,7 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 
 failed:
 	if (eq->eq_events != NULL)
-		LIBCFS_FREE(eq->eq_events, count * sizeof(struct lnet_event));
+		LIBCFS_FREE(eq->eq_events, count * sizeof(*eq->eq_events));
 
 	if (eq->eq_refs != NULL)
 		cfs_percpt_free(eq->eq_refs);
@@ -194,7 +194,7 @@ LNetEQFree(struct lnet_handle_eq eqh)
 	lnet_res_unlock(LNET_LOCK_EX);
 
 	if (events != NULL)
-		LIBCFS_FREE(events, size * sizeof(struct lnet_event));
+		LIBCFS_FREE(events, size * sizeof(*events));
 	if (refs != NULL)
 		cfs_percpt_free(refs);
 

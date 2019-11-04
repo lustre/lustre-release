@@ -4483,7 +4483,7 @@ static int lod_layout_del_prep_layout(const struct lu_env *env,
 			lu_object_put(env, &obj->do_lu);
 			lod_comp->llc_stripe[j] = NULL;
 		}
-		OBD_FREE(lod_comp->llc_stripe, sizeof(struct dt_object *) *
+		OBD_FREE(lod_comp->llc_stripe, sizeof(*lod_comp->llc_stripe) *
 					lod_comp->llc_stripes_allocated);
 		lod_comp->llc_stripe = NULL;
 		OBD_FREE(lod_comp->llc_ost_indices,

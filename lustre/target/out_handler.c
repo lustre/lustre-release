@@ -715,8 +715,7 @@ static int out_read(struct tgt_session_info *tsi)
 	orr = (struct out_read_reply *)update_result->our_data;
 
 	nbufs = (size + OUT_BULK_BUFFER_SIZE - 1) / OUT_BULK_BUFFER_SIZE;
-	OBD_ALLOC(rdbuf, sizeof(struct lu_rdbuf) +
-			 nbufs * sizeof(rdbuf->rb_bufs[0]));
+	OBD_ALLOC(rdbuf, sizeof(*rdbuf) + nbufs * sizeof(rdbuf->rb_bufs[0]));
 	if (rdbuf == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -761,7 +760,7 @@ out_free:
 				 rdbuf->rb_bufs[i].lb_len);
 		}
 	}
-	OBD_FREE(rdbuf, sizeof(struct lu_rdbuf) +
+	OBD_FREE(rdbuf, sizeof(*rdbuf) +
 			nbufs * sizeof(rdbuf->rb_bufs[0]));
 out:
 	/* Insert read buffer */

@@ -807,7 +807,7 @@ nrs_tbf_jobid_list_free(struct list_head *jobid_list)
 	list_for_each_entry_safe(jobid, n, jobid_list, tj_linkage) {
 		OBD_FREE(jobid->tj_id, strlen(jobid->tj_id) + 1);
 		list_del(&jobid->tj_linkage);
-		OBD_FREE(jobid, sizeof(struct nrs_tbf_jobid));
+		OBD_FREE_PTR(jobid);
 	}
 }
 
@@ -817,13 +817,13 @@ nrs_tbf_jobid_list_add(struct cfs_lstr *id, struct list_head *jobid_list)
 	struct nrs_tbf_jobid *jobid;
 	char *ptr;
 
-	OBD_ALLOC(jobid, sizeof(struct nrs_tbf_jobid));
+	OBD_ALLOC_PTR(jobid);
 	if (jobid == NULL)
 		return -ENOMEM;
 
 	OBD_ALLOC(jobid->tj_id, id->ls_len + 1);
 	if (jobid->tj_id == NULL) {
-		OBD_FREE(jobid, sizeof(struct nrs_tbf_jobid));
+		OBD_FREE_PTR(jobid);
 		return -ENOMEM;
 	}
 
@@ -1840,7 +1840,7 @@ nrs_tbf_expression_parse(struct cfs_lstr *src, struct list_head *cond_list)
 	struct cfs_lstr field;
 	int rc = 0;
 
-	OBD_ALLOC(expr, sizeof(struct nrs_tbf_expression));
+	OBD_ALLOC_PTR(expr);
 	if (expr == NULL)
 		return -ENOMEM;
 
@@ -1903,7 +1903,7 @@ nrs_tbf_conjunction_parse(struct cfs_lstr *src, struct list_head *cond_list)
 	struct cfs_lstr expr;
 	int rc = 0;
 
-	OBD_ALLOC(conjunction, sizeof(struct nrs_tbf_conjunction));
+	OBD_ALLOC_PTR(conjunction);
 	if (conjunction == NULL)
 		return -ENOMEM;
 

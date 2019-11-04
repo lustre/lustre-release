@@ -2294,7 +2294,7 @@ kiblnd_destroy_tx_pool(struct kib_pool *pool)
 		    pool->po_size * sizeof(struct kib_tx));
 out:
         kiblnd_fini_pool(pool);
-	LIBCFS_FREE(tpo, sizeof(struct kib_tx_pool));
+	CFS_FREE_PTR(tpo);
 }
 
 static int kiblnd_tx_pool_size(struct lnet_ni *ni, int ncpts)
@@ -2330,7 +2330,7 @@ kiblnd_create_tx_pool(struct kib_poolset *ps, int size, struct kib_pool **pp_po)
         npg = (size * IBLND_MSG_SIZE + PAGE_SIZE - 1) / PAGE_SIZE;
 	if (kiblnd_alloc_pages(&tpo->tpo_tx_pages, ps->ps_cpt, npg) != 0) {
 		CERROR("Can't allocate tx pages: %d\n", npg);
-		LIBCFS_FREE(tpo, sizeof(struct kib_tx_pool));
+		CFS_FREE_PTR(tpo);
 		return -ENOMEM;
 	}
 

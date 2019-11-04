@@ -922,7 +922,7 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 open:
 	LASSERT((count & (count - 1)) == 0);
 	o->od_oi_count = count;
-	OBD_ALLOC(o->od_oi_table, sizeof(struct osd_oi *) * count);
+	OBD_ALLOC(o->od_oi_table, sizeof(*o->od_oi_table) * count);
 	if (o->od_oi_table == NULL)
 		GOTO(out, rc = -ENOMEM);
 
