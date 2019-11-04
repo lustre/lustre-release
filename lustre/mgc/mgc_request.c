@@ -2073,7 +2073,7 @@ restart:
 		    atomic_read(&mgc->u.cli.cl_mgc_refcount) > 0 && !retry) {
 			struct obd_import *imp;
 			struct l_wait_info lwi;
-			int secs = cfs_time_seconds(obd_timeout);
+			long timeout = cfs_time_seconds(obd_timeout);
 
 			mutex_unlock(&cld->cld_lock);
 			imp = class_exp2cliimp(mgc->u.cli.cl_mgc_mgsexp);
@@ -2086,7 +2086,7 @@ restart:
 			 * FULL or closed */
 			ptlrpc_pinger_force(imp);
 
-			lwi = LWI_TIMEOUT(secs, NULL, NULL);
+			lwi = LWI_TIMEOUT(timeout, NULL, NULL);
 			l_wait_event(imp->imp_recovery_waitq,
 				     !mgc_import_in_recovery(imp), &lwi);
 
