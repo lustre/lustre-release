@@ -792,7 +792,7 @@ static int nrs_crrn_lprocfs_init(struct ptlrpc_service *svc)
 		{ NULL }
 	};
 
-	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
+	if (!svc->srv_debugfs_entry)
 		return 0;
 
 	return ldebugfs_add_vars(svc->srv_debugfs_entry, nrs_crrn_lprocfs_vars, NULL);

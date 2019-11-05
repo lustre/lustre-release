@@ -402,8 +402,7 @@ EXPORT_SYMBOL(fid_is_local);
 
 static void fld_server_debugfs_fini(struct lu_server_fld *fld)
 {
-	if (!IS_ERR_OR_NULL(fld->lsf_debugfs_entry))
-		ldebugfs_remove(&fld->lsf_debugfs_entry);
+	debugfs_remove_recursive(fld->lsf_debugfs_entry);
 }
 
 static int fld_server_debugfs_init(struct lu_server_fld *fld)
@@ -424,7 +423,7 @@ static int fld_server_debugfs_init(struct lu_server_fld *fld)
 	rc = ldebugfs_seq_create(fld->lsf_debugfs_entry, "fldb", 0444,
 				 &fld_debugfs_seq_fops, fld);
 	if (rc)
-		ldebugfs_remove(&fld->lsf_debugfs_entry);
+		debugfs_remove_recursive(fld->lsf_debugfs_entry);
 
 	RETURN(rc);
 }

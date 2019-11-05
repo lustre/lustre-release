@@ -437,8 +437,7 @@ EXPORT_SYMBOL(seq_client_flush);
 
 static void seq_client_debugfs_fini(struct lu_client_seq *seq)
 {
-	if (!IS_ERR_OR_NULL(seq->lcs_debugfs_entry))
-		ldebugfs_remove(&seq->lcs_debugfs_entry);
+	debugfs_remove_recursive(seq->lcs_debugfs_entry);
 }
 
 static int seq_client_debugfs_init(struct lu_client_seq *seq)
@@ -580,16 +579,19 @@ EXPORT_SYMBOL(client_fid_fini);
 
 static int __init fid_init(void)
 {
+	struct dentry *de;
 #ifdef HAVE_SERVER_SUPPORT
 	int rc = fid_server_mod_init();
 
 	if (rc)
 		return rc;
 #endif
-	seq_debugfs_dir = ldebugfs_register(LUSTRE_SEQ_NAME,
-					    debugfs_lustre_root,
-					    NULL, NULL);
-	return PTR_ERR_OR_ZERO(seq_debugfs_dir);
+	de = ldebugfs_register(LUSTRE_SEQ_NAME,
+			       debugfs_lustre_root,
+			       NULL, NULL);
+	if (!IS_ERR(de))
+		seq_debugfs_dir = de;
+	return PTR_ERR_OR_ZERO(de);
 }
 
 static void __exit fid_exit(void)
@@ -597,8 +599,7 @@ static void __exit fid_exit(void)
 # ifdef HAVE_SERVER_SUPPORT
 	fid_server_mod_exit();
 # endif
-	if (!IS_ERR_OR_NULL(seq_debugfs_dir))
-		ldebugfs_remove(&seq_debugfs_dir);
+	debugfs_remove_recursive(seq_debugfs_dir);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

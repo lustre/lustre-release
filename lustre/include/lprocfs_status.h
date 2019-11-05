@@ -534,7 +534,6 @@ extern struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
 		 struct lprocfs_vars *list, void *data);
 
-extern void ldebugfs_remove(struct dentry **entryp);
 extern void lprocfs_remove(struct proc_dir_entry **root);
 extern void lprocfs_remove_proc_entry(const char *name,
                                       struct proc_dir_entry *parent);

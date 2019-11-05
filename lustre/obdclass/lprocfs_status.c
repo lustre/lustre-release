@@ -207,13 +207,6 @@ lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
 }
 EXPORT_SYMBOL(lprocfs_add_vars);
 
-void ldebugfs_remove(struct dentry **entryp)
-{
-	debugfs_remove_recursive(*entryp);
-	*entryp = NULL;
-}
-EXPORT_SYMBOL_GPL(ldebugfs_remove);
-
 #ifndef HAVE_REMOVE_PROC_SUBTREE
 /* for b=10866, global variable */
 DECLARE_RWSEM(_lprocfs_lock);
@@ -1242,7 +1235,9 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);
 		obd->obd_proc_entry = NULL;
 
-		ldebugfs_remove(&obd->obd_debugfs_entry);
+		debugfs_remove_recursive(obd->obd_debugfs_entry);
+		obd->obd_debugfs_entry = NULL;
+
 		sysfs_remove_files(&obd->obd_kset.kobj, obd->obd_attrs);
 		obd->obd_attrs = NULL;
 		kset_unregister(&obd->obd_kset);
@@ -1269,8 +1264,8 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 		obd->obd_proc_entry = NULL;
 	}
 
-	if (!IS_ERR_OR_NULL(obd->obd_debugfs_entry))
-		ldebugfs_remove(&obd->obd_debugfs_entry);
+	debugfs_remove_recursive(obd->obd_debugfs_entry);
+	obd->obd_debugfs_entry = NULL;
 
 	/* obd device never allocated a kset */
 	if (!obd->obd_kset.kobj.state_initialized)

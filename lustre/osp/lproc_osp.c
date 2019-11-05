@@ -1019,13 +1019,13 @@ void osp_tunables_fini(struct osp_device *osp)
 		kobject_put(osc);
 	}
 
-	if (!IS_ERR_OR_NULL(osp->opd_debugfs))
-		ldebugfs_remove(&osp->opd_debugfs);
+	debugfs_remove_recursive(osp->opd_debugfs);
+	osp->opd_debugfs = NULL;
 
 	ptlrpc_lprocfs_unregister_obd(obd);
 
-	if (!IS_ERR_OR_NULL(obd->obd_debugfs_entry))
-		ldebugfs_remove(&obd->obd_debugfs_entry);
+	debugfs_remove_recursive(obd->obd_debugfs_entry);
+	obd->obd_debugfs_entry = NULL;
 
 	dt_tunables_fini(&osp->opd_dt_dev);
 }

@@ -258,15 +258,15 @@ ptlrpc_ldebugfs_register(struct dentry *root, char *dir, char *name,
         }
 
 	rc = ldebugfs_register_stats(svc_debugfs_entry, name, svc_stats);
-        if (rc < 0) {
-                if (dir)
-			ldebugfs_remove(&svc_debugfs_entry);
-                lprocfs_free_stats(&svc_stats);
-        } else {
-                if (dir)
+	if (rc < 0) {
+		if (dir)
+			debugfs_remove_recursive(svc_debugfs_entry);
+		lprocfs_free_stats(&svc_stats);
+	} else {
+		if (dir)
 			*debugfs_root_ret = svc_debugfs_entry;
-                *stats_ret = svc_stats;
-        }
+		*stats_ret = svc_stats;
+	}
 }
 
 static int
@@ -1227,7 +1227,7 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 
 	ptlrpc_ldebugfs_register(entry, svc->srv_name, "stats",
 				 &svc->srv_debugfs_entry, &svc->srv_stats);
-	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
+	if (!svc->srv_debugfs_entry)
 		return;
 
 	ldebugfs_add_vars(svc->srv_debugfs_entry, lproc_vars, NULL);
@@ -1290,11 +1290,10 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_brw);
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
-	if (!IS_ERR_OR_NULL(svc->srv_debugfs_entry))
-		ldebugfs_remove(&svc->srv_debugfs_entry);
+	debugfs_remove_recursive(svc->srv_debugfs_entry);
 
-        if (svc->srv_stats)
-                lprocfs_free_stats(&svc->srv_stats);
+	if (svc->srv_stats)
+		lprocfs_free_stats(&svc->srv_stats);
 }
 
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
@@ -1304,11 +1303,10 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 	 */
 	lprocfs_obd_cleanup(obd);
 
-	if (!IS_ERR_OR_NULL(obd->obd_svc_debugfs_entry))
-		ldebugfs_remove(&obd->obd_svc_debugfs_entry);
+	debugfs_remove_recursive(obd->obd_svc_debugfs_entry);
 
-        if (obd->obd_svc_stats)
-                lprocfs_free_stats(&obd->obd_svc_stats);
+	if (obd->obd_svc_stats)
+		lprocfs_free_stats(&obd->obd_svc_stats);
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 

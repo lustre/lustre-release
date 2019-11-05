@@ -1052,8 +1052,7 @@ void lod_procfs_fini(struct lod_device *lod)
 		kobject_put(lov);
 	}
 
-	if (!IS_ERR_OR_NULL(lod->lod_debugfs))
-		ldebugfs_remove(&lod->lod_debugfs);
+	debugfs_remove_recursive(lod->lod_debugfs);
 
 	if (obd->obd_proc_entry) {
 		lprocfs_remove(&obd->obd_proc_entry);

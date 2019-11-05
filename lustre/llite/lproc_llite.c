@@ -1730,7 +1730,7 @@ out_ra_stats:
 out_stats:
 	lprocfs_free_stats(&sbi->ll_stats);
 out_debugfs:
-	ldebugfs_remove(&sbi->ll_debugfs_entry);
+	debugfs_remove_recursive(sbi->ll_debugfs_entry);
 
 	RETURN(err);
 }
@@ -1740,8 +1740,7 @@ void ll_debugfs_unregister_super(struct super_block *sb)
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 
-	if (!IS_ERR_OR_NULL(sbi->ll_debugfs_entry))
-		ldebugfs_remove(&sbi->ll_debugfs_entry);
+	debugfs_remove_recursive(sbi->ll_debugfs_entry);
 
 	if (sbi->ll_dt_obd)
 		sysfs_remove_link(&sbi->ll_kset.kobj,

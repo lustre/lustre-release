@@ -230,6 +230,7 @@ int ldlm_debugfs_setup(void)
 	if (IS_ERR_OR_NULL(ldlm_debugfs_dir)) {
 		CERROR("LDebugFS failed in ldlm-init\n");
 		rc = ldlm_debugfs_dir ? PTR_ERR(ldlm_debugfs_dir) : -ENOMEM;
+		ldlm_debugfs_dir = NULL;
 		GOTO(err, rc);
 	}
 
@@ -240,7 +241,7 @@ int ldlm_debugfs_setup(void)
 		CERROR("LProcFS failed in ldlm-init\n");
 		rc = ldlm_ns_debugfs_dir ? PTR_ERR(ldlm_ns_debugfs_dir)
 					 : -ENOMEM;
-		GOTO(err_type, rc);
+		GOTO(err, rc);
 	}
 
 	ldlm_svc_debugfs_dir = ldebugfs_register("services",
@@ -250,24 +251,19 @@ int ldlm_debugfs_setup(void)
 		CERROR("LProcFS failed in ldlm-init\n");
 		rc = ldlm_svc_debugfs_dir ? PTR_ERR(ldlm_svc_debugfs_dir)
 					  : -ENOMEM;
-		GOTO(err_ns, rc);
+		GOTO(err, rc);
 	}
 
 	rc = ldebugfs_add_vars(ldlm_debugfs_dir, ldlm_debugfs_list, NULL);
 	if (rc != 0) {
 		CERROR("LProcFS failed in ldlm-init\n");
-		GOTO(err_svc, rc);
+		GOTO(err, rc);
 	}
 
 	RETURN(0);
 
-err_svc:
-	ldebugfs_remove(&ldlm_svc_debugfs_dir);
-err_ns:
-	ldebugfs_remove(&ldlm_ns_debugfs_dir);
-err_type:
-	ldebugfs_remove(&ldlm_debugfs_dir);
 err:
+	debugfs_remove_recursive(ldlm_debugfs_dir);
 	ldlm_svc_debugfs_dir = NULL;
 	ldlm_ns_debugfs_dir = NULL;
 	ldlm_debugfs_dir = NULL;
@@ -276,14 +272,7 @@ err:
 
 void ldlm_debugfs_cleanup(void)
 {
-	if (!IS_ERR_OR_NULL(ldlm_svc_debugfs_dir))
-		ldebugfs_remove(&ldlm_svc_debugfs_dir);
-
-	if (!IS_ERR_OR_NULL(ldlm_ns_debugfs_dir))
-		ldebugfs_remove(&ldlm_ns_debugfs_dir);
-
-	if (!IS_ERR_OR_NULL(ldlm_debugfs_dir))
-		ldebugfs_remove(&ldlm_debugfs_dir);
+	debugfs_remove_recursive(ldlm_debugfs_dir);
 
 	ldlm_svc_debugfs_dir = NULL;
 	ldlm_ns_debugfs_dir = NULL;
@@ -705,7 +694,7 @@ static void ldlm_namespace_debugfs_unregister(struct ldlm_namespace *ns)
 		CERROR("dlm namespace %s has no procfs dir?\n",
 		       ldlm_ns_name(ns));
 	else
-		ldebugfs_remove(&ns->ns_debugfs_entry);
+		debugfs_remove_recursive(ns->ns_debugfs_entry);
 
 	if (ns->ns_stats != NULL)
 		lprocfs_free_stats(&ns->ns_stats);

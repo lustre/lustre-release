@@ -458,8 +458,7 @@ LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD | LCT_DT_THREAD);
 
 static void seq_server_debugfs_fini(struct lu_server_seq *seq)
 {
-	if (!IS_ERR_OR_NULL(seq->lss_debugfs_entry))
-		ldebugfs_remove(&seq->lss_debugfs_entry);
+	debugfs_remove_recursive(seq->lss_debugfs_entry);
 }
 
 static int seq_server_debugfs_init(struct lu_server_seq *seq)

@@ -247,8 +247,7 @@ static int fld_client_debugfs_init(struct lu_client_fld *fld)
 
 void fld_client_debugfs_fini(struct lu_client_fld *fld)
 {
-	if (!IS_ERR_OR_NULL(fld->lcf_debugfs_entry))
-		ldebugfs_remove(&fld->lcf_debugfs_entry);
+	debugfs_remove_recursive(fld->lcf_debugfs_entry);
 }
 EXPORT_SYMBOL(fld_client_debugfs_fini);
 
@@ -523,6 +522,7 @@ void fld_client_flush(struct lu_client_fld *fld)
 
 static int __init fld_init(void)
 {
+	struct dentry *de;
 #ifdef HAVE_SERVER_SUPPORT
 	int rc;
 
@@ -531,10 +531,12 @@ static int __init fld_init(void)
 		return rc;
 #endif /* HAVE_SERVER_SUPPORT */
 
-	fld_debugfs_dir = ldebugfs_register(LUSTRE_FLD_NAME,
-					    debugfs_lustre_root,
-					    NULL, NULL);
-	return PTR_ERR_OR_ZERO(fld_debugfs_dir);
+	de = ldebugfs_register(LUSTRE_FLD_NAME,
+			       debugfs_lustre_root,
+			       NULL, NULL);
+	if (!IS_ERR(de))
+		fld_debugfs_dir = de;
+	return PTR_ERR_OR_ZERO(de);
 }
 
 static void __exit fld_exit(void)
@@ -543,8 +545,7 @@ static void __exit fld_exit(void)
 	fld_server_mod_exit();
 #endif /* HAVE_SERVER_SUPPORT */
 
-	if (!IS_ERR_OR_NULL(fld_debugfs_dir))
-		ldebugfs_remove(&fld_debugfs_dir);
+	debugfs_remove_recursive(fld_debugfs_dir);
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

@@ -1876,7 +1876,7 @@ static int nrs_orr_lprocfs_init(struct ptlrpc_service *svc)
 		{ NULL }
 	};
 
-	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
+	if (!svc->srv_debugfs_entry)
 		return 0;
 
 	lprocfs_orr_data.svc = svc;
@@ -1928,7 +1928,7 @@ static int nrs_trr_lprocfs_init(struct ptlrpc_service *svc)
 		{ NULL }
 	};
 
-	if (IS_ERR_OR_NULL(svc->srv_debugfs_entry))
+	if (!svc->srv_debugfs_entry)
 		return 0;
 
 	lprocfs_trr_data.svc = svc;

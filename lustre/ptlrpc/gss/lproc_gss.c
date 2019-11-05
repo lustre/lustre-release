@@ -211,11 +211,11 @@ static struct lprocfs_vars gss_lk_debugfs_vars[] = {
 
 void gss_exit_tunables(void)
 {
-	if (!IS_ERR_OR_NULL(gss_debugfs_dir_lk))
-		ldebugfs_remove(&gss_debugfs_dir_lk);
+	debugfs_remove_recursive(gss_debugfs_dir_lk);
+	gss_debugfs_dir_lk = NULL;
 
-	if (!IS_ERR_OR_NULL(gss_debugfs_dir))
-		ldebugfs_remove(&gss_debugfs_dir);
+	debugfs_remove_recursive(gss_debugfs_dir);
+	gss_debugfs_dir = NULL;
 
 	if (!IS_ERR_OR_NULL(gss_lprocfs_dir))
 		lprocfs_remove(&gss_lprocfs_dir);
