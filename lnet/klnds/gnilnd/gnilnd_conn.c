@@ -1614,10 +1614,8 @@ kgnilnd_cancel_wc_dgrams(kgn_device_t *dev)
 			kgnilnd_cancel_dgram_locked(dg);
 
 			/* WC could be DONE already, check and if so add to list to be released */
-			if (dg->gndg_state == GNILND_DGRAM_DONE) {
-				list_del_init(&dg->gndg_list);
-				list_add_tail(&dg->gndg_list, &zombies);
-			}
+			if (dg->gndg_state == GNILND_DGRAM_DONE)
+				list_move_tail(&dg->gndg_list, &zombies);
 		}
 	} while (dg != NULL);
 

@@ -1808,11 +1808,9 @@ lst_print_stat(char *name, struct list_head *resultp,
                         break;
                 }
 
-		list_del(&new->rpe_link);
-		list_add_tail(&new->rpe_link, &tmp[idx]);
+		list_move_tail(&new->rpe_link, &tmp[idx]);
 
-		list_del(&old->rpe_link);
-		list_add_tail(&old->rpe_link, &tmp[1 - idx]);
+		list_move_tail(&old->rpe_link, &tmp[1 - idx]);
 
                 if (new->rpe_rpc_errno != 0 || new->rpe_fwk_errno != 0 ||
                     old->rpe_rpc_errno != 0 || old->rpe_fwk_errno != 0) {

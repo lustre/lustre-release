@@ -332,8 +332,7 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 		 * the waiting_locks_list and ldlm_add_waiting_lock()
 		 * already grabbed a ref
 		 */
-		list_del(&lock->l_pending_chain);
-		list_add(&lock->l_pending_chain, &expired_lock_list);
+		list_move(&lock->l_pending_chain, &expired_lock_list);
 		need_dump = 1;
 	}
 

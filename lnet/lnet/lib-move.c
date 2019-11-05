@@ -4656,7 +4656,6 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 			struct lnet_libmd *md, struct lnet_handle_md mdh)
 {
 	s64 timeout_ns;
-	bool new_entry = true;
 	struct lnet_rsp_tracker *local_rspt;
 
 	/*
@@ -4676,7 +4675,6 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 		 * update the deadline on that one.
 		 */
 		lnet_rspt_free(rspt, cpt);
-		new_entry = false;
 	} else {
 		/* new md */
 		rspt->rspt_mdh = mdh;
@@ -4692,9 +4690,7 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 	 * list in order to expire all the older entries first.
 	 */
 	lnet_net_lock(cpt);
-	if (!new_entry && !list_empty(&local_rspt->rspt_on_list))
-		list_del_init(&local_rspt->rspt_on_list);
-	list_add_tail(&local_rspt->rspt_on_list, the_lnet.ln_mt_rstq[cpt]);
+	list_move_tail(&local_rspt->rspt_on_list, the_lnet.ln_mt_rstq[cpt]);
 	lnet_net_unlock(cpt);
 	lnet_res_unlock(cpt);
 }

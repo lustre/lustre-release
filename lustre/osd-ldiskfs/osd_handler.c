@@ -3929,10 +3929,8 @@ static int osd_process_scheduled_agent_removals(const struct lu_env *env,
 
 	spin_lock(&osd->od_osfs_lock);
 	list_for_each_entry_safe(oor, tmp, &osd->od_orphan_list, oor_list) {
-		if (oor->oor_env == env) {
-			list_del(&oor->oor_list);
-			list_add(&oor->oor_list, &list);
-		}
+		if (oor->oor_env == env)
+			list_move(&oor->oor_list, &list);
 	}
 	spin_unlock(&osd->od_osfs_lock);
 
