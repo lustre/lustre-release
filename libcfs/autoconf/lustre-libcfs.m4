@@ -1269,6 +1269,27 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_HAVE_IOV_ITER_TYPE
 
 #
+# LIBCFS_FORCE_SIG_WITH_TASK
+#
+# kernel 5.3 commit 3cf5d076fb4d48979f382bc9452765bf8b79e740
+# signal: Remove task parameter from force_sig
+#
+AC_DEFUN([LIBCFS_FORCE_SIG_WITH_TASK], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if force_sig has task parameter],
+force_sig_with_task, [
+	#include <linux/sched/signal.h>
+],[
+	force_sig(SIGINT, NULL);
+],[
+	AC_DEFINE(HAVE_FORCE_SIG_WITH_TASK, 1,
+		[force_sig() has task parameter])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_FORCE_SIG_WITH_TASK
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -1382,6 +1403,8 @@ LIBCFS_CLEAR_AND_WAKE_UP_BIT
 LIBCFS_HAVE_IOV_ITER_TYPE
 # 5.0
 LIBCFS_MM_TOTALRAM_PAGES_FUNC
+# 5.3
+LIBCFS_FORCE_SIG_WITH_TASK
 ]) # LIBCFS_PROG_LINUX
 
 #

@@ -78,6 +78,20 @@
  #endif
 #endif
 
+#ifdef HAVE_FORCE_SIG_WITH_TASK
+#define cfs_force_sig(sig, task)	force_sig((sig), (task))
+#else
+#define cfs_force_sig(sig, task)					\
+do {									\
+	unsigned long flags;						\
+									\
+	spin_lock_irqsave(&task->sighand->siglock, flags);		\
+	task->sighand->action[sig - 1].sa.sa_handler = SIG_DFL;		\
+	send_sig(sig, task, 1);						\
+	spin_unlock_irqrestore(&task->sighand->siglock, flags);		\
+} while (0)
+#endif
+
 /* need both kernel and user-land acceptor */
 #define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
