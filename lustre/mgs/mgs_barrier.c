@@ -121,7 +121,7 @@ static int mgs_barrier_glimpse_lock(const struct lu_env *env,
 	struct ldlm_resource *res;
 	struct ldlm_glimpse_work *work;
 	struct ldlm_glimpse_work *tmp;
-	struct list_head gl_list = LIST_HEAD_INIT(gl_list);
+	LIST_HEAD(gl_list);
 	struct list_head *pos;
 	int i;
 	int rc;

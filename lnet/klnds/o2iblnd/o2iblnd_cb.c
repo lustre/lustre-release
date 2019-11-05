@@ -2151,7 +2151,7 @@ kiblnd_handle_early_rxs(struct kib_conn *conn)
 void
 kiblnd_abort_txs(struct kib_conn *conn, struct list_head *txs)
 {
-	struct list_head	 zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	struct list_head	*tmp;
 	struct list_head	*nxt;
 	struct kib_tx *tx;
@@ -2241,7 +2241,7 @@ static void
 kiblnd_peer_connect_failed(struct kib_peer_ni *peer_ni, int active,
 			   int error)
 {
-	struct list_head zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	unsigned long	flags;
 
 	LASSERT (error != 0);
@@ -3369,9 +3369,9 @@ kiblnd_conn_timed_out_locked(struct kib_conn *conn)
 static void
 kiblnd_check_conns (int idx)
 {
-	struct list_head  closes = LIST_HEAD_INIT(closes);
-	struct list_head  checksends = LIST_HEAD_INIT(checksends);
-	struct list_head  timedout_txs = LIST_HEAD_INIT(timedout_txs);
+	LIST_HEAD(closes);
+	LIST_HEAD(checksends);
+	LIST_HEAD(timedout_txs);
 	struct list_head *peers = &kiblnd_data.kib_peers[idx];
 	struct list_head *ptmp;
 	struct kib_peer_ni *peer_ni;

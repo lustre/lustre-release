@@ -118,7 +118,7 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id, int type)
 EXPORT_SYMBOL(mgc_logname2resid);
 
 /********************** config llog list **********************/
-static struct list_head config_llog_list = LIST_HEAD_INIT(config_llog_list);
+static LIST_HEAD(config_llog_list);
 static DEFINE_SPINLOCK(config_list_lock);	/* protects config_llog_list */
 
 /* Take a reference to a config log */

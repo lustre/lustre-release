@@ -2085,7 +2085,7 @@ osc_send_write_rpc(const struct lu_env *env, struct client_obd *cli,
 		   struct osc_object *osc)
 __must_hold(osc)
 {
-	struct list_head   rpclist = LIST_HEAD_INIT(rpclist);
+	LIST_HEAD(rpclist);
 	struct osc_extent *ext;
 	struct osc_extent *tmp;
 	struct osc_extent *first = NULL;
@@ -2161,7 +2161,7 @@ __must_hold(osc)
 {
 	struct osc_extent *ext;
 	struct osc_extent *next;
-	struct list_head rpclist = LIST_HEAD_INIT(rpclist);
+	LIST_HEAD(rpclist);
 	struct extent_rpc_data data = {
 		.erd_rpc_list	= &rpclist,
 		.erd_page_count	= 0,
@@ -2794,7 +2794,7 @@ int osc_cache_truncate_start(const struct lu_env *env, struct osc_object *obj,
 	struct osc_extent *ext;
 	struct osc_extent *waiting = NULL;
 	pgoff_t index;
-	struct list_head list = LIST_HEAD_INIT(list);
+	LIST_HEAD(list);
 	int result = 0;
 	bool partial;
 	ENTRY;
@@ -3012,7 +3012,7 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			      pgoff_t start, pgoff_t end, int hp, int discard)
 {
 	struct osc_extent *ext;
-	struct list_head discard_list = LIST_HEAD_INIT(discard_list);
+	LIST_HEAD(discard_list);
 	bool unplug = false;
 	int result = 0;
 	ENTRY;

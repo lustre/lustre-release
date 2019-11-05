@@ -61,7 +61,7 @@
 #include "gss_api.h"
 #include "gss_crypto.h"
 
-static struct list_head registered_mechs = LIST_HEAD_INIT(registered_mechs);
+static LIST_HEAD(registered_mechs);
 static DEFINE_SPINLOCK(registered_mechs_lock);
 
 int lgss_mech_register(struct gss_api_mech *gm)

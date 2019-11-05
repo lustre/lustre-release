@@ -407,7 +407,7 @@ ksocknal_handle_zcack(struct ksock_conn *conn, __u64 cookie1, __u64 cookie2)
 	struct ksock_peer_ni *peer_ni = conn->ksnc_peer;
 	struct ksock_tx *tx;
 	struct ksock_tx *tmp;
-	struct list_head zlist = LIST_HEAD_INIT(zlist);
+	LIST_HEAD(zlist);
 	int count;
 
         if (cookie1 == 0)

@@ -1313,7 +1313,7 @@ lnet_parse_routes (char *routes, int *im_a_router)
 static int
 lnet_match_network_token(char *token, int len, __u32 *ipaddrs, int nip)
 {
-	struct list_head list = LIST_HEAD_INIT(list);
+	LIST_HEAD(list);
 	int		rc;
 	int		i;
 

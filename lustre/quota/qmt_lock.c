@@ -499,7 +499,7 @@ static int qmt_glimpse_lock(const struct lu_env *env, struct qmt_device *qmt,
 			    qmt_glimpse_cb_t cb, void *arg)
 {
 	struct list_head *tmp, *pos;
-	struct list_head gl_list = LIST_HEAD_INIT(gl_list);
+	LIST_HEAD(gl_list);
 	struct qmt_gl_lock_array locks;
 	unsigned long i;
 	int rc = 0;

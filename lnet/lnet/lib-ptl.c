@@ -920,7 +920,7 @@ int
 lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason)
 {
 	struct lnet_portal	*ptl;
-	struct list_head	zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 
 	if (portal < 0 || portal >= the_lnet.ln_nportals)
 		return -EINVAL;

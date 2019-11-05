@@ -373,8 +373,8 @@ int
 LNetMDAttach(struct lnet_handle_me meh, struct lnet_md umd,
 	     enum lnet_unlink unlink, struct lnet_handle_md *handle)
 {
-	struct list_head	matches = LIST_HEAD_INIT(matches);
-	struct list_head	drops = LIST_HEAD_INIT(drops);
+	LIST_HEAD(matches);
+	LIST_HEAD(drops);
 	struct lnet_me		*me;
 	struct lnet_libmd	*md;
 	int			cpt;

@@ -107,7 +107,7 @@ int mdc_resource_get_unused(struct obd_export *exp, const struct lu_fid *fid,
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 		void *ea, size_t ealen, struct ptlrpc_request **request)
 {
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
         struct ptlrpc_request *req;
         int count = 0, rc;
         __u64 bits;
@@ -169,7 +169,7 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
         int count, resends = 0;
         struct obd_import *import = exp->exp_obd->u.cli.cl_import;
         int generation = import->imp_generation;
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
         ENTRY;
 
 	/* For case if upper layer did not alloc fid, do it now. */
@@ -279,7 +279,7 @@ rebuild:
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
                struct ptlrpc_request **request)
 {
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
         struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
         int count = 0, rc;
@@ -341,7 +341,7 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
              struct ptlrpc_request **request)
 {
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
         struct ptlrpc_request *req;
         int count = 0, rc;
         ENTRY;
@@ -397,7 +397,7 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 		const char *old, size_t oldlen, const char *new, size_t newlen,
 		struct ptlrpc_request **request)
 {
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	struct obd_device *obd = exp->exp_obd;
 	struct ptlrpc_request *req;
 	int count = 0, rc;
@@ -477,7 +477,7 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 
 int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)
 {
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	struct ptlrpc_request *req;
 	struct ldlm_lock *lock;
 	struct mdt_rec_resync *rec;

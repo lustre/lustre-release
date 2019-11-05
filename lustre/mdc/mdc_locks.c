@@ -258,7 +258,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	const void		*lmm = op_data->op_data;
 	__u32			 lmmsize = op_data->op_data_size;
 	__u32			 mdt_md_capsule_size;
-	struct list_head	 cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	int			 count = 0;
 	enum ldlm_mode		 mode;
 	int			 rc;
@@ -436,7 +436,7 @@ mdc_intent_getxattr_pack(struct obd_export *exp,
 	struct ptlrpc_request	*req;
 	struct ldlm_intent	*lit;
 	int			rc, count = 0;
-	struct list_head	cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	u32 ea_vals_buf_size = GA_DEFAULT_EA_VAL_LEN * GA_DEFAULT_EA_NUM;
 
 	ENTRY;
@@ -589,7 +589,7 @@ static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
 						     struct md_op_data *op_data)
 {
 	struct obd_device     *obd = class_exp2obd(exp);
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	struct ptlrpc_request *req;
 	struct ldlm_intent    *lit;
 	struct layout_intent  *layout;

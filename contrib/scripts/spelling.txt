@@ -72,7 +72,7 @@ cfs_list_for_each_entry_safe||list_for_each_entry_safe
 cfs_list_for_each_entry_typed||list_for_each_entry_typed
 cfs_list_for_each_prev||list_for_each_prev
 cfs_list_for_each_safe||list_for_each_safe
-CFS_LIST_HEAD||struct list_head foo = LIST_HEAD_INIT(foo);
+CFS_LIST_HEAD||LIST_HEAD(foo);
 CFS_LIST_HEAD_INIT||LIST_HEAD_INIT
 cfs_list_move||list_move
 cfs_list_move_tail||list_move_tail

@@ -1545,7 +1545,7 @@ int ksocknal_scheduler(void *arg)
 		}
 
 		if (!list_empty(&sched->kss_tx_conns)) {
-			struct list_head zlist = LIST_HEAD_INIT(zlist);
+			LIST_HEAD(zlist);
 
 			if (!list_empty(&sched->kss_zombie_noop_txs)) {
 				list_add(&zlist,
@@ -1933,7 +1933,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 static int
 ksocknal_connect(struct ksock_route *route)
 {
-	struct list_head zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	struct ksock_peer_ni *peer_ni = route->ksnr_peer;
         int               type;
         int               wanted;
@@ -2416,7 +2416,7 @@ static inline void
 ksocknal_flush_stale_txs(struct ksock_peer_ni *peer_ni)
 {
 	struct ksock_tx	*tx;
-	struct list_head stale_txs = LIST_HEAD_INIT(stale_txs);
+	LIST_HEAD(stale_txs);
 
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 

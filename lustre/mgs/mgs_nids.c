@@ -363,7 +363,7 @@ out:
 static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 {
 	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
-	struct list_head head = LIST_HEAD_INIT(head);
+	LIST_HEAD(head);
 
 	mutex_lock(&tbl->mn_lock);
 	tbl->mn_nr_targets = 0;
@@ -922,7 +922,7 @@ void mgs_fsc_cleanup(struct obd_export *exp)
 {
 	struct mgs_export_data *data = &exp->u.eu_mgs_data;
 	struct mgs_fsc *fsc, *tmp;
-	struct list_head head = LIST_HEAD_INIT(head);
+	LIST_HEAD(head);
 
 	spin_lock(&data->med_lock);
 	list_splice_init(&data->med_clients, &head);

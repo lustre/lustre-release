@@ -76,7 +76,7 @@ void lov_tgts_putref(struct obd_device *obd)
 	mutex_lock(&lov->lov_lock);
 	/* ok to dec to 0 more than once -- ltd_exp's will be null */
 	if (atomic_dec_and_test(&lov->lov_refcount) && lov->lov_death_row) {
-		struct list_head kill = LIST_HEAD_INIT(kill);
+		LIST_HEAD(kill);
 		struct lov_tgt_desc *tgt, *n;
 		int i;
 

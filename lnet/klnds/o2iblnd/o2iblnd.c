@@ -480,7 +480,7 @@ kiblnd_del_peer_locked(struct kib_peer_ni *peer_ni)
 static int
 kiblnd_del_peer(struct lnet_ni *ni, lnet_nid_t nid)
 {
-	struct list_head	zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	struct list_head	*ptmp;
 	struct list_head	*pnxt;
 	struct kib_peer_ni		*peer_ni;
@@ -1788,7 +1788,7 @@ kiblnd_map_tx_pages(struct kib_tx *tx, struct kib_rdma_desc *rd)
 void
 kiblnd_fmr_pool_unmap(struct kib_fmr *fmr, int status)
 {
-	struct list_head zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	struct kib_fmr_pool *fpo = fmr->fmr_pool;
 	struct kib_fmr_poolset *fps;
 	time64_t now = ktime_get_seconds();
@@ -2145,7 +2145,7 @@ kiblnd_pool_is_idle(struct kib_pool *pool, time64_t now)
 void
 kiblnd_pool_free_node(struct kib_pool *pool, struct list_head *node)
 {
-	struct list_head zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	struct kib_poolset *ps = pool->po_owner;
 	struct kib_pool *tmp;
 	time64_t now = ktime_get_seconds();
@@ -2725,9 +2725,9 @@ kiblnd_dev_need_failover(struct kib_dev *dev, struct net *ns)
 int
 kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 {
-	struct list_head    zombie_tpo = LIST_HEAD_INIT(zombie_tpo);
-	struct list_head    zombie_ppo = LIST_HEAD_INIT(zombie_ppo);
-	struct list_head    zombie_fpo = LIST_HEAD_INIT(zombie_fpo);
+	LIST_HEAD(zombie_tpo);
+	LIST_HEAD(zombie_ppo);
+	LIST_HEAD(zombie_fpo);
         struct rdma_cm_id  *cmid  = NULL;
 	struct kib_hca_dev *hdev  = NULL;
 	struct kib_hca_dev *old;

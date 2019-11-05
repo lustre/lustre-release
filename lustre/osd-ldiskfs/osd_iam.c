@@ -157,7 +157,7 @@
  *
  * No locking. Callers synchronize.
  */
-static struct list_head iam_formats = LIST_HEAD_INIT(iam_formats);
+static LIST_HEAD(iam_formats);
 
 void iam_format_register(struct iam_format *fmt)
 {

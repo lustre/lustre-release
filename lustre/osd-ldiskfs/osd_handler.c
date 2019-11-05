@@ -1985,7 +1985,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	struct osd_device *osd = osd_dt_dev(th->th_dev);
 	struct qsd_instance *qsd = osd_def_qsd(osd);
 	struct lquota_trans *qtrans;
-	struct list_head truncates = LIST_HEAD_INIT(truncates);
+	LIST_HEAD(truncates);
 	int rc = 0, remove_agents = 0;
 
 	ENTRY;

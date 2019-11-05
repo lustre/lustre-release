@@ -837,7 +837,7 @@ int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
 	struct ldlm_namespace	*ns = exp->exp_obd->obd_namespace;
 	struct req_capsule	*pill = &req->rq_pill;
 	struct ldlm_request	*dlm = NULL;
-	struct list_head	head = LIST_HEAD_INIT(head);
+	LIST_HEAD(head);
 	enum ldlm_lru_flags lru_flags;
 	int avail, to_free, pack = 0;
 	int rc;
@@ -1572,7 +1572,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 	__u64 rc = 0;
 	struct ldlm_namespace *ns;
 	struct ldlm_lock *lock;
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 
 	ENTRY;
 
@@ -1663,7 +1663,7 @@ EXPORT_SYMBOL(ldlm_cli_cancel);
 int ldlm_cli_cancel_list_local(struct list_head *cancels, int count,
 			       enum ldlm_cancel_flags cancel_flags)
 {
-	struct list_head head = LIST_HEAD_INIT(head);
+	LIST_HEAD(head);
 	struct ldlm_lock *lock, *next;
 	int left = 0, bl_ast = 0;
 	__u64 rc;
@@ -2132,7 +2132,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr,
 		    enum ldlm_cancel_flags cancel_flags,
 		    enum ldlm_lru_flags lru_flags)
 {
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	int count, rc;
 
 	ENTRY;
@@ -2295,7 +2295,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 				    enum ldlm_cancel_flags flags, void *opaque)
 {
 	struct ldlm_resource *res;
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	int count;
 	int rc;
 
@@ -2638,7 +2638,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
 {
 	int canceled;
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 
 	CDEBUG(D_DLMTRACE,
 	       "Dropping as many unused locks as possible before replay for namespace %s (%d)\n",
@@ -2659,7 +2659,7 @@ static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
 int ldlm_replay_locks(struct obd_import *imp)
 {
 	struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-	struct list_head list = LIST_HEAD_INIT(list);
+	LIST_HEAD(list);
 	struct ldlm_lock *lock, *next;
 	int rc = 0;
 

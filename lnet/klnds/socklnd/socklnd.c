@@ -564,7 +564,7 @@ ksocknal_del_peer_locked(struct ksock_peer_ni *peer_ni, __u32 ip)
 static int
 ksocknal_del_peer(struct lnet_ni *ni, struct lnet_process_id id, __u32 ip)
 {
-	struct list_head zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	struct list_head *ptmp;
 	struct list_head *pnxt;
 	struct ksock_peer_ni *peer_ni;
@@ -1016,7 +1016,7 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_route *route,
 		     struct socket *sock, int type)
 {
 	rwlock_t *global_lock = &ksocknal_data.ksnd_global_lock;
-	struct list_head zombies = LIST_HEAD_INIT(zombies);
+	LIST_HEAD(zombies);
 	struct lnet_process_id peerid;
 	struct list_head *tmp;
 	u64 incarnation;
@@ -1530,7 +1530,7 @@ ksocknal_finalize_zcreq(struct ksock_conn *conn)
 	struct ksock_peer_ni *peer_ni = conn->ksnc_peer;
 	struct ksock_tx *tx;
 	struct ksock_tx *tmp;
-	struct list_head zlist = LIST_HEAD_INIT(zlist);
+	LIST_HEAD(zlist);
 
 	/* NB safe to finalize TXs because closing of socket will
 	 * abort all buffered data */

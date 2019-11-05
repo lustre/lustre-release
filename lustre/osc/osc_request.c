@@ -577,7 +577,7 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
         struct client_obd     *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
         struct ost_body       *body;
-	struct list_head       cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
         int rc, count;
         ENTRY;
 
@@ -2204,7 +2204,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	int				grant = 0;
 	int				rc;
 	__u32				layout_version = 0;
-	struct list_head		rpc_list = LIST_HEAD_INIT(rpc_list);
+	LIST_HEAD(rpc_list);
 	struct ost_body			*body;
 	ENTRY;
 	LASSERT(!list_empty(ext_list));
@@ -3370,7 +3370,7 @@ static struct obd_ops osc_obd_ops = {
 };
 
 static struct shrinker *osc_cache_shrinker;
-struct list_head osc_shrink_list = LIST_HEAD_INIT(osc_shrink_list);
+LIST_HEAD(osc_shrink_list);
 DEFINE_SPINLOCK(osc_shrink_lock);
 
 #ifndef HAVE_SHRINKER_COUNT

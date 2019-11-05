@@ -116,7 +116,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	struct osc_object *osc  = NULL;	/* to keep gcc happy */
 	struct osc_page	  *opg;
 	struct cl_io	  *io;
-	struct list_head  list = LIST_HEAD_INIT(list);
+	LIST_HEAD(list);
 
 	struct cl_page_list *qin      = &queue->c2_qin;
 	struct cl_page_list *qout     = &queue->c2_qout;

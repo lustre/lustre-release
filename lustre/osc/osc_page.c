@@ -441,7 +441,7 @@ int lru_queue_work(const struct lu_env *env, void *data)
 
 void osc_lru_add_batch(struct client_obd *cli, struct list_head *plist)
 {
-	struct list_head lru = LIST_HEAD_INIT(lru);
+	LIST_HEAD(lru);
 	struct osc_async_page *oap;
 	long npages = 0;
 

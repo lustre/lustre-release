@@ -35,7 +35,7 @@
 
 #include "qsd_internal.h"
 
-static struct list_head qfs_list = LIST_HEAD_INIT(qfs_list);
+static LIST_HEAD(qfs_list);
 /* protect the qfs_list */
 static DEFINE_SPINLOCK(qfs_list_lock);
 

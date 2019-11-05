@@ -1723,7 +1723,7 @@ static enum ldlm_error ldlm_lock_enqueue_helper(struct ldlm_lock *lock,
 {
 	struct ldlm_resource *res = lock->l_resource;
 	enum ldlm_error rc = ELDLM_OK;
-	struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+	LIST_HEAD(rpc_list);
 	ldlm_processing_policy policy;
 
 	ENTRY;
@@ -1915,7 +1915,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 	__u64 flags;
 	int rc = LDLM_ITER_CONTINUE;
 	enum ldlm_error err;
-	struct list_head bl_ast_list = LIST_HEAD_INIT(bl_ast_list);
+	LIST_HEAD(bl_ast_list);
 
 	ENTRY;
 
@@ -1929,7 +1929,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 restart:
 	list_for_each_safe(tmp, pos, queue) {
 		struct ldlm_lock *pending;
-		struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+		LIST_HEAD(rpc_list);
 
 		pending = list_entry(tmp, struct ldlm_lock, l_res_link);
 

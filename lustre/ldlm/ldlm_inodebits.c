@@ -74,7 +74,7 @@ int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
 	__u64 flags;
 	int rc = LDLM_ITER_CONTINUE;
 	enum ldlm_error err;
-	struct list_head bl_ast_list = LIST_HEAD_INIT(bl_ast_list);
+	LIST_HEAD(bl_ast_list);
 	struct ldlm_ibits_queues *queues = res->lr_ibits_queues;
 	int i;
 
@@ -95,7 +95,7 @@ restart:
 	       PLDLMRES(res), res);
 
 	for (i = 0; i < MDS_INODELOCK_NUMBITS; i++) {
-		struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+		LIST_HEAD(rpc_list);
 		struct list_head *head = &queues->liq_waiting[i];
 		struct ldlm_lock *pending;
 		struct ldlm_ibits_node *node;

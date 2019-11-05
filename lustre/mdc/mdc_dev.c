@@ -700,7 +700,7 @@ int mdc_enqueue_send(const struct lu_env *env, struct obd_export *exp,
 	enum ldlm_mode mode;
 	bool glimpse = *flags & LDLM_FL_HAS_INTENT;
 	__u64 match_flags = *flags;
-	struct list_head cancels = LIST_HEAD_INIT(cancels);
+	LIST_HEAD(cancels);
 	int rc, count;
 
 	ENTRY;
