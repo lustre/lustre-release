@@ -2743,7 +2743,7 @@ EXPORT_SYMBOL(LNetNIInit);
  * \return always 0 for current implementation.
  */
 int
-LNetNIFini()
+LNetNIFini(void)
 {
 	mutex_lock(&the_lnet.ln_api_mutex);
 

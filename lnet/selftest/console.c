@@ -1814,7 +1814,7 @@ lstcon_session_info(struct lst_sid __user *sid_up, int __user *key_up,
 }
 
 int
-lstcon_session_end()
+lstcon_session_end(void)
 {
 	struct lstcon_rpc_trans *trans;
 	struct lstcon_group *grp;

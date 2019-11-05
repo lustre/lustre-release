@@ -265,7 +265,7 @@ kgn_tunables_t kgnilnd_tunables = {
 };
 
 int
-kgnilnd_tunables_init()
+kgnilnd_tunables_init(void)
 {
 	int rc = 0;
 

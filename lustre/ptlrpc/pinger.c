@@ -52,7 +52,7 @@ static struct list_head pinger_imports =
 static struct list_head timeout_list =
 		LIST_HEAD_INIT(timeout_list);
 
-int ptlrpc_pinger_suppress_pings()
+int ptlrpc_pinger_suppress_pings(void)
 {
 	return suppress_pings;
 }
@@ -538,7 +538,7 @@ int ptlrpc_pinger_remove_timeouts(void)
 	return 0;
 }
 
-void ptlrpc_pinger_wake_up()
+void ptlrpc_pinger_wake_up(void)
 {
 #ifdef ENABLE_PINGER
 	mod_delayed_work(pinger_wq, &ping_work, 0);
