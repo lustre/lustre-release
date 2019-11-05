@@ -783,7 +783,6 @@ struct lnet_peer_net {
  *
  * protected by lnet_net_lock/EX for update
  *    pt_version
- *    pt_number
  *    pt_hash[...]
  *    pt_peer_list
  *    pt_peers
@@ -795,7 +794,6 @@ struct lnet_peer_net {
  */
 struct lnet_peer_table {
 	int			pt_version;	/* /proc validity stamp */
-	int			pt_number;	/* # peers_ni extant */
 	struct list_head	*pt_hash;	/* NID->peer hash */
 	struct list_head	pt_peer_list;	/* peers */
 	int			pt_peers;	/* # peers */
