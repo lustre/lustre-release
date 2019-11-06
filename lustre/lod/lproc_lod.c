@@ -454,7 +454,7 @@ static ssize_t qos_prio_free_show(struct kobject *kobj,
  *
  * Set the relative priority of free OST space compared to OST load when OSTs
  * are space imbalanced.  See qos_priofree_show() for description of
- * this parameter.  See qos_thresholdrr_store() and lq_threshold_rr to
+ * this parameter.  See qos_threshold_rr_store() and lq_threshold_rr to
  * determine what constitutes "space imbalanced" OSTs.
  */
 static ssize_t __qos_prio_free_store(struct kobject *kobj,
@@ -502,9 +502,9 @@ LUSTRE_RW_ATTR(qos_prio_free);
 /**
  * Show threshold for "same space on all OSTs" rule.
  */
-static ssize_t __qos_thresholdrr_show(struct kobject *kobj,
-				    struct attribute *attr, char *buf,
-				    bool is_mdt)
+static ssize_t __qos_threshold_rr_show(struct kobject *kobj,
+				       struct attribute *attr, char *buf,
+				       bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
@@ -516,16 +516,16 @@ static ssize_t __qos_thresholdrr_show(struct kobject *kobj,
 		       (ltd->ltd_qos.lq_threshold_rr * 100 + 255) >> 8);
 }
 
-static ssize_t mdt_qos_thresholdrr_show(struct kobject *kobj,
-					struct attribute *attr, char *buf)
+static ssize_t mdt_qos_threshold_rr_show(struct kobject *kobj,
+					 struct attribute *attr, char *buf)
 {
-	return __qos_thresholdrr_show(kobj, attr, buf, true);
+	return __qos_threshold_rr_show(kobj, attr, buf, true);
 }
 
-static ssize_t qos_thresholdrr_show(struct kobject *kobj,
-					struct attribute *attr, char *buf)
+static ssize_t qos_threshold_rr_show(struct kobject *kobj,
+				     struct attribute *attr, char *buf)
 {
-	return __qos_thresholdrr_show(kobj, attr, buf, false);
+	return __qos_threshold_rr_show(kobj, attr, buf, false);
 }
 
 /**
@@ -537,20 +537,31 @@ static ssize_t qos_thresholdrr_show(struct kobject *kobj,
  * space so that more full OSTs are chosen less often, otherwise use the
  * round-robin allocator for efficiency and performance.
  */
-static ssize_t __qos_thresholdrr_store(struct kobject *kobj,
-				       struct attribute *attr,
-				       const char *buffer, size_t count,
-				       bool is_mdt)
+static ssize_t __qos_threshold_rr_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count,
+					bool is_mdt)
 {
 	struct dt_device *dt = container_of(kobj, struct dt_device,
 					    dd_kobj);
 	struct lod_device *lod = dt2lod_dev(dt);
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
+	char buf[6], *tmp;
 	unsigned int val;
 	int rc;
 
-	rc = kstrtouint(buffer, 0, &val);
+	/* "100%\n\0" should be largest string */
+	if (count >= sizeof(buf))
+		return -ERANGE;
+
+	strncpy(buf, buffer, sizeof(buf));
+	buf[sizeof(buf) - 1] = '\0';
+	tmp = strchr(buf, '%');
+	if (tmp)
+		*tmp = '\0';
+
+	rc = kstrtouint(buf, 0, &val);
 	if (rc)
 		return rc;
 
@@ -562,22 +573,22 @@ static ssize_t __qos_thresholdrr_store(struct kobject *kobj,
 	return count;
 }
 
-static ssize_t mdt_qos_thresholdrr_store(struct kobject *kobj,
-					 struct attribute *attr,
-					 const char *buffer, size_t count)
+static ssize_t mdt_qos_threshold_rr_store(struct kobject *kobj,
+					  struct attribute *attr,
+					  const char *buffer, size_t count)
 {
-	return __qos_thresholdrr_store(kobj, attr, buffer, count, true);
+	return __qos_threshold_rr_store(kobj, attr, buffer, count, true);
 }
 
-static ssize_t qos_thresholdrr_store(struct kobject *kobj,
-				     struct attribute *attr,
-				     const char *buffer, size_t count)
+static ssize_t qos_threshold_rr_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
 {
-	return __qos_thresholdrr_store(kobj, attr, buffer, count, false);
+	return __qos_threshold_rr_store(kobj, attr, buffer, count, false);
 }
 
-LUSTRE_RW_ATTR(mdt_qos_thresholdrr);
-LUSTRE_RW_ATTR(qos_thresholdrr);
+LUSTRE_RW_ATTR(mdt_qos_threshold_rr);
+LUSTRE_RW_ATTR(qos_threshold_rr);
 
 /**
  * Show expiration period used to refresh cached statfs data, which
@@ -908,14 +919,14 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_numobd.attr,
 	&lustre_attr_qos_maxage.attr,
 	&lustre_attr_qos_prio_free.attr,
-	&lustre_attr_qos_thresholdrr.attr,
+	&lustre_attr_qos_threshold_rr.attr,
 	&lustre_attr_mdt_stripecount.attr,
 	&lustre_attr_mdt_stripetype.attr,
 	&lustre_attr_mdt_activeobd.attr,
 	&lustre_attr_mdt_numobd.attr,
 	&lustre_attr_mdt_qos_maxage.attr,
 	&lustre_attr_mdt_qos_prio_free.attr,
-	&lustre_attr_mdt_qos_thresholdrr.attr,
+	&lustre_attr_mdt_qos_threshold_rr.attr,
 	NULL,
 };
 

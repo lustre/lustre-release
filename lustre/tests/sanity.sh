@@ -20788,14 +20788,14 @@ test_qos_mkdir() {
 		lod.lustre-MDT0000-mdtlov.mdt_qos_prio_free | head -n1)
 	lod_qos_prio_free=${lod_qos_prio_free%%%}
 	lod_qos_threshold_rr=$(do_facet mds1 $LCTL get_param -n \
-		lod.lustre-MDT0000-mdtlov.mdt_qos_thresholdrr | head -n1)
+		lod.lustre-MDT0000-mdtlov.mdt_qos_threshold_rr | head -n1)
 	lod_qos_threshold_rr=${lod_qos_threshold_rr%%%}
 	lod_qos_maxage=$(do_facet mds1 $LCTL get_param -n \
 		lod.lustre-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null" EXIT
 	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_thresholdrr=$lod_qos_threshold_rr > /dev/null" \
+		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null" \
 		EXIT
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		lod.*.mdt_qos_maxage=$lod_qos_maxage > /dev/null" EXIT
@@ -20804,7 +20804,7 @@ test_qos_mkdir() {
 	echo "Mkdir (stripe_count $stripe_count) roundrobin:"
 
 	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
-	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_thresholdrr=100 > /dev/null
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=100 > /dev/null
 
 	testdir=$DIR/$tdir-s$stripe_count/rr
 
@@ -20832,7 +20832,7 @@ test_qos_mkdir() {
 
 	$LCTL set_param lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null
 	do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_thresholdrr=$lod_qos_threshold_rr > /dev/null
+		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null
 
 	echo
 	echo "Check for uneven MDTs: "
