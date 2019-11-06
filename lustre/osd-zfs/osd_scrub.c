@@ -165,8 +165,8 @@ osd_scrub_check_update(const struct lu_env *env, struct osd_device *dev,
 		GOTO(out, rc = val);
 
 	if (scrub->os_in_prior)
-		oii = list_entry(scrub->os_inconsistent_items.next,
-				 struct osd_inconsistent_item, oii_list);
+		oii = list_first_entry(&scrub->os_inconsistent_items,
+				       struct osd_inconsistent_item, oii_list);
 
 	if (oid < sf->sf_pos_latest_start && !oii)
 		GOTO(out, rc = 0);
@@ -360,8 +360,9 @@ again:
 		if (likely(!list_empty(&scrub->os_inconsistent_items))) {
 			struct osd_inconsistent_item *oii;
 
-			oii = list_entry(scrub->os_inconsistent_items.next,
-				struct osd_inconsistent_item, oii_list);
+			oii = list_first_entry(&scrub->os_inconsistent_items,
+					       struct osd_inconsistent_item,
+					       oii_list);
 			*fid = oii->oii_cache.oic_fid;
 			*oid = oii->oii_cache.oic_dnode;
 			scrub->os_in_prior = 1;
@@ -539,8 +540,8 @@ out:
 	while (!list_empty(&scrub->os_inconsistent_items)) {
 		struct osd_inconsistent_item *oii;
 
-		oii = list_entry(scrub->os_inconsistent_items.next,
-				 struct osd_inconsistent_item, oii_list);
+		oii = list_first_entry(&scrub->os_inconsistent_items,
+				       struct osd_inconsistent_item, oii_list);
 		list_del_init(&oii->oii_list);
 		OBD_FREE_PTR(oii);
 	}
@@ -1241,8 +1242,8 @@ static void osd_initial_OI_scrub(const struct lu_env *env,
 	while (!list_empty(&dev->od_ios_list)) {
 		struct osd_ios_item *item;
 
-		item = list_entry(dev->od_ios_list.next,
-				  struct osd_ios_item, oii_list);
+		item = list_first_entry(&dev->od_ios_list,
+					struct osd_ios_item, oii_list);
 		list_del_init(&item->oii_list);
 		item->oii_scan_dir(env, dev, item->oii_parent,
 				   item->oii_handle_dirent, item->oii_flags);
@@ -1260,9 +1261,9 @@ static void osd_initial_OI_scrub(const struct lu_env *env,
 		while (!list_empty(&dev->od_index_restore_list)) {
 			struct lustre_index_restore_unit *liru;
 
-			liru = list_entry(dev->od_index_restore_list.next,
-					  struct lustre_index_restore_unit,
-					  liru_link);
+			liru = list_first_entry(&dev->od_index_restore_list,
+						struct lustre_index_restore_unit,
+						liru_link);
 			list_del(&liru->liru_link);
 			if (buf)
 				osd_index_restore(env, dev, liru, buf,

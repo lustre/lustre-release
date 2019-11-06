@@ -294,8 +294,8 @@ static int osp_prep_inline_update_req(const struct lu_env *env,
 	__u32 update_req_size;
 	int rc;
 
-	ours = list_entry(our->our_req_list.next,
-			  struct osp_update_request_sub, ours_list);
+	ours = list_first_entry(&our->our_req_list,
+				struct osp_update_request_sub, ours_list);
 	update_req_size = object_update_request_size(ours->ours_req);
 	req_capsule_set_size(&req->rq_pill, &RMF_OUT_UPDATE_HEADER, RCL_CLIENT,
 			     update_req_size + sizeof(*ouh));
@@ -386,8 +386,9 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 		RETURN(-ENOMEM);
 
 	if (buf_count == 1) {
-		ours = list_entry(our->our_req_list.next,
-				  struct osp_update_request_sub, ours_list);
+		ours = list_first_entry(&our->our_req_list,
+					struct osp_update_request_sub,
+					ours_list);
 
 		/* Let's check if it can be packed inline */
 		if (object_update_request_size(ours->ours_req) +

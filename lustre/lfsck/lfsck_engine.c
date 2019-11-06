@@ -586,8 +586,8 @@ static int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
 		struct lfsck_lmv_unit *llu;
 
 		spin_lock(&lfsck->li_lock);
-		llu = list_entry(lfsck->li_list_lmv.next,
-				 struct lfsck_lmv_unit, llu_link);
+		llu = list_first_entry(&lfsck->li_list_lmv,
+				       struct lfsck_lmv_unit, llu_link);
 		list_del_init(&llu->llu_link);
 		spin_unlock(&lfsck->li_lock);
 
@@ -863,8 +863,8 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 			struct lfsck_lmv_unit *llu;
 
 			spin_lock(&lfsck->li_lock);
-			llu = list_entry(lfsck->li_list_lmv.next,
-					 struct lfsck_lmv_unit, llu_link);
+			llu = list_first_entry(&lfsck->li_list_lmv,
+					       struct lfsck_lmv_unit, llu_link);
 			list_del_init(&llu->llu_link);
 			spin_unlock(&lfsck->li_lock);
 
@@ -1490,17 +1490,17 @@ again:
 			__u32		 *gen;
 
 			if (com->lc_type == LFSCK_TYPE_LAYOUT) {
-				ltd = list_entry(lad->lad_mdt_list.next,
-						 struct lfsck_tgt_desc,
-						 ltd_layout_list);
+				ltd = list_first_entry(&lad->lad_mdt_list,
+						       struct lfsck_tgt_desc,
+						       ltd_layout_list);
 				list = &ltd->ltd_layout_list;
 				gen = &ltd->ltd_layout_gen;
 			} else {
 				struct lfsck_namespace *ns = com->lc_file_ram;
 
-				ltd = list_entry(lad->lad_mdt_list.next,
-						 struct lfsck_tgt_desc,
-						 ltd_namespace_list);
+				ltd = list_first_entry(&lad->lad_mdt_list,
+						       struct lfsck_tgt_desc,
+						       ltd_namespace_list);
 				list = &ltd->ltd_namespace_list;
 				gen = &ltd->ltd_namespace_gen;
 				lr->lr_flags2 = ns->ln_flags & ~LF_INCOMPLETE;
@@ -1611,9 +1611,9 @@ int lfsck_assistant_engine(void *args)
 				     !thread_is_running(mthread)))
 				GOTO(cleanup, rc = lad->lad_post_result);
 
-			lar = list_entry(lad->lad_req_list.next,
-					 struct lfsck_assistant_req,
-					 lar_list);
+			lar = list_first_entry(&lad->lad_req_list,
+					       struct lfsck_assistant_req,
+					       lar_list);
 			/* Only the lfsck_assistant_engine thread itself can
 			 * remove the "lar" from the head of the list, LFSCK
 			 * engine thread only inserts other new "lar" at the
@@ -1754,9 +1754,9 @@ cleanup:
 
 	thread_set_flags(athread, SVC_STOPPING);
 	while (!list_empty(&lad->lad_req_list)) {
-		lar = list_entry(lad->lad_req_list.next,
-				 struct lfsck_assistant_req,
-				 lar_list);
+		lar = list_first_entry(&lad->lad_req_list,
+				       struct lfsck_assistant_req,
+				       lar_list);
 		list_del_init(&lar->lar_list);
 		lad->lad_prefetched--;
 		spin_unlock(&lad->lad_lock);

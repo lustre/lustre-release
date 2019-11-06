@@ -1148,8 +1148,8 @@ void ptlrpc_update_export_timer(struct obd_export *exp, time64_t extra_delay)
 		RETURN_EXIT;
 	}
 
-	newest_exp = list_entry(exp->exp_obd->obd_exports_timed.prev,
-				struct obd_export, exp_obd_chain_timed);
+	newest_exp = list_last_entry(&exp->exp_obd->obd_exports_timed,
+				     struct obd_export, exp_obd_chain_timed);
 
 	list_move_tail(&exp->exp_obd_chain_timed,
 		       &exp->exp_obd->obd_exports_timed);

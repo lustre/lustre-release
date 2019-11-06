@@ -372,7 +372,8 @@ static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
 	while (!list_empty(&head)) {
 		struct mgs_nidtbl_target *tgt;
 
-		tgt = list_entry(head.next, struct mgs_nidtbl_target, mnt_list);
+		tgt = list_first_entry(&head, struct mgs_nidtbl_target,
+				       mnt_list);
 		list_del(&tgt->mnt_list);
 		OBD_FREE_PTR(tgt);
 	}

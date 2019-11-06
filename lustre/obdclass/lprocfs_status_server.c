@@ -333,8 +333,8 @@ void lprocfs_free_per_client_stats(struct obd_device *obd)
 	/* we need extra list - because hash_exit called to early */
 	/* not need locking because all clients is died */
 	while (!list_empty(&obd->obd_nid_stats)) {
-		stat = list_entry(obd->obd_nid_stats.next,
-				  struct nid_stat, nid_list);
+		stat = list_first_entry(&obd->obd_nid_stats,
+					struct nid_stat, nid_list);
 		list_del_init(&stat->nid_list);
 		cfs_hash_del(hash, &stat->nid, &stat->nid_hash);
 		lprocfs_free_client_stats(stat);
@@ -532,8 +532,8 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 			  lprocfs_nid_stats_clear_write_cb, &free_list);
 
 	while (!list_empty(&free_list)) {
-		client_stat = list_entry(free_list.next, struct nid_stat,
-					 nid_list);
+		client_stat = list_first_entry(&free_list, struct nid_stat,
+					       nid_list);
 		list_del_init(&client_stat->nid_list);
 		lprocfs_free_client_stats(client_stat);
 	}

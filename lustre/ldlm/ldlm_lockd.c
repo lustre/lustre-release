@@ -324,8 +324,8 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 
 	spin_lock_bh(&waiting_locks_spinlock);
 	while (!list_empty(&waiting_locks_list)) {
-		lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
-				  l_pending_chain);
+		lock = list_first_entry(&waiting_locks_list, struct ldlm_lock,
+					l_pending_chain);
 		if (lock->l_callback_timestamp > ktime_get_seconds() ||
 		    lock->l_req_mode == LCK_GROUP)
 			break;
@@ -354,8 +354,8 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 		time64_t now = ktime_get_seconds();
 		timeout_t delta = 0;
 
-		lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
-				  l_pending_chain);
+		lock = list_first_entry(&waiting_locks_list, struct ldlm_lock,
+					l_pending_chain);
 		if (lock->l_callback_timestamp - now > 0)
 			delta = lock->l_callback_timestamp - now;
 		mod_timer(&waiting_locks_timer,

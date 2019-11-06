@@ -805,8 +805,9 @@ int server_disconnect_export(struct obd_export *exp)
 	spin_lock(&exp->exp_lock);
 	while (!list_empty(&exp->exp_outstanding_replies)) {
 		struct ptlrpc_reply_state *rs =
-			list_entry(exp->exp_outstanding_replies.next,
-				       struct ptlrpc_reply_state, rs_exp_list);
+			list_first_entry(&exp->exp_outstanding_replies,
+					 struct ptlrpc_reply_state,
+					 rs_exp_list);
 		struct ptlrpc_service_part *svcpt = rs->rs_svcpt;
 
 		spin_lock(&svcpt->scp_rep_lock);
@@ -2118,8 +2119,8 @@ static int check_for_next_transno(struct lu_target *lut)
 
 	spin_lock(&obd->obd_recovery_task_lock);
 	if (!list_empty(&obd->obd_req_replay_queue)) {
-		req = list_entry(obd->obd_req_replay_queue.next,
-				     struct ptlrpc_request, rq_list);
+		req = list_first_entry(&obd->obd_req_replay_queue,
+				       struct ptlrpc_request, rq_list);
 		req_transno = lustre_msg_get_transno(req->rq_reqmsg);
 	}
 
@@ -2366,8 +2367,8 @@ static struct ptlrpc_request *target_next_replay_lock(struct lu_target *lut)
 
 	spin_lock(&obd->obd_recovery_task_lock);
 	if (!list_empty(&obd->obd_lock_replay_queue)) {
-		req = list_entry(obd->obd_lock_replay_queue.next,
-				     struct ptlrpc_request, rq_list);
+		req = list_first_entry(&obd->obd_lock_replay_queue,
+				       struct ptlrpc_request, rq_list);
 		list_del_init(&req->rq_list);
 		spin_unlock(&obd->obd_recovery_task_lock);
 	} else {
@@ -2386,8 +2387,8 @@ static struct ptlrpc_request *target_next_final_ping(struct obd_device *obd)
 
 	spin_lock(&obd->obd_recovery_task_lock);
 	if (!list_empty(&obd->obd_final_req_queue)) {
-		req = list_entry(obd->obd_final_req_queue.next,
-				     struct ptlrpc_request, rq_list);
+		req = list_first_entry(&obd->obd_final_req_queue,
+				       struct ptlrpc_request, rq_list);
 		list_del_init(&req->rq_list);
 		spin_unlock(&obd->obd_recovery_task_lock);
 		if (req->rq_export->exp_in_recovery) {
@@ -2509,8 +2510,8 @@ static __u64 get_next_replay_req_transno(struct obd_device *obd)
 	if (!list_empty(&obd->obd_req_replay_queue)) {
 		struct ptlrpc_request *req;
 
-		req = list_entry(obd->obd_req_replay_queue.next,
-				 struct ptlrpc_request, rq_list);
+		req = list_first_entry(&obd->obd_req_replay_queue,
+				       struct ptlrpc_request, rq_list);
 		transno = lustre_msg_get_transno(req->rq_reqmsg);
 	}
 
@@ -2642,8 +2643,8 @@ static void replay_request_or_update(struct lu_env *env,
 			 * replay has been executed by update with the
 			 * same transno
 			 */
-			req = list_entry(obd->obd_req_replay_queue.next,
-					struct ptlrpc_request, rq_list);
+			req = list_first_entry(&obd->obd_req_replay_queue,
+					       struct ptlrpc_request, rq_list);
 
 			list_del_init(&req->rq_list);
 			obd->obd_requests_queued_for_recovery--;

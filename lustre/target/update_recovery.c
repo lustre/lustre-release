@@ -570,8 +570,9 @@ distribute_txn_get_next_req(struct target_distribute_txn_data *tdtd)
 
 	spin_lock(&tdtd->tdtd_replay_list_lock);
 	if (!list_empty(&tdtd->tdtd_replay_list)) {
-		dtrq = list_entry(tdtd->tdtd_replay_list.next,
-				 struct distribute_txn_replay_req, dtrq_list);
+		dtrq = list_first_entry(&tdtd->tdtd_replay_list,
+					struct distribute_txn_replay_req,
+					dtrq_list);
 		list_del_init(&dtrq->dtrq_list);
 	}
 	spin_unlock(&tdtd->tdtd_replay_list_lock);
@@ -595,8 +596,9 @@ __u64 distribute_txn_get_next_transno(struct target_distribute_txn_data *tdtd)
 
 	spin_lock(&tdtd->tdtd_replay_list_lock);
 	if (!list_empty(&tdtd->tdtd_replay_list)) {
-		dtrq = list_entry(tdtd->tdtd_replay_list.next,
-				 struct distribute_txn_replay_req, dtrq_list);
+		dtrq = list_first_entry(&tdtd->tdtd_replay_list,
+					struct distribute_txn_replay_req,
+					dtrq_list);
 		transno = dtrq->dtrq_master_transno;
 	}
 	spin_unlock(&tdtd->tdtd_replay_list_lock);

@@ -1040,8 +1040,8 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	while (!list_empty(&list)) {
 		struct osp_job_req_args	*jra;
 
-		jra = list_entry(list.next, struct osp_job_req_args,
-				 jra_committed_link);
+		jra = list_first_entry(&list, struct osp_job_req_args,
+				       jra_committed_link);
 		LASSERT(jra->jra_magic == OSP_JOB_MAGIC);
 		list_del_init(&jra->jra_committed_link);
 

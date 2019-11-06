@@ -484,8 +484,8 @@ static int ping_evictor_main(void *arg)
 		 * is not strictly necessary.
 		 */
 		spin_lock(&pet_lock);
-		obd = list_entry(pet_list.next, struct obd_device,
-				 obd_evict_list);
+		obd = list_first_entry(&pet_list, struct obd_device,
+				       obd_evict_list);
 		spin_unlock(&pet_lock);
 
 		expire_time = ktime_get_real_seconds() - PING_EVICT_TIMEOUT;
@@ -501,9 +501,9 @@ static int ping_evictor_main(void *arg)
 		 */
 		spin_lock(&obd->obd_dev_lock);
 		while (!list_empty(&obd->obd_exports_timed)) {
-			exp = list_entry(obd->obd_exports_timed.next,
-					 struct obd_export,
-					 exp_obd_chain_timed);
+			exp = list_first_entry(&obd->obd_exports_timed,
+					       struct obd_export,
+					       exp_obd_chain_timed);
 			if (expire_time > exp->exp_last_request_time) {
 				struct obd_uuid *client_uuid;
 

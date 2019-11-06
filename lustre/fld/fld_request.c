@@ -492,7 +492,7 @@ again:
 						  struct lu_fld_target,
 						  ft_chain);
 		else
-			target = list_entry(target->ft_chain.next,
+			target = list_first_entry(&target->ft_chain,
 						 struct lu_fld_target,
 						 ft_chain);
 		spin_unlock(&fld->lcf_lock);

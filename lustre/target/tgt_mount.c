@@ -1043,8 +1043,8 @@ static int lustre_stop_lwp(struct super_block *sb)
 	ENTRY;
 	mutex_lock(&lsi->lsi_lwp_mutex);
 	while (!list_empty(&lsi->lsi_lwp_list)) {
-		lwp = list_entry(lsi->lsi_lwp_list.next, struct obd_device,
-				 obd_lwp_list);
+		lwp = list_first_entry(&lsi->lsi_lwp_list, struct obd_device,
+				       obd_lwp_list);
 		list_del_init(&lwp->obd_lwp_list);
 		lwp->obd_force = 1;
 		mutex_unlock(&lsi->lsi_lwp_mutex);

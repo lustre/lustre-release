@@ -161,7 +161,7 @@ again:
 		list_add_tail(&work->gl_list, &gl_list);
 	}
 
-	work = list_entry(gl_list.next, struct ldlm_glimpse_work, gl_list);
+	work = list_first_entry(&gl_list, struct ldlm_glimpse_work, gl_list);
 
 	lock_res(res);
 	list_for_each(pos, &res->lr_granted) {

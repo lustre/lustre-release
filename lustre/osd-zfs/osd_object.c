@@ -122,8 +122,8 @@ void osd_object_sa_dirty_rele(const struct lu_env *env, struct osd_thandle *oh)
 	struct osd_object *obj;
 
 	while (!list_empty(&oh->ot_sa_list)) {
-		obj = list_entry(oh->ot_sa_list.next,
-				 struct osd_object, oo_sa_linkage);
+		obj = list_first_entry(&oh->ot_sa_list,
+				       struct osd_object, oo_sa_linkage);
 		write_lock(&obj->oo_attr_lock);
 		list_del_init(&obj->oo_sa_linkage);
 		write_unlock(&obj->oo_attr_lock);

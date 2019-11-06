@@ -260,9 +260,9 @@ again:
 
 	down_write(&ltds->ltd_rw_sem);
 	while (!list_empty(&ltds->ltd_orphan)) {
-		ltd = list_entry(ltds->ltd_orphan.next,
-				 struct lfsck_tgt_desc,
-				 ltd_orphan_list);
+		ltd = list_first_entry(&ltds->ltd_orphan,
+				       struct lfsck_tgt_desc,
+				       ltd_orphan_list);
 		list_del_init(&ltd->ltd_orphan_list);
 		rc = __lfsck_add_target(env, lfsck, ltd, for_ost, true);
 		/* Do not hold the semaphore for too long time. */

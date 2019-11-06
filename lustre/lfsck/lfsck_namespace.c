@@ -4182,8 +4182,8 @@ static void lfsck_namespace_release_lmv(const struct lu_env *env,
 		struct lfsck_lmv_unit	*llu;
 		struct lfsck_lmv	*llmv;
 
-		llu = list_entry(lfsck->li_list_lmv.next,
-				 struct lfsck_lmv_unit, llu_link);
+		llu = list_first_entry(&lfsck->li_list_lmv,
+				       struct lfsck_lmv_unit, llu_link);
 		llmv = &llu->llu_lmv;
 
 		LASSERTF(atomic_read(&llmv->ll_ref) == 1,
@@ -6523,8 +6523,8 @@ out:
 		RETURN(1);
 
 	spin_lock(&lad->lad_lock);
-	lar = list_entry(lad->lad_req_list.next, struct lfsck_assistant_req,
-			  lar_list);
+	lar = list_first_entry(&lad->lad_req_list, struct lfsck_assistant_req,
+			       lar_list);
 	list_del_init(&lar->lar_list);
 	spin_unlock(&lad->lad_lock);
 
@@ -6675,8 +6675,8 @@ static int lfsck_namespace_assistant_handler_p2(const struct lu_env *env,
 		struct lfsck_lmv_unit *llu;
 
 		spin_lock(&lfsck->li_lock);
-		llu = list_entry(lfsck->li_list_lmv.next,
-				 struct lfsck_lmv_unit, llu_link);
+		llu = list_first_entry(&lfsck->li_list_lmv,
+				       struct lfsck_lmv_unit, llu_link);
 		list_del_init(&llu->llu_link);
 		spin_unlock(&lfsck->li_lock);
 
@@ -6723,9 +6723,9 @@ static void lfsck_namespace_assistant_fill_pos(const struct lu_env *env,
 	if (list_empty(&lad->lad_req_list))
 		return;
 
-	lnr = list_entry(lad->lad_req_list.next,
-			 struct lfsck_namespace_req,
-			 lnr_lar.lar_list);
+	lnr = list_first_entry(&lad->lad_req_list,
+			       struct lfsck_namespace_req,
+			       lnr_lar.lar_list);
 	pos->lp_oit_cookie = lnr->lnr_lar.lar_parent->lso_oit_cookie;
 	pos->lp_dir_cookie = lnr->lnr_dir_cookie - 1;
 	pos->lp_dir_parent = lnr->lnr_lar.lar_parent->lso_fid;

@@ -2647,8 +2647,8 @@ int ldlm_export_cancel_blocked_locks(struct obd_export *exp)
 
 		spin_lock_bh(&exp->exp_bl_list_lock);
 		if (!list_empty(&exp->exp_bl_list)) {
-			lock = list_entry(exp->exp_bl_list.next,
-					  struct ldlm_lock, l_exp_list);
+			lock = list_first_entry(&exp->exp_bl_list,
+						struct ldlm_lock, l_exp_list);
 			LDLM_LOCK_GET(lock);
 			list_del_init(&lock->l_exp_list);
 		} else {

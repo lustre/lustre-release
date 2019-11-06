@@ -241,8 +241,8 @@ ldlm_interval_extent(struct ldlm_interval *node)
         struct ldlm_lock *lock;
 	LASSERT(!list_empty(&node->li_group));
 
-	lock = list_entry(node->li_group.next, struct ldlm_lock,
-                              l_sl_policy);
+	lock = list_first_entry(&node->li_group, struct ldlm_lock,
+				l_sl_policy);
         return &lock->l_policy_data.l_extent;
 }
 
