@@ -1126,14 +1126,15 @@ static int check_owner(int type, int id)
 	return 0;
 }
 
-static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
+int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
 {
-        int cmd = qctl->qc_cmd;
-        int type = qctl->qc_type;
-        int id = qctl->qc_id;
-        int valid = qctl->qc_valid;
-        int rc = 0;
-        ENTRY;
+	int cmd = qctl->qc_cmd;
+	int type = qctl->qc_type;
+	int id = qctl->qc_id;
+	int valid = qctl->qc_valid;
+	int rc = 0;
+
+	ENTRY;
 
 	switch (cmd) {
 	case Q_SETQUOTA:

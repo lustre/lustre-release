@@ -2205,6 +2205,52 @@ out:
 	RETURN(rc);
 }
 
+static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
+{
+	struct if_quotactl qctl = {
+		.qc_cmd = LUSTRE_Q_GETQUOTA,
+		.qc_type = PRJQUOTA,
+		.qc_valid = QC_GENERAL,
+	};
+	u64 limit, curblock;
+	int ret;
+
+	qctl.qc_id = ll_i2info(inode)->lli_projid;
+	ret = quotactl_ioctl(ll_i2sbi(inode), &qctl);
+	if (ret) {
+		/* ignore errors if project ID does not have
+		 * a quota limit or feature unsupported.
+		 */
+		if (ret == -ESRCH || ret == -EOPNOTSUPP)
+			ret = 0;
+		return ret;
+	}
+
+	limit = ((qctl.qc_dqblk.dqb_bsoftlimit ?
+		 qctl.qc_dqblk.dqb_bsoftlimit :
+		 qctl.qc_dqblk.dqb_bhardlimit) * 1024) / sfs->f_bsize;
+	if (limit && sfs->f_blocks > limit) {
+		curblock = (qctl.qc_dqblk.dqb_curspace +
+				sfs->f_bsize - 1) / sfs->f_bsize;
+		sfs->f_blocks = limit;
+		sfs->f_bfree = sfs->f_bavail =
+			(sfs->f_blocks > curblock) ?
+			(sfs->f_blocks - curblock) : 0;
+	}
+
+	limit = qctl.qc_dqblk.dqb_isoftlimit ?
+		qctl.qc_dqblk.dqb_isoftlimit :
+		qctl.qc_dqblk.dqb_ihardlimit;
+	if (limit && sfs->f_files > limit) {
+		sfs->f_files = limit;
+		sfs->f_ffree = (sfs->f_files >
+			qctl.qc_dqblk.dqb_curinodes) ?
+			(sfs->f_files - qctl.qc_dqblk.dqb_curinodes) : 0;
+	}
+
+	return 0;
+}
+
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 {
 	struct super_block *sb = de->d_sb;
@@ -2241,6 +2287,8 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	sfs->f_bavail = osfs.os_bavail;
 	sfs->f_fsid.val[0] = (__u32)fsid;
 	sfs->f_fsid.val[1] = (__u32)(fsid >> 32);
+	if (ll_i2info(de->d_inode)->lli_projid)
+		return ll_statfs_project(de->d_inode, sfs);
 
 	ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STATFS,
 			   ktime_us_delta(ktime_get(), kstart));

@@ -1365,9 +1365,9 @@ struct obd_dqinfo {
 
 /* XXX: same as if_dqblk struct in kernel, plus one padding */
 struct obd_dqblk {
-	__u64 dqb_bhardlimit;
-	__u64 dqb_bsoftlimit;
-	__u64 dqb_curspace;
+	__u64 dqb_bhardlimit;	/* kbytes unit */
+	__u64 dqb_bsoftlimit;	/* kbytes unit */
+	__u64 dqb_curspace;	/* bytes unit */
 	__u64 dqb_ihardlimit;
 	__u64 dqb_isoftlimit;
 	__u64 dqb_curinodes;

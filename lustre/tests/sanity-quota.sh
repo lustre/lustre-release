@@ -3561,6 +3561,50 @@ test_40d() {
 }
 run_test 40d "Stripe Directory inherit project quota properly"
 
+test_41() {
+	is_project_quota_supported ||
+		skip "Project quota is not supported"
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+	local dir="$DIR/$tdir/dir"
+	local blimit=102400
+	local ilimit=4096
+	local projid=$((testnum * 1000))
+
+	quota_init
+
+	# enable mdt/ost quota
+	set_mdt_qtype ugp || error "enable mdt quota failed"
+	set_ost_qtype ugp || error "enable ost quota failed"
+
+	test_mkdir -p $dir && change_project -sp $projid $dir
+	$LFS setquota -p $projid -b 0 -B ${blimit}K -i 0 -I $ilimit $dir ||
+		error "set project quota failed"
+
+	sync; sync_all_data
+	sleep_maxage
+
+	# check if df output works as expected
+	echo "== global statfs: $MOUNT =="
+	df -kP $MOUNT; df -iP $MOUNT; $LFS quota -p $projid $dir
+	echo
+	echo "== project statfs (prjid=$projid): $dir =="
+	df -kP $dir; df -iP $dir
+	local bused=$(getquota -p $projid global curspace)
+	local iused=$(getquota -p $projid global curinodes)
+	# note trailing space to match double printf from awk
+	local expected="$blimit $bused $ilimit $iused "
+
+	wait_update $HOSTNAME \
+		"{ df -kP $dir; df -iP $dir; } |
+		 awk '/$FSNAME/ { printf \\\"%d %d \\\", \\\$2,\\\$3 }'" \
+		"$expected" ||
+		error "failed to get correct statfs for project quota"
+
+	cleanup_quota_test
+}
+run_test 41 "df should return projid-specific values"
+
 test_50() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"
