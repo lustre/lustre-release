@@ -16926,6 +16926,61 @@ test_230l() {
 }
 run_test 230l "readdir between MDTs won't crash"
 
+test_230m() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	[ $MDS1_VERSION -lt $(version_code 2.11.56) ] &&
+		skip "Need MDS version at least 2.11.56"
+
+	local MDTIDX=1
+	local mig_dir=$DIR/$tdir/migrate_dir
+	local longstr="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	local shortstr="b"
+	local val
+
+	echo "Creating files and dirs with xattrs"
+	test_mkdir $DIR/$tdir
+	test_mkdir -i0 -c1 $mig_dir
+	mkdir $mig_dir/dir
+	setfattr -n user.attr1 -v $longstr $mig_dir/dir ||
+		error "cannot set xattr attr1 on dir"
+	setfattr -n user.attr2 -v $shortstr $mig_dir/dir ||
+		error "cannot set xattr attr2 on dir"
+	touch $mig_dir/dir/f0
+	setfattr -n user.attr1 -v $longstr $mig_dir/dir/f0 ||
+		error "cannot set xattr attr1 on file"
+	setfattr -n user.attr2 -v $shortstr $mig_dir/dir/f0 ||
+		error "cannot set xattr attr2 on file"
+	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
+	val=$(getfattr --only-values -n user.attr1 $mig_dir/dir 2>/dev/null)
+	[ "$val" = $longstr ] || error "xattr attr1 not set properly on dir"
+	val=$(getfattr --only-values -n user.attr2 $mig_dir/dir 2>/dev/null)
+	[ "$val" = $shortstr ] || error "xattr attr2 not set properly on dir"
+	val=$(getfattr --only-values -n user.attr1 $mig_dir/dir/f0 2>/dev/null)
+	[ "$val" = $longstr ] || error "xattr attr1 not set properly on file"
+	val=$(getfattr --only-values -n user.attr2 $mig_dir/dir/f0 2>/dev/null)
+	[ "$val" = $shortstr ] || error "xattr attr2 not set properly on file"
+
+	echo "Migrating to MDT1"
+	$LFS migrate -m $MDTIDX $mig_dir ||
+		error "fails on migrating dir to MDT1"
+
+	sync ; sync ; echo 3 > /proc/sys/vm/drop_caches
+	echo "Checking xattrs"
+	val=$(getfattr --only-values -n user.attr1 $mig_dir/dir 2>/dev/null)
+	[ "$val" = $longstr ] ||
+		error "expecting xattr1 $longstr on dir, found $val"
+	val=$(getfattr --only-values -n user.attr2 $mig_dir/dir 2>/dev/null)
+	[ "$val" = $shortstr ] ||
+		error "expecting xattr2 $shortstr on dir, found $val"
+	val=$(getfattr --only-values -n user.attr1 $mig_dir/dir/f0 2>/dev/null)
+	[ "$val" = $longstr ] ||
+		error "expecting xattr1 $longstr on file, found $val"
+	val=$(getfattr --only-values -n user.attr2 $mig_dir/dir/f0 2>/dev/null)
+	[ "$val" = $shortstr ] ||
+		error "expecting xattr2 $shortstr on file, found $val"
+}
+run_test 230m "xattrs not changed after dir migration"
+
 test_231a()
 {
 	# For simplicity this test assumes that max_pages_per_rpc

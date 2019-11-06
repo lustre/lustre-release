@@ -3608,6 +3608,7 @@ static int mdd_iterate_xattrs(const struct lu_env *env,
 			GOTO(out, rc);
 
 		cbxbuf = xbuf;
+		cbxbuf.lb_len = xsize;
 repeat:
 		rc = cb(env, tobj, &cbxbuf, xname, 0, handle);
 		if (unlikely(rc == -ENOSPC &&
