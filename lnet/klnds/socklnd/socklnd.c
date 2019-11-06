@@ -2365,7 +2365,8 @@ ksocknal_base_startup(void)
 
 	/* flag lists/ptrs/locks initialised */
 	ksocknal_data.ksnd_init = SOCKNAL_INIT_DATA;
-	try_module_get(THIS_MODULE);
+	if (!try_module_get(THIS_MODULE))
+		goto failed;
 
 	/* Create a scheduler block per available CPT */
 	ksocknal_data.ksnd_schedulers = cfs_percpt_alloc(lnet_cpt_table(),

@@ -2304,7 +2304,8 @@ int kgnilnd_base_startup(void)
 
 	/* OK to call kgnilnd_api_shutdown() to cleanup now */
 	kgnilnd_data.kgn_init = GNILND_INIT_DATA;
-	try_module_get(THIS_MODULE);
+	if (!try_module_get(THIS_MODULE))
+		GOTO(failed, rc = -ENOENT);
 
 	rwlock_init(&kgnilnd_data.kgn_peer_conn_lock);
 
