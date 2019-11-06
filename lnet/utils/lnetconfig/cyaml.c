@@ -242,7 +242,7 @@ static struct cYAML *cYAML_ll_pop(struct list_head *list,
 	struct cYAML *obj = NULL;
 
 	if (!list_empty(list)) {
-		pop = list_entry(list->next, struct cYAML_ll, list);
+		pop = list_first_entry(list, struct cYAML_ll, list);
 
 		obj = pop->obj;
 		if (print_info != NULL)

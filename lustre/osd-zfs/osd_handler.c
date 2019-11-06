@@ -241,8 +241,8 @@ static void osd_unlinked_list_emptify(const struct lu_env *env,
 	uint64_t	   oid;
 
 	while (!list_empty(list)) {
-		obj = list_entry(list->next,
-				 struct osd_object, oo_unlinked_linkage);
+		obj = list_first_entry(list,
+				       struct osd_object, oo_unlinked_linkage);
 		LASSERT(obj->oo_dn != NULL);
 		oid = obj->oo_dn->dn_object;
 

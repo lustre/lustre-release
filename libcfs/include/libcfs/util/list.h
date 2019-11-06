@@ -239,6 +239,17 @@ static inline void list_splice_init(struct list_head *list,
 	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 /**
+ * list_first_entry - get the first element from a list
+ * \param ptr	 the list head to take the element from.
+ * \param type	 the type of the struct this is embedded in.
+ * \param member the name of the list_head within the struct.
+ *
+ * Note, that list is expected to be not empty.
+ */
+#define list_first_entry(ptr, type, member) \
+	list_entry((ptr)->next, type, member)
+
+/**
  * Iterate over a list
  * \param pos	the iterator
  * \param head	the list to iterate over
@@ -453,7 +464,7 @@ static inline void hlist_add_after(struct hlist_node *n,
  * \param member     the name of the list_struct within the struct.
  */
 #define list_for_each_entry(pos, head, member)                          \
-	for (pos = list_entry((head)->next, typeof(*pos), member),      \
+	for (pos = list_first_entry((head), typeof(*pos), member),      \
 		     prefetch(pos->member.next);                            \
 	     &pos->member != (head);                                        \
 	     pos = list_entry(pos->member.next, typeof(*pos), member),  \
@@ -478,7 +489,7 @@ static inline void hlist_add_after(struct hlist_node *n,
  * \param member     the name of the list_struct within the struct.
  */
 #define list_for_each_entry_safe(pos, n, head, member)                   \
-	for (pos = list_entry((head)->next, typeof(*pos), member),       \
+	for (pos = list_first_entry((head), typeof(*pos), member),       \
 		n = list_entry(pos->member.next, typeof(*pos), member);  \
 	     &pos->member != (head);                                         \
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))

@@ -1197,15 +1197,15 @@ again:
 		__u32		 *gen;
 
 		if (com->lc_type == LFSCK_TYPE_LAYOUT) {
-			ltd = list_entry(phase_head->next,
-					 struct lfsck_tgt_desc,
-					 ltd_layout_phase_list);
+			ltd = list_first_entry(phase_head,
+					       struct lfsck_tgt_desc,
+					       ltd_layout_phase_list);
 			phase_list = &ltd->ltd_layout_phase_list;
 			gen = &ltd->ltd_layout_gen;
 		} else {
-			ltd = list_entry(phase_head->next,
-					 struct lfsck_tgt_desc,
-					 ltd_namespace_phase_list);
+			ltd = list_first_entry(phase_head,
+					       struct lfsck_tgt_desc,
+					       ltd_namespace_phase_list);
 			phase_list = &ltd->ltd_namespace_phase_list;
 			gen = &ltd->ltd_namespace_gen;
 		}
@@ -1428,17 +1428,17 @@ again:
 		spin_lock(&ltds->ltd_lock);
 		while (!list_empty(phase_head)) {
 			if (com->lc_type == LFSCK_TYPE_LAYOUT) {
-				ltd = list_entry(phase_head->next,
-						 struct lfsck_tgt_desc,
-						 ltd_layout_list);
+				ltd = list_first_entry(phase_head,
+						       struct lfsck_tgt_desc,
+						       ltd_layout_list);
 				if (!list_empty(&ltd->ltd_layout_phase_list))
 					list_del_init(
 						&ltd->ltd_layout_phase_list);
 				list_del_init(&ltd->ltd_layout_list);
 			} else {
-				ltd = list_entry(phase_head->next,
-						 struct lfsck_tgt_desc,
-						 ltd_namespace_list);
+				ltd = list_first_entry(phase_head,
+						       struct lfsck_tgt_desc,
+						       ltd_namespace_list);
 				if (!list_empty(&ltd->ltd_namespace_phase_list))
 					list_del_init(
 						&ltd->ltd_namespace_phase_list);

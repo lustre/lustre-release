@@ -3407,8 +3407,8 @@ lnet_resend_pending_msgs_locked(struct list_head *resendq, int cpt)
 	while (!list_empty(resendq)) {
 		struct lnet_peer_ni *lpni;
 
-		msg = list_entry(resendq->next, struct lnet_msg,
-				 msg_list);
+		msg = list_first_entry(resendq, struct lnet_msg,
+				       msg_list);
 
 		list_del_init(&msg->msg_list);
 

@@ -1086,8 +1086,9 @@ void lustre_index_backup(const struct lu_env *env, struct dt_device *dev,
 scan:
 	spin_lock(lock);
 	while (!list_empty(head)) {
-		libu = list_entry(head->next,
-				  struct lustre_index_backup_unit, libu_link);
+		libu = list_first_entry(head,
+					struct lustre_index_backup_unit,
+					libu_link);
 		list_del_init(&libu->libu_link);
 		spin_unlock(lock);
 

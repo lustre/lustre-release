@@ -204,8 +204,8 @@ static int expired_lock_main(void *arg)
 			struct obd_export *export;
 			struct ldlm_lock *lock;
 
-			lock = list_entry(expired->next, struct ldlm_lock,
-					  l_pending_chain);
+			lock = list_first_entry(expired, struct ldlm_lock,
+						l_pending_chain);
 			if ((void *)lock < LP_POISON + PAGE_SIZE &&
 			    (void *)lock >= LP_POISON) {
 				spin_unlock_bh(&waiting_locks_spinlock);

@@ -460,7 +460,7 @@ cfs_ip_addr_range_gen(__u32 *ip_list, int count, struct list_head *ip_addr_expr)
 	struct cfs_expr_list *octet_el;
 	int idx = count - 1;
 
-	octet_el = list_entry(ip_addr_expr->next, typeof(*octet_el), el_link);
+	octet_el = list_first_entry(ip_addr_expr, typeof(*octet_el), el_link);
 
 	(void) cfs_ip_addr_range_gen_recurse(ip_list, &idx, 3, 0, &octet_el->el_link, octet_el);
 
@@ -561,7 +561,7 @@ libcfs_num_match(__u32 addr, struct list_head *numaddr)
 	struct cfs_expr_list *el;
 
 	assert(!list_empty(numaddr));
-	el = list_entry(numaddr->next, struct cfs_expr_list, el_link);
+	el = list_first_entry(numaddr, struct cfs_expr_list, el_link);
 
 	return cfs_expr_list_match(addr, el);
 }
@@ -1320,7 +1320,7 @@ free_addrranges(struct list_head *list)
 	while (!list_empty(list)) {
 		struct addrrange *ar;
 
-		ar = list_entry(list->next, struct addrrange, ar_link);
+		ar = list_first_entry(list, struct addrrange, ar_link);
 
 		cfs_expr_list_free_list(&ar->ar_numaddr_ranges);
 		list_del(&ar->ar_link);
@@ -1649,7 +1649,7 @@ int cfs_nidrange_find_min_max(struct list_head *nidlist, char *min_nid,
 	char max_addr_str[IPSTRING_LENGTH];
 	int rc;
 
-	first_nidrange = list_entry(nidlist->next, struct nidrange, nr_link);
+	first_nidrange = list_first_entry(nidlist, struct nidrange, nr_link);
 
 	netnum = first_nidrange->nr_netnum;
 	nf = first_nidrange->nr_netstrfns;

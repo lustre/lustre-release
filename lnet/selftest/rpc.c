@@ -229,9 +229,9 @@ srpc_service_fini(struct srpc_service *svc)
 				break;
 
 			while (!list_empty(q)) {
-				buf = list_entry(q->next,
-						 struct srpc_buffer,
-						 buf_list);
+				buf = list_first_entry(q,
+						       struct srpc_buffer,
+						       buf_list);
 				list_del(&buf->buf_list);
 				LIBCFS_FREE(buf, sizeof(*buf));
 			}

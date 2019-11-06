@@ -407,7 +407,7 @@ lst_free_rpcent(struct list_head *head)
 	struct lstcon_rpc_ent *ent;
 
 	while (!list_empty(head)) {
-		ent = list_entry(head->next, struct lstcon_rpc_ent, rpe_link);
+		ent = list_first_entry(head, struct lstcon_rpc_ent, rpe_link);
 
 		list_del(&ent->rpe_link);
 		free(ent);

@@ -438,8 +438,8 @@ cfs_expr_list_free_list(struct list_head *list)
 	struct cfs_expr_list *el;
 
 	while (!list_empty(list)) {
-		el = list_entry(list->next,
-				    struct cfs_expr_list, el_link);
+		el = list_first_entry(list,
+				      struct cfs_expr_list, el_link);
 		list_del(&el->el_link);
 		cfs_expr_list_free(el);
 	}
