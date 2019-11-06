@@ -115,8 +115,8 @@ lstcon_rpc_prep(struct lstcon_node *nd, int service, unsigned int feats,
 	spin_lock(&console_session.ses_rpc_lock);
 
 	if (!list_empty(&console_session.ses_rpc_freelist)) {
-		crpc = list_entry(console_session.ses_rpc_freelist.next,
-				  struct lstcon_rpc, crp_link);
+		crpc = list_first_entry(&console_session.ses_rpc_freelist,
+					struct lstcon_rpc, crp_link);
 		list_del_init(&crpc->crp_link);
 	}
 
@@ -1391,7 +1391,7 @@ lstcon_rpc_cleanup_wait(void)
 	spin_unlock(&console_session.ses_rpc_lock);
 
 	while (!list_empty(&zlist)) {
-		crpc = list_entry(zlist.next, struct lstcon_rpc, crp_link);
+		crpc = list_first_entry(&zlist, struct lstcon_rpc, crp_link);
 
 		list_del(&crpc->crp_link);
 		LIBCFS_FREE(crpc, sizeof(*crpc));

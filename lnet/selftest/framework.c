@@ -644,15 +644,15 @@ sfw_destroy_test_instance(struct sfw_test_instance *tsi)
 	LASSERT(!sfw_test_active(tsi));
 
 	while (!list_empty(&tsi->tsi_units)) {
-		tsu = list_entry(tsi->tsi_units.next,
-				 struct sfw_test_unit, tsu_list);
+		tsu = list_first_entry(&tsi->tsi_units,
+				       struct sfw_test_unit, tsu_list);
 		list_del(&tsu->tsu_list);
 		LIBCFS_FREE(tsu, sizeof(*tsu));
 	}
 
 	while (!list_empty(&tsi->tsi_free_rpcs)) {
-		rpc = list_entry(tsi->tsi_free_rpcs.next,
-				 struct srpc_client_rpc, crpc_list);
+		rpc = list_first_entry(&tsi->tsi_free_rpcs,
+				       struct srpc_client_rpc, crpc_list);
 		list_del(&rpc->crpc_list);
 		swi_cancel_workitem(&rpc->crpc_wi);
 		LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
@@ -672,8 +672,8 @@ sfw_destroy_batch(struct sfw_batch *tsb)
 	LASSERT(list_empty(&tsb->bat_list));
 
 	while (!list_empty(&tsb->bat_tests)) {
-		tsi = list_entry(tsb->bat_tests.next,
-				 struct sfw_test_instance, tsi_list);
+		tsi = list_first_entry(&tsb->bat_tests,
+				       struct sfw_test_instance, tsi_list);
 		list_del_init(&tsi->tsi_list);
 		sfw_destroy_test_instance(tsi);
 	}
@@ -690,8 +690,8 @@ sfw_destroy_session(struct sfw_session *sn)
 	LASSERT(sn != sfw_data.fw_session);
 
 	while (!list_empty(&sn->sn_batches)) {
-		batch = list_entry(sn->sn_batches.next,
-				   struct sfw_batch, bat_list);
+		batch = list_first_entry(&sn->sn_batches,
+					 struct sfw_batch, bat_list);
 		list_del_init(&batch->bat_list);
 		sfw_destroy_batch(batch);
 	}
@@ -930,8 +930,8 @@ sfw_create_test_rpc(struct sfw_test_unit *tsu, struct lnet_process_id peer,
 
 	if (!list_empty(&tsi->tsi_free_rpcs)) {
 		/* pick request from buffer */
-		rpc = list_entry(tsi->tsi_free_rpcs.next,
-				 struct srpc_client_rpc, crpc_list);
+		rpc = list_first_entry(&tsi->tsi_free_rpcs,
+				       struct srpc_client_rpc, crpc_list);
 		LASSERT(nblk == rpc->crpc_bulk.bk_niov);
 		list_del_init(&rpc->crpc_list);
 	}
@@ -1418,8 +1418,8 @@ sfw_create_rpc(struct lnet_process_id peer, int service,
         LASSERT (service <= SRPC_FRAMEWORK_SERVICE_MAX_ID);
 
 	if (nbulkiov == 0 && !list_empty(&sfw_data.fw_zombie_rpcs)) {
-		rpc = list_entry(sfw_data.fw_zombie_rpcs.next,
-				     struct srpc_client_rpc, crpc_list);
+		rpc = list_first_entry(&sfw_data.fw_zombie_rpcs,
+				       struct srpc_client_rpc, crpc_list);
 		list_del(&rpc->crpc_list);
 	}
 	spin_unlock(&sfw_data.fw_lock);
@@ -1763,8 +1763,8 @@ sfw_shutdown (void)
 	while (!list_empty(&sfw_data.fw_zombie_rpcs)) {
 		struct srpc_client_rpc *rpc;
 
-		rpc = list_entry(sfw_data.fw_zombie_rpcs.next,
-				 struct srpc_client_rpc, crpc_list);
+		rpc = list_first_entry(&sfw_data.fw_zombie_rpcs,
+				       struct srpc_client_rpc, crpc_list);
 		list_del(&rpc->crpc_list);
 
 		LIBCFS_FREE(rpc, srpc_client_rpc_size(rpc));
@@ -1779,8 +1779,8 @@ sfw_shutdown (void)
         }
 
 	while (!list_empty(&sfw_data.fw_tests)) {
-		tsc = list_entry(sfw_data.fw_tests.next,
-				 struct sfw_test_case, tsc_list);
+		tsc = list_first_entry(&sfw_data.fw_tests,
+				       struct sfw_test_case, tsc_list);
 
 		srpc_wait_service_shutdown(tsc->tsc_srv_service);
 
