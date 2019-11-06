@@ -2338,7 +2338,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			     struct lu_buf *def_acl_buf,
 			     struct lu_buf *hsm_buf,
 			     struct dt_allocation_hint *hint,
-			     struct thandle *handle)
+			     struct thandle *handle, bool initsecctx)
 {
 	const struct lu_buf *buf;
 	int rc;
@@ -2432,7 +2432,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			GOTO(err_initlized, rc = -EFAULT);
 	}
 
-	if (spec->sp_cr_file_secctx_name != NULL) {
+	if (initsecctx && spec->sp_cr_file_secctx_name != NULL) {
 		buf = mdd_buf_get_const(env, spec->sp_cr_file_secctx,
 					spec->sp_cr_file_secctx_size);
 		rc = mdo_xattr_set(env, son, buf, spec->sp_cr_file_secctx_name,
@@ -2642,7 +2642,7 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		GOTO(out_stop, rc);
 
 	rc = mdd_create_object(env, mdd_pobj, son, attr, spec, &acl_buf,
-			       &def_acl_buf, &hsm_buf, hint, handle);
+			       &def_acl_buf, &hsm_buf, hint, handle, true);
 	if (rc != 0)
 		GOTO(out_stop, rc);
 
@@ -4140,7 +4140,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	attr->la_valid &= ~LA_NLINK;
 
 	rc = mdd_create_object(env, tpobj, tobj, attr, spec, NULL, NULL, NULL,
-			       hint, handle);
+			       hint, handle, false);
 	if (rc)
 		RETURN(rc);
 

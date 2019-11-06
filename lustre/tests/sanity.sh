@@ -51,8 +51,8 @@ fi
 
 selinux_status=$(getenforce)
 if [ "$selinux_status" != "Disabled" ]; then
-	# bug number:    LU-12469 LU-12469
-	ALWAYS_EXCEPT+=" 230b     230d"
+	# bug number:
+	ALWAYS_EXCEPT+=""
 fi
 
 # skip the grant tests for ARM until they are fixed
