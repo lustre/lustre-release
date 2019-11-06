@@ -2038,31 +2038,33 @@ File 4: OST6, OST7, OST0</screen>
             necessarily chosen each time.</para>
         </listitem>
       </itemizedlist>
-      <para>The allocation method is determined by the amount of free-space imbalance on the OSTs.
-        When free space is relatively balanced across OSTs, the faster round-robin allocator is
-        used, which maximizes network balancing. The weighted allocator is used when any two OSTs
-        are out of balance by more than the specified threshold (17% by default). The threshold
-        between the two allocation methods is defined in the file
-            <literal>/proc/fs/<replaceable>fsname</replaceable>/lov/<replaceable>fsname</replaceable>-mdtlov/qos_threshold_rr</literal>. </para>
-      <para>To set the <literal>qos_threshold_r</literal> to <literal>25</literal>,  enter this
-        command on the
-        MGS:<screen>lctl set_param lov.<replaceable>fsname</replaceable>-mdtlov.qos_threshold_rr=25</screen></para>
+      <para>The allocation method is determined by the amount of free-space
+        imbalance on the OSTs. When free space is relatively balanced across
+        OSTs, the faster round-robin allocator is used, which maximizes network
+        balancing. The weighted allocator is used when any two OSTs are out of
+        balance by more than the specified threshold (17% by default). The
+        threshold between the two allocation methods is defined by the
+        <literal>qos_threshold_rr</literal> parameter. </para>
+        <para>To temporarily set the <literal>qos_threshold_rr</literal> to
+        <literal>25</literal>, enter the folowing on each MDS:
+        <screen>mds# lctl set_param lod.<replaceable>fsname</replaceable>*.qos_threshold_rr=25</screen></para>
     </section>
     <section remap="h3">
       <title><indexterm>
           <primary>space</primary>
           <secondary>location weighting</secondary>
         </indexterm>Adjusting the Weighting Between Free Space and Location</title>
-      <para>The weighting priority used by the weighted allocator is set in the file
-            <literal>/proc/fs/<replaceable>fsname</replaceable>/lov/<replaceable>fsname</replaceable>-mdtlov/qos_prio_free</literal>.
-        Increasing the value of <literal>qos_prio_free</literal> puts more weighting on the amount
-        of free space available on each OST and less on how stripes are distributed across OSTs. The
-        default value is <literal>91</literal> (percent). When the free space priority is set to
+      <para>The weighting priority used by the weighted allocator is set by the
+        the <literal>qos_prio_free</literal> parameter.
+        Increasing the value of <literal>qos_prio_free</literal> puts more
+        weighting on the amount of free space available on each OST and less
+        on how stripes are distributed across OSTs. The default value is
+        <literal>91</literal> (percent). When the free space priority is set to
           <literal>100</literal> (percent), weighting is based entirely on free space and location
         is no longer used by the striping algorithm. </para>
-      <para>To change the allocator weighting to <literal>100</literal>, enter this command on the
+      <para>To permanently change the allocator weighting to <literal>100</literal>, enter this command on the
         MGS:</para>
-      <screen>lctl conf_param <replaceable>fsname</replaceable>-MDT0000.lov.qos_prio_free=100</screen>
+      <screen>lctl conf_param <replaceable>fsname</replaceable>-MDT0000-*.lod.qos_prio_free=100</screen>
       <para> .</para>
       <note>
         <para>When <literal>qos_prio_free</literal> is set to <literal>100</literal>, a weighted
