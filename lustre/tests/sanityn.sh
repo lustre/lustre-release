@@ -4484,12 +4484,12 @@ test_93() {
 
 	mkdir -p $DIR1/$tfile-1/
 	mkdir -p $DIR2/$tfile-2/
-	local old_rr=$(do_facet $SINGLEMDS lctl get_param -n \
-		'lod.lustre-MDT*/qos_threshold_rr' | sed -e 's/%//')
-	do_facet $SINGLEMDS lctl set_param -n \
-		'lod.lustre-MDT*/qos_threshold_rr' 100
+	local old_rr=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+		lod.$FSNAME-MDT0000-*/qos_threshold_rr" | sed -e 's/%//')
+	do_facet $SINGLEMDS "$LCTL set_param -n \
+		lod.$FSNAME-MDT0000-*/qos_threshold_rr=100"
 	#define OBD_FAIL_MDS_LOV_CREATE_RACE     0x163
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0x00000163"
+	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x00000163"
 
 	$LFS setstripe -c -1 $DIR1/$tfile-1/file1 &
 	local PID1=$!
@@ -4498,9 +4498,9 @@ test_93() {
 	local PID2=$!
 	wait $PID2
 	wait $PID1
-	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
-	do_facet $SINGLEMDS "lctl set_param -n \
-		'lod.lustre-MDT*/qos_threshold_rr' $old_rr"
+	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x0"
+	do_facet $SINGLEMDS "$LCTL set_param -n \
+		lod.$FSNAME-MDT0000-*/qos_threshold_rr=$old_rr"
 
 	$LFS getstripe $DIR1/$tfile-1/file1
 	rc1=$($LFS getstripe -q $DIR1/$tfile-1/file1 |
