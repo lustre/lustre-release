@@ -2461,38 +2461,38 @@ lst_print_stat(char *name, struct list_head *resultp,
 	INIT_LIST_HEAD(&tmp[0]);
 	INIT_LIST_HEAD(&tmp[1]);
 
-        memset(&lnet_stat_result, 0, sizeof(lnet_stat_result));
+	memset(&lnet_stat_result, 0, sizeof(lnet_stat_result));
 
 	while (!list_empty(&resultp[idx])) {
 		if (list_empty(&resultp[1 - idx])) {
-                        fprintf(stderr, "Group is changed, re-run stat\n");
-                        break;
-                }
+			fprintf(stderr, "Group is changed, re-run stat\n");
+			break;
+		}
 
-		new = list_entry(resultp[idx].next, struct lstcon_rpc_ent,
-                                     rpe_link);
-		old = list_entry(resultp[1 - idx].next, struct lstcon_rpc_ent,
-                                     rpe_link);
+		new = list_first_entry(&resultp[idx], struct lstcon_rpc_ent,
+				       rpe_link);
+		old = list_first_entry(&resultp[1 - idx], struct lstcon_rpc_ent,
+				       rpe_link);
 
-                /* first time get stats result, can't calculate diff */
-                if (new->rpe_peer.nid == LNET_NID_ANY)
-                        break;
+		/* first time get stats result, can't calculate diff */
+		if (new->rpe_peer.nid == LNET_NID_ANY)
+			break;
 
-                if (new->rpe_peer.nid != old->rpe_peer.nid ||
-                    new->rpe_peer.pid != old->rpe_peer.pid) {
-                        /* Something wrong. i.e, somebody change the group */
-                        break;
-                }
+		if (new->rpe_peer.nid != old->rpe_peer.nid ||
+		    new->rpe_peer.pid != old->rpe_peer.pid) {
+			/* Something wrong. i.e, somebody change the group */
+			break;
+		}
 
 		list_move_tail(&new->rpe_link, &tmp[idx]);
 
 		list_move_tail(&old->rpe_link, &tmp[1 - idx]);
 
-                if (new->rpe_rpc_errno != 0 || new->rpe_fwk_errno != 0 ||
-                    old->rpe_rpc_errno != 0 || old->rpe_fwk_errno != 0) {
-                        errcount ++;
-                        continue;
-                }
+		if (new->rpe_rpc_errno != 0 || new->rpe_fwk_errno != 0 ||
+		    old->rpe_rpc_errno != 0 || old->rpe_fwk_errno != 0) {
+			errcount++;
+			continue;
+		}
 
 		sfwk_new = (struct sfw_counters *)&new->rpe_payload[0];
 		sfwk_old = (struct sfw_counters *)&old->rpe_payload[0];
@@ -2697,21 +2697,21 @@ jt_lst_stat(int argc, char **argv)
 			lst_reset_rpcent(&srp->srp_result[1 - idx]);
 		}
 
-                idx = 1 - idx;
+		idx = 1 - idx;
 
-                if (count > 0)
-                        count--;
-        } while (count == -1 || count > 0);
+		if (count > 0)
+			count--;
+	} while (count == -1 || count > 0);
 
 out:
 	while (!list_empty(&head)) {
-		srp = list_entry(head.next, lst_stat_req_param_t, srp_link);
+		srp = list_first_entry(&head, lst_stat_req_param_t, srp_link);
 
 		list_del(&srp->srp_link);
-                lst_stat_req_param_free(srp);
-        }
+		lst_stat_req_param_free(srp);
+	}
 
-        return rc;
+	return rc;
 }
 
 int
@@ -2828,13 +2828,13 @@ jt_lst_show_error(int argc, char **argv)
         }
 out:
 	while (!list_empty(&head)) {
-		srp = list_entry(head.next, lst_stat_req_param_t, srp_link);
+		srp = list_first_entry(&head, lst_stat_req_param_t, srp_link);
 
 		list_del(&srp->srp_link);
-                lst_stat_req_param_free(srp);
-        }
+		lst_stat_req_param_free(srp);
+	}
 
-        return rc;
+	return rc;
 }
 
 int

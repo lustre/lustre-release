@@ -300,8 +300,8 @@ lnet_size_marshaled_nid_descr(struct lnet_ud_nid_descr *descr)
 		return size;
 
 	if (!list_empty(&descr->ud_net_id.udn_net_num_range)) {
-		expr = list_entry(descr->ud_net_id.udn_net_num_range.next,
-				  struct cfs_expr_list, el_link);
+		expr = list_first_entry(&descr->ud_net_id.udn_net_num_range,
+					struct cfs_expr_list, el_link);
 		range_count = lnet_get_list_len(&expr->el_exprs);
 	}
 
@@ -374,8 +374,8 @@ copy_nid_range(struct lnet_ud_nid_descr *nid_descr, char *type,
 
 	/* copy the net information */
 	if (!list_empty(&nid_descr->ud_net_id.udn_net_num_range)) {
-		expr = list_entry(nid_descr->ud_net_id.udn_net_num_range.next,
-				  struct cfs_expr_list, el_link);
+		expr = list_first_entry(&nid_descr->ud_net_id.udn_net_num_range,
+					struct cfs_expr_list, el_link);
 		net_expr_count = lnet_get_list_len(&expr->el_exprs);
 	} else {
 		net_expr_count = 0;

@@ -624,8 +624,8 @@ static void snapshot_unload_conf(struct snapshot_instance *si)
 	struct snapshot_target *st;
 
 	while (!list_empty(&si->si_mdts_list)) {
-		st = list_entry(si->si_mdts_list.next,
-				struct snapshot_target, st_list);
+		st = list_first_entry(&si->si_mdts_list,
+				      struct snapshot_target, st_list);
 		list_del(&st->st_list);
 		free(st->st_host);
 		free(st->st_fhost);
@@ -636,8 +636,8 @@ static void snapshot_unload_conf(struct snapshot_instance *si)
 	}
 
 	while (!list_empty(&si->si_osts_list)) {
-		st = list_entry(si->si_osts_list.next,
-				struct snapshot_target, st_list);
+		st = list_first_entry(&si->si_osts_list,
+				      struct snapshot_target, st_list);
 		list_del(&st->st_list);
 		free(st->st_host);
 		free(st->st_fhost);
@@ -1062,8 +1062,8 @@ static int snapshot_get_mgsnode(struct snapshot_instance *si,
 	int rc;
 	int foreign = 0;
 
-	st = list_entry(si->si_osts_list.next, struct snapshot_target,
-			st_list);
+	st = list_first_entry(&si->si_osts_list, struct snapshot_target,
+			      st_list);
 again:
 	rc = 0;
 	memset(buf, 0, sizeof(buf));
@@ -2210,8 +2210,8 @@ again:
 		goto again;
 	}
 	while (!list_empty(&list_sub_items)) {
-		lsi = list_entry(list_sub_items.next,
-				 struct list_sub_item, lsi_list);
+		lsi = list_first_entry(&list_sub_items,
+				       struct list_sub_item, lsi_list);
 		list_del(&lsi->lsi_list);
 		if (!rc) {
 			si->si_ssname = lsi->lsi_ssname;

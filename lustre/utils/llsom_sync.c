@@ -246,7 +246,7 @@ static int lsom_start_update(int count)
 	while (i < count) {
 		struct fid_rec *f;
 
-		f = list_entry(head.lh_list.next, struct fid_rec, fr_link);
+		f = list_first_entry(&head.lh_list, struct fid_rec, fr_link);
 		rc = lsom_update_one(f);
 		if (rc == 0) {
 			list_del_init(&f->fr_link);
@@ -284,7 +284,7 @@ repeated:
 		 * pop the record, start to handle it immediately.
 		 */
 		now = time(NULL);
-		f = list_entry(head.lh_list.next, struct fid_rec, fr_link);
+		f = list_first_entry(&head.lh_list, struct fid_rec, fr_link);
 		if (now > ((f->fr_time >> 30) + opt.o_min_age))
 			count = 1;
 	}

@@ -1089,8 +1089,8 @@ config:
 	ret = 0;
 
 	while (!list_empty(&cfg_list) && ret == 0) {
-		lce = list_entry(cfg_list.next, struct lustre_cfg_entry,
-				 lce_list);
+		lce = list_first_entry(&cfg_list, struct lustre_cfg_entry,
+				       lce_list);
 		list_del(&lce->lce_list);
 		snprintf(filepnm, sizeof(filepnm), "%s/%s", cfg_dir,
 			 lce->lce_name);
@@ -1126,8 +1126,8 @@ out:
 		closedir(dir);
 
 	while (!list_empty(&cfg_list)) {
-		lce = list_entry(cfg_list.next, struct lustre_cfg_entry,
-				 lce_list);
+		lce = list_first_entry(&cfg_list, struct lustre_cfg_entry,
+				       lce_list);
 		list_del(&lce->lce_list);
 		lustre_cfg_entry_fini(lce);
 	}

@@ -371,7 +371,8 @@ static int lfs_project_iterate(const char *pathname,
 		return ret;
 
 	while (!list_empty(&head)) {
-		lpi = list_entry(head.next, struct lfs_project_item, lpi_list);
+		lpi = list_first_entry(&head, struct lfs_project_item,
+				       lpi_list);
 		list_del(&lpi->lpi_list);
 		rc = lfs_project_handle_dir(&head, lpi->lpi_pathname,
 					     phc, func);

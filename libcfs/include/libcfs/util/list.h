@@ -250,6 +250,17 @@ static inline void list_splice_init(struct list_head *list,
 	list_entry((ptr)->next, type, member)
 
 /**
+ * list_last_entry - get the last element from a list
+ * \param ptr	 the list head to take the element from.
+ * \param type	 the type of the struct this is embedded in.
+ * \param member the name of the list_head within the struct.
+ *
+ * Note, that list is expected to be not empty.
+ */
+#define list_last_entry(ptr, type, member) \
+	list_entry((ptr)->prev, type, member)
+
+/**
  * Iterate over a list
  * \param pos	the iterator
  * \param head	the list to iterate over

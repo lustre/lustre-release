@@ -1980,8 +1980,8 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 	if (new == NULL)
 		return -1;
 
-	last = list_entry(layout->llot_comp_list.prev, typeof(*last),
-			  llc_list);
+	last = list_last_entry(&layout->llot_comp_list, typeof(*last),
+			       llc_list);
 
 	list_add_tail(&new->llc_list, &layout->llot_comp_list);
 
@@ -2065,7 +2065,7 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
 		return -1;
 	}
 	layout->llot_cur_comp =
-		list_entry(comp->llc_list.prev, typeof(*comp), llc_list);
+		list_last_entry(&comp->llc_list, typeof(*comp), llc_list);
 	if (comp->llc_list.prev == &layout->llot_comp_list)
 		layout->llot_cur_comp = NULL;
 
@@ -2144,8 +2144,10 @@ int llapi_layout_comp_use(struct llapi_layout *layout,
 		return 1;
 	}
 
-	head = list_entry(layout->llot_comp_list.next, typeof(*head), llc_list);
-	tail = list_entry(layout->llot_comp_list.prev, typeof(*tail), llc_list);
+	head = list_first_entry(&layout->llot_comp_list, typeof(*head),
+				llc_list);
+	tail = list_last_entry(&layout->llot_comp_list, typeof(*tail),
+			       llc_list);
 	switch (pos) {
 	case LLAPI_LAYOUT_COMP_USE_FIRST:
 		layout->llot_cur_comp = head;
@@ -2155,8 +2157,9 @@ int llapi_layout_comp_use(struct llapi_layout *layout,
 			errno = ENOENT;
 			return 1;
 		}
-		layout->llot_cur_comp = list_entry(comp->llc_list.next,
-						   typeof(*comp), llc_list);
+		layout->llot_cur_comp = list_first_entry(&comp->llc_list,
+							 typeof(*comp),
+							 llc_list);
 		break;
 	case LLAPI_LAYOUT_COMP_USE_LAST:
 		layout->llot_cur_comp = tail;
@@ -2166,8 +2169,9 @@ int llapi_layout_comp_use(struct llapi_layout *layout,
 			errno = ENOENT;
 			return 1;
 		}
-		layout->llot_cur_comp = list_entry(comp->llc_list.prev,
-						   typeof(*comp), llc_list);
+		layout->llot_cur_comp = list_last_entry(&comp->llc_list,
+							typeof(*comp),
+							llc_list);
 		break;
 	default:
 		errno = EINVAL;
@@ -2724,7 +2728,8 @@ int llapi_layout_get_last_init_comp(struct llapi_layout *layout)
 	if (!layout->llot_is_composite)
 		return 0;
 
-	head = list_entry(layout->llot_comp_list.next, typeof(*comp), llc_list);
+	head = list_first_entry(&layout->llot_comp_list, typeof(*comp),
+				llc_list);
 	if (head == NULL)
 		return -EINVAL;
 	if (head->llc_id == 0 && !(head->llc_flags & LCME_FL_INIT))
@@ -2732,11 +2737,13 @@ int llapi_layout_get_last_init_comp(struct llapi_layout *layout)
 		return -EISDIR;
 
 	/* traverse the components from the tail to find the last init one */
-	comp = list_entry(layout->llot_comp_list.prev, typeof(*comp), llc_list);
+	comp = list_last_entry(&layout->llot_comp_list, typeof(*comp),
+			       llc_list);
 	while (comp != head) {
 		if (comp->llc_flags & LCME_FL_INIT)
 			break;
-		comp = list_entry(comp->llc_list.prev, typeof(*comp), llc_list);
+		comp = list_last_entry(&comp->llc_list, typeof(*comp),
+				       llc_list);
 	}
 
 	layout->llot_cur_comp = comp;
@@ -3220,14 +3227,14 @@ static int llapi_layout_sanity_cb(struct llapi_layout *layout,
 	}
 
 	if (comp->llc_list.prev != &layout->llot_comp_list)
-		prev = list_entry(comp->llc_list.prev, typeof(*prev),
-				  llc_list);
+		prev = list_last_entry(&comp->llc_list, typeof(*prev),
+				       llc_list);
 	else
 		prev = NULL;
 
 	if (comp->llc_list.next != &layout->llot_comp_list)
-		next = list_entry(comp->llc_list.next, typeof(*next),
-				  llc_list);
+		next = list_first_entry(&comp->llc_list, typeof(*next),
+					llc_list);
 	else
 		next = NULL;
 
