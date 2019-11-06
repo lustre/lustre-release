@@ -4981,7 +4981,7 @@ test_49() { # LU-1030
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"
 
-	# get ost1 size - lustre-OST0000
+	# get ost1 size - $FSNAME-OST0000
 	ost1_size=$(do_facet ost1 $LFS df | grep ${ost1_svc} |
 		awk '{ print $4 }')
 	# write 800M at maximum
@@ -19757,8 +19757,9 @@ test_300k() {
 
 	# this test needs a huge transaction
 	local kb
-	kb=$(do_facet $SINGLEMDS lctl get_param -n osd*.lustre-MDT0000.kbytestotal)
-	[ $kb -lt $((1024*1024)) ] && skip "too small mds: $kb"
+	kb=$(do_facet $SINGLEMDS "$LCTL get_param -n \
+	     osd*.$FSNAME-MDT0000.kbytestotal")
+	[ $kb -lt $((1024*1024)) ] && skip "MDT0 too small: $kb"
 
 	local stripe_count
 	local file
@@ -20440,7 +20441,7 @@ test_fake_rw() {
 
 	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 
-	# get ost1 size - lustre-OST0000
+	# get ost1 size - $FSNAME-OST0000
 	local ost1_avail_size=$($LFS df | awk /${ost1_svc}/'{ print $4 }')
 	local blocks=$((ost1_avail_size/2/1024)) # half avail space by megabytes
 	[ $blocks -gt 1000 ] && blocks=1000 # 1G in maximum
@@ -20982,13 +20983,13 @@ test_qos_mkdir() {
 		lmv.*.qos_maxage=$lmv_qos_maxage > /dev/null" EXIT
 
 	lod_qos_prio_free=$(do_facet mds1 $LCTL get_param -n \
-		lod.lustre-MDT0000-mdtlov.mdt_qos_prio_free | head -n1)
+		lod.$FSNAME-MDT0000-mdtlov.mdt_qos_prio_free | head -n1)
 	lod_qos_prio_free=${lod_qos_prio_free%%%}
 	lod_qos_threshold_rr=$(do_facet mds1 $LCTL get_param -n \
-		lod.lustre-MDT0000-mdtlov.mdt_qos_threshold_rr | head -n1)
+		lod.$FSNAME-MDT0000-mdtlov.mdt_qos_threshold_rr | head -n1)
 	lod_qos_threshold_rr=${lod_qos_threshold_rr%%%}
 	lod_qos_maxage=$(do_facet mds1 $LCTL get_param -n \
-		lod.lustre-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
+		lod.$FSNAME-MDT0000-mdtlov.qos_maxage | awk '{ print $1 }')
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null" EXIT
 	stack_trap "do_nodes $mdts $LCTL set_param \
@@ -22160,7 +22161,7 @@ test_805() {
 	local usedkb
 	local old
 	local quota
-	local pref="osd-zfs.lustre-MDT0000."
+	local pref="osd-zfs.$FSNAME-MDT0000."
 
 	# limit available space on MDS dataset to meet nospace issue
 	# quickly. then ZFS 0.7.2 can use reserved space if asked

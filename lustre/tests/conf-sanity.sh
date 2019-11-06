@@ -7305,9 +7305,9 @@ test_100() {
 	# Desired output
 	# MGS:
 	#     0@lo
-	# lustre-MDT0000:
+	# $FSNAME-MDT0000:
 	#     0@lo
-	# lustre-OST0000:
+	# $FSNAME-OST0000:
 	#     0@lo
 	do_facet mgs 'lshowmount -v' | awk 'BEGIN {NR == 0; rc=1} /MGS:/ {rc=0}
 		END {exit rc}' || error "lshowmount have no output MGS"
@@ -7801,10 +7801,10 @@ test_108a() {
 
 	echo "changing server nid..."
 	$rcmd mount -t lustre -o nosvc lustre-mdt1/mdt1 $tmp/mnt/mdt1
-	$rcmd lctl replace_nids lustre-MDT0000 $nid
-	$rcmd lctl replace_nids lustre-MDT0001 $nid
-	$rcmd lctl replace_nids lustre-OST0000 $nid
-	$rcmd lctl replace_nids lustre-OST0001 $nid
+	$rcmd lctl replace_nids $FSNAME-MDT0000 $nid
+	$rcmd lctl replace_nids $FSNAME-MDT0001 $nid
+	$rcmd lctl replace_nids $FSNAME-OST0000 $nid
+	$rcmd lctl replace_nids $FSNAME-OST0001 $nid
 	$rcmd umount $tmp/mnt/mdt1
 
 	for facet in $facets; do
@@ -7863,10 +7863,10 @@ test_108b() {
 
 	echo "changing server nid..."
 	$rcmd mount -t lustre -o nosvc,loop $tmp/images/mdt1 $tmp/mnt/mdt1
-	$rcmd lctl replace_nids lustre-MDT0000 $nid
-	$rcmd lctl replace_nids lustre-MDT0001 $nid
-	$rcmd lctl replace_nids lustre-OST0000 $nid
-	$rcmd lctl replace_nids lustre-OST0001 $nid
+	$rcmd lctl replace_nids $FSNAME-MDT0000 $nid
+	$rcmd lctl replace_nids $FSNAME-MDT0001 $nid
+	$rcmd lctl replace_nids $FSNAME-OST0000 $nid
+	$rcmd lctl replace_nids $FSNAME-OST0001 $nid
 	$rcmd umount $tmp/mnt/mdt1
 
 	for facet in $facets; do
@@ -7876,7 +7876,7 @@ test_108b() {
 	done
 
 	for facet in $scrub_list; do
-		$rcmd $LCTL lfsck_start -M lustre-$facet -t scrub ||
+		$rcmd $LCTL lfsck_start -M $FSNAME-$facet -t scrub ||
 			error "failed to start OI scrub on $facet"
 	done
 

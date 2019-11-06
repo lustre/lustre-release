@@ -50,7 +50,7 @@ get_targets () {
 		# obdfilter-survey :
 		# case 1 (local disk):
 		#    $ nobjhi=2 thrhi=2 size=1024
-		#         targets="lustre-OST0000 lustre-OST0001 ..."
+		#      targets="$nid:$FSNAME-OST0000 $nid:$FSNAME-OST0001 ..."
 		#                 sh obdfilter-survey
 		local_node && [ "$1" == "disk" ] || target=$nid:$target
 		targets="$targets $target"
