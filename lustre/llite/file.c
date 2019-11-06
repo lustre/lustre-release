@@ -787,7 +787,9 @@ restart:
         } else {
                 LASSERT(*och_usecount == 0);
 		if (!it->it_disposition) {
-			struct ll_dentry_data *ldd = ll_d2d(file->f_path.dentry);
+			struct dentry *dentry = file_dentry(file);
+			struct ll_dentry_data *ldd;
+
                         /* We cannot just request lock handle now, new ELC code
                            means that one of other OPEN locks for this file
                            could be cancelled, and since blocking ast handler
@@ -809,18 +811,21 @@ restart:
 			 *  lookup path only, since ll_iget_for_nfs always calls
 			 *  ll_d_init().
 			 */
+			ldd = ll_d2d(dentry);
 			if (ldd && ldd->lld_nfs_dentry) {
 				ldd->lld_nfs_dentry = 0;
-				it->it_flags |= MDS_OPEN_LOCK;
+				if (!filename_is_volatile(dentry->d_name.name,
+							  dentry->d_name.len,
+							  NULL))
+					it->it_flags |= MDS_OPEN_LOCK;
 			}
 
-			 /*
+			/*
 			 * Always specify MDS_OPEN_BY_FID because we don't want
 			 * to get file with different fid.
 			 */
 			it->it_flags |= MDS_OPEN_BY_FID;
-			rc = ll_intent_file_open(file_dentry(file), NULL, 0,
-						 it);
+			rc = ll_intent_file_open(dentry, NULL, 0, it);
                         if (rc)
                                 GOTO(out_openerr, rc);
 
