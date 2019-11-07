@@ -143,7 +143,7 @@ static inline void key_revoke_locked(struct key *key)
 static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
 {
 	struct gss_cli_ctx_keyring *gctx_kr = cfs_from_timer(gctx_kr,
-							     &data, gck_timer);
+							     data, gck_timer);
 	struct ptlrpc_cli_ctx *ctx = &(gctx_kr->gck_base.gc_base);
 	struct key *key	= gctx_kr->gck_key;
 
@@ -158,7 +158,7 @@ static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
 static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
 {
 	struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
-	struct timer_list *timer = gctx_kr->gck_timer;
+	struct timer_list *timer = &gctx_kr->gck_timer;
 
 	LASSERT(timer);
 
@@ -177,18 +177,11 @@ static
 void ctx_clear_timer_kr(struct ptlrpc_cli_ctx *ctx)
 {
         struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
-        struct timer_list          *timer = gctx_kr->gck_timer;
-
-        if (timer == NULL)
-                return;
+	struct timer_list          *timer = &gctx_kr->gck_timer;
 
         CDEBUG(D_SEC, "ctx %p, key %p\n", ctx, gctx_kr->gck_key);
 
-        gctx_kr->gck_timer = NULL;
-
         del_singleshot_timer_sync(timer);
-
-        OBD_FREE_PTR(timer);
 }
 
 static
@@ -202,17 +195,11 @@ struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
 	if (gctx_kr == NULL)
 		return NULL;
 
-	OBD_ALLOC_PTR(gctx_kr->gck_timer);
-	if (gctx_kr->gck_timer == NULL) {
-		OBD_FREE_PTR(gctx_kr);
-		return NULL;
-	}
-	cfs_timer_setup(gctx_kr->gck_timer, NULL, 0, 0);
+	cfs_timer_setup(&gctx_kr->gck_timer, NULL, 0, 0);
 
 	ctx = &gctx_kr->gck_base.gc_base;
 
 	if (gss_cli_ctx_init_common(sec, ctx, &gss_keyring_ctxops, vcred)) {
-		OBD_FREE_PTR(gctx_kr->gck_timer);
 		OBD_FREE_PTR(gctx_kr);
 		return NULL;
 	}
@@ -239,7 +226,6 @@ static void ctx_destroy_kr(struct ptlrpc_cli_ctx *ctx)
         LASSERT(gctx_kr->gck_key == NULL);
 
 	ctx_clear_timer_kr(ctx);
-	LASSERT(gctx_kr->gck_timer == NULL);
 
 	if (gss_cli_ctx_fini_common(sec, ctx))
 		return;
