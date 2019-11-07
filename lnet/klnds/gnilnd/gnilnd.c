@@ -1593,19 +1593,14 @@ kgnilnd_del_conn_or_peer(kgn_net_t *net, lnet_nid_t nid, int command,
 		return rc;
 	}
 
-	i = 4;
-	while (atomic_read(&kgnilnd_data.kgn_npending_conns)   ||
-	       atomic_read(&kgnilnd_data.kgn_npending_detach)  ||
-	       atomic_read(&kgnilnd_data.kgn_npending_unlink)) {
-
-		schedule_timeout_uninterruptible(cfs_time_seconds(1));
-		i++;
-
-		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, "Waiting on %d peers %d closes %d detaches\n",
+	wait_var_event_warning(&kgnilnd_data,
+			       !atomic_read(&kgnilnd_data.kgn_npending_conns) &&
+			       !atomic_read(&kgnilnd_data.kgn_npending_detach) &&
+			       !atomic_read(&kgnilnd_data.kgn_npending_unlink),
+			       "Waiting on %d peers %d closes %d detaches\n",
 				atomic_read(&kgnilnd_data.kgn_npending_unlink),
 				atomic_read(&kgnilnd_data.kgn_npending_conns),
 				atomic_read(&kgnilnd_data.kgn_npending_detach));
-	}
 
 	return rc;
 }

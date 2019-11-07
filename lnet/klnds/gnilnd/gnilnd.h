@@ -1159,18 +1159,20 @@ do {									\
 #error "this code uses actions inside LASSERT for ref counting"
 #endif
 
-#define kgnilnd_admin_addref(atomic)                                     \
-do {                                                                            \
-	int     val = atomic_inc_return(&atomic);                               \
-	LASSERTF(val > 0,  #atomic " refcount %d\n", val);                       \
-	CDEBUG(D_NETTRACE, #atomic " refcount %d\n", val);                       \
+#define kgnilnd_admin_addref(atomic)					\
+do {									\
+	int val = atomic_inc_return(&atomic);				\
+	LASSERTF(val > 0,  #atomic " refcount %d\n", val);		\
+	CDEBUG(D_NETTRACE, #atomic " refcount %d\n", val);		\
 } while (0)
 
-#define kgnilnd_admin_decref(atomic)                                     \
-do {                                                                            \
-	int     val = atomic_dec_return(&atomic);                               \
-	LASSERTF(val >=0,  #atomic " refcount %d\n", val);                        \
-	CDEBUG(D_NETTRACE, #atomic " refcount %d\n", val);                       \
+#define kgnilnd_admin_decref(atomic)					\
+do {									\
+	int val = atomic_dec_return(&atomic);				\
+	LASSERTF(val >= 0,  #atomic " refcount %d\n", val);		\
+	CDEBUG(D_NETTRACE, #atomic " refcount %d\n", val);		\
+	if (!val)							\
+		wake_up_var(&kgnilnd_data);				\
 }while (0)
 
 #define kgnilnd_net_addref(net)                                                 \
