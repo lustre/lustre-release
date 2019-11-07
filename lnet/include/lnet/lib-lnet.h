@@ -882,11 +882,6 @@ static inline void lnet_ping_buffer_decref(struct lnet_ping_buffer *pbuf)
 		lnet_ping_buffer_free(pbuf);
 }
 
-static inline int lnet_ping_buffer_numref(struct lnet_ping_buffer *pbuf)
-{
-	return atomic_read(&pbuf->pb_refcnt);
-}
-
 static inline int lnet_push_target_resize_needed(void)
 {
 	return the_lnet.ln_push_target->pb_nnis < the_lnet.ln_push_target_nnis;

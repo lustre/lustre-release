@@ -1513,7 +1513,7 @@ lnet_ping_buffer_alloc(int nnis, gfp_t gfp)
 void
 lnet_ping_buffer_free(struct lnet_ping_buffer *pbuf)
 {
-	LASSERT(lnet_ping_buffer_numref(pbuf) == 0);
+	LASSERT(atomic_read(&pbuf->pb_refcnt) == 0);
 	LIBCFS_FREE(pbuf, LNET_PING_BUFFER_SIZE(pbuf->pb_nnis));
 }
 
@@ -1726,7 +1726,7 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 fail_unlink_ping_me:
 	LNetMEUnlink(me);
 fail_decref_ping_buffer:
-	LASSERT(lnet_ping_buffer_numref(*ppbuf) == 1);
+	LASSERT(atomic_read(&(*ppbuf)->pb_refcnt) == 1);
 	lnet_ping_buffer_decref(*ppbuf);
 	*ppbuf = NULL;
 fail_free_eq:
@@ -1747,7 +1747,7 @@ lnet_ping_md_unlink(struct lnet_ping_buffer *pbuf,
 	LNetInvalidateMDHandle(ping_mdh);
 
 	/* NB the MD could be busy; this just starts the unlink */
-	while (lnet_ping_buffer_numref(pbuf) > 1) {
+	while (atomic_read(&pbuf->pb_refcnt) > 1) {
 		CDEBUG(D_NET, "Still waiting for ping data MD to unlink\n");
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(cfs_time_seconds(1));
@@ -1981,7 +1981,7 @@ static void lnet_push_target_fini(void)
 	LNetInvalidateMDHandle(&the_lnet.ln_push_target_md);
 
 	/* Wait for the unlink to complete. */
-	while (lnet_ping_buffer_numref(the_lnet.ln_push_target) > 1) {
+	while (atomic_read(&the_lnet.ln_push_target->pb_refcnt) > 1) {
 		CDEBUG(D_NET, "Still waiting for ping data MD to unlink\n");
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		schedule_timeout(cfs_time_seconds(1));
