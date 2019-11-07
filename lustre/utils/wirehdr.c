@@ -39,7 +39,14 @@
 #ifdef HAVE_SERVER_SUPPORT
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
-#endif
+#ifdef CONFIG_FS_POSIX_ACL
+#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
+#include <linux/posix_acl_xattr.h>
+# define posix_acl_xattr_header struct posix_acl_xattr_header
+# define posix_acl_xattr_entry  struct posix_acl_xattr_entry
+#endif /* HAVE_STRUCT_POSIX_ACL_XATTR */
+#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }

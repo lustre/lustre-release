@@ -39,7 +39,14 @@
 #ifdef HAVE_SERVER_SUPPORT
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
-#endif
+#ifdef CONFIG_FS_POSIX_ACL
+#include <linux/posix_acl_xattr.h>
+#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
+# define posix_acl_xattr_header struct posix_acl_xattr_header
+# define posix_acl_xattr_entry  struct posix_acl_xattr_entry
+#endif /* HAVE_STRUCT_POSIX_ACL_XATTR */
+#endif /* CONFIG_FS_POSIX_ACL */
+#endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
@@ -1971,6 +1978,20 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_statfs, os_spare9));
 	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_spare9) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_spare9));
+	LASSERTF(OS_STATE_DEGRADED == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATE_DEGRADED);
+	LASSERTF(OS_STATE_READONLY == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATE_READONLY);
+	LASSERTF(OS_STATE_NOPRECREATE == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATE_NOPRECREATE);
+	LASSERTF(OS_STATE_ENOSPC == 0x00000020UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATE_ENOSPC);
+	LASSERTF(OS_STATE_ENOINO == 0x00000040UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATE_ENOINO);
+	LASSERTF(OS_STATE_SUM == 0x00000100UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATE_SUM);
+	LASSERTF(OS_STATE_NONROT == 0x00000200UL, "found 0x%.8xUL\n",
+		(unsigned)OS_STATE_NONROT);
 
 	/* Checks for struct obd_ioobj */
 	LASSERTF((int)sizeof(struct obd_ioobj) == 24, "found %lld\n",
@@ -2527,20 +2548,20 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LUSTRE_DIRECTIO_FL);
 	LASSERTF(LUSTRE_INLINE_DATA_FL == 0x10000000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_INLINE_DATA_FL);
-	LASSERTF(MDS_INODELOCK_LOOKUP == 0x000001, "found 0x%.8x\n",
-		MDS_INODELOCK_LOOKUP);
-	LASSERTF(MDS_INODELOCK_UPDATE == 0x000002, "found 0x%.8x\n",
-		MDS_INODELOCK_UPDATE);
-	LASSERTF(MDS_INODELOCK_OPEN == 0x000004, "found 0x%.8x\n",
-		MDS_INODELOCK_OPEN);
-	LASSERTF(MDS_INODELOCK_LAYOUT == 0x000008, "found 0x%.8x\n",
-		MDS_INODELOCK_LAYOUT);
-	LASSERTF(MDS_INODELOCK_PERM == 0x000010, "found 0x%.8x\n",
-		MDS_INODELOCK_PERM);
-	LASSERTF(MDS_INODELOCK_XATTR == 0x000020, "found 0x%.8x\n",
-		MDS_INODELOCK_XATTR);
-	LASSERTF(MDS_INODELOCK_DOM == 0x000040, "found 0x%.8x\n",
-		MDS_INODELOCK_DOM);
+	LASSERTF(MDS_INODELOCK_LOOKUP == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_INODELOCK_LOOKUP);
+	LASSERTF(MDS_INODELOCK_UPDATE == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_INODELOCK_UPDATE);
+	LASSERTF(MDS_INODELOCK_OPEN == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_INODELOCK_OPEN);
+	LASSERTF(MDS_INODELOCK_LAYOUT == 0x00000008UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_INODELOCK_LAYOUT);
+	LASSERTF(MDS_INODELOCK_PERM == 0x00000010UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_INODELOCK_PERM);
+	LASSERTF(MDS_INODELOCK_XATTR == 0x00000020UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_INODELOCK_XATTR);
+	LASSERTF(MDS_INODELOCK_DOM == 0x00000040UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_INODELOCK_DOM);
 
 	/* Checks for struct mdt_ioepoch */
 	LASSERTF((int)sizeof(struct mdt_ioepoch) == 24, "found %lld\n",
