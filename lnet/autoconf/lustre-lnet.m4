@@ -638,27 +638,6 @@ LB_CHECK_EXPORT([kmap_to_page], [mm/highmem.c],
 ]) # LN_EXPORT_KMAP_TO_PAG
 
 #
-# LN_CONFIG_SOCK_ACCEPT
-#
-# 4.11 commit cdfbabfb2f0ce983fdaa42f20e5f7842178fc01e added a flag
-# to handle a possible lockdep condition kernel socket accept.
-#
-AC_DEFUN([LN_CONFIG_SOCK_ACCEPT], [
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_CHECK_COMPILE([if 'struct sock' accept function requires a bool argument],
-kern_sock_flag, [
-	#include <linux/net.h>
-],[
-	((struct socket *)0)->ops->accept(NULL, NULL, O_NONBLOCK, false);
-],[
-	AC_DEFINE(HAVE_KERN_SOCK_ACCEPT_FLAG_ARG, 1,
-		['struct sock' accept function requires bool argument])
-])
-EXTRA_KCFLAGS="$tmp_flags"
-]) # LN_CONFIG_SOCK_ACCEPT
-
-#
 # LN_HAVE_ORACLE_OFED_EXTENSIONS
 #
 # Oracle UEK 5
@@ -766,8 +745,6 @@ LN_EXPORT_KMAP_TO_PAGE
 LN_CONFIG_SK_DATA_READY
 # 4.x
 LN_CONFIG_SOCK_CREATE_KERN
-# 4.11
-LN_CONFIG_SOCK_ACCEPT
 # 4.14
 LN_HAVE_ORACLE_OFED_EXTENSIONS
 # 4.17

@@ -847,7 +847,6 @@ int lnet_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
 
 int lnet_sock_listen(struct socket **sockp, __u32 ip, int port, int backlog,
 		     struct net *ns);
-int lnet_sock_accept(struct socket **newsockp, struct socket *sock);
 int lnet_sock_connect(struct socket **sockp, int *fatal,
 			__u32 local_ip, int local_port,
 			__u32 peer_ip, int peer_port, struct net *ns);

@@ -414,7 +414,8 @@ lnet_acceptor(void *arg)
 		if (!atomic_read(&lnet_acceptor_state.pta_ready))
 			continue;
 		atomic_set(&lnet_acceptor_state.pta_ready, 0);
-		rc = lnet_sock_accept(&newsock, lnet_acceptor_state.pta_sock);
+		rc = kernel_accept(lnet_acceptor_state.pta_sock, &newsock,
+				   SOCK_NONBLOCK);
 		if (rc != 0) {
 			if (rc != -EAGAIN) {
 				CWARN("Accept error %d: pausing...\n", rc);

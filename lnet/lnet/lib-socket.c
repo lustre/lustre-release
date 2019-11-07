@@ -333,38 +333,6 @@ lnet_sock_listen(struct socket **sockp,
 }
 
 int
-lnet_sock_accept(struct socket **newsockp, struct socket *sock)
-{
-	struct socket *newsock;
-	int	       rc;
-
-	/* XXX this should add a ref to sock->ops->owner, if
-	 * TCP could be a module */
-	rc = sock_create_lite(PF_PACKET, sock->type, IPPROTO_TCP, &newsock);
-	if (rc) {
-		CERROR("Can't allocate socket\n");
-		return rc;
-	}
-
-	newsock->ops = sock->ops;
-
-#ifdef HAVE_KERN_SOCK_ACCEPT_FLAG_ARG
-	rc = sock->ops->accept(sock, newsock, O_NONBLOCK, false);
-#else
-	rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
-#endif
-	if (rc != 0)
-		goto failed;
-
-	*newsockp = newsock;
-	return 0;
-
-failed:
-	sock_release(newsock);
-	return rc;
-}
-
-int
 lnet_sock_connect(struct socket **sockp, int *fatal,
 		  __u32 local_ip, int local_port,
 		  __u32 peer_ip, int peer_port,
