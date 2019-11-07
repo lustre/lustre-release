@@ -1,0 +1,33 @@
+It looks like what's happening is when dm_dispatch_clone_request
+dispatches the "clone" I/O request to the underlying (real) device
+from the multipath device, the scsi driver can (often under load)
+return BLK_MQ_RQ_QUEUE_DEV_BUSY. dm_dispatch_clone_request doesn't
+have that as an exception the way it does BLK_MQ_RQ_QUEUE_BUSY and
+so it calls dm_complete_request which propagates
+the BLK_MQ_RQ_QUEUE_DEV_BUSY error code up the stack resulting
+in multipath_end_io calling fail_path and failing the path because
+there is an error value set.
+
+diff --git a/drivers/md/dm-rq.c b/drivers/md/dm-rq.c
+index 02da1e65..e4f58472 100644
+--- a/drivers/md/dm-rq.c
++++ b/drivers/md/dm-rq.c
+@@ -477,7 +477,8 @@ static int dm_dispatch_clone_request(struct request *clone, struct request *rq)
+ 
+ 	clone->start_time = jiffies;
+ 	r = blk_insert_cloned_request(clone->q, clone);
+-	if (r != BLK_MQ_RQ_QUEUE_OK && r != BLK_MQ_RQ_QUEUE_BUSY)
++	if (r != BLK_MQ_RQ_QUEUE_OK && r != BLK_MQ_RQ_QUEUE_BUSY &&
++	    r != BLK_MQ_RQ_QUEUE_DEV_BUSY)
+ 		/* must complete clone in terms of original request */
+ 		dm_complete_request(rq, r);
+ 	return r;
+@@ -661,7 +662,7 @@ check_again:
+ 		trace_block_rq_remap(clone->q, clone, disk_devt(dm_disk(md)),
+ 				     blk_rq_pos(rq));
+ 		ret = dm_dispatch_clone_request(clone, rq);
+-		if (ret == BLK_MQ_RQ_QUEUE_BUSY) {
++		if (ret == BLK_MQ_RQ_QUEUE_BUSY || ret == BLK_MQ_RQ_QUEUE_DEV_BUSY) {
+ 			blk_rq_unprep_clone(clone);
+ 			tio->ti->type->release_clone_rq(clone);
+ 			tio->clone = NULL;
