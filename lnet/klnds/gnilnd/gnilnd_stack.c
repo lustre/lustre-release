@@ -135,7 +135,7 @@ kgnilnd_quiesce_wait(char *reason)
 			CFS_RACE(CFS_FAIL_GNI_QUIESCE_RACE);
 			schedule_timeout_uninterruptible(cfs_time_seconds(i));
 
-			LASSERTF(quiesce_deadline > jiffies,
+			LASSERTF(time_after(quiesce_deadline, jiffies),
 				 "couldn't quiesce threads in %lu seconds, falling over now\n",
 				 cfs_duration_sec(quiesce_to));
 		}
