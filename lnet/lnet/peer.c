@@ -576,21 +576,10 @@ lnet_peer_table_cleanup_locked(struct lnet_net *net,
 static void
 lnet_peer_ni_finalize_wait(struct lnet_peer_table *ptable)
 {
-	int	i = 3;
-
-	spin_lock(&ptable->pt_zombie_lock);
-	while (ptable->pt_zombies) {
-		spin_unlock(&ptable->pt_zombie_lock);
-
-		if (is_power_of_2(i)) {
-			CDEBUG(D_WARNING,
+	wait_var_event_warning(&ptable->pt_zombies,
+			       ptable->pt_zombies == 0,
 			       "Waiting for %d zombies on peer table\n",
 			       ptable->pt_zombies);
-		}
-		schedule_timeout_uninterruptible(cfs_time_seconds(1) >> 1);
-		spin_lock(&ptable->pt_zombie_lock);
-	}
-	spin_unlock(&ptable->pt_zombie_lock);
 }
 
 static void

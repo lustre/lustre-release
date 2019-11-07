@@ -831,8 +831,10 @@ static inline void lnet_ping_buffer_addref(struct lnet_ping_buffer *pbuf)
 
 static inline void lnet_ping_buffer_decref(struct lnet_ping_buffer *pbuf)
 {
-	if (atomic_dec_and_test(&pbuf->pb_refcnt))
+	if (atomic_dec_and_test(&pbuf->pb_refcnt)) {
+		wake_up_var(&pbuf->pb_refcnt);
 		lnet_ping_buffer_free(pbuf);
+	}
 }
 
 static inline int lnet_push_target_resize_needed(void)

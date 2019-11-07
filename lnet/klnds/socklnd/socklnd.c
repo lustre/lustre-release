@@ -158,7 +158,8 @@ ksocknal_destroy_peer(struct ksock_peer_ni *peer_ni)
 	 * state to do with this peer_ni has been cleaned up when its refcount
 	 * drops to zero.
 	 */
-	atomic_dec(&net->ksnn_npeers);
+	if (atomic_dec_and_test(&net->ksnn_npeers))
+		wake_up_var(&net->ksnn_npeers);
 }
 
 struct ksock_peer_ni *
@@ -2205,25 +2206,16 @@ ksocknal_base_shutdown(void)
 					wake_up_all(&sched->kss_waitq);
 		}
 
-		i = 4;
-		read_lock(&ksocknal_data.ksnd_global_lock);
-		while (ksocknal_data.ksnd_nthreads != 0) {
-			i++;
-			/* power of 2? */
-			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
-				"waiting for %d threads to terminate\n",
-				ksocknal_data.ksnd_nthreads);
-			read_unlock(&ksocknal_data.ksnd_global_lock);
-			schedule_timeout_uninterruptible(cfs_time_seconds(1));
-			read_lock(&ksocknal_data.ksnd_global_lock);
-		}
-		read_unlock(&ksocknal_data.ksnd_global_lock);
+		wait_var_event_warning(&ksocknal_data.ksnd_nthreads,
+				       ksocknal_data.ksnd_nthreads == 0,
+				       "waiting for %d threads to terminate\n",
+				       ksocknal_data.ksnd_nthreads);
 
-                ksocknal_free_buffers();
+		ksocknal_free_buffers();
 
-                ksocknal_data.ksnd_init = SOCKNAL_INIT_NOTHING;
-                break;
-        }
+		ksocknal_data.ksnd_init = SOCKNAL_INIT_NOTHING;
+		break;
+	}
 
 	CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
 	       atomic_read (&libcfs_kmemory));
@@ -2352,7 +2344,7 @@ ksocknal_base_startup(void)
         return -ENETDOWN;
 }
 
-static void
+static int
 ksocknal_debug_peerhash(struct lnet_ni *ni)
 {
 	struct ksock_peer_ni *peer_ni;
@@ -2394,6 +2386,7 @@ ksocknal_debug_peerhash(struct lnet_ni *ni)
 	}
 
 	read_unlock(&ksocknal_data.ksnd_global_lock);
+	return 0;
 }
 
 void
@@ -2416,16 +2409,13 @@ ksocknal_shutdown(struct lnet_ni *ni)
 	ksocknal_del_peer(ni, anyid, 0);
 
 	/* Wait for all peer_ni state to clean up */
-	i = 2;
-	while (atomic_read(&net->ksnn_npeers) > SOCKNAL_SHUTDOWN_BIAS) {
-		i++;
-		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
-		       "waiting for %d peers to disconnect\n",
-		       atomic_read(&net->ksnn_npeers) - SOCKNAL_SHUTDOWN_BIAS);
-		schedule_timeout_uninterruptible(cfs_time_seconds(1));
-
-		ksocknal_debug_peerhash(ni);
-	}
+	wait_var_event_warning(&net->ksnn_npeers,
+			       atomic_read(&net->ksnn_npeers) ==
+			       SOCKNAL_SHUTDOWN_BIAS,
+			       "waiting for %d peers to disconnect\n",
+			       ksocknal_debug_peerhash(ni) +
+			       atomic_read(&net->ksnn_npeers) -
+			       SOCKNAL_SHUTDOWN_BIAS);
 
 	for (i = 0; i < net->ksnn_ninterfaces; i++) {
 		LASSERT(net->ksnn_interfaces[i].ksni_npeers == 0);
@@ -2435,9 +2425,9 @@ ksocknal_shutdown(struct lnet_ni *ni)
 	list_del(&net->ksnn_list);
 	LIBCFS_FREE(net, sizeof(*net));
 
-        ksocknal_data.ksnd_nnets--;
-        if (ksocknal_data.ksnd_nnets == 0)
-                ksocknal_base_shutdown();
+	ksocknal_data.ksnd_nnets--;
+	if (ksocknal_data.ksnd_nnets == 0)
+		ksocknal_base_shutdown();
 }
 
 static int

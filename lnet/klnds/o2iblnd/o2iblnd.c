@@ -372,7 +372,8 @@ kiblnd_destroy_peer(struct kib_peer_ni *peer_ni)
 	 * they are destroyed, so we can be assured that _all_ state to do
 	 * with this peer_ni has been cleaned up when its refcount drops to
 	 * zero. */
-	atomic_dec(&net->ibn_npeers);
+	if (atomic_dec_and_test(&net->ibn_npeers))
+		wake_up_var(&net->ibn_npeers);
 }
 
 struct kib_peer_ni *
@@ -2972,17 +2973,11 @@ kiblnd_base_shutdown(void)
 		wake_up_all(&kiblnd_data.kib_connd_waitq);
 		wake_up_all(&kiblnd_data.kib_failover_waitq);
 
-		i = 2;
-		while (atomic_read(&kiblnd_data.kib_nthreads) != 0) {
-			i++;
-			/* power of 2? */
-			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
-			       "Waiting for %d threads to terminate\n",
-			       atomic_read(&kiblnd_data.kib_nthreads));
-			schedule_timeout_uninterruptible(cfs_time_seconds(1));
-		}
-
-                /* fall through */
+		wait_var_event_warning(&kiblnd_data.kib_nthreads,
+				       !atomic_read(&kiblnd_data.kib_nthreads),
+				       "Waiting for %d threads to terminate\n",
+				       atomic_read(&kiblnd_data.kib_nthreads));
+		/* fall through */
 
         case IBLND_INIT_NOTHING:
                 break;
@@ -3007,8 +3002,7 @@ kiblnd_shutdown(struct lnet_ni *ni)
 {
 	struct kib_net *net = ni->ni_data;
 	rwlock_t     *g_lock = &kiblnd_data.kib_global_lock;
-        int               i;
-        unsigned long     flags;
+	unsigned long     flags;
 
         LASSERT(kiblnd_data.kib_init == IBLND_INIT_ALL);
 
@@ -3026,21 +3020,16 @@ kiblnd_shutdown(struct lnet_ni *ni)
         default:
                 LBUG();
 
-        case IBLND_INIT_ALL:
-                /* nuke all existing peers within this net */
-                kiblnd_del_peer(ni, LNET_NID_ANY);
+	case IBLND_INIT_ALL:
+		/* nuke all existing peers within this net */
+		kiblnd_del_peer(ni, LNET_NID_ANY);
 
 		/* Wait for all peer_ni state to clean up */
-		i = 2;
-		while (atomic_read(&net->ibn_npeers) != 0) {
-			i++;
-			/* power of 2? */
-			CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
-			       "%s: waiting for %d peers to disconnect\n",
-			       libcfs_nid2str(ni->ni_nid),
-			       atomic_read(&net->ibn_npeers));
-			schedule_timeout_uninterruptible(cfs_time_seconds(1));
-		}
+		wait_var_event_warning(&net->ibn_npeers,
+				       atomic_read(&net->ibn_npeers) == 0,
+				       "%s: waiting for %d peers to disconnect\n",
+				       libcfs_nid2str(ni->ni_nid),
+				       atomic_read(&net->ibn_npeers));
 
 		kiblnd_net_fini_pools(net);
 
@@ -3050,7 +3039,7 @@ kiblnd_shutdown(struct lnet_ni *ni)
 		list_del(&net->ibn_list);
 		write_unlock_irqrestore(g_lock, flags);
 
-                /* fall through */
+		/* fall through */
 
         case IBLND_INIT_NOTHING:
 		LASSERT (atomic_read(&net->ibn_nconns) == 0);

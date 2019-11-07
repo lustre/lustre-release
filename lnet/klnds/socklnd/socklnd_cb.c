@@ -1083,7 +1083,8 @@ void
 ksocknal_thread_fini (void)
 {
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
-        ksocknal_data.ksnd_nthreads--;
+	if (--ksocknal_data.ksnd_nthreads == 0)
+		wake_up_var(&ksocknal_data.ksnd_nthreads);
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 }
 

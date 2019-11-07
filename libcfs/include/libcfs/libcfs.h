@@ -141,4 +141,19 @@ int lprocfs_call_handler(void *data, int write, loff_t *ppos,
 			 int (*handler)(void *data, int write, loff_t pos,
 					void __user *buffer, int len));
 
+
+#define wait_var_event_warning(var, condition, format, ...)		\
+do {									\
+	int counter = 4;						\
+	might_sleep();							\
+	if (condition)							\
+		break;							\
+	___wait_var_event(var, condition, TASK_UNINTERRUPTIBLE, 0, 0,	\
+			  if (schedule_timeout(cfs_time_seconds(1)) == 0)\
+				  CDEBUG(is_power_of_2(counter++) ?	\
+					 D_WARNING : D_NET,		\
+					 format, ## __VA_ARGS__)	\
+		);							\
+} while (0)
+
 #endif /* _LIBCFS_LIBCFS_H_ */
