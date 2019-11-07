@@ -893,6 +893,9 @@ int target_name2index(const char *tgtname, __u32 *idx, const char **endptr)
 	if (idx != NULL)
 		*idx = index;
 
+	if (index > 0xffff)
+		return -ERANGE;
+
 	return rc;
 }
 EXPORT_SYMBOL(target_name2index);

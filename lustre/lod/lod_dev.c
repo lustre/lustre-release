@@ -528,8 +528,8 @@ void lod_sub_fini_llog(const struct lu_env *env,
  */
 int lodname2mdt_index(char *lodname, u32 *mdt_index)
 {
-	unsigned long index;
-	char *ptr, *tmp;
+	u32 index;
+	const char *ptr, *tmp;
 	int rc;
 
 	/* 1.8 configs don't have "-MDT0000" at the end */
@@ -564,8 +564,8 @@ int lodname2mdt_index(char *lodname, u32 *mdt_index)
 		return rc;
 	}
 
-	index = simple_strtol(ptr - 4, &tmp, 16);
-	if (*tmp != '-' || index > INT_MAX) {
+	rc = target_name2index(ptr - 7, &index, &tmp);
+	if (rc < 0 || rc & LDD_F_SV_ALL || *tmp != '-') {
 		rc = -EINVAL;
 		CERROR("invalid MDT index in '%s': rc = %d\n", lodname, rc);
 		return rc;
