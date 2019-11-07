@@ -386,7 +386,14 @@ static int lod_sub_recovery_thread(void *arg)
 	start = ktime_get_real_seconds();
 
 again:
-	rc = lod_sub_prep_llog(&env, lod, dt, lrd->lrd_idx);
+
+	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_TGT_RECOVERY_CONNECT)) &&
+	    lrd->lrd_ltd) {
+		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_RECOVERY_CONNECT, cfs_fail_val);
+		rc = -EIO;
+	} else {
+		rc = lod_sub_prep_llog(&env, lod, dt, lrd->lrd_idx);
+	}
 	if (!rc && !lod->lod_child->dd_rdonly) {
 		/* Process the recovery record */
 		ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
@@ -1039,6 +1046,7 @@ static int lod_process_config(const struct lu_env *env,
 	case LCFG_PRE_CLEANUP: {
 		lod_sub_process_config(env, lod, &lod->lod_mdt_descs, lcfg);
 		lod_sub_process_config(env, lod, &lod->lod_ost_descs, lcfg);
+		OBD_FAIL_TIMEOUT(OBD_FAIL_TGT_RECOVERY_CONNECT, cfs_fail_val * 2);
 		next = &lod->lod_child->dd_lu_dev;
 		rc = next->ld_ops->ldo_process_config(env, next, lcfg);
 		if (rc != 0)
