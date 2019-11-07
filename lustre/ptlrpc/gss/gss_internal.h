@@ -287,9 +287,9 @@ struct gss_cli_ctx {
 };
 
 struct gss_cli_ctx_keyring {
-        struct gss_cli_ctx      gck_base;
-        struct key             *gck_key;
-        struct timer_list      *gck_timer;
+	struct gss_cli_ctx      gck_base;
+	struct key             *gck_key;
+	struct timer_list       gck_timer;
 };
 
 struct gss_sec {
