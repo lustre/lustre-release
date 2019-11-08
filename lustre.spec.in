@@ -17,6 +17,7 @@
 %bcond_with    systemd
 %bcond_with mofed
 %bcond_without mpi
+%bcond_with kabi
 
 # By default both gss and gss keyring are disabled.
 # gss keyring requires the gss core. If the builder
@@ -34,19 +35,30 @@
 %endif
 
 %{!?version: %global version @VERSION@}
+# if you want a custom kernel version set it variable with $ver.$arch
 %{!?kver:    %global kver    %(uname -r)}
-%{!?kdir:    %global kdir    /lib/modules/%{kver}/source}
-%{!?kobjdir: %global kobjdir %(if [ "%{kdir}" = "/lib/modules/%{kver}/source" ]; then echo "/lib/modules/%{kver}/build"; else echo "%{kdir}"; fi)}
+# cut epoch for kmodtool
+%define _kver %(echo %{kver} | sed -e 's/^[0-9]*://')
+# trust version from kdir - but it can lost 'epoch'
+%if %{defined kdir}
+	%define _take_kver 1
+%endif
+%{!?kdir:    %global kdir    /lib/modules/%{_kver}/source}
+%{!?kobjdir: %global kobjdir %(if [ "%{kdir}" = "/lib/modules/%{_kver}/source" ]; then echo "/lib/modules/%{_kver}/build"; else echo "%{kdir}"; fi)}
 
+%if %{defined _take_kver}
 # as an alternative to this implementation we could simply "make -C $kdir kernelversion"
-%{!?kversion: %global kversion %(files="include/generated/utsrelease.h include/linux/utsrelease.h include/linux/version.h"; for f in $files; do if test -r %{kobjdir}/$f && grep UTS_RELEASE %{kobjdir}/$f >/dev/null; then sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %{kobjdir}/$f; break; fi; done)}
+%global kver %(files="include/generated/utsrelease.h include/linux/utsrelease.h include/linux/version.h"; for f in $files; do if test -r %{kobjdir}/$f && grep UTS_RELEASE %{kobjdir}/$f >/dev/null; then sed -ne '/^#define UTS_RELEASE/s/.*"\\(.*\\)"$/\\1/p' %{kobjdir}/$f; break; fi; done)
+%define _kver %kver
+%endif
 
 # We set this because kernel_module_package has its own method of identifying
 # which kernel to build against, and it is unlikely that its decision will
 # match with Lustre's method of selecting which kernel to build against.
 # By setting this variable, we override kernel_module_package's kernel
 # selection with our selection.
-%{!?kernel_version: %global kernel_version %kversion}
+# kmodtool failed to take a version if epoch set
+%global kernel_version %_kver
 
 # in order to get kernel symset and/or kernel module dependencies into
 # the RPM, in order to support weak-modules, the internal dependency gen-
@@ -89,7 +101,9 @@
     %endif
 %endif
 
-%global modules_fs_path /lib/modules/%{kversion}/%{kmoddir}
+%global modules_fs_path /lib/modules/%{_kver}/%{kmoddir}
+# requires want to set a version including epoch
+%global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//')
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global requires_yaml_name libyaml
@@ -104,7 +118,6 @@
 	%if %{with lustre_tests}
 		%global requires_kmod_tests_name %{lustre_name}-tests-kmp
 	%endif
-	%define krequires %(echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//')
 	%if 0%{?suse_version} >= 1200
 		%global requires_kmod_version %{version}_k%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
 	%else
@@ -151,6 +164,7 @@ Requires: %{requires_kmod_name} = %{requires_kmod_version} zlib
 Requires: %{requires_yaml_name}
 BuildRequires: libtool libyaml-devel zlib-devel
 %if %{_vendor}=="redhat"
+BuildRequires: redhat-rpm-config
 BuildRequires: pkgconfig
 %else
 BuildRequires: pkg-config
@@ -179,13 +193,16 @@ Requires: kmod-mlnx-ofa_kernel
 Requires: mlnx-ofa_kernel-kmp
 %endif
 %endif
-%if 0%{?rhel} >= 8 && %{undefined kernel_module_package_buildreqs}
-BuildRequires: redhat-rpm-config kernel-rpm-macros elfutils-libelf-devel kmod
-%else
-BuildRequires: %kernel_module_package_buildreqs
+%if 0%{?rhel} >= 8
+BuildRequires: kernel-rpm-macros
 %endif
+BuildRequires: %kernel_module_package_buildreqs
+# need to provide a /usr/lib/${uname -r)/build dir
+BuildRequires: kernel
 %if %{_vendor}=="redhat"
-BuildRequires: redhat-rpm-config
+%if %{with kabi}
+BuildRequires: kernel-abi-whitelists
+%endif
 %endif
 %endif
 
@@ -210,7 +227,7 @@ Userspace tools and files for the Lustre file system.
 %define preamble %{expand:%(
 TMPFILE=`mktemp`
 cat %{SOURCE1} > $TMPFILE
-kver=%{kversion}
+kver=%{kernel_version}
 linuxversion=${kver%%%%-*}
 linuxrelease=${kver##*-}
 kabiminor=${linuxrelease%%%%.*}
