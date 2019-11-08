@@ -74,10 +74,6 @@
 #include <linux/lustre/lustre_ver.h>
 #include <libcfs/util/string.h>
 
-#ifdef HAVE_SELINUX
-#include <selinux/selinux.h>
-#endif
-
 #include "mount_utils.h"
 
 #define MAX_HW_SECTORS_KB_PATH	"queue/max_hw_sectors_kb"
@@ -97,30 +93,6 @@ static void append_unique(char *buf, char *prefix, char *key, char *val,
 			  size_t maxbuflen);
 static bool is_e2fsprogs_feature_supp(const char *feature);
 static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs);
-
-/*
- * Concatenate context of the temporary mount point if selinux is enabled
- */
-#ifdef HAVE_SELINUX
-static void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
-{
-	security_context_t fcontext;
-
-	if (getfilecon(mntpt, &fcontext) < 0) {
-		/* Continuing with default behaviour */
-		fprintf(stderr, "%s: Get file context failed : %s\n",
-			progname, strerror(errno));
-		return;
-	}
-
-	if (fcontext != NULL) {
-		append_unique(mop->mo_ldd.ldd_mount_opts,
-			      ",", "context", fcontext,
-			      sizeof(mop->mo_ldd.ldd_mount_opts));
-		freecon(fcontext);
-	}
-}
-#endif
 
 /* Determine if a device is a block device (as opposed to a file) */
 static int is_block(char *devname)
@@ -203,14 +175,6 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 			progname, mntpt, strerror(errno));
 		return errno;
 	}
-
-	/*
-	 * Append file context to mount options if SE Linux is enabled
-	 */
-	#ifdef HAVE_SELINUX
-	if (is_selinux_enabled() > 0)
-		append_context_for_mount(mntpt, mop);
-	#endif
 
 	dev = mop->mo_device;
 	if (mop->mo_flags & MO_IS_LOOP)
@@ -1415,14 +1379,6 @@ int ldiskfs_rename_fsname(struct mkfs_opts *mop, const char *oldname)
 			mntpt, strerror(ret));
 		return ret;
 	}
-
-#ifdef HAVE_SELINUX
-	/*
-	 * Append file context to mount options if SE Linux is enabled
-	 */
-	if (is_selinux_enabled() > 0)
-		append_context_for_mount(mntpt, mop);
-#endif
 
 	if (mop->mo_flags & MO_IS_LOOP)
 		dev = mop->mo_loopdev;
