@@ -15,6 +15,7 @@
 %bcond_without shared
 %bcond_without static
 %bcond_with    systemd
+%bcond_with mofed
 
 # By default both gss and gss keyring are disabled.
 # gss keyring requires the gss core. If the builder
@@ -167,7 +168,14 @@ BuildRequires: libselinux-devel
 Requires: libselinux
 %endif
 %if %{with lustre_modules}
-
+%if %{with mofed}
+BuildRequires: mlnx-ofa_kernel-devel
+%if %{_vendor} == "redhat"
+Requires: kmod-mlnx-ofa_kernel
+%else
+Requires: mlnx-ofa_kernel-kmp
+%endif
+%endif
 %if 0%{?rhel} >= 8 && %{undefined kernel_module_package_buildreqs}
 BuildRequires: redhat-rpm-config kernel-rpm-macros elfutils-libelf-devel kmod
 %else
@@ -384,6 +392,7 @@ fi
 	%{!?with_manpages:--disable-manpages} \
 	%{!?with_systemd:--with-systemdsystemunitdir=no} \
 	%{?with_systemd:--with-systemdsystemunitdir=%{_unitdir}} \
+	%{?with_mofed:--with-o2ib=/usr/src/ofa_kernel/default} \
 	--with-linux=%{kdir} \
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}
