@@ -59,8 +59,14 @@ fi
 if [[ $(uname -m) = aarch64 ]]; then
 	# bug number:	 LU-11596
 	ALWAYS_EXCEPT+=" $GRANT_CHECK_LIST"
-	# bug number:	 LU-11671 LU-11667 LU-4398
-	ALWAYS_EXCEPT+=" 45	  317      817"
+	# bug number:	 LU-11671 LU-11667
+	ALWAYS_EXCEPT+=" 45	  317"
+fi
+
+# skip nfs tests on kernels >= 4.14.0 until they are fixed
+if [ $LINUX_VERSION_CODE -ge $(version_code 4.14.0) ];then
+	# bug number:	LU-12661
+	ALWAYS_EXCEPT+=" 817"
 fi
 
 #                                  5          12          (min)"
