@@ -16,6 +16,7 @@
 %bcond_without static
 %bcond_with    systemd
 %bcond_with mofed
+%bcond_without mpi
 
 # By default both gss and gss keyring are disabled.
 # gss keyring requires the gss core. If the builder
@@ -127,6 +128,8 @@
 %if 0%{?suse_version} >= 1310
 %define with_systemd 1
 %endif
+
+%{!?mpi_name: %global mpi_name openmpi}
 
 Summary: Lustre File System
 Name: %{lustre_name}
@@ -277,6 +280,18 @@ Requires: lustre-client = %{version}
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
 Requires: attr, rsync, perl, lsof, libtool, /usr/bin/getconf
+%if %{with mpi}
+%if %{mpi_name} == "mpich"
+BuildRequires: mpich-devel
+%endif
+%if %{mpi_name} == "openmpi"
+%if %{_vendor} == "redhat" || 0%{?suse_version} < 1500
+BuildRequires: openmpi-devel
+%else
+BuildRequires: openmpi2-devel
+%endif
+%endif
+%endif
 
 %description tests
 This package contains a set of test binaries and scripts that are intended
@@ -376,6 +391,9 @@ fi
 # kmod tools/scripts require %{name} directory with kernel modules
 %define eval_configure %(echo '%configure' | sed -e 's#\./configure#eval ./configure#' -e 's/--\\(build\\|host\\|target\\)=[^ ][^ ]* //g')
 
+%{?_openmpi_load}
+%{?_mpich_load}
+
 %eval_configure $CONFIGURE_ARGS \
 	%{?with_lustre_tests:--enable-tests}%{!?with_lustre_tests:--disable-tests} \
 	%{?with_lustre_utils:--enable-utils}%{!?with_lustre_utils:--disable-utils} \
@@ -400,6 +418,9 @@ fi
 make %{?_smp_mflags} -s %{?make_args}
 
 %install
+%{?_openmpi_load}
+%{?_mpich_load}
+
 make install DESTDIR=$RPM_BUILD_ROOT
 
 # RHEL's kernel_module_path macro expects that all the modules
@@ -503,11 +524,9 @@ echo '%{_bindir}/mcreate' >>lustre-tests.files
 echo '%{_bindir}/munlink' >>lustre-tests.files
 echo '%{_sbindir}/wirecheck' >>lustre-tests.files
 echo '%{_sbindir}/wiretest' >>lustre-tests.files
-%if %{_vendor}=="redhat"
-if [ -n "@MPI_BIN@" ]; then
-	echo '@MPI_BIN@/*' >>lustre-tests.files
+if [ -n "$MPI_BIN" ]; then
+	echo "$MPI_BIN/*" >>lustre-tests.files
 fi
-%endif
 %endif
 
 %files -f lustre.files
