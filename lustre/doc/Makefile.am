@@ -75,10 +75,25 @@ MANFILES =					\
 	lfs-setdirstripe.1			\
 	lfs-setquota.1				\
 	lfs-setstripe.1				\
-	l_getidentity.8				\
-	l_getsepol.8				\
-	lgss_sk.8				\
 	lhbadm.8				\
+	ll_decode_linkea.8			\
+	llobdstat.8				\
+	llog_reader.8				\
+	llsom_sync.8				\
+	llstat.8				\
+	lnetctl.8				\
+	lst.8					\
+	lustre.7				\
+	lustre_routes_config.8			\
+	lustre_routes_conversion.8		\
+	lustre_rsync.8				\
+	nids.5					\
+	plot-llstat.8				\
+	routerstat.8
+
+
+LIBMAN = 					\
+	lustreapi.7				\
 	llapi_create_volatile_param.3		\
 	llapi_fd2parent.3			\
 	llapi_fid_parse.3			\
@@ -153,7 +168,7 @@ MANFILES =					\
 	llapi_pcc_detach_fid.3			\
 	llapi_pcc_detach_fid_fd.3		\
 	llapi_pcc_detach_fid_str.3		\
-	llapi_pcc_detach_file.3		\
+	llapi_pcc_detach_file.3			\
 	llapi_pccdev_get.3			\
 	llapi_pccdev_set.3			\
 	llapi_pcc_state_get.3			\
@@ -162,24 +177,7 @@ MANFILES =					\
 	llapi_rmfid.3				\
 	llapi_search_mdt.3			\
 	llapi_search_ost.3			\
-	llapi_search_tgt.3			\
-	ll_decode_linkea.8			\
-	llobdstat.8				\
-	llog_reader.8				\
-	llsom_sync.8				\
-	llstat.8				\
-	lnetctl.8				\
-	lst.8					\
-	lustre.7				\
-	lustreapi.7				\
-	lustre_routes_config.8			\
-	lustre_routes_conversion.8		\
-	lustre_rsync.8				\
-	mount.lustre.8				\
-	mount.lustre_tgt.8			\
-	nids.5					\
-	plot-llstat.8				\
-	routerstat.8
+	llapi_search_tgt.3
 
 SERVER_MANFILES =				\
 	lctl-barrier.8				\
@@ -211,22 +209,33 @@ SERVER_MANFILES =				\
 	llverdev.8				\
 	lshowmount.8				\
 	mkfs.lustre.8				\
-	tunefs.lustre.8
+	l_getidentity.8				\
+	l_getsepol.8				\
+	lgss_sk.8				\
+	tunefs.lustre.8				\
+	ll_decode_linkea.8			\
+	llobdstat.8				\
+	llog_reader.8				\
+	llsom_sync.8				\
+	llstat.8				\
+	lnetctl.8				\
+	lst.8					\
+	mount.lustre.8				\
+	mount.lustre_tgt.8
 
+if MANPAGES
+man_MANS = $(LIBMAN)
 if SERVER
-MANFILES += $(SERVER_MANFILES)
-else
-DISTONLY_MANFILES = $(SERVER_MANFILES)
+man_MANS += $(SERVER_MANFILES)
 endif
 
 if UTILS
-if MANPAGES
-man_MANS = $(MANFILES)
+man_MANS += $(MANFILES)
 endif
 endif
 
 CLEANFILES = *.aux *.tex *.log *.pdf
 
-EXTRA_DIST = $(MANFILES) $(DISTONLY_MANFILES)
+EXTRA_DIST = $(MANFILES) $(SERVER_MANFILES) $(LIBMAN)
 
 all:

@@ -80,13 +80,13 @@ if ZFS_ENABLED
 sbin_SCRIPTS += zfsobj2fid
 endif
 
-endif # UTILS
-
 if ENABLE_BASH_COMPLETION
 bashcompletiondir = $(BASH_COMPLETION_DIR)
 dist_bashcompletion_DATA = bash-completion/lustre bash-completion/lctl \
 			   bash-completion/lfs
 endif
+
+endif # UTILS
 
 EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     lc_servip lustre_routes_config lustre_routes_conversion \

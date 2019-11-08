@@ -48,6 +48,7 @@ if GETSEPOL
 sbin_PROGRAMS += l_getsepol
 endif
 endif
+endif # UTILS
 
 lib_LIBRARIES =
 noinst_LIBRARIES =
@@ -58,7 +59,6 @@ endif
 
 pkglib_LTLIBRARIES =
 lib_LTLIBRARIES = liblustreapi.la
-endif # UTILS
 
 lctl_SOURCES = portals.c debug.c obd.c lustre_cfg.c lctl.c obdctl.h
 if SERVER

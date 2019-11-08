@@ -34,6 +34,17 @@
     %undefine with_zfs
 %endif
 
+%if %{without shared} && %{without static}
+# need exit to stop build because error only displays a message
+%{error: you can't disable both library types}
+%{exit 1}
+%endif
+
+# lustre_tests depends on lustre_utils
+%if %{without lustre_utils}
+%undefine with_lustre_tests
+%endif
+
 %{!?version: %global version @VERSION@}
 # if you want a custom kernel version set it variable with $ver.$arch
 %{!?kver:    %global kver    %(uname -r)}
@@ -572,26 +583,28 @@ fi
 %{_bindir}/llobdstat
 %{_bindir}/llstat
 %{_bindir}/plot-llstat
+%{_datadir}/lustre
 
 %{_bindir}/lfs
 %{_bindir}/lfs_migrate
 /sbin/mount.lustre
 /sbin/mount.lustre_tgt
+%{_datadir}/bash-completion/completions/*
+%endif
+
+%if %{with manpages}
+%{_mandir}/man?/*
+%endif
+
 %if %{with static}
 %{_libdir}/liblustreapi.a
 %endif
 %if %{with shared}
 %{_libdir}/liblustreapi.so*
 %endif
-%if %{with manpages}
-%{_mandir}/man?/*
-%endif
-%{_datadir}/lustre
-%{_datadir}/bash-completion/completions/*
 %{_includedir}/lustre
 %{_includedir}/linux/lnet
 %{_includedir}/linux/lustre
-%endif
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
 %if %{with servers}
 %{_sysconfdir}/udev/rules.d/99-lustre-server.rules

@@ -32,10 +32,8 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-if UTILS
 pkginclude_HEADERS = lustreapi.h lustre_user.h liblustreapi.h ll_fiemap.h \
 			lustre_lfsck_user.h lustre_barrier_user.h
-endif
 
 EXTRA_DIST = libiam.h \
 	liblustreapi.h \
