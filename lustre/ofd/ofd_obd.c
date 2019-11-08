@@ -1105,6 +1105,9 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 
 	ENTRY;
 
+	if (ofd->ofd_no_precreate)
+		return -EPERM;
+
 	ofd_info_init(env, exp);
 
 	LASSERT(seq == FID_SEQ_ECHO);

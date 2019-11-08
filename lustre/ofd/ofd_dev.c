@@ -180,8 +180,11 @@ static int ofd_stack_init(const struct lu_env *env,
 	}
 
 	lmd = s2lsi(lmi->lmi_sb)->lsi_lmd;
-	if (lmd != NULL && lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+	if (lmd && lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
 		m->ofd_skip_lfsck = 1;
+
+	if (lmd && lmd->lmd_flags & LMD_FLG_NO_PRECREATE)
+		m->ofd_no_precreate = 1;
 
 	/* find bottom osd */
 	OBD_ALLOC(osdname, MTI_NAME_MAXLEN);
@@ -1487,6 +1490,9 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
 		RETURN(-EROFS);
+
+	if (ofd->ofd_no_precreate)
+		return -EPERM;
 
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
 	if (repbody == NULL)

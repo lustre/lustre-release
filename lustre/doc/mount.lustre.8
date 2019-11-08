@@ -234,6 +234,19 @@ Enable POSIX Access Control List support for all clients.  See the
 .BR acl (5)
 manual page.
 .TP
+.BI no_precreate
+Do not allow objects to be created on the OST after mounting.  This
+allows a (potentially newly-formatted) OST to be started without
+clients starting to use it immediately.  To allow the MDS to create
+objects on the OST mount without this option, or run
+.BI "lctl set_param obdfilter." fsname -OST nnnn .no_precreate=0
+on the OSS to re-enable object creation.
+.BR NOTE :
+this does not start the OST read-only, it only disables the
+creation of new objects on the OST.  This means existing objects
+can be read, modified, or deleted, but if the OST is new then it
+will not have any such objects.
+.TP
 .BI nosvc
 Only start the MGC (and MGS, if co-located) for a target service,
 and not the actual MDS or OSS service.

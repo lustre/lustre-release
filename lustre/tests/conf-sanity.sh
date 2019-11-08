@@ -8302,6 +8302,32 @@ test_111() {
 }
 run_test 111 "Adding large_dir with over 2GB directory"
 
+test_112() {
+	start_mds || error "MDS start failed"
+	start_ost || error "OSS start failed"
+	echo "start ost2 service on $(facet_active_host ost2)"
+	start ost2 $(ostdevname 2) $(csa_add "$OST_MOUNT_OPTS" -o no_precreate) ||
+		error "start ost2 facet failed"
+	local val=$(do_facet ost2 \
+		   "$LCTL get_param -n obdfilter.$FSNAME-OST0001*.no_precreate")
+	(( $val == 1 )) || error "obdfilter.$FSNAME-OST0001*.no_precreate=$val"
+
+	mount_client $MOUNT || error "mount client failed"
+	wait_osc_import_state client ost2 FULL
+
+	$LFS setstripe -i 0 $DIR/$tfile.0 ||
+		error "problem creating $tfile.0 on OST0000"
+	$LFS setstripe -i 1 $DIR/$tfile.1 && $LFS getstripe $DIR/$tfile.1 &&
+		(( $($LFS getstripe -i $DIR/$tfile.1) == 1 )) &&
+		error "allowed to create $tfile.1 on OST0001"
+	do_facet ost2 $LCTL set_param obdfilter.*.no_precreate=0
+	sleep_maxage
+	$LFS setstripe -i 1 $DIR/$tfile.2 ||
+		error "failed to create $tfile.2 on ost1 facet"
+	stop_ost2 || error "stop ost2 facet failed"
+	cleanup
+}
+run_test 112 "mount OST with nocreate option"
 
 cleanup_115()
 {
