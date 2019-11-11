@@ -2539,8 +2539,13 @@ int req_capsule_server_grow(struct req_capsule *pill,
 				      len, newlen);
 
 	req_capsule_set_size(pill, field, RCL_SERVER, newlen);
-	/* there can be enough space in current reply buffer */
-	if (rs->rs_repbuf_len >=
+	/**
+	 * There can be enough space in current reply buffer, make sure
+	 * that rs_repbuf is not a wrapper but real reply msg, otherwise
+	 * re-packing is still needed.
+	 */
+	if (rs->rs_msg == rs->rs_repbuf &&
+	    rs->rs_repbuf_len >=
 	    lustre_packed_msg_size(rs->rs_msg) - len + newlen) {
 		pill->rc_req->rq_replen = lustre_grow_msg(rs->rs_msg, offset,
 							  newlen);

@@ -45,8 +45,8 @@ ALWAYS_EXCEPT+="               42a     42b     42c "
 ALWAYS_EXCEPT+=" 407     312 "
 
 if $SHARED_KEY; then
-	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795 LU-12781
-	ALWAYS_EXCEPT+=" 17n     60a     133g    300f    272a"
+	# bug number:    LU-9795 LU-9795 LU-9795 LU-9795
+	ALWAYS_EXCEPT+=" 17n     60a     133g    300f"
 fi
 
 selinux_status=$(getenforce)
@@ -18988,7 +18988,7 @@ test_272a() {
 		error "md5sum differ: $old_md5, $new_md5"
 
 	[ $($LFS getstripe -c $dom) -eq 2 ] ||
-		error "migrate stripe count bad: $(LFS getstripe -c $dom) != 2"
+		error "bad final stripe count: $($LFS getstripe -c $dom) != 2"
 }
 run_test 272a "DoM migration: new layout with the same DOM component"
 

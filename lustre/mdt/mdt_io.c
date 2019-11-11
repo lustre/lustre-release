@@ -211,7 +211,7 @@ static int mdt_rw_hpreq_check(struct ptlrpc_request *req)
 
 	if (pa.lpa_blocks_cnt > 0) {
 		CDEBUG(D_DLMTRACE,
-		       "%s: refreshed %u locks timeout for req %p",
+		       "%s: refreshed %u locks timeout for req %p\n",
 		       tgt_name(tsi->tsi_tgt), pa.lpa_blocks_cnt, req);
 		RETURN(1);
 	}
