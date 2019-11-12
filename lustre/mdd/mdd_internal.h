@@ -80,6 +80,8 @@
 #define CLM_FINI  0x20000
 /** some changelog records purged */
 #define CLM_PURGE 0x40000
+/** changelog cleanup done, to prevent double cleanup */
+#define CLM_CLEANUP_DONE 0x80000
 
 #define LLOG_CHANGELOG_HDR_SZ (sizeof(struct llog_changelog_rec) - \
 			       sizeof(struct changelog_rec))

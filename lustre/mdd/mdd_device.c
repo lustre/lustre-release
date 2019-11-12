@@ -598,7 +598,9 @@ static void mdd_changelog_fini(const struct lu_env *env,
 	struct obd_device	*obd = mdd2obd_dev(mdd);
 	struct llog_ctxt	*ctxt;
 
-	mdd->mdd_cl.mc_flags = 0;
+	if (mdd->mdd_cl.mc_flags & CLM_CLEANUP_DONE)
+		return;
+	mdd->mdd_cl.mc_flags = CLM_CLEANUP_DONE;
 
 again:
 	/* stop GC-thread if running */
