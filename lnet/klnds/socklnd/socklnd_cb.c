@@ -1700,8 +1700,8 @@ void ksocknal_write_callback(struct ksock_conn *conn)
 	EXIT;
 }
 
-static struct ksock_proto *
-ksocknal_parse_proto_version (struct ksock_hello_msg *hello)
+static const struct ksock_proto *
+ksocknal_parse_proto_version(struct ksock_hello_msg *hello)
 {
         __u32   version = 0;
 
@@ -1799,7 +1799,7 @@ ksocknal_recv_hello(struct lnet_ni *ni, struct ksock_conn *conn,
         int                  timeout;
         int                  proto_match;
         int                  rc;
-	struct ksock_proto *proto;
+	const struct ksock_proto *proto;
 	struct lnet_process_id recv_id;
 
 	/* socket type set on active connections - not set on passive */

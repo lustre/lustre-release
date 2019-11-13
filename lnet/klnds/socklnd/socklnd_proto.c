@@ -748,7 +748,7 @@ ksocknal_unpack_msg_v2(struct ksock_msg *msg)
         return;  /* Do nothing */
 }
 
-struct ksock_proto  ksocknal_protocol_v1x =
+const struct ksock_proto ksocknal_protocol_v1x =
 {
         .pro_version            = KSOCK_PROTO_V1,
         .pro_send_hello         = ksocknal_send_hello_v1,
@@ -762,7 +762,7 @@ struct ksock_proto  ksocknal_protocol_v1x =
         .pro_match_tx           = ksocknal_match_tx
 };
 
-struct ksock_proto  ksocknal_protocol_v2x =
+const struct ksock_proto ksocknal_protocol_v2x =
 {
         .pro_version            = KSOCK_PROTO_V2,
         .pro_send_hello         = ksocknal_send_hello_v2,
@@ -776,7 +776,7 @@ struct ksock_proto  ksocknal_protocol_v2x =
         .pro_match_tx           = ksocknal_match_tx
 };
 
-struct ksock_proto  ksocknal_protocol_v3x =
+const struct ksock_proto ksocknal_protocol_v3x =
 {
         .pro_version            = KSOCK_PROTO_V3,
         .pro_send_hello         = ksocknal_send_hello_v2,

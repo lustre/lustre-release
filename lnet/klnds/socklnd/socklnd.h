@@ -314,7 +314,7 @@ struct ksock_conn {
 	unsigned int	    ksnc_closing:1;  /* being shut down */
 	unsigned int	    ksnc_flip:1;     /* flip or not, only for V2.x */
 	unsigned int	    ksnc_zc_capable:1; /* enable to ZC */
-        struct ksock_proto *ksnc_proto;      /* protocol for the connection */
+	const struct ksock_proto *ksnc_proto; /* protocol for the connection */
 
 	/* READER */
 
@@ -392,7 +392,7 @@ struct ksock_peer_ni {
 	int			ksnp_error;	/* errno on closing last conn */
 	__u64			ksnp_zc_next_cookie;/* ZC completion cookie */
 	__u64			ksnp_incarnation;   /* latest known peer_ni incarnation */
-	struct ksock_proto	*ksnp_proto;	/* latest known peer_ni protocol */
+	const struct ksock_proto *ksnp_proto;	/* latest known protocol */
 	struct list_head	ksnp_conns;	/* all active connections */
 	struct list_head	ksnp_routes;	/* routes */
 	struct list_head	ksnp_tx_queue;	/* waiting packets */
@@ -438,9 +438,9 @@ struct ksock_proto {
                                                                                  *   return MATCH_MAY : can be backup */
 };
 
-extern struct ksock_proto ksocknal_protocol_v1x;
-extern struct ksock_proto ksocknal_protocol_v2x;
-extern struct ksock_proto ksocknal_protocol_v3x;
+extern const struct ksock_proto ksocknal_protocol_v1x;
+extern const struct ksock_proto ksocknal_protocol_v2x;
+extern const struct ksock_proto ksocknal_protocol_v3x;
 
 #define KSOCK_PROTO_V1_MAJOR    LNET_PROTO_TCP_VERSION_MAJOR
 #define KSOCK_PROTO_V1_MINOR    LNET_PROTO_TCP_VERSION_MINOR
