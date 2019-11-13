@@ -1255,8 +1255,6 @@ void class_import_put(struct obd_import *imp)
                 obd_zombie_import_add(imp);
         }
 
-	/* catch possible import put race */
-	LASSERT_ATOMIC_GE_LT(&imp->imp_refcount, 0, LI_POISON);
 	EXIT;
 }
 EXPORT_SYMBOL(class_import_put);
