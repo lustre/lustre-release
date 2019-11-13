@@ -2146,8 +2146,7 @@ static inline void init_blwi(struct ldlm_bl_work_item *blwi,
 	if (ld != NULL)
 		blwi->blwi_ld = *ld;
 	if (count) {
-		list_add(&blwi->blwi_head, cancels);
-		list_del_init(cancels);
+		list_splice_init(cancels, &blwi->blwi_head);
 		blwi->blwi_count = count;
 	} else {
 		blwi->blwi_lock = lock;

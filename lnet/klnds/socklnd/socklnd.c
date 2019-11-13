@@ -1340,8 +1340,7 @@ failed_2:
 	if (!peer_ni->ksnp_closing &&
 	    list_empty(&peer_ni->ksnp_conns) &&
 	    list_empty(&peer_ni->ksnp_routes)) {
-		list_add(&zombies, &peer_ni->ksnp_tx_queue);
-		list_del_init(&peer_ni->ksnp_tx_queue);
+		list_splice_init(&peer_ni->ksnp_tx_queue, &zombies);
 		ksocknal_unlink_peer_locked(peer_ni);
 	}
 
@@ -2141,11 +2140,10 @@ ksocknal_free_buffers (void)
 	spin_lock(&ksocknal_data.ksnd_tx_lock);
 
 	if (!list_empty(&ksocknal_data.ksnd_idle_noop_txs)) {
-		struct list_head zlist;
+		LIST_HEAD(zlist);
 		struct ksock_tx	*tx;
 
-		list_add(&zlist, &ksocknal_data.ksnd_idle_noop_txs);
-		list_del_init(&ksocknal_data.ksnd_idle_noop_txs);
+		list_splice_init(&ksocknal_data.ksnd_idle_noop_txs, &zlist);
 		spin_unlock(&ksocknal_data.ksnd_tx_lock);
 
 		while (!list_empty(&zlist)) {

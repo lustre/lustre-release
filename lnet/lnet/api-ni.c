@@ -2152,16 +2152,12 @@ lnet_shutdown_lndnets(void)
 	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_state = LNET_STATE_STOPPING;
 
-	while (!list_empty(&the_lnet.ln_nets)) {
-		/*
-		 * move the nets to the zombie list to avoid them being
-		 * picked up for new work. LONET is also included in the
-		 * Nets that will be moved to the zombie list
-		 */
-		net = list_entry(the_lnet.ln_nets.next,
-				 struct lnet_net, net_list);
-		list_move(&net->net_list, &the_lnet.ln_net_zombie);
-	}
+	/*
+	 * move the nets to the zombie list to avoid them being
+	 * picked up for new work. LONET is also included in the
+	 * Nets that will be moved to the zombie list
+	 */
+	list_splice_init(&the_lnet.ln_nets, &the_lnet.ln_net_zombie);
 
 	/* Drop the cached loopback Net. */
 	if (the_lnet.ln_loni != NULL) {
