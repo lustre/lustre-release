@@ -216,7 +216,7 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 	spin_lock_init(&r0->lo_sub_lock);
 	r0->lo_nr = lse->lsme_stripe_count;
 
-	OBD_ALLOC_LARGE(r0->lo_sub, r0->lo_nr * sizeof(r0->lo_sub[0]));
+	OBD_ALLOC_PTR_ARRAY_LARGE(r0->lo_sub, r0->lo_nr);
 	if (r0->lo_sub == NULL)
 		GOTO(out, result = -ENOMEM);
 
@@ -335,7 +335,7 @@ static void lov_fini_raid0(const struct lu_env *env,
 	struct lov_layout_raid0 *r0 = &lle->lle_raid0;
 
 	if (r0->lo_sub != NULL) {
-		OBD_FREE_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
+		OBD_FREE_PTR_ARRAY_LARGE(r0->lo_sub, r0->lo_nr);
 		r0->lo_sub = NULL;
 	}
 }
@@ -646,12 +646,11 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	if (equi(flr_state == LCM_FL_NONE, comp->lo_mirror_count > 1))
 		RETURN(-EINVAL);
 
-	OBD_ALLOC(comp->lo_mirrors,
-		  comp->lo_mirror_count * sizeof(*comp->lo_mirrors));
+	OBD_ALLOC_PTR_ARRAY(comp->lo_mirrors, comp->lo_mirror_count);
 	if (comp->lo_mirrors == NULL)
 		RETURN(-ENOMEM);
 
-	OBD_ALLOC(comp->lo_entries, entry_count * sizeof(*comp->lo_entries));
+	OBD_ALLOC_PTR_ARRAY(comp->lo_entries, entry_count);
 	if (comp->lo_entries == NULL)
 		RETURN(-ENOMEM);
 
@@ -873,14 +872,12 @@ static void lov_fini_composite(const struct lu_env *env,
 			if (entry->lle_comp_ops)
 				entry->lle_comp_ops->lco_fini(env, entry);
 
-		OBD_FREE(comp->lo_entries,
-			 comp->lo_entry_count * sizeof(*comp->lo_entries));
+		OBD_FREE_PTR_ARRAY(comp->lo_entries, comp->lo_entry_count);
 		comp->lo_entries = NULL;
 	}
 
 	if (comp->lo_mirrors != NULL) {
-		OBD_FREE(comp->lo_mirrors,
-			 comp->lo_mirror_count * sizeof(*comp->lo_mirrors));
+		OBD_FREE_PTR_ARRAY(comp->lo_mirrors, comp->lo_mirror_count);
 		comp->lo_mirrors = NULL;
 	}
 

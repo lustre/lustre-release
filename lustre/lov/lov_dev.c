@@ -258,18 +258,16 @@ static struct lu_device *lov_device_free(const struct lu_env *env,
 
 	cl_device_fini(lu2cl_dev(d));
 	if (ld->ld_target) {
-		OBD_FREE(ld->ld_target, nr * sizeof ld->ld_target[0]);
+		OBD_FREE_PTR_ARRAY(ld->ld_target, nr);
 		ld->ld_target = NULL;
 	}
 	if (ld->ld_md_tgts) {
-		OBD_FREE(ld->ld_md_tgts,
-			 sizeof(*ld->ld_md_tgts) * LOV_MDC_TGT_MAX);
+		OBD_FREE_PTR_ARRAY(ld->ld_md_tgts, LOV_MDC_TGT_MAX);
 		ld->ld_md_tgts = NULL;
 	}
 	/* free array of MDCs */
 	if (ld->ld_lov->lov_mdc_tgts) {
-		OBD_FREE(ld->ld_lov->lov_mdc_tgts,
-			 sizeof(*ld->ld_lov->lov_mdc_tgts) * LOV_MDC_TGT_MAX);
+		OBD_FREE_PTR_ARRAY(ld->ld_lov->lov_mdc_tgts, LOV_MDC_TGT_MAX);
 		ld->ld_lov->lov_mdc_tgts = NULL;
 	}
 
@@ -305,7 +303,7 @@ static int lov_expand_targets(const struct lu_env *env, struct lov_device *dev)
 		struct lovsub_device **newd;
 		const size_t sz = sizeof(newd[0]);
 
-		OBD_ALLOC(newd, tgt_size * sz);
+		OBD_ALLOC_PTR_ARRAY(newd, tgt_size);
 		if (newd) {
 			if (sub_size > 0) {
 				memcpy(newd, dev->ld_target, sub_size * sz);
@@ -537,15 +535,14 @@ static struct lu_device *lov_device_alloc(const struct lu_env *env,
 
 	/* Alloc MDC devices array */
 	/* XXX: need dynamic allocation at some moment */
-	OBD_ALLOC(ld->ld_md_tgts, sizeof(*ld->ld_md_tgts) * LOV_MDC_TGT_MAX);
+	OBD_ALLOC_PTR_ARRAY(ld->ld_md_tgts, LOV_MDC_TGT_MAX);
 	if (!ld->ld_md_tgts)
 		GOTO(out, rc = -ENOMEM);
 
 	ld->ld_md_tgts_nr = 0;
 
 	ld->ld_lov = &obd->u.lov;
-	OBD_ALLOC(ld->ld_lov->lov_mdc_tgts,
-		  sizeof(*ld->ld_lov->lov_mdc_tgts) * LOV_MDC_TGT_MAX);
+	OBD_ALLOC_PTR_ARRAY(ld->ld_lov->lov_mdc_tgts, LOV_MDC_TGT_MAX);
 	if (!ld->ld_lov->lov_mdc_tgts)
 		GOTO(out_md_tgts, rc = -ENOMEM);
 
@@ -561,11 +558,10 @@ static struct lu_device *lov_device_alloc(const struct lu_env *env,
 out_site:
 	lu_site_fini(&ld->ld_site);
 out_mdc_tgts:
-	OBD_FREE(ld->ld_lov->lov_mdc_tgts,
-		 sizeof(*ld->ld_lov->lov_mdc_tgts) * LOV_MDC_TGT_MAX);
+	OBD_FREE_PTR_ARRAY(ld->ld_lov->lov_mdc_tgts, LOV_MDC_TGT_MAX);
 	ld->ld_lov->lov_mdc_tgts = NULL;
 out_md_tgts:
-	OBD_FREE(ld->ld_md_tgts, sizeof(*ld->ld_md_tgts) * LOV_MDC_TGT_MAX);
+	OBD_FREE_PTR_ARRAY(ld->ld_md_tgts, LOV_MDC_TGT_MAX);
 	ld->ld_md_tgts = NULL;
 out:
 	OBD_FREE_PTR(ld);

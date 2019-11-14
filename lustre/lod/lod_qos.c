@@ -2306,8 +2306,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 	lag->lag_oaa_count = 0;
 	if (lag->lag_oss_avoid_array &&
 	    lag->lag_oaa_size < lod->lod_ost_count) {
-		OBD_FREE(lag->lag_oss_avoid_array,
-			 sizeof(__u32) * lag->lag_oaa_size);
+		OBD_FREE_PTR_ARRAY(lag->lag_oss_avoid_array, lag->lag_oaa_size);
 		lag->lag_oss_avoid_array = NULL;
 		lag->lag_oaa_size = 0;
 	}
@@ -2335,7 +2334,7 @@ int lod_prepare_avoidance(const struct lu_env *env, struct lod_object *lo)
 		 * using OST count to allocate the array to store the OSS
 		 * id.
 		 */
-		OBD_ALLOC(new_oss, sizeof(*new_oss) * lod->lod_ost_count);
+		OBD_ALLOC_PTR_ARRAY(new_oss, lod->lod_ost_count);
 		if (!new_oss) {
 			CFS_FREE_BITMAP(bitmap);
 			return -ENOMEM;
@@ -2494,10 +2493,10 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (stripe_len == 0)
 			GOTO(out, rc = -ERANGE);
 		lod_comp->llc_stripe_count = stripe_len;
-		OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
+		OBD_ALLOC_PTR_ARRAY(stripe, stripe_len);
 		if (stripe == NULL)
 			GOTO(out, rc = -ENOMEM);
-		OBD_ALLOC(ost_indices, sizeof(*ost_indices) * stripe_len);
+		OBD_ALLOC_PTR_ARRAY(ost_indices, stripe_len);
 		if (!ost_indices)
 			GOTO(out, rc = -ENOMEM);
 
@@ -2576,10 +2575,9 @@ put_ldts:
 out:
 	if (rc < 0) {
 		if (stripe)
-			OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
+			OBD_FREE_PTR_ARRAY(stripe, stripe_len);
 		if (ost_indices)
-			OBD_FREE(ost_indices,
-				 sizeof(*ost_indices) * stripe_len);
+			OBD_FREE_PTR_ARRAY(ost_indices, stripe_len);
 	}
 	RETURN(rc);
 }

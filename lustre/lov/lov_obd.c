@@ -510,36 +510,36 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 		RETURN(rc);
 	}
 
-        if (index >= lov->lov_tgt_size) {
-                /* We need to reallocate the lov target array. */
-                struct lov_tgt_desc **newtgts, **old = NULL;
-                __u32 newsize, oldsize = 0;
+	if (index >= lov->lov_tgt_size) {
+		/* We need to reallocate the lov target array. */
+		struct lov_tgt_desc **newtgts, **old = NULL;
+		__u32 newsize, oldsize = 0;
 
-                newsize = max(lov->lov_tgt_size, (__u32)2);
-                while (newsize < index + 1)
-                        newsize = newsize << 1;
-                OBD_ALLOC(newtgts, sizeof(*newtgts) * newsize);
-                if (newtgts == NULL) {
+		newsize = max(lov->lov_tgt_size, 2U);
+		while (newsize < index + 1)
+			newsize = newsize << 1;
+		OBD_ALLOC_PTR_ARRAY(newtgts, newsize);
+		if (newtgts == NULL) {
 			mutex_unlock(&lov->lov_lock);
-                        RETURN(-ENOMEM);
-                }
+			RETURN(-ENOMEM);
+		}
 
-                if (lov->lov_tgt_size) {
-                        memcpy(newtgts, lov->lov_tgts, sizeof(*newtgts) *
-                               lov->lov_tgt_size);
-                        old = lov->lov_tgts;
-                        oldsize = lov->lov_tgt_size;
-                }
+		if (lov->lov_tgt_size) {
+			memcpy(newtgts, lov->lov_tgts, sizeof(*newtgts) *
+			       lov->lov_tgt_size);
+			old = lov->lov_tgts;
+			oldsize = lov->lov_tgt_size;
+		}
 
 		lov->lov_tgts = newtgts;
 		lov->lov_tgt_size = newsize;
 		smp_rmb();
 		if (old)
-			OBD_FREE(old, sizeof(*old) * oldsize);
+			OBD_FREE_PTR_ARRAY(old, oldsize);
 
-                CDEBUG(D_CONFIG, "tgts: %p size: %d\n",
-                       lov->lov_tgts, lov->lov_tgt_size);
-        }
+		CDEBUG(D_CONFIG, "tgts: %p size: %d\n",
+		       lov->lov_tgts, lov->lov_tgt_size);
+	}
 
         OBD_ALLOC_PTR(tgt);
         if (!tgt) {
@@ -825,10 +825,9 @@ static int lov_cleanup(struct obd_device *obd)
 			lov_del_target(obd, i, NULL, 0);
 		}
 		lov_tgts_putref(obd);
-                OBD_FREE(lov->lov_tgts, sizeof(*lov->lov_tgts) *
-                         lov->lov_tgt_size);
-                lov->lov_tgt_size = 0;
-        }
+		OBD_FREE_PTR_ARRAY(lov->lov_tgts, lov->lov_tgt_size);
+		lov->lov_tgt_size = 0;
+	}
 
 	if (lov->lov_cache != NULL) {
 		cl_cache_decref(lov->lov_cache);

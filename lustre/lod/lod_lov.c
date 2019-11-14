@@ -549,8 +549,7 @@ int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count)
 void lod_free_comp_entries(struct lod_object *lo)
 {
 	if (lo->ldo_mirrors) {
-		OBD_FREE(lo->ldo_mirrors,
-			 sizeof(*lo->ldo_mirrors) * lo->ldo_mirror_count);
+		OBD_FREE_PTR_ARRAY(lo->ldo_mirrors, lo->ldo_mirror_count);
 		lo->ldo_mirrors = NULL;
 		lo->ldo_mirror_count = 0;
 	}
@@ -569,8 +568,7 @@ int lod_alloc_comp_entries(struct lod_object *lo,
 	LASSERT(lo->ldo_comp_cnt == 0 && lo->ldo_comp_entries == NULL);
 
 	if (mirror_count > 0) {
-		OBD_ALLOC(lo->ldo_mirrors,
-			  sizeof(*lo->ldo_mirrors) * mirror_count);
+		OBD_ALLOC_PTR_ARRAY(lo->ldo_mirrors, mirror_count);
 		if (!lo->ldo_mirrors)
 			return -ENOMEM;
 
@@ -580,8 +578,7 @@ int lod_alloc_comp_entries(struct lod_object *lo,
 	OBD_ALLOC_LARGE(lo->ldo_comp_entries,
 			sizeof(*lo->ldo_comp_entries) * comp_count);
 	if (lo->ldo_comp_entries == NULL) {
-		OBD_FREE(lo->ldo_mirrors,
-			 sizeof(*lo->ldo_mirrors) * mirror_count);
+		OBD_FREE_PTR_ARRAY(lo->ldo_mirrors, mirror_count);
 		lo->ldo_mirror_count = 0;
 		return -ENOMEM;
 	}
@@ -1028,10 +1025,10 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lod_comp->llc_stripe_size > 0);
 
 	stripe_len = lod_comp->llc_stripe_count;
-	OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
+	OBD_ALLOC_PTR_ARRAY(stripe, stripe_len);
 	if (stripe == NULL)
 		RETURN(-ENOMEM);
-	OBD_ALLOC(ost_indices, sizeof(*ost_indices) * stripe_len);
+	OBD_ALLOC_PTR_ARRAY(ost_indices, stripe_len);
 	if (!ost_indices)
 		GOTO(out, rc = -ENOMEM);
 
@@ -1077,11 +1074,10 @@ out:
 			if (stripe[i] != NULL)
 				dt_object_put(env, stripe[i]);
 
-		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
+		OBD_FREE_PTR_ARRAY(stripe, stripe_len);
 		lod_comp->llc_stripe_count = 0;
 		if (ost_indices)
-			OBD_FREE(ost_indices,
-				 sizeof(*ost_indices) * stripe_len);
+			OBD_FREE_PTR_ARRAY(ost_indices, stripe_len);
 	} else {
 		lod_comp->llc_stripe = stripe;
 		lod_comp->llc_ost_indices = ost_indices;
