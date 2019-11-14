@@ -1274,7 +1274,7 @@ int ll_rmfid(struct file *file, void __user *arg)
 	OBD_ALLOC(lfa, size);
 	if (!lfa)
 		RETURN(-ENOMEM);
-	OBD_ALLOC(rcs, sizeof(int) * nr);
+	OBD_ALLOC_PTR_ARRAY(rcs, nr);
 	if (!rcs)
 		GOTO(free_lfa, rc = -ENOMEM);
 
@@ -1292,7 +1292,7 @@ int ll_rmfid(struct file *file, void __user *arg)
 	}
 
 free_rcs:
-	OBD_FREE(rcs, sizeof(int) * nr);
+	OBD_FREE_PTR_ARRAY(rcs, nr);
 free_lfa:
 	OBD_FREE(lfa, size);
 

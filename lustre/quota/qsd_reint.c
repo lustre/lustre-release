@@ -207,7 +207,7 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	npages /= PAGE_SIZE;
 
 	/* allocate pages for bulk index read */
-	OBD_ALLOC(pages, npages * sizeof(*pages));
+	OBD_ALLOC_PTR_ARRAY(pages, npages);
 	if (pages == NULL)
 		GOTO(out, rc = -ENOMEM);
 	for (i = 0; i < npages; i++) {
@@ -285,7 +285,7 @@ out:
 		for (i = 0; i < npages; i++)
 			if (pages[i] != NULL)
 				__free_page(pages[i]);
-		OBD_FREE(pages, npages * sizeof(*pages));
+		OBD_FREE_PTR_ARRAY(pages, npages);
 	}
 
 	/* Update index version */

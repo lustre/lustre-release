@@ -1761,7 +1761,7 @@ void osp_it_fini(const struct lu_env *env, struct dt_it *di)
 				__free_page(pages[i]);
 			}
 		}
-		OBD_FREE(pages, npages * sizeof(*pages));
+		OBD_FREE_PTR_ARRAY(pages, npages);
 	}
 	OBD_FREE_PTR(it);
 }
@@ -1795,7 +1795,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	npages = min_t(unsigned int, OFD_MAX_BRW_SIZE, 1 << 20);
 	npages /= PAGE_SIZE;
 
-	OBD_ALLOC(pages, npages * sizeof(*pages));
+	OBD_ALLOC_PTR_ARRAY(pages, npages);
 	if (pages == NULL)
 		RETURN(-ENOMEM);
 
@@ -1971,7 +1971,7 @@ again0:
 			if (pages[i] != NULL)
 				__free_page(pages[i]);
 		}
-		OBD_FREE(pages, it->ooi_total_npages * sizeof(*pages));
+		OBD_FREE_PTR_ARRAY(pages, it->ooi_total_npages);
 
 		it->ooi_pos_page = 0;
 		it->ooi_total_npages = 0;

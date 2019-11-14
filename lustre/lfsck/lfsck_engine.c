@@ -274,7 +274,7 @@ static int lfsck_load_stripe_lmv(const struct lu_env *env,
 		else
 			stripes = lmv->lmv_stripe_count;
 
-		OBD_ALLOC_LARGE(lslr, sizeof(*lslr) * stripes);
+		OBD_ALLOC_PTR_ARRAY_LARGE(lslr, stripes);
 		if (lslr == NULL) {
 			OBD_FREE_PTR(llmv);
 

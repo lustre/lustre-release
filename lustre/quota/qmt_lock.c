@@ -554,7 +554,7 @@ static void qmt_free_lock_array(struct qmt_gl_lock_array *array)
 		array->q_locks[i] = NULL;
 	}
 	array->q_cnt = 0;
-	OBD_FREE(array->q_locks, array->q_max * sizeof(*array->q_locks));
+	OBD_FREE_PTR_ARRAY(array->q_locks, array->q_max);
 	array->q_locks = NULL;
 	array->q_max = 0;
 }
@@ -605,8 +605,7 @@ again:
 		array->q_max = count + count / 2 + 10;
 		count = 0;
 		LASSERT(array->q_locks == NULL && array->q_cnt == 0);
-		OBD_ALLOC(array->q_locks,
-			  sizeof(*array->q_locks) * array->q_max);
+		OBD_ALLOC_PTR_ARRAY(array->q_locks, array->q_max);
 		if (array->q_locks == NULL) {
 			array->q_max = 0;
 			RETURN(-ENOMEM);

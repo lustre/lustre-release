@@ -168,14 +168,13 @@ void lfsck_lmv_put(const struct lu_env *env, struct lfsck_lmv *llmv)
 
 			LASSERT(llmv->ll_lslr != NULL);
 
-			OBD_FREE_LARGE(llmv->ll_lslr,
-				       sizeof(*llmv->ll_lslr) *
-				       llmv->ll_stripes_allocated);
+			OBD_FREE_PTR_ARRAY_LARGE(llmv->ll_lslr,
+						 llmv->ll_stripes_allocated);
 			OBD_FREE_PTR(llu);
 		} else {
 			if (llmv->ll_lslr != NULL)
-				OBD_FREE_LARGE(llmv->ll_lslr,
-					sizeof(*llmv->ll_lslr) *
+				OBD_FREE_PTR_ARRAY_LARGE(
+					llmv->ll_lslr,
 					llmv->ll_stripes_allocated);
 
 			OBD_FREE_PTR(llmv);
@@ -510,7 +509,7 @@ static int lfsck_record_lmv(const struct lu_env *env,
 		int new_stripes = index + 1;
 		size_t old_size = sizeof(*lslr) * llmv->ll_stripes_allocated;
 
-		OBD_ALLOC_LARGE(new_lslr, sizeof(*new_lslr) * new_stripes);
+		OBD_ALLOC_PTR_ARRAY_LARGE(new_lslr, new_stripes);
 		if (new_lslr == NULL) {
 			llmv->ll_failed = 1;
 
@@ -1360,7 +1359,7 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
 	else
 		count = lmv4->lmv_stripe_count;
 
-	OBD_ALLOC_LARGE(lslr, sizeof(*lslr) * count);
+	OBD_ALLOC_PTR_ARRAY_LARGE(lslr, count);
 	if (lslr == NULL) {
 		OBD_FREE_PTR(llu);
 

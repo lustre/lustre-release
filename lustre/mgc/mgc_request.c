@@ -1611,25 +1611,25 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 	if (cld_is_nodemap(cld) && (mgc_conn->c_peer.nid == LNET_NID_LO_0))
 		GOTO(out, rc = 0);
 
-        /* allocate buffer for bulk transfer.
-         * if this is the first time for this mgs to read logs,
-         * CONFIG_READ_NRPAGES_INIT will be used since it will read all logs
-         * once; otherwise, it only reads increment of logs, this should be
-         * small and CONFIG_READ_NRPAGES will be used.
-         */
-        nrpages = CONFIG_READ_NRPAGES;
+	/* allocate buffer for bulk transfer.
+	 * if this is the first time for this mgs to read logs,
+	 * CONFIG_READ_NRPAGES_INIT will be used since it will read all logs
+	 * once; otherwise, it only reads increment of logs, this should be
+	 * small and CONFIG_READ_NRPAGES will be used.
+	 */
+	nrpages = CONFIG_READ_NRPAGES;
 	if (cfg->cfg_last_idx == 0 || cld_is_nodemap(cld))
-                nrpages = CONFIG_READ_NRPAGES_INIT;
+		nrpages = CONFIG_READ_NRPAGES_INIT;
 
-        OBD_ALLOC(pages, sizeof(*pages) * nrpages);
-        if (pages == NULL)
-                GOTO(out, rc = -ENOMEM);
+	OBD_ALLOC_PTR_ARRAY(pages, nrpages);
+	if (pages == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-        for (i = 0; i < nrpages; i++) {
+	for (i = 0; i < nrpages; i++) {
 		pages[i] = alloc_page(GFP_KERNEL);
-                if (pages[i] == NULL)
-                        GOTO(out, rc = -ENOMEM);
-        }
+		if (pages[i] == NULL)
+			GOTO(out, rc = -ENOMEM);
+	}
 
 again:
 #ifdef HAVE_SERVER_SUPPORT
@@ -1791,7 +1791,7 @@ out:
 				break;
 			__free_page(pages[i]);
 		}
-		OBD_FREE(pages, sizeof(*pages) * nrpages);
+		OBD_FREE_PTR_ARRAY(pages, nrpages);
 	}
 	return rc;
 }

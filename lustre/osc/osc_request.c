@@ -2011,8 +2011,8 @@ static void sort_brw_pages(struct brw_page **array, int num)
 
 static void osc_release_ppga(struct brw_page **ppga, size_t count)
 {
-        LASSERT(ppga != NULL);
-        OBD_FREE(ppga, sizeof(*ppga) * count);
+	LASSERT(ppga != NULL);
+	OBD_FREE_PTR_ARRAY(ppga, count);
 }
 
 static int brw_interpret(const struct lu_env *env,
@@ -2207,7 +2207,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	if (mem_tight)
 		mpflag = cfs_memory_pressure_get_and_set();
 
-	OBD_ALLOC(pga, sizeof(*pga) * page_count);
+	OBD_ALLOC_PTR_ARRAY(pga, page_count);
 	if (pga == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -2336,7 +2336,7 @@ out:
 		if (oa)
 			OBD_SLAB_FREE_PTR(oa, osc_obdo_kmem);
 		if (pga)
-			OBD_FREE(pga, sizeof(*pga) * page_count);
+			OBD_FREE_PTR_ARRAY(pga, page_count);
 		/* this should happen rarely and is pretty bad, it makes the
 		 * pending list not follow the dirty order */
 		while (!list_empty(ext_list)) {

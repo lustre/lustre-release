@@ -1347,7 +1347,7 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	fid = &op_data->op_fid1;
 	LASSERT(inode != NULL);
 
-	OBD_ALLOC(page_pool, sizeof(page_pool[0]) * max_pages);
+	OBD_ALLOC_PTR_ARRAY(page_pool, max_pages);
 	if (page_pool != NULL) {
 		page_pool[0] = page0;
 	} else {
@@ -1416,7 +1416,7 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	}
 
 	if (page_pool != &page0)
-		OBD_FREE(page_pool, sizeof(page_pool[0]) * max_pages);
+		OBD_FREE_PTR_ARRAY(page_pool, max_pages);
 
 	RETURN(rc);
 }

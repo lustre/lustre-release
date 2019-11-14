@@ -319,7 +319,7 @@ __generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 		struct iovec *iov_copy;
 		int count = 0;
 
-		OBD_ALLOC(iov_copy, sizeof(*iov_copy) * iter->nr_segs);
+		OBD_ALLOC_PTR_ARRAY(iov_copy, iter->nr_segs);
 		if (!iov_copy)
 			return -ENOMEM;
 
@@ -328,7 +328,7 @@ __generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 
 		bytes = __generic_file_aio_write(iocb, iov_copy, count,
 						 &iocb->ki_pos);
-		OBD_FREE(iov_copy, sizeof(*iov_copy) * iter->nr_segs);
+		OBD_FREE_PTR_ARRAY(iov_copy, iter->nr_segs);
 
 		if (bytes > 0)
 			iov_iter_advance(iter, bytes);

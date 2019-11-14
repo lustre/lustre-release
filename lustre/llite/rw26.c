@@ -185,7 +185,7 @@ static void ll_free_user_pages(struct page **pages, int npages)
 #if defined(HAVE_DIO_ITER)
 	kvfree(pages);
 #else
-	OBD_FREE_LARGE(pages, npages * sizeof(*pages));
+	OBD_FREE_PTR_ARRAY_LARGE(pages, npages);
 #endif
 }
 
@@ -224,7 +224,7 @@ static ssize_t ll_get_user_pages(int rw, struct iov_iter *iter,
 
 	size = min_t(size_t, maxsize, iter->iov->iov_len);
 	page_count = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	OBD_ALLOC_LARGE(*pages, page_count * sizeof(**pages));
+	OBD_ALLOC_PTR_ARRAY_LARGE(*pages, page_count);
 	if (*pages == NULL)
 		return -ENOMEM;
 

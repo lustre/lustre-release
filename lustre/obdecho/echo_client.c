@@ -2572,13 +2572,13 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 	if (rw == OBD_BRW_WRITE)
 		brw_flags = OBD_BRW_ASYNC;
 
-	OBD_ALLOC(pga, npages * sizeof(*pga));
+	OBD_ALLOC_PTR_ARRAY(pga, npages);
 	if (!pga)
 		RETURN(-ENOMEM);
 
-	OBD_ALLOC(pages, npages * sizeof(*pages));
+	OBD_ALLOC_PTR_ARRAY(pages, npages);
 	if (!pages) {
-		OBD_FREE(pga, npages * sizeof(*pga));
+		OBD_FREE_PTR_ARRAY(pga, npages);
 		RETURN(-ENOMEM);
 	}
 
@@ -2628,8 +2628,8 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 		}
 		__free_page(pgp->pg);
 	}
-	OBD_FREE(pga, npages * sizeof(*pga));
-	OBD_FREE(pages, npages * sizeof(*pages));
+	OBD_FREE_PTR_ARRAY(pga, npages);
+	OBD_FREE_PTR_ARRAY(pages, npages);
 	RETURN(rc);
 }
 
@@ -2653,7 +2653,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	apc = npages = batch >> PAGE_SHIFT;
 	tot_pages = count >> PAGE_SHIFT;
 
-	OBD_ALLOC_LARGE(lnb, apc * sizeof(*lnb));
+	OBD_ALLOC_PTR_ARRAY_LARGE(lnb, apc);
 	if (!lnb)
 		RETURN(-ENOMEM);
 
@@ -2719,7 +2719,7 @@ static int echo_client_prep_commit(const struct lu_env *env,
 	}
 
 out:
-	OBD_FREE_LARGE(lnb, apc * sizeof(*lnb));
+	OBD_FREE_PTR_ARRAY_LARGE(lnb, apc);
 
 	RETURN(ret);
 }

@@ -636,7 +636,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	CDEBUG(D_MGS, "Reading IR log %s bufsize %ld.\n",
 	       body->mcb_name, bufsize);
 
-	OBD_ALLOC(pages, sizeof(*pages) * nrpages);
+	OBD_ALLOC_PTR_ARRAY(pages, nrpages);
 	if (!pages)
 		GOTO(out, rc = -ENOMEM);
 
@@ -682,7 +682,7 @@ out:
 			__free_page(pages[i]);
 		}
 
-		OBD_FREE(pages, sizeof(*pages) * nrpages);
+		OBD_FREE_PTR_ARRAY(pages, nrpages);
 	}
 
 	if (fsdb)
