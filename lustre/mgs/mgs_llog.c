@@ -3285,8 +3285,7 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 	int rc, del;
 
 	/* Erase any old settings of this same parameter */
-	memcpy(comment, ptr, MTI_NAME_MAXLEN);
-	comment[MTI_NAME_MAXLEN - 1] = 0;
+	strlcpy(comment, ptr, sizeof(comment));
 	/* But don't try to match the value. */
 	tmp = strchr(comment, '=');
 	if (tmp != NULL)
