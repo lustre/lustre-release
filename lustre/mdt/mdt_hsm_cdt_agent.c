@@ -135,8 +135,7 @@ int mdt_hsm_agent_register(struct mdt_thread_info *mti,
 out_free:
 
 	if (ha != NULL && ha->ha_archive_id != NULL)
-		OBD_FREE(ha->ha_archive_id,
-			 ha->ha_archive_cnt * sizeof(*ha->ha_archive_id));
+		OBD_FREE_PTR_ARRAY(ha->ha_archive_id, ha->ha_archive_cnt);
 	if (ha != NULL)
 		OBD_FREE_PTR(ha);
 out:
@@ -165,7 +164,7 @@ int mdt_hsm_agent_register_mask(struct mdt_thread_info *mti,
 	nr_archives = hweight32(archive_mask);
 
 	if (nr_archives != 0) {
-		OBD_ALLOC(archive_id, nr_archives * sizeof(*archive_id));
+		OBD_ALLOC_PTR_ARRAY(archive_id, nr_archives);
 		if (!archive_id)
 			RETURN(-ENOMEM);
 
@@ -181,7 +180,7 @@ int mdt_hsm_agent_register_mask(struct mdt_thread_info *mti,
 	rc = mdt_hsm_agent_register(mti, uuid, nr_archives, archive_id);
 
 	if (archive_id != NULL)
-		OBD_FREE(archive_id, nr_archives * sizeof(*archive_id));
+		OBD_FREE_PTR_ARRAY(archive_id, nr_archives);
 
 	RETURN(rc);
 }
@@ -217,8 +216,7 @@ int mdt_hsm_agent_unregister(struct mdt_thread_info *mti,
 		GOTO(out, rc = -ENOENT);
 
 	if (ha->ha_archive_cnt != 0)
-		OBD_FREE(ha->ha_archive_id,
-			 ha->ha_archive_cnt * sizeof(*ha->ha_archive_id));
+		OBD_FREE_PTR_ARRAY(ha->ha_archive_id, ha->ha_archive_cnt);
 	OBD_FREE_PTR(ha);
 
 	GOTO(out, rc = 0);

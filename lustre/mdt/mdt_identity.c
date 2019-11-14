@@ -57,8 +57,7 @@ static void mdt_identity_entry_free(struct upcall_cache *cache,
 
 	if (identity->mi_nperms) {
 		LASSERT(identity->mi_perms);
-		OBD_FREE(identity->mi_perms,
-			 identity->mi_nperms * sizeof(struct md_perm));
+		OBD_FREE_PTR_ARRAY(identity->mi_perms, identity->mi_nperms);
 		identity->mi_nperms = 0;
 	}
 }

@@ -467,8 +467,8 @@ static void mdt_hsm_cdt_cleanup(struct mdt_device *mdt)
 	list_for_each_entry_safe(ha, tmp2, &cdt->cdt_agents, ha_list) {
 		list_del(&ha->ha_list);
 		if (ha->ha_archive_cnt != 0)
-			OBD_FREE(ha->ha_archive_id, ha->ha_archive_cnt *
-				 sizeof(*ha->ha_archive_id));
+			OBD_FREE_PTR_ARRAY(ha->ha_archive_id,
+					   ha->ha_archive_cnt);
 		OBD_FREE_PTR(ha);
 	}
 	up_write(&cdt->cdt_agent_lock);

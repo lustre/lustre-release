@@ -184,13 +184,11 @@ static void mdt_cdt_free_request_tree(struct cdt_req_progress *crp)
 	}
 	/* free all sub vectors */
 	for (i = 0 ; i <= crp->crp_max / NODE_VECTOR_SZ ; i++)
-		OBD_FREE(crp->crp_node[i],
-			 NODE_VECTOR_SZ * sizeof(crp->crp_node[i][0]));
+		OBD_FREE_PTR_ARRAY(crp->crp_node[i], NODE_VECTOR_SZ);
 
 	/* free main vector */
-	OBD_FREE(crp->crp_node,
-		 sizeof(crp->crp_node[0]) *
-		  (crp->crp_max / NODE_VECTOR_SZ + 1));
+	OBD_FREE_PTR_ARRAY(crp->crp_node,
+			   (crp->crp_max / NODE_VECTOR_SZ + 1));
 
 	crp->crp_cnt = 0;
 	crp->crp_max = 0;
@@ -221,7 +219,7 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 	if (crp->crp_cnt >= crp->crp_max) {
 		/* no more room */
 		/* allocate a new vector */
-		OBD_ALLOC(v, NODE_VECTOR_SZ * sizeof(v[0]));
+		OBD_ALLOC_PTR_ARRAY(v, NODE_VECTOR_SZ);
 		if (v == NULL)
 			GOTO(out, rc = -ENOMEM);
 
@@ -235,7 +233,7 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 		/* increase main vector size */
 		OBD_ALLOC(new_vv, nsz);
 		if (new_vv == NULL) {
-			OBD_FREE(v, NODE_VECTOR_SZ * sizeof(v[0]));
+			OBD_FREE_PTR_ARRAY(v, NODE_VECTOR_SZ);
 			GOTO(out, rc = -ENOMEM);
 		}
 

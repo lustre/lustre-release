@@ -2233,7 +2233,7 @@ static int mdt_close_resync_done(struct mdt_thread_info *info,
 					   RCL_CLIENT))
 			GOTO(out_unlock, rc = -EPROTO);
 
-		OBD_ALLOC(resync_ids, resync_count * sizeof(__u32));
+		OBD_ALLOC_PTR_ARRAY(resync_ids, resync_count);
 		if (!resync_ids)
 			GOTO(out_unlock, rc = -ENOMEM);
 
@@ -2273,7 +2273,7 @@ out_unlock:
 	}
 
 	if (resync_ids)
-		OBD_FREE(resync_ids, resync_count * sizeof(__u32));
+		OBD_FREE_PTR_ARRAY(resync_ids, resync_count);
 
 out_reprocess:
 	ldlm_reprocess_all(lease->l_resource, lease);

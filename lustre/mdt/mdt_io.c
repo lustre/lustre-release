@@ -1532,7 +1532,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 
 	/* parse remote buffers to local buffers and prepare the latter */
 	lnbs = (len >> PAGE_SHIFT) + 1;
-	OBD_ALLOC(lnb, sizeof(*lnb) * lnbs);
+	OBD_ALLOC_PTR_ARRAY(lnb, lnbs);
 	if (lnb == NULL)
 		GOTO(unlock, rc = -ENOMEM);
 
@@ -1573,7 +1573,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 buf_put:
 	dt_bufs_put(env, mo, lnb, nr_local);
 free:
-	OBD_FREE(lnb, sizeof(*lnb) * lnbs);
+	OBD_FREE_PTR_ARRAY(lnb, lnbs);
 unlock:
 	dt_read_unlock(env, mo);
 	lu_object_put(env, &mo->do_lu);
