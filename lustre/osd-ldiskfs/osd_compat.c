@@ -546,8 +546,8 @@ static void osd_seq_free(struct osd_obj_seq *osd_seq)
 			if (osd_seq->oos_dirs[j])
 				dput(osd_seq->oos_dirs[j]);
 		}
-		OBD_FREE(osd_seq->oos_dirs,
-			 sizeof(struct dentry *) * osd_seq->oos_subdir_count);
+		OBD_FREE_PTR_ARRAY(osd_seq->oos_dirs,
+				   osd_seq->oos_subdir_count);
 	}
 
 	if (osd_seq->oos_root)
@@ -972,8 +972,7 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 	osd_seq->oos_root = seq_dir;
 
 	LASSERT(osd_seq->oos_dirs == NULL);
-	OBD_ALLOC(osd_seq->oos_dirs,
-		  sizeof(seq_dir) * osd_seq->oos_subdir_count);
+	OBD_ALLOC_PTR_ARRAY(osd_seq->oos_dirs, osd_seq->oos_subdir_count);
 	if (osd_seq->oos_dirs == NULL)
 		GOTO(out_put, rc = -ENOMEM);
 
@@ -1000,8 +999,8 @@ out_free:
 			if (osd_seq->oos_dirs[i] != NULL)
 				dput(osd_seq->oos_dirs[i]);
 		}
-		OBD_FREE(osd_seq->oos_dirs,
-			 sizeof(seq_dir) * osd_seq->oos_subdir_count);
+		OBD_FREE_PTR_ARRAY(osd_seq->oos_dirs,
+				   osd_seq->oos_subdir_count);
 out_put:
 		dput(seq_dir);
 		osd_seq->oos_root = NULL;

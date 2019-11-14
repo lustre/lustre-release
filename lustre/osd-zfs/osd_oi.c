@@ -388,8 +388,7 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 	/* Init subdir count to be 32, but each seq can have
 	 * different subdir count */
 	osd_seq->os_subdir_count = OSD_OST_MAP_SIZE;
-	OBD_ALLOC(osd_seq->os_compat_dirs,
-		  sizeof(uint64_t) * osd_seq->os_subdir_count);
+	OBD_ALLOC_PTR_ARRAY(osd_seq->os_compat_dirs, osd_seq->os_subdir_count);
 	if (osd_seq->os_compat_dirs == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -421,8 +420,8 @@ out:
 	up(&seq_list->osl_seq_init_sem);
 	if (rc != 0) {
 		if (osd_seq != NULL && osd_seq->os_compat_dirs != NULL)
-			OBD_FREE(osd_seq->os_compat_dirs,
-				 sizeof(uint64_t) * osd_seq->os_subdir_count);
+			OBD_FREE_PTR_ARRAY(osd_seq->os_compat_dirs,
+					   osd_seq->os_subdir_count);
 		if (osd_seq != NULL)
 			OBD_FREE_PTR(osd_seq);
 		osd_seq = ERR_PTR(rc);
@@ -782,8 +781,8 @@ static void osd_ost_seq_fini(const struct lu_env *env, struct osd_device *osd)
 	list_for_each_entry_safe(osd_seq, tmp, &osl->osl_seq_list,
 				 os_seq_list) {
 		list_del(&osd_seq->os_seq_list);
-		OBD_FREE(osd_seq->os_compat_dirs,
-			 sizeof(uint64_t) * osd_seq->os_subdir_count);
+		OBD_FREE_PTR_ARRAY(osd_seq->os_compat_dirs,
+				   osd_seq->os_subdir_count);
 		OBD_FREE(osd_seq, sizeof(*osd_seq));
 	}
 	write_unlock(&osl->osl_seq_list_lock);
@@ -922,7 +921,7 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 open:
 	LASSERT((count & (count - 1)) == 0);
 	o->od_oi_count = count;
-	OBD_ALLOC(o->od_oi_table, sizeof(*o->od_oi_table) * count);
+	OBD_ALLOC_PTR_ARRAY(o->od_oi_table, count);
 	if (o->od_oi_table == NULL)
 		GOTO(out, rc = -ENOMEM);
 
@@ -935,8 +934,7 @@ out:
 		osd_ost_seq_fini(env, o);
 
 		if (o->od_oi_table) {
-			OBD_FREE(o->od_oi_table,
-				 sizeof(struct osd_oi *) * count);
+			OBD_FREE_PTR_ARRAY(o->od_oi_table, count);
 			o->od_oi_table = NULL;
 		}
 	}
@@ -952,8 +950,7 @@ void osd_oi_fini(const struct lu_env *env, struct osd_device *o)
 
 	if (o->od_oi_table != NULL) {
 		(void) osd_oi_close_table(env, o);
-		OBD_FREE(o->od_oi_table,
-			 sizeof(struct osd_oi *) * o->od_oi_count);
+		OBD_FREE_PTR_ARRAY(o->od_oi_table, o->od_oi_count);
 		o->od_oi_table = NULL;
 		o->od_oi_count = 0;
 	}
@@ -1013,14 +1010,14 @@ struct osd_idmap_cache *osd_idc_add(const struct lu_env *env,
 		i = oti->oti_ins_cache_size * 2;
 		if (i == 0)
 			i = OSD_INS_CACHE_SIZE;
-		OBD_ALLOC_LARGE(idc, sizeof(*idc) * i);
+		OBD_ALLOC_PTR_ARRAY_LARGE(idc, i);
 		if (idc == NULL)
 			return ERR_PTR(-ENOMEM);
 		if (oti->oti_ins_cache != NULL) {
 			memcpy(idc, oti->oti_ins_cache,
 			       oti->oti_ins_cache_used * sizeof(*idc));
-			OBD_FREE_LARGE(oti->oti_ins_cache,
-				 oti->oti_ins_cache_used * sizeof(*idc));
+			OBD_FREE_PTR_ARRAY_LARGE(oti->oti_ins_cache,
+						 oti->oti_ins_cache_used);
 		}
 		oti->oti_ins_cache = idc;
 		oti->oti_ins_cache_size = i;

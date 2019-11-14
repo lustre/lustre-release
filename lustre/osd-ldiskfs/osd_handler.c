@@ -209,14 +209,14 @@ osd_idc_add(const struct lu_env *env, struct osd_device *osd,
 		i = oti->oti_ins_cache_size * 2;
 		if (i == 0)
 			i = OSD_INS_CACHE_SIZE;
-		OBD_ALLOC(idc, sizeof(*idc) * i);
+		OBD_ALLOC_PTR_ARRAY(idc, i);
 		if (idc == NULL)
 			return ERR_PTR(-ENOMEM);
 		if (oti->oti_ins_cache != NULL) {
 			memcpy(idc, oti->oti_ins_cache,
 			       oti->oti_ins_cache_used * sizeof(*idc));
-			OBD_FREE(oti->oti_ins_cache,
-				 oti->oti_ins_cache_used * sizeof(*idc));
+			OBD_FREE_PTR_ARRAY(oti->oti_ins_cache,
+					   oti->oti_ins_cache_used);
 		}
 		oti->oti_ins_cache = idc;
 		oti->oti_ins_cache_size = i;
@@ -7374,8 +7374,7 @@ static void osd_key_fini(const struct lu_context *ctx,
 				__free_page(page);
 			}
 		}
-		OBD_FREE(info->oti_dio_pages,
-			 sizeof(struct page *) * PTLRPC_MAX_BRW_PAGES);
+		OBD_FREE_PTR_ARRAY(info->oti_dio_pages, PTLRPC_MAX_BRW_PAGES);
 	}
 
 	if (info->oti_inode != NULL)
@@ -7389,7 +7388,7 @@ static void osd_key_fini(const struct lu_context *ctx,
 	lu_buf_free(&info->oti_big_buf);
 	if (idc != NULL) {
 		LASSERT(info->oti_ins_cache_size > 0);
-		OBD_FREE(idc, sizeof(*idc) * info->oti_ins_cache_size);
+		OBD_FREE_PTR_ARRAY(idc, info->oti_ins_cache_size);
 		info->oti_ins_cache = NULL;
 		info->oti_ins_cache_size = 0;
 	}

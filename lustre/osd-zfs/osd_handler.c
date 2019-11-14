@@ -743,7 +743,7 @@ static void osd_key_fini(const struct lu_context *ctx,
 
 	if (idc != NULL) {
 		LASSERT(info->oti_ins_cache_size > 0);
-		OBD_FREE_LARGE(idc, sizeof(*idc) * info->oti_ins_cache_size);
+		OBD_FREE_PTR_ARRAY_LARGE(idc, info->oti_ins_cache_size);
 		info->oti_ins_cache = NULL;
 		info->oti_ins_cache_size = 0;
 	}
