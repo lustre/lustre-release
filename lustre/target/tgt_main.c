@@ -53,8 +53,8 @@ static char *sync_on_cancel_states[] = {"never",
  * \retval		0 and buffer filled with data on success
  * \retval		negative value on error
  */
-static ssize_t sync_lock_cancel_show(struct kobject *kobj,
-				     struct attribute *attr, char *buf)
+ssize_t sync_lock_cancel_show(struct kobject *kobj,
+			      struct attribute *attr, char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -63,6 +63,7 @@ static ssize_t sync_lock_cancel_show(struct kobject *kobj,
 	return sprintf(buf, "%s\n",
 		       sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
 }
+EXPORT_SYMBOL(sync_lock_cancel_show);
 
 /**
  * Change policy for handling dirty data under a lock being cancelled.
@@ -85,9 +86,8 @@ static ssize_t sync_lock_cancel_show(struct kobject *kobj,
  * \retval		\a count on success
  * \retval		negative value on error
  */
-static ssize_t sync_lock_cancel_store(struct kobject *kobj,
-				      struct attribute *attr,
-				      const char *buffer, size_t count)
+ssize_t sync_lock_cancel_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
@@ -120,6 +120,7 @@ static ssize_t sync_lock_cancel_store(struct kobject *kobj,
 	spin_unlock(&tgt->lut_flags_lock);
 	return count;
 }
+EXPORT_SYMBOL(sync_lock_cancel_store);
 LUSTRE_RW_ATTR(sync_lock_cancel);
 
 /**

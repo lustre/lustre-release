@@ -7839,31 +7839,35 @@ test_80() { # bug 10718
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	# relax strong synchronous semantics for slow backends like ZFS
-	local soc="obdfilter.*.sync_on_lock_cancel"
-	local soc_old=$(do_facet ost1 lctl get_param -n $soc | head -n1)
-	local hosts=
-	if [ "$soc_old" != "never" ] &&
-		[ "$ost1_FSTYPE" != "ldiskfs" ]; then
-			hosts=$(for host in $(seq -f "ost%g" 1 $OSTCOUNT); do
-				facet_active_host $host; done | sort -u)
-			do_nodes $hosts lctl set_param $soc=never
+	if [ "$ost1_FSTYPE" != "ldiskfs" ]; then
+		local soc="obdfilter.*.sync_lock_cancel"
+		local save=$(do_facet ost1 $LCTL get_param -n $soc | head -n1)
+
+		# "sync_on_lock_cancel" was broken by v2_11_55_0-26-g7059644e9a
+		if [ -z "$save" ]; then
+			soc="obdfilter.*.sync_on_lock_cancel"
+			save=$(do_facet ost1 $LCTL get_param -n $soc | head -n1)
+		fi
+
+		if [ "$save" != "never" ]; then
+			local hosts=$(comma_list $(osts_nodes))
+
+			do_nodes $hosts $LCTL set_param $soc=never
+			stack_trap "do_nodes $hosts $LCTL set_param $soc=$save"
+		fi
 	fi
 
-        dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
-        sync; sleep 1; sync
-        local BEFORE=`date +%s`
-        cancel_lru_locks osc
-        local AFTER=`date +%s`
-        local DIFF=$((AFTER-BEFORE))
-        if [ $DIFF -gt 1 ] ; then
-                error "elapsed for 1M@1T = $DIFF"
-        fi
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
+	sync; sleep 1; sync
+	local before=$(date +%s)
+	cancel_lru_locks osc
+	local after=$(date +%s)
+	local diff=$((after - before))
+	[ $diff -le 1 ] || error "elapsed for 1M@1T = $diff"
 
-        [ -n "$hosts" ] && do_nodes $hosts lctl set_param $soc=$soc_old
-
-        rm -f $DIR/$tfile
+	rm -f $DIR/$tfile
 }
-run_test 80 "Page eviction is equally fast at high offsets too  ===="
+run_test 80 "Page eviction is equally fast at high offsets too"
 
 test_81a() { # LU-456
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
