@@ -775,7 +775,7 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 			}
 		}
 		/* the extra entry is for MEs with ignore bits */
-		LIBCFS_FREE(mhash, sizeof(*mhash) * (LNET_MT_HASH_SIZE + 1));
+		CFS_FREE_PTR_ARRAY(mhash, LNET_MT_HASH_SIZE + 1);
 	}
 
 	cfs_percpt_free(ptl->ptl_mtables);

@@ -190,7 +190,7 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	}
 
 	/* allocate just enough space for the bits to track the mailboxes */
-	LIBCFS_ALLOC(fma_blk->gnm_bit_array, BITS_TO_LONGS(num_mbox) * sizeof(unsigned long));
+	CFS_ALLOC_PTR_ARRAY(fma_blk->gnm_bit_array, BITS_TO_LONGS(num_mbox));
 	if (fma_blk->gnm_bit_array == NULL) {
 		CNETERR("could not allocate mailbox bitmask, %lu bytes for %d mbox\n",
 		       sizeof(unsigned long) * BITS_TO_LONGS(num_mbox), num_mbox);
@@ -199,8 +199,10 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	}
 	bitmap_zero(fma_blk->gnm_bit_array, num_mbox);
 
-	/* now that the num_mbox is set based on allocation type, get debug info setup */
-	LIBCFS_ALLOC(fma_blk->gnm_mbox_info, sizeof(kgn_mbox_info_t) * num_mbox);
+	/* now that the num_mbox is set based on allocation type, get debug
+	 * info setup
+	 * */
+	CFS_ALLOC_PTR_ARRAY(fma_blk->gnm_mbox_info, num_mbox);
 	if (fma_blk->gnm_mbox_info == NULL) {
 		CNETERR("could not allocate mailbox debug, %lu bytes for %d mbox\n",
 		       sizeof(kgn_mbox_info_t) * num_mbox, num_mbox);
@@ -238,9 +240,9 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 	return 0;
 
 free_info:
-	LIBCFS_FREE(fma_blk->gnm_mbox_info, sizeof(kgn_mbox_info_t)*num_mbox);
+	CFS_FREE_PTR_ARRAY(fma_blk->gnm_mbox_info, num_mbox);
 free_bit:
-	LIBCFS_FREE(fma_blk->gnm_bit_array, BITS_TO_LONGS(num_mbox) * sizeof (unsigned long));
+	CFS_FREE_PTR_ARRAY(fma_blk->gnm_bit_array, BITS_TO_LONGS(num_mbox));
 free_blk:
 	if (fma_blk->gnm_state == GNILND_FMABLK_VIRT) {
 		kgnilnd_vfree(fma_blk->gnm_block, fma_blk->gnm_blk_size);
@@ -353,8 +355,9 @@ kgnilnd_free_fmablk_locked(kgn_device_t *dev, kgn_fma_memblock_t *fma_blk)
 
 	list_del(&fma_blk->gnm_bufflist);
 
-	LIBCFS_FREE(fma_blk->gnm_mbox_info, sizeof(kgn_mbox_info_t)*fma_blk->gnm_num_mboxs);
-	LIBCFS_FREE(fma_blk->gnm_bit_array, BITS_TO_LONGS(fma_blk->gnm_num_mboxs) * sizeof (unsigned long));
+	CFS_FREE_PTR_ARRAY(fma_blk->gnm_mbox_info, fma_blk->gnm_num_mboxs);
+	CFS_FREE_PTR_ARRAY(fma_blk->gnm_bit_array,
+			   BITS_TO_LONGS(fma_blk->gnm_num_mboxs));
 	LIBCFS_FREE(fma_blk, sizeof(kgn_fma_memblock_t));
 }
 

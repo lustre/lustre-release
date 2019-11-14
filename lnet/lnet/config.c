@@ -165,15 +165,14 @@ lnet_net_append_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 	if (cpts == NULL) {
 		/* there is an NI which will exist on all CPTs */
 		if (net->net_cpts != NULL)
-			LIBCFS_FREE(net->net_cpts, sizeof(*net->net_cpts) *
-				    net->net_ncpts);
+			CFS_FREE_PTR_ARRAY(net->net_cpts, net->net_ncpts);
 		net->net_cpts = NULL;
 		net->net_ncpts = LNET_CPT_NUMBER;
 		return 0;
 	}
 
 	if (net->net_cpts == NULL) {
-		LIBCFS_ALLOC(net->net_cpts, sizeof(*net->net_cpts) * ncpts);
+		CFS_ALLOC_PTR_ARRAY(net->net_cpts, ncpts);
 		if (net->net_cpts == NULL)
 			return -ENOMEM;
 		memcpy(net->net_cpts, cpts, ncpts * sizeof(*net->net_cpts));
@@ -181,7 +180,7 @@ lnet_net_append_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 		return 0;
 	}
 
-	LIBCFS_ALLOC(added_cpts, sizeof(*added_cpts) * LNET_CPT_NUMBER);
+	CFS_ALLOC_PTR_ARRAY(added_cpts, LNET_CPT_NUMBER);
 	if (added_cpts == NULL)
 		return -ENOMEM;
 
@@ -197,7 +196,7 @@ lnet_net_append_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 		__u32 *array = NULL, *loc;
 		__u32 total_entries = j + net->net_ncpts;
 
-		LIBCFS_ALLOC(array, sizeof(*net->net_cpts) * total_entries);
+		CFS_ALLOC_PTR_ARRAY(array, total_entries);
 		if (array == NULL) {
 			rc = -ENOMEM;
 			goto failed;
@@ -208,14 +207,13 @@ lnet_net_append_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 		loc = array + net->net_ncpts;
 		memcpy(loc, added_cpts, j * sizeof(*net->net_cpts));
 
-		LIBCFS_FREE(net->net_cpts, sizeof(*net->net_cpts) *
-			    net->net_ncpts);
+		CFS_FREE_PTR_ARRAY(net->net_cpts, net->net_ncpts);
 		net->net_ncpts = total_entries;
 		net->net_cpts = array;
 	}
 
 failed:
-	LIBCFS_FREE(added_cpts, sizeof(*added_cpts) * LNET_CPT_NUMBER);
+	CFS_FREE_PTR_ARRAY(added_cpts, LNET_CPT_NUMBER);
 
 	return rc;
 }
@@ -266,8 +264,7 @@ lnet_net_remove_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 	 * CPTs which the remaining NIs are associated with.
 	 */
 	if (net->net_cpts != NULL) {
-		LIBCFS_FREE(net->net_cpts,
-			sizeof(*net->net_cpts) * net->net_ncpts);
+		CFS_FREE_PTR_ARRAY(net->net_cpts, net->net_ncpts);
 		net->net_cpts = NULL;
 	}
 
@@ -284,9 +281,8 @@ lnet_net_remove_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 			 * accross CPT lines.
 			 */
 			if (net->net_cpts != NULL) {
-				LIBCFS_FREE(net->net_cpts,
-						sizeof(*net->net_cpts) *
-						net->net_ncpts);
+				CFS_FREE_PTR_ARRAY(net->net_cpts,
+						   net->net_ncpts);
 				net->net_cpts = NULL;
 				net->net_ncpts = LNET_CPT_NUMBER;
 			}
@@ -350,8 +346,7 @@ lnet_net_free(struct lnet_net *net)
 	}
 
 	if (net->net_cpts != NULL)
-		LIBCFS_FREE(net->net_cpts,
-			    sizeof(*net->net_cpts) * net->net_ncpts);
+		CFS_FREE_PTR_ARRAY(net->net_cpts, net->net_ncpts);
 
 	LIBCFS_FREE(net, sizeof(*net));
 }
@@ -527,7 +522,7 @@ lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el, char *iface)
 
 		LASSERT(rc <= LNET_CPT_NUMBER);
 		if (rc == LNET_CPT_NUMBER) {
-			LIBCFS_FREE(ni->ni_cpts, rc * sizeof(ni->ni_cpts[0]));
+			CFS_FREE_PTR_ARRAY(ni->ni_cpts, rc);
 			ni->ni_cpts = NULL;
 		}
 
@@ -560,7 +555,8 @@ lnet_ni_alloc_w_cpt_array(struct lnet_net *net, __u32 *cpts, __u32 ncpts,
 		ni->ni_ncpts = LNET_CPT_NUMBER;
 	} else {
 		size_t array_size = ncpts * sizeof(ni->ni_cpts[0]);
-		LIBCFS_ALLOC(ni->ni_cpts, array_size);
+
+		CFS_ALLOC_PTR_ARRAY(ni->ni_cpts, ncpts);
 		if (ni->ni_cpts == NULL)
 			goto failed;
 		memcpy(ni->ni_cpts, cpts, array_size);
@@ -1688,7 +1684,7 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
 		return nip;
 	}
 
-	LIBCFS_ALLOC(ipaddrs, nip * sizeof(*ipaddrs));
+	CFS_ALLOC_PTR_ARRAY(ipaddrs, nip);
 	if (!ipaddrs) {
 		rc = -ENOMEM;
 		CERROR("lnet: Can't allocate ipaddrs[%d], rc = %d\n",
@@ -1707,7 +1703,7 @@ lnet_parse_ip2nets (char **networksp, char *ip2nets)
 				   "any local IP interfaces\n");
 		rc = -ENOENT;
 	}
-	LIBCFS_FREE(ipaddrs, nip * sizeof(*ipaddrs));
+	CFS_FREE_PTR_ARRAY(ipaddrs, nip);
 out_free_addrs:
 	kfree(ifaces);
 	return rc > 0 ? 0 : rc;

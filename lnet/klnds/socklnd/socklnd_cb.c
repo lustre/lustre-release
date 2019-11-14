@@ -1627,10 +1627,8 @@ int ksocknal_scheduler(void *arg)
 	}
 
 	spin_unlock_bh(&sched->kss_lock);
-	LIBCFS_FREE(rx_scratch_pgs, sizeof(*rx_scratch_pgs) *
-		    LNET_MAX_IOV);
-	LIBCFS_FREE(scratch_iov, sizeof(*scratch_iov) *
-		    LNET_MAX_IOV);
+	CFS_FREE_PTR_ARRAY(rx_scratch_pgs, LNET_MAX_IOV);
+	CFS_FREE_PTR_ARRAY(scratch_iov, LNET_MAX_IOV);
 	ksocknal_thread_fini();
 	return 0;
 }

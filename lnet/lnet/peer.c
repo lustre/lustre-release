@@ -104,7 +104,7 @@ lnet_peer_tables_destroy(void)
 		for (j = 0; j < LNET_PEER_HASH_SIZE; j++)
 			LASSERT(list_empty(&hash[j]));
 
-		LIBCFS_FREE(hash, LNET_PEER_HASH_SIZE * sizeof(*hash));
+		CFS_FREE_PTR_ARRAY(hash, LNET_PEER_HASH_SIZE);
 	}
 
 	cfs_percpt_free(the_lnet.ln_peer_tables);
@@ -1049,7 +1049,7 @@ lnet_peer_add_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid)
 
 	if (oldnids) {
 		size = sizeof(*nids) * (lpni->lpni_pref_nnids - 1);
-		LIBCFS_FREE(oldnids, sizeof(*oldnids) * size);
+		CFS_FREE_PTR_ARRAY(oldnids, size);
 	}
 out:
 	if (rc == -EEXIST && (lpni->lpni_state & LNET_PEER_NI_NON_MR_PREF)) {
@@ -1129,7 +1129,7 @@ lnet_peer_del_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid)
 
 	if (oldnids) {
 		size = sizeof(*nids) * (lpni->lpni_pref_nnids + 1);
-		LIBCFS_FREE(oldnids, sizeof(*oldnids) * size);
+		CFS_FREE_PTR_ARRAY(oldnids, size);
 	}
 out:
 	CDEBUG(D_NET, "peer %s nid %s: %d\n",
@@ -1720,10 +1720,9 @@ lnet_destroy_peer_ni_locked(struct lnet_peer_ni *lpni)
 	ptable->pt_zombies--;
 	spin_unlock(&ptable->pt_zombie_lock);
 
-	if (lpni->lpni_pref_nnids > 1) {
-		LIBCFS_FREE(lpni->lpni_pref.nids,
-			sizeof(*lpni->lpni_pref.nids) * lpni->lpni_pref_nnids);
-	}
+	if (lpni->lpni_pref_nnids > 1)
+		CFS_FREE_PTR_ARRAY(lpni->lpni_pref.nids, lpni->lpni_pref_nnids);
+
 	LIBCFS_FREE(lpni, sizeof(*lpni));
 
 	lnet_peer_net_decref_locked(lpn);
@@ -2584,9 +2583,9 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	spin_unlock(&lp->lp_lock);
 
 	nnis = max_t(int, lp->lp_nnis, pbuf->pb_info.pi_nnis);
-	LIBCFS_ALLOC(curnis, nnis * sizeof(*curnis));
-	LIBCFS_ALLOC(addnis, nnis * sizeof(*addnis));
-	LIBCFS_ALLOC(delnis, nnis * sizeof(*delnis));
+	CFS_ALLOC_PTR_ARRAY(curnis, nnis);
+	CFS_ALLOC_PTR_ARRAY(addnis, nnis);
+	CFS_ALLOC_PTR_ARRAY(delnis, nnis);
 	if (!curnis || !addnis || !delnis) {
 		rc = -ENOMEM;
 		goto out;
@@ -2690,9 +2689,9 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 	 */
 	rc = 0;
 out:
-	LIBCFS_FREE(curnis, nnis * sizeof(*curnis));
-	LIBCFS_FREE(addnis, nnis * sizeof(*addnis));
-	LIBCFS_FREE(delnis, nnis * sizeof(*delnis));
+	CFS_FREE_PTR_ARRAY(curnis, nnis);
+	CFS_FREE_PTR_ARRAY(addnis, nnis);
+	CFS_FREE_PTR_ARRAY(delnis, nnis);
 	lnet_ping_buffer_decref(pbuf);
 	CDEBUG(D_NET, "peer %s (%p): %d\n", libcfs_nid2str(lp->lp_primary_nid), lp, rc);
 

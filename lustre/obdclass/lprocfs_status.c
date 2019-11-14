@@ -1264,8 +1264,7 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
 	spin_lock_init(&stats->ls_lock);
 
 	/* alloc num of counter headers */
-	LIBCFS_ALLOC(stats->ls_cnt_header,
-		     stats->ls_num * sizeof(struct lprocfs_counter_header));
+	CFS_ALLOC_PTR_ARRAY(stats->ls_cnt_header, stats->ls_num);
 	if (!stats->ls_cnt_header)
 		goto fail;
 
@@ -1312,8 +1311,7 @@ void lprocfs_free_stats(struct lprocfs_stats **statsh)
 		if (stats->ls_percpu[i])
 			LIBCFS_FREE(stats->ls_percpu[i], percpusize);
 	if (stats->ls_cnt_header)
-		LIBCFS_FREE(stats->ls_cnt_header, stats->ls_num *
-					sizeof(struct lprocfs_counter_header));
+		CFS_FREE_PTR_ARRAY(stats->ls_cnt_header, stats->ls_num);
 	LIBCFS_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_entry]));
 }
 EXPORT_SYMBOL(lprocfs_free_stats);

@@ -622,7 +622,7 @@ lnet_create_remote_nets_table(void)
 
 	LASSERT(the_lnet.ln_remote_nets_hash == NULL);
 	LASSERT(the_lnet.ln_remote_nets_hbits > 0);
-	LIBCFS_ALLOC(hash, LNET_REMOTE_NETS_HASH_SIZE * sizeof(*hash));
+	CFS_ALLOC_PTR_ARRAY(hash, LNET_REMOTE_NETS_HASH_SIZE);
 	if (hash == NULL) {
 		CERROR("Failed to create remote nets hash table\n");
 		return -ENOMEM;
@@ -645,9 +645,8 @@ lnet_destroy_remote_nets_table(void)
 	for (i = 0; i < LNET_REMOTE_NETS_HASH_SIZE; i++)
 		LASSERT(list_empty(&the_lnet.ln_remote_nets_hash[i]));
 
-	LIBCFS_FREE(the_lnet.ln_remote_nets_hash,
-		    LNET_REMOTE_NETS_HASH_SIZE *
-		    sizeof(the_lnet.ln_remote_nets_hash[0]));
+	CFS_FREE_PTR_ARRAY(the_lnet.ln_remote_nets_hash,
+			   LNET_REMOTE_NETS_HASH_SIZE);
 	the_lnet.ln_remote_nets_hash = NULL;
 }
 
@@ -997,8 +996,7 @@ lnet_res_container_cleanup(struct lnet_res_container *rec)
 	}
 
 	if (rec->rec_lh_hash != NULL) {
-		LIBCFS_FREE(rec->rec_lh_hash,
-			    LNET_LH_HASH_SIZE * sizeof(rec->rec_lh_hash[0]));
+		CFS_FREE_PTR_ARRAY(rec->rec_lh_hash, LNET_LH_HASH_SIZE);
 		rec->rec_lh_hash = NULL;
 	}
 
@@ -4282,7 +4280,6 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 	int i;
 	int rc;
 	int max_intf = lnet_interfaces_max;
-	size_t buf_size;
 
 	if (n_ids <= 0 ||
 	    id.nid == LNET_NID_ANY)
@@ -4298,9 +4295,7 @@ lnet_discover(struct lnet_process_id id, __u32 force,
 	if (n_ids > max_intf)
 		n_ids = max_intf;
 
-	buf_size = n_ids * sizeof(*buf);
-
-	LIBCFS_ALLOC(buf, buf_size);
+	CFS_ALLOC_PTR_ARRAY(buf, n_ids);
 	if (!buf)
 		return -ENOMEM;
 
@@ -4353,7 +4348,7 @@ out_decref:
 out:
 	lnet_net_unlock(cpt);
 
-	LIBCFS_FREE(buf, buf_size);
+	CFS_FREE_PTR_ARRAY(buf, n_ids);
 
 	return rc;
 }

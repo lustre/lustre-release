@@ -855,24 +855,22 @@ lstcon_batch_add(char *name)
                 return -ENOMEM;
         }
 
-	LIBCFS_ALLOC(bat->bat_cli_hash,
-		     sizeof(struct list_head) * LST_NODE_HASHSIZE);
+	CFS_ALLOC_PTR_ARRAY(bat->bat_cli_hash, LST_NODE_HASHSIZE);
 	if (bat->bat_cli_hash == NULL) {
 		CERROR("Can't allocate hash for batch %s\n", name);
 		LIBCFS_FREE(bat, sizeof(*bat));
 
-                return -ENOMEM;
-        }
+		return -ENOMEM;
+	}
 
-        LIBCFS_ALLOC(bat->bat_srv_hash,
-		     sizeof(struct list_head) * LST_NODE_HASHSIZE);
-        if (bat->bat_srv_hash == NULL) {
-                CERROR("Can't allocate hash for batch %s\n", name);
-                LIBCFS_FREE(bat->bat_cli_hash, LST_NODE_HASHSIZE);
+	CFS_ALLOC_PTR_ARRAY(bat->bat_srv_hash, LST_NODE_HASHSIZE);
+	if (bat->bat_srv_hash == NULL) {
+		CERROR("Can't allocate hash for batch %s\n", name);
+		LIBCFS_FREE(bat->bat_cli_hash, LST_NODE_HASHSIZE);
 		LIBCFS_FREE(bat, sizeof(*bat));
 
-                return -ENOMEM;
-        }
+		return -ENOMEM;
+	}
 
 	if (strlen(name) > sizeof(bat->bat_name)-1) {
 		LIBCFS_FREE(bat->bat_srv_hash, LST_NODE_HASHSIZE);
@@ -2025,8 +2023,8 @@ lstcon_console_init(void)
 	INIT_LIST_HEAD(&console_session.ses_bat_list);
 	INIT_LIST_HEAD(&console_session.ses_trans_list);
 
-	LIBCFS_ALLOC(console_session.ses_ndl_hash,
-		     sizeof(struct list_head) * LST_GLOBAL_HASHSIZE);
+	CFS_ALLOC_PTR_ARRAY(console_session.ses_ndl_hash,
+			       LST_GLOBAL_HASHSIZE);
 	if (console_session.ses_ndl_hash == NULL)
 		return -ENOMEM;
 
@@ -2040,8 +2038,8 @@ lstcon_console_init(void)
 	rc = srpc_add_service(&lstcon_acceptor_service);
 	LASSERT(rc != -EBUSY);
 	if (rc != 0) {
-		LIBCFS_FREE(console_session.ses_ndl_hash,
-			    sizeof(struct list_head) * LST_GLOBAL_HASHSIZE);
+		CFS_FREE_PTR_ARRAY(console_session.ses_ndl_hash,
+				   LST_GLOBAL_HASHSIZE);
 		return rc;
 	}
 
@@ -2063,8 +2061,7 @@ out:
 	srpc_shutdown_service(&lstcon_acceptor_service);
 	srpc_remove_service(&lstcon_acceptor_service);
 
-	LIBCFS_FREE(console_session.ses_ndl_hash,
-		    sizeof(struct list_head) * LST_GLOBAL_HASHSIZE);
+	CFS_FREE_PTR_ARRAY(console_session.ses_ndl_hash, LST_GLOBAL_HASHSIZE);
 
 	srpc_wait_service_shutdown(&lstcon_acceptor_service);
 
@@ -2099,8 +2096,8 @@ lstcon_console_fini(void)
 	for (i = 0; i < LST_NODE_HASHSIZE; i++)
 		LASSERT(list_empty(&console_session.ses_ndl_hash[i]));
 
-	LIBCFS_FREE(console_session.ses_ndl_hash,
-		    sizeof(struct list_head) * LST_GLOBAL_HASHSIZE);
+	CFS_FREE_PTR_ARRAY(console_session.ses_ndl_hash,
+			   LST_GLOBAL_HASHSIZE);
 
 	srpc_wait_service_shutdown(&lstcon_acceptor_service);
 

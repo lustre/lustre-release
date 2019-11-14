@@ -86,23 +86,21 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 	if (!cptab->ctb_nodemask)
 		goto failed_alloc_nodemask;
 
-	LIBCFS_ALLOC(cptab->ctb_cpu2cpt,
-		     nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
+	CFS_ALLOC_PTR_ARRAY(cptab->ctb_cpu2cpt, nr_cpu_ids);
 	if (!cptab->ctb_cpu2cpt)
 		goto failed_alloc_cpu2cpt;
 
 	memset(cptab->ctb_cpu2cpt, -1,
 	       nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
 
-	LIBCFS_ALLOC(cptab->ctb_node2cpt,
-		     nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
+	CFS_ALLOC_PTR_ARRAY(cptab->ctb_node2cpt, nr_node_ids);
 	if (!cptab->ctb_node2cpt)
 		goto failed_alloc_node2cpt;
 
 	memset(cptab->ctb_node2cpt, -1,
 	       nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
 
-	LIBCFS_ALLOC(cptab->ctb_parts, ncpt * sizeof(cptab->ctb_parts[0]));
+	CFS_ALLOC_PTR_ARRAY(cptab->ctb_parts, ncpt);
 	if (!cptab->ctb_parts)
 		goto failed_alloc_ctb_parts;
 
@@ -118,8 +116,7 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 		if (!part->cpt_nodemask)
 			goto failed_setting_ctb_parts;
 
-		LIBCFS_ALLOC(part->cpt_distance,
-			     cptab->ctb_nparts * sizeof(part->cpt_distance[0]));
+		CFS_ALLOC_PTR_ARRAY(part->cpt_distance, cptab->ctb_nparts);
 		if (!part->cpt_distance)
 			goto failed_setting_ctb_parts;
 
@@ -141,26 +138,22 @@ failed_setting_ctb_parts:
 		free_cpumask_var(part->cpt_cpumask);
 
 		if (part->cpt_distance) {
-			LIBCFS_FREE(part->cpt_distance,
-				cptab->ctb_nparts *
-					sizeof(part->cpt_distance[0]));
+			CFS_FREE_PTR_ARRAY(part->cpt_distance,
+					   cptab->ctb_nparts);
 		}
 	}
 
-	if (cptab->ctb_parts) {
-		LIBCFS_FREE(cptab->ctb_parts,
-			    cptab->ctb_nparts * sizeof(cptab->ctb_parts[0]));
-	}
+	if (cptab->ctb_parts)
+		CFS_FREE_PTR_ARRAY(cptab->ctb_parts, cptab->ctb_nparts);
+
 failed_alloc_ctb_parts:
-	if (cptab->ctb_node2cpt) {
-		LIBCFS_FREE(cptab->ctb_node2cpt,
-			    nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
-	}
+	if (cptab->ctb_node2cpt)
+		CFS_FREE_PTR_ARRAY(cptab->ctb_node2cpt, nr_node_ids);
+
 failed_alloc_node2cpt:
-	if (cptab->ctb_cpu2cpt) {
-		LIBCFS_FREE(cptab->ctb_cpu2cpt,
-			    nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
-	}
+	if (cptab->ctb_cpu2cpt)
+		CFS_FREE_PTR_ARRAY(cptab->ctb_cpu2cpt, nr_cpu_ids);
+
 failed_alloc_cpu2cpt:
 	if (cptab->ctb_nodemask)
 		LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));
@@ -176,15 +169,11 @@ void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 {
 	int i;
 
-	if (cptab->ctb_cpu2cpt) {
-		LIBCFS_FREE(cptab->ctb_cpu2cpt,
-			    nr_cpu_ids * sizeof(cptab->ctb_cpu2cpt[0]));
-	}
+	if (cptab->ctb_cpu2cpt)
+		CFS_FREE_PTR_ARRAY(cptab->ctb_cpu2cpt, nr_cpu_ids);
 
-	if (cptab->ctb_node2cpt) {
-		LIBCFS_FREE(cptab->ctb_node2cpt,
-			    nr_node_ids * sizeof(cptab->ctb_node2cpt[0]));
-	}
+	if (cptab->ctb_node2cpt)
+		CFS_FREE_PTR_ARRAY(cptab->ctb_node2cpt, nr_node_ids);
 
 	for (i = 0; cptab->ctb_parts && i < cptab->ctb_nparts; i++) {
 		struct cfs_cpu_partition *part = &cptab->ctb_parts[i];
@@ -196,17 +185,13 @@ void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 
 		free_cpumask_var(part->cpt_cpumask);
 
-		if (part->cpt_distance) {
-			LIBCFS_FREE(part->cpt_distance,
-				cptab->ctb_nparts *
-					sizeof(part->cpt_distance[0]));
-		}
+		if (part->cpt_distance)
+			CFS_FREE_PTR_ARRAY(part->cpt_distance,
+					   cptab->ctb_nparts);
 	}
 
-	if (cptab->ctb_parts) {
-		LIBCFS_FREE(cptab->ctb_parts,
-			    cptab->ctb_nparts * sizeof(cptab->ctb_parts[0]));
-	}
+	if (cptab->ctb_parts)
+		CFS_FREE_PTR_ARRAY(cptab->ctb_parts, cptab->ctb_nparts);
 
 	if (cptab->ctb_nodemask)
 		LIBCFS_FREE(cptab->ctb_nodemask, sizeof(*cptab->ctb_nodemask));

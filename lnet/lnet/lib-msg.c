@@ -1162,16 +1162,14 @@ lnet_msg_container_cleanup(struct lnet_msg_container *container)
 		CERROR("%d active msg on exit\n", count);
 
 	if (container->msc_finalizers != NULL) {
-		LIBCFS_FREE(container->msc_finalizers,
-			    container->msc_nfinalizers *
-			    sizeof(*container->msc_finalizers));
+		CFS_FREE_PTR_ARRAY(container->msc_finalizers,
+				   container->msc_nfinalizers);
 		container->msc_finalizers = NULL;
 	}
 
 	if (container->msc_resenders != NULL) {
-		LIBCFS_FREE(container->msc_resenders,
-			    container->msc_nfinalizers *
-			    sizeof(*container->msc_resenders));
+		CFS_FREE_PTR_ARRAY(container->msc_resenders,
+				   container->msc_nfinalizers);
 		container->msc_resenders = NULL;
 	}
 	container->msc_init = 0;

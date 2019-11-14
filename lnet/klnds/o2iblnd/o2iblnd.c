@@ -1050,10 +1050,8 @@ kiblnd_destroy_conn(struct kib_conn *conn)
 	if (conn->ibc_rx_pages != NULL)
 		kiblnd_unmap_rx_descs(conn);
 
-	if (conn->ibc_rxs != NULL) {
-		LIBCFS_FREE(conn->ibc_rxs,
-			    IBLND_RX_MSGS(conn) * sizeof(struct kib_rx));
-	}
+	if (conn->ibc_rxs != NULL)
+		CFS_FREE_PTR_ARRAY(conn->ibc_rxs, IBLND_RX_MSGS(conn));
 
 	if (conn->ibc_connvars != NULL)
 		LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
@@ -2228,37 +2226,32 @@ kiblnd_destroy_tx_pool(struct kib_pool *pool)
         if (tpo->tpo_tx_descs == NULL)
                 goto out;
 
-        for (i = 0; i < pool->po_size; i++) {
+	for (i = 0; i < pool->po_size; i++) {
 		struct kib_tx *tx = &tpo->tpo_tx_descs[i];
 		int	  wrq_sge = *kiblnd_tunables.kib_wrq_sge;
 
 		list_del(&tx->tx_list);
-                if (tx->tx_pages != NULL)
-                        LIBCFS_FREE(tx->tx_pages,
-                                    LNET_MAX_IOV *
-                                    sizeof(*tx->tx_pages));
-                if (tx->tx_frags != NULL)
-                        LIBCFS_FREE(tx->tx_frags,
-				    (1 + IBLND_MAX_RDMA_FRAGS) *
-				    sizeof(*tx->tx_frags));
-                if (tx->tx_wrq != NULL)
-                        LIBCFS_FREE(tx->tx_wrq,
-                                    (1 + IBLND_MAX_RDMA_FRAGS) *
-                                    sizeof(*tx->tx_wrq));
+		if (tx->tx_pages != NULL)
+			CFS_FREE_PTR_ARRAY(tx->tx_pages, LNET_MAX_IOV);
+		if (tx->tx_frags != NULL)
+			CFS_FREE_PTR_ARRAY(tx->tx_frags,
+					   (1 + IBLND_MAX_RDMA_FRAGS));
+		if (tx->tx_wrq != NULL)
+			CFS_FREE_PTR_ARRAY(tx->tx_wrq,
+					   (1 + IBLND_MAX_RDMA_FRAGS));
 		if (tx->tx_sge != NULL)
-			LIBCFS_FREE(tx->tx_sge,
-				    (1 + IBLND_MAX_RDMA_FRAGS) * wrq_sge *
-				    sizeof(*tx->tx_sge));
-                if (tx->tx_rd != NULL)
-                        LIBCFS_FREE(tx->tx_rd,
+			CFS_FREE_PTR_ARRAY(tx->tx_sge,
+					   (1 + IBLND_MAX_RDMA_FRAGS) *
+					   wrq_sge);
+		if (tx->tx_rd != NULL)
+			LIBCFS_FREE(tx->tx_rd,
 				    offsetof(struct kib_rdma_desc,
-                                             rd_frags[IBLND_MAX_RDMA_FRAGS]));
-        }
+					     rd_frags[IBLND_MAX_RDMA_FRAGS]));
+	}
 
-        LIBCFS_FREE(tpo->tpo_tx_descs,
-		    pool->po_size * sizeof(struct kib_tx));
+	CFS_FREE_PTR_ARRAY(tpo->tpo_tx_descs, pool->po_size);
 out:
-        kiblnd_fini_pool(pool);
+	kiblnd_fini_pool(pool);
 	CFS_FREE_PTR(tpo);
 }
 
@@ -2995,11 +2988,9 @@ kiblnd_base_shutdown(void)
                 break;
         }
 
-	if (kiblnd_data.kib_peers != NULL) {
-		LIBCFS_FREE(kiblnd_data.kib_peers,
-			    sizeof(struct list_head) *
-			    kiblnd_data.kib_peer_hash_size);
-	}
+	if (kiblnd_data.kib_peers)
+		CFS_FREE_PTR_ARRAY(kiblnd_data.kib_peers,
+				   kiblnd_data.kib_peer_hash_size);
 
 	if (kiblnd_data.kib_scheds != NULL)
 		cfs_percpt_free(kiblnd_data.kib_scheds);
@@ -3104,9 +3095,8 @@ kiblnd_base_startup(struct net *ns)
 	INIT_LIST_HEAD(&kiblnd_data.kib_failed_devs);
 
 	kiblnd_data.kib_peer_hash_size = IBLND_PEER_HASH_SIZE;
-	LIBCFS_ALLOC(kiblnd_data.kib_peers,
-		     sizeof(struct list_head) *
-		     kiblnd_data.kib_peer_hash_size);
+	CFS_ALLOC_PTR_ARRAY(kiblnd_data.kib_peers,
+			    kiblnd_data.kib_peer_hash_size);
 	if (kiblnd_data.kib_peers == NULL)
 		goto failed;
 

@@ -576,7 +576,7 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 			return;
 		}
 
-		LIBCFS_ALLOC(nets, nnets * sizeof(*nets));
+		CFS_ALLOC_PTR_ARRAY(nets, nnets);
 
 		if (nets == NULL) {
 			up_read(&kgnilnd_data.kgn_net_rw_sem);
@@ -613,7 +613,7 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 			kgnilnd_net_decref(net);
 		}
 
-		LIBCFS_FREE(nets, nnets * sizeof(*nets));
+		CFS_FREE_PTR_ARRAY(nets, nnets);
 	}
 }
 
@@ -2192,8 +2192,8 @@ int kgnilnd_base_startup(void)
 		init_rwsem(&dev->gnd_conn_sem);
 
 		/* alloc & setup nid based dgram table */
-		LIBCFS_ALLOC(dev->gnd_dgrams,
-			    sizeof(struct list_head) * *kgnilnd_tunables.kgn_peer_hash_size);
+		CFS_ALLOC_PTR_ARRAY(dev->gnd_dgrams,
+				    *kgnilnd_tunables.kgn_peer_hash_size);
 
 		if (dev->gnd_dgrams == NULL)
 			GOTO(failed, rc = -ENOMEM);
@@ -2236,8 +2236,8 @@ int kgnilnd_base_startup(void)
 
 	rwlock_init(&kgnilnd_data.kgn_peer_conn_lock);
 
-	LIBCFS_ALLOC(kgnilnd_data.kgn_peers,
-		    sizeof(struct list_head) * *kgnilnd_tunables.kgn_peer_hash_size);
+	CFS_ALLOC_PTR_ARRAY(kgnilnd_data.kgn_peers,
+			    *kgnilnd_tunables.kgn_peer_hash_size);
 
 	if (kgnilnd_data.kgn_peers == NULL)
 		GOTO(failed, rc = -ENOMEM);
@@ -2246,8 +2246,8 @@ int kgnilnd_base_startup(void)
 		INIT_LIST_HEAD(&kgnilnd_data.kgn_peers[i]);
 	}
 
-	LIBCFS_ALLOC(kgnilnd_data.kgn_conns,
-		    sizeof(struct list_head) * *kgnilnd_tunables.kgn_peer_hash_size);
+	CFS_ALLOC_PTR_ARRAY(kgnilnd_data.kgn_conns,
+			    *kgnilnd_tunables.kgn_peer_hash_size);
 
 	if (kgnilnd_data.kgn_conns == NULL)
 		GOTO(failed, rc = -ENOMEM);
@@ -2256,8 +2256,8 @@ int kgnilnd_base_startup(void)
 		INIT_LIST_HEAD(&kgnilnd_data.kgn_conns[i]);
 	}
 
-	LIBCFS_ALLOC(kgnilnd_data.kgn_nets,
-		    sizeof(struct list_head) * *kgnilnd_tunables.kgn_net_hash_size);
+	CFS_ALLOC_PTR_ARRAY(kgnilnd_data.kgn_nets,
+			    *kgnilnd_tunables.kgn_net_hash_size);
 
 	if (kgnilnd_data.kgn_nets == NULL)
 		GOTO(failed, rc = -ENOMEM);
@@ -2524,9 +2524,8 @@ kgnilnd_base_shutdown(void)
 		for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++)
 			LASSERT(list_empty(&kgnilnd_data.kgn_peers[i]));
 
-		LIBCFS_FREE(kgnilnd_data.kgn_peers,
-			    sizeof (struct list_head) *
-			    *kgnilnd_tunables.kgn_peer_hash_size);
+		CFS_FREE_PTRE_ARRAT(kgnilnd_data.kgn_peers,
+				    *kgnilnd_tunables.kgn_peer_hash_size);
 	}
 
 	down_write(&kgnilnd_data.kgn_net_rw_sem);
@@ -2534,9 +2533,8 @@ kgnilnd_base_shutdown(void)
 		for (i = 0; i < *kgnilnd_tunables.kgn_net_hash_size; i++)
 			LASSERT(list_empty(&kgnilnd_data.kgn_nets[i]));
 
-		LIBCFS_FREE(kgnilnd_data.kgn_nets,
-			    sizeof (struct list_head) *
-			    *kgnilnd_tunables.kgn_net_hash_size);
+		CFS_FREE_PTRE_ARRAY(kgnilnd_data.kgn_nets,
+				    *kgnilnd_tunables.kgn_net_hash_size);
 	}
 	up_write(&kgnilnd_data.kgn_net_rw_sem);
 
@@ -2547,9 +2545,8 @@ kgnilnd_base_shutdown(void)
 		for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++)
 			LASSERT(list_empty(&kgnilnd_data.kgn_conns[i]));
 
-		LIBCFS_FREE(kgnilnd_data.kgn_conns,
-			    sizeof (struct list_head) *
-			    *kgnilnd_tunables.kgn_peer_hash_size);
+		CFS_FREE_PTR_ARRAY(kgnilnd_data.kgn_conns,
+				   *kgnilnd_tunables.kgn_peer_hash_size);
 	}
 
 	for (i = 0; i < kgnilnd_data.kgn_ndevs; i++) {
@@ -2560,12 +2557,12 @@ kgnilnd_base_shutdown(void)
 			"dgrams left %d\n", atomic_read(&dev->gnd_ndgrams));
 
 		if (dev->gnd_dgrams != NULL) {
-			for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size; i++)
+			for (i = 0; i < *kgnilnd_tunables.kgn_peer_hash_size;
+			     i++)
 				LASSERT(list_empty(&dev->gnd_dgrams[i]));
 
-			LIBCFS_FREE(dev->gnd_dgrams,
-				    sizeof (struct list_head) *
-				    *kgnilnd_tunables.kgn_peer_hash_size);
+			CFS_FREE_PTR_ARRAY(dev->gnd_dgrams,
+					   *kgnilnd_tunables.kgn_peer_hash_size);
 		}
 
 		kgnilnd_free_phys_fmablk(dev);

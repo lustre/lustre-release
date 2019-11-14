@@ -475,7 +475,7 @@ cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp)
 		return -EINVAL;
 	}
 
-	LIBCFS_ALLOC(val, sizeof(val[0]) * count);
+	CFS_ALLOC_PTR_ARRAY(val, count);
 	if (val == NULL)
 		return -ENOMEM;
 
@@ -498,7 +498,7 @@ cfs_expr_list_values_free(__u32 *values, int num)
 	/* This array is allocated by LIBCFS_ALLOC(), so it shouldn't be freed
 	 * by OBD_FREE() if it's called by module other than libcfs & LNet,
 	 * otherwise we will see fake memory leak */
-	LIBCFS_FREE(values, num * sizeof(values[0]));
+	CFS_FREE_PTR_ARRAY(values, num);
 }
 EXPORT_SYMBOL(cfs_expr_list_values_free);
 

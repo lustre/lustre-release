@@ -48,8 +48,8 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	__u16                    cksum, cksum2;
 	__u64                    mbytes;
 
-	LIBCFS_ALLOC(src, LNET_MAX_IOV * sizeof(lnet_kiov_t));
-	LIBCFS_ALLOC(dest, LNET_MAX_IOV * sizeof(lnet_kiov_t));
+	CFS_ALLOC_PTR_ARRAY(src, LNET_MAX_IOV);
+	CFS_ALLOC_PTR_ARRAY(dest, LNET_MAX_IOV);
 
 	if (src == NULL || dest == NULL) {
 		CERROR("couldn't allocate iovs\n");
@@ -150,9 +150,9 @@ unwind:
 	}
 
 	if (src != NULL)
-		LIBCFS_FREE(src, LNET_MAX_IOV * sizeof(lnet_kiov_t));
+		CFS_FREE_PTR_ARRAY(src, LNET_MAX_IOV);
 	if (dest != NULL)
-		LIBCFS_FREE(dest, LNET_MAX_IOV * sizeof(lnet_kiov_t));
+		CFS_FREE_PTR_ARRAY(dest, LNET_MAX_IOV);
 	return rc;
 }
 
