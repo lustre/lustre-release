@@ -439,7 +439,7 @@ static int tx_extend_args(struct thandle_exec_args *ta, int new_alloc_ta)
 	if (ta->ta_alloc_args >= new_alloc_ta)
 		return 0;
 
-	OBD_ALLOC(new_ta, sizeof(*new_ta) * new_alloc_ta);
+	OBD_ALLOC_PTR_ARRAY(new_ta, new_alloc_ta);
 	if (new_ta == NULL)
 		return -ENOMEM;
 
@@ -456,8 +456,7 @@ static int tx_extend_args(struct thandle_exec_args *ta, int new_alloc_ta)
 
 	/* free the old args */
 	if (ta->ta_args != NULL)
-		OBD_FREE(ta->ta_args, sizeof(ta->ta_args[0]) *
-				      ta->ta_alloc_args);
+		OBD_FREE_PTR_ARRAY(ta->ta_args, ta->ta_alloc_args);
 
 	ta->ta_args = new_ta;
 	ta->ta_alloc_args = new_alloc_ta;
@@ -467,7 +466,7 @@ out:
 			if (new_ta[i] != NULL)
 				OBD_FREE_PTR(new_ta[i]);
 		}
-		OBD_FREE(new_ta, sizeof(*new_ta) * new_alloc_ta);
+		OBD_FREE_PTR_ARRAY(new_ta, new_alloc_ta);
 	}
 	return rc;
 }

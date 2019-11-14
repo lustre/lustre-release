@@ -663,8 +663,7 @@ static void tgt_key_fini(const struct lu_context *ctx,
 	}
 
 	if (args->ta_args != NULL)
-		OBD_FREE(args->ta_args, sizeof(args->ta_args[0]) *
-					args->ta_alloc_args);
+		OBD_FREE_PTR_ARRAY(args->ta_args, args->ta_alloc_args);
 	OBD_SLAB_FREE_PTR(info, tgt_thread_kmem);
 }
 

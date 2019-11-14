@@ -996,7 +996,7 @@ int out_handle(struct tgt_session_info *tsi)
 	if (update_buf_count == 0)
 		RETURN(err_serious(-EPROTO));
 
-	OBD_ALLOC(update_bufs, sizeof(*update_bufs) * update_buf_count);
+	OBD_ALLOC_PTR_ARRAY(update_bufs, update_buf_count);
 	if (update_bufs == NULL)
 		RETURN(err_serious(-ENOMEM));
 
@@ -1231,7 +1231,7 @@ out_free:
 			}
 		}
 
-		OBD_FREE(update_bufs, sizeof(*update_bufs) * update_buf_count);
+		OBD_FREE_PTR_ARRAY(update_bufs, update_buf_count);
 	}
 
 	if (desc != NULL)

@@ -1194,7 +1194,7 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 	rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
 	/* allocate pages to store the containers */
-	OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof(rdpg->rp_pages[0]));
+	OBD_ALLOC_PTR_ARRAY(rdpg->rp_pages, rdpg->rp_npages);
 	if (rdpg->rp_pages == NULL)
 		GOTO(out, rc = -ENOMEM);
 	for (i = 0; i < rdpg->rp_npages; i++) {
@@ -1221,8 +1221,7 @@ out:
 		for (i = 0; i < rdpg->rp_npages; i++)
 			if (rdpg->rp_pages[i])
 				__free_page(rdpg->rp_pages[i]);
-		OBD_FREE(rdpg->rp_pages,
-			 rdpg->rp_npages * sizeof(rdpg->rp_pages[0]));
+		OBD_FREE_PTR_ARRAY(rdpg->rp_pages, rdpg->rp_npages);
 	}
 	return rc;
 }
