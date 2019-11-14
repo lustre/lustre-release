@@ -456,9 +456,9 @@ static inline struct ofd_thread_info *tsi2ofd_info(struct tgt_session_info *tsi)
 static inline void ofd_slc_set(struct ofd_device *ofd)
 {
 	if (ofd->ofd_sync_journal == 1)
-		ofd->ofd_lut.lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
-	else if (ofd->ofd_lut.lut_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
-		ofd->ofd_lut.lut_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
+		ofd->ofd_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_NEVER;
+	else if (ofd->ofd_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_NEVER)
+		ofd->ofd_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_ALWAYS;
 }
 
 static inline int ofd_validate_seq(struct obd_export *exp, __u64 seq)

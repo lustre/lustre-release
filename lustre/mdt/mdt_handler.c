@@ -6153,14 +6153,14 @@ static int mdt_export_cleanup(struct obd_export *exp)
 
 static inline void mdt_enable_slc(struct mdt_device *mdt)
 {
-	if (mdt->mdt_lut.lut_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
-		mdt->mdt_lut.lut_sync_lock_cancel = BLOCKING_SYNC_ON_CANCEL;
+	if (mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_NEVER)
+		mdt->mdt_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_BLOCKING;
 }
 
 static inline void mdt_disable_slc(struct mdt_device *mdt)
 {
-	if (mdt->mdt_lut.lut_sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL)
-		mdt->mdt_lut.lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
+	if (mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_BLOCKING)
+		mdt->mdt_lut.lut_sync_lock_cancel = SYNC_LOCK_CANCEL_NEVER;
 }
 
 static int mdt_obd_disconnect(struct obd_export *exp)

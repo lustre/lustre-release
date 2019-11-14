@@ -136,11 +136,10 @@ struct timeout_item {
 #define OSC_DEFAULT_RESENDS	10
 
 /* possible values for lut_sync_lock_cancel */
-enum {
-        NEVER_SYNC_ON_CANCEL = 0,
-        BLOCKING_SYNC_ON_CANCEL = 1,
-        ALWAYS_SYNC_ON_CANCEL = 2,
-        NUM_SYNC_ON_CANCEL_STATES
+enum tgt_sync_lock_cancel {
+	SYNC_LOCK_CANCEL_NEVER    = 0,
+	SYNC_LOCK_CANCEL_BLOCKING = 1,
+	SYNC_LOCK_CANCEL_ALWAYS   = 2,
 };
 
 /*

@@ -39,9 +39,11 @@
 
 /* This must be longer than the longest string below */
 #define SYNC_STATES_MAXLEN 16
-static char *sync_on_cancel_states[] = {"never",
-					"blocking",
-					"always" };
+static char *sync_lock_cancel_states[] = {
+	[SYNC_LOCK_CANCEL_NEVER]	= "never",
+	[SYNC_LOCK_CANCEL_BLOCKING]	= "blocking",
+	[SYNC_LOCK_CANCEL_ALWAYS]	= "always",
+};
 
 /**
  * Show policy for handling dirty data under a lock being cancelled.
@@ -61,7 +63,7 @@ ssize_t sync_lock_cancel_show(struct kobject *kobj,
 	struct lu_target *tgt = obd->u.obt.obt_lut;
 
 	return sprintf(buf, "%s\n",
-		       sync_on_cancel_states[tgt->lut_sync_lock_cancel]);
+		       sync_lock_cancel_states[tgt->lut_sync_lock_cancel]);
 }
 EXPORT_SYMBOL(sync_lock_cancel_show);
 
@@ -93,14 +95,14 @@ ssize_t sync_lock_cancel_store(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	struct lu_target *tgt = obd->u.obt.obt_lut;
 	int val = -1;
-	int i;
+	enum tgt_sync_lock_cancel slc;
 
 	if (count == 0 || count >= SYNC_STATES_MAXLEN)
 		return -EINVAL;
 
-	for (i = 0 ; i < NUM_SYNC_ON_CANCEL_STATES; i++) {
-		if (strcmp(buffer, sync_on_cancel_states[i]) == 0) {
-			val = i;
+	for (slc = 0; slc < ARRAY_SIZE(sync_lock_cancel_states); slc++) {
+		if (strcmp(buffer, sync_lock_cancel_states[slc]) == 0) {
+			val = slc;
 			break;
 		}
 	}
@@ -416,7 +418,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	sptlrpc_rule_set_init(&lut->lut_sptlrpc_rset);
 
 	spin_lock_init(&lut->lut_flags_lock);
-	lut->lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
+	lut->lut_sync_lock_cancel = SYNC_LOCK_CANCEL_NEVER;
 
 	spin_lock_init(&lut->lut_slc_locks_guard);
 	INIT_LIST_HEAD(&lut->lut_slc_locks);
