@@ -544,6 +544,12 @@ ssize_t grant_compat_disable_show(struct kobject *kobj, struct attribute *attr,
 ssize_t grant_compat_disable_store(struct kobject *kobj,
 				   struct attribute *attr,
 				   const char *buffer, size_t count);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
+ssize_t sync_lock_cancel_show(struct kobject *kobj,
+			      struct attribute *attr, char *buf);
+ssize_t sync_lock_cancel_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count);
+#endif
 
 /* FMD */
 void tgt_fmd_update(struct obd_export *exp, const struct lu_fid *fid,

@@ -135,7 +135,7 @@ struct timeout_item {
 #define OSC_MAX_DIRTY_MB_MAX	2048     /* arbitrary, but < MAX_LONG bytes */
 #define OSC_DEFAULT_RESENDS	10
 
-/* possible values for fo_sync_lock_cancel */
+/* possible values for lut_sync_lock_cancel */
 enum {
         NEVER_SYNC_ON_CANCEL = 0,
         BLOCKING_SYNC_ON_CANCEL = 1,
