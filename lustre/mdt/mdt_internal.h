@@ -1171,7 +1171,7 @@ static inline void mdt_fid_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 
 static inline bool mdt_slc_is_enabled(struct mdt_device *mdt)
 {
-	return mdt->mdt_lut.lut_sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL;
+	return mdt->mdt_lut.lut_sync_lock_cancel == SYNC_LOCK_CANCEL_BLOCKING;
 }
 
 extern mdl_mode_t mdt_mdl_lock_modes[];
