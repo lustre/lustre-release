@@ -797,8 +797,11 @@ do {									      \
 
 #define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, GFP_NOFS)
 #define OBD_ALLOC_WAIT(ptr, size) OBD_ALLOC_GFP(ptr, size, GFP_KERNEL)
-#define OBD_ALLOC_PTR(ptr) OBD_ALLOC(ptr, sizeof *(ptr))
-#define OBD_ALLOC_PTR_WAIT(ptr) OBD_ALLOC_WAIT(ptr, sizeof *(ptr))
+#define OBD_ALLOC_PTR(ptr) OBD_ALLOC(ptr, sizeof(*(ptr)))
+#define OBD_ALLOC_PTR_WAIT(ptr) OBD_ALLOC_WAIT(ptr, sizeof(*(ptr)))
+#define OBD_ALLOC_PTR_ARRAY(ptr, n) OBD_ALLOC(ptr, (n) * sizeof(*(ptr)))
+#define OBD_ALLOC_PTR_ARRAY_WAIT(ptr, n)				      \
+		OBD_ALLOC_WAIT(ptr, (n) * sizeof(*(ptr)))
 
 #define OBD_CPT_ALLOC_GFP(ptr, cptab, cpt, size, gfp_mask)		      \
 	__OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, gfp_mask)
@@ -807,7 +810,7 @@ do {									      \
 	OBD_CPT_ALLOC_GFP(ptr, cptab, cpt, size, GFP_NOFS)
 
 #define OBD_CPT_ALLOC_PTR(ptr, cptab, cpt)				      \
-	OBD_CPT_ALLOC(ptr, cptab, cpt, sizeof *(ptr))
+	OBD_CPT_ALLOC(ptr, cptab, cpt, sizeof(*(ptr)))
 
 /* Direct use of __vmalloc() allows for protection flag specification
  * (and particularly to not set __GFP_FS, which is likely to cause some
@@ -844,6 +847,9 @@ do {                                                                          \
 	if (ptr == NULL)                                                      \
                 OBD_VMALLOC(ptr, size);                                       \
 } while (0)
+
+#define OBD_ALLOC_PTR_ARRAY_LARGE(ptr, n)				\
+	OBD_ALLOC_LARGE(ptr, (n) * sizeof(*(ptr)))
 
 #define OBD_CPT_ALLOC_LARGE(ptr, cptab, cpt, size)			      \
 do {									      \
@@ -887,6 +893,9 @@ do {									      \
 	}                                                                     \
 } while (0)
 
+#define OBD_FREE_PTR_ARRAY_LARGE(ptr, n)			\
+	OBD_FREE_LARGE(ptr, (n) * sizeof(*(ptr)))
+
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
  * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd
  * love to assert on that, but slab.c keeps kmem_cache_s all to itself. */
@@ -912,7 +921,8 @@ do {									      \
 #define OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, size, flags)	      \
 	__OBD_SLAB_ALLOC_VERBOSE(ptr, slab, cptab, cpt, size, flags)
 
-#define OBD_FREE_PTR(ptr) OBD_FREE(ptr, sizeof *(ptr))
+#define OBD_FREE_PTR(ptr) OBD_FREE(ptr, sizeof(*(ptr)))
+#define OBD_FREE_PTR_ARRAY(ptr, n) OBD_FREE(ptr, (n) * sizeof(*(ptr)))
 
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
 do {                                                                          \
@@ -929,19 +939,19 @@ do {                                                                          \
 	OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, size, GFP_NOFS)
 
 #define OBD_SLAB_ALLOC_PTR(ptr, slab)					      \
-	OBD_SLAB_ALLOC(ptr, slab, sizeof *(ptr))
+	OBD_SLAB_ALLOC(ptr, slab, sizeof(*(ptr)))
 
 #define OBD_SLAB_CPT_ALLOC_PTR(ptr, slab, cptab, cpt)			      \
-	OBD_SLAB_CPT_ALLOC(ptr, slab, cptab, cpt, sizeof *(ptr))
+	OBD_SLAB_CPT_ALLOC(ptr, slab, cptab, cpt, sizeof(*(ptr)))
 
 #define OBD_SLAB_ALLOC_PTR_GFP(ptr, slab, flags)			      \
-	OBD_SLAB_ALLOC_GFP(ptr, slab, sizeof *(ptr), flags)
+	OBD_SLAB_ALLOC_GFP(ptr, slab, sizeof(*(ptr)), flags)
 
 #define OBD_SLAB_CPT_ALLOC_PTR_GFP(ptr, slab, cptab, cpt, flags)		      \
-	OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, sizeof *(ptr), flags)
+	OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, sizeof(*(ptr)), flags)
 
 #define OBD_SLAB_FREE_PTR(ptr, slab)					      \
-	OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
+	OBD_SLAB_FREE((ptr), (slab), sizeof(*(ptr)))
 
 #define KEY_IS(str) \
         (keylen >= (sizeof(str)-1) && memcmp(key, str, (sizeof(str)-1)) == 0)
