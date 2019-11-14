@@ -684,13 +684,12 @@ static int ptlrpc_service_part_init(struct ptlrpc_service *svc,
 
  failed:
 	if (array->paa_reqs_count != NULL) {
-		OBD_FREE(array->paa_reqs_count, sizeof(__u32) * size);
+		OBD_FREE_PTR_ARRAY(array->paa_reqs_count, size);
 		array->paa_reqs_count = NULL;
 	}
 
 	if (array->paa_reqs_array != NULL) {
-		OBD_FREE(array->paa_reqs_array,
-			 sizeof(struct list_head) * array->paa_size);
+		OBD_FREE_PTR_ARRAY(array->paa_reqs_array, array->paa_size);
 		array->paa_reqs_array = NULL;
 	}
 
@@ -755,7 +754,7 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 				CERROR("%s: failed to parse CPT array %s: %d\n",
 				       conf->psc_name, cconf->cc_pattern, rc);
 				if (cpts != NULL)
-					OBD_FREE(cpts, sizeof(*cpts) * ncpts);
+					OBD_FREE_PTR_ARRAY(cpts, ncpts);
 				RETURN(ERR_PTR(rc < 0 ? rc : -EINVAL));
 			}
 			ncpts = rc;
@@ -765,7 +764,7 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	OBD_ALLOC(service, offsetof(struct ptlrpc_service, srv_parts[ncpts]));
 	if (service == NULL) {
 		if (cpts != NULL)
-			OBD_FREE(cpts, sizeof(*cpts) * ncpts);
+			OBD_FREE_PTR_ARRAY(cpts, ncpts);
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 
@@ -3348,10 +3347,8 @@ void ptlrpc_hr_fini(void)
 	ptlrpc_stop_hr_threads();
 
 	cfs_percpt_for_each(hrp, cpt, ptlrpc_hr.hr_partitions) {
-		if (hrp->hrp_thrs != NULL) {
-			OBD_FREE(hrp->hrp_thrs,
-				 hrp->hrp_nthrs * sizeof(hrp->hrp_thrs[0]));
-		}
+		if (hrp->hrp_thrs)
+			OBD_FREE_PTR_ARRAY(hrp->hrp_thrs, hrp->hrp_nthrs);
 	}
 
 	cfs_percpt_free(ptlrpc_hr.hr_partitions);
@@ -3544,14 +3541,14 @@ ptlrpc_service_free(struct ptlrpc_service *svc)
 		array = &svcpt->scp_at_array;
 
 		if (array->paa_reqs_array != NULL) {
-			OBD_FREE(array->paa_reqs_array,
-				 sizeof(struct list_head) * array->paa_size);
+			OBD_FREE_PTR_ARRAY(array->paa_reqs_array,
+					   array->paa_size);
 			array->paa_reqs_array = NULL;
 		}
 
 		if (array->paa_reqs_count != NULL) {
-			OBD_FREE(array->paa_reqs_count,
-				 sizeof(__u32) * array->paa_size);
+			OBD_FREE_PTR_ARRAY(array->paa_reqs_count,
+					   array->paa_size);
 			array->paa_reqs_count = NULL;
 		}
 	}

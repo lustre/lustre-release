@@ -559,7 +559,7 @@ static int ptlrpc_lprocfs_nrs_seq_show(struct seq_file *m, void *n)
 	num_pols = svc->srv_parts[0]->scp_nrs_reg.nrs_num_pols;
 	spin_unlock(&nrs->nrs_lock);
 
-	OBD_ALLOC(infos, num_pols * sizeof(*infos));
+	OBD_ALLOC_PTR_ARRAY(infos, num_pols);
 	if (infos == NULL)
 		GOTO(out, rc = -ENOMEM);
 again:
@@ -681,7 +681,7 @@ again:
 
 out:
 	if (infos)
-		OBD_FREE(infos, num_pols * sizeof(*infos));
+		OBD_FREE_PTR_ARRAY(infos, num_pols);
 
 	mutex_unlock(&nrs_core.nrs_mutex);
 

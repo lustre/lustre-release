@@ -1488,7 +1488,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	       body->mcb_name, rdpg.rp_count);
 
 	/* allocate pages to store the containers */
-	OBD_ALLOC(rdpg.rp_pages, sizeof(*rdpg.rp_pages) * rdpg.rp_npages);
+	OBD_ALLOC_PTR_ARRAY(rdpg.rp_pages, rdpg.rp_npages);
 	if (rdpg.rp_pages == NULL)
 		RETURN(-ENOMEM);
 	for (i = 0; i < rdpg.rp_npages; i++) {
@@ -1539,8 +1539,7 @@ out:
 		for (i = 0; i < rdpg.rp_npages; i++)
 			if (rdpg.rp_pages[i] != NULL)
 				__free_page(rdpg.rp_pages[i]);
-		OBD_FREE(rdpg.rp_pages,
-			 rdpg.rp_npages * sizeof(rdpg.rp_pages[0]));
+		OBD_FREE_PTR_ARRAY(rdpg.rp_pages, rdpg.rp_npages);
 	}
 	return rc;
 }

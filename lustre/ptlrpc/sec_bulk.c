@@ -432,7 +432,7 @@ static int enc_pools_add_pages(int npages)
 	page_pools.epp_st_grows++;
 
 	npools = npages_to_npools(npages);
-	OBD_ALLOC(pools, npools * sizeof(*pools));
+	OBD_ALLOC_PTR_ARRAY(pools, npools);
 	if (pools == NULL)
 		goto out;
 
@@ -458,7 +458,7 @@ static int enc_pools_add_pages(int npages)
 
 out_pools:
 	enc_pools_cleanup(pools, npools);
-	OBD_FREE(pools, npools * sizeof(*pools));
+	OBD_FREE_PTR_ARRAY(pools, npools);
 out:
 	if (rc) {
 		page_pools.epp_st_grow_fails++;

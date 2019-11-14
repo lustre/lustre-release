@@ -237,14 +237,13 @@ EXPORT_SYMBOL(sptlrpc_parse_rule);
 
 void sptlrpc_rule_set_free(struct sptlrpc_rule_set *rset)
 {
-        LASSERT(rset->srs_nslot ||
-                (rset->srs_nrule == 0 && rset->srs_rules == NULL));
+	LASSERT(rset->srs_nslot ||
+		(rset->srs_nrule == 0 && rset->srs_rules == NULL));
 
-        if (rset->srs_nslot) {
-                OBD_FREE(rset->srs_rules,
-                         rset->srs_nslot * sizeof(*rset->srs_rules));
-                sptlrpc_rule_set_init(rset);
-        }
+	if (rset->srs_nslot) {
+		OBD_FREE_PTR_ARRAY(rset->srs_rules, rset->srs_nslot);
+		sptlrpc_rule_set_init(rset);
+	}
 }
 EXPORT_SYMBOL(sptlrpc_rule_set_free);
 
@@ -263,19 +262,18 @@ int sptlrpc_rule_set_expand(struct sptlrpc_rule_set *rset)
 
 	nslot = rset->srs_nslot + 8;
 
-        /* better use realloc() if available */
-        OBD_ALLOC(rules, nslot * sizeof(*rset->srs_rules));
-        if (rules == NULL)
-                return -ENOMEM;
+	/* better use realloc() if available */
+	OBD_ALLOC_PTR_ARRAY(rules, nslot);
+	if (rules == NULL)
+		return -ENOMEM;
 
-        if (rset->srs_nrule) {
-                LASSERT(rset->srs_nslot && rset->srs_rules);
-                memcpy(rules, rset->srs_rules,
-                       rset->srs_nrule * sizeof(*rset->srs_rules));
+	if (rset->srs_nrule) {
+		LASSERT(rset->srs_nslot && rset->srs_rules);
+		memcpy(rules, rset->srs_rules,
+		       rset->srs_nrule * sizeof(*rset->srs_rules));
 
-                OBD_FREE(rset->srs_rules,
-                         rset->srs_nslot * sizeof(*rset->srs_rules));
-        }
+		OBD_FREE_PTR_ARRAY(rset->srs_rules, rset->srs_nslot);
+	}
 
         rset->srs_rules = rules;
         rset->srs_nslot = nslot;

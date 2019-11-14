@@ -693,8 +693,7 @@ out:
 	if (pc->pc_npartners > 0) {
 		LASSERT(pc->pc_partners != NULL);
 
-		OBD_FREE(pc->pc_partners,
-			 sizeof(struct ptlrpcd_ctl *) * pc->pc_npartners);
+		OBD_FREE_PTR_ARRAY(pc->pc_partners, pc->pc_npartners);
 		pc->pc_partners = NULL;
 	}
 	pc->pc_npartners = 0;
@@ -721,7 +720,7 @@ static void ptlrpcd_fini(void)
 			OBD_FREE(ptlrpcds[i], ptlrpcds[i]->pd_size);
 			ptlrpcds[i] = NULL;
 		}
-		OBD_FREE(ptlrpcds, sizeof(ptlrpcds[0]) * ptlrpcds_num);
+		OBD_FREE_PTR_ARRAY(ptlrpcds, ptlrpcds_num);
 	}
 	ptlrpcds_num = 0;
 
@@ -730,7 +729,7 @@ static void ptlrpcd_fini(void)
 
 	if (ptlrpcds_cpt_idx != NULL) {
 		ncpts = cfs_cpt_number(cfs_cpt_tab);
-		OBD_FREE(ptlrpcds_cpt_idx, ncpts * sizeof(ptlrpcds_cpt_idx[0]));
+		OBD_FREE_PTR_ARRAY(ptlrpcds_cpt_idx, ncpts);
 		ptlrpcds_cpt_idx = NULL;
 	}
 
