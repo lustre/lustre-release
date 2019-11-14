@@ -1157,7 +1157,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 	s->ls_bkt_cnt = max_t(long, 1 << LU_SITE_BKT_BITS,
 			      2 * num_possible_cpus());
 	s->ls_bkt_cnt = roundup_pow_of_two(s->ls_bkt_cnt);
-	OBD_ALLOC_LARGE(s->ls_bkts, s->ls_bkt_cnt * sizeof(*bkt));
+	OBD_ALLOC_PTR_ARRAY_LARGE(s->ls_bkts, s->ls_bkt_cnt);
 	if (!s->ls_bkts) {
 		cfs_hash_putref(s->ls_obj_hash);
 		s->ls_obj_hash = NULL;
@@ -1171,14 +1171,14 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 		init_waitqueue_head(&bkt->lsb_waitq);
 	}
 
-        s->ls_stats = lprocfs_alloc_stats(LU_SS_LAST_STAT, 0);
-        if (s->ls_stats == NULL) {
-		OBD_FREE_LARGE(s->ls_bkts, s->ls_bkt_cnt * sizeof(*bkt));
+	s->ls_stats = lprocfs_alloc_stats(LU_SS_LAST_STAT, 0);
+	if (s->ls_stats == NULL) {
+		OBD_FREE_PTR_ARRAY_LARGE(s->ls_bkts, s->ls_bkt_cnt);
 		cfs_hash_putref(s->ls_obj_hash);
-                s->ls_obj_hash = NULL;
+		s->ls_obj_hash = NULL;
 		s->ls_bkts = NULL;
-                return -ENOMEM;
-        }
+		return -ENOMEM;
+	}
 
         lprocfs_counter_init(s->ls_stats, LU_SS_CREATED,
                              0, "created", "created");
@@ -1224,7 +1224,7 @@ void lu_site_fini(struct lu_site *s)
                 s->ls_obj_hash = NULL;
         }
 
-	OBD_FREE_LARGE(s->ls_bkts, s->ls_bkt_cnt * sizeof(*s->ls_bkts));
+	OBD_FREE_PTR_ARRAY_LARGE(s->ls_bkts, s->ls_bkt_cnt);
 
         if (s->ls_top_dev != NULL) {
                 s->ls_top_dev->ld_site = NULL;
@@ -1700,7 +1700,7 @@ static void keys_fini(struct lu_context *ctx)
 	for (i = 0; i < ARRAY_SIZE(lu_keys); ++i)
 		key_fini(ctx, i);
 
-	OBD_FREE(ctx->lc_value, ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
+	OBD_FREE_PTR_ARRAY(ctx->lc_value, ARRAY_SIZE(lu_keys));
 	ctx->lc_value = NULL;
 }
 
@@ -1768,7 +1768,7 @@ static int keys_fill(struct lu_context *ctx)
 
 static int keys_init(struct lu_context *ctx)
 {
-	OBD_ALLOC(ctx->lc_value, ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
+	OBD_ALLOC_PTR_ARRAY(ctx->lc_value, ARRAY_SIZE(lu_keys));
 	if (likely(ctx->lc_value != NULL))
 		return keys_fill(ctx);
 

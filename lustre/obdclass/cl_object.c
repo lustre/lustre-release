@@ -1074,7 +1074,7 @@ int cl_global_init(void)
 {
 	int result;
 
-	OBD_ALLOC(cl_envs, sizeof(*cl_envs) * num_possible_cpus());
+	OBD_ALLOC_PTR_ARRAY(cl_envs, num_possible_cpus());
 	if (cl_envs == NULL)
 		GOTO(out, result = -ENOMEM);
 
@@ -1098,7 +1098,7 @@ out_keys:
 out_kmem:
 	lu_kmem_fini(cl_object_caches);
 out_envs:
-	OBD_FREE(cl_envs, sizeof(*cl_envs) * num_possible_cpus());
+	OBD_FREE_PTR_ARRAY(cl_envs, num_possible_cpus());
 out:
 	return result;
 }
@@ -1119,5 +1119,5 @@ void cl_global_fini(void)
 	cl_env_percpu_fini();
 	lu_context_key_degister(&cl_key);
 	lu_kmem_fini(cl_object_caches);
-	OBD_FREE(cl_envs, sizeof(*cl_envs) * num_possible_cpus());
+	OBD_FREE_PTR_ARRAY(cl_envs, num_possible_cpus());
 }
