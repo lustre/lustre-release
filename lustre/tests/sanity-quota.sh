@@ -438,9 +438,13 @@ project_quota_enabled || enable_project_quota
 
 reset_quota_settings() {
 	resetquota -u $TSTUSR
+	resetquota -u $TSTID
 	resetquota -g $TSTUSR
+	resetquota -g $TSTID
 	resetquota -u $TSTUSR2
+	resetquota -u $TSTID2
 	resetquota -g $TSTUSR2
+	resetquota -g $TSTID2
 	resetquota -p $TSTPRJID
 }
 
@@ -2298,8 +2302,8 @@ test_27b() { # b20200
 		$SHOW_QUOTA_PROJID ||
 			error "lfs quota failed with projid argument"
 	fi
-	resetquota -u $TSTUSR
-	resetquota -g $TSTUSR
+	resetquota -u $TSTID
+	resetquota -g $TSTID
 	resetquota -p $TSTPRJID
 	return 0
 }
