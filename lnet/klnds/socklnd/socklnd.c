@@ -96,9 +96,8 @@ ksocknal_destroy_route(struct ksock_route *route)
 	LIBCFS_FREE (route, sizeof (*route));
 }
 
-static int
-ksocknal_create_peer(struct ksock_peer_ni **peerp, struct lnet_ni *ni,
-		     struct lnet_process_id id)
+static struct ksock_peer_ni *
+ksocknal_create_peer(struct lnet_ni *ni, struct lnet_process_id id)
 {
 	int cpt = lnet_cpt_of_nid(id.nid, ni);
 	struct ksock_net *net = ni->ni_data;
@@ -110,7 +109,7 @@ ksocknal_create_peer(struct ksock_peer_ni **peerp, struct lnet_ni *ni,
 
 	LIBCFS_CPT_ALLOC(peer_ni, lnet_cpt_table(), cpt, sizeof(*peer_ni));
 	if (peer_ni == NULL)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	peer_ni->ksnp_ni = ni;
 	peer_ni->ksnp_id = id;
@@ -134,15 +133,14 @@ ksocknal_create_peer(struct ksock_peer_ni **peerp, struct lnet_ni *ni,
 
 		LIBCFS_FREE(peer_ni, sizeof(*peer_ni));
 		CERROR("Can't create peer_ni: network shutdown\n");
-		return -ESHUTDOWN;
+		return ERR_PTR(-ESHUTDOWN);
 	}
 
 	net->ksnn_npeers++;
 
 	spin_unlock_bh(&net->ksnn_lock);
 
-	*peerp = peer_ni;
-	return 0;
+	return peer_ni;
 }
 
 void
@@ -452,16 +450,15 @@ ksocknal_add_peer(struct lnet_ni *ni, struct lnet_process_id id, __u32 ipaddr,
 	struct ksock_peer_ni *peer2;
 	struct ksock_route *route;
 	struct ksock_route *route2;
-	int rc;
 
         if (id.nid == LNET_NID_ANY ||
             id.pid == LNET_PID_ANY)
                 return (-EINVAL);
 
-        /* Have a brand new peer_ni ready... */
-        rc = ksocknal_create_peer(&peer_ni, ni, id);
-        if (rc != 0)
-                return rc;
+	/* Have a brand new peer_ni ready... */
+	peer_ni = ksocknal_create_peer(ni, id);
+	if (IS_ERR(peer_ni))
+		return PTR_ERR(peer_ni);
 
         route = ksocknal_create_route (ipaddr, port);
         if (route == NULL) {
@@ -1123,17 +1120,19 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_route *route,
 
 	cpt = lnet_cpt_of_nid(peerid.nid, ni);
 
-        if (active) {
-                ksocknal_peer_addref(peer_ni);
+	if (active) {
+		ksocknal_peer_addref(peer_ni);
 		write_lock_bh(global_lock);
-        } else {
-                rc = ksocknal_create_peer(&peer_ni, ni, peerid);
-                if (rc != 0)
-                        goto failed_1;
+	} else {
+		peer_ni = ksocknal_create_peer(ni, peerid);
+		if (IS_ERR(peer_ni)) {
+			rc = PTR_ERR(peer_ni);
+			goto failed_1;
+		}
 
 		write_lock_bh(global_lock);
 
-                /* called with a ref on ni, so shutdown can't have started */
+		/* called with a ref on ni, so shutdown can't have started */
 		LASSERT(((struct ksock_net *) ni->ni_data)->ksnn_shutdown == 0);
 
 		peer2 = ksocknal_find_peer_locked(ni, peerid);
