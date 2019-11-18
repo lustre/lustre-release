@@ -156,13 +156,15 @@ struct ksock_tunables {
 
 struct ksock_net {
 	__u64		  ksnn_incarnation;	/* my epoch */
-	spinlock_t	  ksnn_lock;		/* serialise */
 	struct list_head  ksnn_list;		/* chain on global list */
-	int		  ksnn_npeers;		/* # peers */
-	int		  ksnn_shutdown;	/* shutting down? */
+	atomic_t	  ksnn_npeers;		/* # peers */
 	int		  ksnn_ninterfaces;	/* IP interfaces */
 	struct ksock_interface ksnn_interfaces[LNET_INTERFACES_NUM];
 };
+/* When the ksock_net is shut down, this (negative) bias is added to
+ * ksnn_npeers, which prevents new peers from being added.
+ */
+#define SOCKNAL_SHUTDOWN_BIAS  (INT_MIN+1)
 
 /** connd timeout */
 #define SOCKNAL_CONND_TIMEOUT  120
