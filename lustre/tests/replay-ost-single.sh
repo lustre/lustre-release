@@ -197,6 +197,8 @@ test_6() {
 	#define OBD_FAIL_MDS_REINT_NET_REP       0x119
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000119"
 
+	wait_mds_ost_sync || error "second wait_mds_ost_sync failed"
+
 	# retry till statfs returns useful results
 	local after_dd=$(kbytesfree)
 	local i=0
@@ -218,7 +220,7 @@ test_6() {
 	$CHECKSTAT -t file $f && return 2 || true
 	sync
 	# let the delete happen
-	wait_mds_ost_sync || error "second wait_mds_ost_sync failed"
+	wait_mds_ost_sync || error "third wait_mds_ost_sync failed"
 	wait_delete_completed || error "second wait_delete_completed failed"
 	local after=$(kbytesfree)
 	log "free_before: $before free_after: $after"
