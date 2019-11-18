@@ -988,12 +988,9 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 
 	header = &obd->obd_svc_stats->ls_cnt_header[PTLRPC_REQWAIT_CNTR];
 	lprocfs_stats_collect(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR, &ret);
-	if (ret.lc_count != 0) {
-		/* first argument to do_div MUST be __u64 */
-		__u64 sum = ret.lc_sum;
-		do_div(sum, ret.lc_count);
-		ret.lc_sum = sum;
-	} else
+	if (ret.lc_count != 0)
+		ret.lc_sum = div64_s64(ret.lc_sum, ret.lc_count);
+	else
 		ret.lc_sum = 0;
 	seq_printf(m, "    rpcs:\n"
 		   "       inflight: %u\n"
@@ -1032,10 +1029,7 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 				      PTLRPC_LAST_CNTR + BRW_READ_BYTES + rw,
 				      &ret);
 		if (ret.lc_sum > 0 && ret.lc_count > 0) {
-			/* first argument to do_div MUST be __u64 */
-			__u64 sum = ret.lc_sum;
-			do_div(sum, ret.lc_count);
-			ret.lc_sum = sum;
+			ret.lc_sum = div64_s64(ret.lc_sum, ret.lc_count);
 			seq_printf(m, "    %s_data_averages:\n"
 				   "       bytes_per_rpc: %llu\n",
 				   rw ? "write" : "read",
@@ -1046,10 +1040,7 @@ int lprocfs_import_seq_show(struct seq_file *m, void *data)
 		header = &obd->obd_svc_stats->ls_cnt_header[j];
 		lprocfs_stats_collect(obd->obd_svc_stats, j, &ret);
 		if (ret.lc_sum > 0 && ret.lc_count != 0) {
-			/* first argument to do_div MUST be __u64 */
-			__u64 sum = ret.lc_sum;
-			do_div(sum, ret.lc_count);
-			ret.lc_sum = sum;
+			ret.lc_sum = div64_s64(ret.lc_sum, ret.lc_count);
 			seq_printf(m, "       %s_per_rpc: %llu\n",
 				   header->lc_units, ret.lc_sum);
 			j = (int)ret.lc_sum;
