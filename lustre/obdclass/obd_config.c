@@ -1640,21 +1640,22 @@ int class_config_llog_handler(const struct lu_env *env,
 
 #ifdef HAVE_SERVER_SUPPORT
 		/* newer MDS replaces LOV/OSC with LOD/OSP */
-		{
+		if ((lcfg->lcfg_command == LCFG_ATTACH ||
+		     lcfg->lcfg_command == LCFG_SET_PARAM ||
+		     lcfg->lcfg_command == LCFG_PARAM) &&
+		    cfg->cfg_sb && IS_MDT(s2lsi(cfg->cfg_sb))) {
 			char *typename = lustre_cfg_string(lcfg, 1);
 
-			if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
-			    strcmp(typename, LUSTRE_LOV_NAME) == 0) &&
-			    cfg->cfg_sb && IS_MDT(s2lsi(cfg->cfg_sb))) {
+			if (typename &&
+			    strcmp(typename, LUSTRE_LOV_NAME) == 0) {
 				CDEBUG(D_CONFIG,
 				       "For 2.x interoperability, rename obd "
 				       "type from lov to lod (%s)\n",
 				       s2lsi(cfg->cfg_sb)->lsi_svname);
 				strcpy(typename, LUSTRE_LOD_NAME);
 			}
-			if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
-			    strcmp(typename, LUSTRE_OSC_NAME) == 0) &&
-			    cfg->cfg_sb && IS_MDT(s2lsi(cfg->cfg_sb))) {
+			if (typename &&
+			    strcmp(typename, LUSTRE_OSC_NAME) == 0) {
 				CDEBUG(D_CONFIG,
 				       "For 2.x interoperability, rename obd "
 				       "type from osc to osp (%s)\n",
