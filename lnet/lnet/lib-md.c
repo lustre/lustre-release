@@ -330,10 +330,6 @@ lnet_md_validate(struct lnet_md *umd)
 		CERROR("Invalid option: too many fragments %u, %d max\n",
 		       umd->length, LNET_MAX_IOV);
 		return -EINVAL;
-	} else if (umd->length > LNET_MTU) {
-		CERROR("Invalid length: too big fragment size %u, %d max\n",
-		       umd->length, LNET_MTU);
-		return -EINVAL;
 	}
 
 	return 0;
@@ -466,6 +462,13 @@ LNetMDBind(struct lnet_md umd, enum lnet_unlink unlink,
 	rc = lnet_md_build(md, &umd, unlink);
 	if (rc != 0)
 		goto out_free;
+
+	if (md->md_length > LNET_MTU) {
+		CERROR("Invalid length: too big transfer size %u, %d max\n",
+		       md->md_length, LNET_MTU);
+		rc = -EINVAL;
+		goto out_free;
+	}
 
 	cpt = lnet_res_lock_current();
 
