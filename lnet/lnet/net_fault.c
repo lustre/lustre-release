@@ -487,8 +487,8 @@ struct lnet_delay_rule {
 	time64_t		dl_delay_time;
 	/** baseline to caculate dl_delay_time */
 	time64_t		dl_time_base;
-	/** jiffies to send the next delayed message */
-	unsigned long		dl_msg_send;
+	/** seconds until we send the next delayed message */
+	time64_t		dl_msg_send;
 	/** delayed message list */
 	struct list_head	dl_msg_list;
 	/** statistic of delayed messages */
@@ -593,7 +593,8 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 	msg->msg_delay_send = ktime_get_seconds() + attr->u.delay.la_latency;
 	if (rule->dl_msg_send == -1) {
 		rule->dl_msg_send = msg->msg_delay_send;
-		mod_timer(&rule->dl_timer, rule->dl_msg_send);
+		mod_timer(&rule->dl_timer,
+			  jiffies + cfs_time_seconds(rule->dl_msg_send));
 	}
 
 	spin_unlock(&rule->dl_lock);
@@ -661,7 +662,8 @@ delayed_msg_check(struct lnet_delay_rule *rule, bool all,
 		msg = list_entry(rule->dl_msg_list.next,
 				 struct lnet_msg, msg_list);
 		rule->dl_msg_send = msg->msg_delay_send;
-		mod_timer(&rule->dl_timer, rule->dl_msg_send);
+		mod_timer(&rule->dl_timer,
+			  jiffies + cfs_time_seconds(rule->dl_msg_send));
 	}
 	spin_unlock(&rule->dl_lock);
 }

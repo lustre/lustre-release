@@ -349,12 +349,15 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
 	 * left.
 	 */
 	if (!list_empty(&waiting_locks_list)) {
-		unsigned long timeout_jiffies;
+		time64_t now = ktime_get_seconds();
+		time_t delta = 0;
 
 		lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
 				  l_pending_chain);
-		timeout_jiffies = cfs_time_seconds(lock->l_callback_timeout);
-		mod_timer(&waiting_locks_timer, timeout_jiffies);
+		if (lock->l_callback_timeout - now > 0)
+			delta = lock->l_callback_timeout - now;
+		mod_timer(&waiting_locks_timer,
+			  jiffies + cfs_time_seconds(delta));
 	}
 	spin_unlock_bh(&waiting_locks_spinlock);
 }
@@ -373,8 +376,10 @@ static void waiting_locks_callback(TIMER_DATA_TYPE unused)
  */
 static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t seconds)
 {
-	unsigned long timeout_jiffies;
-	time64_t timeout;
+	unsigned long timeout_jiffies = jiffies;
+	time64_t now = ktime_get_seconds();
+	time64_t deadline;
+	time_t timeout;
 
 	if (!list_empty(&lock->l_pending_chain))
 		return 0;
@@ -383,11 +388,13 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, time64_t seconds)
 	    OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
 		seconds = 1;
 
-	timeout = ktime_get_seconds() + seconds;
-	if (likely(timeout > lock->l_callback_timeout))
-		lock->l_callback_timeout = timeout;
+	deadline = now + seconds;
+	if (likely(deadline > lock->l_callback_timeout))
+		lock->l_callback_timeout = deadline;
 
-	timeout_jiffies = cfs_time_seconds(lock->l_callback_timeout);
+	timeout = clamp_t(time_t, lock->l_callback_timeout - now,
+			  0, seconds);
+	timeout_jiffies += cfs_time_seconds(timeout);
 
 	if (time_before(timeout_jiffies, waiting_locks_timer.expires) ||
 	    !timer_pending(&waiting_locks_timer))
@@ -504,12 +511,17 @@ static int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
 			/* No more, just cancel. */
 			del_timer(&waiting_locks_timer);
 		} else {
+			time64_t now = ktime_get_seconds();
 			struct ldlm_lock *next;
+			time_t delta = 0;
 
 			next = list_entry(list_next, struct ldlm_lock,
 					  l_pending_chain);
+			if (next->l_callback_timeout - now > 0)
+				delta = lock->l_callback_timeout - now;
+
 			mod_timer(&waiting_locks_timer,
-				  cfs_time_seconds(next->l_callback_timeout));
+				  jiffies + cfs_time_seconds(delta));
 		}
 	}
 	list_del_init(&lock->l_pending_chain);
