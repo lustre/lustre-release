@@ -377,9 +377,11 @@ static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
 #endif
 
 #ifdef HAVE_PID_NS_FOR_CHILDREN
-# define ll_task_pid_ns(task)	((task)->nsproxy->pid_ns_for_children)
+# define ll_task_pid_ns(task) \
+	 ((task)->nsproxy ? ((task)->nsproxy->pid_ns_for_children) : NULL)
 #else
-# define ll_task_pid_ns(task)	((task)->nsproxy->pid_ns)
+# define ll_task_pid_ns(task) \
+	 ((task)->nsproxy ? ((task)->nsproxy->pid_ns) : NULL)
 #endif
 
 #ifdef HAVE_FULL_NAME_HASH_3ARGS

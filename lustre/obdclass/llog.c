@@ -748,7 +748,8 @@ static int llog_process_thread_daemonize(void *arg)
 		 * used outside of the kernel itself, because it calls
 		 * free_nsproxy() which is not exported by the kernel
 		 * (defined in kernel/nsproxy.c) */
-		atomic_dec(&curr_ns->count);
+		if (curr_ns)
+			atomic_dec(&curr_ns->count);
 	}
 	task_unlock(lpi->lpi_reftask);
 
