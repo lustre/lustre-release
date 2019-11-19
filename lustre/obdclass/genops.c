@@ -1317,7 +1317,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
 	init_waitqueue_head(&imp->imp_recovery_waitq);
 	INIT_WORK(&imp->imp_zombie_work, obd_zombie_imp_cull);
 
-	if (curr_pid_ns->child_reaper)
+	if (curr_pid_ns && curr_pid_ns->child_reaper)
 		imp->imp_sec_refpid = curr_pid_ns->child_reaper->pid;
 	else
 		imp->imp_sec_refpid = 1;
