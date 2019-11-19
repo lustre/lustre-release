@@ -74,6 +74,7 @@ struct cfs_hash_hlist_ops;
 union cfs_hash_lock {
 	rwlock_t		rw;		/**< rwlock */
 	spinlock_t		spin;		/**< spinlock */
+	struct rw_semaphore	rw_sem;		/**< rwsem */
 };
 
 /**
@@ -155,6 +156,8 @@ enum cfs_hash_tag {
          * change on hash table is non-blocking
          */
         CFS_HASH_NBLK_CHANGE    = 1 << 13,
+	/** rw semaphore lock to protect bucket */
+	CFS_HASH_RW_SEM_BKTLOCK	= 1 << 14,
         /** NB, we typed hs_flags as  __u16, please change it
          * if you need to extend >=16 flags */
 };
@@ -357,6 +360,13 @@ cfs_hash_with_spin_bktlock(struct cfs_hash *hs)
 {
         /* spinlock to protect hash bucket */
         return (hs->hs_flags & CFS_HASH_SPIN_BKTLOCK) != 0;
+}
+
+static inline int
+cfs_hash_with_rw_sem_bktlock(struct cfs_hash *hs)
+{
+	/* rw sem lock to protect hash bucket */
+	return (hs->hs_flags & CFS_HASH_RW_SEM_BKTLOCK) != 0;
 }
 
 static inline int

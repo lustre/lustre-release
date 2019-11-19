@@ -156,6 +156,26 @@ cfs_hash_rw_unlock(union cfs_hash_lock *lock, int exclusive)
 		write_unlock(&lock->rw);
 }
 
+static inline void
+cfs_hash_rw_sem_lock(union cfs_hash_lock *lock, int exclusive)
+	__acquires(&lock->rw_sem)
+{
+	if (!exclusive)
+		down_read(&lock->rw_sem);
+	else
+		down_write(&lock->rw_sem);
+}
+
+static inline void
+cfs_hash_rw_sem_unlock(union cfs_hash_lock *lock, int exclusive)
+	__releases(&lock->rw_sem)
+{
+	if (!exclusive)
+		up_read(&lock->rw_sem);
+	else
+		up_write(&lock->rw_sem);
+}
+
 /** No lock hash */
 static struct cfs_hash_lock_ops cfs_hash_nl_lops = {
 	.hs_lock	= cfs_hash_nl_lock,
@@ -204,6 +224,22 @@ static struct cfs_hash_lock_ops cfs_hash_nr_bkt_rw_lops = {
 	.hs_bkt_unlock	= cfs_hash_rw_unlock,
 };
 
+/** rw_sem bucket lock, rehash is disabled */
+static struct cfs_hash_lock_ops cfs_hash_nr_bkt_rw_sem_lops = {
+	.hs_lock	= cfs_hash_nl_lock,
+	.hs_unlock	= cfs_hash_nl_unlock,
+	.hs_bkt_lock	= cfs_hash_rw_sem_lock,
+	.hs_bkt_unlock	= cfs_hash_rw_sem_unlock,
+};
+
+/** rw_sem bucket lock, rehash is enabled */
+static struct cfs_hash_lock_ops cfs_hash_bkt_rw_sem_lops = {
+	.hs_lock	= cfs_hash_rw_sem_lock,
+	.hs_unlock	= cfs_hash_rw_sem_unlock,
+	.hs_bkt_lock	= cfs_hash_rw_sem_lock,
+	.hs_bkt_unlock	= cfs_hash_rw_sem_unlock,
+};
+
 static void
 cfs_hash_lock_setup(struct cfs_hash *hs)
 {
@@ -215,19 +251,26 @@ cfs_hash_lock_setup(struct cfs_hash *hs)
 		spin_lock_init(&hs->hs_lock.spin);
 
 	} else if (cfs_hash_with_rehash(hs)) {
-		rwlock_init(&hs->hs_lock.rw);
+		if (cfs_hash_with_rw_sem_bktlock(hs)) {
+			init_rwsem(&hs->hs_lock.rw_sem);
+			hs->hs_lops = &cfs_hash_bkt_rw_sem_lops;
+		} else {
+			rwlock_init(&hs->hs_lock.rw);
 
-                if (cfs_hash_with_rw_bktlock(hs))
-                        hs->hs_lops = &cfs_hash_bkt_rw_lops;
-                else if (cfs_hash_with_spin_bktlock(hs))
-                        hs->hs_lops = &cfs_hash_bkt_spin_lops;
-                else
-                        LBUG();
+			if (cfs_hash_with_rw_bktlock(hs))
+				hs->hs_lops = &cfs_hash_bkt_rw_lops;
+			else if (cfs_hash_with_spin_bktlock(hs))
+				hs->hs_lops = &cfs_hash_bkt_spin_lops;
+			else
+				LBUG();
+		}
         } else {
                 if (cfs_hash_with_rw_bktlock(hs))
                         hs->hs_lops = &cfs_hash_nr_bkt_rw_lops;
                 else if (cfs_hash_with_spin_bktlock(hs))
                         hs->hs_lops = &cfs_hash_nr_bkt_spin_lops;
+		else if (cfs_hash_with_rw_sem_bktlock(hs))
+			hs->hs_lops = &cfs_hash_nr_bkt_rw_sem_lops;
                 else
                         LBUG();
         }
@@ -925,6 +968,8 @@ cfs_hash_buckets_realloc(struct cfs_hash *hs, struct cfs_hash_bucket **old_bkts,
 			rwlock_init(&new_bkts[i]->hsb_lock.rw);
 		else if (cfs_hash_with_spin_bktlock(hs))
 			spin_lock_init(&new_bkts[i]->hsb_lock.spin);
+		else if (cfs_hash_with_rw_sem_bktlock(hs))
+			init_rwsem(&new_bkts[i]->hsb_lock.rw_sem);
 		else
 			LBUG(); /* invalid use-case */
 	}

@@ -228,7 +228,11 @@ struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
 					    HASH_LQE_BKT_BITS),
 					0, CFS_HASH_MIN_THETA,
 					CFS_HASH_MAX_THETA, &lqe64_hash_ops,
-					CFS_HASH_DEFAULT|CFS_HASH_BIGNAME);
+					CFS_HASH_RW_SEM_BKTLOCK |
+					CFS_HASH_COUNTER |
+					CFS_HASH_REHASH |
+					CFS_HASH_BIGNAME);
+
 	if (site->lqs_hash == NULL) {
 		OBD_FREE_PTR(site);
 		RETURN(ERR_PTR(-ENOMEM));
