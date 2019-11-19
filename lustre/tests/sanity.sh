@@ -7881,8 +7881,13 @@ test_65n() {
 
 	local dir3=$MOUNT/$tdir-3
 	mkdir $dir3 || error "mkdir $dir3 failed"
-	! getfattr -n trusted.lov $dir3 &> /dev/null ||
-		error "$dir3 shouldn't have LOV EA"
+	# $dir3 shouldn't have LOV EA, but "lfs getstripe -d $dir3" should show
+	# the root layout, which is the actual default layout that will be used
+	# when new files are created in $dir3.
+	local dir3_layout=$(get_layout_param $dir3)
+	local root_dir_layout=$(get_layout_param $MOUNT)
+	[[ "$dir3_layout" = "$root_dir_layout" ]] ||
+		error "$dir3 should show the default layout from $MOUNT"
 
 	# set OST pool on root directory
 	local pool=$TESTNAME
@@ -7904,8 +7909,14 @@ test_65n() {
 
 	local dir4=$MOUNT/$tdir-4
 	mkdir $dir4 || error "mkdir $dir4 failed"
-	! getfattr -n trusted.lov $dir4 &> /dev/null ||
-		error "$dir4 shouldn't have LOV EA"
+	local dir4_layout=$(get_layout_param $dir4)
+	root_dir_layout=$(get_layout_param $MOUNT)
+	echo "$LFS getstripe -d $dir4"
+	$LFS getstripe -d $dir4
+	echo "$LFS getstripe -d $MOUNT"
+	$LFS getstripe -d $MOUNT
+	[[ "$dir4_layout" = "$root_dir_layout" ]] ||
+		error "$dir4 should show the default layout from $MOUNT"
 
 	# new file created in $dir4 should inherit the pool from
 	# the filesystem default
@@ -7924,7 +7935,7 @@ test_65n() {
 	local dir5=$dir4/$tdir-5
 	mkdir $dir5 || error "mkdir $dir5 failed"
 
-	local dir4_layout=$(get_layout_param $dir4)
+	dir4_layout=$(get_layout_param $dir4)
 	local dir5_layout=$(get_layout_param $dir5)
 	[[ "$dir4_layout" = "$dir5_layout" ]] ||
 		error "$dir5 should inherit the default layout from $dir4"

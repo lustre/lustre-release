@@ -679,16 +679,10 @@ end:
 	RETURN(rc);
 }
 
-/**
- * This function will be used to get default LOV/LMV/Default LMV
- * @valid will be used to indicate which stripe it will retrieve
- * 	OBD_MD_MEA  		LMV stripe EA
- * 	OBD_MD_DEFAULT_MEA	Default LMV stripe EA
- *  	otherwise		Default LOV EA.
- * Each time, it can only retrieve 1 stripe EA
- **/
-int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
-		     struct ptlrpc_request **request, u64 valid)
+static int ll_dir_get_default_layout(struct inode *inode, void **plmm,
+				     int *plmm_size,
+				     struct ptlrpc_request **request, u64 valid,
+				     enum get_default_layout_type type)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct mdt_body   *body;
@@ -696,6 +690,7 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 	struct ptlrpc_request *req = NULL;
 	int rc, lmm_size;
 	struct md_op_data *op_data;
+	struct lu_fid fid;
 	ENTRY;
 
 	rc = ll_get_default_mdsize(sbi, &lmm_size);
@@ -709,11 +704,19 @@ int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 		RETURN(PTR_ERR(op_data));
 
 	op_data->op_valid = valid | OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
+
+	if (type == GET_DEFAULT_LAYOUT_ROOT) {
+		lu_root_fid(&op_data->op_fid1);
+		fid = op_data->op_fid1;
+	} else {
+		fid = *ll_inode2fid(inode);
+	}
+
 	rc = md_getattr(sbi->ll_md_exp, op_data, &req);
 	ll_finish_md_op_data(op_data);
 	if (rc < 0) {
-		CDEBUG(D_INFO, "md_getattr failed on inode "
-		       DFID": rc %d\n", PFID(ll_inode2fid(inode)), rc);
+		CDEBUG(D_INFO, "md_getattr failed on inode "DFID": rc %d\n",
+		       PFID(&fid), rc);
 		GOTO(out, rc);
 	}
 
@@ -773,6 +776,72 @@ out:
 	*plmm_size = lmm_size;
 	*request = req;
 	return rc;
+}
+
+/**
+ * This function will be used to get default LOV/LMV/Default LMV
+ * @valid will be used to indicate which stripe it will retrieve.
+ * If the directory does not have its own default layout, then the
+ * function will request the default layout from root FID.
+ *	OBD_MD_MEA		LMV stripe EA
+ *	OBD_MD_DEFAULT_MEA	Default LMV stripe EA
+ *	otherwise		Default LOV EA.
+ * Each time, it can only retrieve 1 stripe EA
+ **/
+int ll_dir_getstripe_default(struct inode *inode, void **plmm, int *plmm_size,
+			     struct ptlrpc_request **request,
+			     struct ptlrpc_request **root_request,
+			     u64 valid)
+{
+	struct ptlrpc_request *req = NULL;
+	struct ptlrpc_request *root_req = NULL;
+	struct lov_mds_md *lmm = NULL;
+	int lmm_size = 0;
+	int rc = 0;
+	ENTRY;
+
+	rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
+				       &req, valid, 0);
+	if (rc == -ENODATA && !fid_is_root(ll_inode2fid(inode)) &&
+	    !(valid & (OBD_MD_MEA|OBD_MD_DEFAULT_MEA)) && root_request != NULL)
+		rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
+					       &root_req, valid,
+					       GET_DEFAULT_LAYOUT_ROOT);
+
+	*plmm = lmm;
+	*plmm_size = lmm_size;
+	*request = req;
+	if (root_request != NULL)
+		*root_request = root_req;
+
+	RETURN(rc);
+}
+
+/**
+ * This function will be used to get default LOV/LMV/Default LMV
+ * @valid will be used to indicate which stripe it will retrieve
+ *	OBD_MD_MEA		LMV stripe EA
+ *	OBD_MD_DEFAULT_MEA	Default LMV stripe EA
+ *	otherwise		Default LOV EA.
+ * Each time, it can only retrieve 1 stripe EA
+ **/
+int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
+		     struct ptlrpc_request **request, u64 valid)
+{
+	struct ptlrpc_request *req = NULL;
+	struct lov_mds_md *lmm = NULL;
+	int lmm_size = 0;
+	int rc = 0;
+	ENTRY;
+
+	rc = ll_dir_get_default_layout(inode, (void **)&lmm, &lmm_size,
+				       &req, valid, 0);
+
+	*plmm = lmm;
+	*plmm_size = lmm_size;
+	*request = req;
+
+	RETURN(rc);
 }
 
 int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid)
@@ -1507,6 +1576,7 @@ out:
 					(struct lmv_user_md __user *)arg;
 		struct lmv_user_md	lum;
 		struct ptlrpc_request	*request = NULL;
+		struct ptlrpc_request	*root_request = NULL;
 		union lmv_mds_md	*lmm = NULL;
 		int			lmmsize;
 		u64			valid = 0;
@@ -1532,8 +1602,8 @@ out:
 		else
 			RETURN(-EINVAL);
 
-		rc = ll_dir_getstripe(inode, (void **)&lmm, &lmmsize, &request,
-				      valid);
+		rc = ll_dir_getstripe_default(inode, (void **)&lmm, &lmmsize,
+					      &request, &root_request, valid);
 		if (rc != 0)
 			GOTO(finish_req, rc);
 
@@ -1623,6 +1693,7 @@ out_tmp:
 		OBD_FREE(tmp, lum_size);
 finish_req:
 		ptlrpc_req_finished(request);
+		ptlrpc_req_finished(root_request);
 		return rc;
 	}
 
@@ -1667,6 +1738,7 @@ out_rmdir:
 	case IOC_MDC_GETFILEINFO_OLD:
 	case IOC_MDC_GETFILESTRIPE: {
 		struct ptlrpc_request *request = NULL;
+		struct ptlrpc_request *root_request = NULL;
 		struct lov_user_md __user *lump;
 		struct lov_mds_md *lmm = NULL;
 		struct mdt_body *body;
@@ -1688,8 +1760,9 @@ out_rmdir:
 			rc = ll_lov_getstripe_ea_info(inode, filename, &lmm,
 						      &lmmsize, &request);
 		} else {
-			rc = ll_dir_getstripe(inode, (void **)&lmm, &lmmsize,
-					      &request, 0);
+			rc = ll_dir_getstripe_default(inode, (void **)&lmm,
+						      &lmmsize, &request,
+						      &root_request, 0);
 		}
 
 		if (request) {
@@ -1828,6 +1901,7 @@ out_rmdir:
 		EXIT;
 out_req:
 		ptlrpc_req_finished(request);
+		ptlrpc_req_finished(root_request);
 		if (filename)
 			ll_putname(filename);
 		return rc;
