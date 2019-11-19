@@ -666,10 +666,16 @@ run_test 1 "Block hard limit (normal use and out of quota)"
 
 # test inode hardlimit
 test_2() {
-	local LIMIT=$((1024 * 1024)) # 1M inodes
 	local TESTFILE="$DIR/$tdir/$tfile-0"
+	local LIMIT=$(do_facet mds1 $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.md-0x0.info |
+		awk '/least qunit/{ print $3 }')
+	local L2=$(do_facet mds1 $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.md-0x0.soft_least_qunit)
 
-	[ "$SLOW" = "no" ] && LIMIT=1024 # 1k inodes
+	[ $L2 -le $LIMIT ] || LIMIT=$L2
+
+	[ "$SLOW" = "no" ] || LIMIT=$((LIMIT * 1024))
 
 	local FREE_INODES=$(mdt_free_inodes 0)
 	echo "$FREE_INODES free inodes on master MDT"
