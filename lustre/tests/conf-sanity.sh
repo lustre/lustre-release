@@ -530,6 +530,9 @@ test_5h() {
 run_test 5h "start mdt failure at mdt_fs_setup()"
 
 test_5i() {
+	(( $MDS1_VERSION >= $(version_code 2.12.54) )) ||
+		skip "Need MDS version at least 2.12.54"
+
 	setup
 
 	stop mds1
