@@ -130,32 +130,6 @@ int LNetMDBind(struct lnet_md	 md_in,
 int LNetMDUnlink(struct lnet_handle_md md_in);
 /** @} lnet_md */
 
-/** \defgroup lnet_eq Events and event queues
- *
- * Event queues (abbreviated as EQ) are used to log operations performed on
- * local MDs. In particular, they signal the completion of a data transmission
- * into or out of a MD. They can also be used to hold acknowledgments for
- * completed PUT operations and indicate when a MD has been unlinked. Multiple
- * MDs can share a single EQ. An EQ must have an event handler
- * associated with it. It will be run for each event that is deposited into
- * the EQ.
- *
- * In addition to the struct lnet_eq, the LNet API defines two types
- * associated with events: The ::lnet_event_kind defines the kinds of events
- * that can be stored in an EQ. The struct lnet_event defines a structure that
- * holds the information about with an event.
- *
- * There are two functions for dealing with EQs: LNetEQAlloc() is used
- * to create an EQ and allocate the resources needed, while LNetEQFree()
- * releases these resources and frees the EQ.
- * @{ */
-struct lnet_eq *
-LNetEQAlloc(lnet_eq_handler_t handler);
-
-void LNetEQFree(struct lnet_eq *eventq_in);
-
-/** @} lnet_eq */
-
 /** \defgroup lnet_data Data movement operations
  *
  * The LNet API provides two data movement operations: LNetPut()

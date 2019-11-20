@@ -395,6 +395,20 @@ enum lnet_ins_pos {
  * @{ */
 
 /**
+ * Event queue handler function type.
+ *
+ * The EQ handler runs for each event that is deposited into the EQ. The
+ * handler is supplied with a pointer to the event that triggered the
+ * handler invocation.
+ *
+ * The handler must not block, must be reentrant, and must not call any LNet
+ * API functions. It should return as quickly as possible.
+ */
+struct lnet_event;
+typedef void (*lnet_eq_handler_t)(struct lnet_event *event);
+#define LNET_EQ_HANDLER_NONE NULL
+
+/**
  * Defines the visible parts of a memory descriptor. Values of this type
  * are used to initialize memory descriptors.
  */
@@ -480,11 +494,11 @@ struct lnet_md {
 	 */
 	void		*user_ptr;
 	/**
-	 * A handle for the event queue used to log the operations performed on
-	 * the memory region. If this argument is a NULL handle operations
+	 * The event handler used to log the operations performed on
+	 * the memory region. If this argument is NULL operations
 	 * performed on this memory descriptor are not logged.
 	 */
-	struct lnet_eq *eq_handle;
+	lnet_eq_handler_t eq_handle;
 	/**
 	 * The bulk MD handle which was registered to describe the buffers
 	 * either to be used to transfer data to the peer or receive data
@@ -656,20 +670,6 @@ struct lnet_event {
 	 */
 	volatile unsigned long sequence;
 };
-
-/**
- * Event queue handler function type.
- *
- * The EQ handler runs for each event that is deposited into the EQ. The
- * handler is supplied with a pointer to the event that triggered the
- * handler invocation.
- *
- * The handler must not block, must be reentrant, and must not call any LNet
- * API functions. It should return as quickly as possible.
- */
-typedef void (*lnet_eq_handler_t)(struct lnet_event *event);
-#define LNET_EQ_HANDLER_NONE NULL
-/** @} lnet_eq */
 
 /** \addtogroup lnet_data
  * @{ */

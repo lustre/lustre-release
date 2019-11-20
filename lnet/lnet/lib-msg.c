@@ -947,7 +947,7 @@ lnet_msg_detach_md(struct lnet_msg *msg, int cpt, int status)
 			msg->msg_ev.status   = status;
 		}
 		msg->msg_ev.unlinked = unlink;
-		lnet_eq_enqueue_event(md->md_eq, &msg->msg_ev);
+		md->md_eq(&msg->msg_ev);
 	}
 
 	if (unlink || (md->md_refcount == 0 &&

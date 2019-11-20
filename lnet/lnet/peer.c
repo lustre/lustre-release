@@ -3475,7 +3475,6 @@ static int lnet_peer_discovery(void *arg)
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	LNetEQFree(the_lnet.ln_dc_eq);
 	the_lnet.ln_dc_eq = NULL;
 
 	the_lnet.ln_dc_state = LNET_DC_STATE_SHUTDOWN;
@@ -3495,20 +3494,13 @@ int lnet_peer_discovery_start(void)
 	if (the_lnet.ln_dc_state != LNET_DC_STATE_SHUTDOWN)
 		return -EALREADY;
 
-	the_lnet.ln_dc_eq = LNetEQAlloc(lnet_discovery_event_handler);
-	if (IS_ERR(the_lnet.ln_dc_eq)) {
-		rc = PTR_ERR(the_lnet.ln_dc_eq);
-		CERROR("Can't allocate discovery EQ: %d\n", rc);
-		return rc;
-	}
-
+	the_lnet.ln_dc_eq = lnet_discovery_event_handler;
 	the_lnet.ln_dc_state = LNET_DC_STATE_RUNNING;
 	task = kthread_run(lnet_peer_discovery, NULL, "lnet_discovery");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		CERROR("Can't start peer discovery thread: %d\n", rc);
 
-		LNetEQFree(the_lnet.ln_dc_eq);
 		the_lnet.ln_dc_eq = NULL;
 
 		the_lnet.ln_dc_state = LNET_DC_STATE_SHUTDOWN;

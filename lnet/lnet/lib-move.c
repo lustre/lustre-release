@@ -3565,7 +3565,7 @@ lnet_monitor_thread(void *arg)
 int
 lnet_send_ping(lnet_nid_t dest_nid,
 	       struct lnet_handle_md *mdh, int nnis,
-	       void *user_data, struct lnet_eq *eq, bool recovery)
+	       void *user_data, lnet_eq_handler_t eq, bool recovery)
 {
 	struct lnet_md md = { NULL };
 	struct lnet_process_id id;
