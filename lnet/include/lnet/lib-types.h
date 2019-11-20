@@ -184,7 +184,6 @@ struct lnet_libhandle {
 
 struct lnet_eq {
 	lnet_eq_handler_t	eq_callback;
-	int			**eq_refs;	/* percpt refcount for EQ */
 };
 
 struct lnet_me {
