@@ -63,6 +63,9 @@ extern struct nrs_core nrs_core;
 extern struct mutex ptlrpcd_mutex;
 extern struct mutex pinger_mutex;
 
+extern struct lnet_eq *ptlrpc_eq;
+extern struct percpu_ref ptlrpc_pending;
+
 int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait);
 /* ptlrpcd.c */
 int ptlrpcd_start(struct ptlrpcd_ctl *pc);
