@@ -1973,7 +1973,7 @@ static inline bool nrs_policy_compat_one(const struct ptlrpc_service *svc,
 /** @} nrs */
 
 /* ptlrpc/events.c */
-extern struct lnet_handle_eq ptlrpc_eq_h;
+extern struct lnet_eq *ptlrpc_eq;
 extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 			       struct lnet_process_id *peer, lnet_nid_t *self);
 /**

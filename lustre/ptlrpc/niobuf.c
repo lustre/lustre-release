@@ -61,7 +61,7 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 	md.threshold = (ack == LNET_ACK_REQ) ? 2 : 1;
 	md.options   = PTLRPC_MD_OPTIONS;
 	md.user_ptr  = cbid;
-	md.eq_handle = ptlrpc_eq_h;
+	md.eq_handle = ptlrpc_eq;
 	LNetInvalidateMDHandle(&md.bulk_handle);
 
 	if (bulk_cookie) {
@@ -195,7 +195,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	desc->bd_failure = 0;
 
 	md.user_ptr = &desc->bd_cbid;
-	md.eq_handle = ptlrpc_eq_h;
+	md.eq_handle = ptlrpc_eq;
 	md.threshold = 2; /* SENT and ACK/REPLY */
 
 	for (posted_md = 0; posted_md < total_md; mbits++) {
@@ -362,7 +362,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	desc->bd_last_mbits = mbits;
 	desc->bd_md_count = total_md;
 	md.user_ptr = &desc->bd_cbid;
-	md.eq_handle = ptlrpc_eq_h;
+	md.eq_handle = ptlrpc_eq;
 	md.threshold = 1;                       /* PUT or GET */
 
 	for (posted_md = 0; posted_md < total_md; posted_md++, mbits++) {
@@ -850,8 +850,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 reply_md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
                         LNET_MD_MANAGE_REMOTE |
                         LNET_MD_TRUNCATE; /* allow to make EOVERFLOW error */;
-                reply_md.user_ptr  = &request->rq_reply_cbid;
-                reply_md.eq_handle = ptlrpc_eq_h;
+		reply_md.user_ptr  = &request->rq_reply_cbid;
+		reply_md.eq_handle = ptlrpc_eq;
 
 		/* We must see the unlink callback to set rq_reply_unlinked,
 		 * so we can't auto-unlink */
@@ -967,16 +967,16 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 		return -ENOMEM;
 	}
 
-        LASSERT(rqbd->rqbd_refcount == 0);
-        rqbd->rqbd_refcount = 1;
+	LASSERT(rqbd->rqbd_refcount == 0);
+	rqbd->rqbd_refcount = 1;
 
-        md.start     = rqbd->rqbd_buffer;
-        md.length    = service->srv_buf_size;
-        md.max_size  = service->srv_max_req_size;
-        md.threshold = LNET_MD_THRESH_INF;
-        md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT | LNET_MD_MAX_SIZE;
-        md.user_ptr  = &rqbd->rqbd_cbid;
-        md.eq_handle = ptlrpc_eq_h;
+	md.start     = rqbd->rqbd_buffer;
+	md.length    = service->srv_buf_size;
+	md.max_size  = service->srv_max_req_size;
+	md.threshold = LNET_MD_THRESH_INF;
+	md.options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT | LNET_MD_MAX_SIZE;
+	md.user_ptr  = &rqbd->rqbd_cbid;
+	md.eq_handle = ptlrpc_eq;
 
 	rc = LNetMDAttach(me, md, LNET_UNLINK, &rqbd->rqbd_md_h);
 	if (rc == 0)

@@ -40,7 +40,7 @@
 #include <lustre_sec.h>
 #include "ptlrpc_internal.h"
 
-struct lnet_handle_eq ptlrpc_eq_h;
+struct lnet_eq *ptlrpc_eq;
 
 /*
  *  Client's outgoing request callback
@@ -556,7 +556,7 @@ void ptlrpc_ni_fini(void)
 	 * replies */
 
 	for (retries = 0;; retries++) {
-		rc = LNetEQFree(ptlrpc_eq_h);
+		rc = LNetEQFree(ptlrpc_eq);
 		switch (rc) {
 		default:
 			LBUG();
@@ -603,16 +603,16 @@ int ptlrpc_ni_init(void)
 	 * because we are guaranteed to get every event via callback,
 	 * so we just set EQ size to 0 to avoid overhread of serializing
 	 * enqueue/dequeue operations in LNet. */
-	rc = LNetEQAlloc(0, ptlrpc_master_callback, &ptlrpc_eq_h);
-        if (rc == 0)
-                return 0;
+	ptlrpc_eq = LNetEQAlloc(0, ptlrpc_master_callback);
+	if (!IS_ERR(ptlrpc_eq))
+		return 0;
 
-        CERROR ("Failed to allocate event queue: %d\n", rc);
-        LNetNIFini();
+	rc = PTR_ERR(ptlrpc_eq);
+	CERROR("Failed to allocate event queue: %d\n", rc);
+	LNetNIFini();
 
 	return rc;
 }
-
 
 int ptlrpc_init_portals(void)
 {

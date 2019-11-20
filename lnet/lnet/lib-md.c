@@ -269,7 +269,7 @@ lnet_md_build(struct lnet_libmd *lmd, struct lnet_md *umd, int unlink)
 
 /* must be called with resource lock held */
 static int
-lnet_md_link(struct lnet_libmd *md, struct lnet_handle_eq eq_handle, int cpt)
+lnet_md_link(struct lnet_libmd *md, struct lnet_eq *eq, int cpt)
 {
 	struct lnet_res_container *container = the_lnet.ln_md_containers[cpt];
 
@@ -285,12 +285,8 @@ lnet_md_link(struct lnet_libmd *md, struct lnet_handle_eq eq_handle, int cpt)
 	 * maybe there we shouldn't even allow LNET_EQ_NONE!)
 	 * LASSERT (eq == NULL);
 	 */
-	if (!LNetEQHandleIsInvalid(eq_handle)) {
-		md->md_eq = lnet_handle2eq(&eq_handle);
-
-		if (md->md_eq == NULL)
-			return -ENOENT;
-
+	if (eq) {
+		md->md_eq = eq;
 		(*md->md_eq->eq_refs[cpt])++;
 	}
 
@@ -318,7 +314,6 @@ lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_md *umd)
 	umd->max_size = lmd->md_max_size;
 	umd->options = lmd->md_options;
 	umd->user_ptr = lmd->md_user_ptr;
-	lnet_eq2handle(&umd->eq_handle, lmd->md_eq);
 }
 
 static int

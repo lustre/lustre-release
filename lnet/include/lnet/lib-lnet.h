@@ -308,30 +308,6 @@ lnet_res_lh_invalidate(struct lnet_libhandle *lh)
 }
 
 static inline void
-lnet_eq2handle(struct lnet_handle_eq *handle, struct lnet_eq *eq)
-{
-	if (eq == NULL) {
-		LNetInvalidateEQHandle(handle);
-		return;
-	}
-
-	handle->cookie = eq->eq_lh.lh_cookie;
-}
-
-static inline struct lnet_eq *
-lnet_handle2eq(struct lnet_handle_eq *handle)
-{
-	/* ALWAYS called with resource lock held */
-	struct lnet_libhandle *lh;
-
-	lh = lnet_res_lh_lookup(&the_lnet.ln_eq_container, handle->cookie);
-	if (lh == NULL)
-		return NULL;
-
-	return lh_entry(lh, struct lnet_eq, eq_lh);
-}
-
-static inline void
 lnet_md2handle(struct lnet_handle_md *handle, struct lnet_libmd *md)
 {
 	handle->cookie = md->md_lh.lh_cookie;
@@ -617,7 +593,7 @@ void lnet_prep_send(struct lnet_msg *msg, int type,
 		    unsigned int len);
 int lnet_send(lnet_nid_t nid, struct lnet_msg *msg, lnet_nid_t rtr_nid);
 int lnet_send_ping(lnet_nid_t dest_nid, struct lnet_handle_md *mdh, int nnis,
-		   void *user_ptr, struct lnet_handle_eq eqh, bool recovery);
+		   void *user_ptr, struct lnet_eq *eq, bool recovery);
 void lnet_return_tx_credits_locked(struct lnet_msg *msg);
 void lnet_return_rx_credits_locked(struct lnet_msg *msg);
 void lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp);
