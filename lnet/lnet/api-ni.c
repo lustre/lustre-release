@@ -4077,24 +4077,45 @@ LNetGetId(unsigned int index, struct lnet_process_id *id)
 }
 EXPORT_SYMBOL(LNetGetId);
 
+struct ping_data {
+	int rc;
+	int replied;
+	struct lnet_handle_md mdh;
+	struct completion completion;
+};
+
+static void
+lnet_ping_event_handler(struct lnet_event *event)
+{
+	struct ping_data *pd = event->md.user_ptr;
+
+	CDEBUG(D_NET, "ping event (%d %d)%s\n",
+	       event->type, event->status,
+	       event->unlinked ? " unlinked" : "");
+
+	if (event->status) {
+		if (!pd->rc)
+			pd->rc = event->status;
+	} else if (event->type == LNET_EVENT_REPLY) {
+		pd->replied = 1;
+		pd->rc = event->mlength;
+	}
+	if (event->unlinked)
+		complete(&pd->completion);
+}
+
 static int lnet_ping(struct lnet_process_id id, signed long timeout,
 		     struct lnet_process_id __user *ids, int n_ids)
 {
 	struct lnet_eq *eq;
-	struct lnet_handle_md mdh;
-	struct lnet_event event;
 	struct lnet_md md = { NULL };
-	int which;
-	int unlinked = 0;
-	int replied = 0;
-	const signed long a_long_time = cfs_time_seconds(60);
+	struct ping_data pd = { 0 };
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_process_id tmpid;
 	int i;
 	int nob;
 	int rc;
 	int rc2;
-	sigset_t blocked;
 
 	/* n_ids limit is arbitrary */
 	if (n_ids <= 0 || id.nid == LNET_NID_ANY)
@@ -4114,8 +4135,7 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	if (!pbuf)
 		return -ENOMEM;
 
-	/* NB 2 events max (including any unlink event) */
-	eq = LNetEQAlloc(2, LNET_EQ_HANDLER_NONE);
+	eq = LNetEQAlloc(0, lnet_ping_event_handler);
 	if (IS_ERR(eq)) {
 		rc = PTR_ERR(eq);
 		CERROR("Can't allocate EQ: %d\n", rc);
@@ -4128,83 +4148,40 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	md.threshold = 2; /* GET/REPLY */
 	md.max_size  = 0;
 	md.options   = LNET_MD_TRUNCATE;
-	md.user_ptr  = NULL;
+	md.user_ptr  = &pd;
 	md.eq_handle = eq;
 
-	rc = LNetMDBind(md, LNET_UNLINK, &mdh);
+	init_completion(&pd.completion);
+
+	rc = LNetMDBind(md, LNET_UNLINK, &pd.mdh);
 	if (rc != 0) {
 		CERROR("Can't bind MD: %d\n", rc);
 		goto fail_free_eq;
 	}
 
-	rc = LNetGet(LNET_NID_ANY, mdh, id,
+	rc = LNetGet(LNET_NID_ANY, pd.mdh, id,
 		     LNET_RESERVED_PORTAL,
 		     LNET_PROTO_PING_MATCHBITS, 0, false);
 
 	if (rc != 0) {
 		/* Don't CERROR; this could be deliberate! */
-		rc2 = LNetMDUnlink(mdh);
+		rc2 = LNetMDUnlink(pd.mdh);
 		LASSERT(rc2 == 0);
 
 		/* NB must wait for the UNLINK event below... */
-		unlinked = 1;
-		timeout = a_long_time;
 	}
 
-	do {
-		/* MUST block for unlink to complete */
-		if (unlinked) {
-			sigset_t set;
-
-			sigfillset(&set);
-			sigprocmask(SIG_SETMASK, &set, &blocked);
-		}
-
-		rc2 = LNetEQPoll(&eq, 1, timeout, &event, &which);
-
-		if (unlinked)
-			cfs_restore_sigs(blocked);
-
-		CDEBUG(D_NET, "poll %d(%d %d)%s\n", rc2,
-		       (rc2 <= 0) ? -1 : event.type,
-		       (rc2 <= 0) ? -1 : event.status,
-		       (rc2 > 0 && event.unlinked) ? " unlinked" : "");
-
-		LASSERT(rc2 != -EOVERFLOW);	/* can't miss anything */
-
-		if (rc2 <= 0 || event.status != 0) {
-			/* timeout or error */
-			if (!replied && rc == 0)
-				rc = (rc2 < 0) ? rc2 :
-				     (rc2 == 0) ? -ETIMEDOUT :
-				     event.status;
-
-			if (!unlinked) {
-				/* Ensure completion in finite time... */
-				LNetMDUnlink(mdh);
-				/* No assertion (racing with network) */
-				unlinked = 1;
-				timeout = a_long_time;
-			} else if (rc2 == 0) {
-				/* timed out waiting for unlink */
-				CWARN("ping %s: late network completion\n",
-				      libcfs_id2str(id));
-			}
-		} else if (event.type == LNET_EVENT_REPLY) {
-			replied = 1;
-			rc = event.mlength;
-		}
-	} while (rc2 <= 0 || !event.unlinked);
-
-	if (!replied) {
-		if (rc >= 0)
-			CWARN("%s: Unexpected rc >= 0 but no reply!\n",
-			      libcfs_id2str(id));
+	if (wait_for_completion_timeout(&pd.completion, timeout) == 0) {
+		/* Ensure completion in finite time... */
+		LNetMDUnlink(pd.mdh);
+		wait_for_completion(&pd.completion);
+	}
+	if (!pd.replied) {
 		rc = -EIO;
 		goto fail_free_eq;
 	}
 
-	nob = rc;
+	nob = pd.rc;
 	LASSERT(nob >= 0 && nob <= LNET_PING_INFO_SIZE(n_ids));
 
 	rc = -EPROTO;		/* if I can't parse... */
