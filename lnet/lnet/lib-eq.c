@@ -38,17 +38,10 @@
 #include <lnet/lib-lnet.h>
 
 /**
- * Create an event queue that has room for \a count number of events.
+ * Create an event queue that calls a @callback on each event.
  *
- * Note that when EQ handler is specified in \a callback, no event loss
- * can happen, since the handler is run for each event deposited into
- * the EQ.
- *
- * \param count The number of events to be stored in the event queue. It
- * will be rounded up to the next power of two.
  * \param callback A handler function that runs when an event is deposited
- * into the EQ. The constant value LNET_EQ_HANDLER_NONE can be used to
- * indicate that no event handler is desired.
+ * into the EQ.
  *
  * \retval eq	   On successful return, the newly created EQ is returned.
  *		   On failure, an error code encoded with ERR_PTR() is returned.
@@ -58,46 +51,19 @@
  * \see lnet_eq_handler_t for the discussion on EQ handler semantics.
  */
 struct lnet_eq *
-LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback)
+LNetEQAlloc(lnet_eq_handler_t callback)
 {
 	struct lnet_eq *eq;
 
 	LASSERT(the_lnet.ln_refcount > 0);
 
-	/* We need count to be a power of 2 so that when eq_{enq,deq}_seq
-	 * overflow, they don't skip entries, so the queue has the same
-	 * apparent capacity at all times */
-
-	if (count)
-		count = roundup_pow_of_two(count);
-
-	if (callback != LNET_EQ_HANDLER_NONE && count != 0) {
-		CWARN("EQ callback is guaranteed to get every event, "
-		      "do you still want to set eqcount %d for polling "
-		      "event which will have locking overhead? "
-		      "Please contact with developer to confirm\n", count);
-	}
-
-	/* count can be 0 if only need callback, we can eliminate
-	 * overhead of enqueue event */
-	if (count == 0 && callback == LNET_EQ_HANDLER_NONE)
+	if (callback == LNET_EQ_HANDLER_NONE)
 		return ERR_PTR(-EINVAL);
 
 	eq = lnet_eq_alloc();
 	if (eq == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	if (count != 0) {
-		LIBCFS_ALLOC(eq->eq_events, count * sizeof(*eq->eq_events));
-		if (eq->eq_events == NULL)
-			goto failed;
-		/* NB allocator has set all event sequence numbers to 0,
-		 * so all them should be earlier than eq_deq_seq */
-	}
-
-	eq->eq_deq_seq = 1;
-	eq->eq_enq_seq = 1;
-	eq->eq_size = count;
 	eq->eq_callback = callback;
 
 	eq->eq_refs = cfs_percpt_alloc(lnet_cpt_table(),
@@ -108,9 +74,6 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback)
 	return eq;
 
 failed:
-	if (eq->eq_events != NULL)
-		LIBCFS_FREE(eq->eq_events, count * sizeof(*eq->eq_events));
-
 	if (eq->eq_refs != NULL)
 		cfs_percpt_free(eq->eq_refs);
 
@@ -131,11 +94,9 @@ EXPORT_SYMBOL(LNetEQAlloc);
 int
 LNetEQFree(struct lnet_eq *eq)
 {
-	struct lnet_event	*events = NULL;
 	int		**refs = NULL;
 	int		*ref;
 	int		rc = 0;
-	int		size = 0;
 	int		i;
 
 	lnet_res_lock(LNET_LOCK_EX);
@@ -155,8 +116,6 @@ LNetEQFree(struct lnet_eq *eq)
 	}
 
 	/* stash for free after lock dropped */
-	events	= eq->eq_events;
-	size	= eq->eq_size;
 	refs	= eq->eq_refs;
 
 	lnet_eq_free(eq);
@@ -164,8 +123,6 @@ LNetEQFree(struct lnet_eq *eq)
 	lnet_eq_wait_unlock();
 	lnet_res_unlock(LNET_LOCK_EX);
 
-	if (events != NULL)
-		LIBCFS_FREE(events, size * sizeof(*events));
 	if (refs != NULL)
 		cfs_percpt_free(refs);
 
@@ -176,25 +133,6 @@ EXPORT_SYMBOL(LNetEQFree);
 void
 lnet_eq_enqueue_event(struct lnet_eq *eq, struct lnet_event *ev)
 {
-	/* MUST called with resource lock hold but w/o lnet_eq_wait_lock */
-	int index;
-
-	if (eq->eq_size == 0) {
-		LASSERT(eq->eq_callback != LNET_EQ_HANDLER_NONE);
-		eq->eq_callback(ev);
-		return;
-	}
-
-	lnet_eq_wait_lock();
-	ev->sequence = eq->eq_enq_seq++;
-
-	LASSERT(eq->eq_size == LOWEST_BIT_SET(eq->eq_size));
-	index = ev->sequence & (eq->eq_size - 1);
-
-	eq->eq_events[index] = *ev;
-
-	if (eq->eq_callback != LNET_EQ_HANDLER_NONE)
-		eq->eq_callback(ev);
-
-	lnet_eq_wait_unlock();
+	LASSERT(eq->eq_callback != LNET_EQ_HANDLER_NONE);
+	eq->eq_callback(ev);
 }

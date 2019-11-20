@@ -603,7 +603,7 @@ int ptlrpc_ni_init(void)
 	 * because we are guaranteed to get every event via callback,
 	 * so we just set EQ size to 0 to avoid overhread of serializing
 	 * enqueue/dequeue operations in LNet. */
-	ptlrpc_eq = LNetEQAlloc(0, ptlrpc_master_callback);
+	ptlrpc_eq = LNetEQAlloc(ptlrpc_master_callback);
 	if (!IS_ERR(ptlrpc_eq))
 		return 0;
 

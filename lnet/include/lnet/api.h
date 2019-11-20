@@ -136,9 +136,9 @@ int LNetMDUnlink(struct lnet_handle_md md_in);
  * local MDs. In particular, they signal the completion of a data transmission
  * into or out of a MD. They can also be used to hold acknowledgments for
  * completed PUT operations and indicate when a MD has been unlinked. Multiple
- * MDs can share a single EQ. An EQ may have an optional event handler
- * associated with it. If an event handler exists, it will be run for each
- * event that is deposited into the EQ.
+ * MDs can share a single EQ. An EQ must have an event handler
+ * associated with it. It will be run for each event that is deposited into
+ * the EQ.
  *
  * In addition to the struct lnet_eq, the LNet API defines two types
  * associated with events: The ::lnet_event_kind defines the kinds of events
@@ -150,8 +150,7 @@ int LNetMDUnlink(struct lnet_handle_md md_in);
  * releases these resources and frees the EQ.
  * @{ */
 struct lnet_eq *
-LNetEQAlloc(unsigned int count_in,
-	    lnet_eq_handler_t handler);
+LNetEQAlloc(lnet_eq_handler_t handler);
 
 int LNetEQFree(struct lnet_eq *eventq_in);
 

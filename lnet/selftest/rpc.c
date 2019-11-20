@@ -1621,7 +1621,7 @@ srpc_startup (void)
 
 	srpc_data.rpc_state = SRPC_STATE_NI_INIT;
 
-	srpc_data.rpc_lnet_eq = LNetEQAlloc(0, srpc_lnet_ev_handler);
+	srpc_data.rpc_lnet_eq = LNetEQAlloc(srpc_lnet_ev_handler);
 	if (IS_ERR(srpc_data.rpc_lnet_eq)) {
 		rc = PTR_ERR(srpc_data.rpc_lnet_eq);
 		CERROR("LNetEQAlloc() has failed: %d\n", rc);

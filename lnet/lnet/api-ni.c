@@ -1678,7 +1678,7 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 
 	if (set_eq) {
 		the_lnet.ln_ping_target_eq =
-			LNetEQAlloc(0, lnet_ping_target_event_handler);
+			LNetEQAlloc(lnet_ping_target_event_handler);
 		if (IS_ERR(the_lnet.ln_ping_target_eq)) {
 			rc = PTR_ERR(the_lnet.ln_ping_target_eq);
 			CERROR("Can't allocate ping buffer EQ: %d\n", rc);
@@ -1944,7 +1944,7 @@ static int lnet_push_target_init(void)
 		return -EALREADY;
 
 	the_lnet.ln_push_target_eq =
-		LNetEQAlloc(0, lnet_push_target_event_handler);
+		LNetEQAlloc(lnet_push_target_event_handler);
 	if (IS_ERR(the_lnet.ln_push_target_eq)) {
 		rc = PTR_ERR(the_lnet.ln_push_target_eq);
 		CERROR("Can't allocated push target EQ: %d\n", rc);
@@ -2645,7 +2645,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 	lnet_ping_target_update(pbuf, ping_mdh);
 
-	the_lnet.ln_mt_eq = LNetEQAlloc(0, lnet_mt_event_handler);
+	the_lnet.ln_mt_eq = LNetEQAlloc(lnet_mt_event_handler);
 	if (IS_ERR(the_lnet.ln_mt_eq)) {
 		rc = PTR_ERR(the_lnet.ln_mt_eq);
 		CERROR("Can't allocate monitor thread EQ: %d\n", rc);
@@ -4134,7 +4134,7 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	if (!pbuf)
 		return -ENOMEM;
 
-	eq = LNetEQAlloc(0, lnet_ping_event_handler);
+	eq = LNetEQAlloc(lnet_ping_event_handler);
 	if (IS_ERR(eq)) {
 		rc = PTR_ERR(eq);
 		CERROR("Can't allocate EQ: %d\n", rc);

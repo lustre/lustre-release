@@ -183,11 +183,7 @@ struct lnet_libhandle {
 	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 struct lnet_eq {
-	unsigned long		eq_enq_seq;
-	unsigned long		eq_deq_seq;
-	unsigned int		eq_size;
 	lnet_eq_handler_t	eq_callback;
-	struct lnet_event	*eq_events;
 	int			**eq_refs;	/* percpt refcount for EQ */
 };
 
