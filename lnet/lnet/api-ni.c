@@ -548,7 +548,6 @@ lnet_init_locks(void)
 {
 	spin_lock_init(&the_lnet.ln_eq_wait_lock);
 	spin_lock_init(&the_lnet.ln_msg_resend_lock);
-	init_waitqueue_head(&the_lnet.ln_eq_waitq);
 	init_completion(&the_lnet.ln_mt_wait_complete);
 	mutex_init(&the_lnet.ln_lnd_mutex);
 }

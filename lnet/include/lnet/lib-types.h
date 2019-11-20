@@ -1010,7 +1010,6 @@ struct lnet {
 
 	/* Event Queue container */
 	struct lnet_res_container	ln_eq_container;
-	wait_queue_head_t		ln_eq_waitq;
 	spinlock_t			ln_eq_wait_lock;
 
 	unsigned int			ln_remote_nets_hbits;
