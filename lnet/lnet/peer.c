@@ -1275,6 +1275,7 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 	/* Add peer_ni to peer_net */
 	lpni->lpni_peer_net = lpn;
 	list_add_tail(&lpni->lpni_peer_nis, &lpn->lpn_peer_nis);
+	lnet_update_peer_net_healthv(lpni);
 	lnet_peer_net_addref_locked(lpn);
 
 	/* Add peer_net to peer */

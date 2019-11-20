@@ -1642,10 +1642,10 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
 
 	if (alive) {
 		if (reset)
-			lnet_set_healthv(&lpni->lpni_healthv,
-					 LNET_MAX_HEALTH_VALUE);
+			lnet_set_lpni_healthv_locked(lpni,
+						     LNET_MAX_HEALTH_VALUE);
 		else
-			lnet_inc_healthv(&lpni->lpni_healthv);
+			lnet_inc_lpni_healthv_locked(lpni);
 	} else {
 		lnet_handle_remote_failure_locked(lpni);
 	}

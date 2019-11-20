@@ -503,6 +503,10 @@ lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 		sensitivity = lp_sensitivity;
 
 	lnet_dec_healthv_locked(&lpni->lpni_healthv, sensitivity);
+
+	/* update the peer_net's health value */
+	lnet_update_peer_net_healthv(lpni);
+
 	/*
 	 * add the peer NI to the recovery queue if it's not already there
 	 * and it's health value is actually below the maximum. It's
@@ -849,11 +853,14 @@ lnet_health_check(struct lnet_msg *msg)
 			 * I'm a router, then set that lpni's health to
 			 * maximum so we can commence communication
 			 */
-			if (lnet_isrouter(lpni) || the_lnet.ln_routing)
-				lnet_set_healthv(&lpni->lpni_healthv,
-						 LNET_MAX_HEALTH_VALUE);
-			else
-				lnet_inc_healthv(&lpni->lpni_healthv);
+			lnet_net_lock(0);
+			if (lnet_isrouter(lpni) || the_lnet.ln_routing) {
+				lnet_set_lpni_healthv_locked(lpni,
+					LNET_MAX_HEALTH_VALUE);
+			} else {
+				lnet_inc_lpni_healthv_locked(lpni);
+			}
+			lnet_net_unlock(0);
 		}
 
 		/* we can finalize this message */

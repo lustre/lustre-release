@@ -758,6 +758,9 @@ struct lnet_peer_net {
 	/* Net ID */
 	__u32			lpn_net_id;
 
+	/* peer net health */
+	int			lpn_healthv;
+
 	/* time of last router net check attempt */
 	time64_t		lpn_rtrcheck_timestamp;
 

@@ -967,9 +967,37 @@ lnet_is_peer_ni_alive(struct lnet_peer_ni *lpni)
 }
 
 static inline void
-lnet_set_healthv(atomic_t *healthv, int value)
+lnet_update_peer_net_healthv(struct lnet_peer_ni *lpni)
 {
-	atomic_set(healthv, value);
+	struct lnet_peer_net *lpn;
+	int best_healthv = 0;
+
+	lpn = lpni->lpni_peer_net;
+
+	list_for_each_entry(lpni, &lpn->lpn_peer_nis, lpni_peer_nis) {
+		int lpni_healthv = atomic_read(&lpni->lpni_healthv);
+		if (best_healthv < lpni_healthv)
+			best_healthv = lpni_healthv;
+	}
+
+	lpn->lpn_healthv = best_healthv;
+}
+
+static inline void
+lnet_set_lpni_healthv_locked(struct lnet_peer_ni *lpni, int value)
+{
+	if (atomic_read(&lpni->lpni_healthv) == value)
+		return;
+	atomic_set(&lpni->lpni_healthv, value);
+	lnet_update_peer_net_healthv(lpni);
+}
+
+static inline void
+lnet_inc_lpni_healthv_locked(struct lnet_peer_ni *lpni)
+{
+	/* only adjust the net health if the lpni health value changed */
+	if (atomic_add_unless(&lpni->lpni_healthv, 1, LNET_MAX_HEALTH_VALUE))
+		lnet_update_peer_net_healthv(lpni);
 }
 
 static inline void

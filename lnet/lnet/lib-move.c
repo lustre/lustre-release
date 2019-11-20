@@ -2197,6 +2197,7 @@ lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 {
 	struct lnet_peer_net *peer_net = NULL;
 	struct lnet_ni *best_ni = NULL;
+	int lpn_healthv = 0;
 
 	/*
 	 * The peer can have multiple interfaces, some of them can be on
@@ -2213,8 +2214,15 @@ lnet_find_best_ni_on_local_net(struct lnet_peer *peer, int md_cpt,
 		 */
 		if (!lnet_get_net_locked(peer_net->lpn_net_id))
 			continue;
-		best_ni = lnet_find_best_ni_on_spec_net(best_ni, peer,
-						   peer_net, md_cpt, false);
+
+		/* always select the lpn with the best health */
+		if (lpn_healthv <= peer_net->lpn_healthv)
+			lpn_healthv = peer_net->lpn_healthv;
+		else
+			continue;
+
+		best_ni = lnet_find_best_ni_on_spec_net(best_ni, peer, peer_net,
+							md_cpt, false);
 
 		/*
 		 * if this is a discovery message and lp_disc_net_id is
