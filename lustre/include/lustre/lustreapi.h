@@ -188,6 +188,13 @@ enum llapi_layout_verbose  {
 #define VERBOSE_OFFSET	VERBOSE_STRIPE_OFFSET
 #define VERBOSE_LAYOUT	VERBOSE_PATTERN
 
+enum {
+	NEWERXY_ATIME = 0,	/* neweraY */
+	NEWERXY_MTIME = 1,	/* newermY */
+	NEWERXY_CTIME = 2,	/* newercY */
+	NEWERXY_MAX,
+};
+
 struct find_param {
 	unsigned int		 fp_max_depth;
 	dev_t			 fp_dev;
@@ -279,7 +286,7 @@ struct find_param {
 				 fp_check_ext_size:1, /* extension size */
 				 fp_exclude_ext_size:1,
 				 fp_lazy:1,
-				 fp_unused_bit1:1,
+				 fp_newerxy:1,
 				 fp_unused_bit2:1, /* All of these unused bit */
 				 fp_unused_bit3:1, /* fields available to use.*/
 				 fp_unused_bit4:1, /* Once all unused fields  */
@@ -345,6 +352,12 @@ struct find_param {
 	__u32			 fp_foreign_type;
 	unsigned long long	 fp_ext_size;
 	unsigned long long	 fp_ext_size_units;
+
+	/*
+	 * fp_newery[NEWERXY_MAX][0]: --newerXY reference
+	 * fp_newery[NEWERXY_MAX][1]: ! -- newerXY reference
+	 */
+	time_t			 fp_newery[NEWERXY_MAX][2];
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

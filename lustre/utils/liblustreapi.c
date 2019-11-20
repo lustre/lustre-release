@@ -4044,6 +4044,57 @@ static int find_time_check(lstatx_t *stx, struct find_param *param, int mds)
 	return rc;
 }
 
+static int find_newerxy_check(lstatx_t *stx, struct find_param *param, int mds)
+{
+	int i;
+	int rc = 1;
+	int rc2;
+
+	for (i = 0; i < 2; i++) {
+		/* Check if file is accepted. */
+		if (param->fp_newery[NEWERXY_ATIME][i]) {
+			rc2 = find_value_cmp(stx->stx_atime.tv_sec,
+					     param->fp_newery[NEWERXY_ATIME][i],
+					     -1, i, 0, mds);
+			if (rc2 < 0)
+				return rc2;
+			rc = rc2;
+		}
+
+		if (param->fp_newery[NEWERXY_MTIME][i]) {
+			rc2 = find_value_cmp(stx->stx_mtime.tv_sec,
+					     param->fp_newery[NEWERXY_MTIME][i],
+					     -1, i, 0, mds);
+			if (rc2 < 0)
+				return rc2;
+
+			/*
+			 * If the previous check matches, but this one is not
+			 * yet clear, we should return 0 to do an RPC on OSTs.
+			 */
+			if (rc == 1)
+				rc = rc2;
+		}
+
+		if (param->fp_newery[NEWERXY_CTIME][i]) {
+			rc2 = find_value_cmp(stx->stx_ctime.tv_sec,
+					     param->fp_newery[NEWERXY_CTIME][i],
+					     -1, i, 0, mds);
+			if (rc2 < 0)
+				return rc2;
+
+			/*
+			 * If the previous check matches, but this one is not
+			 * yet clear, we should return 0 to do an RPC on OSTs.
+			 */
+			if (rc == 1)
+				rc = rc2;
+		}
+	}
+
+	return rc;
+}
+
 /**
  * Check whether the stripes matches the indexes user provided
  *       1   : matched
@@ -4555,7 +4606,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	/* Request MDS for the stat info if some of these parameters need
 	 * to be compared. */
 	if (param->fp_obd_uuid || param->fp_mdt_uuid ||
-	    param->fp_check_uid || param->fp_check_gid ||
+	    param->fp_check_uid || param->fp_check_gid || param->fp_newerxy ||
 	    param->fp_atime || param->fp_mtime || param->fp_ctime ||
 	    param->fp_check_size || param->fp_check_blocks ||
 	    find_check_lmm_info(param) ||
@@ -4835,8 +4886,18 @@ obd_matches:
                 int for_mds;
 
 		for_mds = lustre_fs ?
-			(S_ISREG(stx->stx_mode) && stripe_count) : 0;
+			  (S_ISREG(stx->stx_mode) && stripe_count) : 0;
 		decision = find_time_check(stx, param, for_mds);
+		if (decision == -1)
+			goto decided;
+	}
+
+	if (param->fp_newerxy) {
+		int for_mds;
+
+		for_mds = lustre_fs ?
+			  (S_ISREG(stx->stx_mode) && stripe_count) : 0;
+		decision = find_newerxy_check(stx, param, for_mds);
 		if (decision == -1)
 			goto decided;
 	}
@@ -4899,6 +4960,13 @@ obd_matches:
 		decision = find_time_check(stx, param, 0);
 		if (decision == -1)
 			goto decided;
+
+		if (param->fp_newerxy) {
+			decision = find_newerxy_check(stx, param, 0);
+			if (decision == -1)
+				goto decided;
+
+		}
 	}
 
 	if (param->fp_check_size) {

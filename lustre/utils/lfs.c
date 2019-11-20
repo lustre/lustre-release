@@ -457,6 +457,7 @@ command_t cmdlist[] = {
 	 "usage: find <directory|filename> ...\n"
 	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --ctime|-C [+-]N[smhdwy]]\n"
 	 "     [[!] --mtime|-M [+-]N[smhdwy]] [[!] --blocks|-b N]\n"
+	 "     [[!] --newer[XY] <reference>]\n"
 	 "     [--maxdepth|-D N] [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
 	 "     [--print|-P] [--print0|-0] [[!] --size|-s [+-]N[bkMGTPE]]\n"
@@ -2976,6 +2977,7 @@ enum {
 	LFS_MIRROR_INDEX_OPT,
 	LFS_LAYOUT_FOREIGN_OPT,
 	LFS_MODE_OPT,
+	LFS_NEWERXY_OPT,
 };
 
 /* functions */
@@ -4125,6 +4127,32 @@ static int lfs_find(int argc, char **argv)
 			.name = "mirror-state",	.has_arg = required_argument },
 	{ .val = LFS_LAYOUT_FOREIGN_OPT,
 			.name = "foreign",	.has_arg = optional_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newer",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "neweraa",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "neweram",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerac",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerma",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newermm",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newermc",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerca",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newercm",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newercc",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerat",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newermt",	.has_arg = required_argument},
+	{ .val = LFS_NEWERXY_OPT,
+			.name = "newerct",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument },
 	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument },
@@ -4176,6 +4204,7 @@ static int lfs_find(int argc, char **argv)
 /* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
 /* getstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .name = NULL } };
+	int optidx = 0;
 	int pathstart = -1;
 	int pathend = -1;
 	int pathbad = -1;
@@ -4190,7 +4219,7 @@ static int lfs_find(int argc, char **argv)
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
 			"-0A:b:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:vz:",
-			long_opts, NULL)) >= 0) {
+			long_opts, &optidx)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
                 if (neg_opt)
@@ -4410,6 +4439,130 @@ static int lfs_find(int argc, char **argv)
 			param.fp_foreign_type = type;
 			param.fp_check_foreign = 1;
 			param.fp_exclude_foreign = !!neg_opt;
+			break;
+		}
+		case LFS_NEWERXY_OPT: {
+			char x = 'm';
+			char y = 'm';
+			int xidx;
+			int negidx;
+			time_t *newery;
+			time_t ref = time(NULL);
+
+			/* no need to check bad options, they won't get here */
+			if (strlen(long_opts[optidx].name) == 7) {
+				x = long_opts[optidx].name[5];
+				y = long_opts[optidx].name[6];
+			}
+
+			if (y == 't') {
+				static const char *const fmts[] = {
+					"%Y-%m-%d %H:%M:%S",
+					"%Y-%m-%d %H:%M",
+					"%Y-%m-%d",
+					"%H:%M:%S", /* sometime today */
+					"%H:%M",
+					"@%s",
+					"%s",
+					NULL };
+				struct tm tm;
+				bool found = false;
+				int i;
+
+				for (i = 0; fmts[i] != NULL; i++) {
+					char *ptr;
+
+					/* Init for times relative to today */
+					if (strncmp(fmts[i], "%H", 2) == 0)
+						localtime_r(&ref, &tm);
+					else
+						memset(&tm, 0, sizeof(tm));
+					ptr = strptime(optarg, fmts[i], &tm);
+					/* Skip spaces */
+					while (ptr && isspace(*ptr))
+						ptr++;
+					if (ptr == optarg + strlen(optarg)) {
+						found = true;
+						break;
+					}
+				}
+
+				if (!found) {
+					fprintf(stderr,
+						"%s: invalid time '%s'\n",
+						progname, optarg);
+					fprintf(stderr,
+						"supported formats are:\n  ");
+					for (i = 0; fmts[i] != NULL; i++)
+						fprintf(stderr, "'%s', ",
+							fmts[i]);
+					fprintf(stderr, "\n");
+					ret = -EINVAL;
+					goto err;
+				}
+
+				ref = mktime(&tm);
+			} else {
+				struct stat statbuf;
+
+				if (stat(optarg, &statbuf) < 0) {
+					fprintf(stderr,
+						"%s: cannot stat file '%s': %s\n",
+						progname, optarg,
+						strerror(errno));
+					ret = -errno;
+					goto err;
+				}
+
+				switch (y) {
+				case 'a':
+					ref = statbuf.st_atime;
+					break;
+				case 'm':
+					ref = statbuf.st_mtime;
+					break;
+				case 'c':
+					ref = statbuf.st_ctime;
+					break;
+				default:
+					fprintf(stderr,
+						"%s: invalid Y argument: '%c'\n",
+						progname, x);
+					ret = -EINVAL;
+					goto err;
+				}
+			}
+
+			switch (x) {
+			case 'a':
+				xidx = NEWERXY_ATIME;
+				break;
+			case 'm':
+				xidx = NEWERXY_MTIME;
+				break;
+			case 'c':
+				xidx = NEWERXY_CTIME;
+				break;
+			default:
+				fprintf(stderr,
+					"%s: invalid X argument: '%c'\n",
+					progname, x);
+				ret = -EINVAL;
+				goto err;
+			}
+
+			negidx = !!neg_opt;
+			newery = &param.fp_newery[xidx][negidx];
+
+			if (*newery == 0) {
+				*newery = ref;
+			} else {
+				if (negidx)
+					*newery = *newery > ref ? ref : *newery;
+				else
+					*newery = *newery > ref ? *newery : ref;
+			}
+			param.fp_newerxy = 1;
 			break;
 		}
 		case 'g':

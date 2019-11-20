@@ -5744,6 +5744,65 @@ test_56ob() {
 }
 run_test 56ob "check lfs find -atime -mtime -ctime with units"
 
+test_newerXY_base() {
+	local x=$1
+	local y=$2
+	local dir=$DIR/$tdir
+	local ref
+	local negref
+
+	if [ $y == "t" ]; then
+		ref="\"$(date +"%Y-%m-%d %H:%M:%S")\""
+	else
+		ref=$DIR/$tfile.newer
+		touch $ref || error "touch $ref failed"
+	fi
+	sleep 2
+	setup_56 $dir $NUMFILES $NUMDIRS "-i0 -c1" "-i0 -c1"
+	sleep 2
+	if [ $y == "t" ]; then
+		negref="\"$(date +"%Y-%m-%d %H:%M:%S")\""
+	else
+		negref=$DIR/$tfile.newerneg
+		touch $negref || error "touch $negref failed"
+	fi
+
+	local cmd="$LFS find $dir -newer$x$y $ref"
+	local nums=$(eval $cmd | wc -l)
+	local expected=$(((NUMFILES + 2) * NUMDIRS + 1))
+
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	cmd="$LFS find $dir ! -newer$x$y $negref"
+	nums=$(eval $cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	cmd="$LFS find $dir -newer$x$y $ref ! -newer$x$y $negref"
+	nums=$(eval $cmd | wc -l)
+	[ $nums -eq $expected ] ||
+		error "'$cmd' wrong: found $nums, expected $expected"
+
+	rm -rf $DIR/*
+}
+
+test_56oc() {
+	test_newerXY_base "a" "a"
+	test_newerXY_base "a" "m"
+	test_newerXY_base "a" "c"
+	test_newerXY_base "m" "a"
+	test_newerXY_base "m" "m"
+	test_newerXY_base "m" "c"
+	test_newerXY_base "c" "a"
+	test_newerXY_base "c" "m"
+	test_newerXY_base "c" "c"
+	test_newerXY_base "a" "t"
+	test_newerXY_base "m" "t"
+	test_newerXY_base "c" "t"
+}
+run_test 56oc "check lfs find -newerXY work"
+
 test_56p() {
 	[ $RUNAS_ID -eq $UID ] &&
 		skip_env "RUNAS_ID = UID = $UID -- skipping"

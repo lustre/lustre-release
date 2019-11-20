@@ -25,6 +25,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 [[\fB!\fR] \fB--mirror-state\fR <[^]\fIstate\fR>]
       [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn[smhdwy]\fR]
 [[\fB!\fR] \fB--name\fR|\fB-n <\fIpattern\fR>]
+      [[\fB!\fR] \fB--newer\fR[\fBXY\fR] <\fIreference\fR>]
       [[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIindex\fR,...>]
 [[\fB!\fR] \fB--pool\fR <\fIpool\fR>]
 [\fB--print\fR|\fB-P\fR]
@@ -194,6 +195,43 @@ Filename matches the given filename, or regular expression using
 standard
 .BR glob (7)
 file name regular expressions and wildcards.
+.TP
+.BR -newer [ XY "] " \fIreference
+Succeeds if timestamp \fIX\fR of the file being considered is newer
+than timestamp \fIY\fR of the file
+.IR reference .
+The letters \fIX\fR and \fIY\fR can be any of the following letters:
+
+.TS
+ll
+ll
+ll
+ll
+llw(2i).
+a       The access time of the file \fIreference\fR
+c       The inode status change time of \fIreference\fR
+m       The modification time of the file \fIreference\fR
+t       \fIreference\fR is interpreted directly as a time
+.TE
+
+Some combinations are invalid; for example, it is invalid for
+.I X
+to be
+.IR t .
+Specifying
+.B -newer
+is equivalent to
+.BR -newermm .
+When
+.IR reference
+is interpreted directly as a time, currently it must be in one of the
+following formats: "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",
+"%H:%M:%S", "%H:%M", to represent year, month, day, hour, minute, seconds,
+with unspecified times at the start of that minute or day, unspecified dates
+being "today", and "@%s" or "%s" the seconds since the Unix epoch (see
+.BR strftime (3)
+for details of the time formats).  Otherwise, it will report an error.
+
 .TP
 .BR --ost | -O
 File has an object on the specified OST(s).  The OST names can be specified
