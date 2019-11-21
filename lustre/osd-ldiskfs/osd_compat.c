@@ -1298,7 +1298,6 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 	dquot_initialize(src_parent);
 	dquot_initialize(dir);
 
-	inode_lock(src_parent);
 	inode_lock(dir);
 	bh = osd_ldiskfs_find_entry(dir, &tgt_child->d_name, &de, NULL, NULL);
 	if (!IS_ERR(bh)) {
@@ -1323,7 +1322,6 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		 */
 		brelse(bh);
 		inode_unlock(dir);
-		inode_unlock(src_parent);
 		ldiskfs_journal_stop(jh);
 
 		rc = -EEXIST;
@@ -1354,7 +1352,6 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 
 unlock:
 	inode_unlock(dir);
-	inode_unlock(src_parent);
 	ldiskfs_journal_stop(jh);
 	return rc;
 }
@@ -1431,7 +1428,8 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 }
 
 int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
-			const struct lu_fid *fid, struct osd_inode_id *id)
+			const struct lu_fid *fid, struct osd_inode_id *id,
+			enum oi_check_flags flags)
 {
 	struct dentry *root;
 	struct dentry *dentry;
@@ -1456,7 +1454,8 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			RETURN(-ENOENT);
 	}
 
-	dentry = osd_lookup_one_len_unlocked(osd, name, root, strlen(name));
+	dentry = osd_lookup_one_len_common(osd, name, root, strlen(name),
+					   flags);
 	if (!IS_ERR(dentry)) {
 		inode = dentry->d_inode;
 		if (inode) {

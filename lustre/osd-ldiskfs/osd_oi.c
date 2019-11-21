@@ -632,7 +632,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		  enum oi_check_flags flags)
 {
 	if (unlikely(fid_is_last_id(fid)))
-		return osd_obj_spec_lookup(info, osd, fid, id);
+		return osd_obj_spec_lookup(info, osd, fid, id, flags);
 
 	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_lookup(info, osd, fid, id);
@@ -651,7 +651,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		/* For other special FIDs, try OI first, then do spec lookup */
 		rc = __osd_oi_lookup(info, osd, fid, id);
 		if (rc == -ENOENT)
-			return osd_obj_spec_lookup(info, osd, fid, id);
+			return osd_obj_spec_lookup(info, osd, fid, id, flags);
 		return rc;
 	}
 

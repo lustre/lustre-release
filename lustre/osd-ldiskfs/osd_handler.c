@@ -855,10 +855,8 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 }
 
 struct osd_check_lmv_buf {
-#ifdef HAVE_DIR_CONTEXT
 	/* please keep it as first member */
 	struct dir_context ctx;
-#endif
 	struct osd_thread_info *oclb_info;
 	struct osd_device *oclb_dev;
 	struct osd_idmap_cache *oclb_oic;
@@ -867,7 +865,7 @@ struct osd_check_lmv_buf {
 };
 
 /**
- * It is called internally by ->readdir() to filter out the
+ * It is called internally by ->iterate*() to filter out the
  * local slave object's FID of the striped directory.
  *
  * \retval	1 found the local slave's FID
@@ -964,9 +962,7 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 	const struct file_operations *fops;
 	struct lmv_mds_md_v1 *lmv1;
 	struct osd_check_lmv_buf oclb = {
-#ifdef HAVE_DIR_CONTEXT
 		.ctx.actor = osd_stripe_dir_filldir,
-#endif
 		.oclb_info = oti,
 		.oclb_dev = dev,
 		.oclb_oic = oic,
@@ -1013,21 +1009,19 @@ again:
 	dentry->d_sb = inode->i_sb;
 	filp->f_pos = 0;
 	filp->f_path.dentry = dentry;
-	filp->f_mode = FMODE_64BITHASH;
+	filp->f_flags |= O_NOATIME;
+	filp->f_mode = FMODE_64BITHASH | FMODE_NONOTIFY;
 	filp->f_mapping = inode->i_mapping;
 	filp->f_op = fops;
 	filp->private_data = NULL;
 	set_file_inode(filp, inode);
+	rc = osd_security_file_alloc(filp);
+	if (rc)
+		goto out;
 
 	do {
 		oclb.oclb_items = 0;
-#ifdef HAVE_DIR_CONTEXT
-		oclb.ctx.pos = filp->f_pos;
-		rc = fops->iterate_shared(filp, &oclb.ctx);
-		filp->f_pos = oclb.ctx.pos;
-#else
-		rc = fops->readdir(filp, &oclb, osd_stripe_dir_filldir);
-#endif
+		rc = iterate_dir(filp, &oclb.ctx);
 	} while (rc >= 0 && oclb.oclb_items > 0 && !oclb.oclb_found &&
 		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
 	fops->release(inode, filp);
@@ -2434,6 +2428,14 @@ static int osd_commit_async(const struct lu_env *env,
 static int (*priv_dev_set_rdonly)(struct block_device *bdev);
 static int (*priv_dev_check_rdonly)(struct block_device *bdev);
 /* static int (*priv_dev_clear_rdonly)(struct block_device *bdev); */
+static int (*priv_security_file_alloc)(struct file *file);
+
+int osd_security_file_alloc(struct file *file)
+{
+	if (priv_security_file_alloc)
+		return priv_security_file_alloc(file);
+	return 0;
+}
 
 /*
  * Concurrency: shouldn't matter.
@@ -6515,13 +6517,11 @@ static void osd_it_ea_put(const struct lu_env *env, struct dt_it *di)
 }
 
 struct osd_filldir_cbs {
-#ifdef HAVE_DIR_CONTEXT
 	struct dir_context ctx;
-#endif
 	struct osd_it_ea  *it;
 };
 /**
- * It is called internally by ->readdir(). It fills the
+ * It is called internally by ->iterate*(). It fills the
  * iterator's in-memory data structure with required
  * information i.e. name, namelen, rec_size etc.
  *
@@ -6588,7 +6588,7 @@ static int osd_ldiskfs_filldir(void *buf,
 }
 
 /**
- * Calls ->readdir() to load a directory entry at a time
+ * Calls ->iterate*() to load a directory entry at a time
  * and stored it in iterator's in-memory data structure.
  *
  * \param di iterator's in memory structure
@@ -6607,9 +6607,7 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 	struct file *filp = &it->oie_file;
 	int rc = 0;
 	struct osd_filldir_cbs buf = {
-#ifdef HAVE_DIR_CONTEXT
 		.ctx.actor = osd_ldiskfs_filldir,
-#endif
 		.it = it
 	};
 
@@ -6625,13 +6623,15 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 		down_read(&obj->oo_ext_idx_sem);
 	}
 
-#ifdef HAVE_DIR_CONTEXT
-	buf.ctx.pos = filp->f_pos;
-	rc = inode->i_fop->iterate_shared(filp, &buf.ctx);
-	filp->f_pos = buf.ctx.pos;
-#else
-	rc = inode->i_fop->readdir(filp, &buf, osd_ldiskfs_filldir);
-#endif
+	rc = osd_security_file_alloc(filp);
+	if (rc)
+		RETURN(rc);
+
+	filp->f_flags |= O_NOATIME;
+	filp->f_mode |= FMODE_NONOTIFY;
+	rc = iterate_dir(filp, &buf.ctx);
+	if (rc)
+		RETURN(rc);
 
 	if (hlock != NULL)
 		ldiskfs_htree_unlock(hlock);
@@ -6655,7 +6655,7 @@ static int osd_ldiskfs_it_fill(const struct lu_env *env,
 }
 
 /**
- * It calls osd_ldiskfs_it_fill() which will use ->readdir()
+ * It calls osd_ldiskfs_it_fill() which will use ->iterate*()
  * to load a directory entry at a time and stored it in
  * iterator's in-memory data structure.
  *
@@ -7268,7 +7268,7 @@ static __u64 osd_it_ea_store(const struct lu_env *env, const struct dt_it *di)
 }
 
 /**
- * It calls osd_ldiskfs_it_fill() which will use ->readdir()
+ * It calls osd_ldiskfs_it_fill() which will use ->iterate*()
  * to load a directory entry at a time and stored it i inn,
  * in iterator's in-memory data structure.
  *
@@ -8196,6 +8196,8 @@ static int __init osd_init(void)
 		return rc;
 
 #ifdef CONFIG_KALLSYMS
+	priv_security_file_alloc =
+		(void *)kallsyms_lookup_name("security_file_alloc");
 	priv_dev_set_rdonly = (void *)kallsyms_lookup_name("dev_set_rdonly");
 	priv_dev_check_rdonly =
 		(void *)kallsyms_lookup_name("dev_check_rdonly");

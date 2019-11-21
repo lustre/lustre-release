@@ -570,6 +570,8 @@ struct osd_iobuf {
 	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 };
 
+int osd_security_file_alloc(struct file *file);
+
 #ifdef HAVE_INODE_TIMESPEC64
 # define osd_timespec			timespec64
 # define osd_timespec_trunc(ts, gran)	timespec64_trunc((ts), (gran))
@@ -788,7 +790,8 @@ int osd_obj_map_recover(struct osd_thread_info *info, struct osd_device *osd,
 			struct inode *src_parent, struct dentry *src_child,
 			const struct lu_fid *fid);
 int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
-			const struct lu_fid *fid, struct osd_inode_id *id);
+			const struct lu_fid *fid, struct osd_inode_id *id,
+			enum oi_check_flags flags);
 int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
 			handle_t *th);

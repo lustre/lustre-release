@@ -1728,10 +1728,8 @@ struct osd_ios_item {
 };
 
 struct osd_ios_filldir_buf {
-#ifdef HAVE_DIR_CONTEXT
 	/* please keep it as first member */
 	struct dir_context	 ctx;
-#endif
 	struct osd_thread_info	*oifb_info;
 	struct osd_device	*oifb_dev;
 	struct dentry		*oifb_dentry;
@@ -1956,7 +1954,8 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 					       inode);
 	}
 
-	rc = osd_oi_lookup(info, dev, &tfid, id2, 0);
+	/* Since this called from iterate_dir() the inode lock will be taken */
+	rc = osd_oi_lookup(info, dev, &tfid, id2, OI_LOCKED);
 	if (rc != 0) {
 		if (rc != -ENOENT)
 			RETURN(rc);
@@ -2019,7 +2018,7 @@ static int osd_ios_lf_fill(void *buf,
 		RETURN(0);
 
 	scrub->os_lf_scanned++;
-	child = osd_lookup_one_len_unlocked(dev, name, parent, namelen);
+	child = osd_lookup_one_len(dev, name, parent, namelen);
 	if (IS_ERR(child)) {
 		CDEBUG(D_LFSCK, "%s: cannot lookup child '%.*s': rc = %d\n",
 		      osd_name(dev), namelen, name, (int)PTR_ERR(child));
@@ -2093,8 +2092,7 @@ static int osd_ios_varfid_fill(void *buf,
 	if (name[0] == '.')
 		RETURN(0);
 
-	child = osd_lookup_one_len_unlocked(dev, name, fill_buf->oifb_dentry,
-					    namelen);
+	child = osd_lookup_one_len(dev, name, fill_buf->oifb_dentry, namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
@@ -2142,8 +2140,7 @@ static int osd_ios_dl_fill(void *buf,
 	if (map->olm_name == NULL)
 		RETURN(0);
 
-	child = osd_lookup_one_len_unlocked(dev, name, fill_buf->oifb_dentry,
-					    namelen);
+	child = osd_lookup_one_len(dev, name, fill_buf->oifb_dentry, namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
@@ -2177,8 +2174,7 @@ static int osd_ios_uld_fill(void *buf,
 	if (name[0] != '[')
 		RETURN(0);
 
-	child = osd_lookup_one_len_unlocked(dev, name, fill_buf->oifb_dentry,
-					    namelen);
+	child = osd_lookup_one_len(dev, name, fill_buf->oifb_dentry, namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
@@ -2228,8 +2224,7 @@ static int osd_ios_root_fill(void *buf,
 	if (map->olm_name == NULL)
 		RETURN(0);
 
-	child = osd_lookup_one_len_unlocked(dev, name, fill_buf->oifb_dentry,
-					    namelen);
+	child = osd_lookup_one_len(dev, name, fill_buf->oifb_dentry, namelen);
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 	else if (!child->d_inode)
@@ -2253,9 +2248,7 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 		     struct dentry *dentry, filldir_t filldir)
 {
 	struct osd_ios_filldir_buf    buf   = {
-#ifdef HAVE_DIR_CONTEXT
 						.ctx.actor = filldir,
-#endif
 						.oifb_info = info,
 						.oifb_dev = dev,
 						.oifb_dentry = dentry };
@@ -2269,21 +2262,19 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 
 	filp->f_pos = 0;
 	filp->f_path.dentry = dentry;
-	filp->f_mode = FMODE_64BITHASH;
+	filp->f_flags |= O_NOATIME;
+	filp->f_mode = FMODE_64BITHASH | FMODE_NONOTIFY;
 	filp->f_mapping = inode->i_mapping;
 	filp->f_op = fops;
 	filp->private_data = NULL;
 	set_file_inode(filp, inode);
+	rc = osd_security_file_alloc(filp);
+	if (rc)
+		RETURN(rc);
 
 	do {
 		buf.oifb_items = 0;
-#ifdef HAVE_DIR_CONTEXT
-		buf.ctx.pos = filp->f_pos;
-		rc = fops->iterate_shared(filp, &buf.ctx);
-		filp->f_pos = buf.ctx.pos;
-#else
-		rc = fops->readdir(filp, &buf, filldir);
-#endif
+		rc = iterate_dir(filp, &buf.ctx);
 	} while (rc >= 0 && buf.oifb_items > 0 &&
 		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
 	fops->release(inode, filp);
@@ -2347,10 +2338,12 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 	 * to access the ".lustre" with cached IGIF. So we prefer
 	 * to the solution 2).
 	 */
+	inode_lock(dentry->d_inode);
 	rc = osd_ios_scan_one(info, dev, dentry->d_inode,
 			      child->d_inode, &LU_DOT_LUSTRE_FID,
 			      dot_lustre_name,
 			      strlen(dot_lustre_name), 0);
+	inode_unlock(dentry->d_inode);
 	if (rc == -ENOENT) {
 out_scrub:
 		/* It is 1.8 MDT device. */
@@ -2393,9 +2386,11 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 	if (IS_ERR(child)) {
 		rc = PTR_ERR(child);
 	} else {
+		inode_lock(dentry->d_inode);
 		rc = osd_ios_scan_one(info, dev, dentry->d_inode,
 				      child->d_inode, NULL, ADMIN_USR,
 				      strlen(ADMIN_USR), 0);
+		inode_unlock(dentry->d_inode);
 		dput(child);
 	}
 
@@ -2407,9 +2402,11 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 	if (IS_ERR(child))
 		GOTO(out, rc = PTR_ERR(child));
 
+	inode_lock(dentry->d_inode);
 	rc = osd_ios_scan_one(info, dev, dentry->d_inode,
 			      child->d_inode, NULL, ADMIN_GRP,
 			      strlen(ADMIN_GRP), 0);
+	inode_unlock(dentry->d_inode);
 	dput(child);
 out:
 	RETURN(rc == -ENOENT ? 0 : rc);
@@ -2429,6 +2426,12 @@ static void osd_initial_OI_scrub(struct osd_thread_info *info,
 	dev->od_igif_inoi = 1;
 
 	while (1) {
+		/* Don't take inode_lock here since scandir() callbacks
+		 * can call VFS functions which may manully take the
+		 * inode lock itself like iterate_dir(). Since this
+		 * is the case it is best to leave the scandir()
+		 * callbacks to managing the inode lock.
+		 */
 		scandir(info, dev, dentry, filldir);
 		if (item != NULL) {
 			dput(item->oii_dentry);
