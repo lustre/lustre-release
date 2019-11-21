@@ -1218,6 +1218,6 @@ int kiblnd_post_rx(struct kib_rx *rx, int credit);
 int kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg);
 int kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		int delayed, unsigned int niov, struct kvec *iov,
-		lnet_kiov_t *kiov, unsigned int offset, unsigned int mlen,
+		struct bio_vec *kiov, unsigned int offset, unsigned int mlen,
 		unsigned int rlen);
 

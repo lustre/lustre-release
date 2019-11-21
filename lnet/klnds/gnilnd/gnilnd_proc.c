@@ -40,7 +40,7 @@
 static int
 _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 {
-	lnet_kiov_t              *src, *dest;
+	struct bio_vec          *src, *dest;
 	struct timespec          begin, end, diff;
 	int                      niov;
 	int                      rc = 0;
@@ -57,20 +57,20 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	}
 
 	for (i = 0; i < LNET_MAX_IOV; i++) {
-		src[i].kiov_offset = 0;
-		src[i].kiov_len = PAGE_SIZE;
-		src[i].kiov_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+		src[i].bv_offset = 0;
+		src[i].bv_len = PAGE_SIZE;
+		src[i].bv_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 
-		if (src[i].kiov_page == NULL) {
+		if (src[i].bv_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
 			GOTO(unwind, rc = -ENOMEM);
 		}
 
-		dest[i].kiov_offset = 0;
-		dest[i].kiov_len = PAGE_SIZE;
-		dest[i].kiov_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+		dest[i].bv_offset = 0;
+		dest[i].bv_len = PAGE_SIZE;
+		dest[i].bv_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
 
-		if (dest[i].kiov_page == NULL) {
+		if (dest[i].bv_page == NULL) {
 			CERROR("couldn't allocate page %d\n", i);
 			GOTO(unwind, rc = -ENOMEM);
 		}
@@ -85,31 +85,31 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	}
 
 	/* setup real data */
-	src[0].kiov_offset = 317;
-	dest[0].kiov_offset = 592;
+	src[0].bv_offset = 317;
+	dest[0].bv_offset = 592;
 	switch (caseno) {
 	default:
 		/* odd -> even */
 		break;
 	case 1:
 		/* odd -> odd */
-		dest[0].kiov_offset -= 1;
+		dest[0].bv_offset -= 1;
 		break;
 	case 2:
 		/* even -> even */
-		src[0].kiov_offset += 1;
+		src[0].bv_offset += 1;
 		break;
 	case 3:
 		/* even -> odd */
-		src[0].kiov_offset += 1;
-		dest[0].kiov_offset -= 1;
+		src[0].bv_offset += 1;
+		dest[0].bv_offset -= 1;
 	}
-	src[0].kiov_len = PAGE_SIZE - src[0].kiov_offset;
-	dest[0].kiov_len = PAGE_SIZE - dest[0].kiov_offset;
+	src[0].bv_len = PAGE_SIZE - src[0].bv_offset;
+	dest[0].bv_len = PAGE_SIZE - dest[0].bv_offset;
 
 	for (i = 0; i < niov; i++) {
-		memset(page_address(src[i].kiov_page) + src[i].kiov_offset,
-		       0xf0 + i, src[i].kiov_len);
+		memset(page_address(src[i].bv_page) + src[i].bv_offset,
+		       0xf0 + i, src[i].bv_len);
 	}
 
 	lnet_copy_kiov2kiov(niov, dest, 0, niov, src, 0, nob);
@@ -117,8 +117,10 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	getnstimeofday(&begin);
 
 	for (n = 0; n < nloops; n++) {
-		CDEBUG(D_BUFFS, "case %d loop %d src %d dest %d nob %d niov %d\n",
-		       caseno, n, src[0].kiov_offset, dest[0].kiov_offset, nob, niov);
+		CDEBUG(D_BUFFS,
+		       "case %d loop %d src %d dest %d nob %d niov %d\n",
+		       caseno, n, src[0].bv_offset, dest[0].bv_offset, nob,
+		       niov);
 		cksum = kgnilnd_cksum_kiov(niov, src, 0, nob - (n % nob), 1);
 		cksum2 = kgnilnd_cksum_kiov(niov, dest, 0, nob - (n % nob), 1);
 
@@ -141,12 +143,11 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 unwind:
 	CDEBUG(D_NET, "freeing %d pages\n", i);
 	for (i -= 1; i >= 0; i--) {
-		if (src[i].kiov_page != NULL) {
-			__free_page(src[i].kiov_page);
-		}
-		if (dest[i].kiov_page != NULL) {
-			__free_page(dest[i].kiov_page);
-		}
+		if (src[i].bv_page)
+			__free_page(src[i].bv_page);
+
+		if (dest[i].bv_page)
+			__free_page(dest[i].bv_page);
 	}
 
 	if (src != NULL)

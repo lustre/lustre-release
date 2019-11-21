@@ -806,7 +806,7 @@ static int kiblnd_setup_rd_iov(struct lnet_ni *ni, struct kib_tx *tx,
 
 static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 				struct kib_rdma_desc *rd, int nkiov,
-				lnet_kiov_t *kiov, int offset, int nob)
+				struct bio_vec *kiov, int offset, int nob)
 {
 	struct kib_net *net = ni->ni_data;
 	struct scatterlist *sg;
@@ -819,8 +819,8 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 	LASSERT(nkiov > 0);
 	LASSERT(net != NULL);
 
-	while (offset >= kiov->kiov_len) {
-		offset -= kiov->kiov_len;
+	while (offset >= kiov->bv_len) {
+		offset -= kiov->bv_len;
 		nkiov--;
 		kiov++;
 		LASSERT(nkiov > 0);
@@ -832,24 +832,24 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 	do {
 		LASSERT(nkiov > 0);
 
-		fragnob = min((int)(kiov->kiov_len - offset), nob);
+		fragnob = min((int)(kiov->bv_len - offset), nob);
 
 		/*
 		 * We're allowed to start at a non-aligned page offset in
 		 * the first fragment and end at a non-aligned page offset
 		 * in the last fragment.
 		 */
-		if ((fragnob < (int)(kiov->kiov_len - offset)) &&
+		if ((fragnob < (int)(kiov->bv_len - offset)) &&
 		    nkiov < max_nkiov && nob > fragnob) {
 			CDEBUG(D_NET, "fragnob %d < available page %d: with"
 				      " remaining %d kiovs with %d nob left\n",
-			       fragnob, (int)(kiov->kiov_len - offset),
+			       fragnob, (int)(kiov->bv_len - offset),
 			       nkiov, nob);
 			tx->tx_gaps = true;
 		}
 
-		sg_set_page(sg, kiov->kiov_page, fragnob,
-			    kiov->kiov_offset + offset);
+		sg_set_page(sg, kiov->bv_page, fragnob,
+			    kiov->bv_offset + offset);
 		sg = sg_next(sg);
 		if (!sg) {
 			CERROR("lacking enough sg entries to map tx\n");
@@ -1646,7 +1646,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	int               routing = lntmsg->msg_routing;
 	unsigned int      payload_niov = lntmsg->msg_niov;
 	struct kvec      *payload_iov = lntmsg->msg_iov;
-	lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
+	struct bio_vec   *payload_kiov = lntmsg->msg_kiov;
 	unsigned int      payload_offset = lntmsg->msg_offset;
 	unsigned int      payload_nob = lntmsg->msg_len;
 	struct kib_msg *ibmsg;
@@ -1811,13 +1811,13 @@ static void
 kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 {
 	struct lnet_process_id target = lntmsg->msg_target;
-        unsigned int      niov = lntmsg->msg_niov;
+	unsigned int      niov = lntmsg->msg_niov;
 	struct kvec      *iov = lntmsg->msg_iov;
-        lnet_kiov_t      *kiov = lntmsg->msg_kiov;
-        unsigned int      offset = lntmsg->msg_offset;
-        unsigned int      nob = lntmsg->msg_len;
+	struct bio_vec   *kiov = lntmsg->msg_kiov;
+	unsigned int      offset = lntmsg->msg_offset;
+	unsigned int      nob = lntmsg->msg_len;
 	struct kib_tx *tx;
-        int               rc;
+	int               rc;
 
 	tx = kiblnd_get_idle_tx(ni, rx->rx_conn->ibc_peer->ibp_nid);
         if (tx == NULL) {
@@ -1873,7 +1873,7 @@ failed_0:
 
 int
 kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
-	    int delayed, unsigned int niov, struct kvec *iov, lnet_kiov_t *kiov,
+	    int delayed, unsigned int niov, struct kvec *iov, struct bio_vec *kiov,
 	    unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
 	struct kib_rx *rx = private;

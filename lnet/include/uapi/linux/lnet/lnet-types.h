@@ -403,9 +403,9 @@ struct lnet_md {
 	 * Specify the memory region associated with the memory descriptor.
 	 * If the options field has:
 	 * - LNET_MD_KIOV bit set: The start field points to the starting
-	 * address of an array of lnet_kiov_t and the length field specifies
+	 * address of an array of struct bio_vec and the length field specifies
 	 * the number of entries in the array. The length can't be bigger
-	 * than LNET_MAX_IOV. The lnet_kiov_t is used to describe page-based
+	 * than LNET_MAX_IOV. The struct bio_vec is used to describe page-based
 	 * fragments that are not necessarily mapped in virtal memory.
 	 * - LNET_MD_IOVEC bit set: The start field points to the starting
 	 * address of an array of struct kvec and the length field specifies
@@ -465,7 +465,7 @@ struct lnet_md {
 	 *   acknowledgment. Acknowledgments are never sent for GET operations.
 	 *   The data sent in the REPLY serves as an implicit acknowledgment.
 	 * - LNET_MD_KIOV: The start and length fields specify an array of
-	 *   lnet_kiov_t.
+	 *   struct bio_vec.
 	 * - LNET_MD_IOVEC: The start and length fields specify an array of
 	 *   struct iovec.
 	 * - LNET_MD_MAX_SIZE: The max_size field is valid.
@@ -537,21 +537,6 @@ struct lnet_md {
 /** Infinite threshold on MD operations. See struct lnet_md::threshold */
 #define LNET_MD_THRESH_INF	 (-1)
 
-/**
- * A page-based fragment of a MD.
- */
-typedef struct {
-	/** Pointer to the page where the fragment resides */
-	struct page	 *kiov_page;
-	/** Length in bytes of the fragment */
-	unsigned int	 kiov_len;
-	/**
-	 * Starting offset of the fragment within the page. Note that the
-	 * end of the fragment must not pass the end of the page; i.e.,
-	 * kiov_len + kiov_offset <= PAGE_SIZE.
-	 */
-	unsigned int	 kiov_offset;
-} lnet_kiov_t;
 /** @} lnet_md */
 
 /** \addtogroup lnet_eq

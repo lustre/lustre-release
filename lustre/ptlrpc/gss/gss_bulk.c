@@ -251,12 +251,12 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
 			/* fix the actual data size */
 			for (i = 0, nob = 0; i < desc->bd_iov_count; i++) {
-				if (desc->bd_vec[i].kiov_len + nob >
+				if (desc->bd_vec[i].bv_len + nob >
 				    desc->bd_nob_transferred) {
-					desc->bd_vec[i].kiov_len =
+					desc->bd_vec[i].bv_len =
 						desc->bd_nob_transferred - nob;
 				}
-				nob += desc->bd_vec[i].kiov_len;
+				nob += desc->bd_vec[i].bv_len;
 			}
 
 			token.data = bsdv->bsd_data;

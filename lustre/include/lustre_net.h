@@ -1448,8 +1448,8 @@ struct ptlrpc_bulk_desc {
 	struct lnet_handle_md	bd_mds[PTLRPC_BULK_OPS_COUNT];
 
 	/* encrypted iov, size is either 0 or bd_iov_count. */
-	lnet_kiov_t *bd_enc_vec;
-	lnet_kiov_t *bd_vec;
+	struct bio_vec *bd_enc_vec;
+	struct bio_vec *bd_vec;
 };
 
 enum {

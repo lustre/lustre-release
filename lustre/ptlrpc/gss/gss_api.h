@@ -24,7 +24,7 @@ struct gss_api_mech;
 typedef int (*digest_hash)(
 	struct ahash_request *req, rawobj_t *hdr,
 	int msgcnt, rawobj_t *msgs,
-	int iovcnt, lnet_kiov_t *iovs);
+	int iovcnt, struct bio_vec *iovs);
 
 /* The mechanism-independent gss-api context: */
 struct gss_ctx {
@@ -56,14 +56,14 @@ __u32 lgss_get_mic(
                 int                      msgcnt,
                 rawobj_t                *msgs,
                 int                      iovcnt,
-                lnet_kiov_t             *iovs,
+		struct bio_vec             *iovs,
                 rawobj_t                *mic_token);
 __u32 lgss_verify_mic(
                 struct gss_ctx          *ctx,
                 int                      msgcnt,
                 rawobj_t                *msgs,
                 int                      iovcnt,
-                lnet_kiov_t             *iovs,
+		struct bio_vec             *iovs,
                 rawobj_t                *mic_token);
 __u32 lgss_wrap(
                 struct gss_ctx          *ctx,
@@ -131,14 +131,14 @@ struct gss_api_ops {
                         int                     msgcnt,
                         rawobj_t               *msgs,
                         int                     iovcnt,
-                        lnet_kiov_t            *iovs,
+			struct bio_vec         *iovs,
                         rawobj_t               *mic_token);
         __u32 (*gss_verify_mic)(
                         struct gss_ctx         *ctx,
                         int                     msgcnt,
                         rawobj_t               *msgs,
                         int                     iovcnt,
-                        lnet_kiov_t            *iovs,
+			struct bio_vec         *iovs,
                         rawobj_t               *mic_token);
         __u32 (*gss_wrap)(
                         struct gss_ctx         *ctx,

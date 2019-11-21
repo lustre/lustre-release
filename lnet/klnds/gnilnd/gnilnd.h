@@ -1787,10 +1787,11 @@ int kgnilnd_eager_recv(struct lnet_ni *ni, void *private,
 			struct lnet_msg *lntmsg, void **new_private);
 int kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		int delayed, unsigned int niov,
-		struct kvec *iov, lnet_kiov_t *kiov,
+		struct kvec *iov, struct bio_vec *kiov,
 		unsigned int offset, unsigned int mlen, unsigned int rlen);
 
-__u16 kgnilnd_cksum_kiov(unsigned int nkiov, lnet_kiov_t *kiov, unsigned int offset, unsigned int nob, int dump_blob);
+__u16 kgnilnd_cksum_kiov(unsigned int nkiov, struct bio_vec *kiov,
+			 unsigned int offset, unsigned int nob, int dump_blob);
 
 /* purgatory functions */
 void kgnilnd_add_purgatory_locked(kgn_conn_t *conn, kgn_peer_t *peer);

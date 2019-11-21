@@ -893,7 +893,7 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 	for (i = 0; i < page_count; i++) {
 		void *pz;
 		if (desc)
-			pz = page_zone(desc->bd_vec[i].kiov_page);
+			pz = page_zone(desc->bd_vec[i].bv_page);
 		else
 			pz = page_zone(aa->aa_ppga[i]->pg);
 

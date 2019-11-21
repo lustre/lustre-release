@@ -151,11 +151,11 @@ struct srpc_event {
 
 /* bulk descriptor */
 struct srpc_bulk {
-        int              bk_len;  /* len of bulk data */
-	struct lnet_handle_md bk_mdh;
-        int              bk_sink; /* sink/source */
-        int              bk_niov; /* # iov in bk_iovs */
-        lnet_kiov_t      bk_iovs[0];
+	int			bk_len;  /* len of bulk data */
+	struct lnet_handle_md	bk_mdh;
+	int			bk_sink; /* sink/source */
+	int			bk_niov; /* # iov in bk_iovs */
+	struct bio_vec		bk_iovs[0];
 };
 
 /* message buffer descriptor */

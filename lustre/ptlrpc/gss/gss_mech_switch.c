@@ -207,11 +207,11 @@ __u32 lgss_inquire_context(struct gss_ctx *context_handle,
 
 /* gss_get_mic: compute a mic over message and return mic_token. */
 __u32 lgss_get_mic(struct gss_ctx *context_handle,
-                   int msgcnt,
-                   rawobj_t *msg,
-                   int iovcnt,
-                   lnet_kiov_t *iovs,
-                   rawobj_t *mic_token)
+		   int msgcnt,
+		   rawobj_t *msg,
+		   int iovcnt,
+		   struct bio_vec *iovs,
+		   rawobj_t *mic_token)
 {
         LASSERT(context_handle);
         LASSERT(context_handle->mech_type);
@@ -229,11 +229,11 @@ __u32 lgss_get_mic(struct gss_ctx *context_handle,
 
 /* gss_verify_mic: check whether the provided mic_token verifies message. */
 __u32 lgss_verify_mic(struct gss_ctx *context_handle,
-                      int msgcnt,
-                      rawobj_t *msg,
-                      int iovcnt,
-                      lnet_kiov_t *iovs,
-                      rawobj_t *mic_token)
+		      int msgcnt,
+		      rawobj_t *msg,
+		      int iovcnt,
+		      struct bio_vec *iovs,
+		      rawobj_t *mic_token)
 {
         LASSERT(context_handle);
         LASSERT(context_handle->mech_type);

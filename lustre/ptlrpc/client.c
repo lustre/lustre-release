@@ -66,7 +66,7 @@ static void ptlrpc_release_bulk_page_pin(struct ptlrpc_bulk_desc *desc)
 	int i;
 
 	for (i = 0; i < desc->bd_iov_count ; i++)
-		put_page(desc->bd_vec[i].kiov_page);
+		put_page(desc->bd_vec[i].bv_page);
 }
 
 static int ptlrpc_prep_bulk_frag_pages(struct ptlrpc_bulk_desc *desc,
@@ -243,7 +243,7 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 			     struct page *page, int pageoffset, int len,
 			     int pin)
 {
-	lnet_kiov_t *kiov;
+	struct bio_vec *kiov;
 
 	LASSERT(desc->bd_iov_count < desc->bd_max_iov);
 	LASSERT(page != NULL);
@@ -258,9 +258,9 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 	if (pin)
 		get_page(page);
 
-	kiov->kiov_page = page;
-	kiov->kiov_offset = pageoffset;
-	kiov->kiov_len = len;
+	kiov->bv_page = page;
+	kiov->bv_offset = pageoffset;
+	kiov->bv_len = len;
 
 	desc->bd_iov_count++;
 }

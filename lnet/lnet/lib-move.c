@@ -387,21 +387,23 @@ EXPORT_SYMBOL(lnet_extract_iov);
 
 
 unsigned int
-lnet_kiov_nob(unsigned int niov, lnet_kiov_t *kiov)
+lnet_kiov_nob(unsigned int niov, struct bio_vec *kiov)
 {
 	unsigned int  nob = 0;
 
 	LASSERT(niov == 0 || kiov != NULL);
 	while (niov-- > 0)
-		nob += (kiov++)->kiov_len;
+		nob += (kiov++)->bv_len;
 
 	return (nob);
 }
 EXPORT_SYMBOL(lnet_kiov_nob);
 
 void
-lnet_copy_kiov2kiov(unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset,
-		    unsigned int nsiov, lnet_kiov_t *siov, unsigned int soffset,
+lnet_copy_kiov2kiov(unsigned int ndiov, struct bio_vec *diov,
+		    unsigned int doffset,
+		    unsigned int nsiov, struct bio_vec *siov,
+		    unsigned int soffset,
 		    unsigned int nob)
 {
 	/* NB diov, siov are READ-ONLY */
@@ -415,16 +417,16 @@ lnet_copy_kiov2kiov(unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset,
 	LASSERT (!in_interrupt ());
 
 	LASSERT (ndiov > 0);
-	while (doffset >= diov->kiov_len) {
-		doffset -= diov->kiov_len;
+	while (doffset >= diov->bv_len) {
+		doffset -= diov->bv_len;
 		diov++;
 		ndiov--;
 		LASSERT(ndiov > 0);
 	}
 
 	LASSERT(nsiov > 0);
-	while (soffset >= siov->kiov_len) {
-		soffset -= siov->kiov_len;
+	while (soffset >= siov->bv_len) {
+		soffset -= siov->bv_len;
 		siov++;
 		nsiov--;
 		LASSERT(nsiov > 0);
@@ -433,16 +435,16 @@ lnet_copy_kiov2kiov(unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset,
 	do {
 		LASSERT(ndiov > 0);
 		LASSERT(nsiov > 0);
-		this_nob = min3(diov->kiov_len - doffset,
-				siov->kiov_len - soffset,
+		this_nob = min3(diov->bv_len - doffset,
+				siov->bv_len - soffset,
 				nob);
 
 		if (daddr == NULL)
-			daddr = ((char *)kmap(diov->kiov_page)) +
-				diov->kiov_offset + doffset;
+			daddr = ((char *)kmap(diov->bv_page)) +
+				diov->bv_offset + doffset;
 		if (saddr == NULL)
-			saddr = ((char *)kmap(siov->kiov_page)) +
-				siov->kiov_offset + soffset;
+			saddr = ((char *)kmap(siov->bv_page)) +
+				siov->bv_offset + soffset;
 
 		/* Vanishing risk of kmap deadlock when mapping 2 pages.
 		 * However in practice at least one of the kiovs will be mapped
@@ -451,22 +453,22 @@ lnet_copy_kiov2kiov(unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset,
 		memcpy (daddr, saddr, this_nob);
 		nob -= this_nob;
 
-		if (diov->kiov_len > doffset + this_nob) {
+		if (diov->bv_len > doffset + this_nob) {
 			daddr += this_nob;
 			doffset += this_nob;
 		} else {
-			kunmap(diov->kiov_page);
+			kunmap(diov->bv_page);
 			daddr = NULL;
 			diov++;
 			ndiov--;
 			doffset = 0;
 		}
 
-		if (siov->kiov_len > soffset + this_nob) {
+		if (siov->bv_len > soffset + this_nob) {
 			saddr += this_nob;
 			soffset += this_nob;
 		} else {
-			kunmap(siov->kiov_page);
+			kunmap(siov->bv_page);
 			saddr = NULL;
 			siov++;
 			nsiov--;
@@ -475,15 +477,16 @@ lnet_copy_kiov2kiov(unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset,
 	} while (nob > 0);
 
 	if (daddr != NULL)
-		kunmap(diov->kiov_page);
+		kunmap(diov->bv_page);
 	if (saddr != NULL)
-		kunmap(siov->kiov_page);
+		kunmap(siov->bv_page);
 }
 EXPORT_SYMBOL(lnet_copy_kiov2kiov);
 
 void
 lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
-		    unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffset,
+		    unsigned int nkiov, struct bio_vec *kiov,
+		    unsigned int kiovoffset,
 		    unsigned int nob)
 {
 	/* NB iov, kiov are READ-ONLY */
@@ -504,8 +507,8 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 	}
 
 	LASSERT(nkiov > 0);
-	while (kiovoffset >= kiov->kiov_len) {
-		kiovoffset -= kiov->kiov_len;
+	while (kiovoffset >= kiov->bv_len) {
+		kiovoffset -= kiov->bv_len;
 		kiov++;
 		nkiov--;
 		LASSERT(nkiov > 0);
@@ -515,12 +518,12 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 		LASSERT(niov > 0);
 		LASSERT(nkiov > 0);
 		this_nob = min3((unsigned int)iov->iov_len - iovoffset,
-				(unsigned int)kiov->kiov_len - kiovoffset,
+				(unsigned int)kiov->bv_len - kiovoffset,
 				nob);
 
 		if (addr == NULL)
-			addr = ((char *)kmap(kiov->kiov_page)) +
-				kiov->kiov_offset + kiovoffset;
+			addr = ((char *)kmap(kiov->bv_page)) +
+				kiov->bv_offset + kiovoffset;
 
 		memcpy((char *)iov->iov_base + iovoffset, addr, this_nob);
 		nob -= this_nob;
@@ -533,11 +536,11 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 			iovoffset = 0;
 		}
 
-		if (kiov->kiov_len > kiovoffset + this_nob) {
+		if (kiov->bv_len > kiovoffset + this_nob) {
 			addr += this_nob;
 			kiovoffset += this_nob;
 		} else {
-			kunmap(kiov->kiov_page);
+			kunmap(kiov->bv_page);
 			addr = NULL;
 			kiov++;
 			nkiov--;
@@ -547,12 +550,13 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 	} while (nob > 0);
 
 	if (addr != NULL)
-		kunmap(kiov->kiov_page);
+		kunmap(kiov->bv_page);
 }
 EXPORT_SYMBOL(lnet_copy_kiov2iov);
 
 void
-lnet_copy_iov2kiov(unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffset,
+lnet_copy_iov2kiov(unsigned int nkiov, struct bio_vec *kiov,
+		   unsigned int kiovoffset,
 		   unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 		   unsigned int nob)
 {
@@ -566,8 +570,8 @@ lnet_copy_iov2kiov(unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffse
 	LASSERT (!in_interrupt ());
 
 	LASSERT (nkiov > 0);
-	while (kiovoffset >= kiov->kiov_len) {
-		kiovoffset -= kiov->kiov_len;
+	while (kiovoffset >= kiov->bv_len) {
+		kiovoffset -= kiov->bv_len;
 		kiov++;
 		nkiov--;
 		LASSERT(nkiov > 0);
@@ -584,22 +588,22 @@ lnet_copy_iov2kiov(unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffse
 	do {
 		LASSERT(nkiov > 0);
 		LASSERT(niov > 0);
-		this_nob = min3((unsigned int)kiov->kiov_len - kiovoffset,
+		this_nob = min3((unsigned int)kiov->bv_len - kiovoffset,
 				(unsigned int)iov->iov_len - iovoffset,
 				nob);
 
 		if (addr == NULL)
-			addr = ((char *)kmap(kiov->kiov_page)) +
-				kiov->kiov_offset + kiovoffset;
+			addr = ((char *)kmap(kiov->bv_page)) +
+				kiov->bv_offset + kiovoffset;
 
 		memcpy (addr, (char *)iov->iov_base + iovoffset, this_nob);
 		nob -= this_nob;
 
-		if (kiov->kiov_len > kiovoffset + this_nob) {
+		if (kiov->bv_len > kiovoffset + this_nob) {
 			addr += this_nob;
 			kiovoffset += this_nob;
 		} else {
-			kunmap(kiov->kiov_page);
+			kunmap(kiov->bv_page);
 			addr = NULL;
 			kiov++;
 			nkiov--;
@@ -616,13 +620,13 @@ lnet_copy_iov2kiov(unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffse
 	} while (nob > 0);
 
 	if (addr != NULL)
-		kunmap(kiov->kiov_page);
+		kunmap(kiov->bv_page);
 }
 EXPORT_SYMBOL(lnet_copy_iov2kiov);
 
 int
-lnet_extract_kiov(int dst_niov, lnet_kiov_t *dst,
-		  int src_niov, lnet_kiov_t *src,
+lnet_extract_kiov(int dst_niov, struct bio_vec *dst,
+		  int src_niov, struct bio_vec *src,
 		  unsigned int offset, unsigned int len)
 {
 	/* Initialise 'dst' to the subset of 'src' starting at 'offset',
@@ -635,8 +639,8 @@ lnet_extract_kiov(int dst_niov, lnet_kiov_t *dst,
 		return (0);			/* no frags */
 
 	LASSERT(src_niov > 0);
-	while (offset >= src->kiov_len) {      /* skip initial frags */
-		offset -= src->kiov_len;
+	while (offset >= src->bv_len) {      /* skip initial frags */
+		offset -= src->bv_len;
 		src_niov--;
 		src++;
 		LASSERT(src_niov > 0);
@@ -647,18 +651,18 @@ lnet_extract_kiov(int dst_niov, lnet_kiov_t *dst,
 		LASSERT(src_niov > 0);
 		LASSERT((int)niov <= dst_niov);
 
-		frag_len = src->kiov_len - offset;
-		dst->kiov_page = src->kiov_page;
-		dst->kiov_offset = src->kiov_offset + offset;
+		frag_len = src->bv_len - offset;
+		dst->bv_page = src->bv_page;
+		dst->bv_offset = src->bv_offset + offset;
 
 		if (len <= frag_len) {
-			dst->kiov_len = len;
-			LASSERT(dst->kiov_offset + dst->kiov_len <= PAGE_SIZE);
+			dst->bv_len = len;
+			LASSERT(dst->bv_offset + dst->bv_len <= PAGE_SIZE);
 			return niov;
 		}
 
-		dst->kiov_len = frag_len;
-		LASSERT(dst->kiov_offset + dst->kiov_len <= PAGE_SIZE);
+		dst->bv_len = frag_len;
+		LASSERT(dst->bv_offset + dst->bv_len <= PAGE_SIZE);
 
 		len -= frag_len;
 		dst++;
@@ -675,10 +679,10 @@ lnet_ni_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 	     int delayed, unsigned int offset, unsigned int mlen,
 	     unsigned int rlen)
 {
-	unsigned int  niov = 0;
+	unsigned int niov = 0;
 	struct kvec *iov = NULL;
-	lnet_kiov_t  *kiov = NULL;
-	int	      rc;
+	struct bio_vec  *kiov = NULL;
+	int rc;
 
 	LASSERT (!in_interrupt ());
 	LASSERT (mlen == 0 || msg != NULL);

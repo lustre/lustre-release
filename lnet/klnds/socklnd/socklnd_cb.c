@@ -152,7 +152,7 @@ static int
 ksocknal_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 		   struct kvec *scratch_iov)
 {
-	lnet_kiov_t *kiov = tx->tx_kiov;
+	struct bio_vec *kiov = tx->tx_kiov;
 	int nob;
 	int rc;
 
@@ -173,13 +173,13 @@ ksocknal_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 	do {
 		LASSERT(tx->tx_nkiov > 0);
 
-		if (nob < (int)kiov->kiov_len) {
-			kiov->kiov_offset += nob;
-			kiov->kiov_len -= nob;
+		if (nob < (int)kiov->bv_len) {
+			kiov->bv_offset += nob;
+			kiov->bv_len -= nob;
 			return rc;
 		}
 
-		nob -= (int)kiov->kiov_len;
+		nob -= (int)kiov->bv_len;
 		tx->tx_kiov = ++kiov;
 		tx->tx_nkiov--;
 	} while (nob != 0);
@@ -302,7 +302,7 @@ static int
 ksocknal_recv_kiov(struct ksock_conn *conn, struct page **rx_scratch_pgs,
 		   struct kvec *scratch_iov)
 {
-	lnet_kiov_t *kiov = conn->ksnc_rx_kiov;
+	struct bio_vec *kiov = conn->ksnc_rx_kiov;
 	int nob;
 	int rc;
 	LASSERT(conn->ksnc_rx_nkiov > 0);
@@ -329,13 +329,13 @@ ksocknal_recv_kiov(struct ksock_conn *conn, struct page **rx_scratch_pgs,
 	do {
 		LASSERT(conn->ksnc_rx_nkiov > 0);
 
-		if (nob < (int) kiov->kiov_len) {
-			kiov->kiov_offset += nob;
-			kiov->kiov_len -= nob;
+		if (nob < (int) kiov->bv_len) {
+			kiov->bv_offset += nob;
+			kiov->bv_len -= nob;
 			return -EAGAIN;
 		}
 
-		nob -= kiov->kiov_len;
+		nob -= kiov->bv_len;
 		conn->ksnc_rx_kiov = ++kiov;
 		conn->ksnc_rx_nkiov--;
 	} while (nob != 0);
@@ -985,14 +985,14 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	int mpflag = 1;
 	int type = lntmsg->msg_type;
 	struct lnet_process_id target = lntmsg->msg_target;
-        unsigned int      payload_niov = lntmsg->msg_niov;
+	unsigned int	 payload_niov = lntmsg->msg_niov;
 	struct kvec *payload_iov = lntmsg->msg_iov;
-        lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
-        unsigned int      payload_offset = lntmsg->msg_offset;
-        unsigned int      payload_nob = lntmsg->msg_len;
-	struct ksock_tx *tx;
-        int               desc_size;
-        int               rc;
+	struct bio_vec	*payload_kiov = lntmsg->msg_kiov;
+	unsigned int	 payload_offset = lntmsg->msg_offset;
+	unsigned int	 payload_nob = lntmsg->msg_len;
+	struct ksock_tx	*tx;
+	int		 desc_size;
+	int		 rc;
 
         /* NB 'private' is different depending on what we're sending.
          * Just ignore it... */
@@ -1385,7 +1385,7 @@ ksocknal_process_receive(struct ksock_conn *conn,
 int
 ksocknal_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 	      int delayed, unsigned int niov, struct kvec *iov,
-	      lnet_kiov_t *kiov, unsigned int offset, unsigned int mlen,
+	      struct bio_vec *kiov, unsigned int offset, unsigned int mlen,
 	      unsigned int rlen)
 {
 	struct ksock_conn *conn = private;

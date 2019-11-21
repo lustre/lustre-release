@@ -132,7 +132,7 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 
 	/*
 	 * There are three cases to handle:
-	 *  1. The MD is using lnet_kiov_t
+	 *  1. The MD is using struct bio_vec
 	 *  2. The MD is using struct kvec
 	 *  3. Contiguous buffer allocated via vmalloc
 	 *
@@ -147,10 +147,10 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 	 * DMAed.
 	 */
 	if ((md->md_options & LNET_MD_KIOV) != 0) {
-		lnet_kiov_t *kiov = md->md_iov.kiov;
+		struct bio_vec *kiov = md->md_iov.kiov;
 
-		while (offset >= kiov->kiov_len) {
-			offset -= kiov->kiov_len;
+		while (offset >= kiov->bv_len) {
+			offset -= kiov->bv_len;
 			niov--;
 			kiov++;
 			if (niov == 0) {
@@ -160,7 +160,7 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 		}
 
 		cpt = cfs_cpt_of_node(lnet_cpt_table(),
-				page_to_nid(kiov->kiov_page));
+				page_to_nid(kiov->bv_page));
 	} else {
 		struct kvec *iov = md->md_iov.iov;
 		unsigned long vaddr;
@@ -239,11 +239,11 @@ lnet_md_build(struct lnet_libmd *lmd, struct lnet_md *umd, int unlink)
 
 		for (i = 0; i < (int)niov; i++) {
 			/* We take the page pointer on trust */
-			if (lmd->md_iov.kiov[i].kiov_offset +
-			    lmd->md_iov.kiov[i].kiov_len > PAGE_SIZE)
+			if (lmd->md_iov.kiov[i].bv_offset +
+			    lmd->md_iov.kiov[i].bv_len > PAGE_SIZE)
 				return -EINVAL; /* invalid length */
 
-			total_length += lmd->md_iov.kiov[i].kiov_len;
+			total_length += lmd->md_iov.kiov[i].bv_len;
 		}
 
 		lmd->md_length = total_length;

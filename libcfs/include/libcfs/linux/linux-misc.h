@@ -34,6 +34,10 @@
 #define __LIBCFS_LINUX_MISC_H__
 
 #include <linux/fs.h>
+/* Since Commit 2f8b544477e6 ("block,fs: untangle fs.h and blk_types.h")
+ * fs.h doesn't include blk_types.h, but we need it.
+ */
+#include <linux/blk_types.h>
 #include <linux/mutex.h>
 #include <linux/user_namespace.h>
 #include <linux/uio.h>

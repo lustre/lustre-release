@@ -45,7 +45,7 @@ lolnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 static int
 lolnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	   int delayed, unsigned int niov,
-	   struct kvec *iov, lnet_kiov_t *kiov,
+	   struct kvec *iov, struct bio_vec *kiov,
 	   unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
 	struct lnet_msg *sendmsg = private;

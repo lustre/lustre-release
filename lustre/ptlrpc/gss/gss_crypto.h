@@ -24,10 +24,11 @@ void gss_teardown_sgtable(struct sg_table *sgt);
 int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, const void *iv,
 		      const void *in, void *out, size_t length);
 int gss_digest_hash(struct ahash_request *req, rawobj_t *hdr,
-		    int msgcnt, rawobj_t *msgs, int iovcnt, lnet_kiov_t *iovs);
+		    int msgcnt, rawobj_t *msgs, int iovcnt,
+		    struct bio_vec *iovs);
 int gss_digest_hash_compat(struct ahash_request *req,
 			   rawobj_t *hdr, int msgcnt, rawobj_t *msgs,
-			   int iovcnt, lnet_kiov_t *iovs);
+			   int iovcnt, struct bio_vec *iovs);
 int gss_add_padding(rawobj_t *msg, int msg_buflen, int blocksize);
 int gss_crypt_rawobjs(struct crypto_blkcipher *tfm, __u8 *iv,
 		      int inobj_cnt, rawobj_t *inobjs, rawobj_t *outobj,

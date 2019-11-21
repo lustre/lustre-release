@@ -272,7 +272,7 @@ out:
 
 int gss_digest_hash(struct ahash_request *req,
 		    rawobj_t *hdr, int msgcnt, rawobj_t *msgs,
-		    int iovcnt, lnet_kiov_t *iovs)
+		    int iovcnt, struct bio_vec *iovs)
 {
 	struct scatterlist sg[1];
 	struct sg_table sgt;
@@ -295,14 +295,14 @@ int gss_digest_hash(struct ahash_request *req,
 	}
 
 	for (i = 0; i < iovcnt; i++) {
-		if (iovs[i].kiov_len == 0)
+		if (iovs[i].bv_len == 0)
 			continue;
 
 		sg_init_table(sg, 1);
-		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
-			    iovs[i].kiov_offset);
+		sg_set_page(&sg[0], iovs[i].bv_page, iovs[i].bv_len,
+			    iovs[i].bv_offset);
 
-		ahash_request_set_crypt(req, sg, NULL, iovs[i].kiov_len);
+		ahash_request_set_crypt(req, sg, NULL, iovs[i].bv_len);
 		rc = crypto_ahash_update(req);
 		if (rc)
 			return rc;
@@ -325,7 +325,7 @@ int gss_digest_hash(struct ahash_request *req,
 
 int gss_digest_hash_compat(struct ahash_request *req,
 			   rawobj_t *hdr, int msgcnt, rawobj_t *msgs,
-			   int iovcnt, lnet_kiov_t *iovs)
+			   int iovcnt, struct bio_vec *iovs)
 {
 	struct scatterlist sg[1];
 	struct sg_table sgt;
@@ -348,14 +348,14 @@ int gss_digest_hash_compat(struct ahash_request *req,
 	}
 
 	for (i = 0; i < iovcnt; i++) {
-		if (iovs[i].kiov_len == 0)
+		if (iovs[i].bv_len == 0)
 			continue;
 
 		sg_init_table(sg, 1);
-		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
-			    iovs[i].kiov_offset);
+		sg_set_page(&sg[0], iovs[i].bv_page, iovs[i].bv_len,
+			    iovs[i].bv_offset);
 
-		ahash_request_set_crypt(req, sg, NULL, iovs[i].kiov_len);
+		ahash_request_set_crypt(req, sg, NULL, iovs[i].bv_len);
 		rc = crypto_ahash_update(req);
 		if (rc)
 			return rc;

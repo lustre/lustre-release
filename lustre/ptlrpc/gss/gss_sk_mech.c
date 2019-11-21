@@ -315,7 +315,7 @@ __u32 gss_inquire_context_sk(struct gss_ctx *gss_context,
 
 static
 u32 sk_make_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key, int msg_count,
-		 rawobj_t *msgs, int iov_count, lnet_kiov_t *iovs,
+		 rawobj_t *msgs, int iov_count, struct bio_vec *iovs,
 		 rawobj_t *token, digest_hash hash_func)
 {
 	struct ahash_request *req;
@@ -347,7 +347,7 @@ __u32 gss_get_mic_sk(struct gss_ctx *gss_context,
 		     int message_count,
 		     rawobj_t *messages,
 		     int iov_count,
-		     lnet_kiov_t *iovs,
+		     struct bio_vec *iovs,
 		     rawobj_t *token)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
@@ -360,7 +360,7 @@ __u32 gss_get_mic_sk(struct gss_ctx *gss_context,
 static
 u32 sk_verify_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key,
 		   int message_count, rawobj_t *messages,
-		   int iov_count, lnet_kiov_t *iovs,
+		   int iov_count, struct bio_vec *iovs,
 		   rawobj_t *token, digest_hash hash_func)
 {
 	rawobj_t checksum = RAWOBJ_EMPTY;
@@ -404,7 +404,7 @@ cleanup:
 static
 u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 			int msgcnt, rawobj_t *msgs, int iovcnt,
-			lnet_kiov_t *iovs, int iov_bytes, rawobj_t *token)
+			struct bio_vec *iovs, int iov_bytes, rawobj_t *token)
 {
 	rawobj_t checksum = RAWOBJ_EMPTY;
 	struct ahash_request *req;
@@ -450,15 +450,15 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 	}
 
 	for (i = 0; i < iovcnt && iov_bytes > 0; i++) {
-		if (iovs[i].kiov_len == 0)
+		if (iovs[i].bv_len == 0)
 			continue;
 
-		bytes = min_t(int, iov_bytes, iovs[i].kiov_len);
+		bytes = min_t(int, iov_bytes, iovs[i].bv_len);
 		iov_bytes -= bytes;
 
 		sg_init_table(sg, 1);
-		sg_set_page(&sg[0], iovs[i].kiov_page, bytes,
-			    iovs[i].kiov_offset);
+		sg_set_page(&sg[0], iovs[i].bv_page, bytes,
+			    iovs[i].bv_offset);
 		ahash_request_set_crypt(req, sg, NULL, bytes);
 		rc = crypto_ahash_update(req);
 		if (rc)
@@ -486,7 +486,7 @@ __u32 gss_verify_mic_sk(struct gss_ctx *gss_context,
 			int message_count,
 			rawobj_t *messages,
 			int iov_count,
-			lnet_kiov_t *iovs,
+			struct bio_vec *iovs,
 			rawobj_t *token)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
@@ -612,16 +612,16 @@ __u32 gss_prep_bulk_sk(struct gss_ctx *gss_context,
 	blocksize = crypto_blkcipher_blocksize(skc->sc_session_kb.kb_tfm);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		if (desc->bd_vec[i].kiov_offset & blocksize) {
+		if (desc->bd_vec[i].bv_offset & blocksize) {
 			CERROR("offset %d not blocksize aligned\n",
-			       desc->bd_vec[i].kiov_offset);
+			       desc->bd_vec[i].bv_offset);
 			return GSS_S_FAILURE;
 		}
 
-		desc->bd_enc_vec[i].kiov_offset =
-			desc->bd_vec[i].kiov_offset;
-		desc->bd_enc_vec[i].kiov_len =
-			sk_block_mask(desc->bd_vec[i].kiov_len, blocksize);
+		desc->bd_enc_vec[i].bv_offset =
+			desc->bd_vec[i].bv_offset;
+		desc->bd_enc_vec[i].bv_len =
+			sk_block_mask(desc->bd_vec[i].bv_len, blocksize);
 	}
 
 	return GSS_S_COMPLETE;
@@ -649,17 +649,17 @@ static __u32 sk_encrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 	sg_init_table(&ctxt, 1);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		sg_set_page(&ptxt, desc->bd_vec[i].kiov_page,
-			    sk_block_mask(desc->bd_vec[i].kiov_len,
+		sg_set_page(&ptxt, desc->bd_vec[i].bv_page,
+			    sk_block_mask(desc->bd_vec[i].bv_len,
 					  blocksize),
-			    desc->bd_vec[i].kiov_offset);
+			    desc->bd_vec[i].bv_offset);
 		nob += ptxt.length;
 
-		sg_set_page(&ctxt, desc->bd_enc_vec[i].kiov_page,
+		sg_set_page(&ctxt, desc->bd_enc_vec[i].bv_page,
 			    ptxt.length, ptxt.offset);
 
-		desc->bd_enc_vec[i].kiov_offset = ctxt.offset;
-		desc->bd_enc_vec[i].kiov_len = ctxt.length;
+		desc->bd_enc_vec[i].bv_offset = ctxt.offset;
+		desc->bd_enc_vec[i].bv_len = ctxt.length;
 
 		rc = crypto_blkcipher_encrypt_iv(&cdesc, &ctxt, &ptxt,
 						 ptxt.length);
@@ -704,11 +704,11 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 
 	for (i = 0; i < desc->bd_iov_count && cnob < desc->bd_nob_transferred;
 	     i++) {
-		lnet_kiov_t *piov = &desc->bd_vec[i];
-		lnet_kiov_t *ciov = &desc->bd_enc_vec[i];
+		struct bio_vec *piov = &desc->bd_vec[i];
+		struct bio_vec *ciov = &desc->bd_enc_vec[i];
 
-		if (ciov->kiov_offset % blocksize != 0 ||
-		    ciov->kiov_len % blocksize != 0) {
+		if (ciov->bv_offset % blocksize != 0 ||
+		    ciov->bv_len % blocksize != 0) {
 			CERROR("Invalid bulk descriptor vector\n");
 			return GSS_S_DEFECTIVE_TOKEN;
 		}
@@ -718,38 +718,38 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 		 * integrity only mode */
 		if (adj_nob) {
 			/* cipher text must not exceed transferred size */
-			if (ciov->kiov_len + cnob > desc->bd_nob_transferred)
-				ciov->kiov_len =
+			if (ciov->bv_len + cnob > desc->bd_nob_transferred)
+				ciov->bv_len =
 					desc->bd_nob_transferred - cnob;
 
-			piov->kiov_len = ciov->kiov_len;
+			piov->bv_len = ciov->bv_len;
 
 			/* plain text must not exceed bulk's size */
-			if (ciov->kiov_len + pnob > desc->bd_nob)
-				piov->kiov_len = desc->bd_nob - pnob;
+			if (ciov->bv_len + pnob > desc->bd_nob)
+				piov->bv_len = desc->bd_nob - pnob;
 		} else {
 			/* Taken from krb5_decrypt since it was not verified
 			 * whether or not LNET guarantees these */
-			if (ciov->kiov_len + cnob > desc->bd_nob_transferred ||
-			    piov->kiov_len > ciov->kiov_len) {
+			if (ciov->bv_len + cnob > desc->bd_nob_transferred ||
+			    piov->bv_len > ciov->bv_len) {
 				CERROR("Invalid decrypted length\n");
 				return GSS_S_FAILURE;
 			}
 		}
 
-		if (ciov->kiov_len == 0)
+		if (ciov->bv_len == 0)
 			continue;
 
 		sg_init_table(&ctxt, 1);
-		sg_set_page(&ctxt, ciov->kiov_page, ciov->kiov_len,
-			    ciov->kiov_offset);
+		sg_set_page(&ctxt, ciov->bv_page, ciov->bv_len,
+			    ciov->bv_offset);
 		ptxt = ctxt;
 
 		/* In the event the plain text size is not a multiple
 		 * of blocksize we decrypt in place and copy the result
 		 * after the decryption */
-		if (piov->kiov_len % blocksize == 0)
-			sg_assign_page(&ptxt, piov->kiov_page);
+		if (piov->bv_len % blocksize == 0)
+			sg_assign_page(&ptxt, piov->bv_page);
 
 		rc = crypto_blkcipher_decrypt_iv(&cdesc, &ptxt, &ctxt,
 						 ctxt.length);
@@ -758,22 +758,22 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 			return GSS_S_FAILURE;
 		}
 
-		if (piov->kiov_len % blocksize != 0) {
-			memcpy(page_address(piov->kiov_page) +
-			       piov->kiov_offset,
-			       page_address(ciov->kiov_page) +
-			       ciov->kiov_offset,
-			       piov->kiov_len);
+		if (piov->bv_len % blocksize != 0) {
+			memcpy(page_address(piov->bv_page) +
+			       piov->bv_offset,
+			       page_address(ciov->bv_page) +
+			       ciov->bv_offset,
+			       piov->bv_len);
 		}
 
-		cnob += ciov->kiov_len;
-		pnob += piov->kiov_len;
+		cnob += ciov->bv_len;
+		pnob += piov->bv_len;
 	}
 
 	/* if needed, clear up the rest unused iovs */
 	if (adj_nob)
 		while (i < desc->bd_iov_count)
-			desc->bd_vec[i++].kiov_len = 0;
+			desc->bd_vec[i++].bv_len = 0;
 
 	if (unlikely(cnob != desc->bd_nob_transferred)) {
 		CERROR("%d cipher text transferred but only %d decrypted\n",

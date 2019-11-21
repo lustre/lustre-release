@@ -152,7 +152,7 @@ int gss_display_null(struct gss_ctx *gss_context, char *buf, int bufsize)
 
 static
 __u32 gss_get_mic_null(struct gss_ctx *gss_context, int message_count,
-		       rawobj_t *messages, int iov_count, lnet_kiov_t *iovs,
+		       rawobj_t *messages, int iov_count, struct bio_vec *iovs,
 		       rawobj_t *token)
 {
 	return GSS_S_COMPLETE;
@@ -160,7 +160,8 @@ __u32 gss_get_mic_null(struct gss_ctx *gss_context, int message_count,
 
 static
 __u32 gss_verify_mic_null(struct gss_ctx *gss_context, int message_count,
-			  rawobj_t *messages, int iov_count, lnet_kiov_t *iovs,
+			  rawobj_t *messages, int iov_count,
+			  struct bio_vec *iovs,
 			  rawobj_t *token)
 {
 	return GSS_S_COMPLETE;

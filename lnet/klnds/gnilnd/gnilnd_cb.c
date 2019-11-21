@@ -321,8 +321,8 @@ kgnilnd_cksum(void *ptr, size_t nob)
 }
 
 __u16
-kgnilnd_cksum_kiov(unsigned int nkiov, lnet_kiov_t *kiov,
-		    unsigned int offset, unsigned int nob, int dump_blob)
+kgnilnd_cksum_kiov(unsigned int nkiov, struct bio_vec *kiov,
+		   unsigned int offset, unsigned int nob, int dump_blob)
 {
 	__wsum             cksum = 0;
 	__wsum             tmpck;
@@ -339,15 +339,15 @@ kgnilnd_cksum_kiov(unsigned int nkiov, lnet_kiov_t *kiov,
 
 	/* if loops changes, please change kgnilnd_setup_phys_buffer */
 
-	while (offset >= kiov->kiov_len) {
-		offset -= kiov->kiov_len;
+	while (offset >= kiov->bv_len) {
+		offset -= kiov->bv_len;
 		nkiov--;
 		kiov++;
 		LASSERT(nkiov > 0);
 	}
 
-	/* ignore nob here, if nob < (kiov_len - offset), kiov == 1 */
-	odd = (unsigned long) (kiov[0].kiov_len - offset) & 1;
+	/* ignore nob here, if nob < (bv_len - offset), kiov == 1 */
+	odd = (unsigned long) (kiov[0].bv_len - offset) & 1;
 
 	if ((odd || *kgnilnd_tunables.kgn_vmap_cksum) && nkiov > 1) {
 		struct page **pages = kgnilnd_data.kgn_cksum_map_pages[get_cpu()];
@@ -356,10 +356,10 @@ kgnilnd_cksum_kiov(unsigned int nkiov, lnet_kiov_t *kiov,
 			 get_cpu(), kgnilnd_data.kgn_cksum_map_pages);
 
 		CDEBUG(D_BUFFS, "odd %d len %u offset %u nob %u\n",
-		       odd, kiov[0].kiov_len, offset, nob);
+		       odd, kiov[0].bv_len, offset, nob);
 
 		for (i = 0; i < nkiov; i++) {
-			pages[i] = kiov[i].kiov_page;
+			pages[i] = kiov[i].bv_page;
 		}
 
 		addr = vmap(pages, nkiov, VM_MAP, PAGE_KERNEL);
@@ -372,42 +372,46 @@ kgnilnd_cksum_kiov(unsigned int nkiov, lnet_kiov_t *kiov,
 		}
 		atomic_inc(&kgnilnd_data.kgn_nvmap_cksum);
 
-		tmpck = _kgnilnd_cksum(0, (void *) addr + kiov[0].kiov_offset + offset, nob);
+		tmpck = _kgnilnd_cksum(0, ((void *) addr + kiov[0].bv_offset +
+					   offset), nob);
 		cksum = tmpck;
 
 		if (dump_blob) {
 			kgnilnd_dump_blob(D_BUFFS, "flat kiov RDMA payload",
-					  (void *)addr + kiov[0].kiov_offset + offset, nob);
+					  (void *)addr + kiov[0].bv_offset +
+					  offset, nob);
 		}
 		CDEBUG(D_BUFFS, "cksum 0x%x (+0x%x) for addr 0x%p+%u len %u offset %u\n",
-		       cksum, tmpck, addr, kiov[0].kiov_offset, nob, offset);
+		       cksum, tmpck, addr, kiov[0].bv_offset, nob, offset);
 		vunmap(addr);
 	} else {
 		do {
-			fraglen = min(kiov->kiov_len - offset, nob);
+			fraglen = min(kiov->bv_len - offset, nob);
 
 			/* make dang sure we don't send a bogus checksum if somehow we get
 			 * an odd length fragment on anything but the last entry in a kiov  -
 			 * we know from kgnilnd_setup_rdma_buffer that we can't have non
 			 * PAGE_SIZE pages in the middle, so if nob < PAGE_SIZE, it is the last one */
 			LASSERTF(!(fraglen&1) || (nob < PAGE_SIZE),
-				 "odd fraglen %u on nkiov %d, nob %u kiov_len %u offset %u kiov 0x%p\n",
-				 fraglen, nkiov, nob, kiov->kiov_len, offset, kiov);
+				 "odd fraglen %u on nkiov %d, nob %u bv_len %u offset %u kiov 0x%p\n",
+				 fraglen, nkiov, nob, kiov->bv_len,
+				 offset, kiov);
 
-			addr = (void *)kmap(kiov->kiov_page) + kiov->kiov_offset + offset;
+			addr = (void *)kmap(kiov->bv_page) + kiov->bv_offset +
+				offset;
 			tmpck = _kgnilnd_cksum(cksum, addr, fraglen);
 
 			CDEBUG(D_BUFFS,
 			       "cksum 0x%x (+0x%x) for page 0x%p+%u (0x%p) len %u offset %u\n",
-			       cksum, tmpck, kiov->kiov_page, kiov->kiov_offset, addr,
-			       fraglen, offset);
+			       cksum, tmpck, kiov->bv_page, kiov->bv_offset,
+			       addr, fraglen, offset);
 
 			cksum = tmpck;
 
 			if (dump_blob)
 				kgnilnd_dump_blob(D_BUFFS, "kiov cksum", addr, fraglen);
 
-			kunmap(kiov->kiov_page);
+			kunmap(kiov->bv_page);
 
 			kiov++;
 			nkiov--;
@@ -509,7 +513,7 @@ kgnilnd_nak_rdma(kgn_conn_t *conn, int rx_type, int error, __u64 cookie, lnet_ni
 
 int
 kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
-			       struct kvec *iov, lnet_kiov_t *kiov,
+			       struct kvec *iov, struct bio_vec *kiov,
 			       unsigned int offset, unsigned int nob)
 {
 	kgn_msg_t       *msg = &tx->tx_msg;
@@ -525,41 +529,45 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 	} else if (kiov != NULL) {
 
 		if ((niov > 0) && unlikely(niov > (nob/PAGE_SIZE))) {
-			niov = ((nob + offset + kiov->kiov_offset + PAGE_SIZE - 1) /
-				PAGE_SIZE);
+			niov = round_up(nob + offset + kiov->bv_offset,
+					PAGE_SIZE);
 		}
 
 		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
 			"bad niov %d msg %p kiov %p iov %p offset %d nob%d\n",
 			niov, msg, kiov, iov, offset, nob);
 
-		while (offset >= kiov->kiov_len) {
-			offset -= kiov->kiov_len;
+		while (offset >= kiov->bv_len) {
+			offset -= kiov->bv_len;
 			niov--;
 			kiov++;
 			LASSERT(niov > 0);
 		}
 		for (i = 0; i < niov; i++) {
-			/* We can't have a kiov_offset on anything but the first entry,
-			 * otherwise we'll have a hole at the end of the mapping as we only map
-			 * whole pages.
-			 * Also, if we have a kiov_len < PAGE_SIZE but we need to map more
-			 * than kiov_len, we will also have a whole at the end of that page
-			 * which isn't allowed */
-			if ((kiov[i].kiov_offset != 0 && i > 0) ||
-			    (kiov[i].kiov_offset + kiov[i].kiov_len != PAGE_SIZE && i < niov - 1)) {
-				CNETERR("Can't make payload contiguous in I/O VM: page %d, offset %u, nob %u, kiov_offset %u, kiov_len %u\n",
-				       i, offset, nob, kiov->kiov_offset, kiov->kiov_len);
+			/* We can't have a bv_offset on anything but the first
+			 * entry, otherwise we'll have a hole at the end of the
+			 * mapping as we only map whole pages.
+			 * Also, if we have a bv_len < PAGE_SIZE but we need to
+			 * map more than bv_len, we will also have a whole at
+			 * the end of that page which isn't allowed
+			 */
+			if ((kiov[i].bv_offset != 0 && i > 0) ||
+			    (kiov[i].bv_offset + kiov[i].bv_len != PAGE_SIZE &&
+			     i < niov - 1)) {
+				CNETERR("Can't make payload contiguous in I/O VM:page %d, offset %u, nob %u, bv_offset %u bv_len %u\n",
+				       i, offset, nob, kiov->bv_offset,
+					kiov->bv_len);
 				RETURN(-EINVAL);
 			}
-			tx->tx_imm_pages[i] = kiov[i].kiov_page;
+			tx->tx_imm_pages[i] = kiov[i].bv_page;
 		}
 
 		/* hijack tx_phys for the later unmap */
 		if (niov == 1) {
 			/* tx->phyx being equal to NULL is the signal for unmap to discern between kmap and vmap */
 			tx->tx_phys = NULL;
-			tx->tx_buffer = (void *)kmap(tx->tx_imm_pages[0]) + kiov[0].kiov_offset + offset;
+			tx->tx_buffer = (void *)kmap(tx->tx_imm_pages[0]) +
+				kiov[0].bv_offset + offset;
 			atomic_inc(&kgnilnd_data.kgn_nkmap_short);
 			GNIDBG_TX(D_NET, tx, "kmapped page for %d bytes for kiov 0x%p, buffer 0x%p",
 				nob, kiov, tx->tx_buffer);
@@ -571,10 +579,14 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 
 			}
 			atomic_inc(&kgnilnd_data.kgn_nvmap_short);
-			/* make sure we take into account the kiov offset as the start of the buffer */
-			tx->tx_buffer = (void *)tx->tx_phys + kiov[0].kiov_offset + offset;
-			GNIDBG_TX(D_NET, tx, "mapped %d pages for %d bytes from kiov 0x%p to 0x%p, buffer 0x%p",
-				niov, nob, kiov, tx->tx_phys, tx->tx_buffer);
+			/* make sure we take into account the kiov offset as the
+			 * start of the buffer
+			 */
+			tx->tx_buffer = (void *)tx->tx_phys + kiov[0].bv_offset
+				+ offset;
+			GNIDBG_TX(D_NET, tx,
+				  "mapped %d pages for %d bytes from kiov 0x%p to 0x%p, buffer 0x%p",
+				  niov, nob, kiov, tx->tx_phys, tx->tx_buffer);
 		}
 		tx->tx_buftype = GNILND_BUF_IMMEDIATE_KIOV;
 		tx->tx_nob = nob;
@@ -650,7 +662,7 @@ kgnilnd_setup_virt_buffer(kgn_tx_t *tx,
 }
 
 int
-kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
+kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, struct bio_vec *kiov,
 			  unsigned int offset, unsigned int nob)
 {
 	gni_mem_segment_t *phys;
@@ -678,8 +690,8 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
 	/* if loops changes, please change kgnilnd_cksum_kiov
 	 *   and kgnilnd_setup_immediate_buffer */
 
-	while (offset >= kiov->kiov_len) {
-		offset -= kiov->kiov_len;
+	while (offset >= kiov->bv_len) {
+		offset -= kiov->bv_len;
 		nkiov--;
 		kiov++;
 		LASSERT(nkiov > 0);
@@ -691,30 +703,31 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
 	tx->tx_buftype = GNILND_BUF_PHYS_UNMAPPED;
 	tx->tx_nob = nob;
 
-	/* kiov_offset is start of 'valid' buffer, so index offset past that */
-	tx->tx_buffer = (void *)((unsigned long)(kiov->kiov_offset + offset));
+	/* bv_offset is start of 'valid' buffer, so index offset past that */
+	tx->tx_buffer = (void *)((unsigned long)(kiov->bv_offset + offset));
 	phys = tx->tx_phys;
 
 	CDEBUG(D_NET, "tx 0x%p buffer 0x%p map start kiov 0x%p+%u niov %d offset %u\n",
-	       tx, tx->tx_buffer, kiov, kiov->kiov_offset, nkiov, offset);
+	       tx, tx->tx_buffer, kiov, kiov->bv_offset, nkiov, offset);
 
 	do {
-		fraglen = min(kiov->kiov_len - offset, nob);
+		fraglen = min(kiov->bv_len - offset, nob);
 
-		/* We can't have a kiov_offset on anything but the first entry,
-		 * otherwise we'll have a hole at the end of the mapping as we only map
-		 * whole pages. Only the first page is allowed to have an offset -
-		 * we'll add that into tx->tx_buffer and that will get used when we
-		 * map in the segments (see kgnilnd_map_buffer).
-		 * Also, if we have a kiov_len < PAGE_SIZE but we need to map more
-		 * than kiov_len, we will also have a whole at the end of that page
-		 * which isn't allowed */
+		/* We can't have a bv_offset on anything but the first entry,
+		 * otherwise we'll have a hole at the end of the mapping as we
+		 * only map whole pages.  Only the first page is allowed to
+		 * have an offset - we'll add that into tx->tx_buffer and that
+		 * will get used when we map in the segments (see
+		 * kgnilnd_map_buffer).  Also, if we have a bv_len < PAGE_SIZE
+		 * but we need to map more than bv_len, we will also have a
+		 * whole at the end of that page which isn't allowed
+		 */
 		if ((phys != tx->tx_phys) &&
-		    ((kiov->kiov_offset != 0) ||
-		     ((kiov->kiov_len < PAGE_SIZE) && (nob > kiov->kiov_len)))) {
-			CERROR("Can't make payload contiguous in I/O VM: page %d, offset %u, nob %u, kiov_offset %u, kiov_len %u\n",
+		    ((kiov->bv_offset != 0) ||
+		     ((kiov->bv_len < PAGE_SIZE) && (nob > kiov->bv_len)))) {
+			CERROR("Can't make payload contiguous in I/O VM:page %d, offset %u, nob %u, bv_offset %u bv_len %u\n",
 			       (int)(phys - tx->tx_phys),
-			       offset, nob, kiov->kiov_offset, kiov->kiov_len);
+			       offset, nob, kiov->bv_offset, kiov->bv_len);
 			rc = -EINVAL;
 			GOTO(error, rc);
 		}
@@ -730,11 +743,12 @@ kgnilnd_setup_phys_buffer(kgn_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
 			GOTO(error, rc);
 		}
 
-		CDEBUG(D_BUFFS, "page 0x%p kiov_offset %u kiov_len %u nob %u "
-			       "nkiov %u offset %u\n",
-		      kiov->kiov_page, kiov->kiov_offset, kiov->kiov_len, nob, nkiov, offset);
+		CDEBUG(D_BUFFS,
+		       "page 0x%p bv_offset %u bv_len %u nob %u nkiov %u offset %u\n",
+		       kiov->bv_page, kiov->bv_offset, kiov->bv_len, nob, nkiov,
+		       offset);
 
-		phys->address = page_to_phys(kiov->kiov_page);
+		phys->address = page_to_phys(kiov->bv_page);
 		phys++;
 		kiov++;
 		nkiov--;
@@ -762,7 +776,7 @@ error:
 
 static inline int
 kgnilnd_setup_rdma_buffer(kgn_tx_t *tx, unsigned int niov,
-			  struct kvec *iov, lnet_kiov_t *kiov,
+			  struct kvec *iov, struct bio_vec *kiov,
 			  unsigned int offset, unsigned int nob)
 {
 	int     rc;
@@ -792,7 +806,7 @@ kgnilnd_setup_rdma_buffer(kgn_tx_t *tx, unsigned int niov,
 static void
 kgnilnd_parse_lnet_rdma(struct lnet_msg *lntmsg, unsigned int *niov,
 			unsigned int *offset, unsigned int *nob,
-			lnet_kiov_t **kiov, int put_len)
+			struct bio_vec **kiov, int put_len)
 {
 	/* GETs are weird, see kgnilnd_send */
 	if (lntmsg->msg_type == LNET_MSG_GET) {
@@ -815,10 +829,10 @@ kgnilnd_parse_lnet_rdma(struct lnet_msg *lntmsg, unsigned int *niov,
 static inline void
 kgnilnd_compute_rdma_cksum(kgn_tx_t *tx, int put_len)
 {
-	unsigned int     niov, offset, nob;
-	lnet_kiov_t     *kiov;
-	struct lnet_msg      *lntmsg = tx->tx_lntmsg[0];
-	int              dump_cksum = (*kgnilnd_tunables.kgn_checksum_dump > 1);
+	unsigned int niov, offset, nob;
+	struct bio_vec *kiov;
+	struct lnet_msg *lntmsg = tx->tx_lntmsg[0];
+	int dump_cksum = (*kgnilnd_tunables.kgn_checksum_dump > 1);
 
 	GNITX_ASSERTF(tx, ((tx->tx_msg.gnm_type == GNILND_MSG_PUT_DONE) ||
 			   (tx->tx_msg.gnm_type == GNILND_MSG_GET_DONE) ||
@@ -868,8 +882,8 @@ kgnilnd_verify_rdma_cksum(kgn_tx_t *tx, __u16 rx_cksum, int put_len)
 	int              rc = 0;
 	__u16            cksum;
 	unsigned int     niov, offset, nob;
-	lnet_kiov_t     *kiov;
-	struct lnet_msg      *lntmsg = tx->tx_lntmsg[0];
+	struct bio_vec  *kiov;
+	struct lnet_msg *lntmsg = tx->tx_lntmsg[0];
 	int dump_on_err = *kgnilnd_tunables.kgn_checksum_dump;
 
 	/* we can only match certain requests */
@@ -2105,7 +2119,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	int               routing = lntmsg->msg_routing;
 	unsigned int      niov = lntmsg->msg_niov;
 	struct kvec      *iov = lntmsg->msg_iov;
-	lnet_kiov_t      *kiov = lntmsg->msg_kiov;
+	struct bio_vec   *kiov = lntmsg->msg_kiov;
 	unsigned int      offset = lntmsg->msg_offset;
 	unsigned int      nob = lntmsg->msg_len;
 	unsigned int      msg_vmflush = lntmsg->msg_vmflush;
@@ -2274,7 +2288,7 @@ kgnilnd_setup_rdma(struct lnet_ni *ni, kgn_rx_t *rx, struct lnet_msg *lntmsg, in
 	kgn_msg_t     *rxmsg = rx->grx_msg;
 	unsigned int   niov = lntmsg->msg_niov;
 	struct kvec   *iov = lntmsg->msg_iov;
-	lnet_kiov_t   *kiov = lntmsg->msg_kiov;
+	struct bio_vec *kiov = lntmsg->msg_kiov;
 	unsigned int   offset = lntmsg->msg_offset;
 	unsigned int   nob = lntmsg->msg_len;
 	int            done_type;
@@ -2422,7 +2436,7 @@ kgnilnd_eager_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 int
 kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	     int delayed, unsigned int niov,
-	     struct kvec *iov, lnet_kiov_t *kiov,
+	     struct kvec *iov, struct bio_vec *kiov,
 	     unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
 	kgn_rx_t    *rx = private;
@@ -3120,7 +3134,7 @@ kgnilnd_reaper(void *arg)
 int
 kgnilnd_recv_bte_get(kgn_tx_t *tx) {
 	unsigned niov, offset, nob;
-	lnet_kiov_t	*kiov;
+	struct bio_vec *kiov;
 	struct lnet_msg *lntmsg = tx->tx_lntmsg[0];
 	kgnilnd_parse_lnet_rdma(lntmsg, &niov, &offset, &nob, &kiov, tx->tx_nob_rdma);
 

@@ -149,10 +149,10 @@ lstcon_rpc_put(struct lstcon_rpc *crpc)
 	LASSERT(list_empty(&crpc->crp_link));
 
 	for (i = 0; i < bulk->bk_niov; i++) {
-		if (bulk->bk_iovs[i].kiov_page == NULL)
+		if (bulk->bk_iovs[i].bv_page == NULL)
 			continue;
 
-		__free_page(bulk->bk_iovs[i].kiov_page);
+		__free_page(bulk->bk_iovs[i].bv_page);
 	}
 
 	srpc_client_rpc_decref(crpc->crp_rpc);
@@ -696,7 +696,7 @@ lstcon_statrpc_prep(struct lstcon_node *nd, unsigned int feats,
 }
 
 static struct lnet_process_id_packed *
-lstcon_next_id(int idx, int nkiov, lnet_kiov_t *kiov)
+lstcon_next_id(int idx, int nkiov, struct bio_vec *kiov)
 {
 	struct lnet_process_id_packed *pid;
         int                       i;
@@ -705,14 +705,14 @@ lstcon_next_id(int idx, int nkiov, lnet_kiov_t *kiov)
 
         LASSERT (i < nkiov);
 
-	pid = (struct lnet_process_id_packed *)page_address(kiov[i].kiov_page);
+	pid = (struct lnet_process_id_packed *)page_address(kiov[i].bv_page);
 
         return &pid[idx % SFW_ID_PER_PAGE];
 }
 
 static int
 lstcon_dstnodes_prep(struct lstcon_group *grp, int idx,
-                     int dist, int span, int nkiov, lnet_kiov_t *kiov)
+		     int dist, int span, int nkiov, struct bio_vec *kiov)
 {
 	struct lnet_process_id_packed *pid;
 	struct lstcon_ndlink *ndl;
@@ -850,12 +850,12 @@ lstcon_testrpc_prep(struct lstcon_node *nd, int transop, unsigned int feats,
 			      PAGE_SIZE : min_t(int, nob, PAGE_SIZE);
 			nob -= len;
 
-			bulk->bk_iovs[i].kiov_offset = 0;
-			bulk->bk_iovs[i].kiov_len    = len;
-			bulk->bk_iovs[i].kiov_page   =
+			bulk->bk_iovs[i].bv_offset = 0;
+			bulk->bk_iovs[i].bv_len    = len;
+			bulk->bk_iovs[i].bv_page   =
 				alloc_page(GFP_KERNEL);
 
-			if (bulk->bk_iovs[i].kiov_page == NULL) {
+			if (bulk->bk_iovs[i].bv_page == NULL) {
 				lstcon_rpc_put(*crpc);
 				return -ENOMEM;
 			}
