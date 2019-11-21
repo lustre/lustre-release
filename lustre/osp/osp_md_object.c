@@ -1240,7 +1240,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 
 	/* allocate bulk descriptor */
 	desc = ptlrpc_prep_bulk_imp(req, pages, 1,
-				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KIOV,
+				    PTLRPC_BULK_PUT_SINK,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_nopin_ops);
 	if (desc == NULL)

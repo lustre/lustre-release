@@ -681,7 +681,6 @@ int krb5_encrypt_bulk(struct crypto_blkcipher *tfm,
 	struct sg_table		sg_src, sg_dst;
         int                     blocksize, i, rc, nob = 0;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
         LASSERT(desc->bd_iov_count);
 	LASSERT(GET_ENC_KIOV(desc));
 
@@ -802,7 +801,6 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
         int                     ct_nob = 0, pt_nob = 0;
         int                     blocksize, i, rc;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
         LASSERT(desc->bd_iov_count);
 	LASSERT(GET_ENC_KIOV(desc));
         LASSERT(desc->bd_nob_transferred);
@@ -1108,7 +1106,6 @@ __u32 gss_prep_bulk_kerberos(struct gss_ctx *gctx,
 	struct krb5_ctx     *kctx = gctx->internal_ctx_id;
 	int                  blocksize, i;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(desc->bd_iov_count);
 	LASSERT(GET_ENC_KIOV(desc));
 	LASSERT(kctx->kc_keye.kb_tfm);
@@ -1152,7 +1149,6 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
 	int rc = 0;
 	u32 major;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(ke);
 	LASSERT(ke->ke_conf_size <= GSS_MAX_CIPHER_BLOCK);
 
@@ -1434,7 +1430,6 @@ __u32 gss_unwrap_bulk_kerberos(struct gss_ctx *gctx,
 	int                  rc;
 	__u32                major;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(ke);
 
 	if (token->len < sizeof(*khdr)) {

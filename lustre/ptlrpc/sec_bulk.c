@@ -538,7 +538,6 @@ int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
 	int p_idx, g_idx;
 	int i;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(desc->bd_iov_count > 0);
 	LASSERT(desc->bd_iov_count <= page_pools.epp_max_pages);
 
@@ -668,8 +667,6 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 {
 	int p_idx, g_idx;
 	int i;
-
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
 	if (GET_ENC_KIOV(desc) == NULL)
 		return;
@@ -913,7 +910,6 @@ int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
 	unsigned int bufsize;
 	int i, err;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(alg > BULK_HASH_ALG_NULL && alg < BULK_HASH_ALG_MAX);
 	LASSERT(buflen >= 4);
 

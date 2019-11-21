@@ -1017,8 +1017,7 @@ int out_handle(struct tgt_session_info *tsi)
 
 		desc = ptlrpc_prep_bulk_exp(pill->rc_req, page_count,
 					    PTLRPC_BULK_OPS_COUNT,
-					    PTLRPC_BULK_GET_SINK |
-					    PTLRPC_BULK_BUF_KIOV,
+					    PTLRPC_BULK_GET_SINK,
 					    MDS_BULK_PORTAL,
 					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)

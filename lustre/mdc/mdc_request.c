@@ -1060,7 +1060,7 @@ restart_bulk:
 	ptlrpc_at_set_req_timeout(req);
 
 	desc = ptlrpc_prep_bulk_imp(req, npages, 1,
-				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KIOV,
+				    PTLRPC_BULK_PUT_SINK,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
 	if (desc == NULL) {

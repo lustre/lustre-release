@@ -1082,7 +1082,7 @@ int tgt_send_buffer(struct tgt_session_info *tsi, struct lu_rdbuf *rdbuf)
 	}
 
 	desc = ptlrpc_prep_bulk_exp(req, pages, 1,
-				  PTLRPC_BULK_PUT_SOURCE | PTLRPC_BULK_BUF_KIOV,
+				  PTLRPC_BULK_PUT_SOURCE,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_nopin_ops);
 	if (desc == NULL)
@@ -1112,8 +1112,7 @@ int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 	ENTRY;
 
 	desc = ptlrpc_prep_bulk_exp(req, rdpg->rp_npages, 1,
-				    PTLRPC_BULK_PUT_SOURCE |
-					PTLRPC_BULK_BUF_KIOV,
+				    PTLRPC_BULK_PUT_SOURCE,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
 	if (desc == NULL)
@@ -2245,8 +2244,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		desc = NULL;
 	} else {
 		desc = ptlrpc_prep_bulk_exp(req, npages, ioobj_max_brw_get(ioo),
-					    PTLRPC_BULK_PUT_SOURCE |
-						PTLRPC_BULK_BUF_KIOV,
+					    PTLRPC_BULK_PUT_SOURCE,
 					    OST_BULK_PORTAL,
 					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)
@@ -2604,8 +2602,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 		desc = NULL;
 	} else {
 		desc = ptlrpc_prep_bulk_exp(req, npages, ioobj_max_brw_get(ioo),
-					    PTLRPC_BULK_GET_SINK |
-					    PTLRPC_BULK_BUF_KIOV,
+					    PTLRPC_BULK_GET_SINK,
 					    OST_BULK_PORTAL,
 					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)

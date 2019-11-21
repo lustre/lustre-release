@@ -155,8 +155,6 @@ static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
 	char *ptr;
 	unsigned int off, i;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
-
 	for (i = 0; i < desc->bd_iov_count; i++) {
 		if (BD_GET_KIOV(desc, i).kiov_len == 0)
 			continue;
@@ -342,7 +340,6 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 	int rc;
 	int i, nob;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 	LASSERT(req->rq_pack_bulk);
 	LASSERT(req->rq_reqbuf->lm_bufcount == PLAIN_PACK_SEGMENTS);
 	LASSERT(req->rq_repdata->lm_bufcount == PLAIN_PACK_SEGMENTS);

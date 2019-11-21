@@ -426,7 +426,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	req->rq_bulk_write = 1;
 	desc = ptlrpc_prep_bulk_imp(req, page_count,
 		MD_MAX_BRW_SIZE >> LNET_MTU_BITS,
-		PTLRPC_BULK_GET_SOURCE | PTLRPC_BULK_BUF_KIOV,
+		PTLRPC_BULK_GET_SOURCE,
 		MDS_BULK_PORTAL, &ptlrpc_bulk_kiov_nopin_ops);
 	if (desc == NULL)
 		GOTO(out_req, rc = -ENOMEM);

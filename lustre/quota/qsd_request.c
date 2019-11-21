@@ -387,7 +387,7 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 
 	/* allocate bulk descriptor */
 	desc = ptlrpc_prep_bulk_imp(req, npages, 1,
-				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KIOV,
+				    PTLRPC_BULK_PUT_SINK,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
 	if (desc == NULL)

@@ -69,7 +69,6 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
 	LASSERT(req->rq_pack_bulk);
 	LASSERT(req->rq_bulk_read || req->rq_bulk_write);
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
 	gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
 	LASSERT(gctx->gc_mechctx);
@@ -174,7 +173,6 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_read || req->rq_bulk_write);
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
         switch (SPTLRPC_FLVR_SVC(req->rq_flvr.sf_rpc)) {
         case SPTLRPC_SVC_NULL:
@@ -378,7 +376,6 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
         LASSERT(req->rq_svc_ctx);
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_write);
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
 
@@ -456,7 +453,6 @@ int gss_svc_wrap_bulk(struct ptlrpc_request *req,
         LASSERT(req->rq_svc_ctx);
         LASSERT(req->rq_pack_bulk);
         LASSERT(req->rq_bulk_read);
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
         grctx = gss_svc_ctx2reqctx(req->rq_svc_ctx);
 

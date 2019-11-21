@@ -655,8 +655,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	page_count = (bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	LASSERT(page_count <= nrpages);
 	desc = ptlrpc_prep_bulk_exp(req, page_count, 1,
-				    PTLRPC_BULK_PUT_SOURCE |
-					PTLRPC_BULK_BUF_KIOV,
+				    PTLRPC_BULK_PUT_SOURCE,
 				    MGS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
 	if (!desc)
