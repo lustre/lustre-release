@@ -407,11 +407,6 @@ struct lnet_md {
 	 * the number of entries in the array. The length can't be bigger
 	 * than LNET_MAX_IOV. The struct bio_vec is used to describe page-based
 	 * fragments that are not necessarily mapped in virtal memory.
-	 * - LNET_MD_IOVEC bit set: The start field points to the starting
-	 * address of an array of struct kvec and the length field specifies
-	 * the number of entries in the array. The length can't be bigger
-	 * than LNET_MAX_IOV. The struct kvec is used to describe fragments
-	 * that have virtual addresses.
 	 * - Otherwise: The memory region is contiguous. The start field
 	 * specifies the starting address for the memory region and the
 	 * length field specifies its length.
@@ -466,14 +461,12 @@ struct lnet_md {
 	 *   The data sent in the REPLY serves as an implicit acknowledgment.
 	 * - LNET_MD_KIOV: The start and length fields specify an array of
 	 *   struct bio_vec.
-	 * - LNET_MD_IOVEC: The start and length fields specify an array of
-	 *   struct iovec.
 	 * - LNET_MD_MAX_SIZE: The max_size field is valid.
 	 * - LNET_MD_BULK_HANDLE: The bulk_handle field is valid.
 	 *
 	 * Note:
-	 * - LNET_MD_KIOV or LNET_MD_IOVEC allows for a scatter/gather
-	 *   capability for memory descriptors. They can't be both set.
+	 * - LNET_MD_KIOV allows for a scatter/gather capability for memory
+	 *   descriptors.
 	 * - When LNET_MD_MAX_SIZE is set, the total length of the memory
 	 *   region (i.e. sum of all fragment lengths) must not be less than
 	 *   \a max_size.
@@ -523,7 +516,7 @@ struct lnet_md {
 /** See struct lnet_md::options. */
 #define LNET_MD_ACK_DISABLE	     (1 << 5)
 /** See struct lnet_md::options. */
-#define LNET_MD_IOVEC		     (1 << 6)
+/* deprecated #define LNET_MD_IOVEC  (1 << 6) */
 /** See struct lnet_md::options. */
 #define LNET_MD_MAX_SIZE	     (1 << 7)
 /** See struct lnet_md::options. */

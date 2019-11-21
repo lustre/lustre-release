@@ -208,31 +208,7 @@ lnet_md_build(struct lnet_libmd *lmd, struct lnet_md *umd, int unlink)
 	lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
 	lmd->md_bulk_handle = umd->bulk_handle;
 
-	if ((umd->options & LNET_MD_IOVEC) != 0) {
-
-		if ((umd->options & LNET_MD_KIOV) != 0) /* Can't specify both */
-			return -EINVAL;
-
-		lmd->md_niov = niov = umd->length;
-		memcpy(lmd->md_iov.iov, umd->start,
-		       niov * sizeof(lmd->md_iov.iov[0]));
-
-		for (i = 0; i < (int)niov; i++) {
-			/* We take the base address on trust */
-			if (lmd->md_iov.iov[i].iov_len <= 0) /* invalid length */
-				return -EINVAL;
-
-			total_length += lmd->md_iov.iov[i].iov_len;
-		}
-
-		lmd->md_length = total_length;
-
-		if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
-		    (umd->max_size < 0 ||
-		     umd->max_size > total_length)) // illegal max_size
-			return -EINVAL;
-
-	} else if ((umd->options & LNET_MD_KIOV) != 0) {
+	if ((umd->options & LNET_MD_KIOV) != 0) {
 		lmd->md_niov = niov = umd->length;
 		memcpy(lmd->md_iov.kiov, umd->start,
 		       niov * sizeof(lmd->md_iov.kiov[0]));
@@ -308,7 +284,7 @@ lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_md *umd)
 	 * and that's all.
 	 */
 	umd->start = lmd->md_start;
-	umd->length = ((lmd->md_options & (LNET_MD_IOVEC | LNET_MD_KIOV)) == 0) ?
+	umd->length = ((lmd->md_options & LNET_MD_KIOV) == 0) ?
 		      lmd->md_length : lmd->md_niov;
 	umd->threshold = lmd->md_threshold;
 	umd->max_size = lmd->md_max_size;
@@ -325,7 +301,7 @@ lnet_md_validate(struct lnet_md *umd)
 		return -EINVAL;
 	}
 
-	if ((umd->options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
+	if ((umd->options & LNET_MD_KIOV) &&
 	    umd->length > LNET_MAX_IOV) {
 		CERROR("Invalid option: too many fragments %u, %d max\n",
 		       umd->length, LNET_MAX_IOV);

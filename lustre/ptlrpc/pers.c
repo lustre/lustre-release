@@ -48,8 +48,7 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 
 	LASSERT(mdidx < desc->bd_md_max_brw);
 	LASSERT(desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
-	LASSERT(!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV |
-				 LNET_MD_PHYS)));
+	LASSERT(!(md->options & (LNET_MD_KIOV | LNET_MD_PHYS)));
 
 	md->length = max(0, desc->bd_iov_count - mdidx * LNET_MAX_IOV);
 	md->length = min_t(unsigned int, LNET_MAX_IOV, md->length);

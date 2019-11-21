@@ -223,8 +223,7 @@ lnet_md_alloc(struct lnet_md *umd)
 		niov = umd->length;
 		size = offsetof(struct lnet_libmd, md_iov.kiov[niov]);
 	} else {
-		niov = ((umd->options & LNET_MD_IOVEC) != 0) ?
-		       umd->length : 1;
+		niov = 1;
 		size = offsetof(struct lnet_libmd, md_iov.iov[niov]);
 	}
 
