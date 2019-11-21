@@ -419,7 +419,8 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	list_for_each_entry(ours, &our->our_req_list, ours_list) {
 		oub->oub_size = ours->ours_req_size;
 		oub++;
-		page_count += round_up(ours->ours_req_size, PAGE_SIZE) + 1;
+		/* First *and* last might be partial pages, hence +1 */
+		page_count += DIV_ROUND_UP(ours->ours_req_size, PAGE_SIZE) + 1;
 	}
 
 	req->rq_bulk_write = 1;
