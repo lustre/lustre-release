@@ -2177,9 +2177,10 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 
 	if (lo->ldo_dir_stripe_offset == LMV_OFFSET_DEFAULT) {
 		lod_qos_statfs_update(env, lod, &lod->lod_mdt_descs);
-		rc = lod_mdt_alloc_qos(env, lo, stripes);
+		rc = lod_mdt_alloc_qos(env, lo, stripes, 1, stripe_count);
 		if (rc == -EAGAIN)
-			rc = lod_mdt_alloc_rr(env, lo, stripes);
+			rc = lod_mdt_alloc_rr(env, lo, stripes, 1,
+					      stripe_count);
 	} else {
 		int *idx_array;
 		bool is_specific = false;

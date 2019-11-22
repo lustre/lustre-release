@@ -644,9 +644,11 @@ struct lod_obj_stripe_cb_data {
 
 /* lod_qos.c */
 int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
-		      struct dt_object **stripes);
+		      struct dt_object **stripes, u32 stripe_idx,
+		      u32 stripe_count);
 int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
-		     struct dt_object **stripe);
+		     struct dt_object **stripes, u32 stripe_idx,
+		     u32 stripe_count);
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		       struct lu_attr *attr, const struct lu_buf *buf,
 		       struct thandle *th);

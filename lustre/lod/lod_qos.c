@@ -450,7 +450,7 @@ static inline int lod_qos_tgt_in_use_clear(const struct lu_env *env,
 	if (info->lti_ea_store_size < sizeof(int) * stripes)
 		lod_ea_store_resize(info, stripes * sizeof(int));
 	if (info->lti_ea_store_size < sizeof(int) * stripes) {
-		CERROR("can't allocate memory for ost-in-use array\n");
+		CERROR("can't allocate memory for tgt-in-use array\n");
 		return -ENOMEM;
 	}
 	memset(info->lti_ea_store, -1, sizeof(int) * stripes);
@@ -865,6 +865,44 @@ out:
 	RETURN(rc);
 }
 
+static int
+lod_qos_mdt_in_use_init(const struct lu_env *env,
+			const struct lu_tgt_descs *ltd,
+			u32 stripe_idx, u32 stripe_count,
+			const struct lu_tgt_pool *pool,
+			struct dt_object **stripes)
+{
+	u32 mdt_idx;
+	struct lu_tgt_desc *mdt;
+	int i, j;
+	int rc;
+
+	rc = lod_qos_tgt_in_use_clear(env, stripe_count);
+	if (rc)
+		return rc;
+
+	/* if stripe_idx > 1, we are splitting directory, mark existing stripes
+	 * in_use. Because for either split or creation, stripe 0 is local,
+	 * don't mark it in use.
+	 */
+	for (i = 1; i < stripe_idx; i++) {
+		LASSERT(stripes[i]);
+		for (j = 0; j < pool->op_count; j++) {
+			mdt_idx = pool->op_array[j];
+
+			if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, mdt_idx))
+				continue;
+
+			mdt = LTD_TGT(ltd, mdt_idx);
+			if (&mdt->ltd_tgt->dd_lu_dev ==
+			    stripes[i]->do_lu.lo_dev)
+				lod_qos_tgt_in_use(env, i, mdt_idx);
+		}
+	}
+
+	return 0;
+}
+
 /**
  * Allocate a striping using round-robin algorithm.
  *
@@ -878,7 +916,7 @@ out:
  *
  * \param[in] env		execution environment for this thread
  * \param[in] lo		LOD object
- * \param[out] stripe		striping created
+ * \param[out] stripes		striping created
  *
  * \retval positive	stripe objects allocated, including the first stripe
  *			allocated outside
@@ -886,7 +924,8 @@ out:
  * \retval negative	negated errno for other failures
  */
 int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
-		     struct dt_object **stripe)
+		     struct dt_object **stripes, u32 stripe_idx,
+		     u32 stripe_count)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
@@ -898,9 +937,8 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct dt_object *dto;
 	unsigned int pool_idx;
 	unsigned int i;
-	u32 start_idx_temp;
-	u32 stripe_count = lo->ldo_dir_stripe_count;
-	u32 stripe_idx = 1;
+	u32 saved_idx = stripe_idx;
+	u32 start_mdt;
 	u32 mdt_idx;
 	bool use_degraded = false;
 	int tgt_connecting = 0;
@@ -914,7 +952,8 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		RETURN(rc);
 
-	rc = lod_qos_tgt_in_use_clear(env, stripe_count);
+	rc = lod_qos_mdt_in_use_init(env, ltd, stripe_idx, stripe_count, pool,
+				     stripes);
 	if (rc)
 		RETURN(rc);
 
@@ -935,10 +974,10 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		    (pool->op_count % (stripe_count - 1)) != 1)
 			++lqr->lqr_offset_idx;
 	}
-	start_idx_temp = lqr->lqr_start_idx;
+	start_mdt = lqr->lqr_start_idx;
 
 repeat_find:
-	QOS_DEBUG("want %d start_idx %d start_count %d offset %d active %d count %d\n",
+	QOS_DEBUG("want=%d start_idx=%d start_count=%d offset=%d active=%d count=%d\n",
 		  stripe_count - 1, lqr->lqr_start_idx, lqr->lqr_start_count,
 		  lqr->lqr_offset_idx, pool->op_count, pool->op_count);
 
@@ -977,7 +1016,7 @@ repeat_find:
 		spin_unlock(&lqr->lqr_alloc);
 
 		rc = obd_fid_alloc(env, mdt->ltd_exp, &fid, NULL);
-		if (rc) {
+		if (rc < 0) {
 			QOS_DEBUG("#%d: alloc FID failed: %dl\n", mdt_idx, rc);
 			spin_lock(&lqr->lqr_alloc);
 			continue;
@@ -998,14 +1037,13 @@ repeat_find:
 		}
 
 		lod_qos_tgt_in_use(env, stripe_idx, mdt_idx);
-		stripe[stripe_idx] = dto;
-		stripe_idx++;
+		stripes[stripe_idx++] = dto;
 	}
 
 	if (!use_degraded && stripe_idx < stripe_count) {
-		/* Try again, allowing slower OSCs */
+		/* Try again, allowing slower MDTs */
 		use_degraded = true;
-		lqr->lqr_start_idx = start_idx_temp;
+		lqr->lqr_start_idx = start_mdt;
 
 		tgt_connecting = 0;
 		goto repeat_find;
@@ -1013,7 +1051,7 @@ repeat_find:
 	spin_unlock(&lqr->lqr_alloc);
 	up_read(&ltd->ltd_qos.lq_rw_sem);
 
-	if (stripe_idx > 1)
+	if (stripe_idx > saved_idx)
 		/* at least one stripe is allocated */
 		RETURN(stripe_idx);
 
@@ -1598,6 +1636,9 @@ out_nolock:
  *
  * \param[in] env		execution environment for this thread
  * \param[in] lo		LOD object
+ * \param[in] stripe_idx	starting stripe index to allocate, if it's not
+ *				0, we are restriping directory
+ * \param[in] stripe_count	total stripe count
  * \param[out] stripes		striping created
  *
  * \retval positive	stripes allocated, and it should be equal to
@@ -1607,7 +1648,8 @@ out_nolock:
  * \retval negative	errno on failure
  */
 int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
-		      struct dt_object **stripes)
+		      struct dt_object **stripes, u32 stripe_idx,
+		      u32 stripe_count)
 {
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
@@ -1617,22 +1659,31 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	struct lu_tgt_desc *mdt;
 	struct dt_object *dto;
 	u64 total_weight = 0;
-	u32 stripe_count = lo->ldo_dir_stripe_count;
-	unsigned int nfound;
+	u32 saved_idx = stripe_idx;
+	u32 mdt_idx;
 	unsigned int good_mdts;
 	unsigned int i;
 	int rc = 0;
 
 	ENTRY;
 
-	if (stripe_count == 1)
-		RETURN(1);
+	LASSERT(stripe_idx <= stripe_count);
+	if (stripe_idx == stripe_count)
+		RETURN(stripe_count);
 
+	/* use MDT pool in @ltd, once MDT pool is supported in the future, it
+	 * can be passed in as argument like OST object allocation.
+	 */
 	pool = &ltd->ltd_tgt_pool;
 
 	/* Detect -EAGAIN early, before expensive lock is taken. */
 	if (!ltd_qos_is_usable(ltd))
 		RETURN(-EAGAIN);
+
+	rc = lod_qos_mdt_in_use_init(env, ltd, stripe_idx, stripe_count, pool,
+				     stripes);
+	if (rc)
+		RETURN(rc);
 
 	/* Do actual allocation, use write lock here. */
 	down_write(&ltd->ltd_qos.lq_rw_sem);
@@ -1648,12 +1699,8 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(unlock, rc);
 
-	rc = lod_qos_tgt_in_use_clear(env, stripe_count);
-	if (rc)
-		GOTO(unlock, rc);
-
 	good_mdts = 0;
-	/* Find all the tgts that are valid stripe candidates */
+	/* Find all the MDTs that are valid stripe candidates */
 	for (i = 0; i < pool->op_count; i++) {
 		if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, pool->op_array[i]))
 			continue;
@@ -1675,14 +1722,13 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		good_mdts++;
 	}
 
-	QOS_DEBUG("found %d good tgts\n", good_mdts);
+	QOS_DEBUG("found %d good MDTs\n", good_mdts);
 
-	if (good_mdts < stripe_count - 1)
+	if (good_mdts < stripe_count - stripe_idx)
 		GOTO(unlock, rc = -EAGAIN);
 
-	/* Find enough tgts with weighted random allocation. */
-	nfound = 1;
-	while (nfound < stripe_count) {
+	/* Find enough MDTs with weighted random allocation. */
+	while (stripe_idx < stripe_count) {
 		u64 rand, cur_weight;
 
 		cur_weight = 0;
@@ -1690,35 +1736,36 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 		rand = lu_prandom_u64_max(total_weight);
 
-		/* On average, this will hit larger-weighted tgts more often.
-		 * 0-weight tgts will always get used last (only when rand=0) */
+		/* On average, this will hit larger-weighted MDTs more often.
+		 * 0-weight MDT will always get used last (only when rand=0) */
 		for (i = 0; i < pool->op_count; i++) {
-			__u32 idx = pool->op_array[i];
 			int rc2;
 
-			mdt = LTD_TGT(ltd, idx);
+			mdt_idx = pool->op_array[i];
+			mdt = LTD_TGT(ltd, mdt_idx);
 
 			if (!mdt->ltd_qos.ltq_usable)
 				continue;
 
 			cur_weight += mdt->ltd_qos.ltq_weight;
 
-			QOS_DEBUG("idx=%d nfound=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
-				  idx, nfound, cur_weight, rand,
+			QOS_DEBUG("stripe_count=%d stripe_index=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
+				  stripe_count, stripe_idx, cur_weight, rand,
 				  total_weight);
 
 			if (cur_weight < rand)
 				continue;
 
-			QOS_DEBUG("stripe=%d to idx=%d\n", nfound, idx);
+			QOS_DEBUG("stripe=%d to idx=%d\n",
+				  stripe_idx, mdt_idx);
 
-			if (lod_qos_is_tgt_used(env, idx, nfound))
+			if (lod_qos_is_tgt_used(env, mdt_idx, stripe_idx))
 				continue;
 
 			rc2 = obd_fid_alloc(env, mdt->ltd_exp, &fid, NULL);
-			if (rc2) {
+			if (rc2 < 0) {
 				QOS_DEBUG("can't alloc FID on #%u: %d\n",
-					  idx, rc2);
+					  mdt_idx, rc2);
 				continue;
 			}
 
@@ -1728,14 +1775,14 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				&conf);
 			if (IS_ERR(dto)) {
 				QOS_DEBUG("can't alloc stripe on #%u: %d\n",
-					  idx, (int) PTR_ERR(dto));
+					  mdt_idx, (int) PTR_ERR(dto));
 				continue;
 			}
 
-			lod_qos_tgt_in_use(env, nfound, idx);
-			stripes[nfound] = dto;
+			lod_qos_tgt_in_use(env, stripe_idx, mdt_idx);
+			stripes[stripe_idx] = dto;
 			ltd_qos_update(ltd, mdt, &total_weight);
-			nfound++;
+			stripe_idx++;
 			rc = 0;
 			break;
 		}
@@ -1745,7 +1792,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			break;
 	}
 
-	if (unlikely(nfound != stripe_count)) {
+	if (unlikely(stripe_idx != stripe_count)) {
 		/*
 		 * when the decision to use weighted algorithm was made
 		 * we had enough appropriate OSPs, but this state can
@@ -1754,8 +1801,8 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 * an object due to just changed state
 		 */
 		QOS_DEBUG("%s: wanted %d objects, found only %d\n",
-			  lod2obd(lod)->obd_name, stripe_count, nfound);
-		for (i = 1; i < nfound; i++) {
+			  lod2obd(lod)->obd_name, stripe_count, stripe_idx);
+		for (i = saved_idx; i < stripe_idx; i++) {
 			LASSERT(stripes[i] != NULL);
 			dt_object_put(env, stripes[i]);
 			stripes[i] = NULL;
@@ -1767,7 +1814,7 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 		rc = -EAGAIN;
 	} else {
-		rc = nfound;
+		rc = stripe_idx;
 	}
 
 unlock:
