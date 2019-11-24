@@ -250,7 +250,6 @@ struct socket;
 struct lnet_lnd {
 	/* fields managed by portals */
 	struct list_head	lnd_list;	/* stash in the LND table */
-	int			lnd_refcount;	/* # active instances */
 
 	/* fields initialized by the LND */
 	__u32			lnd_type;
