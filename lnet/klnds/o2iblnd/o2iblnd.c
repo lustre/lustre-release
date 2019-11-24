@@ -39,7 +39,7 @@
 
 #include "o2iblnd.h"
 
-static struct lnet_lnd the_o2iblnd;
+static const struct lnet_lnd the_o2iblnd;
 
 struct kib_data kiblnd_data;
 
@@ -3354,7 +3354,7 @@ failed:
 	return -ENETDOWN;
 }
 
-static struct lnet_lnd the_o2iblnd = {
+static const struct lnet_lnd the_o2iblnd = {
 	.lnd_type	= O2IBLND,
 	.lnd_startup	= kiblnd_startup,
 	.lnd_shutdown	= kiblnd_shutdown,

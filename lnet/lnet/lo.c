@@ -103,7 +103,7 @@ lolnd_startup(struct lnet_ni *ni)
 	return (0);
 }
 
-struct lnet_lnd the_lolnd = {
+const struct lnet_lnd the_lolnd = {
 	.lnd_type	= LOLND,
 	.lnd_startup	= lolnd_startup,
 	.lnd_shutdown	= lolnd_shutdown,

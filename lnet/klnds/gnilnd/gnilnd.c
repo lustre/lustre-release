@@ -25,7 +25,7 @@
 #include "gnilnd.h"
 
 /* Primary entry points from LNET.  There are no guarantees against reentrance. */
-struct lnet_lnd the_kgnilnd = {
+const struct lnet_lnd the_kgnilnd = {
 	.lnd_type       = GNILND,
 	.lnd_startup    = kgnilnd_startup,
 	.lnd_shutdown   = kgnilnd_shutdown,

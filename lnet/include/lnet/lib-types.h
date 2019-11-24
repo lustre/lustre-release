@@ -399,7 +399,7 @@ struct lnet_net {
 	bool			net_tunables_set;
 
 	/* procedural interface */
-	struct lnet_lnd		*net_lnd;
+	const struct lnet_lnd	*net_lnd;
 
 	/* list of NIs on this net */
 	struct list_head	net_ni_list;
@@ -1110,7 +1110,7 @@ struct lnet {
 	/* uniquely identifies this ni in this epoch */
 	__u64				ln_interface_cookie;
 	/* registered LNDs */
-	struct lnet_lnd			*ln_lnds[NUM_LNDS];
+	const struct lnet_lnd		*ln_lnds[NUM_LNDS];
 
 	/* test protocol compatibility flags */
 	int				ln_testprotocompat;

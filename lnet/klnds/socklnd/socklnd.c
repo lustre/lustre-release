@@ -40,7 +40,7 @@
 #include "socklnd.h"
 #include <linux/inetdevice.h>
 
-static struct lnet_lnd the_ksocklnd;
+static const struct lnet_lnd the_ksocklnd;
 struct ksock_nal_data ksocknal_data;
 
 static struct ksock_interface *
@@ -2797,7 +2797,7 @@ static void __exit ksocklnd_exit(void)
 	lnet_unregister_lnd(&the_ksocklnd);
 }
 
-static struct lnet_lnd the_ksocklnd = {
+static const struct lnet_lnd the_ksocklnd = {
 	.lnd_type		= SOCKLND,
 	.lnd_startup		= ksocknal_startup,
 	.lnd_shutdown		= ksocknal_shutdown,
