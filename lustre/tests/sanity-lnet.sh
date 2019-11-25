@@ -28,6 +28,38 @@ export LNETCTL=${LNETCTL:-"$LUSTRE/../lnet/utils/lnetctl"}
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 [[ -z $LNETCTL ]] && skip "Need lnetctl"
 
+restore_mounts=false
+
+if is_mounted $MOUNT || is_mounted $MOUNT2; then
+	cleanupall || error "Failed cleanup prior to test execution"
+	restore_mounts=true
+fi
+
+cleanup_lnet() {
+	echo "Cleaning up LNet"
+	$LNETCTL lnet unconfigure 2>/dev/null
+	unload_modules
+}
+
+restore_modules=false
+if module_loaded lnet ; then
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	restore_modules=true
+fi
+
+cleanup_testsuite() {
+	rm -f $TMP/sanity-dlc*
+	cleanup_netns
+	cleanup_lnet
+	if $restore_mounts; then
+		setupall || error "Failed to setup Lustre after test execution"
+	elif $restore_modules; then
+		load_modules ||
+			error "Couldn't load modules after test execution"
+	fi
+	return 0
+}
+
 load_lnet() {
 	load_module ../libcfs/libcfs/libcfs
 	# Prevent local MODOPTS_LIBCFS being passed as part of environment
@@ -49,11 +81,6 @@ load_lnet() {
 		esac
 	fi
 	load_module ../lnet/klnds/$LNETLND
-}
-
-cleanup_lnet() {
-	$LNETCTL lnet unconfigure 2>/dev/null
-	unload_modules
 }
 
 do_lnetctl() {
@@ -134,6 +161,7 @@ test_5() {
 }
 run_test 5 "add a network using an interface in the non-default namespace"
 
-cleanup_netns
-cleanup_lnet
+complete $SECONDS
+
+cleanup_testsuite
 exit_status
