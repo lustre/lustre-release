@@ -1102,14 +1102,14 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	const struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
 	struct inode		*inode = osd_dt_obj(dt)->oo_inode;
 	struct osd_thandle	*oh;
-	int			extents = 1;
+	int			extents = 0;
 	int			depth;
 	int			i;
-	int			newblocks;
+	int			newblocks = 0;
 	int			rc = 0;
 	int			credits = 0;
 	long long		quota_space = 0;
-	struct osd_fextent	extent = { 0 };
+	struct osd_fextent	mapped = { 0 }, extent = { 0 };
 	enum osd_quota_local_flags local_flags = 0;
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	ENTRY;
@@ -1118,19 +1118,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	oh = container_of(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	newblocks = npages;
-
 	/* calculate number of extents (probably better to pass nb) */
 	for (i = 0; i < npages; i++) {
-		if (i && lnb[i].lnb_file_offset !=
-		    lnb[i - 1].lnb_file_offset + lnb[i - 1].lnb_len)
-			extents++;
-
-		if (osd_is_mapped(dt, lnb[i].lnb_file_offset, &extent))
-			lnb[i].lnb_flags |= OBD_BRW_MAPPED;
-		else
-			quota_space += PAGE_SIZE;
-
 		/* ignore quota for the whole request if any page is from
 		 * client cache or written by root.
 		 *
@@ -1145,6 +1134,22 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		    (lnb[i].lnb_flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
 		    OBD_BRW_FROM_GRANT)
 			declare_flags |= OSD_QID_FORCE;
+
+		if (osd_is_mapped(dt, lnb[i].lnb_file_offset, &mapped)) {
+			lnb[i].lnb_flags |= OBD_BRW_MAPPED;
+			continue;
+		}
+
+		/* count only unmapped changes */
+		newblocks++;
+		if (lnb[i].lnb_file_offset != extent.end || extent.end == 0) {
+			extents++;
+			extent.end = lnb[i].lnb_file_offset + lnb[i].lnb_len;
+		} else {
+			extent.end += lnb[i].lnb_len;
+		}
+
+		quota_space += PAGE_SIZE;
 	}
 
 	/*
