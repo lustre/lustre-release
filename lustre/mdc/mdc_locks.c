@@ -668,6 +668,12 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 			mdc_set_open_replay_data(NULL, NULL, it);
 		}
 
+		if (it_disposition(it, DISP_OPEN_CREATE) &&
+		    !it_open_error(DISP_OPEN_CREATE, it)) {
+			lprocfs_counter_incr(exp->exp_obd->obd_md_stats,
+					     LPROC_MD_CREATE);
+		}
+
 		if (body->mbo_valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE)) {
                         void *eadata;
 

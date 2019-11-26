@@ -617,7 +617,8 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 
 static int ll_lookup_it_finish(struct ptlrpc_request *request,
 			       struct lookup_intent *it,
-			       struct inode *parent, struct dentry **de)
+			       struct inode *parent, struct dentry **de,
+			       ktime_t kstart)
 {
 	struct inode		 *inode = NULL;
 	__u64			  bits = 0;
@@ -691,6 +692,11 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 		}
 	}
 
+	if (it_disposition(it, DISP_OPEN_CREATE)) {
+		ll_stats_ops_tally(ll_i2sbi(parent), LPROC_LL_MKNOD,
+				   ktime_us_delta(ktime_get(), kstart));
+	}
+
 	GOTO(out, rc = 0);
 
 out:
@@ -704,6 +710,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 				   struct lookup_intent *it,
 				   void **secctx, __u32 *secctxlen)
 {
+	ktime_t kstart = ktime_get();
 	struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
 	struct dentry *save = dentry, *retval;
 	struct ptlrpc_request *req = NULL;
@@ -797,7 +804,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
 	/* dir layout may change */
 	ll_unlock_md_op_lsm(op_data);
-	rc = ll_lookup_it_finish(req, it, parent, &dentry);
+	rc = ll_lookup_it_finish(req, it, parent, &dentry, kstart);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, retval = ERR_PTR(rc));
