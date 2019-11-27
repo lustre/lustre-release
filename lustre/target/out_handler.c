@@ -1055,7 +1055,7 @@ int out_handle(struct tgt_session_info *tsi)
 
 		our = update_bufs[i];
 		if (ptlrpc_req_need_swab(pill->rc_req))
-			lustre_swab_object_update_request(our);
+			lustre_swab_object_update_request(our, 0);
 
 		if (our->ourq_magic != UPDATE_REQUEST_MAGIC) {
 			CERROR("%s: invalid update buffer magic %x"

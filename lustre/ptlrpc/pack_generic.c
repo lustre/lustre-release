@@ -2909,20 +2909,37 @@ void lustre_swab_object_update(struct object_update *ou)
 	}
 }
 
-void lustre_swab_object_update_request(struct object_update_request *our)
+int lustre_swab_object_update_request(struct object_update_request *our,
+				      __u32 len)
 {
-	size_t i;
+	__u32 i, size = 0;
+	struct object_update *ou;
+
 	__swab32s(&our->ourq_magic);
 	__swab16s(&our->ourq_count);
 	__swab16s(&our->ourq_padding);
-	for (i = 0; i < our->ourq_count; i++) {
-		struct object_update *ou;
 
+	/* Don't need to calculate request size if len is 0. */
+	if (len > 0) {
+		size = sizeof(struct object_update_request);
+		for (i = 0; i < our->ourq_count; i++) {
+			ou = object_update_request_get(our, i, NULL);
+			if (ou == NULL)
+				return -EPROTO;
+			size += sizeof(struct object_update) +
+				ou->ou_params_count *
+				sizeof(struct object_update_param);
+		}
+		if (unlikely(size > len))
+			return -EOVERFLOW;
+	}
+
+	for (i = 0; i < our->ourq_count; i++) {
 		ou = object_update_request_get(our, i, NULL);
-		if (ou == NULL)
-			return;
 		lustre_swab_object_update(ou);
 	}
+
+	return size;
 }
 
 void lustre_swab_object_update_result(struct object_update_result *our)
@@ -2932,22 +2949,30 @@ void lustre_swab_object_update_result(struct object_update_result *our)
 	__swab16s(&our->our_padding);
 }
 
-void lustre_swab_object_update_reply(struct object_update_reply *our)
+int lustre_swab_object_update_reply(struct object_update_reply *our, __u32 len)
 {
-	size_t i;
+	__u32 i, size;
 
 	__swab32s(&our->ourp_magic);
 	__swab16s(&our->ourp_count);
 	__swab16s(&our->ourp_padding);
+
+	size = sizeof(struct object_update_reply) + our->ourp_count *
+	       (sizeof(__u16) + sizeof(struct object_update_result));
+	if (unlikely(size > len))
+		return -EOVERFLOW;
+
 	for (i = 0; i < our->ourp_count; i++) {
 		struct object_update_result *ourp;
 
 		__swab16s(&our->ourp_lens[i]);
 		ourp = object_update_result_get(our, i, NULL);
 		if (ourp == NULL)
-			return;
+			return -EPROTO;
 		lustre_swab_object_update_result(ourp);
 	}
+
+	return size;
 }
 
 void lustre_swab_out_update_header(struct out_update_header *ouh)

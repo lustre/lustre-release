@@ -1263,12 +1263,12 @@ struct req_msg_field RMF_MDS_HSM_REQUEST =
 		    lustre_swab_hsm_request, NULL);
 EXPORT_SYMBOL(RMF_MDS_HSM_REQUEST);
 
-struct req_msg_field RMF_OUT_UPDATE = DEFINE_MSGF("object_update", 0, -1,
+struct req_msg_field RMF_OUT_UPDATE = DEFINE_MSGFL("object_update", 0, -1,
 				lustre_swab_object_update_request, NULL);
 EXPORT_SYMBOL(RMF_OUT_UPDATE);
 
 struct req_msg_field RMF_OUT_UPDATE_REPLY =
-			DEFINE_MSGF("object_update_reply", 0, -1,
+			DEFINE_MSGFL("object_update_reply", 0, -1,
 				    lustre_swab_object_update_reply, NULL);
 EXPORT_SYMBOL(RMF_OUT_UPDATE_REPLY);
 

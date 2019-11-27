@@ -114,11 +114,12 @@ void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
 void lustre_swab_hsm_user_item(struct hsm_user_item *hui);
 void lustre_swab_hsm_request(struct hsm_request *hr);
 void lustre_swab_object_update(struct object_update *ou);
-void lustre_swab_object_update_request(struct object_update_request *our);
+int lustre_swab_object_update_request(struct object_update_request *our,
+				      __u32 len);
 void lustre_swab_out_update_header(struct out_update_header *ouh);
 void lustre_swab_out_update_buffer(struct out_update_buffer *oub);
 void lustre_swab_object_update_result(struct object_update_result *our);
-void lustre_swab_object_update_reply(struct object_update_reply *our);
+int lustre_swab_object_update_reply(struct object_update_reply *our, __u32 len);
 void lustre_swab_swap_layouts(struct mdc_swap_layouts *msl);
 void lustre_swab_close_data(struct close_data *data);
 void lustre_swab_close_data_resync_done(struct close_data_resync_done *resync);
