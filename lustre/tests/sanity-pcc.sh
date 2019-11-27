@@ -1373,6 +1373,79 @@ test_17() {
 }
 run_test 17 "Test auto attach for layout refresh"
 
+test_18() {
+	local agt_host=$(facet_active_host $SINGLEAGT)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local oldmd5
+	local newmd5
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
+
+	do_facet $SINGLEAGT $LCTL pcc list $MOUNT
+	do_facet $SINGLEAGT dd if=/dev/urandom of=$file bs=1M count=4 ||
+		error "failed to write $file"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach $file"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $LFS pcc detach --keep $file ||
+		error "failed to detach $file"
+	do_facet $SINGLEAGT $LFS pcc state $file
+	$CHECKSTAT -s 4194304 $file
+	dd if=/dev/zero of=$DIR2/$tfile seek=1k bs=1k count=1 ||
+		error "failed to write $DIR2/$tfile"
+	oldmd5=$(md5sum $DIR2/$tfile | awk '{print $1}')
+	$CHECKSTAT -s 1049600 $DIR2/$tfile || error "$DIR2/$tfile size wrong"
+
+	local lpcc_path=$(lpcc_fid2path $hsm_root $file)
+
+	do_facet $SINGLEAGT $LFS pcc state $file
+	check_file_size $SINGLEAGT $lpcc_path 4194304
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "failed to attach $file"
+	check_lpcc_sizes $SINGLEAGT $lpcc_path $file 1049600
+	newmd5=$(do_facet $SINGLEAGT md5sum $file | awk '{print $1}')
+	[ "$oldmd5" == "$newmd5" ] || error "md5sum differ: $oldmd5 $newmd5"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "failed to detach $file"
+}
+run_test 18 "Verify size correctness after re-attach the file"
+
+test_19() {
+	local agt_host=$(facet_active_host $SINGLEAGT)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local lpcc_path
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ auto_attach=0"
+
+	do_facet $SINGLEAGT "echo -n QQQQQ > $file" || error "echo $file failed"
+	lpcc_path=$(lpcc_fid2path $hsm_root $file)
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "Failed to attach $file"
+	check_lpcc_state $file "readwrite"
+	check_lpcc_sizes $SINGLEAGT $file $lpcc_path 5
+	do_facet $SINGLEAGT $LFS pcc detach --keep $file ||
+		error "Failed to detach $file"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "Failed to attach $file"
+	check_lpcc_sizes $SINGLEAGT $file $lpcc_path 5
+	do_facet $SINGLEAGT $LFS pcc detach --keep $file ||
+		error "Failed to detach $file"
+}
+run_test 19 "Verify the file re-attach works as expected"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
