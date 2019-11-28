@@ -814,6 +814,7 @@ struct lnet_route {
 	__u32			lr_hops;	/* how far I am */
 	unsigned int		lr_priority;	/* route priority */
 	bool			lr_alive;	/* cached route aliveness */
+	bool			lr_single_hop;  /* this route is single-hop */
 };
 
 #define LNET_REMOTE_NETS_HASH_DEFAULT	(1U << 7)

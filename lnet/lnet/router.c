@@ -257,8 +257,12 @@ bool lnet_is_route_alive(struct lnet_route *route)
 	if (!lnet_is_gateway_net_alive(llpn))
 		return false;
 
-	if (avoid_asym_router_failure) {
-		/* Check the gateway's interfaces on the remote network */
+	/*
+	 * For single hop routes avoid_asym_router_failure dictates
+	 * that the remote net must exist on the gateway. For multi-hop
+	 * routes the next-hop will not have the remote net.
+	 */
+	if (avoid_asym_router_failure && route->lr_single_hop) {
 		rlpn = lnet_peer_get_net_locked(gw, route->lr_net);
 		if (!rlpn)
 			return false;
@@ -304,7 +308,33 @@ lnet_consolidate_routes_locked(struct lnet_peer *orig_lp,
 			lnet_net_unlock(LNET_LOCK_EX);
 		}
 	}
+}
 
+static inline void
+lnet_check_route_inconsistency(struct lnet_route *route)
+{
+	if (!route->lr_single_hop && (int)route->lr_hops <= 1) {
+		CWARN("route %s->%s is detected to be multi-hop but hop count is set to %d\n",
+			libcfs_net2str(route->lr_net),
+			libcfs_nid2str(route->lr_gateway->lp_primary_nid),
+			(int) route->lr_hops);
+	}
+}
+
+static void
+lnet_set_route_hop_type(struct lnet_peer *gw, struct lnet_route *route)
+{
+	struct lnet_peer_net *lpn;
+	bool single_hop = false;
+
+	list_for_each_entry(lpn, &gw->lp_peer_nets, lpn_peer_nets) {
+		if (route->lr_net == lpn->lpn_net_id) {
+			single_hop = true;
+			break;
+		}
+	}
+	route->lr_single_hop = single_hop;
+	lnet_check_route_inconsistency(route);
 }
 
 static inline void
@@ -325,13 +355,13 @@ void
 lnet_router_discovery_ping_reply(struct lnet_peer *lp)
 {
 	struct lnet_ping_buffer *pbuf = lp->lp_data;
-	struct lnet_remotenet *rnet;
 	struct lnet_peer_net *llpn;
 	struct lnet_route *route;
+	bool single_hop = false;
 	bool net_up = false;
 	unsigned lp_state;
-	__u32 net, net2;
-	int i, j;
+	__u32 net;
+	int i;
 
 
 	spin_lock(&lp->lp_lock);
@@ -359,67 +389,54 @@ lnet_router_discovery_ping_reply(struct lnet_peer *lp)
 		return;
 	}
 
-	CDEBUG(D_NET, "Discovery is disabled. Processing reply for gw: %s\n",
-	       libcfs_nid2str(lp->lp_primary_nid));
+	CDEBUG(D_NET, "Discovery is disabled. Processing reply for gw: %s:%d\n",
+	       libcfs_nid2str(lp->lp_primary_nid), pbuf->pb_info.pi_nnis);
 
 	/*
-	 * examine the ping response:
-	 * For each NID in the ping response, extract the net
-	 * if the net exists on our remote net list then
-	 * iterate over the routes on the rnet and if:
-	 *	The route's local net is healthy and
-	 *	The remote net status is UP, then mark the route up
-	 * otherwise mark the route down
+	 * examine the ping response to determine if the routes on that
+	 * gateway should be declared alive.
+	 * The route is alive if:
+	 *  1. local network to reach the route is alive and
+	 *  2. route is single hop, avoid_async_router_failure is set and
+	 *     there exists at least one NI on the route's remote net
 	 */
-	for (i = 1; i < pbuf->pb_info.pi_nnis; i++) {
-		net = LNET_NIDNET(pbuf->pb_info.pi_ni[i].ns_nid);
-		rnet = lnet_find_rnet_locked(net);
-		if (!rnet)
+	list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
+		llpn = lnet_peer_get_net_locked(lp, route->lr_lnet);
+		if (!llpn) {
+			lnet_set_route_aliveness(route, false);
 			continue;
-		list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
-			/* check if this is the route's gateway */
-			if (lp->lp_primary_nid !=
-			    route->lr_gateway->lp_primary_nid)
-				continue;
-
-			llpn = lnet_peer_get_net_locked(lp, route->lr_lnet);
-			if (!llpn) {
-				lnet_set_route_aliveness(route, false);
-				continue;
-			}
-
-			if (!lnet_is_gateway_net_alive(llpn)) {
-				lnet_set_route_aliveness(route, false);
-				continue;
-			}
-
-			if (avoid_asym_router_failure &&
-			    pbuf->pb_info.pi_ni[i].ns_status !=
-				LNET_NI_STATUS_UP) {
-				net_up = false;
-
-				/*
-				 * revisit all previous NIDs and check if
-				 * any on the network we're examining is
-				 * up. If at least one is up then we consider
-				 * the route to be alive.
-				 */
-				for (j = 1; j < i; j++) {
-					net2 = LNET_NIDNET(pbuf->pb_info.
-							   pi_ni[j].ns_nid);
-					if (net2 == net &&
-					    pbuf->pb_info.pi_ni[j].ns_status ==
-						LNET_NI_STATUS_UP)
-						net_up = true;
-				}
-				if (!net_up) {
-					lnet_set_route_aliveness(route, false);
-					continue;
-				}
-			}
-
-			lnet_set_route_aliveness(route, true);
 		}
+
+		if (!lnet_is_gateway_net_alive(llpn)) {
+			lnet_set_route_aliveness(route, false);
+			continue;
+		}
+
+		single_hop = net_up = false;
+		for (i = 1; i < pbuf->pb_info.pi_nnis; i++) {
+			net = LNET_NIDNET(pbuf->pb_info.pi_ni[i].ns_nid);
+
+			if (route->lr_net == net) {
+				single_hop = true;
+				if (pbuf->pb_info.pi_ni[i].ns_status ==
+				    LNET_NI_STATUS_UP) {
+					net_up = true;
+					break;
+				}
+			}
+		}
+
+		route->lr_single_hop = single_hop;
+		if (avoid_asym_router_failure && single_hop)
+			lnet_set_route_aliveness(route, net_up);
+		else
+			lnet_set_route_aliveness(route, true);
+
+		/*
+		 * warn that the route is configured as single-hop but it
+		 * really is multi-hop as far as we can tell.
+		 */
+		lnet_check_route_inconsistency(route);
 	}
 }
 
@@ -435,12 +452,21 @@ lnet_router_discovery_complete(struct lnet_peer *lp)
 	lp->lp_alive = lp->lp_dc_error == 0;
 	spin_unlock(&lp->lp_lock);
 
-	/*
-	 * Router discovery successful? All peer information would've been
-	 * updated already. No need to do any more processing
-	 */
-	if (lp->lp_alive)
+	/* ping replies are being handled when discovery is disabled */
+	if (lnet_is_discovery_disabled_locked(lp))
 		return;
+
+	if (!lp->lp_dc_error) {
+		/*
+		* mark single-hop routes.  If the remote net is not configured on
+		* the gateway we assume this is intentional and we mark the
+		* gateway as multi-hop
+		*/
+		list_for_each_entry(route, &lp->lp_routes, lr_gwlist)
+			lnet_set_route_hop_type(lp, route);
+
+		return;
+	}
 
 	/*
 	 * We do not send messages directly to the remote interfaces
@@ -868,7 +894,7 @@ int lnet_get_rtr_pool_cfg(int cpt, struct lnet_ioctl_pool_cfg *pool_cfg)
 
 int
 lnet_get_route(int idx, __u32 *net, __u32 *hops,
-	       lnet_nid_t *gateway, __u32 *alive, __u32 *priority, __u32 *sensitivity)
+	       lnet_nid_t *gateway, __u32 *flags, __u32 *priority, __u32 *sensitivity)
 {
 	struct lnet_remotenet *rnet;
 	struct list_head *rn_list;
@@ -896,7 +922,14 @@ lnet_get_route(int idx, __u32 *net, __u32 *hops,
 					*priority = route->lr_priority;
 					*sensitivity = route->lr_gateway->
 						lp_health_sensitivity;
-					*alive	  = lnet_is_route_alive(route);
+					if (lnet_is_route_alive(route))
+						*flags |= LNET_RT_ALIVE;
+					else
+						*flags &= ~LNET_RT_ALIVE;
+					if (route->lr_single_hop)
+						*flags &= ~LNET_RT_MULTI_HOP;
+					else
+						*flags |= LNET_RT_MULTI_HOP;
 					lnet_net_unlock(cpt);
 					return 0;
 				}

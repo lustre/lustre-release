@@ -1011,6 +1011,9 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 		goto out;
 
 	for (i = 0;; i++) {
+		__u32 rt_alive;
+		__u32 rt_multi_hop;
+
 		LIBCFS_IOC_INIT_V2(data, cfg_hdr);
 		data.cfg_count = i;
 
@@ -1073,11 +1076,21 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 						cfg_route.rtr_sensitivity) == NULL)
 				goto out;
 
+			rt_alive = data.cfg_config_u.cfg_route.rtr_flags &
+					LNET_RT_ALIVE;
+			rt_multi_hop = data.cfg_config_u.cfg_route.rtr_flags &
+					LNET_RT_MULTI_HOP;
+
 			if (!backup &&
 			    cYAML_create_string(item, "state",
-						data.cfg_config_u.cfg_route.
-							rtr_flags ?
+						rt_alive ?
 						"up" : "down") == NULL)
+				goto out;
+
+			if (!backup &&
+			    cYAML_create_string(item, "type",
+						rt_multi_hop?
+						"multi-hop" : "single-hop") == NULL)
 				goto out;
 		}
 	}
