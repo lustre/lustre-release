@@ -1,0 +1,19 @@
+--- linux-4.18/fs/ext4/mballoc.c	2019-11-28 14:55:26.500545920 +0300
++++ linux-4.18/fs/ext4/mballoc.c	2019-11-28 14:53:18.600086008 +0300
+@@ -2060,7 +2060,15 @@ static int ext4_mb_good_group(struct
+ 
+ 	/* We only do this if the grp has never been initialized */
+ 	if (unlikely(EXT4_MB_GRP_NEED_INIT(grp))) {
+-		int ret = ext4_mb_init_group(ac->ac_sb, group, GFP_NOFS);
++		int ret;
++
++		/* cr=0/1 is a very optimistic search to find large
++		 * good chunks almost for free. if buddy data is
++		 * not ready, then this optimization makes no sense */
++
++		if (cr < 2)
++			return 0;
++		ret = ext4_mb_init_group(ac->ac_sb, group, GFP_NOFS);
+ 		if (ret)
+ 			return ret;
+ 	}
