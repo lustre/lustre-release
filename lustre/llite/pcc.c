@@ -124,6 +124,7 @@ int pcc_super_init(struct pcc_super *super)
 	cap_lower(cred->cap_effective, CAP_SYS_RESOURCE);
 	init_rwsem(&super->pccs_rw_sem);
 	INIT_LIST_HEAD(&super->pccs_datasets);
+	super->pccs_generation = 1;
 
 	return 0;
 }
@@ -540,6 +541,12 @@ pcc_parse_value_pairs(struct pcc_cmd *cmd, char *buffer)
 		 */
 		if ((cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCC_ALL) == 0)
 			cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCC_ALL;
+
+		/* For RW-PCC, the value of @rwid must be non zero. */
+		if (cmd->u.pccc_add.pccc_flags & PCC_DATASET_RWPCC &&
+		    cmd->u.pccc_add.pccc_rwid == 0)
+			return -EINVAL;
+
 		break;
 	case PCC_DEL_DATASET:
 	case PCC_CLEAR_ALL:
@@ -826,6 +833,7 @@ pcc_dataset_del(struct pcc_super *super, char *pathname)
 		if (strcmp(dataset->pccd_pathname, pathname) == 0) {
 			list_del_init(&dataset->pccd_linkage);
 			pcc_dataset_put(dataset);
+			super->pccs_generation++;
 			rc = 0;
 			break;
 		}
@@ -866,6 +874,7 @@ static void pcc_remove_datasets(struct pcc_super *super)
 		list_del(&dataset->pccd_linkage);
 		pcc_dataset_put(dataset);
 	}
+	super->pccs_generation++;
 	up_write(&super->pccs_rw_sem);
 }
 
@@ -1073,9 +1082,15 @@ void pcc_file_init(struct pcc_file *pccf)
 	pccf->pccf_type = LU_PCC_NONE;
 }
 
-static inline bool pcc_auto_attach_enabled(struct pcc_dataset *dataset)
+static inline bool pcc_auto_attach_enabled(enum pcc_dataset_flags flags,
+					   enum pcc_io_type iot)
 {
-	return dataset->pccd_flags & PCC_DATASET_AUTO_ATTACH;
+	if (iot == PIT_OPEN)
+		return flags & PCC_DATASET_OPEN_ATTACH;
+	if (iot == PIT_GETATTR)
+		return flags & PCC_DATASET_STAT_ATTACH;
+	else
+		return flags & PCC_DATASET_AUTO_ATTACH;
 }
 
 static const char pcc_xattr_layout[] = XATTR_USER_PREFIX "PCC.layout";
@@ -1088,7 +1103,7 @@ static int pcc_layout_xattr_set(struct pcc_inode *pcci, __u32 gen)
 
 	ENTRY;
 
-	if (!(lli->lli_pcc_state & PCC_STATE_FL_AUTO_ATTACH))
+	if (!(lli->lli_pcc_dsflags & PCC_DATASET_AUTO_ATTACH))
 		RETURN(0);
 
 #ifndef HAVE_VFS_SETXATTR
@@ -1150,21 +1165,33 @@ static void pcc_inode_attach_init(struct pcc_dataset *dataset,
 				  struct dentry *dentry,
 				  enum lu_pcc_type type)
 {
-	struct ll_inode_info *lli = pcci->pcci_lli;
-
 	pcci->pcci_path.mnt = mntget(dataset->pccd_path.mnt);
 	pcci->pcci_path.dentry = dentry;
 	LASSERT(atomic_read(&pcci->pcci_refcount) == 0);
 	atomic_set(&pcci->pcci_refcount, 1);
 	pcci->pcci_type = type;
 	pcci->pcci_attr_valid = false;
+}
 
-	if (dataset->pccd_flags & PCC_DATASET_OPEN_ATTACH)
-		lli->lli_pcc_state |= PCC_STATE_FL_OPEN_ATTACH;
-	if (dataset->pccd_flags & PCC_DATASET_IO_ATTACH)
-		lli->lli_pcc_state |= PCC_STATE_FL_IO_ATTACH;
-	if (dataset->pccd_flags & PCC_DATASET_STAT_ATTACH)
-		lli->lli_pcc_state |= PCC_STATE_FL_STAT_ATTACH;
+static inline void pcc_inode_dsflags_set(struct ll_inode_info *lli,
+					 struct pcc_dataset *dataset)
+{
+	lli->lli_pcc_generation = ll_info2pccs(lli)->pccs_generation;
+	lli->lli_pcc_dsflags = dataset->pccd_flags;
+}
+
+static void pcc_inode_attach_set(struct pcc_super *super,
+				 struct pcc_dataset *dataset,
+				 struct ll_inode_info *lli,
+				 struct pcc_inode *pcci,
+				 struct dentry *dentry,
+				 enum lu_pcc_type type)
+{
+	pcc_inode_init(pcci, lli);
+	pcc_inode_attach_init(dataset, pcci, dentry, type);
+	down_read(&super->pccs_rw_sem);
+	pcc_inode_dsflags_set(lli, dataset);
+	up_read(&super->pccs_rw_sem);
 }
 
 static inline void pcc_layout_gen_set(struct pcc_inode *pcci,
@@ -1253,6 +1280,7 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 			pcc_inode_get(pcci);
 			pcci->pcci_type = type;
 		}
+		pcc_inode_dsflags_set(lli, dataset);
 		pcc_layout_gen_set(pcci, gen);
 		*cached = true;
 	}
@@ -1264,11 +1292,13 @@ out:
 	RETURN(rc);
 }
 
-static int pcc_try_datasets_attach(struct inode *inode, __u32 gen,
-				   enum lu_pcc_type type, bool *cached)
+static int pcc_try_datasets_attach(struct inode *inode, enum pcc_io_type iot,
+				   __u32 gen, enum lu_pcc_type type,
+				   bool *cached)
 {
-	struct pcc_dataset *dataset, *tmp;
 	struct pcc_super *super = &ll_i2sbi(inode)->ll_pcc_super;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct pcc_dataset *dataset = NULL, *tmp;
 	int rc = 0;
 
 	ENTRY;
@@ -1276,18 +1306,71 @@ static int pcc_try_datasets_attach(struct inode *inode, __u32 gen,
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry_safe(dataset, tmp,
 				 &super->pccs_datasets, pccd_linkage) {
-		if (!pcc_auto_attach_enabled(dataset))
-			continue;
+		if (!pcc_auto_attach_enabled(dataset->pccd_flags, iot))
+			break;
+
 		rc = pcc_try_dataset_attach(inode, gen, type, dataset, cached);
 		if (rc < 0 || (!rc && *cached))
 			break;
+	}
+
+	/*
+	 * Update the saved dataset flags for the inode accordingly if failed.
+	 */
+	if (!rc && !*cached) {
+		/*
+		 * Currently auto attach strategy for a PCC backend is
+		 * unchangeable once once it was added into the PCC datasets on
+		 * a client as the support to change auto attach strategy is
+		 * not implemented yet.
+		 */
+		/*
+		 * If tried to attach from one PCC backend:
+		 * @lli_pcc_generation > 0:
+		 * 1) The file was once attached into PCC, but now the
+		 * corresponding PCC backend should be removed from the client;
+		 * 2) The layout generation was changed, the data has been
+		 * restored;
+		 * 3) The corresponding PCC copy is not existed on PCC
+		 * @lli_pcc_generation == 0:
+		 * The file is never attached into PCC but in a HSM released
+		 * state, or once attached into PCC but the inode was evicted
+		 * from icache later.
+		 * Set the saved dataset flags with PCC_DATASET_NONE. Then this
+		 * file will skip from the candidates to try auto attach until
+		 * the file is attached ninto PCC again.
+		 *
+		 * If the file was never attached into PCC, or once attached but
+		 * its inode was evicted from icache (lli_pcc_generation == 0),
+		 * set the saved dataset flags with PCC_DATASET_NONE.
+		 *
+		 * If the file was once attached into PCC but the corresponding
+		 * dataset was removed from the client, set the saved dataset
+		 * flags with PCC_DATASET_NONE.
+		 *
+		 * TODO: If the file was once attached into PCC but not try to
+		 * auto attach due to the change of the configuration parameters
+		 * for this dataset (i.e. change from auto attach enabled to
+		 * auto attach disabled for this dataset), update the saved
+		 * dataset flags witha the found one.
+		 */
+		lli->lli_pcc_dsflags = PCC_DATASET_NONE;
 	}
 	up_read(&super->pccs_rw_sem);
 
 	RETURN(rc);
 }
 
-static int pcc_try_auto_attach(struct inode *inode, bool *cached, bool is_open)
+/*
+ * TODO: For RW-PCC, it is desirable to store HSM info as a layout (LU-10606).
+ * Thus the client can get archive ID from the layout directly. When try to
+ * attach the file automatically which is in HSM released state (according to
+ * LOV_PATTERN_F_RELEASED in the layout), it can determine whether the file is
+ * valid cached on PCC more precisely according to the @rwid (archive ID) in
+ * the PCC dataset and the archive ID in HSM attrs.
+ */
+static int pcc_try_auto_attach(struct inode *inode, bool *cached,
+			       enum pcc_io_type iot)
 {
 	struct pcc_super *super = &ll_i2sbi(inode)->ll_pcc_super;
 	struct cl_layout clt = {
@@ -1311,7 +1394,7 @@ static int pcc_try_auto_attach(struct inode *inode, bool *cached, bool is_open)
 	 * obtain valid layout lock from MDT (i.e. the file is being
 	 * HSM restoring).
 	 */
-	if (is_open) {
+	if (iot == PIT_OPEN) {
 		if (ll_layout_version_get(lli) == CL_LAYOUT_GEN_NONE)
 			RETURN(0);
 	} else {
@@ -1324,17 +1407,52 @@ static int pcc_try_auto_attach(struct inode *inode, bool *cached, bool is_open)
 	if (rc)
 		RETURN(rc);
 
-	if (!is_open && gen != clt.cl_layout_gen) {
+	if (iot != PIT_OPEN && gen != clt.cl_layout_gen) {
 		CDEBUG(D_CACHE, DFID" layout changed from %d to %d.\n",
 		       PFID(ll_inode2fid(inode)), gen, clt.cl_layout_gen);
 		RETURN(-EINVAL);
 	}
 
 	if (clt.cl_is_released)
-		rc = pcc_try_datasets_attach(inode, clt.cl_layout_gen,
+		rc = pcc_try_datasets_attach(inode, iot, clt.cl_layout_gen,
 					     LU_PCC_READWRITE, cached);
 
 	RETURN(rc);
+}
+
+static inline bool pcc_may_auto_attach(struct inode *inode,
+				       enum pcc_io_type iot)
+{
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct pcc_super *super = ll_i2pccs(inode);
+
+	/* Known the file was not in any PCC backend. */
+	if (lli->lli_pcc_dsflags & PCC_DATASET_NONE)
+		return false;
+
+	/*
+	 * lli_pcc_generation = 0 means that the file was never attached into
+	 * PCC, or may be once attached into PCC but detached as the inode is
+	 * evicted from icache (i.e. "echo 3 > /proc/sys/vm/drop_caches" or
+	 * icache shrinking due to the memory pressure), which will cause the
+	 * file detach from PCC when releasing the inode from icache.
+	 * In either case, we still try to attach.
+	 */
+	/* lli_pcc_generation == 0, or the PCC setting was changed,
+	 * or there is no PCC setup on the client and the try will return
+	 * immediately in pcc_try_auto_attch().
+	 */
+	if (super->pccs_generation != lli->lli_pcc_generation)
+		return true;
+
+	/* The cached setting @lli_pcc_dsflags is valid */
+	if (iot == PIT_OPEN)
+		return lli->lli_pcc_dsflags & PCC_DATASET_OPEN_ATTACH;
+
+	if (iot == PIT_GETATTR)
+		return lli->lli_pcc_dsflags & PCC_DATASET_STAT_ATTACH;
+
+	return lli->lli_pcc_dsflags & PCC_DATASET_IO_ATTACH;
 }
 
 int pcc_file_open(struct inode *inode, struct file *file)
@@ -1361,8 +1479,8 @@ int pcc_file_open(struct inode *inode, struct file *file)
 		GOTO(out_unlock, rc = 0);
 
 	if (!pcci || !pcc_inode_has_layout(pcci)) {
-		if (lli->lli_pcc_state & PCC_STATE_FL_OPEN_ATTACH)
-			rc = pcc_try_auto_attach(inode, &cached, true);
+		if (pcc_may_auto_attach(inode, PIT_OPEN))
+			rc = pcc_try_auto_attach(inode, &cached, PIT_OPEN);
 
 		if (rc < 0 || !cached)
 			GOTO(out_unlock, rc);
@@ -1433,7 +1551,6 @@ out:
 
 static void pcc_io_init(struct inode *inode, enum pcc_io_type iot, bool *cached)
 {
-	struct ll_inode_info *lli = ll_i2info(inode);
 	struct pcc_inode *pcci;
 
 	pcc_inode_lock(inode);
@@ -1444,11 +1561,8 @@ static void pcc_io_init(struct inode *inode, enum pcc_io_type iot, bool *cached)
 		*cached = true;
 	} else {
 		*cached = false;
-		if ((lli->lli_pcc_state & PCC_STATE_FL_IO_ATTACH &&
-		     iot != PIT_GETATTR) ||
-		    (iot == PIT_GETATTR &&
-		     lli->lli_pcc_state & PCC_STATE_FL_STAT_ATTACH)) {
-			(void) pcc_try_auto_attach(inode, cached, false);
+		if (pcc_may_auto_attach(inode, iot)) {
+			(void) pcc_try_auto_attach(inode, cached, iot);
 			if (*cached) {
 				pcci = ll_i2pcci(inode);
 				LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
@@ -2175,6 +2289,7 @@ int pcc_inode_create(struct super_block *sb, struct pcc_dataset *dataset,
 int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 {
 	struct dentry *pcc_dentry = pca->pca_dentry;
+	struct pcc_super *super = ll_i2pccs(inode);
 	const struct cred *old_cred;
 	struct pcc_inode *pcci;
 	int rc;
@@ -2189,7 +2304,7 @@ int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 
 	LASSERT(pcc_dentry);
 
-	old_cred = override_creds(pcc_super_cred(inode->i_sb));
+	old_cred = override_creds(super->pccs_cred);
 	pcc_inode_lock(inode);
 	LASSERT(ll_i2pcci(inode) == NULL);
 	OBD_SLAB_ALLOC_PTR_GFP(pcci, pcc_inode_slab, GFP_NOFS);
@@ -2201,9 +2316,8 @@ int pcc_inode_create_fini(struct inode *inode, struct pcc_create_attach *pca)
 	if (rc)
 		GOTO(out_put, rc);
 
-	pcc_inode_init(pcci, ll_i2info(inode));
-	pcc_inode_attach_init(pca->pca_dataset, pcci, pcc_dentry,
-			      LU_PCC_READWRITE);
+	pcc_inode_attach_set(super, pca->pca_dataset, ll_i2info(inode),
+			     pcci, pcc_dentry, LU_PCC_READWRITE);
 
 	rc = pcc_layout_xattr_set(pcci, 0);
 	if (rc) {
@@ -2336,6 +2450,7 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 {
 	struct pcc_dataset *dataset;
 	struct ll_inode_info *lli = ll_i2info(inode);
+	struct pcc_super *super = ll_i2pccs(inode);
 	struct pcc_inode *pcci;
 	const struct cred *old_cred;
 	struct dentry *dentry;
@@ -2355,7 +2470,7 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 	if (dataset == NULL)
 		RETURN(-ENOENT);
 
-	old_cred = override_creds(pcc_super_cred(inode->i_sb));
+	old_cred = override_creds(super->pccs_cred);
 	rc = __pcc_inode_create(dataset, &lli->lli_fid, &dentry);
 	if (rc)
 		GOTO(out_dataset_put, rc);
@@ -2402,8 +2517,8 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 	if (pcci == NULL)
 		GOTO(out_unlock, rc = -ENOMEM);
 
-	pcc_inode_init(pcci, lli);
-	pcc_inode_attach_init(dataset, pcci, dentry, LU_PCC_READWRITE);
+	pcc_inode_attach_set(super, dataset, lli, pcci,
+			     dentry, LU_PCC_READWRITE);
 out_unlock:
 	pcc_inode_unlock(inode);
 out_fput:
@@ -2535,8 +2650,15 @@ int pcc_ioctl_detach(struct inode *inode, __u32 opt)
 	LASSERT(atomic_read(&pcci->pcci_refcount) > 0);
 
 	if (pcci->pcci_type == LU_PCC_READWRITE) {
-		if (opt == PCC_DETACH_OPT_UNCACHE)
+		if (opt == PCC_DETACH_OPT_UNCACHE) {
 			hsm_remove = true;
+			/*
+			 * The file will be removed from PCC, set the flags
+			 * with PCC_DATASET_NONE even the later removal of the
+			 * PCC copy fails.
+			 */
+			lli->lli_pcc_dsflags = PCC_DATASET_NONE;
+		}
 
 		__pcc_layout_invalidate(pcci);
 		pcc_inode_put(pcci);
