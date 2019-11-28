@@ -210,10 +210,26 @@ struct ll_inode_info {
 
 			struct mutex		 lli_pcc_lock;
 			enum lu_pcc_state_flags	 lli_pcc_state;
+			/*
+			 * @lli_pcc_generation saves the gobal PCC generation
+			 * when the file was successfully attached into PCC.
+			 * The flags of the PCC dataset are saved in
+			 * @lli_pcc_dsflags.
+			 * The gobal PCC generation will be increased when add
+			 * or delete a PCC backend, or change the configuration
+			 * parameters for PCC.
+			 * If @lli_pcc_generation is same as the gobal PCC
+			 * generation, we can use the saved flags of the PCC
+			 * dataset to determine whether need to try auto attach
+			 * safely.
+			 */
+			__u64			 lli_pcc_generation;
+			enum pcc_dataset_flags	 lli_pcc_dsflags;
 			struct pcc_inode	*lli_pcc_inode;
-			struct mutex			lli_group_mutex;
-			__u64				lli_group_users;
-			unsigned long			lli_group_gid;
+
+			struct mutex		 lli_group_mutex;
+			__u64			 lli_group_users;
+			unsigned long		 lli_group_gid;
 		};
 	};
 
@@ -1501,5 +1517,15 @@ void cl_inode_fini(struct inode *inode);
 
 u64 cl_fid_build_ino(const struct lu_fid *fid, int api32);
 u32 cl_fid_build_gen(const struct lu_fid *fid);
+
+static inline struct pcc_super *ll_i2pccs(struct inode *inode)
+{
+	return &ll_i2sbi(inode)->ll_pcc_super;
+}
+
+static inline struct pcc_super *ll_info2pccs(struct ll_inode_info *lli)
+{
+	return ll_i2pccs(ll_info2i(lli));
+}
 
 #endif /* LLITE_INTERNAL_H */

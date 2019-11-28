@@ -91,20 +91,22 @@ struct pcc_matcher {
 };
 
 enum pcc_dataset_flags {
-	PCC_DATASET_NONE	= 0x0,
+	PCC_DATASET_INVALID	= 0x0,
+	/* Indicate that known the file is not in PCC. */
+	PCC_DATASET_NONE	= 0x01,
 	/* Try auto attach at open, enabled by default */
-	PCC_DATASET_OPEN_ATTACH	= 0x01,
+	PCC_DATASET_OPEN_ATTACH	= 0x02,
 	/* Try auto attach during IO when layout refresh, enabled by default */
-	PCC_DATASET_IO_ATTACH	= 0x02,
+	PCC_DATASET_IO_ATTACH	= 0x04,
 	/* Try auto attach at stat */
-	PCC_DATASET_STAT_ATTACH	= 0x04,
+	PCC_DATASET_STAT_ATTACH	= 0x08,
 	PCC_DATASET_AUTO_ATTACH	= PCC_DATASET_OPEN_ATTACH |
 				  PCC_DATASET_IO_ATTACH |
 				  PCC_DATASET_STAT_ATTACH,
 	/* PCC backend is only used for RW-PCC */
-	PCC_DATASET_RWPCC	= 0x08,
+	PCC_DATASET_RWPCC	= 0x10,
 	/* PCC backend is only used for RO-PCC */
-	PCC_DATASET_ROPCC	= 0x10,
+	PCC_DATASET_ROPCC	= 0x20,
 	/* PCC backend provides caching services for both RW-PCC and RO-PCC */
 	PCC_DATASET_PCC_ALL	= PCC_DATASET_RWPCC | PCC_DATASET_ROPCC,
 };
@@ -113,7 +115,7 @@ struct pcc_dataset {
 	__u32			pccd_rwid;	 /* Archive ID */
 	__u32			pccd_roid;	 /* Readonly ID */
 	struct pcc_match_rule	pccd_rule;	 /* Match rule */
-	enum pcc_dataset_flags	pccd_flags;	 /* flags of PCC backend */
+	enum pcc_dataset_flags	pccd_flags;	 /* Flags of PCC backend */
 	char			pccd_pathname[PATH_MAX]; /* full path */
 	struct path		pccd_path;	 /* Root path */
 	struct list_head	pccd_linkage;  /* Linked to pccs_datasets */
@@ -127,6 +129,12 @@ struct pcc_super {
 	struct list_head	 pccs_datasets;
 	/* creds of process who forced instantiation of super block */
 	const struct cred	*pccs_cred;
+	/*
+	 * Gobal PCC Generation: it will be increased once the configuration
+	 * for PCC is changed, i.e. add or delete a PCC backend, modify the
+	 * parameters for PCC.
+	 */
+	__u64			 pccs_generation;
 };
 
 struct pcc_inode {
@@ -176,7 +184,9 @@ enum pcc_io_type {
 	/* fsync system call handling */
 	PIT_FSYNC,
 	/* splice_read system call */
-	PIT_SPLICE_READ
+	PIT_SPLICE_READ,
+	/* open system call */
+	PIT_OPEN
 };
 
 enum pcc_cmd_type {

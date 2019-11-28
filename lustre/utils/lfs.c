@@ -10712,6 +10712,11 @@ static int lfs_pcc_attach(int argc, char **argv)
 		}
 	}
 
+	if (archive_id == 0) {
+		fprintf(stderr, "%s: must specify attach ID\n", argv[0]);
+		return CMD_HELP;
+	}
+
 	if (argc <= optind) {
 		fprintf(stderr, "%s: must specify one or more file names\n",
 			argv[0]);

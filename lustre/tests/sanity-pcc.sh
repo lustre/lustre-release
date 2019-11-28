@@ -1411,7 +1411,7 @@ test_18() {
 		error "failed to attach $file"
 	check_lpcc_sizes $SINGLEAGT $lpcc_path $file 1049600
 	newmd5=$(do_facet $SINGLEAGT md5sum $file | awk '{print $1}')
-	[ "$oldmd5" == "$newmd5" ] || error "md5sum differ: $oldmd5 $newmd5"
+	[ "$oldmd5" == "$newmd5" ] || error "md5sum differ: $oldmd5 != $newmd5"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "failed to detach $file"
 }
@@ -1423,7 +1423,6 @@ test_19() {
 	local mntpt="/mnt/pcc.$tdir"
 	local hsm_root="$mntpt/$tdir"
 	local file=$DIR/$tfile
-	local lpcc_path
 
 	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
 	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
@@ -1445,6 +1444,29 @@ test_19() {
 		error "Failed to detach $file"
 }
 run_test 19 "Verify the file re-attach works as expected"
+
+test_20() {
+	local agt_host=$(facet_active_host $SINGLEAGT)
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+	setup_pcc_mapping $SINGLEAGT \
+		"projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
+
+	do_facet $SINGLEAGT "echo -n QQQQQ > $file" ||
+		error "echo $file failed"
+	do_facet $SINGLEAGT $LFS pcc attach -i $HSM_ARCHIVE_NUMBER $file ||
+		error "Failed to attach $file"
+	do_facet $SINGLEAGT "echo 3 > /proc/sys/vm/drop_caches"
+	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "Failed to detach $file"
+}
+run_test 20 "Auto attach works after the inode was once evicted from cache"
 
 complete $SECONDS
 check_and_cleanup_lustre
