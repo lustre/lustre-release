@@ -2698,11 +2698,16 @@ again:
 		send_case |= REMOTE_DST;
 
 	/*
-	 * if this is a non-MR peer or if we're recovering a peer ni then
-	 * let's consider this an NMR case so we can hit the destination
-	 * NID.
+	 * Deal with the peer as NMR in the following cases:
+	 * 1. the peer is NMR
+	 * 2. We're trying to recover a specific peer NI
+	 * 3. I'm a router sending to the final destination
+	 *    In this case the source of the message would've
+	 *    already selected the final destination so my job
+	 *    is to honor the selection.
 	 */
-	if (!lnet_peer_is_multi_rail(peer) || msg->msg_recovery)
+	if (!lnet_peer_is_multi_rail(peer) || msg->msg_recovery ||
+	    (msg->msg_routing && (send_case & LOCAL_DST)))
 		send_case |= NMR_DST;
 	else
 		send_case |= MR_DST;
