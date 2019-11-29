@@ -553,6 +553,9 @@ LNetMDUnlink(struct lnet_handle_md mdh)
 		lnet_eq_enqueue_event(md->md_eq, &ev);
 	}
 
+	if (md->md_rspt_ptr != NULL)
+		lnet_detach_rsp_tracker(md, cpt);
+
 	lnet_md_unlink(md);
 
 	lnet_res_unlock(cpt);
