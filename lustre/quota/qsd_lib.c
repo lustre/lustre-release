@@ -168,6 +168,7 @@ static ssize_t qsd_enabled_seq_write(struct file *file,
 	if (copy_from_user(valstr, buffer, count))
 		GOTO(out, count = -EFAULT);
 
+	valstr[sizeof(valstr) - 1] = 0;
 	if (strchr(valstr, 'u'))
 		enabled |= BIT(USRQUOTA);
 	if (strchr(valstr, 'g'))
