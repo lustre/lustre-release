@@ -118,6 +118,12 @@ module_param_call(router_sensitivity_percentage, rtr_sensitivity_set, param_get_
 MODULE_PARM_DESC(router_sensitivity_percentage,
 		"How healthy a gateway should be to be used in percent");
 
+static void lnet_add_route_to_rnet(struct lnet_remotenet *rnet,
+				   struct lnet_route *route);
+static void lnet_del_route_from_rnet(lnet_nid_t gw_nid,
+				     struct list_head *route_list,
+				     struct list_head *zombies);
+
 static int
 rtr_sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 {
@@ -149,31 +155,76 @@ rtr_sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 	return 0;
 }
 
+static inline void
+lnet_move_route(struct lnet_route *route, struct lnet_peer *lp)
+{
+	struct lnet_remotenet *rnet;
+	struct list_head zombies;
+
+	INIT_LIST_HEAD(&zombies);
+
+	rnet = lnet_find_rnet_locked(route->lr_net);
+	LASSERT(rnet);
+
+	lnet_del_route_from_rnet(route->lr_nid, &rnet->lrn_routes,
+				 &zombies);
+
+	if (lp) {
+		route = list_first_entry(&zombies, struct lnet_route,
+					lr_list);
+		route->lr_gateway = lp;
+		lnet_add_route_to_rnet(rnet, route);
+	} else {
+		while (!list_empty(&zombies)) {
+			route = list_first_entry(&zombies, struct lnet_route,
+				 lr_list);
+			list_del(&route->lr_list);
+			LIBCFS_FREE(route, sizeof(*route));
+		}
+	}
+
+}
+
 void
 lnet_rtr_transfer_to_peer(struct lnet_peer *src, struct lnet_peer *target)
 {
 	struct lnet_route *route;
+	struct lnet_route *tmp, *tmp2;
 
 	lnet_net_lock(LNET_LOCK_EX);
-	target->lp_rtr_refcount += src->lp_rtr_refcount;
-	/* move the list of queued messages to the new peer */
+	CDEBUG(D_NET, "transfering routes from %s -> %s\n",
+	       libcfs_nid2str(src->lp_primary_nid),
+	       libcfs_nid2str(target->lp_primary_nid));
+	list_for_each_entry(route, &src->lp_routes, lr_gwlist) {
+		CDEBUG(D_NET, "%s: %s->%s\n", libcfs_nid2str(src->lp_primary_nid),
+		       libcfs_net2str(route->lr_net),
+		       libcfs_nid2str(route->lr_nid));
+	}
 	list_splice_init(&src->lp_rtrq, &target->lp_rtrq);
-	/* move all the routes that reference the peer */
-	list_splice_init(&src->lp_routes, &target->lp_routes);
-	/* update all the routes to point to the new peer */
-	list_for_each_entry(route, &target->lp_routes, lr_gwlist)
-		route->lr_gateway = target;
-	/* remove the old peer from the ln_routers list */
-	list_del_init(&src->lp_rtr_list);
-	/* add the new peer to the ln_routers list */
+	list_for_each_entry_safe(route, tmp, &src->lp_routes, lr_gwlist) {
+		struct lnet_route *r2;
+		bool present = false;
+		list_for_each_entry_safe(r2, tmp2, &target->lp_routes, lr_gwlist) {
+			if (route->lr_net == r2->lr_net) {
+				if (route->lr_priority >= r2->lr_priority)
+					present = true;
+				else if (route->lr_hops >= r2->lr_hops)
+					present = true;
+				else
+					lnet_move_route(r2, NULL);
+			}
+		}
+		if (present)
+			lnet_move_route(route, NULL);
+		else
+			lnet_move_route(route, target);
+	}
+
 	if (list_empty(&target->lp_rtr_list)) {
 		lnet_peer_addref_locked(target);
 		list_add_tail(&target->lp_rtr_list, &the_lnet.ln_routers);
 	}
-	/* reset the ref count on the old peer and decrement its ref count */
-	src->lp_rtr_refcount = 0;
-	lnet_peer_decref_locked(src);
-	/* update the router version */
+
 	the_lnet.ln_routers_version++;
 	lnet_net_unlock(LNET_LOCK_EX);
 }
