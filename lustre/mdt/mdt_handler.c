@@ -4683,6 +4683,23 @@ static int mdt_intent_policy(const struct lu_env *env,
 		} else {
 			rc = err_serious(-EFAULT);
 		}
+	} else if (ldesc->l_resource.lr_type == LDLM_IBITS &&
+		   ldesc->l_policy_data.l_inodebits.bits == MDS_INODELOCK_DOM) {
+		struct ldlm_reply *rep;
+
+		/* No intent was provided but INTENT flag is set along with
+		 * DOM bit, this is considered as GLIMPSE request.
+		 * This logic is common for MDT and OST glimpse
+		 */
+		mdt_ptlrpc_stats_update(req, IT_GLIMPSE);
+		rc = mdt_glimpse_enqueue(info, ns, lockp, flags);
+		/* Check whether the reply has been packed successfully. */
+		if (req->rq_repmsg != NULL) {
+			rep = req_capsule_server_get(info->mti_pill,
+						     &RMF_DLM_REP);
+			rep->lock_policy_res2 =
+				ptlrpc_status_hton(rep->lock_policy_res2);
+		}
 	} else {
 		/* No intent was provided */
 		req_capsule_set_size(pill, &RMF_DLM_LVB, RCL_SERVER, 0);

@@ -292,6 +292,11 @@ static int mdt_lvbo_size(struct ldlm_lock *lock)
 		return qmt_hdls.qmth_lvbo_size(mdt->mdt_qmt_dev, lock);
 	}
 
+	/* Always prefer DoM LVB data because layout is never returned in
+	 * LVB when lock bits are combined with DoM, this is either GETATTR
+	 * or OPEN enqueue. Meanwhile GL AST can be issued on such combined
+	 * lock bits and it uses LVB for DoM data.
+	 */
 	if (ldlm_has_dom(lock))
 		return sizeof(struct ost_lvb);
 
@@ -355,22 +360,23 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 			GOTO(out, rc = -ENOMEM);
 	}
 
-	/* LVB for DoM lock is needed only for glimpse,
-	 * don't fill DoM data if there is layout lock */
+	/* DOM LVB is used by glimpse and IO completion when
+	 * DoM bits is always alone.
+	 * If DoM bit is combined with any other bit then it is
+	 * intent OPEN or GETATTR lock which is not filling
+	 * LVB buffer in reply neither for DoM nor for LAYOUT.
+	 */
 	if (ldlm_has_dom(lock)) {
 		struct ldlm_resource *res = lock->l_resource;
 		int lvb_len = sizeof(struct ost_lvb);
 
 		if (!mdt_dom_lvb_is_valid(res))
-			mdt_dom_lvbo_update(lock->l_resource, lock, NULL, 0);
+			mdt_dom_lvbo_update(res, lock, NULL, 0);
 
-		if (lvb_len > *lvblen)
-			lvb_len = *lvblen;
-
+		LASSERT(*lvblen >= lvb_len);
 		lock_res(res);
 		memcpy(lvb, res->lr_lvb_data, lvb_len);
 		unlock_res(res);
-
 		GOTO(out, rc = lvb_len);
 	}
 

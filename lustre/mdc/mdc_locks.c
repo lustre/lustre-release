@@ -879,7 +879,10 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 		LDLM_DEBUG(lock, "DoM lock is returned by: %s, size: %llu",
 			   ldlm_it2str(it->it_op), body->mbo_dom_size);
 
-		rc = mdc_fill_lvb(req, &lock->l_ost_lvb);
+		lock_res_and_lock(lock);
+		mdc_body2lvb(body, &lock->l_ost_lvb);
+		ldlm_lock_allow_match_locked(lock);
+		unlock_res_and_lock(lock);
 	}
 out_lock:
 	LDLM_LOCK_PUT(lock);
@@ -1377,8 +1380,8 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDC_GETATTR_ENQUEUE))
 		rc = -ETIMEDOUT;
 
-	rc = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, 1, einfo->ei_mode,
-				   &flags, NULL, 0, lockh, rc);
+	rc = ldlm_cli_enqueue_fini(exp, req, einfo, 1, &flags, NULL, 0,
+				   lockh, rc);
 	if (rc < 0) {
 		CERROR("%s: ldlm_cli_enqueue_fini() failed: rc = %d\n",
 		       exp->exp_obd->obd_name, rc);

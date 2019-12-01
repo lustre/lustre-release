@@ -1730,9 +1730,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
 			 const struct ldlm_request *dlm_req,
 			 const struct ldlm_callback_suite *cbs);
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
-			  enum ldlm_type type, __u8 with_policy,
-			  enum ldlm_mode mode, __u64 *flags, void *lvb,
-			  __u32 lvb_len,
+			  struct ldlm_enqueue_info *einfo, __u8 with_policy,
+			  __u64 *flags, void *lvb, __u32 lvb_len,
 			  const struct lustre_handle *lockh, int rc);
 int ldlm_cli_enqueue_local(const struct lu_env *env,
 			   struct ldlm_namespace *ns,

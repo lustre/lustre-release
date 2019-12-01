@@ -1381,6 +1381,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_GETATTR_PFID);
 	LASSERTF(OBD_CONNECT2_LSEEK == 0x40000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_LSEEK);
+	LASSERTF(OBD_CONNECT2_DOM_LVB == 0x80000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT2_DOM_LVB);
 	LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)OBD_CKSUM_CRC32);
 	LASSERTF(OBD_CKSUM_ADLER == 0x00000002UL, "found 0x%.8xUL\n",
@@ -3549,7 +3551,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->try_bits));
 	LASSERTF((int)offsetof(struct ldlm_inodebits, li_gid) == 16, "found %lld\n",
 		 (long long)(int)offsetof(struct ldlm_inodebits, li_gid));
-
 	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->li_gid) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->li_gid));
 

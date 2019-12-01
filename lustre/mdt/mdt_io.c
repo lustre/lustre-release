@@ -1033,22 +1033,26 @@ out:
 	return rc;
 }
 
-static void mdt_lvb2body(struct ldlm_resource *res, struct mdt_body *mb)
+static void mdt_lvb2reply(struct ldlm_resource *res, struct mdt_body *mb,
+			  struct ost_lvb *lvb)
 {
 	struct ost_lvb *res_lvb;
 
 	lock_res(res);
 	res_lvb = res->lr_lvb_data;
-	mb->mbo_dom_size = res_lvb->lvb_size;
-	mb->mbo_dom_blocks = res_lvb->lvb_blocks;
-	mb->mbo_mtime = res_lvb->lvb_mtime;
-	mb->mbo_ctime = res_lvb->lvb_ctime;
-	mb->mbo_atime = res_lvb->lvb_atime;
+	if (lvb)
+		*lvb = *res_lvb;
 
+	if (mb) {
+		mb->mbo_dom_size = res_lvb->lvb_size;
+		mb->mbo_dom_blocks = res_lvb->lvb_blocks;
+		mb->mbo_mtime = res_lvb->lvb_mtime;
+		mb->mbo_ctime = res_lvb->lvb_ctime;
+		mb->mbo_atime = res_lvb->lvb_atime;
+		mb->mbo_valid |= OBD_MD_FLATIME | OBD_MD_FLCTIME |
+				 OBD_MD_FLMTIME | OBD_MD_DOM_SIZE;
+	}
 	CDEBUG(D_DLMTRACE, "size %llu\n", res_lvb->lvb_size);
-
-	mb->mbo_valid |= OBD_MD_FLATIME | OBD_MD_FLCTIME | OBD_MD_FLMTIME |
-			 OBD_MD_DOM_SIZE;
 	unlock_res(res);
 }
 
@@ -1079,7 +1083,7 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 	if (dom_lock || !mdt_dom_lvb_is_valid(res))
 		mdt_dom_lvbo_update(res, NULL, NULL, false);
 
-	mdt_lvb2body(res, mb);
+	mdt_lvb2reply(res, mb, NULL);
 	ldlm_resource_putref(res);
 	RETURN(rc);
 }
@@ -1110,6 +1114,8 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	ldlm_processing_policy policy;
 	struct ldlm_reply *rep;
 	struct mdt_body *mbo;
+	struct ost_lvb *lvb;
+	bool old_client = !exp_connect_dom_lvb(mti->mti_exp);
 	int rc;
 
 	ENTRY;
@@ -1117,19 +1123,28 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	policy = ldlm_get_processing_policy(res);
 	LASSERT(policy != NULL);
 
-	req_capsule_set_size(mti->mti_pill, &RMF_MDT_MD, RCL_SERVER, 0);
-	req_capsule_set_size(mti->mti_pill, &RMF_ACL, RCL_SERVER, 0);
+	if (unlikely(old_client)) {
+		req_capsule_set_size(mti->mti_pill, &RMF_MDT_MD, RCL_SERVER, 0);
+		req_capsule_set_size(mti->mti_pill, &RMF_ACL, RCL_SERVER, 0);
+	} else {
+		req_capsule_set_size(mti->mti_pill, &RMF_DLM_LVB, RCL_SERVER,
+				     sizeof(*lvb));
+	}
 	rc = req_capsule_server_pack(mti->mti_pill);
 	if (rc)
 		RETURN(err_serious(rc));
 
 	rep = req_capsule_server_get(mti->mti_pill, &RMF_DLM_REP);
-	if (rep == NULL)
-		RETURN(-EPROTO);
 
-	mbo = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
-	if (mbo == NULL)
-		RETURN(-EPROTO);
+	if (unlikely(old_client)) {
+		mbo = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
+		LASSERT(mbo);
+		lvb = NULL;
+	} else {
+		lvb = req_capsule_server_get(mti->mti_pill, &RMF_DLM_LVB);
+		LASSERT(lvb);
+		mbo = NULL;
+	}
 
 	lock_res(res);
 	/* Check if this is a resend case (MSG_RESENT is set on RPC) and a
@@ -1160,14 +1175,12 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	if (rc == -ENOENT) {
 		/* We are racing with unlink(); just return -ENOENT */
 		rep->lock_policy_res2 = ptlrpc_status_hton(-ENOENT);
-		rc = 0;
 	} else if (rc == -EINVAL) {
 		/* this is possible is client lock has been cancelled but
 		 * still exists on server. If that lock was found on server
 		 * as only conflicting lock then the client has already
 		 * size authority and glimpse is not needed. */
 		CDEBUG(D_DLMTRACE, "Glimpse from the client owning lock\n");
-		rc = 0;
 	} else if (rc < 0) {
 		RETURN(rc);
 	}
@@ -1176,7 +1189,8 @@ fill_mbo:
 	/* LVB can be without valid data in case of DOM */
 	if (!mdt_dom_lvb_is_valid(res))
 		mdt_dom_lvbo_update(res, lock, NULL, false);
-	mdt_lvb2body(res, mbo);
+	mdt_lvb2reply(res, mbo, lvb);
+
 	RETURN(rc);
 }
 
@@ -1247,7 +1261,7 @@ int mdt_brw_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 			GOTO(out_fail, rc);
 		mdt_dom_disk_lvbo_update(mti->mti_env, mo, res, false);
 	}
-	mdt_lvb2body(res, mbo);
+	mdt_lvb2reply(res, mbo, NULL);
 out_fail:
 	rep->lock_policy_res2 = clear_serious(rc);
 	if (rep->lock_policy_res2) {

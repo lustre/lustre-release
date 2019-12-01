@@ -176,6 +176,16 @@ int mdc_unpack_acl(struct ptlrpc_request *req, struct lustre_md *md)
 }
 #endif
 
+static inline void mdc_body2lvb(struct mdt_body *body, struct ost_lvb *lvb)
+{
+	LASSERT(body->mbo_valid & OBD_MD_DOM_SIZE);
+	lvb->lvb_mtime = body->mbo_mtime;
+	lvb->lvb_atime = body->mbo_atime;
+	lvb->lvb_ctime = body->mbo_ctime;
+	lvb->lvb_blocks = body->mbo_dom_blocks;
+	lvb->lvb_size = body->mbo_dom_size;
+}
+
 static inline unsigned long hash_x_index(__u64 hash, int hash64)
 {
 	if (BITS_PER_LONG == 32 && hash64)

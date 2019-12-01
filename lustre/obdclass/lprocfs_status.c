@@ -636,6 +636,7 @@ static const char *obd_connect_names[] = {
 	"fidmap",		/* 0x10000 */
 	"getattr_pfid",		/* 0x20000 */
 	"lseek",		/* 0x40000 */
+	"dom_lvb",		/* 0x80000 */
 	NULL
 };
 

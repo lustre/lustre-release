@@ -160,6 +160,10 @@ static int qsd_intent_interpret(const struct lu_env *env,
 	struct qsd_async_args	 *aa = (struct qsd_async_args *)arg;
 	struct ldlm_reply	 *lockrep;
 	__u64			  flags = LDLM_FL_HAS_INTENT;
+	struct ldlm_enqueue_info  einfo = {
+		.ei_type = LDLM_PLAIN,
+		.ei_mode = LCK_CR,
+	};
 	ENTRY;
 
 	LASSERT(aa->aa_exp);
@@ -167,9 +171,9 @@ static int qsd_intent_interpret(const struct lu_env *env,
 	req_qbody = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_BODY);
 	req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 
-	rc = ldlm_cli_enqueue_fini(aa->aa_exp, req, LDLM_PLAIN, 0, LCK_CR,
-				   &flags, (void *)aa->aa_lvb,
-				   sizeof(struct lquota_lvb), lockh, rc);
+	rc = ldlm_cli_enqueue_fini(aa->aa_exp, req, &einfo, 0, &flags,
+				   aa->aa_lvb, sizeof(*(aa->aa_lvb)),
+				   lockh, rc);
 	if (rc < 0) {
 		/* the lock has been destroyed, forget about the lock handle */
 		memset(lockh, 0, sizeof(*lockh));

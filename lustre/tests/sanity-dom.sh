@@ -194,7 +194,12 @@ run_test sanity "Run sanity with Data-on-MDT files"
 test_sanityn()
 {
 	SANITYN_ONLY=${SANITYN_ONLY:-"1 2 4 5 6 7 8 9 10 11 12 14 17 19 20 \
-				      23 27 39 51a 51c 51d 107"}
+				      23 27 39 51a 51c 51d"}
+
+	if [[ $MDS1_VERSION -ge $(version_code 2.13.55) ]]; then
+		SANITYN_ONLY+=" 107"
+	fi
+
 	SANITYN_REPEAT=${SANITYN_REPEAT:-1}
 	# XXX: to fix 60
 	ONLY=$SANITYN_ONLY ONLY_REPEAT=$SANITYN_REPEAT OSC="mdc" DOM="yes" \
