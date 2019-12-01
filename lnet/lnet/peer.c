@@ -525,7 +525,7 @@ lnet_peer_del_nid(struct lnet_peer *lp, lnet_nid_t nid, unsigned flags)
 		/* assign the next peer_ni to be the primary */
 		lpni2 = lnet_get_next_peer_ni_locked(lp, NULL, lpni);
 		LASSERT(lpni2);
-		lp->lp_primary_nid = lpni->lpni_nid;
+		lp->lp_primary_nid = lpni2->lpni_nid;
 	}
 	rc = lnet_peer_ni_del_locked(lpni, force);
 
