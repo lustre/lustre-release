@@ -1040,7 +1040,7 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
 
         ENTRY;
 
-        CLASSERT(CFS_HASH_THETA_BITS < 15);
+	BUILD_BUG_ON(CFS_HASH_THETA_BITS >= 15);
 
         LASSERT(name != NULL);
         LASSERT(ops != NULL);
