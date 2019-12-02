@@ -1455,8 +1455,6 @@ static int osd_oxc_get(struct osd_object *obj, const char *name,
 	size_t namelen = strlen(name);
 	int rc;
 
-	ENTRY;
-
 	rcu_read_lock();
 	list_for_each_entry_rcu(tmp, &obj->oo_xattr_list, oxe_list) {
 		if (namelen == tmp->oxe_namelen &&
@@ -1483,7 +1481,6 @@ static int osd_oxc_get(struct osd_object *obj, const char *name,
 		GOTO(out, rc = -ERANGE);
 
 	memcpy(buf->lb_buf, &oxe->oxe_buf[namelen + 1], rc);
-	EXIT;
 out:
 	rcu_read_unlock();
 
