@@ -349,9 +349,15 @@ discovery_set(const char *val, cfs_kernel_param_arg_t *kp)
 		return 0;
 	}
 
-	*discovery = value;
-
+	/*
+	 * We still want to set the discovery value even when LNet is not
+	 * running. This is the case when LNet is being loaded and we want
+	 * the module parameters to take effect. Otherwise if we're
+	 * changing the value dynamically, we want to set it after
+	 * updating the peers
+	 */
 	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		*discovery = value;
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return 0;
 	}
@@ -365,7 +371,23 @@ discovery_set(const char *val, cfs_kernel_param_arg_t *kp)
 		pbuf->pb_info.pi_features |= LNET_PING_FEAT_DISCOVERY;
 	lnet_net_unlock(LNET_LOCK_EX);
 
+	/*
+	 * Always update the peers. This will result in a push to the
+	 * peers with the updated capabilities feature mask. The peer can
+	 * then take appropriate action to update its representation of
+	 * the node.
+	 *
+	 * If discovery is already off, turn it on first before pushing
+	 * the update. The discovery flag must be on before pushing.
+	 * otherwise if the flag is on and we're turning it off then push
+	 * first before turning the flag off. In the former case the flag
+	 * is being set twice, but I find it's better to do that rather
+	 * than have duplicate code in an if/else statement.
+	 */
+	if (*discovery > 0 && value == 0)
+		*discovery = value;
 	lnet_push_update_to_peers(1);
+	*discovery = value;
 
 	mutex_unlock(&the_lnet.ln_api_mutex);
 

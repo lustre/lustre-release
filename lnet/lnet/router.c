@@ -120,8 +120,7 @@ MODULE_PARM_DESC(router_sensitivity_percentage,
 
 static void lnet_add_route_to_rnet(struct lnet_remotenet *rnet,
 				   struct lnet_route *route);
-static void lnet_del_route_from_rnet(lnet_nid_t gw_nid,
-				     struct list_head *route_list,
+static void lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
 				     struct list_head *zombies);
 
 static int
@@ -155,34 +154,48 @@ rtr_sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
 	return 0;
 }
 
-static inline void
-lnet_move_route(struct lnet_route *route, struct lnet_peer *lp)
+void
+lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
+		struct list_head *rt_list)
 {
 	struct lnet_remotenet *rnet;
 	struct list_head zombies;
+	struct list_head *l;
 
 	INIT_LIST_HEAD(&zombies);
+
+	if (rt_list)
+		l = rt_list;
+	else
+		l = &zombies;
 
 	rnet = lnet_find_rnet_locked(route->lr_net);
 	LASSERT(rnet);
 
-	lnet_del_route_from_rnet(route->lr_nid, &rnet->lrn_routes,
-				 &zombies);
+	CDEBUG(D_NET, "deleting route %s->%s\n",
+	       libcfs_net2str(route->lr_net),
+	       libcfs_nid2str(route->lr_nid));
+
+	/*
+	 * use the gateway's lp_primary_nid to delete the route as the
+	 * lr_nid can be a constituent NID of the peer
+	 */
+	lnet_del_route_from_rnet(route->lr_gateway->lp_primary_nid,
+				 &rnet->lrn_routes, l);
 
 	if (lp) {
-		route = list_first_entry(&zombies, struct lnet_route,
+		route = list_first_entry(l, struct lnet_route,
 					lr_list);
 		route->lr_gateway = lp;
 		lnet_add_route_to_rnet(rnet, route);
 	} else {
-		while (!list_empty(&zombies)) {
-			route = list_first_entry(&zombies, struct lnet_route,
+		while (!list_empty(l) && !rt_list) {
+			route = list_first_entry(l, struct lnet_route,
 				 lr_list);
 			list_del(&route->lr_list);
 			LIBCFS_FREE(route, sizeof(*route));
 		}
 	}
-
 }
 
 void
@@ -211,13 +224,13 @@ lnet_rtr_transfer_to_peer(struct lnet_peer *src, struct lnet_peer *target)
 				else if (route->lr_hops >= r2->lr_hops)
 					present = true;
 				else
-					lnet_move_route(r2, NULL);
+					lnet_move_route(r2, NULL, NULL);
 			}
 		}
 		if (present)
-			lnet_move_route(route, NULL);
+			lnet_move_route(route, NULL, NULL);
 		else
-			lnet_move_route(route, target);
+			lnet_move_route(route, target, NULL);
 	}
 
 	if (list_empty(&target->lp_rtr_list)) {
@@ -791,7 +804,7 @@ lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway,
 	return rc;
 }
 
-static void
+void
 lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
 			 struct list_head *zombies)
 {

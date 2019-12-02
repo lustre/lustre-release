@@ -2027,6 +2027,13 @@ void lnet_peer_push_event(struct lnet_event *ev)
 	if (!(pbuf->pb_info.pi_features & LNET_PING_FEAT_DISCOVERY)) {
 		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
 		       libcfs_nid2str(lp->lp_primary_nid));
+		/*
+		 * If the peer is going from discovery enabled to
+		 * discovery disabled, we need to reflect that in our
+		 * representation of the peer.
+		 */
+		if (!(lp->lp_state & LNET_PEER_NO_DISCOVERY))
+			lp->lp_state |= LNET_PEER_MARK_DELETION;
 		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
 	} else if (lp->lp_state & LNET_PEER_NO_DISCOVERY) {
 		CDEBUG(D_NET, "Peer %s has discovery enabled\n",
@@ -2324,6 +2331,13 @@ lnet_discovery_event_reply(struct lnet_peer *lp, struct lnet_event *ev)
 	} else {
 		CDEBUG(D_NET, "Peer %s has discovery disabled\n",
 		       libcfs_nid2str(lp->lp_primary_nid));
+		/*
+		 * If the peer is going from discovery enabled to
+		 * discovery disabled, we need to reflect that in our
+		 * representation of the peer.
+		 */
+		if (!(lp->lp_state & LNET_PEER_NO_DISCOVERY))
+			lp->lp_state |= LNET_PEER_MARK_DELETION;
 		lp->lp_state |= LNET_PEER_NO_DISCOVERY;
 	}
 
@@ -3378,6 +3392,50 @@ static int lnet_peer_discovery(void *arg)
 				lnet_peer_discovery_complete(lp);
 			if (the_lnet.ln_dc_state == LNET_DC_STATE_STOPPING)
 				break;
+
+			if (lp->lp_state & LNET_PEER_MARK_DELETION) {
+				struct list_head rlist;
+				struct lnet_route *route, *tmp;
+				int sensitivity = lp->lp_health_sensitivity;
+
+				INIT_LIST_HEAD(&rlist);
+
+				/*
+				 * remove the peer from the discovery work
+				 * queue if it's on there in preparation
+				 * of deleting it.
+				 */
+				if (!list_empty(&lp->lp_dc_list))
+					list_del(&lp->lp_dc_list);
+
+				lnet_net_unlock(LNET_LOCK_EX);
+
+				mutex_lock(&the_lnet.ln_api_mutex);
+
+				lnet_net_lock(LNET_LOCK_EX);
+				list_for_each_entry_safe(route, tmp,
+							 &lp->lp_routes,
+							 lr_gwlist)
+					lnet_move_route(route, NULL, &rlist);
+				lnet_net_unlock(LNET_LOCK_EX);
+
+				/* delete the peer */
+				lnet_peer_del(lp);
+
+				list_for_each_entry_safe(route, tmp,
+							 &rlist, lr_list) {
+					/* re-add these routes */
+					lnet_add_route(route->lr_net,
+						       route->lr_hops,
+						       route->lr_nid,
+						       route->lr_priority,
+						       sensitivity);
+					LIBCFS_FREE(route, sizeof(*route));
+				}
+				mutex_unlock(&the_lnet.ln_api_mutex);
+
+				lnet_net_lock(LNET_LOCK_EX);
+			}
 		}
 
 		lnet_net_unlock(LNET_LOCK_EX);
