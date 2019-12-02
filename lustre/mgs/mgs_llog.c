@@ -1534,12 +1534,15 @@ static int only_mgs_is_running(struct obd_device *mgs_obd)
 	return (num_devices <= 3) && (num_exports == 0);
 }
 
-static int name_create_mdt(char **logname, char *fsname, int i)
+static int name_create_mdt(char **logname, char *fsname, int mdt_idx)
 {
-	char mdt_index[9];
+	char postfix[9];
 
-	sprintf(mdt_index, "-MDT%04x", i);
-	return name_create(logname, fsname, mdt_index);
+	if (mdt_idx > INDEX_MAP_MAX_VALUE)
+		return -E2BIG;
+
+	snprintf(postfix, sizeof(postfix), "-MDT%04x", mdt_idx);
+	return name_create(logname, fsname, postfix);
 }
 
 /**

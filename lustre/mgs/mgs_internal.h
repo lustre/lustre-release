@@ -106,6 +106,7 @@ struct mgs_tgt_srpc_conf {
 };
 
 #define INDEX_MAP_SIZE  8192     /* covers indicies to FFFF */
+#define INDEX_MAP_MAX_VALUE	((INDEX_MAP_SIZE * 8) - 1)
 
 #define FSDB_LOG_EMPTY          (0)  /* missing client log */
 #define FSDB_OLDLOG14           (1)  /* log starts in old (1.4) style */
