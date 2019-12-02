@@ -38,3 +38,4 @@ rhel7/ext4-mmp-dont-mark-bh-dirty.patch
 rhel7/ext4-include-terminating-u32-in-size-of-xattr-entries-when-expanding-inodes.patch
 rhel7/ext4-optimize-ext4_find_delalloc_range-in-nodelalloc.patch
 rhel7/ext4-mballoc-skip-uninit-groups-cr0.patch
+rhel7/ext4-mballoc-prefetch.patch
