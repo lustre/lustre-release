@@ -490,7 +490,11 @@ lnet_handle_remote_failure_locked(struct lnet_peer_ni *lpni)
 	__u32 sensitivity = lnet_health_sensitivity;
 	__u32 lp_sensitivity;
 
-	/* lpni could be NULL if we're in the LOLND case */
+	/*
+	 * NO-OP if:
+	 * 1. lpni could be NULL if we're in the LOLND case
+	 * 2. this is a recovery message
+	 */
 	if (!lpni)
 		return;
 
@@ -875,7 +879,12 @@ lnet_health_check(struct lnet_msg *msg)
 	case LNET_MSG_STATUS_LOCAL_ABORTED:
 	case LNET_MSG_STATUS_LOCAL_NO_ROUTE:
 	case LNET_MSG_STATUS_LOCAL_TIMEOUT:
-		lnet_handle_local_failure(ni);
+		/*
+		 * don't further decrement the health value if the
+		 * recovery message failed.
+		 */
+		if (!msg->msg_recovery)
+			lnet_handle_local_failure(ni);
 		if (msg->msg_tx_committed)
 			/* add to the re-send queue */
 			return lnet_attempt_msg_resend(msg);
@@ -886,7 +895,12 @@ lnet_health_check(struct lnet_msg *msg)
 	 * finalize the message
 	 */
 	case LNET_MSG_STATUS_LOCAL_ERROR:
-		lnet_handle_local_failure(ni);
+		/*
+		 * don't further decrement the health value if the
+		 * recovery message failed.
+		 */
+		if (!msg->msg_recovery)
+			lnet_handle_local_failure(ni);
 		return -1;
 
 	/*
@@ -894,7 +908,8 @@ lnet_health_check(struct lnet_msg *msg)
 	 * attempt a resend safely.
 	 */
 	case LNET_MSG_STATUS_REMOTE_DROPPED:
-		lnet_handle_remote_failure(lpni);
+		if (!msg->msg_recovery)
+			lnet_handle_remote_failure(lpni);
 		if (msg->msg_tx_committed)
 			return lnet_attempt_msg_resend(msg);
 		break;
@@ -902,7 +917,8 @@ lnet_health_check(struct lnet_msg *msg)
 	case LNET_MSG_STATUS_REMOTE_ERROR:
 	case LNET_MSG_STATUS_REMOTE_TIMEOUT:
 	case LNET_MSG_STATUS_NETWORK_TIMEOUT:
-		lnet_handle_remote_failure(lpni);
+		if (!msg->msg_recovery)
+			lnet_handle_remote_failure(lpni);
 		return -1;
 	default:
 		LBUG();

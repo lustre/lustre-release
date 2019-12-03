@@ -1749,8 +1749,6 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, bool alive, bool reset,
 					(sensitivity) ? sensitivity :
 					lnet_health_sensitivity);
 		}
-	} else {
-		lnet_handle_remote_failure_locked(lpni);
 	}
 
 	/* recalculate aliveness */
