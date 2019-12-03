@@ -691,11 +691,11 @@ static bool qsd_acquire(const struct lu_env *env, struct lquota_entry *lqe,
  */
 static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 			 struct lquota_id_info *qid, long long space,
-			 int *flags)
+			 enum osd_quota_local_flags *local_flags)
 {
 	struct lquota_entry *lqe;
 	struct l_wait_info lwi;
-	int qtype_flag = 0;
+	enum osd_quota_local_flags qtype_flag = 0;
 	int rc, ret = -EINPROGRESS;
 	ENTRY;
 
@@ -722,7 +722,7 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		 * quota space. That said, we still want to perform space
 		 * adjustments in qsd_op_end, so we return here, but with
 		 * a reference on the lqe */
-		if (flags != NULL) {
+		if (local_flags != NULL) {
 			rc = qsd_refresh_usage(env, lqe);
 			GOTO(out_flags, rc);
 		}
@@ -753,10 +753,10 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		lqe_write_lock(lqe);
 		lqe->lqe_waiting_write -= space;
 
-		if (flags && lqe->lqe_pending_write != 0)
+		if (local_flags && lqe->lqe_pending_write != 0)
 			/* Inform OSD layer that there are pending writes.
 			 * It might want to retry after a sync if appropriate */
-			 *flags |= QUOTA_FL_SYNC;
+			 *local_flags |= QUOTA_FL_SYNC;
 		lqe_write_unlock(lqe);
 
 		/* convert recoverable error into -EINPROGRESS, client will
@@ -775,11 +775,11 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		}
 	}
 
-	if (flags != NULL) {
+	if (local_flags != NULL) {
 out_flags:
 		LASSERT(qid->lqi_is_blk);
 		if (rc != 0) {
-			*flags |= lquota_over_fl(qqi->qqi_qtype);
+			*local_flags |= lquota_over_fl(qqi->qqi_qtype);
 		} else {
 			__u64	usage;
 
@@ -795,9 +795,9 @@ out_flags:
 			qtype_flag = lquota_over_fl(qqi->qqi_qtype);
 			/* if we should notify client to start sync write */
 			if (usage >= lqe->lqe_granted - lqe->lqe_pending_rel)
-				*flags |= qtype_flag;
+				*local_flags |= qtype_flag;
 			else
-				*flags &= ~qtype_flag;
+				*local_flags &= ~qtype_flag;
 			lqe_read_unlock(lqe);
 		}
 	}
@@ -835,7 +835,7 @@ static inline bool qid_equal(struct lquota_id_info *q1,
  */
 int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 		 struct lquota_trans *trans, struct lquota_id_info *qi,
-		 int *flags)
+		 enum osd_quota_local_flags *local_flags)
 {
 	int	i, rc;
 	bool	found = false;
@@ -894,7 +894,7 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 
 	/* manage quota enforcement for this ID */
 	rc = qsd_op_begin0(env, qsd->qsd_type_array[qi->lqi_type],
-			   &trans->lqt_ids[i], qi->lqi_space, flags);
+			   &trans->lqt_ids[i], qi->lqi_space, local_flags);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(qsd_op_begin);

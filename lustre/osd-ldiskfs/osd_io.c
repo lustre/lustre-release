@@ -1126,10 +1126,10 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	int			i;
 	int			newblocks;
 	int			rc = 0;
-	int			flags = 0;
 	int			credits = 0;
 	long long		quota_space = 0;
 	struct osd_fextent	extent = { 0 };
+	enum osd_quota_local_flags local_flags = 0;
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	ENTRY;
 
@@ -1214,16 +1214,16 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), quota_space, oh,
-				   osd_dt_obj(dt), &flags, declare_flags);
+				   osd_dt_obj(dt), &local_flags, declare_flags);
 
 	/* we need only to store the overquota flags in the first lnb for
 	 * now, once we support multiple objects BRW, this code needs be
 	 * revised. */
-	if (flags & QUOTA_FL_OVER_USRQUOTA)
+	if (local_flags & QUOTA_FL_OVER_USRQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_USRQUOTA;
-	if (flags & QUOTA_FL_OVER_GRPQUOTA)
+	if (local_flags & QUOTA_FL_OVER_GRPQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_GRPQUOTA;
-	if (flags & QUOTA_FL_OVER_PRJQUOTA)
+	if (local_flags & QUOTA_FL_OVER_PRJQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_PRJQUOTA;
 
 	if (rc == 0)

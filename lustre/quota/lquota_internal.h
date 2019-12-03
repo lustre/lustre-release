@@ -295,7 +295,7 @@ static inline void lqe_read_unlock(struct lquota_entry *lqe)
 #define LQUOTA_LEAST_QUNIT(type) \
 	(type == LQUOTA_RES_MD ? (1 << 10) : toqb(OFD_MAX_BRW_SIZE))
 
-static inline int lquota_over_fl(int qtype)
+static inline enum osd_quota_local_flags lquota_over_fl(int qtype)
 {
 	switch (qtype) {
 	case USRQUOTA:
