@@ -2110,9 +2110,9 @@ t32_test() {
 			$LFS setdirstripe -D -c2 $tmp/mnt/lustre/striped_dir
 
 			pushd $tmp/mnt/lustre
-			tar -cf - . --exclude=./striped_dir \
-				    --exclude=./striped_dir_old \
-				    --exclude=./remote_dir |
+			tar -c --exclude=./striped_dir \
+				--exclude=./striped_dir_old \
+				--exclude=./remote_dir -f - .|
 				tar -xvf - -C striped_dir 1>/dev/null || {
 				error_noexit "cp to striped dir failed"
 				return 1
