@@ -475,7 +475,8 @@ extern struct lu_device_operations  osd_lu_ops;
 extern struct dt_index_operations osd_dir_ops;
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		      qid_t uid, qid_t gid, qid_t projid, long long space,
-		      struct osd_thandle *oh, int *flags,
+		      struct osd_thandle *oh,
+		      enum osd_quota_local_flags *local_flags,
 		      enum osd_qid_declare_flags osd_qid_declare_flags);
 uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
 				 uint64_t nrblocks, uint64_t est_maxblockshift);

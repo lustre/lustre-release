@@ -515,7 +515,8 @@ const struct dt_index_operations osd_acct_index_ops = {
  */
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 		      qid_t uid, qid_t gid, qid_t projid, long long space,
-		      struct osd_thandle *oh, int *flags,
+		      struct osd_thandle *oh,
+		      enum osd_quota_local_flags *local_flags,
 		      enum osd_qid_declare_flags osd_qid_declare_flags)
 {
 	struct osd_thread_info *info = osd_oti_get(env);
@@ -543,7 +544,7 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	qi->lqi_type       = USRQUOTA;
 	qi->lqi_space      = space;
 	qi->lqi_is_blk     = !!(osd_qid_declare_flags & OSD_QID_BLK);
-	rcu = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
+	rcu = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, local_flags);
 	if (force && (rcu == -EDQUOT || rcu == -EINPROGRESS))
 		/* ignore EDQUOT & EINPROGRESS when changes are done by root */
 		rcu = 0;
@@ -552,26 +553,27 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	 * for group id. This is only for commit write, which has @flags passed
 	 * in. See osd_declare_write_commit().
 	 * When force is set to true, we also want to proceed with the gid */
-	if (rcu && (rcu != -EDQUOT || flags == NULL))
+	if (rcu && (rcu != -EDQUOT || local_flags == NULL))
 		RETURN(rcu);
 
 	/* and now group quota */
 	qi->lqi_id.qid_gid = gid;
 	qi->lqi_type       = GRPQUOTA;
-	rcg = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
+	rcg = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, local_flags);
 	if (force && (rcg == -EDQUOT || rcg == -EINPROGRESS))
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcg = 0;
 
 #ifdef ZFS_PROJINHERIT
-	if (rcg && (rcg != -EDQUOT || flags == NULL))
+	if (rcg && (rcg != -EDQUOT || local_flags == NULL))
 		RETURN(rcg);
 
 	/* for project quota */
 	if (osd->od_projectused_dn) {
 		qi->lqi_id.qid_projid = projid;
 		qi->lqi_type = PRJQUOTA;
-		rcp = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
+		rcp = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi,
+				   local_flags);
 		if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS))
 			rcp = 0;
 	}

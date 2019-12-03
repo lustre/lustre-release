@@ -638,11 +638,12 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	uint64_t            offset = 0;
 	uint32_t            size = 0;
 	uint32_t blksz = obj->oo_dn->dn_datablksz;
-	int		    i, rc, flags = 0;
+	int		    i, rc;
 	bool synced = false;
 	long long	    space = 0;
 	struct page	   *last_page = NULL;
 	unsigned long	    discont_pages = 0;
+	enum osd_quota_local_flags local_flags = 0;
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	ENTRY;
 
@@ -722,25 +723,26 @@ retry:
 	/* acquire quota space if needed */
 	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
 			       obj->oo_attr.la_gid, obj->oo_attr.la_projid,
-			       space, oh, &flags, declare_flags);
+			       space, oh, &local_flags, declare_flags);
 
-	if (!synced && rc == -EDQUOT && (flags & QUOTA_FL_SYNC) != 0) {
+	if (!synced && rc == -EDQUOT &&
+	    (local_flags & QUOTA_FL_SYNC) != 0) {
 		dt_sync(env, th->th_dev);
 		synced = true;
 		CDEBUG(D_QUOTA, "retry after sync\n");
-		flags = 0;
+		local_flags = 0;
 		goto retry;
 	}
 
 	/* we need only to store the overquota flags in the first lnb for
 	 * now, once we support multiple objects BRW, this code needs be
 	 * revised. */
-	if (flags & QUOTA_FL_OVER_USRQUOTA)
+	if (local_flags & QUOTA_FL_OVER_USRQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_USRQUOTA;
-	if (flags & QUOTA_FL_OVER_GRPQUOTA)
+	if (local_flags & QUOTA_FL_OVER_GRPQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_GRPQUOTA;
 #ifdef ZFS_PROJINHERIT
-	if (flags & QUOTA_FL_OVER_PRJQUOTA)
+	if (local_flags & QUOTA_FL_OVER_PRJQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_PRJQUOTA;
 #endif
 

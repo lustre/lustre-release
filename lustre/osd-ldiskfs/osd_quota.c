@@ -549,7 +549,7 @@ static inline int osd_qid_type(struct osd_thandle *oh, int i)
  */
 int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    struct lquota_id_info *qi, struct osd_object *obj,
-		    bool enforce, int *flags)
+		    bool enforce, enum osd_quota_local_flags *local_flags)
 {
 	struct osd_device *dev;
 	struct qsd_instance *qsd;
@@ -632,7 +632,8 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 
 	/* check quota */
 	if (enforce)
-		rc = qsd_op_begin(env, qsd, oh->ot_quota_trans, qi, flags);
+		rc = qsd_op_begin(env, qsd, oh->ot_quota_trans, qi,
+				  local_flags);
 	RETURN(rc);
 }
 
@@ -655,7 +656,8 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
  */
 int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 			  __u32 projid, long long space, struct osd_thandle *oh,
-			  struct osd_object *obj, int *flags,
+			  struct osd_object *obj,
+			  enum osd_quota_local_flags *local_flags,
 			  enum osd_qid_declare_flags osd_qid_declare_flags)
 {
 	struct osd_thread_info *info = osd_oti_get(env);
@@ -671,7 +673,7 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	qi->lqi_type = USRQUOTA;
 	qi->lqi_space = space;
 	qi->lqi_is_blk = !!(osd_qid_declare_flags & OSD_QID_BLK);
-	rcu = osd_declare_qid(env, oh, qi, obj, true, flags);
+	rcu = osd_declare_qid(env, oh, qi, obj, true, local_flags);
 
 	if (force && (rcu == -EDQUOT || rcu == -EINPROGRESS))
 		/* ignore EDQUOT & EINPROGRESS when changes are done by root */
@@ -683,29 +685,30 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	 * in. See osd_declare_write_commit().
 	 * When force is set to true, we also want to proceed with the gid
 	 */
-	if (rcu && (rcu != -EDQUOT || flags == NULL))
+	if (rcu && (rcu != -EDQUOT || local_flags == NULL))
 		RETURN(rcu);
 
 	/* and now group quota */
 	qi->lqi_id.qid_gid = gid;
 	qi->lqi_type = GRPQUOTA;
-	rcg = osd_declare_qid(env, oh, qi, obj, true, flags);
+	rcg = osd_declare_qid(env, oh, qi, obj, true, local_flags);
 
 	if (force && (rcg == -EDQUOT || rcg == -EINPROGRESS))
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcg = 0;
 
 #ifdef HAVE_PROJECT_QUOTA
-	if (rcg && (rcg != -EDQUOT || flags == NULL))
+	if (rcg && (rcg != -EDQUOT || local_flags == NULL))
 		RETURN(rcg);
 
 	/* and now project quota */
 	qi->lqi_id.qid_projid = projid;
 	qi->lqi_type = PRJQUOTA;
-	rcp = osd_declare_qid(env, oh, qi, obj, true, flags);
+	rcp = osd_declare_qid(env, oh, qi, obj, true, local_flags);
 
 	if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS)) {
-		CDEBUG(D_ERROR, "force to ignore quota flags =%d\n", *flags);
+		CDEBUG(D_QUOTA, "forced to ignore quota flags = %#x\n",
+		       local_flags ? *local_flags : -1);
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcp = 0;
 	}
