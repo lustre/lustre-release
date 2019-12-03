@@ -712,8 +712,9 @@ test_21b() {
 	do_facet mgs $LCTL set_param -P nodemap.c0.sepol="$sepol"
 	check_nodemap c0 sepol $sepol
 
-	# metadata ops with sepol every 10 seconds only
-	echo 10 > /sys/module/ptlrpc/parameters/send_sepol
+	# metadata ops with sepol every 1000 seconds only
+	echo 1000 > /sys/module/ptlrpc/parameters/send_sepol
+	local before=$(date +%s)
 	touch $DIR/$tdir/f6 || error "touch (4)"
 	lfs setstripe -c1 $DIR/$tdir/f7 || error "lfs setstripe (4)"
 	mkdir $DIR/$tdir/d6 || error "mkdir (4)"
@@ -762,7 +763,9 @@ test_21b() {
 	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl5 || error "hardlink (5)"
 	echo 3 > /proc/sys/vm/drop_caches
 
-	sleep 10
+	local after=$(date +%s)
+	# change send_sepol to a smaller, already expired, value
+	echo $((after-before-1)) > /sys/module/ptlrpc/parameters/send_sepol
 	# metadata ops without matching sepol: should fail now
 	touch $DIR/$tdir/f10 && error "touch (6)"
 	lfs setstripe -c1 $DIR/$tdir/f11 && error "lfs setstripe (6)"
