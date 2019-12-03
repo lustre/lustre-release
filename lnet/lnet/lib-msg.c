@@ -838,7 +838,7 @@ lnet_health_check(struct lnet_msg *msg)
 		 * increment the local ni health weather we successfully
 		 * received or sent a message on it.
 		 */
-		lnet_inc_healthv(&ni->ni_healthv);
+		lnet_inc_healthv(&ni->ni_healthv, lnet_health_sensitivity);
 		/*
 		 * It's possible msg_txpeer is NULL in the LOLND
 		 * case. Only increment the peer's health if we're
@@ -858,7 +858,12 @@ lnet_health_check(struct lnet_msg *msg)
 				lnet_set_lpni_healthv_locked(lpni,
 					LNET_MAX_HEALTH_VALUE);
 			} else {
-				lnet_inc_lpni_healthv_locked(lpni);
+				__u32 sensitivity = lpni->lpni_peer_net->
+					lpn_peer->lp_health_sensitivity;
+
+				lnet_inc_lpni_healthv_locked(lpni,
+					(sensitivity) ? sensitivity :
+					lnet_health_sensitivity);
 			}
 			lnet_net_unlock(0);
 		}

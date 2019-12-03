@@ -997,18 +997,50 @@ lnet_set_lpni_healthv_locked(struct lnet_peer_ni *lpni, int value)
 	lnet_update_peer_net_healthv(lpni);
 }
 
+static inline bool
+lnet_atomic_add_unless_max(atomic_t *v, int a, int u)
+{
+	int c = atomic_read(v);
+	bool mod = false;
+	int old;
+	int m;
+
+	if (c == u)
+		return mod;
+
+	for (;;) {
+		if (c + a >= u)
+			m = u;
+		else
+			m = c + a;
+		old = atomic_cmpxchg(v, c, m);
+
+		if (old == u)
+			break;
+
+		if (old == c) {
+			mod = true;
+			break;
+		}
+		c = old;
+	}
+
+	return mod;
+}
+
 static inline void
-lnet_inc_lpni_healthv_locked(struct lnet_peer_ni *lpni)
+lnet_inc_lpni_healthv_locked(struct lnet_peer_ni *lpni, int value)
 {
 	/* only adjust the net health if the lpni health value changed */
-	if (atomic_add_unless(&lpni->lpni_healthv, 1, LNET_MAX_HEALTH_VALUE))
+	if (lnet_atomic_add_unless_max(&lpni->lpni_healthv, value,
+				       LNET_MAX_HEALTH_VALUE))
 		lnet_update_peer_net_healthv(lpni);
 }
 
 static inline void
-lnet_inc_healthv(atomic_t *healthv)
+lnet_inc_healthv(atomic_t *healthv, int value)
 {
-	atomic_add_unless(healthv, 1, LNET_MAX_HEALTH_VALUE);
+	lnet_atomic_add_unless_max(healthv, value, LNET_MAX_HEALTH_VALUE);
 }
 
 void lnet_incr_stats(struct lnet_element_stats *stats,

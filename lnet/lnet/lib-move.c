@@ -3653,7 +3653,8 @@ lnet_handle_recovery_reply(struct lnet_mt_event_info *ev_info,
 		 * In the peer case, it'll naturally be incremented
 		 */
 		if (!unlink_event)
-			lnet_inc_healthv(&ni->ni_healthv);
+			lnet_inc_healthv(&ni->ni_healthv,
+					 lnet_health_sensitivity);
 	} else {
 		struct lnet_peer_ni *lpni;
 		int cpt;
