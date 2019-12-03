@@ -768,7 +768,10 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 						struct lnet_me, me_list);
 				CERROR("Active ME %p on exit\n", me);
 				list_del(&me->me_list);
-				lnet_me_free(me);
+				CDEBUG(D_MALLOC,
+				       "slab-freed 'me' at %p in cleanup.\n",
+				       me);
+				kmem_cache_free(lnet_mes_cachep, me);
 			}
 		}
 		/* the extra entry is for MEs with ignore bits */

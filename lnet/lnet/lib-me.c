@@ -85,9 +85,12 @@ LNetMEAttach(unsigned int portal,
 	if (mtable == NULL) /* can't match portal type */
 		return ERR_PTR(-EPERM);
 
-	me = lnet_me_alloc();
-	if (me == NULL)
+	me = kmem_cache_alloc(lnet_mes_cachep, GFP_NOFS | __GFP_ZERO);
+	if (me == NULL) {
+		CDEBUG(D_MALLOC, "failed to allocate 'me'\n");
 		return ERR_PTR(-ENOMEM);
+	}
+	CDEBUG(D_MALLOC, "slab-alloced 'me' at %p.\n", me);
 
 	lnet_res_lock(mtable->mt_cpt);
 
@@ -171,7 +174,8 @@ lnet_me_unlink(struct lnet_me *me)
 		lnet_md_unlink(md);
 	}
 
-	lnet_me_free(me);
+	CDEBUG(D_MALLOC, "slab-freed 'me' at %p.\n", me);
+	kmem_cache_free(lnet_mes_cachep, me);
 }
 
 #if 0

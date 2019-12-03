@@ -273,28 +273,6 @@ lnet_md_free(struct lnet_libmd *md)
 	}
 }
 
-static inline struct lnet_me *
-lnet_me_alloc (void)
-{
-	struct lnet_me *me;
-
-	me = kmem_cache_alloc(lnet_mes_cachep, GFP_NOFS | __GFP_ZERO);
-
-	if (me)
-		CDEBUG(D_MALLOC, "slab-alloced 'me' at %p.\n", me);
-	else
-		CDEBUG(D_MALLOC, "failed to allocate 'me'\n");
-
-	return me;
-}
-
-static inline void
-lnet_me_free(struct lnet_me *me)
-{
-	CDEBUG(D_MALLOC, "slab-freed 'me' at %p.\n", me);
-	kmem_cache_free(lnet_mes_cachep, me);
-}
-
 struct lnet_libhandle *lnet_res_lh_lookup(struct lnet_res_container *rec,
 				     __u64 cookie);
 void lnet_res_lh_initialize(struct lnet_res_container *rec,
