@@ -1338,21 +1338,18 @@ static int pcc_try_datasets_attach(struct inode *inode, enum pcc_io_type iot,
 		 * from icache later.
 		 * Set the saved dataset flags with PCC_DATASET_NONE. Then this
 		 * file will skip from the candidates to try auto attach until
-		 * the file is attached ninto PCC again.
+		 * the file is attached into PCC again.
 		 *
 		 * If the file was never attached into PCC, or once attached but
 		 * its inode was evicted from icache (lli_pcc_generation == 0),
+		 * or the corresponding dataset was removed from the client,
 		 * set the saved dataset flags with PCC_DATASET_NONE.
-		 *
-		 * If the file was once attached into PCC but the corresponding
-		 * dataset was removed from the client, set the saved dataset
-		 * flags with PCC_DATASET_NONE.
 		 *
 		 * TODO: If the file was once attached into PCC but not try to
 		 * auto attach due to the change of the configuration parameters
 		 * for this dataset (i.e. change from auto attach enabled to
 		 * auto attach disabled for this dataset), update the saved
-		 * dataset flags witha the found one.
+		 * dataset flags with the found one.
 		 */
 		lli->lli_pcc_dsflags = PCC_DATASET_NONE;
 	}
@@ -1431,7 +1428,7 @@ static inline bool pcc_may_auto_attach(struct inode *inode,
 		return false;
 
 	/*
-	 * lli_pcc_generation = 0 means that the file was never attached into
+	 * lli_pcc_generation == 0 means that the file was never attached into
 	 * PCC, or may be once attached into PCC but detached as the inode is
 	 * evicted from icache (i.e. "echo 3 > /proc/sys/vm/drop_caches" or
 	 * icache shrinking due to the memory pressure), which will cause the
@@ -1440,7 +1437,7 @@ static inline bool pcc_may_auto_attach(struct inode *inode,
 	 */
 	/* lli_pcc_generation == 0, or the PCC setting was changed,
 	 * or there is no PCC setup on the client and the try will return
-	 * immediately in pcc_try_auto_attch().
+	 * immediately in pcc_try_auto_attach().
 	 */
 	if (super->pccs_generation != lli->lli_pcc_generation)
 		return true;
