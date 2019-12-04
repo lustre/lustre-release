@@ -1447,31 +1447,19 @@ struct ptlrpc_bulk_desc {
 	/** array of associated MDs */
 	struct lnet_handle_md	bd_mds[PTLRPC_BULK_OPS_COUNT];
 
-	union {
-		struct {
-			/*
-			 * encrypt iov, size is either 0 or bd_iov_count.
-			 */
-			lnet_kiov_t *bd_enc_vec;
-			lnet_kiov_t *bd_vec;
-		} bd_kiov;
-
-		struct {
-			struct kvec *bd_enc_kvec;
-			struct kvec *bd_kvec;
-		} bd_kvec;
-	} bd_u;
-
+	struct {
+		/*
+		 * encrypt iov, size is either 0 or bd_iov_count.
+		 */
+		lnet_kiov_t *bd_enc_vec;
+		lnet_kiov_t *bd_vec;
+	} bd_kiov;
 };
 
-#define GET_KIOV(desc)			((desc)->bd_u.bd_kiov.bd_vec)
-#define BD_GET_KIOV(desc, i)		((desc)->bd_u.bd_kiov.bd_vec[i])
-#define GET_ENC_KIOV(desc)		((desc)->bd_u.bd_kiov.bd_enc_vec)
-#define BD_GET_ENC_KIOV(desc, i)	((desc)->bd_u.bd_kiov.bd_enc_vec[i])
-#define GET_KVEC(desc)			((desc)->bd_u.bd_kvec.bd_kvec)
-#define BD_GET_KVEC(desc, i)		((desc)->bd_u.bd_kvec.bd_kvec[i])
-#define GET_ENC_KVEC(desc)		((desc)->bd_u.bd_kvec.bd_enc_kvec)
-#define BD_GET_ENC_KVEC(desc, i)	((desc)->bd_u.bd_kvec.bd_enc_kvec[i])
+#define GET_KIOV(desc)			((desc)->bd_kiov.bd_vec)
+#define BD_GET_KIOV(desc, i)		((desc)->bd_kiov.bd_vec[i])
+#define GET_ENC_KIOV(desc)		((desc)->bd_kiov.bd_enc_vec)
+#define BD_GET_ENC_KIOV(desc, i)	((desc)->bd_kiov.bd_enc_vec[i])
 
 enum {
 	SVC_INIT	= 0,
