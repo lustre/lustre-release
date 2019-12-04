@@ -813,7 +813,7 @@ kgnilnd_parse_lnet_rdma(struct lnet_msg *lntmsg, unsigned int *niov,
 		if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) == 0) {
 			*kiov = NULL;
 		} else {
-			*kiov = lntmsg->msg_md->md_iov.kiov;
+			*kiov = lntmsg->msg_md->md_kiov;
 		}
 		*niov = lntmsg->msg_md->md_niov;
 		*nob = lntmsg->msg_md->md_length;
@@ -2183,16 +2183,9 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			rc = -ENOMEM;
 			goto out;
 		}
-		/* slightly different options as we might actually have a GET with a
-		 * MD_KIOV set but a non-NULL md_iov.iov */
-		if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) == 0)
-			rc = kgnilnd_setup_rdma_buffer(tx, lntmsg->msg_md->md_niov,
-						      lntmsg->msg_md->md_iov.iov, NULL,
-						      0, lntmsg->msg_md->md_length);
-		else
-			rc = kgnilnd_setup_rdma_buffer(tx, lntmsg->msg_md->md_niov,
-						      NULL, lntmsg->msg_md->md_iov.kiov,
-						      0, lntmsg->msg_md->md_length);
+		rc = kgnilnd_setup_rdma_buffer(tx, lntmsg->msg_md->md_niov,
+					       NULL, lntmsg->msg_md->md_kiov,
+					       0, lntmsg->msg_md->md_length);
 		if (rc != 0) {
 			CERROR("unable to setup buffer: %d\n", rc);
 			kgnilnd_tx_done(tx, rc);

@@ -206,7 +206,7 @@ lnet_net_lock_current(void)
 
 #define MAX_PORTALS	64
 
-#define LNET_SMALL_MD_SIZE   offsetof(struct lnet_libmd, md_iov.iov[1])
+#define LNET_SMALL_MD_SIZE   offsetof(struct lnet_libmd, md_kiov[1])
 extern struct kmem_cache *lnet_mes_cachep;	 /* MEs kmem_cache */
 extern struct kmem_cache *lnet_small_mds_cachep; /* <= LNET_SMALL_MD_SIZE bytes
 						  * MDs kmem_cache */
@@ -220,10 +220,7 @@ lnet_md_free(struct lnet_libmd *md)
 
 	LASSERTF(md->md_rspt_ptr == NULL, "md %p rsp %p\n", md, md->md_rspt_ptr);
 
-	if ((md->md_options & LNET_MD_KIOV) != 0)
-		size = offsetof(struct lnet_libmd, md_iov.kiov[md->md_niov]);
-	else
-		size = offsetof(struct lnet_libmd, md_iov.iov[md->md_niov]);
+	size = offsetof(struct lnet_libmd, md_kiov[md->md_niov]);
 
 	if (size <= LNET_SMALL_MD_SIZE) {
 		CDEBUG(D_MALLOC, "slab-freed 'md' at %p.\n", md);

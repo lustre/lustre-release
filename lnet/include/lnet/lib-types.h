@@ -211,10 +211,7 @@ struct lnet_libmd {
 	struct lnet_rsp_tracker *md_rspt_ptr;
 	lnet_handler_t		 md_handler;
 	struct lnet_handle_md	 md_bulk_handle;
-	union {
-		struct kvec	 iov[LNET_MAX_IOV];
-		struct bio_vec	 kiov[LNET_MAX_IOV];
-	} md_iov;
+	struct bio_vec		 md_kiov[LNET_MAX_IOV];
 };
 
 #define LNET_MD_FLAG_ZOMBIE	 (1 << 0)

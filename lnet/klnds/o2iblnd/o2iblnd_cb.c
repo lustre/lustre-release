@@ -1695,16 +1695,10 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 		ibmsg = tx->tx_msg;
 		rd = &ibmsg->ibm_u.get.ibgm_rd;
-		if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) == 0)
-			rc = kiblnd_setup_rd_iov(ni, tx, rd,
-						 lntmsg->msg_md->md_niov,
-						 lntmsg->msg_md->md_iov.iov,
-						 0, lntmsg->msg_md->md_length);
-		else
-			rc = kiblnd_setup_rd_kiov(ni, tx, rd,
-						  lntmsg->msg_md->md_niov,
-						  lntmsg->msg_md->md_iov.kiov,
-						  0, lntmsg->msg_md->md_length);
+		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
+					  lntmsg->msg_md->md_niov,
+					  lntmsg->msg_md->md_kiov,
+					  0, lntmsg->msg_md->md_length);
 		if (rc != 0) {
 			CERROR("Can't setup GET sink for %s: %d\n",
 			       libcfs_nid2str(target.nid), rc);

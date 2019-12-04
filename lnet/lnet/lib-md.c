@@ -109,6 +109,7 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 {
 	int cpt = CFS_CPT_ANY;
 	unsigned int niov;
+	struct bio_vec *kiov;
 
 	/*
 	 * if the md_options has a bulk handle then we want to look at the
@@ -121,63 +122,21 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 	if (!md || md->md_niov == 0)
 		return CFS_CPT_ANY;
 
+	kiov = md->md_kiov;
 	niov = md->md_niov;
 
-	/*
-	 * There are three cases to handle:
-	 *  1. The MD is using struct bio_vec
-	 *  2. The MD is using struct kvec
-	 *  3. Contiguous buffer allocated via vmalloc
-	 *
-	 *  in case 2 we can use virt_to_page() macro to get the page
-	 *  address of the memory kvec describes.
-	 *
-	 *  in case 3 use is_vmalloc_addr() and vmalloc_to_page()
-	 *
-	 * The offset provided can be within the first iov/kiov entry or
-	 * it could go beyond it. In that case we need to make sure to
-	 * look at the page which actually contains the data that will be
-	 * DMAed.
-	 */
-	if ((md->md_options & LNET_MD_KIOV) != 0) {
-		struct bio_vec *kiov = md->md_iov.kiov;
-
-		while (offset >= kiov->bv_len) {
-			offset -= kiov->bv_len;
-			niov--;
-			kiov++;
-			if (niov == 0) {
-				CERROR("offset %d goes beyond kiov\n", offset);
-				goto out;
-			}
-		}
-
-		cpt = cfs_cpt_of_node(lnet_cpt_table(),
-				page_to_nid(kiov->bv_page));
-	} else {
-		struct kvec *iov = md->md_iov.iov;
-		unsigned long vaddr;
-		struct page *page;
-
-		while (offset >= iov->iov_len) {
-			offset -= iov->iov_len;
-			niov--;
-			iov++;
-			if (niov == 0) {
-				CERROR("offset %d goes beyond iov\n", offset);
-				goto out;
-			}
-		}
-
-		vaddr = ((unsigned long)iov->iov_base) + offset;
-		page = lnet_kvaddr_to_page(vaddr);
-		if (!page) {
-			CERROR("Couldn't resolve vaddr 0x%lx to page\n", vaddr);
+	while (offset >= kiov->bv_len) {
+		offset -= kiov->bv_len;
+		niov--;
+		kiov++;
+		if (niov == 0) {
+			CERROR("offset %d goes beyond kiov\n", offset);
 			goto out;
 		}
-		cpt = cfs_cpt_of_node(lnet_cpt_table(), page_to_nid(page));
 	}
 
+	cpt = cfs_cpt_of_node(lnet_cpt_table(),
+			      page_to_nid(kiov->bv_page));
 out:
 	return cpt;
 }
@@ -196,7 +155,7 @@ lnet_md_build(struct lnet_md *umd, int unlink)
 	else
 		niov = DIV_ROUND_UP(offset_in_page(umd->start) + umd->length,
 				    PAGE_SIZE);
-	size = offsetof(struct lnet_libmd, md_iov.kiov[niov]);
+	size = offsetof(struct lnet_libmd, md_kiov[niov]);
 
 	if (size <= LNET_SMALL_MD_SIZE) {
 		lmd = kmem_cache_zalloc(lnet_small_mds_cachep, GFP_NOFS);
@@ -230,18 +189,18 @@ lnet_md_build(struct lnet_md *umd, int unlink)
 	lmd->md_bulk_handle = umd->bulk_handle;
 
 	if (umd->options & LNET_MD_KIOV) {
-		memcpy(lmd->md_iov.kiov, umd->start,
-		       niov * sizeof(lmd->md_iov.kiov[0]));
+		memcpy(lmd->md_kiov, umd->start,
+		       niov * sizeof(lmd->md_kiov[0]));
 
 		for (i = 0; i < (int)niov; i++) {
 			/* We take the page pointer on trust */
-			if (lmd->md_iov.kiov[i].bv_offset +
-			    lmd->md_iov.kiov[i].bv_len > PAGE_SIZE) {
+			if (lmd->md_kiov[i].bv_offset +
+			    lmd->md_kiov[i].bv_len > PAGE_SIZE) {
 				lnet_md_free(lmd);
 				return ERR_PTR(-EINVAL); /* invalid length */
 			}
 
-			total_length += lmd->md_iov.kiov[i].bv_len;
+			total_length += lmd->md_kiov[i].bv_len;
 		}
 
 		lmd->md_length = total_length;
@@ -263,10 +222,10 @@ lnet_md_build(struct lnet_md *umd, int unlink)
 
 			plen = min_t(int, len, PAGE_SIZE - offset_in_page(pa));
 
-			lmd->md_iov.kiov[i].bv_page =
+			lmd->md_kiov[i].bv_page =
 				lnet_kvaddr_to_page((unsigned long) pa);
-			lmd->md_iov.kiov[i].bv_offset = offset_in_page(pa);
-			lmd->md_iov.kiov[i].bv_len = plen;
+			lmd->md_kiov[i].bv_offset = offset_in_page(pa);
+			lmd->md_kiov[i].bv_len = plen;
 
 			len -= plen;
 			pa += plen;
