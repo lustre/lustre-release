@@ -52,7 +52,7 @@ run_dumpfs() {
 		ldiskfs )
 			cmd="$DUMPE2FS -h $dev" ;;
 		zfs )
-			cmd="$ZDB -l $(facet_vdevice $facet)" ;;
+			cmd="$ZDB -l $(zpool_name $facet)" ;;
 		* )
 			error "unknown fstype!" ;;
 	esac
@@ -167,13 +167,37 @@ test_2 () {
 	local dev
 	local ostmnt
 	local fstype
+	local zostsize_restore=${OSTSIZE}
+	local zmin=$((30 << 30)) # 30GiB in bytes
+	local skipped=1
+
+	stack_trap "export OSTSIZE=$zostsize_restore" EXIT
 
 	for num in $(seq $OSTCOUNT); do
 		dev=$(ostdevname $num)
 		ostmnt=$(facet_mntpt ost${num})
 		fstype=$(facet_fstype ost${num})
 
-		# Mount the OST as an ldiskfs filesystem.
+		if [[ $fstype == "zfs" ]] && [[ ${OSTSIZE} -lt ${zmin} ]]; then
+			local real_dev=$(ostvdevname $num)
+			local num_sectors=$(get_num_sectors $facet $real_dev)
+			local phy_bytes=$((num_sectors * 512))
+
+			if [ ${phy_bytes} -lt ${zmin} ] ; then
+				log "ost${num}: OSTSIZE ${OSTSIZE} less than 30GiB"
+				log "ost${num}: Block device ${phy_bytes} too small"
+				log " .. skipping this ost"
+				continue
+			fi
+			# Backing block device is big enough
+			skipped=0
+			log "ost${num}: OSTSIZE ${OSTSIZE} too small, increasing to 30GiB [temporarily]"
+			format_ost ${num}
+			# NOTE: OSTSIZE is in KB
+			export OSTSIZE=$((zmin >> 10))
+		fi
+
+		# Mount the OST as an ldiskfs or zfs filesystem.
 		log "mount the OST $dev as a $fstype filesystem"
 		add ost${num} $(mkfs_opts ost${num} $dev) $FSTYPE_OPT \
 			--reformat $(ostdevname $num) \
@@ -181,14 +205,16 @@ test_2 () {
 			error "format ost${num} error"
 		if [ $fstype == zfs ]; then
 			import_zpool ost${num}
-			do_facet ost${num} "$ZFS set canmount=on $dev; " \
-			    "$ZFS set mountpoint=legacy $dev; $ZFS list $dev"
+			do_facet ost${num} \
+			    "$ZFS set canmount=on $dev; " \
+			    "$ZFS set mountpoint=legacy $dev; " \
+			    "$ZFS list $dev"
 		fi
 		run_dumpfs ost${num} $dev
 		do_facet ost${num} mount -t $fstype $dev \
 			$ostmnt "$OST_MOUNT_OPTS"
 
-		# Run llverfs on the mounted ldiskfs filesystem in partial mode
+		# Run llverfs on the mounted filesystem in partial mode
 		# to ensure that the kernel can perform filesystem operations
 		# on the complete device without any errors.
 		log "run llverfs in partial mode on the OST $fstype $ostmnt"
@@ -199,7 +225,7 @@ test_2 () {
 		log "unmount the OST $dev"
 		stop ost${num}
 
-		# After llverfs is run on the ldiskfs filesystem in partial
+		# After llverfs is run on the filesystem in partial
 		# mode, a full e2fsck should be run to catch any errors early.
 		$RUN_FSCK && check_fsfacet ost${num}
 
@@ -232,7 +258,9 @@ test_2 () {
 			#  errors early.
 			$RUN_FSCK && check_fsfacet ost${num}
 		fi
+		export OSTSIZE=${zostsize_restore}
 	done
+	[[ $skipped -ne 0 ]] && skip_env "No OST with enough space is available."
 	# there is no reason to continue using ost devices
 	# filled by llverfs as ldiskfs
 	formatall
