@@ -730,80 +730,6 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
 	return -EINVAL;
 }
 
-static int kiblnd_setup_rd_iov(struct lnet_ni *ni, struct kib_tx *tx,
-			       struct kib_rdma_desc *rd, unsigned int niov,
-			       struct kvec *iov, int offset, int nob)
-{
-	struct kib_net *net = ni->ni_data;
-	struct page *page;
-        struct scatterlist *sg;
-        unsigned long       vaddr;
-        int                 fragnob;
-        int                 page_offset;
-	unsigned int	    max_niov;
-
-        LASSERT (nob > 0);
-        LASSERT (niov > 0);
-        LASSERT (net != NULL);
-
-        while (offset >= iov->iov_len) {
-                offset -= iov->iov_len;
-                niov--;
-                iov++;
-                LASSERT (niov > 0);
-        }
-
-	max_niov = niov;
-
-	sg = tx->tx_frags;
-	do {
-		LASSERT(niov > 0);
-
-		vaddr = ((unsigned long)iov->iov_base) + offset;
-		page_offset = vaddr & (PAGE_SIZE - 1);
-		page = lnet_kvaddr_to_page(vaddr);
-		if (page == NULL) {
-			CERROR("Can't find page\n");
-			return -EFAULT;
-		}
-
-		fragnob = min((int)(iov->iov_len - offset), nob);
-		fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
-
-		/*
-		 * We're allowed to start at a non-aligned page offset in
-		 * the first fragment and end at a non-aligned page offset
-		 * in the last fragment.
-		 */
-		if ((fragnob < (int)PAGE_SIZE - page_offset) &&
-		    (niov < max_niov) && nob > fragnob) {
-			CDEBUG(D_NET, "fragnob %d < available page %d: with"
-				      " remaining %d iovs with %d nob left\n",
-			       fragnob, (int)PAGE_SIZE - page_offset, niov,
-			       nob);
-			tx->tx_gaps = true;
-		}
-
-		sg_set_page(sg, page, fragnob, page_offset);
-		sg = sg_next(sg);
-		if (!sg) {
-			CERROR("lacking enough sg entries to map tx\n");
-			return -EFAULT;
-		}
-
-                if (offset + fragnob < iov->iov_len) {
-                        offset += fragnob;
-                } else {
-                        offset = 0;
-                        iov++;
-                        niov--;
-                }
-                nob -= fragnob;
-        } while (nob > 0);
-
-        return kiblnd_map_tx(ni, tx, rd, sg - tx->tx_frags);
-}
-
 static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 				struct kib_rdma_desc *rd, int nkiov,
 				struct bio_vec *kiov, int offset, int nob)
@@ -1850,7 +1776,7 @@ failed_0:
 
 int
 kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
-	    int delayed, unsigned int niov, struct kvec *iov, struct bio_vec *kiov,
+	    int delayed, unsigned int niov, struct bio_vec *kiov,
 	    unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
 	struct kib_rx *rx = private;
@@ -1864,8 +1790,6 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 	LASSERT (mlen <= rlen);
 	LASSERT (!in_interrupt());
-	/* Either all pages or all vaddrs */
-	LASSERT (!(kiov != NULL && iov != NULL));
 
 	switch (rxmsg->ibm_type) {
 	default:
@@ -1881,16 +1805,11 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
                         break;
                 }
 
-                if (kiov != NULL)
-                        lnet_copy_flat2kiov(niov, kiov, offset,
-                                            IBLND_MSG_SIZE, rxmsg,
-					    offsetof(struct kib_msg, ibm_u.immediate.ibim_payload),
-                                            mlen);
-                else
-                        lnet_copy_flat2iov(niov, iov, offset,
-                                           IBLND_MSG_SIZE, rxmsg,
-					   offsetof(struct kib_msg, ibm_u.immediate.ibim_payload),
-                                           mlen);
+		lnet_copy_flat2kiov(niov, kiov, offset,
+				    IBLND_MSG_SIZE, rxmsg,
+				    offsetof(struct kib_msg,
+					     ibm_u.immediate.ibim_payload),
+				    mlen);
 		lnet_finalize(lntmsg, 0);
 		break;
 
@@ -1917,12 +1836,8 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 		txmsg = tx->tx_msg;
 		rd = &txmsg->ibm_u.putack.ibpam_rd;
-		if (kiov == NULL)
-			rc = kiblnd_setup_rd_iov(ni, tx, rd,
-						 niov, iov, offset, mlen);
-		else
-			rc = kiblnd_setup_rd_kiov(ni, tx, rd,
-						  niov, kiov, offset, mlen);
+		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
+					  niov, kiov, offset, mlen);
 		if (rc != 0) {
 			CERROR("Can't setup PUT sink for %s: %d\n",
 			       libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);

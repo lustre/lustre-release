@@ -581,7 +581,7 @@ int ksocknal_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg);
 int ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg);
 int ksocknal_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		  int delayed, unsigned int niov,
-		  struct kvec *iov, struct bio_vec *kiov,
+		  struct bio_vec *kiov,
                   unsigned int offset, unsigned int mlen, unsigned int rlen);
 int ksocknal_accept(struct lnet_ni *ni, struct socket *sock);
 

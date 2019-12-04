@@ -45,22 +45,16 @@ lolnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 static int
 lolnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	   int delayed, unsigned int niov,
-	   struct kvec *iov, struct bio_vec *kiov,
+	   struct bio_vec *kiov,
 	   unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
 	struct lnet_msg *sendmsg = private;
 
-	if (lntmsg != NULL) {			/* not discarding */
-		if (iov != NULL)
-			lnet_copy_kiov2iov(niov, iov, offset,
-					   sendmsg->msg_niov,
-					   sendmsg->msg_kiov,
-					   sendmsg->msg_offset, mlen);
-		else
-			lnet_copy_kiov2kiov(niov, kiov, offset,
-					    sendmsg->msg_niov,
-					    sendmsg->msg_kiov,
-					    sendmsg->msg_offset, mlen);
+	if (lntmsg) {			/* not discarding */
+		lnet_copy_kiov2kiov(niov, kiov, offset,
+				    sendmsg->msg_niov,
+				    sendmsg->msg_kiov,
+				    sendmsg->msg_offset, mlen);
 
 		lnet_finalize(lntmsg, 0);
 	}

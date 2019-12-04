@@ -2424,7 +2424,7 @@ kgnilnd_eager_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 int
 kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	     int delayed, unsigned int niov,
-	     struct kvec *iov, struct bio_vec *kiov,
+	     struct bio_vec *kiov,
 	     unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
 	kgn_rx_t    *rx = private;
@@ -2437,14 +2437,11 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 	LASSERT(!in_interrupt());
 	LASSERTF(mlen <= rlen, "%d <= %d\n", mlen, rlen);
-	/* Either all pages or all vaddrs */
-	LASSERTF(!(kiov != NULL && iov != NULL), "kiov %p iov %p\n",
-		kiov, iov);
 
 	GNIDBG_MSG(D_NET, rxmsg, "conn %p, rxmsg %p, lntmsg %p"
-		" niov=%d kiov=%p iov=%p offset=%d mlen=%d rlen=%d",
+		" niov=%d kiov=%p offset=%d mlen=%d rlen=%d",
 		conn, rxmsg, lntmsg,
-		niov, kiov, iov, offset, mlen, rlen);
+		niov, kiov, offset, mlen, rlen);
 
 	/* we need to lock here as recv can be called from any context */
 	read_lock(&kgnilnd_data.kgn_peer_conn_lock);
@@ -2461,8 +2458,8 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	switch (rxmsg->gnm_type) {
 	default:
 		GNIDBG_MSG(D_NETERROR, rxmsg, "conn %p, rx %p, rxmsg %p, lntmsg %p"
-		" niov=%d kiov=%p iov=%p offset=%d mlen=%d rlen=%d",
-		conn, rx, rxmsg, lntmsg, niov, kiov, iov, offset, mlen, rlen);
+		" niov=%d kiov=%p offset=%d mlen=%d rlen=%d",
+		conn, rx, rxmsg, lntmsg, niov, kiov, offset, mlen, rlen);
 		LBUG();
 
 	case GNILND_MSG_IMMEDIATE:
@@ -2522,7 +2519,7 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 				&rxmsg[1], 0, mlen);
 		else
 			lnet_copy_flat2iov(
-				niov, iov, offset,
+				niov, NULL, offset,
 				*kgnilnd_tunables.kgn_max_immediate,
 				&rxmsg[1], 0, mlen);
 
@@ -2556,7 +2553,8 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			GOTO(nak_put_req, rc);
 		}
 
-		rc = kgnilnd_setup_rdma_buffer(tx, niov, iov, kiov, offset, mlen);
+		rc = kgnilnd_setup_rdma_buffer(tx, niov, NULL,
+					       kiov, offset, mlen);
 		if (rc != 0) {
 			GOTO(nak_put_req, rc);
 		}
@@ -2617,7 +2615,8 @@ nak_put_req:
 				GOTO(nak_get_req_rev, rc);
 
 
-			rc = kgnilnd_setup_rdma_buffer(tx, niov, iov, kiov, offset, mlen);
+			rc = kgnilnd_setup_rdma_buffer(tx, niov, NULL,
+						       kiov, offset, mlen);
 			if (rc != 0)
 				GOTO(nak_get_req_rev, rc);
 

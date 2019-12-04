@@ -707,7 +707,7 @@ lnet_ni_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 	}
 
 	rc = (ni->ni_net->net_lnd->lnd_recv)(ni, private, msg, delayed,
-					     niov, NULL, kiov, offset, mlen,
+					     niov, kiov, offset, mlen,
 					     rlen);
 	if (rc < 0)
 		lnet_finalize(msg, rc);
