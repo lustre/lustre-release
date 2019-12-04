@@ -3094,7 +3094,7 @@ __must_hold(&lp->lp_lock)
 	md.handler   = the_lnet.ln_dc_handler;
 	md.user_ptr  = lp;
 
-	rc = LNetMDBind(md, LNET_UNLINK, &lp->lp_push_mdh);
+	rc = LNetMDBind(&md, LNET_UNLINK, &lp->lp_push_mdh);
 	if (rc) {
 		lnet_ping_buffer_decref(pbuf);
 		CERROR("Can't bind push source MD: %d\n", rc);

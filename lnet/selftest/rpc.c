@@ -375,7 +375,7 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 	md.options   = options;
 	md.handler   = srpc_data.rpc_lnet_handler;
 
-	rc = LNetMDAttach(me, md, LNET_UNLINK, mdh);
+	rc = LNetMDAttach(me, &md, LNET_UNLINK, mdh);
 	if (rc != 0) {
 		CERROR("LNetMDAttach failed: %d\n", rc);
 		LASSERT(rc == -ENOMEM);
@@ -406,7 +406,7 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
 	md.threshold = ((options & LNET_MD_OP_GET) != 0) ? 2 : 1;
 	md.options   = options & ~(LNET_MD_OP_PUT | LNET_MD_OP_GET);
 
-	rc = LNetMDBind(md, LNET_UNLINK, mdh);
+	rc = LNetMDBind(&md, LNET_UNLINK, mdh);
 	if (rc != 0) {
 		CERROR("LNetMDBind failed: %d\n", rc);
 		LASSERT(rc == -ENOMEM);

@@ -1724,7 +1724,7 @@ lnet_ping_target_setup(struct lnet_ping_buffer **ppbuf,
 	md.handler   = the_lnet.ln_ping_target_handler;
 	md.user_ptr  = *ppbuf;
 
-	rc = LNetMDAttach(me, md, LNET_RETAIN, ping_mdh);
+	rc = LNetMDAttach(me, &md, LNET_RETAIN, ping_mdh);
 	if (rc != 0) {
 		CERROR("Can't attach ping target MD: %d\n", rc);
 		goto fail_unlink_ping_me;
@@ -1933,7 +1933,7 @@ int lnet_push_target_post(struct lnet_ping_buffer *pbuf,
 	md.user_ptr  = pbuf;
 	md.handler   = the_lnet.ln_push_target_handler;
 
-	rc = LNetMDAttach(me, md, LNET_UNLINK, mdhp);
+	rc = LNetMDAttach(me, &md, LNET_UNLINK, mdhp);
 	if (rc) {
 		CERROR("Can't attach push MD: %d\n", rc);
 		LNetMEUnlink(me);
@@ -4160,7 +4160,7 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 
 	init_completion(&pd.completion);
 
-	rc = LNetMDBind(md, LNET_UNLINK, &pd.mdh);
+	rc = LNetMDBind(&md, LNET_UNLINK, &pd.mdh);
 	if (rc != 0) {
 		CERROR("Can't bind MD: %d\n", rc);
 		goto fail_ping_buffer_decref;

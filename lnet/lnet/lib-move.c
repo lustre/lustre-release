@@ -3573,7 +3573,7 @@ lnet_send_ping(lnet_nid_t dest_nid,
 	md.user_ptr  = user_data;
 	md.handler   = handler;
 
-	rc = LNetMDBind(md, LNET_UNLINK, mdh);
+	rc = LNetMDBind(&md, LNET_UNLINK, mdh);
 	if (rc) {
 		lnet_ping_buffer_decref(pbuf);
 		CERROR("Can't bind MD: %d\n", rc);
