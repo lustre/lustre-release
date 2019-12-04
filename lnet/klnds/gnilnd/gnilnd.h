@@ -193,8 +193,6 @@ static inline time_t cfs_duration_sec(long duration_jiffies)
 #define GNILND_BUF_IMMEDIATE_KIOV 2              /* immediate data */
 #define GNILND_BUF_PHYS_UNMAPPED  3              /* physical: not mapped yet */
 #define GNILND_BUF_PHYS_MAPPED    4              /* physical: mapped already */
-#define GNILND_BUF_VIRT_UNMAPPED  5              /* virtual: not mapped yet */
-#define GNILND_BUF_VIRT_MAPPED    6              /* virtual: mapped already */
 
 #define GNILND_TX_WAITING_REPLY      (1<<1)     /* expecting to receive reply */
 #define GNILND_TX_WAITING_COMPLETION (1<<2)     /* waiting for smsg_send to complete */
@@ -580,8 +578,6 @@ typedef struct kgn_device {
 	atomic64_t              gnd_nbytes_map;   /* bytes of total GART maps - fma, tx, etc */
 	__u32                   gnd_map_nphys;    /* # TX phys mappings */
 	__u32                   gnd_map_physnop;  /* # TX phys pages mapped */
-	__u32                   gnd_map_nvirt;    /* # TX virt mappings */
-	__u64                   gnd_map_virtnob;  /* # TX virt bytes mapped */
 	spinlock_t              gnd_map_lock;     /* serialize gnd_map_XXX */
 	unsigned long           gnd_next_map;     /* next mapping attempt in jiffies */
 	int                     gnd_map_attempt;  /* last map attempt # */
@@ -1574,8 +1570,7 @@ kgnilnd_tx_del_state_locked(kgn_tx_t *tx, kgn_peer_t *peer,
 static inline int
 kgnilnd_tx_mapped(kgn_tx_t *tx)
 {
-	return (tx->tx_buftype == GNILND_BUF_VIRT_MAPPED ||
-		tx->tx_buftype == GNILND_BUF_PHYS_MAPPED);
+	return tx->tx_buftype == GNILND_BUF_PHYS_MAPPED;
 }
 
 static inline struct list_head *

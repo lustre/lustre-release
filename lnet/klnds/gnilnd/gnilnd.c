@@ -2051,10 +2051,6 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 		"%d physical mappings of %d pages still mapped\n",
 		 dev->gnd_map_nphys, dev->gnd_map_physnop);
 
-	LASSERTF(dev->gnd_map_nvirt == 0 && dev->gnd_map_virtnob == 0,
-		"%d virtual mappings of %llu bytes still mapped\n",
-		 dev->gnd_map_nvirt, dev->gnd_map_virtnob);
-
 	LASSERTF(atomic_read(&dev->gnd_n_mdd) == 0 &&
 		 atomic_read(&dev->gnd_n_mdd_held) == 0 &&
 		 atomic64_read(&dev->gnd_nbytes_map) == 0,

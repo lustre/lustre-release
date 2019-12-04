@@ -235,8 +235,6 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 		   "TX queued maps: %d\n"
 		   "TX phys nmaps: %d\n"
 		   "TX phys bytes: %lu\n"
-		   "TX virt nmaps: %d\n"
-		   "TX virt bytes: %llu\n"
 		   "RDMAQ bytes_auth: %ld\n"
 		   "RDMAQ bytes_left: %ld\n"
 		   "RDMAQ nstalls: %d\n"
@@ -272,7 +270,6 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 		   atomic64_read(&dev->gnd_nbytes_map),
 		   atomic_read(&dev->gnd_nq_map),
 		   dev->gnd_map_nphys, dev->gnd_map_physnop * PAGE_SIZE,
-		   dev->gnd_map_nvirt, dev->gnd_map_virtnob,
 		   atomic64_read(&dev->gnd_rdmaq_bytes_out),
 		   atomic64_read(&dev->gnd_rdmaq_bytes_ok),
 		   atomic_read(&dev->gnd_rdmaq_nstalls),

@@ -904,12 +904,6 @@ kgnilnd_mem_add_map_list(kgn_device_t *dev, kgn_tx_t *tx)
 		dev->gnd_map_nphys++;
 		dev->gnd_map_physnop += tx->tx_phys_npages;
 		break;
-
-	case GNILND_BUF_VIRT_MAPPED:
-		bytes = tx->tx_nob;
-		dev->gnd_map_nvirt++;
-		dev->gnd_map_virtnob += tx->tx_nob;
-		break;
 	}
 
 	if (tx->tx_msg.gnm_type == GNILND_MSG_PUT_ACK ||
@@ -952,12 +946,6 @@ kgnilnd_mem_del_map_list(kgn_device_t *dev, kgn_tx_t *tx)
 		bytes = tx->tx_phys_npages * PAGE_SIZE;
 		dev->gnd_map_nphys--;
 		dev->gnd_map_physnop -= tx->tx_phys_npages;
-		break;
-
-	case GNILND_BUF_VIRT_UNMAPPED:
-		bytes = tx->tx_nob;
-		dev->gnd_map_nvirt--;
-		dev->gnd_map_virtnob -= tx->tx_nob;
 		break;
 	}
 
@@ -1011,7 +999,6 @@ kgnilnd_map_buffer(kgn_tx_t *tx)
 	case GNILND_BUF_IMMEDIATE:
 	case GNILND_BUF_IMMEDIATE_KIOV:
 	case GNILND_BUF_PHYS_MAPPED:
-	case GNILND_BUF_VIRT_MAPPED:
 		return 0;
 
 	case GNILND_BUF_PHYS_UNMAPPED:
@@ -1024,40 +1011,15 @@ kgnilnd_map_buffer(kgn_tx_t *tx)
 		 * - this needs to turn into a non-fatal error soon to allow
 		 *  GART resource, etc starvation handling */
 		if (rrc != GNI_RC_SUCCESS) {
-			GNIDBG_TX(D_NET, tx, "Can't map %d pages: dev %d "
-				"phys %u pp %u, virt %u nob %llu",
+			GNIDBG_TX(D_NET, tx,
+				  "Can't map %d pages: dev %d phys %u pp %u",
 				tx->tx_phys_npages, dev->gnd_id,
-				dev->gnd_map_nphys, dev->gnd_map_physnop,
-				dev->gnd_map_nvirt, dev->gnd_map_virtnob);
+				dev->gnd_map_nphys, dev->gnd_map_physnop);
 			RETURN(rrc == GNI_RC_ERROR_RESOURCE ? -ENOMEM : -EINVAL);
 		}
 
 		tx->tx_buftype = GNILND_BUF_PHYS_MAPPED;
 		kgnilnd_mem_add_map_list(dev, tx);
-		return 0;
-
-	case GNILND_BUF_VIRT_UNMAPPED:
-		rrc = kgnilnd_mem_register(dev->gnd_handle,
-			(__u64)tx->tx_buffer, tx->tx_nob,
-			NULL, flags, &tx->tx_map_key);
-		if (rrc != GNI_RC_SUCCESS) {
-			GNIDBG_TX(D_NET, tx, "Can't map %u bytes: dev %d "
-				"phys %u pp %u, virt %u nob %llu",
-				tx->tx_nob, dev->gnd_id,
-				dev->gnd_map_nphys, dev->gnd_map_physnop,
-				dev->gnd_map_nvirt, dev->gnd_map_virtnob);
-			RETURN(rrc == GNI_RC_ERROR_RESOURCE ? -ENOMEM : -EINVAL);
-		}
-
-		tx->tx_buftype = GNILND_BUF_VIRT_MAPPED;
-		kgnilnd_mem_add_map_list(dev, tx);
-		if (tx->tx_msg.gnm_type == GNILND_MSG_PUT_ACK ||
-		    tx->tx_msg.gnm_type == GNILND_MSG_GET_REQ) {
-			atomic64_add(tx->tx_nob, &dev->gnd_rdmaq_bytes_out);
-			GNIDBG_TX(D_NETTRACE, tx, "rdma ++ %d to %ld\n",
-			       tx->tx_nob, atomic64_read(&dev->gnd_rdmaq_bytes_out));
-		}
-
 		return 0;
 	}
 }
@@ -1102,8 +1064,6 @@ kgnilnd_unmap_buffer(kgn_tx_t *tx, int error)
 	/* code below relies on +1 relationship ... */
 	BUILD_BUG_ON(GNILND_BUF_PHYS_MAPPED !=
 		     (GNILND_BUF_PHYS_UNMAPPED + 1));
-	BUILD_BUG_ON(GNILND_BUF_VIRT_MAPPED !=
-		     (GNILND_BUF_VIRT_UNMAPPED + 1));
 
 	switch (tx->tx_buftype) {
 	default:
@@ -1112,7 +1072,6 @@ kgnilnd_unmap_buffer(kgn_tx_t *tx, int error)
 	case GNILND_BUF_NONE:
 	case GNILND_BUF_IMMEDIATE:
 	case GNILND_BUF_PHYS_UNMAPPED:
-	case GNILND_BUF_VIRT_UNMAPPED:
 		break;
 	case GNILND_BUF_IMMEDIATE_KIOV:
 		if (tx->tx_phys != NULL) {
@@ -1126,7 +1085,6 @@ kgnilnd_unmap_buffer(kgn_tx_t *tx, int error)
 		break;
 
 	case GNILND_BUF_PHYS_MAPPED:
-	case GNILND_BUF_VIRT_MAPPED:
 		LASSERT(tx->tx_conn != NULL);
 
 		dev = tx->tx_conn->gnc_device;
@@ -4406,8 +4364,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		if (tx == NULL)
 			break;
 
-		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED ||
-			       tx->tx_buftype == GNILND_BUF_VIRT_MAPPED,
+		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED,
 			       "bad tx buftype %d", tx->tx_buftype);
 
 		kgnilnd_finalize_rx_done(tx, msg);
@@ -4425,8 +4382,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		if (tx == NULL)
 			break;
 
-		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED ||
-			       tx->tx_buftype == GNILND_BUF_VIRT_MAPPED,
+		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED,
 			       "bad tx buftype %d", tx->tx_buftype);
 
 		kgnilnd_complete_tx(tx, msg->gnm_u.completion.gncm_retval);
@@ -4438,8 +4394,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		if (tx == NULL)
 			break;
 
-		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED ||
-			       tx->tx_buftype == GNILND_BUF_VIRT_MAPPED,
+		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED,
 			       "bad tx buftype %d", tx->tx_buftype);
 
 		lnet_set_reply_msg_len(net->gnn_ni, tx->tx_lntmsg[1],
@@ -4453,8 +4408,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		if (tx == NULL)
 			break;
 
-		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED ||
-				tx->tx_buftype == GNILND_BUF_VIRT_MAPPED,
+		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED,
 				"bad tx buftype %d", tx->tx_buftype);
 
 		kgnilnd_finalize_rx_done(tx, msg);
@@ -4467,8 +4421,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		if (tx == NULL)
 			break;
 
-		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED ||
-			       tx->tx_buftype == GNILND_BUF_VIRT_MAPPED,
+		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED,
 			       "bad tx buftype %d", tx->tx_buftype);
 
 		kgnilnd_finalize_rx_done(tx, msg);
@@ -4480,8 +4433,7 @@ kgnilnd_check_fma_rx(kgn_conn_t *conn)
 		if (tx == NULL)
 			break;
 
-		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED ||
-			       tx->tx_buftype == GNILND_BUF_VIRT_MAPPED,
+		GNITX_ASSERTF(tx, tx->tx_buftype == GNILND_BUF_PHYS_MAPPED,
 				"bad tx buftype %d", tx->tx_buftype);
 
 		kgnilnd_complete_tx(tx, msg->gnm_u.completion.gncm_retval);
@@ -4784,11 +4736,9 @@ kgnilnd_process_mapped_tx(kgn_device_t *dev)
 		} else {
 		       GNIDBG_TX(log_retrans_level, tx,
 				"transient map failure #%d %d pages/%d bytes phys %u@%u "
-				"virt %u@%llu "
 				"nq_map %d mdd# %d/%d GART %ld",
 				dev->gnd_map_attempt, tx->tx_phys_npages, tx->tx_nob,
 				dev->gnd_map_nphys, dev->gnd_map_physnop * PAGE_SIZE,
-				dev->gnd_map_nvirt, dev->gnd_map_virtnob,
 				atomic_read(&dev->gnd_nq_map),
 				atomic_read(&dev->gnd_n_mdd), atomic_read(&dev->gnd_n_mdd_held),
 				atomic64_read(&dev->gnd_nbytes_map));
