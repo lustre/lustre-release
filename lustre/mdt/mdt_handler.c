@@ -598,8 +598,9 @@ again:
 			    buf->lb_buf != info->mti_big_acl) {
 				if (info->mti_big_acl == NULL) {
 					info->mti_big_aclsize =
-							MIN(mdt->mdt_max_ea_size,
-							    XATTR_SIZE_MAX);
+							min_t(unsigned int,
+							      mdt->mdt_max_ea_size,
+							      XATTR_SIZE_MAX);
 					OBD_ALLOC_LARGE(info->mti_big_acl,
 							info->mti_big_aclsize);
 					if (info->mti_big_acl == NULL) {

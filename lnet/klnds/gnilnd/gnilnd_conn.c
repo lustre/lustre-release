@@ -517,8 +517,8 @@ kgnilnd_release_mbox(kgn_conn_t *conn, int purgatory_hold)
 			fma_blk->gnm_hndl.qword1, fma_blk->gnm_hndl.qword2);
 
 		fma_blk->gnm_held_mboxs++;
-		fma_blk->gnm_max_timeout = MAX(fma_blk->gnm_max_timeout,
-						conn->gnc_timeout);
+		fma_blk->gnm_max_timeout = max_t(long, fma_blk->gnm_max_timeout,
+						 conn->gnc_timeout);
 	} else {
 		CDEBUG(D_NET, "conn %p smsg %p fmablk %p release SMSG mbox %d "
 			"hndl %#llx.%#llx\n",

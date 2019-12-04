@@ -257,8 +257,8 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 		if (!lu_extent_is_overlapped(ext, lle->lle_extent))
 			continue;
 
-		ext->e_start = MIN(ext->e_start, lle->lle_extent->e_start);
-		ext->e_end = MAX(ext->e_end, lle->lle_extent->e_end);
+		ext->e_start = min(ext->e_start, lle->lle_extent->e_start);
+		ext->e_end = max(ext->e_end, lle->lle_extent->e_end);
 		++count;
 	}
 	if (count == 0) {

@@ -1229,8 +1229,9 @@ kiblnd_init_rdma(struct kib_conn *conn, struct kib_tx *tx, int type,
 			break;
 		}
 
-		sge_nob = MIN(MIN(kiblnd_rd_frag_size(srcrd, srcidx),
-				  kiblnd_rd_frag_size(dstrd, dstidx)), resid);
+		sge_nob = min3(kiblnd_rd_frag_size(srcrd, srcidx),
+			       kiblnd_rd_frag_size(dstrd, dstidx),
+			       resid);
 
 		sge = &tx->tx_sge[tx->tx_nsge];
 		sge->addr   = kiblnd_rd_frag_addr(srcrd, srcidx);

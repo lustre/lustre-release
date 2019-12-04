@@ -856,7 +856,8 @@ osd_dmu_object_alloc(objset_t *os, dmu_object_type_t objtype, int blocksize,
 		     int dnodesize, dmu_tx_t *tx)
 {
 	if (dnodesize == 0)
-		dnodesize = MAX(dmu_objset_dnodesize(os), DNODE_MIN_SIZE);
+		dnodesize = max_t(int, dmu_objset_dnodesize(os),
+				  DNODE_MIN_SIZE);
 
 	return dmu_object_alloc_dnsize(os, objtype, blocksize, DMU_OT_SA,
 				       DN_BONUS_SIZE(dnodesize), dnodesize, tx);
@@ -868,7 +869,8 @@ osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
 		     int indirect_blockshift, int dnodesize, dmu_tx_t *tx)
 {
 	if (dnodesize == 0)
-		dnodesize = MAX(dmu_objset_dnodesize(os), DNODE_MIN_SIZE);
+		dnodesize = max_t(int, dmu_objset_dnodesize(os),
+				  DNODE_MIN_SIZE);
 
 	return zap_create_flags_dnsize(os, normflags, flags, ot,
 				       leaf_blockshift, indirect_blockshift,

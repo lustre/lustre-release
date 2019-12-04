@@ -621,8 +621,9 @@ int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 			ff->ff_layout_version = oa->o_layout_version;
 			ff->ff_range = 0;
 		} else if (oa->o_layout_version > ff->ff_layout_version) {
-			ff->ff_range = MAX(ff->ff_range,
-				  oa->o_layout_version - ff->ff_layout_version);
+			ff->ff_range = max_t(__u32, ff->ff_range,
+					     oa->o_layout_version -
+					     ff->ff_layout_version);
 		}
 	}
 

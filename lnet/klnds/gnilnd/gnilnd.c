@@ -291,8 +291,8 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 	 * check context */
 	conn->gnc_device = dev;
 
-	conn->gnc_timeout = MAX(*kgnilnd_tunables.kgn_timeout,
-				GNILND_MIN_TIMEOUT);
+	conn->gnc_timeout = max(*kgnilnd_tunables.kgn_timeout,
+				 GNILND_MIN_TIMEOUT);
 	kgnilnd_update_reaper_timeout(conn->gnc_timeout);
 
 	/* this is the ep_handle for doing SMSG & BTE */
@@ -879,7 +879,7 @@ kgnilnd_set_conn_params(kgn_dgram_t *dgram)
 	/* set timeout vals in conn early so we can use them for the NAK */
 
 	/* use max of the requested and our timeout, peer will do the same */
-	conn->gnc_timeout = MAX(conn->gnc_timeout, connreq->gncr_timeout);
+	conn->gnc_timeout = max(conn->gnc_timeout, connreq->gncr_timeout);
 
 	/* only ep_bind really mucks around with the CQ */
 	/* only ep bind if we are not connecting to ourself and the dstnid is not a wildcard. this check
@@ -1261,8 +1261,8 @@ kgnilnd_peer_increase_reconnect_locked(kgn_peer_t *peer)
 		current_to += *kgnilnd_tunables.kgn_min_reconnect_interval / 2;
 	}
 
-	current_to = MIN(current_to,
-				*kgnilnd_tunables.kgn_max_reconnect_interval);
+	current_to = min(current_to,
+			 *kgnilnd_tunables.kgn_max_reconnect_interval);
 
 	peer->gnp_reconnect_interval = current_to;
 	CDEBUG(D_NET, "peer %s can reconnect at %lu interval %lu\n",

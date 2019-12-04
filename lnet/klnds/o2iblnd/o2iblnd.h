@@ -1060,7 +1060,7 @@ kiblnd_rd_frag_addr(struct kib_rdma_desc *rd, int index)
         return rd->rd_frags[index].rf_addr;
 }
 
-static inline __u32
+static inline int
 kiblnd_rd_frag_size(struct kib_rdma_desc *rd, int index)
 {
         return rd->rd_frags[index].rf_nob;

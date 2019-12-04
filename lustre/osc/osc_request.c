@@ -2214,7 +2214,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		mem_tight |= ext->oe_memalloc;
 		grant += ext->oe_grants;
 		page_count += ext->oe_nr_pages;
-		layout_version = MAX(layout_version, ext->oe_layout_version);
+		layout_version = max(layout_version, ext->oe_layout_version);
 		if (obj == NULL)
 			obj = ext->oe_obj;
 	}

@@ -820,7 +820,8 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		nid = libcfs_str2nid(nidstr);
 		nodemap_test_nid(nid, name_buf, sizeof(name_buf));
 		rc = copy_to_user(data->ioc_pbuf1, name_buf,
-				  MIN(data->ioc_plen1, sizeof(name_buf)));
+				  min_t(size_t, data->ioc_plen1,
+					sizeof(name_buf)));
 		if (rc != 0)
 			GOTO(out_lcfg, rc = -EFAULT);
 		break;

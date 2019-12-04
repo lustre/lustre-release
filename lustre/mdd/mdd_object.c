@@ -1443,7 +1443,8 @@ static int mdd_hsm_update_locked(const struct lu_env *env,
 
 	/* Read HSM attrs from disk */
 	current_buf = lu_buf_check_and_alloc(&info->mti_xattr_buf,
-			MIN(mdd_obj2mdd_dev(mdd_obj)->mdd_dt_conf.ddp_max_ea_size,
+			min_t(unsigned int,
+			      mdd_obj2mdd_dev(mdd_obj)->mdd_dt_conf.ddp_max_ea_size,
 			    XATTR_SIZE_MAX));
 	rc = mdo_xattr_get(env, mdd_obj, current_buf, XATTR_NAME_HSM);
 	rc = lustre_buf2hsm(current_buf->lb_buf, rc, current_mh);

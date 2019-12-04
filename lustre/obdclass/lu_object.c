@@ -738,7 +738,8 @@ static void lu_object_limit(const struct lu_env *env,
 		return;
 
 	lu_site_purge_objects(env, dev->ld_site,
-			      MIN(size - nr, LU_CACHE_NR_MAX_ADJUST), 0);
+			      min_t(__u64, size - nr, LU_CACHE_NR_MAX_ADJUST),
+			      0);
 }
 
 /**

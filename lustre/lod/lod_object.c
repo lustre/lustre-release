@@ -3454,7 +3454,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 			lcme->lcme_id = cpu_to_le32(id);
 		}
 
-		id = MAX(le32_to_cpu(lcme->lcme_id), id);
+		id = max(le32_to_cpu(lcme->lcme_id), id);
 	}
 
 	mirror_id = mirror_id_of(id) + 1;

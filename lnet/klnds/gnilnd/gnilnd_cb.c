@@ -2800,7 +2800,7 @@ kgnilnd_check_peer_timeouts_locked(kgn_peer_t *peer, struct list_head *todie,
 		peer, libcfs_nid2str(peer->gnp_nid),
 		peer->gnp_reconnect_interval);
 
-	timeout = cfs_time_seconds(MAX(*kgnilnd_tunables.kgn_timeout,
+	timeout = cfs_time_seconds(max(*kgnilnd_tunables.kgn_timeout,
 				       GNILND_MIN_TIMEOUT));
 
 	conn = kgnilnd_find_conn_locked(peer);

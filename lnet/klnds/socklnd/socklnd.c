@@ -748,9 +748,10 @@ ksocknal_select_ips(struct ksock_peer_ni *peer_ni, __u32 *peerips, int n_peerips
 	LASSERT(net->ksnn_ninterfaces <= LNET_INTERFACES_NUM);
 
 	/* Only match interfaces for additional connections
-         * if I have > 1 interface */
-        n_ips = (net->ksnn_ninterfaces < 2) ? 0 :
-                MIN(n_peerips, net->ksnn_ninterfaces);
+	 * if I have > 1 interface
+	 */
+	n_ips = (net->ksnn_ninterfaces < 2) ? 0 :
+		min(n_peerips, net->ksnn_ninterfaces);
 
         for (i = 0; peer_ni->ksnp_n_passive_ips < n_ips; i++) {
                 /*              ^ yes really... */

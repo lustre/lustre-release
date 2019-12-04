@@ -1145,22 +1145,22 @@ ksocknal_new_packet(struct ksock_conn *conn, int nob_to_skip)
         /* Set up to skip as much as possible now.  If there's more left
          * (ran out of iov entries) we'll get called again */
 
-        conn->ksnc_rx_state = SOCKNAL_RX_SLOP;
-        conn->ksnc_rx_nob_left = nob_to_skip;
+	conn->ksnc_rx_state = SOCKNAL_RX_SLOP;
+	conn->ksnc_rx_nob_left = nob_to_skip;
 	conn->ksnc_rx_iov = (struct kvec *)&conn->ksnc_rx_iov_space;
-        skipped = 0;
-        niov = 0;
+	skipped = 0;
+	niov = 0;
 
-        do {
-                nob = MIN (nob_to_skip, sizeof (ksocknal_slop_buffer));
+	do {
+		nob = min_t(int, nob_to_skip, sizeof(ksocknal_slop_buffer));
 
-                conn->ksnc_rx_iov[niov].iov_base = ksocknal_slop_buffer;
-                conn->ksnc_rx_iov[niov].iov_len  = nob;
-                niov++;
-                skipped += nob;
-                nob_to_skip -=nob;
+		conn->ksnc_rx_iov[niov].iov_base = ksocknal_slop_buffer;
+		conn->ksnc_rx_iov[niov].iov_len  = nob;
+		niov++;
+		skipped += nob;
+		nob_to_skip -= nob;
 
-        } while (nob_to_skip != 0 &&    /* mustn't overflow conn's rx iov */
+	} while (nob_to_skip != 0 &&    /* mustn't overflow conn's rx iov */
 		 niov < sizeof(conn->ksnc_rx_iov_space) / sizeof(struct kvec));
 
         conn->ksnc_rx_niov = niov;

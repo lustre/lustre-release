@@ -351,14 +351,6 @@ do {                                                            \
 /* logical equivalence */
 #define equi(a, b) (!!(a) == !!(b))
 
-/* what used to be in portals_lib.h */
-#ifndef MIN
-# define MIN(a,b) (((a)<(b)) ? (a): (b))
-#endif
-#ifndef MAX
-# define MAX(a,b) (((a)>(b)) ? (a): (b))
-#endif
-
 #define MKSTR(ptr) ((ptr))? (ptr) : ""
 
 static inline size_t cfs_size_round4(size_t val)

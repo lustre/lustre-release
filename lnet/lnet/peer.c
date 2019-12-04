@@ -2583,7 +2583,7 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 		lp->lp_state &= ~LNET_PEER_ROUTER_ENABLED;
 	spin_unlock(&lp->lp_lock);
 
-	nnis = MAX(lp->lp_nnis, pbuf->pb_info.pi_nnis);
+	nnis = max_t(int, lp->lp_nnis, pbuf->pb_info.pi_nnis);
 	LIBCFS_ALLOC(curnis, nnis * sizeof(*curnis));
 	LIBCFS_ALLOC(addnis, nnis * sizeof(*addnis));
 	LIBCFS_ALLOC(delnis, nnis * sizeof(*delnis));
@@ -2977,7 +2977,7 @@ __must_hold(&lp->lp_lock)
 	pnid = lnet_peer_select_nid(lp);
 	lnet_net_unlock(cpt);
 
-	nnis = MAX(lp->lp_data_nnis, LNET_INTERFACES_MIN);
+	nnis = max(lp->lp_data_nnis, LNET_INTERFACES_MIN);
 
 	rc = lnet_send_ping(pnid, &lp->lp_ping_mdh, nnis, lp,
 			    the_lnet.ln_dc_eqh, false);

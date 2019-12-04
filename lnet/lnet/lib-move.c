@@ -279,7 +279,7 @@ lnet_copy_iov2iov(unsigned int ndiov, struct kvec *diov, unsigned int doffset,
 		  unsigned int nob)
 {
 	/* NB diov, siov are READ-ONLY */
-	unsigned int  this_nob;
+	unsigned int this_nob;
 
 	if (nob == 0)
 		return;
@@ -305,9 +305,9 @@ lnet_copy_iov2iov(unsigned int ndiov, struct kvec *diov, unsigned int doffset,
 	do {
 		LASSERT(ndiov > 0);
 		LASSERT(nsiov > 0);
-		this_nob = MIN(diov->iov_len - doffset,
-			       siov->iov_len - soffset);
-		this_nob = MIN(this_nob, nob);
+		this_nob = min3((unsigned int)diov->iov_len - doffset,
+				(unsigned int)siov->iov_len - soffset,
+				nob);
 
 		memcpy((char *)diov->iov_base + doffset,
 		       (char *)siov->iov_base + soffset, this_nob);
@@ -427,9 +427,9 @@ lnet_copy_kiov2kiov(unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset,
 	do {
 		LASSERT(ndiov > 0);
 		LASSERT(nsiov > 0);
-		this_nob = MIN(diov->kiov_len - doffset,
-			       siov->kiov_len - soffset);
-		this_nob = MIN(this_nob, nob);
+		this_nob = min3(diov->kiov_len - doffset,
+				siov->kiov_len - soffset,
+				nob);
 
 		if (daddr == NULL)
 			daddr = ((char *)kmap(diov->kiov_page)) +
@@ -508,9 +508,9 @@ lnet_copy_kiov2iov (unsigned int niov, struct kvec *iov, unsigned int iovoffset,
 	do {
 		LASSERT(niov > 0);
 		LASSERT(nkiov > 0);
-		this_nob = MIN(iov->iov_len - iovoffset,
-			       kiov->kiov_len - kiovoffset);
-		this_nob = MIN(this_nob, nob);
+		this_nob = min3((unsigned int)iov->iov_len - iovoffset,
+				(unsigned int)kiov->kiov_len - kiovoffset,
+				nob);
 
 		if (addr == NULL)
 			addr = ((char *)kmap(kiov->kiov_page)) +
@@ -578,9 +578,9 @@ lnet_copy_iov2kiov(unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffse
 	do {
 		LASSERT(nkiov > 0);
 		LASSERT(niov > 0);
-		this_nob = MIN(kiov->kiov_len - kiovoffset,
-			       iov->iov_len - iovoffset);
-		this_nob = MIN(this_nob, nob);
+		this_nob = min3((unsigned int)kiov->kiov_len - kiovoffset,
+				(unsigned int)iov->iov_len - iovoffset,
+				nob);
 
 		if (addr == NULL)
 			addr = ((char *)kmap(kiov->kiov_page)) +
@@ -3994,8 +3994,8 @@ lnet_parse_reply(struct lnet_ni *ni, struct lnet_msg *msg)
 	struct lnet_hdr *hdr = &msg->msg_hdr;
 	struct lnet_process_id src = {0};
 	struct lnet_libmd *md;
-	int rlength;
-	int mlength;
+	unsigned int rlength;
+	unsigned int mlength;
 	int cpt;
 
 	cpt = lnet_cpt_of_cookie(hdr->msg.reply.dst_wmd.wh_object_cookie);
@@ -4024,7 +4024,7 @@ lnet_parse_reply(struct lnet_ni *ni, struct lnet_msg *msg)
 	LASSERT(md->md_offset == 0);
 
 	rlength = hdr->payload_length;
-	mlength = MIN(rlength, (int)md->md_length);
+	mlength = min(rlength, md->md_length);
 
 	if (mlength < rlength &&
 	    (md->md_options & LNET_MD_TRUNCATE) == 0) {
