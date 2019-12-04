@@ -301,8 +301,8 @@ kgnilnd_alloc_tx (void)
 #define _kgnilnd_cksum(seed, ptr, nob)  csum_partial(ptr, nob, seed)
 
 /* we don't use offset as every one is passing a buffer reference that already
- * includes the offset into the base address -
- *  see kgnilnd_setup_virt_buffer and kgnilnd_setup_immediate_buffer */
+ * includes the offset into the base address.
+ */
 static inline __u16
 kgnilnd_cksum(void *ptr, size_t nob)
 {
@@ -511,9 +511,9 @@ kgnilnd_nak_rdma(kgn_conn_t *conn, int rx_type, int error, __u64 cookie, lnet_ni
 	kgnilnd_queue_tx(conn, tx);
 }
 
-int
+static int
 kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
-			       struct kvec *iov, struct bio_vec *kiov,
+			       struct bio_vec *kiov,
 			       unsigned int offset, unsigned int nob)
 {
 	kgn_msg_t       *msg = &tx->tx_msg;
@@ -526,7 +526,7 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 
 	if (nob == 0) {
 		tx->tx_buffer = NULL;
-	} else if (kiov != NULL) {
+	} else {
 
 		if ((niov > 0) && unlikely(niov > (nob/PAGE_SIZE))) {
 			niov = round_up(nob + offset + kiov->bv_offset,
@@ -534,8 +534,8 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 		}
 
 		LASSERTF(niov > 0 && niov < GNILND_MAX_IMMEDIATE/PAGE_SIZE,
-			"bad niov %d msg %p kiov %p iov %p offset %d nob%d\n",
-			niov, msg, kiov, iov, offset, nob);
+			"bad niov %d msg %p kiov %p offset %d nob%d\n",
+			niov, msg, kiov, offset, nob);
 
 		while (offset >= kiov->bv_len) {
 			offset -= kiov->bv_len;
@@ -591,29 +591,6 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 		tx->tx_buftype = GNILND_BUF_IMMEDIATE_KIOV;
 		tx->tx_nob = nob;
 
-	} else {
-		/* For now this is almost identical to kgnilnd_setup_virt_buffer, but we
-		 * could "flatten" the payload into a single contiguous buffer ready
-		 * for sending direct over an FMA if we ever needed to. */
-
-		LASSERT(niov > 0);
-
-		while (offset >= iov->iov_len) {
-			offset -= iov->iov_len;
-			niov--;
-			iov++;
-			LASSERT(niov > 0);
-		}
-
-		if (nob > iov->iov_len - offset) {
-			CERROR("Can't handle multiple vaddr fragments\n");
-			return -EMSGSIZE;
-		}
-
-		tx->tx_buffer = (void *)(((unsigned long)iov->iov_base) + offset);
-
-		tx->tx_buftype = GNILND_BUF_IMMEDIATE;
-		tx->tx_nob = nob;
 	}
 
 	/* checksum payload early - it shouldn't be changing after lnd_send */
@@ -630,34 +607,6 @@ kgnilnd_setup_immediate_buffer(kgn_tx_t *tx, unsigned int niov,
 		msg->gnm_payload_cksum = 0;
 	}
 
-	return 0;
-}
-
-int
-kgnilnd_setup_virt_buffer(kgn_tx_t *tx,
-			  unsigned int niov, struct kvec *iov,
-			  unsigned int offset, unsigned int nob)
-
-{
-	LASSERT(nob > 0);
-	LASSERT(niov > 0);
-	LASSERT(tx->tx_buftype == GNILND_BUF_NONE);
-
-	while (offset >= iov->iov_len) {
-		offset -= iov->iov_len;
-		niov--;
-		iov++;
-		LASSERT(niov > 0);
-	}
-
-	if (nob > iov->iov_len - offset) {
-		CERROR("Can't handle multiple vaddr fragments\n");
-		return -EMSGSIZE;
-	}
-
-	tx->tx_buftype = GNILND_BUF_VIRT_UNMAPPED;
-	tx->tx_nob = nob;
-	tx->tx_buffer = (void *)(((unsigned long)iov->iov_base) + offset);
 	return 0;
 }
 
@@ -776,21 +725,10 @@ error:
 
 static inline int
 kgnilnd_setup_rdma_buffer(kgn_tx_t *tx, unsigned int niov,
-			  struct kvec *iov, struct bio_vec *kiov,
+			  struct bio_vec *kiov,
 			  unsigned int offset, unsigned int nob)
 {
-	int     rc;
-
-	LASSERTF((iov == NULL) != (kiov == NULL), "iov 0x%p, kiov 0x%p, tx 0x%p,"
-						" offset %d, nob %d, niov %d\n"
-						, iov, kiov, tx, offset, nob, niov);
-
-	if (kiov != NULL) {
-		rc = kgnilnd_setup_phys_buffer(tx, niov, kiov, offset, nob);
-	} else {
-		rc = kgnilnd_setup_virt_buffer(tx, niov, iov, offset, nob);
-	}
-	return rc;
+	return kgnilnd_setup_phys_buffer(tx, niov, kiov, offset, nob);
 }
 
 /* kgnilnd_parse_lnet_rdma()
@@ -2180,7 +2118,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			goto out;
 		}
 		rc = kgnilnd_setup_rdma_buffer(tx, lntmsg->msg_md->md_niov,
-					       NULL, lntmsg->msg_md->md_kiov,
+					       lntmsg->msg_md->md_kiov,
 					       0, lntmsg->msg_md->md_length);
 		if (rc != 0) {
 			CERROR("unable to setup buffer: %d\n", rc);
@@ -2224,7 +2162,7 @@ kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			goto out;
 		}
 
-		rc = kgnilnd_setup_rdma_buffer(tx, niov, NULL,
+		rc = kgnilnd_setup_rdma_buffer(tx, niov,
 					       kiov, offset, nob);
 		if (rc != 0) {
 			kgnilnd_tx_done(tx, rc);
@@ -2307,7 +2245,7 @@ kgnilnd_setup_rdma(struct lnet_ni *ni, kgn_rx_t *rx, struct lnet_msg *lntmsg, in
 	if (rc != 0)
 		goto failed_1;
 
-	rc = kgnilnd_setup_rdma_buffer(tx, niov, NULL, kiov, offset, nob);
+	rc = kgnilnd_setup_rdma_buffer(tx, niov, kiov, offset, nob);
 	if (rc != 0)
 		goto failed_1;
 
@@ -2548,7 +2486,7 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			GOTO(nak_put_req, rc);
 		}
 
-		rc = kgnilnd_setup_rdma_buffer(tx, niov, NULL,
+		rc = kgnilnd_setup_rdma_buffer(tx, niov,
 					       kiov, offset, mlen);
 		if (rc != 0) {
 			GOTO(nak_put_req, rc);
@@ -2609,12 +2547,10 @@ nak_put_req:
 			if (rc != 0)
 				GOTO(nak_get_req_rev, rc);
 
-
-			rc = kgnilnd_setup_rdma_buffer(tx, niov, NULL,
+			rc = kgnilnd_setup_rdma_buffer(tx, niov,
 						       kiov, offset, mlen);
 			if (rc != 0)
 				GOTO(nak_get_req_rev, rc);
-
 
 			tx->tx_msg.gnm_u.putack.gnpam_src_cookie =
 				rxmsg->gnm_u.putreq.gnprm_cookie;
