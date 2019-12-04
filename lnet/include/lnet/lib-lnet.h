@@ -213,46 +213,6 @@ extern struct kmem_cache *lnet_small_mds_cachep; /* <= LNET_SMALL_MD_SIZE bytes
 extern struct kmem_cache *lnet_rspt_cachep;
 extern struct kmem_cache *lnet_msg_cachep;
 
-static inline struct lnet_libmd *
-lnet_md_alloc(struct lnet_md *umd)
-{
-	struct lnet_libmd *md;
-	unsigned int  size;
-	unsigned int  niov;
-
-	if ((umd->options & LNET_MD_KIOV) != 0) {
-		niov = umd->length;
-		size = offsetof(struct lnet_libmd, md_iov.kiov[niov]);
-	} else {
-		niov = 1;
-		size = offsetof(struct lnet_libmd, md_iov.iov[niov]);
-	}
-
-	if (size <= LNET_SMALL_MD_SIZE) {
-		md = kmem_cache_alloc(lnet_small_mds_cachep,
-				      GFP_NOFS | __GFP_ZERO);
-		if (md) {
-			CDEBUG(D_MALLOC, "slab-alloced 'md' of size %u at "
-			       "%p.\n", size, md);
-		} else {
-			CDEBUG(D_MALLOC, "failed to allocate 'md' of size %u\n",
-			       size);
-			return NULL;
-		}
-	} else {
-		LIBCFS_ALLOC(md, size);
-	}
-
-	if (md != NULL) {
-		/* Set here in case of early free */
-		md->md_options = umd->options;
-		md->md_niov = niov;
-		INIT_LIST_HEAD(&md->md_list);
-	}
-
-	return md;
-}
-
 static inline void
 lnet_md_free(struct lnet_libmd *md)
 {

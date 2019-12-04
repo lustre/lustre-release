@@ -182,12 +182,42 @@ out:
 	return cpt;
 }
 
-static int
-lnet_md_build(struct lnet_libmd *lmd, struct lnet_md *umd, int unlink)
+static struct lnet_libmd *
+lnet_md_build(struct lnet_md *umd, int unlink)
 {
-	int	     i;
+	int i;
 	unsigned int niov;
-	int	     total_length = 0;
+	int total_length = 0;
+	struct lnet_libmd *lmd;
+	unsigned int size;
+
+	if ((umd->options & LNET_MD_KIOV) != 0) {
+		niov = umd->length;
+		size = offsetof(struct lnet_libmd, md_iov.kiov[niov]);
+	} else {
+		niov = 1;
+		size = offsetof(struct lnet_libmd, md_iov.iov[niov]);
+	}
+
+	if (size <= LNET_SMALL_MD_SIZE) {
+		lmd = kmem_cache_zalloc(lnet_small_mds_cachep, GFP_NOFS);
+		if (lmd) {
+			CDEBUG(D_MALLOC,
+			       "slab-alloced 'md' of size %u at %p.\n",
+			       size, lmd);
+		} else {
+			CDEBUG(D_MALLOC, "failed to allocate 'md' of size %u\n",
+			       size);
+		}
+	} else {
+		LIBCFS_ALLOC(lmd, size);
+	}
+
+	if (!lmd)
+		return ERR_PTR(-ENOMEM);
+
+	lmd->md_niov = niov;
+	INIT_LIST_HEAD(&lmd->md_list);
 
 	lmd->md_me = NULL;
 	lmd->md_start = umd->start;
@@ -209,31 +239,37 @@ lnet_md_build(struct lnet_libmd *lmd, struct lnet_md *umd, int unlink)
 		for (i = 0; i < (int)niov; i++) {
 			/* We take the page pointer on trust */
 			if (lmd->md_iov.kiov[i].bv_offset +
-			    lmd->md_iov.kiov[i].bv_len > PAGE_SIZE)
-				return -EINVAL; /* invalid length */
+			    lmd->md_iov.kiov[i].bv_len > PAGE_SIZE) {
+				lnet_md_free(lmd);
+				return ERR_PTR(-EINVAL); /* invalid length */
+			}
 
 			total_length += lmd->md_iov.kiov[i].bv_len;
 		}
 
 		lmd->md_length = total_length;
 
-		if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
+		if ((umd->options & LNET_MD_MAX_SIZE) && /* max size used */
 		    (umd->max_size < 0 ||
-		     umd->max_size > total_length)) // illegal max_size
-			return -EINVAL;
+		     umd->max_size > total_length)) { /* illegal max_size */
+			lnet_md_free(lmd);
+			return ERR_PTR(-EINVAL);
+		}
 	} else {   /* contiguous */
 		lmd->md_length = umd->length;
 		lmd->md_niov = niov = 1;
 		lmd->md_iov.iov[0].iov_base = umd->start;
 		lmd->md_iov.iov[0].iov_len = umd->length;
 
-		if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
+		if ((umd->options & LNET_MD_MAX_SIZE) && /* max size used */
 		    (umd->max_size < 0 ||
-		     umd->max_size > (int)umd->length)) // illegal max_size
-			return -EINVAL;
+		     umd->max_size > (int)umd->length)) { /* illegal max_size */
+			lnet_md_free(lmd);
+			return ERR_PTR(-EINVAL);
+		}
 	}
 
-	return 0;
+	return lmd;
 }
 
 /* must be called with resource lock held */
@@ -355,13 +391,9 @@ LNetMDAttach(struct lnet_me *me, struct lnet_md umd,
 		return -EINVAL;
 	}
 
-	md = lnet_md_alloc(&umd);
-	if (md == NULL)
-		return -ENOMEM;
-
-	rc = lnet_md_build(md, &umd, unlink);
-	if (rc != 0)
-		goto out_free;
+	md = lnet_md_build(&umd, unlink);
+	if (IS_ERR(md))
+		return PTR_ERR(md);
 
 	cpt = me->me_cpt;
 
@@ -390,7 +422,6 @@ LNetMDAttach(struct lnet_me *me, struct lnet_md umd,
 
 out_unlock:
 	lnet_res_unlock(cpt);
-out_free:
 	lnet_md_free(md);
 	return rc;
 }
@@ -430,13 +461,9 @@ LNetMDBind(struct lnet_md umd, enum lnet_unlink unlink,
 		return -EINVAL;
 	}
 
-	md = lnet_md_alloc(&umd);
-	if (md == NULL)
-		return -ENOMEM;
-
-	rc = lnet_md_build(md, &umd, unlink);
-	if (rc != 0)
-		goto out_free;
+	md = lnet_md_build(&umd, unlink);
+	if (IS_ERR(md))
+		return PTR_ERR(md);
 
 	if (md->md_length > LNET_MTU) {
 		CERROR("Invalid length: too big transfer size %u, %d max\n",
