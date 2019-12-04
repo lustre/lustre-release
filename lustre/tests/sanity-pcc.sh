@@ -1463,6 +1463,9 @@ test_20() {
 		error "Failed to attach $file"
 	do_facet $SINGLEAGT "echo 3 > /proc/sys/vm/drop_caches"
 	check_lpcc_state $file "readwrite"
+	do_facet $SINGLEAGT "echo 3 > /proc/sys/vm/drop_caches"
+	do_facet $SINGLEAGT "echo 3 > /proc/sys/vm/drop_caches"
+	check_lpcc_state $file "readwrite"
 	do_facet $SINGLEAGT $LFS pcc detach $file ||
 		error "Failed to detach $file"
 }
