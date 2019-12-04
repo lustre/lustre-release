@@ -71,26 +71,26 @@ ksocknal_alloc_tx_noop(__u64 cookie, int nonblk)
 {
 	struct ksock_tx *tx;
 
-        tx = ksocknal_alloc_tx(KSOCK_MSG_NOOP, KSOCK_NOOP_TX_SIZE);
-        if (tx == NULL) {
-                CERROR("Can't allocate noop tx desc\n");
-                return NULL;
-        }
+	tx = ksocknal_alloc_tx(KSOCK_MSG_NOOP, KSOCK_NOOP_TX_SIZE);
+	if (tx == NULL) {
+		CERROR("Can't allocate noop tx desc\n");
+		return NULL;
+	}
 
-        tx->tx_conn     = NULL;
-        tx->tx_lnetmsg  = NULL;
-        tx->tx_kiov     = NULL;
-        tx->tx_nkiov    = 0;
-        tx->tx_iov      = tx->tx_frags.virt.iov;
-        tx->tx_niov     = 1;
-        tx->tx_nonblk   = nonblk;
+	tx->tx_conn     = NULL;
+	tx->tx_lnetmsg  = NULL;
+	tx->tx_kiov     = NULL;
+	tx->tx_nkiov    = 0;
+	tx->tx_iov      = &tx->tx_hdr;
+	tx->tx_niov     = 1;
+	tx->tx_nonblk   = nonblk;
 
 	tx->tx_msg.ksm_csum = 0;
 	tx->tx_msg.ksm_type = KSOCK_MSG_NOOP;
 	tx->tx_msg.ksm_zc_cookies[0] = 0;
-        tx->tx_msg.ksm_zc_cookies[1] = cookie;
+	tx->tx_msg.ksm_zc_cookies[1] = cookie;
 
-        return tx;
+	return tx;
 }
 
 
@@ -1006,7 +1006,7 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	LASSERT (!in_interrupt ());
 
 	desc_size = offsetof(struct ksock_tx,
-			     tx_frags.paged.kiov[payload_niov]);
+			     tx_payload[payload_niov]);
 
         if (lntmsg->msg_vmflush)
 		mpflag = memalloc_noreclaim_save();
@@ -1024,8 +1024,8 @@ ksocknal_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	tx->tx_lnetmsg = lntmsg;
 
 	tx->tx_niov = 1;
-	tx->tx_iov = &tx->tx_frags.paged.iov;
-	tx->tx_kiov = tx->tx_frags.paged.kiov;
+	tx->tx_iov = &tx->tx_hdr;
+	tx->tx_kiov = tx->tx_payload;
 	tx->tx_nkiov = lnet_extract_kiov(payload_niov, tx->tx_kiov,
 					 payload_niov, payload_kiov,
 					 payload_offset, payload_nob);

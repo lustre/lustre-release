@@ -262,24 +262,17 @@ struct ksock_tx {			/* transmit packet */
         unsigned short tx_zc_checked:1; /* Have I checked if I should ZC? */
         unsigned short tx_nonblk:1;    /* it's a non-blocking ACK */
 	struct bio_vec *tx_kiov;        /* packet page frags */
-	struct ksock_conn *tx_conn;        /* owning conn */
-	struct lnet_msg	  *tx_lnetmsg;	/* lnet message for lnet_finalize() */
-	time64_t	   tx_deadline;	/* when (in secs) tx times out */
-	struct ksock_msg   tx_msg;         /* socklnd message buffer */
-        int            tx_desc_size;   /* size of this descriptor */
+	struct ksock_conn *tx_conn;	/* owning conn */
+	struct lnet_msg	*tx_lnetmsg;	/* lnet message for lnet_finalize() */
+	time64_t	tx_deadline;	/* when (in secs) tx times out */
+	struct ksock_msg tx_msg;	/* socklnd message buffer */
+	int		tx_desc_size;	/* size of this descriptor */
 	enum lnet_msg_hstatus tx_hstatus; /* health status of tx */
-        union {
-                struct {
-			struct kvec iov;	/* virt hdr */
-			struct bio_vec kiov[0];	/* paged payload */
-                }                  paged;
-                struct {
-			struct kvec iov[1];	/* virt hdr + payload */
-                }                  virt;
-        }                       tx_frags;
+	struct kvec	tx_hdr;		/* virt hdr */
+	struct bio_vec	tx_payload[0];	/* paged payload */
 };
 
-#define KSOCK_NOOP_TX_SIZE  ((int)offsetof(struct ksock_tx, tx_frags.paged.kiov[0]))
+#define KSOCK_NOOP_TX_SIZE  ((int)offsetof(struct ksock_tx, tx_payload[0]))
 
 /* network zero copy callback descriptor embedded in struct ksock_tx */
 
