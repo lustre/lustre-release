@@ -653,10 +653,6 @@ void lnet_counters_get(struct lnet_counters *counters);
 void lnet_counters_reset(void);
 
 unsigned int lnet_iov_nob(unsigned int niov, struct kvec *iov);
-int lnet_extract_iov(int dst_niov, struct kvec *dst,
-		      int src_niov, struct kvec *src,
-		      unsigned int offset, unsigned int len);
-
 unsigned int lnet_kiov_nob(unsigned int niov, struct bio_vec *iov);
 int lnet_extract_kiov(int dst_niov, struct bio_vec *dst,
 		      int src_niov, struct bio_vec *src,

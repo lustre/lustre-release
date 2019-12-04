@@ -1392,9 +1392,7 @@ ksocknal_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 		conn->ksnc_rx_nkiov = 0;
 		conn->ksnc_rx_kiov = NULL;
 		conn->ksnc_rx_iov = conn->ksnc_rx_iov_space.iov;
-		conn->ksnc_rx_niov =
-			lnet_extract_iov(LNET_MAX_IOV, conn->ksnc_rx_iov,
-					 niov, NULL, offset, mlen);
+		conn->ksnc_rx_niov = 0;
 	} else {
 		conn->ksnc_rx_niov = 0;
 		conn->ksnc_rx_iov  = NULL;
