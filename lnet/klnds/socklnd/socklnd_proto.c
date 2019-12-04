@@ -706,8 +706,8 @@ ksocknal_pack_msg_v1(struct ksock_tx *tx)
 	LASSERT(tx->tx_msg.ksm_type != KSOCK_MSG_NOOP);
 	LASSERT(tx->tx_lnetmsg != NULL);
 
-	tx->tx_iov[0].iov_base = (void *)&tx->tx_lnetmsg->msg_hdr;
-	tx->tx_iov[0].iov_len  = sizeof(struct lnet_hdr);
+	tx->tx_hdr.iov_base = (void *)&tx->tx_lnetmsg->msg_hdr;
+	tx->tx_hdr.iov_len  = sizeof(struct lnet_hdr);
 
 	tx->tx_nob = tx->tx_lnetmsg->msg_len + sizeof(struct lnet_hdr);
 	tx->tx_resid = tx->tx_nob;
@@ -716,18 +716,19 @@ ksocknal_pack_msg_v1(struct ksock_tx *tx)
 static void
 ksocknal_pack_msg_v2(struct ksock_tx *tx)
 {
-        tx->tx_iov[0].iov_base = (void *)&tx->tx_msg;
+	tx->tx_hdr.iov_base = (void *)&tx->tx_msg;
 
         if (tx->tx_lnetmsg != NULL) {
                 LASSERT(tx->tx_msg.ksm_type != KSOCK_MSG_NOOP);
 
                 tx->tx_msg.ksm_u.lnetmsg.ksnm_hdr = tx->tx_lnetmsg->msg_hdr;
-		tx->tx_iov[0].iov_len = sizeof(struct ksock_msg);
+		tx->tx_hdr.iov_len = sizeof(struct ksock_msg);
 		tx->tx_resid = tx->tx_nob = sizeof(struct ksock_msg) + tx->tx_lnetmsg->msg_len;
         } else {
                 LASSERT(tx->tx_msg.ksm_type == KSOCK_MSG_NOOP);
 
-		tx->tx_iov[0].iov_len = offsetof(struct ksock_msg, ksm_u.lnetmsg.ksnm_hdr);
+		tx->tx_hdr.iov_len = offsetof(struct ksock_msg,
+					      ksm_u.lnetmsg.ksnm_hdr);
 		tx->tx_resid = tx->tx_nob = offsetof(struct ksock_msg,  ksm_u.lnetmsg.ksnm_hdr);
         }
         /* Don't checksum before start sending, because packet can be piggybacked with ACK */

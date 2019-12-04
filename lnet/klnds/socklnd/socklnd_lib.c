@@ -71,11 +71,11 @@ ksocknal_lib_zc_capable(struct ksock_conn *conn)
 }
 
 int
-ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx,
+ksocknal_lib_send_hdr(struct ksock_conn *conn, struct ksock_tx *tx,
 		      struct kvec *scratchiov)
 {
 	struct socket  *sock = conn->ksnc_sock;
-	int		nob;
+	int		nob = 0;
 	int		rc;
 
 	if (*ksocknal_tunables.ksnd_enable_csum	       && /* checksum enabled */
@@ -96,11 +96,10 @@ ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx,
 		unsigned int niov = tx->tx_niov;
 #endif
 		struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
-                int  i;
 
-		for (nob = i = 0; i < niov; i++) {
-			scratchiov[i] = tx->tx_iov[i];
-			nob += scratchiov[i].iov_len;
+		if (tx->tx_niov) {
+			scratchiov[0] = tx->tx_hdr;
+			nob += scratchiov[0].iov_len;
 		}
 
 		if (!list_empty(&conn->ksnc_tx_queue) ||
@@ -384,29 +383,23 @@ ksocknal_lib_csum_tx(struct ksock_tx *tx)
         __u32        csum;
         void        *base;
 
-        LASSERT(tx->tx_iov[0].iov_base == (void *)&tx->tx_msg);
-        LASSERT(tx->tx_conn != NULL);
-        LASSERT(tx->tx_conn->ksnc_proto == &ksocknal_protocol_v2x);
+	LASSERT(tx->tx_hdr.iov_base == (void *)&tx->tx_msg);
+	LASSERT(tx->tx_conn != NULL);
+	LASSERT(tx->tx_conn->ksnc_proto == &ksocknal_protocol_v2x);
 
         tx->tx_msg.ksm_csum = 0;
 
-        csum = ksocknal_csum(~0, (void *)tx->tx_iov[0].iov_base,
-                             tx->tx_iov[0].iov_len);
+	csum = ksocknal_csum(~0, (void *)tx->tx_hdr.iov_base,
+			     tx->tx_hdr.iov_len);
 
-        if (tx->tx_kiov != NULL) {
-                for (i = 0; i < tx->tx_nkiov; i++) {
-                        base = kmap(tx->tx_kiov[i].bv_page) +
-                               tx->tx_kiov[i].bv_offset;
+	for (i = 0; i < tx->tx_nkiov; i++) {
+		base = kmap(tx->tx_kiov[i].bv_page) +
+			tx->tx_kiov[i].bv_offset;
 
-                        csum = ksocknal_csum(csum, base, tx->tx_kiov[i].bv_len);
+		csum = ksocknal_csum(csum, base, tx->tx_kiov[i].bv_len);
 
-                        kunmap(tx->tx_kiov[i].bv_page);
-                }
-        } else {
-                for (i = 1; i < tx->tx_niov; i++)
-                        csum = ksocknal_csum(csum, tx->tx_iov[i].iov_base,
-                                             tx->tx_iov[i].iov_len);
-        }
+		kunmap(tx->tx_kiov[i].bv_page);
+	}
 
         if (*ksocknal_tunables.ksnd_inject_csum_error) {
                 csum++;

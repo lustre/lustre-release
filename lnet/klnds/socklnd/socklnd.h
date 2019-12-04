@@ -255,7 +255,6 @@ struct ksock_tx {			/* transmit packet */
 	int            tx_nob;         /* # packet bytes */
 	int            tx_resid;       /* residual bytes */
 	int            tx_niov;        /* # packet kvec frags */
-	struct kvec  *tx_iov;         /* packet kvec frags */
         int            tx_nkiov;       /* # packet page frags */
         unsigned short tx_zc_aborted;  /* aborted ZC request */
         unsigned short tx_zc_capable:1; /* payload is large enough for ZC */
@@ -634,7 +633,7 @@ extern void ksocknal_lib_reset_callback(struct socket *sock,
 extern void ksocknal_lib_push_conn(struct ksock_conn *conn);
 extern int ksocknal_lib_get_conn_addrs(struct ksock_conn *conn);
 extern int ksocknal_lib_setup_sock(struct socket *so);
-extern int ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx,
+extern int ksocknal_lib_send_hdr(struct ksock_conn *conn, struct ksock_tx *tx,
 				 struct kvec *scratch_iov);
 extern int ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 				  struct kvec *scratch_iov);
