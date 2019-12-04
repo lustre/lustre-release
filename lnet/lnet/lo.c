@@ -51,29 +51,16 @@ lolnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	struct lnet_msg *sendmsg = private;
 
 	if (lntmsg != NULL) {			/* not discarding */
-		if (sendmsg->msg_iov != NULL) {
-			if (iov != NULL)
-				lnet_copy_iov2iov(niov, iov, offset,
-						  sendmsg->msg_niov,
-						  sendmsg->msg_iov,
-						  sendmsg->msg_offset, mlen);
-			else
-				lnet_copy_iov2kiov(niov, kiov, offset,
-						   sendmsg->msg_niov,
-						   sendmsg->msg_iov,
-						   sendmsg->msg_offset, mlen);
-		} else {
-			if (iov != NULL)
-				lnet_copy_kiov2iov(niov, iov, offset,
-						   sendmsg->msg_niov,
-						   sendmsg->msg_kiov,
-						   sendmsg->msg_offset, mlen);
-			else
-				lnet_copy_kiov2kiov(niov, kiov, offset,
-						    sendmsg->msg_niov,
-						    sendmsg->msg_kiov,
-						    sendmsg->msg_offset, mlen);
-		}
+		if (iov != NULL)
+			lnet_copy_kiov2iov(niov, iov, offset,
+					   sendmsg->msg_niov,
+					   sendmsg->msg_kiov,
+					   sendmsg->msg_offset, mlen);
+		else
+			lnet_copy_kiov2kiov(niov, kiov, offset,
+					    sendmsg->msg_niov,
+					    sendmsg->msg_kiov,
+					    sendmsg->msg_offset, mlen);
 
 		lnet_finalize(lntmsg, 0);
 	}

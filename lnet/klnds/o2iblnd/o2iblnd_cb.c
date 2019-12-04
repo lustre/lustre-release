@@ -1645,7 +1645,6 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	int               target_is_router = lntmsg->msg_target_is_router;
 	int               routing = lntmsg->msg_routing;
 	unsigned int      payload_niov = lntmsg->msg_niov;
-	struct kvec      *payload_iov = lntmsg->msg_iov;
 	struct bio_vec   *payload_kiov = lntmsg->msg_kiov;
 	unsigned int      payload_offset = lntmsg->msg_offset;
 	unsigned int      payload_nob = lntmsg->msg_len;
@@ -1665,8 +1664,6 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 	/* Thread context */
 	LASSERT (!in_interrupt());
-	/* payload is either all vaddrs or all pages */
-	LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
 	switch (type) {
 	default:
@@ -1741,14 +1738,9 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
                         return -ENOMEM;
                 }
 
-                if (payload_kiov == NULL)
-                        rc = kiblnd_setup_rd_iov(ni, tx, tx->tx_rd,
-                                                 payload_niov, payload_iov,
-                                                 payload_offset, payload_nob);
-                else
-                        rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
-                                                  payload_niov, payload_kiov,
-                                                  payload_offset, payload_nob);
+		rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
+					  payload_niov, payload_kiov,
+					  payload_offset, payload_nob);
 		if (rc != 0) {
 			CERROR("Can't setup PUT src for %s: %d\n",
 			       libcfs_nid2str(target.nid), rc);
@@ -1782,16 +1774,11 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
         ibmsg = tx->tx_msg;
         ibmsg->ibm_u.immediate.ibim_hdr = *hdr;
 
-        if (payload_kiov != NULL)
-                lnet_copy_kiov2flat(IBLND_MSG_SIZE, ibmsg,
-				    offsetof(struct kib_msg, ibm_u.immediate.ibim_payload),
-                                    payload_niov, payload_kiov,
-                                    payload_offset, payload_nob);
-        else
-                lnet_copy_iov2flat(IBLND_MSG_SIZE, ibmsg,
-				   offsetof(struct kib_msg, ibm_u.immediate.ibim_payload),
-                                   payload_niov, payload_iov,
-                                   payload_offset, payload_nob);
+	lnet_copy_kiov2flat(IBLND_MSG_SIZE, ibmsg,
+			    offsetof(struct kib_msg,
+				     ibm_u.immediate.ibim_payload),
+			    payload_niov, payload_kiov,
+			    payload_offset, payload_nob);
 
 	nob = offsetof(struct kib_immediate_msg, ibim_payload[payload_nob]);
         kiblnd_init_tx_msg(ni, tx, IBLND_MSG_IMMEDIATE, nob);
@@ -1805,13 +1792,12 @@ static void
 kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 {
 	struct lnet_process_id target = lntmsg->msg_target;
-	unsigned int      niov = lntmsg->msg_niov;
-	struct kvec      *iov = lntmsg->msg_iov;
-	struct bio_vec   *kiov = lntmsg->msg_kiov;
-	unsigned int      offset = lntmsg->msg_offset;
-	unsigned int      nob = lntmsg->msg_len;
+	unsigned int niov = lntmsg->msg_niov;
+	struct bio_vec *kiov = lntmsg->msg_kiov;
+	unsigned int offset = lntmsg->msg_offset;
+	unsigned int nob = lntmsg->msg_len;
 	struct kib_tx *tx;
-	int               rc;
+	int rc;
 
 	tx = kiblnd_get_idle_tx(ni, rx->rx_conn->ibc_peer->ibp_nid);
         if (tx == NULL) {
@@ -1822,9 +1808,6 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 
         if (nob == 0)
                 rc = 0;
-        else if (kiov == NULL)
-                rc = kiblnd_setup_rd_iov(ni, tx, tx->tx_rd,
-                                         niov, iov, offset, nob);
         else
                 rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
                                           niov, kiov, offset, nob);

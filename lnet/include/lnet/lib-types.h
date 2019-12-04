@@ -167,7 +167,6 @@ struct lnet_msg {
 	unsigned int          msg_wanted;
 	unsigned int          msg_offset;
 	unsigned int          msg_niov;
-	struct kvec	     *msg_iov;
 	struct bio_vec	     *msg_kiov;
 
 	struct lnet_event	msg_ev;
