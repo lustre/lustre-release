@@ -612,16 +612,16 @@ __u32 gss_prep_bulk_sk(struct gss_ctx *gss_context,
 	blocksize = crypto_blkcipher_blocksize(skc->sc_session_kb.kb_tfm);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		if (BD_GET_KIOV(desc, i).kiov_offset & blocksize) {
+		if (desc->bd_vec[i].kiov_offset & blocksize) {
 			CERROR("offset %d not blocksize aligned\n",
-			       BD_GET_KIOV(desc, i).kiov_offset);
+			       desc->bd_vec[i].kiov_offset);
 			return GSS_S_FAILURE;
 		}
 
-		BD_GET_ENC_KIOV(desc, i).kiov_offset =
-			BD_GET_KIOV(desc, i).kiov_offset;
-		BD_GET_ENC_KIOV(desc, i).kiov_len =
-			sk_block_mask(BD_GET_KIOV(desc, i).kiov_len, blocksize);
+		desc->bd_enc_vec[i].kiov_offset =
+			desc->bd_vec[i].kiov_offset;
+		desc->bd_enc_vec[i].kiov_len =
+			sk_block_mask(desc->bd_vec[i].kiov_len, blocksize);
 	}
 
 	return GSS_S_COMPLETE;
@@ -649,17 +649,17 @@ static __u32 sk_encrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 	sg_init_table(&ctxt, 1);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		sg_set_page(&ptxt, BD_GET_KIOV(desc, i).kiov_page,
-			    sk_block_mask(BD_GET_KIOV(desc, i).kiov_len,
+		sg_set_page(&ptxt, desc->bd_vec[i].kiov_page,
+			    sk_block_mask(desc->bd_vec[i].kiov_len,
 					  blocksize),
-			    BD_GET_KIOV(desc, i).kiov_offset);
+			    desc->bd_vec[i].kiov_offset);
 		nob += ptxt.length;
 
-		sg_set_page(&ctxt, BD_GET_ENC_KIOV(desc, i).kiov_page,
+		sg_set_page(&ctxt, desc->bd_enc_vec[i].kiov_page,
 			    ptxt.length, ptxt.offset);
 
-		BD_GET_ENC_KIOV(desc, i).kiov_offset = ctxt.offset;
-		BD_GET_ENC_KIOV(desc, i).kiov_len = ctxt.length;
+		desc->bd_enc_vec[i].kiov_offset = ctxt.offset;
+		desc->bd_enc_vec[i].kiov_len = ctxt.length;
 
 		rc = crypto_blkcipher_encrypt_iv(&cdesc, &ctxt, &ptxt,
 						 ptxt.length);
@@ -704,8 +704,8 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 
 	for (i = 0; i < desc->bd_iov_count && cnob < desc->bd_nob_transferred;
 	     i++) {
-		lnet_kiov_t *piov = &BD_GET_KIOV(desc, i);
-		lnet_kiov_t *ciov = &BD_GET_ENC_KIOV(desc, i);
+		lnet_kiov_t *piov = &desc->bd_vec[i];
+		lnet_kiov_t *ciov = &desc->bd_enc_vec[i];
 
 		if (ciov->kiov_offset % blocksize != 0 ||
 		    ciov->kiov_len % blocksize != 0) {
@@ -773,7 +773,7 @@ static __u32 sk_decrypt_bulk(struct crypto_blkcipher *tfm, __u8 *iv,
 	/* if needed, clear up the rest unused iovs */
 	if (adj_nob)
 		while (i < desc->bd_iov_count)
-			BD_GET_KIOV(desc, i++).kiov_len = 0;
+			desc->bd_vec[i++].kiov_len = 0;
 
 	if (unlikely(cnob != desc->bd_nob_transferred)) {
 		CERROR("%d cipher text transferred but only %d decrypted\n",
@@ -821,7 +821,7 @@ __u32 gss_wrap_bulk_sk(struct gss_ctx *gss_context,
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
 	skw.skw_hmac.len = sht_bytes;
 	if (sk_make_hmac(skc->sc_hmac, &skc->sc_hmac_key, 1, &skw.skw_cipher,
-			 desc->bd_iov_count, GET_ENC_KIOV(desc), &skw.skw_hmac,
+			 desc->bd_iov_count, desc->bd_enc_vec, &skw.skw_hmac,
 			 gss_context->hash_func))
 		return GSS_S_FAILURE;
 
@@ -859,7 +859,7 @@ __u32 gss_unwrap_bulk_sk(struct gss_ctx *gss_context,
 
 	rc = sk_verify_bulk_hmac(skc->sc_hmac, &skc->sc_hmac_key, 1,
 				 &skw.skw_cipher, desc->bd_iov_count,
-				 GET_ENC_KIOV(desc), desc->bd_nob,
+				 desc->bd_enc_vec, desc->bd_nob,
 				 &skw.skw_hmac);
 	if (rc)
 		return rc;

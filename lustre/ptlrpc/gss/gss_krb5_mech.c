@@ -682,7 +682,7 @@ int krb5_encrypt_bulk(struct crypto_blkcipher *tfm,
         int                     blocksize, i, rc, nob = 0;
 
         LASSERT(desc->bd_iov_count);
-	LASSERT(GET_ENC_KIOV(desc));
+	LASSERT(desc->bd_enc_vec);
 
 	blocksize = crypto_blkcipher_blocksize(tfm);
         LASSERT(blocksize > 1);
@@ -717,19 +717,19 @@ int krb5_encrypt_bulk(struct crypto_blkcipher *tfm,
         /* encrypt clear pages */
         for (i = 0; i < desc->bd_iov_count; i++) {
 		sg_init_table(&src, 1);
-		sg_set_page(&src, BD_GET_KIOV(desc, i).kiov_page,
-			    (BD_GET_KIOV(desc, i).kiov_len +
+		sg_set_page(&src, desc->bd_vec[i].kiov_page,
+			    (desc->bd_vec[i].kiov_len +
 				blocksize - 1) &
 			    (~(blocksize - 1)),
-			    BD_GET_KIOV(desc, i).kiov_offset);
+			    desc->bd_vec[i].kiov_offset);
 		if (adj_nob)
 			nob += src.length;
 		sg_init_table(&dst, 1);
-		sg_set_page(&dst, BD_GET_ENC_KIOV(desc, i).kiov_page,
+		sg_set_page(&dst, desc->bd_enc_vec[i].kiov_page,
 			    src.length, src.offset);
 
-		BD_GET_ENC_KIOV(desc, i).kiov_offset = dst.offset;
-		BD_GET_ENC_KIOV(desc, i).kiov_len = dst.length;
+		desc->bd_enc_vec[i].kiov_offset = dst.offset;
+		desc->bd_enc_vec[i].kiov_len = dst.length;
 
 		rc = crypto_blkcipher_encrypt_iv(&ciph_desc, &dst, &src,
                                                     src.length);
@@ -802,7 +802,7 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
         int                     blocksize, i, rc;
 
         LASSERT(desc->bd_iov_count);
-	LASSERT(GET_ENC_KIOV(desc));
+	LASSERT(desc->bd_enc_vec);
         LASSERT(desc->bd_nob_transferred);
 
 	blocksize = crypto_blkcipher_blocksize(tfm);
@@ -842,49 +842,49 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
 
 	for (i = 0; i < desc->bd_iov_count && ct_nob < desc->bd_nob_transferred;
 	     i++) {
-		if (BD_GET_ENC_KIOV(desc, i).kiov_offset % blocksize
+		if (desc->bd_enc_vec[i].kiov_offset % blocksize
 		    != 0 ||
-		    BD_GET_ENC_KIOV(desc, i).kiov_len % blocksize
+		    desc->bd_enc_vec[i].kiov_len % blocksize
 		    != 0) {
 			CERROR("page %d: odd offset %u len %u, blocksize %d\n",
-			       i, BD_GET_ENC_KIOV(desc, i).kiov_offset,
-			       BD_GET_ENC_KIOV(desc, i).kiov_len,
+			       i, desc->bd_enc_vec[i].kiov_offset,
+			       desc->bd_enc_vec[i].kiov_len,
 			       blocksize);
 			return -EFAULT;
 		}
 
 		if (adj_nob) {
-			if (ct_nob + BD_GET_ENC_KIOV(desc, i).kiov_len >
+			if (ct_nob + desc->bd_enc_vec[i].kiov_len >
 			    desc->bd_nob_transferred)
-				BD_GET_ENC_KIOV(desc, i).kiov_len =
+				desc->bd_enc_vec[i].kiov_len =
 					desc->bd_nob_transferred - ct_nob;
 
-			BD_GET_KIOV(desc, i).kiov_len =
-			  BD_GET_ENC_KIOV(desc, i).kiov_len;
-			if (pt_nob + BD_GET_ENC_KIOV(desc, i).kiov_len >
+			desc->bd_vec[i].kiov_len =
+			  desc->bd_enc_vec[i].kiov_len;
+			if (pt_nob + desc->bd_enc_vec[i].kiov_len >
 			    desc->bd_nob)
-				BD_GET_KIOV(desc, i).kiov_len =
+				desc->bd_vec[i].kiov_len =
 				  desc->bd_nob - pt_nob;
 		} else {
 			/* this should be guaranteed by LNET */
-			LASSERT(ct_nob + BD_GET_ENC_KIOV(desc, i).
+			LASSERT(ct_nob + desc->bd_enc_vec[i].
 				kiov_len <=
 				desc->bd_nob_transferred);
-			LASSERT(BD_GET_KIOV(desc, i).kiov_len <=
-				BD_GET_ENC_KIOV(desc, i).kiov_len);
+			LASSERT(desc->bd_vec[i].kiov_len <=
+				desc->bd_enc_vec[i].kiov_len);
 		}
 
-		if (BD_GET_ENC_KIOV(desc, i).kiov_len == 0)
+		if (desc->bd_enc_vec[i].kiov_len == 0)
 			continue;
 
 		sg_init_table(&src, 1);
-		sg_set_page(&src, BD_GET_ENC_KIOV(desc, i).kiov_page,
-			    BD_GET_ENC_KIOV(desc, i).kiov_len,
-			    BD_GET_ENC_KIOV(desc, i).kiov_offset);
+		sg_set_page(&src, desc->bd_enc_vec[i].kiov_page,
+			    desc->bd_enc_vec[i].kiov_len,
+			    desc->bd_enc_vec[i].kiov_offset);
 		dst = src;
-		if (BD_GET_KIOV(desc, i).kiov_len % blocksize == 0)
+		if (desc->bd_vec[i].kiov_len % blocksize == 0)
 			sg_assign_page(&dst,
-				       BD_GET_KIOV(desc, i).kiov_page);
+				       desc->bd_vec[i].kiov_page);
 
 		rc = crypto_blkcipher_decrypt_iv(&ciph_desc, &dst, &src,
 						 src.length);
@@ -893,17 +893,17 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
                         return rc;
                 }
 
-		if (BD_GET_KIOV(desc, i).kiov_len % blocksize != 0) {
-			memcpy(page_address(BD_GET_KIOV(desc, i).kiov_page) +
-			       BD_GET_KIOV(desc, i).kiov_offset,
-			       page_address(BD_GET_ENC_KIOV(desc, i).
+		if (desc->bd_vec[i].kiov_len % blocksize != 0) {
+			memcpy(page_address(desc->bd_vec[i].kiov_page) +
+			       desc->bd_vec[i].kiov_offset,
+			       page_address(desc->bd_enc_vec[i].
 					    kiov_page) +
-			       BD_GET_KIOV(desc, i).kiov_offset,
-			       BD_GET_KIOV(desc, i).kiov_len);
+			       desc->bd_vec[i].kiov_offset,
+			       desc->bd_vec[i].kiov_len);
 		}
 
-		ct_nob += BD_GET_ENC_KIOV(desc, i).kiov_len;
-		pt_nob += BD_GET_KIOV(desc, i).kiov_len;
+		ct_nob += desc->bd_enc_vec[i].kiov_len;
+		pt_nob += desc->bd_vec[i].kiov_len;
 	}
 
         if (unlikely(ct_nob != desc->bd_nob_transferred)) {
@@ -921,7 +921,7 @@ int krb5_decrypt_bulk(struct crypto_blkcipher *tfm,
 	/* if needed, clear up the rest unused iovs */
 	if (adj_nob)
 		while (i < desc->bd_iov_count)
-			BD_GET_KIOV(desc, i++).kiov_len = 0;
+			desc->bd_vec[i++].kiov_len = 0;
 
         /* decrypt tail (krb5 header) */
 	rc = gss_setup_sgtable(&sg_src, &src, cipher->data + blocksize,
@@ -1107,27 +1107,27 @@ __u32 gss_prep_bulk_kerberos(struct gss_ctx *gctx,
 	int                  blocksize, i;
 
 	LASSERT(desc->bd_iov_count);
-	LASSERT(GET_ENC_KIOV(desc));
+	LASSERT(desc->bd_enc_vec);
 	LASSERT(kctx->kc_keye.kb_tfm);
 
 	blocksize = crypto_blkcipher_blocksize(kctx->kc_keye.kb_tfm);
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		LASSERT(BD_GET_ENC_KIOV(desc, i).kiov_page);
+		LASSERT(desc->bd_enc_vec[i].kiov_page);
 		/*
 		 * offset should always start at page boundary of either
 		 * client or server side.
 		 */
-		if (BD_GET_KIOV(desc, i).kiov_offset & blocksize) {
+		if (desc->bd_vec[i].kiov_offset & blocksize) {
 			CERROR("odd offset %d in page %d\n",
-			       BD_GET_KIOV(desc, i).kiov_offset, i);
+			       desc->bd_vec[i].kiov_offset, i);
 			return GSS_S_FAILURE;
 		}
 
-		BD_GET_ENC_KIOV(desc, i).kiov_offset =
-			BD_GET_KIOV(desc, i).kiov_offset;
-		BD_GET_ENC_KIOV(desc, i).kiov_len =
-			(BD_GET_KIOV(desc, i).kiov_len +
+		desc->bd_enc_vec[i].kiov_offset =
+			desc->bd_vec[i].kiov_offset;
+		desc->bd_enc_vec[i].kiov_len =
+			(desc->bd_vec[i].kiov_len +
 			 blocksize - 1) & (~(blocksize - 1));
 	}
 
@@ -1198,7 +1198,7 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
 	/* compute checksum */
 	if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyi,
 			       khdr, 1, data_desc,
-			       desc->bd_iov_count, GET_KIOV(desc),
+			       desc->bd_iov_count, desc->bd_vec,
 			       &cksum, gctx->hash_func))
 		GOTO(out_free_cksum, major = GSS_S_FAILURE);
 	LASSERT(cksum.len >= ke->ke_hash_size);
@@ -1490,7 +1490,7 @@ __u32 gss_unwrap_bulk_kerberos(struct gss_ctx *gctx,
 	if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyi,
 			       khdr, 1, data_desc,
 			       desc->bd_iov_count,
-			       GET_KIOV(desc),
+			       desc->bd_vec,
 			       &cksum, gctx->hash_func))
 		return GSS_S_FAILURE;
 	LASSERT(cksum.len >= ke->ke_hash_size);

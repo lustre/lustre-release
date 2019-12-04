@@ -55,11 +55,11 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 	md->length = min_t(unsigned int, LNET_MAX_IOV, md->length);
 
 	md->options |= LNET_MD_KIOV;
-	if (GET_ENC_KIOV(desc))
-		md->start = &BD_GET_ENC_KIOV(desc, mdidx *
-					     LNET_MAX_IOV);
+	if (desc->bd_enc_vec)
+		md->start = &desc->bd_enc_vec[mdidx *
+					      LNET_MAX_IOV];
 	else
-		md->start = &BD_GET_KIOV(desc, mdidx * LNET_MAX_IOV);
+		md->start = &desc->bd_vec[mdidx * LNET_MAX_IOV];
 }
 
 

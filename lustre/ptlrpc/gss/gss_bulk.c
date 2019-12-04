@@ -126,7 +126,7 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
 			maj = lgss_get_mic(gctx->gc_mechctx, 0, NULL,
 					   desc->bd_iov_count,
-					   GET_KIOV(desc),
+					   desc->bd_vec,
 					   &token);
 			if (maj != GSS_S_COMPLETE) {
 				CWARN("failed to sign bulk data: %x\n", maj);
@@ -251,12 +251,12 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
 			/* fix the actual data size */
 			for (i = 0, nob = 0; i < desc->bd_iov_count; i++) {
-				if (BD_GET_KIOV(desc, i).kiov_len + nob >
+				if (desc->bd_vec[i].kiov_len + nob >
 				    desc->bd_nob_transferred) {
-					BD_GET_KIOV(desc, i).kiov_len =
+					desc->bd_vec[i].kiov_len =
 						desc->bd_nob_transferred - nob;
 				}
-				nob += BD_GET_KIOV(desc, i).kiov_len;
+				nob += desc->bd_vec[i].kiov_len;
 			}
 
 			token.data = bsdv->bsd_data;
@@ -265,7 +265,7 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
 			maj = lgss_verify_mic(gctx->gc_mechctx, 0, NULL,
 					      desc->bd_iov_count,
-					      GET_KIOV(desc),
+					      desc->bd_vec,
 					      &token);
                         if (maj != GSS_S_COMPLETE) {
                                 CERROR("failed to verify bulk read: %x\n", maj);
@@ -400,7 +400,7 @@ int gss_svc_unwrap_bulk(struct ptlrpc_request *req,
 
 		maj = lgss_verify_mic(grctx->src_ctx->gsc_mechctx, 0, NULL,
 				      desc->bd_iov_count,
-				      GET_KIOV(desc), &token);
+				      desc->bd_vec, &token);
                 if (maj != GSS_S_COMPLETE) {
                         bsdv->bsd_flags |= BSD_FL_ERR;
                         CERROR("failed to verify bulk signature: %x\n", maj);
@@ -477,7 +477,7 @@ int gss_svc_wrap_bulk(struct ptlrpc_request *req,
 
 		maj = lgss_get_mic(grctx->src_ctx->gsc_mechctx, 0, NULL,
 				   desc->bd_iov_count,
-				   GET_KIOV(desc), &token);
+				   desc->bd_vec, &token);
 		if (maj != GSS_S_COMPLETE) {
                         bsdv->bsd_flags |= BSD_FL_ERR;
                         CERROR("failed to sign bulk data: %x\n", maj);

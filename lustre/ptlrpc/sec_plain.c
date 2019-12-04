@@ -156,13 +156,13 @@ static void corrupt_bulk_data(struct ptlrpc_bulk_desc *desc)
 	unsigned int off, i;
 
 	for (i = 0; i < desc->bd_iov_count; i++) {
-		if (BD_GET_KIOV(desc, i).kiov_len == 0)
+		if (desc->bd_vec[i].kiov_len == 0)
 			continue;
 
-		ptr = kmap(BD_GET_KIOV(desc, i).kiov_page);
-		off = BD_GET_KIOV(desc, i).kiov_offset & ~PAGE_MASK;
+		ptr = kmap(desc->bd_vec[i].kiov_page);
+		off = desc->bd_vec[i].kiov_offset & ~PAGE_MASK;
 		ptr[off] ^= 0x1;
-		kunmap(BD_GET_KIOV(desc, i).kiov_page);
+		kunmap(desc->bd_vec[i].kiov_page);
 		return;
 	}
 }
@@ -355,12 +355,12 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 
 	/* fix the actual data size */
 	for (i = 0, nob = 0; i < desc->bd_iov_count; i++) {
-		if (BD_GET_KIOV(desc, i).kiov_len +
+		if (desc->bd_vec[i].kiov_len +
 		    nob > desc->bd_nob_transferred) {
-			BD_GET_KIOV(desc, i).kiov_len =
+			desc->bd_vec[i].kiov_len =
 				desc->bd_nob_transferred - nob;
 		}
-		nob += BD_GET_KIOV(desc, i).kiov_len;
+		nob += desc->bd_vec[i].kiov_len;
 	}
 
 	rc = plain_verify_bulk_csum(desc, req->rq_flvr.u_bulk.hash.hash_alg,

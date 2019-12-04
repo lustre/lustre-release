@@ -1447,19 +1447,10 @@ struct ptlrpc_bulk_desc {
 	/** array of associated MDs */
 	struct lnet_handle_md	bd_mds[PTLRPC_BULK_OPS_COUNT];
 
-	struct {
-		/*
-		 * encrypt iov, size is either 0 or bd_iov_count.
-		 */
-		lnet_kiov_t *bd_enc_vec;
-		lnet_kiov_t *bd_vec;
-	} bd_kiov;
+	/* encrypted iov, size is either 0 or bd_iov_count. */
+	lnet_kiov_t *bd_enc_vec;
+	lnet_kiov_t *bd_vec;
 };
-
-#define GET_KIOV(desc)			((desc)->bd_kiov.bd_vec)
-#define BD_GET_KIOV(desc, i)		((desc)->bd_kiov.bd_vec[i])
-#define GET_ENC_KIOV(desc)		((desc)->bd_kiov.bd_enc_vec)
-#define BD_GET_ENC_KIOV(desc, i)	((desc)->bd_kiov.bd_enc_vec[i])
 
 enum {
 	SVC_INIT	= 0,

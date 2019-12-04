@@ -66,7 +66,7 @@ static void ptlrpc_release_bulk_page_pin(struct ptlrpc_bulk_desc *desc)
 	int i;
 
 	for (i = 0; i < desc->bd_iov_count ; i++)
-		put_page(BD_GET_KIOV(desc, i).kiov_page);
+		put_page(desc->bd_vec[i].kiov_page);
 }
 
 static int ptlrpc_prep_bulk_frag_pages(struct ptlrpc_bulk_desc *desc,
@@ -173,9 +173,9 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned int nfrags,
 	if (!desc)
 		return NULL;
 
-	OBD_ALLOC_LARGE(GET_KIOV(desc),
-			nfrags * sizeof(*GET_KIOV(desc)));
-	if (!GET_KIOV(desc))
+	OBD_ALLOC_LARGE(desc->bd_vec,
+			nfrags * sizeof(*desc->bd_vec));
+	if (!desc->bd_vec)
 		goto out;
 
 	spin_lock_init(&desc->bd_lock);
@@ -251,7 +251,7 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 	LASSERT(len > 0);
 	LASSERT(pageoffset + len <= PAGE_SIZE);
 
-	kiov = &BD_GET_KIOV(desc, desc->bd_iov_count);
+	kiov = &desc->bd_vec[desc->bd_iov_count];
 
 	desc->bd_nob += len;
 
@@ -286,8 +286,8 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 	if (desc->bd_frag_ops->release_frags != NULL)
 		desc->bd_frag_ops->release_frags(desc);
 
-	OBD_FREE_LARGE(GET_KIOV(desc),
-		       desc->bd_max_iov * sizeof(*GET_KIOV(desc)));
+	OBD_FREE_LARGE(desc->bd_vec,
+		       desc->bd_max_iov * sizeof(*desc->bd_vec));
 	OBD_FREE_PTR(desc);
 	EXIT;
 }
