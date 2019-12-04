@@ -653,7 +653,8 @@ lnet_get_peer_ni_locked(struct lnet_peer_table *ptable, lnet_nid_t nid)
 	struct list_head	*peers;
 	struct lnet_peer_ni	*lp;
 
-	LASSERT(the_lnet.ln_state == LNET_STATE_RUNNING);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		return NULL;
 
 	peers = &ptable->pt_hash[lnet_nid2peerhash(nid)];
 	list_for_each_entry(lp, peers, lpni_hashlist) {
