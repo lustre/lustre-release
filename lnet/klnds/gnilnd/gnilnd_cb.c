@@ -2513,16 +2513,10 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			}
 		}
 
-		if (kiov != NULL)
-			lnet_copy_flat2kiov(
-				niov, kiov, offset,
-				*kgnilnd_tunables.kgn_max_immediate,
-				&rxmsg[1], 0, mlen);
-		else
-			lnet_copy_flat2iov(
-				niov, NULL, offset,
-				*kgnilnd_tunables.kgn_max_immediate,
-				&rxmsg[1], 0, mlen);
+		lnet_copy_flat2kiov(
+			niov, kiov, offset,
+			*kgnilnd_tunables.kgn_max_immediate,
+			&rxmsg[1], 0, mlen);
 
 		kgnilnd_consume_rx(rx);
 		lnet_finalize(lntmsg, 0);
