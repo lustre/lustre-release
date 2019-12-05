@@ -9036,9 +9036,9 @@ test_103a() {
 	echo "performing permissions..."
 	run_acl_subtest permissions || error "permissions failed"
 	# LU-1482 mdd: Setting xattr are properly checked with and without ACLs
-	if [ $MDS1_VERSION -gt $(version_code 2.8.55) -o \
-	     \( $MDS1_VERSION -lt $(version_code 2.6) -a \
-	     $MDS1_VERSION -ge $(version_code 2.5.29) \) ]
+	if [ $MDS1_VERSION -gt $(version_code 2.8.55) ] ||
+		{ [ $MDS1_VERSION -lt $(version_code 2.6) ] &&
+			[ $MDS1_VERSION -ge $(version_code 2.5.29) ]; }
 	then
 		echo "performing permissions xattr..."
 		run_acl_subtest permissions_xattr ||
@@ -19743,9 +19743,10 @@ test_404() { # LU-6601
 run_test 404 "validate manual {de}activated works properly for OSPs"
 
 test_405() {
-	[ $MDS1_VERSION -lt $(version_code 2.6.92) -o \
-	[ $CLIENT_VERSION -lt $(version_code 2.6.99) ] &&
-		skip "Layout swap lock is not supported"
+	[ $MDS1_VERSION -lt $(version_code 2.6.92) ] ||
+		[ $CLIENT_VERSION -lt $(version_code 2.6.99) ] &&
+			skip "Layout swap lock is not supported"
+
 	check_swap_layouts_support
 
 	test_mkdir $DIR/$tdir
