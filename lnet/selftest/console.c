@@ -1491,11 +1491,9 @@ static int
 lstcon_ndlist_stat(struct list_head *ndlist,
 		   int timeout, struct list_head __user *result_up)
 {
-	struct list_head    head;
+	LIST_HEAD(head);
 	struct lstcon_rpc_trans *trans;
-	int		    rc;
-
-	INIT_LIST_HEAD(&head);
+	int rc;
 
         rc = lstcon_rpc_trans_ndlist(ndlist, &head,
                                      LST_TRANS_STATQRY, NULL, NULL, &trans);

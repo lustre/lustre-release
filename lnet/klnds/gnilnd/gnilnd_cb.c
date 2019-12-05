@@ -2983,11 +2983,8 @@ kgnilnd_reaper_check(int idx)
 {
 	struct list_head  *peers = &kgnilnd_data.kgn_peers[idx];
 	struct list_head  *ctmp, *ctmpN;
-	struct list_head   geriatrics;
-	struct list_head   souls;
-
-	INIT_LIST_HEAD(&geriatrics);
-	INIT_LIST_HEAD(&souls);
+	LIST_HEAD(geriatrics);
+	LIST_HEAD(souls);
 
 	write_lock(&kgnilnd_data.kgn_peer_conn_lock);
 

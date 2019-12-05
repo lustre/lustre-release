@@ -1464,12 +1464,10 @@ kiblnd_connect_peer(struct kib_peer_ni *peer_ni)
 bool
 kiblnd_reconnect_peer(struct kib_peer_ni *peer_ni)
 {
-	rwlock_t	 *glock = &kiblnd_data.kib_global_lock;
-	char		 *reason = NULL;
-	struct list_head  txs;
-	unsigned long	  flags;
-
-	INIT_LIST_HEAD(&txs);
+	rwlock_t *glock = &kiblnd_data.kib_global_lock;
+	char *reason = NULL;
+	LIST_HEAD(txs);
+	unsigned long flags;
 
 	write_lock_irqsave(glock, flags);
 	if (peer_ni->ibp_reconnecting == 0) {
@@ -2295,7 +2293,7 @@ kiblnd_connreq_done(struct kib_conn *conn, int status)
 {
 	struct kib_peer_ni *peer_ni = conn->ibc_peer;
 	struct kib_tx *tx;
-	struct list_head txs;
+	LIST_HEAD(txs);
 	unsigned long	 flags;
 	int		 active;
 
@@ -2352,7 +2350,6 @@ kiblnd_connreq_done(struct kib_conn *conn, int status)
         }
 
 	/* grab pending txs while I have the lock */
-	INIT_LIST_HEAD(&txs);
 	list_splice_init(&peer_ni->ibp_tx_queue, &txs);
 
         if (!kiblnd_peer_active(peer_ni) ||        /* peer_ni has been deleted */

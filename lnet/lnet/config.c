@@ -904,13 +904,11 @@ lnet_free_text_bufs(struct list_head *tbs)
 static int
 lnet_str2tbs_sep(struct list_head *tbs, char *str)
 {
-	struct list_head  pending;
-	char		 *sep;
-	int		  nob;
-	int		  i;
-	struct lnet_text_buf  *ltb;
-
-	INIT_LIST_HEAD(&pending);
+	LIST_HEAD(pending);
+	char *sep;
+	int nob;
+	int i;
+	struct lnet_text_buf *ltb;
 
 	/* Split 'str' into separate commands */
 	for (;;) {
@@ -988,7 +986,7 @@ static int
 lnet_str2tbs_expand(struct list_head *tbs, char *str)
 {
 	char		  num[16];
-	struct list_head  pending;
+	LIST_HEAD(pending);
 	char		 *sep;
 	char		 *sep2;
 	char		 *parsed;
@@ -999,8 +997,6 @@ lnet_str2tbs_expand(struct list_head *tbs, char *str)
 	int		  i;
 	int		  nob;
 	int		  scanned;
-
-	INIT_LIST_HEAD(&pending);
 
 	sep = strchr(str, '[');
 	if (sep == NULL)			/* nothing to expand */
@@ -1111,10 +1107,10 @@ static int
 lnet_parse_route (char *str, int *im_a_router)
 {
 	/* static scratch buffer OK (single threaded) */
-	static char	  cmd[LNET_SINGLE_TEXTBUF_NOB];
+	static char cmd[LNET_SINGLE_TEXTBUF_NOB];
 
-	struct list_head  nets;
-	struct list_head  gateways;
+	LIST_HEAD(nets);
+	LIST_HEAD(gateways);
 	struct list_head *tmp1;
 	struct list_head *tmp2;
 	__u32		  net;
@@ -1128,9 +1124,6 @@ lnet_parse_route (char *str, int *im_a_router)
 	__u32		  hops;
 	int		  got_hops = 0;
 	unsigned int	  priority = 0;
-
-	INIT_LIST_HEAD(&gateways);
-	INIT_LIST_HEAD(&nets);
 
 	/* save a copy of the string for error messages */
 	strncpy(cmd, str, sizeof(cmd));
@@ -1276,12 +1269,10 @@ lnet_parse_route_tbs(struct list_head *tbs, int *im_a_router)
 int
 lnet_parse_routes (char *routes, int *im_a_router)
 {
-	struct list_head tbs;
-	int		 rc = 0;
+	LIST_HEAD(tbs);
+	int rc = 0;
 
 	*im_a_router = 0;
-
-	INIT_LIST_HEAD(&tbs);
 
 	if (lnet_str2tbs_sep(&tbs, routes) < 0) {
 		CERROR("Error parsing routes\n");
@@ -1475,9 +1466,9 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 	static char	  networks[LNET_SINGLE_TEXTBUF_NOB];
 	static char	  source[LNET_SINGLE_TEXTBUF_NOB];
 
-	struct list_head  raw_entries;
-	struct list_head  matched_nets;
-	struct list_head  current_nets;
+	LIST_HEAD(raw_entries);
+	LIST_HEAD(matched_nets);
+	LIST_HEAD(current_nets);
 	struct list_head *t;
 	struct list_head *t2;
 	struct lnet_text_buf  *tb;
@@ -1489,15 +1480,12 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 	int		  dup;
 	int		  rc;
 
-	INIT_LIST_HEAD(&raw_entries);
 	if (lnet_str2tbs_sep(&raw_entries, ip2nets) < 0) {
 		CERROR("Error parsing ip2nets\n");
 		LASSERT(lnet_tbnob == 0);
 		return -EINVAL;
 	}
 
-	INIT_LIST_HEAD(&matched_nets);
-	INIT_LIST_HEAD(&current_nets);
 	networks[0] = 0;
 	count = 0;
 	len = 0;

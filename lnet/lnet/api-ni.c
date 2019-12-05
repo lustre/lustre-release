@@ -2143,10 +2143,8 @@ static void
 lnet_shutdown_lndnets(void)
 {
 	struct lnet_net *net;
-	struct list_head resend;
+	LIST_HEAD(resend);
 	struct lnet_msg *msg, *tmp;
-
-	INIT_LIST_HEAD(&resend);
 
 	/* NB called holding the global mutex */
 
@@ -2278,20 +2276,18 @@ static int
 lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 {
 	struct lnet_ni *ni;
-	struct lnet_net	*net_l = NULL;
-	struct list_head	local_ni_list;
-	int			rc;
-	int			ni_count = 0;
-	__u32			lnd_type;
+	struct lnet_net *net_l = NULL;
+	LIST_HEAD(local_ni_list);
+	int rc;
+	int ni_count = 0;
+	__u32 lnd_type;
 	const struct lnet_lnd  *lnd;
-	int			peer_timeout =
+	int peer_timeout =
 		net->net_tunables.lct_peer_timeout;
-	int			maxtxcredits =
+	int maxtxcredits =
 		net->net_tunables.lct_max_tx_credits;
-	int			peerrtrcredits =
+	int peerrtrcredits =
 		net->net_tunables.lct_peer_rtr_credits;
-
-	INIT_LIST_HEAD(&local_ni_list);
 
 	/*
 	 * make sure that this net is unique. If it isn't then
@@ -2590,10 +2586,8 @@ LNetNIInit(lnet_pid_t requested_pid)
 	int			ni_count;
 	struct lnet_ping_buffer	*pbuf;
 	struct lnet_handle_md	ping_mdh;
-	struct list_head	net_head;
+	LIST_HEAD(net_head);
 	struct lnet_net		*net;
-
-	INIT_LIST_HEAD(&net_head);
 
 	mutex_lock(&the_lnet.ln_api_mutex);
 
@@ -3181,9 +3175,7 @@ static int lnet_handle_legacy_ip2nets(char *ip2nets,
 	struct lnet_net *net;
 	char *nets;
 	int rc;
-	struct list_head net_head;
-
-	INIT_LIST_HEAD(&net_head);
+	LIST_HEAD(net_head);
 
 	rc = lnet_parse_ip2nets(&nets, ip2nets);
 	if (rc < 0)
@@ -3362,13 +3354,11 @@ unlock_api_mutex:
 int
 lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 {
-	struct lnet_net		*net;
-	struct list_head	net_head;
-	int			rc;
+	struct lnet_net *net;
+	LIST_HEAD(net_head);
+	int rc;
 	struct lnet_ioctl_config_lnd_tunables tun;
 	char *nets = conf->cfg_config_u.cfg_net.net_intf;
-
-	INIT_LIST_HEAD(&net_head);
 
 	/* Create a net/ni structures for the network string */
 	rc = lnet_parse_networks(&net_head, nets, use_tcp_bonding);

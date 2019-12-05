@@ -1924,9 +1924,7 @@ static void lnet_peer_discovery_complete(struct lnet_peer *lp)
 {
 	struct lnet_msg *msg, *tmp;
 	int rc = 0;
-	struct list_head pending_msgs;
-
-	INIT_LIST_HEAD(&pending_msgs);
+	LIST_HEAD(pending_msgs);
 
 	CDEBUG(D_NET, "Discovery complete. Dequeue peer %s\n",
 	       libcfs_nid2str(lp->lp_primary_nid));
@@ -3254,10 +3252,8 @@ static int lnet_peer_discovery_wait_for_work(void)
 static void lnet_resend_msgs(void)
 {
 	struct lnet_msg *msg, *tmp;
-	struct list_head resend;
+	LIST_HEAD(resend);
 	int rc;
-
-	INIT_LIST_HEAD(&resend);
 
 	spin_lock(&the_lnet.ln_msg_resend_lock);
 	list_splice(&the_lnet.ln_msg_resend, &resend);

@@ -2608,7 +2608,7 @@ int ksocknal_reaper(void *arg)
 	wait_queue_entry_t wait;
 	struct ksock_conn *conn;
 	struct ksock_sched *sched;
-	struct list_head enomem_conns;
+	LIST_HEAD(enomem_conns);
 	int nenomem_conns;
 	time64_t timeout;
 	int i;
@@ -2617,7 +2617,6 @@ int ksocknal_reaper(void *arg)
 
         cfs_block_allsigs ();
 
-	INIT_LIST_HEAD(&enomem_conns);
 	init_waitqueue_entry(&wait, current);
 
 	spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);

@@ -747,18 +747,15 @@ lnet_del_route_from_rnet(lnet_nid_t gw_nid, struct list_head *route_list,
 int
 lnet_del_route(__u32 net, lnet_nid_t gw_nid)
 {
-	struct list_head rnet_zombies;
+	LIST_HEAD(rnet_zombies);
 	struct lnet_remotenet *rnet;
 	struct lnet_remotenet *tmp;
 	struct list_head *rn_list;
 	struct lnet_peer_ni *lpni;
 	struct lnet_route *route;
-	struct list_head zombies;
+	LIST_HEAD(zombies);
 	struct lnet_peer *lp = NULL;
 	int i = 0;
-
-	INIT_LIST_HEAD(&rnet_zombies);
-	INIT_LIST_HEAD(&zombies);
 
 	CDEBUG(D_NET, "Del route: net %s : gw %s\n",
 	       libcfs_net2str(net), libcfs_nid2str(gw_nid));
@@ -1198,12 +1195,10 @@ lnet_rtrpool_free_bufs(struct lnet_rtrbufpool *rbp, int cpt)
 {
 	int npages = rbp->rbp_npages;
 	struct lnet_rtrbuf *rb;
-	struct list_head tmp;
+	LIST_HEAD(tmp);
 
 	if (rbp->rbp_nbuffers == 0) /* not initialized or already freed */
 		return;
-
-	INIT_LIST_HEAD(&tmp);
 
 	lnet_net_lock(cpt);
 	list_splice_init(&rbp->rbp_msgs, &tmp);
@@ -1225,7 +1220,7 @@ lnet_rtrpool_free_bufs(struct lnet_rtrbufpool *rbp, int cpt)
 static int
 lnet_rtrpool_adjust_bufs(struct lnet_rtrbufpool *rbp, int nbufs, int cpt)
 {
-	struct list_head rb_list;
+	LIST_HEAD(rb_list);
 	struct lnet_rtrbuf *rb;
 	int		num_rb;
 	int		num_buffers = 0;
@@ -1252,8 +1247,6 @@ lnet_rtrpool_adjust_bufs(struct lnet_rtrbufpool *rbp, int nbufs, int cpt)
 	old_req_nbufs = rbp->rbp_req_nbuffers;
 	rbp->rbp_req_nbuffers = nbufs;
 	lnet_net_unlock(cpt);
-
-	INIT_LIST_HEAD(&rb_list);
 
 	/* allocate the buffers on a local list first.	If all buffers are
 	 * allocated successfully then join this list to the rbp buffer

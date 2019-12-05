@@ -165,7 +165,7 @@ lnet_fail_nid(lnet_nid_t nid, unsigned int threshold)
 	struct lnet_test_peer *tp;
 	struct list_head *el;
 	struct list_head *next;
-	struct list_head  cull;
+	LIST_HEAD(cull);
 
 	/* NB: use lnet_net_lock(0) to serialize operations on test peers */
 	if (threshold != 0) {
@@ -182,9 +182,6 @@ lnet_fail_nid(lnet_nid_t nid, unsigned int threshold)
 		lnet_net_unlock(0);
 		return 0;
 	}
-
-	/* removing entries */
-	INIT_LIST_HEAD(&cull);
 
 	lnet_net_lock(0);
 
@@ -215,10 +212,8 @@ fail_peer (lnet_nid_t nid, int outgoing)
 	struct lnet_test_peer *tp;
 	struct list_head *el;
 	struct list_head *next;
-	struct list_head  cull;
-	int		  fail = 0;
-
-	INIT_LIST_HEAD(&cull);
+	LIST_HEAD(cull);
+	int fail = 0;
 
 	/* NB: use lnet_net_lock(0) to serialize operations on test peers */
 	lnet_net_lock(0);
@@ -1269,8 +1264,7 @@ routing_off:
 		/* drop all messages which are queued to be routed on that
 		 * peer. */
 		if (!the_lnet.ln_routing) {
-			struct list_head drop;
-			INIT_LIST_HEAD(&drop);
+			LIST_HEAD(drop);
 			list_splice_init(&lp->lp_rtrq, &drop);
 			spin_unlock(&lp->lp_lock);
 			spin_unlock(&rxpeerni->lpni_lock);
@@ -2867,7 +2861,6 @@ static void
 lnet_finalize_expired_responses(void)
 {
 	struct lnet_libmd *md;
-	struct list_head local_queue;
 	struct lnet_rsp_tracker *rspt, *tmp;
 	ktime_t now;
 	int i;
@@ -2876,7 +2869,7 @@ lnet_finalize_expired_responses(void)
 		return;
 
 	cfs_cpt_for_each(i, lnet_cpt_table()) {
-		INIT_LIST_HEAD(&local_queue);
+		LIST_HEAD(local_queue);
 
 		lnet_net_lock(i);
 		if (!the_lnet.ln_mt_rstq[i]) {
@@ -3104,17 +3097,14 @@ static void
 lnet_recover_local_nis(void)
 {
 	struct lnet_mt_event_info *ev_info;
-	struct list_head processed_list;
-	struct list_head local_queue;
+	LIST_HEAD(processed_list);
+	LIST_HEAD(local_queue);
 	struct lnet_handle_md mdh;
 	struct lnet_ni *tmp;
 	struct lnet_ni *ni;
 	lnet_nid_t nid;
 	int healthv;
 	int rc;
-
-	INIT_LIST_HEAD(&local_queue);
-	INIT_LIST_HEAD(&processed_list);
 
 	/*
 	 * splice the recovery queue on a local queue. We will iterate
@@ -3346,10 +3336,8 @@ static void
 lnet_clean_resendqs(void)
 {
 	struct lnet_msg *msg, *tmp;
-	struct list_head msgs;
+	LIST_HEAD(msgs);
 	int i;
-
-	INIT_LIST_HEAD(&msgs);
 
 	cfs_cpt_for_each(i, lnet_cpt_table()) {
 		lnet_net_lock(i);
@@ -3369,17 +3357,14 @@ static void
 lnet_recover_peer_nis(void)
 {
 	struct lnet_mt_event_info *ev_info;
-	struct list_head processed_list;
-	struct list_head local_queue;
+	LIST_HEAD(processed_list);
+	LIST_HEAD(local_queue);
 	struct lnet_handle_md mdh;
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer_ni *tmp;
 	lnet_nid_t nid;
 	int healthv;
 	int rc;
-
-	INIT_LIST_HEAD(&local_queue);
-	INIT_LIST_HEAD(&processed_list);
 
 	/*
 	 * Always use cpt 0 for locking across all interactions with

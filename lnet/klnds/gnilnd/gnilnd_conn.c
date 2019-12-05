@@ -1546,9 +1546,9 @@ failed:
 int
 kgnilnd_cancel_net_dgrams(kgn_net_t *net)
 {
-	kgn_dgram_t            *dg, *dgN;
-	struct list_head        zombies;
-	int                     i;
+	kgn_dgram_t *dg, *dgN;
+	LIST_HEAD(zombies);
+	int i;
 	ENTRY;
 
 	/* we want to cancel any outstanding dgrams - we don't want to rely
@@ -1560,8 +1560,6 @@ kgnilnd_cancel_net_dgrams(kgn_net_t *net)
 		 "called with LND invalid state: net shutdown %d "
 		 "in reset %d\n", net->gnn_shutdown,
 		 kgnilnd_data.kgn_in_reset);
-
-	INIT_LIST_HEAD(&zombies);
 
 	spin_lock(&net->gnn_dev->gnd_dgram_lock);
 
@@ -1588,7 +1586,7 @@ int
 kgnilnd_cancel_wc_dgrams(kgn_device_t *dev)
 {
 	kgn_dgram_t *dg, *dgN;
-	struct list_head zombies;
+	LIST_HEAD(zombies);
 	ENTRY;
 
 	/* Time to kill the outstanding WC's
@@ -1600,7 +1598,6 @@ kgnilnd_cancel_wc_dgrams(kgn_device_t *dev)
 		"in reset %d\n", kgnilnd_data.kgn_wc_kill,
 		kgnilnd_data.kgn_in_reset);
 
-	INIT_LIST_HEAD(&zombies);
 	spin_lock(&dev->gnd_dgram_lock);
 
 	do {
