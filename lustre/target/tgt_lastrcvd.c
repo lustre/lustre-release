@@ -1959,7 +1959,6 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 	unsigned long		 reply_data_size;
 	int			 rc;
 	struct lsd_reply_header	*lrh = NULL;
-	struct lsd_client_data  *lcd = NULL;
 	struct tg_reply_data	*trd = NULL;
 	int                      idx;
 	loff_t			 off;
@@ -2007,10 +2006,6 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 		hash = cfs_hash_getref(tgt->lut_obd->obd_gen_hash);
 		if (hash == NULL)
 			GOTO(out, rc = -ENODEV);
-
-		OBD_ALLOC_PTR(lcd);
-		if (lcd == NULL)
-			GOTO(out, rc = -ENOMEM);
 
 		OBD_ALLOC_PTR(trd);
 		if (trd == NULL)
@@ -2063,6 +2058,13 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			/* update export last committed transation */
 			exp->exp_last_committed = max(exp->exp_last_committed,
 						      lrd->lrd_transno);
+			/* Update lcd_last_transno as well for check in
+			 * tgt_release_reply_data() or the latest client
+			 * transno can be lost.
+			 */
+			ted->ted_lcd->lcd_last_transno =
+				max(ted->ted_lcd->lcd_last_transno,
+				    exp->exp_last_committed);
 
 			mutex_unlock(&ted->ted_lcd_lock);
 			class_export_put(exp);
@@ -2094,8 +2096,6 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 out:
 	if (hash != NULL)
 		cfs_hash_putref(hash);
-	if (lcd != NULL)
-		OBD_FREE_PTR(lcd);
 	if (trd != NULL)
 		OBD_FREE_PTR(trd);
 	if (lrh != NULL)
