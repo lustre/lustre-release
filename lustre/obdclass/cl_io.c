@@ -562,7 +562,9 @@ int cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,
 	const struct cl_io_slice *scan;
 	int                       result = 0;
 
-	LINVRNT(io->ci_type == CIT_READ || io->ci_type == CIT_FAULT);
+	LINVRNT(io->ci_type == CIT_READ ||
+		io->ci_type == CIT_FAULT ||
+		io->ci_type == CIT_WRITE);
 	LINVRNT(io->ci_state == CIS_IO_GOING || io->ci_state == CIS_LOCKED);
 	LINVRNT(cl_io_invariant(io));
 	ENTRY;
