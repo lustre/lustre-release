@@ -1688,9 +1688,8 @@ static void target_finish_recovery(struct lu_target *lut)
 static void abort_req_replay_queue(struct obd_device *obd)
 {
 	struct ptlrpc_request *req, *n;
-	struct list_head abort_list;
+	LIST_HEAD(abort_list);
 
-	INIT_LIST_HEAD(&abort_list);
 	spin_lock(&obd->obd_recovery_task_lock);
 	list_splice_init(&obd->obd_req_replay_queue, &abort_list);
 	spin_unlock(&obd->obd_recovery_task_lock);
@@ -1709,9 +1708,8 @@ static void abort_req_replay_queue(struct obd_device *obd)
 static void abort_lock_replay_queue(struct obd_device *obd)
 {
 	struct ptlrpc_request *req, *n;
-	struct list_head abort_list;
+	LIST_HEAD(abort_list);
 
-	INIT_LIST_HEAD(&abort_list);
 	spin_lock(&obd->obd_recovery_task_lock);
 	list_splice_init(&obd->obd_lock_replay_queue, &abort_list);
 	spin_unlock(&obd->obd_recovery_task_lock);
@@ -1738,9 +1736,8 @@ static void abort_lock_replay_queue(struct obd_device *obd)
 void target_cleanup_recovery(struct obd_device *obd)
 {
 	struct ptlrpc_request *req, *n;
-	struct list_head clean_list;
+	LIST_HEAD(clean_list);
 
-	INIT_LIST_HEAD(&clean_list);
 	spin_lock(&obd->obd_dev_lock);
 	if (!obd->obd_recovering) {
 		spin_unlock(&obd->obd_dev_lock);

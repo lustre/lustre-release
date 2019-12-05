@@ -987,7 +987,7 @@ int mdt_do_glimpse(const struct lu_env *env, struct ldlm_namespace *ns,
 	enum ldlm_mode mode;
 	struct ldlm_lock *lock;
 	struct ldlm_glimpse_work *gl_work;
-	struct list_head gl_list;
+	LIST_HEAD(gl_list);
 	int rc;
 
 	ENTRY;
@@ -1028,7 +1028,6 @@ int mdt_do_glimpse(const struct lu_env *env, struct ldlm_namespace *ns,
 	gl_work->gl_lock = LDLM_LOCK_GET(lock);
 	/* The glimpse callback is sent to one single IO lock. As a result,
 	 * the gl_work list is just composed of one element */
-	INIT_LIST_HEAD(&gl_list);
 	list_add_tail(&gl_work->gl_list, &gl_list);
 	/* There is actually no need for a glimpse descriptor when glimpsing
 	 * IO locks */

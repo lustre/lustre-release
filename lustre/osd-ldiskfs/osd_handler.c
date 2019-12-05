@@ -3919,13 +3919,11 @@ static int osd_process_scheduled_agent_removals(const struct lu_env *env,
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct osd_obj_orphan *oor, *tmp;
 	struct osd_inode_id id;
-	struct list_head list;
+	LIST_HEAD(list);
 	struct inode *inode;
 	struct lu_fid fid;
 	handle_t *jh;
 	__u32 ino;
-
-	INIT_LIST_HEAD(&list);
 
 	spin_lock(&osd->od_osfs_lock);
 	list_for_each_entry_safe(oor, tmp, &osd->od_orphan_list, oor_list) {

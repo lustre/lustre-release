@@ -65,7 +65,7 @@ static void ptlrpc_server_hpreq_fini(struct ptlrpc_request *req);
 static void ptlrpc_at_remove_timed(struct ptlrpc_request *req);
 
 /** Holds a list of all PTLRPC services */
-struct list_head ptlrpc_all_services;
+LIST_HEAD(ptlrpc_all_services);
 /** Used to protect the \e ptlrpc_all_services list */
 struct mutex ptlrpc_all_services_mutex;
 
@@ -1526,7 +1526,7 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 {
 	struct ptlrpc_at_array *array = &svcpt->scp_at_array;
 	struct ptlrpc_request *rq, *n;
-	struct list_head work_list;
+	LIST_HEAD(work_list);
 	__u32 index, count;
 	time64_t deadline;
 	time64_t now = ktime_get_real_seconds();
@@ -1560,7 +1560,6 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 	 * We're close to a timeout, and we don't know how much longer the
 	 * server will take. Send early replies to everyone expiring soon.
 	 */
-	INIT_LIST_HEAD(&work_list);
 	deadline = -1;
 	div_u64_rem(array->paa_deadline, array->paa_size, &index);
 	count = array->paa_count;
@@ -2948,7 +2947,7 @@ static int ptlrpc_hr_main(void *arg)
 {
 	struct ptlrpc_hr_thread *hrt = (struct ptlrpc_hr_thread *)arg;
 	struct ptlrpc_hr_partition *hrp = hrt->hrt_partition;
-	struct list_head replies;
+	LIST_HEAD(replies);
 	struct lu_env *env;
 	int rc;
 
@@ -2956,7 +2955,6 @@ static int ptlrpc_hr_main(void *arg)
 	if (env == NULL)
 		RETURN(-ENOMEM);
 
-	INIT_LIST_HEAD(&replies);
 	unshare_fs_struct();
 
 	rc = cfs_cpt_bind(ptlrpc_hr.hr_cpt_table, hrp->hrp_cpt);
@@ -3077,14 +3075,13 @@ static int ptlrpc_start_hr_threads(void)
 static void ptlrpc_svcpt_stop_threads(struct ptlrpc_service_part *svcpt)
 {
 	struct ptlrpc_thread *thread;
-	struct list_head zombie;
+	LIST_HEAD(zombie);
 
 	ENTRY;
 
 	CDEBUG(D_INFO, "Stopping threads for service %s\n",
 	       svcpt->scp_service->srv_name);
 
-	INIT_LIST_HEAD(&zombie);
 	spin_lock(&svcpt->scp_lock);
 	/* let the thread know that we would like it to stop asap */
 	list_for_each_entry(thread, &svcpt->scp_threads, t_link)

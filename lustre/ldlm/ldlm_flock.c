@@ -587,10 +587,9 @@ reprocess:
 			 * LDLM_PROCESS_ENQUEUE from ldlm_reprocess_queue.
 			 */
 			if ((mode == LCK_NL) && overlaps) {
-				struct list_head rpc_list;
+				LIST_HEAD(rpc_list);
 				int rc;
 
-				INIT_LIST_HEAD(&rpc_list);
 restart:
 				ldlm_reprocess_queue(res, &res->lr_waiting,
 						     &rpc_list,

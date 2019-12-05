@@ -502,7 +502,7 @@ struct sptlrpc_conf {
 };
 
 static struct mutex sptlrpc_conf_lock;
-static struct list_head sptlrpc_confs;
+static LIST_HEAD(sptlrpc_confs);
 
 static void sptlrpc_conf_free_rsets(struct sptlrpc_conf *conf)
 {
@@ -968,7 +968,6 @@ int sptlrpc_conf_target_get_rules(struct obd_device *obd,
 
 int  sptlrpc_conf_init(void)
 {
-	INIT_LIST_HEAD(&sptlrpc_confs);
 	mutex_init(&sptlrpc_conf_lock);
 	return 0;
 }

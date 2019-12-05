@@ -1907,7 +1907,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
                                     struct ldlm_request *dlm_req,
                                     struct ldlm_lock *lock)
 {
-	struct list_head ast_list;
+	LIST_HEAD(ast_list);
 	int lvb_len;
 	int rc = 0;
 
@@ -1915,7 +1915,6 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
 	LDLM_DEBUG(lock, "client completion callback handler START");
 
-	INIT_LIST_HEAD(&ast_list);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_BL_CB_RACE)) {
 		long to = cfs_time_seconds(1);
 
@@ -2679,11 +2678,10 @@ static int ldlm_revoke_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 
 void ldlm_revoke_export_locks(struct obd_export *exp)
 {
-	struct list_head rpc_list;
+	LIST_HEAD(rpc_list);
 
 	ENTRY;
 
-	INIT_LIST_HEAD(&rpc_list);
 	cfs_hash_for_each_nolock(exp->exp_lock_hash,
 				 ldlm_revoke_lock_cb, &rpc_list, 0);
 	ldlm_run_ast_work(exp->exp_obd->obd_namespace, &rpc_list,

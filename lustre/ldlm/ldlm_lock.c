@@ -2340,7 +2340,7 @@ static void __ldlm_reprocess_all(struct ldlm_resource *res,
 				 enum ldlm_process_intention intention,
 				 struct ldlm_lock *hint)
 {
-	struct list_head rpc_list;
+	LIST_HEAD(rpc_list);
 #ifdef HAVE_SERVER_SUPPORT
 	ldlm_reprocessing_policy reprocess;
 	struct obd_device *obd;
@@ -2348,7 +2348,6 @@ static void __ldlm_reprocess_all(struct ldlm_resource *res,
 
 	ENTRY;
 
-	INIT_LIST_HEAD(&rpc_list);
 	/* Local lock trees don't get reprocessed. */
 	if (ns_is_client(ldlm_res_to_ns(res))) {
 		EXIT;
@@ -2377,7 +2376,6 @@ restart:
 #else
 	ENTRY;
 
-	INIT_LIST_HEAD(&rpc_list);
 	if (!ns_is_client(ldlm_res_to_ns(res))) {
 		CERROR("This is client-side-only module, cannot handle "
 		       "LDLM_NAMESPACE_SERVER resource type lock.\n");

@@ -1376,8 +1376,6 @@ void osp_invalidate_request(struct osp_device *osp)
 		return;
 	}
 
-	INIT_LIST_HEAD(&list);
-
 	spin_lock(&ou->ou_lock);
 	/* invalidate all of request in the sending list */
 	list_for_each_entry_safe(our, tmp, &ou->ou_list, our_list) {

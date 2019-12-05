@@ -131,9 +131,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
 int class_del_uuid(const char *uuid)
 {
 	struct uuid_nid_data *data;
-	struct list_head deathrow;
-
-	INIT_LIST_HEAD(&deathrow);
+	LIST_HEAD(deathrow);
 
 	spin_lock(&g_uuid_lock);
 	if (uuid != NULL) {

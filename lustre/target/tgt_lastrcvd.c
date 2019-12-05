@@ -797,7 +797,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	struct lu_env		 env;
 	struct ptlrpc_request	*req;
 	__u32			 start_epoch;
-	struct list_head	 client_list;
+	LIST_HEAD(client_list);
 	int			 rc;
 
 	if (tgt->lut_obd->obd_stopping)
@@ -816,7 +816,6 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	tgt->lut_lsd.lsd_start_epoch = start_epoch;
 	spin_unlock(&tgt->lut_translock);
 
-	INIT_LIST_HEAD(&client_list);
 	/**
 	 * The recovery is not yet finished and final queue can still be updated
 	 * with resend requests. Move final list to separate one for processing

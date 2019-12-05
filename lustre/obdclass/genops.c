@@ -1520,11 +1520,10 @@ static void class_disconnect_export_list(struct list_head *list,
 
 void class_disconnect_exports(struct obd_device *obd)
 {
-	struct list_head work_list;
+	LIST_HEAD(work_list);
 	ENTRY;
 
 	/* Move all of the exports from obd_exports to a work list, en masse. */
-	INIT_LIST_HEAD(&work_list);
 	spin_lock(&obd->obd_dev_lock);
 	list_splice_init(&obd->obd_exports, &work_list);
 	list_splice_init(&obd->obd_delayed_exports, &work_list);
@@ -1547,12 +1546,11 @@ EXPORT_SYMBOL(class_disconnect_exports);
 void class_disconnect_stale_exports(struct obd_device *obd,
                                     int (*test_export)(struct obd_export *))
 {
-	struct list_head work_list;
+	LIST_HEAD(work_list);
 	struct obd_export *exp, *n;
-        int evicted = 0;
-        ENTRY;
+	int evicted = 0;
+	ENTRY;
 
-	INIT_LIST_HEAD(&work_list);
 	spin_lock(&obd->obd_dev_lock);
 	list_for_each_entry_safe(exp, n, &obd->obd_exports,
 				 exp_obd_chain) {

@@ -1553,7 +1553,7 @@ static int distribute_txn_commit_thread(void *_arg)
 	struct lu_target	*lut = tdtd->tdtd_lut;
 	struct ptlrpc_thread	*thread = &lut->lut_tdtd_commit_thread;
 	struct lu_env		 env;
-	struct list_head	 list;
+	LIST_HEAD(list);
 	int			 rc;
 	struct top_multiple_thandle *tmt;
 	struct top_multiple_thandle *tmp;
@@ -1569,7 +1569,6 @@ static int distribute_txn_commit_thread(void *_arg)
 	thread->t_flags = SVC_RUNNING;
 	spin_unlock(&tdtd->tdtd_batchid_lock);
 	wake_up(&thread->t_ctl_waitq);
-	INIT_LIST_HEAD(&list);
 
 	CDEBUG(D_HA, "%s: start commit thread committed batchid %llu\n",
 	       tdtd->tdtd_lut->lut_obd->obd_name,

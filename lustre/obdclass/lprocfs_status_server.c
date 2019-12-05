@@ -479,9 +479,8 @@ lprocfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct nid_stat *client_stat;
-	struct list_head free_list;
+	LIST_HEAD(free_list);
 
-	INIT_LIST_HEAD(&free_list);
 	cfs_hash_cond_del(obd->obd_nid_stats_hash,
 			  lprocfs_nid_stats_clear_write_cb, &free_list);
 

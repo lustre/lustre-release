@@ -376,10 +376,10 @@ next:
 static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 {
 	wait_queue_head_t *wq;
-	struct lu_site		*site;
-	struct lu_object	*scan;
-	struct list_head	*layers;
-	struct list_head	 splice;
+	struct lu_site *site;
+	struct lu_object *scan;
+	struct list_head *layers;
+	LIST_HEAD(splice);
 
 	site = o->lo_dev->ld_site;
 	layers = &o->lo_header->loh_layers;
@@ -398,7 +398,6 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
          * necessary, because lu_object_header is freed together with the
          * top-level slice.
          */
-	INIT_LIST_HEAD(&splice);
 	list_splice_init(layers, &splice);
 	while (!list_empty(&splice)) {
 		/*
@@ -427,7 +426,7 @@ int lu_site_purge_objects(const struct lu_env *env, struct lu_site *s,
         struct lu_object_header *h;
         struct lu_object_header *temp;
         struct lu_site_bkt_data *bkt;
-	struct list_head	 dispose;
+	LIST_HEAD(dispose);
 	int                      did_sth;
 	unsigned int		 start = 0;
         int                      count;
@@ -437,7 +436,6 @@ int lu_site_purge_objects(const struct lu_env *env, struct lu_site *s,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OBD_NO_LRU))
 		RETURN(0);
 
-	INIT_LIST_HEAD(&dispose);
         /*
          * Under LRU list lock, scan LRU list and move unreferenced objects to
          * the dispose list, removing them from LRU and hash table.

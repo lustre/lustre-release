@@ -688,9 +688,8 @@ nrs_tbf_jobid_cli_put(struct nrs_tbf_head *head,
 	struct cfs_hash		*hs = head->th_cli_hash;
 	struct nrs_tbf_bucket	*bkt;
 	int			 hw;
-	struct list_head	zombies;
+	LIST_HEAD(zombies);
 
-	INIT_LIST_HEAD(&zombies);
 	cfs_hash_bd_get(hs, &cli->tc_jobid, &bd);
 	bkt = cfs_hash_bd_extra_get(hs, &bd);
 	if (!cfs_hash_bd_dec_and_lock(hs, &bd, &cli->tc_ref))
@@ -1697,9 +1696,8 @@ nrs_tbf_cli_put(struct nrs_tbf_head *head, struct nrs_tbf_client *cli)
 	struct cfs_hash		*hs = head->th_cli_hash;
 	struct nrs_tbf_bucket	*bkt;
 	int			 hw;
-	struct list_head	 zombies;
+	LIST_HEAD(zombies);
 
-	INIT_LIST_HEAD(&zombies);
 	cfs_hash_bd_get(hs, &cli->tc_key, &bd);
 	bkt = cfs_hash_bd_extra_get(hs, &bd);
 	if (!cfs_hash_bd_dec_and_lock(hs, &bd, &cli->tc_ref))

@@ -2604,7 +2604,7 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 	int rc;
 	char *kernbuf = NULL;
 	char *errmsg;
-	struct list_head tmp;
+	LIST_HEAD(tmp);
 	int len = count;
 	ENTRY;
 
@@ -2639,7 +2639,6 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 		RETURN(count);
 	}
 
-	INIT_LIST_HEAD(&tmp);
 	if (cfs_parse_nidlist(kernbuf, count, &tmp) <= 0) {
 		errmsg = "can't parse";
 		GOTO(failed, rc = -EINVAL);

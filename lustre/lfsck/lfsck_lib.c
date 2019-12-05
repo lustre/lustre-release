@@ -63,9 +63,9 @@ static void lfsck_key_fini(const struct lu_context *ctx,
 LU_CONTEXT_KEY_DEFINE(lfsck, LCT_MD_THREAD | LCT_DT_THREAD);
 LU_KEY_INIT_GENERIC(lfsck);
 
-static struct list_head lfsck_instance_list;
-static struct list_head lfsck_ost_orphan_list;
-static struct list_head lfsck_mdt_orphan_list;
+static LIST_HEAD(lfsck_instance_list);
+static LIST_HEAD(lfsck_ost_orphan_list);
+static LIST_HEAD(lfsck_mdt_orphan_list);
 static DEFINE_SPINLOCK(lfsck_instance_lock);
 
 const char *lfsck_flags_names[] = {
@@ -3973,9 +3973,6 @@ static int __init lfsck_init(void)
 {
 	int rc;
 
-	INIT_LIST_HEAD(&lfsck_instance_list);
-	INIT_LIST_HEAD(&lfsck_ost_orphan_list);
-	INIT_LIST_HEAD(&lfsck_mdt_orphan_list);
 	lfsck_key_init_generic(&lfsck_thread_key, NULL);
 	rc = lu_context_key_register(&lfsck_thread_key);
 	if (!rc) {

@@ -76,12 +76,10 @@ void lod_putref(struct lod_device *lod, struct lod_tgt_descs *ltd)
 	ltd->ltd_refcount--;
 	if (ltd->ltd_refcount == 0 && ltd->ltd_death_row) {
 		struct lod_tgt_desc *tgt_desc, *tmp;
-		struct list_head kill;
+		LIST_HEAD(kill);
 
 		CDEBUG(D_CONFIG, "destroying %d ltd desc\n",
 		       ltd->ltd_death_row);
-
-		INIT_LIST_HEAD(&kill);
 
 		ltd_foreach_tgt_safe(ltd, tgt_desc, tmp) {
 			LASSERT(tgt_desc);

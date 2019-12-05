@@ -552,7 +552,7 @@ void ptlrpc_pinger_wake_up(void)
 static int pet_refcount;
 static int pet_state;
 static wait_queue_head_t pet_waitq;
-static struct list_head pet_list;
+static LIST_HEAD(pet_list);
 static DEFINE_SPINLOCK(pet_lock);
 
 int ping_evictor_wake(struct obd_export *exp)
@@ -668,7 +668,6 @@ void ping_evictor_start(void)
 	if (++pet_refcount > 1)
 		return;
 
-	INIT_LIST_HEAD(&pet_list);
 	init_waitqueue_head(&pet_waitq);
 
 	task = kthread_run(ping_evictor_main, NULL, "ll_evictor");

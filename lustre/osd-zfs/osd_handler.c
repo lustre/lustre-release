@@ -280,13 +280,12 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	struct osd_device	*osd = osd_dt_dev(th->th_dev);
 	bool			 sync = (th->th_sync != 0);
 	struct osd_thandle	*oh;
-	struct list_head	 unlinked;
+	LIST_HEAD(unlinked);
 	uint64_t		 txg;
 	int			 rc;
 	ENTRY;
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
-	INIT_LIST_HEAD(&unlinked);
 	list_splice_init(&oh->ot_unlinked_list, &unlinked);
 
 	osd_oti_get(env)->oti_ins_cache_depth--;

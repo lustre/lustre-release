@@ -1265,7 +1265,7 @@ try_again:
  */
 static int lmd_parse_nidlist(char *buf, char **endh)
 {
-	struct list_head nidlist;
+	LIST_HEAD(nidlist);
 	char *endp = buf;
 	char tmp;
 	int rc = 0;
@@ -1283,7 +1283,6 @@ static int lmd_parse_nidlist(char *buf, char **endh)
 	tmp = *endp;
 	*endp = '\0';
 
-	INIT_LIST_HEAD(&nidlist);
 	if (cfs_parse_nidlist(buf, strlen(buf), &nidlist) <= 0)
 		rc = 1;
 	cfs_free_nidlist(&nidlist);

@@ -6077,7 +6077,7 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 
 static int mdt_export_cleanup(struct obd_export *exp)
 {
-	struct list_head	 closing_list;
+	LIST_HEAD(closing_list);
 	struct mdt_export_data	*med = &exp->exp_mdt_data;
 	struct obd_device	*obd = exp->exp_obd;
 	struct mdt_device	*mdt;
@@ -6087,7 +6087,6 @@ static int mdt_export_cleanup(struct obd_export *exp)
 	int rc = 0;
 	ENTRY;
 
-	INIT_LIST_HEAD(&closing_list);
 	spin_lock(&med->med_open_lock);
 	while (!list_empty(&med->med_open_head)) {
 		struct list_head *tmp = med->med_open_head.next;

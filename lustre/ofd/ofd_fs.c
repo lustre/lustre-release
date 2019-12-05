@@ -310,11 +310,10 @@ static void ofd_fld_fini(const struct lu_env *env, struct ofd_device *ofd)
  */
 void ofd_seqs_free(const struct lu_env *env, struct ofd_device *ofd)
 {
-	struct ofd_seq		*oseq;
-	struct ofd_seq		*tmp;
-	struct list_head	 dispose;
+	struct ofd_seq *oseq;
+	struct ofd_seq *tmp;
+	LIST_HEAD(dispose);
 
-	INIT_LIST_HEAD(&dispose);
 	write_lock(&ofd->ofd_seq_list_lock);
 	list_for_each_entry_safe(oseq, tmp, &ofd->ofd_seq_list, os_list)
 		list_move(&oseq->os_list, &dispose);

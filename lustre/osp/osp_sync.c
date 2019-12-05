@@ -1016,7 +1016,8 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	struct llog_ctxt	*ctxt;
 	struct llog_handle	*llh;
 	int			*arr;
-	struct list_head	 list, *le;
+	LIST_HEAD(list);
+	struct list_head	 *le;
 	struct llog_logid	 lgid;
 	int			 rc, i, count = 0, done = 0;
 
@@ -1047,7 +1048,6 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	llh = ctxt->loc_handle;
 	LASSERT(llh);
 
-	INIT_LIST_HEAD(&list);
 	spin_lock(&d->opd_sync_lock);
 	list_splice(&d->opd_sync_committed_there, &list);
 	INIT_LIST_HEAD(&d->opd_sync_committed_there);

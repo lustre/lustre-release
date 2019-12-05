@@ -50,7 +50,6 @@ static __init int ptlrpc_init(void)
 #if RS_DEBUG
 	spin_lock_init(&ptlrpc_rs_debug_lock);
 #endif
-	INIT_LIST_HEAD(&ptlrpc_all_services);
 	mutex_init(&ptlrpc_all_services_mutex);
 	mutex_init(&pinger_mutex);
 	mutex_init(&ptlrpcd_mutex);

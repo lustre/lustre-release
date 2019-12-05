@@ -433,7 +433,7 @@ static int qsd_upd_thread(void *arg)
 {
 	struct qsd_instance	*qsd = (struct qsd_instance *)arg;
 	struct ptlrpc_thread	*thread = &qsd->qsd_upd_thread;
-	struct list_head	 queue;
+	LIST_HEAD(queue);
 	struct qsd_upd_rec	*upd, *n;
 	struct lu_env		*env;
 	int			 qtype, rc = 0;
@@ -456,7 +456,6 @@ static int qsd_upd_thread(void *arg)
 	thread_set_flags(thread, SVC_RUNNING);
 	wake_up(&thread->t_ctl_waitq);
 
-	INIT_LIST_HEAD(&queue);
 	while (1) {
 		wait_event_idle_timeout(
 			thread->t_ctl_waitq,
