@@ -1784,6 +1784,8 @@ __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 		max_stripes = lov_mds_md_max_stripe_count(easize, LOV_MAGIC_V3);
 	}
 
+	max_stripes = (max_stripes == 0) ? 0 : max_stripes - 1;
+
 	return (stripe_count < max_stripes) ? stripe_count : max_stripes;
 }
 
