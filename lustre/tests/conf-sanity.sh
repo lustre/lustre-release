@@ -6361,7 +6361,7 @@ test_87() { #LU-6544
 		       more than $left_size-byte space left in inode."
 	echo "Verified: at most $left_size-byte space left in inode."
 
-	umount_ldiskfs $SINGLEMDS
+	unmount_ldiskfs $SINGLEMDS
 
 	for i in $(seq $OSTCOUNT); do
 		stop ost$i -f || error "stop ost$i failed"
