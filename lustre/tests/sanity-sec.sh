@@ -2623,6 +2623,44 @@ test_34() {
 }
 run_test 34 "deny_unknown on default nodemap"
 
+test_35() {
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.13.50) ] ||
+		skip "Need MDS >= 2.13.50"
+
+	# activate changelogs
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+	changelog_chmask ALL
+
+	# do some IOs
+	mkdir $DIR/$tdir || error "failed to mkdir $tdir"
+	touch $DIR/$tdir/$tfile || error "failed to touch $tfile"
+
+	# access changelogs with root
+	changelog_dump || error "failed to dump changelogs"
+	changelog_clear 0 || error "failed to clear changelogs"
+
+	# put clients in non-admin nodemap
+	nodemap_test_setup
+	stack_trap nodemap_test_cleanup EXIT
+	for i in $(seq 0 $((num_clients-1))); do
+		do_facet mgs $LCTL nodemap_modify --name c${i} \
+			 --property admin --value 0
+	done
+	for i in $(seq 0 $((num_clients-1))); do
+		wait_nm_sync c${i} admin_nodemap
+	done
+
+	# access with mapped root
+	changelog_dump && error "dump changelogs should have failed"
+	changelog_clear 0 && error "clear changelogs should have failed"
+
+	exit 0
+}
+run_test 35 "Check permissions when accessing changelogs"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

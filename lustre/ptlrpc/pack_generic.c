@@ -1666,7 +1666,10 @@ int do_set_info_async(struct obd_import *imp,
 	int rc;
 
 	ENTRY;
-	req = ptlrpc_request_alloc(imp, &RQF_OBD_SET_INFO);
+
+	req = ptlrpc_request_alloc(imp, KEY_IS(KEY_CHANGELOG_CLEAR) ?
+						&RQF_MDT_SET_INFO :
+						&RQF_OBD_SET_INFO);
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
@@ -1679,6 +1682,9 @@ int do_set_info_async(struct obd_import *imp,
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}
+
+	if (KEY_IS(KEY_CHANGELOG_CLEAR))
+		do_pack_body(req);
 
 	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
 	memcpy(tmp, key, keylen);

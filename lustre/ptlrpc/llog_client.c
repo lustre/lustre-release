@@ -45,6 +45,8 @@
 #include <lustre_log.h>
 #include <lustre_net.h>
 
+#include "ptlrpc_internal.h"
+
 #define LLOG_CLIENT_ENTRY(ctxt, imp) do {                             \
 	mutex_lock(&ctxt->loc_mutex);                                 \
 	if (ctxt->loc_imp) {                                          \
@@ -121,6 +123,8 @@ static int llog_client_open(const struct lu_env *env,
 						   strlen(name) + 1);
 		LASSERT(tmp);
 		strcpy(tmp, name);
+
+		do_pack_body(req);
 	}
 
 	rc = ptlrpc_queue_wait(req);

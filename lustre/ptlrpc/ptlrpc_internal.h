@@ -418,4 +418,23 @@ static inline bool ptlrpc_req_is_disconnect(struct ptlrpc_request *req)
 		return false;
 }
 
+static inline void do_pack_body(struct ptlrpc_request *req)
+{
+	struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+						    &RMF_MDT_BODY);
+
+	if (b == NULL)
+		return;
+
+	b->mbo_valid = 0;
+	b->mbo_eadatasize = 0;
+	b->mbo_flags = 0;
+	b->mbo_suppgid = -1;
+	b->mbo_uid = from_kuid(&init_user_ns, current_uid());
+	b->mbo_gid = from_kgid(&init_user_ns, current_gid());
+	b->mbo_fsuid = from_kuid(&init_user_ns, current_fsuid());
+	b->mbo_fsgid = from_kgid(&init_user_ns, current_fsgid());
+	b->mbo_capability = cfs_curproc_cap_pack();
+}
+
 #endif /* PTLRPC_INTERNAL_H */

@@ -9599,12 +9599,24 @@ changelog_clear() {
 }
 
 changelog_dump() {
+	local rc
+
 	for M in $(seq $MDSCOUNT); do
 		local facet=mds$M
 		local mdt="$(facet_svc $facet)"
+		local output
+		local ret
 
-		$LFS changelog $mdt | sed -e 's/^/'$mdt'./'
+		output=$($LFS changelog $mdt)
+		ret=$?
+		if [ $ret -ne 0 ]; then
+			rc=${rc:-$ret}
+		elif [ -n "$output" ]; then
+			echo "$output" | sed -e 's/^/'$mdt'./'
+		fi
 	done
+
+	return ${rc:-0}
 }
 
 changelog_extract_field() {

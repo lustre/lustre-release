@@ -319,11 +319,15 @@ static int tgt_request_preprocess(struct tgt_session_info *tsi,
 		     h->th_fmt != NULL));
 	if (h->th_fmt != NULL) {
 		req_capsule_set(pill, h->th_fmt);
-		if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_CLIENT)) {
+		if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_CLIENT) &&
+		    req_capsule_field_present(pill, &RMF_MDT_BODY,
+					      RCL_CLIENT)) {
 			rc = tgt_mdt_body_unpack(tsi, flags);
 			if (rc < 0)
 				RETURN(rc);
 		} else if (req_capsule_has_field(pill, &RMF_OST_BODY,
+						 RCL_CLIENT) &&
+			   req_capsule_field_present(pill, &RMF_OST_BODY,
 						 RCL_CLIENT)) {
 			rc = tgt_ost_body_unpack(tsi, flags);
 			if (rc < 0)

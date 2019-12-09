@@ -1365,4 +1365,32 @@ long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       u64 want, bool conservative);
 extern struct kmem_cache *ldlm_glimpse_work_kmem;
 
+static inline bool mdt_is_rootadmin(struct mdt_thread_info *info)
+{
+	struct lu_ucred *uc = NULL;
+	bool is_admin;
+	int rc;
+
+	if (info == NULL || info->mti_body == NULL)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 3, 0)
+		/* return true in case old client did not send mdt body */
+		return true;
+#else
+		return false
+#endif
+
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc < 0)
+		return false;
+
+	uc = mdt_ucred(info);
+	is_admin = (uc->uc_uid == 0 && uc->uc_gid == 0 &&
+		    md_capable(uc, CFS_CAP_SYS_ADMIN));
+
+	mdt_exit_ucred(info);
+
+	return is_admin;
+}
+
+
 #endif /* _MDT_INTERNAL_H */

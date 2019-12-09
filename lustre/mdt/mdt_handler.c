@@ -2273,6 +2273,8 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 			__swab32s(&cs->cs_id);
 		}
 
+		if (!mdt_is_rootadmin(tsi2mdt_info(tsi)))
+			RETURN(-EACCES);
 		rc = mdt_iocontrol(OBD_IOC_CHANGELOG_CLEAR, req->rq_export,
 				   vallen, val, NULL);
 	} else if (KEY_IS(KEY_EVICT_BY_NID)) {
@@ -5147,6 +5149,16 @@ static int mdt_tgt_getxattr(struct tgt_session_info *tsi)
 	return rc;
 }
 
+static int mdt_llog_open(struct tgt_session_info *tsi)
+{
+	ENTRY;
+
+	if (!mdt_is_rootadmin(tsi2mdt_info(tsi)))
+		RETURN(err_serious(-EACCES));
+
+	RETURN(tgt_llog_open(tsi));
+}
+
 #define OBD_FAIL_OST_READ_NET	OBD_FAIL_OST_BRW_NET
 #define OBD_FAIL_OST_WRITE_NET	OBD_FAIL_OST_BRW_NET
 #define OST_BRW_READ	OST_READ
@@ -5161,7 +5173,7 @@ TGT_RPC_HANDLER(MDS_FIRST_OPC,
 		&RQF_MDS_DISCONNECT, LUSTRE_OBD_VERSION),
 TGT_RPC_HANDLER(MDS_FIRST_OPC,
 		HAS_REPLY,		MDS_SET_INFO,	mdt_set_info,
-		&RQF_OBD_SET_INFO, LUSTRE_MDS_VERSION),
+		&RQF_MDT_SET_INFO, LUSTRE_MDS_VERSION),
 TGT_MDT_HDL(0,				MDS_GET_INFO,	mdt_get_info),
 TGT_MDT_HDL(HAS_REPLY,		MDS_GET_ROOT,	mdt_get_root),
 TGT_MDT_HDL(HAS_BODY,		MDS_GETATTR,	mdt_getattr),
@@ -5214,6 +5226,13 @@ static struct tgt_handler mdt_quota_ops[] = {
 TGT_QUOTA_HDL(HAS_REPLY,		QUOTA_DQACQ,	  mdt_quota_dqacq),
 };
 
+static struct tgt_handler mdt_llog_handlers[] = {
+	TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_CREATE,	mdt_llog_open),
+	TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
+	TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
+	TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
+};
+
 static struct tgt_opc_slice mdt_common_slice[] = {
 	{
 		.tos_opc_start	= MDS_FIRST_OPC,
@@ -5258,7 +5277,7 @@ static struct tgt_opc_slice mdt_common_slice[] = {
 	{
 		.tos_opc_start	= LLOG_FIRST_OPC,
 		.tos_opc_end	= LLOG_LAST_OPC,
-		.tos_hs		= tgt_llog_handlers
+		.tos_hs		= mdt_llog_handlers
 	},
 	{
 		.tos_opc_start	= LFSCK_FIRST_OPC,

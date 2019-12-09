@@ -132,6 +132,7 @@ int req_check_sepol(struct req_capsule *pill);
 
 extern struct req_format RQF_OBD_PING;
 extern struct req_format RQF_OBD_SET_INFO;
+extern struct req_format RQF_MDT_SET_INFO;
 extern struct req_format RQF_SEC_CTX;
 extern struct req_format RQF_OBD_IDX_READ;
 /* MGS req_format */
