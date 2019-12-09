@@ -97,6 +97,7 @@ Display help information.
 Do not fall back to using rsync if
 .BR lfs-migrate (1) " fails."
 Cannot be used at the same time as \fB--rsync\fR.
+.TP
 .B \\--min-free|-M \fI<min_free>
 When \fB-A \fRis set, only consider OSTs with free space greater than the
 \fImin_free \fRvalue to be available for migration.  The value is specified in
@@ -122,6 +123,11 @@ and are therefore not listed here).
 Skip file data comparison after migrate.  Default is to compare migrated file
 against original to verify correctness.
 .TP
+.B \\--stripe-size|-S
+.I <stripe_size>
+Restripe file using the specified stripe size. This option may not be
+specified at the same time as the \fB-R \fRoption.
+.TP
 .B \\--verbose|-v
 Show verbose debug messages.
 .B \\--max-free|-X \fI<max_free>
@@ -129,16 +135,6 @@ When \fB-A \fRis set, \fImax_free \fRis the maximum amount of free space that
 can be considered available for the migration of the file on each OST.  The
 value is specified in KB.  This option is useful for testing, by simulating
 OSTs that are nearly full.
-.TP
-.B \\--yes|-y
-Answer 'y' to usage warning without prompting (for scripts; use with caution).
-.SH EXAMPLES
-To rebalance all files within
-.I /testfs/jobs/2011
-.B \\--stripe-size|-S
-.I <stripe_size>
-Restripe file using the specified stripe size. This option may not be
-specified at the same time as the \fB-R \fRoption.
 .TP
 .B \\--yes|-y
 Answer 'y' to usage warning without prompting (for scripts, use with caution).
