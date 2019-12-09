@@ -545,6 +545,7 @@ static struct lu_object *ofd_object_alloc(const struct lu_env *env,
 		lu_object_init(o, h, d);
 		lu_object_add_top(h, o);
 		o->lo_ops = &ofd_obj_ops;
+		range_lock_tree_init(&of->ofo_write_tree);
 		RETURN(o);
 	} else {
 		RETURN(NULL);

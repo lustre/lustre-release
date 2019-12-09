@@ -688,6 +688,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	int maxlnb = *nr_local;
 	__u64 begin, end;
 	ktime_t kstart = ktime_get();
+	struct range_lock *range = &ofd_info(env)->fti_write_range;
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -841,6 +842,26 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		tot_bytes,
 		obj->ioo_bufcnt,
 		WRITE);
+
+	/*
+	 * Reordering precautions: make sure that request processing that
+	 * was able to receive its bulk data should not get reordered with
+	 * overlapping BRW requests, e.g.
+	 *  1) BRW1 sent, bulk data received, but disk I/O delayed
+	 *  2) BRW1 resent and fully processed
+	 *  3) the page was unlocked on the client and its writeback bit reset
+	 *  4) BRW2 sent and fully processed
+	 *  5) BRW1 processing wakes up and writes stale data to disk
+	 * If on step 1 bulk data was not received, client resend will invalidate
+	 * its bulk descriptor and the RPC will be dropped due to failed bulk
+	 * transfer, which is just fine.
+	 */
+	range_lock_init(range,
+			rnb[0].rnb_offset,
+			rnb[obj->ioo_bufcnt - 1].rnb_offset +
+			rnb[obj->ioo_bufcnt - 1].rnb_len - 1);
+	range_lock(&fo->ofo_write_tree, range);
+	ofd_info(env)->fti_range_locked = 1;
 
 	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE_BYTES, jobid, tot_bytes);
 	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE, jobid,
@@ -1220,6 +1241,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 	bool soft_sync = false;
 	bool cb_registered = false;
 	bool fake_write = false;
+	struct range_lock *range = &ofd_info(env)->fti_write_range;
 
 	ENTRY;
 
@@ -1384,6 +1406,10 @@ out_stop:
 		dt_commit_async(env, ofd->ofd_osd);
 
 out:
+	if (info->fti_range_locked) {
+		range_unlock(&fo->ofo_write_tree, range);
+		info->fti_range_locked = 0;
+	}
 	dt_bufs_put(env, o, lnb, niocount);
 	ofd_object_put(env, fo);
 	if (granted > 0)

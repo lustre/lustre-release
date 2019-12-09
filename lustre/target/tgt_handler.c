@@ -2700,6 +2700,8 @@ skip_transfer:
 		}
 	}
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK2, cfs_fail_val);
+
 out_commitrw:
 	/* Must commit after prep above in all cases */
 	rc = obd_commitrw(tsi->tsi_env, OBD_BRW_WRITE, exp, &repbody->oa,

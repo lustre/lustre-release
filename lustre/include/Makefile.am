@@ -95,6 +95,7 @@ EXTRA_DIST = \
 	obd_support.h \
 	obd_target.h \
 	obj_update.h \
+	range_lock.h \
 	upcall_cache.h \
 	lustre_kernelcomm.h \
 	seq_range.h

@@ -7,8 +7,7 @@ ldlm_objs += $(LDLM)ldlm_resource.o $(LDLM)ldlm_lib.o
 ldlm_objs += $(LDLM)ldlm_plain.o $(LDLM)ldlm_extent.o
 ldlm_objs += $(LDLM)ldlm_request.o $(LDLM)ldlm_lockd.o
 ldlm_objs += $(LDLM)ldlm_flock.o $(LDLM)ldlm_inodebits.o
-ldlm_objs += $(LDLM)ldlm_pool.o $(LDLM)interval_tree.o
-ldlm_objs += $(LDLM)ldlm_reclaim.o
+ldlm_objs += $(LDLM)ldlm_pool.o $(LDLM)ldlm_reclaim.o
 
 target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
 target_objs += $(TARGET)tgt_handler.o $(TARGET)out_handler.o
@@ -41,9 +40,6 @@ ldlm_%.c: @LUSTRE@/ldlm/ldlm_%.c
 	ln -sf $< $@
 
 l_lock.c: @LUSTRE@/ldlm/l_lock.c
-	ln -sf $< $@
-
-interval_tree.c: @LUSTRE@/ldlm/interval_tree.c
 	ln -sf $< $@
 
 tgt_%.c: @LUSTRE@/target/tgt_%.c

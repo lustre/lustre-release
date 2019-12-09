@@ -780,3 +780,4 @@ void interval_expand(struct interval_node *root,
 		ext->end = interval_expand_high(root, ext->end);
 	LASSERT(interval_is_overlapped(root, ext) == 0);
 }
+EXPORT_SYMBOL(interval_expand);

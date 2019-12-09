@@ -36,8 +36,8 @@
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/signal.h>
 #endif
-#include "range_lock.h"
 #include <uapi/linux/lustre/lustre_user.h>
+#include <range_lock.h>
 
 /**
  * Initialize a range lock tree
@@ -53,6 +53,7 @@ void range_lock_tree_init(struct range_lock_tree *tree)
 	tree->rlt_sequence = 0;
 	spin_lock_init(&tree->rlt_lock);
 }
+EXPORT_SYMBOL(range_lock_tree_init);
 
 /**
  * Intialize a range lock node
@@ -82,6 +83,7 @@ int range_lock_init(struct range_lock *lock, __u64 start, __u64 end)
 	lock->rl_sequence = 0;
 	return rc;
 }
+EXPORT_SYMBOL(range_lock_init);
 
 static inline struct range_lock *next_lock(struct range_lock *lock)
 {
@@ -168,6 +170,7 @@ void range_unlock(struct range_lock_tree *tree, struct range_lock *lock)
 
 	EXIT;
 }
+EXPORT_SYMBOL(range_unlock);
 
 /**
  * Helper function of range_lock()
@@ -245,3 +248,4 @@ int range_lock(struct range_lock_tree *tree, struct range_lock *lock)
 out:
 	RETURN(rc);
 }
+EXPORT_SYMBOL(range_lock);

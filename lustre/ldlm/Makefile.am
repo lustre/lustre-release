@@ -40,4 +40,4 @@ MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 EXTRA_DIST = ldlm_extent.c ldlm_flock.c ldlm_internal.h ldlm_lib.c \
 	ldlm_lock.c ldlm_lockd.c ldlm_plain.c ldlm_request.c	     \
 	ldlm_resource.c l_lock.c ldlm_inodebits.c ldlm_pool.c 	     \
-	interval_tree.c ldlm_reclaim.c
+	ldlm_reclaim.c

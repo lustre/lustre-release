@@ -13,6 +13,7 @@ obdclass-all-objs += linkea.o
 obdclass-all-objs += kernelcomm.o jobid.o
 obdclass-all-objs += integrity.o obd_cksum.o
 obdclass-all-objs += lu_tgt_descs.o
+obdclass-all-objs += range_lock.o interval_tree.o
 
 @SERVER_TRUE@obdclass-all-objs += acl.o
 @SERVER_TRUE@obdclass-all-objs += idmap.o
@@ -31,6 +32,7 @@ EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
 EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c llog_internal.h
 EXTRA_DIST += cl_internal.h local_storage.h
+EXTRA_DIST += range_lock.c interval_tree.c
 
 @SERVER_FALSE@EXTRA_DIST += acl.c
 @SERVER_FALSE@EXTRA_DIST += idmap.c

@@ -44,4 +44,4 @@ if GSS
 SUBDIRS = gss
 endif
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ ldlm_*.c l_lock.c interval_tree.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ ldlm_*.c l_lock.c

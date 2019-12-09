@@ -46,9 +46,9 @@
 #include <linux/aio.h>
 #include <lustre_compat.h>
 #include <lustre_crypto.h>
+#include <range_lock.h>
 
 #include "vvp_internal.h"
-#include "range_lock.h"
 #include "pcc.h"
 
 #ifndef FMODE_EXEC
