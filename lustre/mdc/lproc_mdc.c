@@ -43,11 +43,11 @@ static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
+	struct obd_import *imp;
 	ssize_t len;
 
-	LPROCFS_CLIMP_CHECK(dev);
-	len = sprintf(buf, "%d\n", !dev->u.cli.cl_import->imp_deactive);
-	LPROCFS_CLIMP_EXIT(dev);
+	with_imp_locked(dev, imp, len)
+		len = sprintf(buf, "%d\n", !imp->imp_deactive);
 	return len;
 }
 

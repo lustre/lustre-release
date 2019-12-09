@@ -660,17 +660,14 @@ extern int lprocfs_single_release(struct inode *, struct file *);
 extern int lprocfs_seq_release(struct inode *, struct file *);
 
 /* You must use these macros when you want to refer to
- * the import in a client obd_device for a lprocfs entry */
-#define LPROCFS_CLIMP_CHECK(obd) do {           \
-        typecheck(struct obd_device *, obd);    \
-	down_read(&(obd)->u.cli.cl_sem);    \
-        if ((obd)->u.cli.cl_import == NULL) {   \
-	     up_read(&(obd)->u.cli.cl_sem); \
-             return -ENODEV;                    \
-        }                                       \
-} while(0)
-#define LPROCFS_CLIMP_EXIT(obd)                 \
-	up_read(&(obd)->u.cli.cl_sem);
+ * the import in a client obd_device for a lprocfs entry
+ */
+#define with_imp_locked(__obd, __imp, __rc)				\
+	for (down_read(&(__obd)->u.cli.cl_sem),				\
+	     __imp = (__obd)->u.cli.cl_import,				\
+	     __rc = __imp ? 0 : -ENODEV;				\
+	     __imp ? 1 : (up_read(&(__obd)->u.cli.cl_sem), 0);		\
+	     __imp = NULL)
 
 /* write the name##_seq_show function, call LDEBUGFS_SEQ_FOPS_RO for read-only
  * debugfs entries; otherwise, you will define name##_seq_write function also

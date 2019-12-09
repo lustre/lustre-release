@@ -46,11 +46,12 @@ static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
+	struct obd_import *imp;
 	int rc;
 
-	LPROCFS_CLIMP_CHECK(dev);
-	rc = sprintf(buf, "%d\n", !dev->u.cli.cl_import->imp_deactive);
-	LPROCFS_CLIMP_EXIT(dev);
+	with_imp_locked(dev, imp, rc)
+		rc = sprintf(buf, "%d\n", !imp->imp_deactive);
+
 	return rc;
 }
 
@@ -111,8 +112,6 @@ static ssize_t max_rpcs_in_flight_store(struct kobject *kobj,
 	if (val == 0 || val > OSC_MAX_RIF_MAX)
 		return -ERANGE;
 
-	LPROCFS_CLIMP_CHECK(dev);
-
 	adding = (int)val - cli->cl_max_rpcs_in_flight;
 	req_count = atomic_read(&osc_pool_req_count);
 	if (adding > 0 && req_count < osc_reqpool_maxreqcount) {
@@ -132,7 +131,6 @@ static ssize_t max_rpcs_in_flight_store(struct kobject *kobj,
 	client_adjust_max_dirty(cli);
 	spin_unlock(&cli->cl_loi_list_lock);
 
-	LPROCFS_CLIMP_EXIT(dev);
 	return count;
 }
 LUSTRE_RW_ATTR(max_rpcs_in_flight);
@@ -284,6 +282,7 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct client_obd *cli = &obd->u.cli;
+	struct obd_import *imp;
 	char kernbuf[22] = "";
 	u64 val;
 	int rc;
@@ -311,10 +310,9 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
 
 	spin_unlock(&cli->cl_loi_list_lock);
 
-	LPROCFS_CLIMP_CHECK(obd);
-	if (cli->cl_import->imp_state == LUSTRE_IMP_FULL)
-		rc = osc_shrink_grant_to_target(cli, val);
-	LPROCFS_CLIMP_EXIT(obd);
+	with_imp_locked(obd, imp, rc)
+		if (imp->imp_state == LUSTRE_IMP_FULL)
+			rc = osc_shrink_grant_to_target(cli, val);
 
 	return rc ? rc : count;
 }
@@ -625,12 +623,11 @@ static ssize_t idle_timeout_show(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct client_obd *cli = &obd->u.cli;
+	struct obd_import *imp;
 	int ret;
 
-	LPROCFS_CLIMP_CHECK(obd);
-	ret = sprintf(buf, "%u\n", cli->cl_import->imp_idle_timeout);
-	LPROCFS_CLIMP_EXIT(obd);
+	with_imp_locked(obd, imp, ret)
+		ret = sprintf(buf, "%u\n", imp->imp_idle_timeout);
 
 	return ret;
 }
@@ -640,7 +637,7 @@ static ssize_t idle_timeout_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct client_obd *cli = &dev->u.cli;
+	struct obd_import *imp;
 	struct ptlrpc_request *req;
 	unsigned int idle_debug = 0;
 	unsigned int val;
@@ -659,20 +656,20 @@ static ssize_t idle_timeout_store(struct kobject *kobj, struct attribute *attr,
 			return -ERANGE;
 	}
 
-	LPROCFS_CLIMP_CHECK(dev);
-	if (idle_debug) {
-		cli->cl_import->imp_idle_debug = idle_debug;
-	} else {
-		if (!val) {
-			/* initiate the connection if it's in IDLE state */
-			req = ptlrpc_request_alloc(cli->cl_import,
-						   &RQF_OST_STATFS);
-			if (req != NULL)
-				ptlrpc_req_finished(req);
+	with_imp_locked(dev, imp, rc) {
+		if (idle_debug) {
+			imp->imp_idle_debug = idle_debug;
+		} else {
+			if (!val) {
+				/* initiate the connection if it's in IDLE state */
+				req = ptlrpc_request_alloc(imp,
+							   &RQF_OST_STATFS);
+				if (req != NULL)
+					ptlrpc_req_finished(req);
+			}
+			imp->imp_idle_timeout = val;
 		}
-		cli->cl_import->imp_idle_timeout = val;
 	}
-	LPROCFS_CLIMP_EXIT(dev);
 
 	return count;
 }
@@ -683,18 +680,19 @@ static ssize_t idle_connect_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *dev = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct client_obd *cli = &dev->u.cli;
+	struct obd_import *imp;
 	struct ptlrpc_request *req;
+	int rc;
 
-	LPROCFS_CLIMP_CHECK(dev);
-	/* to initiate the connection if it's in IDLE state */
-	req = ptlrpc_request_alloc(cli->cl_import, &RQF_OST_STATFS);
-	if (req)
-		ptlrpc_req_finished(req);
-	ptlrpc_pinger_force(cli->cl_import);
-	LPROCFS_CLIMP_EXIT(dev);
+	with_imp_locked(dev, imp, rc) {
+		/* to initiate the connection if it's in IDLE state */
+		req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
+		if (req)
+			ptlrpc_req_finished(req);
+		ptlrpc_pinger_force(imp);
+	}
 
-	return count;
+	return rc ?: count;
 }
 LUSTRE_WO_ATTR(idle_connect);
 
@@ -706,12 +704,11 @@ static ssize_t grant_shrink_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_import *imp;
 	ssize_t len;
 
-	LPROCFS_CLIMP_CHECK(obd);
-	imp = obd->u.cli.cl_import;
-	len = scnprintf(buf, PAGE_SIZE, "%d\n",
-			!imp->imp_grant_shrink_disabled &&
-			OCD_HAS_FLAG(&imp->imp_connect_data, GRANT_SHRINK));
-	LPROCFS_CLIMP_EXIT(obd);
+	with_imp_locked(obd, imp, len)
+		len = scnprintf(buf, PAGE_SIZE, "%d\n",
+				!imp->imp_grant_shrink_disabled &&
+				OCD_HAS_FLAG(&imp->imp_connect_data,
+					     GRANT_SHRINK));
 
 	return len;
 }
@@ -732,16 +729,13 @@ static ssize_t grant_shrink_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	LPROCFS_CLIMP_CHECK(dev);
+	with_imp_locked(dev, imp, rc) {
+		spin_lock(&imp->imp_lock);
+		imp->imp_grant_shrink_disabled = !val;
+		spin_unlock(&imp->imp_lock);
+	}
 
-	imp = dev->u.cli.cl_import;
-	spin_lock(&imp->imp_lock);
-	imp->imp_grant_shrink_disabled = !val;
-	spin_unlock(&imp->imp_lock);
-
-	LPROCFS_CLIMP_EXIT(dev);
-
-	return count;
+	return rc ?: count;
 }
 LUSTRE_RW_ATTR(grant_shrink);
 

@@ -55,11 +55,11 @@ static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lu_device *lu = dt2lu_dev(dt);
 	struct obd_device *obd = lu->ld_obd;
+	struct obd_import *imp;
 	int rc;
 
-	LPROCFS_CLIMP_CHECK(obd);
-	rc = sprintf(buf, "%d\n", !obd->u.cli.cl_import->imp_deactive);
-	LPROCFS_CLIMP_EXIT(obd);
+	with_imp_locked(obd, imp, rc)
+		rc = sprintf(buf, "%d\n", !imp->imp_deactive);
 	return rc;
 }
 
@@ -80,6 +80,7 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lu_device *lu = dt2lu_dev(dt);
 	struct obd_device *obd = lu->ld_obd;
+	struct obd_import *imp;
 	bool val;
 	int rc;
 
@@ -87,16 +88,17 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	LPROCFS_CLIMP_CHECK(obd);
-	/* opposite senses */
-	if (obd->u.cli.cl_import->imp_deactive == val)
-		rc = ptlrpc_set_import_active(obd->u.cli.cl_import, val);
-	else
-		CDEBUG(D_CONFIG, "activate %u: ignoring repeat request\n",
-		       (unsigned int)val);
+	with_imp_locked(obd, imp, rc) {
+		/* opposite senses */
+		if (obd->u.cli.cl_import->imp_deactive == val)
+			rc = ptlrpc_set_import_active(imp, val);
+		else
+			CDEBUG(D_CONFIG,
+			       "activate %u: ignoring repeat request\n",
+			       (unsigned int)val);
+	}
 
-	LPROCFS_CLIMP_EXIT(obd);
-	return count;
+	return rc ?: count;
 }
 LUSTRE_RW_ATTR(active);
 
@@ -756,11 +758,11 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lu_device *lu = dt2lu_dev(dt);
 	struct obd_device *obd = lu->ld_obd;
+	struct obd_import *imp;
 	int rc;
 
-	LPROCFS_CLIMP_CHECK(obd);
-	rc = ptlrpc_obd_ping(obd);
-	LPROCFS_CLIMP_EXIT(obd);
+	with_imp_locked(obd, imp, rc)
+		rc = ptlrpc_obd_ping(obd);
 
 	return rc;
 }
@@ -773,17 +775,18 @@ ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lu_device *lu = dt2lu_dev(dt);
 	struct obd_device *obd = lu->ld_obd;
+	struct obd_import *imp;
 	struct ptlrpc_connection *conn;
 	ssize_t count;
 
-	LPROCFS_CLIMP_CHECK(obd);
-	conn = obd->u.cli.cl_import->imp_connection;
-	if (conn && obd->u.cli.cl_import)
-		count = sprintf(buf, "%s\n", conn->c_remote_uuid.uuid);
-	else
-		count = sprintf(buf, "%s\n", "<none>");
+	with_imp_locked(obd, imp, count) {
+		conn = imp->imp_connection;
+		if (conn)
+			count = sprintf(buf, "%s\n", conn->c_remote_uuid.uuid);
+		else
+			count = sprintf(buf, "%s\n", "<none>");
+	}
 
-	LPROCFS_CLIMP_EXIT(obd);
 	return count;
 }
 

@@ -546,15 +546,20 @@ int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data)
 	struct obd_import       *imp;
 	struct obd_connect_data *ocd;
 	struct config_llog_data *cld;
+	int rc = 0;
 
 	ENTRY;
 	LASSERT(obd);
-	LPROCFS_CLIMP_CHECK(obd);
-	imp = obd->u.cli.cl_import;
-	ocd = &imp->imp_connect_data;
+	with_imp_locked(obd, imp, rc) {
+		ocd = &imp->imp_connect_data;
 
-	seq_printf(m, "imperative_recovery: %s\n",
-		   OCD_HAS_FLAG(ocd, IMP_RECOV) ? "ENABLED" : "DISABLED");
+		seq_printf(m, "imperative_recovery: %s\n",
+			   OCD_HAS_FLAG(ocd, IMP_RECOV) ?
+			   "ENABLED" : "DISABLED");
+	}
+	if (rc)
+		RETURN(rc);
+
 	seq_printf(m, "client_state:\n");
 
 	spin_lock(&config_list_lock);
@@ -567,7 +572,6 @@ int lprocfs_mgc_rd_ir_state(struct seq_file *m, void *data)
 	}
 	spin_unlock(&config_list_lock);
 
-	LPROCFS_CLIMP_EXIT(obd);
 	RETURN(0);
 }
 
