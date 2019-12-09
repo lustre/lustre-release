@@ -61,12 +61,6 @@ _restore_mount () {
 	fi
 }
 
-is_mounted () {
-    local mntpt=$1
-    local mounted=$(mounted_lustre_filesystems)
-    echo $mounted' ' | grep -w -q $mntpt' '
-}
-
 if local_mode; then
    lst_SERVERS=`hostname`
    lst_CLIENTS=`hostname`

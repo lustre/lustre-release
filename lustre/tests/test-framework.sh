@@ -5267,11 +5267,11 @@ check_timeout () {
 }
 
 is_mounted () {
-    local mntpt=$1
-    [ -z $mntpt ] && return 1
-    local mounted=$(mounted_lustre_filesystems)
+	local mntpt=$1
+	[ -z $mntpt ] && return 1
+	local mounted=$(mounted_lustre_filesystems)
 
-    echo $mounted' ' | grep -w -q $mntpt' '
+	echo $mounted' ' | grep -w -q $mntpt' '
 }
 
 is_empty_dir() {
