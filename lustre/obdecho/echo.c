@@ -121,13 +121,13 @@ static int echo_destroy_export(struct obd_export *exp)
 	RETURN(0);
 }
 
-static u64 echo_next_id(struct obd_device *obddev)
+static u64 echo_next_id(struct obd_device *obd)
 {
 	u64 id;
 
-	spin_lock(&obddev->u.echo.eo_lock);
-	id = ++obddev->u.echo.eo_lastino;
-	spin_unlock(&obddev->u.echo.eo_lock);
+	spin_lock(&obd->u.echo.eo_lock);
+	id = ++obd->u.echo.eo_lastino;
+	spin_unlock(&obd->u.echo.eo_lock);
 
 	return id;
 }

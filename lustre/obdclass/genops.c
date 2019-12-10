@@ -758,11 +758,12 @@ void class_obd_list(void)
 }
 
 /* Search for a client OBD connected to tgt_uuid.  If grp_uuid is
-   specified, then only the client with that uuid is returned,
-   otherwise any client connected to the tgt is returned. */
-struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-					  const char *type_name,
-                                          struct obd_uuid *grp_uuid)
+ * specified, then only the client with that uuid is returned,
+ * otherwise any client connected to the tgt is returned.
+ */
+struct obd_device *class_find_client_obd(struct obd_uuid *tgt_uuid,
+					 const char *type_name,
+					 struct obd_uuid *grp_uuid)
 {
         int i;
 
@@ -790,10 +791,11 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 EXPORT_SYMBOL(class_find_client_obd);
 
 /* Iterate the obd_device list looking devices have grp_uuid. Start
-   searching at *next, and if a device is found, the next index to look
-   at is saved in *next. If next is NULL, then the first matching device
-   will always be returned. */
-struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
+ * searching at *next, and if a device is found, the next index to look
+ * at is saved in *next. If next is NULL, then the first matching device
+ * will always be returned.
+ */
+struct obd_device *class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 {
         int i;
 

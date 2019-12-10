@@ -86,12 +86,12 @@ struct obd_device *class_name2obd(const char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 void class_obd_list(void);
-struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-					  const char *type_name,
-                                          struct obd_uuid *grp_uuid);
-struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
-                                           int *next);
-struct obd_device * class_num2obd(int num);
+struct obd_device *class_find_client_obd(struct obd_uuid *tgt_uuid,
+					 const char *type_name,
+					 struct obd_uuid *grp_uuid);
+struct obd_device *class_devices_in_group(struct obd_uuid *grp_uuid,
+					  int *next);
+struct obd_device *class_num2obd(int num);
 int get_devices_count(void);
 
 int class_notify_sptlrpc_conf(const char *fsname, int namelen);
@@ -348,7 +348,7 @@ extern void (*class_export_dump_hook)(struct obd_export *);
 /* genops.c */
 struct obd_export *class_export_get(struct obd_export *exp);
 void class_export_put(struct obd_export *exp);
-struct obd_export *class_new_export(struct obd_device *obddev,
+struct obd_export *class_new_export(struct obd_device *obd,
                                     struct obd_uuid *cluuid);
 struct obd_export *class_new_export_self(struct obd_device *obd,
 					 struct obd_uuid *uuid);
@@ -369,7 +369,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
 int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
 int class_connected_export(struct obd_export *exp);
-void class_disconnect_exports(struct obd_device *obddev);
+void class_disconnect_exports(struct obd_device *obd);
 int class_manual_cleanup(struct obd_device *obd);
 void class_disconnect_stale_exports(struct obd_device *,
                                     int (*test_export)(struct obd_export *));

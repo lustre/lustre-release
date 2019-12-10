@@ -252,21 +252,21 @@ static struct ptlrpc_request *
 mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 		     struct md_op_data *op_data, __u32 acl_bufsize)
 {
-	struct ptlrpc_request	*req;
-	struct obd_device	*obddev = class_exp2obd(exp);
-	struct ldlm_intent	*lit;
-	const void		*lmm = op_data->op_data;
-	__u32			 lmmsize = op_data->op_data_size;
-	__u32			 mdt_md_capsule_size;
+	struct ptlrpc_request *req;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct ldlm_intent *lit;
+	const void *lmm = op_data->op_data;
+	__u32 lmmsize = op_data->op_data_size;
+	__u32  mdt_md_capsule_size;
 	LIST_HEAD(cancels);
-	int			 count = 0;
-	enum ldlm_mode		 mode;
-	int			 rc;
+	int count = 0;
+	enum ldlm_mode mode;
+	int rc;
 	int repsize, repsize_estimate;
 
 	ENTRY;
 
-	mdt_md_capsule_size = obddev->u.cli.cl_default_mds_easize;
+	mdt_md_capsule_size = obd->u.cli.cl_default_mds_easize;
 
 	it->it_create_mode = (it->it_create_mode & ~S_IFMT) | S_IFREG;
 
@@ -317,7 +317,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 		req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, 0);
 	} else {
 		req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
-			     max(lmmsize, obddev->u.cli.cl_default_mds_easize));
+			     max(lmmsize, obd->u.cli.cl_default_mds_easize));
 	}
 
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
@@ -372,7 +372,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 		       op_data->op_file_secctx_name_size);
 		req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX,
 				     RCL_SERVER,
-				     obddev->u.cli.cl_max_mds_easize);
+				     obd->u.cli.cl_max_mds_easize);
 
 		CDEBUG(D_SEC, "packed '%.*s' as security xattr name\n",
 		       op_data->op_file_secctx_name_size,
@@ -400,8 +400,8 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 			   sizeof(struct lov_comp_md_entry_v1) +
 			   lov_mds_md_size(0, LOV_MAGIC_V3));
 
-	if (repsize_estimate < obddev->u.cli.cl_dom_min_inline_repsize) {
-		repsize = obddev->u.cli.cl_dom_min_inline_repsize -
+	if (repsize_estimate < obd->u.cli.cl_dom_min_inline_repsize) {
+		repsize = obd->u.cli.cl_dom_min_inline_repsize -
 			  repsize_estimate + sizeof(struct niobuf_remote);
 		req_capsule_set_size(&req->rq_pill, &RMF_NIOBUF_INLINE,
 				     RCL_SERVER,
@@ -510,7 +510,7 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 			struct md_op_data *op_data, __u32 acl_bufsize)
 {
 	struct ptlrpc_request *req;
-	struct obd_device *obddev = class_exp2obd(exp);
+	struct obd_device *obd = class_exp2obd(exp);
 	u64 valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE |
 		    OBD_MD_FLDIREA | OBD_MD_MEA | OBD_MD_FLACL |
 		    OBD_MD_DEFAULT_MEA;
@@ -551,7 +551,7 @@ mdc_intent_getattr_pack(struct obd_export *exp, struct lookup_intent *it,
 	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 	lit->opc = (__u64)it->it_op;
 
-	easize = obddev->u.cli.cl_default_mds_easize;
+	easize = obd->u.cli.cl_default_mds_easize;
 
 	/* pack the intended request */
 	mdc_getattr_pack(req, valid, it->it_flags, op_data, easize);
@@ -886,7 +886,7 @@ static int mdc_enqueue_base(struct obd_export *exp,
 			    struct lustre_handle *lockh,
 			    __u64 extra_lock_flags)
 {
-	struct obd_device *obddev = class_exp2obd(exp);
+	struct obd_device *obd = class_exp2obd(exp);
 	struct ptlrpc_request *req;
 	__u64 flags, saved_flags = extra_lock_flags;
 	struct ldlm_res_id res_id;
@@ -924,7 +924,7 @@ static int mdc_enqueue_base(struct obd_export *exp,
 			policy = &lookup_policy;
 	}
 
-	generation = obddev->u.cli.cl_import->imp_generation;
+	generation = obd->u.cli.cl_import->imp_generation;
 	if (!it || (it->it_op & (IT_OPEN | IT_CREAT)))
 		acl_bufsize = min_t(__u32, imp->imp_connect_data.ocd_max_easize,
 				    XATTR_SIZE_MAX);
@@ -998,7 +998,7 @@ resend:
 	if (rc < 0) {
 		CDEBUG(D_INFO,
 		      "%s: ldlm_cli_enqueue "DFID":"DFID"=%s failed: rc = %d\n",
-		      obddev->obd_name, PFID(&op_data->op_fid1),
+		      obd->obd_name, PFID(&op_data->op_fid1),
 		      PFID(&op_data->op_fid2), op_data->op_name ?: "", rc);
 
 		mdc_clear_replay_flag(req, rc);
@@ -1018,13 +1018,13 @@ resend:
 	if (it && (int)lockrep->lock_policy_res2 == -EINPROGRESS) {
 		mdc_clear_replay_flag(req, rc);
 		ptlrpc_req_finished(req);
-		if (generation == obddev->u.cli.cl_import->imp_generation) {
+		if (generation == obd->u.cli.cl_import->imp_generation) {
 			if (signal_pending(current))
 				RETURN(-EINTR);
 
 			resends++;
 			CDEBUG(D_HA, "%s: resend:%d op:%d "DFID"/"DFID"\n",
-			       obddev->obd_name, resends, it->it_op,
+			       obd->obd_name, resends, it->it_op,
 			       PFID(&op_data->op_fid1),
 			       PFID(&op_data->op_fid2));
 			goto resend;

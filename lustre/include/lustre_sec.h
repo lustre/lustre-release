@@ -1129,7 +1129,7 @@ void sptlrpc_gc_add_ctx(struct ptlrpc_cli_ctx *ctx);
 
 /* misc */
 const char * sec2target_str(struct ptlrpc_sec *sec);
-int sptlrpc_lprocfs_cliobd_attach(struct obd_device *dev);
+int sptlrpc_lprocfs_cliobd_attach(struct obd_device *obd);
 
 /*
  * server side

@@ -672,12 +672,12 @@ LUSTRE_RW_ATTR(qos_maxage);
 
 static void *lod_tgts_seq_start(struct seq_file *p, loff_t *pos, bool is_mdt)
 {
-	struct obd_device *dev = p->private;
-	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
+	struct obd_device *obd = p->private;
+	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	LASSERT(dev != NULL);
+	LASSERT(obd != NULL);
 
 	lod_getref(ltd); /* released in lod_tgts_seq_stop */
 	if (*pos >= ltd->ltd_tgt_bitmap->size)
@@ -703,12 +703,12 @@ static void *lod_osts_seq_start(struct seq_file *p, loff_t *pos)
 
 static void lod_tgts_seq_stop(struct seq_file *p, void *v, bool is_mdt)
 {
-	struct obd_device *dev = p->private;
-	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
+	struct obd_device *obd = p->private;
+	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 
-	LASSERT(dev != NULL);
+	LASSERT(obd != NULL);
 	lod_putref(lod, ltd);
 }
 
@@ -725,8 +725,8 @@ static void lod_osts_seq_stop(struct seq_file *p, void *v)
 static void *lod_tgts_seq_next(struct seq_file *p, void *v, loff_t *pos,
 			       bool is_mdt)
 {
-	struct obd_device *dev = p->private;
-	struct lod_device *lod = lu2lod_dev(dev->obd_lu_dev);
+	struct obd_device *obd = p->private;
+	struct lod_device *lod = lu2lod_dev(obd->obd_lu_dev);
 	struct lu_tgt_descs *ltd = is_mdt ? &lod->lod_mdt_descs :
 					    &lod->lod_ost_descs;
 

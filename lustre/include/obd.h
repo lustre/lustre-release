@@ -949,11 +949,11 @@ struct obd_ops {
 				__u32 keylen, void *key,
 				__u32 vallen, void *val,
 				struct ptlrpc_request_set *set);
-	int (*o_setup) (struct obd_device *dev, struct lustre_cfg *cfg);
-	int (*o_precleanup)(struct obd_device *dev);
-	int (*o_cleanup)(struct obd_device *dev);
-	int (*o_process_config)(struct obd_device *dev, size_t len, void *data);
-	int (*o_postrecov)(struct obd_device *dev);
+	int (*o_setup) (struct obd_device *obd, struct lustre_cfg *cfg);
+	int (*o_precleanup)(struct obd_device *obd);
+	int (*o_cleanup)(struct obd_device *obd);
+	int (*o_process_config)(struct obd_device *obd, size_t len, void *data);
+	int (*o_postrecov)(struct obd_device *obd);
 	int (*o_add_conn)(struct obd_import *imp, struct obd_uuid *uuid,
 			  int priority);
 	int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);

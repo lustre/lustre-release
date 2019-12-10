@@ -1239,11 +1239,11 @@ void ptlrpc_ldebugfs_register_service(struct dentry *entry,
 		CWARN("Error adding the req_history file\n");
 }
 
-void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
+void ptlrpc_lprocfs_register_obd(struct obd_device *obd)
 {
-	ptlrpc_ldebugfs_register(obddev->obd_debugfs_entry, NULL, "stats",
-				 &obddev->obd_svc_debugfs_entry,
-				 &obddev->obd_svc_stats);
+	ptlrpc_ldebugfs_register(obd->obd_debugfs_entry, NULL, "stats",
+				 &obd->obd_svc_debugfs_entry,
+				 &obd->obd_svc_stats);
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 

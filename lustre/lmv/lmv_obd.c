@@ -557,8 +557,8 @@ static int lmv_disconnect(struct obd_export *exp)
 static int lmv_fid2path(struct obd_export *exp, int len, void *karg,
 			void __user *uarg)
 {
-	struct obd_device *obddev = class_exp2obd(exp);
-	struct lmv_obd *lmv = &obddev->u.lmv;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct lmv_obd *lmv = &obd->u.lmv;
 	struct getinfo_fid2path *gf;
 	struct lmv_tgt_desc *tgt;
 	struct getinfo_fid2path *remote_gf = NULL;
@@ -812,8 +812,8 @@ err_fput:
 static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 			 int len, void *karg, void __user *uarg)
 {
-	struct obd_device *obddev = class_exp2obd(exp);
-	struct lmv_obd *lmv = &obddev->u.lmv;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lu_tgt_desc *tgt = NULL;
 	int set = 0;
 	__u32 count = lmv->lmv_mdt_count;
@@ -1020,9 +1020,9 @@ hsm_req_err:
 	case LL_IOC_HSM_CT_START: {
 		struct lustre_kernelcomm *lk = karg;
 		if (lk->lk_flags & LK_FLG_STOP)
-			rc = lmv_hsm_ct_unregister(obddev, cmd, len, lk, uarg);
+			rc = lmv_hsm_ct_unregister(obd, cmd, len, lk, uarg);
 		else
-			rc = lmv_hsm_ct_register(obddev, cmd, len, lk, uarg);
+			rc = lmv_hsm_ct_register(obd, cmd, len, lk, uarg);
 		break;
 	}
 	default:
@@ -1033,7 +1033,7 @@ hsm_req_err:
 			/* ll_umount_begin() sets force flag but for lmv, not
 			 * mdc. Let's pass it through */
 			mdc_obd = class_exp2obd(tgt->ltd_exp);
-			mdc_obd->obd_force = obddev->obd_force;
+			mdc_obd->obd_force = obd->obd_force;
 			err = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
 			if (err) {
 				if (tgt->ltd_active) {
@@ -2939,9 +2939,9 @@ static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
 static int lmv_rmfid(struct obd_export *exp, struct fid_array *fa,
 		     int *__rcs, struct ptlrpc_request_set *_set)
 {
-	struct obd_device *obddev = class_exp2obd(exp);
+	struct obd_device *obd = class_exp2obd(exp);
 	struct ptlrpc_request_set *set = _set;
-	struct lmv_obd *lmv = &obddev->u.lmv;
+	struct lmv_obd *lmv = &obd->u.lmv;
 	int tgt_count = lmv->lmv_mdt_count;
 	struct lu_tgt_desc *tgt;
 	struct fid_array *fat, **fas = NULL;

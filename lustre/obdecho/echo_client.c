@@ -126,9 +126,9 @@ struct echo_md_device {
 #endif /* HAVE_SERVER_SUPPORT */
 
 static int echo_client_setup(const struct lu_env *env,
-			     struct obd_device *obddev,
+			     struct obd_device *obd,
 			     struct lustre_cfg *lcfg);
-static int echo_client_cleanup(struct obd_device *obddev);
+static int echo_client_cleanup(struct obd_device *obd);
 
 /** \defgroup echo_helpers Helper functions
  * @{
@@ -740,9 +740,9 @@ out_free_seq:
 	RETURN(rc);
 }
 
-static int echo_fid_fini(struct obd_device *obddev)
+static int echo_fid_fini(struct obd_device *obd)
 {
-	struct echo_device *ed = obd2echo_dev(obddev);
+	struct echo_device *ed = obd2echo_dev(obd);
 
 	ENTRY;
 	if (ed->ed_cl_seq) {
@@ -2948,9 +2948,9 @@ out:
 }
 
 static int echo_client_setup(const struct lu_env *env,
-			     struct obd_device *obddev, struct lustre_cfg *lcfg)
+			     struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-	struct echo_client_obd *ec = &obddev->u.echo_client;
+	struct echo_client_obd *ec = &obd->u.echo_client;
 	struct obd_device *tgt;
 	struct obd_uuid echo_uuid = { "ECHO_UUID" };
 	struct obd_connect_data *ocd = NULL;
@@ -3022,10 +3022,10 @@ static int echo_client_setup(const struct lu_env *env,
 	RETURN(rc);
 }
 
-static int echo_client_cleanup(struct obd_device *obddev)
+static int echo_client_cleanup(struct obd_device *obd)
 {
-	struct echo_device *ed = obd2echo_dev(obddev);
-	struct echo_client_obd *ec = &obddev->u.echo_client;
+	struct echo_device *ed = obd2echo_dev(obd);
+	struct echo_client_obd *ec = &obd->u.echo_client;
 	int rc;
 
 	ENTRY;
@@ -3045,7 +3045,7 @@ static int echo_client_cleanup(struct obd_device *obddev)
 		RETURN(0);
 	}
 
-	if (!list_empty(&obddev->obd_exports)) {
+	if (!list_empty(&obd->obd_exports)) {
 		CERROR("still has clients!\n");
 		RETURN(-EBUSY);
 	}

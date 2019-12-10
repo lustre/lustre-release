@@ -271,13 +271,13 @@ static int osc_on_mdt(char *obdname)
  * 3 - inactive-on-startup
  * 4 - restrictive net
  */
-int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
+int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-	struct client_obd *cli = &obddev->u.cli;
+	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp;
 	struct obd_uuid server_uuid;
 	int rq_portal, rp_portal, connect_op;
-	const char *name = obddev->obd_type->typ_name;
+	const char *name = obd->obd_type->typ_name;
 	enum ldlm_ns_type ns_type = LDLM_NS_TYPE_UNKNOWN;
 	char *cli_name = lustre_cfg_buf(lcfg, 0);
 	struct ptlrpc_connection fake_conn = { .c_self = 0,
@@ -451,7 +451,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	} else if (cfs_totalram_pages() >> (20 - PAGE_SHIFT) <= 512 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 4;
 	} else {
-		if (osc_on_mdt(obddev->obd_name))
+		if (osc_on_mdt(obd->obd_name))
 			cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_MAX;
 		else
 			cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
@@ -482,12 +482,12 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	}
 
 	ptlrpc_init_client(rq_portal, rp_portal, name,
-			   &obddev->obd_ldlm_client);
+			   &obd->obd_ldlm_client);
 
-	imp = class_new_import(obddev);
+	imp = class_new_import(obd);
 	if (imp == NULL)
 		GOTO(err_ldlm, rc = -ENOENT);
-	imp->imp_client = &obddev->obd_ldlm_client;
+	imp->imp_client = &obd->obd_ldlm_client;
 	imp->imp_connect_op = connect_op;
 	memcpy(cli->cl_target_uuid.uuid, lustre_cfg_buf(lcfg, 1),
 	       LUSTRE_CFG_BUFLEN(lcfg, 1));
@@ -499,7 +499,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 		if (refnet == LNET_NIDNET(LNET_NID_ANY)) {
 			rc = -EINVAL;
 			CERROR("%s: bad mount option 'network=%s': rc = %d\n",
-			       obddev->obd_name, lustre_cfg_string(lcfg, 4),
+			       obd->obd_name, lustre_cfg_string(lcfg, 4),
 			       rc);
 			GOTO(err_import, rc);
 		}
@@ -521,7 +521,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
 		if (!strcmp(lustre_cfg_string(lcfg, 3), "inactive")) {
 			CDEBUG(D_HA, "marking %s %s->%s as inactive\n",
-			       name, obddev->obd_name,
+			       name, obd->obd_name,
 			       cli->cl_target_uuid.uuid);
 			spin_lock(&imp->imp_lock);
 			imp->imp_deactive = 1;
@@ -529,13 +529,13 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 		}
 	}
 
-	obddev->obd_namespace = ldlm_namespace_new(obddev, obddev->obd_name,
-						   LDLM_NAMESPACE_CLIENT,
-						   LDLM_NAMESPACE_GREEDY,
-						   ns_type);
-	if (obddev->obd_namespace == NULL) {
+	obd->obd_namespace = ldlm_namespace_new(obd, obd->obd_name,
+						LDLM_NAMESPACE_CLIENT,
+						LDLM_NAMESPACE_GREEDY,
+						ns_type);
+	if (obd->obd_namespace == NULL) {
 		CERROR("Unable to create client namespace - %s\n",
-		       obddev->obd_name);
+		       obd->obd_name);
 		GOTO(err_import, rc = -ENOMEM);
 	}
 
@@ -555,17 +555,17 @@ err:
 }
 EXPORT_SYMBOL(client_obd_setup);
 
-int client_obd_cleanup(struct obd_device *obddev)
+int client_obd_cleanup(struct obd_device *obd)
 {
-	struct client_obd *cli = &obddev->u.cli;
+	struct client_obd *cli = &obd->u.cli;
 
 	ENTRY;
 
-	ldlm_namespace_free_post(obddev->obd_namespace);
-	obddev->obd_namespace = NULL;
+	ldlm_namespace_free_post(obd->obd_namespace);
+	obd->obd_namespace = NULL;
 
-	obd_cleanup_client_import(obddev);
-	LASSERT(obddev->u.cli.cl_import == NULL);
+	obd_cleanup_client_import(obd);
+	LASSERT(obd->u.cli.cl_import == NULL);
 
 	ldlm_put_ref();
 

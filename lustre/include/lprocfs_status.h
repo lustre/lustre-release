@@ -479,18 +479,18 @@ lprocfs_alloc_stats(unsigned int num, enum lprocfs_stats_flags flags);
 extern void lprocfs_clear_stats(struct lprocfs_stats *stats);
 extern void lprocfs_free_stats(struct lprocfs_stats **stats);
 extern void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats);
-extern int lprocfs_alloc_obd_stats(struct obd_device *obddev,
+extern int lprocfs_alloc_obd_stats(struct obd_device *obd,
 				   unsigned int num_stats);
-extern int lprocfs_alloc_md_stats(struct obd_device *obddev,
-                                  unsigned int num_private_stats);
+extern int lprocfs_alloc_md_stats(struct obd_device *obd,
+				  unsigned int num_private_stats);
 extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
-                                 unsigned conf, const char *name,
-                                 const char *units);
-extern void lprocfs_free_obd_stats(struct obd_device *obddev);
-extern void lprocfs_free_md_stats(struct obd_device *obddev);
+				 unsigned conf, const char *name,
+				 const char *units);
+extern void lprocfs_free_obd_stats(struct obd_device *obd);
+extern void lprocfs_free_md_stats(struct obd_device *obd);
 struct obd_export;
 struct nid_stat;
-extern int lprocfs_add_clear_entry(struct obd_device * obd,
+extern int lprocfs_add_clear_entry(struct obd_device *obd,
 				   struct proc_dir_entry *entry);
 #ifdef HAVE_SERVER_SUPPORT
 extern int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *peer_nid);
@@ -550,7 +550,7 @@ extern int lprocfs_seq_create(struct proc_dir_entry *parent, const char *name,
 			      mode_t mode,
 			      const struct file_operations *seq_fops,
 			      void *data);
-extern int lprocfs_obd_seq_create(struct obd_device *dev, const char *name,
+extern int lprocfs_obd_seq_create(struct obd_device *obd, const char *name,
 				  mode_t mode,
 				  const struct file_operations *seq_fops,
 				  void *data);
@@ -893,15 +893,15 @@ static inline int lprocfs_register_stats(struct proc_dir_entry *root,
 { return 0; }
 static inline void lprocfs_init_ldlm_stats(struct lprocfs_stats *ldlm_stats)
 { return; }
-static inline int lprocfs_alloc_obd_stats(struct obd_device *obddev,
+static inline int lprocfs_alloc_obd_stats(struct obd_device *obd,
 					  unsigned int num_stats)
 { return 0; }
-static inline int lprocfs_alloc_md_stats(struct obd_device *obddev,
+static inline int lprocfs_alloc_md_stats(struct obd_device *obd,
                                          unsigned int num_private_stats)
 { return 0; }
-static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
+static inline void lprocfs_free_obd_stats(struct obd_device *obd)
 { return; }
-static inline void lprocfs_free_md_stats(struct obd_device *obddev)
+static inline void lprocfs_free_md_stats(struct obd_device *obd)
 { return; }
 
 struct obd_export;
@@ -943,9 +943,9 @@ static inline void lprocfs_remove(struct proc_dir_entry **root)
 static inline void lprocfs_remove_proc_entry(const char *name,
                                              struct proc_dir_entry *parent)
 { return; }
-static inline int lprocfs_obd_setup(struct obd_device *dev, bool uuid_only)
+static inline int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 { return 0; }
-static inline int lprocfs_obd_cleanup(struct obd_device *dev)
+static inline int lprocfs_obd_cleanup(struct obd_device *obd)
 { return 0; }
 static inline int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
 { return 0; }
