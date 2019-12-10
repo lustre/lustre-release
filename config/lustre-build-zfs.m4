@@ -548,15 +548,24 @@ your distribution.
 		dnl #
 		dnl # ZFS 0.7.0 feature: MULTIHOST
 		dnl #
-		LB_CHECK_COMPILE([if ZFS has multihost protection],
-		spa_multihost, [
-			#include <sys/spa.h>
-		],[
+		restore_CFLAGS=$CFLAGS
+		CFLAGS="$CFLAGS $ZFS_LIBZFS_INCLUDE -Werror"
+		AC_MSG_CHECKING([[if ZFS has multihost protection]])
+		AC_COMPILE_IFELSE([
+		  AC_LANG_PROGRAM(
+		  [[
+		    #define _LARGEFILE64_SOURCE 1
+		    #include <sys/sysmacros.h>
+		    #include <sys/spa.h>
+		  ]], [[
 			spa_multihost(NULL);
-		],[
-			AC_DEFINE(HAVE_ZFS_MULTIHOST, 1,
-				[Have multihost protection in ZFS])
-		])
+		  ]])
+		  ],[
+		  AC_DEFINE(HAVE_ZFS_MULTIHOST, 1,
+			[Have multihost protection in ZFS])
+		  spa_multihost_fn="yes"],[spa_multihost_fn="no"]),
+		AC_MSG_RESULT([$spa_multihost_fn])
+		CFLAGS=$restore_CFLAGS
 		dnl #
 		dnl # ZFS 0.7.x adds new method zap_lookup_by_dnode
 		dnl #
