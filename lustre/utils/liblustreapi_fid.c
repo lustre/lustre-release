@@ -293,27 +293,6 @@ out:
 	return rc;
 }
 
-static int fid_from_lma(const char *path, int fd, struct lu_fid *fid)
-{
-	char buf[512];
-	struct lustre_mdt_attrs	*lma;
-	int rc = -1;
-
-	if (fd >= 0)
-		rc = fgetxattr(fd, XATTR_NAME_LMA, buf, sizeof(buf));
-	else if (path)
-		rc = lgetxattr(path, XATTR_NAME_LMA, buf, sizeof(buf));
-	else
-		errno = EINVAL;
-	if (rc < 0)
-		return -errno;
-
-	lma = (struct lustre_mdt_attrs *)buf;
-	fid_le_to_cpu(fid, &lma->lma_self_fid);
-
-	return 0;
-}
-
 int llapi_get_mdt_index_by_fid(int fd, const struct lu_fid *fid,
 			       int *mdt_index)
 {
@@ -329,38 +308,77 @@ int llapi_get_mdt_index_by_fid(int fd, const struct lu_fid *fid,
 	return rc;
 }
 
+static int fid_from_lma(const char *path, int fd, struct lu_fid *fid)
+{
+	struct lustre_mdt_attrs	*lma;
+	char buf[512];
+	int rc = -1;
+
+	if (path == NULL)
+		rc = fgetxattr(fd, XATTR_NAME_LMA, buf, sizeof(buf));
+	else
+		rc = lgetxattr(path, XATTR_NAME_LMA, buf, sizeof(buf));
+	if (rc < 0)
+		return -errno;
+
+	lma = (struct lustre_mdt_attrs *)buf;
+	memcpy(fid, &lma->lma_self_fid, sizeof(lma->lma_self_fid));
+	return 0;
+}
+
 int llapi_fd2fid(int fd, struct lu_fid *fid)
 {
-	int rc;
+	const struct lustre_file_handle *data;
+	struct file_handle *handle;
+	char buffer[sizeof(*handle) + MAX_HANDLE_SZ];
+	int mount_id;
 
 	memset(fid, 0, sizeof(*fid));
 
-	rc = ioctl(fd, LL_IOC_PATH2FID, fid) < 0 ? -errno : 0;
-	/* Allow extracting the FID from an ldiskfs-mounted filesystem */
-	if (rc < 0) {
-		if (errno == EINVAL || errno == ENOTTY)
-			rc = fid_from_lma(NULL, fd, fid);
-		else
-			rc = -errno;
+	/* A lustre file handle should always fit in a 128 bytes long buffer
+	 * (which is the value of MAX_HANDLE_SZ at the time this is written)
+	 */
+	handle = (struct file_handle *)buffer;
+	handle->handle_bytes = MAX_HANDLE_SZ;
+
+	if (name_to_handle_at(fd, "", handle, &mount_id, AT_EMPTY_PATH)) {
+		if (errno == EOVERFLOW)
+			/* A Lustre file_handle would have fit */
+			return -ENOTTY;
+		return -errno;
 	}
 
-	return rc;
+	if (handle->handle_type != FILEID_LUSTRE)
+		/* Might be a locally mounted Lustre target */
+		return fid_from_lma(NULL, fd, fid);
+	if (handle->handle_bytes < sizeof(*fid))
+		/* Unexpected error try and recover */
+		return fid_from_lma(NULL, fd, fid);
+
+	/* Parse the FID out of the handle */
+	data = (const struct lustre_file_handle *)handle->f_handle;
+	memcpy(fid, &data->lfh_child, sizeof(data->lfh_child));
+
+	return 0;
 }
 
 int llapi_path2fid(const char *path, struct lu_fid *fid)
 {
 	int fd, rc;
 
-	fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
-	if (fd >= 0) {
-		rc = llapi_fd2fid(fd, fid);
-		close(fd);
-	} else {
-		memset(fid, 0, sizeof(*fid));
-		rc = -errno;
-	}
+	fd = open(path, O_RDONLY | O_PATH | O_CLOEXEC | O_NOFOLLOW);
+	if (fd < 0)
+		return -errno;
 
-	if (rc == -ELOOP || rc == -ENXIO || rc == -EINVAL || rc == -ENOTTY)
+	rc = llapi_fd2fid(fd, fid);
+	close(fd);
+
+	if (rc == -EBADF)
+		/* Might be a locally mounted Lustre target
+		 *
+		 * Cannot use `fd' as fgetxattr() does not work on file
+		 * descriptor opened with O_PATH
+		 */
 		rc = fid_from_lma(path, -1, fid);
 
 	return rc;
