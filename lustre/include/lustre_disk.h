@@ -348,8 +348,7 @@ int lustre_start_mgc(struct super_block *sb);
 int server_name2fsname(const char *svname, char *fsname, const char **endptr);
 void obdname2fsname(const char *tgt, char *fsname, size_t fslen);
 
-void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb,
-						  struct vfsmount *mnt));
+void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb));
 int lustre_common_put_super(struct super_block *sb);
 

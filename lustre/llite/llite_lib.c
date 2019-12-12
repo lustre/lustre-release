@@ -191,8 +191,7 @@ static void ll_free_sbi(struct super_block *sb)
 	EXIT;
 }
 
-static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
-                                    struct vfsmount *mnt)
+static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 {
 	struct inode *root = NULL;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -1054,7 +1053,7 @@ static int super_setup_bdi_name(struct super_block *sb, char *fmt, ...)
 }
 #endif /* !HAVE_SUPER_SETUP_BDI_NAME */
 
-int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
+int ll_fill_super(struct super_block *sb)
 {
 	struct	lustre_profile *lprof = NULL;
 	struct	lustre_sb_info *lsi = s2lsi(sb);
@@ -1175,7 +1174,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	snprintf(md, md_len - 1, "%s-%016lx", lprof->lp_md, cfg_instance);
 
 	/* connections, registrations, sb setup */
-	err = client_common_fill_super(sb, md, dt, mnt);
+	err = client_common_fill_super(sb, md, dt);
 	if (err < 0)
 		GOTO(out_free_md, err);
 

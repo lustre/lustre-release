@@ -50,8 +50,7 @@
 #include <lustre_disk.h>
 #include <uapi/linux/lustre/lustre_param.h>
 
-static int (*client_fill_super)(struct super_block *sb,
-				struct vfsmount *mnt);
+static int (*client_fill_super)(struct super_block *sb);
 
 static void (*kill_super_cb)(struct super_block *sb);
 
@@ -1637,7 +1636,7 @@ static int lustre_fill_super(struct super_block *sb, void *lmd2_data,
 			}
 			/* Connect and start */
 			/* (should always be ll_fill_super) */
-			rc = (*client_fill_super)(sb, NULL);
+			rc = (*client_fill_super)(sb);
 			/* c_f_s will call lustre_common_put_super on failure */
 		}
 	} else {
@@ -1678,8 +1677,7 @@ out:
  * We can't call ll_fill_super by name because it lives in a module that
  * must be loaded after this one.
  */
-void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb,
-						  struct vfsmount *mnt))
+void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
 {
 	client_fill_super = cfs;
 }
