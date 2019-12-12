@@ -74,9 +74,6 @@ extern char obd_jobid_var[];
 #define HASH_POOLS_BKT_BITS 3
 #define HASH_POOLS_CUR_BITS 3
 #define HASH_POOLS_MAX_BITS 7
-#define HASH_UUID_BKT_BITS 5
-#define HASH_UUID_CUR_BITS 7
-#define HASH_UUID_MAX_BITS 12
 #define HASH_NID_BKT_BITS 5
 #define HASH_NID_CUR_BITS 7
 #define HASH_NID_MAX_BITS 12

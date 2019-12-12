@@ -627,7 +627,7 @@ struct obd_device {
          * protection of other bits using _bh lock */
         unsigned long obd_recovery_expired:1;
         /* uuid-export hash body */
-	struct cfs_hash             *obd_uuid_hash;
+	struct rhashtable		obd_uuid_hash;
         /* nid-export hash body */
 	struct cfs_hash             *obd_nid_hash;
 	/* nid stats body */
@@ -742,6 +742,13 @@ struct obd_device {
 	struct kobj_type		obd_ktype;
 	struct completion		obd_kobj_unregister;
 };
+
+int obd_uuid_add(struct obd_device *obd, struct obd_export *export);
+void obd_uuid_del(struct obd_device *obd, struct obd_export *export);
+#ifdef HAVE_SERVER_SUPPORT
+struct obd_export *obd_uuid_lookup(struct obd_device *obd,
+				   struct obd_uuid *uuid);
+#endif
 
 /* get/set_info keys */
 #define KEY_ASYNC               "async"

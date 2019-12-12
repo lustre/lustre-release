@@ -419,7 +419,7 @@ int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 			RETURN(-ENOMEM);
 		}
 		memcpy(uuid->uuid, lwpname, strlen(lwpname));
-		*exp = cfs_hash_lookup(lwp->obd_uuid_hash, uuid);
+		*exp = obd_uuid_lookup(lwp, uuid);
 		OBD_FREE_PTR(uuid);
 	}
 

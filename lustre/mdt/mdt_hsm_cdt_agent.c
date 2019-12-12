@@ -560,7 +560,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	 *  the ldlm_callback_handler. Note this sends a request RPC
 	 * from a server (MDT) to a client (MDC), backwards of normal comms.
 	 */
-	exp = cfs_hash_lookup(mdt2obd_dev(mdt)->obd_uuid_hash, &uuid);
+	exp = obd_uuid_lookup(mdt2obd_dev(mdt), &uuid);
 	if (exp == NULL || exp->exp_disconnected) {
 		if (exp != NULL)
 			class_export_put(exp);

@@ -327,6 +327,44 @@ static int lprocfs_exp_uuid_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_exp_uuid);
 
+#define HASH_NAME_LEN	16
+
+static void ldebugfs_rhash_seq_show(const char *name, struct rhashtable *ht,
+				    struct seq_file *m)
+{
+	unsigned int max_size = ht->p.max_size ? ht->p.max_size : UINT_MAX;
+	struct bucket_table *tbl;
+	int dist[8] = { 0, };
+	int maxdep = 0;
+	int i;
+
+	rcu_read_lock();
+	tbl = rht_dereference(ht->tbl, ht);
+	for (i = 0; i < tbl->size; i++) {
+		struct rhash_head *pos;
+		int count = 0;
+
+		rht_for_each(pos, tbl, i)
+			count++;
+
+		if (count)
+			maxdep = max(maxdep, count);
+
+		dist[min(fls(count), 7)]++;
+	}
+
+	seq_printf(m, "%-*s %5d %5d %10u %d.%03d 0.300 0.750 0x%03x %7d %7d %7d ",
+		   HASH_NAME_LEN, name, tbl->size, ht->p.min_size, max_size,
+		   atomic_read(&ht->nelems) / tbl->size,
+		   atomic_read(&ht->nelems) * 1000 / tbl->size,
+		   ht->p.automatic_shrinking, 0,
+		   atomic_read(&ht->nelems), maxdep);
+	rcu_read_unlock();
+
+	for (i = 0; i < 8; i++)
+		seq_printf(m, "%d%c",  dist[i], (i == 7) ? '\n' : '/');
+}
+
 static int
 lprocfs_exp_print_hash_seq(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			   struct hlist_node *hnode, void *cb_data)
@@ -654,8 +692,12 @@ int lprocfs_hash_seq_show(struct seq_file *m, void *data)
 	if (obd == NULL)
 		return 0;
 
+	/* header for rhashtable state */
+	seq_printf(m, "%-*s   cur   min        max theta t-min t-max flags  rehash   count  maxdep distribution\n",
+		   HASH_NAME_LEN, "name");
+	ldebugfs_rhash_seq_show("UUID_HASH", &obd->obd_uuid_hash, m);
+
 	cfs_hash_debug_header(m);
-	cfs_hash_debug_str(obd->obd_uuid_hash, m);
 	cfs_hash_debug_str(obd->obd_nid_hash, m);
 	cfs_hash_debug_str(obd->obd_nid_stats_hash, m);
 	return 0;

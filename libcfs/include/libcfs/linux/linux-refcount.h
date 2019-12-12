@@ -30,6 +30,7 @@
 
 #define refcount_set		atomic_set
 #define refcount_inc		atomic_inc
+#define refcount_inc_not_zero	atomic_inc_not_zero
 #define refcount_dec		atomic_dec
 #define refcount_dec_and_test	atomic_dec_and_test
 #define refcount_read		atomic_read

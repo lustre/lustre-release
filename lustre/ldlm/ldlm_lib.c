@@ -1176,7 +1176,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	if (obd_uuid_equals(&cluuid, &target->obd_uuid))
 		goto dont_check_exports;
 
-	export = cfs_hash_lookup(target->obd_uuid_hash, &cluuid);
+	export = obd_uuid_lookup(target, &cluuid);
 	if (!export)
 		goto no_export;
 

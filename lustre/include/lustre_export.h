@@ -42,6 +42,7 @@
  * @{
  */
 
+#include <linux/rhashtable.h>
 #include <linux/workqueue.h>
 
 #include <lprocfs_status.h>
@@ -211,7 +212,7 @@ struct obd_export {
 	struct work_struct	exp_zombie_work;
 	/* Unlinked export list */
 	struct list_head	exp_stale_list;
-	struct hlist_node	exp_uuid_hash;	/** uuid-export hash*/
+	struct rhash_head	exp_uuid_hash;	/** uuid-export hash */
 	struct hlist_node	exp_nid_hash;	/** nid-export hash */
 	struct hlist_node	exp_gen_hash;   /** last_rcvd clt gen hash */
         /**
