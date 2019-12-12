@@ -3700,7 +3700,7 @@ lnet_peer_ni_add_to_recoveryq_locked(struct lnet_peer_ni *lpni)
 
 	if (list_empty(&lpni->lpni_recovery) &&
 	    atomic_read(&lpni->lpni_healthv) < LNET_MAX_HEALTH_VALUE) {
-		CERROR("lpni %s added to recovery queue. Health = %d\n",
+		CDEBUG(D_NET, "lpni %s added to recovery queue. Health = %d\n",
 			libcfs_nid2str(lpni->lpni_nid),
 			atomic_read(&lpni->lpni_healthv));
 		list_add_tail(&lpni->lpni_recovery, &the_lnet.ln_mt_peerNIRecovq);
