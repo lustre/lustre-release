@@ -818,8 +818,9 @@ lnet_is_health_check(struct lnet_msg *msg)
 	if (hc &&
 	    ((!status && msg->msg_health_status != LNET_MSG_STATUS_OK) ||
 	     (status && msg->msg_health_status == LNET_MSG_STATUS_OK))) {
-		CERROR("Msg is in inconsistent state, don't perform health "
-		       "checking (%d, %d)\n", status, msg->msg_health_status);
+		CDEBUG(D_NET, "Msg %p is in inconsistent state, don't perform health "
+			      "checking (%d, %d)\n", msg, status,
+			      msg->msg_health_status);
 		hc = false;
 	}
 
