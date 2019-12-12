@@ -480,7 +480,7 @@ lnet_handle_local_failure(struct lnet_msg *msg)
 	 */
 	if (list_empty(&local_ni->ni_recovery) &&
 	    atomic_read(&local_ni->ni_healthv) < LNET_MAX_HEALTH_VALUE) {
-		CERROR("ni %s added to recovery queue. Health = %d\n",
+		CDEBUG(D_NET, "ni %s added to recovery queue. Health = %d\n",
 			libcfs_nid2str(local_ni->ni_nid),
 			atomic_read(&local_ni->ni_healthv));
 		list_add_tail(&local_ni->ni_recovery,
