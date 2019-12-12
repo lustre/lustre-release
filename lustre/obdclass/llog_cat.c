@@ -206,6 +206,13 @@ static int llog_cat_new_log(const struct lu_env *env,
 		if (freespace > (128 << 20))
 			loghandle->lgh_max_size = 128 << 20;
 	}
+	if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_PLAIN_RECORDS) ||
+		     OBD_FAIL_PRECHECK(OBD_FAIL_CATALOG_FULL_CHECK))) {
+		// limit the numer of plain records for test
+		loghandle->lgh_max_size = loghandle->lgh_hdr_size +
+		       cfs_fail_val * 64;
+	}
+
 	rc = 0;
 
 out:
@@ -926,6 +933,7 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 			 * catalog bottom.
 			 */
 			startcat = 0;
+			d.lpd_startcat = 0;
 			if (rc != 0)
 				RETURN(rc);
 		}

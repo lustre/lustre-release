@@ -70,7 +70,7 @@ if [ $LINUX_VERSION_CODE -ge $(version_code 4.14.0) ];then
 fi
 
 #                                  5          12          (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 135 136 300o"
 
 if [ "$mds1_FSTYPE" = "zfs" ]; then
 	# bug number for skipped test:
@@ -12613,6 +12613,73 @@ test_134b() {
 	unlinkmany $DIR/$tdir/f $nr
 }
 run_test 134b "Server rejects lock request when reaching lock_limit_mb"
+
+test_135() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ $MDS1_VERSION -lt $(version_code 2.13.50) ]] &&
+		skip "Need MDS version at least 2.13.50"
+	local fname
+
+	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+
+#define OBD_FAIL_PLAIN_RECORDS 0x1319
+	#set only one record at plain llog
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1319 fail_val=1
+
+	#fill already existed plain llog each 64767
+	#wrapping whole catalog
+	createmany -o -u $DIR/$tdir/$tfile- $((64767 * 1))
+
+	createmany -o $DIR/$tdir/$tfile_ 64700
+	for (( i = 0; i < 64700; i = i + 2 ))
+	do
+		rm $DIR/$tdir/$tfile_$i &
+		rm $DIR/$tdir/$tfile_$((i + 1)) &
+		local pid=$!
+		wait $pid
+	done
+
+	#waiting osp synchronization
+	wait_delete_completed
+}
+run_test 135 "Race catalog processing"
+
+test_136() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[[ $MDS1_VERSION -lt $(version_code 2.13.50) ]] &&
+		skip "Need MDS version at least 2.13.50"
+	local fname
+
+	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
+	$SETSTRIPE -c 1 -i 0 $DIR/$tdir || error "failed to set striping"
+	#set only one record at plain llog
+#define OBD_FAIL_CATALOG_FULL_CHECK                0x131a
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x131a fail_val=1
+
+	#fill already existed 2 plain llogs each 64767
+	#wrapping whole catalog
+	createmany -o -u $DIR/$tdir/$tfile- $((64767 * 1))
+	createmany -o -u $DIR/$tdir/$tfile- $((64767 * 3 / 2))
+	wait_delete_completed
+
+	createmany -o $DIR/$tdir/$tfile_ 10
+	sleep 25
+
+	do_facet $SINGLEMDS $LCTL set_param fail_val=3
+	for (( i = 0; i < 10; i = i + 3 ))
+	do
+		rm $DIR/$tdir/$tfile_$i &
+		rm $DIR/$tdir/$tfile_$((i + 1)) &
+		local pid=$!
+		wait $pid
+		sleep 7
+		rm $DIR/$tdir/$tfile_$((i + 2)) &
+	done
+
+	#waiting osp synchronization
+	wait_delete_completed
+}
+run_test 136 "Race catalog processing 2"
 
 test_140() { #bug-17379
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

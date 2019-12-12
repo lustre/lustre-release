@@ -40,6 +40,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/kthread.h>
+#include <linux/delay.h>
 #include <lustre_log.h>
 #include <lustre_update.h>
 #include "osp_internal.h"
@@ -1176,6 +1177,9 @@ static int osp_sync_process_queues(const struct lu_env *env,
 			llh = NULL;
 			rec = NULL;
 		}
+		if (OBD_FAIL_PRECHECK(OBD_FAIL_CATALOG_FULL_CHECK) &&
+			    cfs_fail_val != 1)
+			msleep(1 * MSEC_PER_SEC);
 
 		wait_event_idle(d->opd_sync_waitq,
 				!osp_sync_running(d) ||
@@ -1275,12 +1279,11 @@ next:
 		/* processing reaches catalog bottom */
 		if (d->opd_sync_last_catalog_idx == size)
 			d->opd_sync_last_catalog_idx = LLOG_CAT_FIRST;
-		else if (wrapped)
-			/* If catalog is wrapped we can`t predict last index of
-			 * processing because lgh_last_idx could be changed.
-			 * Starting form the next one */
-			d->opd_sync_last_catalog_idx++;
-
+		/* If catalog is wrapped we can`t predict last index of
+		 * processing because lgh_last_idx could be changed.
+		 * Starting form the next one. Index would be increased
+		 * at llog_process_thread
+		 */
 	} while (rc == 0 && (wrapped ||
 			     d->opd_sync_last_catalog_idx == LLOG_CAT_FIRST));
 
