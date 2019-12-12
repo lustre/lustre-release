@@ -312,6 +312,8 @@ do {                                                                           \
                 if (condition)                                                 \
                         break;                                                 \
 		if (signal_pending(current)) {				       \
+			unsigned long flags;				       \
+									       \
                         if (info->lwi_on_signal != NULL &&                     \
                             (__timeout == 0 || __allow_intr)) {                \
                                 if (info->lwi_on_signal != LWI_ON_SIGNAL_NOOP) \
@@ -326,7 +328,9 @@ do {                                                                           \
 			/* -EINTR when the RPC actually succeeded.      */     \
 			/* the recalc_sigpending() below will deliver the */   \
 			/* signal properly.                             */     \
-			cfs_clear_sigpending();                                \
+			spin_lock_irqsave(&current->sighand->siglock, flags);  \
+			clear_tsk_thread_flag(current, TIF_SIGPENDING);	       \
+			spin_unlock_irqrestore(&current->sighand->siglock, flags);\
                 }                                                              \
         }                                                                      \
                                                                                \

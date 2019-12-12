@@ -108,10 +108,8 @@ static inline int notifier_from_ioctl_errno(int err)
  * Defined by platform
  */
 int unshare_fs_struct(void);
-sigset_t cfs_block_sigs(unsigned long sigs);
 sigset_t cfs_block_sigsinv(unsigned long sigs);
 void cfs_restore_sigs(sigset_t);
-void cfs_clear_sigpending(void);
 
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 

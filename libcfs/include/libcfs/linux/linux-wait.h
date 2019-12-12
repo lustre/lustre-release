@@ -206,6 +206,7 @@ __out:	__ret;								\
 #define ___wait_event_idle(wq_head, condition, exclusive, ret, cmd)	\
 ({									\
 	wait_queue_entry_t __wq_entry;					\
+	unsigned long flags;						\
 	long __ret = ret;	/* explicit shadow */			\
 	sigset_t __blocked;						\
 									\
@@ -221,9 +222,13 @@ __out:	__ret;								\
 		if (condition)						\
 			break;						\
 		/* See justification in __l_wait_event */		\
-		if (signal_pending(current))				\
-			cfs_clear_sigpending();				\
-									\
+		if (signal_pending(current)) {				\
+			spin_lock_irqsave(&current->sighand->siglock,	\
+					  flags);			\
+			clear_tsk_thread_flag(current, TIF_SIGPENDING);	\
+			spin_unlock_irqrestore(&current->sighand->siglock,\
+					       flags);			\
+		}							\
 		cmd;							\
 	}								\
 	finish_wait(&wq_head, &__wq_entry);				\
@@ -462,6 +467,7 @@ do {									\
 #define ___wait_event_lifo(wq_head, condition, ret, cmd)		\
 ({									\
 	wait_queue_entry_t __wq_entry;					\
+	unsigned long flags;						\
 	long __ret = ret;	/* explicit shadow */			\
 	sigset_t __blocked;						\
 									\
@@ -476,9 +482,13 @@ do {									\
 		if (condition)						\
 			break;						\
 		/* See justification in __l_wait_event */		\
-		if (signal_pending(current))				\
-			cfs_clear_sigpending();				\
-									\
+		if (signal_pending(current)) {				\
+			spin_lock_irqsave(&current->sighand->siglock,	\
+					  flags);			\
+			clear_tsk_thread_flag(current, TIF_SIGPENDING);	\
+			spin_unlock_irqrestore(&current->sighand->siglock,\
+					       flags);			\
+		}							\
 		cmd;							\
 	}								\
 	cfs_restore_sigs(__blocked);					\
