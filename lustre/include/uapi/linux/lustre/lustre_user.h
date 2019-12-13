@@ -755,6 +755,12 @@ static inline bool lov_pattern_supported_normal_comp(__u32 pattern)
 #define XATTR_LUSTRE_PREFIX	"lustre."
 #define XATTR_LUSTRE_LOV	XATTR_LUSTRE_PREFIX"lov"
 
+/* Please update if XATTR_LUSTRE_LOV".set" groks more flags in the future */
+#define allowed_lustre_lov(att) (strcmp((att), XATTR_LUSTRE_LOV".add") == 0 || \
+			strcmp((att), XATTR_LUSTRE_LOV".set") == 0 || \
+			strcmp((att), XATTR_LUSTRE_LOV".set.flags") == 0 || \
+			strcmp((att), XATTR_LUSTRE_LOV".del") == 0)
+
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
 	struct ost_id l_ost_oi;	  /* OST object ID */

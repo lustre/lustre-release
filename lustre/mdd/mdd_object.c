@@ -1362,7 +1362,7 @@ static inline bool has_prefix(const char *str, const char *prefix)
  *
  * \param[in]  xattr_name  Full extended attribute name.
  *
- * \return The type of changelog to use, or -1 if no changelog is to be emitted.
+ * \return type of changelog to use, or CL_NONE if no changelog is to be emitted
  */
 static enum changelog_rec_type
 mdd_xattr_changelog_type(const struct lu_env *env, struct mdd_device *mdd,
@@ -1370,8 +1370,8 @@ mdd_xattr_changelog_type(const struct lu_env *env, struct mdd_device *mdd,
 {
 	/* Layout changes systematically recorded */
 	if (strcmp(XATTR_NAME_LOV, xattr_name) == 0 ||
-	    strncmp(XATTR_LUSTRE_LOV, xattr_name,
-		    strlen(XATTR_LUSTRE_LOV)) == 0)
+	    strcmp(XATTR_LUSTRE_LOV, xattr_name) == 0 ||
+	    allowed_lustre_lov(xattr_name))
 		return CL_LAYOUT;
 
 	/* HSM information changes systematically recorded */
