@@ -59,7 +59,7 @@
  * ldlm_lock.  If it's not at the top, you'll want to use container_of()
  * to compute the start of the structure based on the handle field. */
 struct portals_handle {
-	struct list_head		h_link;
+	struct hlist_node		h_link;
 	__u64				h_cookie;
 	const char			*h_owner;
 	refcount_t			h_ref;
@@ -67,7 +67,6 @@ struct portals_handle {
 	/* newly added fields to handle the RCU issue. -jxiong */
 	struct rcu_head			h_rcu;
 	spinlock_t			h_lock;
-	unsigned int			h_in:1;
 };
 
 /* handles.c */
