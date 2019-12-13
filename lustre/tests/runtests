@@ -17,119 +17,124 @@ RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
 check_and_setup_lustre
 
 test_1() {
-sleep 5 # let MDS refresh aggregated statfs
-# Include some extra space for the status file
-USED=$(df -P $DIR | awk '{ print $3 }' | tail -n 1)
+	sleep 5 # let MDS refresh aggregated statfs
+	# Include some extra space for the status file
+	local dfused=$(df -P $DIR | awk '{ print $3 }' | tail -n 1)
+	local truncsize=123
 
-# let's start slowly here...
-START=$(date +%s)
-log "touching $DIR at $(date) (@$START)"
-touch $DIR || error "can't touch $DIR" 2
-HOSTS=$DIR/hosts.$$
-TRUNCSIZE=123
+	# let's start slowly here...
+	local stime=$(date +%s)
+	log "touching $DIR at $(date) (@$stime)"
+	touch $DIR || error "can't touch $DIR"
+	local hfile=$DIR/hosts.$$
 
-if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
-	# this will cause the following cp to trigger bug #620096
-	log "create an empty file $HOSTS"
-	mcreate $HOSTS
-	log "copying /etc/hosts to $HOSTS"
-	cp /etc/hosts $HOSTS || error "can't cp /etc/hosts to $HOSTS" 3
-	log "comparing /etc/hosts and $HOSTS"
-	diff -u /etc/hosts $HOSTS || error "$HOSTS different" 4
-	log "renaming $HOSTS to $HOSTS.ren"
-	mv $HOSTS $HOSTS.ren || error "can't rename $HOSTS to $HOSTS.ren" 5
-	log "copying /etc/hosts to $HOSTS again"
-	cp /etc/hosts $HOSTS || error "can't cp /etc/hosts to $HOSTS again" 6
-	log "truncating $HOSTS"
-	> $HOSTS || error "can't truncate $HOSTS" 8
-	log "removing $HOSTS"
-	rm $HOSTS || error "can't remove $HOSTS" 9
-	log "copying /etc/hosts to $HOSTS.2"
-	cp /etc/hosts $HOSTS.2 || error "can't cp /etc/hosts to $HOSTS.2" 7
-	log "truncating $HOSTS.2 to $TRUNCSIZE bytes"
-	$TRUNCATE $HOSTS.2 $TRUNCSIZE || error "can't truncate $HOSTS.2" 10
-	checkstat -s $TRUNCSIZE $HOSTS.2 ||
-		error "$HOSTS.2 isn't $TRUNCSIZE bytes" 11
-fi
+	if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
+		# this will cause the following cp to trigger bug #620096
+		log "create an empty file $hfile"
+		mcreate $hfile
+		log "copying /etc/hosts to $hfile"
+		cp /etc/hosts $hfile || error "can't cp /etc/hosts to $hfile"
+		log "comparing /etc/hosts and $hfile"
+		diff -u /etc/hosts $hfile || error "$hfile different"
+		log "renaming $hfile to $hfile.ren"
+		mv $hfile $hfile.ren ||
+			error "can't rename $hfile to $hfile.ren"
+		log "copying /etc/hosts to $hfile again"
+		cp /etc/hosts $hfile ||
+			error "can't cp /etc/hosts to $hfile again"
+		log "truncating $hfile"
+		> $hfile || error "can't truncate $hfile"
+		log "removing $hfile"
+		rm $hfile || error "can't remove $hfile"
+		log "copying /etc/hosts to $hfile.2"
+		cp /etc/hosts $hfile.2 ||
+			error "can't cp /etc/hosts to $hfile.2"
+		log "truncating $hfile.2 to $truncsize bytes"
+		$TRUNCATE $hfile.2 $truncsize || error "can't truncate $hfile.2"
+		checkstat -s $truncsize $hfile.2 ||
+			error "$hfile.2 isn't $truncsize bytes"
+	fi
 
-DST=$DIR/$tdir
-# let's start slowly here...
-log "creating $DST"
-test_mkdir -p $DST || error "can't mkdir $DST" 12
+	local dst=$DIR/$tdir
+	log "creating $dst"
+	test_mkdir -p $dst || error "can't mkdir $dst"
 
-# ok, that hopefully worked, so let's do a little more, with files that
-# haven't changed in the last day (hopefully they don't change during test)
-FILES=$TMP/runtests.files
-# use "NUL" instead of newline as filename terminator, bug 19702 
-find $RUNTESTS_SRC -type f -mtime +1 | head -n $COUNT | tr '\n' '\0' > $FILES
-[ -s "$FILES" ] ||
-	error "$RUNTESTS_SRC contains only files modifed less than 2 days ago"
-COUNT=$(xargs -0 -n 1 echo < $FILES | wc -l)
+	# let's do a little more, with files that haven't changed in the
+	# last day (hopefully they don't change during test)
+	local findfiles=$TMP/runtests.files
 
-log "copying $COUNT files from $RUNTESTS_SRC to $DST$RUNTESTS_SRC at $(date)"
-tar cf - --null --files-from $FILES | tar xvf - -C $DST > /dev/null ||
-	error "copying $RUNTESTS_SRC" 17
+	# use "NUL" instead of newline as filename terminator, bug 19702
+	find $RUNTESTS_SRC -type f -mtime +1 | head -n $COUNT | \
+	      tr '\n' '\0' > $findfiles
+	[ -s "$findfiles" ] ||
+		error "$RUNTESTS_SRC contains only files modifed less than " \
+		      "2 days ago"
+	stack_trap "rm -f $findfiles"
+	COUNT=$(xargs -0 -n 1 echo < $findfiles | wc -l)
 
-log "comparing $COUNT newly copied files at $(date)"
+	log "copying $COUNT files from $RUNTESTS_SRC to $dst$RUNTESTS_SRC " \
+	    "at $(date)"
+	tar cf - --null --files-from $findfiles | \
+		tar xvf - -C $dst > /dev/null || error "copying $RUNTESTS_SRC"
 
-cat $FILES | tr "\0" "\n" | ( rc=0; while read f; do
-	[ $V ] && log "verifying $DST/$f"
-	diff -q "$f" "$DST/$f" || rc=18
-done
-[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" ) 
+	log "comparing $COUNT newly copied files at $(date)"
 
-log "finished at $(date) ($(($(date +%s) - START)))"
+	cat $findfiles | tr "\0" "\n" | ( rc=0; while read f; do
+		diff -q "$f" "$dst/$f" || rc=18
+	done
+	[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
 
-stopall || exit 19
-setupall || exit 20
+	log "finished at $(date) ($(($(date +%s) - stime)))"
 
-log "comparing $COUNT previously copied files"
-cat $FILES | tr "\0" "\n" | ( rc=0; while read f; do
-	[ $V ] && log "verifying $DST/$f"
-	diff -q "$f" "$DST/$f" || rc=22
-done
-[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
+	stopall || error "stopall failed"
+	setupall || error "setupall failed"
 
-stopall || exit 21
-setupall || exit 22
+	log "comparing $COUNT previously copied files"
+	cat $findfiles | tr "\0" "\n" | ( rc=0; while read f; do
+		diff -q "$f" "$dst/$f" || rc=22
+	done
+	[ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
 
-log "removing $DST"
-rm -r $V $DST || error "can't remove $DST" 37
+	stopall || error "stopall failed (2)"
+	setupall || error "setupall failed (2)"
 
-if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
-	log "renaming $HOSTS.ren to $HOSTS"
-	mv $HOSTS.ren $HOSTS || error "can't rename $HOSTS.ren to $HOSTS" 32
-	log "truncating $HOSTS"
-	> $HOSTS || error "can't truncate $HOSTS" 34
-	log "removing $HOSTS"
-	rm $HOSTS || error "can't remove $HOSTS again" 36
-	log "verifying $HOSTS.2 is $TRUNCSIZE bytes"
-	checkstat -s $TRUNCSIZE $HOSTS.2 || \
-		error "$HOSTS.2 isn't $TRUNCSIZE bytes" 37
-	rm $HOSTS.2 || error "can't remove $HOSTS.2" 38
-fi
+	log "removing $dst"
+	rm -r $dst || error "can't remove $dst"
 
-# mkdirmany test (bug 589)
-test_mkdir -p $DST
-log "running $MKDIRMANY $DST/d 100"
-$MKDIRMANY $DST/d 100 || error "$MKDIRMANY failed"
-log "running $RMDIRMANY $DST/d 100"
-$RMDIRMANY $DST/d 100 || error "$RMDIRMANY cleanup failed"
+	if [ $COUNT -gt 10 -o $COUNT -eq 0 ]; then
+		log "renaming $hfile.ren to $hfile"
+		mv $hfile.ren $hfile ||
+			error "can't rename $hfile.ren to $hfile"
+		log "truncating $hfile"
+		> $hfile || error "can't truncate $hfile"
+		log "removing $hfile"
+		rm $hfile || error "can't remove $hfile again"
+		log "verifying $hfile.2 is $truncsize bytes"
+		checkstat -s $truncsize $hfile.2 ||
+			error "$hfile.2 isn't $truncsize bytes"
+		rm $hfile.2 || error "can't remove $hfile.2"
+	fi
 
-log "done"
+	# mkdirmany test (bug 589)
+	test_mkdir -p $dst
+	log "running $MKDIRMANY $dst/d 100"
+	$MKDIRMANY $dst/d 100 || error "$MKDIRMANY failed"
+	log "running $RMDIRMANY $dst/d 100"
+	$RMDIRMANY $dst/d 100 || error "$RMDIRMANY cleanup failed"
 
-wait_delete_completed
-sleep 5 # let MDS refresh aggregated statfs
-NOWUSED=$(($(df -P $DIR | awk '{ print $3 }' | tail -n 1)))
-if [ $(expr $NOWUSED - $USED) -gt $(fs_log_size) ]; then
-	error "Space not all freed: now ${NOWUSED}kB, was ${USED}kB."
-else
-	log "Space was freed: now ${NOWUSED}kB, was ${USED}kB."
-fi
+	log "done"
+
+	wait_delete_completed
+	sleep 5 # let MDS refresh aggregated statfs
+	local nowdfused=$(($(df -P $DIR | awk '{ print $3 }' | tail -n 1)))
+	if [ $(expr $nowdfused - $dfused) -gt $(fs_log_size) ]; then
+		error "Space not all freed: now ${nowdfused}kB, was ${dfused}kB"
+	else
+		log "Space was freed: now ${nowdfused}kB, was ${dfused}kB."
+	fi
 }
 run_test 1 "All Runtests"
 
 complete $SECONDS
-rm -f $FILES
 check_and_cleanup_lustre
 exit_status
