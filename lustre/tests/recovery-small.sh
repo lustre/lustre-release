@@ -15,12 +15,6 @@ if $SHARED_KEY; then
 	# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 fi
 
-selinux_status=$(getenforce)
-if [ "$selinux_status" != "Disabled" ]; then
-	# bug number for skipped test:   LU-12928
-	$SHARED_KEY && ALWAYS_EXCEPT+=" 136"
-fi
-
 build_test_filter
 
 require_dsh_mds || exit 0
