@@ -2834,6 +2834,8 @@ bool lod_last_non_stale_mirror(__u16 mirror_id, struct lod_object *lo)
  * the '$field' can only be 'flags' now. The xattr value is binary
  * lov_comp_md_v1 which contains the component ID(s) and the value of
  * the field to be modified.
+ * Please update allowed_lustre_lov macro if $field groks more values
+ * in the future.
  *
  * \param[in] env	execution environment
  * \param[in] dt	dt_object to be modified
@@ -2859,6 +2861,9 @@ static int lod_declare_layout_set(const struct lu_env *env,
 	bool	changed = false;
 	ENTRY;
 
+	/* Please update allowed_lustre_lov macro if op
+	 * groks more values in the future
+	 */
 	if (strcmp(op, "set.flags") != 0) {
 		CDEBUG(D_LAYOUT, "%s: operation (%s) not supported.\n",
 		       lod2obd(d)->obd_name, op);
@@ -3429,9 +3434,8 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 			strcmp(name, XATTR_LUSTRE_LOV) == 0);
 		rc = lod_declare_layout_split(env, dt, buf, th);
 	} else if (S_ISREG(mode) &&
-		   strlen(name) > strlen(XATTR_LUSTRE_LOV) + 1 &&
-		   strncmp(name, XATTR_LUSTRE_LOV,
-			   strlen(XATTR_LUSTRE_LOV)) == 0) {
+		   strlen(name) >= sizeof(XATTR_LUSTRE_LOV) + 3 &&
+		   allowed_lustre_lov(name)) {
 		/*
 		 * this is a request to modify object's striping.
 		 * add/set/del component(s).
@@ -3441,15 +3445,15 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 
 		rc = lod_declare_modify_layout(env, dt, name, buf, th);
 	} else if (strncmp(name, XATTR_NAME_LMV, strlen(XATTR_NAME_LMV)) == 0 &&
-		   strlen(name) > strlen(XATTR_NAME_LMV) + 1) {
-		const char *op = name + strlen(XATTR_NAME_LMV) + 1;
+		   strlen(name) > strlen(XATTR_NAME_LMV)) {
+		const char *op = name + strlen(XATTR_NAME_LMV);
 
 		rc = -ENOTSUPP;
-		if (strcmp(op, "add") == 0)
+		if (strcmp(op, ".add") == 0)
 			rc = lod_dir_declare_layout_add(env, dt, buf, th);
-		else if (strcmp(op, "del") == 0)
+		else if (strcmp(op, ".del") == 0)
 			rc = lod_dir_declare_layout_delete(env, dt, buf, th);
-		else if (strcmp(op, "set") == 0)
+		else if (strcmp(op, ".set") == 0)
 			rc = lod_sub_declare_xattr_set(env, next, buf,
 						       XATTR_NAME_LMV, fl, th);
 
@@ -4218,23 +4222,23 @@ static int lod_xattr_set(const struct lu_env *env,
 		RETURN(rc);
 	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
 		   strncmp(name, XATTR_NAME_LMV, strlen(XATTR_NAME_LMV)) == 0 &&
-		   strlen(name) > strlen(XATTR_NAME_LMV) + 1) {
-		const char *op = name + strlen(XATTR_NAME_LMV) + 1;
+		   strlen(name) > strlen(XATTR_NAME_LMV)) {
+		const char *op = name + strlen(XATTR_NAME_LMV);
 
 		rc = -ENOTSUPP;
 		/*
 		 * XATTR_NAME_LMV".add" is never called, but only declared,
 		 * because lod_xattr_set_lmv() will do the addition.
 		 */
-		if (strcmp(op, "del") == 0)
+		if (strcmp(op, ".del") == 0)
 			rc = lod_dir_layout_delete(env, dt, buf, th);
-		else if (strcmp(op, "set") == 0)
+		else if (strcmp(op, ".set") == 0)
 			rc = lod_sub_xattr_set(env, next, buf, XATTR_NAME_LMV,
 					       fl, th);
 
 		RETURN(rc);
 	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
-	    strcmp(name, XATTR_NAME_LOV) == 0) {
+		   strcmp(name, XATTR_NAME_LOV) == 0) {
 		struct lod_default_striping *lds = lod_lds_buf_get(env);
 		struct lov_user_md_v1 *v1 = buf->lb_buf;
 		char pool[LOV_MAXPOOLNAME + 1];
@@ -4296,9 +4300,9 @@ static int lod_xattr_set(const struct lu_env *env,
 						      th);
 		RETURN(rc);
 	} else if (S_ISREG(dt->do_lu.lo_header->loh_attr) &&
-		   (!strcmp(name, XATTR_NAME_LOV) ||
-		    !strncmp(name, XATTR_LUSTRE_LOV,
-			     strlen(XATTR_LUSTRE_LOV)))) {
+		   (strcmp(name, XATTR_NAME_LOV) == 0 ||
+		    strcmp(name, XATTR_LUSTRE_LOV) == 0 ||
+		    allowed_lustre_lov(name))) {
 		/* in case of lov EA swap, just set it
 		 * if not, it is a replay so check striping match what we
 		 * already have during req replay, declare_xattr_set()

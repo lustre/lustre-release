@@ -534,16 +534,11 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		/* ACLs were mapped out, return an error so the user knows */
 		if (rc != xattr_len)
 			GOTO(out, rc = -EPERM);
-	} else if ((strlen(xattr_name) > strlen(XATTR_LUSTRE_LOV) + 1) &&
+	} else if ((strlen(xattr_name) > sizeof(XATTR_LUSTRE_LOV)) &&
 		   strncmp(xattr_name, XATTR_LUSTRE_LOV,
 			   strlen(XATTR_LUSTRE_LOV)) == 0) {
 
-		if (strncmp(xattr_name, XATTR_LUSTRE_LOV".add",
-			    strlen(XATTR_LUSTRE_LOV".add")) &&
-		    strncmp(xattr_name, XATTR_LUSTRE_LOV".set",
-			    strlen(XATTR_LUSTRE_LOV".set")) &&
-		    strncmp(xattr_name, XATTR_LUSTRE_LOV".del",
-			    strlen(XATTR_LUSTRE_LOV".del"))) {
+		if (!allowed_lustre_lov(xattr_name)) {
 			CERROR("%s: invalid xattr name: %s\n",
 			       mdt_obd_name(info->mti_mdt), xattr_name);
 			GOTO(out, rc = -EINVAL);
