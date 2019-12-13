@@ -63,10 +63,7 @@ struct portals_handle {
 	__u64				h_cookie;
 	const char			*h_owner;
 	refcount_t			h_ref;
-
-	/* newly added fields to handle the RCU issue. -jxiong */
 	struct rcu_head			h_rcu;
-	spinlock_t			h_lock;
 };
 
 /* handles.c */

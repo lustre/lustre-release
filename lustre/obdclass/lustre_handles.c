@@ -88,7 +88,6 @@ void class_handle_hash(struct portals_handle *h, const char *owner)
 	spin_unlock(&handle_base_lock);
 
 	h->h_owner = owner;
-	spin_lock_init(&h->h_lock);
 
 	bucket = &handle_hash[h->h_cookie & HANDLE_HASH_MASK];
 	spin_lock(&bucket->lock);
@@ -112,13 +111,7 @@ static void class_handle_unhash_nolock(struct portals_handle *h)
 	CDEBUG(D_INFO, "removing object %p with handle %#llx from hash\n",
 	       h, h->h_cookie);
 
-	spin_lock(&h->h_lock);
-	if (hlist_unhashed(&h->h_link)) {
-		spin_unlock(&h->h_lock);
-		return;
-	}
 	hlist_del_init_rcu(&h->h_link);
-	spin_unlock(&h->h_lock);
 }
 
 void class_handle_unhash(struct portals_handle *h)
