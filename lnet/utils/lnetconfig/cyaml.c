@@ -49,6 +49,8 @@
 
 #define INDENT		4
 #define EXTRA_IND	2
+#define LEAD_ROOM	128
+#define PRINT_BUF_LEN	2048
 
 /*
  * cYAML_print_info
@@ -72,7 +74,7 @@ struct cYAML_ll {
 	struct cYAML_print_info *print_info;
 };
 
-static void print_value(FILE *f, struct list_head *stack);
+static void print_value(char **out, struct list_head *stack);
 
 enum cYAML_handler_error {
 	CYAML_ERROR_NONE = 0,
@@ -794,102 +796,194 @@ void cYAML_free_tree(struct cYAML *node)
 	cYAML_tree_recursive_walk(node, free_node, false, NULL, NULL);
 }
 
-static inline void print_simple(FILE *f, struct cYAML *node,
+static char *ensure(char *in, int len)
+{
+	int curlen;
+	char *new = in;
+
+	if (!in)
+		return (char*)calloc(len, 1);
+
+	curlen = strlen(in) + 1;
+
+	if (curlen <= curlen + len) {
+		new = calloc(curlen + len, 1);
+		if (!new) {
+			free(in);
+			return NULL;
+		}
+		strcpy(new, in);
+		free(in);
+	}
+
+	return new;
+}
+
+static inline void print_simple(char **out, struct cYAML *node,
 				struct cYAML_print_info *cpi)
 {
 	int level = cpi->level;
 	int ind = cpi->extra_ind;
+	char *tmp = NULL;
+	int len = (INDENT * level + ind) * 2 +
+	  ((node->cy_string) ? strlen(node->cy_string) : 0) + LEAD_ROOM;
 
-	if (cpi->array_first_elem)
-		fprintf(f, "%*s- ", INDENT * level, "");
+	*out = ensure(*out, len);
+	if (!*out)
+		return;
 
-	fprintf(f, "%*s""%s: %" PRId64 "\n", (cpi->array_first_elem) ? 0 :
+	tmp = ensure(tmp, len);
+	if (!tmp)
+		return;
+
+	if (cpi->array_first_elem) {
+		sprintf(tmp, "%*s- ", INDENT * level, "");
+		strcat(*out, tmp);
+	}
+
+	sprintf(tmp, "%*s""%s: %" PRId64 "\n", (cpi->array_first_elem) ? 0 :
 		INDENT * level + ind, "", node->cy_string,
 		node->cy_valueint);
+	strcat(*out, tmp);
+	free(tmp);
 }
 
-static void print_string(FILE *f, struct cYAML *node,
+static void print_string(char **out, struct cYAML *node,
 			 struct cYAML_print_info *cpi)
 {
 	char *new_line;
 	int level = cpi->level;
 	int ind = cpi->extra_ind;
+	char *tmp = NULL;
+	int len = INDENT * level + ind +
+	  ((node->cy_valuestring) ? strlen(node->cy_valuestring) : 0) +
+	  ((node->cy_string) ? strlen(node->cy_string) : 0) + LEAD_ROOM;
 
-	if (cpi->array_first_elem)
-		fprintf(f, "%*s- ", INDENT * level, "");
+	*out = ensure(*out, len);
+	if (!*out)
+		return;
+
+	tmp = ensure(tmp, len);
+	if (!tmp)
+		return;
+
+	if (cpi->array_first_elem) {
+		sprintf(tmp, "%*s- ", INDENT * level, "");
+		strcat(*out, tmp);
+	}
 
 	new_line = strchr(node->cy_valuestring, '\n');
-	if (new_line == NULL)
-		fprintf(f, "%*s""%s: %s\n", (cpi->array_first_elem) ?
+	if (new_line == NULL) {
+		sprintf(tmp, "%*s""%s: %s\n", (cpi->array_first_elem) ?
 			0 : INDENT * level + ind, "",
 			node->cy_string, node->cy_valuestring);
-	else {
+		strcat(*out, tmp);
+	} else {
 		int indent = 0;
-		fprintf(f, "%*s""%s: ", (cpi->array_first_elem) ?
+		sprintf(tmp, "%*s""%s: ", (cpi->array_first_elem) ?
 			0 : INDENT * level + ind, "",
 			node->cy_string);
+		strcat(*out, tmp);
 		char *l = node->cy_valuestring;
 		while (new_line) {
 			*new_line = '\0';
-			fprintf(f, "%*s""%s\n", indent, "", l);
+			sprintf(tmp, "%*s""%s\n", indent, "", l);
+			strcat(*out, tmp);
 			indent = INDENT * level + ind +
 				  strlen(node->cy_string) + 2;
 			*new_line = '\n';
 			l = new_line+1;
 			new_line = strchr(l, '\n');
 		}
-		fprintf(f, "%*s""%s\n", indent, "", l);
+		sprintf(tmp, "%*s""%s\n", indent, "", l);
+		strcat(*out, tmp);
 	}
+
+	free(tmp);
 }
 
-static void print_number(FILE *f, struct cYAML *node,
+static void print_number(char **out, struct cYAML *node,
 			 struct cYAML_print_info *cpi)
 {
 	double d = node->cy_valuedouble;
 	int level = cpi->level;
 	int ind = cpi->extra_ind;
+	char *tmp = NULL;
+	int len = INDENT * level + ind + LEAD_ROOM;
 
-	if (cpi->array_first_elem)
-		fprintf(f, "%*s- ", INDENT * level, "");
+	*out = ensure(*out, len);
+	if (!*out)
+		return;
+
+	tmp = ensure(tmp, len);
+	if (!tmp)
+		return;
+
+	if (cpi->array_first_elem) {
+		sprintf(tmp, "%*s- ", INDENT * level, "");
+		strcat(*out, tmp);
+	}
 
 	if ((fabs(((double)node->cy_valueint) - d) <= DBL_EPSILON) &&
-	    (d <= INT_MAX) && (d >= INT_MIN))
-		fprintf(f, "%*s""%s: %" PRId64 "\n", (cpi->array_first_elem) ? 0 :
+	    (d <= INT_MAX) && (d >= INT_MIN)) {
+		sprintf(tmp, "%*s""%s: %" PRId64 "\n", (cpi->array_first_elem) ? 0 :
 			INDENT * level + ind, "",
 			node->cy_string, node->cy_valueint);
-	else {
+		strcat(*out, tmp);
+	} else {
 		if ((fabs(floor(d) - d) <= DBL_EPSILON) &&
-		    (fabs(d) < 1.0e60))
-			fprintf(f, "%*s""%s: %.0f\n",
+		    (fabs(d) < 1.0e60)) {
+			sprintf(tmp, "%*s""%s: %.0f\n",
 				(cpi->array_first_elem) ? 0 :
 				INDENT * level + ind, "",
 				node->cy_string, d);
-		else if ((fabs(d) < 1.0e-6) || (fabs(d) > 1.0e9))
-			fprintf(f, "%*s""%s: %e\n",
+			strcat(*out, tmp);
+		} else if ((fabs(d) < 1.0e-6) || (fabs(d) > 1.0e9)) {
+			sprintf(tmp, "%*s""%s: %e\n",
 				(cpi->array_first_elem) ? 0 :
 				INDENT * level + ind, "",
 				node->cy_string, d);
-		else
-			fprintf(f, "%*s""%s: %f\n",
+			strcat(*out, tmp);
+		} else {
+			sprintf(tmp, "%*s""%s: %f\n",
 				(cpi->array_first_elem) ? 0 :
 				INDENT * level + ind, "",
 				node->cy_string, d);
+			strcat(*out, tmp);
+		}
 	}
+
+	free(tmp);
 }
 
-static void print_object(FILE *f, struct cYAML *node,
+static void print_object(char **out, struct cYAML *node,
 			 struct list_head *stack,
 			 struct cYAML_print_info *cpi)
 {
 	struct cYAML_print_info print_info;
 	struct cYAML *child = node->cy_child;
+	char *tmp = NULL;
+	int len = ((cpi->array_first_elem) ? INDENT * cpi->level :
+	  INDENT * cpi->level + cpi->extra_ind) +
+	  ((node->cy_string) ? strlen(node->cy_string) : 0) +
+	  LEAD_ROOM;
 
-	if (node->cy_string != NULL)
-		fprintf(f, "%*s""%s%s:\n", (cpi->array_first_elem) ?
+	*out = ensure(*out, len);
+	if (!*out)
+		return;
+
+	tmp = ensure(tmp, len);
+	if (!tmp)
+		return;
+
+	if (node->cy_string != NULL) {
+		sprintf(tmp, "%*s""%s%s:\n", (cpi->array_first_elem) ?
 			INDENT * cpi->level :
 			INDENT * cpi->level + cpi->extra_ind,
 			"", (cpi->array_first_elem) ? "- " : "",
 			node->cy_string);
+		strcat(*out, tmp);
+	}
 
 	print_info.level = (node->cy_string != NULL) ? cpi->level + 1 :
 	  cpi->level;
@@ -899,24 +993,40 @@ static void print_object(FILE *f, struct cYAML *node,
 	  cpi->extra_ind;
 
 	while (child) {
-		if (cYAML_ll_push(child, &print_info, stack) != 0)
+		if (cYAML_ll_push(child, &print_info, stack) != 0) {
+			free(tmp);
 			return;
-		print_value(f, stack);
+		}
+		print_value(out, stack);
 		print_info.array_first_elem = 0;
 		child = child->cy_next;
 	}
+
+	free(tmp);
 }
 
-static void print_array(FILE *f, struct cYAML *node,
+static void print_array(char **out, struct cYAML *node,
 			struct list_head *stack,
 			struct cYAML_print_info *cpi)
 {
 	struct cYAML_print_info print_info;
 	struct cYAML *child = node->cy_child;
+	char *tmp = NULL;
+	int len = ((node->cy_string) ? strlen(node->cy_string) : 0) +
+	  INDENT * cpi->level + cpi->extra_ind + LEAD_ROOM;
+
+	*out = ensure(*out, len);
+	if (!*out)
+		return;
+
+	tmp = ensure(tmp, len);
+	if (!tmp)
+		return;
 
 	if (node->cy_string != NULL) {
-		fprintf(f, "%*s""%s:\n", INDENT * cpi->level + cpi->extra_ind,
+		sprintf(tmp, "%*s""%s:\n", INDENT * cpi->level + cpi->extra_ind,
 			"", node->cy_string);
+		strcat(*out, tmp);
 	}
 
 	print_info.level = (node->cy_string != NULL) ? cpi->level + 1 :
@@ -925,14 +1035,18 @@ static void print_array(FILE *f, struct cYAML *node,
 	print_info.extra_ind = EXTRA_IND;
 
 	while (child) {
-		if (cYAML_ll_push(child, &print_info, stack) != 0)
+		if (cYAML_ll_push(child, &print_info, stack) != 0) {
+			free(tmp);
 			return;
-		print_value(f, stack);
+		}
+		print_value(out, stack);
 		child = child->cy_next;
 	}
+
+	free(tmp);
 }
 
-static void print_value(FILE *f, struct list_head *stack)
+static void print_value(char **out, struct list_head *stack)
 {
 	struct cYAML_print_info *cpi = NULL;
 	struct cYAML *node = cYAML_ll_pop(stack, &cpi);
@@ -944,19 +1058,19 @@ static void print_value(FILE *f, struct list_head *stack)
 	case CYAML_TYPE_FALSE:
 	case CYAML_TYPE_TRUE:
 	case CYAML_TYPE_NULL:
-		print_simple(f, node, cpi);
+		print_simple(out, node, cpi);
 		break;
 	case CYAML_TYPE_STRING:
-		print_string(f, node, cpi);
+		print_string(out, node, cpi);
 		break;
 	case CYAML_TYPE_NUMBER:
-		print_number(f, node, cpi);
+		print_number(out, node, cpi);
 		break;
 	case CYAML_TYPE_ARRAY:
-		print_array(f, node, stack, cpi);
+		print_array(out, node, stack, cpi);
 		break;
 	case CYAML_TYPE_OBJECT:
-		print_object(f, node, stack, cpi);
+		print_object(out, node, stack, cpi);
 		break;
 	default:
 	break;
@@ -966,10 +1080,37 @@ static void print_value(FILE *f, struct list_head *stack)
 		free(cpi);
 }
 
+void cYAML_dump(struct cYAML *node, char **buf)
+{
+	struct cYAML_print_info print_info;
+	struct list_head list;
+
+	*buf = ensure(NULL, PRINT_BUF_LEN);
+
+	if (!*buf)
+		return;
+
+	INIT_LIST_HEAD(&list);
+
+	if (node == NULL) {
+		*buf = NULL;
+		return;
+	}
+
+	memset(&print_info, 0, sizeof(struct cYAML_print_info));
+
+	if (cYAML_ll_push(node, &print_info, &list) == 0)
+		print_value(buf, &list);
+}
+
 void cYAML_print_tree(struct cYAML *node)
 {
 	struct cYAML_print_info print_info;
 	struct list_head list;
+	char *buf = ensure(NULL, PRINT_BUF_LEN);
+
+	if (!buf)
+		return;
 
 	INIT_LIST_HEAD(&list);
 
@@ -979,13 +1120,23 @@ void cYAML_print_tree(struct cYAML *node)
 	memset(&print_info, 0, sizeof(struct cYAML_print_info));
 
 	if (cYAML_ll_push(node, &print_info, &list) == 0)
-		print_value(stdout, &list);
+		print_value(&buf, &list);
+
+	/* buf could've been freed if we ran out of memory */
+	if (buf) {
+		printf("%s", buf);
+		free(buf);
+	}
 }
 
 void cYAML_print_tree2file(FILE *f, struct cYAML *node)
 {
 	struct cYAML_print_info print_info;
 	struct list_head list;
+	char *buf = ensure(NULL, PRINT_BUF_LEN);
+
+	if (!buf)
+		return;
 
 	INIT_LIST_HEAD(&list);
 
@@ -995,7 +1146,13 @@ void cYAML_print_tree2file(FILE *f, struct cYAML *node)
 	memset(&print_info, 0, sizeof(struct cYAML_print_info));
 
 	if (cYAML_ll_push(node, &print_info, &list) == 0)
-		print_value(f, &list);
+		print_value(&buf, &list);
+
+	/* buf could've been freed if we ran out of memory */
+	if (buf) {
+		fprintf(f, "%s", buf);
+		free(buf);
+	}
 }
 
 static struct cYAML *insert_item(struct cYAML *parent, char *key,

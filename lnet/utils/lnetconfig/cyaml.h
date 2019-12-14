@@ -107,6 +107,12 @@ void cYAML_print_tree(struct cYAML *node);
 void cYAML_print_tree2file(FILE *f, struct cYAML *node);
 
 /*
+ * cYAML_dump
+ *   dump YAML to a buffer and return the pointer of the buffer
+ */
+void cYAML_dump(struct cYAML *node, char **buf);
+
+/*
  * cYAML_free_tree
  *   Free the cYAML tree returned as part of the cYAML_build_tree
  *
