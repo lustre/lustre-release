@@ -1109,11 +1109,19 @@ init_gss() {
 		OST_MOUNT_OPTS=$(add_sk_mntflag $OST_MOUNT_OPTS)
 		MOUNT_OPTS=$(add_sk_mntflag $MOUNT_OPTS)
 		SEC=$SK_FLAVOR
+		if [ -z "$LGSS_KEYRING_DEBUG" ]; then
+			LGSS_KEYRING_DEBUG=4
+		fi
 	fi
 
-	if [ -n "$LGSS_KEYRING_DEBUG" ]; then
+	if [ -n "$LGSS_KEYRING_DEBUG" ] && \
+	       ( local_mode || $from_build_tree ); then
 		lctl set_param -n \
-			sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG
+		     sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG
+	elif [ -n "$LGSS_KEYRING_DEBUG" ]; then
+		do_nodes $(comma_list $(all_nodes)) "modprobe ptlrpc_gss && \
+		lctl set_param -n \
+		   sptlrpc.gss.lgss_keyring.debug_level=$LGSS_KEYRING_DEBUG"
 	fi
 }
 
@@ -7730,39 +7738,62 @@ destroy_test_pools () {
 }
 
 gather_logs () {
-    local list=$1
+	local list=$1
 
-    local ts=$(date +%s)
-    local docp=true
+	local ts=$(date +%s)
+	local docp=true
 
-    if [[ ! -f "$YAML_LOG" ]]; then
-        # init_logging is not performed before gather_logs,
-        # so the $LOGDIR needs to be checked here
-        check_shared_dir $LOGDIR && touch $LOGDIR/shared
-    fi
+	if [[ ! -f "$YAML_LOG" ]]; then
+		# init_logging is not performed before gather_logs,
+		# so the $LOGDIR needs to be checked here
+		check_shared_dir $LOGDIR && touch $LOGDIR/shared
+	fi
 
-    [ -f $LOGDIR/shared ] && docp=false
+	[ -f $LOGDIR/shared ] && docp=false
 
-    # dump lustre logs, dmesg
+	# dump lustre logs, dmesg, and journal if GSS_SK=true
 
-    prefix="$TESTLOG_PREFIX.$TESTNAME"
-    suffix="$ts.log"
-    echo "Dumping lctl log to ${prefix}.*.${suffix}"
+	prefix="$TESTLOG_PREFIX.$TESTNAME"
+	suffix="$ts.log"
+	echo "Dumping lctl log to ${prefix}.*.${suffix}"
 
-    if [ -n "$CLIENTONLY" -o "$PDSH" == "no_dsh" ]; then
-        echo "Dumping logs only on local client."
-        $LCTL dk > ${prefix}.debug_log.$(hostname -s).${suffix}
-        dmesg > ${prefix}.dmesg.$(hostname -s).${suffix}
-        return
-    fi
+	if [ -n "$CLIENTONLY" -o "$PDSH" == "no_dsh" ]; then
+		echo "Dumping logs only on local client."
+		$LCTL dk > ${prefix}.debug_log.$(hostname -s).${suffix}
+		dmesg > ${prefix}.dmesg.$(hostname -s).${suffix}
+		[ "$SHARED_KEY" = true ] && find $SK_PATH -name '*.key' -exec \
+			lgss_sk -r {} \; &> \
+			${prefix}.ssk_keys.$(hostname -s).${suffix}
+		[ "$SHARED_KEY" = true ] && lctl get_param 'nodemap.*.*' > \
+			${prefix}.nodemaps.$(hostname -s).${suffix}
+		[ "$GSS_SK" = true ] && keyctl show > \
+			${prefix}.keyring.$(hostname -s).${suffix}
+		[ "$GSS_SK" = true ] && journalctl -a > \
+			${prefix}.journal.$(hostname -s).${suffix}
+		return
+	fi
 
-    do_nodesv $list \
-        "$LCTL dk > ${prefix}.debug_log.\\\$(hostname -s).${suffix};
-         dmesg > ${prefix}.dmesg.\\\$(hostname -s).${suffix}"
+	do_nodesv $list \
+		"$LCTL dk > ${prefix}.debug_log.\\\$(hostname -s).${suffix};
+		dmesg > ${prefix}.dmesg.\\\$(hostname -s).${suffix}"
+	if [ "$SHARED_KEY" = true ]; then
+		do_nodesv $list "find $SK_PATH -name '*.key' -exec \
+			lgss_sk -r {} \; &> \
+			${prefix}.ssk_keys.\\\$(hostname -s).${suffix}"
+		do_facet mds1 "lctl get_param 'nodemap.*.*' > \
+			${prefix}.nodemaps.\\\$(hostname -s).${suffix}"
+	fi
+	if [ "$GSS_SK" = true ]; then
+		do_nodesv $list "keyctl show > \
+			${prefix}.keyring.\\\$(hostname -s).${suffix}"
+		do_nodesv $list "journalctl -a > \
+			${prefix}.journal.\\\$(hostname -s).${suffix}"
+	fi
 
-    if [ ! -f $LOGDIR/shared ]; then
-        do_nodes $list rsync -az "${prefix}.*.${suffix}" $HOSTNAME:$LOGDIR
-    fi
+	if [ ! -f $LOGDIR/shared ]; then
+		do_nodes $list rsync -az "${prefix}.*.${suffix}" \
+			 $HOSTNAME:$LOGDIR
+	fi
 }
 
 do_ls () {
