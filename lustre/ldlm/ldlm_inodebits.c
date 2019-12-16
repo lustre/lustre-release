@@ -68,7 +68,7 @@ int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
 				   struct list_head *queue,
 				   struct list_head *work_list,
 				   enum ldlm_process_intention intention,
-				   struct ldlm_lock *hint)
+				   __u64 mask)
 {
 	__u64 flags;
 	int rc = LDLM_ITER_CONTINUE;
@@ -87,11 +87,15 @@ int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
 
 	if (intention == LDLM_PROCESS_RECOVERY)
 		return ldlm_reprocess_queue(res, queue, work_list, intention,
-					    NULL);
+					    0);
 
 restart:
 	CDEBUG(D_DLMTRACE, "--- Reprocess resource "DLDLMRES" (%p)\n",
 	       PLDLMRES(res), res);
+	if (mask)
+		CDEBUG(D_DLMTRACE, "Hint %llx\n", mask);
+	else
+		mask = MDS_INODELOCK_FULL;
 
 	for (i = 0; i < MDS_INODELOCK_NUMBITS; i++) {
 		LIST_HEAD(rpc_list);
@@ -99,9 +103,7 @@ restart:
 		struct ldlm_lock *pending;
 		struct ldlm_ibits_node *node;
 
-		if (list_empty(head))
-			continue;
-		if (hint && !(hint->l_policy_data.l_inodebits.bits & BIT(i)))
+		if (list_empty(head) || !(mask & (1 << i)))
 			continue;
 
 		node = list_entry(head->next, struct ldlm_ibits_node,
@@ -115,8 +117,8 @@ restart:
 						 &err, &rpc_list);
 		if (ldlm_is_granted(pending)) {
 			list_splice(&rpc_list, work_list);
-			/* Try to grant more locks from current queue */
-			i--;
+			mask |= pending->l_policy_data.l_inodebits.bits;
+			i = ffs(pending->l_policy_data.l_inodebits.bits) - 2;
 		} else {
 			list_splice(&rpc_list, &bl_ast_list);
 		}
@@ -129,8 +131,10 @@ restart:
 				       LDLM_WORK_BL_AST);
 
 		lock_res(res);
-		if (rc == -ERESTART)
+		if (rc == -ERESTART) {
+			mask = 0;
 			GOTO(restart, rc);
+		}
 	}
 
 	if (!list_empty(&bl_ast_list))

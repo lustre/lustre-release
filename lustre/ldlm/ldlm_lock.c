@@ -1935,8 +1935,7 @@ out:
  */
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 			 struct list_head *work_list,
-			 enum ldlm_process_intention intention,
-			 struct ldlm_lock *hint)
+			 enum ldlm_process_intention intention, __u64 hint)
 {
 	struct list_head *tmp, *pos;
 	ldlm_processing_policy policy;
@@ -2038,7 +2037,7 @@ int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
 		class_fail_export(lock->l_export);
 
 	if (rc == -ERESTART)
-		ldlm_reprocess_all(res, NULL);
+		ldlm_reprocess_all(res, 0);
 
 	lock_res(res);
 	if (rc == -ERESTART) {
@@ -2349,7 +2348,7 @@ out:
  */
 static void __ldlm_reprocess_all(struct ldlm_resource *res,
 				 enum ldlm_process_intention intention,
-				 struct ldlm_lock *hint)
+				 __u64 hint)
 {
 	LIST_HEAD(rpc_list);
 #ifdef HAVE_SERVER_SUPPORT
@@ -2382,6 +2381,7 @@ restart:
 			       LDLM_WORK_CP_AST);
 	if (rc == -ERESTART) {
 		LASSERT(list_empty(&rpc_list));
+		hint = 0;
 		goto restart;
 	}
 #else
@@ -2396,7 +2396,7 @@ restart:
 	EXIT;
 }
 
-void ldlm_reprocess_all(struct ldlm_resource *res, struct ldlm_lock *hint)
+void ldlm_reprocess_all(struct ldlm_resource *res, __u64 hint)
 {
 	__ldlm_reprocess_all(res, LDLM_PROCESS_RESCAN, hint);
 }
@@ -2408,7 +2408,7 @@ static int ldlm_reprocess_res(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct ldlm_resource *res = cfs_hash_object(hs, hnode);
 
 	/* This is only called once after recovery done. LU-8306. */
-	__ldlm_reprocess_all(res, LDLM_PROCESS_RECOVERY, NULL);
+	__ldlm_reprocess_all(res, LDLM_PROCESS_RECOVERY, 0);
 	return 0;
 }
 
@@ -2555,7 +2555,7 @@ static void ldlm_cancel_lock_for_export(struct obd_export *exp,
 	ldlm_lvbo_update(res, lock, NULL, 1);
 	ldlm_lock_cancel(lock);
 	if (!exp->exp_obd->obd_stopping)
-		ldlm_reprocess_all(res, lock);
+		ldlm_reprocess_all(res, lock->l_policy_data.l_inodebits.bits);
 	ldlm_resource_putref(res);
 
 	ecl->ecl_loop++;
@@ -2720,7 +2720,8 @@ void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode)
 	ldlm_grant_lock(lock, NULL);
 	unlock_res_and_lock(lock);
 
-	ldlm_reprocess_all(lock->l_resource, lock);
+	ldlm_reprocess_all(lock->l_resource,
+			   lock->l_policy_data.l_inodebits.bits);
 
 	EXIT;
 #endif

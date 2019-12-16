@@ -1200,7 +1200,7 @@ int ldlm_glimpse_locks(struct ldlm_resource *res,
 	rc = ldlm_run_ast_work(ldlm_res_to_ns(res), gl_work_list,
 			       LDLM_WORK_GL_AST);
 	if (rc == -ERESTART)
-		ldlm_reprocess_all(res, NULL);
+		ldlm_reprocess_all(res, 0);
 
 	RETURN(rc);
 }
@@ -1548,12 +1548,13 @@ retry:
 				ldlm_lock_destroy_nolock(lock);
 				unlock_res_and_lock(lock);
 			}
-			ldlm_reprocess_all(lock->l_resource, lock);
+			ldlm_reprocess_all(lock->l_resource, lock->l_policy_data.l_inodebits.bits);
 		}
 
 		if (!err && !ldlm_is_cbpending(lock) &&
 		    dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
-			ldlm_reprocess_all(lock->l_resource, lock);
+			ldlm_reprocess_all(lock->l_resource,
+					   lock->l_policy_data.l_inodebits.bits);
 
 		LDLM_LOCK_RELEASE(lock);
 	}
@@ -1659,7 +1660,10 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 		ldlm_clear_blocking_data(lock);
 		unlock_res_and_lock(lock);
 
-		ldlm_reprocess_all(lock->l_resource, NULL);
+		/* All old bits should be reprocessed to send new BL AST if
+		 * it wasn't sent earlier due to LDLM_FL_AST_SENT bit set.
+		 * */
+		ldlm_reprocess_all(lock->l_resource, bits);
 	}
 
 	dlm_rep->lock_handle = lock->l_remote_handle;
@@ -1733,7 +1737,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 		 */
 		if (res != pres) {
 			if (pres != NULL) {
-				ldlm_reprocess_all(pres, NULL);
+				ldlm_reprocess_all(pres, 0);
 				LDLM_RESOURCE_DELREF(pres);
 				ldlm_resource_putref(pres);
 			}
@@ -1764,7 +1768,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 		LDLM_LOCK_PUT(lock);
 	}
 	if (pres != NULL) {
-		ldlm_reprocess_all(pres, NULL);
+		ldlm_reprocess_all(pres, 0);
 		LDLM_RESOURCE_DELREF(pres);
 		ldlm_resource_putref(pres);
 	}
@@ -2693,14 +2697,17 @@ static int ldlm_revoke_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 
 void ldlm_revoke_export_locks(struct obd_export *exp)
 {
+	int rc;
 	LIST_HEAD(rpc_list);
-
 	ENTRY;
 
 	cfs_hash_for_each_nolock(exp->exp_lock_hash,
 				 ldlm_revoke_lock_cb, &rpc_list, 0);
-	ldlm_run_ast_work(exp->exp_obd->obd_namespace, &rpc_list,
+	rc = ldlm_run_ast_work(exp->exp_obd->obd_namespace, &rpc_list,
 			  LDLM_WORK_REVOKE_AST);
+
+	if (rc == -ERESTART)
+		ldlm_reprocess_recovery_done(exp->exp_obd->obd_namespace);
 
 	EXIT;
 }

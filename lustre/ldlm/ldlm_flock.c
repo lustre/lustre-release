@@ -604,7 +604,7 @@ reprocess:
 restart:
 				ldlm_reprocess_queue(res, &res->lr_waiting,
 						     &rpc_list,
-						     LDLM_PROCESS_RESCAN, NULL);
+						     LDLM_PROCESS_RESCAN, 0);
 
 				unlock_res_and_lock(req);
 				rc = ldlm_run_ast_work(ns, &rpc_list,

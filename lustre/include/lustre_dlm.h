@@ -1361,7 +1361,7 @@ typedef int (*ldlm_reprocessing_policy)(struct ldlm_resource *res,
 					struct list_head *queue,
 					struct list_head *work_list,
 					enum ldlm_process_intention intention,
-					struct ldlm_lock *hint);
+					__u64 hint);
 
 /**
  * Return values for lock iterators.
@@ -1612,7 +1612,7 @@ enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 					   __u64 *bits);
 void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
-void ldlm_reprocess_all(struct ldlm_resource *res, struct ldlm_lock *hint);
+void ldlm_reprocess_all(struct ldlm_resource *res, __u64 hint);
 void ldlm_reprocess_recovery_done(struct ldlm_namespace *ns);
 void ldlm_lock_dump_handle(int level, const struct lustre_handle *lockh);
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);

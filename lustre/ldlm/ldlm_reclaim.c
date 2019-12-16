@@ -181,6 +181,7 @@ static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 {
 	struct ldlm_reclaim_cb_data	data;
 	int				idx, type, start;
+	int				rc;
 	ENTRY;
 
 	LASSERT(*count != 0);
@@ -216,7 +217,10 @@ static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 	LASSERTF(*count >= data.rcd_added, "count:%d, added:%d\n", *count,
 		 data.rcd_added);
 
-	ldlm_run_ast_work(ns, &data.rcd_rpc_list, LDLM_WORK_REVOKE_AST);
+	rc  = ldlm_run_ast_work(ns, &data.rcd_rpc_list, LDLM_WORK_REVOKE_AST);
+	if (rc == -ERESTART)
+		ldlm_reprocess_recovery_done(ns);
+
 	*count -= data.rcd_added;
 	EXIT;
 }
