@@ -990,7 +990,7 @@ static void osp_sync_process_record(const struct lu_env *env,
 			       rec->lrh_id, rc);
 	}
 
-	CDEBUG(D_HA, "found record %x, %d, idx %u, id %u\n",
+	CDEBUG(D_OTHER, "found record %x, %d, idx %u, id %u\n",
 	       rec->lrh_type, rec->lrh_len, rec->lrh_index, rec->lrh_id);
 
 	RETURN_EXIT;
@@ -1056,7 +1056,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 	list_for_each(le, &list)
 		count++;
 	if (count > 2)
-		OBD_ALLOC_WAIT(arr, sizeof(int) * count);
+		OBD_ALLOC_LARGE(arr, sizeof(int) * count);
 	else
 		arr = NULL;
 	i = 0;
@@ -1109,15 +1109,19 @@ static void osp_sync_process_committed(const struct lu_env *env,
 			       PFID(&lgid.lgl_oi.oi_fid), i);
 	}
 	if (arr)
-		OBD_FREE(arr, sizeof(int) * count);
+		OBD_FREE_LARGE(arr, sizeof(int) * count);
 
 	llog_ctxt_put(ctxt);
 
 	LASSERT(atomic_read(&d->opd_sync_rpcs_in_progress) >= done);
 	atomic_sub(done, &d->opd_sync_rpcs_in_progress);
-	CDEBUG(D_OTHER, "%s: %d in flight, %d in progress, done %d\n",
-	       d->opd_obd->obd_name, atomic_read(&d->opd_sync_rpcs_in_flight),
-	       atomic_read(&d->opd_sync_rpcs_in_progress), done);
+	CDEBUG((done > 2 ? D_HA : D_OTHER), "%s: %u changes, %u in progress,"
+				     " %u in flight, %u done\n",
+				     d->opd_obd->obd_name,
+				     atomic_read(&d->opd_sync_changes),
+				     atomic_read(&d->opd_sync_rpcs_in_progress),
+				     atomic_read(&d->opd_sync_rpcs_in_flight),
+				     done);
 
 	osp_sync_check_for_work(d);
 
@@ -1166,11 +1170,6 @@ static int osp_sync_process_queues(const struct lu_env *env,
 		if (osp_sync_can_process_new(d, rec)) {
 			if (llh == NULL) {
 				/* ask llog for another record */
-				CDEBUG(D_HA, "%u changes, %u in progress,"
-				     " %u in flight\n",
-				     atomic_read(&d->opd_sync_changes),
-				     atomic_read(&d->opd_sync_rpcs_in_progress),
-				     atomic_read(&d->opd_sync_rpcs_in_flight));
 				return 0;
 			}
 			osp_sync_process_record(env, d, llh, rec);

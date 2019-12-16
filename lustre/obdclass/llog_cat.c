@@ -1144,7 +1144,7 @@ static int llog_cat_set_first_idx(struct llog_handle *cathandle, int idx)
 			}
 		}
 
-		CDEBUG(D_RPCTRACE, "catlog "DFID" first idx %u, last_idx %u\n",
+		CDEBUG(D_HA, "catlog "DFID" first idx %u, last_idx %u\n",
 		       PFID(&cathandle->lgh_id.lgl_oi.oi_fid),
 		       llh->llh_cat_idx, cathandle->lgh_last_idx);
 	}
@@ -1157,11 +1157,13 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 		     struct llog_handle *loghandle, int index)
 {
 	int rc;
+	struct lu_fid fid = {.f_seq = 0, .f_oid = 0, .f_ver = 0};
 
 	LASSERT(index);
 	if (loghandle != NULL) {
 		/* remove destroyed llog from catalog list and
 		 * chd_current_log variable */
+		fid = loghandle->lgh_id.lgl_oi.oi_fid;
 		down_write(&cathandle->lgh_lock);
 		if (cathandle->u.chd.chd_current_log == loghandle)
 			cathandle->u.chd.chd_current_log = NULL;
@@ -1180,7 +1182,9 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 	llog_cat_set_first_idx(cathandle, index);
 	rc = llog_cancel_rec(env, cathandle, index);
 	if (rc == 0)
-		CDEBUG(D_HA, "cancel plain log at index %u of catalog "DFID"\n",
-		       index, PFID(&cathandle->lgh_id.lgl_oi.oi_fid));
+		CDEBUG(D_HA,
+		       "cancel plain log "DFID" at index %u of catalog "DFID"\n",
+		       PFID(&fid), index,
+		       PFID(&cathandle->lgh_id.lgl_oi.oi_fid));
 	return rc;
 }
