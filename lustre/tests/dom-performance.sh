@@ -25,9 +25,16 @@ FAIL_ON_ERROR=false
 
 SAVED_DEBUG=$($LCTL get_param -n debug 2> /dev/null)
 
+
+. $LUSTRE/tests/functions.sh
+build_test_filter
 check_and_setup_lustre
 
-build_test_filter
+# if MACHINEFILE set and exists -- use it
+MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh)-$(hostname).machines}
+clients=${CLIENTS:-$HOSTNAME}
+generate_machine_file $clients $MACHINEFILE ||
+	error "Failed to generate machine file"
 
 DP_DIO=${DP_DIO:-"no"}
 
@@ -143,10 +150,12 @@ run_MDtest() {
 	local th_num=$((DP_FNUM * 2 / DP_NUM))
 	local bsizes="8192"
 
+	chmod 0777 $TDIR
+
 	[ "$SLOW" = "yes" ] && bsizes="4096 32768"
 
 	for bsize in $bsizes ; do
-		dp_run_cmd "mpirun -np $DP_NUM $mdtest -i 3 -I $th_num -F \
+		dp_run_cmd "mpi_run -np $DP_NUM $mdtest -i 3 -I $th_num -F \
 			-z 1 -b 1 -L -u -w $bsize -R -d $TDIR"
 		if [ ${PIPESTATUS[0]} != 0 ]; then
 			error "MDtest failed, aborting"
@@ -220,23 +229,28 @@ run_IOR() {
 	fi
 
 	local TDIR=${1:-$MOUNT}
+
+	chmod 0777 $TDIR
+
 	local bsizes="8"
 	[ "$SLOW" = "yes" ] && bsizes="4 32"
 
 	for bsize in $bsizes ; do
 		segments=$((128 / bsize))
 
-		dp_run_cmd "mpirun -np $DP_NUM $IOR \
+		dp_run_cmd "mpi_run -np $DP_NUM $IOR \
 			-a POSIX -b ${bsize}K -t ${bsize}K -o $TDIR/ -k \
-			-s $segments -w -r -i $iter -F -E -z -m -Z $direct"
+			-s $segments -w -r -i $iter -F -E -z -m -Z $direct" |
+			awk '($1 !~ /^(write|read|access)$/) || NF>12 {print}'
 		if [ ${PIPESTATUS[0]} != 0 ]; then
 			error "IOR write test for ${bsize}K failed, aborting"
 		fi
 
 		# check READ performance only (no cache)
-		dp_run_cmd "mpirun -np $DP_NUM $IOR \
+		dp_run_cmd "mpi_run -np $DP_NUM $IOR \
 			-a POSIX -b ${bsize}K -t ${bsize}K -o $TDIR/ -X 42\
-			-s $segments -r -i $iter -F -E -z -m -Z $direct"
+			-s $segments -r -i $iter -F -E -z -m -Z $direct" |
+			awk '($1 !~ /^(read|access|remove)$/) || NF>12 {print}'
 		if [ ${PIPESTATUS[0]} != 0 ]; then
 			error "IOR read test for ${bsize}K failed, aborting"
 		fi
