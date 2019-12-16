@@ -576,13 +576,17 @@ repeat:
 			 * could be less than index. So we detect last index
 			 * for processing as index == lh_last_idx+1. But when
 			 * catalog is wrapped and full lgh_last_idx=llh_cat_idx,
-			 * the first processing index is llh_cat_idx+1.
+			 * the first processing index is llh_cat_idx+1.The
+			 * exception is !(lgh_last_idx == llh_cat_idx &&
+			 * index == llh_cat_idx + 1), and after simplification
+			 * it turns to
+			 * lh_last_idx != LLOG_HDR_TAIL(llh)->lrt_index
+			 * This exception is working for catalog only.
 			 */
 
 			if ((index == lh_last_idx && synced_idx != index) ||
 			    (index == (lh_last_idx + 1) &&
-			     !(index == (llh->llh_cat_idx + 1) &&
-			       (llh->llh_flags & LLOG_F_IS_CAT))) ||
+			     lh_last_idx != LLOG_HDR_TAIL(llh)->lrt_index) ||
 			    (rec->lrh_index == 0 && !repeated)) {
 
 				/* save offset inside buffer for the re-read */
@@ -643,7 +647,9 @@ repeat:
 				__u64	tmp_off;
 				int	tmp_idx;
 
-				CDEBUG(D_OTHER, "index: %d, lh_last_idx: %d "
+				CDEBUG((llh->llh_flags & LLOG_F_IS_CAT ?
+					D_HA : D_OTHER),
+				       "index: %d, lh_last_idx: %d "
 				       "synced_idx: %d lgh_last_idx: %d\n",
 				       index, lh_last_idx, synced_idx,
 				       loghandle->lgh_last_idx);
@@ -693,6 +699,11 @@ repeat:
 	}
 
 out:
+	CDEBUG(D_HA, "stop processing %s "DOSTID":%x index %d count %d\n",
+	       ((llh->llh_flags & LLOG_F_IS_CAT) ? "catalog" : "plain"),
+	       POSTID(&loghandle->lgh_id.lgl_oi), loghandle->lgh_id.lgl_ogen,
+	       index, llh->llh_count);
+
 	if (cd != NULL)
 		cd->lpcd_last_idx = last_called_index;
 
