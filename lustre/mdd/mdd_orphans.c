@@ -323,6 +323,10 @@ static int mdd_orphan_destroy(const struct lu_env *env, struct mdd_object *obj,
 	if (likely(obj->mod_count == 0)) {
 		dt_write_lock(env, mdd->mdd_orphans, DT_TGT_ORPHAN);
 		rc = dt_delete(env, mdd->mdd_orphans, key, th);
+		if (rc == -ENOENT) {
+			key = mdd_orphan_key_fill_20(env, mdo2fid(obj));
+			rc = dt_delete(env, mdd->mdd_orphans, key, th);
+		}
 		if (rc) {
 			CERROR("%s: could not delete orphan "DFID": rc = %d\n",
 			       mdd2obd_dev(mdd)->obd_name, PFID(mdo2fid(obj)),
