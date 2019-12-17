@@ -1290,6 +1290,29 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LIBCFS_FORCE_SIG_WITH_TASK
 
 #
+# LIBCFS_CACHE_DETAIL_WRITERS
+#
+# kernel v5.3-rc2-1-g64a38e840ce5
+# SUNRPC: Track writers of the 'channel' file to improve cache_listeners_exist
+#
+AC_DEFUN([LIBCFS_CACHE_DETAIL_WRITERS], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if struct cache_detail has writers],
+cache_detail_writers_atomic, [
+	#include <linux/sunrpc/cache.h>
+
+	static struct cache_detail rsi_cache;
+],[
+	atomic_set(&rsi_cache.writers, 0);
+],[
+	AC_DEFINE(HAVE_CACHE_DETAIL_WRITERS, 1,
+		[struct cache_detail has writers])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_CACHE_DETAIL_WRITERS
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -1405,6 +1428,7 @@ LIBCFS_HAVE_IOV_ITER_TYPE
 LIBCFS_MM_TOTALRAM_PAGES_FUNC
 # 5.3
 LIBCFS_FORCE_SIG_WITH_TASK
+LIBCFS_CACHE_DETAIL_WRITERS
 ]) # LIBCFS_PROG_LINUX
 
 #
