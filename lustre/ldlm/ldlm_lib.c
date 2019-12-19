@@ -2118,11 +2118,13 @@ repeat:
 			 * yet, let's wait those threads stopped
 			 */
 			if (next_update_transno == 0) {
+				spin_unlock(&obd->obd_recovery_task_lock);
 				wait_event_idle(
 					tdtd->tdtd_recovery_threads_waitq,
 					atomic_read(&tdtd->tdtd_recovery_threads_count)
 					== 0);
 
+				spin_lock(&obd->obd_recovery_task_lock);
 				next_update_transno =
 					distribute_txn_get_next_transno(
 								lut->lut_tdtd);
