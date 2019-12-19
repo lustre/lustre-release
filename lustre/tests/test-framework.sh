@@ -1552,34 +1552,42 @@ set_debug_size () {
 }
 
 set_default_debug () {
-    local debug=${1:-"$PTLDEBUG"}
-    local subsys=${2:-"$SUBSYSTEM"}
-    local debug_size=${3:-$DEBUG_SIZE}
+	local debug=${1:-"$PTLDEBUG"}
+	local subsys=${2:-"$SUBSYSTEM"}
+	local debug_size=${3:-$DEBUG_SIZE}
 
-    [ -n "$debug" ] && lctl set_param debug="$debug" >/dev/null
-    [ -n "$subsys" ] && lctl set_param subsystem_debug="${subsys# }" >/dev/null
+	[ -n "$debug" ] && lctl set_param debug="$debug" >/dev/null
+	[ -n "$subsys" ] && lctl set_param subsystem_debug="${subsys# }" >/dev/null
 
-    [ -n "$debug_size" ] && set_debug_size $debug_size > /dev/null
+	[ -n "$debug_size" ] && set_debug_size $debug_size > /dev/null
 }
 
 set_default_debug_nodes () {
 	local nodes="$1"
+	local debug="${2:-"$PTLDEBUG"}"
+	local subsys="${3:-"$SUBSYSTEM"}"
+	local debug_size="${4:-$DEBUG_SIZE}"
 
 	if [[ ,$nodes, = *,$HOSTNAME,* ]]; then
 		nodes=$(exclude_items_from_list "$nodes" "$HOSTNAME")
 		set_default_debug
 	fi
 
-	do_rpc_nodes "$nodes" set_default_debug \
-		\\\"$PTLDEBUG\\\" \\\"$SUBSYSTEM\\\" $DEBUG_SIZE || true
+	[[ -z "$nodes" ]] ||
+		do_rpc_nodes "$nodes" set_default_debug \
+			\\\"$debug\\\" \\\"$subsys\\\" $debug_size || true
 }
 
 set_default_debug_facet () {
-    local facet=$1
-    local node=$(facet_active_host $facet)
-    [ -z "$node" ] && echo "No host defined for facet $facet" && exit 1
+	local facet=$1
+	local debug="${2:-"$PTLDEBUG"}"
+	local subsys="${3:-"$SUBSYSTEM"}"
+	local debug_size="${4:-$DEBUG_SIZE}"
+	local node=$(facet_active_host $facet)
 
-    set_default_debug_nodes $node
+	[ -n "$node" ] || error "No host defined for facet $facet"
+
+	set_default_debug_nodes $node "$debug" "$subsys" $debug_size
 }
 
 set_hostid () {
@@ -6001,19 +6009,19 @@ debug_size_restore() {
 }
 
 start_full_debug_logging() {
-    debugsave
-    debug_size_save
+	debugsave
+	debug_size_save
 
-    local FULLDEBUG=-1
-    local DEBUG_SIZE=150
+	local fulldebug=-1
+	local debug_size=150
+	local nodes=$(comma_list $(nodes_list))
 
-    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug_mb=$DEBUG_SIZE"
-    do_nodes $(comma_list $(nodes_list)) "$LCTL set_param debug=$FULLDEBUG;"
+	do_nodes $nodes "$LCTL set_param debug=$fulldebug debug_mb=$debug_size"
 }
 
 stop_full_debug_logging() {
-    debug_size_restore
-    debugrestore
+	debug_size_restore
+	debugrestore
 }
 
 # prints bash call stack
