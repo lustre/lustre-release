@@ -2029,11 +2029,13 @@ repeat:
 			if (next_update_transno == 0) {
 				struct l_wait_info lwi = { 0 };
 
+				spin_unlock(&obd->obd_recovery_task_lock);
 				l_wait_event(tdtd->tdtd_recovery_threads_waitq,
 				       atomic_read(
 				       &tdtd->tdtd_recovery_threads_count) == 0,
 				       &lwi);
 
+				spin_lock(&obd->obd_recovery_task_lock);
 				next_update_transno =
 					distribute_txn_get_next_transno(
 								lut->lut_tdtd);
