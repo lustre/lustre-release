@@ -7,6 +7,7 @@
 .RB [ --dry-run ]
 .RB [ --help|-h ]
 .RB [ --no-rsync | --rsync ]
+.RB [ --pool | -p \fI<pool> \fR]
 .RB [ --quiet|-q ]
 .RB [ --restripe|-R ]
 .RB [ --skip|-s ]
@@ -102,7 +103,10 @@ When \fB-A \fRis set, only consider OSTs with free space greater than the
 \fImin_free \fRvalue to be available for migration.  The value is specified in
 KB. If this option is not set, a default of 256MB is used.
 .TP
-.B \\--quiet|-q
+.BR \\--pool | -q \fI<pool>
+Migrate files to specified pool.
+.TP
+.BR \\--quiet | -q
 Run quietly (don't print filenames or status).
 .TP
 .B \\--rsync

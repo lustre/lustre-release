@@ -47,8 +47,8 @@ usage() {
     cat -- <<USAGE 1>&2
 usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
 		   [--auto-stripe|-A [-C <cap>]
-                    [--min-free|-M <min_free>] [--max-free|-X <max_free>]]
-		   [--stripe-count|-c <stripe_count>]
+		   [--min-free|-M <min_free>] [--max-free|-X <max_free>]]
+		   [--pool|-p <pool>] [--stripe-count|-c <stripe_count>]
 		   [--stripe-size|-S <stripe_size>]
 		   [-D] [-h] [-n] [-S]
 		   [--restripe|-R] [--skip|-s] [--verbose|-v] [--yes|-y] [-0]
@@ -67,6 +67,7 @@ usage: lfs_migrate [--dry-run|-n] [--help|-h] [--no-rsync|--rsync] [--quiet|-q]
 		   use in the migration
 	--no-rsync do not fall back to rsync mode even if lfs migrate fails
 	-n         only print the names of files to be migrated
+	-p <pool>  use the specified OST pool for the destination file
 	-q         run quietly (don't print filenames or status)
 	--rsync    force rsync mode instead of using lfs migrate
 	-R         restripe file using default directory striping
@@ -116,6 +117,7 @@ OPT_NO_RSYNC=false
 OPT_NO_DIRECT=false
 OPT_NULL=false
 OPT_PASSTHROUGH=()
+OPT_POOL=""
 OPT_RESTRIPE=false
 OPT_YES=false
 LFS_OPT_DIRECTIO=""
@@ -134,8 +136,10 @@ while [ -n "$*" ]; do
 	case "$arg" in
 	-h|--help) usage;;
 	-l|--link) ;; # maintained backward compatibility for now
-	-n|--dry-run) OPT_DRYRUN=true; OPT_YES=true
+	-n) OPT_DRYRUN=true; OPT_YES=true
 	   echo "$PROG: -n deprecated, use --dry-run or --non-block" 1>&2;;
+	--dry-run) OPT_DRYRUN=true; OPT_YES=true;;
+	-p|--pool) OPT_POOL="$arg $2"; OPT_LAYOUT+="$OPT_POOL "; shift;;
 	-q|--quiet) ECHO=:;;
 	-R|--restripe) OPT_RESTRIPE=true;;
 	-s|--skip) OPT_CHECK=false;;
@@ -149,7 +153,7 @@ while [ -n "$*" ]; do
 	--no-rsync) OPT_NO_RSYNC=true;;
 	--copy|--yaml|--file)
 	   # these options have files as arguments, pass both through
-	   OPT_LAYOUT+="$arg $2"; shift;;
+	   OPT_LAYOUT+="$arg $2 "; shift;;
 	--auto-stripe|-A) OPT_AUTOSTRIPE=true;;
 	-C) OPT_CAP="$2"; shift;;
 	-D) LFS_OPT_DIRECTIO="-D";;
@@ -246,21 +250,18 @@ function calc_stripe()
 					ost_min_kb=$avail
 				fi
 			fi
-		done < <($LFS df $OLDNAME | awk '/OST/ { print $4 }')
-		# Once this script supports pools, the lfs df command above
-		# should also include the -p <pool> option to restrict the
-		# listed OSTs to the correct pool.
+		done < <($LFS df $OPT_POOL $OLDNAME | awk '/OST/ { print $4 }')
 
 		if [ $ost_max_count -eq 0 ]; then
-			echo "no OSTs with sufficient available space" >&2
+			# no OSTs with enough space, stripe over all of them
+			echo "-1" "0"
 			return
 		fi
 
 		if (( ost_min_kb == (1 << 62) )); then
 			echo "warning: unable to determine minimum OST size, " \
 			     "object size not capped" >&2
-			obj_max_kb=0
-			echo "$stripe_count" "$obj_max_kb"
+			echo "$stripe_count" "0"
 			return
 		fi
 
@@ -292,7 +293,7 @@ lfs_migrate() {
 		local stripe_count="$OPT_STRIPE_COUNT"
 		local parent_count=""
 		local parent_size=""
-		local stripe_pool
+		local stripe_pool="${OPT_POOL#-p }"
 		local mirror_count
 		local layout
 
@@ -377,8 +378,9 @@ lfs_migrate() {
 			# stuff.
 			UNLINK="-u"
 
-			stripe_pool=$($LFS getstripe -p "$OLDNAME" 2> /dev/null)
-			mirror_count=$($LFS getstripe -N "$OLDFILE" 2> /dev/null)
+			[ -n "$OPT_POOL" ] ||
+			 stripe_pool=$($LFS getstripe -p "$OLDNAME" 2>/dev/null)
+			mirror_count=$($LFS getstripe -N "$OLDFILE" 2>/dev/null)
 
 			if $OPT_AUTOSTRIPE; then
 				local filekb=$((${nlink_type[3]} / 1024))
@@ -388,11 +390,11 @@ lfs_migrate() {
 				[ -z "$stripe_count" ] && exit 1
 				[ $stripe_count -lt 1 ] && stripe_count=1
 			else
-				[ "$OPT_STRIPE_COUNT" ] && stripe_count=$OPT_STRIPE_COUNT ||
+				[ -n "$stripe_count" ] ||
 					stripe_count=$($LFS getstripe -c "$OLDNAME" \
 						2> /dev/null)
 			fi
-			[ -z "$stripe_size" ] &&
+			[ -n "$stripe_size" ] ||
 				stripe_size=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
 
 			[ -z "$stripe_count" -o -z "$stripe_size" ] && UNLINK=""
@@ -430,12 +432,13 @@ lfs_migrate() {
 			continue
 		fi
 
-		[ -n "$stripe_count" ] && stripe_count="-c $stripe_count"
-		[ -n "$stripe_size" ] && stripe_size="-S $stripe_size"
-		[ -n "$stripe_pool" ] && stripe_pool="-p $stripe_pool"
-		[ -n "$mirror_count" ] && mirror_count="-N $mirror_count"
-		layout="$stripe_count $stripe_size $stripe_pool $mirror_count \
-		        $OPT_LAYOUT"
+		layout="${OPT_PASSTHROUGH[@]} "
+		[ -n "$stripe_count" ] && layout+="-c $stripe_count "
+		[ -n "$stripe_size" ] && layout+="-S $stripe_size "
+		[ -z "$OPT_POOL" -a -n "$stripe_pool" ] &&
+					layout+="-p $stripe_pool "
+		[ -n "$mirror_count" ] && layout+="-N $mirror_count "
+		layout+="$OPT_LAYOUT"
 
 		# detect other hard links and store them on a global
 		# list so we don't re-migrate them
@@ -454,8 +457,7 @@ lfs_migrate() {
 
 		# first try to migrate via Lustre tools, then fall back to rsync
 		if ! $OPT_RSYNC; then
-			if $LFS migrate "${OPT_PASSTHROUGH[@]}" $layout \
-			   "$OLDNAME"; then
+			if $LFS migrate $layout "$OLDNAME"; then
 				$ECHO "done"
 				for link in ${hlinks[*]}; do
 					add_to_set "$fid" "$link"
@@ -470,15 +472,16 @@ lfs_migrate() {
 			fi
 		fi
 
-		NEWNAME=$(mktemp $UNLINK "$OLDNAME-lfs_migrate.tmp.XXXXXX")
+		local olddir=$(dirname $OLDNAME)
+		local oldfile=$(basename $OLDNAME)
+		NEWNAME=$(mktemp $UNLINK "$olddir/.$oldfile.XXXXXX")
 		if [ $? -ne 0 -o -z "$NEWNAME" ]; then
 			echo -e "\r$OLDNAME: cannot make temp file, skipped" 1>&2
 			continue
 		fi
 
 		if [ "$UNLINK" ]; then
-			if ! $LFS setstripe "${OPT_PASSTHROUGH[@]}" $layout \
-			     "$NEWNAME"; then
+			if ! $LFS setstripe $layout "$NEWNAME"; then
 				echo -e "\r$NEWNAME: setstripe failed, exiting" 1>&2
 				exit 2
 			fi
@@ -513,7 +516,7 @@ lfs_migrate() {
 		# of 1 (all other links will point to the new inode).
 		# This flag indicates that even paths with a link count of
 		# 1 are potentially part of a link set.
-		[ ${#hlinks[*]} -gt 1 ] && RSYNC_WITH_HLINKS=true
+		(( ${#hlinks[*]} == 1 )) || RSYNC_WITH_HLINKS=true
 	done
 }
 

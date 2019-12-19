@@ -1571,6 +1571,33 @@ test_27() {
 }
 run_test 27 "Race pool_list and pool_remove"
 
+test_28() {
+	create_pool_nofail $POOL
+	create_pool_nofail $POOL2
+	add_pool $POOL $TGT_ALL "$TGT_UUID"
+	add_pool $POOL2 $TGT_ALL "$TGT_UUID"
+
+	start_full_debug_logging
+	#$LFS setstripe -E 4M -c 1 -p $POOL -E 16M -c 2 $DIR/$tfile
+	$LFS setstripe -c 1 -p $POOL $DIR/$tfile
+	dd if=/dev/urandom of=$DIR/$tfile bs=1M count=1 seek=16
+	local csum=$(cksum $DIR/$tfile)
+	$LFS getstripe $DIR/$tfile
+	local pool="$($LFS getstripe -p $DIR/$tfile)"
+	[[ "$pool" == "$POOL" ]] ||
+		error "$tfile is in '$pool', not created on $POOL"
+	$LFS_MIGRATE -y -p $POOL2 $DIR/$tfile ||
+		error "migrate $tfile to $POOL2 failed"
+	$LFS getstripe $DIR/$tfile
+	pool="$($LFS getstripe -p $DIR/$tfile)"
+	[[ "$pool" == "$POOL2" ]] ||
+		error "$tfile is in '$pool', not migrated to $POOL2"
+	local csum2=$(cksum $DIR/$tfile)
+	[[ "$csum" == "$csum2" ]] || error "checksum error after migration"
+	stop_full_debug_logging
+}
+run_test 28 "lfs_migrate with pool name"
+
 cd $ORIG_PWD
 
 complete $SECONDS
