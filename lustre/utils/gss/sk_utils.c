@@ -1162,10 +1162,26 @@ uint32_t sk_compute_dh_key(struct sk_cred *skc, const gss_buffer_desc *pub_key)
 			 ERR_error_string(ERR_get_error(), NULL));
 		goto out_err;
 	} else if (status < dh_shared->length) {
-		printerr(0, "DH_compute_key() returned a short key of %d "
-			 "bytes, expected: %zu\n", status, dh_shared->length);
-		rc = GSS_S_DEFECTIVE_TOKEN;
-		goto out_err;
+		/* there is around 1 chance out of 256 that the returned
+		 * shared key is shorter than expected
+		 */
+		if (status >= dh_shared->length - 2) {
+			int shift = dh_shared->length - status;
+			/* if the key is short by only 1 or 2 bytes, just
+			 * prepend it with 0s
+			 */
+			memmove((void *)(dh_shared->value + shift),
+				dh_shared->value, status);
+			memset(dh_shared->value, 0, shift);
+		} else {
+			/* if the key is really too short, return GSS_S_BAD_QOP
+			 * so that the caller can retry to generate
+			 */
+			printerr(0, "DH_compute_key() returned a short key of %d bytes, expected: %zu\n",
+				 status, dh_shared->length);
+			rc = GSS_S_BAD_QOP;
+			goto out_err;
+		}
 	}
 
 	rc = GSS_S_COMPLETE;

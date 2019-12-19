@@ -176,7 +176,7 @@ static int lgss_sk_validate_cred(struct lgss_cred *cred, gss_buffer_desc *token,
 	}
 
 	rc = sk_compute_dh_key(skc, &bufs[SK_RESP_PUB_KEY]);
-	if (rc == GSS_S_DEFECTIVE_TOKEN) {
+	if (rc == GSS_S_BAD_QOP) {
 		/* Defective token for short key means we need to retry
 		 * because there is a chance that the parameters generated
 		 * resulted in a key that is 1 byte short */

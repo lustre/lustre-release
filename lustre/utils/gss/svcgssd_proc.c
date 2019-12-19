@@ -364,6 +364,7 @@ int handle_sk(struct svc_nego_data *snd)
 	uint32_t version;
 	uint32_t flags;
 	int i;
+	int attempts = 0;
 
 	printerr(3, "Handling sk request\n");
 	memset(bufs, 0, sizeof(gss_buffer_desc) * SK_INIT_BUFFERS);
@@ -458,12 +459,34 @@ int handle_sk(struct svc_nego_data *snd)
 		goto cleanup_partial;
 	}
 
+redo:
 	rc = sk_gen_params(skc);
 	if (rc != GSS_S_COMPLETE) {
 		printerr(0, "Failed to generate DH params for responder\n");
 		goto cleanup_partial;
 	}
-	if (sk_compute_dh_key(skc, &remote_pub_key)) {
+	rc = sk_compute_dh_key(skc, &remote_pub_key);
+	if (rc == GSS_S_BAD_QOP && attempts < 2) {
+		/* GSS_S_BAD_QOP means the generated shared key was shorter
+		 * than expected. Just retry twice before giving up.
+		 */
+		attempts++;
+		if (skc->sc_params) {
+			DH_free(skc->sc_params);
+			skc->sc_params = NULL;
+		}
+		if (skc->sc_pub_key.value) {
+			free(skc->sc_pub_key.value);
+			skc->sc_pub_key.value = NULL;
+		}
+		skc->sc_pub_key.length = 0;
+		if (skc->sc_dh_shared_key.value) {
+			free(skc->sc_dh_shared_key.value);
+			skc->sc_dh_shared_key.value = NULL;
+		}
+		skc->sc_dh_shared_key.length = 0;
+		goto redo;
+	} else if (rc != GSS_S_COMPLETE) {
 		printerr(0, "Failed to compute session key from DH params\n");
 		goto cleanup_partial;
 	}
