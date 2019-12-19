@@ -2904,6 +2904,21 @@ test_138() {
 }
 run_test 138 "Umount MDT during recovery"
 
+test_139() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $MDS1_VERSION -lt $(version_code 2.13.50) ] &&
+		skip "Need MDS version at least 2.13.50"
+
+	mdt_dev=$(mdsdevname 1)
+
+	stop $SINGLEMDS || error "stop $SINGLEMDS failed"
+
+#define OBD_FAIL_OSP_INVALID_LOGID		0x2106
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0x68 fail_loc=0x80002106
+	start $SINGLEMDS $mdt_dev $MDS_MOUNT_OPTS || error "Fail to start MDT"
+}
+run_test 139 "corrupted catid won't cause crash"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
