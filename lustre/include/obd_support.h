@@ -681,8 +681,9 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSP_FAKE_PRECREATE		0x2102
 #define OBD_FAIL_OSP_RPCS_SEM			0x2104
 #define OBD_FAIL_OSP_CANT_PROCESS_LLOG		0x2105
+#define OBD_FAIL_OSP_INVALID_LOGID		0x2106
 
- /* barrier */
+/* barrier */
 #define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200
 #define OBD_FAIL_MGS_BARRIER_NOTIFY_NET		0x2201
 

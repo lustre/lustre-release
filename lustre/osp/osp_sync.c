@@ -1393,13 +1393,30 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	LASSERT(ctxt);
 
 	if (likely(logid_id(&osi->osi_cid.lci_logid) != 0)) {
-		rc = llog_open(env, ctxt, &lgh, &osi->osi_cid.lci_logid, NULL,
-			       LLOG_OPEN_EXISTS);
-		/* re-create llog if it is missing */
-		if (rc == -ENOENT)
+		struct lu_fid fid_temp;
+
+		if (CFS_FAIL_CHECK(OBD_FAIL_OSP_INVALID_LOGID)) {
+			memset(&osi->osi_cid, 0, sizeof(osi->osi_cid));
+			logid_set_id(&osi->osi_cid.lci_logid, cfs_fail_val);
+		}
+
+		logid_to_fid(&osi->osi_cid.lci_logid, &fid_temp);
+		if (fid_is_sane(&fid_temp)) {
+			rc = llog_open(env, ctxt, &lgh, &osi->osi_cid.lci_logid,
+				       NULL, LLOG_OPEN_EXISTS);
+
+			/* re-create llog if it is missing */
+			if (rc == -ENOENT)
+				logid_set_id(&osi->osi_cid.lci_logid, 0);
+			else if (rc < 0)
+				GOTO(out_cleanup, rc);
+		} else {
+			CERROR("%s: the catid "DFID" for init llog %d is bad\n",
+			       obd->obd_name, PFID(&fid_temp), d->opd_index);
+
+			/* it will be recreated later */
 			logid_set_id(&osi->osi_cid.lci_logid, 0);
-		else if (rc < 0)
-			GOTO(out_cleanup, rc);
+		}
 	}
 
 	if (unlikely(logid_id(&osi->osi_cid.lci_logid) == 0)) {
