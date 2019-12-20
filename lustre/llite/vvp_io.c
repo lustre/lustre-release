@@ -1314,7 +1314,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	if (fio->ft_mkwrite) {
 		wait_on_page_writeback(vmpage);
 		if (!PageDirty(vmpage)) {
-			struct cl_page_list *plist = &io->ci_queue.c2_qin;
+			struct cl_page_list *plist = &vio->u.fault.ft_queue;
 			struct vvp_page *vpg = cl_object_page_slice(obj, page);
 			int to = PAGE_SIZE;
 
@@ -1326,13 +1326,34 @@ static int vvp_io_fault_start(const struct lu_env *env,
 
 			/* size fixup */
 			if (last_index == vvp_index(vpg))
-				to = size & ~PAGE_MASK;
+				to = ((size - 1) & ~PAGE_MASK) + 1;
 
 			/* Do not set Dirty bit here so that in case IO is
 			 * started before the page is really made dirty, we
 			 * still have chance to detect it. */
 			result = cl_io_commit_async(env, io, plist, 0, to,
 						    mkwrite_commit_callback);
+			/* Have overquota flag, trying sync write to check
+			 * whether indeed out of quota */
+			if (result == -EDQUOT) {
+				cl_page_get(page);
+				result = vvp_io_commit_sync(env, io,
+							    plist, 0, to);
+				if (result >= 0) {
+					io->ci_noquota = 1;
+					cl_page_own(env, io, page);
+					cl_page_list_add(plist, page);
+					lu_ref_add(&page->cp_reference,
+						   "cl_io", io);
+					result = cl_io_commit_async(env, io,
+						plist, 0, to,
+						mkwrite_commit_callback);
+					io->ci_noquota = 0;
+				} else {
+					cl_page_put(env, page);
+				}
+			}
+
 			LASSERT(cl_page_is_owned(page, io));
 			cl_page_list_fini(env, plist);
 
@@ -1347,8 +1368,9 @@ static int vvp_io_fault_start(const struct lu_env *env,
 				if (result == -EDQUOT)
 					result = -ENOSPC;
 				GOTO(out, result);
-			} else
+			} else {
 				cl_page_disown(env, io, page);
+			}
 		}
 	}
 
