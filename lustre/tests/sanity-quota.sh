@@ -755,6 +755,11 @@ test_block_soft() {
 	OFFSET=$((OFFSET + 1024)) # make sure we don't write to same block
 	cancel_lru_locks osc
 
+	echo "mmap write when over soft limit"
+	$RUNAS $MULTIOP $TESTFILE.mmap OT40960SMW ||
+		quota_error a $TSTUSR "mmap write failure, but expect success"
+	cancel_lru_locks osc
+
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
 	$SHOW_QUOTA_PROJID

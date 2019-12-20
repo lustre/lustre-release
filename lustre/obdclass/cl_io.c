@@ -650,6 +650,7 @@ int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 	struct cl_sync_io *anchor = &cl_env_info(env)->clt_anchor;
 	struct cl_page *pg;
 	int rc;
+	ENTRY;
 
 	cl_page_list_for_each(pg, &queue->c2_qin) {
 		LASSERT(pg->cp_sync_io == NULL);
@@ -678,7 +679,7 @@ int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 		cl_page_list_for_each(pg, &queue->c2_qin)
 			pg->cp_sync_io = NULL;
 	}
-	return rc;
+	RETURN(rc);
 }
 EXPORT_SYMBOL(cl_io_submit_sync);
 

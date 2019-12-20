@@ -184,6 +184,8 @@ struct lov_io_sub *lov_sub_get(const struct lu_env *env,
 out:
 	if (rc < 0)
 		sub = ERR_PTR(rc);
+	else
+		sub->sub_io.ci_noquota = lio->lis_cl.cis_io->ci_noquota;
 	RETURN(sub);
 }
 
