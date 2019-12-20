@@ -59,8 +59,7 @@ static struct handle_bucket {
  * Generate a unique 64bit cookie (hash) for a handle and insert it into
  * global (per-node) hash-table.
  */
-void class_handle_hash(struct portals_handle *h,
-		       const struct portals_handle_ops *ops)
+void class_handle_hash(struct portals_handle *h, const char *owner)
 {
 	struct handle_bucket *bucket;
 
@@ -88,7 +87,7 @@ void class_handle_hash(struct portals_handle *h,
 	h->h_cookie = handle_base;
 	spin_unlock(&handle_base_lock);
 
-	h->h_ops = ops;
+	h->h_owner = owner;
 	spin_lock_init(&h->h_lock);
 
 	bucket = &handle_hash[h->h_cookie & HANDLE_HASH_MASK];
@@ -135,7 +134,7 @@ void class_handle_unhash(struct portals_handle *h)
 }
 EXPORT_SYMBOL(class_handle_unhash);
 
-void *class_handle2object(u64 cookie, const struct portals_handle_ops *ops)
+void *class_handle2object(u64 cookie, const char *owner)
 {
 	struct handle_bucket *bucket;
 	struct portals_handle *h;
@@ -153,14 +152,14 @@ void *class_handle2object(u64 cookie, const struct portals_handle_ops *ops)
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(h, &bucket->head, h_link) {
-		if (h->h_cookie != cookie || h->h_ops != ops)
+		if (h->h_cookie != cookie || h->h_owner != owner)
 			continue;
 
 		spin_lock(&h->h_lock);
 		if (likely(h->h_in != 0)) {
 			refcount_inc(&h->h_ref);
 			CDEBUG(D_INFO, "GET %s %p refcount=%d\n",
-			       h->h_ops->hop_type, h,
+			       h->h_owner, h,
 			       refcount_read(&h->h_ref));
 			retval = h;
 		}
@@ -205,8 +204,8 @@ static int cleanup_all_handles(void)
 
 		spin_lock(&handle_hash[i].lock);
 		list_for_each_entry_rcu(h, &(handle_hash[i].head), h_link) {
-			CERROR("force clean handle %#llx addr %p ops %p\n",
-			       h->h_cookie, h, h->h_ops);
+			CERROR("force clean handle %#llx addr %p owner %p\n",
+			       h->h_cookie, h, h->h_owner);
 
 			class_handle_unhash_nolock(h);
 			rc++;

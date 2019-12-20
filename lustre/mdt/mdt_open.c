@@ -44,9 +44,7 @@
 #include "mdt_internal.h"
 #include <lustre_nodemap.h>
 
-static const struct portals_handle_ops mfd_open_handle_ops = {
-	.hop_type	= "mdt",
-};
+static const char mfd_open_handle_owner[] = "mdt";
 
 /* Create a new mdt_file_data struct, initialize it,
  * and insert it to global hash table */
@@ -61,7 +59,7 @@ struct mdt_file_data *mdt_mfd_new(const struct mdt_export_data *med)
 		INIT_LIST_HEAD_RCU(&mfd->mfd_open_handle.h_link);
 		mfd->mfd_owner = med;
 		INIT_LIST_HEAD(&mfd->mfd_list);
-		class_handle_hash(&mfd->mfd_open_handle, &mfd_open_handle_ops);
+		class_handle_hash(&mfd->mfd_open_handle, mfd_open_handle_owner);
 	}
 
 	RETURN(mfd);
@@ -81,7 +79,7 @@ struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 	ENTRY;
 
 	LASSERT(open_handle != NULL);
-	mfd = class_handle2object(open_handle->cookie, &mfd_open_handle_ops);
+	mfd = class_handle2object(open_handle->cookie, mfd_open_handle_owner);
 	if (mfd)
 		refcount_dec(&mfd->mfd_open_handle.h_ref);
 

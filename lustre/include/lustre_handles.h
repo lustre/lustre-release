@@ -47,11 +47,6 @@
 #include <linux/spinlock.h>
 #include <libcfs/libcfs.h>
 
-struct portals_handle_ops {
-	/* hop_type is used for some debugging messages */
-	char *hop_type;
-};
-
 /* These handles are most easily used by having them appear at the very top of
  * whatever object that you want to make handles for.  ie:
  *
@@ -66,7 +61,7 @@ struct portals_handle_ops {
 struct portals_handle {
 	struct list_head		h_link;
 	__u64				h_cookie;
-	const struct portals_handle_ops	*h_ops;
+	const char			*h_owner;
 	refcount_t			h_ref;
 
 	/* newly added fields to handle the RCU issue. -jxiong */
@@ -78,10 +73,9 @@ struct portals_handle {
 /* handles.c */
 
 /* Add a handle to the hash table */
-void class_handle_hash(struct portals_handle *,
-		       const struct portals_handle_ops *ops);
+void class_handle_hash(struct portals_handle *, const char *h_owner);
 void class_handle_unhash(struct portals_handle *);
-void *class_handle2object(u64 cookie, const struct portals_handle_ops *ops);
+void *class_handle2object(u64 cookie, const char *h_owner);
 int class_handle_init(void);
 void class_handle_cleanup(void);
 
