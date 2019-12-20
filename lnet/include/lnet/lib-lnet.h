@@ -244,6 +244,33 @@ lnet_ni_set_status(struct lnet_ni *ni, __u32 status)
 	return update;
 }
 
+static inline void lnet_md_wait_handling(struct lnet_libmd *md, int cpt)
+{
+	wait_queue_head_t *wq = __var_waitqueue(md);
+#ifdef HAVE_WAIT_QUEUE_ENTRY
+	struct wait_bit_queue_entry entry;
+	wait_queue_entry_t *wqe = &entry.wq_entry;
+#else
+	struct wait_bit_queue entry;
+	wait_queue_entry_t *wqe = &entry.wait;
+#endif
+	init_wait_var_entry(&entry, md, 0);
+	prepare_to_wait_event(wq, wqe, TASK_IDLE);
+	if (md->md_flags & LNET_MD_FLAG_HANDLING) {
+		/* Race with unlocked call to ->md_handler.
+		 * It is safe to drop the res_lock here as the
+		 * caller has only just claimed it.
+		 */
+		lnet_res_unlock(cpt);
+		schedule();
+		/* Cannot check md now, it might be freed.  Caller
+		 * must reclaim reference and check.
+		 */
+		lnet_res_lock(cpt);
+	}
+	finish_wait(wq, wqe);
+}
+
 static inline void
 lnet_md_free(struct lnet_libmd *md)
 {

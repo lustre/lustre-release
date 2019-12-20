@@ -70,6 +70,7 @@ lnet_md_unlink(struct lnet_libmd *md)
 
 	LASSERT(!list_empty(&md->md_list));
 	list_del_init(&md->md_list);
+	LASSERT(!(md->md_flags & LNET_MD_FLAG_HANDLING));
 	lnet_md_free(md);
 }
 
@@ -473,18 +474,26 @@ int
 LNetMDUnlink(struct lnet_handle_md mdh)
 {
 	struct lnet_event ev;
-	struct lnet_libmd *md;
+	struct lnet_libmd *md = NULL;
+	lnet_handler_t handler = NULL;
 	int cpt;
 
 	LASSERT(the_lnet.ln_refcount > 0);
 
 	cpt = lnet_cpt_of_cookie(mdh.cookie);
 	lnet_res_lock(cpt);
-
-	md = lnet_handle2md(&mdh);
-	if (md == NULL) {
-		lnet_res_unlock(cpt);
-		return -ENOENT;
+	while (!md) {
+		md = lnet_handle2md(&mdh);
+		if (!md) {
+			lnet_res_unlock(cpt);
+			return -ENOENT;
+		}
+		if (md->md_refcount == 0 &&
+		    md->md_flags & LNET_MD_FLAG_HANDLING) {
+			/* Race with unlocked call to ->md_handler. */
+			lnet_md_wait_handling(md, cpt);
+			md = NULL;
+		}
 	}
 
 	md->md_flags |= LNET_MD_FLAG_ABORTED;
@@ -493,7 +502,7 @@ LNetMDUnlink(struct lnet_handle_md mdh)
 	 * unlinked. Otherwise, we enqueue an event now... */
 	if (md->md_handler && md->md_refcount == 0) {
 		lnet_build_unlink_event(md, &ev);
-		md->md_handler(&ev);
+		handler = md->md_handler;
 	}
 
 	if (md->md_rspt_ptr != NULL)
@@ -502,6 +511,10 @@ LNetMDUnlink(struct lnet_handle_md mdh)
 	lnet_md_unlink(md);
 
 	lnet_res_unlock(cpt);
+
+	if (handler)
+		handler(&ev);
+
 	return 0;
 }
 EXPORT_SYMBOL(LNetMDUnlink);

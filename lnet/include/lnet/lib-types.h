@@ -217,6 +217,15 @@ struct lnet_libmd {
 #define LNET_MD_FLAG_ZOMBIE	 BIT(0)
 #define LNET_MD_FLAG_AUTO_UNLINK BIT(1)
 #define LNET_MD_FLAG_ABORTED	 BIT(2)
+/* LNET_MD_FLAG_HANDLING is set when a non-unlink event handler
+ * is being called for an event relating to the md.
+ * It ensures only one such handler runs at a time.
+ * The final "unlink" event is only called once the
+ * md_refcount has reached zero, and this flag has been cleared,
+ * ensuring that it doesn't race with any other event handler
+ * call.
+ */
+#define LNET_MD_FLAG_HANDLING	 BIT(3)
 
 struct lnet_test_peer {
 	/* info about peers we are trying to fail */
