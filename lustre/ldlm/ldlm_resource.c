@@ -834,56 +834,35 @@ static struct cfs_hash_ops ldlm_ns_hash_ops = {
 	.hs_put         = ldlm_res_hop_put
 };
 
-typedef struct ldlm_ns_hash_def {
-	enum ldlm_ns_type	nsd_type;
+static struct {
 	/** hash bucket bits */
 	unsigned		nsd_bkt_bits;
 	/** hash bits */
 	unsigned		nsd_all_bits;
-	/** hash operations */
-	struct cfs_hash_ops *nsd_hops;
-} ldlm_ns_hash_def_t;
-
-static struct ldlm_ns_hash_def ldlm_ns_hash_defs[] =
-{
-	{
-		.nsd_type       = LDLM_NS_TYPE_MDC,
+} ldlm_ns_hash_defs[] = {
+	[LDLM_NS_TYPE_MDC] = {
 		.nsd_bkt_bits   = 11,
 		.nsd_all_bits   = 16,
-		.nsd_hops       = &ldlm_ns_hash_ops,
 	},
-	{
-		.nsd_type       = LDLM_NS_TYPE_MDT,
+	[LDLM_NS_TYPE_MDT] = {
 		.nsd_bkt_bits   = 14,
 		.nsd_all_bits   = 21,
-		.nsd_hops       = &ldlm_ns_hash_ops,
 	},
-	{
-		.nsd_type       = LDLM_NS_TYPE_OSC,
+	[LDLM_NS_TYPE_OSC] = {
 		.nsd_bkt_bits   = 8,
 		.nsd_all_bits   = 12,
-		.nsd_hops       = &ldlm_ns_hash_ops,
 	},
-	{
-		.nsd_type       = LDLM_NS_TYPE_OST,
+	[LDLM_NS_TYPE_OST] = {
 		.nsd_bkt_bits   = 11,
 		.nsd_all_bits   = 17,
-		.nsd_hops       = &ldlm_ns_hash_ops,
 	},
-	{
-		.nsd_type       = LDLM_NS_TYPE_MGC,
+	[LDLM_NS_TYPE_MGC] = {
 		.nsd_bkt_bits   = 3,
 		.nsd_all_bits   = 4,
-		.nsd_hops       = &ldlm_ns_hash_ops,
 	},
-	{
-		.nsd_type       = LDLM_NS_TYPE_MGT,
+	[LDLM_NS_TYPE_MGT] = {
 		.nsd_bkt_bits   = 3,
 		.nsd_all_bits   = 4,
-		.nsd_hops       = &ldlm_ns_hash_ops,
-	},
-	{
-		.nsd_type       = LDLM_NS_TYPE_UNKNOWN,
 	},
 };
 
@@ -896,7 +875,6 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 					  enum ldlm_ns_type ns_type)
 {
 	struct ldlm_namespace *ns = NULL;
-	struct ldlm_ns_hash_def *nsd;
 	int idx;
 	int rc;
 
@@ -909,15 +887,10 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 		RETURN(NULL);
 	}
 
-	for (idx = 0; ; idx++) {
-		nsd = &ldlm_ns_hash_defs[idx];
-		if (nsd->nsd_type == LDLM_NS_TYPE_UNKNOWN) {
-			CERROR("Unknown type %d for ns %s\n", ns_type, name);
-			GOTO(out_ref, NULL);
-		}
-
-		if (nsd->nsd_type == ns_type)
-			break;
+	if (ns_type >= ARRAY_SIZE(ldlm_ns_hash_defs) ||
+	    ldlm_ns_hash_defs[ns_type].nsd_bkt_bits == 0) {
+		CERROR("Unknown type %d for ns %s\n", ns_type, name);
+		GOTO(out_ref, NULL);
 	}
 
 	OBD_ALLOC_PTR(ns);
@@ -925,11 +898,13 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 		GOTO(out_ref, NULL);
 
 	ns->ns_rs_hash = cfs_hash_create(name,
-					 nsd->nsd_all_bits, nsd->nsd_all_bits,
-					 nsd->nsd_bkt_bits, 0,
+					 ldlm_ns_hash_defs[ns_type].nsd_all_bits,
+					 ldlm_ns_hash_defs[ns_type].nsd_all_bits,
+					 ldlm_ns_hash_defs[ns_type].nsd_bkt_bits,
+					 0,
 					 CFS_HASH_MIN_THETA,
 					 CFS_HASH_MAX_THETA,
-					 nsd->nsd_hops,
+					 &ldlm_ns_hash_ops,
 					 CFS_HASH_DEPTH |
 					 CFS_HASH_BIGNAME |
 					 CFS_HASH_SPIN_BKTLOCK |
@@ -937,7 +912,9 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	if (ns->ns_rs_hash == NULL)
 		GOTO(out_ns, NULL);
 
-	ns->ns_bucket_bits = nsd->nsd_all_bits - nsd->nsd_bkt_bits;
+	ns->ns_bucket_bits = ldlm_ns_hash_defs[ns_type].nsd_all_bits -
+			     ldlm_ns_hash_defs[ns_type].nsd_bkt_bits;
+
 	OBD_ALLOC_LARGE(ns->ns_rs_buckets,
 			BIT(ns->ns_bucket_bits) * sizeof(ns->ns_rs_buckets[0]));
 	if (!ns->ns_rs_buckets)
