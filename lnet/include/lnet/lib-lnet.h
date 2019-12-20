@@ -194,6 +194,8 @@ lnet_net_lock_current(void)
 extern struct kmem_cache *lnet_mes_cachep;	 /* MEs kmem_cache */
 extern struct kmem_cache *lnet_small_mds_cachep; /* <= LNET_SMALL_MD_SIZE bytes
 						  * MDs kmem_cache */
+extern struct kmem_cache *lnet_rspt_cachep;
+extern struct kmem_cache *lnet_msg_cachep;
 
 static inline struct lnet_eq *
 lnet_eq_alloc (void)
@@ -462,9 +464,8 @@ lnet_msg_alloc(void)
 {
 	struct lnet_msg *msg;
 
-	LIBCFS_ALLOC(msg, sizeof(*msg));
+	msg = kmem_cache_alloc(lnet_msg_cachep, GFP_NOFS | __GFP_ZERO);
 
-	/* no need to zero, LIBCFS_ALLOC does for us */
 	return (msg);
 }
 
@@ -472,26 +473,30 @@ static inline void
 lnet_msg_free(struct lnet_msg *msg)
 {
 	LASSERT(!msg->msg_onactivelist);
-	LIBCFS_FREE(msg, sizeof(*msg));
+	kmem_cache_free(lnet_msg_cachep, msg);
 }
 
 static inline struct lnet_rsp_tracker *
 lnet_rspt_alloc(int cpt)
 {
 	struct lnet_rsp_tracker *rspt;
-	LIBCFS_ALLOC(rspt, sizeof(*rspt));
+
+	rspt = kmem_cache_alloc(lnet_rspt_cachep, GFP_NOFS | __GFP_ZERO);
 	if (rspt) {
 		lnet_net_lock(cpt);
 		the_lnet.ln_counters[cpt]->lct_health.lch_rst_alloc++;
 		lnet_net_unlock(cpt);
 	}
+	CDEBUG(D_MALLOC, "rspt alloc %p\n", rspt);
 	return rspt;
 }
 
 static inline void
 lnet_rspt_free(struct lnet_rsp_tracker *rspt, int cpt)
 {
-	LIBCFS_FREE(rspt, sizeof(*rspt));
+	CDEBUG(D_MALLOC, "rspt free %p\n", rspt);
+
+	kmem_cache_free(lnet_rspt_cachep, rspt);
 	lnet_net_lock(cpt);
 	the_lnet.ln_counters[cpt]->lct_health.lch_rst_alloc--;
 	lnet_net_unlock(cpt);
