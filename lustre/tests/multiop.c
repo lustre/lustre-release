@@ -52,6 +52,7 @@
 #include <semaphore.h>
 #include <time.h>
 #include <err.h>
+#include <dirent.h>
 
 #include <lustre/lustreapi.h>
 
@@ -78,9 +79,9 @@ char usage[] =
 "	 E[+|-] get lease. +/-: expect lease to (not) exist\n"
 "	 f  statfs\n"
 "	 F  print FID\n"
-"	 H[num] create HSM released file with num stripes\n"
 "	 G gid get grouplock\n"
 "	 g gid put grouplock\n"
+"	 H[num] create HSM released file with num stripes\n"
 "	 K  link path to filename\n"
 "	 L  link\n"
 "	 l  symlink filename to path\n"
@@ -91,6 +92,7 @@ char usage[] =
 "	 o  open(O_RDONLY)\n"
 "	 O  open(O_CREAT|O_RDWR)\n"
 "	 p  print return value of last command\n"
+"	 Q  open filename (should be dir), stat first entry to init statahead"
 "	 r[num] read [optional length]\n"
 "	 R  reference entire mmap-ed region\n"
 "	 s  stat\n"
@@ -201,6 +203,35 @@ int get_flags(char *data, int *rflags)
 
         *rflags = flags;
         return size;
+}
+
+static int statahead(char *dname)
+{
+	DIR *d;
+	struct dirent *dent;
+	struct stat st;
+	char *buf;
+	int rc;
+
+	rc = 0;
+	d = opendir(dname);
+	if (!d)
+		return errno;
+	dent = readdir(d);
+	if (!dent) {
+		rc = errno;
+		goto out_closedir;
+	}
+	if (asprintf(&buf, "%s/%s", dname, dent->d_name) == -1) {
+		rc = errno;
+		goto out_closedir;
+	}
+	if (stat(buf, &st))
+		rc = errno;
+	free(buf);
+out_closedir:
+	closedir(d);
+	return rc;
 }
 
 #define POP_ARG() (pop_arg(argc, argv))
@@ -541,6 +572,13 @@ int main(int argc, char **argv)
                         break;
 		case 'p':
 			printf("%lld\n", last_rc);
+			break;
+		case 'Q':
+			save_errno = statahead(fname);
+			if (save_errno) {
+				perror("statahead");
+				exit(save_errno);
+			}
 			break;
 		case 'r':
 			len = atoi(commands+1);

@@ -6206,7 +6206,7 @@ run_one() {
 	check_node_health
 	check_dmesg_for_errors || error "Error in dmesg detected"
 	if [ "$PARALLEL" != "yes" ]; then
-		ps auxww | grep -v grep | grep -q multiop &&
+		ps auxww | grep -v grep | grep -q "multiop " &&
 					error "multiop still running"
 	fi
 	unset TESTNAME

@@ -10477,6 +10477,27 @@ test_123b () { # statahead(bug 15027)
 }
 run_test 123b "not panic with network error in statahead enqueue (bug 15027)"
 
+test_123c() {
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir.0
+	test_mkdir -i 1 -c 1 $DIR/$tdir.1
+	touch $DIR/$tdir.1/{1..3}
+	mv $DIR/$tdir.1/{1..3} $DIR/$tdir.0
+
+	remount_client $MOUNT
+
+	$MULTIOP $DIR/$tdir.0 Q
+
+	# let statahead to complete
+	ls -l $DIR/$tdir.0 > /dev/null
+
+	testid=$(echo $TESTNAME | tr '_' ' ')
+	dmesg | tac | sed "/$testid/,$ d" | grep "Can not initialize inode" &&
+		error "statahead warning" || true
+}
+run_test 123c "Can not initialize inode warning on DNE statahead"
+
 test_124a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
