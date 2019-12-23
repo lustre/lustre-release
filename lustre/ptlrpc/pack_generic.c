@@ -2098,14 +2098,25 @@ static void lustre_swab_fiemap_hdr(struct fiemap *fiemap)
 	__swab32s(&fiemap->fm_reserved);
 }
 
-void lustre_swab_fiemap(struct fiemap *fiemap)
+int lustre_swab_fiemap(struct fiemap *fiemap, __u32 len)
 {
-	__u32 i;
+	__u32 i, size, count;
 
 	lustre_swab_fiemap_hdr(fiemap);
 
-	for (i = 0; i < fiemap->fm_mapped_extents; i++)
+	size = fiemap_count_to_size(fiemap->fm_mapped_extents);
+	count = fiemap->fm_mapped_extents;
+	if (unlikely(size > len)) {
+		count = (len - sizeof(struct fiemap)) /
+			sizeof(struct fiemap_extent);
+		fiemap->fm_mapped_extents = count;
+		size = -EOVERFLOW;
+	}
+	/* still swab extents as we cannot yet pass rc to callers */
+	for (i = 0; i < count; i++)
 		lustre_swab_fiemap_extent(&fiemap->fm_extents[i]);
+
+	return size;
 }
 
 void lustre_swab_fiemap_info_key(struct ll_fiemap_info_key *fiemap_info)
