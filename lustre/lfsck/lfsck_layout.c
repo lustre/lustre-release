@@ -4057,6 +4057,11 @@ log:
 	return rc;
 }
 
+#define CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid, msg)		 \
+	CDEBUG(D_LFSCK, "%s:("DFID"|"DFID")/"DFID":XATTR %s: %s\n",	 \
+	       lfsck_lfsck2name(lfsck), PFID(&lso->lso_fid), PFID(pfid), \
+	       PFID(cfid), XATTR_NAME_FID, msg);
+
 /* Check whether the OST-object correctly back points to the
  * MDT-object (@parent) via the XATTR_NAME_FID xattr (@pfid). */
 static int lfsck_layout_check_parent(const struct lu_env *env,
@@ -4074,6 +4079,7 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 	struct lov_mds_md_v1		*lmm;
 	struct lov_ost_data_v1		*objs;
 	struct lustre_handle		 lh	= { 0 };
+	struct lfsck_instance		*lfsck  = com->lc_lfsck;
 	int				 rc;
 	int				 i;
 	__u32				 magic;
@@ -4085,12 +4091,19 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 	idx = pfid->f_stripe_idx;
 	pfid->f_ver = 0;
 
-	if (unlikely(!fid_is_sane(pfid)))
+	if (unlikely(!fid_is_sane(pfid))) {
+		CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+				      "the parent FID is invalid");
+
 		RETURN(LLIT_UNMATCHED_PAIR);
+	}
 
 	if (lu_fid_eq(pfid, &lso->lso_fid)) {
 		if (likely(llr->llr_lov_idx == idx))
 			RETURN(0);
+
+		CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+				      "the stripe index is unmatched");
 
 		RETURN(LLIT_UNMATCHED_PAIR);
 	}
@@ -4099,17 +4112,38 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 	if (IS_ERR(tobj))
 		RETURN(PTR_ERR(tobj));
 
-	if (dt_object_exists(tobj) == 0 || lfsck_is_dead_obj(tobj) ||
-	    !S_ISREG(lfsck_object_type(tobj)))
+	if (dt_object_exists(tobj) == 0) {
+		CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+				      "the parent is nonexistent");
+
 		GOTO(out, rc = LLIT_UNMATCHED_PAIR);
+	}
+
+	if (lfsck_is_dead_obj(tobj)) {
+		CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+				      "the parent is dead object");
+
+		GOTO(out, rc = LLIT_UNMATCHED_PAIR);
+	}
+
+	if (!S_ISREG(lfsck_object_type(tobj))) {
+		CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+				      "the parent is not a regular file");
+
+		GOTO(out, rc = LLIT_UNMATCHED_PAIR);
+	}
 
 	/* Load the tobj's layout EA, in spite of it is a local MDT-object or
 	 * remote one on another MDT. Then check whether the given OST-object
 	 * is in such layout. If yes, it is multiple referenced, otherwise it
 	 * is unmatched referenced case. */
 	rc = lfsck_layout_get_lovea(env, tobj, buf);
-	if (rc == 0 || rc == -ENODATA || rc == -ENOENT)
+	if (rc == 0 || rc == -ENODATA || rc == -ENOENT) {
+		CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+				      "the parent has no stripe data");
+
 		GOTO(out, rc = LLIT_UNMATCHED_PAIR);
+	}
 
 	if (unlikely(rc == -EOPNOTSUPP))
 		GOTO(out, rc = LLIT_NONE);
@@ -4123,8 +4157,12 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 		struct lov_comp_md_v1 *lcm = buf->lb_buf;
 		struct lov_comp_md_entry_v1 *lcme;
 
-		if (ff->ff_layout.ol_comp_id == 0)
+		if (ff->ff_layout.ol_comp_id == 0) {
+			CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+					      "the parent has incorrect comp_id");
+
 			GOTO(out, rc = LLIT_UNMATCHED_PAIR);
+		}
 
 		count = le16_to_cpu(lcm->lcm_entry_count);
 		for (i = 0; i < count; i++) {
@@ -4135,12 +4173,20 @@ static int lfsck_layout_check_parent(const struct lu_env *env,
 					le32_to_cpu(lcme->lcme_offset);
 				magic = le32_to_cpu(lmm->lmm_magic);
 				if (!(le32_to_cpu(lcme->lcme_flags) &
-				      LCME_FL_INIT))
+				      LCME_FL_INIT)) {
+					CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid,
+							      cfid,
+							      "the parent has uninitialized component");
+
 					GOTO(out, rc = LLIT_UNMATCHED_PAIR);
+				}
 
 				goto further;
 			}
 		}
+
+		CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+				      "the parent has no matched comp_id");
 
 		GOTO(out, rc = LLIT_UNMATCHED_PAIR);
 	}
@@ -4189,10 +4235,15 @@ further:
 			 * after taken the lock. */
 			if (!dt_object_remote(tobj)) {
 				if (dt_object_exists(tobj) == 0 ||
-				    lfsck_is_dead_obj(tobj))
+				    lfsck_is_dead_obj(tobj)) {
+					CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid,
+							      cfid,
+							      "the parent doesn't exist anymore after lock");
+
 					rc = LLIT_UNMATCHED_PAIR;
-				else
+				} else {
 					rc = LLIT_MULTIPLE_REFERENCED;
+				}
 
 				GOTO(unlock, rc);
 			}
@@ -4207,14 +4258,21 @@ further:
 			 * has been been removed or not. */
 			rc = dt_xattr_get(env, tobj, &LU_BUF_NULL,
 					  XATTR_NAME_DUMMY);
-			if (unlikely(rc == -ENOENT || rc >= 0))
+			if (unlikely(rc == -ENOENT || rc >= 0)) {
+				CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+						      "the parent is remote object and nonexistent after lock");
+
 				rc = LLIT_UNMATCHED_PAIR;
-			else if (rc == -ENODATA)
+			} else if (rc == -ENODATA) {
 				rc = LLIT_MULTIPLE_REFERENCED;
+			}
 
 			GOTO(unlock, rc);
 		}
 	}
+
+	CDEBUG_UNMATCHED_PAIR(lfsck, lso, pfid, cfid,
+			      "the parent has no matched stripe");
 
 	GOTO(out, rc = LLIT_UNMATCHED_PAIR);
 
@@ -4276,6 +4334,12 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	lfsck_buf_init(&buf, ff, sizeof(*ff));
 	rc = dt_xattr_get(env, child, &buf, XATTR_NAME_FID);
 	if (unlikely(rc > 0 && rc < sizeof(struct lu_fid))) {
+		CDEBUG(D_LFSCK, "%s:"DFID"/"DFID": "
+		       "the child object's %s is corrupted\n",
+		       lfsck_lfsck2name(lfsck), PFID(&lso->lso_fid),
+		       PFID(lu_object_fid(&child->do_lu)),
+		       XATTR_NAME_FID);
+
 		type = LLIT_UNMATCHED_PAIR;
 		goto repair;
 	}
