@@ -134,10 +134,10 @@ command_t cmdlist[] = {
 	 "print all the remote LNet connections\n"
 	 "usage: conn_list"},
 	{"route_list", jt_ptl_print_routes, 0,
-	 "print the LNet routing table, same as show_route\n"
+	 "print the LNet routing table, same as 'show_route'\n"
 	 "usage: route_list"},
 	{"show_route", jt_ptl_print_routes, 0,
-	 "print the LNet routing table, same as route_list\n"
+	 "print the LNet routing table, same as 'route_list'\n"
 	 "usage: show_route"},
 	{"ping", jt_ptl_ping, 0, "Check LNET connectivity\n"
 	 "usage: ping nid [timeout] [pid]"},
@@ -179,9 +179,12 @@ command_t cmdlist[] = {
 	{"device", jt_obd_device, 0,
 	 "set current device to <name|devno>\n"
 	 "usage: device <%name|$name|devno>"},
+	{"cfg_device", jt_obd_device, 0,
+	 "set current device to <name>, same as 'device'\n"
+	 "usage: cfg_device <name>"},
 	{"device_list", jt_obd_list, 0, "show all devices\n"
 	 "usage: device_list"},
-	{"dl", jt_obd_list, 0, "show all devices\n"
+	{"dl", jt_obd_list, 0, "show all devices, same as 'device_list'\n"
 	 "usage: dl [-t]"},
 
 	/* Device operations */
@@ -193,6 +196,9 @@ command_t cmdlist[] = {
 	 "abort recovery on a restarting MDT or OST device\n"},
 	{"abort_recovery_mdt", jt_obd_abort_recovery_mdt, 0,
 	 "abort recovery between MDTs\n"},
+	{"recover", jt_obd_recover, 0,
+	 "try to restore a lost connection immediately\n"
+	 "usage: recover [MDC/OSC device]"},
 	{"set_timeout", jt_lcfg_set_timeout, 0,
 	 "usage: conf_param obd_timeout=<secs>\n"},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
@@ -237,16 +243,16 @@ command_t cmdlist[] = {
 	 "debug daemon control and dump to a file\n"
 	 "usage: debug_daemon {start file [#MB]|stop}"},
 	{"debug_kernel", jt_dbg_debug_kernel, 0,
-	 "get debug buffer and dump to a file, same as dk\n"
+	 "get debug buffer and dump to a file, same as 'dk'\n"
 	 "usage: debug_kernel [file] [raw]"},
 	{"dk", jt_dbg_debug_kernel, 0,
-	 "get debug buffer and dump to a file, same as debug_kernel\n"
+	 "get debug buffer and dump to a file, same as 'debug_kernel'\n"
 	 "usage: dk [file] [raw]"},
 	{"debug_file", jt_dbg_debug_file, 0,
 	 "convert a binary debug file dumped by the kernel to ASCII text\n"
 	 "usage: debug_file <input> [output]"},
 	{"df", jt_dbg_debug_file, 0,
-	 "read debug buffer from input and dump to output, same as debug_file\n"
+	 "read debug log from input convert to ASCII, same as 'debug_file'\n"
 	 "usage: df <input> [output]"},
 	{"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer\n"
 	 "usage: clear"},
@@ -334,6 +340,12 @@ command_t cmdlist[] = {
 	 "usage: snapshot_umount <-F | --fsname fsname> [-h | --help]\n"
 	 "			 <-n | --name ssname>\n"
 	 "			 [-r | --rsh remote_shell]"},
+	{"fork_lcfg", jt_lcfg_fork, 0,
+	 "copy configuration files for named filesystem with given name\n"
+	 "usage: fork_lcfg <fsname> <newname>"},
+	{"erase_lcfg", jt_lcfg_erase, 0,
+	 "permanently erase configuration for the named filesystem\n"
+	 "usage: erase_lcfg <fsname>"},
 #endif /* HAVE_SERVER_SUPPORT */
 	/* Nodemap commands */
 	{"=== Nodemap ===", NULL, 0, "nodemap management"},
@@ -414,6 +426,68 @@ command_t cmdlist[] = {
 	 "permanently erase configuration for the named filesystem\n"
 	 "usage: erase_lcfg <fsname>"},
 
+#ifdef HAVE_SERVER_SUPPORT
+	/* LFSCK commands */
+	{"==== LFSCK ====", NULL, 0, "LFSCK"},
+	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
+	 "usage: lfsck_start [--device|-M [MDT,OST]_device]\n"
+	 "		     [--all|-A] [--create-ostobj|-c [on | off]]\n"
+	 "		     [--create-mdtobj|-C [on | off]]\n"
+	 "		     [--delay-create-ostobj|-d [on | off]]\n"
+	 "		     [--error|-e {continue | abort}] [--help|-h]\n"
+	 "		     [--dryrun|-n [on | off]] [--orphan|-o]\n"
+	 "		     [--reset|-r] [--speed|-s speed_limit]\n"
+	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
+	 "		     [--window-size|-w size]"},
+	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
+	 "usage: lfsck_stop [--device|-M [MDT,OST]_device]\n"
+	 "		    [--all|-A] [--help|-h]"},
+	{"lfsck_query", jt_lfsck_query, 0, "check lfsck(s) status\n"
+	 "usage: lfsck_query [--device|-M MDT_device] [--help|-h]\n"
+	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
+	 "		     [--wait|-w]"},
+#endif /* HAVE_SERVER_SUPPORT */
+
+	/* Llog operations */
+	{"==== LLOG ====", NULL, 0, "LLOG"},
+	{"llog_catlist", jt_llog_catlist, 0,
+	 "list all catalog files on current device. If current device is not\n"
+	 "set, MGS device is used by default.\n"
+	 "usage: llog_catlist"},
+	{"llog_info", jt_llog_info, 0,
+	 "print log header information.\n"
+	 "usage: llog_info <logname|FID>\n"},
+	{"llog_print", jt_llog_print, 0,
+	 "print log content information.\n"
+	 "usage: llog_print <logname|FID> [--start <index>] [--end <index>j]\n"
+	 "       print all records by default, or within given index range."},
+	{"llog_cancel", jt_llog_cancel, 0,
+	 "cancel one record in specified log.\n"
+	 "usage:llog_cancel <logname|FID> --log_idx <idx>\n"},
+	{"llog_check", jt_llog_check, 0,
+	 "verify that log content is valid.\n"
+	 "usage: llog_check <logname|FID> [--start <index>] [--end <index>j]\n"
+	 "       check all records from index 1 by default."},
+	{"llog_remove", jt_llog_remove, 0,
+	 "remove one log from catalog or plain log, erase it from disk.\n"
+	 "usage: llog_remove <logname|FID> [--log_id <id>]"},
+
+	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
+	/* network operations */
+	{"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
+	 "usage: add_interface ip [netmask]"},
+	{"del_interface", jt_ptl_del_interface, 0, "del interface entry\n"
+	 "usage: del_interface [ip]"},
+	{"add_route", jt_ptl_add_route, 0,
+	 "add an entry to the LNet routing table\n"
+	 "usage: add_route <gateway> [<hops> [<priority>]]"},
+	{"del_route", jt_ptl_del_route, 0,
+	 "delete route via gateway to targets from the LNet routing table\n"
+	 "usage: del_route <gateway> [<target>] [<target>]"},
+	{"set_route", jt_ptl_notify_router, 0,
+	 "enable/disable routes via gateway in the LNet routing table\n"
+	 "usage: set_route <gateway> <up/down> [<time>]"},
+
 	/* Test only commands */
 	{"==== testing (DANGEROUS) ====", NULL, 0, "testing (DANGEROUS)"},
 	{"--threads", jt_opt_threads, 0,
@@ -451,7 +525,7 @@ command_t cmdlist[] = {
 	 "otherwise fail 'count' messages.\n"
 	 "usage: fail nid|_all_ [count]"},
 
-	/*Test commands for echo client*/
+	/* Test commands for echo client */
 	{"test_create", jt_obd_test_create, 0,
 	 "create files on MDT by echo client\n"
 	 "usage: test_create [-d parent_basedir] <-D parent_count> "
@@ -505,71 +579,6 @@ command_t cmdlist[] = {
 	 "get the version of an object on servers\n"
 	 "usage: getobjversion <fid>\n"
 	 "	 getobjversion -i <id> -g <group>"},
-#ifdef HAVE_SERVER_SUPPORT
-	/* LFSCK commands */
-	{"==== LFSCK ====", NULL, 0, "LFSCK"},
-	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
-	 "usage: lfsck_start [--device|-M [MDT,OST]_device]\n"
-	 "		     [--all|-A] [--create-ostobj|-c [on | off]]\n"
-	 "		     [--create-mdtobj|-C [on | off]]\n"
-	 "		     [--delay-create-ostobj|-d [on | off]]\n"
-	 "		     [--error|-e {continue | abort}] [--help|-h]\n"
-	 "		     [--dryrun|-n [on | off]] [--orphan|-o]\n"
-	 "		     [--reset|-r] [--speed|-s speed_limit]\n"
-	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
-	 "		     [--window-size|-w size]"},
-	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
-	 "usage: lfsck_stop [--device|-M [MDT,OST]_device]\n"
-	 "		    [--all|-A] [--help|-h]"},
-	{"lfsck_query", jt_lfsck_query, 0, "check lfsck(s) status\n"
-	 "usage: lfsck_query [--device|-M MDT_device] [--help|-h]\n"
-	 "		     [--type|-t lfsck_type[,lfsck_type...]]\n"
-	 "		     [--wait|-w]"},
-#endif /* HAVE_SERVER_SUPPORT */
-	{"cfg_device", jt_obd_device, 0,
-	 "set current device to <name>\n"
-	 "usage: device <name>"},
-	{"recover", jt_obd_recover, 0,
-	 "try to restore a lost connection immediately\n"
-	 "usage: recover [MDC/OSC device]"},
-	/* Llog operations */
-	{"llog_catlist", jt_llog_catlist, 0,
-	 "list all catalog files on current device. If current device is not\n"
-	 "set, MGS device is used by default.\n"
-	 "usage: llog_catlist"},
-	{"llog_info", jt_llog_info, 0,
-	 "print log header information.\n"
-	 "usage: llog_info <logname|LLOG_ID>\n"},
-	{"llog_print", jt_llog_print, 0,
-	 "print log content information.\n"
-	 "usage: llog_print <logname|LLOG_ID> [--start <index>] [--end <index>j]\n"
-	 "       print all records by default, or within given index range."},
-	{"llog_cancel", jt_llog_cancel, 0,
-	 "cancel one record in specified log.\n"
-	 "usage:llog_cancel <logname|LLOG_ID> --log_idx <idx>\n"},
-	{"llog_check", jt_llog_check, 0,
-	 "verify that log content is valid.\n"
-	 "usage: llog_check <logname|LLOG_ID> [--start <index>] [--end <index>j]\n"
-	 "       check all records from index 1 by default."},
-	{"llog_remove", jt_llog_remove, 0,
-	 "remove one log from catalog or plain log, erase it from disk.\n"
-	 "usage: llog_remove <logname|LLOG_ID> [--log_id <id>]"},
-	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
-	/* network operations */
-	{"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
-	 "usage: add_interface ip [netmask]"},
-	{"del_interface", jt_ptl_del_interface, 0, "del interface entry\n"
-	 "usage: del_interface [ip]"},
-	{"add_route", jt_ptl_add_route, 0,
-	 "add an entry to the LNet routing table\n"
-	 "usage: add_route <gateway> [<hops> [<priority>]]"},
-	{"del_route", jt_ptl_del_route, 0,
-	 "delete route via gateway to targets from the LNet routing table\n"
-	 "usage: del_route <gateway> [<target>] [<target>]"},
-	{"set_route", jt_ptl_notify_router, 0,
-	 "enable/disable routes via gateway in the LNet routing table\n"
-	 "usage: set_route <gateway> <up/down> [<time>]"},
-
 	{ 0, 0, 0, NULL }
 };
 
