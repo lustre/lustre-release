@@ -46,9 +46,7 @@
 /*
  *  osd_iam.h
  */
-#ifndef CLASSERT
-#define CLASSERT(cond) do {switch(42) {case (cond): case 0: break;}} while (0)
-#endif
+
 /* implication */
 #define ergo(a, b) (!(a) || (b))
 /* logical equivalence */

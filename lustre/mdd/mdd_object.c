@@ -2323,7 +2323,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 
 	ENTRY;
 
-	CLASSERT(ARRAY_SIZE(info->mti_buf) >= 4);
+	BUILD_BUG_ON(ARRAY_SIZE(info->mti_buf) < 4);
 	memset(info->mti_buf, 0, sizeof(info->mti_buf));
 
 	/* we have to sort the 2 obj, so locking will always

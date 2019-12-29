@@ -249,7 +249,7 @@ static int nodemap_idx_insert(const struct lu_env *env,
 	struct dt_device *dev = lu2dt_dev(idx->do_lu.lo_dev);
 	int rc;
 
-	CLASSERT(sizeof(union nodemap_rec) == 32);
+	BUILD_BUG_ON(sizeof(union nodemap_rec) != 32);
 
 	th = dt_trans_create(env, dev);
 

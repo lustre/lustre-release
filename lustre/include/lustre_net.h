@@ -559,15 +559,15 @@ struct ptlrpc_client {
 #define REQ_MAX_ACK_LOCKS 8
 
 union ptlrpc_async_args {
-        /**
-         * Scratchpad for passing args to completion interpreter. Users
-         * cast to the struct of their choosing, and CLASSERT that this is
-         * big enough.  For _tons_ of context, OBD_ALLOC a struct and store
-         * a pointer to it here.  The pointer_arg ensures this struct is at
-         * least big enough for that.
-         */
-        void      *pointer_arg[11];
-	__u64      space[7];
+	/**
+	 * Scratchpad for passing args to completion interpreter. Users
+	 * cast to the struct of their choosing, and BUILD_BUG_ON that this is
+	 * big enough.  For _tons_ of context, OBD_ALLOC a struct and store
+	 * a pointer to it here.  The pointer_arg ensures this struct is at
+	 * least big enough for that.
+	 */
+	void    *pointer_arg[11];
+	__u64   space[7];
 };
 
 struct ptlrpc_request_set;

@@ -1029,8 +1029,8 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		}
 	}
 
-	CLASSERT(sizeof(zde->lzd_reg) == 8);
-	CLASSERT(sizeof(*zde) % 8 == 0);
+	BUILD_BUG_ON(sizeof(zde->lzd_reg) != 8);
+	BUILD_BUG_ON(sizeof(*zde) % 8 != 0);
 
 	memset(&zde->lzd_reg, 0, sizeof(zde->lzd_reg));
 	zde->lzd_reg.zde_type = IFTODT(rec1->rec_type & S_IFMT);
@@ -1330,7 +1330,7 @@ static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
 	ENTRY;
 
 	/* temp. storage should be enough for any key supported by ZFS */
-	CLASSERT(sizeof(za->za_name) <= sizeof(it->ozi_name));
+	BUILD_BUG_ON(sizeof(za->za_name) > sizeof(it->ozi_name));
 
 	/*
 	 * the first ->next() moves the cursor to .
