@@ -61,12 +61,12 @@ do {                                            \
 
 #define CHECK_DEFINE(a)                                                 \
 do {                                                                    \
-        printf ("        CLASSERT ("#a" == "STRINGIFY(a)");\n");        \
+        printf ("        BUILD_BUG_ON("#a" != "STRINGIFY(a)");\n");     \
 } while (0)
 
-#define CHECK_VALUE(a)                                  \
-do {                                                    \
-        printf ("        CLASSERT ("#a" == %d);\n", a); \
+#define CHECK_VALUE(a)                                     \
+do {                                                       \
+        printf ("        BUILD_BUG_ON("#a" != %d);\n", a); \
 } while (0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                \
