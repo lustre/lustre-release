@@ -631,9 +631,8 @@ int ctx_check_refresh(struct ptlrpc_cli_ctx *ctx)
 }
 
 static
-int ctx_refresh_timeout(void *data)
+int ctx_refresh_timeout(struct ptlrpc_request *req)
 {
-	struct ptlrpc_request *req = data;
 	int rc;
 
 	/* conn_cnt is needed in expire_one_request */
@@ -653,9 +652,8 @@ int ctx_refresh_timeout(void *data)
 }
 
 static
-void ctx_refresh_interrupt(void *data)
+void ctx_refresh_interrupt(struct ptlrpc_request *req)
 {
-	struct ptlrpc_request *req = data;
 
 	spin_lock(&req->rq_lock);
 	req->rq_intr = 1;
@@ -689,7 +687,6 @@ int sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout)
 {
 	struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
 	struct ptlrpc_sec *sec;
-	struct l_wait_info lwi;
 	int rc;
 
 	ENTRY;
@@ -823,10 +820,18 @@ again:
 	req->rq_restart = 0;
 	spin_unlock(&req->rq_lock);
 
-	lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(timeout),
-			       ctx_refresh_timeout,
-			       ctx_refresh_interrupt, req);
-	rc = l_wait_event(req->rq_reply_waitq, ctx_check_refresh(ctx), &lwi);
+	if (wait_event_idle_timeout(req->rq_reply_waitq,
+				    ctx_check_refresh(ctx),
+				    cfs_time_seconds(timeout)) == 0) {
+		rc = -ETIMEDOUT;
+		if (!ctx_refresh_timeout(req) &&
+		    l_wait_event_abortable(req->rq_reply_waitq,
+					   ctx_check_refresh(ctx))
+		    == -ERESTARTSYS) {
+			rc = -EINTR;
+			ctx_refresh_interrupt(req);
+		}
+	}
 
 	/*
 	 * following cases could lead us here:
