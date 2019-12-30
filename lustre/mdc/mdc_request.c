@@ -39,9 +39,7 @@
 #include <linux/user_namespace.h>
 #include <linux/utsname.h>
 #include <linux/delay.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
 
 #include <lustre_errno.h>
 

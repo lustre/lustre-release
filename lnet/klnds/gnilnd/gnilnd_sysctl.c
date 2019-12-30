@@ -236,7 +236,6 @@ static struct ctl_table kgnilnd_table[] = {
 	 * to go via /proc for portability.
 	 */
 	{
-		INIT_CTL_NAME
 		.procname = "version",
 		.data     = LUSTRE_VERSION_STRING,
 		.maxlen   = sizeof(LUSTRE_VERSION_STRING),
@@ -244,7 +243,6 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_dostring
 	},
 	{
-		INIT_CTL_NAME
 		.procname = "thread_pause",
 		.data     = &kgnilnd_sysctl.ksd_pause_trigger,
 		.maxlen   = sizeof(int),
@@ -252,7 +250,6 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_toggle_thread_pause,
 	},
 	{
-		INIT_CTL_NAME
 		.procname = "hw_quiesce",
 		.data     = &kgnilnd_sysctl.ksd_quiesce_secs,
 		.maxlen   = sizeof(__u32),
@@ -260,7 +257,6 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_hw_quiesce,
 	},
 	{
-		INIT_CTL_NAME
 		.procname = "stack_reset",
 		.data     = NULL,
 		.maxlen   = sizeof(int),
@@ -268,7 +264,6 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_trigger_stack_reset,
 	},
 	{
-		INIT_CTL_NAME
 		.procname = "rdmaq_override",
 		.data     = &kgnilnd_sysctl.ksd_rdmaq_override,
 		.maxlen   = sizeof(int),
@@ -276,7 +271,6 @@ static struct ctl_table kgnilnd_table[] = {
 		.proc_handler = &proc_toggle_rdmaq_override,
 	},
 	{
-		INIT_CTL_NAME
 		.procname = "peer_state",
 		.data     = kgnilnd_sysctl.ksd_peer_state,
 		.maxlen   = GNILND_PEERSTATE_STRLEN,
@@ -288,7 +282,6 @@ static struct ctl_table kgnilnd_table[] = {
 
 static struct ctl_table kgnilnd_top_table[2] = {
 	{
-		INIT_CTL_NAME
 		.procname = "kgnilnd",
 		.data     = NULL,
 		.maxlen   = 0,

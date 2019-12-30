@@ -6,9 +6,6 @@ libcfs-linux-objs += linux-curproc.o
 libcfs-linux-objs += linux-hash.o
 libcfs-linux-objs += linux-crypto.o linux-crypto-adler.o
 libcfs-linux-objs += linux-wait.o
-@HAVE_CRC32_TRUE@libcfs-linux-objs += linux-crypto-crc32.o
-@HAVE_PCLMULQDQ_TRUE@@NEED_PCLMULQDQ_CRC32_TRUE@libcfs-linux-objs += linux-crypto-crc32pclmul.o crc32-pclmul_asm.o
-@HAVE_PCLMULQDQ_TRUE@@NEED_PCLMULQDQ_CRC32C_TRUE@libcfs-linux-objs += linux-crypto-crc32c-pclmul.o crc32c-pcl-intel-asm_64.o
 
 default: all
 

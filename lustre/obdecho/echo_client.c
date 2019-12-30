@@ -33,11 +33,9 @@
 #define DEBUG_SUBSYSTEM S_ECHO
 
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
-#include <libcfs/libcfs.h>
+#include <linux/uidgid.h>
 
+#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_support.h>
 #include <obd_class.h>

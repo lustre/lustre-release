@@ -32,9 +32,8 @@
 
 #define DEBUG_SUBSYSTEM S_MDC
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
+
 #include <lustre_net.h>
 #include <obd_class.h>
 #include <obd.h>

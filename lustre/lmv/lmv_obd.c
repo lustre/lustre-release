@@ -36,9 +36,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/mm.h>

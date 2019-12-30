@@ -40,9 +40,7 @@
 #include <linux/version.h>
 #include <linux/security.h>
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
 #include <linux/uaccess.h>
 #include <linux/buffer_head.h>   // for wait_on_buffer
 #include <linux/pagevec.h>

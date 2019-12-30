@@ -491,7 +491,6 @@ static int proc_cpt_distance(struct ctl_table *table, int write,
 
 static struct ctl_table lnet_table[] = {
 	{
-		INIT_CTL_NAME
 		.procname	= "debug",
 		.data		= &libcfs_debug,
 		.maxlen		= sizeof(int),
@@ -499,7 +498,6 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_dobitmasks,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "subsystem_debug",
 		.data		= &libcfs_subsystem_debug,
 		.maxlen		= sizeof(int),
@@ -507,7 +505,6 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_dobitmasks,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "printk",
 		.data		= &libcfs_printk,
 		.maxlen		= sizeof(int),
@@ -515,21 +512,18 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_dobitmasks,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "cpu_partition_table",
 		.maxlen		= 128,
 		.mode		= 0444,
 		.proc_handler	= &proc_cpt_table,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "cpu_partition_distance",
 		.maxlen		= 128,
 		.mode		= 0444,
 		.proc_handler	= &proc_cpt_distance,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "debug_log_upcall",
 		.data		= lnet_debug_log_upcall,
 		.maxlen		= sizeof(lnet_debug_log_upcall),
@@ -537,7 +531,6 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_dostring,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "lnet_memused",
 		.data		= (int *)&libcfs_kmemory.counter,
 		.maxlen		= sizeof(int),
@@ -545,7 +538,6 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_dointvec,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "catastrophe",
 		.data		= &libcfs_catastrophe,
 		.maxlen		= sizeof(int),
@@ -553,21 +545,18 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_dointvec,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "dump_kernel",
 		.maxlen		= 256,
 		.mode		= 0200,
 		.proc_handler	= &proc_dump_kernel,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "daemon_file",
 		.mode		= 0644,
 		.maxlen		= 256,
 		.proc_handler	= &proc_daemon_file,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "watchdog_ratelimit",
 		.data		= &libcfs_watchdog_ratelimit,
 		.maxlen		= sizeof(int),
@@ -577,7 +566,6 @@ static struct ctl_table lnet_table[] = {
 		.extra2		= &max_watchdog_ratelimit,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "force_lbug",
 		.data		= NULL,
 		.maxlen		= 0,
@@ -585,7 +573,6 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &libcfs_force_lbug
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "fail_loc",
 		.data		= &cfs_fail_loc,
 		.maxlen		= sizeof(cfs_fail_loc),
@@ -593,7 +580,6 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_fail_loc
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "fail_val",
 		.data		= &cfs_fail_val,
 		.maxlen		= sizeof(int),
@@ -601,7 +587,6 @@ static struct ctl_table lnet_table[] = {
 		.proc_handler	= &proc_dointvec
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "fail_err",
 		.data		= &cfs_fail_err,
 		.maxlen		= sizeof(cfs_fail_err),

@@ -858,28 +858,6 @@ const struct dt_rec *osd_quota_pack(struct osd_object *obj,
 				    union lquota_rec *quota_rec);
 void osd_quota_unpack(struct osd_object *obj, const struct dt_rec *rec);
 
-#ifndef HAVE_I_UID_READ
-static inline uid_t i_uid_read(const struct inode *inode)
-{
-	return inode->i_uid;
-}
-
-static inline gid_t i_gid_read(const struct inode *inode)
-{
-	return inode->i_gid;
-}
-
-static inline void i_uid_write(struct inode *inode, uid_t uid)
-{
-	inode->i_uid = uid;
-}
-
-static inline void i_gid_write(struct inode *inode, gid_t gid)
-{
-	inode->i_gid = gid;
-}
-#endif
-
 #ifdef HAVE_PROJECT_QUOTA
 static inline __u32 i_projid_read(struct inode *inode)
 {

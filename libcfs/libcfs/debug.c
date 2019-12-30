@@ -69,15 +69,8 @@ static int libcfs_param_debug_mb_set(const char *val,
  * RHEL6 does not support any kind of locking so we have to provide
  * our own
  */
-#if !defined(HAVE_MODULE_PARAM_LOCKING) && !defined(HAVE_KERNEL_PARAM_LOCK)
-	kernel_param_lock(THIS_MODULE);
-#endif
 	if (!*((unsigned int *)kp->arg)) {
 		*((unsigned int *)kp->arg) = num;
-
-#if !defined(HAVE_MODULE_PARAM_LOCKING) && !defined(HAVE_KERNEL_PARAM_LOCK)
-		kernel_param_unlock(THIS_MODULE);
-#endif
 		return 0;
 	}
 
@@ -86,9 +79,6 @@ static int libcfs_param_debug_mb_set(const char *val,
 	if (!rc)
 		*((unsigned int *)kp->arg) = cfs_trace_get_debug_mb();
 
-#if !defined(HAVE_MODULE_PARAM_LOCKING) && !defined(HAVE_KERNEL_PARAM_LOCK)
-	kernel_param_unlock(THIS_MODULE);
-#endif
 	return rc;
 }
 

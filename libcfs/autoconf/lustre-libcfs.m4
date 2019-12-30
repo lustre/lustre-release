@@ -49,213 +49,6 @@ AS_IF([test "x$enable_panic_dumplog" = xyes],
 ]) # LIBCFS_CONFIG_PANIC_DUMPLOG
 
 #
-# LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
-#
-# 2.6.32-30.el6 adds a new 'walk_stack' field in 'struct stacktrace_ops'
-#
-AC_DEFUN([LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK], [
-LB_CHECK_COMPILE([if 'struct stacktrace_ops' has 'walk_stack' field],
-stacktrace_ops_walk_stack, [
-	#include <asm/stacktrace.h>
-],[
-	((struct stacktrace_ops *)0)->walk_stack(NULL, NULL, 0, NULL, NULL, NULL, NULL);
-],[
-	AC_DEFINE(STACKTRACE_OPS_HAVE_WALK_STACK, 1,
-		['struct stacktrace_ops' has 'walk_stack' field])
-])
-]) # LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
-
-#
-# LIBCFS_STACKTRACE_WARNING
-#
-# 3.0 removes stacktrace_ops warning* functions
-#
-AC_DEFUN([LIBCFS_STACKTRACE_WARNING], [
-LB_CHECK_COMPILE([if 'stacktrace_ops.warning' is exist],
-stacktrace_ops_warning, [
-	struct task_struct;
-	struct pt_regs;
-	#include <asm/stacktrace.h>
-],[
-	((struct stacktrace_ops *)0)->warning(NULL, NULL);
-],[
-	AC_DEFINE(HAVE_STACKTRACE_WARNING, 1,
-		[stacktrace_ops.warning is exist])
-])
-]) # LIBCFS_STACKTRACE_WARNING
-
-#
-# LC_SHRINKER_WANT_SHRINK_PTR
-#
-# RHEL6/2.6.32 want to have pointer to shrinker self pointer in handler function
-#
-AC_DEFUN([LC_SHRINKER_WANT_SHRINK_PTR], [
-LB_CHECK_COMPILE([if 'shrinker' want self pointer in handler],
-shrink_self_pointer, [
-	#include <linux/mm.h>
-],[
-	struct shrinker *tmp = NULL;
-	tmp->shrink(tmp, 0, 0);
-],[
-	AC_DEFINE(HAVE_SHRINKER_WANT_SHRINK_PTR, 1,
-		[shrinker want self pointer in handler])
-])
-]) # LC_SHRINKER_WANT_SHRINK_PTR
-
-#
-# LIBCFS_SYSCTL_CTLNAME
-#
-# 2.6.33 no longer has ctl_name & strategy field in struct ctl_table.
-#
-AC_DEFUN([LIBCFS_SYSCTL_CTLNAME], [
-LB_CHECK_COMPILE([if 'ctl_table' has a 'ctl_name' field],
-ctl_table_ctl_name, [
-	#include <linux/sysctl.h>
-],[
-	struct ctl_table ct;
-	ct.ctl_name = sizeof(ct);
-],[
-	AC_DEFINE(HAVE_SYSCTL_CTLNAME, 1,
-		[ctl_table has ctl_name field])
-])
-]) # LIBCFS_SYSCTL_CTLNAME
-
-#
-# LIBCFS_MODULE_LOCKING
-#
-# 2.6.36 introduced locking to module params. RHEL6 lacks this support
-#
-AC_DEFUN([LIBCFS_MODULE_LOCKING],[
-LB_CHECK_COMPILE([does the kernel support module param locking],
-module_param_locking, [
-	#include <linux/moduleparam.h>
-],[
-	__kernel_param_lock(NULL);
-	__kernel_param_unlock(NULL);
-],[
-	AC_DEFINE(HAVE_MODULE_PARAM_LOCKING, 1,
-		[locking module param is supported])
-])
-]) # LIBCFS_MODULE_LOCKING
-
-#
-# LIBCFS_KSTRTOUL
-#
-# 2.6.38 kstrtoul is added
-#
-AC_DEFUN([LIBCFS_KSTRTOUL], [
-LB_CHECK_COMPILE([if Linux kernel has 'kstrtoul'],
-kstrtoul, [
-	#include <linux/kernel.h>
-],[
-	unsigned long result;
-	return kstrtoul("12345", 0, &result);
-],[
-	AC_DEFINE(HAVE_KSTRTOUL, 1,
-		[kernel has kstrtoul])
-])
-]) # LIBCFS_KSTRTOUL
-
-#
-# LIBCFS_DUMP_TRACE_ADDRESS
-#
-# 2.6.39 adds a base pointer address argument to dump_trace
-#
-AC_DEFUN([LIBCFS_DUMP_TRACE_ADDRESS], [
-LB_CHECK_COMPILE([if 'dump_trace' want address],
-dump_trace_address, [
-	struct task_struct;
-	struct pt_regs;
-	#include <asm/stacktrace.h>
-],[
-	dump_trace(NULL, NULL, NULL, 0, NULL, NULL);
-],[
-	AC_DEFINE(HAVE_DUMP_TRACE_ADDRESS, 1,
-		[dump_trace want address argument])
-])
-]) # LIBCFS_DUMP_TRACE_ADDRESS
-
-#
-# LC_SHRINK_CONTROL
-#
-# FC15 2.6.40-5 backported the "shrink_control" parameter to the memory
-# pressure shrinker from Linux 3.0
-#
-AC_DEFUN([LC_SHRINK_CONTROL], [
-LB_CHECK_COMPILE([if 'shrink_control' is present],
-shrink_control, [
-	#include <linux/atomic.h>
-	#include <linux/mm.h>
-],[
-	struct shrink_control tmp = {0};
-	tmp.nr_to_scan = sizeof(tmp);
-],[
-	AC_DEFINE(HAVE_SHRINK_CONTROL, 1,
-		[shrink_control is present])
-])
-]) # LC_SHRINK_CONTROL
-
-#
-# LIBCFS_PROCESS_NAMESPACE
-#
-# 3.5 introduced process namespace
-AC_DEFUN([LIBCFS_PROCESS_NAMESPACE], [
-LB_CHECK_LINUX_HEADER([linux/uidgid.h], [
-	AC_DEFINE(HAVE_UIDGID_HEADER, 1,
-		[uidgid.h is present])])
-]) # LIBCFS_PROCESS_NAMESPACE
-
-#
-# LIBCFS_I_UID_READ
-#
-# 3.5 added helpers to read the new uid/gid types from VFS structures
-# SLE11 SP3 has uidgid.h but not the helpers
-#
-AC_DEFUN([LIBCFS_I_UID_READ], [
-LB_CHECK_COMPILE([if 'i_uid_read' is present],
-i_uid_read, [
-	#include <linux/fs.h>
-],[
-	i_uid_read(NULL);
-],[
-	AC_DEFINE(HAVE_I_UID_READ, 1, [i_uid_read is present])
-])
-]) # LIBCFS_I_UID_READ
-
-#
-# LIBCFS_HAVE_CRC32
-#
-AC_DEFUN([LIBCFS_HAVE_CRC32], [
-LB_CHECK_CONFIG_IM([CRC32],
-	[have_crc32="yes"], [have_crc32="no"])
-AS_IF([test "x$have_crc32" = xyes],
-	[AC_DEFINE(HAVE_CRC32, 1,
-		[kernel compiled with CRC32 functions])])
-]) # LIBCFS_HAVE_CRC32
-
-#
-# LIBCFS_ENABLE_CRC32_ACCEL
-#
-AC_DEFUN([LIBCFS_ENABLE_CRC32_ACCEL], [
-LB_CHECK_CONFIG_IM([CRYPTO_CRC32_PCLMUL],
-	[enable_crc32_crypto="no"], [enable_crc32_crypto="yes"])
-AS_IF([test "x$have_crc32" = xyes -a "x$enable_crc32_crypto" = xyes], [
-	AC_DEFINE(NEED_CRC32_ACCEL, 1, [need pclmulqdq based crc32])
-	AC_MSG_WARN([No crc32 pclmulqdq crypto api found, enable internal pclmulqdq based crc32])])
-]) # LIBCFS_ENABLE_CRC32_ACCEL
-
-#
-# LIBCFS_ENABLE_CRC32C_ACCEL
-#
-AC_DEFUN([LIBCFS_ENABLE_CRC32C_ACCEL], [
-LB_CHECK_CONFIG_IM([CRYPTO_CRC32C_INTEL],
-	[enable_crc32c_crypto="no"], [enable_crc32c_crypto="yes"])
-AS_IF([test "x$enable_crc32c_crypto" = xyes], [
-	AC_DEFINE(NEED_CRC32C_ACCEL, 1, [need pclmulqdq based crc32c])
-	AC_MSG_WARN([No crc32c pclmulqdq crypto api found, enable internal pclmulqdq based crc32c])])
-]) # LIBCFS_ENABLE_CRC32C_ACCEL
-
-#
 # Kernel version 3.11 introduced ktime_get_ts64
 #
 AC_DEFUN([LIBCFS_KTIME_GET_TS64],[
@@ -656,16 +449,6 @@ topology_sibling_cpumask, [
 		[topology_sibling_cpumask is available])
 ])
 ]) # LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
-
-#
-# Kernel version 4.2 commit df6b35f409af0a8ff1ef62f552b8402f3fef8665
-# header file i387.h was renamed to fpu/api.h
-#
-AC_DEFUN([LIBCFS_FPU_API], [
-LB_CHECK_LINUX_HEADER([asm/fpu/api.h], [
-	AC_DEFINE(HAVE_FPU_API_HEADER, 1,
-		[fpu/api.h is present])])
-]) # LIBCFS_FPU_API
 
 #
 # Kernel version 4.4 commit ef951599074ba4fad2d0efa0a977129b41e6d203
@@ -1322,29 +1105,6 @@ AC_MSG_NOTICE([LibCFS kernel checks
 ==============================================================================])
 LIBCFS_CONFIG_PANIC_DUMPLOG
 
-# 2.6.32
-LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
-LC_SHRINKER_WANT_SHRINK_PTR
-# 2.6.33
-LIBCFS_SYSCTL_CTLNAME
-# 2.6.36
-LIBCFS_MODULE_LOCKING
-# 2.6.38
-LIBCFS_KSTRTOUL
-# 2.6.39
-LIBCFS_DUMP_TRACE_ADDRESS
-# 2.6.40 fc15
-LC_SHRINK_CONTROL
-# 3.0
-LIBCFS_STACKTRACE_WARNING
-# 3.5
-LIBCFS_PROCESS_NAMESPACE
-LIBCFS_I_UID_READ
-# 3.8
-LIBCFS_HAVE_CRC32
-LIBCFS_ENABLE_CRC32_ACCEL
-# 3.10
-LIBCFS_ENABLE_CRC32C_ACCEL
 # 3.11
 LIBCFS_KTIME_GET_TS64
 # 3.12
@@ -1375,7 +1135,6 @@ LIBCFS_KTIME_MS_DELTA
 LIBCFS_KERNEL_PARAM_LOCK
 # 4.2
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
-LIBCFS_FPU_API
 # 4.4
 LIBCFS_KSTRTOBOOL_FROM_USER
 # 4.5
@@ -1493,15 +1252,6 @@ AS_IF([test "x$enable_libpthread" = xyes], [
 ])
 AC_SUBST(PTHREAD_LIBS)
 ]) # LIBCFS_CONFIGURE
-
-#
-# LIBCFS_CONDITIONALS
-#
-AC_DEFUN([LIBCFS_CONDITIONALS], [
-AM_CONDITIONAL(HAVE_CRC32, [test "x$have_crc32" = xyes])
-AM_CONDITIONAL(NEED_PCLMULQDQ_CRC32,  [test "x$have_crc32" = xyes -a "x$enable_crc32_crypto" = xyes])
-AM_CONDITIONAL(NEED_PCLMULQDQ_CRC32C, [test "x$enable_crc32c_crypto" = xyes])
-]) # LIBCFS_CONDITIONALS
 
 #
 # LIBCFS_CONFIG_FILES

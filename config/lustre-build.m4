@@ -424,16 +424,6 @@ AM_CONDITIONAL([RHEL], [test x$RHEL_KERNEL = xyes])
 AM_CONDITIONAL([SUSE], [test x$SUSE_KERNEL = xyes])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
 
-# Sanity check for PCLMULQDQ instruction availability
-# PCLMULQDQ instruction is a new instruction available beginning with
-# the all new Core processor family based on the 32nm microarchitecture
-# codename Westmere. So, $target_cpu = x86_64 should have this instruction
-# except MIC microarchitecture (k1om).
-AM_CONDITIONAL(HAVE_PCLMULQDQ, test x$target_cpu = "xx86_64" -a x$target_vendor != "xk1om")
-AS_IF([test x$target_cpu = "xx86_64" -a x$target_vendor != "xk1om"],
-	[AC_DEFINE(HAVE_PCLMULQDQ, 1, [have PCLMULQDQ instruction])])
-
-LIBCFS_CONDITIONALS
 LN_CONDITIONALS
 LC_CONDITIONALS
 ]) # LB_CONDITIONALS

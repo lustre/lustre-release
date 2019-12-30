@@ -31,25 +31,7 @@
  */
 
 /**
- * Functions for start/stop shash CRC32 algorithm.
- */
-int cfs_crypto_crc32_register(void);
-void cfs_crypto_crc32_unregister(void);
-
-/**
  * Functions for start/stop shash adler32 algorithm.
  */
 int cfs_crypto_adler32_register(void);
 void cfs_crypto_adler32_unregister(void);
-
-/**
- * Functions for start/stop shash crc32 pclmulqdq
- */
-int cfs_crypto_crc32_pclmul_register(void);
-void cfs_crypto_crc32_pclmul_unregister(void);
-
-/**
- * Functions for start/stop shash crc32c pclmulqdq
- */
-int cfs_crypto_crc32c_pclmul_register(void);
-void cfs_crypto_crc32c_pclmul_unregister(void);

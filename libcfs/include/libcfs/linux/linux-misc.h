@@ -38,14 +38,6 @@
 #include <linux/user_namespace.h>
 #include <linux/uio.h>
 
-#ifdef HAVE_SYSCTL_CTLNAME
-#define INIT_CTL_NAME	.ctl_name = CTL_UNNUMBERED,
-#define INIT_STRATEGY	.strategy = &sysctl_intvec,
-#else
-#define INIT_CTL_NAME
-#define INIT_STRATEGY
-#endif
-
 #ifndef HAVE_IOV_ITER_TYPE
 #ifdef HAVE_IOV_ITER_HAS_TYPE_MEMBER
 #define iter_is_iovec(iter)		((iter)->type & ITER_IOVEC)
@@ -61,72 +53,6 @@
 #define iov_iter_is_discard(iter)	0
 #endif
 #endif /* HAVE_IOV_ITER_TYPE */
-
-#ifndef HAVE_MODULE_PARAM_LOCKING
-static DEFINE_MUTEX(param_lock);
-#endif
-
-#ifndef HAVE_UIDGID_HEADER
-
-#ifndef _LINUX_UIDGID_H
-#define _LINUX_UIDGID_H
-
-typedef uid_t kuid_t;
-typedef gid_t kgid_t;
-
-#define INVALID_UID	-1
-#define INVALID_GID	-1
-
-#define GLOBAL_ROOT_UID	0
-#define GLOBAL_ROOT_GID	0
-
-static inline uid_t __kuid_val(kuid_t uid)
-{
-	return uid;
-}
-
-static inline gid_t __kgid_val(kgid_t gid)
-{
-	return gid;
-}
-
-static inline kuid_t make_kuid(struct user_namespace *from, uid_t uid)
-{
-	return uid;
-}
-
-static inline kgid_t make_kgid(struct user_namespace *from, gid_t gid)
-{
-	return gid;
-}
-
-static inline uid_t from_kuid(struct user_namespace *to, kuid_t uid)
-{
-	return uid;
-}
-
-static inline gid_t from_kgid(struct user_namespace *to, kgid_t gid)
-{
-	return gid;
-}
-
-static inline bool uid_eq(kuid_t left, kuid_t right)
-{
-	return left == right;
-}
-
-static inline bool uid_valid(kuid_t uid)
-{
-	return uid != (typeof(uid))INVALID_UID;
-}
-
-static inline bool gid_valid(kgid_t gid)
-{
-	return gid != (typeof(gid))INVALID_GID;
-}
-#endif /* _LINUX_UIDGID_H */
-
-#endif
 
 int cfs_get_environ(const char *key, char *value, int *val_len);
 
@@ -150,34 +76,14 @@ ssize_t cfs_kernel_read(struct file *file, void *buf, size_t count,
 #ifndef HAVE_KERNEL_PARAM_LOCK
 static inline void kernel_param_unlock(struct module *mod)
 {
-#ifndef	HAVE_MODULE_PARAM_LOCKING
-	mutex_unlock(&param_lock);
-#else
 	__kernel_param_unlock();
-#endif
 }
 
 static inline void kernel_param_lock(struct module *mod)
 {
-#ifndef	HAVE_MODULE_PARAM_LOCKING
-	mutex_lock(&param_lock);
-#else
 	__kernel_param_lock();
-#endif
 }
 #endif /* ! HAVE_KERNEL_PARAM_LOCK */
-
-#ifndef HAVE_KSTRTOUL
-static inline int kstrtoul(const char *s, unsigned int base, unsigned long *res)
-{
-	char *end = (char *)s;
-
-	*res = simple_strtoul(s, &end, base);
-	if (end - s == 0)
-		return -EINVAL;
-	return 0;
-}
-#endif /* !HAVE_KSTRTOUL */
 
 #ifndef HAVE_KSTRTOBOOL_FROM_USER
 

@@ -456,18 +456,6 @@ static int cfs_crypto_test_hashes(void)
 
 static int adler32;
 
-#ifdef HAVE_CRC32
-static int crc32;
-#endif
-#ifdef HAVE_PCLMULQDQ
-#ifdef NEED_CRC32_ACCEL
-static int crc32_pclmul;
-#endif
-#ifdef NEED_CRC32C_ACCEL
-static int crc32c_pclmul;
-#endif
-#endif /* HAVE_PCLMULQDQ */
-
 /**
  * Register available hash functions
  *
@@ -477,19 +465,8 @@ int cfs_crypto_register(void)
 {
 	request_module("crc32c");
 
-	adler32 = cfs_crypto_adler32_register();
-
-#ifdef HAVE_CRC32
-	crc32 = cfs_crypto_crc32_register();
-#endif
-#ifdef HAVE_PCLMULQDQ
-#ifdef NEED_CRC32_ACCEL
-	crc32_pclmul = cfs_crypto_crc32_pclmul_register();
-#endif
-#ifdef NEED_CRC32C_ACCEL
-	crc32c_pclmul = cfs_crypto_crc32c_pclmul_register();
-#endif
-#endif /* HAVE_PCLMULQDQ */
+	if (cfs_crypto_adler32_register() == 0)
+		adler32 = 1;
 
 	/* check all algorithms and do performance test */
 	cfs_crypto_test_hashes();
@@ -502,21 +479,7 @@ int cfs_crypto_register(void)
  */
 void cfs_crypto_unregister(void)
 {
-	if (adler32 == 0)
+	if (adler32)
 		cfs_crypto_adler32_unregister();
-
-#ifdef HAVE_CRC32
-	if (crc32 == 0)
-		cfs_crypto_crc32_unregister();
-#endif
-#ifdef HAVE_PCLMULQDQ
-#ifdef NEED_CRC32_ACCEL
-	if (crc32_pclmul == 0)
-		cfs_crypto_crc32_pclmul_unregister();
-#endif
-#ifdef NEED_CRC32C_ACCEL
-	if (crc32c_pclmul == 0)
-		cfs_crypto_crc32c_pclmul_unregister();
-#endif
-#endif /* HAVE_PCLMULQDQ */
+	adler32 = 0;
 }

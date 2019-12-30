@@ -48,28 +48,10 @@
 /*
  * Shrinker
  */
-#ifdef HAVE_SHRINK_CONTROL
 # define SHRINKER_ARGS(sc, nr_to_scan, gfp_mask)  \
                        struct shrinker *shrinker, \
                        struct shrink_control *sc
 # define shrink_param(sc, var) ((sc)->var)
-#else
-struct shrink_control {
-	gfp_t gfp_mask;
-	unsigned long nr_to_scan;
-};
-# ifdef HAVE_SHRINKER_WANT_SHRINK_PTR
-#  define SHRINKER_ARGS(sc, nr_to_scan, gfp_mask)  \
-                        struct shrinker *shrinker, \
-                        int nr_to_scan, gfp_t gfp_mask
-# else
-#  define SHRINKER_ARGS(sc, nr_to_scan, gfp_mask)  \
-                        int nr_to_scan, gfp_t gfp_mask
-# endif
-	/* avoid conflict with spl mm_compat.h */
-# define HAVE_SHRINK_CONTROL_STRUCT 1
-# define shrink_param(sc, var) (var)
-#endif
 
 #ifdef HAVE_SHRINKER_COUNT
 struct shrinker_var {

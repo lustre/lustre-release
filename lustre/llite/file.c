@@ -42,9 +42,7 @@
 #include <linux/file.h>
 #include <linux/sched.h>
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
 
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_swab.h>

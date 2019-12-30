@@ -867,43 +867,36 @@ static struct ctl_table lnet_table[] = {
 	 * to go via /proc for portability.
 	 */
 	{
-		INIT_CTL_NAME
 		.procname	= "stats",
 		.mode		= 0644,
 		.proc_handler	= &proc_lnet_stats,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "routes",
 		.mode		= 0444,
 		.proc_handler	= &proc_lnet_routes,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "routers",
 		.mode		= 0444,
 		.proc_handler	= &proc_lnet_routers,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "peers",
 		.mode		= 0644,
 		.proc_handler	= &proc_lnet_peers,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "buffers",
 		.mode		= 0444,
 		.proc_handler	= &proc_lnet_buffers,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "nis",
 		.mode		= 0644,
 		.proc_handler	= &proc_lnet_nis,
 	},
 	{
-		INIT_CTL_NAME
 		.procname	= "portal_rotor",
 		.mode		= 0644,
 		.proc_handler	= &proc_lnet_portal_rotor,

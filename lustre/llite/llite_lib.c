@@ -46,9 +46,7 @@
 #include <linux/mm.h>
 #include <linux/user_namespace.h>
 #include <linux/delay.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
 #include <linux/security.h>
 
 #include <uapi/linux/lustre/lustre_ioctl.h>

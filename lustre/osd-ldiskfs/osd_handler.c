@@ -42,9 +42,7 @@
 #include <linux/kallsyms.h>
 #include <linux/module.h>
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
 
 /* prerequisite for linux/xattr.h */
 #include <linux/types.h>

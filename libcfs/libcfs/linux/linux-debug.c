@@ -183,21 +183,6 @@ static void libcfs_call_trace(struct task_struct *tsk)
 #include <asm/stacktrace.h>
 
 #ifdef HAVE_STACKTRACE_OPS
-#ifdef HAVE_STACKTRACE_WARNING
-static void
-print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
-{
-	printk("%s", (char *)data);
-	print_symbol(msg, symbol);
-	printk("\n");
-}
-
-static void print_trace_warning(void *data, char *msg)
-{
-	printk("%s%s\n", (char *)data, msg);
-}
-#endif
-
 static int print_trace_stack(void *data, char *name)
 {
 	printk(" <%s> ", name);
@@ -222,15 +207,9 @@ print_trace_address(void *data, unsigned long addr, int reliable)
 }
 
 static const struct stacktrace_ops print_trace_ops = {
-#ifdef HAVE_STACKTRACE_WARNING
-	.warning = print_trace_warning,
-	.warning_symbol = print_trace_warning_symbol,
-#endif
 	.stack = print_trace_stack,
 	.address = print_trace_address,
-#ifdef STACKTRACE_OPS_HAVE_WALK_STACK
 	.walk_stack = print_context_stack,
-#endif
 };
 #endif /* HAVE_STACKTRACE_OPS */
 
@@ -239,11 +218,7 @@ static void libcfs_call_trace(struct task_struct *tsk)
 #ifdef HAVE_STACKTRACE_OPS
 	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
 	printk("\nCall Trace:\n");
-	dump_trace(tsk, NULL, NULL,
-#ifdef HAVE_DUMP_TRACE_ADDRESS
-		   0,
-#endif /* HAVE_DUMP_TRACE_ADDRESS */
-		   &print_trace_ops, NULL);
+	dump_trace(tsk, NULL, NULL, 0, &print_trace_ops, NULL);
 	printk("\n");
 #else /* !HAVE_STACKTRACE_OPS */
 	if (tsk == current)

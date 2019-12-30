@@ -33,9 +33,8 @@
 
 #include <linux/version.h>
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
+
 #include <uapi/linux/lustre/lustre_param.h>
 #include <lprocfs_status.h>
 #include <obd_support.h>

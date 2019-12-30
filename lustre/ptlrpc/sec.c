@@ -37,9 +37,7 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <linux/user_namespace.h>
-#ifdef HAVE_UIDGID_HEADER
-# include <linux/uidgid.h>
-#endif
+#include <linux/uidgid.h>
 #include <linux/crypto.h>
 #include <linux/key.h>
 

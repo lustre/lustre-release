@@ -2193,10 +2193,6 @@ static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 		 .nr_to_scan = shrink_param(sc, nr_to_scan),
 		 .gfp_mask   = shrink_param(sc, gfp_mask)
 	};
-#if !defined(HAVE_SHRINKER_WANT_SHRINK_PTR) && !defined(HAVE_SHRINK_CONTROL)
-	struct shrinker* shrinker = NULL;
-#endif
-
 
 	CDEBUG(D_INODE, "Shrink %lu objects\n", scv.nr_to_scan);
 
