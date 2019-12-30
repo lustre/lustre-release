@@ -12,7 +12,6 @@ ubuntu18/ext4-data-in-dirent.patch
 rhel8/ext4-nocmtime.patch
 rhel8/ext4-pdirop.patch
 sles12sp3/ext4-max-dir-size.patch
-ubuntu18/ext4-remove-truncate-warning.patch
 rhel8/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
 ubuntu18/ext4-give-warning-with-dir-htree-growing.patch
 ubuntu18/ext4-jcb-optimization.patch

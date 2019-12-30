@@ -15,7 +15,6 @@ rhel7/ext4-nocmtime.patch
 ubuntu14+16/ext4-large-dir.patch
 ubuntu14+16/ext4-pdirop-001.patch
 sles12sp2/ext4-max-dir-size.patch
-rhel7/ext4-remove-truncate-warning.patch
 sles12sp2/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
 sles12sp2/ext4-give-warning-with-dir-htree-growing.patch
 sles12sp2/ext4-mmp-brelse.patch

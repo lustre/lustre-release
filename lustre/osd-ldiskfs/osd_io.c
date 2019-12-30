@@ -2160,7 +2160,9 @@ void osd_execute_truncate(struct osd_object *obj)
 		return;
 	}
 
+	inode_lock(inode);
 	ldiskfs_truncate(inode);
+	inode_unlock(inode);
 
 	/*
 	 * For a partial-page truncate, flush the page to disk immediately to
