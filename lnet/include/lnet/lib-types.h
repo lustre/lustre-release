@@ -49,6 +49,7 @@
 
 #include <uapi/linux/lnet/lnet-dlc.h>
 #include <uapi/linux/lnet/lnetctl.h>
+#include <uapi/linux/lnet/nidstr.h>
 
 /* Max payload size */
 #define LNET_MAX_PAYLOAD	LNET_MTU
@@ -248,9 +249,6 @@ struct lnet_ni;					 /* forward ref */
 struct socket;
 
 struct lnet_lnd {
-	/* fields managed by portals */
-	struct list_head	lnd_list;	/* stash in the LND table */
-
 	/* fields initialized by the LND */
 	__u32			lnd_type;
 
@@ -1112,7 +1110,7 @@ struct lnet {
 	/* uniquely identifies this ni in this epoch */
 	__u64				ln_interface_cookie;
 	/* registered LNDs */
-	struct list_head		ln_lnds;
+	struct lnet_lnd			*ln_lnds[NUM_LNDS];
 
 	/* test protocol compatibility flags */
 	int				ln_testprotocompat;
